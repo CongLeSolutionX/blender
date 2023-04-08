@@ -111,6 +111,7 @@ set(SRC
   intern/math_rotation.c
   intern/math_rotation.cc
   intern/math_solvers.c
+  intern/math_solvers.ipp
   intern/math_statistics.c
   intern/math_time.c
   intern/math_vec.cc
@@ -315,6 +316,7 @@ set(SRC
   BLI_math_rotation_legacy.hh
   BLI_math_rotation_types.hh
   BLI_math_solvers.h
+  BLI_math_solvers.hh
   BLI_math_statistics.h
   BLI_math_time.h
   BLI_math_vector.h

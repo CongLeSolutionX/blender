@@ -13,6 +13,16 @@
 
 namespace blender::geometry {
 
+struct BisectArgs {
+
+  float plane[4];
+  float3 plane_co;
+  float3 plane_no;
+  bool use_fill;
+  bool clear_inner;
+  bool clear_outer;
+};
+
 /*
  * Create a new Curves instance by trimming the input curves. Copying the selected splines
  * between the start and end points.
@@ -23,5 +33,10 @@ bke::CurvesGeometry trim_curves(const bke::CurvesGeometry &src_curves,
                                 const VArray<float> &ends,
                                 GeometryNodeCurveSampleMode mode,
                                 const bke::AttributeFilter &attribute_filter);
+
+bke::CurvesGeometry bisect_curves(const bke::CurvesGeometry &src_curves,
+                                  IndexMask selection,
+                                  const BisectArgs &args,
+                                  const bke::AnonymousAttributePropagationInfo &propagation_info);
 
 }  // namespace blender::geometry
