@@ -838,6 +838,10 @@ static void bisect_attribute_linear(const bke::CurvesGeometry &src_curves,
                                     MutableSpan<bke::AttributeTransferData> transfer_attributes,
                                     bool sample_evaluated = false)
 {
+  const OffsetIndices src_points_by_curve = src_curves.points_by_curve();
+  const OffsetIndices src_points_by_curve_evaluated = sample_evaluated ? src_curves.evaluated_points_by_curve() :
+                                                          src_points_by_curve;
+  const OffsetIndices dst_points_by_curve = dst_curves.points_by_curve();
   for (bke::AttributeTransferData &attribute : transfer_attributes) {
     attribute_math::convert_to_static_type(attribute.meta_data.data_type, [&](auto dummy) {
       using T = decltype(dummy);
@@ -851,12 +855,10 @@ static void bisect_attribute_linear(const bke::CurvesGeometry &src_curves,
                bisect_sequences[src_curve_i]) {
             BLI_assert(sequence.size() > 1);
             bke::curves::IndexRangeCyclic src_range;
-            const IndexRange dst_points = dst_curves.points_for_curve(dst_curve_i);
+            const IndexRange dst_points = dst_points_by_curve[dst_curve_i];
 
             Span<T> attribute_span;
-            const IndexRange src_points = sample_evaluated ?
-                                              src_curves.evaluated_points_for_curve(src_curve_i) :
-                                              src_curves.points_for_curve(src_curve_i);
+            const IndexRange src_points = src_points_by_curve_evaluated[src_curve_i];
             GArray<> evaluated_data;
             GMutableSpan evaluated_span;
             if (sample_evaluated) {
@@ -864,7 +866,7 @@ static void bisect_attribute_linear(const bke::CurvesGeometry &src_curves,
               evaluated_span = evaluated_data.as_mutable_span();
               src_curves.interpolate_to_evaluated(
                   src_curve_i,
-                  attribute.src.slice(src_curves.points_for_curve(src_curve_i)),
+                  attribute.src.slice(src_points_by_curve[src_curve_i]),
                   evaluated_span);
               attribute_span = evaluated_span.typed<T>();
             }
@@ -914,8 +916,12 @@ static void bisect_polygonal_curves(const bke::CurvesGeometry &src_curves,
                                     MutableSpan<bke::AttributeTransferData> transfer_attributes,
                                     bool sample_evaluated = false)
 {
+  const OffsetIndices src_points_by_curve = sample_evaluated ?
+      src_curves.evaluated_points_by_curve() : src_curves.points_by_curve();
   const Span<float3> src_positions = sample_evaluated ? src_curves.evaluated_positions() :
                                                         src_curves.positions();
+
+  const OffsetIndices dst_points_by_curve = dst_curves.points_by_curve();
   MutableSpan<float3> dst_positions = dst_curves.positions_for_write();
 
   threading::parallel_for(selection.index_range(), 512, [&](const IndexRange range) {
@@ -923,14 +929,12 @@ static void bisect_polygonal_curves(const bke::CurvesGeometry &src_curves,
     for (const int64_t src_curve_i : selection.slice(range)) {
       /* Compute bisections */
       int dst_curve_i = curve_offsets[src_curve_i];
-      const IndexRange src_points = sample_evaluated ?
-                                        src_curves.evaluated_points_for_curve(src_curve_i) :
-                                        src_curves.points_for_curve(src_curve_i);
+      const IndexRange src_points = src_points_by_curve[src_curve_i];
 
       for (const Array<bke::curves::CurvePoint, 12> &sequence : bisect_sequences[src_curve_i]) {
         BLI_assert(sequence.size() > 1);
         bke::curves::IndexRangeCyclic src_range;
-        const IndexRange dst_points = dst_curves.points_for_curve(dst_curve_i);
+        const IndexRange dst_points = dst_points_by_curve[dst_curve_i];
 
         /* Initial case, include start sample. */
         int sequence_size = compute_curve_shape(
@@ -982,12 +986,14 @@ static void bisect_bezier_curves(const bke::CurvesGeometry &src_curves,
                                  const Span<int> curve_offsets,
                                  MutableSpan<bke::AttributeTransferData> transfer_attributes)
 {
+  const OffsetIndices src_points_by_curve = src_curves.points_by_curve();
   const Span<float3> src_positions = src_curves.positions();
   const VArraySpan<int8_t> src_types_l{src_curves.handle_types_left()};
   const VArraySpan<int8_t> src_types_r{src_curves.handle_types_right()};
   const Span<float3> src_handles_l = src_curves.handle_positions_left();
   const Span<float3> src_handles_r = src_curves.handle_positions_right();
 
+  const OffsetIndices dst_points_by_curve = dst_curves.points_by_curve();
   MutableSpan<float3> dst_positions = dst_curves.positions_for_write();
   MutableSpan<int8_t> dst_types_l = dst_curves.handle_types_left_for_write();
   MutableSpan<int8_t> dst_types_r = dst_curves.handle_types_right_for_write();
@@ -997,13 +1003,13 @@ static void bisect_bezier_curves(const bke::CurvesGeometry &src_curves,
   threading::parallel_for(selection.index_range(), 512, [&](const IndexRange range) {
     for (const int64_t src_curve_i : selection.slice(range)) {
       /* Compute bisections */
-      const IndexRange src_points = src_curves.points_for_curve(src_curve_i);
+      const IndexRange src_points = src_points_by_curve[src_curve_i];
       int dst_curve_i = curve_offsets[src_curve_i];
 
       for (const Array<bke::curves::CurvePoint, 12> &sequence : bisect_sequences[src_curve_i]) {
         BLI_assert(sequence.size() > 1);
         bke::curves::IndexRangeCyclic src_range;
-        const IndexRange dst_points = dst_curves.points_for_curve(dst_curve_i);
+        const IndexRange dst_points = dst_points_by_curve[dst_curve_i];
 
         /* Initial case, include start sample. */
         int sequence_size = compute_curve_shape(
@@ -1581,6 +1587,7 @@ bke::CurvesGeometry bisect_curves(const bke::CurvesGeometry &src_curves,
 
   const VArraySpan<bool> src_cyclic{src_curves.cyclic()};
   const VArraySpan<int8_t> src_curve_types{src_curves.curve_types()};
+  const OffsetIndices src_points_by_curve = src_curves.points_by_curve();
 
   Vector<BisectCurveSequence, 12> bisect_sequences(src_curves.curves_num());
   Vector<Array<int, 12>> bisect_sizes(src_curves.curves_num());
@@ -1598,7 +1605,7 @@ bke::CurvesGeometry bisect_curves(const bke::CurvesGeometry &src_curves,
       Vector<bool> bisect_infront;
       for (const int64_t curve_i : selection.slice(range)) {
         /* Compute bisections */
-        const IndexRange src_points = src_curves.points_for_curve(curve_i);
+        const IndexRange src_points = src_points_by_curve[curve_i];
         for (const int64_t segment_i : IndexRange(0, src_points.size() - 1)) {
           bisect_polyline_segment(
               src_positions, args, segment_i, segment_i + 1, bisect_points, bisect_infront);
@@ -1637,13 +1644,14 @@ bke::CurvesGeometry bisect_curves(const bke::CurvesGeometry &src_curves,
   };
   auto compute_eval_parameters = [&](const IndexMask selection) {
     const Span<float3> eval_positions = src_curves.evaluated_positions();
+    const OffsetIndices evaluated_points_by_curve = src_curves.evaluated_points_by_curve();
 
     threading::parallel_for(selection.index_range(), 512, [&](const IndexRange range) {
       Vector<bke::curves::CurvePoint> bisect_points;
       Vector<bool> bisect_infront;
       for (const int64_t curve_i : selection.slice(range)) {
         /* Compute bisections */
-        const IndexRange eval_points = src_curves.evaluated_points_for_curve(curve_i);
+        const IndexRange eval_points = evaluated_points_by_curve[curve_i];
         for (const int64_t segment_i : IndexRange(0, eval_points.size() - 1)) {
           bisect_polyline_segment(
               eval_positions, args, segment_i, segment_i + 1, bisect_points, bisect_infront);
@@ -1692,7 +1700,7 @@ bke::CurvesGeometry bisect_curves(const bke::CurvesGeometry &src_curves,
       Vector<bool> bisect_infront;
       for (const int64_t curve_i : selection.slice(range)) {
         /* Compute bisections */
-        const IndexRange src_points = src_curves.points_for_curve(curve_i);
+        const IndexRange src_points = src_points_by_curve[curve_i];
         for (const int64_t segment_i : IndexRange(0, src_points.size() - 1)) {
           bisect_bezier_segment(src_positions.slice(src_points),
                                 src_handles_l.slice(src_points),
@@ -1765,7 +1773,7 @@ bke::CurvesGeometry bisect_curves(const bke::CurvesGeometry &src_curves,
   Vector<int64_t> copy_curve_offsets; /* Tracks the offset to copied curves. */
   Vector<int64_t> curve_domain_gather_indices;
 
-  /* Recompute selection and it's inverse (the inverse may not the exact inverse) */
+  /* Recompute selection and it's inverse (the inverse may not be the exact inverse) */
   selection_indices.reserve(selection.size());
   inverse_selection_indices.reserve(src_curves.curves_num() - selection.size());
   curve_offsets.reserve(src_curves.curves_num());
@@ -1774,7 +1782,7 @@ bke::CurvesGeometry bisect_curves(const bke::CurvesGeometry &src_curves,
     curve_offsets.append(curve_counter);
     if (!bisect_curve[curve_i]) {
       /* Copied curves */
-      dst_curve_offsets[curve_counter] = src_curves.points_num_for_curve(curve_i);
+      dst_curve_offsets[curve_counter] = src_points_by_curve[curve_i].size();
       dst_curve_types_span[curve_counter] = dst_curve_types[curve_i];
       dst_cyclic[curve_counter] = src_cyclic[curve_i];
 
@@ -1799,7 +1807,7 @@ bke::CurvesGeometry bisect_curves(const bke::CurvesGeometry &src_curves,
   }
 
   /* Finalize and update the geometry container. */
-  bke::curves::accumulate_counts_to_offsets(dst_curve_offsets);
+  blender::offset_indices::accumulate_counts_to_offsets(dst_curve_offsets);
   dst_curves.resize(dst_curves.offsets().last(), dst_curves.curves_num());
   dst_curves.update_curve_types();
   IndexMask inverse_selection = IndexMask(inverse_selection_indices);

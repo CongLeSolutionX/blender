@@ -853,7 +853,7 @@ Vector<AttributeTransferData> retrieve_attributes_for_transfer(
 }
 void gather_attribute_domain(const AttributeAccessor src_attributes,
                            MutableAttributeAccessor dst_attributes,
-                           const IndexMask gather_indices,
+                          const Span<int64_t> gather_indices,
                            const eAttrDomain domain,
                            const AnonymousAttributePropagationInfo &propagation_info,
                            const Set<std::string> &skip)
@@ -876,7 +876,12 @@ void gather_attribute_domain(const AttributeAccessor src_attributes,
         /* Copy attribute. */
         GSpanAttributeWriter dst = dst_attributes.lookup_or_add_for_write_only_span(
             id, domain, meta_data.data_type);
-        array_utils::gather(src, gather_indices, dst.span);
+
+        attribute_math::convert_to_static_type(
+            src.type(), [&](auto dummy) {
+            using T = decltype(dummy);
+          array_utils::gather<T, int64_t>(src.typed<T>(), gather_indices, dst.span.typed<T>());
+         });
         dst.finish();
 
         return true;
