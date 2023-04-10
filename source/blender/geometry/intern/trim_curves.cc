@@ -446,7 +446,8 @@ static void sample_interval_bezier(const Span<float3> src_positions,
     }
   }
   else if constexpr (!include_start_point) {
-    /* Do nothing, 'start_point' is excluded. */
+    /* Handle edges cases when 'start_point' is excluded. */
+    // (wont work if 3 intersections) start_point_insert.handle_next = dst_handles_l[dst_range.first()]
   }
   else {
     /* General case, sample 'start_point'. */
@@ -475,7 +476,7 @@ static void sample_interval_bezier(const Span<float3> src_positions,
   dst_types_r.slice(dst_range_to_end).copy_from(src_types_r.slice(src_range_to_end));
   dst_index += increment;
 
-  if (dst_range.size() == 1) {
+  if ((include_start_point || end_point.is_controlpoint()) &&  dst_range.size() == 1) {
     BLI_assert(dst_index == dst_range.one_after_last());
     return;
   }
@@ -500,6 +501,7 @@ static void sample_interval_bezier(const Span<float3> src_positions,
   /* Handle 'end_point' */
   bke::curves::bezier::Insertion end_point_insert;
   if (end_point.parameter == 0.0f) {
+    /* Set logical values for the 'outer' handles (endpoint handles not affecting the new curve). */
     if (end_point.index == start_point.index) {
       /* Start point is same point or in the same segment. */
       if (start_point.parameter == 0.0f) {
@@ -520,6 +522,8 @@ static void sample_interval_bezier(const Span<float3> src_positions,
     /* Start point is considered 'before' the endpoint and ignored. */
   }
   else if (end_point.parameter == 1.0f) {
+    /* Set logical values for the 'outer' handles (endpoint handles not affecting the new curve).
+     */
     if (end_point.next_index == start_point.index) {
       /* Start point is same or in 'next' segment. */
       if (start_point.parameter == 0.0f) {
