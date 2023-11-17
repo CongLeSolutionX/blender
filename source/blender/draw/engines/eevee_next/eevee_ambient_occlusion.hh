@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -10,7 +10,6 @@
  * Based on Practical Realtime Strategies for Accurate Indirect Occlusion
  * http://blog.selfshadow.com/publications/s2016-shading-course/activision/s2016_pbs_activision_occlusion.pdf
  * http://blog.selfshadow.com/publications/s2016-shading-course/activision/s2016_pbs_activision_occlusion.pptx
- *
  */
 
 #pragma once
@@ -31,15 +30,11 @@ class AmbientOcclusion {
 
   bool render_pass_enabled_;
 
-  AODataBuf data_;
+  AOData &data_;
   PassSimple render_pass_ps_ = {"AO Render Pass"};
 
-  /* Used as pointers for texture views in the AO Render Pass. */
-  GPUTexture *rp_normal_tx_ = nullptr;
-  GPUTexture *rp_ao_tx_ = nullptr;
-
  public:
-  AmbientOcclusion(Instance &inst) : inst_(inst){};
+  AmbientOcclusion(Instance &inst, AOData &data) : inst_(inst), data_(data){};
   ~AmbientOcclusion(){};
 
   void init();
@@ -48,11 +43,6 @@ class AmbientOcclusion {
 
   void render(View &view);
   void render_pass(View &view);
-
-  template<typename T> void bind_resources(draw::detail::PassBase<T> *pass)
-  {
-    pass->bind_ubo(AO_BUF_SLOT, &data_);
-  }
 };
 
 /** \} */

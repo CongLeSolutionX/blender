@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -16,9 +16,9 @@
 #include "DNA_collection_types.h"
 #include "DNA_object_types.h"
 
-#include "BKE_armature.h"
+#include "BKE_armature.hh"
 #include "BKE_collection.h"
-#include "BKE_curve.h"
+#include "BKE_curve.hh"
 #include "BKE_layer.h"
 #include "BKE_lib_id.h"
 #include "BKE_lib_query.h"
@@ -26,14 +26,14 @@
 #include "BKE_main.h"
 #include "BKE_material.h"
 #include "BKE_mball.h"
-#include "BKE_modifier.h"
-#include "BKE_multires.h"
+#include "BKE_modifier.hh"
+#include "BKE_multires.hh"
 #include "BKE_node.h"
-#include "BKE_node_tree_update.h"
-#include "BKE_object.h"
+#include "BKE_node_tree_update.hh"
+#include "BKE_object.hh"
 
-#include "DEG_depsgraph.h"
-#include "DEG_depsgraph_build.h"
+#include "DEG_depsgraph.hh"
+#include "DEG_depsgraph_build.hh"
 
 #include "lib_intern.h" /* own include */
 
@@ -54,16 +54,16 @@ void BKE_library_callback_remap_editor_id_reference_set(
   remap_editor_id_reference_cb = func;
 }
 
-typedef struct IDRemap {
+struct IDRemap {
   eIDRemapType type;
   Main *bmain; /* Only used to trigger depsgraph updates in the right bmain. */
 
-  struct IDRemapper *id_remapper;
+  IDRemapper *id_remapper;
 
   /** The ID in which we are replacing old_id by new_id usages. */
   ID *id_owner;
   int flag;
-} IDRemap;
+};
 
 /* IDRemap->flag enums defined in BKE_lib.h */
 
@@ -102,7 +102,7 @@ static void foreach_libblock_remap_callback_apply(ID *id_owner,
                                                   ID *id_self,
                                                   ID **id_ptr,
                                                   IDRemap *id_remap_data,
-                                                  const struct IDRemapper *mappings,
+                                                  const IDRemapper *mappings,
                                                   const IDRemapperApplyOptions id_remapper_options,
                                                   const int cb_flag,
                                                   const bool is_indirect,
@@ -194,7 +194,7 @@ static int foreach_libblock_remap_callback(LibraryIDLinkCallbackData *cb_data)
     return IDWALK_RET_NOP;
   }
 
-  struct IDRemapper *id_remapper = id_remap_data->id_remapper;
+  IDRemapper *id_remapper = id_remap_data->id_remapper;
   IDRemapperApplyOptions id_remapper_options = ID_REMAP_APPLY_DEFAULT;
 
   /* Used to cleanup all IDs used by a specific one. */
@@ -291,7 +291,7 @@ static int foreach_libblock_remap_callback(LibraryIDLinkCallbackData *cb_data)
 
 static void libblock_remap_data_preprocess_ob(Object *ob,
                                               eIDRemapType remap_type,
-                                              const struct IDRemapper *id_remapper)
+                                              const IDRemapper *id_remapper)
 {
   if (ob->type != OB_ARMATURE) {
     return;
@@ -324,7 +324,7 @@ static void libblock_remap_data_preprocess_ob(Object *ob,
 
 static void libblock_remap_data_preprocess(ID *id_owner,
                                            eIDRemapType remap_type,
-                                           const struct IDRemapper *id_remapper)
+                                           const IDRemapper *id_remapper)
 {
   switch (GS(id_owner->name)) {
     case ID_OB: {
@@ -481,11 +481,8 @@ static void libblock_remap_reset_remapping_status_callback(ID *old_id,
  * \param r_id_remap_data: if non-nullptr, the IDRemap struct to use
  * (useful to retrieve info about remapping process).
  */
-static void libblock_remap_data(Main *bmain,
-                                ID *id,
-                                eIDRemapType remap_type,
-                                struct IDRemapper *id_remapper,
-                                const int remap_flags)
+static void libblock_remap_data(
+    Main *bmain, ID *id, eIDRemapType remap_type, IDRemapper *id_remapper, const int remap_flags)
 {
   IDRemap id_remap_data = {eIDRemapType(0)};
   const bool include_ui = (remap_flags & ID_REMAP_FORCE_UI_POINTERS) != 0;
@@ -545,10 +542,10 @@ static void libblock_remap_data(Main *bmain,
   BKE_id_remapper_iter(id_remapper, libblock_remap_data_update_tags, &id_remap_data);
 }
 
-typedef struct LibblockRemapMultipleUserData {
+struct LibBlockRemapMultipleUserData {
   Main *bmain;
   int remap_flags;
-} LibBlockRemapMultipleUserData;
+};
 
 static void libblock_remap_foreach_idpair_cb(ID *old_id, ID *new_id, void *user_data)
 {
@@ -643,9 +640,7 @@ static void libblock_remap_foreach_idpair_cb(ID *old_id, ID *new_id, void *user_
   BKE_libblock_runtime_reset_remapping_status(old_id);
 }
 
-void BKE_libblock_remap_multiple_locked(Main *bmain,
-                                        struct IDRemapper *mappings,
-                                        const int remap_flags)
+void BKE_libblock_remap_multiple_locked(Main *bmain, IDRemapper *mappings, const int remap_flags)
 {
   if (BKE_id_remapper_is_empty(mappings)) {
     /* Early exit nothing to do. */
@@ -654,7 +649,7 @@ void BKE_libblock_remap_multiple_locked(Main *bmain,
 
   libblock_remap_data(bmain, nullptr, ID_REMAP_TYPE_REMAP, mappings, remap_flags);
 
-  LibBlockRemapMultipleUserData user_data = {0};
+  LibBlockRemapMultipleUserData user_data = {nullptr};
   user_data.bmain = bmain;
   user_data.remap_flags = remap_flags;
 
@@ -671,9 +666,7 @@ void BKE_libblock_remap_multiple_locked(Main *bmain,
   DEG_relations_tag_update(bmain);
 }
 
-void BKE_libblock_remap_multiple_raw(Main *bmain,
-                                     struct IDRemapper *mappings,
-                                     const int remap_flags)
+void BKE_libblock_remap_multiple_raw(Main *bmain, IDRemapper *mappings, const int remap_flags)
 {
   if (BKE_id_remapper_is_empty(mappings)) {
     /* Early exit nothing to do. */
@@ -689,7 +682,7 @@ void BKE_libblock_remap_multiple_raw(Main *bmain,
 
 void BKE_libblock_remap_locked(Main *bmain, void *old_idv, void *new_idv, const int remap_flags)
 {
-  struct IDRemapper *remapper = BKE_id_remapper_create();
+  IDRemapper *remapper = BKE_id_remapper_create();
   ID *old_id = static_cast<ID *>(old_idv);
   ID *new_id = static_cast<ID *>(new_idv);
   BKE_id_remapper_add(remapper, old_id, new_id);
@@ -706,7 +699,7 @@ void BKE_libblock_remap(Main *bmain, void *old_idv, void *new_idv, const int rem
   BKE_main_unlock(bmain);
 }
 
-void BKE_libblock_remap_multiple(Main *bmain, struct IDRemapper *mappings, const int remap_flags)
+void BKE_libblock_remap_multiple(Main *bmain, IDRemapper *mappings, const int remap_flags)
 {
   BKE_main_lock(bmain);
 
@@ -738,10 +731,10 @@ void BKE_libblock_unlink(Main *bmain,
  *     ... sigh
  */
 
-typedef struct LibblockRelinkMultipleUserData {
+struct LibBlockRelinkMultipleUserData {
   Main *bmain;
   LinkNode *ids;
-} LibBlockRelinkMultipleUserData;
+};
 
 static void libblock_relink_foreach_idpair_cb(ID *old_id, ID *new_id, void *user_data)
 {
@@ -802,7 +795,7 @@ static void libblock_relink_foreach_idpair_cb(ID *old_id, ID *new_id, void *user
 void BKE_libblock_relink_multiple(Main *bmain,
                                   LinkNode *ids,
                                   const eIDRemapType remap_type,
-                                  struct IDRemapper *id_remapper,
+                                  IDRemapper *id_remapper,
                                   const int remap_flags)
 {
   BLI_assert(remap_type == ID_REMAP_TYPE_REMAP || BKE_id_remapper_is_empty(id_remapper));
@@ -818,7 +811,7 @@ void BKE_libblock_relink_multiple(Main *bmain,
 
   switch (remap_type) {
     case ID_REMAP_TYPE_REMAP: {
-      LibBlockRelinkMultipleUserData user_data = {0};
+      LibBlockRelinkMultipleUserData user_data = {nullptr};
       user_data.bmain = bmain;
       user_data.ids = ids;
 
@@ -880,7 +873,7 @@ void BKE_libblock_relink_ex(
   ids.link = idv;
 
   /* No need to lock here, we are only affecting given ID, not bmain database. */
-  struct IDRemapper *id_remapper = BKE_id_remapper_create();
+  IDRemapper *id_remapper = BKE_id_remapper_create();
   eIDRemapType remap_type = ID_REMAP_TYPE_REMAP;
 
   BLI_assert(id != nullptr);
@@ -900,10 +893,10 @@ void BKE_libblock_relink_ex(
   BKE_id_remapper_free(id_remapper);
 }
 
-typedef struct RelinkToNewIDData {
+struct RelinkToNewIDData {
   LinkNode *ids;
-  struct IDRemapper *id_remapper;
-} RelinkToNewIDData;
+  IDRemapper *id_remapper;
+};
 
 static void libblock_relink_to_newid_prepare_data(Main *bmain,
                                                   ID *id,

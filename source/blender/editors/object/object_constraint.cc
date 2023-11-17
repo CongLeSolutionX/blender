@@ -6,14 +6,15 @@
  * \ingroup edobj
  */
 
-#include <stdio.h>
-#include <string.h>
+#include <cstdio>
+#include <cstring>
 
 #include "MEM_guardedalloc.h"
 
 #include "BLI_blenlib.h"
 #include "BLI_dynstr.h"
-#include "BLI_math.h"
+#include "BLI_math_matrix.h"
+#include "BLI_math_vector.h"
 #include "BLI_utildefines.h"
 
 #include "BLT_translation.h"
@@ -28,39 +29,41 @@
 
 #include "BIK_api.h"
 #include "BKE_action.h"
-#include "BKE_armature.h"
+#include "BKE_armature.hh"
 #include "BKE_constraint.h"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_fcurve.h"
 #include "BKE_layer.h"
 #include "BKE_main.h"
-#include "BKE_object.h"
+#include "BKE_object.hh"
 #include "BKE_report.h"
 #include "BKE_tracking.h"
 
-#include "DEG_depsgraph.h"
-#include "DEG_depsgraph_build.h"
-#include "DEG_depsgraph_query.h"
+#include "DEG_depsgraph.hh"
+#include "DEG_depsgraph_build.hh"
+#include "DEG_depsgraph_query.hh"
 
 #ifdef WITH_PYTHON
 #  include "BPY_extern.h"
 #endif
 
-#include "WM_api.h"
-#include "WM_types.h"
+#include "WM_api.hh"
+#include "WM_types.hh"
 
-#include "RNA_access.h"
-#include "RNA_define.h"
-#include "RNA_enum_types.h"
-#include "RNA_path.h"
+#include "RNA_access.hh"
+#include "RNA_define.hh"
+#include "RNA_enum_types.hh"
+#include "RNA_path.hh"
 #include "RNA_prototypes.h"
 
-#include "ED_keyframing.h"
-#include "ED_object.h"
-#include "ED_screen.h"
+#include "ED_keyframing.hh"
+#include "ED_object.hh"
+#include "ED_screen.hh"
 
-#include "UI_interface.h"
-#include "UI_resources.h"
+#include "ANIM_action.hh"
+
+#include "UI_interface.hh"
+#include "UI_resources.hh"
 
 #include "object_intern.h"
 
@@ -77,7 +80,7 @@ ListBase *ED_object_constraint_active_list(Object *ob)
   if (ob->mode & OB_MODE_POSE) {
     bPoseChannel *pchan;
 
-    pchan = BKE_pose_channel_active_if_layer_visible(ob);
+    pchan = BKE_pose_channel_active_if_bonecoll_visible(ob);
     if (pchan) {
       return &pchan->constraints;
     }
@@ -121,13 +124,10 @@ ListBase *ED_object_constraint_list_from_constraint(Object *ob,
 
   /* if armature, try pose bones too */
   if (ob->pose) {
-    bPoseChannel *pchan;
-
     /* try each bone in order
      * NOTE: it's not possible to directly look up the active bone yet, so this will have to do
      */
-    for (pchan = static_cast<bPoseChannel *>(ob->pose->chanbase.first); pchan; pchan = pchan->next)
-    {
+    LISTBASE_FOREACH (bPoseChannel *, pchan, &ob->pose->chanbase) {
       if (BLI_findindex(&pchan->constraints, con) != -1) {
 
         if (r_pchan) {
@@ -280,7 +280,7 @@ static void set_constraint_nth_target(bConstraint *con,
       }
     }
 
-    BKE_constraint_targets_flush(con, &targets, 0);
+    BKE_constraint_targets_flush(con, &targets, false);
   }
 }
 
@@ -294,7 +294,6 @@ static void test_constraint(
     Main *bmain, Object *owner, bPoseChannel *pchan, bConstraint *con, int type)
 {
   ListBase targets = {nullptr, nullptr};
-  bConstraintTarget *ct;
   bool check_targets = true;
 
   /* clear disabled-flag first */
@@ -469,7 +468,7 @@ static void test_constraint(
   /* Check targets for constraints */
   if (check_targets && BKE_constraint_targets_get(con, &targets)) {
     /* disable and clear constraints targets that are incorrect */
-    for (ct = static_cast<bConstraintTarget *>(targets.first); ct; ct = ct->next) {
+    LISTBASE_FOREACH (bConstraintTarget *, ct, &targets) {
       /* general validity checks (for those constraints that need this) */
       if (BKE_object_exists_check(bmain, ct->tar) == 0) {
         /* object doesn't exist, but constraint requires target */
@@ -538,7 +537,7 @@ static void test_constraint(
     }
 
     /* free any temporary targets */
-    BKE_constraint_targets_flush(con, &targets, 0);
+    BKE_constraint_targets_flush(con, &targets, false);
   }
   else if (check_targets) {
     /* constraints with empty target list that actually require targets */
@@ -573,7 +572,6 @@ static int constraint_type_get(Object *owner, bPoseChannel *pchan)
  */
 static void test_constraints(Main *bmain, Object *ob, bPoseChannel *pchan)
 {
-  bConstraint *curcon;
   ListBase *conlist = nullptr;
   int type;
 
@@ -595,7 +593,7 @@ static void test_constraints(Main *bmain, Object *ob, bPoseChannel *pchan)
 
   /* Check all constraints - is constraint valid? */
   if (conlist) {
-    for (curcon = static_cast<bConstraint *>(conlist->first); curcon; curcon = curcon->next) {
+    LISTBASE_FOREACH (bConstraint *, curcon, conlist) {
       test_constraint(bmain, ob, pchan, curcon, type);
     }
   }
@@ -608,10 +606,7 @@ void object_test_constraints(Main *bmain, Object *ob)
   }
 
   if (ob->type == OB_ARMATURE && ob->pose) {
-    bPoseChannel *pchan;
-
-    for (pchan = static_cast<bPoseChannel *>(ob->pose->chanbase.first); pchan; pchan = pchan->next)
-    {
+    LISTBASE_FOREACH (bPoseChannel *, pchan, &ob->pose->chanbase) {
       if (pchan->constraints.first) {
         test_constraints(bmain, ob, pchan);
       }
@@ -626,9 +621,7 @@ static void object_test_constraint(Main *bmain, Object *ob, bConstraint *con)
       test_constraint(bmain, ob, nullptr, con, CONSTRAINT_OBTYPE_OBJECT);
     }
     else {
-      bPoseChannel *pchan;
-      for (pchan = static_cast<bPoseChannel *>(ob->pose->chanbase.first); pchan;
-           pchan = pchan->next) {
+      LISTBASE_FOREACH (bPoseChannel *, pchan, &ob->pose->chanbase) {
         if (BLI_findindex(&pchan->constraints, con) != -1) {
           test_constraint(bmain, ob, pchan, con, CONSTRAINT_OBTYPE_BONE);
           break;
@@ -1080,7 +1073,7 @@ static int followpath_path_animate_exec(bContext *C, wmOperator *op)
     {
       /* create F-Curve for path animation */
       act = ED_id_action_ensure(bmain, &cu->id);
-      fcu = ED_action_fcurve_ensure(bmain, act, nullptr, nullptr, "eval_time", 0);
+      fcu = blender::animrig::action_fcurve_ensure(bmain, act, nullptr, nullptr, "eval_time", 0);
 
       /* standard vertical range - 1:1 = 100 frames */
       standardRange = 100.0f;
@@ -1093,19 +1086,18 @@ static int followpath_path_animate_exec(bContext *C, wmOperator *op)
   }
   else {
     /* animate constraint's "fixed offset" */
-    PointerRNA ptr;
     PropertyRNA *prop;
     char *path;
 
     /* get RNA pointer to constraint's "offset_factor" property - to build RNA path */
-    RNA_pointer_create(&ob->id, &RNA_FollowPathConstraint, con, &ptr);
+    PointerRNA ptr = RNA_pointer_create(&ob->id, &RNA_FollowPathConstraint, con);
     prop = RNA_struct_find_property(&ptr, "offset_factor");
 
     path = RNA_path_from_ID_to_property(&ptr, prop);
 
     /* create F-Curve for constraint */
     act = ED_id_action_ensure(bmain, &ob->id);
-    fcu = ED_action_fcurve_ensure(bmain, act, nullptr, nullptr, path, 0);
+    fcu = blender::animrig::action_fcurve_ensure(bmain, act, nullptr, nullptr, path, 0);
 
     /* standard vertical range - 0.0 to 1.0 */
     standardRange = 1.0f;
@@ -1459,7 +1451,7 @@ static int constraint_delete_exec(bContext *C, wmOperator *op)
 
   /* free the constraint */
   if (BKE_constraint_remove_ex(lb, ob, con, true)) {
-    /* needed to set the flags on posebones correctly */
+    /* Needed to set the flags on pose-bones correctly. */
     ED_object_constraint_update(bmain, ob);
 
     /* relations */
@@ -1549,7 +1541,7 @@ static int constraint_apply_exec(bContext *C, wmOperator *op)
   /* Update for any children that may get moved. */
   DEG_id_tag_update(&ob->id, ID_RECALC_TRANSFORM);
 
-  /* Needed to set the flags on posebones correctly. */
+  /* Needed to set the flags on pose-bones correctly. */
   ED_object_constraint_update(bmain, ob);
 
   DEG_relations_tag_update(bmain);
@@ -1649,7 +1641,7 @@ static int constraint_copy_exec(bContext *C, wmOperator *op)
   BLI_assert(current_index >= 0);
   BLI_listbase_link_move(constraints, copy_con, new_index - current_index);
 
-  /* Needed to set the flags on posebones correctly. */
+  /* Needed to set the flags on pose-bones correctly. */
   ED_object_constraint_update(bmain, ob);
 
   DEG_relations_tag_update(bmain);
@@ -2029,7 +2021,7 @@ static int pose_constraints_clear_exec(bContext *C, wmOperator * /*op*/)
   /* free constraints for all selected bones */
   CTX_DATA_BEGIN_WITH_ID (C, bPoseChannel *, pchan, selected_pose_bones, Object *, ob) {
     BKE_constraints_free(&pchan->constraints);
-    pchan->constflag &= ~(PCHAN_HAS_IK | PCHAN_HAS_SPLINEIK | PCHAN_HAS_CONST);
+    pchan->constflag = 0;
 
     if (prev_ob != ob) {
       DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
@@ -2213,7 +2205,7 @@ static bool get_new_constraint_target(
     bContext *C, int con_type, Object **tar_ob, bPoseChannel **tar_pchan, bool add)
 {
   Object *obact = ED_object_active_context(C);
-  bPoseChannel *pchanact = BKE_pose_channel_active_if_layer_visible(obact);
+  bPoseChannel *pchanact = BKE_pose_channel_active_if_bonecoll_visible(obact);
   bool only_curve = false, only_mesh = false, only_ob = false;
   bool found = false;
 
@@ -2371,7 +2363,7 @@ static int constraint_add_exec(
     pchan = nullptr;
   }
   else {
-    pchan = BKE_pose_channel_active_if_layer_visible(ob);
+    pchan = BKE_pose_channel_active_if_bonecoll_visible(ob);
 
     /* ensure not to confuse object/pose adding */
     if (pchan == nullptr) {
@@ -2401,7 +2393,7 @@ static int constraint_add_exec(
     bPoseChannel *tar_pchan = nullptr;
 
     /* get the target objects, adding them as need be */
-    if (get_new_constraint_target(C, type, &tar_ob, &tar_pchan, 1)) {
+    if (get_new_constraint_target(C, type, &tar_ob, &tar_pchan, true)) {
       /* Method of setting target depends on the type of target we've got - by default,
        * just set the first target (distinction here is only for multiple-targeted constraints).
        */
@@ -2555,7 +2547,7 @@ void OBJECT_OT_constraint_add(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
   /* properties */
-  prop = RNA_def_enum(ot->srna, "type", DummyRNA_NULL_items, 0, "Type", "");
+  prop = RNA_def_enum(ot->srna, "type", rna_enum_dummy_NULL_items, 0, "Type", "");
   RNA_def_enum_funcs(prop, object_constraint_add_itemf);
   ot->prop = prop;
 }
@@ -2586,7 +2578,7 @@ void OBJECT_OT_constraint_add_with_targets(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
   /* properties */
-  prop = RNA_def_enum(ot->srna, "type", DummyRNA_NULL_items, 0, "Type", "");
+  prop = RNA_def_enum(ot->srna, "type", rna_enum_dummy_NULL_items, 0, "Type", "");
   RNA_def_enum_funcs(prop, object_constraint_add_itemf);
   ot->prop = prop;
 }
@@ -2645,7 +2637,7 @@ void POSE_OT_constraint_add_with_targets(wmOperatorType *ot)
 static int pose_ik_add_invoke(bContext *C, wmOperator *op, const wmEvent * /*event*/)
 {
   Object *ob = BKE_object_pose_armature_get(CTX_data_active_object(C));
-  bPoseChannel *pchan = BKE_pose_channel_active_if_layer_visible(ob);
+  bPoseChannel *pchan = BKE_pose_channel_active_if_bonecoll_visible(ob);
   bConstraint *con = nullptr;
 
   uiPopupMenu *pup;
@@ -2675,7 +2667,7 @@ static int pose_ik_add_invoke(bContext *C, wmOperator *op, const wmEvent * /*eve
   layout = UI_popup_menu_layout(pup);
 
   /* the type of targets we'll set determines the menu entries to show... */
-  if (get_new_constraint_target(C, CONSTRAINT_TYPE_KINEMATIC, &tar_ob, &tar_pchan, 0)) {
+  if (get_new_constraint_target(C, CONSTRAINT_TYPE_KINEMATIC, &tar_ob, &tar_pchan, false)) {
     /* bone target, or object target?
      * - the only thing that matters is that we want a target...
      */
@@ -2732,7 +2724,7 @@ void POSE_OT_ik_add(wmOperatorType *ot)
   /* properties */
   RNA_def_boolean(ot->srna,
                   "with_targets",
-                  1,
+                  true,
                   "With Targets",
                   "Assign IK Constraint with targets derived from the select bones/objects");
 }
@@ -2761,7 +2753,7 @@ static int pose_ik_clear_exec(bContext *C, wmOperator * /*op*/)
         BKE_constraint_remove(&pchan->constraints, con);
       }
     }
-    pchan->constflag &= ~(PCHAN_HAS_IK | PCHAN_HAS_TARGET);
+    pchan->constflag &= ~(PCHAN_HAS_IK | PCHAN_HAS_NO_TARGET);
 
     if (prev_ob != ob) {
       prev_ob = ob;

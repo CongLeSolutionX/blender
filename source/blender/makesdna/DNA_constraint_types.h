@@ -13,10 +13,6 @@
 #include "DNA_defs.h"
 #include "DNA_listBase.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 struct Action;
 struct Ipo;
 struct Text;
@@ -97,7 +93,7 @@ typedef struct bConstraintTarget {
   short flag;
   /** Type of target (eConstraintObType). */
   short type;
-  /** Rotation order for target (as defined in BLI_math.h). */
+  /** Rotation order for target (as defined in BLI_math_rotation.h). */
   short rotOrder;
   /** Weight for armature deform. */
   float weight;
@@ -670,7 +666,7 @@ typedef enum eBConstraint_Types {
 /* bConstraint->flag */
 /* flags 0x2 (1 << 1) and 0x8 (1 << 3) were used in past */
 /* flag 0x20 (1 << 5) was used to indicate that a constraint was evaluated
- *                  using a 'local' hack for posebones only. */
+ *                    using a 'local' hack for pose-bones only. */
 typedef enum eBConstraint_Flags {
 #ifdef DNA_DEPRECATED_ALLOW
   /* Expansion for old box constraint layouts. Just for versioning. */
@@ -1111,7 +1107,8 @@ typedef enum eChildOf_Flags {
   CHILDOF_SET_INVERSE = (1 << 9),
 } eChildOf_Flags;
 
-/** Pivot Constraint
+/**
+ * Pivot Constraint
  *
  * Restrictions for Pivot Constraint axis to consider for enabling constraint.
  */
@@ -1171,7 +1168,3 @@ typedef enum eStretchTo_Flags {
   STRETCHTOCON_USE_BULGE_MIN = (1 << 0),
   STRETCHTOCON_USE_BULGE_MAX = (1 << 1),
 } eStretchTo_Flags;
-
-#ifdef __cplusplus
-}
-#endif

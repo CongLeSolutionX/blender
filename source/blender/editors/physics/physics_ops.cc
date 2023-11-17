@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2009 Blender Foundation
+/* SPDX-FileCopyrightText: 2009 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -6,11 +6,13 @@
  * \ingroup edphys
  */
 
-#include <stdlib.h>
+#include <cstdlib>
 
-#include "WM_api.h"
+#include "DNA_space_types.h"
 
-#include "ED_physics.h"
+#include "WM_api.hh"
+
+#include "ED_physics.hh"
 
 #include "physics_intern.h" /* own include */
 
@@ -86,7 +88,7 @@ static void operatortypes_particle()
 
 static void keymap_particle(wmKeyConfig *keyconf)
 {
-  wmKeyMap *keymap = WM_keymap_ensure(keyconf, "Particle", 0, 0);
+  wmKeyMap *keymap = WM_keymap_ensure(keyconf, "Particle", SPACE_EMPTY, RGN_TYPE_WINDOW);
   keymap->poll = PE_poll;
 }
 

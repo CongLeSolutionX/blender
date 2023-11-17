@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -22,13 +22,18 @@ class VKSampler : public NonCopyable {
 
  public:
   virtual ~VKSampler();
-  void create();
+  void create(const GPUSamplerState &sampler_state);
   void free();
 
   VkSampler vk_handle() const
   {
     BLI_assert(vk_sampler_ != VK_NULL_HANDLE);
     return vk_sampler_;
+  }
+
+  bool is_initialized() const
+  {
+    return vk_sampler_ != VK_NULL_HANDLE;
   }
 };
 

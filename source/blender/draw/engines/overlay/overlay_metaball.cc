@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2019 Blender Foundation
+/* SPDX-FileCopyrightText: 2019 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -10,11 +10,12 @@
 
 #include "DNA_meta_types.h"
 
-#include "BKE_object.h"
+#include "BKE_object.hh"
+#include "BKE_object_types.hh"
 
-#include "DEG_depsgraph_query.h"
+#include "DEG_depsgraph_query.hh"
 
-#include "ED_mball.h"
+#include "ED_mball.hh"
 
 #include "overlay_private.hh"
 
@@ -69,7 +70,7 @@ void OVERLAY_edit_metaball_cache_populate(OVERLAY_Data *vedata, Object *ob)
 
   int select_id = 0;
   if (is_select) {
-    select_id = ob->runtime.select_id;
+    select_id = ob->runtime->select_id;
   }
 
   LISTBASE_FOREACH (MetaElem *, ml, mb->editelems) {

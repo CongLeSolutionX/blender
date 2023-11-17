@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2004 Blender Foundation
+/* SPDX-FileCopyrightText: 2004 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -39,53 +39,55 @@
 
 #include "BKE_anim_data.h"
 #include "BKE_animsys.h"
-#include "BKE_armature.h"
+#include "BKE_armature.hh"
 #include "BKE_collection.h"
 #include "BKE_constraint.h"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_fcurve.h"
 #include "BKE_global.h"
+#include "BKE_grease_pencil.hh"
 #include "BKE_idtype.h"
 #include "BKE_layer.h"
 #include "BKE_lib_id.h"
-#include "BKE_lib_override.h"
+#include "BKE_lib_override.hh"
 #include "BKE_lib_query.h"
 #include "BKE_lib_remap.h"
 #include "BKE_main.h"
-#include "BKE_object.h"
+#include "BKE_object.hh"
 #include "BKE_report.h"
 #include "BKE_scene.h"
-#include "BKE_screen.h"
+#include "BKE_screen.hh"
 
-#include "DEG_depsgraph.h"
-#include "DEG_depsgraph_build.h"
+#include "DEG_depsgraph.hh"
+#include "DEG_depsgraph_build.hh"
 
-#include "ED_node.h"
-#include "ED_object.h"
-#include "ED_outliner.h"
-#include "ED_scene.h"
-#include "ED_screen.h"
-#include "ED_sequencer.h"
-#include "ED_undo.h"
+#include "ED_node.hh"
+#include "ED_object.hh"
+#include "ED_outliner.hh"
+#include "ED_scene.hh"
+#include "ED_screen.hh"
+#include "ED_sequencer.hh"
+#include "ED_undo.hh"
 
-#include "WM_api.h"
-#include "WM_message.h"
-#include "WM_types.h"
+#include "WM_api.hh"
+#include "WM_message.hh"
+#include "WM_types.hh"
 
-#include "UI_interface.h"
-#include "UI_resources.h"
-#include "UI_view2d.h"
+#include "UI_interface.hh"
+#include "UI_resources.hh"
+#include "UI_view2d.hh"
 
 #include "../../blender/blenloader/BLO_readfile.h"
 
-#include "RNA_access.h"
-#include "RNA_define.h"
-#include "RNA_enum_types.h"
+#include "RNA_access.hh"
+#include "RNA_define.hh"
+#include "RNA_enum_types.hh"
 
-#include "SEQ_relations.h"
-#include "SEQ_sequencer.h"
+#include "SEQ_relations.hh"
+#include "SEQ_sequencer.hh"
 
 #include "outliner_intern.hh"
+#include "tree/tree_element_grease_pencil_node.hh"
 #include "tree/tree_element_rna.hh"
 #include "tree/tree_element_seq.hh"
 #include "tree/tree_iterator.hh"
@@ -388,6 +390,15 @@ static void unlink_collection_fn(bContext *C,
                 "instance empties it should be unlinked from, there's no scene, collection or "
                 "instance empties as parent in the Outliner tree",
                 tselem->id->name + 2);
+    return;
+  }
+
+  if (tsep && (ID_IS_LINKED(tsep->id) || ID_IS_OVERRIDE_LIBRARY(tsep->id))) {
+    BKE_reportf(reports,
+                RPT_WARNING,
+                "Cannot unlink collection '%s' parented to another linked collection '%s'",
+                collection->id.name + 2,
+                tsep->id->name + 2);
     return;
   }
 
@@ -1000,7 +1011,7 @@ static void id_local_fn(bContext *C,
     }
   }
   else if (ID_IS_OVERRIDE_LIBRARY_REAL(tselem->id)) {
-    BKE_lib_override_library_make_local(tselem->id);
+    BKE_lib_override_library_make_local(CTX_data_main(C), tselem->id);
   }
 }
 
@@ -1680,10 +1691,9 @@ static void singleuser_action_fn(bContext *C,
 
   if (id) {
     IdAdtTemplate *iat = (IdAdtTemplate *)tsep->id;
-    PointerRNA ptr = {nullptr};
     PropertyRNA *prop;
 
-    RNA_pointer_create(&iat->id, &RNA_AnimData, iat->adt, &ptr);
+    PointerRNA ptr = RNA_pointer_create(&iat->id, &RNA_AnimData, iat->adt);
     prop = RNA_struct_find_property(&ptr, "action");
 
     id_single_user(C, id, &ptr, prop);
@@ -1703,10 +1713,9 @@ static void singleuser_world_fn(bContext *C,
   /* need to use parent scene not just scene, otherwise may end up getting wrong one */
   if (id) {
     Scene *parscene = (Scene *)tsep->id;
-    PointerRNA ptr = {nullptr};
     PropertyRNA *prop;
 
-    RNA_id_pointer_create(&parscene->id, &ptr);
+    PointerRNA ptr = RNA_id_pointer_create(&parscene->id);
     prop = RNA_struct_find_property(&ptr, "world");
 
     id_single_user(C, id, &ptr, prop);
@@ -1811,7 +1820,7 @@ static void refreshdrivers_animdata_fn(int /*event*/,
   IdAdtTemplate *iat = (IdAdtTemplate *)tselem->id;
 
   /* Loop over drivers, performing refresh
-   * (i.e. check graph_buttons.c and rna_fcurve.cc for details). */
+   * (i.e. check `graph_buttons.cc` and `rna_fcurve.cc` for details). */
   LISTBASE_FOREACH (FCurve *, fcu, &iat->adt->drivers) {
     fcu->flag &= ~FCURVE_DISABLED;
 
@@ -2161,7 +2170,7 @@ static void ebone_fn(int event, TreeElement *te, TreeStoreElem * /*tselem*/, voi
 static void sequence_fn(int event, TreeElement *te, TreeStoreElem * /*tselem*/, void *scene_ptr)
 {
   TreeElementSequence *te_seq = tree_element_cast<TreeElementSequence>(te);
-  Sequence *seq = &te_seq->getSequence();
+  Sequence *seq = &te_seq->get_sequence();
   Scene *scene = (Scene *)scene_ptr;
   Editing *ed = SEQ_editing_get(scene);
   if (BLI_findindex(ed->seqbasep, seq) != -1) {
@@ -2207,6 +2216,27 @@ static void gpencil_layer_fn(int event,
   }
 }
 
+static void grease_pencil_node_fn(int event,
+                                  TreeElement *te,
+                                  TreeStoreElem * /*tselem*/,
+                                  void * /*arg*/)
+{
+  bke::greasepencil::TreeNode &node = tree_element_cast<TreeElementGreasePencilNode>(te)->node();
+
+  if (event == OL_DOP_SELECT) {
+    node.set_selected(true);
+  }
+  else if (event == OL_DOP_DESELECT) {
+    node.set_selected(false);
+  }
+  else if (event == OL_DOP_HIDE) {
+    node.set_visible(false);
+  }
+  else if (event == OL_DOP_UNHIDE) {
+    node.set_visible(true);
+  }
+}
+
 static void data_select_linked_fn(int event,
                                   TreeElement *te,
                                   TreeStoreElem * /*tselem*/,
@@ -2218,7 +2248,7 @@ static void data_select_linked_fn(int event,
   }
 
   if (event == OL_DOP_SELECT_LINKED) {
-    const PointerRNA &ptr = te_rna_struct->getPointerRNA();
+    const PointerRNA &ptr = te_rna_struct->get_pointer_rna();
     if (RNA_struct_is_ID(ptr.type)) {
       bContext *C = (bContext *)C_v;
       ID *id = static_cast<ID *>(ptr.data);
@@ -2259,7 +2289,7 @@ static void constraint_fn(int event, TreeElement *te, TreeStoreElem * /*tselem*/
       /* there's no active constraint now, so make sure this is the case */
       BKE_constraints_active_set(&ob->constraints, nullptr);
 
-      /* needed to set the flags on posebones correctly */
+      /* Needed to set the flags on pose-bones correctly. */
       ED_object_constraint_update(bmain, ob);
 
       WM_event_add_notifier(C, NC_OBJECT | ND_CONSTRAINT | NA_REMOVED, ob);
@@ -2571,7 +2601,7 @@ void OUTLINER_OT_object_operation(wmOperatorType *ot)
 
 using OutlinerDeleteFn = void (*)(bContext *C, ReportList *reports, Scene *scene, Object *ob);
 
-using ObjectEditData = struct ObjectEditData {
+struct ObjectEditData {
   GSet *objects_set;
   bool is_liboverride_allowed;
   bool is_liboverride_hierarchy_root_allowed;
@@ -2613,7 +2643,7 @@ static TreeTraversalAction outliner_collect_objects_to_delete(TreeElement *te, v
     ID *id_parent = tselem_parent->id;
     /* It's not possible to remove an object from an overridden collection (and potentially scene,
      * through the master collection). */
-    if ((ELEM(GS(id_parent->name), ID_GR, ID_SCE))) {
+    if (ELEM(GS(id_parent->name), ID_GR, ID_SCE)) {
       if (ID_IS_OVERRIDE_LIBRARY_REAL(id_parent)) {
         return TRAVERSE_SKIP_CHILDS;
       }
@@ -3245,7 +3275,7 @@ void OUTLINER_OT_action_set(wmOperatorType *ot)
 
   /* props */
   /* TODO: this would be nicer as an ID-pointer... */
-  prop = RNA_def_enum(ot->srna, "action", DummyRNA_NULL_items, 0, "Action", "");
+  prop = RNA_def_enum(ot->srna, "action", rna_enum_dummy_NULL_items, 0, "Action", "");
   RNA_def_enum_funcs(prop, RNA_action_itemf);
   RNA_def_property_flag(prop, PROP_ENUM_NO_TRANSLATE);
   ot->prop = prop;
@@ -3529,6 +3559,12 @@ static int outliner_data_operation_exec(bContext *C, wmOperator *op)
 
       break;
     }
+    case TSE_GREASE_PENCIL_NODE: {
+      outliner_do_data_operation(space_outliner, datalevel, event, grease_pencil_node_fn, nullptr);
+      WM_event_add_notifier(C, NC_GPENCIL | ND_DATA, nullptr);
+      ED_undo_push(C, "Grease Pencil Node operation");
+      break;
+    }
     case TSE_RNA_STRUCT:
       if (event == OL_DOP_SELECT_LINKED) {
         outliner_do_data_operation(space_outliner, datalevel, event, data_select_linked_fn, C);
@@ -3552,17 +3588,17 @@ static const EnumPropertyItem *outliner_data_op_sets_enum_item_fn(bContext *C,
 {
   /* Check for invalid states. */
   if (C == nullptr) {
-    return DummyRNA_DEFAULT_items;
+    return rna_enum_dummy_DEFAULT_items;
   }
 
   SpaceOutliner *space_outliner = CTX_wm_space_outliner(C);
   if (space_outliner == nullptr) {
-    return DummyRNA_DEFAULT_items;
+    return rna_enum_dummy_DEFAULT_items;
   }
 
   TreeElement *te = get_target_element(space_outliner);
   if (te == nullptr) {
-    return DummyRNA_NULL_items;
+    return rna_enum_dummy_NULL_items;
   }
 
   TreeStoreElem *tselem = TREESTORE(te);
@@ -3598,7 +3634,7 @@ void OUTLINER_OT_data_operation(wmOperatorType *ot)
 
   ot->flag = 0;
 
-  ot->prop = RNA_def_enum(ot->srna, "type", DummyRNA_DEFAULT_items, 0, "Data Operation", "");
+  ot->prop = RNA_def_enum(ot->srna, "type", rna_enum_dummy_DEFAULT_items, 0, "Data Operation", "");
   RNA_def_enum_funcs(ot->prop, outliner_data_op_sets_enum_item_fn);
 }
 
@@ -3611,10 +3647,10 @@ void OUTLINER_OT_data_operation(wmOperatorType *ot)
 static int outliner_operator_menu(bContext *C, const char *opname)
 {
   wmOperatorType *ot = WM_operatortype_find(opname, false);
-  uiPopupMenu *pup = UI_popup_menu_begin(C, WM_operatortype_name(ot, nullptr), ICON_NONE);
+  uiPopupMenu *pup = UI_popup_menu_begin(C, WM_operatortype_name(ot, nullptr).c_str(), ICON_NONE);
   uiLayout *layout = UI_popup_menu_layout(pup);
 
-  /* set this so the default execution context is the same as submenus */
+  /* Set this so the default execution context is the same as sub-menus. */
   uiLayoutSetOperatorContext(layout, WM_OP_INVOKE_REGION_WIN);
 
   if (WM_operator_poll(C, ot)) {
@@ -3705,7 +3741,7 @@ static int do_outliner_operation_event(bContext *C,
   return OPERATOR_CANCELLED;
 }
 
-static int outliner_operation(bContext *C, wmOperator * /*op*/, const wmEvent *event)
+static int outliner_operation_invoke(bContext *C, wmOperator * /*op*/, const wmEvent *event)
 {
   ARegion *region = CTX_wm_region(C);
   SpaceOutliner *space_outliner = CTX_wm_space_outliner(C);
@@ -3735,7 +3771,7 @@ void OUTLINER_OT_operation(wmOperatorType *ot)
   ot->idname = "OUTLINER_OT_operation";
   ot->description = "Context menu for item operations";
 
-  ot->invoke = outliner_operation;
+  ot->invoke = outliner_operation_invoke;
 
   ot->poll = ED_operator_outliner_active;
 }

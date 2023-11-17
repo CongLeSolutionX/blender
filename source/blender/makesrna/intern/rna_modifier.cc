@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -6,9 +6,9 @@
  * \ingroup RNA
  */
 
-#include <float.h>
-#include <limits.h>
-#include <stdlib.h>
+#include <cfloat>
+#include <climits>
+#include <cstdlib>
 
 #include "DNA_armature_types.h"
 #include "DNA_cachefile_types.h"
@@ -20,8 +20,6 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_math.h"
-
 #include "BLT_translation.h"
 
 #include "BKE_animsys.h"
@@ -32,19 +30,19 @@
 #include "BKE_effect.h"
 #include "BKE_fluid.h" /* For BKE_fluid_modifier_free & BKE_fluid_modifier_create_type_data */
 #include "BKE_idprop.h"
-#include "BKE_mesh_mapping.h"
-#include "BKE_mesh_remap.h"
-#include "BKE_multires.h"
+#include "BKE_mesh_mapping.hh"
+#include "BKE_mesh_remap.hh"
+#include "BKE_multires.hh"
 #include "BKE_ocean.h"
 
-#include "RNA_access.h"
-#include "RNA_define.h"
-#include "RNA_enum_types.h"
+#include "RNA_access.hh"
+#include "RNA_define.hh"
+#include "RNA_enum_types.hh"
 
 #include "rna_internal.h"
 
-#include "WM_api.h"
-#include "WM_types.h"
+#include "WM_api.hh"
+#include "WM_types.hh"
 
 #include "MOD_nodes.hh"
 
@@ -445,7 +443,7 @@ const EnumPropertyItem rna_enum_dt_method_vertex_items[] = {
      0,
      "Nearest Edge Interpolated",
      "Copy from interpolated values of vertices from closest point on closest edge"},
-    {MREMAP_MODE_VERT_POLY_NEAREST,
+    {MREMAP_MODE_VERT_FACE_NEAREST,
      "POLY_NEAREST",
      0,
      "Nearest Face Vertex",
@@ -508,17 +506,17 @@ const EnumPropertyItem rna_enum_dt_method_loop_items[] = {
      "NEAREST_POLY",
      0,
      "Nearest Corner of Nearest Face",
-     "Copy from nearest corner of nearest polygon"},
+     "Copy from nearest corner of nearest face"},
     {MREMAP_MODE_LOOP_POLYINTERP_NEAREST,
      "POLYINTERP_NEAREST",
      0,
      "Nearest Face Interpolated",
-     "Copy from interpolated corners of the nearest source polygon"},
+     "Copy from interpolated corners of the nearest source face"},
     {MREMAP_MODE_LOOP_POLYINTERP_LNORPROJ,
      "POLYINTERP_LNORPROJ",
      0,
      "Projected Face Interpolated",
-     "Copy from interpolated corners of the source polygon hit by corner normal projection"},
+     "Copy from interpolated corners of the source face hit by corner normal projection"},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
@@ -528,12 +526,12 @@ const EnumPropertyItem rna_enum_dt_method_poly_items[] = {
      "NEAREST",
      0,
      "Nearest Face",
-     "Copy from nearest polygon (using center points)"},
+     "Copy from nearest face (using center points)"},
     {MREMAP_MODE_POLY_NOR,
      "NORMAL",
      0,
      "Best Normal-Matching",
-     "Copy from source polygon which normal is the closest to destination one"},
+     "Copy from source face which normal is the closest to destination one"},
     {MREMAP_MODE_POLY_POLYINTERP_PNORPROJ,
      "POLYINTERP_PNORPROJ",
      0,
@@ -672,18 +670,18 @@ const EnumPropertyItem rna_enum_subdivision_boundary_smooth_items[] = {
 #  include "DNA_particle_types.h"
 
 #  include "BKE_cachefile.h"
-#  include "BKE_context.h"
+#  include "BKE_context.hh"
 #  include "BKE_deform.h"
-#  include "BKE_mesh_runtime.h"
-#  include "BKE_modifier.h"
-#  include "BKE_object.h"
+#  include "BKE_mesh_runtime.hh"
+#  include "BKE_modifier.hh"
+#  include "BKE_object.hh"
 #  include "BKE_particle.h"
 
 #  include "BLI_sort_utils.h"
 
-#  include "DEG_depsgraph.h"
-#  include "DEG_depsgraph_build.h"
-#  include "DEG_depsgraph_query.h"
+#  include "DEG_depsgraph.hh"
+#  include "DEG_depsgraph_build.hh"
+#  include "DEG_depsgraph_query.hh"
 
 #  ifdef WITH_ALEMBIC
 #    include "ABC_alembic.h"
@@ -907,20 +905,18 @@ static void rna_HookModifier_object_set(PointerRNA *ptr,
 }
 
 static bool rna_HookModifier_object_override_apply(Main *bmain,
-                                                   PointerRNA *ptr_dst,
-                                                   PointerRNA *ptr_src,
-                                                   PointerRNA *ptr_storage,
-                                                   PropertyRNA *prop_dst,
-                                                   PropertyRNA *prop_src,
-                                                   PropertyRNA * /*prop_storage*/,
-                                                   const int len_dst,
-                                                   const int len_src,
-                                                   const int len_storage,
-                                                   PointerRNA * /*ptr_item_dst*/,
-                                                   PointerRNA * /*ptr_item_src*/,
-                                                   PointerRNA * /*ptr_item_storage*/,
-                                                   IDOverrideLibraryPropertyOperation *opop)
+                                                   RNAPropertyOverrideApplyContext &rnaapply_ctx)
 {
+  PointerRNA *ptr_dst = &rnaapply_ctx.ptr_dst;
+  PointerRNA *ptr_src = &rnaapply_ctx.ptr_src;
+  PointerRNA *ptr_storage = &rnaapply_ctx.ptr_storage;
+  PropertyRNA *prop_dst = rnaapply_ctx.prop_dst;
+  PropertyRNA *prop_src = rnaapply_ctx.prop_src;
+  const int len_dst = rnaapply_ctx.len_src;
+  const int len_src = rnaapply_ctx.len_src;
+  const int len_storage = rnaapply_ctx.len_storage;
+  IDOverrideLibraryPropertyOperation *opop = rnaapply_ctx.liboverride_operation;
+
   BLI_assert(len_dst == len_src && (!ptr_storage || len_dst == len_storage) && len_dst == 0);
   BLI_assert(opop->operation == LIBOVERRIDE_OP_REPLACE &&
              "Unsupported RNA override operation on Hook modifier target object pointer");
@@ -975,16 +971,16 @@ static void rna_HookModifier_vertex_indices_get(PointerRNA *ptr, int *values)
 
 static void rna_HookModifier_vertex_indices_set(HookModifierData *hmd,
                                                 ReportList *reports,
-                                                int indices_len,
-                                                int *indices)
+                                                const int *indices,
+                                                int indices_num)
 {
-  if (indices_len == 0) {
+  if (indices_num == 0) {
     MEM_SAFE_FREE(hmd->indexar);
     hmd->indexar_num = 0;
   }
   else {
     /* Reject negative indices. */
-    for (int i = 0; i < indices_len; i++) {
+    for (int i = 0; i < indices_num; i++) {
       if (indices[i] < 0) {
         BKE_reportf(reports, RPT_ERROR, "Negative vertex index in vertex_indices_set");
         return;
@@ -992,14 +988,14 @@ static void rna_HookModifier_vertex_indices_set(HookModifierData *hmd,
     }
 
     /* Copy and sort the index array. */
-    size_t size = sizeof(int) * indices_len;
+    size_t size = sizeof(int) * indices_num;
     int *buffer = static_cast<int *>(MEM_mallocN(size, "hook indexar"));
     memcpy(buffer, indices, size);
 
-    qsort(buffer, indices_len, sizeof(int), BLI_sortutil_cmp_int);
+    qsort(buffer, indices_num, sizeof(int), BLI_sortutil_cmp_int);
 
     /* Reject duplicate indices. */
-    for (int i = 1; i < indices_len; i++) {
+    for (int i = 1; i < indices_num; i++) {
       if (buffer[i] == buffer[i - 1]) {
         BKE_reportf(reports, RPT_ERROR, "Duplicate index %d in vertex_indices_set", buffer[i]);
         MEM_freeN(buffer);
@@ -1010,7 +1006,7 @@ static void rna_HookModifier_vertex_indices_set(HookModifierData *hmd,
     /* Success - save the new array. */
     MEM_SAFE_FREE(hmd->indexar);
     hmd->indexar = buffer;
-    hmd->indexar_num = indices_len;
+    hmd->indexar_num = indices_num;
   }
 }
 
@@ -1076,13 +1072,13 @@ static bool rna_MultiresModifier_external_get(PointerRNA *ptr)
   Object *ob = (Object *)ptr->owner_id;
   Mesh *me = static_cast<Mesh *>(ob->data);
 
-  return CustomData_external_test(&me->ldata, CD_MDISPS);
+  return CustomData_external_test(&me->loop_data, CD_MDISPS);
 }
 
 static void rna_MultiresModifier_filepath_get(PointerRNA *ptr, char *value)
 {
   Object *ob = (Object *)ptr->owner_id;
-  CustomDataExternal *external = ((Mesh *)ob->data)->ldata.external;
+  CustomDataExternal *external = ((Mesh *)ob->data)->loop_data.external;
 
   strcpy(value, (external) ? external->filepath : "");
 }
@@ -1090,7 +1086,7 @@ static void rna_MultiresModifier_filepath_get(PointerRNA *ptr, char *value)
 static void rna_MultiresModifier_filepath_set(PointerRNA *ptr, const char *value)
 {
   Object *ob = (Object *)ptr->owner_id;
-  CustomDataExternal *external = ((Mesh *)ob->data)->ldata.external;
+  CustomDataExternal *external = ((Mesh *)ob->data)->loop_data.external;
 
   if (external && !STREQ(external->filepath, value)) {
     STRNCPY(external->filepath, value);
@@ -1101,7 +1097,7 @@ static void rna_MultiresModifier_filepath_set(PointerRNA *ptr, const char *value
 static int rna_MultiresModifier_filepath_length(PointerRNA *ptr)
 {
   Object *ob = (Object *)ptr->owner_id;
-  CustomDataExternal *external = ((Mesh *)ob->data)->ldata.external;
+  CustomDataExternal *external = ((Mesh *)ob->data)->loop_data.external;
 
   return strlen((external) ? external->filepath : "");
 }
@@ -1363,14 +1359,14 @@ static const EnumPropertyItem *rna_DataTransferModifier_layers_select_src_itemf(
         return item;
       }
 
-      num_data = CustomData_number_of_layers(&me_eval->ldata, CD_PROP_FLOAT2);
+      num_data = CustomData_number_of_layers(&me_eval->loop_data, CD_PROP_FLOAT2);
 
       RNA_enum_item_add_separator(&item, &totitem);
 
       for (i = 0; i < num_data; i++) {
         tmp_item.value = i;
         tmp_item.identifier = tmp_item.name = CustomData_get_layer_name(
-            &me_eval->ldata, CD_PROP_FLOAT2, i);
+            &me_eval->loop_data, CD_PROP_FLOAT2, i);
         RNA_enum_item_add(&item, &totitem, &tmp_item);
       }
     }
@@ -1401,10 +1397,10 @@ static const EnumPropertyItem *rna_DataTransferModifier_layers_select_src_itemf(
 
       const CustomData *cdata;
       if (domain == ATTR_DOMAIN_POINT) {
-        cdata = &mesh_eval->vdata;
+        cdata = &mesh_eval->vert_data;
       }
       else {
-        cdata = &mesh_eval->ldata;
+        cdata = &mesh_eval->loop_data;
       }
 
       eCustomDataType types[2] = {CD_PROP_COLOR, CD_PROP_BYTE_COLOR};
@@ -1480,19 +1476,19 @@ static const EnumPropertyItem *rna_DataTransferModifier_layers_select_dst_itemf(
 
       if (ob_dst && ob_dst->data) {
         Mesh *me_dst;
-        CustomData *ldata;
+        CustomData *loop_data;
         int num_data, i;
 
         me_dst = static_cast<Mesh *>(ob_dst->data);
-        ldata = &me_dst->ldata;
-        num_data = CustomData_number_of_layers(ldata, CD_PROP_FLOAT2);
+        loop_data = &me_dst->loop_data;
+        num_data = CustomData_number_of_layers(loop_data, CD_PROP_FLOAT2);
 
         RNA_enum_item_add_separator(&item, &totitem);
 
         for (i = 0; i < num_data; i++) {
           tmp_item.value = i;
           tmp_item.identifier = tmp_item.name = CustomData_get_layer_name(
-              ldata, CD_PROP_FLOAT2, i);
+              loop_data, CD_PROP_FLOAT2, i);
           RNA_enum_item_add(&item, &totitem, &tmp_item);
         }
       }
@@ -1514,8 +1510,8 @@ static const EnumPropertyItem *rna_DataTransferModifier_layers_select_dst_itemf(
 
         Mesh *me_dst = static_cast<Mesh *>(ob_dst->data);
         CustomData *cdata = STREQ(RNA_property_identifier(prop), "layers_vcol_vert_select_dst") ?
-                                &me_dst->vdata :
-                                &me_dst->ldata;
+                                &me_dst->vert_data :
+                                &me_dst->loop_data;
 
         int idx = 0;
         for (int i = 0; i < 2; i++) {
@@ -1632,14 +1628,13 @@ static PointerRNA rna_ParticleInstanceModifier_particle_system_get(PointerRNA *p
 {
   ParticleInstanceModifierData *psmd = static_cast<ParticleInstanceModifierData *>(ptr->data);
   ParticleSystem *psys;
-  PointerRNA rptr;
 
   if (!psmd->ob) {
     return PointerRNA_NULL;
   }
 
   psys = static_cast<ParticleSystem *>(BLI_findlink(&psmd->ob->particlesystem, psmd->psys - 1));
-  RNA_pointer_create((ID *)psmd->ob, &RNA_ParticleSystem, psys, &rptr);
+  PointerRNA rptr = RNA_pointer_create((ID *)psmd->ob, &RNA_ParticleSystem, psys);
   return rptr;
 }
 
@@ -1681,7 +1676,16 @@ static bool rna_Modifier_show_expanded_get(PointerRNA *ptr)
 static bool rna_NodesModifier_node_group_poll(PointerRNA * /*ptr*/, PointerRNA value)
 {
   bNodeTree *ntree = static_cast<bNodeTree *>(value.data);
-  return ntree->type == NTREE_GEOMETRY;
+  if (ntree->type != NTREE_GEOMETRY) {
+    return false;
+  }
+  if (!ntree->geometry_node_asset_traits) {
+    return false;
+  }
+  if ((ntree->geometry_node_asset_traits->flag & GEO_NODE_ASSET_MODIFIER) == 0) {
+    return false;
+  }
+  return true;
 }
 
 static void rna_NodesModifier_node_group_update(Main *bmain, Scene *scene, PointerRNA *ptr)
@@ -4816,6 +4820,7 @@ static void rna_def_modifier_solidify(BlenderRNA *brna)
   prop = RNA_def_property(srna, "nonmanifold_boundary_mode", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_items(prop, nonmanifold_boundary_mode_items);
   RNA_def_property_ui_text(prop, "Boundary Shape", "Selects the boundary adjustment algorithm");
+  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_MESH);
   RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
   prop = RNA_def_property(srna, "nonmanifold_merge_threshold", PROP_FLOAT, PROP_DISTANCE);
@@ -6545,7 +6550,7 @@ static void rna_def_modifier_datatransfer(BlenderRNA *brna)
                       DT_layer_poly_items,
                       0,
                       "Poly Data Types",
-                      "Which poly data layers to transfer");
+                      "Which face data layers to transfer");
   RNA_def_property_flag(prop, PROP_ENUM_FLAG);
   RNA_def_property_enum_sdna(prop, nullptr, "data_types");
   RNA_def_property_enum_funcs(
@@ -7054,10 +7059,56 @@ static void rna_def_modifier_weightednormal(BlenderRNA *brna)
   RNA_define_lib_overridable(false);
 }
 
+static void rna_def_modifier_nodes_bake(BlenderRNA *brna)
+{
+  StructRNA *srna;
+  PropertyRNA *prop;
+
+  srna = RNA_def_struct(brna, "NodesModifierBake", nullptr);
+  RNA_def_struct_ui_text(srna, "Nodes Modifier Bake", "");
+
+  prop = RNA_def_property(srna, "directory", PROP_STRING, PROP_DIRPATH);
+  RNA_def_property_ui_text(prop, "Directory", "Location on disk where the bake data is stored");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "frame_start", PROP_INT, PROP_TIME);
+  RNA_def_property_ui_text(prop, "Start Frame", "Frame where the baking starts");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "frame_end", PROP_INT, PROP_TIME);
+  RNA_def_property_ui_text(prop, "End Frame", "Frame where the baking ends");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "use_custom_simulation_frame_range", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(
+      prop, nullptr, "flag", NODES_MODIFIER_BAKE_CUSTOM_SIMULATION_FRAME_RANGE);
+  RNA_def_property_ui_text(
+      prop, "Custom Simulation Frame Range", "Override the simulation frame range from the scene");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "use_custom_path", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "flag", NODES_MODIFIER_BAKE_CUSTOM_PATH);
+  RNA_def_property_ui_text(
+      prop, "Custom Path", "Specify a path where the baked data should be stored manually");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+}
+
+static void rna_def_modifier_nodes_bakes(BlenderRNA *brna)
+{
+  StructRNA *srna;
+
+  srna = RNA_def_struct(brna, "NodesModifierBakes", nullptr);
+  RNA_def_struct_sdna(srna, "NodesModifierData");
+  RNA_def_struct_ui_text(srna, "Bakes", "Bake data for every bake node");
+}
+
 static void rna_def_modifier_nodes(BlenderRNA *brna)
 {
   StructRNA *srna;
   PropertyRNA *prop;
+
+  rna_def_modifier_nodes_bake(brna);
+  rna_def_modifier_nodes_bakes(brna);
 
   srna = RNA_def_struct(brna, "NodesModifier", "Modifier");
   RNA_def_struct_ui_text(srna, "Nodes Modifier", "");
@@ -7078,6 +7129,18 @@ static void rna_def_modifier_nodes(BlenderRNA *brna)
   RNA_def_property_ui_text(
       prop, "Simulation Bake Directory", "Location on disk where the bake data is stored");
   RNA_def_property_update(prop, 0, nullptr);
+
+  prop = RNA_def_property(srna, "bakes", PROP_COLLECTION, PROP_NONE);
+  RNA_def_property_struct_type(prop, "NodesModifierBake");
+  RNA_def_property_collection_sdna(prop, nullptr, "bakes", "bakes_num");
+  RNA_def_property_srna(prop, "NodesModifierBakes");
+
+  prop = RNA_def_property(srna, "show_group_selector", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_negative_sdna(
+      prop, nullptr, "flag", NODES_MODIFIER_HIDE_DATABLOCK_SELECTOR);
+  RNA_def_property_ui_text(prop, "Show Node Group", "");
+  RNA_def_property_flag(prop, PROP_NO_DEG_UPDATE);
+  RNA_def_property_update(prop, NC_OBJECT | ND_MODIFIER, nullptr);
 
   RNA_define_lib_overridable(false);
 }

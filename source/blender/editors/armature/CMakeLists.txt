@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2023 Blender Foundation
+# SPDX-FileCopyrightText: 2023 Blender Authors
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
@@ -6,6 +6,7 @@ set(INC
   ../include
   ../../asset_system
   ../../blenfont
+  ../../blenkernel
   ../../blenloader
   ../../blentranslation
   ../../depsgraph
@@ -30,10 +31,10 @@ set(SRC
   armature_select.cc
   armature_skinning.cc
   armature_utils.cc
+  bone_collections.cc
   editarmature_undo.cc
   meshlaplacian.cc
   pose_edit.cc
-  pose_group.cc
   pose_lib_2.cc
   pose_select.cc
   pose_slide.cc
@@ -45,7 +46,8 @@ set(SRC
 )
 
 set(LIB
-  PRIVATE bf::blenkernel
+  PRIVATE bf::animrig
+  bf_blenkernel
   PRIVATE bf::blenlib
   PRIVATE bf::dna
   PRIVATE bf::intern::guardedalloc

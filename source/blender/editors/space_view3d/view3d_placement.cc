@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -13,21 +13,24 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BKE_context.h"
+#include "BLI_math_matrix.h"
+#include "BLI_math_rotation.h"
 
-#include "RNA_access.h"
-#include "RNA_define.h"
-#include "RNA_enum_types.h"
+#include "BKE_context.hh"
 
-#include "WM_api.h"
+#include "RNA_access.hh"
+#include "RNA_define.hh"
+#include "RNA_enum_types.hh"
+
+#include "WM_api.hh"
 #include "WM_toolsystem.h"
 
-#include "ED_gizmo_utils.h"
-#include "ED_screen.h"
-#include "ED_space_api.h"
-#include "ED_view3d.h"
+#include "ED_gizmo_utils.hh"
+#include "ED_screen.hh"
+#include "ED_space_api.hh"
+#include "ED_view3d.hh"
 
-#include "UI_resources.h"
+#include "UI_resources.hh"
 
 #include "GPU_immediate.h"
 
@@ -356,7 +359,7 @@ static void draw_line_bounds(const BoundBox *bounds, const float color[4])
   GPU_blend(GPU_BLEND_NONE);
 }
 
-static bool calc_bbox(struct InteractivePlaceData *ipd, BoundBox *bounds)
+static bool calc_bbox(InteractivePlaceData *ipd, BoundBox *bounds)
 {
   memset(bounds, 0x0, sizeof(*bounds));
 
@@ -528,7 +531,7 @@ static void draw_circle_in_quad(const float v1[3],
  * \{ */
 
 static void draw_primitive_view_impl(const bContext *C,
-                                     struct InteractivePlaceData *ipd,
+                                     InteractivePlaceData *ipd,
                                      const float color[4],
                                      int flatten_axis)
 {
@@ -631,7 +634,7 @@ static void draw_primitive_view_impl(const bContext *C,
 
 static void draw_primitive_view(const bContext *C, ARegion * /*region*/, void *arg)
 {
-  struct InteractivePlaceData *ipd = static_cast<InteractivePlaceData *>(arg);
+  InteractivePlaceData *ipd = static_cast<InteractivePlaceData *>(arg);
   float color[4];
   UI_GetThemeColor3fv(TH_GIZMO_PRIMARY, color);
 
@@ -691,7 +694,7 @@ static bool view3d_interactive_add_calc_snap(bContext * /*C*/,
   if (r_is_snap_invert) {
     *r_is_snap_invert = snap_data->is_snap_invert;
   }
-  return snap_data->snap_elem != SCE_SNAP_TO_NONE;
+  return snap_data->type_target != SCE_SNAP_TO_NONE;
 }
 
 /** \} */
@@ -716,7 +719,7 @@ static void view3d_interactive_add_begin(bContext *C, wmOperator *op, const wmEv
       ePlace_Aspect(RNA_enum_get(op->ptr, "plane_aspect_depth")),
   };
 
-  struct InteractivePlaceData *ipd = static_cast<InteractivePlaceData *>(op->customdata);
+  InteractivePlaceData *ipd = static_cast<InteractivePlaceData *>(op->customdata);
 
   ipd->launch_event = WM_userdef_event_type_from_keymap_type(event->type);
 
@@ -731,14 +734,11 @@ static void view3d_interactive_add_begin(bContext *C, wmOperator *op, const wmEv
       /* Set this flag so snapping always updated. */
       int mval[2];
       WM_event_drag_start_mval(event, ipd->region, mval);
-      int flag_orig = snap_state_new->flag;
-      snap_state_new->flag |= V3D_SNAPCURSOR_TOGGLE_ALWAYS_TRUE;
 
       /* Be sure to also compute the #V3DSnapCursorData.plane_omat. */
       snap_state->draw_plane = true;
 
       ED_view3d_cursor_snap_data_update(snap_state_new, C, mval[0], mval[1]);
-      snap_state_new->flag = eV3DSnapCursor(flag_orig);
     }
   }
 
@@ -879,7 +879,7 @@ static int view3d_interactive_add_invoke(bContext *C, wmOperator *op, const wmEv
 {
   const bool wait_for_input = RNA_boolean_get(op->ptr, "wait_for_input");
 
-  struct InteractivePlaceData *ipd = static_cast<InteractivePlaceData *>(
+  InteractivePlaceData *ipd = static_cast<InteractivePlaceData *>(
       MEM_callocN(sizeof(*ipd), __func__));
   op->customdata = ipd;
 
@@ -908,7 +908,7 @@ static void view3d_interactive_add_exit(bContext *C, wmOperator *op)
 {
   UNUSED_VARS(C);
 
-  struct InteractivePlaceData *ipd = static_cast<InteractivePlaceData *>(op->customdata);
+  InteractivePlaceData *ipd = static_cast<InteractivePlaceData *>(op->customdata);
   ED_view3d_cursor_snap_state_free(ipd->snap_state);
 
   if (ipd->region != nullptr) {
@@ -964,7 +964,7 @@ static int view3d_interactive_add_modal(bContext *C, wmOperator *op, const wmEve
 {
   UNUSED_VARS(C, op);
 
-  struct InteractivePlaceData *ipd = static_cast<InteractivePlaceData *>(op->customdata);
+  InteractivePlaceData *ipd = static_cast<InteractivePlaceData *>(op->customdata);
 
   ARegion *region = ipd->region;
   bool do_redraw = false;

@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -21,8 +21,8 @@
 
 #include "BLT_translation.h"
 
-#include "BKE_curve.h"
-#include "BKE_object.h"
+#include "BKE_curve.hh"
+#include "BKE_object.hh"
 
 using Alembic::AbcGeom::FloatArraySamplePtr;
 using Alembic::AbcGeom::kWrapExisting;

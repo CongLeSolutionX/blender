@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2008 Blender Foundation
+/* SPDX-FileCopyrightText: 2008 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -6,8 +6,8 @@
  * \ingroup edscr
  */
 
-#include <math.h>
-#include <string.h>
+#include <cmath>
+#include <cstring>
 
 #include "MEM_guardedalloc.h"
 
@@ -19,7 +19,7 @@
 #include "BLI_blenlib.h"
 #include "BLI_utildefines.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_global.h"
 #include "BKE_icons.h"
 #include "BKE_image.h"
@@ -27,24 +27,24 @@
 #include "BKE_lib_id.h"
 #include "BKE_main.h"
 #include "BKE_scene.h"
-#include "BKE_screen.h"
+#include "BKE_screen.hh"
 #include "BKE_sound.h"
 #include "BKE_workspace.h"
 
-#include "WM_api.h"
-#include "WM_types.h"
+#include "WM_api.hh"
+#include "WM_types.hh"
 
-#include "ED_clip.h"
-#include "ED_node.h"
-#include "ED_screen.h"
-#include "ED_screen_types.h"
+#include "ED_clip.hh"
+#include "ED_node.hh"
+#include "ED_screen.hh"
+#include "ED_screen_types.hh"
 
-#include "UI_interface.h"
+#include "UI_interface.hh"
 
-#include "WM_message.h"
+#include "WM_message.hh"
 #include "WM_toolsystem.h"
 
-#include "DEG_depsgraph_query.h"
+#include "DEG_depsgraph_query.hh"
 
 #include "screen_intern.h" /* own module include */
 
@@ -212,7 +212,7 @@ bScreen *screen_add(Main *bmain, const char *name, const rcti *rect)
 
 void screen_data_copy(bScreen *to, bScreen *from)
 {
-  /* free contents of 'to', is from blenkernel screen.c */
+  /* Free contents of 'to', is from blenkernel `screen.cc`. */
   BKE_screen_free_data(to);
 
   to->flag = from->flag;
@@ -281,8 +281,8 @@ eScreenDir area_getorientation(ScrArea *sa_a, ScrArea *sa_b)
   short bottom_b = sa_b->v1->vec.y;
 
   /* How much these areas share a common edge. */
-  short overlapx = MIN2(right_a, right_b) - MAX2(left_a, left_b);
-  short overlapy = MIN2(top_a, top_b) - MAX2(bottom_a, bottom_b);
+  short overlapx = std::min(right_a, right_b) - std::max(left_a, left_b);
+  short overlapy = std::min(top_a, top_b) - std::max(bottom_a, bottom_b);
 
   /* Minimum overlap required. */
   const short minx = MIN3(AREAJOINTOLERANCEX, right_a - left_a, right_b - left_b);
@@ -381,8 +381,8 @@ static bool screen_areas_can_align(bScreen *screen, ScrArea *sa1, ScrArea *sa2, 
 
   /* Areas that are _smaller_ than minimum sizes, sharing an edge to be moved. See #100772. */
   if (SCREEN_DIR_IS_VERTICAL(dir)) {
-    const short xmin = MIN2(sa1->v1->vec.x, sa2->v1->vec.x);
-    const short xmax = MAX2(sa1->v3->vec.x, sa2->v3->vec.x);
+    const short xmin = std::min(sa1->v1->vec.x, sa2->v1->vec.x);
+    const short xmax = std::max(sa1->v3->vec.x, sa2->v3->vec.x);
     LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
       if (ELEM(area, sa1, sa2)) {
         continue;
@@ -390,14 +390,14 @@ static bool screen_areas_can_align(bScreen *screen, ScrArea *sa1, ScrArea *sa2, 
       if (area->v3->vec.x - area->v1->vec.x < tolerance &&
           (area->v1->vec.x == xmin || area->v3->vec.x == xmax))
       {
-        /* There is a narrow vertical area sharing an edge of the combined bounds. */
+        WM_report(RPT_ERROR, "A narrow vertical area interferes with this operation");
         return false;
       }
     }
   }
   else {
-    const short ymin = MIN2(sa1->v1->vec.y, sa2->v1->vec.y);
-    const short ymax = MAX2(sa1->v3->vec.y, sa2->v3->vec.y);
+    const short ymin = std::min(sa1->v1->vec.y, sa2->v1->vec.y);
+    const short ymax = std::max(sa1->v3->vec.y, sa2->v3->vec.y);
     LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
       if (ELEM(area, sa1, sa2)) {
         continue;
@@ -405,7 +405,7 @@ static bool screen_areas_can_align(bScreen *screen, ScrArea *sa1, ScrArea *sa2, 
       if (area->v3->vec.y - area->v1->vec.y < tolerance &&
           (area->v1->vec.y == ymin || area->v3->vec.y == ymax))
       {
-        /* There is a narrow horizontal area sharing an edge of the combined bounds. */
+        WM_report(RPT_ERROR, "A narrow horizontal area interferes with this operation");
         return false;
       }
     }
@@ -581,7 +581,7 @@ bool screen_area_close(bContext *C, bScreen *screen, ScrArea *area)
       const int ar_length = vertical ? (neighbor->v3->vec.x - neighbor->v1->vec.x) :
                                        (neighbor->v3->vec.y - neighbor->v1->vec.y);
       /* Calculate the ratio of the lengths of the shared edges. */
-      float alignment = MIN2(area_length, ar_length) / float(MAX2(area_length, ar_length));
+      float alignment = std::min(area_length, ar_length) / float(std::max(area_length, ar_length));
       if (alignment > best_alignment) {
         best_alignment = alignment;
         sa2 = neighbor;
@@ -593,7 +593,7 @@ bool screen_area_close(bContext *C, bScreen *screen, ScrArea *area)
   return screen_area_join_ex(C, screen, sa2, area, true);
 }
 
-void screen_area_spacelink_add(Scene *scene, ScrArea *area, eSpace_Type space_type)
+void screen_area_spacelink_add(const Scene *scene, ScrArea *area, eSpace_Type space_type)
 {
   SpaceType *stype = BKE_spacetype_from_id(space_type);
   SpaceLink *slink = stype->create(area, scene);
@@ -728,7 +728,7 @@ static bool region_poll(const bContext *C,
     return true;
   }
 
-  RegionPollParams params = {0};
+  RegionPollParams params = {nullptr};
   params.screen = screen;
   params.area = area;
   params.region = region;
@@ -805,7 +805,9 @@ void ED_region_exit(bContext *C, ARegion *region)
 
   WM_event_remove_handlers(C, &region->handlers);
   WM_event_modal_handler_region_replace(win, region, nullptr);
-  WM_draw_region_free(region, true);
+  WM_draw_region_free(region);
+  /* The region is not in a state that it can be visible in anymore. Reinitializing is needed. */
+  region->visible = false;
 
   MEM_SAFE_FREE(region->headerstr);
 
@@ -895,7 +897,10 @@ static void screen_cursor_set(wmWindow *win, const int xy[2])
   ScrArea *area = nullptr;
 
   LISTBASE_FOREACH (ScrArea *, area_iter, &screen->areabase) {
-    if ((az = ED_area_actionzone_find_xy(area_iter, xy))) {
+    az = ED_area_actionzone_find_xy(area_iter, xy);
+    /* Scrollers use default cursor and their zones extend outside of their
+     * areas. Ignore here so we can always detect screen edges - #110085. */
+    if (az && az->type != AZONE_REGION_SCROLL) {
       area = area_iter;
       break;
     }
@@ -976,7 +981,7 @@ void ED_screen_set_active_region(bContext *C, wmWindow *win, const int xy[2])
 
       LISTBASE_FOREACH (ARegion *, region, &area_iter->regionbase) {
         /* Call old area's deactivate if assigned. */
-        if (region == region_prev && area_iter->type->deactivate) {
+        if (region == region_prev && area_iter->type && area_iter->type->deactivate) {
           area_iter->type->deactivate(area_iter);
         }
 
@@ -1500,7 +1505,9 @@ static bScreen *screen_state_to_nonnormal(bContext *C,
                RGN_TYPE_FOOTER,
                RGN_TYPE_TOOLS,
                RGN_TYPE_NAV_BAR,
-               RGN_TYPE_EXECUTE))
+               RGN_TYPE_EXECUTE,
+               RGN_TYPE_ASSET_SHELF,
+               RGN_TYPE_ASSET_SHELF_HEADER))
       {
         region->flag |= RGN_FLAG_HIDDEN;
       }
@@ -1631,10 +1638,7 @@ ScrArea *ED_screen_state_toggle(bContext *C, wmWindow *win, ScrArea *area, const
 
 ScrArea *ED_screen_temp_space_open(bContext *C,
                                    const char *title,
-                                   int x,
-                                   int y,
-                                   int sizex,
-                                   int sizey,
+                                   const rcti *rect_unscaled,
                                    eSpace_Type space_type,
                                    int display_type,
                                    bool dialog)
@@ -1645,15 +1649,14 @@ ScrArea *ED_screen_temp_space_open(bContext *C,
     case USER_TEMP_SPACE_DISPLAY_WINDOW:
       if (WM_window_open(C,
                          title,
-                         x,
-                         y,
-                         sizex,
-                         sizey,
+                         rect_unscaled,
                          int(space_type),
                          false,
                          dialog,
                          true,
-                         WIN_ALIGN_LOCATION_CENTER))
+                         WIN_ALIGN_LOCATION_CENTER,
+                         nullptr,
+                         nullptr))
       {
         area = CTX_wm_area(C);
       }
@@ -1676,32 +1679,6 @@ ScrArea *ED_screen_temp_space_open(bContext *C,
   }
 
   return area;
-}
-
-void ED_refresh_viewport_fps(bContext *C)
-{
-  wmTimer *animtimer = CTX_wm_screen(C)->animtimer;
-  Scene *scene = CTX_data_scene(C);
-
-  /* is anim playback running? */
-  if (animtimer && (U.uiflag & USER_SHOW_FPS)) {
-    ScreenFrameRateInfo *fpsi = static_cast<ScreenFrameRateInfo *>(scene->fps_info);
-
-    /* if there isn't any info, init it first */
-    if (fpsi == nullptr) {
-      fpsi = static_cast<ScreenFrameRateInfo *>(
-          scene->fps_info = MEM_callocN(sizeof(ScreenFrameRateInfo),
-                                        "refresh_viewport_fps fps_info"));
-    }
-
-    /* update the values */
-    fpsi->redrawtime = fpsi->lredrawtime;
-    fpsi->lredrawtime = animtimer->ltime;
-  }
-  else {
-    /* playback stopped or shouldn't be running */
-    MEM_SAFE_FREE(scene->fps_info);
-  }
 }
 
 void ED_screen_animation_timer(bContext *C, int redraws, int sync, int enable)

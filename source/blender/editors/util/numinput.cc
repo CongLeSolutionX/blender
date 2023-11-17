@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -8,7 +8,8 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_math.h"
+#include "BLI_math_rotation.h"
+#include "BLI_math_vector.h"
 #include "BLI_string.h"
 #include "BLI_string_cursor_utf8.h"
 #include "BLI_string_utf8.h"
@@ -16,22 +17,22 @@
 
 #include "BLT_translation.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_report.h"
 #include "BKE_scene.h"
 #include "BKE_unit.h"
 
 #include "DNA_scene_types.h"
 
-#include "WM_api.h"
-#include "WM_types.h"
+#include "WM_api.hh"
+#include "WM_types.hh"
 
 #ifdef WITH_PYTHON
 #  include "BPY_extern_run.h"
 #endif
 
-#include "ED_numinput.h"
-#include "UI_interface.h"
+#include "ED_numinput.hh"
+#include "UI_interface.hh"
 
 /* Numeric input which isn't allowing full numeric editing. */
 #define USE_FAKE_EDIT
@@ -508,7 +509,7 @@ bool handleNumInput(bContext *C, NumInput *n, const wmEvent *event)
     case EVT_CKEY:
       if (event->modifier & KM_CTRL) {
         /* Copy current `str` to the copy/paste buffer. */
-        WM_clipboard_text_set(n->str, 0);
+        WM_clipboard_text_set(n->str, false);
         updated = true;
       }
       break;
@@ -561,7 +562,9 @@ bool handleNumInput(bContext *C, NumInput *n, const wmEvent *event)
       }
     }
 
-    if (!editstr_insert_at_cursor(n, utf8_buf, BLI_str_utf8_size(utf8_buf))) {
+    const int utf8_buf_len = BLI_str_utf8_size_or_error(utf8_buf);
+    BLI_assert(utf8_buf_len != -1);
+    if (!editstr_insert_at_cursor(n, utf8_buf, utf8_buf_len)) {
       return false;
     }
 

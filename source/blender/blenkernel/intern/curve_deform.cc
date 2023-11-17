@@ -8,12 +8,14 @@
  * Deform coordinates by a curve object (used by modifier).
  */
 
-#include <math.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cmath>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 
-#include "BLI_math.h"
+#include "BLI_math_matrix.h"
+#include "BLI_math_rotation.h"
+#include "BLI_math_vector.h"
 #include "BLI_utildefines.h"
 
 #include "DNA_curve_types.h"
@@ -21,10 +23,11 @@
 #include "DNA_object_types.h"
 
 #include "BKE_anim_path.h"
-#include "BKE_curve.h"
-#include "BKE_editmesh.h"
-#include "BKE_lattice.h"
-#include "BKE_modifier.h"
+#include "BKE_curve.hh"
+#include "BKE_editmesh.hh"
+#include "BKE_lattice.hh"
+#include "BKE_modifier.hh"
+#include "BKE_object_types.hh"
 
 #include "BKE_deform.h"
 
@@ -67,12 +70,12 @@ static bool calc_curve_deform(
   short index;
   const bool is_neg_axis = (axis > 2);
 
-  if (ob_curve->runtime.curve_cache == nullptr) {
+  if (ob_curve->runtime->curve_cache == nullptr) {
     /* Happens with a cyclic dependencies. */
     return false;
   }
 
-  if (ob_curve->runtime.curve_cache->anim_path_accum_length == nullptr) {
+  if (ob_curve->runtime->curve_cache->anim_path_accum_length == nullptr) {
     return false; /* happens on append, cyclic dependencies and empty curves */
   }
 
@@ -89,7 +92,7 @@ static bool calc_curve_deform(
       }
     }
     else {
-      const CurveCache *cc = ob_curve->runtime.curve_cache;
+      const CurveCache *cc = ob_curve->runtime->curve_cache;
       float totdist = BKE_anim_path_get_length(cc);
       if (LIKELY(totdist > FLT_EPSILON)) {
         fac = -(co[index] - cd->dmax[index]) / totdist;
@@ -111,7 +114,7 @@ static bool calc_curve_deform(
       }
     }
     else {
-      const CurveCache *cc = ob_curve->runtime.curve_cache;
+      const CurveCache *cc = ob_curve->runtime->curve_cache;
       float totdist = BKE_anim_path_get_length(cc);
       if (LIKELY(totdist > FLT_EPSILON)) {
         fac = +(co[index] - cd->dmin[index]) / totdist;

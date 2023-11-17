@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -29,6 +29,11 @@ class ModifierComputeContext : public ComputeContext {
 
  public:
   ModifierComputeContext(const ComputeContext *parent, std::string modifier_name);
+
+  StringRefNull modifier_name() const
+  {
+    return modifier_name_;
+  }
 
  private:
   void print_current_in_line(std::ostream &stream) const override;

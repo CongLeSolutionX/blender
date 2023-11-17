@@ -1,13 +1,15 @@
-# SPDX-FileCopyrightText: 2006 Blender Foundation
+# SPDX-FileCopyrightText: 2006 Blender Authors
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 set(INC
   .
+  dummy
   intern
   metal
   opengl
   vulkan
+  ../blenkernel
   ../bmesh
   ../draw
   ../imbuf
@@ -41,13 +43,12 @@ if(WITH_RENDERDOC)
 endif()
 
 set(INC_SYS
-  ${Epoxy_INCLUDE_DIRS}
 )
 
 set(SRC
   intern/gpu_batch.cc
-  intern/gpu_batch_presets.c
-  intern/gpu_batch_utils.c
+  intern/gpu_batch_presets.cc
+  intern/gpu_batch_utils.cc
   intern/gpu_capabilities.cc
   intern/gpu_codegen.cc
   intern/gpu_compute.cc
@@ -56,17 +57,17 @@ set(SRC
   intern/gpu_drawlist.cc
   intern/gpu_framebuffer.cc
   intern/gpu_immediate.cc
-  intern/gpu_immediate_util.c
+  intern/gpu_immediate_util.cc
   intern/gpu_index_buffer.cc
-  intern/gpu_init_exit.c
-  intern/gpu_material.c
+  intern/gpu_init_exit.cc
+  intern/gpu_material.cc
   intern/gpu_matrix.cc
   intern/gpu_node_graph.cc
   intern/gpu_platform.cc
   intern/gpu_query.cc
-  intern/gpu_select.c
+  intern/gpu_select.cc
   intern/gpu_select_next.cc
-  intern/gpu_select_pick.c
+  intern/gpu_select_pick.cc
   intern/gpu_select_sample_query.cc
   intern/gpu_shader.cc
   intern/gpu_shader_builtin.cc
@@ -80,7 +81,7 @@ set(SRC
   intern/gpu_uniform_buffer.cc
   intern/gpu_vertex_buffer.cc
   intern/gpu_vertex_format.cc
-  intern/gpu_viewport.c
+  intern/gpu_viewport.cc
 
   GPU_batch.h
   GPU_batch_presets.h
@@ -141,6 +142,12 @@ set(SRC
   intern/gpu_uniform_buffer_private.hh
   intern/gpu_vertex_buffer_private.hh
   intern/gpu_vertex_format_private.h
+
+  dummy/dummy_backend.hh
+  dummy/dummy_batch.hh
+  dummy/dummy_context.hh
+  dummy/dummy_framebuffer.hh
+  dummy/dummy_vertex_buffer.hh
 )
 
 set(OPENGL_SRC
@@ -193,6 +200,7 @@ set(VULKAN_SRC
   vulkan/vk_bindable_resource.cc
   vulkan/vk_buffer.cc
   vulkan/vk_command_buffer.cc
+  vulkan/vk_command_buffers.cc
   vulkan/vk_common.cc
   vulkan/vk_context.cc
   vulkan/vk_data_conversion.cc
@@ -215,6 +223,7 @@ set(VULKAN_SRC
   vulkan/vk_query.cc
   vulkan/vk_resource_tracker.cc
   vulkan/vk_sampler.cc
+  vulkan/vk_samplers.cc
   vulkan/vk_shader.cc
   vulkan/vk_shader_interface.cc
   vulkan/vk_shader_log.cc
@@ -230,6 +239,7 @@ set(VULKAN_SRC
   vulkan/vk_bindable_resource.hh
   vulkan/vk_buffer.hh
   vulkan/vk_command_buffer.hh
+  vulkan/vk_command_buffers.hh
   vulkan/vk_common.hh
   vulkan/vk_context.hh
   vulkan/vk_data_conversion.hh
@@ -252,6 +262,7 @@ set(VULKAN_SRC
   vulkan/vk_query.hh
   vulkan/vk_resource_tracker.hh
   vulkan/vk_sampler.hh
+  vulkan/vk_samplers.hh
   vulkan/vk_shader.hh
   vulkan/vk_shader_interface.hh
   vulkan/vk_shader_log.hh
@@ -314,18 +325,23 @@ set(METAL_SRC
 )
 
 set(LIB
-  PRIVATE bf::blenkernel
   PRIVATE bf::blenlib
   PRIVATE bf::dna
   PRIVATE bf::intern::atomic
-  ${Epoxy_LIBRARIES}
   PRIVATE bf::intern::guardedalloc
 )
 
 # Select Backend source based on availability
 if(WITH_OPENGL_BACKEND)
-  list(APPEND SRC ${OPENGL_SRC})
-
+  list(APPEND INC_SYS
+    ${Epoxy_INCLUDE_DIRS}
+  )
+  list(APPEND SRC
+    ${OPENGL_SRC}
+  )
+  list(APPEND LIB
+    ${Epoxy_LIBRARIES}
+  )
   add_definitions(-DWITH_OPENGL_BACKEND)
 endif()
 
@@ -335,12 +351,25 @@ endif()
 
 
 if(WITH_VULKAN_BACKEND)
+
+  if(APPLE)
+    list(APPEND INC_SYS
+      ${MOLTENVK_INCLUDE_DIRS}
+    )
+
+    list(APPEND LIB
+      ${MOLTENVK_LIBRARIES}
+    )
+  endif()
+
   list(APPEND INC
     ../../../extern/vulkan_memory_allocator
   )
   list(APPEND INC_SYS
     ${VULKAN_INCLUDE_DIRS}
-    ${MOLTENVK_INCLUDE_DIRS}
+  )
+
+  list(APPEND INC_SYS
     ${SHADERC_INCLUDE_DIRS}
   )
   list(APPEND SRC
@@ -350,7 +379,6 @@ if(WITH_VULKAN_BACKEND)
   list(APPEND LIB
     ${VULKAN_LIBRARIES}
     ${SHADERC_LIBRARIES}
-    ${MOLTENVK_LIBRARIES}
     extern_vulkan_memory_allocator
   )
 
@@ -449,6 +477,7 @@ set(GLSL_SRC
   shaders/common/gpu_shader_common_math.glsl
   shaders/common/gpu_shader_common_math_utils.glsl
   shaders/common/gpu_shader_common_mix_rgb.glsl
+  shaders/common/gpu_shader_debug_gradients_lib.glsl
   shaders/common/gpu_shader_math_base_lib.glsl
   shaders/common/gpu_shader_math_fast_lib.glsl
   shaders/common/gpu_shader_math_matrix_lib.glsl
@@ -514,6 +543,7 @@ set(GLSL_SRC
   shaders/material/gpu_shader_material_separate_xyz.glsl
   shaders/material/gpu_shader_material_set.glsl
   shaders/material/gpu_shader_material_shader_to_rgba.glsl
+  shaders/material/gpu_shader_material_sheen.glsl
   shaders/material/gpu_shader_material_squeeze.glsl
   shaders/material/gpu_shader_material_subsurface_scattering.glsl
   shaders/material/gpu_shader_material_tangent.glsl
@@ -538,7 +568,6 @@ set(GLSL_SRC
   shaders/material/gpu_shader_material_vector_displacement.glsl
   shaders/material/gpu_shader_material_vector_math.glsl
   shaders/material/gpu_shader_material_vector_rotate.glsl
-  shaders/material/gpu_shader_material_velvet.glsl
   shaders/material/gpu_shader_material_vertex_color.glsl
   shaders/material/gpu_shader_material_volume_absorption.glsl
   shaders/material/gpu_shader_material_volume_principled.glsl
@@ -571,6 +600,8 @@ set(GLSL_SRC_TEST
   tests/shaders/gpu_compute_ssbo_test.glsl
   tests/shaders/gpu_compute_vbo_test.glsl
   tests/shaders/gpu_compute_dummy_test.glsl
+  tests/shaders/gpu_framebuffer_layer_viewport_test.glsl
+  tests/shaders/gpu_framebuffer_subpass_input_test.glsl
   tests/shaders/gpu_push_constants_test.glsl
 )
 
@@ -602,13 +633,13 @@ if(WITH_METAL_BACKEND)
 
   set(MSL_C)
   foreach(MSL_FILE ${MSL_SRC})
-    data_to_c_simple(${MSL_FILE} MSL_C)
+    data_to_c_simple(${MSL_FILE} MSL_C STRIP_LEADING_C_COMMENTS)
   endforeach()
 endif()
 
 set(GLSL_C)
 foreach(GLSL_FILE ${GLSL_SRC})
-  data_to_c_simple(${GLSL_FILE} GLSL_C)
+  data_to_c_simple(${GLSL_FILE} GLSL_C STRIP_LEADING_C_COMMENTS)
 endforeach()
 
 set(SHADER_C)
@@ -644,12 +675,15 @@ set(SRC_SHADER_CREATE_INFOS
   ../draw/engines/eevee_next/shaders/infos/eevee_hiz_info.hh
   ../draw/engines/eevee_next/shaders/infos/eevee_irradiance_cache_info.hh
   ../draw/engines/eevee_next/shaders/infos/eevee_light_culling_info.hh
+  ../draw/engines/eevee_next/shaders/infos/eevee_lut_info.hh
   ../draw/engines/eevee_next/shaders/infos/eevee_material_info.hh
   ../draw/engines/eevee_next/shaders/infos/eevee_motion_blur_info.hh
   ../draw/engines/eevee_next/shaders/infos/eevee_reflection_probe_info.hh
   ../draw/engines/eevee_next/shaders/infos/eevee_shadow_info.hh
   ../draw/engines/eevee_next/shaders/infos/eevee_subsurface_info.hh
+  ../draw/engines/eevee_next/shaders/infos/eevee_tracing_info.hh
   ../draw/engines/eevee_next/shaders/infos/eevee_velocity_info.hh
+  ../draw/engines/eevee_next/shaders/infos/eevee_volume_info.hh
   ../draw/engines/gpencil/shaders/infos/gpencil_info.hh
   ../draw/engines/gpencil/shaders/infos/gpencil_vfx_info.hh
   ../draw/engines/overlay/shaders/infos/overlay_antialiasing_info.hh
@@ -668,12 +702,10 @@ set(SRC_SHADER_CREATE_INFOS
   ../draw/engines/overlay/shaders/infos/overlay_wireframe_info.hh
   ../draw/engines/select/shaders/infos/select_id_info.hh
   ../draw/engines/workbench/shaders/infos/workbench_composite_info.hh
+  ../draw/engines/workbench/shaders/infos/workbench_depth_info.hh
   ../draw/engines/workbench/shaders/infos/workbench_effect_antialiasing_info.hh
-  ../draw/engines/workbench/shaders/infos/workbench_effect_cavity_info.hh
   ../draw/engines/workbench/shaders/infos/workbench_effect_dof_info.hh
   ../draw/engines/workbench/shaders/infos/workbench_effect_outline_info.hh
-  ../draw/engines/workbench/shaders/infos/workbench_merge_infront_info.hh
-  ../draw/engines/workbench/shaders/infos/workbench_overlay_depth_info.hh
   ../draw/engines/workbench/shaders/infos/workbench_prepass_info.hh
   ../draw/engines/workbench/shaders/infos/workbench_shadow_info.hh
   ../draw/engines/workbench/shaders/infos/workbench_transparent_resolve_info.hh
@@ -819,7 +851,6 @@ if(WITH_GPU_BUILDTIME_SHADER_BUILDER)
     bf_intern_ghost
     ${PLATFORM_LINKLIBS}
     PRIVATE bf::intern::guardedalloc
-    PRIVATE bf::blenkernel
   )
   target_include_directories(shader_builder PRIVATE ${INC} ${CMAKE_CURRENT_BINARY_DIR})
 

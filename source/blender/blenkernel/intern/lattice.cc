@@ -6,16 +6,17 @@
  * \ingroup bke
  */
 
-#include <math.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cmath>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 
 #include "MEM_guardedalloc.h"
 
 #include "BLI_bitmap.h"
 #include "BLI_listbase.h"
-#include "BLI_math.h"
+#include "BLI_math_matrix.h"
+#include "BLI_math_vector.h"
 #include "BLI_utildefines.h"
 
 #include "BLT_translation.h"
@@ -32,20 +33,21 @@
 #include "DNA_scene_types.h"
 
 #include "BKE_anim_data.h"
-#include "BKE_curve.h"
+#include "BKE_curve.hh"
 #include "BKE_deform.h"
 #include "BKE_displist.h"
 #include "BKE_idtype.h"
-#include "BKE_lattice.h"
+#include "BKE_lattice.hh"
 #include "BKE_lib_id.h"
 #include "BKE_lib_query.h"
 #include "BKE_main.h"
-#include "BKE_modifier.h"
-#include "BKE_object.h"
+#include "BKE_modifier.hh"
+#include "BKE_object.hh"
+#include "BKE_object_types.hh"
 
-#include "DEG_depsgraph_query.h"
+#include "DEG_depsgraph_query.hh"
 
-#include "BLO_read_write.h"
+#include "BLO_read_write.hh"
 
 static void lattice_init_data(ID *id)
 {
@@ -116,8 +118,14 @@ static void lattice_free_data(ID *id)
 
 static void lattice_foreach_id(ID *id, LibraryForeachIDData *data)
 {
-  Lattice *lattice = (Lattice *)id;
+  Lattice *lattice = reinterpret_cast<Lattice *>(id);
+  const int flag = BKE_lib_query_foreachid_process_flags_get(data);
+
   BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, lattice->key, IDWALK_CB_USER);
+
+  if (flag & IDWALK_DO_DEPRECATED_POINTERS) {
+    BKE_LIB_FOREACHID_PROCESS_ID_NOCHECK(data, lattice->ipo, IDWALK_CB_USER);
+  }
 }
 
 static void lattice_blend_write(BlendWriter *writer, ID *id, const void *id_address)
@@ -131,11 +139,6 @@ static void lattice_blend_write(BlendWriter *writer, ID *id, const void *id_addr
   /* write LibData */
   BLO_write_id_struct(writer, Lattice, id_address, &lt->id);
   BKE_id_blend_write(writer, &lt->id);
-
-  /* write animdata */
-  if (lt->adt) {
-    BKE_animdata_blend_write(writer, lt->adt);
-  }
 
   /* direct data */
   BLO_write_struct_array(writer, BPoint, lt->pntsu * lt->pntsv * lt->pntsw, lt->def);
@@ -155,23 +158,6 @@ static void lattice_blend_read_data(BlendDataReader *reader, ID *id)
 
   lt->editlatt = nullptr;
   lt->batch_cache = nullptr;
-
-  BLO_read_data_address(reader, &lt->adt);
-  BKE_animdata_blend_read_data(reader, lt->adt);
-}
-
-static void lattice_blend_read_lib(BlendLibReader *reader, ID *id)
-{
-  Lattice *lt = (Lattice *)id;
-  BLO_read_id_address(reader, id, &lt->ipo);  // XXX deprecated - old animation system
-  BLO_read_id_address(reader, id, &lt->key);
-}
-
-static void lattice_blend_read_expand(BlendExpander *expander, ID *id)
-{
-  Lattice *lt = (Lattice *)id;
-  BLO_expand(expander, lt->ipo);  // XXX deprecated - old animation system
-  BLO_expand(expander, lt->key);
 }
 
 IDTypeInfo IDType_ID_LT = {
@@ -180,7 +166,7 @@ IDTypeInfo IDType_ID_LT = {
     /*main_listbase_index*/ INDEX_ID_LT,
     /*struct_size*/ sizeof(Lattice),
     /*name*/ "Lattice",
-    /*name_plural*/ "lattices",
+    /*name_plural*/ N_("lattices"),
     /*translation_context*/ BLT_I18NCONTEXT_ID_LATTICE,
     /*flags*/ IDTYPE_FLAGS_APPEND_IS_REUSABLE,
     /*asset_type_info*/ nullptr,
@@ -196,8 +182,7 @@ IDTypeInfo IDType_ID_LT = {
 
     /*blend_write*/ lattice_blend_write,
     /*blend_read_data*/ lattice_blend_read_data,
-    /*blend_read_lib*/ lattice_blend_read_lib,
-    /*blend_read_expand*/ lattice_blend_read_expand,
+    /*blend_read_after_liblink*/ nullptr,
 
     /*blend_read_undo_preserve*/ nullptr,
 
@@ -353,9 +338,9 @@ void BKE_lattice_resize(Lattice *lt, int uNew, int vNew, int wNew, Object *ltOb)
     /* works best if we force to linear type (endpoints match) */
     lt->typeu = lt->typev = lt->typew = KEY_LINEAR;
 
-    if (ltOb->runtime.curve_cache) {
+    if (ltOb->runtime->curve_cache) {
       /* prevent using deformed locations */
-      BKE_displist_free(&ltOb->runtime.curve_cache->disp);
+      BKE_displist_free(&ltOb->runtime->curve_cache->disp);
     }
 
     copy_m4_m4(mat, ltOb->object_to_world);
@@ -417,13 +402,13 @@ void outside_lattice(Lattice *lt)
     bp = lt->def;
 
     if (lt->pntsu > 1) {
-      du = 1.0f / ((float)lt->pntsu - 1);
+      du = 1.0f / float(lt->pntsu - 1);
     }
     if (lt->pntsv > 1) {
-      dv = 1.0f / ((float)lt->pntsv - 1);
+      dv = 1.0f / float(lt->pntsv - 1);
     }
     if (lt->pntsw > 1) {
-      dw = 1.0f / ((float)lt->pntsw - 1);
+      dw = 1.0f / float(lt->pntsw - 1);
     }
 
     for (w = 0; w < lt->pntsw; w++) {
@@ -523,14 +508,14 @@ void BKE_lattice_vert_coords_apply(Lattice *lt, const float (*vert_coords)[3])
 void BKE_lattice_modifiers_calc(Depsgraph *depsgraph, Scene *scene, Object *ob)
 {
   BKE_object_free_derived_caches(ob);
-  if (ob->runtime.curve_cache == nullptr) {
-    ob->runtime.curve_cache = static_cast<CurveCache *>(
+  if (ob->runtime->curve_cache == nullptr) {
+    ob->runtime->curve_cache = static_cast<CurveCache *>(
         MEM_callocN(sizeof(CurveCache), "CurveCache for lattice"));
   }
 
   Lattice *lt = static_cast<Lattice *>(ob->data);
-  VirtualModifierData virtualModifierData;
-  ModifierData *md = BKE_modifiers_get_virtual_modifierlist(ob, &virtualModifierData);
+  VirtualModifierData virtual_modifier_data;
+  ModifierData *md = BKE_modifiers_get_virtual_modifierlist(ob, &virtual_modifier_data);
   float(*vert_coords)[3] = nullptr;
   int numVerts;
   const bool is_editmode = (lt->editlatt != nullptr);
@@ -548,10 +533,10 @@ void BKE_lattice_modifiers_calc(Depsgraph *depsgraph, Scene *scene, Object *ob)
     if (is_editmode && !(md->mode & eModifierMode_Editmode)) {
       continue;
     }
-    if (mti->isDisabled && mti->isDisabled(scene, md, 0)) {
+    if (mti->is_disabled && mti->is_disabled(scene, md, false)) {
       continue;
     }
-    if (mti->type != eModifierTypeType_OnlyDeform) {
+    if (mti->type != ModifierTypeType::OnlyDeform) {
       continue;
     }
 
@@ -561,7 +546,8 @@ void BKE_lattice_modifiers_calc(Depsgraph *depsgraph, Scene *scene, Object *ob)
       vert_coords = BKE_lattice_vert_coords_alloc(effective_lattice, &numVerts);
     }
 
-    mti->deformVerts(md, &mectx, nullptr, vert_coords, numVerts);
+    mti->deform_verts(
+        md, &mectx, nullptr, {reinterpret_cast<blender::float3 *>(vert_coords), numVerts});
   }
 
   if (vert_coords == nullptr) {
@@ -617,7 +603,7 @@ void BKE_lattice_center_median(Lattice *lt, float cent[3])
     add_v3_v3(cent, lt->def[i].vec);
   }
 
-  mul_v3_fl(cent, 1.0f / (float)numVerts);
+  mul_v3_fl(cent, 1.0f / float(numVerts));
 }
 
 static void boundbox_lattice(Object *ob)
@@ -626,11 +612,11 @@ static void boundbox_lattice(Object *ob)
   Lattice *lt;
   float min[3], max[3];
 
-  if (ob->runtime.bb == nullptr) {
-    ob->runtime.bb = static_cast<BoundBox *>(MEM_callocN(sizeof(BoundBox), "Lattice boundbox"));
+  if (ob->runtime->bb == nullptr) {
+    ob->runtime->bb = static_cast<BoundBox *>(MEM_callocN(sizeof(BoundBox), "Lattice boundbox"));
   }
 
-  bb = ob->runtime.bb;
+  bb = ob->runtime->bb;
   lt = static_cast<Lattice *>(ob->data);
 
   INIT_MINMAX(min, max);
@@ -644,13 +630,13 @@ BoundBox *BKE_lattice_boundbox_get(Object *ob)
 {
   boundbox_lattice(ob);
 
-  return ob->runtime.bb;
+  return ob->runtime->bb;
 }
 
 void BKE_lattice_minmax_dl(Object *ob, Lattice *lt, float min[3], float max[3])
 {
-  DispList *dl = ob->runtime.curve_cache ?
-                     BKE_displist_find(&ob->runtime.curve_cache->disp, DL_VERTS) :
+  DispList *dl = ob->runtime->curve_cache ?
+                     BKE_displist_find(&ob->runtime->curve_cache->disp, DL_VERTS) :
                      nullptr;
 
   if (!dl) {
@@ -705,9 +691,7 @@ void BKE_lattice_transform(Lattice *lt, const float mat[4][4], bool do_keys)
   }
 
   if (do_keys && lt->key) {
-    KeyBlock *kb;
-
-    for (kb = static_cast<KeyBlock *>(lt->key->block.first); kb; kb = kb->next) {
+    LISTBASE_FOREACH (KeyBlock *, kb, &lt->key->block) {
       float *fp = static_cast<float *>(kb->data);
       for (i = kb->totelem; i--; fp += 3) {
         mul_m4_v3(mat, fp);
@@ -735,9 +719,7 @@ void BKE_lattice_translate(Lattice *lt, const float offset[3], bool do_keys)
   }
 
   if (do_keys && lt->key) {
-    KeyBlock *kb;
-
-    for (kb = static_cast<KeyBlock *>(lt->key->block.first); kb; kb = kb->next) {
+    LISTBASE_FOREACH (KeyBlock *, kb, &lt->key->block) {
       float *fp = static_cast<float *>(kb->data);
       for (i = kb->totelem; i--; fp += 3) {
         add_v3_v3(fp, offset);

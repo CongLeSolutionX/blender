@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2004-2022 Blender Foundation
+/* SPDX-FileCopyrightText: 2004-2022 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -138,7 +138,7 @@ static PyObject *SShape_compute_bbox(BPy_SShape *self)
   Py_RETURN_NONE;
 }
 
-// const Material &     material (unsigned i) const
+// const Material &     material (uint i) const
 // const vector< Material > &   materials () const
 // void     SetMaterials (const vector< Material > &iMaterials)
 

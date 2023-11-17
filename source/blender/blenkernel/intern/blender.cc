@@ -8,9 +8,9 @@
  * Application level startup/shutdown functionality.
  */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 
 #include "MEM_guardedalloc.h"
 
@@ -26,7 +26,7 @@
 #include "BKE_blender_user_menu.h"
 #include "BKE_blender_version.h" /* own include */
 #include "BKE_blendfile.h"
-#include "BKE_brush.h"
+#include "BKE_brush.hh"
 #include "BKE_cachefile.h"
 #include "BKE_callbacks.h"
 #include "BKE_global.h"
@@ -37,15 +37,15 @@
 #include "BKE_node.h"
 #include "BKE_report.h"
 #include "BKE_scene.h"
-#include "BKE_screen.h"
+#include "BKE_screen.hh"
 #include "BKE_studiolight.h"
 
-#include "DEG_depsgraph.h"
+#include "DEG_depsgraph.hh"
 
 #include "RE_pipeline.h"
 #include "RE_texture.h"
 
-#include "SEQ_sequencer.h"
+#include "SEQ_sequencer.hh"
 
 #include "BLF_api.h"
 
@@ -56,7 +56,7 @@ UserDef U;
 /** \name Blender Free on Exit
  * \{ */
 
-void BKE_blender_free(void)
+void BKE_blender_free()
 {
   /* samples are in a global list..., also sets G_MAIN->sound->sample nullptr */
 
@@ -93,7 +93,10 @@ void BKE_blender_free(void)
 
 static char blender_version_string[48] = "";
 
-static void blender_version_init(void)
+/* Only includes patch if non-zero. */
+static char blender_version_string_compact[48] = "";
+
+static void blender_version_init()
 {
   const char *version_cycle = "";
   if (STREQ(STRINGIFY(BLENDER_VERSION_CYCLE), "alpha")) {
@@ -118,14 +121,45 @@ static void blender_version_init(void)
            BLENDER_VERSION % 100,
            BLENDER_VERSION_PATCH,
            version_cycle);
+
+  SNPRINTF(blender_version_string_compact,
+           "%d.%01d%s",
+           BLENDER_VERSION / 100,
+           BLENDER_VERSION % 100,
+           version_cycle);
 }
 
-const char *BKE_blender_version_string(void)
+const char *BKE_blender_version_string()
 {
   return blender_version_string;
 }
 
-bool BKE_blender_version_is_alpha(void)
+const char *BKE_blender_version_string_compact()
+{
+  return blender_version_string_compact;
+}
+
+void BKE_blender_version_blendfile_string_from_values(char *str_buff,
+                                                      const size_t str_buff_maxncpy,
+                                                      const short file_version,
+                                                      const short file_subversion)
+{
+  const short file_version_major = file_version / 100;
+  const short file_version_minor = file_version % 100;
+  if (file_subversion >= 0) {
+    BLI_snprintf(str_buff,
+                 str_buff_maxncpy,
+                 "%d.%d (sub %d)",
+                 file_version_major,
+                 file_version_minor,
+                 file_subversion);
+  }
+  else {
+    BLI_snprintf(str_buff, str_buff_maxncpy, "%d.%d", file_version_major, file_version_minor);
+  }
+}
+
+bool BKE_blender_version_is_alpha()
 {
   bool is_alpha = STREQ(STRINGIFY(BLENDER_VERSION_CYCLE), "alpha");
   return is_alpha;
@@ -137,7 +171,7 @@ bool BKE_blender_version_is_alpha(void)
 /** \name Blender #Global Initialize/Clear
  * \{ */
 
-void BKE_blender_globals_init(void)
+void BKE_blender_globals_init()
 {
   blender_version_init();
 
@@ -147,7 +181,7 @@ void BKE_blender_globals_init(void)
 
   BKE_blender_globals_main_replace(BKE_main_new());
 
-  STRNCPY(G.ima, "//");
+  STRNCPY(G.filepath_last_image, "//");
 
 #ifndef WITH_PYTHON_SECURITY /* default */
   G.f |= G_FLAG_SCRIPT_AUTOEXEC;
@@ -158,7 +192,7 @@ void BKE_blender_globals_init(void)
   G.log.level = 1;
 }
 
-void BKE_blender_globals_clear(void)
+void BKE_blender_globals_clear()
 {
   if (G_MAIN == nullptr) {
     return;
@@ -307,6 +341,7 @@ void BKE_blender_userdef_data_free(UserDef *userdef, bool clear_fonts)
   BLI_freelistN(&userdef->autoexec_paths);
   BLI_freelistN(&userdef->script_directories);
   BLI_freelistN(&userdef->asset_libraries);
+  BLI_freelistN(&userdef->extension_repos);
 
   BLI_freelistN(&userdef->uistyles);
   BLI_freelistN(&userdef->uifonts);
@@ -336,7 +371,7 @@ void BKE_blender_userdef_app_template_data_swap(UserDef *userdef_a, UserDef *use
   } \
   ((void)0)
 
-#define LIST_SWAP(id) \
+#define LISTBASE_SWAP(id) \
   { \
     SWAP(ListBase, userdef_a->id, userdef_b->id); \
   } \
@@ -353,12 +388,12 @@ void BKE_blender_userdef_app_template_data_swap(UserDef *userdef_a, UserDef *use
   } \
   ((void)0)
 
-  LIST_SWAP(uistyles);
-  LIST_SWAP(uifonts);
-  LIST_SWAP(themes);
-  LIST_SWAP(addons);
-  LIST_SWAP(user_keymaps);
-  LIST_SWAP(user_keyconfig_prefs);
+  LISTBASE_SWAP(uistyles);
+  LISTBASE_SWAP(uifonts);
+  LISTBASE_SWAP(themes);
+  LISTBASE_SWAP(addons);
+  LISTBASE_SWAP(user_keymaps);
+  LISTBASE_SWAP(user_keyconfig_prefs);
 
   DATA_SWAP(font_path_ui);
   DATA_SWAP(font_path_ui_mono);
@@ -374,7 +409,7 @@ void BKE_blender_userdef_app_template_data_swap(UserDef *userdef_a, UserDef *use
 
 #undef SWAP_TYPELESS
 #undef DATA_SWAP
-#undef LIST_SWAP
+#undef LISTBASE_SWAP
 #undef FLAG_SWAP
 }
 
@@ -399,7 +434,7 @@ void BKE_blender_userdef_app_template_data_set_and_free(UserDef *userdef)
  * \{ */
 
 static struct AtExitData {
-  struct AtExitData *next;
+  AtExitData *next;
 
   void (*func)(void *user_data);
   void *user_data;
@@ -407,7 +442,7 @@ static struct AtExitData {
 
 void BKE_blender_atexit_register(void (*func)(void *user_data), void *user_data)
 {
-  struct AtExitData *ae = static_cast<AtExitData *>(malloc(sizeof(*ae)));
+  AtExitData *ae = static_cast<AtExitData *>(malloc(sizeof(*ae)));
   ae->next = g_atexit;
   ae->func = func;
   ae->user_data = user_data;
@@ -416,8 +451,8 @@ void BKE_blender_atexit_register(void (*func)(void *user_data), void *user_data)
 
 void BKE_blender_atexit_unregister(void (*func)(void *user_data), const void *user_data)
 {
-  struct AtExitData *ae = g_atexit;
-  struct AtExitData **ae_p = &g_atexit;
+  AtExitData *ae = g_atexit;
+  AtExitData **ae_p = &g_atexit;
 
   while (ae) {
     if ((ae->func == func) && (ae->user_data == user_data)) {
@@ -430,9 +465,9 @@ void BKE_blender_atexit_unregister(void (*func)(void *user_data), const void *us
   }
 }
 
-void BKE_blender_atexit(void)
+void BKE_blender_atexit()
 {
-  struct AtExitData *ae = g_atexit, *ae_next;
+  AtExitData *ae = g_atexit, *ae_next;
   while (ae) {
     ae_next = ae->next;
 

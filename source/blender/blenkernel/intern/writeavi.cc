@@ -8,7 +8,7 @@
  * \ingroup bke
  */
 
-#include <string.h>
+#include <cstring>
 
 #include "MEM_guardedalloc.h"
 
@@ -54,7 +54,7 @@ static int append_stub(void * /*context_v*/,
   return 0;
 }
 
-static void *context_create_stub(void)
+static void *context_create_stub()
 {
   return nullptr;
 }
@@ -206,7 +206,7 @@ static int start_avi(void *context_v,
   y = recty;
 
   quality = rd->im_format.quality;
-  framerate = (double)rd->frs_sec / (double)rd->frs_sec_base;
+  framerate = double(rd->frs_sec) / double(rd->frs_sec_base);
 
   if (rd->im_format.imtype != R_IMF_IMTYPE_AVIJPEG) {
     format = AVI_FORMAT_AVI_RGB;
@@ -251,11 +251,11 @@ static int append_avi(void *context_v,
     return 0;
   }
 
-  /* note that libavi free's the buffer... stupid interface - zr */
+  /* NOTE(@zr): that LIBAVI free's the buffer (stupid interface). */
   rectot = static_cast<uint *>(MEM_mallocN(rectx * recty * sizeof(int), "rectot"));
   rt1 = rectot;
   rt2 = (uint *)pixels + (recty - 1) * rectx;
-  /* flip y and convert to abgr */
+  /* Flip Y and convert to ABGR. */
   for (y = 0; y < recty; y++, rt1 += rectx, rt2 -= rectx) {
     memcpy(rt1, rt2, rectx * sizeof(int));
 
@@ -288,7 +288,7 @@ static void end_avi(void *context_v)
   AVI_close_compress(avi);
 }
 
-static void *context_create_avi(void)
+static void *context_create_avi()
 {
   AviMovie *avi = static_cast<AviMovie *>(MEM_mallocN(sizeof(AviMovie), "avimovie"));
   return avi;

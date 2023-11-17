@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -6,18 +6,18 @@
  * \ingroup RNA
  */
 
-#include "RNA_define.h"
-#include "RNA_enum_types.h"
-#include "RNA_types.h"
+#include "RNA_define.hh"
+#include "RNA_enum_types.hh"
+#include "RNA_types.hh"
 
 #include "BKE_workspace.h"
 
-#include "ED_render.h"
+#include "ED_render.hh"
 
 #include "RE_engine.h"
 
-#include "WM_api.h"
-#include "WM_types.h"
+#include "WM_api.hh"
+#include "WM_types.hh"
 
 #include "rna_internal.h"
 
@@ -33,10 +33,10 @@
 #  include "DNA_screen_types.h"
 #  include "DNA_space_types.h"
 
-#  include "ED_asset.h"
-#  include "ED_paint.h"
+#  include "ED_asset.hh"
+#  include "ED_paint.hh"
 
-#  include "RNA_access.h"
+#  include "RNA_access.hh"
 
 #  include "WM_toolsystem.h"
 
@@ -170,7 +170,7 @@ const EnumPropertyItem *rna_WorkSpace_tools_mode_itemf(bContext * /*C*/,
     case SPACE_SEQ:
       return rna_enum_space_sequencer_view_type_items;
   }
-  return DummyRNA_DEFAULT_items;
+  return rna_enum_dummy_DEFAULT_items;
 }
 
 static bool rna_WorkSpaceTool_use_paint_canvas_get(PointerRNA *ptr)
@@ -285,7 +285,7 @@ static void rna_def_workspace_tool(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "mode", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, nullptr, "mode");
-  RNA_def_property_enum_items(prop, DummyRNA_DEFAULT_items);
+  RNA_def_property_enum_items(prop, rna_enum_dummy_DEFAULT_items);
   RNA_def_property_enum_funcs(prop, nullptr, nullptr, "rna_WorkSpace_tools_mode_itemf");
   RNA_def_property_ui_text(prop, "Tool Mode", "");
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);
@@ -296,12 +296,12 @@ static void rna_def_workspace_tool(BlenderRNA *brna)
   RNA_def_property_boolean_funcs(prop, "rna_WorkSpaceTool_use_paint_canvas_get", nullptr);
   RNA_def_property_ui_text(prop, "Use Paint Canvas", "Does this tool use a painting canvas");
 
-  RNA_define_verify_sdna(0);
+  RNA_define_verify_sdna(false);
   prop = RNA_def_property(srna, "has_datablock", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);
   RNA_def_property_ui_text(prop, "Has Data-Block", "");
   RNA_def_property_boolean_funcs(prop, "rna_WorkSpaceTool_has_datablock_get", nullptr);
-  RNA_define_verify_sdna(1);
+  RNA_define_verify_sdna(true);
 
   prop = RNA_def_property(srna, "widget", PROP_STRING, PROP_NONE);
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);

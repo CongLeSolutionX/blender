@@ -6,10 +6,10 @@
  * \ingroup bke
  */
 
-#include <math.h>
-#include <stddef.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cmath>
+#include <cstddef>
+#include <cstdlib>
+#include <cstring>
 
 #include "MEM_guardedalloc.h"
 
@@ -24,9 +24,12 @@
 
 #include "BLI_blenlib.h"
 #include "BLI_ghash.h"
-#include "BLI_math.h"
+#include "BLI_math_color.h"
+#include "BLI_math_matrix.h"
+#include "BLI_math_rotation.h"
+#include "BLI_math_vector.h"
 #include "BLI_session_uuid.h"
-#include "BLI_string_utils.h"
+#include "BLI_string_utils.hh"
 #include "BLI_utildefines.h"
 
 #include "BLT_translation.h"
@@ -35,29 +38,33 @@
 #include "BKE_anim_data.h"
 #include "BKE_anim_visualization.h"
 #include "BKE_animsys.h"
-#include "BKE_armature.h"
-#include "BKE_asset.h"
+#include "BKE_armature.hh"
+#include "BKE_asset.hh"
 #include "BKE_constraint.h"
 #include "BKE_deform.h"
 #include "BKE_fcurve.h"
-#include "BKE_icons.h"
 #include "BKE_idprop.h"
 #include "BKE_idtype.h"
 #include "BKE_lib_id.h"
 #include "BKE_lib_query.h"
 #include "BKE_main.h"
-#include "BKE_object.h"
+#include "BKE_object.hh"
+#include "BKE_object_types.hh"
+#include "BKE_preview_image.hh"
 
-#include "DEG_depsgraph.h"
-#include "DEG_depsgraph_build.h"
+#include "DEG_depsgraph.hh"
+#include "DEG_depsgraph_build.hh"
 
 #include "BIK_api.h"
 
-#include "RNA_access.h"
-#include "RNA_path.h"
+#include "RNA_access.hh"
+#include "RNA_path.hh"
 #include "RNA_prototypes.h"
 
-#include "BLO_read_write.h"
+#include "BLO_read_write.hh"
+
+#include "ANIM_bone_collections.h"
+#include "ANIM_bonecolor.hh"
 
 #include "CLG_log.h"
 
@@ -164,7 +171,8 @@ static void action_free_data(ID *id)
 
 static void action_foreach_id(ID *id, LibraryForeachIDData *data)
 {
-  bAction *act = (bAction *)id;
+  bAction *act = reinterpret_cast<bAction *>(id);
+  const int flag = BKE_lib_query_foreachid_process_flags_get(data);
 
   LISTBASE_FOREACH (FCurve *, fcu, &act->curves) {
     BKE_LIB_FOREACHID_PROCESS_FUNCTION_CALL(data, BKE_fcurve_foreach_id(fcu, data));
@@ -172,6 +180,15 @@ static void action_foreach_id(ID *id, LibraryForeachIDData *data)
 
   LISTBASE_FOREACH (TimeMarker *, marker, &act->markers) {
     BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, marker->camera, IDWALK_CB_NOP);
+  }
+
+  if (flag & IDWALK_DO_DEPRECATED_POINTERS) {
+    LISTBASE_FOREACH (bActionChannel *, chan, &act->chanbase) {
+      BKE_LIB_FOREACHID_PROCESS_ID_NOCHECK(data, chan->ipo, IDWALK_CB_USER);
+      LISTBASE_FOREACH (bConstraintChannel *, chan_constraint, &chan->constraintChannels) {
+        BKE_LIB_FOREACHID_PROCESS_ID_NOCHECK(data, chan_constraint->ipo, IDWALK_CB_USER);
+      }
+    }
   }
 }
 
@@ -223,61 +240,6 @@ static void action_blend_read_data(BlendDataReader *reader, ID *id)
   BKE_previewimg_blend_read(reader, act->preview);
 }
 
-static void blend_read_lib_constraint_channels(BlendLibReader *reader, ID *id, ListBase *chanbase)
-{
-  LISTBASE_FOREACH (bConstraintChannel *, chan, chanbase) {
-    BLO_read_id_address(reader, id, &chan->ipo);
-  }
-}
-
-static void action_blend_read_lib(BlendLibReader *reader, ID *id)
-{
-  bAction *act = (bAction *)id;
-
-  /* XXX deprecated - old animation system <<< */
-  LISTBASE_FOREACH (bActionChannel *, chan, &act->chanbase) {
-    BLO_read_id_address(reader, id, &chan->ipo);
-    blend_read_lib_constraint_channels(reader, &act->id, &chan->constraintChannels);
-  }
-  /* >>> XXX deprecated - old animation system */
-
-  BKE_fcurve_blend_read_lib(reader, id, &act->curves);
-
-  LISTBASE_FOREACH (TimeMarker *, marker, &act->markers) {
-    if (marker->camera) {
-      BLO_read_id_address(reader, id, &marker->camera);
-    }
-  }
-}
-
-static void blend_read_expand_constraint_channels(BlendExpander *expander, ListBase *chanbase)
-{
-  LISTBASE_FOREACH (bConstraintChannel *, chan, chanbase) {
-    BLO_expand(expander, chan->ipo);
-  }
-}
-
-static void action_blend_read_expand(BlendExpander *expander, ID *id)
-{
-  bAction *act = (bAction *)id;
-
-  /* XXX deprecated - old animation system -------------- */
-  LISTBASE_FOREACH (bActionChannel *, chan, &act->chanbase) {
-    BLO_expand(expander, chan->ipo);
-    blend_read_expand_constraint_channels(expander, &chan->constraintChannels);
-  }
-  /* --------------------------------------------------- */
-
-  /* F-Curves in Action */
-  BKE_fcurve_blend_read_expand(expander, &act->curves);
-
-  LISTBASE_FOREACH (TimeMarker *, marker, &act->markers) {
-    if (marker->camera) {
-      BLO_expand(expander, marker->camera);
-    }
-  }
-}
-
 static IDProperty *action_asset_type_property(const bAction *action)
 {
   const bool is_single_frame = BKE_action_has_single_frame(action);
@@ -289,7 +251,7 @@ static IDProperty *action_asset_type_property(const bAction *action)
   return property;
 }
 
-static void action_asset_pre_save(void *asset_ptr, AssetMetaData *asset_data)
+static void action_asset_metadata_ensure(void *asset_ptr, AssetMetaData *asset_data)
 {
   bAction *action = (bAction *)asset_ptr;
   BLI_assert(GS(action->id.name) == ID_AC);
@@ -299,7 +261,8 @@ static void action_asset_pre_save(void *asset_ptr, AssetMetaData *asset_data)
 }
 
 static AssetTypeInfo AssetType_AC = {
-    /*pre_save_fn*/ action_asset_pre_save,
+    /*pre_save_fn*/ action_asset_metadata_ensure,
+    /*on_mark_asset_fn*/ action_asset_metadata_ensure,
 };
 
 IDTypeInfo IDType_ID_AC = {
@@ -324,8 +287,7 @@ IDTypeInfo IDType_ID_AC = {
 
     /*blend_write*/ action_blend_write,
     /*blend_read_data*/ action_blend_read_data,
-    /*blend_read_lib*/ action_blend_read_lib,
-    /*blend_read_expand*/ action_blend_read_expand,
+    /*blend_read_after_liblink*/ nullptr,
 
     /*blend_read_undo_preserve*/ nullptr,
 
@@ -364,15 +326,13 @@ bActionGroup *get_active_actiongroup(bAction *act)
 
 void set_active_action_group(bAction *act, bActionGroup *agrp, short select)
 {
-  bActionGroup *grp;
-
   /* sanity checks */
   if (act == nullptr) {
     return;
   }
 
   /* Deactivate all others */
-  for (grp = static_cast<bActionGroup *>(act->groups.first); grp; grp = grp->next) {
+  LISTBASE_FOREACH (bActionGroup *, grp, &act->groups) {
     if ((grp == agrp) && (select)) {
       grp->flag |= AGRP_ACTIVE;
     }
@@ -409,6 +369,28 @@ void action_group_colors_sync(bActionGroup *grp, const bActionGroup *ref_grp)
         rgba_uchar_args_set(grp->cs.active, 0x18, 0xb6, 0xe0, 255);
       }
     }
+  }
+}
+
+void action_group_colors_set_from_posebone(bActionGroup *grp, const bPoseChannel *pchan)
+{
+  const BoneColor &color = blender::animrig::ANIM_bonecolor_posebone_get(pchan);
+  action_group_colors_set(grp, &color);
+}
+
+void action_group_colors_set(bActionGroup *grp, const BoneColor *color)
+{
+  const blender::animrig::BoneColor &bone_color = color->wrap();
+
+  grp->customCol = bone_color.palette_index;
+
+  const ThemeWireColor *effective_color = bone_color.effective_color();
+  if (effective_color) {
+    /* The drawing code assumes that grp->cs always contains the effective
+     * color. This is why the effective color is always written to it, and why
+     * the above action_group_colors_sync() function exists: it needs to update
+     * grp->cs in case the theme changes. */
+    memcpy(&grp->cs, effective_color, sizeof(grp->cs));
   }
 }
 
@@ -598,15 +580,13 @@ bActionGroup *BKE_action_group_find_name(bAction *act, const char name[])
 
 void action_groups_clear_tempflags(bAction *act)
 {
-  bActionGroup *agrp;
-
   /* sanity checks */
   if (ELEM(nullptr, act, act->groups.first)) {
     return;
   }
 
   /* flag clearing loop */
-  for (agrp = static_cast<bActionGroup *>(act->groups.first); agrp; agrp = agrp->next) {
+  LISTBASE_FOREACH (bActionGroup *, agrp, &act->groups) {
     agrp->flag &= ~AGRP_TEMP;
   }
 }
@@ -698,24 +678,22 @@ bool BKE_pose_channels_is_valid(const bPose *pose)
 
 #endif
 
-bool BKE_pose_is_layer_visible(const bArmature *arm, const bPoseChannel *pchan)
+bool BKE_pose_is_bonecoll_visible(const bArmature *arm, const bPoseChannel *pchan)
 {
-  return (pchan->bone->layer & arm->layer);
+  return pchan->bone && ANIM_bonecoll_is_visible(arm, pchan->bone);
 }
 
-bPoseChannel *BKE_pose_channel_active(Object *ob, const bool check_arm_layer)
+bPoseChannel *BKE_pose_channel_active(Object *ob, const bool check_bonecoll)
 {
   bArmature *arm = static_cast<bArmature *>((ob) ? ob->data : nullptr);
-  bPoseChannel *pchan;
-
   if (ELEM(nullptr, ob, ob->pose, arm)) {
     return nullptr;
   }
 
   /* find active */
-  for (pchan = static_cast<bPoseChannel *>(ob->pose->chanbase.first); pchan; pchan = pchan->next) {
+  LISTBASE_FOREACH (bPoseChannel *, pchan, &ob->pose->chanbase) {
     if ((pchan->bone) && (pchan->bone == arm->act_bone)) {
-      if (!check_arm_layer || BKE_pose_is_layer_visible(arm, pchan)) {
+      if (!check_bonecoll || ANIM_bonecoll_is_visible(arm, pchan->bone)) {
         return pchan;
       }
     }
@@ -724,7 +702,7 @@ bPoseChannel *BKE_pose_channel_active(Object *ob, const bool check_arm_layer)
   return nullptr;
 }
 
-bPoseChannel *BKE_pose_channel_active_if_layer_visible(Object *ob)
+bPoseChannel *BKE_pose_channel_active_if_bonecoll_visible(Object *ob)
 {
   return BKE_pose_channel_active(ob, true);
 }
@@ -737,12 +715,12 @@ bPoseChannel *BKE_pose_channel_active_or_first_selected(Object *ob)
     return nullptr;
   }
 
-  bPoseChannel *pchan = BKE_pose_channel_active_if_layer_visible(ob);
+  bPoseChannel *pchan = BKE_pose_channel_active_if_bonecoll_visible(ob);
   if (pchan && (pchan->bone->flag & BONE_SELECTED) && PBONE_VISIBLE(arm, pchan->bone)) {
     return pchan;
   }
 
-  for (pchan = static_cast<bPoseChannel *>(ob->pose->chanbase.first); pchan; pchan = pchan->next) {
+  LISTBASE_FOREACH (bPoseChannel *, pchan, &ob->pose->chanbase) {
     if (pchan->bone != nullptr) {
       if ((pchan->bone->flag & BONE_SELECTED) && PBONE_VISIBLE(arm, pchan->bone)) {
         return pchan;
@@ -784,7 +762,6 @@ void BKE_pose_copy_data_ex(bPose **dst,
                            const bool copy_constraints)
 {
   bPose *outPose;
-  bPoseChannel *pchan;
   ListBase listb;
 
   if (!src) {
@@ -810,7 +787,7 @@ void BKE_pose_copy_data_ex(bPose **dst,
   outPose->ikparam = MEM_dupallocN(src->ikparam);
   outPose->avs = src->avs;
 
-  for (pchan = static_cast<bPoseChannel *>(outPose->chanbase.first); pchan; pchan = pchan->next) {
+  LISTBASE_FOREACH (bPoseChannel *, pchan, &outPose->chanbase) {
     if ((flag & LIB_ID_CREATE_NO_USER_REFCOUNT) == 0) {
       id_us_plus((ID *)pchan->custom);
     }
@@ -900,12 +877,9 @@ void BKE_pose_ikparam_init(bPose *pose)
 /* only for real IK, not for auto-IK */
 static bool pose_channel_in_IK_chain(Object *ob, bPoseChannel *pchan, int level)
 {
-  bConstraint *con;
-  Bone *bone;
-
   /* No need to check if constraint is active (has influence),
    * since all constraints with CONSTRAINT_IK_AUTO are active */
-  for (con = static_cast<bConstraint *>(pchan->constraints.first); con; con = con->next) {
+  LISTBASE_FOREACH (bConstraint *, con, &pchan->constraints) {
     if (con->type == CONSTRAINT_TYPE_KINEMATIC) {
       bKinematicConstraint *data = static_cast<bKinematicConstraint *>(con->data);
       if ((data->rootbone == 0) || (data->rootbone > level)) {
@@ -915,7 +889,7 @@ static bool pose_channel_in_IK_chain(Object *ob, bPoseChannel *pchan, int level)
       }
     }
   }
-  for (bone = static_cast<Bone *>(pchan->bone->childbase.first); bone; bone = bone->next) {
+  LISTBASE_FOREACH (Bone *, bone, &pchan->bone->childbase) {
     pchan = BKE_pose_channel_find_name(ob->pose, bone->name);
     if (pchan && pose_channel_in_IK_chain(ob, pchan, level + 1)) {
       return true;
@@ -932,10 +906,8 @@ bool BKE_pose_channel_in_IK_chain(Object *ob, bPoseChannel *pchan)
 void BKE_pose_channels_hash_ensure(bPose *pose)
 {
   if (!pose->chanhash) {
-    bPoseChannel *pchan;
-
     pose->chanhash = BLI_ghash_str_new("make_pose_chan gh");
-    for (pchan = static_cast<bPoseChannel *>(pose->chanbase.first); pchan; pchan = pchan->next) {
+    LISTBASE_FOREACH (bPoseChannel *, pchan, &pose->chanbase) {
       BLI_ghash_insert(pose->chanhash, pchan->name, pchan);
     }
   }
@@ -971,7 +943,6 @@ void BKE_pose_channels_remove(Object *ob,
   /* Erase any associated pose channel, along with any references to them */
   if (ob->pose) {
     bPoseChannel *pchan, *pchan_next;
-    bConstraint *con;
 
     for (pchan = static_cast<bPoseChannel *>(ob->pose->chanbase.first); pchan; pchan = pchan_next)
     {
@@ -988,12 +959,10 @@ void BKE_pose_channels_remove(Object *ob,
       }
       else {
         /* Maybe something the bone references is being removed instead? */
-        for (con = static_cast<bConstraint *>(pchan->constraints.first); con; con = con->next) {
+        LISTBASE_FOREACH (bConstraint *, con, &pchan->constraints) {
           ListBase targets = {nullptr, nullptr};
-          bConstraintTarget *ct;
-
           if (BKE_constraint_targets_get(con, &targets)) {
-            for (ct = static_cast<bConstraintTarget *>(targets.first); ct; ct = ct->next) {
+            LISTBASE_FOREACH (bConstraintTarget *, ct, &targets) {
               if (ct->tar == ob) {
                 if (ct->subtarget[0]) {
                   if (filter_fn(ct->subtarget, user_data)) {
@@ -1004,7 +973,7 @@ void BKE_pose_channels_remove(Object *ob,
               }
             }
 
-            BKE_constraint_targets_flush(con, &targets, 0);
+            BKE_constraint_targets_flush(con, &targets, false);
           }
         }
 
@@ -1081,6 +1050,7 @@ void BKE_pose_channel_free_bbone_cache(bPoseChannel_Runtime *runtime)
   MEM_SAFE_FREE(runtime->bbone_pose_mats);
   MEM_SAFE_FREE(runtime->bbone_deform_mats);
   MEM_SAFE_FREE(runtime->bbone_dual_quats);
+  MEM_SAFE_FREE(runtime->bbone_segment_boundaries);
 }
 
 void BKE_pose_channel_free(bPoseChannel *pchan)
@@ -1090,10 +1060,8 @@ void BKE_pose_channel_free(bPoseChannel *pchan)
 
 void BKE_pose_channels_free_ex(bPose *pose, bool do_id_user)
 {
-  bPoseChannel *pchan;
-
-  if (pose->chanbase.first) {
-    for (pchan = static_cast<bPoseChannel *>(pose->chanbase.first); pchan; pchan = pchan->next) {
+  if (!BLI_listbase_is_empty(&pose->chanbase)) {
+    LISTBASE_FOREACH (bPoseChannel *, pchan, &pose->chanbase) {
       BKE_pose_channel_free_ex(pchan, do_id_user);
     }
 
@@ -1199,68 +1167,75 @@ void BKE_pose_channel_copy_data(bPoseChannel *pchan, const bPoseChannel *pchan_f
 
 void BKE_pose_update_constraint_flags(bPose *pose)
 {
-  bPoseChannel *pchan, *parchan;
-  bConstraint *con;
-
-  /* clear */
-  for (pchan = static_cast<bPoseChannel *>(pose->chanbase.first); pchan; pchan = pchan->next) {
-    pchan->constflag = 0;
-  }
   pose->flag &= ~POSE_CONSTRAINTS_TIMEDEPEND;
 
-  /* detect */
-  for (pchan = static_cast<bPoseChannel *>(pose->chanbase.first); pchan; pchan = pchan->next) {
-    for (con = static_cast<bConstraint *>(pchan->constraints.first); con; con = con->next) {
-      if (con->type == CONSTRAINT_TYPE_KINEMATIC) {
-        bKinematicConstraint *data = (bKinematicConstraint *)con->data;
+  LISTBASE_FOREACH (bPoseChannel *, pchan, &pose->chanbase) {
+    pchan->constflag = 0;
 
-        pchan->constflag |= PCHAN_HAS_IK;
+    LISTBASE_FOREACH (bConstraint *, con, &pchan->constraints) {
+      pchan->constflag |= PCHAN_HAS_CONST;
 
-        if (data->tar == nullptr || (data->tar->type == OB_ARMATURE && data->subtarget[0] == 0)) {
-          pchan->constflag |= PCHAN_HAS_TARGET;
-        }
+      switch (con->type) {
+        case CONSTRAINT_TYPE_KINEMATIC: {
+          bKinematicConstraint *data = (bKinematicConstraint *)con->data;
 
-        /* negative rootbone = recalc rootbone index. used in do_versions */
-        if (data->rootbone < 0) {
-          data->rootbone = 0;
+          pchan->constflag |= PCHAN_HAS_IK;
 
-          if (data->flag & CONSTRAINT_IK_TIP) {
-            parchan = pchan;
-          }
-          else {
-            parchan = pchan->parent;
+          if (data->tar == nullptr || (data->tar->type == OB_ARMATURE && data->subtarget[0] == 0))
+          {
+            pchan->constflag |= PCHAN_HAS_NO_TARGET;
           }
 
-          while (parchan) {
-            data->rootbone++;
-            if ((parchan->bone->flag & BONE_CONNECTED) == 0) {
-              break;
+          bPoseChannel *chain_tip = (data->flag & CONSTRAINT_IK_TIP) ? pchan : pchan->parent;
+
+          /* negative rootbone = recalc rootbone index. used in do_versions */
+          if (data->rootbone < 0) {
+            data->rootbone = 0;
+
+            bPoseChannel *parchan = chain_tip;
+            while (parchan) {
+              data->rootbone++;
+              if ((parchan->bone->flag & BONE_CONNECTED) == 0) {
+                break;
+              }
+              parchan = parchan->parent;
             }
-            parchan = parchan->parent;
           }
-        }
-      }
-      else if (con->type == CONSTRAINT_TYPE_FOLLOWPATH) {
-        bFollowPathConstraint *data = (bFollowPathConstraint *)con->data;
 
-        /* for drawing constraint colors when color set allows this */
-        pchan->constflag |= PCHAN_HAS_CONST;
-
-        /* if we have a valid target, make sure that this will get updated on frame-change
-         * (needed for when there is no anim-data for this pose)
-         */
-        if ((data->tar) && (data->tar->type == OB_CURVES_LEGACY)) {
-          pose->flag |= POSE_CONSTRAINTS_TIMEDEPEND;
+          /* Mark the pose bones in the IK chain as influenced by it. */
+          {
+            bPoseChannel *chain_bone = chain_tip;
+            for (short index = 0; chain_bone && (data->rootbone == 0 || index < data->rootbone);
+                 index++) {
+              chain_bone->constflag |= PCHAN_INFLUENCED_BY_IK;
+              chain_bone = chain_bone->parent;
+            }
+          }
+          break;
         }
-      }
-      else if (con->type == CONSTRAINT_TYPE_SPLINEIK) {
-        pchan->constflag |= PCHAN_HAS_SPLINEIK;
-      }
-      else {
-        pchan->constflag |= PCHAN_HAS_CONST;
+
+        case CONSTRAINT_TYPE_FOLLOWPATH: {
+          bFollowPathConstraint *data = (bFollowPathConstraint *)con->data;
+
+          /* if we have a valid target, make sure that this will get updated on frame-change
+           * (needed for when there is no anim-data for this pose)
+           */
+          if ((data->tar) && (data->tar->type == OB_CURVES_LEGACY)) {
+            pose->flag |= POSE_CONSTRAINTS_TIMEDEPEND;
+          }
+          break;
+        }
+
+        case CONSTRAINT_TYPE_SPLINEIK:
+          pchan->constflag |= PCHAN_HAS_SPLINEIK;
+          break;
+
+        default:
+          break;
       }
     }
   }
+
   pose->flag &= ~POSE_CONSTRAINTS_NEED_UPDATE_FLAGS;
 }
 
@@ -1291,7 +1266,6 @@ bActionGroup *BKE_pose_add_group(bPose *pose, const char *name)
 
 void BKE_pose_remove_group(bPose *pose, bActionGroup *grp, const int index)
 {
-  bPoseChannel *pchan;
   int idx = index;
 
   if (idx < 1) {
@@ -1304,7 +1278,7 @@ void BKE_pose_remove_group(bPose *pose, bActionGroup *grp, const int index)
    * - firstly, make sure nothing references it
    * - also, make sure that those after this item get corrected
    */
-  for (pchan = static_cast<bPoseChannel *>(pose->chanbase.first); pchan; pchan = pchan->next) {
+  LISTBASE_FOREACH (bPoseChannel *, pchan, &pose->chanbase) {
     if (pchan->agrp_index == idx) {
       pchan->agrp_index = 0;
     }
@@ -1342,11 +1316,9 @@ void BKE_pose_remove_group_index(bPose *pose, const int index)
 
 bool BKE_action_has_motion(const bAction *act)
 {
-  FCurve *fcu;
-
   /* return on the first F-Curve that has some keyframes/samples defined */
   if (act) {
-    for (fcu = static_cast<FCurve *>(act->curves.first); fcu; fcu = fcu->next) {
+    LISTBASE_FOREACH (FCurve *, fcu, &act->curves) {
       if (fcu->totvert) {
         return true;
       }
@@ -1404,12 +1376,11 @@ void BKE_action_frame_range_calc(const bAction *act,
                                  float *r_start,
                                  float *r_end)
 {
-  FCurve *fcu;
   float min = 999999999.0f, max = -999999999.0f;
   short foundvert = 0, foundmod = 0;
 
   if (act) {
-    for (fcu = static_cast<FCurve *>(act->curves.first); fcu; fcu = fcu->next) {
+    LISTBASE_FOREACH (FCurve *, fcu, &act->curves) {
       /* if curve has keyframes, consider them first */
       if (fcu->totvert) {
         float nmin, nmax;
@@ -1475,17 +1446,12 @@ void BKE_action_frame_range_calc(const bAction *act,
   }
 
   if (foundvert || foundmod) {
-    /* ensure that action is at least 1 frame long (for NLA strips to have a valid length) */
-    if (min == max) {
-      max += 1.0f;
-    }
-
     *r_start = max_ff(min, MINAFRAMEF);
     *r_end = min_ff(max, MAXFRAMEF);
   }
   else {
     *r_start = 0.0f;
-    *r_end = 1.0f;
+    *r_end = 0.0f;
   }
 }
 
@@ -1499,10 +1465,7 @@ void BKE_action_frame_range_get(const bAction *act, float *r_start, float *r_end
     BKE_action_frame_range_calc(act, false, r_start, r_end);
   }
 
-  /* Ensure that action is at least 1 frame long (for NLA strips to have a valid length). */
-  if (*r_start >= *r_end) {
-    *r_end = *r_start + 1.0f;
-  }
+  BLI_assert(*r_start <= *r_end);
 }
 
 bool BKE_action_is_cyclic(const bAction *act)
@@ -1516,16 +1479,15 @@ eAction_TransformFlags BKE_action_get_item_transform_flags(bAction *act,
                                                            ListBase *curves)
 {
   PointerRNA ptr;
-  FCurve *fcu;
   char *basePath = nullptr;
   short flags = 0;
 
   /* build PointerRNA from provided data to obtain the paths to use */
   if (pchan) {
-    RNA_pointer_create((ID *)ob, &RNA_PoseBone, pchan, &ptr);
+    ptr = RNA_pointer_create((ID *)ob, &RNA_PoseBone, pchan);
   }
   else if (ob) {
-    RNA_id_pointer_create((ID *)ob, &ptr);
+    ptr = RNA_id_pointer_create((ID *)ob);
   }
   else {
     return eAction_TransformFlags(0);
@@ -1540,7 +1502,7 @@ eAction_TransformFlags BKE_action_get_item_transform_flags(bAction *act,
   /* search F-Curves for the given properties
    * - we cannot use the groups, since they may not be grouped in that way...
    */
-  for (fcu = static_cast<FCurve *>(act->curves.first); fcu; fcu = fcu->next) {
+  LISTBASE_FOREACH (FCurve *, fcu, &act->curves) {
     const char *bPtr = nullptr, *pPtr = nullptr;
 
     /* If enough flags have been found,
@@ -1645,8 +1607,6 @@ eAction_TransformFlags BKE_action_get_item_transform_flags(bAction *act,
 
 void BKE_pose_rest(bPose *pose, bool selected_bones_only)
 {
-  bPoseChannel *pchan;
-
   if (!pose) {
     return;
   }
@@ -1654,7 +1614,7 @@ void BKE_pose_rest(bPose *pose, bool selected_bones_only)
   memset(pose->stride_offset, 0, sizeof(pose->stride_offset));
   memset(pose->cyclic_offset, 0, sizeof(pose->cyclic_offset));
 
-  for (pchan = static_cast<bPoseChannel *>(pose->chanbase.first); pchan; pchan = pchan->next) {
+  LISTBASE_FOREACH (bPoseChannel *, pchan, &pose->chanbase) {
     if (selected_bones_only && pchan->bone != nullptr && (pchan->bone->flag & BONE_SELECTED) == 0)
     {
       continue;
@@ -1710,8 +1670,6 @@ void BKE_pose_copy_pchan_result(bPoseChannel *pchanto, const bPoseChannel *pchan
 
 bool BKE_pose_copy_result(bPose *to, bPose *from)
 {
-  bPoseChannel *pchanto, *pchanfrom;
-
   if (to == nullptr || from == nullptr) {
     CLOG_ERROR(
         &LOG, "Pose copy error, pose to:%p from:%p", (void *)to, (void *)from); /* debug temp */
@@ -1723,10 +1681,8 @@ bool BKE_pose_copy_result(bPose *to, bPose *from)
     return false;
   }
 
-  for (pchanfrom = static_cast<bPoseChannel *>(from->chanbase.first); pchanfrom;
-       pchanfrom = pchanfrom->next)
-  {
-    pchanto = BKE_pose_channel_find_name(to, pchanfrom->name);
+  LISTBASE_FOREACH (bPoseChannel *, pchanfrom, &from->chanbase) {
+    bPoseChannel *pchanto = BKE_pose_channel_find_name(to, pchanfrom->name);
     if (pchanto != nullptr) {
       BKE_pose_copy_pchan_result(pchanto, pchanfrom);
     }
@@ -1753,7 +1709,9 @@ void what_does_obaction(Object *ob,
   bActionGroup *agrp = BKE_action_group_find_name(act, groupname);
 
   /* clear workob */
+  blender::bke::ObjectRuntime workob_runtime;
   BKE_object_workob_clear(workob);
+  workob->runtime = &workob_runtime;
 
   /* init workob */
   copy_m4_m4(workob->object_to_world, ob->object_to_world);
@@ -1798,10 +1756,9 @@ void what_does_obaction(Object *ob,
    * (though a bit more dangerous). */
   if (agrp) {
     /* specifically evaluate this group only */
-    PointerRNA id_ptr;
 
     /* get RNA-pointer for the workob's ID */
-    RNA_id_pointer_create(&workob->id, &id_ptr);
+    PointerRNA id_ptr = RNA_id_pointer_create(&workob->id);
 
     /* execute action for this group only */
     animsys_evaluate_action_group(&id_ptr, act, agrp, anim_eval_context);
@@ -1896,7 +1853,7 @@ void BKE_pose_blend_write(BlendWriter *writer, bPose *pose, bArmature *arm)
   BLO_write_struct(writer, bPose, pose);
 }
 
-void BKE_pose_blend_read_data(BlendDataReader *reader, bPose *pose)
+void BKE_pose_blend_read_data(BlendDataReader *reader, ID *id_owner, bPose *pose)
 {
   if (!pose) {
     return;
@@ -1920,7 +1877,7 @@ void BKE_pose_blend_read_data(BlendDataReader *reader, bPose *pose)
     BLO_read_data_address(reader, &pchan->bbone_prev);
     BLO_read_data_address(reader, &pchan->bbone_next);
 
-    BKE_constraint_blend_read_data(reader, &pchan->constraints);
+    BKE_constraint_blend_read_data(reader, id_owner, &pchan->constraints);
 
     BLO_read_data_address(reader, &pchan->prop);
     IDP_BlendDataRead(reader, &pchan->prop);
@@ -1944,7 +1901,7 @@ void BKE_pose_blend_read_data(BlendDataReader *reader, bPose *pose)
   }
 }
 
-void BKE_pose_blend_read_lib(BlendLibReader *reader, Object *ob, bPose *pose)
+void BKE_pose_blend_read_after_liblink(BlendLibReader *reader, Object *ob, bPose *pose)
 {
   bArmature *arm = static_cast<bArmature *>(ob->data);
 
@@ -1962,13 +1919,8 @@ void BKE_pose_blend_read_lib(BlendLibReader *reader, Object *ob, bPose *pose)
   }
 
   LISTBASE_FOREACH (bPoseChannel *, pchan, &pose->chanbase) {
-    BKE_constraint_blend_read_lib(reader, (ID *)ob, &pchan->constraints);
-
     pchan->bone = BKE_armature_find_bone_name(arm, pchan->name);
 
-    IDP_BlendReadLib(reader, &ob->id, pchan->prop);
-
-    BLO_read_id_address(reader, &ob->id, &pchan->custom);
     if (UNLIKELY(pchan->bone == nullptr)) {
       rebuild = true;
     }
@@ -1984,19 +1936,6 @@ void BKE_pose_blend_read_lib(BlendLibReader *reader, Object *ob, bPose *pose)
     DEG_id_tag_update_ex(
         bmain, &ob->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY | ID_RECALC_ANIMATION);
     BKE_pose_tag_recalc(bmain, pose);
-  }
-}
-
-void BKE_pose_blend_read_expand(BlendExpander *expander, bPose *pose)
-{
-  if (!pose) {
-    return;
-  }
-
-  LISTBASE_FOREACH (bPoseChannel *, chan, &pose->chanbase) {
-    BKE_constraint_blend_read_expand(expander, &chan->constraints);
-    IDP_BlendReadExpand(expander, chan->prop);
-    BLO_expand(expander, chan->custom);
   }
 }
 

@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2022 Blender Foundation
+/* SPDX-FileCopyrightText: 2022 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -29,6 +29,7 @@
  */
 
 #ifdef GPU_SHADER
+#  define BLI_STATIC_ASSERT(cond, msg)
 #  define BLI_STATIC_ASSERT_ALIGN(type_, align_)
 #  define BLI_STATIC_ASSERT_SIZE(type_, size_)
 #  define static

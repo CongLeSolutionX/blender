@@ -19,14 +19,16 @@ ccl_device_forceinline bool projection_inverse_impl(ccl_private float R[4][4],
     int pivot = i;
     float pivotsize = M[i][i];
 
-    if (pivotsize < 0)
+    if (pivotsize < 0) {
       pivotsize = -pivotsize;
+    }
 
     for (int j = i + 1; j < 4; j++) {
       float tmp = M[j][i];
 
-      if (tmp < 0)
+      if (tmp < 0) {
         tmp = -tmp;
+      }
 
       if (tmp > pivotsize) {
         pivot = j;
@@ -34,8 +36,9 @@ ccl_device_forceinline bool projection_inverse_impl(ccl_private float R[4][4],
       }
     }
 
-    if (UNLIKELY(pivotsize == 0.0f))
+    if (UNLIKELY(pivotsize == 0.0f)) {
       return false;
+    }
 
     if (pivot != i) {
       for (int j = 0; j < 4; j++) {
@@ -65,8 +68,9 @@ ccl_device_forceinline bool projection_inverse_impl(ccl_private float R[4][4],
   for (int i = 3; i >= 0; --i) {
     float f;
 
-    if (UNLIKELY((f = M[i][i]) == 0.0f))
+    if (UNLIKELY((f = M[i][i]) == 0.0f)) {
       return false;
+    }
 
     for (int j = 0; j < 4; j++) {
       M[i][j] /= f;

@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2005 Blender Foundation
+/* SPDX-FileCopyrightText: 2005 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -10,7 +10,7 @@
  * (see "7.6.2.2 Standard Uniform Block Layout" from the OpenGL spec for more info about std140
  * layout)
  * Rule of thumb: Padding to 16bytes, don't use vec3, don't use arrays of anything that is not vec4
- * aligned .
+ * aligned.
  */
 
 #pragma once

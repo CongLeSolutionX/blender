@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -16,7 +16,7 @@
 #include "BLI_vector.hh"
 #include "BLI_vector_set.hh"
 
-#include "ED_select_utils.h"
+#include "ED_select_utils.hh"
 
 struct bContext;
 struct Curves;
@@ -53,7 +53,7 @@ void ensure_surface_deformation_node_exists(bContext &C, Object &curves_ob);
 
 /**
  * Allocate an array of `TransVert` for cursor/selection snapping (See
- * `ED_transverts_create_from_obedit` in `view3d_snap.c`).
+ * `ED_transverts_create_from_obedit` in `view3d_snap.cc`).
  * \note: the `TransVert` elements in \a tvs are expected to write to the positions of \a curves.
  */
 void transverts_from_curves_positions_create(bke::CurvesGeometry &curves, TransVertStore *tvs);
@@ -67,6 +67,14 @@ bool editable_curves_in_edit_mode_poll(bContext *C);
 bool curves_with_surface_poll(bContext *C);
 bool editable_curves_poll(bContext *C);
 bool curves_poll(bContext *C);
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Operators
+ * \{ */
+
+void CURVES_OT_attribute_set(wmOperatorType *ot);
 
 /** \} */
 
@@ -134,6 +142,7 @@ bool has_anything_selected(const VArray<bool> &varray, IndexRange range_to_check
  * Find curves that have any point selected (a selection factor greater than zero),
  * or curves that have their own selection factor greater than zero.
  */
+IndexMask retrieve_selected_curves(const bke::CurvesGeometry &curves, IndexMaskMemory &memory);
 IndexMask retrieve_selected_curves(const Curves &curves_id, IndexMaskMemory &memory);
 
 /**
@@ -157,7 +166,7 @@ void apply_selection_operation_at_index(GMutableSpan selection, int index, eSele
  * (De)select all the curves.
  *
  * \param action: One of SEL_TOGGLE, SEL_SELECT, SEL_DESELECT, or SEL_INVERT. See
- * "ED_select_utils.h".
+ * "ED_select_utils.hh".
  */
 void select_all(bke::CurvesGeometry &curves, eAttrDomain selection_domain, int action);
 

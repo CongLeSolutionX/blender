@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2008 Blender Foundation
+/* SPDX-FileCopyrightText: 2008 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -9,13 +9,14 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BKE_armature.h"
+#include "BKE_armature.hh"
 #include "BKE_fcurve.h"
 #include "BKE_material.h"
 
-#include "ED_anim_api.h"
-#include "ED_keyframes_edit.h"
-#include "ED_keyframing.h"
+#include "ED_anim_api.hh"
+#include "ED_keyframes_edit.hh"
+
+#include "ANIM_fcurve.hh"
 
 typedef float(TangentPoint)[2];
 

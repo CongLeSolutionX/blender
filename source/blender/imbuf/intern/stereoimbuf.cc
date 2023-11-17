@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2015 Blender Foundation
+/* SPDX-FileCopyrightText: 2015 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -6,7 +6,7 @@
  * \ingroup imbuf
  */
 
-#include <stddef.h>
+#include <cstddef>
 
 #include "IMB_imbuf.h"
 #include "IMB_imbuf_types.h"
@@ -20,9 +20,8 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "BLI_math_vector.h"
 #include "BLI_utildefines.h"
-
-#include "BLI_math.h"
 
 #include "DNA_scene_types.h"
 #include "DNA_userdef_types.h"
@@ -138,7 +137,7 @@ static void imb_stereo3d_write_anaglyph(const Stereo3DData *s3d, enum eStereo3dA
           to[0] = from[r][0];
           to[1] = from[g][1];
           to[2] = from[b][2];
-          to[3] = MAX2(from[0][3], from[1][3]);
+          to[3] = std::max(from[0][3], from[1][3]);
         }
       }
     }

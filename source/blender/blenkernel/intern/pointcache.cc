@@ -6,11 +6,18 @@
  * \ingroup bke
  */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <sys/stat.h>
 #include <sys/types.h>
+
+/* needed for directory lookup */
+#ifndef WIN32
+#  include <dirent.h>
+#else
+#  include "BLI_winstuff.h"
+#endif
 
 #include "CLG_log.h"
 
@@ -29,7 +36,8 @@
 
 #include "BLI_blenlib.h"
 #include "BLI_endian_switch.h"
-#include "BLI_math.h"
+#include "BLI_math_rotation.h"
+#include "BLI_math_vector.h"
 #include "BLI_string.h"
 #include "BLI_utildefines.h"
 
@@ -38,21 +46,21 @@
 #include "PIL_time.h"
 
 #include "BKE_appdir.h"
-#include "BKE_cloth.h"
+#include "BKE_cloth.hh"
 #include "BKE_collection.h"
 #include "BKE_dynamicpaint.h"
 #include "BKE_fluid.h"
 #include "BKE_global.h"
 #include "BKE_lib_id.h"
 #include "BKE_main.h"
-#include "BKE_modifier.h"
-#include "BKE_object.h"
+#include "BKE_modifier.hh"
+#include "BKE_object.hh"
 #include "BKE_particle.h"
 #include "BKE_pointcache.h"
 #include "BKE_scene.h"
 #include "BKE_softbody.h"
 
-#include "BLO_read_write.h"
+#include "BLO_read_write.hh"
 
 #include "BIK_api.h"
 
@@ -74,13 +82,6 @@
 
 #ifdef WITH_LZMA
 #  include "LzmaLib.h"
-#endif
-
-/* needed for directory lookup */
-#ifndef WIN32
-#  include <dirent.h>
-#else
-#  include "BLI_winstuff.h"
 #endif
 
 #define PTCACHE_DATA_FROM(data, type, from) \
@@ -229,7 +230,7 @@ static void ptcache_softbody_interpolate(int index,
   mul_v3_fl(keys[1].vel, dfra);
   mul_v3_fl(keys[2].vel, dfra);
 
-  psys_interpolate_particle(-1, keys, (cfra - cfra1) / dfra, keys, 1);
+  psys_interpolate_particle(-1, keys, (cfra - cfra1) / dfra, keys, true);
 
   mul_v3_fl(keys->vel, 1.0f / dfra);
 
@@ -284,8 +285,8 @@ static int ptcache_particle_write(int index, void *psys_v, void **data, int cfra
     }
     else {
       /* Inclusive ranges for particle lifetime (`dietime - 1` for an inclusive end-frame). */
-      const int pa_sfra = (int)pa->time - step;
-      const int pa_efra = ((int)pa->dietime - 1) + step;
+      const int pa_sfra = int(pa->time) - step;
+      const int pa_efra = (int(pa->dietime) - 1) + step;
       if (!(cfra >= pa_sfra && cfra <= pa_efra)) {
         return 0;
       }
@@ -400,8 +401,8 @@ static void ptcache_particle_interpolate(int index,
   pa = psys->particles + index;
 
   /* Inclusive ranges for particle lifetime (`dietime - 1` for an inclusive end-frame). */
-  const int pa_sfra = (int)pa->time - psys->pointcache->step;
-  const int pa_efra = ((int)pa->dietime - 1) + psys->pointcache->step;
+  const int pa_sfra = int(pa->time) - psys->pointcache->step;
+  const int pa_efra = (int(pa->dietime) - 1) + psys->pointcache->step;
 
   /* Particle wasn't read from first cache so can't interpolate. */
   if (!(cfra1 >= pa_sfra && cfra1 <= pa_efra)) {
@@ -409,8 +410,8 @@ static void ptcache_particle_interpolate(int index,
   }
 
   cfra = MIN2(cfra, pa->dietime);
-  cfra1 = MIN2(cfra1, pa->dietime);
-  cfra2 = MIN2(cfra2, pa->dietime);
+  cfra1 = std::min(cfra1, pa->dietime);
+  cfra2 = std::min(cfra2, pa->dietime);
 
   if (cfra1 == cfra2) {
     return;
@@ -450,7 +451,7 @@ static void ptcache_particle_interpolate(int index,
   mul_v3_fl(keys[1].vel, dfra * timestep);
   mul_v3_fl(keys[2].vel, dfra * timestep);
 
-  psys_interpolate_particle(-1, keys, (cfra - cfra1) / dfra, &pa->state, 1);
+  psys_interpolate_particle(-1, keys, (cfra - cfra1) / dfra, &pa->state, true);
   interp_qt_qtqt(pa->state.rot, keys[1].rot, keys[2].rot, (cfra - cfra1) / dfra);
 
   mul_v3_fl(pa->state.vel, 1.0f / (dfra * timestep));
@@ -485,15 +486,15 @@ static int ptcache_particle_totwrite(void *psys_v, int cfra)
   if (psys->part->flag & PART_DIED) {
     /* Also store dead particles when they are displayed. */
     for (p = 0; p < psys->totpart; p++, pa++) {
-      const int pa_sfra = (int)pa->time - step;
+      const int pa_sfra = int(pa->time) - step;
       totwrite += (cfra >= pa_sfra);
     }
   }
   else {
     for (p = 0; p < psys->totpart; p++, pa++) {
       /* Inclusive ranges for particle lifetime (`dietime - 1` for an inclusive end-frame). */
-      const int pa_sfra = (int)pa->time - step;
-      const int pa_efra = ((int)pa->dietime - 1) + step;
+      const int pa_sfra = int(pa->time) - step;
+      const int pa_efra = (int(pa->dietime) - 1) + step;
       totwrite += (cfra >= pa_sfra) && (cfra <= pa_efra);
     }
   }
@@ -599,7 +600,7 @@ static void ptcache_cloth_interpolate(int index,
   mul_v3_fl(keys[1].vel, dfra);
   mul_v3_fl(keys[2].vel, dfra);
 
-  psys_interpolate_particle(-1, keys, (cfra - cfra1) / dfra, keys, 1);
+  psys_interpolate_particle(-1, keys, (cfra - cfra1) / dfra, keys, true);
 
   mul_v3_fl(keys->vel, 1.0f / dfra);
 
@@ -1090,7 +1091,7 @@ void BKE_ptcache_id_from_rigidbody(PTCacheID *pid, Object *ob, RigidBodyWorld *r
 
 PTCacheID BKE_ptcache_id_find(Object *ob, Scene *scene, PointCache *cache)
 {
-  PTCacheID result = {0};
+  PTCacheID result = {nullptr};
 
   ListBase pidlist;
   BKE_ptcache_ids_from_object(&pidlist, ob, scene, MAX_DUPLI_RECUR);
@@ -1117,7 +1118,7 @@ PTCacheID BKE_ptcache_id_find(Object *ob, Scene *scene, PointCache *cache)
  *
  * If the function returns false, then foreach() loop aborts.
  */
-typedef bool (*ForeachPtcacheCb)(PTCacheID *pid, void *userdata);
+using ForeachPtcacheCb = bool (*)(PTCacheID *pid, void *userdata);
 
 static bool foreach_object_particle_ptcache(Object *object,
                                             ForeachPtcacheCb callback,
@@ -1431,8 +1432,7 @@ static int ptcache_filepath(PTCacheID *pid,
     /* convert chars to hex so they are always a valid filename */
     while ('\0' != *idname) {
       /* Always 2 unless there isn't enough room in the string. */
-      const int temp = BLI_snprintf_rlen(
-          newname, MAX_PTCACHE_FILE - len, "%02X", (uint)(*idname++));
+      const int temp = BLI_snprintf_rlen(newname, MAX_PTCACHE_FILE - len, "%02X", uint(*idname++));
       newname += temp;
       len += temp;
     }
@@ -1444,7 +1444,7 @@ static int ptcache_filepath(PTCacheID *pid,
   }
 
   if (do_ext) {
-    len += ptcache_filepath_ext_append(pid, filepath, (size_t)len, true, cfra);
+    len += ptcache_filepath_ext_append(pid, filepath, size_t(len), true, cfra);
   }
 
   return len; /* make sure the above string is always 16 chars */
@@ -1520,7 +1520,7 @@ static int ptcache_file_compressed_read(PTCacheFile *pf, uchar *result, uint len
   if (compressed) {
     uint size;
     ptcache_file_read(pf, &size, 1, sizeof(uint));
-    in_len = (size_t)size;
+    in_len = size_t(size);
     if (in_len == 0) {
       /* do nothing */
     }
@@ -1537,7 +1537,7 @@ static int ptcache_file_compressed_read(PTCacheFile *pf, uchar *result, uint len
         size_t sizeOfIt;
         size_t leni = in_len, leno = len;
         ptcache_file_read(pf, &size, 1, sizeof(uint));
-        sizeOfIt = (size_t)size;
+        sizeOfIt = size_t(size);
         ptcache_file_read(pf, props, sizeOfIt, sizeof(uchar));
         r = LzmaUncompress(result, &leno, in, &leni, props, sizeOfIt);
       }
@@ -1584,7 +1584,7 @@ static int ptcache_file_compressed_write(
     r = LzmaCompress(out,
                      &out_len,
                      in,
-                     in_len, /* assume sizeof(char)==1.... */
+                     in_len, /* Assume `sizeof(char) == 1`. */
                      props,
                      &sizeOfIt,
                      5,
@@ -2206,13 +2206,13 @@ static int ptcache_read(PTCacheID *pid, int cfra)
         index = static_cast<int *>(cur[BPHYS_DATA_INDEX]);
       }
 
-      pid->read_point(*index, pid->calldata, cur, (float)pm->frame, nullptr);
+      pid->read_point(*index, pid->calldata, cur, float(pm->frame), nullptr);
 
       BKE_ptcache_mem_pointers_incr(cur);
     }
 
     if (pid->read_extra_data && pm->extradata.first) {
-      pid->read_extra_data(pid->calldata, pm, (float)pm->frame);
+      pid->read_extra_data(pid->calldata, pm, float(pm->frame));
     }
 
     /* clean up temporary memory cache */
@@ -2247,7 +2247,7 @@ static int ptcache_interpolate(PTCacheID *pid, float cfra, int cfra1, int cfra2)
     int totpoint = pm->totpoint;
 
     if ((pid->data_types & (1 << BPHYS_DATA_INDEX)) == 0) {
-      int pid_totpoint = pid->totpoint(pid->calldata, (int)cfra);
+      int pid_totpoint = pid->totpoint(pid->calldata, int(cfra));
 
       if (totpoint != pid_totpoint) {
         pid->error(pid->owner_id, pid->calldata, "Number of points in cache does not match mesh");
@@ -2264,12 +2264,12 @@ static int ptcache_interpolate(PTCacheID *pid, float cfra, int cfra1, int cfra2)
       }
 
       pid->interpolate_point(
-          *index, pid->calldata, cur, cfra, (float)cfra1, (float)cfra2, nullptr);
+          *index, pid->calldata, cur, cfra, float(cfra1), float(cfra2), nullptr);
       BKE_ptcache_mem_pointers_incr(cur);
     }
 
     if (pid->interpolate_extra_data && pm->extradata.first) {
-      pid->interpolate_extra_data(pid->calldata, pm, cfra, (float)cfra1, (float)cfra2);
+      pid->interpolate_extra_data(pid->calldata, pm, cfra, float(cfra1), float(cfra2));
     }
 
     /* clean up temporary memory cache */
@@ -2284,7 +2284,7 @@ static int ptcache_interpolate(PTCacheID *pid, float cfra, int cfra1, int cfra2)
 
 int BKE_ptcache_read(PTCacheID *pid, float cfra, bool no_extrapolate_old)
 {
-  int cfrai = (int)floor(cfra), cfra1 = 0, cfra2 = 0;
+  int cfrai = int(floor(cfra)), cfra1 = 0, cfra2 = 0;
   int ret = 0;
 
   /* nothing to read to */
@@ -2298,7 +2298,7 @@ int BKE_ptcache_read(PTCacheID *pid, float cfra, bool no_extrapolate_old)
   }
 
   /* first check if we have the actual frame cached */
-  if (cfra == (float)cfrai && BKE_ptcache_id_exist(pid, cfrai)) {
+  if (cfra == float(cfrai) && BKE_ptcache_id_exist(pid, cfrai)) {
     cfra1 = cfrai;
   }
 
@@ -2362,7 +2362,7 @@ int BKE_ptcache_read(PTCacheID *pid, float cfra, bool no_extrapolate_old)
     pid->cache->simframe = cfra2;
   }
 
-  cfrai = (int)cfra;
+  cfrai = int(cfra);
   /* clear invalid cache frames so that better stuff can be simulated */
   if (pid->cache->flag & PTCACHE_OUTDATED) {
     BKE_ptcache_id_clear(pid, PTCACHE_CLEAR_AFTER, cfrai);
@@ -2372,7 +2372,7 @@ int BKE_ptcache_read(PTCacheID *pid, float cfra, bool no_extrapolate_old)
       pid->cache->flag &= ~PTCACHE_FRAMES_SKIPPED;
     }
 
-    BKE_ptcache_id_clear(pid, PTCACHE_CLEAR_AFTER, MAX2(cfrai, pid->cache->last_exact));
+    BKE_ptcache_id_clear(pid, PTCACHE_CLEAR_AFTER, std::max(cfrai, pid->cache->last_exact));
   }
 
   return ret;
@@ -2601,7 +2601,7 @@ void BKE_ptcache_id_clear(PTCacheID *pid, int mode, uint cfra)
 
   /* mode is same as fopen's modes */
   DIR *dir;
-  struct dirent *de;
+  dirent *de;
   char path[MAX_PTCACHE_PATH];
   char filepath[MAX_PTCACHE_FILE];
   char path_full[MAX_PTCACHE_FILE];
@@ -2653,7 +2653,7 @@ void BKE_ptcache_id_clear(PTCacheID *pid, int mode, uint cfra)
           if (strstr(de->d_name, ext)) {               /* Do we have the right extension? */
             if (STREQLEN(filepath, de->d_name, len)) { /* Do we have the right prefix. */
               if (mode == PTCACHE_CLEAR_ALL) {
-                pid->cache->last_exact = MIN2(pid->cache->startframe, 0);
+                pid->cache->last_exact = std::min(pid->cache->startframe, 0);
                 BLI_path_join(path_full, sizeof(path_full), path, de->d_name);
                 BLI_delete(path_full, false, false);
               }
@@ -2688,7 +2688,7 @@ void BKE_ptcache_id_clear(PTCacheID *pid, int mode, uint cfra)
 
         if (mode == PTCACHE_CLEAR_ALL) {
           /* We want startframe if the cache starts before zero. */
-          pid->cache->last_exact = MIN2(pid->cache->startframe, 0);
+          pid->cache->last_exact = std::min(pid->cache->startframe, 0);
           for (; pm; pm = pm->next) {
             ptcache_mem_clear(pm);
           }
@@ -2780,7 +2780,7 @@ bool BKE_ptcache_id_exist(PTCacheID *pid, int cfra)
 void BKE_ptcache_id_time(
     PTCacheID *pid, Scene *scene, float cfra, int *startframe, int *endframe, float *timescale)
 {
-  /* Object *ob; */ /* UNUSED */
+  // Object *ob; /* UNUSED */
   PointCache *cache;
   /* float offset; unused for now */
   float time, nexttime;
@@ -2803,7 +2803,7 @@ void BKE_ptcache_id_time(
     time = BKE_scene_ctime_get(scene);
     nexttime = BKE_scene_frame_to_ctime(scene, scene->r.cfra + 1);
 
-    *timescale = MAX2(nexttime - time, 0.0f);
+    *timescale = std::max(nexttime - time, 0.0f);
   }
 
   if (startframe && endframe) {
@@ -2831,7 +2831,7 @@ void BKE_ptcache_id_time(
     if (pid->cache->flag & PTCACHE_DISK_CACHE) {
       /* mode is same as fopen's modes */
       DIR *dir;
-      struct dirent *de;
+      dirent *de;
       char path[MAX_PTCACHE_PATH];
       char filepath[MAX_PTCACHE_FILE];
       char ext[MAX_PTCACHE_FILE];
@@ -2839,7 +2839,7 @@ void BKE_ptcache_id_time(
 
       ptcache_path(pid, path);
 
-      len = ptcache_filepath(pid, filepath, (int)cfra, 0, 0); /* no path */
+      len = ptcache_filepath(pid, filepath, int(cfra), false, false); /* no path */
 
       dir = opendir(path);
       if (dir == nullptr) {
@@ -2937,8 +2937,6 @@ int BKE_ptcache_id_reset(Scene *scene, PTCacheID *pid, int mode)
 int BKE_ptcache_object_reset(Scene *scene, Object *ob, int mode)
 {
   PTCacheID pid;
-  ParticleSystem *psys;
-  ModifierData *md;
   int reset, skip;
 
   reset = 0;
@@ -2949,7 +2947,7 @@ int BKE_ptcache_object_reset(Scene *scene, Object *ob, int mode)
     reset |= BKE_ptcache_id_reset(scene, &pid, mode);
   }
 
-  for (psys = static_cast<ParticleSystem *>(ob->particlesystem.first); psys; psys = psys->next) {
+  LISTBASE_FOREACH (ParticleSystem *, psys, &ob->particlesystem) {
     /* children or just redo can be calculated without resetting anything */
     if (psys->recalc & ID_RECALC_PSYS_REDO || psys->recalc & ID_RECALC_PSYS_CHILD) {
       skip = 1;
@@ -2974,7 +2972,7 @@ int BKE_ptcache_object_reset(Scene *scene, Object *ob, int mode)
     }
   }
 
-  for (md = static_cast<ModifierData *>(ob->modifiers.first); md; md = md->next) {
+  LISTBASE_FOREACH (ModifierData *, md, &ob->modifiers) {
     if (md->type == eModifierType_Cloth) {
       BKE_ptcache_id_from_cloth(&pid, ob, (ClothModifierData *)md);
       reset |= BKE_ptcache_id_reset(scene, &pid, mode);
@@ -3060,9 +3058,7 @@ void BKE_ptcache_free(PointCache *cache)
 }
 void BKE_ptcache_free_list(ListBase *ptcaches)
 {
-  PointCache *cache;
-
-  while ((cache = static_cast<PointCache *>(BLI_pophead(ptcaches)))) {
+  while (PointCache *cache = static_cast<PointCache *>(BLI_pophead(ptcaches))) {
     BKE_ptcache_free(cache);
   }
 }
@@ -3084,9 +3080,7 @@ static PointCache *ptcache_copy(PointCache *cache, const bool copy_data)
     ncache->simframe = 0;
   }
   else {
-    PTCacheMem *pm;
-
-    for (pm = static_cast<PTCacheMem *>(cache->mem_cache.first); pm; pm = pm->next) {
+    LISTBASE_FOREACH (PTCacheMem *, pm, &cache->mem_cache) {
       PTCacheMem *pmn = static_cast<PTCacheMem *>(MEM_dupallocN(pm));
       int i;
 
@@ -3138,9 +3132,9 @@ void BKE_ptcache_quick_cache_all(Main *bmain, Scene *scene, ViewLayer *view_laye
   baker.bmain = bmain;
   baker.scene = scene;
   baker.view_layer = view_layer;
-  baker.bake = 0;
-  baker.render = 0;
-  baker.anim_init = 0;
+  baker.bake = false;
+  baker.render = false;
+  baker.anim_init = false;
   baker.quick_step = scene->physics_settings.quick_cache_step;
 
   BKE_ptcache_bake(&baker);
@@ -3153,16 +3147,16 @@ static void ptcache_dt_to_str(char *str, size_t str_maxncpy, double dtime)
       BLI_snprintf(str,
                    str_maxncpy,
                    "%ih %im %is",
-                   (int)(dtime / 3600),
-                   (int)(dtime / 60) % 60,
-                   ((int)dtime) % 60);
+                   int(dtime / 3600),
+                   int(dtime / 60) % 60,
+                   int(dtime) % 60);
     }
     else {
-      BLI_snprintf(str, str_maxncpy, "%im %is", (int)(dtime / 60) % 60, ((int)dtime) % 60);
+      BLI_snprintf(str, str_maxncpy, "%im %is", int(dtime / 60) % 60, int(dtime) % 60);
     }
   }
   else {
-    BLI_snprintf(str, str_maxncpy, "%is", ((int)dtime) % 60);
+    BLI_snprintf(str, str_maxncpy, "%is", int(dtime) % 60);
   }
 }
 
@@ -3170,7 +3164,7 @@ void BKE_ptcache_bake(PTCacheBaker *baker)
 {
   Scene *scene = baker->scene;
   ViewLayer *view_layer = baker->view_layer;
-  struct Depsgraph *depsgraph = baker->depsgraph;
+  Depsgraph *depsgraph = baker->depsgraph;
   Scene *sce_iter; /* SETLOOPER macro only */
   Base *base;
   ListBase pidlist;
@@ -3203,10 +3197,9 @@ void BKE_ptcache_bake(PTCacheBaker *baker)
       else if (pid->type == PTCACHE_TYPE_SMOKE_HIGHRES) {
         /* get all pids from the object and search for smoke low res */
         ListBase pidlist2;
-        PTCacheID *pid2;
         BLI_assert(GS(pid->owner_id->name) == ID_OB);
         BKE_ptcache_ids_from_object(&pidlist2, (Object *)pid->owner_id, scene, MAX_DUPLI_RECUR);
-        for (pid2 = static_cast<PTCacheID *>(pidlist2.first); pid2; pid2 = pid2->next) {
+        LISTBASE_FOREACH (PTCacheID *, pid2, &pidlist2) {
           if (pid2->type == PTCACHE_TYPE_SMOKE_DOMAIN) {
             if (pid2->cache && !(pid2->cache->flag & PTCACHE_BAKED)) {
               if (bake || pid2->cache->flag & PTCACHE_REDO_NEEDED) {
@@ -3226,7 +3219,7 @@ void BKE_ptcache_bake(PTCacheBaker *baker)
         BKE_ptcache_id_clear(pid, PTCACHE_CLEAR_ALL, 0);
       }
 
-      startframe = MAX2(cache->last_exact, cache->startframe);
+      startframe = std::max(cache->last_exact, cache->startframe);
 
       if (bake) {
         endframe = cache->endframe;
@@ -3306,7 +3299,7 @@ void BKE_ptcache_bake(PTCacheBaker *baker)
     BKE_scene_graph_update_for_newframe(depsgraph);
 
     if (baker->update_progress) {
-      float progress = ((float)(scene->r.cfra - startframe) / (float)(endframe - startframe));
+      float progress = (float(scene->r.cfra - startframe) / float(endframe - startframe));
       baker->update_progress(baker->bake_job, progress, &cancel);
     }
 
@@ -3369,7 +3362,7 @@ void BKE_ptcache_bake(PTCacheBaker *baker)
     for (SETLOOPER_VIEW_LAYER(scene, view_layer, sce_iter, base)) {
       BKE_ptcache_ids_from_object(&pidlist, base->object, scene, MAX_DUPLI_RECUR);
 
-      for (pid = static_cast<PTCacheID *>(pidlist.first); pid; pid = pid->next) {
+      LISTBASE_FOREACH (PTCacheID *, pid, &pidlist) {
         /* skip hair particles */
         if (pid->type == PTCACHE_TYPE_PARTICLES &&
             ((ParticleSystem *)pid->calldata)->part->type == PART_HAIR)
@@ -3513,7 +3506,7 @@ void BKE_ptcache_disk_cache_rename(PTCacheID *pid, const char *name_src, const c
   int len; /* store the length of the string */
   /* mode is same as fopen's modes */
   DIR *dir;
-  struct dirent *de;
+  dirent *de;
   char path[MAX_PTCACHE_PATH];
   char old_filepath[MAX_PTCACHE_FILE];
   char new_path_full[MAX_PTCACHE_FILE];
@@ -3575,7 +3568,7 @@ void BKE_ptcache_load_external(PTCacheID *pid)
 
   /* mode is same as fopen's modes */
   DIR *dir;
-  struct dirent *de;
+  dirent *de;
   char path[MAX_PTCACHE_PATH];
   char filepath[MAX_PTCACHE_FILE];
   char ext[MAX_PTCACHE_PATH];
@@ -3610,8 +3603,8 @@ void BKE_ptcache_load_external(PTCacheID *pid)
 
         if (frame != -1) {
           if (frame) {
-            start = MIN2(start, frame);
-            end = MAX2(end, frame);
+            start = std::min(start, frame);
+            end = std::max(end, frame);
           }
           else {
             info = 1;
@@ -3680,9 +3673,8 @@ void BKE_ptcache_load_external(PTCacheID *pid)
 void BKE_ptcache_update_info(PTCacheID *pid)
 {
   PointCache *cache = pid->cache;
-  PTCacheExtra *extra = nullptr;
   int totframes = 0;
-  char mem_info[sizeof(((PointCache *)0)->info) / sizeof(*(((PointCache *)0)->info))];
+  char mem_info[sizeof(PointCache::info) / sizeof(*PointCache::info)];
 
   cache->flag &= ~PTCACHE_FLAG_INFO_DIRTY;
 
@@ -3743,7 +3735,7 @@ void BKE_ptcache_update_info(PTCacheID *pid)
         bytes += MEM_allocN_len(pm->data[i]);
       }
 
-      for (extra = static_cast<PTCacheExtra *>(pm->extradata.first); extra; extra = extra->next) {
+      LISTBASE_FOREACH (PTCacheExtra *, extra, &pm->extradata) {
         bytes += MEM_allocN_len(extra->data);
         bytes += sizeof(PTCacheExtra);
       }
@@ -3782,7 +3774,7 @@ void BKE_ptcache_invalidate(PointCache *cache)
   if (cache) {
     cache->flag &= ~PTCACHE_SIMULATION_VALID;
     cache->simframe = 0;
-    cache->last_exact = MIN2(cache->startframe, 0);
+    cache->last_exact = std::min(cache->startframe, 0);
   }
 }
 

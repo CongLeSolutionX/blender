@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2004 Blender Foundation
+/* SPDX-FileCopyrightText: 2004 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -11,14 +11,16 @@
 #include "BLI_bitmap.h"
 #include "BLI_kdtree.h"
 #include "BLI_listbase.h"
-#include "BLI_math.h"
+#include "BLI_math_geom.h"
+#include "BLI_math_matrix.h"
+#include "BLI_math_vector.h"
 
 #include "BLT_translation.h"
 
-#include "BKE_context.h"
-#include "BKE_customdata.h"
+#include "BKE_context.hh"
+#include "BKE_customdata.hh"
 #include "BKE_deform.h"
-#include "BKE_editmesh.h"
+#include "BKE_editmesh.hh"
 #include "BKE_layer.h"
 #include "BKE_material.h"
 #include "BKE_report.h"
@@ -26,15 +28,15 @@
 #include "DNA_material_types.h"
 #include "DNA_meshdata_types.h"
 
-#include "WM_api.h"
-#include "WM_types.h"
+#include "WM_api.hh"
+#include "WM_types.hh"
 
-#include "RNA_access.h"
-#include "RNA_define.h"
+#include "RNA_access.hh"
+#include "RNA_define.hh"
 
-#include "ED_mesh.h"
-#include "ED_screen.h"
-#include "ED_select_utils.h"
+#include "ED_mesh.hh"
+#include "ED_screen.hh"
+#include "ED_select_utils.hh"
 
 #include "mesh_intern.h" /* own include */
 
@@ -50,32 +52,33 @@ static const EnumPropertyItem prop_similar_compare_types[] = {
 };
 
 static const EnumPropertyItem prop_similar_types[] = {
-    {SIMVERT_NORMAL, "NORMAL", 0, "Normal", ""},
-    {SIMVERT_FACE, "FACE", 0, "Amount of Adjacent Faces", ""},
-    {SIMVERT_VGROUP, "VGROUP", 0, "Vertex Groups", ""},
-    {SIMVERT_EDGE, "EDGE", 0, "Amount of Connecting Edges", ""},
-    {SIMVERT_CREASE, "VCREASE", 0, "Vertex Crease", ""},
-    {SIMEDGE_LENGTH, "LENGTH", 0, "Length", ""},
-    {SIMEDGE_DIR, "DIR", 0, "Direction", ""},
-    {SIMEDGE_FACE, "FACE", 0, "Amount of Faces Around an Edge", ""},
-    {SIMEDGE_FACE_ANGLE, "FACE_ANGLE", 0, "Face Angles", ""},
-    {SIMEDGE_CREASE, "CREASE", 0, "Crease", ""},
-    {SIMEDGE_BEVEL, "BEVEL", 0, "Bevel", ""},
-    {SIMEDGE_SEAM, "SEAM", 0, "Seam", ""},
-    {SIMEDGE_SHARP, "SHARP", 0, "Sharpness", ""},
+    {SIMVERT_NORMAL, "VERT_NORMAL", 0, "Normal", ""},
+    {SIMVERT_FACE, "VERT_FACES", 0, "Amount of Adjacent Faces", ""},
+    {SIMVERT_VGROUP, "VERT_GROUPS", 0, "Vertex Groups", ""},
+    {SIMVERT_EDGE, "VERT_EDGES", 0, "Amount of Connecting Edges", ""},
+    {SIMVERT_CREASE, "VERT_CREASE", 0, "Vertex Crease", ""},
+
+    {SIMEDGE_LENGTH, "EDGE_LENGTH", 0, "Length", ""},
+    {SIMEDGE_DIR, "EDGE_DIR", 0, "Direction", ""},
+    {SIMEDGE_FACE, "EDGE_FACES", 0, "Amount of Faces Around an Edge", ""},
+    {SIMEDGE_FACE_ANGLE, "EDGE_FACE_ANGLE", 0, "Face Angles", ""},
+    {SIMEDGE_CREASE, "EDGE_CREASE", 0, "Crease", ""},
+    {SIMEDGE_BEVEL, "EDGE_BEVEL", 0, "Bevel", ""},
+    {SIMEDGE_SEAM, "EDGE_SEAM", 0, "Seam", ""},
+    {SIMEDGE_SHARP, "EDGE_SHARP", 0, "Sharpness", ""},
 #ifdef WITH_FREESTYLE
-    {SIMEDGE_FREESTYLE, "FREESTYLE_EDGE", 0, "Freestyle Edge Marks", ""},
+    {SIMEDGE_FREESTYLE, "EDGE_FREESTYLE", 0, "Freestyle Edge Marks", ""},
 #endif
 
-    {SIMFACE_MATERIAL, "MATERIAL", 0, "Material", ""},
-    {SIMFACE_AREA, "AREA", 0, "Area", ""},
-    {SIMFACE_SIDES, "SIDES", 0, "Polygon Sides", ""},
-    {SIMFACE_PERIMETER, "PERIMETER", 0, "Perimeter", ""},
-    {SIMFACE_NORMAL, "NORMAL", 0, "Normal", ""},
-    {SIMFACE_COPLANAR, "COPLANAR", 0, "Coplanar", ""},
-    {SIMFACE_SMOOTH, "SMOOTH", 0, "Flat/Smooth", ""},
+    {SIMFACE_MATERIAL, "FACE_MATERIAL", 0, "Material", ""},
+    {SIMFACE_AREA, "FACE_AREA", 0, "Area", ""},
+    {SIMFACE_SIDES, "FACE_SIDES", 0, "Polygon Sides", ""},
+    {SIMFACE_PERIMETER, "FACE_PERIMETER", 0, "Perimeter", ""},
+    {SIMFACE_NORMAL, "FACE_NORMAL", 0, "Normal", ""},
+    {SIMFACE_COPLANAR, "FACE_COPLANAR", 0, "Coplanar", ""},
+    {SIMFACE_SMOOTH, "FACE_SMOOTH", 0, "Flat/Smooth", ""},
 #ifdef WITH_FREESTYLE
-    {SIMFACE_FREESTYLE, "FREESTYLE_FACE", 0, "Freestyle Face Marks", ""},
+    {SIMFACE_FREESTYLE, "FACE_FREESTYLE", 0, "Freestyle Face Marks", ""},
 #endif
 
     {0, nullptr, 0, nullptr, nullptr},

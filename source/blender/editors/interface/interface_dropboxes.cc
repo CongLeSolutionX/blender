@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -6,7 +6,7 @@
  * \ingroup edinterface
  */
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 
 #include "BLI_string.h"
 #include "BLT_translation.h"
@@ -16,12 +16,11 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "RNA_access.h"
+#include "RNA_access.hh"
 #include "RNA_prototypes.h"
 
-#include "WM_api.h"
+#include "WM_api.hh"
 
-#include "UI_interface.h"
 #include "UI_interface.hh"
 
 using namespace blender::ui;
@@ -86,9 +85,9 @@ static bool ui_drop_material_poll(bContext *C, wmDrag *drag, const wmEvent * /*e
   return WM_drag_is_ID_type(drag, ID_MA) && !RNA_pointer_is_null(&mat_slot);
 }
 
-static void ui_drop_material_copy(bContext * /*C*/, wmDrag *drag, wmDropBox *drop)
+static void ui_drop_material_copy(bContext *C, wmDrag *drag, wmDropBox *drop)
 {
-  const ID *id = WM_drag_get_local_ID_or_import_from_asset(drag, ID_MA);
+  const ID *id = WM_drag_get_local_ID_or_import_from_asset(C, drag, ID_MA);
   RNA_int_set(drop->ptr, "session_uuid", int(id->session_uuid));
 }
 
@@ -139,7 +138,7 @@ static char *ui_drop_material_tooltip(bContext *C,
 
 void ED_dropboxes_ui()
 {
-  ListBase *lb = WM_dropboxmap_find("User Interface", SPACE_EMPTY, 0);
+  ListBase *lb = WM_dropboxmap_find("User Interface", SPACE_EMPTY, RGN_TYPE_WINDOW);
 
   WM_dropbox_add(lb, "UI_OT_view_drop", ui_view_drop_poll, nullptr, nullptr, ui_view_drop_tooltip);
   WM_dropbox_add(lb,

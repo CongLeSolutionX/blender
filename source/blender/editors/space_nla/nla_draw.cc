@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2009 Blender Foundation, Joshua Leung. All rights reserved.
+/* SPDX-FileCopyrightText: 2009 Blender Authors, Joshua Leung. All rights reserved.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -24,24 +24,24 @@
 #include "BLI_utildefines.h"
 
 #include "BKE_action.h"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_fcurve.h"
 #include "BKE_nla.h"
-#include "BKE_screen.h"
+#include "BKE_screen.hh"
 
-#include "ED_anim_api.h"
-#include "ED_keyframes_draw.h"
-#include "ED_keyframes_keylist.h"
+#include "ED_anim_api.hh"
+#include "ED_keyframes_draw.hh"
+#include "ED_keyframes_keylist.hh"
 
 #include "GPU_immediate.h"
 #include "GPU_immediate_util.h"
 #include "GPU_state.h"
 
-#include "WM_types.h"
+#include "WM_types.hh"
 
-#include "UI_interface.h"
-#include "UI_resources.h"
-#include "UI_view2d.h"
+#include "UI_interface.hh"
+#include "UI_resources.hh"
+#include "UI_view2d.hh"
 
 #include "nla_intern.hh" /* own include */
 #include "nla_private.h"
@@ -889,6 +889,7 @@ void draw_nla_main_data(bAnimContext *ac, SpaceNla *snla, ARegion *region)
               float r_start;
               float r_end;
               BKE_action_frame_range_get(static_cast<bAction *>(ale->data), &r_start, &r_end);
+              BKE_nla_clip_length_ensure_nonzero(&r_start, &r_end);
 
               immRectf(pos, r_end, ymin + NLACHANNEL_SKIP, v2d->cur.xmax, ymax - NLACHANNEL_SKIP);
               break;

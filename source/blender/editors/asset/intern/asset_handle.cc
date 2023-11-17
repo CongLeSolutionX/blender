@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -17,6 +17,8 @@
 #include "DNA_space_types.h"
 
 #include "DNA_space_types.h"
+
+#include "ED_fileselect.hh"
 
 #include "RNA_prototypes.h"
 
@@ -38,6 +40,11 @@ int ED_asset_handle_get_preview_icon_id(const AssetHandle *asset)
   return asset->file_data->preview_icon_id;
 }
 
+int ED_asset_handle_get_preview_or_type_icon_id(const AssetHandle *asset)
+{
+  return ED_file_icon(asset->file_data);
+}
+
 void ED_asset_handle_get_full_library_path(const AssetHandle *asset_handle,
                                            char r_full_lib_path[FILE_MAX])
 {
@@ -50,16 +57,3 @@ void ED_asset_handle_get_full_library_path(const AssetHandle *asset_handle,
 
   BLI_strncpy(r_full_lib_path, library_path.c_str(), FILE_MAX);
 }
-
-namespace blender::ed::asset {
-
-PointerRNA create_asset_rna_ptr(const asset_system::AssetRepresentation *asset)
-{
-  PointerRNA ptr{};
-  ptr.owner_id = nullptr;
-  ptr.type = &RNA_AssetRepresentation;
-  ptr.data = const_cast<asset_system::AssetRepresentation *>(asset);
-  return ptr;
-}
-
-}  // namespace blender::ed::asset

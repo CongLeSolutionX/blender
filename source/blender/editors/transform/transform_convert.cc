@@ -15,38 +15,45 @@
 #include "BLI_kdtree.h"
 #include "BLI_linklist_stack.h"
 #include "BLI_listbase.h"
-#include "BLI_math.h"
+#include "BLI_math_matrix.h"
+#include "BLI_math_vector.h"
+#include "BLI_math_vector.hh"
 
 #include "BKE_action.h"
 #include "BKE_anim_data.h"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_fcurve.h"
 #include "BKE_global.h"
 #include "BKE_image.h"
 #include "BKE_layer.h"
 #include "BKE_lib_id.h"
 #include "BKE_main.h"
-#include "BKE_modifier.h"
+#include "BKE_modifier.hh"
 #include "BKE_nla.h"
 #include "BKE_scene.h"
 
-#include "ED_keyframes_edit.h"
-#include "ED_keyframing.h"
-#include "ED_particle.h"
-#include "ED_screen.h"
-#include "ED_screen_types.h"
+#include "ED_keyframes_edit.hh"
+#include "ED_keyframing.hh"
+#include "ED_particle.hh"
+#include "ED_screen.hh"
+#include "ED_screen_types.hh"
+#include "ED_sequencer.hh"
 
-#include "UI_view2d.h"
+#include "ANIM_keyframing.hh"
 
-#include "WM_types.h"
+#include "UI_view2d.hh"
 
-#include "DEG_depsgraph_build.h"
+#include "WM_types.hh"
+
+#include "DEG_depsgraph_build.hh"
 
 #include "transform.hh"
 #include "transform_snap.hh"
 
 /* Own include. */
 #include "transform_convert.hh"
+
+using namespace blender;
 
 bool transform_mode_use_local_origins(const TransInfo *t)
 {
@@ -119,10 +126,10 @@ static void sort_trans_data_dist_container(const TransInfo *t, TransDataContaine
 
   if (i < tc->data_len) {
     if (t->flag & T_PROP_CONNECTED) {
-      qsort(start, (size_t)tc->data_len - i, sizeof(TransData), trans_data_compare_dist);
+      qsort(start, size_t(tc->data_len) - i, sizeof(TransData), trans_data_compare_dist);
     }
     else {
-      qsort(start, (size_t)tc->data_len - i, sizeof(TransData), trans_data_compare_rdist);
+      qsort(start, size_t(tc->data_len) - i, sizeof(TransData), trans_data_compare_rdist);
     }
   }
 }
@@ -167,6 +174,39 @@ static void sort_trans_data_selected_first(TransInfo *t)
   FOREACH_TRANS_DATA_CONTAINER (t, tc) {
     sort_trans_data_selected_first_container(tc);
   }
+}
+
+static float3 prop_dist_loc_get(const TransDataContainer *tc,
+                                const TransData *td,
+                                const bool use_island,
+                                const float proj_vec[3])
+{
+  float3 r_vec;
+
+  if (use_island) {
+    if (tc->use_local_mat) {
+      mul_v3_m4v3(r_vec, tc->mat, td->iloc);
+    }
+    else {
+      mul_v3_m3v3(r_vec, td->mtx, td->iloc);
+    }
+  }
+  else {
+    if (tc->use_local_mat) {
+      mul_v3_m4v3(r_vec, tc->mat, td->center);
+    }
+    else {
+      mul_v3_m3v3(r_vec, td->mtx, td->center);
+    }
+  }
+
+  if (proj_vec) {
+    float vec_p[3];
+    project_v3_v3v3(vec_p, r_vec, proj_vec);
+    sub_v3_v3(r_vec, vec_p);
+  }
+
+  return r_vec;
 }
 
 /**
@@ -219,31 +259,9 @@ static void set_prop_dist(TransInfo *t, const bool with_dist)
     for (a = 0; a < tc->data_len; a++, td++) {
       if (td->flag & TD_SELECTED) {
         /* Initialize, it was malloced. */
-        float vec[3];
         td->rdist = 0.0f;
 
-        if (use_island) {
-          if (tc->use_local_mat) {
-            mul_v3_m4v3(vec, tc->mat, td->iloc);
-          }
-          else {
-            mul_v3_m3v3(vec, td->mtx, td->iloc);
-          }
-        }
-        else {
-          if (tc->use_local_mat) {
-            mul_v3_m4v3(vec, tc->mat, td->center);
-          }
-          else {
-            mul_v3_m3v3(vec, td->mtx, td->center);
-          }
-        }
-
-        if (proj_vec) {
-          float vec_p[3];
-          project_v3_v3v3(vec_p, vec, proj_vec);
-          sub_v3_v3(vec, vec_p);
-        }
+        const float3 vec = prop_dist_loc_get(tc, td, use_island, proj_vec);
 
         BLI_kdtree_3d_insert(td_tree, td_table_index, vec);
         td_table[td_table_index++] = td;
@@ -263,30 +281,7 @@ static void set_prop_dist(TransInfo *t, const bool with_dist)
     TransData *td = tc->data;
     for (a = 0; a < tc->data_len; a++, td++) {
       if ((td->flag & TD_SELECTED) == 0) {
-        float vec[3];
-
-        if (use_island) {
-          if (tc->use_local_mat) {
-            mul_v3_m4v3(vec, tc->mat, td->iloc);
-          }
-          else {
-            mul_v3_m3v3(vec, td->mtx, td->iloc);
-          }
-        }
-        else {
-          if (tc->use_local_mat) {
-            mul_v3_m4v3(vec, tc->mat, td->center);
-          }
-          else {
-            mul_v3_m3v3(vec, td->mtx, td->center);
-          }
-        }
-
-        if (proj_vec) {
-          float vec_p[3];
-          project_v3_v3v3(vec_p, vec, proj_vec);
-          sub_v3_v3(vec, vec_p);
-        }
+        const float3 vec = prop_dist_loc_get(tc, td, use_island, proj_vec);
 
         KDTreeNearest_3d nearest;
         const int td_index = BLI_kdtree_3d_find_nearest(td_tree, vec, &nearest);
@@ -320,16 +315,15 @@ static void set_prop_dist(TransInfo *t, const bool with_dist)
 /* adjust pose-channel's auto-ik chainlen */
 static bool pchan_autoik_adjust(bPoseChannel *pchan, short chainlen)
 {
-  bConstraint *con;
   bool changed = false;
 
   /* don't bother to search if no valid constraints */
-  if ((pchan->constflag & (PCHAN_HAS_IK | PCHAN_HAS_TARGET)) == 0) {
+  if ((pchan->constflag & (PCHAN_HAS_IK | PCHAN_HAS_NO_TARGET)) == 0) {
     return changed;
   }
 
   /* check if pchan has ik-constraint */
-  for (con = static_cast<bConstraint *>(pchan->constraints.first); con; con = con->next) {
+  LISTBASE_FOREACH (bConstraint *, con, &pchan->constraints) {
     if (con->flag & (CONSTRAINT_DISABLE | CONSTRAINT_OFF)) {
       continue;
     }
@@ -359,7 +353,6 @@ void transform_autoik_update(TransInfo *t, short mode)
   Main *bmain = CTX_data_main(t->context);
 
   short *chainlen = &t->settings->autoik_chainlen;
-  bPoseChannel *pchan;
 
   /* mode determines what change to apply to chainlen */
   if (mode == 1) {
@@ -387,9 +380,7 @@ void transform_autoik_update(TransInfo *t, short mode)
       continue;
     }
 
-    for (pchan = static_cast<bPoseChannel *>(tc->poseobj->pose->chanbase.first); pchan;
-         pchan = pchan->next)
-    {
+    LISTBASE_FOREACH (bPoseChannel *, pchan, &tc->poseobj->pose->chanbase) {
       changed |= pchan_autoik_adjust(pchan, *chainlen);
     }
   }
@@ -421,7 +412,7 @@ void calc_distanceCurveVerts(TransData *head, TransData *tail, bool cyclic)
     }
   }
 
-  while ((td = static_cast<TransData *>(BLI_LINKSTACK_POP(queue)))) {
+  while ((td = BLI_LINKSTACK_POP(queue))) {
     float dist;
     float vec[3];
 
@@ -434,7 +425,7 @@ void calc_distanceCurveVerts(TransData *head, TransData *tail, bool cyclic)
       next_td = head;
     }
 
-    if (next_td != nullptr && !(next_td->flag & TD_NOTCONNECTED)) {
+    if (next_td != nullptr) {
       sub_v3_v3v3(vec, next_td->center, td->center);
       mul_m3_v3(head->mtx, vec);
       dist = len_v3(vec) + td->dist;
@@ -454,7 +445,7 @@ void calc_distanceCurveVerts(TransData *head, TransData *tail, bool cyclic)
       next_td = tail;
     }
 
-    if (next_td != nullptr && !(next_td->flag & TD_NOTCONNECTED)) {
+    if (next_td != nullptr) {
       sub_v3_v3v3(vec, next_td->center, td->center);
       mul_m3_v3(head->mtx, vec);
       dist = len_v3(vec) + td->dist;
@@ -489,6 +480,13 @@ TransDataCurveHandleFlags *initTransDataCurveHandles(TransData *td, BezTriple *b
 
 void clipUVData(TransInfo *t)
 {
+  /* NOTE(@ideasman42): Often used to clip UV's after proportional editing:
+   * In this case the radius of the proportional region can end outside the clipping area,
+   * while not ideal an elegant solution here would likely be computationally expensive
+   * as it would need to calculate the transform value that would meet the UV bounds.
+   * While it would be technically correct to handle this properly,
+   * there isn't a strong use case for it. */
+
   FOREACH_TRANS_DATA_CONTAINER (t, tc) {
     TransData *td = tc->data;
     for (int a = 0; a < tc->data_len; a++, td++) {
@@ -552,13 +550,11 @@ bool FrameOnMouseSide(char side, float frame, float cframe)
 
 bool constraints_list_needinv(TransInfo *t, ListBase *list)
 {
-  bConstraint *con;
-
   /* loop through constraints, checking if there's one of the mentioned
    * constraints needing special crazy-space corrections
    */
   if (list) {
-    for (con = static_cast<bConstraint *>(list->first); con; con = con->next) {
+    LISTBASE_FOREACH (bConstraint *, con, list) {
       /* only consider constraint if it is enabled, and has influence on result */
       if ((con->flag & (CONSTRAINT_DISABLE | CONSTRAINT_OFF)) == 0 && (con->enforce != 0.0f)) {
         /* (affirmative) returns for specific constraints here... */
@@ -722,23 +718,25 @@ static int countAndCleanTransDataContainer(TransInfo *t)
 static void init_proportional_edit(TransInfo *t)
 {
   /* NOTE: Proportional editing is not usable in pose mode yet #32444. */
-  if (!ELEM(t->data_type,
-            &TransConvertType_Action,
-            &TransConvertType_Curve,
-            &TransConvertType_Curves,
-            &TransConvertType_Graph,
-            &TransConvertType_GPencil,
-            &TransConvertType_Lattice,
-            &TransConvertType_Mask,
-            &TransConvertType_MBall,
-            &TransConvertType_Mesh,
-            &TransConvertType_MeshEdge,
-            &TransConvertType_MeshSkin,
-            &TransConvertType_MeshUV,
-            &TransConvertType_MeshVertCData,
-            &TransConvertType_Node,
-            &TransConvertType_Object,
-            &TransConvertType_Particle))
+  /* NOTE: This `ELEM` uses more than 16 elements and so has been split. */
+  if (!(ELEM(t->data_type,
+             &TransConvertType_Action,
+             &TransConvertType_Curve,
+             &TransConvertType_Curves,
+             &TransConvertType_Graph,
+             &TransConvertType_GPencil,
+             &TransConvertType_GreasePencil,
+             &TransConvertType_Lattice,
+             &TransConvertType_Mask,
+             &TransConvertType_MBall,
+             &TransConvertType_Mesh,
+             &TransConvertType_MeshEdge,
+             &TransConvertType_MeshSkin,
+             &TransConvertType_MeshUV,
+             &TransConvertType_MeshVertCData,
+             &TransConvertType_Node,
+             &TransConvertType_Object) ||
+        ELEM(t->data_type, &TransConvertType_Particle)))
   {
     /* Disable proportional editing */
     t->options |= CTX_NO_PET;
@@ -801,6 +799,7 @@ static void init_TransDataContainers(TransInfo *t,
             &TransConvertType_Curve,
             &TransConvertType_Curves,
             &TransConvertType_GPencil,
+            &TransConvertType_GreasePencil,
             &TransConvertType_Lattice,
             &TransConvertType_MBall,
             &TransConvertType_Mesh,
@@ -817,6 +816,7 @@ static void init_TransDataContainers(TransInfo *t,
   const short object_type = obact ? obact->type : -1;
 
   if ((object_mode & OB_MODE_EDIT) || (t->data_type == &TransConvertType_GPencil) ||
+      (t->data_type == &TransConvertType_GreasePencil) ||
       ((object_mode & OB_MODE_POSE) && (object_type == OB_ARMATURE)))
   {
     if (t->data_container) {
@@ -864,6 +864,9 @@ static void init_TransDataContainers(TransInfo *t,
       else if (t->data_type == &TransConvertType_GPencil) {
         tc->use_local_mat = true;
       }
+      else if (t->data_type == &TransConvertType_GreasePencil) {
+        tc->use_local_mat = true;
+      }
 
       if (tc->use_local_mat) {
         BLI_assert((t->flag & T_2D_EDIT) == 0);
@@ -890,7 +893,7 @@ static TransConvertTypeInfo *convert_type_get(const TransInfo *t, Object **r_obj
   BKE_view_layer_synced_ensure(t->scene, t->view_layer);
   Object *ob = BKE_view_layer_active_object_get(view_layer);
 
-  /* if tests must match recalcData for correct updates */
+  /* if tests must match recalc_data for correct updates */
   if (t->options & CTX_CURSOR) {
     if (t->spacetype == SPACE_IMAGE) {
       return &TransConvertType_CursorImage;
@@ -913,8 +916,14 @@ static TransConvertTypeInfo *convert_type_get(const TransInfo *t, Object **r_obj
   if (t->options & CTX_EDGE_DATA) {
     return &TransConvertType_MeshEdge;
   }
-  if (t->options & CTX_GPENCIL_STROKES) {
-    return &TransConvertType_GPencil;
+  if ((t->options & CTX_GPENCIL_STROKES) && (t->spacetype == SPACE_VIEW3D)) {
+    if (t->obedit_type == OB_GREASE_PENCIL) {
+      return &TransConvertType_GreasePencil;
+    }
+    else if (t->obedit_type == OB_GPENCIL_LEGACY) {
+      return &TransConvertType_GPencil;
+    }
+    return nullptr;
   }
   if (t->spacetype == SPACE_IMAGE) {
     if (t->options & CTX_MASK) {
@@ -939,6 +948,9 @@ static TransConvertTypeInfo *convert_type_get(const TransInfo *t, Object **r_obj
   if (t->spacetype == SPACE_SEQ) {
     if (t->options & CTX_SEQUENCER_IMAGE) {
       return &TransConvertType_SequencerImage;
+    }
+    if (sequencer_retiming_mode_is_active(t->context)) {
+      return &TransConvertType_SequencerRetiming;
     }
     return &TransConvertType_Sequencer;
   }
@@ -1016,7 +1028,7 @@ static TransConvertTypeInfo *convert_type_get(const TransInfo *t, Object **r_obj
   return &TransConvertType_Object;
 }
 
-void createTransData(bContext *C, TransInfo *t)
+void create_trans_data(bContext *C, TransInfo *t)
 {
   t->data_len_all = -1;
 
@@ -1052,7 +1064,7 @@ void createTransData(bContext *C, TransInfo *t)
     if ((t->settings->transform_flag & SCE_XFORM_SKIP_CHILDREN) != 0) {
       t->options |= CTX_OBMODE_XFORM_SKIP_CHILDREN;
     }
-    TransConvertType_Object.createTransData(C, t);
+    TransConvertType_Object.create_trans_data(C, t);
     /* Check if we're transforming the camera from the camera */
     if ((t->spacetype == SPACE_VIEW3D) && (t->region->regiontype == RGN_TYPE_WINDOW)) {
       View3D *v3d = static_cast<View3D *>(t->view);
@@ -1079,7 +1091,7 @@ void createTransData(bContext *C, TransInfo *t)
     else if (t->data_type == &TransConvertType_SequencerImage) {
       t->obedit_type = -1;
     }
-    t->data_type->createTransData(C, t);
+    t->data_type->create_trans_data(C, t);
   }
 
   countAndCleanTransDataContainer(t);
@@ -1189,7 +1201,7 @@ void animrecord_check_state(TransInfo *t, ID *id)
    * - we're not only keying for available channels
    * - the option to add new actions for each round is not enabled
    */
-  if (IS_AUTOKEY_FLAG(scene, INSERTAVAIL) == 0 &&
+  if (blender::animrig::is_autokey_flag(scene, AUTOKEY_FLAG_INSERTAVAIL) == 0 &&
       (scene->toolsettings->autokey_flag & ANIMRECORD_FLAG_WITHNLA))
   {
     /* if playback has just looped around,
@@ -1271,12 +1283,12 @@ void transform_convert_flush_handle2D(TransData *td, TransData2D *td2d, const fl
   }
 }
 
-void recalcData(TransInfo *t)
+void recalc_data(TransInfo *t)
 {
-  if (!t->data_type || !t->data_type->recalcData) {
+  if (!t->data_type || !t->data_type->recalc_data) {
     return;
   }
-  t->data_type->recalcData(t);
+  t->data_type->recalc_data(t);
 }
 
 /** \} */

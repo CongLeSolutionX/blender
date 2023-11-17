@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2021 Blender Foundation
+/* SPDX-FileCopyrightText: 2021 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -6,13 +6,16 @@
  * \ingroup draw_engine
  */
 
-#include "BKE_paint.h"
+#include "BKE_object_types.hh"
+#include "BKE_paint.hh"
+
+#include "BLI_math_color.h"
 #include "DRW_render.h"
 
-#include "ED_view3d.h"
+#include "ED_view3d.hh"
 
 #include "PIL_time.h"
-#include "UI_resources.h"
+#include "UI_resources.hh"
 
 #include "overlay_private.hh"
 
@@ -79,7 +82,7 @@ void OVERLAY_mode_transfer_cache_populate(OVERLAY_Data *vedata, Object *ob)
   }
 
   const float animation_time = pd->mode_transfer.time -
-                               ob->runtime.overlay_mode_transfer_start_time;
+                               ob->runtime->overlay_mode_transfer_start_time;
 
   if (!mode_transfer_is_animation_running(animation_time)) {
     return;

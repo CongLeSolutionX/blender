@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -6,7 +6,7 @@
  * \ingroup edscr
  */
 
-#include <stdlib.h>
+#include <cstdlib>
 
 #include "BLI_listbase.h"
 #include "BLI_utildefines.h"
@@ -14,14 +14,14 @@
 #include "DNA_screen_types.h"
 #include "DNA_workspace_types.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_main.h"
-#include "BKE_screen.h"
+#include "BKE_screen.hh"
 #include "BKE_workspace.h"
 
-#include "WM_api.h"
+#include "WM_api.hh"
 
-#include "ED_screen.h"
+#include "ED_screen.hh"
 
 #include "screen_intern.h"
 

@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -6,9 +6,9 @@
  * \ingroup edtransform
  */
 
-#include <ctype.h>
-#include <stddef.h>
-#include <string.h>
+#include <cctype>
+#include <cstddef>
+#include <cstring>
 
 #include "MEM_guardedalloc.h"
 
@@ -23,25 +23,30 @@
 #include "DNA_view3d_types.h"
 
 #include "BLI_listbase.h"
-#include "BLI_math.h"
+#include "BLI_math_geom.h"
+#include "BLI_math_matrix.h"
+#include "BLI_math_rotation.h"
+#include "BLI_math_vector.h"
 #include "BLI_string.h"
-#include "BLI_string_utils.h"
+#include "BLI_string_utils.hh"
 #include "BLI_utildefines.h"
 
 #include "BKE_action.h"
-#include "BKE_armature.h"
-#include "BKE_context.h"
-#include "BKE_curve.h"
-#include "BKE_editmesh.h"
+#include "BKE_armature.hh"
+#include "BKE_context.hh"
+#include "BKE_curve.hh"
+#include "BKE_editmesh.hh"
 #include "BKE_layer.h"
 #include "BKE_report.h"
 #include "BKE_scene.h"
 
 #include "BLT_translation.h"
 
-#include "ED_armature.h"
+#include "ED_armature.hh"
 
-#include "SEQ_select.h"
+#include "ANIM_bone_collections.h"
+
+#include "SEQ_select.hh"
 
 #include "transform.hh"
 #include "transform_orientations.hh"
@@ -82,7 +87,7 @@ static void uniqueOrientationName(ListBase *lb, char *name)
                     CTX_DATA_(BLT_I18NCONTEXT_ID_SCENE, "Space"),
                     '.',
                     name,
-                    sizeof(((TransformOrientation *)nullptr)->name));
+                    sizeof(TransformOrientation::name));
 }
 
 static TransformOrientation *createViewSpace(bContext *C,
@@ -235,10 +240,10 @@ static TransformOrientation *createMeshSpace(bContext *C,
 
 static bool test_rotmode_euler(short rotmode)
 {
-  return ELEM(rotmode, ROT_MODE_AXISANGLE, ROT_MODE_QUAT) ? 0 : 1;
+  return ELEM(rotmode, ROT_MODE_AXISANGLE, ROT_MODE_QUAT) ? false : true;
 }
 
-/* could move into BLI_math however this is only useful for display/editing purposes */
+/* could move into BLI_math_rotation.h however this is only useful for display/editing purposes */
 static void axis_angle_to_gimbal_axis(float gmat[3][3], const float axis[3], const float angle)
 {
   /* X/Y are arbitrary axes, most importantly Z is the axis of rotation. */
@@ -279,7 +284,7 @@ bool gimbal_axis_pose(Object *ob, const bPoseChannel *pchan, float gmat[3][3])
     axis_angle_to_gimbal_axis(mat, pchan->rotAxis, pchan->rotAngle);
   }
   else { /* quat */
-    return 0;
+    return false;
   }
 
   /* apply bone transformation */
@@ -316,7 +321,7 @@ bool gimbal_axis_object(Object *ob, float gmat[3][3])
     axis_angle_to_gimbal_axis(gmat, ob->rotAxis, ob->rotAngle);
   }
   else { /* quat */
-    return 0;
+    return false;
   }
 
   if (ob->parent) {
@@ -325,7 +330,7 @@ bool gimbal_axis_object(Object *ob, float gmat[3][3])
     normalize_m3(parent_mat);
     mul_m3_m3m3(gmat, parent_mat, gmat);
   }
-  return 1;
+  return true;
 }
 
 bool transform_orientations_create_from_axis(float mat[3][3],
@@ -543,15 +548,14 @@ static int armature_bone_transflags_update_recursive(bArmature *arm,
                                                      ListBase *lb,
                                                      const bool do_it)
 {
-  Bone *bone;
   bool do_next;
   int total = 0;
 
-  for (bone = static_cast<Bone *>(lb->first); bone; bone = bone->next) {
+  LISTBASE_FOREACH (Bone *, bone, lb) {
     bone->flag &= ~BONE_TRANSFORM;
     do_next = do_it;
     if (do_it) {
-      if (bone->layer & arm->layer) {
+      if (ANIM_bonecoll_is_visible(arm, bone)) {
         if (bone->flag & BONE_SELECTED) {
           bone->flag |= BONE_TRANSFORM;
           total++;
@@ -629,7 +633,7 @@ short ED_transform_calc_orientation_from_type_ex(const Scene *scene,
 
       if (ob) {
         if (ob->mode & OB_MODE_POSE) {
-          const bPoseChannel *pchan = BKE_pose_channel_active_if_layer_visible(ob);
+          const bPoseChannel *pchan = BKE_pose_channel_active_if_bonecoll_visible(ob);
           if (pchan && gimbal_axis_pose(ob, pchan, r_mat)) {
             break;
           }
@@ -828,9 +832,8 @@ static uint bm_mesh_elems_select_get_n__internal(
 
   if (!BLI_listbase_is_empty(&bm->selected)) {
     /* quick check */
-    BMEditSelection *ese;
     i = 0;
-    for (ese = static_cast<BMEditSelection *>(bm->selected.last); ese; ese = ese->prev) {
+    LISTBASE_FOREACH_BACKWARD (BMEditSelection *, ese, &bm->selected) {
       /* shouldn't need this check */
       if (BM_elem_flag_test(ese->ele, BM_ELEM_SELECT)) {
 
@@ -1264,7 +1267,7 @@ int getTransformOrientation_ex(const Scene *scene,
         ok = true;
       }
       else {
-        for (ml = static_cast<MetaElem *>(mb->editelems->first); ml; ml = ml->next) {
+        LISTBASE_FOREACH (MetaElem *, ml, mb->editelems) {
           if (ml->flag & SELECT) {
             quat_to_mat3(tmat, ml->quat);
             add_v3_v3(normal, tmat[2]);
@@ -1301,8 +1304,8 @@ int getTransformOrientation_ex(const Scene *scene,
         zero_v3(fallback_normal);
         zero_v3(fallback_plane);
 
-        for (ebone = static_cast<EditBone *>(arm->edbo->first); ebone; ebone = ebone->next) {
-          if (arm->layer & ebone->layer) {
+        LISTBASE_FOREACH (EditBone *, ebone, arm->edbo) {
+          if (ANIM_bonecoll_is_visible_editbone(arm, ebone)) {
             if (ebone->flag & BONE_SELECTED) {
               ED_armature_ebone_to_mat3(ebone, tmat);
               add_v3_v3(normal, tmat[2]);
@@ -1358,7 +1361,7 @@ int getTransformOrientation_ex(const Scene *scene,
     float imat[3][3], mat[3][3];
     bool ok = false;
 
-    if (activeOnly && (pchan = BKE_pose_channel_active_if_layer_visible(ob))) {
+    if (activeOnly && (pchan = BKE_pose_channel_active_if_bonecoll_visible(ob))) {
       add_v3_v3(normal, pchan->pose_mat[2]);
       add_v3_v3(plane, pchan->pose_mat[1]);
       ok = true;
@@ -1368,8 +1371,7 @@ int getTransformOrientation_ex(const Scene *scene,
       transformed_len = armature_bone_transflags_update_recursive(arm, &arm->bonebase, true);
       if (transformed_len) {
         /* use channels to get stats */
-        for (pchan = static_cast<bPoseChannel *>(ob->pose->chanbase.first); pchan;
-             pchan = pchan->next) {
+        LISTBASE_FOREACH (bPoseChannel *, pchan, &ob->pose->chanbase) {
           if (pchan->bone && pchan->bone->flag & BONE_TRANSFORM) {
             add_v3_v3(normal, pchan->pose_mat[2]);
             add_v3_v3(plane, pchan->pose_mat[1]);

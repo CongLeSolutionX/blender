@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2011 Blender Foundation
+/* SPDX-FileCopyrightText: 2011 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -9,7 +9,7 @@
  * by multiple tracking files but which should not be public.
  */
 
-#include <stddef.h>
+#include <cstddef>
 
 #include "MEM_guardedalloc.h"
 
@@ -17,9 +17,10 @@
 
 #include "BLI_ghash.h"
 #include "BLI_listbase.h"
-#include "BLI_math.h"
+#include "BLI_math_color.h"
+#include "BLI_math_vector.h"
 #include "BLI_string.h"
-#include "BLI_string_utils.h"
+#include "BLI_string_utils.hh"
 #include "BLI_threads.h"
 #include "BLI_utildefines.h"
 

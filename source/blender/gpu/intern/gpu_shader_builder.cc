@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2021 Blender Foundation
+/* SPDX-FileCopyrightText: 2021 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -106,7 +106,9 @@ int main(int argc, const char *argv[])
   };
 
   blender::Vector<NamedBackend> backends_to_validate;
+#ifdef WITH_OPENGL_BACKEND
   backends_to_validate.append({"OpenGL", GPU_BACKEND_OPENGL});
+#endif
 #ifdef WITH_METAL_BACKEND
   backends_to_validate.append({"Metal", GPU_BACKEND_METAL});
 #endif

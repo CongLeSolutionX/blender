@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2008 Blender Foundation
+/* SPDX-FileCopyrightText: 2008 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -18,18 +18,18 @@
 #include "BLI_math_vector.h"
 #include "BLI_utildefines.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 
-#include "RNA_access.h"
-#include "RNA_define.h"
+#include "RNA_access.hh"
+#include "RNA_define.hh"
 
-#include "WM_api.h"
-#include "WM_types.h"
+#include "WM_api.hh"
+#include "WM_types.hh"
 
-#include "ED_screen.h"
+#include "ED_screen.hh"
 
-#include "UI_interface.h"
-#include "UI_view2d.h"
+#include "UI_interface.hh"
+#include "UI_view2d.hh"
 
 #include "PIL_time.h" /* USER_ZOOM_CONTINUE */
 
@@ -294,15 +294,15 @@ static int view_pan_modal(bContext *C, wmOperator *op, const wmEvent *event)
       }
 
       if (deltax != 0) {
-        RNA_int_set(op->ptr, "deltax", deltax);
         vpd->lastx = event->xy[0];
       }
       if (deltay != 0) {
-        RNA_int_set(op->ptr, "deltay", deltay);
         vpd->lasty = event->xy[1];
       }
 
       if (deltax || deltay) {
+        RNA_int_set(op->ptr, "deltax", deltax);
+        RNA_int_set(op->ptr, "deltay", deltay);
         view_pan_apply(C, op);
       }
       break;
@@ -393,7 +393,12 @@ static int view_edge_pan_modal(bContext *C, wmOperator *op, const wmEvent *event
 {
   View2DEdgePanData *vpd = static_cast<View2DEdgePanData *>(op->customdata);
 
-  if (event->val == KM_RELEASE || event->type == EVT_ESCKEY) {
+  wmWindow *source_win = CTX_wm_window(C);
+  int event_xy_target[2];
+  wmWindow *target_win = WM_window_find_under_cursor(source_win, event->xy, &event_xy_target[0]);
+
+  /* Exit if we release the mouse button, hit escape, or enter a different window. */
+  if (event->val == KM_RELEASE || event->type == EVT_ESCKEY || source_win != target_win) {
     vpd->v2d->flag &= ~V2D_IS_NAVIGATING;
     MEM_SAFE_FREE(op->customdata);
     return (OPERATOR_FINISHED | OPERATOR_PASS_THROUGH);
@@ -451,7 +456,7 @@ static int view_scrollright_exec(bContext *C, wmOperator *op)
   }
 
   /* set RNA-Props - only movement in positive x-direction */
-  RNA_int_set(op->ptr, "deltax", 40);
+  RNA_int_set(op->ptr, "deltax", 40 * UI_SCALE_FAC);
   RNA_int_set(op->ptr, "deltay", 0);
 
   /* apply movement, then we're done */
@@ -491,7 +496,7 @@ static int view_scrollleft_exec(bContext *C, wmOperator *op)
   }
 
   /* set RNA-Props - only movement in negative x-direction */
-  RNA_int_set(op->ptr, "deltax", -40);
+  RNA_int_set(op->ptr, "deltax", -40 * UI_SCALE_FAC);
   RNA_int_set(op->ptr, "deltay", 0);
 
   /* apply movement, then we're done */
@@ -536,7 +541,7 @@ static int view_scrolldown_exec(bContext *C, wmOperator *op)
 
   /* set RNA-Props */
   RNA_int_set(op->ptr, "deltax", 0);
-  RNA_int_set(op->ptr, "deltay", -40);
+  RNA_int_set(op->ptr, "deltay", -40 * UI_SCALE_FAC);
 
   PropertyRNA *prop = RNA_struct_find_property(op->ptr, "page");
   const bool use_page_size = (vpd->v2d->flag & V2D_SNAP_TO_PAGESIZE_Y) ||
@@ -591,7 +596,7 @@ static int view_scrollup_exec(bContext *C, wmOperator *op)
 
   /* set RNA-Props */
   RNA_int_set(op->ptr, "deltax", 0);
-  RNA_int_set(op->ptr, "deltay", 40);
+  RNA_int_set(op->ptr, "deltay", 40 * UI_SCALE_FAC);
 
   PropertyRNA *prop = RNA_struct_find_property(op->ptr, "page");
   const bool use_page_size = (vpd->v2d->flag & V2D_SNAP_TO_PAGESIZE_Y) ||
@@ -1696,7 +1701,7 @@ static int view2d_smoothview_invoke(bContext *C, wmOperator * /*op*/, const wmEv
 
   float step;
   if (sms->time_allowed != 0.0) {
-    step = float((v2d->smooth_timer->duration) / sms->time_allowed);
+    step = float((v2d->smooth_timer->time_duration) / sms->time_allowed);
   }
   else {
     step = 1.0f;
@@ -1863,17 +1868,17 @@ static short mouse_in_scroller_handle(int mouse, int sc_min, int sc_max, int sh_
 
 static bool scroller_activate_poll(bContext *C)
 {
+  const wmWindow *win = CTX_wm_window(C);
+  if (!(win && win->eventstate)) {
+    return false;
+  }
   if (!view2d_poll(C)) {
     return false;
   }
-
-  wmWindow *win = CTX_wm_window(C);
   ARegion *region = CTX_wm_region(C);
   View2D *v2d = &region->v2d;
-  wmEvent *event = win->eventstate;
-
   /* Check if mouse in scroll-bars, if they're enabled. */
-  return (UI_view2d_mouse_in_scrollers(region, v2d, event->xy) != 0);
+  return (UI_view2d_mouse_in_scrollers(region, v2d, win->eventstate->xy) != 0);
 }
 
 /* Initialize #wmOperator.customdata for scroller manipulation operator. */
@@ -2156,9 +2161,8 @@ static int scroller_activate_invoke(bContext *C, wmOperator *op, const wmEvent *
       vsm->zone = SCROLLHANDLE_BAR;
     }
 
-    /* check if zoom zones are inappropriate (i.e. zoom widgets not shown), so cannot continue
-     * NOTE: see view2d.c for latest conditions, and keep this in sync with that
-     */
+    /* Check if zoom zones are inappropriate (i.e. zoom widgets not shown), so cannot continue
+     * NOTE: see `view2d.cc` for latest conditions, and keep this in sync with that. */
     if (ELEM(vsm->zone, SCROLLHANDLE_MIN, SCROLLHANDLE_MAX)) {
       if (((vsm->scroller == 'h') && (v2d->scroll & V2D_SCROLL_HORIZONTAL_HANDLES) == 0) ||
           ((vsm->scroller == 'v') && (v2d->scroll & V2D_SCROLL_VERTICAL_HANDLES) == 0))
@@ -2340,7 +2344,7 @@ void ED_operatortypes_view2d()
 
 void ED_keymap_view2d(wmKeyConfig *keyconf)
 {
-  WM_keymap_ensure(keyconf, "View2D", 0, 0);
+  WM_keymap_ensure(keyconf, "View2D", SPACE_EMPTY, RGN_TYPE_WINDOW);
 }
 
 /** \} */

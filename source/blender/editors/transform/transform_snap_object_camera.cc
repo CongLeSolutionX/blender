@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -6,15 +6,14 @@
  * \ingroup edtransform
  */
 
-#include "BLI_math.h"
 #include "BLI_math_matrix.hh"
 
-#include "BKE_bvhutils.h"
+#include "BKE_bvhutils.hh"
 #include "BKE_mesh.hh"
-#include "BKE_object.h"
+#include "BKE_object.hh"
 #include "BKE_tracking.h"
 
-#include "ED_transform_snap_object_context.h"
+#include "ED_transform_snap_object_context.hh"
 
 #include "transform_snap_object.hh"
 
@@ -46,7 +45,7 @@ eSnapMode snapCamera(SnapObjectContext *sctx,
   BKE_tracking_get_camera_object_matrix(object, orig_camera_mat.ptr());
 
   SnapData nearest2d(sctx);
-  nearest2d.clip_planes_enable(sctx);
+  nearest2d.clip_planes_enable(sctx, object);
 
   MovieTracking *tracking = &clip->tracking;
   LISTBASE_FOREACH (MovieTrackingObject *, tracking_object, &tracking->objects) {

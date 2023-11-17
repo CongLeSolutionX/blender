@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2012 Blender Foundation
+/* SPDX-FileCopyrightText: 2012 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -8,23 +8,26 @@
  * Functions for evaluating the mask beziers into points for the outline and feather.
  */
 
-#include <stddef.h>
-#include <string.h>
+#include <algorithm> /* For `min/max`. */
+#include <cstddef>
+#include <cstring>
 
 #include "MEM_guardedalloc.h"
 
 #include "BLI_listbase.h"
-#include "BLI_math.h"
+#include "BLI_math_geom.h"
+#include "BLI_math_matrix.h"
+#include "BLI_math_vector.h"
 #include "BLI_utildefines.h"
 
 #include "DNA_mask_types.h"
 #include "DNA_object_types.h"
 
-#include "BKE_curve.h"
+#include "BKE_curve.hh"
 #include "BKE_mask.h"
 
-#include "DEG_depsgraph.h"
-#include "DEG_depsgraph_query.h"
+#include "DEG_depsgraph.hh"
+#include "DEG_depsgraph_query.hh"
 
 uint BKE_mask_spline_resolution(MaskSpline *spline, int width, int height)
 {
@@ -55,7 +58,7 @@ uint BKE_mask_spline_resolution(MaskSpline *spline, int width, int height)
     len = a + b + c;
     cur_resol = len / max_segment;
 
-    resol = MAX2(resol, cur_resol);
+    resol = std::max(resol, cur_resol);
 
     if (resol >= MASK_RESOL_MAX) {
       break;
@@ -515,16 +518,16 @@ static float (
   point_curr = point_prev + 1;
 
   while (a--) {
-    /* BezTriple *bezt_prev; */ /* UNUSED */
-    /* BezTriple *bezt_curr; */ /* UNUSED */
+    // BezTriple *bezt_prev; /* UNUSED */
+    // BezTriple *bezt_curr; /* UNUSED */
     int j;
 
     if (a == 0 && (spline->flag & MASK_SPLINE_CYCLIC)) {
       point_curr = points_array;
     }
 
-    /* bezt_prev = &point_prev->bezt; */
-    /* bezt_curr = &point_curr->bezt; */
+    // bezt_prev = &point_prev->bezt;
+    // bezt_curr = &point_curr->bezt;
 
     for (j = 0; j < resol; j++, fp++) {
       float u = float(j) / resol, weight;

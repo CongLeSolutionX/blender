@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -15,12 +15,14 @@
 
 #include "BLI_ghash.h"
 #include "BLI_kdopbvh.h"
-#include "BLI_math.h"
+#include "BLI_math_geom.h"
+#include "BLI_math_matrix.h"
+#include "BLI_math_vector.h"
 #include "BLI_memarena.h"
 #include "BLI_polyfill_2d.h"
 #include "BLI_utildefines.h"
 
-#include "BKE_bvhutils.h"
+#include "BKE_bvhutils.hh"
 
 #include "../generic/py_capi_utils.h"
 #include "../generic/python_utildefines.h"
@@ -33,14 +35,14 @@
 #  include "DNA_meshdata_types.h"
 #  include "DNA_object_types.h"
 
-#  include "BKE_customdata.h"
+#  include "BKE_customdata.hh"
 #  include "BKE_editmesh_bvh.h"
 #  include "BKE_lib_id.h"
 #  include "BKE_mesh.hh"
-#  include "BKE_mesh_runtime.h"
-#  include "BKE_object.h"
+#  include "BKE_mesh_runtime.hh"
+#  include "BKE_object.hh"
 
-#  include "DEG_depsgraph_query.h"
+#  include "DEG_depsgraph_query.hh"
 
 #  include "bmesh.h"
 
@@ -1145,7 +1147,7 @@ static PyObject *C_BVHTree_FromObject(PyObject * /*cls*/, PyObject *args, PyObje
 
   const blender::Span<int> corner_verts = mesh->corner_verts();
   const blender::Span<MLoopTri> looptris = mesh->looptris();
-  const blender::Span<int> looptri_polys = mesh->looptri_polys();
+  const blender::Span<int> looptri_faces = mesh->looptri_faces();
 
   /* Get data for tessellation */
 
@@ -1167,11 +1169,11 @@ static PyObject *C_BVHTree_FromObject(PyObject * /*cls*/, PyObject *args, PyObje
   if (tree) {
     orig_index = static_cast<int *>(
         MEM_mallocN(sizeof(*orig_index) * size_t(looptris.size()), __func__));
-    if (!BKE_mesh_poly_normals_are_dirty(mesh)) {
-      const blender::Span<blender::float3> poly_normals = mesh->poly_normals();
+    if (!BKE_mesh_face_normals_are_dirty(mesh)) {
+      const blender::Span<blender::float3> face_normals = mesh->face_normals();
       orig_normal = static_cast<blender::float3 *>(
-          MEM_malloc_arrayN(size_t(mesh->totpoly), sizeof(blender::float3), __func__));
-      blender::MutableSpan(orig_normal, poly_normals.size()).copy_from(poly_normals);
+          MEM_malloc_arrayN(size_t(mesh->faces_num), sizeof(blender::float3), __func__));
+      blender::MutableSpan(orig_normal, face_normals.size()).copy_from(face_normals);
     }
 
     for (const int64_t i : looptris.index_range()) {
@@ -1186,7 +1188,7 @@ static PyObject *C_BVHTree_FromObject(PyObject * /*cls*/, PyObject *args, PyObje
       copy_v3_v3(co[2], coords[tris[i][2]]);
 
       BLI_bvhtree_insert(tree, int(i), co[0], 3);
-      orig_index[i] = int(looptri_polys[i]);
+      orig_index[i] = int(looptri_faces[i]);
     }
 
     BLI_bvhtree_balance(tree);

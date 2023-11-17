@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -12,6 +12,7 @@
 
 #include "BLI_function_ref.hh"
 #include "BLI_multi_value_map.hh"
+#include "BLI_vector.hh"
 
 #include "AS_asset_catalog_path.hh"
 #include "AS_asset_catalog_tree.hh"
@@ -21,8 +22,9 @@ struct AssetLibraryReference;
 struct bContext;
 
 namespace blender::asset_system {
+class AssetLibrary;
 class AssetRepresentation;
-}
+}  // namespace blender::asset_system
 
 /**
  * Compare \a asset against the settings of \a filter.
@@ -45,8 +47,14 @@ struct AssetItemTree {
   asset_system::AssetCatalogTree catalogs;
   MultiValueMap<asset_system::AssetCatalogPath, asset_system::AssetRepresentation *>
       assets_per_path;
+  /** Assets not added to a catalog, not part of #assets_per_path. */
+  Vector<asset_system::AssetRepresentation *> unassigned_assets;
 };
 
+asset_system::AssetCatalogTree build_filtered_catalog_tree(
+    const asset_system::AssetLibrary &library,
+    const AssetLibraryReference &library_ref,
+    blender::FunctionRef<bool(const asset_system::AssetRepresentation &)> is_asset_visible_fn);
 AssetItemTree build_filtered_all_catalog_tree(
     const AssetLibraryReference &library_ref,
     const bContext &C,

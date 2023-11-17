@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2008 Blender Foundation
+/* SPDX-FileCopyrightText: 2008 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -6,16 +6,16 @@
  * \ingroup edanimation
  */
 
-#include <float.h>
-#include <math.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cfloat>
+#include <cmath>
+#include <cstdlib>
+#include <cstring>
 
 #include "MEM_guardedalloc.h"
 
 #include "BLI_blenlib.h"
-#include "BLI_math.h"
-#include "BLI_string_utils.h"
+#include "BLI_math_vector.h"
+#include "BLI_string_utils.hh"
 #include "BLI_utildefines.h"
 
 #include "DNA_anim_types.h"
@@ -24,19 +24,20 @@
 #include "DNA_space_types.h"
 
 #include "BKE_action.h"
-#include "BKE_curve.h"
+#include "BKE_curve.hh"
 #include "BKE_fcurve.h"
 #include "BKE_main.h"
 #include "BKE_report.h"
 #include "BKE_scene.h"
 
-#include "RNA_access.h"
-#include "RNA_enum_types.h"
-#include "RNA_path.h"
+#include "RNA_access.hh"
+#include "RNA_enum_types.hh"
+#include "RNA_path.hh"
 
-#include "ED_anim_api.h"
-#include "ED_keyframes_edit.h"
-#include "ED_keyframing.h"
+#include "ED_keyframes_edit.hh"
+
+#include "ANIM_animdata.hh"
+#include "ANIM_fcurve.hh"
 
 /* This file contains code for various keyframe-editing tools which are 'destructive'
  * (i.e. they will modify the order of the keyframes, and change the size of the array).
@@ -91,7 +92,11 @@ bool duplicate_fcurve_keys(FCurve *fcu)
 /** \name Various Tools
  * \{ */
 
-void clean_fcurve(bAnimContext *ac, bAnimListElem *ale, float thresh, bool cleardefault)
+void clean_fcurve(bAnimContext *ac,
+                  bAnimListElem *ale,
+                  float thresh,
+                  bool cleardefault,
+                  const bool only_selected_keys)
 {
   FCurve *fcu = (FCurve *)ale->key_data;
   BezTriple *old_bezts, *bezt, *beztn;
@@ -113,7 +118,7 @@ void clean_fcurve(bAnimContext *ac, bAnimListElem *ale, float thresh, bool clear
 
   /* now insert first keyframe, as it should be ok */
   bezt = old_bezts;
-  insert_bezt_fcurve(fcu, bezt, eInsertKeyFlags(0));
+  blender::animrig::insert_bezt_fcurve(fcu, bezt, eInsertKeyFlags(0));
   if (!(bezt->f2 & SELECT)) {
     lastb = fcu->bezt;
     lastb->f1 = lastb->f2 = lastb->f3 = 0;
@@ -144,8 +149,8 @@ void clean_fcurve(bAnimContext *ac, bAnimListElem *ale, float thresh, bool clear
     cur[0] = bezt->vec[1][0];
     cur[1] = bezt->vec[1][1];
 
-    if (!(bezt->f2 & SELECT)) {
-      insert_bezt_fcurve(fcu, bezt, eInsertKeyFlags(0));
+    if (only_selected_keys && !(bezt->f2 & SELECT)) {
+      blender::animrig::insert_bezt_fcurve(fcu, bezt, eInsertKeyFlags(0));
       lastb = (fcu->bezt + (fcu->totvert - 1));
       lastb->f1 = lastb->f2 = lastb->f3 = 0;
       continue;
@@ -162,7 +167,7 @@ void clean_fcurve(bAnimContext *ac, bAnimListElem *ale, float thresh, bool clear
         if (cur[1] > next[1]) {
           if (IS_EQT(cur[1], prev[1], thresh) == 0) {
             /* add new keyframe */
-            insert_bezt_fcurve(fcu, bezt, eInsertKeyFlags(0));
+            blender::animrig::insert_bezt_fcurve(fcu, bezt, eInsertKeyFlags(0));
           }
         }
       }
@@ -170,7 +175,7 @@ void clean_fcurve(bAnimContext *ac, bAnimListElem *ale, float thresh, bool clear
         /* only add if values are a considerable distance apart */
         if (IS_EQT(cur[1], prev[1], thresh) == 0) {
           /* add new keyframe */
-          insert_bezt_fcurve(fcu, bezt, eInsertKeyFlags(0));
+          blender::animrig::insert_bezt_fcurve(fcu, bezt, eInsertKeyFlags(0));
         }
       }
     }
@@ -180,18 +185,18 @@ void clean_fcurve(bAnimContext *ac, bAnimListElem *ale, float thresh, bool clear
         /* does current have same value as previous and next? */
         if (IS_EQT(cur[1], prev[1], thresh) == 0) {
           /* add new keyframe */
-          insert_bezt_fcurve(fcu, bezt, eInsertKeyFlags(0));
+          blender::animrig::insert_bezt_fcurve(fcu, bezt, eInsertKeyFlags(0));
         }
         else if (IS_EQT(cur[1], next[1], thresh) == 0) {
           /* add new keyframe */
-          insert_bezt_fcurve(fcu, bezt, eInsertKeyFlags(0));
+          blender::animrig::insert_bezt_fcurve(fcu, bezt, eInsertKeyFlags(0));
         }
       }
       else {
         /* add if value doesn't equal that of previous */
         if (IS_EQT(cur[1], prev[1], thresh) == 0) {
           /* add new keyframe */
-          insert_bezt_fcurve(fcu, bezt, eInsertKeyFlags(0));
+          blender::animrig::insert_bezt_fcurve(fcu, bezt, eInsertKeyFlags(0));
         }
       }
     }
@@ -206,9 +211,9 @@ void clean_fcurve(bAnimContext *ac, bAnimListElem *ale, float thresh, bool clear
    * the default value and if is, remove fcurve completely. */
   if (cleardefault && fcu->totvert == 1) {
     float default_value = 0.0f;
-    PointerRNA id_ptr, ptr;
+    PointerRNA ptr;
     PropertyRNA *prop;
-    RNA_id_pointer_create(ale->id, &id_ptr);
+    PointerRNA id_ptr = RNA_id_pointer_create(ale->id);
 
     /* get property to read from, and get value as appropriate */
     if (RNA_path_resolve_property(&id_ptr, fcu->rna_path, &ptr, &prop)) {
@@ -223,7 +228,7 @@ void clean_fcurve(bAnimContext *ac, bAnimListElem *ale, float thresh, bool clear
       /* check if curve is really unused and if it is, return signal for deletion */
       if (BKE_fcurve_is_empty(fcu)) {
         AnimData *adt = ale->adt;
-        ANIM_fcurve_delete_from_animdata(ac, adt, fcu);
+        blender::animrig::animdata_fcurve_delete(ac, adt, fcu);
         ale->key_data = nullptr;
       }
     }
@@ -384,6 +389,25 @@ void blend_to_default_fcurve(PointerRNA *id_ptr, FCurve *fcu, const float factor
       continue;
     }
     const float key_y_value = interpf(default_value, fcu->bezt[i].vec[1][1], factor);
+    BKE_fcurve_keyframe_move_value_with_handles(&fcu->bezt[i], key_y_value);
+  }
+}
+
+/* ---------------- */
+
+void scale_average_fcurve_segment(FCurve *fcu, FCurveSegment *segment, const float factor)
+{
+  float y = 0;
+
+  /* Find first the average of the y values to then use it in the final calculation. */
+  for (int i = segment->start_index; i < segment->start_index + segment->length; i++) {
+    y += fcu->bezt[i].vec[1][1];
+  }
+
+  const float y_average = y / segment->length;
+
+  for (int i = segment->start_index; i < segment->start_index + segment->length; i++) {
+    const float key_y_value = interpf(y_average, fcu->bezt[i].vec[1][1], 1 - factor);
     BKE_fcurve_keyframe_move_value_with_handles(&fcu->bezt[i], key_y_value);
   }
 }
@@ -661,7 +685,7 @@ void ease_fcurve_segment(FCurve *fcu, FCurveSegment *segment, const float factor
   const float exponent = 1 + fabs(factor) * 4;
 
   for (int i = segment->start_index; i < segment->start_index + segment->length; i++) {
-    /* For easy calculation of the curve, the  values are normalized. */
+    /* For easy calculation of the curve, the values are normalized. */
     const float normalized_x = (fcu->bezt[i].vec[1][0] - left_x) / key_x_range;
 
     float normalized_y = 0;
@@ -675,6 +699,253 @@ void ease_fcurve_segment(FCurve *fcu, FCurveSegment *segment, const float factor
     const float key_y_value = left_y + normalized_y * key_y_range;
     BKE_fcurve_keyframe_move_value_with_handles(&fcu->bezt[i], key_y_value);
   }
+}
+
+/* ---------------- */
+
+void blend_offset_fcurve_segment(FCurve *fcu, FCurveSegment *segment, const float factor)
+{
+  const BezTriple *left_key = fcurve_segment_start_get(fcu, segment->start_index);
+  const BezTriple *right_key = fcurve_segment_end_get(fcu, segment->start_index + segment->length);
+
+  float y_delta;
+
+  if (factor > 0) {
+    const BezTriple segment_last_key = fcu->bezt[segment->start_index + segment->length - 1];
+    y_delta = right_key->vec[1][1] - segment_last_key.vec[1][1];
+  }
+  else {
+    const BezTriple segment_first_key = fcu->bezt[segment->start_index];
+    y_delta = left_key->vec[1][1] - segment_first_key.vec[1][1];
+  }
+
+  const float offset_value = y_delta * fabs(factor);
+  for (int i = segment->start_index; i < segment->start_index + segment->length; i++) {
+    const float key_y_value = fcu->bezt[i].vec[1][1] + offset_value;
+    BKE_fcurve_keyframe_move_value_with_handles(&fcu->bezt[i], key_y_value);
+  }
+}
+
+/* ---------------- */
+
+static float s_curve(float x, float slope, float width, float height, float xshift, float yshift)
+{
+  /* Formula for 'S' curve we use for the "ease" sliders.
+   * The shift values move the curve vertically or horizontally.
+   * The range of the curve used is from 0 to 1 on "x" and "y"
+   * so we can scale it (width and height) and move it (`xshift` and y `yshift`)
+   * to crop the part of the curve we need. Slope determines how curvy the shape is. */
+  float y = height * pow((x - xshift), slope) /
+                (pow((x - xshift), slope) + pow((width - (x - xshift)), slope)) +
+            yshift;
+
+  /* The curve doesn't do what we want beyond our margins so we clamp the values. */
+  if (x > xshift + width) {
+    y = height + yshift;
+  }
+  else if (x < xshift) {
+    y = yshift;
+  }
+  return y;
+}
+
+void blend_to_ease_fcurve_segment(FCurve *fcu, FCurveSegment *segment, const float factor)
+{
+  const BezTriple *left_key = fcurve_segment_start_get(fcu, segment->start_index);
+  const BezTriple *right_key = fcurve_segment_end_get(fcu, segment->start_index + segment->length);
+
+  const float key_x_range = right_key->vec[1][0] - left_key->vec[1][0];
+  const float key_y_range = right_key->vec[1][1] - left_key->vec[1][1];
+
+  /* Happens if there is only 1 key on the FCurve. Needs to be skipped because it
+   * would be a divide by 0. */
+  if (IS_EQF(key_x_range, 0.0f)) {
+    return;
+  }
+
+  const float slope = 3.0;
+  /* By doubling the size of the "S" curve we just one side of it, a "C" shape. */
+  const float width = 2.0;
+  const float height = 2.0;
+  float xy_shift;
+
+  /* Shifting the x and y values we can decide what side of the "S" shape to use. */
+  if (factor > 0) {
+    xy_shift = -1.0;
+  }
+  else {
+    xy_shift = 0.0;
+  }
+
+  for (int i = segment->start_index; i < segment->start_index + segment->length; i++) {
+
+    const float x = (fcu->bezt[i].vec[1][0] - left_key->vec[1][0]) / key_x_range;
+    const float ease = s_curve(x, slope, width, height, xy_shift, xy_shift);
+    const float base = left_key->vec[1][1] + key_y_range * ease;
+
+    float y_delta;
+    if (factor > 0) {
+      y_delta = base - fcu->bezt[i].vec[1][1];
+    }
+    else {
+      y_delta = fcu->bezt[i].vec[1][1] - base;
+    }
+
+    const float key_y_value = fcu->bezt[i].vec[1][1] + y_delta * factor;
+    BKE_fcurve_keyframe_move_value_with_handles(&fcu->bezt[i], key_y_value);
+  }
+}
+
+/* ---------------- */
+
+bool match_slope_fcurve_segment(FCurve *fcu, FCurveSegment *segment, const float factor)
+{
+  const BezTriple *left_key = fcurve_segment_start_get(fcu, segment->start_index);
+  const BezTriple *right_key = fcurve_segment_end_get(fcu, segment->start_index + segment->length);
+
+  BezTriple beyond_key;
+  const BezTriple *reference_key;
+
+  if (factor >= 0) {
+    /* Stop the function if there is no key beyond the right neighboring one. */
+    if (segment->start_index + segment->length >= fcu->totvert - 1) {
+      return false;
+    }
+    reference_key = right_key;
+    beyond_key = fcu->bezt[segment->start_index + segment->length + 1];
+  }
+  else {
+    /* Stop the function if there is no key beyond the left neighboring one. */
+    if (segment->start_index <= 1) {
+      return false;
+    }
+    reference_key = left_key;
+    beyond_key = fcu->bezt[segment->start_index - 2];
+  }
+
+  /* This delta values are used to get the relationship between the bookend keys and the
+   * reference keys beyond those. */
+  const float y_delta = beyond_key.vec[1][1] - reference_key->vec[1][1];
+  const float x_delta = beyond_key.vec[1][0] - reference_key->vec[1][0];
+
+  /* Avoids dividing by 0. */
+  if (x_delta == 0) {
+    return false;
+  }
+
+  for (int i = segment->start_index; i < segment->start_index + segment->length; i++) {
+
+    /* These new deltas are used to determine the relationship between the current key and the
+     * bookend ones. */
+    const float new_x_delta = fcu->bezt[i].vec[1][0] - reference_key->vec[1][0];
+    const float new_y_delta = new_x_delta * y_delta / x_delta;
+
+    const float delta = reference_key->vec[1][1] + new_y_delta - fcu->bezt[i].vec[1][1];
+
+    const float key_y_value = fcu->bezt[i].vec[1][1] + delta * fabs(factor);
+    BKE_fcurve_keyframe_move_value_with_handles(&fcu->bezt[i], key_y_value);
+  }
+  return true;
+}
+
+/* ---------------- */
+
+void shear_fcurve_segment(FCurve *fcu,
+                          FCurveSegment *segment,
+                          const float factor,
+                          tShearDirection direction)
+{
+  const BezTriple *left_key = fcurve_segment_start_get(fcu, segment->start_index);
+  const BezTriple *right_key = fcurve_segment_end_get(fcu, segment->start_index + segment->length);
+
+  const float key_x_range = right_key->vec[1][0] - left_key->vec[1][0];
+  const float key_y_range = right_key->vec[1][1] - left_key->vec[1][1];
+
+  /* Happens if there is only 1 key on the FCurve. Needs to be skipped because it
+   * would be a divide by 0. */
+  if (IS_EQF(key_x_range, 0.0f)) {
+    return;
+  }
+
+  for (int i = segment->start_index; i < segment->start_index + segment->length; i++) {
+    /* For easy calculation of the curve, the  values are normalized. */
+    float normalized_x;
+    if (direction == SHEAR_FROM_LEFT) {
+      normalized_x = (fcu->bezt[i].vec[1][0] - left_key->vec[1][0]) / key_x_range;
+    }
+    else {
+      normalized_x = (right_key->vec[1][0] - fcu->bezt[i].vec[1][0]) / key_x_range;
+    }
+
+    const float y_delta = key_y_range * normalized_x;
+
+    const float key_y_value = fcu->bezt[i].vec[1][1] + y_delta * factor;
+    BKE_fcurve_keyframe_move_value_with_handles(&fcu->bezt[i], key_y_value);
+  }
+}
+
+/* ---------------- */
+
+void push_pull_fcurve_segment(FCurve *fcu, FCurveSegment *segment, const float factor)
+{
+  const BezTriple *left_key = fcurve_segment_start_get(fcu, segment->start_index);
+  const BezTriple *right_key = fcurve_segment_end_get(fcu, segment->start_index + segment->length);
+
+  const float key_x_range = right_key->vec[1][0] - left_key->vec[1][0];
+  const float key_y_range = right_key->vec[1][1] - left_key->vec[1][1];
+
+  /* Happens if there is only 1 key on the FCurve. Needs to be skipped because it
+   * would be a divide by 0. */
+  if (IS_EQF(key_x_range, 0.0f)) {
+    return;
+  }
+
+  for (int i = segment->start_index; i < segment->start_index + segment->length; i++) {
+    /* For easy calculation of the curve, the values are normalized. */
+    const float normalized_x = (fcu->bezt[i].vec[1][0] - left_key->vec[1][0]) / key_x_range;
+
+    const float linear = left_key->vec[1][1] + key_y_range * normalized_x;
+
+    const float delta = fcu->bezt[i].vec[1][1] - linear;
+
+    const float key_y_value = linear + delta * factor;
+    BKE_fcurve_keyframe_move_value_with_handles(&fcu->bezt[i], key_y_value);
+  }
+}
+
+/* ---------------- */
+
+void time_offset_fcurve_segment(FCurve *fcu, FCurveSegment *segment, const float frame_offset)
+{
+  /* Two bookend keys of the fcurve are needed to be able to cycle the values. */
+  const BezTriple *last_key = &fcu->bezt[fcu->totvert - 1];
+  const BezTriple *first_key = &fcu->bezt[0];
+
+  const float fcu_x_range = last_key->vec[1][0] - first_key->vec[1][0];
+  const float fcu_y_range = last_key->vec[1][1] - first_key->vec[1][1];
+
+  const float first_key_x = first_key->vec[1][0];
+
+  /* If we operate directly on the fcurve there will be a feedback loop
+   * so we need to capture the "y" values on an array to then apply them on a second loop. */
+  float *y_values = static_cast<float *>(
+      MEM_callocN(sizeof(float) * segment->length, "Time Offset Samples"));
+
+  for (int i = 0; i < segment->length; i++) {
+    /* This simulates the fcu curve moving in time. */
+    const float time = fcu->bezt[segment->start_index + i].vec[1][0] + frame_offset;
+    /* Need to normalize time to first_key to specify that as the wrapping point. */
+    const float wrapped_time = mod_f_positive(time - first_key_x, fcu_x_range) + first_key_x;
+    const float delta_y = fcu_y_range * floorf((time - first_key_x) / fcu_x_range);
+
+    const float key_y_value = evaluate_fcurve(fcu, wrapped_time) + delta_y;
+    y_values[i] = key_y_value;
+  }
+
+  for (int i = 0; i < segment->length; i++) {
+    BKE_fcurve_keyframe_move_value_with_handles(&fcu->bezt[segment->start_index + i], y_values[i]);
+  }
+  MEM_freeN(y_values);
 }
 
 /* ---------------- */
@@ -807,7 +1078,7 @@ bool decimate_fcurve(bAnimListElem *ale, float remove_ratio, float error_sq_max)
     BezTriple *bezt = (old_bezts + i);
     bezt->f2 &= ~BEZT_FLAG_IGNORE_TAG;
     if ((bezt->f2 & BEZT_FLAG_TEMP_TAG) == 0) {
-      insert_bezt_fcurve(fcu, bezt, eInsertKeyFlags(0));
+      blender::animrig::insert_bezt_fcurve(fcu, bezt, eInsertKeyFlags(0));
     }
   }
   /* now free the memory used by the old BezTriples */
@@ -950,7 +1221,7 @@ void sample_fcurve_segment(FCurve *fcu,
   }
 }
 
-void sample_fcurve(FCurve *fcu)
+void bake_fcurve_segments(FCurve *fcu)
 {
   BezTriple *bezt, *start = nullptr, *end = nullptr;
   TempFrameValCache *value_cache, *fp;
@@ -1000,7 +1271,7 @@ void sample_fcurve(FCurve *fcu)
 
           /* add keyframes with these, tagging as 'breakdowns' */
           for (n = 1, fp = value_cache; n < range && fp; n++, fp++) {
-            insert_vert_fcurve(
+            blender::animrig::insert_vert_fcurve(
                 fcu, fp->frame, fp->val, BEZT_KEYTYPE_BREAKDOWN, eInsertKeyFlags(1));
           }
 
@@ -1049,7 +1320,7 @@ static float animcopy_cfra = 0.0;
 
 /* datatype for use in copy/paste buffer */
 struct tAnimCopybufItem {
-  struct tAnimCopybufItem *next, *prev;
+  tAnimCopybufItem *next, *prev;
 
   ID *id;            /* ID which owns the curve */
   bActionGroup *grp; /* Action Group */
@@ -1095,14 +1366,13 @@ void ANIM_fcurves_copybuf_free()
 
 short copy_animedit_keys(bAnimContext *ac, ListBase *anim_data)
 {
-  bAnimListElem *ale;
   Scene *scene = ac->scene;
 
   /* clear buffer first */
   ANIM_fcurves_copybuf_free();
 
   /* assume that each of these is an F-Curve */
-  for (ale = static_cast<bAnimListElem *>(anim_data->first); ale; ale = ale->next) {
+  LISTBASE_FOREACH (bAnimListElem *, ale, anim_data) {
     FCurve *fcu = (FCurve *)ale->key_data;
     tAnimCopybufItem *aci;
     BezTriple *bezt, *nbezt, *newbuf;
@@ -1294,10 +1564,10 @@ static tAnimCopybufItem *pastebuf_match_path_property(Main *bmain,
         printf("paste_animedit_keys: error ID has been removed!\n");
       }
       else {
-        PointerRNA id_ptr, rptr;
+        PointerRNA rptr;
         PropertyRNA *prop;
 
-        RNA_id_pointer_create(aci->id, &id_ptr);
+        PointerRNA id_ptr = RNA_id_pointer_create(aci->id);
 
         if (RNA_path_resolve_property(&id_ptr, aci->rna_path, &rptr, &prop)) {
           const char *identifier = RNA_property_identifier(prop);
@@ -1443,7 +1713,7 @@ static void paste_animedit_keys_fcurve(
      * NOTE: we do not want to inherit handles from existing keyframes in this case!
      */
 
-    insert_bezt_fcurve(fcu, bezt, INSERTKEY_OVERWRITE_FULL);
+    blender::animrig::insert_bezt_fcurve(fcu, bezt, INSERTKEY_OVERWRITE_FULL);
 
     /* un-apply offset from src beztriple after copying */
     sub_v2_v2(bezt->vec[0], offset);
@@ -1475,7 +1745,7 @@ const EnumPropertyItem rna_enum_keyframe_paste_offset_items[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
-const EnumPropertyItem rna_enum_keyframe_paste_offset_value[] = {
+const EnumPropertyItem rna_enum_keyframe_paste_offset_value_items[] = {
     {KEYFRAME_PASTE_VALUE_OFFSET_LEFT_KEY,
      "LEFT_KEY",
      0,
@@ -1630,7 +1900,7 @@ eKeyPasteError paste_animedit_keys(bAnimContext *ac,
     for (pass = 0; pass < 3; pass++) {
       uint totmatch = 0;
 
-      for (ale = static_cast<bAnimListElem *>(anim_data->first); ale; ale = ale->next) {
+      LISTBASE_FOREACH (bAnimListElem *, ale, anim_data) {
         /* Find buffer item to paste from:
          * - If names don't matter (i.e. only 1 channel in buffer), don't check id/group
          * - If names do matter, only check if id-type is ok for now
@@ -1664,9 +1934,9 @@ eKeyPasteError paste_animedit_keys(bAnimContext *ac,
 
           offset[1] = paste_get_y_offset(ac, aci, ale, value_offset_mode);
           if (adt) {
-            ANIM_nla_mapping_apply_fcurve(adt, static_cast<FCurve *>(ale->key_data), 0, 0);
+            ANIM_nla_mapping_apply_fcurve(adt, static_cast<FCurve *>(ale->key_data), false, false);
             paste_animedit_keys_fcurve(fcu, aci, offset, merge_mode, flip);
-            ANIM_nla_mapping_apply_fcurve(adt, static_cast<FCurve *>(ale->key_data), 1, 0);
+            ANIM_nla_mapping_apply_fcurve(adt, static_cast<FCurve *>(ale->key_data), true, false);
           }
           else {
             paste_animedit_keys_fcurve(fcu, aci, offset, merge_mode, flip);

@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -23,12 +23,12 @@
 
 #include "DNA_screen_types.h"
 
-#include "BKE_screen.h"
+#include "BKE_screen.hh"
 
 #include "BLI_listbase.h"
 #include "BLI_map.hh"
 
-#include "ED_screen.h"
+#include "ED_screen.hh"
 
 #include "interface_intern.hh"
 
@@ -197,6 +197,11 @@ uiViewItemHandle *UI_region_views_find_active_item(const ARegion *region)
   }
 
   return item_but->view_item;
+}
+
+uiBut *UI_region_views_find_active_item_but(const ARegion *region)
+{
+  return ui_view_item_find_active(region);
 }
 
 namespace blender::ui {

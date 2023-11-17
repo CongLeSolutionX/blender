@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2017 Blender Foundation
+/* SPDX-FileCopyrightText: 2017 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -12,7 +12,9 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "BLI_listbase.h"
 #include "BLI_math_base.h"
+#include "BLI_math_color.hh"
 #include "BLI_math_vector.h"
 #include "BLI_task.hh"
 #include "BLI_utildefines.h"
@@ -27,7 +29,7 @@
 #include "GPU_material.h"
 
 #include "draw_attributes.hh"
-#include "draw_cache_impl.h"
+#include "draw_cache_impl.hh"
 #include "draw_cache_inline.h"
 #include "draw_pointcloud_private.hh" /* own include */
 

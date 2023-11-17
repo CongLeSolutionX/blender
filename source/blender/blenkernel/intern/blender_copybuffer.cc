@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -8,7 +8,7 @@
  * Used for copy/paste operator, (using a temporary file).
  */
 
-#include <stdlib.h>
+#include <cstdlib>
 
 #include "MEM_guardedalloc.h"
 
@@ -27,18 +27,18 @@
 #include "BKE_blender_copybuffer.h" /* own include */
 #include "BKE_blendfile.h"
 #include "BKE_blendfile_link_append.h"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_global.h"
 #include "BKE_layer.h"
 #include "BKE_lib_id.h"
 #include "BKE_main.h"
 #include "BKE_scene.h"
 
-#include "DEG_depsgraph.h"
-#include "DEG_depsgraph_build.h"
+#include "DEG_depsgraph.hh"
+#include "DEG_depsgraph_build.hh"
 
 #include "BLO_readfile.h"
-#include "BLO_writefile.h"
+#include "BLO_writefile.hh"
 
 #include "IMB_colormanagement.h"
 

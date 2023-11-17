@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2023 Blender Foundation
+# SPDX-FileCopyrightText: 2023 Blender Authors
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
@@ -8,6 +8,7 @@ set(INC
   importer
   intern
   ../common
+  ../../blenkernel
   ../../bmesh
   ../../depsgraph
   ../../geometry
@@ -45,13 +46,13 @@ set(SRC
   importer/ply_import_buffer.hh
   importer/ply_import_data.hh
   importer/ply_import_mesh.hh
-  IO_ply.h
+  IO_ply.hh
 
   intern/ply_data.hh
 )
 
 set(LIB
-  PRIVATE bf::blenkernel
+  bf_blenkernel
   PRIVATE bf::blenlib
   PRIVATE bf::dna
   PRIVATE bf::intern::guardedalloc
@@ -59,7 +60,7 @@ set(LIB
   extern_fmtlib
 )
 
-blender_add_lib(bf_ply "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
+blender_add_lib(bf_io_ply "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 
 if(WITH_GTESTS)
   set(TEST_SRC
@@ -71,7 +72,7 @@ if(WITH_GTESTS)
     ../../../../tests/gtests
   )
   set(TEST_LIB
-    bf_ply
+    bf_io_ply
   )
   include(GTestTesting)
   blender_add_test_lib(bf_io_ply_tests "${TEST_SRC}" "${INC};${TEST_INC}" "${INC_SYS}" "${LIB};${TEST_LIB}")

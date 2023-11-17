@@ -9,8 +9,8 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_heap.h"
-#include "BLI_math.h"
 #include "BLI_math_color.h"
+#include "BLI_math_vector.h"
 #include "BLI_utildefines.h"
 
 #include "DNA_key_types.h"
@@ -73,7 +73,7 @@ static void colorband_init_from_table_rgba_simple(ColorBand *coba,
   BLI_assert(array_len < MAXCOLORBAND);
   int stops = min_ii(MAXCOLORBAND, array_len);
   if (stops) {
-    const float step_size = 1.0f / (float)max_ii(stops - 1, 1);
+    const float step_size = 1.0f / float(max_ii(stops - 1, 1));
     int i_curr = -1;
     for (int i_step = 0; i_step < stops; i_step++) {
       if ((i_curr != -1) && compare_v4v4(&coba->data[i_curr].r, array[i_step], eps)) {
@@ -106,7 +106,7 @@ static void colorband_init_from_table_rgba_simple(ColorBand *coba,
  * Used for calculating which samples of a color-band to remove (when simplifying).
  */
 struct ColorResampleElem {
-  struct ColorResampleElem *next, *prev;
+  ColorResampleElem *next, *prev;
   HeapNode *node;
   float rgba[4];
   float pos;
@@ -115,7 +115,7 @@ struct ColorResampleElem {
 /**
  * Measure the 'area' of each channel and combine to use as a cost for this samples removal.
  */
-static float color_sample_remove_cost(const struct ColorResampleElem *c)
+static float color_sample_remove_cost(const ColorResampleElem *c)
 {
   if (c->next == nullptr || c->prev == nullptr) {
     return -1.0f;
@@ -151,7 +151,7 @@ static float filter_gauss(float x)
   const float gaussfac = 1.6f;
   const float two_gaussfac2 = 2.0f * gaussfac * gaussfac;
   x *= 3.0f * gaussfac;
-  return 1.0f / sqrtf((float)M_PI * two_gaussfac2) * expf(-x * x / two_gaussfac2);
+  return 1.0f / sqrtf(float(M_PI) * two_gaussfac2) * expf(-x * x / two_gaussfac2);
 }
 
 static void colorband_init_from_table_rgba_resample(ColorBand *coba,
@@ -161,12 +161,12 @@ static void colorband_init_from_table_rgba_resample(ColorBand *coba,
 {
   BLI_assert(array_len >= 2);
   const float eps_2x = ((1.0f / 255.0f) + 1e-6f);
-  struct ColorResampleElem *c,
+  ColorResampleElem *c,
       *carr = static_cast<ColorResampleElem *>(MEM_mallocN(sizeof(*carr) * array_len, __func__));
   int carr_len = array_len;
   c = carr;
   {
-    const float step_size = 1.0f / (float)(array_len - 1);
+    const float step_size = 1.0f / float(array_len - 1);
     for (int i = 0; i < array_len; i++, c++) {
       copy_v4_v4(carr[i].rgba, array[i]);
       c->next = c + 1;
@@ -194,7 +194,7 @@ static void colorband_init_from_table_rgba_resample(ColorBand *coba,
          ((carr_len >= MAXCOLORBAND) || (BLI_heap_top_value(heap) <= eps_2x)))
   {
     c = static_cast<ColorResampleElem *>(BLI_heap_pop_min(heap));
-    struct ColorResampleElem *c_next = c->next, *c_prev = c->prev;
+    ColorResampleElem *c_next = c->next, *c_prev = c->prev;
     c_prev->next = c_next;
     c_next->prev = c_prev;
     /* Clear data (not essential, avoid confusion). */
@@ -203,7 +203,7 @@ static void colorband_init_from_table_rgba_resample(ColorBand *coba,
 
     /* Update adjacent */
     for (int i = 0; i < 2; i++) {
-      struct ColorResampleElem *c_other = i ? c_next : c_prev;
+      ColorResampleElem *c_other = i ? c_next : c_prev;
       if (c_other->node != nullptr) {
         const float cost = color_sample_remove_cost(c_other);
         if (cost != -1.0) {
@@ -242,10 +242,10 @@ static void colorband_init_from_table_rgba_resample(ColorBand *coba,
         copy_v4_v4(rgba, c->rgba);
 
         if (steps_prev) {
-          const float step_size = 1.0 / (float)(steps_prev + 1);
+          const float step_size = 1.0 / float(steps_prev + 1);
           int j = steps_prev;
-          for (struct ColorResampleElem *c_other = c - 1; c_other != c->prev; c_other--, j--) {
-            const float step_pos = (float)j * step_size;
+          for (ColorResampleElem *c_other = c - 1; c_other != c->prev; c_other--, j--) {
+            const float step_pos = float(j) * step_size;
             BLI_assert(step_pos > 0.0f && step_pos < 1.0f);
             const float f = filter_gauss(step_pos);
             madd_v4_v4fl(rgba, c_other->rgba, f);
@@ -253,10 +253,10 @@ static void colorband_init_from_table_rgba_resample(ColorBand *coba,
           }
         }
         if (steps_next) {
-          const float step_size = 1.0 / (float)(steps_next + 1);
+          const float step_size = 1.0 / float(steps_next + 1);
           int j = steps_next;
-          for (struct ColorResampleElem *c_other = c + 1; c_other != c->next; c_other++, j--) {
-            const float step_pos = (float)j * step_size;
+          for (ColorResampleElem *c_other = c + 1; c_other != c->next; c_other++, j--) {
+            const float step_pos = float(j) * step_size;
             BLI_assert(step_pos > 0.0f && step_pos < 1.0f);
             const float f = filter_gauss(step_pos);
             madd_v4_v4fl(rgba, c_other->rgba, f);
@@ -410,7 +410,7 @@ bool BKE_colorband_evaluate(const ColorBand *coba, float in, float out[4])
   /* NOTE: when ipotype >= COLBAND_INTERP_B_SPLINE,
    * we cannot do early-out with a constant color before first color stop and after last one,
    * because interpolation starts before and ends after those... */
-  ipotype = (coba->color_mode == COLBAND_BLEND_RGB) ? coba->ipotype : COLBAND_INTERP_LINEAR;
+  ipotype = (coba->color_mode == COLBAND_BLEND_RGB) ? coba->ipotype : int(COLBAND_INTERP_LINEAR);
 
   if (coba->tot == 1) {
     out[0] = cbd1->r;
@@ -565,7 +565,7 @@ void BKE_colorband_evaluate_table_rgba(const ColorBand *coba, float **array, int
   *array = static_cast<float *>(MEM_callocN(sizeof(float) * (*size) * 4, "ColorBand"));
 
   for (a = 0; a < *size; a++) {
-    BKE_colorband_evaluate(coba, (float)a / (float)CM_TABLE, &(*array)[a * 4]);
+    BKE_colorband_evaluate(coba, float(a) / float(CM_TABLE), &(*array)[a * 4]);
   }
 }
 

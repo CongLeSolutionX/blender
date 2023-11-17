@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -6,11 +6,11 @@
  * \ingroup RNA
  */
 
-#include <limits.h>
-#include <stdlib.h>
+#include <climits>
+#include <cstdlib>
 
 #include "BKE_dynamicpaint.h"
-#include "BKE_modifier.h"
+#include "BKE_modifier.hh"
 
 #include "BLI_string_utf8_symbols.h"
 
@@ -22,12 +22,12 @@
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
-#include "RNA_define.h"
-#include "RNA_enum_types.h"
+#include "RNA_define.hh"
+#include "RNA_enum_types.hh"
 
 #include "rna_internal.h"
 
-#include "WM_types.h"
+#include "WM_types.hh"
 
 const EnumPropertyItem rna_enum_prop_dynamicpaint_type_items[] = {
     {MOD_DYNAMICPAINT_TYPE_CANVAS, "CANVAS", 0, "Canvas", ""},
@@ -37,11 +37,11 @@ const EnumPropertyItem rna_enum_prop_dynamicpaint_type_items[] = {
 
 #ifdef RNA_RUNTIME
 
-#  include "BKE_context.h"
+#  include "BKE_context.hh"
 #  include "BKE_particle.h"
 
-#  include "DEG_depsgraph.h"
-#  include "DEG_depsgraph_build.h"
+#  include "DEG_depsgraph.hh"
+#  include "DEG_depsgraph_build.hh"
 
 static char *rna_DynamicPaintCanvasSettings_path(const PointerRNA *ptr)
 {
@@ -633,7 +633,7 @@ static void rna_def_canvas_surface(BlenderRNA *brna)
   parm = RNA_def_int(func, "index", 0, 0, 1, "Index", "", 0, 1);
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   /* return type */
-  parm = RNA_def_boolean(func, "exists", 0, "", "");
+  parm = RNA_def_boolean(func, "exists", false, "", "");
   RNA_def_function_return(func, parm);
 
   prop = RNA_def_property(srna, "depth_clamp", PROP_FLOAT, PROP_NONE);
@@ -909,6 +909,7 @@ static void rna_def_dynamic_paint_brush_settings(BlenderRNA *brna)
   RNA_def_property_enum_sdna(prop, nullptr, "proximity_falloff");
   RNA_def_property_enum_items(prop, prop_dynamicpaint_prox_falloff);
   RNA_def_property_ui_text(prop, "Falloff", "Proximity falloff type");
+  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_BRUSH);
   RNA_def_property_update(prop, NC_OBJECT | ND_MODIFIER, "rna_DynamicPaint_redoModifier");
 
   prop = RNA_def_property(srna, "use_proximity_project", PROP_BOOLEAN, PROP_NONE);

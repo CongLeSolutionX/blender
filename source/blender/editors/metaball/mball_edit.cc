@@ -6,14 +6,16 @@
  * \ingroup edmeta
  */
 
-#include <math.h>
-#include <string.h>
+#include <cmath>
+#include <cstring>
 
 #include "MEM_guardedalloc.h"
 
 #include "BLI_blenlib.h"
 #include "BLI_kdtree.h"
-#include "BLI_math.h"
+#include "BLI_math_matrix.h"
+#include "BLI_math_rotation.h"
+#include "BLI_math_vector.h"
 #include "BLI_rand.h"
 #include "BLI_utildefines.h"
 
@@ -22,26 +24,27 @@
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
-#include "RNA_access.h"
-#include "RNA_define.h"
+#include "RNA_access.hh"
+#include "RNA_define.hh"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_layer.h"
 #include "BKE_mball.h"
-#include "BKE_object.h"
+#include "BKE_object.hh"
+#include "BKE_object_types.hh"
 
-#include "DEG_depsgraph.h"
+#include "DEG_depsgraph.hh"
 
 #include "GPU_select.h"
 
-#include "ED_mball.h"
-#include "ED_object.h"
-#include "ED_screen.h"
-#include "ED_select_utils.h"
-#include "ED_view3d.h"
+#include "ED_mball.hh"
+#include "ED_object.hh"
+#include "ED_screen.hh"
+#include "ED_select_utils.hh"
+#include "ED_view3d.hh"
 
-#include "WM_api.h"
-#include "WM_types.h"
+#include "WM_api.hh"
+#include "WM_types.hh"
 
 #include "mball_intern.h"
 
@@ -85,8 +88,7 @@ void ED_mball_editmball_load(Object * /*obedit*/) {}
 bool ED_mball_deselect_all_multi(bContext *C)
 {
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
-  ViewContext vc;
-  ED_view3d_viewcontext_init(C, &vc, depsgraph);
+  ViewContext vc = ED_view3d_viewcontext_init(C, depsgraph);
   uint bases_len = 0;
   Base **bases = BKE_view_layer_array_from_bases_in_edit_mode_unique_data(
       vc.scene, vc.view_layer, vc.v3d, &bases_len);
@@ -220,9 +222,8 @@ static void mball_select_similar_type_get(
     Object *obedit, MetaBall *mb, int type, KDTree_1d *tree_1d, KDTree_3d *tree_3d)
 {
   float tree_entry[3] = {0.0f, 0.0f, 0.0f};
-  MetaElem *ml;
   int tree_index = 0;
-  for (ml = static_cast<MetaElem *>(mb->editelems->first); ml; ml = ml->next) {
+  LISTBASE_FOREACH (MetaElem *, ml, mb->editelems) {
     if (ml->flag & SELECT) {
       switch (type) {
         case SIMMBALL_RADIUS: {
@@ -239,7 +240,7 @@ static void mball_select_similar_type_get(
         case SIMMBALL_STIFFNESS: {
           tree_entry[0] = ml->s;
           break;
-        } break;
+        }
         case SIMMBALL_ROTATION: {
           float dir[3] = {1.0f, 0.0f, 0.0f};
           float rmat[3][3];
@@ -267,9 +268,8 @@ static bool mball_select_similar_type(Object *obedit,
                                       const KDTree_3d *tree_3d,
                                       const float thresh)
 {
-  MetaElem *ml;
   bool changed = false;
-  for (ml = static_cast<MetaElem *>(mb->editelems->first); ml; ml = ml->next) {
+  LISTBASE_FOREACH (MetaElem *, ml, mb->editelems) {
     bool select = false;
     switch (type) {
       case SIMMBALL_RADIUS: {
@@ -359,8 +359,7 @@ static int mball_select_similar_exec(bContext *C, wmOperator *op)
 
     switch (type) {
       case SIMMBALL_TYPE: {
-        MetaElem *ml;
-        for (ml = static_cast<MetaElem *>(mb->editelems->first); ml; ml = ml->next) {
+        LISTBASE_FOREACH (MetaElem *, ml, mb->editelems) {
           if (ml->flag & SELECT) {
             short mball_type = 1 << (ml->type + 1);
             type_ref |= mball_type;
@@ -395,8 +394,7 @@ static int mball_select_similar_exec(bContext *C, wmOperator *op)
 
     switch (type) {
       case SIMMBALL_TYPE: {
-        MetaElem *ml;
-        for (ml = static_cast<MetaElem *>(mb->editelems->first); ml; ml = ml->next) {
+        LISTBASE_FOREACH (MetaElem *, ml, mb->editelems) {
           short mball_type = 1 << (ml->type + 1);
           if (mball_type & type_ref) {
             ml->flag |= SELECT;
@@ -652,7 +650,7 @@ static int hide_metaelems_exec(bContext *C, wmOperator *op)
   Object *obedit = CTX_data_edit_object(C);
   MetaBall *mb = (MetaBall *)obedit->data;
   MetaElem *ml;
-  const bool invert = RNA_boolean_get(op->ptr, "unselected") ? SELECT : 0;
+  const bool invert = RNA_boolean_get(op->ptr, "unselected") ? SELECT : false;
 
   ml = static_cast<MetaElem *>(mb->editelems->first);
 
@@ -751,7 +749,7 @@ Base *ED_mball_base_and_elem_from_select_buffer(Base **bases,
   MetaElem *ml = nullptr;
   /* TODO(@ideasman42): optimize, eg: sort & binary search. */
   for (uint base_index = 0; base_index < bases_len; base_index++) {
-    if (bases[base_index]->object->runtime.select_id == hit_object) {
+    if (bases[base_index]->object->runtime->select_id == hit_object) {
       base = bases[base_index];
       break;
     }
@@ -773,13 +771,12 @@ static bool ed_mball_findnearest_metaelem(bContext *C,
                                           uint *r_selmask)
 {
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
-  ViewContext vc;
   int a, hits;
   GPUSelectResult buffer[MAXPICKELEMS];
   rcti rect;
   bool found = false;
 
-  ED_view3d_viewcontext_init(C, &vc, depsgraph);
+  ViewContext vc = ED_view3d_viewcontext_init(C, depsgraph);
 
   BLI_rcti_init_pt_radius(&rect, mval, 12);
 
@@ -801,7 +798,7 @@ static bool ed_mball_findnearest_metaelem(bContext *C,
   int hit_cycle_offset = 0;
   if (use_cycle) {
     /* When cycling, use the hit directly after the current active meta-element (when set). */
-    const int base_index = vc.obact->runtime.select_id;
+    const int base_index = vc.obact->runtime->select_id;
     MetaBall *mb = (MetaBall *)vc.obact->data;
     MetaElem *ml = mb->lastelem;
     if (ml && (ml->flag & SELECT)) {
@@ -850,7 +847,7 @@ static bool ed_mball_findnearest_metaelem(bContext *C,
   return found;
 }
 
-bool ED_mball_select_pick(bContext *C, const int mval[2], const struct SelectPick_Params *params)
+bool ED_mball_select_pick(bContext *C, const int mval[2], const SelectPick_Params *params)
 {
   Base *base = nullptr;
   MetaElem *ml = nullptr;

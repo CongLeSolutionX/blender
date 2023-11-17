@@ -1,9 +1,10 @@
-# SPDX-FileCopyrightText: 2023 Blender Foundation
+# SPDX-FileCopyrightText: 2023 Blender Authors
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 set(INC
   ../include
+  ../../blenkernel
   ../../blentranslation
   ../../depsgraph
   ../../gpu
@@ -42,7 +43,8 @@ set(SRC
 )
 
 set(LIB
-  PRIVATE bf::blenkernel
+  bf_blenkernel
+  PRIVATE bf::animrig
   PRIVATE bf::blenlib
   PRIVATE bf::dna
   PRIVATE bf::intern::guardedalloc
@@ -52,6 +54,9 @@ if(WITH_PYTHON)
   add_definitions(-DWITH_PYTHON)
 endif()
 
+if(WITH_EXPERIMENTAL_FEATURES)
+  add_definitions(-DWITH_GREASE_PENCIL_V3)
+endif()
 
 blender_add_lib(bf_editor_animation "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 

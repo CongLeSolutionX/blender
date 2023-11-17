@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2017 Blender Foundation
+/* SPDX-FileCopyrightText: 2017 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -21,19 +21,19 @@
 #include "DNA_volume_types.h"
 
 #include "BKE_global.h"
-#include "BKE_volume.h"
-#include "BKE_volume_render.h"
+#include "BKE_volume.hh"
+#include "BKE_volume_render.hh"
 
 #include "GPU_batch.h"
 #include "GPU_capabilities.h"
 #include "GPU_texture.h"
 
-#include "DEG_depsgraph_query.h"
+#include "DEG_depsgraph_query.hh"
 
 #include "DRW_render.h"
 
-#include "draw_cache.h"      /* own include */
-#include "draw_cache_impl.h" /* own include */
+#include "draw_cache.h"       /* own include */
+#include "draw_cache_impl.hh" /* own include */
 
 static void volume_batch_cache_clear(Volume *volume);
 

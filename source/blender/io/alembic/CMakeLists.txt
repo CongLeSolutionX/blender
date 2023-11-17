@@ -1,10 +1,11 @@
-# SPDX-FileCopyrightText: 2006 Blender Foundation
+# SPDX-FileCopyrightText: 2006 Blender Authors
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 set(INC
   .
   ../common
+  ../../blenkernel
   ../../blenloader
   ../../blentranslation
   ../../bmesh
@@ -87,7 +88,7 @@ set(SRC
 )
 
 set(LIB
-  PRIVATE bf::blenkernel
+  bf_blenkernel
   PRIVATE bf::blenlib
   PRIVATE bf::dna
   PRIVATE bf::intern::guardedalloc
@@ -103,7 +104,7 @@ if(WITH_BOOST)
   )
 endif()
 
-blender_add_lib(bf_alembic "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
+blender_add_lib(bf_io_alembic "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 
 if(WITH_GTESTS)
   set(TEST_SRC
@@ -113,7 +114,7 @@ if(WITH_GTESTS)
   set(TEST_INC
   )
   set(TEST_LIB
-    bf_alembic
+    bf_io_alembic
   )
   include(GTestTesting)
   blender_add_test_lib(bf_io_alembic_tests "${TEST_SRC}" "${INC};${TEST_INC}" "${INC_SYS}" "${LIB};${TEST_LIB}")

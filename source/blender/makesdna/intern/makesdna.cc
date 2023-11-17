@@ -26,10 +26,10 @@
 
 #define DNA_DEPRECATED_ALLOW
 
-#include <ctype.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cctype>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 
 #include "MEM_guardedalloc.h"
 
@@ -364,7 +364,7 @@ static int add_name(const char *str)
     /* We handle function pointer and special array cases here, e.g.
      * `void (*function)(...)` and `float (*array)[..]`. the array case
      * name is still converted to (array *)() though because it is that
-     * way in old DNA too, and works correct with #DNA_elem_size_nr. */
+     * way in old DNA too, and works correct with #DNA_struct_member_size. */
     int isfuncptr = (strchr(str + 1, '(')) != nullptr;
 
     DEBUG_PRINTF(3, "\t\t\t\t*** Function pointer or multidim array pointer found\n");
@@ -543,7 +543,6 @@ static bool match_preproc_prefix(const char *__restrict str, const char *__restr
 
 /**
  * \return The point in `str` that starts with `start` or nullptr when not found.
- *
  */
 static char *match_preproc_strstr(char *__restrict str, const char *__restrict start)
 {
@@ -798,7 +797,7 @@ static int convert_include(const char *filepath)
               }
 
               /* we've got a type! */
-              if (STREQ(md1, "long") || STREQ(md1, "ulong")) {
+              if (STR_ELEM(md1, "long", "ulong")) {
                 /* Forbid using long/ulong because those can be either 32 or 64 bit. */
                 fprintf(stderr,
                         "File '%s' contains use of \"%s\" in DNA struct which is not allowed\n",
@@ -1008,7 +1007,7 @@ static int calculate_struct_sizes(int firststruct, FILE *file_verify, const char
                       types[structtype],
                       namelen + 1,
                       cp);
-              dna_error = 1;
+              dna_error = true;
             }
 
             /* 4-8 aligned/ */
@@ -1018,7 +1017,7 @@ static int calculate_struct_sizes(int firststruct, FILE *file_verify, const char
                         "Align pointer error in struct (size_native 4): %s %s\n",
                         types[structtype],
                         cp);
-                dna_error = 1;
+                dna_error = true;
               }
             }
             else {
@@ -1027,7 +1026,7 @@ static int calculate_struct_sizes(int firststruct, FILE *file_verify, const char
                         "Align pointer error in struct (size_native 8): %s %s\n",
                         types[structtype],
                         cp);
-                dna_error = 1;
+                dna_error = true;
               }
             }
 
@@ -1036,7 +1035,7 @@ static int calculate_struct_sizes(int firststruct, FILE *file_verify, const char
                       "Align pointer error in struct (size_64 8): %s %s\n",
                       types[structtype],
                       cp);
-              dna_error = 1;
+              dna_error = true;
             }
 
             size_native += sizeof(void *) * mul;
@@ -1052,7 +1051,7 @@ static int calculate_struct_sizes(int firststruct, FILE *file_verify, const char
                     "Parse error in struct, invalid member name: %s %s\n",
                     types[structtype],
                     cp);
-            dna_error = 1;
+            dna_error = true;
           }
           else if (types_size_native[type]) {
             /* has the name an extra length? (array) */
@@ -1067,23 +1066,31 @@ static int calculate_struct_sizes(int firststruct, FILE *file_verify, const char
                       types[structtype],
                       namelen + 1,
                       cp);
-              dna_error = 1;
+              dna_error = true;
             }
 
             /* struct alignment */
             if (type >= firststruct) {
               if (sizeof(void *) == 8 && (size_native % 8)) {
-                fprintf(stderr, "Align struct error: %s %s\n", types[structtype], cp);
-                dna_error = 1;
+                fprintf(stderr,
+                        "Align struct error: %s::%s (starts at %d on the native platform; "
+                        "%d %% %zu = %d bytes)\n",
+                        types[structtype],
+                        cp,
+                        size_native,
+                        size_native,
+                        sizeof(void *),
+                        size_native % 8);
+                dna_error = true;
               }
             }
 
             /* Check 2-4-8 aligned. */
             if (!check_field_alignment(firststruct, structtype, type, size_32, cp, "32 bit")) {
-              dna_error = 1;
+              dna_error = true;
             }
             if (!check_field_alignment(firststruct, structtype, type, size_64, cp, "64 bit")) {
-              dna_error = 1;
+              dna_error = true;
             }
 
             size_native += mul * types_size_native[type];
@@ -1134,7 +1141,7 @@ static int calculate_struct_sizes(int firststruct, FILE *file_verify, const char
                       types[structtype],
                       max_align_32 - (size_32 % max_align_32));
             }
-            dna_error = 1;
+            dna_error = true;
           }
 
           if (size_64 % max_align_64) {
@@ -1142,7 +1149,7 @@ static int calculate_struct_sizes(int firststruct, FILE *file_verify, const char
                     "Sizeerror in 64 bit struct: %s (add %d bytes)\n",
                     types[structtype],
                     max_align_64 - (size_64 % max_align_64));
-            dna_error = 1;
+            dna_error = true;
           }
 
           if (size_native % 4 && !ELEM(size_native, 1, 2)) {
@@ -1150,7 +1157,7 @@ static int calculate_struct_sizes(int firststruct, FILE *file_verify, const char
                     "Sizeerror 4 in struct: %s (add %d bytes)\n",
                     types[structtype],
                     size_native % 4);
-            dna_error = 1;
+            dna_error = true;
           }
 
           /* Write size verification to file. */
@@ -1196,7 +1203,7 @@ static int calculate_struct_sizes(int firststruct, FILE *file_verify, const char
       }
     }
 
-    dna_error = 1;
+    dna_error = true;
   }
 
   return dna_error;
@@ -1333,7 +1340,7 @@ static int make_structDNA(const char *base_directory,
   /* FOR DEBUG */
   if (debugSDNA > 1) {
     int a, b;
-    /* short *elem; */
+    // short *elem;
     short num_types;
 
     printf("names_len %d types_len %d structs_len %d\n", names_len, types_len, structs_len);
@@ -1425,7 +1432,7 @@ static int make_structDNA(const char *base_directory,
     /* calc datablock size */
     const short *sp = structs[structs_len - 1];
     sp += 2 + 2 * (sp[1]);
-    len = (intptr_t)((char *)sp - (char *)structs[0]);
+    len = intptr_t((char *)sp - (char *)structs[0]);
     len = (len + 3) & ~3;
 
     dna_write(file, structs[0], len);

@@ -11,37 +11,43 @@
 #include "DNA_armature_types.h"
 #include "DNA_object_types.h"
 
-#include "BLI_array.h"
-#include "BLI_math.h"
+#include "BLI_math_matrix.h"
+#include "BLI_math_vector.h"
 #include "BLI_utildefines.h"
+#include "BLI_vector.hh"
 
 #include "BKE_action.h"
-#include "BKE_armature.h"
-#include "BKE_context.h"
-#include "BKE_editmesh.h"
+#include "BKE_armature.hh"
+#include "BKE_context.hh"
+#include "BKE_editmesh.hh"
 #include "BKE_layer.h"
 #include "BKE_main.h"
 #include "BKE_mball.h"
-#include "BKE_object.h"
+#include "BKE_object.hh"
 #include "BKE_report.h"
 #include "BKE_scene.h"
 #include "BKE_tracking.h"
 
-#include "DEG_depsgraph.h"
-#include "DEG_depsgraph_query.h"
+#include "DEG_depsgraph.hh"
+#include "DEG_depsgraph_query.hh"
 
-#include "WM_api.h"
-#include "WM_types.h"
+#include "WM_api.hh"
+#include "WM_types.hh"
 
-#include "RNA_access.h"
-#include "RNA_define.h"
+#include "RNA_access.hh"
+#include "RNA_define.hh"
 
-#include "ED_keyframing.h"
-#include "ED_object.h"
-#include "ED_screen.h"
-#include "ED_transverts.h"
+#include "ED_keyframing.hh"
+#include "ED_object.hh"
+#include "ED_screen.hh"
+#include "ED_transverts.hh"
+
+#include "ANIM_bone_collections.h"
+#include "ANIM_keyframing.hh"
 
 #include "view3d_intern.h"
+
+using blender::Vector;
 
 static bool snap_curs_to_sel_ex(bContext *C, const int pivot_point, float r_cursor[3]);
 static bool snap_calc_active_center(bContext *C, const bool select_only, float r_center[3]);
@@ -116,16 +122,13 @@ static int snap_sel_to_grid_exec(bContext *C, wmOperator * /*op*/)
     for (uint ob_index = 0; ob_index < objects_len; ob_index++) {
       Object *ob_eval = objects_eval[ob_index];
       Object *ob = DEG_get_original_object(ob_eval);
-      bPoseChannel *pchan_eval;
       bArmature *arm_eval = static_cast<bArmature *>(ob_eval->data);
 
       invert_m4_m4(ob_eval->world_to_object, ob_eval->object_to_world);
 
-      for (pchan_eval = static_cast<bPoseChannel *>(ob_eval->pose->chanbase.first); pchan_eval;
-           pchan_eval = pchan_eval->next)
-      {
+      LISTBASE_FOREACH (bPoseChannel *, pchan_eval, &ob_eval->pose->chanbase) {
         if (pchan_eval->bone->flag & BONE_SELECTED) {
-          if (pchan_eval->bone->layer & arm_eval->layer) {
+          if (ANIM_bonecoll_is_visible_pchan(arm_eval, pchan_eval)) {
             if ((pchan_eval->bone->flag & BONE_CONNECTED) == 0) {
               float nLoc[3];
 
@@ -155,7 +158,7 @@ static int snap_sel_to_grid_exec(bContext *C, wmOperator * /*op*/)
               }
 
               /* auto-keyframing */
-              ED_autokeyframe_pchan(C, scene, ob, pchan, ks);
+              blender::animrig::autokeyframe_pchan(C, scene, ob, pchan, ks);
             }
             /* if the bone has a parent and is connected to the parent,
              * don't do anything - will break chain unless we do auto-ik.
@@ -179,44 +182,36 @@ static int snap_sel_to_grid_exec(bContext *C, wmOperator * /*op*/)
                                               SCE_XFORM_SKIP_CHILDREN);
     const bool use_transform_data_origin = (scene->toolsettings->transform_flag &
                                             SCE_XFORM_DATA_ORIGIN);
-    struct XFormObjectSkipChild_Container *xcs = nullptr;
-    struct XFormObjectData_Container *xds = nullptr;
+    XFormObjectSkipChild_Container *xcs = nullptr;
+    XFormObjectData_Container *xds = nullptr;
 
     /* Build object array. */
-    Object **objects_eval = nullptr;
-    uint objects_eval_len;
+    Vector<Object *> objects_eval;
     {
-      BLI_array_declare(objects_eval);
       FOREACH_SELECTED_EDITABLE_OBJECT_BEGIN (view_layer_eval, v3d, ob_eval) {
-        BLI_array_append(objects_eval, ob_eval);
+        objects_eval.append(ob_eval);
       }
       FOREACH_SELECTED_EDITABLE_OBJECT_END;
-      objects_eval_len = BLI_array_len(objects_eval);
     }
 
     if (use_transform_skip_children) {
       ViewLayer *view_layer = CTX_data_view_layer(C);
 
-      Object **objects = static_cast<Object **>(
-          MEM_malloc_arrayN(objects_eval_len, sizeof(*objects), __func__));
-
-      for (int ob_index = 0; ob_index < objects_eval_len; ob_index++) {
-        Object *ob_eval = objects_eval[ob_index];
-        objects[ob_index] = DEG_get_original_object(ob_eval);
+      Vector<Object *> objects(objects_eval.size());
+      for (Object *ob_eval : objects_eval) {
+        objects.append_unchecked(DEG_get_original_object(ob_eval));
       }
       BKE_scene_graph_evaluated_ensure(depsgraph, bmain);
       xcs = ED_object_xform_skip_child_container_create();
       ED_object_xform_skip_child_container_item_ensure_from_array(
-          xcs, scene, view_layer, objects, objects_eval_len);
-      MEM_freeN(objects);
+          xcs, scene, view_layer, objects.data(), objects.size());
     }
     if (use_transform_data_origin) {
       BKE_scene_graph_evaluated_ensure(depsgraph, bmain);
       xds = ED_object_data_xform_container_create();
     }
 
-    for (int ob_index = 0; ob_index < objects_eval_len; ob_index++) {
-      Object *ob_eval = objects_eval[ob_index];
+    for (Object *ob_eval : objects_eval) {
       Object *ob = DEG_get_original_object(ob_eval);
       vec[0] = -ob_eval->object_to_world[3][0] +
                gridf * floorf(0.5f + ob_eval->object_to_world[3][0] / gridf);
@@ -243,17 +238,13 @@ static int snap_sel_to_grid_exec(bContext *C, wmOperator * /*op*/)
       }
 
       /* auto-keyframing */
-      ED_autokeyframe_object(C, scene, ob, ks);
+      blender::animrig::autokeyframe_object(C, scene, ob, ks);
 
       if (use_transform_data_origin) {
         ED_object_data_xform_container_item_ensure(xds, ob);
       }
 
       DEG_id_tag_update(&ob->id, ID_RECALC_TRANSFORM);
-    }
-
-    if (objects_eval) {
-      MEM_freeN(objects_eval);
     }
 
     if (use_transform_skip_children) {
@@ -387,15 +378,13 @@ static bool snap_selected_to_location(bContext *C,
 
     for (uint ob_index = 0; ob_index < objects_len; ob_index++) {
       Object *ob = objects[ob_index];
-      bPoseChannel *pchan;
       bArmature *arm = static_cast<bArmature *>(ob->data);
       float snap_target_local[3];
 
       invert_m4_m4(ob->world_to_object, ob->object_to_world);
       mul_v3_m4v3(snap_target_local, ob->world_to_object, snap_target_global);
 
-      for (pchan = static_cast<bPoseChannel *>(ob->pose->chanbase.first); pchan;
-           pchan = pchan->next) {
+      LISTBASE_FOREACH (bPoseChannel *, pchan, &ob->pose->chanbase) {
         if ((pchan->bone->flag & BONE_SELECTED) && PBONE_VISIBLE(arm, pchan->bone) &&
             /* if the bone has a parent and is connected to the parent,
              * don't do anything - will break chain unless we do auto-ik.
@@ -409,8 +398,7 @@ static bool snap_selected_to_location(bContext *C,
         }
       }
 
-      for (pchan = static_cast<bPoseChannel *>(ob->pose->chanbase.first); pchan;
-           pchan = pchan->next) {
+      LISTBASE_FOREACH (bPoseChannel *, pchan, &ob->pose->chanbase) {
         if ((pchan->bone->flag & BONE_TRANSFORM) &&
             /* check that our parents not transformed (if we have one) */
             ((pchan->bone->parent &&
@@ -443,7 +431,7 @@ static bool snap_selected_to_location(bContext *C,
             }
 
             /* auto-keyframing */
-            ED_autokeyframe_pchan(C, scene, ob, pchan, ks);
+            blender::animrig::autokeyframe_pchan(C, scene, ob, pchan, ks);
           }
           else {
             copy_v3_v3(pchan->loc, cursor_pose);
@@ -451,8 +439,7 @@ static bool snap_selected_to_location(bContext *C,
         }
       }
 
-      for (pchan = static_cast<bPoseChannel *>(ob->pose->chanbase.first); pchan;
-           pchan = pchan->next) {
+      LISTBASE_FOREACH (bPoseChannel *, pchan, &ob->pose->chanbase) {
         pchan->bone->flag &= ~BONE_TRANSFORM;
       }
 
@@ -476,16 +463,13 @@ static bool snap_selected_to_location(bContext *C,
 
     /* Build object array, tag objects we're transforming. */
     ViewLayer *view_layer = CTX_data_view_layer(C);
-    Object **objects = nullptr;
-    uint objects_len;
+    Vector<Object *> objects;
     {
-      BLI_array_declare(objects);
       FOREACH_SELECTED_EDITABLE_OBJECT_BEGIN (view_layer, v3d, ob) {
-        BLI_array_append(objects, ob);
+        objects.append(ob);
         ob->flag |= OB_DONE;
       }
       FOREACH_SELECTED_EDITABLE_OBJECT_END;
-      objects_len = BLI_array_len(objects);
     }
 
     const bool use_transform_skip_children = use_toolsettings &&
@@ -494,14 +478,14 @@ static bool snap_selected_to_location(bContext *C,
     const bool use_transform_data_origin = use_toolsettings &&
                                            (scene->toolsettings->transform_flag &
                                             SCE_XFORM_DATA_ORIGIN);
-    struct XFormObjectSkipChild_Container *xcs = nullptr;
-    struct XFormObjectData_Container *xds = nullptr;
+    XFormObjectSkipChild_Container *xcs = nullptr;
+    XFormObjectData_Container *xds = nullptr;
 
     if (use_transform_skip_children) {
       BKE_scene_graph_evaluated_ensure(depsgraph, bmain);
       xcs = ED_object_xform_skip_child_container_create();
       ED_object_xform_skip_child_container_item_ensure_from_array(
-          xcs, scene, view_layer, objects, objects_len);
+          xcs, scene, view_layer, objects.data(), objects.size());
     }
     if (use_transform_data_origin) {
       BKE_scene_graph_evaluated_ensure(depsgraph, bmain);
@@ -509,14 +493,12 @@ static bool snap_selected_to_location(bContext *C,
 
       /* Initialize the transform data in a separate loop because the depsgraph
        * may be evaluated while setting the locations. */
-      for (int ob_index = 0; ob_index < objects_len; ob_index++) {
-        Object *ob = objects[ob_index];
+      for (Object *ob : objects) {
         ED_object_data_xform_container_item_ensure(xds, ob);
       }
     }
 
-    for (int ob_index = 0; ob_index < objects_len; ob_index++) {
-      Object *ob = objects[ob_index];
+    for (Object *ob : objects) {
       if (ob->parent && BKE_object_flag_test_recursive(ob->parent, OB_DONE)) {
         continue;
       }
@@ -535,7 +517,7 @@ static bool snap_selected_to_location(bContext *C,
       if (ob->parent) {
         float originmat[3][3], parentmat[4][4];
         /* Use the evaluated object here because sometimes
-         * `ob->parent->runtime.curve_cache` is required. */
+         * `ob->parent->runtime->curve_cache` is required. */
         BKE_scene_graph_evaluated_ensure(depsgraph, bmain);
         Object *ob_eval = DEG_get_evaluated_object(depsgraph, ob);
 
@@ -556,17 +538,13 @@ static bool snap_selected_to_location(bContext *C,
         }
 
         /* auto-keyframing */
-        ED_autokeyframe_object(C, scene, ob, ks);
+        blender::animrig::autokeyframe_object(C, scene, ob, ks);
       }
       else {
         add_v3_v3(ob->loc, cursor_parent);
       }
 
       DEG_id_tag_update(&ob->id, ID_RECALC_TRANSFORM);
-    }
-
-    if (objects) {
-      MEM_freeN(objects);
     }
 
     if (use_transform_skip_children) {
@@ -636,7 +614,7 @@ void VIEW3D_OT_snap_selected_to_cursor(wmOperatorType *ot)
   /* rna */
   RNA_def_boolean(ot->srna,
                   "use_offset",
-                  1,
+                  true,
                   "Offset",
                   "If the selection should be snapped as a whole or by each object center");
 }
@@ -766,7 +744,7 @@ static void bundle_midpoint(Scene *scene, Object *ob, float r_vec[3])
 
     LISTBASE_FOREACH (const MovieTrackingTrack *, track, &tracking_object->tracks) {
       if ((track->flag & TRACK_HAS_BUNDLE) && TRACK_SELECTED(track)) {
-        ok = 1;
+        ok = true;
         mul_v3_m4v3(pos, obmat, track->bundle_pos);
         minmax_v3v3_v3(min, max, pos);
       }
@@ -839,11 +817,8 @@ static bool snap_curs_to_sel_ex(bContext *C, const int pivot_point, float r_curs
     if (obact && (obact->mode & OB_MODE_POSE)) {
       Object *obact_eval = DEG_get_evaluated_object(depsgraph, obact);
       bArmature *arm = static_cast<bArmature *>(obact_eval->data);
-      bPoseChannel *pchan;
-      for (pchan = static_cast<bPoseChannel *>(obact_eval->pose->chanbase.first); pchan;
-           pchan = pchan->next)
-      {
-        if (arm->layer & pchan->bone->layer) {
+      LISTBASE_FOREACH (bPoseChannel *, pchan, &obact_eval->pose->chanbase) {
+        if (ANIM_bonecoll_is_visible_pchan(arm, pchan)) {
           if (pchan->bone->flag & BONE_SELECTED) {
             copy_v3_v3(vec, pchan->pose_head);
             mul_m4_v3(obact_eval->object_to_world, vec);

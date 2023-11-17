@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2010 Blender Foundation
+/* SPDX-FileCopyrightText: 2010 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -9,9 +9,10 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_kdopbvh.h"
-#include "BLI_math.h"
+#include "BLI_math_geom.h"
+#include "BLI_math_vector.h"
 
-#include "BKE_editmesh.h"
+#include "BKE_editmesh.hh"
 
 #include "BKE_editmesh_bvh.h" /* own include */
 
@@ -206,7 +207,7 @@ static void bmbvh_tri_from_face(const float *cos[3],
   }
 }
 
-/* Taken from `bvhutils.c`. */
+/* Taken from `bvhutils.cc`. */
 
 /* -------------------------------------------------------------------- */
 /* BKE_bmbvh_ray_cast */
@@ -221,7 +222,7 @@ struct RayCastUserData {
 };
 
 static BMFace *bmbvh_ray_cast_handle_hit(BMBVHTree *bmtree,
-                                         struct RayCastUserData *bmcb_data,
+                                         RayCastUserData *bmcb_data,
                                          const BVHTreeRayHit *hit,
                                          float *r_dist,
                                          float r_hitout[3],
@@ -250,7 +251,7 @@ static BMFace *bmbvh_ray_cast_handle_hit(BMBVHTree *bmtree,
 
 static void bmbvh_ray_cast_cb(void *userdata, int index, const BVHTreeRay *ray, BVHTreeRayHit *hit)
 {
-  struct RayCastUserData *bmcb_data = static_cast<RayCastUserData *>(userdata);
+  RayCastUserData *bmcb_data = static_cast<RayCastUserData *>(userdata);
   const BMLoop **ltri = bmcb_data->looptris[index];
   float dist, uv[2];
   const float *tri_cos[3];
@@ -297,7 +298,7 @@ BMFace *BKE_bmbvh_ray_cast(BMBVHTree *bmtree,
                            float r_cagehit[3])
 {
   BVHTreeRayHit hit;
-  struct RayCastUserData bmcb_data;
+  RayCastUserData bmcb_data;
   const float dist = r_dist ? *r_dist : FLT_MAX;
 
   if (bmtree->cos_cage) {
@@ -327,7 +328,7 @@ BMFace *BKE_bmbvh_ray_cast(BMBVHTree *bmtree,
  */
 
 struct RayCastUserData_Filter {
-  struct RayCastUserData bmcb_data;
+  RayCastUserData bmcb_data;
 
   BMBVHTree_FaceFilter filter_cb;
   void *filter_userdata;
@@ -338,9 +339,8 @@ static void bmbvh_ray_cast_cb_filter(void *userdata,
                                      const BVHTreeRay *ray,
                                      BVHTreeRayHit *hit)
 {
-  struct RayCastUserData_Filter *bmcb_data_filter = static_cast<RayCastUserData_Filter *>(
-      userdata);
-  struct RayCastUserData *bmcb_data = &bmcb_data_filter->bmcb_data;
+  RayCastUserData_Filter *bmcb_data_filter = static_cast<RayCastUserData_Filter *>(userdata);
+  RayCastUserData *bmcb_data = &bmcb_data_filter->bmcb_data;
   const BMLoop **ltri = bmcb_data->looptris[index];
   if (bmcb_data_filter->filter_cb(ltri[0]->f, bmcb_data_filter->filter_userdata)) {
     bmbvh_ray_cast_cb(bmcb_data, index, ray, hit);
@@ -358,8 +358,8 @@ BMFace *BKE_bmbvh_ray_cast_filter(BMBVHTree *bmtree,
                                   void *filter_userdata)
 {
   BVHTreeRayHit hit;
-  struct RayCastUserData_Filter bmcb_data_filter;
-  struct RayCastUserData *bmcb_data = &bmcb_data_filter.bmcb_data;
+  RayCastUserData_Filter bmcb_data_filter;
+  RayCastUserData *bmcb_data = &bmcb_data_filter.bmcb_data;
 
   const float dist = r_dist ? *r_dist : FLT_MAX;
 
@@ -404,7 +404,7 @@ static void bmbvh_find_vert_closest_cb(void *userdata,
                                        const float co[3],
                                        BVHTreeNearest *hit)
 {
-  struct VertSearchUserData *bmcb_data = static_cast<VertSearchUserData *>(userdata);
+  VertSearchUserData *bmcb_data = static_cast<VertSearchUserData *>(userdata);
   const BMLoop **ltri = bmcb_data->looptris[index];
   const float dist_max_sq = bmcb_data->dist_max_sq;
 
@@ -427,7 +427,7 @@ static void bmbvh_find_vert_closest_cb(void *userdata,
 BMVert *BKE_bmbvh_find_vert_closest(BMBVHTree *bmtree, const float co[3], const float dist_max)
 {
   BVHTreeNearest hit;
-  struct VertSearchUserData bmcb_data;
+  VertSearchUserData bmcb_data;
   const float dist_max_sq = dist_max * dist_max;
 
   if (bmtree->cos_cage) {
@@ -464,7 +464,7 @@ static void bmbvh_find_face_closest_cb(void *userdata,
                                        const float co[3],
                                        BVHTreeNearest *hit)
 {
-  struct FaceSearchUserData *bmcb_data = static_cast<FaceSearchUserData *>(userdata);
+  FaceSearchUserData *bmcb_data = static_cast<FaceSearchUserData *>(userdata);
   const BMLoop **ltri = bmcb_data->looptris[index];
   const float dist_max_sq = bmcb_data->dist_max_sq;
 
@@ -486,7 +486,7 @@ static void bmbvh_find_face_closest_cb(void *userdata,
 BMFace *BKE_bmbvh_find_face_closest(BMBVHTree *bmtree, const float co[3], const float dist_max)
 {
   BVHTreeNearest hit;
-  struct FaceSearchUserData bmcb_data;
+  FaceSearchUserData bmcb_data;
   const float dist_max_sq = dist_max * dist_max;
 
   if (bmtree->cos_cage) {
@@ -519,7 +519,7 @@ struct BMBVHTree_OverlapData {
 
 static bool bmbvh_overlap_cb(void *userdata, int index_a, int index_b, int /*thread*/)
 {
-  struct BMBVHTree_OverlapData *data = static_cast<BMBVHTree_OverlapData *>(userdata);
+  BMBVHTree_OverlapData *data = static_cast<BMBVHTree_OverlapData *>(userdata);
   const BMBVHTree *bmtree_a = data->tree_pair[0];
   const BMBVHTree *bmtree_b = data->tree_pair[1];
 
@@ -553,7 +553,7 @@ BVHTreeOverlap *BKE_bmbvh_overlap(const BMBVHTree *bmtree_a,
                                   const BMBVHTree *bmtree_b,
                                   uint *r_overlap_tot)
 {
-  struct BMBVHTree_OverlapData data;
+  BMBVHTree_OverlapData data;
 
   data.tree_pair[0] = bmtree_a;
   data.tree_pair[1] = bmtree_b;
@@ -574,7 +574,7 @@ static bool bmbvh_overlap_self_cb(void *userdata, int index_a, int index_b, int 
 
 BVHTreeOverlap *BKE_bmbvh_overlap_self(const BMBVHTree *bmtree, uint *r_overlap_tot)
 {
-  struct BMBVHTree_OverlapData data;
+  BMBVHTree_OverlapData data;
 
   data.tree_pair[0] = bmtree;
   data.tree_pair[1] = bmtree;

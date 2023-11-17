@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2005 Blender Foundation
+/* SPDX-FileCopyrightText: 2005 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -78,7 +78,7 @@ typedef enum eGPUMaterialFlag {
   GPU_MATFLAG_HOLDOUT = (1 << 6),
   GPU_MATFLAG_SHADER_TO_RGBA = (1 << 7),
   GPU_MATFLAG_AO = (1 << 8),
-  GPU_MATFLAG_CLEARCOAT = (1 << 9),
+  GPU_MATFLAG_COAT = (1 << 9),
 
   GPU_MATFLAG_OBJECT_INFO = (1 << 10),
   GPU_MATFLAG_AOV = (1 << 11),
@@ -86,7 +86,7 @@ typedef enum eGPUMaterialFlag {
   GPU_MATFLAG_BARYCENTRIC = (1 << 20),
 
   /* Optimization to only add the branches of the principled shader that are necessary. */
-  GPU_MATFLAG_PRINCIPLED_CLEARCOAT = (1 << 21),
+  GPU_MATFLAG_PRINCIPLED_COAT = (1 << 21),
   GPU_MATFLAG_PRINCIPLED_METALLIC = (1 << 22),
   GPU_MATFLAG_PRINCIPLED_DIELECTRIC = (1 << 23),
   GPU_MATFLAG_PRINCIPLED_GLASS = (1 << 24),
@@ -285,18 +285,18 @@ eGPUMaterialStatus GPU_material_status(GPUMaterial *mat);
 void GPU_material_status_set(GPUMaterial *mat, eGPUMaterialStatus status);
 
 /**
- * Return status for async optimization jobs.
+ * Return status for asynchronous optimization jobs.
  */
 eGPUMaterialOptimizationStatus GPU_material_optimization_status(GPUMaterial *mat);
 void GPU_material_optimization_status_set(GPUMaterial *mat, eGPUMaterialOptimizationStatus status);
 bool GPU_material_optimization_ready(GPUMaterial *mat);
 
 /**
- * Store reference to a similar default material for async PSO cache warming.
+ * Store reference to a similar default material for asynchronous PSO cache warming.
  *
  * This function expects `material` to have not yet been compiled and for `default_material` to be
- * ready. When compiling `material` as part of an async shader compilation job, use existing PSO
- * descriptors from `default_material`'s shader to also compile PSOs for this new material
+ * ready. When compiling `material` as part of an asynchronous shader compilation job, use existing
+ * PSO descriptors from `default_material`'s shader to also compile PSOs for this new material
  * asynchronously, rather than at runtime.
  *
  * The default_material `options` should match this new materials options in order
@@ -320,6 +320,7 @@ struct GPUUniformBuf *GPU_material_create_sss_profile_ubo(void);
 
 bool GPU_material_has_surface_output(GPUMaterial *mat);
 bool GPU_material_has_volume_output(GPUMaterial *mat);
+bool GPU_material_has_displacement_output(GPUMaterial *mat);
 
 void GPU_material_flag_set(GPUMaterial *mat, eGPUMaterialFlag flag);
 bool GPU_material_flag_get(const GPUMaterial *mat, eGPUMaterialFlag flag);

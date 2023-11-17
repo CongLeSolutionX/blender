@@ -1,9 +1,9 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "BKE_mesh.hh"
-#include "BKE_mesh_mapping.h"
+#include "BKE_mesh_mapping.hh"
 
 #include "BLI_array_utils.hh"
 
@@ -103,7 +103,7 @@ class EdgesOfVertInput final : public bke::MeshFieldInput {
            * when accessing values in the sort weights. However, it means a separate array of
            * indices within the compressed array is necessary for sorting. */
           sort_indices.reinitialize(edges.size());
-          std::iota(sort_indices.begin(), sort_indices.end(), 0);
+          array_utils::fill_index_range<int>(sort_indices);
           std::stable_sort(sort_indices.begin(), sort_indices.end(), [&](int a, int b) {
             return sort_weights[a] < sort_weights[b];
           });
@@ -200,16 +200,15 @@ static void node_geo_exec(GeoNodeExecParams params)
   }
 }
 
-}  // namespace blender::nodes::node_geo_mesh_topology_edges_of_vertex_cc
-
-void register_node_type_geo_mesh_topology_edges_of_vertex()
+static void node_register()
 {
-  namespace file_ns = blender::nodes::node_geo_mesh_topology_edges_of_vertex_cc;
-
   static bNodeType ntype;
   geo_node_type_base(
       &ntype, GEO_NODE_MESH_TOPOLOGY_EDGES_OF_VERTEX, "Edges of Vertex", NODE_CLASS_INPUT);
-  ntype.geometry_node_execute = file_ns::node_geo_exec;
-  ntype.declare = file_ns::node_declare;
+  ntype.geometry_node_execute = node_geo_exec;
+  ntype.declare = node_declare;
   nodeRegisterType(&ntype);
 }
+NOD_REGISTER_NODE(node_register)
+
+}  // namespace blender::nodes::node_geo_mesh_topology_edges_of_vertex_cc

@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -31,12 +31,14 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_math.h"
+#include "BLI_math_matrix.h"
+#include "BLI_math_rotation.h"
+#include "BLI_math_vector.h"
 #include "BLI_utildefines.h"
 
-#include "BKE_object.h"
+#include "BKE_object.hh"
 
-#include "DEG_depsgraph.h"
+#include "DEG_depsgraph.hh"
 
 #include "view3d_intern.h" /* own include */
 
@@ -232,7 +234,7 @@ static bool object_apply_mat4_with_protect(
 
 void ED_view3d_cameracontrol_update(View3DCameraControl *vctrl, /* args for keyframing */
                                     const bool use_autokey,
-                                    struct bContext *C,
+                                    bContext *C,
                                     const bool do_rotate,
                                     const bool do_translate)
 {

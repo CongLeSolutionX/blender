@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -89,9 +89,9 @@ template<typename T> class OffsetIndices {
     return OffsetIndices(offsets_.slice(range.start(), range.one_after_last()));
   }
 
-  const T *data() const
+  Span<T> data() const
   {
-    return offsets_.data();
+    return offsets_;
   }
 };
 

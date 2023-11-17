@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: Blender Foundation
+/* SPDX-FileCopyrightText: Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -6,7 +6,7 @@
  * \ingroup edobj
  */
 
-#include <string.h>
+#include <cstring>
 
 #include "BLI_blenlib.h"
 #include "BLI_utildefines.h"
@@ -16,28 +16,28 @@
 #include "DNA_scene_types.h"
 
 #include "BKE_collection.h"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_layer.h"
 #include "BKE_lib_id.h"
 #include "BKE_main.h"
-#include "BKE_object.h"
+#include "BKE_object.hh"
 #include "BKE_report.h"
 
-#include "DEG_depsgraph.h"
-#include "DEG_depsgraph_build.h"
+#include "DEG_depsgraph.hh"
+#include "DEG_depsgraph_build.hh"
 
-#include "ED_object.h"
-#include "ED_screen.h"
+#include "ED_object.hh"
+#include "ED_screen.hh"
 
-#include "WM_api.h"
-#include "WM_types.h"
+#include "WM_api.hh"
+#include "WM_types.hh"
 
-#include "RNA_access.h"
-#include "RNA_define.h"
-#include "RNA_enum_types.h"
+#include "RNA_access.hh"
+#include "RNA_define.hh"
+#include "RNA_enum_types.hh"
 #include "RNA_prototypes.h"
 
-#include "UI_interface_icons.h"
+#include "UI_interface_icons.hh"
 
 #include "object_intern.h"
 
@@ -56,7 +56,7 @@ static const EnumPropertyItem *collection_object_active_itemf(bContext *C,
   int totitem = 0;
 
   if (C == nullptr) {
-    return DummyRNA_NULL_items;
+    return rna_enum_dummy_NULL_items;
   }
 
   ob = ED_object_context(C);
@@ -190,7 +190,7 @@ void COLLECTION_OT_objects_add_active(wmOperatorType *ot)
   /* properties */
   prop = RNA_def_enum(ot->srna,
                       "collection",
-                      DummyRNA_NULL_items,
+                      rna_enum_dummy_NULL_items,
                       0,
                       "Collection",
                       "The collection to add other selected objects to");
@@ -227,7 +227,7 @@ static int objects_remove_active_exec(bContext *C, wmOperator *op)
       CTX_DATA_BEGIN (C, Base *, base, selected_editable_bases) {
         BKE_collection_object_remove(bmain, collection, base->object, false);
         DEG_id_tag_update(&collection->id, ID_RECALC_COPY_ON_WRITE);
-        ok = 1;
+        ok = true;
       }
       CTX_DATA_END;
     }
@@ -264,7 +264,7 @@ void COLLECTION_OT_objects_remove_active(wmOperatorType *ot)
   /* properties */
   prop = RNA_def_enum(ot->srna,
                       "collection",
-                      DummyRNA_NULL_items,
+                      rna_enum_dummy_NULL_items,
                       0,
                       "Collection",
                       "The collection to remove other selected objects from");
@@ -366,7 +366,7 @@ void COLLECTION_OT_objects_remove(wmOperatorType *ot)
   /* properties */
   prop = RNA_def_enum(ot->srna,
                       "collection",
-                      DummyRNA_NULL_items,
+                      rna_enum_dummy_NULL_items,
                       0,
                       "Collection",
                       "The collection to remove this object from");
@@ -524,7 +524,7 @@ void OBJECT_OT_collection_link(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
   /* properties */
-  prop = RNA_def_enum(ot->srna, "collection", DummyRNA_NULL_items, 0, "Collection", "");
+  prop = RNA_def_enum(ot->srna, "collection", rna_enum_dummy_NULL_items, 0, "Collection", "");
   RNA_def_enum_funcs(prop, RNA_collection_local_itemf);
   RNA_def_property_flag(prop, PROP_ENUM_NO_TRANSLATE);
   ot->prop = prop;

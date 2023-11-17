@@ -1,11 +1,11 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup edmesh
  *
- * Tools to implement polygon building tool,
+ * Tools to implement face building tool,
  * an experimental tool for quickly constructing/manipulating faces.
  */
 
@@ -13,33 +13,35 @@
 
 #include "DNA_object_types.h"
 
-#include "BLI_math.h"
-
-#include "BKE_context.h"
-#include "BKE_editmesh.h"
+#include "BKE_context.hh"
+#include "BKE_editmesh.hh"
 #include "BKE_layer.h"
-#include "BKE_mesh.h"
+#include "BKE_mesh.hh"
 #include "BKE_report.h"
 
-#include "WM_types.h"
+#include "BLI_math_geom.h"
+#include "BLI_math_matrix.h"
+#include "BLI_math_vector.h"
 
-#include "ED_mesh.h"
-#include "ED_object.h"
-#include "ED_scene.h"
-#include "ED_screen.h"
-#include "ED_transform.h"
-#include "ED_view3d.h"
+#include "WM_types.hh"
+
+#include "ED_mesh.hh"
+#include "ED_object.hh"
+#include "ED_scene.hh"
+#include "ED_screen.hh"
+#include "ED_transform.hh"
+#include "ED_view3d.hh"
 
 #include "bmesh.h"
 
 #include "mesh_intern.h" /* own include */
 
-#include "RNA_access.h"
-#include "RNA_define.h"
+#include "RNA_access.hh"
+#include "RNA_define.hh"
 
-#include "WM_api.h"
+#include "WM_api.hh"
 
-#include "DEG_depsgraph.h"
+#include "DEG_depsgraph.hh"
 
 /* -------------------------------------------------------------------- */
 /** \name Local Utilities
@@ -102,27 +104,25 @@ static bool edbm_preselect_or_active(bContext *C, const View3D *v3d, Base **r_ba
   return (*r_ele != nullptr);
 }
 
-static bool edbm_preselect_or_active_init_viewcontext(bContext *C,
-                                                      ViewContext *vc,
-                                                      Base **r_base,
-                                                      BMElem **r_ele)
+static ViewContext edbm_preselect_or_active_init_viewcontext(bContext *C,
+                                                             Base **r_base,
+                                                             BMElem **r_ele)
 {
-  em_setup_viewcontext(C, vc);
-  bool ok = edbm_preselect_or_active(C, vc->v3d, r_base, r_ele);
+  ViewContext vc = em_setup_viewcontext(C);
+  bool ok = edbm_preselect_or_active(C, vc.v3d, r_base, r_ele);
   if (ok) {
-    ED_view3d_viewcontext_init_object(vc, (*r_base)->object);
+    ED_view3d_viewcontext_init_object(&vc, (*r_base)->object);
   }
-  return ok;
+  return vc;
 }
 
 static int edbm_polybuild_transform_at_cursor_invoke(bContext *C,
                                                      wmOperator * /*op*/,
                                                      const wmEvent * /*event*/)
 {
-  ViewContext vc;
   Base *basact = nullptr;
   BMElem *ele_act = nullptr;
-  edbm_preselect_or_active_init_viewcontext(C, &vc, &basact, &ele_act);
+  ViewContext vc = edbm_preselect_or_active_init_viewcontext(C, &basact, &ele_act);
   BMEditMesh *em = vc.em;
   BMesh *bm = em->bm;
 
@@ -185,11 +185,9 @@ static int edbm_polybuild_delete_at_cursor_invoke(bContext *C,
                                                   const wmEvent * /*event*/)
 {
   bool changed = false;
-
-  ViewContext vc;
   Base *basact = nullptr;
   BMElem *ele_act = nullptr;
-  edbm_preselect_or_active_init_viewcontext(C, &vc, &basact, &ele_act);
+  ViewContext vc = edbm_preselect_or_active_init_viewcontext(C, &basact, &ele_act);
   BMEditMesh *em = vc.em;
   BMesh *bm = em->bm;
 
@@ -280,10 +278,9 @@ static int edbm_polybuild_face_at_cursor_invoke(bContext *C, wmOperator *op, con
   float center[3];
   bool changed = false;
 
-  ViewContext vc;
   Base *basact = nullptr;
   BMElem *ele_act = nullptr;
-  edbm_preselect_or_active_init_viewcontext(C, &vc, &basact, &ele_act);
+  ViewContext vc = edbm_preselect_or_active_init_viewcontext(C, &basact, &ele_act);
   BMEditMesh *em = vc.em;
   BMesh *bm = em->bm;
 
@@ -458,10 +455,9 @@ static int edbm_polybuild_split_at_cursor_invoke(bContext *C,
   float center[3];
   bool changed = false;
 
-  ViewContext vc;
   Base *basact = nullptr;
   BMElem *ele_act = nullptr;
-  edbm_preselect_or_active_init_viewcontext(C, &vc, &basact, &ele_act);
+  ViewContext vc = edbm_preselect_or_active_init_viewcontext(C, &basact, &ele_act);
   BMEditMesh *em = vc.em;
   BMesh *bm = em->bm;
 
@@ -542,10 +538,9 @@ static int edbm_polybuild_dissolve_at_cursor_invoke(bContext *C,
 {
   bool changed = false;
 
-  ViewContext vc;
   Base *basact = nullptr;
   BMElem *ele_act = nullptr;
-  edbm_preselect_or_active_init_viewcontext(C, &vc, &basact, &ele_act);
+  ViewContext vc = edbm_preselect_or_active_init_viewcontext(C, &basact, &ele_act);
   BMEditMesh *em = vc.em;
   BMesh *bm = em->bm;
 

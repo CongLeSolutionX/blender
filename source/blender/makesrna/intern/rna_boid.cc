@@ -6,9 +6,9 @@
  * \ingroup RNA
  */
 
-#include <float.h>
-#include <limits.h>
-#include <stdlib.h>
+#include <cfloat>
+#include <climits>
+#include <cstdlib>
 
 #include "DNA_boid_types.h"
 #include "DNA_object_types.h"
@@ -17,13 +17,13 @@
 
 #include "BLI_utildefines.h"
 
-#include "RNA_define.h"
-#include "RNA_enum_types.h"
+#include "RNA_define.hh"
+#include "RNA_enum_types.hh"
 
 #include "rna_internal.h"
 
-#include "WM_api.h"
-#include "WM_types.h"
+#include "WM_api.hh"
+#include "WM_types.hh"
 
 const EnumPropertyItem rna_enum_boidrule_type_items[] = {
     {eBoidRuleType_Goal,
@@ -102,11 +102,11 @@ static const EnumPropertyItem boidruleset_type_items[] = {
 
 #  include "BLI_math_base.h"
 
-#  include "BKE_context.h"
+#  include "BKE_context.hh"
 #  include "BKE_particle.h"
 
-#  include "DEG_depsgraph.h"
-#  include "DEG_depsgraph_build.h"
+#  include "DEG_depsgraph.hh"
+#  include "DEG_depsgraph_build.hh"
 
 static void rna_Boids_reset(Main * /*bmain*/, Scene * /*scene*/, PointerRNA *ptr)
 {

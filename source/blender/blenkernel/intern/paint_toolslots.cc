@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -6,7 +6,7 @@
  * \ingroup bke
  */
 
-#include <limits.h>
+#include <climits>
 
 #include "MEM_guardedalloc.h"
 
@@ -16,10 +16,10 @@
 
 #include "BLI_utildefines.h"
 
-#include "BKE_brush.h"
+#include "BKE_brush.hh"
 #include "BKE_lib_id.h"
 #include "BKE_main.h"
-#include "BKE_paint.h"
+#include "BKE_paint.hh"
 
 /* -------------------------------------------------------------------- */
 /** \name Tool Slot Initialization / Versioning

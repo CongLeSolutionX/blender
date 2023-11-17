@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2022 Blender Foundation
+/* SPDX-FileCopyrightText: 2022 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -505,6 +505,8 @@ template float4x4 orthographic(
     float left, float right, float bottom, float top, float near_clip, float far_clip);
 template float4x4 perspective(
     float left, float right, float bottom, float top, float near_clip, float far_clip);
+template float4x4 perspective_infinite(
+    float left, float right, float bottom, float top, float near_clip);
 
 }  // namespace projection
 

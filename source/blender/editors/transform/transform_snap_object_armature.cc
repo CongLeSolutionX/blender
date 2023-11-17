@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -6,15 +6,16 @@
  * \ingroup edtransform
  */
 
-#include "BLI_math.h"
 #include "BLI_math_matrix.hh"
 
-#include "BKE_armature.h"
-#include "BKE_bvhutils.h"
+#include "BKE_armature.hh"
+#include "BKE_bvhutils.hh"
 #include "BKE_mesh.hh"
 #include "DNA_armature_types.h"
 
-#include "ED_transform_snap_object_context.h"
+#include "ED_transform_snap_object_context.hh"
+
+#include "ANIM_bone_collections.h"
 
 #include "transform_snap_object.hh"
 
@@ -45,7 +46,7 @@ eSnapMode snapArmature(SnapObjectContext *sctx,
     }
   }
 
-  nearest2d.clip_planes_enable(sctx);
+  nearest2d.clip_planes_enable(sctx, ob_eval);
 
   const float *head_vec = nullptr, *tail_vec = nullptr;
 
@@ -56,7 +57,7 @@ eSnapMode snapArmature(SnapObjectContext *sctx,
 
   if (arm->edbo) {
     LISTBASE_FOREACH (EditBone *, eBone, arm->edbo) {
-      if (eBone->layer & arm->layer) {
+      if (ANIM_bonecoll_is_visible_editbone(arm, eBone)) {
         if (eBone->flag & BONE_HIDDEN_A) {
           /* Skip hidden bones. */
           continue;

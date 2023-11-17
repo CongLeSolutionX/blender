@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -6,10 +6,10 @@
  * \ingroup bke
  */
 
-#include <stddef.h>
-#include <stdlib.h>
+#include <cstddef>
+#include <cstdlib>
 
-#include "RNA_types.h"
+#include "RNA_types.hh"
 
 #include "BLI_ghash.h"
 #include "BLI_listbase.h"
@@ -32,7 +32,7 @@ static CLG_LogRef LOG = {"bke.addon"};
 /** \name Add-on New/Free
  * \{ */
 
-bAddon *BKE_addon_new(void)
+bAddon *BKE_addon_new()
 {
   bAddon *addon = static_cast<bAddon *>(MEM_callocN(sizeof(bAddon), "bAddon"));
   return addon;
@@ -115,13 +115,13 @@ void BKE_addon_pref_type_remove(const bAddonPrefType *apt)
   BLI_ghash_remove(global_addonpreftype_hash, apt->idname, nullptr, MEM_freeN);
 }
 
-void BKE_addon_pref_type_init(void)
+void BKE_addon_pref_type_init()
 {
   BLI_assert(global_addonpreftype_hash == nullptr);
   global_addonpreftype_hash = BLI_ghash_str_new(__func__);
 }
 
-void BKE_addon_pref_type_free(void)
+void BKE_addon_pref_type_free()
 {
   BLI_ghash_free(global_addonpreftype_hash, nullptr, MEM_freeN);
   global_addonpreftype_hash = nullptr;

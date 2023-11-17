@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -18,7 +18,9 @@
 #include "BKE_preferences.h"
 
 #include "BLI_fileops.h"
+#include "BLI_listbase.h"
 #include "BLI_path_util.h"
+#include "BLI_string.h"
 
 #include "DNA_userdef_types.h"
 
@@ -157,7 +159,7 @@ void AS_asset_full_path_explode_from_weak_ref(const AssetWeakReference *asset_re
   BLI_assert(!exploded->group_component.is_empty());
   BLI_assert(!exploded->name_component.is_empty());
 
-  BLI_strncpy(r_path_buffer, exploded->full_path->c_str(), 1090 /* FILE_MAX_LIBEXTRA */);
+  BLI_strncpy(r_path_buffer, exploded->full_path->c_str(), 1090 /* #FILE_MAX_LIBEXTRA. */);
 
   if (!exploded->dir_component.is_empty()) {
     r_path_buffer[exploded->dir_component.size()] = '\0';
@@ -300,6 +302,13 @@ void AssetLibrary::on_blend_save_post(Main *main,
 AssetIdentifier AssetLibrary::asset_identifier_from_library(StringRef relative_asset_path)
 {
   return AssetIdentifier(root_path_, relative_asset_path);
+}
+
+std::string AssetLibrary::resolve_asset_weak_reference_to_full_path(
+    const AssetWeakReference &asset_reference)
+{
+  AssetLibraryService *service = AssetLibraryService::get();
+  return service->resolve_asset_weak_reference_to_full_path(asset_reference);
 }
 
 void AssetLibrary::refresh_catalog_simplename(AssetMetaData *asset_data)

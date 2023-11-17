@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: Blender Foundation
+/* SPDX-FileCopyrightText: Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -6,14 +6,15 @@
  * \ingroup spgraph
  */
 
-#include <float.h>
-#include <math.h>
-#include <stdio.h>
-#include <string.h>
+#include <cfloat>
+#include <cmath>
+#include <cstdio>
+#include <cstring>
 
 #include "BLI_blenlib.h"
-#include "BLI_math.h"
+#include "BLI_math_vector_types.hh"
 #include "BLI_utildefines.h"
+#include "BLI_vector.hh"
 
 #include "DNA_anim_types.h"
 #include "DNA_screen_types.h"
@@ -23,8 +24,8 @@
 
 #include "BKE_action.h"
 #include "BKE_anim_data.h"
-#include "BKE_context.h"
-#include "BKE_curve.h"
+#include "BKE_context.hh"
+#include "BKE_curve.hh"
 #include "BKE_fcurve.h"
 #include "BKE_nla.h"
 
@@ -32,13 +33,13 @@
 #include "GPU_matrix.h"
 #include "GPU_state.h"
 
-#include "ED_anim_api.h"
+#include "ED_anim_api.hh"
 
 #include "graph_intern.h"
 
-#include "UI_interface.h"
-#include "UI_resources.h"
-#include "UI_view2d.h"
+#include "UI_interface.hh"
+#include "UI_resources.hh"
+#include "UI_view2d.hh"
 
 static void graph_draw_driver_debug(bAnimContext *ac, ID *id, FCurve *fcu);
 
@@ -53,6 +54,20 @@ static void graph_draw_driver_debug(bAnimContext *ac, ID *id, FCurve *fcu);
 static float fcurve_display_alpha(FCurve *fcu)
 {
   return (fcu->flag & FCURVE_SELECTED) ? 1.0f : U.fcu_inactive_alpha;
+}
+
+/** Get the first and last index to the bezt array that are just outside min and max. */
+static blender::int2 get_bounding_bezt_indices(FCurve *fcu, const float min, const float max)
+{
+  bool replace;
+  int first, last;
+  first = BKE_fcurve_bezt_binarysearch_index(fcu->bezt, min, fcu->totvert, &replace);
+  first = clamp_i(first - 1, 0, fcu->totvert - 1);
+
+  last = BKE_fcurve_bezt_binarysearch_index(fcu->bezt, max, fcu->totvert, &replace);
+  last = replace ? last + 1 : last;
+  last = clamp_i(last, 0, fcu->totvert - 1);
+  return {first, last};
 }
 
 /** \} */
@@ -155,7 +170,7 @@ static void set_fcurve_vertex_color(FCurve *fcu, bool sel)
   }
   else {
     /* Curve's points CANNOT BE edited */
-    UI_GetThemeColor3fv(TH_VERTEX, color);
+    UI_GetThemeColorShade4fv(TH_HEADER, 50, color);
   }
 
   /* Fade the 'intensity' of the vertices based on the selection of the curves too
@@ -220,37 +235,6 @@ static void draw_fcurve_selected_keyframe_vertices(FCurve *fcu, View2D *v2d, boo
   immEnd();
 }
 
-static void draw_locked_keyframe_vertices(FCurve *fcu,
-                                          View2D *v2d,
-                                          const uint attr_id,
-                                          const float unit_scale)
-{
-  const float correction_factor = 0.05f * BLI_rctf_size_x(&v2d->cur);
-
-  /* get view settings */
-  const float vertex_size = UI_GetThemeValuef(TH_VERTEX_SIZE);
-  float scale[2];
-  UI_view2d_scale_get(v2d, &scale[0], &scale[1]);
-  scale[0] /= vertex_size;
-  /* Dividing by the unit scale is needed to display euler correctly (internally they are radians
-   * but displayed as degrees) and all curves when normalization is turned on. */
-  scale[1] = scale[1] / vertex_size * unit_scale;
-
-  set_fcurve_vertex_color(fcu, false);
-
-  for (int i = 0; i < fcu->totvert; i++) {
-    BezTriple *bezt = &fcu->bezt[i];
-    if (!IN_RANGE(bezt->vec[1][0],
-                  (v2d->cur.xmin - correction_factor),
-                  (v2d->cur.xmax + correction_factor)))
-    {
-      continue;
-    }
-    float position[2] = {bezt->vec[1][0], bezt->vec[1][1]};
-    draw_cross(position, scale, attr_id);
-  }
-}
-
 /**
  * Draw the extra indicator for the active point.
  */
@@ -278,42 +262,31 @@ static void draw_fcurve_active_vertex(const FCurve *fcu, const View2D *v2d, cons
 }
 
 /* helper func - draw keyframe vertices only for an F-Curve */
-static void draw_fcurve_keyframe_vertices(
-    FCurve *fcu, View2D *v2d, bool edit, const uint pos, const float unit_scale)
+static void draw_fcurve_keyframe_vertices(FCurve *fcu, View2D *v2d, const uint pos)
 {
-  if (edit) {
-    immBindBuiltinProgram(GPU_SHADER_2D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_AA);
+  immBindBuiltinProgram(GPU_SHADER_2D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_AA);
 
+  if ((fcu->flag & FCURVE_PROTECTED) == 0) {
     immUniform1f("size", UI_GetThemeValuef(TH_VERTEX_SIZE) * UI_SCALE_FAC);
-
-    draw_fcurve_selected_keyframe_vertices(fcu, v2d, false, pos);
-    draw_fcurve_selected_keyframe_vertices(fcu, v2d, true, pos);
-    draw_fcurve_active_vertex(fcu, v2d, pos);
-
-    immUnbindProgram();
   }
   else {
-    if (U.animation_flag & USER_ANIM_HIGH_QUALITY_DRAWING) {
-      GPU_line_smooth(true);
-    }
-    GPU_blend(GPU_BLEND_ALPHA);
-    immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
-
-    draw_locked_keyframe_vertices(fcu, v2d, pos, unit_scale);
-
-    immUnbindProgram();
-    GPU_blend(GPU_BLEND_NONE);
-    if (U.animation_flag & USER_ANIM_HIGH_QUALITY_DRAWING) {
-      GPU_line_smooth(false);
-    }
+    /* Draw keyframes on locked curves slightly smaller to give them less visual weight. */
+    immUniform1f("size", (UI_GetThemeValuef(TH_VERTEX_SIZE) * UI_SCALE_FAC) * 0.8f);
   }
+
+  draw_fcurve_selected_keyframe_vertices(fcu, v2d, false, pos);
+  draw_fcurve_selected_keyframe_vertices(fcu, v2d, true, pos);
+  draw_fcurve_active_vertex(fcu, v2d, pos);
+
+  immUnbindProgram();
 }
 
 /* helper func - draw handle vertices only for an F-Curve (if it is not protected) */
 static void draw_fcurve_selected_handle_vertices(
     FCurve *fcu, View2D *v2d, bool sel, bool sel_handle_only, uint pos)
 {
-  (void)v2d; /* TODO: use this to draw only points in view */
+  const blender::int2 bounding_indices = get_bounding_bezt_indices(
+      fcu, v2d->cur.xmin, v2d->cur.xmax);
 
   /* set handle color */
   float hcolor[3];
@@ -323,9 +296,9 @@ static void draw_fcurve_selected_handle_vertices(
 
   immBeginAtMost(GPU_PRIM_POINTS, fcu->totvert * 2);
 
-  BezTriple *bezt = fcu->bezt;
   BezTriple *prevbezt = nullptr;
-  for (int i = 0; i < fcu->totvert; i++, prevbezt = bezt, bezt++) {
+  for (int i = bounding_indices[0]; i <= bounding_indices[1]; i++) {
+    BezTriple *bezt = &fcu->bezt[i];
     /* Draw the editmode handles for a bezier curve (others don't have handles)
      * if their selection status matches the selection status we're drawing for
      * - first handle only if previous beztriple was bezier-mode
@@ -352,6 +325,7 @@ static void draw_fcurve_selected_handle_vertices(
         }
       }
     }
+    prevbezt = bezt;
   }
 
   immEnd();
@@ -409,8 +383,10 @@ static void draw_fcurve_handle_vertices(FCurve *fcu, View2D *v2d, bool sel_handl
   immUnbindProgram();
 }
 
-static void draw_fcurve_vertices(
-    ARegion *region, FCurve *fcu, bool do_handles, bool sel_handle_only, const float unit_scale)
+static void draw_fcurve_vertices(ARegion *region,
+                                 FCurve *fcu,
+                                 bool do_handles,
+                                 bool sel_handle_only)
 {
   View2D *v2d = &region->v2d;
 
@@ -433,7 +409,7 @@ static void draw_fcurve_vertices(
   }
 
   /* draw keyframes over the handles */
-  draw_fcurve_keyframe_vertices(fcu, v2d, !(fcu->flag & FCURVE_PROTECTED), pos, unit_scale);
+  draw_fcurve_keyframe_vertices(fcu, v2d, pos);
 
   GPU_program_point_size(false);
   GPU_blend(GPU_BLEND_NONE);
@@ -463,9 +439,9 @@ static bool draw_fcurve_handles_check(SpaceGraph *sipo, FCurve *fcu)
 
 /* draw lines for F-Curve handles only (this is only done in EditMode)
  * NOTE: draw_fcurve_handles_check must be checked before running this. */
-static void draw_fcurve_handles(SpaceGraph *sipo, FCurve *fcu)
+static void draw_fcurve_handles(SpaceGraph *sipo, ARegion *region, FCurve *fcu)
 {
-  int sel, b;
+  using namespace blender;
 
   GPUVertFormat *format = immVertexFormat();
   uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
@@ -479,20 +455,25 @@ static void draw_fcurve_handles(SpaceGraph *sipo, FCurve *fcu)
 
   immBeginAtMost(GPU_PRIM_LINES, 4 * 2 * fcu->totvert);
 
+  const int2 bounding_indices = get_bounding_bezt_indices(
+      fcu, region->v2d.cur.xmin, region->v2d.cur.xmax);
+
   /* slightly hacky, but we want to draw unselected points before selected ones
    * so that selected points are clearly visible
    */
-  for (sel = 0; sel < 2; sel++) {
-    BezTriple *bezt = fcu->bezt, *prevbezt = nullptr;
+  for (int sel = 0; sel < 2; sel++) {
     int basecol = (sel) ? TH_HANDLE_SEL_FREE : TH_HANDLE_FREE;
     uchar col[4];
 
-    for (b = 0; b < fcu->totvert; b++, prevbezt = bezt, bezt++) {
+    BezTriple *prevbezt = nullptr;
+    for (int i = bounding_indices[0]; i <= bounding_indices[1]; i++) {
+      BezTriple *bezt = &fcu->bezt[i];
       /* if only selected keyframes can get their handles shown,
        * check that keyframe is selected
        */
       if (sipo->flag & SIPO_SELVHANDLESONLY) {
         if (BEZT_ISSEL_ANY(bezt) == 0) {
+          prevbezt = bezt;
           continue;
         }
       }
@@ -538,11 +519,12 @@ static void draw_fcurve_handles(SpaceGraph *sipo, FCurve *fcu)
           UI_GetThemeColor3ubv(basecol + bezt->h2, col);
           col[3] = fcurve_display_alpha(fcu) * 255;
           immAttr4ubv(color, col);
-          immVertex2fv(pos, bezt->vec[0]);
-          immAttr4ubv(color, col);
           immVertex2fv(pos, bezt->vec[1]);
+          immAttr4ubv(color, col);
+          immVertex2fv(pos, bezt->vec[2]);
         }
       }
+      prevbezt = bezt;
     }
   }
 
@@ -610,7 +592,7 @@ static void draw_fcurve_curve(bAnimContext *ac,
                               const bool use_nla_remap,
                               const bool draw_extrapolation)
 {
-  short mapping_flag = ANIM_get_normalization_flags(ac);
+  short mapping_flag = ANIM_get_normalization_flags(ac->sl);
 
   /* when opening a blend file on a different sized screen or while dragging the toolbar this can
    * happen best just bail out in this case. */
@@ -757,7 +739,7 @@ static void draw_fcurve_curve_samples(bAnimContext *ac,
   float fac, v[2];
   int b = fcu->totvert;
   float unit_scale, offset;
-  short mapping_flag = ANIM_get_normalization_flags(ac);
+  short mapping_flag = ANIM_get_normalization_flags(ac->sl);
   int count = fcu->totvert;
 
   const bool extrap_left = draw_extrapolation && prevfpt->vec[0] > v2d->cur.xmin;
@@ -842,54 +824,50 @@ static void draw_fcurve_curve_samples(bAnimContext *ac,
   GPU_matrix_pop();
 }
 
-/* helper func - check if the F-Curve only contains easily drawable segments
- * (i.e. no easing equation interpolations)
- */
-static bool fcurve_can_use_simple_bezt_drawing(FCurve *fcu)
-{
-  BezTriple *bezt;
-  int i;
-
-  for (i = 0, bezt = fcu->bezt; i < fcu->totvert; i++, bezt++) {
-    if (ELEM(bezt->ipo, BEZT_IPO_CONST, BEZT_IPO_LIN, BEZT_IPO_BEZ) == false) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
 static int calculate_bezt_draw_resolution(BezTriple *bezt,
                                           BezTriple *prevbezt,
-                                          const int max_bez_resolution,
-                                          const bool is_driver)
+                                          const blender::float2 pixels_per_unit)
 {
-  if (is_driver) {
-    return max_bez_resolution;
-  }
+  const float points_per_pixel = 0.25f;
+  const int resolution_x = int(((bezt->vec[1][0] - prevbezt->vec[1][0]) * pixels_per_unit[0]) *
+                               points_per_pixel);
+  /* Include the handles in the resolution calculation to cover the case where keys have the same
+   * y-value, but their handles are offset to create an arc. */
+  const float min_y = min_ffff(
+      bezt->vec[1][1], bezt->vec[2][1], prevbezt->vec[1][1], prevbezt->vec[0][1]);
+  const float max_y = max_ffff(
+      bezt->vec[1][1], bezt->vec[2][1], prevbezt->vec[1][1], prevbezt->vec[0][1]);
+  const int resolution_y = int(((max_y - min_y) * pixels_per_unit[1]) * points_per_pixel);
 
-  const int resolution = int(5.0f * len_v2v2(bezt->vec[1], prevbezt->vec[1]));
-
-  /* NOTE: higher values will crash */
-  /* TODO: view scale should factor into this someday too... */
-  return min_ii(resolution, max_bez_resolution);
+  /* Using a simple sum instead of calculating the diagonal. This gives a slightly higher
+   * resolution but it does compensate for the fact that bezier curves can create long arcs between
+   * keys. */
+  return resolution_x + resolution_y;
 }
 
 /**
- * Draw a segment from `prevbezt` to `bezt` at the given `resolution`.
- * #immBeginAtMost is expected to be called with enough space for this function to run.
+ * Add points on the bezier between `prevbezt` and `bezt` to `curve_vertices`.
+ * The amount of points added is based on the given `resolution`.
  */
-static void draw_bezt(BezTriple *bezt, BezTriple *prevbezt, int resolution, uint pos)
+static void add_bezt_vertices(BezTriple *bezt,
+                              BezTriple *prevbezt,
+                              int resolution,
+                              blender::Vector<blender::float2> &curve_vertices)
 {
-  float prev_key[2], prev_handle[2], bez_handle[2], bez_key[2];
-  float data[120];
-
   if (resolution < 2) {
-    prev_key[0] = prevbezt->vec[1][0];
-    prev_key[1] = prevbezt->vec[1][1];
-    immVertex2fv(pos, prev_key);
+    curve_vertices.append({prevbezt->vec[1][0], prevbezt->vec[1][1]});
     return;
   }
+
+  /* If the resolution goes too high the line will not end exactly at the keyframe. Probably due to
+   * accumulating floating point issues in BKE_curve_forward_diff_bezier.*/
+  resolution = min_ii(64, resolution);
+
+  float prev_key[2], prev_handle[2], bez_handle[2], bez_key[2];
+  /* Allocation needs +1 on resolution because BKE_curve_forward_diff_bezier uses it to iterate
+   * inclusively. */
+  float *bezier_diff_points = static_cast<float *>(
+      MEM_mallocN(sizeof(float) * ((resolution + 1) * 2), "Draw bezt data"));
 
   prev_key[0] = prevbezt->vec[1][0];
   prev_key[1] = prevbezt->vec[1][1];
@@ -903,25 +881,141 @@ static void draw_bezt(BezTriple *bezt, BezTriple *prevbezt, int resolution, uint
 
   BKE_fcurve_correct_bezpart(prev_key, prev_handle, bez_handle, bez_key);
 
-  BKE_curve_forward_diff_bezier(
-      prev_key[0], prev_handle[0], bez_handle[0], bez_key[0], data, resolution, sizeof(float[3]));
+  BKE_curve_forward_diff_bezier(prev_key[0],
+                                prev_handle[0],
+                                bez_handle[0],
+                                bez_key[0],
+                                bezier_diff_points,
+                                resolution,
+                                sizeof(float[2]));
   BKE_curve_forward_diff_bezier(prev_key[1],
                                 prev_handle[1],
                                 bez_handle[1],
                                 bez_key[1],
-                                data + 1,
+                                bezier_diff_points + 1,
                                 resolution,
-                                sizeof(float[3]));
+                                sizeof(float[2]));
 
-  for (float *fp = data; resolution; resolution--, fp += 3) {
-    immVertex2fv(pos, fp);
+  for (float *fp = bezier_diff_points; resolution; resolution--, fp += 2) {
+    const float x = *fp;
+    const float y = *(fp + 1);
+    curve_vertices.append({x, y});
+  }
+  MEM_freeN(bezier_diff_points);
+}
+
+static void add_extrapolation_point_left(FCurve *fcu,
+                                         const float v2d_xmin,
+                                         blender::Vector<blender::float2> &curve_vertices)
+{
+  /* left-side of view comes before first keyframe, so need to extend as not cyclic */
+  float vertex_position[2];
+  vertex_position[0] = v2d_xmin;
+  BezTriple *bezt = &fcu->bezt[0];
+
+  /* y-value depends on the interpolation */
+  if ((fcu->extend == FCURVE_EXTRAPOLATE_CONSTANT) || (bezt->ipo == BEZT_IPO_CONST) ||
+      (bezt->ipo == BEZT_IPO_LIN && fcu->totvert == 1))
+  {
+    /* just extend across the first keyframe's value */
+    vertex_position[1] = bezt->vec[1][1];
+  }
+  else if (bezt->ipo == BEZT_IPO_LIN) {
+    BezTriple *next_bezt = bezt + 1;
+    /* extrapolate linear doesn't use the handle, use the next points center instead */
+    float fac = (bezt->vec[1][0] - next_bezt->vec[1][0]) / (bezt->vec[1][0] - vertex_position[0]);
+    if (fac) {
+      fac = 1.0f / fac;
+    }
+    vertex_position[1] = bezt->vec[1][1] - fac * (bezt->vec[1][1] - next_bezt->vec[1][1]);
+  }
+  else {
+    /* based on angle of handle 1 (relative to keyframe) */
+    float fac = (bezt->vec[0][0] - bezt->vec[1][0]) / (bezt->vec[1][0] - vertex_position[0]);
+    if (fac) {
+      fac = 1.0f / fac;
+    }
+    vertex_position[1] = bezt->vec[1][1] - fac * (bezt->vec[0][1] - bezt->vec[1][1]);
+  }
+
+  curve_vertices.append(vertex_position);
+}
+
+static void add_extrapolation_point_right(FCurve *fcu,
+                                          const float v2d_xmax,
+                                          blender::Vector<blender::float2> &curve_vertices)
+{
+  float vertex_position[2];
+  vertex_position[0] = v2d_xmax;
+  BezTriple *bezt = &fcu->bezt[fcu->totvert - 1];
+
+  /* y-value depends on the interpolation. */
+  if ((fcu->extend == FCURVE_EXTRAPOLATE_CONSTANT) || (fcu->flag & FCURVE_INT_VALUES) ||
+      (bezt->ipo == BEZT_IPO_CONST) || (bezt->ipo == BEZT_IPO_LIN && fcu->totvert == 1))
+  {
+    /* based on last keyframe's value */
+    vertex_position[1] = bezt->vec[1][1];
+  }
+  else if (bezt->ipo == BEZT_IPO_LIN) {
+    /* Extrapolate linear doesn't use the handle, use the previous points center instead. */
+    BezTriple *prev_bezt = bezt - 1;
+    float fac = (bezt->vec[1][0] - prev_bezt->vec[1][0]) / (bezt->vec[1][0] - vertex_position[0]);
+    if (fac) {
+      fac = 1.0f / fac;
+    }
+    vertex_position[1] = bezt->vec[1][1] - fac * (bezt->vec[1][1] - prev_bezt->vec[1][1]);
+  }
+  else {
+    /* Based on angle of handle 1 (relative to keyframe). */
+    float fac = (bezt->vec[2][0] - bezt->vec[1][0]) / (bezt->vec[1][0] - vertex_position[0]);
+    if (fac) {
+      fac = 1.0f / fac;
+    }
+    vertex_position[1] = bezt->vec[1][1] - fac * (bezt->vec[2][1] - bezt->vec[1][1]);
+  }
+
+  curve_vertices.append(vertex_position);
+}
+
+static blender::float2 calculate_pixels_per_unit(View2D *v2d)
+{
+  const int window_width = BLI_rcti_size_x(&v2d->mask);
+  const int window_height = BLI_rcti_size_y(&v2d->mask);
+
+  const float v2d_frame_range = BLI_rctf_size_x(&v2d->cur);
+  const float v2d_value_range = BLI_rctf_size_y(&v2d->cur);
+  const blender::float2 pixels_per_unit = {window_width / v2d_frame_range,
+                                           window_height / v2d_value_range};
+  return pixels_per_unit;
+}
+
+static float calculate_pixel_distance(const rctf &bounds, const blender::float2 pixels_per_unit)
+{
+  return BLI_rctf_size_x(&bounds) * pixels_per_unit[0] +
+         BLI_rctf_size_y(&bounds) * pixels_per_unit[1];
+}
+
+static void expand_key_bounds(const BezTriple *left_key, const BezTriple *right_key, rctf &bounds)
+{
+  bounds.xmax = right_key->vec[1][0];
+  if (left_key->ipo == BEZT_IPO_BEZ) {
+    /* Respect handles of bezier keys. */
+    bounds.ymin = min_ffff(
+        bounds.ymin, right_key->vec[1][1], right_key->vec[0][1], left_key->vec[2][1]);
+    bounds.ymax = max_ffff(
+        bounds.ymax, right_key->vec[1][1], right_key->vec[0][1], left_key->vec[2][1]);
+  }
+  else {
+    bounds.ymax = max_ff(bounds.ymax, right_key->vec[1][1]);
+    bounds.ymin = min_ff(bounds.ymin, right_key->vec[1][1]);
   }
 }
 
 /* Helper function - draw one repeat of an F-Curve (using Bezier curve approximations). */
-static void draw_fcurve_curve_bezts(
+static void draw_fcurve_curve_keys(
     bAnimContext *ac, ID *id, FCurve *fcu, View2D *v2d, uint pos, const bool draw_extrapolation)
 {
+  using namespace blender;
   if (!draw_extrapolation && fcu->totvert == 1) {
     return;
   }
@@ -929,135 +1023,118 @@ static void draw_fcurve_curve_bezts(
   /* Apply unit mapping. */
   GPU_matrix_push();
   float offset;
-  short mapping_flag = ANIM_get_normalization_flags(ac);
+  short mapping_flag = ANIM_get_normalization_flags(ac->sl);
   const float unit_scale = ANIM_unit_mapping_get_factor(ac->scene, id, fcu, mapping_flag, &offset);
   GPU_matrix_scale_2f(1.0f, unit_scale);
   GPU_matrix_translate_2f(0.0f, offset);
 
-  /* For now, this assumes the worst case scenario, where all the keyframes have
-   * bezier interpolation, and are drawn at full res.
-   * This is tricky to optimize, but maybe can be improved at some point... */
-  int b = fcu->totvert - 1;
-  const int max_bezt_resolution = 32;
-  immBeginAtMost(GPU_PRIM_LINE_STRIP, (b * max_bezt_resolution + 3));
-
-  BezTriple *prevbezt = fcu->bezt;
-  BezTriple *bezt = prevbezt + 1;
-
-  float vertex_position[2];
-  float fac = 0.0f;
+  Vector<float2> curve_vertices;
 
   /* Extrapolate to the left? */
-  if (draw_extrapolation && prevbezt->vec[1][0] > v2d->cur.xmin) {
-    /* left-side of view comes before first keyframe, so need to extend as not cyclic */
-    vertex_position[0] = v2d->cur.xmin;
-
-    /* y-value depends on the interpolation */
-    if ((fcu->extend == FCURVE_EXTRAPOLATE_CONSTANT) || (prevbezt->ipo == BEZT_IPO_CONST) ||
-        (prevbezt->ipo == BEZT_IPO_LIN && fcu->totvert == 1))
-    {
-      /* just extend across the first keyframe's value */
-      vertex_position[1] = prevbezt->vec[1][1];
-    }
-    else if (prevbezt->ipo == BEZT_IPO_LIN) {
-      /* extrapolate linear doesn't use the handle, use the next points center instead */
-      fac = (prevbezt->vec[1][0] - bezt->vec[1][0]) / (prevbezt->vec[1][0] - vertex_position[0]);
-      if (fac) {
-        fac = 1.0f / fac;
-      }
-      vertex_position[1] = prevbezt->vec[1][1] - fac * (prevbezt->vec[1][1] - bezt->vec[1][1]);
-    }
-    else {
-      /* based on angle of handle 1 (relative to keyframe) */
-      fac = (prevbezt->vec[0][0] - prevbezt->vec[1][0]) /
-            (prevbezt->vec[1][0] - vertex_position[0]);
-      if (fac) {
-        fac = 1.0f / fac;
-      }
-      vertex_position[1] = prevbezt->vec[1][1] - fac * (prevbezt->vec[0][1] - prevbezt->vec[1][1]);
-    }
-
-    immVertex2fv(pos, vertex_position);
+  if (draw_extrapolation && fcu->bezt[0].vec[1][0] > v2d->cur.xmin) {
+    add_extrapolation_point_left(fcu, v2d->cur.xmin, curve_vertices);
   }
 
-  /* If only one keyframe, add it now. */
-  if (fcu->totvert == 1) {
-    vertex_position[0] = prevbezt->vec[1][0];
-    vertex_position[1] = prevbezt->vec[1][1];
-    immVertex2fv(pos, vertex_position);
-  }
+  const int2 bounding_indices = get_bounding_bezt_indices(fcu, v2d->cur.xmin, v2d->cur.xmax);
+
+  /* Always add the first point so the extrapolation line doesn't jump. */
+  curve_vertices.append(
+      {fcu->bezt[bounding_indices[0]].vec[1][0], fcu->bezt[bounding_indices[0]].vec[1][1]});
+
+  const blender::float2 pixels_per_unit = calculate_pixels_per_unit(v2d);
+  const int window_width = BLI_rcti_size_x(&v2d->mask);
+  const float v2d_frame_range = BLI_rctf_size_x(&v2d->cur);
+  const float pixel_width = v2d_frame_range / window_width;
+  const float samples_per_pixel = 0.66f;
+  const float evaluation_step = pixel_width / samples_per_pixel;
+
+  BezTriple *first_key = &fcu->bezt[bounding_indices[0]];
+  rctf key_bounds = {
+      first_key->vec[1][0], first_key->vec[1][1], first_key->vec[1][0], first_key->vec[1][1]};
+  /* Used when skipping keys. */
+  bool has_skipped_keys = false;
+  const float min_pixel_distance = 3.0f;
 
   /* Draw curve between first and last keyframe (if there are enough to do so). */
-  /* TODO: optimize this to not have to calc stuff out of view too? */
-  while (b--) {
-    if (prevbezt->ipo == BEZT_IPO_CONST) {
-      /* Constant-Interpolation: draw segment between previous keyframe and next,
-       * but holding same value */
-      vertex_position[0] = prevbezt->vec[1][0];
-      vertex_position[1] = prevbezt->vec[1][1];
-      immVertex2fv(pos, vertex_position);
+  for (int i = bounding_indices[0] + 1; i <= bounding_indices[1]; i++) {
+    BezTriple *prevbezt = &fcu->bezt[i - 1];
+    BezTriple *bezt = &fcu->bezt[i];
+    expand_key_bounds(prevbezt, bezt, key_bounds);
+    float pixel_distance = calculate_pixel_distance(key_bounds, pixels_per_unit);
 
-      vertex_position[0] = bezt->vec[1][0];
-      vertex_position[1] = prevbezt->vec[1][1];
-      immVertex2fv(pos, vertex_position);
-    }
-    else if (prevbezt->ipo == BEZT_IPO_LIN) {
-      /* Linear interpolation: just add one point (which should add a new line segment) */
-      vertex_position[0] = prevbezt->vec[1][0];
-      vertex_position[1] = prevbezt->vec[1][1];
-      immVertex2fv(pos, vertex_position);
-    }
-    else if (prevbezt->ipo == BEZT_IPO_BEZ) {
-      int resolution = calculate_bezt_draw_resolution(
-          bezt, prevbezt, max_bezt_resolution, fcu->driver != nullptr);
-      draw_bezt(bezt, prevbezt, resolution, pos);
+    if (pixel_distance >= min_pixel_distance && has_skipped_keys) {
+      /* When the pixel distance is greater than the threshold, and we've skipped at least one, add
+       * a point. The point position is the average of all keys from INCLUDING prevbezt to
+       * EXCLUDING bezt. prevbezt then gets reset to the key before bezt because the distance
+       * between those is potentially below the threshold. */
+      curve_vertices.append({BLI_rctf_cent_x(&key_bounds), BLI_rctf_cent_y(&key_bounds)});
+      has_skipped_keys = false;
+      key_bounds = {
+          prevbezt->vec[1][0], prevbezt->vec[1][1], prevbezt->vec[1][0], prevbezt->vec[1][1]};
+      expand_key_bounds(prevbezt, bezt, key_bounds);
+      /* Calculate again based on the new prevbezt. */
+      pixel_distance = calculate_pixel_distance(key_bounds, pixels_per_unit);
     }
 
-    /* Get next pointers. */
+    if (pixel_distance < min_pixel_distance) {
+      /* Skip any keys that are too close to each other in screen space. */
+      has_skipped_keys = true;
+      continue;
+    }
+
+    switch (prevbezt->ipo) {
+
+      case BEZT_IPO_CONST:
+        /* Constant-Interpolation: draw segment between previous keyframe and next,
+         * but holding same value */
+        curve_vertices.append({prevbezt->vec[1][0], prevbezt->vec[1][1]});
+        curve_vertices.append({bezt->vec[1][0], prevbezt->vec[1][1]});
+        break;
+
+      case BEZT_IPO_LIN:
+        /* Linear interpolation: just add one point (which should add a new line segment) */
+        curve_vertices.append({prevbezt->vec[1][0], prevbezt->vec[1][1]});
+        break;
+
+      case BEZT_IPO_BEZ: {
+        const int resolution = calculate_bezt_draw_resolution(bezt, prevbezt, pixels_per_unit);
+        add_bezt_vertices(bezt, prevbezt, resolution, curve_vertices);
+        break;
+      }
+
+      default: {
+        /* In case there is no other way to get curve points, evaluate the FCurve. */
+        curve_vertices.append(prevbezt->vec[1]);
+        float current_frame = prevbezt->vec[1][0] + evaluation_step;
+        while (current_frame < bezt->vec[1][0]) {
+          curve_vertices.append({current_frame, evaluate_fcurve(fcu, current_frame)});
+          current_frame += evaluation_step;
+        }
+        break;
+      }
+    }
+
     prevbezt = bezt;
-    bezt++;
-
-    /* Last point? */
-    if (b == 0) {
-      vertex_position[0] = prevbezt->vec[1][0];
-      vertex_position[1] = prevbezt->vec[1][1];
-      immVertex2fv(pos, vertex_position);
-    }
   }
+
+  /* Always add the last point so the extrapolation line doesn't jump. */
+  curve_vertices.append(
+      {fcu->bezt[bounding_indices[1]].vec[1][0], fcu->bezt[bounding_indices[1]].vec[1][1]});
 
   /* Extrapolate to the right? (see code for left-extrapolation above too) */
-  if (draw_extrapolation && prevbezt->vec[1][0] < v2d->cur.xmax) {
-    vertex_position[0] = v2d->cur.xmax;
-
-    /* y-value depends on the interpolation. */
-    if ((fcu->extend == FCURVE_EXTRAPOLATE_CONSTANT) || (fcu->flag & FCURVE_INT_VALUES) ||
-        (prevbezt->ipo == BEZT_IPO_CONST) || (prevbezt->ipo == BEZT_IPO_LIN && fcu->totvert == 1))
-    {
-      /* based on last keyframe's value */
-      vertex_position[1] = prevbezt->vec[1][1];
-    }
-    else if (prevbezt->ipo == BEZT_IPO_LIN) {
-      /* Extrapolate linear doesn't use the handle, use the previous points center instead. */
-      bezt = prevbezt - 1;
-      fac = (prevbezt->vec[1][0] - bezt->vec[1][0]) / (prevbezt->vec[1][0] - vertex_position[0]);
-      if (fac) {
-        fac = 1.0f / fac;
-      }
-      vertex_position[1] = prevbezt->vec[1][1] - fac * (prevbezt->vec[1][1] - bezt->vec[1][1]);
-    }
-    else {
-      /* Based on angle of handle 1 (relative to keyframe). */
-      fac = (prevbezt->vec[2][0] - prevbezt->vec[1][0]) /
-            (prevbezt->vec[1][0] - vertex_position[0]);
-      if (fac) {
-        fac = 1.0f / fac;
-      }
-      vertex_position[1] = prevbezt->vec[1][1] - fac * (prevbezt->vec[2][1] - prevbezt->vec[1][1]);
-    }
-
-    immVertex2fv(pos, vertex_position);
+  if (draw_extrapolation && fcu->bezt[fcu->totvert - 1].vec[1][0] < v2d->cur.xmax) {
+    add_extrapolation_point_right(fcu, v2d->cur.xmax, curve_vertices);
   }
 
+  if (curve_vertices.size() < 2) {
+    GPU_matrix_pop();
+    return;
+  }
+
+  immBegin(GPU_PRIM_LINE_STRIP, curve_vertices.size());
+  for (const float2 vertex : curve_vertices) {
+    immVertex2fv(pos, vertex);
+  }
   immEnd();
 
   GPU_matrix_pop();
@@ -1070,9 +1147,7 @@ static void draw_fcurve(bAnimContext *ac, SpaceGraph *sipo, ARegion *region, bAn
   AnimData *adt = ANIM_nla_mapping_get(ac, ale);
 
   /* map keyframes for drawing if scaled F-Curve */
-  if (adt) {
-    ANIM_nla_mapping_apply_fcurve(adt, static_cast<FCurve *>(ale->key_data), 0, 0);
-  }
+  ANIM_nla_mapping_apply_fcurve(adt, static_cast<FCurve *>(ale->key_data), false, false);
 
   /* draw curve:
    * - curve line may be result of one or more destructive modifiers or just the raw data,
@@ -1157,12 +1232,7 @@ static void draw_fcurve(bAnimContext *ac, SpaceGraph *sipo, ARegion *region, bAn
     else if (((fcu->bezt) || (fcu->fpt)) && (fcu->totvert)) {
       /* just draw curve based on defined data (i.e. no modifiers) */
       if (fcu->bezt) {
-        if (fcurve_can_use_simple_bezt_drawing(fcu)) {
-          draw_fcurve_curve_bezts(ac, ale->id, fcu, &region->v2d, shdr_pos, draw_extrapolation);
-        }
-        else {
-          draw_fcurve_curve(ac, ale->id, fcu, &region->v2d, shdr_pos, false, draw_extrapolation);
-        }
+        draw_fcurve_curve_keys(ac, ale->id, fcu, &region->v2d, shdr_pos, draw_extrapolation);
       }
       else if (fcu->fpt) {
         draw_fcurve_curve_samples(ac, ale->id, fcu, &region->v2d, shdr_pos, draw_extrapolation);
@@ -1194,7 +1264,7 @@ static void draw_fcurve(bAnimContext *ac, SpaceGraph *sipo, ARegion *region, bAn
       }
     }
     else if (((fcu->bezt) || (fcu->fpt)) && (fcu->totvert)) {
-      short mapping_flag = ANIM_get_normalization_flags(ac);
+      short mapping_flag = ANIM_get_normalization_flags(ac->sl);
       float offset;
       const float unit_scale = ANIM_unit_mapping_get_factor(
           ac->scene, ale->id, fcu, mapping_flag, &offset);
@@ -1213,11 +1283,10 @@ static void draw_fcurve(bAnimContext *ac, SpaceGraph *sipo, ARegion *region, bAn
 
         if (do_handles) {
           /* only draw handles/vertices on keyframes */
-          draw_fcurve_handles(sipo, fcu);
+          draw_fcurve_handles(sipo, region, fcu);
         }
 
-        draw_fcurve_vertices(
-            region, fcu, do_handles, (sipo->flag & SIPO_SELVHANDLESONLY), unit_scale);
+        draw_fcurve_vertices(region, fcu, do_handles, (sipo->flag & SIPO_SELVHANDLESONLY));
       }
       else {
         /* samples: only draw two indicators at either end as indicators */
@@ -1235,7 +1304,7 @@ static void draw_fcurve(bAnimContext *ac, SpaceGraph *sipo, ARegion *region, bAn
 
   /* undo mapping of keyframes for drawing if scaled F-Curve */
   if (adt) {
-    ANIM_nla_mapping_apply_fcurve(adt, static_cast<FCurve *>(ale->key_data), 1, 0);
+    ANIM_nla_mapping_apply_fcurve(adt, static_cast<FCurve *>(ale->key_data), true, false);
   }
 }
 
@@ -1250,7 +1319,7 @@ static void graph_draw_driver_debug(bAnimContext *ac, ID *id, FCurve *fcu)
 {
   ChannelDriver *driver = fcu->driver;
   View2D *v2d = &ac->region->v2d;
-  short mapping_flag = ANIM_get_normalization_flags(ac);
+  short mapping_flag = ANIM_get_normalization_flags(ac->sl);
   float offset;
   float unitfac = ANIM_unit_mapping_get_factor(ac->scene, id, fcu, mapping_flag, &offset);
 
@@ -1362,8 +1431,6 @@ static void graph_draw_driver_debug(bAnimContext *ac, ID *id, FCurve *fcu)
 
 void graph_draw_ghost_curves(bAnimContext *ac, SpaceGraph *sipo, ARegion *region)
 {
-  FCurve *fcu;
-
   /* draw with thick dotted lines */
   GPU_line_width(3.0f);
 
@@ -1391,7 +1458,7 @@ void graph_draw_ghost_curves(bAnimContext *ac, SpaceGraph *sipo, ARegion *region
    * See issue #109920 for details. */
   const bool draw_extrapolation = false;
   /* the ghost curves are simply sampled F-Curves stored in sipo->runtime.ghost_curves */
-  for (fcu = static_cast<FCurve *>(sipo->runtime.ghost_curves.first); fcu; fcu = fcu->next) {
+  LISTBASE_FOREACH (FCurve *, fcu, &sipo->runtime.ghost_curves) {
     /* set whatever color the curve has set
      * - this is set by the function which creates these
      * - draw with a fixed opacity of 2
@@ -1413,7 +1480,6 @@ void graph_draw_ghost_curves(bAnimContext *ac, SpaceGraph *sipo, ARegion *region
 void graph_draw_curves(bAnimContext *ac, SpaceGraph *sipo, ARegion *region, short sel)
 {
   ListBase anim_data = {nullptr, nullptr};
-  bAnimListElem *ale;
   int filter;
 
   /* build list of curves to draw */
@@ -1427,7 +1493,7 @@ void graph_draw_curves(bAnimContext *ac, SpaceGraph *sipo, ARegion *region, shor
    * the data will be layered correctly
    */
   bAnimListElem *ale_active_fcurve = nullptr;
-  for (ale = static_cast<bAnimListElem *>(anim_data.first); ale; ale = ale->next) {
+  LISTBASE_FOREACH (bAnimListElem *, ale, &anim_data) {
     const FCurve *fcu = (FCurve *)ale->key_data;
     if (fcu->flag & FCURVE_ACTIVE) {
       ale_active_fcurve = ale;

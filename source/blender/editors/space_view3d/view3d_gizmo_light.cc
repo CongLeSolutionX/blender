@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -6,31 +6,32 @@
  * \ingroup spview3d
  */
 
-#include "BLI_math.h"
 #include "BLI_math_base_safe.h"
+#include "BLI_math_matrix.h"
+#include "BLI_math_vector.h"
 #include "BLI_utildefines.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_layer.h"
-#include "BKE_object.h"
+#include "BKE_object.hh"
 
-#include "DEG_depsgraph.h"
+#include "DEG_depsgraph.hh"
 
 #include "DNA_light_types.h"
 #include "DNA_object_types.h"
 
-#include "ED_gizmo_library.h"
-#include "ED_screen.h"
+#include "ED_gizmo_library.hh"
+#include "ED_screen.hh"
 
-#include "UI_resources.h"
+#include "UI_resources.hh"
 
 #include "MEM_guardedalloc.h"
 
-#include "RNA_access.h"
+#include "RNA_access.hh"
 #include "RNA_prototypes.h"
 
-#include "WM_api.h"
-#include "WM_types.h"
+#include "WM_api.hh"
+#include "WM_types.hh"
 
 #include "view3d_intern.h" /* own include */
 
@@ -89,8 +90,7 @@ static void gizmo_spot_blend_prop_matrix_set(const wmGizmo * /*gz*/,
 
   float spot_blend = safe_divide(clamp_f(c - a, 0.0f, 1.0f - a), 1.0f - a);
 
-  PointerRNA light_ptr;
-  RNA_pointer_create(&la->id, &RNA_Light, la, &light_ptr);
+  PointerRNA light_ptr = RNA_pointer_create(&la->id, &RNA_Light, la);
   PropertyRNA *spot_blend_prop = RNA_struct_find_property(&light_ptr, "spot_blend");
   RNA_property_float_set(&light_ptr, spot_blend_prop, spot_blend);
 
@@ -130,8 +130,7 @@ static void gizmo_light_radius_prop_matrix_set(const wmGizmo * /*gz*/,
 
   const float radius = 0.5f * len_v3(matrix[0]);
 
-  PointerRNA light_ptr;
-  RNA_pointer_create(&la->id, &RNA_Light, la, &light_ptr);
+  PointerRNA light_ptr = RNA_pointer_create(&la->id, &RNA_Light, la);
   PropertyRNA *radius_prop = RNA_struct_find_property(&light_ptr, "shadow_soft_size");
   RNA_property_float_set(&light_ptr, radius_prop, radius);
 
@@ -230,8 +229,7 @@ static void WIDGETGROUP_light_spot_refresh(const bContext *C, wmGizmoGroup *gzgr
 
   /* Spot angle gizmo. */
   {
-    PointerRNA lamp_ptr;
-    RNA_pointer_create(&la->id, &RNA_Light, la, &lamp_ptr);
+    PointerRNA lamp_ptr = RNA_pointer_create(&la->id, &RNA_Light, la);
 
     wmGizmo *gz = ls_gzgroup->spot_angle;
     float dir[3];

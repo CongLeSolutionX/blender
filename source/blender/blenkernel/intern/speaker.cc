@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -11,7 +11,6 @@
 #include "DNA_sound_types.h"
 #include "DNA_speaker_types.h"
 
-#include "BLI_math.h"
 #include "BLI_utildefines.h"
 
 #include "BLT_translation.h"
@@ -23,7 +22,9 @@
 #include "BKE_main.h"
 #include "BKE_speaker.h"
 
-#include "BLO_read_write.h"
+#include "BLO_read_write.hh"
+
+#include <cstring>
 
 static void speaker_init_data(ID *id)
 {
@@ -48,34 +49,6 @@ static void speaker_blend_write(BlendWriter *writer, ID *id, const void *id_addr
   /* write LibData */
   BLO_write_id_struct(writer, Speaker, id_address, &spk->id);
   BKE_id_blend_write(writer, &spk->id);
-
-  if (spk->adt) {
-    BKE_animdata_blend_write(writer, spk->adt);
-  }
-}
-
-static void speaker_blend_read_data(BlendDataReader *reader, ID *id)
-{
-  Speaker *spk = (Speaker *)id;
-  BLO_read_data_address(reader, &spk->adt);
-  BKE_animdata_blend_read_data(reader, spk->adt);
-
-#if 0
-  spk->sound = newdataadr(fd, spk->sound);
-  direct_link_sound(fd, spk->sound);
-#endif
-}
-
-static void speaker_blend_read_lib(BlendLibReader *reader, ID *id)
-{
-  Speaker *spk = (Speaker *)id;
-  BLO_read_id_address(reader, id, &spk->sound);
-}
-
-static void speaker_blend_read_expand(BlendExpander *expander, ID *id)
-{
-  Speaker *spk = (Speaker *)id;
-  BLO_expand(expander, spk->sound);
 }
 
 IDTypeInfo IDType_ID_SPK = {
@@ -84,7 +57,7 @@ IDTypeInfo IDType_ID_SPK = {
     /*main_listbase_index*/ INDEX_ID_SPK,
     /*struct_size*/ sizeof(Speaker),
     /*name*/ "Speaker",
-    /*name_plural*/ "speakers",
+    /*name_plural*/ N_("speakers"),
     /*translation_context*/ BLT_I18NCONTEXT_ID_SPEAKER,
     /*flags*/ IDTYPE_FLAGS_APPEND_IS_REUSABLE,
     /*asset_type_info*/ nullptr,
@@ -99,9 +72,8 @@ IDTypeInfo IDType_ID_SPK = {
     /*owner_pointer_get*/ nullptr,
 
     /*blend_write*/ speaker_blend_write,
-    /*blend_read_data*/ speaker_blend_read_data,
-    /*blend_read_lib*/ speaker_blend_read_lib,
-    /*blend_read_expand*/ speaker_blend_read_expand,
+    /*blend_read_data*/ nullptr,
+    /*blend_read_after_liblink*/ nullptr,
 
     /*blend_read_undo_preserve*/ nullptr,
 

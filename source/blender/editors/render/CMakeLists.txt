@@ -1,9 +1,10 @@
-# SPDX-FileCopyrightText: 2023 Blender Foundation
+# SPDX-FileCopyrightText: 2023 Blender Authors
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 set(INC
   ../include
+  ../../blenkernel
   ../../blenloader
   ../../blentranslation
   ../../bmesh
@@ -20,6 +21,9 @@ set(INC
   ${CMAKE_BINARY_DIR}/source/blender/makesrna
 )
 
+set(INC_SYS
+)
+
 set(SRC
   render_internal.cc
   render_opengl.cc
@@ -33,7 +37,6 @@ set(SRC
 )
 
 set(LIB
-  PRIVATE bf::blenkernel
   PRIVATE bf::blenlib
   PRIVATE bf::dna
   bf_draw

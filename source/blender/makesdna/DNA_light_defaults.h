@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -42,6 +42,8 @@
     .diff_fac = 1.0f, \
     .spec_fac = 1.0f, \
     .volume_fac = 1.0f, \
+    .shadow_softness_factor = 1.0f, \
+    .shadow_trace_distance = 10.0f, \
     .att_dist = 40.0f, \
     .sun_angle = DEG2RADF(0.526f), \
     .area_spread = DEG2RADF(180.0f), \

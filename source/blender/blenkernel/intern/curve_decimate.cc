@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -12,7 +12,7 @@
 #include "BLI_math_vector.h"
 #include "MEM_guardedalloc.h"
 
-#include "BKE_curve.h"
+#include "BKE_curve.hh"
 
 extern "C" {
 #include "curve_fit_nd.h"
@@ -20,8 +20,10 @@ extern "C" {
 
 #include "BLI_strict_flags.h"
 
+#include <cstring>
+
 struct Knot {
-  struct Knot *next, *prev;
+  Knot *next, *prev;
   uint point_index; /* Index in point array. */
   uint knot_index;  /* Index in knot array. */
   float tan[2][3];
@@ -75,11 +77,8 @@ static float knot_remove_error_value(const float tan_l[3],
   return error_sq;
 }
 
-static void knot_remove_error_recalculate(Heap *heap,
-                                          const float (*points)[3],
-                                          const uint points_len,
-                                          struct Knot *k,
-                                          const float error_sq_max)
+static void knot_remove_error_recalculate(
+    Heap *heap, const float (*points)[3], const uint points_len, Knot *k, const float error_sq_max)
 {
   BLI_assert(k->can_remove);
   float handles[2];
@@ -105,7 +104,7 @@ static void knot_remove_error_recalculate(Heap *heap,
       k->prev->tan[1], k->next->tan[0], points_offset, points_offset_len, handles);
 
   if (cost_sq < error_sq_max) {
-    struct Removal *r;
+    Removal *r;
     if (k->heap_node) {
       r = static_cast<Removal *>(BLI_heap_node_ptr(k->heap_node));
     }
@@ -120,7 +119,7 @@ static void knot_remove_error_recalculate(Heap *heap,
   }
   else {
     if (k->heap_node) {
-      struct Removal *r;
+      Removal *r;
       r = static_cast<Removal *>(BLI_heap_node_ptr(k->heap_node));
       BLI_heap_remove(heap, k->heap_node);
 
@@ -133,14 +132,14 @@ static void knot_remove_error_recalculate(Heap *heap,
 
 static void curve_decimate(const float (*points)[3],
                            const uint points_len,
-                           struct Knot *knots,
+                           Knot *knots,
                            const uint knots_len,
                            float error_sq_max,
                            const uint error_target_len)
 {
   Heap *heap = BLI_heap_new_ex(knots_len);
   for (uint i = 0; i < knots_len; i++) {
-    struct Knot *k = &knots[i];
+    Knot *k = &knots[i];
     if (k->can_remove) {
       knot_remove_error_recalculate(heap, points, points_len, k, error_sq_max);
     }
@@ -149,10 +148,10 @@ static void curve_decimate(const float (*points)[3],
   uint knots_len_remaining = knots_len;
 
   while ((knots_len_remaining > error_target_len) && (BLI_heap_is_empty(heap) == false)) {
-    struct Knot *k;
+    Knot *k;
 
     {
-      struct Removal *r = static_cast<Removal *>(BLI_heap_pop_min(heap));
+      Removal *r = static_cast<Removal *>(BLI_heap_pop_min(heap));
       k = &knots[r->knot_index];
       k->heap_node = nullptr;
       k->prev->handles[1] = r->handles[0];
@@ -160,8 +159,8 @@ static void curve_decimate(const float (*points)[3],
       MEM_freeN(r);
     }
 
-    struct Knot *k_prev = k->prev;
-    struct Knot *k_next = k->next;
+    Knot *k_prev = k->prev;
+    Knot *k_next = k->next;
 
     /* remove ourselves */
     k_next->prev = k_prev;
@@ -208,8 +207,7 @@ uint BKE_curve_decimate_bezt_array(BezTriple *bezt_array,
       bezt_array, bezt_array_len, resolu, is_cyclic, false, 2, sizeof(float[3]), &points[0][2]);
 
   const uint knots_len = bezt_array_len;
-  struct Knot *knots = static_cast<Knot *>(
-      MEM_mallocN((sizeof(*knots) * bezt_array_len), __func__));
+  Knot *knots = static_cast<Knot *>(MEM_mallocN((sizeof(*knots) * bezt_array_len), __func__));
 
   if (is_cyclic) {
     memcpy(points[points_len], points[0], sizeof(float[3]) * points_len);
@@ -278,7 +276,7 @@ uint BKE_curve_decimate_bezt_array(BezTriple *bezt_array,
       knots_len_decimated--;
     }
     else {
-      bezt_array[i].f2 &= (char)~flag_set;
+      bezt_array[i].f2 &= char(~flag_set);
       if (is_cyclic || i != 0) {
         uint i_prev = (i != 0) ? i - 1 : bezt_array_last;
         if (knots[i_prev].is_removed) {
@@ -314,7 +312,7 @@ void BKE_curve_decimate_nurb(Nurb *nu,
   const char flag_test = BEZT_FLAG_TEMP_TAG;
 
   const uint pntsu_dst = BKE_curve_decimate_bezt_array(nu->bezt,
-                                                       (uint)nu->pntsu,
+                                                       uint(nu->pntsu),
                                                        resolu,
                                                        (nu->flagu & CU_NURB_CYCLIC) != 0,
                                                        SELECT,
@@ -322,7 +320,7 @@ void BKE_curve_decimate_nurb(Nurb *nu,
                                                        error_sq_max,
                                                        error_target_len);
 
-  if (pntsu_dst == (uint)nu->pntsu) {
+  if (pntsu_dst == uint(nu->pntsu)) {
     return;
   }
 

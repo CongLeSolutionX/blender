@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -6,7 +6,7 @@
  * \ingroup RNA
  */
 
-#include <stdlib.h>
+#include <cstdlib>
 
 #include "DNA_anim_types.h"
 #include "DNA_curve_types.h"
@@ -19,16 +19,20 @@
 
 #include "BKE_action.h"
 
-#include "RNA_access.h"
-#include "RNA_define.h"
-#include "RNA_enum_types.h"
+#include "RNA_access.hh"
+#include "RNA_define.hh"
+#include "RNA_enum_types.hh"
 
 #include "rna_internal.h"
 
-#include "WM_types.h"
+#include "WM_types.hh"
 
-#include "ED_keyframes_edit.h"
-#include "ED_keyframing.h"
+#include "ED_keyframes_edit.hh"
+#include "ED_keyframing.hh"
+
+#ifdef RNA_RUNTIME
+#  include "ANIM_fcurve.hh"
+#endif
 
 const EnumPropertyItem rna_enum_fmodifier_type_items[] = {
     {FMODIFIER_TYPE_NULL, "nullptr", 0, "Invalid", ""},
@@ -179,7 +183,7 @@ static const EnumPropertyItem rna_enum_driver_target_context_property_items[] = 
 
 #ifdef RNA_RUNTIME
 
-#  include "WM_api.h"
+#  include "WM_api.hh"
 
 static StructRNA *rna_FModifierType_refine(PointerRNA *ptr)
 {
@@ -217,8 +221,8 @@ static StructRNA *rna_FModifierType_refine(PointerRNA *ptr)
 #  include "BKE_fcurve.h"
 #  include "BKE_fcurve_driver.h"
 
-#  include "DEG_depsgraph.h"
-#  include "DEG_depsgraph_build.h"
+#  include "DEG_depsgraph.hh"
+#  include "DEG_depsgraph_build.hh"
 
 /**
  * \warning this isn't efficient but it's unavoidable
@@ -537,7 +541,7 @@ static void rna_FKeyframe_ctrlpoint_ui_set(PointerRNA *ptr, const float *values)
   const float value_delta = values[1] - bezt->vec[1][1];
 
   /* To match the behavior of transforming the keyframe Co using the Graph Editor
-   * (transform_convert_graph.c) flushTransGraphData(), we will also move the handles by
+   * (`transform_convert_graph.cc`) flushTransGraphData(), we will also move the handles by
    * the same amount as the Co delta. */
 
   bezt->vec[0][0] += frame_delta;
@@ -1051,11 +1055,11 @@ static void rna_FModifierStepped_frame_end_set(PointerRNA *ptr, float value)
 static BezTriple *rna_FKeyframe_points_insert(
     ID *id, FCurve *fcu, Main *bmain, float frame, float value, int keyframe_type, int flag)
 {
-  int index = insert_vert_fcurve(fcu,
-                                 frame,
-                                 value,
-                                 eBezTriple_KeyframeType(keyframe_type),
-                                 eInsertKeyFlags(flag) | INSERTKEY_NO_USERPREF);
+  int index = blender::animrig::insert_vert_fcurve(fcu,
+                                                   frame,
+                                                   value,
+                                                   eBezTriple_KeyframeType(keyframe_type),
+                                                   eInsertKeyFlags(flag) | INSERTKEY_NO_USERPREF);
 
   if ((fcu->bezt) && (index >= 0)) {
     rna_tag_animation_update(bmain, id);
@@ -2050,7 +2054,7 @@ static void rna_def_drivervar(BlenderRNA *brna)
 static void rna_def_channeldriver_variables(BlenderRNA *brna, PropertyRNA *cprop)
 {
   StructRNA *srna;
-  /* PropertyRNA *prop; */
+  // PropertyRNA *prop;
 
   FunctionRNA *func;
   PropertyRNA *parm;
@@ -2170,8 +2174,9 @@ static void rna_def_fpoint(BlenderRNA *brna)
   RNA_def_property_update(prop, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, nullptr);
 }
 
-/* duplicate of BezTriple in rna_curve.c
- * but with F-Curve specific options updates/functionality
+/**
+ * Duplicate of #BezTriple in `rna_curve.cc`
+ * but with F-Curve specific options updates/functionality.
  */
 static void rna_def_fkeyframe(BlenderRNA *brna)
 {
@@ -2412,8 +2417,11 @@ static void rna_def_fcurve_keyframe_points(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED | PARM_RNAPTR);
   RNA_def_parameter_clear_flags(parm, PROP_THICK_WRAP, ParameterFlag(0));
   /* optional */
-  RNA_def_boolean(
-      func, "fast", 0, "Fast", "Fast keyframe removal to avoid recalculating the curve each time");
+  RNA_def_boolean(func,
+                  "fast",
+                  false,
+                  "Fast",
+                  "Fast keyframe removal to avoid recalculating the curve each time");
 
   func = RNA_def_function(srna, "clear", "rna_FKeyframe_points_clear");
   RNA_def_function_ui_description(func, "Remove all keyframes from an F-Curve");

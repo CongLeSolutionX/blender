@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2014 Blender Foundation
+/* SPDX-FileCopyrightText: 2014 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "BKE_customdata.h" /* For cd_datatransfer_interp */
+#include "BKE_customdata.hh" /* For cd_datatransfer_interp */
 
 #ifdef __cplusplus
 extern "C" {
@@ -53,7 +53,7 @@ bool data_transfer_layersmapping_vgroups(struct ListBase *r_map,
                                          int fromlayers,
                                          int tolayers);
 
-/* Defined in customdata.c */
+/* Defined in `customdata.cc`. */
 
 /**
  * Normals are special, we need to take care of source & destination spaces.

@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2008 Blender Foundation
+/* SPDX-FileCopyrightText: 2008 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -15,8 +15,8 @@
 #include "BLI_rect.h"
 
 #include "BKE_colortools.h"
-#include "BKE_context.h"
-#include "BKE_editmesh.h"
+#include "BKE_context.hh"
+#include "BKE_editmesh.hh"
 #include "BKE_global.h"
 #include "BKE_image.h"
 #include "BKE_layer.h"
@@ -26,17 +26,17 @@
 
 #include "IMB_imbuf_types.h"
 
-#include "DEG_depsgraph.h"
+#include "DEG_depsgraph.hh"
 
-#include "ED_image.h" /* own include */
-#include "ED_mesh.h"
-#include "ED_screen.h"
-#include "ED_uvedit.h"
+#include "ED_image.hh" /* own include */
+#include "ED_mesh.hh"
+#include "ED_screen.hh"
+#include "ED_uvedit.hh"
 
-#include "UI_view2d.h"
+#include "UI_view2d.hh"
 
-#include "WM_api.h"
-#include "WM_types.h"
+#include "WM_api.hh"
+#include "WM_types.hh"
 
 /* NOTE: image_panel_properties() uses pointer to sima->image directly. */
 Image *ED_space_image(const SpaceImage *sima)

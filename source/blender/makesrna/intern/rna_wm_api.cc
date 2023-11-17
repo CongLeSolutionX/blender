@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2009 Blender Foundation
+/* SPDX-FileCopyrightText: 2009 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -6,26 +6,26 @@
  * \ingroup RNA
  */
 
-#include <ctype.h>
-#include <stdio.h>
-#include <stdlib.h>
+#include <cctype>
+#include <cstdio>
+#include <cstdlib>
 
 #include "BLI_utildefines.h"
 
-#include "RNA_define.h"
-#include "RNA_enum_types.h"
+#include "RNA_define.hh"
+#include "RNA_enum_types.hh"
 
 #include "DNA_screen_types.h"
 #include "DNA_space_types.h"
 #include "DNA_windowmanager_types.h"
 
-#include "UI_interface.h"
+#include "UI_interface.hh"
 
-#include "wm_cursors.h"
-#include "wm_event_types.h"
+#include "wm_cursors.hh"
+#include "wm_event_types.hh"
 
-#include "WM_api.h"
-#include "WM_types.h"
+#include "WM_api.hh"
+#include "WM_types.hh"
 
 #include "rna_internal.h" /* own include */
 
@@ -62,10 +62,10 @@ const EnumPropertyItem rna_enum_window_cursor_items[] = {
 
 #ifdef RNA_RUNTIME
 
-#  include "BKE_context.h"
+#  include "BKE_context.hh"
 #  include "BKE_undo_system.h"
 
-#  include "WM_types.h"
+#  include "WM_types.hh"
 
 /* Needed since RNA doesn't use `const` in function signatures. */
 static bool rna_KeyMapItem_compare(wmKeyMapItem *k1, wmKeyMapItem *k2)
@@ -386,15 +386,13 @@ static void rna_KeyMap_item_remove(wmKeyMap *km, ReportList *reports, PointerRNA
 {
   wmKeyMapItem *kmi = static_cast<wmKeyMapItem *>(kmi_ptr->data);
 
-  if (WM_keymap_remove_item(km, kmi) == false) {
-    BKE_reportf(reports,
-                RPT_ERROR,
-                "KeyMapItem '%s' cannot be removed from '%s'",
-                kmi->idname,
-                km->idname);
+  if (UNLIKELY(BLI_findindex(&km->items, kmi) == -1)) {
+    BKE_reportf(
+        reports, RPT_ERROR, "KeyMapItem '%s' not found in KeyMap '%s'", kmi->idname, km->idname);
     return;
   }
 
+  WM_keymap_remove_item(km, kmi);
   RNA_POINTER_INVALIDATE(kmi_ptr);
 }
 
@@ -410,26 +408,24 @@ static PointerRNA rna_KeyMap_item_find_from_operator(ID *id,
 
   wmKeyMapItem *kmi = WM_key_event_operator_from_keymap(
       km, idname_bl, static_cast<IDProperty *>(properties->data), include_mask, exclude_mask);
-  PointerRNA kmi_ptr;
-  RNA_pointer_create(id, &RNA_KeyMapItem, kmi, &kmi_ptr);
+  PointerRNA kmi_ptr = RNA_pointer_create(id, &RNA_KeyMapItem, kmi);
   return kmi_ptr;
 }
 
 static PointerRNA rna_KeyMap_item_match_event(ID *id, wmKeyMap *km, bContext *C, wmEvent *event)
 {
   wmKeyMapItem *kmi = WM_event_match_keymap_item(C, km, event);
-  PointerRNA kmi_ptr;
-  RNA_pointer_create(id, &RNA_KeyMapItem, kmi, &kmi_ptr);
+  PointerRNA kmi_ptr = RNA_pointer_create(id, &RNA_KeyMapItem, kmi);
   return kmi_ptr;
 }
 
-static wmKeyMap *rna_keymap_new(wmKeyConfig *keyconf,
-                                ReportList *reports,
-                                const char *idname,
-                                int spaceid,
-                                int regionid,
-                                bool modal,
-                                bool tool)
+static wmKeyMap *rna_KeyMaps_new(wmKeyConfig *keyconf,
+                                 ReportList *reports,
+                                 const char *idname,
+                                 int spaceid,
+                                 int regionid,
+                                 bool modal,
+                                 bool tool)
 {
   if (modal) {
     /* Sanity check: Don't allow add-ons to override internal modal key-maps
@@ -460,15 +456,15 @@ static wmKeyMap *rna_keymap_new(wmKeyConfig *keyconf,
   return keymap;
 }
 
-static wmKeyMap *rna_keymap_find(wmKeyConfig *keyconf,
-                                 const char *idname,
-                                 int spaceid,
-                                 int regionid)
+static wmKeyMap *rna_KeyMaps_find(wmKeyConfig *keyconf,
+                                  const char *idname,
+                                  int spaceid,
+                                  int regionid)
 {
   return WM_keymap_list_find(&keyconf->keymaps, idname, spaceid, regionid);
 }
 
-static wmKeyMap *rna_keymap_find_modal(wmKeyConfig * /*keyconf*/, const char *idname)
+static wmKeyMap *rna_KeyMaps_find_modal(wmKeyConfig * /*keyconf*/, const char *idname)
 {
   wmOperatorType *ot = WM_operatortype_find(idname, 0);
 
@@ -480,27 +476,41 @@ static wmKeyMap *rna_keymap_find_modal(wmKeyConfig * /*keyconf*/, const char *id
   }
 }
 
-static void rna_KeyMap_remove(wmKeyConfig *keyconfig, ReportList *reports, PointerRNA *keymap_ptr)
+static void rna_KeyMaps_remove(wmKeyConfig *keyconfig, ReportList *reports, PointerRNA *keymap_ptr)
 {
   wmKeyMap *keymap = static_cast<wmKeyMap *>(keymap_ptr->data);
 
-  if (WM_keymap_remove(keyconfig, keymap) == false) {
-    BKE_reportf(reports, RPT_ERROR, "KeyConfig '%s' cannot be removed", keymap->idname);
+  if (UNLIKELY(BLI_findindex(&keyconfig->keymaps, keymap) == -1)) {
+    BKE_reportf(reports,
+                RPT_ERROR,
+                "KeyMap '%s' not found in KeyConfig '%s'",
+                keymap->idname,
+                keyconfig->idname);
     return;
   }
 
+  WM_keymap_remove(keyconfig, keymap);
   RNA_POINTER_INVALIDATE(keymap_ptr);
+}
+
+static void rna_KeyMaps_clear(wmKeyConfig *keyconfig)
+{
+  WM_keyconfig_clear(keyconfig);
+}
+
+wmKeyConfig *rna_KeyConfig_new(wmWindowManager *wm, const char *idname)
+{
+  return WM_keyconfig_ensure(wm, idname, true);
 }
 
 static void rna_KeyConfig_remove(wmWindowManager *wm, ReportList *reports, PointerRNA *keyconf_ptr)
 {
   wmKeyConfig *keyconf = static_cast<wmKeyConfig *>(keyconf_ptr->data);
-
-  if (WM_keyconfig_remove(wm, keyconf) == false) {
+  if (UNLIKELY(BLI_findindex(&wm->keyconfigs, keyconf) == -1)) {
     BKE_reportf(reports, RPT_ERROR, "KeyConfig '%s' cannot be removed", keyconf->idname);
     return;
   }
-
+  WM_keyconfig_remove(wm, keyconf);
   RNA_POINTER_INVALIDATE(keyconf_ptr);
 }
 
@@ -524,27 +534,24 @@ static PointerRNA rna_KeyConfig_find_item_from_operator(wmWindowManager *wm,
                                             include_mask,
                                             exclude_mask,
                                             &km);
-  PointerRNA kmi_ptr;
-  RNA_pointer_create(&wm->id, &RNA_KeyMap, km, km_ptr);
-  RNA_pointer_create(&wm->id, &RNA_KeyMapItem, kmi, &kmi_ptr);
+  *km_ptr = RNA_pointer_create(&wm->id, &RNA_KeyMap, km);
+  PointerRNA kmi_ptr = RNA_pointer_create(&wm->id, &RNA_KeyMapItem, kmi);
   return kmi_ptr;
 }
 
-static void rna_KeyConfig_update(wmWindowManager *wm)
+static void rna_KeyConfig_update(wmWindowManager *wm, bool keep_properties)
 {
-  WM_keyconfig_update(wm);
+  WM_keyconfig_update_ex(wm, keep_properties);
 }
 
 /* popup menu wrapper */
 static PointerRNA rna_PopMenuBegin(bContext *C, const char *title, int icon)
 {
-  PointerRNA r_ptr;
   void *data;
 
   data = (void *)UI_popup_menu_begin(C, title, icon);
 
-  RNA_pointer_create(nullptr, &RNA_UIPopupMenu, data, &r_ptr);
-
+  PointerRNA r_ptr = RNA_pointer_create(nullptr, &RNA_UIPopupMenu, data);
   return r_ptr;
 }
 
@@ -556,13 +563,11 @@ static void rna_PopMenuEnd(bContext *C, PointerRNA *handle)
 /* popover wrapper */
 static PointerRNA rna_PopoverBegin(bContext *C, int ui_units_x, bool from_active_button)
 {
-  PointerRNA r_ptr;
   void *data;
 
   data = (void *)UI_popover_begin(C, U.widget_unit * ui_units_x, from_active_button);
 
-  RNA_pointer_create(nullptr, &RNA_UIPopover, data, &r_ptr);
-
+  PointerRNA r_ptr = RNA_pointer_create(nullptr, &RNA_UIPopover, data);
   return r_ptr;
 }
 
@@ -574,13 +579,11 @@ static void rna_PopoverEnd(bContext *C, PointerRNA *handle, wmKeyMap *keymap)
 /* pie menu wrapper */
 static PointerRNA rna_PieMenuBegin(bContext *C, const char *title, int icon, PointerRNA *event)
 {
-  PointerRNA r_ptr;
   void *data;
 
   data = (void *)UI_pie_menu_begin(C, title, icon, static_cast<const wmEvent *>(event->data));
 
-  RNA_pointer_create(nullptr, &RNA_UIPieMenu, data, &r_ptr);
-
+  PointerRNA r_ptr = RNA_pointer_create(nullptr, &RNA_UIPieMenu, data);
   return r_ptr;
 }
 
@@ -654,7 +657,7 @@ static wmEvent *rna_Window_event_add_simulate(wmWindow *win,
   /* TODO: validate NDOF. */
 
   if (unicode != nullptr) {
-    int len = BLI_str_utf8_size(unicode);
+    int len = BLI_str_utf8_size_or_error(unicode);
     if (len == -1 || unicode[len] != '\0') {
       BKE_report(reports, RPT_ERROR, "Only a single character supported");
       return nullptr;
@@ -764,10 +767,10 @@ void RNA_api_window(StructRNA *srna)
   RNA_def_int(func, "x", 0, INT_MIN, INT_MAX, "", "", INT_MIN, INT_MAX);
   RNA_def_int(func, "y", 0, INT_MIN, INT_MAX, "", "", INT_MIN, INT_MAX);
 
-  RNA_def_boolean(func, "shift", 0, "Shift", "");
-  RNA_def_boolean(func, "ctrl", 0, "Ctrl", "");
-  RNA_def_boolean(func, "alt", 0, "Alt", "");
-  RNA_def_boolean(func, "oskey", 0, "OS Key", "");
+  RNA_def_boolean(func, "shift", false, "Shift", "");
+  RNA_def_boolean(func, "ctrl", false, "Ctrl", "");
+  RNA_def_boolean(func, "alt", false, "Alt", "");
+  RNA_def_boolean(func, "oskey", false, "OS Key", "");
   parm = RNA_def_pointer(func, "event", "Event", "Item", "Added key map item");
   RNA_def_function_return(func, parm);
 }
@@ -794,7 +797,8 @@ void RNA_api_wm(StructRNA *srna)
   parm = RNA_def_pointer(func, "operator", "Operator", "", "Operator to call");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   RNA_def_function_return(
-      func, RNA_def_boolean(func, "handle", 1, "", "Whether adding the handler was successful"));
+      func,
+      RNA_def_boolean(func, "handle", true, "", "Whether adding the handler was successful"));
 
   func = RNA_def_function(srna, "event_timer_add", "rna_event_timer_add");
   RNA_def_function_ui_description(
@@ -912,7 +916,7 @@ void RNA_api_wm(StructRNA *srna)
   RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_RNAPTR);
   RNA_def_function_return(func, parm);
   RNA_def_boolean(
-      func, "from_active_button", 0, "Use Button", "Use the active button for positioning");
+      func, "from_active_button", false, "Use Button", "Use the active button for positioning");
 
   /* wrap UI_popover_end */
   func = RNA_def_function(srna, "popover_end__internal", "rna_PopoverEnd");
@@ -986,7 +990,7 @@ void RNA_api_operator(StructRNA *srna)
   func = RNA_def_function(srna, "is_repeat", "rna_Operator_is_repeat");
   RNA_def_function_flag(func, FUNC_USE_CONTEXT);
   /* return */
-  parm = RNA_def_boolean(func, "result", 0, "result", "");
+  parm = RNA_def_boolean(func, "result", false, "result", "");
   RNA_def_function_return(func, parm);
 
   /* Registration */
@@ -995,7 +999,7 @@ void RNA_api_operator(StructRNA *srna)
   func = RNA_def_function(srna, "poll", nullptr);
   RNA_def_function_ui_description(func, "Test if the operator can be called or not");
   RNA_def_function_flag(func, FUNC_NO_SELF | FUNC_REGISTER_OPTIONAL);
-  RNA_def_function_return(func, RNA_def_boolean(func, "visible", 1, "", ""));
+  RNA_def_function_return(func, RNA_def_boolean(func, "visible", true, "", ""));
   parm = RNA_def_pointer(func, "context", "Context", "", "");
   RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
 
@@ -1019,7 +1023,7 @@ void RNA_api_operator(StructRNA *srna)
   parm = RNA_def_pointer(func, "context", "Context", "", "");
   RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
 
-  parm = RNA_def_boolean(func, "result", 0, "result", ""); /* better name? */
+  parm = RNA_def_boolean(func, "result", false, "result", ""); /* better name? */
   RNA_def_function_return(func, parm);
 
   /* invoke */
@@ -1095,7 +1099,7 @@ void RNA_api_macro(StructRNA *srna)
   func = RNA_def_function(srna, "poll", nullptr);
   RNA_def_function_ui_description(func, "Test if the operator can be called or not");
   RNA_def_function_flag(func, FUNC_NO_SELF | FUNC_REGISTER_OPTIONAL);
-  RNA_def_function_return(func, RNA_def_boolean(func, "visible", 1, "", ""));
+  RNA_def_function_return(func, RNA_def_boolean(func, "visible", true, "", ""));
   parm = RNA_def_pointer(func, "context", "Context", "", "");
   RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
 
@@ -1140,7 +1144,7 @@ void RNA_api_keymapitem(StructRNA *srna)
   func = RNA_def_function(srna, "compare", "rna_KeyMapItem_compare");
   parm = RNA_def_pointer(func, "item", "KeyMapItem", "Item", "");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
-  parm = RNA_def_boolean(func, "result", 0, "Comparison result", "");
+  parm = RNA_def_boolean(func, "result", false, "Comparison result", "");
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "to_string", "rna_KeyMapItem_to_string");
@@ -1163,7 +1167,7 @@ void RNA_api_keymapitems(StructRNA *srna)
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   parm = RNA_def_enum(func, "value", rna_enum_event_value_items, 0, "Value", "");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
-  RNA_def_boolean(func, "any", 0, "Any", "");
+  RNA_def_boolean(func, "any", false, "Any", "");
   RNA_def_int(func, "shift", KM_NOTHING, KM_ANY, KM_MOD_HELD, "Shift", "", KM_ANY, KM_MOD_HELD);
   RNA_def_int(func, "ctrl", KM_NOTHING, KM_ANY, KM_MOD_HELD, "Ctrl", "", KM_ANY, KM_MOD_HELD);
   RNA_def_int(func, "alt", KM_NOTHING, KM_ANY, KM_MOD_HELD, "Alt", "", KM_ANY, KM_MOD_HELD);
@@ -1173,7 +1177,7 @@ void RNA_api_keymapitems(StructRNA *srna)
   RNA_def_boolean(func, "repeat", false, "Repeat", "When set, accept key-repeat events");
   RNA_def_boolean(func,
                   "head",
-                  0,
+                  false,
                   "At Head",
                   "Force item to be added at start (not end) of key map so that "
                   "it doesn't get blocked by an existing key map item");
@@ -1188,7 +1192,7 @@ void RNA_api_keymapitems(StructRNA *srna)
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   parm = RNA_def_enum(func, "value", rna_enum_event_value_items, 0, "Value", "");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
-  RNA_def_boolean(func, "any", 0, "Any", "");
+  RNA_def_boolean(func, "any", false, "Any", "");
   RNA_def_int(func, "shift", KM_NOTHING, KM_ANY, KM_MOD_HELD, "Shift", "", KM_ANY, KM_MOD_HELD);
   RNA_def_int(func, "ctrl", KM_NOTHING, KM_ANY, KM_MOD_HELD, "Ctrl", "", KM_ANY, KM_MOD_HELD);
   RNA_def_int(func, "alt", KM_NOTHING, KM_ANY, KM_MOD_HELD, "Alt", "", KM_ANY, KM_MOD_HELD);
@@ -1203,7 +1207,7 @@ void RNA_api_keymapitems(StructRNA *srna)
   RNA_def_function_flag(func, FUNC_USE_REPORTS);
   parm = RNA_def_pointer(func, "item", "KeyMapItem", "Item", "Item to use as a reference");
   RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
-  RNA_def_boolean(func, "head", 0, "At Head", "");
+  RNA_def_boolean(func, "head", false, "At Head", "");
   parm = RNA_def_pointer(func, "result", "KeyMapItem", "Item", "Added key map item");
   RNA_def_function_return(func, parm);
 
@@ -1249,7 +1253,7 @@ void RNA_api_keymaps(StructRNA *srna)
   FunctionRNA *func;
   PropertyRNA *parm;
 
-  func = RNA_def_function(srna, "new", "rna_keymap_new"); /* add_keymap */
+  func = RNA_def_function(srna, "new", "rna_KeyMaps_new");
   RNA_def_function_flag(func, FUNC_USE_REPORTS);
   RNA_def_function_ui_description(
       func,
@@ -1261,18 +1265,21 @@ void RNA_api_keymaps(StructRNA *srna)
   RNA_def_enum(func, "space_type", rna_enum_space_type_items, SPACE_EMPTY, "Space Type", "");
   RNA_def_enum(
       func, "region_type", rna_enum_region_type_items, RGN_TYPE_WINDOW, "Region Type", "");
-  RNA_def_boolean(func, "modal", 0, "Modal", "Keymap for modal operators");
-  RNA_def_boolean(func, "tool", 0, "Tool", "Keymap for active tools");
+  RNA_def_boolean(func, "modal", false, "Modal", "Keymap for modal operators");
+  RNA_def_boolean(func, "tool", false, "Tool", "Keymap for active tools");
   parm = RNA_def_pointer(func, "keymap", "KeyMap", "Key Map", "Added key map");
   RNA_def_function_return(func, parm);
 
-  func = RNA_def_function(srna, "remove", "rna_KeyMap_remove"); /* remove_keymap */
+  func = RNA_def_function(srna, "remove", "rna_KeyMaps_remove");
   RNA_def_function_flag(func, FUNC_USE_REPORTS);
   parm = RNA_def_pointer(func, "keymap", "KeyMap", "Key Map", "Removed key map");
   RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED | PARM_RNAPTR);
   RNA_def_parameter_clear_flags(parm, PROP_THICK_WRAP, ParameterFlag(0));
 
-  func = RNA_def_function(srna, "find", "rna_keymap_find"); /* find_keymap */
+  func = RNA_def_function(srna, "clear", "rna_KeyMaps_clear");
+  RNA_def_function_ui_description(func, "Remove all keymaps.");
+
+  func = RNA_def_function(srna, "find", "rna_KeyMaps_find");
   parm = RNA_def_string(func, "name", nullptr, 0, "Name", "");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   RNA_def_enum(func, "space_type", rna_enum_space_type_items, SPACE_EMPTY, "Space Type", "");
@@ -1281,7 +1288,7 @@ void RNA_api_keymaps(StructRNA *srna)
   parm = RNA_def_pointer(func, "keymap", "KeyMap", "Key Map", "Corresponding key map");
   RNA_def_function_return(func, parm);
 
-  func = RNA_def_function(srna, "find_modal", "rna_keymap_find_modal"); /* find_keymap_modal */
+  func = RNA_def_function(srna, "find_modal", "rna_KeyMaps_find_modal");
   parm = RNA_def_string(func, "name", nullptr, 0, "Operator Name", "");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   parm = RNA_def_pointer(func, "keymap", "KeyMap", "Key Map", "Corresponding key map");
@@ -1293,7 +1300,7 @@ void RNA_api_keyconfigs(StructRNA *srna)
   FunctionRNA *func;
   PropertyRNA *parm;
 
-  func = RNA_def_function(srna, "new", "WM_keyconfig_new_user"); /* add_keyconfig */
+  func = RNA_def_function(srna, "new", "rna_KeyConfig_new"); /* add_keyconfig */
   parm = RNA_def_string(func, "name", nullptr, 0, "Name", "");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   parm = RNA_def_pointer(
@@ -1328,7 +1335,13 @@ void RNA_api_keyconfigs(StructRNA *srna)
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_RNAPTR);
   RNA_def_function_return(func, parm);
 
-  RNA_def_function(srna, "update", "rna_KeyConfig_update"); /* WM_keyconfig_update */
+  func = RNA_def_function(srna, "update", "rna_KeyConfig_update"); /* WM_keyconfig_update */
+  RNA_def_boolean(
+      func,
+      "keep_properties",
+      false,
+      "Keep Properties",
+      "Operator properties are kept to allow the operators to be registered again in the future");
 }
 
 #endif

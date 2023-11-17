@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2018 Blender Foundation
+/* SPDX-FileCopyrightText: 2018 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -14,9 +14,9 @@
 #include "BLI_utildefines.h"
 
 #include "BKE_mesh.hh"
-#include "BKE_modifier.h"
-#include "BKE_multires.h"
-#include "BKE_subdiv.h"
+#include "BKE_modifier.hh"
+#include "BKE_multires.hh"
+#include "BKE_subdiv.hh"
 #include "BKE_subdiv_mesh.hh"
 
 void BKE_multires_subdiv_settings_init(SubdivSettings *settings, const MultiresModifierData *mmd)

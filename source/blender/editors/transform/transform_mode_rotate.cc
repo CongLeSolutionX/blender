@@ -6,18 +6,20 @@
  * \ingroup edtransform
  */
 
-#include <stdlib.h>
+#include <cstdlib>
 
-#include "BLI_math.h"
+#include "BLI_math_matrix.h"
+#include "BLI_math_rotation.h"
+#include "BLI_math_vector.h"
 #include "BLI_task.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_report.h"
 #include "BKE_unit.h"
 
-#include "ED_screen.h"
+#include "ED_screen.hh"
 
-#include "UI_interface.h"
+#include "UI_interface.hh"
 
 #include "transform.hh"
 #include "transform_convert.hh"
@@ -191,7 +193,7 @@ static float RotationBetween(TransInfo *t, const float p1[3], const float p2[3])
   if (angle > float(M_PI)) {
     angle = angle - 2 * float(M_PI);
   }
-  else if (angle < -(float(M_PI))) {
+  else if (angle < -float(M_PI)) {
     angle = 2.0f * float(M_PI) + angle;
   }
 
@@ -332,7 +334,7 @@ static bool clip_uv_transform_rotate(const TransInfo *t, float *vec, float *vec_
   return true;
 }
 
-static void applyRotation(TransInfo *t, const int[2] /*mval*/)
+static void applyRotation(TransInfo *t)
 {
   float axis_final[3];
   float final = t->values[0] + t->values_modal_offset[0];
@@ -366,16 +368,13 @@ static void applyRotation(TransInfo *t, const int[2] /*mval*/)
       applyRotationValue(t, t->values_final[0], axis_final, is_large_rotation);
     }
 
-    /* In proportional edit it can happen that */
-    /* vertices in the radius of the brush end */
-    /* outside the clipping area               */
-    /* XXX HACK - dg */
+    /* Not ideal, see #clipUVData code-comment. */
     if (t->flag & T_PROP_EDIT) {
       clipUVData(t);
     }
   }
 
-  recalcData(t);
+  recalc_data(t);
 
   char str[UI_MAX_DRAW_STR];
   headerRotation(t, str, sizeof(str), t->values_final[0]);

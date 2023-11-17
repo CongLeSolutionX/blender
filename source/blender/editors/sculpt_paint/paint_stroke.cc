@@ -12,7 +12,7 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_listbase.h"
-#include "BLI_math.h"
+#include "BLI_math_matrix.h"
 #include "BLI_rand.h"
 #include "BLI_utildefines.h"
 
@@ -23,23 +23,23 @@
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
-#include "RNA_access.h"
+#include "RNA_access.hh"
 
-#include "BKE_brush.h"
+#include "BKE_brush.hh"
 #include "BKE_colortools.h"
-#include "BKE_context.h"
-#include "BKE_curve.h"
+#include "BKE_context.hh"
+#include "BKE_curve.hh"
 #include "BKE_image.h"
-#include "BKE_paint.h"
+#include "BKE_paint.hh"
 
-#include "WM_api.h"
-#include "WM_types.h"
+#include "WM_api.hh"
+#include "WM_types.hh"
 
 #include "GPU_immediate.h"
 #include "GPU_state.h"
 
-#include "ED_screen.h"
-#include "ED_view3d.h"
+#include "ED_screen.hh"
+#include "ED_view3d.hh"
 
 #include "IMB_imbuf_types.h"
 
@@ -916,7 +916,7 @@ PaintStroke *paint_stroke_new(bContext *C,
   RegionView3D *rv3d = CTX_wm_region_view3d(C);
   float zoomx, zoomy;
 
-  ED_view3d_viewcontext_init(C, &stroke->vc, depsgraph);
+  stroke->vc = ED_view3d_viewcontext_init(C, depsgraph);
 
   stroke->get_location = get_location;
   stroke->test_start = test_start;
@@ -1611,7 +1611,7 @@ int paint_stroke_modal(bContext *C, wmOperator *op, const wmEvent *event, PaintS
     redraw = true;
   }
 
-  /* Don't update the paint cursor in INBETWEEN_MOUSEMOVE events.*/
+  /* Don't update the paint cursor in #INBETWEEN_MOUSEMOVE events. */
   if (event->type != INBETWEEN_MOUSEMOVE) {
     wmWindow *window = CTX_wm_window(C);
     ARegion *region = CTX_wm_region(C);

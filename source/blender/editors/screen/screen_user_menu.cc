@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2009 Blender Foundation
+/* SPDX-FileCopyrightText: 2009 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -6,10 +6,10 @@
  * \ingroup spview3d
  */
 
-#include <float.h>
-#include <math.h>
-#include <stdio.h>
-#include <string.h>
+#include <cfloat>
+#include <cmath>
+#include <cstdio>
+#include <cstring>
 
 #include "DNA_scene_types.h"
 
@@ -22,20 +22,20 @@
 #include "BLT_translation.h"
 
 #include "BKE_blender_user_menu.h"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_idprop.h"
-#include "BKE_screen.h"
+#include "BKE_screen.hh"
 
-#include "WM_api.h"
-#include "WM_types.h"
+#include "WM_api.hh"
+#include "WM_types.hh"
 
-#include "ED_screen.h"
+#include "ED_screen.hh"
 
-#include "UI_interface.h"
-#include "UI_resources.h"
+#include "UI_interface.hh"
+#include "UI_resources.hh"
 
-#include "RNA_access.h"
-#include "RNA_path.h"
+#include "RNA_access.hh"
+#include "RNA_path.hh"
 #include "RNA_prototypes.h"
 
 /* -------------------------------------------------------------------- */
@@ -232,7 +232,7 @@ static void screen_user_menu_draw(const bContext *C, Menu *menu)
                             ICON_NONE,
                             prop,
                             wmOperatorCallContext(umi_op->opcontext),
-                            0,
+                            UI_ITEM_NONE,
                             nullptr);
           }
           else {
@@ -278,8 +278,7 @@ static void screen_user_menu_draw(const bContext *C, Menu *menu)
         }
         PointerRNA ptr = CTX_data_pointer_get(C, umi_pr->context_data_path);
         if (ptr.type == nullptr) {
-          PointerRNA ctx_ptr;
-          RNA_pointer_create(nullptr, &RNA_Context, (void *)C, &ctx_ptr);
+          PointerRNA ctx_ptr = RNA_pointer_create(nullptr, &RNA_Context, (void *)C);
           if (!RNA_path_resolve_full(&ctx_ptr, umi_pr->context_data_path, &ptr, nullptr, nullptr))
           {
             ptr.type = nullptr;
@@ -299,8 +298,14 @@ static void screen_user_menu_draw(const bContext *C, Menu *menu)
             prop = RNA_struct_find_property(&prop_ptr, umi_pr->prop_id);
             if (prop) {
               ok = true;
-              uiItemFullR(
-                  menu->layout, &prop_ptr, prop, umi_pr->prop_index, 0, 0, ui_name, ICON_NONE);
+              uiItemFullR(menu->layout,
+                          &prop_ptr,
+                          prop,
+                          umi_pr->prop_index,
+                          0,
+                          UI_ITEM_NONE,
+                          ui_name,
+                          ICON_NONE);
               is_empty = false;
             }
           }

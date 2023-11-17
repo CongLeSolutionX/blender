@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -915,7 +915,7 @@ class Map {
   /**
    * Print common statistics like size and collision count. This is useful for debugging purposes.
    */
-  void print_stats(StringRef name = "") const
+  void print_stats(const char *name) const
   {
     HashTableStats stats(*this, this->keys());
     stats.print(name);
@@ -1094,6 +1094,7 @@ class Map {
     MAP_SLOT_PROBING_BEGIN (hash, slot) {
       if (slot.is_empty()) {
         slot.occupy(std::forward<ForwardKey>(key), hash, std::forward<ForwardValue>(value)...);
+        BLI_assert(hash_(*slot.key()) == hash);
         occupied_and_removed_slots_++;
         return;
       }
@@ -1109,6 +1110,7 @@ class Map {
     MAP_SLOT_PROBING_BEGIN (hash, slot) {
       if (slot.is_empty()) {
         slot.occupy(std::forward<ForwardKey>(key), hash, std::forward<ForwardValue>(value)...);
+        BLI_assert(hash_(*slot.key()) == hash);
         occupied_and_removed_slots_++;
         return true;
       }
@@ -1164,6 +1166,7 @@ class Map {
     MAP_SLOT_PROBING_BEGIN (hash, slot) {
       if (slot.is_empty()) {
         slot.occupy(std::forward<ForwardKey>(key), hash, create_value());
+        BLI_assert(hash_(*slot.key()) == hash);
         occupied_and_removed_slots_++;
         return *slot.value();
       }
@@ -1182,6 +1185,7 @@ class Map {
     MAP_SLOT_PROBING_BEGIN (hash, slot) {
       if (slot.is_empty()) {
         slot.occupy(std::forward<ForwardKey>(key), hash, std::forward<ForwardValue>(value)...);
+        BLI_assert(hash_(*slot.key()) == hash);
         occupied_and_removed_slots_++;
         return *slot.value();
       }

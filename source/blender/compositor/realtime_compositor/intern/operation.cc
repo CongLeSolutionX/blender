@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -18,7 +18,6 @@
 #include "COM_reduce_to_single_value_operation.hh"
 #include "COM_result.hh"
 #include "COM_simple_operation.hh"
-#include "COM_static_shader_manager.hh"
 #include "COM_texture_pool.hh"
 
 namespace blender::realtime_compositor {
@@ -70,8 +69,8 @@ Domain Operation::compute_domain()
       continue;
     }
 
-    /* An input that skips realization can't be a domain input. */
-    if (descriptor.skip_realization) {
+    /* An input that skips operation domain realization can't be a domain input. */
+    if (!descriptor.realization_options.realize_on_operation_domain) {
       continue;
     }
 
@@ -165,7 +164,7 @@ InputDescriptor &Operation::get_input_descriptor(StringRef identifier)
   return input_descriptors_.lookup(identifier);
 }
 
-Context &Operation::context()
+Context &Operation::context() const
 {
   return context_;
 }
@@ -173,11 +172,6 @@ Context &Operation::context()
 TexturePool &Operation::texture_pool() const
 {
   return context_.texture_pool();
-}
-
-StaticShaderManager &Operation::shader_manager() const
-{
-  return context_.shader_manager();
 }
 
 void Operation::evaluate_input_processors()

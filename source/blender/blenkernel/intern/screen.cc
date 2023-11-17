@@ -13,9 +13,9 @@
 #  include "BLI_winstuff.h"
 #endif
 
-#include <math.h>
-#include <stdio.h>
-#include <string.h>
+#include <cmath>
+#include <cstdio>
+#include <cstring>
 
 #include "MEM_guardedalloc.h"
 
@@ -32,29 +32,39 @@
 
 #include "BLI_ghash.h"
 #include "BLI_listbase.h"
+#include "BLI_math_rotation.h"
 #include "BLI_math_vector.h"
 #include "BLI_mempool.h"
 #include "BLI_rect.h"
+#include "BLI_string.h"
 #include "BLI_utildefines.h"
 
 #include "BLT_translation.h"
 
 #include "BKE_gpencil_legacy.h"
-#include "BKE_icons.h"
 #include "BKE_idprop.h"
 #include "BKE_idtype.h"
 #include "BKE_lib_id.h"
 #include "BKE_lib_query.h"
 #include "BKE_node.h"
-#include "BKE_screen.h"
-#include "BKE_viewer_path.h"
+#include "BKE_preview_image.hh"
+#include "BKE_screen.hh"
+#include "BKE_viewer_path.hh"
 #include "BKE_workspace.h"
 
-#include "BLO_read_write.h"
+#include "BLO_read_write.hh"
+
+/* TODO(@JulianEisel): For asset shelf region reading/writing. Region read/write should be done via
+ * a #ARegionType callback. */
+#include "../editors/asset/ED_asset_shelf.h"
 
 #ifdef WITH_PYTHON
 #  include "BPY_extern.h"
 #endif
+
+/* -------------------------------------------------------------------- */
+/** \name ID Type Implementation
+ * \{ */
 
 static void screen_free_data(ID *id)
 {
@@ -76,256 +86,32 @@ static void screen_free_data(ID *id)
   MEM_SAFE_FREE(screen->tool_tip);
 }
 
-static void screen_foreach_id_dopesheet(LibraryForeachIDData *data, bDopeSheet *ads)
-{
-  if (ads != nullptr) {
-    BKE_LIB_FOREACHID_PROCESS_ID(data, ads->source, IDWALK_CB_NOP);
-    BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, ads->filter_grp, IDWALK_CB_NOP);
-  }
-}
-
 void BKE_screen_foreach_id_screen_area(LibraryForeachIDData *data, ScrArea *area)
 {
-  const int data_flags = BKE_lib_query_foreachid_process_flags_get(data);
-  const bool is_readonly = (data_flags & IDWALK_READONLY) != 0;
-  const bool allow_pointer_access = (data_flags & IDWALK_NO_ORIG_POINTERS_ACCESS) == 0;
-
   BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, area->full, IDWALK_CB_NOP);
 
-  /* TODO: this should be moved to a callback in `SpaceType`, defined in each editor's own code.
-   * Will be for a later round of cleanup though... */
   LISTBASE_FOREACH (SpaceLink *, sl, &area->spacedata) {
-    switch (sl->spacetype) {
-      case SPACE_VIEW3D: {
-        View3D *v3d = (View3D *)sl;
-        BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, v3d->camera, IDWALK_CB_NOP);
-        BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, v3d->ob_center, IDWALK_CB_NOP);
-        if (v3d->localvd) {
-          BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, v3d->localvd->camera, IDWALK_CB_NOP);
-        }
-        BKE_viewer_path_foreach_id(data, &v3d->viewer_path);
-        break;
-      }
-      case SPACE_GRAPH: {
-        SpaceGraph *sipo = (SpaceGraph *)sl;
-        BKE_LIB_FOREACHID_PROCESS_FUNCTION_CALL(data,
-                                                screen_foreach_id_dopesheet(data, sipo->ads));
+    SpaceType *space_type = BKE_spacetype_from_id(sl->spacetype);
 
-        if (!is_readonly) {
-          /* Force recalc of list of channels (i.e. including calculating F-Curve colors) to
-           * prevent the "black curves" problem post-undo. */
-          sipo->runtime.flag |= SIPO_RUNTIME_FLAG_NEED_CHAN_SYNC_COLOR;
-        }
-        break;
-      }
-      case SPACE_PROPERTIES: {
-        SpaceProperties *sbuts = (SpaceProperties *)sl;
-        BKE_LIB_FOREACHID_PROCESS_ID(data, sbuts->pinid, IDWALK_CB_NOP);
-        if (!is_readonly) {
-          if (sbuts->pinid == nullptr) {
-            sbuts->flag &= ~SB_PIN_CONTEXT;
-          }
-          /* Note: Restoring path pointers is complicated, if not impossible, because this contains
-           * data pointers too, not just ID ones. See #40046. */
-          MEM_SAFE_FREE(sbuts->path);
-        }
-        break;
-      }
-      case SPACE_FILE: {
-        if (!is_readonly) {
-          SpaceFile *sfile = (SpaceFile *)sl;
-          sfile->op = nullptr;
-          sfile->tags = FILE_TAG_REBUILD_MAIN_FILES;
-        }
-        break;
-      }
-      case SPACE_ACTION: {
-        SpaceAction *saction = (SpaceAction *)sl;
-        screen_foreach_id_dopesheet(data, &saction->ads);
-        BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, saction->action, IDWALK_CB_NOP);
-        if (!is_readonly) {
-          /* Force recalc of list of channels, potentially updating the active action while we're
-           * at it (as it can only be updated that way) #28962. */
-          saction->runtime.flag |= SACTION_RUNTIME_FLAG_NEED_CHAN_SYNC;
-        }
-        break;
-      }
-      case SPACE_IMAGE: {
-        SpaceImage *sima = (SpaceImage *)sl;
-        BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, sima->image, IDWALK_CB_USER_ONE);
-        BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, sima->iuser.scene, IDWALK_CB_NOP);
-        BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, sima->mask_info.mask, IDWALK_CB_USER_ONE);
-        BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, sima->gpd, IDWALK_CB_USER);
-        if (!is_readonly) {
-          sima->scopes.ok = 0;
-        }
-        break;
-      }
-      case SPACE_SEQ: {
-        SpaceSeq *sseq = (SpaceSeq *)sl;
-        BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, sseq->gpd, IDWALK_CB_USER);
-        break;
-      }
-      case SPACE_NLA: {
-        SpaceNla *snla = (SpaceNla *)sl;
-        BKE_LIB_FOREACHID_PROCESS_FUNCTION_CALL(data,
-                                                screen_foreach_id_dopesheet(data, snla->ads));
-        break;
-      }
-      case SPACE_TEXT: {
-        SpaceText *st = (SpaceText *)sl;
-        BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, st->text, IDWALK_CB_NOP);
-        break;
-      }
-      case SPACE_SCRIPT: {
-        SpaceScript *scpt = (SpaceScript *)sl;
-        BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, scpt->script, IDWALK_CB_NOP);
-        break;
-      }
-      case SPACE_OUTLINER: {
-        SpaceOutliner *space_outliner = (SpaceOutliner *)sl;
-        if (space_outliner->treestore != nullptr) {
-          TreeStoreElem *tselem;
-          BLI_mempool_iter iter;
-
-          BLI_mempool_iternew(space_outliner->treestore, &iter);
-          while ((tselem = static_cast<TreeStoreElem *>(BLI_mempool_iterstep(&iter)))) {
-            /* Do not try to restore non-ID pointers (drivers/sequence/etc.). */
-            if (TSE_IS_REAL_ID(tselem)) {
-              const int cb_flag = (tselem->id != nullptr && allow_pointer_access &&
-                                   (tselem->id->flag & LIB_EMBEDDED_DATA) != 0) ?
-                                      IDWALK_CB_EMBEDDED_NOT_OWNING :
-                                      IDWALK_CB_NOP;
-              BKE_LIB_FOREACHID_PROCESS_ID(data, tselem->id, cb_flag);
-            }
-            else if (!is_readonly) {
-              tselem->id = nullptr;
-            }
-          }
-          if (!is_readonly) {
-            /* rebuild hash table, because it depends on ids too */
-            space_outliner->storeflag |= SO_TREESTORE_REBUILD;
-          }
-        }
-        break;
-      }
-      case SPACE_NODE: {
-        SpaceNode *snode = (SpaceNode *)sl;
-        const bool is_embedded_nodetree = snode->id != nullptr && allow_pointer_access &&
-                                          ntreeFromID(snode->id) == snode->nodetree;
-
-        BKE_LIB_FOREACHID_PROCESS_ID(data, snode->id, IDWALK_CB_NOP);
-        BKE_LIB_FOREACHID_PROCESS_ID(data, snode->from, IDWALK_CB_NOP);
-
-        bNodeTreePath *path = static_cast<bNodeTreePath *>(snode->treepath.first);
-        BLI_assert(path == nullptr || path->nodetree == snode->nodetree);
-
-        if (is_embedded_nodetree) {
-          BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, snode->nodetree, IDWALK_CB_EMBEDDED_NOT_OWNING);
-          if (path != nullptr) {
-            BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, path->nodetree, IDWALK_CB_EMBEDDED_NOT_OWNING);
-          }
-
-          /* Embedded ID pointers are not remapped (besides exceptions), ensure it still matches
-           * actual data. Note that `snode->id` was already processed (and therefore potentially
-           * remapped) above. */
-          if (!is_readonly) {
-            snode->nodetree = (snode->id == nullptr) ? nullptr : ntreeFromID(snode->id);
-            if (path != nullptr) {
-              path->nodetree = snode->nodetree;
-            }
-          }
-        }
-        else {
-          BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, snode->nodetree, IDWALK_CB_USER_ONE);
-          if (path != nullptr) {
-            BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, path->nodetree, IDWALK_CB_USER_ONE);
-          }
-        }
-
-        /* Both `snode->id` and `snode->nodetree` have been remapped now, so their data can be
-         * accessed. */
-        BLI_assert(snode->id == nullptr || snode->nodetree == nullptr ||
-                   (snode->nodetree->id.flag & LIB_EMBEDDED_DATA) == 0 ||
-                   snode->nodetree == ntreeFromID(snode->id));
-
-        if (path != nullptr) {
-          for (path = path->next; path != nullptr; path = path->next) {
-            BLI_assert(path->nodetree != nullptr);
-            if ((data_flags & IDWALK_NO_ORIG_POINTERS_ACCESS) == 0) {
-              BLI_assert((path->nodetree->id.flag & LIB_EMBEDDED_DATA) == 0);
-            }
-
-            BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, path->nodetree, IDWALK_CB_USER_ONE);
-
-            if (path->nodetree == nullptr) {
-              BLI_assert(!is_readonly);
-              /* Remaining path entries are invalid, remove them. */
-              for (bNodeTreePath *path_next; path; path = path_next) {
-                path_next = path->next;
-                BLI_remlink(&snode->treepath, path);
-                MEM_freeN(path);
-              }
-              break;
-            }
-          }
-        }
-        BLI_assert(path == nullptr);
-
-        if (!is_readonly) {
-          /* `edittree` is just the last in the path, set this directly since the path may have
-           * been shortened above. */
-          if (snode->treepath.last != nullptr) {
-            path = static_cast<bNodeTreePath *>(snode->treepath.last);
-            snode->edittree = path->nodetree;
-          }
-          else {
-            snode->edittree = nullptr;
-          }
-        }
-        else {
-          /* Only process this pointer in readonly case, otherwise could lead to a bad
-           * double-remapping e.g. */
-          if (is_embedded_nodetree && snode->edittree == snode->nodetree) {
-            BKE_LIB_FOREACHID_PROCESS_IDSUPER(
-                data, snode->edittree, IDWALK_CB_EMBEDDED_NOT_OWNING);
-          }
-          else {
-            BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, snode->edittree, IDWALK_CB_NOP);
-          }
-        }
-        break;
-      }
-      case SPACE_CLIP: {
-        SpaceClip *sclip = (SpaceClip *)sl;
-        BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, sclip->clip, IDWALK_CB_USER_ONE);
-        BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, sclip->mask_info.mask, IDWALK_CB_USER_ONE);
-
-        if (!is_readonly) {
-          sclip->scopes.ok = 0;
-        }
-        break;
-      }
-      case SPACE_SPREADSHEET: {
-        SpaceSpreadsheet *sspreadsheet = (SpaceSpreadsheet *)sl;
-        BKE_viewer_path_foreach_id(data, &sspreadsheet->viewer_path);
-        break;
-      }
-      default:
-        break;
+    if (space_type && space_type->foreach_id) {
+      space_type->foreach_id(sl, data);
     }
   }
 }
 
 static void screen_foreach_id(ID *id, LibraryForeachIDData *data)
 {
-  if ((BKE_lib_query_foreachid_process_flags_get(data) & IDWALK_INCLUDE_UI) == 0) {
-    return;
-  }
-  bScreen *screen = (bScreen *)id;
+  bScreen *screen = reinterpret_cast<bScreen *>(id);
+  const int flag = BKE_lib_query_foreachid_process_flags_get(data);
 
-  LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
-    BKE_LIB_FOREACHID_PROCESS_FUNCTION_CALL(data, BKE_screen_foreach_id_screen_area(data, area));
+  if (flag & IDWALK_DO_DEPRECATED_POINTERS) {
+    BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, screen->scene, IDWALK_CB_NOP);
+  }
+
+  if (flag & IDWALK_INCLUDE_UI) {
+    LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
+      BKE_LIB_FOREACHID_PROCESS_FUNCTION_CALL(data, BKE_screen_foreach_id_screen_area(data, area));
+    }
   }
 }
 
@@ -351,6 +137,9 @@ bool BKE_screen_blend_read_data(BlendDataReader *reader, bScreen *screen)
   screen->regionbase.first = screen->regionbase.last = nullptr;
   screen->context = nullptr;
   screen->active_region = nullptr;
+  screen->animtimer = nullptr; /* saved in rare cases */
+  screen->tool_tip = nullptr;
+  screen->scrubbing = false;
 
   BLO_read_data_address(reader, &screen->preview);
   BKE_previewimg_blend_read(reader, screen->preview);
@@ -365,18 +154,12 @@ bool BKE_screen_blend_read_data(BlendDataReader *reader, bScreen *screen)
 
 /* NOTE: file read without screens option G_FILE_NO_UI;
  * check lib pointers in call below */
-static void screen_blend_read_lib(BlendLibReader *reader, ID *id)
+static void screen_blend_read_after_liblink(BlendLibReader *reader, ID *id)
 {
-  bScreen *screen = (bScreen *)id;
-  /* deprecated, but needed for versioning (will be nullptr'ed then) */
-  BLO_read_id_address(reader, id, &screen->scene);
-
-  screen->animtimer = nullptr; /* saved in rare cases */
-  screen->tool_tip = nullptr;
-  screen->scrubbing = false;
+  bScreen *screen = reinterpret_cast<bScreen *>(id);
 
   LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
-    BKE_screen_area_blend_read_lib(reader, &screen->id, area);
+    BKE_screen_area_blend_read_after_liblink(reader, &screen->id, area);
   }
 }
 
@@ -386,7 +169,7 @@ IDTypeInfo IDType_ID_SCR = {
     /*main_listbase_index*/ INDEX_ID_SCR,
     /*struct_size*/ sizeof(bScreen),
     /*name*/ "Screen",
-    /*name_plural*/ "screens",
+    /*name_plural*/ N_("screens"),
     /*translation_context*/ BLT_I18NCONTEXT_ID_SCREEN,
     /*flags*/ IDTYPE_FLAGS_NO_COPY | IDTYPE_FLAGS_ONLY_APPEND | IDTYPE_FLAGS_NO_ANIMDATA |
         IDTYPE_FLAGS_NO_MEMFILE_UNDO,
@@ -404,15 +187,18 @@ IDTypeInfo IDType_ID_SCR = {
     /*blend_write*/ screen_blend_write,
     /* Cannot be used yet, because #direct_link_screen has a return value. */
     /*blend_read_data*/ nullptr,
-    /*blend_read_lib*/ screen_blend_read_lib,
-    /*blend_read_expand*/ nullptr,
+    /*blend_read_after_liblink*/ screen_blend_read_after_liblink,
 
     /*blend_read_undo_preserve*/ nullptr,
 
     /*lib_override_apply_post*/ nullptr,
 };
 
-/* ************ Space-type/region-type handling ************** */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Space-type/region-type handling
+ * \{ */
 
 /** Keep global; this has to be accessible outside of window-manager. */
 static ListBase spacetypes = {nullptr, nullptr};
@@ -445,9 +231,10 @@ static void spacetype_free(SpaceType *st)
   }
 
   BLI_freelistN(&st->regiontypes);
+  BLI_freelistN(&st->asset_shelf_types);
 }
 
-void BKE_spacetypes_free(void)
+void BKE_spacetypes_free()
 {
   LISTBASE_FOREACH (SpaceType *, st, &spacetypes) {
     spacetype_free(st);
@@ -466,19 +253,6 @@ SpaceType *BKE_spacetype_from_id(int spaceid)
   return nullptr;
 }
 
-ARegionType *BKE_regiontype_from_id_or_first(const SpaceType *st, int regionid)
-{
-  LISTBASE_FOREACH (ARegionType *, art, &st->regiontypes) {
-    if (art->regionid == regionid) {
-      return art;
-    }
-  }
-
-  printf(
-      "Error, region type %d missing in - name:\"%s\", id:%d\n", regionid, st->name, st->spaceid);
-  return static_cast<ARegionType *>(st->regiontypes.first);
-}
-
 ARegionType *BKE_regiontype_from_id(const SpaceType *st, int regionid)
 {
   LISTBASE_FOREACH (ARegionType *, art, &st->regiontypes) {
@@ -489,7 +263,7 @@ ARegionType *BKE_regiontype_from_id(const SpaceType *st, int regionid)
   return nullptr;
 }
 
-const ListBase *BKE_spacetypes_list(void)
+const ListBase *BKE_spacetypes_list()
 {
   return &spacetypes;
 }
@@ -512,7 +286,11 @@ bool BKE_spacetype_exists(int spaceid)
   return BKE_spacetype_from_id(spaceid) != nullptr;
 }
 
-/* ***************** Space handling ********************** */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Space handling
+ * \{ */
 
 void BKE_spacedata_freelist(ListBase *lb)
 {
@@ -537,15 +315,16 @@ void BKE_spacedata_freelist(ListBase *lb)
 static void panel_list_copy(ListBase *newlb, const ListBase *lb)
 {
   BLI_listbase_clear(newlb);
-  BLI_duplicatelist(newlb, lb);
 
-  /* copy panel pointers */
-  Panel *new_panel = static_cast<Panel *>(newlb->first);
-  Panel *panel = static_cast<Panel *>(lb->first);
-  for (; new_panel; new_panel = new_panel->next, panel = panel->next) {
+  LISTBASE_FOREACH (const Panel *, old_panel, lb) {
+    Panel *new_panel = BKE_panel_new(old_panel->type);
+    Panel_Runtime *new_runtime = new_panel->runtime;
+    *new_panel = *old_panel;
+    new_panel->runtime = new_runtime;
     new_panel->activedata = nullptr;
-    memset(&new_panel->runtime, 0x0, sizeof(new_panel->runtime));
-    panel_list_copy(&new_panel->children, &panel->children);
+    new_panel->drawname = nullptr;
+    BLI_addtail(newlb, new_panel);
+    panel_list_copy(&new_panel->children, &old_panel->children);
   }
 }
 
@@ -676,9 +455,9 @@ void BKE_spacedata_id_unref(ScrArea *area, SpaceLink *sl, ID *id)
 /**
  * Avoid bad-level calls to #WM_gizmomap_tag_refresh.
  */
-static void (*region_refresh_tag_gizmomap_callback)(struct wmGizmoMap *) = nullptr;
+static void (*region_refresh_tag_gizmomap_callback)(wmGizmoMap *) = nullptr;
 
-void BKE_region_callback_refresh_tag_gizmomap_set(void (*callback)(struct wmGizmoMap *))
+void BKE_region_callback_refresh_tag_gizmomap_set(void (*callback)(wmGizmoMap *))
 {
   region_refresh_tag_gizmomap_callback = callback;
 }
@@ -701,29 +480,45 @@ void BKE_screen_gizmo_tag_refresh(bScreen *screen)
 /**
  * Avoid bad-level calls to #WM_gizmomap_delete.
  */
-static void (*region_free_gizmomap_callback)(struct wmGizmoMap *) = nullptr;
+static void (*region_free_gizmomap_callback)(wmGizmoMap *) = nullptr;
 
-void BKE_region_callback_free_gizmomap_set(void (*callback)(struct wmGizmoMap *))
+void BKE_region_callback_free_gizmomap_set(void (*callback)(wmGizmoMap *))
 {
   region_free_gizmomap_callback = callback;
 }
 
-static void area_region_panels_free_recursive(Panel *panel)
+Panel *BKE_panel_new(PanelType *panel_type)
+{
+  Panel *panel = MEM_cnew<Panel>(__func__);
+  panel->runtime = MEM_new<Panel_Runtime>(__func__);
+  panel->type = panel_type;
+  if (panel_type) {
+    STRNCPY(panel->panelname, panel_type->idname);
+  }
+  return panel;
+}
+
+void BKE_panel_free(Panel *panel)
 {
   MEM_SAFE_FREE(panel->activedata);
+  MEM_SAFE_FREE(panel->drawname);
+  MEM_delete(panel->runtime);
+  MEM_freeN(panel);
+}
 
+static void area_region_panels_free_recursive(Panel *panel)
+{
   LISTBASE_FOREACH_MUTABLE (Panel *, child_panel, &panel->children) {
     area_region_panels_free_recursive(child_panel);
   }
-
-  MEM_freeN(panel);
+  BKE_panel_free(panel);
 }
 
 void BKE_area_region_panels_free(ListBase *panels)
 {
   LISTBASE_FOREACH_MUTABLE (Panel *, panel, panels) {
     /* Free custom data just for parent panels to avoid a double free. */
-    MEM_SAFE_FREE(panel->runtime.custom_data_ptr);
+    MEM_SAFE_FREE(panel->runtime->custom_data_ptr);
     area_region_panels_free_recursive(panel);
   }
   BLI_listbase_clear(panels);
@@ -805,7 +600,11 @@ void BKE_screen_free_data(bScreen *screen)
   screen_free_data(&screen->id);
 }
 
-/* ***************** Screen edges & verts ***************** */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Screen edges & verts
+ * \{ */
 
 ScrEdge *BKE_screen_find_edge(const bScreen *screen, ScrVert *v1, ScrVert *v2)
 {
@@ -960,7 +759,11 @@ void BKE_screen_remove_unused_scrverts(bScreen *screen)
   }
 }
 
-/* ***************** Utilities ********************** */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Utilities
+ * \{ */
 
 ARegion *BKE_region_find_in_listbase_by_type(const ListBase *regionbase, const int region_type)
 {
@@ -986,7 +789,7 @@ ARegion *BKE_area_find_region_type(const ScrArea *area, int region_type)
   return nullptr;
 }
 
-ARegion *BKE_area_find_region_active_win(ScrArea *area)
+ARegion *BKE_area_find_region_active_win(const ScrArea *area)
 {
   if (area == nullptr) {
     return nullptr;
@@ -1002,7 +805,7 @@ ARegion *BKE_area_find_region_active_win(ScrArea *area)
   return BKE_area_find_region_type(area, RGN_TYPE_WINDOW);
 }
 
-ARegion *BKE_area_find_region_xy(ScrArea *area, const int regiontype, const int xy[2])
+ARegion *BKE_area_find_region_xy(const ScrArea *area, const int regiontype, const int xy[2])
 {
   if (area == nullptr) {
     return nullptr;
@@ -1018,7 +821,7 @@ ARegion *BKE_area_find_region_xy(ScrArea *area, const int regiontype, const int 
   return nullptr;
 }
 
-ARegion *BKE_screen_find_region_xy(bScreen *screen, const int regiontype, const int xy[2])
+ARegion *BKE_screen_find_region_xy(const bScreen *screen, const int regiontype, const int xy[2])
 {
   LISTBASE_FOREACH (ARegion *, region, &screen->regionbase) {
     if (ELEM(regiontype, RGN_TYPE_ANY, region->regiontype)) {
@@ -1030,7 +833,7 @@ ARegion *BKE_screen_find_region_xy(bScreen *screen, const int regiontype, const 
   return nullptr;
 }
 
-ScrArea *BKE_screen_find_area_from_space(bScreen *screen, SpaceLink *sl)
+ScrArea *BKE_screen_find_area_from_space(const bScreen *screen, const SpaceLink *sl)
 {
   LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
     if (BLI_findindex(&area->spacedata, sl) != -1) {
@@ -1041,7 +844,7 @@ ScrArea *BKE_screen_find_area_from_space(bScreen *screen, SpaceLink *sl)
   return nullptr;
 }
 
-ScrArea *BKE_screen_find_big_area(bScreen *screen, const int spacetype, const short min)
+ScrArea *BKE_screen_find_big_area(const bScreen *screen, const int spacetype, const short min)
 {
   ScrArea *big = nullptr;
   int maxsize = 0;
@@ -1078,7 +881,7 @@ ScrArea *BKE_screen_area_map_find_area_xy(const ScrAreaMap *areamap,
   }
   return nullptr;
 }
-ScrArea *BKE_screen_find_area_xy(bScreen *screen, const int spacetype, const int xy[2])
+ScrArea *BKE_screen_find_area_xy(const bScreen *screen, const int spacetype, const int xy[2])
 {
   return BKE_screen_area_map_find_area_xy(AREAMAP_FROM_SCREEN(screen), spacetype, xy);
 }
@@ -1120,7 +923,9 @@ void BKE_screen_view3d_shading_init(View3DShading *shading)
   memcpy(shading, shading_default, sizeof(*shading));
 }
 
-ARegion *BKE_screen_find_main_region_at_xy(bScreen *screen, const int space_type, const int xy[2])
+ARegion *BKE_screen_find_main_region_at_xy(const bScreen *screen,
+                                           const int space_type,
+                                           const int xy[2])
 {
   ScrArea *area = BKE_screen_find_area_xy(screen, space_type, xy);
   if (!area) {
@@ -1136,12 +941,12 @@ ARegion *BKE_screen_find_main_region_at_xy(bScreen *screen, const int space_type
 
 float BKE_screen_view3d_zoom_to_fac(float camzoom)
 {
-  return powf(((float)M_SQRT2 + camzoom / 50.0f), 2.0f) / 4.0f;
+  return powf((float(M_SQRT2) + camzoom / 50.0f), 2.0f) / 4.0f;
 }
 
 float BKE_screen_view3d_zoom_from_fac(float zoomfac)
 {
-  return ((sqrtf(4.0f * zoomfac) - (float)M_SQRT2) * 50.0f);
+  return ((sqrtf(4.0f * zoomfac) - float(M_SQRT2)) * 50.0f);
 }
 
 bool BKE_screen_is_fullscreen_area(const bScreen *screen)
@@ -1178,6 +983,12 @@ void BKE_screen_header_alignment_reset(bScreen *screen)
   screen->do_refresh = true;
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Blend File IO (Screen & Related Data)
+ * \{ */
+
 void BKE_screen_view3d_shading_blend_write(BlendWriter *writer, View3DShading *shading)
 {
   if (shading->prop) {
@@ -1199,6 +1010,11 @@ static void write_region(BlendWriter *writer, ARegion *region, int spacetype)
 
   if (region->regiondata) {
     if (region->flag & RGN_FLAG_TEMP_REGIONDATA) {
+      return;
+    }
+
+    if (region->regiontype == RGN_TYPE_ASSET_SHELF) {
+      ED_asset_shelf_region_blend_write(writer, region);
       return;
     }
 
@@ -1295,10 +1111,11 @@ static void direct_link_panel_list(BlendDataReader *reader, ListBase *lb)
   BLO_read_list(reader, lb);
 
   LISTBASE_FOREACH (Panel *, panel, lb) {
+    panel->runtime = MEM_new<Panel_Runtime>(__func__);
     panel->runtime_flag = 0;
     panel->activedata = nullptr;
     panel->type = nullptr;
-    panel->runtime.custom_data_ptr = nullptr;
+    panel->drawname = nullptr;
     direct_link_panel_list(reader, &panel->children);
   }
 }
@@ -1335,21 +1152,25 @@ static void direct_link_region(BlendDataReader *reader, ARegion *region, int spa
     region->regiondata = nullptr;
   }
   else {
-    BLO_read_data_address(reader, &region->regiondata);
-    if (region->regiondata) {
-      if (spacetype == SPACE_VIEW3D) {
+    if (spacetype == SPACE_VIEW3D) {
+      if (region->regiontype == RGN_TYPE_WINDOW) {
+        BLO_read_data_address(reader, &region->regiondata);
+
         RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
 
         BLO_read_data_address(reader, &rv3d->localvd);
         BLO_read_data_address(reader, &rv3d->clipbb);
 
-        rv3d->render_engine = nullptr;
+        rv3d->view_render = nullptr;
         rv3d->sms = nullptr;
         rv3d->smooth_timer = nullptr;
 
         rv3d->rflag &= ~(RV3D_NAVIGATING | RV3D_PAINTING);
         rv3d->runtime_viewlock = 0;
       }
+    }
+    if (region->regiontype == RGN_TYPE_ASSET_SHELF) {
+      ED_asset_shelf_region_blend_read_data(reader, region);
     }
   }
 
@@ -1376,8 +1197,8 @@ void BKE_screen_view3d_do_versions_250(View3D *v3d, ListBase *regions)
 
       rv3d = static_cast<RegionView3D *>(
           region->regiondata = MEM_callocN(sizeof(RegionView3D), "region v3d patch"));
-      rv3d->persp = (char)v3d->persp;
-      rv3d->view = (char)v3d->view;
+      rv3d->persp = char(v3d->persp);
+      rv3d->view = char(v3d->view);
       rv3d->dist = v3d->dist;
       copy_v3_v3(rv3d->ofs, v3d->ofs);
       copy_qt_qt(rv3d->viewquat, v3d->viewquat);
@@ -1397,6 +1218,8 @@ static void direct_link_area(BlendDataReader *reader, ScrArea *area)
 
   BLI_listbase_clear(&area->handlers);
   area->type = nullptr; /* spacetype callbacks */
+
+  memset(&area->runtime, 0x0, sizeof(area->runtime));
 
   /* Should always be unset so that rna_Area_type_get works correctly. */
   area->butspacetype = SPACE_EMPTY;
@@ -1485,17 +1308,49 @@ bool BKE_screen_area_map_blend_read_data(BlendDataReader *reader, ScrAreaMap *ar
   return true;
 }
 
-void BKE_screen_area_blend_read_lib(BlendLibReader *reader, ID *parent_id, ScrArea *area)
+/**
+ * Removes all regions whose type cannot be reconstructed. For example files from new versions may
+ * be stored with a newly introduced region type that this version cannot handle.
+ */
+static void regions_remove_invalid(SpaceType *space_type, ListBase *regionbase)
 {
-  BLO_read_id_address(reader, parent_id, &area->full);
+  LISTBASE_FOREACH_MUTABLE (ARegion *, region, regionbase) {
+    if (BKE_regiontype_from_id(space_type, region->regiontype) != nullptr) {
+      continue;
+    }
 
-  memset(&area->runtime, 0x0, sizeof(area->runtime));
+    printf("Warning: region type %d missing in space type \"%s\" (id: %d) - removing region\n",
+           region->regiontype,
+           space_type->name,
+           space_type->spaceid);
 
+    BKE_area_region_free(space_type, region);
+    BLI_freelinkN(regionbase, region);
+  }
+}
+
+void BKE_screen_area_blend_read_after_liblink(BlendLibReader *reader, ID *parent_id, ScrArea *area)
+{
   LISTBASE_FOREACH (SpaceLink *, sl, &area->spacedata) {
     SpaceType *space_type = BKE_spacetype_from_id(sl->spacetype);
+    ListBase *regionbase = (sl == area->spacedata.first) ? &area->regionbase : &sl->regionbase;
 
-    if (space_type && space_type->blend_read_lib) {
-      space_type->blend_read_lib(reader, parent_id, sl);
+    /* We cannot restore the region type without a valid space type. So delete all regions to make
+     * sure no data is kept around that can't be restored safely (like the type dependent
+     * #ARegion.regiondata). */
+    if (!space_type) {
+      LISTBASE_FOREACH_MUTABLE (ARegion *, region, regionbase) {
+        BKE_area_region_free(nullptr, region);
+        BLI_freelinkN(regionbase, region);
+      }
+
+      continue;
     }
+
+    if (space_type->blend_read_after_liblink) {
+      space_type->blend_read_after_liblink(reader, parent_id, sl);
+    }
+
+    regions_remove_invalid(space_type, regionbase);
   }
 }

@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2009 Blender Foundation
+/* SPDX-FileCopyrightText: 2009 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -8,13 +8,13 @@
 
 #include "DNA_scene_types.h"
 
-#include "RNA_access.h"
+#include "RNA_access.hh"
 
-#include "WM_api.h"
-#include "WM_types.h"
+#include "WM_api.hh"
+#include "WM_types.hh"
 
-#include "ED_mesh.h"
-#include "ED_screen.h"
+#include "ED_mesh.hh"
+#include "ED_screen.hh"
 
 #include "mesh_intern.h" /* own include */
 
@@ -73,6 +73,7 @@ void ED_operatortypes_mesh()
   WM_operatortype_append(MESH_OT_edge_rotate);
   WM_operatortype_append(MESH_OT_shortest_path_select);
   WM_operatortype_append(MESH_OT_loop_to_region);
+  WM_operatortype_append(MESH_OT_select_by_attribute);
   WM_operatortype_append(MESH_OT_region_to_loop);
   WM_operatortype_append(MESH_OT_select_axis);
 
@@ -358,7 +359,7 @@ void ED_operatormacros_mesh()
 
 void ED_keymap_mesh(wmKeyConfig *keyconf)
 {
-  wmKeyMap *keymap = WM_keymap_ensure(keyconf, "Mesh", 0, 0);
+  wmKeyMap *keymap = WM_keymap_ensure(keyconf, "Mesh", SPACE_EMPTY, RGN_TYPE_WINDOW);
   keymap->poll = ED_operator_editmesh;
 
   knifetool_modal_keymap(keyconf);

@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -6,10 +6,10 @@
  * \ingroup RNA
  */
 
-#include <float.h>
-#include <stdlib.h>
+#include <cfloat>
+#include <cstdlib>
 
-#include "RNA_define.h"
+#include "RNA_define.hh"
 
 #include "rna_internal.h"
 
@@ -18,23 +18,23 @@
 #include "DNA_texture_types.h"
 #include "DNA_world_types.h"
 
-#include "WM_types.h"
+#include "WM_types.hh"
 
 #ifdef RNA_RUNTIME
 
 #  include "MEM_guardedalloc.h"
 
-#  include "BKE_context.h"
+#  include "BKE_context.hh"
 #  include "BKE_layer.h"
 #  include "BKE_main.h"
 #  include "BKE_texture.h"
 
-#  include "DEG_depsgraph.h"
-#  include "DEG_depsgraph_build.h"
+#  include "DEG_depsgraph.hh"
+#  include "DEG_depsgraph_build.hh"
 
-#  include "ED_node.h"
+#  include "ED_node.hh"
 
-#  include "WM_api.h"
+#  include "WM_api.hh"
 
 static PointerRNA rna_World_lighting_get(PointerRNA *ptr)
 {

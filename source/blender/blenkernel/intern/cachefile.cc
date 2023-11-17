@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2016 Blender Foundation
+/* SPDX-FileCopyrightText: 2016 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -6,7 +6,7 @@
  * \ingroup bke
  */
 
-#include <string.h>
+#include <cstring>
 
 #include "DNA_anim_types.h"
 #include "DNA_cachefile_types.h"
@@ -30,14 +30,14 @@
 #include "BKE_idtype.h"
 #include "BKE_lib_id.h"
 #include "BKE_main.h"
-#include "BKE_modifier.h"
+#include "BKE_modifier.hh"
 #include "BKE_scene.h"
 
-#include "DEG_depsgraph_query.h"
+#include "DEG_depsgraph_query.hh"
 
 #include "RE_engine.h"
 
-#include "BLO_read_write.h"
+#include "BLO_read_write.hh"
 
 #include "MEM_guardedalloc.h"
 
@@ -104,10 +104,6 @@ static void cache_file_blend_write(BlendWriter *writer, ID *id, const void *id_a
   BLO_write_id_struct(writer, CacheFile, id_address, &cache_file->id);
   BKE_id_blend_write(writer, &cache_file->id);
 
-  if (cache_file->adt) {
-    BKE_animdata_blend_write(writer, cache_file->adt);
-  }
-
   /* write layers */
   LISTBASE_FOREACH (CacheFileLayer *, layer, &cache_file->layers) {
     BLO_write_struct(writer, CacheFileLayer, layer);
@@ -122,10 +118,6 @@ static void cache_file_blend_read_data(BlendDataReader *reader, ID *id)
   cache_file->handle_filepath[0] = '\0';
   cache_file->handle_readers = nullptr;
 
-  /* relink animdata */
-  BLO_read_data_address(reader, &cache_file->adt);
-  BKE_animdata_blend_read_data(reader, cache_file->adt);
-
   /* relink layers */
   BLO_read_list(reader, &cache_file->layers);
 }
@@ -136,7 +128,7 @@ IDTypeInfo IDType_ID_CF = {
     /*main_listbase_index*/ INDEX_ID_CF,
     /*struct_size*/ sizeof(CacheFile),
     /*name*/ "CacheFile",
-    /*name_plural*/ "cache_files",
+    /*name_plural*/ N_("cache_files"),
     /*translation_context*/ BLT_I18NCONTEXT_ID_CACHEFILE,
     /*flags*/ IDTYPE_FLAGS_APPEND_IS_REUSABLE,
     /*asset_type_info*/ nullptr,
@@ -152,8 +144,7 @@ IDTypeInfo IDType_ID_CF = {
 
     /*blend_write*/ cache_file_blend_write,
     /*blend_read_data*/ cache_file_blend_read_data,
-    /*blend_read_lib*/ nullptr,
-    /*blend_read_expand*/ nullptr,
+    /*blend_read_after_liblink*/ nullptr,
 
     /*blend_read_undo_preserve*/ nullptr,
 
@@ -163,18 +154,18 @@ IDTypeInfo IDType_ID_CF = {
 /* TODO: make this per cache file to avoid global locks. */
 static SpinLock spin;
 
-void BKE_cachefiles_init(void)
+void BKE_cachefiles_init()
 {
   BLI_spin_init(&spin);
 }
 
-void BKE_cachefiles_exit(void)
+void BKE_cachefiles_exit()
 {
   BLI_spin_end(&spin);
 }
 
 void BKE_cachefile_reader_open(CacheFile *cache_file,
-                               struct CacheReader **reader,
+                               CacheReader **reader,
                                Object *object,
                                const char *object_path)
 {
@@ -223,7 +214,7 @@ void BKE_cachefile_reader_open(CacheFile *cache_file,
 #endif
 }
 
-void BKE_cachefile_reader_free(CacheFile *cache_file, struct CacheReader **reader)
+void BKE_cachefile_reader_free(CacheFile *cache_file, CacheReader **reader)
 {
 #if defined(WITH_ALEMBIC) || defined(WITH_USD)
   /* Multiple modifiers and constraints can call this function concurrently, and
@@ -271,7 +262,7 @@ static void cachefile_handle_free(CacheFile *cache_file)
   if (cache_file->handle_readers) {
     GSetIterator gs_iter;
     GSET_ITER (gs_iter, cache_file->handle_readers) {
-      struct CacheReader **reader = static_cast<CacheReader **>(BLI_gsetIterator_getKey(&gs_iter));
+      CacheReader **reader = static_cast<CacheReader **>(BLI_gsetIterator_getKey(&gs_iter));
       if (*reader != nullptr) {
         switch (cache_file->type) {
           case CACHEFILE_TYPE_ALEMBIC:
@@ -375,7 +366,7 @@ void BKE_cachefile_eval(Main *bmain, Depsgraph *depsgraph, CacheFile *cache_file
   if (BLI_path_extension_check_glob(filepath, "*.usd;*.usda;*.usdc;*.usdz")) {
     cache_file->type = CACHEFILE_TYPE_USD;
     cache_file->handle = USD_create_handle(bmain, filepath, &cache_file->object_paths);
-    BLI_strncpy(cache_file->handle_filepath, filepath, FILE_MAX);
+    STRNCPY(cache_file->handle_filepath, filepath);
   }
 #endif
 
@@ -401,8 +392,8 @@ bool BKE_cachefile_filepath_get(const Main *bmain,
   if (cache_file->is_sequence && BLI_path_frame_get(r_filepath, &fframe, &frame_len)) {
     Scene *scene = DEG_get_evaluated_scene(depsgraph);
     const float ctime = BKE_scene_ctime_get(scene);
-    const double fps = (((double)scene->r.frs_sec) / (double)scene->r.frs_sec_base);
-    const int frame = (int)BKE_cachefile_time_offset(cache_file, (double)ctime, fps);
+    const double fps = double(scene->r.frs_sec) / double(scene->r.frs_sec_base);
+    const int frame = int(BKE_cachefile_time_offset(cache_file, double(ctime), fps));
 
     char ext[32];
     BLI_path_frame_strip(r_filepath, ext, sizeof(ext));
@@ -418,8 +409,8 @@ bool BKE_cachefile_filepath_get(const Main *bmain,
 
 double BKE_cachefile_time_offset(const CacheFile *cache_file, const double time, const double fps)
 {
-  const double time_offset = (double)cache_file->frame_offset / fps;
-  const double frame = (cache_file->override_frame ? (double)cache_file->frame : time);
+  const double time_offset = double(cache_file->frame_offset) / fps;
+  const double frame = (cache_file->override_frame ? double(cache_file->frame) : time);
   return cache_file->is_sequence ? frame : frame / fps - time_offset;
 }
 
@@ -438,9 +429,7 @@ bool BKE_cache_file_uses_render_procedural(const CacheFile *cache_file, Scene *s
 
 CacheFileLayer *BKE_cachefile_add_layer(CacheFile *cache_file, const char filepath[1024])
 {
-  for (CacheFileLayer *layer = static_cast<CacheFileLayer *>(cache_file->layers.first); layer;
-       layer = layer->next)
-  {
+  LISTBASE_FOREACH (CacheFileLayer *, layer, &cache_file->layers) {
     if (STREQ(layer->filepath, filepath)) {
       return nullptr;
     }
@@ -454,7 +443,7 @@ CacheFileLayer *BKE_cachefile_add_layer(CacheFile *cache_file, const char filepa
 
   BLI_addtail(&cache_file->layers, layer);
 
-  cache_file->active_layer = (char)(num_layers + 1);
+  cache_file->active_layer = char(num_layers + 1);
 
   return layer;
 }

@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2020 Blender Foundation
+/* SPDX-FileCopyrightText: 2020 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -12,35 +12,34 @@
  * to modify the operator.
  */
 
-#include <float.h>
-#include <string.h>
+#include <cfloat>
+#include <cstring>
 
 #include "MEM_guardedalloc.h"
 
 #include "BLI_listbase.h"
-#include "BLI_math.h"
 #include "BLI_string.h"
 
 #include "DNA_anim_types.h"
 #include "DNA_scene_types.h"
 
-#include "RNA_access.h"
-#include "RNA_define.h"
+#include "RNA_access.hh"
+#include "RNA_define.hh"
 
 #include "BLT_translation.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 
-#include "UI_interface.h"
+#include "UI_interface.hh"
 
-#include "ED_anim_api.h"
-#include "ED_keyframes_edit.h"
-#include "ED_numinput.h"
-#include "ED_screen.h"
-#include "ED_util.h"
+#include "ED_anim_api.hh"
+#include "ED_keyframes_edit.hh"
+#include "ED_numinput.hh"
+#include "ED_screen.hh"
+#include "ED_util.hh"
 
-#include "WM_api.h"
-#include "WM_types.h"
+#include "WM_api.hh"
+#include "WM_types.hh"
 
 #include "graph_intern.h"
 
@@ -66,7 +65,7 @@ struct tGraphSliderOp {
   /** The original bezt curve data (used for restoring fcurves). */
   ListBase bezt_arr_list;
 
-  struct tSlider *slider;
+  tSlider *slider;
 
   /* Each operator has a specific update function. */
   void (*modal_update)(bContext *, wmOperator *);
@@ -151,13 +150,12 @@ static void store_original_bezt_arrays(tGraphSliderOp *gso)
 {
   ListBase anim_data = {nullptr, nullptr};
   bAnimContext *ac = &gso->ac;
-  bAnimListElem *ale;
 
   ANIM_animdata_filter(
       ac, &anim_data, OPERATOR_DATA_FILTER, ac->data, eAnimCont_Types(ac->datatype));
 
   /* Loop through filtered data and copy the curves. */
-  for (ale = static_cast<bAnimListElem *>(anim_data.first); ale; ale = ale->next) {
+  LISTBASE_FOREACH (bAnimListElem *, ale, &anim_data) {
     FCurve *fcu = (FCurve *)ale->key_data;
 
     if (fcu->bezt == nullptr) {
@@ -332,17 +330,15 @@ static int graph_slider_modal(bContext *C, wmOperator *op, const wmEvent *event)
     default: {
       if ((event->val == KM_PRESS) && handleNumInput(C, &gso->num, event)) {
         float value;
-        float percentage = RNA_property_float_get(op->ptr, gso->factor_prop);
-
-        /* Grab percentage from numeric input, and store this new value for redo
-         * NOTE: users see ints, while internally we use a 0-1 float.
-         */
-        value = percentage * 100.0f;
         applyNumInput(&gso->num, &value);
 
-        percentage = value / 100.0f;
-        ED_slider_factor_set(gso->slider, percentage);
-        RNA_property_float_set(op->ptr, gso->factor_prop, percentage);
+        /* Grab percentage from numeric input, and store this new value for redo
+         * NOTE: users see ints, while internally we use a 0-1 float. */
+        if (ED_slider_mode_get(gso->slider) == SLIDER_MODE_PERCENT) {
+          value = value / 100.0f;
+        }
+        ED_slider_factor_set(gso->slider, value);
+        RNA_property_float_set(op->ptr, gso->factor_prop, value);
 
         gso->modal_update(C, op);
         break;
@@ -407,14 +403,13 @@ enum tDecimModes {
 static void decimate_graph_keys(bAnimContext *ac, float factor, float error_sq_max)
 {
   ListBase anim_data = {nullptr, nullptr};
-  bAnimListElem *ale;
 
   /* Filter data. */
   ANIM_animdata_filter(
       ac, &anim_data, OPERATOR_DATA_FILTER, ac->data, eAnimCont_Types(ac->datatype));
 
   /* Loop through filtered data and clean curves. */
-  for (ale = static_cast<bAnimListElem *>(anim_data.first); ale; ale = ale->next) {
+  LISTBASE_FOREACH (bAnimListElem *, ale, &anim_data) {
     if (!decimate_fcurve(ale, factor, error_sq_max)) {
       /* The selection contains unsupported keyframe types! */
       WM_report(RPT_WARNING, "Decimate: Skipping non linear/bezier keyframes!");
@@ -542,16 +537,16 @@ static bool decimate_poll_property(const bContext * /*C*/, wmOperator *op, const
   return true;
 }
 
-static char *decimate_desc(bContext * /*C*/, wmOperatorType * /*op*/, PointerRNA *ptr)
+static std::string decimate_desc(bContext * /*C*/, wmOperatorType * /*ot*/, PointerRNA *ptr)
 {
 
   if (RNA_enum_get(ptr, "mode") == DECIM_ERROR) {
-    return BLI_strdup(
-        TIP_("Decimate F-Curves by specifying how much they can deviate from the original curve"));
+    return TIP_(
+        "Decimate F-Curves by specifying how much they can deviate from the original curve");
   }
 
   /* Use default description. */
-  return nullptr;
+  return "";
 }
 
 static const EnumPropertyItem decimate_mode_items[] = {
@@ -812,8 +807,7 @@ static void blend_to_default_graph_keys(bAnimContext *ac, const float factor)
       continue;
     }
 
-    PointerRNA id_ptr;
-    RNA_id_pointer_create(ale->id, &id_ptr);
+    PointerRNA id_ptr = RNA_id_pointer_create(ale->id);
 
     blend_to_default_fcurve(&id_ptr, fcu, factor);
     ale->update |= ANIM_UPDATE_DEFAULT;
@@ -987,6 +981,673 @@ void GRAPH_OT_ease(wmOperatorType *ot)
 }
 
 /** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Blend Offset Operator
+ * \{ */
+
+static void blend_offset_graph_keys(bAnimContext *ac, const float factor)
+{
+  apply_fcu_segment_function(ac, factor, blend_offset_fcurve_segment);
+}
+
+static void blend_offset_draw_status_header(bContext *C, tGraphSliderOp *gso)
+{
+  common_draw_status_header(C, gso, "Blend Offset Keys");
+}
+
+static void blend_offset_modal_update(bContext *C, wmOperator *op)
+{
+  tGraphSliderOp *gso = static_cast<tGraphSliderOp *>(op->customdata);
+
+  blend_offset_draw_status_header(C, gso);
+
+  /* Reset keyframes to the state at invoke. */
+  reset_bezts(gso);
+  const float factor = slider_factor_get_and_remember(op);
+  blend_offset_graph_keys(&gso->ac, factor);
+  WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, nullptr);
+}
+
+static int blend_offset_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+{
+  const int invoke_result = graph_slider_invoke(C, op, event);
+
+  if (invoke_result == OPERATOR_CANCELLED) {
+    return invoke_result;
+  }
+
+  tGraphSliderOp *gso = static_cast<tGraphSliderOp *>(op->customdata);
+  gso->modal_update = blend_offset_modal_update;
+  gso->factor_prop = RNA_struct_find_property(op->ptr, "factor");
+  blend_offset_draw_status_header(C, gso);
+  ED_slider_factor_bounds_set(gso->slider, -1, 1);
+  ED_slider_factor_set(gso->slider, 0.0f);
+
+  return invoke_result;
+}
+
+static int blend_offset_exec(bContext *C, wmOperator *op)
+{
+  bAnimContext ac;
+
+  /* Get editor data. */
+  if (ANIM_animdata_get_context(C, &ac) == 0) {
+    return OPERATOR_CANCELLED;
+  }
+
+  const float factor = RNA_float_get(op->ptr, "factor");
+
+  blend_offset_graph_keys(&ac, factor);
+
+  /* Set notifier that keyframes have changed. */
+  WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, nullptr);
+
+  return OPERATOR_FINISHED;
+}
+
+void GRAPH_OT_blend_offset(wmOperatorType *ot)
+{
+  /* Identifiers. */
+  ot->name = "Blend Offset Keyframes";
+  ot->idname = "GRAPH_OT_blend_offset";
+  ot->description = "Shift selected keys to the value of the neighboring keys as a block";
+
+  /* API callbacks. */
+  ot->invoke = blend_offset_invoke;
+  ot->modal = graph_slider_modal;
+  ot->exec = blend_offset_exec;
+  ot->poll = graphop_editable_keyframes_poll;
+
+  /* Flags. */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_BLOCKING | OPTYPE_GRAB_CURSOR_X;
+
+  RNA_def_float_factor(ot->srna,
+                       "factor",
+                       0.0f,
+                       -FLT_MAX,
+                       FLT_MAX,
+                       "Offset Factor",
+                       "Control which key to offset towards and how far",
+                       -1.0f,
+                       1.0f);
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Blend to Ease Operator
+ * \{ */
+
+static void blend_to_ease_graph_keys(bAnimContext *ac, const float factor)
+{
+  apply_fcu_segment_function(ac, factor, blend_to_ease_fcurve_segment);
+}
+
+static void blend_to_ease_draw_status_header(bContext *C, tGraphSliderOp *gso)
+{
+  common_draw_status_header(C, gso, "Blend to Ease Keys");
+}
+
+static void blend_to_ease_modal_update(bContext *C, wmOperator *op)
+{
+  tGraphSliderOp *gso = static_cast<tGraphSliderOp *>(op->customdata);
+
+  blend_to_ease_draw_status_header(C, gso);
+
+  /* Reset keyframes to the state at invoke. */
+  reset_bezts(gso);
+  const float factor = slider_factor_get_and_remember(op);
+  blend_to_ease_graph_keys(&gso->ac, factor);
+  WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, nullptr);
+}
+
+static int blend_to_ease_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+{
+  const int invoke_result = graph_slider_invoke(C, op, event);
+
+  if (invoke_result == OPERATOR_CANCELLED) {
+    return invoke_result;
+  }
+
+  tGraphSliderOp *gso = static_cast<tGraphSliderOp *>(op->customdata);
+  gso->modal_update = blend_to_ease_modal_update;
+  gso->factor_prop = RNA_struct_find_property(op->ptr, "factor");
+  blend_to_ease_draw_status_header(C, gso);
+  ED_slider_allow_overshoot_set(gso->slider, false, false);
+  ED_slider_factor_bounds_set(gso->slider, -1, 1);
+  ED_slider_factor_set(gso->slider, 0.0f);
+
+  return invoke_result;
+}
+
+static int blend_to_ease_exec(bContext *C, wmOperator *op)
+{
+  bAnimContext ac;
+
+  /* Get editor data. */
+  if (ANIM_animdata_get_context(C, &ac) == 0) {
+    return OPERATOR_CANCELLED;
+  }
+
+  const float factor = RNA_float_get(op->ptr, "factor");
+
+  blend_to_ease_graph_keys(&ac, factor);
+
+  /* Set notifier that keyframes have changed. */
+  WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, nullptr);
+
+  return OPERATOR_FINISHED;
+}
+
+void GRAPH_OT_blend_to_ease(wmOperatorType *ot)
+{
+  /* Identifiers. */
+  ot->name = "Blend to Ease Keyframes";
+  ot->idname = "GRAPH_OT_blend_to_ease";
+  ot->description = "Blends keyframes from current state to an ease-in or ease-out curve";
+
+  /* API callbacks. */
+  ot->invoke = blend_to_ease_invoke;
+  ot->modal = graph_slider_modal;
+  ot->exec = blend_to_ease_exec;
+  ot->poll = graphop_editable_keyframes_poll;
+
+  /* Flags. */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+  RNA_def_float_factor(ot->srna,
+                       "factor",
+                       0.0f,
+                       -FLT_MAX,
+                       FLT_MAX,
+                       "Blend",
+                       "Favor either original data or ease curve",
+                       -1.0f,
+                       1.0f);
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Match Slope
+ * \{ */
+
+static void match_slope_graph_keys(bAnimContext *ac, const float factor)
+{
+  ListBase anim_data = {nullptr, nullptr};
+
+  bool all_segments_valid = true;
+
+  ANIM_animdata_filter(
+      ac, &anim_data, OPERATOR_DATA_FILTER, ac->data, eAnimCont_Types(ac->datatype));
+  LISTBASE_FOREACH (bAnimListElem *, ale, &anim_data) {
+    FCurve *fcu = (FCurve *)ale->key_data;
+    ListBase segments = find_fcurve_segments(fcu);
+
+    LISTBASE_FOREACH (FCurveSegment *, segment, &segments) {
+      all_segments_valid = match_slope_fcurve_segment(fcu, segment, factor);
+    }
+
+    ale->update |= ANIM_UPDATE_DEFAULT;
+    BLI_freelistN(&segments);
+  }
+
+  if (!all_segments_valid) {
+    if (factor >= 0) {
+      WM_report(RPT_WARNING, "You need at least 2 keys to the right side of the selection");
+    }
+    else {
+      WM_report(RPT_WARNING, "You need at least 2 keys to the left side of the selection");
+    }
+  }
+
+  ANIM_animdata_update(ac, &anim_data);
+  ANIM_animdata_freelist(&anim_data);
+}
+
+static void match_slope_draw_status_header(bContext *C, tGraphSliderOp *gso)
+{
+  common_draw_status_header(C, gso, "Match Slope");
+}
+
+static void match_slope_modal_update(bContext *C, wmOperator *op)
+{
+  tGraphSliderOp *gso = static_cast<tGraphSliderOp *>(op->customdata);
+
+  match_slope_draw_status_header(C, gso);
+
+  /* Reset keyframes to the state at invoke. */
+  reset_bezts(gso);
+  const float factor = slider_factor_get_and_remember(op);
+  match_slope_graph_keys(&gso->ac, factor);
+  WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, nullptr);
+}
+
+static int match_slope_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+{
+  const int invoke_result = graph_slider_invoke(C, op, event);
+
+  if (invoke_result == OPERATOR_CANCELLED) {
+    return invoke_result;
+  }
+
+  tGraphSliderOp *gso = static_cast<tGraphSliderOp *>(op->customdata);
+  gso->modal_update = match_slope_modal_update;
+  gso->factor_prop = RNA_struct_find_property(op->ptr, "factor");
+  match_slope_draw_status_header(C, gso);
+  ED_slider_allow_overshoot_set(gso->slider, false, false);
+  ED_slider_factor_bounds_set(gso->slider, -1, 1);
+  ED_slider_factor_set(gso->slider, 0.0f);
+
+  return invoke_result;
+}
+
+static int match_slope_exec(bContext *C, wmOperator *op)
+{
+  bAnimContext ac;
+
+  /* Get editor data. */
+  if (ANIM_animdata_get_context(C, &ac) == 0) {
+    return OPERATOR_CANCELLED;
+  }
+
+  const float factor = RNA_float_get(op->ptr, "factor");
+
+  match_slope_graph_keys(&ac, factor);
+
+  /* Set notifier that keyframes have changed. */
+  WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, nullptr);
+
+  return OPERATOR_FINISHED;
+}
+
+void GRAPH_OT_match_slope(wmOperatorType *ot)
+{
+  /* Identifiers. */
+  ot->name = "Match Slope";
+  ot->idname = "GRAPH_OT_match_slope";
+  ot->description = "Blend selected keys to the slope of neighboring ones";
+
+  /* API callbacks. */
+  ot->invoke = match_slope_invoke;
+  ot->modal = graph_slider_modal;
+  ot->exec = match_slope_exec;
+  ot->poll = graphop_editable_keyframes_poll;
+
+  /* Flags. */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+  RNA_def_float_factor(ot->srna,
+                       "factor",
+                       0.0f,
+                       -FLT_MAX,
+                       FLT_MAX,
+                       "Factor",
+                       "Defines which keys to use as slope and how much to blend towards them",
+                       -1.0f,
+                       1.0f);
+}
+
+/* -------------------------------------------------------------------- */
+/** \name Time Offset
+ * \{ */
+
+static void time_offset_graph_keys(bAnimContext *ac, const float factor)
+{
+  apply_fcu_segment_function(ac, factor, time_offset_fcurve_segment);
+}
+
+static void time_offset_draw_status_header(bContext *C, tGraphSliderOp *gso)
+{
+  common_draw_status_header(C, gso, "Time Offset Keys");
+}
+
+static void time_offset_modal_update(bContext *C, wmOperator *op)
+{
+  tGraphSliderOp *gso = static_cast<tGraphSliderOp *>(op->customdata);
+
+  time_offset_draw_status_header(C, gso);
+
+  /* Reset keyframes to the state at invoke. */
+  reset_bezts(gso);
+  const float factor = slider_factor_get_and_remember(op);
+  time_offset_graph_keys(&gso->ac, factor);
+  WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, nullptr);
+}
+
+static int time_offset_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+{
+  const int invoke_result = graph_slider_invoke(C, op, event);
+
+  if (invoke_result == OPERATOR_CANCELLED) {
+    return invoke_result;
+  }
+
+  tGraphSliderOp *gso = static_cast<tGraphSliderOp *>(op->customdata);
+  gso->modal_update = time_offset_modal_update;
+  gso->factor_prop = RNA_struct_find_property(op->ptr, "frame_offset");
+  time_offset_draw_status_header(C, gso);
+  ED_slider_factor_bounds_set(gso->slider, -10, 10);
+  ED_slider_factor_set(gso->slider, 0.0f);
+  ED_slider_mode_set(gso->slider, SLIDER_MODE_FLOAT);
+  ED_slider_unit_set(gso->slider, "Frames");
+
+  return invoke_result;
+}
+
+static int time_offset_exec(bContext *C, wmOperator *op)
+{
+  bAnimContext ac;
+
+  /* Get editor data. */
+  if (ANIM_animdata_get_context(C, &ac) == 0) {
+    return OPERATOR_CANCELLED;
+  }
+
+  const float factor = RNA_float_get(op->ptr, "frame_offset");
+
+  time_offset_graph_keys(&ac, factor);
+
+  /* Set notifier that keyframes have changed. */
+  WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, nullptr);
+
+  return OPERATOR_FINISHED;
+}
+
+void GRAPH_OT_time_offset(wmOperatorType *ot)
+{
+  /* Identifiers. */
+  ot->name = "Time Offset Keyframes";
+  ot->idname = "GRAPH_OT_time_offset";
+  ot->description = "Shifts the value of selected keys in time";
+
+  /* API callbacks. */
+  ot->invoke = time_offset_invoke;
+  ot->modal = graph_slider_modal;
+  ot->exec = time_offset_exec;
+  ot->poll = graphop_editable_keyframes_poll;
+
+  /* Flags. */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_BLOCKING | OPTYPE_GRAB_CURSOR_X;
+
+  RNA_def_float_factor(ot->srna,
+                       "frame_offset",
+                       0.0f,
+                       -FLT_MAX,
+                       FLT_MAX,
+                       "Frame Offset",
+                       "How far in frames to offset the animation",
+                       -10.0f,
+                       10.0f);
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Shear Operator
+ * \{ */
+
+static const EnumPropertyItem shear_direction_items[] = {
+    {SHEAR_FROM_LEFT,
+     "FROM_LEFT",
+     0,
+     "From Left",
+     "Shear the keys using the left key as reference"},
+    {SHEAR_FROM_RIGHT,
+     "FROM_RIGHT",
+     0,
+     "From Right",
+     "Shear the keys using the right key as reference"},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
+static void shear_graph_keys(bAnimContext *ac, const float factor, tShearDirection direction)
+{
+  ListBase anim_data = {nullptr, nullptr};
+
+  ANIM_animdata_filter(
+      ac, &anim_data, OPERATOR_DATA_FILTER, ac->data, eAnimCont_Types(ac->datatype));
+  LISTBASE_FOREACH (bAnimListElem *, ale, &anim_data) {
+    FCurve *fcu = (FCurve *)ale->key_data;
+    ListBase segments = find_fcurve_segments(fcu);
+
+    LISTBASE_FOREACH (FCurveSegment *, segment, &segments) {
+      shear_fcurve_segment(fcu, segment, factor, direction);
+    }
+
+    ale->update |= ANIM_UPDATE_DEFAULT;
+    BLI_freelistN(&segments);
+  }
+
+  ANIM_animdata_update(ac, &anim_data);
+  ANIM_animdata_freelist(&anim_data);
+}
+
+static void shear_draw_status_header(bContext *C, tGraphSliderOp *gso)
+{
+  char status_str[UI_MAX_DRAW_STR];
+  char mode_str[32];
+  char slider_string[UI_MAX_DRAW_STR];
+  ED_slider_status_string_get(gso->slider, slider_string, UI_MAX_DRAW_STR);
+
+  STRNCPY(mode_str, TIP_("Shear Keys"));
+
+  if (hasNumInput(&gso->num)) {
+    char str_ofs[NUM_STR_REP_LEN];
+
+    outputNumInput(&gso->num, str_ofs, &gso->scene->unit);
+
+    SNPRINTF(status_str, "%s: %s", mode_str, str_ofs);
+  }
+  else {
+    const char *operator_string = "D - Toggle Direction";
+    SNPRINTF(status_str, "%s: %s | %s", mode_str, slider_string, operator_string);
+  }
+
+  ED_workspace_status_text(C, status_str);
+}
+
+static void shear_modal_update(bContext *C, wmOperator *op)
+{
+  tGraphSliderOp *gso = static_cast<tGraphSliderOp *>(op->customdata);
+
+  shear_draw_status_header(C, gso);
+
+  /* Reset keyframes to the state at invoke. */
+  reset_bezts(gso);
+  const float factor = slider_factor_get_and_remember(op);
+  const tShearDirection direction = tShearDirection(RNA_enum_get(op->ptr, "direction"));
+
+  shear_graph_keys(&gso->ac, factor, direction);
+  WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, nullptr);
+}
+
+static int shear_modal(bContext *C, wmOperator *op, const wmEvent *event)
+{
+  if (event->val != KM_PRESS) {
+    return graph_slider_modal(C, op, event);
+  }
+
+  switch (event->type) {
+    case EVT_DKEY: {
+      tShearDirection direction = tShearDirection(RNA_enum_get(op->ptr, "direction"));
+      RNA_enum_set(op->ptr,
+                   "direction",
+                   (direction == SHEAR_FROM_LEFT) ? SHEAR_FROM_RIGHT : SHEAR_FROM_LEFT);
+      shear_modal_update(C, op);
+      break;
+    }
+
+    default:
+      return graph_slider_modal(C, op, event);
+      break;
+  }
+  return OPERATOR_RUNNING_MODAL;
+}
+
+static int shear_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+{
+  const int invoke_result = graph_slider_invoke(C, op, event);
+
+  if (invoke_result == OPERATOR_CANCELLED) {
+    return invoke_result;
+  }
+
+  tGraphSliderOp *gso = static_cast<tGraphSliderOp *>(op->customdata);
+  gso->modal_update = shear_modal_update;
+  gso->factor_prop = RNA_struct_find_property(op->ptr, "factor");
+  shear_draw_status_header(C, gso);
+  ED_slider_factor_bounds_set(gso->slider, -1, 1);
+  ED_slider_factor_set(gso->slider, 0.0f);
+
+  return invoke_result;
+}
+
+static int shear_exec(bContext *C, wmOperator *op)
+{
+  bAnimContext ac;
+
+  /* Get editor data. */
+  if (ANIM_animdata_get_context(C, &ac) == 0) {
+    return OPERATOR_CANCELLED;
+  }
+
+  const float factor = RNA_float_get(op->ptr, "factor");
+  const tShearDirection direction = tShearDirection(RNA_enum_get(op->ptr, "direction"));
+
+  shear_graph_keys(&ac, factor, direction);
+
+  /* Set notifier that keyframes have changed. */
+  WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, nullptr);
+
+  return OPERATOR_FINISHED;
+}
+
+void GRAPH_OT_shear(wmOperatorType *ot)
+{
+  /* Identifiers. */
+  ot->name = "Shear Keyframes";
+  ot->idname = "GRAPH_OT_shear";
+  ot->description =
+      "Affect the value of the keys linearly, keeping the same relationship between them using "
+      "either the left or the right key as reference";
+
+  /* API callbacks. */
+  ot->invoke = shear_invoke;
+  ot->modal = shear_modal;
+  ot->exec = shear_exec;
+  ot->poll = graphop_editable_keyframes_poll;
+
+  /* Flags. */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_BLOCKING | OPTYPE_GRAB_CURSOR_X;
+
+  RNA_def_float_factor(ot->srna,
+                       "factor",
+                       0.0f,
+                       -FLT_MAX,
+                       FLT_MAX,
+                       "Shear Factor",
+                       "The amount of shear to apply",
+                       -1.0f,
+                       1.0f);
+
+  RNA_def_enum(ot->srna,
+               "direction",
+               shear_direction_items,
+               SHEAR_FROM_LEFT,
+               "Direction",
+               "Which end of the segment to use as a reference to shear from");
+}
+
+/* -------------------------------------------------------------------- */
+/** \name Scale Average Operator
+ * \{ */
+
+static void scale_average_graph_keys(bAnimContext *ac, const float factor)
+{
+  apply_fcu_segment_function(ac, factor, scale_average_fcurve_segment);
+}
+
+static void scale_average_modal_update(bContext *C, wmOperator *op)
+{
+  tGraphSliderOp *gso = static_cast<tGraphSliderOp *>(op->customdata);
+
+  common_draw_status_header(C, gso, "Scale to Average");
+
+  /* Reset keyframes to the state at invoke. */
+  reset_bezts(gso);
+  const float factor = slider_factor_get_and_remember(op);
+  scale_average_graph_keys(&gso->ac, factor);
+  WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, nullptr);
+}
+
+static int scale_average_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+{
+  const int invoke_result = graph_slider_invoke(C, op, event);
+
+  if (invoke_result == OPERATOR_CANCELLED) {
+    return invoke_result;
+  }
+
+  tGraphSliderOp *gso = static_cast<tGraphSliderOp *>(op->customdata);
+  gso->modal_update = scale_average_modal_update;
+  gso->factor_prop = RNA_struct_find_property(op->ptr, "factor");
+  common_draw_status_header(C, gso, "Scale to Average");
+  ED_slider_factor_bounds_set(gso->slider, 0, 2);
+  ED_slider_factor_set(gso->slider, 1.0f);
+
+  return invoke_result;
+}
+
+static int scale_average_exec(bContext *C, wmOperator *op)
+{
+  bAnimContext ac;
+
+  /* Get editor data. */
+  if (ANIM_animdata_get_context(C, &ac) == 0) {
+    return OPERATOR_CANCELLED;
+  }
+
+  const float factor = RNA_float_get(op->ptr, "factor");
+
+  scale_average_graph_keys(&ac, factor);
+
+  /* Set notifier that keyframes have changed. */
+  WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, nullptr);
+
+  return OPERATOR_FINISHED;
+}
+
+void GRAPH_OT_scale_average(wmOperatorType *ot)
+{
+  /* Identifiers. */
+  ot->name = "Scale Average Keyframes";
+  ot->idname = "GRAPH_OT_scale_average";
+  ot->description = "Scale selected key values by their combined average";
+
+  /* API callbacks. */
+  ot->invoke = scale_average_invoke;
+  ot->modal = graph_slider_modal;
+  ot->exec = scale_average_exec;
+  ot->poll = graphop_editable_keyframes_poll;
+
+  /* Flags. */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_BLOCKING | OPTYPE_GRAB_CURSOR_X;
+
+  RNA_def_float_factor(ot->srna,
+                       "factor",
+                       1.0f,
+                       -FLT_MAX,
+                       FLT_MAX,
+                       "Scale Factor",
+                       "The scale factor applied to the curve segments",
+                       0.0f,
+                       2.0f);
+}
+
+/** \} */
+
 /* -------------------------------------------------------------------- */
 /** \name Gauss Smooth Operator
  * \{ */
@@ -1001,7 +1662,7 @@ struct tGaussOperatorData {
 
 /* Store data to smooth an FCurve segment. */
 struct tFCurveSegmentLink {
-  struct tFCurveSegmentLink *next, *prev;
+  tFCurveSegmentLink *next, *prev;
   FCurve *fcu;
   FCurveSegment *segment;
   float *samples; /* Array of y-values of the FCurve segment. */
@@ -1230,11 +1891,11 @@ void GRAPH_OT_gaussian_smooth(wmOperatorType *ot)
 /** \name Butterworth Smooth Operator
  * \{ */
 
-typedef struct tBtwOperatorData {
+struct tBtwOperatorData {
   ButterworthCoefficients *coefficients;
   ListBase segment_links; /* tFCurveSegmentLink */
   ListBase anim_data;     /* bAnimListElem */
-} tBtwOperatorData;
+};
 
 static int btw_calculate_sample_count(BezTriple *right_bezt,
                                       BezTriple *left_bezt,
@@ -1259,11 +1920,11 @@ static void btw_smooth_allocate_operator_data(tGraphSliderOp *gso,
 
   operator_data->coefficients = ED_anim_allocate_butterworth_coefficients(filter_order);
 
-  ListBase anim_data = {NULL, NULL};
+  ListBase anim_data = {nullptr, nullptr};
   ANIM_animdata_filter(
       &gso->ac, &anim_data, OPERATOR_DATA_FILTER, gso->ac.data, eAnimCont_Types(gso->ac.datatype));
 
-  ListBase segment_links = {NULL, NULL};
+  ListBase segment_links = {nullptr, nullptr};
   LISTBASE_FOREACH (bAnimListElem *, ale, &anim_data) {
     FCurve *fcu = (FCurve *)ale->key_data;
     ListBase fcu_segments = find_fcurve_segments(fcu);
@@ -1346,7 +2007,7 @@ static void btw_smooth_modal_update(bContext *C, wmOperator *op)
   }
 
   ANIM_animdata_update(&ac, &operator_data->anim_data);
-  WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
+  WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, nullptr);
 }
 
 static int btw_smooth_invoke(bContext *C, wmOperator *op, const wmEvent *event)
@@ -1386,7 +2047,7 @@ static void btw_smooth_graph_keys(bAnimContext *ac,
                                   const int filter_order,
                                   const int samples_per_frame)
 {
-  ListBase anim_data = {NULL, NULL};
+  ListBase anim_data = {nullptr, nullptr};
   ANIM_animdata_filter(
       ac, &anim_data, OPERATOR_DATA_FILTER, ac->data, eAnimCont_Types(ac->datatype));
 
@@ -1441,7 +2102,7 @@ static int btw_smooth_exec(bContext *C, wmOperator *op)
       &ac, blend, blend_in_out, cutoff_frequency, filter_order, samples_per_frame);
 
   /* Set notifier that keyframes have changed. */
-  WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
+  WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, nullptr);
 
   return OPERATOR_FINISHED;
 }
@@ -1467,7 +2128,7 @@ void GRAPH_OT_butterworth_smooth(wmOperatorType *ot)
                 3.0f,
                 0.0f,
                 FLT_MAX,
-                "Frquency Cutoff (Hz)",
+                "Frequency Cutoff (Hz)",
                 "Lower values give a smoother curve",
                 0.0f,
                 FLT_MAX);
@@ -1511,5 +2172,92 @@ void GRAPH_OT_butterworth_smooth(wmOperatorType *ot)
               "Linearly blend the smooth data to the border frames of the selection",
               0,
               128);
+}
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Push-Pull Operator
+ * \{ */
+
+static void push_pull_graph_keys(bAnimContext *ac, const float factor)
+{
+  apply_fcu_segment_function(ac, factor, push_pull_fcurve_segment);
+}
+
+static void push_pull_modal_update(bContext *C, wmOperator *op)
+{
+  tGraphSliderOp *gso = static_cast<tGraphSliderOp *>(op->customdata);
+
+  common_draw_status_header(C, gso, "Push Pull Keys");
+
+  /* Reset keyframes to the state at invoke. */
+  reset_bezts(gso);
+  const float factor = slider_factor_get_and_remember(op);
+  push_pull_graph_keys(&gso->ac, factor);
+  WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, nullptr);
+}
+
+static int push_pull_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+{
+  const int invoke_result = graph_slider_invoke(C, op, event);
+
+  if (invoke_result == OPERATOR_CANCELLED) {
+    return invoke_result;
+  }
+
+  tGraphSliderOp *gso = static_cast<tGraphSliderOp *>(op->customdata);
+  gso->modal_update = push_pull_modal_update;
+  gso->factor_prop = RNA_struct_find_property(op->ptr, "factor");
+  ED_slider_factor_bounds_set(gso->slider, 0, 2);
+  ED_slider_factor_set(gso->slider, 1);
+  common_draw_status_header(C, gso, "Push Pull Keys");
+
+  return invoke_result;
+}
+
+static int push_pull_exec(bContext *C, wmOperator *op)
+{
+  bAnimContext ac;
+
+  /* Get editor data. */
+  if (ANIM_animdata_get_context(C, &ac) == 0) {
+    return OPERATOR_CANCELLED;
+  }
+
+  const float factor = RNA_float_get(op->ptr, "factor");
+
+  push_pull_graph_keys(&ac, factor);
+
+  /* Set notifier that keyframes have changed. */
+  WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, nullptr);
+
+  return OPERATOR_FINISHED;
+}
+
+void GRAPH_OT_push_pull(wmOperatorType *ot)
+{
+  /* Identifiers. */
+  ot->name = "Push Pull Keyframes";
+  ot->idname = "GRAPH_OT_push_pull";
+  ot->description = "Exaggerate or minimize the value of the selected keys";
+
+  /* API callbacks. */
+  ot->invoke = push_pull_invoke;
+  ot->modal = graph_slider_modal;
+  ot->exec = push_pull_exec;
+  ot->poll = graphop_editable_keyframes_poll;
+
+  /* Flags. */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_BLOCKING | OPTYPE_GRAB_CURSOR_X;
+
+  RNA_def_float_factor(ot->srna,
+                       "factor",
+                       1.0f,
+                       -FLT_MAX,
+                       FLT_MAX,
+                       "Factor",
+                       "Control how far to push or pull the keys",
+                       0.0f,
+                       2.0f);
 }
 /** \} */

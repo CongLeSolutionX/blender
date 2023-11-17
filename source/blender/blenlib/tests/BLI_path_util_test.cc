@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: Apache-2.0 */
 
@@ -9,7 +9,7 @@
 #include "BLI_fileops.h"
 #include "BLI_path_util.h"
 #include "BLI_string.h"
-#include "BLI_string_utils.h"
+#include "BLI_string_utils.hh"
 
 /* -------------------------------------------------------------------- */
 /** \name Local Utilities

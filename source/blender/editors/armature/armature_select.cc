@@ -14,33 +14,38 @@
 #include "DNA_scene_types.h"
 
 #include "BLI_blenlib.h"
-#include "BLI_math.h"
+#include "BLI_math_matrix.h"
+#include "BLI_math_vector.h"
 #include "BLI_rect.h"
-#include "BLI_string_utils.h"
+#include "BLI_string_utils.hh"
 
 #include "BKE_action.h"
-#include "BKE_armature.h"
-#include "BKE_context.h"
+#include "BKE_armature.hh"
+#include "BKE_context.hh"
 #include "BKE_layer.h"
-#include "BKE_object.h"
+#include "BKE_object.hh"
+#include "BKE_object_types.hh"
 #include "BKE_report.h"
 
-#include "RNA_access.h"
-#include "RNA_define.h"
+#include "RNA_access.hh"
+#include "RNA_define.hh"
 
-#include "WM_api.h"
-#include "WM_types.h"
+#include "WM_api.hh"
+#include "WM_types.hh"
 
-#include "ED_armature.h"
-#include "ED_object.h"
-#include "ED_outliner.h"
-#include "ED_screen.h"
-#include "ED_select_utils.h"
-#include "ED_view3d.h"
+#include "ED_armature.hh"
+#include "ED_object.hh"
+#include "ED_outliner.hh"
+#include "ED_screen.hh"
+#include "ED_select_utils.hh"
+#include "ED_view3d.hh"
 
-#include "DEG_depsgraph.h"
+#include "DEG_depsgraph.hh"
 
 #include "GPU_select.h"
+
+#include "ANIM_bone_collections.h"
+#include "ANIM_bonecolor.hh"
 
 #include "armature_intern.h"
 
@@ -62,7 +67,7 @@ Base *ED_armature_base_and_ebone_from_select_buffer(Base **bases,
   EditBone *ebone = nullptr;
   /* TODO(@ideasman42): optimize, eg: sort & binary search. */
   for (uint base_index = 0; base_index < bases_len; base_index++) {
-    if (bases[base_index]->object->runtime.select_id == hit_object) {
+    if (bases[base_index]->object->runtime->select_id == hit_object) {
       base = bases[base_index];
       break;
     }
@@ -86,7 +91,7 @@ Object *ED_armature_object_and_ebone_from_select_buffer(Object **objects,
   EditBone *ebone = nullptr;
   /* TODO(@ideasman42): optimize, eg: sort & binary search. */
   for (uint ob_index = 0; ob_index < objects_len; ob_index++) {
-    if (objects[ob_index]->runtime.select_id == hit_object) {
+    if (objects[ob_index]->runtime->select_id == hit_object) {
       ob = objects[ob_index];
       break;
     }
@@ -110,7 +115,7 @@ Base *ED_armature_base_and_pchan_from_select_buffer(Base **bases,
   bPoseChannel *pchan = nullptr;
   /* TODO(@ideasman42): optimize, eg: sort & binary search. */
   for (uint base_index = 0; base_index < bases_len; base_index++) {
-    if (bases[base_index]->object->runtime.select_id == hit_object) {
+    if (bases[base_index]->object->runtime->select_id == hit_object) {
       base = bases[base_index];
       break;
     }
@@ -190,7 +195,7 @@ static void *ed_armature_pick_bone_from_selectbuffer_impl(const bool is_editmode
         }
         else {
           data = nullptr;
-          sel = 0;
+          sel = false;
         }
       }
       else {
@@ -219,7 +224,7 @@ static void *ed_armature_pick_bone_from_selectbuffer_impl(const bool is_editmode
               firstSel = data;
               firstSel_base = base;
             }
-            takeNext = 1;
+            takeNext = true;
           }
         }
         else {
@@ -312,12 +317,11 @@ static void *ed_armature_pick_bone_impl(
     const bool is_editmode, bContext *C, const int xy[2], bool findunsel, Base **r_base)
 {
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
-  ViewContext vc;
   rcti rect;
   GPUSelectResult buffer[MAXPICKELEMS];
   short hits;
 
-  ED_view3d_viewcontext_init(C, &vc, depsgraph);
+  ViewContext vc = ED_view3d_viewcontext_init(C, depsgraph);
   BLI_assert((vc.obedit != nullptr) == is_editmode);
 
   BLI_rcti_init_pt_radius(&rect, xy, 0);
@@ -551,7 +555,7 @@ void ARMATURE_OT_select_linked(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
   /* Leave disabled by default as this matches pose mode. */
-  RNA_def_boolean(ot->srna, "all_forks", 0, "All Forks", "Follow forks in the parents chain");
+  RNA_def_boolean(ot->srna, "all_forks", false, "All Forks", "Follow forks in the parents chain");
 }
 
 /** \} */
@@ -613,9 +617,9 @@ void ARMATURE_OT_select_linked_pick(wmOperatorType *ot)
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
-  RNA_def_boolean(ot->srna, "deselect", 0, "Deselect", "");
+  RNA_def_boolean(ot->srna, "deselect", false, "Deselect", "");
   /* Leave disabled by default as this matches pose mode. */
-  RNA_def_boolean(ot->srna, "all_forks", 0, "All Forks", "Follow forks in the parents chain");
+  RNA_def_boolean(ot->srna, "all_forks", false, "All Forks", "Follow forks in the parents chain");
 }
 
 /** \} */
@@ -766,7 +770,7 @@ cache_end:
 
       if (use_cycle) {
         bArmature *arm = static_cast<bArmature *>(obedit_orig->data);
-        int ob_index = obedit_orig->runtime.select_id & 0xFFFF;
+        int ob_index = obedit_orig->runtime->select_id & 0xFFFF;
         int bone_index = BLI_findindex(arm->edbo, ebone_active_orig);
         /* Offset from the current active bone, so we cycle onto the next. */
         cycle_order.offset.ob = ob_index;
@@ -946,8 +950,7 @@ bool ED_armature_edit_deselect_all_visible_multi_ex(Base **bases, uint bases_len
 bool ED_armature_edit_deselect_all_visible_multi(bContext *C)
 {
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
-  ViewContext vc;
-  ED_view3d_viewcontext_init(C, &vc, depsgraph);
+  ViewContext vc = ED_view3d_viewcontext_init(C, depsgraph);
   uint bases_len = 0;
   Base **bases = BKE_view_layer_array_from_bases_in_edit_mode_unique_data(
       vc.scene, vc.view_layer, vc.v3d, &bases_len);
@@ -962,11 +965,8 @@ bool ED_armature_edit_deselect_all_visible_multi(bContext *C)
 /** \name Select Cursor Pick API
  * \{ */
 
-bool ED_armature_edit_select_pick_bone(bContext *C,
-                                       Base *basact,
-                                       EditBone *ebone,
-                                       const int selmask,
-                                       const struct SelectPick_Params *params)
+bool ED_armature_edit_select_pick_bone(
+    bContext *C, Base *basact, EditBone *ebone, const int selmask, const SelectPick_Params *params)
 {
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
@@ -1138,18 +1138,15 @@ bool ED_armature_edit_select_pick_bone(bContext *C,
   return changed || found;
 }
 
-bool ED_armature_edit_select_pick(bContext *C,
-                                  const int mval[2],
-                                  const struct SelectPick_Params *params)
+bool ED_armature_edit_select_pick(bContext *C, const int mval[2], const SelectPick_Params *params)
 
 {
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
-  ViewContext vc;
   EditBone *nearBone = nullptr;
   int selmask;
   Base *basact = nullptr;
 
-  ED_view3d_viewcontext_init(C, &vc, depsgraph);
+  ViewContext vc = ED_view3d_viewcontext_init(C, depsgraph);
   vc.mval[0] = mval[0];
   vc.mval[1] = mval[1];
 
@@ -1469,18 +1466,17 @@ static void armature_select_less(bArmature * /*arm*/, EditBone *ebone)
 static void armature_select_more_less(Object *ob, bool more)
 {
   bArmature *arm = (bArmature *)ob->data;
-  EditBone *ebone;
 
   /* XXX(@ideasman42): eventually we shouldn't need this. */
   ED_armature_edit_sync_selection(arm->edbo);
 
   /* count bones & store selection state */
-  for (ebone = static_cast<EditBone *>(arm->edbo->first); ebone; ebone = ebone->next) {
+  LISTBASE_FOREACH (EditBone *, ebone, arm->edbo) {
     EBONE_PREV_FLAG_SET(ebone, ED_armature_ebone_selectflag_get(ebone));
   }
 
   /* do selection */
-  for (ebone = static_cast<EditBone *>(arm->edbo->first); ebone; ebone = ebone->next) {
+  LISTBASE_FOREACH (EditBone *, ebone, arm->edbo) {
     if (EBONE_VISIBLE(arm, ebone)) {
       if (more) {
         armature_select_more(arm, ebone);
@@ -1491,7 +1487,7 @@ static void armature_select_more_less(Object *ob, bool more)
     }
   }
 
-  for (ebone = static_cast<EditBone *>(arm->edbo->first); ebone; ebone = ebone->next) {
+  LISTBASE_FOREACH (EditBone *, ebone, arm->edbo) {
     if (EBONE_VISIBLE(arm, ebone)) {
       if (more == false) {
         if (ebone->flag & BONE_SELECTED) {
@@ -1599,8 +1595,8 @@ enum {
   SIMEDBONE_DIRECTION,
   SIMEDBONE_PREFIX,
   SIMEDBONE_SUFFIX,
-  SIMEDBONE_LAYER,
-  SIMEDBONE_GROUP,
+  SIMEDBONE_COLLECTION,
+  SIMEDBONE_COLOR,
   SIMEDBONE_SHAPE,
 };
 
@@ -1612,8 +1608,8 @@ static const EnumPropertyItem prop_similar_types[] = {
     {SIMEDBONE_DIRECTION, "DIRECTION", 0, "Direction (Y Axis)", ""},
     {SIMEDBONE_PREFIX, "PREFIX", 0, "Prefix", ""},
     {SIMEDBONE_SUFFIX, "SUFFIX", 0, "Suffix", ""},
-    {SIMEDBONE_LAYER, "LAYER", 0, "Layer", ""},
-    {SIMEDBONE_GROUP, "GROUP", 0, "Group", ""},
+    {SIMEDBONE_COLLECTION, "BONE_COLLECTION", 0, "Bone Collection", ""},
+    {SIMEDBONE_COLOR, "COLOR", 0, "Color", ""},
     {SIMEDBONE_SHAPE, "SHAPE", 0, "Shape", ""},
     {0, nullptr, 0, nullptr, nullptr},
 };
@@ -1716,11 +1712,17 @@ static void select_similar_direction(bContext *C, const float thresh)
   MEM_freeN(objects);
 }
 
-static void select_similar_layer(bContext *C)
+static void select_similar_bone_collection(bContext *C)
 {
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   EditBone *ebone_act = CTX_data_active_bone(C);
+
+  /* Build a set of bone collection names, to allow cross-Armature selection. */
+  blender::Set<std::string> collection_names;
+  LISTBASE_FOREACH (BoneCollectionReference *, bcoll_ref, &ebone_act->bone_collections) {
+    collection_names.add(bcoll_ref->bcoll->name);
+  }
 
   uint objects_len = 0;
   Object **objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
@@ -1731,12 +1733,56 @@ static void select_similar_layer(bContext *C)
     bool changed = false;
 
     LISTBASE_FOREACH (EditBone *, ebone, arm->edbo) {
-      if (EBONE_SELECTABLE(arm, ebone)) {
-        if (ebone->layer & ebone_act->layer) {
-          ED_armature_ebone_select_set(ebone, true);
-          changed = true;
-        }
+      if (!EBONE_SELECTABLE(arm, ebone)) {
+        continue;
       }
+
+      LISTBASE_FOREACH (BoneCollectionReference *, bcoll_ref, &ebone->bone_collections) {
+        if (!collection_names.contains(bcoll_ref->bcoll->name)) {
+          continue;
+        }
+
+        ED_armature_ebone_select_set(ebone, true);
+        changed = true;
+        break;
+      }
+    }
+
+    if (changed) {
+      WM_event_add_notifier(C, NC_OBJECT | ND_BONE_SELECT, ob);
+      DEG_id_tag_update(&ob->id, ID_RECALC_COPY_ON_WRITE);
+    }
+  }
+  MEM_freeN(objects);
+}
+static void select_similar_bone_color(bContext *C)
+{
+  const Scene *scene = CTX_data_scene(C);
+  ViewLayer *view_layer = CTX_data_view_layer(C);
+  EditBone *ebone_act = CTX_data_active_bone(C);
+
+  const blender::animrig::BoneColor &active_bone_color = ebone_act->color.wrap();
+
+  uint objects_len = 0;
+  Object **objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
+      scene, view_layer, CTX_wm_view3d(C), &objects_len);
+  for (uint ob_index = 0; ob_index < objects_len; ob_index++) {
+    Object *ob = objects[ob_index];
+    bArmature *arm = static_cast<bArmature *>(ob->data);
+    bool changed = false;
+
+    LISTBASE_FOREACH (EditBone *, ebone, arm->edbo) {
+      if (!EBONE_SELECTABLE(arm, ebone)) {
+        continue;
+      }
+
+      const blender::animrig::BoneColor &bone_color = ebone->color.wrap();
+      if (bone_color != active_bone_color) {
+        continue;
+      }
+
+      ED_armature_ebone_select_set(ebone, true);
+      changed = true;
     }
 
     if (changed) {
@@ -1949,8 +1995,7 @@ static int armature_select_similar_exec(bContext *C, wmOperator *op)
   }
 
 #define STRUCT_SIZE_AND_OFFSET(_struct, _member) \
-\
-  sizeof(((_struct *)nullptr)->_member), offsetof(_struct, _member)
+  sizeof(_struct::_member), offsetof(_struct, _member)
 
   switch (type) {
     case SIMEDBONE_CHILDREN:
@@ -1974,11 +2019,11 @@ static int armature_select_similar_exec(bContext *C, wmOperator *op)
     case SIMEDBONE_SUFFIX:
       select_similar_suffix(C);
       break;
-    case SIMEDBONE_LAYER:
-      select_similar_layer(C);
+    case SIMEDBONE_COLLECTION:
+      select_similar_bone_collection(C);
       break;
-    case SIMEDBONE_GROUP:
-      select_similar_data_pchan(C, STRUCT_SIZE_AND_OFFSET(bPoseChannel, agrp_index));
+    case SIMEDBONE_COLOR:
+      select_similar_bone_color(C);
       break;
     case SIMEDBONE_SHAPE:
       select_similar_data_pchan(C, STRUCT_SIZE_AND_OFFSET(bPoseChannel, custom));
@@ -2053,14 +2098,12 @@ static int armature_select_hierarchy_exec(bContext *C, wmOperator *op)
     }
   }
   else { /* BONE_SELECT_CHILD */
-    EditBone *ebone_iter, *ebone_child = nullptr;
+    EditBone *ebone_child = nullptr;
     int pass;
 
     /* first pass, only connected bones (the logical direct child) */
     for (pass = 0; pass < 2 && (ebone_child == nullptr); pass++) {
-      for (ebone_iter = static_cast<EditBone *>(arm->edbo->first); ebone_iter;
-           ebone_iter = ebone_iter->next)
-      {
+      LISTBASE_FOREACH (EditBone *, ebone_iter, arm->edbo) {
         /* possible we have multiple children, some invisible */
         if (EBONE_SELECTABLE(arm, ebone_iter)) {
           if (ebone_iter->parent == ebone_active) {
@@ -2147,14 +2190,14 @@ static int armature_select_mirror_exec(bContext *C, wmOperator *op)
     Object *ob = objects[ob_index];
     bArmature *arm = static_cast<bArmature *>(ob->data);
 
-    EditBone *ebone, *ebone_mirror_act = nullptr;
+    EditBone *ebone_mirror_act = nullptr;
 
-    for (ebone = static_cast<EditBone *>(arm->edbo->first); ebone; ebone = ebone->next) {
+    LISTBASE_FOREACH (EditBone *, ebone, arm->edbo) {
       const int flag = ED_armature_ebone_selectflag_get(ebone);
       EBONE_PREV_FLAG_SET(ebone, flag);
     }
 
-    for (ebone = static_cast<EditBone *>(arm->edbo->first); ebone; ebone = ebone->next) {
+    LISTBASE_FOREACH (EditBone *, ebone, arm->edbo) {
       if (EBONE_SELECTABLE(arm, ebone)) {
         EditBone *ebone_mirror;
         int flag_new = extend ? EBONE_PREV_FLAG_GET(ebone) : 0;

@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2022 Blender Foundation
+/* SPDX-FileCopyrightText: 2022 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -23,7 +23,9 @@ class VKIndexBuffer : public IndexBuf, public VKBindableResource {
 
   void bind_as_ssbo(uint binding) override;
   void bind(VKContext &context);
-  void bind(int binding, shader::ShaderCreateInfo::Resource::BindType bind_type) override;
+  void bind(int binding,
+            shader::ShaderCreateInfo::Resource::BindType bind_type,
+            const GPUSamplerState sampler_state) override;
 
   void read(uint32_t *data) const override;
 

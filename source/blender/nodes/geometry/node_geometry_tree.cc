@@ -1,32 +1,32 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include <cstring>
 
+#include "BLI_string.h"
+
 #include "MEM_guardedalloc.h"
 
 #include "NOD_geometry.hh"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_layer.h"
 #include "BKE_node.hh"
-#include "BKE_object.h"
+#include "BKE_object.hh"
 
 #include "DNA_modifier_types.h"
 #include "DNA_node_types.h"
 #include "DNA_space_types.h"
 
-#include "RNA_access.h"
+#include "RNA_access.hh"
 #include "RNA_prototypes.h"
 
-#include "UI_resources.h"
+#include "UI_resources.hh"
 
 #include "BLT_translation.h"
 
 #include "node_common.h"
-
-#include "node_geometry_register.hh"
 
 bNodeTreeType *ntreeType_Geometry;
 
@@ -34,8 +34,8 @@ static void geometry_node_tree_get_from_context(
     const bContext *C, bNodeTreeType * /*treetype*/, bNodeTree **r_ntree, ID **r_id, ID **r_from)
 {
   const SpaceNode *snode = CTX_wm_space_node(C);
-  if (snode->geometry_nodes_type == SNODE_GEOMETRY_OPERATOR) {
-    *r_ntree = snode->nodetree;
+  if (snode->geometry_nodes_type == SNODE_GEOMETRY_TOOL) {
+    *r_ntree = snode->geometry_nodes_tool_tree;
     return;
   }
 
@@ -93,6 +93,14 @@ static bool geometry_node_tree_validate_link(eNodeSocketDatatype type_a,
   {
     return true;
   }
+  if (ELEM(type_a, SOCK_FLOAT, SOCK_VECTOR) && type_b == SOCK_ROTATION) {
+    /* Floats and vectors implicitly conver to rotations. */
+    return true;
+  }
+  if (type_a == SOCK_ROTATION && type_b == SOCK_VECTOR) {
+    /* Rotations implicitly convert to vectors. */
+    return true;
+  }
   return type_a == type_b;
 }
 
@@ -133,4 +141,18 @@ void register_node_tree_type_geo()
   tt->validate_link = geometry_node_tree_validate_link;
 
   ntreeTypeAdd(tt);
+}
+
+bool is_layer_selection_field(const bNodeTreeInterfaceSocket &socket)
+{
+  if (!U.experimental.use_grease_pencil_version3) {
+    return false;
+  }
+  const bNodeSocketType *typeinfo = socket.socket_typeinfo();
+  BLI_assert(typeinfo != nullptr);
+
+  if (typeinfo->type != SOCK_BOOLEAN) {
+    return false;
+  }
+  return (socket.flag & NODE_INTERFACE_SOCKET_LAYER_SELECTION) != 0;
 }

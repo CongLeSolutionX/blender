@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2004-2022 Blender Foundation
+/* SPDX-FileCopyrightText: 2004-2022 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -10,11 +10,11 @@
 
 #include "../../stroke/BasicStrokeShaders.h"
 
+#include "../../../../python/generic/py_capi_utils.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include "../../../../python/generic/py_capi_utils.h"
 
 using namespace Freestyle;
 

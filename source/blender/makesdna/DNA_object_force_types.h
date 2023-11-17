@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2004-2005 Blender Foundation
+/* SPDX-FileCopyrightText: 2004-2005 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -10,10 +10,6 @@
 
 #include "DNA_defs.h"
 #include "DNA_listBase.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 struct BodySpring;
 
@@ -407,7 +403,3 @@ enum {
   SBC_MODE_MAX = 3,
   SBC_MODE_AVGMINMAX = 4,
 };
-
-#ifdef __cplusplus
-}
-#endif

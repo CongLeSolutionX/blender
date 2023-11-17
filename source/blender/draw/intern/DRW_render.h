@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2016 Blender Foundation
+/* SPDX-FileCopyrightText: 2016 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -15,10 +15,10 @@
 #include "BLI_math_vector.h"
 #include "BLI_string.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_layer.h"
 #include "BKE_material.h"
-#include "BKE_pbvh.h"
+#include "BKE_pbvh.hh"
 #include "BKE_scene.h"
 
 #include "BLT_translation.h"
@@ -50,7 +50,7 @@
 
 #include "RE_engine.h"
 
-#include "DEG_depsgraph.h"
+#include "DEG_depsgraph.hh"
 
 #ifdef __cplusplus
 extern "C" {
@@ -672,8 +672,8 @@ DRWPass *DRW_pass_create_instance(const char *name, DRWPass *original, DRWState 
  */
 void DRW_pass_link(DRWPass *first, DRWPass *second);
 void DRW_pass_foreach_shgroup(DRWPass *pass,
-                              void (*callback)(void *userData, DRWShadingGroup *shgroup),
-                              void *userData);
+                              void (*callback)(void *user_data, DRWShadingGroup *shgroup),
+                              void *user_data);
 /**
  * Sort Shading groups by decreasing Z of their first draw call.
  * This is useful for order dependent effect such as alpha-blending.

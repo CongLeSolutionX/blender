@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -175,7 +175,7 @@
  * - Use two different iterator types for BMO map/buffer types.
  */
 
-#include "BKE_customdata.h"
+#include "BKE_customdata.hh"
 #include "DNA_customdata_types.h" /* BMesh struct in bmesh_class.h uses */
 #include "DNA_listBase.h"         /* selection history uses */
 

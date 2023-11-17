@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2016 Blender Foundation
+/* SPDX-FileCopyrightText: 2016 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -8,11 +8,11 @@
 
 #include "DNA_space_types.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_tracking.h"
 
-#include "WM_api.h"
-#include "WM_types.h"
+#include "WM_api.hh"
+#include "WM_types.hh"
 
 #include "tracking_ops_intern.h" /* own include */
 

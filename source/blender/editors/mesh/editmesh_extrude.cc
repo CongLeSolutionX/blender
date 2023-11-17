@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2004 Blender Foundation
+/* SPDX-FileCopyrightText: 2004 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -10,23 +10,25 @@
 #include "DNA_object_types.h"
 
 #include "BLI_listbase.h"
-#include "BLI_math.h"
+#include "BLI_math_matrix.h"
+#include "BLI_math_rotation.h"
+#include "BLI_math_vector.h"
 
-#include "BKE_context.h"
-#include "BKE_editmesh.h"
+#include "BKE_context.hh"
+#include "BKE_editmesh.hh"
 #include "BKE_layer.h"
 #include "BKE_report.h"
 
-#include "RNA_access.h"
-#include "RNA_define.h"
+#include "RNA_access.hh"
+#include "RNA_define.hh"
 
-#include "WM_api.h"
-#include "WM_types.h"
+#include "WM_api.hh"
+#include "WM_types.hh"
 
-#include "ED_mesh.h"
-#include "ED_screen.h"
-#include "ED_transform.h"
-#include "ED_view3d.h"
+#include "ED_mesh.hh"
+#include "ED_screen.hh"
+#include "ED_transform.hh"
+#include "ED_view3d.hh"
 
 #include "MEM_guardedalloc.h"
 
@@ -40,12 +42,11 @@ static void edbm_extrude_edge_exclude_mirror(
     Object *obedit, BMEditMesh *em, const char hflag, BMOperator *op, BMOpSlot *slot_edges_exclude)
 {
   BMesh *bm = em->bm;
-  ModifierData *md;
 
   /* If a mirror modifier with clipping is on, we need to adjust some
    * of the cases above to handle edges on the line of symmetry.
    */
-  for (md = static_cast<ModifierData *>(obedit->modifiers.first); md; md = md->next) {
+  LISTBASE_FOREACH (ModifierData *, md, &obedit->modifiers) {
     if ((md->type == eModifierType_Mirror) && (md->mode & eModifierMode_Realtime)) {
       MirrorModifierData *mmd = (MirrorModifierData *)md;
 
@@ -701,19 +702,19 @@ void MESH_OT_extrude_faces_indiv(wmOperatorType *ot)
 
 static int edbm_dupli_extrude_cursor_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
-  struct Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
-  ViewContext vc;
+  Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   BMVert *v1;
   BMIter iter;
   float center[3];
   uint verts_len;
 
-  em_setup_viewcontext(C, &vc);
+  ViewContext vc = em_setup_viewcontext(C);
   const Object *object_active = vc.obact;
 
   const bool rot_src = RNA_boolean_get(op->ptr, "rotate_source");
   const bool use_proj = ((vc.scene->toolsettings->snap_flag & SCE_SNAP) &&
-                         (vc.scene->toolsettings->snap_mode == SCE_SNAP_TO_FACE));
+                         (vc.scene->toolsettings->snap_mode &
+                          (SCE_SNAP_TO_FACE | SCE_SNAP_INDIVIDUAL_PROJECT)));
 
   /* First calculate the center of transformation. */
   zero_v3(center);
@@ -913,7 +914,9 @@ static int edbm_dupli_extrude_cursor_invoke(bContext *C, wmOperator *op, const w
   }
   MEM_freeN(objects);
 
-  return OPERATOR_FINISHED;
+  /* Support dragging to move after extrude, see: #114282. */
+  const int retval = OPERATOR_FINISHED | OPERATOR_PASS_THROUGH;
+  return WM_operator_flag_only_pass_through_on_press(retval, event);
 }
 
 void MESH_OT_dupli_extrude_cursor(wmOperatorType *ot)

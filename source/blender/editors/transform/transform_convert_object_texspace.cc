@@ -8,12 +8,13 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_math.h"
+#include "BLI_math_matrix.h"
+#include "BLI_math_vector.h"
 
 #include "BKE_animsys.h"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_layer.h"
-#include "BKE_object.h"
+#include "BKE_object.hh"
 #include "BKE_report.h"
 
 #include "DNA_mesh_types.h"
@@ -113,7 +114,7 @@ static void recalcData_texspace(TransInfo *t)
 
 TransConvertTypeInfo TransConvertType_ObjectTexSpace = {
     /*flags*/ 0,
-    /*createTransData*/ createTransTexspace,
-    /*recalcData*/ recalcData_texspace,
+    /*create_trans_data*/ createTransTexspace,
+    /*recalc_data*/ recalcData_texspace,
     /*special_aftertrans_update*/ nullptr,
 };

@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2010 Blender Foundation
+/* SPDX-FileCopyrightText: 2010 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -10,10 +10,6 @@
 
 #include "DNA_ID.h"
 #include "DNA_listBase.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 #ifndef MAX_MTEX
 #  define MAX_MTEX 18
@@ -681,7 +677,3 @@ typedef struct FreestyleLineStyle {
   ListBase thickness_modifiers;
   ListBase geometry_modifiers;
 } FreestyleLineStyle;
-
-#ifdef __cplusplus
-}
-#endif

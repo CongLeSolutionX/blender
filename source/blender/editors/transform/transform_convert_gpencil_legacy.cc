@@ -12,18 +12,20 @@
 
 #include "BLI_ghash.h"
 #include "BLI_listbase.h"
-#include "BLI_math.h"
+#include "BLI_math_matrix.h"
+#include "BLI_math_vector.h"
 
 #include "BKE_colortools.h"
-#include "BKE_context.h"
-#include "BKE_curve.h"
+#include "BKE_context.hh"
+#include "BKE_curve.hh"
 #include "BKE_gpencil_curve_legacy.h"
 #include "BKE_gpencil_geom_legacy.h"
 #include "BKE_gpencil_legacy.h"
 #include "BKE_layer.h"
 
-#include "ED_gpencil_legacy.h"
-#include "ED_keyframing.h"
+#include "ED_gpencil_legacy.hh"
+
+#include "ANIM_keyframing.hh"
 
 #include "transform.hh"
 #include "transform_convert.hh"
@@ -51,7 +53,7 @@ static void createTransGPencil_center_get(bGPDstroke *gps, float r_center[3])
   }
 }
 
-static short get_bezt_sel_triple_flag(BezTriple *bezt, const bool handles_visible)
+static short get_bezt_sel_triple_flag(BezTriple *bezt, const bool hide_handles)
 {
 #define SEL_F1 (1 << 0)
 #define SEL_F2 (1 << 1)
@@ -60,15 +62,17 @@ static short get_bezt_sel_triple_flag(BezTriple *bezt, const bool handles_visibl
 
   short flag = 0;
 
-  if (handles_visible) {
+  if (hide_handles) {
+    if (bezt->f2 & SELECT) {
+      flag = SEL_ALL;
+    }
+  }
+  else {
     flag = ((bezt->f1 & SELECT) ? SEL_F1 : 0) | ((bezt->f2 & SELECT) ? SEL_F2 : 0) |
            ((bezt->f3 & SELECT) ? SEL_F3 : 0);
   }
-  else if (bezt->f2 & SELECT) {
-    flag = SEL_ALL;
-  }
 
-  /* Special case for auto & aligned handles */
+  /* Special case for auto & aligned handles. */
   if ((flag != SEL_ALL) && (flag & SEL_F2)) {
     if (ELEM(bezt->h1, HD_AUTO, HD_ALIGN) && ELEM(bezt->h2, HD_AUTO, HD_ALIGN)) {
       flag = SEL_ALL;
@@ -137,11 +141,11 @@ static void createTransGPencil_curves(bContext *C,
                 continue;
               }
 
-              const bool handles_visible = (handle_all_visible ||
-                                            (handle_only_selected_visible &&
-                                             (gpc_pt->flag & GP_CURVE_POINT_SELECT)));
+              const bool hide_handles = !(
+                  handle_all_visible ||
+                  (handle_only_selected_visible && (gpc_pt->flag & GP_CURVE_POINT_SELECT)));
 
-              const short sel_flag = get_bezt_sel_triple_flag(bezt, handles_visible);
+              const short sel_flag = get_bezt_sel_triple_flag(bezt, hide_handles);
               if (sel_flag & (SEL_F1 | SEL_F2 | SEL_F3)) {
                 if (sel_flag & SEL_F1) {
                   tot_sel_points++;
@@ -218,7 +222,7 @@ static void createTransGPencil_curves(bContext *C,
       }
 
       if ((gpf->framenum != cfra) && (!is_multiedit)) {
-        if (IS_AUTOKEY_ON(scene)) {
+        if (blender::animrig::is_autokey_on(scene)) {
           gpf = BKE_gpencil_frame_addcopy(gpl, cfra);
         }
         /* In some weird situations (frame-lock enabled) return nullptr. */
@@ -276,10 +280,10 @@ static void createTransGPencil_curves(bContext *C,
 
               TransDataCurveHandleFlags *hdata = nullptr;
               bool bezt_use = false;
-              const bool handles_visible = (handle_all_visible ||
-                                            (handle_only_selected_visible &&
-                                             (gpc_pt->flag & GP_CURVE_POINT_SELECT)));
-              const short sel_flag = get_bezt_sel_triple_flag(bezt, handles_visible);
+              const bool hide_handles = !(
+                  handle_all_visible ||
+                  (handle_only_selected_visible && (gpc_pt->flag & GP_CURVE_POINT_SELECT)));
+              const short sel_flag = get_bezt_sel_triple_flag(bezt, hide_handles);
               /* Iterate over bezier triple */
               for (int j = 0; j < 3; j++) {
                 bool is_ctrl_point = (j == 1);
@@ -288,12 +292,12 @@ static void createTransGPencil_curves(bContext *C,
                 if (is_prop_edit || sel) {
                   copy_v3_v3(td->iloc, bezt->vec[j]);
                   td->loc = bezt->vec[j];
-                  bool rotate_around_ctrl = !handles_visible ||
+                  bool rotate_around_ctrl = hide_handles ||
                                             (t->around == V3D_AROUND_LOCAL_ORIGINS) ||
                                             (bezt->f2 & SELECT);
                   copy_v3_v3(td->center, bezt->vec[rotate_around_ctrl ? 1 : j]);
 
-                  if (!handles_visible || is_ctrl_point) {
+                  if (hide_handles || is_ctrl_point) {
                     if (bezt->f2 & SELECT) {
                       td->flag = TD_SELECTED;
                     }
@@ -301,7 +305,7 @@ static void createTransGPencil_curves(bContext *C,
                       td->flag = 0;
                     }
                   }
-                  else if (handles_visible) {
+                  else if (!hide_handles) {
                     if (sel) {
                       td->flag = TD_SELECTED;
                     }
@@ -354,8 +358,11 @@ static void createTransGPencil_curves(bContext *C,
 
               /* Update the handle types so transformation is possible */
               if (bezt_use && !ELEM(t->mode, TFM_GPENCIL_OPACITY, TFM_GPENCIL_SHRINKFATTEN)) {
-                BKE_nurb_bezt_handle_test(
-                    bezt, SELECT, handles_visible, use_around_origins_for_handles_test);
+                BKE_nurb_bezt_handle_test(bezt,
+                                          SELECT,
+                                          hide_handles ? NURB_HANDLE_TEST_KNOT_ONLY :
+                                                         NURB_HANDLE_TEST_KNOT_OR_EACH,
+                                          use_around_origins_for_handles_test);
                 need_handle_recalc = true;
               }
             }
@@ -415,13 +422,12 @@ static void createTransGPencil_strokes(bContext *C,
     /* Only editable and visible layers are considered. */
     if (BKE_gpencil_layer_is_editable(gpl) && (gpl->actframe != nullptr)) {
       bGPDframe *gpf;
-      bGPDstroke *gps;
       bGPDframe *init_gpf = static_cast<bGPDframe *>((is_multiedit) ? gpl->frames.first :
                                                                       gpl->actframe);
 
       for (gpf = init_gpf; gpf; gpf = gpf->next) {
         if ((gpf == gpl->actframe) || ((gpf->flag & GP_FRAME_SELECT) && (is_multiedit))) {
-          for (gps = static_cast<bGPDstroke *>(gpf->strokes.first); gps; gps = gps->next) {
+          LISTBASE_FOREACH (bGPDstroke *, gps, &gpf->strokes) {
             /* skip strokes that are invalid for current view */
             if (ED_gpencil_stroke_can_use(C, gps) == false) {
               continue;
@@ -516,7 +522,7 @@ static void createTransGPencil_strokes(bContext *C,
        *   spent too much time editing the wrong frame...
        */
       if ((gpf->framenum != cfra) && (!is_multiedit)) {
-        if (IS_AUTOKEY_ON(scene)) {
+        if (blender::animrig::is_autokey_on(scene)) {
           gpf = BKE_gpencil_frame_addcopy(gpl, cfra);
         }
         /* In some weird situations (frame-lock enabled) return nullptr. */
@@ -695,7 +701,7 @@ static void createTransGPencil(bContext *C, TransInfo *t)
 
   const int cfra_scene = scene->r.cfra;
 
-  const bool is_multiedit = (bool)GPENCIL_MULTIEDIT_SESSIONS_ON(gpd);
+  const bool is_multiedit = bool(GPENCIL_MULTIEDIT_SESSIONS_ON(gpd));
   const bool use_multiframe_falloff = (ts->gp_sculpt.flag & GP_SCULPT_SETT_FLAG_FRAME_FALLOFF) !=
                                       0;
 
@@ -704,7 +710,7 @@ static void createTransGPencil(bContext *C, TransInfo *t)
   const bool is_scale_thickness = ((t->mode == TFM_GPENCIL_SHRINKFATTEN) ||
                                    (ts->gp_sculpt.flag & GP_SCULPT_SETT_FLAG_SCALE_THICKNESS));
 
-  const bool is_curve_edit = (bool)GPENCIL_CURVE_EDIT_SESSIONS_ON(gpd);
+  const bool is_curve_edit = bool(GPENCIL_CURVE_EDIT_SESSIONS_ON(gpd));
 
   /* initialize falloff curve */
   if (is_multiedit) {
@@ -752,7 +758,7 @@ static void recalcData_gpencil_strokes(TransInfo *t)
 
   TransData *td = tc->data;
   bGPdata *gpd = static_cast<bGPdata *>(td->ob->data);
-  const bool is_curve_edit = (bool)GPENCIL_CURVE_EDIT_SESSIONS_ON(gpd);
+  const bool is_curve_edit = bool(GPENCIL_CURVE_EDIT_SESSIONS_ON(gpd));
   for (int i = 0; i < tc->data_len; i++, td++) {
     bGPDstroke *gps = static_cast<bGPDstroke *>(td->extra);
 
@@ -773,7 +779,7 @@ static void recalcData_gpencil_strokes(TransInfo *t)
 
 TransConvertTypeInfo TransConvertType_GPencil = {
     /*flags*/ (T_EDIT | T_POINTS),
-    /*createTransData*/ createTransGPencil,
-    /*recalcData*/ recalcData_gpencil_strokes,
+    /*create_trans_data*/ createTransGPencil,
+    /*recalc_data*/ recalcData_gpencil_strokes,
     /*special_aftertrans_update*/ nullptr,
 };

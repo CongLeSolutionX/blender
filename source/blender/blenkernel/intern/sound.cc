@@ -6,14 +6,15 @@
  * \ingroup bke
  */
 
-#include <stdlib.h>
-#include <string.h>
+#include <cstdlib>
+#include <cstring>
 
 #include "MEM_guardedalloc.h"
 
 #include "BLI_blenlib.h"
 #include "BLI_iterator.h"
-#include "BLI_math.h"
+#include "BLI_math_rotation.h"
+#include "BLI_math_vector.h"
 #include "BLI_threads.h"
 
 #include "BLT_translation.h"
@@ -43,19 +44,20 @@
 #include "BKE_global.h"
 #include "BKE_idtype.h"
 #include "BKE_lib_id.h"
+#include "BKE_lib_query.h"
 #include "BKE_main.h"
 #include "BKE_packedFile.h"
 #include "BKE_scene.h"
 #include "BKE_sound.h"
 
-#include "DEG_depsgraph.h"
-#include "DEG_depsgraph_query.h"
+#include "DEG_depsgraph.hh"
+#include "DEG_depsgraph_query.hh"
 
-#include "BLO_read_write.h"
+#include "BLO_read_write.hh"
 
-#include "SEQ_sequencer.h"
-#include "SEQ_sound.h"
-#include "SEQ_time.h"
+#include "SEQ_sequencer.hh"
+#include "SEQ_sound.hh"
+#include "SEQ_time.hh"
 
 static void sound_free_audio(bSound *sound);
 
@@ -100,6 +102,16 @@ static void sound_free_data(ID *id)
     BLI_spin_end(static_cast<SpinLock *>(sound->spinlock));
     MEM_freeN(sound->spinlock);
     sound->spinlock = nullptr;
+  }
+}
+
+static void sound_foreach_id(ID *id, LibraryForeachIDData *data)
+{
+  bSound *sound = reinterpret_cast<bSound *>(id);
+  const int flag = BKE_lib_query_foreachid_process_flags_get(data);
+
+  if (flag & IDWALK_DO_DEPRECATED_POINTERS) {
+    BKE_LIB_FOREACHID_PROCESS_ID_NOCHECK(data, sound->ipo, IDWALK_CB_USER);
   }
 }
 
@@ -177,26 +189,13 @@ static void sound_blend_read_data(BlendDataReader *reader, ID *id)
   BKE_packedfile_blend_read(reader, &sound->newpackedfile);
 }
 
-static void sound_blend_read_lib(BlendLibReader *reader, ID *id)
-{
-  bSound *sound = (bSound *)id;
-  /* XXX: deprecated - old animation system. */
-  BLO_read_id_address(reader, id, &sound->ipo);
-}
-
-static void sound_blend_read_expand(BlendExpander *expander, ID *id)
-{
-  bSound *snd = (bSound *)id;
-  BLO_expand(expander, snd->ipo); /* XXX deprecated - old animation system */
-}
-
 IDTypeInfo IDType_ID_SO = {
     /*id_code*/ ID_SO,
     /*id_filter*/ FILTER_ID_SO,
     /*main_listbase_index*/ INDEX_ID_SO,
     /*struct_size*/ sizeof(bSound),
     /*name*/ "Sound",
-    /*name_plural*/ "sounds",
+    /*name_plural*/ N_("sounds"),
     /*translation_context*/ BLT_I18NCONTEXT_ID_SOUND,
     /*flags*/ IDTYPE_FLAGS_NO_ANIMDATA | IDTYPE_FLAGS_APPEND_IS_REUSABLE,
     /*asset_type_info*/ nullptr,
@@ -206,15 +205,14 @@ IDTypeInfo IDType_ID_SO = {
     /*copy_data*/ sound_copy_data,
     /*free_data*/ sound_free_data,
     /*make_local*/ nullptr,
-    /*foreach_id*/ nullptr,
+    /*foreach_id*/ sound_foreach_id,
     /*foreach_cache*/ sound_foreach_cache,
     /*foreach_path*/ sound_foreach_path,
     /*owner_pointer_get*/ nullptr,
 
     /*blend_write*/ sound_blend_write,
     /*blend_read_data*/ sound_blend_read_data,
-    /*blend_read_lib*/ sound_blend_read_lib,
-    /*blend_read_expand*/ sound_blend_read_expand,
+    /*blend_read_after_liblink*/ nullptr,
 
     /*blend_read_undo_preserve*/ nullptr,
 
@@ -261,7 +259,7 @@ bSound *BKE_sound_new_file(Main *bmain, const char *filepath)
 
   sound = static_cast<bSound *>(BKE_libblock_alloc(bmain, ID_SO, BLI_path_basename(filepath), 0));
   STRNCPY(sound->filepath, filepath);
-  /* sound->type = SOUND_TYPE_FILE; */ /* XXX unused currently */
+  // sound->type = SOUND_TYPE_FILE; /* UNUSED. */
 
   /* Extract sound specs for bSound */
   SoundInfo info;
@@ -354,7 +352,7 @@ void BKE_sound_force_device(const char *device)
   force_device = device;
 }
 
-void BKE_sound_init_once(void)
+void BKE_sound_init_once()
 {
   AUD_initOnce();
   atexit(BKE_sound_exit_once);
@@ -362,7 +360,7 @@ void BKE_sound_init_once(void)
 
 static AUD_Device *sound_device = nullptr;
 
-void *BKE_sound_get_device(void)
+void *BKE_sound_get_device()
 {
   return sound_device;
 }
@@ -432,13 +430,13 @@ void BKE_sound_init_main(Main *bmain)
 #  endif
 }
 
-void BKE_sound_exit(void)
+void BKE_sound_exit()
 {
   AUD_exit(sound_device);
   sound_device = nullptr;
 }
 
-void BKE_sound_exit_once(void)
+void BKE_sound_exit_once()
 {
   AUD_exit(sound_device);
   sound_device = nullptr;
@@ -458,71 +456,38 @@ void BKE_sound_exit_once(void)
 #  if 0
 bSound *BKE_sound_new_buffer(Main *bmain, bSound *source)
 {
-bSound *sound = nullptr;
+  bSound *sound = nullptr;
 
+  char name[MAX_ID_NAME + 5];
+  BLI_string_join(name, sizeof(name), "buf_", source->id.name);
 
+  sound = BKE_libblock_alloc(bmain, ID_SO, name);
 
+  sound->child_sound = source;
+  sound->type = SOUND_TYPE_BUFFER;
 
-char name[MAX_ID_NAME + 5];
-BLI_string_join(name, sizeof(name), "buf_", source->id.name);
+  sound_load(bmain, sound);
 
-
-
-
-sound = BKE_libblock_alloc(bmain, ID_SO, name);
-
-
-
-
-sound->child_sound = source;
-sound->type = SOUND_TYPE_BUFFER;
-
-
-
-
-sound_load(bmain, sound);
-
-
-
-
-return sound;
+  return sound;
 }
-
-
-
 
 bSound *BKE_sound_new_limiter(Main *bmain, bSound *source, float start, float end)
 {
-bSound *sound = nullptr;
+  bSound *sound = nullptr;
 
+  char name[MAX_ID_NAME + 5];
+  BLI_string_join(name, sizeof(name), "lim_", source->id.name);
 
+  sound = BKE_libblock_alloc(bmain, ID_SO, name);
 
+  sound->child_sound = source;
+  sound->start = start;
+  sound->end = end;
+  sound->type = SOUND_TYPE_LIMITER;
 
-char name[MAX_ID_NAME + 5];
-BLI_string_join(name, sizeof(name), "lim_", source->id.name);
+  sound_load(bmain, sound);
 
-
-
-
-sound = BKE_libblock_alloc(bmain, ID_SO, name);
-
-
-
-
-sound->child_sound = source;
-sound->start = start;
-sound->end = end;
-sound->type = SOUND_TYPE_LIMITER;
-
-
-
-
-sound_load(bmain, sound);
-
-
-
-
-return sound;
+  return sound;
 }
 #  endif
 
@@ -572,8 +537,8 @@ static void sound_load_audio(Main *bmain, bSound *sound, bool free_waveform)
 
 /* XXX unused currently */
 #  if 0
-switch (sound->type) {
-case SOUND_TYPE_FILE:
+  switch (sound->type) {
+    case SOUND_TYPE_FILE:
 #  endif
   {
     char fullpath[FILE_MAX];
@@ -596,16 +561,18 @@ case SOUND_TYPE_FILE:
   }
 /* XXX unused currently */
 #  if 0
-break;
-}
-case SOUND_TYPE_BUFFER: if (sound->child_sound && sound->child_sound->handle) {
-sound->handle = AUD_bufferSound(sound->child_sound->handle);
-}
-break;
-case SOUND_TYPE_LIMITER: if (sound->child_sound && sound->child_sound->handle) {
-sound->handle = AUD_limitSound(sound->child_sound, sound->start, sound->end);
-}
-break;
+    break;
+  }
+  case SOUND_TYPE_BUFFER:
+    if (sound->child_sound && sound->child_sound->handle) {
+      sound->handle = AUD_bufferSound(sound->child_sound->handle);
+    }
+    break;
+  case SOUND_TYPE_LIMITER:
+    if (sound->child_sound && sound->child_sound->handle) {
+      sound->handle = AUD_limitSound(sound->child_sound, sound->start, sound->end);
+    }
+    break;
 }
 #  endif
   if (sound->flags & SOUND_FLAGS_MONO) {
@@ -679,12 +646,12 @@ void BKE_sound_destroy_scene(Scene *scene)
   }
 }
 
-void BKE_sound_lock(void)
+void BKE_sound_lock()
 {
   AUD_Device_lock(sound_device);
 }
 
-void BKE_sound_unlock(void)
+void BKE_sound_unlock()
 {
   AUD_Device_unlock(sound_device);
 }
@@ -822,6 +789,19 @@ void BKE_sound_update_scene_sound(void *handle, bSound *sound)
   AUD_SequenceEntry_setSound(handle, sound->playback_handle);
 }
 
+#endif /* WITH_AUDASPACE */
+
+void BKE_sound_update_sequence_handle(void *handle, void *sound_handle)
+{
+#ifdef WITH_AUDASPACE
+  AUD_SequenceEntry_setSound(handle, sound_handle);
+#else
+  UNUSED_VARS(handle, sound_handle);
+#endif
+}
+
+#ifdef WITH_AUDASPACE
+
 void BKE_sound_set_cfra(int cfra)
 {
   sound_cfra = cfra;
@@ -902,7 +882,7 @@ static double get_cur_time(Scene *scene)
   /* We divide by the current framelen to take into account time remapping.
    * Otherwise we will get the wrong starting time which will break A/V sync.
    * See #74111 for further details. */
-  return FRA2TIME((scene->r.cfra + scene->r.subframe) / (double)scene->r.framelen);
+  return FRA2TIME((scene->r.cfra + scene->r.subframe) / double(scene->r.framelen));
 }
 
 void BKE_sound_play_scene(Scene *scene)
@@ -1133,8 +1113,6 @@ void BKE_sound_read_waveform(Main *bmain, bSound *sound, bool *stop)
 
 static void sound_update_base(Scene *scene, Object *object, void *new_set)
 {
-  NlaTrack *track;
-  NlaStrip *strip;
   Speaker *speaker;
   float quat[4];
 
@@ -1145,9 +1123,8 @@ static void sound_update_base(Scene *scene, Object *object, void *new_set)
     return;
   }
 
-  for (track = static_cast<NlaTrack *>(object->adt->nla_tracks.first); track; track = track->next)
-  {
-    for (strip = static_cast<NlaStrip *>(track->strips.first); strip; strip = strip->next) {
+  LISTBASE_FOREACH (NlaTrack *, track, &object->adt->nla_tracks) {
+    LISTBASE_FOREACH (NlaStrip *, strip, &track->strips) {
       if (strip->type != NLASTRIP_TYPE_SOUND) {
         continue;
       }
@@ -1155,7 +1132,7 @@ static void sound_update_base(Scene *scene, Object *object, void *new_set)
 
       if (AUD_removeSet(scene->speaker_handles, strip->speaker_handle)) {
         if (speaker->sound) {
-          AUD_SequenceEntry_move(strip->speaker_handle, (double)strip->start / FPS, FLT_MAX, 0);
+          AUD_SequenceEntry_move(strip->speaker_handle, double(strip->start) / FPS, FLT_MAX, 0);
         }
         else {
           AUD_Sequence_remove(scene->sound_scene, strip->speaker_handle);
@@ -1166,7 +1143,7 @@ static void sound_update_base(Scene *scene, Object *object, void *new_set)
         if (speaker->sound) {
           strip->speaker_handle = AUD_Sequence_add(scene->sound_scene,
                                                    speaker->sound->playback_handle,
-                                                   (double)strip->start / FPS,
+                                                   double(strip->start) / FPS,
                                                    FLT_MAX,
                                                    0);
           AUD_SequenceEntry_setRelative(strip->speaker_handle, 0);
@@ -1255,7 +1232,7 @@ float BKE_sound_get_length(Main *bmain, bSound *sound)
   return info.length;
 }
 
-char **BKE_sound_get_device_names(void)
+char **BKE_sound_get_device_names()
 {
   if (audio_device_names == nullptr) {
     audio_device_names = AUD_getDeviceNames();
@@ -1335,17 +1312,17 @@ bool BKE_sound_stream_info_get(Main *main,
 #  include "BLI_utildefines.h"
 
 void BKE_sound_force_device(const char * /*device*/) {}
-void BKE_sound_init_once(void) {}
+void BKE_sound_init_once() {}
 void BKE_sound_init(Main * /*bmain*/) {}
-void BKE_sound_exit(void) {}
-void BKE_sound_exit_once(void) {}
+void BKE_sound_exit() {}
+void BKE_sound_exit_once() {}
 void BKE_sound_cache(bSound * /*sound*/) {}
 void BKE_sound_delete_cache(bSound * /*sound*/) {}
 void BKE_sound_load(Main * /*bmain*/, bSound * /*sound*/) {}
 void BKE_sound_create_scene(Scene * /*scene*/) {}
 void BKE_sound_destroy_scene(Scene * /*scene*/) {}
-void BKE_sound_lock(void) {}
-void BKE_sound_unlock(void) {}
+void BKE_sound_lock() {}
+void BKE_sound_unlock() {}
 void BKE_sound_reset_scene_specs(Scene * /*scene*/) {}
 void BKE_sound_mute_scene(Scene * /*scene*/, int /*muted*/) {}
 void *BKE_sound_scene_add_scene_sound(Scene * /*scene*/,
@@ -1424,11 +1401,11 @@ void BKE_sound_set_scene_sound_pitch_constant_range(void * /*handle*/,
                                                     float /*pitch*/)
 {
 }
-float BKE_sound_get_length(struct Main * /*bmain*/, bSound * /*sound*/)
+float BKE_sound_get_length(Main * /*bmain*/, bSound * /*sound*/)
 {
   return 0;
 }
-char **BKE_sound_get_device_names(void)
+char **BKE_sound_get_device_names()
 {
   static char *names[1] = {nullptr};
   return names;
@@ -1436,14 +1413,12 @@ char **BKE_sound_get_device_names(void)
 
 void BKE_sound_free_waveform(bSound * /*sound*/) {}
 
-bool BKE_sound_info_get(struct Main * /*main*/,
-                        struct bSound * /*sound*/,
-                        SoundInfo * /*sound_info*/)
+bool BKE_sound_info_get(Main * /*main*/, bSound * /*sound*/, SoundInfo * /*sound_info*/)
 {
   return false;
 }
 
-bool BKE_sound_stream_info_get(struct Main * /*main*/,
+bool BKE_sound_stream_info_get(Main * /*main*/,
                                const char * /*filepath*/,
                                int /*stream*/,
                                SoundStreamInfo * /*sound_info*/)

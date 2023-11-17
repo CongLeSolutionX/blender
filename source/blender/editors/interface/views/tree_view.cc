@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -9,7 +9,7 @@
 #include "DNA_userdef_types.h"
 #include "DNA_windowmanager_types.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 
 #include "BLT_translation.h"
 
@@ -17,14 +17,24 @@
 
 #include "interface_intern.hh"
 
-#include "UI_interface.h"
+#include "UI_interface.hh"
 
-#include "WM_api.h"
-#include "WM_types.h"
+#include "WM_api.hh"
+#include "WM_types.hh"
 
 #include "UI_tree_view.hh"
 
 namespace blender::ui {
+
+static int unpadded_item_height()
+{
+  return UI_UNIT_Y;
+}
+static int padded_item_height()
+{
+  const uiStyle *style = UI_style_get_dpi();
+  return unpadded_item_height() + style->buttonspacey;
+}
 
 /* ---------------------------------------------------------------------- */
 
@@ -72,6 +82,12 @@ void TreeViewItemContainer::foreach_item_recursive(ItemIterFn iter_fn, IterOptio
 }
 
 /* ---------------------------------------------------------------------- */
+
+/* Implementation for the base class virtual function. More specialized iterators below. */
+void AbstractTreeView::foreach_view_item(FunctionRef<void(AbstractViewItem &)> iter_fn) const
+{
+  foreach_item_recursive(iter_fn);
+}
 
 void AbstractTreeView::foreach_item(ItemIterFn iter_fn, IterOptions options) const
 {
@@ -224,32 +240,11 @@ AbstractTreeViewItem *AbstractTreeView::find_matching_child(
   return nullptr;
 }
 
-void AbstractTreeView::change_state_delayed()
-{
-  BLI_assert_msg(
-      is_reconstructed(),
-      "These state changes are supposed to be delayed until reconstruction is completed");
-
-/* Debug-only sanity check: Ensure only one item requests to be active. */
-#ifndef NDEBUG
-  bool has_active = false;
-  foreach_item([&has_active](AbstractTreeViewItem &item) {
-    if (item.should_be_active().value_or(false)) {
-      BLI_assert_msg(
-          !has_active,
-          "Only one view item should ever return true for its `should_be_active()` method");
-      has_active = true;
-    }
-  });
-#endif
-
-  foreach_item([](AbstractTreeViewItem &item) { item.change_state_delayed(); });
-}
-
 /* ---------------------------------------------------------------------- */
 
-TreeViewItemDropTarget::TreeViewItemDropTarget(AbstractTreeView &view, DropBehavior behavior)
-    : view_(view), behavior_(behavior)
+TreeViewItemDropTarget::TreeViewItemDropTarget(AbstractTreeViewItem &view_item,
+                                               DropBehavior behavior)
+    : view_item_(view_item), behavior_(behavior)
 {
 }
 
@@ -260,12 +255,11 @@ std::optional<DropLocation> TreeViewItemDropTarget::choose_drop_location(
     return DropLocation::Into;
   }
 
-  const AbstractTreeViewItem *hovered_item = view_.find_hovered(region, event.xy);
-  if (!hovered_item) {
+  std::optional<rctf> win_rect = view_item_.get_win_rect(region);
+  if (!win_rect) {
+    BLI_assert_unreachable();
     return std::nullopt;
   }
-  std::optional<rctf> win_rect = hovered_item->get_win_rect(region);
-  BLI_assert(win_rect.has_value());
   const float item_height = BLI_rctf_size_y(&*win_rect);
 
   BLI_assert(ELEM(behavior_, DropBehavior::Reorder, DropBehavior::ReorderAndInsert));
@@ -282,8 +276,8 @@ std::optional<DropLocation> TreeViewItemDropTarget::choose_drop_location(
     return DropLocation::Before;
   }
   if (event.xy[1] - win_rect->ymin <= segment_height) {
-    if (behavior_ == DropBehavior::ReorderAndInsert && hovered_item->is_collapsible() &&
-        !hovered_item->is_collapsed())
+    if (behavior_ == DropBehavior::ReorderAndInsert && view_item_.is_collapsible() &&
+        !view_item_.is_collapsed())
     {
       /* Special case: Dropping at the lower 3rd of an uncollapsed item should insert into it, not
        * after. */
@@ -298,12 +292,12 @@ std::optional<DropLocation> TreeViewItemDropTarget::choose_drop_location(
 
 /* ---------------------------------------------------------------------- */
 
-void AbstractTreeViewItem::tree_row_click_fn(bContext * /*C*/, void *but_arg1, void * /*arg2*/)
+void AbstractTreeViewItem::tree_row_click_fn(bContext *C, void *but_arg1, void * /*arg2*/)
 {
   uiButViewItem *item_but = (uiButViewItem *)but_arg1;
   AbstractTreeViewItem &tree_item = reinterpret_cast<AbstractTreeViewItem &>(*item_but->view_item);
 
-  tree_item.activate();
+  tree_item.activate(*C);
   /* Not only activate the item, also show its children. Maybe this should be optional, or
    * controlled by the specific tree-view. */
   tree_item.set_collapsed(false);
@@ -316,6 +310,7 @@ void AbstractTreeViewItem::add_treerow_button(uiBlock &block)
       &block, UI_BTYPE_VIEW_ITEM, 0, "", 0, 0, UI_UNIT_X * 10, UI_UNIT_Y, nullptr, 0, 0, 0, 0, "");
 
   view_item_but_->view_item = reinterpret_cast<uiViewItemHandle *>(this);
+  view_item_but_->draw_height = unpadded_item_height();
   UI_but_func_set(view_item_but_, tree_row_click_fn, view_item_but_, nullptr);
 }
 
@@ -362,14 +357,8 @@ void AbstractTreeViewItem::collapse_chevron_click_fn(bContext *C,
   /* When collapsing an item with an active child, make this collapsed item active instead so the
    * active item stays visible. */
   if (hovered_item->has_active_child()) {
-    hovered_item->activate();
+    hovered_item->activate(*C);
   }
-}
-
-bool AbstractTreeViewItem::is_collapse_chevron_but(const uiBut *but)
-{
-  return but->type == UI_BTYPE_BUT_TOGGLE && ELEM(but->icon, ICON_TRIA_RIGHT, ICON_TRIA_DOWN) &&
-         (but->func == collapse_chevron_click_fn);
 }
 
 void AbstractTreeViewItem::add_collapse_chevron(uiBlock &block) const
@@ -384,9 +373,6 @@ void AbstractTreeViewItem::add_collapse_chevron(uiBlock &block) const
   /* Note that we're passing the tree-row button here, not the chevron one. */
   UI_but_func_set(but, collapse_chevron_click_fn, nullptr, nullptr);
   UI_but_flag_disable(but, UI_BUT_UNDO);
-
-  /* Check if the query for the button matches the created button. */
-  BLI_assert(is_collapse_chevron_but(but));
 }
 
 void AbstractTreeViewItem::add_rename_button(uiLayout &row)
@@ -416,16 +402,6 @@ bool AbstractTreeViewItem::has_active_child() const
   return found;
 }
 
-void AbstractTreeViewItem::on_activate()
-{
-  /* Do nothing by default. */
-}
-
-std::optional<bool> AbstractTreeViewItem::should_be_active() const
-{
-  return std::nullopt;
-}
-
 bool AbstractTreeViewItem::supports_collapsing() const
 {
   return true;
@@ -436,7 +412,7 @@ StringRef AbstractTreeViewItem::get_rename_string() const
   return label_;
 }
 
-bool AbstractTreeViewItem::rename(StringRefNull new_name)
+bool AbstractTreeViewItem::rename(const bContext & /*C*/, StringRefNull new_name)
 {
   /* It is important to update the label after renaming, so #AbstractTreeViewItem::matches_single()
    * recognizes the item. (It only compares labels by default.) */
@@ -494,31 +470,15 @@ int AbstractTreeViewItem::count_parents() const
   return i;
 }
 
-void AbstractTreeViewItem::activate()
+bool AbstractTreeViewItem::set_state_active()
 {
-  BLI_assert_msg(get_tree_view().is_reconstructed(),
-                 "Item activation can't be done until reconstruction is completed");
-
-  if (!is_activatable_) {
-    return;
-  }
-  if (is_active()) {
-    return;
+  if (AbstractViewItem::set_state_active()) {
+    /* Make sure the active item is always visible. */
+    ensure_parents_uncollapsed();
+    return true;
   }
 
-  /* Deactivate other items in the tree. */
-  get_tree_view().foreach_item([](auto &item) { item.deactivate(); });
-
-  on_activate();
-  /* Make sure the active item is always visible. */
-  ensure_parents_uncollapsed();
-
-  is_active_ = true;
-}
-
-void AbstractTreeViewItem::deactivate()
-{
-  is_active_ = false;
+  return false;
 }
 
 bool AbstractTreeViewItem::is_hovered() const
@@ -533,7 +493,7 @@ bool AbstractTreeViewItem::is_hovered() const
    * Get the matching button from the previous redraw instead. */
   uiButViewItem *old_item_but = ui_block_view_find_matching_view_item_but_in_old_block(
       view_item_but_->block, this_item_handle);
-  return old_item_but && (old_item_but->flag & UI_ACTIVE);
+  return old_item_but && (old_item_but->flag & UI_HOVER);
 }
 
 bool AbstractTreeViewItem::is_collapsed() const
@@ -591,14 +551,6 @@ bool AbstractTreeViewItem::matches(const AbstractViewItem &other) const
   return true;
 }
 
-void AbstractTreeViewItem::change_state_delayed()
-{
-  const std::optional<bool> should_be_active = this->should_be_active();
-  if (should_be_active.has_value() && *should_be_active) {
-    activate();
-  }
-}
-
 /* ---------------------------------------------------------------------- */
 
 class TreeViewLayoutBuilder {
@@ -616,8 +568,6 @@ class TreeViewLayoutBuilder {
  private:
   /* Created through #TreeViewBuilder (friend class). */
   TreeViewLayoutBuilder(uiLayout &layout);
-
-  static void polish_layout(const uiBlock &block);
 };
 
 TreeViewLayoutBuilder::TreeViewLayoutBuilder(uiLayout &layout) : block_(*uiLayoutGetBlock(&layout))
@@ -629,29 +579,13 @@ void TreeViewLayoutBuilder::build_from_tree(const AbstractTreeView &tree_view)
   uiLayout &parent_layout = current_layout();
 
   uiLayout *box = uiLayoutBox(&parent_layout);
-  uiLayoutColumn(box, false);
+  uiLayoutColumn(box, true);
 
   tree_view.foreach_item([this](AbstractTreeViewItem &item) { build_row(item); },
                          AbstractTreeView::IterOptions::SkipCollapsed |
                              AbstractTreeView::IterOptions::SkipFiltered);
 
   UI_block_layout_set_current(&block(), &parent_layout);
-}
-
-void TreeViewLayoutBuilder::polish_layout(const uiBlock &block)
-{
-  LISTBASE_FOREACH_BACKWARD (uiBut *, but, &block.buttons) {
-    if (AbstractTreeViewItem::is_collapse_chevron_but(but) && but->next &&
-        /* Embossed buttons with padding-less text padding look weird, so don't touch them. */
-        ELEM(but->next->emboss, UI_EMBOSS_NONE, UI_EMBOSS_NONE_OR_STATUS))
-    {
-      UI_but_drawflag_enable(static_cast<uiBut *>(but->next), UI_BUT_NO_TEXT_PADDING);
-    }
-
-    if (but->type == UI_BTYPE_VIEW_ITEM) {
-      break;
-    }
-  }
 }
 
 void TreeViewLayoutBuilder::build_row(AbstractTreeViewItem &item) const
@@ -666,6 +600,8 @@ void TreeViewLayoutBuilder::build_row(AbstractTreeViewItem &item) const
   if (!item.is_interactive_) {
     uiLayoutSetActive(overlap, false);
   }
+  /* Scale the layout for the padded height. Widgets will be vertically centered then. */
+  uiLayoutSetScaleY(overlap, float(padded_item_height()) / UI_UNIT_Y);
 
   uiLayout *row = uiLayoutRow(overlap, false);
   /* Enable emboss for mouse hover highlight. */
@@ -686,7 +622,6 @@ void TreeViewLayoutBuilder::build_row(AbstractTreeViewItem &item) const
   else {
     item.build_row(*row);
   }
-  polish_layout(block_);
 
   UI_block_emboss_set(&block_, previous_emboss);
   UI_block_layout_set_current(&block_, &prev_layout);
@@ -761,10 +696,10 @@ void BasicTreeViewItem::add_label(uiLayout &layout, StringRefNull label_override
   uiItemL(&layout, IFACE_(label.c_str()), icon);
 }
 
-void BasicTreeViewItem::on_activate()
+void BasicTreeViewItem::on_activate(bContext &C)
 {
   if (activate_fn_) {
-    activate_fn_(*this);
+    activate_fn_(C, *this);
   }
 }
 

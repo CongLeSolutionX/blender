@@ -6,18 +6,20 @@
  * \ingroup edtransform
  */
 
-#include <stdlib.h>
+#include <cstdlib>
 
-#include "BLI_math.h"
+#include "BLI_math_matrix.h"
+#include "BLI_math_rotation.h"
+#include "BLI_math_vector.h"
 
-#include "BKE_context.h"
-#include "BKE_editmesh.h"
-#include "BKE_mesh.h"
+#include "BKE_context.hh"
+#include "BKE_editmesh.hh"
+#include "BKE_mesh.hh"
 #include "BKE_unit.h"
 
-#include "ED_screen.h"
+#include "ED_screen.hh"
 
-#include "UI_interface.h"
+#include "UI_interface.hh"
 
 #include "transform.hh"
 #include "transform_convert.hh"
@@ -60,7 +62,7 @@ void freeCustomNormalArray(TransInfo *t, TransDataContainer *tc, TransCustomData
 }
 
 /* Works by getting custom normal from clnor_data, transform, then store */
-static void applyNormalRotation(TransInfo *t, const int[2] /*mval*/)
+static void applyNormalRotation(TransInfo *t)
 {
   char str[UI_MAX_DRAW_STR];
 
@@ -104,7 +106,7 @@ static void applyNormalRotation(TransInfo *t, const int[2] /*mval*/)
     t->values_final[0] = angle;
   }
 
-  recalcData(t);
+  recalc_data(t);
 
   ED_area_status_text(t->area, str);
 }
@@ -129,8 +131,7 @@ static void initNormalRotation(TransInfo *t, wmOperator * /*op*/)
     BMEditMesh *em = BKE_editmesh_from_object(tc->obedit);
     BMesh *bm = em->bm;
 
-    BKE_editmesh_ensure_autosmooth(em, static_cast<Mesh *>(tc->obedit->data));
-    BKE_editmesh_lnorspace_update(em, static_cast<Mesh *>(tc->obedit->data));
+    BKE_editmesh_lnorspace_update(em);
 
     storeCustomLNorValue(tc, bm);
   }

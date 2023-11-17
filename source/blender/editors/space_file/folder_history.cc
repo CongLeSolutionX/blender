@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2007 Blender Foundation
+/* SPDX-FileCopyrightText: 2007 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -14,15 +14,15 @@
 #include "BLI_path_util.h"
 #include "BLI_string.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 
 #include "DNA_space_types.h"
 
-#include "ED_fileselect.h"
+#include "ED_fileselect.hh"
 
 #include "MEM_guardedalloc.h"
 
-#include "file_intern.h"
+#include "file_intern.hh"
 
 /* -------------------------------------------------------------------- */
 /** \name FOLDERLIST (previous/next)

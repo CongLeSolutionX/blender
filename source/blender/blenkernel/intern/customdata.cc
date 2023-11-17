@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2006 Blender Foundation
+/* SPDX-FileCopyrightText: 2006 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -6,7 +6,7 @@
  * \ingroup bke
  * Implementation of CustomData.
  *
- * BKE_customdata.h contains the function prototypes for this file.
+ * BKE_customdata.hh contains the function prototypes for this file.
  */
 
 #include "MEM_guardedalloc.h"
@@ -23,7 +23,6 @@
 #include "BLI_color.hh"
 #include "BLI_endian_switch.h"
 #include "BLI_index_range.hh"
-#include "BLI_math.h"
 #include "BLI_math_color_blend.h"
 #include "BLI_math_quaternion_types.hh"
 #include "BLI_math_vector.hh"
@@ -34,7 +33,7 @@
 #include "BLI_string.h"
 #include "BLI_string_ref.hh"
 #include "BLI_string_utf8.h"
-#include "BLI_string_utils.h"
+#include "BLI_string_utils.hh"
 #include "BLI_utildefines.h"
 
 #ifndef NDEBUG
@@ -44,16 +43,16 @@
 #include "BLT_translation.h"
 
 #include "BKE_anonymous_attribute_id.hh"
-#include "BKE_customdata.h"
+#include "BKE_customdata.hh"
 #include "BKE_customdata_file.h"
 #include "BKE_deform.h"
 #include "BKE_main.h"
-#include "BKE_mesh_mapping.h"
-#include "BKE_mesh_remap.h"
-#include "BKE_multires.h"
-#include "BKE_subsurf.h"
+#include "BKE_mesh_mapping.hh"
+#include "BKE_mesh_remap.hh"
+#include "BKE_multires.hh"
+#include "BKE_subsurf.hh"
 
-#include "BLO_read_write.h"
+#include "BLO_read_write.hh"
 
 #include "bmesh.h"
 
@@ -1758,7 +1757,7 @@ static const LayerTypeInfo LAYERTYPEINFO[CD_NUMTYPES] = {
     {sizeof(MRecast), "MRecast", 1, N_("Recast"), nullptr, nullptr, nullptr, nullptr},
     /* 25: CD_MPOLY */ /* DEPRECATED */
     {sizeof(MPoly), "MPoly", 1, N_("NGon Face"), nullptr, nullptr, nullptr, nullptr, nullptr},
-    /* 26: CD_MLOOP */ /* DEPRECATED*/
+    /* 26: CD_MLOOP */ /* DEPRECATED */
     {sizeof(MLoop),
      "MLoop",
      1,
@@ -2231,7 +2230,9 @@ static bool customdata_merge_internal(const CustomData *source,
     const int src_layer_flag = src_layer.flag;
 
     if (type != last_type) {
-      current_type_layer_count = 0;
+      /* Don't exceed layer count on destination. */
+      const int layernum_dst = CustomData_number_of_layers(dest, type);
+      current_type_layer_count = layernum_dst;
       max_current_type_layer_count = CustomData_layertype_layers_max(type);
       last_active = src_layer.active;
       last_render = src_layer.active_rnd;
@@ -2413,7 +2414,30 @@ static void ensure_layer_data_is_mutable(CustomDataLayer &layer, const int totel
   }
 }
 
-void CustomData_realloc(CustomData *data, const int old_size, const int new_size)
+[[maybe_unused]] static bool layer_is_mutable(CustomDataLayer &layer)
+{
+  if (layer.sharing_info == nullptr) {
+    return true;
+  }
+  return layer.sharing_info->is_mutable();
+}
+
+void CustomData_ensure_data_is_mutable(CustomDataLayer *layer, const int totelem)
+{
+  ensure_layer_data_is_mutable(*layer, totelem);
+}
+
+void CustomData_ensure_layers_are_mutable(CustomData *data, int totelem)
+{
+  for (const int i : IndexRange(data->totlayer)) {
+    ensure_layer_data_is_mutable(data->layers[i], totelem);
+  }
+}
+
+void CustomData_realloc(CustomData *data,
+                        const int old_size,
+                        const int new_size,
+                        const eCDAllocType alloctype)
 {
   BLI_assert(new_size >= 0);
   for (int i = 0; i < data->totlayer; i++) {
@@ -2446,10 +2470,25 @@ void CustomData_realloc(CustomData *data, const int old_size, const int new_size
     }
 
     if (new_size > old_size) {
-      /* Initialize new values for non-trivial types. */
-      if (typeInfo->construct) {
-        const int new_elements_num = new_size - old_size;
-        typeInfo->construct(POINTER_OFFSET(layer->data, old_size_in_bytes), new_elements_num);
+      const int new_elements_num = new_size - old_size;
+      void *new_elements_begin = POINTER_OFFSET(layer->data, old_size_in_bytes);
+      switch (alloctype) {
+        case CD_CONSTRUCT: {
+          /* Initialize new values for non-trivial types. */
+          if (typeInfo->construct) {
+            typeInfo->construct(new_elements_begin, new_elements_num);
+          }
+          break;
+        }
+        case CD_SET_DEFAULT: {
+          if (typeInfo->set_default_value) {
+            typeInfo->set_default_value(new_elements_begin, new_elements_num);
+          }
+          else {
+            memset(new_elements_begin, 0, typeInfo->size * new_elements_num);
+          }
+          break;
+        }
       }
     }
   }
@@ -2589,8 +2628,8 @@ int CustomData_get_layer_index_n(const CustomData *data, const eCustomDataType t
   int i = CustomData_get_layer_index(data, type);
 
   if (i != -1) {
-    BLI_assert(i + n < data->totlayer);
-    i = (data->layers[i + n].type == type) ? (i + n) : (-1);
+    /* If the value of n goes past the block of layers of the correct type, return -1. */
+    i = (i + n < data->totlayer && data->layers[i + n].type == type) ? (i + n) : (-1);
   }
 
   return i;
@@ -3220,38 +3259,6 @@ int CustomData_number_of_layers_typemask(const CustomData *data, const eCustomDa
   return number;
 }
 
-void CustomData_free_temporary(CustomData *data, const int totelem)
-{
-  int i, j;
-  bool changed = false;
-  for (i = 0, j = 0; i < data->totlayer; i++) {
-    CustomDataLayer *layer = &data->layers[i];
-
-    if (i != j) {
-      data->layers[j] = data->layers[i];
-    }
-
-    if ((layer->flag & CD_FLAG_TEMPORARY) == CD_FLAG_TEMPORARY) {
-      customData_free_layer__internal(layer, totelem);
-      changed = true;
-    }
-    else {
-      j++;
-    }
-  }
-
-  data->totlayer = j;
-
-  if (data->totlayer <= data->maxlayer - CUSTOMDATA_GROW) {
-    customData_resize(data, -CUSTOMDATA_GROW);
-    changed = true;
-  }
-
-  if (changed) {
-    customData_update_offsets(data);
-  }
-}
-
 void CustomData_set_only_copy(const CustomData *data, const eCustomDataMask mask)
 {
   for (int i = 0; i < data->totlayer; i++) {
@@ -3285,6 +3292,8 @@ void CustomData_copy_data_layer(const CustomData *source,
                                 const int count)
 {
   const LayerTypeInfo *typeInfo;
+
+  BLI_assert(layer_is_mutable(dest->layers[dst_layer_index]));
 
   const void *src_data = source->layers[src_layer_index].data;
   void *dst_data = dest->layers[dst_layer_index].data;
@@ -3401,6 +3410,7 @@ void CustomData_free_elem(CustomData *data, const int index, const int count)
 
     if (typeInfo->free) {
       size_t offset = size_t(index) * typeInfo->size;
+      BLI_assert(layer_is_mutable(data->layers[i]));
 
       typeInfo->free(POINTER_OFFSET(data->layers[i].data, offset), count, typeInfo->size);
     }
@@ -3501,33 +3511,6 @@ void CustomData_swap_corners(CustomData *data, const int index, const int *corne
       const size_t offset = size_t(index) * typeInfo->size;
 
       typeInfo->swap(POINTER_OFFSET(data->layers[i].data, offset), corner_indices);
-    }
-  }
-}
-
-void CustomData_swap(CustomData *data, const int index_a, const int index_b)
-{
-  char buff_static[256];
-
-  if (index_a == index_b) {
-    return;
-  }
-
-  for (int i = 0; i < data->totlayer; i++) {
-    const LayerTypeInfo *typeInfo = layerType_getInfo(eCustomDataType(data->layers[i].type));
-    const size_t size = typeInfo->size;
-    const size_t offset_a = size * index_a;
-    const size_t offset_b = size * index_b;
-
-    void *buff = size <= sizeof(buff_static) ? buff_static : MEM_mallocN(size, __func__);
-    memcpy(buff, POINTER_OFFSET(data->layers[i].data, offset_a), size);
-    memcpy(POINTER_OFFSET(data->layers[i].data, offset_a),
-           POINTER_OFFSET(data->layers[i].data, offset_b),
-           size);
-    memcpy(POINTER_OFFSET(data->layers[i].data, offset_b), buff, size);
-
-    if (buff != buff_static) {
-      MEM_freeN(buff);
     }
   }
 }
@@ -4285,11 +4268,10 @@ void CustomData_blend_write_prepare(CustomData &data,
   data.totlayer = layers_to_write.size();
   data.maxlayer = data.totlayer;
 
-  /* Note: data->layers may be null, this happens when adding
-   * a legacy MPoly struct to a mesh with no other face attributes.
+  /* NOTE: `data->layers` may be null, this happens when adding
+   * a legacy #MPoly struct to a mesh with no other face attributes.
    * This leaves us with no unique ID for DNA to identify the old
-   * data with when loading the file.
-   */
+   * data with when loading the file. */
   if (!data.layers && layers_to_write.size() > 0) {
     /* We just need an address that's unique. */
     data.layers = reinterpret_cast<CustomDataLayer *>(&data.layers);
@@ -5214,14 +5196,14 @@ static void blend_read_mdisps(BlendDataReader *reader,
         /* this calculation is only correct for loop mdisps;
          * if loading pre-BMesh face mdisps this will be
          * overwritten with the correct value in
-         * bm_corners_to_loops() */
+         * #bm_corners_to_loops() */
         float gridsize = sqrtf(mdisps[i].totdisp);
         mdisps[i].level = int(logf(gridsize - 1.0f) / float(M_LN2)) + 1;
       }
 
       if (BLO_read_requires_endian_switch(reader) && (mdisps[i].disps)) {
-        /* DNA_struct_switch_endian doesn't do endian swap for (*disps)[] */
-        /* this does swap for data written at write_mdisps() - readfile.c */
+        /* #DNA_struct_switch_endian doesn't do endian swap for `(*disps)[]` */
+        /* this does swap for data written at #write_mdisps() - `readfile.cc`. */
         BLI_endian_switch_float_array(*mdisps[i].disps, mdisps[i].totdisp * 3);
       }
       if (!external && !mdisps[i].disps) {

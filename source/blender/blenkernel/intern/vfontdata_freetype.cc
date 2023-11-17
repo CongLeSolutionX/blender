@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  * The Original Code is written by Rob Haarsma (phase). All rights reserved. */
@@ -24,12 +24,13 @@
 
 #include "BLI_ghash.h"
 #include "BLI_listbase.h"
-#include "BLI_math.h"
+#include "BLI_math_geom.h"
+#include "BLI_math_vector.h"
 #include "BLI_string.h"
 #include "BLI_string_utf8.h"
 #include "BLI_utildefines.h"
 
-#include "BKE_curve.h"
+#include "BKE_curve.hh"
 #include "BKE_vfontdata.h"
 
 #include "DNA_curve_types.h"
@@ -353,11 +354,11 @@ VChar *BKE_vfontdata_char_from_freetypefont(VFont *vfont, ulong character)
     return nullptr;
   }
 
-  /* Init Freetype */
+  /* Initialize Freetype. */
   FT_Library library = nullptr;
   FT_Error err = FT_Init_FreeType(&library);
   if (err) {
-    /* XXX error("Failed to load the Freetype font library"); */
+    // error("Failed to load the Freetype font library");
     return nullptr;
   }
 
@@ -405,15 +406,15 @@ VChar *BKE_vfontdata_char_copy(const VChar *vchar_src)
  *
  * # two successive "on" points indicate a line segment joining them.
  *
- * # one conic "off" point amidst two "on" points indicates a conic bezier arc,
+ * # one conic "off" point midst two "on" points indicates a conic bezier arc,
  *   the "off" point being the control point, and the "on" ones the start and end points.
  *
- * # Two successive cubic "off" points amidst two "on" points indicate a cubic bezier arc.
+ * # Two successive cubic "off" points midst two "on" points indicate a cubic bezier arc.
  *   There must be exactly two cubic control points and two on points for each cubic arc
  *   (using a single cubic "off" point between two "on" points is forbidden, for example).
  *
  * # finally, two successive conic "off" points forces the rasterizer to create
- *   (during the scan-line conversion process exclusively) a virtual "on" point amidst them,
+ *   (during the scan-line conversion process exclusively) a virtual "on" point midst them,
  *   at their exact middle.
  *   This greatly facilitates the definition of successive conic bezier arcs.
  *   Moreover, it's the way outlines are described in the TrueType specification.

@@ -6,23 +6,23 @@
  * \ingroup edtransform
  */
 
-#include <stdlib.h>
+#include <cstdlib>
 
 #include "MEM_guardedalloc.h"
 
 #include "DNA_anim_types.h"
 
-#include "BLI_math.h"
+#include "BLI_math_vector.h"
 #include "BLI_string.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_nla.h"
 #include "BKE_unit.h"
 
-#include "ED_screen.h"
+#include "ED_screen.hh"
 
-#include "UI_interface.h"
-#include "UI_view2d.h"
+#include "UI_interface.hh"
+#include "UI_view2d.hh"
 
 #include "BLT_translation.h"
 
@@ -85,8 +85,18 @@ static void applyTimeSlideValue(TransInfo *t, float sval, float cval)
       /* only apply to data if in range */
       if ((sval > minx) && (sval < maxx)) {
         float cvalc = CLAMPIS(cval, minx, maxx);
-        float ival = td->ival;
         float timefac;
+        float *dst;
+        float ival;
+
+        if (td->val) {
+          dst = td->val;
+          ival = td->ival;
+        }
+        else {
+          dst = &td->loc[0];
+          ival = td->iloc[0];
+        }
 
         /* NLA mapping magic here works as follows:
          * - "ival" goes from strip time to global time
@@ -102,23 +112,23 @@ static void applyTimeSlideValue(TransInfo *t, float sval, float cval)
         /* left half? */
         if (ival < sval) {
           timefac = (sval - ival) / (sval - minx);
-          *(td->val) = cvalc - timefac * (cvalc - minx);
+          *dst = cvalc - timefac * (cvalc - minx);
         }
         else {
           timefac = (ival - sval) / (maxx - sval);
-          *(td->val) = cvalc + timefac * (maxx - cvalc);
+          *dst = cvalc + timefac * (maxx - cvalc);
         }
 
         if (adt) {
           /* global to strip */
-          *(td->val) = BKE_nla_tweakedit_remap(adt, *(td->val), NLATIME_CONVERT_UNMAP);
+          *dst = BKE_nla_tweakedit_remap(adt, *dst, NLATIME_CONVERT_UNMAP);
         }
       }
     }
   }
 }
 
-static void applyTimeSlide(TransInfo *t, const int mval[2])
+static void applyTimeSlide(TransInfo *t)
 {
   View2D *v2d = (View2D *)t->view;
   float cval[2], sval[2];
@@ -128,12 +138,12 @@ static void applyTimeSlide(TransInfo *t, const int mval[2])
   char str[UI_MAX_DRAW_STR];
 
   /* calculate mouse co-ordinates */
-  UI_view2d_region_to_view(v2d, mval[0], mval[1], &cval[0], &cval[1]);
+  UI_view2d_region_to_view(v2d, t->mval[0], t->mval[1], &cval[0], &cval[1]);
   UI_view2d_region_to_view(v2d, t->mouse.imval[0], t->mouse.imval[1], &sval[0], &sval[1]);
 
   /* t->values_final[0] stores cval[0], which is the current mouse-pointer location (in frames) */
   /* XXX Need to be able to repeat this. */
-  /* t->values_final[0] = cval[0]; */ /* UNUSED (reset again later). */
+  // t->values_final[0] = cval[0]; /* UNUSED (reset again later). */
 
   /* handle numeric-input stuff */
   t->vec[0] = 2.0f * (cval[0] - sval[0]) / (maxx - minx);
@@ -143,7 +153,7 @@ static void applyTimeSlide(TransInfo *t, const int mval[2])
   headerTimeSlide(t, sval[0], str);
   applyTimeSlideValue(t, sval[0], t->values_final[0]);
 
-  recalcData(t);
+  recalc_data(t);
 
   ED_area_status_text(t->area, str);
 }

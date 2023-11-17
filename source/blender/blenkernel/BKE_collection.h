@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -24,7 +24,6 @@ extern "C" {
 struct BLI_Iterator;
 struct Base;
 struct BlendDataReader;
-struct BlendExpander;
 struct BlendLibReader;
 struct BlendWriter;
 struct Collection;
@@ -34,7 +33,6 @@ struct Library;
 struct Main;
 struct Object;
 struct Scene;
-struct SceneCollection;
 struct ViewLayer;
 
 typedef struct CollectionParent {
@@ -318,17 +316,6 @@ void BKE_collection_blend_write_nolib(struct BlendWriter *writer, struct Collect
 void BKE_collection_blend_read_data(struct BlendDataReader *reader,
                                     struct Collection *collection,
                                     struct ID *owner_id);
-void BKE_collection_blend_read_lib(struct BlendLibReader *reader, struct Collection *collection);
-void BKE_collection_blend_read_expand(struct BlendExpander *expander,
-                                      struct Collection *collection);
-
-void BKE_collection_compat_blend_read_data(struct BlendDataReader *reader,
-                                           struct SceneCollection *sc);
-void BKE_collection_compat_blend_read_lib(struct BlendLibReader *reader,
-                                          struct ID *self_id,
-                                          struct SceneCollection *sc);
-void BKE_collection_compat_blend_read_expand(struct BlendExpander *expander,
-                                             struct SceneCollection *sc);
 
 /* Iteration callbacks. */
 

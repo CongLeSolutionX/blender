@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -6,8 +6,8 @@
  * \ingroup RNA
  */
 
-#include <limits.h>
-#include <stdlib.h>
+#include <climits>
+#include <cstdlib>
 
 #include "MEM_guardedalloc.h"
 
@@ -16,34 +16,34 @@
 #include "DNA_object_types.h" /* SELECT */
 #include "DNA_scene_types.h"
 
+#include "BLI_math_vector.h"
+
 #include "BLT_translation.h"
 
 #include "BKE_movieclip.h"
 #include "BKE_tracking.h"
 
-#include "RNA_define.h"
-#include "RNA_enum_types.h"
+#include "RNA_define.hh"
+#include "RNA_enum_types.hh"
 
 #include "rna_internal.h"
 
-#include "WM_types.h"
+#include "WM_types.hh"
 
 #include "IMB_imbuf.h"
 #include "IMB_imbuf_types.h"
 
 #ifdef RNA_RUNTIME
 
-#  include "BLI_math.h"
-
 #  include "DNA_movieclip_types.h"
 
 #  include "BKE_mask.h"
 
-#  include "DEG_depsgraph.h"
+#  include "DEG_depsgraph.hh"
 
-#  include "RNA_access.h"
+#  include "RNA_access.hh"
 
-#  include "WM_api.h"
+#  include "WM_api.hh"
 
 static void rna_Mask_update_data(Main * /*bmain*/, Scene * /*scene*/, PointerRNA *ptr)
 {
@@ -893,6 +893,7 @@ static void rna_def_maskSpline(BlenderRNA *brna)
   RNA_def_property_enum_items(prop, spline_offset_mode_items);
   RNA_def_property_ui_text(
       prop, "Feather Offset", "The method used for calculating the feather offset");
+  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_MASK);
   RNA_def_property_update(prop, 0, "rna_Mask_update_data");
 
   /* weight interpolation */

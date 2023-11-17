@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2008 Blender Foundation
+/* SPDX-FileCopyrightText: 2008 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -6,9 +6,9 @@
  * \ingroup edutil
  */
 
-#include <math.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cmath>
+#include <cstdlib>
+#include <cstring>
 
 #include "MEM_guardedalloc.h"
 
@@ -20,7 +20,7 @@
 
 #include "BLT_translation.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_image.h"
 
 #include "BLF_api.h"
@@ -28,20 +28,20 @@
 #include "IMB_imbuf_types.h"
 #include "IMB_metadata.h"
 
-#include "ED_screen.h"
-#include "ED_space_api.h"
-#include "ED_util.h"
+#include "ED_screen.hh"
+#include "ED_space_api.hh"
+#include "ED_util.hh"
 
 #include "GPU_immediate.h"
 #include "GPU_matrix.h"
 #include "GPU_state.h"
 
-#include "UI_interface.h"
-#include "UI_resources.h"
+#include "UI_interface.hh"
+#include "UI_resources.hh"
 
-#include "RNA_access.h"
-#include "WM_api.h"
-#include "WM_types.h"
+#include "RNA_access.hh"
+#include "WM_api.hh"
+#include "WM_types.hh"
 
 /* -------------------------------------------------------------------- */
 /** \name Generic Slider
@@ -359,7 +359,7 @@ static void slider_draw(const bContext * /*C*/, ARegion *region, void *arg)
                        &factor_string_pixel_size[1]);
 
   BLF_position(fontid,
-               main_line_rect.xmin - 24.0 * U.pixelsize - factor_string_pixel_size[0] / 2,
+               main_line_rect.xmin - 12.0 * U.pixelsize - factor_string_pixel_size[0],
                (region->winy / 2) - factor_string_pixel_size[1] / 2,
                0.0f);
   BLF_draw(fontid, factor_string, sizeof(factor_string));
@@ -543,7 +543,7 @@ void ED_slider_factor_set(tSlider *slider, const float factor)
   slider->raw_factor = factor;
   slider->factor = factor;
   if (!slider->overshoot) {
-    slider->factor = clamp_f(slider->factor, 0, 1);
+    slider->factor = clamp_f(slider->factor, slider->factor_bounds[0], slider->factor_bounds[1]);
   }
 }
 
@@ -576,9 +576,14 @@ void ED_slider_mode_set(tSlider *slider, SliderMode mode)
   slider->slider_mode = mode;
 }
 
+SliderMode ED_slider_mode_get(tSlider *slider)
+{
+  return slider->slider_mode;
+}
+
 void ED_slider_unit_set(tSlider *slider, const char *unit)
 {
-  BLI_strncpy(slider->unit_string, unit, SLIDER_UNIT_STRING_SIZE);
+  STRNCPY(slider->unit_string, unit);
 }
 
 /** \} */
@@ -724,7 +729,7 @@ static void metadata_draw_imbuf(ImBuf *ibuf, const rctf *rect, int fontid, const
       else if (i == 3) {
         int len = SNPRINTF_RLEN(temp_str, "%s: ", meta_data_list[i + 1]);
         if (metadata_is_valid(ibuf, temp_str, i + 1, len)) {
-          struct ResultBLF info;
+          ResultBLF info;
           BLF_enable(fontid, BLF_WORD_WRAP);
           BLF_wordwrap(fontid, ibuf->x - (margin * 2));
           BLF_position(fontid, xmin, ymax - vertical_offset - ofs_y, 0.0f);
@@ -795,7 +800,7 @@ static float metadata_box_height_get(ImBuf *ibuf, int fontid, const bool is_top)
       if (metadata_is_valid(ibuf, str, i, 0)) {
         if (i == 4) {
           struct {
-            struct ResultBLF info;
+            ResultBLF info;
             rcti rect;
           } wrap;
 
@@ -864,6 +869,7 @@ void ED_region_image_metadata_draw(
     GPUVertFormat *format = immVertexFormat();
     uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
     immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
+    GPU_blend(GPU_BLEND_ALPHA);
     immUniformThemeColor(TH_METADATA_BG);
     immRectf(pos, rect.xmin, rect.ymin, rect.xmax, rect.ymax);
     immUnbindProgram();
@@ -875,6 +881,7 @@ void ED_region_image_metadata_draw(
     metadata_draw_imbuf(ibuf, &rect, blf_mono_font, true);
 
     BLF_disable(blf_mono_font, BLF_CLIPPING);
+    GPU_blend(GPU_BLEND_NONE);
   }
 
   /* *** lower box*** */
@@ -889,6 +896,7 @@ void ED_region_image_metadata_draw(
     GPUVertFormat *format = immVertexFormat();
     uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
     immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
+    GPU_blend(GPU_BLEND_ALPHA);
     immUniformThemeColor(TH_METADATA_BG);
     immRectf(pos, rect.xmin, rect.ymin, rect.xmax, rect.ymax);
     immUnbindProgram();
@@ -900,6 +908,7 @@ void ED_region_image_metadata_draw(
     metadata_draw_imbuf(ibuf, &rect, blf_mono_font, false);
 
     BLF_disable(blf_mono_font, BLF_CLIPPING);
+    GPU_blend(GPU_BLEND_NONE);
   }
 
   GPU_matrix_pop();

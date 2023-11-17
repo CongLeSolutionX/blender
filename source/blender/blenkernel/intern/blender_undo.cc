@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -15,12 +15,12 @@
 #  include <io.h> /* for open close read */
 #endif
 
-#include <errno.h>
+#include <cerrno>
+#include <cstddef>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <fcntl.h> /* for open */
-#include <stddef.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
 #include "MEM_guardedalloc.h"
 
@@ -33,16 +33,16 @@
 #include "BKE_appdir.h"
 #include "BKE_blender_undo.h" /* own include */
 #include "BKE_blendfile.h"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_global.h"
 #include "BKE_main.h"
 #include "BKE_undo_system.h"
 
 #include "BLO_readfile.h"
-#include "BLO_undofile.h"
-#include "BLO_writefile.h"
+#include "BLO_undofile.hh"
+#include "BLO_writefile.hh"
 
-#include "DEG_depsgraph.h"
+#include "DEG_depsgraph.hh"
 
 /* -------------------------------------------------------------------- */
 /** \name Global Undo

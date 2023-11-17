@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2008 Blender Foundation
+/* SPDX-FileCopyrightText: 2008 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -8,13 +8,13 @@
 
 #include "DNA_scene_types.h"
 
-#include "RNA_access.h"
+#include "RNA_access.hh"
 
-#include "WM_api.h"
-#include "WM_types.h"
+#include "WM_api.hh"
+#include "WM_types.hh"
 
-#include "ED_mball.h"
-#include "ED_screen.h"
+#include "ED_mball.hh"
+#include "ED_screen.hh"
 
 #include "mball_intern.h"
 
@@ -47,6 +47,6 @@ void ED_operatormacros_metaball()
 
 void ED_keymap_metaball(wmKeyConfig *keyconf)
 {
-  wmKeyMap *keymap = WM_keymap_ensure(keyconf, "Metaball", 0, 0);
+  wmKeyMap *keymap = WM_keymap_ensure(keyconf, "Metaball", SPACE_EMPTY, RGN_TYPE_WINDOW);
   keymap->poll = ED_operator_editmball;
 }

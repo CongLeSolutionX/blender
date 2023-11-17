@@ -1,10 +1,11 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "BLI_array.hh"
 #include "BLI_array_utils.hh"
 #include "BLI_math_matrix.hh"
+#include "BLI_math_rotation.h"
 #include "BLI_set.hh"
 #include "BLI_task.hh"
 
@@ -21,9 +22,17 @@
 
 namespace blender::bke {
 
+static int segments_num_no_duplicate_edge(const int points_num, const bool cyclic)
+{
+  if (points_num <= 2) {
+    return curves::segments_num(points_num, false);
+  }
+  return curves::segments_num(points_num, cyclic);
+}
+
 static void fill_mesh_topology(const int vert_offset,
                                const int edge_offset,
-                               const int poly_offset,
+                               const int face_offset,
                                const int loop_offset,
                                const int main_point_num,
                                const int profile_point_num,
@@ -33,9 +42,9 @@ static void fill_mesh_topology(const int vert_offset,
                                MutableSpan<int2> edges,
                                MutableSpan<int> corner_verts,
                                MutableSpan<int> corner_edges,
-                               MutableSpan<int> poly_offsets)
+                               MutableSpan<int> face_offsets)
 {
-  const int main_segment_num = curves::segments_num(main_point_num, main_cyclic);
+  const int main_segment_num = segments_num_no_duplicate_edge(main_point_num, main_cyclic);
   const int profile_segment_num = curves::segments_num(profile_point_num, profile_cyclic);
 
   if (profile_point_num == 1) {
@@ -45,7 +54,7 @@ static void fill_mesh_topology(const int vert_offset,
       edge[1] = vert_offset + i + 1;
     }
 
-    if (main_cyclic && main_segment_num > 1) {
+    if (main_cyclic && main_segment_num > 2) {
       int2 &edge = edges[edge_offset + main_segment_num - 1];
       edge[0] = vert_offset + main_point_num - 1;
       edge[1] = vert_offset;
@@ -84,7 +93,7 @@ static void fill_mesh_topology(const int vert_offset,
     }
   }
 
-  /* Calculate poly and corner indices. */
+  /* Calculate face and corner indices. */
   for (const int i_ring : IndexRange(main_segment_num)) {
     const int i_next_ring = (i_ring == main_point_num - 1) ? 0 : i_ring + 1;
 
@@ -94,7 +103,7 @@ static void fill_mesh_topology(const int vert_offset,
     const int ring_edge_start = profile_edges_start + profile_segment_num * i_ring;
     const int next_ring_edge_offset = profile_edges_start + profile_segment_num * i_next_ring;
 
-    const int ring_poly_offset = poly_offset + i_ring * profile_segment_num;
+    const int ring_face_offset = face_offset + i_ring * profile_segment_num;
     const int ring_loop_offset = loop_offset + i_ring * profile_segment_num * 4;
 
     for (const int i_profile : IndexRange(profile_segment_num)) {
@@ -104,7 +113,7 @@ static void fill_mesh_topology(const int vert_offset,
       const int main_edge_start = main_edges_start + main_segment_num * i_profile;
       const int next_main_edge_start = main_edges_start + main_segment_num * i_next_profile;
 
-      poly_offsets[ring_poly_offset + i_profile] = ring_segment_loop_offset;
+      face_offsets[ring_face_offset + i_profile] = ring_segment_loop_offset;
 
       corner_verts[ring_segment_loop_offset] = ring_vert_offset + i_profile;
       corner_edges[ring_segment_loop_offset] = ring_edge_start + i_profile;
@@ -122,12 +131,12 @@ static void fill_mesh_topology(const int vert_offset,
 
   const bool has_caps = fill_caps && !main_cyclic && profile_cyclic && profile_point_num > 2;
   if (has_caps) {
-    const int poly_num = main_segment_num * profile_segment_num;
-    const int cap_loop_offset = loop_offset + poly_num * 4;
-    const int cap_poly_offset = poly_offset + poly_num;
+    const int face_num = main_segment_num * profile_segment_num;
+    const int cap_loop_offset = loop_offset + face_num * 4;
+    const int cap_face_offset = face_offset + face_num;
 
-    poly_offsets[cap_poly_offset] = cap_loop_offset;
-    poly_offsets[cap_poly_offset + 1] = cap_loop_offset + profile_segment_num;
+    face_offsets[cap_face_offset] = cap_loop_offset;
+    face_offsets[cap_face_offset + 1] = cap_loop_offset + profile_segment_num;
 
     const int last_ring_index = main_point_num - 1;
     const int last_ring_vert_offset = vert_offset + profile_point_num * last_ring_index;
@@ -233,7 +242,7 @@ struct ResultOffsets {
   Array<int> vert;
   Array<int> edge;
   Array<int> loop;
-  Array<int> poly;
+  Array<int> face;
 
   /* The indices of the main and profile curves that form each combination. */
   Array<int> main_indices;
@@ -257,22 +266,22 @@ static ResultOffsets calculate_result_offsets(const CurvesInfo &info, const bool
         result.vert.reinitialize(result.total + 1);
         result.edge.reinitialize(result.total + 1);
         result.loop.reinitialize(result.total + 1);
-        result.poly.reinitialize(result.total + 1);
+        result.face.reinitialize(result.total + 1);
 
         int mesh_index = 0;
         int vert_offset = 0;
         int edge_offset = 0;
         int loop_offset = 0;
-        int poly_offset = 0;
+        int face_offset = 0;
         for (const int i_main : main_offsets.index_range()) {
           const bool main_cyclic = info.main_cyclic[i_main];
           const int main_point_num = main_offsets[i_main].size();
-          const int main_segment_num = curves::segments_num(main_point_num, main_cyclic);
+          const int main_segment_num = segments_num_no_duplicate_edge(main_point_num, main_cyclic);
           for (const int i_profile : profile_offsets.index_range()) {
             result.vert[mesh_index] = vert_offset;
             result.edge[mesh_index] = edge_offset;
             result.loop[mesh_index] = loop_offset;
-            result.poly[mesh_index] = poly_offset;
+            result.face[mesh_index] = face_offset;
 
             const bool profile_cyclic = info.profile_cyclic[i_profile];
             const int profile_point_num = profile_offsets[i_profile].size();
@@ -291,7 +300,7 @@ static ResultOffsets calculate_result_offsets(const CurvesInfo &info, const bool
                            main_segment_num * profile_point_num;
 
             /* Add two cap N-gons for every ending. */
-            poly_offset += tube_face_num + (has_caps ? 2 : 0);
+            face_offset += tube_face_num + (has_caps ? 2 : 0);
 
             /* All faces on the tube are quads, and all cap faces are N-gons with an edge for each
              * profile edge. */
@@ -304,7 +313,7 @@ static ResultOffsets calculate_result_offsets(const CurvesInfo &info, const bool
         result.vert.last() = vert_offset;
         result.edge.last() = edge_offset;
         result.loop.last() = loop_offset;
-        result.poly.last() = poly_offset;
+        result.face.last() = face_offset;
       },
       [&]() {
         result.main_indices.reinitialize(result.total);
@@ -394,7 +403,7 @@ struct CombinationInfo {
 
   IndexRange vert_range;
   IndexRange edge_range;
-  IndexRange poly_range;
+  IndexRange face_range;
   IndexRange loop_range;
 };
 template<typename Fn>
@@ -406,7 +415,7 @@ static void foreach_curve_combination(const CurvesInfo &info,
   const OffsetIndices<int> profile_offsets = info.profile.evaluated_points_by_curve();
   const OffsetIndices<int> vert_offsets(offsets.vert);
   const OffsetIndices<int> edge_offsets(offsets.edge);
-  const OffsetIndices<int> poly_offsets(offsets.poly);
+  const OffsetIndices<int> face_offsets(offsets.face);
   const OffsetIndices<int> loop_offsets(offsets.loop);
   threading::parallel_for(IndexRange(offsets.total), 512, [&](IndexRange range) {
     for (const int i : range) {
@@ -432,7 +441,7 @@ static void foreach_curve_combination(const CurvesInfo &info,
                          curves::segments_num(profile_points.size(), profile_cyclic),
                          vert_offsets[i],
                          edge_offsets[i],
-                         poly_offsets[i],
+                         face_offsets[i],
                          loop_offsets[i]});
     }
   });
@@ -602,7 +611,7 @@ static void copy_main_point_domain_attribute_to_mesh(const CurvesInfo &curves_in
           copy_main_point_data_to_mesh_faces(src.slice(info.main_points),
                                              info.main_segment_num,
                                              info.profile_segment_num,
-                                             dst.slice(info.poly_range));
+                                             dst.slice(info.face_range));
         });
         break;
       case ATTR_DOMAIN_CORNER:
@@ -682,7 +691,7 @@ static void copy_profile_point_domain_attribute_to_mesh(const CurvesInfo &curves
           copy_profile_point_data_to_mesh_faces(src.slice(info.profile_points),
                                                 info.main_segment_num,
                                                 info.profile_segment_num,
-                                                dst.slice(info.poly_range));
+                                                dst.slice(info.face_range));
         });
         break;
       case ATTR_DOMAIN_CORNER:
@@ -728,7 +737,7 @@ static void copy_curve_domain_attribute_to_mesh(const ResultOffsets &mesh_offset
       offsets = mesh_offsets.edge;
       break;
     case ATTR_DOMAIN_FACE:
-      offsets = mesh_offsets.poly;
+      offsets = mesh_offsets.face;
       break;
     case ATTR_DOMAIN_CORNER:
       offsets = mesh_offsets.loop;
@@ -789,16 +798,14 @@ Mesh *curve_to_mesh_sweep(const CurvesGeometry &main,
     return nullptr;
   }
 
-  /* Add the position attribute later so it can be shared in some cases.*/
+  /* Add the position attribute later so it can be shared in some cases. */
   Mesh *mesh = BKE_mesh_new_nomain(
-      0, offsets.edge.last(), offsets.poly.last(), offsets.loop.last());
-  CustomData_free_layer_named(&mesh->vdata, "position", 0);
+      0, offsets.edge.last(), offsets.face.last(), offsets.loop.last());
+  CustomData_free_layer_named(&mesh->vert_data, "position", 0);
   mesh->totvert = offsets.vert.last();
 
-  mesh->flag |= ME_AUTOSMOOTH;
-  mesh->smoothresh = DEG2RADF(180.0f);
   MutableSpan<int2> edges = mesh->edges_for_write();
-  MutableSpan<int> poly_offsets = mesh->poly_offsets_for_write();
+  MutableSpan<int> face_offsets = mesh->face_offsets_for_write();
   MutableSpan<int> corner_verts = mesh->corner_verts_for_write();
   MutableSpan<int> corner_edges = mesh->corner_edges_for_write();
   MutableAttributeAccessor mesh_attributes = mesh->attributes_for_write();
@@ -806,7 +813,7 @@ Mesh *curve_to_mesh_sweep(const CurvesGeometry &main,
   foreach_curve_combination(curves_info, offsets, [&](const CombinationInfo &info) {
     fill_mesh_topology(info.vert_range.start(),
                        info.edge_range.start(),
-                       info.poly_range.start(),
+                       info.face_range.start(),
                        info.loop_range.start(),
                        info.main_points.size(),
                        info.profile_points.size(),
@@ -816,7 +823,7 @@ Mesh *curve_to_mesh_sweep(const CurvesGeometry &main,
                        edges,
                        corner_verts,
                        corner_edges,
-                       poly_offsets);
+                       face_offsets);
   });
 
   if (fill_caps) {
@@ -827,10 +834,10 @@ Mesh *curve_to_mesh_sweep(const CurvesGeometry &main,
     foreach_curve_combination(curves_info, offsets, [&](const CombinationInfo &info) {
       const bool has_caps = fill_caps && !info.main_cyclic && info.profile_cyclic;
       if (has_caps) {
-        const int poly_num = info.main_segment_num * info.profile_segment_num;
-        const int cap_poly_offset = info.poly_range.start() + poly_num;
-        sharp_faces.span[cap_poly_offset] = true;
-        sharp_faces.span[cap_poly_offset + 1] = true;
+        const int face_num = info.main_segment_num * info.profile_segment_num;
+        const int cap_face_offset = info.face_range.start() + face_num;
+        sharp_faces.span[cap_face_offset] = true;
+        sharp_faces.span[cap_face_offset + 1] = true;
       }
     });
     sharp_faces.finish();
@@ -840,6 +847,7 @@ Mesh *curve_to_mesh_sweep(const CurvesGeometry &main,
 
   build_mesh_positions(curves_info, offsets, eval_buffer, *mesh);
 
+  mesh->tag_overlapping_none();
   if (!offsets.any_single_point_main) {
     /* If there are no single point curves, every combination will have at least loose edges. */
     mesh->tag_loose_verts_none();

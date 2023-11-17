@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2019 Blender Foundation
+/* SPDX-FileCopyrightText: 2019 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -8,18 +8,22 @@
 
 #include "DRW_render.h"
 
-#include "UI_resources.h"
+#include "UI_resources.hh"
+
+#include "BLI_math_color.h"
+#include "BLI_math_rotation.h"
 
 #include "BKE_anim_path.h"
 #include "BKE_camera.h"
 #include "BKE_constraint.h"
-#include "BKE_curve.h"
+#include "BKE_curve.hh"
 #include "BKE_global.h"
 #include "BKE_mball.h"
 #include "BKE_mesh.hh"
-#include "BKE_modifier.h"
+#include "BKE_modifier.hh"
 #include "BKE_movieclip.h"
-#include "BKE_object.h"
+#include "BKE_object.hh"
+#include "BKE_object_types.hh"
 #include "BKE_tracking.h"
 
 #include "BLI_listbase.h"
@@ -36,9 +40,9 @@
 #include "DNA_pointcache_types.h"
 #include "DNA_rigidbody_types.h"
 
-#include "DEG_depsgraph_query.h"
+#include "DEG_depsgraph_query.hh"
 
-#include "ED_view3d.h"
+#include "ED_view3d.hh"
 
 #include "overlay_private.hh"
 
@@ -357,21 +361,21 @@ static void OVERLAY_bounds(OVERLAY_ExtraCallBuffers *cb,
     return;
   }
 
-  const BoundBox *bb = BKE_object_boundbox_get(ob);
+  std::optional<BoundBox> bb = BKE_object_boundbox_get(ob);
   BoundBox bb_local;
-  if (bb == nullptr) {
+  if (!bb) {
     const float min[3] = {-1.0f, -1.0f, -1.0f}, max[3] = {1.0f, 1.0f, 1.0f};
     BKE_boundbox_init_from_minmax(&bb_local, min, max);
-    bb = &bb_local;
+    bb.emplace(bb_local);
   }
 
-  BKE_boundbox_calc_size_aabb(bb, size);
+  BKE_boundbox_calc_size_aabb(&*bb, size);
 
   if (around_origin) {
     zero_v3(center);
   }
   else {
-    BKE_boundbox_calc_center_aabb(bb, center);
+    BKE_boundbox_calc_center_aabb(&*bb, center);
   }
 
   switch (boundtype) {
@@ -533,7 +537,7 @@ static void OVERLAY_forcefield(OVERLAY_ExtraCallBuffers *cb, Object *ob, ViewLay
       DRW_buffer_add_entry(cb->field_vortex, color, &instdata);
       break;
     case PFIELD_GUIDE:
-      if (cu && (cu->flag & CU_PATH) && ob->runtime.curve_cache->anim_path_accum_length) {
+      if (cu && (cu->flag & CU_PATH) && ob->runtime->curve_cache->anim_path_accum_length) {
         instdata.size_x = instdata.size_y = instdata.size_z = pd->f_strength;
         float pos[4];
         BKE_where_on_path(ob, 0.0f, pos, nullptr, nullptr, nullptr, nullptr);
@@ -671,8 +675,8 @@ void OVERLAY_light_cache_populate(OVERLAY_Data *vedata, Object *ob)
      * `y = (1/sqrt(1 + x^2) - a)/((1 - a) b)`
      * x being the tangent of the angle between the light direction and the generatrix of the cone.
      * We solve the case where spot attenuation y = 1 and y = 0
-     * root for y = 1 is sqrt(1/c^2 - 1)
-     * root for y = 0 is sqrt(1/a^2 - 1)
+     * root for y = 1 is `sqrt(1/c^2 - 1)`.
+     * root for y = 0 is `sqrt(1/a^2 - 1)`
      * and use that to position the blend circle. */
     float a = cosf(la->spotsize * 0.5f);
     float b = la->spotblend;
@@ -734,7 +738,7 @@ void OVERLAY_lightprobe_cache_populate(OVERLAY_Data *vedata, Object *ob)
   copy_m4_m4(instdata.mat, ob->object_to_world);
 
   switch (prb->type) {
-    case LIGHTPROBE_TYPE_CUBE:
+    case LIGHTPROBE_TYPE_SPHERE:
       instdata.clip_sta = show_clipping ? prb->clipsta : -1.0;
       instdata.clip_end = show_clipping ? prb->clipend : -1.0;
       DRW_buffer_add_entry(cb->probe_cube, color_p, &instdata);
@@ -754,7 +758,7 @@ void OVERLAY_lightprobe_cache_populate(OVERLAY_Data *vedata, Object *ob)
         OVERLAY_empty_shape(cb, ob->object_to_world, dist, shape, color_p);
       }
       break;
-    case LIGHTPROBE_TYPE_GRID:
+    case LIGHTPROBE_TYPE_VOLUME:
       instdata.clip_sta = show_clipping ? prb->clipsta : -1.0;
       instdata.clip_end = show_clipping ? prb->clipend : -1.0;
       DRW_buffer_add_entry(cb->probe_grid, color_p, &instdata);
@@ -784,7 +788,7 @@ void OVERLAY_lightprobe_cache_populate(OVERLAY_Data *vedata, Object *ob)
         DRW_shgroup_call_procedural_points(grp, nullptr, cell_count);
       }
       break;
-    case LIGHTPROBE_TYPE_PLANAR:
+    case LIGHTPROBE_TYPE_PLANE:
       DRW_buffer_add_entry(cb->probe_planar, color_p, &instdata);
 
       if (DRW_state_is_select() && (prb->flag & LIGHTPROBE_FLAG_SHOW_DATA)) {
@@ -946,7 +950,7 @@ static void camera_view3d_reconstruction(
       }
 
       if (is_select) {
-        DRW_select_load_id(ob->runtime.select_id | (track_index << 16));
+        DRW_select_load_id(ob->runtime->select_id | (track_index << 16));
         track_index++;
       }
 
@@ -1281,12 +1285,12 @@ static void OVERLAY_relationship_lines(OVERLAY_ExtraCallBuffers *cb,
   float *constraint_color = G_draw.block.color_grid_axis_z; /* ? */
 
   if (ob->parent && (DRW_object_visibility_in_active_context(ob->parent) & OB_VISIBLE_SELF)) {
-    float *parent_pos = ob->runtime.parent_display_origin;
+    float *parent_pos = ob->runtime->parent_display_origin;
     OVERLAY_extra_line_dashed(cb, parent_pos, ob->object_to_world[3], relation_color);
   }
 
   /* Drawing the hook lines. */
-  for (ModifierData *md = static_cast<ModifierData *>(ob->modifiers.first); md; md = md->next) {
+  LISTBASE_FOREACH (ModifierData *, md, &ob->modifiers) {
     if (md->type == eModifierType_Hook) {
       HookModifierData *hmd = (HookModifierData *)md;
       float center[3];
@@ -1297,11 +1301,7 @@ static void OVERLAY_relationship_lines(OVERLAY_ExtraCallBuffers *cb,
       OVERLAY_extra_point(cb, center, relation_color);
     }
   }
-  for (GpencilModifierData *md =
-           static_cast<GpencilModifierData *>(ob->greasepencil_modifiers.first);
-       md;
-       md = md->next)
-  {
+  LISTBASE_FOREACH (GpencilModifierData *, md, &ob->greasepencil_modifiers) {
     if (md->type == eGpencilModifierType_Hook) {
       HookGpencilModifierData *hmd = (HookGpencilModifierData *)md;
       float center[3];
@@ -1328,13 +1328,11 @@ static void OVERLAY_relationship_lines(OVERLAY_ExtraCallBuffers *cb,
 
   /* Drawing the constraint lines */
   if (!BLI_listbase_is_empty(&ob->constraints)) {
-    bConstraint *curcon;
-    bConstraintOb *cob;
     ListBase *list = &ob->constraints;
+    bConstraintOb *cob = BKE_constraints_make_evalob(
+        depsgraph, scene, ob, nullptr, CONSTRAINT_OBTYPE_OBJECT);
 
-    cob = BKE_constraints_make_evalob(depsgraph, scene, ob, nullptr, CONSTRAINT_OBTYPE_OBJECT);
-
-    for (curcon = static_cast<bConstraint *>(list->first); curcon; curcon = curcon->next) {
+    LISTBASE_FOREACH (bConstraint *, curcon, list) {
       if (ELEM(curcon->type, CONSTRAINT_TYPE_FOLLOWTRACK, CONSTRAINT_TYPE_OBJECTSOLVER)) {
         /* special case for object solver and follow track constraints because they don't fill
          * constraint targets properly (design limitation -- scene is needed for their target
@@ -1360,11 +1358,9 @@ static void OVERLAY_relationship_lines(OVERLAY_ExtraCallBuffers *cb,
         ListBase targets = {nullptr, nullptr};
 
         if ((curcon->ui_expand_flag & (1 << 0)) && BKE_constraint_targets_get(curcon, &targets)) {
-          bConstraintTarget *ct;
-
           BKE_constraint_custom_object_space_init(cob, curcon);
 
-          for (ct = static_cast<bConstraintTarget *>(targets.first); ct; ct = ct->next) {
+          LISTBASE_FOREACH (bConstraintTarget *, ct, &targets) {
             /* calculate target's matrix */
             if (ct->flag & CONSTRAINT_TAR_CUSTOM_SPACE) {
               copy_m4_m4(ct->matrix, cob->space_obj_world_matrix);

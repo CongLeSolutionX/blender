@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2006-2007 Blender Foundation
+/* SPDX-FileCopyrightText: 2006-2007 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -16,11 +16,12 @@
 #include "BLI_fileops_types.h"
 #include "BLI_linklist.h"
 #include "BLI_listbase.h"
-#include "BLI_math.h"
 #include "BLI_math_color.h"
+#include "BLI_math_matrix.h"
+#include "BLI_math_vector.h"
 #include "BLI_path_util.h"
 #include "BLI_string.h"
-#include "BLI_string_utils.h"
+#include "BLI_string_utils.hh"
 
 #include "DNA_listBase.h"
 
@@ -31,6 +32,8 @@
 #include "GPU_texture.h"
 
 #include "MEM_guardedalloc.h"
+
+#include <cstring>
 
 /* Statics */
 static ListBase studiolights;
@@ -779,7 +782,7 @@ static float studiolight_spherical_harmonics_lambda_get(float *sh, float max_lap
   table_b[0] = 0.0f;
   int index = 1;
   for (int level = 1; level < STUDIOLIGHT_SH_BANDS; level++) {
-    table_l[level] = (float)(square_i(level) * square_i(level + 1));
+    table_l[level] = float(square_i(level) * square_i(level + 1));
 
     float b = 0.0f;
     for (int m = -1; m <= level; m++) {
@@ -1071,7 +1074,7 @@ static float blinn_specular(const float L[3],
   return spec_light * (1.0 - w2) + spec_env * w2;
 }
 
-/* Keep in sync with the glsl shader function get_world_lighting() */
+/* Keep in sync with the GLSL shader function `get_world_lighting()`. */
 static void studiolight_lights_eval(StudioLight *sl, float color[3], const float normal[3])
 {
   float R[3], I[3] = {0.0f, 0.0f, 1.0f}, N[3] = {normal[0], normal[2], -normal[1]};
@@ -1213,7 +1216,7 @@ static void studiolight_add_files_from_datafolder(const int folder_id,
     return;
   }
 
-  struct direntry *dirs;
+  direntry *dirs;
   const uint dirs_num = BLI_filelist_dir_contents(folder, &dirs);
   int i;
   for (i = 0; i < dirs_num; i++) {
@@ -1263,7 +1266,7 @@ static uint alpha_circle_mask(float u, float v, float inner_edge, float outer_ed
   const float co[2] = {u - 0.5f, v - 0.5f};
   float dist = len_v2(co);
   float alpha = 1.0f + (inner_edge - dist) / (outer_edge - inner_edge);
-  uint mask = (uint)floorf(255.0f * min_ff(max_ff(alpha, 0.0f), 1.0f));
+  uint mask = uint(floorf(255.0f * min_ff(max_ff(alpha, 0.0f), 1.0f)));
   return mask << 24;
 }
 
@@ -1429,7 +1432,7 @@ void BKE_studiolight_default(SolidLight lights[4], float light_ambient[3])
   lights[3].vec[2] = -0.542269f;
 }
 
-void BKE_studiolight_init(void)
+void BKE_studiolight_init()
 {
   /* Add default studio light */
   StudioLight *sl = studiolight_create(
@@ -1470,10 +1473,9 @@ void BKE_studiolight_init(void)
   BKE_studiolight_default(sl->light, sl->light_ambient);
 }
 
-void BKE_studiolight_free(void)
+void BKE_studiolight_free()
 {
-  StudioLight *sl;
-  while ((sl = static_cast<StudioLight *>(BLI_pophead(&studiolights)))) {
+  while (StudioLight *sl = static_cast<StudioLight *>(BLI_pophead(&studiolights))) {
     studiolight_free(sl);
   }
 }
@@ -1530,7 +1532,7 @@ StudioLight *BKE_studiolight_findindex(int index, int flag)
   return BKE_studiolight_find_default(flag);
 }
 
-ListBase *BKE_studiolight_listbase(void)
+ListBase *BKE_studiolight_listbase()
 {
   return &studiolights;
 }
@@ -1634,9 +1636,9 @@ StudioLight *BKE_studiolight_create(const char *filepath,
   return sl;
 }
 
-StudioLight *BKE_studiolight_studio_edit_get(void)
+StudioLight *BKE_studiolight_studio_edit_get()
 {
-  static StudioLight sl = {0};
+  static StudioLight sl = {nullptr};
   sl.flag = STUDIOLIGHT_TYPE_STUDIO | STUDIOLIGHT_SPECULAR_HIGHLIGHT_PASS;
 
   memcpy(sl.light, U.light_param, sizeof(*sl.light) * 4);
@@ -1645,7 +1647,7 @@ StudioLight *BKE_studiolight_studio_edit_get(void)
   return &sl;
 }
 
-void BKE_studiolight_refresh(void)
+void BKE_studiolight_refresh()
 {
   BKE_studiolight_free();
   BKE_studiolight_init();

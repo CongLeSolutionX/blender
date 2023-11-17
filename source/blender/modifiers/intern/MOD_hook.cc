@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2005 Blender Foundation
+/* SPDX-FileCopyrightText: 2005 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -9,7 +9,8 @@
 #include "BLI_utildefines.h"
 
 #include "BLI_bitmap.h"
-#include "BLI_math.h"
+#include "BLI_math_matrix.h"
+#include "BLI_math_vector.h"
 
 #include "BLT_translation.h"
 
@@ -21,32 +22,32 @@
 
 #include "BKE_action.h"
 #include "BKE_colortools.h"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_deform.h"
-#include "BKE_editmesh.h"
+#include "BKE_editmesh.hh"
 #include "BKE_lib_id.h"
 #include "BKE_lib_query.h"
-#include "BKE_mesh.h"
-#include "BKE_mesh_wrapper.h"
-#include "BKE_modifier.h"
-#include "BKE_screen.h"
+#include "BKE_mesh.hh"
+#include "BKE_mesh_wrapper.hh"
+#include "BKE_modifier.hh"
+#include "BKE_screen.hh"
 
-#include "UI_interface.h"
-#include "UI_resources.h"
+#include "UI_interface.hh"
+#include "UI_resources.hh"
 
-#include "BLO_read_write.h"
+#include "BLO_read_write.hh"
 
-#include "RNA_access.h"
+#include "RNA_access.hh"
 #include "RNA_prototypes.h"
 
-#include "DEG_depsgraph_query.h"
+#include "DEG_depsgraph_query.hh"
 
 #include "MEM_guardedalloc.h"
 
 #include "MOD_ui_common.hh"
 #include "MOD_util.hh"
 
-static void initData(ModifierData *md)
+static void init_data(ModifierData *md)
 {
   HookModifierData *hmd = (HookModifierData *)md;
 
@@ -57,7 +58,7 @@ static void initData(ModifierData *md)
   hmd->curfalloff = BKE_curvemapping_add(1, 0.0f, 0.0f, 1.0f, 1.0f);
 }
 
-static void copyData(const ModifierData *md, ModifierData *target, const int flag)
+static void copy_data(const ModifierData *md, ModifierData *target, const int flag)
 {
   const HookModifierData *hmd = (const HookModifierData *)md;
   HookModifierData *thmd = (HookModifierData *)target;
@@ -69,7 +70,7 @@ static void copyData(const ModifierData *md, ModifierData *target, const int fla
   thmd->indexar = static_cast<int *>(MEM_dupallocN(hmd->indexar));
 }
 
-static void requiredDataMask(ModifierData *md, CustomData_MeshMasks *r_cddata_masks)
+static void required_data_mask(ModifierData *md, CustomData_MeshMasks *r_cddata_masks)
 {
   HookModifierData *hmd = (HookModifierData *)md;
 
@@ -85,7 +86,7 @@ static void requiredDataMask(ModifierData *md, CustomData_MeshMasks *r_cddata_ma
   }
 }
 
-static void freeData(ModifierData *md)
+static void free_data(ModifierData *md)
 {
   HookModifierData *hmd = (HookModifierData *)md;
 
@@ -94,21 +95,21 @@ static void freeData(ModifierData *md)
   MEM_SAFE_FREE(hmd->indexar);
 }
 
-static bool isDisabled(const Scene * /*scene*/, ModifierData *md, bool /*useRenderParams*/)
+static bool is_disabled(const Scene * /*scene*/, ModifierData *md, bool /*use_render_params*/)
 {
   HookModifierData *hmd = (HookModifierData *)md;
 
   return !hmd->object;
 }
 
-static void foreachIDLink(ModifierData *md, Object *ob, IDWalkFunc walk, void *userData)
+static void foreach_ID_link(ModifierData *md, Object *ob, IDWalkFunc walk, void *user_data)
 {
   HookModifierData *hmd = (HookModifierData *)md;
 
-  walk(userData, ob, (ID **)&hmd->object, IDWALK_CB_NOP);
+  walk(user_data, ob, (ID **)&hmd->object, IDWALK_CB_NOP);
 }
 
-static void updateDepsgraph(ModifierData *md, const ModifierUpdateDepsgraphContext *ctx)
+static void update_depsgraph(ModifierData *md, const ModifierUpdateDepsgraphContext *ctx)
 {
   HookModifierData *hmd = (HookModifierData *)md;
   if (hmd->object != nullptr) {
@@ -123,7 +124,7 @@ static void updateDepsgraph(ModifierData *md, const ModifierUpdateDepsgraphConte
 }
 
 struct HookData_cb {
-  float (*vertexCos)[3];
+  blender::MutableSpan<blender::float3> positions;
 
   /**
    * When anything other than -1, use deform groups.
@@ -177,7 +178,7 @@ static float hook_falloff(const HookData_cb *hd, const float len_sq)
       goto finally;
     }
     else if (hd->falloff_type == eHook_Falloff_InvSquare) {
-      /* avoid sqrt below */
+      /* Avoid `sqrt` below. */
       fac = 1.0f - (len_sq / hd->falloff_sq);
       goto finally;
     }
@@ -231,7 +232,7 @@ static float hook_falloff(const HookData_cb *hd, const float len_sq)
 
 static void hook_co_apply(HookData_cb *hd, int j, const MDeformVert *dv)
 {
-  float *co = hd->vertexCos[j];
+  float *co = hd->positions[j];
   float fac;
 
   if (hd->use_falloff) {
@@ -271,8 +272,7 @@ static void deformVerts_do(HookModifierData *hmd,
                            Object *ob,
                            Mesh *mesh,
                            BMEditMesh *em,
-                           float (*vertexCos)[3],
-                           int verts_num)
+                           blender::MutableSpan<blender::float3> positions)
 {
   Object *ob_target = hmd->object;
   bPoseChannel *pchan = BKE_pose_channel_find_name(ob_target->pose, hmd->subtarget);
@@ -292,7 +292,7 @@ static void deformVerts_do(HookModifierData *hmd,
   }
 
   /* Generic data needed for applying per-vertex calculations (initialize all members) */
-  hd.vertexCos = vertexCos;
+  hd.positions = positions;
 
   MOD_get_vgroup(ob, mesh, hmd->name, &dvert, &hd.defgrp_index);
   int cd_dvert_offset = -1;
@@ -362,15 +362,15 @@ static void deformVerts_do(HookModifierData *hmd,
     const int *origindex_ar;
     /* if mesh is present and has original index data, use it */
     if (mesh && (origindex_ar = static_cast<const int *>(
-                     CustomData_get_layer(&mesh->vdata, CD_ORIGINDEX))))
+                     CustomData_get_layer(&mesh->vert_data, CD_ORIGINDEX))))
     {
-      int verts_orig_num = verts_num;
+      int verts_orig_num = positions.size();
       if (ob->type == OB_MESH) {
         const Mesh *me_orig = static_cast<const Mesh *>(ob->data);
         verts_orig_num = me_orig->totvert;
       }
       BLI_bitmap *indexar_used = hook_index_array_to_bitmap(hmd, verts_orig_num);
-      for (i = 0; i < verts_num; i++) {
+      for (i = 0; i < positions.size(); i++) {
         int i_orig = origindex_ar[i];
         BLI_assert(i_orig < verts_orig_num);
         if (BLI_BITMAP_TEST(indexar_used, i_orig)) {
@@ -381,8 +381,8 @@ static void deformVerts_do(HookModifierData *hmd,
     }
     else { /* missing mesh or ORIGINDEX */
       if ((em != nullptr) && (hd.defgrp_index != -1)) {
-        BLI_assert(em->bm->totvert == verts_num);
-        BLI_bitmap *indexar_used = hook_index_array_to_bitmap(hmd, verts_num);
+        BLI_assert(em->bm->totvert == positions.size());
+        BLI_bitmap *indexar_used = hook_index_array_to_bitmap(hmd, positions.size());
         BMIter iter;
         BMVert *v;
         BM_ITER_MESH_INDEX (v, &iter, em->bm, BM_VERTS_OF_MESH, i) {
@@ -397,7 +397,7 @@ static void deformVerts_do(HookModifierData *hmd,
       else {
         for (i = 0, index_pt = hmd->indexar; i < hmd->indexar_num; i++, index_pt++) {
           const int j = *index_pt;
-          if (j < verts_num) {
+          if (j < positions.size()) {
             hook_co_apply(&hd, j, dvert ? &dvert[j] : nullptr);
           }
         }
@@ -406,7 +406,7 @@ static void deformVerts_do(HookModifierData *hmd,
   }
   else if (hd.defgrp_index != -1) { /* vertex group hook */
     if (em != nullptr) {
-      BLI_assert(em->bm->totvert == verts_num);
+      BLI_assert(em->bm->totvert == positions.size());
       BMIter iter;
       BMVert *v;
       BM_ITER_MESH_INDEX (v, &iter, em->bm, BM_VERTS_OF_MESH, i) {
@@ -417,29 +417,27 @@ static void deformVerts_do(HookModifierData *hmd,
     }
     else {
       BLI_assert(dvert != nullptr);
-      for (i = 0; i < verts_num; i++) {
+      for (i = 0; i < positions.size(); i++) {
         hook_co_apply(&hd, i, &dvert[i]);
       }
     }
   }
 }
 
-static void deformVerts(ModifierData *md,
-                        const ModifierEvalContext *ctx,
-                        Mesh *mesh,
-                        float (*vertexCos)[3],
-                        int verts_num)
+static void deform_verts(ModifierData *md,
+                         const ModifierEvalContext *ctx,
+                         Mesh *mesh,
+                         blender::MutableSpan<blender::float3> positions)
 {
   HookModifierData *hmd = (HookModifierData *)md;
-  deformVerts_do(hmd, ctx, ctx->object, mesh, nullptr, vertexCos, verts_num);
+  deformVerts_do(hmd, ctx, ctx->object, mesh, nullptr, positions);
 }
 
-static void deformVertsEM(ModifierData *md,
-                          const ModifierEvalContext *ctx,
-                          BMEditMesh *editData,
-                          Mesh *mesh,
-                          float (*vertexCos)[3],
-                          int verts_num)
+static void deform_verts_EM(ModifierData *md,
+                            const ModifierEvalContext *ctx,
+                            BMEditMesh *em,
+                            Mesh *mesh,
+                            blender::MutableSpan<blender::float3> positions)
 {
   HookModifierData *hmd = (HookModifierData *)md;
 
@@ -447,9 +445,8 @@ static void deformVertsEM(ModifierData *md,
                  ctx,
                  ctx->object,
                  mesh,
-                 mesh->runtime->wrapper_type == ME_WRAPPER_TYPE_BMESH ? editData : nullptr,
-                 vertexCos,
-                 verts_num);
+                 mesh->runtime->wrapper_type == ME_WRAPPER_TYPE_BMESH ? em : nullptr,
+                 positions);
 }
 
 static void panel_draw(const bContext * /*C*/, Panel *panel)
@@ -465,7 +462,7 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
   uiLayoutSetPropSep(layout, true);
 
   col = uiLayoutColumn(layout, false);
-  uiItemR(col, ptr, "object", 0, nullptr, ICON_NONE);
+  uiItemR(col, ptr, "object", UI_ITEM_NONE, nullptr, ICON_NONE);
   if (!RNA_pointer_is_null(&hook_object_ptr) &&
       RNA_enum_get(&hook_object_ptr, "type") == OB_ARMATURE)
   {
@@ -500,27 +497,27 @@ static void falloff_panel_draw(const bContext * /*C*/, Panel *panel)
 
   uiLayoutSetPropSep(layout, true);
 
-  uiItemR(layout, ptr, "falloff_type", 0, IFACE_("Type"), ICON_NONE);
+  uiItemR(layout, ptr, "falloff_type", UI_ITEM_NONE, IFACE_("Type"), ICON_NONE);
 
   row = uiLayoutRow(layout, false);
   uiLayoutSetActive(row, use_falloff);
-  uiItemR(row, ptr, "falloff_radius", 0, nullptr, ICON_NONE);
+  uiItemR(row, ptr, "falloff_radius", UI_ITEM_NONE, nullptr, ICON_NONE);
 
-  uiItemR(layout, ptr, "use_falloff_uniform", 0, nullptr, ICON_NONE);
+  uiItemR(layout, ptr, "use_falloff_uniform", UI_ITEM_NONE, nullptr, ICON_NONE);
 
   if (RNA_enum_get(ptr, "falloff_type") == eWarp_Falloff_Curve) {
     uiTemplateCurveMapping(layout, ptr, "falloff_curve", 0, false, false, false, false);
   }
 }
 
-static void panelRegister(ARegionType *region_type)
+static void panel_register(ARegionType *region_type)
 {
   PanelType *panel_type = modifier_panel_register(region_type, eModifierType_Hook, panel_draw);
   modifier_subpanel_register(
       region_type, "falloff", "Falloff", nullptr, falloff_panel_draw, panel_type);
 }
 
-static void blendWrite(BlendWriter *writer, const ID * /*id_owner*/, const ModifierData *md)
+static void blend_write(BlendWriter *writer, const ID * /*id_owner*/, const ModifierData *md)
 {
   const HookModifierData *hmd = (const HookModifierData *)md;
 
@@ -533,7 +530,7 @@ static void blendWrite(BlendWriter *writer, const ID * /*id_owner*/, const Modif
   BLO_write_int32_array(writer, hmd->indexar_num, hmd->indexar);
 }
 
-static void blendRead(BlendDataReader *reader, ModifierData *md)
+static void blend_read(BlendDataReader *reader, ModifierData *md)
 {
   HookModifierData *hmd = (HookModifierData *)md;
 
@@ -546,34 +543,35 @@ static void blendRead(BlendDataReader *reader, ModifierData *md)
 }
 
 ModifierTypeInfo modifierType_Hook = {
+    /*idname*/ "Hook",
     /*name*/ N_("Hook"),
-    /*structName*/ "HookModifierData",
-    /*structSize*/ sizeof(HookModifierData),
+    /*struct_name*/ "HookModifierData",
+    /*struct_size*/ sizeof(HookModifierData),
     /*srna*/ &RNA_HookModifier,
-    /*type*/ eModifierTypeType_OnlyDeform,
+    /*type*/ ModifierTypeType::OnlyDeform,
     /*flags*/ eModifierTypeFlag_AcceptsCVs | eModifierTypeFlag_AcceptsVertexCosOnly |
         eModifierTypeFlag_SupportsEditmode,
     /*icon*/ ICON_HOOK,
-    /*copyData*/ copyData,
+    /*copy_data*/ copy_data,
 
-    /*deformVerts*/ deformVerts,
-    /*deformMatrices*/ nullptr,
-    /*deformVertsEM*/ deformVertsEM,
-    /*deformMatricesEM*/ nullptr,
-    /*modifyMesh*/ nullptr,
-    /*modifyGeometrySet*/ nullptr,
+    /*deform_verts*/ deform_verts,
+    /*deform_matrices*/ nullptr,
+    /*deform_verts_EM*/ deform_verts_EM,
+    /*deform_matrices_EM*/ nullptr,
+    /*modify_mesh*/ nullptr,
+    /*modify_geometry_set*/ nullptr,
 
-    /*initData*/ initData,
-    /*requiredDataMask*/ requiredDataMask,
-    /*freeData*/ freeData,
-    /*isDisabled*/ isDisabled,
-    /*updateDepsgraph*/ updateDepsgraph,
-    /*dependsOnTime*/ nullptr,
-    /*dependsOnNormals*/ nullptr,
-    /*foreachIDLink*/ foreachIDLink,
-    /*foreachTexLink*/ nullptr,
-    /*freeRuntimeData*/ nullptr,
-    /*panelRegister*/ panelRegister,
-    /*blendWrite*/ blendWrite,
-    /*blendRead*/ blendRead,
+    /*init_data*/ init_data,
+    /*required_data_mask*/ required_data_mask,
+    /*free_data*/ free_data,
+    /*is_disabled*/ is_disabled,
+    /*update_depsgraph*/ update_depsgraph,
+    /*depends_on_time*/ nullptr,
+    /*depends_on_normals*/ nullptr,
+    /*foreach_ID_link*/ foreach_ID_link,
+    /*foreach_tex_link*/ nullptr,
+    /*free_runtime_data*/ nullptr,
+    /*panel_register*/ panel_register,
+    /*blend_write*/ blend_write,
+    /*blend_read*/ blend_read,
 };

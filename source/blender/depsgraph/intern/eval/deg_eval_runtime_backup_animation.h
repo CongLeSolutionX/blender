@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2019 Blender Foundation
+/* SPDX-FileCopyrightText: 2019 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -8,9 +8,9 @@
 
 #pragma once
 
-#include "BKE_modifier.h"
+#include "BKE_modifier.hh"
 
-#include "intern/depsgraph_type.h"
+#include "intern/depsgraph_type.hh"
 
 namespace blender::deg {
 

@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -58,7 +58,6 @@
 
 #include <algorithm>
 #include <array>
-#include <iostream>
 #include <string>
 #include <vector>
 
@@ -449,29 +448,6 @@ template<typename T> class Span {
   {
     return !(a == b);
   }
-
-  /**
-   * A debug utility to print the content of the Span. Every element will be printed on a
-   * separate line using the given callback.
-   */
-  template<typename PrintLineF> void print_as_lines(std::string name, PrintLineF print_line) const
-  {
-    std::cout << "Span: " << name << " \tSize:" << size_ << '\n';
-    for (const T &value : *this) {
-      std::cout << "  ";
-      print_line(value);
-      std::cout << '\n';
-    }
-  }
-
-  /**
-   * A debug utility to print the content of the span. Every element be printed on a separate
-   * line.
-   */
-  void print_as_lines(std::string name) const
-  {
-    this->print_as_lines(name, [](const T &value) { std::cout << value; });
-  }
 };
 
 /**
@@ -552,7 +528,7 @@ template<typename T> class MutableSpan {
   /**
    * Replace all elements in the referenced array with the given value.
    */
-  constexpr void fill(const T &value)
+  constexpr void fill(const T &value) const
   {
     initialized_fill_n(data_, size_, value);
   }
@@ -561,7 +537,7 @@ template<typename T> class MutableSpan {
    * Replace a subset of all elements with the given value. This invokes undefined behavior when
    * one of the indices is out of bounds.
    */
-  template<typename IndexT> constexpr void fill_indices(Span<IndexT> indices, const T &value)
+  template<typename IndexT> constexpr void fill_indices(Span<IndexT> indices, const T &value) const
   {
     static_assert(std::is_integral_v<IndexT>);
     for (IndexT i : indices) {
@@ -685,7 +661,7 @@ template<typename T> class MutableSpan {
   /**
    * Reverse the data in the MutableSpan.
    */
-  constexpr void reverse()
+  constexpr void reverse() const
   {
     for (const int i : IndexRange(size_ / 2)) {
       std::swap(data_[size_ - 1 - i], data_[i]);
@@ -760,7 +736,7 @@ template<typename T> class MutableSpan {
    * destination contains uninitialized data and T is not trivially copy constructible.
    * The size of both spans is expected to be the same.
    */
-  constexpr void copy_from(Span<T> values)
+  constexpr void copy_from(Span<T> values) const
   {
     BLI_assert(size_ == values.size());
     initialized_copy_n(values.data(), size_, data_);

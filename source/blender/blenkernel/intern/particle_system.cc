@@ -7,11 +7,11 @@
  * \ingroup bke
  */
 
-#include <stddef.h>
+#include <cstddef>
 
-#include <math.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cmath>
+#include <cstdlib>
+#include <cstring>
 
 #include "MEM_guardedalloc.h"
 
@@ -30,13 +30,15 @@
 #include "DNA_texture_types.h"
 
 #include "BLI_blenlib.h"
-#include "BLI_edgehash.h"
 #include "BLI_kdopbvh.h"
 #include "BLI_kdtree.h"
 #include "BLI_linklist.h"
-#include "BLI_math.h"
+#include "BLI_math_base_safe.h"
+#include "BLI_math_matrix.h"
+#include "BLI_math_rotation.h"
+#include "BLI_math_vector.h"
 #include "BLI_rand.h"
-#include "BLI_string_utils.h"
+#include "BLI_string_utils.hh"
 #include "BLI_task.h"
 #include "BLI_threads.h"
 #include "BLI_utildefines.h"
@@ -48,24 +50,24 @@
 #include "BKE_effect.h"
 #include "BKE_lib_id.h"
 #include "BKE_lib_query.h"
-#include "BKE_mesh_legacy_convert.h"
-#include "BKE_mesh_runtime.h"
+#include "BKE_mesh_legacy_convert.hh"
+#include "BKE_mesh_runtime.hh"
 #include "BKE_particle.h"
 
-#include "BKE_bvhutils.h"
-#include "BKE_cloth.h"
+#include "BKE_bvhutils.hh"
+#include "BKE_cloth.hh"
 #include "BKE_collection.h"
-#include "BKE_lattice.h"
+#include "BKE_lattice.hh"
 #include "BKE_material.h"
-#include "BKE_mesh.h"
-#include "BKE_modifier.h"
-#include "BKE_object.h"
+#include "BKE_mesh.hh"
+#include "BKE_modifier.hh"
+#include "BKE_object.hh"
 #include "BKE_pointcache.h"
 #include "BKE_scene.h"
 
-#include "DEG_depsgraph.h"
-#include "DEG_depsgraph_physics.h"
-#include "DEG_depsgraph_query.h"
+#include "DEG_depsgraph.hh"
+#include "DEG_depsgraph_physics.hh"
+#include "DEG_depsgraph_query.hh"
 
 #include "PIL_time.h"
 
@@ -323,7 +325,7 @@ void psys_calc_dmcache(Object *ob, Mesh *mesh_final, Mesh *mesh_original, Partic
   PARTICLE_P;
 
   /* CACHE LOCATIONS */
-  if (!BKE_mesh_is_deformed_only(mesh_final)) {
+  if (!mesh_final->runtime->deformed_only) {
     /* Will use later to speed up subsurf/evaluated mesh. */
     LinkNode *node, *nodedmelem, **nodearray;
     int totdmelem, totelem, i;
@@ -339,11 +341,11 @@ void psys_calc_dmcache(Object *ob, Mesh *mesh_final, Mesh *mesh_original, Partic
       else {
         totelem = me->totvert;
         origindex = static_cast<const int *>(
-            CustomData_get_layer(&mesh_final->vdata, CD_ORIGINDEX));
+            CustomData_get_layer(&mesh_final->vert_data, CD_ORIGINDEX));
       }
     }
     else { /* FROM_FACE/FROM_VOLUME */
-      totdmelem = mesh_final->totface;
+      totdmelem = mesh_final->totface_legacy;
 
       if (use_modifier_stack) {
         totelem = totdmelem;
@@ -351,13 +353,13 @@ void psys_calc_dmcache(Object *ob, Mesh *mesh_final, Mesh *mesh_original, Partic
         origindex_poly = nullptr;
       }
       else {
-        totelem = mesh_original->totface;
+        totelem = mesh_original->totface_legacy;
         origindex = static_cast<const int *>(
-            CustomData_get_layer(&mesh_final->fdata, CD_ORIGINDEX));
+            CustomData_get_layer(&mesh_final->fdata_legacy, CD_ORIGINDEX));
 
         /* for face lookups we need the poly origindex too */
         origindex_poly = static_cast<const int *>(
-            CustomData_get_layer(&mesh_final->pdata, CD_ORIGINDEX));
+            CustomData_get_layer(&mesh_final->face_data, CD_ORIGINDEX));
         if (origindex_poly == nullptr) {
           origindex = nullptr;
         }
@@ -584,7 +586,7 @@ static void init_particle_texture(ParticleSimulationData *sim, ParticleData *pa,
 void init_particle(ParticleSimulationData *sim, ParticleData *pa)
 {
   ParticleSettings *part = sim->psys->part;
-  float birth_time = (float)(pa - sim->psys->particles) / (float)sim->psys->totpart;
+  float birth_time = float(pa - sim->psys->particles) / float(sim->psys->totpart);
 
   pa->flag &= ~PARS_UNEXIST;
   pa->time = part->sta + (part->end - part->sta) * birth_time;
@@ -745,11 +747,20 @@ void psys_get_birth_coords(
                              nor,
                              utan,
                              vtan,
-                             0);
+                             nullptr);
   }
   else {
-    psys_particle_on_emitter(
-        sim->psmd, part->from, pa->num, pa->num_dmcache, pa->fuv, pa->foffset, loc, nor, 0, 0, 0);
+    psys_particle_on_emitter(sim->psmd,
+                             part->from,
+                             pa->num,
+                             pa->num_dmcache,
+                             pa->fuv,
+                             pa->foffset,
+                             loc,
+                             nor,
+                             nullptr,
+                             nullptr,
+                             nullptr);
   }
 
   /* get possible textural influence */
@@ -775,8 +786,8 @@ void psys_get_birth_coords(
 #else
     float phase = 0.0f;
 #endif
-    mul_v3_fl(vtan, -cosf((float)M_PI * (part->tanphase + phase)));
-    fac = -sinf((float)M_PI * (part->tanphase + phase));
+    mul_v3_fl(vtan, -cosf(float(M_PI) * (part->tanphase + phase)));
+    fac = -sinf(float(M_PI) * (part->tanphase + phase));
     madd_v3_v3fl(vtan, utan, fac);
 
     mul_mat3_m4_v3(ob->object_to_world, vtan);
@@ -1020,7 +1031,7 @@ void psys_get_birth_coords(
       if (part->randphasefac != 0.0f) {
         phasefac += part->randphasefac * psys_frand(psys, p + 20);
       }
-      axis_angle_to_quat(q_phase, x_vec, phasefac * (float)M_PI);
+      axis_angle_to_quat(q_phase, x_vec, phasefac * float(M_PI));
 
       /* combine base rotation & phase */
       mul_qt_qtqt(state->rot, rot, q_phase);
@@ -1122,7 +1133,7 @@ void reset_particle(ParticleSimulationData *sim, ParticleData *pa, float dtime, 
       (sim->psys->pointcache->mem_cache.first))
   {
     float dietime = psys_get_dietime_from_cache(sim->psys->pointcache, p);
-    pa->dietime = MIN2(pa->dietime, dietime);
+    pa->dietime = std::min(pa->dietime, dietime);
   }
 
   if (pa->time > cfra) {
@@ -1203,7 +1214,7 @@ void psys_count_keyed_targets(ParticleSimulationData *sim)
 static void set_keyed_keys(ParticleSimulationData *sim)
 {
   ParticleSystem *psys = sim->psys;
-  ParticleSimulationData ksim = {0};
+  ParticleSimulationData ksim = {nullptr};
   ParticleTarget *pt;
   PARTICLE_P;
   ParticleKey *key;
@@ -1250,7 +1261,7 @@ static void set_keyed_keys(ParticleSimulationData *sim)
       key->time = -1.0; /* use current time */
 
       const int p_ksim = (ksim.psys->totpart) ? p % ksim.psys->totpart : 0;
-      psys_get_particle_state(&ksim, p_ksim, key, 1);
+      psys_get_particle_state(&ksim, p_ksim, key, true);
 
       if (psys->flag & PSYS_KEYED_TIMING) {
         key->time = pa->time + pt->time;
@@ -1260,7 +1271,7 @@ static void set_keyed_keys(ParticleSimulationData *sim)
         }
       }
       else if (totkeys > 1) {
-        key->time = pa->time + (float)k / (float)(totkeys - 1) * pa->lifetime;
+        key->time = pa->time + float(k) / float(totkeys - 1) * pa->lifetime;
       }
       else {
         key->time = pa->time;
@@ -1306,8 +1317,8 @@ void psys_get_pointcache_start_end(Scene *scene, ParticleSystem *psys, int *sfra
 {
   ParticleSettings *part = psys->part;
 
-  *sfra = max_ii(1, (int)part->sta);
-  *efra = min_ii((int)(part->end + part->lifetime + 1.0f), max_ii(scene->r.pefra, scene->r.efra));
+  *sfra = max_ii(1, int(part->sta));
+  *efra = min_ii(int(part->end + part->lifetime + 1.0f), max_ii(scene->r.pefra, scene->r.efra));
 }
 
 /* BVH tree balancing inside a mutex lock must be run in isolation. Balancing
@@ -1482,7 +1493,7 @@ static void integrate_particle(
           madd_v3_v3v3fl(states[1].co, states->co, states->vel, dtime * 0.5f);
           madd_v3_v3v3fl(states[1].vel, states->vel, acceleration, dtime * 0.5f);
           states[1].time = dtime * 0.5f;
-          /*fra=sim->psys->cfra+0.5f*dfra;*/
+          // fra = sim->psys->cfra + 0.5f * dfra;
         }
         else {
           madd_v3_v3v3fl(pa->state.co, states->co, states[1].vel, dtime);
@@ -1500,7 +1511,7 @@ static void integrate_particle(
             madd_v3_v3v3fl(states[1].co, states->co, dx[0], 0.5f);
             madd_v3_v3v3fl(states[1].vel, states->vel, dv[0], 0.5f);
             states[1].time = dtime * 0.5f;
-            /*fra=sim->psys->cfra+0.5f*dfra;*/
+            // fra = sim->psys->cfra + 0.5f * dfra;
             break;
           case 1:
             madd_v3_v3v3fl(dx[1], states->vel, dv[0], 0.5f);
@@ -1521,7 +1532,7 @@ static void integrate_particle(
             add_v3_v3v3(states[3].co, states->co, dx[2]);
             add_v3_v3v3(states[3].vel, states->vel, dv[2]);
             states[3].time = dtime;
-            /*fra=cfra;*/
+            // fra = cfra;
             break;
           case 3:
             add_v3_v3v3(dx[3], states->vel, dv[2]);
@@ -1563,8 +1574,7 @@ static void integrate_particle(
  * Authors: Simon Clavet, Philippe Beaudoin and Pierre Poulin
  * Website: http://www.iro.umontreal.ca/labs/infographie/papers/Clavet-2005-PVFS/
  *
- * Presented at Siggraph, (2005)
- *
+ * Presented at SIGGRAPH, (2005)
  * \{ */
 
 #define PSYS_FLUID_SPRINGS_INITIAL_SIZE 256
@@ -1655,17 +1665,16 @@ static void sph_springs_modify(ParticleSystem *psys, float dtime)
     }
   }
 }
-static EdgeHash *sph_springhash_build(ParticleSystem *psys)
+static blender::Map<blender::OrderedEdge, int> sph_springhash_build(ParticleSystem *psys)
 {
-  EdgeHash *springhash = nullptr;
+  blender::Map<blender::OrderedEdge, int> springhash;
+  springhash.reserve(psys->tot_fluidsprings);
+
   ParticleSpring *spring;
   int i = 0;
 
-  springhash = BLI_edgehash_new_ex(__func__, psys->tot_fluidsprings);
-
   for (i = 0, spring = psys->fluid_springs; i < psys->tot_fluidsprings; i++, spring++) {
-    BLI_edgehash_insert(
-        springhash, spring->particle_index[0], spring->particle_index[1], POINTER_FROM_INT(i + 1));
+    springhash.add({spring->particle_index[0], spring->particle_index[1]}, i + 1);
   }
 
   return springhash;
@@ -1797,7 +1806,7 @@ static void sph_force_cb(void *sphdata_v, ParticleKey *state, float *force, floa
   SPHRangeData pfr;
   SPHNeighbor *pfn;
   float *gravity = sphdata->gravity;
-  EdgeHash *springhash = sphdata->eh;
+  const std::optional<blender::Map<blender::OrderedEdge, int>> &springhash = sphdata->eh;
 
   float q, u, rij, dv[3];
   float pressure, near_pressure;
@@ -1881,9 +1890,9 @@ static void sph_force_cb(void *sphdata_v, ParticleKey *state, float *force, floa
 
     if (spring_constant > 0.0f) {
       /* Viscoelastic spring force */
-      if (pfn->psys == psys[0] && fluid->flag & SPH_VISCOELASTIC_SPRINGS && springhash) {
-        /* BLI_edgehash_lookup appears to be thread-safe. - z0r */
-        spring_index = POINTER_AS_INT(BLI_edgehash_lookup(springhash, index, pfn->index));
+      if (pfn->psys == psys[0] && fluid->flag & SPH_VISCOELASTIC_SPRINGS && springhash.has_value())
+      {
+        spring_index = springhash->lookup_default({index, pfn->index}, 0);
 
         if (spring_index) {
           spring = psys[0]->fluid_springs + spring_index - 1;
@@ -1929,7 +1938,7 @@ static void sphclassical_density_accum_cb(void *userdata,
   SPHRangeData *pfr = (SPHRangeData *)userdata;
   ParticleData *npa = pfr->npsys->particles + index;
   float q;
-  float qfac = 21.0f / (256.0f * (float)M_PI);
+  float qfac = 21.0f / (256.0f * float(M_PI));
   float rij, rij_h;
   float vec[3];
 
@@ -2018,7 +2027,7 @@ static void sphclassical_force_cb(void *sphdata_v,
 
   int i;
 
-  float qfac2 = 42.0f / (256.0f * (float)M_PI);
+  float qfac2 = 42.0f / (256.0f * float(M_PI));
   float rij_h;
 
   /* 4.0 here is to be consistent with previous formulation/interface */
@@ -2172,11 +2181,6 @@ static void psys_sph_flush_springs(SPHData *sphdata)
 void psys_sph_finalize(SPHData *sphdata)
 {
   psys_sph_flush_springs(sphdata);
-
-  if (sphdata->eh) {
-    BLI_edgehash_free(sphdata->eh, nullptr);
-    sphdata->eh = nullptr;
-  }
 }
 
 void psys_sph_density(BVHTree *tree, SPHData *sphdata, float co[3], float vars[2])
@@ -2365,7 +2369,7 @@ static void basic_rotate(ParticleSettings *part, ParticleData *pa, float dfra, f
       cross_v3_v3v3(pa->state.ave, pa->prev_state.vel, pa->state.vel);
       normalize_v3(pa->state.ave);
       angle = dot_v3v3(pa->prev_state.vel, pa->state.vel) / (len1 * len2);
-      mul_v3_fl(pa->state.ave, saacos(angle) / dtime);
+      mul_v3_fl(pa->state.ave, safe_acosf(angle) / dtime);
     }
 
     get_angular_velocity_vector(part->avemode, &pa->state, vec);
@@ -2399,7 +2403,10 @@ static void basic_rotate(ParticleSettings *part, ParticleData *pa, float dfra, f
 #define COLLISION_MIN_DISTANCE 0.0001f
 #define COLLISION_ZERO 0.00001f
 #define COLLISION_INIT_STEP 0.00008f
-typedef float (*NRDistanceFunc)(float *p, float radius, ParticleCollisionElement *pce, float *nor);
+using NRDistanceFunc = float (*)(float *p,
+                                 float radius,
+                                 ParticleCollisionElement *pce,
+                                 float *nor);
 static float nr_signed_distance_to_plane(float *p,
                                          float radius,
                                          ParticleCollisionElement *pce,
@@ -2835,7 +2842,6 @@ static int collision_detect(ParticleData *pa,
                             ListBase *colliders)
 {
   const int raycast_flag = BVH_RAYCAST_DEFAULT & ~(BVH_RAYCAST_WATERTIGHT);
-  ColliderCache *coll;
   float ray_dir[3];
 
   if (BLI_listbase_is_empty(colliders)) {
@@ -2853,7 +2859,7 @@ static int collision_detect(ParticleData *pa,
     hit->dist = col->original_ray_length = 0.000001f;
   }
 
-  for (coll = static_cast<ColliderCache *>(colliders->first); coll; coll = coll->next) {
+  LISTBASE_FOREACH (ColliderCache *, coll, colliders) {
     /* for boids: don't check with current ground object; also skip if permeated */
     bool skip = false;
 
@@ -2998,14 +3004,14 @@ static int collision_response(ParticleSimulationData *sim,
 
       /* Convert to angular velocity. */
       cross_v3_v3v3(ave, vr_tan, pce->nor);
-      mul_v3_fl(ave, 1.0f / MAX2(pa->size, 0.001f));
+      mul_v3_fl(ave, 1.0f / std::max(pa->size, 0.001f));
 
       /* only friction will cause change in linear & angular velocity */
       interp_v3_v3v3(pa->state.ave, pa->state.ave, ave, frict);
       interp_v3_v3v3(v0_tan, v0_tan, v1_tan, frict);
     }
     else {
-      /* just basic friction (unphysical due to the friction model used in Blender) */
+      /* Just basic friction (nonphysical due to the friction model used in Blender). */
       interp_v3_v3v3(v0_tan, v0_tan, vc_tan, frict);
     }
   }
@@ -3274,7 +3280,7 @@ static void psys_update_path_cache(ParticleSimulationData *sim,
       }
 
       if (!skip) {
-        psys_cache_child_paths(sim, cfra, 0, use_render_params);
+        psys_cache_child_paths(sim, cfra, false, use_render_params);
       }
     }
   }
@@ -3344,9 +3350,8 @@ static void hair_create_input_mesh(ParticleSimulationData *sim,
   if (!mesh) {
     *r_mesh = mesh = BKE_mesh_new_nomain(totpoint, totedge, 0, 0);
   }
-  float(*positions)[3] = BKE_mesh_vert_positions_for_write(mesh);
-  vec2i *edge = static_cast<vec2i *>(CustomData_get_layer_named_for_write(
-      &mesh->edata, CD_PROP_INT32_2D, ".edge_verts", mesh->totedge));
+  blender::MutableSpan<blender::float3> positions = mesh->vert_positions_for_write();
+  blender::int2 *edge = mesh->edges_for_write().data();
   dvert = BKE_mesh_deform_verts_for_write(mesh);
 
   if (psys->clmd->hairdata == nullptr) {
@@ -3522,12 +3527,13 @@ static void do_hair_dynamics(ParticleSimulationData *sim)
   BKE_id_copy_ex(
       nullptr, &psys->hair_in_mesh->id, (ID **)&psys->hair_out_mesh, LIB_ID_COPY_LOCALIZE);
 
-  clothModifier_do(psys->clmd,
-                   sim->depsgraph,
-                   sim->scene,
-                   sim->ob,
-                   psys->hair_in_mesh,
-                   BKE_mesh_vert_positions_for_write(psys->hair_out_mesh));
+  clothModifier_do(
+      psys->clmd,
+      sim->depsgraph,
+      sim->scene,
+      sim->ob,
+      psys->hair_in_mesh,
+      reinterpret_cast<float(*)[3]>(psys->hair_out_mesh->vert_positions_for_write().data()));
   BKE_mesh_tag_positions_changed(psys->hair_out_mesh);
 
   /* restore cloth effector weights */
@@ -3662,7 +3668,7 @@ static void update_courant_num(
 }
 static float get_base_time_step(ParticleSettings *part)
 {
-  return 1.0f / (float)(part->subframes + 1);
+  return 1.0f / float(part->subframes + 1);
 }
 /* Update time step size to suit current conditions. */
 static void update_timestep(ParticleSystem *psys, ParticleSimulationData *sim)
@@ -3874,7 +3880,7 @@ static void dynamics_step(ParticleSimulationData *sim, float cfra)
   }
 
   /* for now do both, boids us 'rng' */
-  sim->rng = BLI_rng_new_srandom(31415926 + (int)cfra + psys->seed);
+  sim->rng = BLI_rng_new_srandom(31415926 + int(cfra) + psys->seed);
 
   psys_update_effectors(sim);
 
@@ -4018,7 +4024,7 @@ static void dynamics_step(ParticleSimulationData *sim, float cfra)
 
       if (part->fluid->solver == SPH_SOLVER_DDR) {
         /* Apply SPH forces using double-density relaxation algorithm
-         * (Clavat et. al.) */
+         * (Clavat et al.) */
 
         TaskParallelSettings settings;
         BLI_parallel_range_settings_defaults(&settings);
@@ -4203,7 +4209,7 @@ static void particles_fluid_step(ParticleSimulationData *sim,
   ParticleSystem *psys = sim->psys;
   if (psys->particles) {
     MEM_freeN(psys->particles);
-    psys->particles = 0;
+    psys->particles = nullptr;
     psys->totpart = 0;
   }
 
@@ -4293,8 +4299,8 @@ static void particles_fluid_step(ParticleSimulationData *sim,
       realloc_particles(sim, part->totpart);
 
       /* Set some randomness when choosing which particles to display. */
-      sim->rng = BLI_rng_new_srandom(31415926 + (int)cfra + psys->seed);
-      double r, dispProb = (double)part->disp / 100.0;
+      sim->rng = BLI_rng_new_srandom(31415926 + int(cfra) + psys->seed);
+      double r, dispProb = double(part->disp) / 100.0;
 
       /* Loop over *all* particles. Will break out of loop before tottypepart amount exceeded. */
       for (p = 0, pa = psys->particles; p < totpart; p++) {
@@ -4309,9 +4315,9 @@ static void particles_fluid_step(ParticleSimulationData *sim,
         if (part->type == PART_FLUID_FLIP) {
           flagActivePart = manta_liquid_get_flip_particle_flag_at(fds->fluid, p);
 
-          resX = (float)manta_get_res_x(fds->fluid);
-          resY = (float)manta_get_res_y(fds->fluid);
-          resZ = (float)manta_get_res_z(fds->fluid);
+          resX = float(manta_get_res_x(fds->fluid));
+          resY = float(manta_get_res_y(fds->fluid));
+          resZ = float(manta_get_res_z(fds->fluid));
 
           upres = 1;
 
@@ -4328,9 +4334,9 @@ static void particles_fluid_step(ParticleSimulationData *sim,
         {
           flagActivePart = manta_liquid_get_snd_particle_flag_at(fds->fluid, p);
 
-          resX = (float)manta_liquid_get_particle_res_x(fds->fluid);
-          resY = (float)manta_liquid_get_particle_res_y(fds->fluid);
-          resZ = (float)manta_liquid_get_particle_res_z(fds->fluid);
+          resX = float(manta_liquid_get_particle_res_x(fds->fluid));
+          resY = float(manta_liquid_get_particle_res_y(fds->fluid));
+          resZ = float(manta_liquid_get_particle_res_z(fds->fluid));
 
           upres = manta_liquid_get_particle_upres(fds->fluid);
 
@@ -4349,8 +4355,8 @@ static void particles_fluid_step(ParticleSimulationData *sim,
           return;
         }
 #  if 0
-/* Debugging: Print type of particle system and current particles. */
-printf("system type is %d and particle type is %d\n", part->type, flagActivePart);
+        /* Debugging: Print type of particle system and current particles. */
+        printf("system type is %d and particle type is %d\n", part->type, flagActivePart);
 #  endif
 
         /* Type of particle must match current particle system type
@@ -4368,8 +4374,8 @@ printf("system type is %d and particle type is %d\n", part->type, flagActivePart
           continue;
         }
 #  if 0
-/* Debugging: Print type of particle system and current particles. */
-printf("system type is %d and particle type is %d\n", part->type, flagActivePart);
+        /* Debugging: Print type of particle system and current particles. */
+        printf("system type is %d and particle type is %d\n", part->type, flagActivePart);
 #  endif
         /* Particle system has allocated 'tottypepart' particles - so break early before exceeded.
          */
@@ -4396,7 +4402,7 @@ printf("system type is %d and particle type is %d\n", part->type, flagActivePart
           sub_v3_v3v3(size, max, min);
 
           /* Biggest dimension will be used for up-scaling. */
-          max_size = MAX3(size[0] / (float)upres, size[1] / (float)upres, size[2] / (float)upres);
+          max_size = MAX3(size[0] / float(upres), size[1] / float(upres), size[2] / float(upres));
 
           /* Set particle position. */
           const float posParticle[3] = {posX, posY, posZ};
@@ -4427,16 +4433,22 @@ printf("system type is %d and particle type is %d\n", part->type, flagActivePart
           mul_v3_v3(tmp, ob->scale);
           add_v3_v3(pa->state.co, tmp);
 #  if 0
-/* Debugging: Print particle coordinates. */
-printf("pa->state.co[0]: %f, pa->state.co[1]: %f, pa->state.co[2]: %f\n", pa->state.co[0], pa->state.co[1], pa->state.co[2]);
+          /* Debugging: Print particle coordinates. */
+          printf("pa->state.co[0]: %f, pa->state.co[1]: %f, pa->state.co[2]: %f\n",
+                 pa->state.co[0],
+                 pa->state.co[1],
+                 pa->state.co[2]);
 #  endif
           /* Set particle velocity. */
           const float velParticle[3] = {velX, velY, velZ};
           copy_v3_v3(pa->state.vel, velParticle);
           mul_v3_fl(pa->state.vel, fds->dx);
 #  if 0
-/* Debugging: Print particle velocity. */
-printf("pa->state.vel[0]: %f, pa->state.vel[1]: %f, pa->state.vel[2]: %f\n", pa->state.vel[0], pa->state.vel[1], pa->state.vel[2]);
+          /* Debugging: Print particle velocity. */
+          printf("pa->state.vel[0]: %f, pa->state.vel[1]: %f, pa->state.vel[2]: %f\n",
+                 pa->state.vel[0],
+                 pa->state.vel[1],
+                 pa->state.vel[2]);
 #  endif
           /* Set default angular velocity and particle rotation. */
           zero_v3(pa->state.ave);
@@ -4452,8 +4464,8 @@ printf("pa->state.vel[0]: %f, pa->state.vel[1]: %f, pa->state.vel[2]: %f\n", pa-
         }
       }
 #  if 0
-/* Debugging: Print number of active particles. */
-printf("active parts: %d\n", activeParts);
+      /* Debugging: Print number of active particles. */
+      printf("active parts: %d\n", activeParts);
 #  endif
       totpart = psys->totpart = part->totpart = activeParts;
 
@@ -4550,10 +4562,10 @@ static void system_step(ParticleSimulationData *sim, float cfra, const bool use_
       update_children(sim, use_render_params);
       psys_update_path_cache(sim, cfra, use_render_params);
 
-      BKE_ptcache_validate(cache, (int)cache_cfra);
+      BKE_ptcache_validate(cache, int(cache_cfra));
 
       if (cache_result == PTCACHE_READ_INTERPOLATED && cache->flag & PTCACHE_REDO_NEEDED) {
-        BKE_ptcache_write(pid, (int)cache_cfra);
+        BKE_ptcache_write(pid, int(cache_cfra));
       }
 
       return;
@@ -4564,7 +4576,7 @@ static void system_step(ParticleSimulationData *sim, float cfra, const bool use_
       return;
     }
     if (cache_result == PTCACHE_READ_OLD) {
-      psys->cfra = (float)cache->simframe;
+      psys->cfra = float(cache->simframe);
       cached_step(sim, psys->cfra, use_render_params);
     }
 
@@ -4597,15 +4609,15 @@ static void system_step(ParticleSimulationData *sim, float cfra, const bool use_
 
     /* handle negative frame start at the first frame by doing
      * all the steps before the first frame */
-    if ((int)cfra == startframe && part->sta < startframe) {
-      totframesback = (startframe - (int)part->sta);
+    if (int(cfra) == startframe && part->sta < startframe) {
+      totframesback = startframe - int(part->sta);
     }
 
     if (!(part->time_flag & PART_TIME_AUTOSF)) {
       /* Constant time step */
       psys->dt_frac = get_base_time_step(part);
     }
-    else if ((int)cfra == startframe) {
+    else if (int(cfra) == startframe) {
       /* Variable time step; initialize to sub-frames. */
       psys->dt_frac = get_base_time_step(part);
     }
@@ -4633,9 +4645,9 @@ static void system_step(ParticleSimulationData *sim, float cfra, const bool use_
 
   /* 4. only write cache starting from second frame */
   if (pid) {
-    BKE_ptcache_validate(cache, (int)cache_cfra);
-    if ((int)cache_cfra != startframe) {
-      BKE_ptcache_write(pid, (int)cache_cfra);
+    BKE_ptcache_validate(cache, int(cache_cfra));
+    if (int(cache_cfra) != startframe) {
+      BKE_ptcache_write(pid, int(cache_cfra));
     }
   }
 
@@ -4677,8 +4689,8 @@ void psys_changed_type(Object *ob, ParticleSystem *psys)
   else {
     free_hair(ob, psys, 1);
 
-    CLAMP(part->path_start, 0.0f, MAX2(100.0f, part->end + part->lifetime));
-    CLAMP(part->path_end, 0.0f, MAX2(100.0f, part->end + part->lifetime));
+    CLAMP(part->path_start, 0.0f, std::max(100.0f, part->end + part->lifetime));
+    CLAMP(part->path_end, 0.0f, std::max(100.0f, part->end + part->lifetime));
   }
 
   psys_reset(psys, PSYS_RESET_ALL);
@@ -4790,7 +4802,7 @@ void particle_system_update(Depsgraph *depsgraph,
                             ParticleSystem *psys,
                             const bool use_render_params)
 {
-  ParticleSimulationData sim = {0};
+  ParticleSimulationData sim = {nullptr};
   ParticleSettings *part = psys->part;
   ParticleSystem *psys_orig = psys_orig_get(psys);
   float cfra;
@@ -4870,7 +4882,7 @@ void particle_system_update(Depsgraph *depsgraph,
       }
 
       for (i = 0; i <= part->hair_step; i++) {
-        hcfra = 100.0f * (float)i / (float)psys->part->hair_step;
+        hcfra = 100.0f * float(i) / float(psys->part->hair_step);
         if ((part->flag & PART_HAIR_REGROW) == 0) {
           const AnimationEvalContext anim_eval_context = BKE_animsys_eval_context_construct(
               depsgraph, hcfra);
@@ -4903,7 +4915,7 @@ void particle_system_update(Depsgraph *depsgraph,
            particles_has_bubble(part->type) || particles_has_foam(part->type) ||
            particles_has_tracer(part->type))
   {
-    particles_fluid_step(&sim, (int)cfra, use_render_params);
+    particles_fluid_step(&sim, int(cfra), use_render_params);
   }
   else {
     switch (part->phystype) {
@@ -4956,7 +4968,7 @@ void particle_system_update(Depsgraph *depsgraph,
         if (part->phystype == PART_PHYS_KEYED) {
           psys_count_keyed_targets(&sim);
           set_keyed_keys(&sim);
-          psys_update_path_cache(&sim, (int)cfra, use_render_params);
+          psys_update_path_cache(&sim, int(cfra), use_render_params);
         }
         break;
       }
@@ -5023,7 +5035,6 @@ static void particlesystem_modifiersForeachIDLink(void *user_data,
 
 void BKE_particlesystem_id_loop(ParticleSystem *psys, ParticleSystemIDFunc func, void *userdata)
 {
-  ParticleTarget *pt;
   LibraryForeachIDData *foreachid_data = static_cast<LibraryForeachIDData *>(userdata);
   const int foreachid_data_flags = BKE_lib_query_foreachid_process_flags_get(foreachid_data);
 
@@ -5034,17 +5045,17 @@ void BKE_particlesystem_id_loop(ParticleSystem *psys, ParticleSystemIDFunc func,
   if (psys->clmd != nullptr) {
     const ModifierTypeInfo *mti = BKE_modifier_get_info(ModifierType(psys->clmd->modifier.type));
 
-    if (mti->foreachIDLink != nullptr) {
+    if (mti->foreach_ID_link != nullptr) {
       ParticleSystemIDLoopForModifier data{};
       data.psys = psys;
       data.func = func;
       data.userdata = userdata;
-      mti->foreachIDLink(
+      mti->foreach_ID_link(
           &psys->clmd->modifier, nullptr, particlesystem_modifiersForeachIDLink, &data);
     }
   }
 
-  for (pt = static_cast<ParticleTarget *>(psys->targets.first); pt; pt = pt->next) {
+  LISTBASE_FOREACH (ParticleTarget *, pt, &psys->targets) {
     func(psys, (ID **)&pt->ob, userdata, IDWALK_CB_NOP);
   }
 

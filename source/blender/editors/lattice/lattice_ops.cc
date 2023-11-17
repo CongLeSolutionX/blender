@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2008 Blender Foundation
+/* SPDX-FileCopyrightText: 2008 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -8,10 +8,10 @@
 
 #include "DNA_scene_types.h"
 
-#include "WM_api.h"
+#include "WM_api.hh"
 
-#include "ED_lattice.h"
-#include "ED_screen.h"
+#include "ED_lattice.hh"
+#include "ED_screen.hh"
 
 #include "lattice_intern.h"
 
@@ -29,6 +29,6 @@ void ED_operatortypes_lattice()
 
 void ED_keymap_lattice(wmKeyConfig *keyconf)
 {
-  wmKeyMap *keymap = WM_keymap_ensure(keyconf, "Lattice", 0, 0);
+  wmKeyMap *keymap = WM_keymap_ensure(keyconf, "Lattice", SPACE_EMPTY, RGN_TYPE_WINDOW);
   keymap->poll = ED_operator_editlattice;
 }

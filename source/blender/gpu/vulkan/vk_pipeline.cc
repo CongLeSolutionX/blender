@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -17,20 +17,13 @@
 
 namespace blender::gpu {
 
-VKPipeline::VKPipeline(VkDescriptorSetLayout vk_descriptor_set_layout,
-                       VKPushConstants &&push_constants)
-    : active_vk_pipeline_(VK_NULL_HANDLE),
-      descriptor_set_(vk_descriptor_set_layout),
-      push_constants_(std::move(push_constants))
+VKPipeline::VKPipeline(VKPushConstants &&push_constants)
+    : active_vk_pipeline_(VK_NULL_HANDLE), push_constants_(std::move(push_constants))
 {
 }
 
-VKPipeline::VKPipeline(VkPipeline vk_pipeline,
-                       VkDescriptorSetLayout vk_descriptor_set_layout,
-                       VKPushConstants &&push_constants)
-    : active_vk_pipeline_(vk_pipeline),
-      descriptor_set_(vk_descriptor_set_layout),
-      push_constants_(std::move(push_constants))
+VKPipeline::VKPipeline(VkPipeline vk_pipeline, VKPushConstants &&push_constants)
+    : active_vk_pipeline_(vk_pipeline), push_constants_(std::move(push_constants))
 {
   vk_pipelines_.append(vk_pipeline);
 }
@@ -46,7 +39,6 @@ VKPipeline::~VKPipeline()
 
 VKPipeline VKPipeline::create_compute_pipeline(
     VkShaderModule compute_module,
-    VkDescriptorSetLayout &descriptor_set_layout,
     VkPipelineLayout &pipeline_layout,
     const VKPushConstants::Layout &push_constants_layout)
 {
@@ -75,15 +67,14 @@ VKPipeline VKPipeline::create_compute_pipeline(
   }
 
   VKPushConstants push_constants(&push_constants_layout);
-  return VKPipeline(vk_pipeline, descriptor_set_layout, std::move(push_constants));
+  return VKPipeline(vk_pipeline, std::move(push_constants));
 }
 
 VKPipeline VKPipeline::create_graphics_pipeline(
-    VkDescriptorSetLayout &descriptor_set_layout,
     const VKPushConstants::Layout &push_constants_layout)
 {
   VKPushConstants push_constants(&push_constants_layout);
-  return VKPipeline(descriptor_set_layout, std::move(push_constants));
+  return VKPipeline(std::move(push_constants));
 }
 
 VkPipeline VKPipeline::vk_handle() const
@@ -135,6 +126,7 @@ void VKPipeline::finalize(VKContext &context,
   }
 
   VKFrameBuffer &framebuffer = *context.active_framebuffer_get();
+  framebuffer.vk_render_pass_ensure();
 
   VkGraphicsPipelineCreateInfo pipeline_create_info = {};
   pipeline_create_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -158,18 +150,20 @@ void VKPipeline::finalize(VKContext &context,
   pipeline_input_assembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
   pipeline_input_assembly.topology = to_vk_primitive_topology(prim_type);
   pipeline_input_assembly.primitiveRestartEnable =
-      ELEM(prim_type, GPU_PRIM_TRIS, GPU_PRIM_LINES, GPU_PRIM_POINTS) ? VK_FALSE : VK_TRUE;
+      ELEM(prim_type, GPU_PRIM_TRIS, GPU_PRIM_LINES, GPU_PRIM_POINTS, GPU_PRIM_LINES_ADJ) ?
+          VK_FALSE :
+          VK_TRUE;
   pipeline_create_info.pInputAssemblyState = &pipeline_input_assembly;
 
   /* Viewport state. */
   VkPipelineViewportStateCreateInfo viewport_state = {};
   viewport_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-  VkViewport viewport = framebuffer.vk_viewport_get();
-  viewport_state.pViewports = &viewport;
-  viewport_state.viewportCount = 1;
-  VkRect2D scissor = framebuffer.vk_render_area_get();
-  viewport_state.pScissors = &scissor;
-  viewport_state.scissorCount = 1;
+  Array<VkViewport, 16> viewports = framebuffer.vk_viewports_get();
+  viewport_state.pViewports = &viewports[0];
+  viewport_state.viewportCount = viewports.size();
+  Array<VkRect2D, 16> scissors = framebuffer.vk_render_areas_get();
+  viewport_state.pScissors = &scissors[0];
+  viewport_state.scissorCount = scissors.size();
   pipeline_create_info.pViewportState = &viewport_state;
 
   /* Multi-sample state. */
@@ -200,18 +194,15 @@ void VKPipeline::finalize(VKContext &context,
   debug::object_label(active_vk_pipeline_, "GraphicsPipeline");
 }
 
-void VKPipeline::update_and_bind(VKContext &context,
-                                 VkPipelineLayout vk_pipeline_layout,
-                                 VkPipelineBindPoint vk_pipeline_bind_point)
+void VKPipeline::bind(VKContext &context, VkPipelineBindPoint vk_pipeline_bind_point)
 {
-  VKCommandBuffer &command_buffer = context.command_buffer_get();
-  command_buffer.bind(*this, vk_pipeline_bind_point);
+  VKCommandBuffers &command_buffers = context.command_buffers_get();
+  command_buffers.bind(*this, vk_pipeline_bind_point);
+}
+
+void VKPipeline::update_push_constants(VKContext &context)
+{
   push_constants_.update(context);
-  if (descriptor_set_.has_layout()) {
-    descriptor_set_.update(context);
-    command_buffer.bind(
-        *descriptor_set_.active_descriptor_set(), vk_pipeline_layout, vk_pipeline_bind_point);
-  }
 }
 
 }  // namespace blender::gpu

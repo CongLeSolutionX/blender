@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2008 Blender Foundation
+/* SPDX-FileCopyrightText: 2008 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -6,8 +6,8 @@
  * \ingroup spbuttons
  */
 
-#include <stdio.h>
-#include <string.h>
+#include <cstdio>
+#include <cstring>
 
 #include "MEM_guardedalloc.h"
 
@@ -15,30 +15,31 @@
 #include "BLI_blenlib.h"
 #include "BLI_utildefines.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_gpencil_modifier_legacy.h" /* Types for registering panels. */
+#include "BKE_lib_query.h"
 #include "BKE_lib_remap.h"
-#include "BKE_modifier.h"
-#include "BKE_screen.h"
+#include "BKE_modifier.hh"
+#include "BKE_screen.hh"
 #include "BKE_shader_fx.h"
 
-#include "ED_buttons.h"
-#include "ED_screen.h"
-#include "ED_space_api.h"
-#include "ED_view3d.h" /* To draw toolbar UI. */
+#include "ED_buttons.hh"
+#include "ED_screen.hh"
+#include "ED_space_api.hh"
+#include "ED_view3d.hh" /* To draw toolbar UI. */
 
-#include "WM_api.h"
-#include "WM_message.h"
-#include "WM_types.h"
+#include "WM_api.hh"
+#include "WM_message.hh"
+#include "WM_types.hh"
 
-#include "RNA_access.h"
-#include "RNA_define.h"
-#include "RNA_enum_types.h"
+#include "RNA_access.hh"
+#include "RNA_define.hh"
+#include "RNA_enum_types.hh"
 
-#include "UI_interface.h"
-#include "UI_resources.h"
+#include "UI_interface.hh"
+#include "UI_resources.hh"
 
-#include "BLO_read_write.h"
+#include "BLO_read_write.hh"
 
 #include "buttons_intern.h" /* own include */
 
@@ -145,7 +146,7 @@ static void buttons_main_region_init(wmWindowManager *wm, ARegion *region)
 
   ED_region_panels_init(wm, region);
 
-  keymap = WM_keymap_ensure(wm->defaultconf, "Property Editor", SPACE_PROPERTIES, 0);
+  keymap = WM_keymap_ensure(wm->defaultconf, "Property Editor", SPACE_PROPERTIES, RGN_TYPE_WINDOW);
   WM_event_add_keymap_handler(&region->handlers, keymap);
 }
 
@@ -535,7 +536,7 @@ static void buttons_operatortypes()
 
 static void buttons_keymap(wmKeyConfig *keyconf)
 {
-  WM_keymap_ensure(keyconf, "Property Editor", SPACE_PROPERTIES, 0);
+  WM_keymap_ensure(keyconf, "Property Editor", SPACE_PROPERTIES, RGN_TYPE_WINDOW);
 }
 
 /** \} */
@@ -562,7 +563,7 @@ static void buttons_header_region_draw(const bContext *C, ARegion *region)
 
 static void buttons_header_region_message_subscribe(const wmRegionMessageSubscribeParams *params)
 {
-  struct wmMsgBus *mbus = params->message_bus;
+  wmMsgBus *mbus = params->message_bus;
   ScrArea *area = params->area;
   ARegion *region = params->region;
   SpaceProperties *sbuts = static_cast<SpaceProperties *>(area->spacedata.first);
@@ -593,7 +594,7 @@ static void buttons_header_region_message_subscribe(const wmRegionMessageSubscri
 
 static void buttons_navigation_bar_region_init(wmWindowManager *wm, ARegion *region)
 {
-  region->flag |= RGN_FLAG_PREFSIZE_OR_HIDDEN;
+  region->flag |= RGN_FLAG_NO_USER_RESIZE;
 
   ED_region_panels_init(wm, region);
   region->v2d.keepzoom |= V2D_LOCKZOOM_X | V2D_LOCKZOOM_Y;
@@ -614,7 +615,7 @@ static void buttons_navigation_bar_region_draw(const bContext *C, ARegion *regio
 static void buttons_navigation_bar_region_message_subscribe(
     const wmRegionMessageSubscribeParams *params)
 {
-  struct wmMsgBus *mbus = params->message_bus;
+  wmMsgBus *mbus = params->message_bus;
   ARegion *region = params->region;
 
   wmMsgSubscribeValue msg_sub_value_region_tag_redraw{};
@@ -693,6 +694,7 @@ static void buttons_area_listener(const wmSpaceTypeListenerParams *params)
         case ND_POSE:
         case ND_BONE_ACTIVE:
         case ND_BONE_SELECT:
+        case ND_BONE_COLLECTION:
           buttons_area_redraw(area, BCONTEXT_BONE);
           buttons_area_redraw(area, BCONTEXT_BONE_CONSTRAINT);
           buttons_area_redraw(area, BCONTEXT_DATA);
@@ -812,7 +814,7 @@ static void buttons_area_listener(const wmSpaceTypeListenerParams *params)
     case NC_GPENCIL:
       switch (wmn->data) {
         case ND_DATA:
-          if (ELEM(wmn->action, NA_EDITED, NA_ADDED, NA_REMOVED, NA_SELECTED)) {
+          if (ELEM(wmn->action, NA_EDITED, NA_ADDED, NA_REMOVED, NA_SELECTED, NA_RENAME)) {
             ED_area_tag_redraw(area);
           }
           break;
@@ -853,9 +855,7 @@ static void buttons_area_listener(const wmSpaceTypeListenerParams *params)
   }
 }
 
-static void buttons_id_remap(ScrArea * /*area*/,
-                             SpaceLink *slink,
-                             const struct IDRemapper *mappings)
+static void buttons_id_remap(ScrArea * /*area*/, SpaceLink *slink, const IDRemapper *mappings)
 {
   SpaceProperties *sbuts = (SpaceProperties *)slink;
 
@@ -879,7 +879,7 @@ static void buttons_id_remap(ScrArea * /*area*/,
           break;
         }
         case ID_REMAP_RESULT_SOURCE_REMAPPED: {
-          RNA_id_pointer_create(path->ptr[i].owner_id, &path->ptr[i]);
+          path->ptr[i] = RNA_id_pointer_create(path->ptr[i].owner_id);
           /* There is no easy way to check/make path downwards valid, just nullify it.
            * Next redraw will rebuild this anyway. */
           i++;
@@ -908,6 +908,33 @@ static void buttons_id_remap(ScrArea * /*area*/,
   }
 }
 
+static void buttons_foreach_id(SpaceLink *space_link, LibraryForeachIDData *data)
+{
+  SpaceProperties *sbuts = reinterpret_cast<SpaceProperties *>(space_link);
+  const int data_flags = BKE_lib_query_foreachid_process_flags_get(data);
+  const bool is_readonly = (data_flags & IDWALK_READONLY) != 0;
+
+  BKE_LIB_FOREACHID_PROCESS_ID(data, sbuts->pinid, IDWALK_CB_NOP);
+  if (!is_readonly) {
+    if (sbuts->pinid == nullptr) {
+      sbuts->flag &= ~SB_PIN_CONTEXT;
+    }
+    /* NOTE: Restoring path pointers is complicated, if not impossible, because this contains
+     * data pointers too, not just ID ones. See #40046. */
+    MEM_SAFE_FREE(sbuts->path);
+  }
+
+  if (sbuts->texuser) {
+    ButsContextTexture *ct = static_cast<ButsContextTexture *>(sbuts->texuser);
+    BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, ct->texture, IDWALK_CB_NOP);
+
+    if (!is_readonly) {
+      BLI_freelistN(&ct->users);
+      ct->user = nullptr;
+    }
+  }
+}
+
 static void buttons_space_blend_read_data(BlendDataReader * /*reader*/, SpaceLink *sl)
 {
   SpaceProperties *sbuts = (SpaceProperties *)sl;
@@ -919,10 +946,12 @@ static void buttons_space_blend_read_data(BlendDataReader * /*reader*/, SpaceLin
   sbuts->runtime = nullptr;
 }
 
-static void buttons_space_blend_read_lib(BlendLibReader *reader, ID *parent_id, SpaceLink *sl)
+static void buttons_space_blend_read_after_liblink(BlendLibReader * /*reader*/,
+                                                   ID * /*parent_id*/,
+                                                   SpaceLink *sl)
 {
-  SpaceProperties *sbuts = (SpaceProperties *)sl;
-  BLO_read_id_address(reader, parent_id, &sbuts->pinid);
+  SpaceProperties *sbuts = reinterpret_cast<SpaceProperties *>(sl);
+
   if (sbuts->pinid == nullptr) {
     sbuts->flag &= ~SB_PIN_CONTEXT;
   }
@@ -956,8 +985,9 @@ void ED_spacetype_buttons()
   st->listener = buttons_area_listener;
   st->context = buttons_context;
   st->id_remap = buttons_id_remap;
+  st->foreach_id = buttons_foreach_id;
   st->blend_read_data = buttons_space_blend_read_data;
-  st->blend_read_lib = buttons_space_blend_read_lib;
+  st->blend_read_after_liblink = buttons_space_blend_read_after_liblink;
   st->blend_write = buttons_space_blend_write;
 
   /* regions: main window */
@@ -975,14 +1005,14 @@ void ED_spacetype_buttons()
    * than per modifier type. */
   for (int i = 0; i < NUM_MODIFIER_TYPES; i++) {
     const ModifierTypeInfo *mti = BKE_modifier_get_info(ModifierType(i));
-    if (mti != nullptr && mti->panelRegister != nullptr) {
-      mti->panelRegister(art);
+    if (mti != nullptr && mti->panel_register != nullptr) {
+      mti->panel_register(art);
     }
   }
   for (int i = 0; i < NUM_GREASEPENCIL_MODIFIER_TYPES; i++) {
     const GpencilModifierTypeInfo *mti = BKE_gpencil_modifier_get_info(GpencilModifierType(i));
-    if (mti != nullptr && mti->panelRegister != nullptr) {
-      mti->panelRegister(art);
+    if (mti != nullptr && mti->panel_register != nullptr) {
+      mti->panel_register(art);
     }
   }
   for (int i = 0; i < NUM_SHADER_FX_TYPES; i++) {
@@ -990,8 +1020,8 @@ void ED_spacetype_buttons()
       continue;
     }
     const ShaderFxTypeInfo *fxti = BKE_shaderfx_get_info(ShaderFxType(i));
-    if (fxti != nullptr && fxti->panelRegister != nullptr) {
-      fxti->panelRegister(art);
+    if (fxti != nullptr && fxti->panel_register != nullptr) {
+      fxti->panel_register(art);
     }
   }
 

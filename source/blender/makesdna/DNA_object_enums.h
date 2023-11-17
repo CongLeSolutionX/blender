@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -9,10 +9,6 @@
  */
 
 #pragma once
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 /** #Object.mode */
 typedef enum eObjectMode {
@@ -54,7 +50,7 @@ typedef enum eDrawType {
 /** Any mode that uses Object.sculpt. */
 #define OB_MODE_ALL_SCULPT (OB_MODE_SCULPT | OB_MODE_VERTEX_PAINT | OB_MODE_WEIGHT_PAINT)
 
-/** Any mode that uses weightpaint. */
+/** Any mode that uses weight-paint. */
 #define OB_MODE_ALL_WEIGHT_PAINT (OB_MODE_WEIGHT_PAINT | OB_MODE_WEIGHT_GPENCIL_LEGACY)
 
 /**
@@ -66,7 +62,3 @@ typedef enum eDrawType {
    OB_MODE_PAINT_GPENCIL_LEGACY | OB_MODE_EDIT_GPENCIL_LEGACY | OB_MODE_SCULPT_GPENCIL_LEGACY | \
    OB_MODE_WEIGHT_GPENCIL_LEGACY | OB_MODE_VERTEX_GPENCIL_LEGACY | OB_MODE_SCULPT_CURVES | \
    OB_MODE_PAINT_GREASE_PENCIL)
-
-#ifdef __cplusplus
-}
-#endif

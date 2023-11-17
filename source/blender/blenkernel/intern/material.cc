@@ -39,18 +39,21 @@
 
 #include "BLI_array_utils.h"
 #include "BLI_listbase.h"
-#include "BLI_math.h"
+#include "BLI_math_color.h"
+#include "BLI_math_vector.h"
+#include "BLI_string.h"
 #include "BLI_utildefines.h"
 
 #include "BLT_translation.h"
 
 #include "BKE_anim_data.h"
 #include "BKE_attribute.h"
-#include "BKE_brush.h"
-#include "BKE_curve.h"
+#include "BKE_brush.hh"
+#include "BKE_curve.hh"
 #include "BKE_displist.h"
-#include "BKE_editmesh.h"
+#include "BKE_editmesh.hh"
 #include "BKE_gpencil_legacy.h"
+#include "BKE_grease_pencil.hh"
 #include "BKE_icons.h"
 #include "BKE_idtype.h"
 #include "BKE_image.h"
@@ -61,19 +64,21 @@
 #include "BKE_mesh.hh"
 #include "BKE_node.hh"
 #include "BKE_node_runtime.hh"
-#include "BKE_object.h"
+#include "BKE_object.hh"
+#include "BKE_object_types.hh"
+#include "BKE_preview_image.hh"
 #include "BKE_scene.h"
 #include "BKE_vfont.h"
 
-#include "DEG_depsgraph.h"
-#include "DEG_depsgraph_build.h"
-#include "DEG_depsgraph_query.h"
+#include "DEG_depsgraph.hh"
+#include "DEG_depsgraph_build.hh"
+#include "DEG_depsgraph_query.hh"
 
 #include "GPU_material.h"
 
 #include "NOD_shader.h"
 
-#include "BLO_read_write.h"
+#include "BLO_read_write.hh"
 
 static CLG_LogRef LOG = {"bke.material"};
 
@@ -159,7 +164,9 @@ static void material_free_data(ID *id)
 
 static void material_foreach_id(ID *id, LibraryForeachIDData *data)
 {
-  Material *material = (Material *)id;
+  Material *material = reinterpret_cast<Material *>(id);
+  const int flag = BKE_lib_query_foreachid_process_flags_get(data);
+
   /* Node-trees **are owned by IDs**, treat them as mere sub-data and not real ID! */
   BKE_LIB_FOREACHID_PROCESS_FUNCTION_CALL(
       data, BKE_library_foreach_ID_embedded(data, (ID **)&material->nodetree));
@@ -169,6 +176,10 @@ static void material_foreach_id(ID *id, LibraryForeachIDData *data)
   if (material->gp_style != nullptr) {
     BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, material->gp_style->sima, IDWALK_CB_USER);
     BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, material->gp_style->ima, IDWALK_CB_USER);
+  }
+
+  if (flag & IDWALK_DO_DEPRECATED_POINTERS) {
+    BKE_LIB_FOREACHID_PROCESS_ID_NOCHECK(data, material->ipo, IDWALK_CB_USER);
   }
 }
 
@@ -183,10 +194,6 @@ static void material_blend_write(BlendWriter *writer, ID *id, const void *id_add
   /* write LibData */
   BLO_write_id_struct(writer, Material, id_address, &ma->id);
   BKE_id_blend_write(writer, &ma->id);
-
-  if (ma->adt) {
-    BKE_animdata_blend_write(writer, ma->adt);
-  }
 
   /* nodetree is integral part of material, no libdata */
   if (ma->nodetree) {
@@ -212,8 +219,6 @@ static void material_blend_write(BlendWriter *writer, ID *id, const void *id_add
 static void material_blend_read_data(BlendDataReader *reader, ID *id)
 {
   Material *ma = (Material *)id;
-  BLO_read_data_address(reader, &ma->adt);
-  BKE_animdata_blend_read_data(reader, ma->adt);
 
   ma->texpaintslot = nullptr;
 
@@ -225,42 +230,13 @@ static void material_blend_read_data(BlendDataReader *reader, ID *id)
   BLO_read_data_address(reader, &ma->gp_style);
 }
 
-static void material_blend_read_lib(BlendLibReader *reader, ID *id)
-{
-  Material *ma = (Material *)id;
-  BLO_read_id_address(reader, id, &ma->ipo); /* XXX deprecated - old animation system */
-
-  /* relink grease pencil settings */
-  if (ma->gp_style != nullptr) {
-    MaterialGPencilStyle *gp_style = ma->gp_style;
-    if (gp_style->sima != nullptr) {
-      BLO_read_id_address(reader, id, &gp_style->sima);
-    }
-    if (gp_style->ima != nullptr) {
-      BLO_read_id_address(reader, id, &gp_style->ima);
-    }
-  }
-}
-
-static void material_blend_read_expand(BlendExpander *expander, ID *id)
-{
-  Material *ma = (Material *)id;
-  BLO_expand(expander, ma->ipo); /* XXX deprecated - old animation system */
-
-  if (ma->gp_style) {
-    MaterialGPencilStyle *gp_style = ma->gp_style;
-    BLO_expand(expander, gp_style->sima);
-    BLO_expand(expander, gp_style->ima);
-  }
-}
-
 IDTypeInfo IDType_ID_MA = {
     /*id_code*/ ID_MA,
     /*id_filter*/ FILTER_ID_MA,
     /*main_listbase_index*/ INDEX_ID_MA,
     /*struct_size*/ sizeof(Material),
     /*name*/ "Material",
-    /*name_plural*/ "materials",
+    /*name_plural*/ N_("materials"),
     /*translation_context*/ BLT_I18NCONTEXT_ID_MATERIAL,
     /*flags*/ IDTYPE_FLAGS_APPEND_IS_REUSABLE,
     /*asset_type_info*/ nullptr,
@@ -276,8 +252,7 @@ IDTypeInfo IDType_ID_MA = {
 
     /*blend_write*/ material_blend_write,
     /*blend_read_data*/ material_blend_read_data,
-    /*blend_read_lib*/ material_blend_read_lib,
-    /*blend_read_expand*/ material_blend_read_expand,
+    /*blend_read_after_liblink*/ nullptr,
 
     /*blend_read_undo_preserve*/ nullptr,
 
@@ -301,6 +276,27 @@ void BKE_gpencil_material_attr_init(Material *ma)
     gp_style->mix_factor = 0.5f;
 
     gp_style->flag |= GP_MATERIAL_STROKE_SHOW;
+  }
+}
+
+static void nodetree_mark_previews_dirty_reccursive(bNodeTree *tree)
+{
+  if (tree == nullptr) {
+    return;
+  }
+  tree->runtime->previews_refresh_state++;
+  for (bNode *node : tree->all_nodes()) {
+    if (node->type == NODE_GROUP) {
+      bNodeTree *nested_tree = reinterpret_cast<bNodeTree *>(node->id);
+      nodetree_mark_previews_dirty_reccursive(nested_tree);
+    }
+  }
+}
+
+void BKE_material_make_node_previews_dirty(Material *ma)
+{
+  if (ma && ma->nodetree) {
+    nodetree_mark_previews_dirty_reccursive(ma->nodetree);
   }
 }
 
@@ -468,6 +464,9 @@ static void material_data_index_remove_id(ID *id, short index)
     case ID_CU_LEGACY:
       BKE_curve_material_index_remove((Curve *)id, index);
       break;
+    case ID_GP:
+      BKE_grease_pencil_material_index_remove(reinterpret_cast<GreasePencil *>(id), index);
+      break;
     case ID_MB:
     case ID_CV:
     case ID_PT:
@@ -506,6 +505,9 @@ bool BKE_object_material_slot_used(Object *object, short actcol)
       return false;
     case ID_GD_LEGACY:
       return BKE_gpencil_material_index_used((bGPdata *)ob_data, actcol - 1);
+    case ID_GP:
+      return BKE_grease_pencil_material_index_used(reinterpret_cast<GreasePencil *>(ob_data),
+                                                   actcol - 1);
     default:
       return false;
   }
@@ -773,15 +775,15 @@ Material *BKE_object_material_get_eval(Object *ob, short act)
   return nullptr;
 }
 
-int BKE_object_material_count_eval(Object *ob)
+int BKE_object_material_count_eval(const Object *ob)
 {
   BLI_assert(DEG_is_evaluated_object(ob));
   if (ob->type == OB_EMPTY) {
     return 0;
   }
   BLI_assert(ob->data != nullptr);
-  ID *id = get_evaluated_object_data_with_materials(ob);
-  const short *len_p = BKE_id_material_len_p(id);
+  const ID *id = get_evaluated_object_data_with_materials(const_cast<Object *>(ob));
+  const short *len_p = BKE_id_material_len_p(const_cast<ID *>(id));
   return len_p ? *len_p : 0;
 }
 
@@ -1118,6 +1120,9 @@ void BKE_object_material_remap(Object *ob, const uint *remap)
   else if (ob->type == OB_GPENCIL_LEGACY) {
     BKE_gpencil_material_remap(static_cast<bGPdata *>(ob->data), remap, ob->totcol);
   }
+  else if (ob->type == OB_GREASE_PENCIL) {
+    BKE_grease_pencil_material_remap(static_cast<GreasePencil *>(ob->data), remap, ob->totcol);
+  }
   else {
     /* add support for this object data! */
     BLI_assert(matar == nullptr);
@@ -1360,14 +1365,14 @@ bool BKE_object_material_slot_remove(Main *bmain, Object *ob)
     }
   }
 
-  /* check indices from mesh */
-  if (ELEM(ob->type, OB_MESH, OB_CURVES_LEGACY, OB_SURF, OB_FONT)) {
+  /* check indices from mesh and grease pencil. */
+  if (ELEM(ob->type, OB_MESH, OB_CURVES_LEGACY, OB_SURF, OB_FONT, OB_GREASE_PENCIL)) {
     material_data_index_remove_id((ID *)ob->data, actcol - 1);
-    if (ob->runtime.curve_cache) {
-      BKE_displist_free(&ob->runtime.curve_cache->disp);
+    if (ob->runtime->curve_cache) {
+      BKE_displist_free(&ob->runtime->curve_cache->disp);
     }
   }
-  /* check indices from gpencil */
+  /* check indices from gpencil legacy. */
   else if (ob->type == OB_GPENCIL_LEGACY) {
     BKE_gpencil_material_index_reassign((bGPdata *)ob->data, ob->totcol, actcol - 1);
   }
@@ -1377,12 +1382,9 @@ bool BKE_object_material_slot_remove(Main *bmain, Object *ob)
 
 static bNode *nodetree_uv_node_recursive(bNode *node)
 {
-  bNode *inode;
-  bNodeSocket *sock;
-
-  for (sock = static_cast<bNodeSocket *>(node->inputs.first); sock; sock = sock->next) {
+  LISTBASE_FOREACH (bNodeSocket *, sock, &node->inputs) {
     if (sock->link) {
-      inode = sock->link->fromnode;
+      bNode *inode = sock->link->fromnode;
       if (inode->typeinfo->nclass == NODE_CLASS_INPUT && inode->typeinfo->type == SH_NODE_UVMAP) {
         return inode;
       }

@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -15,7 +15,7 @@
 #include "BLI_math_vector.h"
 #include "BLI_math_vector.hh"
 
-#include "BKE_customdata.h"
+#include "BKE_customdata.hh"
 
 namespace blender::bke::attribute_math {
 

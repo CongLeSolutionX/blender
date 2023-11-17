@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2007 Blender Foundation
+/* SPDX-FileCopyrightText: 2021 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -12,28 +12,27 @@
 #include "AS_asset_catalog_tree.hh"
 #include "AS_asset_library.hh"
 
-#include "BKE_asset.h"
+#include "BKE_asset.hh"
 
 #include "BLI_string_ref.hh"
 
 #include "BLT_translation.h"
 
-#include "ED_asset.h"
-#include "ED_fileselect.h"
-#include "ED_undo.h"
+#include "ED_asset.hh"
+#include "ED_fileselect.hh"
+#include "ED_undo.hh"
 
-#include "RNA_access.h"
+#include "RNA_access.hh"
 
-#include "UI_interface.h"
 #include "UI_interface.hh"
-#include "UI_resources.h"
+#include "UI_resources.hh"
 #include "UI_tree_view.hh"
 
-#include "WM_api.h"
-#include "WM_types.h"
+#include "WM_api.hh"
+#include "WM_types.hh"
 
-#include "file_intern.h"
-#include "filelist.h"
+#include "file_intern.hh"
+#include "filelist.hh"
 
 #include <fmt/format.h>
 
@@ -82,13 +81,13 @@ class AssetCatalogTreeViewItem : public ui::BasicTreeViewItem {
  public:
   AssetCatalogTreeViewItem(AssetCatalogTreeItem *catalog_item);
 
-  void on_activate() override;
+  void on_activate(bContext &C) override;
 
   void build_row(uiLayout &row) override;
   void build_context_menu(bContext &C, uiLayout &column) const override;
 
   bool supports_renaming() const override;
-  bool rename(StringRefNull new_name) override;
+  bool rename(const bContext &C, StringRefNull new_name) override;
 
   /** Add drag support for catalog items. */
   std::unique_ptr<ui::AbstractViewItemDragController> create_drag_controller() const override;
@@ -112,7 +111,7 @@ class AssetCatalogDropTarget : public ui::TreeViewItemDropTarget {
   AssetCatalogTreeItem &catalog_item_;
 
  public:
-  AssetCatalogDropTarget(AssetCatalogTreeView &tree_view, AssetCatalogTreeItem &catalog_item);
+  AssetCatalogDropTarget(AssetCatalogTreeViewItem &item, AssetCatalogTreeItem &catalog_item);
 
   bool can_drop(const wmDrag &drag, const char **r_disabled_hint) const override;
   std::string drop_tooltip(const ui::DragInfo &drag_info) const override;
@@ -150,7 +149,7 @@ class AssetCatalogTreeViewAllItem : public ui::BasicTreeViewItem {
   void build_row(uiLayout &row) override;
 
   struct DropTarget : public ui::TreeViewItemDropTarget {
-    DropTarget(AssetCatalogTreeView &tree_view);
+    DropTarget(AssetCatalogTreeViewAllItem &item);
 
     bool can_drop(const wmDrag &drag, const char **r_disabled_hint) const override;
     std::string drop_tooltip(const ui::DragInfo &drag_info) const override;
@@ -164,7 +163,7 @@ class AssetCatalogTreeViewUnassignedItem : public ui::BasicTreeViewItem {
   using BasicTreeViewItem::BasicTreeViewItem;
 
   struct DropTarget : public ui::TreeViewItemDropTarget {
-    DropTarget(AssetCatalogTreeView &tree_view);
+    DropTarget(AssetCatalogTreeViewUnassignedItem &item);
 
     bool can_drop(const wmDrag &drag, const char **r_disabled_hint) const override;
     std::string drop_tooltip(const ui::DragInfo &drag_info) const override;
@@ -220,7 +219,7 @@ AssetCatalogTreeViewAllItem &AssetCatalogTreeView::add_all_item()
   FileAssetSelectParams *params = params_;
 
   AssetCatalogTreeViewAllItem &item = add_tree_item<AssetCatalogTreeViewAllItem>(IFACE_("All"));
-  item.set_on_activate_fn([params](ui::BasicTreeViewItem & /*item*/) {
+  item.set_on_activate_fn([params](bContext & /*C*/, ui::BasicTreeViewItem & /*item*/) {
     params->asset_catalog_visibility = FILE_SHOW_ASSETS_ALL_CATALOGS;
     WM_main_add_notifier(NC_SPACE | ND_SPACE_ASSET_PARAMS, nullptr);
   });
@@ -236,7 +235,7 @@ void AssetCatalogTreeView::add_unassigned_item()
   AssetCatalogTreeViewUnassignedItem &item = add_tree_item<AssetCatalogTreeViewUnassignedItem>(
       IFACE_("Unassigned"), ICON_FILE_HIDDEN);
 
-  item.set_on_activate_fn([params](ui::BasicTreeViewItem & /*item*/) {
+  item.set_on_activate_fn([params](bContext & /*C*/, ui::BasicTreeViewItem & /*item*/) {
     params->asset_catalog_visibility = FILE_SHOW_ASSETS_WITHOUT_CATALOG;
     WM_main_add_notifier(NC_SPACE | ND_SPACE_ASSET_PARAMS, nullptr);
   });
@@ -264,7 +263,7 @@ AssetCatalogTreeViewItem::AssetCatalogTreeViewItem(AssetCatalogTreeItem *catalog
 {
 }
 
-void AssetCatalogTreeViewItem::on_activate()
+void AssetCatalogTreeViewItem::on_activate(bContext & /*C*/)
 {
   AssetCatalogTreeView &tree_view = static_cast<AssetCatalogTreeView &>(get_tree_view());
   tree_view.activate_catalog_by_id(catalog_item_.get_catalog_id());
@@ -297,7 +296,7 @@ void AssetCatalogTreeViewItem::build_context_menu(bContext &C, uiLayout &column)
               ICON_NONE,
               nullptr,
               WM_OP_INVOKE_DEFAULT,
-              0,
+              UI_ITEM_NONE,
               &props);
   RNA_string_set(&props, "parent_path", catalog_item_.catalog_path().c_str());
 
@@ -309,7 +308,7 @@ void AssetCatalogTreeViewItem::build_context_menu(bContext &C, uiLayout &column)
               ICON_NONE,
               nullptr,
               WM_OP_INVOKE_DEFAULT,
-              0,
+              UI_ITEM_NONE,
               &props);
   RNA_string_set(&props, "catalog_id", catalog_id_str_buffer);
   uiItemO(&column, "Rename", ICON_NONE, "UI_OT_view_item_rename");
@@ -331,10 +330,10 @@ bool AssetCatalogTreeViewItem::supports_renaming() const
   return !ED_asset_catalogs_read_only(*tree_view.asset_library_);
 }
 
-bool AssetCatalogTreeViewItem::rename(StringRefNull new_name)
+bool AssetCatalogTreeViewItem::rename(const bContext &C, StringRefNull new_name)
 {
   /* Important to keep state. */
-  BasicTreeViewItem::rename(new_name);
+  BasicTreeViewItem::rename(C, new_name);
 
   const AssetCatalogTreeView &tree_view = static_cast<const AssetCatalogTreeView &>(
       get_tree_view());
@@ -344,8 +343,7 @@ bool AssetCatalogTreeViewItem::rename(StringRefNull new_name)
 
 std::unique_ptr<ui::TreeViewItemDropTarget> AssetCatalogTreeViewItem::create_drop_target()
 {
-  return std::make_unique<AssetCatalogDropTarget>(
-      static_cast<AssetCatalogTreeView &>(get_tree_view()), catalog_item_);
+  return std::make_unique<AssetCatalogDropTarget>(*this, catalog_item_);
 }
 
 std::unique_ptr<ui::AbstractViewItemDragController> AssetCatalogTreeViewItem::
@@ -357,9 +355,9 @@ std::unique_ptr<ui::AbstractViewItemDragController> AssetCatalogTreeViewItem::
 
 /* ---------------------------------------------------------------------- */
 
-AssetCatalogDropTarget::AssetCatalogDropTarget(AssetCatalogTreeView &tree_view,
+AssetCatalogDropTarget::AssetCatalogDropTarget(AssetCatalogTreeViewItem &item,
                                                AssetCatalogTreeItem &catalog_item)
-    : ui::TreeViewItemDropTarget(tree_view), catalog_item_(catalog_item)
+    : ui::TreeViewItemDropTarget(item), catalog_item_(catalog_item)
 {
 }
 
@@ -487,6 +485,7 @@ bool AssetCatalogDropTarget::drop_assets_into_catalog(bContext *C,
     filelist_tag_needs_filtering(tree_view.space_file_.files);
     file_select_deselect_all(&tree_view.space_file_, FILE_SEL_SELECTED | FILE_SEL_HIGHLIGHTED);
     WM_main_add_notifier(NC_SPACE | ND_SPACE_FILE_LIST, nullptr);
+    WM_main_add_notifier(NC_ASSET | ND_ASSET_CATALOGS, nullptr);
   }
 
   if (did_update) {
@@ -585,12 +584,11 @@ void AssetCatalogTreeViewAllItem::build_row(uiLayout &row)
 
 std::unique_ptr<ui::TreeViewItemDropTarget> AssetCatalogTreeViewAllItem::create_drop_target()
 {
-  return std::make_unique<AssetCatalogTreeViewAllItem::DropTarget>(
-      static_cast<AssetCatalogTreeView &>(get_tree_view()));
+  return std::make_unique<AssetCatalogTreeViewAllItem::DropTarget>(*this);
 }
 
-AssetCatalogTreeViewAllItem::DropTarget::DropTarget(AssetCatalogTreeView &tree_view)
-    : ui::TreeViewItemDropTarget(tree_view)
+AssetCatalogTreeViewAllItem::DropTarget::DropTarget(AssetCatalogTreeViewAllItem &item)
+    : ui::TreeViewItemDropTarget(item)
 {
 }
 
@@ -641,12 +639,12 @@ bool AssetCatalogTreeViewAllItem::DropTarget::on_drop(bContext * /*C*/,
 std::unique_ptr<ui::TreeViewItemDropTarget> AssetCatalogTreeViewUnassignedItem::
     create_drop_target()
 {
-  return std::make_unique<AssetCatalogTreeViewUnassignedItem::DropTarget>(
-      static_cast<AssetCatalogTreeView &>(get_tree_view()));
+  return std::make_unique<AssetCatalogTreeViewUnassignedItem::DropTarget>(*this);
 }
 
-AssetCatalogTreeViewUnassignedItem::DropTarget::DropTarget(AssetCatalogTreeView &tree_view)
-    : ui::TreeViewItemDropTarget(tree_view)
+AssetCatalogTreeViewUnassignedItem::DropTarget::DropTarget(
+    AssetCatalogTreeViewUnassignedItem &item)
+    : ui::TreeViewItemDropTarget(item)
 {
 }
 

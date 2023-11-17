@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2019 Blender Foundation
+/* SPDX-FileCopyrightText: 2019 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -11,11 +11,11 @@
  * - #EDBM_automerge_and_split
  */
 
-#include "BKE_editmesh.h"
+#include "BKE_editmesh.hh"
 
 #include "DNA_object_types.h"
 
-#include "ED_mesh.h"
+#include "ED_mesh.hh"
 
 #include "tools/bmesh_intersect_edges.h"
 

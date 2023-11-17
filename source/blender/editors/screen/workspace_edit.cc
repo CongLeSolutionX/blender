@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -6,8 +6,8 @@
  * \ingroup edscr
  */
 
-#include <stdlib.h>
-#include <string.h>
+#include <cstdlib>
+#include <cstring>
 
 #include "BLI_fileops.h"
 #include "BLI_listbase.h"
@@ -16,10 +16,10 @@
 
 #include "BKE_appdir.h"
 #include "BKE_blendfile.h"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_lib_id.h"
 #include "BKE_main.h"
-#include "BKE_screen.h"
+#include "BKE_screen.hh"
 #include "BKE_workspace.h"
 
 #include "BLO_readfile.h"
@@ -29,19 +29,19 @@
 #include "DNA_workspace_types.h"
 
 #include "ED_datafiles.h"
-#include "ED_object.h"
-#include "ED_screen.h"
+#include "ED_object.hh"
+#include "ED_screen.hh"
 
-#include "RNA_access.h"
-#include "RNA_define.h"
+#include "RNA_access.hh"
+#include "RNA_define.hh"
 
-#include "UI_interface.h"
-#include "UI_resources.h"
+#include "UI_interface.hh"
+#include "UI_resources.hh"
 
 #include "BLT_translation.h"
 
-#include "WM_api.h"
-#include "WM_types.h"
+#include "WM_api.hh"
+#include "WM_types.hh"
 
 #include "screen_intern.h"
 
@@ -458,7 +458,7 @@ static void workspace_append_button(uiLayout *layout,
                   ICON_NONE,
                   nullptr,
                   WM_OP_EXEC_DEFAULT,
-                  0,
+                  UI_ITEM_NONE,
                   &opptr);
   RNA_string_set(&opptr, "idname", id->name + 2);
   RNA_string_set(&opptr, "filepath", filepath);
@@ -604,7 +604,7 @@ static void WORKSPACE_OT_reorder_to_front(wmOperatorType *ot)
   ot->exec = workspace_reorder_to_front_exec;
 }
 
-static int workspace_scene_pin_toggle(bContext *C, wmOperator * /*op*/)
+static int workspace_scene_pin_toggle_exec(bContext *C, wmOperator * /*op*/)
 {
   WorkSpace *workspace = workspace_context_get(C);
 
@@ -628,7 +628,7 @@ static void WORKSPACE_OT_scene_pin_toggle(wmOperatorType *ot)
 
   /* api callbacks */
   ot->poll = workspace_context_poll;
-  ot->exec = workspace_scene_pin_toggle;
+  ot->exec = workspace_scene_pin_toggle_exec;
 
   ot->flag = OPTYPE_INTERNAL;
 }

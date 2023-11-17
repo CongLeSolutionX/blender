@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2008 Blender Foundation
+/* SPDX-FileCopyrightText: 2008 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -13,9 +13,9 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_listbase.h"
-#include "BLI_math.h"
 #include "BLI_rect.h"
-#include "BLI_string_utils.h"
+#include "BLI_string.h"
+#include "BLI_string_utils.hh"
 #include "BLI_threads.h"
 #include "BLI_timecode.h"
 #include "BLI_utildefines.h"
@@ -30,7 +30,7 @@
 #include "DNA_view3d_types.h"
 
 #include "BKE_colortools.h"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_global.h"
 #include "BKE_image.h"
 #include "BKE_image_format.h"
@@ -38,24 +38,24 @@
 #include "BKE_lib_id.h"
 #include "BKE_main.h"
 #include "BKE_node.hh"
-#include "BKE_node_tree_update.h"
-#include "BKE_object.h"
+#include "BKE_node_tree_update.hh"
+#include "BKE_object.hh"
 #include "BKE_report.h"
 #include "BKE_scene.h"
-#include "BKE_screen.h"
+#include "BKE_screen.hh"
 
-#include "NOD_composite.h"
+#include "NOD_composite.hh"
 
-#include "DEG_depsgraph.h"
+#include "DEG_depsgraph.hh"
 
-#include "WM_api.h"
-#include "WM_types.h"
+#include "WM_api.hh"
+#include "WM_types.hh"
 
-#include "ED_render.h"
-#include "ED_screen.h"
-#include "ED_util.h"
+#include "ED_render.hh"
+#include "ED_screen.hh"
+#include "ED_util.hh"
 
-#include "BIF_glutil.h"
+#include "BIF_glutil.hh"
 
 #include "RE_engine.h"
 #include "RE_pipeline.h"
@@ -63,10 +63,10 @@
 #include "IMB_colormanagement.h"
 #include "IMB_imbuf_types.h"
 
-#include "RNA_access.h"
-#include "RNA_define.h"
+#include "RNA_access.hh"
+#include "RNA_define.hh"
 
-#include "SEQ_relations.h"
+#include "SEQ_relations.hh"
 
 #include "render_intern.hh"
 
@@ -421,16 +421,14 @@ static void make_renderinfo_string(const RenderStats *rs,
     char statistics[64];
   } info_buffers;
 
-  uintptr_t mem_in_use, peak_memory;
-  float megs_used_memory, megs_peak_memory;
   const char *ret_array[32];
   int i = 0;
 
-  mem_in_use = MEM_get_memory_in_use();
-  peak_memory = MEM_get_peak_memory();
+  const uintptr_t mem_in_use = MEM_get_memory_in_use();
+  const uintptr_t peak_memory = MEM_get_peak_memory();
 
-  megs_used_memory = (mem_in_use) / (1024.0 * 1024.0);
-  megs_peak_memory = (peak_memory) / (1024.0 * 1024.0);
+  const float megs_used_memory = (mem_in_use) / (1024.0 * 1024.0);
+  const float megs_peak_memory = (peak_memory) / (1024.0 * 1024.0);
 
   /* local view */
   if (rs->localview) {
@@ -703,13 +701,13 @@ static void current_scene_update(void *rjv, Scene *scene)
   rj->iuser.scene = scene;
 }
 
-static void render_startjob(void *rjv, bool *stop, bool *do_update, float *progress)
+static void render_startjob(void *rjv, wmJobWorkerStatus *worker_status)
 {
   RenderJob *rj = static_cast<RenderJob *>(rjv);
 
-  rj->stop = stop;
-  rj->do_update = do_update;
-  rj->progress = progress;
+  rj->stop = &worker_status->stop;
+  rj->do_update = &worker_status->do_update;
+  rj->progress = &worker_status->progress;
 
   RE_SetReports(rj->re, rj->reports);
 
@@ -743,8 +741,7 @@ static void render_image_restore_layer(RenderJob *rj)
 
   /* Only ever 1 `wm`. */
   LISTBASE_FOREACH (wmWindowManager *, wm, &rj->main->wm) {
-    wmWindow *win;
-    for (win = static_cast<wmWindow *>(wm->windows.first); win; win = win->next) {
+    LISTBASE_FOREACH (wmWindow *, win, &wm->windows) {
       const bScreen *screen = WM_window_get_active_screen(win);
 
       LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {

@@ -6,13 +6,13 @@
  * \ingroup edlattice
  */
 
-#include <stdlib.h>
+#include <cstdlib>
 
 #include "MEM_guardedalloc.h"
 
 #include "BLI_bitmap.h"
 #include "BLI_listbase.h"
-#include "BLI_math.h"
+#include "BLI_math_vector.h"
 #include "BLI_rand.h"
 #include "BLI_utildefines.h"
 
@@ -22,25 +22,25 @@
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
-#include "RNA_access.h"
-#include "RNA_define.h"
-#include "RNA_enum_types.h"
+#include "RNA_access.hh"
+#include "RNA_define.hh"
+#include "RNA_enum_types.hh"
 
-#include "BKE_context.h"
-#include "BKE_lattice.h"
+#include "BKE_context.hh"
+#include "BKE_lattice.hh"
 #include "BKE_layer.h"
 #include "BKE_report.h"
 
-#include "ED_lattice.h"
-#include "ED_object.h"
-#include "ED_screen.h"
-#include "ED_select_utils.h"
-#include "ED_view3d.h"
+#include "ED_lattice.hh"
+#include "ED_object.hh"
+#include "ED_screen.hh"
+#include "ED_select_utils.hh"
+#include "ED_view3d.hh"
 
-#include "WM_api.h"
-#include "WM_types.h"
+#include "WM_api.hh"
+#include "WM_types.hh"
 
-#include "DEG_depsgraph.h"
+#include "DEG_depsgraph.hh"
 
 #include "lattice_intern.h"
 
@@ -75,8 +75,7 @@ bool ED_lattice_deselect_all_multi_ex(Base **bases, const uint bases_len)
 bool ED_lattice_deselect_all_multi(bContext *C)
 {
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
-  ViewContext vc;
-  ED_view3d_viewcontext_init(C, &vc, depsgraph);
+  ViewContext vc = ED_view3d_viewcontext_init(C, depsgraph);
   uint bases_len = 0;
   Base **bases = BKE_view_layer_array_from_bases_in_edit_mode_unique_data(
       vc.scene, vc.view_layer, vc.v3d, &bases_len);
@@ -574,7 +573,7 @@ struct NearestLatticeVert_UserData {
 
 static void findnearestLattvert__doClosest(void *user_data, BPoint *bp, const float screen_co[2])
 {
-  struct NearestLatticeVert_UserData *data = static_cast<NearestLatticeVert_UserData *>(user_data);
+  NearestLatticeVert_UserData *data = static_cast<NearestLatticeVert_UserData *>(user_data);
   float dist_test = len_manhattan_v2v2(data->mval_fl, screen_co);
 
   if ((bp->f1 & SELECT) && data->select) {
@@ -590,7 +589,7 @@ static void findnearestLattvert__doClosest(void *user_data, BPoint *bp, const fl
 
 static BPoint *findnearestLattvert(ViewContext *vc, bool select, Base **r_base)
 {
-  struct NearestLatticeVert_UserData data = {nullptr};
+  NearestLatticeVert_UserData data = {nullptr};
 
   data.dist = ED_view3d_select_dist_px();
   data.select = select;
@@ -617,15 +616,14 @@ static BPoint *findnearestLattvert(ViewContext *vc, bool select, Base **r_base)
   return data.bp;
 }
 
-bool ED_lattice_select_pick(bContext *C, const int mval[2], const struct SelectPick_Params *params)
+bool ED_lattice_select_pick(bContext *C, const int mval[2], const SelectPick_Params *params)
 {
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
-  ViewContext vc;
   BPoint *bp = nullptr;
   Base *basact = nullptr;
   bool changed = false;
 
-  ED_view3d_viewcontext_init(C, &vc, depsgraph);
+  ViewContext vc = ED_view3d_viewcontext_init(C, depsgraph);
   vc.mval[0] = mval[0];
   vc.mval[1] = mval[1];
 

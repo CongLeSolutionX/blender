@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -6,7 +6,8 @@
 
 #include "BLI_fileops.h"
 
-#include <string.h>
+#include <cstring>
+#include <stdexcept>
 
 static inline bool is_newline(char ch)
 {
@@ -63,8 +64,9 @@ bool PlyReadBuffer::read_bytes(void *dst, size_t size)
       }
     }
     int to_copy = int(size);
-    if (to_copy > buf_used_)
+    if (to_copy > buf_used_) {
       to_copy = buf_used_;
+    }
     memcpy(dst, buffer_.data() + pos_, to_copy);
     pos_ += to_copy;
     dst = (char *)dst + to_copy;
@@ -94,8 +96,12 @@ bool PlyReadBuffer::refill_buffer()
   pos_ = 0;
   buf_used_ = int(read);
 
-  /* Find last newline. */
+  /* Skip past newlines at the front of the buffer and find last newline. */
   if (!is_binary_) {
+    while (pos_ < buf_used_ && is_newline(buffer_[pos_])) {
+      pos_++;
+    }
+
     int last_nl = buf_used_;
     if (!at_eof_) {
       while (last_nl > 0) {

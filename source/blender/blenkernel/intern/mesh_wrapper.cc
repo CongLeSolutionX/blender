@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -9,7 +9,7 @@
  * output of a modified mesh.
  *
  * This API handles the case when the modifier stack outputs a mesh which does not have
- * #Mesh data (#Mesh::polys(), corner verts, corner edges, edges, etc).
+ * #Mesh data (#Mesh::faces(), corner verts, corner edges, edges, etc).
  * Currently this is used so the resulting mesh can have #BMEditMesh data,
  * postponing the converting until it's needed or avoiding conversion entirely
  * which can be an expensive operation.
@@ -28,27 +28,28 @@
 #include "DNA_object_types.h"
 
 #include "BLI_ghash.h"
-#include "BLI_math.h"
+#include "BLI_math_matrix.h"
+#include "BLI_math_vector.h"
 #include "BLI_math_vector.hh"
 #include "BLI_task.hh"
 #include "BLI_threads.h"
 #include "BLI_utildefines.h"
 
-#include "BKE_DerivedMesh.h"
-#include "BKE_editmesh.h"
+#include "BKE_DerivedMesh.hh"
+#include "BKE_editmesh.hh"
 #include "BKE_editmesh_cache.hh"
 #include "BKE_lib_id.h"
 #include "BKE_mesh.hh"
-#include "BKE_mesh_runtime.h"
-#include "BKE_mesh_wrapper.h"
-#include "BKE_modifier.h"
-#include "BKE_object.h"
-#include "BKE_subdiv.h"
+#include "BKE_mesh_runtime.hh"
+#include "BKE_mesh_wrapper.hh"
+#include "BKE_modifier.hh"
+#include "BKE_object.hh"
+#include "BKE_subdiv.hh"
 #include "BKE_subdiv_mesh.hh"
-#include "BKE_subdiv_modifier.h"
+#include "BKE_subdiv_modifier.hh"
 
-#include "DEG_depsgraph.h"
-#include "DEG_depsgraph_query.h"
+#include "DEG_depsgraph.hh"
+#include "DEG_depsgraph_query.hh"
 
 using blender::float3;
 using blender::Span;
@@ -76,12 +77,12 @@ Mesh *BKE_mesh_wrapper_from_editmesh(BMEditMesh *em,
 #ifdef DEBUG
   me->totvert = INT_MAX;
   me->totedge = INT_MAX;
-  me->totpoly = INT_MAX;
+  me->faces_num = INT_MAX;
   me->totloop = INT_MAX;
 #else
   me->totvert = 0;
   me->totedge = 0;
-  me->totpoly = 0;
+  me->faces_num = 0;
   me->totloop = 0;
 #endif
 
@@ -105,7 +106,7 @@ void BKE_mesh_wrapper_ensure_mdata(Mesh *me)
       case ME_WRAPPER_TYPE_BMESH: {
         me->totvert = 0;
         me->totedge = 0;
-        me->totpoly = 0;
+        me->faces_num = 0;
         me->totloop = 0;
 
         BLI_assert(me->edit_mesh != nullptr);
@@ -114,14 +115,14 @@ void BKE_mesh_wrapper_ensure_mdata(Mesh *me)
         BMEditMesh *em = me->edit_mesh;
         BM_mesh_bm_to_me_for_eval(em->bm, me, &me->runtime->cd_mask_extra);
 
-        /* Adding original index layers assumes that all BMesh mesh wrappers are created from
+        /* Adding original index layers here assumes that all BMesh Mesh wrappers are created from
          * original edit mode meshes (the only case where adding original indices makes sense).
-         * If that assumption is broken, the layers might be incorrect in that they might not
+         * If that assumption is broken, the layers might be incorrect because they might not
          * actually be "original".
          *
          * There is also a performance aspect, where this also assumes that original indices are
-         * always needed when converting an edit mesh to a mesh. That might be wrong, but it's not
-         * harmful. */
+         * always needed when converting a BMesh to a mesh with the mesh wrapper system. That might
+         * be wrong, but it's not harmful. */
         BKE_mesh_ensure_default_orig_index_customdata_no_check(me);
 
         blender::bke::EditMeshData *edit_data = me->runtime->edit_data;
@@ -129,15 +130,15 @@ void BKE_mesh_wrapper_ensure_mdata(Mesh *me)
           me->vert_positions_for_write().copy_from(edit_data->vertexCos);
           me->runtime->is_original_bmesh = false;
         }
-        BKE_mesh_runtime_reset_edit_data(me);
+
+        if (me->runtime->wrapper_type_finalize) {
+          BKE_mesh_wrapper_deferred_finalize_mdata(me);
+        }
+
         MEM_delete(me->runtime->edit_data);
         me->runtime->edit_data = nullptr;
         break;
       }
-    }
-
-    if (me->runtime->wrapper_type_finalize) {
-      BKE_mesh_wrapper_deferred_finalize_mdata(me, &me->runtime->cd_mask_extra);
     }
 
     /* Keep type assignment last, so that read-only access only uses the mdata code paths after all
@@ -185,18 +186,18 @@ const float (*BKE_mesh_wrapper_vert_coords(const Mesh *mesh))[3]
   return nullptr;
 }
 
-const float (*BKE_mesh_wrapper_poly_normals(Mesh *mesh))[3]
+const float (*BKE_mesh_wrapper_face_normals(Mesh *mesh))[3]
 {
   switch (mesh->runtime->wrapper_type) {
     case ME_WRAPPER_TYPE_BMESH:
-      BKE_editmesh_cache_ensure_poly_normals(mesh->edit_mesh, mesh->runtime->edit_data);
-      if (mesh->runtime->edit_data->polyNos.is_empty()) {
+      BKE_editmesh_cache_ensure_face_normals(mesh->edit_mesh, mesh->runtime->edit_data);
+      if (mesh->runtime->edit_data->faceNos.is_empty()) {
         return nullptr;
       }
-      return reinterpret_cast<const float(*)[3]>(mesh->runtime->edit_data->polyNos.data());
+      return reinterpret_cast<const float(*)[3]>(mesh->runtime->edit_data->faceNos.data());
     case ME_WRAPPER_TYPE_MDATA:
     case ME_WRAPPER_TYPE_SUBD:
-      return reinterpret_cast<const float(*)[3]>(mesh->poly_normals().data());
+      return reinterpret_cast<const float(*)[3]>(mesh->face_normals().data());
   }
   return nullptr;
 }
@@ -207,8 +208,8 @@ void BKE_mesh_wrapper_tag_positions_changed(Mesh *mesh)
     case ME_WRAPPER_TYPE_BMESH:
       if (mesh->runtime->edit_data) {
         mesh->runtime->edit_data->vertexNos = {};
-        mesh->runtime->edit_data->polyCos = {};
-        mesh->runtime->edit_data->polyNos = {};
+        mesh->runtime->edit_data->faceCos = {};
+        mesh->runtime->edit_data->faceNos = {};
       }
       break;
     case ME_WRAPPER_TYPE_MDATA:
@@ -218,37 +219,28 @@ void BKE_mesh_wrapper_tag_positions_changed(Mesh *mesh)
   }
 }
 
-void BKE_mesh_wrapper_vert_coords_copy(const Mesh *me,
-                                       float (*vert_coords)[3],
-                                       int vert_coords_len)
+void BKE_mesh_wrapper_vert_coords_copy(const Mesh *me, blender::MutableSpan<float3> positions)
 {
   switch (me->runtime->wrapper_type) {
     case ME_WRAPPER_TYPE_BMESH: {
       BMesh *bm = me->edit_mesh->bm;
-      BLI_assert(vert_coords_len <= bm->totvert);
       blender::bke::EditMeshData *edit_data = me->runtime->edit_data;
       if (!edit_data->vertexCos.is_empty()) {
-        for (int i = 0; i < vert_coords_len; i++) {
-          copy_v3_v3(vert_coords[i], edit_data->vertexCos[i]);
-        }
+        positions.copy_from(edit_data->vertexCos);
       }
       else {
         BMIter iter;
         BMVert *v;
         int i;
         BM_ITER_MESH_INDEX (v, &iter, bm, BM_VERTS_OF_MESH, i) {
-          copy_v3_v3(vert_coords[i], v->co);
+          copy_v3_v3(positions[i], v->co);
         }
       }
       return;
     }
     case ME_WRAPPER_TYPE_MDATA:
     case ME_WRAPPER_TYPE_SUBD: {
-      BLI_assert(vert_coords_len <= me->totvert);
-      const Span<float3> positions = me->vert_positions();
-      for (int i = 0; i < vert_coords_len; i++) {
-        copy_v3_v3(vert_coords[i], positions[i]);
-      }
+      positions.copy_from(me->vert_positions());
       return;
     }
   }
@@ -338,14 +330,14 @@ int BKE_mesh_wrapper_loop_len(const Mesh *me)
   return -1;
 }
 
-int BKE_mesh_wrapper_poly_len(const Mesh *me)
+int BKE_mesh_wrapper_face_len(const Mesh *me)
 {
   switch (me->runtime->wrapper_type) {
     case ME_WRAPPER_TYPE_BMESH:
       return me->edit_mesh->bm->totface;
     case ME_WRAPPER_TYPE_MDATA:
     case ME_WRAPPER_TYPE_SUBD:
-      return me->totpoly;
+      return me->faces_num;
   }
   BLI_assert_unreachable();
   return -1;
@@ -384,22 +376,17 @@ static Mesh *mesh_wrapper_ensure_subdivision(Mesh *me)
   if (use_clnors) {
     /* If custom normals are present and the option is turned on calculate the split
      * normals and clear flag so the normals get interpolated to the result mesh. */
-    BKE_mesh_calc_normals_split(me);
-    CustomData_clear_layer_flag(&me->ldata, CD_NORMAL, CD_FLAG_TEMPORARY);
+    void *data = CustomData_add_layer(&me->loop_data, CD_NORMAL, CD_CONSTRUCT, me->totloop);
+    memcpy(data, me->corner_normals().data(), me->corner_normals().size_in_bytes());
   }
 
   Mesh *subdiv_mesh = BKE_subdiv_to_mesh(subdiv, &mesh_settings, me);
 
   if (use_clnors) {
-    float(*lnors)[3] = static_cast<float(*)[3]>(
-        CustomData_get_layer_for_write(&subdiv_mesh->ldata, CD_NORMAL, subdiv_mesh->totloop));
-    BLI_assert(lnors != nullptr);
-    BKE_mesh_set_custom_normals(subdiv_mesh, lnors);
-    CustomData_set_layer_flag(&me->ldata, CD_NORMAL, CD_FLAG_TEMPORARY);
-    CustomData_set_layer_flag(&subdiv_mesh->ldata, CD_NORMAL, CD_FLAG_TEMPORARY);
-  }
-  else if (runtime_data->calc_loop_normals) {
-    BKE_mesh_calc_normals_split(subdiv_mesh);
+    BKE_mesh_set_custom_normals(subdiv_mesh,
+                                static_cast<float(*)[3]>(CustomData_get_layer_for_write(
+                                    &subdiv_mesh->loop_data, CD_NORMAL, me->totloop)));
+    CustomData_free_layers(&subdiv_mesh->loop_data, CD_NORMAL, me->totloop);
   }
 
   if (!ELEM(subdiv, runtime_data->subdiv_cpu, runtime_data->subdiv_gpu)) {

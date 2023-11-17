@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2023 Blender Foundation
+# SPDX-FileCopyrightText: 2023 Blender Authors
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
@@ -6,6 +6,7 @@ set(INC
   ../include
   ../../asset_system
   ../../blenfont
+  ../../blenkernel
   ../../blenloader
   ../../blentranslation
   ../../compositor
@@ -25,10 +26,11 @@ set(INC
   ${CMAKE_BINARY_DIR}/source/blender/makesrna
 )
 
+set(INC_SYS
+)
 
 set(SRC
   add_menu_assets.cc
-  add_node_search.cc
   clipboard.cc
   drawnode.cc
   link_drag_search.cc
@@ -42,6 +44,7 @@ set(SRC
   node_ops.cc
   node_relationships.cc
   node_select.cc
+  node_shader_preview.cc
   node_templates.cc
   node_view.cc
   space_node.cc
@@ -50,7 +53,7 @@ set(SRC
 )
 
 set(LIB
-  PRIVATE bf::blenkernel
+  bf_blenkernel
   PRIVATE bf::blenlib
   PRIVATE bf::dna
   bf_editor_screen

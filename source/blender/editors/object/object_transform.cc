@@ -25,49 +25,54 @@
 
 #include "BLI_array.hh"
 #include "BLI_listbase.h"
-#include "BLI_math.h"
+#include "BLI_math_geom.h"
+#include "BLI_math_matrix.h"
 #include "BLI_math_matrix.hh"
+#include "BLI_math_rotation.h"
 #include "BLI_task.hh"
 #include "BLI_utildefines.h"
 #include "BLI_vector.hh"
 
-#include "BKE_armature.h"
-#include "BKE_context.h"
-#include "BKE_curve.h"
+#include "BKE_armature.hh"
+#include "BKE_context.hh"
+#include "BKE_curve.hh"
 #include "BKE_curves.hh"
-#include "BKE_editmesh.h"
+#include "BKE_editmesh.hh"
 #include "BKE_gpencil_geom_legacy.h"
 #include "BKE_gpencil_legacy.h"
 #include "BKE_idtype.h"
-#include "BKE_lattice.h"
+#include "BKE_lattice.hh"
 #include "BKE_layer.h"
 #include "BKE_lib_id.h"
 #include "BKE_main.h"
 #include "BKE_mball.h"
 #include "BKE_mesh.hh"
-#include "BKE_multires.h"
-#include "BKE_object.h"
+#include "BKE_multires.hh"
+#include "BKE_object.hh"
+#include "BKE_object_types.hh"
 #include "BKE_pointcloud.h"
 #include "BKE_report.h"
 #include "BKE_scene.h"
 #include "BKE_tracking.h"
 
-#include "DEG_depsgraph.h"
-#include "DEG_depsgraph_query.h"
+#include "DEG_depsgraph.hh"
+#include "DEG_depsgraph_query.hh"
 
-#include "RNA_access.h"
-#include "RNA_define.h"
+#include "RNA_access.hh"
+#include "RNA_define.hh"
 
-#include "WM_api.h"
-#include "WM_types.h"
+#include "WM_api.hh"
+#include "WM_types.hh"
 
-#include "ED_armature.h"
-#include "ED_gpencil_legacy.h"
-#include "ED_keyframing.h"
-#include "ED_mesh.h"
-#include "ED_object.h"
-#include "ED_screen.h"
-#include "ED_view3d.h"
+#include "ANIM_keyframing.hh"
+
+#include "ED_armature.hh"
+#include "ED_gpencil_legacy.hh"
+#include "ED_keyframing.hh"
+#include "ED_mesh.hh"
+#include "ED_object.hh"
+#include "ED_screen.hh"
+#include "ED_view3d.hh"
 
 #include "MEM_guardedalloc.h"
 
@@ -345,7 +350,7 @@ static int object_clear_transform_generic_exec(bContext *C,
     /* run provided clearing function */
     clear_func(ob, clear_delta);
 
-    ED_autokeyframe_object(C, scene, ob, ks);
+    blender::animrig::autokeyframe_object(C, scene, ob, ks);
 
     /* tag for updates */
     DEG_id_tag_update(&ob->id, ID_RECALC_TRANSFORM);
@@ -1257,7 +1262,7 @@ enum {
   ORIGIN_TO_CENTER_OF_MASS_VOLUME,
 };
 
-static float3 calculate_mean(const blender::Span<blender::float3> values)
+static float3 arithmetic_mean(const blender::Span<blender::float3> values)
 {
   if (values.is_empty()) {
     return float3(0);
@@ -1497,7 +1502,7 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
 
       Curve *cu = static_cast<Curve *>(ob->data);
 
-      if (ob->runtime.bb == nullptr && (centermode != ORIGIN_TO_CURSOR)) {
+      if (ob->runtime->bb == nullptr && (centermode != ORIGIN_TO_CURSOR)) {
         /* Do nothing. */
       }
       else {
@@ -1506,8 +1511,8 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
         }
         else {
           /* extra 0.5 is the height o above line */
-          cent[0] = 0.5f * (ob->runtime.bb->vec[4][0] + ob->runtime.bb->vec[0][0]);
-          cent[1] = 0.5f * (ob->runtime.bb->vec[0][1] + ob->runtime.bb->vec[2][1]);
+          cent[0] = 0.5f * (ob->runtime->bb->vec[4][0] + ob->runtime->bb->vec[0][0]);
+          cent[1] = 0.5f * (ob->runtime->bb->vec[0][1] + ob->runtime->bb->vec[2][1]);
         }
 
         cent[2] = 0.0f;
@@ -1538,7 +1543,7 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
 
         tot_change++;
         arm->id.tag |= LIB_TAG_DOIT;
-        /* do_inverse_offset = true; */ /* docenter_armature() handles this */
+        // do_inverse_offset = true; /* docenter_armature() handles this. */
 
         Object *ob_eval = DEG_get_evaluated_object(depsgraph, ob);
         BKE_object_transform_copy(ob_eval, ob);
@@ -1702,7 +1707,7 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
         cent = math::midpoint(bounds.min, bounds.max);
       }
       else if (around == V3D_AROUND_CENTER_MEDIAN) {
-        cent = calculate_mean(curves.positions());
+        cent = arithmetic_mean(curves.positions());
       }
 
       tot_change++;
@@ -1733,7 +1738,7 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
         }
       }
       else if (around == V3D_AROUND_CENTER_MEDIAN) {
-        cent = calculate_mean(positions.span);
+        cent = arithmetic_mean(positions.span);
       }
 
       tot_change++;
@@ -2080,8 +2085,7 @@ static void object_transform_axis_target_cancel(bContext *C, wmOperator *op)
 static int object_transform_axis_target_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
-  ViewContext vc;
-  ED_view3d_viewcontext_init(C, &vc, depsgraph);
+  ViewContext vc = ED_view3d_viewcontext_init(C, depsgraph);
 
   if (vc.obact == nullptr || !object_is_target_compat(vc.obact)) {
     /* Falls back to texture space transform. */

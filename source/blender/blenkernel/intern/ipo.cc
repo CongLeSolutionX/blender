@@ -14,10 +14,10 @@
  * -- Joshua Leung, Jan 2009
  */
 
-#include <math.h>
-#include <stddef.h>
-#include <stdio.h>
-#include <string.h>
+#include <cmath>
+#include <cstddef>
+#include <cstdio>
+#include <cstring>
 
 /* since we have versioning code here */
 #define DNA_DEPRECATED_ALLOW
@@ -38,7 +38,7 @@
 #include "BLI_blenlib.h"
 #include "BLI_dynstr.h"
 #include "BLI_endian_switch.h"
-#include "BLI_string_utils.h"
+#include "BLI_string_utils.hh"
 #include "BLI_utildefines.h"
 
 #include "BLT_translation.h"
@@ -52,6 +52,7 @@
 #include "BKE_ipo.h"
 #include "BKE_key.h"
 #include "BKE_lib_id.h"
+#include "BKE_lib_query.h"
 #include "BKE_main.h"
 #include "BKE_nla.h"
 
@@ -59,9 +60,9 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "SEQ_iterator.h"
+#include "SEQ_iterator.hh"
 
-#include "BLO_read_write.h"
+#include "BLO_read_write.hh"
 
 #ifdef WIN32
 #  include "BLI_math_base.h" /* M_PI */
@@ -95,6 +96,20 @@ static void ipo_free_data(ID *id)
 
   if (G.debug & G_DEBUG) {
     printf("Freed %d (Unconverted) Ipo-Curves from IPO '%s'\n", n, ipo->id.name + 2);
+  }
+}
+
+static void ipo_foreach_id(ID *id, LibraryForeachIDData *data)
+{
+  Ipo *ipo = reinterpret_cast<Ipo *>(id);
+  const int flag = BKE_lib_query_foreachid_process_flags_get(data);
+
+  if (flag & IDWALK_DO_DEPRECATED_POINTERS) {
+    LISTBASE_FOREACH (IpoCurve *, icu, &ipo->curve) {
+      if (icu->driver) {
+        BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, icu->driver->ob, IDWALK_CB_NOP);
+      }
+    }
   }
 }
 
@@ -139,35 +154,13 @@ static void ipo_blend_read_data(BlendDataReader *reader, ID *id)
   }
 }
 
-static void ipo_blend_read_lib(BlendLibReader *reader, ID *id)
-{
-  Ipo *ipo = (Ipo *)id;
-
-  LISTBASE_FOREACH (IpoCurve *, icu, &ipo->curve) {
-    if (icu->driver) {
-      BLO_read_id_address(reader, id, &icu->driver->ob);
-    }
-  }
-}
-
-static void ipo_blend_read_expand(BlendExpander *expander, ID *id)
-{
-  Ipo *ipo = (Ipo *)id;
-
-  LISTBASE_FOREACH (IpoCurve *, icu, &ipo->curve) {
-    if (icu->driver) {
-      BLO_expand(expander, icu->driver->ob);
-    }
-  }
-}
-
 IDTypeInfo IDType_ID_IP = {
     /*id_code*/ ID_IP,
     /*id_filter*/ 0,
     /*main_listbase_index*/ INDEX_ID_IP,
     /*struct_size*/ sizeof(Ipo),
     /*name*/ "Ipo",
-    /*name_plural*/ "ipos",
+    /*name_plural*/ N_("ipos"),
     /*translation_context*/ "",
     /*flags*/ IDTYPE_FLAGS_NO_COPY | IDTYPE_FLAGS_NO_LIBLINKING | IDTYPE_FLAGS_NO_ANIMDATA,
     /*asset_type_info*/ nullptr,
@@ -176,15 +169,14 @@ IDTypeInfo IDType_ID_IP = {
     /*copy_data*/ nullptr,
     /*free_data*/ ipo_free_data,
     /*make_local*/ nullptr,
-    /*foreach_id*/ nullptr,
+    /*foreach_id*/ ipo_foreach_id,
     /*foreach_cache*/ nullptr,
     /*foreach_path*/ nullptr,
     /*owner_pointer_get*/ nullptr,
 
     /*blend_write*/ nullptr,
     /*blend_read_data*/ ipo_blend_read_data,
-    /*blend_read_lib*/ ipo_blend_read_lib,
-    /*blend_read_expand*/ ipo_blend_read_expand,
+    /*blend_read_after_liblink*/ nullptr,
 
     /*blend_read_undo_preserve*/ nullptr,
 
@@ -1151,8 +1143,8 @@ static char *get_rna_access(ID *id,
   /* NOTE: strings are not escaped and they should be! */
   if ((actname && actname[0]) && (constname && constname[0])) {
     /* Constraint in Pose-Channel */
-    char actname_esc[sizeof(((bActionChannel *)nullptr)->name) * 2];
-    char constname_esc[sizeof(((bConstraint *)nullptr)->name) * 2];
+    char actname_esc[sizeof(bActionChannel::name) * 2];
+    char constname_esc[sizeof(bConstraint::name) * 2];
     BLI_str_escape(actname_esc, actname, sizeof(actname_esc));
     BLI_str_escape(constname_esc, constname, sizeof(constname_esc));
     SNPRINTF(buf, "pose.bones[\"%s\"].constraints[\"%s\"]", actname_esc, constname_esc);
@@ -1169,14 +1161,14 @@ static char *get_rna_access(ID *id,
     }
     else {
       /* Pose-Channel */
-      char actname_esc[sizeof(((bActionChannel *)nullptr)->name) * 2];
+      char actname_esc[sizeof(bActionChannel::name) * 2];
       BLI_str_escape(actname_esc, actname, sizeof(actname_esc));
       SNPRINTF(buf, "pose.bones[\"%s\"]", actname_esc);
     }
   }
   else if (constname && constname[0]) {
     /* Constraint in Object */
-    char constname_esc[sizeof(((bConstraint *)nullptr)->name) * 2];
+    char constname_esc[sizeof(bConstraint::name) * 2];
     BLI_str_escape(constname_esc, constname, sizeof(constname_esc));
     SNPRINTF(buf, "constraints[\"%s\"]", constname_esc);
   }
@@ -1542,7 +1534,7 @@ static void icu_to_fcurves(ID *id,
           }
 
           /* correct values, by checking if the flag of interest is set */
-          if ((int)(dst->vec[1][1]) & (abp->bit)) {
+          if (int(dst->vec[1][1]) & (abp->bit)) {
             dst->vec[0][1] = dst->vec[1][1] = dst->vec[2][1] = 1.0f;
           }
           else {
@@ -1617,7 +1609,7 @@ static void icu_to_fcurves(ID *id,
         if (((icu->blocktype == ID_OB) && ELEM(icu->adrcode, OB_ROT_X, OB_ROT_Y, OB_ROT_Z)) ||
             ((icu->blocktype == ID_PO) && ELEM(icu->adrcode, AC_EUL_X, AC_EUL_Y, AC_EUL_Z)))
         {
-          const float fac = (float)M_PI / 18.0f; /* 10.0f * M_PI/180.0f; */
+          const float fac = float(M_PI) / 18.0f; /* `10.0f * M_PI/180.0f`. */
 
           dst->vec[0][1] *= fac;
           dst->vec[1][1] *= fac;
@@ -1649,7 +1641,7 @@ static void icu_to_fcurves(ID *id,
 
           if (ELEM(dtar->transChan, DTAR_TRANSCHAN_ROTX, DTAR_TRANSCHAN_ROTY, DTAR_TRANSCHAN_ROTZ))
           {
-            const float fac = (float)M_PI / 18.0f;
+            const float fac = float(M_PI) / 18.0f;
 
             dst->vec[0][0] *= fac;
             dst->vec[1][0] *= fac;
@@ -1727,7 +1719,7 @@ static void ipo_to_animato(ID *id,
   }
 
   /* loop over IPO-Curves, freeing as we progress */
-  for (icu = static_cast<IpoCurve *>(ipo->curve.first); icu; icu = icu->next) {
+  LISTBASE_FOREACH (IpoCurve *, icu, &ipo->curve) {
     /* Since an IPO-Curve may end up being made into many F-Curves (i.e. bitflag curves),
      * we figure out the best place to put the channel,
      * then tell the curve-converter to just dump there. */
@@ -2048,10 +2040,7 @@ static bool seq_convert_callback(Sequence *seq, void *userdata)
     return true;
   }
 
-  /* patch adrcode, so that we can map
-   * to different DNA variables later
-   * (semi-hack (tm) )
-   */
+  /* Patch `adrcode`, so that we can map to different DNA variables later (semi-hack (tm)). */
   switch (seq->type) {
     case SEQ_TYPE_IMAGE:
     case SEQ_TYPE_META:
@@ -2107,8 +2096,6 @@ void do_versions_ipos_to_animato(Main *bmain)
   /* objects */
   for (id = static_cast<ID *>(bmain->objects.first); id; id = static_cast<ID *>(id->next)) {
     Object *ob = (Object *)id;
-    bPoseChannel *pchan;
-    bConstraint *con;
     bConstraintChannel *conchan, *conchann;
 
     if (G.debug & G_DEBUG) {
@@ -2163,16 +2150,15 @@ void do_versions_ipos_to_animato(Main *bmain)
 
     /* check PoseChannels for constraints with local data */
     if (ob->pose) {
-      /* Verify if there's AnimData block */
-      BKE_animdata_ensure_id(id);
-
-      for (pchan = static_cast<bPoseChannel *>(ob->pose->chanbase.first); pchan;
-           pchan = pchan->next) {
-        for (con = static_cast<bConstraint *>(pchan->constraints.first); con; con = con->next) {
+      LISTBASE_FOREACH (bPoseChannel *, pchan, &ob->pose->chanbase) {
+        LISTBASE_FOREACH (bConstraint *, con, &pchan->constraints) {
           /* if constraint has own IPO, convert add these to Object
            * (NOTE: they're most likely to be drivers too)
            */
           if (con->ipo) {
+            /* Verify if there's AnimData block */
+            BKE_animdata_ensure_id(id);
+
             /* although this was the constraint's local IPO, we still need to provide pchan + con
              * so that drivers can be added properly...
              */
@@ -2185,7 +2171,7 @@ void do_versions_ipos_to_animato(Main *bmain)
     }
 
     /* check constraints for local IPO's */
-    for (con = static_cast<bConstraint *>(ob->constraints.first); con; con = con->next) {
+    LISTBASE_FOREACH (bConstraint *, con, &ob->constraints) {
       /* if constraint has own IPO, convert add these to Object
        * (NOTE: they're most likely to be drivers too)
        */
@@ -2207,9 +2193,6 @@ void do_versions_ipos_to_animato(Main *bmain)
 
     /* check constraint channels - we need to remove them anyway... */
     if (ob->constraintChannels.first) {
-      /* Verify if there's AnimData block */
-      BKE_animdata_ensure_id(id);
-
       for (conchan = static_cast<bConstraintChannel *>(ob->constraintChannels.first); conchan;
            conchan = conchann)
       {
@@ -2218,6 +2201,9 @@ void do_versions_ipos_to_animato(Main *bmain)
 
         /* convert Constraint Channel's IPO data */
         if (conchan->ipo) {
+          /* Verify if there's AnimData block */
+          BKE_animdata_ensure_id(id);
+
           ipo_to_animdata(bmain, id, conchan->ipo, nullptr, conchan->name, nullptr);
           id_us_min(&conchan->ipo->id);
           conchan->ipo = nullptr;

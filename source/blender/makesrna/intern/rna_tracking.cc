@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -6,19 +6,19 @@
  * \ingroup RNA
  */
 
-#include <limits.h>
-#include <stdlib.h>
+#include <climits>
+#include <cstdlib>
 
 #include "MEM_guardedalloc.h"
 
 #include "BKE_movieclip.h"
-#include "BKE_node_tree_update.h"
+#include "BKE_node_tree_update.hh"
 #include "BKE_tracking.h"
 
 #include "BLT_translation.h"
 
-#include "RNA_access.h"
-#include "RNA_define.h"
+#include "RNA_access.hh"
+#include "RNA_define.hh"
 
 #include "rna_internal.h"
 
@@ -27,24 +27,24 @@
 #include "DNA_object_types.h" /* SELECT */
 #include "DNA_scene_types.h"
 
-#include "WM_types.h"
+#include "WM_types.hh"
 
 #ifdef RNA_RUNTIME
 
-#  include "BLI_math.h"
-
 #  include "DNA_anim_types.h"
+
+#  include "BLI_math_vector.h"
 
 #  include "BKE_anim_data.h"
 #  include "BKE_animsys.h"
 #  include "BKE_node.h"
 #  include "BKE_report.h"
 
-#  include "DEG_depsgraph.h"
+#  include "DEG_depsgraph.hh"
 
 #  include "IMB_imbuf.h"
 
-#  include "WM_api.h"
+#  include "WM_api.hh"
 
 static char *rna_tracking_path(const PointerRNA * /*ptr*/)
 {
@@ -735,7 +735,7 @@ static MovieTrackingMarker *rna_trackingMarkers_find_frame(MovieTrackingTrack *t
 
 static MovieTrackingMarker *rna_trackingMarkers_insert_frame(MovieTrackingTrack *track,
                                                              int framenr,
-                                                             float co[2])
+                                                             const float co[2])
 {
   MovieTrackingMarker marker, *new_marker;
 
@@ -2534,7 +2534,7 @@ static void rna_def_trackingDopesheet(BlenderRNA *brna)
   prop = RNA_def_property(srna, "show_hidden", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", TRACKING_DOPE_SHOW_HIDDEN);
   RNA_def_property_ui_text(
-      prop, "Display Hidden", "Include channels from objects/bone that aren't visible");
+      prop, "Display Hidden", "Include channels from objects/bone that are not visible");
   RNA_def_property_ui_icon(prop, ICON_GHOST_ENABLED, 0);
   RNA_def_property_update(prop, NC_MOVIECLIP | NA_EDITED, "rna_trackingDopesheet_tagUpdate");
 }

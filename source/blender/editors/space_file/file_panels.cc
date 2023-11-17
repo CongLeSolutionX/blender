@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2009 Blender Foundation
+/* SPDX-FileCopyrightText: 2009 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -9,8 +9,8 @@
 #include "BLI_blenlib.h"
 #include "BLI_utildefines.h"
 
-#include "BKE_context.h"
-#include "BKE_screen.h"
+#include "BKE_context.hh"
+#include "BKE_screen.hh"
 
 #include "BLT_translation.h"
 
@@ -20,24 +20,24 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "RNA_access.h"
-#include "RNA_define.h"
+#include "RNA_access.hh"
+#include "RNA_define.hh"
 #include "RNA_prototypes.h"
 
-#include "ED_fileselect.h"
+#include "ED_fileselect.hh"
 
-#include "UI_interface.h"
-#include "UI_interface_icons.h"
-#include "UI_resources.h"
+#include "UI_interface.hh"
+#include "UI_interface_icons.hh"
+#include "UI_resources.hh"
 
-#include "WM_api.h"
-#include "WM_types.h"
+#include "WM_api.hh"
+#include "WM_types.hh"
 
-#include "file_intern.h"
-#include "filelist.h"
+#include "file_intern.hh"
+#include "filelist.hh"
 #include "fsmenu.h"
 
-#include <string.h>
+#include <cstring>
 
 static bool file_panel_operator_poll(const bContext *C, PanelType * /*pt*/)
 {
@@ -56,7 +56,8 @@ static void file_panel_operator_header(const bContext *C, Panel *panel)
   SpaceFile *sfile = CTX_wm_space_file(C);
   wmOperator *op = sfile->op;
 
-  STRNCPY(panel->drawname, WM_operatortype_name(op->type, op->ptr));
+  const std::string opname = WM_operatortype_name(op->type, op->ptr);
+  UI_panel_drawname_set(panel, opname);
 }
 
 static void file_panel_operator(const bContext *C, Panel *panel)
@@ -131,7 +132,7 @@ static void file_panel_execution_buttons_draw(const bContext *C, Panel *panel)
   uiBlock *block = uiLayoutGetBlock(panel->layout);
   uiBut *but;
   uiLayout *row;
-  PointerRNA params_rna_ptr, *but_extra_rna_ptr;
+  PointerRNA *but_extra_rna_ptr;
 
   const bool overwrite_alert = file_draw_check_exists(sfile);
   const bool windows_layout =
@@ -141,7 +142,7 @@ static void file_panel_execution_buttons_draw(const bContext *C, Panel *panel)
       false;
 #endif
 
-  RNA_pointer_create(&screen->id, &RNA_FileSelectParams, params, &params_rna_ptr);
+  PointerRNA params_rna_ptr = RNA_pointer_create(&screen->id, &RNA_FileSelectParams, params);
 
   row = uiLayoutRow(panel->layout, false);
   uiLayoutSetScaleY(row, 1.3f);
@@ -224,17 +225,16 @@ static void file_panel_asset_catalog_buttons_draw(const bContext *C, Panel *pane
   bScreen *screen = CTX_wm_screen(C);
   SpaceFile *sfile = CTX_wm_space_file(C);
   /* May be null if the library wasn't loaded yet. */
-  struct AssetLibrary *asset_library = filelist_asset_library(sfile->files);
+  AssetLibrary *asset_library = filelist_asset_library(sfile->files);
   FileAssetSelectParams *params = ED_fileselect_get_asset_params(sfile);
   BLI_assert(params != nullptr);
 
   uiLayout *col = uiLayoutColumn(panel->layout, false);
   uiLayout *row = uiLayoutRow(col, true);
 
-  PointerRNA params_ptr;
-  RNA_pointer_create(&screen->id, &RNA_FileAssetSelectParams, params, &params_ptr);
+  PointerRNA params_ptr = RNA_pointer_create(&screen->id, &RNA_FileAssetSelectParams, params);
 
-  uiItemR(row, &params_ptr, "asset_library_ref", 0, "", ICON_NONE);
+  uiItemR(row, &params_ptr, "asset_library_reference", UI_ITEM_NONE, "", ICON_NONE);
   if (params->asset_library_ref.type == ASSET_LIBRARY_LOCAL) {
     bContext *mutable_ctx = CTX_copy(C);
     if (WM_operator_name_poll(mutable_ctx, "asset.bundle_install")) {
@@ -242,7 +242,7 @@ static void file_panel_asset_catalog_buttons_draw(const bContext *C, Panel *pane
       uiItemMenuEnumO(col,
                       C,
                       "asset.bundle_install",
-                      "asset_library_ref",
+                      "asset_library_reference",
                       "Copy Bundle to Asset Library...",
                       ICON_IMPORT);
     }

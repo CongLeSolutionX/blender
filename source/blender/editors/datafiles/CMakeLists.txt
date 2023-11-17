@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2023 Blender Foundation
+# SPDX-FileCopyrightText: 2023 Blender Authors
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
@@ -18,7 +18,7 @@ set(SRC
 set(LIB
 )
 
-# Order matches `UI_icons.h`, final name will be formatted: `icons{size}_{name}.dat`.
+# Order matches `UI_icons.hh`, final name will be formatted: `icons{size}_{name}.dat`.
 set(ICON_NAMES
   question
   error
@@ -319,9 +319,6 @@ set(ICON_NAMES
   curve_ncurve
   curve_ncircle
   curve_path
-  lightprobe_cubemap
-  lightprobe_planar
-  lightprobe_grid
   mod_dash
   color_red
   color_green
@@ -345,6 +342,8 @@ set(ICON_NAMES
   force_fluidflow
   rigid_body
   rigid_body_constraint
+  split_horizontal
+  split_vertical
   image_plane
   image_background
   image_reference

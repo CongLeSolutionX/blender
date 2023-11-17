@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2008 Blender Foundation
+/* SPDX-FileCopyrightText: 2008 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -6,8 +6,8 @@
  * \ingroup spgraph
  */
 
-#include <math.h>
-#include <stdlib.h>
+#include <cmath>
+#include <cstdlib>
 
 #include "DNA_scene_types.h"
 
@@ -15,24 +15,24 @@
 #include "BLI_math_base.h"
 #include "BLI_utildefines.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_global.h"
 
-#include "UI_view2d.h"
+#include "UI_view2d.hh"
 
-#include "ED_anim_api.h"
-#include "ED_screen.h"
-#include "ED_transform.h"
+#include "ED_anim_api.hh"
+#include "ED_screen.hh"
+#include "ED_transform.hh"
 
 #include "graph_intern.h"
 
-#include "RNA_access.h"
-#include "RNA_define.h"
+#include "RNA_access.hh"
+#include "RNA_define.hh"
 
-#include "DEG_depsgraph.h"
+#include "DEG_depsgraph.hh"
 
-#include "WM_api.h"
-#include "WM_types.h"
+#include "WM_api.hh"
+#include "WM_types.hh"
 
 /* ************************** view-based operators **********************************/
 /* XXX should these really be here? */
@@ -223,7 +223,6 @@ static int graphview_curves_hide_exec(bContext *C, wmOperator *op)
   bAnimContext ac;
   ListBase anim_data = {nullptr, nullptr};
   ListBase all_data = {nullptr, nullptr};
-  bAnimListElem *ale;
   int filter;
   const bool unselected = RNA_boolean_get(op->ptr, "unselected");
 
@@ -256,7 +255,7 @@ static int graphview_curves_hide_exec(bContext *C, wmOperator *op)
   ANIM_animdata_filter(
       &ac, &anim_data, eAnimFilter_Flags(filter), ac.data, eAnimCont_Types(ac.datatype));
 
-  for (ale = static_cast<bAnimListElem *>(anim_data.first); ale; ale = ale->next) {
+  LISTBASE_FOREACH (bAnimListElem *, ale, &anim_data) {
     /* hack: skip object channels for now, since flushing those will always flush everything,
      * but they are always included */
     /* TODO: find out why this is the case, and fix that */
@@ -287,7 +286,7 @@ static int graphview_curves_hide_exec(bContext *C, wmOperator *op)
     ANIM_animdata_filter(
         &ac, &anim_data, eAnimFilter_Flags(filter), ac.data, eAnimCont_Types(ac.datatype));
 
-    for (ale = static_cast<bAnimListElem *>(anim_data.first); ale; ale = ale->next) {
+    LISTBASE_FOREACH (bAnimListElem *, ale, &anim_data) {
       /* hack: skip object channels for now, since flushing those
        * will always flush everything, but they are always included */
 
@@ -329,7 +328,7 @@ static void GRAPH_OT_hide(wmOperatorType *ot)
 
   /* props */
   RNA_def_boolean(
-      ot->srna, "unselected", 0, "Unselected", "Hide unselected rather than selected curves");
+      ot->srna, "unselected", false, "Unselected", "Hide unselected rather than selected curves");
 }
 
 /* ........ */
@@ -339,7 +338,6 @@ static int graphview_curves_reveal_exec(bContext *C, wmOperator *op)
   bAnimContext ac;
   ListBase anim_data = {nullptr, nullptr};
   ListBase all_data = {nullptr, nullptr};
-  bAnimListElem *ale;
   int filter;
   const bool select = RNA_boolean_get(op->ptr, "select");
 
@@ -364,7 +362,7 @@ static int graphview_curves_reveal_exec(bContext *C, wmOperator *op)
   ANIM_animdata_filter(
       &ac, &anim_data, eAnimFilter_Flags(filter), ac.data, eAnimCont_Types(ac.datatype));
 
-  for (ale = static_cast<bAnimListElem *>(anim_data.first); ale; ale = ale->next) {
+  LISTBASE_FOREACH (bAnimListElem *, ale, &anim_data) {
     /* hack: skip object channels for now, since flushing those will always flush everything,
      * but they are always included. */
     /* TODO: find out why this is the case, and fix that */
@@ -449,6 +447,7 @@ void graphedit_operatortypes()
   WM_operatortype_append(GRAPH_OT_select_more);
   WM_operatortype_append(GRAPH_OT_select_less);
   WM_operatortype_append(GRAPH_OT_select_leftright);
+  WM_operatortype_append(GRAPH_OT_select_key_handles);
 
   /* editing */
   WM_operatortype_append(GRAPH_OT_snap);
@@ -461,17 +460,24 @@ void graphedit_operatortypes()
   WM_operatortype_append(GRAPH_OT_interpolation_type);
   WM_operatortype_append(GRAPH_OT_extrapolation_type);
   WM_operatortype_append(GRAPH_OT_easing_type);
-  WM_operatortype_append(GRAPH_OT_sample);
-  WM_operatortype_append(GRAPH_OT_bake);
-  WM_operatortype_append(GRAPH_OT_unbake);
-  WM_operatortype_append(GRAPH_OT_sound_bake);
+  WM_operatortype_append(GRAPH_OT_bake_keys);
+  WM_operatortype_append(GRAPH_OT_keys_to_samples);
+  WM_operatortype_append(GRAPH_OT_samples_to_keys);
+  WM_operatortype_append(GRAPH_OT_sound_to_samples);
   WM_operatortype_append(GRAPH_OT_smooth);
   WM_operatortype_append(GRAPH_OT_clean);
   WM_operatortype_append(GRAPH_OT_decimate);
   WM_operatortype_append(GRAPH_OT_blend_to_neighbor);
   WM_operatortype_append(GRAPH_OT_breakdown);
   WM_operatortype_append(GRAPH_OT_ease);
+  WM_operatortype_append(GRAPH_OT_shear);
+  WM_operatortype_append(GRAPH_OT_scale_average);
+  WM_operatortype_append(GRAPH_OT_blend_offset);
+  WM_operatortype_append(GRAPH_OT_blend_to_ease);
+  WM_operatortype_append(GRAPH_OT_match_slope);
+  WM_operatortype_append(GRAPH_OT_time_offset);
   WM_operatortype_append(GRAPH_OT_blend_to_default);
+  WM_operatortype_append(GRAPH_OT_push_pull);
   WM_operatortype_append(GRAPH_OT_gaussian_smooth);
   WM_operatortype_append(GRAPH_OT_butterworth_smooth);
   WM_operatortype_append(GRAPH_OT_euler_filter);
@@ -506,7 +512,7 @@ void ED_operatormacros_graph()
                                     OPTYPE_UNDO | OPTYPE_REGISTER);
   WM_operatortype_macro_define(ot, "GRAPH_OT_duplicate");
   otmacro = WM_operatortype_macro_define(ot, "TRANSFORM_OT_translate");
-  RNA_boolean_set(otmacro->ptr, "use_automerge_and_split", true);
+  RNA_boolean_set(otmacro->ptr, "use_duplicated_keyframes", true);
   RNA_boolean_set(otmacro->ptr, "use_proportional_edit", false);
 }
 
@@ -519,7 +525,7 @@ void ED_operatormacros_graph()
 void graphedit_keymap(wmKeyConfig *keyconf)
 {
   /* keymap for all regions */
-  WM_keymap_ensure(keyconf, "Graph Editor Generic", SPACE_GRAPH, 0);
+  WM_keymap_ensure(keyconf, "Graph Editor Generic", SPACE_GRAPH, RGN_TYPE_WINDOW);
 
   /* channels */
   /* Channels are not directly handled by the Graph Editor module,
@@ -530,7 +536,7 @@ void graphedit_keymap(wmKeyConfig *keyconf)
    */
 
   /* keyframes */
-  WM_keymap_ensure(keyconf, "Graph Editor", SPACE_GRAPH, 0);
+  WM_keymap_ensure(keyconf, "Graph Editor", SPACE_GRAPH, RGN_TYPE_WINDOW);
 }
 
 /** \} */

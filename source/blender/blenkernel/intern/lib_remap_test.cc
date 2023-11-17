@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2022 Blender Foundation
+/* SPDX-FileCopyrightText: 2022 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 #include "testing/testing.h"
@@ -12,10 +12,10 @@
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
-#include "RNA_define.h"
+#include "RNA_define.hh"
 
 #include "BKE_appdir.h"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_global.h"
 #include "BKE_idtype.h"
 #include "BKE_lib_id.h"
@@ -23,12 +23,12 @@
 #include "BKE_main.h"
 #include "BKE_mesh.hh"
 #include "BKE_node.hh"
-#include "BKE_object.h"
+#include "BKE_object.hh"
 #include "BKE_scene.h"
 
 #include "IMB_imbuf.h"
 
-#include "ED_node.h"
+#include "ED_node.hh"
 
 #include "MEM_guardedalloc.h"
 

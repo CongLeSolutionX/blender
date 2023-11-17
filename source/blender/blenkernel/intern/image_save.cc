@@ -165,10 +165,10 @@ bool BKE_image_save_options_init(ImageSaveOptions *opts,
 
     /* check for empty path */
     if (guess_path && opts->filepath[0] == 0) {
-      const bool is_prev_save = !STREQ(G.ima, "//");
+      const bool is_prev_save = !STREQ(G.filepath_last_image, "//");
       if (opts->save_as_render) {
         if (is_prev_save) {
-          STRNCPY(opts->filepath, G.ima);
+          STRNCPY(opts->filepath, G.filepath_last_image);
         }
         else {
           BLI_path_join(opts->filepath, sizeof(opts->filepath), "//", DATA_("untitled"));
@@ -178,7 +178,8 @@ bool BKE_image_save_options_init(ImageSaveOptions *opts,
       else {
         BLI_path_join(opts->filepath, sizeof(opts->filepath), "//", ima->id.name + 2);
         BLI_path_make_safe(opts->filepath);
-        BLI_path_abs(opts->filepath, is_prev_save ? G.ima : BKE_main_blendfile_path(bmain));
+        BLI_path_abs(opts->filepath,
+                     is_prev_save ? G.filepath_last_image : BKE_main_blendfile_path(bmain));
       }
 
       /* append UDIM marker if not present */
@@ -794,7 +795,7 @@ bool BKE_image_render_write_exr(ReportList *reports,
 
     LISTBASE_FOREACH (RenderPass *, rp, &rl->passes) {
       /* Skip non-RGBA and Z passes if not using multi layer. */
-      if (!multi_layer && !(STREQ(rp->name, RE_PASSNAME_COMBINED) || STREQ(rp->name, ""))) {
+      if (!multi_layer && !STR_ELEM(rp->name, RE_PASSNAME_COMBINED, "")) {
         continue;
       }
 

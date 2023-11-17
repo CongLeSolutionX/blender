@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2011 Blender Foundation
+/* SPDX-FileCopyrightText: 2011 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -12,7 +12,7 @@
 
 #include "COM_ExecutionSystem.h"
 #include "COM_WorkScheduler.h"
-#include "COM_compositor.h"
+#include "COM_compositor.hh"
 
 #include "RE_compositor.hh"
 

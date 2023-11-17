@@ -6,20 +6,20 @@
  * \ingroup edtransform
  */
 
-#include <stdlib.h>
+#include <cstdlib>
 
 #include "DNA_anim_types.h"
 
-#include "BLI_math.h"
+#include "BLI_math_vector.h"
 #include "BLI_string.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_nla.h"
 #include "BKE_unit.h"
 
-#include "ED_screen.h"
+#include "ED_screen.hh"
 
-#include "UI_interface.h"
+#include "UI_interface.hh"
 
 #include "BLT_translation.h"
 
@@ -32,6 +32,15 @@
 /* -------------------------------------------------------------------- */
 /** \name Transform (Animation Time Scale)
  * \{ */
+
+static void timescale_snap_apply_fn(TransInfo *t, float vec[3])
+{
+  float point[3];
+  getSnapPoint(t, point);
+  const float fac = (point[0] - t->center_global[0]) /
+                    (t->tsnap.snap_source[0] - t->center_global[0]);
+  vec[0] = fac;
+}
 
 static void headerTimeScale(TransInfo *t, char str[UI_MAX_DRAW_STR])
 {
@@ -77,21 +86,33 @@ static void applyTimeScaleValue(TransInfo *t, float value)
   }
 }
 
-static void applyTimeScale(TransInfo *t, const int[2] /*mval*/)
+static void applyTimeScale(TransInfo *t)
 {
   char str[UI_MAX_DRAW_STR];
 
   /* handle numeric-input stuff */
   t->vec[0] = t->values[0];
   applyNumInput(&t->num, &t->vec[0]);
+
+  transform_snap_mixed_apply(t, &t->vec[0]);
+
   t->values_final[0] = t->vec[0];
   headerTimeScale(t, str);
 
   applyTimeScaleValue(t, t->values_final[0]);
 
-  recalcData(t);
+  recalc_data(t);
 
   ED_area_status_text(t->area, str);
+}
+
+static void timescale_transform_matrix_fn(TransInfo *t, float mat_xform[4][4])
+{
+  const float i_loc = mat_xform[3][0];
+  const float startx = t->center_global[0];
+  const float fac = t->values_final[0];
+  const float loc = ((i_loc - startx) * fac) + startx;
+  mat_xform[3][0] = loc;
 }
 
 static void initTimeScale(TransInfo *t, wmOperator * /*op*/)
@@ -141,9 +162,9 @@ TransModeInfo TransMode_timescale = {
     /*flags*/ T_NULL_ONE,
     /*init_fn*/ initTimeScale,
     /*transform_fn*/ applyTimeScale,
-    /*transform_matrix_fn*/ nullptr,
+    /*transform_matrix_fn*/ timescale_transform_matrix_fn,
     /*handle_event_fn*/ nullptr,
     /*snap_distance_fn*/ nullptr,
-    /*snap_apply_fn*/ nullptr,
+    /*snap_apply_fn*/ timescale_snap_apply_fn,
     /*draw_fn*/ nullptr,
 };

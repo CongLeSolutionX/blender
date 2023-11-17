@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2017 Blender Foundation
+/* SPDX-FileCopyrightText: 2017 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -6,14 +6,15 @@
  * \ingroup bke
  */
 
-#include <stdio.h>
+#include <cstdio>
 
 #include "MEM_guardedalloc.h"
 
 #include "BLI_blenlib.h"
 #include "BLI_math_geom.h"
+#include "BLI_math_matrix.h"
 #include "BLI_math_vector.h"
-#include "BLI_string_utils.h"
+#include "BLI_string_utils.hh"
 #include "BLI_utildefines.h"
 
 #include "BLT_translation.h"
@@ -33,22 +34,23 @@
 #include "BKE_gpencil_geom_legacy.h"
 #include "BKE_gpencil_legacy.h"
 #include "BKE_gpencil_modifier_legacy.h"
-#include "BKE_lattice.h"
+#include "BKE_lattice.hh"
 #include "BKE_lib_id.h"
 #include "BKE_lib_query.h"
 #include "BKE_material.h"
-#include "BKE_modifier.h"
-#include "BKE_object.h"
-#include "BKE_screen.h"
+#include "BKE_modifier.hh"
+#include "BKE_object.hh"
+#include "BKE_object_types.hh"
+#include "BKE_screen.hh"
 #include "BKE_shrinkwrap.h"
 
-#include "DEG_depsgraph.h"
-#include "DEG_depsgraph_query.h"
+#include "DEG_depsgraph.hh"
+#include "DEG_depsgraph_query.hh"
 
 #include "MOD_gpencil_legacy_lineart.h"
 #include "MOD_gpencil_legacy_modifiertypes.h"
 
-#include "BLO_read_write.h"
+#include "BLO_read_write.hh"
 
 #include "CLG_log.h"
 
@@ -146,25 +148,25 @@ void BKE_gpencil_cache_data_clear(Object *ob)
 /* Modifier Methods - Evaluation Loops, etc. */
 
 GpencilModifierData *BKE_gpencil_modifiers_get_virtual_modifierlist(
-    const Object *ob, GpencilVirtualModifierData * /*virtualModifierData*/)
+    const Object *ob, GpencilVirtualModifierData * /*virtual_modifier_data*/)
 {
   GpencilModifierData *md = static_cast<GpencilModifierData *>(ob->greasepencil_modifiers.first);
 
 #if 0
   /* Note that GPencil actually does not support these at the moment,
    * but might do in the future. */
-  *virtualModifierData = virtualModifierCommonData;
+  *virtual_modifier_data = virtualModifierCommonData;
   if (ob->parent) {
     if (ob->parent->type == OB_ARMATURE && ob->partype == PARSKEL) {
-      virtualModifierData->amd.object = ob->parent;
-      virtualModifierData->amd.modifier.next = md;
-      virtualModifierData->amd.deformflag = ((bArmature *)(ob->parent->data))->deformflag;
-      md = &virtualModifierData->amd.modifier;
+      virtual_modifier_data->amd.object = ob->parent;
+      virtual_modifier_data->amd.modifier.next = md;
+      virtual_modifier_data->amd.deformflag = ((bArmature *)(ob->parent->data))->deformflag;
+      md = &virtual_modifier_data->amd.modifier;
     }
     else if (ob->parent->type == OB_LATTICE && ob->partype == PARSKEL) {
-      virtualModifierData->lmd.object = ob->parent;
-      virtualModifierData->lmd.modifier.next = md;
-      md = &virtualModifierData->lmd.modifier;
+      virtual_modifier_data->lmd.object = ob->parent;
+      virtual_modifier_data->lmd.modifier.next = md;
+      md = &virtual_modifier_data->lmd.modifier;
     }
   }
 #endif
@@ -178,7 +180,7 @@ bool BKE_gpencil_has_geometry_modifiers(Object *ob)
     const GpencilModifierTypeInfo *mti = BKE_gpencil_modifier_get_info(
         GpencilModifierType(md->type));
 
-    if (mti && mti->generateStrokes) {
+    if (mti && mti->generate_strokes) {
       return true;
     }
   }
@@ -191,7 +193,7 @@ bool BKE_gpencil_has_time_modifiers(Object *ob)
     const GpencilModifierTypeInfo *mti = BKE_gpencil_modifier_get_info(
         GpencilModifierType(md->type));
 
-    if (mti && mti->remapTime) {
+    if (mti && mti->remap_time) {
       return true;
     }
   }
@@ -297,8 +299,8 @@ int BKE_gpencil_time_modifier_cfra(Depsgraph *depsgraph,
         continue;
       }
 
-      if (mti->remapTime) {
-        nfra = mti->remapTime(md, depsgraph, scene, ob, gpl, cfra);
+      if (mti->remap_time) {
+        nfra = mti->remap_time(md, depsgraph, scene, ob, gpl, cfra);
         /* if the frame number changed, don't evaluate more and return */
         if (nfra != cfra) {
           return nfra;
@@ -314,7 +316,7 @@ int BKE_gpencil_time_modifier_cfra(Depsgraph *depsgraph,
 void BKE_gpencil_frame_active_set(Depsgraph *depsgraph, bGPdata *gpd)
 {
   DEG_debug_print_eval(depsgraph, __func__, gpd->id.name, gpd);
-  int ctime = (int)DEG_get_ctime(depsgraph);
+  int ctime = int(DEG_get_ctime(depsgraph));
 
   /* update active frame */
   LISTBASE_FOREACH (bGPDlayer *, gpl, &gpd->layers) {
@@ -334,10 +336,10 @@ void BKE_gpencil_frame_active_set(Depsgraph *depsgraph, bGPdata *gpd)
   }
 }
 
-void BKE_gpencil_modifier_init(void)
+void BKE_gpencil_modifier_init()
 {
   /* Initialize modifier types */
-  gpencil_modifier_type_init(modifier_gpencil_types); /* MOD_gpencil_legacy_util.c */
+  gpencil_modifier_type_init(modifier_gpencil_types); /* `MOD_gpencil_legacy_util.cc`. */
 
 #if 0
   /* Note that GPencil actually does not support these at the moment,
@@ -376,14 +378,14 @@ GpencilModifierData *BKE_gpencil_modifier_new(int type)
     md->mode |= eGpencilModifierMode_Editmode;
   }
 
-  if (mti->initData) {
-    mti->initData(md);
+  if (mti->init_data) {
+    mti->init_data(md);
   }
 
   return md;
 }
 
-static void modifier_free_data_id_us_cb(void * /*userData*/,
+static void modifier_free_data_id_us_cb(void * /*user_data*/,
                                         Object * /*ob*/,
                                         ID **idpoin,
                                         int cb_flag)
@@ -400,13 +402,13 @@ void BKE_gpencil_modifier_free_ex(GpencilModifierData *md, const int flag)
       GpencilModifierType(md->type));
 
   if ((flag & LIB_ID_CREATE_NO_USER_REFCOUNT) == 0) {
-    if (mti->foreachIDLink) {
-      mti->foreachIDLink(md, nullptr, modifier_free_data_id_us_cb, nullptr);
+    if (mti->foreach_ID_link) {
+      mti->foreach_ID_link(md, nullptr, modifier_free_data_id_us_cb, nullptr);
     }
   }
 
-  if (mti->freeData) {
-    mti->freeData(md);
+  if (mti->free_data) {
+    mti->free_data(md);
   }
   if (md->error) {
     MEM_freeN(md->error);
@@ -420,19 +422,18 @@ void BKE_gpencil_modifier_free(GpencilModifierData *md)
   BKE_gpencil_modifier_free_ex(md, 0);
 }
 
-bool BKE_gpencil_modifier_unique_name(ListBase *modifiers, GpencilModifierData *gmd)
+void BKE_gpencil_modifier_unique_name(ListBase *modifiers, GpencilModifierData *gmd)
 {
   if (modifiers && gmd) {
     const GpencilModifierTypeInfo *gmti = BKE_gpencil_modifier_get_info(
         GpencilModifierType(gmd->type));
-    return BLI_uniquename(modifiers,
-                          gmd,
-                          DATA_(gmti->name),
-                          '.',
-                          offsetof(GpencilModifierData, name),
-                          sizeof(gmd->name));
+    BLI_uniquename(modifiers,
+                   gmd,
+                   DATA_(gmti->name),
+                   '.',
+                   offsetof(GpencilModifierData, name),
+                   sizeof(gmd->name));
   }
-  return false;
 }
 
 bool BKE_gpencil_modifier_depends_ontime(GpencilModifierData *md)
@@ -440,7 +441,7 @@ bool BKE_gpencil_modifier_depends_ontime(GpencilModifierData *md)
   const GpencilModifierTypeInfo *mti = BKE_gpencil_modifier_get_info(
       GpencilModifierType(md->type));
 
-  return mti->dependsOnTime && mti->dependsOnTime(md);
+  return mti->depends_on_time && mti->depends_on_time(md);
 }
 
 const GpencilModifierTypeInfo *BKE_gpencil_modifier_get_info(GpencilModifierType type)
@@ -474,18 +475,18 @@ void BKE_gpencil_modifier_copydata_generic(const GpencilModifierData *md_src,
 
   /* md_dst may have already be fully initialized with some extra allocated data,
    * we need to free it now to avoid memleak. */
-  if (mti->freeData) {
-    mti->freeData(md_dst);
+  if (mti->free_data) {
+    mti->free_data(md_dst);
   }
 
   const size_t data_size = sizeof(GpencilModifierData);
   const char *md_src_data = ((const char *)md_src) + data_size;
   char *md_dst_data = ((char *)md_dst) + data_size;
-  BLI_assert(data_size <= (size_t)mti->struct_size);
-  memcpy(md_dst_data, md_src_data, (size_t)mti->struct_size - data_size);
+  BLI_assert(data_size <= size_t(mti->struct_size));
+  memcpy(md_dst_data, md_src_data, size_t(mti->struct_size) - data_size);
 }
 
-static void gpencil_modifier_copy_data_id_us_cb(void * /*userData*/,
+static void gpencil_modifier_copy_data_id_us_cb(void * /*user_data*/,
                                                 Object * /*ob*/,
                                                 ID **idpoin,
                                                 int cb_flag)
@@ -507,13 +508,13 @@ void BKE_gpencil_modifier_copydata_ex(GpencilModifierData *md,
   target->flag = md->flag;
   target->ui_expand_flag = md->ui_expand_flag; /* Expand the parent panel by default. */
 
-  if (mti->copyData) {
-    mti->copyData(md, target);
+  if (mti->copy_data) {
+    mti->copy_data(md, target);
   }
 
   if ((flag & LIB_ID_CREATE_NO_USER_REFCOUNT) == 0) {
-    if (mti->foreachIDLink) {
-      mti->foreachIDLink(target, nullptr, gpencil_modifier_copy_data_id_us_cb, nullptr);
+    if (mti->foreach_ID_link) {
+      mti->foreach_ID_link(target, nullptr, gpencil_modifier_copy_data_id_us_cb, nullptr);
     }
   }
 }
@@ -563,7 +564,9 @@ bool BKE_gpencil_modifier_is_nonlocal_in_liboverride(const Object *ob,
           (gmd == nullptr || (gmd->flag & eGpencilModifierFlag_OverrideLibrary_Local) == 0));
 }
 
-void BKE_gpencil_modifiers_foreach_ID_link(Object *ob, GreasePencilIDWalkFunc walk, void *userData)
+void BKE_gpencil_modifiers_foreach_ID_link(Object *ob,
+                                           GreasePencilIDWalkFunc walk,
+                                           void *user_data)
 {
   GpencilModifierData *md = static_cast<GpencilModifierData *>(ob->greasepencil_modifiers.first);
 
@@ -571,15 +574,15 @@ void BKE_gpencil_modifiers_foreach_ID_link(Object *ob, GreasePencilIDWalkFunc wa
     const GpencilModifierTypeInfo *mti = BKE_gpencil_modifier_get_info(
         GpencilModifierType(md->type));
 
-    if (mti->foreachIDLink) {
-      mti->foreachIDLink(md, ob, walk, userData);
+    if (mti->foreach_ID_link) {
+      mti->foreach_ID_link(md, ob, walk, user_data);
     }
   }
 }
 
 void BKE_gpencil_modifiers_foreach_tex_link(Object *ob,
                                             GreasePencilTexWalkFunc walk,
-                                            void *userData)
+                                            void *user_data)
 {
   GpencilModifierData *md = static_cast<GpencilModifierData *>(ob->greasepencil_modifiers.first);
 
@@ -587,8 +590,8 @@ void BKE_gpencil_modifiers_foreach_tex_link(Object *ob,
     const GpencilModifierTypeInfo *mti = BKE_gpencil_modifier_get_info(
         GpencilModifierType(md->type));
 
-    if (mti->foreachTexLink) {
-      mti->foreachTexLink(md, ob, walk, userData);
+    if (mti->foreach_tex_link) {
+      mti->foreach_tex_link(md, ob, walk, user_data);
     }
   }
 }
@@ -609,9 +612,9 @@ GpencilModifierData *BKE_gpencil_modifiers_findby_name(Object *ob, const char *n
  */
 static int gpencil_remap_time_get(Depsgraph *depsgraph, Scene *scene, Object *ob, bGPDlayer *gpl)
 {
-  const bool is_render = (bool)(DEG_get_mode(depsgraph) == DAG_EVAL_RENDER);
+  const bool is_render = bool(DEG_get_mode(depsgraph) == DAG_EVAL_RENDER);
   const bool time_remap = BKE_gpencil_has_time_modifiers(ob);
-  int cfra_eval = (int)DEG_get_ctime(depsgraph);
+  int cfra_eval = int(DEG_get_ctime(depsgraph));
 
   int remap_cfra = cfra_eval;
   if (time_remap) {
@@ -636,7 +639,7 @@ static void gpencil_assign_object_eval(Object *object)
 {
   BLI_assert(object->id.tag & LIB_TAG_COPIED_ON_WRITE);
 
-  bGPdata *gpd_eval = object->runtime.gpd_eval;
+  bGPdata *gpd_eval = object->runtime->gpd_eval;
 
   gpd_eval->id.tag |= LIB_TAG_COPIED_ON_WRITE_EVAL_RESULT;
 
@@ -752,23 +755,23 @@ void BKE_gpencil_prepare_eval_data(Depsgraph *depsgraph, Scene *scene, Object *o
   DEG_debug_print_eval(depsgraph, __func__, gpd_eval->id.name, gpd_eval);
 
   /* Delete any previously created runtime copy. */
-  if (ob->runtime.gpd_eval != nullptr) {
+  if (ob->runtime->gpd_eval != nullptr) {
     /* Make sure to clear the pointer in case the runtime eval data points to the same data block.
      * This can happen when the gpencil data block was not tagged for a depsgraph update after last
      * call to this function (e.g. a frame change). */
-    if (gpd_eval == ob->runtime.gpd_eval) {
+    if (gpd_eval == ob->runtime->gpd_eval) {
       gpd_eval = nullptr;
     }
-    BKE_gpencil_eval_delete(ob->runtime.gpd_eval);
-    ob->runtime.gpd_eval = nullptr;
+    BKE_gpencil_eval_delete(ob->runtime->gpd_eval);
+    ob->runtime->gpd_eval = nullptr;
     ob->data = gpd_eval;
   }
 
-  const bool is_multiedit = (bool)GPENCIL_MULTIEDIT_SESSIONS_ON(gpd_orig);
-  const bool is_curve_edit = (bool)GPENCIL_CURVE_EDIT_SESSIONS_ON(gpd_orig);
-  const bool do_modifiers = (bool)((!is_multiedit) && (!is_curve_edit) &&
-                                   (ob_orig->greasepencil_modifiers.first != nullptr) &&
-                                   !GPENCIL_SIMPLIFY_MODIF(scene));
+  const bool is_multiedit = bool(GPENCIL_MULTIEDIT_SESSIONS_ON(gpd_orig));
+  const bool is_curve_edit = bool(GPENCIL_CURVE_EDIT_SESSIONS_ON(gpd_orig));
+  const bool do_modifiers = bool((!is_multiedit) && (!is_curve_edit) &&
+                                 (ob_orig->greasepencil_modifiers.first != nullptr) &&
+                                 !GPENCIL_SIMPLIFY_MODIF(scene));
   if ((!do_modifiers) && (!do_parent) && (!do_transform)) {
     BLI_assert(ob->data != nullptr);
     return;
@@ -779,7 +782,7 @@ void BKE_gpencil_prepare_eval_data(Depsgraph *depsgraph, Scene *scene, Object *o
    * may differ. */
   if (gpd_orig->id.us > 1) {
     /* Copy of the original datablock's structure (layers and empty frames). */
-    ob->runtime.gpd_eval = gpencil_copy_structure_for_eval(gpd_orig);
+    ob->runtime->gpd_eval = gpencil_copy_structure_for_eval(gpd_orig);
     /* Overwrite ob->data with gpd_eval here. */
     gpencil_assign_object_eval(ob);
   }
@@ -793,12 +796,12 @@ void BKE_gpencil_modifiers_calc(Depsgraph *depsgraph, Scene *scene, Object *ob)
 {
   bGPdata *gpd = (bGPdata *)ob->data;
   const bool is_edit = GPENCIL_ANY_EDIT_MODE(gpd);
-  const bool is_render = (bool)(DEG_get_mode(depsgraph) == DAG_EVAL_RENDER);
-  const bool is_curve_edit = (bool)(GPENCIL_CURVE_EDIT_SESSIONS_ON(gpd) && !is_render);
-  const bool is_multiedit = (bool)(GPENCIL_MULTIEDIT_SESSIONS_ON(gpd) && !is_render);
-  const bool do_modifiers = (bool)((!is_multiedit) && (!is_curve_edit) &&
-                                   (ob->greasepencil_modifiers.first != nullptr) &&
-                                   !GPENCIL_SIMPLIFY_MODIF(scene));
+  const bool is_render = bool(DEG_get_mode(depsgraph) == DAG_EVAL_RENDER);
+  const bool is_curve_edit = bool(GPENCIL_CURVE_EDIT_SESSIONS_ON(gpd) && !is_render);
+  const bool is_multiedit = bool(GPENCIL_MULTIEDIT_SESSIONS_ON(gpd) && !is_render);
+  const bool do_modifiers = bool((!is_multiedit) && (!is_curve_edit) &&
+                                 (ob->greasepencil_modifiers.first != nullptr) &&
+                                 !GPENCIL_SIMPLIFY_MODIF(scene));
   if (!do_modifiers) {
     return;
   }
@@ -826,21 +829,21 @@ void BKE_gpencil_modifiers_calc(Depsgraph *depsgraph, Scene *scene, Object *ob)
       }
 
       /* Apply geometry modifiers (add new geometry). */
-      if (mti && mti->generateStrokes) {
-        mti->generateStrokes(md, depsgraph, ob);
+      if (mti && mti->generate_strokes) {
+        mti->generate_strokes(md, depsgraph, ob);
       }
 
       /* Apply deform modifiers and Time remap (only change geometry). */
-      if ((time_remap) || (mti && mti->deformStroke)) {
+      if ((time_remap) || (mti && mti->deform_stroke)) {
         LISTBASE_FOREACH (bGPDlayer *, gpl, &gpd->layers) {
           bGPDframe *gpf = BKE_gpencil_frame_retime_get(depsgraph, scene, ob, gpl);
           if (gpf == nullptr) {
             continue;
           }
 
-          if (mti->deformStroke) {
+          if (mti->deform_stroke) {
             LISTBASE_FOREACH (bGPDstroke *, gps, &gpf->strokes) {
-              mti->deformStroke(md, depsgraph, ob, gpl, gpf, gps);
+              mti->deform_stroke(md, depsgraph, ob, gpl, gpf, gps);
             }
           }
         }
@@ -930,7 +933,7 @@ void BKE_gpencil_modifier_blend_write(BlendWriter *writer, ListBase *modbase)
   }
 }
 
-void BKE_gpencil_modifier_blend_read_data(BlendDataReader *reader, ListBase *lb)
+void BKE_gpencil_modifier_blend_read_data(BlendDataReader *reader, ListBase *lb, Object *ob)
 {
   BLO_read_list(reader, lb);
 
@@ -940,6 +943,11 @@ void BKE_gpencil_modifier_blend_read_data(BlendDataReader *reader, ListBase *lb)
     /* if modifiers disappear, or for upward compatibility */
     if (nullptr == BKE_gpencil_modifier_get_info(GpencilModifierType(md->type))) {
       md->type = eModifierType_None;
+    }
+
+    /* If linking from a library, clear 'local' library override flag. */
+    if (ID_IS_LINKED(ob)) {
+      md->flag &= ~eGpencilModifierFlag_OverrideLibrary_Local;
     }
 
     if (md->type == eGpencilModifierType_Lattice) {
@@ -1023,18 +1031,6 @@ void BKE_gpencil_modifier_blend_read_data(BlendDataReader *reader, ListBase *lb)
     if (md->type == eGpencilModifierType_Shrinkwrap) {
       ShrinkwrapGpencilModifierData *gpmd = (ShrinkwrapGpencilModifierData *)md;
       gpmd->cache_data = nullptr;
-    }
-  }
-}
-
-void BKE_gpencil_modifier_blend_read_lib(BlendLibReader *reader, Object *ob)
-{
-  BKE_gpencil_modifiers_foreach_ID_link(ob, BKE_object_modifiers_lib_link_common, reader);
-
-  /* If linking from a library, clear 'local' library override flag. */
-  if (ID_IS_LINKED(ob)) {
-    LISTBASE_FOREACH (GpencilModifierData *, mod, &ob->greasepencil_modifiers) {
-      mod->flag &= ~eGpencilModifierFlag_OverrideLibrary_Local;
     }
   }
 }

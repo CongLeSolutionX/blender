@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -6,9 +6,9 @@
  * \ingroup RNA
  */
 
-#include <float.h>
-#include <limits.h>
-#include <stdlib.h>
+#include <cfloat>
+#include <climits>
+#include <cstdlib>
 
 #include "DNA_armature_types.h"
 #include "DNA_gpencil_legacy_types.h"
@@ -22,20 +22,20 @@
 
 #include "BLI_math_base.h"
 #include "BLI_math_rotation.h"
-#include "BLI_string_utils.h"
+#include "BLI_string_utils.hh"
 
 #include "BLT_translation.h"
 
 #include "BKE_animsys.h"
 
-#include "RNA_access.h"
-#include "RNA_define.h"
-#include "RNA_enum_types.h"
+#include "RNA_access.hh"
+#include "RNA_define.hh"
+#include "RNA_enum_types.hh"
 
 #include "rna_internal.h"
 
-#include "WM_api.h"
-#include "WM_types.h"
+#include "WM_api.hh"
+#include "WM_types.hh"
 
 const EnumPropertyItem rna_enum_object_greasepencil_modifier_type_items[] = {
     RNA_ENUM_ITEM_HEADING(N_("Modify"), nullptr),
@@ -277,13 +277,13 @@ static const EnumPropertyItem modifier_noise_random_mode_items[] = {
 #  include "DNA_particle_types.h"
 
 #  include "BKE_cachefile.h"
-#  include "BKE_context.h"
+#  include "BKE_context.hh"
 #  include "BKE_gpencil_legacy.h"
 #  include "BKE_gpencil_modifier_legacy.h"
-#  include "BKE_object.h"
+#  include "BKE_object.hh"
 
-#  include "DEG_depsgraph.h"
-#  include "DEG_depsgraph_build.h"
+#  include "DEG_depsgraph.hh"
+#  include "DEG_depsgraph_build.hh"
 
 static StructRNA *rna_GpencilModifier_refine(PointerRNA *ptr)
 {
@@ -2136,7 +2136,7 @@ static void rna_def_modifier_gpencilopacity(BlenderRNA *brna)
   RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
 
   prop = RNA_def_property(srna, "hardness", PROP_FLOAT, PROP_NONE);
-  RNA_def_property_float_sdna(prop, nullptr, "hardeness");
+  RNA_def_property_float_sdna(prop, nullptr, "hardness");
   RNA_def_property_range(prop, 0.0, FLT_MAX);
   RNA_def_property_ui_range(prop, 0.0, FLT_MAX, 0.1, 2);
   RNA_def_property_ui_text(prop, "Hardness", "Factor of stroke hardness");

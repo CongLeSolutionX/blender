@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2020 Blender Foundation
+/* SPDX-FileCopyrightText: 2020 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -6,9 +6,9 @@
  * \ingroup edgeometry
  */
 
-#include "WM_api.h"
+#include "WM_api.hh"
 
-#include "ED_geometry.h"
+#include "ED_geometry.hh"
 
 #include "geometry_intern.hh"
 
@@ -27,4 +27,5 @@ void ED_operatortypes_geometry()
   WM_operatortype_append(GEOMETRY_OT_attribute_convert);
   WM_operatortype_append(GEOMETRY_OT_color_attribute_convert);
   WM_operatortype_append(GEOMETRY_OT_execute_node_group);
+  WM_operatortype_append(GEOMETRY_OT_geometry_randomization);
 }

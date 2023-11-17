@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -6,9 +6,9 @@
  * \ingroup bke
  */
 
-#include <math.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cmath>
+#include <cstdlib>
+#include <cstring>
 
 #include "BLI_sys_types.h" /* for intptr_t support */
 #include "MEM_guardedalloc.h"
@@ -51,7 +51,7 @@ EHash *ccg_ehash_new(int estimatedNumEntries,
   return eh;
 }
 
-void ccg_ehash_free(EHash *eh, EHEntryFreeFP freeEntry, void *userData)
+void ccg_ehash_free(EHash *eh, EHEntryFreeFP freeEntry, void *user_data)
 {
   int numBuckets = eh->curSize;
 
@@ -61,7 +61,7 @@ void ccg_ehash_free(EHash *eh, EHEntryFreeFP freeEntry, void *userData)
     while (entry) {
       EHEntry *next = entry->next;
 
-      freeEntry(entry, userData);
+      freeEntry(entry, user_data);
 
       entry = next;
     }
@@ -198,7 +198,7 @@ static void _stdAllocator_free(CCGAllocatorHDL /*a*/, void *ptr)
   MEM_freeN(ptr);
 }
 
-CCGAllocatorIFC *ccg_getStandardAllocatorIFC(void)
+CCGAllocatorIFC *ccg_getStandardAllocatorIFC()
 {
   static CCGAllocatorIFC ifc;
 

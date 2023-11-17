@@ -9,11 +9,11 @@
  * allocate and free of all library data
  */
 
-#include <ctype.h>
-#include <stddef.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cctype>
+#include <cstddef>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 
 #include "CLG_log.h"
 
@@ -35,22 +35,22 @@
 #include "BLI_ghash.h"
 #include "BLI_linklist.h"
 #include "BLI_memarena.h"
-#include "BLI_string_utils.h"
+#include "BLI_string_utils.hh"
 
 #include "BLT_translation.h"
 
 #include "BKE_anim_data.h"
-#include "BKE_armature.h"
-#include "BKE_asset.h"
+#include "BKE_armature.hh"
+#include "BKE_asset.hh"
 #include "BKE_bpath.h"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_global.h"
 #include "BKE_gpencil_legacy.h"
 #include "BKE_idprop.h"
 #include "BKE_idtype.h"
 #include "BKE_key.h"
 #include "BKE_lib_id.h"
-#include "BKE_lib_override.h"
+#include "BKE_lib_override.hh"
 #include "BKE_lib_query.h"
 #include "BKE_lib_remap.h"
 #include "BKE_main.h"
@@ -58,13 +58,13 @@
 #include "BKE_node.h"
 #include "BKE_rigidbody.h"
 
-#include "DEG_depsgraph.h"
-#include "DEG_depsgraph_build.h"
-#include "DEG_depsgraph_query.h"
+#include "DEG_depsgraph.hh"
+#include "DEG_depsgraph_build.hh"
+#include "DEG_depsgraph_query.hh"
 
-#include "RNA_access.h"
+#include "RNA_access.hh"
 
-#include "BLO_read_write.h"
+#include "BLO_read_write.hh"
 
 #include "atomic_ops.h"
 
@@ -84,7 +84,7 @@ IDTypeInfo IDType_ID_LINK_PLACEHOLDER = {
     /*main_listbase_index*/ INDEX_ID_NULL,
     /*struct_size*/ sizeof(ID),
     /*name*/ "LinkPlaceholder",
-    /*name_plural*/ "link_placeholders",
+    /*name_plural*/ N_("link_placeholders"),
     /*translation_context*/ BLT_I18NCONTEXT_ID_ID,
     /*flags*/ IDTYPE_FLAGS_NO_COPY | IDTYPE_FLAGS_NO_LIBLINKING,
     /*asset_type_info*/ nullptr,
@@ -100,8 +100,7 @@ IDTypeInfo IDType_ID_LINK_PLACEHOLDER = {
 
     /*blend_write*/ nullptr,
     /*blend_read_data*/ nullptr,
-    /*blend_read_lib*/ nullptr,
-    /*blend_read_expand*/ nullptr,
+    /*blend_read_after_liblink*/ nullptr,
 
     /*blend_read_undo_preserve*/ nullptr,
 
@@ -507,7 +506,7 @@ void BKE_lib_id_make_local_generic(Main *bmain, ID *id, const int flags)
   if (force_local) {
     BKE_lib_id_clear_library_data(bmain, id, flags);
     if ((flags & LIB_ID_MAKELOCAL_LIBOVERRIDE_CLEAR) != 0) {
-      BKE_lib_override_library_make_local(id);
+      BKE_lib_override_library_make_local(bmain, id);
     }
     BKE_lib_id_expand_local(bmain, id, flags);
   }
@@ -589,8 +588,7 @@ static int id_copy_libmanagement_cb(LibraryIDLinkCallbackData *cb_data)
   ID **id_pointer = cb_data->id_pointer;
   ID *id = *id_pointer;
   const int cb_flag = cb_data->cb_flag;
-  struct IDCopyLibManagementData *data = static_cast<IDCopyLibManagementData *>(
-      cb_data->user_data);
+  IDCopyLibManagementData *data = static_cast<IDCopyLibManagementData *>(cb_data->user_data);
 
   /* Remap self-references to new copied ID. */
   if (id == data->id_src) {
@@ -782,8 +780,8 @@ ID *BKE_id_copy_for_use_in_bmain(Main *bmain, const ID *id)
 static void id_embedded_swap(ID **embedded_id_a,
                              ID **embedded_id_b,
                              const bool do_full_id,
-                             struct IDRemapper *remapper_id_a,
-                             struct IDRemapper *remapper_id_b);
+                             IDRemapper *remapper_id_a,
+                             IDRemapper *remapper_id_b);
 
 /**
  * Does a mere memory swap over the whole IDs data (including type-specific memory).
@@ -794,14 +792,14 @@ static void id_swap(Main *bmain,
                     ID *id_b,
                     const bool do_full_id,
                     const bool do_self_remap,
-                    struct IDRemapper *input_remapper_id_a,
-                    struct IDRemapper *input_remapper_id_b,
+                    IDRemapper *input_remapper_id_a,
+                    IDRemapper *input_remapper_id_b,
                     const int self_remap_flags)
 {
   BLI_assert(GS(id_a->name) == GS(id_b->name));
 
-  struct IDRemapper *remapper_id_a = input_remapper_id_a;
-  struct IDRemapper *remapper_id_b = input_remapper_id_b;
+  IDRemapper *remapper_id_a = input_remapper_id_a;
+  IDRemapper *remapper_id_b = input_remapper_id_b;
   if (do_self_remap) {
     if (remapper_id_a == nullptr) {
       remapper_id_a = BKE_id_remapper_create();
@@ -887,8 +885,8 @@ static void id_swap(Main *bmain,
 static void id_embedded_swap(ID **embedded_id_a,
                              ID **embedded_id_b,
                              const bool do_full_id,
-                             struct IDRemapper *remapper_id_a,
-                             struct IDRemapper *remapper_id_b)
+                             IDRemapper *remapper_id_a,
+                             IDRemapper *remapper_id_b)
 {
   if (embedded_id_a != nullptr && *embedded_id_a != nullptr) {
     BLI_assert(embedded_id_b != nullptr);
@@ -937,7 +935,6 @@ void BKE_lib_id_swap_full(
 bool id_single_user(bContext *C, ID *id, PointerRNA *ptr, PropertyRNA *prop)
 {
   ID *newid = nullptr;
-  PointerRNA idptr;
 
   if (id && (ID_REAL_USERS(id) > 1)) {
     /* If property isn't editable,
@@ -952,7 +949,7 @@ bool id_single_user(bContext *C, ID *id, PointerRNA *ptr, PropertyRNA *prop)
         id_us_min(newid);
 
         /* assign copy */
-        RNA_id_pointer_create(newid, &idptr);
+        PointerRNA idptr = RNA_id_pointer_create(newid);
         RNA_property_pointer_set(ptr, prop, idptr, nullptr);
         RNA_property_update(C, ptr, prop);
 
@@ -1404,7 +1401,7 @@ void BKE_libblock_copy_ex(Main *bmain, const ID *id, ID **r_newid, const int ori
 
   const size_t id_len = BKE_libblock_get_alloc_info(GS(new_id->name), nullptr);
   const size_t id_offset = sizeof(ID);
-  if ((int)id_len - (int)id_offset > 0) { /* signed to allow neg result */ /* XXX ????? */
+  if (int(id_len) - int(id_offset) > 0) { /* signed to allow neg result */ /* XXX ????? */
     const char *cp = (const char *)id;
     char *cpn = (char *)new_id;
 
@@ -1659,7 +1656,7 @@ static int id_refcount_recompute_callback(LibraryIDLinkCallbackData *cb_data)
 {
   ID **id_pointer = cb_data->id_pointer;
   const int cb_flag = cb_data->cb_flag;
-  const bool do_linked_only = (bool)POINTER_AS_INT(cb_data->user_data);
+  const bool do_linked_only = bool(POINTER_AS_INT(cb_data->user_data));
 
   if (*id_pointer == nullptr) {
     return IDWALK_RET_NOP;
@@ -1705,7 +1702,7 @@ void BKE_main_id_refcount_recompute(Main *bmain, const bool do_linked_only)
     BKE_library_foreach_ID_link(bmain,
                                 id,
                                 id_refcount_recompute_callback,
-                                POINTER_FROM_INT((int)do_linked_only),
+                                POINTER_FROM_INT(int(do_linked_only)),
                                 IDWALK_READONLY | IDWALK_INCLUDE_UI);
   }
   FOREACH_MAIN_ID_END;
@@ -1829,7 +1826,9 @@ void BKE_library_make_local(Main *bmain,
             ELEM(lib, nullptr, id->override_library->reference->lib) &&
             ((untagged_only == false) || !(id->tag & LIB_TAG_PRE_EXISTING)))
         {
-          BKE_lib_override_library_make_local(id);
+          /* Validating liboverride hierarchy root pointers will happen later in this function,
+           * rather than doing it for each and every localized ID. */
+          BKE_lib_override_library_make_local(nullptr, id);
         }
       }
       /* The check on the fourth line (LIB_TAG_PRE_EXISTING) is done so it's possible to tag data
@@ -1968,6 +1967,10 @@ void BKE_library_make_local(Main *bmain,
       id_us_ensure_real(id->newid);
     }
   }
+
+  /* Making some liboverride local may have had some impact on validity of liboverrides hierarchy
+   * roots, these need to be re-validated/re-generated. */
+  BKE_lib_override_library_main_hierarchy_root_ensure(bmain);
 
 #ifdef DEBUG_TIME
   printf("Step 4: Remap local usages of old (linked) ID to new (local) ID: Done.\n");
@@ -2226,6 +2229,8 @@ void BKE_id_blend_write(BlendWriter *writer, ID *id)
   if (id->properties && !ELEM(GS(id->name), ID_WM)) {
     IDP_BlendWrite(writer, id->properties);
   }
+
+  BKE_animdata_blend_write(writer, id);
 
   if (id->override_library) {
     BLO_write_struct(writer, IDOverrideLibrary, id->override_library);

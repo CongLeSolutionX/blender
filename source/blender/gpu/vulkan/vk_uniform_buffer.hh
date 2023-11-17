@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2022 Blender Foundation
+/* SPDX-FileCopyrightText: 2022 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -44,7 +44,9 @@ class VKUniformBuffer : public UniformBuf, public VKBindableResource, NonCopyabl
   }
 
   /* Bindable resource */
-  void bind(int binding, shader::ShaderCreateInfo::Resource::BindType bind_type) override;
+  void bind(int binding,
+            shader::ShaderCreateInfo::Resource::BindType bind_type,
+            const GPUSamplerState sampler_state) override;
 
  private:
   void allocate();

@@ -6,13 +6,12 @@
  * \ingroup bke
  */
 
-#include <string.h>
+#include <cstring>
 
 #include "MEM_guardedalloc.h"
 
 #include "BLI_jitter_2d.h"
 #include "BLI_kdtree.h"
-#include "BLI_math.h"
 #include "BLI_math_geom.h"
 #include "BLI_rand.h"
 #include "BLI_sort.h"
@@ -25,16 +24,16 @@
 #include "DNA_particle_types.h"
 #include "DNA_scene_types.h"
 
-#include "BKE_customdata.h"
+#include "BKE_customdata.hh"
 #include "BKE_global.h"
 #include "BKE_lib_id.h"
-#include "BKE_mesh.h"
-#include "BKE_mesh_legacy_convert.h"
-#include "BKE_mesh_runtime.h"
-#include "BKE_object.h"
+#include "BKE_mesh.hh"
+#include "BKE_mesh_legacy_convert.hh"
+#include "BKE_mesh_runtime.hh"
+#include "BKE_object.hh"
 #include "BKE_particle.h"
 
-#include "DEG_depsgraph_query.h"
+#include "DEG_depsgraph_query.hh"
 
 static void alloc_child_particles(ParticleSystem *psys, int tot)
 {
@@ -100,7 +99,7 @@ static void distribute_grid(Mesh *mesh, ParticleSystem *psys)
 {
   ParticleData *pa = nullptr;
   float min[3], max[3], delta[3], d;
-  const float(*positions)[3] = BKE_mesh_vert_positions(mesh);
+  const blender::Span<blender::float3> positions = mesh->vert_positions();
   int totvert = mesh->totvert, from = psys->part->from;
   int i, j, k, p, res = psys->part->grid_res, size[3], axis;
 
@@ -121,19 +120,19 @@ static void distribute_grid(Mesh *mesh, ParticleSystem *psys)
   /* determine major axis */
   axis = axis_dominant_v3_single(delta);
 
-  d = delta[axis] / (float)res;
+  d = delta[axis] / float(res);
 
   size[axis] = res;
-  size[(axis + 1) % 3] = (int)ceil(delta[(axis + 1) % 3] / d);
-  size[(axis + 2) % 3] = (int)ceil(delta[(axis + 2) % 3] / d);
+  size[(axis + 1) % 3] = int(ceil(delta[(axis + 1) % 3] / d));
+  size[(axis + 2) % 3] = int(ceil(delta[(axis + 2) % 3] / d));
 
   /* float errors grrr. */
   size[(axis + 1) % 3] = MIN2(size[(axis + 1) % 3], res);
-  size[(axis + 2) % 3] = MIN2(size[(axis + 2) % 3], res);
+  size[(axis + 2) % 3] = std::min(size[(axis + 2) % 3], res);
 
-  size[0] = MAX2(size[0], 1);
-  size[1] = MAX2(size[1], 1);
-  size[2] = MAX2(size[2], 1);
+  size[0] = std::max(size[0], 1);
+  size[1] = std::max(size[1], 1);
+  size[2] = std::max(size[2], 1);
 
   /* no full offset for flat/thin objects */
   min[0] += d < delta[0] ? d / 2.0f : delta[0] / 2.0f;
@@ -143,9 +142,9 @@ static void distribute_grid(Mesh *mesh, ParticleSystem *psys)
   for (i = 0, p = 0, pa = psys->particles; i < res; i++) {
     for (j = 0; j < res; j++) {
       for (k = 0; k < res; k++, p++, pa++) {
-        pa->fuv[0] = min[0] + (float)i * d;
-        pa->fuv[1] = min[1] + (float)j * d;
-        pa->fuv[2] = min[2] + (float)k * d;
+        pa->fuv[0] = min[0] + float(i) * d;
+        pa->fuv[1] = min[1] + float(j) * d;
+        pa->fuv[2] = min[2] + float(k) * d;
         pa->flag |= PARS_UNEXIST;
         pa->hair_index = 0; /* abused in volume calculation */
       }
@@ -167,8 +166,8 @@ static void distribute_grid(Mesh *mesh, ParticleSystem *psys)
       vec[0] /= delta[0];
       vec[1] /= delta[1];
       vec[2] /= delta[2];
-      pa[((int)(vec[0] * (size[0] - 1)) * res + (int)(vec[1] * (size[1] - 1))) * res +
-         (int)(vec[2] * (size[2] - 1))]
+      pa[(int(vec[0] * (size[0] - 1)) * res + int(vec[1] * (size[1] - 1))) * res +
+         int(vec[2] * (size[2] - 1))]
           .flag &= ~PARS_UNEXIST;
     }
   }
@@ -180,9 +179,9 @@ static void distribute_grid(Mesh *mesh, ParticleSystem *psys)
     int a, a1, a2, a0mul, a1mul, a2mul, totface;
     int amax = from == PART_FROM_FACE ? 3 : 1;
 
-    totface = mesh->totface;
+    totface = mesh->totface_legacy;
     mface = mface_array = static_cast<MFace *>(
-        CustomData_get_layer_for_write(&mesh->fdata, CD_MFACE, mesh->totface));
+        CustomData_get_layer_for_write(&mesh->fdata_legacy, CD_MFACE, mesh->totface_legacy));
 
     for (a = 0; a < amax; a++) {
       if (a == 0) {
@@ -212,7 +211,7 @@ static void distribute_grid(Mesh *mesh, ParticleSystem *psys)
           co2[a] += delta[a] + 0.001f * d;
           co1[a] -= 0.001f * d;
 
-          struct IsectRayPrecalc isect_precalc;
+          IsectRayPrecalc isect_precalc;
           float ray_direction[3];
           sub_v3_v3v3(ray_direction, co2, co1);
           isect_ray_tri_watertight_v3_precalc(&isect_precalc, ray_direction);
@@ -228,14 +227,14 @@ static void distribute_grid(Mesh *mesh, ParticleSystem *psys)
             bool intersects_tri = isect_ray_tri_watertight_v3(
                 co1, &isect_precalc, v1, v2, v3, &lambda, nullptr);
             if (intersects_tri) {
-              pa1 = (pa + (int)(lambda * size[a]) * a0mul);
+              pa1 = (pa + int(lambda * size[a]) * a0mul);
             }
 
             if (mface->v4 && (!intersects_tri || from == PART_FROM_VOLUME)) {
               copy_v3_v3(v4, positions[mface->v4]);
 
               if (isect_ray_tri_watertight_v3(co1, &isect_precalc, v1, v3, v4, &lambda, nullptr)) {
-                pa2 = (pa + (int)(lambda * size[a]) * a0mul);
+                pa2 = (pa + int(lambda * size[a]) * a0mul);
               }
             }
 
@@ -328,14 +327,14 @@ static void hammersley_create(float *out, int n, int seed, float amount)
   double ofs[2], t;
 
   rng = BLI_rng_new(31415926 + n + seed);
-  ofs[0] = BLI_rng_get_double(rng) + (double)amount;
-  ofs[1] = BLI_rng_get_double(rng) + (double)amount;
+  ofs[0] = BLI_rng_get_double(rng) + double(amount);
+  ofs[1] = BLI_rng_get_double(rng) + double(amount);
   BLI_rng_free(rng);
 
   for (int k = 0; k < n; k++) {
     BLI_hammersley_1d(k, &t);
 
-    out[2 * k + 0] = fmod((double)k / (double)n + ofs[0], 1.0);
+    out[2 * k + 0] = fmod(double(k) / double(n) + ofs[0], 1.0);
     out[2 * k + 1] = fmod(t + ofs[1], 1.0);
   }
 }
@@ -351,9 +350,9 @@ static void init_mv_jit(float *jit, int num, int seed2, float amount)
     return;
   }
 
-  rad1 = (float)(1.0f / sqrtf((float)num));
-  rad2 = (float)(1.0f / ((float)num));
-  rad3 = (float)sqrtf((float)num) / ((float)num);
+  rad1 = float(1.0f / sqrtf(float(num)));
+  rad2 = float(1.0f / float(num));
+  rad3 = float(sqrtf(float(num)) / float(num));
 
   rng = BLI_rng_new(31415926 + num + seed2);
   x = 0;
@@ -363,11 +362,11 @@ static void init_mv_jit(float *jit, int num, int seed2, float amount)
     jit[i] = x + amount * rad1 * (0.5f - BLI_rng_get_float(rng));
     jit[i + 1] = i / (2.0f * num) + amount * rad1 * (0.5f - BLI_rng_get_float(rng));
 
-    jit[i] -= (float)floor(jit[i]);
-    jit[i + 1] -= (float)floor(jit[i + 1]);
+    jit[i] -= float(floor(jit[i]));
+    jit[i + 1] -= float(floor(jit[i + 1]));
 
     x += rad3;
-    x -= (float)floor(x);
+    x -= float(floor(x));
   }
 
   jit2 = static_cast<float *>(MEM_mallocN(12 + sizeof(float[2]) * num, "initjit"));
@@ -466,8 +465,8 @@ static void distribute_from_verts_exec(ParticleTask *thread, ParticleData *pa, i
   ParticleThreadContext *ctx = thread->ctx;
   MFace *mface;
 
-  mface = static_cast<MFace *>(
-      CustomData_get_layer_for_write(&ctx->mesh->fdata, CD_MFACE, ctx->mesh->totface));
+  mface = static_cast<MFace *>(CustomData_get_layer_for_write(
+      &ctx->mesh->fdata_legacy, CD_MFACE, ctx->mesh->totface_legacy));
 
   int rng_skip_tot = PSYS_RND_DIST_SKIP; /* count how many rng_* calls won't need skipping */
 
@@ -481,7 +480,7 @@ static void distribute_from_verts_exec(ParticleTask *thread, ParticleData *pa, i
     /* This finds the first face to contain the emitting vertex,
      * this is not ideal, but is mostly fine as UV seams generally
      * map to equal-colored parts of a texture */
-    for (int i = 0; i < ctx->mesh->totface; i++, mface++) {
+    for (int i = 0; i < ctx->mesh->totface_legacy; i++, mface++) {
       if (ELEM(pa->num, mface->v1, mface->v2, mface->v3, mface->v4)) {
         uint *vert = &mface->v1;
 
@@ -504,7 +503,7 @@ static void distribute_from_verts_exec(ParticleTask *thread, ParticleData *pa, i
 
     psys_particle_on_dm(
         ctx->mesh, from, pa->num, pa->num_dmcache, pa->fuv, pa->foffset, co1, 0, 0, 0, orco1, 0);
-    BKE_mesh_orco_verts_transform(ob->data, &orco1, 1, 1);
+    BKE_mesh_orco_verts_transform(ob->data, &orco1, 1, true);
     maxw = BLI_kdtree_3d_find_nearest_n(ctx->tree, orco1, ptn, 3);
 
     for (w = 0; w < maxw; w++) {
@@ -528,7 +527,8 @@ static void distribute_from_faces_exec(ParticleTask *thread, ParticleData *pa, i
   int i;
   int rng_skip_tot = PSYS_RND_DIST_SKIP; /* count how many rng_* calls won't need skipping */
 
-  MFace *mfaces = (MFace *)CustomData_get_layer_for_write(&mesh->fdata, CD_MFACE, mesh->totface);
+  MFace *mfaces = (MFace *)CustomData_get_layer_for_write(
+      &mesh->fdata_legacy, CD_MFACE, mesh->totface_legacy);
   MFace *mface;
 
   pa->num = i = ctx->index[p];
@@ -545,10 +545,10 @@ static void distribute_from_faces_exec(ParticleTask *thread, ParticleData *pa, i
         }
       }
       else {
-        float offset = fmod(ctx->jitoff[i] + (float)p, (float)ctx->jitlevel);
+        float offset = fmod(ctx->jitoff[i] + float(p), float(ctx->jitlevel));
         if (!isnan(offset)) {
           psys_uv_to_w(
-              ctx->jit[2 * (int)offset], ctx->jit[2 * (int)offset + 1], mface->v4, pa->fuv);
+              ctx->jit[2 * int(offset)], ctx->jit[2 * int(offset) + 1], mface->v4, pa->fuv);
         }
       }
       break;
@@ -580,10 +580,11 @@ static void distribute_from_volume_exec(ParticleTask *thread, ParticleData *pa, 
   int rng_skip_tot = PSYS_RND_DIST_SKIP; /* count how many rng_* calls won't need skipping */
 
   MFace *mface;
-  const float(*positions)[3] = BKE_mesh_vert_positions(mesh);
+  const blender::Span<blender::float3> positions = mesh->vert_positions();
 
   pa->num = i = ctx->index[p];
-  MFace *mfaces = (MFace *)CustomData_get_layer_for_write(&mesh->fdata, CD_MFACE, mesh->totface);
+  MFace *mfaces = (MFace *)CustomData_get_layer_for_write(
+      &mesh->fdata_legacy, CD_MFACE, mesh->totface_legacy);
   mface = &mfaces[i];
 
   switch (distr) {
@@ -597,10 +598,10 @@ static void distribute_from_volume_exec(ParticleTask *thread, ParticleData *pa, 
         }
       }
       else {
-        float offset = fmod(ctx->jitoff[i] + (float)p, (float)ctx->jitlevel);
+        float offset = fmod(ctx->jitoff[i] + float(p), float(ctx->jitlevel));
         if (!isnan(offset)) {
           psys_uv_to_w(
-              ctx->jit[2 * (int)offset], ctx->jit[2 * (int)offset + 1], mface->v4, pa->fuv);
+              ctx->jit[2 * int(offset)], ctx->jit[2 * int(offset) + 1], mface->v4, pa->fuv);
         }
       }
       break;
@@ -615,10 +616,20 @@ static void distribute_from_volume_exec(ParticleTask *thread, ParticleData *pa, 
   pa->foffset = 0.0f;
 
   /* experimental */
-  tot = mesh->totface;
+  tot = mesh->totface_legacy;
 
-  psys_interpolate_face(
-      mesh, positions, BKE_mesh_vert_normals_ensure(mesh), mface, 0, 0, pa->fuv, co, nor, 0, 0, 0);
+  psys_interpolate_face(mesh,
+                        reinterpret_cast<const float(*)[3]>(positions.data()),
+                        reinterpret_cast<const float(*)[3]>(mesh->vert_normals().data()),
+                        mface,
+                        nullptr,
+                        nullptr,
+                        pa->fuv,
+                        co,
+                        nor,
+                        nullptr,
+                        nullptr,
+                        nullptr);
 
   normalize_v3(nor);
   negate_v3(nor);
@@ -626,7 +637,7 @@ static void distribute_from_volume_exec(ParticleTask *thread, ParticleData *pa, 
   min_d = FLT_MAX;
   intersect = 0;
   mface = static_cast<MFace *>(
-      CustomData_get_layer_for_write(&mesh->fdata, CD_MFACE, mesh->totface));
+      CustomData_get_layer_for_write(&mesh->fdata_legacy, CD_MFACE, mesh->totface_legacy));
   for (i = 0; i < tot; i++, mface++) {
     if (i == pa->num) {
       continue;
@@ -696,7 +707,8 @@ static void distribute_children_exec(ParticleTask *thread, ChildParticle *cpa, i
     return;
   }
 
-  MFace *mfaces = (MFace *)CustomData_get_layer_for_write(&mesh->fdata, CD_MFACE, mesh->totface);
+  MFace *mfaces = (MFace *)CustomData_get_layer_for_write(
+      &mesh->fdata_legacy, CD_MFACE, mesh->totface_legacy);
   mf = &mfaces[ctx->index[p]];
 
   randu = BLI_rng_get_float(thread->rng);
@@ -725,16 +737,16 @@ static void distribute_children_exec(ParticleTask *thread, ChildParticle *cpa, i
                         nullptr,
                         nullptr,
                         orco1);
-    BKE_mesh_orco_verts_transform(static_cast<Mesh *>(ob->data), &orco1, 1, 1);
+    BKE_mesh_orco_verts_transform(static_cast<Mesh *>(ob->data), &orco1, 1, true);
     maxw = BLI_kdtree_3d_find_nearest_n(ctx->tree, orco1, ptn, 3);
 
     maxd = ptn[maxw - 1].dist;
-    /* mind=ptn[0].dist; */ /* UNUSED */
+    // mind=ptn[0].dist; /* UNUSED */
 
     /* the weights here could be done better */
     for (w = 0; w < maxw; w++) {
       parent[w] = ptn[w].index;
-      pweight[w] = (float)pow(2.0, (double)(-6.0f * ptn[w].dist / maxd));
+      pweight[w] = float(pow(2.0, double(-6.0f * ptn[w].dist / maxd)));
     }
     for (; w < 10; w++) {
       parent[w] = -1;
@@ -880,15 +892,15 @@ static int psys_thread_context_init_distribute(ParticleThreadContext *ctx,
   Mesh *final_mesh = sim->psmd->mesh_final;
   Object *ob = sim->ob;
   ParticleSystem *psys = sim->psys;
-  ParticleData *pa = 0, *tpars = 0;
+  ParticleData *pa = nullptr, *tpars = nullptr;
   ParticleSettings *part;
-  ParticleSeam *seams = 0;
-  KDTree_3d *tree = 0;
+  ParticleSeam *seams = nullptr;
+  KDTree_3d *tree = nullptr;
   Mesh *mesh = nullptr;
   float *jit = nullptr;
   int i, p = 0;
   int cfrom = 0;
-  int totelem = 0, totpart, *particle_element = 0, children = 0, totseam = 0;
+  int totelem = 0, totpart, *particle_element = nullptr, children = 0, totseam = 0;
   int jitlevel = 1, distr;
   float *element_weight = nullptr, *jitter_offset = nullptr, *vweight = nullptr;
   float cur, maxweight = 0.0, tweight, totweight, inv_totweight, co[3], nor[3], orco[3];
@@ -904,8 +916,8 @@ static int psys_thread_context_init_distribute(ParticleThreadContext *ctx,
     return 0;
   }
 
-  if (!BKE_mesh_is_deformed_only(final_mesh) &&
-      !CustomData_get_layer(&final_mesh->fdata, CD_ORIGINDEX))
+  if (!final_mesh->runtime->deformed_only &&
+      !CustomData_get_layer(&final_mesh->fdata_legacy, CD_ORIGINDEX))
   {
     printf(
         "Can't create particles with the current modifier stack, disable destructive modifiers\n");
@@ -970,9 +982,18 @@ static int psys_thread_context_init_distribute(ParticleThreadContext *ctx,
     tree = BLI_kdtree_3d_new(totpart);
 
     for (p = 0, pa = psys->particles; p < totpart; p++, pa++) {
-      psys_particle_on_dm(
-          mesh, part->from, pa->num, pa->num_dmcache, pa->fuv, pa->foffset, co, nor, 0, 0, orco);
-      BKE_mesh_orco_verts_transform(static_cast<Mesh *>(ob->data), &orco, 1, 1);
+      psys_particle_on_dm(mesh,
+                          part->from,
+                          pa->num,
+                          pa->num_dmcache,
+                          pa->fuv,
+                          pa->foffset,
+                          co,
+                          nor,
+                          nullptr,
+                          nullptr,
+                          orco);
+      BKE_mesh_orco_verts_transform(static_cast<Mesh *>(ob->data), &orco, 1, true);
       BLI_kdtree_3d_insert(tree, p, orco);
     }
 
@@ -1000,9 +1021,9 @@ static int psys_thread_context_init_distribute(ParticleThreadContext *ctx,
     BKE_mesh_orco_ensure(ob, mesh);
 
     if (from == PART_FROM_VERT) {
-      const float(*positions)[3] = BKE_mesh_vert_positions(mesh);
+      const blender::Span<blender::float3> positions = mesh->vert_positions();
       const float(*orcodata)[3] = static_cast<const float(*)[3]>(
-          CustomData_get_layer(&mesh->vdata, CD_ORCO));
+          CustomData_get_layer(&mesh->vert_data, CD_ORCO));
       int totvert = mesh->totvert;
 
       tree = BLI_kdtree_3d_new(totvert);
@@ -1010,7 +1031,7 @@ static int psys_thread_context_init_distribute(ParticleThreadContext *ctx,
       for (p = 0; p < totvert; p++) {
         if (orcodata) {
           copy_v3_v3(co, orcodata[p]);
-          BKE_mesh_orco_verts_transform(static_cast<Mesh *>(ob->data), &co, 1, 1);
+          BKE_mesh_orco_verts_transform(static_cast<Mesh *>(ob->data), &co, 1, true);
         }
         else {
           copy_v3_v3(co, positions[p]);
@@ -1023,7 +1044,7 @@ static int psys_thread_context_init_distribute(ParticleThreadContext *ctx,
   }
 
   /* Get total number of emission elements and allocate needed arrays */
-  totelem = (from == PART_FROM_VERT) ? mesh->totvert : mesh->totface;
+  totelem = (from == PART_FROM_VERT) ? mesh->totvert : mesh->totface_legacy;
 
   if (totelem == 0) {
     distribute_invalid(sim, children ? PART_FROM_CHILD : 0);
@@ -1054,9 +1075,10 @@ static int psys_thread_context_init_distribute(ParticleThreadContext *ctx,
     float totarea = 0.0f, co1[3], co2[3], co3[3], co4[3];
     const float(*orcodata)[3];
 
-    orcodata = static_cast<const float(*)[3]>(CustomData_get_layer(&mesh->vdata, CD_ORCO));
+    orcodata = static_cast<const float(*)[3]>(CustomData_get_layer(&mesh->vert_data, CD_ORCO));
 
-    MFace *mfaces = (MFace *)CustomData_get_layer_for_write(&mesh->fdata, CD_MFACE, mesh->totface);
+    MFace *mfaces = (MFace *)CustomData_get_layer_for_write(
+        &mesh->fdata_legacy, CD_MFACE, mesh->totface_legacy);
     for (i = 0; i < totelem; i++) {
       MFace *mf = &mfaces[i];
 
@@ -1065,16 +1087,16 @@ static int psys_thread_context_init_distribute(ParticleThreadContext *ctx,
         copy_v3_v3(co1, orcodata[mf->v1]);
         copy_v3_v3(co2, orcodata[mf->v2]);
         copy_v3_v3(co3, orcodata[mf->v3]);
-        BKE_mesh_orco_verts_transform(static_cast<Mesh *>(ob->data), &co1, 1, 1);
-        BKE_mesh_orco_verts_transform(static_cast<Mesh *>(ob->data), &co2, 1, 1);
-        BKE_mesh_orco_verts_transform(static_cast<Mesh *>(ob->data), &co3, 1, 1);
+        BKE_mesh_orco_verts_transform(static_cast<Mesh *>(ob->data), &co1, 1, true);
+        BKE_mesh_orco_verts_transform(static_cast<Mesh *>(ob->data), &co2, 1, true);
+        BKE_mesh_orco_verts_transform(static_cast<Mesh *>(ob->data), &co3, 1, true);
         if (mf->v4) {
           copy_v3_v3(co4, orcodata[mf->v4]);
-          BKE_mesh_orco_verts_transform(static_cast<Mesh *>(ob->data), &co4, 1, 1);
+          BKE_mesh_orco_verts_transform(static_cast<Mesh *>(ob->data), &co4, 1, true);
         }
       }
       else {
-        const float(*positions)[3] = BKE_mesh_vert_positions_for_write(mesh);
+        blender::MutableSpan<blender::float3> positions = mesh->vert_positions_for_write();
         copy_v3_v3(co1, positions[mf->v1]);
         copy_v3_v3(co2, positions[mf->v2]);
         copy_v3_v3(co3, positions[mf->v3]);
@@ -1100,7 +1122,7 @@ static int psys_thread_context_init_distribute(ParticleThreadContext *ctx,
     maxweight /= totarea;
   }
   else {
-    float min = 1.0f / (float)MIN2(totelem, totpart);
+    float min = 1.0f / float(MIN2(totelem, totpart));
     for (i = 0; i < totelem; i++) {
       element_weight[i] = min;
     }
@@ -1118,7 +1140,7 @@ static int psys_thread_context_init_distribute(ParticleThreadContext *ctx,
     }
     else { /* PART_FROM_FACE / PART_FROM_VOLUME */
       MFace *mfaces = (MFace *)CustomData_get_layer_for_write(
-          &mesh->fdata, CD_MFACE, mesh->totface);
+          &mesh->fdata_legacy, CD_MFACE, mesh->totface_legacy);
       for (i = 0; i < totelem; i++) {
         MFace *mf = &mfaces[i];
         tweight = vweight[mf->v1] + vweight[mf->v2] + vweight[mf->v3];
@@ -1207,7 +1229,7 @@ static int psys_thread_context_init_distribute(ParticleThreadContext *ctx,
   else {
     double step, pos;
 
-    step = (totpart < 2) ? 0.5 : 1.0 / (double)totpart;
+    step = (totpart < 2) ? 0.5 : 1.0 / double(totpart);
     /* This is to address tricky issues with vertex-emitting when user tries
      * (and expects) exact 1-1 vert/part distribution (see #47983 and its two example files).
      * It allows us to consider pos as 'midpoint between v and v+1'
@@ -1215,11 +1237,11 @@ static int psys_thread_context_init_distribute(ParticleThreadContext *ctx,
      * and avoid stumbling over float impression in element_sum.
      * NOTE: moved face and volume distribution to this as well (instead of starting at zero),
      * for the same reasons, see #52682. */
-    pos = (totpart < totmapped) ? 0.5 / (double)totmapped :
+    pos = (totpart < totmapped) ? 0.5 / double(totmapped) :
                                   step * 0.5; /* We choose the smaller step. */
 
     for (i = 0, p = 0; p < totpart; p++, pos += step) {
-      for (; (i < totmapped - 1) && (pos > (double)element_sum[i]); i++) {
+      for (; (i < totmapped - 1) && (pos > double(element_sum[i])); i++) {
         /* pass */
       }
 
@@ -1239,12 +1261,14 @@ static int psys_thread_context_init_distribute(ParticleThreadContext *ctx,
 
     if (from == PART_FROM_VERT) {
       if (mesh->totvert) {
-        orig_index = static_cast<const int *>(CustomData_get_layer(&mesh->vdata, CD_ORIGINDEX));
+        orig_index = static_cast<const int *>(
+            CustomData_get_layer(&mesh->vert_data, CD_ORIGINDEX));
       }
     }
     else {
-      if (mesh->totface) {
-        orig_index = static_cast<const int *>(CustomData_get_layer(&mesh->fdata, CD_ORIGINDEX));
+      if (mesh->totface_legacy) {
+        orig_index = static_cast<const int *>(
+            CustomData_get_layer(&mesh->fdata_legacy, CD_ORIGINDEX));
       }
     }
 

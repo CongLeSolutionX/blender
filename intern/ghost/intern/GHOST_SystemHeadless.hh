@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2022-2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2022-2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -14,7 +14,7 @@
 #include "GHOST_System.hh"
 #include "GHOST_WindowNULL.hh"
 
-#ifdef __linux__
+#if defined(WITH_OPENGL_BACKEND) && defined(__linux__)
 #  include "GHOST_ContextEGL.hh"
 #endif
 #include "GHOST_ContextNone.hh"
@@ -50,7 +50,8 @@ class GHOST_SystemHeadless : public GHOST_System {
                                  /* No windowing functionality supported. */
                                  ~(GHOST_kCapabilityWindowPosition | GHOST_kCapabilityCursorWarp |
                                    GHOST_kCapabilityPrimaryClipboard |
-                                   GHOST_kCapabilityClipboardImages));
+                                   GHOST_kCapabilityDesktopSample |
+                                   GHOST_kCapabilityClipboardImages | GHOST_kCapabilityInputIME));
   }
   char *getClipboard(bool /*selection*/) const override
   {
@@ -83,7 +84,7 @@ class GHOST_SystemHeadless : public GHOST_System {
   }
   GHOST_IContext *createOffscreenContext(GHOST_GPUSettings /*gpuSettings*/) override
   {
-#ifdef __linux__
+#if defined(WITH_OPENGL_BACKEND) && defined(__linux__)
     GHOST_Context *context;
     for (int minor = 6; minor >= 3; --minor) {
       context = new GHOST_ContextEGL((GHOST_System *)this,

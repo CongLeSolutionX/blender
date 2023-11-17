@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2018 Blender Foundation
+/* SPDX-FileCopyrightText: 2018 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -8,7 +8,7 @@
  * Physics utilities for effectors and collision.
  */
 
-#include "intern/depsgraph_physics.h"
+#include "intern/depsgraph_physics.hh"
 
 #include "MEM_guardedalloc.h"
 
@@ -17,17 +17,17 @@
 
 #include "BKE_collision.h"
 #include "BKE_effect.h"
-#include "BKE_modifier.h"
+#include "BKE_modifier.hh"
 
 #include "DNA_collection_types.h"
 #include "DNA_object_force_types.h"
 #include "DNA_object_types.h"
 
-#include "DEG_depsgraph_build.h"
-#include "DEG_depsgraph_physics.h"
-#include "DEG_depsgraph_query.h"
+#include "DEG_depsgraph_build.hh"
+#include "DEG_depsgraph_physics.hh"
+#include "DEG_depsgraph_query.hh"
 
-#include "depsgraph.h"
+#include "depsgraph.hh"
 
 namespace deg = blender::deg;
 

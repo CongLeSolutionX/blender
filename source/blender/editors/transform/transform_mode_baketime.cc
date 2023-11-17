@@ -6,17 +6,17 @@
  * \ingroup edtransform
  */
 
-#include <stdlib.h>
+#include <cstdlib>
 
-#include "BLI_math.h"
+#include "BLI_math_vector.h"
 #include "BLI_string.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_unit.h"
 
-#include "ED_screen.h"
+#include "ED_screen.hh"
 
-#include "UI_interface.h"
+#include "UI_interface.hh"
 
 #include "BLT_translation.h"
 
@@ -30,7 +30,7 @@
 /** \name Transform (Bake-Time)
  * \{ */
 
-static void applyBakeTime(TransInfo *t, const int mval[2])
+static void applyBakeTime(TransInfo *t)
 {
   float time;
   int i;
@@ -49,7 +49,7 @@ static void applyBakeTime(TransInfo *t, const int mval[2])
   else
 #endif
   {
-    time = float(t->center2d[0] - mval[0]) * fac;
+    time = (t->center2d[0] - t->mval[0]) * fac;
   }
 
   transform_snap_increment(t, &time);
@@ -86,19 +86,27 @@ static void applyBakeTime(TransInfo *t, const int mval[2])
         continue;
       }
 
+      float *dst, ival;
       if (td->val) {
-        *td->val = td->ival + time * td->factor;
-        if (td->ext->size && *td->val < *td->ext->size) {
-          *td->val = *td->ext->size;
-        }
-        if (td->ext->quat && *td->val > *td->ext->quat) {
-          *td->val = *td->ext->quat;
-        }
+        dst = td->val;
+        ival = td->ival;
+      }
+      else {
+        dst = &td->loc[0];
+        ival = td->iloc[0];
+      }
+
+      *dst = ival + time * td->factor;
+      if (td->ext->size && *dst < *td->ext->size) {
+        *dst = *td->ext->size;
+      }
+      if (td->ext->quat && *dst > *td->ext->quat) {
+        *dst = *td->ext->quat;
       }
     }
   }
 
-  recalcData(t);
+  recalc_data(t);
 
   ED_area_status_text(t->area, str);
 }

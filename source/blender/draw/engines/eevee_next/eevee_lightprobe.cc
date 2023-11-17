@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -10,7 +10,7 @@
  */
 
 #include "DNA_lightprobe_types.h"
-#include "WM_api.h"
+#include "WM_api.hh"
 
 #include "eevee_instance.hh"
 #include "eevee_lightprobe.hh"
@@ -30,13 +30,28 @@ void LightProbeModule::sync_grid(const Object *ob, ObjectHandle &handle)
   IrradianceGrid &grid = grid_map_.lookup_or_add_default(handle.object_key);
   grid.used = true;
   if (handle.recalc != 0 || grid.initialized == false) {
+    const ::LightProbe *lightprobe = static_cast<const ::LightProbe *>(ob->data);
+
     grid.initialized = true;
     grid.updated = true;
+    grid.surfel_density = static_cast<const ::LightProbe *>(ob->data)->surfel_density;
     grid.object_to_world = float4x4(ob->object_to_world);
     grid.world_to_object = float4x4(
         math::normalize(math::transpose(float3x3(grid.object_to_world))));
 
     grid.cache = ob->lightprobe_cache;
+    grid.normal_bias = lightprobe->grid_normal_bias;
+    grid.view_bias = lightprobe->grid_view_bias;
+    grid.facing_bias = lightprobe->grid_facing_bias;
+
+    grid.validity_threshold = lightprobe->grid_validity_threshold;
+    grid.dilation_threshold = lightprobe->grid_dilation_threshold;
+    grid.dilation_radius = lightprobe->grid_dilation_radius;
+    grid.intensity = lightprobe->intensity;
+
+    grid.viewport_display = lightprobe->flag & LIGHTPROBE_FLAG_SHOW_DATA;
+    grid.viewport_display_size = lightprobe->data_display_size;
+
     /* Force reupload. */
     inst_.irradiance_cache.bricks_free(grid.bricks);
   }
@@ -56,13 +71,13 @@ void LightProbeModule::sync_probe(const Object *ob, ObjectHandle &handle)
 {
   const ::LightProbe *lightprobe = static_cast<const ::LightProbe *>(ob->data);
   switch (lightprobe->type) {
-    case LIGHTPROBE_TYPE_CUBE:
+    case LIGHTPROBE_TYPE_SPHERE:
       sync_cube(handle);
       return;
-    case LIGHTPROBE_TYPE_PLANAR:
+    case LIGHTPROBE_TYPE_PLANE:
       /* TODO(fclem): Remove support? Add support? */
       return;
-    case LIGHTPROBE_TYPE_GRID:
+    case LIGHTPROBE_TYPE_VOLUME:
       sync_grid(ob, handle);
       return;
   }

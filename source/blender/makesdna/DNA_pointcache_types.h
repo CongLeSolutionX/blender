@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -9,10 +9,6 @@
 #pragma once
 
 #include "DNA_listBase.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 /**
  * Point cache file data types:
@@ -158,7 +154,3 @@ enum {
   PTCACHE_COMPRESS_LZO = 1,
   PTCACHE_COMPRESS_LZMA = 2,
 };
-
-#ifdef __cplusplus
-}
-#endif

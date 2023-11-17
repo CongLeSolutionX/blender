@@ -99,15 +99,10 @@ NODE_DEFINE(Light)
 
   SOCKET_COLOR(strength, "Strength", one_float3());
 
-  SOCKET_POINT(co, "Co", zero_float3());
-
-  SOCKET_VECTOR(dir, "Dir", zero_float3());
   SOCKET_FLOAT(size, "Size", 0.0f);
   SOCKET_FLOAT(angle, "Angle", 0.0f);
 
-  SOCKET_VECTOR(axisu, "Axis U", zero_float3());
   SOCKET_FLOAT(sizeu, "Size U", 1.0f);
-  SOCKET_VECTOR(axisv, "Axis V", zero_float3());
   SOCKET_FLOAT(sizev, "Size V", 1.0f);
   SOCKET_BOOLEAN(ellipse, "Ellipse", false);
   SOCKET_FLOAT(spread, "Spread", M_PI_F);
@@ -191,6 +186,26 @@ bool Light::has_shadow_linking() const
   }
 
   return false;
+}
+
+float3 Light::get_co() const
+{
+  return transform_get_column(&tfm, 3);
+}
+
+float3 Light::get_dir() const
+{
+  return -transform_get_column(&tfm, 2);
+}
+
+float3 Light::get_axisu() const
+{
+  return transform_get_column(&tfm, 0);
+}
+
+float3 Light::get_axisv() const
+{
+  return transform_get_column(&tfm, 1);
 }
 
 /* Light Manager */
@@ -278,8 +293,9 @@ void LightManager::device_update_distribution(Device *,
   size_t num_triangles = 0;
 
   foreach (Object *object, scene->objects) {
-    if (progress.get_cancel())
+    if (progress.get_cancel()) {
       return;
+    }
 
     if (!object->usable_as_light()) {
       continue;
@@ -323,8 +339,9 @@ void LightManager::device_update_distribution(Device *,
   int j = 0;
 
   foreach (Object *object, scene->objects) {
-    if (progress.get_cancel())
+    if (progress.get_cancel()) {
       return;
+    }
 
     if (!object->usable_as_light()) {
       j++;
@@ -399,8 +416,9 @@ void LightManager::device_update_distribution(Device *,
   if (num_lights > 0) {
     float lightarea = (totarea > 0.0f) ? totarea / num_lights : 1.0f;
     foreach (Light *light, scene->lights) {
-      if (!light->is_enabled)
+      if (!light->is_enabled) {
         continue;
+      }
 
       distribution[offset].totarea = totarea;
       distribution[offset].prim = ~light_index;
@@ -420,13 +438,15 @@ void LightManager::device_update_distribution(Device *,
   distribution[num_distribution].mesh_light.shader_flag = 0;
 
   if (totarea > 0.0f) {
-    for (size_t i = 0; i < num_distribution; i++)
+    for (size_t i = 0; i < num_distribution; i++) {
       distribution[i].totarea /= totarea;
+    }
     distribution[num_distribution].totarea = 1.0f;
   }
 
-  if (progress.get_cancel())
+  if (progress.get_cancel()) {
     return;
+  }
 
   /* Update integrator state. */
   kintegrator->use_direct_light = (totarea > 0.0f);
@@ -1033,8 +1053,9 @@ void LightManager::device_update_background(Device *device,
   vector<float3> pixels;
   shade_background_pixels(device, dscene, res.x, res.y, pixels, progress);
 
-  if (progress.get_cancel())
+  if (progress.get_cancel()) {
     return;
+  }
 
   /* build row distributions and column distribution for the infinite area environment light */
   int cdf_width = res.x + 1;
@@ -1075,9 +1096,11 @@ void LightManager::device_update_background(Device *device,
     background_light->set_average_radiance(map_average_radiance);
   }
 
-  if (cdf_total > 0.0f)
-    for (int i = 1; i < res.y; i++)
+  if (cdf_total > 0.0f) {
+    for (int i = 1; i < res.y; i++) {
       marg_cdf[i].y /= cdf_total;
+    }
+  }
 
   marg_cdf[res.y].y = 1.0f;
 
@@ -1144,8 +1167,8 @@ void LightManager::device_update_lights(Device *device, DeviceScene *dscene, Sce
     if (light->is_portal) {
       assert(light->light_type == LIGHT_AREA);
 
-      float3 extentu = light->axisu * (light->sizeu * light->size);
-      float3 extentv = light->axisv * (light->sizev * light->size);
+      float3 extentu = light->get_axisu() * (light->sizeu * light->size);
+      float3 extentv = light->get_axisv() * (light->sizev * light->size);
 
       float len_u, len_v;
       float3 axis_u = normalize_len(extentu, &len_u);
@@ -1159,11 +1182,10 @@ void LightManager::device_update_lights(Device *device, DeviceScene *dscene, Sce
         /* Negative inverse area indicates ellipse. */
         invarea = -invarea;
       }
-      float3 dir = light->dir;
 
-      dir = safe_normalize(dir);
+      float3 dir = safe_normalize(light->get_dir());
 
-      klights[portal_index].co = light->co;
+      klights[portal_index].co = light->get_co();
       klights[portal_index].area.axis_u = axis_u;
       klights[portal_index].area.len_u = len_u;
       klights[portal_index].area.axis_v = axis_v;
@@ -1181,14 +1203,13 @@ void LightManager::device_update_lights(Device *device, DeviceScene *dscene, Sce
       continue;
     }
 
-    float3 co = light->co;
     Shader *shader = (light->shader) ? light->shader : scene->default_light;
     int shader_id = scene->shader_manager->get_shader_id(shader);
-    int max_bounces = light->max_bounces;
     float random = (float)light->random_id * (1.0f / (float)0xFFFFFFFF);
 
-    if (!light->cast_shadow)
+    if (!light->cast_shadow) {
       shader_id &= ~SHADER_CAST_SHADOW;
+    }
 
     if (!light->use_camera) {
       shader_id |= SHADER_EXCLUDE_CAMERA;
@@ -1218,7 +1239,6 @@ void LightManager::device_update_lights(Device *device, DeviceScene *dscene, Sce
       shader_id &= ~SHADER_AREA_LIGHT;
 
       float radius = light->size;
-
       float invarea = (radius == 0.0f)   ? 1.0f / 4.0f :
                       (light->normalize) ? 1.0f / (4.0f * M_PI_F * radius * radius) :
                                            1.0f;
@@ -1226,17 +1246,18 @@ void LightManager::device_update_lights(Device *device, DeviceScene *dscene, Sce
       /* Convert radiant flux to radiance or radiant intensity. */
       float eval_fac = invarea * M_1_PI_F;
 
-      if (light->use_mis && radius > 0.0f)
+      if (light->use_mis && radius > 0.0f) {
         shader_id |= SHADER_USE_MIS;
+      }
 
-      klights[light_index].co = co;
+      klights[light_index].co = light->get_co();
       klights[light_index].spot.radius = radius;
       klights[light_index].spot.eval_fac = eval_fac;
     }
     else if (light->light_type == LIGHT_DISTANT) {
       shader_id &= ~SHADER_AREA_LIGHT;
 
-      float3 dir = safe_normalize(light->dir);
+      float3 dir = safe_normalize(light->get_dir());
       float angle = light->angle / 2.0f;
 
       if (light->use_mis && angle > 0.0f) {
@@ -1279,8 +1300,9 @@ void LightManager::device_update_lights(Device *device, DeviceScene *dscene, Sce
       }
     }
     else if (light->light_type == LIGHT_AREA) {
-      float3 extentu = light->axisu * (light->sizeu * light->size);
-      float3 extentv = light->axisv * (light->sizev * light->size);
+      float light_size = light->size;
+      float3 extentu = light->get_axisu() * (light->sizeu * light_size);
+      float3 extentv = light->get_axisv() * (light->sizev * light_size);
 
       float len_u, len_v;
       float3 axis_u = normalize_len(extentu, &len_u);
@@ -1294,7 +1316,6 @@ void LightManager::device_update_lights(Device *device, DeviceScene *dscene, Sce
         /* Negative inverse area indicates ellipse. */
         invarea = -invarea;
       }
-      float3 dir = light->dir;
 
       const float half_spread = 0.5f * light->spread;
       const float tan_half_spread = light->spread == M_PI_F ? FLT_MAX : tanf(half_spread);
@@ -1305,12 +1326,13 @@ void LightManager::device_update_lights(Device *device, DeviceScene *dscene, Sce
       const float normalize_spread = half_spread > 0.05f ? 1.0f / (tan_half_spread - half_spread) :
                                                            3.0f / powf(half_spread, 3.0f);
 
-      dir = safe_normalize(dir);
+      float3 dir = safe_normalize(light->get_dir());
 
-      if (light->use_mis && area != 0.0f)
+      if (light->use_mis && area != 0.0f) {
         shader_id |= SHADER_USE_MIS;
+      }
 
-      klights[light_index].co = co;
+      klights[light_index].co = light->get_co();
       klights[light_index].area.axis_u = axis_u;
       klights[light_index].area.len_u = len_u;
       klights[light_index].area.axis_v = axis_v;
@@ -1322,11 +1344,11 @@ void LightManager::device_update_lights(Device *device, DeviceScene *dscene, Sce
     }
     if (light->light_type == LIGHT_SPOT) {
       /* Scale axes to accommodate non-uniform scaling. */
-      float3 scaled_axis_u = light->axisu / len_squared(light->axisu);
-      float3 scaled_axis_v = light->axisv / len_squared(light->axisv);
+      float3 scaled_axis_u = light->get_axisu() / len_squared(light->get_axisu());
+      float3 scaled_axis_v = light->get_axisv() / len_squared(light->get_axisv());
       float len_z;
       /* Keep direction normalized. */
-      float3 dir = safe_normalize_len(light->dir, &len_z);
+      float3 dir = safe_normalize_len(light->get_dir(), &len_z);
 
       float cos_half_spot_angle = cosf(light->spot_angle * 0.5f);
       float spot_smooth = 1.0f / ((1.0f - cos_half_spot_angle) * light->spot_smooth);
@@ -1342,7 +1364,7 @@ void LightManager::device_update_lights(Device *device, DeviceScene *dscene, Sce
 
     klights[light_index].shader_id = shader_id;
 
-    klights[light_index].max_bounces = max_bounces;
+    klights[light_index].max_bounces = light->max_bounces;
     klights[light_index].random = random;
     klights[light_index].use_caustics = light->use_caustics;
 
@@ -1373,8 +1395,9 @@ void LightManager::device_update(Device *device,
                                  Scene *scene,
                                  Progress &progress)
 {
-  if (!need_update())
+  if (!need_update()) {
     return;
+  }
 
   scoped_callback_timer timer([scene](double time) {
     if (scene->update_stats) {
@@ -1390,26 +1413,31 @@ void LightManager::device_update(Device *device,
   device_free(device, dscene, need_update_background);
 
   device_update_lights(device, dscene, scene);
-  if (progress.get_cancel())
+  if (progress.get_cancel()) {
     return;
+  }
 
   if (need_update_background) {
     device_update_background(device, dscene, scene, progress);
-    if (progress.get_cancel())
+    if (progress.get_cancel()) {
       return;
+    }
   }
 
   device_update_distribution(device, dscene, scene, progress);
-  if (progress.get_cancel())
+  if (progress.get_cancel()) {
     return;
+  }
 
   device_update_tree(device, dscene, scene, progress);
-  if (progress.get_cancel())
+  if (progress.get_cancel()) {
     return;
+  }
 
   device_update_ies(dscene);
-  if (progress.get_cancel())
+  if (progress.get_cancel()) {
     return;
+  }
 
   update_flags = UPDATE_NONE;
   need_update_background = false;

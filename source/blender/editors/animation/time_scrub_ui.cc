@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2019 Blender Foundation
+/* SPDX-FileCopyrightText: 2019 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -6,31 +6,30 @@
  * \ingroup edanimation
  */
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_scene.h"
 
 #include "GPU_immediate.h"
 #include "GPU_matrix.h"
 #include "GPU_state.h"
 
-#include "ED_time_scrub_ui.h"
+#include "ED_time_scrub_ui.hh"
 
-#include "WM_api.h"
-#include "WM_types.h"
+#include "WM_api.hh"
+#include "WM_types.hh"
 
-#include "UI_interface.h"
-#include "UI_interface_icons.h"
-#include "UI_resources.h"
-#include "UI_view2d.h"
+#include "UI_interface.hh"
+#include "UI_interface_icons.hh"
+#include "UI_resources.hh"
+#include "UI_view2d.hh"
 
 #include "DNA_scene_types.h"
 
-#include "BLI_math.h"
 #include "BLI_rect.h"
 #include "BLI_string.h"
 #include "BLI_timecode.h"
 
-#include "RNA_access.h"
+#include "RNA_access.hh"
 #include "RNA_prototypes.h"
 
 void ED_time_scrub_region_rect_get(const ARegion *region, rcti *rect)
@@ -85,7 +84,7 @@ static void draw_current_frame(const Scene *scene,
   char frame_str[64];
   get_current_time_str(scene, display_seconds, current_frame, frame_str, sizeof(frame_str));
   float text_width = UI_fontstyle_string_width(fstyle, frame_str);
-  float box_width = MAX2(text_width + 8 * UI_SCALE_FAC, 24 * UI_SCALE_FAC);
+  float box_width = std::max(text_width + 8 * UI_SCALE_FAC, 24 * UI_SCALE_FAC);
   float box_padding = 3 * UI_SCALE_FAC;
   const int line_outline = max_ii(1, round_fl_to_int(1 * UI_SCALE_FAC));
 
@@ -208,8 +207,7 @@ void ED_time_scrub_channel_search_draw(const bContext *C, ARegion *region, bDope
   immRectf(pos, rect.xmin, rect.ymin, rect.xmax, rect.ymax);
   immUnbindProgram();
 
-  PointerRNA ptr;
-  RNA_pointer_create(&CTX_wm_screen(C)->id, &RNA_DopeSheet, dopesheet, &ptr);
+  PointerRNA ptr = RNA_pointer_create(&CTX_wm_screen(C)->id, &RNA_DopeSheet, dopesheet);
 
   const uiStyle *style = UI_style_get_dpi();
   const float padding_x = 2 * UI_SCALE_FAC;
@@ -228,8 +226,8 @@ void ED_time_scrub_channel_search_draw(const bContext *C, ARegion *region, bDope
   uiLayoutSetScaleY(layout, (UI_UNIT_Y - padding_y) / UI_UNIT_Y);
   UI_block_layout_set_current(block, layout);
   UI_block_align_begin(block);
-  uiItemR(layout, &ptr, "filter_text", 0, "", ICON_NONE);
-  uiItemR(layout, &ptr, "use_filter_invert", 0, "", ICON_ARROW_LEFTRIGHT);
+  uiItemR(layout, &ptr, "filter_text", UI_ITEM_NONE, "", ICON_NONE);
+  uiItemR(layout, &ptr, "use_filter_invert", UI_ITEM_NONE, "", ICON_ARROW_LEFTRIGHT);
   UI_block_align_end(block);
   UI_block_layout_resolve(block, nullptr, nullptr);
 

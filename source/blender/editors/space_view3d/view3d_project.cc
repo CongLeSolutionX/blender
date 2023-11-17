@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2008 Blender Foundation
+/* SPDX-FileCopyrightText: 2008 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -14,14 +14,17 @@
 
 #include "BLI_sys_types.h" /* int64_t */
 
+#include "BLI_math_geom.h"
+#include "BLI_math_matrix.h"
+#include "BLI_math_rotation.h"
 #include "BLI_math_vector.h"
 
 #include "BKE_camera.h"
-#include "BKE_screen.h"
+#include "BKE_screen.hh"
 
 #include "GPU_matrix.h"
 
-#include "ED_view3d.h" /* own include */
+#include "ED_view3d.hh" /* own include */
 
 #define BL_ZERO_CLIP 0.001
 
@@ -37,7 +40,7 @@ void ED_view3d_project_float_v2_m4(const ARegion *region,
 
   copy_v3_v3(vec4, co);
   vec4[3] = 1.0;
-  /* r_co[0] = IS_CLIPPED; */ /* always overwritten */
+  // r_co[0] = IS_CLIPPED; /* Always overwritten. */
 
   mul_m4_v4(mat, vec4);
 
@@ -59,7 +62,7 @@ void ED_view3d_project_float_v3_m4(const ARegion *region,
 
   copy_v3_v3(vec4, co);
   vec4[3] = 1.0;
-  /* r_co[0] = IS_CLIPPED; */ /* always overwritten */
+  // r_co[0] = IS_CLIPPED; /* Always overwritten. */
 
   mul_m4_v4(mat, vec4);
 
@@ -91,9 +94,10 @@ eV3DProjStatus ED_view3d_project_base(const ARegion *region, Base *base, float r
   return ret;
 }
 
-/* perspmat is typically...
- * - 'rv3d->perspmat',   is_local == false
- * - 'rv3d->persmatob', is_local == true
+/**
+ * `perspmat` is typically either:
+ * - 'rv3d->perspmat',  is_local == false.
+ * - 'rv3d->persmatob', is_local == true.
  */
 static eV3DProjStatus ed_view3d_project__internal(const ARegion *region,
                                                   const float perspmat[4][4],
@@ -317,7 +321,7 @@ float ED_view3d_calc_depth_for_comparison(const RegionView3D *rv3d, const float 
   return -dot_v3v3(rv3d->viewinv[2], co);
 }
 
-static void view3d_win_to_ray_segment(const struct Depsgraph *depsgraph,
+static void view3d_win_to_ray_segment(const Depsgraph *depsgraph,
                                       const ARegion *region,
                                       const View3D *v3d,
                                       const float mval[2],
@@ -365,30 +369,29 @@ bool ED_view3d_clip_segment(const RegionView3D *rv3d, float ray_start[3], float 
   return true;
 }
 
-bool ED_view3d_win_to_ray_clipped_ex(struct Depsgraph *depsgraph,
+bool ED_view3d_win_to_ray_clipped_ex(Depsgraph *depsgraph,
                                      const ARegion *region,
                                      const View3D *v3d,
                                      const float mval[2],
+                                     const bool do_clip_planes,
                                      float r_ray_co[3],
                                      float r_ray_normal[3],
                                      float r_ray_start[3],
-                                     bool do_clip_planes)
+                                     float r_ray_end[3])
 {
-  float ray_end[3];
-
   view3d_win_to_ray_segment(
-      depsgraph, region, v3d, mval, r_ray_co, r_ray_normal, r_ray_start, ray_end);
+      depsgraph, region, v3d, mval, r_ray_co, r_ray_normal, r_ray_start, r_ray_end);
 
   /* bounds clipping */
   if (do_clip_planes) {
     return ED_view3d_clip_segment(
-        static_cast<const RegionView3D *>(region->regiondata), r_ray_start, ray_end);
+        static_cast<const RegionView3D *>(region->regiondata), r_ray_start, r_ray_end);
   }
 
   return true;
 }
 
-bool ED_view3d_win_to_ray_clipped(struct Depsgraph *depsgraph,
+bool ED_view3d_win_to_ray_clipped(Depsgraph *depsgraph,
                                   const ARegion *region,
                                   const View3D *v3d,
                                   const float mval[2],
@@ -397,7 +400,7 @@ bool ED_view3d_win_to_ray_clipped(struct Depsgraph *depsgraph,
                                   const bool do_clip_planes)
 {
   return ED_view3d_win_to_ray_clipped_ex(
-      depsgraph, region, v3d, mval, nullptr, r_ray_normal, r_ray_start, do_clip_planes);
+      depsgraph, region, v3d, mval, do_clip_planes, nullptr, r_ray_normal, r_ray_start, nullptr);
 }
 
 void ED_view3d_win_to_ray(const ARegion *region,
@@ -664,7 +667,7 @@ void ED_view3d_win_to_vector(const ARegion *region, const float mval[2], float r
   normalize_v3(r_out);
 }
 
-bool ED_view3d_win_to_segment_clipped(const struct Depsgraph *depsgraph,
+bool ED_view3d_win_to_segment_clipped(const Depsgraph *depsgraph,
                                       const ARegion *region,
                                       const View3D *v3d,
                                       const float mval[2],

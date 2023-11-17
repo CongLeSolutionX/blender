@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -102,6 +102,18 @@ const VKPushConstants::Layout::PushConstant *VKPushConstants::Layout::find(int32
   return nullptr;
 }
 
+void VKPushConstants::Layout::debug_print() const
+{
+  std::ostream &stream = std::cout;
+  stream << "VKPushConstants::Layout::debug_print()\n";
+  for (const PushConstant &push_constant : push_constants) {
+    stream << "  - location:" << push_constant.location;
+    stream << ", offset:" << push_constant.offset;
+    stream << ", array_size:" << push_constant.array_size;
+    stream << "\n";
+  }
+}
+
 VKPushConstants::VKPushConstants() = default;
 VKPushConstants::VKPushConstants(const Layout *layout) : layout_(layout)
 {
@@ -135,19 +147,18 @@ VKPushConstants &VKPushConstants::operator=(VKPushConstants &&other)
 void VKPushConstants::update(VKContext &context)
 {
   VKShader *shader = static_cast<VKShader *>(context.shader);
-  VKCommandBuffer &command_buffer = context.command_buffer_get();
-  VKPipeline &pipeline = shader->pipeline_get();
-  BLI_assert_msg(&pipeline.push_constants_get() == this,
-                 "Invalid state detected. Push constants doesn't belong to the active shader of "
-                 "the given context.");
-  VKDescriptorSetTracker &descriptor_set = pipeline.descriptor_set_get();
+  VKCommandBuffers &command_buffers = context.command_buffers_get();
+  VKDescriptorSetTracker &descriptor_set = context.descriptor_set_get();
 
   switch (layout_get().storage_type_get()) {
     case VKPushConstants::StorageType::NONE:
       break;
 
     case VKPushConstants::StorageType::PUSH_CONSTANTS:
-      command_buffer.push_constants(*this, shader->vk_pipeline_layout_get(), VK_SHADER_STAGE_ALL);
+      command_buffers.push_constants(*this,
+                                     shader->vk_pipeline_layout_get(),
+                                     shader->is_graphics_shader() ? VK_SHADER_STAGE_ALL_GRAPHICS :
+                                                                    VK_SHADER_STAGE_COMPUTE_BIT);
       break;
 
     case VKPushConstants::StorageType::UNIFORM_BUFFER:

@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2008 Blender Foundation
+/* SPDX-FileCopyrightText: 2008 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -6,9 +6,9 @@
  * \ingroup edscr
  */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 
 #include "MEM_guardedalloc.h"
 
@@ -28,29 +28,31 @@
 #include "BLI_utildefines.h"
 
 #include "BKE_action.h"
-#include "BKE_armature.h"
+#include "BKE_armature.hh"
 #include "BKE_blender.h"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_gpencil_legacy.h"
 #include "BKE_layer.h"
-#include "BKE_object.h"
+#include "BKE_object.hh"
 #include "BKE_tracking.h"
 
-#include "RNA_access.h"
+#include "RNA_access.hh"
 #include "RNA_prototypes.h"
 
-#include "ED_anim_api.h"
-#include "ED_armature.h"
-#include "ED_clip.h"
-#include "ED_gpencil_legacy.h"
+#include "ED_anim_api.hh"
+#include "ED_armature.hh"
+#include "ED_clip.hh"
+#include "ED_gpencil_legacy.hh"
 
-#include "SEQ_channels.h"
-#include "SEQ_select.h"
-#include "SEQ_sequencer.h"
-#include "SEQ_transform.h"
+#include "SEQ_channels.hh"
+#include "SEQ_select.hh"
+#include "SEQ_sequencer.hh"
+#include "SEQ_transform.hh"
 
-#include "UI_interface.h"
-#include "WM_api.h"
+#include "UI_interface.hh"
+#include "WM_api.hh"
+
+#include "ANIM_bone_collections.h"
 
 #include "screen_intern.h"
 
@@ -112,7 +114,7 @@ const char *screen_context_dir[] = {
     "selected_editable_keyframes",
     "ui_list",
     "property",
-    "asset_library_ref",
+    "asset_library_reference",
     nullptr,
 };
 
@@ -520,7 +522,7 @@ static eContextResult screen_ctx_active_pose_bone(const bContext *C, bContextDat
   Object *obact = BKE_view_layer_active_object_get(view_layer);
   Object *obpose = BKE_object_pose_armature_get(obact);
 
-  bPoseChannel *pchan = BKE_pose_channel_active_if_layer_visible(obpose);
+  bPoseChannel *pchan = BKE_pose_channel_active_if_bonecoll_visible(obpose);
   if (pchan) {
     CTX_data_pointer_set(result, &obpose->id, &RNA_PoseBone, pchan);
     return CTX_RESULT_OK;
@@ -990,7 +992,7 @@ static eContextResult screen_ctx_editable_gpencil_strokes(const bContext *C,
   Object *obact = BKE_view_layer_active_object_get(view_layer);
 
   bGPdata *gpd = ED_gpencil_data_get_active_direct(area, obact);
-  const bool is_multiedit = (bool)GPENCIL_MULTIEDIT_SESSIONS_ON(gpd);
+  const bool is_multiedit = bool(GPENCIL_MULTIEDIT_SESSIONS_ON(gpd));
 
   if (gpd == nullptr) {
     return CTX_RESULT_NO_DATA;
@@ -1298,7 +1300,7 @@ static eContextResult screen_ctx_ui_list(const bContext *C, bContextDataResult *
 
 /* Registry of context callback functions. */
 
-typedef eContextResult (*context_callback)(const bContext *C, bContextDataResult *result);
+using context_callback = eContextResult (*)(const bContext *C, bContextDataResult *result);
 static GHash *ed_screen_context_functions = nullptr;
 
 static void free_context_function_ghash(void * /*user_data*/)
@@ -1378,7 +1380,7 @@ static void ensure_ed_screen_context_functions()
   register_context_function("selected_visible_fcurves", screen_ctx_selected_visible_fcurves);
   register_context_function("active_editable_fcurve", screen_ctx_active_editable_fcurve);
   register_context_function("selected_editable_keyframes", screen_ctx_selected_editable_keyframes);
-  register_context_function("asset_library_ref", screen_ctx_asset_library);
+  register_context_function("asset_library_reference", screen_ctx_asset_library);
   register_context_function("ui_list", screen_ctx_ui_list);
   register_context_function("property", screen_ctx_property);
 }

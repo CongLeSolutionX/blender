@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2009 Blender Foundation, Joshua Leung.
+/* SPDX-FileCopyrightText: 2009 Blender Authors, Joshua Leung.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -9,7 +9,8 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_blenlib.h"
-#include "BLI_math.h"
+#include "BLI_math_rotation.h"
+#include "BLI_math_vector.h"
 
 #include "DNA_anim_types.h"
 #include "DNA_armature_types.h"
@@ -20,21 +21,23 @@
 #include "BKE_anim_data.h"
 #include "BKE_idprop.h"
 #include "BKE_layer.h"
-#include "BKE_object.h"
+#include "BKE_object.hh"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 
-#include "DEG_depsgraph.h"
+#include "DEG_depsgraph.hh"
 
-#include "RNA_access.h"
-#include "RNA_path.h"
+#include "RNA_access.hh"
+#include "RNA_path.hh"
 #include "RNA_prototypes.h"
 
-#include "WM_api.h"
-#include "WM_types.h"
+#include "WM_api.hh"
+#include "WM_types.hh"
 
-#include "ED_armature.h"
-#include "ED_keyframing.h"
+#include "ED_armature.hh"
+#include "ED_keyframing.hh"
+
+#include "ANIM_keyframing.hh"
 
 #include "armature_intern.h"
 
@@ -66,14 +69,13 @@ static void fcurves_to_pchan_links_get(ListBase *pfLinks,
     /* make new linkage data */
     tPChanFCurveLink *pfl = static_cast<tPChanFCurveLink *>(
         MEM_callocN(sizeof(tPChanFCurveLink), "tPChanFCurveLink"));
-    PointerRNA ptr;
 
     pfl->ob = ob;
     pfl->fcurves = curves;
     pfl->pchan = pchan;
 
     /* get the RNA path to this pchan - this needs to be freed! */
-    RNA_pointer_create((ID *)ob, &RNA_PoseBone, pchan, &ptr);
+    PointerRNA ptr = RNA_pointer_create((ID *)ob, &RNA_PoseBone, pchan);
     pfl->pchan_path = RNA_path_from_ID_to_struct(&ptr);
 
     /* add linkage data to operator data */
@@ -214,10 +216,8 @@ void poseAnim_mapping_refresh(bContext *C, Scene * /*scene*/, Object *ob)
 
 void poseAnim_mapping_reset(ListBase *pfLinks)
 {
-  tPChanFCurveLink *pfl;
-
   /* iterate over each pose-channel affected, restoring all channels to their original values */
-  for (pfl = static_cast<tPChanFCurveLink *>(pfLinks->first); pfl; pfl = pfl->next) {
+  LISTBASE_FOREACH (tPChanFCurveLink *, pfl, pfLinks) {
     bPoseChannel *pchan = pfl->pchan;
 
     /* just copy all the values over regardless of whether they changed or not */
@@ -263,7 +263,7 @@ void poseAnim_mapping_autoKeyframe(bContext *C, Scene *scene, ListBase *pfLinks,
       continue;
     }
 
-    if (autokeyframe_cfra_can_key(scene, &ob->id)) {
+    if (blender::animrig::autokeyframe_cfra_can_key(scene, &ob->id)) {
       ob->id.tag |= LIB_TAG_DOIT;
       skip = false;
     }
@@ -276,14 +276,13 @@ void poseAnim_mapping_autoKeyframe(bContext *C, Scene *scene, ListBase *pfLinks,
 
   /* Insert keyframes as necessary if auto-key-framing. */
   KeyingSet *ks = ANIM_get_keyingset_for_autokeying(scene, ANIM_KS_WHOLE_CHARACTER_ID);
-  ListBase dsources = {nullptr, nullptr};
-  tPChanFCurveLink *pfl;
+  blender::Vector<PointerRNA> sources;
 
   /* iterate over each pose-channel affected, tagging bones to be keyed */
   /* XXX: here we already have the information about what transforms exist, though
    * it might be easier to just overwrite all using normal mechanisms
    */
-  for (pfl = static_cast<tPChanFCurveLink *>(pfLinks->first); pfl; pfl = pfl->next) {
+  LISTBASE_FOREACH (tPChanFCurveLink *, pfl, pfLinks) {
     bPoseChannel *pchan = pfl->pchan;
 
     if ((pfl->ob->id.tag & LIB_TAG_DOIT) == 0) {
@@ -291,12 +290,11 @@ void poseAnim_mapping_autoKeyframe(bContext *C, Scene *scene, ListBase *pfLinks,
     }
 
     /* Add data-source override for the PoseChannel, to be used later. */
-    ANIM_relative_keyingset_add_source(&dsources, &pfl->ob->id, &RNA_PoseBone, pchan);
+    ANIM_relative_keyingset_add_source(sources, &pfl->ob->id, &RNA_PoseBone, pchan);
   }
 
   /* insert keyframes for all relevant bones in one go */
-  ANIM_apply_keyingset(C, &dsources, nullptr, ks, MODIFYKEY_MODE_INSERT, cframe);
-  BLI_freelistN(&dsources);
+  ANIM_apply_keyingset(C, &sources, ks, MODIFYKEY_MODE_INSERT, cframe);
 
   /* do the bone paths
    * - only do this if keyframes should have been added

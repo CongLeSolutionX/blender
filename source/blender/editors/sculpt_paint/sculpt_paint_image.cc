@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2022 Blender Foundation
+/* SPDX-FileCopyrightText: 2022 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -8,10 +8,10 @@
 #include "DNA_image_types.h"
 #include "DNA_object_types.h"
 
-#include "ED_paint.h"
+#include "ED_paint.hh"
 
-#include "BLI_math.h"
 #include "BLI_math_color_blend.h"
+#include "BLI_math_geom.h"
 #include "BLI_task.h"
 #ifdef DEBUG_PIXEL_NODES
 #  include "BLI_hash.h"
@@ -20,7 +20,7 @@
 #include "IMB_colormanagement.h"
 #include "IMB_imbuf.h"
 
-#include "BKE_brush.h"
+#include "BKE_brush.hh"
 #include "BKE_image_wrappers.hh"
 #include "BKE_pbvh_api.hh"
 #include "BKE_pbvh_pixels.hh"
@@ -147,11 +147,8 @@ template<typename ImageBuffer> class PaintingKernel {
   explicit PaintingKernel(SculptSession *ss,
                           const Brush *brush,
                           const int thread_id,
-                          const float (*positions)[3])
-      : ss(ss),
-        brush(brush),
-        thread_id(thread_id),
-        vert_positions_(reinterpret_cast<const float3 *>(positions))
+                          const Span<float3> positions)
+      : ss(ss), brush(brush), thread_id(thread_id), vert_positions_(positions.data())
   {
     init_brush_strength();
     init_brush_test();
@@ -297,7 +294,7 @@ template<typename ImageBuffer> class PaintingKernel {
 static std::vector<bool> init_uv_primitives_brush_test(SculptSession *ss,
                                                        PaintGeometryPrimitives &geom_primitives,
                                                        PaintUVPrimitives &uv_primitives,
-                                                       const float (*positions)[3])
+                                                       const Span<float3> positions)
 {
   std::vector<bool> brush_test(uv_primitives.size());
   SculptBrushTest test;
@@ -343,7 +340,7 @@ static void do_paint_pixels(void *__restrict userdata,
   PBVHData &pbvh_data = BKE_pbvh_pixels_data_get(*pbvh);
   NodeData &node_data = BKE_pbvh_pixels_node_data_get(*node);
   const int thread_id = BLI_task_parallel_thread_id(tls);
-  const float(*positions)[3] = SCULPT_mesh_deformed_positions_get(ss);
+  const Span<float3> positions = SCULPT_mesh_deformed_positions_get(ss);
 
   std::vector<bool> brush_test = init_uv_primitives_brush_test(
       ss, pbvh_data.geom_primitives, node_data.uv_primitives, positions);
@@ -368,7 +365,7 @@ static void do_paint_pixels(void *__restrict userdata,
   brush_color[3] = 1.0f;
 
   AutomaskingNodeData automask_data;
-  SCULPT_automasking_node_begin(ob, ss, ss->cache->automasking, &automask_data, data->nodes[n]);
+  SCULPT_automasking_node_begin(ob, ss->cache->automasking, &automask_data, data->nodes[n]);
 
   ImageUser image_user = *data->image_data.image_user;
   bool pixels_updated = false;

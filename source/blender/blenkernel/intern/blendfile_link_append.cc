@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -10,8 +10,8 @@
  * collections/objects/object-data in current scene.
  */
 
-#include <stdlib.h>
-#include <string.h>
+#include <cstdlib>
+#include <cstring>
 
 #include "CLG_log.h"
 
@@ -29,7 +29,7 @@
 #include "BLI_blenlib.h"
 #include "BLI_ghash.h"
 #include "BLI_linklist.h"
-#include "BLI_math.h"
+#include "BLI_math_vector.h"
 #include "BLI_memarena.h"
 #include "BLI_utildefines.h"
 
@@ -39,13 +39,13 @@
 #include "BKE_key.h"
 #include "BKE_layer.h"
 #include "BKE_lib_id.h"
-#include "BKE_lib_override.h"
+#include "BKE_lib_override.hh"
 #include "BKE_lib_query.h"
 #include "BKE_lib_remap.h"
 #include "BKE_main.h"
 #include "BKE_main_namemap.h"
 #include "BKE_material.h"
-#include "BKE_object.h"
+#include "BKE_object.hh"
 #include "BKE_report.h"
 #include "BKE_rigidbody.h"
 #include "BKE_scene.h"
@@ -53,7 +53,7 @@
 #include "BKE_blendfile_link_append.h"
 
 #include "BLO_readfile.h"
-#include "BLO_writefile.h"
+#include "BLO_writefile.hh"
 
 static CLG_LogRef LOG = {"bke.blendfile_link_append"};
 
@@ -183,7 +183,7 @@ static BlendHandle *link_append_context_library_blohandle_ensure(
   if (blo_handle == nullptr) {
     if (STREQ(libname, BLO_EMBEDDED_STARTUP_BLEND)) {
       blo_handle = BLO_blendhandle_from_memory(lapp_context->blendfile_mem,
-                                               (int)lapp_context->blendfile_memsize,
+                                               int(lapp_context->blendfile_memsize),
                                                &lib_context->bf_reports);
     }
     else {
@@ -254,7 +254,7 @@ void BKE_blendfile_link_append_context_embedded_blendfile_set(
                  "Please explicitly clear reference to an embedded blender memfile before "
                  "setting a new one");
   lapp_context->blendfile_mem = blendfile_mem;
-  lapp_context->blendfile_memsize = (size_t)blendfile_memsize;
+  lapp_context->blendfile_memsize = size_t(blendfile_memsize);
 }
 
 void BKE_blendfile_link_append_context_embedded_blendfile_clear(
@@ -1715,7 +1715,7 @@ void BKE_blendfile_library_relocate(BlendfileLinkAppendContext *lapp_context,
         }
 
         item = BKE_blendfile_link_append_context_item_add(lapp_context, id->name + 2, idcode, id);
-        BLI_bitmap_set_all(item->libraries, true, (size_t)lapp_context->num_libraries);
+        BLI_bitmap_set_all(item->libraries, true, size_t(lapp_context->num_libraries));
 
         CLOG_INFO(&LOG, 4, "Datablock to seek for: %s", id->name);
       }

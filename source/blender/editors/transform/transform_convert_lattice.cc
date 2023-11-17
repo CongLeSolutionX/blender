@@ -11,10 +11,11 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_math.h"
+#include "BLI_math_matrix.h"
+#include "BLI_math_vector.h"
 
-#include "BKE_context.h"
-#include "BKE_lattice.h"
+#include "BKE_context.hh"
+#include "BKE_lattice.hh"
 
 #include "transform.hh"
 #include "transform_snap.hh"
@@ -120,7 +121,7 @@ static void recalcData_lattice(TransInfo *t)
 
 TransConvertTypeInfo TransConvertType_Lattice = {
     /*flags*/ (T_EDIT | T_POINTS),
-    /*createTransData*/ createTransLatticeVerts,
-    /*recalcData*/ recalcData_lattice,
+    /*create_trans_data*/ createTransLatticeVerts,
+    /*recalc_data*/ recalcData_lattice,
     /*special_aftertrans_update*/ nullptr,
 };

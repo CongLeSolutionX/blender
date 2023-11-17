@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2017 Blender Foundation
+/* SPDX-FileCopyrightText: 2017 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -13,6 +13,7 @@
 #include "BLI_array.hh"
 #include "BLI_color.hh"
 #include "BLI_listbase.h"
+#include "BLI_math_rotation.h"
 #include "BLI_math_vector.h"
 #include "BLI_math_vector_types.hh"
 #include "BLI_span.hh"
@@ -20,10 +21,11 @@
 
 #include "DNA_curve_types.h"
 
-#include "BKE_curve.h"
+#include "BKE_curve.hh"
 #include "BKE_curves.hh"
 #include "BKE_displist.h"
 #include "BKE_geometry_set.hh"
+#include "BKE_object_types.hh"
 #include "BKE_vfont.h"
 
 #include "GPU_batch.h"
@@ -31,13 +33,13 @@
 #include "GPU_material.h"
 #include "GPU_texture.h"
 
-#include "UI_resources.h"
+#include "UI_resources.hh"
 
 #include "DRW_render.h"
 
 #include "draw_cache_inline.h"
 
-#include "draw_cache_impl.h" /* own include */
+#include "draw_cache_impl.hh" /* own include */
 
 using blender::Array;
 using blender::ColorGeometry4f;
@@ -890,7 +892,7 @@ void DRW_curve_batch_cache_create_requested(Object *ob, const Scene *scene)
   printf("  mr_flag %d\n\n", mr_flag);
 #endif
 
-  CurveRenderData *rdata = curve_render_data_create(cu, ob->runtime.curve_cache, mr_flag);
+  CurveRenderData *rdata = curve_render_data_create(cu, ob->runtime->curve_cache, mr_flag);
 
   /* Generate VBOs */
   if (DRW_vbo_requested(cache->ordered.curves_pos)) {

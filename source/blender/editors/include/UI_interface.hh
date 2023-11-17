@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -15,7 +15,9 @@
 #include "BLI_string_ref.hh"
 #include "BLI_vector.hh"
 
-#include "UI_resources.h"
+#include "UI_resources.hh"
+
+#include "UI_interface_c.hh"
 
 namespace blender::nodes::geo_eval_log {
 struct GeometryAttributeInfo;
@@ -122,7 +124,6 @@ struct DragInfo {
  * #wmDropBox is needed to request instances of it from a UI element and call its functions. For
  * example the drop box using "UI_OT_view_drop" implements dropping for views and view items via
  * this interface. To support other kinds of UI elements, similar drop boxes would be necessary.
- *
  */
 class DropTargetInterface {
  public:
@@ -243,7 +244,7 @@ using uiListItemGetNameFn =
  *                     to provide the name still.
  */
 void UI_list_filter_and_sort_items(uiList *ui_list,
-                                   const struct bContext *C,
+                                   const bContext *C,
                                    uiListItemFilterFn item_filter_fn,
                                    PointerRNA *dataptr,
                                    const char *propname,

@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -20,7 +20,7 @@
 #include "IMB_colormanagement.h"
 #include "IMB_imbuf.h"
 
-#include "DEG_depsgraph_query.h"
+#include "DEG_depsgraph_query.hh"
 
 #include "COM_context.hh"
 #include "COM_evaluator.hh"
@@ -32,40 +32,86 @@
 
 namespace blender::render {
 
-/* Render Texture Pool */
-
+/**
+ * Render Texture Pool
+ *
+ * TODO: should share pool with draw manager. It needs some globals initialization figured out
+ * there first.
+ */
 class TexturePool : public realtime_compositor::TexturePool {
- public:
-  Vector<GPUTexture *> textures_;
+ private:
+  /** Textures that are not yet used and are available to be acquired. After evaluation, any
+   * texture in this map should be freed because it was not acquired in the evaluation and is thus
+   * unused. Textures removed from this map should be moved to the textures_in_use_ map when
+   * acquired. */
+  Map<realtime_compositor::TexturePoolKey, Vector<GPUTexture *>> available_textures_;
+  /** Textures that were acquired in this compositor evaluation. After evaluation, those textures
+   * are moved to the available_textures_ map to be acquired in the next evaluation. */
+  Map<realtime_compositor::TexturePoolKey, Vector<GPUTexture *>> textures_in_use_;
 
+ public:
   virtual ~TexturePool()
   {
-    for (GPUTexture *texture : textures_) {
-      GPU_texture_free(texture);
+    for (Vector<GPUTexture *> &available_textures : available_textures_.values()) {
+      for (GPUTexture *texture : available_textures) {
+        GPU_texture_free(texture);
+      }
+    }
+
+    for (Vector<GPUTexture *> &textures_in_use : textures_in_use_.values()) {
+      for (GPUTexture *texture : textures_in_use) {
+        GPU_texture_free(texture);
+      }
     }
   }
 
   GPUTexture *allocate_texture(int2 size, eGPUTextureFormat format) override
   {
-    /* TODO: should share pool with draw manager. It needs some globals
-     * initialization figured out there first. */
-#if 0
-    DrawEngineType *owner = (DrawEngineType *)this;
-    return DRW_texture_pool_query_2d(size.x, size.y, format, owner);
-#else
-    GPUTexture *texture = GPU_texture_create_2d(
-        "compositor_texture_pool", size.x, size.y, 1, format, GPU_TEXTURE_USAGE_GENERAL, nullptr);
-    textures_.append(texture);
+    const realtime_compositor::TexturePoolKey key(size, format);
+    Vector<GPUTexture *> &available_textures = available_textures_.lookup_or_add_default(key);
+    GPUTexture *texture = nullptr;
+    if (available_textures.is_empty()) {
+      texture = GPU_texture_create_2d("compositor_texture_pool",
+                                      size.x,
+                                      size.y,
+                                      1,
+                                      format,
+                                      GPU_TEXTURE_USAGE_GENERAL,
+                                      nullptr);
+    }
+    else {
+      texture = available_textures.pop_last();
+    }
+
+    textures_in_use_.lookup_or_add_default(key).append(texture);
     return texture;
-#endif
+  }
+
+  /** Should be called after compositor evaluation to free unused textures and reset the texture
+   * pool. */
+  void free_unused_and_reset()
+  {
+    /* Free all textures in the available textures vectors. The fact that they still exist in those
+     * vectors after evaluation means they were not acquired during the evaluation, and are thus
+     * consequently no longer used. */
+    for (Vector<GPUTexture *> &available_textures : available_textures_.values()) {
+      for (GPUTexture *texture : available_textures) {
+        GPU_texture_free(texture);
+      }
+    }
+
+    /* Move all textures in-use to be available textures for the next evaluation. */
+    available_textures_ = textures_in_use_;
+    textures_in_use_.clear();
   }
 };
 
-/* Render Context Data
+/**
+ * Render Context Data
  *
  * Stored separately from the context so we can update it without losing any cached
- * data from the context. */
-
+ * data from the context.
+ */
 class ContextInputData {
  public:
   const Scene *scene;
@@ -101,14 +147,12 @@ class Context : public realtime_compositor::Context {
   /* Viewer output texture. */
   GPUTexture *viewer_output_texture_ = nullptr;
 
-  /* Texture pool. */
-  TexturePool &render_texture_pool_;
+  /* Cached textures that the compositor took ownership of. */
+  Vector<GPUTexture *> textures_;
 
  public:
   Context(const ContextInputData &input_data, TexturePool &texture_pool)
-      : realtime_compositor::Context(texture_pool),
-        input_data_(input_data),
-        render_texture_pool_(texture_pool)
+      : realtime_compositor::Context(texture_pool), input_data_(input_data)
   {
   }
 
@@ -116,6 +160,9 @@ class Context : public realtime_compositor::Context {
   {
     GPU_TEXTURE_FREE_SAFE(output_texture_);
     GPU_TEXTURE_FREE_SAFE(viewer_output_texture_);
+    for (GPUTexture *texture : textures_) {
+      GPU_texture_free(texture);
+    }
   }
 
   void update_input_data(const ContextInputData &input_data)
@@ -143,11 +190,6 @@ class Context : public realtime_compositor::Context {
     return true;
   }
 
-  bool use_texture_color_management() const override
-  {
-    return BKE_scene_check_color_management_enabled(input_data_.scene);
-  }
-
   const RenderData &get_render_data() const override
   {
     return *(input_data_.render_data);
@@ -170,37 +212,49 @@ class Context : public realtime_compositor::Context {
 
   GPUTexture *get_output_texture() override
   {
-    /* TODO: support outputting for previews.
-     * TODO: just a temporary hack, needs to get stored in RenderResult,
+    /* TODO: just a temporary hack, needs to get stored in RenderResult,
      * once that supports GPU buffers. */
     if (output_texture_ == nullptr) {
       const int2 size = get_render_size();
-      output_texture_ = GPU_texture_create_2d("compositor_output_texture",
-                                              size.x,
-                                              size.y,
-                                              1,
-                                              GPU_RGBA16F,
-                                              GPU_TEXTURE_USAGE_GENERAL,
-                                              nullptr);
+      output_texture_ = GPU_texture_create_2d(
+          "compositor_output_texture",
+          size.x,
+          size.y,
+          1,
+          get_precision() == realtime_compositor::ResultPrecision::Half ? GPU_RGBA16F :
+                                                                          GPU_RGBA32F,
+          GPU_TEXTURE_USAGE_GENERAL,
+          nullptr);
     }
 
     return output_texture_;
   }
 
-  GPUTexture *get_viewer_output_texture() override
+  GPUTexture *get_viewer_output_texture(int2 size) override
   {
-    /* TODO: support outputting previews.
-     * TODO: just a temporary hack, needs to get stored in RenderResult,
+    /* Re-create texture if the viewer size changes. */
+    if (viewer_output_texture_) {
+      const int current_width = GPU_texture_width(viewer_output_texture_);
+      const int current_height = GPU_texture_height(viewer_output_texture_);
+
+      if (current_width != size.x || current_height != size.y) {
+        GPU_TEXTURE_FREE_SAFE(viewer_output_texture_);
+        viewer_output_texture_ = nullptr;
+      }
+    }
+
+    /* TODO: just a temporary hack, needs to get stored in RenderResult,
      * once that supports GPU buffers. */
     if (viewer_output_texture_ == nullptr) {
-      const int2 size = get_render_size();
-      viewer_output_texture_ = GPU_texture_create_2d("compositor_viewer_output_texture",
-                                                     size.x,
-                                                     size.y,
-                                                     1,
-                                                     GPU_RGBA16F,
-                                                     GPU_TEXTURE_USAGE_GENERAL,
-                                                     nullptr);
+      viewer_output_texture_ = GPU_texture_create_2d(
+          "compositor_viewer_output_texture",
+          size.x,
+          size.y,
+          1,
+          get_precision() == realtime_compositor::ResultPrecision::Half ? GPU_RGBA16F :
+                                                                          GPU_RGBA32F,
+          GPU_TEXTURE_USAGE_GENERAL,
+          nullptr);
     }
 
     return viewer_output_texture_;
@@ -223,8 +277,7 @@ class Context : public realtime_compositor::Context {
       if (view_layer) {
         RenderLayer *rl = RE_GetRenderLayer(rr, view_layer->name);
         if (rl) {
-          RenderPass *rpass = (RenderPass *)BLI_findstring(
-              &rl->passes, pass_name, offsetof(RenderPass, name));
+          RenderPass *rpass = RE_pass_find_by_name(rl, pass_name, get_view_name().data());
 
           if (rpass && rpass->ibuf && rpass->ibuf->float_buffer.data) {
             input_texture = RE_pass_ensure_gpu_texture_cache(re, rpass);
@@ -232,7 +285,7 @@ class Context : public realtime_compositor::Context {
             if (input_texture) {
               /* Don't assume render keeps texture around, add our own reference. */
               GPU_texture_ref(input_texture);
-              render_texture_pool_.textures_.append(input_texture);
+              textures_.append(input_texture);
             }
           }
         }
@@ -252,7 +305,27 @@ class Context : public realtime_compositor::Context {
     return input_data_.view_name;
   }
 
-  void set_info_message(StringRef /* message */) const override
+  realtime_compositor::ResultPrecision get_precision() const override
+  {
+    switch (input_data_.node_tree->precision) {
+      case NODE_TREE_COMPOSITOR_PRECISION_AUTO:
+        /* Auto uses full precision for final renders and half procession otherwise. File outputs
+         * are only used in final renders, so use that as a condition. */
+        if (use_file_output()) {
+          return realtime_compositor::ResultPrecision::Full;
+        }
+        else {
+          return realtime_compositor::ResultPrecision::Half;
+        }
+      case NODE_TREE_COMPOSITOR_PRECISION_FULL:
+        return realtime_compositor::ResultPrecision::Full;
+    }
+
+    BLI_assert_unreachable();
+    return realtime_compositor::ResultPrecision::Full;
+  }
+
+  void set_info_message(StringRef /*message*/) const override
   {
     /* TODO: ignored for now. Currently only used to communicate incomplete node support
      * which is already shown on the node itself.
@@ -261,7 +334,7 @@ class Context : public realtime_compositor::Context {
      * incomplete support, and leave more specific message to individual nodes? */
   }
 
-  IDRecalcFlag query_id_recalc_flag(ID * /* id */) const override
+  IDRecalcFlag query_id_recalc_flag(ID * /*id*/) const override
   {
     /* TODO: implement? */
     return IDRecalcFlag(0);
@@ -312,7 +385,7 @@ class Context : public realtime_compositor::Context {
 
     Image *image = BKE_image_ensure_viewer(G.main, IMA_TYPE_COMPOSITE, "Viewer Node");
 
-    ImageUser image_user = {0};
+    ImageUser image_user = {nullptr};
     image_user.multi_index = BKE_scene_multiview_view_id_get(input_data_.render_data,
                                                              input_data_.view_name.c_str());
 
@@ -327,12 +400,13 @@ class Context : public realtime_compositor::Context {
     void *lock;
     ImBuf *image_buffer = BKE_image_acquire_ibuf(image, &image_user, &lock);
 
-    const int2 render_size = get_render_size();
-    if (image_buffer->x != render_size.x || image_buffer->y != render_size.y) {
+    const int2 size = int2(GPU_texture_width(viewer_output_texture_),
+                           GPU_texture_height(viewer_output_texture_));
+    if (image_buffer->x != size.x || image_buffer->y != size.y) {
       imb_freerectImBuf(image_buffer);
       imb_freerectfloatImBuf(image_buffer);
-      image_buffer->x = render_size.x;
-      image_buffer->y = render_size.y;
+      image_buffer->x = size.x;
+      image_buffer->y = size.y;
       imb_addrectfloatImBuf(image_buffer, 4);
       image_buffer->userflags |= IB_DISPLAY_BUFFER_INVALID;
     }
@@ -343,9 +417,8 @@ class Context : public realtime_compositor::Context {
     GPU_memory_barrier(GPU_BARRIER_TEXTURE_UPDATE);
     float *output_buffer = (float *)GPU_texture_read(viewer_output_texture_, GPU_DATA_FLOAT, 0);
 
-    std::memcpy(image_buffer->float_buffer.data,
-                output_buffer,
-                render_size.x * render_size.y * 4 * sizeof(float));
+    std::memcpy(
+        image_buffer->float_buffer.data, output_buffer, size.x * size.y * 4 * sizeof(float));
 
     MEM_freeN(output_buffer);
 
@@ -417,11 +490,40 @@ class RealtimeCompositor {
 
     context_->output_to_render_result();
     context_->viewer_output_to_viewer_image();
+    texture_pool_->free_unused_and_reset();
     DRW_render_context_disable(&render_);
   }
 };
 
 }  // namespace blender::render
+
+void Render::compositor_execute(const Scene &scene,
+                                const RenderData &render_data,
+                                const bNodeTree &node_tree,
+                                const bool use_file_output,
+                                const char *view_name)
+{
+  std::unique_lock lock(gpu_compositor_mutex);
+
+  blender::render::ContextInputData input_data(
+      scene, render_data, node_tree, use_file_output, view_name);
+
+  if (gpu_compositor == nullptr) {
+    gpu_compositor = new blender::render::RealtimeCompositor(*this, input_data);
+  }
+
+  gpu_compositor->execute(input_data);
+}
+
+void Render::compositor_free()
+{
+  std::unique_lock lock(gpu_compositor_mutex);
+
+  if (gpu_compositor != nullptr) {
+    delete gpu_compositor;
+    gpu_compositor = nullptr;
+  }
+}
 
 void RE_compositor_execute(Render &render,
                            const Scene &scene,
@@ -430,26 +532,10 @@ void RE_compositor_execute(Render &render,
                            const bool use_file_output,
                            const char *view_name)
 {
-  BLI_mutex_lock(&render.gpu_compositor_mutex);
-
-  blender::render::ContextInputData input_data(
-      scene, render_data, node_tree, use_file_output, view_name);
-
-  if (render.gpu_compositor == nullptr) {
-    render.gpu_compositor = new blender::render::RealtimeCompositor(render, input_data);
-  }
-
-  render.gpu_compositor->execute(input_data);
-
-  BLI_mutex_unlock(&render.gpu_compositor_mutex);
+  render.compositor_execute(scene, render_data, node_tree, use_file_output, view_name);
 }
 
 void RE_compositor_free(Render &render)
 {
-  BLI_mutex_lock(&render.gpu_compositor_mutex);
-  if (render.gpu_compositor) {
-    delete render.gpu_compositor;
-    render.gpu_compositor = nullptr;
-  }
-  BLI_mutex_unlock(&render.gpu_compositor_mutex);
+  render.compositor_free();
 }

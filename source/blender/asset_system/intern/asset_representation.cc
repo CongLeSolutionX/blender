@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -70,7 +70,7 @@ const AssetIdentifier &AssetRepresentation::get_identifier() const
   return identifier_;
 }
 
-std::unique_ptr<AssetWeakReference> AssetRepresentation::make_weak_reference() const
+AssetWeakReference *AssetRepresentation::make_weak_reference() const
 {
   if (!owner_asset_library_) {
     return nullptr;

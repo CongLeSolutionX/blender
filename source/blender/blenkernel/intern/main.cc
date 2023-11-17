@@ -8,7 +8,7 @@
  * Contains management of #Main database itself.
  */
 
-#include <string.h>
+#include <cstring>
 
 #include "MEM_guardedalloc.h"
 
@@ -30,7 +30,7 @@
 #include "IMB_imbuf.h"
 #include "IMB_imbuf_types.h"
 
-Main *BKE_main_new(void)
+Main *BKE_main_new()
 {
   Main *bmain = static_cast<Main *>(MEM_callocN(sizeof(Main), "new main"));
   bmain->lock = static_cast<MainLock *>(MEM_mallocN(sizeof(SpinLock), "main lock"));
@@ -158,12 +158,14 @@ void BKE_main_free(Main *mainvar)
 
 bool BKE_main_is_empty(Main *bmain)
 {
+  bool result = true;
   ID *id_iter;
   FOREACH_MAIN_ID_BEGIN (bmain, id_iter) {
-    return false;
+    result = false;
+    break;
   }
   FOREACH_MAIN_ID_END;
-  return true;
+  return result;
 }
 
 void BKE_main_lock(Main *bmain)
@@ -492,7 +494,7 @@ ImBuf *BKE_main_thumbnail_to_imbuf(Main *bmain, BlendThumbnail *data)
 
   if (data) {
     img = IMB_allocFromBuffer(
-        (const uint8_t *)data->rect, nullptr, (uint)data->width, (uint)data->height, 4);
+        (const uint8_t *)data->rect, nullptr, uint(data->width), uint(data->height), 4);
   }
 
   return img;
@@ -513,7 +515,7 @@ const char *BKE_main_blendfile_path(const Main *bmain)
   return bmain->filepath;
 }
 
-const char *BKE_main_blendfile_path_from_global(void)
+const char *BKE_main_blendfile_path_from_global()
 {
   return BKE_main_blendfile_path(G_MAIN);
 }

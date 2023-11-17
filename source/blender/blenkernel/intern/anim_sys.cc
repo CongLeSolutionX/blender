@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2009 Blender Foundation, Joshua Leung. All rights reserved.
+/* SPDX-FileCopyrightText: 2009 Blender Authors, Joshua Leung. All rights reserved.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -6,11 +6,11 @@
  * \ingroup bke
  */
 
-#include <float.h>
-#include <math.h>
-#include <stddef.h>
-#include <stdio.h>
-#include <string.h>
+#include <cfloat>
+#include <cmath>
+#include <cstddef>
+#include <cstdio>
+#include <cstring>
 
 #include "MEM_guardedalloc.h"
 
@@ -20,7 +20,7 @@
 #include "BLI_listbase.h"
 #include "BLI_math_rotation.h"
 #include "BLI_math_vector.h"
-#include "BLI_string_utils.h"
+#include "BLI_string_utils.hh"
 #include "BLI_utildefines.h"
 
 #include "BLT_translation.h"
@@ -38,7 +38,7 @@
 #include "BKE_action.h"
 #include "BKE_anim_data.h"
 #include "BKE_animsys.h"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_fcurve.h"
 #include "BKE_global.h"
 #include "BKE_lib_id.h"
@@ -50,14 +50,14 @@
 #include "BKE_report.h"
 #include "BKE_texture.h"
 
-#include "DEG_depsgraph.h"
-#include "DEG_depsgraph_query.h"
+#include "DEG_depsgraph.hh"
+#include "DEG_depsgraph_query.hh"
 
-#include "RNA_access.h"
-#include "RNA_path.h"
+#include "RNA_access.hh"
+#include "RNA_path.hh"
 #include "RNA_prototypes.h"
 
-#include "BLO_read_write.h"
+#include "BLO_read_write.hh"
 
 #include "nla_private.h"
 
@@ -79,8 +79,6 @@ KS_Path *BKE_keyingset_find_path(KeyingSet *ks,
                                  int array_index,
                                  int /*group_mode*/)
 {
-  KS_Path *ksp;
-
   /* sanity checks */
   if (ELEM(nullptr, ks, rna_path, id)) {
     return nullptr;
@@ -89,7 +87,7 @@ KS_Path *BKE_keyingset_find_path(KeyingSet *ks,
   /* loop over paths in the current KeyingSet, finding the first one where all settings match
    * (i.e. the first one where none of the checks fail and equal 0)
    */
-  for (ksp = static_cast<KS_Path *>(ks->paths.first); ksp; ksp = ksp->next) {
+  LISTBASE_FOREACH (KS_Path *, ksp, &ks->paths) {
     short eq_id = 1, eq_path = 1, eq_index = 1, eq_group = 1;
 
     /* id */
@@ -235,15 +233,12 @@ void BKE_keyingset_free_path(KeyingSet *ks, KS_Path *ksp)
 
 void BKE_keyingsets_copy(ListBase *newlist, const ListBase *list)
 {
-  KeyingSet *ksn;
-  KS_Path *kspn;
-
   BLI_duplicatelist(newlist, list);
 
-  for (ksn = static_cast<KeyingSet *>(newlist->first); ksn; ksn = ksn->next) {
+  LISTBASE_FOREACH (KeyingSet *, ksn, newlist) {
     BLI_duplicatelist(&ksn->paths, &ksn->paths);
 
-    for (kspn = static_cast<KS_Path *>(ksn->paths.first); kspn; kspn = kspn->next) {
+    LISTBASE_FOREACH (KS_Path *, kspn, &ksn->paths) {
       kspn->rna_path = static_cast<char *>(MEM_dupallocN(kspn->rna_path));
     }
   }
@@ -251,8 +246,8 @@ void BKE_keyingsets_copy(ListBase *newlist, const ListBase *list)
 
 void BKE_keyingsets_foreach_id(LibraryForeachIDData *data, const ListBase *keyingsets)
 {
-  for (KeyingSet *ksn = static_cast<KeyingSet *>(keyingsets->first); ksn; ksn = ksn->next) {
-    for (KS_Path *kspn = static_cast<KS_Path *>(ksn->paths.first); kspn; kspn = kspn->next) {
+  LISTBASE_FOREACH (KeyingSet *, ksn, keyingsets) {
+    LISTBASE_FOREACH (KS_Path *, kspn, &ksn->paths) {
       BKE_LIB_FOREACHID_PROCESS_ID(data, kspn->id, IDWALK_CB_NOP);
     }
   }
@@ -260,7 +255,7 @@ void BKE_keyingsets_foreach_id(LibraryForeachIDData *data, const ListBase *keyin
 
 /* Freeing Tools --------------------------- */
 
-void BKE_keyingset_free(KeyingSet *ks)
+void BKE_keyingset_free_paths(KeyingSet *ks)
 {
   KS_Path *ksp, *kspn;
 
@@ -286,11 +281,11 @@ void BKE_keyingsets_free(ListBase *list)
   }
 
   /* loop over KeyingSets freeing them
-   * - BKE_keyingset_free() doesn't free the set itself, but it frees its sub-data
+   * - BKE_keyingset_free_paths() doesn't free the set itself, but it frees its sub-data
    */
   for (ks = static_cast<KeyingSet *>(list->first); ks; ks = ksn) {
     ksn = ks->next;
-    BKE_keyingset_free(ks);
+    BKE_keyingset_free_paths(ks);
     BLI_freelinkN(list, ks);
   }
 }
@@ -322,24 +317,6 @@ void BKE_keyingsets_blend_read_data(BlendDataReader *reader, ListBase *list)
     LISTBASE_FOREACH (KS_Path *, ksp, &ks->paths) {
       /* rna path */
       BLO_read_data_address(reader, &ksp->rna_path);
-    }
-  }
-}
-
-void BKE_keyingsets_blend_read_lib(BlendLibReader *reader, ID *id, ListBase *list)
-{
-  LISTBASE_FOREACH (KeyingSet *, ks, list) {
-    LISTBASE_FOREACH (KS_Path *, ksp, &ks->paths) {
-      BLO_read_id_address(reader, id, &ksp->id);
-    }
-  }
-}
-
-void BKE_keyingsets_blend_read_expand(BlendExpander *expander, ListBase *list)
-{
-  LISTBASE_FOREACH (KeyingSet *, ks, list) {
-    LISTBASE_FOREACH (KS_Path *, ksp, &ks->paths) {
-      BLO_expand(expander, ksp->id);
     }
   }
 }
@@ -424,39 +401,39 @@ bool BKE_animsys_read_from_rna_path(PathResolvedRNA *anim_rna, float *r_value)
     case PROP_BOOLEAN: {
       if (array_index != -1) {
         const int orig_value_coerce = RNA_property_boolean_get_index(ptr, prop, array_index);
-        orig_value = (float)orig_value_coerce;
+        orig_value = float(orig_value_coerce);
       }
       else {
         const int orig_value_coerce = RNA_property_boolean_get(ptr, prop);
-        orig_value = (float)orig_value_coerce;
+        orig_value = float(orig_value_coerce);
       }
       break;
     }
     case PROP_INT: {
       if (array_index != -1) {
         const int orig_value_coerce = RNA_property_int_get_index(ptr, prop, array_index);
-        orig_value = (float)orig_value_coerce;
+        orig_value = float(orig_value_coerce);
       }
       else {
         const int orig_value_coerce = RNA_property_int_get(ptr, prop);
-        orig_value = (float)orig_value_coerce;
+        orig_value = float(orig_value_coerce);
       }
       break;
     }
     case PROP_FLOAT: {
       if (array_index != -1) {
         const float orig_value_coerce = RNA_property_float_get_index(ptr, prop, array_index);
-        orig_value = (float)orig_value_coerce;
+        orig_value = float(orig_value_coerce);
       }
       else {
         const float orig_value_coerce = RNA_property_float_get(ptr, prop);
-        orig_value = (float)orig_value_coerce;
+        orig_value = float(orig_value_coerce);
       }
       break;
     }
     case PROP_ENUM: {
       const int orig_value_coerce = RNA_property_enum_get(ptr, prop);
-      orig_value = (float)orig_value_coerce;
+      orig_value = float(orig_value_coerce);
       break;
     }
     default: /* nothing can be done here... so it is unsuccessful? */
@@ -501,7 +478,7 @@ bool BKE_animsys_write_to_rna_path(PathResolvedRNA *anim_rna, const float value)
       break;
     }
     case PROP_INT: {
-      int value_coerce = (int)value;
+      int value_coerce = int(value);
       RNA_property_int_clamp(ptr, prop, &value_coerce);
       if (array_index != -1) {
         RNA_property_int_set_index(ptr, prop, array_index, value_coerce);
@@ -523,7 +500,7 @@ bool BKE_animsys_write_to_rna_path(PathResolvedRNA *anim_rna, const float value)
       break;
     }
     case PROP_ENUM: {
-      const int value_coerce = (int)value;
+      const int value_coerce = int(value);
       RNA_property_enum_set(ptr, prop, value_coerce);
       break;
     }
@@ -735,8 +712,8 @@ static void animsys_blend_in_fcurves(PointerRNA *ptr,
         case PROP_ENUM:
           value_to_write = roundf(value_to_write);
           break;
-        default: /* All other types are just handled as float, and value_to_write is already
-        correct. */
+          /* All other types are just handled as float, and value_to_write is already correct. */
+        default:
           break;
       }
     }
@@ -773,12 +750,10 @@ static void animsys_evaluate_drivers(PointerRNA *ptr,
                                      AnimData *adt,
                                      const AnimationEvalContext *anim_eval_context)
 {
-  FCurve *fcu;
-
   /* drivers are stored as F-Curves, but we cannot use the standard code, as we need to check if
    * the depsgraph requested that this driver be evaluated...
    */
-  for (fcu = static_cast<FCurve *>(adt->drivers.first); fcu; fcu = fcu->next) {
+  LISTBASE_FOREACH (FCurve *, fcu, &adt->drivers) {
     ChannelDriver *driver = fcu->driver;
     bool ok = false;
 
@@ -937,10 +912,9 @@ static void nlastrip_evaluate_controls(NlaStrip *strip,
 {
   /* now strip's evaluate F-Curves for these settings (if applicable) */
   if (strip->fcurves.first) {
-    PointerRNA strip_ptr;
 
     /* create RNA-pointer needed to set values */
-    RNA_pointer_create(nullptr, &RNA_NlaStrip, strip, &strip_ptr);
+    PointerRNA strip_ptr = RNA_pointer_create(nullptr, &RNA_NlaStrip, strip);
 
     /* execute these settings as per normal */
     animsys_evaluate_fcurves(&strip_ptr, &strip->fcurves, anim_eval_context, flush_to_original);
@@ -981,16 +955,31 @@ NlaEvalStrip *nlastrips_ctime_get_strip(ListBase *list,
                                         const AnimationEvalContext *anim_eval_context,
                                         const bool flush_to_original)
 {
-  NlaStrip *strip, *estrip = nullptr;
+  NlaStrip *estrip = nullptr;
   NlaEvalStrip *nes;
   short side = 0;
   float ctime = anim_eval_context->eval_time;
 
   /* loop over strips, checking if they fall within the range */
-  for (strip = static_cast<NlaStrip *>(strips->first); strip; strip = strip->next) {
+  LISTBASE_FOREACH (NlaStrip *, strip, strips) {
     /* Check if current time occurs within this strip. */
-    if (IN_RANGE_INCL(ctime, strip->start, strip->end) ||
-        (strip->flag & NLASTRIP_FLAG_NO_TIME_MAP)) {
+
+    /* This block leads to the Action Track and non-time-remapped tweak strip evaluation to respect
+     * the extrapolation modes. If in_range, these two tracks will always output NES_TIME_WITHIN so
+     * fcurve extrapolation isn't clamped to the keyframe bounds. */
+    bool in_range = IN_RANGE_INCL(ctime, strip->start, strip->end);
+    if (strip->flag & NLASTRIP_FLAG_NO_TIME_MAP) {
+      switch (strip->extendmode) {
+        case NLASTRIP_EXTEND_HOLD:
+          in_range = true;
+          break;
+        case NLASTRIP_EXTEND_HOLD_FORWARD:
+          in_range = ctime >= strip->start;
+          break;
+      }
+    }
+
+    if (in_range) {
       /* this strip is active, so try to use it */
       estrip = strip;
       side = NES_TIME_WITHIN;
@@ -1079,8 +1068,8 @@ NlaEvalStrip *nlastrips_ctime_get_strip(ListBase *list,
         return nullptr;
       }
       break;
-    case NLASTRIP_TYPE_TRANSITION: /* there must be strips to transition from and to (i.e. prev and
-    next required) */
+      /* There must be strips to transition from and to (i.e. `prev` and `next` required). */
+    case NLASTRIP_TYPE_TRANSITION:
       if (ELEM(nullptr, estrip->prev, estrip->next)) {
         return nullptr;
       }
@@ -1208,7 +1197,7 @@ static void nlaeval_snapshot_init(NlaEvalSnapshot *snapshot,
                                   NlaEvalSnapshot *base)
 {
   snapshot->base = base;
-  snapshot->size = MAX2(16, nlaeval->num_channels);
+  snapshot->size = std::max(16, nlaeval->num_channels);
   snapshot->channels = static_cast<NlaEvalChannelSnapshot **>(
       MEM_callocN(sizeof(*snapshot->channels) * snapshot->size, "NlaEvalSnapshot::channels"));
 }
@@ -1400,7 +1389,7 @@ static void nlaevalchan_get_default_values(NlaEvalChannel *nec, float *r_values)
         tmp_bool = static_cast<bool *>(MEM_malloc_arrayN(length, sizeof(*tmp_bool), __func__));
         RNA_property_boolean_get_default_array(ptr, prop, tmp_bool);
         for (int i = 0; i < length; i++) {
-          r_values[i] = (float)tmp_bool[i];
+          r_values[i] = float(tmp_bool[i]);
         }
         MEM_freeN(tmp_bool);
         break;
@@ -1408,7 +1397,7 @@ static void nlaevalchan_get_default_values(NlaEvalChannel *nec, float *r_values)
         tmp_int = static_cast<int *>(MEM_malloc_arrayN(length, sizeof(*tmp_int), __func__));
         RNA_property_int_get_default_array(ptr, prop, tmp_int);
         for (int i = 0; i < length; i++) {
-          r_values[i] = (float)tmp_int[i];
+          r_values[i] = float(tmp_int[i]);
         }
         MEM_freeN(tmp_int);
         break;
@@ -1424,16 +1413,16 @@ static void nlaevalchan_get_default_values(NlaEvalChannel *nec, float *r_values)
 
     switch (RNA_property_type(prop)) {
       case PROP_BOOLEAN:
-        *r_values = (float)RNA_property_boolean_get_default(ptr, prop);
+        *r_values = float(RNA_property_boolean_get_default(ptr, prop));
         break;
       case PROP_INT:
-        *r_values = (float)RNA_property_int_get_default(ptr, prop);
+        *r_values = float(RNA_property_int_get_default(ptr, prop));
         break;
       case PROP_FLOAT:
         *r_values = RNA_property_float_get_default(ptr, prop);
         break;
       case PROP_ENUM:
-        *r_values = (float)RNA_property_enum_get_default(ptr, prop);
+        *r_values = float(RNA_property_enum_get_default(ptr, prop));
         break;
       default:
         *r_values = 0.0f;
@@ -1690,12 +1679,13 @@ static bool nla_combine_get_inverted_lower_value(const int mix_mode,
          * up interpolation for the animator, requiring further cleanup on their part.
          */
         if (IS_EQF(blended_value, 0.0f)) {
-          /* For blending, nla_combine_value(), when strip_value==0:
-           *
-           *        blended_value = lower_value * powf(strip_value / base_value, infl);
-           *        blended_value = lower_value * powf(0, infl);
-           *        blended_value = lower_value * 0;
-           *        blended_value = 0;
+          /* For blending, nla_combine_value(), when `strip_value == 0`:
+           * \code{.cc}
+           * blended_value = lower_value * powf(strip_value / base_value, infl);
+           * blended_value = lower_value * powf(0, infl);
+           * blended_value = lower_value * 0;
+           * blended_value = 0;
+           * \endcode
            *
            * Effectively, blended_value will equal 0 no matter what lower_value is. Put another
            * way, when (blended_value==0 and strip_value==0), then lower_value can be any value and
@@ -1778,9 +1768,9 @@ static float nla_blend_value(const int blendmode,
 
     default: /* TODO: Do we really want to blend by default? it seems more uses might prefer add...
               */
-      /* Do linear interpolation. The influence of the accumulated data (elsewhere, that is called
-       * dstweight) is 1 - influence, since the strip's influence is srcweight.
-       */
+      /* Do linear interpolation. The influence of the accumulated data
+       * (elsewhere, that is called `dstwegiht`) is 1 - influence,
+       * since the strip's influence is `srcweight`. */
       return lower_value * (1.0f - influence) + (strip_value * influence);
   }
 }
@@ -2608,8 +2598,6 @@ static void nlasnapshot_from_action(PointerRNA *ptr,
                                     const float evaltime,
                                     NlaEvalSnapshot *r_snapshot)
 {
-  FCurve *fcu;
-
   action_idcode_patch_check(ptr->owner_id, action);
 
   /* Evaluate modifiers which modify time to evaluate the base curves at. */
@@ -2621,7 +2609,7 @@ static void nlasnapshot_from_action(PointerRNA *ptr,
   const float modified_evaltime = evaluate_time_fmodifiers(
       &storage, modifiers, nullptr, 0.0f, evaltime);
 
-  for (fcu = static_cast<FCurve *>(action->curves.first); fcu; fcu = fcu->next) {
+  LISTBASE_FOREACH (FCurve *, fcu, &action->curves) {
     if (!is_fcurve_evaluatable(fcu)) {
       continue;
     }
@@ -2792,7 +2780,8 @@ static void nlastrip_evaluate_transition(const int evaluation_mode,
                               anim_eval_context,
                               flush_to_original);
 
-      /** Replace \a snapshot2 nullptr channels with base or default values so all channels blend.
+      /**
+       * Replace \a snapshot2 nullptr channels with base or default values so all channels blend.
        */
       nlasnapshot_ensure_channels(channels, &snapshot2);
       /** Mark all \a snapshot2 channel's values to blend. */
@@ -2905,7 +2894,7 @@ static void nlastrip_evaluate_meta(const int evaluation_mode,
   /* Assert currently supported modes. If new mode added, then assertion marks potentially missed
    * area.
    *
-   * NOTE: In the future if support is ever added to metastrips to support nested tracks, then
+   * NOTE: In the future if support is ever added to meta-strips to support nested tracks, then
    * STRIP_EVAL_BLEND and STRIP_EVAL_BLEND_GET_INVERTED_LOWER_SNAPSHOT cases are no longer
    * equivalent. The output of nlastrips_ctime_get_strip() may return a list of strips. The only
    * case difference should be the evaluation order.
@@ -3234,25 +3223,18 @@ static void animsys_create_action_track_strip(const AnimData *adt,
    * (which making new strips doesn't do due to the troublesome nature of that). */
   BKE_action_frame_range_calc(
       r_action_strip->act, true, &r_action_strip->actstart, &r_action_strip->actend);
+  BKE_nla_clip_length_ensure_nonzero(&r_action_strip->actstart, &r_action_strip->actend);
   r_action_strip->start = r_action_strip->actstart;
-  r_action_strip->end = IS_EQF(r_action_strip->actstart, r_action_strip->actend) ?
-                            (r_action_strip->actstart + 1.0f) :
-                            (r_action_strip->actend);
+  r_action_strip->end = r_action_strip->actend;
 
   r_action_strip->blendmode = adt->act_blendmode;
   r_action_strip->extendmode = adt->act_extendmode;
   r_action_strip->influence = adt->act_influence;
 
-  /* NOTE: must set this, or else the default setting overrides,
-   * and this setting doesn't work. */
-  r_action_strip->flag |= NLASTRIP_FLAG_USR_INFLUENCE;
-
-  /* Unless `extendmode` is Nothing (might be useful for flattening NLA evaluation), disable range.
-   * Extend-mode Nothing and Hold will behave as normal. Hold Forward will behave just like Hold.
+  /* Must set NLASTRIP_FLAG_USR_INFLUENCE, or else the default setting overrides, and influence
+   * doesn't work.
    */
-  if (r_action_strip->extendmode != NLASTRIP_EXTEND_NOTHING) {
-    r_action_strip->flag |= NLASTRIP_FLAG_NO_TIME_MAP;
-  }
+  r_action_strip->flag |= NLASTRIP_FLAG_USR_INFLUENCE;
 
   const bool tweaking = (adt->flag & ADT_NLA_EDIT_ON) != 0;
   const bool soloing = (adt->flag & ADT_NLA_SOLO_TRACK) != 0;
@@ -3319,7 +3301,7 @@ static bool is_action_track_evaluated_without_nla(const AnimData *adt,
 }
 
 /**
- * XXX(Wayde Moss): #BKE_nlatrack_find_tweaked() exists within nla.c, but it doesn't appear to
+ * XXX(Wayde Moss): #BKE_nlatrack_find_tweaked() exists within `nla.cc`, but it doesn't appear to
  * work as expected. From #animsys_evaluate_nla_for_flush(), it returns nullptr in tweak mode. I'm
  * not sure why. Preferably, it would be as simple as checking for `(adt->act_Track == nlt)` but
  * that doesn't work either, neither does comparing indices.
@@ -3328,14 +3310,12 @@ static bool is_action_track_evaluated_without_nla(const AnimData *adt,
  */
 static NlaTrack *nlatrack_find_tweaked(const AnimData *adt)
 {
-  NlaTrack *nlt;
-
   if (adt == nullptr) {
     return nullptr;
   }
 
   /* Since the track itself gets disabled, we want the first disabled. */
-  for (nlt = static_cast<NlaTrack *>(adt->nla_tracks.first); nlt; nlt = nlt->next) {
+  LISTBASE_FOREACH (NlaTrack *, nlt, &adt->nla_tracks) {
     if (nlt->flag & NLATRACK_DISABLED) {
       return nlt;
     }
@@ -3396,12 +3376,12 @@ static bool animsys_evaluate_nla_for_flush(NlaEvalData *echannels,
     return false;
   }
 
-  NlaStrip action_strip = {0};
+  NlaStrip action_strip = {nullptr};
   animsys_create_action_track_strip(adt, false, &action_strip);
   nlastrips_ctime_get_strip_single(&estrips, &action_strip, anim_eval_context, flush_to_original);
 
   /* Per strip, evaluate and accumulate on top of existing channels. */
-  for (nes = static_cast<NlaEvalStrip *>(estrips.first); nes; nes = nes->next) {
+  LISTBASE_FOREACH (NlaEvalStrip *, nes, &estrips) {
     nlasnapshot_blend_strip(ptr,
                             echannels,
                             nullptr,
@@ -3536,7 +3516,7 @@ static void animsys_evaluate_nla_for_keyframing(PointerRNA *ptr,
   }
 
   /* For each strip, evaluate then accumulate on top of existing channels. */
-  for (nes = static_cast<NlaEvalStrip *>(lower_estrips.first); nes; nes = nes->next) {
+  LISTBASE_FOREACH (NlaEvalStrip *, nes, &lower_estrips) {
     nlasnapshot_blend_strip(ptr,
                             &r_context->lower_eval_data,
                             nullptr,
@@ -3729,13 +3709,13 @@ NlaKeyframingContext *BKE_animsys_get_nla_keyframing_context(
 void BKE_animsys_nla_remap_keyframe_values(NlaKeyframingContext *context,
                                            PointerRNA *prop_ptr,
                                            PropertyRNA *prop,
-                                           float *values,
-                                           int count,
+                                           const blender::MutableSpan<float> values,
                                            int index,
                                            const AnimationEvalContext *anim_eval_context,
                                            bool *r_force_all,
                                            BLI_bitmap *r_successful_remaps)
 {
+  const int count = values.size();
   BLI_bitmap_set_all(r_successful_remaps, false, count);
 
   if (r_force_all != nullptr) {
@@ -3802,7 +3782,7 @@ void BKE_animsys_nla_remap_keyframe_values(NlaKeyframingContext *context,
   }
 
   NlaEvalChannelSnapshot *blended_necs = nlaeval_snapshot_ensure_channel(&blended_snapshot, nec);
-  memcpy(blended_necs->values, values, sizeof(float) * count);
+  std::copy(values.begin(), values.end(), blended_necs->values);
 
   /* Force all channels to be remapped for quaternions in a Combine or Replace strip, otherwise it
    * will always fail. See nlaevalchan_combine_quaternion_handle_undefined_blend_values().
@@ -3820,8 +3800,7 @@ void BKE_animsys_nla_remap_keyframe_values(NlaKeyframingContext *context,
   BLI_bitmap_copy_all(blended_necs->remap_domain.ptr, remap_domain, count);
 
   /* Need to send id_ptr instead of prop_ptr so fcurve RNA paths resolve properly. */
-  PointerRNA id_ptr;
-  RNA_id_pointer_create(prop_ptr->owner_id, &id_ptr);
+  PointerRNA id_ptr = RNA_id_pointer_create(prop_ptr->owner_id);
 
   /* Per iteration, remove effect of upper strip which gives output of nla stack below it. */
   LISTBASE_FOREACH_BACKWARD (NlaEvalStrip *, nes, &context->upper_estrips) {
@@ -3870,10 +3849,8 @@ void BKE_animsys_free_nla_keyframing_context_cache(ListBase *cache)
 /* Evaluate Overrides */
 static void animsys_evaluate_overrides(PointerRNA *ptr, AnimData *adt)
 {
-  AnimOverride *aor;
-
   /* for each override, simply execute... */
-  for (aor = static_cast<AnimOverride *>(adt->overrides.first); aor; aor = aor->next) {
+  LISTBASE_FOREACH (AnimOverride *, aor, &adt->overrides) {
     PathResolvedRNA anim_rna;
     if (BKE_animsys_rna_path_resolve(ptr, aor->rna_path, aor->array_index, &anim_rna)) {
       BKE_animsys_write_to_rna_path(&anim_rna, aor->value);
@@ -3925,7 +3902,6 @@ void BKE_animsys_evaluate_animdata(ID *id,
                                    eAnimData_Recalc recalc,
                                    const bool flush_to_original)
 {
-  PointerRNA id_ptr;
 
   /* sanity checks */
   if (ELEM(nullptr, id, adt)) {
@@ -3933,7 +3909,7 @@ void BKE_animsys_evaluate_animdata(ID *id,
   }
 
   /* get pointer to ID-block for RNA to use */
-  RNA_id_pointer_create(id, &id_ptr);
+  PointerRNA id_ptr = RNA_id_pointer_create(id);
 
   /* recalculate keyframe data:
    * - NLA before Active Action, as Active Action behaves as 'tweaking track'
@@ -4160,7 +4136,6 @@ void BKE_animsys_eval_driver(Depsgraph *depsgraph, ID *id, int driver_index, FCu
   BLI_assert(fcu_orig != nullptr);
 
   /* TODO(sergey): De-duplicate with BKE animsys. */
-  PointerRNA id_ptr;
   bool ok = false;
 
   /* Lookup driver, accelerated with driver array map. */
@@ -4177,7 +4152,7 @@ void BKE_animsys_eval_driver(Depsgraph *depsgraph, ID *id, int driver_index, FCu
   DEG_debug_print_eval_subdata_index(
       depsgraph, __func__, id->name, id, "fcu", fcu->rna_path, fcu, fcu->array_index);
 
-  RNA_id_pointer_create(id, &id_ptr);
+  PointerRNA id_ptr = RNA_id_pointer_create(id);
 
   /* check if this driver's curve should be skipped */
   if ((fcu->flag & (FCURVE_MUTED | FCURVE_DISABLED)) == 0) {

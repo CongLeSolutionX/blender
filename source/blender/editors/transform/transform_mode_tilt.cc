@@ -6,17 +6,18 @@
  * \ingroup edtransform
  */
 
-#include <stdlib.h>
+#include <cstdlib>
 
-#include "BLI_math.h"
+#include "BLI_math_rotation.h"
+#include "BLI_math_vector.h"
 #include "BLI_string.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_unit.h"
 
-#include "ED_screen.h"
+#include "ED_screen.hh"
 
-#include "UI_interface.h"
+#include "UI_interface.hh"
 
 #include "BLT_translation.h"
 
@@ -30,7 +31,7 @@
 /** \name Transform (Tilt)
  * \{ */
 
-static void applyTilt(TransInfo *t, const int[2] /*mval*/)
+static void applyTilt(TransInfo *t)
 {
   int i;
   char str[UI_MAX_DRAW_STR];
@@ -72,7 +73,7 @@ static void applyTilt(TransInfo *t, const int[2] /*mval*/)
     }
   }
 
-  recalcData(t);
+  recalc_data(t);
 
   ED_area_status_text(t->area, str);
 }
