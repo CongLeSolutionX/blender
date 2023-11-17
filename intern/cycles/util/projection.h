@@ -146,10 +146,16 @@ ccl_device_inline ProjectionTransform projection_transpose(const ProjectionTrans
 ccl_device_inline ProjectionTransform projection_inverse(const ProjectionTransform &tfm)
 {
   ProjectionTransform tfmR = projection_identity();
+  float M[4][4], R[4][4];
 
-  if (UNLIKELY(!projection_inverse_impl((float(*)[4]) & tfmR.x.x, (float(*)[4]) & tfm.x.x))) {
+  memcpy(R, &tfmR, sizeof(R));
+  memcpy(M, &tfm, sizeof(M));
+
+  if (UNLIKELY(!projection_inverse_impl(R, M))) {
     return projection_identity();
   }
+
+  memcpy(&tfmR, R, sizeof(R));
 
   return tfmR;
 }
