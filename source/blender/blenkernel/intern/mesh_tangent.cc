@@ -25,6 +25,7 @@
 #include "BKE_report.hh"
 
 #include "mikktspace.hh"
+#include "mikktspace_ref.hh"
 
 #include "BLI_strict_flags.h" /* Keep last. */
 
@@ -79,6 +80,8 @@ struct BKEMeshToTangent {
   const float (*corner_normals)[3]; /* loops' normals */
   float (*tangents)[4];             /* output tangents */
   int num_faces;                    /* number of polygons */
+  size_t tangent_len;
+  int num_face_as_quad_map;
 };
 
 void BKE_mesh_calc_loop_tangent_single_ex(const float (*vert_positions)[3],
@@ -87,7 +90,7 @@ void BKE_mesh_calc_loop_tangent_single_ex(const float (*vert_positions)[3],
                                           float (*r_looptangent)[4],
                                           const float (*corner_normals)[3],
                                           const float (*loop_uvs)[2],
-                                          const int /*numLoops*/,
+                                          const int numLoops,
                                           const OffsetIndices<int> faces,
                                           ReportList *reports)
 {
@@ -100,8 +103,9 @@ void BKE_mesh_calc_loop_tangent_single_ex(const float (*vert_positions)[3],
   mesh_to_tangent.corner_normals = corner_normals;
   mesh_to_tangent.tangents = r_looptangent;
   mesh_to_tangent.num_faces = int(faces.size());
+  mesh_to_tangent.tangent_len = (size_t)numLoops * 4;
 
-  mikk::Mikktspace<BKEMeshToTangent> mikk(mesh_to_tangent);
+  mikk::RefMikktspace<BKEMeshToTangent> mikk(mesh_to_tangent);
 
   /* First check we do have a tris/quads only mesh. */
   for (const int64_t i : faces.index_range()) {
@@ -216,6 +220,68 @@ struct SGLSLMeshToTangent {
 #endif
   }
 
+  mikk::float3 GetPositionDirect(const uint loop_index)
+  {
+    return mikk::float3(positions[corner_verts[loop_index]]);
+  }
+
+  inline mikk::float3 GetTexCoordDirect(const uint loop_index)
+  {
+    if (mloopuv != nullptr) {
+      const float2 &uv = mloopuv[loop_index];
+      return mikk::float3(uv[0], uv[1], 1.0f);
+    }
+    const float *l_orco = orco[corner_verts[loop_index]];
+    float u, v;
+    map_to_sphere(&u, &v, l_orco[0], l_orco[1], l_orco[2]);
+    return mikk::float3(u, v, 1.0f);
+  }
+
+  inline mikk::float3 GetNormalDirect(const int face_index, const uint loop_index)
+  {
+    blender::int3 tri;
+    if (!corner_normals.is_empty()) {
+      return mikk::float3(corner_normals[loop_index]);
+    }
+    if (!sharp_faces.is_empty() && sharp_faces[face_index]) { /* flat */
+      if (!face_normals.is_empty()) {
+        return mikk::float3(face_normals[face_index]);
+      }
+#ifdef USE_TRI_DETECT_QUADS
+      const blender::IndexRange face = faces[face_index];
+      float normal[3];
+      if (face.size() == 4) {
+        normal_quad_v3(normal,
+                       positions[corner_verts[face[0]]],
+                       positions[corner_verts[face[1]]],
+                       positions[corner_verts[face[2]]],
+                       positions[corner_verts[face[3]]]);
+      }
+      else
+#endif
+      {
+        normal_tri_v3(normal,
+                      positions[corner_verts[tri[0]]],
+                      positions[corner_verts[tri[1]]],
+                      positions[corner_verts[tri[2]]]);
+      }
+      return mikk::float3(normal);
+    }
+    return mikk::float3(vert_normals[corner_verts[loop_index]]);
+  }
+
+  uint GetStoreIndex(const uint face_num, const uint vert_num)
+  {
+    blender::int3 tri;
+    int face_index;
+    return GetLoop(face_num, vert_num, tri, face_index);
+  }
+
+  void SetTangentSpaceDirect(const uint loop_index, mikk::float3 T, bool orientation)
+  {
+    copy_v4_fl4(tangent[loop_index], T.x, T.y, T.z, orientation ? 1.0f : -1.0f);
+  }
+
   mikk::float3 GetPosition(const uint face_num, const uint vert_num)
   {
     int3 tri;
@@ -296,6 +362,12 @@ struct SGLSLMeshToTangent {
   float (*tangent)[4]; /* destination */
   Span<bool> sharp_faces;
   int numTessFaces;
+  size_t tangent_len;
+
+  //int len_corner_verts;
+  int64_t len_positions;
+  int64_t len_face_normals;
+  int len_vert_normals;
 
 #ifdef USE_TRI_DETECT_QUADS
   /* map from 'fake' face index to corner_tris,
@@ -308,7 +380,7 @@ struct SGLSLMeshToTangent {
 static void DM_calc_loop_tangents_thread(TaskPool *__restrict /*pool*/, void *taskdata)
 {
   SGLSLMeshToTangent *mesh_data = static_cast<SGLSLMeshToTangent *>(taskdata);
-
+  // mikk::RefMikktspace<SGLSLMeshToTangent> mikk(*mesh_data);
   mikk::Mikktspace<SGLSLMeshToTangent> mikk(*mesh_data);
   mikk.genTangSpace();
 }
@@ -408,7 +480,6 @@ void BKE_mesh_calc_loop_tangent_ex(const Span<float3> vert_positions,
                                    const int *corner_tri_faces,
                                    const uint corner_tris_len,
                                    const Span<bool> sharp_faces,
-
                                    const CustomData *loopdata,
                                    bool calc_active_tangent,
                                    const char (*tangent_names)[MAX_CUSTOMDATA_LAYER_NAME],
@@ -524,6 +595,11 @@ void BKE_mesh_calc_loop_tangent_ex(const Span<float3> vert_positions,
         mesh2tangent->mloopuv = static_cast<const float2 *>(CustomData_get_layer_named(
             loopdata, CD_PROP_FLOAT2, loopdata_out->layers[index].name));
 
+        //mesh2tangent->len_corner_verts = loopdata_out_len;
+        mesh2tangent->len_positions = vert_positions.size();
+        mesh2tangent->len_face_normals = face_normals.size();
+        mesh2tangent->tangent_len = loopdata_out_len;
+
         /* Fill the resulting tangent_mask */
         if (!mesh2tangent->mloopuv) {
           mesh2tangent->orco = vert_orco;
@@ -614,7 +690,8 @@ void BKE_mesh_calc_loop_tangents(Mesh *mesh_eval,
                                 /* result */
                                 &mesh_eval->corner_data,
                                 uint(mesh_eval->corners_num),
-                                &tangent_mask);
+                                &tangent_mask
+                                );
 }
 
 /** \} */

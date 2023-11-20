@@ -53,7 +53,6 @@ void BKE_mesh_calc_loop_tangent_ex(blender::Span<blender::float3> vert_positions
                                    const int *corner_tri_faces,
                                    uint corner_tris_len,
                                    const blender::Span<bool> sharp_faces,
-
                                    const CustomData *loopdata,
                                    bool calc_active_tangent,
                                    const char (*tangent_names)[MAX_CUSTOMDATA_LAYER_NAME],

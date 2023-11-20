@@ -26,7 +26,7 @@
 #include "util/log.h"
 #include "util/math.h"
 
-#include "mikktspace.hh"
+#include "mikktspace_ref.hh"
 
 #include "BKE_attribute.hh"
 #include "BKE_attribute_math.hh"
@@ -229,12 +229,12 @@ static void mikk_compute_tangents(
   if (is_subd) {
     MikkMeshWrapper<true> userdata(b_mesh, layer_name, mesh, tangent, tangent_sign);
     /* Compute tangents. */
-    mikk::Mikktspace(userdata).genTangSpace();
+    mikk::RefMikktspace(userdata).genTangSpace();
   }
   else {
     MikkMeshWrapper<false> userdata(b_mesh, layer_name, mesh, tangent, tangent_sign);
     /* Compute tangents. */
-    mikk::Mikktspace(userdata).genTangSpace();
+    mikk::RefMikktspace(userdata).genTangSpace();
   }
 }
 

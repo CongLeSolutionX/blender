@@ -77,6 +77,14 @@ class AtomicHashSet {
   typedef typename std::conditional<isAtomic, std::atomic<KeyT>, KeyT>::type cell_type;
   std::vector<cell_type> cells_;
 
+  static inline size_t power_of_two(size_t x)
+  {
+    size_t y = 1;
+    while (y < x)
+      y *= 2;
+    return y;
+  }
+
  public:
   struct Config {
     KeyT emptyKey;
@@ -97,7 +105,7 @@ class AtomicHashSet {
                 KeyHash hasher = KeyHash(),
                 KeyEqual equalityChecker = KeyEqual(),
                 const Config &c = Config())
-      : capacity_(size_t(double(maxSize) / c.maxLoadFactor) + 1),
+      : capacity_(power_of_two(size_t(double(maxSize) / c.maxLoadFactor) + 1)),
         kEmptyKey_(c.emptyKey),
         hasher_(hasher),
         equalityChecker_(equalityChecker),

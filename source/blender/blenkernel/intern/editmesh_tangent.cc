@@ -23,6 +23,7 @@
 
 /* interface */
 #include "mikktspace.hh"
+#include "mikktspace_ref.hh"
 
 using blender::float3;
 using blender::Span;
@@ -150,7 +151,8 @@ static void emDM_calc_loop_tangents_thread(TaskPool *__restrict /*pool*/, void *
 {
   SGLSLEditMeshToTangent *mesh_data = static_cast<SGLSLEditMeshToTangent *>(taskdata);
 
-  mikk::Mikktspace<SGLSLEditMeshToTangent> mikk(*mesh_data);
+  mikk::RefMikktspace<SGLSLEditMeshToTangent> mikk(*mesh_data);
+  printf("EditMesh::tangent\n");
   mikk.genTangSpace();
 }
 

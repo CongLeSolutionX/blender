@@ -19,7 +19,7 @@ namespace mikk {
 
 inline bool not_zero(const float fX)
 {
-  return fabsf(fX) > FLT_MIN;
+  return (fX > FLT_MIN) || (-fX > FLT_MIN);
 }
 
 /* Helpers for (un)packing a 2-bit vertex index and a 30-bit face index to one integer. */
