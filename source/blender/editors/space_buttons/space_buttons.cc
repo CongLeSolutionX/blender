@@ -159,7 +159,7 @@ static void buttons_main_region_init(wmWindowManager *wm, ARegion *region)
 int ED_buttons_tabs_list(SpaceProperties *sbuts, short *context_tabs_array)
 {
   int length = 0;
-  if (sbuts->pathflag & (1 << BCONTEXT_TOOL)) {
+  if (sbuts->pathflag & (1 << BCONTEXT_TOOL) && sbuts->filter & (1 << BCONTEXT_TOOL)) {
     context_tabs_array[length] = BCONTEXT_TOOL;
     length++;
   }
@@ -167,27 +167,27 @@ int ED_buttons_tabs_list(SpaceProperties *sbuts, short *context_tabs_array)
     context_tabs_array[length] = -1;
     length++;
   }
-  if (sbuts->pathflag & (1 << BCONTEXT_RENDER)) {
+  if (sbuts->pathflag & (1 << BCONTEXT_RENDER) && sbuts->filter & (1 << BCONTEXT_RENDER)) {
     context_tabs_array[length] = BCONTEXT_RENDER;
     length++;
   }
-  if (sbuts->pathflag & (1 << BCONTEXT_OUTPUT)) {
+  if (sbuts->pathflag & (1 << BCONTEXT_OUTPUT) && sbuts->filter & (1 << BCONTEXT_OUTPUT)) {
     context_tabs_array[length] = BCONTEXT_OUTPUT;
     length++;
   }
-  if (sbuts->pathflag & (1 << BCONTEXT_VIEW_LAYER)) {
+  if (sbuts->pathflag & (1 << BCONTEXT_VIEW_LAYER) && sbuts->filter & (1 << BCONTEXT_VIEW_LAYER)) {
     context_tabs_array[length] = BCONTEXT_VIEW_LAYER;
     length++;
   }
-  if (sbuts->pathflag & (1 << BCONTEXT_SCENE)) {
+  if (sbuts->pathflag & (1 << BCONTEXT_SCENE) && sbuts->filter & (1 << BCONTEXT_SCENE)) {
     context_tabs_array[length] = BCONTEXT_SCENE;
     length++;
   }
-  if (sbuts->pathflag & (1 << BCONTEXT_WORLD)) {
+  if (sbuts->pathflag & (1 << BCONTEXT_WORLD) && sbuts->filter & (1 << BCONTEXT_WORLD)) {
     context_tabs_array[length] = BCONTEXT_WORLD;
     length++;
   }
-  if (sbuts->pathflag & (1 << BCONTEXT_COLLECTION)) {
+  if (sbuts->pathflag & (1 << BCONTEXT_COLLECTION) && sbuts->filter & (1 << BCONTEXT_COLLECTION)) {
     if (length != 0) {
       context_tabs_array[length] = -1;
       length++;
@@ -199,43 +199,45 @@ int ED_buttons_tabs_list(SpaceProperties *sbuts, short *context_tabs_array)
     context_tabs_array[length] = -1;
     length++;
   }
-  if (sbuts->pathflag & (1 << BCONTEXT_OBJECT)) {
+  if (sbuts->pathflag & (1 << BCONTEXT_OBJECT) && sbuts->filter & (1 << BCONTEXT_OBJECT)) {
     context_tabs_array[length] = BCONTEXT_OBJECT;
     length++;
   }
-  if (sbuts->pathflag & (1 << BCONTEXT_MODIFIER)) {
+  if (sbuts->pathflag & (1 << BCONTEXT_MODIFIER) && sbuts->filter & (1 << BCONTEXT_MODIFIER)) {
     context_tabs_array[length] = BCONTEXT_MODIFIER;
     length++;
   }
-  if (sbuts->pathflag & (1 << BCONTEXT_SHADERFX)) {
+  if (sbuts->pathflag & (1 << BCONTEXT_SHADERFX) && sbuts->filter & (1 << BCONTEXT_SHADERFX)) {
     context_tabs_array[length] = BCONTEXT_SHADERFX;
     length++;
   }
-  if (sbuts->pathflag & (1 << BCONTEXT_PARTICLE)) {
+  if (sbuts->pathflag & (1 << BCONTEXT_PARTICLE) && sbuts->filter & (1 << BCONTEXT_PARTICLE)) {
     context_tabs_array[length] = BCONTEXT_PARTICLE;
     length++;
   }
-  if (sbuts->pathflag & (1 << BCONTEXT_PHYSICS)) {
+  if (sbuts->pathflag & (1 << BCONTEXT_PHYSICS) && sbuts->filter & (1 << BCONTEXT_PHYSICS)) {
     context_tabs_array[length] = BCONTEXT_PHYSICS;
     length++;
   }
-  if (sbuts->pathflag & (1 << BCONTEXT_CONSTRAINT)) {
+  if (sbuts->pathflag & (1 << BCONTEXT_CONSTRAINT) && sbuts->filter & (1 << BCONTEXT_CONSTRAINT)) {
     context_tabs_array[length] = BCONTEXT_CONSTRAINT;
     length++;
   }
-  if (sbuts->pathflag & (1 << BCONTEXT_DATA)) {
+  if (sbuts->pathflag & (1 << BCONTEXT_DATA) && sbuts->filter & (1 << BCONTEXT_DATA)) {
     context_tabs_array[length] = BCONTEXT_DATA;
     length++;
   }
-  if (sbuts->pathflag & (1 << BCONTEXT_BONE)) {
+  if (sbuts->pathflag & (1 << BCONTEXT_BONE) && sbuts->filter & (1 << BCONTEXT_BONE)) {
     context_tabs_array[length] = BCONTEXT_BONE;
     length++;
   }
-  if (sbuts->pathflag & (1 << BCONTEXT_BONE_CONSTRAINT)) {
+  if (sbuts->pathflag & (1 << BCONTEXT_BONE_CONSTRAINT) &&
+      sbuts->filter & (1 << BCONTEXT_BONE_CONSTRAINT))
+  {
     context_tabs_array[length] = BCONTEXT_BONE_CONSTRAINT;
     length++;
   }
-  if (sbuts->pathflag & (1 << BCONTEXT_MATERIAL)) {
+  if (sbuts->pathflag & (1 << BCONTEXT_MATERIAL) && sbuts->filter & (1 << BCONTEXT_MATERIAL)) {
     context_tabs_array[length] = BCONTEXT_MATERIAL;
     length++;
   }
@@ -243,7 +245,7 @@ int ED_buttons_tabs_list(SpaceProperties *sbuts, short *context_tabs_array)
     context_tabs_array[length] = -1;
     length++;
   }
-  if (sbuts->pathflag & (1 << BCONTEXT_TEXTURE)) {
+  if (sbuts->pathflag & (1 << BCONTEXT_TEXTURE) && sbuts->filter & (1 << BCONTEXT_TEXTURE)) {
     context_tabs_array[length] = BCONTEXT_TEXTURE;
     length++;
   }

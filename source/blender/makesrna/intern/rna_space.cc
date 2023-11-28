@@ -511,7 +511,7 @@ static const EnumPropertyItem buttons_context_items[] = {
      "Constraints",
      "Object Constraint Properties"},
     {BCONTEXT_MODIFIER, "MODIFIER", ICON_MODIFIER, "Modifiers", "Modifier Properties"},
-    {BCONTEXT_DATA, "DATA", ICON_NONE, "Data", "Object Data Properties"},
+    {BCONTEXT_DATA, "DATA", ICON_MESH_DATA, "Data", "Object Data Properties"},
     {BCONTEXT_BONE, "BONE", ICON_BONE_DATA, "Bone", "Bone Properties"},
     {BCONTEXT_BONE_CONSTRAINT,
      "BONE_CONSTRAINT",
@@ -5637,6 +5637,44 @@ static void rna_def_space_view3d(BlenderRNA *brna)
   RNA_api_region_view3d(srna);
 }
 
+static const char *filter_items[] = {
+    "show_tool",
+    "show_scene",
+    "show_render",
+    "show_output",
+    "show_view_layer",
+    "show_world",
+    "show_collection",
+    "show_object",
+    "show_constraints",
+    "show_modifiers",
+    "show_data",
+    "show_bone",
+    "show_bone_constraints",
+    "show_material",
+    "show_texture",
+    "show_particles",
+    "show_physics",
+    "show_effects",
+};
+
+static void rna_def_space_properties_filter(StructRNA *srna)
+{
+  for (int i = 1; i < BCONTEXT_TOT; i++) {
+    EnumPropertyItem item = buttons_context_items[i];
+    int value = (1 << item.value);
+
+    const char *prop_name = filter_items[i];
+
+    PropertyRNA *prop = RNA_def_property(srna, prop_name, PROP_BOOLEAN, PROP_NONE);
+    RNA_def_property_boolean_sdna(prop, nullptr, "filter", value);
+    RNA_def_property_ui_icon(prop, item.icon, 0);
+    RNA_def_property_ui_text(prop, item.name, "");
+    RNA_def_property_update(
+        prop, NC_SPACE | ND_SPACE_PROPERTIES, "rna_SpaceProperties_context_update");
+  }
+}
+
 static void rna_def_space_properties(BlenderRNA *brna)
 {
   StructRNA *srna;
@@ -5724,6 +5762,8 @@ static void rna_def_space_properties(BlenderRNA *brna)
                            "Outliner Sync",
                            "Change to the corresponding tab when outliner data icons are clicked");
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_PROPERTIES, nullptr);
+
+  rna_def_space_properties_filter(srna);
 }
 
 static void rna_def_space_image_overlay(BlenderRNA *brna)

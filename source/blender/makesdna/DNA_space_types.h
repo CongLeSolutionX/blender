@@ -197,7 +197,9 @@ typedef struct SpaceProperties {
   ID *pinid;
 
   void *texuser;
+  int filter;
 
+  char _pad1[4];
   /* Doesn't necessarily need to be a pointer, but runtime structs are still written to files. */
   struct SpaceProperties_Runtime *runtime;
 } SpaceProperties;
