@@ -877,7 +877,7 @@ Vector<AttributeTransferData> retrieve_attributes_for_transfer(
 void gather_attribute_domain(AttributeAccessor src_attributes,
                              MutableAttributeAccessor dst_attributes,
                              Span<int64_t> gather_indices,
-                             eAttrDomain domain,
+                             AttrDomain domain,
                              const AnonymousAttributePropagationInfo &propagation_info,
                              const Set<std::string> &skip = {});
 

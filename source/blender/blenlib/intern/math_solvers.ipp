@@ -24,7 +24,7 @@
 #include <math.h>
 #include <type_traits>
 
-#include "BLI_math.h"
+#include "BLI_math_base.h"
 #include "BLI_utildefines.h"
 
 template<typename FP> FP quadratic(FP a, FP b, FP c, FP x)

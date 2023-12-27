@@ -62,6 +62,24 @@ void copy_group_to_group(const OffsetIndices<int> src_offsets,
   });
 }
 
+void copy_group_to_group(const OffsetIndices<int> src_offsets,
+                         const OffsetIndices<int> dst_offsets,
+                         const IndexMask &src_selection,
+                         const IndexMask &dst_selection,
+                         const GSpan src,
+                         GMutableSpan dst)
+{
+  BLI_assert(src_selection.size() == dst_selection.size());
+  threading::parallel_for(dst_selection.index_range(), 512, [&](IndexRange range) {
+    for (const int i : range) {
+      const IndexRange src_points = src_offsets[src_selection[i]];
+      const IndexRange dst_points = dst_offsets[dst_selection[i]];
+      /* The arrays might be large, so a threaded copy might make sense here too. */
+      dst.slice(dst_points).copy_from(src.slice(src_points));
+    }
+  });
+}
+
 void count_indices(const Span<int> indices, MutableSpan<int> counts)
 {
   if (indices.size() < 8192 || BLI_system_thread_count() < 4) {

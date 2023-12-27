@@ -8,8 +8,10 @@
 
 #include "BLI_array_utils.hh"
 #include "BLI_length_parameterize.hh"
+#include "BLI_math_geom.h"
 #include "BLI_math_solvers.hh"
 
+#include "BKE_attribute.h"
 #include "BKE_attribute.hh"
 #include "BKE_attribute_math.hh"
 #include "BKE_curves.hh"
@@ -447,7 +449,8 @@ static void sample_interval_bezier(const Span<float3> src_positions,
   }
   else if constexpr (!include_start_point) {
     /* Handle edges cases when 'start_point' is excluded. */
-    // (wont work if 3 intersections) start_point_insert.handle_next = dst_handles_l[dst_range.first()]
+    // (wont work if 3 intersections) start_point_insert.handle_next =
+    // dst_handles_l[dst_range.first()]
   }
   else {
     /* General case, sample 'start_point'. */
@@ -476,7 +479,7 @@ static void sample_interval_bezier(const Span<float3> src_positions,
   dst_types_r.slice(dst_range_to_end).copy_from(src_types_r.slice(src_range_to_end));
   dst_index += increment;
 
-  if ((include_start_point || end_point.is_controlpoint()) &&  dst_range.size() == 1) {
+  if ((include_start_point || end_point.is_controlpoint()) && dst_range.size() == 1) {
     BLI_assert(dst_index == dst_range.one_after_last());
     return;
   }
@@ -501,7 +504,8 @@ static void sample_interval_bezier(const Span<float3> src_positions,
   /* Handle 'end_point' */
   bke::curves::bezier::Insertion end_point_insert;
   if (end_point.parameter == 0.0f) {
-    /* Set logical values for the 'outer' handles (endpoint handles not affecting the new curve). */
+    /* Set logical values for the 'outer' handles (endpoint handles not affecting the new curve).
+     */
     if (end_point.index == start_point.index) {
       /* Start point is same point or in the same segment. */
       if (start_point.parameter == 0.0f) {
@@ -843,20 +847,21 @@ static void bisect_attribute_linear(const bke::CurvesGeometry &src_curves,
                                     bool sample_evaluated = false)
 {
   const OffsetIndices src_points_by_curve = src_curves.points_by_curve();
-  const OffsetIndices src_points_by_curve_evaluated = sample_evaluated ? src_curves.evaluated_points_by_curve() :
+  const OffsetIndices src_points_by_curve_evaluated = sample_evaluated ?
+                                                          src_curves.evaluated_points_by_curve() :
                                                           src_points_by_curve;
   const OffsetIndices dst_points_by_curve = dst_curves.points_by_curve();
   for (bke::AttributeTransferData &attribute : transfer_attributes) {
-    attribute_math::convert_to_static_type(attribute.meta_data.data_type, [&](auto dummy) {
+    bke::attribute_math::convert_to_static_type(attribute.meta_data.data_type, [&](auto dummy) {
       using T = decltype(dummy);
 
-      threading::parallel_for(selection.index_range(), 512, [&](const IndexRange range) {
-        for (const int64_t src_curve_i : selection.slice(range)) {
+      selection.foreach_segment(GrainSize(512), [&](const IndexMaskSegment segment) {
+        for (const int64_t src_curve_i : segment) {
           /* Compute bisections */
           int dst_curve_i = curve_offsets[src_curve_i];
 
-          for (const Array<bke::curves::CurvePoint, 12> &sequence :
-               bisect_sequences[src_curve_i]) {
+          for (const Array<bke::curves::CurvePoint, 12> &sequence : bisect_sequences[src_curve_i])
+          {
             BLI_assert(sequence.size() > 1);
             bke::curves::IndexRangeCyclic src_range;
             const IndexRange dst_points = dst_points_by_curve[dst_curve_i];
@@ -921,16 +926,17 @@ static void bisect_polygonal_curves(const bke::CurvesGeometry &src_curves,
                                     bool sample_evaluated = false)
 {
   const OffsetIndices src_points_by_curve = sample_evaluated ?
-      src_curves.evaluated_points_by_curve() : src_curves.points_by_curve();
+                                                src_curves.evaluated_points_by_curve() :
+                                                src_curves.points_by_curve();
   const Span<float3> src_positions = sample_evaluated ? src_curves.evaluated_positions() :
                                                         src_curves.positions();
 
   const OffsetIndices dst_points_by_curve = dst_curves.points_by_curve();
   MutableSpan<float3> dst_positions = dst_curves.positions_for_write();
 
-  threading::parallel_for(selection.index_range(), 512, [&](const IndexRange range) {
+  selection.foreach_segment(GrainSize(512), [&](const IndexMaskSegment segment) {
     Vector<int> dst_selection;
-    for (const int64_t src_curve_i : selection.slice(range)) {
+    for (const int64_t src_curve_i : segment) {
       /* Compute bisections */
       int dst_curve_i = curve_offsets[src_curve_i];
       const IndexRange src_points = src_points_by_curve[src_curve_i];
@@ -1004,8 +1010,8 @@ static void bisect_bezier_curves(const bke::CurvesGeometry &src_curves,
   MutableSpan<float3> dst_handles_l = dst_curves.handle_positions_left_for_write();
   MutableSpan<float3> dst_handles_r = dst_curves.handle_positions_right_for_write();
 
-  threading::parallel_for(selection.index_range(), 512, [&](const IndexRange range) {
-    for (const int64_t src_curve_i : selection.slice(range)) {
+  selection.foreach_segment(GrainSize(512), [&](const IndexMaskSegment segment) {
+    for (const int64_t src_curve_i : segment) {
       /* Compute bisections */
       const IndexRange src_points = src_points_by_curve[src_curve_i];
       int dst_curve_i = curve_offsets[src_curve_i];
@@ -1384,7 +1390,8 @@ static void bisect_bezier_segment(const Span<float3> src_positions,
                                   Vector<bool> &bisect_infront)
 {
   if (src_types_r[index] == BEZIER_HANDLE_VECTOR &&
-      src_types_l[next_index] == BEZIER_HANDLE_VECTOR) {
+      src_types_l[next_index] == BEZIER_HANDLE_VECTOR)
+  {
     /* Treat as polyline. */
     bisect_polyline_segment(src_positions, args, index, next_index, bisect_points, bisect_infront);
   }
@@ -1604,10 +1611,10 @@ bke::CurvesGeometry bisect_curves(const bke::CurvesGeometry &src_curves,
   auto compute_poly_parameters = [&](const IndexMask selection) {
     const Span<float3> src_positions = src_curves.positions();
 
-    threading::parallel_for(selection.index_range(), 512, [&](const IndexRange range) {
+    selection.foreach_segment(GrainSize(512), [&](const IndexMaskSegment segment) {
       Vector<bke::curves::CurvePoint> bisect_points;
       Vector<bool> bisect_infront;
-      for (const int64_t curve_i : selection.slice(range)) {
+      for (const int64_t curve_i : segment) {
         /* Compute bisections */
         const IndexRange src_points = src_points_by_curve[curve_i];
         for (const int64_t segment_i : IndexRange(0, src_points.size() - 1)) {
@@ -1624,7 +1631,8 @@ bke::CurvesGeometry bisect_curves(const bke::CurvesGeometry &src_curves,
         }
         /* Store and reset bisect trackers */
         if (bisect_points.size() == 0 &&
-            keep_bisect_spline_no_intersect(src_positions[src_points.first()], args)) {
+            keep_bisect_spline_no_intersect(src_positions[src_points.first()], args))
+        {
           bisect_curve[curve_i] = false;
           num_dst_curves++;
           dst_curve_types[curve_i] = src_curve_types[curve_i];
@@ -1650,10 +1658,10 @@ bke::CurvesGeometry bisect_curves(const bke::CurvesGeometry &src_curves,
     const Span<float3> eval_positions = src_curves.evaluated_positions();
     const OffsetIndices evaluated_points_by_curve = src_curves.evaluated_points_by_curve();
 
-    threading::parallel_for(selection.index_range(), 512, [&](const IndexRange range) {
+    selection.foreach_segment(GrainSize(512), [&](const IndexMaskSegment segment) {
       Vector<bke::curves::CurvePoint> bisect_points;
       Vector<bool> bisect_infront;
-      for (const int64_t curve_i : selection.slice(range)) {
+      for (const int64_t curve_i : segment) {
         /* Compute bisections */
         const IndexRange eval_points = evaluated_points_by_curve[curve_i];
         for (const int64_t segment_i : IndexRange(0, eval_points.size() - 1)) {
@@ -1670,7 +1678,8 @@ bke::CurvesGeometry bisect_curves(const bke::CurvesGeometry &src_curves,
         }
         /* Store and reset bisect trackers */
         if (bisect_points.size() == 0 &&
-            keep_bisect_spline_no_intersect(eval_positions[eval_points.first()], args)) {
+            keep_bisect_spline_no_intersect(eval_positions[eval_points.first()], args))
+        {
           bisect_curve[curve_i] = false;
           num_dst_curves++;
           dst_curve_types[curve_i] = src_curve_types[curve_i];
@@ -1699,10 +1708,10 @@ bke::CurvesGeometry bisect_curves(const bke::CurvesGeometry &src_curves,
     const Span<float3> src_handles_l = src_curves.handle_positions_left();
     const Span<float3> src_handles_r = src_curves.handle_positions_right();
 
-    threading::parallel_for(selection.index_range(), 512, [&](const IndexRange range) {
+    selection.foreach_segment(GrainSize(512), [&](const IndexMaskSegment segment) {
       Vector<bke::curves::CurvePoint> bisect_points;
       Vector<bool> bisect_infront;
-      for (const int64_t curve_i : selection.slice(range)) {
+      for (const int64_t curve_i : segment) {
         /* Compute bisections */
         const IndexRange src_points = src_points_by_curve[curve_i];
         for (const int64_t segment_i : IndexRange(0, src_points.size() - 1)) {
@@ -1731,7 +1740,8 @@ bke::CurvesGeometry bisect_curves(const bke::CurvesGeometry &src_curves,
         }
         /* Store and reset bisect trackers */
         if (bisect_points.size() == 0 &&
-            keep_bisect_spline_no_intersect(src_positions[src_points.first()], args)) {
+            keep_bisect_spline_no_intersect(src_positions[src_points.first()], args))
+        {
           bisect_curve[curve_i] = false;
           num_dst_curves++;
           dst_curve_types[curve_i] = src_curve_types[curve_i];
@@ -1814,8 +1824,11 @@ bke::CurvesGeometry bisect_curves(const bke::CurvesGeometry &src_curves,
   blender::offset_indices::accumulate_counts_to_offsets(dst_curve_offsets);
   dst_curves.resize(dst_curves.offsets().last(), dst_curves.curves_num());
   dst_curves.update_curve_types();
-  IndexMask inverse_selection = IndexMask(inverse_selection_indices);
-  selection = IndexMask(selection_indices);
+  IndexMaskMemory memory;
+  IndexMaskMemory inverse_memory;
+  IndexMask inverse_selection = IndexMask::from_indices(inverse_selection_indices.as_span(),
+                                                        inverse_memory);
+  selection = IndexMask::from_indices(selection_indices.as_span(), memory);
 
   /* Populate curve domain. */
   if (dst_curves.has_curve_with_type(CURVE_TYPE_NURBS)) {
@@ -1825,11 +1838,11 @@ bke::CurvesGeometry bisect_curves(const bke::CurvesGeometry &src_curves,
     const VArraySpan<int8_t> src_nurbs_orders = src_curves.nurbs_orders();
     const VArraySpan<int8_t> src_nurbs_knot_modes = src_curves.nurbs_knots_modes();
 
-    for (int64_t curve_i : inverse_selection) {
+    inverse_selection.foreach_index(GrainSize(512), [&](const int curve_i) {
       int dst_curve_i = curve_offsets[curve_i];
       dst_nurbs_orders[dst_curve_i] = src_nurbs_orders[curve_i];
       dst_nurbs_knot_modes[dst_curve_i] = dst_nurbs_knot_modes[curve_i];
-    }
+    });
   }
 
   /* Gather (copy) attribute domain */
@@ -1843,7 +1856,7 @@ bke::CurvesGeometry bisect_curves(const bke::CurvesGeometry &src_curves,
   bke::gather_attribute_domain(src_attributes,
                                dst_attributes,
                                curve_domain_gather_indices.as_span(),
-                               ATTR_DOMAIN_CURVE,
+                               bke::AttrDomain::Curve,
                                propagation_info,
                                transfer_curve_skip);
 
@@ -1902,7 +1915,8 @@ bke::CurvesGeometry bisect_curves(const bke::CurvesGeometry &src_curves,
   if (!inverse_selection.is_empty()) {
     Set<std::string> copy_point_skip;
     if (!dst_curves.has_curve_with_type(CURVE_TYPE_NURBS) &&
-        src_curves.has_curve_with_type(CURVE_TYPE_NURBS)) {
+        src_curves.has_curve_with_type(CURVE_TYPE_NURBS))
+    {
       copy_point_skip.add("nurbs_weight");
     }
 
@@ -1911,15 +1925,19 @@ bke::CurvesGeometry bisect_curves(const bke::CurvesGeometry &src_curves,
                                                                  dst_attributes,
                                                                  ATTR_DOMAIN_MASK_POINT,
                                                                  propagation_info,
-                                                                 copy_point_skip)) {
+                                                                 copy_point_skip))
+    {
 
       /* Gather the copied curves only */
-      bke::curves::copy_point_data(src_curves,
-                                   dst_curves,
-                                   inverse_selection,
-                                   copy_curve_offsets,
-                                   attribute.src,
-                                   attribute.dst.span);
+      IndexMaskMemory copy_memory;
+      IndexMask copy_curve_selection = IndexMask::from_indices(copy_curve_offsets.as_span(),
+                                                               copy_memory);
+      array_utils::copy_group_to_group(src_curves.points_by_curve(),
+                                       dst_curves.points_by_curve(),
+                                       inverse_selection,
+                                       copy_curve_selection,
+                                       attribute.src,
+                                       attribute.dst.span);
       attribute.dst.finish();
     }
   }

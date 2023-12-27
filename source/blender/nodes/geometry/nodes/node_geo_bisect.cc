@@ -14,6 +14,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
+#include "BLI_math_geom.h"
 #include "BLI_math_solvers.hh"
 #include "BLI_task.hh"
 
@@ -24,15 +25,14 @@
 #include "BKE_curves.hh"
 #include "BKE_mesh.h"
 #include "BKE_pointcloud.h"
-//#include "BKE_volume.h"
+// #include "BKE_volume.h"
 
-#include "bmesh.h"
-#include "bmesh_tools.h"
+// #include "bmesh_mesh.hh"
+//  #include "bmesh_tools.hh"
 
 #include "GEO_trim_curves.hh"
 
 #include "node_geometry_util.hh"
-
 
 namespace blender::nodes::node_geo_curve_bisect_cc {
 
@@ -57,18 +57,14 @@ static void geo_node_bisect_declare(NodeDeclarationBuilder &b)
 
 class BisectSplineSampler;
 
+using bke::attribute_math::mix2;
 
-using blender::attribute_math::mix2;
-
+/*
 static Mesh *plane_clip_mesh(const Mesh *mesh_in, const blender::geometry::BisectArgs &args)
 {
   BMeshCreateParams bm_params{1};  // Default
   BMeshFromMeshParams to_bm_params{};
   BMesh *bm = BKE_mesh_to_bmesh_ex(mesh_in, &bm_params, &to_bm_params);
-
-  /* This part is largely copy-pasta from:
-   * editmesh_bisect.c
-   */
 
   BMOperator bmop;
   BMO_op_initf(
@@ -88,11 +84,11 @@ static Mesh *plane_clip_mesh(const Mesh *mesh_in, const blender::geometry::Bisec
     BMOperator bmop_fill;
     BMOperator bmop_attr;
 
-    /* The fill normal sign is ignored as the face-winding is defined by surrounding faces.
-     * The normal is passed so triangle fill won't have to calculate it. */
+    //The fill normal sign is ignored as the face-winding is defined by surrounding faces.
+    // The normal is passed so triangle fill won't have to calculate it.
     normalize_v3_v3(normal_fill, args.plane_no);
 
-    /* Fill */
+    // Fill
     BMO_op_initf(bm,
                  &bmop_fill,
                  0,
@@ -103,7 +99,7 @@ static Mesh *plane_clip_mesh(const Mesh *mesh_in, const blender::geometry::Bisec
                  true);
     BMO_op_exec(bm, &bmop_fill);
 
-    /* Copy Attributes */
+    // Copy Attributes
     BMO_op_initf(bm,
                  &bmop_attr,
                  0,
@@ -124,9 +120,11 @@ static Mesh *plane_clip_mesh(const Mesh *mesh_in, const blender::geometry::Bisec
   BMeshToMeshParams from_bm_params{};
   return BKE_mesh_from_bmesh_nomain(bm, &from_bm_params, mesh_in);
 }
+*/
 
 /*
-static void plane_clip_point_cloud(GeometrySet &geometry_set, const blender::geometry::BisectArgs &args)
+static void plane_clip_point_cloud(GeometrySet &geometry_set, const blender::geometry::BisectArgs
+&args)
 {
   const PointCloudComponent &src_points =
       *geometry_set.get_component_for_read<PointCloudComponent>();
@@ -168,13 +166,13 @@ static void plane_clip_point_cloud(GeometrySet &geometry_set, const blender::geo
 */
 
 static void geometry_set_curve_bisect(GeometrySet &geometry_set,
-                                    const blender::geometry::BisectArgs &args,
-                                    const AnonymousAttributePropagationInfo &propagation_info)
+                                      const blender::geometry::BisectArgs &args,
+                                      const AnonymousAttributePropagationInfo &propagation_info)
 {
   if (!geometry_set.has_curves()) {
     return;
   }
-  const Curves &src_curves_id = *geometry_set.get_curves_for_read();
+  const Curves &src_curves_id = *geometry_set.get_curves();
   const bke::CurvesGeometry &src_curves = src_curves_id.geometry.wrap();
   if (src_curves.curves_num() == 0) {
     return;
@@ -197,7 +195,8 @@ static void geometry_set_curve_bisect(GeometrySet &geometry_set,
   }
   */
 
-  bke::CurvesGeometry dst_curves = geometry::bisect_curves(src_curves, src_curves.curves_range(), args, propagation_info);
+  bke::CurvesGeometry dst_curves = geometry::bisect_curves(
+      src_curves, src_curves.curves_range(), args, propagation_info);
 
   Curves *dst_curves_id = bke::curves_new_nomain(std::move(dst_curves));
   bke::curves_copy_parameters(src_curves_id, *dst_curves_id);
@@ -226,13 +225,15 @@ static void geo_node_bisect_exec(GeoNodeExecParams params)
     plane_from_point_normal_v3(args.plane, args.plane_co, args.plane_no);
 
     geometry_set.modify_geometry_sets([&](GeometrySet &geometry_set) {
+      /*
       if (geometry_set.has_mesh()) {
-        const Mesh *mesh_in = geometry_set.get_mesh_for_read();
+        const Mesh *mesh_in = geometry_set.get_mesh();
 
         Mesh *clipped_mesh = plane_clip_mesh(mesh_in, args);
 
-        geometry_set.replace_mesh(clipped_mesh, GeometryOwnershipType::Owned);
+        geometry_set.replace_mesh(clipped_mesh, bke::GeometryOwnershipType::Owned);
       }
+     */
       /*
       if (geometry_set.has_pointcloud()) {
         plane_clip_point_cloud(geometry_set, args);
@@ -242,13 +243,12 @@ static void geo_node_bisect_exec(GeoNodeExecParams params)
       if (geometry_set.has_curves()) {
         geometry_set_curve_bisect(geometry_set, args, propagation_info);
       }
-
     });
   }
 
   params.set_output("Geometry", std::move(geometry_set));
 }
-}  // namespace blender::nodes
+}  // namespace blender::nodes::node_geo_curve_bisect_cc
 
 void register_node_type_geo_bisect()
 {

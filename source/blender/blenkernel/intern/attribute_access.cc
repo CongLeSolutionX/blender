@@ -854,7 +854,7 @@ Vector<AttributeTransferData> retrieve_attributes_for_transfer(
 void gather_attribute_domain(const AttributeAccessor src_attributes,
                            MutableAttributeAccessor dst_attributes,
                           const Span<int64_t> gather_indices,
-                           const eAttrDomain domain,
+                           const AttrDomain domain,
                            const AnonymousAttributePropagationInfo &propagation_info,
                            const Set<std::string> &skip)
 {
@@ -870,7 +870,7 @@ void gather_attribute_domain(const AttributeAccessor src_attributes,
           return true;
         }
 
-        const GVArray src = src_attributes.lookup(id, meta_data.domain);
+        const GAttributeReader src = src_attributes.lookup(id, meta_data.domain);
         BLI_assert(src);
 
         /* Copy attribute. */
@@ -878,9 +878,9 @@ void gather_attribute_domain(const AttributeAccessor src_attributes,
             id, domain, meta_data.data_type);
 
         attribute_math::convert_to_static_type(
-            src.type(), [&](auto dummy) {
+            src.varray.type(), [&](auto dummy) {
             using T = decltype(dummy);
-          array_utils::gather<T, int64_t>(src.typed<T>(), gather_indices, dst.span.typed<T>());
+          array_utils::gather<T, int64_t>(src.varray.typed<T>(), gather_indices, dst.span.typed<T>());
          });
         dst.finish();
 

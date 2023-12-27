@@ -11,7 +11,7 @@
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
 
-#include "BKE_customdata.h"
+#include "BKE_customdata.hh"
 #include "BKE_mesh.hh"
 
 #include "GEO_mesh_bisect.hh"
@@ -22,9 +22,9 @@ Mesh *bisect_mesh(const Mesh &mesh,
                   const BisectArgs &args,
                   const bke::AnonymousAttributePropagationInfo &propagation_info)
 {
-  const int src_num_vert = mesh.totvert;
-  const int src_num_edges = mesh.totedge;
-  const int src_num_polys = mesh.totpoly;
+  const int src_num_vert = mesh.verts_num;
+  const int src_num_edges = mesh.edges_num;
+  const int src_num_polys = mesh.faces_num;
 
   /* Compute per-vert distance. */
   const Span<float3> src_positions = mesh.vert_positions();
@@ -42,7 +42,7 @@ Mesh *bisect_mesh(const Mesh &mesh,
   });
 
   /* Compute edge intersections. */
-  const Span<MEdge> src_edges = mesh.edges();
+  const Span<int2> src_edges = mesh.edges();
   BLI_assert(src_num_vert == src_edges.size());
 
   Array<float, 12> edge_insertion_factor(src_num_edges);
@@ -51,15 +51,15 @@ Mesh *bisect_mesh(const Mesh &mesh,
       src_edges.index_range(),
       512,
       0,
-      [&](const IndexRange range) {
-        int intersect_counter = 0;
+      [&](const IndexRange range, int identity) {
+        int intersect_counter = identity;
         for (const int64_t i : range) {
-          const bool v1_outer = outer_vertex[src_edges[i].v1];
-          const bool v2_outer = outer_vertex[src_edges[i].v2];
+          const bool v1_outer = outer_vertex[src_edges[i].x];
+          const bool v2_outer = outer_vertex[src_edges[i].y];
           if (v1_outer != v2_outer) {
             /* Intersects plane */
-            const float abs_d1 = abs(dist_buffer[src_edges[i].v1]);
-            const float tot_dist = abs_d1 + abs(dist_buffer[src_edges[i].v2]);
+            const float abs_d1 = abs(dist_buffer[src_edges[i].x]);
+            const float tot_dist = abs_d1 + abs(dist_buffer[src_edges[i].y]);
             edge_insertion_factor[i] = abs_d1 / tot_dist;
             intersects[i].set();
             intersect_counter++;
@@ -73,7 +73,7 @@ Mesh *bisect_mesh(const Mesh &mesh,
   if (num_edge_intersect == 0) {
   }
 
-  const OffsetIndices src_polys = mesh.polys();
+  const OffsetIndices src_polys = mesh.faces();
   const Span<int> src_corner_verts = mesh.corner_verts();
   const Span<int> src_corner_edges = mesh.corner_edges();
 
@@ -98,7 +98,7 @@ Mesh *bisect_mesh(const Mesh &mesh,
   Vector<int> new_to_old_edge_map;
   new_to_old_edge_map.reserve(src_num_edges);
   for (const int64_t i : src_edges.index_range()) {
-    if (keep(src_edges[i].v1) && keep(src_edges[i].v2)) {
+    if (keep(src_edges[i].x) && keep(src_edges[i].y)) {
       new_to_old_edge_map.append(i);
     }
   }
@@ -143,6 +143,7 @@ Mesh *bisect_mesh(const Mesh &mesh,
 
   // TODO
 
+  return result;
 }
 
 }  // namespace blender::geometry

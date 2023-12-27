@@ -234,6 +234,18 @@ void copy_group_to_group(OffsetIndices<int> src_offsets,
 }
 
 /**
+ * Copy data between \a src and \a dst using groups defined by \a src_offsets and \a dst_offsets.
+ * Takes separate masks for the source and destination groups through \a src_selection and \a
+ * dst_selection, allowing corresponding groups to be of different sizes.
+ */
+void copy_group_to_group(const OffsetIndices<int> src_offsets,
+                         const OffsetIndices<int> dst_offsets,
+                         const IndexMask &src_selection,
+                         const IndexMask &dst_selection,
+                         const GSpan src,
+                         GMutableSpan dst);
+
+/**
  * Count the number of occurrences of each index.
  * \param indices: The indices to count.
  * \param counts: The number of occurrences of each index. Typically initialized to zero.
