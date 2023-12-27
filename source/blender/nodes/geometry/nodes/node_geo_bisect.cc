@@ -248,16 +248,15 @@ static void geo_node_bisect_exec(GeoNodeExecParams params)
 
   params.set_output("Geometry", std::move(geometry_set));
 }
-}  // namespace blender::nodes::node_geo_curve_bisect_cc
 
-void register_node_type_geo_bisect()
+static void node_register()
 {
-  namespace file_ns = blender::nodes::node_geo_curve_bisect_cc;
-
   static bNodeType ntype;
-
   geo_node_type_base(&ntype, GEO_NODE_BISECT, "Bisect", NODE_CLASS_GEOMETRY);
-  ntype.declare = file_ns::geo_node_bisect_declare;
-  ntype.geometry_node_execute = file_ns::geo_node_bisect_exec;
+  ntype.declare = geo_node_bisect_declare;
+  ntype.geometry_node_execute = geo_node_bisect_exec;
   nodeRegisterType(&ntype);
 }
+NOD_REGISTER_NODE(node_register)
+
+}  // namespace blender::nodes::node_geo_curve_bisect_cc
