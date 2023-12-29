@@ -18,6 +18,7 @@
 #include "BKE_curves_utils.hh"
 
 #include "GEO_trim_curves.hh"
+#include "GEO_mesh_bisect.hh"
 
 namespace blender::geometry {
 

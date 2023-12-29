@@ -31,6 +31,7 @@
 //  #include "bmesh_tools.hh"
 
 #include "GEO_trim_curves.hh"
+#include "GEO_mesh_bisect.hh"
 
 #include "node_geometry_util.hh"
 
@@ -213,7 +214,7 @@ static void geo_node_bisect_exec(GeoNodeExecParams params)
 
   args.plane_no = params.extract_input<float3>("Direction");
   args.plane_co = params.extract_input<float3>("Origin");
-  args.use_fill = params.extract_input<bool>("Fill");
+  //args.use_fill = params.extract_input<bool>("Fill");
   args.clear_inner = params.extract_input<bool>("Clear Inner");
   args.clear_outer = params.extract_input<bool>("Clear Outer");
 
@@ -225,15 +226,14 @@ static void geo_node_bisect_exec(GeoNodeExecParams params)
     plane_from_point_normal_v3(args.plane, args.plane_co, args.plane_no);
 
     geometry_set.modify_geometry_sets([&](GeometrySet &geometry_set) {
-      /*
+      
       if (geometry_set.has_mesh()) {
         const Mesh *mesh_in = geometry_set.get_mesh();
 
-        Mesh *clipped_mesh = plane_clip_mesh(mesh_in, args);
+        Mesh *clipped_mesh = geometry::bisect_mesh(*mesh_in, args, propagation_info);
 
         geometry_set.replace_mesh(clipped_mesh, bke::GeometryOwnershipType::Owned);
       }
-     */
       /*
       if (geometry_set.has_pointcloud()) {
         plane_clip_point_cloud(geometry_set, args);

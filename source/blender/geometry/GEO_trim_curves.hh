@@ -13,15 +13,10 @@
 
 namespace blender::geometry {
 
-struct BisectArgs {
-
-  float plane[4];
-  float3 plane_co;
-  float3 plane_no;
-  bool use_fill;
-  bool clear_inner;
-  bool clear_outer;
-};
+/*
+ * Forw. declare.
+ */
+struct BisectArgs;
 
 /*
  * Create a new Curves instance by trimming the input curves. Copying the selected splines
