@@ -231,8 +231,9 @@ static void geo_node_bisect_exec(GeoNodeExecParams params)
         const Mesh *mesh_in = geometry_set.get_mesh();
 
         Mesh *clipped_mesh = geometry::bisect_mesh(*mesh_in, args, propagation_info);
-
-        geometry_set.replace_mesh(clipped_mesh, bke::GeometryOwnershipType::Owned);
+        if (clipped_mesh) { /* Retain if NULL */
+          geometry_set.replace_mesh(clipped_mesh, bke::GeometryOwnershipType::Owned);
+        }
       }
       /*
       if (geometry_set.has_pointcloud()) {
