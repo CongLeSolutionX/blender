@@ -76,6 +76,8 @@ struct MeshPolygonGroup {
    * Edge index sets, indices point to edges in the target mesh.
    */
   Span<Vector<int, 4>> edge_indices;
+  Span<Vector<int2, 4>> src_corners;
+  Span<Vector<float, 4>> src_weights;
 };
 
 /*
@@ -150,8 +152,8 @@ Array<int, 12> polygon_corner_offsets(VariantPolygonGroup group, int64_t source_
   offsets[0] = source_offset;
 
   if (auto item = std::get_if<MeshPolygonGroup>(&group)) {
-    for (const int64_t group_index : range) {
-      offsets[group_index + 1] = offsets[group_index] + item->edge_indices[group_index].size();
+    for (const int64_t face_index : range) {
+      offsets[face_index + 1] = offsets[face_index] + item->edge_indices[face_index].size();
     }
   }
   else {
@@ -231,9 +233,10 @@ void transfer_vertex_data(const Mesh &src_mesh,
             /* Linear interpolate */
             for (const int64_t i : group_slice.index_range()) {
               const int64_t sample_index = group_slice[i];
-              int2 vert_indices = item->src_indices[sample_index];
-              dst_data[dst_range[i]] = bke::attribute_math::mix2(
-                  item->weights[sample_index], src_data[vert_indices.x], src_data[vert_indices.y]);
+              int2 src_vert_indices = item->src_indices[sample_index];
+              dst_data[dst_range[i]] = bke::attribute_math::mix2(item->weights[sample_index],
+                                                                 src_data[src_vert_indices.x],
+                                                                 src_data[src_vert_indices.y]);
             }
           });
         }
@@ -377,10 +380,11 @@ void transfer_polygon_data(const Mesh &src_mesh,
   bke::MutableAttributeAccessor dst_attributes = dst_mesh.attributes_for_write();
 
   Set<std::string> copy_poly_skip;
-  copy_poly_skip.remove(".corner_vert");
-  copy_poly_skip.remove(".corner_edge");
+  copy_poly_skip.add(".corner_vert");
+  copy_poly_skip.add(".corner_edge");
 
   /* Assign polygon indices */
+  Array<int64_t> group_face_count(poly_groups.size());
   {
     Span<int> src_vert_corners = src_mesh.corner_verts();
     Span<int> src_edge_corners = src_mesh.corner_edges();
@@ -391,13 +395,16 @@ void transfer_polygon_data(const Mesh &src_mesh,
 
     int64_t tot_offset = 0;
     int64_t tot_face_count = 0;
+
     dst_face_offsets[0] = 0;
     for (int64_t group_index = 0; group_index < poly_groups.size(); group_index++) {
       const auto dst_offsets = polygon_corner_offsets(poly_groups[group_index], tot_offset);
+      /* Write face offsets */
       const IndexRange dst_offset_range(tot_face_count, dst_offsets.size());
       BLI_assert(dst_face_offsets[dst_offset_range.first()] == dst_offsets.first());
       dst_face_offsets.slice(dst_offset_range).copy_from(dst_offsets);
 
+      /* Write face corner offsets */
       if (auto item = std::get_if<MeshPolygonGroup>(&poly_groups[group_index])) {
         BLI_assert(dst_offsets.size() - 1 == item->edge_indices.size());
 
@@ -425,7 +432,79 @@ void transfer_polygon_data(const Mesh &src_mesh,
 
       tot_offset += dst_offsets.last();
       tot_face_count += dst_offsets.size() - 1;
+      group_face_count[group_index] = tot_face_count;
     }
+  }
+
+  /* Copy face domain. */
+  for (bke::AttributeTransferData &attribute :
+       bke::retrieve_attributes_for_transfer(src_attributes,
+                                             dst_attributes,
+                                             ATTR_DOMAIN_MASK_FACE,
+                                             propagation_info,
+                                             copy_poly_skip))
+  {
+    const CPPType &cpp_type = *bke::custom_data_type_to_cpp_type(attribute.meta_data.data_type);
+    bke::attribute_math::convert_to_static_type(cpp_type, [&](auto dummy) {
+      using T = decltype(dummy);
+
+      Span<T> src_data = attribute.src.template typed<T>();
+      MutableSpan<T> dst_data = attribute.dst.span.typed<T>();
+
+      int64_t face_offset = 0;
+      for (int64_t group_index = 0; group_index < poly_groups.size(); group_index++) {
+        const IndexRange dst_range(face_offset, group_face_count[group_index]);
+
+        if (auto item = std::get_if<MeshPolygonGroup>(&poly_groups[group_index])) {
+          array_utils::gather(src_data, item->src_polygon_indices, dst_data.slice(dst_range));
+        }
+        else {
+          BLI_assert_msg(false, "Unreachable: Invalid variant implementation");
+        }
+        face_offset += group_face_count[group_index];
+      }
+    });
+  }
+
+  /* Copy face corner domain. */
+  for (bke::AttributeTransferData &attribute :
+       bke::retrieve_attributes_for_transfer(src_attributes,
+                                             dst_attributes,
+                                             ATTR_DOMAIN_MASK_CORNER,
+                                             propagation_info,
+                                             copy_poly_skip))
+  {
+    const CPPType &cpp_type = *bke::custom_data_type_to_cpp_type(attribute.meta_data.data_type);
+    bke::attribute_math::convert_to_static_type(cpp_type, [&](auto dummy) {
+      using T = decltype(dummy);
+
+      Span<T> src_data = attribute.src.template typed<T>();
+      MutableSpan<T> dst_data = attribute.dst.span.typed<T>();
+
+      int64_t tot_offset = 0;
+      for (int64_t group_index = 0; group_index < poly_groups.size(); group_index++) {
+        const auto dst_offsets = polygon_corner_offsets(poly_groups[group_index], tot_offset);
+        if (auto item = std::get_if<MeshPolygonGroup>(&poly_groups[group_index])) {
+
+          threading::parallel_for(item->src_corners.index_range(), 512, [&](IndexRange subrange) {
+            for (const int64_t face_index : subrange) {
+              const IndexRange dst_range(dst_offsets[face_index], dst_offsets[face_index + 1]);
+              const Span<int2> corners = item->src_corners[face_index];
+              const Span<float> weights = item->src_weights[face_index];
+              for (const int64_t index : corners.index_range()) {
+                const int2 cpair = corners[index];
+                dst_data[dst_range[index]] = bke::attribute_math::mix2(
+                    weights[index], src_data[cpair.x], src_data[cpair.y]);
+              }
+            }
+          });
+        }
+        else {
+          BLI_assert_msg(false, "Unreachable: Invalid variant implementation");
+        }
+        tot_offset += dst_offsets.last();
+      }
+    });
   }
 }
 
@@ -524,6 +603,11 @@ Mesh *bisect_mesh(const Mesh &mesh,
   auto fn_intersect_vertex_index = [&](const int intersect_edge_index) {
     return intersect_edge_index + int(kept_vertices.size());
   };
+  auto fn_edge_weight = [](const float signed_dist_x, const float signed_dist_y) {
+    const float abs_d1 = abs(signed_dist_x);
+    const float tot_dist = abs_d1 + abs(signed_dist_y);
+    return math::safe_divide<float>(abs_d1, tot_dist);
+  };
 
   const int keep_count = !args.clear_inner + !args.clear_outer;
   const int keep_both = keep_count == 2;
@@ -538,9 +622,7 @@ Mesh *bisect_mesh(const Mesh &mesh,
         const int2 vert_indices = src_edges[src_index];
         const float signed_dist_x = dist_buffer[vert_indices.x];
         const float signed_dist_y = dist_buffer[vert_indices.y];
-        const float abs_d1 = abs(signed_dist_x);
-        const float tot_dist = abs_d1 + abs(signed_dist_y);
-        split_lerp_weights[index_pos] = math::safe_divide<float>(abs_d1, tot_dist);
+        split_lerp_weights[index_pos] = fn_edge_weight(signed_dist_x, signed_dist_y);
         split_index_pairs[index_pos] = vert_indices;
 
         /* Generate split edges IFF any side is kept */
@@ -585,6 +667,9 @@ Mesh *bisect_mesh(const Mesh &mesh,
   new_poly_offsets.append(0);
 
   Array<Vector<Vector<int, 4>, 2>, 12> new_split_polygons(src_num_polys);
+  Array<Vector<Vector<int2, 4>, 2>, 12> new_split_polygon_src_corner(new_split_polygons.size());
+  Array<Vector<Vector<float, 4>, 2>, 12> new_split_polygon_src_weight(new_split_polygons.size());
+
   Array<Vector<int, 2>, 12> new_inter_edge_offsets(new_split_polygons.size());
   Array<Vector<int2, 2>, 12> new_inter_edge_verts(new_split_polygons.size());
   Array<Vector<int2, 2>, 12> new_inter_edge_map(new_split_polygons.size());
@@ -602,8 +687,9 @@ Mesh *bisect_mesh(const Mesh &mesh,
         for (const int64_t index_poly : src_poly_subrange) {
           Vector<int, 12> intersected;
 
-          const Span<int> corners = src_corner_verts.slice(src_polys[index_poly]);
-          const Span<int> corner_edges = src_corner_edges.slice(src_polys[index_poly]);
+          const IndexRange corner_range = src_polys[index_poly];
+          const Span<int> corners = src_corner_verts.slice(corner_range);
+          const Span<int> corner_edges = src_corner_edges.slice(corner_range);
 
           const bool first_kept = is_kept_vertex[corners[0]];
           bool is_kept = first_kept;
@@ -627,12 +713,18 @@ Mesh *bisect_mesh(const Mesh &mesh,
 
           if (kept_count == corners.size()) {
             /* All kept */
+            new_split_polygons[index_poly].append(Vector<int>(corner_edges.size()));
+            new_split_polygon_src_corner[index_poly].append(Vector<int2>(corner_edges.size()));
+            new_split_polygon_src_weight[index_poly].append(Vector<float>(corner_edges.size()));
+
             Vector<int> mapped_corner_edges(corner_edges.size());
             for (const int64_t index : mapped_corner_edges.index_range()) {
-              const int64_t new_index = old_to_new_edge_map[corner_edges[index]];
-              mapped_corner_edges[index] = new_index;
+              const int new_index = old_to_new_edge_map[corner_edges[index]];
+              const int2 new_corner = int2{int(corner_range[index]), 0};
+              new_split_polygons[index_poly].last()[index] = new_index;
+              new_split_polygon_src_corner[index_poly].last()[index] = new_corner;
+              new_split_polygon_src_weight[index_poly].last()[index] = 0.0f;
             }
-            new_split_polygons[index_poly].append(std::move(mapped_corner_edges));
             count++;
           }
           else {
@@ -687,23 +779,25 @@ Mesh *bisect_mesh(const Mesh &mesh,
             };
             auto increment = [&](const int64_t index) { return (index + 1) % corners.size(); };
 
-            /* Perform a voting scheme to determine order for the intersection pairs since N-gons
-             * may not lie in the plane and near parallel edges will cause robustness issues
-             * if only a single intersection ís used to determine the ordering.
-             *
-             * Shift vote options:
-             *  1: do shift
-             *  0: no vote
-             *  -1: no shift
+            /* Determine if intersection pairs. Shift the pairing by one if the edge formed inside
+             * the n-gon is being flipped.
              */
 
-            float3 V0 = positions[corners[intersected[0]]];
-            float3 V1 = positions[corners[(intersected[0] + 1) % corners.size()]];
-            float3 V2 = positions[corners[intersected[1]]];
-            float3 V3 = positions[corners[(intersected[1] + 1) % corners.size()]];
+            const int v0 = corners[intersected[0]];
+            const int v1 = corners[increment(intersected[0])];
+            const int v2 = corners[intersected[1]];
+            const int v3 = corners[increment(intersected[1])];
+            const float3 V0 = positions[v0];
+            const float3 V1 = positions[v1];
+            const float3 V2 = positions[v2];
+            const float3 V3 = positions[v3];
 
-            float3 I0 = (V0 + V1) * 0.5f;
-            float3 I1 = (V2 + V3) * 0.5f;
+            /* Recompute weight to resolve weight relative edge direction. */
+            const float w0 = fn_edge_weight(dist_buffer[v0], dist_buffer[v1]);
+            const float w1 = fn_edge_weight(dist_buffer[v1], dist_buffer[v2]);
+
+            const float3 I0 = (V0 + V1) * w0;
+            const float3 I1 = (V2 + V3) * w1;
 
             float3 edge1_delta = V1 - V0;
             float3 edge2_delta = V3 - V2;
@@ -731,7 +825,9 @@ Mesh *bisect_mesh(const Mesh &mesh,
             // TODO: Vote shift
             const bool do_shift_start = start_shift_vote > 0;
 
-            /* Form and iterate intersection pairs
+            /* Form and iterate intersection pairs. Pairs store index to the intersection set (not
+             * index to the edge itself), this is due to separate information being stored for
+             * intersected edges.
              */
             Array<int2, 12> intersect_pairs(intersected.size() / 2);
             Array<int, 12> intersect_edges(intersect_pairs.size());
@@ -744,7 +840,69 @@ Mesh *bisect_mesh(const Mesh &mesh,
               intersect_edges[pair_index] = add_intersection_edge(intersect_pairs[pair_index]);
             }
 
-            /* Construct corner loops */
+            /* Construct corner loops
+
+            Corner loop construction is repeated twice: generating polygons once for each side of
+            the plane. The side for either iteration is unknown until checked inside each call,
+            this is due to iteration being determined by the source polygon corner order and is
+            independent of the plane.
+
+            One or multiple polygons can be generated on each side. Starting point for each
+            iteration around the source polygon is the corner index that follws after the first
+            intersected edge pair (if multiple polygons are formed the first remaining intersection
+            is used).
+
+            In the first generate call, iteration begins on the fourth corner (d|3) which also maps
+            to the fourth edge (da|3) in the output polygon, this is due to the corner edges 0 (ab)
+            and 2 (cd) forming the edge corner intersection pair in the source polygon, so ++2 = 3.
+
+            Intersections generate 3 corner edges, since iteration begins from an intersection this
+            intersection is used as the base case and forms the 3 first corners (0, 1, 2).
+            Innermost iteration then generate (3) from (00) then terminates in the second iteration
+            (11) as it looped back to the intersected edge (ab) from the base case.
+
+
+               c *-------* b
+                 |       |
+                 |       |
+                 |   1   |
+            cd|2 x-------x ab|1
+                 |       |
+                 | 2     | 0
+                 |       |
+                 *-------*
+             d|3|00  3     a|0|11
+
+            Legend:
+            No | is edge number of newly formed edge
+            <>|<>|<> sequence:
+              <literal(s) for the original corners used to form the corner> |
+              <corner index in the newly formed (output) polygon> |
+              <repeated iteration index (00 => 0), iteration in the innermost loop>
+
+
+            Second generate call constructs the polygon on the opposite side of the plane, this is
+            done by traversing the half-edge on the opposite side of the intersection edge.
+            Traversal is done in the same way by simply reversing the indices of the edges in the
+            intersection pairs. The end result is highlighted below, the main difference is inner
+            iterations starting on corner 1 (b) from intersection of the 0:th source corner edge.
+
+             c|0|11  3    b|3|00
+               c *-------*
+                 |       |
+               0 |       | 2
+                 |   1   |
+            cd|1 x-------x ab|2
+                 |       |
+                 |       |
+                 |       |
+                 *-------*
+
+            For multiple intersection pairs, intersections are traversed continuing iteration on
+            the same side of the plane until it loops back to the initial intersection. Multiple
+            polygons will be formed in the polygons are disjoint by starting from any remaining
+            intersection pair.
+            */
 
             auto fn_generate_polygons = [&]() {
               const int64_t kept_vertex_index = increment(intersected[intersect_pairs[0].y]);
@@ -763,19 +921,76 @@ Mesh *bisect_mesh(const Mesh &mesh,
                 int64_t index = increment(intersected[start_pair.y]);
 
                 Vector<int, 12> poly_ecorners;
-                poly_ecorners.append(fetch_split_edge_side(start_pair.x, outside));
-                poly_ecorners.append(intersect_edges[next_intersect]);
-                poly_ecorners.append(fetch_split_edge_side(start_pair.y, outside));
+                Vector<int2, 12> poly_src_corner;
+                Vector<float, 12> poly_src_weight;
 
-                for (; index != intersected[start_pair.x]; index = increment(index)) {
+                /*
+                 * Corner edge meaning (references dst edges):
+                    Index to edge formed when splitting first edge (on the correct side of plane)
+                    Index to newly formed internal edge
+                    Index to edge formed when splitting second edge (in the pair, and correct side)
+                */
+                {
+                  poly_ecorners.append(fetch_split_edge_side(start_pair.x, outside));
+                  poly_ecorners.append(intersect_edges[next_intersect]);
+                  poly_ecorners.append(fetch_split_edge_side(start_pair.y, outside));
+                }
+                /* Vertex corners (references src corner vertices)
+                 * Note that vertex corners are 'shifted back' by one, as corner edge 0 begins in
+                 * vertex corner 0.
+                 */
+                const int first_corner = intersected[start_pair.x];
+                {
+                  const int i0 = first_corner;
+                  const int i1 = increment(first_corner);
+                  const int i2 = intersected[start_pair.y];
+                  const int i3 = index;
+                  poly_src_corner.append(int2{int(corner_range[i0]), 0});
+                  poly_src_corner.append(int2{int(corner_range[i0]), int(corner_range[i1])});
+                  poly_src_corner.append(int2{int(corner_range[i2]), int(corner_range[i3])});
+
+                  /* Weight, recompute to resolve weight relative edge direction. */
+                  const float w0 = fn_edge_weight(dist_buffer[corners[i0]],
+                                                  dist_buffer[corners[i1]]);
+                  const float w1 = fn_edge_weight(dist_buffer[corners[i2]],
+                                                  dist_buffer[corners[i3]]);
+                  poly_src_weight.append(0.0f);
+                  poly_src_weight.append(w0);
+                  poly_src_weight.append(w1);
+                }
+
+                for (; index != first_corner; index = increment(index)) {
                   if (index == intersected[intersect_pairs[next_intersect].x]) {
                     /* Traversed to next bisected edge */
-                    poly_ecorners.append(
-                        fetch_split_edge_side(intersect_pairs[next_intersect].x, outside));
+                    const int2 ipair = intersect_pairs[next_intersect];
+                    poly_ecorners.append(fetch_split_edge_side(ipair.x, outside));
                     poly_ecorners.append(intersect_edges[next_intersect]);
-                    poly_ecorners.append(
-                        fetch_split_edge_side(intersect_pairs[next_intersect].y, outside));
-                    index = intersected[intersect_pairs[next_intersect].y];
+                    poly_ecorners.append(fetch_split_edge_side(ipair.y, outside));
+                    index = intersected[ipair.y];
+
+                    /* Vertex corners (references src corner vertices)
+                     * Note that vertex corners are 'shifted back' by one, as corner edge 0 begins
+                     * in vertex corner 0.
+                     */
+                    {
+                      const int i0 = intersected[ipair.x];
+                      const int i1 = increment(i0);
+                      const int i2 = index;
+                      const int i3 = increment(i2);
+                      poly_src_corner.append(int2{int(corner_range[i0]), 0});
+                      poly_src_corner.append(int2{int(corner_range[i0]), int(corner_range[i1])});
+                      poly_src_corner.append(int2{int(corner_range[i2]), int(corner_range[i3])});
+
+                      /* Weight */
+                      const float w0 = fn_edge_weight(dist_buffer[corners[i0]],
+                                                      dist_buffer[corners[i1]]);
+                      const float w1 = fn_edge_weight(dist_buffer[corners[i2]],
+                                                      dist_buffer[corners[i3]]);
+                      poly_src_weight.append(0.0f);
+                      poly_src_weight.append(w0);
+                      poly_src_weight.append(w1);
+                    }
+
                     ++next_intersect;
                   }
                   else {
@@ -788,6 +1003,8 @@ Mesh *bisect_mesh(const Mesh &mesh,
                       break;
                     }
                     poly_ecorners.append(mapped_edge);
+                    poly_src_corner.append(int2{int(corner_range[index]), 0});
+                    poly_src_weight.append(0.0f);
                   }
                 }
                 /* Move to next loop (if any) */
@@ -798,6 +1015,8 @@ Mesh *bisect_mesh(const Mesh &mesh,
                   continue;
                 }
                 new_split_polygons[index_poly].append(std::move(poly_ecorners));
+                new_split_polygon_src_corner[index_poly].append(std::move(poly_src_corner));
+                new_split_polygon_src_weight[index_poly].append(std::move(poly_src_weight));
                 count++;
               }
             };
@@ -817,6 +1036,8 @@ Mesh *bisect_mesh(const Mesh &mesh,
   /* Condense arrays */
   Array<int, 12> new_split_polygon_indices(new_total_face_count);
   Array<Vector<int, 4>, 12> new_split_polygons_dense(new_total_face_count);
+  Array<Vector<int2, 4>, 12> new_split_polygon_src_corner_dense(new_total_face_count);
+  Array<Vector<float, 4>, 12> new_split_polygon_src_weight_dense(new_total_face_count);
 
   Array<int2, 12> new_inter_edge_verts_dense(new_inter_edge_index);
   Array<int2, 12> new_inter_edge_map_dense(new_inter_edge_index);
@@ -836,6 +1057,10 @@ Mesh *bisect_mesh(const Mesh &mesh,
     for (const int64_t i : new_split_polygons[index_poly].index_range()) {
       new_split_polygon_indices[poly_counter] = index_poly;
       new_split_polygons_dense[poly_counter] = std::move(new_split_polygons[index_poly][i]);
+      new_split_polygon_src_corner_dense[poly_counter] = std::move(
+          new_split_polygon_src_corner[index_poly][i]);
+      new_split_polygon_src_weight_dense[poly_counter] = std::move(
+          new_split_polygon_src_weight[index_poly][i]);
       ++poly_counter;
     }
   }
@@ -851,7 +1076,10 @@ Mesh *bisect_mesh(const Mesh &mesh,
       MeshEdgeGroupPair{new_split_edge_verts, new_split_edge_map},
       MeshEdgeGroupPair{new_inter_edge_verts_dense, new_inter_edge_map_dense}};
   std::array<VariantPolygonGroup, 1> poly_groups = {
-      MeshPolygonGroup{new_split_polygon_indices, new_split_polygons_dense}};
+      MeshPolygonGroup{new_split_polygon_indices,
+                       new_split_polygons_dense,
+                       new_split_polygon_src_corner_dense,
+                       new_split_polygon_src_weight_dense}};
 
   /* Create new mesh */
   Mesh *result = new_mesh_from_groups(mesh, vertex_groups, edge_groups, poly_groups);
