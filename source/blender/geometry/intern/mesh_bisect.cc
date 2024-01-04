@@ -531,60 +531,10 @@ Mesh *new_mesh_from_groups(const Mesh &src_mesh,
   return result;
 }
 
-void validate_mask(const IndexMask& mask, int64_t index_to_find, int64_t expected_position) {
-
-  auto result = mask.find(index_to_find);
-  BLI_assert(result.has_value());
-  int64_t index = mask.iterator_to_index(result.value());
-  // index == fish (-1)
-  BLI_assert(index == expected_position);
-}
-
-void test_iterator_mask_from_range() {
-  const IndexMask mask_range1 = IndexMask(IndexRange(1, 2));
-  validate_mask(mask_range1, 2, 1);
-  validate_mask(mask_range1, 1, 0);
-
-  const IndexMask mask_range12000 = IndexMask(IndexRange(12000, 2));
-  validate_mask(mask_range12000, 12001, 1);
-  validate_mask(mask_range12000, 12000, 0);
-
-}
-
-void test_iterator_mask_from_index()
-{
-  const Array<int, 2> groups124{1, 2, 4};
-  IndexMaskMemory memory;
-  const IndexMask mask_group124 = IndexMask::from_indices<int>(groups124, memory);
-  validate_mask(mask_group124, 1, 0);
-
-  const Array<int, 2> groups12{1, 2};
-  const IndexMask mask_group12 = IndexMask::from_indices<int>(groups12, memory);
-  validate_mask(mask_group12, 1, 0);
-}
-
-void test_iterator_mask_find() {
-
-  std::array<int, 9> group_map{1, 2, 2, 1, 1, 1, 1, 1, 1};
-  auto fn_group_map = [&](int64_t i) { return group_map[i];
-  };
-
-  IndexMaskMemory memory;
-  std::array<IndexMask, 3> groups;
-  IndexMask::from_groups<int64_t>(IndexMask(group_map.size()),
-                                  memory,
-                                  fn_group_map, MutableSpan<IndexMask>(groups));
-
-  validate_mask(groups[2], 1, 0);
-}
-
 Mesh *bisect_mesh(const Mesh &mesh,
                   const BisectArgs &args,
                   const bke::AnonymousAttributePropagationInfo &propagation_info)
 {
-  test_iterator_mask_from_index();
-  test_iterator_mask_from_range();
-  test_iterator_mask_find();
   const int src_num_vert = mesh.verts_num;
   const int src_num_edges = mesh.edges_num;
   const int src_num_polys = mesh.faces_num;
@@ -708,10 +658,15 @@ Mesh *bisect_mesh(const Mesh &mesh,
 
   /* Create edge index map */
   Array<int, 12> old_to_new_edge_map(src_num_edges);
+  Array<int, 12> old_to_intersect_edge_map(src_num_edges);
   old_to_new_edge_map.fill(-1);
   edge_type_selections[EdgeIntersectType::Kept].foreach_index(
       [&](const int64_t index, const int64_t index_pos) {
         old_to_new_edge_map[index] = index_pos;
+      });
+  edge_type_selections[EdgeIntersectType::Intersect].foreach_index(
+      [&](const int64_t index, const int64_t index_pos) {
+        old_to_intersect_edge_map[index] = index_pos;
       });
 
   /* Polygons */
@@ -790,11 +745,13 @@ Mesh *bisect_mesh(const Mesh &mesh,
             Array<int, 12> inter_edge_index(intersected.size());
             for (const int64_t index : intersected.index_range()) {
               const int edge_index = corner_edges[intersected[index]];
+              inter_edge_index[index]  = old_to_intersect_edge_map[edge_index];
 
+              /*
               IndexMask &intersect_mask = edge_type_selections[EdgeIntersectType::Intersect];
               auto new_edge_offset = intersect_mask.find(edge_index);
               if (!new_edge_offset.has_value()) {
-                /* Panic. */
+                // Panic. 
                 BLI_assert(false);
                 inter_edge_index[index] = 0;
                 continue;
@@ -804,6 +761,7 @@ Mesh *bisect_mesh(const Mesh &mesh,
                   new_edge_offset.value());
               BLI_assert(intersect_index != -1);
               inter_edge_index[index] = intersect_index;
+              */
             }
 
             /* Find the index for the edge in the intersected edge group.
