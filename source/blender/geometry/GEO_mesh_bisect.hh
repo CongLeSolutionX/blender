@@ -21,8 +21,21 @@ struct BisectArgs {
   bool clear_outer;
 };
 
-Mesh *bisect_mesh(const Mesh &mesh,
-                  const BisectArgs &args,
-                  const bke::AnonymousAttributePropagationInfo &propagation_info);
+enum BisectResult {
+  /* Mesh data is discarded, returning empty output.
+   */
+  Discard,
+  /* Entirity of the data is kept, returning the input mesh.
+   */
+  Keep,
+  /* Mesh is split, returning a modified copy.
+   */
+  Bisect
+};
+
+std::pair<Mesh *, BisectResult> bisect_mesh(
+    const Mesh &mesh,
+    const BisectArgs &args,
+    const bke::AnonymousAttributePropagationInfo &propagation_info);
 
 }  // namespace blender::geometry

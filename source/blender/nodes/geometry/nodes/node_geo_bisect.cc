@@ -230,9 +230,12 @@ static void geo_node_bisect_exec(GeoNodeExecParams params)
       if (geometry_set.has_mesh()) {
         const Mesh *mesh_in = geometry_set.get_mesh();
 
-        Mesh *clipped_mesh = geometry::bisect_mesh(*mesh_in, args, propagation_info);
-        if (clipped_mesh) { /* Retain if NULL */
-          geometry_set.replace_mesh(clipped_mesh, bke::GeometryOwnershipType::Owned);
+        std::pair<Mesh *, geometry::BisectResult> result = geometry::bisect_mesh(*mesh_in, args, propagation_info);
+        if (result.second == geometry::BisectResult::Keep) {
+          /* Do nothing => forward original mesh */
+        }
+        else {
+          geometry_set.replace_mesh(result.first, bke::GeometryOwnershipType::Owned);
         }
       }
       /*
