@@ -624,10 +624,11 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
 
   const int keep_count = !args.clear_inner + !args.clear_outer;
   const int keep_both = keep_count == 2;
+  /* Args for vertices formed during edge splits. */
   Array<float, 12> split_lerp_weights(edge_type_selections[EdgeIntersectType::Intersect].size());
   Array<int2, 12> split_index_pairs(split_lerp_weights.size());
   Array<int2, 12> split_edge_map(split_lerp_weights.size());
-  /* Track */
+  /* Args for the edges formed from splitting intersected edges */
   Array<int2, 12> new_split_edge_verts(edge_type_selections[EdgeIntersectType::Intersect].size() *
                                        keep_count);
   Array<int2, 12> new_split_edge_map(new_split_edge_verts.size());
@@ -732,7 +733,7 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
 
           if (intersected.size() == 0) {
             if (kept_count == corners.size()) {
-              /* All kept */
+              /* All kept, copy */
               new_split_polygons[index_poly].append(Vector<int>(corner_edges.size()));
               new_split_polygon_src_corner[index_poly].append(Vector<int2>(corner_edges.size()));
               new_split_polygon_src_weight[index_poly].append(Vector<float>(corner_edges.size()));
@@ -749,7 +750,7 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
             }
             else {
               BLI_assert(kept_count == 0);
-              /* Discard */
+              /* Discard All */
               continue;
             }
           }
@@ -786,8 +787,8 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
              */
             auto fetch_split_edge_side = [&](const int64_t index, bool outside) {
               const int intersect_index = inter_edge_index[index];
-              const int split_edge_sided_index = intersect_index * keep_count +
-                                                 int(!outside && keep_both) + num_kept_edges;
+              const int split_edge_sided_index = num_kept_edges + intersect_index * keep_count +
+                                                 int(!outside && keep_both);
               return split_edge_sided_index;
             };
             /* Add an edge spanning two intersected edges from the intersection edge pair
