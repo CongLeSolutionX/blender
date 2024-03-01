@@ -637,11 +637,16 @@ void ED_node_composit_default(const bContext *C, Scene *sce)
   in->locy = 200.0f;
   blender::bke::node_set_active(sce->nodetree, in);
 
+  /* Sockets aren't created before a call to update bmain,
+   * which leads to both Render Layers and Composite nodes
+   * to have their link missing.*/
+  BKE_ntree_update_main(CTX_data_main(C), nullptr);
   /* Links from color to color. */
   bNodeSocket *fromsock = (bNodeSocket *)in->outputs.first;
   bNodeSocket *tosock = (bNodeSocket *)out->inputs.first;
-  blender::bke::node_add_link(sce->nodetree, in, fromsock, out, tosock);
-
+  if (fromsock && tosock) {
+    blender::bke::node_add_link(sce->nodetree, in, fromsock, out, tosock);
+  }
   BKE_ntree_update_main_tree(CTX_data_main(C), sce->nodetree, nullptr);
 }
 

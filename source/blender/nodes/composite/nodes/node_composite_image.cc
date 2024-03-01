@@ -217,140 +217,14 @@ static void cmp_node_image_create_outputs(bNodeTree *ntree,
   }
 }
 
-struct RLayerUpdateData {
-  LinkNodePair *available_sockets;
-  int prev_index;
-};
-
-void node_cmp_rlayers_register_pass(bNodeTree *ntree,
-                                    bNode *node,
-                                    Scene *scene,
-                                    ViewLayer *view_layer,
-                                    const char *name,
-                                    eNodeSocketDatatype type)
-{
-  RLayerUpdateData *data = (RLayerUpdateData *)node->storage;
-
-  if (scene == nullptr || view_layer == nullptr || data == nullptr || node->id != (ID *)scene) {
-    return;
-  }
-
-  ViewLayer *node_view_layer = (ViewLayer *)BLI_findlink(&scene->view_layers, node->custom1);
-  if (node_view_layer != view_layer) {
-    return;
-  }
-
-  /* Special handling for the Combined pass to ensure compatibility. */
-  if (STREQ(name, RE_PASSNAME_COMBINED)) {
-    cmp_node_image_add_pass_output(
-        ntree, node, "Image", name, -1, type, true, data->available_sockets, &data->prev_index);
-    cmp_node_image_add_pass_output(ntree,
-                                   node,
-                                   "Alpha",
-                                   name,
-                                   -1,
-                                   SOCK_FLOAT,
-                                   true,
-                                   data->available_sockets,
-                                   &data->prev_index);
-  }
-  else {
-    cmp_node_image_add_pass_output(
-        ntree, node, name, name, -1, type, true, data->available_sockets, &data->prev_index);
-  }
-}
-
-struct CreateOutputUserData {
-  bNodeTree &ntree;
-  bNode &node;
-};
-
-static void cmp_node_rlayer_create_outputs_cb(void *userdata,
-                                              Scene *scene,
-                                              ViewLayer *view_layer,
-                                              const char *name,
-                                              int /*channels*/,
-                                              const char * /*chanid*/,
-                                              eNodeSocketDatatype type)
-{
-  CreateOutputUserData &data = *(CreateOutputUserData *)userdata;
-  node_cmp_rlayers_register_pass(&data.ntree, &data.node, scene, view_layer, name, type);
-}
-
-static void cmp_node_rlayer_create_outputs(bNodeTree *ntree,
-                                           bNode *node,
-                                           LinkNodePair *available_sockets)
-{
-  Scene *scene = (Scene *)node->id;
-
-  if (scene) {
-    RenderEngineType *engine_type = RE_engines_find(scene->r.engine);
-    if (engine_type && engine_type->update_render_passes) {
-      ViewLayer *view_layer = (ViewLayer *)BLI_findlink(&scene->view_layers, node->custom1);
-      if (view_layer) {
-        RLayerUpdateData *data = (RLayerUpdateData *)MEM_mallocN(sizeof(RLayerUpdateData),
-                                                                 "render layer update data");
-        data->available_sockets = available_sockets;
-        data->prev_index = -1;
-        node->storage = data;
-
-        CreateOutputUserData userdata = {*ntree, *node};
-
-        RenderEngine *engine = RE_engine_create(engine_type);
-        RE_engine_update_render_passes(
-            engine, scene, view_layer, cmp_node_rlayer_create_outputs_cb, &userdata);
-        RE_engine_free(engine);
-
-        if ((scene->r.mode & R_EDGE_FRS) &&
-            (view_layer->freestyle_config.flags & FREESTYLE_AS_RENDER_PASS))
-        {
-          node_cmp_rlayers_register_pass(
-              ntree, node, scene, view_layer, RE_PASSNAME_FREESTYLE, SOCK_RGBA);
-        }
-
-        MEM_freeN(data);
-        node->storage = nullptr;
-
-        return;
-      }
-    }
-  }
-
-  int prev_index = -1;
-  cmp_node_image_add_pass_output(ntree,
-                                 node,
-                                 "Image",
-                                 RE_PASSNAME_COMBINED,
-                                 RRES_OUT_IMAGE,
-                                 SOCK_RGBA,
-                                 true,
-                                 available_sockets,
-                                 &prev_index);
-  cmp_node_image_add_pass_output(ntree,
-                                 node,
-                                 "Alpha",
-                                 RE_PASSNAME_COMBINED,
-                                 RRES_OUT_ALPHA,
-                                 SOCK_FLOAT,
-                                 true,
-                                 available_sockets,
-                                 &prev_index);
-}
-
 /* XXX make this into a generic socket verification function for dynamic socket replacement
- * (multi-layer, groups, static templates). */
-static void cmp_node_image_verify_outputs(bNodeTree *ntree, bNode *node, bool rlayer)
+ * (multi-layer, groups, static templates) */
+static void cmp_node_image_verify_outputs(bNodeTree *ntree, bNode *node)
 {
   bNodeSocket *sock, *sock_next;
   LinkNodePair available_sockets = {nullptr, nullptr};
 
-  /* XXX make callback */
-  if (rlayer) {
-    cmp_node_rlayer_create_outputs(ntree, node, &available_sockets);
-  }
-  else {
-    cmp_node_image_create_outputs(ntree, node, &available_sockets);
-  }
+  cmp_node_image_create_outputs(ntree, node, &available_sockets);
 
   /* Get rid of sockets whose passes are not available in the image.
    * If sockets that are not available would be deleted, the connections to them would be lost
@@ -376,7 +250,7 @@ static void cmp_node_image_verify_outputs(bNodeTree *ntree, bNode *node, bool rl
           break;
         }
       }
-      if (!link && (!rlayer || sock_index >= NUM_LEGACY_SOCKETS)) {
+      if (!link && sock_index >= NUM_LEGACY_SOCKETS) {
         MEM_freeN(sock->storage);
         blender::bke::node_remove_socket(ntree, node, sock);
       }
@@ -395,7 +269,7 @@ static void cmp_node_image_update(bNodeTree *ntree, bNode *node)
 {
   /* avoid unnecessary updates, only changes to the image/image user data are of interest */
   if (node->runtime->update & NODE_UPDATE_ID) {
-    cmp_node_image_verify_outputs(ntree, node, false);
+    cmp_node_image_verify_outputs(ntree, node);
   }
 
   cmp_node_update_default(ntree, node);
@@ -410,7 +284,7 @@ static void node_composit_init_image(bNodeTree *ntree, bNode *node)
   iuser->flag |= IMA_ANIM_ALWAYS;
 
   /* setup initial outputs */
-  cmp_node_image_verify_outputs(ntree, node, false);
+  cmp_node_image_verify_outputs(ntree, node);
 }
 
 static void node_composit_free_image(bNode *node)
@@ -521,11 +395,6 @@ void register_node_type_cmp_image()
 
 /* **************** RENDER RESULT ******************** */
 
-void node_cmp_rlayers_outputs(bNodeTree *ntree, bNode *node)
-{
-  cmp_node_image_verify_outputs(ntree, node, true);
-}
-
 const char *node_cmp_rlayers_sock_to_pass(int sock_index)
 {
   if (sock_index >= NUM_LEGACY_SOCKETS) {
@@ -538,23 +407,54 @@ const char *node_cmp_rlayers_sock_to_pass(int sock_index)
 
 namespace blender::nodes::node_composite_render_layer_cc {
 
+static void cmp_node_create_sockets(void *userdata,
+                                    Scene * /*scene*/,
+                                    ViewLayer * /*view_layer*/,
+                                    const char *name,
+                                    int /*channels*/,
+                                    const char * /*channel_id*/,
+                                    eNodeSocketDatatype type)
+{
+  NodeDeclarationBuilder *builder = static_cast<NodeDeclarationBuilder *>(userdata);
+  if (!STREQ(name, RE_PASSNAME_COMBINED)) {
+    builder->add_output(type, name);
+  }
+  else {
+    builder->add_output<decl::Color>("Image");
+    builder->add_output<decl::Float>("Alpha");
+  }
+}
+
+static void node_rlayer_declare(NodeDeclarationBuilder &builder)
+{
+
+  const bNode *node = builder.node_or_null();
+  if (node == nullptr || node->id == nullptr) {
+    return;
+  }
+  Scene *scene = reinterpret_cast<Scene *>(node->id);
+  RenderEngineType *engine_type = RE_engines_find(scene->r.engine);
+  RenderEngine *engine = RE_engine_create(engine_type);
+  ViewLayer *view_layer = (ViewLayer *)BLI_findlink(&scene->view_layers, node->custom1);
+  if (!view_layer) {
+    return;
+  }
+  RE_engine_update_render_passes(
+      engine, scene, view_layer, cmp_node_create_sockets, (void *)&builder);
+  RE_engine_free(engine);
+  if ((scene->r.mode & R_EDGE_FRS) &&
+      (view_layer->freestyle_config.flags & FREESTYLE_AS_RENDER_PASS))
+  {
+    builder.add_output<decl::Color>(RE_PASSNAME_FREESTYLE, RE_PASSNAME_FREESTYLE);
+  }
+}
+
 static void node_composit_init_rlayers(const bContext *C, PointerRNA *ptr)
 {
   Scene *scene = CTX_data_scene(C);
   bNode *node = (bNode *)ptr->data;
-  int sock_index = 0;
-
   node->id = &scene->id;
   id_us_plus(node->id);
-
-  for (bNodeSocket *sock = (bNodeSocket *)node->outputs.first; sock;
-       sock = sock->next, sock_index++)
-  {
-    NodeImageLayer *sockdata = MEM_cnew<NodeImageLayer>(__func__);
-    sock->storage = sockdata;
-
-    STRNCPY(sockdata->pass_name, node_cmp_rlayers_sock_to_pass(sock_index));
-  }
 }
 
 static bool node_composit_poll_rlayers(const blender::bke::bNodeType * /*ntype*/,
@@ -584,38 +484,6 @@ static bool node_composit_poll_rlayers(const blender::bke::bNodeType * /*ntype*/
     return false;
   }
   return true;
-}
-
-static void node_composit_free_rlayers(bNode *node)
-{
-  /* free extra socket info */
-  LISTBASE_FOREACH (bNodeSocket *, sock, &node->outputs) {
-    if (sock->storage) {
-      MEM_freeN(sock->storage);
-    }
-  }
-}
-
-static void node_composit_copy_rlayers(bNodeTree * /*dst_ntree*/,
-                                       bNode *dest_node,
-                                       const bNode *src_node)
-{
-  /* copy extra socket info */
-  const bNodeSocket *src_output_sock = (bNodeSocket *)src_node->outputs.first;
-  bNodeSocket *dest_output_sock = (bNodeSocket *)dest_node->outputs.first;
-  while (dest_output_sock != nullptr) {
-    dest_output_sock->storage = MEM_dupallocN(src_output_sock->storage);
-
-    src_output_sock = src_output_sock->next;
-    dest_output_sock = dest_output_sock->next;
-  }
-}
-
-static void cmp_node_rlayers_update(bNodeTree *ntree, bNode *node)
-{
-  cmp_node_image_verify_outputs(ntree, node, true);
-
-  cmp_node_update_default(ntree, node);
 }
 
 static void node_composit_buts_viewlayers(uiLayout *layout, bContext *C, PointerRNA *ptr)
@@ -779,7 +647,7 @@ void register_node_type_cmp_rlayers()
   static blender::bke::bNodeType ntype;
 
   cmp_node_type_base(&ntype, CMP_NODE_R_LAYERS, "Render Layers", NODE_CLASS_INPUT);
-  blender::bke::node_type_socket_templates(&ntype, nullptr, cmp_node_rlayers_out);
+  ntype.declare = file_ns::node_rlayer_declare;
   ntype.draw_buttons = file_ns::node_composit_buts_viewlayers;
   ntype.initfunc_api = file_ns::node_composit_init_rlayers;
   ntype.poll = file_ns::node_composit_poll_rlayers;
@@ -787,10 +655,6 @@ void register_node_type_cmp_rlayers()
   ntype.realtime_compositor_unsupported_message = N_(
       "Render passes not supported in the Viewport compositor");
   ntype.flag |= NODE_PREVIEW;
-  blender::bke::node_type_storage(
-      &ntype, nullptr, file_ns::node_composit_free_rlayers, file_ns::node_composit_copy_rlayers);
-  ntype.updatefunc = file_ns::cmp_node_rlayers_update;
-  ntype.initfunc = node_cmp_rlayers_outputs;
   blender::bke::node_type_size_preset(&ntype, blender::bke::eNodeSizePreset::Large);
 
   blender::bke::node_register_type(&ntype);
