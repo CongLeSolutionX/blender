@@ -547,9 +547,11 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
   Array<int8_t> is_kept_vertex(src_num_vert);
   Array<float, 12> dist_buffer(src_num_vert);
 
-  auto fn_is_outside = [](float signed_distance) { return signed_distance > 0; };
-  auto fn_is_keep = [](const BisectArgs &args, bool is_outer_vertex) {
-    return (is_outer_vertex && !args.clear_outer) || (!is_outer_vertex && !args.clear_inner);
+  auto fn_is_outside = [](float signed_distance) { return signed_distance > 0.0f; };
+  auto fn_intersect_mode = [](float signed_distance) { return (signed_distance == 0.0f ? 8 : 0) | (signed_distance > 0.0f ? 2 : 4); };
+  auto fn_is_keep = [](const BisectArgs &args, int8_t is_intersect) {
+    return (is_intersect & 8) || ((is_intersect & 2) && !args.clear_outer) ||
+           ((is_intersect & 4) && !args.clear_inner);
   };
 
   IndexMaskMemory kept_memory;
@@ -557,8 +559,8 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
       IndexMask(src_vert_range), GrainSize(512), kept_memory, [&](const int64_t i) {
         dist_buffer[i] = dist_signed_to_plane_v3(src_positions[i], args.plane);
         /* If 'outside': Logic MUST match edge_split gen. */
-        const bool is_outside = fn_is_outside(dist_buffer[i]);
-        const bool is_kept = fn_is_keep(args, is_outside);
+        const int8_t is_intersect = fn_intersect_mode(dist_buffer[i]);
+        const bool is_kept = fn_is_keep(args, is_intersect);
 
         /*
          * 0: Not kept
@@ -566,7 +568,7 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
          * 2^1: Outside
          * 2^2: Inside
          */
-        const int8_t kept_mode = is_kept | (is_outside ? 2 : 4);
+        const int8_t kept_mode = is_kept | is_intersect;
         is_kept_vertex[i] = kept_mode;
         return is_kept;
       });
@@ -597,6 +599,7 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
   /* Handle keep/discard all. */
   const int64_t num_kept_edges = edge_type_selections[EdgeIntersectType::Kept].size();
   const int64_t num_inter_edges = edge_type_selections[EdgeIntersectType::Intersect].size();
+  const int num_kept_vertices = int(kept_vertices.size());
   if (num_inter_edges == 0) {
     if (edge_type_selections[EdgeIntersectType::Discarded].size() == 0) {
       return {nullptr, BisectResult::Keep};
@@ -617,35 +620,51 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
     old_to_new_vertex_map[index] = index_pos;
   });
 
-  /* Edges */
-  auto fn_intersect_vertex_index = [&](const int intersect_edge_index) {
-    return intersect_edge_index + int(kept_vertices.size());
-  };
-
+  /* Handle intersected edges (including IFF cut occurs on vertex).
+   */
   const int keep_count = !args.clear_inner + !args.clear_outer;
   const int keep_both = keep_count == 2;
   /* Args for vertices formed during edge splits. */
   Array<float, 12> split_lerp_weights(edge_type_selections[EdgeIntersectType::Intersect].size());
   Array<int2, 12> split_index_pairs(split_lerp_weights.size());
-  Array<int2, 12> split_edge_map(split_lerp_weights.size());
   /* Args for the edges formed from splitting intersected edges */
   Array<int2, 12> new_split_edge_verts(edge_type_selections[EdgeIntersectType::Intersect].size() *
                                        keep_count);
   Array<int2, 12> new_split_edge_map(new_split_edge_verts.size());
 
+  Array<int, 12> split_edge_vert_map(edge_type_selections[EdgeIntersectType::Intersect].size());
+  /* Counter determining the number of split edges and the number of generated vertices/edges. */
+  std::atomic<int> new_split_edge_index = 0;
   edge_type_selections[EdgeIntersectType::Intersect].foreach_index(
       GrainSize(512), [&](const int64_t src_index, const int64_t index_pos) {
         const int2 vert_indices = src_edges[src_index];
         const float signed_dist_x = dist_buffer[vert_indices.x];
         const float signed_dist_y = dist_buffer[vert_indices.y];
-        split_lerp_weights[index_pos] = edge_weight(signed_dist_x, signed_dist_y);
-        split_index_pairs[index_pos] = vert_indices;
-        split_edge_map[index_pos] = {int(src_index), -1};
 
-        /* Generate split edges IFF any side is kept */
+        /* Handle vertices 'in the plane'. Both can't be 'in the plane' as the edge would then not be classified as 'intersect'.
+        */
+        if (signed_dist_x == 0.0f) {
+          split_edge_vert_map[index_pos] = vert_indices.x;
+          BLI_assert(signed_dist_y != 0.0f);
+          return;
+        }
+        else if (signed_dist_y == 0.0f) {
+          split_edge_vert_map[index_pos] = vert_indices.y;
+          return;
+        }
+
+        /* Generate vertex at the split.
+        */
+        const int split_edge_index = new_split_edge_index++;
+        split_lerp_weights[split_edge_index] = edge_weight(signed_dist_x, signed_dist_y);
+        split_index_pairs[split_edge_index] = vert_indices;
+
+        const int new_vert_index = split_edge_index + int(kept_vertices.size());
+        split_edge_vert_map[index_pos] = new_vert_index;
+
+        /* Generate new edges for the split IFF any side is kept */
         if (keep_count > 0) {
-          const int new_vert_index = fn_intersect_vertex_index(index_pos);
-          const int new_edge_index = index_pos * keep_count;
+          const int new_edge_index = split_edge_index * keep_count;
           /* Inner/Outer logic must match 'is_kept_vertex'*/
           const bool is_ouside_x = fn_is_outside(signed_dist_x);
           const bool is_outside_y = fn_is_outside(signed_dist_y);
@@ -672,6 +691,10 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
         }
       });
 
+  /* Slice of the buffers for split edges that are valid. */
+  const int64_t initial_split_edge_count = new_split_edge_index * keep_count;
+  const IndexRange split_edge_slice(0, initial_split_edge_count);
+
   /* Create edge index map */
   Array<int, 12> old_to_new_edge_map(src_num_edges);
   Array<int, 12> old_to_intersect_edge_map(src_num_edges);
@@ -697,7 +720,7 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
   const Span<float3> positions = mesh.vert_positions();
 
   std::atomic<int> new_inter_edge_index = 0;
-  const int new_inter_edge_offset = num_kept_edges + new_split_edge_verts.size();
+  const int64_t new_inter_edge_offset = num_kept_edges + initial_split_edge_count;
   const int new_total_face_count = threading::parallel_reduce<int>(
       src_polys.index_range(),
       512,
@@ -715,6 +738,10 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
           const Span<int> corners = src_corner_verts.slice(corner_range);
           const Span<int> corner_edges = src_corner_edges.slice(corner_range);
 
+          /* Iterate all corners and track the edge being intersected. */
+
+          // TODO: Handle sequences with edges in the plane
+          // TODO: Add bit for vertex 'in plane'?
           const int8_t first_kept = is_kept_vertex[corners[0]];
           int8_t is_kept = first_kept;
           int kept_count = (first_kept & 1);
@@ -733,7 +760,7 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
 
           if (intersected.size() == 0) {
             if (kept_count == corners.size()) {
-              /* All kept, copy */
+              /* All kept, copy polygon */
               new_split_polygons[index_poly].append(Vector<int>(corner_edges.size()));
               new_split_polygon_src_corner[index_poly].append(Vector<int2>(corner_edges.size()));
               new_split_polygon_src_weight[index_poly].append(Vector<float>(corner_edges.size()));
@@ -750,7 +777,7 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
             }
             else {
               BLI_assert(kept_count == 0);
-              /* Discard All */
+              /* Discard All, polygon 'outside' */
               continue;
             }
           }
@@ -795,13 +822,21 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
              * (pairs references index of the edge in the polygon).
              */
             auto add_intersection_edge = [&](const int2 inter_pair) {
+              /* Fetch vertex indices for the inserted vertices in the split */
+              int2 pair{split_edge_vert_map[inter_edge_index[inter_pair.x]],
+                        split_edge_vert_map[inter_edge_index[inter_pair.y]]};
+
+              bool x_in_plane = pair.x < num_kept_vertices;
+              bool y_in_plane = pair.y < num_kept_vertices;
+
+              if (x_in_plane && y_in_plane) {
+                // Both are kept vertices, edge still formed (chained are ignored)
+              }
+
               int new_index = new_inter_edge_index++;
 
               new_inter_edge_offsets[index_poly].append(new_index);
-              /* Fetch vertex indices for the inserted vertices in the split */
-              new_inter_edge_verts[index_poly].append(
-                  int2{fn_intersect_vertex_index(inter_edge_index[inter_pair.x]),
-                       fn_intersect_vertex_index(inter_edge_index[inter_pair.y])});
+              new_inter_edge_verts[index_poly].append(pair);
               /* Find source edges to map data from */
               int2 src_edges{corner_edges[intersected[inter_pair.x]],
                              corner_edges[intersected[inter_pair.y]]};
@@ -1110,7 +1145,8 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
   std::array<VariantEdgeGroup, 3> edge_groups = {
       MeshEdgeGroupCopyMask{edge_type_selections[EdgeIntersectType::Kept],
                             old_to_new_vertex_map.as_span()},
-      MeshEdgeGroupPair{new_split_edge_verts, new_split_edge_map},
+      MeshEdgeGroupPair{new_split_edge_verts.as_span().slice(split_edge_slice),
+                        new_split_edge_map.as_span().slice(split_edge_slice)},
       MeshEdgeGroupPair{new_inter_edge_verts_dense, new_inter_edge_map_dense}};
   std::array<VariantPolygonGroup, 1> poly_groups = {
       MeshPolygonGroup{new_split_polygon_indices,
