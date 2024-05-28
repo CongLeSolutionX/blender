@@ -113,7 +113,7 @@ PointerRNA rna_BlendImportContextItem_libraries_get(CollectionPropertyIterator *
 
   BlendfileLinkAppendContextLibrary &ctx_lib =
       libs_iter->ctx_item->lapp_context->libraries[libs_iter->iter_index];
-  return rna_pointer_inherit_refine(&iter->parent, &RNA_BlendImportContextLibrary, &ctx_lib);
+  return RNA_pointer_create_with_ancestors(iter->parent, &RNA_BlendImportContextLibrary, &ctx_lib);
 }
 
 int rna_BlendImportContextItem_libraries_len(PointerRNA *ptr)
@@ -149,28 +149,28 @@ PointerRNA rna_BlendImportContextItem_id_get(PointerRNA *ptr)
 {
   BlendfileLinkAppendContextItem *ctx_item = static_cast<BlendfileLinkAppendContextItem *>(
       ptr->data);
-  return rna_pointer_inherit_refine(&PointerRNA_NULL, &RNA_ID, ctx_item->new_id);
+  return RNA_id_pointer_create(ctx_item->new_id);
 }
 
 PointerRNA rna_BlendImportContextItem_source_library_get(PointerRNA *ptr)
 {
   BlendfileLinkAppendContextItem *ctx_item = static_cast<BlendfileLinkAppendContextItem *>(
       ptr->data);
-  return rna_pointer_inherit_refine(&PointerRNA_NULL, &RNA_Library, ctx_item->source_library);
+  return RNA_id_pointer_create(&ctx_item->source_library->id);
 }
 
 PointerRNA rna_BlendImportContextItem_library_override_id_get(PointerRNA *ptr)
 {
   BlendfileLinkAppendContextItem *ctx_item = static_cast<BlendfileLinkAppendContextItem *>(
       ptr->data);
-  return rna_pointer_inherit_refine(&PointerRNA_NULL, &RNA_ID, ctx_item->liboverride_id);
+  return RNA_id_pointer_create(ctx_item->liboverride_id);
 }
 
 PointerRNA rna_BlendImportContextItem_reusable_local_id_get(PointerRNA *ptr)
 {
   BlendfileLinkAppendContextItem *ctx_item = static_cast<BlendfileLinkAppendContextItem *>(
       ptr->data);
-  return rna_pointer_inherit_refine(&PointerRNA_NULL, &RNA_ID, ctx_item->reusable_local_id);
+  return RNA_id_pointer_create(ctx_item->reusable_local_id);
 }
 
 struct RNABlendImportContextItemsIterator {
@@ -212,7 +212,7 @@ PointerRNA rna_BlendImportContext_import_items_get(CollectionPropertyIterator *i
       static_cast<RNABlendImportContextItemsIterator *>(iter->internal.custom);
 
   BlendfileLinkAppendContextItem &ctx_item = *items_iter->iter;
-  return rna_pointer_inherit_refine(&iter->parent, &RNA_BlendImportContextItem, &ctx_item);
+  return RNA_pointer_create_with_ancestors(iter->parent, &RNA_BlendImportContextItem, &ctx_item);
 }
 
 int rna_BlendImportContext_import_items_len(PointerRNA *ptr)

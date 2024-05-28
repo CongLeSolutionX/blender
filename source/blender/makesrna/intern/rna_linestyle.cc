@@ -337,7 +337,8 @@ static void rna_LineStyleGeometryModifier_name_set(PointerRNA *ptr, const char *
 static void rna_LineStyle_mtex_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)
 {
   FreestyleLineStyle *linestyle = (FreestyleLineStyle *)ptr->owner_id;
-  rna_iterator_array_begin(iter, (void *)linestyle->mtex, sizeof(MTex *), MAX_MTEX, 0, nullptr);
+  rna_iterator_array_begin(
+      iter, ptr, (void *)linestyle->mtex, sizeof(MTex *), MAX_MTEX, 0, nullptr);
 }
 
 static PointerRNA rna_LineStyle_active_texture_get(PointerRNA *ptr)
@@ -346,7 +347,7 @@ static PointerRNA rna_LineStyle_active_texture_get(PointerRNA *ptr)
   Tex *tex;
 
   tex = give_current_linestyle_texture(linestyle);
-  return rna_pointer_inherit_refine(ptr, &RNA_Texture, tex);
+  return RNA_pointer_create_with_ancestors(*ptr, &RNA_Texture, tex);
 }
 
 static void rna_LineStyle_active_texture_set(PointerRNA *ptr,

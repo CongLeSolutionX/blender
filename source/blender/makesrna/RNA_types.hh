@@ -28,6 +28,16 @@ struct ReportList;
 struct StructRNA;
 struct bContext;
 
+#define ANCESTOR_POINTERRNA_DEFAULT_SIZE 4
+/**
+ * An ancestor of a given PointerRNA. The owner ID is not needed here, it is assumed to always be
+ * the same as the owner ID of the PropertyRNA itself.
+ */
+struct AncestorPointerRNA {
+  StructRNA *type;
+  void *data;
+};
+
 /**
  * Pointer
  *
@@ -40,6 +50,38 @@ struct PointerRNA {
   ID *owner_id = nullptr;
   StructRNA *type = nullptr;
   void *data = nullptr;
+
+  /**
+   * A chain of ancestors of this PointerRNA, if known. The last item is the closest ancestor.
+   *
+   * E.g. Parsing `vgroup = C.object.data.vertices[0].groups[0]` would result in the PointerRNA of
+   * `vgroup` having two ancestors: `vertices[0]` and `data` (aka the Mesh ID).
+   *
+   * For PointerRNA of IDs, this should always be empty (TODO: unless maybe for embedded IDs? But
+   * should not be needed currently).
+   *
+   * There is no guarantee that this chain is always (fully) valid and will lead to thr root owner
+   * of the wrapped data (typically and ID). Depending on how the PointerRNA was created, and the
+   * available information at that time, it could be empty or only feature a partial ancestors
+   * chain.
+   */
+  blender::Vector<AncestorPointerRNA, ANCESTOR_POINTERRNA_DEFAULT_SIZE> ancestors = {};
+
+  PointerRNA() = default;
+  PointerRNA(const PointerRNA &) = default;
+  PointerRNA(PointerRNA &&) = default;
+  PointerRNA &operator=(const PointerRNA &other) = default;
+  PointerRNA &operator=(PointerRNA &&other) = default;
+
+  PointerRNA(ID *owner_id, StructRNA *type, void *data)
+      : owner_id(owner_id), type(type), data(data), ancestors{}
+  {
+  }
+  PointerRNA(ID *owner_id, StructRNA *type, void *data, PointerRNA *parent)
+      : owner_id(owner_id), type(type), data(data), ancestors(parent->ancestors)
+  {
+    this->ancestors.append({parent->type, parent->data});
+  }
 };
 
 extern const PointerRNA PointerRNA_NULL;

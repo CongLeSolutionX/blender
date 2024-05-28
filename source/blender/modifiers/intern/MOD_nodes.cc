@@ -279,7 +279,7 @@ static void foreach_ID_link(ModifierData *md, Object *ob, IDWalkFunc walk, void 
 
 static void foreach_tex_link(ModifierData *md, Object *ob, TexWalkFunc walk, void *user_data)
 {
-  PointerRNA ptr = RNA_pointer_create(&ob->id, &RNA_Modifier, md);
+  PointerRNA ptr = RNA_pointer_create_isolated(&ob->id, &RNA_Modifier, md);
   PropertyRNA *prop = RNA_struct_find_property(&ptr, "texture");
   walk(user_data, ob, md, &ptr, prop);
 }
@@ -2275,7 +2275,7 @@ static void draw_interface_panel_content(const bContext *C,
         continue;
       }
       NodesModifierPanel *panel = find_panel_by_id(nmd, sub_interface_panel.identifier);
-      PointerRNA panel_ptr = RNA_pointer_create(
+      PointerRNA panel_ptr = RNA_pointer_create_isolated(
           modifier_ptr->owner_id, &RNA_NodesModifierPanel, panel);
       PanelLayout panel_layout = uiLayoutPanelProp(C, layout, &panel_ptr, "is_open");
       uiItemL(panel_layout.header, IFACE_(sub_interface_panel.name), ICON_NONE);

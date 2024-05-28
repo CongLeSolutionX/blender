@@ -180,26 +180,26 @@ static PyObject *create_func(PyObject * /*self*/, PyObject *args)
   /* RNA */
   ID *bScreen = (ID *)PyLong_AsVoidPtr(pyscreen);
 
-  PointerRNA engineptr = RNA_pointer_create(
+  PointerRNA engineptr = RNA_pointer_create_isolated(
       NULL, &RNA_RenderEngine, (void *)PyLong_AsVoidPtr(pyengine));
   BL::RenderEngine engine(engineptr);
 
-  PointerRNA preferencesptr = RNA_pointer_create(
+  PointerRNA preferencesptr = RNA_pointer_create_isolated(
       NULL, &RNA_Preferences, (void *)PyLong_AsVoidPtr(pypreferences));
   BL::Preferences preferences(preferencesptr);
 
   PointerRNA dataptr = RNA_main_pointer_create((Main *)PyLong_AsVoidPtr(pydata));
   BL::BlendData data(dataptr);
 
-  PointerRNA regionptr = RNA_pointer_create(
+  PointerRNA regionptr = RNA_pointer_create_isolated(
       bScreen, &RNA_Region, pylong_as_voidptr_typesafe(pyregion));
   BL::Region region(regionptr);
 
-  PointerRNA v3dptr = RNA_pointer_create(
+  PointerRNA v3dptr = RNA_pointer_create_isolated(
       bScreen, &RNA_SpaceView3D, pylong_as_voidptr_typesafe(pyv3d));
   BL::SpaceView3D v3d(v3dptr);
 
-  PointerRNA rv3dptr = RNA_pointer_create(
+  PointerRNA rv3dptr = RNA_pointer_create_isolated(
       bScreen, &RNA_RegionView3D, pylong_as_voidptr_typesafe(pyrv3d));
   BL::RegionView3D rv3d(rv3dptr);
 
@@ -238,7 +238,7 @@ static PyObject *render_func(PyObject * /*self*/, PyObject *args)
 
   BlenderSession *session = (BlenderSession *)PyLong_AsVoidPtr(pysession);
 
-  PointerRNA depsgraphptr = RNA_pointer_create(
+  PointerRNA depsgraphptr = RNA_pointer_create_isolated(
       NULL, &RNA_Depsgraph, (ID *)PyLong_AsVoidPtr(pydepsgraph));
   BL::Depsgraph b_depsgraph(depsgraphptr);
 
@@ -284,7 +284,7 @@ static PyObject *draw_func(PyObject * /*self*/, PyObject *args)
 
   ID *b_screen = (ID *)PyLong_AsVoidPtr(py_screen);
 
-  PointerRNA b_space_image_ptr = RNA_pointer_create(
+  PointerRNA b_space_image_ptr = RNA_pointer_create_isolated(
       b_screen, &RNA_SpaceImageEditor, pylong_as_voidptr_typesafe(py_space_image));
   BL::SpaceImageEditor b_space_image(b_space_image_ptr);
 
@@ -315,7 +315,7 @@ static PyObject *bake_func(PyObject * /*self*/, PyObject *args)
 
   BlenderSession *session = (BlenderSession *)PyLong_AsVoidPtr(pysession);
 
-  PointerRNA depsgraphptr = RNA_pointer_create(
+  PointerRNA depsgraphptr = RNA_pointer_create_isolated(
       NULL, &RNA_Depsgraph, PyLong_AsVoidPtr(pydepsgraph));
   BL::Depsgraph b_depsgraph(depsgraphptr);
 
@@ -365,7 +365,7 @@ static PyObject *reset_func(PyObject * /*self*/, PyObject *args)
   PointerRNA dataptr = RNA_main_pointer_create((Main *)PyLong_AsVoidPtr(pydata));
   BL::BlendData b_data(dataptr);
 
-  PointerRNA depsgraphptr = RNA_pointer_create(
+  PointerRNA depsgraphptr = RNA_pointer_create_isolated(
       NULL, &RNA_Depsgraph, PyLong_AsVoidPtr(pydepsgraph));
   BL::Depsgraph b_depsgraph(depsgraphptr);
 
@@ -388,7 +388,7 @@ static PyObject *sync_func(PyObject * /*self*/, PyObject *args)
 
   BlenderSession *session = (BlenderSession *)PyLong_AsVoidPtr(pysession);
 
-  PointerRNA depsgraphptr = RNA_pointer_create(
+  PointerRNA depsgraphptr = RNA_pointer_create_isolated(
       NULL, &RNA_Depsgraph, PyLong_AsVoidPtr(pydepsgraph));
   BL::Depsgraph b_depsgraph(depsgraphptr);
 
@@ -453,9 +453,9 @@ static PyObject *osl_update_node_func(PyObject * /*self*/, PyObject *args)
   PointerRNA dataptr = RNA_main_pointer_create((Main *)PyLong_AsVoidPtr(pydata));
   BL::BlendData b_data(dataptr);
 
-  PointerRNA nodeptr = RNA_pointer_create((ID *)PyLong_AsVoidPtr(pynodegroup),
-                                          &RNA_ShaderNodeScript,
-                                          (void *)PyLong_AsVoidPtr(pynode));
+  PointerRNA nodeptr = RNA_pointer_create_isolated((ID *)PyLong_AsVoidPtr(pynodegroup),
+                                                   &RNA_ShaderNodeScript,
+                                                   (void *)PyLong_AsVoidPtr(pynode));
   BL::ShaderNodeScript b_node(nodeptr);
 
   /* update bytecode hash */
@@ -753,7 +753,7 @@ static PyObject *denoise_func(PyObject * /*self*/, PyObject *args, PyObject *key
   }
 
   /* Get device specification from preferences and scene. */
-  PointerRNA preferencesptr = RNA_pointer_create(
+  PointerRNA preferencesptr = RNA_pointer_create_isolated(
       NULL, &RNA_Preferences, (void *)PyLong_AsVoidPtr(pypreferences));
   BL::Preferences b_preferences(preferencesptr);
 
@@ -765,7 +765,7 @@ static PyObject *denoise_func(PyObject * /*self*/, PyObject *args, PyObject *key
       b_preferences, b_scene, true, true, preferences_device);
 
   /* Get denoising parameters from view layer. */
-  PointerRNA viewlayerptr = RNA_pointer_create(
+  PointerRNA viewlayerptr = RNA_pointer_create_isolated(
       (ID *)PyLong_AsVoidPtr(pyscene), &RNA_ViewLayer, PyLong_AsVoidPtr(pyviewlayer));
   BL::ViewLayer b_view_layer(viewlayerptr);
 

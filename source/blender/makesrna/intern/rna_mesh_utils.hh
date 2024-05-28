@@ -26,6 +26,7 @@
     CustomData *data = rna_mesh_##customdata_type(ptr); \
     if (data) { \
       rna_iterator_array_begin(iter, \
+                               ptr, \
                                (void *)data->layers, \
                                sizeof(CustomDataLayer), \
                                data->totlayer, \
@@ -33,7 +34,7 @@
                                rna_##collection_name##_check); \
     } \
     else { \
-      rna_iterator_array_begin(iter, NULL, 0, 0, 0, NULL); \
+      rna_iterator_array_begin(iter, ptr, NULL, 0, 0, 0, NULL); \
     } \
   } \
   /* length */ \
@@ -73,7 +74,7 @@
     else { \
       layer = NULL; \
     } \
-    return rna_pointer_inherit_refine(ptr, &RNA_##layer_rna_type, layer); \
+    return RNA_pointer_create_with_ancestors(*ptr, &RNA_##layer_rna_type, layer); \
   } \
 \
   [[maybe_unused]] static void rna_Mesh_##collection_name##_##active_type##_set( \

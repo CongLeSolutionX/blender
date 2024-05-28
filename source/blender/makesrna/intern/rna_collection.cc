@@ -64,7 +64,7 @@ static void rna_Collection_all_objects_begin(CollectionPropertyIterator *iter, P
 {
   Collection *collection = (Collection *)ptr->data;
   ListBase collection_objects = BKE_collection_object_cache_get(collection);
-  rna_iterator_listbase_begin(iter, &collection_objects, nullptr);
+  rna_iterator_listbase_begin(iter, ptr, &collection_objects, nullptr);
 }
 
 static PointerRNA rna_Collection_all_objects_get(CollectionPropertyIterator *iter)
@@ -73,13 +73,13 @@ static PointerRNA rna_Collection_all_objects_get(CollectionPropertyIterator *ite
 
   /* we are actually iterating a ObjectBase list, so override get */
   Base *base = (Base *)internal->link;
-  return rna_pointer_inherit_refine(&iter->parent, &RNA_Object, base->object);
+  return RNA_id_pointer_create(&base->object->id);
 }
 
 static void rna_Collection_objects_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)
 {
   Collection *collection = (Collection *)ptr->data;
-  rna_iterator_listbase_begin(iter, &collection->gobject, nullptr);
+  rna_iterator_listbase_begin(iter, ptr, &collection->gobject, nullptr);
 }
 
 static PointerRNA rna_Collection_objects_get(CollectionPropertyIterator *iter)
@@ -88,7 +88,7 @@ static PointerRNA rna_Collection_objects_get(CollectionPropertyIterator *iter)
 
   /* we are actually iterating a ObjectBase list, so override get */
   CollectionObject *cob = (CollectionObject *)internal->link;
-  return rna_pointer_inherit_refine(&iter->parent, &RNA_Object, cob->ob);
+  return RNA_id_pointer_create(&cob->ob->id);
 }
 
 static bool rna_collection_objects_edit_check(Collection *collection,
@@ -207,7 +207,7 @@ static bool rna_Collection_objects_override_apply(Main *bmain,
 static void rna_Collection_children_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)
 {
   Collection *collection = (Collection *)ptr->data;
-  rna_iterator_listbase_begin(iter, &collection->children, nullptr);
+  rna_iterator_listbase_begin(iter, ptr, &collection->children, nullptr);
 }
 
 static PointerRNA rna_Collection_children_get(CollectionPropertyIterator *iter)
@@ -216,7 +216,7 @@ static PointerRNA rna_Collection_children_get(CollectionPropertyIterator *iter)
 
   /* we are actually iterating a CollectionChild list, so override get */
   CollectionChild *child = (CollectionChild *)internal->link;
-  return rna_pointer_inherit_refine(&iter->parent, &RNA_Collection, child->collection);
+  return RNA_id_pointer_create(&child->collection->id);
 }
 
 static bool rna_collection_children_edit_check(Collection *collection,
@@ -464,15 +464,17 @@ static PointerRNA rna_CollectionExport_export_properties_get(PointerRNA *ptr)
    * as generic ID properties. */
   blender::bke::FileHandlerType *fh = blender::bke::file_handler_find(data->fh_idname);
   if (!fh) {
-    return RNA_pointer_create(ptr->owner_id, &RNA_IDPropertyWrapPtr, data->export_properties);
+    return RNA_pointer_create_isolated(
+        ptr->owner_id, &RNA_IDPropertyWrapPtr, data->export_properties);
   }
 
   wmOperatorType *ot = WM_operatortype_find(fh->export_operator, false);
   if (!ot) {
-    return RNA_pointer_create(ptr->owner_id, &RNA_IDPropertyWrapPtr, data->export_properties);
+    return RNA_pointer_create_isolated(
+        ptr->owner_id, &RNA_IDPropertyWrapPtr, data->export_properties);
   }
 
-  return RNA_pointer_create(ptr->owner_id, ot->srna, data->export_properties);
+  return RNA_pointer_create_isolated(ptr->owner_id, ot->srna, data->export_properties);
 }
 
 #else

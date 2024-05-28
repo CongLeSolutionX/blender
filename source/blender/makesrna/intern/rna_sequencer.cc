@@ -280,7 +280,7 @@ static void rna_SequenceEditor_sequences_all_next(CollectionPropertyIterator *it
 static PointerRNA rna_SequenceEditor_sequences_all_get(CollectionPropertyIterator *iter)
 {
   Sequence *seq = static_cast<Sequence *>(((BLI_Iterator *)iter->internal.custom)->current);
-  return rna_pointer_inherit_refine(&iter->parent, &RNA_Sequence, seq);
+  return RNA_pointer_create_with_ancestors(iter->parent, &RNA_Sequence, seq);
 }
 
 static void rna_SequenceEditor_sequences_all_end(CollectionPropertyIterator *iter)
@@ -301,7 +301,7 @@ static bool rna_SequenceEditor_sequences_all_lookup_string(PointerRNA *ptr,
 
   Sequence *seq = SEQ_sequence_lookup_seq_by_name(scene, key);
   if (seq) {
-    *r_ptr = RNA_pointer_create(ptr->owner_id, &RNA_Sequence, seq);
+    *r_ptr = RNA_pointer_create_with_ancestors(*ptr, &RNA_Sequence, seq);
     return true;
   }
   return false;
@@ -332,6 +332,7 @@ static void rna_Sequence_elements_begin(CollectionPropertyIterator *iter, Pointe
 {
   Sequence *seq = (Sequence *)ptr->data;
   rna_iterator_array_begin(iter,
+                           ptr,
                            (void *)seq->strip->stripdata,
                            sizeof(StripElem),
                            rna_SequenceEditor_elements_length(ptr),
@@ -349,6 +350,7 @@ static void rna_SequenceEditor_retiming_keys_begin(CollectionPropertyIterator *i
 {
   Sequence *seq = (Sequence *)ptr->data;
   rna_iterator_array_begin(iter,
+                           ptr,
                            (void *)seq->retiming_keys,
                            sizeof(SeqRetimingKey),
                            SEQ_retiming_keys_count(seq),
@@ -892,7 +894,7 @@ static PointerRNA rna_MovieSequence_metadata_get(ID *scene_id, Sequence *seq)
     return PointerRNA_NULL;
   }
 
-  PointerRNA ptr = RNA_pointer_create(scene_id, &RNA_IDPropertyWrapPtr, metadata);
+  PointerRNA ptr = RNA_pointer_create_isolated(scene_id, &RNA_IDPropertyWrapPtr, metadata);
   return ptr;
 }
 
@@ -901,7 +903,7 @@ static PointerRNA rna_SequenceEditor_meta_stack_get(CollectionPropertyIterator *
   ListBaseIterator *internal = &iter->internal.listbase;
   MetaStack *ms = (MetaStack *)internal->link;
 
-  return rna_pointer_inherit_refine(&iter->parent, &RNA_Sequence, ms->parseq);
+  return RNA_pointer_create_with_ancestors(iter->parent, &RNA_Sequence, ms->parseq);
 }
 
 /* TODO: expose seq path setting as a higher level sequencer BKE function. */

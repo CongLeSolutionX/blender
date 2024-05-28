@@ -221,7 +221,7 @@ void AssetViewItem::build_grid_tile(const bContext &C, uiLayout &layout) const
   const AssetShelfType &shelf_type = *asset_view.shelf_.type;
   const asset_system::AssetRepresentation *asset = handle_get_representation(&asset_);
 
-  PointerRNA file_ptr = RNA_pointer_create(
+  PointerRNA file_ptr = RNA_pointer_create_isolated(
       nullptr,
       &RNA_FileSelectEntry,
       /* XXX passing file pointer here, should be asset handle or asset representation. */

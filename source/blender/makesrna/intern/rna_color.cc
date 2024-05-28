@@ -89,7 +89,7 @@ static void rna_CurveMapping_curves_begin(CollectionPropertyIterator *iter, Poin
   CurveMapping *cumap = (CurveMapping *)ptr->data;
 
   rna_iterator_array_begin(
-      iter, cumap->cm, sizeof(CurveMap), rna_CurveMapping_curves_length(ptr), 0, nullptr);
+      iter, ptr, cumap->cm, sizeof(CurveMap), rna_CurveMapping_curves_length(ptr), 0, nullptr);
 }
 
 static void rna_CurveMapping_clip_set(PointerRNA *ptr, bool value)
@@ -204,7 +204,7 @@ static std::optional<std::string> rna_ColorRamp_path(const PointerRNA *ptr)
               /* all node color ramp properties called 'color_ramp'
                * prepend path from ID to the node
                */
-              PointerRNA node_ptr = RNA_pointer_create(id, &RNA_Node, node);
+              PointerRNA node_ptr = RNA_pointer_create_isolated(id, &RNA_Node, node);
               std::string node_path = RNA_path_from_ID_to_struct(&node_ptr).value_or("");
               return fmt::format("{}.color_ramp", node_path);
             }
@@ -267,7 +267,7 @@ static std::optional<std::string> rna_ColorRampElement_path(const PointerRNA *pt
 
         for (node = static_cast<bNode *>(ntree->nodes.first); node; node = node->next) {
           if (ELEM(node->type, SH_NODE_VALTORGB, CMP_NODE_VALTORGB, TEX_NODE_VALTORGB)) {
-            ramp_ptr = RNA_pointer_create(id, &RNA_ColorRamp, node->storage);
+            ramp_ptr = RNA_pointer_create_isolated(id, &RNA_ColorRamp, node->storage);
             COLRAMP_GETPATH;
           }
         }
@@ -279,7 +279,7 @@ static std::optional<std::string> rna_ColorRampElement_path(const PointerRNA *pt
 
         BKE_linestyle_modifier_list_color_ramps((FreestyleLineStyle *)id, &listbase);
         for (link = (LinkData *)listbase.first; link; link = link->next) {
-          ramp_ptr = RNA_pointer_create(id, &RNA_ColorRamp, link->data);
+          ramp_ptr = RNA_pointer_create_isolated(id, &RNA_ColorRamp, link->data);
           COLRAMP_GETPATH;
         }
         BLI_freelistN(&listbase);

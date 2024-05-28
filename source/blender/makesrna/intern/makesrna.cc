@@ -835,13 +835,13 @@ static char *rna_def_property_get_func(
         rna_print_data_get(f, dp);
         if (dp->dnapointerlevel == 0) {
           fprintf(f,
-                  "    return rna_pointer_inherit_refine(ptr, &RNA_%s, &data->%s);\n",
+                  "    return RNA_pointer_create_with_ancestors(*ptr, &RNA_%s, &data->%s);\n",
                   (const char *)pprop->type,
                   dp->dnaname);
         }
         else {
           fprintf(f,
-                  "    return rna_pointer_inherit_refine(ptr, &RNA_%s, data->%s);\n",
+                  "    return RNA_pointer_create_with_ancestors(*ptr, &RNA_%s, data->%s);\n",
                   (const char *)pprop->type,
                   dp->dnaname);
         }
@@ -860,10 +860,11 @@ static char *rna_def_property_get_func(
                      "rna_iterator_array_get",
                      "rna_iterator_array_dereference_get"))
         {
-          fprintf(f,
-                  "    return rna_pointer_inherit_refine(&iter->parent, &RNA_%s, %s(iter));\n",
-                  (cprop->item_type) ? (const char *)cprop->item_type : "UnknownType",
-                  manualfunc);
+          fprintf(
+              f,
+              "    return RNA_pointer_create_with_ancestors(iter->parent, &RNA_%s, %s(iter));\n",
+              (cprop->item_type) ? (const char *)cprop->item_type : "UnknownType",
+              manualfunc);
         }
         else {
           fprintf(f, "    PropCollectionGetFunc fn = %s;\n", manualfunc);
@@ -1631,15 +1632,15 @@ static char *rna_def_property_begin_func(
     else {
       if (dp->dnalengthname) {
         fprintf(f,
-                "\n    rna_iterator_array_begin(iter, data->%s, sizeof(data->%s[0]), data->%s, 0, "
-                "nullptr);\n",
+                "\n    rna_iterator_array_begin(iter, ptr, data->%s, sizeof(data->%s[0]), "
+                "data->%s, 0, nullptr);\n",
                 dp->dnaname,
                 dp->dnaname,
                 dp->dnalengthname);
       }
       else {
         fprintf(f,
-                "\n    rna_iterator_array_begin(iter, data->%s, sizeof(data->%s[0]), %d, 0, "
+                "\n    rna_iterator_array_begin(iter, ptr, data->%s, sizeof(data->%s[0]), %d, 0, "
                 "nullptr);\n",
                 dp->dnaname,
                 dp->dnaname,
@@ -1653,10 +1654,12 @@ static char *rna_def_property_begin_func(
       fprintf(f, "    fn(iter, ptr);\n");
     }
     else if (dp->dnapointerlevel == 0) {
-      fprintf(f, "\n    rna_iterator_listbase_begin(iter, &data->%s, nullptr);\n", dp->dnaname);
+      fprintf(
+          f, "\n    rna_iterator_listbase_begin(iter, ptr, &data->%s, nullptr);\n", dp->dnaname);
     }
     else {
-      fprintf(f, "\n    rna_iterator_listbase_begin(iter, data->%s, nullptr);\n", dp->dnaname);
+      fprintf(
+          f, "\n    rna_iterator_listbase_begin(iter, ptr, data->%s, nullptr);\n", dp->dnaname);
     }
   }
 
@@ -3022,7 +3025,7 @@ static void rna_def_struct_function_impl_cpp(FILE *f, StructRNA *srna, FunctionD
         }
         else {
           fprintf(f,
-                  "\t\tresult = RNA_pointer_create((::ID *) ptr.owner_id, &RNA_%s, retdata);\n",
+                  "\t\tresult = RNA_pointer_create_with_ancestors(ptr, &RNA_%s, retdata);\n",
                   (const char *)pprop->type);
         }
       }

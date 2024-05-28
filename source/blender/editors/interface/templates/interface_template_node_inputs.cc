@@ -61,7 +61,8 @@ static void draw_node_input(bContext *C,
     return;
   }
 
-  PointerRNA socket_ptr = RNA_pointer_create(node_ptr->owner_id, &RNA_NodeSocket, &socket);
+  PointerRNA socket_ptr = RNA_pointer_create_isolated(
+      node_ptr->owner_id, &RNA_NodeSocket, &socket);
   const char *text = IFACE_(bke::nodeSocketLabel(&socket));
   uiLayout *row = uiLayoutRow(layout, true);
   socket.typeinfo->draw(C, row, &socket_ptr, node_ptr, text);
@@ -79,7 +80,7 @@ static void draw_node_inputs_recursive(bContext *C,
   Panel *root_panel = uiLayoutGetRootPanel(layout);
   LayoutPanelState *state = BKE_panel_layout_panel_state_ensure(
       root_panel, panel_idname.c_str(), panel_decl.default_collapsed);
-  PointerRNA state_ptr = RNA_pointer_create(nullptr, &RNA_LayoutPanelState, state);
+  PointerRNA state_ptr = RNA_pointer_create_isolated(nullptr, &RNA_LayoutPanelState, state);
   uiLayout *panel_layout = uiLayoutPanelProp(
       C, layout, &state_ptr, "is_open", IFACE_(panel_decl.name.c_str()));
   if (!(state->flag & LAYOUT_PANEL_STATE_FLAG_OPEN)) {

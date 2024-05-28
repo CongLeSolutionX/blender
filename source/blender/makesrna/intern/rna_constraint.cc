@@ -809,7 +809,7 @@ static void rna_iterator_ActionConstraint_action_slots_begin(CollectionPropertyI
   bConstraint *con = (bConstraint *)ptr->data;
   bActionConstraint *acon = (bActionConstraint *)con->data;
 
-  rna_iterator_generic_action_slots_begin(iter, acon->act);
+  rna_iterator_generic_action_slots_begin(iter, ptr, acon->act);
 }
 
 static int rna_SplineIKConstraint_joint_bindings_get_length(const PointerRNA *ptr,

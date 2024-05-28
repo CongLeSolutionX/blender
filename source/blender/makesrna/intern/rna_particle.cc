@@ -950,7 +950,7 @@ static PointerRNA rna_particle_settings_get(PointerRNA *ptr)
   ParticleSystem *psys = (ParticleSystem *)ptr->data;
   ParticleSettings *part = psys->part;
 
-  return rna_pointer_inherit_refine(ptr, &RNA_ParticleSettings, part);
+  return RNA_id_pointer_create(reinterpret_cast<ID *>(part));
 }
 
 static void rna_particle_settings_set(PointerRNA *ptr, PointerRNA value, ReportList * /*reports*/)
@@ -1164,10 +1164,10 @@ static PointerRNA rna_ParticleSystem_active_particle_target_get(PointerRNA *ptr)
 
   for (; pt; pt = pt->next) {
     if (pt->flag & PTARGET_CURRENT) {
-      return rna_pointer_inherit_refine(ptr, &RNA_ParticleTarget, pt);
+      return RNA_pointer_create_with_ancestors(*ptr, &RNA_ParticleTarget, pt);
     }
   }
-  return rna_pointer_inherit_refine(ptr, &RNA_ParticleTarget, nullptr);
+  return PointerRNA_NULL;
 }
 static void rna_ParticleSystem_active_particle_target_index_range(
     PointerRNA *ptr, int *min, int *max, int * /*softmin*/, int * /*softmax*/)
@@ -1305,10 +1305,10 @@ static PointerRNA rna_ParticleDupliWeight_active_get(PointerRNA *ptr)
 
   for (; dw; dw = dw->next) {
     if (dw->flag & PART_DUPLIW_CURRENT) {
-      return rna_pointer_inherit_refine(ptr, &RNA_ParticleDupliWeight, dw);
+      return RNA_pointer_create_with_ancestors(*ptr, &RNA_ParticleDupliWeight, dw);
     }
   }
-  return rna_pointer_inherit_refine(ptr, &RNA_ParticleTarget, nullptr);
+  return PointerRNA_NULL;
 }
 static void rna_ParticleDupliWeight_active_index_range(
     PointerRNA *ptr, int *min, int *max, int * /*softmin*/, int * /*softmax*/)
@@ -1455,13 +1455,13 @@ static const EnumPropertyItem *rna_Particle_ren_as_itemf(bContext * /*C*/,
 static PointerRNA rna_Particle_field1_get(PointerRNA *ptr)
 {
   ParticleSettings *part = (ParticleSettings *)ptr->owner_id;
-  return rna_pointer_inherit_refine(ptr, &RNA_FieldSettings, part->pd);
+  return RNA_pointer_create_with_ancestors(*ptr, &RNA_FieldSettings, part->pd);
 }
 
 static PointerRNA rna_Particle_field2_get(PointerRNA *ptr)
 {
   ParticleSettings *part = (ParticleSettings *)ptr->owner_id;
-  return rna_pointer_inherit_refine(ptr, &RNA_FieldSettings, part->pd2);
+  return RNA_pointer_create_with_ancestors(*ptr, &RNA_FieldSettings, part->pd2);
 }
 
 static void psys_vg_name_get__internal(PointerRNA *ptr, char *value, int index)
@@ -1529,7 +1529,7 @@ static std::optional<std::string> rna_ParticleSystem_path(const PointerRNA *ptr)
 static void rna_ParticleSettings_mtex_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)
 {
   ParticleSettings *part = (ParticleSettings *)ptr->data;
-  rna_iterator_array_begin(iter, (void *)part->mtex, sizeof(MTex *), MAX_MTEX, 0, nullptr);
+  rna_iterator_array_begin(iter, ptr, (void *)part->mtex, sizeof(MTex *), MAX_MTEX, 0, nullptr);
 }
 
 static PointerRNA rna_ParticleSettings_active_texture_get(PointerRNA *ptr)
@@ -1538,7 +1538,7 @@ static PointerRNA rna_ParticleSettings_active_texture_get(PointerRNA *ptr)
   Tex *tex;
 
   tex = give_current_particle_texture(part);
-  return rna_pointer_inherit_refine(ptr, &RNA_Texture, tex);
+  return RNA_id_pointer_create(reinterpret_cast<ID *>(tex));
 }
 
 static void rna_ParticleSettings_active_texture_set(PointerRNA *ptr,

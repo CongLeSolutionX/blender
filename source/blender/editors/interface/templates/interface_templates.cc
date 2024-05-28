@@ -1919,7 +1919,7 @@ void uiTemplateAction(uiLayout *layout,
    * has a `getter` & `setter` that only need the owner ID and are null-safe regarding the `adt`
    * itself. */
   AnimData *adt = BKE_animdata_from_id(id);
-  PointerRNA adt_ptr = RNA_pointer_create(id, &RNA_AnimData, adt);
+  PointerRNA adt_ptr = RNA_pointer_create_isolated(id, &RNA_AnimData, adt);
 
   TemplateID template_ui = {};
   template_ui.ptr = adt_ptr;
@@ -2143,7 +2143,7 @@ static void template_search_exec_fn(bContext *C, void *arg_template, void *item)
   uiRNACollectionSearch *coll_search = &template_search->search_data;
   StructRNA *type = RNA_property_pointer_type(&coll_search->target_ptr, coll_search->target_prop);
 
-  PointerRNA item_ptr = RNA_pointer_create(nullptr, type, item);
+  PointerRNA item_ptr = RNA_pointer_create_isolated(nullptr, type, item);
   RNA_property_pointer_set(&coll_search->target_ptr, coll_search->target_prop, item_ptr, nullptr);
   RNA_property_update(C, &coll_search->target_ptr, coll_search->target_prop);
 }
@@ -2451,7 +2451,7 @@ void uiTemplateModifiers(uiLayout * /*layout*/, bContext *C)
 
       /* Create custom data RNA pointer. */
       PointerRNA *md_ptr = MEM_new<PointerRNA>(__func__);
-      *md_ptr = RNA_pointer_create(&ob->id, &RNA_Modifier, md);
+      *md_ptr = RNA_pointer_create_isolated(&ob->id, &RNA_Modifier, md);
 
       UI_panel_add_instanced(C, region, &region->panels, panel_idname, md_ptr);
     }
@@ -2473,7 +2473,7 @@ void uiTemplateModifiers(uiLayout * /*layout*/, bContext *C)
       }
 
       PointerRNA *md_ptr = MEM_new<PointerRNA>(__func__);
-      *md_ptr = RNA_pointer_create(&ob->id, &RNA_Modifier, md);
+      *md_ptr = RNA_pointer_create_isolated(&ob->id, &RNA_Modifier, md);
       UI_panel_custom_data_set(panel, md_ptr);
 
       panel = panel->next;
@@ -2617,7 +2617,7 @@ void uiTemplateConstraints(uiLayout * /*layout*/, bContext *C, bool use_bone_con
 
       /* Create custom data RNA pointer. */
       PointerRNA *con_ptr = MEM_new<PointerRNA>(__func__);
-      *con_ptr = RNA_pointer_create(&ob->id, &RNA_Constraint, con);
+      *con_ptr = RNA_pointer_create_isolated(&ob->id, &RNA_Constraint, con);
 
       Panel *new_panel = UI_panel_add_instanced(C, region, &region->panels, panel_idname, con_ptr);
 
@@ -2652,7 +2652,7 @@ void uiTemplateConstraints(uiLayout * /*layout*/, bContext *C, bool use_bone_con
       }
 
       PointerRNA *con_ptr = MEM_new<PointerRNA>(__func__);
-      *con_ptr = RNA_pointer_create(&ob->id, &RNA_Constraint, con);
+      *con_ptr = RNA_pointer_create_isolated(&ob->id, &RNA_Constraint, con);
       UI_panel_custom_data_set(panel, con_ptr);
 
       panel = panel->next;
@@ -2699,7 +2699,7 @@ void uiTemplateShaderFx(uiLayout * /*layout*/, bContext *C)
 
       /* Create custom data RNA pointer. */
       PointerRNA *fx_ptr = MEM_new<PointerRNA>(__func__);
-      *fx_ptr = RNA_pointer_create(&ob->id, &RNA_ShaderFx, fx);
+      *fx_ptr = RNA_pointer_create_isolated(&ob->id, &RNA_ShaderFx, fx);
 
       UI_panel_add_instanced(C, region, &region->panels, panel_idname, fx_ptr);
     }
@@ -2721,7 +2721,7 @@ void uiTemplateShaderFx(uiLayout * /*layout*/, bContext *C)
       }
 
       PointerRNA *fx_ptr = MEM_new<PointerRNA>(__func__);
-      *fx_ptr = RNA_pointer_create(&ob->id, &RNA_ShaderFx, fx);
+      *fx_ptr = RNA_pointer_create_isolated(&ob->id, &RNA_ShaderFx, fx);
       UI_panel_custom_data_set(panel, fx_ptr);
 
       panel = panel->next;
@@ -2829,7 +2829,7 @@ static eAutoPropButsReturn template_operator_property_buts_draw_single(
     user_data.flag = layout_flags;
     const bool use_prop_split = (layout_flags & UI_TEMPLATE_OP_PROPS_NO_SPLIT_LAYOUT) == 0;
 
-    PointerRNA ptr = RNA_pointer_create(&wm->id, op->type->srna, op->properties);
+    PointerRNA ptr = RNA_pointer_create_isolated(&wm->id, op->type->srna, op->properties);
 
     uiLayoutSetPropSep(layout, use_prop_split);
     uiLayoutSetPropDecorate(layout, false);
@@ -2949,7 +2949,7 @@ static bool ui_layout_operator_properties_only_booleans(const bContext *C,
     user_data.op = op;
     user_data.flag = layout_flags;
 
-    PointerRNA ptr = RNA_pointer_create(&wm->id, op->type->srna, op->properties);
+    PointerRNA ptr = RNA_pointer_create_isolated(&wm->id, op->type->srna, op->properties);
 
     bool all_booleans = true;
     RNA_STRUCT_BEGIN (&ptr, prop) {
@@ -3113,7 +3113,8 @@ void uiTemplateCollectionExporters(uiLayout *layout, bContext *C)
   }();
 
   /* Draw exporter list and controls. */
-  PointerRNA collection_ptr = RNA_pointer_create(&collection->id, &RNA_Collection, collection);
+  PointerRNA collection_ptr = RNA_pointer_create_isolated(
+      &collection->id, &RNA_Collection, collection);
   uiLayout *row = uiLayoutRow(layout, false);
   uiTemplateList(row,
                  C,
@@ -3145,7 +3146,8 @@ void uiTemplateCollectionExporters(uiLayout *layout, bContext *C)
   }
 
   using namespace blender;
-  PointerRNA exporter_ptr = RNA_pointer_create(&collection->id, &RNA_CollectionExport, data);
+  PointerRNA exporter_ptr = RNA_pointer_create_isolated(
+      &collection->id, &RNA_CollectionExport, data);
   PanelLayout panel = uiLayoutPanelProp(C, layout, &exporter_ptr, "is_open");
 
   bke::FileHandlerType *fh = bke::file_handler_find(data->fh_idname);
@@ -3163,7 +3165,8 @@ void uiTemplateCollectionExporters(uiLayout *layout, bContext *C)
   }
 
   /* Assign temporary operator to uiBlock, which takes ownership. */
-  PointerRNA properties = RNA_pointer_create(&collection->id, ot->srna, data->export_properties);
+  PointerRNA properties = RNA_pointer_create_isolated(
+      &collection->id, ot->srna, data->export_properties);
   wmOperator *op = minimal_operator_create(ot, &properties);
   UI_block_set_active_operator(uiLayoutGetBlock(panel.header), op, true);
 
@@ -3197,7 +3200,7 @@ static void constraint_ops_extra_draw(bContext *C, uiLayout *layout, void *con_v
 
   Object *ob = blender::ed::object::context_active_object(C);
 
-  PointerRNA ptr = RNA_pointer_create(&ob->id, &RNA_Constraint, con);
+  PointerRNA ptr = RNA_pointer_create_isolated(&ob->id, &RNA_Constraint, con);
   uiLayoutSetContextPointer(layout, "constraint", &ptr);
   uiLayoutSetOperatorContext(layout, WM_OP_INVOKE_DEFAULT);
 
@@ -3261,7 +3264,7 @@ static void draw_constraint_header(uiLayout *layout, Object *ob, bConstraint *co
   uiBlock *block = uiLayoutGetBlock(layout);
   UI_block_func_set(block, constraint_active_func, ob, con);
 
-  PointerRNA ptr = RNA_pointer_create(&ob->id, &RNA_Constraint, con);
+  PointerRNA ptr = RNA_pointer_create_isolated(&ob->id, &RNA_Constraint, con);
 
   if (block->panel) {
     UI_panel_context_pointer_set(block->panel, "constraint", &ptr);
@@ -3460,7 +3463,7 @@ void uiTemplatePreview(uiLayout *layout,
       }
 
       /* Create RNA Pointer */
-      PointerRNA material_ptr = RNA_pointer_create(&ma->id, &RNA_Material, ma);
+      PointerRNA material_ptr = RNA_pointer_create_isolated(&ma->id, &RNA_Material, ma);
 
       col = uiLayoutColumn(row, true);
       uiLayoutSetScaleX(col, 1.5);
@@ -3476,7 +3479,7 @@ void uiTemplatePreview(uiLayout *layout,
 
     if (pr_texture) {
       /* Create RNA Pointer */
-      PointerRNA texture_ptr = RNA_pointer_create(id, &RNA_Texture, tex);
+      PointerRNA texture_ptr = RNA_pointer_create_isolated(id, &RNA_Texture, tex);
 
       uiLayoutRow(layout, true);
       uiDefButS(block,
@@ -3790,7 +3793,7 @@ static void colorband_buttons_layout(uiLayout *layout,
   const float xs = butr->xmin;
   const float ys = butr->ymin;
 
-  PointerRNA ptr = RNA_pointer_create(cb.ptr.owner_id, &RNA_ColorRamp, coba);
+  PointerRNA ptr = RNA_pointer_create_isolated(cb.ptr.owner_id, &RNA_ColorRamp, coba);
 
   uiLayout *split = uiLayoutSplit(layout, 0.4f, false);
 
@@ -3881,7 +3884,7 @@ static void colorband_buttons_layout(uiLayout *layout,
   if (coba->tot) {
     CBData *cbd = coba->data + coba->cur;
 
-    ptr = RNA_pointer_create(cb.ptr.owner_id, &RNA_ColorRampElement, cbd);
+    ptr = RNA_pointer_create_isolated(cb.ptr.owner_id, &RNA_ColorRampElement, cbd);
 
     if (!expand) {
       split = uiLayoutSplit(layout, 0.3f, false);
@@ -5496,7 +5499,8 @@ static void CurveProfile_buttons_layout(uiLayout *layout, PointerRNA *ptr, const
 
     row = uiLayoutRow(layout, true);
 
-    PointerRNA point_ptr = RNA_pointer_create(ptr->owner_id, &RNA_CurveProfilePoint, point);
+    PointerRNA point_ptr = RNA_pointer_create_isolated(
+        ptr->owner_id, &RNA_CurveProfilePoint, point);
     PropertyRNA *prop_handle_type = RNA_struct_find_property(&point_ptr, "handle_type_1");
     uiItemFullR(row,
                 &point_ptr,
@@ -5910,7 +5914,7 @@ void uiTemplatePalette(uiLayout *layout, PointerRNA *ptr, const char *propname, 
       row_cols = 0;
     }
 
-    PointerRNA color_ptr = RNA_pointer_create(&palette->id, &RNA_PaletteColor, color);
+    PointerRNA color_ptr = RNA_pointer_create_isolated(&palette->id, &RNA_PaletteColor, color);
     uiButColor *color_but = (uiButColor *)uiDefButR(block,
                                                     UI_BTYPE_COLOR,
                                                     0,

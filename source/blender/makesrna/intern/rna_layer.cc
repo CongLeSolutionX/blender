@@ -56,7 +56,7 @@ static PointerRNA rna_ViewLayer_active_layer_collection_get(PointerRNA *ptr)
   ViewLayer *view_layer = (ViewLayer *)ptr->data;
   BKE_view_layer_synced_ensure(scene, view_layer);
   LayerCollection *lc = BKE_view_layer_active_collection_get(view_layer);
-  return rna_pointer_inherit_refine(ptr, &RNA_LayerCollection, lc);
+  return RNA_pointer_create_with_ancestors(*ptr, &RNA_LayerCollection, lc);
 }
 
 static void rna_ViewLayer_active_layer_collection_set(PointerRNA *ptr,
@@ -78,8 +78,8 @@ static PointerRNA rna_LayerObjects_active_object_get(PointerRNA *ptr)
   const Scene *scene = (Scene *)ptr->owner_id;
   ViewLayer *view_layer = (ViewLayer *)ptr->data;
   BKE_view_layer_synced_ensure(scene, view_layer);
-  return rna_pointer_inherit_refine(
-      ptr, &RNA_Object, BKE_view_layer_active_object_get(view_layer));
+  return RNA_pointer_create_with_ancestors(
+      *ptr, &RNA_Object, BKE_view_layer_active_object_get(view_layer));
 }
 
 static void rna_LayerObjects_active_object_set(PointerRNA *ptr,
@@ -173,7 +173,7 @@ static PointerRNA rna_ViewLayer_objects_get(CollectionPropertyIterator *iter)
 
   /* we are actually iterating a ObjectBase list */
   Base *base = (Base *)internal->link;
-  return rna_pointer_inherit_refine(&iter->parent, &RNA_Object, base->object);
+  return RNA_pointer_create_with_ancestors(iter->parent, &RNA_Object, base->object);
 }
 
 static bool rna_ViewLayer_objects_selected_skip(CollectionPropertyIterator *iter, void * /*data*/)
@@ -195,7 +195,7 @@ static PointerRNA rna_ViewLayer_depsgraph_get(PointerRNA *ptr)
     Scene *scene = (Scene *)id;
     ViewLayer *view_layer = (ViewLayer *)ptr->data;
     Depsgraph *depsgraph = BKE_scene_get_depsgraph(scene, view_layer);
-    return rna_pointer_inherit_refine(ptr, &RNA_Depsgraph, depsgraph);
+    return RNA_pointer_create_with_ancestors(*ptr, &RNA_Depsgraph, depsgraph);
   }
   return PointerRNA_NULL;
 }
@@ -213,7 +213,7 @@ static void rna_LayerObjects_selected_begin(CollectionPropertyIterator *iter, Po
 {
   ViewLayer *view_layer = (ViewLayer *)ptr->data;
   rna_iterator_listbase_begin(
-      iter, BKE_view_layer_object_bases_get(view_layer), rna_ViewLayer_objects_selected_skip);
+      iter, ptr, BKE_view_layer_object_bases_get(view_layer), rna_ViewLayer_objects_selected_skip);
 }
 
 static void rna_ViewLayer_update_tagged(ID *id_ptr,
@@ -383,13 +383,14 @@ void rna_LayerCollection_children_begin(CollectionPropertyIterator *iter, Pointe
   ViewLayer *view_layer = BKE_view_layer_find_from_collection(scene, lc);
   BKE_view_layer_synced_ensure(scene, view_layer);
 
-  rna_iterator_listbase_begin(iter, &lc->layer_collections, nullptr);
+  rna_iterator_listbase_begin(iter, ptr, &lc->layer_collections, nullptr);
 }
 
 static bool rna_LayerCollection_children_lookupint(PointerRNA *ptr, int key, PointerRNA *r_ptr)
 {
   Scene *scene = (Scene *)ptr->owner_id;
   LayerCollection *lc = (LayerCollection *)ptr->data;
+  /* TODO: replace by using RNA ancestors. */
   ViewLayer *view_layer = BKE_view_layer_find_from_collection(scene, lc);
   BKE_view_layer_synced_ensure(scene, view_layer);
 
@@ -398,7 +399,7 @@ static bool rna_LayerCollection_children_lookupint(PointerRNA *ptr, int key, Poi
   if (!child) {
     return false;
   }
-  *r_ptr = RNA_pointer_create(ptr->owner_id, &RNA_LayerCollection, child);
+  *r_ptr = RNA_pointer_create_with_ancestors(*ptr, &RNA_LayerCollection, child);
   return true;
 }
 
@@ -408,12 +409,13 @@ static bool rna_LayerCollection_children_lookupstring(PointerRNA *ptr,
 {
   Scene *scene = (Scene *)ptr->owner_id;
   LayerCollection *lc = (LayerCollection *)ptr->data;
+  /* TODO: replace by using RNA ancestors. */
   ViewLayer *view_layer = BKE_view_layer_find_from_collection(scene, lc);
   BKE_view_layer_synced_ensure(scene, view_layer);
 
   LISTBASE_FOREACH (LayerCollection *, child, &lc->layer_collections) {
     if (STREQ(child->collection->id.name + 2, key)) {
-      *r_ptr = RNA_pointer_create(ptr->owner_id, &RNA_LayerCollection, child);
+      *r_ptr = RNA_pointer_create_with_ancestors(*ptr, &RNA_LayerCollection, child);
       return true;
     }
   }
