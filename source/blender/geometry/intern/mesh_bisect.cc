@@ -539,16 +539,32 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
   const int src_num_edges = mesh.edges_num;
   const int src_num_polys = mesh.faces_num;
 
-  /* Compute per-vert distance. */
+  /* Compute per-vertex distance to the plane.
+   *
+   *    *  <- 'Outside' relative to the plane
+   *     \
+   *  ^^^^ Plane ^^^^^
+   *       \
+   *        *  <-- 'Inside' relative to plane
+   */
   const Span<float3> src_positions = mesh.vert_positions();
   IndexRange src_vert_range = src_positions.index_range();
   BLI_assert(src_num_vert == src_positions.size());
 
+  /* Bit flag property for how vertices relate to the plane.
+   *
+   * 0: Not kept
+   * 2^0: Kept
+   * 2^1: Outside
+   * 2^2: Inside
+   */
   Array<int8_t> is_kept_vertex(src_num_vert);
   Array<float, 12> dist_buffer(src_num_vert);
 
   auto fn_is_outside = [](float signed_distance) { return signed_distance > 0.0f; };
-  auto fn_intersect_mode = [](float signed_distance) { return (signed_distance == 0.0f ? 8 : 0) | (signed_distance > 0.0f ? 2 : 4); };
+  auto fn_intersect_mode = [](float signed_distance) {
+    return (signed_distance == 0.0f ? 8 : 0) | (signed_distance > 0.0f ? 2 : 4);
+  };
   auto fn_is_keep = [](const BisectArgs &args, int8_t is_intersect) {
     return (is_intersect & 8) || ((is_intersect & 2) && !args.clear_outer) ||
            ((is_intersect & 4) && !args.clear_inner);
@@ -562,18 +578,19 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
         const int8_t is_intersect = fn_intersect_mode(dist_buffer[i]);
         const bool is_kept = fn_is_keep(args, is_intersect);
 
-        /*
-         * 0: Not kept
-         * 2^0: Kept
-         * 2^1: Outside
-         * 2^2: Inside
-         */
         const int8_t kept_mode = is_kept | is_intersect;
         is_kept_vertex[i] = kept_mode;
         return is_kept;
       });
 
-  /* Compute edge intersections. */
+  /* Compute IF edge is intersected
+   *
+   *    *     *-----*  <- No intersection
+   *     \
+   *  ^^^^ Plane ^^^^^
+   *       \
+   *        *  <- Intersected
+   */
   const Span<int2> src_edges = mesh.edges();
   // BLI_assert(src_num_vert == src_edges.size());
   auto fn_intersected_edge = [&](int64_t i) {
@@ -621,17 +638,34 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
   });
 
   /* Handle intersected edges (including IFF cut occurs on vertex).
+   *
+   * Inserts vertices and replaces edges for the edges being split.
+   * If one or both sides are discarded, no edge is formed on that side (vertex will always be).
+   *
+   *         - Goes to ->
+   *
+   *  --*----           --*---
+   *    |                 |
+   *    |                 |      <- Newly formed edge (on the 'outside')
+   *    |      ^^^Plane^^ x   <-- Newly formed vertex (in plane)
+   *    |                 |      <- Newly formed edge (on the 'inside')
+   *    |                 |
+   *  --*----           --*---
+   *
    */
-  const int keep_count = !args.clear_inner + !args.clear_outer;
-  const int keep_both = keep_count == 2;
+
+  const int side_keep_count = !args.clear_inner + !args.clear_outer;
+  const int side_keep_both = side_keep_count == 2;
   /* Args for vertices formed during edge splits. */
   Array<float, 12> split_lerp_weights(edge_type_selections[EdgeIntersectType::Intersect].size());
   Array<int2, 12> split_index_pairs(split_lerp_weights.size());
   /* Args for the edges formed from splitting intersected edges */
   Array<int2, 12> new_split_edge_verts(edge_type_selections[EdgeIntersectType::Intersect].size() *
-                                       keep_count);
+                                       side_keep_count);
   Array<int2, 12> new_split_edge_map(new_split_edge_verts.size());
 
+  /* Map index of a split edge in intersected set -> Index for generated/kept vertex in new mesh
+   */
   Array<int, 12> split_edge_vert_map(edge_type_selections[EdgeIntersectType::Intersect].size());
   /* Counter determining the number of split edges and the number of generated vertices/edges. */
   std::atomic<int> new_split_edge_index = 0;
@@ -641,8 +675,9 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
         const float signed_dist_x = dist_buffer[vert_indices.x];
         const float signed_dist_y = dist_buffer[vert_indices.y];
 
-        /* Handle vertices 'in the plane'. Both can't be 'in the plane' as the edge would then not be classified as 'intersect'.
-        */
+        /* Handle vertices 'in the plane'. Both can't be 'in the plane' as the edge would then not
+         * be classified as 'intersect'.
+         */
         if (signed_dist_x == 0.0f) {
           split_edge_vert_map[index_pos] = vert_indices.x;
           BLI_assert(signed_dist_y != 0.0f);
@@ -654,7 +689,7 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
         }
 
         /* Generate vertex at the split.
-        */
+         */
         const int split_edge_index = new_split_edge_index++;
         split_lerp_weights[split_edge_index] = edge_weight(signed_dist_x, signed_dist_y);
         split_index_pairs[split_edge_index] = vert_indices;
@@ -663,8 +698,8 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
         split_edge_vert_map[index_pos] = new_vert_index;
 
         /* Generate new edges for the split IFF any side is kept */
-        if (keep_count > 0) {
-          const int new_edge_index = split_edge_index * keep_count;
+        if (side_keep_count > 0) {
+          const int new_edge_index = split_edge_index * side_keep_count;
           /* Inner/Outer logic must match 'is_kept_vertex'*/
           const bool is_ouside_x = fn_is_outside(signed_dist_x);
           const bool is_outside_y = fn_is_outside(signed_dist_y);
@@ -674,7 +709,7 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
            * the plane).
            */
           int2 order = is_ouside_x ? vert_indices : int2{vert_indices.y, vert_indices.x};
-          int2 insert_index = {new_edge_index, new_edge_index + keep_both};
+          int2 insert_index = {new_edge_index, new_edge_index + side_keep_both};
 
           if (!args.clear_outer) {
             /* Keep outside */
@@ -692,11 +727,12 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
       });
 
   /* Slice of the buffers for split edges that are valid. */
-  const int64_t initial_split_edge_count = new_split_edge_index * keep_count;
+  const int64_t initial_split_edge_count = new_split_edge_index * side_keep_count;
   const IndexRange split_edge_slice(0, initial_split_edge_count);
 
-  /* Create edge index map */
+  /* Maps index of kept edge's from the original mesh to their index in the new mesh */
   Array<int, 12> old_to_new_edge_map(src_num_edges);
+  /* Track the 'original' index for an edge, to it's index within the intersected edge set. */
   Array<int, 12> old_to_intersect_edge_map(src_num_edges);
   old_to_new_edge_map.fill(-1);
   edge_type_selections[EdgeIntersectType::Kept].foreach_index(
@@ -708,19 +744,34 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
         old_to_intersect_edge_map[index] = index_pos;
       });
 
-  /* Polygons */
+  /* Compute polygon splits using the computed edge splits.
+   *
+   *       -- Goes to -->
+   *
+   *   *---*           *---*
+   *   |   |           |   |      <- Polygon formed on 'outside'
+   *   x   x       ^^^ x---x ^^^
+   *   |   |           |   |      <- Polygon formed on 'inside'
+   *   *---*           *---*
+   */
   Array<Vector<Vector<int, 4>, 2>, 12> new_split_polygons(src_num_polys);
   Array<Vector<Vector<int2, 4>, 2>, 12> new_split_polygon_src_corner(new_split_polygons.size());
   Array<Vector<Vector<float, 4>, 2>, 12> new_split_polygon_src_weight(new_split_polygons.size());
 
-  Array<Vector<int, 2>, 12> new_inter_edge_offsets(new_split_polygons.size());
+  /* Index for the new edges formed inside the intersected polygons by the cutting plane.
+   * Index is zero based relative to the edges formed in this 'group'.
+   */
+  Array<Vector<int, 2>, 12> new_inter_edge_indices(new_split_polygons.size());
+  /* Index pairs for the vertices connected by edges formed in the poly-plane intersection. */
   Array<Vector<int2, 2>, 12> new_inter_edge_verts(new_split_polygons.size());
+  /* Indices to src edges being split by the poly-plane intersection, for attribute transfers */
   Array<Vector<int2, 2>, 12> new_inter_edge_map(new_split_polygons.size());
 
-  const Span<float3> positions = mesh.vert_positions();
-
+  /* Counts the number of edges formed by poly-plane intersection. */
   std::atomic<int> new_inter_edge_index = 0;
-  const int64_t new_inter_edge_offset = num_kept_edges + initial_split_edge_count;
+  /* Index offset to the first poly-plane 'intersect' edge in the final mesh. */
+  const int new_inter_edge_index_offset = num_kept_edges + initial_split_edge_count;
+  const Span<float3> positions = mesh.vert_positions();
   const int new_total_face_count = threading::parallel_reduce<int>(
       src_polys.index_range(),
       512,
@@ -732,33 +783,36 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
           BLI_assert(new_split_polygon_src_corner[index_poly].is_empty());
           BLI_assert(new_split_polygon_src_weight[index_poly].is_empty());
 
-          Vector<int, 12> intersected;
+          /* Index to the corner span from the polygons intersect set. */
+          Vector<int, 12> pic_corner_index;
 
           const IndexRange corner_range = src_polys[index_poly];
           const Span<int> corners = src_corner_verts.slice(corner_range);
           const Span<int> corner_edges = src_corner_edges.slice(corner_range);
 
-          /* Iterate all corners and track the edge being intersected. */
-
-          // TODO: Handle sequences with edges in the plane
-          // TODO: Add bit for vertex 'in plane'?
+          /* Iterate all corners and track the edge being intersected.
+           * TODO: Handle sequences with edges in the plane
+           * TODO: Add bit for vertex 'in plane'?
+           */
           const int8_t first_kept = is_kept_vertex[corners[0]];
           int8_t is_kept = first_kept;
           int kept_count = (first_kept & 1);
           for (const int64_t index : corners.index_range().drop_front(1)) {
             const int8_t next_kept = is_kept_vertex[corners[index]];
             if (is_kept != next_kept) {
-              intersected.append(index - 1);
+              pic_corner_index.append(index - 1);
             }
             kept_count += (next_kept & 1);
             is_kept = next_kept;
           }
           if (is_kept != first_kept) {
             /* Last edge case */
-            intersected.append(corners.size() - 1);
+            pic_corner_index.append(corners.size() - 1);
           }
 
-          if (intersected.size() == 0) {
+          /* Determine action applied to the polygon
+           */
+          if (pic_corner_index.size() == 0) {
             if (kept_count == corners.size()) {
               /* All kept, copy polygon */
               new_split_polygons[index_poly].append(Vector<int>(corner_edges.size()));
@@ -777,90 +831,94 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
             }
             else {
               BLI_assert(kept_count == 0);
-              /* Discard All, polygon 'outside' */
+              /* Discard, polygon is 'not kept'. */
               continue;
             }
           }
           else {
-            /* Split face(s). Iterate corner loop and form edges between adjacent intersection
-             * pairs */
-            BLI_assert(intersected.size() % 2 == 0);
+            /* Split polygon face(s). Iterate corner loop and form edges between adjacent
+             * intersection pairs */
+            BLI_assert(pic_corner_index.size() % 2 == 0);
 
-            /* Find the edge index for the intersected edges.
-             */
-            Array<int, 12> inter_edge_index(intersected.size());
-            for (const int64_t index : intersected.index_range()) {
-              const int edge_index = corner_edges[intersected[index]];
-              inter_edge_index[index] = old_to_intersect_edge_map[edge_index];
-
-              /*
-              IndexMask &intersect_mask = edge_type_selections[EdgeIntersectType::Intersect];
-              auto new_edge_offset = intersect_mask.find(edge_index);
-              if (!new_edge_offset.has_value()) {
-                // Panic.
-                BLI_assert(false);
-                inter_edge_index[index] = 0;
-                continue;
-              }
-
-              const int intersect_index = intersect_mask.iterator_to_index(
-                  new_edge_offset.value());
-              BLI_assert(intersect_index != -1);
-              inter_edge_index[index] = intersect_index;
-              */
+            /* Index for the split edge in the intersected edge set. */
+            Array<int, 12> pic_split_edge_index(pic_corner_index.size());
+            for (const int64_t index : pic_corner_index.index_range()) {
+              const int edge_index = corner_edges[pic_corner_index[index]];
+              pic_split_edge_index[index] = old_to_intersect_edge_map[edge_index];
             }
 
-            /* Find the index for the edge in the intersected edge group.
+            /* Increment the index relative to the polygon set, returns 0 when incrementing the
+             * last entry. */
+            auto increment = [&](const int64_t index) { return (index + 1) % corners.size(); };
+            /* Find index (in new mesh) for the edge on the given side of the split.
              */
             auto fetch_split_edge_side = [&](const int64_t index, bool outside) {
-              const int intersect_index = inter_edge_index[index];
-              const int split_edge_sided_index = num_kept_edges + intersect_index * keep_count +
-                                                 int(!outside && keep_both);
+              const int intersect_index = pic_split_edge_index[index];
+              const int split_edge_sided_index = num_kept_edges +
+                                                 intersect_index * side_keep_count +
+                                                 int(!outside && side_keep_both);
               return split_edge_sided_index;
             };
-            /* Add an edge spanning two intersected edges from the intersection edge pair
-             * (pairs references index of the edge in the polygon).
+            /* Add an edge spanning two intersected edges within the polygon.
+             * Input indices reference edges in the polygon set.
+             * Returns the index of the edge formed in the new mesh.
              */
-            auto add_intersection_edge = [&](const int2 inter_pair) {
-              /* Fetch vertex indices for the inserted vertices in the split */
-              int2 pair{split_edge_vert_map[inter_edge_index[inter_pair.x]],
-                        split_edge_vert_map[inter_edge_index[inter_pair.y]]};
+            auto add_intersection_edge = [&](const int2 pic_pair) {
+              /* Fetch indices to the vertices formed in the previously computed edge splits. */
+              int2 v_connect_pair{split_edge_vert_map[pic_split_edge_index[pic_pair.x]],
+                                  split_edge_vert_map[pic_split_edge_index[pic_pair.y]]};
 
-              bool x_in_plane = pair.x < num_kept_vertices;
-              bool y_in_plane = pair.y < num_kept_vertices;
+              bool x_in_plane = v_connect_pair.x < num_kept_vertices;
+              bool y_in_plane = v_connect_pair.y < num_kept_vertices;
 
+              /* Determine if both are kept vertices and edge already exists (chains of vertices
+               * 'intersecting' the plane are ignored). */
               if (x_in_plane && y_in_plane) {
-                // Both are kept vertices, edge still formed (chained are ignored)
+                /* Find the existing edge, edge must be part of the polygon and must be an adjacent
+                 * connected edge (either previous or next edge). */
+                int corner_a = pic_corner_index[pic_pair.x];
+                int corner_b = pic_corner_index[pic_pair.y];
+
+                /* Check next for either as the index correspond next edge in the corner span! */
+                if (increment(corner_a) == corner_b) {
+                  return old_to_new_edge_map[corner_edges[corner_a]];
+                }
+                else if (increment(corner_b) == corner_a) {
+                  return old_to_new_edge_map[corner_edges[corner_b]];
+                }
+                /* No match and no existing edge and a new one must be formed.
+                 * Geometry could also be degenerate (includes same vertex twice within one polygon
+                 * or some overlap with other polygons...)!
+                 */
               }
 
               int new_index = new_inter_edge_index++;
 
-              new_inter_edge_offsets[index_poly].append(new_index);
-              new_inter_edge_verts[index_poly].append(pair);
+              new_inter_edge_indices[index_poly].append(new_index);
+              new_inter_edge_verts[index_poly].append(v_connect_pair);
               /* Find source edges to map data from */
-              int2 src_edges{corner_edges[intersected[inter_pair.x]],
-                             corner_edges[intersected[inter_pair.y]]};
+              int2 src_edges{corner_edges[pic_corner_index[pic_pair.x]],
+                             corner_edges[pic_corner_index[pic_pair.y]]};
               new_inter_edge_map[index_poly].append(src_edges);
-              return new_index + new_inter_edge_offset;
+              return new_index + new_inter_edge_index_offset;
             };
-            auto increment = [&](const int64_t index) { return (index + 1) % corners.size(); };
 
             /* Determine if intersection pairs. Shift the pairing by one if the edge formed inside
              * the n-gon is being flipped.
              */
             int start_shift_vote;
             {
-              const int v0 = corners[intersected[0]];
-              const int v1 = corners[increment(intersected[0])];
-              const int v2 = corners[intersected[1]];
-              const int v3 = corners[increment(intersected[1])];
+              const int v0 = corners[pic_corner_index[0]];
+              const int v1 = corners[increment(pic_corner_index[0])];
+              const int v2 = corners[pic_corner_index[1]];
+              const int v3 = corners[increment(pic_corner_index[1])];
               const float3 V0 = positions[v0];
               const float3 V1 = positions[v1];
               const float3 V2 = positions[v2];
               const float3 V3 = positions[v3];
 
-              const float w0 = split_lerp_weights[inter_edge_index[0]];
-              const float w1 = split_lerp_weights[inter_edge_index[1]];
+              const float w0 = split_lerp_weights[pic_split_edge_index[0]];
+              const float w1 = split_lerp_weights[pic_split_edge_index[1]];
 
               const float3 I0 = bke::attribute_math::mix2(w0, V0, V1);
               const float3 I1 = bke::attribute_math::mix2(w1, V2, V3);
@@ -898,22 +956,26 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
             // TODO: Vote shift
             const bool do_shift_start = start_shift_vote > 0;
 
-            /* Form and iterate intersection pairs. Pairs store index to the polygon intersection
-             * set (not index to the edge itself), this is done to enable separate information
-             * being stored for intersected edges in the polygon.
+            /* Create edges formed between pairs of intersected edges within the polygon.
              */
-            Array<int2, 12> intersect_pairs(intersected.size() / 2);
+            /* Track index for pairs of intersected edges within the polygon (polygon relative). */
+            Array<int2, 12> intersect_pairs(pic_corner_index.size() / 2);
+            /* Track index for edges formed from the intersected pairs (relative to final mesh). */
             Array<int, 12> intersect_edges(intersect_pairs.size());
-            const int start_intersect = intersected.size() - 2 + do_shift_start;
-            intersect_pairs[0] = {start_intersect, (start_intersect + 1) % intersected.size()};
+
+            /* Initial case (first pair). */
+            const int start_intersect = pic_corner_index.size() - 2 + do_shift_start;
+            intersect_pairs[0] = {start_intersect,
+                                  (start_intersect + 1) % pic_corner_index.size()};
             intersect_edges[0] = add_intersection_edge(intersect_pairs[0]);
+            /* Remaining pairs. */
             for (const int64_t pair_index : IndexRange(1, intersect_pairs.size() - 1)) {
               const int index = (pair_index - 1) * 2 + do_shift_start;
               intersect_pairs[pair_index] = {index, index + 1};
               intersect_edges[pair_index] = add_intersection_edge(intersect_pairs[pair_index]);
             }
             if (kept_count == 0) {
-              /* Only generate intersected edges */
+              /* Only generate the intersected edges (no polygon on either side will be kept) */
               continue;
             }
 
@@ -921,7 +983,7 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
 
             Corner loop construction is repeated twice: generating polygons once for each side of
             the plane. The side for either iteration is unknown until checked inside each call,
-            this is due to iteration being determined by the source polygon corner order and is
+            this is due to iteration being determined by the source polygon corner order which is
             independent of the plane.
 
             One or multiple polygons can be generated on each side. Starting point for each
@@ -982,7 +1044,7 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
             */
 
             auto fn_generate_polygons = [&]() {
-              const int64_t kept_vertex_index = increment(intersected[intersect_pairs[0].y]);
+              const int64_t kept_vertex_index = increment(pic_corner_index[intersect_pairs[0].y]);
               const bool outside = fn_is_outside(dist_buffer[corners[kept_vertex_index]]);
               if ((outside && args.clear_outer) || (!outside && args.clear_inner)) {
                 return; /* Cleared side. */
@@ -994,7 +1056,7 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
               while (next_intersect < intersect_pairs.size()) {
                 const int2 start_pair = intersect_pairs[next_intersect];
 
-                int64_t index = increment(intersected[start_pair.y]);
+                int64_t index = increment(pic_corner_index[start_pair.y]);
 
                 Vector<int, 12> poly_ecorners;
                 Vector<int2, 12> poly_src_corner;
@@ -1015,11 +1077,11 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
                  * Note that vertex corners are 'shifted back' by one, as corner edge 0 begins in
                  * vertex corner 0.
                  */
-                const int first_corner = intersected[start_pair.x];
+                const int first_corner = pic_corner_index[start_pair.x];
                 {
                   const int i0 = first_corner;
                   const int i1 = increment(first_corner);
-                  const int i2 = intersected[start_pair.y];
+                  const int i2 = pic_corner_index[start_pair.y];
                   const int i3 = index;
                   poly_src_corner.append(int2{int(corner_range[i0]), 0});
                   poly_src_corner.append(int2{int(corner_range[i0]), int(corner_range[i1])});
@@ -1033,21 +1095,21 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
                   poly_src_weight.append(w1);
                 }
 
-                int2 ipair = intersect_pairs[++next_intersect % intersect_pairs.size()];
+                int2 pic_pair = intersect_pairs[++next_intersect % intersect_pairs.size()];
                 for (; index != first_corner; index = increment(index)) {
-                  if (index == intersected[ipair.x]) {
+                  if (index == pic_corner_index[pic_pair.x]) {
                     /* Traversed to next bisected edge */
-                    poly_ecorners.append(fetch_split_edge_side(ipair.x, outside));
+                    poly_ecorners.append(fetch_split_edge_side(pic_pair.x, outside));
                     poly_ecorners.append(intersect_edges[next_intersect]);
-                    poly_ecorners.append(fetch_split_edge_side(ipair.y, outside));
-                    index = intersected[ipair.y];
+                    poly_ecorners.append(fetch_split_edge_side(pic_pair.y, outside));
+                    index = pic_corner_index[pic_pair.y];
 
                     /* Vertex corners (references src corner vertices)
                      * Note that vertex corners are 'shifted back' by one, as corner edge 0 begins
                      * in vertex corner 0.
                      */
                     {
-                      const int i0 = intersected[ipair.x];
+                      const int i0 = pic_corner_index[pic_pair.x];
                       const int i1 = increment(i0);
                       const int i2 = index;
                       const int i3 = increment(i2);
@@ -1064,7 +1126,7 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
                       poly_src_weight.append(w0);
                       poly_src_weight.append(w1);
                     }
-                    ipair = intersect_pairs[++next_intersect % intersect_pairs.size()];
+                    pic_pair = intersect_pairs[++next_intersect % intersect_pairs.size()];
                   }
                   else {
                     /* Asserts edge is a 'kept' edge. */
@@ -1073,7 +1135,7 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
                     if (mapped_edge == -1) {
                       /* Not possible unless start shift is wrong */
                       poly_ecorners.clear();
-                      next_intersect = intersected.size();
+                      next_intersect = pic_corner_index.size();
                       break;
                     }
                     poly_ecorners.append(mapped_edge);
@@ -1116,8 +1178,8 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
 
   int poly_counter = 0;
   for (const int64_t index_poly : new_split_polygons.index_range()) {
-    for (const int64_t i : new_inter_edge_offsets[index_poly].index_range()) {
-      const int edge_offset = new_inter_edge_offsets[index_poly][i];
+    for (const int64_t i : new_inter_edge_indices[index_poly].index_range()) {
+      const int edge_offset = new_inter_edge_indices[index_poly][i];
       new_inter_edge_verts_dense[edge_offset] = new_inter_edge_verts[index_poly][i];
       new_inter_edge_map_dense[edge_offset] = new_inter_edge_map[index_poly][i];
     }
