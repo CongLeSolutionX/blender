@@ -9,6 +9,106 @@
 
 CCL_NAMESPACE_BEGIN
 
+/* Find the angle phi such that the area of the projection of a spherical ellipse onto a
+ * cylinder from angle 0 to phi is u*S, where S is the total area of the projection (and
+ * also the solid angle of the spherical ellipse).
+ * This uses Newton's method and is VERY slow since each iteration requires computing a
+ * spherical integral.
+ *
+ * TODO: Replace with LUT-based inversion.
+ *
+ * Algorithm is based on:
+ * https://github.com/iguillens/mitsuba-disk-sampling/blob/master/src/shapes/disk/SphericalEllipseSampler.hpp
+ */
+ccl_device_inline float booth_inversion_newton(const float u,
+                                               const float fac,
+                                               const float S,
+                                               const float c,
+                                               const float n,
+                                               const float m,
+                                               const float k,
+                                               const float asqrtb,
+                                               const float bsqrta)
+{
+  const float phi_max = u * M_PI_2_F;
+  float phi = clamp(atanf(tanf(phi_max) / fac), 0.0f, phi_max);
+  float S_u = u * S;
+  for (int i = 0; i < 100; i++) {
+    const float sinphi2 = sqr(sinf(phi));
+    const float cosphi2 = 1.0f - sinphi2;
+
+    const float t = clamp(atanf(tanf(phi) * fac), 0.0f, M_PI_2_F);
+    const float sint2 = sqr(sinf(t));
+    const float omega = phi - c * std::ellint_3f(k, n, t);
+    const float diff = omega - S_u;
+    if (fabsf(diff) < 1e-5f) {
+      break;
+    }
+    const float deriv = 1.0f - (c * asqrtb * bsqrta) / ((1 - n * sint2) * sqrtf(1 - m * sint2) * (bsqrta * cosphi2 + asqrtb * sinphi2));
+    if (fabsf(deriv) < 1e-5f) {
+      break;
+    }
+    phi = clamp(phi - diff/deriv, 0.0f, phi_max);
+  }
+  return phi;
+}
+
+/* Importance-sample a spherical ellipse w.r.t. solid angle.
+ * Inputs are at and bt, the semi-major/minor axis of the tangential(!) ellipse.
+ * The output is the sampling pdf. Additionally, if P is given, a random point is sampled and *P is
+ * set to its position in local coordinates (where x is major axis and y is minor).
+ *
+ * Based on "Area-preserving parameterizations for spherical ellipses" by Ibón Guillén et al.
+ */
+ccl_device_inline float spherical_ellipse_sample(const float at, const float bt, ccl_private float3 *P, const float2 rand)
+{
+  const float at2 = sqr(at), bt2 = sqr(bt);
+  const float a2 = at2 / (1.0f + at2), b2 = bt2 / (1.0f + bt2);
+  const float a2m = 1.0f - a2, b2m = 1.0f - b2;
+  const float a = sqrtf(a2), b = sqrtf(b2);
+
+  const float c = (b * a2m) / (a * sqrtf(b2m));
+  const float m = (a2 - b2) / b2m;
+  const float n = m / a2;
+  const float k = sqrtf(m);
+
+  const float S = M_PI_2_F - c * std::comp_ellint_3f(k, n);
+
+  if (P != nullptr) {
+    const float asqrtb = a * sqrtf(b2m), bsqrta = b * sqrtf(a2m);
+    const float fac = at / bt;
+
+    float u = 4.0f * rand.x;
+    if (rand.x >= 0.75f) {
+      u = 4.0f - u;
+    } else if (rand.x >= 0.5f) {
+      u = u - 2.0f;
+    } else if (rand.x >= 0.25f) {
+      u = 2.0f - u;
+    }
+
+    float phi_u = booth_inversion_newton(u, fac, S, c, n, m, k, asqrtb, bsqrta);
+
+    if (rand.x >= 0.75f) {
+      phi_u = M_2PI_F - phi_u;
+    } else if (rand.x >= 0.5f) {
+      phi_u = M_PI_F + phi_u;
+    } else if (rand.x >= 0.25f) {
+      phi_u = M_PI_F - phi_u;
+    }
+
+    float sinphi, cosphi;
+    fast_sincosf(phi_u, &sinphi, &cosphi);
+    const float r_u = a*b / sqrtf(a2 * sqr(sinphi) + b2 * sqr(cosphi));
+    const float h_u = cos_from_sin(r_u);
+    const float h_vu = 1.0f - (1.0f - h_u) * rand.y;
+    const float r_vu = sin_from_cos(h_vu);
+
+    *P = make_float3(r_vu * cosphi, r_vu * sinphi, h_vu);
+  }
+  return 0.25f / S;
+}
+
 /* Importance-sample a planar ellipse light.
  * P is the shading point, C is the ellipse center, axis_u/v are the normalized axes of the ellipse,
  * len_u/v are its radii.
@@ -17,11 +117,6 @@ CCL_NAMESPACE_BEGIN
  *
  * Based on "Computing a front-facing ellipse that subtends the same solid angle as an arbitrarily
  * oriented ellipse" by Eric Heitz (https://hal.science/hal-01561624/document).
- *
- * TODO: Currently, this function projects the planar ellipse to be tangent to the unit sphere around P
- * and then performs area-based sampling on the resulting tangent ellipse.
- * Instead, it should apply the technique from "Area-Preserving Parameterizations for Spherical Ellipses"
- * to sample w.r.t. solid angle instead.
  */
 ccl_device_inline float area_light_ellipse_sample(const float3 P,
                                                   float3 C,
@@ -59,7 +154,6 @@ ccl_device_inline float area_light_ellipse_sample(const float3 P,
   /* Compute ellipse radii. */
   const float at = sqrtf(-Q[8]/Q[4]);
   const float bt = sqrtf(-Q[8]/Q[0]);
-  const float area_pdf = M_1_PI_F / (at * bt);
 
   /* Extract tangent ellipse basis. */
   const float3 vx = make_float3(V[3], V[4], V[5]);
@@ -70,20 +164,13 @@ ccl_device_inline float area_light_ellipse_sample(const float3 P,
   }
 
   /* At this point, we know that the input planar ellipse is equivalent to a tangent ellipse with
-   * center vz, major/minor axis vx/vy and major/minor radius at/bt.
-   *
-   * TODO: Sample spherical ellipse here! */
+   * center vz, major/minor axis vx/vy and major/minor radius at/bt. */
 
-  /* To compute the pdf, we need to know the distance and angle w.r.t. the tangent ellipse.
-   * When we're sampling, we start at the tangent ellipse, so compute it straight away.
-   * When we're just evaluating the pdf, we need to project light_P onto the tangent ellipse. */
-  float t;
-  float3 D;
+  float3 p;
+  float pdf = spherical_ellipse_sample(at, bt, sample_coord? &p : nullptr, rand);
   if (sample_coord) {
-    /* Sample tangent ellipse. */
-    float3 p = ellipse_sample(vx * at, vy * bt, rand) + vz;
-    /* Compute pdf inputs. */
-    D = normalize_len(p, &t);
+    /* Transform to local coordinates. */
+    p = p.x*vx + p.y*vy + p.z*vz;
 
     /* Project to planar ellipse. */
     p *= c.z / p.z;
@@ -91,19 +178,8 @@ ccl_device_inline float area_light_ellipse_sample(const float3 P,
     /* Transform to world coordinates. */
     *light_P = P + p.x*X + p.y*Y + p.z*Z;
   }
-  else {
-    float3 O = *light_P - P;
-    /* Transform to local coordinates. */
-    float3 p = make_float3(dot(O, X), dot(O, Y), dot(O, Z));
 
-    /* Project to tangent ellipse. */
-    p /= dot(p, vz);
-
-    /* Compute pdf inputs. */
-    D = normalize_len(p, &t);
-  }
-
-  return area_pdf * light_pdf_area_to_solid_angle(vz, D, t);
+  return pdf;
 }
 
 /* Importance sampling.
