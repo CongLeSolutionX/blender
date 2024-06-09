@@ -5,8 +5,106 @@
 #pragma once
 
 #include "kernel/light/common.h"
+#include "util/math_matrix.h"
 
 CCL_NAMESPACE_BEGIN
+
+/* Importance-sample a planar ellipse light.
+ * P is the shading point, C is the ellipse center, axis_u/v are the normalized axes of the ellipse,
+ * len_u/v are its radii.
+ * If sample_coord == True, the function picks a random point using rand and sets *light_P.
+ * If sample_coord == False, the function computes the sampling PDF for the position given in *light_P.
+ *
+ * Based on "Computing a front-facing ellipse that subtends the same solid angle as an arbitrarily
+ * oriented ellipse" by Eric Heitz (https://hal.science/hal-01561624/document).
+ *
+ * TODO: Currently, this function projects the planar ellipse to be tangent to the unit sphere around P
+ * and then performs area-based sampling on the resulting tangent ellipse.
+ * Instead, it should apply the technique from "Area-Preserving Parameterizations for Spherical Ellipses"
+ * to sample w.r.t. solid angle instead.
+ */
+ccl_device_inline float area_light_ellipse_sample(const float3 P,
+                                                  float3 C,
+                                                  ccl_private float3 *light_P,
+                                                  const float3 axis_u,
+                                                  const float len_u,
+                                                  const float3 axis_v,
+                                                  const float len_v,
+                                                  const float2 rand,
+                                                  bool sample_coord)
+{
+  /* Compute local coordinate basis on the planar ellipse. */
+  const float3 X = axis_u;
+  const float3 Y = axis_v;
+  float3 Z = cross(X, Y);
+
+  /* Transform planar ellipse center to local coordinates. */
+  C -= P;
+  float3 c = make_float3(dot(C, X), dot(C, Y), dot(C, Z));
+  /* Flip z if the eliipse points away. */
+  if (c.z < 0.0f) {
+    c.z = -c.z;
+    Z = -Z;
+  }
+
+  /* Build the elliptic cone matrix. */
+  const float3 c2 = sqr(c);
+  const float2 len2 = make_float2(sqr(len_u), sqr(len_v));
+  float Q[9] = {c2.z/len2.x, 0.0f, 0.0f, 0.0f, c2.z/len2.y, 0.0f, -c.z*c.x/len2.x, -c.z*c.y/len2.y, c2.x/len2.x + c2.y/len2.y - 1.0f};
+
+  /* Perform diagonalization. */
+  float V[9];
+  math_matrix_jacobi_eigendecomposition(Q, V, 3, 1);
+
+  /* Compute ellipse radii. */
+  const float at = sqrtf(-Q[8]/Q[4]);
+  const float bt = sqrtf(-Q[8]/Q[0]);
+  const float area_pdf = M_1_PI_F / (at * bt);
+
+  /* Extract tangent ellipse basis. */
+  const float3 vx = make_float3(V[3], V[4], V[5]);
+  const float3 vy = make_float3(V[0], V[1], V[2]);
+  float3 vz = make_float3(V[6], V[7], V[8]);
+  if (vz.z < 0.0f) {
+    vz = -vz;
+  }
+
+  /* At this point, we know that the input planar ellipse is equivalent to a tangent ellipse with
+   * center vz, major/minor axis vx/vy and major/minor radius at/bt.
+   *
+   * TODO: Sample spherical ellipse here! */
+
+  /* To compute the pdf, we need to know the distance and angle w.r.t. the tangent ellipse.
+   * When we're sampling, we start at the tangent ellipse, so compute it straight away.
+   * When we're just evaluating the pdf, we need to project light_P onto the tangent ellipse. */
+  float t;
+  float3 D;
+  if (sample_coord) {
+    /* Sample tangent ellipse. */
+    float3 p = ellipse_sample(vx * at, vy * bt, rand) + vz;
+    /* Compute pdf inputs. */
+    D = normalize_len(p, &t);
+
+    /* Project to planar ellipse. */
+    p *= c.z / p.z;
+
+    /* Transform to world coordinates. */
+    *light_P = P + p.x*X + p.y*Y + p.z*Z;
+  }
+  else {
+    float3 O = *light_P - P;
+    /* Transform to local coordinates. */
+    float3 p = make_float3(dot(O, X), dot(O, Y), dot(O, Z));
+
+    /* Project to tangent ellipse. */
+    p /= dot(p, vz);
+
+    /* Compute pdf inputs. */
+    D = normalize_len(p, &t);
+  }
+
+  return area_pdf * light_pdf_area_to_solid_angle(vz, D, t);
+}
 
 /* Importance sampling.
  *
@@ -292,10 +390,7 @@ ccl_device_inline bool area_light_eval(const ccl_global KernelLight *klight,
         ls->pdf = 1.0f;
       }
       else {
-        if (sample_coord) {
-          light_P_new += ellipse_sample(axis_u * len_u * 0.5f, axis_v * len_v * 0.5f, rand);
-        }
-        ls->pdf = 4.0f * M_1_PI_F / (len_u * len_v);
+        ls->pdf = area_light_ellipse_sample(ray_P, light_P_new, sample_coord? &light_P_new : &ls->P, axis_u, 0.5f * len_u, axis_v, 0.5f * len_v, rand, sample_coord);
       }
     }
   }
@@ -314,7 +409,7 @@ ccl_device_inline bool area_light_eval(const ccl_global KernelLight *klight,
         ls->D, Ng, klight->area.tan_half_spread, klight->area.normalize_spread);
   }
 
-  if (in_volume_segment || (!sample_rectangle && klight->area.tan_half_spread > 0)) {
+  if (in_volume_segment) {
     ls->pdf *= light_pdf_area_to_solid_angle(Ng, -ls->D, ls->t);
   }
 

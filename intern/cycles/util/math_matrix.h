@@ -239,7 +239,7 @@ ccl_device_inline void math_trimatrix_vec3_solve(ccl_global float *A,
  * so that A = V^T*D*V. Therefore, the diagonal elements of D are the (sorted) eigenvalues of A.
  */
 ccl_device void math_matrix_jacobi_eigendecomposition(ccl_private float *A,
-                                                      ccl_global float *V,
+                                                      ccl_private float *V,
                                                       int n,
                                                       int v_stride)
 {
@@ -431,7 +431,7 @@ ccl_device_inline void math_matrix_hsum(float *A, int n, const float4 *ccl_restr
 {
   for (int row = 0; row < n; row++) {
     for (int col = 0; col <= row; col++) {
-      MAT(A, n, row, col) = reduce_add(MAT(B, n, row, col))[0];
+      MAT(A, n, row, col) = reduce_add(MAT(B, n, row, col));
     }
   }
 }
