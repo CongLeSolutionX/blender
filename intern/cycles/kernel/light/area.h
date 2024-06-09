@@ -53,6 +53,47 @@ ccl_device_inline float booth_inversion_newton(const float u,
   return phi;
 }
 
+/* Similar to the classic concentric disk mapping, but maps back to the unit square.
+ * See 3.3 in "Area-preserving parameterizations for spherical ellipses" for details. */
+ccl_device_inline float2 spherical_ellipse_mapping(const float2 rand, ccl_private int *quadrant)
+{
+  float a = 2.0f * rand.x - 1.0f;
+  float b = 2.0f * rand.y - 1.0f;
+
+  float r = 0.0f, u = 0.0f;
+  if (a == 0.0f && b == 0.0f) {
+    /* Center point. */
+  }
+  else if (fabsf(a) > fabsf(b)) {
+    r = a;
+    u = 0.5f * b/a;
+    if (a < 0.0f) {
+      u += 2.0f;
+    }
+    else if (b < 0.0f) {
+      u += 4.0f;
+    }
+  }
+  else {
+    r = b;
+    u = -0.5f * a/b + ((b < 0.0f)? 3.0f : 1.0f);
+  }
+
+  int q = (int) u;
+  if (q == 3) {
+    u = 4.0f - u;
+  }
+  else if (q == 2) {
+    u = u - 2.0f;
+  }
+  else if (q == 1) {
+    u = 2.0f - u;
+  }
+
+  *quadrant = q;
+  return make_float2(u, sqr(r));
+}
+
 /* Importance-sample a spherical ellipse w.r.t. solid angle.
  * Inputs are at and bt, the semi-major/minor axis of the tangential(!) ellipse.
  * The output is the sampling pdf. Additionally, if P is given, a random point is sampled and *P is
@@ -60,8 +101,9 @@ ccl_device_inline float booth_inversion_newton(const float u,
  *
  * Based on "Area-preserving parameterizations for spherical ellipses" by Ibón Guillén et al.
  */
-ccl_device_inline float spherical_ellipse_sample(const float at, const float bt, ccl_private float3 *P, const float2 rand)
+ccl_device_inline float spherical_ellipse_sample(const float at, const float bt, ccl_private float3 *P, float2 rand)
 {
+  /* Compute constants. */
   const float at2 = sqr(at), bt2 = sqr(bt);
   const float a2 = at2 / (1.0f + at2), b2 = bt2 / (1.0f + bt2);
   const float a2m = 1.0f - a2, b2m = 1.0f - b2;
@@ -78,32 +120,33 @@ ccl_device_inline float spherical_ellipse_sample(const float at, const float bt,
     const float asqrtb = a * sqrtf(b2m), bsqrta = b * sqrtf(a2m);
     const float fac = at / bt;
 
-    float u = 4.0f * rand.x;
-    if (rand.x >= 0.75f) {
-      u = 4.0f - u;
-    } else if (rand.x >= 0.5f) {
-      u = u - 2.0f;
-    } else if (rand.x >= 0.25f) {
-      u = 2.0f - u;
+    /* Perform low-distortion radial mapping. */
+    int quadrant;
+    float2 uv = spherical_ellipse_mapping(rand, &quadrant);
+
+    /* Sample phi according to solid angle. */
+    float phi = booth_inversion_newton(uv.x, fac, S, c, n, m, k, asqrtb, bsqrta);
+
+    /* Unwrap quadrant. */
+    if (quadrant == 3) {
+      phi = M_2PI_F - phi;
+    }
+    else if (quadrant == 2) {
+      phi = M_PI_F + phi;
+    }
+    else if (quadrant == 1) {
+      phi = M_PI_F - phi;
     }
 
-    float phi_u = booth_inversion_newton(u, fac, S, c, n, m, k, asqrtb, bsqrta);
-
-    if (rand.x >= 0.75f) {
-      phi_u = M_2PI_F - phi_u;
-    } else if (rand.x >= 0.5f) {
-      phi_u = M_PI_F + phi_u;
-    } else if (rand.x >= 0.25f) {
-      phi_u = M_PI_F - phi_u;
-    }
-
+    /* Sample along boundary at phi. */
     float sinphi, cosphi;
-    fast_sincosf(phi_u, &sinphi, &cosphi);
+    fast_sincosf(phi, &sinphi, &cosphi);
     const float r_u = a*b / sqrtf(a2 * sqr(sinphi) + b2 * sqr(cosphi));
     const float h_u = cos_from_sin(r_u);
-    const float h_vu = 1.0f - (1.0f - h_u) * rand.y;
+    const float h_vu = 1.0f - (1.0f - h_u) * uv.y;
     const float r_vu = sin_from_cos(h_vu);
 
+    /* Compute sample point. */
     *P = make_float3(r_vu * cosphi, r_vu * sinphi, h_vu);
   }
   return 0.25f / S;
