@@ -5,7 +5,7 @@
 #pragma once
 
 #include "kernel/light/common.h"
-#include "util/math_matrix.h"
+#include "util/math_eigensolver.h"
 
 CCL_NAMESPACE_BEGIN
 
@@ -188,20 +188,14 @@ ccl_device_inline float area_light_ellipse_sample(const float3 P,
   /* Build the elliptic cone matrix. */
   const float3 c2 = sqr(c);
   const float2 len2 = make_float2(sqr(len_u), sqr(len_v));
-  float Q[9] = {c2.z/len2.x, 0.0f, 0.0f, 0.0f, c2.z/len2.y, 0.0f, -c.z*c.x/len2.x, -c.z*c.y/len2.y, c2.x/len2.x + c2.y/len2.y - 1.0f};
 
-  /* Perform diagonalization. */
-  float V[9];
-  math_matrix_jacobi_eigendecomposition(Q, V, 3, 1);
+  /* Perform eigendecomposition. */
+  float3 vx, vy, vz;
+  float3 eigval = eigendecomposition_3x3_symmetric(c2.z/len2.x, 0.0f, -c.z*c.x/len2.x, c2.z/len2.y, -c.z*c.y/len2.y, c2.x/len2.x + c2.y/len2.y - 1.0f, vz, vx, vy);
 
   /* Compute ellipse radii. */
-  const float at = sqrtf(-Q[8]/Q[4]);
-  const float bt = sqrtf(-Q[8]/Q[0]);
-
-  /* Extract tangent ellipse basis. */
-  float3 vx = make_float3(V[3], V[4], V[5]);
-  float3 vy = make_float3(V[0], V[1], V[2]);
-  float3 vz = make_float3(V[6], V[7], V[8]);
+  const float at = sqrtf(-eigval.x/eigval.y);
+  const float bt = sqrtf(-eigval.x/eigval.z);
 
   /* Since the theory behind the computation here solves for the intersection of unit sphere and
    * an elliptical cone, there are two valid solutions, on either side of the unit sphere.

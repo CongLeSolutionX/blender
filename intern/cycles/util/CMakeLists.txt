@@ -63,6 +63,7 @@ set(SRC_HEADERS
   math.h
   math_cdf.h
   math_fast.h
+  math_eigensolver.h
   math_intersect.h
   math_float2.h
   math_float3.h
