@@ -199,11 +199,27 @@ ccl_device_inline float area_light_ellipse_sample(const float3 P,
   const float bt = sqrtf(-Q[8]/Q[0]);
 
   /* Extract tangent ellipse basis. */
-  const float3 vx = make_float3(V[3], V[4], V[5]);
-  const float3 vy = make_float3(V[0], V[1], V[2]);
+  float3 vx = make_float3(V[3], V[4], V[5]);
+  float3 vy = make_float3(V[0], V[1], V[2]);
   float3 vz = make_float3(V[6], V[7], V[8]);
+
+  /* Since the theory behind the computation here solves for the intersection of unit sphere and
+   * an elliptical cone, there are two valid solutions, on either side of the unit sphere.
+   * We're interested in the one that's pointing towards the planar ellipse. */
   if (vz.z < 0.0f) {
     vz = -vz;
+  }
+
+  /* Since ellipses are symmetric, the orientation of the axes is indeterminate and depends on the
+   * eigensolver. However, we need it to be consistent, since changing within different samples of
+   * a pixel hurts the low-discrepancy properties and causes visible noise artifacts.
+   * Therefore, we pick some arbitrary convention (here, the sign of one component) and flip based
+   * on that to make the axes consistent. */
+  if (vx.x < 0.0f) {
+    vx = -vx;
+  }
+  if (vy.y < 0.0f) {
+    vy = -vy;
   }
 
   /* At this point, we know that the input planar ellipse is equivalent to a tangent ellipse with
