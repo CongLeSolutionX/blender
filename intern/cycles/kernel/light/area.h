@@ -12,45 +12,44 @@ CCL_NAMESPACE_BEGIN
 /* Find the angle phi such that the area of the projection of a spherical ellipse onto a
  * cylinder from angle 0 to phi is u*S, where S is the total area of the projection (and
  * also the solid angle of the spherical ellipse).
- * This uses Newton's method and is VERY slow since each iteration requires computing a
- * spherical integral.
  *
- * TODO: Replace with LUT-based inversion.
- *
- * Algorithm is based on:
+ * The idea behind this is based on:
  * https://github.com/iguillens/mitsuba-disk-sampling/blob/master/src/shapes/disk/SphericalEllipseSampler.hpp
+ * In practice, we basically tabulate the area w.r.t. angle for different ratios of beta/alpha
+ * and perform a CDF-style lookup to find the position of the desired fraction in the table.
+ *
+ * Note that unlike the paper and reference implementation, we ignore that the approximation
+ * technically consists of spherical triangles, so instead of sampling the triangle wedge and
+ * rejecting samples that fall outside of the ellipse, we directly sample the ellipse.
+ * This results in a tiny unevenness of the sample distribution, which is negligible in practice.
+ * 
+ * Additionally, we store the data with swapped axes, so that we can perform 1D interpolation
+ * across the x axis for the beta/alpha parameter.
  */
-ccl_device_inline float booth_inversion_newton(const float u,
-                                               const float fac,
-                                               const float S,
-                                               const float c,
-                                               const float n,
-                                               const float m,
-                                               const float k,
-                                               const float asqrtb,
-                                               const float bsqrta)
-{
-  const float phi_max = u * M_PI_2_F;
-  float phi = clamp(atanf(tanf(phi_max) / fac), 0.0f, phi_max);
-  float S_u = u * S;
-  for (int i = 0; i < 100; i++) {
-    const float sinphi2 = sqr(sinf(phi));
-    const float cosphi2 = 1.0f - sinphi2;
 
-    const float t = clamp(atanf(tanf(phi) * fac), 0.0f, M_PI_2_F);
-    const float sint2 = sqr(sinf(t));
-    const float omega = phi - c * std::ellint_3f(k, n, t);
-    const float diff = omega - S_u;
-    if (fabsf(diff) < 1e-5f) {
-      break;
+ccl_device_inline float booth_inversion_table(KernelGlobals kg, const float alpha, const float beta, const float u)
+{
+  const float y = beta / alpha;
+
+  int offset = kernel_data.tables.ellipse_CDF;
+  int index = 0, count = 256;
+  while (count > 0) {
+    int step = count >> 1;
+    int middle = index + step;
+
+    if (lookup_table_read(kg, y, offset + 256 * middle, 256) <= u) {
+      index = middle + 1;
+      count -= step + 1;
     }
-    const float deriv = 1.0f - (c * asqrtb * bsqrta) / ((1 - n * sint2) * sqrtf(1 - m * sint2) * (bsqrta * cosphi2 + asqrtb * sinphi2));
-    if (fabsf(deriv) < 1e-5f) {
-      break;
+    else {
+      count = step;
     }
-    phi = clamp(phi - diff/deriv, 0.0f, phi_max);
   }
-  return phi;
+
+  const float cdf0 = (index == 0)? 0.0f : lookup_table_read(kg, y, offset + 256 * (index - 1), 256);
+  const float cdf1 = lookup_table_read(kg, y, offset + 256 * index, 256);
+  const float du = inverse_lerp(cdf0, cdf1, u);
+  return ((index + du) * M_PI_2_F) / 256.0f;
 }
 
 /* Similar to the classic concentric disk mapping, but maps back to the unit square.
@@ -101,7 +100,7 @@ ccl_device_inline float spherical_ellipse_S(KernelGlobals kg, const float alpha,
 
   const float fit = 0.988812f * (sqr(x)*y) * (1.64709f + 0.328265f * cosf(alpha));
   const float residual = lookup_table_read_2D(
-            kg, sqr(x), sqr(y), kernel_data.tables.ellipse_S, 32, 32);
+    kg, sqr(x), sqr(y), kernel_data.tables.ellipse_S, 32, 32);
   return fit * residual;
 }
 
@@ -117,26 +116,18 @@ ccl_device_inline float spherical_ellipse_sample(KernelGlobals kg, const float a
   /* Compute constants. */
   const float at2 = sqr(at), bt2 = sqr(bt);
   const float a2 = at2 / (1.0f + at2), b2 = bt2 / (1.0f + bt2);
-  const float a2m = 1.0f - a2, b2m = 1.0f - b2;
   const float a = sqrtf(a2), b = sqrtf(b2);
 
-  const float c = (b * a2m) / (a * sqrtf(b2m));
-  const float m = (a2 - b2) / b2m;
-  const float n = m / a2;
-  const float k = sqrtf(m);
-
-  const float S = spherical_ellipse_S(kg, asinf(a), asinf(b));
+  const float alpha = fast_atanf(at), beta = fast_atanf(bt);
+  const float S = spherical_ellipse_S(kg, alpha, beta);
 
   if (P != nullptr) {
-    const float asqrtb = a * sqrtf(b2m), bsqrta = b * sqrtf(a2m);
-    const float fac = at / bt;
-
     /* Perform low-distortion radial mapping. */
     int quadrant;
     float2 uv = spherical_ellipse_mapping(rand, &quadrant);
 
     /* Sample phi according to solid angle. */
-    float phi = booth_inversion_newton(uv.x, fac, S, c, n, m, k, asqrtb, bsqrta);
+    float phi = booth_inversion_table(kg, alpha, beta, uv.x);
 
     /* Unwrap quadrant. */
     if (quadrant == 3) {
@@ -153,9 +144,12 @@ ccl_device_inline float spherical_ellipse_sample(KernelGlobals kg, const float a
     float sinphi, cosphi;
     fast_sincosf(phi, &sinphi, &cosphi);
     const float r_u = a*b / sqrtf(a2 * sqr(sinphi) + b2 * sqr(cosphi));
-    const float h_u = cos_from_sin(r_u);
+    const float h_u = sin_from_cos(r_u);
+    /* Because of the piecewise approximation through the CDF, samples can end up slightly
+     * outside of the ellipse. The paper suggests rejecting the sample and trying again, but
+     * in practice just clamping to the boundary is fine. */
     const float h_vu = 1.0f - (1.0f - h_u) * uv.y;
-    const float r_vu = sin_from_cos(h_vu);
+    const float r_vu = cos_from_sin(h_vu);
 
     /* Compute sample point. */
     *P = make_float3(r_vu * cosphi, r_vu * sinphi, h_vu);

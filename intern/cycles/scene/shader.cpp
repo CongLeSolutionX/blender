@@ -629,6 +629,7 @@ void ShaderManager::device_update_common(Device * /*device*/,
   ktables->ggx_gen_schlick_ior_s = ensure_bsdf_table(dscene, scene, table_ggx_gen_schlick_ior_s);
   ktables->ggx_gen_schlick_s = ensure_bsdf_table(dscene, scene, table_ggx_gen_schlick_s);
   ktables->ellipse_S = ensure_bsdf_table(dscene, scene, table_ellipse_S);
+  ktables->ellipse_CDF = ensure_bsdf_table(dscene, scene, table_ellipse_CDF);
 
   /* integrator */
   KernelIntegrator *kintegrator = &dscene->data.integrator;
