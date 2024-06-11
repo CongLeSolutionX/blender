@@ -1452,7 +1452,7 @@ typedef struct KernelTables {
   int sheen_ltc;
   int ggx_gen_schlick_ior_s;
   int ggx_gen_schlick_s;
-  int pad1;
+  int ellipse_S;
   int pad2;
 } KernelTables;
 static_assert_align(KernelTables, 16);

@@ -165,7 +165,7 @@ ccl_device_inline bool light_sample(KernelGlobals kg,
   }
   else {
     /* area light */
-    if (!area_light_sample<in_volume_segment>(klight, rand, P, ls)) {
+    if (!area_light_sample<in_volume_segment>(kg, klight, rand, P, ls)) {
       return false;
     }
   }
@@ -483,7 +483,7 @@ ccl_device bool light_sample_from_intersection(KernelGlobals kg,
     }
   }
   else if (type == LIGHT_AREA) {
-    if (!area_light_sample_from_intersection(klight, isect, ray_P, ray_D, ls)) {
+    if (!area_light_sample_from_intersection(kg, klight, isect, ray_P, ray_D, ls)) {
       return false;
     }
   }

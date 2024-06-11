@@ -94,6 +94,17 @@ ccl_device_inline float2 spherical_ellipse_mapping(const float2 rand, ccl_privat
   return make_float2(u, sqr(r));
 }
 
+ccl_device_inline float spherical_ellipse_S(KernelGlobals kg, const float alpha, const float beta)
+{
+  float x = alpha * M_2_PI_F;
+  float y = beta / alpha;
+
+  const float fit = 0.988812f * (sqr(x)*y) * (1.64709f + 0.328265f * cosf(alpha));
+  const float residual = lookup_table_read_2D(
+            kg, sqr(x), sqr(y), kernel_data.tables.ellipse_S, 32, 32);
+  return fit * residual;
+}
+
 /* Importance-sample a spherical ellipse w.r.t. solid angle.
  * Inputs are at and bt, the semi-major/minor axis of the tangential(!) ellipse.
  * The output is the sampling pdf. Additionally, if P is given, a random point is sampled and *P is
@@ -101,7 +112,7 @@ ccl_device_inline float2 spherical_ellipse_mapping(const float2 rand, ccl_privat
  *
  * Based on "Area-preserving parameterizations for spherical ellipses" by Ibón Guillén et al.
  */
-ccl_device_inline float spherical_ellipse_sample(const float at, const float bt, ccl_private float3 *P, float2 rand)
+ccl_device_inline float spherical_ellipse_sample(KernelGlobals kg, const float at, const float bt, ccl_private float3 *P, float2 rand)
 {
   /* Compute constants. */
   const float at2 = sqr(at), bt2 = sqr(bt);
@@ -114,7 +125,7 @@ ccl_device_inline float spherical_ellipse_sample(const float at, const float bt,
   const float n = m / a2;
   const float k = sqrtf(m);
 
-  const float S = M_PI_2_F - c * std::comp_ellint_3f(k, n);
+  const float S = spherical_ellipse_S(kg, asinf(a), asinf(b));
 
   if (P != nullptr) {
     const float asqrtb = a * sqrtf(b2m), bsqrta = b * sqrtf(a2m);
@@ -161,7 +172,8 @@ ccl_device_inline float spherical_ellipse_sample(const float at, const float bt,
  * Based on "Computing a front-facing ellipse that subtends the same solid angle as an arbitrarily
  * oriented ellipse" by Eric Heitz (https://hal.science/hal-01561624/document).
  */
-ccl_device_inline float area_light_ellipse_sample(const float3 P,
+ccl_device_inline float area_light_ellipse_sample(KernelGlobals kg,
+                                                  const float3 P,
                                                   float3 C,
                                                   ccl_private float3 *light_P,
                                                   const float3 axis_u,
@@ -220,7 +232,7 @@ ccl_device_inline float area_light_ellipse_sample(const float3 P,
    * center vz, major/minor axis vx/vy and major/minor radius at/bt. */
 
   float3 p;
-  float pdf = spherical_ellipse_sample(at, bt, sample_coord? &p : nullptr, rand);
+  float pdf = spherical_ellipse_sample(kg, at, bt, sample_coord? &p : nullptr, rand);
   if (sample_coord) {
     /* Transform to local coordinates. */
     p = p.x*vx + p.y*vy + p.z*vz;
@@ -470,7 +482,8 @@ ccl_device_forceinline bool area_light_is_ellipse(const ccl_global KernelAreaLig
 /* Common API. */
 /* Compute `eval_fac` and `pdf`. Also sample a new position on the light if `sample_coord`. */
 template<bool in_volume_segment>
-ccl_device_inline bool area_light_eval(const ccl_global KernelLight *klight,
+ccl_device_inline bool area_light_eval(KernelGlobals kg,
+                                       const ccl_global KernelLight *klight,
                                        const float3 ray_P,
                                        ccl_private float3 *light_P,
                                        ccl_private LightSample *ccl_restrict ls,
@@ -519,7 +532,7 @@ ccl_device_inline bool area_light_eval(const ccl_global KernelLight *klight,
         ls->pdf = 1.0f;
       }
       else {
-        ls->pdf = area_light_ellipse_sample(ray_P, light_P_new, sample_coord? &light_P_new : &ls->P, axis_u, 0.5f * len_u, axis_v, 0.5f * len_v, rand, sample_coord);
+        ls->pdf = area_light_ellipse_sample(kg, ray_P, light_P_new, sample_coord? &light_P_new : &ls->P, axis_u, 0.5f * len_u, axis_v, 0.5f * len_v, rand, sample_coord);
       }
     }
   }
@@ -546,7 +559,8 @@ ccl_device_inline bool area_light_eval(const ccl_global KernelLight *klight,
 }
 
 template<bool in_volume_segment>
-ccl_device_inline bool area_light_sample(const ccl_global KernelLight *klight,
+ccl_device_inline bool area_light_sample(KernelGlobals kg,
+                                         const ccl_global KernelLight *klight,
                                          const float2 rand,
                                          const float3 P,
                                          ccl_private LightSample *ls)
@@ -560,7 +574,7 @@ ccl_device_inline bool area_light_sample(const ccl_global KernelLight *klight,
     }
   }
 
-  if (!area_light_eval<in_volume_segment>(klight, P, &ls->P, ls, rand, true)) {
+  if (!area_light_eval<in_volume_segment>(kg, klight, P, &ls->P, ls, rand, true)) {
     return false;
   }
 
@@ -595,17 +609,18 @@ ccl_device_inline bool area_light_sample(const ccl_global KernelLight *klight,
   return true;
 }
 
-ccl_device_forceinline void area_light_mnee_sample_update(const ccl_global KernelLight *klight,
+ccl_device_forceinline void area_light_mnee_sample_update(KernelGlobals kg,
+                                                          const ccl_global KernelLight *klight,
                                                           ccl_private LightSample *ls,
                                                           const float3 P)
 {
   if (klight->area.tan_half_spread == 0) {
     /* Update position on the light to keep the direction fixed. */
-    area_light_eval<false>(klight, P, &ls->P, ls, zero_float2(), true);
+    area_light_eval<false>(kg, klight, P, &ls->P, ls, zero_float2(), true);
   }
   else {
     ls->D = normalize_len(ls->P - P, &ls->t);
-    area_light_eval<false>(klight, P, &ls->P, ls, zero_float2(), false);
+    area_light_eval<false>(kg, klight, P, &ls->P, ls, zero_float2(), false);
     /* Convert pdf to be in area measure. */
     ls->pdf /= light_pdf_area_to_solid_angle(ls->Ng, -ls->D, ls->t);
   }
@@ -652,6 +667,7 @@ ccl_device_inline bool area_light_intersect(const ccl_global KernelLight *klight
 }
 
 ccl_device_inline bool area_light_sample_from_intersection(
+    KernelGlobals kg,
     const ccl_global KernelLight *klight,
     ccl_private const Intersection *ccl_restrict isect,
     const float3 ray_P,
@@ -664,7 +680,7 @@ ccl_device_inline bool area_light_sample_from_intersection(
   ls->Ng = klight->area.dir;
 
   float3 light_P = klight->co;
-  return area_light_eval<false>(klight, ray_P, &light_P, ls, zero_float2(), false);
+  return area_light_eval<false>(kg, klight, ray_P, &light_P, ls, zero_float2(), false);
 }
 
 /* Returns the maximal distance between the light center and the boundary. */
