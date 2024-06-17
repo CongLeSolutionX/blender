@@ -190,7 +190,7 @@ ccl_device_inline void osl_eval_nodes(KernelGlobals kg,
   const int shader = sd->shader & SHADER_MASK;
 
 #  ifdef __KERNEL_OPTIX__
-  uint8_t closure_pool[1024];
+  alignas(8) uint8_t closure_pool[1024];
   sd->osl_closure_pool = closure_pool;
 
   unsigned int optix_dc_index = 2 /* NUM_CALLABLE_PROGRAM_GROUPS */ +
@@ -200,7 +200,8 @@ ccl_device_inline void osl_eval_nodes(KernelGlobals kg,
                         /* groupdata_ptr = */ (void *)nullptr,
                         /* userdata_base_ptr = */ (void *)nullptr,
                         /* output_base_ptr = */ (void *)nullptr,
-                        /* shadeindex = */ 0);
+                        /* shadeindex = */ 0,
+                        /* interactive_params_ptr */ (void *)nullptr);
 #  endif
 
 #  if __cplusplus < 201703L
