@@ -37,12 +37,14 @@ struct bContext;
  * the properties and validate them. */
 
 struct PointerRNA {
-  ID *owner_id;
-  StructRNA *type;
-  void *data;
+  ID *owner_id = nullptr;
+  StructRNA *type = nullptr;
+  void *data = nullptr;
+
+  blender::Vector<int, 2> foo = {1, 2, 3, 4, 5, 6};
 };
 
-constexpr PointerRNA PointerRNA_NULL{nullptr, nullptr, nullptr};
+extern const PointerRNA PointerRNA_NULL;
 
 struct PropertyPointerRNA {
   PointerRNA ptr;
@@ -451,6 +453,7 @@ struct CollectionPropertyIterator {
   PointerRNA builtin_parent;
   PropertyRNA *prop;
   union {
+    /* Keep biggest object first in the union, for zero-initialization to work properly. */
     ArrayIterator array;
     ListBaseIterator listbase;
     CountIterator count;
