@@ -870,41 +870,36 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
            */
 
           /* First find a starting corner to iterate from that is not 'in the plane'. */
-          int8_t first_kept = is_kept_vertex[corners[0]];
-          int kept_count = (first_kept & MASK_KEPT);
-          int64_t drop_count = 1;
-          int start_edge_index = int(corners.size() - 1);
-          if (first_kept & MASK_IN_PLANE) {
-            drop_count = -1;
-            for (const int64_t index : corners.index_range().drop_front(1)) {
-              const int8_t next_kept = is_kept_vertex[corners[index]];
-              kept_count += (next_kept & MASK_KEPT);
-              if (!(next_kept & MASK_IN_PLANE)) {
-                first_kept = next_kept;
-                drop_count = index + 1;
-                start_edge_index = index - 1;
-                break;
-              }
+          int8_t first_kept;
+          int64_t drop_count = -1;
+          int kept_count = 0;
+          int start_edge_index;
+          for (const int64_t index : corners.index_range()) {
+            int vc_index = corners[index];
+            const int8_t next_kept = is_kept_vertex[vc_index];
+            kept_count += next_kept & MASK_KEPT;
+            if (!(next_kept & MASK_IN_PLANE)) {
+              first_kept = next_kept;
+              drop_count = index + 1;
+              start_edge_index = index == 0 ? corners.size() - 1 : index - 1;
+              break;
             }
           }
+
           /* Find intersections IFF a valid starting corner was found (otherwise all are in plane)
            */
           if (drop_count != -1) {
-            int8_t is_kept = first_kept;
+            int8_t is_kept = first_kept & MASK_OUTSIDE;
             for (const int64_t index : corners.index_range().drop_front(drop_count)) {
               const int8_t next_kept = is_kept_vertex[corners[index]];
               kept_count += (next_kept & MASK_KEPT);
-              if (is_kept != next_kept) {
-                if (next_kept & MASK_IN_PLANE) {
-                  /* Skip updating 'next' for corners 'in plane'. */
-                  continue;
-                }
+              if (is_kept != (next_kept & MASK_OUTSIDE)) {
                 pic_corner_index.append(index - 1);
-                is_kept = next_kept;
+                is_kept = next_kept & MASK_OUTSIDE;
               }
             }
             /* Last edge case */
-            if (is_kept != first_kept) {
+            if (is_kept != (first_kept & MASK_OUTSIDE)) {
               /* No need to check 'in plane' here as starting corner is guaranteed not to be! */
               pic_corner_index.append(start_edge_index);
             }
@@ -955,6 +950,7 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
              */
             auto append_split_edge_side = [&](const int64_t index,
                                               bool outside,
+                                              bool side_from,
                                               Vector<int, 12> &poly_ecorners,
                                               Vector<int2, 12> &poly_src_corner,
                                               Vector<float, 12> &poly_src_weight) {
@@ -962,15 +958,16 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
               if (intersect_index >= num_inter_only_edges) {
                 /* If IntersectDiscard or IntersectKeep on wrong side, do nothing. */
                 int intersect_keep_index = intersect_index - num_inter_only_edges;
-                if (intersect_keep_index <
-                        edge_type_selections[EdgeIntersectType::IntersectDiscard].size() ||
+                if (intersect_keep_index >
+                        edge_type_selections[EdgeIntersectType::IntersectKept].size() ||
                     intersect_keep_is_outside[intersect_keep_index] != outside)
                 {
                   return;
                 }
                 const int i0 = pic_corner_index[index];
+                int src_corner_index = int(corner_range[side_from ? increment(i0) : i0]);
                 poly_ecorners.append(intersect_keep_index + num_kept_only_edges);
-                poly_src_corner.append(int2{int(corner_range[i0]), 0});
+                poly_src_corner.append(int2{src_corner_index, 0});
                 poly_src_weight.append(0.0f);
               }
               else {
@@ -979,8 +976,9 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
                                                        int(!outside && side_keep_both);
                 const int i0 = pic_corner_index[index];
                 const int i1 = increment(i0);
+                int2 src_corner_inds{int(corner_range[i0]), int(corner_range[i1])};
                 poly_ecorners.append(num_kept_edges + intersect_split_edge_index);
-                poly_src_corner.append(int2{int(corner_range[i0]), int(corner_range[i1])});
+                poly_src_corner.append(src_corner_inds);
                 /* Weight */
                 const float w0 = edge_weight(dist_buffer[corners[i0]], dist_buffer[corners[i1]]);
                 poly_src_weight.append(w0);
@@ -997,37 +995,10 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
               BLI_assert(v_connect_pair.x >= 0);
               BLI_assert(v_connect_pair.y >= 0);
 
-              /* REDUNDANT? */
-              bool x_in_plane = v_connect_pair.x < num_kept_vertices;
-              bool y_in_plane = v_connect_pair.y < num_kept_vertices;
-
-              /* Determine if both are kept vertices and edge already exists (chains of vertices
-               * 'intersecting' the plane are ignored). */
-
-              // SHOULDNT BE POSSIBLE
-              if (x_in_plane && y_in_plane) {
-                /* Find the existing edge, edge must be part of the polygon and must be an adjacent
-                 * connected edge (either previous or next edge). */
-                int corner_a = pic_corner_index[pic_pair.x];
-                int corner_b = pic_corner_index[pic_pair.y];
-
-                /* Check next for either as the index correspond next edge in the corner span! */
-                if (increment(corner_a) == corner_b) {
-                  return old_to_new_edge_map[corner_edges[corner_a]];
-                }
-                else if (increment(corner_b) == corner_a) {
-                  return old_to_new_edge_map[corner_edges[corner_b]];
-                }
-                /* No match and no existing edge and a new one must be formed.
-                 * Geometry could also be degenerate (includes same vertex twice within one polygon
-                 * or some overlap with other polygons...)!
-                 */
-              }
-
               int new_index = new_inter_edge_index++;
-
               new_inter_edge_indices[index_poly].append(new_index);
               new_inter_edge_verts[index_poly].append(v_connect_pair);
+
               /* Find source edges to map data from */
               int2 src_edges{corner_edges[pic_corner_index[pic_pair.x]],
                              corner_edges[pic_corner_index[pic_pair.y]]};
@@ -1205,11 +1176,19 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
                   const int i0 = first_corner;
                   poly_src_corner.append(int2{int(corner_range[i0]), 0});
                   poly_src_weight.append(0.0f);
-                  append_split_edge_side(
-                      start_pair.x, outside, poly_ecorners, poly_src_corner, poly_src_weight);
+                  append_split_edge_side(start_pair.x,
+                                         outside,
+                                         true,
+                                         poly_ecorners,
+                                         poly_src_corner,
+                                         poly_src_weight);
                   poly_ecorners.append(intersect_edges[next_intersect]);
-                  append_split_edge_side(
-                      start_pair.y, outside, poly_ecorners, poly_src_corner, poly_src_weight);
+                  append_split_edge_side(start_pair.y,
+                                         outside,
+                                         false,
+                                         poly_ecorners,
+                                         poly_src_corner,
+                                         poly_src_weight);
                   // poly_ecorners.append(append_split_edge_side(start_pair.x, outside));
                   //  poly_ecorners.append(append_split_edge_side(start_pair.y, outside));
                 }
@@ -1221,13 +1200,24 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
                 {
                   if (index == pic_corner_index[pic_pair.x]) {
                     /* Traversed to next bisected edge */
+                    index = pic_corner_index[pic_pair.y];
                     const int i0 = pic_corner_index[pic_pair.x];
-                    poly_src_corner.append(int2{int(corner_range[i0]), 0});
-                    append_split_edge_side(
-                        start_pair.x, outside, poly_ecorners, poly_src_corner, poly_src_weight);
+                    int2 src_corner_vindex{int(corner_range[i0]), 0};
+                    poly_src_corner.append(src_corner_vindex);
+                    poly_src_weight.append(0.0f);
+                    append_split_edge_side(pic_pair.x,
+                                           outside,
+                                           true,
+                                           poly_ecorners,
+                                           poly_src_corner,
+                                           poly_src_weight);
                     poly_ecorners.append(intersect_edges[next_intersect]);
-                    append_split_edge_side(
-                        pic_pair.y, outside, poly_ecorners, poly_src_corner, poly_src_weight);
+                    append_split_edge_side(pic_pair.y,
+                                           outside,
+                                           false,
+                                           poly_ecorners,
+                                           poly_src_corner,
+                                           poly_src_weight);
 
                     /* Vertex corners (references src corner vertices)
                      * Note that vertex corners are 'shifted back' by one, as corner edge 0 begins
