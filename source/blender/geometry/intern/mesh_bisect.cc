@@ -958,7 +958,7 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
               if (intersect_index >= num_inter_only_edges) {
                 /* If IntersectDiscard or IntersectKeep on wrong side, do nothing. */
                 int intersect_keep_index = intersect_index - num_inter_only_edges;
-                if (intersect_keep_index >
+                if (intersect_keep_index >=
                         edge_type_selections[EdgeIntersectType::IntersectKept].size() ||
                     intersect_keep_is_outside[intersect_keep_index] != outside)
                 {
@@ -995,6 +995,36 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
               BLI_assert(v_connect_pair.x >= 0);
               BLI_assert(v_connect_pair.y >= 0);
 
+              /* Determine if both edges are 'in the plane' and if so that they are not adjacent
+               * (edge already exist). */
+              const bool x_in_plane = v_connect_pair.x < num_kept_vertices;
+              const bool y_in_plane = v_connect_pair.y < num_kept_vertices;
+              if (x_in_plane && y_in_plane) {
+                int corner_a = pic_corner_index[pic_pair.x];
+                int corner_b = pic_corner_index[pic_pair.y];
+                /* Find the corner not in the plane (can only be 1). */
+                if (!(is_kept_vertex[corners[corner_a]] & MASK_IN_PLANE)) {
+                  corner_a = increment(corner_a);
+                  /*  corner_b = corner_b; */
+                }
+                else {
+                  /* corner_a = corner_a */
+                  corner_b = increment(corner_b);
+                }
+
+                /* Check if corners are adjacent, if so edge already exists! */
+                if (increment(corner_a) == corner_b) {
+                  return old_to_new_edge_map[corner_edges[corner_a]];
+                }
+                else if (increment(corner_b) == corner_a) {
+                  return old_to_new_edge_map[corner_edges[corner_b]];
+                }
+                /* No match and no existing edge and a new one must be formed.
+                 * Geometry could also be degenerate (includes same vertex twice within one polygon
+                 * or some overlap with other polygons...)!
+                 */
+              }
+
               int new_index = new_inter_edge_index++;
               new_inter_edge_indices[index_poly].append(new_index);
               new_inter_edge_verts[index_poly].append(v_connect_pair);
@@ -1007,21 +1037,22 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
             };
 
             /* Determine if intersection pairs. Shift the pairing by one if the edge formed inside
-             * the n-gon is being flipped.
+             * the n-gon is being flipped. Default to no shift (default only apply for intersecting
+             * edges that are nearly identical/overlapping and parallel.
              */
-            int start_shift_vote;
-            {
-              const int v0 = corners[pic_corner_index[0]];
-              const int v1 = corners[increment(pic_corner_index[0])];
-              const int v2 = corners[pic_corner_index[1]];
-              const int v3 = corners[increment(pic_corner_index[1])];
+            int start_shift_vote = 0;
+            for (int i = 0; i < pic_corner_index.size(); i += 2) {
+              const int v0 = corners[pic_corner_index[i]];
+              const int v1 = corners[increment(pic_corner_index[i])];
+              const int v2 = corners[pic_corner_index[i + 1]];
+              const int v3 = corners[increment(pic_corner_index[i + 1])];
               const float3 V0 = positions[v0];
               const float3 V1 = positions[v1];
               const float3 V2 = positions[v2];
               const float3 V3 = positions[v3];
 
-              const float w0 = ie_lerp_weights[pic_split_edge_index[0]];
-              const float w1 = ie_lerp_weights[pic_split_edge_index[1]];
+              const float w0 = ie_lerp_weights[pic_split_edge_index[i]];
+              const float w1 = ie_lerp_weights[pic_split_edge_index[i + 1]];
 
               const float3 I0 = bke::attribute_math::mix2(w0, V0, V1);
               const float3 I1 = bke::attribute_math::mix2(w1, V2, V3);
@@ -1036,8 +1067,10 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
               if (dot_v3v3(edge_norm, edge_norm) < 1e-7) {
                 edge2_delta = V2 - V0;
                 cross_v3_v3v3(edge_norm, edge1_delta, edge2_delta);
-                /* Valid case (edges are identical) but not handled:*/
-                BLI_assert(dot_v3v3(edge_norm, edge_norm) >= 1e-7);
+                /* Valid case (edges are nearly identical) but not handled:*/
+                if (dot_v3v3(edge_norm, edge_norm) < 1e-7) {
+                  continue;
+                }
               }
 
               auto fn_check_edge_order =
@@ -1054,6 +1087,7 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
               const float signed_e1 = fn_check_edge_order(edge1_delta, edge_norm, I0, I1);
               const float signed_e2 = fn_check_edge_order(edge2_delta, edge_norm, I1, I0);
               start_shift_vote = !(signed_e1 < 0.0f && signed_e2 < 0.0f);
+              break;
             }
 
             // TODO: Vote shift
