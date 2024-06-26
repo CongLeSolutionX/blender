@@ -24,7 +24,7 @@
 
 #include "BKE_curves.hh"
 #include "BKE_mesh.h"
-#include "BKE_pointcloud.h"
+//#include "BKE_pointcloud.h"
 // #include "BKE_volume.h"
 
 // #include "bmesh_mesh.hh"
@@ -255,7 +255,7 @@ static void geo_node_bisect_exec(GeoNodeExecParams params)
 
 static void node_register()
 {
-  static bNodeType ntype;
+  static blender::bke::bNodeType ntype;
   geo_node_type_base(&ntype, GEO_NODE_BISECT, "Bisect", NODE_CLASS_GEOMETRY);
   ntype.declare = geo_node_bisect_declare;
   ntype.geometry_node_execute = geo_node_bisect_exec;
