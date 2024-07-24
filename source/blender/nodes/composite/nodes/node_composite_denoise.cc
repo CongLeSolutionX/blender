@@ -102,7 +102,16 @@ class DenoiseOperation : public NodeOperation {
     }
 
 #ifdef WITH_OPENIMAGEDENOISE
-    oidn::DeviceRef device = oidn::newDevice(oidn::DeviceType::CPU);
+    oidn::DeviceRef device;
+    bool host_buffer = false;
+    if (context().get_render_data().compositor_device == SCE_COMPOSITOR_DEVICE_CPU) {
+      device = oidn::newDevice(oidn::DeviceType::CPU);
+    }
+    else {
+      device = oidn::newDevice();
+    }
+    host_buffer = device.get<bool>("systemMemorySupported");
+
     device.commit();
 
     const int width = input_image.domain().size.x;
@@ -110,13 +119,23 @@ class DenoiseOperation : public NodeOperation {
     const int pixel_stride = sizeof(float) * 4;
     const eGPUDataFormat data_format = GPU_DATA_FLOAT;
 
+    const size_t buffer_size = width * height * pixel_stride;
+
     /* Download the input texture and set it as both the input and output of the filter to denoise
      * it in-place. */
     GPU_memory_barrier(GPU_BARRIER_TEXTURE_UPDATE);
     float *color = static_cast<float *>(GPU_texture_read(input_image.texture(), data_format, 0));
+    oidn::BufferRef color_buffer;
+    if (host_buffer) {
+      color_buffer = device.newBuffer(color, buffer_size);
+    }
+    else {
+      color_buffer = device.newBuffer(buffer_size, oidn::Storage::Device);
+      color_buffer.write(0, buffer_size, color);
+    }
     oidn::FilterRef filter = device.newFilter("RT");
-    filter.setImage("color", color, oidn::Format::Float3, width, height, 0, pixel_stride);
-    filter.setImage("output", color, oidn::Format::Float3, width, height, 0, pixel_stride);
+    filter.setImage("color", color_buffer, oidn::Format::Float3, width, height, 0, pixel_stride);
+    filter.setImage("output", color_buffer, oidn::Format::Float3, width, height, 0, pixel_stride);
     filter.set("hdr", use_hdr());
     filter.set("cleanAux", auxiliary_passes_are_clean());
     filter.setProgressMonitorFunction(oidn_progress_monitor_function, &context());
@@ -127,19 +146,26 @@ class DenoiseOperation : public NodeOperation {
     Result &input_albedo = get_input("Albedo");
     if (!input_albedo.is_single_value()) {
       albedo = static_cast<float *>(GPU_texture_read(input_albedo.texture(), data_format, 0));
-
+      oidn::BufferRef albedo_buffer;
+      if (host_buffer) {
+        albedo_buffer = device.newBuffer(albedo, buffer_size);
+      }
+      else {
+        albedo_buffer = device.newBuffer(buffer_size, oidn::Storage::Device);
+        albedo_buffer.write(0, buffer_size, albedo);
+      }
       if (should_denoise_auxiliary_passes()) {
         oidn::FilterRef albedoFilter = device.newFilter("RT");
         albedoFilter.setImage(
-            "albedo", albedo, oidn::Format::Float3, width, height, 0, pixel_stride);
+            "albedo", albedo_buffer, oidn::Format::Float3, width, height, 0, pixel_stride);
         albedoFilter.setImage(
-            "output", albedo, oidn::Format::Float3, width, height, 0, pixel_stride);
+            "output", albedo_buffer, oidn::Format::Float3, width, height, 0, pixel_stride);
         albedoFilter.setProgressMonitorFunction(oidn_progress_monitor_function, &context());
         albedoFilter.commit();
         albedoFilter.execute();
       }
 
-      filter.setImage("albedo", albedo, oidn::Format::Float3, width, height, 0, pixel_stride);
+      filter.setImage("albedo", albedo_buffer, oidn::Format::Float3, width, height, 0, pixel_stride);
     }
 
     /* If the albedo and normal inputs are not single value inputs, download the normal texture,
@@ -150,23 +176,33 @@ class DenoiseOperation : public NodeOperation {
     Result &input_normal = get_input("Normal");
     if (albedo && !input_normal.is_single_value()) {
       normal = static_cast<float *>(GPU_texture_read(input_normal.texture(), data_format, 0));
-
+      oidn::BufferRef normal_buffer;
+      if (host_buffer) {
+        normal_buffer = device.newBuffer(normal, buffer_size);
+      }
+      else {
+        normal_buffer = device.newBuffer(buffer_size, oidn::Storage::Device);
+        normal_buffer.write(0, buffer_size, normal);
+      }
       if (should_denoise_auxiliary_passes()) {
         oidn::FilterRef normalFilter = device.newFilter("RT");
         normalFilter.setImage(
-            "normal", normal, oidn::Format::Float3, width, height, 0, pixel_stride);
+            "normal", normal_buffer, oidn::Format::Float3, width, height, 0, pixel_stride);
         normalFilter.setImage(
-            "output", normal, oidn::Format::Float3, width, height, 0, pixel_stride);
+            "output", normal_buffer, oidn::Format::Float3, width, height, 0, pixel_stride);
         normalFilter.setProgressMonitorFunction(oidn_progress_monitor_function, &context());
         normalFilter.commit();
         normalFilter.execute();
       }
 
-      filter.setImage("normal", normal, oidn::Format::Float3, width, height, 0, pixel_stride);
+      filter.setImage(
+          "normal", normal_buffer, oidn::Format::Float3, width, height, 0, pixel_stride);
     }
 
     filter.commit();
     filter.execute();
+
+    color_buffer.read(0, buffer_size, color);
 
     output_image.allocate_texture(input_image.domain());
     GPU_texture_update(output_image.texture(), data_format, color);
