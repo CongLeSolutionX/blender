@@ -726,6 +726,23 @@ if(WITH_PULSEAUDIO)
 	endif()
 endif()
 
+if(PIPEWIRE_FOUND)
+  set(PIPEWIRE_SRC
+        plugins/pipewire/PipeWireDevice.cpp
+  )
+  set(PIPEWIRE_HDR
+        plugins/pipewire/PipeWireDevice.h
+  )
+
+  if(NOT PLUGIN_PIPEWIRE)
+    list(APPEND INCLUDE ${PIPEWIRE_INCLUDE_DIRS})
+    list(APPEND LIBRARIES ${PIPEWIRE_LIBRARIES})
+    list(APPEND SRC ${PIPEWIRE_SRC})
+    list(APPEND HDR ${PIPEWIRE_HDR})
+    list(APPEND STATIC_PLUGINS PipeWireDevice)
+  endif()
+endif()
+
 # Python
 if(WITH_PYTHON)
 	if(AUDASPACE_STANDALONE)

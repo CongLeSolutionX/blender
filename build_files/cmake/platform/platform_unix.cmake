@@ -717,6 +717,8 @@ endif()
 if(WITH_PULSEAUDIO)
   find_package_wrapper(Pulse)
   set_and_warn_library_found("PulseAudio" PULSE_FOUND WITH_PULSEAUDIO)
+  find_package(PkgConfig)
+  pkg_check_modules(PIPEWIRE REQUIRED libpipewire-0.3)
 endif()
 
 # Audio IO
