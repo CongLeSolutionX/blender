@@ -16,6 +16,7 @@
 #include "BKE_attribute_math.hh"
 #include "BKE_customdata.hh"
 #include "BKE_mesh.hh"
+#include "BLI_math_geom.h"
 
 #include "GEO_mesh_bisect.hh"
 #include <variant>
@@ -673,6 +674,8 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
   /* Map from index of intersected edge -> Index of the 'in plane' vertex created in the new mesh
    */
   Array<int, 12> ie_vert_map(num_inter_edges);
+  /* Track the 'original' index for an edge, to it's index within the intersected edge set. */
+  Array<int, 12> old_to_intersect_edge_map(src_num_edges);
 
   edge_type_selections[EdgeIntersectType::Intersect].foreach_index(
       GrainSize(512), [&](const int64_t src_index, const int64_t index_pos) {
@@ -688,6 +691,7 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
 
         const int new_vert_index = split_edge_index + int(kept_vertices.size());
         ie_vert_map[index_pos] = new_vert_index;
+        old_to_intersect_edge_map[src_index] = index_pos;
 
         /* Generate new edges for the split IFF any side is kept */
         if (side_keep_count > 0) {
@@ -722,16 +726,10 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
 
   /* Maps index of kept edges from the original mesh to their index in the new mesh */
   Array<int, 12> old_to_new_edge_map(src_num_edges);
-  /* Track the 'original' index for an edge, to it's index within the intersected edge set. */
-  Array<int, 12> old_to_intersect_edge_map(src_num_edges);
   old_to_new_edge_map.fill(-1);
   edge_type_selections[EdgeIntersectType::Kept].foreach_index(
       [&](const int64_t index, const int64_t index_pos) {
         old_to_new_edge_map[index] = index_pos;
-      });
-  edge_type_selections[EdgeIntersectType::Intersect].foreach_index(
-      [&](const int64_t index, const int64_t index_pos) {
-        old_to_intersect_edge_map[index] = index_pos;
       });
 
   /* Compute polygon splits using the computed edge splits.
@@ -768,6 +766,11 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
       0,
       [&](IndexRange src_poly_subrange, const int &identity) {
         int count = identity;
+        OffsetIndices<int> poly_subset = src_polys.slice(src_poly_subrange);
+        const int num_tris = poly_to_tri_count(src_poly_subrange.size(), poly_subset[poly_subset.index_range()].size());
+        Array<int3> triangle_corners(num_tris);
+        bke::mesh::corner_tris_calc(positions, poly_subset, src_corner_verts, triangle_corners);
+
         for (const int64_t index_poly : src_poly_subrange) {
           BLI_assert(new_split_polygons[index_poly].is_empty());
           BLI_assert(new_split_polygon_src_corner[index_poly].is_empty());
@@ -779,6 +782,13 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
           const IndexRange corner_range = src_polys[index_poly];
           const Span<int> corners = src_corner_verts.slice(corner_range);
           const Span<int> corner_edges = src_corner_edges.slice(corner_range);
+          
+          int kept_count = 0;
+          for (const int64_t index : corners.index_range()) {
+            int vc_index = corners[index];
+            const int8_t is_kept = is_kept_vertex[vc_index];
+            kept_count += is_kept & MASK_KEPT;
+          }
 
           /* Iterate all corners and track the edge being intersected.
            * TODO: Handle sequences with edges in the plane
@@ -786,40 +796,40 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
            */
 
           /* First find a starting corner to iterate from that is not 'in the plane'. */
-          int8_t first_kept;
-          int64_t drop_count = -1;
-          int kept_count = 0;
-          int start_edge_index;
-          for (const int64_t index : corners.index_range()) {
-            int vc_index = corners[index];
-            const int8_t next_kept = is_kept_vertex[vc_index];
-            kept_count += next_kept & MASK_KEPT;
-            if (!(next_kept & MASK_IN_PLANE)) {
-              first_kept = next_kept;
-              drop_count = index + 1;
-              start_edge_index = index == 0 ? corners.size() - 1 : index - 1;
-              break;
-            }
-          }
-
-          /* Find intersections IFF a valid starting corner was found (otherwise all are in plane)
-           */
-          if (drop_count != -1) {
-            int8_t is_kept = first_kept & MASK_OUTSIDE;
-            for (const int64_t index : corners.index_range().drop_front(drop_count)) {
-              const int8_t next_kept = is_kept_vertex[corners[index]];
-              kept_count += (next_kept & MASK_KEPT);
-              if (is_kept != (next_kept & MASK_OUTSIDE)) {
-                pic_corner_index.append(index - 1);
-                is_kept = next_kept & MASK_OUTSIDE;
-              }
-            }
-            /* Last edge case */
-            if (is_kept != (first_kept & MASK_OUTSIDE)) {
-              /* No need to check 'in plane' here as starting corner is guaranteed not to be! */
-              pic_corner_index.append(start_edge_index);
-            }
-          }
+          //int8_t first_kept;
+          //int64_t drop_count = -1;
+          //int kept_count = 0;
+          //int start_edge_index;
+          //for (const int64_t index : corners.index_range()) {
+          //  int vc_index = corners[index];
+          //  const int8_t next_kept = is_kept_vertex[vc_index];
+          //  kept_count += next_kept & MASK_KEPT;
+          //  if (!(next_kept & MASK_IN_PLANE)) {
+          //    first_kept = next_kept;
+          //    drop_count = index + 1;
+          //    start_edge_index = index == 0 ? corners.size() - 1 : index - 1;
+          //    break;
+          //  }
+          //}
+          //
+          ///* Find intersections IFF a valid starting corner was found (otherwise all are in plane)
+          // */
+          //if (drop_count != -1) {
+          //  int8_t is_kept = first_kept & MASK_OUTSIDE;
+          //  for (const int64_t index : corners.index_range().drop_front(drop_count)) {
+          //    const int8_t next_kept = is_kept_vertex[corners[index]];
+          //    kept_count += (next_kept & MASK_KEPT);
+          //    if (is_kept != (next_kept & MASK_OUTSIDE)) {
+          //      pic_corner_index.append(index - 1);
+          //      is_kept = next_kept & MASK_OUTSIDE;
+          //    }
+          //  }
+          //  /* Last edge case */
+          //  if (is_kept != (first_kept & MASK_OUTSIDE)) {
+          //    /* No need to check 'in plane' here as starting corner is guaranteed not to be! */
+          //    pic_corner_index.append(start_edge_index);
+          //  }
+          //}
 
           /* Determine action applied to the polygon
            */
