@@ -973,20 +973,20 @@ def dump_asset_messages(msgs, reports, settings):
     for bfile in bfiles:
         basename = os.path.basename(bfile)
         bpy.ops.wm.open_mainfile(filepath=bfile)
-        # For now, only parse node groups.
-        # Perhaps some other assets will need to be extracted later?
-        for asset_type in ("node_groups",):
+        # For now, only parse node groups and brushes.
+        for asset_type in ("brushes", "node_groups",):
             for asset in getattr(bpy.data, asset_type):
                 if asset.asset_data is None:  # Not an asset
                     continue
                 assets = asset_files.setdefault(basename, [])
                 asset_data = {"name": asset.name,
                               "description": asset.asset_data.description}
-                for interface in asset.interface.items_tree:
-                    if interface.name == "Geometry":  # Ignore common socket
-                        continue
-                    socket_data = asset_data.setdefault("sockets", [])
-                    socket_data.append((interface.name, interface.description))
+                if asset_type == "node_groups":
+                    for interface in asset.interface.items_tree:
+                        if interface.name == "Geometry":  # Ignore common socket
+                            continue
+                        socket_data = asset_data.setdefault("sockets", [])
+                        socket_data.append((interface.name, interface.description))
                 assets.append(asset_data)
 
     for asset_file in sorted(asset_files):

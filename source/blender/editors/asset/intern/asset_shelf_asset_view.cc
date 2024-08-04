@@ -17,6 +17,8 @@
 #include "BLI_fnmatch.h"
 #include "BLI_string.h"
 
+#include "BLT_translation.hh"
+
 #include "DNA_asset_types.h"
 #include "DNA_screen_types.h"
 
@@ -129,7 +131,7 @@ void AssetView::build_items()
     }();
 
     AssetViewItem &item = this->add_item<AssetViewItem>(
-        asset_handle, identifier, asset->get_name(), preview_id);
+        asset_handle, identifier, IFACE_(asset->get_name().c_str()), preview_id);
     if (!show_names) {
       item.hide_label();
     }
@@ -306,7 +308,7 @@ void AssetViewItem::on_activate(bContext &C)
 
 bool AssetViewItem::should_be_filtered_visible(const StringRefNull filter_string) const
 {
-  const StringRefNull asset_name = handle_get_representation(&asset_)->get_name();
+  const StringRefNull asset_name = IFACE_(handle_get_representation(&asset_)->get_name().c_str());
   return fnmatch(filter_string.c_str(), asset_name.c_str(), FNM_CASEFOLD) == 0;
 }
 

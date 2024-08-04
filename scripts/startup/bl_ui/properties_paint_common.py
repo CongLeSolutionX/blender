@@ -4,6 +4,7 @@
 
 import bpy
 from bpy.types import Menu, Panel
+from bpy.app.translations import pgettext_iface as iface_
 
 
 class BrushAssetShelf:
@@ -136,7 +137,7 @@ class BrushAssetShelf:
         if not shelf_name:
             return
 
-        display_name = brush.name if (brush and show_name) else None
+        display_name = iface_(brush.name) if (brush and show_name) else None
         if display_name and brush.has_unsaved_changes:
             display_name = display_name + "*"
 
