@@ -402,6 +402,12 @@ class IndexMask : private IndexMaskData {
   template<typename Fn> void foreach_index(Fn &&fn) const;
   template<typename Fn> void foreach_index(GrainSize grain_size, Fn &&fn) const;
 
+  template<typename Value, typename Fn, typename Reduction>
+  inline Value parallel_reduce(const GrainSize grain_size,
+                              const Value &identity,
+                              Fn &&fn,
+                              const Reduction &reduction) const;
+
   /**
    * Same as #foreach_index, but generates more code, increasing compile time and binary size. This
    * is because separate loops are generated for segments that are ranges and those that are not.
@@ -823,6 +829,39 @@ inline void IndexMask::foreach_index(const GrainSize grain_size, Fn &&fn) const
       }
     });
   });
+}
+
+template<typename Value, typename Fn, typename Reduction>
+inline Value IndexMask::parallel_reduce(const GrainSize grain_size,
+                                       const Value &identity,
+                                       Fn &&fn,
+                                       const Reduction &reduction) const
+{
+  return threading::parallel_reduce(
+      this->index_range(),
+      grain_size.value,
+      identity,
+      [&](const IndexRange range, const Value &identity) {
+        const IndexMask sub_mask = this->slice(range);
+        Value value = identity;
+        sub_mask.foreach_index([&](const int64_t i, [[maybe_unused]] const int64_t index_pos) {
+          if constexpr (std::is_invocable_r_v<Value, Fn, int64_t, int64_t, const Value &>) {
+            value = reduction(value, fn(i, index_pos + range.start(), identity));
+          }
+          else if constexpr (std::is_invocable_r_v<Value, Fn, int64_t>) {
+            value = reduction(value, fn(i, index_pos + range.start()));
+          }
+          else if constexpr (std::is_invocable_r_v<Value, Fn, int64_t, const Value &>) {
+            value = reduction(value, fn(i, identity));
+          }
+          else {
+            static_assert(std::is_invocable_r_v<Value, Fn, int64_t>);
+            value = reduction(value, fn(i));
+          }
+        });
+        return value;
+      },
+      reduction);
 }
 
 template<typename T, typename Fn>

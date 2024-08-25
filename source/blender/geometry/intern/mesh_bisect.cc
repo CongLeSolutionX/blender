@@ -735,9 +735,54 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
    *   |   |           |   |      <- Polygon formed on 'inside'
    *   *---*           *---*
    */
-  Array<Vector<Vector<int, 4>, 2>, 12> new_split_polygons(src_num_polys);
-  Array<Vector<Vector<int2, 4>, 2>, 12> new_split_polygon_src_corner(new_split_polygons.size());
-  Array<Vector<Vector<float, 4>, 2>, 12> new_split_polygon_src_weight(new_split_polygons.size());
+  Array<Vector<int, 2>, 12> copied_polygons(src_num_polys);
+  // Array<Vector<Vector<int, 4>, 2>, 12> new_split_polygons(src_num_polys);
+  // Array<Vector<Vector<int2, 4>, 2>, 12> new_split_polygon_src_corner(new_split_polygons.size());
+  // Array<Vector<Vector<float, 4>, 2>, 12>
+  // new_split_polygon_src_weight(new_split_polygons.size());
+
+  auto fn_polygon_group = [&](int64_t index_poly) {
+    const IndexRange src_corner_range = src_polys[index_poly];
+    const Span<int> corners = src_corner_verts.slice(src_corner_range);
+
+    const int8_t initial = is_kept_vertex[corners.first()];
+    int8_t identical = initial;
+    for (const int64_t index : corners.index_range().drop_front(1)) {
+      identical |= is_kept_vertex[corners[index]];
+    }
+
+    /* Determine polygon group
+     */
+    if (initial == identical) {
+      return (initial & MASK_KEPT) ? EdgeIntersectType::Kept : EdgeIntersectType::Discarded;
+    }
+    return EdgeIntersectType::Intersect;
+  };
+
+  /* Compute polygon masks */
+  IndexMaskMemory kept_polygon_memory;
+  std::array<IndexMask, EdgeIntersectType::TypeCount> poly_type_selections;
+  IndexMask::from_groups<int64_t>(IndexMask(src_polys.index_range()),
+                                  kept_polygon_memory,
+                                  fn_intersected_edge,
+                                  MutableSpan<IndexMask>(edge_type_selections));
+
+  /* Compute maximum number of polygons formed */
+  int polygon_limit = poly_type_selections[EdgeIntersectType::Intersect].parallel_reduce(
+      GrainSize(512),
+      0,
+      [&](const int64_t index_poly) {
+        const IndexRange src_corner_range = src_polys[index_poly];
+        const Span<int> corners = src_corner_verts.slice(src_corner_range);
+
+        int outside_count = 0;
+        for (const int64_t index : corners.index_range()) {
+          outside_count += is_kept_vertex[corners[index]] & MASK_OUTSIDE;
+        }
+        // TODO: Count should be polys...
+        return outside_count;
+      },
+      [](int a, int b) { return a + b; });
 
   /* Index for the new edges formed inside the intersected polygons by the cutting plane.
    * Index is zero based relative to the edges formed in this 'group'.
@@ -760,9 +805,6 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
       [&](IndexRange src_poly_subrange, const int &identity) {
         int count = identity;
         for (const int64_t index_poly : src_poly_subrange) {
-          BLI_assert(new_split_polygons[index_poly].is_empty());
-          BLI_assert(new_split_polygon_src_corner[index_poly].is_empty());
-          BLI_assert(new_split_polygon_src_weight[index_poly].is_empty());
 
           const IndexRange src_corner_range = src_polys[index_poly];
           const Span<int> corners = src_corner_verts.slice(src_corner_range);
@@ -824,18 +866,6 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
           if (initial == identical) {
             if (keep_count == corners.size()) {
               /* All kept, copy polygon */
-              new_split_polygons[index_poly].append(Vector<int>(corner_edges.size()));
-              new_split_polygon_src_corner[index_poly].append(Vector<int2>(corner_edges.size()));
-              new_split_polygon_src_weight[index_poly].append(Vector<float>(corner_edges.size()));
-
-              for (const int64_t index : corner_edges.index_range()) {
-                const int new_index = old_to_new_edge_map[corner_edges[index]];
-                BLI_assert(new_index >= 0);
-                const int2 new_corner = int2{int(src_corner_range[index]), 0};
-                new_split_polygons[index_poly].last()[index] = new_index;
-                new_split_polygon_src_corner[index_poly].last()[index] = new_corner;
-                new_split_polygon_src_weight[index_poly].last()[index] = 0.0f;
-              }
               count++;
             }
             /* Else: Discard, polygon is 'not kept'. */
@@ -857,6 +887,10 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
           Vector<int3> new_triangles;
           new_triangles.reserve(num_tris * 3);
 
+          auto split_triangle = [](const int opposite, const int next, const int last) {
+            int ___ = 0;
+          };
+
           for (const int3 tri_corners : triangulation_corners) {
             int8_t xy = is_kept_vertex[tri_corners.x] | is_kept_vertex[tri_corners.y];
             if (xy == is_kept_vertex[tri_corners.z]) {
@@ -869,12 +903,14 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
             int8_t opposite;
             if (is_kept_vertex[tri_corners.x] == is_kept_vertex[tri_corners.z]) {
               opposite = 0;
+
+              split_triangle(0, 1, 2);
             }
             else if (is_kept_vertex[tri_corners.y] == is_kept_vertex[tri_corners.z]) {
-              opposite = 1;
+              split_triangle(1, 2, 0);
             }
             else {
-              opposite = 2;
+              split_triangle(2, 0, 1);
             }
           }
 
