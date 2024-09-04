@@ -717,8 +717,13 @@ endif()
 if(WITH_PULSEAUDIO)
   find_package_wrapper(Pulse)
   set_and_warn_library_found("PulseAudio" PULSE_FOUND WITH_PULSEAUDIO)
+endif()
+
+# PipeWire is intended to use the system library.
+if(WITH_PIPEWIRE)
   find_package(PkgConfig)
-  pkg_check_modules(PIPEWIRE REQUIRED libpipewire-0.3)
+  pkg_check_modules(PIPEWIRE libpipewire-0.3)
+  set_and_warn_library_found("PipeWire" PIPEWIRE_FOUND WITH_PIPEWIRE)
 endif()
 
 # Audio IO

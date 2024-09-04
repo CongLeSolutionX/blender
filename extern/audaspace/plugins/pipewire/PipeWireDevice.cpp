@@ -20,10 +20,10 @@
 
 #include "Exception.h"
 #include "IReader.h"
+#include "PipeWireLibrary.h"
 
 #include "devices/DeviceManager.h"
 #include "devices/IDeviceFactory.h"
-#include "pipewire/stream.h"
 
 AUD_NAMESPACE_BEGIN
 
@@ -34,7 +34,7 @@ PipeWireDevice::PipeWireSynchronizer::PipeWireSynchronizer(PipeWireDevice* devic
 void PipeWireDevice::PipeWireSynchronizer::update_tick_start()
 {
 	pw_time tm;
-	pw_stream_get_time_n(m_device->m_stream, &tm, sizeof(tm));
+	AUD_pw_stream_get_time_n(m_device->m_stream, &tm, sizeof(tm));
 	m_tick_start = tm.ticks;
 	m_seek_pos = m_timeline_pos;
 }
@@ -42,7 +42,7 @@ void PipeWireDevice::PipeWireSynchronizer::update_tick_start()
 void PipeWireDevice::PipeWireSynchronizer::seek(std::shared_ptr<IHandle> handle, double time)
 {
 	pw_time tm;
-	pw_stream_get_time_n(m_device->m_stream, &tm, sizeof(tm));
+	AUD_pw_stream_get_time_n(m_device->m_stream, &tm, sizeof(tm));
 	m_tick_start = tm.ticks;
 	m_seek_pos = m_timeline_pos = time;
 	handle->seek(time);
@@ -51,8 +51,8 @@ void PipeWireDevice::PipeWireSynchronizer::seek(std::shared_ptr<IHandle> handle,
 double PipeWireDevice::PipeWireSynchronizer::getPosition(std::shared_ptr<IHandle> handle)
 {
 	pw_time tm;
-	pw_stream_get_time_n(m_device->m_stream, &tm, sizeof(tm));
-	uint64_t now = pw_stream_get_nsec(m_device->m_stream);
+	AUD_pw_stream_get_time_n(m_device->m_stream, &tm, sizeof(tm));
+	uint64_t now = AUD_pw_stream_get_nsec(m_device->m_stream);
 	int64_t diff = now - tm.now;
 	int64_t elapsed = (tm.rate.denom * diff) / (tm.rate.num * SPA_NSEC_PER_SEC);
 
@@ -80,7 +80,7 @@ void PipeWireDevice::handle_state_changed(void* device_ptr, enum pw_stream_state
 void PipeWireDevice::mix_audio_buffer(void* device_ptr)
 {
 	PipeWireDevice* device = (PipeWireDevice*) device_ptr;
-	pw_buffer* pw_buf = pw_stream_dequeue_buffer(device->m_stream);
+	pw_buffer* pw_buf = AUD_pw_stream_dequeue_buffer(device->m_stream);
 	if(!pw_buf)
 	{
 		/* Couldn't get any buffer from PipeWire...*/
@@ -117,14 +117,14 @@ void PipeWireDevice::mix_audio_buffer(void* device_ptr)
 		device->mix((data_t*) data.data, n_frames);
 	}
 
-	pw_stream_queue_buffer(device->m_stream, pw_buf);
+	AUD_pw_stream_queue_buffer(device->m_stream, pw_buf);
 }
 
 void PipeWireDevice::playing(bool playing)
 {
-	pw_thread_loop_lock(m_thread);
-	pw_stream_set_active(m_stream, playing);
-	pw_thread_loop_unlock(m_thread);
+	AUD_pw_thread_loop_lock(m_thread);
+	AUD_pw_stream_set_active(m_stream, playing);
+	AUD_pw_thread_loop_unlock(m_thread);
 
 	m_playback = playing;
 }
@@ -164,9 +164,9 @@ PipeWireDevice::PipeWireDevice(const std::string& name, DeviceSpecs specs, int b
 		break;
 	}
 
-	pw_init(nullptr, nullptr);
+	AUD_pw_init(nullptr, nullptr);
 
-	m_thread = pw_thread_loop_new(name.c_str(), nullptr);
+	m_thread = AUD_pw_thread_loop_new(name.c_str(), nullptr);
 	if(!m_thread)
 	{
 		AUD_THROW(DeviceException, "Could not create PipeWire thread.");
@@ -177,25 +177,25 @@ PipeWireDevice::PipeWireDevice(const std::string& name, DeviceSpecs specs, int b
 	m_events->state_changed = PipeWireDevice::handle_state_changed;
 	m_events->process = PipeWireDevice::mix_audio_buffer;
 
-	pw_properties *stream_props = pw_properties_new(
+	pw_properties *stream_props = AUD_pw_properties_new(
 				PW_KEY_MEDIA_TYPE, "Audio",
 				PW_KEY_MEDIA_CATEGORY, "Playback",
 				PW_KEY_MEDIA_ROLE, "Production",
 				NULL);
 
 	/* Set the requested sample rate and latency. */
-	pw_properties_setf(stream_props, PW_KEY_NODE_RATE, "1/%u", uint(m_specs.rate));
-	pw_properties_setf(stream_props, PW_KEY_NODE_LATENCY, "%u/%u", buffersize, uint(m_specs.rate));
+	AUD_pw_properties_setf(stream_props, PW_KEY_NODE_RATE, "1/%u", uint(m_specs.rate));
+	AUD_pw_properties_setf(stream_props, PW_KEY_NODE_LATENCY, "%u/%u", buffersize, uint(m_specs.rate));
 
-	m_stream = pw_stream_new_simple(
-			pw_thread_loop_get_loop(m_thread),
+	m_stream = AUD_pw_stream_new_simple(
+			AUD_pw_thread_loop_get_loop(m_thread),
 			name.c_str(),
 			stream_props,
 			m_events.get(),
 			this);
 	if(!m_stream)
 	{
-		pw_thread_loop_destroy(m_thread);
+		AUD_pw_thread_loop_destroy(m_thread);
 		AUD_THROW(DeviceException, "Could not create PipeWire stream.");
 	}
 
@@ -209,14 +209,14 @@ PipeWireDevice::PipeWireDevice(const std::string& name, DeviceSpecs specs, int b
 	spa_pod_builder b = SPA_POD_BUILDER_INIT(buffer, sizeof(buffer));
 	params[0] = spa_format_audio_raw_build(&b, SPA_PARAM_EnumFormat, &info);
 
-	pw_stream_connect(m_stream,
+	AUD_pw_stream_connect(m_stream,
 			  PW_DIRECTION_OUTPUT,
 			  PW_ID_ANY,
 			  static_cast<pw_stream_flags>(PW_STREAM_FLAG_AUTOCONNECT |
 			  PW_STREAM_FLAG_MAP_BUFFERS | PW_STREAM_FLAG_INACTIVE |
 			  PW_STREAM_FLAG_RT_PROCESS),
 			  params, 1);
-	pw_thread_loop_start(m_thread);
+	AUD_pw_thread_loop_start(m_thread);
 
 	create();
 }
@@ -227,10 +227,10 @@ PipeWireDevice::~PipeWireDevice()
 	destroy();
 
 	/* Destruct all PipeWire data. */
-	pw_thread_loop_stop(m_thread);
-	pw_stream_destroy(m_stream);
-	pw_thread_loop_destroy(m_thread);
-	pw_deinit();
+	AUD_pw_thread_loop_stop(m_thread);
+	AUD_pw_stream_destroy(m_stream);
+	AUD_pw_thread_loop_destroy(m_thread);
+	AUD_pw_deinit();
 }
 
 ISynchronizer* PipeWireDevice::getSynchronizer()
@@ -281,7 +281,8 @@ public:
 
 void PipeWireDevice::registerPlugin()
 {
-	DeviceManager::registerDevice("PipeWire", std::shared_ptr<IDeviceFactory>(new PipeWireDeviceFactory));
+	if(loadPipeWire())
+		DeviceManager::registerDevice("PipeWire", std::shared_ptr<IDeviceFactory>(new PipeWireDeviceFactory));
 }
 
 #ifdef PIPEWIRE_PLUGIN

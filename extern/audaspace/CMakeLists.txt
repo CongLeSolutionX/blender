@@ -298,6 +298,7 @@ if(AUDASPACE_STANDALONE)
 	endif()
 	if(NOT WIN32 AND NOT APPLE)
 		option(WITH_PULSEAUDIO "Build With PulseAudio" TRUE)
+		option(WITH_PIPEWIRE "Build With PipeWire" TRUE)
 	endif()
 	if(WIN32)
 		option(WITH_WASAPI "Build With WASAPI" TRUE)
@@ -326,12 +327,14 @@ if(AUDASPACE_STANDALONE)
 	cmake_dependent_option(PLUGIN_LIBSNDFILE "Build LibSndFile Plugin" TRUE "WITH_LIBSNDFILE;SHARED_LIBRARY" FALSE)
 	cmake_dependent_option(PLUGIN_OPENAL "Build OpenAL Plugin" TRUE "WITH_OPENAL;SHARED_LIBRARY" FALSE)
 	cmake_dependent_option(PLUGIN_PULSEAUDIO "Build PulseAudio Plugin" TRUE "WITH_PULSEAUDIO;SHARED_LIBRARY" FALSE)
+	cmake_dependent_option(PLUGIN_PIPEWIRE "Build PipeWire Plugin" TRUE "WITH_PIPEWIRE;SHARED_LIBRARY" FALSE)
 	cmake_dependent_option(PLUGIN_SDL "Build SDL Plugin" TRUE "WITH_SDL;SHARED_LIBRARY" FALSE)
 	cmake_dependent_option(PLUGIN_WASAPI "Build WASAPI Plugin" TRUE "WITH_WASAPI;SHARED_LIBRARY" FALSE)
 	cmake_dependent_option(WITH_PYTHON_MODULE "Build Python Module" TRUE "WITH_PYTHON" FALSE)
 	cmake_dependent_option(USE_SDL2 "Use SDL2 instead of 1 if available" TRUE "WITH_SDL" FALSE)
 	cmake_dependent_option(DYNLOAD_JACK "Dynamically load JACK" FALSE "WITH_JACK" FALSE)
 	cmake_dependent_option(DYNLOAD_PULSEAUDIO "Dynamically load PulseAudio" FALSE "WITH_PULSEAUDIO" FALSE)
+	cmake_dependent_option(DYNLOAD_PIPEWIRE "Dynamically load PipeWire" FALSE "WITH_PIPEWIRE" FALSE)
 	cmake_dependent_option(WITH_BINDING_DOCS "Build C/Python HTML Documentation with Sphinx" TRUE "WITH_PYTHON_MODULE" FALSE)
 endif()
 
@@ -726,21 +729,45 @@ if(WITH_PULSEAUDIO)
 	endif()
 endif()
 
-if(PIPEWIRE_FOUND)
-  set(PIPEWIRE_SRC
-        plugins/pipewire/PipeWireDevice.cpp
-  )
-  set(PIPEWIRE_HDR
-        plugins/pipewire/PipeWireDevice.h
-  )
+# Pipewire
+if(WITH_PIPEWIRE)
+	if(AUDASPACE_STANDALONE)
+		find_package(PkgConfig)
+		pkg_check_modules(PIPEWIRE ${PACKAGE_OPTION} libpipewire-0.3)
+	endif()
 
-  if(NOT PLUGIN_PIPEWIRE)
-    list(APPEND INCLUDE ${PIPEWIRE_INCLUDE_DIRS})
-    list(APPEND LIBRARIES ${PIPEWIRE_LIBRARIES})
-    list(APPEND SRC ${PIPEWIRE_SRC})
-    list(APPEND HDR ${PIPEWIRE_HDR})
-    list(APPEND STATIC_PLUGINS PipeWireDevice)
-  endif()
+	if(PIPEWIRE_FOUND)
+		set(PIPEWIRE_SRC
+			plugins/pipewire/PipeWireDevice.cpp
+			plugins/pipewire/PipeWireLibrary.cpp
+		)
+		set(PIPEWIRE_HDR
+			plugins/pipewire/PipeWireDevice.h
+			plugins/pipewire/PipeWireLibrary.h
+			plugins/pipewire/PipeWireSymbols.h
+		)
+
+		if(DYNLOAD_PIPEWIRE)
+			add_definitions(-DDYNLOAD_PIPEWIRE)
+		endif()
+
+		if(NOT PLUGIN_PIPEWIRE)
+			list(APPEND INCLUDE ${PIPEWIRE_INCLUDE_DIRS})
+			if(NOT DYNLOAD_PIPEWIRE)
+				list(APPEND LIBRARIES ${PIPEWIRE_LIBRARIES})
+			endif()
+			list(APPEND SRC ${PIPEWIRE_SRC})
+			list(APPEND HDR ${PIPEWIRE_HDR})
+			list(APPEND STATIC_PLUGINS PipeWireDevice)
+		endif()
+	else()
+		if(AUDASPACE_STANDALONE)
+			set(WITH_PIPEWIRE FALSE CACHE BOOL "Build With PipeWire" FORCE)
+		else()
+			set(WITH_PIPEWIRE FALSE)
+		endif()
+		message(WARNING "PipeWire not found, plugin will not be built.")
+	endif()
 endif()
 
 # Python
@@ -989,6 +1016,19 @@ if(WITH_PULSEAUDIO AND PLUGIN_PULSEAUDIO)
 		target_link_libraries(audpulseaudio audaspace ${LIBPULSE_LIBRARY})
 	endif()
 	install(TARGETS audpulseaudio DESTINATION ${DEFAULT_PLUGIN_PATH})
+endif()
+
+if(WITH_PIPEWIRE AND PLUGIN_PIPEWIRE)
+	add_definitions(-DPIPEWIRE_PLUGIN)
+	include_directories(${INCLUDE} ${PIPEWIRE_INCLUDE_DIRS})
+	add_library(audpipewire SHARED ${PIPEWIRE_SRC} ${PIPEWIRE_HDR} ${HDR})
+	set_target_properties(audpipewire PROPERTIES SOVERSION ${AUDASPACE_VERSION})
+	if(DYNLOAD_PIPEWIRE)
+		target_link_libraries(audpipewire audaspace)
+	else()
+		target_link_libraries(audpipewire audaspace ${PIPEWIRE_LIBRARIES})
+	endif()
+	install(TARGETS audpipewire DESTINATION ${DEFAULT_PLUGIN_PATH})
 endif()
 
 if(WITH_SDL AND PLUGIN_SDL)
