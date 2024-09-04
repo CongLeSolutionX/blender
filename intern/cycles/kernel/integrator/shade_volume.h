@@ -70,20 +70,18 @@ typedef struct EquiangularCoefficients {
 } EquiangularCoefficients;
 
 /* Evaluate shader to get extinction coefficient at P. */
-ccl_device_inline bool shadow_volume_shader_sample(KernelGlobals kg,
-                                                   IntegratorShadowState state,
-                                                   ccl_private ShaderData *ccl_restrict sd,
-                                                   ccl_private Spectrum *ccl_restrict extinction)
+ccl_device_inline Spectrum shadow_volume_shader_eval(KernelGlobals kg,
+                                                     IntegratorShadowState state,
+                                                     ccl_private ShaderData *ccl_restrict sd)
 {
   VOLUME_READ_LAMBDA(integrator_state_read_shadow_volume_stack(state, i))
   volume_shader_eval<true>(kg, state, sd, PATH_RAY_SHADOW, volume_read_lambda_pass);
 
   if (!(sd->flag & SD_EXTINCTION)) {
-    return false;
+    return zero_spectrum();
   }
 
-  *extinction = sd->closure_transparent_extinction;
-  return true;
+  return sd->closure_transparent_extinction;
 }
 
 /* Evaluate shader to get absorption, scattering and emission at P. */
@@ -218,17 +216,16 @@ ccl_device void volume_shadow_heterogeneous(KernelGlobals kg,
     float dt = new_t - t;
 
     float3 new_P = ray->P + ray->D * (t + dt * step_shade_offset);
-    Spectrum sigma_t = zero_spectrum();
 
     /* compute attenuation over segment */
     sd->P = new_P;
-    if (shadow_volume_shader_sample(kg, state, sd, &sigma_t)) {
-      sum += (-sigma_t * dt);
-      if (reduce_max(sum + log_T) < VOLUME_THROUGHPUT_LOG_EPSILON) {
-        /* Stop if nearly all light is blocked. */
-        *throughput = zero_spectrum();
-        break;
-      }
+
+    const Spectrum sigma_t = shadow_volume_shader_eval(kg, state, sd);
+    sum += (-sigma_t * dt);
+    if (reduce_max(sum + log_T) < VOLUME_THROUGHPUT_LOG_EPSILON) {
+      /* Stop if nearly all light is blocked. */
+      *throughput = zero_spectrum();
+      break;
     }
 
     t = new_t;
