@@ -135,16 +135,17 @@ ccl_device_forceinline void volume_step_init(KernelGlobals kg,
   }
   else {
     /* Heterogeneous volume. */
-    *max_steps = kernel_data.integrator.volume_max_steps;
     const float t = tmax - tmin;
-    float step = min(object_step_size, t);
 
-    /* compute exact steps in advance for malloc */
-    if (t > *max_steps * step) {
-      step = t / (float)*max_steps;
+    *max_steps = kernel_data.integrator.volume_max_steps;
+    const float max_step_size = min(object_step_size, t);
+    if (t <= *max_steps * max_step_size) {
+      /* Reduce number of steps if possible. */
+      /* TODO(weizhen): for some reason t can be zero. Check why this happens. */
+      *max_steps = max(1, int(ceilf(t / max_step_size)));
     }
 
-    *step_size = step;
+    *step_size = t / (float)*max_steps;
 
     /* Perform shading at this offset within a step, to integrate over
      * over the entire step segment. */
@@ -205,32 +206,20 @@ ccl_device void volume_shadow_heterogeneous(KernelGlobals kg,
                    &step_shade_offset,
                    &unused,
                    &max_steps);
-  const float steps_offset = 1.0f;
 
-  float t = ray->tmin;
   Spectrum sum = zero_spectrum();
   const Spectrum log_T = log(*throughput);
   for (int i = 0; i < max_steps; i++) {
-    /* advance to new position */
-    float new_t = min(ray->tmax, ray->tmin + (i + steps_offset) * step_size);
-    float dt = new_t - t;
-
-    float3 new_P = ray->P + ray->D * (t + dt * step_shade_offset);
-
-    /* compute attenuation over segment */
-    sd->P = new_P;
+    /* Advance to new position. */
+    const float t = min(ray->tmax, ray->tmin + (step_shade_offset + i) * step_size);
+    sd->P = ray->P + ray->D * t;
 
     const Spectrum sigma_t = shadow_volume_shader_eval(kg, state, sd);
-    sum += (-sigma_t * dt);
+    sum += (-sigma_t * step_size);
+
     if (reduce_max(sum + log_T) < VOLUME_THROUGHPUT_LOG_EPSILON) {
       /* Stop if nearly all light is blocked. */
       *throughput = zero_spectrum();
-      break;
-    }
-
-    t = new_t;
-    if (t == ray->tmax) {
-      /* Stop if at the end of the volume. */
       break;
     }
   }
@@ -548,6 +537,10 @@ ccl_device_forceinline void volume_integrate_heterogeneous(
 #  endif
   Spectrum accum_emission = zero_spectrum();
 
+  if (steps_offset != 1.0f) {
+    /* Plus one because we offset the end point. */
+    max_steps += 1;
+  }
   for (int i = 0; i < max_steps; i++) {
     /* Advance to new position */
     vstate.t.max = min(ray->tmax, ray->tmin + (i + steps_offset) * step_size);
