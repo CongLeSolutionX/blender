@@ -17,6 +17,7 @@
 
 #include "kernel/light/light.h"
 #include "kernel/light/sample.h"
+#include "kernel/sample/lcg.h"
 
 CCL_NAMESPACE_BEGIN
 
@@ -178,6 +179,69 @@ ccl_device void volume_shadow_homogeneous(KernelGlobals kg, IntegratorState stat
 }
 #  endif
 
+/* Returns maximal expansion order N. */
+/* TODO(weizhen): detect homogeneous media? */
+ccl_device int volume_aggressive_BK_roulette(KernelGlobals kg, float rand)
+{
+  float continuation_probability = 0.1f;
+  if (rand > continuation_probability) {
+    /* Stop at the zeroth-order term. */
+    return 0;
+  }
+
+  /* Rescale random number for reusing. */
+  rand /= continuation_probability;
+
+  /* Bhanot & Kennedy roulette with K = c = 2. */
+  /* TODO(weizhen): maybe manual cut off to prevent infinite loop. */
+  for (int k = 2 + 1;; k++) {
+    /* Update the probability of sampling at least order k. */
+    continuation_probability *= 2.0f / k;
+    if (rand > continuation_probability) {
+      return k - 1;
+    }
+
+    /* Rescale random number for reusing. */
+    rand /= continuation_probability;
+  }
+}
+
+/* *
+ * Compute elementary symmetric means from X[0,...,N] - X[i], skipping X[i].
+ *
+ * \param N: expansion order
+ * \param i: index of the expansion pivot (X[i])
+ * \param X: samples to compute means from
+ * \return elementary symmetric means m0, ..., mN
+ *
+ * See [Kettunen et al. 2021] Algorithm 1.
+ */
+ccl_device void volume_elementary_mean(const int N,
+                                       const int i,
+                                       const ccl_private Spectrum *X,
+                                       ccl_private Spectrum *m)
+{
+  /* Initialization. */
+  m[0] = one_spectrum();
+  for (int n = 1; n <= N; n++) {
+    m[n] = zero_spectrum();
+  }
+
+  /* Recursively compute elementary means. */
+  for (int n = 1; n <= N; n++) {
+    const Spectrum x = X[(n + i) % (N + 1)] - X[i];
+    for (int k = n; k >= 1; k--) {
+      m[k] += float(k) / float(n) * (m[k - 1] * x - m[k]);
+    }
+  }
+}
+
+/* For each ray, the probability of evaluating at least 7 orders is 0.00127. */
+/* TODO(weizhen): find a reasonable threshold. */
+/* TODO(weizhen): instead of cutting off after certain order, use the recursive formulation from
+ * Georgiev et al. 2019 instead. */
+#  define VOLUME_EXPANSION_ORDER_CUTOFF 7
+
 /* heterogeneous volume: integrate stepping through the volume until we
  * reach the end, get absorbed entirely, or run out of iterations */
 ccl_device void volume_shadow_heterogeneous(KernelGlobals kg,
@@ -195,36 +259,55 @@ ccl_device void volume_shadow_heterogeneous(KernelGlobals kg,
    * For shadows we do not offset all segments, since the starting point is
    * already a random distance inside the volume. It also appears to create
    * banding artifacts for unknown reasons. */
-  int max_steps;
-  float step_size, step_shade_offset, unused;
-  volume_step_init(kg,
-                   &rng_state,
-                   object_step_size,
-                   ray->tmin,
-                   ray->tmax,
-                   &step_size,
-                   &step_shade_offset,
-                   &unused,
-                   &max_steps);
+  int M;
+  float step_size, unused;
+  volume_step_init(
+      kg, &rng_state, object_step_size, ray->tmin, ray->tmax, &step_size, &unused, &unused, &M);
 
-  Spectrum sum = zero_spectrum();
-  const Spectrum log_T = log(*throughput);
-  for (int i = 0; i < max_steps; i++) {
-    /* Advance to new position. */
-    const float t = min(ray->tmax, ray->tmin + (step_shade_offset + i) * step_size);
-    sd->P = ray->P + ray->D * t;
+  const float rand = path_state_rng_2D(kg, &rng_state, PRNG_VOLUME_TAYLOR_EXPANSION).y;
+  const int N = min(volume_aggressive_BK_roulette(kg, rand), VOLUME_EXPANSION_ORDER_CUTOFF);
 
-    const Spectrum sigma_t = shadow_volume_shader_eval(kg, state, sd);
-    sum += (-sigma_t * step_size);
+  /* TODO(volume): use stratified samples, at least for the first few orders. */
+  uint lcg_state = lcg_state_init(INTEGRATOR_STATE(state, shadow_path, rng_pixel),
+                                  INTEGRATOR_STATE(state, shadow_path, rng_offset),
+                                  INTEGRATOR_STATE(state, shadow_path, sample),
+                                  0x8647ace4);
 
-    if (reduce_max(sum + log_T) < VOLUME_THROUGHPUT_LOG_EPSILON) {
-      /* Stop if nearly all light is blocked. */
-      *throughput = zero_spectrum();
-      break;
+  /* Combed estimators of the optical thickness. */
+  Spectrum X[VOLUME_EXPANSION_ORDER_CUTOFF + 1];
+  for (int i = 0; i <= N; i++) {
+    X[i] = zero_spectrum();
+    const float step_shade_offset = lcg_step_float(&lcg_state);
+    for (int j = 0; j < M; j++) {
+      /* Advance to new position. */
+      const float t = min(ray->tmax, ray->tmin + (step_shade_offset + j) * step_size);
+      sd->P = ray->P + ray->D * t;
+
+      /* TODO(weizhen): early cut off? */
+      const Spectrum sigma_t = shadow_volume_shader_eval(kg, state, sd);
+      X[i] += sigma_t;
     }
+    X[i] = -step_size * X[i];
   }
 
-  *throughput *= exp(sum);
+  Spectrum transmittance = zero_spectrum();
+  for (int i = 0; i <= N; i++) {
+    /* TODO(weizhen): is this zero initialization? */
+    Spectrum elementary_mean[VOLUME_EXPANSION_ORDER_CUTOFF + 1] = {};
+    volume_elementary_mean(N, i, X, elementary_mean);
+
+    /* Compute Taylor expansion of T = e^x at X[i]. */
+    Spectrum fN = one_spectrum();
+    float weight = 20.0f;
+    for (int k = 1; k <= N; k++) {
+      /* weight = 1 / (k!Pk) = 1 / (k! * (0.1 * pow2(k - 1) / k!)) = 10 / pow2(k - 1). */
+      weight /= 2.0f;
+      fN += weight * elementary_mean[k];
+    }
+    transmittance += exp(X[i]) * fN;
+  }
+
+  *throughput *= transmittance / (N + 1);
 }
 
 /* Equi-angular sampling as in:
