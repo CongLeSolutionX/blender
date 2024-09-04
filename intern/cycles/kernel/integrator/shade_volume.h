@@ -51,7 +51,7 @@ typedef struct VolumeIntegrateResult {
  * and precision issues.
  * todo: this value could be tweaked or turned into a probability to avoid unnecessary
  * work in volumes and subsurface scattering. */
-#  define VOLUME_THROUGHPUT_EPSILON 1e-6f
+#  define VOLUME_THROUGHPUT_LOG_EPSILON -13.815510558f /* log(1e-6) */
 
 /* Volume shader properties
  *
@@ -192,8 +192,6 @@ ccl_device void volume_shadow_heterogeneous(KernelGlobals kg,
   RNGState rng_state;
   shadow_path_state_rng_load(state, &rng_state);
 
-  Spectrum tp = *throughput;
-
   /* Prepare for stepping.
    * For shadows we do not offset all segments, since the starting point is
    * already a random distance inside the volume. It also appears to create
@@ -211,11 +209,9 @@ ccl_device void volume_shadow_heterogeneous(KernelGlobals kg,
                    &max_steps);
   const float steps_offset = 1.0f;
 
-  /* compute extinction at the start */
   float t = ray->tmin;
-
   Spectrum sum = zero_spectrum();
-
+  const Spectrum log_T = log(*throughput);
   for (int i = 0; i < max_steps; i++) {
     /* advance to new position */
     float new_t = min(ray->tmax, ray->tmin + (i + steps_offset) * step_size);
@@ -227,30 +223,22 @@ ccl_device void volume_shadow_heterogeneous(KernelGlobals kg,
     /* compute attenuation over segment */
     sd->P = new_P;
     if (shadow_volume_shader_sample(kg, state, sd, &sigma_t)) {
-      /* Compute `expf()` only for every Nth step, to save some calculations
-       * because `exp(a)*exp(b) = exp(a+b)`, also do a quick #VOLUME_THROUGHPUT_EPSILON
-       * check then. */
       sum += (-sigma_t * dt);
-      if ((i & 0x07) == 0) { /* TODO: Other interval? */
-        tp = *throughput * exp(sum);
-
-        /* stop if nearly all light is blocked */
-        if (reduce_max(tp) < VOLUME_THROUGHPUT_EPSILON) {
-          break;
-        }
+      if (reduce_max(sum + log_T) < VOLUME_THROUGHPUT_LOG_EPSILON) {
+        /* Stop if nearly all light is blocked. */
+        *throughput = zero_spectrum();
+        break;
       }
     }
 
-    /* stop if at the end of the volume */
     t = new_t;
     if (t == ray->tmax) {
-      /* Update throughput in case we haven't done it above */
-      tp = *throughput * exp(sum);
+      /* Stop if at the end of the volume. */
       break;
     }
   }
 
-  *throughput = tp;
+  *throughput *= exp(sum);
 }
 
 /* Equi-angular sampling as in:
