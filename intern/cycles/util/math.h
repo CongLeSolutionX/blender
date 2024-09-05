@@ -486,6 +486,14 @@ ccl_device_inline float nonzerof(float f, float eps)
   }
 }
 
+#ifdef __KERNEL_GPU__
+/* TODO(weizhen): check function availability on other GPUs and maybe copy C++ implementation. */
+ccl_device_inline float cbrtf(float x)
+{
+  return pow(x, 1.0f / 3.0f);
+}
+#endif
+
 /* The behavior of `atan2(0, 0)` is undefined on many platforms, to ensure consistent behavior, we
  * return 0 in this case. See !126951.
  * Computes the angle between the positive x axis and the vector pointing from origin to (x, y). */

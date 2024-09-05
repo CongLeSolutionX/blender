@@ -179,33 +179,6 @@ ccl_device void volume_shadow_homogeneous(KernelGlobals kg, IntegratorState stat
 }
 #  endif
 
-/* Returns maximal expansion order N. */
-/* TODO(weizhen): detect homogeneous media? */
-ccl_device int volume_aggressive_BK_roulette(KernelGlobals kg, float rand)
-{
-  float continuation_probability = 0.1f;
-  if (rand > continuation_probability) {
-    /* Stop at the zeroth-order term. */
-    return 0;
-  }
-
-  /* Rescale random number for reusing. */
-  rand /= continuation_probability;
-
-  /* Bhanot & Kennedy roulette with K = c = 2. */
-  /* TODO(weizhen): maybe manual cut off to prevent infinite loop. */
-  for (int k = 2 + 1;; k++) {
-    /* Update the probability of sampling at least order k. */
-    continuation_probability *= 2.0f / k;
-    if (rand > continuation_probability) {
-      return k - 1;
-    }
-
-    /* Rescale random number for reusing. */
-    rand /= continuation_probability;
-  }
-}
-
 /* *
  * Compute elementary symmetric means from X[0,...,N] - X[i], skipping X[i].
  *
@@ -236,6 +209,49 @@ ccl_device void volume_elementary_mean(const int N,
   }
 }
 
+/* Returns maximal expansion order N.
+ * See [Kettunen et al. 2021] Algorithm 2.
+ */
+/* TODO(weizhen): detect homogeneous media? */
+ccl_device int volume_aggressive_BK_roulette(KernelGlobals kg, float rand)
+{
+  float continuation_probability = 0.1f;
+  if (rand > continuation_probability) {
+    /* Stop at the zeroth-order term. */
+    return 0;
+  }
+
+  /* Rescale random number for reusing. */
+  rand /= continuation_probability;
+
+  /* Bhanot & Kennedy roulette with K = c = 2. */
+  /* TODO(weizhen): maybe manual cut off to prevent infinite loop. */
+  for (int k = 2 + 1;; k++) {
+    /* Update the probability of sampling at least order k. */
+    continuation_probability *= 2.0f / k;
+    if (rand > continuation_probability) {
+      return k - 1;
+    }
+
+    /* Rescale random number for reusing. */
+    rand /= continuation_probability;
+  }
+}
+
+/* *
+ * Automatically compute tuple size based on the volume density.
+ *
+ * \param tau: control optical thickness. Recommend using the difference between the majorant and
+ * minorant optical thicknesses when a minorant is available.
+ *
+ * See [Kettunen et al. 2021] Algorithm 4.
+ */
+ccl_device int volume_tuple_size(const float tau)
+{
+  const float N_CMF = ceilf(cbrtf((0.015f + tau) * (0.65f + tau) * (60.3f + tau)));
+  return max(1, int(floorf(N_CMF / 1.31945f + 0.5f)));
+}
+
 /* For each ray, the probability of evaluating at least 7 orders is 0.00127. */
 /* TODO(weizhen): find a reasonable threshold. */
 /* TODO(weizhen): instead of cutting off after certain order, use the recursive formulation from
@@ -259,12 +275,22 @@ ccl_device void volume_shadow_heterogeneous(KernelGlobals kg,
    * For shadows we do not offset all segments, since the starting point is
    * already a random distance inside the volume. It also appears to create
    * banding artifacts for unknown reasons. */
+
+#  if 0
   int M;
   float step_size, unused;
   volume_step_init(
       kg, &rng_state, object_step_size, ray->tmin, ray->tmax, &step_size, &unused, &unused, &M);
+#  else
+  const float ray_length = ray->tmax - ray->tmin;
+  /* TODO(weizhen): compute volume majorant and minorant. */
+  const int M = volume_tuple_size((0.225f - 0.0499f) * ray_length);
+  const float step_size = ray_length / M;
+#  endif
 
   const float rand = path_state_rng_2D(kg, &rng_state, PRNG_VOLUME_TAYLOR_EXPANSION).y;
+  /* TODO(weizhen): this implementation does not properly balance the workloads of the
+   * transmittance estimates inside the thread groups and causes slowdowns on GPU. */
   const int N = min(volume_aggressive_BK_roulette(kg, rand), VOLUME_EXPANSION_ORDER_CUTOFF);
 
   /* TODO(volume): use stratified samples, at least for the first few orders. */
