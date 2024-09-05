@@ -71,14 +71,22 @@ typedef struct EquiangularCoefficients {
 } EquiangularCoefficients;
 
 /* Evaluate shader to get extinction coefficient at P. */
-ccl_device_inline Spectrum shadow_volume_shader_eval(KernelGlobals kg,
-                                                     IntegratorShadowState state,
-                                                     ccl_private ShaderData *ccl_restrict sd)
+template<const bool shadow, typename ConstIntegratorGenericState>
+ccl_device_inline Spectrum volume_shader_eval_extinction(KernelGlobals kg,
+                                                         ConstIntegratorGenericState state,
+                                                         const uint32_t path_flag,
+                                                         ccl_private ShaderData *ccl_restrict sd)
 {
-  VOLUME_READ_LAMBDA(integrator_state_read_shadow_volume_stack(state, i))
-  volume_shader_eval<true>(kg, state, sd, PATH_RAY_SHADOW, volume_read_lambda_pass);
+  if constexpr (shadow) {
+    VOLUME_READ_LAMBDA(integrator_state_read_shadow_volume_stack(state, i))
+    volume_shader_eval<shadow>(kg, state, sd, path_flag, volume_read_lambda_pass);
+  }
+  else {
+    VOLUME_READ_LAMBDA(integrator_state_read_volume_stack(state, i))
+    volume_shader_eval<shadow>(kg, state, sd, path_flag, volume_read_lambda_pass);
+  }
 
-  if (!(sd->flag & SD_EXTINCTION)) {
+  if (!(sd->flag & (SD_EXTINCTION))) {
     return zero_spectrum();
   }
 
@@ -185,11 +193,16 @@ ccl_device void volume_shadow_homogeneous(KernelGlobals kg, IntegratorState stat
  * https://research.nvidia.com/publication/2021-06_unbiased-ray-marching-transmittance-estimator
  */
 
-/* For each ray, the probability of evaluating at least 7 orders is 0.00127. */
-/* TODO(weizhen): find a reasonable threshold. */
-/* TODO(weizhen): instead of cutting off after certain order, use the recursive formulation from
+/* TODO(weizhen): find a reasonable threshold for cut off, or use the recursive formulation from
  * Georgiev et al. 2019 instead. */
-#  define VOLUME_EXPANSION_ORDER_CUTOFF 7
+#  ifdef __KERNEL_GPU__
+/* For each ray, the probability of evaluating at least 5 orders is 0.1 * 2^4 / 5! = 0.01333. GPU
+ * seems to have problems with too many recursions. */
+#    define VOLUME_EXPANSION_ORDER_CUTOFF 5
+#  else
+/* For each ray, the probability of evaluating at least 7 orders is 0.1* 2^6 / 7! = 0.00127. */
+#    define VOLUME_EXPANSION_ORDER_CUTOFF 7
+#  endif
 
 /**
  * Compute elementary symmetric means from X[0,...,N] - X[i], skipping X[i].
@@ -239,7 +252,7 @@ ccl_device int volume_aggressive_BK_roulette(KernelGlobals kg, float rand)
   for (int k = 2 + 1;; k++) {
     /* Update the probability of sampling at least order k. */
     continuation_probability *= 2.0f / k;
-    if (rand > continuation_probability) {
+    if (rand > continuation_probability || k > VOLUME_EXPANSION_ORDER_CUTOFF) {
       return k - 1;
     }
 
@@ -263,7 +276,7 @@ ccl_device int volume_tuple_size(const float tau)
 }
 
 /**
- * Compute transmittance along the ray between [ray->tmin, ray->tmin + ray_length]
+ * Compute transmittance along the ray between [tmin, tmax]
  *
  * /param sigma: extinction control. Recommend using the difference between the majorant and
  * minorant extinction when a minorant is available
@@ -273,21 +286,27 @@ ccl_device int volume_tuple_size(const float tau)
  *
  * See [Kettunen et al. 2021] Algorithm 5.
  */
+template<const bool shadow, typename ConstIntegratorGenericState>
 ccl_device Spectrum volume_unbiased_ray_marching(KernelGlobals kg,
-                                                 IntegratorShadowState state,
+                                                 ConstIntegratorGenericState state,
                                                  const ccl_private Ray *ccl_restrict ray,
                                                  ccl_private ShaderData *ccl_restrict sd,
-                                                 const float ray_length,
+                                                 const uint32_t path_flag,
+                                                 const float tmin,
+                                                 const float tmax,
                                                  const float sigma,
                                                  const float rand,
-                                                 uint lcg_state)
+                                                 ccl_private uint &lcg_state)
 {
   /* Compute tuple size and expansion order. */
-  const int M = volume_tuple_size(sigma * ray_length);
+  const float ray_length = tmax - tmin;
+  /* TODO(weizhen): check if `ray->tmax == FLT_MAX` is correctly handled. */
+  const int M = min(volume_tuple_size(sigma * ray_length),
+                    kernel_data.integrator.volume_max_steps);
   const float step_size = ray_length / M;
   /* TODO(weizhen): this implementation does not properly balance the workloads of the
    * transmittance estimates inside the thread groups and causes slowdowns on GPU. */
-  const int N = min(volume_aggressive_BK_roulette(kg, rand), VOLUME_EXPANSION_ORDER_CUTOFF);
+  const int N = volume_aggressive_BK_roulette(kg, rand);
 
   /* Combed estimators of the optical thickness. */
   Spectrum X[VOLUME_EXPANSION_ORDER_CUTOFF + 1];
@@ -296,12 +315,11 @@ ccl_device Spectrum volume_unbiased_ray_marching(KernelGlobals kg,
     const float step_shade_offset = lcg_step_float(&lcg_state);
     for (int j = 0; j < M; j++) {
       /* Advance to new position. */
-      const float t = min(ray->tmax, ray->tmin + (step_shade_offset + j) * step_size);
+      const float t = min(tmax, tmin + (step_shade_offset + j) * step_size);
       sd->P = ray->P + ray->D * t;
 
       /* TODO(weizhen): early cut off? */
-      const Spectrum sigma_t = shadow_volume_shader_eval(kg, state, sd);
-      X[i] += sigma_t;
+      X[i] += volume_shader_eval_extinction<shadow>(kg, state, path_flag, sd);
     }
     X[i] = -step_size * X[i];
   }
@@ -350,11 +368,12 @@ ccl_device void volume_shadow_heterogeneous(KernelGlobals kg,
       kg, &rng_state, object_step_size, ray->tmin, ray->tmax, &step_size, &unused, &unused, &M);
 #  endif
 
-  const float ray_length = ray->tmax - ray->tmin;
   /* TODO(weizhen): compute volume majorant and minorant. If the value is too off it doesn't seem
    * to converge. */
   const float sigma = 0.225f - 0.0499f;
-  const float rand = path_state_rng_2D(kg, &rng_state, PRNG_VOLUME_TAYLOR_EXPANSION).y;
+  // const float sigma = 31.0f;
+  // const float sigma = 10.0f;
+  const float rand = path_state_rng_3D(kg, &rng_state, PRNG_VOLUME_TAYLOR_EXPANSION).z;
 
   /* TODO(volume): use stratified samples, at least for the first few orders. */
   uint lcg_state = lcg_state_init(INTEGRATOR_STATE(state, shadow_path, rng_pixel),
@@ -362,8 +381,8 @@ ccl_device void volume_shadow_heterogeneous(KernelGlobals kg,
                                   INTEGRATOR_STATE(state, shadow_path, sample),
                                   0x8647ace4);
 
-  *throughput *= volume_unbiased_ray_marching(
-      kg, state, ray, sd, ray_length, sigma, rand, lcg_state);
+  *throughput *= volume_unbiased_ray_marching<true>(
+      kg, state, ray, sd, PATH_RAY_SHADOW, ray->tmin, ray->tmax, sigma, rand, lcg_state);
 }
 
 /* Equi-angular sampling as in:
@@ -486,6 +505,7 @@ typedef struct VolumeIntegrateState {
 
   /* If volume is absorption-only up to this point, and no probabilistic
    * scattering or termination has been used yet. */
+  /* TODO(weizhen): doesn't seem to be used. */
   bool absorption_only;
 
   /* Random numbers for scattering. */
@@ -617,160 +637,64 @@ ccl_device_forceinline void volume_integrate_heterogeneous(
 {
   PROFILING_INIT(kg, PROFILING_SHADE_VOLUME_INTEGRATE);
 
-  /* Prepare for stepping.
-   * Using a different step offset for the first step avoids banding artifacts. */
-  int max_steps;
-  float step_size, step_shade_offset, steps_offset;
-  volume_step_init(kg,
-                   rng_state,
-                   object_step_size,
-                   ray->tmin,
-                   ray->tmax,
-                   &step_size,
-                   &step_shade_offset,
-                   &steps_offset,
-                   &max_steps);
-
   /* Initialize volume integration state. */
   VolumeIntegrateState vstate ccl_optional_struct_init;
-  vstate.t.min = ray->tmin;
-  vstate.t.max = ray->tmin;
-  vstate.absorption_only = true;
   vstate.rscatter = path_state_rng_1D(kg, rng_state, PRNG_VOLUME_SCATTER_DISTANCE);
-  vstate.rchannel = path_state_rng_1D(kg, rng_state, PRNG_VOLUME_COLOR_CHANNEL);
 
-  /* Multiple importance sampling: pick between equiangular and distance sampling strategy. */
-  vstate.direct_sample_method = direct_sample_method;
-  vstate.use_mis = (direct_sample_method == VOLUME_SAMPLE_MIS);
-  if (vstate.use_mis) {
-    if (vstate.rscatter < 0.5f) {
-      vstate.rscatter *= 2.0f;
-      vstate.direct_sample_method = VOLUME_SAMPLE_DISTANCE;
-    }
-    else {
-      vstate.rscatter = (vstate.rscatter - 0.5f) * 2.0f;
-      vstate.direct_sample_method = VOLUME_SAMPLE_EQUIANGULAR;
-    }
-  }
-  vstate.equiangular_pdf = 0.0f;
-  vstate.distance_pdf = 1.0f;
+  /* Equiangular sampling: compute distance and PDF in advance. */
+  result.direct_t = volume_equiangular_sample(
+      ray, equiangular_coeffs, vstate.rscatter, &vstate.equiangular_pdf);
 
   /* Initialize volume integration result. */
   const Spectrum throughput = INTEGRATOR_STATE(state, path, throughput);
   result.direct_throughput = throughput;
   result.indirect_throughput = throughput;
 
-  /* Equiangular sampling: compute distance and PDF in advance. */
-  if (vstate.direct_sample_method == VOLUME_SAMPLE_EQUIANGULAR) {
-    result.direct_t = volume_equiangular_sample(
-        ray, equiangular_coeffs, vstate.rscatter, &vstate.equiangular_pdf);
-  }
-#  ifdef __PATH_GUIDING__
-  result.direct_sample_method = vstate.direct_sample_method;
-#  endif
-
-#  ifdef __DENOISING_FEATURES__
-  const bool write_denoising_features = (INTEGRATOR_STATE(state, path, flag) &
-                                         PATH_RAY_DENOISING_FEATURES);
-  Spectrum accum_albedo = zero_spectrum();
-#  endif
-  Spectrum accum_emission = zero_spectrum();
-
-  if (steps_offset != 1.0f) {
-    /* Plus one because we offset the end point. */
-    max_steps += 1;
-  }
-  for (int i = 0; i < max_steps; i++) {
-    /* Advance to new position */
-    vstate.t.max = min(ray->tmax, ray->tmin + (i + steps_offset) * step_size);
-    const float shade_t = vstate.t.min + (vstate.t.max - vstate.t.min) * step_shade_offset;
-    sd->P = ray->P + ray->D * shade_t;
-
-    /* compute segment */
+  if (direct_sample_method == VOLUME_SAMPLE_EQUIANGULAR && vstate.equiangular_pdf != 0.0f) {
+    /* Direct scatter. */
+    /* TODO(weizhen): support density-based distance sampling. */
+    sd->P = ray->P + ray->D * result.direct_t;
     VolumeShaderCoefficients coeff ccl_optional_struct_init;
-    if (volume_shader_sample(kg, state, sd, &coeff)) {
-      const int closure_flag = sd->flag;
+    if (volume_shader_sample(kg, state, sd, &coeff) && (sd->flag & SD_SCATTER)) {
+      result.direct_scatter = true;
+      result.direct_throughput *= coeff.sigma_s / vstate.equiangular_pdf;
 
-      /* Evaluate transmittance over segment. */
-      const float dt = (vstate.t.max - vstate.t.min);
-      const Spectrum transmittance = (closure_flag & SD_EXTINCTION) ?
-                                         volume_color_transmittance(coeff.sigma_t, dt) :
-                                         one_spectrum();
-
-      /* Emission. */
-      if (closure_flag & SD_EMISSION) {
-        /* Only write emission before indirect light scatter position, since we terminate
-         * stepping at that point if we have already found a direct light scatter position. */
-        if (!result.indirect_scatter) {
-          const Spectrum emission = volume_emission_integrate(
-              &coeff, closure_flag, transmittance, dt);
-          accum_emission += result.indirect_throughput * emission;
-          guiding_record_volume_emission(kg, state, emission);
-        }
-      }
-
-      if (closure_flag & SD_EXTINCTION) {
-        if ((closure_flag & SD_SCATTER) || !vstate.absorption_only) {
-#  ifdef __DENOISING_FEATURES__
-          /* Accumulate albedo for denoising features. */
-          if (write_denoising_features && (closure_flag & SD_SCATTER)) {
-            const Spectrum albedo = safe_divide_color(coeff.sigma_s, coeff.sigma_t);
-            accum_albedo += result.indirect_throughput * albedo * (one_spectrum() - transmittance);
-          }
-#  endif
-
-          /* Scattering and absorption. */
-          volume_integrate_step_scattering(
-              sd, ray, equiangular_coeffs, coeff, transmittance, vstate, result);
-        }
-        else {
-          /* Absorption only. */
-          result.indirect_throughput *= transmittance;
-          result.direct_throughput *= transmittance;
-        }
-
-        /* Stop if nearly all light blocked. */
-        if (!result.indirect_scatter) {
-          if (reduce_max(result.indirect_throughput) < VOLUME_THROUGHPUT_EPSILON) {
-            result.indirect_throughput = zero_spectrum();
-            break;
-          }
-        }
-        else if (!result.direct_scatter) {
-          if (reduce_max(result.direct_throughput) < VOLUME_THROUGHPUT_EPSILON) {
-            break;
-          }
-        }
-      }
-
-      /* If we have scattering data for both direct and indirect, we're done. */
-      if (result.direct_scatter && result.indirect_scatter) {
-        break;
-      }
-    }
-
-    /* Stop if at the end of the volume. */
-    vstate.t.min = vstate.t.max;
-    if (vstate.t.min == ray->tmax) {
-      break;
+      volume_shader_copy_phases(&result.direct_phases, sd);
     }
   }
 
-  /* Write accumulated emission. */
-  if (!is_zero(accum_emission)) {
-    if (light_link_object_match(kg, light_link_receiver_forward(kg, state), sd->object)) {
-      film_write_volume_emission(
-          kg, state, accum_emission, render_buffer, object_lightgroup(kg, sd->object));
-    }
+  const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
+  /* TODO(weizhen): compute volume majorant and minorant. */
+  const float sigma = 0.225f - 0.0499f;
+  /* TODO(volume): use stratified samples, at least for the first few orders. */
+  uint lcg_state = lcg_state_init(INTEGRATOR_STATE(state, path, rng_pixel),
+                                  INTEGRATOR_STATE(state, path, rng_offset),
+                                  INTEGRATOR_STATE(state, path, sample),
+                                  0xe35fad82);
+
+  float tmin = ray->tmin;
+  if (result.direct_scatter) {
+    /* Compute transmission until direct scatter position. */
+    const float rand = path_state_rng_3D(kg, rng_state, PRNG_VOLUME_TAYLOR_EXPANSION).x;
+    const Spectrum transmission = volume_unbiased_ray_marching<false>(
+        kg, state, ray, sd, path_flag, ray->tmin, result.direct_t, sigma, rand, lcg_state);
+
+    result.direct_throughput *= transmission;
+    result.indirect_throughput *= transmission;
+
+    tmin = result.direct_t;
   }
 
-#  ifdef __DENOISING_FEATURES__
-  /* Write denoising features. */
-  if (write_denoising_features) {
-    film_write_denoising_features_volume(
-        kg, state, accum_albedo, result.indirect_scatter, render_buffer);
+  {
+    /* Compute indirect transmission. */
+    /* TODO(weizhen): add indirect scattering. */
+    const float rand = path_state_rng_3D(kg, rng_state, PRNG_VOLUME_TAYLOR_EXPANSION).y;
+    result.indirect_throughput *= volume_unbiased_ray_marching<false>(
+        kg, state, ray, sd, path_flag, tmin, ray->tmax, sigma, rand, lcg_state);
   }
-#  endif /* __DENOISING_FEATURES__ */
+
+  /* TODO(weizhen): Accumulate albedo for denoising features. */
+  /* TODO(weizhen): Emission. */
 }
 
 /* Path tracing: sample point on light for equiangular sampling. */
