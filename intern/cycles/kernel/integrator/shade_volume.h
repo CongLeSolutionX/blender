@@ -179,7 +179,19 @@ ccl_device void volume_shadow_homogeneous(KernelGlobals kg, IntegratorState stat
 }
 #  endif
 
-/* *
+/* --------------------------------------------------------------------
+ * Volume transmittance estimation based on "An unbiased ray-marching transmittance estimator" by
+ * Kettunen et al.
+ * https://research.nvidia.com/publication/2021-06_unbiased-ray-marching-transmittance-estimator
+ */
+
+/* For each ray, the probability of evaluating at least 7 orders is 0.00127. */
+/* TODO(weizhen): find a reasonable threshold. */
+/* TODO(weizhen): instead of cutting off after certain order, use the recursive formulation from
+ * Georgiev et al. 2019 instead. */
+#  define VOLUME_EXPANSION_ORDER_CUTOFF 7
+
+/**
  * Compute elementary symmetric means from X[0,...,N] - X[i], skipping X[i].
  *
  * \param N: expansion order
@@ -209,9 +221,7 @@ ccl_device void volume_elementary_mean(const int N,
   }
 }
 
-/* Returns maximal expansion order N.
- * See [Kettunen et al. 2021] Algorithm 2.
- */
+/* Randomly sample expansion order N. See [Kettunen et al. 2021] Algorithm 2. */
 /* TODO(weizhen): detect homogeneous media? */
 ccl_device int volume_aggressive_BK_roulette(KernelGlobals kg, float rand)
 {
@@ -238,11 +248,11 @@ ccl_device int volume_aggressive_BK_roulette(KernelGlobals kg, float rand)
   }
 }
 
-/* *
+/**
  * Automatically compute tuple size based on the volume density.
  *
- * \param tau: control optical thickness. Recommend using the difference between the majorant and
- * minorant optical thicknesses when a minorant is available.
+ * \param tau: control optical thickness
+ * \return number of ray marching sections along the ray
  *
  * See [Kettunen et al. 2021] Algorithm 4.
  */
@@ -252,52 +262,32 @@ ccl_device int volume_tuple_size(const float tau)
   return max(1, int(floorf(N_CMF / 1.31945f + 0.5f)));
 }
 
-/* For each ray, the probability of evaluating at least 7 orders is 0.00127. */
-/* TODO(weizhen): find a reasonable threshold. */
-/* TODO(weizhen): instead of cutting off after certain order, use the recursive formulation from
- * Georgiev et al. 2019 instead. */
-#  define VOLUME_EXPANSION_ORDER_CUTOFF 7
-
-/* heterogeneous volume: integrate stepping through the volume until we
- * reach the end, get absorbed entirely, or run out of iterations */
-ccl_device void volume_shadow_heterogeneous(KernelGlobals kg,
-                                            IntegratorShadowState state,
-                                            ccl_private Ray *ccl_restrict ray,
-                                            ccl_private ShaderData *ccl_restrict sd,
-                                            ccl_private Spectrum *ccl_restrict throughput,
-                                            const float object_step_size)
+/**
+ * Compute transmittance along the ray between [ray->tmin, ray->tmin + ray_length]
+ *
+ * /param sigma: extinction control. Recommend using the difference between the majorant and
+ * minorant extinction when a minorant is available
+ * /param rand: random number \in [0, 1] for sampling expansion order
+ * /param lcg_state: random number generator for sampling shading offset
+ * /return transmittance along the ray
+ *
+ * See [Kettunen et al. 2021] Algorithm 5.
+ */
+ccl_device Spectrum volume_unbiased_ray_marching(KernelGlobals kg,
+                                                 IntegratorShadowState state,
+                                                 const ccl_private Ray *ccl_restrict ray,
+                                                 ccl_private ShaderData *ccl_restrict sd,
+                                                 const float ray_length,
+                                                 const float sigma,
+                                                 const float rand,
+                                                 uint lcg_state)
 {
-  /* Load random number state. */
-  RNGState rng_state;
-  shadow_path_state_rng_load(state, &rng_state);
-
-  /* Prepare for stepping.
-   * For shadows we do not offset all segments, since the starting point is
-   * already a random distance inside the volume. It also appears to create
-   * banding artifacts for unknown reasons. */
-
-#  if 0
-  int M;
-  float step_size, unused;
-  volume_step_init(
-      kg, &rng_state, object_step_size, ray->tmin, ray->tmax, &step_size, &unused, &unused, &M);
-#  else
-  const float ray_length = ray->tmax - ray->tmin;
-  /* TODO(weizhen): compute volume majorant and minorant. */
-  const int M = volume_tuple_size((0.225f - 0.0499f) * ray_length);
+  /* Compute tuple size and expansion order. */
+  const int M = volume_tuple_size(sigma * ray_length);
   const float step_size = ray_length / M;
-#  endif
-
-  const float rand = path_state_rng_2D(kg, &rng_state, PRNG_VOLUME_TAYLOR_EXPANSION).y;
   /* TODO(weizhen): this implementation does not properly balance the workloads of the
    * transmittance estimates inside the thread groups and causes slowdowns on GPU. */
   const int N = min(volume_aggressive_BK_roulette(kg, rand), VOLUME_EXPANSION_ORDER_CUTOFF);
-
-  /* TODO(volume): use stratified samples, at least for the first few orders. */
-  uint lcg_state = lcg_state_init(INTEGRATOR_STATE(state, shadow_path, rng_pixel),
-                                  INTEGRATOR_STATE(state, shadow_path, rng_offset),
-                                  INTEGRATOR_STATE(state, shadow_path, sample),
-                                  0x8647ace4);
 
   /* Combed estimators of the optical thickness. */
   Spectrum X[VOLUME_EXPANSION_ORDER_CUTOFF + 1];
@@ -326,14 +316,54 @@ ccl_device void volume_shadow_heterogeneous(KernelGlobals kg,
     Spectrum fN = one_spectrum();
     float weight = 20.0f;
     for (int k = 1; k <= N; k++) {
-      /* weight = 1 / (k!Pk) = 1 / (k! * (0.1 * pow2(k - 1) / k!)) = 10 / pow2(k - 1). */
+      /* weight = 1 / (k!Pk) = 1 / (k! * (0.1 * 2^(k - 1) / k!)) = 10 / 2^(k - 1). */
       weight /= 2.0f;
       fN += weight * elementary_mean[k];
     }
     transmittance += exp(X[i]) * fN;
   }
 
-  *throughput *= transmittance / (N + 1);
+  return transmittance / (N + 1);
+}
+
+/* heterogeneous volume: integrate stepping through the volume until we
+ * reach the end, get absorbed entirely, or run out of iterations */
+ccl_device void volume_shadow_heterogeneous(KernelGlobals kg,
+                                            IntegratorShadowState state,
+                                            ccl_private Ray *ccl_restrict ray,
+                                            ccl_private ShaderData *ccl_restrict sd,
+                                            ccl_private Spectrum *ccl_restrict throughput,
+                                            const float object_step_size)
+{
+  /* Load random number state. */
+  RNGState rng_state;
+  shadow_path_state_rng_load(state, &rng_state);
+
+#  if 0
+  /* Prepare for stepping.
+   * For shadows we do not offset all segments, since the starting point is
+   * already a random distance inside the volume. It also appears to create
+   * banding artifacts for unknown reasons. */
+  int M;
+  float step_size, unused;
+  volume_step_init(
+      kg, &rng_state, object_step_size, ray->tmin, ray->tmax, &step_size, &unused, &unused, &M);
+#  endif
+
+  const float ray_length = ray->tmax - ray->tmin;
+  /* TODO(weizhen): compute volume majorant and minorant. If the value is too off it doesn't seem
+   * to converge. */
+  const float sigma = 0.225f - 0.0499f;
+  const float rand = path_state_rng_2D(kg, &rng_state, PRNG_VOLUME_TAYLOR_EXPANSION).y;
+
+  /* TODO(volume): use stratified samples, at least for the first few orders. */
+  uint lcg_state = lcg_state_init(INTEGRATOR_STATE(state, shadow_path, rng_pixel),
+                                  INTEGRATOR_STATE(state, shadow_path, rng_offset),
+                                  INTEGRATOR_STATE(state, shadow_path, sample),
+                                  0x8647ace4);
+
+  *throughput *= volume_unbiased_ray_marching(
+      kg, state, ray, sd, ray_length, sigma, rand, lcg_state);
 }
 
 /* Equi-angular sampling as in:
