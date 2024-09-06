@@ -204,6 +204,11 @@ ccl_device void volume_shadow_homogeneous(KernelGlobals kg, IntegratorState stat
 #    define VOLUME_EXPANSION_ORDER_CUTOFF 7
 #  endif
 
+/* TODO(weizhen): compute volume majorant and minorant. If the value is too off it doesn't seem to
+ * converge. Maybe use Spectrum instead of float. */
+#  define MAJORANT 0.225f
+#  define MINORANT 0.0499f
+
 /**
  * Compute elementary symmetric means from X[0,...,N] - X[i], skipping X[i].
  *
@@ -368,11 +373,7 @@ ccl_device void volume_shadow_heterogeneous(KernelGlobals kg,
       kg, &rng_state, object_step_size, ray->tmin, ray->tmax, &step_size, &unused, &unused, &M);
 #  endif
 
-  /* TODO(weizhen): compute volume majorant and minorant. If the value is too off it doesn't seem
-   * to converge. */
-  const float sigma = 0.225f - 0.0499f;
-  // const float sigma = 31.0f;
-  // const float sigma = 10.0f;
+  const float sigma = MAJORANT - MINORANT;
   const float rand = path_state_rng_3D(kg, &rng_state, PRNG_VOLUME_TAYLOR_EXPANSION).z;
 
   /* TODO(volume): use stratified samples, at least for the first few orders. */
@@ -465,6 +466,85 @@ ccl_device_inline bool volume_equiangular_valid_ray_segment(KernelGlobals kg,
   /* Point light, the whole range of the ray is visible. */
   kernel_assert(ls->type == LIGHT_POINT);
   return true;
+}
+
+/* --------------------------------------------------------------------
+ * Tracking-based distance sampling
+ */
+
+/**
+ * Sample distance along the ray based on weighted delta tracking
+ *
+ * /param rand: random number \in [0, 1] for sampling absorption, scatter or continue (null
+ * scatter) events
+ * /param lcg_state: random number generator for sampling distance
+ * /return true if successfully sampled a scatter event
+ */
+ccl_device bool volume_distance_sample(KernelGlobals kg,
+                                       const IntegratorState state,
+                                       const ccl_private Ray *ccl_restrict ray,
+                                       ccl_private ShaderData *ccl_restrict sd,
+                                       float rand,
+                                       ccl_private uint &lcg_state,
+                                       ccl_private VolumeIntegrateResult &result)
+{
+  /* Initialization */
+  const Spectrum sigma_maj = make_float3(MAJORANT);
+  const float inv_maj = 1.0f / MAJORANT;
+  float t = ray->tmin + sample_exponential_distribution(lcg_step_float(&lcg_state), inv_maj);
+  while (t < ray->tmax) {
+    sd->P = ray->P + ray->D * t;
+
+    VolumeShaderCoefficients coeff ccl_optional_struct_init;
+    if (volume_shader_sample(kg, state, sd, &coeff)) {
+      /* TODO(weizhen): spectral MIS (see PBRT 14.2.2). */
+      const Spectrum sigma_n = sigma_maj - coeff.sigma_t;
+      /* For procedure volumes `sigma_maj` might not be the strict upper bound. Use absolute value
+       * to handle negative null scattering coefficient as suggested in "Monte Carlo Methods for
+       * Volumetric Light Transport Simulation". */
+      const float abs_sigma_n = average(fabs(sigma_n));
+      const float sigma_t = average(coeff.sigma_t);
+      const float sigma_s = average(coeff.sigma_s);
+      const float sigma_a = sigma_t - sigma_s;
+      const float sigma_c = sigma_t + abs_sigma_n;
+      rand *= sigma_c;
+
+      /* TODO(weizhen): check value and sign. */
+      result.indirect_throughput *= inv_maj * sigma_c;
+      if (rand < sigma_a) {
+        /* Absorption. */
+        result.indirect_throughput *= (coeff.sigma_t - coeff.sigma_s) / sigma_a;
+        /* TODO(weizhen): handle emission. Might be problematic when there is no absorption because
+         * our formulation of emission is not tied with absorption (See PBRT Eq. 11.1). Also is the
+         * variance high? */
+        result.indirect_throughput = zero_spectrum();
+        return false;
+      }
+      if (rand < sigma_t) {
+        /* Sampled scatter event. */
+        result.indirect_t = t;
+        result.indirect_throughput *= coeff.sigma_s / sigma_s;
+
+        volume_shader_copy_phases(&result.indirect_phases, sd);
+        return true;
+      }
+
+      /* Null scattering. Accumulate weight and continue. */
+      result.indirect_throughput *= sigma_n / abs_sigma_n;
+
+      /* Rescale random number for reusing. */
+      rand = (rand - sigma_t) / abs_sigma_n;
+    }
+
+    /* Generate the next distance using random walk. */
+    /* TODO(weizhen): this has variance even with monochromatic volume, seems like ratio tracking
+     * needs higher majorant. Use combed estimation ([Kettunen et al. 2021] page 16 bottom), or
+     * reuse the estimation from equiangular transmittance, or reduce lookups. */
+    t += sample_exponential_distribution(lcg_step_float(&lcg_state), inv_maj);
+  }
+
+  /* No scatter event sampled along the ray. */
+  return false;
 }
 
 /* Emission */
@@ -639,20 +719,44 @@ ccl_device_forceinline void volume_integrate_heterogeneous(
 
   /* Initialize volume integration state. */
   VolumeIntegrateState vstate ccl_optional_struct_init;
-  vstate.rscatter = path_state_rng_1D(kg, rng_state, PRNG_VOLUME_SCATTER_DISTANCE);
+  const float rand_equiangular = path_state_rng_2D(kg, rng_state, PRNG_VOLUME_SCATTER_DISTANCE).x;
 
   /* Equiangular sampling: compute distance and PDF in advance. */
   result.direct_t = volume_equiangular_sample(
-      ray, equiangular_coeffs, vstate.rscatter, &vstate.equiangular_pdf);
+      ray, equiangular_coeffs, rand_equiangular, &vstate.equiangular_pdf);
 
   /* Initialize volume integration result. */
   const Spectrum throughput = INTEGRATOR_STATE(state, path, throughput);
   result.direct_throughput = throughput;
   result.indirect_throughput = throughput;
 
+  /* TODO(volume): use stratified samples, at least for the first few orders. */
+  uint lcg_state = lcg_state_init(INTEGRATOR_STATE(state, path, rng_pixel),
+                                  INTEGRATOR_STATE(state, path, rng_offset),
+                                  INTEGRATOR_STATE(state, path, sample),
+                                  0xe35fad82);
+
+  {
+    /* Indirect scatter. */
+    const float rand = path_state_rng_2D(kg, rng_state, PRNG_VOLUME_SCATTER_DISTANCE).y;
+    result.indirect_scatter = volume_distance_sample(kg, state, ray, sd, rand, lcg_state, result);
+  }
+
+  if (direct_sample_method == VOLUME_SAMPLE_DISTANCE && result.indirect_scatter) {
+    /* If using distance sampling for direct light, just copy parameters of indirect light since we
+     * scatter at the same point. */
+    result.direct_scatter = true;
+    result.direct_t = result.indirect_t;
+    result.direct_throughput = result.indirect_throughput;
+
+    volume_shader_copy_phases(&result.direct_phases, sd);
+  }
+
+  /* TODO(weizhen): indirect transmission is computed in `volume_distance_sample()`, but maybe the
+   * variance is high? Try to estimate with unbiased ray marching. */
+
   if (direct_sample_method == VOLUME_SAMPLE_EQUIANGULAR && vstate.equiangular_pdf != 0.0f) {
     /* Direct scatter. */
-    /* TODO(weizhen): support density-based distance sampling. */
     sd->P = ray->P + ray->D * result.direct_t;
     VolumeShaderCoefficients coeff ccl_optional_struct_init;
     if (volume_shader_sample(kg, state, sd, &coeff) && (sd->flag & SD_SCATTER)) {
@@ -660,39 +764,17 @@ ccl_device_forceinline void volume_integrate_heterogeneous(
       result.direct_throughput *= coeff.sigma_s / vstate.equiangular_pdf;
 
       volume_shader_copy_phases(&result.direct_phases, sd);
+
+      /* Compute transmission until direct scatter position. */
+      const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
+      const float sigma = MAJORANT - MINORANT;
+      const float rand = path_state_rng_3D(kg, rng_state, PRNG_VOLUME_TAYLOR_EXPANSION).x;
+      result.direct_throughput *= volume_unbiased_ray_marching<false>(
+          kg, state, ray, sd, path_flag, ray->tmin, result.direct_t, sigma, rand, lcg_state);
     }
   }
 
-  const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
-  /* TODO(weizhen): compute volume majorant and minorant. */
-  const float sigma = 0.225f - 0.0499f;
-  /* TODO(volume): use stratified samples, at least for the first few orders. */
-  uint lcg_state = lcg_state_init(INTEGRATOR_STATE(state, path, rng_pixel),
-                                  INTEGRATOR_STATE(state, path, rng_offset),
-                                  INTEGRATOR_STATE(state, path, sample),
-                                  0xe35fad82);
-
-  float tmin = ray->tmin;
-  if (result.direct_scatter) {
-    /* Compute transmission until direct scatter position. */
-    const float rand = path_state_rng_3D(kg, rng_state, PRNG_VOLUME_TAYLOR_EXPANSION).x;
-    const Spectrum transmission = volume_unbiased_ray_marching<false>(
-        kg, state, ray, sd, path_flag, ray->tmin, result.direct_t, sigma, rand, lcg_state);
-
-    result.direct_throughput *= transmission;
-    result.indirect_throughput *= transmission;
-
-    tmin = result.direct_t;
-  }
-
-  {
-    /* Compute indirect transmission. */
-    /* TODO(weizhen): add indirect scattering. */
-    const float rand = path_state_rng_3D(kg, rng_state, PRNG_VOLUME_TAYLOR_EXPANSION).y;
-    result.indirect_throughput *= volume_unbiased_ray_marching<false>(
-        kg, state, ray, sd, path_flag, tmin, ray->tmax, sigma, rand, lcg_state);
-  }
-
+  /* TODO(weizhen): MIS between equiangular sampling and ratio tracking. */
   /* TODO(weizhen): Accumulate albedo for denoising features. */
   /* TODO(weizhen): Emission. */
 }

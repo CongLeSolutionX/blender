@@ -199,4 +199,11 @@ ccl_device float2 regular_polygon_sample(float corners, float rotation, const fl
   return make_float2(cr * p.x - sr * p.y, sr * p.x + cr * p.y);
 }
 
+/* Generate random variable x following exponential distribution p(x) = lambda * exp(-lambda * x),
+ * where lambda > 0 is the rate parameter. */
+ccl_device_inline float sample_exponential_distribution(const float rand, const float inv_lambda)
+{
+  return -logf(1.0f - rand) * inv_lambda;
+}
+
 CCL_NAMESPACE_END
