@@ -274,6 +274,8 @@ ccl_device int volume_aggressive_BK_roulette(KernelGlobals kg, float rand)
  *
  * See [Kettunen et al. 2021] Algorithm 4.
  */
+/* TODO(weizhen): this formula is purely for matching the cost of [Georgiev et al. 2019]. Probably
+ * it's not needed, and we can use the expectation of the number of events `tau`? */
 ccl_device int volume_tuple_size(const float tau)
 {
   const float N_CMF = ceilf(cbrtf((0.015f + tau) * (0.65f + tau) * (60.3f + tau)));
@@ -517,6 +519,8 @@ ccl_device bool volume_distance_sample(KernelGlobals kg,
         /* TODO(weizhen): handle emission. Might be problematic when there is no absorption because
          * our formulation of emission is not tied with absorption (See PBRT Eq. 11.1). Also is the
          * variance high? */
+        /* TODO(weizhen): skip `sigma_a` and use `sigma_c = sigma_s + sigma_n` if no emission is
+         * present. */
         result.indirect_throughput = zero_spectrum();
         return false;
       }
