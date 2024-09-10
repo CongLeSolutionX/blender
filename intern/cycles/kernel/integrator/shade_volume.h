@@ -518,8 +518,14 @@ ccl_device bool volume_distance_sample(KernelGlobals kg,
        * to handle negative null scattering coefficient as suggested in "Monte Carlo Methods for
        * Volumetric Light Transport Simulation". */
       const Spectrum abs_sigma_n = fabs(sigma_n);
-      const Spectrum sigma_a = coeff.sigma_t - coeff.sigma_s;
-      const Spectrum sigma_c = coeff.sigma_t + abs_sigma_n;
+      Spectrum sigma_c = coeff.sigma_s + abs_sigma_n;
+
+      Spectrum sigma_a = zero_spectrum();
+      if (sd->flag & SD_EMISSION || reduce_add(sigma_c) == 0.0f) {
+        sigma_a = coeff.sigma_t - coeff.sigma_s;
+        sigma_c = coeff.sigma_t + abs_sigma_n;
+      }
+      const Spectrum sigma_t = coeff.sigma_s + sigma_a;
 
       /* Pick random color channel, we use the Veach one-sample model with balance heuristic for
        * the channels. */
@@ -542,12 +548,10 @@ ccl_device bool volume_distance_sample(KernelGlobals kg,
         /* TODO(weizhen): handle emission. Might be problematic when there is no absorption because
          * our formulation of emission is not tied with absorption (See PBRT Eq. 11.1). Also is the
          * variance high? */
-        /* TODO(weizhen): skip `sigma_a` and use `sigma_c = sigma_s + sigma_n` if no emission is
-         * present. */
         result.indirect_throughput = zero_spectrum();
         return false;
       }
-      if (rand < coeff.sigma_t[channel]) {
+      if (rand < sigma_t[channel]) {
         /* Sampled scatter event. */
         result.indirect_t = t;
         const Spectrum pdf_s = coeff.sigma_s / sigma_c;
@@ -565,7 +569,7 @@ ccl_device bool volume_distance_sample(KernelGlobals kg,
       result.indirect_throughput *= sigma_n / abs_sigma_n * mis;
 
       /* Rescale random number for reusing. */
-      rand = (rand - coeff.sigma_t[channel]) / abs_sigma_n[channel];
+      rand = (rand - sigma_t[channel]) / abs_sigma_n[channel];
     }
 
     /* Generate the next distance using random walk. */
