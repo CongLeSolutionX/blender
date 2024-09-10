@@ -209,6 +209,9 @@ ccl_device void volume_shadow_homogeneous(KernelGlobals kg, IntegratorState stat
 #  define MAJORANT 0.225f
 #  define MINORANT 0.0499f
 
+/* For delta-tracking it seems benefitial to increase majorant. */
+#  define DELTA_TRACKING_SCALE 1.0f
+
 /**
  * Compute elementary symmetric means from X[0,...,N] - X[i], skipping X[i].
  *
@@ -303,7 +306,8 @@ ccl_device Spectrum volume_unbiased_ray_marching(KernelGlobals kg,
                                                  const float tmax,
                                                  const float sigma,
                                                  const float rand,
-                                                 ccl_private uint &lcg_state)
+                                                 ccl_private uint &lcg_state,
+                                                 ccl_private Spectrum *biased_tau = nullptr)
 {
   /* Compute tuple size and expansion order. */
   const float ray_length = tmax - tmin;
@@ -317,7 +321,12 @@ ccl_device Spectrum volume_unbiased_ray_marching(KernelGlobals kg,
 
   /* Combed estimators of the optical thickness. */
   Spectrum X[VOLUME_EXPANSION_ORDER_CUTOFF + 1];
-  for (int i = 0; i <= N; i++) {
+  int i = 0;
+  if (biased_tau) {
+    X[0] = *biased_tau;
+    i = 1;
+  }
+  for (; i <= N; i++) {
     X[i] = zero_spectrum();
     const float step_shade_offset = lcg_step_float(&lcg_state);
     for (int j = 0; j < M; j++) {
@@ -488,17 +497,22 @@ ccl_device bool volume_distance_sample(KernelGlobals kg,
                                        ccl_private ShaderData *ccl_restrict sd,
                                        float rand,
                                        ccl_private uint &lcg_state,
-                                       ccl_private VolumeIntegrateResult &result)
+                                       ccl_private VolumeIntegrateResult &result,
+                                       ccl_private Spectrum &pdf,
+                                       ccl_private Spectrum &tau)
 {
   /* Initialization */
-  const Spectrum sigma_maj = make_float3(MAJORANT);
-  const float inv_maj = 1.0f / MAJORANT;
+  const Spectrum sigma_maj = make_float3(DELTA_TRACKING_SCALE * MAJORANT);
+  const float inv_maj = 1.0f / (MAJORANT * DELTA_TRACKING_SCALE);
   float t = ray->tmin + sample_exponential_distribution(lcg_step_float(&lcg_state), inv_maj);
+  int num_samples = 0;
   while (t < ray->tmax) {
     sd->P = ray->P + ray->D * t;
 
     VolumeShaderCoefficients coeff ccl_optional_struct_init;
+    num_samples++;
     if (volume_shader_sample(kg, state, sd, &coeff)) {
+      tau -= coeff.sigma_t;
       const Spectrum sigma_n = sigma_maj - coeff.sigma_t;
       /* For procedure volumes `sigma_maj` might not be the strict upper bound. Use absolute value
        * to handle negative null scattering coefficient as suggested in "Monte Carlo Methods for
@@ -522,6 +536,8 @@ ccl_device bool volume_distance_sample(KernelGlobals kg,
         /* Absorption. */
         const Spectrum mis = sigma_a / dot(channel_pdf, sigma_a);
         result.indirect_throughput *= mis;
+        pdf *= sigma_a;
+
         /* TODO(weizhen): handle emission. Might be problematic when there is no absorption because
          * our formulation of emission is not tied with absorption (See PBRT Eq. 11.1). Also is the
          * variance high? */
@@ -535,7 +551,8 @@ ccl_device bool volume_distance_sample(KernelGlobals kg,
         result.indirect_t = t;
         const Spectrum mis = coeff.sigma_s / dot(channel_pdf, coeff.sigma_s);
         result.indirect_throughput *= mis;
-
+        pdf *= coeff.sigma_s;
+        tau *= (t - ray->tmin) / num_samples;
         volume_shader_copy_phases(&result.indirect_phases, sd);
         return true;
       }
@@ -607,109 +624,9 @@ typedef struct VolumeIntegrateState {
   /* Multiple importance sampling. */
   VolumeSampleMethod direct_sample_method;
   bool use_mis;
-  float distance_pdf;
+  Spectrum distance_pdf;
   float equiangular_pdf;
 } VolumeIntegrateState;
-
-ccl_device_forceinline void volume_integrate_step_scattering(
-    ccl_private const ShaderData *sd,
-    ccl_private const Ray *ray,
-    ccl_private const EquiangularCoefficients &equiangular_coeffs,
-    ccl_private const VolumeShaderCoefficients &ccl_restrict coeff,
-    const Spectrum transmittance,
-    ccl_private VolumeIntegrateState &ccl_restrict vstate,
-    ccl_private VolumeIntegrateResult &ccl_restrict result)
-{
-  /* Pick random color channel, we use the Veach one-sample
-   * model with balance heuristic for the channels. */
-  const Spectrum albedo = safe_divide_color(coeff.sigma_s, coeff.sigma_t);
-  Spectrum channel_pdf;
-  const int channel = volume_sample_channel(
-      albedo, result.indirect_throughput, &vstate.rchannel, &channel_pdf);
-
-  /* Equiangular sampling for direct lighting. */
-  if (vstate.direct_sample_method == VOLUME_SAMPLE_EQUIANGULAR && !result.direct_scatter) {
-    if (vstate.t.contains(result.direct_t) && vstate.equiangular_pdf > VOLUME_SAMPLE_PDF_CUTOFF) {
-      const float new_dt = result.direct_t - vstate.t.min;
-      const Spectrum new_transmittance = volume_color_transmittance(coeff.sigma_t, new_dt);
-
-      result.direct_scatter = true;
-      result.direct_throughput *= coeff.sigma_s * new_transmittance / vstate.equiangular_pdf;
-      volume_shader_copy_phases(&result.direct_phases, sd);
-
-      /* Multiple importance sampling. */
-      if (vstate.use_mis) {
-        const float distance_pdf = vstate.distance_pdf *
-                                   dot(channel_pdf, coeff.sigma_t * new_transmittance);
-        const float mis_weight = 2.0f * power_heuristic(vstate.equiangular_pdf, distance_pdf);
-        result.direct_throughput *= mis_weight;
-      }
-    }
-    else {
-      result.direct_throughput *= transmittance;
-      vstate.distance_pdf *= dot(channel_pdf, transmittance);
-    }
-  }
-
-  /* Distance sampling for indirect and optional direct lighting. */
-  if (!result.indirect_scatter) {
-    const float sample_transmittance = volume_channel_get(transmittance, channel);
-
-    /* If sampled distance does not go beyond the current segment, we have found the scatter
-     * position. Otherwise continue searching and accumulate the transmittance along the ray. */
-    if (1.0f - vstate.rscatter >= sample_transmittance) {
-      /* Pick `sigma_t` from a random channel. */
-      const float sample_sigma_t = volume_channel_get(coeff.sigma_t, channel);
-
-      /* Generate the next distance using random walk, following exponential distribution
-       * p(dt) = sigma_t * exp(-sigma_t * dt). */
-      const float new_dt = -logf(1.0f - vstate.rscatter) / sample_sigma_t;
-      const float new_t = vstate.t.min + new_dt;
-
-      const Spectrum new_transmittance = volume_color_transmittance(coeff.sigma_t, new_dt);
-      /* pdf for density-based distance sampling is handled implicitly via
-       * transmittance / pdf = exp(-sigma_t * dt) / (sigma_t * exp(-sigma_t * dt)) = 1 / sigma_t.
-       */
-      const float distance_pdf = dot(channel_pdf, coeff.sigma_t * new_transmittance);
-
-      if (vstate.distance_pdf * distance_pdf > VOLUME_SAMPLE_PDF_CUTOFF) {
-        /* throughput */
-        result.indirect_scatter = true;
-        result.indirect_t = new_t;
-        result.indirect_throughput *= coeff.sigma_s * new_transmittance / distance_pdf;
-        volume_shader_copy_phases(&result.indirect_phases, sd);
-
-        if (vstate.direct_sample_method != VOLUME_SAMPLE_EQUIANGULAR) {
-          /* If using distance sampling for direct light, just copy parameters
-           * of indirect light since we scatter at the same point then. */
-          result.direct_scatter = true;
-          result.direct_t = result.indirect_t;
-          result.direct_throughput = result.indirect_throughput;
-          volume_shader_copy_phases(&result.direct_phases, sd);
-
-          /* Multiple importance sampling. */
-          if (vstate.use_mis) {
-            const float equiangular_pdf = volume_equiangular_pdf(ray, equiangular_coeffs, new_t);
-            const float mis_weight = power_heuristic(vstate.distance_pdf * distance_pdf,
-                                                     equiangular_pdf);
-            result.direct_throughput *= 2.0f * mis_weight;
-          }
-        }
-      }
-    }
-    else {
-      /* throughput */
-      const float pdf = dot(channel_pdf, transmittance);
-      result.indirect_throughput *= transmittance / pdf;
-      if (vstate.direct_sample_method != VOLUME_SAMPLE_EQUIANGULAR) {
-        vstate.distance_pdf *= pdf;
-      }
-
-      /* remap rscatter so we can reuse it and keep thing stratified */
-      vstate.rscatter = 1.0f - (1.0f - vstate.rscatter) / sample_transmittance;
-    }
-  }
-}
 
 /* heterogeneous volume distance sampling: integrate stepping through the
  * volume until we reach the end, get absorbed entirely, or run out of
@@ -731,7 +648,20 @@ ccl_device_forceinline void volume_integrate_heterogeneous(
 
   /* Initialize volume integration state. */
   VolumeIntegrateState vstate ccl_optional_struct_init;
-  const float rand_equiangular = path_state_rng_2D(kg, rng_state, PRNG_VOLUME_SCATTER_DISTANCE).x;
+  {
+    const float rand = path_state_rng_3D(kg, rng_state, PRNG_VOLUME_SCATTER_DISTANCE).x;
+    /* Multiple importance sampling: pick between equiangular and distance sampling strategy. */
+    vstate.direct_sample_method = direct_sample_method;
+    vstate.use_mis = (direct_sample_method == VOLUME_SAMPLE_MIS);
+    if (vstate.use_mis) {
+      vstate.direct_sample_method = (rand < 0.5f) ? VOLUME_SAMPLE_DISTANCE :
+                                                    VOLUME_SAMPLE_EQUIANGULAR;
+    }
+    vstate.equiangular_pdf = 0.0f;
+    vstate.distance_pdf = one_spectrum();
+  }
+
+  const float rand_equiangular = path_state_rng_3D(kg, rng_state, PRNG_VOLUME_SCATTER_DISTANCE).y;
 
   /* Equiangular sampling: compute distance and PDF in advance. */
   result.direct_t = volume_equiangular_sample(
@@ -748,13 +678,16 @@ ccl_device_forceinline void volume_integrate_heterogeneous(
                                   INTEGRATOR_STATE(state, path, sample),
                                   0xe35fad82);
 
+  /* Biased estimation of optical thickness until indirect scatter point. */
+  Spectrum tau = zero_spectrum();
   {
     /* Indirect scatter. */
-    const float rand = path_state_rng_2D(kg, rng_state, PRNG_VOLUME_SCATTER_DISTANCE).y;
-    result.indirect_scatter = volume_distance_sample(kg, state, ray, sd, rand, lcg_state, result);
+    const float rand = path_state_rng_3D(kg, rng_state, PRNG_VOLUME_SCATTER_DISTANCE).z;
+    result.indirect_scatter = volume_distance_sample(
+        kg, state, ray, sd, rand, lcg_state, result, vstate.distance_pdf, tau);
   }
 
-  if (direct_sample_method == VOLUME_SAMPLE_DISTANCE && result.indirect_scatter) {
+  if (vstate.direct_sample_method == VOLUME_SAMPLE_DISTANCE && result.indirect_scatter) {
     /* If using distance sampling for direct light, just copy parameters of indirect light since we
      * scatter at the same point. */
     result.direct_scatter = true;
@@ -762,12 +695,26 @@ ccl_device_forceinline void volume_integrate_heterogeneous(
     result.direct_throughput = result.indirect_throughput;
 
     volume_shader_copy_phases(&result.direct_phases, sd);
+
+    if (vstate.use_mis) {
+      const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
+      const float sigma = MAJORANT - MINORANT;
+      const float rand = path_state_rng_3D(kg, rng_state, PRNG_VOLUME_TAYLOR_EXPANSION).y;
+      vstate.distance_pdf *= volume_unbiased_ray_marching<false>(
+          kg, state, ray, sd, path_flag, ray->tmin, result.direct_t, sigma, rand, lcg_state, &tau);
+
+      const float equiangular_pdf = volume_equiangular_pdf(
+          ray, equiangular_coeffs, result.direct_t);
+
+      const Spectrum mis_weight = power_heuristic(vstate.distance_pdf, equiangular_pdf);
+      result.direct_throughput *= 2.0f * mis_weight;
+    }
   }
 
   /* TODO(weizhen): indirect transmission is computed in `volume_distance_sample()`, but maybe the
    * variance is high? Try to estimate with unbiased ray marching. */
 
-  if (direct_sample_method == VOLUME_SAMPLE_EQUIANGULAR && vstate.equiangular_pdf != 0.0f) {
+  if (vstate.direct_sample_method == VOLUME_SAMPLE_EQUIANGULAR && vstate.equiangular_pdf != 0.0f) {
     /* Direct scatter. */
     sd->P = ray->P + ray->D * result.direct_t;
     VolumeShaderCoefficients coeff ccl_optional_struct_init;
@@ -781,8 +728,15 @@ ccl_device_forceinline void volume_integrate_heterogeneous(
       const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
       const float sigma = MAJORANT - MINORANT;
       const float rand = path_state_rng_3D(kg, rng_state, PRNG_VOLUME_TAYLOR_EXPANSION).x;
-      result.direct_throughput *= volume_unbiased_ray_marching<false>(
+      const Spectrum transmittance = volume_unbiased_ray_marching<false>(
           kg, state, ray, sd, path_flag, ray->tmin, result.direct_t, sigma, rand, lcg_state);
+      result.direct_throughput *= transmittance;
+
+      if (vstate.use_mis) {
+        vstate.distance_pdf = coeff.sigma_s * transmittance;
+        const Spectrum mis_weight = power_heuristic(vstate.equiangular_pdf, vstate.distance_pdf);
+        result.direct_throughput *= 2.0f * mis_weight;
+      }
     }
   }
 
