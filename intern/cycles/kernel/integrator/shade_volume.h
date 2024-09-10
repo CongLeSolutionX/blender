@@ -534,7 +534,8 @@ ccl_device bool volume_distance_sample(KernelGlobals kg,
       result.indirect_throughput *= inv_maj * sigma_c;
       if (rand < sigma_a[channel]) {
         /* Absorption. */
-        const Spectrum mis = sigma_a / dot(channel_pdf, sigma_a);
+        const Spectrum pdf_a = sigma_a / sigma_c;
+        const Spectrum mis = pdf_a / dot(channel_pdf, pdf_a);
         result.indirect_throughput *= mis;
         pdf *= sigma_a;
 
@@ -549,7 +550,8 @@ ccl_device bool volume_distance_sample(KernelGlobals kg,
       if (rand < coeff.sigma_t[channel]) {
         /* Sampled scatter event. */
         result.indirect_t = t;
-        const Spectrum mis = coeff.sigma_s / dot(channel_pdf, coeff.sigma_s);
+        const Spectrum pdf_s = coeff.sigma_s / sigma_c;
+        const Spectrum mis = pdf_s / dot(channel_pdf, pdf_s);
         result.indirect_throughput *= mis;
         pdf *= coeff.sigma_s;
         tau *= (t - ray->tmin) / num_samples;
@@ -558,7 +560,8 @@ ccl_device bool volume_distance_sample(KernelGlobals kg,
       }
 
       /* Null scattering. Accumulate weight and continue. */
-      const Spectrum mis = sigma_n / dot(channel_pdf, sigma_n);
+      const Spectrum pdf_n = abs_sigma_n / sigma_c;
+      const Spectrum mis = pdf_n / dot(channel_pdf, pdf_n);
       result.indirect_throughput *= sigma_n / abs_sigma_n * mis;
 
       /* Rescale random number for reusing. */
