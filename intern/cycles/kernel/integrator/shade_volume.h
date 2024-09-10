@@ -499,23 +499,29 @@ ccl_device bool volume_distance_sample(KernelGlobals kg,
 
     VolumeShaderCoefficients coeff ccl_optional_struct_init;
     if (volume_shader_sample(kg, state, sd, &coeff)) {
-      /* TODO(weizhen): spectral MIS (see PBRT 14.2.2). */
       const Spectrum sigma_n = sigma_maj - coeff.sigma_t;
       /* For procedure volumes `sigma_maj` might not be the strict upper bound. Use absolute value
        * to handle negative null scattering coefficient as suggested in "Monte Carlo Methods for
        * Volumetric Light Transport Simulation". */
-      const float abs_sigma_n = average(fabs(sigma_n));
-      const float sigma_t = average(coeff.sigma_t);
-      const float sigma_s = average(coeff.sigma_s);
-      const float sigma_a = sigma_t - sigma_s;
-      const float sigma_c = sigma_t + abs_sigma_n;
-      rand *= sigma_c;
+      const Spectrum abs_sigma_n = fabs(sigma_n);
+      const Spectrum sigma_a = coeff.sigma_t - coeff.sigma_s;
+      const Spectrum sigma_c = coeff.sigma_t + abs_sigma_n;
+
+      /* Pick random color channel, we use the Veach one-sample model with balance heuristic for
+       * the channels. */
+      const Spectrum albedo = safe_divide_color(coeff.sigma_s, coeff.sigma_t);
+      Spectrum channel_pdf;
+      const int channel = volume_sample_channel(
+          albedo, result.indirect_throughput, &rand, &channel_pdf);
+
+      rand *= sigma_c[channel];
 
       /* TODO(weizhen): check value and sign. */
       result.indirect_throughput *= inv_maj * sigma_c;
-      if (rand < sigma_a) {
+      if (rand < sigma_a[channel]) {
         /* Absorption. */
-        result.indirect_throughput *= (coeff.sigma_t - coeff.sigma_s) / sigma_a;
+        const Spectrum mis = sigma_a / dot(channel_pdf, sigma_a);
+        result.indirect_throughput *= mis;
         /* TODO(weizhen): handle emission. Might be problematic when there is no absorption because
          * our formulation of emission is not tied with absorption (See PBRT Eq. 11.1). Also is the
          * variance high? */
@@ -524,20 +530,22 @@ ccl_device bool volume_distance_sample(KernelGlobals kg,
         result.indirect_throughput = zero_spectrum();
         return false;
       }
-      if (rand < sigma_t) {
+      if (rand < coeff.sigma_t[channel]) {
         /* Sampled scatter event. */
         result.indirect_t = t;
-        result.indirect_throughput *= coeff.sigma_s / sigma_s;
+        const Spectrum mis = coeff.sigma_s / dot(channel_pdf, coeff.sigma_s);
+        result.indirect_throughput *= mis;
 
         volume_shader_copy_phases(&result.indirect_phases, sd);
         return true;
       }
 
       /* Null scattering. Accumulate weight and continue. */
-      result.indirect_throughput *= sigma_n / abs_sigma_n;
+      const Spectrum mis = sigma_n / dot(channel_pdf, sigma_n);
+      result.indirect_throughput *= sigma_n / abs_sigma_n * mis;
 
       /* Rescale random number for reusing. */
-      rand = (rand - sigma_t) / abs_sigma_n;
+      rand = (rand - coeff.sigma_t[channel]) / abs_sigma_n[channel];
     }
 
     /* Generate the next distance using random walk. */
