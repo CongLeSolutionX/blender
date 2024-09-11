@@ -46,6 +46,8 @@ typedef struct VolumeIntegrateResult {
   Spectrum indirect_throughput;
   float indirect_t;
   ShaderVolumePhases indirect_phases;
+
+  Spectrum emission;
 } VolumeIntegrateResult;
 
 /* Ignore paths that have volume throughput below this value, to avoid unnecessary work
@@ -506,12 +508,14 @@ ccl_device bool volume_distance_sample(KernelGlobals kg,
   const float inv_maj = 1.0f / (MAJORANT * DELTA_TRACKING_SCALE);
   float t = ray->tmin + sample_exponential_distribution(lcg_step_float(&lcg_state), inv_maj);
   int num_samples = 0;
+  result.emission = zero_spectrum();
   Spectrum transmittance = one_spectrum();
   while (t < ray->tmax) {
     sd->P = ray->P + ray->D * t;
+    num_samples++;
 
     VolumeShaderCoefficients coeff ccl_optional_struct_init;
-    num_samples++;
+
     if (volume_shader_sample(kg, state, sd, &coeff)) {
       tau -= coeff.sigma_t;
       const Spectrum sigma_n = sigma_maj - coeff.sigma_t;
@@ -519,14 +523,20 @@ ccl_device bool volume_distance_sample(KernelGlobals kg,
        * to handle negative null scattering coefficient as suggested in "Monte Carlo Methods for
        * Volumetric Light Transport Simulation". */
       const Spectrum abs_sigma_n = fabs(sigma_n);
+      /* We do not sample absorption event, because it always returns zero and has high variance.
+       * Instead, we adjust the sampling weight. */
       Spectrum sigma_c = coeff.sigma_s + abs_sigma_n;
 
-      Spectrum sigma_a = zero_spectrum();
-      if (sd->flag & SD_EMISSION || reduce_add(sigma_c) == 0.0f) {
-        sigma_a = coeff.sigma_t - coeff.sigma_s;
-        sigma_c = coeff.sigma_t + abs_sigma_n;
+      if (sd->flag & SD_EMISSION) {
+        result.emission += transmittance * coeff.emission * inv_maj;
       }
-      const Spectrum sigma_t = coeff.sigma_s + sigma_a;
+
+      if (reduce_add(sigma_c) == 0.0f) {
+        /* Absorption only. */
+        /* TODO(weizhen): this has high variance. Can we use next-flight emstimation? */
+        result.indirect_throughput = zero_spectrum();
+        return false;
+      }
 
       /* Pick random color channel, we use the Veach one-sample model with balance heuristic for
        * the channels. */
@@ -536,22 +546,7 @@ ccl_device bool volume_distance_sample(KernelGlobals kg,
           albedo, result.indirect_throughput * transmittance, &rand, &channel_pdf);
 
       rand *= sigma_c[channel];
-
-      /* TODO(weizhen): check value and sign. */
-      if (rand < sigma_a[channel]) {
-        /* Absorption. */
-        const Spectrum pdf_a = sigma_a / sigma_c;
-        const Spectrum mis = pdf_a / dot(channel_pdf, pdf_a);
-        result.indirect_throughput *= mis;
-
-        /* TODO(weizhen): handle emission. Might be problematic when there is no absorption because
-         * our formulation of emission is not tied with absorption (See PBRT Eq. 11.1). Also is the
-         * variance high? */
-        result.indirect_throughput = zero_spectrum();
-        return false;
-      }
-
-      if (rand < sigma_t[channel]) {
+      if (rand < coeff.sigma_s[channel]) {
         /* Sampled scatter event. */
         result.indirect_t = t;
 
@@ -571,7 +566,7 @@ ccl_device bool volume_distance_sample(KernelGlobals kg,
       transmittance *= sigma_n * inv_maj / dot(channel_pdf, pdf_n);
 
       /* Rescale random number for reusing. */
-      rand = (rand - sigma_t[channel]) / abs_sigma_n[channel];
+      rand = (rand - coeff.sigma_s[channel]) / abs_sigma_n[channel];
     }
 
     /* Generate the next distance using random walk. */
@@ -682,7 +677,7 @@ ccl_device_forceinline void volume_integrate_heterogeneous(
   result.direct_throughput = throughput;
   result.indirect_throughput = throughput;
 
-  /* TODO(volume): use stratified samples, at least for the first few orders. */
+  /* TODO(volume): use stratified samples by scrambing `rng_offset`. See subsurface scattering. */
   uint lcg_state = lcg_state_init(INTEGRATOR_STATE(state, path, rng_pixel),
                                   INTEGRATOR_STATE(state, path, rng_offset),
                                   INTEGRATOR_STATE(state, path, sample),
@@ -697,6 +692,7 @@ ccl_device_forceinline void volume_integrate_heterogeneous(
         kg, state, ray, sd, rand, lcg_state, result, vstate.distance_pdf, tau);
   }
 
+  /* Direct_scatter. */
   if (vstate.direct_sample_method == VOLUME_SAMPLE_DISTANCE && result.indirect_scatter) {
     /* If using distance sampling for direct light, just copy parameters of indirect light since we
      * scatter at the same point. */
@@ -724,8 +720,8 @@ ccl_device_forceinline void volume_integrate_heterogeneous(
   /* TODO(weizhen): indirect transmission is computed in `volume_distance_sample()`, but maybe the
    * variance is high? Try to estimate with unbiased ray marching. */
 
+  /* Direct scatter. */
   if (vstate.direct_sample_method == VOLUME_SAMPLE_EQUIANGULAR && vstate.equiangular_pdf != 0.0f) {
-    /* Direct scatter. */
     sd->P = ray->P + ray->D * result.direct_t;
     VolumeShaderCoefficients coeff ccl_optional_struct_init;
     if (volume_shader_sample(kg, state, sd, &coeff) && (sd->flag & SD_SCATTER)) {
@@ -750,9 +746,17 @@ ccl_device_forceinline void volume_integrate_heterogeneous(
     }
   }
 
-  /* TODO(weizhen): MIS between equiangular sampling and ratio tracking. */
+  /* Write accumulated emission. */
+  if (!is_zero(result.emission)) {
+    if (light_link_object_match(kg, light_link_receiver_forward(kg, state), sd->object)) {
+      result.emission *= throughput;
+      film_write_volume_emission(
+          kg, state, result.emission, render_buffer, object_lightgroup(kg, sd->object));
+    }
+  }
+
+  /* TODO(weizhen): Write emission for path guiding. */
   /* TODO(weizhen): Accumulate albedo for denoising features. */
-  /* TODO(weizhen): Emission. */
 }
 
 /* Path tracing: sample point on light for equiangular sampling. */
