@@ -206,8 +206,8 @@ ccl_device void volume_shadow_homogeneous(KernelGlobals kg, IntegratorState stat
 
 /* TODO(weizhen): compute volume majorant and minorant. If the value is too off it doesn't seem to
  * converge. Maybe use Spectrum instead of float. */
-#  define MAJORANT 0.225f
-#  define MINORANT 0.0499f
+#  define MAJORANT 31.0f
+#  define MINORANT 0.0f
 
 /* For delta-tracking it seems benefitial to increase majorant. */
 #  define DELTA_TRACKING_SCALE 1.0f
@@ -498,7 +498,7 @@ ccl_device bool volume_distance_sample(KernelGlobals kg,
                                        float rand,
                                        ccl_private uint &lcg_state,
                                        ccl_private VolumeIntegrateResult &result,
-                                       ccl_private Spectrum &pdf,
+                                       ccl_private Spectrum &distance_pdf,
                                        ccl_private Spectrum &tau)
 {
   /* Initialization */
@@ -506,6 +506,7 @@ ccl_device bool volume_distance_sample(KernelGlobals kg,
   const float inv_maj = 1.0f / (MAJORANT * DELTA_TRACKING_SCALE);
   float t = ray->tmin + sample_exponential_distribution(lcg_step_float(&lcg_state), inv_maj);
   int num_samples = 0;
+  Spectrum transmittance = one_spectrum();
   while (t < ray->tmax) {
     sd->P = ray->P + ray->D * t;
 
@@ -532,18 +533,16 @@ ccl_device bool volume_distance_sample(KernelGlobals kg,
       const Spectrum albedo = safe_divide_color(coeff.sigma_s, coeff.sigma_t);
       Spectrum channel_pdf;
       const int channel = volume_sample_channel(
-          albedo, result.indirect_throughput, &rand, &channel_pdf);
+          albedo, result.indirect_throughput * transmittance, &rand, &channel_pdf);
 
       rand *= sigma_c[channel];
 
       /* TODO(weizhen): check value and sign. */
-      result.indirect_throughput *= inv_maj * sigma_c;
       if (rand < sigma_a[channel]) {
         /* Absorption. */
         const Spectrum pdf_a = sigma_a / sigma_c;
         const Spectrum mis = pdf_a / dot(channel_pdf, pdf_a);
         result.indirect_throughput *= mis;
-        pdf *= sigma_a;
 
         /* TODO(weizhen): handle emission. Might be problematic when there is no absorption because
          * our formulation of emission is not tied with absorption (See PBRT Eq. 11.1). Also is the
@@ -551,22 +550,25 @@ ccl_device bool volume_distance_sample(KernelGlobals kg,
         result.indirect_throughput = zero_spectrum();
         return false;
       }
+
       if (rand < sigma_t[channel]) {
         /* Sampled scatter event. */
         result.indirect_t = t;
+
         const Spectrum pdf_s = coeff.sigma_s / sigma_c;
-        const Spectrum mis = pdf_s / dot(channel_pdf, pdf_s);
-        result.indirect_throughput *= mis;
-        pdf *= coeff.sigma_s;
-        tau *= (t - ray->tmin) / num_samples;
+        transmittance *= coeff.sigma_s * inv_maj / dot(channel_pdf, pdf_s);
+        result.indirect_throughput *= transmittance;
+
         volume_shader_copy_phases(&result.indirect_phases, sd);
+
+        distance_pdf = coeff.sigma_s;
+        tau *= (t - ray->tmin) / num_samples;
         return true;
       }
 
       /* Null scattering. Accumulate weight and continue. */
       const Spectrum pdf_n = abs_sigma_n / sigma_c;
-      const Spectrum mis = pdf_n / dot(channel_pdf, pdf_n);
-      result.indirect_throughput *= sigma_n / abs_sigma_n * mis;
+      transmittance *= sigma_n * inv_maj / dot(channel_pdf, pdf_n);
 
       /* Rescale random number for reusing. */
       rand = (rand - sigma_t[channel]) / abs_sigma_n[channel];
@@ -580,6 +582,7 @@ ccl_device bool volume_distance_sample(KernelGlobals kg,
   }
 
   /* No scatter event sampled along the ray. */
+  result.indirect_throughput *= transmittance;
   return false;
 }
 
