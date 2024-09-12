@@ -299,8 +299,7 @@ ccl_device Spectrum volume_unbiased_ray_marching(KernelGlobals kg,
                                                  const float tmin,
                                                  const float tmax,
                                                  const float sigma,
-                                                 const float rand,
-                                                 ccl_private uint &lcg_state,
+                                                 ccl_private RNGState &rng_state,
                                                  ccl_private Spectrum *biased_tau = nullptr)
 {
   /* Compute tuple size and expansion order. */
@@ -311,6 +310,7 @@ ccl_device Spectrum volume_unbiased_ray_marching(KernelGlobals kg,
   const float step_size = ray_length / M;
   /* TODO(weizhen): this implementation does not properly balance the workloads of the
    * transmittance estimates inside the thread groups and causes slowdowns on GPU. */
+  const float rand = path_state_rng_1D(kg, &rng_state, PRNG_VOLUME_TAYLOR_EXPANSION);
   const int N = volume_aggressive_BK_roulette(kg, rand);
 
   /* Combed estimators of the optical thickness. */
@@ -322,7 +322,7 @@ ccl_device Spectrum volume_unbiased_ray_marching(KernelGlobals kg,
   }
   for (; i <= N; i++) {
     X[i] = zero_spectrum();
-    const float step_shade_offset = lcg_step_float(&lcg_state);
+    const float step_shade_offset = path_state_rng_1D(kg, &rng_state, PRNG_VOLUME_SHADE_OFFSET);
     for (int j = 0; j < M; j++) {
       /* Advance to new position. */
       const float t = min(tmax, tmin + (step_shade_offset + j) * step_size);
@@ -332,6 +332,9 @@ ccl_device Spectrum volume_unbiased_ray_marching(KernelGlobals kg,
       X[i] += volume_shader_eval_extinction<shadow>(kg, state, sd);
     }
     X[i] = -step_size * X[i];
+
+    /* Advance random number offset. */
+    rng_state.rng_offset += PRNG_BOUNCE_NUM;
   }
 
   Spectrum transmittance = zero_spectrum();
@@ -367,28 +370,11 @@ ccl_device void volume_shadow_heterogeneous(KernelGlobals kg,
   RNGState rng_state;
   shadow_path_state_rng_load(state, &rng_state);
 
-#  if 0
-  /* Prepare for stepping.
-   * For shadows we do not offset all segments, since the starting point is
-   * already a random distance inside the volume. It also appears to create
-   * banding artifacts for unknown reasons. */
-  int M;
-  float step_size, unused;
-  volume_step_init(
-      kg, &rng_state, object_step_size, ray->tmin, ray->tmax, &step_size, &unused, &unused, &M);
-#  endif
+  path_state_rng_scramble(&rng_state, 0x8647ace4);
 
   const float sigma = MAJORANT - MINORANT;
-  const float rand = path_state_rng_3D(kg, &rng_state, PRNG_VOLUME_TAYLOR_EXPANSION).z;
-
-  /* TODO(volume): use stratified samples, at least for the first few orders. */
-  uint lcg_state = lcg_state_init(INTEGRATOR_STATE(state, shadow_path, rng_pixel),
-                                  INTEGRATOR_STATE(state, shadow_path, rng_offset),
-                                  INTEGRATOR_STATE(state, shadow_path, sample),
-                                  0x8647ace4);
-
   *throughput *= volume_unbiased_ray_marching<true>(
-      kg, state, ray, sd, ray->tmin, ray->tmax, sigma, rand, lcg_state);
+      kg, state, ray, sd, ray->tmin, ray->tmax, sigma, rng_state);
 }
 
 /* Equi-angular sampling as in:
@@ -604,7 +590,7 @@ ccl_device_forceinline void volume_integrate_heterogeneous(
     IntegratorState state,
     ccl_private Ray *ccl_restrict ray,
     ccl_private ShaderData *ccl_restrict sd,
-    ccl_private const RNGState *rng_state,
+    RNGState rng_state,
     ccl_global float *ccl_restrict render_buffer,
     const float object_step_size,
     const VolumeSampleMethod direct_sample_method,
@@ -615,8 +601,8 @@ ccl_device_forceinline void volume_integrate_heterogeneous(
 
   /* Initialize volume integration state. */
   VolumeIntegrateState vstate ccl_optional_struct_init;
-  vstate.rscatter = path_state_rng_1D(kg, rng_state, PRNG_VOLUME_SCATTER_DISTANCE);
-  vstate.rchannel = path_state_rng_1D(kg, rng_state, PRNG_VOLUME_COLOR_CHANNEL);
+  vstate.rscatter = path_state_rng_1D(kg, &rng_state, PRNG_VOLUME_SCATTER_DISTANCE);
+  vstate.rchannel = path_state_rng_1D(kg, &rng_state, PRNG_VOLUME_COLOR_CHANNEL);
 
   /* Multiple importance sampling: pick between equiangular and distance sampling strategy. */
   vstate.direct_sample_method = direct_sample_method;
@@ -643,7 +629,7 @@ ccl_device_forceinline void volume_integrate_heterogeneous(
   if (vstate.direct_sample_method == VOLUME_SAMPLE_EQUIANGULAR) {
     result.direct_t = volume_equiangular_sample(
         ray, equiangular_coeffs, vstate.rscatter, &vstate.equiangular_pdf);
-    vstate.rscatter = path_state_rng_2D(kg, rng_state, PRNG_VOLUME_SCATTER_DISTANCE).y;
+    vstate.rscatter = path_state_rng_2D(kg, &rng_state, PRNG_VOLUME_SCATTER_DISTANCE).y;
   }
 
   /* TODO(volume): use stratified samples by scrambing `rng_offset`. See subsurface scattering. */
@@ -651,6 +637,8 @@ ccl_device_forceinline void volume_integrate_heterogeneous(
                                   INTEGRATOR_STATE(state, path, rng_offset),
                                   INTEGRATOR_STATE(state, path, sample),
                                   0xe35fad82);
+  /* TODO(weizhen): This doesn't seem to keep samples stratified. */
+  path_state_rng_scramble(&rng_state, 0xe35fad82);
 
   /* Biased estimation of optical thickness until indirect scatter point. */
   Spectrum tau = zero_spectrum();
@@ -672,10 +660,9 @@ ccl_device_forceinline void volume_integrate_heterogeneous(
 
     if (vstate.use_mis) {
       const float sigma = MAJORANT - MINORANT;
-      const float rand = path_state_rng_3D(kg, rng_state, PRNG_VOLUME_TAYLOR_EXPANSION).y;
-      vstate.distance_pdf *= volume_unbiased_ray_marching<false>(
-          kg, state, ray, sd, ray->tmin, result.direct_t, sigma, rand, lcg_state, &tau);
 
+      vstate.distance_pdf *= volume_unbiased_ray_marching<false>(
+          kg, state, ray, sd, ray->tmin, result.direct_t, sigma, rng_state, &tau);
       const float equiangular_pdf = volume_equiangular_pdf(
           ray, equiangular_coeffs, result.direct_t);
 
@@ -699,9 +686,8 @@ ccl_device_forceinline void volume_integrate_heterogeneous(
 
       /* Compute transmission until direct scatter position. */
       const float sigma = MAJORANT - MINORANT;
-      const float rand = path_state_rng_3D(kg, rng_state, PRNG_VOLUME_TAYLOR_EXPANSION).x;
       const Spectrum transmittance = volume_unbiased_ray_marching<false>(
-          kg, state, ray, sd, ray->tmin, result.direct_t, sigma, rand, lcg_state);
+          kg, state, ray, sd, ray->tmin, result.direct_t, sigma, rng_state);
       result.direct_throughput *= transmittance;
 
       if (vstate.use_mis) {
@@ -1072,7 +1058,7 @@ ccl_device VolumeIntegrateEvent volume_integrate(KernelGlobals kg,
                                  state,
                                  ray,
                                  &sd,
-                                 &rng_state,
+                                 rng_state,
                                  render_buffer,
                                  step_size,
                                  direct_sample_method,
