@@ -72,27 +72,23 @@ typedef struct EquiangularCoefficients {
   Interval<float> t_range;
 } EquiangularCoefficients;
 
-/* Evaluate shader to get extinction coefficient at P. */
+/* Evaluate shader to get extinction coefficient at P. We can use the shadow path evaluation to
+ * skip emission and phase function. */
 template<const bool shadow, typename ConstIntegratorGenericState>
 ccl_device_inline Spectrum volume_shader_eval_extinction(KernelGlobals kg,
                                                          ConstIntegratorGenericState state,
-                                                         const uint32_t path_flag,
                                                          ccl_private ShaderData *ccl_restrict sd)
 {
   if constexpr (shadow) {
     VOLUME_READ_LAMBDA(integrator_state_read_shadow_volume_stack(state, i))
-    volume_shader_eval<shadow>(kg, state, sd, path_flag, volume_read_lambda_pass);
+    volume_shader_eval<shadow>(kg, state, sd, PATH_RAY_SHADOW, volume_read_lambda_pass);
   }
   else {
     VOLUME_READ_LAMBDA(integrator_state_read_volume_stack(state, i))
-    volume_shader_eval<shadow>(kg, state, sd, path_flag, volume_read_lambda_pass);
+    volume_shader_eval<shadow>(kg, state, sd, PATH_RAY_SHADOW, volume_read_lambda_pass);
   }
 
-  if (!(sd->flag & (SD_EXTINCTION))) {
-    return zero_spectrum();
-  }
-
-  return sd->closure_transparent_extinction;
+  return (sd->flag & SD_EXTINCTION) ? sd->closure_transparent_extinction : zero_spectrum();
 }
 
 /* Evaluate shader to get absorption, scattering and emission at P. */
@@ -206,8 +202,8 @@ ccl_device void volume_shadow_homogeneous(KernelGlobals kg, IntegratorState stat
 #    define VOLUME_EXPANSION_ORDER_CUTOFF 7
 #  endif
 
-/* TODO(weizhen): compute volume majorant and minorant. If the value is too off it doesn't seem to
- * converge. Maybe use Spectrum instead of float. */
+/* TODO(weizhen): compute component-wise volume majorant and minorant instead of float, and use
+ * spectral MIS for distance sampling. */
 #  define MAJORANT 31.0f
 #  define MINORANT 0.0f
 
@@ -303,7 +299,6 @@ ccl_device Spectrum volume_unbiased_ray_marching(KernelGlobals kg,
                                                  ConstIntegratorGenericState state,
                                                  const ccl_private Ray *ccl_restrict ray,
                                                  ccl_private ShaderData *ccl_restrict sd,
-                                                 const uint32_t path_flag,
                                                  const float tmin,
                                                  const float tmax,
                                                  const float sigma,
@@ -337,7 +332,7 @@ ccl_device Spectrum volume_unbiased_ray_marching(KernelGlobals kg,
       sd->P = ray->P + ray->D * t;
 
       /* TODO(weizhen): early cut off? */
-      X[i] += volume_shader_eval_extinction<shadow>(kg, state, path_flag, sd);
+      X[i] += volume_shader_eval_extinction<shadow>(kg, state, sd);
     }
     X[i] = -step_size * X[i];
   }
@@ -396,7 +391,7 @@ ccl_device void volume_shadow_heterogeneous(KernelGlobals kg,
                                   0x8647ace4);
 
   *throughput *= volume_unbiased_ray_marching<true>(
-      kg, state, ray, sd, PATH_RAY_SHADOW, ray->tmin, ray->tmax, sigma, rand, lcg_state);
+      kg, state, ray, sd, ray->tmin, ray->tmax, sigma, rand, lcg_state);
 }
 
 /* Equi-angular sampling as in:
@@ -703,11 +698,10 @@ ccl_device_forceinline void volume_integrate_heterogeneous(
     volume_shader_copy_phases(&result.direct_phases, sd);
 
     if (vstate.use_mis) {
-      const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
       const float sigma = MAJORANT - MINORANT;
       const float rand = path_state_rng_3D(kg, rng_state, PRNG_VOLUME_TAYLOR_EXPANSION).y;
       vstate.distance_pdf *= volume_unbiased_ray_marching<false>(
-          kg, state, ray, sd, path_flag, ray->tmin, result.direct_t, sigma, rand, lcg_state, &tau);
+          kg, state, ray, sd, ray->tmin, result.direct_t, sigma, rand, lcg_state, &tau);
 
       const float equiangular_pdf = volume_equiangular_pdf(
           ray, equiangular_coeffs, result.direct_t);
@@ -731,11 +725,10 @@ ccl_device_forceinline void volume_integrate_heterogeneous(
       volume_shader_copy_phases(&result.direct_phases, sd);
 
       /* Compute transmission until direct scatter position. */
-      const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
       const float sigma = MAJORANT - MINORANT;
       const float rand = path_state_rng_3D(kg, rng_state, PRNG_VOLUME_TAYLOR_EXPANSION).x;
       const Spectrum transmittance = volume_unbiased_ray_marching<false>(
-          kg, state, ray, sd, path_flag, ray->tmin, result.direct_t, sigma, rand, lcg_state);
+          kg, state, ray, sd, ray->tmin, result.direct_t, sigma, rand, lcg_state);
       result.direct_throughput *= transmittance;
 
       if (vstate.use_mis) {
