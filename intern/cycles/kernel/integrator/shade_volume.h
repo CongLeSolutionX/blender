@@ -207,9 +207,6 @@ ccl_device void volume_shadow_homogeneous(KernelGlobals kg, IntegratorState stat
 #  define MAJORANT 31.0f
 #  define MINORANT 0.0f
 
-/* For delta-tracking it seems benefitial to increase majorant. */
-#  define DELTA_TRACKING_SCALE 1.0f
-
 /**
  * Compute elementary symmetric means from X[0,...,N] - X[i], skipping X[i].
  *
@@ -518,9 +515,11 @@ ccl_device bool volume_integrate_step_scattering(
     ccl_private VolumeIntegrateResult &ccl_restrict result,
     ccl_private Spectrum &tau)
 {
+  /* Clamp so that the ray are expected to intersect with thin volume at least once. */
+  const float sigma_maj = fmaxf(MAJORANT, 1.0f / (ray->tmax - ray->tmin));
+  const float inv_maj = 1.0f / sigma_maj;
+
   /* Initialization */
-  const Spectrum sigma_maj = make_float3(DELTA_TRACKING_SCALE * MAJORANT);
-  const float inv_maj = 1.0f / (MAJORANT * DELTA_TRACKING_SCALE);
   float t = ray->tmin + sample_exponential_distribution(lcg_step_float(&lcg_state), inv_maj);
   int num_samples = 0;
   result.emission = zero_spectrum();
@@ -533,7 +532,7 @@ ccl_device bool volume_integrate_step_scattering(
 
     if (volume_shader_sample(kg, state, sd, &coeff)) {
       tau -= coeff.sigma_t;
-      const Spectrum sigma_n = sigma_maj - coeff.sigma_t;
+      const Spectrum sigma_n = make_float3(sigma_maj) - coeff.sigma_t;
       /* For procedure volumes `sigma_maj` might not be the strict upper bound. Use absolute value
        * to handle negative null scattering coefficient as suggested in "Monte Carlo Methods for
        * Volumetric Light Transport Simulation". */
