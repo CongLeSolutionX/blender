@@ -506,19 +506,45 @@ ccl_device bool volume_integrate_step_scattering(
   const float inv_maj = 1.0f / sigma_maj;
 
   /* Initialization */
-  float t = ray->tmin + sample_exponential_distribution(lcg_step_float(&lcg_state), inv_maj);
-  int num_samples = 0;
+  float t = ray->tmin;
   result.emission = zero_spectrum();
   Spectrum transmittance = one_spectrum();
-  while (t < ray->tmax) {
+
+  for (int num_samples = 1; num_samples <= kernel_data.integrator.volume_max_steps; num_samples++)
+  {
+    if (reduce_max(result.indirect_throughput * fabs(transmittance)) < VOLUME_THROUGHPUT_EPSILON) {
+      transmittance = zero_spectrum();
+      /* TODO(weizhen): terminate using Russian Roulette. */
+      /* TODO(weizhen): deal with negative transmittance. */
+      break;
+    }
+
+    /* Generate the next distance using random walk. */
+    t += sample_exponential_distribution(lcg_step_float(&lcg_state), inv_maj);
+    if (t > ray->tmax) {
+      break;
+    }
+
     sd->P = ray->P + ray->D * t;
-    num_samples++;
 
     VolumeShaderCoefficients coeff ccl_optional_struct_init;
-
     if (volume_shader_sample(kg, state, sd, &coeff)) {
-      tau -= coeff.sigma_t;
       const Spectrum sigma_n = make_float3(sigma_maj) - coeff.sigma_t;
+      tau -= coeff.sigma_t;
+
+      if (sd->flag & SD_EMISSION) {
+        result.emission += transmittance * coeff.emission * inv_maj;
+      }
+
+      if (reduce_add(coeff.sigma_s) == 0.0f) {
+        /* Absorption only. Deterministically choose null scattering and estimate the transmittance
+         * of the current ray segment. */
+        /* TODO(weizhen): this has high variance. Can we use next-flight estimation? Or unbiased
+         * ray marching when there is no emission. */
+        transmittance *= sigma_n * inv_maj;
+        continue;
+      }
+
       /* For procedure volumes `sigma_maj` might not be the strict upper bound. Use absolute value
        * to handle negative null scattering coefficient as suggested in "Monte Carlo Methods for
        * Volumetric Light Transport Simulation". */
@@ -527,20 +553,11 @@ ccl_device bool volume_integrate_step_scattering(
        * Instead, we adjust the sampling weight. */
       Spectrum sigma_c = coeff.sigma_s + abs_sigma_n;
 
-      if (sd->flag & SD_EMISSION) {
-        result.emission += transmittance * coeff.emission * inv_maj;
-      }
-
-      if (reduce_add(sigma_c) == 0.0f) {
-        /* Absorption only. */
-        /* TODO(weizhen): this has high variance. Can we use next-flight emstimation? */
-        result.indirect_throughput = zero_spectrum();
-        return false;
-      }
-
       /* Pick random color channel, we use the Veach one-sample model with balance heuristic for
        * the channels. */
       const Spectrum albedo = safe_divide_color(coeff.sigma_s, coeff.sigma_t);
+      /* TODO(weizhen): currently the sample distance is the same for each color channel, revisit
+       * the MIS weight when we use Spectral Majorant. */
       Spectrum channel_pdf;
       const int channel = volume_sample_channel(
           albedo, result.indirect_throughput * transmittance, &vstate.rchannel, &channel_pdf);
@@ -569,11 +586,9 @@ ccl_device bool volume_integrate_step_scattering(
       vstate.rchannel = (vstate.rchannel - coeff.sigma_s[channel]) / abs_sigma_n[channel];
     }
 
-    /* Generate the next distance using random walk. */
     /* TODO(weizhen): this has variance even with monochromatic volume, seems like ratio tracking
      * needs higher majorant. Use combed estimation ([Kettunen et al. 2021] page 16 bottom), or
      * reuse the estimation from equiangular transmittance, or reduce lookups. */
-    t += sample_exponential_distribution(lcg_step_float(&lcg_state), inv_maj);
   }
 
   /* No scatter event sampled along the ray. */

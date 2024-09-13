@@ -312,6 +312,7 @@ float Object::compute_volume_step_size() const
   }
 
   if (step_rate == FLT_MAX) {
+    /* TODO(weizhen): homogeneous volume, write majorant and minorant. */
     return FLT_MAX;
   }
 
