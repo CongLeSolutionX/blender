@@ -428,17 +428,23 @@ ccl_device_forceinline void volume_integrate_step_scattering(
 
   /* Distance sampling for indirect and optional direct lighting. */
   if (!result.indirect_scatter) {
-    /* decide if we will scatter or continue */
     const float sample_transmittance = volume_channel_get(transmittance, channel);
 
+    /* If sampled distance does not go beyond the current segment, we have found the scatter
+     * position. Otherwise continue searching and accumulate the transmittance along the ray. */
     if (1.0f - vstate.rscatter >= sample_transmittance) {
-      /* compute sampling distance */
+      /* Pick `sigma_t` from a random channel. */
       const float sample_sigma_t = volume_channel_get(coeff.sigma_t, channel);
+
+      /* Generate the next distance using random walk, following exponential distribution
+       * p(dt) = sigma_t * exp(-sigma_t * dt). */
       const float new_dt = -logf(1.0f - vstate.rscatter) / sample_sigma_t;
       const float new_t = vstate.t.min + new_dt;
 
-      /* transmittance and pdf */
       const Spectrum new_transmittance = volume_color_transmittance(coeff.sigma_t, new_dt);
+      /* pdf for density-based distance sampling is handled implicitly via
+       * transmittance / pdf = exp(-sigma_t * dt) / (sigma_t * exp(-sigma_t * dt)) = 1 / sigma_t.
+       */
       const float distance_pdf = dot(channel_pdf, coeff.sigma_t * new_transmittance);
 
       if (vstate.distance_pdf * distance_pdf > VOLUME_SAMPLE_PDF_CUTOFF) {
