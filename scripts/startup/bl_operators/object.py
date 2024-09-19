@@ -236,6 +236,10 @@ class SubdivisionSet(Operator):
         level = self.level
         relative = self.relative
 
+        if not context.selected_editable_objects:
+            self.report({'WARNING'}, rpt_("No selected objects"))
+            return {'CANCELLED'}
+
         if relative and level == 0:
             return {'CANCELLED'}  # nothing to do
 
