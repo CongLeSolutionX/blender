@@ -5,6 +5,7 @@
 #include "scene/volume.h"
 #include "scene/attribute.h"
 #include "scene/image_vdb.h"
+#include "scene/object.h"
 #include "scene/scene.h"
 
 #ifdef WITH_OPENVDB
@@ -19,6 +20,8 @@
 #include "util/openvdb.h"
 #include "util/progress.h"
 #include "util/types.h"
+
+#include "bvh/octree.h"
 
 CCL_NAMESPACE_BEGIN
 
@@ -633,6 +636,7 @@ static void merge_scalar_grids_for_velocity(const Scene *scene, Volume *volume)
 
 /* ************************************************************************** */
 
+/* TODO(weizhen): remove volume mesh. */
 void GeometryManager::create_volume_mesh(const Scene *scene, Volume *volume, Progress &progress)
 {
   string msg = string_printf("Computing Volume Mesh %s", volume->name.c_str());
@@ -775,5 +779,35 @@ void GeometryManager::create_volume_mesh(const Scene *scene, Volume *volume, Pro
                    (1024.0 * 1024.0)
             << "Mb.";
 }
+
+VolumeManager::VolumeManager()
+{
+  /* TODO(weizhen): update this flag. */
+  need_update_ = true;
+}
+
+VolumeManager::~VolumeManager() {}
+
+bool VolumeManager::need_update() const
+{
+  return need_update_;
+}
+
+void VolumeManager::device_update(Device *device,
+                                  DeviceScene *dscene,
+                                  Scene *scene,
+                                  Progress &progress)
+{
+  if (!need_update()) {
+    return;
+  }
+
+  Octree octree(scene);
+  octree.build(progress);
+
+  need_update_ = false;
+}
+
+void VolumeManager::device_free(Device *device, DeviceScene *dscene) {}
 
 CCL_NAMESPACE_END

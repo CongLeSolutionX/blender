@@ -51,6 +51,7 @@ class VDBImageLoader : public ImageLoader {
   openvdb::CoordBBox bbox;
 #endif
 #ifdef WITH_NANOVDB
+ public:
   nanovdb::GridHandle<> nanogrid;
   int precision = 0;
 #endif

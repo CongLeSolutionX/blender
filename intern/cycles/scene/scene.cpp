@@ -63,6 +63,7 @@ Scene::Scene(const SceneParams &params_, Device *device)
   particle_system_manager = new ParticleSystemManager();
   bake_manager = new BakeManager();
   procedural_manager = new ProceduralManager();
+  volume_manager = new VolumeManager();
 
   /* Create nodes after managers, since create_node() can tag the managers. */
   camera = create_node<Camera>();
@@ -144,10 +145,9 @@ void Scene::free_memory(bool final)
     geometry_manager->device_free(device, &dscene, true);
     shader_manager->device_free(device, &dscene, this);
     light_manager->device_free(device, &dscene);
-
     particle_system_manager->device_free(device, &dscene);
-
     bake_manager->device_free(device, &dscene);
+    volume_manager->device_free(device, &dscene);
 
     if (final) {
       image_manager->device_free(device);
@@ -170,6 +170,7 @@ void Scene::free_memory(bool final)
     delete bake_manager;
     delete update_stats;
     delete procedural_manager;
+    delete volume_manager;
   }
 }
 
@@ -284,6 +285,13 @@ void Scene::device_update(Device *device_, Progress &progress)
 
   progress.set_status("Updating Images");
   image_manager->device_update(device, this, progress);
+
+  if (progress.get_cancel() || device->have_error()) {
+    return;
+  }
+
+  progress.set_status("Updating Volume");
+  volume_manager->device_update(device, &dscene, this, progress);
 
   if (progress.get_cancel() || device->have_error()) {
     return;
@@ -679,6 +687,7 @@ int Scene::get_max_closure_count()
   return max_closure_global;
 }
 
+/* TODO(weizhen): remove. */
 int Scene::get_volume_stack_size() const
 {
   int volume_stack_size = 0;

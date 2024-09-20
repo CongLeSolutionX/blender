@@ -275,9 +275,9 @@ void VDBImageLoader::cleanup()
   /* Free OpenVDB grid memory as soon as we can. */
   grid.reset();
 #endif
-#ifdef WITH_NANOVDB
-  nanogrid.reset();
-#endif
+  // #ifdef WITH_NANOVDB
+  //   nanogrid.reset();
+  // #endif
 }
 
 bool VDBImageLoader::is_vdb_loader() const

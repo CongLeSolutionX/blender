@@ -347,6 +347,11 @@ ccl_device_inline float3 mix(const float3 a, const float3 b, float t)
   return a + t * (b - a);
 }
 
+ccl_device_inline float3 mix(const float3 a, const float3 b, const float3 t)
+{
+  return a + t * (b - a);
+}
+
 ccl_device_inline float3 rcp(const float3 a)
 {
 #  ifdef __KERNEL_SSE__
