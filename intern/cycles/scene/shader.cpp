@@ -564,10 +564,12 @@ void ShaderManager::device_update_common(Device * /*device*/,
     }
     /* in this case we can assume transparent surface */
     if (shader->has_volume_connected && !shader->has_surface) {
+      /* TODO(weizhen): check if we still need this flag. */
       flag |= SD_HAS_ONLY_VOLUME;
     }
     if (shader->has_volume) {
       if (shader->get_heterogeneous_volume() && shader->has_volume_spatial_varying) {
+        /* TODO(weizhen): check if we can use this flag. */
         flag |= SD_HETEROGENEOUS_VOLUME;
       }
     }

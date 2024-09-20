@@ -908,8 +908,12 @@ template<> void Scene::delete_node_impl(Geometry *node)
 
 template<> void Scene::delete_node_impl(Object *node)
 {
+  uint flag = ObjectManager::OBJECT_REMOVED;
+  if (node->get_geometry()->has_volume) {
+    flag |= ObjectManager::VOLUME_REMOVED;
+  }
   delete_node_from_array(objects, node);
-  object_manager->tag_update(this, ObjectManager::OBJECT_REMOVED);
+  object_manager->tag_update(this, flag);
 }
 
 template<> void Scene::delete_node_impl(ParticleSystem *node)

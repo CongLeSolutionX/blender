@@ -636,7 +636,7 @@ static void merge_scalar_grids_for_velocity(const Scene *scene, Volume *volume)
 
 /* ************************************************************************** */
 
-/* TODO(weizhen): remove volume mesh. */
+/* TODO(weizhen): remove volume mesh, replace with a bounding box. */
 void GeometryManager::create_volume_mesh(const Scene *scene, Volume *volume, Progress &progress)
 {
   string msg = string_printf("Computing Volume Mesh %s", volume->name.c_str());

@@ -145,7 +145,7 @@ Octree::Octree(const Scene *scene)
   /* TODO(weizhen): world volume. */
 
   if (!root_->bbox.valid()) {
-    root_.reset();
+    //    root_.reset();
     return;
   }
 
@@ -163,6 +163,8 @@ Octree::~Octree()
 {
   /* TODO(weizhen): quite weird workaround to delay releasing nanogrid, but probably don't need
    * this later. */
+  /* TODO(weizhen): if the scene has instanced objects vdb was already cleared, this doesn't work.
+   */
 #ifdef WITH_NANOVDB
   for (Object *object : root_->objects) {
     Geometry *geom = object->get_geometry();
@@ -180,7 +182,10 @@ Octree::~Octree()
 
 void Octree::build(Progress &progress)
 {
-  if (!root_) {
+  // if (!root_) {
+  //   return;
+  // }
+  if (!root_->bbox.valid()) {
     return;
   }
 
@@ -188,6 +193,8 @@ void Octree::build(Progress &progress)
 
   recursive_build(root_);
 
+  // std::cout << "Built volume Octree with " << num_internal << " internal nodes and " << num_leaf
+  //           << " leaf nodes." << std::endl;
   VLOG_INFO << "Built volume Octree with " << num_internal << " internal nodes and " << num_leaf
             << " leaf nodes.";
 }

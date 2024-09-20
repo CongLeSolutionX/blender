@@ -235,6 +235,11 @@ void Object::tag_update(Scene *scene)
       flag |= ObjectManager::VISIBILITY_MODIFIED;
     }
 
+    if (geometry->has_volume) {
+      /* TODO(weizhen): only update when necessary, and consider world volume. */
+      scene->volume_manager->need_update_ = true;
+    }
+
     foreach (Node *node, geometry->get_used_shaders()) {
       Shader *shader = static_cast<Shader *>(node);
       if (shader->emission_sampling != EMISSION_SAMPLING_NONE) {
@@ -274,6 +279,10 @@ bool Object::is_traceable() const
 {
   /* Mesh itself can be empty,can skip all such objects. */
   if (!bounds.valid() || bounds.size() == zero_float3()) {
+    return false;
+  }
+  if (geometry->is_volume() || !geometry->has_surface) {
+    /* Handled with volume Octree. */
     return false;
   }
   /* TODO(sergey): Check for mesh vertices/curves. visibility flags. */
@@ -1103,6 +1112,10 @@ void ObjectManager::tag_update(Scene *scene, uint32_t flag)
   /* Integrator's shadow catcher settings depends on object visibility settings. */
   if (flag & (OBJECT_ADDED | OBJECT_REMOVED | OBJECT_MODIFIED)) {
     scene->integrator->tag_update(scene, Integrator::OBJECT_MANAGER);
+  }
+
+  if (flag & VOLUME_REMOVED) {
+    scene->volume_manager->need_update_ = true;
   }
 }
 

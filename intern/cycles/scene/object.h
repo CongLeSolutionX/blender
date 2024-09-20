@@ -148,6 +148,7 @@ class ObjectManager {
     HOLDOUT_MODIFIED = (1 << 6),
     TRANSFORM_MODIFIED = (1 << 7),
     VISIBILITY_MODIFIED = (1 << 8),
+    VOLUME_REMOVED = (1 << 9),
 
     /* tag everything in the manager for an update */
     UPDATE_ALL = ~0u,

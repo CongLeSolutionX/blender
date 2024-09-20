@@ -105,6 +105,7 @@ class Geometry : public Node {
   size_t prim_offset;
 
   /* Shader Properties */
+  bool has_surface;
   bool has_volume;         /* Set in the device_update_flags(). */
   bool has_surface_bssrdf; /* Set in the device_update_flags(). */
 
