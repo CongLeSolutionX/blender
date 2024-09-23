@@ -88,4 +88,7 @@ KERNEL_DATA_ARRAY(TextureInfo, texture_info)
 /* ies lights */
 KERNEL_DATA_ARRAY(float, ies)
 
+/* Volume. */
+KERNEL_DATA_ARRAY(KernelOctreeNode, volume_tree_nodes)
+
 #undef KERNEL_DATA_ARRAY

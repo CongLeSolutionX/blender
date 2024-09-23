@@ -803,11 +803,22 @@ void VolumeManager::device_update(Device *device,
   }
 
   Octree octree(scene);
-  octree.build(progress);
+
+  if (!octree.is_empty()) {
+    octree.build(progress);
+
+    KernelOctreeNode *knodes = dscene->volume_tree_nodes.alloc(octree.num_nodes());
+    octree.flatten(knodes);
+
+    dscene->volume_tree_nodes.copy_to_device();
+  }
 
   need_update_ = false;
 }
 
-void VolumeManager::device_free(Device *device, DeviceScene *dscene) {}
+void VolumeManager::device_free(Device *device, DeviceScene *dscene)
+{
+  dscene->volume_tree_nodes.free();
+}
 
 CCL_NAMESPACE_END

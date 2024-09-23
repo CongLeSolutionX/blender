@@ -92,6 +92,9 @@ class DeviceScene {
   /* IES lights */
   device_vector<float> ies_lights;
 
+  /* Volume */
+  device_vector<KernelOctreeNode> volume_tree_nodes;
+
   KernelData data;
 
   DeviceScene(Device *device);

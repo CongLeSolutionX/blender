@@ -26,16 +26,20 @@ bool OctreeNode::should_split()
     return false;
   }
 
-  float global_min = FLT_MAX;
-  float global_max = 0.0f;
+  /* TODO(weizhen): force subdivision of aggregate nodes that are larger than the volume contained,
+   * regardless of the volume’s majorant extinction. */
+
+  sigma_min = FLT_MAX;
+  sigma_max = 0.0f;
 
   for (Object *object : objects) {
     /* NOTE: test scene with known density */
     float min = 0.4f;
     float max = 0.4f;
 
+    /* TODO(weizhen): objects might have multiple shaders. */
     Geometry *geom = object->get_geometry();
-    if (geom->geometry_type == Geometry::VOLUME) {
+    if (geom->is_volume()) {
       Volume *volume = static_cast<Volume *>(geom);
 #ifdef WITH_OPENVDB
       for (Attribute &attr : volume->attributes.attributes) {
@@ -51,7 +55,6 @@ bool OctreeNode::should_split()
         if (handle.metadata().type == IMAGE_DATA_TYPE_NANOVDB_FP16) {
 
           auto const *grid = handle.vdb_loader()->nanogrid.grid<nanovdb::Fp16>();
-
           if (grid) {
             nanovdb::CoordBBox coord_bbox;
             const Transform itfm = transform_inverse(object->get_tfm());
@@ -71,12 +74,12 @@ bool OctreeNode::should_split()
       /* TODO */
 #endif
     }
-    global_min = fminf(min, global_min);
-    global_max += max;
+    sigma_min = fminf(min, sigma_min);
+    sigma_max += max;
   }
 
   /* From "Volume Rendering for Pixar’s Elemental". */
-  if ((global_max - global_min) * len(bbox.size()) < 1.442f) {
+  if ((sigma_max - sigma_min) * len(bbox.size()) < 1.442f) {
     return false;
   }
 
@@ -91,7 +94,7 @@ shared_ptr<OctreeInternalNode> Octree::make_internal(shared_ptr<OctreeNode> &nod
   return internal;
 }
 
-void Octree::recursive_build(shared_ptr<OctreeNode> &node)
+void Octree::recursive_build_(shared_ptr<OctreeNode> &node)
 {
   if (!node->should_split()) {
     num_leaf++;
@@ -119,7 +122,7 @@ void Octree::recursive_build(shared_ptr<OctreeNode> &node)
         child->objects.push_back(object);
       }
     }
-    recursive_build(child);
+    recursive_build_(child);
   }
 
   /* TODO(weizhen): visualize Octree by creating empty mesh. */
@@ -159,6 +162,42 @@ void Octree::visualize()
   /* TODO(weizhen): draw leaf node boxes. */
 }
 
+int Octree::flatten_(KernelOctreeNode *knodes, shared_ptr<OctreeNode> &node, int &node_index)
+{
+  const int current_index = node_index++;
+
+  KernelOctreeNode &knode = knodes[current_index];
+  knode.bbox = node->bbox;
+  if (auto internal_ptr = std::dynamic_pointer_cast<OctreeInternalNode>(node)) {
+    knode.is_leaf = false;
+    /* Loop through all the children. */
+    for (int i = 0; i < 8; i++) {
+      knode.children[i] = flatten_(knodes, internal_ptr->children_[i], node_index);
+    }
+  }
+  else {
+    knode.is_leaf = true;
+    knode.sigma_max = node->sigma_max;
+    knode.sigma_min = node->sigma_min;
+    int i = 0;
+    for (auto *object : node->objects) {
+      if (i >= MAX_VOLUME_STACK_SIZE) {
+        VLOG_WARNING << "Number of overlapping volumes exceeds the limit 32";
+        break;
+      }
+      knode.objects[i++] = object->get_device_index();
+    }
+  }
+
+  return current_index;
+}
+
+void Octree::flatten(KernelOctreeNode *knodes)
+{
+  int root_index = 0;
+  flatten_(knodes, root_, root_index);
+}
+
 Octree::~Octree()
 {
   /* TODO(weizhen): quite weird workaround to delay releasing nanogrid, but probably don't need
@@ -185,18 +224,25 @@ void Octree::build(Progress &progress)
   // if (!root_) {
   //   return;
   // }
-  if (!root_->bbox.valid()) {
-    return;
-  }
 
   progress.set_substatus("Building Octree for volumes");
 
-  recursive_build(root_);
+  recursive_build_(root_);
 
-  // std::cout << "Built volume Octree with " << num_internal << " internal nodes and " << num_leaf
-  //           << " leaf nodes." << std::endl;
+  std::cout << "Built volume Octree with " << num_internal << " internal nodes and " << num_leaf
+            << " leaf nodes." << std::endl;
   VLOG_INFO << "Built volume Octree with " << num_internal << " internal nodes and " << num_leaf
             << " leaf nodes.";
+}
+
+bool Octree::is_empty()
+{
+  return !root_->bbox.valid();
+}
+
+int Octree::num_nodes()
+{
+  return num_internal + num_leaf;
 }
 
 CCL_NAMESPACE_END

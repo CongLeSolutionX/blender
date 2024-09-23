@@ -475,9 +475,9 @@ ccl_device_inline bool area_light_valid_ray_segment(const ccl_global KernelAreaL
       valid = ray_infinite_cylinder_intersect(P, D, half_len_u, half_len_v, t_range);
     }
     else {
-      const float3 bbox_min = make_float3(-half_len_u, -half_len_v, 0.0f);
-      const float3 bbox_max = make_float3(half_len_u, half_len_v, FLT_MAX);
-      valid = ray_aabb_intersect(bbox_min, bbox_max, P, D, t_range);
+      const BoundBox bbox(make_float3(-half_len_u, -half_len_v, 0.0f),
+                          make_float3(half_len_u, half_len_v, FLT_MAX));
+      valid = ray_aabb_intersect(bbox, P, rcp(D), t_range);
     }
   }
   else {

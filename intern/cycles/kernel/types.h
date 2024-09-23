@@ -20,6 +20,7 @@
 #  include <TargetConditionals.h>
 #endif
 
+#include "util/boundbox.h"
 #include "util/math.h"
 #include "util/math_fast.h"
 #include "util/math_intersect.h"
@@ -1700,6 +1701,17 @@ typedef struct KernelLightTreeNode {
   uint8_t pad[11];
 } KernelLightTreeNode;
 static_assert_align(KernelLightTreeNode, 16);
+
+struct KernelOctreeNode {
+  bool is_leaf;
+  float sigma_max;
+  float sigma_min;
+
+  BoundBox bbox;
+
+  int children[8];
+  int objects[MAX_VOLUME_STACK_SIZE];
+};
 
 typedef struct KernelLightTreeEmitter {
   /* Bounding cone. */
