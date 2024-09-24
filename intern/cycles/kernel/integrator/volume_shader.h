@@ -484,12 +484,12 @@ ccl_device_inline bool volume_shader_eval_entry(KernelGlobals kg,
   return true;
 }
 
-template<const bool shadow, typename StackReadOp, typename ConstIntegratorGenericState>
+template<const bool shadow, typename ConstIntegratorGenericState>
 ccl_device_inline void volume_shader_eval(KernelGlobals kg,
                                           ConstIntegratorGenericState state,
                                           ccl_private ShaderData *ccl_restrict sd,
                                           const uint32_t path_flag,
-                                          StackReadOp stack_read)
+                                          const ccl_global KernelOctreeNode *knode)
 {
   /* If path is being terminated, we are tracing a shadow ray or evaluating
    * emission, then we don't need to store closures. The emission and shadow
@@ -510,7 +510,7 @@ ccl_device_inline void volume_shader_eval(KernelGlobals kg,
   sd->object_flag = 0;
 
   for (int i = 0;; i++) {
-    const VolumeStack entry = stack_read(i);
+    const VolumeStack entry = {knode->objects[i], knode->shaders[i]};
     if (!volume_shader_eval_entry<shadow, KERNEL_FEATURE_NODE_MASK_VOLUME>(
             kg, state, sd, entry, path_flag))
     {

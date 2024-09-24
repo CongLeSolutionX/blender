@@ -211,65 +211,34 @@ ccl_device_forceinline void integrator_intersect_next_kernel_after_shadow_catche
 }
 #endif
 
-ccl_device int volume_tree_get_octant(const BoundBox bbox,
-                                      ccl_private Ray *ccl_restrict ray,
-                                      const float3 P)
-{
-  const float3 center = bbox.center();
-
-  const float3 diff = P - center;
-  const bool x_plus = diff.x > 0.0f || (diff.x == 0.0f && ray->D.x > 0.0f);
-  const bool y_plus = diff.y > 0.0f || (diff.y == 0.0f && ray->D.y > 0.0f);
-  const bool z_plus = diff.z > 0.0f || (diff.z == 0.0f && ray->D.z > 0.0f);
-  return x_plus + (y_plus << 1) + (z_plus << 2);
-}
-
-/* Offset ray to avoid self-intersection. */
-ccl_device_forceinline float3 volume_octree_offset(const float3 P,
-                                                   const BoundBox bbox,
-                                                   const float3 ray_D)
-{
-  const float3 step = fabs(P - bbox.center()) / bbox.size();
-  float max_step = reduce_max(step);
-  float3 N = make_float3(step.x == max_step, step.y == max_step, step.z == max_step);
-  if (dot(N, ray_D) < 0.0f) {
-    N = -N;
-  }
-  return ray_offset(P, N);
-}
-
 /* Intersect with volume Octree. */
-ccl_device bool volume_intersect(KernelGlobals kg, ccl_private Ray *ccl_restrict ray)
+ccl_device bool volume_intersect(KernelGlobals kg,
+                                 IntegratorState state,
+                                 ccl_private const Intersection *ccl_restrict isect)
 {
-  const ccl_global KernelOctreeNode *kroot = &kernel_data_fetch(volume_tree_nodes, 0);
-  const float3 inv_ray_D = rcp(ray->D);
-  Interval<float> t_range = {ray->tmin, ray->tmax};
-  if (!ray_aabb_intersect(kroot->bbox, ray->P, inv_ray_D, &t_range)) {
+  if (!kernel_data.integrator.use_volumes) {
     return false;
   }
 
-  if (kroot->is_leaf) {
-    return true;
+  /* Read ray from integrator state into local memory. */
+  /* TODO(weizhen): pass ray as argument. */
+  Ray ray ccl_optional_struct_init;
+  integrator_state_read_ray(state, &ray);
+
+  /* Set ray length to current segment. */
+  ray.tmax = (isect->prim != PRIM_NONE) ? isect->t : FLT_MAX;
+
+  const ccl_global KernelOctreeNode *kroot = &kernel_data_fetch(volume_tree_nodes, 0);
+  const float3 inv_ray_D = rcp(ray.D);
+  Interval<float> t_range = {ray.tmin, ray.tmax};
+  if (!ray_aabb_intersect(kroot->bbox, ray.P, inv_ray_D, &t_range)) {
+    return false;
   }
 
-  float3 P = ray->P;
-  if (!kroot->bbox.contains(ray->P)) {
-    P += t_range.min * ray->D;
-  }
+  INTEGRATOR_STATE_WRITE(state, ray, tmin) = t_range.min;
+  INTEGRATOR_STATE_WRITE(state, ray, tmax) = t_range.max;
 
-  int child = volume_tree_get_octant(kroot->bbox, ray, P);
-  int node_index = kroot->children[child];
-  while (true) {
-    const ccl_global KernelOctreeNode *knode = &kernel_data_fetch(volume_tree_nodes, node_index);
-    if (knode->is_leaf) {
-      ray_aabb_intersect(knode->bbox, ray->P, inv_ray_D, &t_range);
-      P = ray->P + t_range.max * ray->D;
-      P = volume_octree_offset(P, knode->bbox, ray->D);
-      return true;
-    }
-    child = volume_tree_get_octant(knode->bbox, ray, P);
-    node_index = knode->children[child];
-  }
+  return true;
 }
 
 /* Schedule next kernel to be executed after intersect closest.
@@ -286,21 +255,10 @@ ccl_device_forceinline void integrator_intersect_next_kernel(
 {
   /* Continue with volume kernel if we are inside a volume, regardless if we hit anything. */
 #ifdef __VOLUME__
-  /* Read ray from integrator state into local memory. */
-  Ray ray ccl_optional_struct_init;
-  integrator_state_read_ray(state, &ray);
-  volume_intersect(kg, &ray);
-  if (!integrator_state_volume_stack_is_empty(kg, state)) {
-    const bool hit_surface = hit && !(isect->type & PRIMITIVE_LAMP);
-    const int shader = (hit_surface) ? intersection_get_shader(kg, isect) : SHADER_NONE;
-    const int flags = (hit_surface) ? kernel_data_fetch(shaders, shader).flags : 0;
-
-    if (!integrator_intersect_terminate(kg, state, flags)) {
-      integrator_path_next(kg, state, current_kernel, DEVICE_KERNEL_INTEGRATOR_SHADE_VOLUME);
-    }
-    else {
-      integrator_path_terminate(kg, state, current_kernel);
-    }
+  /* TODO(weizhen): visibility. */
+  if (volume_intersect(kg, state, isect)) {
+    /* TODO(weizhen): terminate path using Russian Roulette. */
+    integrator_path_next(kg, state, current_kernel, DEVICE_KERNEL_INTEGRATOR_SHADE_VOLUME);
     return;
   }
 #endif

@@ -185,8 +185,19 @@ int Octree::flatten_(KernelOctreeNode *knodes, shared_ptr<OctreeNode> &node, int
         VLOG_WARNING << "Number of overlapping volumes exceeds the limit 32";
         break;
       }
-      knode.objects[i++] = object->get_device_index();
+      knode.objects[i] = object->get_device_index();
+      for (Node *node : object->get_geometry()->get_used_shaders()) {
+        Shader *shader = static_cast<Shader *>(node);
+        if (shader->has_volume) {
+          knode.shaders[i] = shader->id;
+          /* TODO(weizhen): support multiple shaders per object. */
+          break;
+        }
+      }
+      i++;
     }
+    knode.objects[i] = OBJECT_NONE;
+    knode.shaders[i] = SHADER_NONE;
   }
 
   return current_index;
@@ -196,6 +207,8 @@ void Octree::flatten(KernelOctreeNode *knodes)
 {
   int root_index = 0;
   flatten_(knodes, root_, root_index);
+  /* TODO(weizhen): rescale the bounding box to match its resolution, for more robust traversing.
+   */
 }
 
 Octree::~Octree()

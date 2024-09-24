@@ -1710,7 +1710,9 @@ struct KernelOctreeNode {
   BoundBox bbox;
 
   int children[8];
+  /* TODO(weizhen): maybe store as a separate array. */
   int objects[MAX_VOLUME_STACK_SIZE];
+  int shaders[MAX_VOLUME_STACK_SIZE];
 };
 
 typedef struct KernelLightTreeEmitter {

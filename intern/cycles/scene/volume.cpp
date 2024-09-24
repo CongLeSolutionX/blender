@@ -812,6 +812,11 @@ void VolumeManager::device_update(Device *device,
 
     dscene->volume_tree_nodes.copy_to_device();
   }
+  else {
+    /* TODO(weizhen): maybe there is shader with volume but the object scale is zero, so this is
+     * needed. but does this belong to volume or integrator manager? How about subsurface? */
+    dscene->data.integrator.use_volumes = false;
+  }
 
   need_update_ = false;
 }
