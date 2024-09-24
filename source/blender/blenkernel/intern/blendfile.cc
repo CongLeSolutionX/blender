@@ -16,6 +16,7 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "DNA_brush_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
 #include "DNA_space_types.h"
@@ -510,6 +511,20 @@ static void reuse_editable_asset_bmain_data_for_blendfile(ReuseOldBMainData *reu
   FOREACH_MAIN_LISTBASE_ID_END;
 }
 
+static void unpin_grease_pencil_brush_materials(const ReuseOldBMainData *reuse_data)
+{
+  ID *old_id_iter;
+  FOREACH_MAIN_LISTBASE_ID_BEGIN (&reuse_data->old_bmain->brushes, old_id_iter) {
+    const Brush *brush = reinterpret_cast<Brush *>(old_id_iter);
+    if (brush->gpencil_settings) {
+      /* Unpin material and clear pointer. */
+      brush->gpencil_settings->flag &= ~GP_BRUSH_MATERIAL_PINNED;
+      brush->gpencil_settings->material = nullptr;
+    }
+  }
+  FOREACH_MAIN_LISTBASE_ID_END;
+}
+
 /**
  * Does a complete replacement of data in `new_bmain` by data from `old_bmain. Original new data
  * are moved to the `old_bmain`, and will be freed together with it.
@@ -946,6 +961,7 @@ static void setup_app_data(bContext *C,
     BKE_main_idmap_destroy(reuse_data.id_map);
 
     if (!params->is_factory_settings && reuse_editable_asset_needed(&reuse_data)) {
+      unpin_grease_pencil_brush_materials(&reuse_data);
       /* Keep linked brush asset data, similar to UI data. Only does a known
        * subset know. Could do everything, but that risks dragging along more
        * scene data than we want. */
