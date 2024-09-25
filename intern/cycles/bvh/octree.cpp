@@ -88,20 +88,15 @@ bool OctreeNode::should_split()
 
 shared_ptr<OctreeInternalNode> Octree::make_internal(shared_ptr<OctreeNode> &node)
 {
-  auto internal = std::make_shared<OctreeInternalNode>();
-  internal->bbox = node->bbox;
-  internal->objects = std::move(node->objects);
-  return internal;
+  num_nodes += 8;
+  return std::make_shared<OctreeInternalNode>(*node);
 }
 
 void Octree::recursive_build_(shared_ptr<OctreeNode> &node)
 {
   if (!node->should_split()) {
-    num_leaf++;
     return;
   }
-
-  num_internal++;
 
   /* Make the current node an internal node. */
   auto internal = make_internal(node);
@@ -110,19 +105,20 @@ void Octree::recursive_build_(shared_ptr<OctreeNode> &node)
   const float3 center = internal->bbox.center();
   for (int i = 0; i < 8; i++) {
     const float3 t = make_float3(i & 1, (i >> 1) & 1, (i >> 2) & 1);
-    internal->children_[i] = std::make_shared<OctreeNode>();
-    internal->children_[i]->bbox.min = mix(internal->bbox.min, center, t);
-    internal->children_[i]->bbox.max = mix(center, internal->bbox.max, t);
+    const BoundBox bbox(mix(internal->bbox.min, center, t), mix(center, internal->bbox.max, t));
+    internal->children_[i] = std::make_shared<OctreeNode>(bbox);
   }
 
   for (auto &child : internal->children_) {
+    child->objects.reserve(internal->objects.size());
     for (Object *object : internal->objects) {
       /* TODO(weizhen): more granular than object bounding box is to use the geometry bvh. */
       if (object->bounds.intersects(child->bbox)) {
         child->objects.push_back(object);
       }
     }
-    recursive_build_(child);
+    /* TODO(weizhen): check the performance. */
+    task_pool.push([&] { recursive_build_(child); });
   }
 
   /* TODO(weizhen): visualize Octree by creating empty mesh. */
@@ -239,13 +235,16 @@ void Octree::build(Progress &progress)
   // }
 
   progress.set_substatus("Building Octree for volumes");
+  const double start_time = time_dt();
 
   recursive_build_(root_);
 
-  std::cout << "Built volume Octree with " << num_internal << " internal nodes and " << num_leaf
-            << " leaf nodes." << std::endl;
-  VLOG_INFO << "Built volume Octree with " << num_internal << " internal nodes and " << num_leaf
-            << " leaf nodes.";
+  task_pool.wait_work();
+
+  std::cout << "Built volume Octree with " << num_nodes << " nodes in " << time_dt() - start_time
+            << " seconds." << std::endl;
+  VLOG_INFO << "Built volume Octree with " << num_nodes << " nodes in " << time_dt() - start_time
+            << " seconds.";
 }
 
 bool Octree::is_empty()
@@ -253,9 +252,9 @@ bool Octree::is_empty()
   return !root_->bbox.valid();
 }
 
-int Octree::num_nodes()
+int Octree::get_num_nodes()
 {
-  return num_internal + num_leaf;
+  return num_nodes;
 }
 
 CCL_NAMESPACE_END

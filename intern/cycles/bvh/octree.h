@@ -25,13 +25,18 @@ struct OctreeNode {
   float sigma_max;
 
   OctreeNode() : bbox(BoundBox::empty) {}
+  OctreeNode(BoundBox bbox_) : bbox(bbox_) {}
   virtual ~OctreeNode() = default;
 
   bool should_split();
 };
 
 struct OctreeInternalNode : public OctreeNode {
-  OctreeInternalNode() : children_(8) {}
+  OctreeInternalNode(OctreeNode &node) : children_(8)
+  {
+    bbox = node.bbox;
+    objects = std::move(node.objects);
+  }
 
   vector<std::shared_ptr<OctreeNode>> children_;
 };
@@ -45,21 +50,16 @@ class Octree {
 
   void flatten(KernelOctreeNode *knodes);
   bool is_empty();
-  int num_nodes();
+  int get_num_nodes();
 
  private:
-  std::shared_ptr<OctreeNode> root_;
-  /* Thread. */
-  TaskPool task_pool;
-
   std::shared_ptr<OctreeInternalNode> make_internal(std::shared_ptr<OctreeNode> &node);
-
   void recursive_build_(std::shared_ptr<OctreeNode> &node);
   int flatten_(KernelOctreeNode *knodes, std::shared_ptr<OctreeNode> &node, int &index);
 
-  /* TODO(weizhen): helper functions to delete. */
-  int num_leaf = 0;
-  int num_internal = 0;
+  std::shared_ptr<OctreeNode> root_;
+  std::atomic<int> num_nodes = 1;
+  TaskPool task_pool;
 };
 
 CCL_NAMESPACE_END
