@@ -7,6 +7,7 @@
 #include "scene/geometry.h"
 #include "scene/image_vdb.h"
 #include "scene/object.h"
+#include "scene/shader_nodes.h"
 #include "scene/volume.h"
 
 #include "util/progress.h"
@@ -89,7 +90,17 @@ bool OctreeNode::should_split()
 shared_ptr<OctreeInternalNode> Octree::make_internal(shared_ptr<OctreeNode> &node)
 {
   num_nodes += 8;
-  return std::make_shared<OctreeInternalNode>(*node);
+  auto internal = std::make_shared<OctreeInternalNode>(*node);
+
+  /* Create bounding boxes for children. */
+  const float3 center = internal->bbox.center();
+  for (int i = 0; i < 8; i++) {
+    const float3 t = make_float3(i & 1, (i >> 1) & 1, (i >> 2) & 1);
+    const BoundBox bbox(mix(internal->bbox.min, center, t), mix(center, internal->bbox.max, t));
+    internal->children_[i] = std::make_shared<OctreeNode>(bbox);
+  }
+
+  return internal;
 }
 
 void Octree::recursive_build_(shared_ptr<OctreeNode> &node)
@@ -100,14 +111,6 @@ void Octree::recursive_build_(shared_ptr<OctreeNode> &node)
 
   /* Make the current node an internal node. */
   auto internal = make_internal(node);
-
-  /* Create bounding boxes for children. */
-  const float3 center = internal->bbox.center();
-  for (int i = 0; i < 8; i++) {
-    const float3 t = make_float3(i & 1, (i >> 1) & 1, (i >> 2) & 1);
-    const BoundBox bbox(mix(internal->bbox.min, center, t), mix(center, internal->bbox.max, t));
-    internal->children_[i] = std::make_shared<OctreeNode>(bbox);
-  }
 
   for (auto &child : internal->children_) {
     child->objects.reserve(internal->objects.size());
@@ -158,6 +161,22 @@ void Octree::visualize()
   /* TODO(weizhen): draw leaf node boxes. */
 }
 
+uint Octree::get_object_shader(const Object *object)
+{
+  Geometry *geom = object->get_geometry();
+
+  for (Node *node : geom->get_used_shaders()) {
+    Shader *shader = static_cast<Shader *>(node);
+    if (shader->has_volume &&
+        dynamic_cast<VolumeNode *>(shader->graph->output()->input("Volume")->link->parent))
+    {
+      return shader->id;
+    }
+  }
+
+  return SHADER_NONE;
+}
+
 int Octree::flatten_(KernelOctreeNode *knodes, shared_ptr<OctreeNode> &node, int &node_index)
 {
   const int current_index = node_index++;
@@ -182,14 +201,7 @@ int Octree::flatten_(KernelOctreeNode *knodes, shared_ptr<OctreeNode> &node, int
         break;
       }
       knode.objects[i] = object->get_device_index();
-      for (Node *node : object->get_geometry()->get_used_shaders()) {
-        Shader *shader = static_cast<Shader *>(node);
-        if (shader->has_volume) {
-          knode.shaders[i] = shader->id;
-          /* TODO(weizhen): support multiple shaders per object. */
-          break;
-        }
-      }
+      knode.shaders[i] = get_object_shader(object);
       i++;
     }
     knode.objects[i] = OBJECT_NONE;
