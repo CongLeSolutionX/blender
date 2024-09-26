@@ -21,6 +21,28 @@
 
 CCL_NAMESPACE_BEGIN
 
+float OctreeNode::volume_density_scale(const Object *object)
+{
+  Geometry *geom = object->get_geometry();
+
+  for (Node *node : geom->get_used_shaders()) {
+    Shader *shader = static_cast<Shader *>(node);
+    if (shader->has_volume) {
+      VolumeNode *volume_node = dynamic_cast<VolumeNode *>(
+          shader->graph->output()->input("Volume")->link->parent);
+      if (volume_node) {
+        float3 color = volume_node->get_color();
+        if (auto *principled_volume_node = dynamic_cast<PrincipledVolumeNode *>(volume_node)) {
+          color += principled_volume_node->get_absorption_color();
+        }
+        return reduce_max(volume_node->get_density() * color *
+                          ObjectManager::object_volume_density(object->get_tfm(), geom));
+      }
+    }
+  }
+  return 1.0f;
+}
+
 bool OctreeNode::should_split()
 {
   if (objects.empty()) {
@@ -31,9 +53,8 @@ bool OctreeNode::should_split()
   sigma_max = 0.0f;
 
   for (Object *object : objects) {
-    /* NOTE: test scene with known density */
-    float min = 0.4f;
-    float max = 0.4f;
+    float min = 1.0f;
+    float max = 1.0f;
 
     /* TODO(weizhen): objects might have multiple shaders. */
     Geometry *geom = object->get_geometry();
@@ -74,6 +95,10 @@ bool OctreeNode::should_split()
     }
     sigma_min = fminf(min, sigma_min);
     sigma_max += max;
+
+    const float scale = volume_density_scale(object);
+    sigma_min *= scale;
+    sigma_max *= scale;
   }
 
   /* TODO(weizhen): force subdivision of aggregate nodes that are larger than the volume contained,
