@@ -27,9 +27,6 @@ bool OctreeNode::should_split()
     return false;
   }
 
-  /* TODO(weizhen): force subdivision of aggregate nodes that are larger than the volume contained,
-   * regardless of the volume’s majorant extinction. */
-
   sigma_min = FLT_MAX;
   sigma_max = 0.0f;
 
@@ -79,8 +76,11 @@ bool OctreeNode::should_split()
     sigma_max += max;
   }
 
+  /* TODO(weizhen): force subdivision of aggregate nodes that are larger than the volume contained,
+   * regardless of the volume’s majorant extinction. */
+
   /* From "Volume Rendering for Pixar’s Elemental". */
-  if ((sigma_max - sigma_min) * len(bbox.size()) < 1.442f) {
+  if ((sigma_max - sigma_min) * len(bbox.size()) < 1.442f || level == max_level) {
     return false;
   }
 
@@ -97,7 +97,7 @@ shared_ptr<OctreeInternalNode> Octree::make_internal(shared_ptr<OctreeNode> &nod
   for (int i = 0; i < 8; i++) {
     const float3 t = make_float3(i & 1, (i >> 1) & 1, (i >> 2) & 1);
     const BoundBox bbox(mix(internal->bbox.min, center, t), mix(center, internal->bbox.max, t));
-    internal->children_[i] = std::make_shared<OctreeNode>(bbox);
+    internal->children_[i] = std::make_shared<OctreeNode>(bbox, internal->level + 1);
   }
 
   return internal;

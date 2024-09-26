@@ -19,22 +19,30 @@ struct KernelOctreeNode;
 struct OctreeNode {
   BoundBox bbox;
   vector<Object *> objects;
+  int level;
+
+  /* Set the maximall resolution to be 128 to reduce traversing overhead. */
+  /* TODO(weizhen): tweak this threshold. 128 is a reference from PBRT. */
+  static const int max_level = 7;
 
   /* TODO(weizhen): we need visibility for shadow, camera, and indirect. */
-  float sigma_min;
-  float sigma_max;
+  float sigma_min = 0.0f;
+  float sigma_max = 0.0f;
 
-  OctreeNode() : bbox(BoundBox::empty) {}
-  OctreeNode(BoundBox bbox_) : bbox(bbox_) {}
+  OctreeNode() : bbox(BoundBox::empty), level(0) {}
+  OctreeNode(BoundBox bbox_, int level_) : bbox(bbox_), level(level_) {}
   virtual ~OctreeNode() = default;
 
   bool should_split();
+  /* TODO(weizhen): this is only for testing. Need to support procedural shaders. */
+  float volume_density_scale(const Object *object);
 };
 
 struct OctreeInternalNode : public OctreeNode {
   OctreeInternalNode(OctreeNode &node) : children_(8)
   {
     bbox = node.bbox;
+    level = node.level;
     objects = std::move(node.objects);
   }
 
