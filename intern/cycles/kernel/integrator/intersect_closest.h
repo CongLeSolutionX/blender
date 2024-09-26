@@ -212,31 +212,31 @@ ccl_device_forceinline void integrator_intersect_next_kernel_after_shadow_catche
 #endif
 
 /* Intersect with volume Octree. */
+template<const bool shadow, typename IntegratorGenericState>
 ccl_device bool volume_intersect(KernelGlobals kg,
-                                 IntegratorState state,
-                                 ccl_private const Intersection *ccl_restrict isect)
+                                 IntegratorGenericState state,
+                                 ccl_private const Ray *ray)
 {
   if (!kernel_data.integrator.use_volumes) {
     return false;
   }
 
-  /* Read ray from integrator state into local memory. */
-  /* TODO(weizhen): pass ray as argument. */
-  Ray ray ccl_optional_struct_init;
-  integrator_state_read_ray(state, &ray);
-
-  /* Set ray length to current segment. */
-  ray.tmax = (isect->prim != PRIM_NONE) ? isect->t : FLT_MAX;
-
   const ccl_global KernelOctreeNode *kroot = &kernel_data_fetch(volume_tree_nodes, 0);
-  const float3 inv_ray_D = rcp(ray.D);
-  Interval<float> t_range = {ray.tmin, ray.tmax};
-  if (!ray_aabb_intersect(kroot->bbox, ray.P, inv_ray_D, &t_range)) {
+  Interval<float> t_range = {ray->tmin, ray->tmax};
+  if (!ray_aabb_intersect(kroot->bbox, ray->P, rcp(ray->D), &t_range)) {
     return false;
   }
 
-  INTEGRATOR_STATE_WRITE(state, ray, tmin) = t_range.min;
-  INTEGRATOR_STATE_WRITE(state, ray, tmax) = t_range.max;
+  /* TODO(weizhen): refine segment to skip zero density. */
+
+  if constexpr (shadow) {
+    INTEGRATOR_STATE_WRITE(state, shadow_ray, tmin) = t_range.min;
+    INTEGRATOR_STATE_WRITE(state, shadow_ray, tmax) = t_range.max;
+  }
+  else {
+    INTEGRATOR_STATE_WRITE(state, ray, tmin) = t_range.min;
+    INTEGRATOR_STATE_WRITE(state, ray, tmax) = t_range.max;
+  }
 
   return true;
 }
@@ -250,13 +250,17 @@ ccl_device_forceinline void integrator_intersect_next_kernel(
     KernelGlobals kg,
     IntegratorState state,
     ccl_private const Intersection *ccl_restrict isect,
+    ccl_private Ray *ray,
     ccl_global float *ccl_restrict render_buffer,
     const bool hit)
 {
   /* Continue with volume kernel if we are inside a volume, regardless if we hit anything. */
 #ifdef __VOLUME__
+  /* Set ray length to current segment. */
+  ray->tmax = (isect->prim != PRIM_NONE) ? isect->t : FLT_MAX;
+
   /* TODO(weizhen): visibility. */
-  if (volume_intersect(kg, state, isect)) {
+  if (volume_intersect<false>(kg, state, ray)) {
     /* TODO(weizhen): terminate path using Russian Roulette. */
     integrator_path_next(kg, state, current_kernel, DEVICE_KERNEL_INTEGRATOR_SHADE_VOLUME);
     return;
@@ -455,7 +459,7 @@ ccl_device void integrator_intersect_closest(KernelGlobals kg,
 
   /* Setup up next kernel to be executed. */
   integrator_intersect_next_kernel<DEVICE_KERNEL_INTEGRATOR_INTERSECT_CLOSEST>(
-      kg, state, &isect, render_buffer, hit);
+      kg, state, &isect, &ray, render_buffer, hit);
 }
 
 CCL_NAMESPACE_END

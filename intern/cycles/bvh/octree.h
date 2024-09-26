@@ -8,6 +8,8 @@
 #include "util/boundbox.h"
 #include "util/task.h"
 
+#include <atomic>
+
 CCL_NAMESPACE_BEGIN
 
 class BoundBox;

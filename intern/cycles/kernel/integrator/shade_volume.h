@@ -137,21 +137,32 @@ ccl_device int volume_voxel_get(KernelGlobals kg,
   }
 }
 
+/* Offset ray to avoid self-intersection. */
+ccl_device_forceinline float3 volume_octree_offset(const float3 P,
+                                                   const BoundBox bbox,
+                                                   const float3 ray_D)
+{
+  /* TODO(weizhen): put the point on the bounding box to improve precision. */
+  const float3 step = fabs(P - bbox.center()) / bbox.size();
+  float max_step = reduce_max(step);
+  float3 N = make_float3(step.x == max_step, step.y == max_step, step.z == max_step);
+  if (dot(N, ray_D) < 0.0f) {
+    N = -N;
+  }
+  return ray_offset(P, N);
+  /* TODO(weizhen): maybe offsetting by a small constant is enough. */
+  // return P + 1e-4f * ray_D;
+}
+
 /* Evaluate shader to get extinction coefficient at P. We can use the shadow path evaluation to
  * skip emission and phase function. */
 template<const bool shadow, typename ConstIntegratorGenericState>
-ccl_device_inline Spectrum
-volume_shader_eval_extinction(KernelGlobals kg,
-                              ConstIntegratorGenericState state,
-                              ccl_private VolumeIntegrateState &ccl_restrict vstate,
-                              const ccl_private Ray *ccl_restrict ray,
-                              ccl_private ShaderData *ccl_restrict sd)
+ccl_device_inline Spectrum volume_shader_eval_extinction(KernelGlobals kg,
+                                                         ConstIntegratorGenericState state,
+                                                         ccl_private ShaderData *ccl_restrict sd,
+                                                         const ccl_global KernelOctreeNode *knode)
 {
-  const int node_index = volume_voxel_get(kg, ray, vstate, sd->P);
-  const ccl_global KernelOctreeNode *knode = &kernel_data_fetch(volume_tree_nodes, node_index);
-
   volume_shader_eval<shadow>(kg, state, sd, PATH_RAY_SHADOW, knode);
-
   return (sd->flag & SD_EXTINCTION) ? sd->closure_transparent_extinction : zero_spectrum();
 }
 
@@ -302,9 +313,15 @@ ccl_device void volume_elementary_mean(const int N,
 }
 
 /* Randomly sample expansion order N. See [Kettunen et al. 2021] Algorithm 2. */
-/* TODO(weizhen): detect homogeneous media? */
-ccl_device int volume_aggressive_BK_roulette(KernelGlobals kg, float rand)
+ccl_device_inline int volume_aggressive_BK_roulette(KernelGlobals kg,
+                                                    float rand,
+                                                    const float sigma)
 {
+  if (sigma == 0.0f) {
+    /* Homogeneous media. */
+    return 0;
+  }
+
   float continuation_probability = 0.1f;
   if (rand > continuation_probability) {
     /* Stop at the zeroth-order term. */
@@ -336,8 +353,9 @@ ccl_device int volume_aggressive_BK_roulette(KernelGlobals kg, float rand)
  *
  * See [Kettunen et al. 2021] Algorithm 4.
  */
-/* TODO(weizhen): this formula is purely for matching the cost of [Georgiev et al. 2019]. Probably
- * it's not needed, and we can use the expectation of the number of events `tau`? */
+/* TODO(weizhen): this formula is purely for matching the cost of [Georgiev et al. 2019]. If we
+ * ensure `tau < 1.442` when creating the octree, we can use some approximation like `round(1.1 + 3
+ * * tau)`. But might not be the case if restricted by subdivision level. */
 ccl_device int volume_tuple_size(const float tau)
 {
   const float N_CMF = ceilf(cbrtf((0.015f + tau) * (0.65f + tau) * (60.3f + tau)));
@@ -357,30 +375,30 @@ ccl_device int volume_tuple_size(const float tau)
  */
 
 template<const bool shadow, typename ConstIntegratorGenericState>
-ccl_device Spectrum volume_unbiased_ray_marching(KernelGlobals kg,
-                                                 ConstIntegratorGenericState state,
-                                                 const ccl_private Ray *ccl_restrict ray,
-                                                 ccl_private ShaderData *ccl_restrict sd,
-                                                 const float tmin,
-                                                 const float tmax,
-                                                 const float sigma,
-                                                 ccl_private RNGState &rng_state,
-                                                 ccl_private Spectrum *biased_tau = nullptr)
+ccl_device Spectrum
+volume_unbiased_ray_marching(KernelGlobals kg,
+                             ConstIntegratorGenericState state,
+                             const ccl_private Ray *ccl_restrict ray,
+                             ccl_private ShaderData *ccl_restrict sd,
+                             ccl_private VolumeIntegrateState &ccl_restrict vstate,
+                             const ccl_global KernelOctreeNode *knode,
+                             ccl_private RNGState &rng_state,
+                             ccl_private Spectrum *biased_tau = nullptr)
 {
-  /* Initialize volume integration state. */
-  VolumeIntegrateState vstate ccl_optional_struct_init;
-  vstate.inv_ray_D = rcp(ray->D);
-
   /* Compute tuple size and expansion order. */
-  const float ray_length = tmax - tmin;
+  const float ray_length = vstate.t.max - vstate.t.min;
+
   /* TODO(weizhen): check if `ray->tmax == FLT_MAX` is correctly handled. */
-  const int M = min(volume_tuple_size(sigma * ray_length),
-                    kernel_data.integrator.volume_max_steps);
+  const int steps_left = kernel_data.integrator.volume_max_steps - vstate.step;
+  const float sigma_c = knode->sigma_max - knode->sigma_min;
+  const int M = min(volume_tuple_size(sigma_c * ray_length), steps_left);
+  vstate.step += M;
+
   const float step_size = ray_length / M;
   /* TODO(weizhen): this implementation does not properly balance the workloads of the
    * transmittance estimates inside the thread groups and causes slowdowns on GPU. */
   const float rand = path_state_rng_1D(kg, &rng_state, PRNG_VOLUME_TAYLOR_EXPANSION);
-  const int N = volume_aggressive_BK_roulette(kg, rand);
+  const int N = volume_aggressive_BK_roulette(kg, rand, sigma_c);
 
   /* Combed estimators of the optical thickness. */
   Spectrum X[VOLUME_EXPANSION_ORDER_CUTOFF + 1];
@@ -394,11 +412,11 @@ ccl_device Spectrum volume_unbiased_ray_marching(KernelGlobals kg,
     const float step_shade_offset = path_state_rng_1D(kg, &rng_state, PRNG_VOLUME_SHADE_OFFSET);
     for (int j = 0; j < M; j++) {
       /* Advance to new position. */
-      const float t = min(tmax, tmin + (step_shade_offset + j) * step_size);
+      const float t = min(vstate.t.max, vstate.t.min + (step_shade_offset + j) * step_size);
       sd->P = ray->P + ray->D * t;
 
       /* TODO(weizhen): early cut off? */
-      X[i] += volume_shader_eval_extinction<shadow>(kg, state, vstate, ray, sd);
+      X[i] += volume_shader_eval_extinction<shadow>(kg, state, sd, knode);
     }
     X[i] = -step_size * X[i];
 
@@ -420,6 +438,7 @@ ccl_device Spectrum volume_unbiased_ray_marching(KernelGlobals kg,
       weight /= 2.0f;
       fN += weight * elementary_mean[k];
     }
+    /* TODO(weizhen): avoiding computing exp by summing up all the zero-th order approximation. */
     transmittance += exp(X[i]) * fN;
   }
 
@@ -432,8 +451,7 @@ ccl_device void volume_shadow_heterogeneous(KernelGlobals kg,
                                             IntegratorShadowState state,
                                             ccl_private Ray *ccl_restrict ray,
                                             ccl_private ShaderData *ccl_restrict sd,
-                                            ccl_private Spectrum *ccl_restrict throughput,
-                                            const float object_step_size)
+                                            ccl_private Spectrum *ccl_restrict throughput)
 {
   /* Load random number state. */
   RNGState rng_state;
@@ -441,10 +459,29 @@ ccl_device void volume_shadow_heterogeneous(KernelGlobals kg,
 
   path_state_rng_scramble(&rng_state, 0x8647ace4);
 
+  /* Initialize volume integration state. */
+  VolumeIntegrateState vstate ccl_optional_struct_init;
+  vstate.inv_ray_D = rcp(ray->D);
+  vstate.t.min = ray->tmin;
+  vstate.step = 0;
+  while (vstate.t.min < ray->tmax && vstate.step < kernel_data.integrator.volume_max_steps) {
+    const int node_index = volume_voxel_get(kg, ray, vstate, sd->P);
+    const ccl_global KernelOctreeNode *knode = &kernel_data_fetch(volume_tree_nodes, node_index);
+
+    *throughput *= volume_unbiased_ray_marching<true>(
+        kg, state, ray, sd, vstate, knode, rng_state);
+
+    /* TODO(weizhen): early termination.  */
+
+    /* Advance to the end of the segment. */
+    sd->P = volume_octree_offset(ray->P + vstate.t.max * ray->D, knode->bbox, ray->D);
+
+    /* The next segment starts at the end of the current segment. */
+    vstate.t.min = vstate.t.max;
+  }
+
   /* TODO(weizhen): read majorant. */
   const float sigma = MAJORANT - MINORANT;
-  *throughput *= volume_unbiased_ray_marching<true>(
-      kg, state, ray, sd, ray->tmin, ray->tmax, sigma, rng_state);
 }
 
 /* Equi-angular sampling as in:
@@ -532,23 +569,6 @@ ccl_device_inline bool volume_equiangular_valid_ray_segment(KernelGlobals kg,
 /* --------------------------------------------------------------------
  * Tracking-based distance sampling
  */
-
-/* Offset ray to avoid self-intersection. */
-ccl_device_forceinline float3 volume_octree_offset(const float3 P,
-                                                   const BoundBox bbox,
-                                                   const float3 ray_D)
-{
-  /* TODO(weizhen): put the point on the bounding box to improve precision. */
-  const float3 step = fabs(P - bbox.center()) / bbox.size();
-  float max_step = reduce_max(step);
-  float3 N = make_float3(step.x == max_step, step.y == max_step, step.z == max_step);
-  if (dot(N, ray_D) < 0.0f) {
-    N = -N;
-  }
-  return ray_offset(P, N);
-  /* TODO(weizhen): maybe offsetting by a small constant is enough. */
-  // return P + 1e-4f * ray_D;
-}
 
 /**
  * Sample distance along the ray based on weighted delta tracking

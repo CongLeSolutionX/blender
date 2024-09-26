@@ -209,7 +209,7 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
    * We only need to enable transparent shadows, if we actually have
    * transparent shaders in the scene. Otherwise we can disable it
    * to improve performance a bit. */
-  kintegrator->transparent_shadows = kintegrator->use_volumes;
+  kintegrator->transparent_shadows = false;
   if (!kintegrator->transparent_shadows) {
     foreach (Shader *shader, scene->shaders) {
       /* keep this in sync with SD_HAS_TRANSPARENT_SHADOW in shader.cpp */
