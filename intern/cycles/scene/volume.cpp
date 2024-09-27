@@ -809,6 +809,9 @@ void VolumeManager::device_update(Device *device,
 
     KernelOctreeNode *knodes = dscene->volume_tree_nodes.alloc(octree.get_num_nodes());
     octree.flatten(knodes);
+#ifndef NDEBUG
+    octree.visualize_fast(knodes, "octree.py");
+#endif
 
     dscene->volume_tree_nodes.copy_to_device();
   }

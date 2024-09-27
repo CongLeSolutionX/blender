@@ -13,6 +13,7 @@
 #include "util/progress.h"
 #include "util/stats.h"
 
+#include <fstream>
 #include <memory>
 
 #ifdef WITH_NANOVDB
@@ -181,9 +182,102 @@ Octree::Octree(const Scene *scene)
             << ", max = " << root_->bbox.max << ".";
 }
 
-void Octree::visualize()
+void Octree::visualize(KernelOctreeNode *knodes, const char *filename)
 {
-  /* TODO(weizhen): draw leaf node boxes. */
+  std::ofstream file(filename);
+  if (file.is_open()) {
+    file << "# Visualize volume octree. This script is slow when there are more than 10000 "
+            "nodes, but helps with visualizing bounding boxes.\n\n";
+    file << "import bpy\n\n";
+    file << "octree = bpy.data.collections.new(name='Octree')\n";
+    file << "bpy.context.scene.collection.children.link(octree)\n";
+    file << "bpy.ops.mesh.primitive_cube_add(location = (0, 0, 0), scale=(1, 1, 1))\n";
+    file << "cube = bpy.context.object\n";
+    for (int i = 0; i < num_nodes; i++) {
+      if (!knodes[i].is_leaf) {
+        /* Only draw leaf nodes. */
+        continue;
+      }
+      file << "\n";
+      const float3 center = knodes[i].bbox.center();
+      file << "ob = bpy.data.objects.new(name = '" << i << " sigma_max = " << knodes[i].sigma_max
+           << " sigma_min = " << knodes[i].sigma_min << "' , object_data = cube.data)\n";
+      file << "ob.location = (" << center.x << ", " << center.y << ", " << center.z << ")\n";
+      const float3 scale = knodes[i].bbox.size() * 0.5f;
+      file << "ob.scale = (" << scale.x << ", " << scale.y << ", " << scale.z << ")\n";
+      file << "octree.objects.link(ob)\n";
+    }
+    file << "\nbpy.ops.object.delete()\n\n";
+    file << "for obj in octree.objects:\n";
+    file << "    obj.select_set(True)\n\n";
+
+    file << "bpy.context.view_layer.objects.active = octree.objects[0]\n";
+    file << "bpy.ops.object.join()\n";
+    file << "bpy.ops.object.mode_set(mode='EDIT')\n";
+    file << "bpy.ops.mesh.delete(type='ONLY_FACE')\n";
+    file << "bpy.ops.object.mode_set(mode='OBJECT')\n";
+
+    file.close();
+  }
+}
+
+void Octree::visualize_fast(KernelOctreeNode *knodes, const char *filename)
+{
+  std::ofstream file(filename);
+  if (file.is_open()) {
+    file << "# Visualize volume octree.\n\n";
+    file << "import bpy\n\n";
+    file << "octree = bpy.data.collections.new(name='Octree')\n";
+    file << "bpy.context.scene.collection.children.link(octree)\n\n";
+    float3 center = knodes[0].bbox.center();
+    float3 size = knodes[0].bbox.size() * 0.5f;
+    file << "bpy.ops.mesh.primitive_cube_add(location = (" << center.x << ", " << center.y << ", "
+         << center.z << "), scale = (" << size.x << ", " << size.y << ", " << size.z
+         << "), enter_editmode = True)\n";
+    file << "bpy.ops.mesh.delete(type='ONLY_FACE')\n";
+    file << "bpy.ops.object.mode_set(mode='OBJECT')\n";
+    file << "octree.objects.link(bpy.context.object)\n";
+    file << "bpy.context.scene.collection.objects.unlink(bpy.context.object)\n\n";
+
+    file << "vertices = [";
+    for (int i = 0; i < num_nodes; i++) {
+      if (knodes[i].is_leaf) {
+        continue;
+      }
+      center = knodes[i].bbox.center();
+      size = knodes[i].bbox.size() * 0.5f;
+      /* Create three orthogonal faces. */
+      file << "(" << center.x << "," << center.y << "," << center.z - size.z << "), (" << center.x
+           << "," << center.y << "," << center.z + size.z << "), (" << center.x << ","
+           << center.y + size.y << "," << center.z + size.z << "), (" << center.x << ","
+           << center.y + size.y << "," << center.z - size.z << "), (" << center.x << ","
+           << center.y - size.y << "," << center.z - size.z << "), (" << center.x << ","
+           << center.y - size.y << "," << center.z + size.z << "), (";
+      file << center.x - size.x << "," << center.y << "," << center.z << "), ("
+           << center.x + size.x << "," << center.y << "," << center.z << "), ("
+           << center.x + size.x << "," << center.y << "," << center.z + size.z << "), ("
+           << center.x - size.x << "," << center.y << "," << center.z + size.z << "), ("
+           << center.x - size.x << "," << center.y << "," << center.z - size.z << "), ("
+           << center.x + size.x << "," << center.y << "," << center.z - size.z << "), (";
+      file << center.x << "," << center.y - size.y << "," << center.z << "), (" << center.x << ","
+           << center.y + size.y << "," << center.z << "), (" << center.x + size.x << ","
+           << center.y + size.y << "," << center.z << "), (" << center.x + size.x << ","
+           << center.y - size.y << "," << center.z << "), (" << center.x - size.x << ","
+           << center.y - size.y << "," << center.z << "), (" << center.x - size.x << ","
+           << center.y + size.y << "," << center.z << "), ";
+    }
+    file << "]\nr = range(len(vertices))\n";
+    file << "edges = [(i, i+1 if i%6<5 else i-4) for i in r]\n";
+    file << "mesh = bpy.data.meshes.new('Octree')\n";
+    file << "mesh.from_pydata(vertices, edges, [])\n";
+    file << "mesh.update()\n";
+    file << "obj = bpy.data.objects.new('obj', mesh)\n";
+    file << "octree.objects.link(obj)\n";
+    file << "obj.select_set(True)\n\n";
+
+    file << "bpy.ops.object.join()\n";
+    file.close();
+  }
 }
 
 uint Octree::get_object_shader(const Object *object)

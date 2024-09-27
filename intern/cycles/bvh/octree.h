@@ -54,7 +54,9 @@ struct OctreeInternalNode : public OctreeNode {
 class Octree {
  public:
   void build(Progress &progress);
-  void visualize();
+  /* Represent octree nodes as empty boxes with Blender Python API. */
+  void visualize(KernelOctreeNode *knodes, const char *filename);
+  void visualize_fast(KernelOctreeNode *knodes, const char *filename);
   Octree(const Scene *scene);
   ~Octree();
 
