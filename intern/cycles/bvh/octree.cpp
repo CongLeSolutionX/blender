@@ -76,13 +76,15 @@ bool OctreeNode::should_split()
 
           auto const *grid = handle.vdb_loader()->nanogrid.grid<nanovdb::Fp16>();
           if (grid) {
-            nanovdb::CoordBBox coord_bbox;
+            nanovdb::BBox<nanovdb::Vec3f> vdb_bbox;
             const Transform itfm = transform_inverse(object->get_tfm());
             for (int i = 0; i < 8; i++) {
               const float3 t = make_float3(i & 1, (i >> 1) & 1, (i >> 2) & 1);
               const float3 v = transform_point(&itfm, mix(bbox.min, bbox.max, t));
-              coord_bbox.expand(grid->worldToIndexF(nanovdb::Coord(v.x, v.y, v.z)));
+              vdb_bbox.expand(nanovdb::Vec3(v.x, v.y, v.z));
             }
+            const nanovdb::CoordBBox coord_bbox(grid->worldToIndexF(vdb_bbox.min()).floor(),
+                                                grid->worldToIndexF(vdb_bbox.max()).ceil());
             auto ex = nanovdb::getExtrema(*grid, coord_bbox);
             min = ex.min();
             max = ex.max();
