@@ -117,6 +117,8 @@ ccl_device int volume_tree_get_octant(const BoundBox bbox,
 
 /* Given a position, find the voxel in the octree and retrieve its metadata. */
 /* TODO(weizhen): can return node directly? */
+/* TODO(weizhen): store a stack of parent nodes. The maximal level is 7, so the stack size is at
+ * most 6. */
 ccl_device int volume_voxel_get(KernelGlobals kg,
                                 const ccl_private Ray *ccl_restrict ray,
                                 ccl_private VolumeIntegrateState &ccl_restrict vstate,
@@ -695,25 +697,12 @@ ccl_device bool volume_integrate_step_scattering(
   return false;
 }
 
-/* heterogeneous volume distance sampling: integrate stepping through the
- * volume until we reach the end, get absorbed entirely, or run out of
- * iterations. this does probabilistically scatter or get transmitted through
- * for path tracing where we don't want to branch. */
-ccl_device_forceinline void volume_integrate_heterogeneous(
-    KernelGlobals kg,
-    IntegratorState state,
-    ccl_private Ray *ccl_restrict ray,
-    ccl_private ShaderData *ccl_restrict sd,
-    RNGState rng_state,
-    ccl_global float *ccl_restrict render_buffer,
-    const VolumeSampleMethod direct_sample_method,
-    ccl_private const EquiangularCoefficients &equiangular_coeffs,
-    ccl_private VolumeIntegrateResult &result)
+ccl_device_inline void volume_integrate_state_init(KernelGlobals kg,
+                                                   RNGState rng_state,
+                                                   const ccl_private Ray *ccl_restrict ray,
+                                                   const VolumeSampleMethod direct_sample_method,
+                                                   ccl_private VolumeIntegrateState &vstate)
 {
-  PROFILING_INIT(kg, PROFILING_SHADE_VOLUME_INTEGRATE);
-
-  /* Initialize volume integration state. */
-  VolumeIntegrateState vstate ccl_optional_struct_init;
   vstate.rscatter = path_state_rng_1D(kg, &rng_state, PRNG_VOLUME_SCATTER_DISTANCE);
   vstate.rchannel = path_state_rng_1D(kg, &rng_state, PRNG_VOLUME_COLOR_CHANNEL);
   vstate.step = 0;
@@ -736,21 +725,41 @@ ccl_device_forceinline void volume_integrate_heterogeneous(
   }
   vstate.equiangular_pdf = 0.0f;
   vstate.distance_pdf = one_spectrum();
+}
+
+/* heterogeneous volume distance sampling: integrate stepping through the
+ * volume until we reach the end, get absorbed entirely, or run out of
+ * iterations. this does probabilistically scatter or get transmitted through
+ * for path tracing where we don't want to branch. */
+ccl_device_forceinline void volume_integrate_heterogeneous(
+    KernelGlobals kg,
+    IntegratorState state,
+    ccl_private Ray *ccl_restrict ray,
+    ccl_private ShaderData *ccl_restrict sd,
+    RNGState rng_state,
+    ccl_global float *ccl_restrict render_buffer,
+    const VolumeSampleMethod direct_sample_method,
+    ccl_private const EquiangularCoefficients &equiangular_coeffs,
+    ccl_private VolumeIntegrateResult &result)
+{
+  PROFILING_INIT(kg, PROFILING_SHADE_VOLUME_INTEGRATE);
+
+  VolumeIntegrateState vstate ccl_optional_struct_init;
+  volume_integrate_state_init(kg, rng_state, ray, direct_sample_method, vstate);
 
   /* Initialize volume integration result. */
   const Spectrum throughput = INTEGRATOR_STATE(state, path, throughput);
   result.direct_throughput = throughput;
   result.indirect_throughput = throughput;
+  /* TODO(weizhen): no need to initialize. */
   result.emission = zero_spectrum();
 
-/* Equiangular sampling: compute distance and PDF in advance. */
-#  if 0
+  /* Equiangular sampling: compute distance and PDF in advance. */
   if (vstate.direct_sample_method == VOLUME_SAMPLE_EQUIANGULAR) {
     result.direct_t = volume_equiangular_sample(
         ray, equiangular_coeffs, vstate.rscatter, &vstate.equiangular_pdf);
     vstate.rscatter = path_state_rng_2D(kg, &rng_state, PRNG_VOLUME_SCATTER_DISTANCE).y;
   }
-#  endif
 
   /* TODO(volume): use stratified samples by scrambing `rng_offset`. See subsurface scattering. */
   uint lcg_state = lcg_state_init(INTEGRATOR_STATE(state, path, rng_pixel),
