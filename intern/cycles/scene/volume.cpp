@@ -782,7 +782,6 @@ void GeometryManager::create_volume_mesh(const Scene *scene, Volume *volume, Pro
 
 VolumeManager::VolumeManager()
 {
-  /* TODO(weizhen): update this flag. */
   need_update_ = true;
 }
 

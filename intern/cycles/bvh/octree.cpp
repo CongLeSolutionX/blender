@@ -152,8 +152,6 @@ void Octree::recursive_build_(shared_ptr<OctreeNode> &node)
     task_pool.push([&] { recursive_build_(child); });
   }
 
-  /* TODO(weizhen): visualize Octree by creating empty mesh. */
-
   node = internal;
 }
 

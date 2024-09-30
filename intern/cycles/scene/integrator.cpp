@@ -210,13 +210,11 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
    * transparent shaders in the scene. Otherwise we can disable it
    * to improve performance a bit. */
   kintegrator->transparent_shadows = false;
-  if (!kintegrator->transparent_shadows) {
-    foreach (Shader *shader, scene->shaders) {
-      /* keep this in sync with SD_HAS_TRANSPARENT_SHADOW in shader.cpp */
-      if (shader->has_surface_transparent && shader->get_use_transparent_shadow()) {
-        kintegrator->transparent_shadows = true;
-        break;
-      }
+  foreach (Shader *shader, scene->shaders) {
+    /* keep this in sync with SD_HAS_TRANSPARENT_SHADOW in shader.cpp */
+    if (shader->has_surface_transparent && shader->get_use_transparent_shadow()) {
+      kintegrator->transparent_shadows = true;
+      break;
     }
   }
 
