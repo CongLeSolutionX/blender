@@ -1792,6 +1792,53 @@ GreasePencil *BKE_grease_pencil_copy_for_eval(const GreasePencil *grease_pencil_
   return grease_pencil;
 }
 
+void BKE_grease_pencil_copy_parameters(const GreasePencil &src, GreasePencil &dst)
+{
+  dst.material_array_num = src.material_array_num;
+  dst.material_array = static_cast<Material **>(MEM_dupallocN(src.material_array));
+  dst.attributes_active_index = src.attributes_active_index;
+  dst.flag = src.flag;
+  BLI_duplicatelist(&dst.vertex_group_names, &src.vertex_group_names);
+  dst.vertex_group_active_index = src.vertex_group_active_index;
+  dst.onion_skinning_settings = src.onion_skinning_settings;
+}
+
+void BKE_grease_pencil_copy_layer_parameters(const blender::bke::greasepencil::Layer &src,
+                                             blender::bke::greasepencil::Layer &dst)
+{
+  using namespace blender::bke::greasepencil;
+  dst.as_node().flag = src.as_node().flag;
+  copy_v3_v3_uchar(dst.as_node().color, src.as_node().color);
+
+  dst.blend_mode = src.blend_mode;
+  dst.opacity = src.opacity;
+
+  LISTBASE_FOREACH (GreasePencilLayerMask *, src_mask, &src.masks) {
+    LayerMask *new_mask = MEM_new<LayerMask>(__func__, *reinterpret_cast<LayerMask *>(src_mask));
+    BLI_addtail(&dst.masks, reinterpret_cast<GreasePencilLayerMask *>(new_mask));
+  }
+  dst.active_mask_index = src.active_mask_index;
+
+  dst.parent = src.parent;
+  dst.set_parent_bone_name(src.parsubstr);
+  copy_m4_m4(dst.parentinv, src.parentinv);
+
+  copy_v3_v3(dst.translation, src.translation);
+  copy_v3_v3(dst.rotation, src.rotation);
+  copy_v3_v3(dst.scale, src.scale);
+
+  dst.set_view_layer_name(src.viewlayername);
+}
+
+void BKE_grease_pencil_copy_layer_group_parameters(
+    const blender::bke::greasepencil::LayerGroup &src, blender::bke::greasepencil::LayerGroup &dst)
+{
+  using namespace blender::bke::greasepencil;
+  dst.as_node().flag = src.as_node().flag;
+  copy_v3_v3_uchar(dst.as_node().color, src.as_node().color);
+  dst.color_tag = src.color_tag;
+}
+
 void BKE_grease_pencil_nomain_to_grease_pencil(GreasePencil *grease_pencil_src,
                                                GreasePencil *grease_pencil_dst)
 {

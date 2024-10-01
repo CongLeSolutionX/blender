@@ -11,26 +11,21 @@
 #include "vk_node_info.hh"
 
 namespace blender::gpu::render_graph {
-
 /**
  * Information stored inside the render graph node. See `VKRenderGraphNode`.
  */
-struct VKSynchronizationData {};
-
-/**
- * Information needed to add a node to the render graph.
- */
-struct VKSynchronizationCreateInfo {
-  VkImage vk_image;
-  VkImageLayout vk_image_layout;
-  VkImageAspectFlags vk_image_aspect;
+struct VKUpdateBufferData {
+  VkBuffer dst_buffer;
+  VkDeviceSize dst_offset;
+  VkDeviceSize data_size;
+  void *data;
 };
 
-class VKSynchronizationNode : public VKNodeInfo<VKNodeType::SYNCHRONIZATION,
-                                                VKSynchronizationCreateInfo,
-                                                VKSynchronizationData,
-                                                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                                                VKResourceType::IMAGE | VKResourceType::BUFFER> {
+class VKUpdateBufferNode : public VKNodeInfo<VKNodeType::UPDATE_BUFFER,
+                                             VKUpdateBufferData,
+                                             VKUpdateBufferData,
+                                             VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                             VKResourceType::BUFFER> {
  public:
   /**
    * Update the node data with the data inside create_info.
@@ -41,8 +36,7 @@ class VKSynchronizationNode : public VKNodeInfo<VKNodeType::SYNCHRONIZATION,
    */
   template<typename Node> static void set_node_data(Node &node, const CreateInfo &create_info)
   {
-    UNUSED_VARS(create_info);
-    node.synchronization = {};
+    node.update_buffer = create_info;
   }
 
   /**
@@ -52,9 +46,9 @@ class VKSynchronizationNode : public VKNodeInfo<VKNodeType::SYNCHRONIZATION,
                    VKRenderGraphNodeLinks &node_links,
                    const CreateInfo &create_info) override
   {
-    ResourceWithStamp resource = resources.get_image_and_increase_stamp(create_info.vk_image);
-    node_links.outputs.append(
-        {resource, VK_ACCESS_NONE, create_info.vk_image_layout, create_info.vk_image_aspect});
+    ResourceWithStamp dst_resource = resources.get_buffer_and_increase_stamp(
+        create_info.dst_buffer);
+    node_links.outputs.append({dst_resource, VK_ACCESS_TRANSFER_WRITE_BIT});
   }
 
   /**
@@ -64,9 +58,13 @@ class VKSynchronizationNode : public VKNodeInfo<VKNodeType::SYNCHRONIZATION,
                       Data &data,
                       VKBoundPipelines & /*r_bound_pipelines*/) override
   {
-    UNUSED_VARS(command_buffer, data);
-    /* Intentionally left empty: A pipeline barrier has already been send to the command buffer.
-     */
+    command_buffer.update_buffer(data.dst_buffer, data.dst_offset, data.data_size, data.data);
+  }
+
+  void free_data(Data &data)
+  {
+    MEM_freeN(data.data);
+    data.data = nullptr;
   }
 };
 }  // namespace blender::gpu::render_graph
