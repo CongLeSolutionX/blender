@@ -798,6 +798,7 @@ void VolumeManager::device_update(Device *device,
                                   Progress &progress)
 {
   if (!need_update()) {
+    /* TODO(weizhen): geometry nodes set material should get updated. */
     return;
   }
 

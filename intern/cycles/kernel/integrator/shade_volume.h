@@ -1196,7 +1196,7 @@ ccl_device VolumeIntegrateEvent volume_integrate(KernelGlobals kg,
                                kg, state, ray, &sd, &rng_state, &equiangular_coeffs, ls);
 
   /* TODO(weizhen): how to determine sample method? */
-  VolumeSampleMethod direct_sample_method = have_equiangular_sample ? VOLUME_SAMPLE_MIS :
+  VolumeSampleMethod direct_sample_method = have_equiangular_sample ? VOLUME_SAMPLE_DISTANCE :
                                                                       VOLUME_SAMPLE_DISTANCE;
   // volume_stack_sample_method(kg, state);
 

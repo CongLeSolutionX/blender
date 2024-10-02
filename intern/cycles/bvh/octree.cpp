@@ -16,7 +16,12 @@
 #include <fstream>
 #include <memory>
 
+#ifdef WITH_OPENVDB
+#  include <openvdb/tools/LevelSetUtil.h>
+#endif
 #ifdef WITH_NANOVDB
+#  define NANOVDB_USE_OPENVDB
+#  include <nanovdb/util/CreateNanoGrid.h>
 #  include <nanovdb/util/GridStats.h>
 #endif
 
@@ -44,7 +49,24 @@ float OctreeNode::volume_density_scale(const Object *object)
   return 1.0f;
 }
 
-bool OctreeNode::should_split()
+template<typename T>
+nanovdb::Extrema<typename nanovdb::NanoGrid<T>::ValueType> OctreeNode::get_extrema(
+    const nanovdb::NanoGrid<T> *grid, const Transform *itfm)
+{
+  nanovdb::BBox<nanovdb::Vec3f> vdb_bbox;
+
+  for (int i = 0; i < 8; i++) {
+    const float3 t = make_float3(i & 1, (i >> 1) & 1, (i >> 2) & 1);
+    const float3 v = transform_point(itfm, mix(bbox.min, bbox.max, t));
+    vdb_bbox.expand(nanovdb::Vec3(v.x, v.y, v.z));
+  }
+  const nanovdb::CoordBBox coord_bbox(grid->worldToIndexF(vdb_bbox.min()).floor(),
+                                      grid->worldToIndexF(vdb_bbox.max()).ceil());
+
+  return nanovdb::getExtrema(*grid, coord_bbox);
+}
+
+bool OctreeNode::should_split(const Octree *octree)
 {
   if (objects.empty()) {
     return false;
@@ -76,18 +98,10 @@ bool OctreeNode::should_split()
 
           auto const *grid = handle.vdb_loader()->nanogrid.grid<nanovdb::Fp16>();
           if (grid) {
-            nanovdb::BBox<nanovdb::Vec3f> vdb_bbox;
             const Transform itfm = transform_inverse(object->get_tfm());
-            for (int i = 0; i < 8; i++) {
-              const float3 t = make_float3(i & 1, (i >> 1) & 1, (i >> 2) & 1);
-              const float3 v = transform_point(&itfm, mix(bbox.min, bbox.max, t));
-              vdb_bbox.expand(nanovdb::Vec3(v.x, v.y, v.z));
-            }
-            const nanovdb::CoordBBox coord_bbox(grid->worldToIndexF(vdb_bbox.min()).floor(),
-                                                grid->worldToIndexF(vdb_bbox.max()).ceil());
-            auto ex = nanovdb::getExtrema(*grid, coord_bbox);
-            min = ex.min();
-            max = ex.max();
+            auto extrema = get_extrema(grid, &itfm);
+            min = extrema.min();
+            max = extrema.max();
           }
         }
 #  endif
@@ -95,6 +109,58 @@ bool OctreeNode::should_split()
 #else
       /* TODO */
 #endif
+    }
+    else if (geom->is_mesh()) {
+      const auto *grid = octree->vdb_map.at(geom).grid<bool>();
+      if (grid) {
+        const Mesh *mesh = static_cast<const Mesh *>(geom);
+        Transform itfm;
+        if (!mesh->transform_applied) {
+          itfm = transform_inverse(object->get_tfm());
+        }
+        nanovdb::BBox<nanovdb::Vec3f> vdb_bbox;
+
+        for (int i = 0; i < 8; i++) {
+          const float3 t = make_float3(i & 1, (i >> 1) & 1, (i >> 2) & 1);
+          float3 v = mix(bbox.min, bbox.max, t);
+          if (!mesh->transform_applied) {
+            v = transform_point(&itfm, v);
+          }
+          vdb_bbox.expand(nanovdb::Vec3(v.x, v.y, v.z));
+        }
+        const nanovdb::CoordBBox coord_bbox(grid->worldToIndexF(vdb_bbox.min()).floor(),
+                                            grid->worldToIndexF(vdb_bbox.max()).ceil());
+
+        /* TODO(weizhen): workaround of bool grid not supporting `getExtrema()`. Shouldn't be
+         * necessary later. */
+        min = 1.0f;
+        max = 0.0f;
+        bool has_min = false;
+        bool has_max = false;
+        auto acc = grid->getAccessor();
+        [&] {
+          for (int x = coord_bbox.min().x(); x <= coord_bbox.max().x(); x++) {
+            for (int y = coord_bbox.min().y(); y <= coord_bbox.max().y(); y++) {
+              for (int z = coord_bbox.min().z(); z <= coord_bbox.max().z(); z++) {
+                if (acc.getValue(nanovdb::Coord(x, y, z))) {
+                  max = 1.0f;
+                  if (has_min) {
+                    return;
+                  }
+                  has_max = true;
+                }
+                else if (!acc.getValue(nanovdb::Coord(x, y, z))) {
+                  min = 0.0f;
+                  if (has_max) {
+                    return;
+                  }
+                  has_min = true;
+                }
+              }
+            }
+          }
+        }();
+      }
     }
     sigma_min = fminf(min, sigma_min);
     sigma_max += max;
@@ -133,7 +199,7 @@ shared_ptr<OctreeInternalNode> Octree::make_internal(shared_ptr<OctreeNode> &nod
 
 void Octree::recursive_build_(shared_ptr<OctreeNode> &node)
 {
-  if (!node->should_split()) {
+  if (!node->should_split(this)) {
     return;
   }
 
@@ -160,12 +226,19 @@ Octree::Octree(const Scene *scene)
   root_ = std::make_shared<OctreeNode>();
 
   for (Object *object : scene->objects) {
-    if (object->get_geometry()->has_volume) {
+    const Geometry *geom = object->get_geometry();
+    if (geom->has_volume) {
       const float3 size = object->bounds.size();
       /* Don't push zero-sized volume. */
       if (size.x > 0.0f && size.y > 0.0f && size.z > 0.0f) {
         root_->bbox.grow(object->bounds);
         root_->objects.push_back(object);
+      }
+      /* Create SDF grid for mesh volumes, to determine whether a certain point is in the
+       * interior of the mesh. */
+      if (geom->is_mesh() && vdb_map.find(geom) == vdb_map.end()) {
+        const Mesh *mesh = static_cast<const Mesh *>(geom);
+        vdb_map[geom] = mesh_to_sdf_grid(mesh, 0.1f, 1.0f);
       }
     }
   }
@@ -180,6 +253,36 @@ Octree::Octree(const Scene *scene)
   VLOG_INFO << "Total " << root_->objects.size()
             << " volume objects with bounding box min = " << root_->bbox.min
             << ", max = " << root_->bbox.max << ".";
+}
+
+nanovdb::GridHandle<> Octree::mesh_to_sdf_grid(const Mesh *mesh,
+                                               const float voxel_size,
+                                               const float half_width)
+{
+  const int num_verts = mesh->get_verts().size();
+  std::vector<openvdb::Vec3s> points(num_verts);
+  parallel_for(0, num_verts, [&](int i) {
+    const float3 &vert = mesh->get_verts()[i];
+    points[i] = openvdb::Vec3s(vert.x, vert.y, vert.z);
+  });
+
+  const int num_triangles = mesh->num_triangles();
+  std::vector<openvdb::Vec3I> triangles(num_triangles);
+  parallel_for(0, num_triangles, [&](int i) {
+    triangles[i] = openvdb::Vec3I(mesh->get_triangles()[i * 3],
+                                  mesh->get_triangles()[i * 3 + 1],
+                                  mesh->get_triangles()[i * 3 + 2]);
+  });
+
+  auto xform = openvdb::math::Transform::createLinearTransform(voxel_size);
+  auto sdf_grid = openvdb::tools::meshToLevelSet<openvdb::FloatGrid>(
+      *xform, points, triangles, half_width);
+
+  auto interior_mask_grid = openvdb::tools::sdfInteriorMask(*sdf_grid, 0.0f);
+
+  /* TODO(weizhen): do I need to reset OpenVDB grids? */
+  /* TODO(weizhen): mind vdb version, following `image_vdb.cpp`? */
+  return nanovdb::openToNanoVDB(interior_mask_grid);
 }
 
 void Octree::visualize(KernelOctreeNode *knodes, const char *filename)
@@ -345,13 +448,18 @@ Octree::~Octree()
   /* TODO(weizhen): if the scene has instanced objects vdb was already cleared, this doesn't work.
    */
 #ifdef WITH_NANOVDB
+  for (auto &it : vdb_map) {
+    it.second.reset();
+  }
   for (Object *object : root_->objects) {
     Geometry *geom = object->get_geometry();
     if (geom->geometry_type == Geometry::VOLUME) {
       Volume *volume = static_cast<Volume *>(geom);
       for (Attribute &attr : volume->attributes.attributes) {
         if (attr.element == ATTR_ELEMENT_VOXEL) {
-          attr.data_voxel().vdb_loader()->nanogrid.reset();
+          if (attr.data_voxel().vdb_loader()) {
+            attr.data_voxel().vdb_loader()->nanogrid.reset();
+          }
         }
       }
     }
