@@ -111,6 +111,7 @@ bool OctreeNode::should_split(const Octree *octree)
 #endif
     }
     else if (geom->is_mesh()) {
+      /* TODO(weizhen): detect homogenous mesh volume and do not split. */
       const auto *grid = octree->vdb_map.at(geom).grid<bool>();
       if (grid) {
         const Mesh *mesh = static_cast<const Mesh *>(geom);
@@ -422,9 +423,12 @@ int Octree::flatten_(KernelOctreeNode *knodes, shared_ptr<OctreeNode> &node, int
         VLOG_WARNING << "Number of overlapping volumes exceeds the limit 32";
         break;
       }
-      knode.objects[i] = object->get_device_index();
-      knode.shaders[i] = get_object_shader(object);
-      i++;
+      if (object->get_geometry()->is_volume()) {
+        /* Only record volume objects, mesh is handled via volume stack. */
+        knode.objects[i] = object->get_device_index();
+        knode.shaders[i] = get_object_shader(object);
+        i++;
+      }
     }
     knode.objects[i] = OBJECT_NONE;
     knode.shaders[i] = SHADER_NONE;
@@ -488,6 +492,7 @@ void Octree::build(Progress &progress)
 
 bool Octree::is_empty()
 {
+  /* TODO(weizhen): zero size? */
   return !root_->bbox.valid();
 }
 

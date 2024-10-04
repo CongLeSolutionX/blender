@@ -60,7 +60,6 @@ Geometry::Geometry(const NodeType *node_type, const Type type)
   transform_normal = transform_identity();
   bounds = BoundBox::empty;
 
-  has_surface = false;
   has_volume = false;
   has_surface_bssrdf = false;
 
@@ -370,9 +369,8 @@ void GeometryManager::device_update_preprocess(Device *device, Scene *scene, Pro
   bool volume_images_updated = false;
 
   foreach (Geometry *geom, scene->geometry) {
-    const bool prev_has_surface = geom->has_surface;
     const bool prev_has_volume = geom->has_volume;
-    geom->has_volume = geom->has_surface = false;
+    geom->has_volume = false;
 
     update_attribute_realloc_flags(device_update_flags, geom->attributes);
 
@@ -385,10 +383,6 @@ void GeometryManager::device_update_preprocess(Device *device, Scene *scene, Pro
       Shader *shader = static_cast<Shader *>(node);
       if (shader->has_volume) {
         geom->has_volume = true;
-      }
-
-      if (shader->has_surface) {
-        geom->has_surface = true;
       }
 
       if (shader->has_surface_bssrdf) {
@@ -488,10 +482,6 @@ void GeometryManager::device_update_preprocess(Device *device, Scene *scene, Pro
       else if (pointcloud->is_modified()) {
         device_update_flags |= DEVICE_POINT_DATA_MODIFIED;
       }
-    }
-
-    if (geom->has_surface != prev_has_surface) {
-      geom->tag_bvh_update(true);
     }
 
     if (geom->has_volume != prev_has_volume) {
@@ -743,7 +733,7 @@ void GeometryManager::device_update(Device *device,
 
     foreach (Geometry *geom, scene->geometry) {
       if (geom->is_modified()) {
-        if (geom->is_mesh() && geom->has_surface) {
+        if (geom->is_mesh()) {
           Mesh *mesh = static_cast<Mesh *>(geom);
 
           /* Update normals. */

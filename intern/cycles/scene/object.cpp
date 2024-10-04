@@ -281,7 +281,7 @@ bool Object::is_traceable() const
   if (!bounds.valid() || bounds.size() == zero_float3()) {
     return false;
   }
-  if (geometry->is_volume() || !geometry->has_surface) {
+  if (geometry->is_volume()) {
     /* Handled with volume Octree. */
     return false;
   }

@@ -556,6 +556,11 @@ void ShaderManager::device_update_common(Device * /*device*/,
     if (shader->has_volume) {
       flag |= SD_HAS_VOLUME;
       has_volumes = true;
+
+      /* todo: this could check more fine grained, to skip useless volumes
+       * enclosed inside an opaque bsdf.
+       */
+      flag |= SD_HAS_TRANSPARENT_SHADOW;
     }
     /* in this case we can assume transparent surface */
     if (shader->has_volume_connected && !shader->has_surface) {
