@@ -163,12 +163,13 @@ bool OctreeNode::should_split(const Octree *octree)
         }();
       }
     }
-    sigma_min = fminf(min, sigma_min);
-    sigma_max += max;
 
     const float scale = volume_density_scale(object);
-    sigma_min *= scale;
-    sigma_max *= scale;
+    min *= scale;
+    max *= scale;
+
+    sigma_min = fminf(min, sigma_min);
+    sigma_max += max;
   }
 
   /* TODO(weizhen): force subdivision of aggregate nodes that are larger than the volume contained,
@@ -231,10 +232,14 @@ Octree::Octree(const Scene *scene)
     if (geom->has_volume) {
       const float3 size = object->bounds.size();
       /* Don't push zero-sized volume. */
-      if (size.x > 0.0f && size.y > 0.0f && size.z > 0.0f) {
-        root_->bbox.grow(object->bounds);
-        root_->objects.push_back(object);
+      if (size.x == 0.0f || size.y == 0.0f || size.z == 0.0f) {
+        /* TODO(weizhen): how about this swimming pool mesh? */
+        continue;
       }
+
+      root_->bbox.grow(object->bounds);
+      root_->objects.push_back(object);
+
       /* Create SDF grid for mesh volumes, to determine whether a certain point is in the
        * interior of the mesh. */
       if (geom->is_mesh() && vdb_map.find(geom) == vdb_map.end()) {
