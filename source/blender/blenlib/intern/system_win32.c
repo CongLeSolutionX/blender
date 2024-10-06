@@ -384,6 +384,7 @@ void BLI_system_backtrace(FILE *fp)
   SymInitialize(GetCurrentProcess(), NULL, TRUE);
   bli_load_symbols();
   if (current_exception) {
+    /* `BLI_windows_exception_log_start` should have been called before. */
     bli_windows_system_backtrace_exception_record(fp, current_exception->ExceptionRecord);
   }
   if (BLI_windows_system_backtrace_stack(fp)) {
@@ -394,22 +395,34 @@ void BLI_system_backtrace(FILE *fp)
   bli_windows_system_backtrace_modules(fp);
 }
 
-void BLI_windows_handle_exception(EXCEPTION_POINTERS *exception)
+void BLI_windows_exception_capture(void *exception)
 {
   current_exception = exception;
-  if (current_exception) {
-    fprintf(stderr,
-            "Error   : %s\n",
-            bli_windows_get_exception_description(exception->ExceptionRecord->ExceptionCode));
-    fflush(stderr);
+}
 
-    LPVOID address = exception->ExceptionRecord->ExceptionAddress;
-    fprintf(stderr, "Address : 0x%p\n", address);
-
-    CHAR modulename[MAX_PATH];
-    bli_windows_get_module_name(address, modulename, sizeof(modulename));
-    fprintf(stderr, "Module  : %s\n", modulename);
-    fprintf(stderr, "Thread  : %.8x\n", GetCurrentThreadId());
+void bli_windows_exception_message_get(char r_message[512])
+{
+  if (!current_exception) {
+    /* `BLI_windows_exception_log_start` should have been called before. */
+    r_message[0] = '\0';
+    return;
   }
-  fflush(stderr);
+
+  const char *exception_name = bli_windows_get_exception_description(
+      current_exception->ExceptionRecord->ExceptionCode);
+  LPVOID address = current_exception->ExceptionRecord->ExceptionAddress;
+  CHAR modulename[MAX_PATH];
+  bli_windows_get_module_name(address, modulename, sizeof(modulename));
+  DWORD threadId = GetCurrentThreadId();
+
+  snprintf(r_message,
+           512,
+           "Error   : %s\n"
+           "Address : 0x%p\n"
+           "Module  : %s\n"
+           "Thread  : %.8x\n",
+           exception_name,
+           address,
+           modulename,
+           threadId);
 }

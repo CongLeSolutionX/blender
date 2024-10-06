@@ -22,7 +22,10 @@
 
 #  ifdef WIN32
 #    include <float.h>
+#    include <string>
 #    include <windows.h>
+
+#    include "GPU_platform.hh"
 #  endif
 
 #  include <cerrno>
@@ -81,13 +84,21 @@ static void sig_handle_blender_esc(int sig)
   }
 }
 
-static void sig_handle_crash_backtrace(FILE *fp)
+static void crashlog_filepath_get(char filepath[FILE_MAX])
 {
-  fputs("\n# backtrace\n", fp);
-  BLI_system_backtrace(fp);
+  /* Might be called after WM/Main exit, so needs to be careful about nullptr-checking before
+   * de-referencing. */
+
+  if (!(G_MAIN && G_MAIN->filepath[0])) {
+    BLI_path_join(filepath, FILE_MAX, BKE_tempdir_base(), "blender.crash.txt");
+  }
+  else {
+    BLI_path_join(filepath, FILE_MAX, BKE_tempdir_base(), BLI_path_basename(G_MAIN->filepath));
+    BLI_path_extension_replace(filepath, FILE_MAX, ".crash.txt");
+  }
 }
 
-static void sig_handle_crash(int signum)
+static void crashlog_file_generate(const char *filepath)
 {
   /* Might be called after WM/Main exit, so needs to be careful about nullptr-checking before
    * de-referencing. */
@@ -96,17 +107,6 @@ static void sig_handle_crash(int signum)
 
   FILE *fp;
   char header[512];
-
-  char filepath[FILE_MAX];
-
-  if (!(G_MAIN && G_MAIN->filepath[0])) {
-    BLI_path_join(filepath, sizeof(filepath), BKE_tempdir_base(), "blender.crash.txt");
-  }
-  else {
-    BLI_path_join(
-        filepath, sizeof(filepath), BKE_tempdir_base(), BLI_path_basename(G_MAIN->filepath));
-    BLI_path_extension_replace(filepath, sizeof(filepath), ".crash.txt");
-  }
 
   printf("Writing: %s\n", filepath);
   fflush(stdout);
@@ -136,7 +136,8 @@ static void sig_handle_crash(int signum)
       BKE_report_write_file_fp(fp, &wm->runtime->reports, header);
     }
 
-    sig_handle_crash_backtrace(fp);
+    fputs("\n# backtrace\n", fp);
+    BLI_system_backtrace(fp);
 
 #  ifdef WITH_PYTHON
     /* Generate python back-trace if Python is currently active. */
@@ -145,7 +146,10 @@ static void sig_handle_crash(int signum)
 
     fclose(fp);
   }
+}
 
+static void signal_cleanup_and_terminate(int signum)
+{
   /* Delete content of temp directory. */
   BKE_tempdir_session_purge();
 
@@ -156,6 +160,14 @@ static void sig_handle_crash(int signum)
 #  else
   TerminateProcess(GetCurrentProcess(), signum);
 #  endif
+}
+
+static void sig_handle_crash(int signum)
+{
+  char filepath[FILE_MAX];
+  crashlog_filepath_get(filepath);
+  crashlog_file_generate(filepath);
+  signal_cleanup_and_terminate(signum);
 }
 
 #  ifdef WIN32
@@ -176,8 +188,23 @@ extern LONG WINAPI windows_exception_handler(EXCEPTION_POINTERS *ExceptionInfo)
     }
   }
   else {
-    BLI_windows_handle_exception(ExceptionInfo);
-    sig_handle_crash(SIGSEGV);
+    std::string version;
+#    ifndef BUILD_DATE
+    const char *build_hash = G_MAIN ? G_MAIN->build_hash : "unknown";
+    version = std::string("version: ") + BKE_blender_version_string() + ", hash: `" + build_hash +
+              "`";
+#    else
+    version = std::string("version: ") + BKE_blender_version_string() +
+              ", Commit date: " + build_commit_date + " " + build_commit_time + ", hash: `" +
+              build_hash + "`";
+#    endif
+    BLI_windows_exception_capture(ExceptionInfo);
+
+    char filepath[FILE_MAX];
+    crashlog_filepath_get(filepath);
+    crashlog_file_generate(filepath);
+    BLI_windows_exception_show_dialog(filepath, GPU_platform_gpu_name(), version.c_str());
+    signal_cleanup_and_terminate(SIGSEGV);
   }
 
   return EXCEPTION_EXECUTE_HANDLER;

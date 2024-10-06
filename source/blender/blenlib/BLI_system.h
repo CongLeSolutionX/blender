@@ -46,7 +46,11 @@ int BLI_system_memory_max_in_megabytes_int(void);
  * \note Use `void *` for `exception` since we really do not want to drag Windows.h
  * in to get the proper `typedef`.
  */
-void BLI_windows_handle_exception(void *exception);
+void BLI_windows_exception_capture(void *exception);
+void bli_windows_exception_message_get(char r_message[512]);
+void BLI_windows_exception_show_dialog(const char *filepath,
+                                       const char *gpu_name,
+                                       const char *build_version);
 
 #else
 #  define BLI_SYSTEM_PID_H <unistd.h>
