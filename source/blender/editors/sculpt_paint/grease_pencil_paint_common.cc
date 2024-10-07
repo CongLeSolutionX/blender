@@ -63,6 +63,9 @@ void init_brush(Brush &brush)
   }
   BLI_assert(brush.gpencil_settings != nullptr);
   BKE_curvemapping_init(brush.curve);
+  BKE_curvemapping_init(brush.curve_rand_hue);
+  BKE_curvemapping_init(brush.curve_rand_saturation);
+  BKE_curvemapping_init(brush.curve_rand_value);
   BKE_curvemapping_init(brush.gpencil_settings->curve_strength);
   BKE_curvemapping_init(brush.gpencil_settings->curve_sensitivity);
   BKE_curvemapping_init(brush.gpencil_settings->curve_jitter);

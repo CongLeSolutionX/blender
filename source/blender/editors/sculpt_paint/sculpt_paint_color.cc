@@ -437,6 +437,7 @@ static void do_paint_brush_task(const Scene &scene,
       }
     }
   }
+  // TODO: add jitter support
 
   tls.new_colors.resize(verts.size());
   MutableSpan<float4> new_colors = tls.new_colors;

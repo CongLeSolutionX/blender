@@ -8,14 +8,9 @@
 
 #pragma once
 
-#include "BLI_array.hh"
-#include "BLI_compiler_compat.h"
-#include "BLI_function_ref.hh"
 #include "BLI_index_mask_fwd.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_set.hh"
 #include "BLI_span.hh"
-#include "BLI_vector.hh"
 
 #include "DNA_object_enums.h"
 #include "DNA_scene_enums.h"
@@ -262,6 +257,16 @@ struct ImagePaintPartialRedraw {
   rcti dirty_region;
 };
 
+/* Random stroke factors are generated on each new stroke so each stroke
+ * gets a different starting point in the perlin noise. */
+struct StrokeFactors {
+  float random_hue;
+  float random_sat;
+  float random_val;
+};
+
+StrokeFactors stroke_factors_new();
+
 bool image_texture_paint_poll(bContext *C);
 void imapaint_image_update(
     SpaceImage *sima, Image *image, ImBuf *ibuf, ImageUser *iuser, short texpaint);
@@ -306,6 +311,7 @@ void paint_proj_stroke_done(void *ps_handle_p);
 void paint_brush_color_get(Scene *scene,
                            const Paint *paint,
                            Brush *br,
+                           struct StrokeFactors stroke_factors,
                            bool color_correction,
                            bool invert,
                            float distance,

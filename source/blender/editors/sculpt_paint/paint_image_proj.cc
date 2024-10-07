@@ -229,6 +229,8 @@ struct ProjStrokeHandle {
    * we can assume at least the first is set while painting. */
   ProjPaintState *ps_views[8];
 
+  StrokeFactors stroke_factors;
+
   int ps_views_tot;
   int symmetry_flags;
 
@@ -5765,6 +5767,7 @@ static void paint_proj_stroke_ps(const bContext * /*C*/,
     paint_brush_color_get(scene,
                           paint,
                           brush,
+                          ps_handle->stroke_factors,
                           false,
                           ps->mode == BRUSH_STROKE_INVERT,
                           distance,
@@ -5953,6 +5956,7 @@ void *paint_proj_new_stroke(bContext *C, Object *ob, const float mouse[2], int m
   ps_handle = MEM_cnew<ProjStrokeHandle>("ProjStrokeHandle");
   ps_handle->scene = scene;
   ps_handle->brush = BKE_paint_brush(&settings->imapaint.paint);
+  ps_handle->stroke_factors = stroke_factors_new();
 
   if (mode == BRUSH_STROKE_INVERT) {
     /* Bypass regular stroke logic. */

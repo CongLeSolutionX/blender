@@ -391,6 +391,13 @@ typedef enum eBrushFlags2 {
   BRUSH_AREA_RADIUS_PRESSURE = (1 << 7),
   BRUSH_GRAB_SILHOUETTE = (1 << 8),
   BRUSH_USE_COLOR_AS_DISPLACEMENT = (1 << 9),
+  BRUSH_JITTER_COLOR = (1 << 10),
+  BRUSH_USE_HUE_AT_STROKE = (1 << 11),
+  BRUSH_USE_SAT_AT_STROKE = (1 << 12),
+  BRUSH_USE_VAL_AT_STROKE = (1 << 13),
+  BRUSH_USE_HUE_RAND_PRESS = (1 << 14),
+  BRUSH_USE_SAT_RAND_PRESS = (1 << 15),
+  BRUSH_USE_VAL_RAND_PRESS = (1 << 16),
 } eBrushFlags2;
 
 typedef enum {

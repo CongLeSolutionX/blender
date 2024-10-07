@@ -132,6 +132,20 @@ CurveMapping *BKE_sculpt_default_cavity_curve()
   return cumap;
 }
 
+CurveMapping *BKE_paint_default_curve()
+{
+  CurveMapping *cumap = BKE_curvemapping_add(1, 0, 0, 1, 1);
+
+  cumap->flag &= ~CUMA_EXTEND_EXTRAPOLATE;
+  cumap->preset = CURVE_PRESET_LINE;
+
+  BKE_curvemap_reset(cumap->cm, &cumap->clipr, cumap->preset, CURVEMAP_SLOPE_POSITIVE);
+  BKE_curvemapping_changed(cumap, false);
+  BKE_curvemapping_init(cumap);
+
+  return cumap;
+}
+
 void BKE_sculpt_check_cavity_curves(Sculpt *sd)
 {
   if (!sd->automasking_cavity_curve) {

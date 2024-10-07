@@ -10,14 +10,14 @@
 #include <cfloat>
 #include <cmath>
 #include <cstdio>
-#include <cstring>
 
 #include "MEM_guardedalloc.h"
 
 #include "BLI_math_vector.hh"
+#include "BLI_noise.hh"
+#include "BLI_rand.hh"
 #include "BLI_string.h"
 #include "BLI_utildefines.h"
-
 #include "BLT_translation.hh"
 
 #include "IMB_imbuf.hh"
@@ -32,6 +32,7 @@
 
 #include "BKE_brush.hh"
 #include "BKE_colorband.hh"
+#include "BKE_colortools.hh"
 #include "BKE_context.hh"
 #include "BKE_curves.hh"
 #include "BKE_grease_pencil.hh"
@@ -353,7 +354,7 @@ bool paint_use_opacity_masking(Brush *brush)
                        IMAGE_PAINT_BRUSH_TYPE_SMEAR,
                        IMAGE_PAINT_BRUSH_TYPE_SOFTEN) ||
                   (brush->image_brush_type == IMAGE_PAINT_BRUSH_TYPE_FILL) ||
-                  (brush->flag & BRUSH_USE_GRADIENT) ||
+                  (brush->flag & BRUSH_USE_GRADIENT) || (brush->flag2 & BRUSH_JITTER_COLOR) ||
                   (brush->mtex.tex && !ELEM(brush->mtex.brush_map_mode,
                                             MTEX_MAP_MODE_TILED,
                                             MTEX_MAP_MODE_STENCIL,
@@ -362,9 +363,79 @@ bool paint_use_opacity_masking(Brush *brush)
               true);
 }
 
+// TODO: merge this functionality with greasepencil PaintOperationExecutor::randomize_color
+blender::float3 randomize_color(const Brush *brush,
+                                const StrokeFactors stroke_factors,
+                                const float distance,
+                                const float pressure,
+                                const blender::float3 color)
+{
+  constexpr float noise_scale = 1 / 20.0f;
+
+  float random_hue = 0.0f;
+  if ((brush->flag2 & BRUSH_USE_HUE_AT_STROKE) == 0) {
+    random_hue = blender::noise::perlin(
+        blender::float2(distance * noise_scale, stroke_factors.random_hue * 100));
+  }
+  else {
+    random_hue = stroke_factors.random_hue;
+  }
+
+  float random_sat = 0.0f;
+  if ((brush->flag2 & BRUSH_USE_SAT_AT_STROKE) == 0) {
+    random_sat = blender::noise::perlin(
+        blender::float2(distance * noise_scale, stroke_factors.random_sat * 100));
+  }
+  else {
+    random_sat = stroke_factors.random_sat;
+  }
+
+  float random_val = 0.0f;
+  if ((brush->flag2 & BRUSH_USE_VAL_AT_STROKE) == 0) {
+    random_val = blender::noise::perlin(
+        blender::float2(distance * noise_scale, stroke_factors.random_val * 100));
+  }
+  else {
+    random_val = stroke_factors.random_val;
+  }
+
+  float hue_factor = brush->hue_jitter;
+  if ((brush->flag2 & BRUSH_USE_HUE_RAND_PRESS) != 0) {
+    hue_factor *= BKE_curvemapping_evaluateF(brush->curve_rand_hue, 0, pressure);
+  }
+  float sat_factor = brush->saturation_jitter;
+  if ((brush->flag2 & BRUSH_USE_SAT_RAND_PRESS) != 0) {
+    sat_factor *= BKE_curvemapping_evaluateF(brush->curve_rand_saturation, 0, pressure);
+  }
+  float val_factor = brush->value_jitter;
+  if ((brush->flag2 & BRUSH_USE_VAL_RAND_PRESS) != 0) {
+    val_factor *= BKE_curvemapping_evaluateF(brush->curve_rand_value, 0, pressure);
+  }
+
+  blender::float3 hsv;
+  rgb_to_hsv_v(color, hsv);
+
+  hsv[0] += blender::math::interpolate(0.5f, random_hue, hue_factor) - 0.5f;
+  /* Wrap hue. */
+  if (hsv[0] > 1.0f) {
+    hsv[0] -= 1.0f;
+  }
+  else if (hsv[0] < 0.0f) {
+    hsv[0] += 1.0f;
+  }
+
+  hsv[1] *= blender::math::interpolate(1.0f, random_sat * 2.0f, sat_factor);
+  hsv[2] *= blender::math::interpolate(1.0f, random_val * 2.0f, val_factor);
+
+  blender::float3 random_color;
+  hsv_to_rgb_v(hsv, random_color);
+  return random_color;
+}
+
 void paint_brush_color_get(Scene *scene,
                            const Paint *paint,
                            Brush *br,
+                           StrokeFactors stroke_factors,
                            bool color_correction,
                            bool invert,
                            float distance,
@@ -395,6 +466,11 @@ void paint_brush_color_get(Scene *scene,
       /* Gradient / Color-band colors are not considered #PROP_COLOR_GAMMA.
        * Brush colors are expected to be in sRGB though. */
       IMB_colormanagement_scene_linear_to_srgb_v3(r_color, color_gr);
+    }
+    else if (br->flag2 & BRUSH_JITTER_COLOR) {
+      blender::float3 r = randomize_color(
+          br, stroke_factors, distance, pressure, BKE_brush_color_get(scene, paint, br));
+      copy_v3_v3(r_color, r);
     }
     else {
       copy_v3_v3(r_color, BKE_brush_color_get(scene, paint, br));
@@ -1124,6 +1200,12 @@ static bool texture_paint_poll(bContext *C)
   }
 
   return false;
+}
+
+struct StrokeFactors stroke_factors_new()
+{
+  blender::RandomNumberGenerator rng = blender::RandomNumberGenerator::from_random_seed();
+  return StrokeFactors{rng.get_float(), rng.get_float(), rng.get_float()};
 }
 
 bool image_texture_paint_poll(bContext *C)
