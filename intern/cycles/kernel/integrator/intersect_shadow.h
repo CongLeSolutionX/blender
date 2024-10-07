@@ -180,43 +180,4 @@ ccl_device void integrator_intersect_shadow(KernelGlobals kg, IntegratorShadowSt
   }
 }
 
-#ifdef __VOLUME__
-ccl_device bool volume_shadow_intersect(KernelGlobals kg,
-                                        ConstIntegratorShadowState state,
-                                        const uint hit,
-                                        const uint num_recorded_hits,
-                                        ccl_private Ray *ray)
-{
-  /* TODO(weizhen): kernel_data.kernel_features & KERNEL_FEATURE_VOLUME? #ifdef __VOLUME__? */
-  if (!kernel_data.integrator.use_volumes) {
-    return false;
-  }
-
-  /* Read ray from integrator state into local memory. */
-  integrator_state_read_shadow_ray(state, ray);
-
-  if (!integrator_state_shadow_volume_stack_is_empty(kg, state)) {
-    /* Modify ray position and length to match current segment. */
-    ray->tmin = (hit == 0) ? ray->tmin : INTEGRATOR_STATE_ARRAY(state, shadow_isect, hit - 1, t);
-    ray->tmax = (hit < num_recorded_hits) ? INTEGRATOR_STATE_ARRAY(state, shadow_isect, hit, t) :
-                                            ray->tmax;
-
-    return true;
-  }
-
-  /* Intersect with volume Octree. */
-  const ccl_global KernelOctreeNode *kroot = &kernel_data_fetch(volume_tree_nodes, 0);
-  Interval<float> t_range = {ray->tmin, ray->tmax};
-  if (!ray_aabb_intersect(kroot->bbox, ray->P, rcp(ray->D), &t_range)) {
-    return false;
-  }
-
-  ray->tmin = t_range.min;
-  ray->tmax = t_range.max;
-
-  /* TODO(weizhen): refine segment to skip zero density. */
-  return true;
-}
-#endif
-
 CCL_NAMESPACE_END

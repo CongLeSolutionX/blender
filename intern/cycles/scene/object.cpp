@@ -281,10 +281,6 @@ bool Object::is_traceable() const
   if (!bounds.valid() || bounds.size() == zero_float3()) {
     return false;
   }
-  if (geometry->is_volume()) {
-    /* Handled with volume Octree. */
-    return false;
-  }
   /* TODO(sergey): Check for mesh vertices/curves. visibility flags. */
   return true;
 }

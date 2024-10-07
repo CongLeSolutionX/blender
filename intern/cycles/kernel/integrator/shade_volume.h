@@ -162,16 +162,15 @@ ccl_device_forceinline float3 volume_octree_offset(const float3 P,
 template<const bool shadow, typename ConstIntegratorGenericState>
 ccl_device_inline Spectrum volume_shader_eval_extinction(KernelGlobals kg,
                                                          ConstIntegratorGenericState state,
-                                                         ccl_private ShaderData *ccl_restrict sd,
-                                                         const ccl_global KernelOctreeNode *knode)
+                                                         ccl_private ShaderData *ccl_restrict sd)
 {
   if constexpr (shadow) {
     VOLUME_READ_LAMBDA(integrator_state_read_shadow_volume_stack(state, i))
-    volume_shader_eval<true>(kg, state, sd, PATH_RAY_SHADOW, knode, volume_read_lambda_pass);
+    volume_shader_eval<true>(kg, state, sd, PATH_RAY_SHADOW, volume_read_lambda_pass);
   }
   else {
     VOLUME_READ_LAMBDA(integrator_state_read_volume_stack(state, i))
-    volume_shader_eval<false>(kg, state, sd, PATH_RAY_SHADOW, knode, volume_read_lambda_pass);
+    volume_shader_eval<false>(kg, state, sd, PATH_RAY_SHADOW, volume_read_lambda_pass);
   }
 
   return (sd->flag & SD_EXTINCTION) ? sd->closure_transparent_extinction : zero_spectrum();
@@ -181,12 +180,11 @@ ccl_device_inline Spectrum volume_shader_eval_extinction(KernelGlobals kg,
 ccl_device_inline bool volume_shader_sample(KernelGlobals kg,
                                             IntegratorState state,
                                             ccl_private ShaderData *ccl_restrict sd,
-                                            const ccl_global KernelOctreeNode *knode,
                                             ccl_private VolumeShaderCoefficients *coeff)
 {
   const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
   VOLUME_READ_LAMBDA(integrator_state_read_volume_stack(state, i))
-  volume_shader_eval<false>(kg, state, sd, path_flag, knode, volume_read_lambda_pass);
+  volume_shader_eval<false>(kg, state, sd, path_flag, volume_read_lambda_pass);
 
   if (!(sd->flag & (SD_EXTINCTION | SD_SCATTER | SD_EMISSION))) {
     return false;
@@ -430,7 +428,7 @@ ccl_device Spectrum volume_unbiased_ray_marching(KernelGlobals kg,
       sd->P = ray->P + ray->D * t;
 
       /* TODO(weizhen): early cut off? */
-      X[i] += volume_shader_eval_extinction<shadow>(kg, state, sd, knode);
+      X[i] += volume_shader_eval_extinction<shadow>(kg, state, sd);
     }
     X[i] = -step_size * X[i];
 
@@ -627,7 +625,7 @@ ccl_device bool volume_sample_indirect_scatter(
 
     sd->P = ray->P + ray->D * t;
     VolumeShaderCoefficients coeff ccl_optional_struct_init;
-    if (volume_shader_sample(kg, state, sd, knode, &coeff)) {
+    if (volume_shader_sample(kg, state, sd, &coeff)) {
       /* Emission. */
       if (sd->flag & SD_EMISSION) {
         result.emission += transmittance * coeff.emission * inv_maj;
@@ -746,7 +744,7 @@ ccl_device void volume_integrate_step_scattering(
   {
     sd->P = ray->P + ray->D * result.direct_t;
     VolumeShaderCoefficients coeff ccl_optional_struct_init;
-    if (volume_shader_sample(kg, state, sd, knode, &coeff) && (sd->flag & SD_SCATTER)) {
+    if (volume_shader_sample(kg, state, sd, &coeff) && (sd->flag & SD_SCATTER)) {
       volume_shader_copy_phases(&result.direct_phases, sd);
       result.direct_scatter = true;
 
@@ -1188,8 +1186,9 @@ ccl_device VolumeIntegrateEvent volume_integrate(KernelGlobals kg,
                                                  ccl_global float *ccl_restrict render_buffer)
 {
   ShaderData sd;
-  /* TODO(weizhen): light-linking object. */
-  shader_setup_from_volume(kg, &sd, ray);
+  /* FIXME: `object` is used for light linking. We read the bottom of the stack for simplicity, but
+   * this does not work for overlapping volumes. */
+  shader_setup_from_volume(kg, &sd, ray, INTEGRATOR_STATE_ARRAY(state, volume_stack, 0, object));
 
   /* Load random number state. */
   RNGState rng_state;
@@ -1208,10 +1207,9 @@ ccl_device VolumeIntegrateEvent volume_integrate(KernelGlobals kg,
       need_light_sample && integrate_volume_equiangular_sample_light(
                                kg, state, ray, &sd, &rng_state, &equiangular_coeffs, ls);
 
-  /* TODO(weizhen): how to determine sample method? */
-  VolumeSampleMethod direct_sample_method = have_equiangular_sample ? VOLUME_SAMPLE_DISTANCE :
-                                                                      VOLUME_SAMPLE_DISTANCE;
-  // volume_stack_sample_method(kg, state);
+  VolumeSampleMethod direct_sample_method = (have_equiangular_sample) ?
+                                                volume_stack_sample_method(kg, state) :
+                                                VOLUME_SAMPLE_DISTANCE;
 
 #  if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
   /* The current path throughput which is used later to calculate per-segment throughput. */
@@ -1380,16 +1378,16 @@ ccl_device void integrator_shade_volume(KernelGlobals kg,
     volume_stack_clean(kg, state);
   }
 
-  if (integrator_state_volume_stack_is_empty(kg, state)) {
-    /* Intersect with volume Octree and refine ray segment. */
-    /* TODO(weizhen): refine segment to skip zero density? */
-    /* TODO(weizhen): refine segment if there is only mesh volume. */
-    const ccl_global KernelOctreeNode *kroot = &kernel_data_fetch(volume_tree_nodes, 0);
-    Interval<float> t_range = {ray.tmin, ray.tmax};
-    if (ray_aabb_intersect(kroot->bbox, ray.P, rcp(ray.D), &t_range)) {
-      ray.tmin = t_range.min;
-      ray.tmax = t_range.max;
-    }
+  /* Intersect with volume Octree and refine ray segment. */
+  /* TODO(weizhen): refine segment to skip zero density? */
+  /* TODO(weizhen): refine segment if there is only mesh volume. */
+  /* TODO(weizhen): support world volume. */
+  /* TODO(weizhen): support single-sided swimming pool volume. */
+  const ccl_global KernelOctreeNode *kroot = &kernel_data_fetch(volume_tree_nodes, 0);
+  Interval<float> t_range = {ray.tmin, ray.tmax};
+  if (ray_aabb_intersect(kroot->bbox, ray.P, rcp(ray.D), &t_range)) {
+    ray.tmin = t_range.min;
+    ray.tmax = t_range.max;
   }
 
   const VolumeIntegrateEvent event = volume_integrate(kg, state, &ray, render_buffer);

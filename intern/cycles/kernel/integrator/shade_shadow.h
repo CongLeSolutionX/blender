@@ -63,7 +63,8 @@ ccl_device_inline Spectrum integrate_transparent_surface_shadow(KernelGlobals kg
 #  ifdef __VOLUME__
 ccl_device_inline void integrate_transparent_volume_shadow(KernelGlobals kg,
                                                            IntegratorShadowState state,
-                                                           ccl_private Ray *ccl_restrict ray,
+                                                           const int hit,
+                                                           const int num_recorded_hits,
                                                            ccl_private Spectrum *ccl_restrict
                                                                throughput)
 {
@@ -74,9 +75,22 @@ ccl_device_inline void integrate_transparent_volume_shadow(KernelGlobals kg,
   ccl_private ShaderData *shadow_sd = AS_SHADER_DATA(&shadow_sd_storage);
 
   /* Setup shader data. */
-  shader_setup_from_volume(kg, shadow_sd, ray);
+  Ray ray ccl_optional_struct_init;
+  integrator_state_read_shadow_ray(state, &ray);
+  ray.self.object = OBJECT_NONE;
+  ray.self.prim = PRIM_NONE;
+  ray.self.light_object = OBJECT_NONE;
+  ray.self.light_prim = PRIM_NONE;
+  ray.self.light = LAMP_NONE;
+  /* Modify ray position and length to match current segment. */
+  ray.tmin = (hit == 0) ? ray.tmin : INTEGRATOR_STATE_ARRAY(state, shadow_isect, hit - 1, t);
+  ray.tmax = (hit < num_recorded_hits) ? INTEGRATOR_STATE_ARRAY(state, shadow_isect, hit, t) :
+                                         ray.tmax;
 
-  volume_shadow_heterogeneous(kg, state, ray, shadow_sd, throughput);
+  /* `object` is only needed for light tree with light linking, it is irrelevant for shadow. */
+  shader_setup_from_volume(kg, shadow_sd, &ray, OBJECT_NONE);
+
+  volume_shadow_heterogeneous(kg, state, &ray, shadow_sd, throughput);
 }
 #  endif
 
@@ -92,10 +106,9 @@ ccl_device_inline bool integrate_transparent_shadow(KernelGlobals kg,
     /* Volume shaders. */
     if (hit < num_recorded_hits || !shadow_intersections_has_remaining(num_hits)) {
 #  ifdef __VOLUME__
-      Ray ray ccl_optional_struct_init;
-      if (volume_shadow_intersect(kg, state, hit, num_recorded_hits, &ray)) {
+      if (!integrator_state_shadow_volume_stack_is_empty(kg, state)) {
         Spectrum throughput = INTEGRATOR_STATE(state, shadow_path, throughput);
-        integrate_transparent_volume_shadow(kg, state, &ray, &throughput);
+        integrate_transparent_volume_shadow(kg, state, hit, num_recorded_hits, &throughput);
         if (is_zero(throughput)) {
           return true;
         }
@@ -140,6 +153,7 @@ ccl_device void integrator_shade_shadow(KernelGlobals kg,
 {
   PROFILING_INIT(kg, PROFILING_SHADE_SHADOW_SETUP);
   const uint num_hits = INTEGRATOR_STATE(state, shadow_path, num_hits);
+
 #ifdef __TRANSPARENT_SHADOWS__
   /* Evaluate transparent shadows. */
   const bool opaque = integrate_transparent_shadow(kg, state, num_hits);

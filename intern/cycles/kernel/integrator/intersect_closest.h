@@ -211,34 +211,6 @@ ccl_device_forceinline void integrator_intersect_next_kernel_after_shadow_catche
 }
 #endif
 
-#ifdef __VOLUME__
-/* TODO(weizhen): move to a separate header? */
-/* Check if the current ray intersects with volume octree of volume stack, and set the ray segment
- * to the current valid range. */
-ccl_device bool volume_intersect(KernelGlobals kg,
-                                 IntegratorState state,
-                                 ccl_private const Intersection *ccl_restrict isect,
-                                 ccl_private Ray *ray)
-{
-  /* TODO(weizhen): kernel_data.kernel_features & KERNEL_FEATURE_VOLUME? #ifdef __VOLUME__? */
-  if (!kernel_data.integrator.use_volumes) {
-    return false;
-  }
-
-  if (!integrator_state_volume_stack_is_empty(kg, state)) {
-    return true;
-  }
-
-  /* Set ray length to current segment. */
-  ray->tmax = (isect->prim != PRIM_NONE) ? isect->t : FLT_MAX;
-
-  /* Intersect with volume Octree. */
-  const ccl_global KernelOctreeNode *kroot = &kernel_data_fetch(volume_tree_nodes, 0);
-  Interval<float> t_range = {ray->tmin, ray->tmax};
-  return ray_aabb_intersect(kroot->bbox, ray->P, rcp(ray->D), &t_range);
-}
-#endif
-
 /* Schedule next kernel to be executed after intersect closest.
  *
  * Note that current_kernel is a template value since making this a variable
@@ -248,16 +220,22 @@ ccl_device_forceinline void integrator_intersect_next_kernel(
     KernelGlobals kg,
     IntegratorState state,
     ccl_private const Intersection *ccl_restrict isect,
-    ccl_private Ray *ray,
     ccl_global float *ccl_restrict render_buffer,
     const bool hit)
 {
   /* Continue with volume kernel if we are inside a volume, regardless if we hit anything. */
 #ifdef __VOLUME__
-  /* TODO(weizhen): visibility. */
-  if (volume_intersect(kg, state, isect, ray)) {
-    /* TODO(weizhen): terminate path using Russian Roulette. */
-    integrator_path_next(kg, state, current_kernel, DEVICE_KERNEL_INTEGRATOR_SHADE_VOLUME);
+  if (!integrator_state_volume_stack_is_empty(kg, state)) {
+    const bool hit_surface = hit && !(isect->type & PRIMITIVE_LAMP);
+    const int shader = (hit_surface) ? intersection_get_shader(kg, isect) : SHADER_NONE;
+    const int flags = (hit_surface) ? kernel_data_fetch(shaders, shader).flags : 0;
+
+    if (!integrator_intersect_terminate(kg, state, flags)) {
+      integrator_path_next(kg, state, current_kernel, DEVICE_KERNEL_INTEGRATOR_SHADE_VOLUME);
+    }
+    else {
+      integrator_path_terminate(kg, state, current_kernel);
+    }
     return;
   }
 #endif
@@ -454,7 +432,7 @@ ccl_device void integrator_intersect_closest(KernelGlobals kg,
 
   /* Setup up next kernel to be executed. */
   integrator_intersect_next_kernel<DEVICE_KERNEL_INTEGRATOR_INTERSECT_CLOSEST>(
-      kg, state, &isect, &ray, render_buffer, hit);
+      kg, state, &isect, render_buffer, hit);
 }
 
 CCL_NAMESPACE_END

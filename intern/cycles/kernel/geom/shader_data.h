@@ -397,10 +397,11 @@ ccl_device_inline void shader_setup_from_background(KernelGlobals kg,
 #ifdef __VOLUME__
 ccl_device_inline void shader_setup_from_volume(KernelGlobals kg,
                                                 ccl_private ShaderData *ccl_restrict sd,
-                                                ccl_private const Ray *ccl_restrict ray)
+                                                ccl_private const Ray *ccl_restrict ray,
+                                                const int object)
 {
+
   /* vectors */
-  /* TODO(weizhen): put the point on the bounding box to improve precision. */
   sd->P = ray->P + ray->D * ray->tmin;
   sd->N = -ray->D;
   sd->Ng = -ray->D;
@@ -412,8 +413,7 @@ ccl_device_inline void shader_setup_from_volume(KernelGlobals kg,
   sd->ray_length = 0.0f; /* todo: can we set this to some useful value? */
 
   /* TODO: fill relevant fields for texture coordinates. */
-  /* TODO(weizhen): pick which object? */
-  sd->object = OBJECT_NONE;
+  sd->object = object;
   sd->lamp = LAMP_NONE;
   sd->prim = PRIM_NONE;
   sd->type = PRIMITIVE_VOLUME;

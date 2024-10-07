@@ -485,7 +485,6 @@ ccl_device_inline void volume_shader_eval(KernelGlobals kg,
                                           ConstIntegratorGenericState state,
                                           ccl_private ShaderData *ccl_restrict sd,
                                           const uint32_t path_flag,
-                                          const ccl_global KernelOctreeNode *knode,
                                           StackReadOp stack_read)
 {
   /* If path is being terminated, we are tracing a shadow ray or evaluating
@@ -506,23 +505,8 @@ ccl_device_inline void volume_shader_eval(KernelGlobals kg,
   sd->flag = SD_IS_VOLUME_SHADER_EVAL;
   sd->object_flag = 0;
 
-  bool leaf_node_processed = false;
   for (int i = 0;; i++) {
-    VolumeStack entry;
-    /* Process volume octree. */
-    if (!leaf_node_processed) {
-      entry = {knode->objects[i], knode->shaders[i]};
-      if (entry.object == OBJECT_NONE) {
-        leaf_node_processed = true;
-        i = 0;
-      }
-    }
-
-    /* Process volume stack. */
-    if (leaf_node_processed) {
-      entry = stack_read(i);
-    }
-
+    const VolumeStack entry = stack_read(i);
     if (!volume_shader_eval_entry<shadow, KERNEL_FEATURE_NODE_MASK_VOLUME>(
             kg, state, sd, entry, path_flag))
     {
