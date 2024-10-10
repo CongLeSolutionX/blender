@@ -645,6 +645,7 @@ static const EnumPropertyItem node_cryptomatte_layer_name_items[] = {
 #  include "NOD_geo_repeat.hh"
 #  include "NOD_geo_simulation.hh"
 #  include "NOD_geometry.hh"
+#  include "NOD_sh_repeat.hh"
 #  include "NOD_shader.h"
 #  include "NOD_socket.hh"
 #  include "NOD_socket_items.hh"
@@ -664,6 +665,7 @@ using blender::nodes::ForeachGeometryElementMainItemsAccessor;
 using blender::nodes::IndexSwitchItemsAccessor;
 using blender::nodes::MenuSwitchItemsAccessor;
 using blender::nodes::RepeatItemsAccessor;
+using blender::nodes::ShRepeatItemsAccessor;
 using blender::nodes::SimulationItemsAccessor;
 
 extern FunctionRNA rna_NodeTree_poll_func;
@@ -10513,6 +10515,103 @@ static void def_geo_menu_switch(StructRNA *srna)
                            "exists for backward compatibility.");
 }
 
+/* TODO(NPR): Move to shader nodes. */
+
+static void def_common_sh_zone_input(StructRNA *srna)
+{
+  PropertyRNA *prop;
+  FunctionRNA *func;
+  PropertyRNA *parm;
+
+  prop = RNA_def_property(srna, "paired_output", PROP_POINTER, PROP_NONE);
+  RNA_def_property_struct_type(prop, "Node");
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_pointer_funcs(prop, "rna_Node_paired_output_get", nullptr, nullptr, nullptr);
+  RNA_def_property_ui_text(
+      prop, "Paired Output", "Zone output node that this input node is paired with");
+
+  func = RNA_def_function(srna, "pair_with_output", "rna_Node_pair_with_output");
+  RNA_def_function_ui_description(func, "Pair a zone input node with an output node.");
+  RNA_def_function_flag(func, FUNC_USE_SELF_ID | FUNC_USE_REPORTS | FUNC_USE_CONTEXT);
+  parm = RNA_def_pointer(
+      func, "output_node", "ShaderNode", "Output Node", "Zone output node to pair with");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  /* return value */
+  parm = RNA_def_boolean(
+      func, "result", false, "Result", "True if pairing the node was successful");
+  RNA_def_function_return(func, parm);
+}
+
+static void def_sh_repeat_input(StructRNA *srna)
+{
+  RNA_def_struct_sdna_from(srna, "NodeShaderRepeatInput", "storage");
+
+  def_common_sh_zone_input(srna);
+}
+
+static void rna_def_sh_repeat_item(BlenderRNA *brna)
+{
+  StructRNA *srna = RNA_def_struct(brna, "ShaderRepeatItem", nullptr);
+  RNA_def_struct_ui_text(srna, "Repeat Item", "");
+  RNA_def_struct_sdna(srna, "NodeRepeatItem");
+
+  rna_def_node_item_array_socket_item_common(srna, "ShRepeatItemsAccessor", true);
+}
+
+static void rna_def_sh_repeat_output_items(BlenderRNA *brna)
+{
+  StructRNA *srna;
+
+  srna = RNA_def_struct(brna, "NodeShaderRepeatOutputItems", nullptr);
+  RNA_def_struct_sdna(srna, "bNode");
+  RNA_def_struct_ui_text(srna, "Items", "Collection of repeat items");
+
+  rna_def_node_item_array_new_with_socket_and_name(
+      srna, "ShaderRepeatItem", "ShRepeatItemsAccessor");
+  rna_def_node_item_array_common_functions(srna, "ShaderRepeatItem", "ShRepeatItemsAccessor");
+}
+
+static void def_sh_repeat_output(StructRNA *srna)
+{
+  PropertyRNA *prop;
+
+  RNA_def_struct_sdna_from(srna, "NodeShaderRepeatOutput", "storage");
+
+  prop = RNA_def_property(srna, "repeat_items", PROP_COLLECTION, PROP_NONE);
+  RNA_def_property_collection_sdna(prop, nullptr, "items", "items_num");
+  RNA_def_property_struct_type(prop, "ShaderRepeatItem");
+  RNA_def_property_ui_text(prop, "Items", "");
+  RNA_def_property_srna(prop, "NodeShaderRepeatOutputItems");
+
+  prop = RNA_def_property(srna, "active_index", PROP_INT, PROP_UNSIGNED);
+  RNA_def_property_int_sdna(prop, nullptr, "active_index");
+  RNA_def_property_ui_text(prop, "Active Item Index", "Index of the active item");
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_flag(prop, PROP_NO_DEG_UPDATE);
+  RNA_def_property_update(prop, NC_NODE, nullptr);
+
+  prop = RNA_def_property(srna, "active_item", PROP_POINTER, PROP_NONE);
+  RNA_def_property_struct_type(prop, "ShaderRepeatItem");
+  RNA_def_property_pointer_funcs(prop,
+                                 "rna_Node_ItemArray_active_get<ShRepeatItemsAccessor>",
+                                 "rna_Node_ItemArray_active_set<ShRepeatItemsAccessor>",
+                                 nullptr,
+                                 nullptr);
+  RNA_def_property_flag(prop, PROP_EDITABLE | PROP_NO_DEG_UPDATE);
+  RNA_def_property_ui_text(prop, "Active Item Index", "Index of the active item");
+  RNA_def_property_update(prop, NC_NODE, nullptr);
+
+  prop = RNA_def_property(srna, "inspection_index", PROP_INT, PROP_NONE);
+  RNA_def_property_ui_range(prop, 0, INT32_MAX, 1, -1);
+  RNA_def_property_ui_text(prop,
+                           "Inspection Index",
+                           "Iteration index that is used by inspection features like the viewer "
+                           "node or socket inspection");
+  RNA_def_property_update(prop, NC_NODE, "rna_Node_update");
+}
+
+/* --- */
+
 static void rna_def_shader_node(BlenderRNA *brna)
 {
   StructRNA *srna;
@@ -11737,6 +11836,9 @@ void RNA_def_nodetree(BlenderRNA *brna)
   rna_def_geo_menu_switch_items(brna);
   rna_def_bake_items(brna);
   rna_def_geo_capture_attribute_items(brna);
+
+  rna_def_sh_repeat_item(brna);
+  rna_def_sh_repeat_output_items(brna);
 
   rna_def_node_instance_hash(brna);
 }

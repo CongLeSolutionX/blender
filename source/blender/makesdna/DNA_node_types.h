@@ -1981,6 +1981,25 @@ typedef struct NodeGeometryRepeatOutput {
 #endif
 } NodeGeometryRepeatOutput;
 
+typedef struct NodeShaderRepeatInput {
+  /** bNode.identifier of the corresponding output node. */
+  int32_t output_node_id;
+} NodeShaderRepeatInput;
+
+typedef struct NodeShaderRepeatOutput {
+  NodeRepeatItem *items;
+  int items_num;
+  int active_index;
+  /** Identifier to give to the next repeat item. */
+  int next_identifier;
+  int inspection_index;
+
+#ifdef __cplusplus
+  blender::Span<NodeRepeatItem> items_span() const;
+  blender::MutableSpan<NodeRepeatItem> items_span();
+#endif
+} NodeShaderRepeatOutput;
+
 typedef struct NodeGeometryForeachGeometryElementInput {
   /** bNode.identifier of the corresponding output node. */
   int32_t output_node_id;
