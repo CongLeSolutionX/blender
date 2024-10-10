@@ -389,22 +389,6 @@ void Octree::visualize_fast(KernelOctreeNode *knodes, const char *filename)
   }
 }
 
-uint Octree::get_object_shader(const Object *object)
-{
-  Geometry *geom = object->get_geometry();
-
-  for (Node *node : geom->get_used_shaders()) {
-    Shader *shader = static_cast<Shader *>(node);
-    if (shader->has_volume &&
-        dynamic_cast<VolumeNode *>(shader->graph->output()->input("Volume")->link->parent))
-    {
-      return shader->id;
-    }
-  }
-
-  return SHADER_NONE;
-}
-
 int Octree::flatten_(KernelOctreeNode *knodes, shared_ptr<OctreeNode> &node, int &node_index)
 {
   const int current_index = node_index++;
@@ -422,21 +406,6 @@ int Octree::flatten_(KernelOctreeNode *knodes, shared_ptr<OctreeNode> &node, int
     knode.is_leaf = true;
     knode.sigma_max = node->sigma_max;
     knode.sigma_min = node->sigma_min;
-    int i = 0;
-    for (auto *object : node->objects) {
-      if (i >= MAX_VOLUME_STACK_SIZE) {
-        VLOG_WARNING << "Number of overlapping volumes exceeds the limit 32";
-        break;
-      }
-      if (object->get_geometry()->is_volume()) {
-        /* Only record volume objects, mesh is handled via volume stack. */
-        knode.objects[i] = object->get_device_index();
-        knode.shaders[i] = get_object_shader(object);
-        i++;
-      }
-    }
-    knode.objects[i] = OBJECT_NONE;
-    knode.shaders[i] = SHADER_NONE;
   }
 
   return current_index;

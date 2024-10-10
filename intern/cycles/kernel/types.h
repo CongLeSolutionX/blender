@@ -1715,10 +1715,6 @@ struct KernelOctreeNode {
    * if we use spectrum sigma. If using union, only 7 nodes is needed because children[0] is always
    * node_index + 1. Or, if stored as breadth-first, only one int with 22 bits is needed. */
   int children[8];
-
-  /* TODO(weizhen): maybe store as a separate array. */
-  int objects[MAX_VOLUME_STACK_SIZE];
-  int shaders[MAX_VOLUME_STACK_SIZE];
 };
 
 typedef struct KernelLightTreeEmitter {

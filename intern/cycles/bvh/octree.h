@@ -84,8 +84,6 @@ class Octree {
   std::shared_ptr<OctreeInternalNode> make_internal(std::shared_ptr<OctreeNode> &node);
   void recursive_build_(std::shared_ptr<OctreeNode> &node);
   int flatten_(KernelOctreeNode *knodes, std::shared_ptr<OctreeNode> &node, int &index);
-  /* TODO(weizhen): this is only for testing. Need to support multiple shaders. */
-  uint get_object_shader(const Object *object);
 
   /* Root node. */
   std::shared_ptr<OctreeNode> root_;
