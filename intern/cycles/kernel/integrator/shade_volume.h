@@ -103,7 +103,7 @@ typedef struct VolumeIntegrateState {
 } VolumeIntegrateState;
 
 /* Given a position P and a octree node bounding box, return the octant of P in the box. */
-ccl_device int volume_tree_get_octant(const BoundBox bbox,
+ccl_device int volume_tree_get_octant(const KernelBoundingBox bbox,
                                       const ccl_private Ray *ccl_restrict ray,
                                       const float3 P)
 {
@@ -130,7 +130,7 @@ ccl_device int volume_voxel_get(KernelGlobals kg,
     const ccl_global KernelOctreeNode *knode = &kernel_data_fetch(volume_tree_nodes, node_index);
     if (knode->is_leaf) {
       const bool has_intersection = ray_aabb_intersect(
-          knode->bbox, ray->P, vstate.inv_ray_D, &t_range);
+          knode->bbox.min, knode->bbox.max, ray->P, vstate.inv_ray_D, &t_range);
       /* TODO(weizhen): fix this numerical issue. */
       vstate.t.max = has_intersection ? t_range.max : vstate.t.min + 1e-4f;
       vstate.t.max = fminf(vstate.t.max, ray->tmax);
@@ -142,7 +142,7 @@ ccl_device int volume_voxel_get(KernelGlobals kg,
 
 /* Offset ray to avoid self-intersection. */
 ccl_device_forceinline float3 volume_octree_offset(const float3 P,
-                                                   const BoundBox bbox,
+                                                   const KernelBoundingBox bbox,
                                                    const float3 ray_D)
 {
   /* TODO(weizhen): put the point on the bounding box to improve precision. */
@@ -660,8 +660,8 @@ ccl_device bool volume_sample_indirect_scatter(
       const int channel = volume_sample_channel(
           albedo, result.indirect_throughput * transmittance, &vstate.rchannel, &channel_pdf);
 
-      vstate.rchannel *= sigma_c[channel];
-      if (vstate.rchannel < coeff.sigma_s[channel]) {
+      vstate.rchannel *= volume_channel_get(sigma_c, channel);
+      if (vstate.rchannel < volume_channel_get(coeff.sigma_s, channel)) {
         /* Sampled scatter event. */
         const Spectrum pdf_s = coeff.sigma_s / sigma_c;
         transmittance *= coeff.sigma_s * inv_maj / dot(channel_pdf, pdf_s);
@@ -685,7 +685,8 @@ ccl_device bool volume_sample_indirect_scatter(
       transmittance *= sigma_n * inv_maj / dot(channel_pdf, pdf_n);
 
       /* Rescale random number for reusing. */
-      vstate.rchannel = (vstate.rchannel - coeff.sigma_s[channel]) / abs_sigma_n[channel];
+      vstate.rchannel = (vstate.rchannel - volume_channel_get(coeff.sigma_s, channel)) /
+                        volume_channel_get(abs_sigma_n, channel);
     }
 
     /* TODO(weizhen): this has variance even with monochromatic volume, seems like ratio tracking
@@ -1385,7 +1386,7 @@ ccl_device void integrator_shade_volume(KernelGlobals kg,
   /* TODO(weizhen): support single-sided swimming pool volume. */
   const ccl_global KernelOctreeNode *kroot = &kernel_data_fetch(volume_tree_nodes, 0);
   Interval<float> t_range = {ray.tmin, ray.tmax};
-  if (ray_aabb_intersect(kroot->bbox, ray.P, rcp(ray.D), &t_range)) {
+  if (ray_aabb_intersect(kroot->bbox.min, kroot->bbox.max, ray.P, rcp(ray.D), &t_range)) {
     ray.tmin = t_range.min;
     ray.tmax = t_range.max;
   }

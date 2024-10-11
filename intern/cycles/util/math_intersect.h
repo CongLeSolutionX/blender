@@ -5,7 +5,6 @@
 #ifndef __UTIL_MATH_INTERSECT_H__
 #define __UTIL_MATH_INTERSECT_H__
 
-#include "util/boundbox.h"
 CCL_NAMESPACE_BEGIN
 
 /* Ray Intersection */
@@ -327,14 +326,15 @@ ccl_device bool ray_plane_intersect(const float3 N,
 }
 
 /* Find the ray segment inside an axis-aligned bounding box. */
-ccl_device bool ray_aabb_intersect(const BoundBox bbox,
+ccl_device bool ray_aabb_intersect(const float3 bbox_min,
+                                   const float3 bbox_max,
                                    const float3 ray_P,
                                    const float3 inv_ray_D,
                                    ccl_private Interval<float> *t_range)
 {
   /* Absolute distances to lower and upper box coordinates; */
-  const float3 t_lower = (bbox.min - ray_P) * inv_ray_D;
-  const float3 t_upper = (bbox.max - ray_P) * inv_ray_D;
+  const float3 t_lower = (bbox_min - ray_P) * inv_ray_D;
+  const float3 t_upper = (bbox_max - ray_P) * inv_ray_D;
 
   /* The four t-intervals (for x-/y-/z-slabs, and ray p(t)). */
   const float4 tmins = float3_to_float4(min(t_lower, t_upper), t_range->min);

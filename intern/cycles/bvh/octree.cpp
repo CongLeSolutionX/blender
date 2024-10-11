@@ -405,7 +405,8 @@ int Octree::flatten_(KernelOctreeNode *knodes, shared_ptr<OctreeNode> &node, int
   const int current_index = node_index++;
 
   KernelOctreeNode &knode = knodes[current_index];
-  knode.bbox = node->bbox;
+  knode.bbox.min = node->bbox.min;
+  knode.bbox.max = node->bbox.max;
   if (auto internal_ptr = std::dynamic_pointer_cast<OctreeInternalNode>(node)) {
     knode.is_leaf = false;
     /* Loop through all the children. */
