@@ -4,6 +4,7 @@
 
 #include "bvh/octree.h"
 
+#include "scene/background.h"
 #include "scene/geometry.h"
 #include "scene/image_vdb.h"
 #include "scene/object.h"
@@ -94,8 +95,8 @@ bool OctreeNode::should_split(const Octree *octree)
     }
   }
 
-  sigma_min = FLT_MAX;
-  sigma_max = 0.0f;
+  sigma_min = octree->background_density_min;
+  sigma_max = octree->background_density_max;
 
   for (Object *object : objects) {
     float min = 1.0f;
@@ -273,7 +274,22 @@ Octree::Octree(const Scene *scene)
     }
   }
 
-  /* TODO(weizhen): world volume. */
+  /* Evaluate world volume density. */
+  Shader *bg_shader = scene->background->get_shader(scene);
+  background_density_max = volume_density_scale(bg_shader);
+  if (background_density_max > 0.0f) {
+    if (!bg_shader->has_volume_spatial_varying) {
+      background_density_min = background_density_max;
+    }
+    else {
+      /* TODO(weizhen): can we be more sure about the minimal density. */
+      background_density_min = 0.0f;
+    }
+  }
+  else {
+    /* So that fminf(a, FLT_MAX) always returns a. */
+    background_density_min = FLT_MAX;
+  }
 
   if (!root_->bbox.valid()) {
     //    root_.reset();
@@ -439,8 +455,18 @@ int Octree::flatten_(KernelOctreeNode *knodes, shared_ptr<OctreeNode> &node, int
 
 void Octree::flatten(KernelOctreeNode *knodes)
 {
-  int root_index = 0;
-  flatten_(knodes, root_, root_index);
+  int node_index = 0;
+
+  /* World volume. */
+  /* TODO(weizhen): is there a better way than putting world volume in the octree array? */
+  KernelOctreeNode &knode = knodes[node_index++];
+  knode.is_leaf = false;
+  knode.sigma_max = background_density_max;
+  knode.sigma_min = has_world_volume() ? background_density_min : 0.0f;
+  knode.bbox.max = make_float3(FLT_MAX);
+  knode.bbox.min = -make_float3(FLT_MAX);
+
+  flatten_(knodes, root_, node_index);
   /* TODO(weizhen): rescale the bounding box to match its resolution, for more robust traversing.
    */
 }
@@ -498,7 +524,13 @@ bool Octree::is_empty() const
 
 int Octree::get_num_nodes() const
 {
-  return num_nodes;
+  /* Plus one to account for world volume. */
+  return num_nodes + 1;
+}
+
+bool Octree::has_world_volume() const
+{
+  return background_density_max > 0.0f;
 }
 
 CCL_NAMESPACE_END

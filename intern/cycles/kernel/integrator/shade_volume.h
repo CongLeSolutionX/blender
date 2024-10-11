@@ -18,6 +18,7 @@
 #include "kernel/light/light.h"
 #include "kernel/light/sample.h"
 #include "kernel/sample/lcg.h"
+#include "kernel/types.h"
 
 CCL_NAMESPACE_BEGIN
 
@@ -125,7 +126,15 @@ ccl_device ccl_global const KernelOctreeNode *volume_voxel_get(
     ccl_private VolumeIntegrateState &ccl_restrict vstate,
     const float3 P)
 {
-  int node_index = 0;
+  const KernelBoundingBox root_bbox = kernel_data_fetch(volume_tree_nodes, 1).bbox;
+  if (!root_bbox.contains(P)) {
+    /* World volume or implicit volume. */
+    vstate.t.min = ray->tmin;
+    vstate.t.max = ray->tmax;
+    return &kernel_data_fetch(volume_tree_nodes, 0);
+  }
+
+  int node_index = 1;
   Interval<float> t_range = {vstate.t.min, ray->tmax};
   while (true) {
     const ccl_global KernelOctreeNode *knode = &kernel_data_fetch(volume_tree_nodes, node_index);

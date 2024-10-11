@@ -27,6 +27,7 @@ class Object;
 class Octree;
 class Progress;
 class Scene;
+class Shader;
 struct KernelOctreeNode;
 
 struct OctreeNode {
@@ -77,6 +78,7 @@ class Octree {
   void flatten(KernelOctreeNode *knodes);
   bool is_empty() const;
   int get_num_nodes() const;
+  bool has_world_volume() const;
 
  private:
   std::shared_ptr<OctreeInternalNode> make_internal(std::shared_ptr<OctreeNode> &node);
@@ -92,6 +94,11 @@ class Octree {
                                          const float voxel_size,
                                          const float half_width);
   std::map<const Geometry *, nanovdb::GridHandle<>> vdb_map;
+
+  /* World volume. */
+  /* TODO(weizhen): we only need the max density after properly evaluating volume shaders. */
+  float background_density_max;
+  float background_density_min;
 };
 
 CCL_NAMESPACE_END
