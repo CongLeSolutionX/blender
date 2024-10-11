@@ -72,6 +72,15 @@ bool OctreeNode::should_split(const Octree *octree)
     return false;
   }
 
+  if (objects.size() == 1) {
+    const Object *object = objects[0];
+    if (object->is_homogeneous_volume()) {
+      /* Do not split homogeneous volume. Volume stack already skips the zero-density regions. */
+      sigma_min = sigma_max = volume_density_scale(object);
+      return false;
+    }
+  }
+
   sigma_min = FLT_MAX;
   sigma_max = 0.0f;
 
@@ -111,9 +120,10 @@ bool OctreeNode::should_split(const Octree *octree)
 #endif
     }
     else if (geom->is_mesh()) {
-      /* TODO(weizhen): detect homogenous mesh volume and do not split. */
       const auto *grid = octree->vdb_map.at(geom).grid<bool>();
       if (grid) {
+        /* TODO(weizhen): evaluate objects with various shaders separately.  */
+        /* TODO(weizhen): probably dense grid is the proper way. */
         const Mesh *mesh = static_cast<const Mesh *>(geom);
         Transform itfm;
         if (!mesh->transform_applied) {
@@ -347,6 +357,7 @@ void Octree::visualize_fast(KernelOctreeNode *knodes, const char *filename)
     file << "bpy.ops.object.mode_set(mode='OBJECT')\n";
     file << "octree.objects.link(bpy.context.object)\n";
     file << "bpy.context.scene.collection.objects.unlink(bpy.context.object)\n\n";
+    /* TODO(weizhen): there is a bug when scene already contains an object called `Cube`. */
 
     file << "vertices = [";
     for (int i = 0; i < num_nodes; i++) {

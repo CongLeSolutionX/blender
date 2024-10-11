@@ -442,6 +442,39 @@ bool Object::has_shadow_linking() const
   return false;
 }
 
+bool Object::is_homogeneous_volume() const
+{
+  if (!geometry->has_volume) {
+    return false;
+  }
+
+  bool object_has_volume_attributes = false;
+  foreach (Attribute &attr, geometry->attributes.attributes) {
+    if (attr.element == ATTR_ELEMENT_VOXEL) {
+      object_has_volume_attributes = true;
+      break;
+    }
+  }
+
+  int num_volume_shader = 0;
+  for (Node *node : geometry->get_used_shaders()) {
+    const Shader *shader = static_cast<const Shader *>(node);
+    if (shader->has_volume) {
+      num_volume_shader++;
+
+      if (shader->has_volume_spatial_varying) {
+        return false;
+      }
+
+      if (shader->has_volume_attribute_dependency && object_has_volume_attributes) {
+        return false;
+      }
+    }
+  }
+
+  return num_volume_shader == 1;
+}
+
 /* Object Manager */
 
 ObjectManager::ObjectManager()

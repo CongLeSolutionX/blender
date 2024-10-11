@@ -119,6 +119,10 @@ class Object : public Node {
   bool has_light_linking() const;
   bool has_shadow_linking() const;
 
+  /* Check whether the object is a homogeneous volume. */
+  /* TODO(weizhen): if used often enough we can make it a variable? */
+  bool is_homogeneous_volume() const;
+
  protected:
   /* Specifies the position of the object in scene->objects and
    * in the device vectors. Gets set in device_update. */
