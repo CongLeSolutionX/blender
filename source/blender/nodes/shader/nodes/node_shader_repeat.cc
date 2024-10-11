@@ -71,9 +71,9 @@ static void node_declare(NodeDeclarationBuilder &b)
 {
   b.use_custom_socket_order();
   b.allow_any_socket_order();
-  b.add_output<decl::Int>("Iteration")
+  b.add_output<decl::Float>("Iteration")
       .description("Index of the current iteration. Starts counting at zero");
-  b.add_input<decl::Int>("Iterations").min(0).default_value(1);
+  b.add_input<decl::Float>("Iterations").min(0.0f).default_value(1.0f);
 
   const bNode *node = b.node_or_null();
   const bNodeTree *tree = b.tree_or_null();
@@ -88,14 +88,9 @@ static void node_declare(NodeDeclarationBuilder &b)
         const eNodeSocketDatatype socket_type = eNodeSocketDatatype(item.socket_type);
         const StringRef name = item.name ? item.name : "";
         const std::string identifier = ShRepeatItemsAccessor::socket_identifier_for_item(item);
-        auto &input_decl = b.add_input(socket_type, name, identifier)
-                               .socket_name_ptr(
-                                   &tree->id, ShRepeatItemsAccessor::item_srna, &item, "name");
-        auto &output_decl = b.add_output(socket_type, name, identifier).align_with_previous();
-        if (socket_type_supports_fields(socket_type)) {
-          input_decl.supports_field();
-          output_decl.dependent_field({input_decl.index()});
-        }
+        b.add_input(socket_type, name, identifier)
+            .socket_name_ptr(&tree->id, ShRepeatItemsAccessor::item_srna, &item, "name");
+        b.add_output(socket_type, name, identifier).align_with_previous();
       }
     }
   }
@@ -165,14 +160,9 @@ static void node_declare(NodeDeclarationBuilder &b)
       const eNodeSocketDatatype socket_type = eNodeSocketDatatype(item.socket_type);
       const StringRef name = item.name ? item.name : "";
       const std::string identifier = ShRepeatItemsAccessor::socket_identifier_for_item(item);
-      auto &input_decl = b.add_input(socket_type, name, identifier)
-                             .socket_name_ptr(
-                                 &tree->id, ShRepeatItemsAccessor::item_srna, &item, "name");
-      auto &output_decl = b.add_output(socket_type, name, identifier).align_with_previous();
-      if (socket_type_supports_fields(socket_type)) {
-        input_decl.supports_field();
-        output_decl.dependent_field({input_decl.index()});
-      }
+      b.add_input(socket_type, name, identifier)
+          .socket_name_ptr(&tree->id, ShRepeatItemsAccessor::item_srna, &item, "name");
+      b.add_output(socket_type, name, identifier).align_with_previous();
     }
   }
   b.add_input<decl::Extend>("", "__extend__");
