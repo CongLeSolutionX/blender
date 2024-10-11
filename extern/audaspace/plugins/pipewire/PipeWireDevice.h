@@ -27,6 +27,7 @@
  */
 
 #include <pipewire/pipewire.h>
+#include <spa/utils/ringbuffer.h>
 
 #include "devices/SoftwareDevice.h"
 
@@ -64,6 +65,8 @@ private:
 	pw_stream* m_stream;
 	pw_thread_loop* m_thread;
 	std::unique_ptr<pw_stream_events> m_events;
+  spa_ringbuffer m_ringbuffer;
+  void *m_ringbuffer_data;
 
 	AUD_LOCAL static void handle_state_changed(void* device_ptr, enum pw_stream_state old, enum pw_stream_state state, const char* error);
 	/**
