@@ -119,10 +119,11 @@ ccl_device int volume_tree_get_octant(const KernelBoundingBox bbox,
 /* TODO(weizhen): can return node directly? */
 /* TODO(weizhen): store a stack of parent nodes. The maximal level is 7, so the stack size is at
  * most 6. */
-ccl_device int volume_voxel_get(KernelGlobals kg,
-                                const ccl_private Ray *ccl_restrict ray,
-                                ccl_private VolumeIntegrateState &ccl_restrict vstate,
-                                const float3 P)
+ccl_device ccl_global const KernelOctreeNode *volume_voxel_get(
+    KernelGlobals kg,
+    const ccl_private Ray *ccl_restrict ray,
+    ccl_private VolumeIntegrateState &ccl_restrict vstate,
+    const float3 P)
 {
   int node_index = 0;
   Interval<float> t_range = {vstate.t.min, ray->tmax};
@@ -134,7 +135,7 @@ ccl_device int volume_voxel_get(KernelGlobals kg,
       /* TODO(weizhen): fix this numerical issue. */
       vstate.t.max = has_intersection ? t_range.max : vstate.t.min + 1e-4f;
       vstate.t.max = fminf(vstate.t.max, ray->tmax);
-      return node_index;
+      return knode;
     }
     node_index = knode->children[volume_tree_get_octant(knode->bbox, ray, P)];
   }
@@ -477,8 +478,7 @@ ccl_device void volume_shadow_heterogeneous(KernelGlobals kg,
   vstate.t.min = ray->tmin;
   vstate.step = 0;
   while (vstate.t.min < ray->tmax && vstate.step < kernel_data.integrator.volume_max_steps) {
-    const int node_index = volume_voxel_get(kg, ray, vstate, sd->P);
-    const ccl_global KernelOctreeNode *knode = &kernel_data_fetch(volume_tree_nodes, node_index);
+    const ccl_global KernelOctreeNode *knode = volume_voxel_get(kg, ray, vstate, sd->P);
 
     *throughput *= volume_unbiased_ray_marching<true>(
         kg, state, ray, sd, vstate.t.min, vstate.t.max, vstate.step, knode, rng_state);
@@ -591,7 +591,7 @@ ccl_device bool volume_sample_indirect_scatter(
     const IntegratorState state,
     const ccl_private Ray *ccl_restrict ray,
     ccl_private ShaderData *ccl_restrict sd,
-    const ccl_global KernelOctreeNode *knode,
+    float sigma_max,
     ccl_private uint &lcg_state,
     ccl_private VolumeIntegrateState &ccl_restrict vstate,
     ccl_private const EquiangularCoefficients &equiangular_coeffs,
@@ -604,7 +604,7 @@ ccl_device bool volume_sample_indirect_scatter(
 
   /* Initialization */
   float t = vstate.t.min;
-  const float inv_maj = 1.0f / knode->sigma_max;
+  const float inv_maj = 1.0f / sigma_max;
   Spectrum transmittance = one_spectrum();
   while (vstate.step++ < kernel_data.integrator.volume_max_steps) {
     if (reduce_max(result.indirect_throughput * fabs(transmittance)) < VOLUME_THROUGHPUT_EPSILON) {
@@ -633,7 +633,7 @@ ccl_device bool volume_sample_indirect_scatter(
 
       /* Null scattering coefficients. */
       // tau -= coeff.sigma_t;
-      const Spectrum sigma_n = make_float3(knode->sigma_max) - coeff.sigma_t;
+      const Spectrum sigma_n = make_float3(sigma_max) - coeff.sigma_t;
       if (reduce_add(coeff.sigma_s) == 0.0f) {
         /* Absorption only. Deterministically choose null scattering and estimate the transmittance
          * of the current ray segment. */
@@ -711,11 +711,10 @@ ccl_device void volume_integrate_step_scattering(
     ccl_private const EquiangularCoefficients &equiangular_coeffs,
     ccl_private VolumeIntegrateResult &ccl_restrict result)
 {
-  const int node_index = volume_voxel_get(kg, ray, vstate, sd->P);
-  const ccl_global KernelOctreeNode *knode = &kernel_data_fetch(volume_tree_nodes, node_index);
+  const ccl_global KernelOctreeNode *knode = volume_voxel_get(kg, ray, vstate, sd->P);
 
   if (volume_sample_indirect_scatter(
-          kg, state, ray, sd, knode, lcg_state, vstate, equiangular_coeffs, result))
+          kg, state, ray, sd, knode->sigma_max, lcg_state, vstate, equiangular_coeffs, result))
   {
     if (vstate.direct_sample_method == VOLUME_SAMPLE_DISTANCE) {
       /* If using distance sampling for direct light, just copy parameters of indirect light
@@ -1382,14 +1381,7 @@ ccl_device void integrator_shade_volume(KernelGlobals kg,
   /* Intersect with volume Octree and refine ray segment. */
   /* TODO(weizhen): refine segment to skip zero density? */
   /* TODO(weizhen): refine segment if there is only mesh volume. */
-  /* TODO(weizhen): support world volume. */
   /* TODO(weizhen): support single-sided swimming pool volume. */
-  const ccl_global KernelOctreeNode *kroot = &kernel_data_fetch(volume_tree_nodes, 0);
-  Interval<float> t_range = {ray.tmin, ray.tmax};
-  if (ray_aabb_intersect(kroot->bbox.min, kroot->bbox.max, ray.P, rcp(ray.D), &t_range)) {
-    ray.tmin = t_range.min;
-    ray.tmax = t_range.max;
-  }
 
   const VolumeIntegrateEvent event = volume_integrate(kg, state, &ray, render_buffer);
   if (event == VOLUME_PATH_MISSED) {

@@ -47,8 +47,6 @@ struct OctreeNode {
   virtual ~OctreeNode() = default;
 
   bool should_split(const Octree *octree);
-  /* TODO(weizhen): this is only for testing. Need to support procedural shaders. */
-  float volume_density_scale(const Object *object);
   template<typename T>
   nanovdb::Extrema<typename nanovdb::NanoGrid<T>::ValueType> get_extrema(
       const nanovdb::NanoGrid<T> *grid, const Transform *itfm);
@@ -77,8 +75,8 @@ class Octree {
   ~Octree();
 
   void flatten(KernelOctreeNode *knodes);
-  bool is_empty();
-  int get_num_nodes();
+  bool is_empty() const;
+  int get_num_nodes() const;
 
  private:
   std::shared_ptr<OctreeInternalNode> make_internal(std::shared_ptr<OctreeNode> &node);

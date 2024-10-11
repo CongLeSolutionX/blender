@@ -27,26 +27,39 @@
 
 CCL_NAMESPACE_BEGIN
 
-float OctreeNode::volume_density_scale(const Object *object)
+/* TODO(weizhen): this is only for testing. Need to support procedural shaders and multiple
+ * shaders. */
+float volume_density_scale(const Shader *shader)
+{
+  if (!shader->has_volume) {
+    return 0.0f;
+  }
+
+  VolumeNode *volume_node = dynamic_cast<VolumeNode *>(
+      shader->graph->output()->input("Volume")->link->parent);
+  if (!volume_node) {
+    return 0.0f;
+  }
+
+  float3 color = volume_node->get_color();
+  if (auto *principled_volume_node = dynamic_cast<PrincipledVolumeNode *>(volume_node)) {
+    color += principled_volume_node->get_absorption_color();
+  }
+  return reduce_max(volume_node->get_density() * color);
+}
+
+float volume_density_scale(const Object *object)
 {
   Geometry *geom = object->get_geometry();
 
   for (Node *node : geom->get_used_shaders()) {
     Shader *shader = static_cast<Shader *>(node);
     if (shader->has_volume) {
-      VolumeNode *volume_node = dynamic_cast<VolumeNode *>(
-          shader->graph->output()->input("Volume")->link->parent);
-      if (volume_node) {
-        float3 color = volume_node->get_color();
-        if (auto *principled_volume_node = dynamic_cast<PrincipledVolumeNode *>(volume_node)) {
-          color += principled_volume_node->get_absorption_color();
-        }
-        return reduce_max(volume_node->get_density() * color *
-                          ObjectManager::object_volume_density(object->get_tfm(), geom));
-      }
+      return volume_density_scale(shader) *
+             ObjectManager::object_volume_density(object->get_tfm(), geom);
     }
   }
-  return 1.0f;
+  return 0.0f;
 }
 
 template<typename T>
@@ -237,6 +250,7 @@ Octree::Octree(const Scene *scene)
 {
   root_ = std::make_shared<OctreeNode>();
 
+  /* Loop through the volume objects to initialize the root node. */
   for (Object *object : scene->objects) {
     const Geometry *geom = object->get_geometry();
     if (geom->has_volume) {
@@ -405,8 +419,8 @@ int Octree::flatten_(KernelOctreeNode *knodes, shared_ptr<OctreeNode> &node, int
   const int current_index = node_index++;
 
   KernelOctreeNode &knode = knodes[current_index];
-  knode.bbox.min = node->bbox.min;
   knode.bbox.max = node->bbox.max;
+  knode.bbox.min = node->bbox.min;
   if (auto internal_ptr = std::dynamic_pointer_cast<OctreeInternalNode>(node)) {
     knode.is_leaf = false;
     /* Loop through all the children. */
@@ -476,13 +490,13 @@ void Octree::build(Progress &progress)
             << " seconds.";
 }
 
-bool Octree::is_empty()
+bool Octree::is_empty() const
 {
   /* TODO(weizhen): zero size? */
   return !root_->bbox.valid();
 }
 
-int Octree::get_num_nodes()
+int Octree::get_num_nodes() const
 {
   return num_nodes;
 }
