@@ -28,7 +28,10 @@ CCL_NAMESPACE_BEGIN
  * to make the data more linear (which lets us reduce the table size).
  */
 
-ccl_device_inline float booth_inversion_table(KernelGlobals kg, const float alpha, const float beta, const float u)
+ccl_device_inline float booth_inversion_table(KernelGlobals kg,
+                                              const float alpha,
+                                              const float beta,
+                                              const float u)
 {
   /* Compute y as the eccentricity ratio, then apply mapping to get LUT coords. */
   const float y = sqrtf(sqrtf(beta / alpha));
@@ -72,7 +75,7 @@ ccl_device_inline float2 spherical_ellipse_mapping(const float2 rand, ccl_privat
   }
   else if (fabsf(a) > fabsf(b)) {
     r = a;
-    u = 0.5f * b/a;
+    u = 0.5f * b / a;
     if (a < 0.0f) {
       u += 2.0f;
     }
@@ -82,10 +85,10 @@ ccl_device_inline float2 spherical_ellipse_mapping(const float2 rand, ccl_privat
   }
   else {
     r = b;
-    u = -0.5f * a/b + ((b < 0.0f)? 3.0f : 1.0f);
+    u = -0.5f * a / b + ((b < 0.0f) ? 3.0f : 1.0f);
   }
 
-  int q = (int) u;
+  int q = (int)u;
   if (q == 3) {
     u = 4.0f - u;
   }
@@ -105,9 +108,9 @@ ccl_device_inline float spherical_ellipse_S(KernelGlobals kg, const float alpha,
   float x = alpha * M_2_PI_F;
   float y = beta / alpha;
 
-  const float fit = 0.988812f * (sqr(x)*y) * (1.64709f + 0.328265f * cosf(alpha));
+  const float fit = 0.988812f * (sqr(x) * y) * (1.64709f + 0.328265f * cosf(alpha));
   const float residual = lookup_table_read_2D(
-    kg, sqr(x), sqr(y), kernel_data.tables.ellipse_S, 32, 32);
+      kg, sqr(x), sqr(y), kernel_data.tables.ellipse_S, 32, 32);
   return fit * residual;
 }
 
@@ -118,7 +121,8 @@ ccl_device_inline float spherical_ellipse_S(KernelGlobals kg, const float alpha,
  *
  * Based on "Area-preserving parameterizations for spherical ellipses" by Ibón Guillén et al.
  */
-ccl_device_inline float spherical_ellipse_sample(KernelGlobals kg, const float at, const float bt, ccl_private float3 *P, float2 rand)
+ccl_device_inline float spherical_ellipse_sample(
+    KernelGlobals kg, const float at, const float bt, ccl_private float3 *P, float2 rand)
 {
   /* Compute constants. */
   const float at2 = sqr(at), bt2 = sqr(bt);
@@ -150,7 +154,7 @@ ccl_device_inline float spherical_ellipse_sample(KernelGlobals kg, const float a
     /* Sample along boundary at phi. */
     float sinphi, cosphi;
     fast_sincosf(phi, &sinphi, &cosphi);
-    const float r_u = a*b / sqrtf(a2 * sqr(sinphi) + b2 * sqr(cosphi));
+    const float r_u = a * b / sqrtf(a2 * sqr(sinphi) + b2 * sqr(cosphi));
     const float h_u = sin_from_cos(r_u);
     /* Because of the piecewise approximation through the CDF, samples can end up slightly
      * outside of the ellipse. The paper suggests rejecting the sample and trying again, but
@@ -165,10 +169,10 @@ ccl_device_inline float spherical_ellipse_sample(KernelGlobals kg, const float a
 }
 
 /* Importance-sample a planar ellipse light.
- * P is the shading point, C is the ellipse center, axis_u/v are the normalized axes of the ellipse,
- * len_u/v are its radii.
+ * P is the shading point, C is the ellipse center, axis_u/v are the normalized axes of the
+ * ellipse, len_u/v are its radii.
  * If sample_coord == True, the function picks a random point using rand and sets *light_P.
- * If sample_coord == False, the function computes the sampling PDF for the position given in *light_P.
+ * If sample_coord == False, it computes the sampling PDF for the position given in *light_P.
  *
  * Based on "Computing a front-facing ellipse that subtends the same solid angle as an arbitrarily
  * oriented ellipse" by Eric Heitz (https://hal.science/hal-01561624/document).
@@ -204,11 +208,19 @@ ccl_device_inline float area_light_ellipse_sample(KernelGlobals kg,
 
   /* Perform eigendecomposition. */
   float3 vx, vy, vz;
-  float3 eigval = eigendecomposition_3x3_symmetric(c2.z/len2.x, 0.0f, -c.z*c.x/len2.x, c2.z/len2.y, -c.z*c.y/len2.y, c2.x/len2.x + c2.y/len2.y - 1.0f, vz, vx, vy);
+  float3 eigval = eigendecomposition_3x3_symmetric(c2.z / len2.x,
+                                                   0.0f,
+                                                   -c.z * c.x / len2.x,
+                                                   c2.z / len2.y,
+                                                   -c.z * c.y / len2.y,
+                                                   c2.x / len2.x + c2.y / len2.y - 1.0f,
+                                                   vz,
+                                                   vx,
+                                                   vy);
 
   /* Compute ellipse radii. */
-  const float at = sqrtf(-eigval.x/eigval.y);
-  const float bt = sqrtf(-eigval.x/eigval.z);
+  const float at = sqrtf(-eigval.x / eigval.y);
+  const float bt = sqrtf(-eigval.x / eigval.z);
 
   /* Since the theory behind the computation here solves for the intersection of unit sphere and
    * an elliptical cone, there are two valid solutions, on either side of the unit sphere.
@@ -233,16 +245,16 @@ ccl_device_inline float area_light_ellipse_sample(KernelGlobals kg,
    * center vz, major/minor axis vx/vy and major/minor radius at/bt. */
 
   float3 p;
-  float pdf = spherical_ellipse_sample(kg, at, bt, sample_coord? &p : nullptr, rand);
+  float pdf = spherical_ellipse_sample(kg, at, bt, sample_coord ? &p : nullptr, rand);
   if (sample_coord) {
     /* Transform to local coordinates. */
-    p = p.x*vx + p.y*vy + p.z*vz;
+    p = p.x * vx + p.y * vy + p.z * vz;
 
     /* Project to planar ellipse. */
     p *= c.z / p.z;
 
     /* Transform to world coordinates. */
-    *light_P = P + p.x*X + p.y*Y + p.z*Z;
+    *light_P = P + p.x * X + p.y * Y + p.z * Z;
   }
 
   return pdf;
@@ -533,7 +545,16 @@ ccl_device_inline bool area_light_eval(KernelGlobals kg,
         ls->pdf = 1.0f;
       }
       else {
-        ls->pdf = area_light_ellipse_sample(kg, ray_P, light_P_new, sample_coord? &light_P_new : &ls->P, axis_u, 0.5f * len_u, axis_v, 0.5f * len_v, rand, sample_coord);
+        ls->pdf = area_light_ellipse_sample(kg,
+                                            ray_P,
+                                            light_P_new,
+                                            sample_coord ? &light_P_new : &ls->P,
+                                            axis_u,
+                                            0.5f * len_u,
+                                            axis_v,
+                                            0.5f * len_v,
+                                            rand,
+                                            sample_coord);
       }
     }
   }

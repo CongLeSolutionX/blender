@@ -7,7 +7,9 @@
 
 CCL_NAMESPACE_BEGIN
 
-ccl_device_inline void identity_basis(ccl_private float3 &v0, ccl_private float3 &v1, ccl_private float3 &v2)
+ccl_device_inline void identity_basis(ccl_private float3 &v0,
+                                      ccl_private float3 &v1,
+                                      ccl_private float3 &v2)
 {
   v0 = make_float3(1.0f, 0.0f, 0.0f);
   v1 = make_float3(0.0f, 1.0f, 0.0f);
@@ -20,12 +22,18 @@ ccl_device_inline void identity_basis(ccl_private float3 &v0, ccl_private float3
  *
  * Based on "A Robust Eigensolver for 3 x 3 Symmetric Matrices" by David Eberly
  * (https://www.geometrictools.com/Documentation/RobustEigenSymmetric3x3.pdf). */
-ccl_device float3 eigendecomposition_3x3_symmetric(float a00, float a01, float a02, float a11, float a12, float a22, ccl_private float3 &v0, ccl_private float3 &v1, ccl_private float3 &v2)
+ccl_device float3 eigendecomposition_3x3_symmetric(float a00,
+                                                   float a01,
+                                                   float a02,
+                                                   float a11,
+                                                   float a12,
+                                                   float a22,
+                                                   ccl_private float3 &v0,
+                                                   ccl_private float3 &v1,
+                                                   ccl_private float3 &v2)
 {
-  const float max_element = max(
-    max(max(fabsf(a00), fabsf(a01)), fabsf(a02)),
-    max(max(fabsf(a11), fabsf(a12)), fabsf(a22))
-  );
+  const float max_element = max(max(max(fabsf(a00), fabsf(a01)), fabsf(a02)),
+                                max(max(fabsf(a11), fabsf(a12)), fabsf(a22)));
 
   if (max_element == 0.0f) {
     /* Matrix is all zeroes. */
@@ -50,10 +58,10 @@ ccl_device float3 eigendecomposition_3x3_symmetric(float a00, float a01, float a
 
     float midVal = a00;
     if (a00 == maxVal) {
-      midVal = (a11 == minVal)? a22 : a11;
+      midVal = (a11 == minVal) ? a22 : a11;
     }
     else if (a00 == minVal) {
-      midVal = (a11 == maxVal)? a22 : a11;
+      midVal = (a11 == maxVal) ? a22 : a11;
     }
 
     return make_float3(minVal, midVal, maxVal);
@@ -73,7 +81,7 @@ ccl_device float3 eigendecomposition_3x3_symmetric(float a00, float a01, float a
   const float3 eigvals = make_float3(q + p * beta0, q + p * beta1, q + p * beta2);
 
   /* Compute first eigenvector. */
-  const float first_val = (half_det >= 0.0f)? eigvals.z : eigvals.x;
+  const float first_val = (half_det >= 0.0f) ? eigvals.z : eigvals.x;
   const float3 r0 = make_float3(a00 - first_val, a01, a02);
   const float3 r1 = make_float3(a01, a11 - first_val, a12);
   const float3 r2 = make_float3(a02, a12, a22 - first_val);
