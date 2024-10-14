@@ -22,22 +22,25 @@ CCL_NAMESPACE_BEGIN
  * technically consists of spherical triangles, so instead of sampling the triangle wedge and
  * rejecting samples that fall outside of the ellipse, we directly sample the ellipse.
  * This results in a tiny unevenness of the sample distribution, which is negligible in practice.
- * 
+ *
  * Additionally, we store the data with swapped axes, so that we can perform 1D interpolation
- * across the x axis for the beta/alpha parameter.
+ * for what would otherwise be the y coordinate, and we remap coordinates to their fourth power
+ * to make the data more linear (which lets us reduce the table size).
  */
 
 ccl_device_inline float booth_inversion_table(KernelGlobals kg, const float alpha, const float beta, const float u)
 {
-  const float y = beta / alpha;
+  /* Compute y as the eccentricity ratio, then apply mapping to get LUT coords. */
+  const float y = sqrtf(sqrtf(beta / alpha));
 
+  const int table_size = 64;
   int offset = kernel_data.tables.ellipse_CDF;
-  int index = 0, count = 256;
+  int index = 0, count = table_size;
   while (count > 0) {
     int step = count >> 1;
     int middle = index + step;
 
-    if (lookup_table_read(kg, y, offset + 256 * middle, 256) <= u) {
+    if (lookup_table_read(kg, y, offset + table_size * middle, table_size) <= u) {
       index = middle + 1;
       count -= step + 1;
     }
@@ -46,10 +49,14 @@ ccl_device_inline float booth_inversion_table(KernelGlobals kg, const float alph
     }
   }
 
-  const float cdf0 = (index == 0)? 0.0f : lookup_table_read(kg, y, offset + 256 * (index - 1), 256);
-  const float cdf1 = lookup_table_read(kg, y, offset + 256 * index, 256);
+  /* Approximate as piecewise linear, invert to find x. */
+  const float cdf0 = lookup_table_read(kg, y, offset + table_size * (index - 1), table_size);
+  const float cdf1 = lookup_table_read(kg, y, offset + table_size * index, table_size);
   const float du = inverse_lerp(cdf0, cdf1, u);
-  return ((index + du) * M_PI_2_F) / 256.0f;
+  const float x = (index + du) * (1.0f / table_size);
+
+  /* Undo coordinate mapping to get x in linear coords, then map to phi angle. */
+  return sqr(sqr(x)) * M_PI_2_F;
 }
 
 /* Similar to the classic concentric disk mapping, but maps back to the unit square.
