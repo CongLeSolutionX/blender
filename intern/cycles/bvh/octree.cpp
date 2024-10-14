@@ -43,8 +43,17 @@ float volume_density_scale(const Shader *shader)
   }
 
   float3 color = volume_node->get_color();
+
+  if (auto *absorption_volume_node = dynamic_cast<AbsorptionVolumeNode *>(volume_node)) {
+    color = one_spectrum() - color;
+  }
+
   if (auto *principled_volume_node = dynamic_cast<PrincipledVolumeNode *>(volume_node)) {
-    color += principled_volume_node->get_absorption_color();
+    Spectrum zero = zero_spectrum();
+    Spectrum one = one_spectrum();
+    Spectrum absorption = max(one - color, zero) *
+                          max(one - principled_volume_node->get_absorption_color(), zero);
+    color += absorption;
   }
   return reduce_max(volume_node->get_density() * color);
 }
