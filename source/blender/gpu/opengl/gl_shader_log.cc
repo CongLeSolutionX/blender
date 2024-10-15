@@ -60,7 +60,7 @@ const char *GLLogParser::parse_line(const char *source_combined,
     }
   }
 
-  /* FIXME: Temporary fix for new line directive. Eventually this whole parsing should be done in
+  /* TODO: Temporary fix for new line directive. Eventually this whole parsing should be done in
    * C++ with regex for simplicity. */
   if (log_item.cursor.source != -1) {
     StringRefNull src(source_combined);

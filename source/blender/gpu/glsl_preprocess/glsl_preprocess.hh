@@ -26,18 +26,18 @@ namespace blender::gpu::shader {
  */
 class Preprocessor {
   using uint64_t = std::uint64_t;
-
+  using report_callback = std::function<void(const std::smatch &, const char *)>;
   struct SharedVar {
     std::string type;
     std::string name;
     std::string array;
   };
+
   std::vector<SharedVar> shared_vars_;
   std::unordered_set<std::string> static_strings_;
   std::unordered_set<std::string> gpu_builtins_;
   /* Note: Could be a set, but for now the order matters. */
   std::vector<std::string> dependencies_;
-
   std::stringstream gpu_functions_;
 
  public:
@@ -52,20 +52,20 @@ class Preprocessor {
     }
     return hash;
   }
+
   static uint64_t hash(const std::string &name)
   {
     return hash(name.c_str());
   }
 
   /* Takes a whole source file and output processed source. */
-  template<typename ReportErrorF>
   std::string process(std::string str,
-                      std::string filename,
+                      const std::string &filename,
                       bool do_linting,
                       bool do_string_mutation,
                       bool do_include_mutation,
                       bool do_small_type_linting,
-                      const ReportErrorF &report_error)
+                      report_callback report_error)
   {
     str = remove_comments(str, report_error);
     threadgroup_variables_parsing(str);
@@ -106,6 +106,20 @@ class Preprocessor {
   }
 
  private:
+  using regex_callback = std::function<void(const std::smatch &)>;
+
+  /* Helper to make the code more readable in parsing functions. */
+  void regex_global_search(const std::string &str,
+                           const std::regex &regex,
+                           regex_callback callback)
+  {
+    using namespace std;
+    string::const_iterator it = str.begin();
+    for (smatch match; regex_search(it, str.end(), match, regex); it = match.suffix().first) {
+      callback(match);
+    }
+  }
+
   template<typename ReportErrorF>
   std::string remove_comments(const std::string &str, const ReportErrorF &report_error)
   {
@@ -155,28 +169,28 @@ class Preprocessor {
     return std::regex_replace(out_str, regex, "\n");
   }
 
-  std::string remove_quotes(std::string str)
+  std::string remove_quotes(const std::string &str)
   {
     return std::regex_replace(str, std::regex(R"(["'])"), " ");
   }
 
-  void preprocessor_parse(std::string str)
+  void preprocessor_parse(const std::string &str)
   {
     /* Parse include directive before removing them. */
     std::regex regex(R"(#\s*include\s*\"(\w+\.\w+)\")");
-    for (std::smatch match; std::regex_search(str, match, regex); str = match.suffix()) {
+
+    regex_global_search(str, regex, [&](const std::smatch &match) {
       std::string dependency_name = match[1].str();
       if (dependency_name == "gpu_glsl_cpp_stubs.hh") {
         /* Skip GLSL-C++ stubs. They are only for IDE linting. */
-        continue;
+        return;
       }
       dependencies_.emplace_back(dependency_name);
-    }
+    });
   }
 
-  std::string preprocessor_directive_mutation(std::string str)
+  std::string preprocessor_directive_mutation(const std::string &str)
   {
-    std::string out_str = str;
     /* Remove unsupported directives.` */
     std::regex regex(R"(#\s*(?:include|pragma once)[^\n]*)");
     return std::regex_replace(str, regex, "");
@@ -194,38 +208,38 @@ class Preprocessor {
     return suffix.str();
   }
 
-  void threadgroup_variables_parsing(std::string str)
+  void threadgroup_variables_parsing(const std::string &str)
   {
     std::regex regex("shared\\s+(\\w+)\\s+(\\w+)([^;]*);");
-    for (std::smatch match; std::regex_search(str, match, regex); str = match.suffix()) {
+    regex_global_search(str, regex, [&](const std::smatch &match) {
       shared_vars_.push_back({match[1].str(), match[2].str(), match[3].str()});
-    }
+    });
   }
 
-  void parse_library_functions(std::string str)
+  void parse_library_functions(const std::string &str)
   {
     std::regex regex_func(R"(void\s+(\w+)\s*\(([^)]+\))\s*\{)");
-    for (std::smatch match; std::regex_search(str, match, regex_func); str = match.suffix()) {
+    regex_global_search(str, regex_func, [&](const std::smatch &match) {
       std::string name = match[1].str();
       std::string args = match[2].str();
       gpu_functions_ << "// " << hash("function") << " " << name;
 
       std::regex regex_arg(R"((?:(const|in|out|inout)\s)?(\w+)\s([\w\[\]]+)(?:,|\)))");
-      for (std::smatch arg; std::regex_search(args, arg, regex_arg); args = arg.suffix()) {
+      regex_global_search(str, regex_arg, [&](const std::smatch &arg) {
         std::string qualifier = arg[1].str();
         std::string type = arg[2].str();
         if (qualifier.empty() || qualifier == "const") {
           qualifier = "in";
         }
         gpu_functions_ << ' ' << hash(qualifier) << ' ' << hash(type);
-      }
+      });
       gpu_functions_ << "\n";
-    }
+    });
   }
 
-  void parse_builtins(std::string str)
+  void parse_builtins(const std::string &str)
   {
-    /* FIXME: This can trigger false positive caused by disabled #if blocks. */
+    /* TODO: This can trigger false positive caused by disabled #if blocks. */
     std::regex regex(
         "("
         "gl_FragCoord|"
@@ -244,12 +258,11 @@ class Preprocessor {
         "drw_debug_|"
         "printf"
         ")");
-    for (std::smatch match; std::regex_search(str, match, regex); str = match.suffix()) {
-      gpu_builtins_.insert(match[0].str());
-    }
+    regex_global_search(
+        str, regex, [&](const std::smatch &match) { gpu_builtins_.insert(match[0].str()); });
   }
 
-  std::string gpu_builtins_suffix(std::string filename)
+  std::string gpu_builtins_suffix(const std::string &filename)
   {
     if (gpu_builtins_.empty()) {
       return "";
@@ -326,13 +339,12 @@ class Preprocessor {
     return out_str;
   }
 
-  void static_strings_parsing(std::string str)
+  void static_strings_parsing(const std::string &str)
   {
     /* Matches any character inside a pair of unescaped quote. */
     std::regex regex(R"("(?:[^"])*")");
-    for (std::smatch match; std::regex_search(str, match, regex); str = match.suffix()) {
-      static_strings_.insert(match[0].str());
-    }
+    regex_global_search(
+        str, regex, [&](const std::smatch &match) { static_strings_.insert(match[0].str()); });
   }
 
   std::string static_strings_mutation(std::string str)
@@ -425,38 +437,38 @@ class Preprocessor {
 
   /* TODO(fclem): Too many false positive and false negative to be applied to python shaders. */
   template<typename ReportErrorF>
-  void matrix_constructor_linting(std::string str, const ReportErrorF &report_error)
+  void matrix_constructor_linting(const std::string &str, const ReportErrorF &report_error)
   {
     /* Example: `mat4(other_mat)`. */
     std::regex regex("\\s+(mat(\\d|\\dx\\d)|float\\dx\\d)\\([^,\\s\\d]+\\)");
-    for (std::smatch match; std::regex_search(str, match, regex); str = match.suffix()) {
+    regex_global_search(str, regex, [&](const std::smatch &match) {
       /* This only catches some invalid usage. For the rest, the CI will catch them. */
       const char *msg =
           "Matrix constructor is not cross API compatible. "
           "Use to_floatNxM to reshape the matrix or use other constructors instead.";
       report_error(match, msg);
-    }
+    });
   }
 
   template<typename ReportErrorF>
-  void array_constructor_linting(std::string str, const ReportErrorF &report_error)
+  void array_constructor_linting(const std::string &str, const ReportErrorF &report_error)
   {
     std::regex regex("=\\s*(\\w+)\\s*\\[[^\\]]*\\]\\s*\\(");
-    for (std::smatch match; std::regex_search(str, match, regex); str = match.suffix()) {
+    regex_global_search(str, regex, [&](const std::smatch &match) {
       /* This only catches some invalid usage. For the rest, the CI will catch them. */
       const char *msg =
           "Array constructor is not cross API compatible. Use type_array instead of type[].";
       report_error(match, msg);
-    }
+    });
   }
 
   template<typename ReportErrorF>
-  void small_type_linting(std::string str, const ReportErrorF &report_error)
+  void small_type_linting(const std::string &str, const ReportErrorF &report_error)
   {
     std::regex regex(R"(\su?(char|short|half)(2|3|4)?\s)");
-    for (std::smatch match; std::regex_search(str, match, regex); str = match.suffix()) {
+    regex_global_search(str, regex, [&](const std::smatch &match) {
       report_error(match, "Small types are forbidden in shader interfaces.");
-    }
+    });
   }
 
   std::string threadgroup_variables_suffix()
@@ -554,7 +566,11 @@ class Preprocessor {
     std::stringstream suffix;
     suffix << "#line 1 ";
 #ifdef __APPLE__
-    /* For now, only Metal supports filname in line directive. */
+    /* For now, only Metal supports filname in line directive.
+     * There is no way to know the actual backend, so we assume Apple uses Metal. */
+    /* TODO(fclem): We could make it work using a macro to choose between the filename and the hash
+     * at runtime. i.e.: `FILENAME_MACRO(12546546541, 'filename.glsl')` This should work for both
+     * MSL and GLSL. */
     std::string filename = std::regex_replace(filepath, std::regex(R"((?:.*)\/(.*))"), "$1");
     if (!filename.empty()) {
       suffix << "\"" << filename << "\"";
