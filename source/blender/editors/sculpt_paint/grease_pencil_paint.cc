@@ -551,7 +551,7 @@ struct PaintOperationExecutor {
     materials.span[active_curve] = material_index;
     softness.span[active_curve] = softness_;
     u_scale.span[active_curve] = 1.0f;
-    curve_attributes_to_skip.add_multiple({"material_index", "cyclic", "softness"});
+    curve_attributes_to_skip.add_multiple({"material_index", "cyclic", "softness", "u_scale"});
     cyclic.finish();
     materials.finish();
     softness.finish();
