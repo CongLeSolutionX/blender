@@ -12,7 +12,7 @@ namespace blender::nodes::node_geo_input_shape_center_of_mass_cc {
 static void node_declare(NodeDeclarationBuilder &b)
 {
   b.add_input<decl::Geometry>("Shape");
-  b.add_output<decl::Vector>("Center of Mass").field_source();
+  b.add_output<decl::Vector>("Center of Mass");
 }
 
 static void node_geo_exec(GeoNodeExecParams params)
