@@ -537,11 +537,7 @@ bool asset_edit_id_is_essential_not_override(const ID &id)
 
 bool asset_edit_id_is_editable(const ID &id)
 {
-  if (!ID_IS_LINKED(&id)) {
-    return false;
-  }
-  return asset_edit_id_is_essential_not_override(id) ||
-         (id.lib->runtime.tag & LIBRARY_ASSET_EDITABLE);
+  return (id.lib && (id.lib->runtime.tag & LIBRARY_ASSET_EDITABLE));
 }
 
 bool asset_edit_id_is_writable(const ID &id)
