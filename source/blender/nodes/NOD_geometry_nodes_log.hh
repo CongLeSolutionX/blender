@@ -161,7 +161,7 @@ class GeometryInfoLog : public ValueLog {
   };
   struct PhysicsInfo {
     bool has_world;
-    int bodies_num, constraints_num, shapes_num;
+    int bodies_num, constraints_num;
   };
   struct CollisionShapeInfo {
     std::optional<bke::CollisionShapeType> shape_type;

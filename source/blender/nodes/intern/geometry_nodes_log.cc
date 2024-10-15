@@ -164,7 +164,6 @@ GeometryInfoLog::GeometryInfoLog(const bke::GeometrySet &geometry_set)
         info.has_world = physics_component.has_world();
         info.bodies_num = physics_component.bodies_num();
         info.constraints_num = physics_component.constraints_num();
-        info.shapes_num = physics_component.shapes_num();
         break;
       }
       case bke::GeometryComponent::Type::CollisionShape: {

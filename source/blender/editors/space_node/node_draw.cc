@@ -1802,10 +1802,9 @@ static void create_inspection_string_for_geometry_info(const geo_log::GeometryIn
         if (value_log.physics_info.has_value()) {
           const geo_log::GeometryInfoLog::PhysicsInfo &physics_info = *value_log.physics_info;
           fmt::format_to(fmt::appender(buf),
-                         TIP_("\u2022 Rigid Body: {} bodies, {} constraints, {} shapes {}"),
+                         TIP_("\u2022 Rigid Body: {} bodies, {} constraints{}"),
                          to_string(physics_info.bodies_num),
                          to_string(physics_info.constraints_num),
-                         to_string(physics_info.shapes_num),
                          physics_info.has_world ? ", has world" : "");
         }
         break;
