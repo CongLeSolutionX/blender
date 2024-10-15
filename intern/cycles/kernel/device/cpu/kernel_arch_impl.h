@@ -154,6 +154,18 @@ void KERNEL_FUNCTION_FULL_NAME(shader_eval_curve_shadow_transparency)(
 #endif
 }
 
+void KERNEL_FUNCTION_FULL_NAME(shader_eval_volume_density)(const KernelGlobalsCPU *kg,
+                                                           const KernelShaderEvalInput *input,
+                                                           float *output,
+                                                           const int offset)
+{
+#ifdef KERNEL_STUB
+  STUB_ASSERT(KERNEL_ARCH, shader_eval_volume_density);
+#else
+  kernel_volume_density_evaluate(kg, input, output, offset);
+#endif
+}
+
 /* --------------------------------------------------------------------
  * Adaptive sampling.
  */

@@ -112,4 +112,37 @@ ccl_device void kernel_curve_shadow_transparency_evaluate(
 #endif
 }
 
+ccl_device void kernel_volume_density_evaluate(KernelGlobals kg,
+                                               ccl_global const KernelShaderEvalInput *input,
+                                               ccl_global float *output,
+                                               const int offset)
+{
+#ifdef __VOLUME__
+  /* Setup shader data. */
+  const KernelShaderEvalInput in = input[offset];
+
+  ShaderData sd;
+  Ray ray;
+  ray.P = make_float3(in.u, in.v, in.w);
+  ray.D = zero_float3();
+  /* TODO(weizhen): What fields need to be written? */
+  shader_setup_from_volume(kg, &sd, &ray, in.object);
+
+  const VolumeStack entry = {sd.object, in.prim};
+
+  /* Evaluate volume extinction coefficients. */
+  sd.flag = SD_IS_VOLUME_SHADER_EVAL;
+  sd.object_flag = 0;
+  volume_shader_eval_entry<true, KERNEL_FEATURE_NODE_VOLUME | KERNEL_FEATURE_NODE_VORONOI_EXTRA>(
+      kg, INTEGRATOR_STATE_NULL, &sd, entry, PATH_RAY_SHADOW, 0);
+
+  const Spectrum sigma = (sd.flag & SD_EXTINCTION) ? sd.closure_transparent_extinction :
+                                                     zero_spectrum();
+
+  /* Write output. */
+  output[offset * 2 + 0] = reduce_max(sigma);
+  output[offset * 2 + 1] = reduce_min(sigma);
+#endif
+}
+
 CCL_NAMESPACE_END

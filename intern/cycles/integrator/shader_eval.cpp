@@ -113,6 +113,9 @@ bool ShaderEval::eval_cpu(Device *device,
         case SHADER_EVAL_CURVE_SHADOW_TRANSPARENCY:
           kernels.shader_eval_curve_shadow_transparency(kg, input_data, output_data, work_index);
           break;
+        case SHADER_EVAL_VOLUME_DENSITY:
+          kernels.shader_eval_volume_density(kg, input_data, output_data, work_index);
+          break;
       }
     });
   });
@@ -138,6 +141,8 @@ bool ShaderEval::eval_gpu(Device *device,
     case SHADER_EVAL_CURVE_SHADOW_TRANSPARENCY:
       kernel = DEVICE_KERNEL_SHADER_EVAL_CURVE_SHADOW_TRANSPARENCY;
       break;
+    case SHADER_EVAL_VOLUME_DENSITY:
+      kernel = DEVICE_KERNEL_SHADER_EVAL_VOLUME_DENSITY;
   };
 
   /* Create device queue. */

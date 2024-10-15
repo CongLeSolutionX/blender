@@ -1820,6 +1820,10 @@ typedef struct KernelShaderEvalInput {
   int object;
   int prim;
   float u, v;
+  /* Volume. */
+  float w;
+  /* Padding. */
+  float pad[3];
 } KernelShaderEvalInput;
 static_assert_align(KernelShaderEvalInput, 16);
 
@@ -1878,6 +1882,7 @@ typedef enum DeviceKernel : int {
   DEVICE_KERNEL_SHADER_EVAL_DISPLACE,
   DEVICE_KERNEL_SHADER_EVAL_BACKGROUND,
   DEVICE_KERNEL_SHADER_EVAL_CURVE_SHADOW_TRANSPARENCY,
+  DEVICE_KERNEL_SHADER_EVAL_VOLUME_DENSITY,
 
 #define DECLARE_FILM_CONVERT_KERNEL(variant) \
   DEVICE_KERNEL_FILM_CONVERT_##variant, DEVICE_KERNEL_FILM_CONVERT_##variant##_HALF_RGBA
