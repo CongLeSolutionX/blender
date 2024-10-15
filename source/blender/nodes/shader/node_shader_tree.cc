@@ -1282,8 +1282,39 @@ static bNode *ntreeShaderNPROutputNode(bNodeTree *localtree)
   return output;
 }
 
+bNodeTree *ntreeGPUNPRNodes(bNodeTree *material_tree, GPUMaterial *mat)
+{
+  bNodeTree *npr_tree = npr_tree_get(material_tree);
+  bNodeTree *localtree = blender::bke::node_tree_localize(npr_tree, nullptr);
+
+  /* TODO(NPR): Embed displacement. */
+  // ntree_shader_embed_tree(material_tree, localtree);
+
+  ntree_shader_groups_remove_muted_links(localtree);
+  ntree_shader_groups_expand_inputs(localtree);
+  ntree_shader_groups_flatten(localtree);
+
+  bNodeTreeExec *exec = ntreeShaderBeginExecTree(localtree);
+
+  if (bNode *npr_output = ntreeShaderNPROutputNode(localtree)) {
+    ntreeExecGPUNodes(exec, mat, npr_output);
+  }
+  LISTBASE_FOREACH (bNode *, node, &localtree->nodes) {
+    if (node->type == SH_NODE_OUTPUT_AOV) {
+      ntreeExecGPUNodes(exec, mat, node);
+    }
+  }
+
+  ntreeShaderEndExecTree(exec);
+
+  return localtree;
+}
+
 void ntreeGPUMaterialNodes(bNodeTree *localtree, GPUMaterial *mat, bool is_npr_shader)
 {
+  /* TODO(NPR): Remove parameter. */
+  BLI_assert(!is_npr_shader);
+
   bNodeTreeExec *exec;
 
   if (is_npr_shader) {

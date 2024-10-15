@@ -184,6 +184,13 @@ extern "C" void ntreeGPUMaterialNodes(struct bNodeTree * /*localtree*/,
   BLI_assert_unreachable();
 }
 
+extern "C" struct bNodeTree *ntreeGPUNPRNodes(struct bNodeTree * /*localtree*/,
+                                              struct GPUMaterial * /*mat*/)
+{
+  BLI_assert_unreachable();
+  return nullptr;
+}
+
 struct bNodeTree *blender::bke::node_tree_localize(struct bNodeTree * /*ntree*/,
                                                    ID * /*new_owner_id*/)
 {
