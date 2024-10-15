@@ -551,10 +551,6 @@ static bool brush_asset_edit_metadata_poll(bContext *C)
     BLI_assert_unreachable();
     return false;
   }
-  if (!library_is_editable(*library_ref)) {
-    CTX_wm_operator_poll_msg_set(C, "Asset library is not editable");
-    return false;
-  }
   if (!bke::asset_edit_id_is_writable(brush->id)) {
     CTX_wm_operator_poll_msg_set(C, "Asset file is not editable");
     return false;
