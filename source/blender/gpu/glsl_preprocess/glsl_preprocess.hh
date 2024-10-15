@@ -165,7 +165,7 @@ class Preprocessor {
         return out_str;
       }
     }
-    /* Remove trailing whitespaces as they make the subsequent regex much slower. */
+    /* Remove trailing white space as they make the subsequent regex much slower. */
     std::regex regex("(\\ )*?\\n");
     return std::regex_replace(out_str, regex, "\n");
   }
