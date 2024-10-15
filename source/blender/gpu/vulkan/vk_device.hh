@@ -62,6 +62,11 @@ struct VKWorkarounds {
   bool fragment_shader_barycentric = false;
 
   /**
+   * Is the workarounds for devices that don't support VK_KHR_dynamic_rendering enabled.
+   */
+  bool dynamic_rendering = false;
+  
+  /**
    * Is the workarounds for devices that don't support VK_EXT_dynamic_rendering_unused_attachments
    * enabled.
    */
