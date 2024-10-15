@@ -299,6 +299,12 @@ void VKBackend::detect_workarounds(VKDevice &device)
       !device.physical_device_vulkan_12_features_get().shaderOutputLayer;
   workarounds.shader_output_viewport_index =
       !device.physical_device_vulkan_12_features_get().shaderOutputViewportIndex;
+  workarounds.fragment_shader_barycentric = !device.supports_extension(
+      VK_KHR_FRAGMENT_SHADER_BARYCENTRIC_EXTENSION_NAME);
+  workarounds.dynamic_rendering = !device.supports_extension(
+      VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
+  workarounds.dynamic_rendering_unused_attachments = !device.supports_extension(
+      VK_EXT_DYNAMIC_RENDERING_UNUSED_ATTACHMENTS_EXTENSION_NAME);
 
   /* AMD GPUs don't support texture formats that use are aligned to 24 or 48 bits. */
   if (GPU_type_matches(GPU_DEVICE_ATI, GPU_OS_ANY, GPU_DRIVER_ANY) ||
@@ -316,13 +322,10 @@ void VKBackend::detect_workarounds(VKDevice &device)
   workarounds.fragment_shader_barycentric = !device.supports_extension(
       VK_KHR_FRAGMENT_SHADER_BARYCENTRIC_EXTENSION_NAME);
 
-  workarounds.dynamic_rendering = !device.supports_extension(
+  GCaps.render_pass_workaround = workarounds.dynamic_rendering = !device.supports_extension(
       VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
   workarounds.dynamic_rendering_unused_attachments = !device.supports_extension(
       VK_EXT_DYNAMIC_RENDERING_UNUSED_ATTACHMENTS_EXTENSION_NAME);
-
-  /* TODO(jbakker): This should be set when dynamic rendering is not available. See #129062. */
-  GCaps.render_pass_workaround = false;
 
   device.workarounds_ = workarounds;
 }

@@ -554,24 +554,16 @@ void VKFrameBuffer::rendering_reset()
   is_rendering_ = false;
 }
 
-void VKFrameBuffer::rendering_ensure(VKContext &context)
+void VKFrameBuffer::rendering_ensure_render_pass(VKContext &context)
 {
-  if (is_rendering_) {
-    return;
-  }
+  BLI_assert_unreachable();
+  // create render pass
+  // create frame buffer
+}
 
-#ifndef NDEBUG
-  if (G.debug & G_DEBUG_GPU) {
-    char message[256];
-    message[0] = '\0';
-    BLI_assert_msg(this->check(message), message);
-  }
-#endif
-
+void VKFrameBuffer::rendering_ensure_dynamic_rendering(VKContext &context)
+{
   const VKWorkarounds &workarounds = VKBackend::get().device.workarounds_get();
-  is_rendering_ = true;
-  dirty_attachments_ = false;
-  dirty_state_ = false;
   depth_attachment_format_ = VK_FORMAT_UNDEFINED;
   stencil_attachment_format_ = VK_FORMAT_UNDEFINED;
 
@@ -591,7 +583,8 @@ void VKFrameBuffer::rendering_ensure(VKContext &context)
     }
 
     VKTexture &color_texture = *unwrap(unwrap(attachment.tex));
-    /* To support `gpu_Layer` we need to set the layerCount to the number of layers it can access.
+    /* To support `gpu_Layer` we need to set the layerCount to the number of layers it can
+     * access.
      */
     int layer_count = color_texture.layer_count();
     if (attachment.layer == -1 && layer_count != 1) {
@@ -707,6 +700,32 @@ void VKFrameBuffer::rendering_ensure(VKContext &context)
   }
 
   context.render_graph.add_node(begin_rendering);
+}
+
+void VKFrameBuffer::rendering_ensure(VKContext &context)
+{
+  if (is_rendering_) {
+    return;
+  }
+
+#ifndef NDEBUG
+  if (G.debug & G_DEBUG_GPU) {
+    char message[256];
+    message[0] = '\0';
+    BLI_assert_msg(this->check(message), message);
+  }
+#endif
+
+  const VKWorkarounds &workarounds = VKBackend::get().device.workarounds_get();
+  is_rendering_ = true;
+  if (workarounds.dynamic_rendering) {
+    rendering_ensure_render_pass(context);
+  }
+  else {
+    rendering_ensure_dynamic_rendering(context);
+  }
+  dirty_attachments_ = false;
+  dirty_state_ = false;
 }
 
 VkFormat VKFrameBuffer::depth_attachment_format_get() const
