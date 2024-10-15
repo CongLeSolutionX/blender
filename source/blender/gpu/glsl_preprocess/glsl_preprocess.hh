@@ -225,7 +225,7 @@ class Preprocessor {
       gpu_functions_ << "// " << hash("function") << " " << name;
 
       std::regex regex_arg(R"((?:(const|in|out|inout)\s)?(\w+)\s([\w\[\]]+)(?:,|\)))");
-      regex_global_search(str, regex_arg, [&](const std::smatch &arg) {
+      regex_global_search(args, regex_arg, [&](const std::smatch &arg) {
         std::string qualifier = arg[1].str();
         std::string type = arg[2].str();
         if (qualifier.empty() || qualifier == "const") {
