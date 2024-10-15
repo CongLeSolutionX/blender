@@ -38,6 +38,7 @@ class BrushAssetShelf:
                     "builtin.box",
                     "builtin.circle",
                     "builtin.polyline",
+                    "builtin.semicircle",
             }:
                 continue
             if item.options is None or ('USE_BRUSHES' not in item.options):
@@ -1635,6 +1636,7 @@ def brush_basic_gpencil_paint_settings(layout, context, brush, *, compact=False)
             "builtin.box",
             "builtin.circle",
             "builtin.polyline",
+            "builtin.semicircle",
     }:
         settings = context.tool_settings.gpencil_sculpt
         if compact:

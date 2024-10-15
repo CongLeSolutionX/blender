@@ -2268,6 +2268,25 @@ class _defs_grease_pencil_paint:
         )
 
     @ToolDef.from_fn
+    def semicircle():
+        def draw_settings(context, layout, tool):
+            props = tool.operator_properties("grease_pencil.primitive_semicircle")
+            _defs_grease_pencil_paint.grease_pencil_primitive_toolbar(context, layout, tool, props)
+
+        return dict(
+            idname="builtin.semicircle",
+            label="Semicircle",
+            icon="ops.gpencil.primitive_semicircle",
+            cursor='CROSSHAIR',
+            widget=None,
+            keymap=(),
+            draw_settings=draw_settings,
+            # Only allow draw brushes, no eraser, fill or tint.
+            brush_type='DRAW',
+            options={'USE_BRUSHES'},
+        )
+
+    @ToolDef.from_fn
     def curve():
         def draw_settings(context, layout, tool):
             props = tool.operator_properties("grease_pencil.primitive_curve")
@@ -3279,6 +3298,7 @@ class VIEW3D_PT_tools_active(ToolSelectPanelHelper, Panel):
             _defs_grease_pencil_paint.polyline,
             _defs_grease_pencil_paint.arc,
             _defs_grease_pencil_paint.curve,
+            _defs_grease_pencil_paint.semicircle,
         ),
     )
 

@@ -7769,6 +7769,24 @@ def km_3d_view_tool_paint_grease_pencil_primitive_arc(params):
     )
 
 
+def km_3d_view_tool_paint_grease_pencil_primitive_semicircle(params):
+    return (
+        "3D View Tool: Paint Grease Pencil, Semicircle",
+        {"space_type": 'VIEW_3D', "region_type": 'WINDOW'},
+        {"items": [
+            ("grease_pencil.primitive_semicircle", params.tool_maybe_tweak_event,
+             {"properties": []}),
+            ("grease_pencil.primitive_semicircle", {"type": 'LEFTMOUSE', "value": 'PRESS', "shift": True},
+             {"properties": []}),
+            ("grease_pencil.primitive_semicircle", {"type": 'LEFTMOUSE', "value": 'PRESS', "alt": True},
+             {"properties": []}),
+            # Lasso select
+            ("grease_pencil.select_lasso",
+             {"type": params.action_mouse, "value": 'CLICK_DRAG', "ctrl": True, "alt": True}, None),
+        ]},
+    )
+
+
 def km_3d_view_tool_paint_grease_pencil_primitive_curve(params):
     return (
         "3D View Tool: Paint Grease Pencil, Curve",
@@ -8243,6 +8261,7 @@ def generate_keymaps(params=None):
         km_3d_view_tool_paint_grease_pencil_primitive_polyline(params),
         km_3d_view_tool_paint_grease_pencil_primitive_box(params),
         km_3d_view_tool_paint_grease_pencil_primitive_circle(params),
+        km_3d_view_tool_paint_grease_pencil_primitive_semicircle(params),
         km_3d_view_tool_paint_grease_pencil_primitive_arc(params),
         km_3d_view_tool_paint_grease_pencil_primitive_curve(params),
         *(km_sequencer_editor_tool_generic_select_timeline(params, fallback=fallback)

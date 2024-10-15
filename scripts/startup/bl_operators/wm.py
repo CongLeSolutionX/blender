@@ -2432,6 +2432,7 @@ class WM_OT_tool_set_by_brush_type(Operator):
                     "builtin.box",
                     "builtin.circle",
                     "builtin.polyline",
+                    "builtin.semicircle",
             }:
                 continue
 

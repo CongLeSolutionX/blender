@@ -633,6 +633,7 @@ class _draw_tool_settings_context_mode:
                 "builtin.box",
                 "builtin.circle",
                 "builtin.polyline",
+                "builtin.semicircle",
         }:
             return False
 

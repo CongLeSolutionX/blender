@@ -55,6 +55,7 @@ enum class PrimitiveType : int8_t {
   Curve = 3,
   Box = 4,
   Circle = 5,
+  Semicircle = 6,
 };
 
 enum class OperatorMode : int8_t {
@@ -143,6 +144,7 @@ static int control_points_per_segment(const PrimitiveToolOperation &ptd)
     case PrimitiveType::Line: {
       return 1;
     }
+    case PrimitiveType::Semicircle:
     case PrimitiveType::Box:
     case PrimitiveType::Circle:
     case PrimitiveType::Arc: {
@@ -305,6 +307,41 @@ static void primitive_calulate_curve_positions(PrimitiveToolOperation &ptd,
       new_positions.last() = control_points.last();
       return;
     }
+    case PrimitiveType::Semicircle: {
+      const int num_shared_points = control_points_per_segment(ptd);
+      const int num_segments = ptd.segments;
+      for (const int segment_i : IndexRange(num_segments)) {
+        const float2 A = control_points[num_shared_points * segment_i + 0];
+        const float2 CP = control_points[num_shared_points * segment_i + 1];
+        const float2 B = control_points[num_shared_points * segment_i + 2];
+        const float2 MP = math::midpoint(A, B);
+        const float2 AB = A - B;
+        const float angle_cp = angle_signed_v2v2(A - CP, AB);
+        /* If CP is near MP or near AB, generate straight segment. */
+        if ((math::distance(MP, CP) < math::distance(MP, A) * 0.4f) ||
+            (math::abs(angle_cp) < 0.2f) || (math::numbers::pi - math::abs(angle_cp) < 0.2f))
+        {
+          for (const int i : IndexRange(subdivision + 1)) {
+            const float t = i / float(subdivision + 1);
+            new_positions[i + segment_i * (subdivision + 1)] = math::interpolate(A, B, t);
+          }
+        }
+        else {
+          const float radius = math::distance(A, MP);
+          const float angle_offset = angle_signed_v2v2(AB, float2(1.0f, 0.0f));
+          const float flip = angle_cp >= 0.0f ? 1.0f : -1.0f;
+          const float theta_step = (-math::numbers::pi) / float(subdivision + 1) * flip;
+          for (const int i : IndexRange(subdivision + 1)) {
+            const float t = theta_step * i + angle_offset;
+            const float x = radius * cos(t);
+            const float y = radius * sin(t);
+            new_positions[i + segment_i * (subdivision + 1)] = MP + float2(x, y);
+          }
+        }
+      }
+      new_positions.last() = control_points.last();
+      return;
+    }
     case PrimitiveType::Arc: {
       const int num_shared_points = control_points_per_segment(ptd);
       const int num_segments = ptd.segments;
@@ -406,6 +443,7 @@ static int grease_pencil_primitive_curve_points_number(PrimitiveToolOperation &p
     case PrimitiveType::Polyline:
     case PrimitiveType::Curve:
     case PrimitiveType::Line:
+    case PrimitiveType::Semicircle:
     case PrimitiveType::Circle:
     case PrimitiveType::Arc: {
       const int join_points = ptd.segments + 1;
@@ -614,6 +652,10 @@ static void grease_pencil_primitive_status_indicators(bContext *C,
       header += RPT_("Circle: ");
       break;
     }
+    case (PrimitiveType::Semicircle): {
+      header += RPT_("Semicircle: ");
+      break;
+    }
     case (PrimitiveType::Arc): {
       header += RPT_("Arc: ");
       break;
@@ -645,6 +687,7 @@ static void grease_pencil_primitive_status_indicators(bContext *C,
            PrimitiveType::Line,
            PrimitiveType::Polyline,
            PrimitiveType::Arc,
+           PrimitiveType::Semicircle,
            PrimitiveType::Curve))
   {
     header += fmt::format(IFACE_(", {}: extrude"), get_modal_key_str(ModalKeyMode::Extrude));
@@ -861,7 +904,7 @@ static void grease_pencil_primitive_extruding_update(PrimitiveToolOperation &ptd
     else if (ptd.type == PrimitiveType::Circle) {
       offset = snap_diagonals(dif);
     }
-    else { /* Line, Polyline, Arc and Curve. */
+    else { /* Line, Polyline, Arc, Semicircle and Curve. */
       offset = snap_8_angles(dif);
     }
   }
@@ -874,13 +917,29 @@ static void grease_pencil_primitive_extruding_update(PrimitiveToolOperation &ptd
     offset *= 2.0f;
   }
 
-  const float3 start_pos = ptd.placement.project(center - offset);
-  const float3 end_pos = ptd.placement.project(center + offset);
+  switch (ptd.type) {
+    case PrimitiveType::Semicircle: {
+      const float2 start = center - offset;
+      const float2 end = center + offset;
+      const float2 org = end - center;
+      const float2 cp = float2(-org.y, org.x) + center;
 
-  const int number_control_points = control_points_per_segment(ptd);
-  for (const int i : IndexRange(number_control_points + 1)) {
-    ptd.control_points.last(i) = interpolate(
-        end_pos, start_pos, (i / float(number_control_points)));
+      ptd.control_points.last(2) = ptd.placement.project(start);
+      ptd.control_points.last(1) = ptd.placement.project(cp);
+      ptd.control_points.last(0) = ptd.placement.project(end);
+      break;
+    }
+    default: {
+      const float3 start_pos = ptd.placement.project(center - offset);
+      const float3 end_pos = ptd.placement.project(center + offset);
+
+      const int number_control_points = control_points_per_segment(ptd);
+      for (const int i : IndexRange(number_control_points + 1)) {
+        ptd.control_points.last(i) = interpolate(
+            end_pos, start_pos, (i / float(number_control_points)));
+      }
+      break;
+    }
   }
 }
 
@@ -900,11 +959,48 @@ static void grease_pencil_primitive_drag_all_update(PrimitiveToolOperation &ptd,
   }
 }
 
+static void grease_pencil_primitive_rotate_cps(PrimitiveToolOperation &ptd,
+                                               const float2 active_pos,
+                                               const int offset)
+{
+  const int end_index = ptd.active_control_point_index;
+  const int cp_index = end_index + offset;
+  const int start_index = cp_index + offset;
+
+  if (start_index < 0 || start_index >= ptd.control_points.size()) {
+    return;
+  }
+
+  const float2 start = ED_view3d_project_float_v2_m4(
+      ptd.vc.region, ptd.temp_control_points[start_index], ptd.projection);
+  const float2 end = ED_view3d_project_float_v2_m4(
+      ptd.vc.region, ptd.temp_control_points[end_index], ptd.projection);
+  const float2 cp = ED_view3d_project_float_v2_m4(
+      ptd.vc.region, ptd.temp_control_points[cp_index], ptd.projection);
+
+  const float rotation = angle_signed_v2v2(active_pos - start, end - start);
+  const float len = math::length(active_pos - start) / math::length(end - start);
+
+  const float2 dif = (cp - start);
+  const float c = math::cos(rotation);
+  const float s = math::sin(rotation);
+  const float2x2 rot = float2x2(float2(c, s), float2(-s, c));
+  const float2 pos2 = rot * dif * len + start;
+
+  ptd.control_points[cp_index] = ptd.placement.project(pos2);
+}
+
 static void grease_pencil_primitive_grab_update(PrimitiveToolOperation &ptd, const wmEvent *event)
 {
   BLI_assert(ptd.active_control_point_index != -1);
   const float3 pos = ptd.placement.project(float2(event->mval));
   ptd.control_points[ptd.active_control_point_index] = pos;
+
+  if (ptd.type == PrimitiveType::Semicircle) {
+    grease_pencil_primitive_rotate_cps(ptd, float2(event->mval), -1);
+    grease_pencil_primitive_rotate_cps(ptd, float2(event->mval), 1);
+    return;
+  }
 
   if (!ELEM(ptd.type, PrimitiveType::Circle, PrimitiveType::Box)) {
     return;
@@ -1085,8 +1181,11 @@ static int grease_pencil_primitive_event_modal_map(bContext *C,
       return OPERATOR_FINISHED;
     }
     case int(ModalKeyMode::Extrude): {
-      if (ptd.mode == OperatorMode::Idle &&
-          ELEM(ptd.type, PrimitiveType::Line, PrimitiveType::Arc, PrimitiveType::Curve))
+      if (ptd.mode == OperatorMode::Idle && ELEM(ptd.type,
+                                                 PrimitiveType::Line,
+                                                 PrimitiveType::Arc,
+                                                 PrimitiveType::Curve,
+                                                 PrimitiveType::Semicircle))
       {
         ptd.mode = OperatorMode::Extruding;
         grease_pencil_primitive_save(ptd);
@@ -1359,6 +1458,7 @@ static void grease_pencil_primitive_common_props(wmOperatorType *ot,
       {int(PrimitiveType::Circle), "CIRCLE", 0, "Circle", ""},
       {int(PrimitiveType::Arc), "ARC", 0, "Arc", ""},
       {int(PrimitiveType::Curve), "CURVE", 0, "Curve", ""},
+      {int(PrimitiveType::Semicircle), "SEMICIRCLE", 0, "Semicircle", ""},
       {0, nullptr, 0, nullptr, nullptr},
   };
 
@@ -1455,6 +1555,25 @@ static void GREASE_PENCIL_OT_primitive_curve(wmOperatorType *ot)
   grease_pencil_primitive_common_props(ot, 62, PrimitiveType::Curve);
 }
 
+static void GREASE_PENCIL_OT_primitive_semicircle(wmOperatorType *ot)
+{
+  /* Identifiers. */
+  ot->name = "Grease Pencil Semicircle Shape";
+  ot->idname = "GREASE_PENCIL_OT_primitive_semicircle";
+  ot->description = "Create predefined grease pencil stroke semicircle shapes";
+
+  /* Callbacks. */
+  ot->invoke = grease_pencil_primitive_invoke;
+  ot->modal = grease_pencil_primitive_modal;
+  ot->cancel = grease_pencil_primitive_cancel;
+
+  /* Flags. */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_BLOCKING;
+
+  /* Properties. */
+  grease_pencil_primitive_common_props(ot, 62, PrimitiveType::Semicircle);
+}
+
 static void GREASE_PENCIL_OT_primitive_box(wmOperatorType *ot)
 {
   /* Identifiers. */
@@ -1504,6 +1623,7 @@ void ED_operatortypes_grease_pencil_primitives()
   WM_operatortype_append(GREASE_PENCIL_OT_primitive_curve);
   WM_operatortype_append(GREASE_PENCIL_OT_primitive_box);
   WM_operatortype_append(GREASE_PENCIL_OT_primitive_circle);
+  WM_operatortype_append(GREASE_PENCIL_OT_primitive_semicircle);
 }
 
 void ED_primitivetool_modal_keymap(wmKeyConfig *keyconf)
@@ -1545,4 +1665,5 @@ void ED_primitivetool_modal_keymap(wmKeyConfig *keyconf)
   WM_modalkeymap_assign(keymap, "GREASE_PENCIL_OT_primitive_curve");
   WM_modalkeymap_assign(keymap, "GREASE_PENCIL_OT_primitive_box");
   WM_modalkeymap_assign(keymap, "GREASE_PENCIL_OT_primitive_circle");
+  WM_modalkeymap_assign(keymap, "GREASE_PENCIL_OT_primitive_semicircle");
 }

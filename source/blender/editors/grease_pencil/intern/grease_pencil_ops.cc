@@ -234,6 +234,7 @@ static bool keymap_grease_pencil_brush_stroke_poll(bContext *C)
         "builtin.curve",
         "builtin.box",
         "builtin.circle",
+        "builtin.semicircle",
     };
     if (primitive_tools.contains(tref->idname)) {
       return false;
