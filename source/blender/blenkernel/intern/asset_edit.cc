@@ -18,6 +18,7 @@
 #include "DNA_space_types.h"
 
 #include "AS_asset_library.hh"
+#include "AS_essentials_library.hh"
 
 #include "BKE_asset.hh"
 #include "BKE_asset_edit.hh"
@@ -43,6 +44,9 @@
 #include "MEM_guardedalloc.h"
 
 namespace blender::bke {
+
+bool asset_edit_id_is_essential_or_override(const ID &id);
+bool asset_edit_id_is_essential_not_override(const ID &id);
 
 static ID *asset_link_id(Main &global_main,
                          const ID_Type id_type,
@@ -80,19 +84,24 @@ static ID *asset_link_id(Main &global_main,
     local_asset->lib->runtime.tag |= LIBRARY_ASSET_EDITABLE;
 
     if ((local_asset->lib->runtime.tag & LIBRARY_IS_ASSET_EDIT_FILE) &&
-        StringRef(filepath).endswith(BLENDER_ASSET_FILE_SUFFIX) &&
-        BKE_preferences_asset_library_containing_path(&U, filepath) &&
-        BLI_file_is_writable(filepath))
+        StringRef(filepath).endswith(BLENDER_ASSET_FILE_SUFFIX) && BLI_file_is_writable(filepath))
     {
-      local_asset->lib->runtime.tag |= LIBRARY_ASSET_FILE_WRITABLE;
+
+      if (BKE_preferences_asset_library_containing_path(&U, filepath) ||
+          /* Path into essentials override directory. */
+          BLI_path_contains(asset_system::essentials_override_directory_path().c_str(), filepath))
+      {
+
+        local_asset->lib->runtime.tag |= LIBRARY_ASSET_FILE_WRITABLE;
+      }
     }
   }
 
   return local_asset;
 }
 
-static std::string asset_root_path_for_save(const bUserAssetLibrary &user_library,
-                                            const ID_Type id_type)
+static std::string asset_user_library_root_path_for_save(const bUserAssetLibrary &user_library,
+                                                         const ID_Type id_type)
 {
   BLI_assert(user_library.dirpath[0] != '\0');
 
@@ -110,12 +119,13 @@ static std::string asset_root_path_for_save(const bUserAssetLibrary &user_librar
   return std::string(libpath) + SEP + "Saved" + SEP + name;
 }
 
-static std::string asset_blendfile_path_for_save(const bUserAssetLibrary &user_library,
-                                                 const StringRef base_name,
-                                                 const ID_Type id_type,
-                                                 ReportList &reports)
+static std::string asset_user_library_blendfile_path_for_save(
+    const bUserAssetLibrary &user_library,
+    const StringRef base_name,
+    const ID_Type id_type,
+    ReportList &reports)
 {
-  std::string root_path = asset_root_path_for_save(user_library, id_type);
+  std::string root_path = asset_user_library_root_path_for_save(user_library, id_type);
   BLI_assert(!root_path.empty());
 
   if (!BLI_dir_create_recursive(root_path.c_str())) {
@@ -147,6 +157,44 @@ static std::string asset_blendfile_path_for_save(const bUserAssetLibrary &user_l
   }
 
   return "";
+}
+
+static std::string asset_essentials_library_id_blendfile_path_for_save(const ID &id,
+                                                                       ReportList &reports)
+{
+  if (!ID_IS_LINKED(&id)) {
+    BLI_assert_unreachable();
+    return "";
+  }
+
+  const std::string essentials_directory = asset_system::essentials_directory_path() + SEP_STR;
+  const StringRefNull essentials_override_directory =
+      asset_system::essentials_override_directory_path();
+
+  BLI_assert(BLI_path_contains(essentials_directory.c_str(), id.lib->runtime.filepath_abs));
+
+  /* Filepath within the essentials library. */
+  char path_relative[FILE_MAX];
+  BLI_strncpy(path_relative, id.lib->runtime.filepath_abs, sizeof(path_relative));
+  BLI_path_rel(path_relative, essentials_directory.c_str());
+
+  /* Remove the `.blend` extension. */
+  BLI_path_extension_strip(path_relative);
+
+  /* Make sure filename only contains valid characters for file-system. */
+  char base_name_filesafe[FILE_MAXFILE];
+  BLI_strncpy(base_name_filesafe, id.name + 2, sizeof(base_name_filesafe));
+  BLI_path_make_safe_filename(base_name_filesafe);
+
+  const std::string rootpath = essentials_override_directory + SEP_STR + (path_relative + 2);
+  if (!BLI_dir_create_recursive(rootpath.c_str())) {
+    BKE_report(&reports,
+               RPT_ERROR,
+               "Failed to create asset library directory to override essentials asset");
+    return "";
+  }
+
+  return rootpath + SEP + base_name_filesafe + BLENDER_ASSET_FILE_SUFFIX;
 }
 
 static void asset_main_create_expander(void * /*handle*/, Main * /*bmain*/, void *vid)
@@ -316,7 +364,7 @@ std::optional<std::string> asset_edit_id_save_as(Main &global_main,
                                                  AssetWeakReference &r_weak_ref,
                                                  ReportList &reports)
 {
-  const std::string filepath = asset_blendfile_path_for_save(
+  const std::string filepath = asset_user_library_blendfile_path_for_save(
       user_library, name, GS(id.name), reports);
 
   std::string final_full_asset_filepath;
@@ -341,13 +389,21 @@ bool asset_edit_id_save(Main &global_main, const ID &id, ReportList &reports)
     return false;
   }
 
+  std::string override_filepath;
+  /* When trying to save an asset in the technically read-only bundled essentials asset library,
+   * redirect to a path within the essentials overrides directory. */
+  if (asset_edit_id_is_essential_not_override(id)) {
+    override_filepath = asset_essentials_library_id_blendfile_path_for_save(id, reports);
+  }
+
   std::string final_full_asset_filepath;
-  const bool success = asset_write_in_library(global_main,
-                                              id,
-                                              id.name + 2,
-                                              id.lib->runtime.filepath_abs,
-                                              final_full_asset_filepath,
-                                              reports);
+  const bool success = asset_write_in_library(
+      global_main,
+      id,
+      id.name + 2,
+      override_filepath.empty() ? id.lib->runtime.filepath_abs : override_filepath,
+      final_full_asset_filepath,
+      reports);
 
   if (!success) {
     BKE_report(&reports, RPT_ERROR, "Failed to write to asset library");
@@ -448,14 +504,84 @@ std::optional<AssetWeakReference> asset_edit_weak_reference_from_id(const ID &id
   return asset_weak_reference_for_essentials(idcode, id.name + 2, id.lib->runtime.filepath_abs);
 }
 
+/**
+ * Returns true if \a id is linked from the essentials asset library location or the location
+ * holding the essentials library overrides. Put differently: returns true if \a id can be
+ * considered linked from the essentials asset library from the user perspective.
+ */
+bool asset_edit_id_is_essential_or_override(const ID &id)
+{
+  if (!ID_IS_LINKED(&id)) {
+    return false;
+  }
+
+  return BLI_path_contains(asset_system::essentials_directory_path().c_str(),
+                           id.lib->runtime.filepath_abs) ||
+         BLI_path_contains(asset_system::essentials_override_directory_path().c_str(),
+                           id.lib->runtime.filepath_abs);
+}
+
+/**
+ * Returns true if \a id is linked from the essentials asset library location (but not the location
+ * holding the essentials library overrides).
+ */
+bool asset_edit_id_is_essential_not_override(const ID &id)
+{
+  if (!ID_IS_LINKED(&id)) {
+    return false;
+  }
+
+  return BLI_path_contains(asset_system::essentials_directory_path().c_str(),
+                           id.lib->runtime.filepath_abs);
+}
+
 bool asset_edit_id_is_editable(const ID &id)
 {
-  return (id.lib && (id.lib->runtime.tag & LIBRARY_ASSET_EDITABLE));
+  if (!ID_IS_LINKED(&id)) {
+    return false;
+  }
+  return asset_edit_id_is_essential_not_override(id) ||
+         (id.lib->runtime.tag & LIBRARY_ASSET_EDITABLE);
 }
 
 bool asset_edit_id_is_writable(const ID &id)
 {
+  /* Consider essentials as writable, actual writing will re-direct to the directory for storing
+   * overridden essentials.
+   *
+   * In case the id is already an essentials override, fall through to the normal writable check,
+   * since there may be a manually saved file in there. Be nice and avoid overriding that. */
+  if (asset_edit_id_is_essential_not_override(id)) {
+    return true;
+  }
+
   return asset_edit_id_is_editable(id) && (id.lib->runtime.tag & LIBRARY_ASSET_FILE_WRITABLE);
+}
+
+/* TODO right location? Maybe move to brush_assets_ops.cc? */
+std::optional<AssetLibraryReference> asset_edit_id_get_library_reference(const ID &id)
+{
+  if (!ID_IS_LINKED(&id)) {
+    return {};
+  }
+
+  if (asset_edit_id_is_essential_or_override(id)) {
+    AssetLibraryReference library_ref{};
+    library_ref.custom_library_index = -1;
+    library_ref.type = ASSET_LIBRARY_ESSENTIALS;
+    return library_ref;
+  }
+
+  if (const bUserAssetLibrary *user_library = BKE_preferences_asset_library_containing_path(
+          &U, id.lib->runtime.filepath_abs))
+  {
+    AssetLibraryReference library_ref{};
+    library_ref.custom_library_index = BLI_findindex(&U.asset_libraries, user_library);
+    library_ref.type = ASSET_LIBRARY_CUSTOM;
+    return library_ref;
+  }
+
+  return {};
 }
 
 }  // namespace blender::bke

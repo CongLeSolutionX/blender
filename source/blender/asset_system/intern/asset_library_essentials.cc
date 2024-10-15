@@ -8,6 +8,8 @@
 
 #include "BKE_appdir.hh"
 
+#include "BLI_path_utils.hh"
+
 #include "utils.hh"
 
 #include "AS_essentials_library.hh"
@@ -29,6 +31,20 @@ StringRefNull essentials_directory_path()
     const std::optional<std::string> datafiles_path = BKE_appdir_folder_id(
         BLENDER_SYSTEM_DATAFILES, "assets");
     return datafiles_path.value_or("");
+  }();
+  return path;
+}
+
+StringRefNull essentials_override_directory_path()
+{
+  static std::string path = []() -> std::string {
+    const std::optional<std::string> datafiles_path = BKE_appdir_folder_id_user_notest(
+        BLENDER_USER_DATAFILES, "assets");
+    if (!datafiles_path) {
+      BLI_assert_unreachable();
+      return "";
+    }
+    return *datafiles_path + SEP + "essentials_overrides";
   }();
   return path;
 }

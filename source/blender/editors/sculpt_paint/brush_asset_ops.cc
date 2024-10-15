@@ -741,20 +741,19 @@ static int brush_asset_save_exec(bContext *C, wmOperator *op)
   Main *bmain = CTX_data_main(C);
   Paint *paint = BKE_paint_get_active_from_context(C);
   Brush *brush = BKE_paint_brush(paint);
-  const AssetWeakReference *asset_weak_ref = paint->brush_asset_reference;
-
-  const bUserAssetLibrary *user_library = BKE_preferences_asset_library_find_by_name(
-      &U, asset_weak_ref->asset_library_identifier);
-  if (!user_library) {
-    return OPERATOR_CANCELLED;
-  }
 
   BLI_assert(ID_IS_ASSET(brush));
 
-  bke::asset_edit_id_save(*bmain, brush->id, *op->reports);
+  if (!bke::asset_edit_id_save(*bmain, brush->id, *op->reports)) {
+    return OPERATOR_CANCELLED;
+  }
   brush->has_unsaved_changes = false;
 
-  refresh_asset_library(C, *user_library);
+  if (std::optional<AssetLibraryReference> affected_library =
+          bke::asset_edit_id_get_library_reference(brush->id))
+  {
+    refresh_asset_library(C, *affected_library);
+  }
   WM_main_add_notifier(NC_ASSET | ND_ASSET_LIST | NA_EDITED, nullptr);
   WM_main_add_notifier(NC_BRUSH | NA_EDITED, brush);
 

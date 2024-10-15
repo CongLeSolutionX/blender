@@ -33,6 +33,7 @@
 
 struct bUserAssetLibrary;
 struct AssetWeakReference;
+struct AssetLibraryReference;
 struct ID;
 struct Main;
 struct ReportList;
@@ -51,6 +52,14 @@ std::optional<AssetWeakReference> asset_edit_weak_reference_from_id(const ID &id
 
 bool asset_edit_id_is_editable(const ID &id);
 bool asset_edit_id_is_writable(const ID &id);
+
+/**
+ * Return a reference to the asset library that is (or would be) affected by the asset editing API,
+ * if linking and editing is or would be done through this API. For example, this is the asset
+ * library that needs refreshing after calling #asset_edit_id_save(), or other operations of the
+ * API.
+ */
+std::optional<AssetLibraryReference> asset_edit_id_get_library_reference(const ID &id);
 
 std::optional<std::string> asset_edit_id_save_as(Main &global_main,
                                                  const ID &id,
