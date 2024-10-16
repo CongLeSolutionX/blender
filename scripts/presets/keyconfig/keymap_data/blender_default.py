@@ -2939,9 +2939,9 @@ def km_sequencer(params):
         *_template_sequencer_generic_select(
             type=params.select_mouse, value=params.select_mouse_value_fallback, legacy=params.legacy,
         ),
-        ("sequencer.select", {"type": params.select_mouse, "value": params.select_mouse_value_fallback, "ctrl": True},
+        ("sequencer.select", {"type": params.select_mouse, "value": 'PRESS', "ctrl": True},
          {"properties": [("linked_time", True)]}),
-        ("sequencer.select", {"type": params.select_mouse, "value": params.select_mouse_value_fallback, "ctrl": True, "shift": True},
+        ("sequencer.select", {"type": params.select_mouse, "value": 'PRESS', "ctrl": True, "shift": True},
          {"properties": [("linked_time", True), ("extend", True)]}),
         ("sequencer.select", {"type": params.select_mouse, "value": 'CLICK', "ctrl": True},
          {"properties": [("side_of_frame", True)]}),
