@@ -84,7 +84,7 @@ bool eval_begin(Subdiv *subdiv,
   return true;
 #else
   UNUSED_VARS(subdiv, evaluator_type, evaluator_cache, settings);
-  return true;
+  return false;
 #endif
 }
 
