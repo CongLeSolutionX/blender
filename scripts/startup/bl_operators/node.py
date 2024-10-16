@@ -415,7 +415,9 @@ class NODE_OT_viewer_shortcut_set(Operator):
     bl_label = "Fast Preview"
     bl_options = {'REGISTER', 'UNDO'}
 
-    viewer_index: IntProperty()
+    viewer_index: IntProperty(
+        name="Viewer index",
+        description="Index corresponding to the shortcut, e.g. number key 1 corresponds to index 1 etc..")
     NODE_SHORTCUT_NONE = 0
 
     def get_node_with_shortcut(self, context, shortcut):
@@ -486,7 +488,9 @@ class NODE_OT_viewer_shortcut_get(Operator):
     bl_label = "Fast Preview"
     bl_options = {'REGISTER', 'UNDO'}
 
-    viewer_index: IntProperty()
+    viewer_index: IntProperty(
+        name="Viewer index",
+        description="Index corresponding to the shortcut, e.g. number key 1 corresponds to index 1 etc..")
     NODE_SHORTCUT_NONE = 0
 
     @classmethod
