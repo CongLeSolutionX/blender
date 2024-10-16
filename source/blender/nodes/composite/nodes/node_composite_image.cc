@@ -665,17 +665,6 @@ class RenderLayerOperation : public NodeOperation {
 
   void execute() override
   {
-    /* Not yet supported on CPU. */
-    if (!context().use_gpu()) {
-      for (const bNodeSocket *output : this->node()->output_sockets()) {
-        Result &output_result = get_result(output->identifier);
-        if (output_result.should_compute()) {
-          output_result.allocate_invalid();
-        }
-      }
-      return;
-    }
-
     const Scene *scene = reinterpret_cast<const Scene *>(bnode().id);
     const int view_layer = bnode().custom1;
 
@@ -683,13 +672,12 @@ class RenderLayerOperation : public NodeOperation {
     Result &alpha_result = get_result("Alpha");
 
     if (image_result.should_compute() || alpha_result.should_compute()) {
-      GPUTexture *combined_texture = context().get_input_texture(
-          scene, view_layer, RE_PASSNAME_COMBINED);
+      const Result combined_pass = context().get_pass(scene, view_layer, RE_PASSNAME_COMBINED);
       if (image_result.should_compute()) {
-        execute_pass(image_result, combined_texture, "compositor_read_input_color");
+        execute_pass(image_result, combined_pass, "compositor_read_input_color");
       }
       if (alpha_result.should_compute()) {
-        execute_pass(alpha_result, combined_texture, "compositor_read_input_alpha");
+        execute_pass(alpha_result, combined_pass, "compositor_read_input_alpha");
       }
     }
 
@@ -707,16 +695,15 @@ class RenderLayerOperation : public NodeOperation {
       context().populate_meta_data_for_pass(
           scene, view_layer, output->identifier, result.meta_data);
 
-      GPUTexture *pass_texture = context().get_input_texture(
-          scene, view_layer, output->identifier);
+      const Result pass = context().get_pass(scene, view_layer, output->identifier);
       if (output->type == SOCK_FLOAT) {
-        execute_pass(result, pass_texture, "compositor_read_input_float");
+        execute_pass(result, pass, "compositor_read_input_float");
       }
       else if (output->type == SOCK_VECTOR) {
-        execute_pass(result, pass_texture, "compositor_read_input_vector");
+        execute_pass(result, pass, "compositor_read_input_vector");
       }
       else if (output->type == SOCK_RGBA) {
-        execute_pass(result, pass_texture, "compositor_read_input_color");
+        execute_pass(result, pass, "compositor_read_input_color");
       }
       else {
         BLI_assert_unreachable();
@@ -724,9 +711,9 @@ class RenderLayerOperation : public NodeOperation {
     }
   }
 
-  void execute_pass(Result &result, GPUTexture *pass_texture, const char *shader_name)
+  void execute_pass(Result &result, const Result &pass, const char *shader_name)
   {
-    if (pass_texture == nullptr) {
+    if (!pass.is_allocated()) {
       /* Pass not rendered yet, or not supported by viewport. */
       result.allocate_invalid();
       context().set_info_message("Viewport compositor setup not fully supported");
@@ -738,8 +725,7 @@ class RenderLayerOperation : public NodeOperation {
       return;
     }
 
-    const ResultPrecision precision = Result::precision(GPU_texture_format(pass_texture));
-    GPUShader *shader = context().get_shader(shader_name, precision);
+    GPUShader *shader = context().get_shader(shader_name, pass.precision());
     GPU_shader_bind(shader);
 
     /* The compositing space might be limited to a subset of the pass texture, so only read that
@@ -748,11 +734,9 @@ class RenderLayerOperation : public NodeOperation {
     const int2 lower_bound = int2(compositing_region.xmin, compositing_region.ymin);
     GPU_shader_uniform_2iv(shader, "lower_bound", lower_bound);
 
-    const int input_unit = GPU_shader_get_sampler_binding(shader, "input_tx");
-    GPU_texture_bind(pass_texture, input_unit);
+    pass.bind_as_texture(shader, "input_tx");
 
-    result.set_precision(precision);
-
+    result.set_precision(pass.precision());
     const int2 compositing_region_size = context().get_compositing_region_size();
     result.allocate_texture(Domain(compositing_region_size));
     result.bind_as_image(shader, "output_img");
@@ -760,7 +744,7 @@ class RenderLayerOperation : public NodeOperation {
     compute_dispatch_threads_at_least(shader, compositing_region_size);
 
     GPU_shader_unbind();
-    GPU_texture_unbind(pass_texture);
+    GPU_texture_unbind(pass);
     result.unbind_as_image();
   }
 };
