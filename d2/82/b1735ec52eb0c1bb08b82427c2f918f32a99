@@ -1,2 +1,3 @@
 Referenced by issue #129069, Regression: Sculpt: Various paint stroke methods do not work (Anchored, Drag Dot)
 Referenced by pull request #129084, Fix #129069: Drag Dot and Anchored paint brush modes don't clear mesh
+Referenced by commit b8e5c66947fdc7ef8f9ffb5dafe228374710c6f7, Fix #129069: Drag Dot and Anchored paint brush modes don't clear mesh
