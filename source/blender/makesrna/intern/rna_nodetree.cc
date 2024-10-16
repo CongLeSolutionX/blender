@@ -10823,7 +10823,7 @@ static void rna_def_node(BlenderRNA *brna)
   prop = RNA_def_property(srna, "ui_shortcut", PROP_INT, PROP_NONE);
   RNA_def_property_int_sdna(prop, nullptr, "shortcut");
   RNA_def_property_range(prop, 0, 9);
-  RNA_def_property_int_default(prop, -1);
+  RNA_def_property_int_default(prop, NODE_SHORTCUT_NONE);
   RNA_def_property_update(prop, NC_NODE | ND_DISPLAY, nullptr);
 
   prop = RNA_def_property(srna, "show_options", PROP_BOOLEAN, PROP_NONE);

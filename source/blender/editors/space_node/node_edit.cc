@@ -1453,6 +1453,11 @@ static int node_duplicate_exec(bContext *C, wmOperator *op)
     update_multi_input_indices_for_removed_links(*node);
   }
 
+  /* Clear shortcuts. */
+  for (bNode *node : node_map.values()) {
+    node->shortcut = NODE_SHORTCUT_NONE;
+  }
+
   /* Clear flags for recursive depth-first iteration. */
   for (bNode *node : ntree->all_nodes()) {
     node->flag &= ~NODE_TEST;

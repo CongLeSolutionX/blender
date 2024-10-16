@@ -409,30 +409,23 @@ class NODE_OT_interface_item_remove(NodeInterfaceOperator, Operator):
         return {'FINISHED'}
 
 
-class NODE_OT_fast_preview(Operator):
-    '''Set node viewers as favorite using 1,2,..,9 keys'''
-    bl_idname = "node.fast_preview"
+class NODE_OT_viewer_shortcut_set(Operator):
+    """Create a viewer shortcut for the selected node by pressingctrl+1,2,..9"""
+    bl_idname = "node.viewer_shortcut_set"
     bl_label = "Fast Preview"
     bl_options = {'REGISTER', 'UNDO'}
 
-    update_map: BoolProperty(default=False)
     viewer_index: IntProperty()
     NODE_SHORTCUT_NONE = 0
-    __nodes: None
-    __links: None
 
-    def __get_nodes_links(self, context):
-        tree = context.space_data.edit_tree
-        return tree.nodes, tree.links
-
-    def __get_node_with_shortcut(self, context, shortcut):
-        nodes, _ = self.__get_nodes_links(context)
+    def get_node_with_shortcut(self, context, shortcut):
+        nodes = context.space_data.edit_tree.nodes
         for n in nodes:
             if n.ui_shortcut == shortcut:
                 return n
         return None
 
-    def __get_connected_viewer(self, node):
+    def get_connected_viewer(self, node):
         for out in node.outputs:
             for link in out.links:
                 nv = link.to_node
@@ -440,7 +433,7 @@ class NODE_OT_fast_preview(Operator):
                     return nv
         return None
 
-    def __check_viewer_connected(self, node):
+    def check_viewer_connected(self, node):
         for out in node.outputs:
             for link in out.links:
                 if link.to_node.type == 'VIEWER':
@@ -452,45 +445,68 @@ class NODE_OT_fast_preview(Operator):
         return bpy.ops.node.link_viewer.poll()
 
     def execute(self, context):
-        self.__nodes, self.__links = self.__get_nodes_links(context)
+        nodes = context.space_data.edit_tree.nodes
+        links = context.space_data.edit_tree.links
         selected_nodes = context.selected_nodes
 
-        if self.update_map:
-            if len(selected_nodes) == 0:
-                self.report({'ERROR'}, "No previews to set. Reason: No nodes selected.")
-                return {'CANCELLED'}
+        if len(selected_nodes) == 0:
+            self.report({'ERROR'}, "No previews to set. Reason: No nodes selected.")
+            return {'CANCELLED'}
 
-            # reset node with exisiting shortcut
-            old_fav_node = self.__get_node_with_shortcut(context, self.viewer_index)
-            if old_fav_node:
-                old_fav_node.ui_shortcut = self.NODE_SHORTCUT_NONE
+        # Reset node with exisiting shortcut.
+        old_fav_node = self.get_node_with_shortcut(context, self.viewer_index)
+        if old_fav_node:
+            old_fav_node.ui_shortcut = self.NODE_SHORTCUT_NONE
 
-            fav_node = selected_nodes[0]
+        fav_node = selected_nodes[0]
 
-            # Only viewer nodes can be set to favorites. However, the user can
-            # create a new favorite viewer by selecting any node and pressing ^1
-            if fav_node.type == 'VIEWER':
-                viewer_node = fav_node
-            elif self.__check_viewer_connected(fav_node):
-                viewer_node = self.__get_connected_viewer(fav_node)
-            else:
-                # todo: support all node types
-                viewer_node = self.__nodes.new("CompositorNodeViewer")
-                self.__links.new(fav_node.outputs[0], viewer_node.inputs[0])
-                viewer_node.location = fav_node.location
-                viewer_node.location.x += fav_node.width + 50
-
-            self.__nodes.active = viewer_node
-            viewer_node.ui_shortcut = self.viewer_index
-            self.report({'INFO'}, "Set viewer %s to shortcut %i" % (viewer_node.name, self.viewer_index))
-
+        # Only viewer nodes can be set to favorites. However, the user can
+        # create a new favorite viewer by selecting any node and pressing ctrl+1
+        if fav_node.type == 'VIEWER':
+            viewer_node = fav_node
+        elif self.check_viewer_connected(fav_node):
+            viewer_node = self.get_connected_viewer(fav_node)
         else:
-            viewer_node = self.__get_node_with_shortcut(context, self.viewer_index)
-            if not viewer_node:
-                self.report({'WARNING'}, "No preview set for shortcut %i" % self.viewer_index)
-                return {'CANCELLED'}
+            # todo: support all node types
+            viewer_node = nodes.new("CompositorNodeViewer")
+            links.new(fav_node.outputs[0], viewer_node.inputs[0])
+            viewer_node.location = fav_node.location
+            viewer_node.location.x += fav_node.width + 50
 
-            self.__nodes.active = viewer_node
+        nodes.active = viewer_node
+        viewer_node.ui_shortcut = self.viewer_index
+        self.report({'INFO'}, "Set viewer %s to shortcut %i" % (viewer_node.name, self.viewer_index))
+
+        return {'FINISHED'}
+
+
+class NODE_OT_viewer_shortcut_get(Operator):
+    """Get favorite viewer and set it to active using 1,2,..,9 keys"""
+    bl_idname = "node.viewer_shortcut_get"
+    bl_label = "Fast Preview"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    viewer_index: IntProperty()
+    NODE_SHORTCUT_NONE = 0
+
+    @classmethod
+    def poll(self, context):
+        return bpy.ops.node.link_viewer.poll()
+
+    def execute(self, context):
+        nodes = context.space_data.edit_tree.nodes
+
+        # Get viewer node with exisiting shortcut.
+        viewer_node = None
+        for n in nodes:
+            if n.ui_shortcut == self.viewer_index:
+                viewer_node = n
+
+        if not viewer_node:
+            self.report({'WARNING'}, "No preview set for shortcut %i" % self.viewer_index)
+            return {'CANCELLED'}
+
+        nodes.active = viewer_node
 
         return {'FINISHED'}
 
@@ -525,5 +541,6 @@ classes = (
     NODE_OT_interface_item_duplicate,
     NODE_OT_interface_item_remove,
     NODE_OT_tree_path_parent,
-    NODE_OT_fast_preview,
+    NODE_OT_viewer_shortcut_get,
+    NODE_OT_viewer_shortcut_set,
 )
