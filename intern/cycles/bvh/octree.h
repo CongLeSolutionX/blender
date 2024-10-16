@@ -24,7 +24,6 @@ class BoundBox;
 class Geometry;
 class Mesh;
 class Object;
-class Octree;
 class Progress;
 class Scene;
 class Shader;
@@ -35,10 +34,6 @@ struct OctreeNode {
   vector<Object *> objects;
   int level;
 
-  /* Set the maximall resolution to be 128 to reduce traversing overhead. */
-  /* TODO(weizhen): tweak this threshold. 128 is a reference from PBRT. */
-  static const int max_level = 7;
-
   /* TODO(weizhen): we need visibility for shadow, camera, and indirect. */
   float sigma_min = 0.0f;
   float sigma_max = 0.0f;
@@ -47,7 +42,6 @@ struct OctreeNode {
   OctreeNode(BoundBox bbox_, int level_) : bbox(bbox_), level(level_) {}
   virtual ~OctreeNode() = default;
 
-  bool should_split(const Octree *octree);
   template<typename T>
   nanovdb::Extrema<typename nanovdb::NanoGrid<T>::ValueType> get_extrema(
       const nanovdb::NanoGrid<T> *grid, const Transform *itfm);
@@ -69,9 +63,6 @@ class Octree {
 
  public:
   void build(Progress &progress);
-  /* Represent octree nodes as empty boxes with Blender Python API. */
-  void visualize(KernelOctreeNode *knodes, const char *filename);
-  void visualize_fast(KernelOctreeNode *knodes, const char *filename);
   Octree(const Scene *scene);
   ~Octree();
 
@@ -80,10 +71,15 @@ class Octree {
   int get_num_nodes() const;
   bool has_world_volume() const;
 
+  /* Represent octree nodes as empty boxes with Blender Python API. */
+  void visualize(KernelOctreeNode *knodes, const char *filename) const;
+  void visualize_fast(KernelOctreeNode *knodes, const char *filename) const;
+
  private:
   std::shared_ptr<OctreeInternalNode> make_internal(std::shared_ptr<OctreeNode> &node);
   void recursive_build_(std::shared_ptr<OctreeNode> &node);
   int flatten_(KernelOctreeNode *knodes, std::shared_ptr<OctreeNode> &node, int &index);
+  bool should_split(std::shared_ptr<OctreeNode> &node);
 
   /* Root node. */
   std::shared_ptr<OctreeNode> root_;
@@ -94,6 +90,10 @@ class Octree {
                                          const float voxel_size,
                                          const float half_width);
   std::map<const Geometry *, nanovdb::GridHandle<>> vdb_map;
+
+  /* Set the maximal resolution to be 128 to reduce traversing overhead. */
+  /* TODO(weizhen): tweak this threshold. 128 is a reference from PBRT. */
+  const int max_level = 7;
 
   /* World volume. */
   /* TODO(weizhen): we only need the max density after properly evaluating volume shaders. */

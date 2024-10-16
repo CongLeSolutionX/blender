@@ -89,25 +89,25 @@ nanovdb::Extrema<typename nanovdb::NanoGrid<T>::ValueType> OctreeNode::get_extre
   return nanovdb::getExtrema(*grid, coord_bbox);
 }
 
-bool OctreeNode::should_split(const Octree *octree)
+bool Octree::should_split(std::shared_ptr<OctreeNode> &node)
 {
-  if (objects.empty()) {
+  if (node->objects.empty()) {
     return false;
   }
 
-  if (objects.size() == 1) {
-    const Object *object = objects[0];
+  if (node->objects.size() == 1) {
+    const Object *object = node->objects[0];
     if (object->is_homogeneous_volume()) {
       /* Do not split homogeneous volume. Volume stack already skips the zero-density regions. */
-      sigma_min = sigma_max = volume_density_scale(object);
+      node->sigma_min = node->sigma_max = volume_density_scale(object);
       return false;
     }
   }
 
-  sigma_min = octree->background_density_min;
-  sigma_max = octree->background_density_max;
+  node->sigma_min = background_density_min;
+  node->sigma_max = background_density_max;
 
-  for (Object *object : objects) {
+  for (Object *object : node->objects) {
     float min = 1.0f;
     float max = 1.0f;
 
@@ -131,7 +131,7 @@ bool OctreeNode::should_split(const Octree *octree)
           auto const *grid = handle.vdb_loader()->nanogrid.grid<nanovdb::Fp16>();
           if (grid) {
             const Transform itfm = transform_inverse(object->get_tfm());
-            auto extrema = get_extrema(grid, &itfm);
+            auto extrema = node->get_extrema(grid, &itfm);
             min = extrema.min();
             max = extrema.max();
           }
@@ -143,7 +143,7 @@ bool OctreeNode::should_split(const Octree *octree)
 #endif
     }
     else if (geom->is_mesh()) {
-      const auto *grid = octree->vdb_map.at(geom).grid<bool>();
+      const auto *grid = vdb_map.at(geom).grid<bool>();
       if (grid) {
         /* TODO(weizhen): evaluate objects with various shaders separately.  */
         /* TODO(weizhen): probably dense grid is the proper way. */
@@ -156,7 +156,7 @@ bool OctreeNode::should_split(const Octree *octree)
 
         for (int i = 0; i < 8; i++) {
           const float3 t = make_float3(i & 1, (i >> 1) & 1, (i >> 2) & 1);
-          float3 v = mix(bbox.min, bbox.max, t);
+          float3 v = mix(node->bbox.min, node->bbox.max, t);
           if (!mesh->transform_applied) {
             v = transform_point(&itfm, v);
           }
@@ -201,15 +201,17 @@ bool OctreeNode::should_split(const Octree *octree)
     min *= scale;
     max *= scale;
 
-    sigma_min = fminf(min, sigma_min);
-    sigma_max += max;
+    node->sigma_min = fminf(min, node->sigma_min);
+    node->sigma_max += max;
   }
 
   /* TODO(weizhen): force subdivision of aggregate nodes that are larger than the volume contained,
    * regardless of the volume’s majorant extinction. */
 
   /* From "Volume Rendering for Pixar’s Elemental". */
-  if ((sigma_max - sigma_min) * len(bbox.size()) < 1.442f || level == max_level) {
+  if ((node->sigma_max - node->sigma_min) * len(node->bbox.size()) < 1.442f ||
+      node->level == max_level)
+  {
     return false;
   }
 
@@ -234,7 +236,7 @@ shared_ptr<OctreeInternalNode> Octree::make_internal(shared_ptr<OctreeNode> &nod
 
 void Octree::recursive_build_(shared_ptr<OctreeNode> &node)
 {
-  if (!node->should_split(this)) {
+  if (!should_split(node)) {
     return;
   }
 
@@ -254,6 +256,96 @@ void Octree::recursive_build_(shared_ptr<OctreeNode> &node)
   }
 
   node = internal;
+}
+
+nanovdb::GridHandle<> Octree::mesh_to_sdf_grid(const Mesh *mesh,
+                                               const float voxel_size,
+                                               const float half_width)
+{
+  const int num_verts = mesh->get_verts().size();
+  std::vector<openvdb::Vec3s> points(num_verts);
+  parallel_for(0, num_verts, [&](int i) {
+    const float3 &vert = mesh->get_verts()[i];
+    points[i] = openvdb::Vec3s(vert.x, vert.y, vert.z);
+  });
+
+  const int num_triangles = mesh->num_triangles();
+  std::vector<openvdb::Vec3I> triangles(num_triangles);
+  parallel_for(0, num_triangles, [&](int i) {
+    triangles[i] = openvdb::Vec3I(mesh->get_triangles()[i * 3],
+                                  mesh->get_triangles()[i * 3 + 1],
+                                  mesh->get_triangles()[i * 3 + 2]);
+  });
+
+  auto xform = openvdb::math::Transform::createLinearTransform(voxel_size);
+  auto sdf_grid = openvdb::tools::meshToLevelSet<openvdb::FloatGrid>(
+      *xform, points, triangles, half_width);
+
+  auto interior_mask_grid = openvdb::tools::sdfInteriorMask(*sdf_grid, 0.0f);
+
+  /* TODO(weizhen): do I need to reset OpenVDB grids? */
+  /* TODO(weizhen): mind vdb version, following `image_vdb.cpp`? */
+  return nanovdb::openToNanoVDB(interior_mask_grid);
+}
+
+int Octree::flatten_(KernelOctreeNode *knodes, shared_ptr<OctreeNode> &node, int &node_index)
+{
+  const int current_index = node_index++;
+
+  KernelOctreeNode &knode = knodes[current_index];
+  knode.bbox.max = node->bbox.max;
+  knode.bbox.min = node->bbox.min;
+  if (auto internal_ptr = std::dynamic_pointer_cast<OctreeInternalNode>(node)) {
+    knode.is_leaf = false;
+    /* Loop through all the children. */
+    for (int i = 0; i < 8; i++) {
+      knode.children[i] = flatten_(knodes, internal_ptr->children_[i], node_index);
+    }
+  }
+  else {
+    knode.is_leaf = true;
+    knode.sigma_max = node->sigma_max;
+    knode.sigma_min = node->sigma_min;
+  }
+
+  return current_index;
+}
+
+void Octree::flatten(KernelOctreeNode *knodes)
+{
+  int node_index = 0;
+
+  /* World volume. */
+  /* TODO(weizhen): is there a better way than putting world volume in the octree array? */
+  KernelOctreeNode &knode = knodes[node_index++];
+  knode.is_leaf = false;
+  knode.sigma_max = background_density_max;
+  knode.sigma_min = has_world_volume() ? background_density_min : 0.0f;
+  knode.bbox.max = make_float3(FLT_MAX);
+  knode.bbox.min = -make_float3(FLT_MAX);
+
+  flatten_(knodes, root_, node_index);
+  /* TODO(weizhen): rescale the bounding box to match its resolution, for more robust traversing.
+   */
+}
+
+void Octree::build(Progress &progress)
+{
+  // if (!root_) {
+  //   return;
+  // }
+
+  progress.set_substatus("Building Octree for volumes");
+  const double start_time = time_dt();
+
+  recursive_build_(root_);
+
+  task_pool.wait_work();
+
+  std::cout << "Built volume Octree with " << num_nodes << " nodes in " << time_dt() - start_time
+            << " seconds." << std::endl;
+  VLOG_INFO << "Built volume Octree with " << num_nodes << " nodes in " << time_dt() - start_time
+            << " seconds.";
 }
 
 Octree::Octree(const Scene *scene)
@@ -300,47 +392,34 @@ Octree::Octree(const Scene *scene)
     background_density_min = FLT_MAX;
   }
 
-  if (!root_->bbox.valid()) {
-    //    root_.reset();
-    return;
-  }
+  // if (!root_->bbox.valid()) {
+  //   root_.reset();
+  //   return;
+  // }
 
   VLOG_INFO << "Total " << root_->objects.size()
             << " volume objects with bounding box min = " << root_->bbox.min
             << ", max = " << root_->bbox.max << ".";
 }
 
-nanovdb::GridHandle<> Octree::mesh_to_sdf_grid(const Mesh *mesh,
-                                               const float voxel_size,
-                                               const float half_width)
+bool Octree::is_empty() const
 {
-  const int num_verts = mesh->get_verts().size();
-  std::vector<openvdb::Vec3s> points(num_verts);
-  parallel_for(0, num_verts, [&](int i) {
-    const float3 &vert = mesh->get_verts()[i];
-    points[i] = openvdb::Vec3s(vert.x, vert.y, vert.z);
-  });
-
-  const int num_triangles = mesh->num_triangles();
-  std::vector<openvdb::Vec3I> triangles(num_triangles);
-  parallel_for(0, num_triangles, [&](int i) {
-    triangles[i] = openvdb::Vec3I(mesh->get_triangles()[i * 3],
-                                  mesh->get_triangles()[i * 3 + 1],
-                                  mesh->get_triangles()[i * 3 + 2]);
-  });
-
-  auto xform = openvdb::math::Transform::createLinearTransform(voxel_size);
-  auto sdf_grid = openvdb::tools::meshToLevelSet<openvdb::FloatGrid>(
-      *xform, points, triangles, half_width);
-
-  auto interior_mask_grid = openvdb::tools::sdfInteriorMask(*sdf_grid, 0.0f);
-
-  /* TODO(weizhen): do I need to reset OpenVDB grids? */
-  /* TODO(weizhen): mind vdb version, following `image_vdb.cpp`? */
-  return nanovdb::openToNanoVDB(interior_mask_grid);
+  /* TODO(weizhen): zero size? */
+  return !root_->bbox.valid();
 }
 
-void Octree::visualize(KernelOctreeNode *knodes, const char *filename)
+int Octree::get_num_nodes() const
+{
+  /* Plus one to account for world volume. */
+  return num_nodes + 1;
+}
+
+bool Octree::has_world_volume() const
+{
+  return background_density_max > 0.0f;
+}
+
+void Octree::visualize(KernelOctreeNode *knodes, const char *filename) const
 {
   std::ofstream file(filename);
   if (file.is_open()) {
@@ -379,7 +458,7 @@ void Octree::visualize(KernelOctreeNode *knodes, const char *filename)
   }
 }
 
-void Octree::visualize_fast(KernelOctreeNode *knodes, const char *filename)
+void Octree::visualize_fast(KernelOctreeNode *knodes, const char *filename) const
 {
   std::ofstream file(filename);
   if (file.is_open()) {
@@ -439,47 +518,6 @@ void Octree::visualize_fast(KernelOctreeNode *knodes, const char *filename)
   }
 }
 
-int Octree::flatten_(KernelOctreeNode *knodes, shared_ptr<OctreeNode> &node, int &node_index)
-{
-  const int current_index = node_index++;
-
-  KernelOctreeNode &knode = knodes[current_index];
-  knode.bbox.max = node->bbox.max;
-  knode.bbox.min = node->bbox.min;
-  if (auto internal_ptr = std::dynamic_pointer_cast<OctreeInternalNode>(node)) {
-    knode.is_leaf = false;
-    /* Loop through all the children. */
-    for (int i = 0; i < 8; i++) {
-      knode.children[i] = flatten_(knodes, internal_ptr->children_[i], node_index);
-    }
-  }
-  else {
-    knode.is_leaf = true;
-    knode.sigma_max = node->sigma_max;
-    knode.sigma_min = node->sigma_min;
-  }
-
-  return current_index;
-}
-
-void Octree::flatten(KernelOctreeNode *knodes)
-{
-  int node_index = 0;
-
-  /* World volume. */
-  /* TODO(weizhen): is there a better way than putting world volume in the octree array? */
-  KernelOctreeNode &knode = knodes[node_index++];
-  knode.is_leaf = false;
-  knode.sigma_max = background_density_max;
-  knode.sigma_min = has_world_volume() ? background_density_min : 0.0f;
-  knode.bbox.max = make_float3(FLT_MAX);
-  knode.bbox.min = -make_float3(FLT_MAX);
-
-  flatten_(knodes, root_, node_index);
-  /* TODO(weizhen): rescale the bounding box to match its resolution, for more robust traversing.
-   */
-}
-
 Octree::~Octree()
 {
   /* TODO(weizhen): quite weird workaround to delay releasing nanogrid, but probably don't need
@@ -504,42 +542,6 @@ Octree::~Octree()
     }
   }
 #endif
-}
-
-void Octree::build(Progress &progress)
-{
-  // if (!root_) {
-  //   return;
-  // }
-
-  progress.set_substatus("Building Octree for volumes");
-  const double start_time = time_dt();
-
-  recursive_build_(root_);
-
-  task_pool.wait_work();
-
-  std::cout << "Built volume Octree with " << num_nodes << " nodes in " << time_dt() - start_time
-            << " seconds." << std::endl;
-  VLOG_INFO << "Built volume Octree with " << num_nodes << " nodes in " << time_dt() - start_time
-            << " seconds.";
-}
-
-bool Octree::is_empty() const
-{
-  /* TODO(weizhen): zero size? */
-  return !root_->bbox.valid();
-}
-
-int Octree::get_num_nodes() const
-{
-  /* Plus one to account for world volume. */
-  return num_nodes + 1;
-}
-
-bool Octree::has_world_volume() const
-{
-  return background_density_max > 0.0f;
 }
 
 CCL_NAMESPACE_END
