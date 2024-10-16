@@ -2936,11 +2936,15 @@ def km_sequencer(params):
     )
 
     items.extend([
-        *_template_sequencer_timeline_select(
-            type=params.select_mouse,
-            value=params.select_mouse_value_fallback,
-            legacy=params.legacy,
+        *_template_sequencer_generic_select(
+            type=params.select_mouse, value=params.select_mouse_value_fallback, legacy=params.legacy,
         ),
+        ("sequencer.select", {"type": params.select_mouse, "value": params.select_mouse_value_fallback, "ctrl": True},
+         {"properties": [("linked_time", True)]}),
+        ("sequencer.select", {"type": params.select_mouse, "value": params.select_mouse_value_fallback, "ctrl": True, "shift": True},
+         {"properties": [("linked_time", True), ("extend", True)]}),
+        ("sequencer.select", {"type": params.select_mouse, "value": 'CLICK', "ctrl": True},
+         {"properties": [("side_of_frame", True)]}),
         ("sequencer.select", {"type": params.select_mouse, "value": 'PRESS', "alt": True},
          {"properties": [("deselect_all", True), ("ignore_connections", True)]}),
         ("sequencer.select", {"type": params.select_mouse, "value": 'PRESS', "alt": True, "shift": True},
@@ -2963,9 +2967,6 @@ def km_sequencer(params):
         ("sequencer.select_box", {"type": 'B', "value": 'PRESS', "ctrl": True},
          {"properties": [("include_handles", True)]}),
         ("sequencer.select_grouped", {"type": 'G', "value": 'PRESS', "shift": True}, None),
-        op_menu("SEQUENCER_MT_add", {"type": 'A', "value": 'PRESS', "shift": True}),
-        op_menu("SEQUENCER_MT_change", {"type": 'C', "value": 'PRESS'}),
-        op_menu_pie("SEQUENCER_MT_view_pie", {"type": 'ACCENT_GRAVE', "value": 'PRESS'}),
         *_template_items_select_actions(params, "sequencer.select_all"),
         ("sequencer.split", {"type": 'K', "value": 'PRESS'},
          {"properties": [("type", 'SOFT')]}),
@@ -3031,6 +3032,9 @@ def km_sequencer(params):
              for i in range(10)
              )
         ),
+        op_menu("SEQUENCER_MT_add", {"type": 'A', "value": 'PRESS', "shift": True}),
+        op_menu("SEQUENCER_MT_change", {"type": 'C', "value": 'PRESS'}),
+        op_menu_pie("SEQUENCER_MT_view_pie", {"type": 'ACCENT_GRAVE', "value": 'PRESS'}),
         ("sequencer.slip", {"type": 'S', "value": 'PRESS'}, None),
         ("wm.context_set_int", {"type": 'O', "value": 'PRESS'},
          {"properties": [("data_path", "scene.sequence_editor.overlay_frame"), ("value", 0)]}),
@@ -4547,19 +4551,6 @@ def _template_sequencer_preview_select(*, type, value, legacy):
         (("toggle", "ignore_connections"), ("shift", "alt")),
         # (("toggle", "enumerate"), ("shift", "alt")),
         # (("toggle", "center", "enumerate"), ("shift", "ctrl", "alt")),
-    )]
-
-
-def _template_sequencer_timeline_select(*, type, value, legacy):
-    return _template_sequencer_generic_select(
-        type=type, value=value, legacy=legacy,
-    ) + [(
-        "sequencer.select",
-        {"type": type, "value": value, **{m: True for m in mods}},
-        {"properties": [(c, True) for c in props]},
-    ) for props, mods in (
-        (("linked_time"), ("ctrl",)),
-        (("linked_time", "extend"), ("ctrl", "shift")),
     )]
 
 
