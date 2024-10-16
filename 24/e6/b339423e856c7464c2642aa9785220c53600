@@ -1,4 +1,4 @@
 Referenced by issue #126445, Regression: Symmetry doesn't work with deform brushes
 Referenced by issue #126826, VSE: Video rendering extremely slow with effects in 4.3
 Referenced by issue #127356, Sculpt Mode: Mask Expand doesn't snap to Face Sets
-Referenced by issue #129069, Regression: Sculpt: Setting "Drag Dot" stroke method to paint brushes doesn't work
+Referenced by issue #129069, Regression: Sculpt: Various paint stroke methods do not work (Anchored, Drag Dot)
