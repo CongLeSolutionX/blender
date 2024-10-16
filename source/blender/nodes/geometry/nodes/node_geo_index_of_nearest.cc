@@ -16,8 +16,8 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Vector>("Position").implicit_field(implicit_field_inputs::position);
   b.add_input<decl::Int>("Group ID").supports_field().hide_value();
 
-  b.add_output<decl::Int>("Index").field_source().description("Index of nearest element");
-  b.add_output<decl::Bool>("Has Neighbor").field_source();
+  b.add_output<decl::Int>("Index").dependent_field().description("Index of nearest element");
+  b.add_output<decl::Bool>("Has Neighbor").dependent_field();
 }
 
 static KDTree_3d *build_kdtree(const Span<float3> positions, const IndexMask &mask)
