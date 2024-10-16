@@ -975,6 +975,8 @@ static void updateDuplicateCustomBoneShapes(bContext *C, EditBone *dup_bone, Obj
   }
 }
 
+/* Properties should be added on a case by case basis whenever needed to avoid mirroring things
+ * that shouldn't be mirrored. */
 static void mirror_pose_bone(Object &ob, EditBone &ebone)
 {
   bPoseChannel *pose_bone = BKE_pose_channel_find_name(ob.pose, ebone.name);
