@@ -98,7 +98,7 @@ class Drawing : public ::GreasePencilDrawing {
    * Normal vectors for a plane that fits the stroke.
    */
   Span<float3> curve_plane_normals() const;
-  
+
   void tag_texture_matrices_changed();
 
   void tag_positions_changed();
