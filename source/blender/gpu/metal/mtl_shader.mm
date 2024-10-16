@@ -170,7 +170,7 @@ MTLShader::~MTLShader()
     }
     compute_pso_cache_.clear();
     pso_cache_lock_.unlock();
-    
+
     /* Free shader libraries. */
     if (shader_library_vert_ != nil) {
       [shader_library_vert_ release];
@@ -1635,11 +1635,11 @@ MTLComputePipelineStateInstance *MTLShader::bake_compute_pipeline_state(
     }
 
     [desc release];
-    
+
     /* Gather reflection data and create MTLComputePipelineStateInstance to store results. */
     MTLComputePipelineStateInstance *compute_pso_instance = new MTLComputePipelineStateInstance();
     compute_pso_instance->compute = compute_function;
-    compute_pso_instance->pso = pso; 
+    compute_pso_instance->pso = pso;
     compute_pso_instance->base_uniform_buffer_index = MTL_uniform_buffer_base_index;
     compute_pso_instance->base_storage_buffer_index = MTL_storage_buffer_base_index;
     pso_cache_lock_.lock();
@@ -1880,13 +1880,37 @@ MTLParallelShaderCompiler::MTLParallelShaderCompiler()
 
 MTLParallelShaderCompiler::~MTLParallelShaderCompiler()
 {
-  BLI_assert(batches.is_empty());
+  /* Shutdown the compiler threads. */
   terminate_compile_threads = true;
   cond_var.notify_all();
 
   for (auto &thread : compile_threads) {
     thread.join();
   }
+
+  /* Mark any unprocessed work items as ready so we can move
+  * them into a batch for cleanup. */
+  if (!parallel_work_queue.empty()) {
+    std::unique_lock<std::mutex> lock(queue_mutex);
+    while (!parallel_work_queue.empty()) {
+      ParallelWork *work_item = parallel_work_queue.front();
+      work_item->is_ready = true;
+      parallel_work_queue.pop_front();
+    }
+  }
+
+  /* Clean up any outstanding batches. */
+  for (BatchHandle handle : batches.keys()) {
+    Vector<Shader *> shaders = batch_finalize(handle);
+    /* Delete any shaders in the batch. */
+    for (Shader *shader : shaders) {
+      if (shader) {
+        delete shader;
+      }
+    }
+  }
+
+  BLI_assert(batches.is_empty());
 }
 
 void MTLParallelShaderCompiler::create_compile_threads()
