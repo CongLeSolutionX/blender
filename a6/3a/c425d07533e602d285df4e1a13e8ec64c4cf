@@ -1,2 +1,3 @@
 Referenced by issue #65328, Offset on Outliner when Outliner header gains focus
 Referenced by issue #128346, Regression: outliner delay refreshing makes search results fail to display
+Referenced by commit 7ae759289960748ee91cc5257d3ab53016841534, Fix #128346: Search results fail to display in the outliner
