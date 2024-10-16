@@ -515,9 +515,9 @@ static bke::CurvesGeometry interpolate_between_curves(const GreasePencil &grease
     const IndexRange from_curves = from_drawing->strokes().curves_range();
     const IndexRange to_curves = to_drawing->strokes().curves_range();
 
-    /* Subset of target curves that are filled by this frame pair. */
     IndexMaskMemory selection_memory;
-    const IndexMask selection = IndexMask::from_indices(sorted_pairs.as_span().slice(pair_range),
+    /* Subset of target curves that are filled by this frame pair. Selection is built from pair indices, which correspond to dst curve indices. */
+    const IndexMask dst_curve_mask = IndexMask::from_indices(sorted_pairs.as_span().slice(pair_range),
                                                         selection_memory);
     MutableSpan<int> pair_from_indices = sorted_from_curve_indices.as_mutable_span().slice(
         pair_range);
@@ -533,7 +533,7 @@ static bke::CurvesGeometry interpolate_between_curves(const GreasePencil &grease
                                  to_drawing->strokes(),
                                  pair_from_indices,
                                  pair_to_indices,
-                                 selection,
+                                 dst_curve_mask,
                                  dst_curve_flip,
                                  mix_factor,
                                  dst_curves);
