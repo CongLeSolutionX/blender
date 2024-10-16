@@ -180,6 +180,9 @@ static void *ed_armature_pick_bone_from_selectbuffer_impl(const bool is_editmode
       if (is_editmode == false) {
         base = ED_armature_base_and_pchan_from_select_buffer(bases, hit_id, &pchan);
         if (pchan != nullptr) {
+          if (pchan->bone->flag & BONE_UNSELECTABLE) {
+            continue;
+          }
           if (findunsel) {
             sel = (pchan->bone->flag & BONE_SELECTED);
           }
@@ -196,6 +199,9 @@ static void *ed_armature_pick_bone_from_selectbuffer_impl(const bool is_editmode
       }
       else {
         base = ED_armature_base_and_ebone_from_select_buffer(bases, hit_id, &ebone);
+        if (ebone->flag & BONE_UNSELECTABLE) {
+          continue;
+        }
         if (findunsel) {
           sel = (ebone->flag & BONE_SELECTED);
         }
