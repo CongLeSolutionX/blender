@@ -125,13 +125,12 @@ GHOST_ContextCGL::~GHOST_ContextCGL()
     }
   }
   assert(s_sharedCount);
-  
+
   s_sharedCount--;
   [s_sharedMetalCommandQueue release];
   if (s_sharedCount == 0) {
     s_sharedMetalCommandQueue = nil;
   }
-  
 }
 
 GHOST_TSuccess GHOST_ContextCGL::swapBuffers()
@@ -317,7 +316,7 @@ void GHOST_ContextCGL::metalInit()
           "GHOST_ContextCGL::metalInit: newRenderPipelineStateWithDescriptor:error: failed (when "
           "creating the Metal overlay pipeline)!");
     }
-    
+
     [desc.fragmentFunction release];
     [desc.vertexFunction release];
   }

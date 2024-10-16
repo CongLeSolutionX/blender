@@ -130,7 +130,7 @@ eFileAttributes BLI_file_attributes(const char *path)
   @autoreleasepool {
     /* clang-format on */
     NSURL *fileURL = [[[NSURL alloc] initFileURLWithFileSystemRepresentation:path
-                                                                isDirectory:NO
+                                                                 isDirectory:NO
                                                                relativeToURL:nil] autorelease];
 
     /* Querying NSURLIsReadableKey and NSURLIsWritableKey keys for OneDrive placeholder files

@@ -2733,7 +2733,7 @@ void present(MTLRenderPassDescriptor *blit_descriptor,
   [cmdbuf addCompletedHandler:^(id<MTLCommandBuffer> /*cb*/) {
     /* Flag freed buffers associated with this CMD buffer as ready to be freed. */
     cmd_free_buffer_list->decrement_reference();
-    
+
     /* Decrement count */
     ctx->main_command_buffer.dec_active_command_buffer_count();
 
