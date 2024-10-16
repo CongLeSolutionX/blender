@@ -6,7 +6,6 @@
  * \ingroup spseq
  */
 
-#include "BLI_math_basis_types.hh"
 #include "DNA_windowmanager_types.h"
 #include "MEM_guardedalloc.h"
 
@@ -22,6 +21,7 @@
 #include "ED_select_utils.hh"
 #include "ED_sequencer.hh"
 
+#include "RNA_access.hh"
 #include "SEQ_effects.hh"
 #include "SEQ_relations.hh"
 #include "SEQ_select.hh"
@@ -35,6 +35,7 @@
 
 /* Own include. */
 #include "sequencer_intern.hh"
+#include <cstddef>
 
 using namespace blender;
 
@@ -160,10 +161,6 @@ static void delete_selected_text(TextVars *data)
 static void text_editing_update(const bContext *C)
 {
   Sequence *seq = SEQ_select_active_get(CTX_data_scene(C));
-  TextVars *data = static_cast<TextVars *>(seq->effectdata);
-
-  MEM_delete(data->runtime);
-  data->runtime = nullptr;
   SEQ_relations_invalidate_cache_raw(CTX_data_scene(C), seq);
   WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, CTX_data_scene(C));
 }
@@ -182,16 +179,16 @@ enum {
 };
 
 static const EnumPropertyItem move_type_items[] = {
-    {LINE_BEGIN, "LINE_BEGIN", 0, "Line Begin", ""},                 // ok
-    {LINE_END, "LINE_END", 0, "Line End", ""},                       // ok
-    {TEXT_BEGIN, "TEXT_BEGIN", 0, "Text Begin", ""},                 // ok
-    {TEXT_END, "TEXT_END", 0, "Text End", ""},                       // ok
-    {PREV_CHAR, "PREVIOUS_CHARACTER", 0, "Previous Character", ""},  // ok
-    {NEXT_CHAR, "NEXT_CHARACTER", 0, "Next Character", ""},          // ok
+    {LINE_BEGIN, "LINE_BEGIN", 0, "Line Begin", ""},
+    {LINE_END, "LINE_END", 0, "Line End", ""},
+    {TEXT_BEGIN, "TEXT_BEGIN", 0, "Text Begin", ""},
+    {TEXT_END, "TEXT_END", 0, "Text End", ""},
+    {PREV_CHAR, "PREVIOUS_CHARACTER", 0, "Previous Character", ""},
+    {NEXT_CHAR, "NEXT_CHARACTER", 0, "Next Character", ""},
     {PREV_WORD, "PREVIOUS_WORD", 0, "Previous Word", ""},
     {NEXT_WORD, "NEXT_WORD", 0, "Next Word", ""},
-    {PREV_LINE, "PREVIOUS_LINE", 0, "Previous Line", ""},  // ok
-    {NEXT_LINE, "NEXT_LINE", 0, "Next Line", ""},          // ok
+    {PREV_LINE, "PREVIOUS_LINE", 0, "Previous Line", ""},
+    {NEXT_LINE, "NEXT_LINE", 0, "Next Line", ""},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
@@ -261,7 +258,6 @@ static bool is_whitespace_transition(char chr1, char chr2)
   return ELEM(chr1, ' ', '\t', '\n') && !ELEM(chr2, ' ', '\t', '\n');
 }
 
-/* XXX Not great, not terrible I guess */
 static int2 cursor_move_prev_word(int2 cursor_position, TextVarsRuntime *text)
 {
   cursor_position = cursor_move_by_character(cursor_position, text, -1);
@@ -279,14 +275,12 @@ static int2 cursor_move_prev_word(int2 cursor_position, TextVarsRuntime *text)
   return cursor_position;
 }
 
-/* XXX Not great, not terrible I guess */
 static int2 cursor_move_next_word(int2 cursor_position, TextVarsRuntime *text)
 {
   const int maxline = text->lines.size() - 1;
   const int maxchar = text->lines.last().characters.size() - 1;
 
-  while ((cursor_position.x < maxchar) || (cursor_position.y < maxline))
-  {  // xxx this in incorrect?!
+  while ((cursor_position.x < maxchar) || (cursor_position.y < maxline)) {
     seq::CharInfo character = character_at_cursor_pos_get(text, cursor_position);
     cursor_position = cursor_move_by_character(cursor_position, text, 1);
     seq::CharInfo next_character = character_at_cursor_pos_get(text, cursor_position);
@@ -386,20 +380,13 @@ void SEQUENCER_OT_text_cursor_move(wmOperatorType *ot)
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
 
-static int sequencer_text_insert_exec(bContext * /*C*/, wmOperator * /*op*/)
-{
-  /* xxx
-   */
-  return OPERATOR_FINISHED;
-}
-
 static bool text_insert(TextVars *data, const char *buf)
 {
   TextVarsRuntime *text = data->runtime;
   delete_selected_text(data);
 
-  size_t in_buf_len = BLI_str_utf8_size_safe(buf);
-  size_t text_buf_len = BLI_str_utf8_size_safe(data->text);
+  size_t in_buf_len = BLI_strnlen(buf, sizeof(buf));
+  size_t text_buf_len = strlen_include_null_terminator(data->text, sizeof(data->text));
 
   if (text_buf_len + in_buf_len > sizeof(data->text)) {
     return false;
@@ -416,22 +403,33 @@ static bool text_insert(TextVars *data, const char *buf)
   return true;
 }
 
-static int sequencer_text_insert_invoke(bContext *C, wmOperator * /*op*/, const wmEvent *event)
+static int sequencer_text_insert_exec(bContext *C, wmOperator *op)
 {
   Sequence *seq = SEQ_select_active_get(CTX_data_scene(C));
   TextVars *data = static_cast<TextVars *>(seq->effectdata);
 
-  size_t in_buf_len = BLI_str_utf8_size_safe(event->utf8_buf);
+  char str[512];
+  RNA_string_get(op->ptr, "string", str);
+
+  size_t in_buf_len = BLI_strnlen(str, sizeof(str));
   if (in_buf_len == 0) {
     return OPERATOR_CANCELLED | OPERATOR_PASS_THROUGH;
   }
 
-  if (!text_insert(data, event->utf8_buf)) {
+  if (!text_insert(data, str)) {
     return OPERATOR_CANCELLED;
   }
 
   text_editing_update(C);
   return OPERATOR_FINISHED;
+}
+
+static int sequencer_text_insert_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+{
+  char str[6];
+  BLI_strncpy(str, event->utf8_buf, BLI_str_utf8_size_safe(event->utf8_buf) + 1);
+  RNA_string_set(op->ptr, "string", str);
+  return sequencer_text_insert_exec(C, op);
 }
 
 void SEQUENCER_OT_text_insert(wmOperatorType *ot)
@@ -450,29 +448,12 @@ void SEQUENCER_OT_text_insert(wmOperatorType *ot)
   ot->flag = OPTYPE_UNDO;
 
   /* properties */
-  // xxx
-  /*  RNA_def_boolean(
-        ot->srna,
-        "accent",
-        false,
-        "Accent Mode",
-        "Next typed character will strike through previous, for special character input");*/
+  RNA_def_string(
+      ot->srna, "string", nullptr, 512, "String", "String to be inserted at cursor position");
 }
 
-enum {
-  DEL_NEXT_CHAR,
-  DEL_PREV_CHAR,
-  DEL_NEXT_WORD,
-  DEL_PREV_WORD,
-  DEL_SELECTION,
-  DEL_NEXT_SEL,
-  DEL_PREV_SEL
-};
-
+enum { DEL_NEXT_CHAR, DEL_PREV_CHAR, DEL_SELECTION, DEL_NEXT_SEL, DEL_PREV_SEL };
 static const EnumPropertyItem delete_type_items[] = {
-    {DEL_NEXT_WORD, "NEXT_WORD", 0, "Next Word", ""},
-    {DEL_PREV_WORD, "PREVIOUS_WORD", 0, "Previous Word", ""},
-    // xxx I guess these are not needed? at least selection is implied to be always deleted
     {DEL_NEXT_SEL, "NEXT_OR_SELECTION", 0, "Next or Selection", ""},
     {DEL_PREV_SEL, "PREVIOUS_OR_SELECTION", 0, "Previous or Selection", ""},
     {0, nullptr, 0, nullptr, nullptr},
@@ -705,11 +686,6 @@ static int sequencer_text_cursor_set_modal(bContext *C, wmOperator * /*op*/, con
   const Scene *scene = CTX_data_scene(C);
   Sequence *seq = SEQ_select_active_get(scene);
   TextVars *data = static_cast<TextVars *>(seq->effectdata);
-  /* XXX This happened sometimes, maybe not needed now, since I no longer invalidate runtime. */
-  /*if (data->runtime == nullptr) {
-    return OPERATOR_RUNNING_MODAL;
-  }*/
-
   bool make_selection = false;
 
   switch (event->type) {
@@ -772,7 +748,6 @@ void SEQUENCER_OT_text_cursor_set(wmOperatorType *ot)
   ot->idname = "SEQUENCER_OT_text_cursor_set";
 
   /* api callbacks */
-  // ot->exec = sequencer_text_cursor_move_mouse_exec; //TODO I guess
   ot->invoke = sequencer_text_cursor_set_invoke;
   ot->modal = sequencer_text_cursor_set_modal;
   ot->poll = sequencer_text_editing_active_poll;
@@ -795,7 +770,7 @@ static void text_edit_copy(TextVars *data)
   seq::CharInfo end = character_at_cursor_offset_get(text, selection_range.last());
   const size_t len = end.str_ptr + end.byte_length - start.str_ptr;
 
-  char clipboard_buf[sizeof(data->text)] = {0};  // xxx
+  char clipboard_buf[sizeof(data->text)] = {0};
   memcpy(clipboard_buf, start.str_ptr, math::min(len, sizeof(clipboard_buf)));
   WM_clipboard_text_set(clipboard_buf, false);
 }
@@ -843,15 +818,18 @@ static int sequencer_text_edit_paste_exec(bContext *C, wmOperator * /*op*/)
     return OPERATOR_CANCELLED;
   }
 
+  int max_len = sizeof(data->text) -
+                strlen_include_null_terminator(data->text, sizeof(data->text));
+  clipboard_len = std::min(clipboard_len, max_len);
+
   seq::CharInfo cur_char = character_at_cursor_offset_get(text, data->cursor_offset);
   char *cursor_addr = const_cast<char *>(cur_char.str_ptr);
-  size_t move_len = strlen_include_null_terminator(cursor_addr, sizeof(data->text));
+  size_t move_len = BLI_strnlen(cursor_addr, sizeof(data->text));
 
-  // XXX unsafe memmove and memcpy!
   std::memmove(cursor_addr + clipboard_len, cursor_addr, move_len);
   std::memcpy(cursor_addr, clipboard_buf, clipboard_len);
 
-  data->cursor_offset += BLI_strlen_utf8(clipboard_buf);
+  data->cursor_offset += move_len;
 
   text_editing_update(C);
   return OPERATOR_FINISHED;
