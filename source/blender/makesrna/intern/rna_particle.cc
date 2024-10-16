@@ -484,7 +484,7 @@ static const EnumPropertyItem *rna_Particle_Material_itemf(bContext *C,
                                                            bool *r_free)
 {
 
-  ParticleSettings *part = (ParticleSettings *)ptr->owner_id;
+  ParticleSettings *part = reinterpret_cast<ParticleSettings *>(ptr->owner_id);
 
   /* The context object might not be what we want when doing this from python. */
   Object *ob_found = nullptr;
