@@ -11,6 +11,8 @@
 #include "scene/shader_nodes.h"
 #include "scene/volume.h"
 
+#include "integrator/shader_eval.h"
+
 #include "util/progress.h"
 #include "util/stats.h"
 
@@ -58,35 +60,14 @@ float volume_density_scale(const Shader *shader)
   return reduce_max(volume_node->get_density() * color);
 }
 
-float volume_density_scale(const Object *object)
+__forceinline int Octree::flatten_index(int x, int y, int z, int3 size) const
 {
-  Geometry *geom = object->get_geometry();
-
-  for (Node *node : geom->get_used_shaders()) {
-    Shader *shader = static_cast<Shader *>(node);
-    if (shader->has_volume) {
-      return volume_density_scale(shader) *
-             ObjectManager::object_volume_density(object->get_tfm(), geom);
-    }
-  }
-  return 0.0f;
+  return x + size.x * (y + z * size.y);
 }
 
-template<typename T>
-nanovdb::Extrema<typename nanovdb::NanoGrid<T>::ValueType> OctreeNode::get_extrema(
-    const nanovdb::NanoGrid<T> *grid, const Transform *itfm)
+__forceinline int Octree::flatten_index(int x, int y, int z) const
 {
-  nanovdb::BBox<nanovdb::Vec3f> vdb_bbox;
-
-  for (int i = 0; i < 8; i++) {
-    const float3 t = make_float3(i & 1, (i >> 1) & 1, (i >> 2) & 1);
-    const float3 v = transform_point(itfm, mix(bbox.min, bbox.max, t));
-    vdb_bbox.expand(nanovdb::Vec3(v.x, v.y, v.z));
-  }
-  const nanovdb::CoordBBox coord_bbox(grid->worldToIndexF(vdb_bbox.min()).floor(),
-                                      grid->worldToIndexF(vdb_bbox.max()).ceil());
-
-  return nanovdb::getExtrema(*grid, coord_bbox);
+  return x + width * (y + z * width);
 }
 
 bool Octree::should_split(std::shared_ptr<OctreeNode> &node)
@@ -95,6 +76,8 @@ bool Octree::should_split(std::shared_ptr<OctreeNode> &node)
     return false;
   }
 
+/* TODO(weizhen): need to query where the density is non-zero. */
+#if 0
   if (node->objects.size() == 1) {
     const Object *object = node->objects[0];
     if (object->is_homogeneous_volume()) {
@@ -104,106 +87,31 @@ bool Octree::should_split(std::shared_ptr<OctreeNode> &node)
       return false;
     }
   }
-
-  node->sigma = {background_density_min, background_density_max};
-
-  for (Object *object : node->objects) {
-    float min = 1.0f;
-    float max = 1.0f;
-
-    /* TODO(weizhen): objects might have multiple shaders. */
-    Geometry *geom = object->get_geometry();
-    if (geom->is_volume()) {
-      Volume *volume = static_cast<Volume *>(geom);
-#ifdef WITH_OPENVDB
-      for (Attribute &attr : volume->attributes.attributes) {
-        if (attr.element != ATTR_ELEMENT_VOXEL || attr.name != "density") {
-          continue;
-        }
-
-        /* TODO(weizhen): bbox is an approximation, a more appropriate way would be to evaluate
-         * volume shader at certain resolution. See `kernel/bake/bake.h`. */
-        /* TODO(weizhen): potentially remove the object when max = 0. */
-#  ifdef WITH_NANOVDB
-        ImageHandle &handle = attr.data_voxel();
-        if (handle.metadata().type == IMAGE_DATA_TYPE_NANOVDB_FP16) {
-
-          auto const *grid = handle.vdb_loader()->nanogrid.grid<nanovdb::Fp16>();
-          if (grid) {
-            const Transform itfm = transform_inverse(object->get_tfm());
-            auto extrema = node->get_extrema(grid, &itfm);
-            min = extrema.min();
-            max = extrema.max();
-          }
-        }
-#  endif
-      }
-#else
-      /* TODO */
 #endif
-    }
-    else if (geom->is_mesh()) {
-      const auto *grid = vdb_map.at(geom).grid<bool>();
-      if (grid) {
-        /* TODO(weizhen): evaluate objects with various shaders separately.  */
-        /* TODO(weizhen): probably dense grid is the proper way. */
-        const Mesh *mesh = static_cast<const Mesh *>(geom);
-        Transform itfm;
-        if (!mesh->transform_applied) {
-          itfm = transform_inverse(object->get_tfm());
-        }
-        nanovdb::BBox<nanovdb::Vec3f> vdb_bbox;
 
-        for (int i = 0; i < 8; i++) {
-          const float3 t = make_float3(i & 1, (i >> 1) & 1, (i >> 2) & 1);
-          float3 v = mix(node->bbox.min, node->bbox.max, t);
-          if (!mesh->transform_applied) {
-            v = transform_point(&itfm, v);
-          }
-          vdb_bbox.expand(nanovdb::Vec3(v.x, v.y, v.z));
-        }
-        const nanovdb::CoordBBox coord_bbox(grid->worldToIndexF(vdb_bbox.min()).floor(),
-                                            grid->worldToIndexF(vdb_bbox.max()).ceil());
+  const int3 index_min = world_to_floor_index(node->bbox.min);
+  const int3 index_max = world_to_ceil_index(node->bbox.max);
 
-        /* TODO(weizhen): workaround of bool grid not supporting `getExtrema()`. Shouldn't be
-         * necessary later. */
-        min = 1.0f;
-        max = 0.0f;
-        bool has_min = false;
-        bool has_max = false;
-        auto acc = grid->getAccessor();
-        [&] {
-          for (int x = coord_bbox.min().x(); x <= coord_bbox.max().x(); x++) {
-            for (int y = coord_bbox.min().y(); y <= coord_bbox.max().y(); y++) {
-              for (int z = coord_bbox.min().z(); z <= coord_bbox.max().z(); z++) {
-                if (acc.getValue(nanovdb::Coord(x, y, z))) {
-                  max = 1.0f;
-                  if (has_min) {
-                    return;
-                  }
-                  has_max = true;
-                }
-                else if (!acc.getValue(nanovdb::Coord(x, y, z))) {
-                  min = 0.0f;
-                  if (has_max) {
-                    return;
-                  }
-                  has_min = true;
-                }
-              }
+  const blocked_range3d<int> range(
+      index_min.x, index_max.x, index_min.y, index_max.y, index_min.z, index_max.z);
+  const Extrema<float> identity = {FLT_MAX, 0.0f};
+  const Extrema<float> sigma_extrema = parallel_reduce(
+      range,
+      identity,
+      [&](const blocked_range3d<int> &r, Extrema<float> init) -> Extrema<float> {
+        for (int z = r.cols().begin(); z < r.cols().end(); ++z) {
+          for (int y = r.rows().begin(); y < r.rows().end(); ++y) {
+            for (int x = r.pages().begin(); x < r.pages().end(); ++x) {
+              init = join(init, sigmas[flatten_index(x, y, z)]);
             }
           }
-        }();
-      }
-    }
+        }
+        return init;
+      },
+      [](Extrema<float> a, Extrema<float> b) -> Extrema<float> { return join(a, b); });
 
-    const float scale = volume_density_scale(object);
-    min *= scale;
-    max *= scale;
-
-    node->sigma.min = fminf(min, node->sigma.min);
-    node->sigma.max += max;
-  }
+  node->sigma.min = sigma_extrema.min;  // + background_density_min;
+  node->sigma.max = sigma_extrema.max;  // + background_density_max;
 
   /* TODO(weizhen): force subdivision of aggregate nodes that are larger than the volume contained,
    * regardless of the volume’s majorant extinction. */
@@ -328,14 +236,142 @@ void Octree::flatten(KernelOctreeNode *knodes)
    */
 }
 
-void Octree::build(Progress &progress)
+__forceinline float3 Octree::world_to_index(float3 p) const
+{
+  return (p - root_->bbox.min) * world_to_index_scale_;
+}
+
+int3 Octree::world_to_floor_index(float3 p) const
+{
+  const float3 index = floor(world_to_index(p));
+  return make_int3(int(index.x), int(index.y), int(index.z));
+}
+
+int3 Octree::world_to_ceil_index(float3 p) const
+{
+  const float3 index = ceil(world_to_index(p));
+  return make_int3(int(index.x), int(index.y), int(index.z));
+}
+
+__forceinline float3 Octree::index_to_world(int x, int y, int z) const
+{
+  return root_->bbox.min + make_float3(x, y, z) * index_to_world_scale_;
+}
+
+void Octree::evaluate_volume_density_(Device *device, Progress &progress)
+{
+  const int size = width * width * width;
+  /* Min and max. */
+  const int num_channels = 2;
+
+  sigmas.resize(size);
+
+  parallel_for(0, size, [&](int i) { sigmas[i] = {0.0f, 0.0f}; });
+
+  /* TODO(weizhen): add world. */
+  for (const Object *object : root_->objects) {
+    const int object_id = object->get_device_index();
+
+    const Geometry *geom = object->get_geometry();
+
+    /* Get shader id. */
+    uint shader_id;
+    for (Node *node : geom->get_used_shaders()) {
+      Shader *shader = static_cast<Shader *>(node);
+      if (shader->has_volume) {
+        /* TODO(weizhen): support multiple shaders. */
+        shader_id = shader->id;
+        break;
+      }
+    }
+
+    /* Evaluate density inside object bounds. */
+    const int3 index_min = world_to_floor_index(object->bounds.min);
+    const int3 index_max = world_to_ceil_index(object->bounds.max);
+
+    const int3 index_range = index_max - index_min;
+    const int valid_size = index_range.x * index_range.y * index_range.z;
+
+    const blocked_range3d<int> range(0, index_range.x, 0, index_range.y, 0, index_range.z);
+
+    /* TODO(weizhen): specialize homogeneous volume and evaluate less points? */
+
+    /* Evaluate shader on device. */
+    ShaderEval shader_eval(device, progress);
+    shader_eval.eval(
+        SHADER_EVAL_VOLUME_DENSITY,
+        valid_size * 2,
+        num_channels,
+        [&](device_vector<KernelShaderEvalInput> &d_input) {
+          /* Fill coordinates for shading. */
+          KernelShaderEvalInput *d_input_data = d_input.data();
+
+          parallel_for(range, [&](const blocked_range3d<int> &r) {
+            for (int z = r.cols().begin(); z < r.cols().end(); ++z) {
+              for (int y = r.rows().begin(); y < r.rows().end(); ++y) {
+                for (int x = r.pages().begin(); x < r.pages().end(); ++x) {
+                  const int local_index = flatten_index(x, y, z, index_range);
+
+                  KernelShaderEvalInput in;
+                  in.object = object_id;
+                  const float3 p = index_to_world(
+                      x + index_min.x, y + index_min.y, z + index_min.z);
+                  in.prim = __float_as_int(p.x);
+                  in.u = p.y;
+                  in.v = p.z;
+                  d_input_data[local_index * 2 + 0] = in;
+
+                  const float3 voxel_size = index_to_world_scale_;
+                  in.object = shader_id;
+                  in.prim = __float_as_int(index_to_world_scale_.x);
+                  in.u = index_to_world_scale_.y;
+                  in.v = index_to_world_scale_.z;
+                  d_input_data[local_index * 2 + 1] = in;
+                }
+              }
+            }
+          });
+          return valid_size;
+        },
+        [&](device_vector<float> &d_output) {
+          /* Copy output to pixel buffer. */
+          float *d_output_data = d_output.data();
+          parallel_for(range, [&](const blocked_range3d<int> &r) {
+            for (int z = r.cols().begin(); z < r.cols().end(); ++z) {
+              for (int y = r.rows().begin(); y < r.rows().end(); ++y) {
+                for (int x = r.pages().begin(); x < r.pages().end(); ++x) {
+                  const int local_index = flatten_index(x, y, z, index_range);
+                  const int global_index = flatten_index(
+                      x + index_min.x, y + index_min.y, z + index_min.z);
+
+                  /* TODO(weizhen): multiply by vdb. */
+                  sigmas[global_index].min += d_output_data[local_index * num_channels + 0];
+                  sigmas[global_index].max += d_output_data[local_index * num_channels + 1];
+                }
+              }
+            }
+          });
+        });
+  }
+}
+
+void Octree::build(Device *device, Progress &progress)
 {
   // if (!root_) {
   //   return;
   // }
 
+  progress.set_substatus("Evaluate volume density");
+  double start_time = time_dt();
+
+  evaluate_volume_density_(device, progress);
+
+  std::cout << "Volume density evaluated in " << time_dt() - start_time << " seconds."
+            << std::endl;
+  VLOG_INFO << "Volume density evaluated in " << time_dt() - start_time << " seconds.";
+
   progress.set_substatus("Building Octree for volumes");
-  const double start_time = time_dt();
+  start_time = time_dt();
 
   recursive_build_(root_);
 
@@ -390,6 +426,11 @@ Octree::Octree(const Scene *scene)
     /* So that fminf(a, FLT_MAX) always returns a. */
     background_density_min = FLT_MAX;
   }
+
+  /* 2^max_level. */
+  width = 1 << max_level;
+  world_to_index_scale_ = float(width) / (root_->bbox.max - root_->bbox.min);
+  index_to_world_scale_ = 1.0f / world_to_index_scale_;
 
   // if (!root_->bbox.valid()) {
   //   root_.reset();
@@ -519,26 +560,9 @@ void Octree::visualize_fast(KernelOctreeNode *knodes, const char *filename) cons
 
 Octree::~Octree()
 {
-  /* TODO(weizhen): quite weird workaround to delay releasing nanogrid, but probably don't need
-   * this later. */
-  /* TODO(weizhen): if the scene has instanced objects vdb was already cleared, this doesn't work.
-   */
 #ifdef WITH_NANOVDB
   for (auto &it : vdb_map) {
     it.second.reset();
-  }
-  for (Object *object : root_->objects) {
-    Geometry *geom = object->get_geometry();
-    if (geom->geometry_type == Geometry::VOLUME) {
-      Volume *volume = static_cast<Volume *>(geom);
-      for (Attribute &attr : volume->attributes.attributes) {
-        if (attr.element == ATTR_ELEMENT_VOXEL) {
-          if (attr.data_voxel().vdb_loader()) {
-            attr.data_voxel().vdb_loader()->nanogrid.reset();
-          }
-        }
-      }
-    }
   }
 #endif
 }

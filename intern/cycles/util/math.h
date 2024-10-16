@@ -1098,9 +1098,16 @@ template<typename T> struct Extrema {
   T max;
 };
 
-template<typename T> ccl_device_inline Extrema<T> join(const Extrema<T> a, const Extrema<T> b)
+template<typename T>
+ccl_device_inline Extrema<T> join(const ccl_private Extrema<T> &a, const ccl_private Extrema<T> &b)
 {
   return {min(a.min, b.min), max(a.max, b.max)};
+}
+
+template<typename T>
+ccl_device_inline Extrema<T> join(const ccl_private Extrema<T> &a, const ccl_private T &v)
+{
+  return {min(a.min, v), max(a.max, v)};
 }
 
 /* Defines a closed interval [min, max]. */

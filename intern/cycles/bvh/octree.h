@@ -21,6 +21,7 @@
 CCL_NAMESPACE_BEGIN
 
 class BoundBox;
+class Device;
 class Geometry;
 class Mesh;
 class Object;
@@ -40,10 +41,6 @@ struct OctreeNode {
   OctreeNode() : bbox(BoundBox::empty), level(0) {}
   OctreeNode(BoundBox bbox_, int level_) : bbox(bbox_), level(level_) {}
   virtual ~OctreeNode() = default;
-
-  template<typename T>
-  nanovdb::Extrema<typename nanovdb::NanoGrid<T>::ValueType> get_extrema(
-      const nanovdb::NanoGrid<T> *grid, const Transform *itfm);
 };
 
 struct OctreeInternalNode : public OctreeNode {
@@ -61,7 +58,7 @@ class Octree {
   friend struct OctreeNode;
 
  public:
-  void build(Progress &progress);
+  void build(Device *device, Progress &progress);
   Octree(const Scene *scene);
   ~Octree();
 
@@ -69,6 +66,12 @@ class Octree {
   bool is_empty() const;
   int get_num_nodes() const;
   bool has_world_volume() const;
+
+  float3 world_to_index(float3 p) const;
+  int3 world_to_floor_index(float3 p) const;
+  int3 world_to_ceil_index(float3 p) const;
+  /* Convert from index to the position of the lower left corner of the cell. */
+  float3 index_to_world(int x, int y, int z) const;
 
   /* Represent octree nodes as empty boxes with Blender Python API. */
   void visualize(KernelOctreeNode *knodes, const char *filename) const;
@@ -78,6 +81,9 @@ class Octree {
   std::shared_ptr<OctreeInternalNode> make_internal(std::shared_ptr<OctreeNode> &node);
   void recursive_build_(std::shared_ptr<OctreeNode> &node);
   int flatten_(KernelOctreeNode *knodes, std::shared_ptr<OctreeNode> &node, int &index);
+  void evaluate_volume_density_(Device *device, Progress &progress);
+  int flatten_index(int x, int y, int z) const;
+  int flatten_index(int x, int y, int z, int3 size) const;
   bool should_split(std::shared_ptr<OctreeNode> &node);
 
   /* Root node. */
@@ -93,6 +99,10 @@ class Octree {
   /* Set the maximal resolution to be 128 to reduce traversing overhead. */
   /* TODO(weizhen): tweak this threshold. 128 is a reference from PBRT. */
   const int max_level = 7;
+  int width;
+  float3 world_to_index_scale_;
+  float3 index_to_world_scale_;
+  vector<Extrema<float>> sigmas;
 
   /* World volume. */
   /* TODO(weizhen): we only need the max density after properly evaluating volume shaders. */

@@ -119,29 +119,44 @@ ccl_device void kernel_volume_density_evaluate(KernelGlobals kg,
 {
 #ifdef __VOLUME__
   /* Setup shader data. */
-  const KernelShaderEvalInput in = input[offset];
+  KernelShaderEvalInput in = input[offset * 2 + 0];
 
   ShaderData sd;
   Ray ray;
-  ray.P = make_float3(in.u, in.v, in.w);
+  ray.P = make_float3(__int_as_float(in.prim), in.u, in.v);
   ray.D = zero_float3();
   /* TODO(weizhen): What fields need to be written? */
   shader_setup_from_volume(kg, &sd, &ray, in.object);
-
-  const VolumeStack entry = {sd.object, in.prim};
-
-  /* Evaluate volume extinction coefficients. */
   sd.flag = SD_IS_VOLUME_SHADER_EVAL;
-  sd.object_flag = 0;
-  volume_shader_eval_entry<true, KERNEL_FEATURE_NODE_VOLUME | KERNEL_FEATURE_NODE_VORONOI_EXTRA>(
-      kg, INTEGRATOR_STATE_NULL, &sd, entry, PATH_RAY_SHADOW, 0);
+  /* No need for closure when evaluating extinction. */
+  sd.num_closure_left = 0;
 
-  const Spectrum sigma = (sd.flag & SD_EXTINCTION) ? sd.closure_transparent_extinction :
-                                                     zero_spectrum();
+  in = input[offset * 2 + 1];
+  const int shader = in.object;
+  const VolumeStack entry = {sd.object, shader};
+  const float3 voxel_size = make_float3(__int_as_float(in.prim), in.u, in.v);
+
+  Extrema<float> extrema = {FLT_MAX, 0.0f};
+  for (int sample = 0; sample < 10; sample++) {
+    /* TODO(weizhen): fix the blue noise sample number problem. */
+    const float3 rand_p = path_rng_3D(kg, offset, 0, sample);
+    sd.P = ray.P + rand_p * voxel_size;
+    sd.closure_transparent_extinction = zero_float3();
+
+    /* Evaluate volume extinction coefficients. */
+    volume_shader_eval_entry<false,
+                             KERNEL_FEATURE_NODE_MASK_VOLUME & ~KERNEL_FEATURE_NODE_LIGHT_PATH>(
+        kg, INTEGRATOR_STATE_NULL, &sd, entry, PATH_RAY_SHADOW);
+
+    const float sigma = (sd.flag & SD_EXTINCTION) ? reduce_max(sd.closure_transparent_extinction) :
+                                                    0.0f;
+
+    extrema = join(extrema, sigma);
+  }
 
   /* Write output. */
-  output[offset * 2 + 0] = reduce_max(sigma);
-  output[offset * 2 + 1] = reduce_min(sigma);
+  output[offset * 2 + 0] = extrema.min;
+  output[offset * 2 + 1] = extrema.max;
 #endif
 }
 

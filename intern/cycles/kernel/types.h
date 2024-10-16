@@ -1820,10 +1820,6 @@ typedef struct KernelShaderEvalInput {
   int object;
   int prim;
   float u, v;
-  /* Volume. */
-  float w;
-  /* Padding. */
-  float pad[3];
 } KernelShaderEvalInput;
 static_assert_align(KernelShaderEvalInput, 16);
 
