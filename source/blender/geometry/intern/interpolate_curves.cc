@@ -381,14 +381,15 @@ void interpolate_curves(const CurvesGeometry &from_curves,
       GArray<> from_samples(dst.type(), dst.size());
       GArray<> to_samples(dst.type(), dst.size());
       sample_curve_attribute(from_curves,
-      from_curve_indices,
+                             from_curve_indices,
                              dst_points_by_curve,
                              src_from,
                              dst_curve_mask,
                              from_sample_indices,
                              from_sample_factors,
                              from_samples);
-      sample_curve_attribute(to_curves,to_curve_indices,
+      sample_curve_attribute(to_curves,
+                             to_curve_indices,
                              dst_points_by_curve,
                              src_to,
                              dst_curve_mask,
@@ -398,7 +399,8 @@ void interpolate_curves(const CurvesGeometry &from_curves,
       mix_arrays(from_samples, to_samples, mix_factor, dst_curve_mask, dst_points_by_curve, dst);
     }
     else if (!src_from.is_empty()) {
-      sample_curve_attribute(from_curves,from_curve_indices,
+      sample_curve_attribute(from_curves,
+                             from_curve_indices,
                              dst_points_by_curve,
                              src_from,
                              dst_curve_mask,
@@ -407,7 +409,8 @@ void interpolate_curves(const CurvesGeometry &from_curves,
                              dst);
     }
     else if (!src_to.is_empty()) {
-      sample_curve_attribute(to_curves,to_curve_indices,
+      sample_curve_attribute(to_curves,
+                             to_curve_indices,
                              dst_points_by_curve,
                              src_to,
                              dst_curve_mask,
@@ -422,14 +425,16 @@ void interpolate_curves(const CurvesGeometry &from_curves,
     Array<float3> to_samples(dst_positions.size());
 
     /* Interpolate the evaluated positions to the resampled curves. */
-    sample_curve_attribute(from_curves,from_curve_indices,
+    sample_curve_attribute(from_curves,
+                           from_curve_indices,
                            dst_points_by_curve,
                            from_evaluated_positions,
                            dst_curve_mask,
                            from_sample_indices,
                            from_sample_factors,
                            from_samples.as_mutable_span());
-    sample_curve_attribute(to_curves,to_curve_indices,
+    sample_curve_attribute(to_curves,
+                           to_curve_indices,
                            dst_points_by_curve,
                            to_evaluated_positions,
                            dst_curve_mask,
