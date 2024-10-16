@@ -1,2 +1,2 @@
-Referenced by issue #69444, VSE Linked external scene with audio with input Sequencer only works if the scene is NOT also linked with input Camera
+Referenced by issue #69444, VSE Scene with audio with input Sequencer only works if the scene is NOT also present with input Camera
 Referenced by issue #66279, No sound from scene strip
