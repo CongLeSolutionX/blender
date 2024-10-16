@@ -3,3 +3,4 @@ Referenced by issue #115938, UI: the “j” in the Front of Text Input Field is
 Referenced by issue #115162, Cycles: Blurry Volumetric & Very Long Render Time in 4.0
 Referenced by issue #116413, EEVEE-Next: Crashes/freezes when enabling HDRI Preview spheres
 Referenced by issue #119202, Regression: Python API: 'bpy.ops.screen.area_close' crashes in Blender 4.1
+Referenced by issue #129085, Face Set From Masked Not Working in Blender 4.2.2
