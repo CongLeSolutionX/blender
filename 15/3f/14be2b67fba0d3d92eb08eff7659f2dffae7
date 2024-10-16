@@ -3,3 +3,4 @@ Referenced by issue #115779, Compositor Split node factor 0 still shows the othe
 Referenced by issue #115780, Regression: Compositor Split node with only colors does not work (in 3DView, compositor backdrop is fine)
 Referenced by issue #116413, EEVEE-Next: Crashes/freezes when enabling HDRI Preview spheres
 Referenced by issue #119202, Regression: Python API: 'bpy.ops.screen.area_close' crashes in Blender 4.1
+Referenced by issue #129085, Face Set From Masked Not Working in Blender 4.2.2
