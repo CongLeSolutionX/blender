@@ -181,12 +181,10 @@ class EvalOutputAPI {
 }  // namespace blender::opensubdiv
 
 struct OpenSubdiv_Evaluator {
-  // Implementation of the evaluator.
   blender::opensubdiv::EvalOutputAPI *eval_output;
   const blender::opensubdiv::PatchMap *patch_map;
   const OpenSubdiv::Far::PatchTable *patch_table;
 
-  // Type of the evaluator.
   eOpenSubdivEvaluator type;
 
   OpenSubdiv_Evaluator();
