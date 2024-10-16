@@ -95,6 +95,12 @@ enum ISectType {
   IX_TOT,
 };
 
+struct ISectEpsilon {
+  float eps, eps_sq;
+  float eps2x, eps2x_sq;
+  float eps_margin, eps_margin_sq;
+};
+
 /**
  * Store as value in GHash so we can get list-length without counting every time.
  * Also means we don't need to update the GHash value each time.
@@ -102,12 +108,6 @@ enum ISectType {
 struct LinkBase {
   LinkNode *list;
   uint list_len;
-};
-
-struct ISectEpsilon {
-  float eps, eps_sq;
-  float eps2x, eps2x_sq;
-  float eps_margin, eps_margin_sq;
 };
 
 struct ISectState {
@@ -414,7 +414,7 @@ static BMVert *bm_isect_edge_tri(ISectState *s,
 #undef KEY_EDGE_TRI_ORDER
 
   for (i = 0; i < ARRAY_SIZE(k_arr); i++) {
-    BMVert *iv = s->edgetri_cache.lookup(k_arr[i]);
+    BMVert *iv = s->edgetri_cache.lookup_default(k_arr[i], nullptr);
 
     if (iv) {
 #ifdef USE_DUMP
