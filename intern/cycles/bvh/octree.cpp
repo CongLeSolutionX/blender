@@ -351,7 +351,7 @@ void Octree::visualize(KernelOctreeNode *knodes, const char *filename)
     file << "bpy.context.scene.collection.children.link(octree)\n";
     file << "bpy.ops.mesh.primitive_cube_add(location = (0, 0, 0), scale=(1, 1, 1))\n";
     file << "cube = bpy.context.object\n";
-    for (int i = 0; i < num_nodes; i++) {
+    for (int i = 1; i < get_num_nodes(); i++) {
       if (!knodes[i].is_leaf) {
         /* Only draw leaf nodes. */
         continue;
@@ -387,8 +387,8 @@ void Octree::visualize_fast(KernelOctreeNode *knodes, const char *filename)
     file << "import bpy\n\n";
     file << "octree = bpy.data.collections.new(name='Octree')\n";
     file << "bpy.context.scene.collection.children.link(octree)\n\n";
-    float3 center = knodes[0].bbox.center();
-    float3 size = knodes[0].bbox.size() * 0.5f;
+    float3 center = knodes[1].bbox.center();
+    float3 size = knodes[1].bbox.size() * 0.5f;
     file << "bpy.ops.mesh.primitive_cube_add(location = (" << center.x << ", " << center.y << ", "
          << center.z << "), scale = (" << size.x << ", " << size.y << ", " << size.z
          << "), enter_editmode = True)\n";
@@ -399,7 +399,7 @@ void Octree::visualize_fast(KernelOctreeNode *knodes, const char *filename)
     /* TODO(weizhen): there is a bug when scene already contains an object called `Cube`. */
 
     file << "vertices = [";
-    for (int i = 0; i < num_nodes; i++) {
+    for (int i = 1; i < get_num_nodes(); i++) {
       if (knodes[i].is_leaf) {
         continue;
       }
