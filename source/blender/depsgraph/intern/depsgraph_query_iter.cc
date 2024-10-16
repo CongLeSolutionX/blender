@@ -146,9 +146,9 @@ bool deg_iterator_duplis_step(DEGObjectIterData *data)
     }
 
     DEGObjectIterSettings *settings = data->settings;
-    if (!settings->including_objects.is_empty()) {
+    if (settings->included_objects) {
       Object *object_orig = DEG_get_original_object(obd);
-      if (!settings->including_objects.contains(object_orig)) {
+      if (!settings->included_objects->contains(object_orig)) {
         continue;
       }
     }
@@ -249,8 +249,8 @@ bool deg_iterator_objects_step(DEGObjectIterData *data)
     Object *object_orig = DEG_get_original_object(object);
 
     DEGObjectIterSettings *settings = data->settings;
-    if (!settings->including_objects.is_empty()) {
-      if (!settings->including_objects.contains(object_orig)) {
+    if (settings->included_objects) {
+      if (!settings->included_objects->contains(object_orig)) {
         continue;
       }
     }

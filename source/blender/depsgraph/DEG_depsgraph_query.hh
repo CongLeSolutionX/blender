@@ -205,7 +205,7 @@ struct DEGObjectIterSettings {
    * If not empty, the iterator should only return objects that are in this list (or their
    * instances are in it). Pointers in this span should be the original data-block.
    */
-  blender::Set<const Object *> including_objects;
+  blender::Set<const Object *> *included_objects;
 };
 
 /**

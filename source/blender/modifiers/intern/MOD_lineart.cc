@@ -91,12 +91,13 @@ static void copy_data(const ModifierData *md, ModifierData *target, const int fl
   GreasePencilLineartModifierData *target_lmd =
       reinterpret_cast<GreasePencilLineartModifierData *>(target);
 
-  target_lmd->runtime = new LineartModifierRuntime;
+  target_lmd->runtime = MEM_new<LineartModifierRuntime>(__func__);
   LineartModifierRuntime *target_runtime = reinterpret_cast<LineartModifierRuntime *>(
       target_lmd->runtime);
 
-  blender::Set<const Object *> *object_dependencies = source_runtime->object_dependencies;
-  target_runtime->object_dependencies = new blender::Set<const Object *>(*object_dependencies);
+  blender::Set<const Object *> *object_dependencies = source_runtime->object_dependencies.get();
+  target_runtime->object_dependencies.reset(
+      new blender::Set<const Object *>(*object_dependencies));
 }
 
 static void free_data(ModifierData *md)
@@ -104,11 +105,7 @@ static void free_data(ModifierData *md)
   GreasePencilLineartModifierData *lmd = reinterpret_cast<GreasePencilLineartModifierData *>(md);
   if (lmd->runtime) {
     LineartModifierRuntime *runtime = reinterpret_cast<LineartModifierRuntime *>(lmd->runtime);
-    blender::Set<const Object *> *object_dependencies = runtime->object_dependencies;
-    if (object_dependencies) {
-      delete object_dependencies;
-    }
-    delete runtime;
+    MEM_delete(runtime);
     lmd->runtime = nullptr;
   }
 }
@@ -181,14 +178,14 @@ static void update_depsgraph(ModifierData *md, const ModifierUpdateDepsgraphCont
 
   LineartModifierRuntime *runtime = reinterpret_cast<LineartModifierRuntime *>(lmd->runtime);
   if (!runtime) {
-    runtime = new LineartModifierRuntime;
+    runtime = MEM_new<LineartModifierRuntime>(__func__);
     lmd->runtime = runtime;
     runtime->object_dependencies = nullptr;
   }
-  Set<const Object *> *object_dependencies = runtime->object_dependencies;
+  Set<const Object *> *object_dependencies = runtime->object_dependencies.get();
   if (!object_dependencies) {
-    object_dependencies = new Set<const Object *>;
-    runtime->object_dependencies = object_dependencies;
+    runtime->object_dependencies = std::make_unique<Set<const Object *>>();
+    object_dependencies = runtime->object_dependencies.get();
   }
 
   object_dependencies->clear();

@@ -2552,7 +2552,7 @@ void lineart_main_load_geometries(Depsgraph *depsgraph,
                                   bool allow_duplicates,
                                   bool do_shadow_casting,
                                   ListBase *shadow_elns,
-                                  blender::Set<const Object *> &including_objects)
+                                  blender::Set<const Object *> *included_objects)
 {
   double proj[4][4], view[4][4], result[4][4];
   float inv[4][4];
@@ -2616,7 +2616,7 @@ void lineart_main_load_geometries(Depsgraph *depsgraph,
   DEGObjectIterSettings deg_iter_settings = {nullptr};
   deg_iter_settings.depsgraph = depsgraph;
   deg_iter_settings.flags = flags;
-  deg_iter_settings.including_objects = including_objects;
+  deg_iter_settings.included_objects = included_objects;
 
   DEG_OBJECT_ITER_BEGIN (&deg_iter_settings, ob) {
 
@@ -5094,10 +5094,8 @@ bool MOD_lineart_compute_feature_lines_v3(Depsgraph *depsgraph,
   lineart_main_get_view_vector(ld);
 
   LineartModifierRuntime *runtime = reinterpret_cast<LineartModifierRuntime *>(lmd.runtime);
-  blender::Set<const Object *> *including_objects = runtime ? runtime->object_dependencies :
-                                                              nullptr;
-
-  BLI_assert(including_objects != nullptr);
+  blender::Set<const Object *> *included_objects = runtime ? runtime->object_dependencies.get() :
+                                                             nullptr;
 
   lineart_main_load_geometries(depsgraph,
                                scene,
@@ -5106,7 +5104,7 @@ bool MOD_lineart_compute_feature_lines_v3(Depsgraph *depsgraph,
                                lmd.calculation_flags & MOD_LINEART_ALLOW_DUPLI_OBJECTS,
                                false,
                                shadow_elns,
-                               *including_objects);
+                               included_objects);
 
   if (shadow_generated) {
     lineart_main_transform_and_add_shadow(ld, shadow_veln, shadow_eeln);
