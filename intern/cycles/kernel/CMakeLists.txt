@@ -400,6 +400,7 @@ set(SRC_UTIL_HEADERS
   ../util/math_int3.h
   ../util/math_int4.h
   ../util/math_int8.h
+  ../util/math_eigensolver.h
   ../util/math_matrix.h
   ../util/projection.h
   ../util/rect.h
