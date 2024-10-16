@@ -2171,7 +2171,7 @@ static void GREASE_PENCIL_OT_separate(wmOperatorType *ot)
 {
   ot->name = "Separate";
   ot->idname = "GREASE_PENCIL_OT_separate";
-  ot->description = "Separate the selected geometry into a new grease pencil object";
+  ot->description = "Separate the selected geometry into a new Grease Pencil object";
 
   ot->invoke = WM_menu_invoke;
   ot->exec = grease_pencil_separate_exec;
@@ -3558,7 +3558,7 @@ static int grease_pencil_set_curve_resolution_exec(bContext *C, wmOperator *op)
     }
 
     index_mask::masked_fill(curves.resolution_for_write(), resolution, editable_strokes);
-    info.drawing.tag_positions_changed();
+    info.drawing.tag_topology_changed();
     changed = true;
   });
 
@@ -3838,7 +3838,7 @@ static void remap_vertex_groups(bke::greasepencil::Drawing &drawing,
                                 const Map<StringRefNull, StringRefNull> &vertex_group_map)
 {
   LISTBASE_FOREACH (bDeformGroup *, dg, &drawing.strokes_for_write().vertex_group_names) {
-    BLI_strncpy(dg->name, vertex_group_map.lookup(dg->name).c_str(), sizeof(dg->name));
+    STRNCPY(dg->name, vertex_group_map.lookup(dg->name).c_str());
   }
 
   /* Indices in vertex weights remain valid, they are local to the drawing's vertex groups.
@@ -3962,7 +3962,7 @@ static void join_object_with_active(Main &bmain,
   /* Rename animation paths to layers. */
   BKE_fcurves_main_cb(&bmain, [&](ID *id, FCurve *fcu) {
     if (id == &grease_pencil_src.id && fcu->rna_path && strstr(fcu->rna_path, "layers[")) {
-      /* Have to use linear search, the layer name map only contains substrings of RNA paths. */
+      /* Have to use linear search, the layer name map only contains sub-strings of RNA paths. */
       for (auto [name_src, name_dst] : layer_name_map.items()) {
         if (name_dst != name_src) {
           const char *old_path = fcu->rna_path;
@@ -4054,7 +4054,7 @@ int ED_grease_pencil_join_objects_exec(bContext *C, wmOperator *op)
   CTX_DATA_END;
   /* Active object must always selected. */
   if (ok == false) {
-    BKE_report(op->reports, RPT_WARNING, "Active object is not a selected grease pencil");
+    BKE_report(op->reports, RPT_WARNING, "Active object is not a selected Grease Pencil");
     return OPERATOR_CANCELLED;
   }
 

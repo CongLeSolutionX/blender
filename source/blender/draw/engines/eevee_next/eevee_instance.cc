@@ -294,9 +294,6 @@ void Instance::object_sync(Object *ob)
       case OB_CURVES:
         sync.sync_curves(ob, ob_handle, res_handle, ob_ref);
         break;
-      case OB_GREASE_PENCIL:
-        sync.sync_gpencil(ob, ob_handle, res_handle);
-        break;
       case OB_LIGHTPROBE:
         light_probes.sync_probe(ob, ob_handle);
         break;
@@ -314,11 +311,6 @@ void Instance::object_sync_render(void *instance_,
 {
   UNUSED_VARS(engine, depsgraph);
   Instance &inst = *reinterpret_cast<Instance *>(instance_);
-
-  if (inst.is_baking() && ob->visibility_flag & OB_HIDE_PROBE_VOLUME) {
-    return;
-  }
-
   inst.object_sync(ob);
 }
 
@@ -418,10 +410,6 @@ void Instance::render_sample()
   /* Motion blur may need to do re-sync after a certain number of sample. */
   if (!is_viewport() && sampling.do_render_sync()) {
     render_sync();
-    if (!info_.empty()) {
-      printf("%s", info_.c_str());
-      info_ = "";
-    }
   }
 
   DebugScope debug_scope(debug_scope_render_sample, "EEVEE.render_sample");
@@ -563,6 +551,13 @@ void Instance::render_frame(RenderEngine *engine, RenderLayer *render_layer, con
   this->film.cryptomatte_sort();
 
   this->render_read_result(render_layer, view_name);
+
+  if (!info_.empty()) {
+    RE_engine_set_error_message(
+        engine, RPT_("Errors during render. See the System Console for more info."));
+    printf("%s", info_.c_str());
+    info_ = "";
+  }
 }
 
 void Instance::draw_viewport()

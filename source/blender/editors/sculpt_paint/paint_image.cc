@@ -518,6 +518,7 @@ static void grab_clone_apply(bContext *C, wmOperator *op)
 
   RNA_float_get_array(op->ptr, "delta", delta);
   add_v2_v2(brush->clone.offset, delta);
+  BKE_brush_tag_unsaved_changes(brush);
   ED_region_tag_redraw(CTX_wm_region(C));
 }
 
@@ -569,6 +570,7 @@ static int grab_clone_modal(bContext *C, wmOperator *op, const wmEvent *event)
       RNA_float_set_array(op->ptr, "delta", delta);
 
       copy_v2_v2(brush->clone.offset, cmv->startoffset);
+      BKE_brush_tag_unsaved_changes(brush);
 
       grab_clone_apply(C, op);
       break;
@@ -1038,6 +1040,7 @@ static int brush_colors_flip_exec(bContext *C, wmOperator * /*op*/)
   }
   else if (br) {
     swap_v3_v3(br->rgb, br->secondary_rgb);
+    BKE_brush_tag_unsaved_changes(br);
   }
   else {
     return OPERATOR_CANCELLED;
@@ -1060,6 +1063,11 @@ static bool brush_colors_flip_poll(bContext *C)
     Object *ob = CTX_data_active_object(C);
     if (ob != nullptr) {
       if (ob->mode & (OB_MODE_VERTEX_PAINT | OB_MODE_TEXTURE_PAINT | OB_MODE_SCULPT)) {
+        return true;
+      }
+      if (blender::ed::greasepencil::grease_pencil_painting_poll(C) ||
+          blender::ed::greasepencil::grease_pencil_vertex_painting_poll(C))
+      {
         return true;
       }
     }
