@@ -700,7 +700,7 @@ void PathTraceWorkGPU::compact_shadow_paths()
    * compaction has a cost. */
   const float max_overhead_factor = 2.0f;
   const int min_compact_paths = 32;
-  const int num_total_paths = integrator_next_shadow_path_index_.data()[0]
+  const int num_total_paths = integrator_next_shadow_path_index_.data()[0];
   if (num_total_paths < num_active_paths * max_overhead_factor ||
       num_total_paths < min_compact_paths)
   {
