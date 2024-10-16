@@ -17,6 +17,7 @@
 
 #include "AS_asset_library.hh"
 #include "AS_asset_representation.hh"
+#include "AS_essentials_library.hh"
 
 namespace blender::asset_system {
 
@@ -24,10 +25,12 @@ AssetRepresentation::AssetRepresentation(StringRef relative_asset_path,
                                          StringRef name,
                                          const int id_type,
                                          std::unique_ptr<AssetMetaData> metadata,
-                                         const AssetLibrary &owner_asset_library)
+                                         const AssetLibrary &owner_asset_library,
+                                         const bool is_essentials_override)
     : owner_asset_library_(owner_asset_library),
       relative_identifier_(relative_asset_path),
-      asset_(AssetRepresentation::ExternalAsset{name, id_type, std::move(metadata)})
+      asset_(AssetRepresentation::ExternalAsset{
+          name, id_type, std::move(metadata), is_essentials_override})
 {
 }
 
@@ -79,6 +82,10 @@ StringRefNull AssetRepresentation::library_relative_identifier() const
 
 std::string AssetRepresentation::full_path() const
 {
+  if (is_essentials_override()) {
+    return essentials_asset_override_full_path(*this);
+  }
+
   char filepath[FILE_MAX];
   BLI_path_join(filepath,
                 sizeof(filepath),
@@ -125,6 +132,11 @@ ID *AssetRepresentation::local_id() const
 bool AssetRepresentation::is_local_id() const
 {
   return std::holds_alternative<ID *>(asset_);
+}
+
+bool AssetRepresentation::is_essentials_override() const
+{
+  return this->is_local_id() ? false : std::get<ExternalAsset>(asset_).is_essentials_override_;
 }
 
 const AssetLibrary &AssetRepresentation::owner_asset_library() const

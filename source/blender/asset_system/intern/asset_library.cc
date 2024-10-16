@@ -203,10 +203,11 @@ std::weak_ptr<AssetRepresentation> AssetLibrary::add_external_asset(
     StringRef relative_asset_path,
     StringRef name,
     const int id_type,
-    std::unique_ptr<AssetMetaData> metadata)
+    std::unique_ptr<AssetMetaData> metadata,
+    bool is_essentials_override)
 {
   return asset_storage_.external_assets.lookup_key_or_add(std::make_shared<AssetRepresentation>(
-      relative_asset_path, name, id_type, std::move(metadata), *this));
+      relative_asset_path, name, id_type, std::move(metadata), *this, is_essentials_override));
 }
 
 std::weak_ptr<AssetRepresentation> AssetLibrary::add_local_id_asset(StringRef relative_asset_path,

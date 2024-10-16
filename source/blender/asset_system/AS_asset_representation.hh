@@ -44,6 +44,7 @@ class AssetRepresentation : NonCopyable, NonMovable {
     std::string name;
     int id_type = 0;
     std::unique_ptr<AssetMetaData> metadata_ = nullptr;
+    bool is_essentials_override_ = false;
   };
   std::variant<ExternalAsset, ID *> asset_;
 
@@ -55,7 +56,8 @@ class AssetRepresentation : NonCopyable, NonMovable {
                       StringRef name,
                       int id_type,
                       std::unique_ptr<AssetMetaData> metadata,
-                      const AssetLibrary &owner_asset_library);
+                      const AssetLibrary &owner_asset_library,
+                      bool is_essentials_override = false);
   /**
    * Constructs an asset representation for an ID stored in the current file. This makes the asset
    * local and fully editable.
@@ -100,6 +102,7 @@ class AssetRepresentation : NonCopyable, NonMovable {
   ID *local_id() const;
   /** Returns if this asset is stored inside this current file, and as such fully editable. */
   bool is_local_id() const;
+  bool is_essentials_override() const;
   const AssetLibrary &owner_asset_library() const;
 };
 

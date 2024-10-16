@@ -828,18 +828,6 @@ static bool is_filtered_id_file_type(const FileListInternEntry *file,
   return true;
 }
 
-/**
- * Get the asset metadata of a file, if it represents an asset. This may either be of a local ID
- * (ID in the current #Main) or read from an external asset library.
- */
-static AssetMetaData *filelist_file_internal_get_asset_data(const FileListInternEntry *file)
-{
-  if (asset_system::AssetRepresentation *asset = file->get_asset()) {
-    return &asset->get_metadata();
-  }
-  return nullptr;
-}
-
 static void prepare_filter_asset_library(const FileList *filelist, FileListFilter *filter)
 {
   /* Not used yet for the asset view template. */
@@ -877,7 +865,19 @@ static bool asset_tag_matches_filter(const char *filter_search, const AssetMetaD
 
 static bool is_filtered_asset(FileListInternEntry *file, FileListFilter *filter)
 {
-  const AssetMetaData *asset_data = filelist_file_internal_get_asset_data(file);
+  const asset_system::AssetRepresentation *asset = file->get_asset();
+  const asset_system::AssetLibrary &library = asset->owner_asset_library();
+
+  BLI_assert(asset != nullptr);
+
+  /* Filter out overridden essentials. The override was added to the filelist already. */
+  if (library.library_type() == ASSET_LIBRARY_ESSENTIALS) {
+    if (asset_system::essentials_asset_override_exists(*asset)) {
+      return false;
+    }
+  }
+
+  const AssetMetaData *asset_data = &asset->get_metadata();
 
   /* Not used yet for the asset view template. */
   if (filter->asset_catalog_filter &&
@@ -3297,8 +3297,14 @@ static void filelist_readjob_list_lib_add_datablock(FileListReadJob *job_params,
         datablock_info->asset_data = metadata.get();
         datablock_info->free_asset_data = false;
 
-        entry->asset = job_params->load_asset_library->add_external_asset(
-            entry->relpath, datablock_info->name, idcode, std::move(metadata));
+        const bool is_essentials_override = asset_system::essentials_override_is_path_inside(
+            job_params->tmp_filelist->filelist.root);
+
+        entry->asset = job_params->load_asset_library->add_external_asset(entry->relpath,
+                                                                          datablock_info->name,
+                                                                          idcode,
+                                                                          std::move(metadata),
+                                                                          is_essentials_override);
       }
     }
   }

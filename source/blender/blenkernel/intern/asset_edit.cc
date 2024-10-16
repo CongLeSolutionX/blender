@@ -167,34 +167,20 @@ static std::string asset_essentials_library_id_blendfile_path_for_save(const ID 
     return "";
   }
 
-  const std::string essentials_directory = asset_system::essentials_directory_path() + SEP_STR;
-  const StringRefNull essentials_override_directory =
-      asset_system::essentials_override_directory_path();
+  std::string override_filepath = asset_system::essentials_asset_path_resolve_to_override_path(
+      id.lib->runtime.filepath_abs, GS(id.name), id.name + 2);
 
-  BLI_assert(BLI_path_contains(essentials_directory.c_str(), id.lib->runtime.filepath_abs));
+  char rootpath[PATH_MAX];
+  BLI_path_split_dir_part(override_filepath.c_str(), rootpath, sizeof(rootpath));
 
-  /* Filepath within the essentials library. */
-  char path_relative[FILE_MAX];
-  BLI_strncpy(path_relative, id.lib->runtime.filepath_abs, sizeof(path_relative));
-  BLI_path_rel(path_relative, essentials_directory.c_str());
-
-  /* Remove the `.blend` extension. */
-  BLI_path_extension_strip(path_relative);
-
-  /* Make sure filename only contains valid characters for file-system. */
-  char base_name_filesafe[FILE_MAXFILE];
-  BLI_strncpy(base_name_filesafe, id.name + 2, sizeof(base_name_filesafe));
-  BLI_path_make_safe_filename(base_name_filesafe);
-
-  const std::string rootpath = essentials_override_directory + SEP_STR + (path_relative + 2);
-  if (!BLI_dir_create_recursive(rootpath.c_str())) {
+  if (!BLI_dir_create_recursive(rootpath)) {
     BKE_report(&reports,
                RPT_ERROR,
                "Failed to create asset library directory to override essentials asset");
     return "";
   }
 
-  return rootpath + SEP + base_name_filesafe + BLENDER_ASSET_FILE_SUFFIX;
+  return override_filepath;
 }
 
 static void asset_main_create_expander(void * /*handle*/, Main * /*bmain*/, void *vid)

@@ -141,7 +141,8 @@ class AssetLibrary {
   std::weak_ptr<AssetRepresentation> add_external_asset(StringRef relative_asset_path,
                                                         StringRef name,
                                                         int id_type,
-                                                        std::unique_ptr<AssetMetaData> metadata);
+                                                        std::unique_ptr<AssetMetaData> metadata,
+                                                        bool is_essentials_override = false);
   /** See #AssetLibrary::add_external_asset(). */
   std::weak_ptr<AssetRepresentation> add_local_id_asset(StringRef relative_asset_path, ID &id);
   /**
