@@ -99,13 +99,13 @@ bool Octree::should_split(std::shared_ptr<OctreeNode> &node)
     const Object *object = node->objects[0];
     if (object->is_homogeneous_volume()) {
       /* Do not split homogeneous volume. Volume stack already skips the zero-density regions. */
-      node->sigma_min = node->sigma_max = volume_density_scale(object);
+      const float sigma = volume_density_scale(object);
+      node->sigma = {sigma, sigma};
       return false;
     }
   }
 
-  node->sigma_min = background_density_min;
-  node->sigma_max = background_density_max;
+  node->sigma = {background_density_min, background_density_max};
 
   for (Object *object : node->objects) {
     float min = 1.0f;
@@ -201,15 +201,15 @@ bool Octree::should_split(std::shared_ptr<OctreeNode> &node)
     min *= scale;
     max *= scale;
 
-    node->sigma_min = fminf(min, node->sigma_min);
-    node->sigma_max += max;
+    node->sigma.min = fminf(min, node->sigma.min);
+    node->sigma.max += max;
   }
 
   /* TODO(weizhen): force subdivision of aggregate nodes that are larger than the volume contained,
    * regardless of the volume’s majorant extinction. */
 
   /* From "Volume Rendering for Pixar’s Elemental". */
-  if ((node->sigma_max - node->sigma_min) * len(node->bbox.size()) < 1.442f ||
+  if ((node->sigma.max - node->sigma.min) * len(node->bbox.size()) < 1.442f ||
       node->level == max_level)
   {
     return false;
@@ -304,8 +304,7 @@ int Octree::flatten_(KernelOctreeNode *knodes, shared_ptr<OctreeNode> &node, int
   }
   else {
     knode.is_leaf = true;
-    knode.sigma_max = node->sigma_max;
-    knode.sigma_min = node->sigma_min;
+    knode.sigma = node->sigma;
   }
 
   return current_index;
@@ -319,8 +318,8 @@ void Octree::flatten(KernelOctreeNode *knodes)
   /* TODO(weizhen): is there a better way than putting world volume in the octree array? */
   KernelOctreeNode &knode = knodes[node_index++];
   knode.is_leaf = false;
-  knode.sigma_max = background_density_max;
-  knode.sigma_min = has_world_volume() ? background_density_min : 0.0f;
+  knode.sigma.max = background_density_max;
+  knode.sigma.min = has_world_volume() ? background_density_min : 0.0f;
   knode.bbox.max = make_float3(FLT_MAX);
   knode.bbox.min = -make_float3(FLT_MAX);
 
@@ -437,8 +436,8 @@ void Octree::visualize(KernelOctreeNode *knodes, const char *filename) const
       }
       file << "\n";
       const float3 center = knodes[i].bbox.center();
-      file << "ob = bpy.data.objects.new(name = '" << i << " sigma_max = " << knodes[i].sigma_max
-           << " sigma_min = " << knodes[i].sigma_min << "' , object_data = cube.data)\n";
+      file << "ob = bpy.data.objects.new(name = '" << i << " sigma_max = " << knodes[i].sigma.max
+           << " sigma_min = " << knodes[i].sigma.min << "' , object_data = cube.data)\n";
       file << "ob.location = (" << center.x << ", " << center.y << ", " << center.z << ")\n";
       const float3 scale = knodes[i].bbox.size() * 0.5f;
       file << "ob.scale = (" << scale.x << ", " << scale.y << ", " << scale.z << ")\n";

@@ -35,8 +35,7 @@ struct OctreeNode {
   int level;
 
   /* TODO(weizhen): we need visibility for shadow, camera, and indirect. */
-  float sigma_min = 0.0f;
-  float sigma_max = 0.0f;
+  Extrema<float> sigma = {0.0f, 0.0f};
 
   OctreeNode() : bbox(BoundBox::empty), level(0) {}
   OctreeNode(BoundBox bbox_, int level_) : bbox(bbox_), level(level_) {}

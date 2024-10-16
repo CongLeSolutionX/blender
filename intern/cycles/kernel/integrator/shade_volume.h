@@ -412,7 +412,7 @@ ccl_device Spectrum volume_unbiased_ray_marching(KernelGlobals kg,
   /* TODO(weizhen): check if `ray->tmax == FLT_MAX` is correctly handled. */
   const int steps_left = kernel_data.integrator.volume_max_steps - step;
   /* TODO(weizhen): detect homogenous mesh volume. */
-  const float sigma_c = knode->sigma_max - knode->sigma_min;
+  const float sigma_c = knode->sigma.max - knode->sigma.min;
   const int M = min(volume_tuple_size(sigma_c * ray_length), steps_left);
   step += M;
 
@@ -723,7 +723,7 @@ ccl_device void volume_integrate_step_scattering(
   const ccl_global KernelOctreeNode *knode = volume_voxel_get(kg, ray, vstate, sd->P);
 
   if (volume_sample_indirect_scatter(
-          kg, state, ray, sd, knode->sigma_max, lcg_state, vstate, equiangular_coeffs, result))
+          kg, state, ray, sd, knode->sigma.max, lcg_state, vstate, equiangular_coeffs, result))
   {
     if (vstate.direct_sample_method == VOLUME_SAMPLE_DISTANCE) {
       /* If using distance sampling for direct light, just copy parameters of indirect light

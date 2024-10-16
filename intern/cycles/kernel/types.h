@@ -1719,8 +1719,7 @@ static_assert_align(KernelLightTreeNode, 16);
 
 struct KernelOctreeNode {
   bool is_leaf;
-  float sigma_max;
-  float sigma_min;
+  Extrema<float> sigma;
 
   /* TODO(weizhen): probably we just need center and level, the size is a global constant. */
   KernelBoundingBox bbox;

@@ -1093,6 +1093,16 @@ ccl_device_inline bool solve_quadratic(
   return (valid_linear || valid_quadratic);
 }
 
+template<typename T> struct Extrema {
+  T min;
+  T max;
+};
+
+template<typename T> ccl_device_inline Extrema<T> join(const Extrema<T> a, const Extrema<T> b)
+{
+  return {min(a.min, b.min), max(a.max, b.max)};
+}
+
 /* Defines a closed interval [min, max]. */
 template<typename T> struct Interval {
   T min;
