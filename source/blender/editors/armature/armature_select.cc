@@ -821,6 +821,7 @@ cache_end:
           }
           else if (bias == bias_max && do_nearest) {
             if (min_depth > result.depth) {
+              min_depth = result.depth;
               result_bias.hitresult = hitresult;
               result_bias.base = base;
               result_bias.ebone = ebone;
