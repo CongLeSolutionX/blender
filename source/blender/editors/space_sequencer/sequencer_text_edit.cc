@@ -7,6 +7,7 @@
  */
 
 #include "BLI_math_basis_types.hh"
+#include "DNA_windowmanager_types.h"
 #include "MEM_guardedalloc.h"
 
 #include "BLI_math_matrix.hh"
@@ -392,14 +393,18 @@ static int sequencer_text_insert_exec(bContext * /*C*/, wmOperator * /*op*/)
   return OPERATOR_FINISHED;
 }
 
-static void text_insert(TextVars *data, const char *buf)
+static bool text_insert(TextVars *data, const char *buf)
 {
   TextVarsRuntime *text = data->runtime;
   delete_selected_text(data);
 
   size_t in_buf_len = BLI_str_utf8_size_safe(buf);
+  size_t text_buf_len = BLI_str_utf8_size_safe(data->text);
 
-  /* XXX Bail, if array is full. */
+  if (text_buf_len + in_buf_len > sizeof(data->text)) {
+    return false;
+  }
+
   seq::CharInfo cur_char = character_at_cursor_offset_get(text, data->cursor_offset);
   char *cursor_addr = const_cast<char *>(cur_char.str_ptr);
   size_t move_len = strlen_include_null_terminator(cursor_addr, sizeof(data->text));
@@ -408,6 +413,7 @@ static void text_insert(TextVars *data, const char *buf)
   std::memcpy(cursor_addr, buf, in_buf_len);
 
   data->cursor_offset += 1;
+  return true;
 }
 
 static int sequencer_text_insert_invoke(bContext *C, wmOperator * /*op*/, const wmEvent *event)
@@ -420,7 +426,9 @@ static int sequencer_text_insert_invoke(bContext *C, wmOperator * /*op*/, const 
     return OPERATOR_CANCELLED | OPERATOR_PASS_THROUGH;
   }
 
-  text_insert(data, event->utf8_buf);
+  if (!text_insert(data, event->utf8_buf)) {
+    return OPERATOR_CANCELLED;
+  }
 
   text_editing_update(C);
   return OPERATOR_FINISHED;
@@ -538,7 +546,11 @@ static int sequencer_text_line_break_exec(bContext *C, wmOperator * /*op*/)
 {
   Sequence *seq = SEQ_select_active_get(CTX_data_scene(C));
   TextVars *data = static_cast<TextVars *>(seq->effectdata);
-  text_insert(data, "\n");
+
+  if (!text_insert(data, "\n")) {
+    return OPERATOR_CANCELLED;
+  }
+
   text_editing_update(C);
   return OPERATOR_FINISHED;
 }
