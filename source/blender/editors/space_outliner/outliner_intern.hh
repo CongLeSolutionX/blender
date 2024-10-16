@@ -293,10 +293,7 @@ TreeTraversalAction outliner_collect_selected_objects(TreeElement *te, void *cus
 
 /* `outliner_draw.cc` */
 
-/**
- * \param do_rebuild: When false, only the scroll position changed since last draw.
- */
-void draw_outliner(const bContext *C, bool do_rebuild);
+void draw_outliner(const bContext *C);
 
 void outliner_tree_dimensions(SpaceOutliner *space_outliner, int *r_width, int *r_height);
 

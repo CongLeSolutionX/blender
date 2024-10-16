@@ -2993,11 +2993,16 @@ static bool tselem_draw_icon(uiBlock *block,
                              TreeElement *te,
                              float alpha,
                              const bool is_clickable,
-                             const int num_elements)
+                             const int num_elements,
+                             const bool do_draw)
 {
   TreeElementIcon data = tree_element_get_icon(tselem, te);
   if (data.icon == 0) {
     return false;
+  }
+
+  if (do_draw == false) {
+    return true;
   }
 
   const bool is_collection = outliner_is_collection_tree_element(te);
@@ -3106,31 +3111,43 @@ static void outliner_draw_iconrow_doit(uiBlock *block,
                                        int ys,
                                        float alpha_fac,
                                        const eOLDrawState active,
-                                       const int num_elements)
+                                       const int num_elements,
+                                       const bool do_draw)
 {
   TreeStoreElem *tselem = TREESTORE(te);
 
-  if (active != OL_DRAWSEL_NONE) {
-    float icon_color[4], icon_border[4];
-    outliner_icon_background_colors(icon_color, icon_border);
-    if (active == OL_DRAWSEL_ACTIVE) {
-      UI_GetThemeColor4fv(TH_EDITED_OBJECT, icon_color);
-      icon_border[3] = 0.3f;
+  if (do_draw) {
+    if (active != OL_DRAWSEL_NONE) {
+      float icon_color[4], icon_border[4];
+      outliner_icon_background_colors(icon_color, icon_border);
+      if (active == OL_DRAWSEL_ACTIVE) {
+        UI_GetThemeColor4fv(TH_EDITED_OBJECT, icon_color);
+        icon_border[3] = 0.3f;
+      }
+
+      outliner_draw_active_indicator(float(*offsx),
+                                     float(ys),
+                                     float(*offsx) + UI_UNIT_X,
+                                     float(ys) + UI_UNIT_Y,
+                                     icon_color,
+                                     icon_border);
     }
 
-    outliner_draw_active_indicator(float(*offsx),
-                                   float(ys),
-                                   float(*offsx) + UI_UNIT_X,
-                                   float(ys) + UI_UNIT_Y,
-                                   icon_color,
-                                   icon_border);
+    if (tselem->flag & TSE_HIGHLIGHTED_ICON) {
+      alpha_fac += 0.5;
+    }
+    tselem_draw_icon(block,
+                     xmax,
+                     float(*offsx),
+                     float(ys),
+                     tselem,
+                     te,
+                     alpha_fac,
+                     false,
+                     num_elements,
+                     do_draw);
   }
 
-  if (tselem->flag & TSE_HIGHLIGHTED_ICON) {
-    alpha_fac += 0.5;
-  }
-  tselem_draw_icon(
-      block, xmax, float(*offsx), float(ys), tselem, te, alpha_fac, false, num_elements);
   te->xs = *offsx;
   te->ys = ys;
   te->xend = short(*offsx) + UI_UNIT_X;
@@ -3190,7 +3207,8 @@ static void outliner_draw_iconrow(uiBlock *block,
                                   float alpha_fac,
                                   bool in_bone_hierarchy,
                                   const bool is_grease_pencil_node_hierarchy,
-                                  MergedIconRow *merged)
+                                  MergedIconRow *merged,
+                                  const bool do_draw)
 {
   eOLDrawState active = OL_DRAWSEL_NONE;
 
@@ -3243,7 +3261,7 @@ static void outliner_draw_iconrow(uiBlock *block,
                 TSE_BONE_COLLECTION,
                 TSE_DEFGROUP))
       {
-        outliner_draw_iconrow_doit(block, te, xmax, offsx, ys, alpha_fac, active, 1);
+        outliner_draw_iconrow_doit(block, te, xmax, offsx, ys, alpha_fac, active, 1, do_draw);
       }
       else if (tselem->type == TSE_GREASE_PENCIL_NODE &&
                tree_element_cast<TreeElementGreasePencilNode>(te)->node().is_group())
@@ -3286,7 +3304,8 @@ static void outliner_draw_iconrow(uiBlock *block,
                             alpha_fac,
                             in_bone_hierarchy,
                             in_grease_pencil_node_hierarchy,
-                            merged);
+                            merged,
+                            do_draw);
     }
   }
 
@@ -3308,7 +3327,8 @@ static void outliner_draw_iconrow(uiBlock *block,
                                      ys,
                                      alpha_fac,
                                      merged->active[index],
-                                     merged->num_elements[index]);
+                                     merged->num_elements[index],
+                                     do_draw);
         }
       }
     }
@@ -3389,6 +3409,7 @@ static void outliner_draw_tree_element(uiBlock *block,
                                        int startx,
                                        int *starty,
                                        const float restrict_column_width,
+                                       const bool do_draw,
                                        TreeElement **te_edit)
 {
   TreeStoreElem *tselem = TREESTORE(te);
@@ -3500,7 +3521,8 @@ static void outliner_draw_tree_element(uiBlock *block,
                          te,
                          (tselem->flag & TSE_HIGHLIGHTED_ICON) ? alpha_fac + 0.5f : alpha_fac,
                          true,
-                         1))
+                         1,
+                         do_draw))
     {
       offsx += UI_UNIT_X + 4 * ufac;
     }
@@ -3567,7 +3589,8 @@ static void outliner_draw_tree_element(uiBlock *block,
                                 alpha_fac,
                                 false,
                                 false,
-                                &merged);
+                                &merged,
+                                do_draw);
 
           GPU_blend(GPU_BLEND_NONE);
         }
@@ -3596,6 +3619,7 @@ static void outliner_draw_tree_element(uiBlock *block,
                                  startx + UI_UNIT_X,
                                  starty,
                                  restrict_column_width,
+                                 do_draw,
                                  te_edit);
     }
   }
@@ -3737,41 +3761,44 @@ static void outliner_draw_hierarchy_lines(SpaceOutliner *space_outliner,
   immUnbindProgram();
 }
 
-static void outliner_draw_struct_marks(ARegion *region,
-                                       SpaceOutliner *space_outliner,
-                                       ListBase *lb,
-                                       int *starty)
+static void outliner_draw_struct_marks(
+    ARegion *region, SpaceOutliner *space_outliner, ListBase *lb, const bool do_draw, int *starty)
 {
   LISTBASE_FOREACH (TreeElement *, te, lb) {
     TreeStoreElem *tselem = TREESTORE(te);
 
     /* Selection status. */
-    if (TSELEM_OPEN(tselem, space_outliner)) {
-      if (tselem->type == TSE_RNA_STRUCT) {
-        GPUVertFormat *format = immVertexFormat();
-        uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_I32, 2, GPU_FETCH_INT_TO_FLOAT);
-        immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
-        immThemeColorShadeAlpha(TH_BACK, -15, -200);
-        immRecti(pos, 0, *starty + 1, int(region->v2d.cur.xmax), *starty + UI_UNIT_Y - 1);
-        immUnbindProgram();
+    if (do_draw) {
+      if (TSELEM_OPEN(tselem, space_outliner)) {
+        if (tselem->type == TSE_RNA_STRUCT) {
+          GPUVertFormat *format = immVertexFormat();
+          uint pos = GPU_vertformat_attr_add(
+              format, "pos", GPU_COMP_I32, 2, GPU_FETCH_INT_TO_FLOAT);
+          immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
+          immThemeColorShadeAlpha(TH_BACK, -15, -200);
+          immRecti(pos, 0, *starty + 1, int(region->v2d.cur.xmax), *starty + UI_UNIT_Y - 1);
+          immUnbindProgram();
+        }
       }
     }
 
     *starty -= UI_UNIT_Y;
     if (TSELEM_OPEN(tselem, space_outliner)) {
-      outliner_draw_struct_marks(region, space_outliner, &te->subtree, starty);
-      if (tselem->type == TSE_RNA_STRUCT) {
-        GPUVertFormat *format = immVertexFormat();
-        uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
-        immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
-        immThemeColorShadeAlpha(TH_BACK, -15, -200);
+      outliner_draw_struct_marks(region, space_outliner, &te->subtree, do_draw, starty);
+      if (do_draw) {
+        if (tselem->type == TSE_RNA_STRUCT) {
+          GPUVertFormat *format = immVertexFormat();
+          uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+          immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
+          immThemeColorShadeAlpha(TH_BACK, -15, -200);
 
-        immBegin(GPU_PRIM_LINES, 2);
-        immVertex2f(pos, 0, float(*starty) + UI_UNIT_Y);
-        immVertex2f(pos, region->v2d.cur.xmax, float(*starty) + UI_UNIT_Y);
-        immEnd();
+          immBegin(GPU_PRIM_LINES, 2);
+          immVertex2f(pos, 0, float(*starty) + UI_UNIT_Y);
+          immVertex2f(pos, region->v2d.cur.xmax, float(*starty) + UI_UNIT_Y);
+          immEnd();
 
-        immUnbindProgram();
+          immUnbindProgram();
+        }
       }
     }
   }
@@ -3889,7 +3916,8 @@ static void outliner_draw_tree(uiBlock *block,
                                const float right_column_width,
                                const bool use_mode_column,
                                const bool use_warning_column,
-                               TreeElement **te_edit)
+                               TreeElement **te_edit,
+                               const bool do_draw)
 {
   const uiFontStyle *fstyle = UI_FSTYLE_WIDGET;
 
@@ -3905,17 +3933,19 @@ static void outliner_draw_tree(uiBlock *block,
     columns_offset += UI_UNIT_X;
   }
 
-  GPU_blend(GPU_BLEND_ALPHA); /* Only once. */
+  if (do_draw) {
+    GPU_blend(GPU_BLEND_ALPHA); /* Only once. */
 
-  if (space_outliner->outlinevis == SO_DATA_API) {
-    /* struct marks */
-    int starty = int(region->v2d.tot.ymax) - UI_UNIT_Y - OL_Y_OFFSET;
-    outliner_draw_struct_marks(region, space_outliner, &space_outliner->tree, &starty);
+    if (space_outliner->outlinevis == SO_DATA_API) {
+      /* struct marks */
+      int starty = int(region->v2d.tot.ymax) - UI_UNIT_Y - OL_Y_OFFSET;
+      outliner_draw_struct_marks(region, space_outliner, &space_outliner->tree, do_draw, &starty);
+    }
   }
 
   /* Draw highlights before hierarchy. */
   int scissor[4] = {0};
-  {
+  if (do_draw) {
     int starty = int(region->v2d.tot.ymax) - UI_UNIT_Y - OL_Y_OFFSET;
     int startx = 0;
     outliner_draw_highlights(region, space_outliner, startx, &starty);
@@ -3931,7 +3961,7 @@ static void outliner_draw_tree(uiBlock *block,
   }
 
   /* Draw hierarchy lines for collections and object children. */
-  {
+  if (do_draw) {
     int starty = int(region->v2d.tot.ymax) - OL_Y_OFFSET;
     int startx = columns_offset + UI_UNIT_X / 2 - (U.pixelsize + 1) / 2;
     outliner_draw_hierarchy_lines(space_outliner, &space_outliner->tree, tvc, startx, &starty);
@@ -3952,12 +3982,15 @@ static void outliner_draw_tree(uiBlock *block,
                                  startx,
                                  &starty,
                                  right_column_width,
+                                 do_draw,
                                  te_edit);
     }
 
-    if (right_column_width > 0.0f) {
-      /* Reset scissor. */
-      GPU_scissor(UNPACK4(scissor));
+    if (do_draw) {
+      if (right_column_width > 0.0f) {
+        /* Reset scissor. */
+        GPU_scissor(UNPACK4(scissor));
+      }
     }
   }
 }
@@ -4039,7 +4072,7 @@ static void outliner_update_viewable_area(ARegion *region,
  * Draw contents of Outliner editor.
  * \{ */
 
-void draw_outliner(const bContext *C, bool do_rebuild)
+void draw_outliner(const bContext *C)
 {
   Main *mainvar = CTX_data_main(C);
   ARegion *region = CTX_wm_region(C);
@@ -4051,46 +4084,60 @@ void draw_outliner(const bContext *C, bool do_rebuild)
   TreeViewContext tvc;
   outliner_viewcontext_init(C, &tvc);
 
-  /* FIXME(@ideasman42): There is an order of initialization problem here between
-   * `v2d->cur` & `v2d->tot` where this function reads from `v2d->cur` for the scroll position
-   * but may reset the scroll position *without* drawing into the clamped position.
-   *
-   * The `on_scroll` argument is used for an optional second draw pass.
-   *
-   * See `USE_OUTLINER_DRAW_CLAMPS_SCROLL_HACK` & #128346 for a full description. */
+  outliner_build_tree(mainvar, tvc.scene, tvc.view_layer, space_outliner, region); /* Always. */
 
-  if (do_rebuild) {
-    outliner_build_tree(mainvar, tvc.scene, tvc.view_layer, space_outliner, region); /* Always. */
-
-    /* If global sync select is dirty, flag other outliners. */
-    if (ED_outliner_select_sync_is_dirty(C)) {
-      ED_outliner_select_sync_flag_outliners(C);
-    }
-
-    /* Sync selection state from view layer. */
-    if (space_outliner->flag & SO_SYNC_SELECT) {
-      if (!ELEM(space_outliner->outlinevis,
-                SO_LIBRARIES,
-                SO_OVERRIDES_LIBRARY,
-                SO_DATA_API,
-                SO_ID_ORPHANS))
-      {
-        outliner_sync_selection(C, tvc, space_outliner);
-      }
-    }
+  /* If global sync select is dirty, flag other outliners. */
+  if (ED_outliner_select_sync_is_dirty(C)) {
+    ED_outliner_select_sync_flag_outliners(C);
   }
 
-  /* Force display to pixel coords. */
-  v2d->flag |= (V2D_PIXELOFS_X | V2D_PIXELOFS_Y);
-  /* Set matrix for 2D-view controls. */
-  UI_view2d_view_ortho(v2d);
+  /* Sync selection state from view layer. */
+  if (space_outliner->flag & SO_SYNC_SELECT) {
+    if (!ELEM(space_outliner->outlinevis,
+              SO_LIBRARIES,
+              SO_OVERRIDES_LIBRARY,
+              SO_DATA_API,
+              SO_ID_ORPHANS))
+    {
+      outliner_sync_selection(C, tvc, space_outliner);
+    }
+  }
 
   /* Only show mode column in View Layers and Scenes view. */
   const bool use_mode_column = outliner_shows_mode_column(*space_outliner);
   const bool use_warning_column = outliner_has_element_warnings(*space_outliner);
 
-  /* Draw outliner stuff (background, hierarchy lines and names). */
   const float right_column_width = outliner_right_columns_width(space_outliner);
+
+  /* Force display to pixel coords. */
+  v2d->flag |= (V2D_PIXELOFS_X | V2D_PIXELOFS_Y);
+
+  /* Perform a fake draw (simply calculate the bounding box). */
+  int tree_width, tree_height;
+  {
+    TreeElement *te_edit_dummy = nullptr;
+    outliner_draw_tree(nullptr,
+                       tvc,
+                       region,
+                       space_outliner,
+                       right_column_width,
+                       use_mode_column,
+                       use_warning_column,
+                       &te_edit_dummy,
+                       false);
+
+    /* Compute outliner dimensions after a fake draw pass. */
+    outliner_tree_dimensions(space_outliner, &tree_width, &tree_height);
+
+    /* Update total viewable region. */
+    outliner_update_viewable_area(
+        region, space_outliner, tree_width, tree_height, right_column_width);
+  }
+
+  /* Set matrix for 2D-view controls. */
+  UI_view2d_view_ortho(v2d);
+
+  /* Draw outliner stuff (background, hierarchy lines and names). */
   outliner_back(region);
   block = UI_block_begin(C, region, __func__, UI_EMBOSS);
   outliner_draw_tree(block,
@@ -4100,11 +4147,8 @@ void draw_outliner(const bContext *C, bool do_rebuild)
                      right_column_width,
                      use_mode_column,
                      use_warning_column,
-                     &te_edit);
-
-  /* Compute outliner dimensions after it has been drawn. */
-  int tree_width, tree_height;
-  outliner_tree_dimensions(space_outliner, &tree_width, &tree_height);
+                     &te_edit,
+                     true);
 
   /* Default to no emboss for outliner UI. */
   UI_block_emboss_set(block, UI_EMBOSS_NONE_OR_STATUS);
@@ -4168,10 +4212,6 @@ void draw_outliner(const bContext *C, bool do_rebuild)
 
   UI_block_end(C, block);
   UI_block_draw(C, block);
-
-  /* Update total viewable region. */
-  outliner_update_viewable_area(
-      region, space_outliner, tree_width, tree_height, right_column_width);
 }
 
 /** \} */
