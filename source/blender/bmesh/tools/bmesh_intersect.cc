@@ -86,6 +86,15 @@ static BMEdge *bm_vert_other_edge(BMVert *v, BMEdge *e)
 }
 #endif
 
+/**
+ * Store as value in GHash so we can get list-length without counting every time.
+ * Also means we don't need to update the GHash value each time.
+ */
+struct LinkBase {
+  LinkNode *list;
+  uint list_len;
+};
+
 enum ISectType {
   IX_NONE = -1,
   IX_EDGE_TRI_EDGE0,
@@ -99,15 +108,6 @@ struct ISectEpsilon {
   float eps, eps_sq;
   float eps2x, eps2x_sq;
   float eps_margin, eps_margin_sq;
-};
-
-/**
- * Store as value in GHash so we can get list-length without counting every time.
- * Also means we don't need to update the GHash value each time.
- */
-struct LinkBase {
-  LinkNode *list;
-  uint list_len;
 };
 
 struct ISectState {
@@ -144,47 +144,36 @@ struct ISectState {
   {
     BLI_memarena_free(this->mem_arena);
   }
-
-  template<typename MapType, typename T, typename K>
-  void insert_link(MapType &map, K key, T val, bool use_test)
-  {
-    LinkBase *ls_base;
-    LinkNode *ls;
-
-    ls_base = map.lookup_or_add_cb(key, [&]() {
-      ls_base = static_cast<LinkBase *>(BLI_memarena_alloc(this->mem_arena, sizeof(*ls_base)));
-      ls_base->list = nullptr;
-      ls_base->list_len = 0;
-      use_test = false;
-      return ls_base;
-    });
-
-    if (use_test && (BLI_linklist_index(ls_base->list, val) != -1)) {
-      return;
-    }
-
-    ls = static_cast<LinkNode *>(BLI_memarena_alloc(this->mem_arena, sizeof(*ls)));
-    ls->next = ls_base->list;
-    ls->link = val;
-    ls_base->list = ls;
-    ls_base->list_len += 1;
-  }
-
-  void edge_verts_add(BMEdge *e, BMVert *v, bool use_test)
-  {
-    BLI_assert(e->head.htype == BM_EDGE);
-    BLI_assert(v->head.htype == BM_VERT);
-    this->insert_link(this->edge_verts, e, v, use_test);
-  }
-
-  void face_edges_add(const int f_index, BMEdge *e, bool use_test)
-  {
-    BLI_assert(e->head.htype == BM_EDGE);
-    BLI_assert(BM_edge_in_face(e, this->bm->ftable[f_index]) == false);
-    BLI_assert(BM_elem_index_get(this->bm->ftable[f_index]) == f_index);
-    this->insert_link(this->face_edges, f_index, e, use_test);
-  }
 };
+
+template<typename MapType, typename K, typename T>
+static bool map_insert_link(MapType &map, K key, T val, bool use_test, MemArena *mem_arena)
+{
+  LinkBase *ls_base;
+  LinkNode *ls;
+
+  ls_base = map.lookup_or_add_cb(key, [&]() {
+    ls_base = static_cast<LinkBase *>(BLI_memarena_alloc(mem_arena, sizeof(*ls_base)));
+    ls_base->list = nullptr;
+    ls_base->list_len = 0;
+    use_test = false;
+    return ls_base;
+  });
+
+  {
+    if (use_test && (BLI_linklist_index(ls_base->list, val) != -1)) {
+      return false;
+    }
+  }
+
+  ls = static_cast<LinkNode *>(BLI_memarena_alloc(mem_arena, sizeof(*ls)));
+  ls->next = ls_base->list;
+  ls->link = val;
+  ls_base->list = ls;
+  ls_base->list_len += 1;
+
+  return true;
+}
 
 struct vert_sort_t {
   float val;
@@ -215,6 +204,22 @@ static void edge_verts_sort(const float co[3], LinkBase *v_ls_base)
   }
 }
 #endif
+
+static void edge_verts_add(ISectState *s, BMEdge *e, BMVert *v, const bool use_test)
+{
+  BLI_assert(e->head.htype == BM_EDGE);
+  BLI_assert(v->head.htype == BM_VERT);
+  map_insert_link(s->edge_verts, e, v, use_test, s->mem_arena);
+}
+
+static void face_edges_add(ISectState *s, const int f_index, BMEdge *e, const bool use_test)
+{
+  BLI_assert(e->head.htype == BM_EDGE);
+  BLI_assert(BM_edge_in_face(e, s->bm->ftable[f_index]) == false);
+  BLI_assert(BM_elem_index_get(s->bm->ftable[f_index]) == f_index);
+
+  map_insert_link(s->face_edges, f_index, e, use_test, s->mem_arena);
+}
 
 #ifdef USE_NET
 static void face_edges_split(BMesh *bm,
@@ -414,7 +419,9 @@ static BMVert *bm_isect_edge_tri(ISectState *s,
 #undef KEY_EDGE_TRI_ORDER
 
   for (i = 0; i < ARRAY_SIZE(k_arr); i++) {
-    BMVert *iv = s->edgetri_cache.lookup_default(k_arr[i], nullptr);
+    BMVert *iv;
+
+    iv = s->edgetri_cache.lookup_default(k_arr[i], nullptr);
 
     if (iv) {
 #ifdef USE_DUMP
@@ -447,7 +454,7 @@ static BMVert *bm_isect_edge_tri(ISectState *s,
 #ifdef USE_DUMP
       printf("# adding to edge %d\n", BM_elem_index_get(e));
 #endif
-      s->edge_verts_add(e, iv, false);
+      edge_verts_add(s, e, iv, false);
     }
     else {
 #ifdef USE_DISSOLVE
@@ -459,7 +466,7 @@ static BMVert *bm_isect_edge_tri(ISectState *s,
       i = uint(*r_side - IX_EDGE_TRI_EDGE0);
       e = BM_edge_exists(t[i], t[(i + 1) % 3]);
       if (e) {
-        s->edge_verts_add(e, iv, false);
+        edge_verts_add(s, e, iv, false);
       }
     }
 
@@ -626,7 +633,7 @@ static void bm_isect_tri_tri(ISectState *s,
 #ifdef USE_DUMP
                 printf("# adding to edge %d\n", BM_elem_index_get(e));
 #endif
-                s->edge_verts_add(e, fv_a[i_a], true);
+                edge_verts_add(s, e, fv_a[i_a], true);
               }
               break;
             }
@@ -669,7 +676,7 @@ static void bm_isect_tri_tri(ISectState *s,
 #ifdef USE_DUMP
                 printf("# adding to edge %d\n", BM_elem_index_get(e));
 #endif
-                s->edge_verts_add(e, fv_b[i_b], true);
+                edge_verts_add(s, e, fv_b[i_b], true);
               }
               break;
             }
@@ -838,7 +845,7 @@ static void bm_isect_tri_tri(ISectState *s,
         }
       }
 
-      s->face_edges_add(BM_elem_index_get(f), ie, ie_exists);
+      face_edges_add(s, BM_elem_index_get(f), ie, ie_exists);
       // BLI_assert(len(ie_vs) <= 2)
     }
   }
@@ -1154,7 +1161,10 @@ bool BM_mesh_intersect(BMesh *bm,
 
 #ifdef USE_SPLICE
   {
-    s.edge_verts.foreach_item([&](BMEdge *e, LinkBase *v_ls_base) {
+    for (auto item : s.edge_verts.items()) {
+      BMEdge *e = item.key;
+      LinkBase *v_ls_base = item.value;
+
       BMVert *v_start;
       BMVert *v_end;
       BMVert *v_prev;
@@ -1210,7 +1220,7 @@ bool BM_mesh_intersect(BMesh *bm,
         }
       }
       UNUSED_VARS_NDEBUG(v_end);
-    });
+    }
   }
 #endif
 
@@ -1438,12 +1448,16 @@ bool BM_mesh_intersect(BMesh *bm,
 
     faces = bm->ftable;
 
-    s.face_edges.foreach_item([&](const int f_index, LinkBase *e_ls_base) {
+    for (auto item : s.face_edges.items()) {
+      const int f_index = item.key;
+      BMFace *f;
+      LinkBase *e_ls_base = item.value;
+
       BLI_assert(f_index >= 0 && f_index < totface_orig);
 
-      BMFace *f = faces[f_index];
+      f = faces[f_index];
       if (UNLIKELY(f == nullptr)) {
-        return;
+        continue;
       }
 
       BLI_assert(BM_elem_index_get(f) == f_index);
@@ -1452,7 +1466,7 @@ bool BM_mesh_intersect(BMesh *bm,
           bm, f, e_ls_base, use_island_connect, use_partial_connect, mem_arena_edgenet);
 
       BLI_memarena_clear(mem_arena_edgenet);
-    });
+    }
 
     BLI_memarena_free(mem_arena_edgenet);
   }
@@ -1526,7 +1540,7 @@ bool BM_mesh_intersect(BMesh *bm,
           continue;
         }
         BLI_assert(ELEM(side, 0, 1));
-        side = int(!side);
+        side = !side;
 
         // BM_face_calc_center_median(f, co);
         BM_face_calc_point_in_face(f, co);
