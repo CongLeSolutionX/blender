@@ -1,10 +1,10 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.2.0 Release Candidate (b'988bf2b88f3b')\n"
+"Project-Id-Version: Blender 4.3.0 Beta (b'89e3ab2a4533')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-07-15 07:57+0000\n"
-"PO-Revision-Date: 2024-05-23 14:56+0000\n"
+"POT-Creation-Date: 2024-10-14 08:43+0000\n"
+"PO-Revision-Date: 2024-10-14 08:42+0000\n"
 "Last-Translator: leif larsen <linuxdk1978@gmail.com>\n"
 "Language-Team: Danish <https://translate.blender.org/projects/blender-ui/ui/da/>\n"
 "Language: da\n"
@@ -12,7 +12,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=n != 1;\n"
-"X-Generator: Weblate 5.5.2"
+"X-Generator: Weblate 5.7.2"
 
 
 msgid "Valid"
@@ -399,12 +399,68 @@ msgid "Displays glTF Material Output node in Shader Editor (Menu Add > Output)"
 msgstr "Viser glTF Material Output node i Shader Editor (Menu Tilføj > Output)"
 
 
+msgid "        Filter by Name"
+msgstr "        Filtrer efter navn"
+
+
+msgid "Show only hotkeys that have this text in their name"
+msgstr "Vis kun genvejstaster, der har denne tekst i deres navn"
+
+
+msgid "Hide Mix nodes"
+msgstr "Skjul Mix-noder"
+
+
+msgid "When merging nodes with the Ctrl+Numpad0 hotkey (and similar) specify whether to collapse them or show the full node with options expanded"
+msgstr "Når du slår noder sammen med genvejstasten Ctrl+Numpad0 (og lignende), skal du angive, om de skal skjules eller vise hele noden med udvidede muligheder"
+
+
+msgid "Always collapse the new merge nodes"
+msgstr "Skjul altid de nye sammenfletningsknuder sammen"
+
+
+msgid "Collapse in all cases except for shaders"
+msgstr "Fold sammen i alle tilfælde undtagen shaders"
+
+
+msgid "Never"
+msgstr "Aldrig"
+
+
+msgid "Never collapse the new merge nodes"
+msgstr "Skjul aldrig de nye fletningsnoder sammen"
+
+
+msgid "When merging nodes with the Ctrl+Numpad0 hotkey (and similar) specify the position of the new nodes"
+msgstr "Når du slår noder sammen med genvejstasten Ctrl+Numpad0 (og lignende), skal du angive placeringen af de nye noder"
+
+
 msgid "Center"
 msgstr "Centrum"
 
 
+msgid "Place the Mix node between the two nodes"
+msgstr "Placer Mix-noden mellem de to noder"
+
+
 msgid "Bottom"
 msgstr "Bund"
+
+
+msgid "Place the Mix node at the same height as the lowest node"
+msgstr "Placer Mix-noden mellem de to noder"
+
+
+msgid "Show Hotkey List"
+msgstr "Vis genvejsliste"
+
+
+msgid "Expand this box into a list of all the hotkeys for functions in this addon"
+msgstr "Udvid denne boks til en liste over alle genvejstaster til funktioner i denne tilføjelse"
+
+
+msgid "Expand this box into a list of all naming tags for principled texture setup"
+msgstr "Udvid denne boks til en liste over alle navngivningsmærker til principiel teksturopsætning"
 
 
 msgid "Fribidi Library"
@@ -803,10 +859,6 @@ msgid "Bake to active Camera"
 msgstr "Bag til aktivt kamera"
 
 
-msgid "Motion path points will be baked into the camera space of the active camera. This means they will only look right when looking through that camera. Switching cameras using markers is not supported"
-msgstr "Bevægelsesstipunkter vil blive indbygget i kamerarummet på det aktive kamera. Det betyder, at de kun ser rigtigt ud, når de ser gennem det kamera. Skift kamera ved hjælp af markører er ikke understøttet"
-
-
 msgid "Any Type"
 msgstr "Enhver type"
 
@@ -1111,10 +1163,6 @@ msgid "Catalog UUID"
 msgstr "Katalog UUID"
 
 
-msgid "Identifier for the asset's catalog, used by Blender to look up the asset's catalog path. Must be a UUID according to RFC4122"
-msgstr "Identifikator for aktivets katalog, brugt af Blender til at slå aktivets katalogsti op. Skal være et UUID i henhold til RFC4122"
-
-
 msgid "Catalog Simple Name"
 msgstr "Katalog enkelt navn"
 
@@ -1127,10 +1175,6 @@ msgid "Copyright"
 msgstr "ophavsret"
 
 
-msgid "Copyright notice for this asset. An empty copyright notice does not necessarily indicate that this is copyright-free. Contact the author if any clarification is needed"
-msgstr "Ophavsretsmeddelelse for dette aktiv. En tom ophavsretsmeddelelse betyder ikke nødvendigvis, at dette er ophavsretsfrit. Kontakt forfatteren, hvis der er behov for nogen afklaring"
-
-
 msgid "Description"
 msgstr "Beskrivelse"
 
@@ -1141,10 +1185,6 @@ msgstr "En beskrivelse af det aktiv, der skal vises for brugeren"
 
 msgid "License"
 msgstr "Licens"
-
-
-msgid "The type of license this asset is distributed under. An empty license name does not necessarily indicate that this is free of licensing terms. Contact the author if any clarification is needed"
-msgstr "Den type licens, som dette aktiv er distribueret under. Et tomt licensnavn betyder ikke nødvendigvis, at dette er fri for licensvilkår. Kontakt forfatteren, hvis der er behov for en afklaring"
 
 
 msgid "Tags"
@@ -1326,10 +1366,6 @@ msgid "Choose the asset library to display assets from"
 msgstr "Vælg det aktivbibliotek, du vil vise aktiver fra"
 
 
-msgid "All"
-msgstr "alle"
-
-
 msgid "Show assets from all of the listed asset libraries"
 msgstr "Vis aktiver fra alle de listede aktivbiblioteker"
 
@@ -1394,10 +1430,6 @@ msgid "No Asset Dragging"
 msgstr "Ingen aktiv træk"
 
 
-msgid "Disable the default asset dragging on drag events. Useful for implementing custom dragging via custom key-map items"
-msgstr "Deaktiver standardaktivets træk ved trækhændelser. Nyttigt til at implementere tilpasset træk via brugerdefinerede nøglekortelementer"
-
-
 msgid "Visible by Default"
 msgstr "Synlig som standard"
 
@@ -1440,10 +1472,6 @@ msgstr "Filtrer aktiver efter navn"
 
 msgid "Show Names"
 msgstr "Vis Navne"
-
-
-msgid "Show the asset name together with the preview. Otherwise only the preview will be visible"
-msgstr "Vis aktivnavnet sammen med forhåndsvisningen. Ellers vil kun forhåndsvisningen være synlig"
 
 
 msgid "Asset Tag"
@@ -1670,6 +1698,10 @@ msgid "Active attribute"
 msgstr "Arktive atributer"
 
 
+msgid "Active Attribute Index"
+msgstr "Aktivt attributindeks"
+
+
 msgid "Active Color"
 msgstr "Aktiv farve"
 
@@ -1694,14 +1726,6 @@ msgid "The name of the active color attribute for display and editing"
 msgstr "Navnet på den aktive farveattribut til visning og redigering"
 
 
-msgid "Active Attribute Index"
-msgstr "Aktivt attributindeks"
-
-
-msgid "Active attribute index"
-msgstr "Aktivt attributindeks"
-
-
 msgid "Default Color Attribute"
 msgstr "Standardfarveattribut"
 
@@ -1724,10 +1748,6 @@ msgstr "Bag data til en Scene-datablok"
 
 msgid "Cage Extrusion"
 msgstr "Bur ekstrudering"
-
-
-msgid "Inflate the active object by the specified distance for baking. This helps matching to points nearer to the outside of the selected object meshes"
-msgstr "Pust den aktive genstand op med den angivne afstand til bagning. Dette hjælper med at matche til punkter tættere på ydersiden af de valgte objektmasker"
 
 
 msgid "Cage Object"
@@ -1772,10 +1792,6 @@ msgstr "Forlæng"
 
 msgid "Extend border pixels outwards"
 msgstr "Forlæng kantpixel udad"
-
-
-msgid "The maximum ray distance for matching points between the active and selected objects. If zero, there is no limit"
-msgstr "Den maksimale stråleafstand for at matche punkter mellem de aktive og valgte objekter. Hvis nul, er der ingen grænse"
 
 
 msgid "Normal Space"
@@ -1982,6 +1998,46 @@ msgid "Weight"
 msgstr "Vægt"
 
 
+msgid "Armature"
+msgstr "Armatur"
+
+
+msgid "Camera"
+msgstr "Kamera"
+
+
+msgid "Image"
+msgstr "Billede"
+
+
+msgid "Key"
+msgstr "Nøgle"
+
+
+msgid "Material"
+msgstr "Materiale"
+
+
+msgid "Mesh"
+msgstr "Maske"
+
+
+msgid "Movie Clip"
+msgstr "Film klip"
+
+
+msgid "Scene"
+msgstr "Scene"
+
+
+msgid "Sound"
+msgstr "Lyd"
+
+
+msgid "Text"
+msgstr "Tekst"
+
+
 msgid "Level"
 msgstr "Niveau"
 
@@ -2038,20 +2094,16 @@ msgid "Active"
 msgstr "Aktiv"
 
 
-msgid "Material"
-msgstr "Materiale"
-
-
 msgid "Direction"
 msgstr "Retning"
 
 
+msgid "All"
+msgstr "alle"
+
+
 msgid "Threshold"
 msgstr "Tærskel"
-
-
-msgid "Blur"
-msgstr "Sløring"
 
 
 msgid "Object Path"
@@ -2126,10 +2178,6 @@ msgid "Crop"
 msgstr "Beskær"
 
 
-msgid "Image"
-msgstr "Billede"
-
-
 msgid "Image displayed and edited in this space"
 msgstr "Billedet vises og redigeres i dette rum"
 
@@ -2176,10 +2224,6 @@ msgstr "Baggrunds kilde"
 
 msgid "Data source used for background"
 msgstr "Datakilde brugt til baggrund"
-
-
-msgid "Movie Clip"
-msgstr "Film klip"
 
 
 msgid "Camera Clip"
@@ -2246,6 +2290,10 @@ msgid "Look"
 msgstr "udseende"
 
 
+msgid "Temperature"
+msgstr "Temperatur"
+
+
 msgid "Influence"
 msgstr "Indflydelse"
 
@@ -2294,10 +2342,6 @@ msgid "Locked Track"
 msgstr "Låst spor"
 
 
-msgid "Armature"
-msgstr "Armatur"
-
-
 msgid "Mix Mode"
 msgstr "Blandingstilstand"
 
@@ -2326,10 +2370,6 @@ msgid "Up Axis"
 msgstr "Op akse"
 
 
-msgid "Camera"
-msgstr "Kamera"
-
-
 msgid "Bone"
 msgstr "Knogle"
 
@@ -2348,10 +2388,6 @@ msgstr "Lokation"
 
 msgid "Depth"
 msgstr "Dybte"
-
-
-msgid "Scene"
-msgstr "Scene"
 
 
 msgid "Invert"
@@ -2411,32 +2447,8 @@ msgid "Blend Mode"
 msgstr "Blandings måde"
 
 
-msgid "Camera Object"
-msgstr "Kamera objekt"
-
-
-msgid "Target Object"
-msgstr "Mål objekt"
-
-
 msgid "Ping Pong"
 msgstr "Ping pong"
-
-
-msgid "Key"
-msgstr "Nøgle"
-
-
-msgid "Mesh"
-msgstr "Maske"
-
-
-msgid "Sound"
-msgstr "Lyd"
-
-
-msgid "Text"
-msgstr "Tekst"
 
 
 msgid "F-Curves"
@@ -2449,6 +2461,10 @@ msgstr "B-Knogle"
 
 msgid "Local"
 msgstr "Lokal"
+
+
+msgid "Blur"
+msgstr "Sløring"
 
 
 msgid "Occlusion"
@@ -2574,6 +2590,14 @@ msgstr "Fil"
 
 msgid "New"
 msgstr "ny"
+
+
+msgid "Camera Object"
+msgstr "Kamera objekt"
+
+
+msgid "Target Object"
+msgstr "Mål objekt"
 
 
 msgid "Play Mode"
@@ -2720,6 +2744,14 @@ msgid "Limit"
 msgstr "Grænse"
 
 
+msgid "Inflate the active object by the specified distance for baking. This helps matching to points nearer to the outside of the selected object meshes"
+msgstr "Pust den aktive genstand op med den angivne afstand til bagning. Dette hjælper med at matche til punkter tættere på ydersiden af de valgte objektmasker"
+
+
+msgid "The maximum ray distance for matching points between the active and selected objects. If zero, there is no limit"
+msgstr "Den maksimale stråleafstand for at matche punkter mellem de aktive og valgte objekter. Hvis nul, er der ingen grænse"
+
+
 msgid "Child"
 msgstr "Barn"
 
@@ -2786,10 +2818,6 @@ msgstr "Forældere beregningstyrper"
 
 msgid "Password"
 msgstr "Kodeord"
-
-
-msgid "Temperature"
-msgstr "Temperatur"
 
 
 msgid "Gray Scale"
@@ -2866,6 +2894,14 @@ msgstr "Tiden er gået"
 
 msgid "Sharpen"
 msgstr "Skarpere"
+
+
+msgid "ON"
+msgstr "Til"
+
+
+msgid "OFF"
+msgstr "Fra"
 
 
 msgid "Keyframe not in F-Curve"
@@ -2970,14 +3006,6 @@ msgstr "W3"
 
 msgid "W4"
 msgstr "W4"
-
-
-msgid "ON"
-msgstr "Til"
-
-
-msgid "OFF"
-msgstr "Fra"
 
 
 msgid "unsupported format"

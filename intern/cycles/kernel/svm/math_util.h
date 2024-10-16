@@ -34,10 +34,10 @@ ccl_device void svm_vector_math(ccl_private float *value,
       *vector = project(a, b);
       break;
     case NODE_VECTOR_MATH_REFLECT:
-      *vector = reflect(a, b);
+      *vector = reflect(a, safe_normalize(b));
       break;
     case NODE_VECTOR_MATH_REFRACT:
-      *vector = refract(a, normalize(b), param1);
+      *vector = refract(a, safe_normalize(b), param1);
       break;
     case NODE_VECTOR_MATH_FACEFORWARD:
       *vector = faceforward(a, b, c);
@@ -174,7 +174,7 @@ ccl_device float svm_math(NodeMathType type, float a, float b, float c)
     case NODE_MATH_ARCTANGENT:
       return atanf(a);
     case NODE_MATH_ARCTAN2:
-      return atan2f(a, b);
+      return compatible_atan2(a, b);
     case NODE_MATH_SIGN:
       return compatible_signf(a);
     case NODE_MATH_EXPONENT:

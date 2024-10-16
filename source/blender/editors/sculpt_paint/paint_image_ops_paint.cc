@@ -313,7 +313,9 @@ static std::unique_ptr<PaintOperation> texture_paint_init(bContext *C,
     return nullptr;
   }
 
-  if ((brush->imagepaint_tool == PAINT_TOOL_FILL) && (brush->flag & BRUSH_USE_GRADIENT)) {
+  if ((brush->image_brush_type == IMAGE_PAINT_BRUSH_TYPE_FILL) &&
+      (brush->flag & BRUSH_USE_GRADIENT))
+  {
     pop->cursor = WM_paint_cursor_activate(
         SPACE_TYPE_ANY, RGN_TYPE_ANY, ED_image_tools_paint_poll, gradient_draw_line, pop.get());
   }
@@ -352,7 +354,7 @@ static void paint_stroke_update_step(bContext *C,
   size = RNA_float_get(itemptr, "size");
 
   /* stroking with fill tool only acts on stroke end */
-  if (brush->imagepaint_tool == PAINT_TOOL_FILL) {
+  if (brush->image_brush_type == IMAGE_PAINT_BRUSH_TYPE_FILL) {
     copy_v2_v2(pop->prevmouse, mouse);
     return;
   }
@@ -393,7 +395,7 @@ static void paint_stroke_done(const bContext *C, PaintStroke *stroke)
 
   toolsettings->imapaint.flag &= ~IMAGEPAINT_DRAWING;
 
-  if (brush->imagepaint_tool == PAINT_TOOL_FILL) {
+  if (brush->image_brush_type == IMAGE_PAINT_BRUSH_TYPE_FILL) {
     if (brush->flag & BRUSH_USE_GRADIENT) {
       pop->mode->paint_gradient_fill(
           C, scene, brush, stroke, pop->stroke_handle, pop->startmouse, pop->prevmouse);
@@ -481,14 +483,31 @@ static int paint_exec(bContext *C, wmOperator *op)
 
   RNA_float_get_array(&firstpoint, "mouse", mouse);
 
-  op->customdata = paint_stroke_new(C,
-                                    op,
-                                    nullptr,
-                                    paint_stroke_test_start,
-                                    paint_stroke_update_step,
-                                    paint_stroke_redraw,
-                                    paint_stroke_done,
-                                    0);
+  PaintStroke *stroke = paint_stroke_new(C,
+                                         op,
+                                         nullptr,
+                                         paint_stroke_test_start,
+                                         paint_stroke_update_step,
+                                         paint_stroke_redraw,
+                                         paint_stroke_done,
+                                         0);
+  op->customdata = stroke;
+
+  /* Make sure we have proper coordinates for sampling (mask) textures -- these get stored in
+   * #UnifiedPaintSettings -- as well as support randomness and jitter. */
+  Scene &scene = *CTX_data_scene(C);
+  PaintMode mode = BKE_paintmode_get_active_from_context(C);
+  Paint &paint = *BKE_paint_get_active_from_context(C);
+  const Brush &brush = *BKE_paint_brush_for_read(&paint);
+  float pressure;
+  pressure = RNA_float_get(&firstpoint, "pressure");
+  float mouse_out[2];
+  bool dummy;
+  float dummy_location[3];
+
+  paint_stroke_jitter_pos(scene, *stroke, mode, brush, pressure, mouse, mouse_out);
+  paint_brush_update(C, brush, mode, stroke, mouse, mouse_out, pressure, dummy_location, &dummy);
+
   /* frees op->customdata */
   return paint_stroke_exec(C, op, static_cast<PaintStroke *>(op->customdata));
 }

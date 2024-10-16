@@ -56,6 +56,17 @@ class LevelsOperation : public NodeOperation {
 
   void execute() override
   {
+    /* Not yet supported on CPU. */
+    if (!context().use_gpu()) {
+      for (const bNodeSocket *output : this->node()->output_sockets()) {
+        Result &output_result = get_result(output->identifier);
+        if (output_result.should_compute()) {
+          output_result.allocate_invalid();
+        }
+      }
+      return;
+    }
+
     if (get_input("Image").is_single_value()) {
       execute_single_value();
       return;
@@ -129,17 +140,17 @@ class LevelsOperation : public NodeOperation {
     const Result &input = get_input("Image");
     switch (get_channel()) {
       case CMP_NODE_LEVLES_RED:
-        return sum_red(context(), input.texture());
+        return sum_red(context(), input);
       case CMP_NODE_LEVLES_GREEN:
-        return sum_green(context(), input.texture());
+        return sum_green(context(), input);
       case CMP_NODE_LEVLES_BLUE:
-        return sum_blue(context(), input.texture());
+        return sum_blue(context(), input);
       case CMP_NODE_LEVLES_LUMINANCE_BT709:
-        return sum_luminance(context(), input.texture(), float3(luminance_coefficients_bt709_));
+        return sum_luminance(context(), input, float3(luminance_coefficients_bt709_));
       case CMP_NODE_LEVLES_LUMINANCE: {
         float luminance_coefficients[3];
         IMB_colormanagement_get_luminance_coefficients(luminance_coefficients);
-        return sum_luminance(context(), input.texture(), float3(luminance_coefficients));
+        return sum_luminance(context(), input, float3(luminance_coefficients));
       }
       default:
         BLI_assert_unreachable();
@@ -159,19 +170,19 @@ class LevelsOperation : public NodeOperation {
     const Result &input = get_input("Image");
     switch (get_channel()) {
       case CMP_NODE_LEVLES_RED:
-        return sum_red_squared_difference(context(), input.texture(), subtrahend);
+        return sum_red_squared_difference(context(), input, subtrahend);
       case CMP_NODE_LEVLES_GREEN:
-        return sum_green_squared_difference(context(), input.texture(), subtrahend);
+        return sum_green_squared_difference(context(), input, subtrahend);
       case CMP_NODE_LEVLES_BLUE:
-        return sum_blue_squared_difference(context(), input.texture(), subtrahend);
+        return sum_blue_squared_difference(context(), input, subtrahend);
       case CMP_NODE_LEVLES_LUMINANCE_BT709:
         return sum_luminance_squared_difference(
-            context(), input.texture(), float3(luminance_coefficients_bt709_), subtrahend);
+            context(), input, float3(luminance_coefficients_bt709_), subtrahend);
       case CMP_NODE_LEVLES_LUMINANCE: {
         float luminance_coefficients[3];
         IMB_colormanagement_get_luminance_coefficients(luminance_coefficients);
         return sum_luminance_squared_difference(
-            context(), input.texture(), float3(luminance_coefficients), subtrahend);
+            context(), input, float3(luminance_coefficients), subtrahend);
       }
       default:
         BLI_assert_unreachable();
@@ -205,5 +216,5 @@ void register_node_type_cmp_view_levels()
   ntype.initfunc = file_ns::node_composit_init_view_levels;
   ntype.get_compositor_operation = file_ns::get_compositor_operation;
 
-  blender::bke::nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }

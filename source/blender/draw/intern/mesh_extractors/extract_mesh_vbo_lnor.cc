@@ -259,12 +259,27 @@ static const GPUVertFormat &get_subdiv_lnor_format()
   return format;
 }
 
-void extract_normals_subdiv(const DRWSubdivCache &subdiv_cache,
+void extract_normals_subdiv(const MeshRenderData &mr,
+                            const DRWSubdivCache &subdiv_cache,
                             gpu::VertBuf &pos_nor,
                             gpu::VertBuf &lnor)
 {
-  GPU_vertbuf_init_build_on_device(lnor, get_subdiv_lnor_format(), subdiv_cache.num_subdiv_loops);
-  draw_subdiv_build_lnor_buffer(subdiv_cache, &pos_nor, &lnor);
-}
+  const int vbo_size = subdiv_full_vbo_size(mr, subdiv_cache);
+  const int loose_geom_start = subdiv_cache.num_subdiv_loops;
 
+  GPU_vertbuf_init_build_on_device(lnor, get_subdiv_lnor_format(), vbo_size);
+  draw_subdiv_build_lnor_buffer(subdiv_cache, &pos_nor, &lnor);
+
+  /* Push VBO content to the GPU and bind the VBO so that #GPU_vertbuf_update_sub can work. */
+  GPU_vertbuf_use(&lnor);
+
+  /* Default to zeroed attribute. The overlay shader should expect this and render engines should
+   * never draw loose geometry. */
+  const float4 default_normal(0.0f, 0.0f, 0.0f, 0.0f);
+  for (const int i : IndexRange::from_begin_end(loose_geom_start, vbo_size)) {
+    /* TODO(fclem): This has HORRENDOUS performance. Prefer clearing the buffer on device with
+     * something like glClearBufferSubData. */
+    GPU_vertbuf_update_sub(&lnor, i * sizeof(float4), sizeof(float4), &default_normal);
+  }
+}
 }  // namespace blender::draw

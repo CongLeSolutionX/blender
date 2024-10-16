@@ -13,6 +13,9 @@
 #include "BLI_string_utils.hh"
 #include "BLI_vector.hh"
 
+#include "GPU_storage_buffer.hh"
+
+#include "gpu_context_private.hh"
 #include "gpu_shader_dependency_private.hh"
 #include "gpu_shader_private.hh"
 
@@ -122,9 +125,6 @@ void Shader::print_log(Span<const char *> sources,
     if (log_item.cursor.row == -1) {
       found_line_id = false;
     }
-    else if (log_item.source_base_row && log_item.cursor.source > 0) {
-      log_item.cursor.row += sources_end_line[log_item.cursor.source - 1];
-    }
 
     const char *src_line = sources_combined;
 
@@ -143,8 +143,7 @@ void Shader::print_log(Span<const char *> sources,
     {
       const char *src_line_end;
       found_line_id = false;
-      /* error_line is 1 based in this case. */
-      int src_line_index = 1;
+      int src_line_index = 0;
       while ((src_line_end = strchr(src_line, '\n'))) {
         if (src_line_index >= log_item.cursor.row) {
           found_line_id = true;
@@ -317,6 +316,78 @@ bool GPULogParser::at_any(const char *log_line, const StringRef chars) const
 int GPULogParser::parse_number(const char *log_line, const char **r_new_position) const
 {
   return int(strtol(log_line, const_cast<char **>(r_new_position), 10));
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Shader Debug Printf
+ * \{ */
+
+void printf_begin(Context *ctx)
+{
+  if (ctx == nullptr) {
+    return;
+  }
+  if (!shader::gpu_shader_dependency_has_printf()) {
+    return;
+  }
+  BLI_assert(ctx->printf_buf == nullptr);
+  ctx->printf_buf = GPU_storagebuf_create(GPU_SHADER_PRINTF_MAX_CAPACITY * sizeof(uint32_t));
+  GPU_storagebuf_clear_to_zero(ctx->printf_buf);
+}
+
+void printf_end(Context *ctx)
+{
+  if (ctx == nullptr) {
+    return;
+  }
+  if (ctx->printf_buf == nullptr) {
+    return;
+  }
+
+  Vector<uint32_t> data(GPU_SHADER_PRINTF_MAX_CAPACITY);
+  GPU_storagebuf_read(ctx->printf_buf, data.data());
+  GPU_storagebuf_free(ctx->printf_buf);
+  ctx->printf_buf = nullptr;
+
+  uint32_t data_len = data[0];
+  if (data_len == 0) {
+    return;
+  }
+  if (data_len >= GPU_SHADER_PRINTF_MAX_CAPACITY) {
+    printf("Printf buffer overflow.\n");
+    /* TODO(fclem): We can still read the uncorrupted part. */
+    return;
+  }
+
+  int cursor = 1;
+  while (cursor < data_len + 1) {
+    uint32_t format_hash = data[cursor++];
+
+    const shader::PrintfFormat &format = shader::gpu_shader_dependency_get_printf_format(
+        format_hash);
+
+    for (const shader::PrintfFormat::Block &block : format.format_blocks) {
+      switch (block.type) {
+        case shader::PrintfFormat::Block::NONE:
+          printf("%s", block.fmt.c_str());
+          break;
+        case shader::PrintfFormat::Block::UINT:
+          printf(block.fmt.c_str(), *reinterpret_cast<uint32_t *>(&data[cursor++]));
+          break;
+        case shader::PrintfFormat::Block::INT:
+          printf(block.fmt.c_str(), *reinterpret_cast<int32_t *>(&data[cursor++]));
+          break;
+        case shader::PrintfFormat::Block::FLOAT:
+          printf(block.fmt.c_str(), *reinterpret_cast<float *>(&data[cursor++]));
+          break;
+        default:
+          BLI_assert_unreachable();
+          break;
+      }
+    }
+  }
 }
 
 /** \} */

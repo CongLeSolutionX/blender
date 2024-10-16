@@ -13,6 +13,7 @@
 #include "DNA_collection_types.h"
 #include "DNA_scene_types.h"
 
+#include "DNA_screen_types.h"
 #include "MEM_guardedalloc.h"
 
 #include "BLI_blenlib.h"
@@ -247,7 +248,9 @@ static void action_main_region_draw_overlay(const bContext *C, ARegion *region)
   ED_time_scrub_draw_current_frame(region, scene, saction->flag & SACTION_DRAWTIME);
 
   /* scrollers */
-  UI_view2d_scrollers_draw(v2d, nullptr);
+  if (region->winy > HEADERY * UI_SCALE_FAC) {
+    UI_view2d_scrollers_draw(v2d, nullptr);
+  }
 }
 
 /* add handlers, stuff you only do once or on area/region changes */
@@ -271,7 +274,9 @@ static void action_channel_region_init(wmWindowManager *wm, ARegion *region)
 static void set_v2d_height(View2D *v2d, const size_t item_count, const bool add_marker_padding)
 {
   const int height = ANIM_UI_get_channels_total_height(v2d, item_count);
-  const float pad_bottom = add_marker_padding ? UI_MARKER_MARGIN_Y : 0;
+  float pad_bottom = add_marker_padding ? UI_MARKER_MARGIN_Y : 0;
+  /* Add padding for the collapsed redo panel. */
+  pad_bottom += HEADERY;
   v2d->tot.ymin = -(height + pad_bottom);
   UI_view2d_curRect_clamp_y(v2d);
 }
@@ -869,7 +874,7 @@ static void action_space_subtype_item_extend(bContext * /*C*/,
 static blender::StringRefNull action_space_name_get(const ScrArea *area)
 {
   SpaceAction *sact = static_cast<SpaceAction *>(area->spacedata.first);
-  const int index = RNA_enum_from_value(rna_enum_space_action_mode_items, sact->mode);
+  const int index = max_ii(0, RNA_enum_from_value(rna_enum_space_action_mode_items, sact->mode));
   const EnumPropertyItem item = rna_enum_space_action_mode_items[index];
   return item.name;
 }
@@ -877,7 +882,7 @@ static blender::StringRefNull action_space_name_get(const ScrArea *area)
 static int action_space_icon_get(const ScrArea *area)
 {
   SpaceAction *sact = static_cast<SpaceAction *>(area->spacedata.first);
-  const int index = RNA_enum_from_value(rna_enum_space_action_mode_items, sact->mode);
+  const int index = max_ii(0, RNA_enum_from_value(rna_enum_space_action_mode_items, sact->mode));
   const EnumPropertyItem item = rna_enum_space_action_mode_items[index];
   return item.icon;
 }
@@ -961,7 +966,7 @@ void ED_spacetype_action()
   art = MEM_cnew<ARegionType>("spacetype action region");
   art->regionid = RGN_TYPE_UI;
   art->prefsizex = UI_SIDEBAR_PANEL_WIDTH;
-  art->keymapflag = ED_KEYMAP_UI;
+  art->keymapflag = ED_KEYMAP_UI | ED_KEYMAP_FRAMES;
   art->listener = action_region_listener;
   art->init = action_buttons_area_init;
   art->draw = action_buttons_area_draw;

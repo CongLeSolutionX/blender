@@ -49,6 +49,7 @@
 #include "RNA_access.hh"
 #include "RNA_prototypes.hh"
 
+#include "ED_asset.hh"
 #include "ED_fileselect.hh"
 #include "ED_screen.hh"
 
@@ -127,7 +128,7 @@ static FileTooltipData *file_tooltip_data_create(const SpaceFile *sfile, const F
   return data;
 }
 
-static void file_draw_tooltip_custom_func(bContext * /*C*/, uiTooltipData *tip, void *argN)
+static void file_draw_tooltip_custom_func(bContext & /*C*/, uiTooltipData &tip, void *argN)
 {
   FileTooltipData *file_data = static_cast<FileTooltipData *>(argN);
   const SpaceFile *sfile = file_data->sfile;
@@ -178,7 +179,7 @@ static void file_draw_tooltip_custom_func(bContext * /*C*/, uiTooltipData *tip, 
     }
 
     if (file->typeflag & (FILE_TYPE_BLENDER | FILE_TYPE_BLENDER_BACKUP)) {
-      char version_st[128] = {0};
+      char version_str[128] = {0};
       if (!thumb) {
         /* Load the thumbnail from cache if existing, but don't create if not. */
         thumb = IMB_thumb_read(full_path, THB_LARGE);
@@ -186,20 +187,23 @@ static void file_draw_tooltip_custom_func(bContext * /*C*/, uiTooltipData *tip, 
       if (thumb) {
         /* Look for version in existing thumbnail if available. */
         IMB_metadata_get_field(
-            thumb->metadata, "Thumb::Blender::Version", version_st, sizeof(version_st));
+            thumb->metadata, "Thumb::Blender::Version", version_str, sizeof(version_str));
       }
 
-      if (!version_st[0] && !(file->attributes & FILE_ATTR_OFFLINE)) {
+      if (!version_str[0] && !(file->attributes & FILE_ATTR_OFFLINE)) {
         /* Load Blender version directly from the file. */
         short version = BLO_version_from_file(full_path);
         if (version != 0) {
-          SNPRINTF(version_st, "%d.%01d", version / 100, version % 100);
+          SNPRINTF(version_str, "%d.%01d", version / 100, version % 100);
         }
       }
 
-      if (version_st[0]) {
-        UI_tooltip_text_field_add(
-            tip, fmt::format("Blender {}", version_st), {}, UI_TIP_STYLE_NORMAL, UI_TIP_LC_NORMAL);
+      if (version_str[0]) {
+        UI_tooltip_text_field_add(tip,
+                                  fmt::format("Blender {}", version_str),
+                                  {},
+                                  UI_TIP_STYLE_NORMAL,
+                                  UI_TIP_LC_NORMAL);
         UI_tooltip_text_field_add(tip, {}, {}, UI_TIP_STYLE_SPACER, UI_TIP_LC_NORMAL);
       }
     }
@@ -267,11 +271,11 @@ static void file_draw_tooltip_custom_func(bContext * /*C*/, uiTooltipData *tip, 
       }
     }
 
-    char date_st[FILELIST_DIRENTRY_DATE_LEN], time_st[FILELIST_DIRENTRY_TIME_LEN];
+    char date_str[FILELIST_DIRENTRY_DATE_LEN], time_str[FILELIST_DIRENTRY_TIME_LEN];
     bool is_today, is_yesterday;
     std::string day_string = ("");
     BLI_filelist_entry_datetime_to_string(
-        nullptr, file->time, false, time_st, date_st, &is_today, &is_yesterday);
+        nullptr, file->time, false, time_str, date_str, &is_today, &is_yesterday);
     if (is_today || is_yesterday) {
       day_string = (is_today ? N_("Today") : N_("Yesterday")) + std::string(" ");
     }
@@ -279,8 +283,8 @@ static void file_draw_tooltip_custom_func(bContext * /*C*/, uiTooltipData *tip, 
                               fmt::format("{}: {}{}{}",
                                           N_("Modified"),
                                           day_string,
-                                          (is_today || is_yesterday) ? "" : date_st,
-                                          (is_today || is_yesterday) ? time_st : ""),
+                                          (is_today || is_yesterday) ? "" : date_str,
+                                          (is_today || is_yesterday) ? time_str : ""),
                               {},
                               UI_TIP_STYLE_NORMAL,
                               UI_TIP_LC_NORMAL);
@@ -331,13 +335,7 @@ static void file_draw_tooltip_custom_func(bContext * /*C*/, uiTooltipData *tip, 
 static std::string file_draw_asset_tooltip_func(bContext * /*C*/, void *argN, const char * /*tip*/)
 {
   const auto *asset = static_cast<blender::asset_system::AssetRepresentation *>(argN);
-  std::string complete_string = asset->get_name();
-  const AssetMetaData &meta_data = asset->get_metadata();
-  if (meta_data.description) {
-    complete_string += '\n';
-    complete_string += meta_data.description;
-  }
-  return complete_string;
+  return blender::ed::asset::asset_tooltip(*asset);
 }
 
 static void draw_tile_background(const rcti *draw_rect, int colorid, int shade)
@@ -694,7 +692,7 @@ static void file_draw_preview(const FileList *files,
     }
 
     icon_x = xco + (file->typeflag & FILE_TYPE_DIR ? ex * 0.31f : ex * 0.178f);
-    icon_y = yco + (file->typeflag & FILE_TYPE_DIR ? ex * 0.11f : ex * 0.15f);
+    icon_y = yco + (file->typeflag & FILE_TYPE_DIR ? ex * 0.19f : ex * 0.15f);
     UI_icon_draw_ex(icon_x,
                     icon_y,
                     is_loading ? ICON_TEMP : icon,
@@ -706,17 +704,15 @@ static void file_draw_preview(const FileList *files,
                     UI_NO_ICON_OVERLAY_TEXT);
   }
 
-  if (is_link || is_offline) {
-    /* Icon at bottom to indicate it is a shortcut, link, alias, or offline. */
-    const int arrow = is_link ? ICON_LOOP_FORWARDS : ICON_INTERNET;
-    if (!is_icon) {
-      /* At very bottom-left if preview style. */
-      const uchar light[4] = {255, 255, 255, 255};
-      const float icon_x = float(xco) + (2.0f * UI_SCALE_FAC);
-      const float icon_y = float(yco) + (2.0f * UI_SCALE_FAC);
+  if (icon_aspect < 2.0f) {
+    const float icon_x = float(tile_draw_rect->xmin) + (3.0f * UI_SCALE_FAC);
+    const float icon_y = float(tile_draw_rect->ymin) + (17.0f * UI_SCALE_FAC);
+    const uchar light[4] = {255, 255, 255, 255};
+    if (is_offline) {
+      /* Icon at bottom to indicate the file is offline. */
       UI_icon_draw_ex(icon_x,
                       icon_y,
-                      arrow,
+                      ICON_INTERNET,
                       1.0f / UI_SCALE_FAC,
                       0.6f,
                       0.0f,
@@ -724,39 +720,30 @@ static void file_draw_preview(const FileList *files,
                       true,
                       UI_NO_ICON_OVERLAY_TEXT);
     }
-    else {
-      /* Link to folder or non-previewed file. */
-      uchar icon_color[4];
-      UI_GetThemeColor4ubv(TH_BACK, icon_color);
-      const float icon_x = xco + ((file->typeflag & FILE_TYPE_DIR) ? 0.14f : 0.23f) * scaledx;
-      const float icon_y = yco + ((file->typeflag & FILE_TYPE_DIR) ? 0.24f : 0.14f) * scaledy;
+    else if (is_link) {
+      /* Icon at bottom to indicate it is a shortcut, link, or alias. */
       UI_icon_draw_ex(icon_x,
                       icon_y,
-                      arrow,
-                      icon_aspect / UI_SCALE_FAC * 1.8f,
-                      0.3f,
+                      ICON_FILE_ALIAS,
+                      1.0f / UI_SCALE_FAC,
+                      0.6f,
                       0.0f,
-                      icon_color,
+                      nullptr,
                       false,
                       UI_NO_ICON_OVERLAY_TEXT);
     }
-  }
-  else if (icon && icon_aspect < 2.0f &&
-           ((!is_icon && !(file->typeflag & FILE_TYPE_FTFONT)) || is_loading))
-  {
-    /* Smaller, fainter icon at bottom-left for preview image thumbnail, but not for fonts. */
-    const uchar light[4] = {255, 255, 255, 255};
-    const float icon_x = float(xco) + (2.0f * UI_SCALE_FAC);
-    const float icon_y = float(yco) + (2.0f * UI_SCALE_FAC);
-    UI_icon_draw_ex(icon_x,
-                    icon_y,
-                    icon,
-                    1.0f / UI_SCALE_FAC,
-                    0.6f,
-                    0.0f,
-                    light,
-                    true,
-                    UI_NO_ICON_OVERLAY_TEXT);
+    else if (icon && ((!is_icon && !(file->typeflag & FILE_TYPE_FTFONT)) || is_loading)) {
+      /* Smaller, fainter icon at bottom-left for preview image thumbnail, but not for fonts. */
+      UI_icon_draw_ex(icon_x,
+                      icon_y,
+                      icon,
+                      1.0f / UI_SCALE_FAC,
+                      0.6f,
+                      0.0f,
+                      light,
+                      true,
+                      UI_NO_ICON_OVERLAY_TEXT);
+    }
   }
 
   const bool is_current_main_data = filelist_file_get_id(file) != nullptr;
@@ -765,8 +752,8 @@ static void file_draw_preview(const FileList *files,
      * current file (from current #Main in fact). */
     float icon_x, icon_y;
     const uchar light[4] = {255, 255, 255, 255};
-    icon_x = xco + ex - UI_UNIT_X;
-    icon_y = yco + ey - UI_UNIT_Y;
+    icon_x = float(tile_draw_rect->xmax) - (16.0f * UI_SCALE_FAC);
+    icon_y = float(tile_draw_rect->ymax) - (20.0f * UI_SCALE_FAC);
     UI_icon_draw_ex(icon_x,
                     icon_y,
                     ICON_CURRENT_FILE,
@@ -774,7 +761,7 @@ static void file_draw_preview(const FileList *files,
                     0.6f,
                     0.0f,
                     light,
-                    false,
+                    true,
                     UI_NO_ICON_OVERLAY_TEXT);
   }
 
@@ -1386,10 +1373,10 @@ void file_draw_list(const bContext *C, ARegion *region)
 
     const bool is_filtered = params->filter_search[0] != '\0';
 
-    uchar text_col[4];
-    UI_GetThemeColor4ubv(TH_TEXT, text_col);
+    uchar text_col_mod[4];
+    copy_v4_v4_uchar(text_col_mod, text_col);
     if (!is_filtered) {
-      text_col[3] /= 2;
+      text_col_mod[3] /= 2;
     }
 
     const char *message = [&]() {
@@ -1406,7 +1393,7 @@ void file_draw_list(const bContext *C, ARegion *region)
                              tile_draw_rect.xmin + UI_UNIT_X,
                              tile_draw_rect.ymax - UI_UNIT_Y,
                              message,
-                             text_col);
+                             text_col_mod);
   }
 
   BLF_batch_draw_end();

@@ -23,6 +23,7 @@
 #include "BLO_readfile.hh"
 
 struct BlendFileData;
+struct BlendfileLinkAppendContext;
 struct BlendFileReadParams;
 struct BlendFileReadReport;
 struct BLOCacheStorage;
@@ -34,7 +35,6 @@ struct Main;
 struct MemFile;
 struct Object;
 struct OldNewMap;
-struct ReportList;
 struct UserDef;
 
 enum eFileDataFlag {
@@ -51,6 +51,12 @@ ENUM_OPERATORS(eFileDataFlag, FD_FLAGS_IS_MEMFILE)
 #  pragma GCC poison off_t
 #endif
 
+/**
+ * General data used during a blend-file reading.
+ *
+ * Note that this data (and its accesses) are absolutely not thread-safe currently. It should never
+ * be accessed concurrently.
+ */
 struct FileData {
   /** Linked list of BHeadN's. */
   ListBase bhead_list;
@@ -136,6 +142,9 @@ struct FileData {
   IDNameLib_Map *new_idmap_uid;
 
   BlendFileReadReport *reports;
+
+  /** Opaque handle to the storage system used for non-static allocation strings. */
+  void *storage_handle;
 };
 
 #define SIZEOFBLENDERHEADER 12
@@ -238,7 +247,9 @@ void do_versions_after_linking_300(FileData *fd, Main *bmain);
 void do_versions_after_linking_400(FileData *fd, Main *bmain);
 void do_versions_after_linking_cycles(Main *bmain);
 
-void do_versions_after_setup(Main *new_bmain, BlendFileReadReport *reports);
+void do_versions_after_setup(Main *new_bmain,
+                             BlendfileLinkAppendContext *lapp_context,
+                             BlendFileReadReport *reports);
 
 /**
  * Direct data-blocks with global linking.

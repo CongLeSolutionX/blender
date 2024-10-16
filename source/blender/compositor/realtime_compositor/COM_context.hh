@@ -51,8 +51,14 @@ class Context {
   /* Get the node tree used for compositing. */
   virtual const bNodeTree &get_node_tree() const = 0;
 
+  /* True if the compositor should use GPU acceleration. */
+  virtual bool use_gpu() const = 0;
+
   /* True if the compositor should write file outputs, false otherwise. */
   virtual bool use_file_output() const = 0;
+
+  /* True if the compositor should compute node previews, false otherwise. */
+  virtual bool should_compute_node_previews() const = 0;
 
   /* True if the compositor should write the composite output, otherwise, the compositor is assumed
    * to not support the composite output and just displays its viewer output. In that case, the
@@ -75,14 +81,15 @@ class Context {
    * since the region can be zero sized. */
   virtual rcti get_compositing_region() const = 0;
 
-  /* Get the texture where the result of the compositor should be written. This should be called by
-   * the composite output node to get its target texture. */
-  virtual GPUTexture *get_output_texture() = 0;
+  /* Get the result where the result of the compositor should be written. */
+  virtual Result get_output_result() = 0;
 
-  /* Get the texture where the result of the compositor viewer should be written, given the domain
-   * of the result to be viewed. This should be called by viewer output nodes to get their target
-   * texture. */
-  virtual GPUTexture *get_viewer_output_texture(Domain domain, bool is_data) = 0;
+  /* Get the result where the result of the compositor viewer should be written, given the domain
+   * of the result to be viewed, its precision, and whether the output is a non-color data image
+   * that should be displayed without view transform. */
+  virtual Result get_viewer_output_result(Domain domain,
+                                          bool is_data,
+                                          ResultPrecision precision) = 0;
 
   /* Get the texture where the given render pass is stored. This should be called by the Render
    * Layer node to populate its outputs. */
@@ -160,19 +167,11 @@ class Context {
   /* Get a GPU shader with the given info name and context's precision. */
   GPUShader *get_shader(const char *info_name);
 
-  /* Create a result of the given type and precision using the context's texture pool. */
+  /* Create a result of the given type and precision. */
   Result create_result(ResultType type, ResultPrecision precision);
 
-  /* Create a result of the given type using the context's texture pool and precision. */
+  /* Create a result of the given type using the context's precision. */
   Result create_result(ResultType type);
-
-  /* Create a temporary result of the given type and precision using the context's texture pool.
-   * See Result::Temporary for more information. */
-  Result create_temporary_result(ResultType type, ResultPrecision precision);
-
-  /* Create a temporary result of the given type using the context's texture pool and precision.
-   * See Result::Temporary for more information. */
-  Result create_temporary_result(ResultType type);
 
   /* Get a reference to the texture pool of this context. */
   TexturePool &texture_pool();

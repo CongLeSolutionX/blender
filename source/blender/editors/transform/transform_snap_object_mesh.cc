@@ -13,6 +13,7 @@
 #include "BKE_mesh.hh"
 
 #include "ED_transform_snap_object_context.hh"
+#include "ED_view3d.hh"
 
 #include "transform_snap_object.hh"
 
@@ -418,11 +419,11 @@ eSnapMode snap_edge_points_mesh(SnapObjectContext *sctx,
                                 const Object *ob_eval,
                                 const ID *id,
                                 const float4x4 &obmat,
-                                float dist_pex_sq_orig,
-                                int edge)
+                                float dist_px_sq_orig,
+                                int edge_index)
 {
   SnapData_Mesh nearest2d(sctx, reinterpret_cast<const Mesh *>(id), obmat);
-  eSnapMode elem = nearest2d.snap_edge_points_impl(sctx, edge, dist_pex_sq_orig);
+  eSnapMode elem = nearest2d.snap_edge_points_impl(sctx, edge_index, dist_px_sq_orig);
   if (nearest2d.nearest_point.index != -2) {
     nearest2d.register_result(sctx, ob_eval, id);
   }
@@ -491,7 +492,11 @@ static eSnapMode snapMesh(SnapObjectContext *sctx,
     BLI_assert(treedata_dummy.cached);
   }
 
-  nearest2d.clip_planes_enable(sctx, ob_eval);
+  /* #XRAY_ENABLED can return false even with the XRAY flag enabled, this happens because the
+   * alpha is 1.0 in this case. But even with the alpha being 1.0, the edit mesh is still not
+   * occluded. */
+  const bool skip_occlusion_plane = is_editmesh && XRAY_FLAG_ENABLED(sctx->runtime.v3d);
+  nearest2d.clip_planes_enable(sctx, ob_eval, skip_occlusion_plane);
 
   BVHTreeNearest nearest{};
   nearest.index = -1;

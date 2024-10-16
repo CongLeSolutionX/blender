@@ -52,7 +52,7 @@
 #  include "GPU_state.hh"
 
 #  ifdef WITH_PYTHON
-#    include "BPY_extern.h"
+#    include "BPY_extern.hh"
 #  endif
 
 /* -------------------------------------------------------------------- */
@@ -412,7 +412,7 @@ static PointerRNA rna_Gizmo_group_get(PointerRNA *ptr)
 #  ifdef WITH_PYTHON
 
 static bool rna_Gizmo_unregister(Main *bmain, StructRNA *type);
-extern "C" void BPY_RNA_gizmo_wrapper(wmGizmoType *gzgt, void *userdata);
+extern void BPY_RNA_gizmo_wrapper(wmGizmoType *gzgt, void *userdata);
 
 static StructRNA *rna_Gizmo_register(Main *bmain,
                                      ReportList *reports,
@@ -602,7 +602,7 @@ static wmGizmo *rna_GizmoGroup_gizmo_new(wmGizmoGroup *gzgroup,
       BKE_reportf(reports,
                   RPT_ERROR,
                   "GizmoType '%s' is for a 3D gizmo-group. "
-                  "The 'draw_select' callback is set where only 'test_select' will be used",
+                  "The 'draw_select' callback is set where only 'test_select' will be used.",
                   idname);
       return nullptr;
     }
@@ -787,7 +787,7 @@ static void rna_gizmogroup_invoke_prepare_cb(const bContext *C,
   RNA_parameter_list_free(&list);
 }
 
-extern "C" void BPY_RNA_gizmogroup_wrapper(wmGizmoGroupType *gzgt, void *userdata);
+extern void BPY_RNA_gizmogroup_wrapper(wmGizmoGroupType *gzgt, void *userdata);
 static bool rna_GizmoGroup_unregister(Main *bmain, StructRNA *type);
 
 static StructRNA *rna_GizmoGroup_register(Main *bmain,
@@ -1441,7 +1441,7 @@ static void rna_def_gizmogroup(BlenderRNA *brna)
   func = RNA_def_function(srna, "poll", nullptr);
   RNA_def_function_ui_description(func, "Test if the gizmo group can be called or not");
   RNA_def_function_flag(func, FUNC_NO_SELF | FUNC_REGISTER_OPTIONAL);
-  RNA_def_function_return(func, RNA_def_boolean(func, "visible", true, "", ""));
+  RNA_def_function_return(func, RNA_def_boolean(func, "visible", false, "", ""));
   parm = RNA_def_pointer(func, "context", "Context", "", "");
   RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
 

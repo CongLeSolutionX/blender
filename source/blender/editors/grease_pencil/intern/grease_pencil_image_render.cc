@@ -108,7 +108,7 @@ Image *image_render_end(Main &bmain, GPUOffScreen *buffer)
   }
 
   Image *ima = BKE_image_add_from_imbuf(&bmain, ibuf, "Grease Pencil Fill");
-  ima->id.tag |= LIB_TAG_DOIT;
+  ima->id.tag |= ID_TAG_DOIT;
 
   BKE_image_release_ibuf(ima, ibuf, nullptr);
 
@@ -551,7 +551,7 @@ void draw_grease_pencil_strokes(const RegionView3D &rv3d,
                                                            mat->gp_style->mode) :
                                                        GP_MATERIAL_MODE_LINE;
 
-    if (mat == 0 || (mat->gp_style->flag & GP_MATERIAL_HIDE)) {
+    if (mat == nullptr || (mat->gp_style->flag & GP_MATERIAL_HIDE)) {
       return;
     }
 

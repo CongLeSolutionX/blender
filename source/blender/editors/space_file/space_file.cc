@@ -148,7 +148,6 @@ static void file_init(wmWindowManager * /*wm*/, ScrArea *area)
   }
   /* Validate the params right after file read. */
   fileselect_refresh_params(sfile);
-  ED_fileselect_set_params_from_userdef(sfile);
 }
 
 static void file_exit(wmWindowManager *wm, ScrArea *area)
@@ -1026,11 +1025,6 @@ void ED_spacetype_file()
 void ED_file_init()
 {
   ED_file_read_bookmarks();
-
-  if (G.background == false) {
-    filelist_init_icons();
-  }
-
   IMB_thumb_makedirs();
 }
 

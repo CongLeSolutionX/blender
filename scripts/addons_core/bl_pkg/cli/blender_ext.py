@@ -54,9 +54,6 @@ def signal_handler_sigint(_sig: int, _frame: Any) -> None:
     REQUEST_EXIT = True
 
 
-signal.signal(signal.SIGINT, signal_handler_sigint)
-
-
 # A primitive type that can be communicated via message passing.
 PrimType = Union[int, str]
 PrimTypeOrSeq = Union[PrimType, Sequence[PrimType]]
@@ -142,6 +139,46 @@ ${body}
 '''
 
 
+# -----------------------------------------------------------------------------
+# Workarounds
+
+def _worlaround_win32_ssl_cert_failure() -> None:
+    # Applies workaround by `pukkandan` on GITHUB at run-time:
+    # See: https://github.com/python/cpython/pull/91740
+    import ssl
+
+    class SSLContext_DUMMY(ssl.SSLContext):
+        def _load_windows_store_certs(self, storename: str, purpose: ssl.Purpose) -> bytearray:
+            # WIN32 only.
+            enum_certificates = getattr(ssl, "enum_certificates", None)
+            assert callable(enum_certificates)
+            certs = bytearray()
+            try:
+                for cert, encoding, trust in enum_certificates(storename):
+                    try:
+                        self.load_verify_locations(cadata=cert)
+                    except ssl.SSLError:
+                        # warnings.warn("Bad certificate in Windows certificate store")
+                        pass
+                    else:
+                        # CA certs are never PKCS#7 encoded
+                        if encoding == "x509_asn":
+                            if trust is True or purpose.oid in trust:
+                                certs.extend(cert)
+            except PermissionError:
+                # warnings.warn("unable to enumerate Windows certificate store")
+                pass
+            # NOTE(@ideasman42): Python never uses this return value internally.
+            # Keep it for consistency.
+            return certs
+
+    # pylint: disable-next=protected-access
+    ssl.SSLContext._load_windows_store_certs = SSLContext_DUMMY._load_windows_store_certs  # type: ignore
+
+
+# -----------------------------------------------------------------------------
+# Argument Overrides
+
 class _ArgsDefaultOverride:
     __slots__ = (
         "build_valid_tags",
@@ -154,6 +191,7 @@ class _ArgsDefaultOverride:
 # Support overriding this value so Blender can default to a different tags file.
 ARG_DEFAULTS_OVERRIDE = _ArgsDefaultOverride()
 del _ArgsDefaultOverride
+
 
 # Standard out may be communicating with a parent process,
 # arbitrary prints are NOT acceptable.
@@ -288,7 +326,7 @@ class CleanupPathsContext:
 
 class PkgRepoData(NamedTuple):
     version: str
-    blocklist: List[str]
+    blocklist: List[Dict[str, Any]]
     data: List[Dict[str, Any]]
 
 
@@ -382,6 +420,12 @@ class PkgManifest_Archive(NamedTuple):
     archive_size: int
     archive_hash: str
     archive_url: str
+
+
+class PkgServerRepoConfig(NamedTuple):
+    """Server configuration (for generating repositories)."""
+    schema_version: str
+    blocklist: List[Dict[str, Any]]
 
 
 # -----------------------------------------------------------------------------
@@ -520,10 +564,6 @@ def rmtree_with_fallback_or_error(
 
     On failure, a string will be returned containing the first error.
     """
-    try:
-        return shutil.rmtree(path)
-    except Exception as ex:
-        return str(ex)
 
     # Note that `shutil.rmtree` has link detection that doesn't match `os.path.islink` exactly,
     # so use it's callback that raises a link error and remove the link in that case.
@@ -574,6 +614,73 @@ def rmtree_with_fallback_or_error(
         return str(errors[0][2])
 
     return None
+
+
+def rmtree_with_fallback_or_error_pseudo_atomic(
+        path: str,
+        *,
+        temp_prefix_and_suffix: Tuple[str, str],
+        remove_file: bool = True,
+        remove_link: bool = True,
+) -> Optional[str]:
+
+    # It's possible the directory doesn't exist, only attempt a rename if it does.
+    try:
+        isdir = os.path.isdir(path)
+    except Exception:
+        isdir = False
+
+    if isdir:
+        # Apply the prefix/suffix.
+        path_base_dirname, path_base_filename = os.path.split(path.rstrip(os.sep))
+        path_base = os.path.join(
+            path_base_dirname,
+            temp_prefix_and_suffix[0] + path_base_filename + temp_prefix_and_suffix[1],
+        )
+        del path_base_dirname, path_base_filename
+
+        path_test = path_base
+        test_count = 0
+        # Unlikely this exists.
+        while os.path.exists(path_test):
+            path_test = "{:s}{:d}".format(path_base, test_count)
+            test_count += 1
+            # Very unlikely, something is likely incorrect in the setup, avoid hanging.
+            if test_count > 1000:
+                return "Unable to create a new path at: {:s}".format(path_test)
+
+        # NOTE(@ideasman42): on WIN32 renaming a directory will fail if any files within the directory are open.
+        # The rename is important, the reasoning is as follows.
+        # - If the rename fails, the entire directory is left as-is.
+        #   This is done because in the case of an upgrade we *never* want to leave the extension
+        #   in a broken state, with some files removed and the directory locked,
+        #   meaning that an updated extension cannot be written to the destination.
+        # - If the rename succeeds but deleting the directory fails (unlikely but possible),
+        #   then at least the directory name is available (necessary for an upgrade).
+        #   The directory will use the `temp_prefix_and_suffix` can be removed later.
+        #
+        # On other systems, renaming before removal isn't important but is harmless,
+        # so keep it to avoid logic diverging.
+        #
+        # See #128175.
+
+        try:
+            os.rename(path, path_test)
+        except Exception as ex:
+            ex_str = str(ex)
+            if isinstance(ex, PermissionError):
+                if sys.platform == "win32":
+                    if "The process cannot access the file because it is being used by another process" in ex_str:
+                        return "locked by another process: {:s}".format(path)
+            return ex_str
+
+        path = path_test
+
+    return rmtree_with_fallback_or_error(
+        path,
+        remove_file=remove_file,
+        remove_link=remove_link,
+    )
 
 
 def build_paths_expand_iter(
@@ -639,8 +746,9 @@ def pkg_manifest_from_dict_and_validate_impl(
     else:
         if (error_msg := pkg_manifest_is_valid_or_error(data, from_repo=from_repo, strict=strict)) is not None:
             error_list.append(error_msg)
-            if not all_errors:
-                return error_list
+
+    if error_list:
+        return error_list
 
     values: List[str] = []
     for key in PkgManifest._fields:
@@ -654,10 +762,6 @@ def pkg_manifest_from_dict_and_validate_impl(
 
     kw_args: Dict[str, Any] = dict(zip(PkgManifest._fields, values, strict=True))
     manifest = PkgManifest(**kw_args)
-
-    if error_list:
-        assert all_errors
-        return error_list
 
     # There could be other validation, leave these as-is.
     return manifest
@@ -835,6 +939,33 @@ def pkg_manifest_from_archive_and_validate(
         return pkg_manifest_from_zipfile_and_validate(zip_fh, archive_subdir, strict=strict)
 
 
+def pkg_server_repo_config_from_toml_and_validate(
+        filepath: str,
+) -> Union[PkgServerRepoConfig, str]:
+
+    if isinstance(result := toml_from_filepath_or_error(filepath), str):
+        return result
+
+    if not (field_schema_version := result.get("schema_version", "")):
+        return "missing \"schema_version\" field"
+
+    if not (field_blocklist := result.get("blocklist", "")):
+        return "missing \"blocklist\" field"
+
+    for item in field_blocklist:
+        if not isinstance(item, dict):
+            return "blocklist contains non dictionary item, found ({:s})".format(str(type(item)))
+        if not isinstance(value := item.get("id"), str):
+            return "blocklist items must have have a string typed \"id\" entry, found {:s}".format(str(type(value)))
+        if not isinstance(value := item.get("reason"), str):
+            return "blocklist items must have have a string typed \"reason\" entry, found {:s}".format(str(type(value)))
+
+    return PkgServerRepoConfig(
+        schema_version=field_schema_version,
+        blocklist=field_blocklist,
+    )
+
+
 def pkg_is_legacy_addon(filepath: str) -> bool:
     # Python file is legacy.
     if os.path.splitext(filepath)[1].lower() == ".py":
@@ -861,7 +992,7 @@ def pkg_is_legacy_addon(filepath: str) -> bool:
                 file_content = zip_fh.read(filename)
             except Exception:
                 file_content = None
-            if file_content and file_content.find(b"bl_info"):
+            if file_content and file_content.find(b"bl_info") != -1:
                 return True
 
     return False
@@ -1578,6 +1709,32 @@ def pkg_manifest_validate_field_type(value: str, strict: bool) -> Optional[str]:
     return None
 
 
+def pkg_manifest_validate_field_blender_version(
+        value: str,
+        strict: bool,
+) -> Optional[str]:
+    if (error := pkg_manifest_validate_field_any_version_primitive(value, strict)) is not None:
+        return error
+
+    if strict:
+        # NOTE: Blender's extension support allows `X`, `X.X`, `X.X.X`,
+        # Blender's own extensions site doesn't, so require this for validation.
+        if value.count(".") != 2:
+            return "expected 3 numbers separated by \".\", found \"{:s}\"".format(value)
+
+    return None
+
+
+def pkg_manifest_validate_field_blender_version_or_empty(
+        value: str,
+        strict: bool,
+) -> Optional[str]:
+    if value:
+        return pkg_manifest_validate_field_blender_version(value, strict)
+
+    return None
+
+
 def pkg_manifest_validate_field_tagline(value: str, strict: bool) -> Optional[str]:
     if strict:
         return pkg_manifest_validate_terse_description_or_error(value)
@@ -1790,10 +1947,10 @@ pkg_manifest_known_keys_and_types: Tuple[
     ("type", str, pkg_manifest_validate_field_type),
     ("maintainer", str, pkg_manifest_validate_field_any_non_empty_string_stripped_no_control_chars),
     ("license", list, pkg_manifest_validate_field_any_non_empty_list_of_non_empty_strings),
-    ("blender_version_min", str, pkg_manifest_validate_field_any_version_primitive),
+    ("blender_version_min", str, pkg_manifest_validate_field_blender_version),
 
     # Optional.
-    ("blender_version_max", str, pkg_manifest_validate_field_any_version_primitive_or_empty),
+    ("blender_version_max", str, pkg_manifest_validate_field_blender_version_or_empty),
     ("website", str, pkg_manifest_validate_field_any_non_empty_string_stripped_no_control_chars),
     ("copyright", list, pkg_manifest_validate_field_copyright),
     # Type should be `dict` eventually, some existing packages will have a list of strings instead.
@@ -2181,7 +2338,7 @@ def blender_version_parse_or_error(version: str) -> Union[Tuple[int, int, int], 
     # `mypy` can't detect that this is guaranteed to be 3 items.
     return (
         version_tuple if (len(version_tuple) == 3) else
-        (*version_tuple, (0, 0))[:3]     # type: ignore
+        (*version_tuple, 0, 0)[:3]  # type: ignore
     )
 
 
@@ -2232,9 +2389,9 @@ def repo_json_is_valid_or_error(filepath: str) -> Optional[str]:
         if not isinstance(value, list):
             return "Expected \"blocklist\" to be a list, not a {:s}".format(str(type(value)))
         for item in value:
-            if isinstance(item, str):
+            if isinstance(item, dict):
                 continue
-            return "Expected \"blocklist\" to be a list of strings, found {:s}".format(str(type(item)))
+            return "Expected \"blocklist\" to be a list of dictionaries, found {:s}".format(str(type(item)))
 
     if (value := result.get("data")) is None:
         return "Expected a \"data\" key which was not found"
@@ -2579,9 +2736,15 @@ def pkg_repo_data_from_json_or_error(json_data: Dict[str, Any]) -> Union[PkgRepo
 
     if not isinstance((blocklist := json_data.get("blocklist", [])), list):
         return "expected \"blocklist\" to be a list"
+    for item in blocklist:
+        if not isinstance(item, dict):
+            return "expected \"blocklist\" contain dictionary items"
 
     if not isinstance((data := json_data.get("data", [])), list):
         return "expected \"data\" to be a list"
+    for item in data:
+        if not isinstance(item, dict):
+            return "expected \"data\" contain dictionary items"
 
     result_new = PkgRepoData(
         version=version,
@@ -2629,6 +2792,13 @@ def arg_handle_str_as_package_names(value: str) -> Sequence[str]:
         if (error_msg := pkg_idname_is_valid_or_error(pkg_idname)) is not None:
             raise argparse.ArgumentTypeError("Invalid name \"{:s}\". {:s}".format(pkg_idname, error_msg))
     return result
+
+
+def arg_handle_str_as_temp_prefix_and_suffix(value: str) -> Tuple[str, str]:
+    if (value.count("/") != 1) and (len(value) > 1):
+        raise argparse.ArgumentTypeError("Must contain a \"/\" character with a prefix and/or suffix")
+    a, b = value.split("/", 1)
+    return a, b
 
 
 # -----------------------------------------------------------------------------
@@ -2694,6 +2864,31 @@ def generic_arg_package_valid_tags(subparse: argparse.ArgumentParser) -> None:
 
 # -----------------------------------------------------------------------------
 # Argument Handlers ("server-generate" command)
+
+def generic_arg_server_generate_repo_config(subparse: argparse.ArgumentParser) -> None:
+    subparse.add_argument(
+        "--repo-config",
+        dest="repo_config",
+        default="",
+        metavar="REPO_CONFIG",
+        help=(
+            "An optional server configuration to include information which can't be detected.\n"
+            "Defaults to ``blender_repo.toml`` (in the repository directory).\n"
+            "\n"
+            "This can be used to defined blocked extensions, for example ::\n"
+            "\n"
+            "   schema_version = \"1.0.0\"\n"
+            "\n"
+            "   [[blocklist]]\n"
+            "   id = \"my_example_package\"\n"
+            "   reason = \"Explanation for why this extension was blocked\"\n"
+            "   [[blocklist]]\n"
+            "   id = \"other_extenison\"\n"
+            "   reason = \"Another reason for why this is blocked\"\n"
+            "\n"
+        ),
+    )
+
 
 def generic_arg_server_generate_html(subparse: argparse.ArgumentParser) -> None:
     subparse.add_argument(
@@ -2820,6 +3015,20 @@ def generic_arg_blender_version(subparse: argparse.ArgumentParser) -> None:
         type=str,
         help=(
             "The version of Blender used for selecting packages."
+        ),
+        required=False,
+    )
+
+
+def generic_arg_temp_prefix_and_suffix(subparse: argparse.ArgumentParser) -> None:
+    subparse.add_argument(
+        "--temp-prefix-and-suffix",
+        dest="temp_prefix_and_suffix",
+        default="./.temp",
+        type=arg_handle_str_as_temp_prefix_and_suffix,
+        help=(
+            "The template to use when removing files. "
+            "A slash separates the: `prefix/suffix`, digits may be appended"
         ),
         required=False,
     )
@@ -3156,6 +3365,7 @@ class subcmd_server:
             msglog: MessageLogger,
             *,
             repo_dir: str,
+            repo_config_filepath: str,
             html: bool,
             html_template: str,
     ) -> bool:
@@ -3167,14 +3377,44 @@ class subcmd_server:
             msglog.fatal_error("Directory: {!r} not found!".format(repo_dir))
             return False
 
+        # Server manifest (optional), use if found.
+        server_manifest_default = "blender_repo.toml"
+        if not repo_config_filepath:
+            server_manifest_test = os.path.join(repo_dir, server_manifest_default)
+            if os.path.exists(server_manifest_test):
+                repo_config_filepath = server_manifest_test
+            del server_manifest_test
+        del server_manifest_default
+
+        repo_config = None
+        if repo_config_filepath:
+            repo_config = pkg_server_repo_config_from_toml_and_validate(repo_config_filepath)
+            if isinstance(repo_config, str):
+                msglog.fatal_error("parsing repository configuration {!r}, {:s}".format(
+                    repo_config,
+                    repo_config_filepath,
+                ))
+                return False
+            if repo_config.schema_version != "1.0.0":
+                msglog.fatal_error("unsupported schema version {!r} in {:s}, expected 1.0.0".format(
+                    repo_config.schema_version,
+                    repo_config_filepath,
+                ))
+                return False
+        assert repo_config is None or isinstance(repo_config, PkgServerRepoConfig)
+
         repo_data_idname_map: Dict[str, List[PkgManifest]] = {}
         repo_data: List[Dict[str, Any]] = []
+
         # Write package meta-data into each directory.
         repo_gen_dict = {
             "version": "v1",
-            "blocklist": [],
+            "blocklist": [] if repo_config is None else repo_config.blocklist,
             "data": repo_data,
         }
+
+        del repo_config
+
         for entry in os.scandir(repo_dir):
             if not entry.name.endswith(PKG_EXT):
                 continue
@@ -3268,6 +3508,7 @@ class subcmd_client:
     @staticmethod
     def list_packages(
             msglog: MessageLogger,
+            *,
             remote_url: str,
             online_user_agent: str,
             access_token: str,
@@ -3370,6 +3611,7 @@ class subcmd_client:
             filepath_archive: str,
             blender_version_tuple: Tuple[int, int, int],
             manifest_compare: Optional[PkgManifest],
+            temp_prefix_and_suffix: Tuple[str, str],
     ) -> bool:
         # NOTE: Don't use `FATAL_ERROR` because other packages will attempt to install.
 
@@ -3464,7 +3706,10 @@ class subcmd_client:
 
             is_reinstall = False
             if os.path.isdir(filepath_local_pkg):
-                if (error := rmtree_with_fallback_or_error(filepath_local_pkg)) is not None:
+                if (error := rmtree_with_fallback_or_error_pseudo_atomic(
+                        filepath_local_pkg,
+                        temp_prefix_and_suffix=temp_prefix_and_suffix,
+                )) is not None:
                     msglog.error("Failed to remove existing directory for \"{:s}\": {:s}".format(manifest.id, error))
                     return False
 
@@ -3487,6 +3732,7 @@ class subcmd_client:
             local_dir: str,
             package_files: Sequence[str],
             blender_version: str,
+            temp_prefix_and_suffix: Tuple[str, str],
     ) -> bool:
         if not os.path.exists(local_dir):
             msglog.fatal_error("destination directory \"{:s}\" does not exist".format(local_dir))
@@ -3508,6 +3754,7 @@ class subcmd_client:
                         blender_version_tuple=blender_version_tuple,
                         # There is no manifest from the repository, leave this unset.
                         manifest_compare=None,
+                        temp_prefix_and_suffix=temp_prefix_and_suffix,
                 ):
                     # The package failed to install.
                     continue
@@ -3526,6 +3773,7 @@ class subcmd_client:
             blender_version: str,
             access_token: str,
             timeout_in_seconds: float,
+            temp_prefix_and_suffix: Tuple[str, str],
     ) -> bool:
 
         # Validate arguments.
@@ -3573,6 +3821,14 @@ class subcmd_client:
         for pkg_info in json_data_pkg_info:
             json_data_pkg_info_map[pkg_info["id"]].append(pkg_info)
 
+        # NOTE: we could have full validation as a separate function,
+        # currently install is the only place this is needed.
+        json_data_pkg_block_map = {
+            pkg_idname: pkg_block.get("reason", "Unknown")
+            for pkg_block in pkg_repo_data.blocklist
+            if (pkg_idname := pkg_block.get("id"))
+        }
+
         platform_this = platform_from_this_system()
 
         has_fatal_error = False
@@ -3580,6 +3836,11 @@ class subcmd_client:
         for pkg_idname, pkg_info_list in json_data_pkg_info_map.items():
             if not pkg_info_list:
                 msglog.fatal_error("Package \"{:s}\", not found".format(pkg_idname))
+                has_fatal_error = True
+                continue
+
+            if (result := json_data_pkg_block_map.get(pkg_idname)) is not None:
+                msglog.fatal_error("Package \"{:s}\", is blocked: {:s}".format(pkg_idname, result))
                 has_fatal_error = True
                 continue
 
@@ -3738,6 +3999,7 @@ class subcmd_client:
                         filepath_archive=filepath_local_cache_archive,
                         blender_version_tuple=blender_version_tuple,
                         manifest_compare=manifest_archive.manifest,
+                        temp_prefix_and_suffix=temp_prefix_and_suffix,
                 ):
                     # The package failed to install.
                     continue
@@ -3751,6 +4013,7 @@ class subcmd_client:
             local_dir: str,
             user_dir: str,
             packages: Sequence[str],
+            temp_prefix_and_suffix: Tuple[str, str],
     ) -> bool:
         if not os.path.isdir(local_dir):
             msglog.fatal_error("Missing local \"{:s}\"".format(local_dir))
@@ -3801,10 +4064,16 @@ class subcmd_client:
             for pkg_idname in packages_valid:
                 filepath_local_pkg = os.path.join(local_dir, pkg_idname)
 
-                if (error := rmtree_with_fallback_or_error(filepath_local_pkg)) is not None:
+                # First try and rename which will fail on WIN32 when one of the files is locked.
+
+                if (error := rmtree_with_fallback_or_error_pseudo_atomic(
+                        filepath_local_pkg,
+                        temp_prefix_and_suffix=temp_prefix_and_suffix,
+                )) is not None:
                     msglog.error("Failure to remove \"{:s}\" with error ({:s})".format(pkg_idname, error))
-                else:
-                    msglog.status("Removed \"{:s}\"".format(pkg_idname))
+                    continue
+
+                msglog.status("Removed \"{:s}\"".format(pkg_idname))
 
                 filepath_local_cache_archive = os.path.join(local_cache_dir, pkg_idname + PKG_EXT)
                 if os.path.exists(filepath_local_cache_archive):
@@ -3813,7 +4082,10 @@ class subcmd_client:
                 if user_dir:
                     filepath_user_pkg = os.path.join(user_dir, pkg_idname)
                     if os.path.exists(filepath_user_pkg):
-                        if (error := rmtree_with_fallback_or_error(filepath_user_pkg)) is not None:
+                        if (error := rmtree_with_fallback_or_error_pseudo_atomic(
+                                filepath_user_pkg,
+                                temp_prefix_and_suffix=temp_prefix_and_suffix,
+                        )) is not None:
                             msglog.error(
                                 "Failure to remove \"{:s}\" user files with error ({:s})".format(pkg_idname, error),
                             )
@@ -4381,6 +4653,7 @@ def unregister():
         if not subcmd_server.generate(
             MessageLogger(msg_fn_no_done),
             repo_dir=repo_dir,
+            repo_config_filepath="",
             html=True,
             html_template="",
         ):
@@ -4437,6 +4710,7 @@ def argparse_create_server_generate(
     )
 
     generic_arg_repo_dir(subparse)
+    generic_arg_server_generate_repo_config(subparse)
     generic_arg_server_generate_html(subparse)
     generic_arg_server_generate_html_template(subparse)
     if args_internal:
@@ -4446,6 +4720,7 @@ def argparse_create_server_generate(
         func=lambda args: subcmd_server.generate(
             msglog_from_args(args),
             repo_dir=args.repo_dir,
+            repo_config_filepath=args.repo_config,
             html=args.html,
             html_template=args.html_template,
         ),
@@ -4475,7 +4750,7 @@ def argparse_create_client_list(subparsers: "argparse._SubParsersAction[argparse
     subparse.set_defaults(
         func=lambda args: subcmd_client.list_packages(
             msglog_from_args(args),
-            args.remote_url,
+            remote_url=args.remote_url,
             online_user_agent=args.online_user_agent,
             access_token=args.access_token,
             timeout_in_seconds=args.timeout,
@@ -4535,6 +4810,8 @@ def argparse_create_client_install_files(subparsers: "argparse._SubParsersAction
     generic_arg_local_dir(subparse)
     generic_arg_blender_version(subparse)
 
+    generic_arg_temp_prefix_and_suffix(subparse)
+
     generic_arg_output_type(subparse)
 
     subparse.set_defaults(
@@ -4543,6 +4820,7 @@ def argparse_create_client_install_files(subparsers: "argparse._SubParsersAction
             local_dir=args.local_dir,
             package_files=args.files,
             blender_version=args.blender_version,
+            temp_prefix_and_suffix=args.temp_prefix_and_suffix,
         ),
     )
 
@@ -4563,6 +4841,8 @@ def argparse_create_client_install(subparsers: "argparse._SubParsersAction[argpa
     generic_arg_blender_version(subparse)
     generic_arg_access_token(subparse)
 
+    generic_arg_temp_prefix_and_suffix(subparse)
+
     generic_arg_output_type(subparse)
     generic_arg_timeout(subparse)
 
@@ -4577,6 +4857,7 @@ def argparse_create_client_install(subparsers: "argparse._SubParsersAction[argpa
             blender_version=args.blender_version,
             access_token=args.access_token,
             timeout_in_seconds=args.timeout,
+            temp_prefix_and_suffix=args.temp_prefix_and_suffix,
         ),
     )
 
@@ -4592,6 +4873,9 @@ def argparse_create_client_uninstall(subparsers: "argparse._SubParsersAction[arg
 
     generic_arg_local_dir(subparse)
     generic_arg_user_dir(subparse)
+
+    generic_arg_temp_prefix_and_suffix(subparse)
+
     generic_arg_output_type(subparse)
 
     subparse.set_defaults(
@@ -4600,6 +4884,7 @@ def argparse_create_client_uninstall(subparsers: "argparse._SubParsersAction[arg
             local_dir=args.local_dir,
             user_dir=args.user_dir,
             packages=args.packages.split(","),
+            temp_prefix_and_suffix=args.temp_prefix_and_suffix,
         ),
     )
 
@@ -4841,12 +5126,19 @@ def msglog_from_args(args: argparse.Namespace) -> MessageLogger:
     raise Exception("Unknown output!")
 
 
+# -----------------------------------------------------------------------------
+# Main Function
+
 def main(
         argv: Optional[List[str]] = None,
         args_internal: bool = True,
         args_extra_subcommands_fn: Optional[ArgsSubparseFn] = None,
         prog: Optional[str] = None,
 ) -> int:
+    # NOTE: only manipulate Python's run-time such as encoding & SIGINT when running stand-alone.
+
+    # Run early to prevent a `KeyboardInterrupt` exception.
+    signal.signal(signal.SIGINT, signal_handler_sigint)
 
     # Needed on WIN32 which doesn't default to `utf-8`.
     for fh in (sys.stdout, sys.stderr):
@@ -4861,6 +5153,9 @@ def main(
     if "--version" in sys.argv:
         sys.stdout.write("{:s}\n".format(VERSION))
         return 0
+
+    if (sys.platform == "win32") and (sys.version_info < (3, 12, 6)):
+        _worlaround_win32_ssl_cert_failure()
 
     parser = argparse_create(
         args_internal=args_internal,

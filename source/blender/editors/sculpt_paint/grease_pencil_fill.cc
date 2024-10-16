@@ -668,10 +668,14 @@ static bke::CurvesGeometry boundary_to_curves(const Scene &scene,
   opacities.finish();
 
   /* Initialize the rest of the attributes with default values. */
-  bke::fill_attribute_range_default(
-      attributes, bke::AttrDomain::Curve, skip_curve_attributes, curves.curves_range());
-  bke::fill_attribute_range_default(
-      attributes, bke::AttrDomain::Point, skip_point_attributes, curves.points_range());
+  bke::fill_attribute_range_default(attributes,
+                                    bke::AttrDomain::Curve,
+                                    bke::attribute_filter_from_skip_ref(skip_curve_attributes),
+                                    curves.curves_range());
+  bke::fill_attribute_range_default(attributes,
+                                    bke::AttrDomain::Point,
+                                    bke::attribute_filter_from_skip_ref(skip_point_attributes),
+                                    curves.points_range());
 
   return curves;
 }
@@ -884,7 +888,7 @@ static rctf get_boundary_bounds(const ARegion &region,
       /* Check if the color is visible. */
       const int material_index = materials[curve_i];
       Material *mat = BKE_object_material_get(const_cast<Object *>(&object), material_index + 1);
-      if (mat == 0 || (mat->gp_style->flag & GP_MATERIAL_HIDE)) {
+      if (mat == nullptr || (mat->gp_style->flag & GP_MATERIAL_HIDE)) {
         return;
       }
 
@@ -1109,20 +1113,6 @@ bke::CurvesGeometry fill_strokes(const ViewContext &view_context,
                                line_colors,
                                line_width);
     }
-    const IndexRange circles_range = extensions.circles.centers.index_range();
-    if (!circles_range.is_empty()) {
-      const VArray<ColorGeometry4f> circle_colors = VArray<ColorGeometry4f>::ForSingle(
-          draw_boundary_color, circles_range.size());
-
-      image_render::draw_circles(world_to_view,
-                                 circles_range,
-                                 extensions.circles.centers,
-                                 VArray<float>::ForSpan(extensions.circles.radii),
-                                 circle_colors,
-                                 float2(image_size),
-                                 1.0f,
-                                 true);
-    }
   }
 
   ed::greasepencil::image_render::clear_projection_matrix();
@@ -1134,7 +1124,7 @@ bke::CurvesGeometry fill_strokes(const ViewContext &view_context,
     return {};
   }
 
-  /* TODO should use the same hardness as the paint tool. */
+  /* TODO should use the same hardness as the paint brush. */
   const float stroke_hardness = 1.0f;
 
   bke::CurvesGeometry fill_curves = process_image(*ima,

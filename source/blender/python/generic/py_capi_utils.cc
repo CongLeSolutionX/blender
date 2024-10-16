@@ -21,9 +21,9 @@
 
 #include "BLI_utildefines.h" /* for bool */
 
-#include "py_capi_utils.h"
+#include "py_capi_utils.hh"
 
-#include "python_utildefines.h"
+#include "python_utildefines.hh"
 
 #ifndef MATH_STANDALONE
 #  include "MEM_guardedalloc.h"
@@ -347,6 +347,23 @@ PyObject *PyC_Tuple_PackArray_Bool(const bool *array, uint len)
   PyObject *tuple = PyTuple_New(len);
   for (uint i = 0; i < len; i++) {
     PyTuple_SET_ITEM(tuple, i, PyBool_FromLong(array[i]));
+  }
+  return tuple;
+}
+
+PyObject *PyC_Tuple_PackArray_String(const char **array, uint len)
+{
+  /* Not part of numeric array packing but useful none the less. */
+  PyObject *tuple = PyTuple_New(len);
+  for (uint i = 0; i < len; i++) {
+    if (PyObject *value = PyUnicode_FromString(array[i])) {
+      PyTuple_SET_ITEM(tuple, i, value);
+    }
+    else {
+      Py_DECREF(tuple);
+      tuple = nullptr;
+      break;
+    }
   }
   return tuple;
 }
@@ -1107,9 +1124,8 @@ PyObject *PyC_DefaultNameSpace(const char *filename)
    * In this case an identifier is typically used that is surrounded by angle-brackets.
    * It's mainly helpful for the UI and messages to show *something*. */
   PyModule_AddObject(mod_main, "__file__", PyC_UnicodeFromBytes(filename));
+  PyModule_AddObjectRef(mod_main, "__builtins__", builtins);
 
-  PyModule_AddObject(mod_main, "__builtins__", builtins);
-  Py_INCREF(builtins); /* AddObject steals a reference */
   return PyModule_GetDict(mod_main);
 }
 
@@ -1214,7 +1230,7 @@ void PyC_RunQuicky(const char *filepath, int n, ...)
         PyErr_Print();
         PyErr_Clear();
 
-        PyList_SET_ITEM(values, i, Py_INCREF_RET(Py_None)); /* hold user */
+        PyList_SET_ITEM(values, i, Py_NewRef(Py_None)); /* hold user */
 
         sizes[i] = 0;
       }

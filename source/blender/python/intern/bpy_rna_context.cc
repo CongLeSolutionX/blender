@@ -21,14 +21,14 @@
 #include "WM_api.hh"
 #include "WM_types.hh"
 
-#include "bpy_rna_context.h"
+#include "bpy_rna_context.hh"
 
-#include "../generic/python_compat.h"
+#include "../generic/python_compat.hh"
 
 #include "RNA_access.hh"
 #include "RNA_prototypes.hh"
 
-#include "bpy_rna.h"
+#include "bpy_rna.hh"
 
 /* -------------------------------------------------------------------- */
 /** \name Private Utility Functions
@@ -570,7 +570,7 @@ static PyObject *bpy_context_temp_override_extract_known_args(const char *const 
 PyDoc_STRVAR(
     /* Wrap. */
     bpy_context_temp_override_doc,
-    ".. method:: temp_override(window=None, area=None, region=None, **keywords)\n"
+    ".. method:: temp_override(*, window=None, area=None, region=None, **keywords)\n"
     "\n"
     "   Context manager to temporarily override members in the context.\n"
     "\n"

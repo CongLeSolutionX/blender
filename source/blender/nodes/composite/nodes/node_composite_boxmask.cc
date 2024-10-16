@@ -78,6 +78,17 @@ class BoxMaskOperation : public NodeOperation {
 
   void execute() override
   {
+    /* Not yet supported on CPU. */
+    if (!context().use_gpu()) {
+      for (const bNodeSocket *output : this->node()->output_sockets()) {
+        Result &output_result = get_result(output->identifier);
+        if (output_result.should_compute()) {
+          output_result.allocate_invalid();
+        }
+      }
+      return;
+    }
+
     const Result &input_mask = get_input("Mask");
     Result &output_mask = get_result("Mask");
     /* For single value masks, the output will assume the compositing region, so ensure it is valid
@@ -180,5 +191,5 @@ void register_node_type_cmp_boxmask()
       &ntype, "NodeBoxMask", node_free_standard_storage, node_copy_standard_storage);
   ntype.get_compositor_operation = file_ns::get_compositor_operation;
 
-  blender::bke::nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }
