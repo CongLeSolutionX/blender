@@ -4609,8 +4609,6 @@ static bool edbm_fill_grid_prepare(BMesh *bm, int offset, int *span_p, const boo
   /* angle differences below this value are considered 'even'
    * in that they shouldn't be used to calculate corners used for the 'span' */
   const float eps_even = 1e-3f;
-  BMEdge *e;
-  BMIter iter;
   int count;
   int span = *span_p;
 
@@ -4629,9 +4627,6 @@ static bool edbm_fill_grid_prepare(BMesh *bm, int offset, int *span_p, const boo
   }
 
   /* Only tag edges that are part of a loop. */
-  BM_ITER_MESH (e, &iter, bm, BM_EDGES_OF_MESH) {
-    BM_elem_flag_disable(e, BM_ELEM_TAG);
-  }
   const int verts_len = BM_edgeloop_length_get(el_store);
   const int edges_len = verts_len - (BM_edgeloop_is_closed(el_store) ? 0 : 1);
   BMEdge **edges = static_cast<BMEdge **>(MEM_mallocN(sizeof(*edges) * edges_len, __func__));
@@ -4755,6 +4750,37 @@ static bool edbm_fill_grid_prepare(BMesh *bm, int offset, int *span_p, const boo
   return true;
 }
 
+static bool edbm_fill_grid_delete_existing_faces(BMesh *bm)
+{
+  bool deletions = false;
+  BM_mesh_elem_hflag_disable_all(bm, BM_FACE | BM_EDGE, BM_ELEM_TAG, true);
+
+  BMIter iter;
+  BMEdge *e;
+  BM_ITER_MESH (e, &iter, bm, BM_EDGES_OF_MESH) {
+
+    if (BM_elem_flag_test_bool(e, BM_ELEM_SELECT)) {
+      BMFace *f_a, *f_b;
+
+      /* Tag all edges between two selected faces. */
+      if (BM_edge_face_pair(e, &f_a, &f_b) && (BM_elem_flag_test_bool(f_a, BM_ELEM_SELECT) &&
+                                               BM_elem_flag_test_bool(f_b, BM_ELEM_SELECT)))
+      {
+        BM_elem_flag_enable(e, BM_ELEM_TAG);
+        BM_elem_flag_enable(f_a, BM_ELEM_TAG);
+        BM_elem_flag_enable(f_b, BM_ELEM_TAG);
+        deletions = true;
+      }
+    }
+  }
+
+  if (deletions) {
+    BM_mesh_delete_hflag_tagged(bm, BM_ELEM_TAG, BM_FACE | BM_EDGE);
+  }
+
+  return deletions;
+}
+
 static int edbm_fill_grid_exec(bContext *C, wmOperator *op)
 {
   const bool use_interp_simple = RNA_boolean_get(op->ptr, "use_interp_simple");
@@ -4773,8 +4799,9 @@ static int edbm_fill_grid_exec(bContext *C, wmOperator *op)
 
     bool use_prepare = true;
     const bool use_smooth = edbm_add_edge_face__smooth_get(em->bm);
-    const int totedge_orig = em->bm->totedge;
-    const int totface_orig = em->bm->totface;
+    int totedge_orig = em->bm->totedge;
+    int totface_orig = em->bm->totface;
+    bool deletions = false;
 
     if (use_prepare) {
       /* use when we have a single loop selected */
@@ -4800,6 +4827,12 @@ static int edbm_fill_grid_exec(bContext *C, wmOperator *op)
       }
 
       offset = RNA_property_int_get(op->ptr, prop_offset);
+
+      if (edbm_fill_grid_delete_existing_faces(em->bm)) {
+        deletions = true;
+        totedge_orig = em->bm->totedge;
+        totface_orig = em->bm->totface;
+      }
 
       /* in simple cases, move selection for tags, but also support more advanced cases */
       use_prepare = edbm_fill_grid_prepare(em->bm, offset, &span, calc_span);
@@ -4830,7 +4863,9 @@ static int edbm_fill_grid_exec(bContext *C, wmOperator *op)
     DEG_id_tag_update(&obedit->id, 0);
 
     /* cancel if nothing was done */
-    if ((totedge_orig == em->bm->totedge) && (totface_orig == em->bm->totface)) {
+    if ((totedge_orig == em->bm->totedge) && (totface_orig == em->bm->totface) &&
+        (deletions == false))
+    {
       EDBM_op_finish(em, &bmop, op, true);
       continue;
     }
@@ -4838,7 +4873,7 @@ static int edbm_fill_grid_exec(bContext *C, wmOperator *op)
     BMO_slot_buffer_hflag_enable(
         em->bm, bmop.slots_out, "faces.out", BM_FACE, BM_ELEM_SELECT, true);
 
-    if (!EDBM_op_finish(em, &bmop, op, true)) {
+    if (!EDBM_op_finish(em, &bmop, op, true) && !deletions) {
       continue;
     }
 
