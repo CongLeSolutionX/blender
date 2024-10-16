@@ -25,6 +25,7 @@
 
 #include "AS_asset_library.hh"
 #include "AS_asset_representation.hh"
+#include "AS_essentials_library.hh"
 
 #include "MEM_guardedalloc.h"
 
@@ -3937,6 +3938,24 @@ static void filelist_readjob_load_asset_library_data(FileListReadJob *job_params
   *do_update = true;
 }
 
+static void filelist_readjob_essentials_overrides(FileListReadJob *job_params,
+                                                  bool *stop,
+                                                  bool *do_update,
+                                                  float *progress)
+{
+  FileList *filelist = job_params->tmp_filelist; /* Use the thread-safe filelist queue. */
+
+  char old_filelist_root[sizeof(filelist->filelist.root)];
+
+  STRNCPY(old_filelist_root, filelist->filelist.root);
+  STRNCPY(filelist->filelist.root, asset_system::essentials_override_directory_path().c_str());
+  BLI_path_slash_ensure(filelist->filelist.root, sizeof(filelist->filelist.root));
+  /* Ensure path is restored on scope exit. */
+  BLI_SCOPED_DEFER([&]() { STRNCPY(filelist->filelist.root, old_filelist_root); });
+
+  filelist_readjob_recursive_dir_add_items(true, job_params, stop, do_update, progress);
+}
+
 static void filelist_readjob_main_assets_add_items(FileListReadJob *job_params,
                                                    bool * /*stop*/,
                                                    bool *do_update,
@@ -4030,6 +4049,10 @@ static void filelist_readjob_asset_library(FileListReadJob *job_params,
   }
   if (!job_params->only_main_data) {
     filelist_readjob_recursive_dir_add_items(true, job_params, stop, do_update, progress);
+
+    if (job_params->load_asset_library->library_type() == ASSET_LIBRARY_ESSENTIALS) {
+      filelist_readjob_essentials_overrides(job_params, stop, do_update, progress);
+    }
   }
 }
 
@@ -4117,6 +4140,10 @@ static void filelist_readjob_all_asset_library(FileListReadJob *job_params,
         float progress_this = 0.0f;
         filelist_readjob_recursive_dir_add_items(
             true, job_params, stop, do_update, &progress_this);
+
+        if (nested_library.library_type() == ASSET_LIBRARY_ESSENTIALS) {
+          filelist_readjob_essentials_overrides(job_params, stop, do_update, &progress_this);
+        }
 
         libraries_done_count++;
         *progress = float(libraries_done_count) / library_count;
