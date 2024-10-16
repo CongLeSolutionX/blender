@@ -93,7 +93,7 @@ class Drawing : public ::GreasePencilDrawing {
   /**
    * The triangles for fill geometry. Grouped by each stroke.
    */
-  GroupedSpan<uint3> triangles() const;
+  Span<uint3> triangles() const;
   /**
    * Normal vectors for a plane that fits the stroke.
    */

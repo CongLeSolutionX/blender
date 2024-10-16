@@ -436,7 +436,7 @@ static void update_triangle_cache(const Span<float3> positions,
   });
 }
 
-GroupedSpan<uint3> Drawing::triangles() const
+Span<uint3> Drawing::triangles() const
 {
   const CurvesGeometry &curves = this->strokes();
   const OffsetIndices<int> triangle_offsets = this->triangle_offsets();
@@ -452,7 +452,7 @@ GroupedSpan<uint3> Drawing::triangles() const
                           r_data.as_mutable_span());
   });
 
-  return {this->triangle_offsets(), this->runtime->triangles_cache.data().as_span()};
+  return this->runtime->triangles_cache.data().as_span();
 }
 
 static void update_curve_plane_normal_cache(const Span<float3> positions,

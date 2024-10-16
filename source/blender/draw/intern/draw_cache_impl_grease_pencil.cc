@@ -1098,7 +1098,7 @@ static void grease_pencil_geom_batch_ensure(Object &object,
     /* One vertex is stored before and after as padding. Cyclic strokes have one extra vertex. */
     total_verts_num += num_points + num_cyclic + num_curves * 2;
     total_triangles_num += (num_points + num_cyclic) * 2;
-    total_triangles_num += info.drawing.triangles().data.size();
+    total_triangles_num += info.drawing.triangles().size();
 
     verts_start_offsets_per_visible_drawing.append(std::move(verts_start_offsets));
     tris_start_offsets_per_visible_drawing.append(std::move(tris_start_offsets));
@@ -1168,7 +1168,7 @@ static void grease_pencil_geom_batch_ensure(Object &object,
     const VArray<float> fill_opacities = *attributes.lookup_or_default<float>(
         "fill_opacity", bke::AttrDomain::Curve, 1.0f);
 
-    const Span<uint3> triangles = info.drawing.triangles().data;
+    const Span<uint3> triangles = info.drawing.triangles();
     const Span<float4x2> texture_matrices = info.drawing.texture_matrices();
     const Span<int> verts_start_offsets = verts_start_offsets_per_visible_drawing[drawing_i];
     const Span<int> tris_start_offsets = tris_start_offsets_per_visible_drawing[drawing_i];
