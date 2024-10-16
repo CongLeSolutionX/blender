@@ -33,7 +33,7 @@
 #include "BLI_listbase.h"
 #include "BLI_math_color.h"
 #include "BLI_math_vector.h"
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 #include "BLI_rect.h"
 #include "BLI_string.h"
 #include "BLI_string_ref.hh"
@@ -2205,16 +2205,12 @@ static void template_search_add_button_name(uiBlock *block,
   }
 
   PropertyRNA *name_prop;
-#ifdef WITH_ANIM_BAKLAVA
   if (type == &RNA_ActionSlot) {
     name_prop = RNA_struct_find_property(active_ptr, "name_display");
   }
   else {
-#endif /* WITH_ANIM_BAKLAVA */
     name_prop = RNA_struct_name_property(type);
-#ifdef WITH_ANIM_BAKLAVA
   }
-#endif /* WITH_ANIM_BAKLAVA */
 
   const int width = template_search_textbut_width(active_ptr, name_prop);
   const int height = template_search_textbut_height();
@@ -6474,12 +6470,7 @@ static bool uiTemplateInputStatusAzone(uiLayout *layout, const AZone *az, const 
 {
   if (az->type == AZONE_AREA) {
     uiItemL(layout, nullptr, ICON_MOUSE_LMB_DRAG);
-    if (U.experimental.use_docking) {
-      uiItemL(layout, IFACE_("Split/Dock"), ICON_NONE);
-    }
-    else {
-      uiItemL(layout, IFACE_("Split/Join"), ICON_NONE);
-    }
+    uiItemL(layout, IFACE_("Split/Dock"), ICON_NONE);
     uiItemS_ex(layout, 0.7f);
     uiItemL(layout, "", ICON_EVENT_SHIFT);
     uiItemL(layout, nullptr, ICON_MOUSE_LMB_DRAG);
@@ -6832,6 +6823,7 @@ static void keymap_item_modified(bContext * /*C*/, void *kmi_p, void * /*unused*
 {
   wmKeyMapItem *kmi = (wmKeyMapItem *)kmi_p;
   WM_keyconfig_update_tag(nullptr, kmi);
+  U.runtime.is_dirty = true;
 }
 
 static void template_keymap_item_properties(uiLayout *layout, const char *title, PointerRNA *ptr)

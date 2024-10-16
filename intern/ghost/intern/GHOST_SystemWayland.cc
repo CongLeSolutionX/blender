@@ -65,7 +65,7 @@
 #include <pointer-gestures-unstable-v1-client-protocol.h>
 #include <primary-selection-unstable-v1-client-protocol.h>
 #include <relative-pointer-unstable-v1-client-protocol.h>
-#include <tablet-unstable-v2-client-protocol.h>
+#include <tablet-v2-client-protocol.h>
 #include <viewporter-client-protocol.h>
 #include <xdg-activation-v1-client-protocol.h>
 #include <xdg-output-unstable-v1-client-protocol.h>
@@ -589,11 +589,6 @@ struct GWL_DataOffer {
   std::unordered_set<std::string> types;
 
   struct {
-    /**
-     * Prevents freeing after #wl_data_device_listener.leave,
-     * before #wl_data_device_listener.drop.
-     */
-    bool in_use = false;
     /**
      * Bit-mask with available drop options.
      * #WL_DATA_DEVICE_MANAGER_DND_ACTION_COPY, #WL_DATA_DEVICE_MANAGER_DND_ACTION_MOVE.. etc.
@@ -2246,9 +2241,9 @@ static const GWL_Cursor_ShapeInfo ghost_wl_cursors = []() -> GWL_Cursor_ShapeInf
     CASE_CURSOR(GHOST_kStandardCursorZoomIn, "zoom-in");
     CASE_CURSOR(GHOST_kStandardCursorZoomOut, "zoom-out");
     CASE_CURSOR(GHOST_kStandardCursorMove, "move");
-    CASE_CURSOR(GHOST_kStandardCursorHandOpen, "move");
-    CASE_CURSOR(GHOST_kStandardCursorHandClosed, "move");
-    CASE_CURSOR(GHOST_kStandardCursorHandPoint, "move");
+    CASE_CURSOR(GHOST_kStandardCursorHandOpen, "hand1");
+    CASE_CURSOR(GHOST_kStandardCursorHandClosed, "grabbing");
+    CASE_CURSOR(GHOST_kStandardCursorHandPoint, "hand2");
     CASE_CURSOR(GHOST_kStandardCursorNSEWScroll, "all-scroll");
     CASE_CURSOR(GHOST_kStandardCursorNSScroll, "size_ver");
     CASE_CURSOR(GHOST_kStandardCursorEWScroll, "size_hor");
@@ -3172,13 +3167,14 @@ static char *read_buffer_from_data_offer(GWL_DataOffer *data_offer,
     CLOG_WARN(LOG, "error creating pipe: %s", std::strerror(errno));
   }
 
-  /* Only for DND (A no-op to disable for clipboard data-offer). */
-  data_offer->dnd.in_use = false;
-
   if (mutex) {
     mutex->unlock();
   }
-  /* WARNING: `data_offer` may be freed from now on. */
+  /* NOTE: Regarding `data_offer`:
+   * - In the case of the clipboard - unlocking the `mutex` means, it may be feed from now on.
+   * - In the case of drag & drop - the caller owns & no locking is needed
+   *   (locking is performed while transferring the ownership).
+   */
   char *buf = nullptr;
   if (pipefd_ok) {
     buf = read_file_as_buffer(pipefd[0], nil_terminate, r_len);
@@ -3432,7 +3428,6 @@ static void data_device_handle_enter(void *data,
   /* Transfer ownership of the `data_offer`. */
   seat->data_offer_dnd = data_offer;
 
-  data_offer->dnd.in_use = true;
   data_offer->dnd.xy[0] = x;
   data_offer->dnd.xy[1] = y;
 
@@ -3468,7 +3463,7 @@ static void data_device_handle_leave(void *data, wl_data_device * /*wl_data_devi
   dnd_events(seat, GHOST_kEventDraggingExited, event_ms);
   seat->wl.surface_window_focus_dnd = nullptr;
 
-  if (seat->data_offer_dnd && !seat->data_offer_dnd->dnd.in_use) {
+  if (seat->data_offer_dnd) {
     wl_data_offer_destroy(seat->data_offer_dnd->wl.id);
     delete seat->data_offer_dnd;
     seat->data_offer_dnd = nullptr;
@@ -3507,6 +3502,10 @@ static void data_device_handle_drop(void *data, wl_data_device * /*wl_data_devic
    * because the data-offer has not been accepted (actions set... etc). */
   GWL_DataOffer *data_offer = seat->data_offer_dnd;
 
+  /* Take ownership of `data_offer` to prevent a double-free, see: #128766.
+   * The thread this function spawns is responsible for freeing it. */
+  seat->data_offer_dnd = nullptr;
+
   /* Use a blank string for  `mime_receive` to prevent crashes, although could also be `nullptr`.
    * Failure to set this to a known type just means the file won't have any special handling.
    * GHOST still generates a dropped file event.
@@ -3540,9 +3539,6 @@ static void data_device_handle_drop(void *data, wl_data_device * /*wl_data_devic
     wl_data_offer_finish(data_offer->wl.id);
     wl_data_offer_destroy(data_offer->wl.id);
 
-    if (seat->data_offer_dnd == data_offer) {
-      seat->data_offer_dnd = nullptr;
-    }
     delete data_offer;
     data_offer = nullptr;
 
@@ -4305,7 +4301,7 @@ static void gesture_pinch_handle_begin(void *data,
   /* Reset defaults. */
   seat->pointer_gesture_pinch = GWL_SeatStatePointerGesture_Pinch{};
 
-  GHOST_WindowWayland *win = nullptr;
+  const GHOST_WindowWayland *win = nullptr;
   if (wl_surface *wl_surface_focus = seat->pointer.wl.surface_window) {
     win = ghost_wl_surface_user_data(wl_surface_focus);
   }
@@ -5725,6 +5721,12 @@ static void text_input_handle_enter(void *data,
   CLOG_INFO(LOG, 2, "enter");
   GWL_Seat *seat = static_cast<GWL_Seat *>(data);
   seat->ime.surface_window = surface;
+  /* If text input is enabled, should call `enable` after receive `enter` event.
+   * This support switch input method during input, otherwise input method will not work. */
+  if (seat->ime.is_enabled) {
+    zwp_text_input_v3_enable(seat->wp.text_input);
+    zwp_text_input_v3_commit(seat->wp.text_input);
+  }
 }
 
 static void text_input_handle_leave(void *data,
@@ -5740,6 +5742,9 @@ static void text_input_handle_leave(void *data,
   if (seat->ime.surface_window == surface) {
     seat->ime.surface_window = nullptr;
   }
+  /* Always call `disable` after receive `leave` event. */
+  zwp_text_input_v3_disable(seat->wp.text_input);
+  zwp_text_input_v3_commit(seat->wp.text_input);
 }
 
 static void text_input_handle_preedit_string(void *data,
@@ -8273,7 +8278,8 @@ GHOST_IContext *GHOST_SystemWayland::createOffscreenContext(GHOST_GPUSettings gp
                                                    nullptr,
                                                    1,
                                                    2,
-                                                   debug_context);
+                                                   debug_context,
+                                                   gpuSettings.preferred_device);
 
       if (context->initializeDrawingContext()) {
         context->setUserData(wl_surface);
@@ -8400,7 +8406,8 @@ GHOST_IWindow *GHOST_SystemWayland::createWindow(const char *title,
       is_dialog,
       ((gpuSettings.flags & GHOST_gpuStereoVisual) != 0),
       exclusive,
-      (gpuSettings.flags & GHOST_gpuDebugContext) != 0);
+      (gpuSettings.flags & GHOST_gpuDebugContext) != 0,
+      gpuSettings.preferred_device);
 
   if (window) {
     if (window->getValid()) {
@@ -8911,10 +8918,6 @@ void GHOST_SystemWayland::ime_begin(const GHOST_WindowWayland *win,
     seat->ime.has_preedit = false;
     seat->ime.is_enabled = true;
 
-    /* NOTE(@flibit): For some reason this has to be done twice,
-     * it appears to be a bug in mutter? Maybe? */
-    zwp_text_input_v3_enable(seat->wp.text_input);
-    zwp_text_input_v3_commit(seat->wp.text_input);
     zwp_text_input_v3_enable(seat->wp.text_input);
     zwp_text_input_v3_commit(seat->wp.text_input);
 

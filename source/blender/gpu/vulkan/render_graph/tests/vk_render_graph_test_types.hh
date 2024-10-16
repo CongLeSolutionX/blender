@@ -45,13 +45,13 @@ class CommandBufferLog : public VKCommandBufferInterface {
     is_recording_ = false;
   }
 
-  void submit_with_cpu_synchronization() override
+  void submit_with_cpu_synchronization(VkFence /*vk_fence*/) override
   {
     EXPECT_FALSE(is_recording_);
     EXPECT_FALSE(is_cpu_synchronizing_);
     is_cpu_synchronizing_ = true;
   };
-  void wait_for_cpu_synchronization() override
+  void wait_for_cpu_synchronization(VkFence /*vk_fence*/) override
   {
     EXPECT_FALSE(is_recording_);
     EXPECT_TRUE(is_cpu_synchronizing_);
@@ -189,6 +189,20 @@ class CommandBufferLog : public VKCommandBufferInterface {
     log_.append(ss.str());
   }
 
+  void update_buffer(VkBuffer dst_buffer,
+                     VkDeviceSize dst_offset,
+                     VkDeviceSize data_size,
+                     const void * /*p_data*/) override
+  {
+    EXPECT_TRUE(is_recording_);
+    std::stringstream ss;
+    ss << "update_buffer(";
+    ss << "dst_buffer=" << to_string(dst_buffer);
+    ss << ", dst_offset=" << dst_offset;
+    ss << ", data_size=" << data_size;
+    ss << ")";
+    log_.append(ss.str());
+  }
   void copy_buffer(VkBuffer src_buffer,
                    VkBuffer dst_buffer,
                    uint32_t region_count,

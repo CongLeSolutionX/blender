@@ -135,7 +135,7 @@ const IDFilterEnumPropertyItem rna_enum_id_type_filter_items[] = {
      "filter_grease_pencil",
      ICON_GREASEPENCIL,
      "Grease Pencil",
-     "Show Grease pencil data-blocks"},
+     "Show Grease Pencil data-blocks"},
     {FILTER_ID_GR,
      "filter_group",
      ICON_OUTLINER_COLLECTION,
@@ -238,7 +238,7 @@ const IDFilterEnumPropertyItem rna_enum_id_type_filter_items[] = {
 #  include "WM_api.hh"
 
 #  ifdef WITH_PYTHON
-#    include "BPY_extern.h"
+#    include "BPY_extern.hh"
 #  endif
 
 void rna_ID_override_library_property_operation_refname_get(PointerRNA *ptr, char *value)

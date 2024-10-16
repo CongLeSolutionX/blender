@@ -462,7 +462,7 @@ class ImageOperation : public NodeOperation {
         context(), get_image(), get_image_user(), get_pass_name(identifier));
 
     Result &result = get_result(identifier);
-    if (!cached_image) {
+    if (!cached_image || !cached_image->is_allocated()) {
       result.allocate_invalid();
       return;
     }
@@ -665,6 +665,17 @@ class RenderLayerOperation : public NodeOperation {
 
   void execute() override
   {
+    /* Not yet supported on CPU. */
+    if (!context().use_gpu()) {
+      for (const bNodeSocket *output : this->node()->output_sockets()) {
+        Result &output_result = get_result(output->identifier);
+        if (output_result.should_compute()) {
+          output_result.allocate_invalid();
+        }
+      }
+      return;
+    }
+
     const Scene *scene = reinterpret_cast<const Scene *>(bnode().id);
     const int view_layer = bnode().custom1;
 

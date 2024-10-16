@@ -719,11 +719,8 @@ if(NOT APPLE AND NOT (WIN32 AND CMAKE_SYSTEM_PROCESSOR STREQUAL "ARM64"))
   mark_as_advanced(WITH_CYCLES_DEVICE_HIP)
   mark_as_advanced(CYCLES_HIP_BINARIES_ARCH)
 
-  # HIPRT is only available on Windows for now.
-  if(WIN32)
-    option(WITH_CYCLES_DEVICE_HIPRT "Enable Cycles AMD HIPRT support" OFF)
-    mark_as_advanced(WITH_CYCLES_DEVICE_HIPRT)
-  endif()
+  option(WITH_CYCLES_DEVICE_HIPRT "Enable Cycles AMD HIPRT support" OFF)
+  mark_as_advanced(WITH_CYCLES_DEVICE_HIPRT)
 endif()
 
 # Apple Metal
@@ -895,19 +892,10 @@ endif()
 
 # Vulkan
 option(WITH_VULKAN_BACKEND "Enable Vulkan as graphics backend (experimental)" ON)
-option(WITH_VULKAN_GUARDEDALLOC "\
-Use guardedalloc for host allocations done inside Vulkan (development option)"
-  OFF
-)
-mark_as_advanced(
-  WITH_VULKAN_BACKEND
-  WITH_VULKAN_GUARDEDALLOC
-)
+mark_as_advanced(WITH_VULKAN_BACKEND)
 if(APPLE)
   option(WITH_VULKAN_MOLTENVK "Enable Vulkan over MoltenVK (development option)" OFF)
-  mark_as_advanced(
-    WITH_VULKAN_MOLTENVK
-  )
+  mark_as_advanced(WITH_VULKAN_MOLTENVK)
 endif()
 
 if(APPLE AND NOT WITH_VULKAN_MOLTENVK)
@@ -1231,6 +1219,13 @@ set_and_warn_dependency(WITH_PYTHON WITH_CYCLES        OFF)
 set_and_warn_dependency(WITH_PYTHON WITH_DRACO         OFF)
 set_and_warn_dependency(WITH_PYTHON WITH_MOD_FLUID     OFF)
 
+if(NOT WITH_PYTHON_MODULE)
+  if(WITH_DRACO AND NOT WITH_PYTHON_INSTALL)
+    message(STATUS "WITH_DRACO requires WITH_PYTHON_INSTALL to be ON, disabling WITH_DRACO for now")
+    set(WITH_DRACO OFF)
+  endif()
+endif()
+
 # enable boost for cycles, audaspace or i18n
 # otherwise if the user disabled
 
@@ -1330,7 +1325,7 @@ endif()
 # Check if Sub-modules are Cloned
 
 if(WITH_PYTHON)
-  # While we have this as an '#error' in 'bpy_capi_utils.h',
+  # While we have this as an '#error' in 'bpy_capi_utils.hh',
   # upgrading Python tends to cause confusion for users who build.
   # Give the error message early to make this more obvious.
   #
@@ -2818,8 +2813,6 @@ if(FIRST_RUN)
       info_cfg_option(WITH_CYCLES_ONEAPI_BINARIES)
       info_cfg_option(WITH_CYCLES_DEVICE_HIP)
       info_cfg_option(WITH_CYCLES_HIP_BINARIES)
-    endif()
-    if(WIN32)
       info_cfg_option(WITH_CYCLES_DEVICE_HIPRT)
     endif()
   endif()

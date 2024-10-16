@@ -268,7 +268,12 @@ MTLContext::MTLContext(void *ghost_window, void *ghost_context)
   /* Initialize samplers. */
   this->sampler_state_cache_init();
 
-  compiler = new ShaderCompilerGeneric();
+  if (GPU_use_parallel_compilation()) {
+    compiler = new MTLShaderCompiler();
+  }
+  else {
+    compiler = new ShaderCompilerGeneric();
+  }
 }
 
 MTLContext::~MTLContext()
@@ -2217,8 +2222,15 @@ const MTLComputePipelineStateInstance *MTLContext::ensure_compute_pipeline_state
     return nullptr;
   }
 
+  MTLShader *active_shader = this->pipeline_state.active_shader;
+
+  /* Set descriptor to default shader constants . */
+  MTLComputePipelineStateDescriptor compute_pipeline_descriptor(active_shader->constants.values);
+
   const MTLComputePipelineStateInstance *compute_pso_inst =
-      this->pipeline_state.active_shader->bake_compute_pipeline_state(this);
+      this->pipeline_state.active_shader->bake_compute_pipeline_state(this,
+                                                                      compute_pipeline_descriptor);
+
   if (compute_pso_inst == nullptr || compute_pso_inst->pso == nil) {
     MTL_LOG_WARNING("No valid compute PSO for compute dispatch!", );
     return nullptr;
@@ -2694,7 +2706,7 @@ void present(MTLRenderPassDescriptor *blit_descriptor,
    * possible. This command buffer is separate as it does not utilize the global state
    * for rendering as the main context does. */
   id<MTLCommandBuffer> cmdbuf = [ctx->queue commandBuffer];
-  MTLCommandBufferManager::num_active_cmd_bufs++;
+  ctx->main_command_buffer.inc_active_command_buffer_count();
 
   /* Do Present Call and final Blit to MTLDrawable. */
   id<MTLRenderCommandEncoder> enc = [cmdbuf renderCommandEncoderWithDescriptor:blit_descriptor];
@@ -2727,8 +2739,10 @@ void present(MTLRenderPassDescriptor *blit_descriptor,
     [cmd_buffer_ref release];
 
     /* Decrement count */
-    MTLCommandBufferManager::num_active_cmd_bufs--;
-    MTL_LOG_INFO("Active command buffers: %d", MTLCommandBufferManager::num_active_cmd_bufs);
+    ctx->main_command_buffer.dec_active_command_buffer_count();
+
+    MTL_LOG_INFO("Active command buffers: %d",
+                 int(MTLCommandBufferManager::num_active_cmd_bufs_in_system));
 
     /* Drawable count and latency management. */
     MTLContext::max_drawables_in_flight--;

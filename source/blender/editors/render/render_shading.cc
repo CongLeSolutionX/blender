@@ -25,7 +25,7 @@
 
 #include "BLI_listbase.h"
 #include "BLI_math_vector.h"
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 #include "BLI_string.h"
 #include "BLI_string_utils.hh"
 #include "BLI_utildefines.h"
@@ -2854,6 +2854,7 @@ void MATERIAL_OT_paste(wmOperatorType *ot)
 
   /* api callbacks */
   ot->exec = paste_material_exec;
+  ot->poll = object_materials_supported_poll;
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_INTERNAL;

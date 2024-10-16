@@ -139,7 +139,6 @@ void Manager::debug_bind()
     return;
   }
   GPU_storagebuf_bind(drw_debug_gpu_draw_buf_get(), DRW_DEBUG_DRAW_SLOT);
-  GPU_storagebuf_bind(drw_debug_gpu_print_buf_get(), DRW_DEBUG_PRINT_SLOT);
 #  ifndef DISABLE_DEBUG_SHADER_PRINT_BARRIER
   /* Add a barrier to allow multiple shader writing to the same buffer. */
   GPU_memory_barrier(GPU_BARRIER_SHADER_STORAGE);
@@ -185,7 +184,8 @@ void Manager::submit(PassMain &pass, View &view)
   bool freeze_culling = (U.experimental.use_viewport_debug && DST.draw_ctx.v3d &&
                          (DST.draw_ctx.v3d->debug_flag & V3D_DEBUG_FREEZE_CULLING) != 0);
 
-  view.compute_visibility(bounds_buf.current(), resource_len_, freeze_culling);
+  view.compute_visibility(
+      bounds_buf.current(), infos_buf.current(), resource_len_, freeze_culling);
 
   command::RecordingState state;
   state.inverted_view = view.is_inverted();

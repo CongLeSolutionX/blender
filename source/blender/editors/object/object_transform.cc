@@ -963,7 +963,7 @@ static int apply_objects_internal(bContext *C,
       const float scalef = mat4_to_scale(mat);
 
       for (const int layer_i : grease_pencil.layers().index_range()) {
-        bke::greasepencil::Layer &layer = *grease_pencil.layer(layer_i);
+        bke::greasepencil::Layer &layer = grease_pencil.layer(layer_i);
         const float4x4 layer_to_object = layer.to_object_space(*ob);
         const float4x4 object_to_layer = math::invert(layer_to_object);
         const Map<bke::greasepencil::FramesMapKeyT, GreasePencilFrame> frames = layer.frames();
@@ -1044,6 +1044,11 @@ static int apply_objects_internal(bContext *C,
       la->area_size *= rsmat[0][0];
       la->area_sizey *= rsmat[1][1];
       la->area_sizez *= rsmat[2][2];
+
+      /* Explicit tagging is required for Lamp ID because, unlike Geometry IDs like Mesh,
+       * it is not covered by the `ID_RECALC_GEOMETRY` flag applied to the object at the end
+       * of this loop. */
+      DEG_id_tag_update(&la->id, ID_RECALC_PARAMETERS);
     }
     else {
       continue;
@@ -1775,7 +1780,7 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
         int total_points = 0;
 
         for (const int layer_i : grease_pencil.layers().index_range()) {
-          const bke::greasepencil::Layer &layer = *grease_pencil.layer(layer_i);
+          const bke::greasepencil::Layer &layer = grease_pencil.layer(layer_i);
           const float4x4 layer_to_object = layer.local_transform();
           if (!layer.is_visible()) {
             continue;
@@ -1800,7 +1805,7 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
       tot_change++;
 
       for (const int layer_i : grease_pencil.layers().index_range()) {
-        bke::greasepencil::Layer &layer = *grease_pencil.layer(layer_i);
+        bke::greasepencil::Layer &layer = grease_pencil.layer(layer_i);
         const float4x4 layer_to_object = layer.local_transform();
         const float4x4 object_to_layer = math::invert(layer_to_object);
         const Map<bke::greasepencil::FramesMapKeyT, GreasePencilFrame> frames = layer.frames();

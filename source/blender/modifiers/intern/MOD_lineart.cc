@@ -213,9 +213,9 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
   }
 
   uiLayout *col = uiLayoutColumn(layout, false);
-  uiItemPointerR(col, ptr, "target_layer", &obj_data_ptr, "layers", nullptr, ICON_GREASEPENCIL);
   uiItemPointerR(
-      col, ptr, "target_material", &obj_data_ptr, "materials", nullptr, ICON_GREASEPENCIL);
+      col, ptr, "target_layer", &obj_data_ptr, "layers", nullptr, ICON_OUTLINER_DATA_GP_LAYER);
+  uiItemPointerR(col, ptr, "target_material", &obj_data_ptr, "materials", nullptr, ICON_MATERIAL);
 
   col = uiLayoutColumn(layout, false);
   uiItemR(col, ptr, "thickness", UI_ITEM_R_SLIDER, IFACE_("Line Thickness"), ICON_NONE);
@@ -327,7 +327,7 @@ static void options_light_reference_draw(const bContext * /*C*/, Panel *panel)
   uiLayoutSetEnabled(layout, !is_baked);
 
   if (use_cache && !is_first) {
-    uiItemL(layout, RPT_("Cached from the first line art modifier."), ICON_INFO);
+    uiItemL(layout, RPT_("Cached from the first Line Art modifier."), ICON_INFO);
     return;
   }
 
@@ -780,7 +780,7 @@ static void generate_strokes(ModifierData &md,
       lmd.flags,
       lmd.calculation_flags);
 
-  if ((!(lmd.flags & MOD_LINEART_USE_CACHE)) && (&first_lineart != &lmd)) {
+  if (!(lmd.flags & MOD_LINEART_USE_CACHE) && (&first_lineart != &lmd)) {
     /* Clear local cache. */
     if (local_lc != first_lineart.shared_cache) {
       MOD_lineart_clear_cache(&local_lc);

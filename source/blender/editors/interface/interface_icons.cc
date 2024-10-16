@@ -492,7 +492,7 @@ static void vicon_layergroup_color_draw(
 
   UI_icon_draw_ex(x,
                   y,
-                  ICON_FILE_FOLDER,
+                  ICON_GREASEPENCIL_LAYER_GROUP,
                   aspect,
                   1.0f,
                   0.0f,
@@ -1921,14 +1921,14 @@ int UI_icon_from_object_mode(const int mode)
     case OB_MODE_EDIT_GPENCIL_LEGACY:
       return ICON_EDITMODE_HLT;
     case OB_MODE_SCULPT:
-    case OB_MODE_SCULPT_GPENCIL_LEGACY:
+    case OB_MODE_SCULPT_GREASE_PENCIL:
     case OB_MODE_SCULPT_CURVES:
       return ICON_SCULPTMODE_HLT;
     case OB_MODE_VERTEX_PAINT:
-    case OB_MODE_VERTEX_GPENCIL_LEGACY:
+    case OB_MODE_VERTEX_GREASE_PENCIL:
       return ICON_VPAINT_HLT;
     case OB_MODE_WEIGHT_PAINT:
-    case OB_MODE_WEIGHT_GPENCIL_LEGACY:
+    case OB_MODE_WEIGHT_GREASE_PENCIL:
       return ICON_WPAINT_HLT;
     case OB_MODE_TEXTURE_PAINT:
       return ICON_TPAINT_HLT;
@@ -1936,7 +1936,7 @@ int UI_icon_from_object_mode(const int mode)
       return ICON_PARTICLEMODE;
     case OB_MODE_POSE:
       return ICON_POSE_HLT;
-    case OB_MODE_PAINT_GPENCIL_LEGACY:
+    case OB_MODE_PAINT_GREASE_PENCIL:
       return ICON_GREASEPENCIL;
   }
   return ICON_NONE;
