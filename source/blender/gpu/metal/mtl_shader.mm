@@ -119,7 +119,59 @@ MTLShader::~MTLShader()
       push_constant_data_ = nullptr;
     }
 
-    /* Free Metal resources. */
+    /* Free Metal resources.
+     * This is done in the order of:
+     * 1. Pipelinestate objects
+     * 2. MTLFunctions
+     * 3. MTLLibraries
+     * So that each object releases it's references to the one following it.
+     * This way we can sanity check that the retainCount of each object is 1
+     * prior to releasing and we are not over-retaining it. */
+    if (pso_descriptor_ != nil) {
+      BLI_assert(pso_descriptor_.retainCount == 1);
+      [pso_descriptor_ release];
+      pso_descriptor_ = nil;
+    }
+
+    /* Free Pipeline Cache. */
+    pso_cache_lock_.lock();
+    for (const MTLRenderPipelineStateInstance *pso_inst : pso_cache_.values()) {
+      /* Free pipeline state object. */
+      if (pso_inst->pso) {
+        BLI_assert(pso_inst->pso.retainCount == 1);
+        [pso_inst->pso release];
+      }
+      /* Free vertex function. */
+      if (pso_inst->vert) {
+        BLI_assert(pso_inst->vert.retainCount == 1);
+        [pso_inst->vert release];
+      }
+      /* Free fragment function. */
+      if (pso_inst->frag) {
+        BLI_assert(pso_inst->frag.retainCount == 1);
+        [pso_inst->frag release];
+      }
+      delete pso_inst;
+    }
+    pso_cache_.clear();
+
+    /* Free Compute pipeline cache. */
+    for (const MTLComputePipelineStateInstance *pso_inst : compute_pso_cache_.values()) {
+      /* Free pipeline state object. */
+      if (pso_inst->pso) {
+        BLI_assert(pso_inst->pso.retainCount == 1);
+        [pso_inst->pso release];
+      }
+      /* Free compute function. */
+      if (pso_inst->compute) {
+        BLI_assert(pso_inst->compute.retainCount == 1);
+        [pso_inst->compute release];
+      }
+    }
+    compute_pso_cache_.clear();
+    pso_cache_lock_.unlock();
+    
+    /* Free shader libraries. */
     if (shader_library_vert_ != nil) {
       [shader_library_vert_ release];
       shader_library_vert_ = nil;
@@ -128,39 +180,10 @@ MTLShader::~MTLShader()
       [shader_library_frag_ release];
       shader_library_frag_ = nil;
     }
-
-    if (pso_descriptor_ != nil) {
-      [pso_descriptor_ release];
-      pso_descriptor_ = nil;
+    if (shader_library_compute_ != nil) {
+      [shader_library_compute_ release];
+      shader_library_compute_ = nil;
     }
-
-    /* Free Pipeline Cache. */
-    pso_cache_lock_.lock();
-    for (const MTLRenderPipelineStateInstance *pso_inst : pso_cache_.values()) {
-      if (pso_inst->vert) {
-        [pso_inst->vert release];
-      }
-      if (pso_inst->frag) {
-        [pso_inst->frag release];
-      }
-      if (pso_inst->pso) {
-        [pso_inst->pso release];
-      }
-      delete pso_inst;
-    }
-    pso_cache_.clear();
-
-    /* Free Compute pipeline cache. */
-    for (const MTLComputePipelineStateInstance *pso_inst : compute_pso_cache_.values()) {
-      if (pso_inst->compute) {
-        [pso_inst->compute release];
-      }
-      if (pso_inst->pso) {
-        [pso_inst->pso release];
-      }
-    }
-    compute_pso_cache_.clear();
-    pso_cache_lock_.unlock();
 
     /* NOTE(Metal): #ShaderInterface deletion is handled in the super destructor `~Shader()`. */
   }
@@ -412,21 +435,18 @@ bool MTLShader::finalize(const shader::ShaderCreateInfo *info)
 
       switch (src_stage) {
         case ShaderStage::VERTEX: {
-          /* Retain generated library and assign debug name. */
+          /* Store generated library and assign debug name. */
           shader_library_vert_ = library;
-          [shader_library_vert_ retain];
           shader_library_vert_.label = [NSString stringWithUTF8String:this->name];
         } break;
         case ShaderStage::FRAGMENT: {
-          /* Retain generated library for fragment shader and assign debug name. */
+          /* Store generated library for fragment shader and assign debug name. */
           shader_library_frag_ = library;
-          [shader_library_frag_ retain];
           shader_library_frag_.label = [NSString stringWithUTF8String:this->name];
         } break;
         case ShaderStage::COMPUTE: {
-          /* Retain generated library for fragment shader and assign debug name. */
+          /* Store generated library for fragment shader and assign debug name. */
           shader_library_compute_ = library;
-          [shader_library_compute_ retain];
           shader_library_compute_.label = [NSString stringWithUTF8String:this->name];
         } break;
         case ShaderStage::ANY: {
@@ -451,7 +471,6 @@ bool MTLShader::finalize(const shader::ShaderCreateInfo *info)
     if (!is_compute) {
       /* Prepare Render pipeline descriptor. */
       pso_descriptor_ = [[MTLRenderPipelineDescriptor alloc] init];
-      [pso_descriptor_ retain];
       pso_descriptor_.label = [NSString stringWithUTF8String:this->name];
     }
 
@@ -1447,10 +1466,6 @@ MTLRenderPipelineStateInstance *MTLShader::bake_pipeline_state(
       }
     }
 
-    [pso_inst->vert retain];
-    [pso_inst->frag retain];
-    [pso_inst->pso retain];
-
     /* Insert into pso cache. */
     pso_cache_lock_.lock();
     pso_inst->shader_pso_index = pso_cache_.size();
@@ -1619,13 +1634,14 @@ MTLComputePipelineStateInstance *MTLShader::bake_compute_pipeline_state(
 #endif
     }
 
+    [desc release];
+    
     /* Gather reflection data and create MTLComputePipelineStateInstance to store results. */
     MTLComputePipelineStateInstance *compute_pso_instance = new MTLComputePipelineStateInstance();
-    compute_pso_instance->compute = [compute_function retain];
-    compute_pso_instance->pso = [pso retain];
+    compute_pso_instance->compute = compute_function;
+    compute_pso_instance->pso = pso; 
     compute_pso_instance->base_uniform_buffer_index = MTL_uniform_buffer_base_index;
     compute_pso_instance->base_storage_buffer_index = MTL_storage_buffer_base_index;
-
     pso_cache_lock_.lock();
     compute_pso_instance->shader_pso_index = compute_pso_cache_.size();
     compute_pso_cache_.add(compute_pipeline_descriptor, compute_pso_instance);
