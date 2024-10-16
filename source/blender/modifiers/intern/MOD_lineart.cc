@@ -95,18 +95,19 @@ static void copy_data(const ModifierData *md, ModifierData *target, const int fl
   LineartModifierRuntime *target_runtime = reinterpret_cast<LineartModifierRuntime *>(
       target_lmd->runtime);
 
-  blender::Set<Object *> *object_dependencies = source_runtime->object_dependencies;
-  target_runtime->object_dependencies = new blender::Set<Object *>(*object_dependencies);
+  blender::Set<const Object *> *object_dependencies = source_runtime->object_dependencies;
+  target_runtime->object_dependencies = new blender::Set<const Object *>(*object_dependencies);
 }
 
 static void free_data(ModifierData *md)
 {
   GreasePencilLineartModifierData *lmd = reinterpret_cast<GreasePencilLineartModifierData *>(md);
   if (lmd->runtime) {
-    LineartModifierRuntime *runtime = reinterpret_cast<LineartModifierRuntime *>(
-        lmd->runtime);
-    blender::Set<Object *> *object_dependencies = runtime->object_dependencies;
-    if(object_dependencies){ delete object_dependencies;}
+    LineartModifierRuntime *runtime = reinterpret_cast<LineartModifierRuntime *>(lmd->runtime);
+    blender::Set<const Object *> *object_dependencies = runtime->object_dependencies;
+    if (object_dependencies) {
+      delete object_dependencies;
+    }
     delete runtime;
     lmd->runtime = nullptr;
   }
@@ -136,7 +137,7 @@ static bool is_disabled(const Scene * /*scene*/, ModifierData *md, bool /*use_re
 static void add_this_collection(Collection &collection,
                                 const ModifierUpdateDepsgraphContext *ctx,
                                 const int mode,
-                                Set<Object *> &object_dependencies)
+                                Set<const Object *> &object_dependencies)
 {
   bool default_add = true;
   /* Do not do nested collection usage check, this is consistent with lineart calculation, because
@@ -184,9 +185,9 @@ static void update_depsgraph(ModifierData *md, const ModifierUpdateDepsgraphCont
     lmd->runtime = runtime;
     runtime->object_dependencies = nullptr;
   }
-  Set<Object *> *object_dependencies = runtime->object_dependencies;
+  Set<const Object *> *object_dependencies = runtime->object_dependencies;
   if (!object_dependencies) {
-    object_dependencies = new Set<Object *>;
+    object_dependencies = new Set<const Object *>;
     runtime->object_dependencies = object_dependencies;
   }
 

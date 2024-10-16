@@ -28,7 +28,7 @@ typedef struct LineartModifierRuntime {
   /* This list is constructed during `update_depsgraph()` call, and stays valid until the next
    * update. This way line art can load objects from this list instead of iterating over all
    * obejcts that may or may not have finished evaluating. */
-  blender::Set<Object *> *object_dependencies;
+  blender::Set<const Object *> *object_dependencies;
 } LineartModifierRuntime;
 
 typedef struct LineartStaticMemPoolNode {

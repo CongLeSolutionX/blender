@@ -3220,6 +3220,7 @@ typedef struct GreasePencilLineartModifierData {
   /* Keep a pointer to the render buffer so we can call destroy from #ModifierData. */
   struct LineartData *la_data_ptr;
 
+  /* Points to a `LineartModifierRuntime`, which includes the object dependency list. */
   void *runtime;
 } GreasePencilLineartModifierData;
 

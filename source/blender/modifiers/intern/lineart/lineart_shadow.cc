@@ -1251,10 +1251,11 @@ bool lineart_main_try_generate_shadow_v3(Depsgraph *depsgraph,
 
   lineart_main_get_view_vector(ld);
 
-  LineartModifierRuntime *runtime = reinterpret_cast<LineartModifierRuntime*>(lmd->runtime);
-  blender::Set<Object *> *including_objects = runtime?runtime->object_dependencies:nullptr;
-  
-  BLI_assert(including_objects!=nullptr);
+  LineartModifierRuntime *runtime = reinterpret_cast<LineartModifierRuntime *>(lmd->runtime);
+  blender::Set<const Object *> *including_objects = runtime ? runtime->object_dependencies :
+                                                              nullptr;
+
+  BLI_assert(including_objects != nullptr);
 
   lineart_main_load_geometries(depsgraph,
                                scene,

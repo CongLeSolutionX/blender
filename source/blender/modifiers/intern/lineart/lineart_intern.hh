@@ -132,7 +132,7 @@ void lineart_main_load_geometries(struct Depsgraph *depsgraph,
                                   bool allow_duplicates,
                                   bool do_shadow_casting,
                                   struct ListBase *shadow_elns,
-                                  blender::Set<Object *> &including_objects);
+                                  blender::Set<const Object *> &including_objects);
 /**
  * The calculated view vector will point towards the far-plane from the camera position.
  */

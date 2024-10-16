@@ -2552,7 +2552,7 @@ void lineart_main_load_geometries(Depsgraph *depsgraph,
                                   bool allow_duplicates,
                                   bool do_shadow_casting,
                                   ListBase *shadow_elns,
-                                  blender::Set<Object *> &including_objects)
+                                  blender::Set<const Object *> &including_objects)
 {
   double proj[4][4], view[4][4], result[4][4];
   float inv[4][4];
@@ -5093,10 +5093,11 @@ bool MOD_lineart_compute_feature_lines_v3(Depsgraph *depsgraph,
   /* Get view vector before loading geometries, because we detect feature lines there. */
   lineart_main_get_view_vector(ld);
 
-  LineartModifierRuntime *runtime = reinterpret_cast<LineartModifierRuntime*>(lmd.runtime);
-  blender::Set<Object *> *including_objects = runtime?runtime->object_dependencies:nullptr;
+  LineartModifierRuntime *runtime = reinterpret_cast<LineartModifierRuntime *>(lmd.runtime);
+  blender::Set<const Object *> *including_objects = runtime ? runtime->object_dependencies :
+                                                              nullptr;
 
-  BLI_assert(including_objects!=nullptr);
+  BLI_assert(including_objects != nullptr);
 
   lineart_main_load_geometries(depsgraph,
                                scene,
