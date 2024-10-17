@@ -187,9 +187,6 @@ static void createTransCurvesVerts(bContext * /*C*/, TransInfo *t)
       const index_mask::Expr &selected_right_nonselected_knots = builder.intersect(
           {&selection_per_attribute[2], &nonselected_knots});
 
-      const index_mask::Expr &selected_auto_right = builder.intersect(
-          {&selected_right_nonselected_knots, &auto_right});
-
       update_handle_types(auto_left,
                           auto_right,
                           vector_left,
