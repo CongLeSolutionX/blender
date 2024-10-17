@@ -185,16 +185,6 @@ class Context : public realtime_compositor::Context {
       return pass;
     }
 
-    /* If no Z pass was found above, return the viewport depth as a fallback, which might be
-     * populated if overlays are enabled. */
-    if (STREQ(pass_name, RE_PASSNAME_Z)) {
-      GPUTexture *depth_texture = DRW_viewport_texture_list_get()->depth;
-      realtime_compositor::Result pass = realtime_compositor::Result(
-          *this, GPU_texture_format(depth_texture));
-      pass.wrap_external(depth_texture);
-      return pass;
-    }
-
     return realtime_compositor::Result(*this);
   }
 
