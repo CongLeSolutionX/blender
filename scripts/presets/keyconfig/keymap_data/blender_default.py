@@ -1014,6 +1014,7 @@ def km_user_interface(_params):
         ("ui.view_start_filter", {"type": 'F', "value": 'PRESS', "ctrl": True}, None),
         ("ui.view_scroll", {"type": 'WHEELUPMOUSE', "value": 'ANY'}, None),
         ("ui.view_scroll", {"type": 'WHEELDOWNMOUSE', "value": 'ANY'}, None),
+        ("ui.view_scroll", {"type": 'TRACKPADPAN', "value": 'ANY'}, None),
     ])
 
     return keymap
@@ -2328,7 +2329,8 @@ def km_file_browser(params):
         ("file.next", {"type": 'BACK_SPACE', "value": 'PRESS', "shift": True}, None),
         ("wm.context_toggle", {"type": 'H', "value": 'PRESS'},
          {"properties": [("data_path", "space_data.params.show_hidden")]}),
-        ("file.directory_new", {"type": 'I', "value": 'PRESS'}, None),
+        ("file.directory_new", {"type": 'I', "value": 'PRESS'},
+         {"properties": [("confirm", False)]}),
         ("file.rename", {"type": 'F2', "value": 'PRESS'}, None),
         ("file.delete", {"type": 'X', "value": 'PRESS'}, None),
         ("file.delete", {"type": 'DEL', "value": 'PRESS'}, None),
@@ -3724,6 +3726,8 @@ def km_grease_pencil_selection(params):
         # Select more/less
         ("grease_pencil.select_more", {"type": 'NUMPAD_PLUS', "value": 'PRESS', "ctrl": True, "repeat": True}, None),
         ("grease_pencil.select_less", {"type": 'NUMPAD_MINUS', "value": 'PRESS', "ctrl": True, "repeat": True}, None),
+        # Select Similar
+        ("grease_pencil.select_similar", {"type": 'G', "value": 'PRESS', "shift": True}, None),
     ])
 
     return keymap
@@ -3745,7 +3749,8 @@ def km_grease_pencil_paint_mode(params):
 
         # Show/hide
         *_template_items_hide_reveal_actions("grease_pencil.layer_hide", "grease_pencil.layer_reveal"),
-
+        # Flip primary and secondary color
+        ("paint.brush_colors_flip", {"type": 'X', "value": 'PRESS'}, None),
         ("paint.sample_color", {"type": 'X', "value": 'PRESS', "shift": True}, None),
 
         # Isolate Layer
@@ -3754,10 +3759,26 @@ def km_grease_pencil_paint_mode(params):
         # Keyframe Menu
         op_menu("VIEW3D_MT_edit_greasepencil_animation", {"type": 'I', "value": 'PRESS'}),
 
+        # Insert Blank Keyframe
+        ("grease_pencil.insert_blank_frame", {"type": 'I', "value": 'PRESS', "shift": True}, None),
+
+        # Delete all active frames
+        ("grease_pencil.delete_frame", {"type": 'DEL', "value": 'PRESS', "shift": True},
+         {"properties": [("type", "ALL_FRAMES")]}),
+
+        # Delete Animation menu
+        op_menu("GREASE_PENCIL_MT_draw_delete", {"type": 'I', "value": 'PRESS', "alt": True}),
+
+        # Merge Down
+        ("grease_pencil.layer_merge", {"type": 'M', "value": 'PRESS',
+         "ctrl": True, "shift": True}, {"properties": [("mode", 'ACTIVE')]}),
+
         op_tool_optional(
-            ("grease_pencil.interpolate", {"type": 'E', "value": 'PRESS', "ctrl": True}, None),
+            ("grease_pencil.interpolate", {"type": 'E', "value": 'PRESS',
+             "ctrl": True}, {"properties": [("use_selection", False)]}),
             (op_tool_cycle, "builtin.interpolate"), params),
-        ("grease_pencil.interpolate_sequence", {"type": 'E', "value": 'PRESS', "shift": True, "ctrl": True}, None),
+        ("grease_pencil.interpolate_sequence", {"type": 'E', "value": 'PRESS',
+         "shift": True, "ctrl": True}, None),
 
         op_asset_shelf_popup(
             "VIEW3D_AST_brush_gpencil_paint",
@@ -3831,6 +3852,12 @@ def km_grease_pencil_edit_mode(params):
         # Keyframe Menu
         op_menu("VIEW3D_MT_edit_greasepencil_animation", {"type": 'I', "value": 'PRESS'}),
 
+        # Insert Blank Keyframe
+        ("grease_pencil.insert_blank_frame", {"type": 'I', "value": 'PRESS', "shift": True}, None),
+
+        # Delete Animation menu
+        op_menu("GREASE_PENCIL_MT_draw_delete", {"type": 'I', "value": 'PRESS', "alt": True}),
+
         # Show/hide
         *_template_items_hide_reveal_actions("grease_pencil.layer_hide", "grease_pencil.layer_reveal"),
 
@@ -3868,8 +3895,21 @@ def km_grease_pencil_edit_mode(params):
         # Move to layer
         op_menu("GREASE_PENCIL_MT_move_to_layer", {"type": 'M', "value": 'PRESS'}),
 
+        # Merge Down
+        ("grease_pencil.layer_merge", {"type": 'M', "value": 'PRESS',
+         "ctrl": True, "shift": True}, {"properties": [("mode", 'ACTIVE')]}),
+
+        # Edit Lines overlay
+        ("wm.context_toggle", {"type": 'Q', "value": 'PRESS', "shift": True},
+         {"properties": [("data_path", 'space_data.overlay.use_gpencil_edit_lines')]}),
+        ("wm.context_toggle", {"type": 'Q', "value": 'PRESS', "shift": True, "alt": True},
+         {"properties": [("data_path", 'space_data.overlay.use_gpencil_multiedit_line_only')]}),
+
         # Context menu
         *_template_items_context_menu("VIEW3D_MT_greasepencil_edit_context_menu", params.context_menu_event),
+
+        # Vertex Groups
+        op_menu("VIEW3D_MT_greasepencil_vertex_group", {"type": 'G', "value": 'PRESS', "ctrl": True}),
 
         # Reorder
         ("grease_pencil.reorder", {"type": 'UP_ARROW', "value": 'PRESS',
@@ -3894,9 +3934,11 @@ def km_grease_pencil_edit_mode(params):
         ("grease_pencil.set_handle_type", {"type": 'V', "value": 'PRESS'}, None),
 
         op_tool_optional(
-            ("grease_pencil.interpolate", {"type": 'E', "value": 'PRESS', "ctrl": True}, None),
+            ("grease_pencil.interpolate", {"type": 'E', "value": 'PRESS',
+             "ctrl": True}, {"properties": [("use_selection", True)]}),
             (op_tool_cycle, "builtin.interpolate"), params),
-        ("grease_pencil.interpolate_sequence", {"type": 'E', "value": 'PRESS', "shift": True, "ctrl": True}, None),
+        ("grease_pencil.interpolate_sequence", {"type": 'E', "value": 'PRESS',
+         "shift": True, "ctrl": True}, None),
     ])
 
     return keymap
@@ -3928,6 +3970,46 @@ def km_grease_pencil_sculpt_mode(params):
          {"properties": [("data_path", "scene.tool_settings.use_gpencil_select_mask_stroke")]}),
         ("wm.context_toggle", {"type": 'THREE', "value": 'PRESS'},
          {"properties": [("data_path", "scene.tool_settings.use_gpencil_select_mask_segment")]}),
+
+        # Edit Lines overlay
+        ("wm.context_toggle", {"type": 'Q', "value": 'PRESS', "shift": True},
+         {"properties": [("data_path", 'space_data.overlay.use_gpencil_edit_lines')]}),
+        ("wm.context_toggle", {"type": 'Q', "value": 'PRESS', "shift": True, "alt": True},
+         {"properties": [("data_path", 'space_data.overlay.use_gpencil_multiedit_line_only')]}),
+
+        # Keyframe Menu
+        op_menu("VIEW3D_MT_edit_greasepencil_animation", {"type": 'I', "value": 'PRESS'}),
+
+        # Insert Blank Keyframe
+        ("grease_pencil.insert_blank_frame", {"type": 'I', "value": 'PRESS', "shift": True}, None),
+
+        # Delete Animation menu
+        op_menu("GREASE_PENCIL_MT_draw_delete", {"type": 'I', "value": 'PRESS', "alt": True}),
+
+        # Delete all active frames
+        ("grease_pencil.delete_frame", {"type": 'DEL', "value": 'PRESS', "shift": True},
+         {"properties": [("type", "ALL_FRAMES")]}),
+
+        # Merge Down
+        ("grease_pencil.layer_merge", {"type": 'M', "value": 'PRESS',
+         "ctrl": True, "shift": True}, {"properties": [("mode", 'ACTIVE')]}),
+
+        # Copy/paste
+        ("grease_pencil.copy", {"type": 'C', "value": 'PRESS', "ctrl": True}, None),
+        ("grease_pencil.paste", {"type": 'V', "value": 'PRESS', "ctrl": True}, None),
+        ("grease_pencil.paste", {"type": 'V', "value": 'PRESS', "shift": True, "ctrl": True},
+         {"properties": [("paste_back", True)]}),
+
+        # Active material
+        op_menu("VIEW3D_MT_greasepencil_material_active", {"type": 'U', "value": 'PRESS'}),
+
+        # Active layer
+        op_menu("GREASE_PENCIL_MT_layer_active", {"type": 'Y', "value": 'PRESS'}),
+
+        # Auto-masking menu.
+        op_menu_pie("VIEW3D_MT_grease_pencil_sculpt_automasking_pie", {
+                    "type": 'A', "value": 'PRESS', "shift": True, "alt": True}),
+
         *_template_paint_radial_control("gpencil_sculpt_paint"),
         op_asset_shelf_popup(
             "VIEW3D_AST_brush_gpencil_sculpt",
@@ -3966,6 +4048,33 @@ def km_grease_pencil_weight_paint(params):
          radial_control_properties("gpencil_weight_paint", "weight", "use_unified_weight")),
         # Toggle Add/Subtract for weight draw tool
         ("grease_pencil.weight_toggle_direction", {"type": 'D', "value": 'PRESS'}, None),
+
+        # Edit Lines overlay
+        ("wm.context_toggle", {"type": 'Q', "value": 'PRESS', "shift": True},
+         {"properties": [("data_path", 'space_data.overlay.use_gpencil_edit_lines')]}),
+        ("wm.context_toggle", {"type": 'Q', "value": 'PRESS', "shift": True, "alt": True},
+         {"properties": [("data_path", 'space_data.overlay.use_gpencil_multiedit_line_only')]}),
+
+        # Active layer
+        op_menu("GREASE_PENCIL_MT_layer_active", {"type": 'Y', "value": 'PRESS'}),
+
+        # Merge Down
+        ("grease_pencil.layer_merge", {"type": 'M', "value": 'PRESS',
+         "ctrl": True, "shift": True}, {"properties": [("mode", 'ACTIVE')]}),
+
+        # Keyframe Menu
+        op_menu("VIEW3D_MT_edit_greasepencil_animation", {"type": 'I', "value": 'PRESS'}),
+
+        # Insert Blank Keyframe
+        ("grease_pencil.insert_blank_frame", {"type": 'I', "value": 'PRESS', "shift": True}, None),
+
+        # Delete Animation menu
+        op_menu("GREASE_PENCIL_MT_draw_delete", {"type": 'I', "value": 'PRESS', "alt": True}),
+
+        # Delete all active frames
+        ("grease_pencil.delete_frame", {"type": 'DEL', "value": 'PRESS', "shift": True},
+         {"properties": [("type", "ALL_FRAMES")]}),
+
         # Sample weight
         ("grease_pencil.weight_sample", {"type": 'X', "value": 'PRESS', "shift": True}, None),
         # Context menu
@@ -4021,6 +4130,35 @@ def km_grease_pencil_vertex_paint(params):
          {"properties": [("data_path", "scene.tool_settings.use_gpencil_vertex_select_mask_stroke")]}),
         ("wm.context_toggle", {"type": 'THREE', "value": 'PRESS'},
          {"properties": [("data_path", "scene.tool_settings.use_gpencil_vertex_select_mask_segment")]}),
+        # Flip primary and secondary color
+        ("paint.brush_colors_flip", {"type": 'X', "value": 'PRESS'}, None),
+
+        # Edit Lines overlay
+        ("wm.context_toggle", {"type": 'Q', "value": 'PRESS', "shift": True},
+         {"properties": [("data_path", 'space_data.overlay.use_gpencil_edit_lines')]}),
+        ("wm.context_toggle", {"type": 'Q', "value": 'PRESS', "shift": True, "alt": True},
+         {"properties": [("data_path", 'space_data.overlay.use_gpencil_multiedit_line_only')]}),
+
+        # Active layer
+        op_menu("GREASE_PENCIL_MT_layer_active", {"type": 'Y', "value": 'PRESS'}),
+
+        # Merge Down
+        ("grease_pencil.layer_merge", {"type": 'M', "value": 'PRESS',
+         "ctrl": True, "shift": True}, {"properties": [("mode", 'ACTIVE')]}),
+
+        # Keyframe Menu
+        op_menu("VIEW3D_MT_edit_greasepencil_animation", {"type": 'I', "value": 'PRESS'}),
+
+        # Insert Blank Keyframe
+        ("grease_pencil.insert_blank_frame", {"type": 'I', "value": 'PRESS', "shift": True}, None),
+
+        # Delete Animation menu
+        op_menu("GREASE_PENCIL_MT_draw_delete", {"type": 'I', "value": 'PRESS', "alt": True}),
+
+        # Delete all active frames
+        ("grease_pencil.delete_frame", {"type": 'DEL', "value": 'PRESS', "shift": True},
+         {"properties": [("type", "ALL_FRAMES")]}),
+
         # Radial controls
         *_template_paint_radial_control("gpencil_vertex_paint"),
         # Context menu
@@ -4341,10 +4479,6 @@ def km_paint_curve(params):
         ("transform.translate", {"type": params.select_mouse, "value": 'CLICK_DRAG'}, None),
         ("transform.rotate", {"type": 'R', "value": 'PRESS'}, None),
         ("transform.resize", {"type": 'S', "value": 'PRESS'}, None),
-        op_asset_shelf_popup(
-            "VIEW3D_AST_brush_sculpt_curves",
-            {"type": 'SPACE', "value": 'PRESS', "shift": True}
-        ),
     ])
 
     return keymap
@@ -4926,35 +5060,55 @@ def km_sculpt(params):
         *_template_items_context_panel("VIEW3D_PT_sculpt_context_menu", params.context_menu_event),
         # Brushes
         ("brush.asset_activate", {"type": 'V', "value": 'PRESS'},
-         {"properties": [("asset_library_type", 'ESSENTIALS'),
-                         ("relative_asset_identifier", "brushes/essentials_brushes-mesh_sculpt.blend/Brush/Draw")]}),
+         {"properties": [
+             ("asset_library_type", 'ESSENTIALS'),
+             ("relative_asset_identifier", "brushes/essentials_brushes-mesh_sculpt.blend/Brush/Draw"),
+         ]}),
         ("brush.asset_activate", {"type": 'S', "value": 'PRESS'},
-         {"properties": [("asset_library_type", 'ESSENTIALS'),
-                         ("relative_asset_identifier", "brushes/essentials_brushes-mesh_sculpt.blend/Brush/Smooth")]}),
+         {"properties": [
+             ("asset_library_type", 'ESSENTIALS'),
+             ("relative_asset_identifier", "brushes/essentials_brushes-mesh_sculpt.blend/Brush/Smooth"),
+         ]}),
         ("brush.asset_activate", {"type": 'P', "value": 'PRESS'},
-         {"properties": [("asset_library_type", 'ESSENTIALS'),
-                         ("relative_asset_identifier", "brushes/essentials_brushes-mesh_sculpt.blend/Brush/Pinch/Magnify")]}),
+         {"properties": [
+             ("asset_library_type", 'ESSENTIALS'),
+             ("relative_asset_identifier", "brushes/essentials_brushes-mesh_sculpt.blend/Brush/Pinch/Magnify"),
+         ]}),
         ("brush.asset_activate", {"type": 'I', "value": 'PRESS'},
-         {"properties": [("asset_library_type", 'ESSENTIALS'),
-                         ("relative_asset_identifier", "brushes/essentials_brushes-mesh_sculpt.blend/Brush/Inflate/Deflate")]}),
+         {"properties": [
+             ("asset_library_type", 'ESSENTIALS'),
+             ("relative_asset_identifier", "brushes/essentials_brushes-mesh_sculpt.blend/Brush/Inflate/Deflate"),
+         ]}),
         ("brush.asset_activate", {"type": 'G', "value": 'PRESS'},
-         {"properties": [("asset_library_type", 'ESSENTIALS'),
-                         ("relative_asset_identifier", "brushes/essentials_brushes-mesh_sculpt.blend/Brush/Grab")]}),
+         {"properties": [
+             ("asset_library_type", 'ESSENTIALS'),
+             ("relative_asset_identifier", "brushes/essentials_brushes-mesh_sculpt.blend/Brush/Grab"),
+         ]}),
         ("brush.asset_activate", {"type": 'T', "value": 'PRESS', "shift": True},
-         {"properties": [("asset_library_type", 'ESSENTIALS'),
-                         ("relative_asset_identifier", "brushes/essentials_brushes-mesh_sculpt.blend/Brush/Scrape/Fill")]}),
+         {"properties": [
+             ("asset_library_type", 'ESSENTIALS'),
+             ("relative_asset_identifier", "brushes/essentials_brushes-mesh_sculpt.blend/Brush/Scrape/Fill"),
+         ]}),
         ("brush.asset_activate", {"type": 'C', "value": 'PRESS'},
-         {"properties": [("asset_library_type", 'ESSENTIALS'),
-                         ("relative_asset_identifier", "brushes/essentials_brushes-mesh_sculpt.blend/Brush/Clay Strips")]}),
+         {"properties": [
+             ("asset_library_type", 'ESSENTIALS'),
+             ("relative_asset_identifier", "brushes/essentials_brushes-mesh_sculpt.blend/Brush/Clay Strips"),
+         ]}),
         ("brush.asset_activate", {"type": 'C', "value": 'PRESS', "shift": True},
-         {"properties": [("asset_library_type", 'ESSENTIALS'),
-                         ("relative_asset_identifier", "brushes/essentials_brushes-mesh_sculpt.blend/Brush/Crease")]}),
+         {"properties": [
+             ("asset_library_type", 'ESSENTIALS'),
+             ("relative_asset_identifier", "brushes/essentials_brushes-mesh_sculpt.blend/Brush/Crease Polish"),
+         ]}),
         ("brush.asset_activate", {"type": 'K', "value": 'PRESS'},
-         {"properties": [("asset_library_type", 'ESSENTIALS'),
-                         ("relative_asset_identifier", "brushes/essentials_brushes-mesh_sculpt.blend/Brush/Snake Hook")]}),
+         {"properties": [
+             ("asset_library_type", 'ESSENTIALS'),
+             ("relative_asset_identifier", "brushes/essentials_brushes-mesh_sculpt.blend/Brush/Snake Hook"),
+         ]}),
         ("brush.asset_activate", {"type": 'M', "value": 'PRESS'},
-         {"properties": [("asset_library_type", 'ESSENTIALS'),
-                         ("relative_asset_identifier", "brushes/essentials_brushes-mesh_sculpt.blend/Brush/Mask")]}),
+         {"properties": [
+             ("asset_library_type", 'ESSENTIALS'),
+             ("relative_asset_identifier", "brushes/essentials_brushes-mesh_sculpt.blend/Brush/Mask"),
+         ]}),
         op_asset_shelf_popup(
             "VIEW3D_AST_brush_sculpt",
             {"type": 'SPACE', "value": 'PRESS', "shift": True}
@@ -5011,6 +5165,10 @@ def km_sculpt_curves(params):
         *_template_items_select_actions(params, "curves.select_all"),
         ("sculpt_curves.min_distance_edit", {"type": 'R', "value": 'PRESS'}, {}),
         ("sculpt_curves.select_grow", {"type": 'A', "value": 'PRESS', "shift": True}, {}),
+        op_asset_shelf_popup(
+            "VIEW3D_AST_brush_sculpt_curves",
+            {"type": 'SPACE', "value": 'PRESS', "shift": True}
+        ),
     ])
 
     return keymap
@@ -7979,7 +8137,7 @@ def km_3d_view_tool_edit_grease_pencil_interpolate(params):
         {"space_type": 'VIEW_3D', "region_type": 'WINDOW'},
         {"items": [
             ("grease_pencil.interpolate", params.tool_maybe_tweak_event,
-             None),
+             {"properties": [("use_selection", True)]}),
         ]},
     )
 
@@ -7990,7 +8148,7 @@ def km_3d_view_tool_paint_grease_pencil_interpolate(params):
         {"space_type": 'VIEW_3D', "region_type": 'WINDOW'},
         {"items": [
             ("grease_pencil.interpolate", params.tool_maybe_tweak_event,
-             None),
+             {"properties": [("use_selection", False)]}),
         ]},
     )
 

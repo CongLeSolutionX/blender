@@ -8,16 +8,16 @@
  */
 /* TODO(fclem): Could reject bounding boxes that are covering only invalid tiles. */
 
-#pragma BLENDER_REQUIRE(gpu_shader_utildefines_lib.glsl)
-#pragma BLENDER_REQUIRE(common_view_lib.glsl)
-#pragma BLENDER_REQUIRE(common_math_lib.glsl)
-#pragma BLENDER_REQUIRE(common_intersect_lib.glsl)
-#pragma BLENDER_REQUIRE(common_intersect_lib.glsl)
+#include "common_intersect_lib.glsl"
+#include "common_math_lib.glsl"
+#include "common_view_lib.glsl"
+#include "gpu_shader_utildefines_lib.glsl"
 
 bool shadow_linking_affects_caster(uint view_id, uint resource_id)
 {
+  ObjectInfos object_infos = drw_infos[resource_id];
   return bitmask64_test(render_view_buf[view_id].shadow_set_membership,
-                        blocker_shadow_set_get(drw_infos[resource_id]));
+                        blocker_shadow_set_get(object_infos));
 }
 
 void mask_visibility_bit(uint view_id)
