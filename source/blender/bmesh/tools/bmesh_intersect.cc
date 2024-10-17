@@ -471,8 +471,7 @@ static BMVert *bm_isect_edge_tri(ISectState *s,
     }
 
     {
-      int *k = static_cast<int *>(BLI_memarena_alloc(s->mem_arena, sizeof(int[4])));
-      memcpy(k, k_arr[*r_side], sizeof(int[4]));
+      int4 k = k_arr[*r_side];
       s->edgetri_cache.add_new(k, iv);
     }
 
