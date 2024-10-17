@@ -22,11 +22,6 @@
 #ifdef WITH_OPENVDB
 #  include <openvdb/tools/LevelSetUtil.h>
 #endif
-#ifdef WITH_NANOVDB
-#  define NANOVDB_USE_OPENVDB
-#  include <nanovdb/util/CreateNanoGrid.h>
-#  include <nanovdb/util/GridStats.h>
-#endif
 
 CCL_NAMESPACE_BEGIN
 
@@ -76,19 +71,6 @@ bool Octree::should_split(std::shared_ptr<OctreeNode> &node)
     return false;
   }
 
-/* TODO(weizhen): need to query where the density is non-zero. */
-#if 0
-  if (node->objects.size() == 1) {
-    const Object *object = node->objects[0];
-    if (object->is_homogeneous_volume()) {
-      /* Do not split homogeneous volume. Volume stack already skips the zero-density regions. */
-      const float sigma = volume_density_scale(object);
-      node->sigma = {sigma, sigma};
-      return false;
-    }
-  }
-#endif
-
   const int3 index_min = world_to_floor_index(node->bbox.min);
   const int3 index_max = world_to_ceil_index(node->bbox.max);
 
@@ -110,8 +92,12 @@ bool Octree::should_split(std::shared_ptr<OctreeNode> &node)
       },
       [](Extrema<float> a, Extrema<float> b) -> Extrema<float> { return join(a, b); });
 
-  node->sigma.min = sigma_extrema.min;  // + background_density_min;
+  /* Do not split homogeneous volume. Volume stack already skips the zero-density regions. */
+  const bool homogeneous = (node->objects.size() == 1) &&
+                           node->objects[0]->is_homogeneous_volume();
   node->sigma.max = sigma_extrema.max;  // + background_density_max;
+  node->sigma.min = homogeneous ? sigma_extrema.max :
+                                  sigma_extrema.min;  // + background_density_min;
 
   /* TODO(weizhen): force subdivision of aggregate nodes that are larger than the volume contained,
    * regardless of the volume’s majorant extinction. */
@@ -166,9 +152,10 @@ void Octree::recursive_build_(shared_ptr<OctreeNode> &node)
   node = internal;
 }
 
-nanovdb::GridHandle<> Octree::mesh_to_sdf_grid(const Mesh *mesh,
-                                               const float voxel_size,
-                                               const float half_width)
+#ifdef WITH_OPENVDB
+openvdb::BoolGrid::ConstPtr Octree::mesh_to_sdf_grid(const Mesh *mesh,
+                                                     const float voxel_size,
+                                                     const float half_width)
 {
   const int num_verts = mesh->get_verts().size();
   std::vector<openvdb::Vec3s> points(num_verts);
@@ -189,12 +176,9 @@ nanovdb::GridHandle<> Octree::mesh_to_sdf_grid(const Mesh *mesh,
   auto sdf_grid = openvdb::tools::meshToLevelSet<openvdb::FloatGrid>(
       *xform, points, triangles, half_width);
 
-  auto interior_mask_grid = openvdb::tools::sdfInteriorMask(*sdf_grid, 0.0f);
-
-  /* TODO(weizhen): do I need to reset OpenVDB grids? */
-  /* TODO(weizhen): mind vdb version, following `image_vdb.cpp`? */
-  return nanovdb::openToNanoVDB(interior_mask_grid);
+  return openvdb::tools::sdfInteriorMask(*sdf_grid, 1.0f);
 }
+#endif
 
 int Octree::flatten_(KernelOctreeNode *knodes, shared_ptr<OctreeNode> &node, int &node_index)
 {
@@ -292,6 +276,29 @@ void Octree::evaluate_volume_density_(Device *device, Progress &progress)
     const int3 index_range = index_max - index_min;
     const int valid_size = index_range.x * index_range.y * index_range.z;
 
+#ifdef WITH_OPENVDB
+    /* Create SDF grid for mesh volumes, to determine whether a certain point is in the
+     * interior of the mesh. */
+    /* TODO(weizhen): no need to create when there is only one mesh volume. */
+    /* TODO(weizhen): pre-processing takes longer now because reading VDB grid is slow. Check if
+     * fewer grids really improves rendering performance (doesn't seem to be the case, on CPU at
+     * least). */
+    openvdb::BoolGrid::ConstPtr grid = nullptr;
+    Transform itfm;
+    bool transform_applied = true;
+    if (geom->is_mesh()) {
+      const Mesh *mesh = static_cast<const Mesh *>(geom);
+      if (!vdb_map.count(geom)) {
+        vdb_map[geom] = mesh_to_sdf_grid(mesh, 1.0f / reduce_max(index_range), 2.0f);
+      }
+      grid = vdb_map[geom];
+      if (!mesh->transform_applied) {
+        transform_applied = false;
+        itfm = transform_inverse(object->get_tfm());
+      }
+    }
+#endif
+
     const blocked_range3d<int> range(0, index_range.x, 0, index_range.y, 0, index_range.z);
 
     /* TODO(weizhen): specialize homogeneous volume and evaluate less points? */
@@ -311,11 +318,25 @@ void Octree::evaluate_volume_density_(Device *device, Progress &progress)
               for (int y = r.rows().begin(); y < r.rows().end(); ++y) {
                 for (int x = r.pages().begin(); x < r.pages().end(); ++x) {
                   const int local_index = flatten_index(x, y, z, index_range);
-
                   KernelShaderEvalInput in;
-                  in.object = object_id;
                   const float3 p = index_to_world(
                       x + index_min.x, y + index_min.y, z + index_min.z);
+#ifdef WITH_OPENVDB
+                  /* Zero density for cells outside of the mesh. */
+                  if (grid) {
+                    float3 cell_center = p + 0.5f * index_to_world_scale_;
+                    if (!transform_applied) {
+                      cell_center = transform_point(&itfm, cell_center);
+                    }
+                    openvdb::Coord coord = openvdb::Coord::round(grid->worldToIndex(
+                        openvdb::Vec3s(cell_center.x, cell_center.y, cell_center.z)));
+                    if (!grid->getAccessor().getValue(coord)) {
+                      d_input_data[local_index * 2 + 0].object = OBJECT_NONE;
+                      continue;
+                    }
+                  }
+#endif
+                  in.object = object_id;
                   in.prim = __float_as_int(p.x);
                   in.u = p.y;
                   in.v = p.z;
@@ -343,8 +364,6 @@ void Octree::evaluate_volume_density_(Device *device, Progress &progress)
                   const int local_index = flatten_index(x, y, z, index_range);
                   const int global_index = flatten_index(
                       x + index_min.x, y + index_min.y, z + index_min.z);
-
-                  /* TODO(weizhen): multiply by vdb. */
                   sigmas[global_index].min += d_output_data[local_index * num_channels + 0];
                   sigmas[global_index].max += d_output_data[local_index * num_channels + 1];
                 }
@@ -400,13 +419,6 @@ Octree::Octree(const Scene *scene)
 
       root_->bbox.grow(object->bounds);
       root_->objects.push_back(object);
-
-      /* Create SDF grid for mesh volumes, to determine whether a certain point is in the
-       * interior of the mesh. */
-      if (geom->is_mesh() && vdb_map.find(geom) == vdb_map.end()) {
-        const Mesh *mesh = static_cast<const Mesh *>(geom);
-        vdb_map[geom] = mesh_to_sdf_grid(mesh, 0.1f, 1.0f);
-      }
     }
   }
 
@@ -560,7 +572,7 @@ void Octree::visualize_fast(KernelOctreeNode *knodes, const char *filename) cons
 
 Octree::~Octree()
 {
-#ifdef WITH_NANOVDB
+#ifdef WITH_OPENVDB
   for (auto &it : vdb_map) {
     it.second.reset();
   }

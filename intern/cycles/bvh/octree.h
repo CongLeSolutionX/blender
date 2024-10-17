@@ -7,11 +7,9 @@
 
 #include "util/boundbox.h"
 #include "util/task.h"
-#include <nanovdb/NanoVDB.h>
 
-#ifdef WITH_NANOVDB
-#  include <nanovdb/util/GridHandle.h>
-#  include <nanovdb/util/GridStats.h>
+#ifdef WITH_OPENVDB
+#  include <openvdb/openvdb.h>
 #endif
 
 #include <map>
@@ -91,10 +89,12 @@ class Octree {
   std::atomic<int> num_nodes = 1;
 
   TaskPool task_pool;
-  nanovdb::GridHandle<> mesh_to_sdf_grid(const Mesh *mesh,
-                                         const float voxel_size,
-                                         const float half_width);
-  std::map<const Geometry *, nanovdb::GridHandle<>> vdb_map;
+#ifdef WITH_OPENVDB
+  openvdb::BoolGrid::ConstPtr mesh_to_sdf_grid(const Mesh *mesh,
+                                               const float voxel_size,
+                                               const float half_width);
+  std::map<const Geometry *, openvdb::BoolGrid::ConstPtr> vdb_map;
+#endif
 
   /* Set the maximal resolution to be 128 to reduce traversing overhead. */
   /* TODO(weizhen): tweak this threshold. 128 is a reference from PBRT. */
