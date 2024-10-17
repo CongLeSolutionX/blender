@@ -976,6 +976,9 @@ static void mirror_pose_bone(Object &ob, EditBone &ebone)
     BKE_constraint_targets_get(constraint, &targets);
     char name_flip[MAX_ID_NAME - 2];
     LISTBASE_FOREACH (bConstraintTarget *, target, &targets) {
+      if (!target->tar || !target->subtarget) {
+        continue;
+      }
       BLI_string_flip_side_name(name_flip, target->subtarget, false, sizeof(name_flip));
       if (bPoseChannel *flipped_bone = BKE_pose_channel_find_name(target->tar->pose, name_flip)) {
         STRNCPY(target->subtarget, flipped_bone->name);
