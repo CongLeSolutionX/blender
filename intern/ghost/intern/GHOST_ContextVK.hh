@@ -80,7 +80,8 @@ class GHOST_ContextVK : public GHOST_Context {
 #endif
                   int contextMajorVersion,
                   int contextMinorVersion,
-                  int debug);
+                  int debug,
+                  const GHOST_GPUDevice &preferred_device);
 
   /**
    * Destructor.
@@ -126,7 +127,8 @@ class GHOST_ContextVK : public GHOST_Context {
                                   void *r_physical_device,
                                   void *r_device,
                                   uint32_t *r_graphic_queue_family,
-                                  void *r_queue) override;
+                                  void *r_queue,
+                                  void **r_queue_mutex) override;
 
   GHOST_TSuccess getVulkanSwapChainFormat(GHOST_VulkanSwapChainData *r_swap_chain_data) override;
 
@@ -173,6 +175,7 @@ class GHOST_ContextVK : public GHOST_Context {
   const int m_context_major_version;
   const int m_context_minor_version;
   const int m_debug;
+  const GHOST_GPUDevice m_preferred_device;
 
   VkCommandPool m_command_pool;
   VkCommandBuffer m_command_buffer;

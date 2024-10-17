@@ -2,6 +2,8 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#pragma once
+
 /**
  * Debugging drawing library
  *
@@ -13,7 +15,7 @@
 
 /** Global switch option. */
 bool drw_debug_draw_enable = true;
-const vec4 drw_debug_default_color = vec4(1.0, 0.0, 0.0, 1.0);
+#  define drw_debug_default_color vec4(1.0, 0.0, 0.0, 1.0)
 
 /* -------------------------------------------------------------------- */
 /** \name Internals
@@ -174,7 +176,7 @@ void drw_debug_sphere(vec3 p, float radius)
  */
 void drw_debug_matrix(mat4 mat, vec4 v_color)
 {
-  vec4 p[4] = vec4[4](vec4(0, 0, 0, 1), vec4(1, 0, 0, 1), vec4(0, 1, 0, 1), vec4(0, 0, 1, 1));
+  vec4 p[4] = float4_array(vec4(0, 0, 0, 1), vec4(1, 0, 0, 1), vec4(0, 1, 0, 1), vec4(0, 0, 1, 1));
   for (int i = 0; i < 4; i++) {
     p[i] = mat * p[i];
     p[i].xyz /= p[i].w;
@@ -193,14 +195,14 @@ void drw_debug_matrix(mat4 mat)
  */
 void drw_debug_matrix_as_bbox(mat4 mat, vec4 v_color)
 {
-  vec4 p[8] = vec4[8](vec4(-1, -1, -1, 1),
-                      vec4(1, -1, -1, 1),
-                      vec4(1, 1, -1, 1),
-                      vec4(-1, 1, -1, 1),
-                      vec4(-1, -1, 1, 1),
-                      vec4(1, -1, 1, 1),
-                      vec4(1, 1, 1, 1),
-                      vec4(-1, 1, 1, 1));
+  vec4 p[8] = float4_array(vec4(-1, -1, -1, 1),
+                           vec4(1, -1, -1, 1),
+                           vec4(1, 1, -1, 1),
+                           vec4(-1, 1, -1, 1),
+                           vec4(-1, -1, 1, 1),
+                           vec4(1, -1, 1, 1),
+                           vec4(1, 1, 1, 1),
+                           vec4(-1, 1, 1, 1));
   for (int i = 0; i < 8; i++) {
     p[i] = mat * p[i];
     p[i].xyz /= p[i].w;

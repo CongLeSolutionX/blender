@@ -24,7 +24,7 @@
 #include "BLI_fileops.h"
 #include "BLI_function_ref.hh"
 #include "BLI_listbase.h"
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 #include "BLI_string.h"
 #include "BLI_system.h"
 #include "BLI_time.h"
@@ -69,7 +69,7 @@
 #include "RE_pipeline.h"
 
 #ifdef WITH_PYTHON
-#  include "BPY_extern.h"
+#  include "BPY_extern.hh"
 #endif
 
 using namespace blender::bke;
@@ -348,7 +348,8 @@ static bool reuse_bmain_move_id(ReuseOldBMainData *reuse_data,
 
   id->lib = lib;
   BLI_addtail(new_lb, id);
-  BKE_id_new_name_validate(new_bmain, new_lb, id, nullptr, true);
+  BKE_id_new_name_validate(
+      *new_bmain, *new_lb, *id, nullptr, IDNewNameMode::RenameExistingNever, true);
   BKE_lib_libblock_session_uid_renew(id);
 
   /* Remap to itself, to avoid re-processing this ID again. */
@@ -480,7 +481,7 @@ static void reuse_editable_asset_bmain_data_for_blendfile(ReuseOldBMainData *reu
 
   FOREACH_MAIN_LISTBASE_ID_BEGIN (old_lb, old_id_iter) {
     /* Keep any datablocks from libraries marked as LIBRARY_ASSET_EDITABLE. */
-    if (!((ID_IS_LINKED(old_id_iter) && old_id_iter->lib->runtime.tag & LIBRARY_ASSET_EDITABLE))) {
+    if (!(ID_IS_LINKED(old_id_iter) && old_id_iter->lib->runtime.tag & LIBRARY_ASSET_EDITABLE)) {
       continue;
     }
 
@@ -953,6 +954,12 @@ static void setup_app_data(bContext *C,
         if (ID_TYPE_SUPPORTS_ASSET_EDITABLE(idtype_info->id_code)) {
           reuse_editable_asset_bmain_data_for_blendfile(&reuse_data, idtype_info->id_code);
         }
+      }
+    }
+
+    if (mode != LOAD_UI) {
+      LISTBASE_FOREACH (bScreen *, screen, &bfd->main->screens) {
+        BKE_screen_runtime_refresh_for_blendfile(screen);
       }
     }
   }
@@ -1438,6 +1445,7 @@ UserDef *BKE_blendfile_userdef_from_defaults()
         "io_scene_gltf2",
         "cycles",
         "pose_library",
+        "bl_pkg",
     };
     for (int i = 0; i < ARRAY_SIZE(addons); i++) {
       bAddon *addon = BKE_addon_new();
@@ -1485,11 +1493,11 @@ UserDef *BKE_blendfile_userdef_from_defaults()
 
   {
     BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
-        userdef, "VIEW3D_AST_brush_sculpt", "Brushes/Mesh/Sculpt/Cloth");
+        userdef, "VIEW3D_AST_brush_sculpt", "Brushes/Mesh Sculpt/Cloth");
     BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
-        userdef, "VIEW3D_AST_brush_sculpt", "Brushes/Mesh/Sculpt/General");
+        userdef, "VIEW3D_AST_brush_sculpt", "Brushes/Mesh Sculpt/General");
     BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
-        userdef, "VIEW3D_AST_brush_sculpt", "Brushes/Mesh/Sculpt/Painting");
+        userdef, "VIEW3D_AST_brush_sculpt", "Brushes/Mesh Sculpt/Paint");
   }
 
   return userdef;
@@ -1771,7 +1779,7 @@ void PartialWriteContext::make_local(ID *ctx_id, const int make_local_flags)
   /* Making an ID local typically resets its session UID, here we want to keep the same value. */
   const uint ctx_id_session_uid = ctx_id->session_uid;
   BKE_main_idmap_remove_id(this->bmain.id_map, ctx_id);
-  BKE_main_idmap_insert_id(matching_uid_map_, ctx_id);
+  BKE_main_idmap_remove_id(matching_uid_map_, ctx_id);
 
   BKE_lib_id_make_local(&this->bmain, ctx_id, make_local_flags);
 

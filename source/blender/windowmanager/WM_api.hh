@@ -997,8 +997,8 @@ void WM_operator_properties_id_lookup(wmOperatorType *ot, const bool add_name_pr
  */
 void WM_operator_properties_use_cursor_init(wmOperatorType *ot);
 void WM_operator_properties_border(wmOperatorType *ot);
-void WM_operator_properties_border_to_rcti(wmOperator *op, rcti *rect);
-void WM_operator_properties_border_to_rctf(wmOperator *op, rctf *rect);
+void WM_operator_properties_border_to_rcti(wmOperator *op, rcti *r_rect);
+void WM_operator_properties_border_to_rctf(wmOperator *op, rctf *r_rect);
 /**
  * Use with #WM_gesture_box_invoke
  */
@@ -1542,6 +1542,7 @@ std::string WM_drag_get_string_firstline(const wmDrag *drag);
 void wmViewport(const rcti *winrct);
 void wmPartialViewport(rcti *drawrct, const rcti *winrct, const rcti *partialrct);
 void wmWindowViewport(const wmWindow *win);
+void wmWindowViewport_ex(const wmWindow *win, float offset);
 
 /* OpenGL utilities with safety check. */
 void wmOrtho2(float x1, float x2, float y1, float y2);

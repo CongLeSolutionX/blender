@@ -70,10 +70,6 @@ set(LIB
   PRIVATE bf::intern::clog
 )
 
-if(WITH_EXPERIMENTAL_FEATURES)
-  add_definitions(-DWITH_ANIM_BAKLAVA)
-endif()
-
 blender_add_lib(bf_animrig "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 add_library(bf::animrig ALIAS bf_animrig)
 
@@ -82,6 +78,7 @@ if(WITH_GTESTS)
   )
   set(TEST_SRC
     intern/action_iterators_test.cc
+    intern/action_legacy_test.cc
     intern/action_test.cc
     intern/bone_collections_test.cc
     intern/evaluation_test.cc

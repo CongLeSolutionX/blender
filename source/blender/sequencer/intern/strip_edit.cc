@@ -188,7 +188,7 @@ void SEQ_edit_remove_flagged_sequences(Scene *scene, ListBase *seqbase)
       SEQ_free_animdata(scene, seq);
       BLI_remlink(seqbase, seq);
       SEQ_sequence_free(scene, seq);
-      SEQ_sequence_lookup_tag(scene, SEQ_LOOKUP_TAG_INVALID);
+      SEQ_sequence_lookup_invalidate(scene);
     }
   }
 }
@@ -419,16 +419,23 @@ Sequence *SEQ_edit_strip_split(Main *bmain,
   strips.add(seq);
   SEQ_iterator_set_expand(scene, seqbase, strips, SEQ_query_strip_effect_chain);
 
+  /* All connected strips (that are selected and at the cut frame) must also be duplicated. */
+  blender::VectorSet<Sequence *> strips_old(strips);
+  for (Sequence *strip : strips_old) {
+    blender::VectorSet<Sequence *> connections = SEQ_get_connected_strips(strip);
+    connections.remove_if([&](Sequence *connection) {
+      return !(connection->flag & SELECT) ||
+             !seq_edit_split_intersect_check(scene, connection, timeline_frame);
+    });
+    strips.add_multiple(connections.as_span());
+  }
+
+  /* In case connected strips had effects, duplicate those too: */
+  SEQ_iterator_set_expand(scene, seqbase, strips, SEQ_query_strip_effect_chain);
+
   if (!seq_edit_split_operation_permitted_check(scene, strips, timeline_frame, r_error)) {
     return nullptr;
   }
-
-  /* All connected strips (that are selected and at the cut frame) must also be duplicated. */
-  blender::VectorSet<Sequence *> connections = SEQ_get_connected_strips(seq);
-  connections.remove_if([&](Sequence *seq) {
-    return !(seq->flag & SELECT) || !seq_edit_split_intersect_check(scene, seq, timeline_frame);
-  });
-  strips.add_multiple(connections.as_span());
 
   /* Store `F-Curves`, so original ones aren't renamed. */
   SeqAnimationBackup animation_backup{};
@@ -517,5 +524,5 @@ void SEQ_edit_sequence_name_set(Scene *scene, Sequence *seq, const char *new_nam
 {
   BLI_strncpy_utf8(seq->name + 2, new_name, MAX_NAME - 2);
   BLI_str_utf8_invalid_strip(seq->name + 2, strlen(seq->name + 2));
-  SEQ_sequence_lookup_tag(scene, SEQ_LOOKUP_TAG_INVALID);
+  SEQ_sequence_lookup_invalidate(scene);
 }

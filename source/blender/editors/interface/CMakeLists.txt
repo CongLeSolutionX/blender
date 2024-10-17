@@ -29,12 +29,12 @@ set(INC_SYS
 )
 
 set(SRC
+  eyedroppers/eyedropper_bone.cc
   eyedroppers/eyedropper_color.cc
   eyedroppers/eyedropper_colorband.cc
   eyedroppers/eyedropper_datablock.cc
   eyedroppers/eyedropper_depth.cc
   eyedroppers/eyedropper_driver.cc
-  eyedroppers/eyedropper_gpencil_color.cc
   eyedroppers/eyedropper_grease_pencil_color.cc
   eyedroppers/interface_eyedropper.cc
   interface.cc
@@ -106,6 +106,7 @@ set(LIB
   PRIVATE bf::depsgraph
   PRIVATE bf::dna
   bf_editor_datafiles
+  bf_editor_id_management
   PRIVATE bf::extern::fmtlib
   PRIVATE bf::intern::guardedalloc
   PRIVATE bf::animrig
@@ -125,10 +126,6 @@ endif()
 
 if(WITH_INPUT_IME)
   add_definitions(-DWITH_INPUT_IME)
-endif()
-
-if(WITH_EXPERIMENTAL_FEATURES)
-  add_definitions(-DWITH_ANIM_BAKLAVA)
 endif()
 
 blender_add_lib(bf_editor_interface "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")

@@ -69,6 +69,7 @@
 
 #include "mesh_brush_common.hh"
 #include "paint_intern.hh" /* own include */
+#include "sculpt_automask.hh"
 #include "sculpt_intern.hh"
 
 using namespace blender;
@@ -1138,7 +1139,7 @@ static void do_wpaint_brush_blur(const Depsgraph &depsgraph,
       const Span<int> verts = nodes[i].verts();
       tls.factors.resize(verts.size());
       const MutableSpan<float> factors = tls.factors;
-      fill_factor_from_hide(mesh, verts, factors);
+      fill_factor_from_hide(hide_vert, verts, factors);
       if (!select_vert.is_empty()) {
         filter_factors_with_selection(select_vert, verts, factors);
       }
@@ -1256,7 +1257,7 @@ static void do_wpaint_brush_smear(const Depsgraph &depsgraph,
       const Span<int> verts = nodes[i].verts();
       tls.factors.resize(verts.size());
       const MutableSpan<float> factors = tls.factors;
-      fill_factor_from_hide(mesh, verts, factors);
+      fill_factor_from_hide(hide_vert, verts, factors);
       if (!select_vert.is_empty()) {
         filter_factors_with_selection(select_vert, verts, factors);
       }
@@ -1373,7 +1374,7 @@ static void do_wpaint_brush_draw(const Depsgraph &depsgraph,
       const Span<int> verts = nodes[i].verts();
       tls.factors.resize(verts.size());
       const MutableSpan<float> factors = tls.factors;
-      fill_factor_from_hide(mesh, verts, factors);
+      fill_factor_from_hide(hide_vert, verts, factors);
       if (!select_vert.is_empty()) {
         filter_factors_with_selection(select_vert, verts, factors);
       }
@@ -1460,7 +1461,7 @@ static float calculate_average_weight(const Depsgraph &depsgraph,
           const Span<int> verts = nodes[i].verts();
           tls.factors.resize(verts.size());
           const MutableSpan<float> factors = tls.factors;
-          fill_factor_from_hide(mesh, verts, factors);
+          fill_factor_from_hide(hide_vert, verts, factors);
           if (!select_vert.is_empty()) {
             filter_factors_with_selection(select_vert, verts, factors);
           }

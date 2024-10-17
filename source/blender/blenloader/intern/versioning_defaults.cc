@@ -312,7 +312,7 @@ void BLO_update_defaults_workspace(WorkSpace *workspace, const char *app_templat
 
     /* For 2D animation template. */
     if (STREQ(workspace->id.name + 2, "Drawing")) {
-      workspace->object_mode = OB_MODE_PAINT_GPENCIL_LEGACY;
+      workspace->object_mode = OB_MODE_PAINT_GREASE_PENCIL;
     }
 
     /* For Sculpting template. */
@@ -513,9 +513,9 @@ void BLO_update_defaults_startup_blend(Main *bmain, const char *app_template)
       ToolSettings *ts = scene->toolsettings;
 
       /* Ensure new Paint modes. */
-      BKE_paint_ensure_from_paintmode(bmain, scene, PaintMode::VertexGPencil);
-      BKE_paint_ensure_from_paintmode(bmain, scene, PaintMode::SculptGPencil);
-      BKE_paint_ensure_from_paintmode(bmain, scene, PaintMode::WeightGPencil);
+      BKE_paint_ensure_from_paintmode(scene, PaintMode::VertexGPencil);
+      BKE_paint_ensure_from_paintmode(scene, PaintMode::SculptGPencil);
+      BKE_paint_ensure_from_paintmode(scene, PaintMode::WeightGPencil);
 
       /* Enable cursor. */
       if (ts->gp_paint) {
@@ -545,7 +545,7 @@ void BLO_update_defaults_startup_blend(Main *bmain, const char *app_template)
         if (layout->screen) {
           bScreen *screen = layout->screen;
           if (!STREQ(screen->id.name + 2, workspace->id.name + 2)) {
-            BKE_libblock_rename(bmain, &screen->id, workspace->id.name + 2);
+            BKE_libblock_rename(*bmain, screen->id, workspace->id.name + 2);
           }
         }
 
@@ -600,7 +600,7 @@ void BLO_update_defaults_startup_blend(Main *bmain, const char *app_template)
       if (object->type == OB_GPENCIL_LEGACY) {
         /* Set grease pencil object in drawing mode */
         bGPdata *gpd = (bGPdata *)object->data;
-        object->mode = OB_MODE_PAINT_GPENCIL_LEGACY;
+        object->mode = OB_MODE_PAINT_GREASE_PENCIL;
         gpd->flag |= GP_DATA_STROKE_PAINTMODE;
         break;
       }
