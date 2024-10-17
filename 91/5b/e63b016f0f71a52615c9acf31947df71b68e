@@ -2,3 +2,4 @@ Referenced by issue #126160, Blender Crashes When Exporting USD with Allow Unico
 Referenced by issue #126175, Bones change the size after export to the USD format
 Referenced by issue #129135, Sculpt: Automask topology option affecting outside vertices
 Referenced by pull request #129139, Fix #129135: Automasking topology doesn't work with certain brushes
+Referenced by commit e01713be7c3075aa7784424516eab51eee4f42e5, Fix #129135: Automasking topology doesn't work with certain brushes
