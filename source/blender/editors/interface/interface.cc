@@ -257,7 +257,7 @@ void ui_region_to_window(const ARegion *region, int *x, int *y)
   *y += region->winrct.ymin;
 }
 
-int64_t uiBlock::but_index(const uiBut *but) const
+int uiBlock::but_index(const uiBut *but) const
 {
   BLI_assert(!buttons.is_empty() && but);
   auto index = std::distance(
@@ -1005,8 +1005,8 @@ static bool but_itr_in_range(const std::unique_ptr<uiBut> *but, const uiBlock *b
 std::unique_ptr<uiBut> *but_rfind_old_itr(uiBlock *block_old,
                                           const std::unique_ptr<uiBut> &but_new)
 {
-  for (int64_t idx = block_old->buttons.size() - 1; idx >= 0; idx--) {
-    std::unique_ptr<uiBut> *but = block_old->buttons.begin() + idx;
+  for (int i = block_old->buttons.size() - 1; i >= 0; i--) {
+    std::unique_ptr<uiBut> *but = block_old->buttons.begin() + i;
     if (ui_but_equals_old(but_new.get(), but->get())) {
       return but;
     }
@@ -1883,8 +1883,8 @@ void UI_block_update_from_old(const bContext *C, uiBlock *block)
   /* Remove all back `buts` until an active `but` is found, most `blocks` do not even have an
    * active `but`. */
   int count = 0;
-  for (int idx = oldblock->buttons.size() - 1; idx >= 0; idx--) {
-    std::unique_ptr<uiBut> &oldbut = oldblock->buttons[idx];
+  for (int i = oldblock->buttons.size() - 1; i >= 0; i--) {
+    std::unique_ptr<uiBut> &oldbut = oldblock->buttons[i];
     if (oldbut->active || oldbut->semi_modal_state ||
         (oldbut->flag & (UI_BUT_DRAG_MULTI | UI_HOVER)))
     {

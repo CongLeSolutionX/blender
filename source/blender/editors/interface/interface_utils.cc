@@ -1021,8 +1021,8 @@ std::optional<std::string> UI_key_event_operator_string(const bContext *C,
   short event_type = KM_NOTHING;
 
   uiBut *listbox = nullptr;
-  for (int idx = but->block->buttons.size() - 1; idx >= 0; idx--) {
-    uiBut *but_iter = but->block->buttons[idx].get();
+  for (int i = but->block->buttons.size() - 1; i >= 0; i--) {
+    uiBut *but_iter = but->block->buttons[i].get();
     if ((but_iter->type == UI_BTYPE_LISTBOX) && ui_but_contains_rect(but_iter, &but->rect)) {
       listbox = but_iter;
       break;

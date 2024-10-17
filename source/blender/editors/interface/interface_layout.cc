@@ -937,8 +937,8 @@ static void ui_item_enum_expand_tabs(uiLayout *layout,
   ui_item_enum_expand_exec(layout, block, ptr, prop, uiname, h, UI_BTYPE_TAB, icon_only);
   BLI_assert(start_size != block->buttons.size());
 
-  for (int idx = start_size; idx < block->buttons.size(); idx++) {
-    uiBut *tab = block->buttons[idx].get();
+  for (int i = start_size; i < block->buttons.size(); i++) {
+    uiBut *tab = block->buttons[i].get();
     UI_but_drawflag_enable(tab, ui_but_align_opposite_to_area_align_get(CTX_wm_region(C)));
     if (icon_only) {
       UI_but_drawflag_enable(tab, UI_BUT_HAS_TOOLTIP_LABEL);
@@ -951,11 +951,9 @@ static void ui_item_enum_expand_tabs(uiLayout *layout,
     const int highlight_array_len = RNA_property_array_length(ptr_highlight, prop_highlight);
     blender::Array<bool, 64> highlight_array(highlight_array_len);
     RNA_property_boolean_get_array(ptr_highlight, prop_highlight, highlight_array.data());
-    int i = 0;
-    for (int idx = start_size; (idx < block->buttons.size()) && (i < highlight_array_len);
-         idx++, i++)
-    {
-      uiBut *tab_but = block->buttons[idx].get();
+    int end = std::max<int>(start_size + highlight_array_len, block->buttons.size());
+    for (int i = start_size; i < end; i++) {
+      uiBut *tab_but = block->buttons[i].get();
       SET_FLAG_FROM_TEST(tab_but->flag, !highlight_array[i], UI_BUT_INACTIVE);
     }
   }
@@ -2573,16 +2571,16 @@ void uiItemFullR_with_popover(uiLayout *layout,
                               const char *panel_type)
 {
   uiBlock *block = layout->root->block;
-  int idx = block->buttons.size();
+  int i = block->buttons.size();
   uiItemFullR(layout, ptr, prop, index, value, flag, name, icon);
-  for (; idx < block->buttons.size(); idx++) {
-    uiBut *but = block->buttons[idx].get();
+  for (; i < block->buttons.size(); i++) {
+    uiBut *but = block->buttons[i].get();
     if (but->rnaprop == prop && ELEM(but->type, UI_BTYPE_MENU, UI_BTYPE_COLOR)) {
       ui_but_rna_menu_convert_to_panel_type(but, panel_type);
       break;
     }
   }
-  if (idx == block->buttons.size()) {
+  if (i == block->buttons.size()) {
     const char *propname = RNA_property_identifier(prop);
     ui_item_disabled(layout, panel_type);
     RNA_warning("property could not use a popover: %s.%s (%s)",
@@ -2603,17 +2601,17 @@ void uiItemFullR_with_menu(uiLayout *layout,
                            const char *menu_type)
 {
   uiBlock *block = layout->root->block;
-  int64_t idx = block->buttons.size();
+  int i = block->buttons.size();
   uiItemFullR(layout, ptr, prop, index, value, flag, name, icon);
-  while (idx < block->buttons.size()) {
-    uiBut *but = block->buttons[idx].get();
+  while (i < block->buttons.size()) {
+    uiBut *but = block->buttons[i].get();
     if (but->rnaprop == prop && but->type == UI_BTYPE_MENU) {
       ui_but_rna_menu_convert_to_menu_type(but, menu_type);
       break;
     }
-    idx++;
+    i++;
   }
-  if (idx == block->buttons.size()) {
+  if (i == block->buttons.size()) {
     const char *propname = RNA_property_identifier(prop);
     ui_item_disabled(layout, menu_type);
     RNA_warning("property could not use a menu: %s.%s (%s)",

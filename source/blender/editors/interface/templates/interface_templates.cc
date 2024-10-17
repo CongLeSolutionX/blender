@@ -3926,8 +3926,8 @@ static void colorband_buttons_layout(uiLayout *layout,
     }
 
     /* Some special (rather awkward) treatment to update UI state on certain property changes. */
-    for (int idx = block->buttons.size() - 1; idx >= 0; idx--) {
-      uiBut *but = block->buttons[idx].get();
+    for (int i = block->buttons.size() - 1; i >= 0; i--) {
+      uiBut *but = block->buttons[i].get();
       if (but->rnapoin.data != ptr.data) {
         continue;
       }
@@ -6887,17 +6887,17 @@ void uiTemplateKeymapItemProperties(uiLayout *layout, PointerRNA *ptr)
 
   if (propptr.data) {
     uiBlock *block = uiLayoutGetBlock(layout);
-    int idx = uiLayoutGetBlock(layout)->buttons.size() - 1;
+    int i = uiLayoutGetBlock(layout)->buttons.size() - 1;
 
     WM_operator_properties_sanitize(&propptr, false);
     template_keymap_item_properties(layout, nullptr, &propptr);
-    if (idx < 0) {
+    if (i < 0) {
       return;
     }
     /* attach callbacks to compensate for missing properties update,
      * we don't know which keymap (item) is being modified there */
-    for (; idx < block->buttons.size(); idx++) {
-      uiBut *but = block->buttons[idx].get();
+    for (; i < block->buttons.size(); i++) {
+      uiBut *but = block->buttons[i].get();
       /* operator buttons may store props for use (file selector, #36492) */
       if (but->rnaprop) {
         UI_but_func_set(but, keymap_item_modified, ptr->data, nullptr);

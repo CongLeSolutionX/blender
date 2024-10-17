@@ -123,19 +123,19 @@ static uiBut *ui_but_anim_decorate_find_attached_button(uiButDecorator *but)
   if (but->block->buttons.is_empty()) {
     return nullptr;
   }
-  int idx = but->block->but_index(but);
-  idx = idx > 0 ? idx - 1 : but->block->buttons.size() - 1;
-  const int start = idx;
+  int i = but->block->but_index(but);
+  i = i > 0 ? i - 1 : but->block->buttons.size() - 1;
+  const int start = i;
   do {
-    but_iter = but->block->buttons[idx].get();
+    but_iter = but->block->buttons[i].get();
     if (but_iter != but &&
         ui_but_rna_equals_ex(
             but_iter, &but->decorated_rnapoin, but->decorated_rnaprop, but->decorated_rnaindex))
     {
       return but_iter;
     }
-    idx = idx > 0 ? idx - 1 : but->block->buttons.size() - 1;
-  } while (idx != start);
+    i = i > 0 ? i - 1 : but->block->buttons.size() - 1;
+  } while (i != start);
 
   return nullptr;
 }

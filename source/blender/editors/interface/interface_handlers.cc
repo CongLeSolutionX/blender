@@ -614,24 +614,24 @@ static bool ui_but_find_select_in_enum__cmp(const uiBut *but_a, const uiBut *but
 uiBut *ui_but_find_select_in_enum(uiBut *but, int direction)
 {
   uiBlock *block = but->block;
-  int idx = block->but_index(but);
+  int i = block->but_index(but);
   uiBut *but_found = nullptr;
   BLI_assert(ELEM(direction, -1, 1));
 
-  while (idx > 0 && ui_but_find_select_in_enum__cmp(block->buttons[idx - 1].get(), but)) {
-    idx--;
+  while (i > 0 && ui_but_find_select_in_enum__cmp(block->buttons[i - 1].get(), but)) {
+    i--;
   }
 
-  while (idx < block->buttons.size() &&
-         ui_but_find_select_in_enum__cmp(block->buttons[idx].get(), but))
+  while (i < block->buttons.size() &&
+         ui_but_find_select_in_enum__cmp(block->buttons[i].get(), but))
   {
-    if (block->buttons[idx]->flag & UI_SELECT) {
-      but_found = block->buttons[idx].get();
+    if (block->buttons[i]->flag & UI_SELECT) {
+      but_found = block->buttons[i].get();
       if (direction == 1) {
         break;
       }
     }
-    idx++;
+    i++;
   }
 
   return but_found;
@@ -3669,8 +3669,8 @@ static void ui_textedit_next_but(uiBlock *block, uiBut *actbut, uiHandleButtonDa
     return;
   }
 
-  for (int64_t idx = block->but_index(actbut) + 1; idx < block->buttons.size(); idx++) {
-    uiBut *but = block->buttons[idx].get();
+  for (int64_t i = block->but_index(actbut) + 1; i < block->buttons.size(); i++) {
+    uiBut *but = block->buttons[i].get();
     if (ui_but_is_editable_as_text(but)) {
       if (!(but->flag & UI_BUT_DISABLED)) {
         data->postbut = but;
@@ -3706,8 +3706,8 @@ static void ui_textedit_prev_but(uiBlock *block, uiBut *actbut, uiHandleButtonDa
     return;
   }
 
-  for (int64_t idx = block->but_index(actbut) - 1; idx >= 0; idx--) {
-    uiBut *but = block->buttons[idx].get();
+  for (int i = block->but_index(actbut) - 1; i >= 0; i--) {
+    uiBut *but = block->buttons[i].get();
     if (ui_but_is_editable_as_text(but)) {
       if (!(but->flag & UI_BUT_DISABLED)) {
         data->postbut = but;
@@ -3716,8 +3716,8 @@ static void ui_textedit_prev_but(uiBlock *block, uiBut *actbut, uiHandleButtonDa
       }
     }
   }
-  for (int64_t idx = block->buttons.size() - 1; idx >= 0; idx--) {
-    uiBut *but = block->buttons[idx].get();
+  for (int i = block->buttons.size() - 1; i >= 0; i--) {
+    uiBut *but = block->buttons[i].get();
     if (but == actbut) {
       break;
     }

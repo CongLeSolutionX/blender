@@ -676,7 +676,7 @@ struct uiBlock {
   void remove_but(const uiBut *but);
   [[nodiscard]] uiBut *first_but_or_null() const;
   [[nodiscard]] uiBut *last_but_or_null() const;
-  int64_t but_index(const uiBut *but) const;
+  int but_index(const uiBut *but) const;
   [[nodiscard]] uiBut *next_but(const uiBut *but) const;
   [[nodiscard]] uiBut *prev_but(const uiBut *but) const;
 };
