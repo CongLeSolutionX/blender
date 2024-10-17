@@ -70,18 +70,21 @@ class Octree {
   int3 world_to_ceil_index(float3 p) const;
   /* Convert from index to the position of the lower left corner of the cell. */
   float3 index_to_world(int x, int y, int z) const;
+  float3 voxel_size() const;
+  int flatten_index(int x, int y, int z) const;
 
   /* Represent octree nodes as empty boxes with Blender Python API. */
   void visualize(KernelOctreeNode *knodes, const char *filename) const;
   void visualize_fast(KernelOctreeNode *knodes, const char *filename) const;
+#ifdef WITH_OPENVDB
+  openvdb::BoolGrid::ConstPtr get_vdb(const Geometry *geom) const;
+#endif
 
  private:
   std::shared_ptr<OctreeInternalNode> make_internal(std::shared_ptr<OctreeNode> &node);
   void recursive_build_(std::shared_ptr<OctreeNode> &node);
   int flatten_(KernelOctreeNode *knodes, std::shared_ptr<OctreeNode> &node, int &index);
   void evaluate_volume_density_(Device *device, Progress &progress);
-  int flatten_index(int x, int y, int z) const;
-  int flatten_index(int x, int y, int z, int3 size) const;
   bool should_split(std::shared_ptr<OctreeNode> &node);
 
   /* Root node. */
