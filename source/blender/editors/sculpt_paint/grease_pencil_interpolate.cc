@@ -308,6 +308,7 @@ InterpolateOpData *InterpolateOpData::from_operator(const bContext &C, const wmO
   data->smooth_factor = RNA_float_get(op.ptr, "smooth_factor");
   data->smooth_steps = RNA_int_get(op.ptr, "smooth_steps");
   data->active_layer_index = *grease_pencil.get_layer_index(active_layer);
+  const bool use_selection = RNA_boolean_get(op.ptr, "use_selection");
 
   const auto layer_mode = InterpolateLayerMode(RNA_enum_get(op.ptr, "layers"));
   switch (layer_mode) {
@@ -329,12 +330,11 @@ InterpolateOpData *InterpolateOpData::from_operator(const bContext &C, const wmO
     InterpolateOpData::LayerData &layer_data = data->layer_data[layer_index];
 
     /* Pair from/to curves by index. */
-    const bool only_selected = true;
     find_curve_mapping_from_index(grease_pencil,
                                   layer,
                                   current_frame,
                                   data->exclude_breakdowns,
-                                  only_selected,
+                                  use_selection,
                                   layer_data.curve_pairs);
   });
 
@@ -905,6 +905,12 @@ static void GREASE_PENCIL_OT_interpolate(wmOperatorType *ot)
                   false,
                   "Exclude Breakdowns",
                   "Exclude existing Breakdowns keyframes as interpolation extremes");
+
+  RNA_def_boolean(ot->srna,
+                  "use_selection",
+                  false,
+                  "Use Selection",
+                  "Use only selected strokes for interpolating");
 
   RNA_def_enum(ot->srna,
                "flip",
