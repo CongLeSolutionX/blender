@@ -607,7 +607,7 @@ static bool view3d_mat_drop_poll(bContext *C, wmDrag *drag, const wmEvent *event
 
   Object *ob = ED_view3d_give_object_under_cursor(C, event->mval);
 
-  return (ob && BKE_id_is_editable(CTX_data_main(C), &ob->id));
+  return (ob && ID_IS_EDITABLE(&ob->id) && !ID_IS_OVERRIDE_LIBRARY(&ob->id));
 }
 
 static std::string view3d_mat_drop_tooltip(bContext *C,

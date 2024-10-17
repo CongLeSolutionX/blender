@@ -9,7 +9,6 @@
 #include <fmt/format.h>
 
 #include "BKE_context.hh"
-#include "BKE_lib_id.hh"
 
 #include "BLT_translation.hh"
 
@@ -101,7 +100,8 @@ static bool ui_drop_material_poll(bContext *C, wmDrag *drag, const wmEvent * /*e
 
   Object *ob = static_cast<Object *>(ob_ptr.data);
 
-  return WM_drag_is_ID_type(drag, ID_MA) && BKE_id_is_editable(CTX_data_main(C), &ob->id);
+  return WM_drag_is_ID_type(drag, ID_MA) && ID_IS_EDITABLE(&ob->id) &&
+         !ID_IS_OVERRIDE_LIBRARY(&ob->id);
 }
 
 static void ui_drop_material_copy(bContext *C, wmDrag *drag, wmDropBox *drop)
