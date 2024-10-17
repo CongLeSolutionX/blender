@@ -914,11 +914,11 @@ shader node_rounded_polygon_texture(
     float R_gonSides = 0.0,
     float R_gonRoundness = 5.0,
     output float R_gonField = 0.0,
-    output float R_gonParameterField = 0.0,
+    output float RadialCoordinates = 0.0,
     output float MaxUnitParameter = 0.0)
 {
   /* isconnected() returns 2 when output socket is connected. */
-  int calculate_r_gon_parameter_field = int(isconnected(R_gonParameterField) != 0);
+  int calculate_r_gon_parameter_field = int(isconnected(RadialCoordinates) != 0);
   int calculate_max_unit_parameter = int(isconnected(MaxUnitParameter) != 0);
 
   vector3 out_variables = calculate_out_fields_2d(calculate_r_gon_parameter_field,
@@ -930,6 +930,6 @@ shader node_rounded_polygon_texture(
                                                   Scale * vector2(Vector.x, Vector.y));
 
   R_gonField = out_variables.x;
-  R_gonParameterField = out_variables.y;
+  RadialCoordinates = out_variables.y;
   MaxUnitParameter = out_variables.z;
 }

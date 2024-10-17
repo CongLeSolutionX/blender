@@ -25,7 +25,7 @@ static void sh_node_tex_rounded_polygon_declare(NodeDeclarationBuilder &b)
   b.is_function_node();
 
   b.add_output<decl::Float>("R_gon Field").no_muted_links();
-  b.add_output<decl::Float>("R_gon Parameter Field").no_muted_links();
+  b.add_output<decl::Float>("Radial Coordinates").no_muted_links();
   b.add_output<decl::Float>("Max Unit Parameter").no_muted_links();
 
   b.add_input<decl::Vector>("Vector")
@@ -108,14 +108,13 @@ static void node_shader_update_tex_rounded_polygon(bNodeTree *ntree, bNode *node
   bNodeSocket *inR_gonRoundnessSock = bke::node_find_socket(node, SOCK_IN, "R_gon Roundness");
 
   bNodeSocket *outR_gonFieldSock = bke::node_find_socket(node, SOCK_OUT, "R_gon Field");
-  bNodeSocket *outR_gonParameterFieldSock = bke::node_find_socket(
-      node, SOCK_OUT, "R_gon Parameter Field");
+  bNodeSocket *outRadialCoordinatesSock = bke::node_find_socket(
+      node, SOCK_OUT, "Radial Coordinates");
 
   node_sock_label(inR_gonSidesSock, "Sides");
   node_sock_label(inR_gonRoundnessSock, "Roundness");
 
   node_sock_label(outR_gonFieldSock, "Radius");
-  node_sock_label(outR_gonParameterFieldSock, "Edge Parameter");
 }
 
 float3 calculate_out_fields_2d_full_roundness_irregular_elliptical(
@@ -1054,7 +1053,7 @@ class RoundedPolygonFunction : public mf::MultiFunction {
     builder.single_input<float>("R_gon Roundness");
 
     builder.single_output<float>("R_gon Field", mf::ParamFlag::SupportsUnusedOutput);
-    builder.single_output<float>("R_gon Parameter Field", mf::ParamFlag::SupportsUnusedOutput);
+    builder.single_output<float>("Radial Coordinates", mf::ParamFlag::SupportsUnusedOutput);
     builder.single_output<float>("Max Unit Parameter", mf::ParamFlag::SupportsUnusedOutput);
 
     return signature;
@@ -1073,13 +1072,13 @@ class RoundedPolygonFunction : public mf::MultiFunction {
 
     MutableSpan<float> r_r_gon_field = params.uninitialized_single_output_if_required<float>(
         param++, "R_gon Field");
-    MutableSpan<float> r_r_gon_parameter_field =
-        params.uninitialized_single_output_if_required<float>(param++, "R_gon Parameter Field");
+    MutableSpan<float> r_radial_coordinates =
+        params.uninitialized_single_output_if_required<float>(param++, "Radial Coordinates");
     MutableSpan<float> r_max_unit_parameter =
         params.uninitialized_single_output_if_required<float>(param++, "Max Unit Parameter");
 
     const bool calc_r_gon_field = !r_r_gon_field.is_empty();
-    const bool calc_r_gon_parameter_field = !r_r_gon_parameter_field.is_empty();
+    const bool calc_r_gon_parameter_field = !r_radial_coordinates.is_empty();
     const bool calc_max_unit_parameter = !r_max_unit_parameter.is_empty();
 
     mask.foreach_index([&](const int64_t i) {
@@ -1095,7 +1094,7 @@ class RoundedPolygonFunction : public mf::MultiFunction {
         r_r_gon_field[i] = out_variables.x;
       }
       if (calc_r_gon_parameter_field) {
-        r_r_gon_parameter_field[i] = out_variables.y;
+        r_radial_coordinates[i] = out_variables.y;
       }
       if (calc_max_unit_parameter) {
         r_max_unit_parameter[i] = out_variables.z;

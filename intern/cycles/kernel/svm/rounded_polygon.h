@@ -12,7 +12,7 @@ struct RoundedPolygonStackOffsets {
   uint r_gon_sides;
   uint r_gon_roundness;
   uint r_gon_field;
-  uint r_gon_parameter_field;
+  uint radial_coordinates;
   uint max_unit_parameter;
 };
 
@@ -933,10 +933,10 @@ ccl_device_noinline int svm_node_tex_rounded_polygon(
                          &(so.r_gon_sides),
                          &(so.r_gon_roundness),
                          &(so.r_gon_field),
-                         &(so.r_gon_parameter_field));
+                         &(so.radial_coordinates));
   so.max_unit_parameter = node.w;
 
-  bool calculate_r_gon_parameter_field = stack_valid(so.r_gon_parameter_field);
+  bool calculate_r_gon_parameter_field = stack_valid(so.radial_coordinates);
   bool calculate_max_unit_parameter = stack_valid(so.max_unit_parameter);
 
   float3 coord = stack_load_float3(stack, so.vector);
@@ -956,8 +956,8 @@ ccl_device_noinline int svm_node_tex_rounded_polygon(
   if (stack_valid(so.r_gon_field)) {
     stack_store_float(stack, so.r_gon_field, out_variables.x);
   }
-  if (stack_valid(so.r_gon_parameter_field)) {
-    stack_store_float(stack, so.r_gon_parameter_field, out_variables.y);
+  if (stack_valid(so.radial_coordinates)) {
+    stack_store_float(stack, so.radial_coordinates, out_variables.y);
   }
   if (stack_valid(so.max_unit_parameter)) {
     stack_store_float(stack, so.max_unit_parameter, out_variables.z);

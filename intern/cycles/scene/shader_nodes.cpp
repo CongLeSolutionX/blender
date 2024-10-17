@@ -1236,7 +1236,7 @@ NODE_DEFINE(RoundedPolygonTextureNode)
   SOCKET_IN_FLOAT(r_gon_roundness, "R_gon Roundness", 0.0f);
 
   SOCKET_OUT_FLOAT(r_gon_field, "R_gon Field");
-  SOCKET_OUT_FLOAT(r_gon_parameter_field, "R_gon Parameter Field");
+  SOCKET_OUT_FLOAT(radial_coordinates, "Radial Coordinates");
   SOCKET_OUT_FLOAT(max_unit_parameter, "Max Unit Parameter");
 
   return type;
@@ -1253,8 +1253,8 @@ void RoundedPolygonTextureNode::compile(SVMCompiler &compiler)
   int r_gon_roundness_stack_offset = compiler.stack_assign_if_linked(input("R_gon Roundness"));
 
   int r_gon_field_stack_offset = compiler.stack_assign_if_linked(output("R_gon Field"));
-  int r_gon_parameter_field_stack_offset = compiler.stack_assign_if_linked(
-      output("R_gon Parameter Field"));
+  int radial_coordinates_field_stack_offset = compiler.stack_assign_if_linked(
+      output("Radial Coordinates"));
   int max_unit_parameter_stack_offset = compiler.stack_assign_if_linked(
       output("Max Unit Parameter"));
 
@@ -1265,7 +1265,7 @@ void RoundedPolygonTextureNode::compile(SVMCompiler &compiler)
       compiler.encode_uchar4(r_gon_sides_stack_offset,
                              r_gon_roundness_stack_offset,
                              r_gon_field_stack_offset,
-                             r_gon_parameter_field_stack_offset),
+                             radial_coordinates_field_stack_offset),
       max_unit_parameter_stack_offset);
   compiler.add_node(
       __float_as_int(scale), __float_as_int(r_gon_sides), __float_as_int(r_gon_roundness));

@@ -908,7 +908,7 @@ void node_tex_rounded_polygon(vec3 coord,
                               float calculate_r_gon_parameter_field,
                               float calculate_max_unit_parameter,
                               out float out_r_gon_field,
-                              out float out_r_gon_parameter_field,
+                              out float out_radial_coordinates,
                               out float out_max_unit_parameter)
 {
   vec3 out_variables = calculate_out_fields_2d(bool(calculate_r_gon_parameter_field),
@@ -920,6 +920,6 @@ void node_tex_rounded_polygon(vec3 coord,
                                                scale * vec2(coord.x, coord.y));
 
   out_r_gon_field = out_variables.x;
-  out_r_gon_parameter_field = out_variables.y;
+  out_radial_coordinates = out_variables.y;
   out_max_unit_parameter = out_variables.z;
 }
