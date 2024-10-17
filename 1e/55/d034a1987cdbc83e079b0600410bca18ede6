@@ -1,1 +1,2 @@
 Referenced by issue #129177, "NameError: name 'bpy' is not defined" at exit
+Referenced by commit c072d42f6b21bf4d8a519a20bbaf61b0359b1efb, Fix #129177: name 'bpy' is not defined at exit
