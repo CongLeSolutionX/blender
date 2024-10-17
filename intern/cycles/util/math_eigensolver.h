@@ -5,6 +5,8 @@
 #ifndef __UTIL_MATH_EIGENSOLVER_H__
 #define __UTIL_MATH_EIGENSOLVER_H__
 
+#include "util/algorithm.h"
+
 CCL_NAMESPACE_BEGIN
 
 ccl_device_inline void identity_basis(ccl_private float3 &v0,
@@ -53,18 +55,21 @@ ccl_device float3 eigendecomposition_3x3_symmetric(float a00,
   if (norm == 0.0f) {
     /* Diagonal matrix, so directly extract eigenvalues (but make sure to sort them). */
     identity_basis(v0, v1, v2);
-    const float minVal = min(min(a00, a11), a22);
-    const float maxVal = max(max(a00, a11), a22);
 
-    float midVal = a00;
-    if (a00 == maxVal) {
-      midVal = (a11 == minVal) ? a22 : a11;
+    if (a00 > a11) {
+      swap(a00, a11);
+      swap(v0, v1);
     }
-    else if (a00 == minVal) {
-      midVal = (a11 == maxVal) ? a22 : a11;
+    if (a11 > a22) {
+      swap(a11, a22);
+      swap(v1, v2);
+    }
+    if (a00 > a11) {
+      swap(a00, a11);
+      swap(v0, v1);
     }
 
-    return make_float3(minVal, midVal, maxVal);
+    return max_element * make_float3(a00, a11, a22);
   }
 
   /* Compute eigenvalues. */

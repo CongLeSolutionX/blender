@@ -5,14 +5,29 @@
 #ifndef __UTIL_ALGORITHM_H__
 #define __UTIL_ALGORITHM_H__
 
-#include <algorithm>
+#ifndef __KERNEL_GPU__
+#  include <algorithm>
+#endif
 
 CCL_NAMESPACE_BEGIN
+
+#ifdef __KERNEL_GPU__
+
+template<typename T> void swap(T &a, T &b)
+{
+  T tmp(a);
+  a = b;
+  b = tmp;
+}
+
+#else
 
 using std::remove;
 using std::sort;
 using std::stable_sort;
 using std::swap;
+
+#endif
 
 CCL_NAMESPACE_END
 

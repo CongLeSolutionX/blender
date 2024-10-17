@@ -28,14 +28,15 @@ CCL_NAMESPACE_BEGIN
  * to make the data more linear (which lets us reduce the table size).
  */
 
-ccl_device_inline float booth_inversion_table(KernelGlobals kg,
-                                              const float alpha,
-                                              const float beta,
-                                              const float u)
+ccl_device_inline float spherical_ellipse_sample_phi(KernelGlobals kg,
+                                                     const float alpha,
+                                                     const float beta,
+                                                     const float u)
 {
   /* Compute y as the eccentricity ratio, then apply mapping to get LUT coords. */
   const float y = sqrtf(sqrtf(beta / alpha));
 
+  /* Perform bisection search in CDF table. */
   const int table_size = 64;
   int offset = kernel_data.tables.ellipse_CDF;
   int index = 0, count = table_size;
@@ -138,7 +139,7 @@ ccl_device_inline float spherical_ellipse_sample(
     float2 uv = spherical_ellipse_mapping(rand, &quadrant);
 
     /* Sample phi according to solid angle. */
-    float phi = booth_inversion_table(kg, alpha, beta, uv.x);
+    float phi = spherical_ellipse_sample_phi(kg, alpha, beta, uv.x);
 
     /* Unwrap quadrant. */
     if (quadrant == 3) {
@@ -219,8 +220,8 @@ ccl_device_inline float area_light_ellipse_sample(KernelGlobals kg,
                                                    vy);
 
   /* Compute ellipse radii. */
-  const float at = sqrtf(-eigval.x / eigval.y);
-  const float bt = sqrtf(-eigval.x / eigval.z);
+  const float at = max(1e-7f, safe_sqrtf(-eigval.x / eigval.y));
+  const float bt = max(1e-7f, safe_sqrtf(-eigval.x / eigval.z));
 
   /* Since the theory behind the computation here solves for the intersection of unit sphere and
    * an elliptical cone, there are two valid solutions, on either side of the unit sphere.

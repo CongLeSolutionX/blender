@@ -384,6 +384,7 @@ set(SRC_KERNEL_HEADERS
 )
 
 set(SRC_UTIL_HEADERS
+  ../util/algorithm.h
   ../util/atomic.h
   ../util/color.h
   ../util/defines.h
