@@ -258,6 +258,7 @@ set(LIB
   PRIVATE bf::intern::atomic
   PRIVATE bf::extern::fmtlib
   PRIVATE bf::extern::xxhash
+  PRIVATE bf::extern::voro
 )
 
 if(WITH_IO_STL)
@@ -342,10 +343,6 @@ add_node_discovery(
 
 list(APPEND LIB
   bf_nodes_geometry_generated
-)
-
-list(APPEND LIB
-  /usr/local/lib/libvoro++.a
 )
 
 # If compiling with MSVC clang we need to add the `D_LIBCPP_VERSION` define

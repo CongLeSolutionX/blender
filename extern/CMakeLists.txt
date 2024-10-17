@@ -30,6 +30,7 @@ endif()
 
 
 add_subdirectory(rangetree)
+add_subdirectory(voro)
 add_subdirectory(nanosvg)
 add_subdirectory(wcwidth)
 add_subdirectory(xxhash)
