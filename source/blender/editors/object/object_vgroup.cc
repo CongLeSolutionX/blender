@@ -36,6 +36,7 @@
 #include "BKE_editmesh.hh"
 #include "BKE_grease_pencil_vertex_groups.hh"
 #include "BKE_lattice.hh"
+#include "BKE_layer.hh"
 #include "BKE_mesh.hh"
 #include "BKE_mesh_mapping.hh"
 #include "BKE_modifier.hh"
@@ -636,55 +637,85 @@ static bool vgroup_normalize_active_vertex(Object *ob, eVGroupSelect subset_type
   return true;
 }
 
-static void vgroup_copy_active_to_sel(Object *ob, eVGroupSelect subset_type)
+static void vgroup_copy_active_to_sel(bContext *C, Object *active_ob, eVGroupSelect subset_type)
 {
-  Mesh *mesh = static_cast<Mesh *>(ob->data);
-  MDeformVert *dvert_act;
-  int i, vgroup_tot, subset_count;
-  const bool *vgroup_validmap = BKE_object_defgroup_subset_from_select_type(
-      ob, subset_type, &vgroup_tot, &subset_count);
-
-  if (BMEditMesh *em = mesh->runtime->edit_mesh.get()) {
-    BMIter iter;
-    BMVert *eve, *eve_act;
-    const int cd_dvert_offset = CustomData_get_offset(&em->bm->vdata, CD_MDEFORMVERT);
-
-    dvert_act = ED_mesh_active_dvert_get_em(ob, &eve_act);
-    if (dvert_act) {
-      BM_ITER_MESH_INDEX (eve, &iter, em->bm, BM_VERTS_OF_MESH, i) {
-        if (BM_elem_flag_test(eve, BM_ELEM_SELECT) && eve != eve_act) {
-          MDeformVert *dv = static_cast<MDeformVert *>(
-              BM_ELEM_CD_GET_VOID_P(eve, cd_dvert_offset));
-          BKE_defvert_copy_subset(dv, dvert_act, vgroup_validmap, vgroup_tot);
-          if (mesh->symmetry & ME_SYMMETRY_X) {
-            ED_mesh_defvert_mirror_update_em(ob, eve, -1, i, cd_dvert_offset);
-          }
-        }
-      }
-    }
+  /* Groups are copied from the active vertex of the active object. Because of multi object edit
+   * mode there may be more than 1 object in edit mode. */
+  Mesh *active_mesh = static_cast<Mesh *>(active_ob->data);
+  BMVert *active_vert;
+  MDeformVert *active_vert_deform;
+  if (active_mesh->runtime->edit_mesh.get()) {
+    active_vert_deform = ED_mesh_active_dvert_get_em(active_ob, &active_vert);
   }
   else {
-    const bke::AttributeAccessor attributes = mesh->attributes();
-    const VArray<bool> select_vert = *attributes.lookup_or_default<bool>(
-        ".select_vert", bke::AttrDomain::Point, false);
+    int active_vert_index;
+    active_vert_deform = ED_mesh_active_dvert_get_ob(active_ob, &active_vert_index);
+  }
 
-    int v_act;
+  if (!active_vert_deform) {
+    return;
+  }
 
-    dvert_act = ED_mesh_active_dvert_get_ob(ob, &v_act);
-    if (dvert_act) {
-      MutableSpan<MDeformVert> dverts = mesh->deform_verts_for_write();
-      for (i = 0; i < mesh->verts_num; i++) {
-        if (select_vert[i] && &dverts[i] != dvert_act) {
-          BKE_defvert_copy_subset(&dverts[i], dvert_act, vgroup_validmap, vgroup_tot);
+  const ListBase *active_ob_defgroups = BKE_object_defgroup_list(active_ob);
+
+  ViewLayer *view_layer = CTX_data_view_layer(C);
+  Scene *scene = CTX_data_scene(C);
+  View3D *v3d = CTX_wm_view3d(C);
+  FOREACH_OBJECT_IN_EDIT_MODE_BEGIN (scene, view_layer, v3d, ob_iter) {
+    /* Ensure that all objects have the same vertex groups. */
+    if (ob_iter != active_ob) {
+      LISTBASE_FOREACH (bDeformGroup *, group, active_ob_defgroups) {
+        if (BKE_object_defgroup_find_name(ob_iter, group->name)) {
+          continue;
+        }
+        bDeformGroup *new_group = BKE_object_defgroup_add(ob_iter);
+        STRNCPY(new_group->name, group->name);
+        /* Not ensuring uniqueness because we already checked if the name exists. */
+      }
+    }
+    int i, vgroup_tot, subset_count;
+    const bool *vgroup_validmap = BKE_object_defgroup_subset_from_select_type(
+        ob_iter, subset_type, &vgroup_tot, &subset_count);
+    Mesh *mesh = static_cast<Mesh *>(ob_iter->data);
+    if (BMEditMesh *em = mesh->runtime->edit_mesh.get()) {
+      BMIter iter;
+      BMVert *eve;
+      if (!CustomData_has_layer(&em->bm->vdata, CD_MDEFORMVERT)) {
+        BM_data_layer_add(em->bm, &em->bm->vdata, CD_MDEFORMVERT);
+      }
+      const int cd_dvert_offset = CustomData_get_offset(&em->bm->vdata, CD_MDEFORMVERT);
+      BLI_assert(cd_dvert_offset != -1);
+
+      BM_ITER_MESH_INDEX (eve, &iter, em->bm, BM_VERTS_OF_MESH, i) {
+        if (BM_elem_flag_test(eve, BM_ELEM_SELECT) && eve != active_vert) {
+          MDeformVert *dv = static_cast<MDeformVert *>(
+              BM_ELEM_CD_GET_VOID_P(eve, cd_dvert_offset));
+          BKE_defvert_copy_subset(dv, active_vert_deform, vgroup_validmap, vgroup_tot);
           if (mesh->symmetry & ME_SYMMETRY_X) {
-            ED_mesh_defvert_mirror_update_ob(ob, -1, i);
+            ED_mesh_defvert_mirror_update_em(ob_iter, eve, -1, i, cd_dvert_offset);
           }
         }
       }
     }
-  }
+    else {
+      const bke::AttributeAccessor attributes = mesh->attributes();
+      const VArray<bool> select_vert = *attributes.lookup_or_default<bool>(
+          ".select_vert", bke::AttrDomain::Point, false);
 
-  MEM_freeN((void *)vgroup_validmap);
+      MutableSpan<MDeformVert> dverts = mesh->deform_verts_for_write();
+      for (i = 0; i < mesh->verts_num; i++) {
+        if (select_vert[i] && &dverts[i] != active_vert_deform) {
+          BKE_defvert_copy_subset(&dverts[i], active_vert_deform, vgroup_validmap, vgroup_tot);
+          if (mesh->symmetry & ME_SYMMETRY_X) {
+            ED_mesh_defvert_mirror_update_ob(ob_iter, -1, i);
+          }
+        }
+      }
+    }
+
+    MEM_freeN((void *)vgroup_validmap);
+  }
+  FOREACH_OBJECT_IN_EDIT_MODE_END;
 }
 
 /** \} */
@@ -4140,14 +4171,17 @@ void OBJECT_OT_vertex_weight_normalize_active_vertex(wmOperatorType *ot)
 
 static int vertex_weight_copy_exec(bContext *C, wmOperator * /*op*/)
 {
-  Object *ob = context_object(C);
   ToolSettings *ts = CTX_data_tool_settings(C);
   eVGroupSelect subset_type = static_cast<eVGroupSelect>(ts->vgroupsubset);
 
-  vgroup_copy_active_to_sel(ob, subset_type);
+  Object *active_object = CTX_data_active_object(C);
+  if (!active_object) {
+    return OPERATOR_CANCELLED;
+  }
+  vgroup_copy_active_to_sel(C, active_object, subset_type);
 
-  DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
-  WM_event_add_notifier(C, NC_OBJECT | ND_DRAW, ob);
+  DEG_id_tag_update(&active_object->id, ID_RECALC_GEOMETRY);
+  WM_event_add_notifier(C, NC_OBJECT | ND_DRAW, active_object);
 
   return OPERATOR_FINISHED;
 }
