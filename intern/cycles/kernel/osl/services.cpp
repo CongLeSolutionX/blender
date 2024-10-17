@@ -434,9 +434,7 @@ static bool set_attribute_float2(float2 f[3], TypeDesc type, bool derivatives, v
     }
     return true;
   }
-  else if (type == TypePoint || type == TypeVector ||
-           type == TypeNormal || type == TypeColor)
-  {
+  else if (type == TypePoint || type == TypeVector || type == TypeNormal || type == TypeColor) {
     float *fval = (float *)val;
 
     fval[0] = f[0].x;
@@ -505,9 +503,7 @@ static bool set_attribute_float3(float3 f[3], TypeDesc type, bool derivatives, v
     }
     return true;
   }
-  else if (type == TypePoint || type == TypeVector ||
-           type == TypeNormal || type == TypeColor)
-  {
+  else if (type == TypePoint || type == TypeVector || type == TypeNormal || type == TypeColor) {
     float *fval = (float *)val;
 
     fval[0] = f[0].x;
@@ -582,9 +578,7 @@ static bool set_attribute_float4(float4 f[3], TypeDesc type, bool derivatives, v
     }
     return true;
   }
-  else if (type == TypePoint || type == TypeVector ||
-           type == TypeNormal || type == TypeColor)
-  {
+  else if (type == TypePoint || type == TypeVector || type == TypeNormal || type == TypeColor) {
     fval[0] = f[0].x;
     fval[1] = f[0].y;
     fval[2] = f[0].z;
@@ -647,9 +641,7 @@ static bool set_attribute_float(float f[3], TypeDesc type, bool derivatives, voi
     }
     return true;
   }
-  else if (type == TypePoint || type == TypeVector ||
-           type == TypeNormal || type == TypeColor)
-  {
+  else if (type == TypePoint || type == TypeVector || type == TypeNormal || type == TypeColor) {
     float *fval = (float *)val;
     fval[0] = f[0];
     fval[1] = f[0];

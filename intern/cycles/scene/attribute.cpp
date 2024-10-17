@@ -21,10 +21,9 @@ Attribute::Attribute(
     : name(name), std(ATTR_STD_NONE), type(type), element(element), flags(0), modified(true)
 {
   /* string and matrix not supported! */
-  assert(type == TypeFloat || type == TypeColor ||
-         type == TypePoint || type == TypeVector ||
-         type == TypeNormal || type == TypeMatrix || type == TypeFloat2 ||
-         type == TypeFloat4 || type == TypeRGBA);
+  assert(type == TypeFloat || type == TypeColor || type == TypePoint || type == TypeVector ||
+         type == TypeNormal || type == TypeMatrix || type == TypeFloat2 || type == TypeFloat4 ||
+         type == TypeRGBA);
 
   if (element == ATTR_ELEMENT_VOXEL) {
     buffer.resize(sizeof(ImageHandle));
@@ -293,12 +292,8 @@ bool Attribute::same_storage(TypeDesc a, TypeDesc b)
     return true;
   }
 
-  if (a == TypeColor || a == TypePoint || a == TypeVector ||
-      a == TypeNormal)
-  {
-    if (b == TypeColor || b == TypePoint || b == TypeVector ||
-        b == TypeNormal)
-    {
+  if (a == TypeColor || a == TypePoint || a == TypeVector || a == TypeNormal) {
+    if (b == TypeColor || b == TypePoint || b == TypeVector || b == TypeNormal) {
       return true;
     }
   }
