@@ -1385,7 +1385,6 @@ void node_tree_remove_layer_n(bNodeTree *ntree, Scene *scene, int layer_index);
 #define GEO_NODE_SET_RIGID_BODY_ANGULAR_VELOCITY 2154
 #define GEO_NODE_PHYSICS_TIME_STEP 2155
 #define GEO_NODE_SET_BODY_MOTION_TYPE 2156
-#define GEO_NODE_COLLISION_SHAPE_INERTIA 2157
 #define GEO_NODE_COLLISION_SHAPE 2158
 #define GEO_NODE_INPUT_BODY_ACTIVATION_STATE 2159
 #define GEO_NODE_SET_BODY_ACTIVATION_STATE 2160
@@ -1403,6 +1402,8 @@ void node_tree_remove_layer_n(bNodeTree *ntree, Scene *scene, int layer_index);
 #define GEO_NODE_INPUT_SHAPE_INFO 2172
 #define GEO_NODE_SHAPE_GEOMETRY 2173
 #define GEO_NODE_BODY_COLLISION_SHAPE 2174
+#define GEO_NODE_INPUT_SHAPE_MASS 2175
+#define GEO_NODE_SET_SHAPE_DENSITY 2176
 
 /** \} */
 

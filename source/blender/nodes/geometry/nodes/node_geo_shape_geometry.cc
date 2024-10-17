@@ -28,6 +28,7 @@ static void node_geo_exec(GeoNodeExecParams params)
 {
   const GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
   if (!geometry_set.has_collision_shape()) {
+    params.set_default_remaining_outputs();
     return;
   }
 

@@ -539,7 +539,9 @@ Array<bke::PhysicsGeometry *> extract_physics_bodies(const bke::PhysicsGeometry 
 
   const bke::AttributeAccessor src_attributes = physics.attributes();
   const Span<bke::InstanceReference> src_shapes = physics.state().shapes();
-  const VArraySpan<int> src_shape_handles = bke::physics_attributes::physics_attribute_lookup_or_default<int>(physics.attributes(), bke::PhysicsBodyAttribute::collision_shape);
+  const VArraySpan<int> src_shape_handles =
+      bke::physics_attributes::physics_attribute_lookup_or_default<int>(
+          physics.attributes(), bke::PhysicsBodyAttribute::collision_shape);
 
   mask.foreach_index(GrainSize(32), [&](const int body_i, const int element_i) {
     bke::PhysicsGeometry *element = new bke::PhysicsGeometry(1, 0);
@@ -554,9 +556,9 @@ Array<bke::PhysicsGeometry *> extract_physics_bodies(const bke::PhysicsGeometry 
                            element_attributes);
 
     /* Reference the collision shape and correct the index. */
-    const int  src_shape_handle=src_shape_handles[body_i];
-    int dst_shape_handle =-1;
-    if (src_shapes.index_range().contains(src_shape_handle)){
+    const int src_shape_handle = src_shape_handles[body_i];
+    int dst_shape_handle = -1;
+    if (src_shapes.index_range().contains(src_shape_handle)) {
       const bke::InstanceReference reference = src_shapes[src_shape_handle];
       dst_shape_handle = element->state_for_write().add_new_shape(reference);
     }

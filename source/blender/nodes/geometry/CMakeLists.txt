@@ -45,7 +45,6 @@ set(SRC
   nodes/node_geo_bounding_box.cc
   nodes/node_geo_collection_info.cc
   nodes/node_geo_collision_shape.cc
-  nodes/node_geo_collision_shape_inertia.cc
   nodes/node_geo_common.cc
   nodes/node_geo_convex_hull.cc
   nodes/node_geo_curve_endpoint_selection.cc
@@ -136,6 +135,7 @@ set(SRC
   nodes/node_geo_input_scene_time.cc
   nodes/node_geo_input_shape_info.cc
   nodes/node_geo_input_shape_center_of_mass.cc
+  nodes/node_geo_input_shape_mass.cc
   nodes/node_geo_input_shortest_edge_paths.cc
   nodes/node_geo_input_spline_cyclic.cc
   nodes/node_geo_input_spline_length.cc
@@ -226,6 +226,7 @@ set(SRC
   nodes/node_geo_set_rigid_body_mass.cc
   nodes/node_geo_set_rigid_body_velocity.cc
   nodes/node_geo_set_shade_smooth.cc
+  nodes/node_geo_set_shape_density.cc
   nodes/node_geo_set_spline_cyclic.cc
   nodes/node_geo_set_spline_resolution.cc
   nodes/node_geo_shape_geometry.cc

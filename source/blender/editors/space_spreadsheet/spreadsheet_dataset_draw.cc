@@ -749,11 +749,13 @@ void InstancesTreeViewItem::get_parent_instance_ids(
     Vector<SpreadsheetInstanceID> &r_instance_ids) const
 {
   if (auto *reference_item = dynamic_cast<const InstanceReferenceViewItem *>(this)) {
-    r_instance_ids.append({reference_item->reference_index(), int(reference_item->component_type())});
+    r_instance_ids.append(
+        {reference_item->reference_index(), int(reference_item->component_type())});
   }
   this->foreach_parent([&](const ui::AbstractTreeViewItem &item) {
     if (auto *reference_item = dynamic_cast<const InstanceReferenceViewItem *>(&item)) {
-      r_instance_ids.append({reference_item->reference_index(), int(reference_item->component_type())});
+      r_instance_ids.append(
+          {reference_item->reference_index(), int(reference_item->component_type())});
     }
   });
   std::reverse(r_instance_ids.begin(), r_instance_ids.end());

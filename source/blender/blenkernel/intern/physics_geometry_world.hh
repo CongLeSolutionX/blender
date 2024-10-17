@@ -205,6 +205,10 @@ class JoltPhysicsWorldData : NonCopyable, NonMovable {
                        const Span<InstanceReference> shapes,
                        const Span<int> shape_handles);
 
+  void set_body_mass(const IndexMask &selection,
+                     const Span<float> masses,
+                     const Span<float4x4> inertias);
+
   void apply_force(const IndexMask &selection,
                    const VArray<float3> &forces,
                    const VArray<float3> &positions = {});

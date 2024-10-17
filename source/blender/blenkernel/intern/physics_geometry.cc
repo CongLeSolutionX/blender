@@ -169,6 +169,9 @@ PhysicsWorldState &PhysicsWorldState::operator=(const PhysicsWorldState &other)
   if (is_cache_dirty(other.body_collision_shapes_valid_)) {
     tag_cache_dirty(body_collision_shapes_valid_);
   }
+  if (is_cache_dirty(other.body_mass_valid_)) {
+    tag_cache_dirty(body_mass_valid_);
+  }
   if (is_cache_dirty(other.constraints_valid_)) {
     tag_cache_dirty(constraints_valid_);
   }
@@ -232,6 +235,11 @@ void PhysicsWorldState::tag_body_topology_changed()
 void PhysicsWorldState::tag_body_collision_shape_changed()
 {
   tag_cache_dirty(body_collision_shapes_valid_);
+}
+
+void PhysicsWorldState::tag_body_mass_changed()
+{
+  tag_cache_dirty(body_mass_valid_);
 }
 
 void PhysicsWorldState::tag_constraints_changed()
@@ -338,6 +346,7 @@ void PhysicsWorldState::ensure_bodies()
 void PhysicsWorldState::ensure_bodies_no_lock()
 {
   this->ensure_body_collision_shapes_no_lock();
+  this->ensure_body_mass_no_lock();
 }
 
 void PhysicsWorldState::ensure_body_collision_shapes_no_lock()
@@ -358,6 +367,26 @@ void PhysicsWorldState::ensure_body_collision_shapes_no_lock()
 
   const IndexMask selection = world_data_->bodies().index_range();
   world_data_->set_body_shapes(selection, shapes_, body_shapes);
+}
+
+void PhysicsWorldState::ensure_body_mass_no_lock()
+{
+  if (!is_cache_dirty(body_mass_valid_)) {
+    return;
+  }
+  if (world_data_ == nullptr) {
+    return;
+  }
+
+  AttributeAccessor cached_attributes = this->state_attributes();
+  const VArraySpan<float> masses = physics_attributes::physics_attribute_lookup_or_default<float>(
+      cached_attributes, BodyAttribute::mass);
+  const VArraySpan<float4x4> inertias =
+      physics_attributes::physics_attribute_lookup_or_default<float4x4>(cached_attributes,
+                                                                        BodyAttribute::inertia);
+
+  const IndexMask selection = world_data_->bodies().index_range();
+  world_data_->set_body_mass(selection, masses, inertias);
 }
 
 void PhysicsWorldState::ensure_constraints()
@@ -900,37 +929,6 @@ void PhysicsWorldState::step_simulation(float delta_time, int collision_steps)
   this->tag_read_cache_changed();
 }
 
-void PhysicsWorldState::compute_local_inertia(const IndexMask &selection)
-{
-  using BodyAttribute = PhysicsBodyAttribute;
-
-  MutableAttributeAccessor attributes = this->attributes_for_write();
-  const VArray<int> body_shapes = *attributes.lookup_or_default<int>(
-      physics_attribute_name(BodyAttribute::collision_shape), AttrDomain::Point, -1);
-  const VArray<float> masses = *attributes.lookup_or_default<float>(
-      physics_attribute_name(BodyAttribute::mass), AttrDomain::Point, 1.0f);
-  AttributeWriter<float3> local_inertias = attributes.lookup_or_add_for_write<float3>(
-      physics_attribute_name(BodyAttribute::inertia), AttrDomain::Point);
-
-  selection.foreach_index([&](const int body_i) {
-    const int shape_index = body_shapes[body_i];
-    if (!shapes_.index_range().contains(shape_index)) {
-      local_inertias.varray.set(body_i, float3(1.0f));
-      return;
-    }
-    const InstanceReference &reference = shapes_[shape_index];
-    const CollisionShape *shape = reference.geometry_set().get_collision_shape();
-    if (shape == nullptr) {
-      local_inertias.varray.set(body_i, float3(1.0f));
-      return;
-    }
-
-    local_inertias.varray.set(body_i, shape->calculate_local_inertia(masses[body_i]));
-  });
-
-  local_inertias.finish();
-}
-
 void PhysicsWorldState::apply_force(const IndexMask &selection,
                                     const VArray<float3> &forces,
                                     const VArray<float3> &relative_positions)
@@ -1269,14 +1267,14 @@ AttributeWriter<float> PhysicsGeometry::body_masses_for_write()
       physics_attribute_name(BodyAttribute::mass), AttrDomain::Point);
 }
 
-VArray<float3> PhysicsGeometry::body_inertias() const
+VArray<float4x4> PhysicsGeometry::body_inertias() const
 {
-  return *attributes().lookup<float3>(physics_attribute_name(BodyAttribute::inertia));
+  return *attributes().lookup<float4x4>(physics_attribute_name(BodyAttribute::inertia));
 }
 
-AttributeWriter<float3> PhysicsGeometry::body_inertias_for_write()
+AttributeWriter<float4x4> PhysicsGeometry::body_inertias_for_write()
 {
-  return attributes_for_write().lookup_for_write<float3>(
+  return attributes_for_write().lookup_for_write<float4x4>(
       physics_attribute_name(BodyAttribute::inertia));
 }
 

@@ -113,7 +113,11 @@ class CollisionShape {
   float3 center_of_mass() const;
   Bounds<float3> local_bounds() const;
 
-  float3 calculate_local_inertia(float mass) const;
+  float density() const;
+  void set_density(const float);
+
+  float mass() const;
+  float4x4 inertia() const;
 
   GeometrySet create_mesh_instances() const;
 

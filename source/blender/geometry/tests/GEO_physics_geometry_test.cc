@@ -149,6 +149,45 @@ struct TestAttributeOwner {
 
 const StringRefNull TestAttributeOwner::test_attribute_name = "test";
 
+static void compute_body_inertia(bke::PhysicsGeometry &physics, const IndexMask &selection)
+{
+  using BodyAttribute = PhysicsBodyAttribute;
+
+  MutableAttributeAccessor attributes = physics.attributes_for_write();
+  const VArray<int> body_shapes = *attributes.lookup_or_default<int>(
+      bke::physics_attributes::physics_attribute_name(BodyAttribute::collision_shape),
+      AttrDomain::Point,
+      -1);
+  const VArray<float> masses = *attributes.lookup_or_default<float>(
+      bke::physics_attributes::physics_attribute_name(BodyAttribute::mass),
+      AttrDomain::Point,
+      1.0f);
+  AttributeWriter<float3> local_inertias = attributes.lookup_or_add_for_write<float3>(
+      bke::physics_attributes::physics_attribute_name(BodyAttribute::inertia), AttrDomain::Point);
+
+  selection.foreach_index([&](const int body_i) {
+    const int shape_index = body_shapes[body_i];
+    const Span<bke::InstanceReference> shapes = physics.state().shapes();
+    if (!shapes.index_range().contains(shape_index)) {
+      local_inertias.varray.set(body_i, float3(1.0f));
+      return;
+    }
+    const InstanceReference &reference = shapes[shape_index];
+    const CollisionShape *shape = reference.geometry_set().get_collision_shape();
+    if (shape == nullptr) {
+      local_inertias.varray.set(body_i, float3(1.0f));
+      return;
+    }
+
+    const float4x4 inertia_tensor = shape->inertia();
+    const float3 inertia_diagonal = float3(
+        inertia_tensor.x.x, inertia_tensor.y.y, inertia_tensor.z.z);
+    local_inertias.varray.set(body_i, inertia_diagonal);
+  });
+
+  local_inertias.finish();
+}
+
 TEST(attribute_accessor, PartialSpanWriter)
 {
   TestAttributeOwner attribute_owner;
@@ -666,7 +705,7 @@ TEST_F(PhysicsGeometryTest, custom_data_body_shapes)
     AttributeWriter<int> body_shapes = geo.body_shapes_for_write();
     body_shapes.varray.set_all({0, 1, -1});
     body_shapes.finish();
-    geo.state_for_write().compute_local_inertia(geo.bodies_range());
+    compute_body_inertia(geo, geo.bodies_range());
   }
 }
 
@@ -757,7 +796,7 @@ TEST_F(PhysicsGeometryTest, assign_collision_shapes)
     body_shapes.varray.set(1, handle1);
     body_shapes.varray.set(3, handle2);
     body_shapes.finish();
-    geo1.state_for_write().compute_local_inertia(geo1.bodies_range());
+    compute_body_inertia(geo1, geo1.bodies_range());
   }
   test_data(geo1, false, 4, 0, 2);
   {
@@ -816,7 +855,7 @@ TEST_F(PhysicsGeometryTest, realize_instances)
     AttributeWriter<int> body_shapes = geo1->body_shapes_for_write();
     body_shapes.varray.set_all({2, 0, 2, -1, 1});
     body_shapes.finish();
-    geo1->state_for_write().compute_local_inertia(geo1->bodies_range());
+    compute_body_inertia(*geo1, geo1->bodies_range());
   }
 
   bke::PhysicsGeometry *geo2 = new bke::PhysicsGeometry(0, 0);
@@ -836,7 +875,7 @@ TEST_F(PhysicsGeometryTest, realize_instances)
     AttributeWriter<int> body_shapes = geo3->body_shapes_for_write();
     body_shapes.varray.set_all({0, 100});
     body_shapes.finish();
-    geo3->state_for_write().compute_local_inertia(geo3->bodies_range());
+    compute_body_inertia(*geo3, geo3->bodies_range());
   }
   test_data(*geo3, true, 2, 1, 1);
 
@@ -931,7 +970,7 @@ TEST_F(PhysicsGeometryTest, join_geometry)
     constraint_body2.finish();
     constraint_frame1.finish();
     constraint_frame2.finish();
-    geo1->state_for_write().compute_local_inertia(geo1->bodies_range());
+    compute_body_inertia(*geo1, geo1->bodies_range());
   }
   test_data(*geo1, false, 5, 2, 3);
 
@@ -968,7 +1007,7 @@ TEST_F(PhysicsGeometryTest, join_geometry)
     constraint_body2.finish();
     constraint_frame1.finish();
     constraint_frame2.finish();
-    geo3->state_for_write().compute_local_inertia(geo3->bodies_range());
+    compute_body_inertia(*geo3, geo3->bodies_range());
   }
   test_data(*geo3, true, 2, 1, 1);
 

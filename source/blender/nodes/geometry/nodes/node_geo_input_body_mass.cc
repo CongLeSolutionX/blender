@@ -12,7 +12,7 @@ namespace blender::nodes::node_geo_input_body_mass_cc {
 static void node_declare(NodeDeclarationBuilder &b)
 {
   b.add_output<decl::Float>("Mass").field_source();
-  b.add_output<decl::Vector>("Inertia").field_source();
+  b.add_output<decl::Matrix>("Inertia").field_source();
 }
 
 static void node_geo_exec(GeoNodeExecParams params)
@@ -21,7 +21,7 @@ static void node_geo_exec(GeoNodeExecParams params)
                     AttributeFieldInput::Create<float>(bke::PhysicsGeometry::attribute_name(
                         bke::PhysicsGeometry::BodyAttribute::mass)));
   params.set_output("Inertia",
-                    AttributeFieldInput::Create<float3>(bke::PhysicsGeometry::attribute_name(
+                    AttributeFieldInput::Create<float4x4>(bke::PhysicsGeometry::attribute_name(
                         bke::PhysicsGeometry::BodyAttribute::inertia)));
 }
 

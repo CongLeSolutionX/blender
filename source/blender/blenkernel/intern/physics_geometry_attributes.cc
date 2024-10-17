@@ -382,7 +382,7 @@ const CPPType &physics_attribute_type(PhysicsBodyAttribute attribute)
     case BodyAttribute::mass:
       return CPPType::get<float>();
     case BodyAttribute::inertia:
-      return CPPType::get<float3>();
+      return CPPType::get<float4x4>();
     case BodyAttribute::position:
       return CPPType::get<float3>();
     case BodyAttribute::rotation:
@@ -466,7 +466,7 @@ const void *physics_attribute_default_value(PhysicsBodyAttribute attribute)
       return &default_value;
     }
     case BodyAttribute::inertia: {
-      static const float3 default_value = float3(1.0f);
+      static const float4x4 default_value = float4x4::identity();
       return &default_value;
     }
     case BodyAttribute::is_active: {
@@ -650,10 +650,21 @@ static WorldStateUpdateOnChange world_state_update_on_change_fn(
   using BodyAttribute = PhysicsBodyAttribute;
 
   switch (attribute) {
-    case BodyAttribute::collision_shape:
+    case BodyAttribute::collision_shape: {
+      static WorldStateUpdateOnChange update = [](void *owner) {
+        PhysicsWorldState &state = get_physics_owner(owner);
+        state.tag_body_collision_shape_changed();
+      };
+      return update;
+    }
     case BodyAttribute::mass:
-    case BodyAttribute::inertia:
-      return nullptr;
+    case BodyAttribute::inertia: {
+      static WorldStateUpdateOnChange update = [](void *owner) {
+        PhysicsWorldState &state = get_physics_owner(owner);
+        state.tag_body_mass_changed();
+      };
+      return update;
+    }
 
     case BodyAttribute::motion_type:
     case BodyAttribute::position:

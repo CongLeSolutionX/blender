@@ -17,7 +17,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Geometry>("Points").supported_type(GeometryComponent::Type::PointCloud);
   b.add_input<decl::Bool>("Selection").default_value(true).field_on({0}).hide_value();
   b.add_input<decl::Float>("Mass").default_value(1.0f).field_on({0});
-  b.add_input<decl::Vector>("Inertia").field_on({0}).hide_value();
+  b.add_input<decl::Matrix>("Inertia").field_on({0}).hide_value();
   b.add_input<decl::Geometry>("Shapes").description(
       "Collision shapes to choose from for each body");
   b.add_input<decl::Int>("Shape Index")
@@ -35,7 +35,7 @@ static void node_declare(NodeDeclarationBuilder &b)
 static void geometry_set_points_to_rigid_bodies(GeometrySet &geometry_set,
                                                 Field<bool> &selection_field,
                                                 Field<float> &mass_field,
-                                                Field<float3> &inertia_field,
+                                                Field<float4x4> &inertia_field,
                                                 Field<float3> &position_field,
                                                 Field<math::Quaternion> &rotation_field,
                                                 Field<float3> &velocity_field,
@@ -64,7 +64,7 @@ static void geometry_set_points_to_rigid_bodies(GeometrySet &geometry_set,
   const IndexMask selection = field_evaluator.get_evaluated_selection_as_mask();
 
   const VArray<float> src_masses = field_evaluator.get_evaluated<float>(0);
-  const VArray<float3> src_inertias = field_evaluator.get_evaluated<float3>(1);
+  const VArray<float4x4> src_inertias = field_evaluator.get_evaluated<float4x4>(1);
   const VArray<float3> src_positions = field_evaluator.get_evaluated<float3>(2);
   const VArray<math::Quaternion> src_rotations = field_evaluator.get_evaluated<math::Quaternion>(
       3);
@@ -93,7 +93,7 @@ static void geometry_set_points_to_rigid_bodies(GeometrySet &geometry_set,
 
   AttributeWriter<int> dst_body_shapes = physics->body_shapes_for_write();
   AttributeWriter<float> dst_masses = physics->body_masses_for_write();
-  AttributeWriter<float3> dst_inertias = physics->body_inertias_for_write();
+  AttributeWriter<float4x4> dst_inertias = physics->body_inertias_for_write();
   AttributeWriter<float3> dst_positions = physics->body_positions_for_write();
   AttributeWriter<math::Quaternion> dst_rotations = physics->body_rotations_for_write();
   AttributeWriter<float3> dst_velocities = physics->body_velocities_for_write();
@@ -129,7 +129,7 @@ static void node_geo_exec(GeoNodeExecParams params)
   GeometrySet geometry_set = params.extract_input<GeometrySet>("Points");
   Field<bool> selection_field = params.extract_input<Field<bool>>("Selection");
   Field<float> mass_field = params.extract_input<Field<float>>("Mass");
-  Field<float3> inertia_field = params.extract_input<Field<float3>>("Inertia");
+  Field<float4x4> inertia_field = params.extract_input<Field<float4x4>>("Inertia");
   Field<float3> position_field = params.extract_input<Field<float3>>("Position");
   Field<math::Quaternion> rotation_field = params.extract_input<Field<math::Quaternion>>(
       "Rotation");

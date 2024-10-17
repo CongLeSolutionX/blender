@@ -80,7 +80,7 @@ static void node_geo_exec(GeoNodeExecParams params)
   using ShapeType = bke::CollisionShapeType;
   const ShapeType shape_type = ShapeType(params.node().custom1);
 
-  const GeometrySet geometry_set = params.extract_input<bke::GeometrySet>("Geometry");
+  const GeometrySet geometry_set = params.extract_input<bke::GeometrySet>("Collision Shape");
   const bke::CollisionShape *shape = geometry_set.get_collision_shape();
   if (shape == nullptr || shape->type() != shape_type) {
     params.set_default_remaining_outputs();

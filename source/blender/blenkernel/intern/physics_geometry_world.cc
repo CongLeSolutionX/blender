@@ -867,6 +867,25 @@ void JoltPhysicsWorldData::set_body_shapes(const IndexMask &selection,
   });
 }
 
+void JoltPhysicsWorldData::set_body_mass(const IndexMask &selection,
+                                         const Span<float> masses,
+                                         const Span<float4x4> inertias)
+{
+  selection.foreach_index([&](const int index) {
+    JPH::Body *body = this->bodies_[index];
+    if (body->IsStatic()) {
+      return;
+    }
+
+    JPH::MassProperties mass_props;
+    mass_props.mMass = to_jolt(masses[index]);
+    mass_props.mInertia = to_jolt(inertias[index]);
+
+    JPH::MotionProperties &motion_props = *body->GetMotionProperties();
+    motion_props.SetMassProperties(motion_props.GetAllowedDOFs(), mass_props);
+  });
+}
+
 void JoltPhysicsWorldData::apply_force(const IndexMask &selection,
                                        const VArray<float3> &forces,
                                        const VArray<float3> &positions)
@@ -1009,66 +1028,6 @@ MutableAttributeAccessor JoltPhysicsWorldData::attributes_for_write()
  * \{ */
 
 namespace physics_world_attribute_functions {
-
-static void physics_world_attribute_finish(PhysicsWorldData & /*world_data*/,
-                                           const PhysicsBodyAttribute attribute)
-{
-  using BodyAttribute = PhysicsBodyAttribute;
-
-  switch (attribute) {
-    case BodyAttribute::motion_type:
-    case BodyAttribute::collision_shape:
-    case BodyAttribute::mass:
-    case BodyAttribute::inertia:
-    case BodyAttribute::position:
-    case BodyAttribute::rotation:
-    case BodyAttribute::velocity:
-    case BodyAttribute::angular_velocity:
-    case BodyAttribute::is_active:
-    case BodyAttribute::allow_sleep:
-    case BodyAttribute::friction:
-    case BodyAttribute::restitution:
-    case BodyAttribute::linear_damping:
-    case BodyAttribute::angular_damping:
-    case BodyAttribute::total_force:
-    case BodyAttribute::total_torque:
-      break;
-  }
-}
-
-static void physics_world_attribute_finish(PhysicsWorldData & /*world_data*/,
-                                           const PhysicsWorldData::ConstraintAttribute attribute)
-{
-  using ConstraintAttribute = PhysicsWorldData::ConstraintAttribute;
-
-  switch (attribute) {
-    case ConstraintAttribute::type:
-    case ConstraintAttribute::body1:
-    case ConstraintAttribute::body2:
-    case ConstraintAttribute::enabled:
-    case ConstraintAttribute::frame1:
-    case ConstraintAttribute::frame2:
-    case ConstraintAttribute::limit_min_axis:
-    case ConstraintAttribute::limit_max_axis:
-    case ConstraintAttribute::limit_min_angle:
-    case ConstraintAttribute::limit_max_angle:
-    case ConstraintAttribute::spring_stiffness_axis:
-    case ConstraintAttribute::spring_stiffness_angle:
-    case ConstraintAttribute::spring_damping_axis:
-    case ConstraintAttribute::spring_damping_angle:
-    case ConstraintAttribute::max_friction_axis:
-    case ConstraintAttribute::max_friction_angle:
-    case ConstraintAttribute::motor_spring_stiffness_axis:
-    case ConstraintAttribute::motor_spring_stiffness_angle:
-    case ConstraintAttribute::motor_spring_damping_axis:
-    case ConstraintAttribute::motor_spring_damping_angle:
-    case ConstraintAttribute::min_motor_force_axis:
-    case ConstraintAttribute::min_motor_force_angle:
-    case ConstraintAttribute::max_motor_force_axis:
-    case ConstraintAttribute::max_motor_force_angle:
-      break;
-  }
-}
 
 static int motion_type_get_fn(const JPH::BodyInterface & /*body_interface*/, const JPH::Body &body)
 {
@@ -1653,7 +1612,7 @@ GVMutableArray physics_attribute_cache_vmutablearray(PhysicsBodyAttribute attrib
     case BodyAttribute::mass:
       return VMutableArray<float>::For<VArrayImpl_For_ValidatedSpan<float>>(data);
     case BodyAttribute::inertia:
-      return VMutableArray<float3>::For<VArrayImpl_For_ValidatedSpan<float3>>(data);
+      return VMutableArray<float4x4>::For<VArrayImpl_For_ValidatedSpan<float4x4>>(data);
     case BodyAttribute::position:
       return VMutableArray<float3>::For<VArrayImpl_For_ValidatedSpan<float3>>(data);
     case BodyAttribute::rotation:
@@ -1788,8 +1747,6 @@ GAttributeWriter PhysicsWorldBodyAttributeProvider::try_get_for_write(void *owne
                                            access_info = access_info_,
                                            update_on_change = update_on_change_,
                                            owner]() {
-    PhysicsWorldData &world_data = *access_info.get_world_data(owner);
-    physics_world_attribute_finish(world_data, attribute);
     if (update_on_change) {
       update_on_change(owner);
     }
@@ -1845,8 +1802,6 @@ GAttributeWriter PhysicsWorldConstraintAttributeProvider::try_get_for_write(void
                                            access_info = access_info_,
                                            update_on_change = update_on_change_,
                                            owner]() {
-    PhysicsWorldData &world_data = *access_info.get_world_data(owner);
-    physics_world_attribute_finish(world_data, attribute);
     if (update_on_change) {
       update_on_change(owner);
     }

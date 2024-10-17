@@ -272,16 +272,40 @@ Bounds<float3> CollisionShape::local_bounds() const
   return impl_ ? to_blender(impl_->GetLocalBounds()) : Bounds<float3>{};
 }
 
-float3 CollisionShape::calculate_local_inertia(const float /*mass*/) const
+float CollisionShape::density() const
+{
+  if (!impl_ || impl_->GetType() != JPH::EShapeType::Convex) {
+    return 0.0f;
+  }
+  const auto *convex_shape = static_cast<const JPH::ConvexShape *>(impl_);
+  return to_blender(convex_shape->GetDensity());
+}
+
+void CollisionShape::set_density(const float density)
+{
+  if (!impl_ || impl_->GetType() != JPH::EShapeType::Convex) {
+    return;
+  }
+  auto *convex_shape = static_cast<JPH::ConvexShape *>(impl_);
+  convex_shape->SetDensity(density);
+}
+
+float CollisionShape::mass() const
 {
   if (!impl_) {
-    return float3(0);
+    return 0.0f;
   }
-  // XXX This assumes the principal components are aligned with the canonical axes.
-  // For complex shapes (e.g. mesh) this is not generally the case, the principal axes are
-  // rotated. The DecomposePrincipalMomentsOfInertia function can be used to get the rotation.
   const JPH::MassProperties mass_props = impl_->GetMassProperties();
-  return to_blender(mass_props.mInertia.GetDiagonal3());
+  return to_blender(mass_props.mMass);
+}
+
+float4x4 CollisionShape::inertia() const
+{
+  if (!impl_) {
+    return float4x4::zero();
+  }
+  const JPH::MassProperties mass_props = impl_->GetMassProperties();
+  return to_blender(mass_props.mInertia);
 }
 
 GeometrySet CollisionShape::create_mesh_instances() const

@@ -143,10 +143,10 @@ class PhysicsWorldState : public ImplicitSharingMixin {
   /* Valid when body collision shape pointers match pointers from the
    * shapes list, as stored in the body shapes index attribute. */
   mutable CacheFlag body_collision_shapes_valid_ = false;
+  /* Valid when body mass properties match the write cache. */
+  mutable CacheFlag body_mass_valid_ = false;
   /* Valid when internal constraints have been updated to specified types and bodies. */
   mutable CacheFlag constraints_valid_ = false;
-  ///* Valid when constraint references to disable collisions have been updated. */
-  // mutable CacheFlag constraint_disable_collision_valid_ = false;
 
   int body_num_;
   int constraint_num_;
@@ -192,6 +192,7 @@ class PhysicsWorldState : public ImplicitSharingMixin {
   void tag_read_cache_changed();
   void tag_body_topology_changed();
   void tag_body_collision_shape_changed();
+  void tag_body_mass_changed();
   void tag_constraints_changed();
   // void tag_constraint_disable_collision_changed();
   void tag_shapes_changed();
@@ -259,8 +260,6 @@ class PhysicsWorldState : public ImplicitSharingMixin {
   void set_solver_iterations(int num_solver_iterations);
   void set_split_impulse(bool split_impulse);
 
-  void compute_local_inertia(const IndexMask &selection);
-
   void step_simulation(float delta_time, int collision_steps = 1);
 
   void apply_force(const IndexMask &selection,
@@ -300,6 +299,7 @@ class PhysicsWorldState : public ImplicitSharingMixin {
   void ensure_read_cache_no_lock() const;
   void ensure_bodies_no_lock();
   void ensure_body_collision_shapes_no_lock();
+  void ensure_body_mass_no_lock();
   void ensure_constraints_no_lock();
   // void ensure_constraint_disable_collision_no_lock();
   void ensure_attribute_cache(BodyAttribute attribute);
@@ -358,8 +358,8 @@ class PhysicsGeometry {
   VArray<float> body_masses() const;
   AttributeWriter<float> body_masses_for_write();
 
-  VArray<float3> body_inertias() const;
-  AttributeWriter<float3> body_inertias_for_write();
+  VArray<float4x4> body_inertias() const;
+  AttributeWriter<float4x4> body_inertias_for_write();
 
   VArray<float3> body_positions() const;
   AttributeWriter<float3> body_positions_for_write();

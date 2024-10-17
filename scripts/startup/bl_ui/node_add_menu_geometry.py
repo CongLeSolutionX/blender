@@ -560,9 +560,9 @@ class NODE_MT_category_simulation_read(Menu):
         layout.separator()
         # TODO add constraint inputs here
         layout.separator()
-        node_add_menu.add_node_type(layout, "GeometryNodeInputShapeInfo")
         node_add_menu.add_node_type(layout, "GeometryNodeInputShapeCenterOfMass")
-        node_add_menu.add_node_type(layout, "GeometryNodeCollisionShapeInertia")
+        node_add_menu.add_node_type(layout, "GeometryNodeInputShapeInfo")
+        node_add_menu.add_node_type(layout, "GeometryNodeInputShapeMass")
         node_add_menu.add_node_type(layout, "GeometryNodeShapeGeometry")
         node_add_menu.draw_assets_for_catalog(layout, "Simulation/Read")
 
@@ -575,6 +575,7 @@ class NODE_MT_category_simulation_write(Menu):
         layout = self.layout
         node_add_menu.add_node_type(layout, "GeometryNodeSetBodyMotionType")
         node_add_menu.add_node_type(layout, "GeometryNodeSetBodyActivationState")
+        node_add_menu.add_node_type(layout, "GeometryNodeSetShapeDensity")
         node_add_menu.draw_assets_for_catalog(layout, "Simulation/Write")
 
 
