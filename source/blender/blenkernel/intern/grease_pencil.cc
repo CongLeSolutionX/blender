@@ -782,12 +782,17 @@ void Drawing::tag_positions_changed()
   this->tag_texture_matrices_changed();
 }
 
-void Drawing::tag_positions_changed(const IndexMask &curves_to_update)
+void Drawing::tag_positions_changed(const IndexMask &changed_curves)
 {
-  if (curves_to_update.is_empty()) {
+  if (changed_curves.is_empty()) {
     return;
   }
-  if (curves_to_update.size() > this->strokes().curves_num() / 2) {
+  /* If more than half of the curves have changed, update the entire cache instead.
+   * The assumption here is that it's better to lazily compute the caches if more than half of the
+   * curves need to be updated.
+   * TODO: This could probably be a bit more rigorous once this function gets used in more places.
+   */
+  if (changed_curves.size() > this->strokes().curves_num() / 2) {
     this->tag_positions_changed();
     return;
   }
@@ -797,13 +802,13 @@ void Drawing::tag_positions_changed(const IndexMask &curves_to_update)
     this->tag_positions_changed();
     return;
   }
-  /* Positions needs to be tagged first, because the cache updates just after need the positions to
-   * be up-to-date. */
+  /* Positions needs to be tagged first, because the triangle cache updates just after need the
+   * positions to be up-to-date. */
   this->strokes_for_write().tag_positions_changed();
   this->runtime->curve_plane_normals_cache.update([&](Vector<float3> &normals) {
     const CurvesGeometry &curves = this->strokes();
     update_curve_plane_normal_cache(
-        curves.positions(), curves.points_by_curve(), curves_to_update, normals);
+        curves.positions(), curves.points_by_curve(), changed_curves, normals);
   });
   this->runtime->triangles_cache.update([&](Vector<uint3> &triangles) {
     const CurvesGeometry &curves = this->strokes();
@@ -824,12 +829,17 @@ void Drawing::tag_topology_changed()
   this->strokes_for_write().tag_topology_changed();
 }
 
-void Drawing::tag_topology_changed(const IndexMask &curves_to_update)
+void Drawing::tag_topology_changed(const IndexMask &changed_curves)
 {
-  if (curves_to_update.is_empty()) {
+  if (changed_curves.is_empty()) {
     return;
   }
-  if (curves_to_update.size() > this->strokes().curves_num() / 2) {
+  /* If more than half of the curves have changed, update the entire cache instead.
+   * The assumption here is that it's better to lazily compute the caches if more than half of the
+   * curves need to be updated.
+   * TODO: This could probably be a bit more rigorous once this function gets used in more places.
+   */
+  if (changed_curves.size() > this->strokes().curves_num() / 2) {
     this->tag_topology_changed();
     return;
   }
@@ -839,13 +849,13 @@ void Drawing::tag_topology_changed(const IndexMask &curves_to_update)
     this->tag_topology_changed();
     return;
   }
-  /* Positions needs to be tagged first, because the cache updates just after need the positions to
-   * be up-to-date. */
+  /* Positions needs to be tagged first, because the triangle cache updates just after need the
+   * positions to be up-to-date. */
   this->strokes_for_write().tag_positions_changed();
   this->runtime->curve_plane_normals_cache.update([&](Vector<float3> &normals) {
     const CurvesGeometry &curves = this->strokes();
     update_curve_plane_normal_cache(
-        curves.positions(), curves.points_by_curve(), curves_to_update, normals);
+        curves.positions(), curves.points_by_curve(), changed_curves, normals);
   });
   /* Copy the current triangle offsets. These are used to copy over the triangle data for curves
    * that don't need to be updated. */
@@ -860,7 +870,7 @@ void Drawing::tag_topology_changed(const IndexMask &curves_to_update)
     const OffsetIndices<int> dst_triangle_offsets = this->triangle_offsets();
 
     IndexMaskMemory memory;
-    const IndexMask curves_to_copy = curves_to_update.complement(curves.curves_range(), memory);
+    const IndexMask curves_to_copy = changed_curves.complement(curves.curves_range(), memory);
 
     const Vector<uint3> src_triangles(triangles);
     triangles.reinitialize(dst_triangle_offsets.total_size());
@@ -875,7 +885,7 @@ void Drawing::tag_topology_changed(const IndexMask &curves_to_update)
                           this->curve_plane_normals(),
                           curves.evaluated_points_by_curve(),
                           dst_triangle_offsets,
-                          curves_to_update,
+                          changed_curves,
                           triangles);
   });
   this->tag_texture_matrices_changed();
