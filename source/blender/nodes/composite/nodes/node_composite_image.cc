@@ -763,6 +763,8 @@ class RenderLayerOperation : public NodeOperation {
         return "compositor_read_input_vector";
       case ResultType::Color:
         return "compositor_read_input_color";
+      case ResultType::Float3:
+        return "compositor_read_input_vector";
       default:
         /* Other types are internal and needn't be handled by operations. */
         break;
