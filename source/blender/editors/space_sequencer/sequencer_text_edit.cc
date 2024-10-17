@@ -452,7 +452,7 @@ void SEQUENCER_OT_text_insert(wmOperatorType *ot)
       ot->srna, "string", nullptr, 512, "String", "String to be inserted at cursor position");
 }
 
-enum { DEL_NEXT_CHAR, DEL_PREV_CHAR, DEL_SELECTION, DEL_NEXT_SEL, DEL_PREV_SEL };
+enum { DEL_NEXT_SEL, DEL_PREV_SEL };
 static const EnumPropertyItem delete_type_items[] = {
     {DEL_NEXT_SEL, "NEXT_OR_SELECTION", 0, "Next or Selection", ""},
     {DEL_PREV_SEL, "PREVIOUS_OR_SELECTION", 0, "Previous or Selection", ""},
@@ -518,7 +518,7 @@ void SEQUENCER_OT_text_delete(wmOperatorType *ot)
   RNA_def_enum(ot->srna,
                "type",
                delete_type_items,
-               DEL_PREV_CHAR,
+               DEL_NEXT_SEL,
                "Type",
                "Which part of the text to delete");
 }

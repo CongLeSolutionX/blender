@@ -3093,7 +3093,6 @@ def _seq_preview_text_edit_cursor_move():
                  {"properties": [prop, ('select_text', True)]}))
     return items
 
-
 def km_sequencerpreview(params):
     items = []
     keymap = (
@@ -3107,14 +3106,8 @@ def km_sequencerpreview(params):
         *_seq_preview_text_edit_cursor_move(),
         ("sequencer.text_delete", {"type": 'DEL', "value": 'PRESS', "repeat": True},
          {"properties": [("type", 'NEXT_OR_SELECTION')]}),
-        ("sequencer.text_delete", {"type": 'DEL', "value": 'PRESS', "ctrl": True, "repeat": True},
-         {"properties": [("type", 'NEXT_WORD')]}),
         ("sequencer.text_delete", {"type": 'BACK_SPACE', "value": 'PRESS', "repeat": True},
          {"properties": [("type", 'PREVIOUS_OR_SELECTION')]}),
-        ("sequencer.text_delete", {"type": 'BACK_SPACE', "value": 'PRESS', "shift": True, "repeat": True},
-         {"properties": [("type", 'PREVIOUS_OR_SELECTION')]}),
-        ("sequencer.text_delete", {"type": 'BACK_SPACE', "value": 'PRESS', "ctrl": True, "repeat": True},
-         {"properties": [("type", 'PREVIOUS_WORD')]}),
         ("sequencer.text_line_break", {"type": 'RET', "value": 'PRESS', "repeat": True}, None),
         ("sequencer.text_line_break", {"type": 'NUMPAD_ENTER', "value": 'PRESS', "repeat": True}, None),
         ("sequencer.text_select_all", {"type": 'A', "value": 'PRESS', "ctrl": True}, None),

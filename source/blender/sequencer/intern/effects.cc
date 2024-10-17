@@ -2501,10 +2501,11 @@ static ImBuf *do_gaussian_blur_effect(const SeqRenderData *context,
 /** \name Text Effect
  * \{ */
 
+/* `data->text[0] == 0` is ignored on purpose in order to make it possible to edit  */
 bool SEQ_effects_can_render_text(const Sequence *seq)
 {
   TextVars *data = static_cast<TextVars *>(seq->effectdata);
-  if (data->text[0] == 0 || data->text_size < 1.0f ||
+  if (data->text_size < 1.0f ||
       ((data->color[3] == 0.0f) &&
        (data->shadow_color[3] == 0.0f || (data->flag & SEQ_TEXT_SHADOW) == 0) &&
        (data->outline_color[3] == 0.0f || data->outline_width <= 0.0f ||
