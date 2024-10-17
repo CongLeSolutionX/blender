@@ -1287,12 +1287,6 @@ static void GREASE_PENCIL_OT_interpolate_sequence(wmOperatorType *ot)
                "Layers included in the interpolation");
 
   RNA_def_boolean(ot->srna,
-                  "interpolate_selected_only",
-                  false,
-                  "Only Selected",
-                  "Interpolate only selected strokes");
-
-  RNA_def_boolean(ot->srna,
                   "exclude_breakdowns",
                   false,
                   "Exclude Breakdowns",
