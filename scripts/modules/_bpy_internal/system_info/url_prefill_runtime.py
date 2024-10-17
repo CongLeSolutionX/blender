@@ -52,5 +52,30 @@ def url_from_blender(*, addon_info=None):
         query_params["addon_name"] = addon_info_lines[0].removeprefix("Name: ")
         query_params["addon_author"] = addon_info_lines[1].removeprefix("Author: ")
 
-    query_str = urllib.parse.urlencode(query_params)
-    return "https://redirect.blender.org/?" + query_str
+
+
+    # The repo you want the bug reports to go to. You might want "pragma37/blender"
+    repo = "Alaska/bug-report-testing"
+    # The path to your report template in your repo.
+    # You may want to use ".gitea/issue_template/bug.yaml" which is what the official Blender repo uses. Especially if it's on a fork of the Blender repo.
+    path_to_report_template = ".gitea/issue_template/blender-official-bug.yaml"
+
+    # A reconstruction of the expected data to go on the report
+    body_string = "**System Information**\n"
+    body_string += f"Operating System: {query_params['os']}\n"
+    body_string += f"Graphics card: {query_params['gpu']}\n\n"
+    body_string += "**Blender Version**\n"
+    body_string += f"Broken: {query_params['broken_version']}\n"
+    body_string += "Worked: (newest version of Blender that worked as expected)\n\n"
+    body_string += "**Short description of error**\n"
+    body_string += "[Please fill out a short description of the error here]\n\n"
+    body_string += "**Exact steps for others to reproduce the error**\n"
+    body_string += "[Please describe the exact steps needed to reproduce the issue]\n"
+    body_string += "[Based on the default startup or an attached .blend file (as simple as possible)]\n"
+
+    full_url = "https://projects.blender.org/"
+    full_url += f"{repo}/issues/new?template="
+    full_url += f"{urllib.parse.quote_plus(path_to_report_template)}&field:body="
+    full_url += f"{urllib.parse.quote_plus(body_string)}"
+
+    return full_url
