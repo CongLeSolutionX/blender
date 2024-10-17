@@ -24,7 +24,6 @@ set(INC
   ../../io/ply
   ../../io/stl
   ../../io/wavefront_obj
-  /usr/local/include/voro++
   # RNA_prototypes.hh
   ${CMAKE_BINARY_DIR}/source/blender/makesrna
 )
