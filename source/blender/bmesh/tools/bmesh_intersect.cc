@@ -147,7 +147,7 @@ struct ISectState {
 };
 
 template<typename MapType, typename K, typename T>
-static bool map_insert_link(MapType &map, K key, T val, bool use_test, MemArena *mem_arena)
+static bool map_insert_link(MapType &map, const K &key, T *val, bool use_test, MemArena *mem_arena)
 {
   LinkBase *ls_base;
   LinkNode *ls;
