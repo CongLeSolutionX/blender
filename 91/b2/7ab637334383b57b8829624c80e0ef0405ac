@@ -9,3 +9,4 @@ Referenced by issue #119544, Regression: On Cage display mode of Armature modifi
 Referenced by pull request #119718, Fix #119544: Cage modifier deformation ignored in next modifier
 Referenced by commit ddcfc46ee6575bc90846e6e0a76ae72cd7313337, Fix #119544: Cage modifier deformation ignored in next modifier
 Referenced by issue #120154, Regression displaying deformed face-normal in edit-mode
+Referenced by issue #129140, Editing mesh through Corrective Smooth results in distortion after exiting Edit Mode
