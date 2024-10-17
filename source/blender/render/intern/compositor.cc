@@ -160,7 +160,9 @@ class Context : public realtime_compositor::Context {
   /* Viewer output result. */
   realtime_compositor::Result viewer_output_result_;
 
-  /* Cached GPU and CPU passes that the compositor took ownership of. */
+  /* Cached GPU and CPU passes that the compositor took ownership of. Those had their reference
+   * count incremented when accessed and need to be freed/have their reference count decremented
+   * when destroying the context. */
   Vector<GPUTexture *> cached_gpu_passes_;
   Vector<ImBuf *> cached_cpu_passes_;
 
