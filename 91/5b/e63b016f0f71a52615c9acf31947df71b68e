@@ -1,2 +1,3 @@
 Referenced by issue #126160, Blender Crashes When Exporting USD with Allow Unicode Enabled and Using the Character "∧"
 Referenced by issue #126175, Bones change the size after export to the USD format
+Referenced by issue #129135, Sculpt: Automask topology option affecting outside vertices
