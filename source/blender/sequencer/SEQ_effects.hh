@@ -92,6 +92,7 @@ SeqEffectHandle SEQ_effect_handle_get(Sequence *seq);
 int SEQ_effect_get_num_inputs(int seq_type);
 void SEQ_effect_text_font_unload(TextVars *data, bool do_id_user);
 void SEQ_effect_text_font_load(TextVars *data, bool do_id_user);
+bool SEQ_effects_can_render_text(const Sequence *seq);
 
 namespace blender::seq {
 

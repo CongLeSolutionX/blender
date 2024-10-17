@@ -1220,6 +1220,10 @@ static void text_edit_draw(const bContext *C)
   }
 
   Sequence *seq = SEQ_select_active_get(CTX_data_scene(C));
+  if (!SEQ_effects_can_render_text(seq)) {
+    return;
+  }
+
   GPUVertFormat *format = immVertexFormat();
   uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
   GPU_line_smooth(true);
@@ -1323,14 +1327,13 @@ void sequencer_draw_preview(const bContext *C,
     Sequence *active_seq = SEQ_select_active_get(scene);
     for (Sequence *seq : strips) {
       seq_draw_image_origin_and_outline(C, seq, seq == active_seq);
+      text_edit_draw(C);
     }
   }
 
   if (draw_gpencil && show_imbuf && (sseq->flag & SEQ_SHOW_OVERLAY)) {
     sequencer_draw_gpencil_overlay(C);
   }
-
-  text_edit_draw(C);
 
 #if 0
   sequencer_draw_maskedit(C, scene, region, sseq);

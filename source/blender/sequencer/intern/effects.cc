@@ -2501,6 +2501,20 @@ static ImBuf *do_gaussian_blur_effect(const SeqRenderData *context,
 /** \name Text Effect
  * \{ */
 
+bool SEQ_effects_can_render_text(const Sequence *seq)
+{
+  TextVars *data = static_cast<TextVars *>(seq->effectdata);
+  if (data->text[0] == 0 || data->text_size < 1.0f ||
+      ((data->color[3] == 0.0f) &&
+       (data->shadow_color[3] == 0.0f || (data->flag & SEQ_TEXT_SHADOW) == 0) &&
+       (data->outline_color[3] == 0.0f || data->outline_width <= 0.0f ||
+        (data->flag & SEQ_TEXT_OUTLINE) == 0)))
+  {
+    return false;
+  }
+  return true;
+}
+
 static void init_text_effect(Sequence *seq)
 {
   TextVars *data;
@@ -2634,17 +2648,7 @@ static int num_inputs_text()
 
 static StripEarlyOut early_out_text(const Sequence *seq, float /*fac*/)
 {
-  /* xxx I want to have runtime data initialized at all times. But this should work to prevent
-   * unnecessary blending. */
-  return StripEarlyOut::NoInput;
-
-  TextVars *data = static_cast<TextVars *>(seq->effectdata);
-  if (data->text[0] == 0 || data->text_size < 1.0f ||
-      ((data->color[3] == 0.0f) &&
-       (data->shadow_color[3] == 0.0f || (data->flag & SEQ_TEXT_SHADOW) == 0) &&
-       (data->outline_color[3] == 0.0f || data->outline_width <= 0.0f ||
-        (data->flag & SEQ_TEXT_OUTLINE) == 0)))
-  {
+  if (!SEQ_effects_can_render_text(seq)) {
     return StripEarlyOut::UseInput1;
   }
   return StripEarlyOut::NoInput;

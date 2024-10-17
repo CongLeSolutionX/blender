@@ -46,7 +46,7 @@ static bool sequencer_text_editing_poll(bContext *C)
   }
 
   Sequence *seq = SEQ_select_active_get(CTX_data_scene(C));
-  if (seq == nullptr || seq->type != SEQ_TYPE_TEXT) {
+  if (seq == nullptr || seq->type != SEQ_TYPE_TEXT || !SEQ_effects_can_render_text(seq)) {
     return false;
   }
 
