@@ -42,6 +42,17 @@ VKFrameBuffer::~VKFrameBuffer()
   if (context.active_framebuffer_get() == this) {
     context.deactivate_framebuffer();
   }
+
+  // TODO: use discard pool.
+  VKDevice &device = VKBackend::get().device;
+  if (vk_framebuffer != VK_NULL_HANDLE) {
+    vkDestroyFramebuffer(device.vk_handle(), vk_framebuffer, nullptr);
+    vk_framebuffer = VK_NULL_HANDLE;
+  }
+  if (vk_render_pass != VK_NULL_HANDLE) {
+    vkDestroyRenderPass(device.vk_handle(), vk_render_pass, nullptr);
+    vk_render_pass = VK_NULL_HANDLE;
+  }
 }
 
 /** \} */
@@ -308,6 +319,14 @@ static void set_load_store(VkRenderingAttachmentInfo &r_rendering_attachment,
   r_rendering_attachment.storeOp = to_vk_attachment_store_op(ls.store_action);
 }
 
+static void set_load_store(VkAttachmentDescription &r_attachment_description,
+                           const GPULoadStore &ls)
+{
+  // TODO: copy_v4_v4(r_attachment_description.clearValue.color.float32, ls.clear_value);
+  r_attachment_description.loadOp = to_vk_attachment_load_op(ls.load_action);
+  r_attachment_description.storeOp = to_vk_attachment_store_op(ls.store_action);
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -557,8 +576,97 @@ void VKFrameBuffer::rendering_reset()
 void VKFrameBuffer::rendering_ensure_render_pass(VKContext &context)
 {
   BLI_assert_unreachable();
-  // create render pass
-  // create frame buffer
+  // TODO: use discard pool.
+  VKDevice &device = VKBackend::get().device;
+  if (vk_framebuffer != VK_NULL_HANDLE) {
+    vkDestroyFramebuffer(device.vk_handle(), vk_framebuffer, nullptr);
+    vk_framebuffer = VK_NULL_HANDLE;
+  }
+  if (vk_render_pass != VK_NULL_HANDLE) {
+    vkDestroyRenderPass(device.vk_handle(), vk_render_pass, nullptr);
+    vk_render_pass = VK_NULL_HANDLE;
+  }
+
+  render_graph::VKResourceAccessInfo access_info;
+  Vector<VkAttachmentDescription> color_attachment_descriptions;
+  Vector<VkAttachmentReference> color_attachment_references;
+  Vector<VkImageView> vk_image_views;
+  VkAttachmentReference depth_attachment_reference = {};
+  bool has_depth_attachment = false;
+  uint32_t layer_count = 1;
+
+  /* Initialize color attachments */
+  for (int color_attachment_index :
+       IndexRange(GPU_FB_COLOR_ATTACHMENT0, GPU_FB_MAX_COLOR_ATTACHMENT))
+  {
+    const GPUAttachment &attachment = attachments_[color_attachment_index];
+    if (attachment.tex == nullptr) {
+      continue;
+    }
+    VKTexture &color_texture = *unwrap(unwrap(attachment.tex));
+    VkAttachmentDescription vk_attachment_description = {};
+
+    vk_attachment_description.format = to_vk_format(color_texture.device_format_get());
+    vk_attachment_description.samples = VK_SAMPLE_COUNT_1_BIT;
+    set_load_store(vk_attachment_description, load_stores[color_attachment_index]);
+    vk_attachment_description.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    vk_attachment_description.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    color_attachment_descriptions.append(std::move(vk_attachment_description));
+    uint32_t layer_base = max_ii(attachment.layer, 0);
+
+    GPUAttachmentState attachment_state = attachment_states_[color_attachment_index];
+    VkImageView vk_image_view = VK_NULL_HANDLE;
+    if (attachment_state == GPU_ATTACHMENT_WRITE) {
+      VKImageViewInfo image_view_info = {
+          eImageViewUsage::Attachment,
+          IndexRange(layer_base,
+                     layer_count != 1 ? max_ii(layer_count - layer_base, 1) : layer_count),
+          IndexRange(attachment.mip, 1),
+          {{'r', 'g', 'b', 'a'}},
+          false,
+          srgb_ && enabled_srgb_,
+          VKImageViewArrayed::DONT_CARE};
+      vk_image_view = color_texture.image_view_get(image_view_info).vk_handle();
+    }
+    vk_image_views.append(vk_image_view);
+    access_info.images.append(
+        {color_texture.vk_image_handle(),
+         VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+         VK_IMAGE_ASPECT_COLOR_BIT,
+         layer_base});
+  }
+
+  /* Subpass description */
+  VkSubpassDescription vk_subpass_description = {};
+  vk_subpass_description.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+  vk_subpass_description.colorAttachmentCount = color_attachment_references.size();
+  vk_subpass_description.pColorAttachments = color_attachment_references.data();
+  if (has_depth_attachment) {
+    vk_subpass_description.pDepthStencilAttachment = &depth_attachment_reference;
+  }
+
+  /* Renderpass create info */
+  VkRenderPassCreateInfo vk_render_pass_create_info = {};
+  vk_render_pass_create_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+  vk_render_pass_create_info.subpassCount = 1;
+  vk_render_pass_create_info.pSubpasses = &vk_subpass_description;
+  vkCreateRenderPass(device.vk_handle(), &vk_render_pass_create_info, nullptr, &vk_render_pass);
+
+  /* Frame buffer create info */
+  VkFramebufferCreateInfo vk_framebuffer_create_info = {};
+  vk_framebuffer_create_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+  vk_framebuffer_create_info.renderPass = vk_render_pass;
+  vk_framebuffer_create_info.attachmentCount = vk_image_views.size();
+  vk_framebuffer_create_info.pAttachments = vk_image_views.data();
+  vk_framebuffer_create_info.width = width_;
+  vk_framebuffer_create_info.height = height_;
+  vk_framebuffer_create_info.layers = layer_count;
+  vkCreateFramebuffer(device.vk_handle(), &vk_framebuffer_create_info, nullptr, &vk_framebuffer);
+
+  /* Begin rendering */
+  render_graph::VKBeginRenderingNode::CreateInfo begin_rendering(access_info);
+  begin_rendering.node_data.vk_render_pass = vk_render_pass;
+  context.render_graph.add_node(begin_rendering);
 }
 
 void VKFrameBuffer::rendering_ensure_dynamic_rendering(VKContext &context)
@@ -748,7 +856,9 @@ void VKFrameBuffer::rendering_end(VKContext &context)
   }
 
   if (is_rendering_) {
+    const VKWorkarounds &workarounds = VKBackend::get().device.workarounds_get();
     render_graph::VKEndRenderingNode::CreateInfo end_rendering = {};
+    end_rendering.vk_render_pass = workarounds.dynamic_rendering ? vk_render_pass : VK_NULL_HANDLE;
     context.render_graph.add_node(end_rendering);
     is_rendering_ = false;
   }

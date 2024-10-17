@@ -39,6 +39,10 @@ class VKFrameBuffer : public FrameBuffer {
   Array<GPULoadStore, GPU_FB_MAX_ATTACHMENT> load_stores;
   Array<GPUAttachmentState, GPU_FB_MAX_ATTACHMENT> attachment_states_;
 
+  /* Render pass workaround when dynamic rendering isn't supported. */
+  VkRenderPass vk_render_pass = VK_NULL_HANDLE;
+  VkFramebuffer vk_framebuffer = VK_NULL_HANDLE;
+
  public:
   /**
    * Create a conventional frame-buffer to attach texture to.

@@ -326,6 +326,22 @@ void VKCommandBufferWrapper::push_constants(VkPipelineLayout layout,
   vkCmdPushConstants(vk_command_buffer_, layout, stage_flags, offset, size, p_values);
 }
 
+void VKCommandBufferWrapper::begin_render_pass(VkRenderPassBeginInfo *render_pass_begin_info)
+{
+  vkCmdBeginRenderPass(vk_command_buffer_, &render_pass_begin_info, VK_NULL_HANDLE);
+}
+
+void VKCommandBufferWrapper::end_render_pass()
+{
+  vkCmdEndRenderPass(vk_command_buffer);
+}
+
+void VKCommandBufferWrapper::end_rendering()
+{
+  const VKDevice &device = VKBackend::get().device;
+  BLI_assert(device.functions.vkCmdEndRendering);
+  device.functions.vkCmdEndRendering(vk_command_buffer_);
+}
 void VKCommandBufferWrapper::begin_rendering(const VkRenderingInfo *p_rendering_info)
 {
   const VKDevice &device = VKBackend::get().device;

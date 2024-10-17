@@ -21,6 +21,7 @@ struct VKBeginRenderingData {
   VkRenderingAttachmentInfo depth_attachment;
   VkRenderingAttachmentInfo stencil_attachment;
   VkRenderingInfoKHR vk_rendering_info;
+  VkRenderPass vk_render_pass;
 };
 
 struct VKBeginRenderingCreateInfo {
@@ -51,19 +52,23 @@ class VKBeginRenderingNode : public VKNodeInfo<VKNodeType::BEGIN_RENDERING,
    */
   template<typename Node> void set_node_data(Node &node, const CreateInfo &create_info)
   {
-    BLI_assert_msg(ELEM(create_info.node_data.vk_rendering_info.pColorAttachments,
-                        nullptr,
-                        create_info.node_data.color_attachments),
+    const bool is_dynamic_rendering = create_info.node_data.vk_render_pass == VK_NULL_HANDLE;
+    BLI_assert_msg(is_dynamic_rendering &&
+                       ELEM(create_info.node_data.vk_rendering_info.pColorAttachments,
+                            nullptr,
+                            create_info.node_data.color_attachments),
                    "When create_info.node_data.vk_rendering_info.pColorAttachments points to "
                    "something, it should point to create_info.node_data.color_attachments.");
-    BLI_assert_msg(ELEM(create_info.node_data.vk_rendering_info.pDepthAttachment,
-                        nullptr,
-                        &create_info.node_data.depth_attachment),
+    BLI_assert_msg(is_dynamic_rendering &&
+                       ELEM(create_info.node_data.vk_rendering_info.pDepthAttachment,
+                            nullptr,
+                            &create_info.node_data.depth_attachment),
                    "When create_info.node_data.vk_rendering_info.pDepthAttachment points to "
                    "something, it should point to create_info.node_data.depth_attachment.");
-    BLI_assert_msg(ELEM(create_info.node_data.vk_rendering_info.pStencilAttachment,
-                        nullptr,
-                        &create_info.node_data.stencil_attachment),
+    BLI_assert_msg(is_dynamic_rendering &&
+                       ELEM(create_info.node_data.vk_rendering_info.pStencilAttachment,
+                            nullptr,
+                            &create_info.node_data.stencil_attachment),
                    "When create_info.node_data.vk_rendering_info.pStencilAttachment points to "
                    "something, it should point to create_info.node_data.stencil_attachment.");
     node.begin_rendering = create_info.node_data;
@@ -89,19 +94,25 @@ class VKBeginRenderingNode : public VKNodeInfo<VKNodeType::BEGIN_RENDERING,
                       Data &data,
                       VKBoundPipelines & /*r_bound_pipelines*/) override
   {
-    /* Localize pointers just before sending to the command buffer. Pointer can (and will) change
-     * as they are stored in a union which is stored in a vector. When the vector reallocates, the
-     * pointers will become invalid. */
-    if (data.vk_rendering_info.pColorAttachments) {
-      data.vk_rendering_info.pColorAttachments = data.color_attachments;
+    const bool is_dynamic_rendering = data.vk_render_pass == VK_NULL_HANDLE;
+    if (is_dynamic_rendering) {
+      /* Localize pointers just before sending to the command buffer. Pointer can (and will) change
+       * as they are stored in a union which is stored in a vector. When the vector reallocates,
+       * the pointers will become invalid. */
+      if (data.vk_rendering_info.pColorAttachments) {
+        data.vk_rendering_info.pColorAttachments = data.color_attachments;
+      }
+      if (data.vk_rendering_info.pDepthAttachment) {
+        data.vk_rendering_info.pDepthAttachment = &data.depth_attachment;
+      }
+      if (data.vk_rendering_info.pStencilAttachment) {
+        data.vk_rendering_info.pStencilAttachment = &data.stencil_attachment;
+      }
+      command_buffer.begin_rendering(&data.vk_rendering_info);
     }
-    if (data.vk_rendering_info.pDepthAttachment) {
-      data.vk_rendering_info.pDepthAttachment = &data.depth_attachment;
+    else {
+      // command_buffer.begin_render_pass(data.vk_render_pass);vk
     }
-    if (data.vk_rendering_info.pStencilAttachment) {
-      data.vk_rendering_info.pStencilAttachment = &data.stencil_attachment;
-    }
-    command_buffer.begin_rendering(&data.vk_rendering_info);
   }
 };
 }  // namespace blender::gpu::render_graph
