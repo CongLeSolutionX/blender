@@ -164,6 +164,16 @@ struct StrokeCache {
   } mirror_modifier_clip;
   float2 initial_mouse;
 
+  /**
+   * Some brushes change behavior drastically depending on the directional value (i.e. the smooth
+   * and enhance details functionality being bound to the Smooth brush).
+   *
+   * Because the tablet `pen_flip` variable is not invariant over the entirety of the stroke, we
+   * need to store the initial direction at the beginning of the stroke to prevent switching the
+   * brush type mid-stroke.
+   */
+  bool initial_direction_flipped;
+
   /* Variants */
   float radius;
   float radius_squared;
