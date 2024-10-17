@@ -382,10 +382,7 @@ void postEditBoneDuplicate(ListBase *editbones, Object *ob)
   BLI_ghash_free(name_map, nullptr, nullptr);
 }
 
-static void updateDuplicateSubtarget(EditBone *dup_bone,
-                                     ListBase *editbones,
-                                     Object *ob,
-                                     bool lookup_mirror_subtarget)
+static void updateDuplicateSubtarget(EditBone *dup_bone, ListBase *editbones, Object *ob)
 {
   /* If an edit bone has been duplicated, lets update its constraints if the
    * subtarget they point to has also been duplicated.
@@ -413,17 +410,6 @@ static void updateDuplicateSubtarget(EditBone *dup_bone,
               if (oldtarget->temp.ebone) {
                 newtarget = oldtarget->temp.ebone;
                 STRNCPY(ct->subtarget, newtarget->name);
-              }
-              else if (lookup_mirror_subtarget) {
-                /* The subtarget was not selected for duplication, try to see if a mirror bone of
-                 * the current target exists */
-                char name_flip[MAXBONENAME];
-
-                BLI_string_flip_side_name(name_flip, oldtarget->name, false, sizeof(name_flip));
-                newtarget = get_named_editbone(editbones, name_flip);
-                if (newtarget) {
-                  STRNCPY(ct->subtarget, newtarget->name);
-                }
               }
             }
           }
@@ -984,6 +970,19 @@ static void mirror_pose_bone(Object &ob, EditBone &ebone)
   float limit_min = pose_bone->limitmin[2];
   pose_bone->limitmin[2] = -pose_bone->limitmax[2];
   pose_bone->limitmax[2] = -limit_min;
+
+  LISTBASE_FOREACH (bConstraint *, constraint, &pose_bone->constraints) {
+    ListBase targets = {nullptr, nullptr};
+    BKE_constraint_targets_get(constraint, &targets);
+    char name_flip[MAX_ID_NAME - 2];
+    LISTBASE_FOREACH (bConstraintTarget *, target, &targets) {
+      BLI_string_flip_side_name(name_flip, target->subtarget, false, sizeof(name_flip));
+      if (bPoseChannel *flipped_bone = BKE_pose_channel_find_name(target->tar->pose, name_flip)) {
+        STRNCPY(target->subtarget, flipped_bone->name);
+      }
+    }
+    BKE_constraint_targets_flush(constraint, &targets, false);
+  }
 }
 
 static void copy_pchan(EditBone *src_bone, EditBone *dst_bone, Object *src_ob, Object *dst_ob)
@@ -1151,7 +1150,7 @@ static int armature_duplicate_selected_exec(bContext *C, wmOperator *op)
         }
 
         /* Lets try to fix any constraint sub-targets that might have been duplicated. */
-        updateDuplicateSubtarget(ebone, arm->edbo, ob, false);
+        updateDuplicateSubtarget(ebone, arm->edbo, ob);
       }
     }
 
@@ -1404,7 +1403,7 @@ static int armature_symmetrize_exec(bContext *C, wmOperator *op)
         ebone->bbone_next_flag = ebone_iter->bbone_next_flag;
 
         /* Lets try to fix any constraint sub-targets that might have been duplicated. */
-        updateDuplicateSubtarget(ebone, arm->edbo, obedit, true);
+        updateDuplicateSubtarget(ebone, arm->edbo, obedit);
         /* Try to update constraint options so that they are mirrored as well
          * (need to supply bone_iter as well in case we are working with existing bones) */
         updateDuplicateConstraintSettings(ebone, ebone_iter, obedit);
