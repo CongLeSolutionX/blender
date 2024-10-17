@@ -7,6 +7,8 @@
  */
 
 #include "BKE_global.hh"
+#include "BLI_assert.h"
+#include "BLI_math_base.h"
 #include "GPU_compute.hh"
 
 #include "draw_debug.hh"
@@ -15,6 +17,9 @@
 #include "draw_manager_c.hh"
 #include "draw_pass.hh"
 #include "draw_shader.hh"
+#include <cstdint>
+#include <iostream>
+#include <string>
 
 namespace blender::draw {
 
@@ -28,6 +33,8 @@ Manager::~Manager()
 
 void Manager::begin_sync()
 {
+  sync_count_ += 1;
+
   matrix_buf.swap();
   bounds_buf.swap();
   infos_buf.swap();
@@ -157,46 +164,76 @@ void Manager::resource_bind()
   GPU_uniformbuf_bind(attributes_buf_legacy, 2);
 }
 
-void Manager::submit(PassSimple &pass, View &view)
+uint64_t Manager::fingerprint_get()
 {
+  /* Covers new sync cycle, added resources and different #Manager. */
+  return 1 | ((sync_count_ | (uint64_t(resource_len_) << 32)) ^ uint64_t(this));
+}
+
+void Manager::compute_visibility(View &view)
+{
+  bool freeze_culling = (U.experimental.use_viewport_debug && DST.draw_ctx.v3d &&
+                         (DST.draw_ctx.v3d->debug_flag & V3D_DEBUG_FREEZE_CULLING) != 0);
+
+  view.manager_fingerprint_ = this->fingerprint_get();
+
   view.bind();
+  view.compute_visibility(
+      bounds_buf.current(), infos_buf.current(), resource_len_, freeze_culling);
+}
 
-  debug_bind();
+void Manager::generate_commands(PassMain &pass, View &view)
+{
+  pass.manager_fingerprint_ = this->fingerprint_get();
+  pass.view_fingerprint_ = view.fingerprint_get();
 
-  command::RecordingState state;
-  state.inverted_view = view.is_inverted();
+  pass.draw_commands_buf_.generate_commands(pass.headers_,
+                                            pass.commands_,
+                                            view.get_visibility_buffer(),
+                                            view.visibility_word_per_draw(),
+                                            view.view_len_,
+                                            pass.use_custom_ids);
+}
 
-  pass.draw_commands_buf_.bind(state, pass.headers_, pass.commands_, pass.sub_passes_);
+void Manager::generate_commands(PassSimple &pass)
+{
+  pass.manager_fingerprint_ = this->fingerprint_get();
 
-  resource_bind();
-
-  pass.submit(state);
-
-  state.cleanup();
+  pass.draw_commands_buf_.generate_commands(pass.headers_, pass.commands_, pass.sub_passes_);
 }
 
 void Manager::submit(PassMain &pass, View &view)
 {
-  view.bind();
-
   debug_bind();
 
-  bool freeze_culling = (U.experimental.use_viewport_debug && DST.draw_ctx.v3d &&
-                         (DST.draw_ctx.v3d->debug_flag & V3D_DEBUG_FREEZE_CULLING) != 0);
+  if (view.has_computed_visibility()) {
+    BLI_assert_msg(view.manager_fingerprint_ == fingerprint_get(),
+                   "Scene resources changed since last compute_visibility");
+  }
+  else {
+    compute_visibility(view);
+  }
 
-  view.compute_visibility(
-      bounds_buf.current(), infos_buf.current(), resource_len_, freeze_culling);
+  if (pass.has_generated_commands()) {
+    BLI_assert_msg(pass.manager_fingerprint_ == fingerprint_get(),
+                   "Scene resources changed since last generate_commands");
+
+    /* Submitting with different views is not automatically supported.
+     * The user code need to call `generate_commands()` for each view before the respective
+     * submission. */
+    BLI_assert_msg(
+        pass.view_fingerprint_ == view.fingerprint_get(),
+        "View have changed since last generate_commands or submitting with a different view");
+  }
+  else {
+    generate_commands(pass, view);
+  }
 
   command::RecordingState state;
   state.inverted_view = view.is_inverted();
 
-  pass.draw_commands_buf_.bind(state,
-                               pass.headers_,
-                               pass.commands_,
-                               view.get_visibility_buffer(),
-                               view.visibility_word_per_draw(),
-                               view.view_len_,
-                               pass.use_custom_ids);
+  view.bind();
+  pass.draw_commands_buf_.bind(state);
 
   resource_bind();
 
@@ -212,19 +249,37 @@ void Manager::submit(PassSortable &pass, View &view)
   this->submit(static_cast<PassMain &>(pass), view);
 }
 
-void Manager::submit(PassSimple &pass)
+void Manager::submit(PassSimple &pass, bool inverted_view)
 {
   debug_bind();
 
-  command::RecordingState state;
+  if (pass.has_generated_commands()) {
+    BLI_assert_msg(pass.manager_fingerprint_ == fingerprint_get(),
+                   "Scene resources changed since last generate_commands");
+  }
+  else {
+    generate_commands(pass);
+  }
 
-  pass.draw_commands_buf_.bind(state, pass.headers_, pass.commands_, pass.sub_passes_);
+  command::RecordingState state;
+  state.inverted_view = inverted_view;
+
+  pass.draw_commands_buf_.bind(state);
 
   resource_bind();
 
   pass.submit(state);
 
   state.cleanup();
+}
+
+void Manager::submit(PassSimple &pass, View &view)
+{
+  debug_bind();
+
+  view.bind();
+
+  this->submit(pass, view.is_inverted());
 }
 
 Manager::SubmitDebugOutput Manager::submit_debug(PassSimple &pass, View &view)

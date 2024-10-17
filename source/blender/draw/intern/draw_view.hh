@@ -21,6 +21,7 @@
 #include "DRW_render.hh"
 
 #include "draw_shader_shared.hh"
+#include <cstdint>
 
 namespace blender::draw {
 
@@ -44,6 +45,10 @@ class View {
   UniformArrayBuffer<ViewCullingData, DRW_VIEW_MAX> culling_freeze_;
   /** Result of the visibility computation. 1 bit or 1 or 2 word per resource ID per view. */
   VisibilityBuf visibility_buf_;
+  /* Fingerprint of the manager state when visibility was computed. */
+  uint64_t manager_fingerprint_ = 0;
+
+  uint32_t sync_count_ = 0;
 
   const char *debug_name_;
 
@@ -179,6 +184,21 @@ class View {
                                   uint resource_len,
                                   bool debug_freeze);
   virtual VisibilityBuf &get_visibility_buffer();
+
+  bool has_computed_visibility() const
+  {
+    /* NOTE: Even though manager fingerprint is not enough to check for update, it is still
+     * guaranteed to not be 0. So we can check wether or not this view has computed visibility
+     * after sync. Asserts will catch invalid usage . */
+    return manager_fingerprint_ != 0;
+  }
+
+  /* Fingerprint of the view for the current state.
+   * Not reliable enough for general update detection. Only to be used for debugging assertion. */
+  uint64_t fingerprint_get() const
+  {
+    return sync_count_ ^ uint64_t(this);
+  }
 
   void update_viewport_size();
 
