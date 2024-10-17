@@ -23,7 +23,6 @@ NODE_STORAGE_FUNCS(NodeTexRoundedPolygon)
 static void sh_node_tex_rounded_polygon_declare(NodeDeclarationBuilder &b)
 {
   b.is_function_node();
-  b.use_custom_socket_order();
 
   b.add_output<decl::Float>("R_gon Field").no_muted_links();
   b.add_output<decl::Float>("R_gon Parameter Field").no_muted_links();
