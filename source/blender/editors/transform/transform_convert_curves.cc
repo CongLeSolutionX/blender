@@ -154,18 +154,18 @@ static void createTransCurvesVerts(bContext * /*C*/, TransInfo *t)
       MutableSpan<int8_t> left_handle_types = curves.handle_types_left_for_write();
       MutableSpan<int8_t> right_handle_types = curves.handle_types_right_for_write();
 
-      auto from_type = [&bezier_points, &memory](VArray<int8_t> types, const HandleType type) {
+      auto from_type = [&bezier_points, &memory](Span<int8_t> types, const HandleType type) {
         return IndexMask::from_predicate(bezier_points,
                                          GrainSize(4096),
                                          memory,
                                          [&](const int64_t i) { return types[i] == type; });
       };
 
-      const IndexMask auto_left = from_type(curves.handle_types_left(), BEZIER_HANDLE_AUTO);
-      const IndexMask auto_right = from_type(curves.handle_types_right(), BEZIER_HANDLE_AUTO);
+      const IndexMask auto_left = from_type(left_handle_types, BEZIER_HANDLE_AUTO);
+      const IndexMask auto_right = from_type(right_handle_types, BEZIER_HANDLE_AUTO);
 
-      const IndexMask vector_left = from_type(curves.handle_types_left(), BEZIER_HANDLE_VECTOR);
-      const IndexMask vector_right = from_type(curves.handle_types_right(), BEZIER_HANDLE_VECTOR);
+      const IndexMask vector_left = from_type(left_handle_types, BEZIER_HANDLE_VECTOR);
+      const IndexMask vector_right = from_type(right_handle_types, BEZIER_HANDLE_VECTOR);
 
       index_mask::ExprBuilder builder;
       const index_mask::Expr &selected_knots = builder.intersect(
