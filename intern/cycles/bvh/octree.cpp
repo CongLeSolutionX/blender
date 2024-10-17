@@ -252,12 +252,12 @@ openvdb::BoolGrid::ConstPtr Octree::get_vdb(const Geometry *geom) const
   if (vdb_map.count(geom) > 0) {
     return vdb_map.at(geom);
   }
-  return nullptr;
+  /* Create empty grid. */
+  return openvdb::BoolGrid::create();
 }
 
 /* Fill in coordinates for shading the volume density. */
 static void fill_shader_input(device_vector<KernelShaderEvalInput> &d_input,
-                              const blocked_range3d<int> &range,
                               const Octree *octree,
                               const Object *object,
                               const int3 &index_min,
@@ -280,11 +280,12 @@ static void fill_shader_input(device_vector<KernelShaderEvalInput> &d_input,
 
   /* Get object boundary VDB. */
   openvdb::BoolGrid::ConstPtr grid = octree->get_vdb(geom);
+  openvdb::BoolGrid::ConstAccessor acc = grid->getConstAccessor();
 
   /* Get object transform. */
   Transform itfm;
   bool transform_applied = true;
-  if (grid) {
+  if (!grid->empty()) {
     const Mesh *mesh = static_cast<const Mesh *>(geom);
     if (!mesh->transform_applied) {
       transform_applied = false;
@@ -296,51 +297,47 @@ static void fill_shader_input(device_vector<KernelShaderEvalInput> &d_input,
 
   KernelShaderEvalInput *d_input_data = d_input.data();
 
-  parallel_for(range, [&](const blocked_range3d<int> &r) {
-    for (int z = r.cols().begin(); z < r.cols().end(); ++z) {
-      for (int y = r.rows().begin(); y < r.rows().end(); ++y) {
-        for (int x = r.pages().begin(); x < r.pages().end(); ++x) {
-          const int local_index = flatten_index(x, y, z, index_range);
-          const float3 p = octree->index_to_world(
-              x + index_min.x, y + index_min.y, z + index_min.z);
+  for (int z = 0; z < index_range.z; ++z) {
+    for (int y = 0; y < index_range.y; ++y) {
+      for (int x = 0; x < index_range.x; ++x) {
+        const int local_index = flatten_index(x, y, z, index_range);
+        const float3 p = octree->index_to_world(x + index_min.x, y + index_min.y, z + index_min.z);
 
 #ifdef WITH_OPENVDB
-          /* Zero density for cells outside of the mesh. */
-          if (grid) {
-            float3 cell_center = p + 0.5f * voxel_size;
-            if (!transform_applied) {
-              cell_center = transform_point(&itfm, cell_center);
-            }
-            openvdb::Coord coord = openvdb::Coord::round(
-                grid->worldToIndex(openvdb::Vec3s(cell_center.x, cell_center.y, cell_center.z)));
-            if (!grid->getAccessor().getValue(coord)) {
-              d_input_data[local_index * 2 + 0].object = OBJECT_NONE;
-              continue;
-            }
+        /* Zero density for cells outside of the mesh. */
+        if (!grid->empty()) {
+          float3 cell_center = p + 0.5f * voxel_size;
+          if (!transform_applied) {
+            cell_center = transform_point(&itfm, cell_center);
           }
+          openvdb::Coord coord = openvdb::Coord::round(
+              grid->worldToIndex(openvdb::Vec3s(cell_center.x, cell_center.y, cell_center.z)));
+          if (!acc.getValue(coord)) {
+            d_input_data[local_index * 2 + 1].object = SHADER_NONE;
+            continue;
+          }
+        }
 #endif
 
-          KernelShaderEvalInput in;
-          in.object = object_id;
-          in.prim = __float_as_int(p.x);
-          in.u = p.y;
-          in.v = p.z;
-          d_input_data[local_index * 2 + 0] = in;
+        KernelShaderEvalInput in;
+        in.object = object_id;
+        in.prim = __float_as_int(p.x);
+        in.u = p.y;
+        in.v = p.z;
+        d_input_data[local_index * 2 + 0] = in;
 
-          in.object = shader_id;
-          in.prim = __float_as_int(voxel_size.x);
-          in.u = voxel_size.y;
-          in.v = voxel_size.z;
-          d_input_data[local_index * 2 + 1] = in;
-        }
+        in.object = shader_id;
+        in.prim = __float_as_int(voxel_size.x);
+        in.u = voxel_size.y;
+        in.v = voxel_size.z;
+        d_input_data[local_index * 2 + 1] = in;
       }
     }
-  });
+  }
 }
 
 /* Read back the volume densty. */
 static void read_shader_output(const device_vector<float> &d_output,
-                               const blocked_range3d<int> &range,
                                const Octree *octree,
                                const int3 &index_min,
                                const int3 &index_range,
@@ -348,6 +345,7 @@ static void read_shader_output(const device_vector<float> &d_output,
                                vector<Extrema<float>> &sigmas)
 {
   const float *d_output_data = d_output.data();
+  const blocked_range3d<int> range(0, index_range.x, 0, index_range.y, 0, index_range.z);
   parallel_for(range, [&](const blocked_range3d<int> &r) {
     for (int z = r.cols().begin(); z < r.cols().end(); ++z) {
       for (int y = r.rows().begin(); y < r.rows().end(); ++y) {
@@ -396,8 +394,6 @@ void Octree::evaluate_volume_density_(Device *device, Progress &progress)
     }
 #endif
 
-    const blocked_range3d<int> range(0, index_range.x, 0, index_range.y, 0, index_range.z);
-
     /* TODO(weizhen): specialize homogeneous volume and evaluate less points? */
 
     /* Evaluate shader on device. */
@@ -407,11 +403,11 @@ void Octree::evaluate_volume_density_(Device *device, Progress &progress)
         valid_size * 2,
         num_channels,
         [&](device_vector<KernelShaderEvalInput> &d_input) {
-          fill_shader_input(d_input, range, this, object, index_min, index_range);
+          fill_shader_input(d_input, this, object, index_min, index_range);
           return valid_size;
         },
         [&](device_vector<float> &d_output) {
-          read_shader_output(d_output, range, this, index_min, index_range, num_channels, sigmas);
+          read_shader_output(d_output, this, index_min, index_range, num_channels, sigmas);
         });
   }
 }

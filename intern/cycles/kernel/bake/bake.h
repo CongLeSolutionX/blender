@@ -121,10 +121,6 @@ ccl_device void kernel_volume_density_evaluate(KernelGlobals kg,
   /* Setup shader data. */
   KernelShaderEvalInput in = input[offset * 2 + 0];
 
-  if (in.object == OBJECT_NONE) {
-    return;
-  }
-
   ShaderData sd;
   Ray ray;
   ray.P = make_float3(__int_as_float(in.prim), in.u, in.v);
