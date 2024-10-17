@@ -3623,7 +3623,7 @@ class VIEW3D_MT_sculpt(Menu):
             ('RELAX_FACE_SETS', iface_("Relax Face Sets")),
             ('SHARPEN', iface_("Sharpen")),
             ('ENHANCE_DETAILS', iface_("Enhance Details")),
-            ('ERASE_DISCPLACEMENT', iface_("Erase Multires Displacement")),
+            ('ERASE_DISPLACEMENT', iface_("Erase Multires Displacement")),
             ('RANDOM', iface_("Randomize")),
         ]
 
@@ -5623,11 +5623,11 @@ class VIEW3D_MT_edit_greasepencil_animation(Menu):
 
         layout.separator()
         layout.operator("grease_pencil.frame_duplicate", text="Duplicate Active Keyframe (Active Layer)").all = False
-        layout.operator("grease_pencil.frame_duplicate", text="Duplicate Active Keyframe (All Layer)").all = True
+        layout.operator("grease_pencil.frame_duplicate", text="Duplicate Active Keyframe (All Layers)").all = True
 
         layout.separator()
         layout.operator("grease_pencil.active_frame_delete", text="Delete Active Keyframe (Active Layer)").all = False
-        layout.operator("grease_pencil.active_frame_delete", text="Delete Active Keyframe (All Layer)").all = True
+        layout.operator("grease_pencil.active_frame_delete", text="Delete Active Keyframe (All Layers)").all = True
 
 
 class VIEW3D_MT_edit_greasepencil_showhide(Menu):
