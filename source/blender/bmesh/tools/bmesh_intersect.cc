@@ -87,8 +87,8 @@ static BMEdge *bm_vert_other_edge(BMVert *v, BMEdge *e)
 #endif
 
 /**
- * Store as value in GHash so we can get list-length without counting every time.
- * Also means we don't need to update the GHash value each time.
+ * Store as value in Map so we can get list-length without counting every time.
+ * Also means we don't need to update the Map value each time.
  */
 struct LinkBase {
   LinkNode *list;
@@ -1440,7 +1440,6 @@ bool BM_mesh_intersect(BMesh *bm,
 /* now split faces */
 #ifdef USE_NET
   {
-    GHashIterator gh_iter;
     BMFace **faces;
 
     MemArena *mem_arena_edgenet = BLI_memarena_new(BLI_MEMARENA_STD_BUFSIZE, __func__);
