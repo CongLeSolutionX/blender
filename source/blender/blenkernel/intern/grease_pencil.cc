@@ -1890,6 +1890,21 @@ void BKE_grease_pencil_nomain_to_grease_pencil(GreasePencil *grease_pencil_src,
   BKE_id_free(nullptr, grease_pencil_src);
 }
 
+void BKE_grease_pencil_vgroup_name_update(Object *ob, const char *old_name, const char *new_name)
+{
+  using namespace blender::bke::greasepencil;
+  GreasePencil &grease_pencil = *static_cast<GreasePencil *>(ob->data);
+  for (GreasePencilDrawingBase *base : grease_pencil.drawings()) {
+    Drawing &drawing = reinterpret_cast<GreasePencilDrawing *>(base)->wrap();
+    CurvesGeometry &curves = drawing.strokes_for_write();
+    LISTBASE_FOREACH (bDeformGroup *, vgroup, &curves.vertex_group_names) {
+      if (strcmp(vgroup->name, old_name) == 0) {
+        STRNCPY(vgroup->name, new_name);
+      }
+    }
+  }
+}
+
 static void grease_pencil_evaluate_modifiers(Depsgraph *depsgraph,
                                              Scene *scene,
                                              Object *object,
@@ -1956,9 +1971,6 @@ static void grease_pencil_do_layer_adjustments(GreasePencil &grease_pencil)
   using namespace bke::greasepencil;
 
   const bke::AttributeAccessor layer_attributes = grease_pencil.attributes();
-  if (!layer_attributes.contains("tint_color") && !layer_attributes.contains("radius_offset")) {
-    return;
-  }
 
   struct LayerDrawingInfo {
     Drawing *drawing;
@@ -2024,6 +2036,7 @@ static void grease_pencil_do_layer_adjustments(GreasePencil &grease_pencil)
 
 void BKE_grease_pencil_data_update(Depsgraph *depsgraph, Scene *scene, Object *object)
 {
+  using namespace blender;
   using namespace blender::bke;
   /* Free any evaluated data and restore original data. */
   BKE_object_free_derived_caches(object);
@@ -2032,12 +2045,15 @@ void BKE_grease_pencil_data_update(Depsgraph *depsgraph, Scene *scene, Object *o
   GreasePencil *grease_pencil = static_cast<GreasePencil *>(object->data);
   /* Store the frame that this grease pencil is evaluated on. */
   grease_pencil->runtime->eval_frame = int(DEG_get_ctime(depsgraph));
+  GeometrySet geometry_set = GeometrySet::from_grease_pencil(grease_pencil,
+                                                             GeometryOwnershipType::ReadOnly);
   /* The layer adjustments for tinting and radii offsets are applied before modifier evaluation.
    * This ensures that the evaluated geometry contains the modifications. In the future, it would
    * be better to move these into modifiers. For now, these are hardcoded. */
-  grease_pencil_do_layer_adjustments(*grease_pencil);
-  GeometrySet geometry_set = GeometrySet::from_grease_pencil(grease_pencil,
-                                                             GeometryOwnershipType::ReadOnly);
+  const bke::AttributeAccessor layer_attributes = grease_pencil->attributes();
+  if (layer_attributes.contains("tint_color") || layer_attributes.contains("radius_offset")) {
+    grease_pencil_do_layer_adjustments(*geometry_set.get_grease_pencil_for_write());
+  }
   /* Only add the edit hint component in edit mode for now so users can properly select deformed
    * drawings. */
   if (object->mode == OB_MODE_EDIT) {
@@ -3242,7 +3258,7 @@ blender::bke::greasepencil::Layer &GreasePencil::add_layer(const blender::String
   using namespace blender;
   std::string unique_name = check_name_is_unique ? unique_layer_name(*this, name) : name.c_str();
   const int numLayers = layers().size();
-  CustomData_realloc(&layers_data, numLayers, numLayers + 1);
+  CustomData_realloc(&layers_data, numLayers, numLayers + 1, CD_SET_DEFAULT);
   bke::greasepencil::Layer *new_layer = MEM_new<bke::greasepencil::Layer>(__func__, unique_name);
   /* Hide masks by default. */
   new_layer->base.flag |= GP_LAYER_TREE_NODE_HIDE_MASKS;
@@ -3287,8 +3303,20 @@ blender::bke::greasepencil::Layer &GreasePencil::duplicate_layer(
 {
   using namespace blender;
   std::string unique_name = unique_layer_name(*this, duplicate_layer.name());
+  std::optional<int> duplicate_layer_idx = get_layer_index(duplicate_layer);
   const int numLayers = layers().size();
   CustomData_realloc(&layers_data, numLayers, numLayers + 1);
+  if (duplicate_layer_idx.has_value()) {
+    for (const int layer_index : IndexRange(layers_data.totlayer)) {
+      CustomData_copy_data_layer(&layers_data,
+                                 &layers_data,
+                                 layer_index,
+                                 layer_index,
+                                 *duplicate_layer_idx,
+                                 numLayers,
+                                 1);
+    }
+  }
   bke::greasepencil::Layer *new_layer = MEM_new<bke::greasepencil::Layer>(__func__,
                                                                           duplicate_layer);
   root_group().add_node(new_layer->as_node());

@@ -2171,7 +2171,7 @@ static void GREASE_PENCIL_OT_separate(wmOperatorType *ot)
 {
   ot->name = "Separate";
   ot->idname = "GREASE_PENCIL_OT_separate";
-  ot->description = "Separate the selected geometry into a new grease pencil object";
+  ot->description = "Separate the selected geometry into a new Grease Pencil object";
 
   ot->invoke = WM_menu_invoke;
   ot->exec = grease_pencil_separate_exec;
@@ -3558,7 +3558,7 @@ static int grease_pencil_set_curve_resolution_exec(bContext *C, wmOperator *op)
     }
 
     index_mask::masked_fill(curves.resolution_for_write(), resolution, editable_strokes);
-    info.drawing.tag_positions_changed();
+    info.drawing.tag_topology_changed();
     changed = true;
   });
 
@@ -4054,7 +4054,7 @@ int ED_grease_pencil_join_objects_exec(bContext *C, wmOperator *op)
   CTX_DATA_END;
   /* Active object must always selected. */
   if (ok == false) {
-    BKE_report(op->reports, RPT_WARNING, "Active object is not a selected grease pencil");
+    BKE_report(op->reports, RPT_WARNING, "Active object is not a selected Grease Pencil");
     return OPERATOR_CANCELLED;
   }
 

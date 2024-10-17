@@ -31,6 +31,8 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.use_custom_socket_order();
   b.allow_any_socket_order();
 
+  b.add_default_layout();
+
   b.add_input<decl::Geometry>("Geometry");
   b.add_output<decl::Geometry>("Geometry").propagate_all().align_with_previous();
   if (node != nullptr) {
@@ -79,16 +81,12 @@ static void node_layout_ex(uiLayout *layout, bContext *C, PointerRNA *ptr)
   {
     socket_items::ui::draw_items_list_with_operators<CaptureAttributeItemsAccessor>(
         C, panel, tree, node);
-
-    auto &storage = node_storage(node);
-    if (storage.active_index >= 0 && storage.active_index < storage.capture_items_num) {
-      NodeGeometryAttributeCaptureItem &active_item = storage.capture_items[storage.active_index];
-      PointerRNA item_ptr = RNA_pointer_create(
-          ptr->owner_id, CaptureAttributeItemsAccessor::item_srna, &active_item);
-      uiLayoutSetPropSep(panel, true);
-      uiLayoutSetPropDecorate(panel, false);
-      uiItemR(panel, &item_ptr, "data_type", UI_ITEM_NONE, nullptr, ICON_NONE);
-    }
+    socket_items::ui::draw_active_item_props<CaptureAttributeItemsAccessor>(
+        tree, node, [&](PointerRNA *item_ptr) {
+          uiLayoutSetPropSep(panel, true);
+          uiLayoutSetPropDecorate(panel, false);
+          uiItemR(panel, item_ptr, "data_type", UI_ITEM_NONE, nullptr, ICON_NONE);
+        });
   }
 }
 

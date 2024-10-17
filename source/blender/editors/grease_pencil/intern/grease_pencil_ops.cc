@@ -7,6 +7,7 @@
  */
 
 #include "BKE_context.hh"
+#include "BKE_material.h"
 #include "BKE_paint.hh"
 
 #include "DNA_brush_enums.h"
@@ -24,6 +25,12 @@
 
 namespace blender::ed::greasepencil {
 
+bool grease_pencil_context_poll(bContext *C)
+{
+  GreasePencil *grease_pencil = blender::ed::greasepencil::from_context(*C);
+  return grease_pencil != nullptr;
+}
+
 bool active_grease_pencil_poll(bContext *C)
 {
   Object *object = CTX_data_active_object(C);
@@ -31,6 +38,16 @@ bool active_grease_pencil_poll(bContext *C)
     return false;
   }
   return true;
+}
+
+bool active_grease_pencil_material_poll(bContext *C)
+{
+  Object *object = CTX_data_active_object(C);
+  if (object == nullptr || object->type != OB_GREASE_PENCIL) {
+    return false;
+  }
+  short *totcolp = BKE_object_material_len_p(object);
+  return *totcolp > 0;
 }
 
 bool editable_grease_pencil_poll(bContext *C)
@@ -47,12 +64,8 @@ bool editable_grease_pencil_poll(bContext *C)
 
 bool active_grease_pencil_layer_poll(bContext *C)
 {
-  Object *object = CTX_data_active_object(C);
-  if (object == nullptr || object->type != OB_GREASE_PENCIL) {
-    return false;
-  }
-  const GreasePencil *grease_pencil = static_cast<GreasePencil *>(object->data);
-  return grease_pencil->has_active_layer();
+  const GreasePencil *grease_pencil = blender::ed::greasepencil::from_context(*C);
+  return grease_pencil && grease_pencil->has_active_layer();
 }
 
 bool editable_grease_pencil_point_selection_poll(bContext *C)
@@ -74,10 +87,8 @@ bool grease_pencil_selection_poll(bContext *C)
   Object *object = CTX_data_active_object(C);
   /* Selection operators are available in multiple modes, e.g. for masking in sculpt and vertex
    * paint mode. */
-  if (!ELEM(object->mode,
-            OB_MODE_EDIT_GPENCIL_LEGACY,
-            OB_MODE_SCULPT_GPENCIL_LEGACY,
-            OB_MODE_VERTEX_GPENCIL_LEGACY))
+  if (!ELEM(
+          object->mode, OB_MODE_EDIT, OB_MODE_SCULPT_GREASE_PENCIL, OB_MODE_VERTEX_GREASE_PENCIL))
   {
     return false;
   }
@@ -90,7 +101,7 @@ bool grease_pencil_painting_poll(bContext *C)
     return false;
   }
   Object *object = CTX_data_active_object(C);
-  if ((object->mode & OB_MODE_PAINT_GPENCIL_LEGACY) == 0) {
+  if ((object->mode & OB_MODE_PAINT_GREASE_PENCIL) == 0) {
     return false;
   }
   ToolSettings *ts = CTX_data_tool_settings(C);
@@ -118,7 +129,7 @@ bool grease_pencil_sculpting_poll(bContext *C)
     return false;
   }
   Object *object = CTX_data_active_object(C);
-  if ((object->mode & OB_MODE_SCULPT_GPENCIL_LEGACY) == 0) {
+  if ((object->mode & OB_MODE_SCULPT_GREASE_PENCIL) == 0) {
     return false;
   }
   ToolSettings *ts = CTX_data_tool_settings(C);
@@ -134,7 +145,7 @@ bool grease_pencil_weight_painting_poll(bContext *C)
     return false;
   }
   Object *object = CTX_data_active_object(C);
-  if ((object->mode & OB_MODE_WEIGHT_GPENCIL_LEGACY) == 0) {
+  if ((object->mode & OB_MODE_WEIGHT_GREASE_PENCIL) == 0) {
     return false;
   }
   ToolSettings *ts = CTX_data_tool_settings(C);
@@ -150,7 +161,7 @@ bool grease_pencil_vertex_painting_poll(bContext *C)
     return false;
   }
   Object *object = CTX_data_active_object(C);
-  if ((object->mode & OB_MODE_VERTEX_GPENCIL_LEGACY) == 0) {
+  if ((object->mode & OB_MODE_VERTEX_GREASE_PENCIL) == 0) {
     return false;
   }
   ToolSettings *ts = CTX_data_tool_settings(C);
