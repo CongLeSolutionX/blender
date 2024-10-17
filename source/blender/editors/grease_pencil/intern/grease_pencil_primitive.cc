@@ -137,6 +137,22 @@ struct PrimitiveToolOperation {
   ViewOpsData *vod;
 };
 
+static float2 rotate_point(const float2 p,
+                           const float angle,
+                           const float2 origin,
+                           const float scale = 1.0f);
+static float2 rotate_point(const float2 p,
+                           const float angle,
+                           const float2 origin,
+                           const float scale)
+{
+  const float2 dif = (p - origin);
+  const float c = math::cos(angle);
+  const float s = math::sin(angle);
+  const float2x2 rot = float2x2(float2(c, s), float2(-s, c));
+  return rot * dif * scale + origin;
+}
+
 static int control_points_per_segment(const PrimitiveToolOperation &ptd)
 {
   switch (ptd.type) {
@@ -159,10 +175,20 @@ static int control_points_per_segment(const PrimitiveToolOperation &ptd)
   return 0;
 }
 
+static bool cyclic_primitive(const PrimitiveToolOperation &ptd)
+{
+  return ELEM(ptd.type, PrimitiveType::Circle, PrimitiveType::Box);
+}
+
+static bool multi_segment_primitive(const PrimitiveToolOperation &ptd)
+{
+  return !cyclic_primitive(ptd);
+}
+
 static ControlPointType get_control_point_type(const PrimitiveToolOperation &ptd, const int point)
 {
   BLI_assert(point != -1);
-  if (ELEM(ptd.type, PrimitiveType::Circle, PrimitiveType::Box)) {
+  if (cyclic_primitive(ptd)) {
     return ControlPointType::JoinPoint;
   }
 
@@ -196,7 +222,7 @@ static void control_point_colors_and_sizes(const PrimitiveToolOperation &ptd,
     return;
   }
 
-  if (ELEM(ptd.type, PrimitiveType::Box, PrimitiveType::Circle)) {
+  if (cyclic_primitive(ptd)) {
     colors.fill(color_gizmo_primary);
     sizes.fill(size_primary);
 
@@ -233,7 +259,7 @@ static void control_point_colors_and_sizes(const PrimitiveToolOperation &ptd,
   }
 }
 
-static void draw_control_points(PrimitiveToolOperation &ptd)
+static void draw_control_points(PrimitiveToolOperation &ptd, const bool drag_line)
 {
   GPUVertFormat *format3d = immVertexFormat();
   const uint pos3d = GPU_vertformat_attr_add(format3d, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
@@ -241,8 +267,10 @@ static void draw_control_points(PrimitiveToolOperation &ptd)
   const uint siz3d = GPU_vertformat_attr_add(format3d, "size", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
   immBindBuiltinProgram(GPU_SHADER_3D_POINT_VARYING_SIZE_VARYING_COLOR);
 
+  const int total_points = drag_line ? ptd.control_points.size() + 1 : ptd.control_points.size();
+
   GPU_program_point_size(true);
-  immBegin(GPU_PRIM_POINTS, ptd.control_points.size());
+  immBegin(GPU_PRIM_POINTS, total_points);
 
   Array<ColorGeometry4f> colors(ptd.control_points.size());
   Array<float> sizes(ptd.control_points.size());
@@ -258,15 +286,43 @@ static void draw_control_points(PrimitiveToolOperation &ptd)
     immVertex3fv(pos3d, point3d);
   }
 
+  if (drag_line) {
+    const float3 point3d = ptd.placement.project(ptd.start_position_2d);
+    ColorGeometry4f color;
+    UI_GetThemeColor4fv(TH_GIZMO_B, color);
+
+    immAttr4f(col3d, color[0], color[1], color[2], color[3]);
+    immAttr1f(siz3d, ui_secondary_point_draw_size_px);
+    immVertex3fv(pos3d, point3d);
+  }
+
   immEnd();
   immUnbindProgram();
   GPU_program_point_size(false);
+
+  if (drag_line) {
+    const float3 p1 = ptd.placement.project(ptd.start_position_2d);
+    const float3 p2 = ptd.control_points[ptd.active_control_point_index];
+
+    GPUVertFormat *format3d = immVertexFormat();
+    const uint pos3d = GPU_vertformat_attr_add(format3d, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+    immBindBuiltinProgram(GPU_SHADER_3D_LINE_DASHED_UNIFORM_COLOR);
+
+    immUniformColor4f(0.0f, 0.0f, 0.0f, 0.5f);
+
+    immBegin(GPU_PRIM_LINES, 2);
+    immVertex3fv(pos3d, p1);
+    immVertex3fv(pos3d, p2);
+    immEnd();
+    immUnbindProgram();
+  }
 }
 
 static void grease_pencil_primitive_draw(const bContext * /*C*/, ARegion * /*region*/, void *arg)
 {
   PrimitiveToolOperation &ptd = *reinterpret_cast<PrimitiveToolOperation *>(arg);
-  draw_control_points(ptd);
+  const bool drag_line = ELEM(ptd.mode, OperatorMode::Grab, OperatorMode::Drag);
+  draw_control_points(ptd, drag_line);
 }
 
 static void grease_pencil_primitive_save(PrimitiveToolOperation &ptd)
@@ -318,7 +374,7 @@ static void primitive_calulate_curve_positions(PrimitiveToolOperation &ptd,
         const float2 AB = A - B;
         const float angle_cp = angle_signed_v2v2(A - CP, AB);
         /* If CP is near MP or near AB, generate straight segment. */
-        if ((math::distance(MP, CP) < math::distance(MP, A) * 0.4f) ||
+        if (math::is_equal(A, B) || (math::distance(MP, CP) < math::distance(MP, A) * 0.4f) ||
             (math::abs(angle_cp) < 0.2f) || (math::numbers::pi - math::abs(angle_cp) < 0.2f))
         {
           for (const int i : IndexRange(subdivision + 1)) {
@@ -590,7 +646,7 @@ static void grease_pencil_primitive_init_curves(PrimitiveToolOperation &ptd)
     end_caps.finish();
   }
 
-  const bool is_cyclic = ELEM(ptd.type, PrimitiveType::Box, PrimitiveType::Circle);
+  const bool is_cyclic = cyclic_primitive(ptd);
   cyclic.span.last() = is_cyclic;
   materials.span.last() = ptd.material_index;
   softness.span.last() = ptd.softness;
@@ -683,13 +739,8 @@ static void grease_pencil_primitive_status_indicators(bContext *C,
     header += IFACE_(", Alt: center");
   }
 
-  if (ELEM(ptd.type,
-           PrimitiveType::Line,
-           PrimitiveType::Polyline,
-           PrimitiveType::Arc,
-           PrimitiveType::Semicircle,
-           PrimitiveType::Curve))
-  {
+  if (multi_segment_primitive(ptd)) {
+    header += fmt::format(IFACE_(", Shift: constrain or snap to points"));
     header += fmt::format(IFACE_(", {}: extrude"), get_modal_key_str(ModalKeyMode::Extrude));
   }
 
@@ -887,6 +938,24 @@ static float2 snap_8_angles(float2 p)
   return sign(p) * length(p) * normalize(sign(normalize(abs(p)) - sin225) + 1.0f);
 }
 
+static float2 snap_cps(PrimitiveToolOperation &ptd,
+                       const float2 p,
+                       const float2 r_default,
+                       const int active_index)
+{
+  for (const int point_index : ptd.temp_control_points.index_range()) {
+    if (point_index == active_index) {
+      continue;
+    }
+    const float2 pos = ED_view3d_project_float_v2_m4(
+        ptd.vc.region, ptd.temp_control_points[point_index], ptd.projection);
+    if (math::distance_manhattan(pos, p) < 15.0f) {
+      return pos;
+    }
+  }
+  return r_default;
+}
+
 static void grease_pencil_primitive_extruding_update(PrimitiveToolOperation &ptd,
                                                      const wmEvent *event)
 {
@@ -906,8 +975,11 @@ static void grease_pencil_primitive_extruding_update(PrimitiveToolOperation &ptd
     }
     else { /* Line, Polyline, Arc, Semicircle and Curve. */
       offset = snap_8_angles(dif);
+      offset = snap_cps(ptd, float2(event->mval), offset + start, ptd.temp_control_points.size());
+      offset -= start;
     }
   }
+
   offset *= 0.5f;
 
   float2 center = start + offset;
@@ -921,8 +993,7 @@ static void grease_pencil_primitive_extruding_update(PrimitiveToolOperation &ptd
     case PrimitiveType::Semicircle: {
       const float2 start = center - offset;
       const float2 end = center + offset;
-      const float2 org = end - center;
-      const float2 cp = float2(-org.y, org.x) + center;
+      const float2 cp = rotate_point(end, 90, center);
 
       ptd.control_points.last(2) = ptd.placement.project(start);
       ptd.control_points.last(1) = ptd.placement.project(cp);
@@ -978,14 +1049,10 @@ static void grease_pencil_primitive_rotate_cps(PrimitiveToolOperation &ptd,
   const float2 cp = ED_view3d_project_float_v2_m4(
       ptd.vc.region, ptd.temp_control_points[cp_index], ptd.projection);
 
-  const float rotation = angle_signed_v2v2(active_pos - start, end - start);
-  const float len = math::length(active_pos - start) / math::length(end - start);
+  const float angle = angle_signed_v2v2(active_pos - start, end - start);
+  const float scale = math::length(active_pos - start) / math::length(end - start);
 
-  const float2 dif = (cp - start);
-  const float c = math::cos(rotation);
-  const float s = math::sin(rotation);
-  const float2x2 rot = float2x2(float2(c, s), float2(-s, c));
-  const float2 pos2 = rot * dif * len + start;
+  const float2 pos2 = rotate_point(cp, angle, start, scale);
 
   ptd.control_points[cp_index] = ptd.placement.project(pos2);
 }
@@ -993,16 +1060,25 @@ static void grease_pencil_primitive_rotate_cps(PrimitiveToolOperation &ptd,
 static void grease_pencil_primitive_grab_update(PrimitiveToolOperation &ptd, const wmEvent *event)
 {
   BLI_assert(ptd.active_control_point_index != -1);
-  const float3 pos = ptd.placement.project(float2(event->mval));
+  float2 active_pos = float2(event->mval);
+
+  if (multi_segment_primitive(ptd) && event->modifier & KM_SHIFT) {
+    const float2 start = ED_view3d_project_float_v2_m4(
+        ptd.vc.region, ptd.temp_control_points[ptd.active_control_point_index], ptd.projection);
+    active_pos = snap_8_angles(active_pos - start) + start;
+    active_pos = snap_cps(ptd, float2(event->mval), active_pos, ptd.active_control_point_index);
+  }
+
+  const float3 pos = ptd.placement.project(active_pos);
   ptd.control_points[ptd.active_control_point_index] = pos;
 
   if (ptd.type == PrimitiveType::Semicircle) {
-    grease_pencil_primitive_rotate_cps(ptd, float2(event->mval), -1);
-    grease_pencil_primitive_rotate_cps(ptd, float2(event->mval), 1);
+    grease_pencil_primitive_rotate_cps(ptd, active_pos, -1);
+    grease_pencil_primitive_rotate_cps(ptd, active_pos, 1);
     return;
   }
 
-  if (!ELEM(ptd.type, PrimitiveType::Circle, PrimitiveType::Box)) {
+  if (multi_segment_primitive(ptd)) {
     return;
   }
 
@@ -1041,7 +1117,7 @@ static void grease_pencil_primitive_drag_update(PrimitiveToolOperation &ptd, con
 
 static float2 primitive_center_of_mass(const PrimitiveToolOperation &ptd)
 {
-  if (ELEM(ptd.type, PrimitiveType::Box, PrimitiveType::Circle)) {
+  if (cyclic_primitive(ptd)) {
     return ED_view3d_project_float_v2_m4(
         ptd.vc.region, ptd.temp_control_points[control_point_center], ptd.projection);
   }
