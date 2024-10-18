@@ -1682,6 +1682,8 @@ static StructRNA *rna_Operator_register(Main *bmain,
   if (!WM_operator_py_idname_ok_or_report(reports, identifier, dummy_ot.idname)) {
     return nullptr;
   }
+  WM_operator_py_ui_strings_ensure_valid_utf8(
+      temp_buffers.name, temp_buffers.description, temp_buffers.translation_context);
 
   char idname_conv[sizeof(dummy_operator.idname)];
   WM_operator_bl_idname(idname_conv, dummy_ot.idname); /* convert the idname from python */
@@ -1830,6 +1832,8 @@ static StructRNA *rna_MacroOperator_register(Main *bmain,
   if (!WM_operator_py_idname_ok_or_report(reports, identifier, dummy_ot.idname)) {
     return nullptr;
   }
+  WM_operator_py_ui_strings_ensure_valid_utf8(
+      temp_buffers.name, temp_buffers.description, temp_buffers.translation_context);
 
   /* check if we have registered this operator type before, and remove it */
   {

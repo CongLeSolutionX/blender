@@ -196,6 +196,15 @@ bool WM_operator_py_idname_ok_or_report(ReportList *reports,
                                         const char *classname,
                                         const char *idname)
 {
+  if (BLI_str_utf8_invalid_byte(idname, strlen(idname)) != -1) {
+    BKE_reportf(reports,
+                RPT_ERROR,
+                "Registering operator class: '%s', invalid utf-8 character in '%s'",
+                idname,
+                idname);
+    return false;
+  }
+
   const char *ch = idname;
   int dot = 0;
   int i;
@@ -247,6 +256,21 @@ bool WM_operator_py_idname_ok_or_report(ReportList *reports,
     return false;
   }
   return true;
+}
+
+void WM_operator_py_ui_strings_ensure_valid_utf8(char *name,
+                                                 char *description,
+                                                 char *translation_context)
+{
+  auto clean_str = [](char *str) {
+    const int stripped_bytes = BLI_str_utf8_invalid_strip(str, strlen(str));
+    if (stripped_bytes > 0) {
+      CLOG_WARN(WM_LOG_OPERATORS, "Operator string '%s' contains invalid utf-8 characters", str);
+    }
+  };
+  clean_str(name);
+  clean_str(description);
+  clean_str(translation_context);
 }
 
 std::string WM_operator_pystring_ex(bContext *C,

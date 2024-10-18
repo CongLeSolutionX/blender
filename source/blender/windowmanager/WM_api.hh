@@ -1131,6 +1131,13 @@ bool WM_operator_py_idname_ok_or_report(ReportList *reports,
                                         const char *classname,
                                         const char *idname);
 /**
+ * Checks if the strings contain valid utf-8 encoded strings. If not, invalid bytes will be
+ * stripped.
+ */
+void WM_operator_py_ui_strings_ensure_valid_utf8(char *name,
+                                                 char *description,
+                                                 char *translation_context);
+/**
  * Return true when an operators name follows the `SOME_OT_op` naming convention.
  */
 bool WM_operator_bl_idname_is_valid(const char *idname);
