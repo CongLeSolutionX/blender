@@ -4258,7 +4258,6 @@ static void sculpt_update_cache_variants(bContext *C, Sculpt &sd, Object &ob, Po
     RNA_float_get_array(ptr, "location", cache.location);
   }
 
-  cache.pen_flip = RNA_boolean_get(ptr, "pen_flip");
   RNA_float_get_array(ptr, "mouse", cache.mouse);
   RNA_float_get_array(ptr, "mouse_event", cache.mouse_event);
 
