@@ -234,38 +234,33 @@ static void calculate_aligned_handles(const TransCustomData &custom_data,
   const CurvesTransformData &transform_data = *static_cast<const CurvesTransformData *>(
       custom_data.data);
 
-  const VArray<int8_t> handle_types_left = curves.handle_types_left();
-  const VArray<int8_t> handle_types_right = curves.handle_types_right();
+  const VArraySpan<int8_t> handle_types_left = curves.handle_types_left();
+  const VArraySpan<int8_t> handle_types_right = curves.handle_types_right();
   const Span<float3> positions = curves.positions();
   MutableSpan<float3> handle_positions_left = curves.handle_positions_left_for_write();
   MutableSpan<float3> handle_positions_right = curves.handle_positions_right_for_write();
 
   IndexMaskMemory memory;
-  /* When knot is selected both handles are treaded as selected and transformed together.
+  /* When control point is selected both handles are treaded as selected and transformed together.
    * So these will be excluded from alignment. */
-  const IndexMask &selected_knots = transform_data.selection_by_layer[layer];
+  const IndexMask &selected_points = transform_data.selection_by_layer[layer];
   const IndexMask selected_left_handles = IndexMask::from_difference(
-      transform_data.selection_by_layer[layer + 1], selected_knots, memory);
+      transform_data.selection_by_layer[layer + 1], selected_points, memory);
   index_mask::ExprBuilder builder;
   /* Left are excluded here to align only one handle when both are selected. */
   const IndexMask selected_right_handles = evaluate_expression(
       builder.subtract({&transform_data.selection_by_layer[layer + 2]},
-                       {&selected_left_handles, &selected_knots}),
+                       {&selected_left_handles, &selected_points}),
       memory);
 
   const IndexMask &affected_handles = IndexMask::from_union(
       selected_left_handles, selected_right_handles, memory);
 
-  auto aligned_handles_to_selection = [&affected_handles,
-                                       &memory](const VArray<int8_t> &handle_types) {
-    IndexMask selection;
-    devirtualize_varray(handle_types, [&](const auto handle_types) {
-      selection = IndexMask::from_predicate(
-          affected_handles, GrainSize(4096), memory, [&](const int64_t i) {
-            return handle_types[i] == BEZIER_HANDLE_ALIGN;
-          });
-    });
-    return selection;
+  auto aligned_handles_to_selection = [&](const VArraySpan<int8_t> &handle_types) {
+    return IndexMask::from_predicate(
+        affected_handles, GrainSize(4096), memory, [&](const int64_t i) {
+          return handle_types[i] == BEZIER_HANDLE_ALIGN;
+        });
   };
 
   const IndexMask both_aligned = IndexMask::from_intersection(

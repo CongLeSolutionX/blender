@@ -186,9 +186,9 @@ void calculate_aligned_handles(const IndexMask &selection,
                                const Span<float3> align_with,
                                MutableSpan<float3> align_handles)
 {
-  selection.foreach_index_optimized<int>(GrainSize(4096), [&](const int point_i) {
-    align_handles[point_i] = calculate_aligned_handle(
-        positions[point_i], align_with[point_i], align_handles[point_i]);
+  selection.foreach_index_optimized<int>(GrainSize(4096), [&](const int point) {
+    align_handles[point] = calculate_aligned_handle(
+        positions[point], align_with[point], align_handles[point]);
   });
 }
 
