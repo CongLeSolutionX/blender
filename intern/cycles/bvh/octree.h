@@ -113,9 +113,7 @@ class Octree {
   vector<Extrema<float>> sigmas;
 
   /* World volume. */
-  /* TODO(weizhen): we only need the max density after properly evaluating volume shaders. */
-  float background_density_max;
-  float background_density_min;
+  Extrema<float> background_density;
 };
 
 CCL_NAMESPACE_END

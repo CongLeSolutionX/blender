@@ -224,8 +224,7 @@ void Octree::flatten(KernelOctreeNode *knodes)
   /* TODO(weizhen): is there a better way than putting world volume in the octree array? */
   KernelOctreeNode &knode = knodes[node_index++];
   knode.is_leaf = false;
-  knode.sigma.max = background_density_max;
-  knode.sigma.min = has_world_volume() ? background_density_min : 0.0f;
+  knode.sigma = background_density;
   knode.bbox.max = make_float3(FLT_MAX);
   knode.bbox.min = -make_float3(FLT_MAX);
 
@@ -394,6 +393,27 @@ void Octree::evaluate_volume_density_(Device *device, Progress &progress)
   /* Min and max. */
   const int num_channels = 2;
 
+  auto eval_density = [&](const Object *object,
+                          vector<Extrema<float>> &dest,
+                          const int3 index_min,
+                          const int3 index_range) {
+    const int size = index_range.x * index_range.y * index_range.z;
+
+    /* Evaluate shader on device. */
+    ShaderEval shader_eval(device, progress);
+    shader_eval.eval(
+        SHADER_EVAL_VOLUME_DENSITY,
+        size * 2,
+        num_channels,
+        [&](device_vector<KernelShaderEvalInput> &d_input) {
+          fill_shader_input(d_input, this, object, index_min, index_range);
+          return size;
+        },
+        [&](device_vector<float> &d_output) {
+          read_shader_output(d_output, this, index_min, index_range, num_channels, dest);
+        });
+  };
+
   /* TODO(weizhen): add world. */
   for (const Object *object : root_->objects) {
     /* Evaluate density inside object bounds. */
@@ -401,15 +421,10 @@ void Octree::evaluate_volume_density_(Device *device, Progress &progress)
     const int3 index_max = world_to_ceil_index(object->bounds.max);
 
     const int3 index_range = index_max - index_min;
-    const int valid_size = index_range.x * index_range.y * index_range.z;
 
 #ifdef WITH_OPENVDB
     /* Create SDF grid for mesh volumes, to determine whether a certain point is in the
      * interior of the mesh. */
-    /* TODO(weizhen): no need to create when there is only one mesh volume. */
-    /* TODO(weizhen): pre-processing takes longer now because reading VDB grid is slow. Check if
-     * fewer grids really improves rendering performance (doesn't seem to be the case, on CPU at
-     * least). */
     const Geometry *geom = object->get_geometry();
     if (geom->is_mesh() && !vdb_map.count(geom)) {
       const Mesh *mesh = static_cast<const Mesh *>(geom);
@@ -420,18 +435,7 @@ void Octree::evaluate_volume_density_(Device *device, Progress &progress)
     /* TODO(weizhen): specialize homogeneous volume and evaluate less points? */
 
     /* Evaluate shader on device. */
-    ShaderEval shader_eval(device, progress);
-    shader_eval.eval(
-        SHADER_EVAL_VOLUME_DENSITY,
-        valid_size * 2,
-        num_channels,
-        [&](device_vector<KernelShaderEvalInput> &d_input) {
-          fill_shader_input(d_input, this, object, index_min, index_range);
-          return valid_size;
-        },
-        [&](device_vector<float> &d_output) {
-          read_shader_output(d_output, this, index_min, index_range, num_channels, sigmas);
-        });
+    eval_density(object, sigmas, index_min, index_range);
   }
 }
 
@@ -485,19 +489,12 @@ Octree::Octree(const Scene *scene)
 
   /* Evaluate world volume density. */
   Shader *bg_shader = scene->background->get_shader(scene);
-  background_density_max = volume_density_scale(bg_shader);
-  if (background_density_max > 0.0f) {
-    if (!bg_shader->has_volume_spatial_varying) {
-      background_density_min = background_density_max;
-    }
-    else {
-      /* TODO(weizhen): can we be more sure about the minimal density. */
-      background_density_min = 0.0f;
-    }
+  background_density.max = volume_density_scale(bg_shader);
+  if (!bg_shader->has_volume_spatial_varying) {
+    background_density.min = background_density.max;
   }
   else {
-    /* So that fminf(a, FLT_MAX) always returns a. */
-    background_density_min = FLT_MAX;
+    background_density.min = 0.0f;
   }
 
   /* 2^max_level. */
@@ -518,7 +515,7 @@ Octree::Octree(const Scene *scene)
 bool Octree::is_empty() const
 {
   /* TODO(weizhen): zero size? */
-  return !root_->bbox.valid();
+  return !(root_->bbox.valid() || has_world_volume());
 }
 
 int Octree::get_num_nodes() const
@@ -529,7 +526,7 @@ int Octree::get_num_nodes() const
 
 bool Octree::has_world_volume() const
 {
-  return background_density_max > 0.0f;
+  return background_density.max > 0.0f;
 }
 
 void Octree::visualize(KernelOctreeNode *knodes, const char *filename) const
