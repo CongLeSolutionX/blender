@@ -168,9 +168,8 @@ struct StrokeCache {
    * Some brushes change behavior drastically depending on the directional value (i.e. the smooth
    * and enhance details functionality being bound to the Smooth brush).
    *
-   * Because the tablet `pen_flip` variable is not invariant over the entirety of the stroke, we
-   * need to store the initial direction at the beginning of the stroke to prevent switching the
-   * brush type mid-stroke.
+   * We store the initial direction here to be able to discern the initial intent without needing
+   * to inspect the sign of the brush direction, as that has ambiguity when the strength is 0.
    */
   bool initial_direction_flipped;
 
