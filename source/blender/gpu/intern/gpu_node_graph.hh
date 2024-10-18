@@ -76,6 +76,13 @@ struct GPUNode {
 
   ListBase inputs;
   ListBase outputs;
+
+  /* Zones. */
+  int zone_index;
+  bool is_zone_end;
+  /* If >= 0 overrides the number of parameters passed to the function call. */
+  int parameter_input_count;
+  int parameter_output_count;
 };
 
 struct GPUNodeLink {

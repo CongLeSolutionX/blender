@@ -124,6 +124,16 @@ static bool node_insert_link(bNodeTree *ntree, bNode *node, bNodeLink *link)
       *ntree, *node, *output_node, *link);
 }
 
+static int node_shader_fn(GPUMaterial *mat,
+                          bNode *node,
+                          bNodeExecData * /*execdata*/,
+                          GPUNodeStack *in,
+                          GPUNodeStack *out)
+{
+  int zone_id = ((NodeShaderRepeatInput *)node->storage)->output_node_id;
+  return GPU_stack_link_zone(mat, node, "REPEAT_BEGIN", in, out, zone_id, false, 1, 1);
+}
+
 static void node_register()
 {
   static blender::bke::bNodeType ntype;
@@ -137,6 +147,7 @@ static void node_register()
   ntype.draw_buttons_ex = node_layout_ex;
   blender::bke::node_type_storage(
       &ntype, "NodeShaderRepeatInput", node_free_standard_storage, node_copy_standard_storage);
+  ntype.gpu_fn = node_shader_fn;
   blender::bke::node_register_type(&ntype);
 }
 // NOD_REGISTER_NODE(node_register)
@@ -210,6 +221,16 @@ static void node_operators()
   socket_items::ops::make_common_operators<ShRepeatItemsAccessor>();
 }
 
+static int node_shader_fn(GPUMaterial *mat,
+                          bNode *node,
+                          bNodeExecData * /*execdata*/,
+                          GPUNodeStack *in,
+                          GPUNodeStack *out)
+{
+  int zone_id = node->identifier;
+  return GPU_stack_link_zone(mat, node, "REPEAT_END", in, out, zone_id, true, 0, 0);
+}
+
 static void node_register()
 {
   static blender::bke::bNodeType ntype;
@@ -223,6 +244,7 @@ static void node_register()
   ntype.register_operators = node_operators;
   blender::bke::node_type_storage(
       &ntype, "NodeShaderRepeatOutput", node_free_storage, node_copy_storage);
+  ntype.gpu_fn = node_shader_fn;
   blender::bke::node_register_type(&ntype);
 }
 // NOD_REGISTER_NODE(node_register)

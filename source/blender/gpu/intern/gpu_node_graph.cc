@@ -59,6 +59,10 @@ static GPUNode *gpu_node_create(const char *name)
   GPUNode *node = MEM_cnew<GPUNode>("GPUNode");
 
   node->name = name;
+  node->zone_index = -1;
+  node->is_zone_end = false;
+  node->parameter_input_count = -1;
+  node->parameter_output_count = -1;
 
   return node;
 }
@@ -832,6 +836,52 @@ bool GPU_stack_link(GPUMaterial *material,
   va_end(params);
 
   return valid;
+}
+
+bool GPU_stack_link_zone(GPUMaterial *material,
+                         const bNode *bnode,
+                         const char *name,
+                         GPUNodeStack *in,
+                         GPUNodeStack *out,
+                         int zone_index,
+                         bool is_zone_end,
+                         int parameter_input_count,
+                         int parameter_output_count)
+{
+  GPUNodeGraph *graph = gpu_material_node_graph(material);
+  GPUNode *node;
+  int i, totin, totout;
+
+  node = gpu_node_create(name);
+  node->zone_index = zone_index;
+  node->is_zone_end = is_zone_end;
+  node->parameter_input_count = parameter_input_count;
+  node->parameter_output_count = parameter_output_count;
+
+  totin = 0;
+  totout = 0;
+
+  if (in) {
+    for (i = 0; !in[i].end; i++) {
+      if (in[i].type != GPU_NONE) {
+        gpu_node_input_socket(material, bnode, node, &in[i], i);
+        totin++;
+      }
+    }
+  }
+
+  if (out) {
+    for (i = 0; !out[i].end; i++) {
+      if (out[i].type != GPU_NONE) {
+        gpu_node_output(node, out[i].type, &out[i].link);
+        totout++;
+      }
+    }
+  }
+
+  BLI_addtail(&graph->nodes, node);
+
+  return true;
 }
 
 /* Node Graph */
