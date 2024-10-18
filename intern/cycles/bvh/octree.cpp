@@ -65,6 +65,16 @@ __forceinline int Octree::flatten_index(int x, int y, int z) const
   return x + width * (y + z * width);
 }
 
+bool OctreeNode::contains_homogeneous_volume() const
+{
+  if (objects.size() > 1) {
+    /* If node contains multiple objects, do not consider it as homogeneous. */
+    return false;
+  }
+
+  return objects[0]->is_homogeneous_volume();
+}
+
 bool Octree::should_split(std::shared_ptr<OctreeNode> &node)
 {
   if (node->objects.empty()) {
@@ -93,11 +103,8 @@ bool Octree::should_split(std::shared_ptr<OctreeNode> &node)
       [](Extrema<float> a, Extrema<float> b) -> Extrema<float> { return join(a, b); });
 
   /* Do not split homogeneous volume. Volume stack already skips the zero-density regions. */
-  const bool homogeneous = (node->objects.size() == 1) &&
-                           node->objects[0]->is_homogeneous_volume();
-  node->sigma.max = sigma_extrema.max;  // + background_density_max;
-  node->sigma.min = homogeneous ? sigma_extrema.max :
-                                  sigma_extrema.min;  // + background_density_min;
+  node->sigma.max = sigma_extrema.max;
+  node->sigma.min = node->contains_homogeneous_volume() ? sigma_extrema.max : sigma_extrema.min;
 
   /* TODO(weizhen): force subdivision of aggregate nodes that are larger than the volume contained,
    * regardless of the volume’s majorant extinction. */
@@ -128,14 +135,14 @@ shared_ptr<OctreeInternalNode> Octree::make_internal(shared_ptr<OctreeNode> &nod
   return internal;
 }
 
-void Octree::recursive_build_(shared_ptr<OctreeNode> &node)
+void Octree::recursive_build_(shared_ptr<OctreeNode> &octree_node)
 {
-  if (!should_split(node)) {
+  if (!should_split(octree_node)) {
     return;
   }
 
   /* Make the current node an internal node. */
-  auto internal = make_internal(node);
+  auto internal = make_internal(octree_node);
 
   for (auto &child : internal->children_) {
     child->objects.reserve(internal->objects.size());
@@ -149,7 +156,7 @@ void Octree::recursive_build_(shared_ptr<OctreeNode> &node)
     task_pool.push([&] { recursive_build_(child); });
   }
 
-  node = internal;
+  octree_node = internal;
 }
 
 #ifdef WITH_OPENVDB

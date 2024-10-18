@@ -39,6 +39,8 @@ struct OctreeNode {
   OctreeNode() : bbox(BoundBox::empty), level(0) {}
   OctreeNode(BoundBox bbox_, int level_) : bbox(bbox_), level(level_) {}
   virtual ~OctreeNode() = default;
+
+  bool contains_homogeneous_volume() const;
 };
 
 struct OctreeInternalNode : public OctreeNode {
