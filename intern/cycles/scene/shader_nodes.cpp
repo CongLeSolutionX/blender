@@ -1238,6 +1238,7 @@ NODE_DEFINE(RoundedPolygonTextureNode)
   SOCKET_OUT_FLOAT(r_gon_field, "R_gon Field");
   SOCKET_OUT_POINT(segment_coordinates, "Segment Coordinates");
   SOCKET_OUT_FLOAT(max_unit_parameter, "Max Unit Parameter");
+  SOCKET_OUT_FLOAT(x_axis_A_angle_bisector, "X_axis To Angle Bisector Angle");
 
   return type;
 }
@@ -1257,6 +1258,8 @@ void RoundedPolygonTextureNode::compile(SVMCompiler &compiler)
       output("Segment Coordinates"));
   int max_unit_parameter_stack_offset = compiler.stack_assign_if_linked(
       output("Max Unit Parameter"));
+  int x_axis_A_angle_bisector_stack_offset = compiler.stack_assign_if_linked(
+      output("X_axis To Angle Bisector Angle"));
 
   compiler.add_node(
       NODE_TEX_ROUNDED_POLYGON,
@@ -1266,7 +1269,8 @@ void RoundedPolygonTextureNode::compile(SVMCompiler &compiler)
                              r_gon_roundness_stack_offset,
                              r_gon_field_stack_offset,
                              segment_coordinates_field_stack_offset),
-      max_unit_parameter_stack_offset);
+      compiler.encode_uchar4(max_unit_parameter_stack_offset,
+                             x_axis_A_angle_bisector_stack_offset));
   compiler.add_node(
       __float_as_int(scale), __float_as_int(r_gon_sides), __float_as_int(r_gon_roundness));
 

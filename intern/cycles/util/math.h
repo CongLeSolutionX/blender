@@ -95,7 +95,7 @@ CCL_NAMESPACE_BEGIN
 
 /* Scalar */
 
-ccl_device_inline float square(float a)
+ccl_device_inline float squaref(float a)
 {
   return a * a;
 }
