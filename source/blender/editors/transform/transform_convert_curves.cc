@@ -65,31 +65,28 @@ static void calculate_curve_point_distances_for_proportional_editing(
   }
 }
 
-static void update_handle_types(
-    const IndexMask &auto_handles,
-    const IndexMask &auto_handles_opposite,
-    const IndexMask &vector_handles,
-    const index_mask::Expr &selected_handles_nonselected_points,
-    const index_mask::Expr &selected_handles_nonselected_points_opposite,
-    MutableSpan<int8_t> handle_types,
-    index_mask::ExprBuilder &builder,
-    blender::IndexMaskMemory &memory)
+static void update_handle_types(const IndexMask &auto_handles,
+                                const IndexMask &auto_handles_opposite,
+                                const IndexMask &vector_handles,
+                                const index_mask::Expr &selected_handles,
+                                const index_mask::Expr &selected_handles_opposite,
+                                MutableSpan<int8_t> handle_types,
+                                index_mask::ExprBuilder &builder,
+                                blender::IndexMaskMemory &memory)
 {
   const IndexMask &convert_to_align = evaluate_expression(
       builder.merge({
           /* Selected BEZIER_HANDLE_AUTO handles from one side. */
-          &builder.intersect({&selected_handles_nonselected_points, &auto_handles}),
+          &builder.intersect({&selected_handles, &auto_handles}),
           /* Both sides are BEZIER_HANDLE_AUTO and opposite side is selected.
            * It ensures to convert both handles, when only one is transformed. */
-          &builder.intersect({&selected_handles_nonselected_points_opposite,
-                              &auto_handles_opposite,
-                              &auto_handles}),
+          &builder.intersect({&selected_handles_opposite, &auto_handles_opposite, &auto_handles}),
       }),
       memory);
   index_mask::masked_fill(handle_types, int8_t(BEZIER_HANDLE_ALIGN), convert_to_align);
   /* Selected BEZIER_HANDLE_VECTOR handles. */
   const IndexMask &convert_to_free = evaluate_expression(
-      builder.intersect({&selected_handles_nonselected_points, &vector_handles}), memory);
+      builder.intersect({&selected_handles, &vector_handles}), memory);
   index_mask::masked_fill(handle_types, int8_t(BEZIER_HANDLE_FREE), convert_to_free);
 }
 
@@ -171,7 +168,7 @@ static void createTransCurvesVerts(bContext * /*C*/, TransInfo *t)
       const index_mask::Expr &selected_bezier_points = builder.intersect(
           {&bezier_points, &selection_per_attribute[0]});
 
-      /* Select bezier handles that must be transformed if the knot (main control point) is
+      /* Select bezier handles that must be transformed because the control point is
        * selected. */
       selection_per_attribute[1] = evaluate_expression(
           builder.merge({&selection_per_attribute[1], &selected_bezier_points}),
@@ -180,18 +177,16 @@ static void createTransCurvesVerts(bContext * /*C*/, TransInfo *t)
           builder.merge({&selection_per_attribute[2], &selected_bezier_points}),
           curves_transform_data->memory);
 
-      const index_mask::Expr &nonselected_points = builder.subtract(&bezier_points,
-                                                                    {&selected_bezier_points});
-      const index_mask::Expr &selected_left_nonselected_points = builder.intersect(
-          {&selection_per_attribute[1], &nonselected_points});
-      const index_mask::Expr &selected_right_nonselected_points = builder.intersect(
-          {&selection_per_attribute[2], &nonselected_points});
+      const index_mask::Expr &selected_left = builder.subtract(&selection_per_attribute[1],
+                                                               {&selected_bezier_points});
+      const index_mask::Expr &selected_right = builder.subtract(&selection_per_attribute[2],
+                                                                {&selected_bezier_points});
 
       update_handle_types(auto_left,
                           auto_right,
                           vector_left,
-                          selected_left_nonselected_points,
-                          selected_right_nonselected_points,
+                          selected_left,
+                          selected_right,
                           left_handle_types,
                           builder,
                           memory);
@@ -199,8 +194,8 @@ static void createTransCurvesVerts(bContext * /*C*/, TransInfo *t)
       update_handle_types(auto_right,
                           auto_left,
                           vector_right,
-                          selected_right_nonselected_points,
-                          selected_left_nonselected_points,
+                          selected_right,
+                          selected_left,
                           right_handle_types,
                           builder,
                           memory);
