@@ -435,6 +435,9 @@ class CommandBufferLog : public VKCommandBufferInterface {
     log_.append(ss.str());
   }
 
+  void begin_render_pass(const VkRenderPassBeginInfo * /*p_render_pass_begin_info*/) {}
+  void end_render_pass() {}
+
   void begin_query(VkQueryPool /*vk_query_pool*/,
                    uint32_t /*query_index*/,
                    VkQueryControlFlags /*vk_query_control_flags*/) override
