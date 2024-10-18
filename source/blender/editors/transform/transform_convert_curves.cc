@@ -187,10 +187,6 @@ static void createTransCurvesVerts(bContext * /*C*/, TransInfo *t)
 
     /* Alter selection as in legacy curves bezt_select_to_transform_triple_flag(). */
     if (bezier_points.size() > 0) {
-      blender::IndexMaskMemory memory;
-      MutableSpan<int8_t> handle_types_left = curves.handle_types_left_for_write();
-      MutableSpan<int8_t> handle_types_right = curves.handle_types_right_for_write();
-
       index_mask::ExprBuilder builder;
       const index_mask::Expr &selected_bezier_points = builder.intersect(
           {&bezier_points, &selection_per_attribute[0]});
@@ -204,15 +200,17 @@ static void createTransCurvesVerts(bContext * /*C*/, TransInfo *t)
           builder.merge({&selection_per_attribute[2], &selected_bezier_points}),
           curves_transform_data->memory);
 
+      blender::IndexMaskMemory memory;
       /* Selected handles, but not the control point. */
       const IndexMask selected_left = evaluate_expression(
           builder.subtract(&selection_per_attribute[1], {&selected_bezier_points}), memory);
       const IndexMask selected_right = evaluate_expression(
           builder.subtract(&selection_per_attribute[2], {&selected_bezier_points}), memory);
 
+      MutableSpan<int8_t> handle_types_left = curves.handle_types_left_for_write();
+      MutableSpan<int8_t> handle_types_right = curves.handle_types_right_for_write();
       update_vector_handle_types(selected_left, handle_types_left);
       update_vector_handle_types(selected_right, handle_types_right);
-
       update_auto_handle_types(
           selected_left, selected_right, bezier_points, handle_types_left, handle_types_right);
     }
