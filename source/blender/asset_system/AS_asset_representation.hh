@@ -44,7 +44,8 @@ class AssetRepresentation : NonCopyable, NonMovable {
     std::string name;
     int id_type = 0;
     std::unique_ptr<AssetMetaData> metadata_ = nullptr;
-    bool is_essentials_override_ = false;
+
+    std::string relative_identifier_override_;
   };
   std::variant<ExternalAsset, ID *> asset_;
 
@@ -56,8 +57,14 @@ class AssetRepresentation : NonCopyable, NonMovable {
                       StringRef name,
                       int id_type,
                       std::unique_ptr<AssetMetaData> metadata,
-                      const AssetLibrary &owner_asset_library,
-                      bool is_essentials_override = false);
+                      const AssetLibrary &owner_asset_library);
+  /** Constructs an asset representation for an external ID. The asset will not be editable. */
+  AssetRepresentation(StringRef relative_asset_path,
+                      StringRef relative_asset_override_path,
+                      StringRef name,
+                      int id_type,
+                      std::unique_ptr<AssetMetaData> metadata,
+                      const AssetLibrary &owner_asset_library);
   /**
    * Constructs an asset representation for an ID stored in the current file. This makes the asset
    * local and fully editable.
@@ -71,6 +78,11 @@ class AssetRepresentation : NonCopyable, NonMovable {
    * Create a weak reference for this asset that can be written to files, but can break under a
    * number of conditions.
    * A weak reference can only be created if an asset representation is owned by an asset library.
+   *
+   * For overridden assets (#AssetRepresentation::is_essentials_override()), this will return the
+   * un-overwritten path. This is generally what should be used to refer to assets. Only when
+   * actually accessing the asset files the reference should be resolved to the overridden path
+   * (API in #AS_essentials_library.hh).
    */
   AssetWeakReference make_weak_reference() const;
 
@@ -78,9 +90,13 @@ class AssetRepresentation : NonCopyable, NonMovable {
   ID_Type get_id_type() const;
   AssetMetaData &get_metadata() const;
 
-  StringRefNull library_relative_identifier() const;
-  std::string full_path() const;
-  std::string full_library_path() const;
+  /**
+   * \param follow_override: If the asset location is an override, return the override identifier,
+   * not the overridden one.
+   */
+  StringRefNull library_relative_identifier(const bool follow_override = false) const;
+  std::string full_path(bool follow_override) const;
+  std::string full_library_path(bool follow_override) const;
 
   /**
    * Get the import method to use for this asset. A different one may be used if

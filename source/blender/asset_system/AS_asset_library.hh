@@ -141,8 +141,13 @@ class AssetLibrary {
   std::weak_ptr<AssetRepresentation> add_external_asset(StringRef relative_asset_path,
                                                         StringRef name,
                                                         int id_type,
-                                                        std::unique_ptr<AssetMetaData> metadata,
-                                                        bool is_essentials_override = false);
+                                                        std::unique_ptr<AssetMetaData> metadata);
+  std::weak_ptr<AssetRepresentation> add_external_override_asset(
+      StringRef relative_asset_path,
+      StringRef relative_asset_override_path,
+      StringRef name,
+      int id_type,
+      std::unique_ptr<AssetMetaData> metadata);
   /** See #AssetLibrary::add_external_asset(). */
   std::weak_ptr<AssetRepresentation> add_local_id_asset(StringRef relative_asset_path, ID &id);
   /**
@@ -177,7 +182,8 @@ class AssetLibrary {
 
   void on_blend_save_post(Main *bmain, PointerRNA **pointers, int num_pointers);
 
-  std::string resolve_asset_weak_reference_to_full_path(const AssetWeakReference &asset_reference);
+  std::string resolve_asset_weak_reference_to_full_path(const AssetWeakReference &asset_reference,
+                                                        bool follow_override);
 
   eAssetLibraryType library_type() const;
   StringRefNull name() const;
@@ -282,7 +288,13 @@ void AS_asset_library_remap_ids(const blender::bke::id::IDRemapper &mappings);
  * \note Only works for asset libraries on disk and the "Current File" one (others can't be
  *       resolved).
  *
- * \param r_path_buffer: Buffer to hold the result in on success. Will be the full path with null
+ * \param follow_override: If there is an override for the referenced asset, resolve the path to
+ *                         the override instead. The essentials asset library allows overriding
+ *                         individual assets. The override will be stored at a different location
+ *                         on disk. For the most part the non-overridden path should be used (so
+ *                         this should be false), only to access the actual files on disk the
+ *                         override path should be used.
+ * \param r_path_buffer: Buffer to hold* the result in on success. Will be the full path with null
  *                       terminators instead of slashes separating the directory, group and name
  *                       components. Must be at least #FILE_MAX_LIBEXTRA long.
  * \param r_dir: Returns the .blend file path with native slashes on success. Optional (passing
@@ -292,6 +304,7 @@ void AS_asset_library_remap_ids(const blender::bke::id::IDRemapper &mappings);
  * \param r_name: Returns the ID name on success. Optional (passing null is allowed).
  */
 void AS_asset_full_path_explode_from_weak_ref(const AssetWeakReference *asset_reference,
+                                              bool follow_override,
                                               char r_path_buffer[1090 /* FILE_MAX_LIBEXTRA */],
                                               char **r_dir,
                                               char **r_group,

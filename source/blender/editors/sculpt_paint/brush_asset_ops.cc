@@ -457,7 +457,7 @@ static int brush_asset_edit_metadata_exec(bContext *C, wmOperator *op)
   char asset_full_path_buffer[FILE_MAX_LIBEXTRA];
   char *file_path = nullptr;
   AS_asset_full_path_explode_from_weak_ref(
-      &brush_weak_ref, asset_full_path_buffer, &file_path, nullptr, nullptr);
+      &brush_weak_ref, false, asset_full_path_buffer, &file_path, nullptr, nullptr);
   if (!file_path) {
     BLI_assert_unreachable();
     return OPERATOR_CANCELLED;

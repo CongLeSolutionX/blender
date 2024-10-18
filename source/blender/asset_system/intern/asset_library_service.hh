@@ -115,7 +115,7 @@ class AssetLibraryService {
   /** Get a valid library path from the weak reference. Empty if e.g. the reference is to a local
    * asset. */
   std::string resolve_asset_weak_reference_to_library_path(
-      const AssetWeakReference &asset_reference);
+      const AssetWeakReference &asset_reference, bool follow_override);
   /**
    * Attempt to build a full path to an asset based on the currently available (not necessary
    * loaded) asset libraries. The path is not guaranteed to exist. The returned path will be
@@ -123,7 +123,8 @@ class AssetLibraryService {
    *
    * \note Only works for asset libraries on disk (others can't be resolved).
    */
-  std::string resolve_asset_weak_reference_to_full_path(const AssetWeakReference &asset_reference);
+  std::string resolve_asset_weak_reference_to_full_path(const AssetWeakReference &asset_reference,
+                                                        bool follow_override);
   /** Struct to hold results from path explosion functions
    * (#resolve_asset_weak_reference_to_exploded_path()). */
   struct ExplodedPath {
@@ -143,7 +144,7 @@ class AssetLibraryService {
    * #resolve_asset_weak_reference_to_library_path, with StringRefs to the `dir` (i.e. blendfile
    * path), `group` (i.e. ID type) and `name` (i.e. ID name) parts. */
   std::optional<ExplodedPath> resolve_asset_weak_reference_to_exploded_path(
-      const AssetWeakReference &asset_reference);
+      const AssetWeakReference &asset_reference, bool follow_override);
 
   /** Returns whether there are any known asset libraries with unsaved catalog edits. */
   bool has_any_unsaved_catalogs() const;

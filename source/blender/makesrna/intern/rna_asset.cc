@@ -435,28 +435,28 @@ static PointerRNA rna_AssetRepresentation_local_id_get(PointerRNA *ptr)
 static void rna_AssetRepresentation_full_library_path_get(PointerRNA *ptr, char *value)
 {
   const AssetRepresentation *asset = static_cast<const AssetRepresentation *>(ptr->data);
-  const std::string full_library_path = asset->full_library_path();
+  const std::string full_library_path = asset->full_library_path(true);
   BLI_strncpy(value, full_library_path.c_str(), full_library_path.size() + 1);
 }
 
 static int rna_AssetRepresentation_full_library_path_length(PointerRNA *ptr)
 {
   const AssetRepresentation *asset = static_cast<const AssetRepresentation *>(ptr->data);
-  const std::string full_library_path = asset->full_library_path();
+  const std::string full_library_path = asset->full_library_path(true);
   return full_library_path.size();
 }
 
 static void rna_AssetRepresentation_full_path_get(PointerRNA *ptr, char *value)
 {
   const AssetRepresentation *asset = static_cast<const AssetRepresentation *>(ptr->data);
-  const std::string full_path = asset->full_path();
+  const std::string full_path = asset->full_path(true);
   BLI_strncpy(value, full_path.c_str(), full_path.size() + 1);
 }
 
 static int rna_AssetRepresentation_full_path_length(PointerRNA *ptr)
 {
   const AssetRepresentation *asset = static_cast<const AssetRepresentation *>(ptr->data);
-  const std::string full_path = asset->full_path();
+  const std::string full_path = asset->full_path(true);
   return full_path.size();
 }
 

@@ -167,7 +167,7 @@ static std::string asset_essentials_library_id_blendfile_path_for_save(const ID 
     return "";
   }
 
-  std::string override_filepath = asset_system::essentials_asset_path_resolve_to_override_path(
+  std::string override_filepath = asset_system::essentials_asset_override_blend_path_resolve(
       id.lib->runtime.filepath_abs, GS(id.name), id.name + 2);
 
   char rootpath[PATH_MAX];
@@ -433,7 +433,7 @@ ID *asset_edit_id_from_weak_reference(Main &global_main,
   char *asset_lib_path, *asset_group, *asset_name;
 
   AS_asset_full_path_explode_from_weak_ref(
-      &weak_ref, asset_full_path_buffer, &asset_lib_path, &asset_group, &asset_name);
+      &weak_ref, true, asset_full_path_buffer, &asset_lib_path, &asset_group, &asset_name);
   if (asset_lib_path == nullptr && asset_group == nullptr && asset_name == nullptr) {
     return nullptr;
   }
@@ -487,6 +487,16 @@ std::optional<AssetWeakReference> asset_edit_weak_reference_from_id(const ID &id
         *user_library, idcode, id.name + 2, id.lib->runtime.filepath_abs);
   }
 
+  if (asset_system::essentials_override_is_path_inside(id.lib->runtime.filepath_abs)) {
+    const std::string essentials_blend_path =
+        asset_system::essentials_asset_override_path_to_essentials_blend_path(
+            id.lib->runtime.filepath_abs);
+    /* Couldn't re-locate the original asset from the overridden path. */
+    if (essentials_blend_path.empty()) {
+      return std::nullopt;
+    }
+    return asset_weak_reference_for_essentials(idcode, id.name + 2, essentials_blend_path.c_str());
+  }
   return asset_weak_reference_for_essentials(idcode, id.name + 2, id.lib->runtime.filepath_abs);
 }
 
@@ -503,8 +513,7 @@ bool asset_edit_id_is_essential_or_override(const ID &id)
 
   return BLI_path_contains(asset_system::essentials_directory_path().c_str(),
                            id.lib->runtime.filepath_abs) ||
-         BLI_path_contains(asset_system::essentials_override_directory_path().c_str(),
-                           id.lib->runtime.filepath_abs);
+         asset_system::essentials_override_is_path_inside(id.lib->runtime.filepath_abs);
 }
 
 /**

@@ -11,6 +11,7 @@
 #include "AS_asset_catalog_tree.hh"
 #include "AS_asset_library.hh"
 #include "AS_asset_representation.hh"
+#include "AS_essentials_library.hh"
 
 #include "BKE_lib_remap.hh"
 #include "BKE_main.hh"
@@ -102,6 +103,7 @@ void AS_asset_library_remap_ids(const bke::id::IDRemapper &mappings)
 }
 
 void AS_asset_full_path_explode_from_weak_ref(const AssetWeakReference *asset_reference,
+                                              const bool follow_override,
                                               char r_path_buffer[1090 /* FILE_MAX_LIBEXTRA */],
                                               char **r_dir,
                                               char **r_group,
@@ -109,7 +111,7 @@ void AS_asset_full_path_explode_from_weak_ref(const AssetWeakReference *asset_re
 {
   AssetLibraryService *service = AssetLibraryService::get();
   std::optional<AssetLibraryService::ExplodedPath> exploded =
-      service->resolve_asset_weak_reference_to_exploded_path(*asset_reference);
+      service->resolve_asset_weak_reference_to_exploded_path(*asset_reference, follow_override);
 
   if (!exploded) {
     if (r_dir) {
@@ -203,11 +205,52 @@ std::weak_ptr<AssetRepresentation> AssetLibrary::add_external_asset(
     StringRef relative_asset_path,
     StringRef name,
     const int id_type,
-    std::unique_ptr<AssetMetaData> metadata,
-    bool is_essentials_override)
+    std::unique_ptr<AssetMetaData> metadata)
 {
+  /* The essentials library supports overriding individual assets from a different location on
+   * disk. Check if there's an override at the expected location, and load that instead. */
+  if (library_type() == ASSET_LIBRARY_ESSENTIALS) {
+    const AssetWeakReference asset_ref = AssetWeakReference::make_reference(*this,
+                                                                            relative_asset_path);
+    const std::string override_path = essentials_asset_override_full_path_from_reference(
+        asset_ref);
+    if (!override_path.empty()) {
+      char relative_override_asset_path[FILE_MAX];
+      BLI_strncpy(relative_override_asset_path,
+                  override_path.c_str(),
+                  sizeof(relative_override_asset_path));
+      BLI_path_rel(relative_override_asset_path,
+                   std::string(essentials_override_directory_path() + SEP_STR).c_str());
+
+      return asset_storage_.external_assets.lookup_key_or_add(
+          std::make_shared<AssetRepresentation>(relative_asset_path,
+                                                /* +2 to skip "//" relative path indicator. */
+                                                relative_override_asset_path + 2,
+                                                name,
+                                                id_type,
+                                                std::move(metadata),
+                                                *this));
+    }
+  }
+
   return asset_storage_.external_assets.lookup_key_or_add(std::make_shared<AssetRepresentation>(
-      relative_asset_path, name, id_type, std::move(metadata), *this, is_essentials_override));
+      relative_asset_path, name, id_type, std::move(metadata), *this));
+}
+
+std::weak_ptr<AssetRepresentation> AssetLibrary::add_external_override_asset(
+    StringRef relative_asset_path,
+    StringRef relative_asset_override_path,
+    StringRef name,
+    const int id_type,
+    std::unique_ptr<AssetMetaData> metadata)
+{
+  return asset_storage_.external_assets.lookup_key_or_add(
+      std::make_shared<AssetRepresentation>(relative_asset_path,
+                                            relative_asset_override_path,
+                                            name,
+                                            id_type,
+                                            std::move(metadata),
+                                            *this));
 }
 
 std::weak_ptr<AssetRepresentation> AssetLibrary::add_local_id_asset(StringRef relative_asset_path,
@@ -287,10 +330,10 @@ void AssetLibrary::on_blend_save_post(Main *bmain,
 }
 
 std::string AssetLibrary::resolve_asset_weak_reference_to_full_path(
-    const AssetWeakReference &asset_reference)
+    const AssetWeakReference &asset_reference, const bool follow_override)
 {
   AssetLibraryService *service = AssetLibraryService::get();
-  return service->resolve_asset_weak_reference_to_full_path(asset_reference);
+  return service->resolve_asset_weak_reference_to_full_path(asset_reference, follow_override);
 }
 
 void AssetLibrary::refresh_catalog_simplename(AssetMetaData *asset_data)

@@ -828,6 +828,18 @@ static bool is_filtered_id_file_type(const FileListInternEntry *file,
   return true;
 }
 
+/**
+ * Get the asset metadata of a file, if it represents an asset. This may either be of a local ID
+ * (ID in the current #Main) or read from an external asset library.
+ */
+static AssetMetaData *filelist_file_internal_get_asset_data(const FileListInternEntry *file)
+{
+  if (asset_system::AssetRepresentation *asset = file->get_asset()) {
+    return &asset->get_metadata();
+  }
+  return nullptr;
+}
+
 static void prepare_filter_asset_library(const FileList *filelist, FileListFilter *filter)
 {
   /* Not used yet for the asset view template. */
@@ -865,19 +877,7 @@ static bool asset_tag_matches_filter(const char *filter_search, const AssetMetaD
 
 static bool is_filtered_asset(FileListInternEntry *file, FileListFilter *filter)
 {
-  const asset_system::AssetRepresentation *asset = file->get_asset();
-  const asset_system::AssetLibrary &library = asset->owner_asset_library();
-
-  BLI_assert(asset != nullptr);
-
-  /* Filter out overridden essentials. The override was added to the filelist already. */
-  if (library.library_type() == ASSET_LIBRARY_ESSENTIALS) {
-    if (asset_system::essentials_asset_override_exists(*asset)) {
-      return false;
-    }
-  }
-
-  const AssetMetaData *asset_data = &asset->get_metadata();
+  const AssetMetaData *asset_data = filelist_file_internal_get_asset_data(file);
 
   /* Not used yet for the asset view template. */
   if (filter->asset_catalog_filter &&
@@ -1149,7 +1149,7 @@ void filelist_file_get_full_path(const FileList *filelist,
                                  char r_filepath[/*FILE_MAX_LIBEXTRA*/])
 {
   if (file->asset) {
-    const std::string asset_path = file->asset->full_path();
+    const std::string asset_path = file->asset->full_path(true);
     BLI_strncpy(r_filepath, asset_path.c_str(), FILE_MAX_LIBEXTRA);
     return;
   }
@@ -3297,14 +3297,8 @@ static void filelist_readjob_list_lib_add_datablock(FileListReadJob *job_params,
         datablock_info->asset_data = metadata.get();
         datablock_info->free_asset_data = false;
 
-        const bool is_essentials_override = asset_system::essentials_override_is_path_inside(
-            job_params->tmp_filelist->filelist.root);
-
-        entry->asset = job_params->load_asset_library->add_external_asset(entry->relpath,
-                                                                          datablock_info->name,
-                                                                          idcode,
-                                                                          std::move(metadata),
-                                                                          is_essentials_override);
+        entry->asset = job_params->load_asset_library->add_external_asset(
+            entry->relpath, datablock_info->name, idcode, std::move(metadata));
       }
     }
   }
@@ -3944,24 +3938,6 @@ static void filelist_readjob_load_asset_library_data(FileListReadJob *job_params
   *do_update = true;
 }
 
-static void filelist_readjob_essentials_overrides(FileListReadJob *job_params,
-                                                  bool *stop,
-                                                  bool *do_update,
-                                                  float *progress)
-{
-  FileList *filelist = job_params->tmp_filelist; /* Use the thread-safe filelist queue. */
-
-  char old_filelist_root[sizeof(filelist->filelist.root)];
-
-  STRNCPY(old_filelist_root, filelist->filelist.root);
-  STRNCPY(filelist->filelist.root, asset_system::essentials_override_directory_path().c_str());
-  BLI_path_slash_ensure(filelist->filelist.root, sizeof(filelist->filelist.root));
-  /* Ensure path is restored on scope exit. */
-  BLI_SCOPED_DEFER([&]() { STRNCPY(filelist->filelist.root, old_filelist_root); });
-
-  filelist_readjob_recursive_dir_add_items(true, job_params, stop, do_update, progress);
-}
-
 static void filelist_readjob_main_assets_add_items(FileListReadJob *job_params,
                                                    bool * /*stop*/,
                                                    bool *do_update,
@@ -4055,10 +4031,6 @@ static void filelist_readjob_asset_library(FileListReadJob *job_params,
   }
   if (!job_params->only_main_data) {
     filelist_readjob_recursive_dir_add_items(true, job_params, stop, do_update, progress);
-
-    if (job_params->load_asset_library->library_type() == ASSET_LIBRARY_ESSENTIALS) {
-      filelist_readjob_essentials_overrides(job_params, stop, do_update, progress);
-    }
   }
 }
 
@@ -4146,10 +4118,6 @@ static void filelist_readjob_all_asset_library(FileListReadJob *job_params,
         float progress_this = 0.0f;
         filelist_readjob_recursive_dir_add_items(
             true, job_params, stop, do_update, &progress_this);
-
-        if (nested_library.library_type() == ASSET_LIBRARY_ESSENTIALS) {
-          filelist_readjob_essentials_overrides(job_params, stop, do_update, &progress_this);
-        }
 
         libraries_done_count++;
         *progress = float(libraries_done_count) / library_count;

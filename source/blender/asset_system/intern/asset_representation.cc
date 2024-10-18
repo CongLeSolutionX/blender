@@ -25,12 +25,23 @@ AssetRepresentation::AssetRepresentation(StringRef relative_asset_path,
                                          StringRef name,
                                          const int id_type,
                                          std::unique_ptr<AssetMetaData> metadata,
-                                         const AssetLibrary &owner_asset_library,
-                                         const bool is_essentials_override)
+                                         const AssetLibrary &owner_asset_library)
+    : owner_asset_library_(owner_asset_library),
+      relative_identifier_(relative_asset_path),
+      asset_(AssetRepresentation::ExternalAsset{name, id_type, std::move(metadata)})
+{
+}
+
+AssetRepresentation::AssetRepresentation(StringRef relative_asset_path,
+                                         StringRef relative_asset_override_path,
+                                         StringRef name,
+                                         const int id_type,
+                                         std::unique_ptr<AssetMetaData> metadata,
+                                         const AssetLibrary &owner_asset_library)
     : owner_asset_library_(owner_asset_library),
       relative_identifier_(relative_asset_path),
       asset_(AssetRepresentation::ExternalAsset{
-          name, id_type, std::move(metadata), is_essentials_override})
+          name, id_type, std::move(metadata), relative_asset_override_path})
 {
 }
 
@@ -48,7 +59,8 @@ AssetRepresentation::AssetRepresentation(StringRef relative_asset_path,
 
 AssetWeakReference AssetRepresentation::make_weak_reference() const
 {
-  return AssetWeakReference::make_reference(owner_asset_library_, relative_identifier_);
+  return AssetWeakReference::make_reference(owner_asset_library_,
+                                            this->library_relative_identifier(false));
 }
 
 StringRefNull AssetRepresentation::get_name() const
@@ -75,14 +87,16 @@ AssetMetaData &AssetRepresentation::get_metadata() const
   return *std::get<ExternalAsset>(asset_).metadata_;
 }
 
-StringRefNull AssetRepresentation::library_relative_identifier() const
+StringRefNull AssetRepresentation::library_relative_identifier(const bool follow_override) const
 {
-  return relative_identifier_;
+  return (follow_override && is_essentials_override()) ?
+             std::get<ExternalAsset>(asset_).relative_identifier_override_ :
+             relative_identifier_;
 }
 
-std::string AssetRepresentation::full_path() const
+std::string AssetRepresentation::full_path(const bool follow_override) const
 {
-  if (is_essentials_override()) {
+  if (follow_override && is_essentials_override()) {
     return essentials_asset_override_full_path(*this);
   }
 
@@ -94,9 +108,9 @@ std::string AssetRepresentation::full_path() const
   return filepath;
 }
 
-std::string AssetRepresentation::full_library_path() const
+std::string AssetRepresentation::full_library_path(const bool follow_override) const
 {
-  std::string asset_path = full_path();
+  std::string asset_path = full_path(follow_override);
 
   char blend_path[1090 /*FILE_MAX_LIBEXTRA*/];
   if (!BKE_blendfile_library_path_explode(asset_path.c_str(), blend_path, nullptr, nullptr)) {
@@ -136,7 +150,9 @@ bool AssetRepresentation::is_local_id() const
 
 bool AssetRepresentation::is_essentials_override() const
 {
-  return this->is_local_id() ? false : std::get<ExternalAsset>(asset_).is_essentials_override_;
+  return this->is_local_id() ?
+             false :
+             !std::get<ExternalAsset>(asset_).relative_identifier_override_.empty();
 }
 
 const AssetLibrary &AssetRepresentation::owner_asset_library() const

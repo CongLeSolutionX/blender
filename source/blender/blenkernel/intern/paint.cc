@@ -702,6 +702,8 @@ bool BKE_paint_brush_set(Main *bmain,
     MEM_delete(paint->brush_asset_reference);
     paint->brush_asset_reference = nullptr;
     if (brush != nullptr) {
+      std::optional<AssetWeakReference> ref = blender::bke::asset_edit_weak_reference_from_id(
+          brush->id);
       BLI_assert(blender::bke::asset_edit_weak_reference_from_id(brush->id) ==
                  *brush_asset_reference);
       paint->brush_asset_reference = MEM_new<AssetWeakReference>(__func__, *brush_asset_reference);
