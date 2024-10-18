@@ -91,9 +91,9 @@ void VKRenderGraph::submit()
 /** \name Debug
  * \{ */
 
-void VKRenderGraph::debug_group_begin(const char *name)
+void VKRenderGraph::debug_group_begin(const char *name, const ColorTheme4f &color)
 {
-  DebugGroupNameID name_id = debug_.group_names.index_of_or_add(std::string(name));
+  DebugGroupNameID name_id = debug_.groups.index_of_or_add({std::string(name), color});
   debug_.group_stack.append(name_id);
   debug_.group_used = false;
 }

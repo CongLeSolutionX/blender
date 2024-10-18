@@ -19,9 +19,9 @@
 static CLG_LogRef LOG = {"gpu.vulkan"};
 
 namespace blender::gpu {
-void VKContext::debug_group_begin(const char *name, int)
+void VKContext::debug_group_begin(const char *name, const ColorTheme4f &color, int)
 {
-  render_graph.debug_group_begin(name);
+  render_graph.debug_group_begin(name, color);
 }
 
 void VKContext::debug_group_end()

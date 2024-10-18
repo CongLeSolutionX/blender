@@ -61,11 +61,15 @@
 
 #pragma once
 
+#include "BLI_color.hh"
 #include "BLI_sys_types.h"
 
 #define GPU_DEBUG_SHADER_COMPILATION_GROUP "Shader Compilation"
 
-void GPU_debug_group_begin(const char *name);
+static blender::ColorTheme4f GPU_DEBUG_GROUP_COLOR_DEFAULT = {};
+
+void GPU_debug_group_begin(const char *name,
+                           const blender::ColorTheme4f &color = GPU_DEBUG_GROUP_COLOR_DEFAULT);
 void GPU_debug_group_end();
 /**
  * Return a formatted string showing the current group hierarchy in this format:
