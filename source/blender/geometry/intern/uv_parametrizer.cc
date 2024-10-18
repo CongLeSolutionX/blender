@@ -3974,7 +3974,11 @@ void uv_parametrizer_face_add(ParamHandle *phandle,
         vkeys_sub[i] = vkeys[j];
         co_sub[i] = co[j];
         uv_sub[i] = uv[j];
-        weight_sub[i] = weight[j];
+
+        if (weight) {
+          weight_sub[i] = weight[j];
+        }
+
         pin_sub[i] = pin && pin[j];
         select_sub[i] = select && select[j];
       }
@@ -3984,7 +3988,7 @@ void uv_parametrizer_face_add(ParamHandle *phandle,
                  &vkeys_sub.first(),
                  &co_sub.first(),
                  &uv_sub.first(),
-                 &weight_sub.first(),
+                 weight ? &weight_sub.first() : nullptr,
                  &pin_sub.first(),
                  &select_sub.first());
       return; /* Nothing more to do. */
