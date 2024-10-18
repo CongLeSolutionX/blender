@@ -549,7 +549,6 @@ bool asset_edit_id_is_writable(const ID &id)
   return asset_edit_id_is_editable(id) && (id.lib->runtime.tag & LIBRARY_ASSET_FILE_WRITABLE);
 }
 
-/* TODO right location? Maybe move to brush_assets_ops.cc? */
 std::optional<AssetLibraryReference> asset_edit_id_get_library_reference(const ID &id)
 {
   if (!ID_IS_LINKED(&id)) {
