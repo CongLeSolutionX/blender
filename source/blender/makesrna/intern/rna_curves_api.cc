@@ -8,11 +8,14 @@
 
 #include "RNA_define.hh"
 
+#include "BKE_curves.hh"
+
+#include "RNA_enum_types.hh"
+
 #include "rna_internal.hh" /* own include */
 
 #ifdef RNA_RUNTIME
 
-#  include "BKE_curves.hh"
 #  include "BKE_report.hh"
 
 #  include "BLI_index_mask.hh"
@@ -188,6 +191,15 @@ static void rna_Curves_resize_curves(Curves *curves_id,
   }
 }
 
+static void rna_Curves_set_types(Curves *curves_id, const int type)
+{
+  using namespace blender;
+  bke::CurvesGeometry &curves = curves_id->geometry.wrap();
+  curves.fill_curve_types(CurveType(type));
+  DEG_id_tag_update(&curves_id->id, ID_RECALC_GEOMETRY);
+  WM_main_add_notifier(NC_GEOM | ND_DATA, curves_id);
+}
+
 #else
 
 void RNA_api_curves(StructRNA *srna)
@@ -255,6 +267,10 @@ void RNA_api_curves(StructRNA *srna)
                            0,
                            10000);
   RNA_def_parameter_flags(parm, PROP_DYNAMIC, ParameterFlag(0));
+
+  func = RNA_def_function(srna, "set_types", "rna_Curves_set_types");
+  RNA_def_function_ui_description(func, "");
+  RNA_def_enum(func, "type", rna_enum_curves_type_items, CURVE_TYPE_CATMULL_ROM, "Type", "");
 }
 
 #endif
