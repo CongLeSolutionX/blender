@@ -253,7 +253,7 @@ static GPUShader *get_patch_evaluation_shader(int shader_type)
 
     /* Merge OpenSubdiv library code with our own library code. */
     const StringRefNull patch_basis_source = openSubdiv_getGLSLPatchBasisSource();
-    StringRefNull subdiv_lib_code = datatoc_common_subdiv_lib_glsl;
+    const StringRefNull subdiv_lib_code = datatoc_common_subdiv_lib_glsl;
     std::string library_code = patch_basis_source + subdiv_lib_code;
     g_subdiv_shaders[shader_type] = GPU_shader_create_compute(
         compute_code, library_code, defines, get_shader_name(shader_type));

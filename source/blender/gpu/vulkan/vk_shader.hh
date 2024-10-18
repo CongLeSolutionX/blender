@@ -131,7 +131,7 @@ class VKShader : public Shader {
   }
 
  private:
-  void build_shader_module(Span<StringRefNull> sources,
+  void build_shader_module(MutableSpan<StringRefNull> sources,
                            shaderc_shader_kind stage,
                            VKShaderModule &r_shader_module);
   bool finalize_shader_module(VKShaderModule &shader_module, const char *stage_name);

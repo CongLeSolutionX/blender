@@ -1442,7 +1442,7 @@ GLSources &GLSources::operator=(Span<StringRefNull> other)
   for (StringRefNull other_source : other) {
     /* Don't store empty string as compilers can optimize these away and result in pointing to a
      * string that isn't c-str compliant anymore. */
-    if (other_source[0] == '\0') {
+    if (other_source.is_empty()) {
       continue;
     }
     append(GLSource(other_source));

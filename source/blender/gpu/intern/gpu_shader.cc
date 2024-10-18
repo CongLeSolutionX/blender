@@ -333,12 +333,12 @@ GPUShader *GPU_shader_create_from_info_python(const GPUShaderCreateInfo *_info)
   return result;
 }
 
-GPUShader *GPU_shader_create_from_python(const char *vertcode,
-                                         const char *fragcode,
-                                         const char *geomcode,
-                                         const char *libcode,
-                                         const char *defines,
-                                         const char *name)
+GPUShader *GPU_shader_create_from_python(std::optional<StringRefNull> vertcode,
+                                         std::optional<StringRefNull> fragcode,
+                                         std::optional<StringRefNull> geomcode,
+                                         std::optional<StringRefNull> libcode,
+                                         const std::optional<StringRefNull> defines,
+                                         const std::optional<StringRefNull> name)
 {
   std::string libcodecat;
 
@@ -355,21 +355,21 @@ GPUShader *GPU_shader_create_from_python(const char *vertcode,
   std::string geometry_source_processed;
   std::string library_source_processed;
 
-  if (vertcode != nullptr) {
-    vertex_source_processed = preprocess_source(vertcode);
-    vertcode = vertex_source_processed.c_str();
+  if (vertcode.has_value()) {
+    vertex_source_processed = preprocess_source(*vertcode);
+    vertcode = vertex_source_processed;
   }
-  if (fragcode != nullptr) {
-    fragment_source_processed = preprocess_source(fragcode);
-    fragcode = fragment_source_processed.c_str();
+  if (fragcode.has_value()) {
+    fragment_source_processed = preprocess_source(*fragcode);
+    fragcode = fragment_source_processed;
   }
-  if (geomcode != nullptr) {
-    geometry_source_processed = preprocess_source(geomcode);
-    geomcode = geometry_source_processed.c_str();
+  if (geomcode.has_value()) {
+    geometry_source_processed = preprocess_source(*geomcode);
+    geomcode = geometry_source_processed;
   }
-  if (libcode != nullptr) {
-    library_source_processed = preprocess_source(libcode);
-    libcode = library_source_processed.c_str();
+  if (libcode.has_value()) {
+    library_source_processed = preprocess_source(*libcode);
+    libcode = library_source_processed;
   }
 
   /* Use pyGPUShader as default name for shader. */

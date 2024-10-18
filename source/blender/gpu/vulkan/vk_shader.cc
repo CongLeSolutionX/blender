@@ -625,8 +625,7 @@ bool VKShader::finalize_shader_module(VKShaderModule &shader_module, const char 
   if (bool(shader_module.compilation_result.GetNumWarnings() +
            shader_module.compilation_result.GetNumErrors()))
   {
-    const char *sources = shader_module.combined_sources.c_str();
-    print_log(Span<const char *>(&sources, 1),
+    print_log({shader_module.combined_sources},
               shader_module.compilation_result.GetErrorMessage().c_str(),
               stage_name,
               bool(shader_module.compilation_result.GetNumErrors()),
