@@ -5510,9 +5510,10 @@ static void def_sh_tex_rounded_polygon(StructRNA *srna)
 
   prop = RNA_def_property(srna, "normalize_r_gon_parameter", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "normalize_r_gon_parameter", 0);
-  RNA_def_property_ui_text(prop,
-                           "Normalize Edge Parameter",
-                           "Normalize the Edge Parameter output to a [-1, 1] interval");
+  RNA_def_property_ui_text(
+      prop,
+      "Normalize X-Coordinate",
+      "Normalize the X-coordinate of the Segment Coordinates output to a [-1, 1] interval");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
 
   prop = RNA_def_property(srna, "elliptical_corners", PROP_BOOLEAN, PROP_NONE);

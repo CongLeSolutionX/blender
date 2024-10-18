@@ -108,11 +108,14 @@ static void node_shader_update_tex_rounded_polygon(bNodeTree *ntree, bNode *node
   bNodeSocket *inR_gonRoundnessSock = bke::node_find_socket(node, SOCK_IN, "R_gon Roundness");
 
   bNodeSocket *outR_gonFieldSock = bke::node_find_socket(node, SOCK_OUT, "R_gon Field");
+  bNodeSocket *outMaxUnitParameterSock = bke::node_find_socket(
+      node, SOCK_OUT, "Max Unit Parameter");
 
   node_sock_label(inR_gonSidesSock, "Sides");
   node_sock_label(inR_gonRoundnessSock, "Roundness");
 
   node_sock_label(outR_gonFieldSock, "Radius");
+  node_sock_label(outMaxUnitParameterSock, "Segment Width");
 }
 
 float3 calculate_out_fields_2d_full_roundness_irregular_elliptical(
