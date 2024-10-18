@@ -13,6 +13,7 @@
 #include "AS_asset_representation.hh"
 #include "AS_essentials_library.hh"
 
+#include "BKE_global.hh"
 #include "BKE_lib_remap.hh"
 #include "BKE_main.hh"
 #include "BKE_preferences.h"
@@ -207,9 +208,11 @@ std::weak_ptr<AssetRepresentation> AssetLibrary::add_external_asset(
     const int id_type,
     std::unique_ptr<AssetMetaData> metadata)
 {
+  const bool use_essentials_overrides = !(G.f & G_FLAG_ASSETS_NO_ESSENTIALS_OVERRIDES);
+
   /* The essentials library supports overriding individual assets from a different location on
    * disk. Check if there's an override at the expected location, and load that instead. */
-  if (library_type() == ASSET_LIBRARY_ESSENTIALS) {
+  if (use_essentials_overrides && (library_type() == ASSET_LIBRARY_ESSENTIALS)) {
     const AssetWeakReference asset_ref = AssetWeakReference::make_reference(*this,
                                                                             relative_asset_path);
     const std::string override_path = essentials_asset_override_full_path_from_reference(

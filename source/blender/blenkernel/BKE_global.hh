@@ -222,6 +222,11 @@ enum {
   G_FLAG_GPU_BACKEND_FALLBACK = (1 << 17),
   G_FLAG_GPU_BACKEND_FALLBACK_QUIET = (1 << 18),
 
+  /**
+   * Use original assets from the essentials asset library, don't access essential overrides. Set
+   * when using factory startup.
+   */
+  G_FLAG_ASSETS_NO_ESSENTIALS_OVERRIDES = (1 << 19),
 };
 
 #define G_FLAG_INTERNET_OVERRIDE_PREF_ANY \
@@ -232,7 +237,7 @@ enum {
   (G_FLAG_SCRIPT_AUTOEXEC | G_FLAG_SCRIPT_OVERRIDE_PREF | G_FLAG_INTERNET_ALLOW | \
    G_FLAG_INTERNET_OVERRIDE_PREF_ONLINE | G_FLAG_INTERNET_OVERRIDE_PREF_OFFLINE | \
    G_FLAG_EVENT_SIMULATE | G_FLAG_USERPREF_NO_SAVE_ON_EXIT | G_FLAG_GPU_BACKEND_FALLBACK | \
-   G_FLAG_GPU_BACKEND_FALLBACK_QUIET | \
+   G_FLAG_GPU_BACKEND_FALLBACK_QUIET | G_FLAG_ASSETS_NO_ESSENTIALS_OVERRIDES | \
 \
    /* #BPY_python_reset is responsible for resetting these flags on file load. */ \
    G_FLAG_SCRIPT_AUTOEXEC_FAIL | G_FLAG_SCRIPT_AUTOEXEC_FAIL_QUIET)

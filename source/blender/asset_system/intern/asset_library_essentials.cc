@@ -8,6 +8,7 @@
 
 #include "BKE_appdir.hh"
 #include "BKE_blendfile.hh"
+#include "BKE_global.hh"
 #include "BKE_idtype.hh"
 
 #include "BLI_fileops.h"
@@ -91,6 +92,10 @@ std::string essentials_asset_override_blend_path_resolve(StringRefNull essential
                                                          const ID_Type id_type,
                                                          StringRefNull asset_name)
 {
+  if (G.f & G_FLAG_ASSETS_NO_ESSENTIALS_OVERRIDES) {
+    return "";
+  }
+
   const std::string essentials_directory = essentials_directory_path() + SEP_STR;
   const StringRefNull essentials_override_directory = essentials_override_directory_path();
 
@@ -143,6 +148,10 @@ static bool essentials_asset_override_paths_from_reference(
     std::string *r_full_path = nullptr)
 {
   BLI_assert(asset_reference.asset_library_type == ASSET_LIBRARY_ESSENTIALS);
+
+  if (G.f & G_FLAG_ASSETS_NO_ESSENTIALS_OVERRIDES) {
+    return false;
+  }
 
   /* First, see if the weak reference already points to an override. */
   {

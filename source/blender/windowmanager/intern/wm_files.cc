@@ -2697,6 +2697,7 @@ static int wm_userpref_read_exec(bContext *C, wmOperator *op)
 
   wm_userpref_read_exceptions(&U, &U_backup);
   SET_FLAG_FROM_TEST(G.f, use_factory_settings, G_FLAG_USERPREF_NO_SAVE_ON_EXIT);
+  SET_FLAG_FROM_TEST(G.f, use_factory_settings, G_FLAG_ASSETS_NO_ESSENTIALS_OVERRIDES);
 
   wm_userpref_update_when_changed(C, bmain, &U_backup, &U);
 
@@ -2894,6 +2895,8 @@ static int wm_homefile_read_exec(bContext *C, wmOperator *op)
       U.runtime.is_dirty = true;
     }
   }
+
+  SET_FLAG_FROM_TEST(G.f, use_factory_settings, G_FLAG_ASSETS_NO_ESSENTIALS_OVERRIDES);
 
   if (use_userdef) {
     BKE_callback_exec_null(CTX_data_main(C), BKE_CB_EVT_EXTENSION_REPOS_UPDATE_POST);

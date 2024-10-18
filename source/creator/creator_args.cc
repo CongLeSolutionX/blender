@@ -1580,6 +1580,7 @@ static int arg_handle_factory_startup_set(int /*argc*/, const char ** /*argv*/, 
 {
   G.factory_startup = true;
   G.f |= G_FLAG_USERPREF_NO_SAVE_ON_EXIT;
+  G.f |= G_FLAG_ASSETS_NO_ESSENTIALS_OVERRIDES;
   return 0;
 }
 

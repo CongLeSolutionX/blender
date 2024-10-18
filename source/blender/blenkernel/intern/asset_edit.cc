@@ -89,7 +89,7 @@ static ID *asset_link_id(Main &global_main,
 
       if (BKE_preferences_asset_library_containing_path(&U, filepath) ||
           /* Path into essentials override directory. */
-          BLI_path_contains(asset_system::essentials_override_directory_path().c_str(), filepath))
+          asset_system::essentials_override_is_path_inside(filepath))
       {
 
         local_asset->lib->runtime.tag |= LIBRARY_ASSET_FILE_WRITABLE;
@@ -537,12 +537,15 @@ bool asset_edit_id_is_editable(const ID &id)
 
 bool asset_edit_id_is_writable(const ID &id)
 {
-  /* Consider essentials as writable, actual writing will re-direct to the directory for storing
-   * overridden essentials.
-   *
-   * In case the id is already an essentials override, fall through to the normal writable check,
-   * since there may be a manually saved file in there. Be nice and avoid overriding that. */
-  if (asset_edit_id_is_essential_not_override(id)) {
+  if (!(G.f & G_FLAG_ASSETS_NO_ESSENTIALS_OVERRIDES) &&
+      /* Consider essentials as writable, actual writing will re-direct to the directory for
+       * storing overridden essentials.
+       *
+       * In case the id is already an essentials override, fall through to the normal writable
+       * check, since there may be a manually saved file in there. Be nice and avoid overriding
+       * that. */
+      asset_edit_id_is_essential_not_override(id))
+  {
     return true;
   }
 
