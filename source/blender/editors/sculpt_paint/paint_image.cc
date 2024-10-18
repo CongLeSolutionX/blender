@@ -368,11 +368,11 @@ void paint_brush_color_get(Scene *scene,
                            bool invert,
                            float distance,
                            float pressure,
-                           float color[3],
-                           ColorManagedDisplay *display)
+                           ColorManagedDisplay *display,
+                           float r_color[3])
 {
   if (invert) {
-    copy_v3_v3(color, BKE_brush_secondary_color_get(scene, br));
+    copy_v3_v3(r_color, BKE_brush_secondary_color_get(scene, br));
   }
   else {
     if (br->flag & BRUSH_USE_GRADIENT) {
@@ -393,14 +393,14 @@ void paint_brush_color_get(Scene *scene,
       }
       /* Gradient / Color-band colors are not considered #PROP_COLOR_GAMMA.
        * Brush colors are expected to be in sRGB though. */
-      IMB_colormanagement_scene_linear_to_srgb_v3(color, color_gr);
+      IMB_colormanagement_scene_linear_to_srgb_v3(r_color, color_gr);
     }
     else {
-      copy_v3_v3(color, BKE_brush_color_get(scene, br));
+      copy_v3_v3(r_color, BKE_brush_color_get(scene, br));
     }
   }
   if (color_correction) {
-    IMB_colormanagement_display_to_scene_linear_v3(color, display);
+    IMB_colormanagement_display_to_scene_linear_v3(r_color, display);
   }
 }
 
@@ -518,6 +518,7 @@ static void grab_clone_apply(bContext *C, wmOperator *op)
 
   RNA_float_get_array(op->ptr, "delta", delta);
   add_v2_v2(brush->clone.offset, delta);
+  BKE_brush_tag_unsaved_changes(brush);
   ED_region_tag_redraw(CTX_wm_region(C));
 }
 
@@ -569,6 +570,7 @@ static int grab_clone_modal(bContext *C, wmOperator *op, const wmEvent *event)
       RNA_float_set_array(op->ptr, "delta", delta);
 
       copy_v2_v2(brush->clone.offset, cmv->startoffset);
+      BKE_brush_tag_unsaved_changes(brush);
 
       grab_clone_apply(C, op);
       break;
@@ -1038,6 +1040,7 @@ static int brush_colors_flip_exec(bContext *C, wmOperator * /*op*/)
   }
   else if (br) {
     swap_v3_v3(br->rgb, br->secondary_rgb);
+    BKE_brush_tag_unsaved_changes(br);
   }
   else {
     return OPERATOR_CANCELLED;
@@ -1060,6 +1063,11 @@ static bool brush_colors_flip_poll(bContext *C)
     Object *ob = CTX_data_active_object(C);
     if (ob != nullptr) {
       if (ob->mode & (OB_MODE_VERTEX_PAINT | OB_MODE_TEXTURE_PAINT | OB_MODE_SCULPT)) {
+        return true;
+      }
+      if (blender::ed::greasepencil::grease_pencil_painting_poll(C) ||
+          blender::ed::greasepencil::grease_pencil_vertex_painting_poll(C))
+      {
         return true;
       }
     }
@@ -1088,7 +1096,7 @@ void PAINT_OT_brush_colors_flip(wmOperatorType *ot)
 /** \name Texture Paint Bucket Fill Operator
  * \{ */
 
-void ED_imapaint_bucket_fill(bContext *C, float color[3], wmOperator *op, const int mouse[2])
+void ED_imapaint_bucket_fill(bContext *C, float const color[3], wmOperator *op, const int mouse[2])
 {
   SpaceImage *sima = CTX_wm_space_image(C);
 

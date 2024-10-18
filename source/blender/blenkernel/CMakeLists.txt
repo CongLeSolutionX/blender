@@ -69,6 +69,7 @@ set(SRC
   intern/autoexec.cc
   intern/bake_data_block_map.cc
   intern/bake_geometry_nodes_modifier.cc
+  intern/bake_geometry_nodes_modifier_pack.cc
   intern/bake_items.cc
   intern/bake_items_paths.cc
   intern/bake_items_serialize.cc
@@ -237,10 +238,10 @@ set(SRC
   intern/node_enum_definition.cc
   intern/node_runtime.cc
   intern/node_socket_value.cc
-  intern/node_tree_anonymous_attributes.cc
   intern/node_tree_dot_export.cc
   intern/node_tree_field_inferencing.cc
   intern/node_tree_interface.cc
+  intern/node_tree_reference_lifetimes.cc
   intern/node_tree_update.cc
   intern/node_tree_zones.cc
   intern/object.cc
@@ -327,19 +328,20 @@ set(SRC
   BKE_animsys.h
   BKE_anonymous_attribute_id.hh
   BKE_anonymous_attribute_make.hh
-  BKE_attribute_filter.hh
-  BKE_attribute_filters.hh
   BKE_appdir.hh
   BKE_armature.hh
   BKE_asset.hh
   BKE_asset_edit.hh
   BKE_attribute.h
   BKE_attribute.hh
+  BKE_attribute_filter.hh
+  BKE_attribute_filters.hh
   BKE_attribute_math.hh
   BKE_autoexec.hh
   BKE_bake_data_block_id.hh
   BKE_bake_data_block_map.hh
   BKE_bake_geometry_nodes_modifier.hh
+  BKE_bake_geometry_nodes_modifier_pack.hh
   BKE_bake_items.hh
   BKE_bake_items_paths.hh
   BKE_bake_items_serialize.hh
@@ -389,7 +391,7 @@ set(SRC
   BKE_dynamicpaint.h
   BKE_editlattice.h
   BKE_editmesh.hh
-  BKE_editmesh_bvh.h
+  BKE_editmesh_bvh.hh
   BKE_editmesh_cache.hh
   BKE_editmesh_tangent.hh
   BKE_effect.h
@@ -400,6 +402,7 @@ set(SRC
   BKE_freestyle.h
   BKE_geometry_fields.hh
   BKE_geometry_nodes_gizmos_transforms.hh
+  BKE_geometry_nodes_reference_set.hh
   BKE_geometry_set.hh
   BKE_geometry_set_instances.hh
   BKE_global.hh
@@ -467,9 +470,9 @@ set(SRC
   BKE_node_enum.hh
   BKE_node_runtime.hh
   BKE_node_socket_value.hh
-  BKE_node_tree_anonymous_attributes.hh
   BKE_node_tree_dot_export.hh
   BKE_node_tree_interface.hh
+  BKE_node_tree_reference_lifetimes.hh
   BKE_node_tree_update.hh
   BKE_node_tree_zones.hh
   BKE_object.hh
@@ -809,10 +812,6 @@ endif()
 
 if(WITH_XR_OPENXR)
   add_definitions(-DWITH_XR_OPENXR)
-endif()
-
-if(WITH_EXPERIMENTAL_FEATURES)
-  add_definitions(-DWITH_ANIM_BAKLAVA)
 endif()
 
 # # Warnings as errors, this is too strict!

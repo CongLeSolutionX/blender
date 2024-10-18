@@ -16,8 +16,7 @@
 
 #include "vk_common.hh"
 #include "vk_device.hh"
-
-#include "shaderc/shaderc.hpp"
+#include "vk_shader_compiler.hh"
 
 namespace blender::gpu {
 
@@ -27,12 +26,12 @@ class VKDescriptorSetTracker;
 
 class VKBackend : public GPUBackend {
  private:
-  shaderc::Compiler shaderc_compiler_;
 #ifdef WITH_RENDERDOC
   renderdoc::api::Renderdoc renderdoc_api_;
 #endif
 
  public:
+  VKShaderCompiler shader_compiler;
   /* Global instance to device handles. */
   VKDevice device;
 
@@ -76,7 +75,10 @@ class VKBackend : public GPUBackend {
   StorageBuf *storagebuf_alloc(size_t size, GPUUsageType usage, const char *name) override;
   VertBuf *vertbuf_alloc() override;
 
-  void shader_cache_dir_clear_old() override {}
+  void shader_cache_dir_clear_old() override
+  {
+    VKShaderCompiler::cache_dir_clear_old();
+  }
 
   /* Render Frame Coordination --
    * Used for performing per-frame actions globally */
@@ -86,8 +88,6 @@ class VKBackend : public GPUBackend {
 
   bool debug_capture_begin(const char *title);
   void debug_capture_end();
-
-  shaderc::Compiler &get_shaderc_compiler();
 
   static VKBackend &get()
   {

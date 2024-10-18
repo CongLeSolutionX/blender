@@ -545,7 +545,7 @@ void BKE_mesh_to_pointcloud(Main *bmain, Depsgraph *depsgraph, Scene * /*scene*/
     return;
   }
 
-  PointCloud *pointcloud = (PointCloud *)BKE_pointcloud_add(bmain, ob->id.name + 2);
+  PointCloud *pointcloud = BKE_pointcloud_add(bmain, ob->id.name + 2);
 
   CustomData_free(&pointcloud->pdata, pointcloud->totpoint);
   pointcloud->totpoint = mesh_eval->verts_num;
@@ -1060,9 +1060,10 @@ void BKE_mesh_nomain_to_mesh(Mesh *mesh_src, Mesh *mesh_dst, Object *ob)
     BLI_assert(mesh_dst == ob->data);
   }
 
+  const bool verts_num_changed = mesh_dst->verts_num != mesh_src->verts_num;
+
   BKE_mesh_clear_geometry_and_metadata(mesh_dst);
 
-  const bool verts_num_changed = mesh_dst->verts_num != mesh_src->verts_num;
   mesh_dst->verts_num = mesh_src->verts_num;
   mesh_dst->edges_num = mesh_src->edges_num;
   mesh_dst->faces_num = mesh_src->faces_num;

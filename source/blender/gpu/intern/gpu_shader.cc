@@ -17,6 +17,8 @@
 #include "GPU_matrix.hh"
 #include "GPU_platform.hh"
 
+#include "glsl_preprocess/glsl_preprocess.hh"
+
 #include "gpu_backend.hh"
 #include "gpu_context_private.hh"
 #include "gpu_shader_create_info.hh"
@@ -261,6 +263,12 @@ const GPUShaderCreateInfo *GPU_shader_create_info_get(const char *info_name)
   return gpu_shader_create_info_get(info_name);
 }
 
+void GPU_shader_create_info_get_unfinalized_copy(const char *info_name,
+                                                 GPUShaderCreateInfo &r_info)
+{
+  gpu_shader_create_info_get_unfinalized_copy(info_name, r_info);
+}
+
 bool GPU_shader_create_info_check_error(const GPUShaderCreateInfo *_info, char r_error[128])
 {
   using namespace blender::gpu::shader;
@@ -293,12 +301,44 @@ GPUShader *GPU_shader_create_from_info(const GPUShaderCreateInfo *_info)
   return wrap(Context::get()->compiler->compile(info, false));
 }
 
-GPUShader *GPU_shader_create_from_python(std::optional<blender::StringRefNull> vertcode,
-                                         std::optional<blender::StringRefNull> fragcode,
-                                         std::optional<blender::StringRefNull> geomcode,
-                                         std::optional<blender::StringRefNull> libcode,
-                                         std::optional<blender::StringRefNull> defines,
-                                         std::optional<blender::StringRefNull> name)
+static std::string preprocess_source(StringRefNull original)
+{
+  gpu::shader::Preprocessor processor;
+  return processor.process(original);
+};
+
+GPUShader *GPU_shader_create_from_info_python(const GPUShaderCreateInfo *_info)
+{
+  using namespace blender::gpu::shader;
+  ShaderCreateInfo &info = *const_cast<ShaderCreateInfo *>(
+      reinterpret_cast<const ShaderCreateInfo *>(_info));
+
+  std::string vertex_source_original = info.vertex_source_generated;
+  std::string fragment_source_original = info.fragment_source_generated;
+  std::string geometry_source_original = info.geometry_source_generated;
+  std::string compute_source_original = info.compute_source_generated;
+
+  info.vertex_source_generated = preprocess_source(info.vertex_source_generated);
+  info.fragment_source_generated = preprocess_source(info.fragment_source_generated);
+  info.geometry_source_generated = preprocess_source(info.geometry_source_generated);
+  info.compute_source_generated = preprocess_source(info.compute_source_generated);
+
+  GPUShader *result = wrap(Context::get()->compiler->compile(info, false));
+
+  info.vertex_source_generated = vertex_source_original;
+  info.fragment_source_generated = fragment_source_original;
+  info.geometry_source_generated = geometry_source_original;
+  info.compute_source_generated = compute_source_original;
+
+  return result;
+}
+
+GPUShader *GPU_shader_create_from_python(const char *vertcode,
+                                         const char *fragcode,
+                                         const char *geomcode,
+                                         const char *libcode,
+                                         const char *defines,
+                                         const char *name)
 {
   std::string libcodecat;
 
@@ -308,6 +348,28 @@ GPUShader *GPU_shader_create_from_python(std::optional<blender::StringRefNull> v
   else {
     libcodecat = *libcode + datatoc_gpu_shader_colorspace_lib_glsl;
     libcode = libcodecat;
+  }
+
+  std::string vertex_source_processed;
+  std::string fragment_source_processed;
+  std::string geometry_source_processed;
+  std::string library_source_processed;
+
+  if (vertcode != nullptr) {
+    vertex_source_processed = preprocess_source(vertcode);
+    vertcode = vertex_source_processed.c_str();
+  }
+  if (fragcode != nullptr) {
+    fragment_source_processed = preprocess_source(fragcode);
+    fragcode = fragment_source_processed.c_str();
+  }
+  if (geomcode != nullptr) {
+    geometry_source_processed = preprocess_source(geomcode);
+    geomcode = geometry_source_processed.c_str();
+  }
+  if (libcode != nullptr) {
+    library_source_processed = preprocess_source(libcode);
+    libcode = library_source_processed.c_str();
   }
 
   /* Use pyGPUShader as default name for shader. */

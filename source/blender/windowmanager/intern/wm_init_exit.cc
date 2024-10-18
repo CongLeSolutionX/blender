@@ -23,7 +23,7 @@
 
 #include "BLI_fileops.h"
 #include "BLI_listbase.h"
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 #include "BLI_string.h"
 #include "BLI_task.h"
 #include "BLI_threads.h"
@@ -62,8 +62,8 @@
 #include "RE_pipeline.h" /* `RE_` free stuff. */
 
 #ifdef WITH_PYTHON
-#  include "BPY_extern_python.h"
-#  include "BPY_extern_run.h"
+#  include "BPY_extern_python.hh"
+#  include "BPY_extern_run.hh"
 #endif
 
 #include "GHOST_C-api.h"
@@ -533,8 +533,9 @@ void WM_exit_ex(bContext *C, const bool do_python_exit, const bool do_user_exit_
    * Which can happen when the GPU backend fails to initialize.
    */
   if (C && CTX_py_init_get(C)) {
-    const char *imports[2] = {"addon_utils", nullptr};
-    BPY_run_string_eval(C, imports, "addon_utils.disable_all()");
+    /* Calls `addon_utils.disable_all()` as well as unregistering all "startup" modules.  */
+    const char *imports[] = {"bpy", "bpy.utils", nullptr};
+    BPY_run_string_eval(C, imports, "bpy.utils._on_exit()");
   }
 #endif
 

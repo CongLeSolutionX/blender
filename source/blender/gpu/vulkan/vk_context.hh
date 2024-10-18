@@ -36,12 +36,14 @@ class VKContext : public Context, NonCopyable {
   /* Reusable data. Stored inside context to limit reallocations. */
   render_graph::VKResourceAccessInfo access_info_ = {};
 
-  VKThreadData &thread_data_;
+  std::optional<std::reference_wrapper<VKThreadData>> thread_data_;
 
  public:
-  render_graph::VKRenderGraph &render_graph;
+  render_graph::VKRenderGraph render_graph;
 
-  VKContext(void *ghost_window, void *ghost_context, VKThreadData &thread_data);
+  VKContext(void *ghost_window,
+            void *ghost_context,
+            render_graph::VKResourceStateTracker &resources);
   virtual ~VKContext();
 
   void activate() override;
@@ -80,7 +82,7 @@ class VKContext : public Context, NonCopyable {
    */
   void rendering_end();
 
-  render_graph::VKResourceAccessInfo &update_and_get_access_info();
+  render_graph::VKResourceAccessInfo &reset_and_get_access_info();
 
   /**
    * Update the give shader data with the current state of the context.

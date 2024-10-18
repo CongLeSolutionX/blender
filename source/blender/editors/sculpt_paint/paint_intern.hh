@@ -151,7 +151,7 @@ void BRUSH_OT_asset_save_as(wmOperatorType *ot);
 void BRUSH_OT_asset_edit_metadata(wmOperatorType *ot);
 void BRUSH_OT_asset_load_preview(wmOperatorType *ot);
 void BRUSH_OT_asset_delete(wmOperatorType *ot);
-void BRUSH_OT_asset_update(wmOperatorType *ot);
+void BRUSH_OT_asset_save(wmOperatorType *ot);
 void BRUSH_OT_asset_revert(wmOperatorType *ot);
 
 }  // namespace blender::ed::sculpt_paint
@@ -308,8 +308,8 @@ void paint_brush_color_get(Scene *scene,
                            bool invert,
                            float distance,
                            float pressure,
-                           float color[3],
-                           ColorManagedDisplay *display);
+                           ColorManagedDisplay *display,
+                           float r_color[3]);
 bool paint_use_opacity_masking(Brush *brush);
 void paint_brush_init_tex(Brush *brush);
 void paint_brush_exit_tex(Brush *brush);
