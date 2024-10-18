@@ -478,10 +478,10 @@ static int create_op_exec(bContext *C, wmOperator *op)
                                  continue;
                                }
 
-                               const Span<float> grid_masks = masks.slice(
+                               const Span<float> face_masks = masks.slice(
                                    bke::ccg::face_range(faces, grid_area, indices[i]));
-                               if (!std::any_of(grid_masks.begin(),
-                                                grid_masks.end(),
+                               if (!std::any_of(face_masks.begin(),
+                                                face_masks.end(),
                                                 [&](const float mask) { return mask > 0.5f; }))
                                {
                                  continue;
