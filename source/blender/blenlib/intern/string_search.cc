@@ -150,8 +150,12 @@ int get_fuzzy_match_errors(StringRef query, StringRef full)
     for (int i = 0; i < window_offset && window_end < full_end; i++) {
       window_begin += BLI_str_utf8_size_safe(window_begin);
       window_end += BLI_str_utf8_size_safe(window_end);
-      if (window_end > full_end)
-        window_end = full_end;
+    }
+    if (window_end > full_end) {
+      /* Can happen in case the `full` string has invalid utf8 bytes. While typically this should
+       * not occur, better be safe and handle the case gracefully. See also PR !129167, where a
+       * breaking case was reported. */
+      window_end = full_end;
     }
   }
 }
