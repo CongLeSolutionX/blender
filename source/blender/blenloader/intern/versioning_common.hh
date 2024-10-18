@@ -38,7 +38,7 @@ using blender::FunctionRef;
  * \returns The old, deprecated ID type code if any matches the given `id_code_new` one, otherwise
  * `ID_LINK_PLACEHOLDER`.
  */
-short do_versions_new_to_old_idcode_get(const short id_code_new);
+short do_versions_new_to_old_idcode_get(short id_code_new);
 
 /**
  * Check if a region of type \a region_type exists in \a regionbase. Otherwise add it after the

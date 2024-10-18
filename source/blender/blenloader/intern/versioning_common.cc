@@ -54,7 +54,7 @@ short do_versions_new_to_old_idcode_get(const short id_code_new)
       /* ID_GD_LEGACY (Grease Pencil v2) is now converted to ID_GP (Grease Pencil v3). */
       return ID_GD_LEGACY;
     default:
-      return 0;
+      return ID_LINK_PLACEHOLDER;
   }
 }
 
