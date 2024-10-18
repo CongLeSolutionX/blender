@@ -21,6 +21,7 @@
 #include "DRW_render.hh"
 
 #include "draw_shader_shared.hh"
+#include <atomic>
 #include <cstdint>
 
 namespace blender::draw {
@@ -35,6 +36,12 @@ using VisibilityBuf = StorageArrayBuffer<uint, 4, true>;
 class View {
   friend Manager;
 
+  /** Number of sync done by views. Used for fingerprint. */
+  static std::atomic<uint32_t> global_sync_counter_;
+
+  /* Local sync counter. Used for fingerprint. */
+  uint32_t sync_counter_ = 0;
+
  protected:
   /** TODO(fclem): Maybe try to reduce the minimum cost if the number of view is lower. */
 
@@ -47,8 +54,6 @@ class View {
   VisibilityBuf visibility_buf_;
   /* Fingerprint of the manager state when visibility was computed. */
   uint64_t manager_fingerprint_ = 0;
-
-  uint32_t sync_count_ = 0;
 
   const char *debug_name_;
 
@@ -197,7 +202,8 @@ class View {
    * Not reliable enough for general update detection. Only to be used for debugging assertion. */
   uint64_t fingerprint_get() const
   {
-    return sync_count_ ^ uint64_t(this);
+    BLI_assert_msg(sync_counter_ != 0, "View should be synced at least once before use");
+    return sync_counter_;
   }
 
   void update_viewport_size();

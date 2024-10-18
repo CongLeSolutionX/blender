@@ -26,7 +26,7 @@
 #include "draw_sculpt.hh"
 #include "draw_view.hh"
 
-#include <cstdint>
+#include <atomic>
 #include <string>
 
 namespace blender::draw {
@@ -111,8 +111,12 @@ class Manager {
   Vector<GPUTexture *> acquired_textures;
 
  private:
-  /** Number of sync done by this manager. Used for fingerprint. */
-  uint sync_count_ = 0;
+  /** Number of sync done by managers. Used for fingerprint. */
+  static std::atomic<uint32_t> global_sync_counter_;
+
+  /* Local sync counter. Used for fingerprint. */
+  uint32_t sync_counter_ = 0;
+
   /** Number of resource handle recorded. */
   uint resource_len_ = 0;
   /** Number of object attribute recorded. */
@@ -255,7 +259,13 @@ class Manager {
 
   /**
    * Submit a pass for drawing. All resource reference will be dereferenced and commands will be
-   * sent to GPU.
+   * sent to GPU. Visibility and command generation **must** have already been done explicitely
+   * using `compute_visibility` and `generate_commands`.
+   */
+  void submit_only(PassMain &pass, View &view);
+  /**
+   * Submit a pass for drawing. All resource reference will be dereferenced and commands will be
+   * sent to GPU. Visibility and command generation are run JIT if needed.
    */
   void submit(PassSimple &pass, View &view);
   void submit(PassMain &pass, View &view);

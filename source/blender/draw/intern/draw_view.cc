@@ -17,6 +17,8 @@
 
 namespace blender::draw {
 
+std::atomic<uint32_t> View::global_sync_counter_ = 1;
+
 void View::sync(const float4x4 &view_mat, const float4x4 &win_mat, int view_id)
 {
   data_[view_id].viewmat = view_mat;
@@ -32,7 +34,7 @@ void View::sync(const float4x4 &view_mat, const float4x4 &win_mat, int view_id)
 
   dirty_ = true;
   manager_fingerprint_ = 0;
-  sync_count_ += 1;
+  sync_counter_ = global_sync_counter_++;
 }
 
 void View::sync(const DRWView *view)
@@ -236,7 +238,7 @@ void View::compute_procedural_bounds()
 {
   /* Sync happens on the GPU. This is called after each sync. */
   manager_fingerprint_ = 0;
-  sync_count_ += 1;
+  sync_counter_ = global_sync_counter_++;
 
   GPU_debug_group_begin("View.compute_procedural_bounds");
 
