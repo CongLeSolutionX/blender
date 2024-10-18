@@ -87,7 +87,10 @@ class Octree {
   void recursive_build_(std::shared_ptr<OctreeNode> &node);
   int flatten_(KernelOctreeNode *knodes, std::shared_ptr<OctreeNode> &node, int &index);
   void evaluate_volume_density_(Device *device, Progress &progress);
-  bool should_split(std::shared_ptr<OctreeNode> &node);
+  Extrema<float> get_extrema(const vector<Extrema<float>> &values,
+                             const int3 index_min,
+                             const int3 index_max) const;
+  bool should_split(std::shared_ptr<OctreeNode> &node) const;
 
   /* Root node. */
   std::shared_ptr<OctreeNode> root_;

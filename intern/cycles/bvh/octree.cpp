@@ -75,7 +75,31 @@ bool OctreeNode::contains_homogeneous_volume() const
   return objects[0]->is_homogeneous_volume();
 }
 
-bool Octree::should_split(std::shared_ptr<OctreeNode> &node)
+Extrema<float> Octree::get_extrema(const vector<Extrema<float>> &values,
+                                   const int3 index_min,
+                                   const int3 index_max) const
+{
+  const blocked_range3d<int> range(
+      index_min.x, index_max.x, 32, index_min.y, index_max.y, 32, index_min.z, index_max.z, 32);
+  const Extrema<float> identity = {FLT_MAX, 0.0f};
+
+  auto reduction_func = [&](const blocked_range3d<int> &r, Extrema<float> init) -> Extrema<float> {
+    for (int z = r.cols().begin(); z < r.cols().end(); ++z) {
+      for (int y = r.rows().begin(); y < r.rows().end(); ++y) {
+        for (int x = r.pages().begin(); x < r.pages().end(); ++x) {
+          init = join(init, values[flatten_index(x, y, z)]);
+        }
+      }
+    }
+    return init;
+  };
+
+  auto join_func = [](Extrema<float> a, Extrema<float> b) -> Extrema<float> { return join(a, b); };
+
+  return parallel_reduce(range, identity, reduction_func, join_func);
+}
+
+bool Octree::should_split(std::shared_ptr<OctreeNode> &node) const
 {
   if (node->objects.empty()) {
     return false;
@@ -83,24 +107,7 @@ bool Octree::should_split(std::shared_ptr<OctreeNode> &node)
 
   const int3 index_min = world_to_floor_index(node->bbox.min);
   const int3 index_max = world_to_ceil_index(node->bbox.max);
-
-  const blocked_range3d<int> range(
-      index_min.x, index_max.x, index_min.y, index_max.y, index_min.z, index_max.z);
-  const Extrema<float> identity = {FLT_MAX, 0.0f};
-  const Extrema<float> sigma_extrema = parallel_reduce(
-      range,
-      identity,
-      [&](const blocked_range3d<int> &r, Extrema<float> init) -> Extrema<float> {
-        for (int z = r.cols().begin(); z < r.cols().end(); ++z) {
-          for (int y = r.rows().begin(); y < r.rows().end(); ++y) {
-            for (int x = r.pages().begin(); x < r.pages().end(); ++x) {
-              init = join(init, sigmas[flatten_index(x, y, z)]);
-            }
-          }
-        }
-        return init;
-      },
-      [](Extrema<float> a, Extrema<float> b) -> Extrema<float> { return join(a, b); });
+  const Extrema<float> sigma_extrema = get_extrema(sigmas, index_min, index_max);
 
   /* Do not split homogeneous volume. Volume stack already skips the zero-density regions. */
   node->sigma.max = sigma_extrema.max;
@@ -287,7 +294,6 @@ static void fill_shader_input(device_vector<KernelShaderEvalInput> &d_input,
 
   /* Get object boundary VDB. */
   openvdb::BoolGrid::ConstPtr grid = octree->get_vdb(geom);
-  openvdb::BoolGrid::ConstAccessor acc = grid->getConstAccessor();
 
   /* Get object transform. */
   Transform itfm;
@@ -303,44 +309,52 @@ static void fill_shader_input(device_vector<KernelShaderEvalInput> &d_input,
   const float3 voxel_size = octree->voxel_size();
 
   KernelShaderEvalInput *d_input_data = d_input.data();
+  const blocked_range3d<int> range(
+      0, index_range.x, 32, 0, index_range.y, 32, 0, index_range.z, 32);
 
-  for (int z = 0; z < index_range.z; ++z) {
-    for (int y = 0; y < index_range.y; ++y) {
-      for (int x = 0; x < index_range.x; ++x) {
-        const int local_index = flatten_index(x, y, z, index_range);
-        const float3 p = octree->index_to_world(x + index_min.x, y + index_min.y, z + index_min.z);
+  parallel_for(range, [&](const blocked_range3d<int> &r) {
+    /* One accessor per thread is importance for cached access. */
+    openvdb::BoolGrid::ConstAccessor acc = grid->getConstAccessor();
+
+    for (int z = r.cols().begin(); z < r.cols().end(); ++z) {
+      for (int y = r.rows().begin(); y < r.rows().end(); ++y) {
+        for (int x = r.pages().begin(); x < r.pages().end(); ++x) {
+          const int local_index = flatten_index(x, y, z, index_range);
+          const float3 p = octree->index_to_world(
+              x + index_min.x, y + index_min.y, z + index_min.z);
 
 #ifdef WITH_OPENVDB
-        /* Zero density for cells outside of the mesh. */
-        if (!grid->empty()) {
-          float3 cell_center = p + 0.5f * voxel_size;
-          if (!transform_applied) {
-            cell_center = transform_point(&itfm, cell_center);
+          /* Zero density for cells outside of the mesh. */
+          if (!grid->empty()) {
+            float3 cell_center = p + 0.5f * voxel_size;
+            if (!transform_applied) {
+              cell_center = transform_point(&itfm, cell_center);
+            }
+            openvdb::Coord coord = openvdb::Coord::round(
+                grid->worldToIndex(openvdb::Vec3s(cell_center.x, cell_center.y, cell_center.z)));
+            if (!acc.getValue(coord)) {
+              d_input_data[local_index * 2 + 1].object = SHADER_NONE;
+              continue;
+            }
           }
-          openvdb::Coord coord = openvdb::Coord::round(
-              grid->worldToIndex(openvdb::Vec3s(cell_center.x, cell_center.y, cell_center.z)));
-          if (!acc.getValue(coord)) {
-            d_input_data[local_index * 2 + 1].object = SHADER_NONE;
-            continue;
-          }
-        }
 #endif
 
-        KernelShaderEvalInput in;
-        in.object = object_id;
-        in.prim = __float_as_int(p.x);
-        in.u = p.y;
-        in.v = p.z;
-        d_input_data[local_index * 2 + 0] = in;
+          KernelShaderEvalInput in;
+          in.object = object_id;
+          in.prim = __float_as_int(p.x);
+          in.u = p.y;
+          in.v = p.z;
+          d_input_data[local_index * 2 + 0] = in;
 
-        in.object = shader_id;
-        in.prim = __float_as_int(voxel_size.x);
-        in.u = voxel_size.y;
-        in.v = voxel_size.z;
-        d_input_data[local_index * 2 + 1] = in;
+          in.object = shader_id;
+          in.prim = __float_as_int(voxel_size.x);
+          in.u = voxel_size.y;
+          in.v = voxel_size.z;
+          d_input_data[local_index * 2 + 1] = in;
+        }
       }
     }
-  }
+  });
 }
 
 /* Read back the volume densty. */
@@ -352,7 +366,9 @@ static void read_shader_output(const device_vector<float> &d_output,
                                vector<Extrema<float>> &sigmas)
 {
   const float *d_output_data = d_output.data();
-  const blocked_range3d<int> range(0, index_range.x, 0, index_range.y, 0, index_range.z);
+  const blocked_range3d<int> range(
+      0, index_range.x, 32, 0, index_range.y, 32, 0, index_range.z, 32);
+
   parallel_for(range, [&](const blocked_range3d<int> &r) {
     for (int z = r.cols().begin(); z < r.cols().end(); ++z) {
       for (int y = r.rows().begin(); y < r.rows().end(); ++y) {
@@ -370,13 +386,13 @@ static void read_shader_output(const device_vector<float> &d_output,
 
 void Octree::evaluate_volume_density_(Device *device, Progress &progress)
 {
+  /* Initialize density field. */
   const int size = width * width * width;
+  sigmas.resize(size);
+  parallel_for(0, size, [&](int i) { sigmas[i] = {0.0f, 0.0f}; });
+
   /* Min and max. */
   const int num_channels = 2;
-
-  sigmas.resize(size);
-
-  parallel_for(0, size, [&](int i) { sigmas[i] = {0.0f, 0.0f}; });
 
   /* TODO(weizhen): add world. */
   for (const Object *object : root_->objects) {
