@@ -66,9 +66,9 @@ static void calculate_curve_point_distances_for_proportional_editing(
 }
 
 static void update_handle_types(
-    const IndexMask auto_handles,
-    const IndexMask auto_handles_opposite,
-    const IndexMask vector_handles,
+    const IndexMask &auto_handles,
+    const IndexMask &auto_handles_opposite,
+    const IndexMask &vector_handles,
     const index_mask::Expr &selected_handles_nonselected_knots,
     const index_mask::Expr &selected_handles_nonselected_knots_opposite,
     MutableSpan<int8_t> handle_types,
