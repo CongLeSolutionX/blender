@@ -2062,7 +2062,7 @@ void calc_area_normal_and_center(const Depsgraph &depsgraph,
 /**
  * Calculates the direction of the brush stroke, typically along the brush normal.
  */
-static float brush_flip(const Brush& brush, const blender::ed::sculpt_paint::StrokeCache &cache)
+static float brush_flip(const Brush &brush, const blender::ed::sculpt_paint::StrokeCache &cache)
 {
   if (brush.flag & BRUSH_INVERT_TO_SCRAPE_FILL) {
     return 1.0f;
