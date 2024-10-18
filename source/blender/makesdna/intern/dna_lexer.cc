@@ -35,59 +35,10 @@ void TokenIterator::eval_identifier(const char *&itr, const char *end)
   while (itr < end && (std::isalnum(itr[0]) || itr[0] == '_')) {
     itr++;
   }
-  struct KeywordItem {
-    StringRef word;
-    KeywordType type;
-  };
-  static constexpr KeywordItem keywords[]{
-      {"include", KeywordType::Include},
-      {"struct", KeywordType::Struct},
-      {"typedef", KeywordType::Typedef},
-      {"class", KeywordType::Class},
-      {"enum", KeywordType::Enum},
-      {"define", KeywordType::Define},
-      {"public", KeywordType::Public},
-      {"private", KeywordType::Private},
-      {"const", KeywordType::Const},
-      {"void", KeywordType::Void},
-      {"char", KeywordType::Char},
-      {"char16_t", KeywordType::Char16_t},
-      {"char32_t", KeywordType::Char32_t},
-      {"unsigned", KeywordType::Unsigned},
-      {"signed", KeywordType::Signed},
-      {"short", KeywordType::Short},
-      {"long", KeywordType::Long},
-      {"ulong", KeywordType::Ulong},
-      {"int", KeywordType::Int},
-      {"int8_t", KeywordType::Int8_t},
-      {"int16_t", KeywordType::Int16_t},
-      {"int32_t", KeywordType::Int32_t},
-      {"int64_t", KeywordType::Int64_t},
-      {"uint8_t", KeywordType::Uint8_t},
-      {"uint16_t", KeywordType::Uint16_t},
-      {"uint32_t", KeywordType::Uint32_t},
-      {"uint64_t", KeywordType::Uint64_t},
-      {"float", KeywordType::Float},
-      {"double", KeywordType::Double},
-      {"if", KeywordType::If},
-      {"ifdef", KeywordType::Ifdef},
-      {"ifndef", KeywordType::Ifndef},
-      {"endif", KeywordType::Endif},
-      {"extern", KeywordType::Extern},
-      {"pragma", KeywordType::Pragma},
-      {"once", KeywordType::Once},
-      {"BLI_STATIC_ASSERT_ALIGN", KeywordType::BLIStaticAssertAlign},
-      {"DNA_DEFINE_CXX_METHODS", KeywordType::DNADefineCxxMethods},
-      {"DNA_DEPRECATED", KeywordType::DNADeprecated},
-      {"DNA_DEPRECATED_ALLOW", KeywordType::DNADeprecatedAllow},
-      {"ENUM_OPERATORS", KeywordType::EnumOperators},
-  };
+
   StringRef str = StringRef(start, itr);
-  auto test_keyword_fn = [str](const KeywordItem &keyword) -> bool { return keyword.word == str; };
-  const KeywordItem *keyword_itr = std::find_if(
-      std::begin(keywords), std::end(keywords), test_keyword_fn);
-  if (keyword_itr != std::end(keywords)) {
-    this->append(KeywordToken{str, keyword_itr->type});
+  if (Span(keywords, ARRAY_SIZE(keywords)).contains(str)) {
+    this->append(KeywordToken{str});
     return;
   }
   this->append(IdentifierToken{str});
@@ -141,17 +92,8 @@ void TokenIterator::eval_multiline_comment(const char *&itr, const char *end)
 
 void TokenIterator::eval_symbol(const char *&itr, const char * /* end */)
 {
-  static constexpr SymbolType symbols[] = {
-      SymbolType::Colon,     SymbolType::Semicolon, SymbolType::LParen,   SymbolType::RParen,
-      SymbolType::LBracket,  SymbolType::RBracket,  SymbolType::LBrace,   SymbolType::RBrace,
-      SymbolType::Assign,    SymbolType::Hash,      SymbolType::Dot,      SymbolType::Comma,
-      SymbolType::Star,      SymbolType::Less,      SymbolType::Greater,  SymbolType::BitOr,
-      SymbolType::BitAnd,    SymbolType::Plus,      SymbolType::Minus,    SymbolType::Exclamation,
-      SymbolType::Percent,   SymbolType::Caret,     SymbolType::Question, SymbolType::Tilde,
-      SymbolType::Backslash, SymbolType::Slash,
-  };
-  if (std::find(std::begin(symbols), std::end(symbols), SymbolType(itr[0])) != std::end(symbols)) {
-    this->append(SymbolToken{StringRef(itr, itr + 1), SymbolType(itr[0])});
+  if (symbols.find(itr[0]) != symbols.not_found) {
+    this->append(SymbolToken{StringRef(itr, itr + 1)});
     itr++;
   }
 }
@@ -258,26 +200,6 @@ void TokenIterator::end_waypoint(bool success)
     next_ = waypoints_.last();
   }
   waypoints_.remove_last();
-}
-
-KeywordToken *TokenIterator::next_keyword(KeywordType type)
-{
-  TokenVariant *tmp = next_;
-  if (KeywordToken *keyword = next<KeywordToken>(); keyword && keyword->type == type) {
-    return keyword;
-  }
-  next_ = tmp;
-  return nullptr;
-}
-
-SymbolToken *TokenIterator::next_symbol(SymbolType type)
-{
-  TokenVariant *tmp = next_;
-  if (SymbolToken *symbol = next<SymbolToken>(); symbol && symbol->type == type) {
-    return symbol;
-  }
-  next_ = tmp;
-  return nullptr;
 }
 
 }  // namespace blender::dna::lex

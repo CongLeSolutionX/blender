@@ -10,78 +10,94 @@
 
 namespace blender::dna::lex {
 
-enum class SymbolType : char {
-  Colon = ':',
-  Semicolon = ';',
-  LParen = '(',
-  RParen = ')',
-  LBracket = '[',
-  RBracket = ']',
-  LBrace = '{',
-  RBrace = '}',
-  Assign = '=',
-  Hash = '#',
-  Dot = '.',
-  Comma = ',',
-  Star = '*',
-  Less = '<',
-  Greater = '>',
-  BitOr = '|',
-  BitAnd = '&',
-  Plus = '+',
-  Minus = '-',
-  Exclamation = '!',
-  Percent = '%',
-  Caret = '^',
-  Question = '?',
-  Tilde = '~',
-  Backslash = '\\',
-  Slash = '/',
-};
+static constexpr StringRef symbols = ":;()[]{}=#.,*<>|&+-!%^?~\\/";
 
-enum class KeywordType : int8_t {
-  Include = 0, /* include */
-  Struct,      /* struct */
-  Typedef,     /* typedef */
-  Class,       /* class */
-  Enum,        /* enum */
-  Define,      /* define */
-  Public,      /* public */
-  Private,     /* private */
-  Const,       /* const */
-  Void,        /* void */
-  Char,        /* char */
-  Char16_t,    /* char16_t */
-  Char32_t,    /* char32_t */
-  Unsigned,    /* unsigned */
-  Signed,      /* signed */
-  Short,       /* short */
-  Long,        /* long */
-  Ulong,       /* ulong */
-  Int,         /* int */
-  Int8_t,      /* int8_t */
-  Int16_t,     /* int16_t */
-  Int32_t,     /* int32_t */
-  Int64_t,     /* int64_t */
-  Uint8_t,     /* uint8_t */
-  Uint16_t,    /* uint16_t */
-  Uint32_t,    /* uint32_t */
-  Uint64_t,    /* uint64_t */
-  Float,       /* float */
-  Double,      /* double */
-  If,          /* if */
-  Ifdef,       /* ifdef */
-  Ifndef,      /* ifndef */
-  Endif,       /* endif */
-  Extern,      /* extern */
-  Pragma,      /* pragma */
-  Once,        /* once */
-  /* Common Blender macros in DNA. */
-  BLIStaticAssertAlign, /* BLI_STATIC_ASSERT_ALIGN */
-  DNADefineCxxMethods,  /* DNA_DEFINE_CXX_METHODS */
-  DNADeprecated,        /* DNA_DEPRECATED */
-  DNADeprecatedAllow,   /* DNA_DEPRECATED_ALLOW */
-  EnumOperators,        /* ENUM_OPERATORS */
+static constexpr char include_str[] = "include";
+static constexpr char struct_str[] = "struct";
+static constexpr char typedef_str[] = "typedef";
+static constexpr char class_str[] = "class";
+static constexpr char enum_str[] = "enum";
+static constexpr char define_str[] = "define";
+static constexpr char public_str[] = "public";
+static constexpr char private_str[] = "private";
+static constexpr char const_str[] = "const";
+static constexpr char void_str[] = "void";
+static constexpr char char_str[] = "char";
+static constexpr char char16_t_str[] = "char16_t";
+static constexpr char char32_t_str[] = "char32_t";
+static constexpr char unsigned_str[] = "unsigned";
+static constexpr char signed_str[] = "signed";
+static constexpr char short_str[] = "short";
+static constexpr char long_str[] = "long";
+static constexpr char ulong_str[] = "ulong";
+static constexpr char int_str[] = "int";
+static constexpr char int8_t_str[] = "int8_t";
+static constexpr char int16_t_str[] = "int16_t";
+static constexpr char int32_t_str[] = "int32_t";
+static constexpr char int64_t_str[] = "int64_t";
+static constexpr char uint8_t_str[] = "uint8_t";
+static constexpr char uint16_t_str[] = "uint16_t";
+static constexpr char uint32_t_str[] = "uint32_t";
+static constexpr char uint64_t_str[] = "uint64_t";
+static constexpr char float_str[] = "float";
+static constexpr char double_str[] = "double";
+static constexpr char if_str[] = "if";
+static constexpr char ifdef_str[] = "ifdef";
+static constexpr char ifndef_str[] = "ifndef";
+static constexpr char endif_str[] = "endif";
+static constexpr char extern_str[] = "extern";
+static constexpr char pragma_str[] = "pragma";
+static constexpr char once_str[] = "once";
+
+/* Common Blender macros in DNA. */
+static constexpr char BLI_STATIC_ASSERT_ALIGN_str[] = "BLI_STATIC_ASSERT_ALIGN";
+static constexpr char DNA_DEFINE_CXX_METHODS_str[] = "DNA_DEFINE_CXX_METHODS";
+static constexpr char DNA_DEPRECATED_str[] = "DNA_DEPRECATED";
+static constexpr char DNA_DEPRECATED_ALLOW_str[] = "DNA_DEPRECATED_ALLOW";
+static constexpr char ENUM_OPERATORS_str[] = "ENUM_OPERATORS";
+
+static constexpr StringRef keywords[]{
+    include_str,
+    struct_str,
+    typedef_str,
+    class_str,
+    enum_str,
+    define_str,
+    public_str,
+    private_str,
+    const_str,
+    void_str,
+    char_str,
+    char16_t_str,
+    char32_t_str,
+    unsigned_str,
+    signed_str,
+    short_str,
+    long_str,
+    ulong_str,
+    int_str,
+    int8_t_str,
+    int16_t_str,
+    int32_t_str,
+    int64_t_str,
+    uint8_t_str,
+    uint16_t_str,
+    uint32_t_str,
+    uint64_t_str,
+    float_str,
+    double_str,
+    if_str,
+    ifdef_str,
+    ifndef_str,
+    endif_str,
+    extern_str,
+    pragma_str,
+    once_str,
+    BLI_STATIC_ASSERT_ALIGN_str,
+    DNA_DEFINE_CXX_METHODS_str,
+    DNA_DEPRECATED_str,
+    DNA_DEPRECATED_ALLOW_str,
+    ENUM_OPERATORS_str,
 };
 
 struct Token {
@@ -98,13 +114,9 @@ struct IntLiteralToken : public Token {
   int64_t value;
 };
 
-struct SymbolToken : public Token {
-  SymbolType type;
-};
+struct SymbolToken : public Token {};
 
-struct KeywordToken : public Token {
-  KeywordType type;
-};
+struct KeywordToken : public Token {};
 
 using TokenVariant = std::variant<BreakLineToken,
                                   IdentifierToken,
@@ -171,12 +183,6 @@ struct TokenIterator {
     next_ = current_next;
     return nullptr;
   }
-
-  /** Return the next token if it matches to the requested keyword type. */
-  KeywordToken *next_keyword(KeywordType type);
-
-  /** Return the next token if it matches to the requested symbol type. */
-  SymbolToken *next_symbol(SymbolType type);
 
  private:
   /** Match any whitespace except break lines. */

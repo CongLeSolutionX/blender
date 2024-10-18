@@ -120,7 +120,7 @@ template<typename T> class ParseResult {
 
   bool fail() const
   {
-    return data_.has_value();
+    return !data_.has_value();
   }
 
   T &value() &
@@ -150,16 +150,20 @@ template<typename T> struct Parser {
   }
 };
 
+/* Helper function that manages parsing state. */
 template<typename T> ParseResult<T> parse_t(TokenIterator &token_iterator)
 {
-  return Parser<T>::parse(token_iterator);
+  token_iterator.push_waypoint();
+  ParseResult<T> parse_Result = Parser<T>::parse(token_iterator);
+  token_iterator.end_waypoint(parse_Result.success());
+  return parse_Result;
 };
 
 /**
  * Parser that matches a sequence of elements to parse, fails if any `Args` in `Args...` fails to
  * parse.
- * The sequence: `Sequence<HashSymbol, PragmaKeyword, OnceKeyword>` parses when the
- * text contains `#pragma once`.
+ * The sequence: `Sequence<Symbol<'#'>,  Keyword<pragma_str>, Keyword<once_str>>` parses
+ * when the text contains `#pragma once`.
  */
 template<class... Args> using Sequence = std::tuple<Args...>;
 template<class... Args> struct Parser<Sequence<Args...>> {
@@ -169,11 +173,11 @@ template<class... Args> struct Parser<Sequence<Args...>> {
   static inline bool parse_idx(Sequence<Args...> &sequence, TokenIterator &token_iterator)
   {
     using T = std::tuple_element_t<I, std::tuple<Args...>>;
-    ParseResult<T> val = parse_t<T>(token_iterator);
-    if (val.success()) {
-      std::get<I>(sequence) = std::move(val.value());
+    ParseResult<T> parse_Result = Parser<T>::parse(token_iterator);
+    if (parse_Result.success()) {
+      std::get<I>(sequence) = std::move(parse_Result.value());
     }
-    return val.success();
+    return parse_Result.success();
   };
 
   template<std::size_t... I>
@@ -187,11 +191,8 @@ template<class... Args> struct Parser<Sequence<Args...>> {
  public:
   static ParseResult<Sequence<Args...>> parse(TokenIterator &token_iterator)
   {
-    token_iterator.push_waypoint();
     Sequence<Args...> sequence{};
-    const bool success = parse_impl(sequence, std::index_sequence_for<Args...>{}, token_iterator);
-    token_iterator.end_waypoint(success);
-    if (success) {
+    if (parse_impl(sequence, std::index_sequence_for<Args...>{}, token_iterator)) {
       return sequence;
     }
     return parse_failed;
@@ -200,17 +201,15 @@ template<class... Args> struct Parser<Sequence<Args...>> {
 
 /**
  * Parser that don't fails if `T` can't be parsed.
- * The sequence `Sequence<Optional<ConstKeyword>, IntKeyword, Identifier, SemicolonSymbol>` success
- * either if text is `const int num;` or `int num;`
+ * The sequence `Sequence<Optional<Keyword<const_str>>, Keyword<int_str>, Identifier, Symbol<';'>>`
+ * success either if text is `const int num;` or `int num;`
  */
 template<typename T> using Optional = std::optional<T>;
 template<typename T> struct Parser<Optional<T>> {
  public:
   static ParseResult<Optional<T>> parse(TokenIterator &token_iterator)
   {
-    token_iterator.push_waypoint();
     ParseResult<T> result = parse_t<T>(token_iterator);
-    token_iterator.end_waypoint(result.success());
     if (result.success()) {
       return Optional<T>{std::move(result.value())};
     }
@@ -220,7 +219,7 @@ template<typename T> struct Parser<Optional<T>> {
 
 /**
  * Parser that tries to match any `Arg` in `Args...`
- * The sequence `Sequence<Variant<IntKeyword, FloatKeyword>, Identifier, SemicolonSymbol>`
+ * The sequence `Sequence<Variant<Keyword<int_str>,  Keyword<float_str>>, Identifier, Symbol<';'>>`
  * success either if text is `int num;` or `float num;`
  */
 template<class... Args> using Variant = std::variant<Args...>;
@@ -230,12 +229,10 @@ template<class... Args> struct Parser<Variant<Args...>> {
   template<typename T>
   static bool parse_variant(Variant<Args...> &variant, TokenIterator &token_iterator)
   {
-    token_iterator.push_waypoint();
     ParseResult<T> val = parse_t<T>(token_iterator);
     if (val.success()) {
       variant.template emplace<T>(std::move(val.value()));
     }
-    token_iterator.end_waypoint(val.success());
     return val.success();
   };
 
@@ -251,92 +248,55 @@ template<class... Args> struct Parser<Variant<Args...>> {
 };
 
 /** Keyword parser. */
-template<KeywordType Type> struct Keyword {};
-template<KeywordType Type> struct Parser<Keyword<Type>> {
+template<const char *word> struct Keyword {
+  static_assert(Span(keywords, ARRAY_SIZE(keywords)).contains(StringRef(word)),
+                "Template string parameter is not a Keyword Type");
+  StringRef str;
+};
+
+template<const char *Type> struct Parser<Keyword<Type>> {
   static ParseResult<Keyword<Type>> parse(TokenIterator &token_iterator)
   {
-    if (token_iterator.next_keyword(Type)) {
-      return Keyword<Type>{};
+    if (KeywordToken *keyword = token_iterator.next<KeywordToken>();
+        keyword && keyword->where == Type)
+    {
+      return Keyword<Type>{keyword->where};
     }
     return parse_failed;
   }
 };
-
-using ConstKeyword = Keyword<KeywordType::Const>;
-using IncludeKeyword = Keyword<KeywordType::Include>;
-using StructKeyword = Keyword<KeywordType::Struct>;
-using DefineKeyword = Keyword<KeywordType::Define>;
-using UnsignedKeyword = Keyword<KeywordType::Unsigned>;
-using IntKeyword = Keyword<KeywordType::Int>;
-using Int8Keyword = Keyword<KeywordType::Int8_t>;
-using Int16Keyword = Keyword<KeywordType::Int16_t>;
-using Int32Keyword = Keyword<KeywordType::Int32_t>;
-using Int64Keyword = Keyword<KeywordType::Int64_t>;
-using UInt8Keyword = Keyword<KeywordType::Uint8_t>;
-using UInt16Keyword = Keyword<KeywordType::Uint16_t>;
-using UInt32Keyword = Keyword<KeywordType::Uint32_t>;
-using UInt64Keyword = Keyword<KeywordType::Uint64_t>;
-using FloatKeyword = Keyword<KeywordType::Float>;
-using DoubleKeyword = Keyword<KeywordType::Double>;
-using ShortKeyword = Keyword<KeywordType::Short>;
-using CharKeyword = Keyword<KeywordType::Char>;
-using VoidKeyword = Keyword<KeywordType::Void>;
-using IfKeyword = Keyword<KeywordType::If>;
-using IfDefKeyword = Keyword<KeywordType::Ifdef>;
-using IfnDefKeyword = Keyword<KeywordType::Ifndef>;
-using EndIfKeyword = Keyword<KeywordType::Endif>;
-using ExternKeyword = Keyword<KeywordType::Extern>;
-using TypedefKeyword = Keyword<KeywordType::Typedef>;
-using PragmaKeyword = Keyword<KeywordType::Pragma>;
-using OnceKeyword = Keyword<KeywordType::Once>;
-using EnumKeyword = Keyword<KeywordType::Enum>;
-using ClassKeyword = Keyword<KeywordType::Class>;
-using DNADeprecatedKeyword = Keyword<KeywordType::DNADeprecated>;
-using DNADeprecatedAllowKeyword = Keyword<KeywordType::DNADeprecatedAllow>;
 
 /** Symbol parser. */
-template<SymbolType type> struct Symbol {};
-template<SymbolType Type> struct Parser<Symbol<Type>> {
+template<char type> struct Symbol {
+  static_assert(symbols.find(type) != symbols.not_found,
+                "Template char parameter is not a Symbol Type");
+  StringRef str;
+};
+template<char Type> struct Parser<Symbol<Type>> {
   static ParseResult<Symbol<Type>> parse(TokenIterator &token_iterator)
   {
-    if (token_iterator.next_symbol(Type)) {
-      return Symbol<Type>{};
+    if (SymbolToken *symbol = token_iterator.next<SymbolToken>();
+        symbol && symbol->where[0] == Type)
+    {
+      return Symbol<Type>{symbol->where};
     }
     return parse_failed;
   }
 };
 
-using LBracketSymbol = Symbol<SymbolType::LBracket>;
-using RBracketSymbol = Symbol<SymbolType::RBracket>;
-using LBraceSymbol = Symbol<SymbolType::LBrace>;
-using RBraceSymbol = Symbol<SymbolType::RBrace>;
-using LParenSymbol = Symbol<SymbolType::LParen>;
-using RParenSymbol = Symbol<SymbolType::RParen>;
-using StarSymbol = Symbol<SymbolType::Star>;
-using SemicolonSymbol = Symbol<SymbolType::Semicolon>;
-using ColonSymbol = Symbol<SymbolType::Colon>;
-using CommaSymbol = Symbol<SymbolType::Comma>;
-using HashSymbol = Symbol<SymbolType::Hash>;
-using LessSymbol = Symbol<SymbolType::Less>;
-using GreaterSymbol = Symbol<SymbolType::Greater>;
-using AssignSymbol = Symbol<SymbolType::Assign>;
-using MinusSymbol = Symbol<SymbolType::Minus>;
-
-static void skip_until_match_paired_symbols(SymbolType left,
-                                            SymbolType right,
-                                            TokenIterator &token_iterator);
+static void skip_until_match_paired_symbols(char left, char right, TokenIterator &token_iterator);
 
 /**
- * Parses a macro call, `MacroCall<KeywordType::DNA_DEFINE_CXX_METHODS>` parses
+ * Parses a macro call, `MacroCall<Keyword<DNA_DEFINE_CXX_METHODS_str>>` parses
  * `DNA_DEFINE_CXX_METHODS(...)`.
  */
-template<KeywordType Type> struct MacroCall {};
-template<KeywordType Type> struct Parser<MacroCall<Type>> {
+template<const char *Type> struct MacroCall {};
+template<const char *Type> struct Parser<MacroCall<Type>> {
   static ParseResult<MacroCall<Type>> parse(TokenIterator &token_iterator)
   {
-    if (parse_t<Sequence<Keyword<Type>, LParenSymbol>>(token_iterator).success()) {
-      skip_until_match_paired_symbols(SymbolType::LParen, SymbolType::RParen, token_iterator);
-      parse_t<SemicolonSymbol>(token_iterator);
+    if (parse_t<Sequence<Keyword<Type>, Symbol<'('>>>(token_iterator).success()) {
+      skip_until_match_paired_symbols('(', ')', token_iterator);
+      parse_t<Symbol<';'>>(token_iterator);
       return MacroCall<Type>{};
     }
     return parse_failed;
@@ -390,7 +350,7 @@ struct Include {};
 template<> struct Parser<Include> {
   static ParseResult<Include> parse(TokenIterator &token_iterator)
   {
-    if (parse_t<Sequence<HashSymbol, IncludeKeyword>>(token_iterator).success()) {
+    if (parse_t<Sequence<Symbol<'#'>, Keyword<include_str>>>(token_iterator).success()) {
       TokenVariant *token = token_iterator.next_variant();
       while (token && !std::holds_alternative<BreakLineToken>(*token)) {
         token = token_iterator.next_variant();
@@ -402,9 +362,10 @@ template<> struct Parser<Include> {
 };
 
 /** Check if a token is a symbol and has a type. */
-static bool inline is_symbol_type(const TokenVariant &token, const SymbolType type)
+static bool inline is_symbol_type(const TokenVariant &token, const char type)
 {
-  return std::holds_alternative<SymbolToken>(token) && std::get<SymbolToken>(token).type == type;
+  return std::holds_alternative<SymbolToken>(token) &&
+         std::get<SymbolToken>(token).where[0] == type;
 }
 
 /** Parses `#define` directives except to const int defines. */
@@ -412,7 +373,7 @@ struct Define {};
 template<> struct Parser<Define> {
   static ParseResult<Define> parse(TokenIterator &token_iterator)
   {
-    if (!parse_t<Sequence<HashSymbol, DefineKeyword>>(token_iterator).success()) {
+    if (!parse_t<Sequence<Symbol<'#'>, Keyword<define_str>>>(token_iterator).success()) {
       return parse_failed;
     }
     bool scape_bl = false;
@@ -422,7 +383,7 @@ template<> struct Parser<Define> {
       if (std::holds_alternative<BreakLineToken>(*token) && !scape_bl) {
         break;
       }
-      scape_bl = is_symbol_type(*token, SymbolType::Backslash);
+      scape_bl = is_symbol_type(*token, '\\');
     }
     return Define{};
   }
@@ -435,12 +396,12 @@ template<> struct Parser<Define> {
 template<> struct Parser<IntDeclaration> {
   static ParseResult<IntDeclaration> parse(TokenIterator &token_iterator)
   {
-    using DefineConstIntSeq = Sequence<HashSymbol, DefineKeyword, Identifier, IntLiteral>;
+    using DefineConstIntSeq = Sequence<Symbol<'#'>, Keyword<define_str>, Identifier, IntLiteral>;
     ParseResult<DefineConstIntSeq> def_int_seq = parse_t<DefineConstIntSeq>(token_iterator);
     if (!def_int_seq.success() || !token_iterator.next<BreakLineToken>()) {
       return parse_failed;
     }
-    return IntDeclaration{std::move(std::get<2>(def_int_seq.value()).str),
+    return IntDeclaration{std::get<2>(def_int_seq.value()).str,
                           std::get<3>(def_int_seq.value()).value};
   }
 };
@@ -453,38 +414,29 @@ template<> struct Parser<PrimitiveType> {
   static ParseResult<PrimitiveType> parse(TokenIterator &token_iterator)
   {
     /* TODO: Add all primitive types. */
-    using PrimitiveTypeVariants = Variant<IntKeyword,
-                                          CharKeyword,
-                                          ShortKeyword,
-                                          FloatKeyword,
-                                          DoubleKeyword,
-                                          VoidKeyword,
-                                          Sequence<UnsignedKeyword, IntKeyword>,
-                                          Sequence<UnsignedKeyword, ShortKeyword>,
-                                          Sequence<UnsignedKeyword, CharKeyword>,
-                                          Int8Keyword,
-                                          Int16Keyword,
-                                          Int32Keyword,
-                                          Int64Keyword,
-                                          UInt8Keyword,
-                                          UInt16Keyword,
-                                          UInt32Keyword,
-                                          UInt64Keyword,
-                                          Keyword<KeywordType::Long>,
-                                          Keyword<KeywordType::Ulong>>;
+    const bool is_unsigned = parse_t<Keyword<unsigned_str>>(token_iterator).success();
+    using PrimitiveTypeVariants = Variant<Keyword<int_str>,
+                                          Keyword<char_str>,
+                                          Keyword<short_str>,
+                                          Keyword<float_str>,
+                                          Keyword<double_str>,
+                                          Keyword<void_str>,
+                                          Keyword<int8_t_str>,
+                                          Keyword<int16_t_str>,
+                                          Keyword<int32_t_str>,
+                                          Keyword<int64_t_str>,
+                                          Keyword<uint8_t_str>,
+                                          Keyword<uint16_t_str>,
+                                          Keyword<uint32_t_str>,
+                                          Keyword<uint64_t_str>,
+                                          Keyword<long_str>,
+                                          Keyword<ulong_str>>;
     ParseResult<PrimitiveTypeVariants> type = parse_t<PrimitiveTypeVariants>(token_iterator);
-    if (!type.success()) {
+    /* Only int, char or short could be unsigned. */
+    if (type.fail() || (is_unsigned && type.value().index() > 2)) {
       return parse_failed;
     }
-
-    /* Use `unsigned int` as uint32?.... */
-    /* Note: makesdna ignores `unsigned` keyword. */
-    static constexpr const char *primitive_types[]{
-        "int",      "char",     "short",    "float",   "double",  "void",    "int",
-        "short",    "char",     "int8_t",   "int16_t", "int32_t", "int64_t", "uint8_t",
-        "uint16_t", "uint32_t", "uint64_t", "long",    "ulong",
-    };
-    return PrimitiveType{primitive_types[type.value().index()]};
+    return PrimitiveType{std::visit([](auto &&type) { return type.str; }, type.value())};
   }
 };
 
@@ -499,8 +451,9 @@ struct Type {
 template<> struct Parser<Type> {
   static ParseResult<Type> parse(TokenIterator &token_iterator)
   {
-    using TypeVariant = Variant<PrimitiveType, Sequence<Optional<StructKeyword>, Identifier>>;
-    using TypeSequence = Sequence<Optional<ConstKeyword>, TypeVariant>;
+    using TypeVariant =
+        Variant<PrimitiveType, Sequence<Optional<Keyword<struct_str>>, Identifier>>;
+    using TypeSequence = Sequence<Optional<Keyword<const_str>>, TypeVariant>;
 
     ParseResult<TypeSequence> type_seq = parse_t<TypeSequence>(token_iterator);
     if (!type_seq.success()) {
@@ -524,11 +477,11 @@ static Vector<std::variant<StringRef, int64_t>> variable_array_size_parse(
 {
   Vector<std::variant<StringRef, int64_t>> result;
   /* Dynamic array. */
-  if (parse_t<Sequence<LBracketSymbol, RBracketSymbol>>(token_iterator).success()) {
+  if (parse_t<Sequence<Symbol<'['>, Symbol<']'>>>(token_iterator).success()) {
     result.append("");
   }
   while (true) {
-    using ArraySize = Sequence<LBracketSymbol, Variant<IntLiteral, Identifier>, RBracketSymbol>;
+    using ArraySize = Sequence<Symbol<'['>, Variant<IntLiteral, Identifier>, Symbol<']'>>;
     ParseResult<ArraySize> size_seq = parse_t<ArraySize>(token_iterator);
     if (!size_seq.success()) {
       break;
@@ -562,24 +515,24 @@ template<> struct Parser<VariableDeclaration> {
     var_decl.type = type.value().str;
 
     while (true) {
-      std::string star;
-      for (; parse_t<StarSymbol>(token_iterator).success();) {
-        star += '*';
+      std::string ptr;
+      for (; parse_t<Symbol<'*'>>(token_iterator).success();) {
+        ptr += '*';
       }
       ParseResult<Identifier> name = parse_t<Identifier>(token_iterator);
       if (!name.success()) {
         return parse_failed;
       }
       VariableDeclaration::Item item{};
-      item.ptr = !star.empty() ? std::optional{star} : std::nullopt;
+      item.ptr = !ptr.empty() ? std::optional{ptr} : std::nullopt;
       item.name = name.value().str;
       item.array_size = variable_array_size_parse(token_iterator);
       var_decl.items.append(std::move(item));
-      parse_t<DNADeprecatedKeyword>(token_iterator);
-      if (parse_t<SemicolonSymbol>(token_iterator).success()) {
+      parse_t<Keyword<DNA_DEPRECATED_str>>(token_iterator);
+      if (parse_t<Symbol<';'>>(token_iterator).success()) {
         break;
       }
-      if (!parse_t<CommaSymbol>(token_iterator).success()) {
+      if (!parse_t<Symbol<','>>(token_iterator).success()) {
         return parse_failed;
       }
     }
@@ -588,9 +541,7 @@ template<> struct Parser<VariableDeclaration> {
 };
 
 /* Skips tokens until match the closing right symbol, like function body braces `{...}`. */
-static void skip_until_match_paired_symbols(SymbolType left,
-                                            SymbolType right,
-                                            TokenIterator &token_iterator)
+static void skip_until_match_paired_symbols(char left, char right, TokenIterator &token_iterator)
 {
   int left_count = 1;
   for (TokenVariant *token = token_iterator.next_variant(); token;
@@ -615,12 +566,12 @@ template<> struct Parser<FunctionPtrDeclaration> {
   static ParseResult<FunctionPtrDeclaration> parse(TokenIterator &token_iterator)
   {
     using FunctionPtrBegin = Sequence<Type,
-                                      Optional<StarSymbol>,
-                                      LParenSymbol,
-                                      StarSymbol,
+                                      Optional<Symbol<'*'>>,
+                                      Symbol<'('>,
+                                      Symbol<'*'>,
                                       Identifier,
-                                      RParenSymbol,
-                                      LParenSymbol>;
+                                      Symbol<')'>,
+                                      Symbol<'('>>;
     const ParseResult<FunctionPtrBegin> fn_ptr_seq = parse_t<FunctionPtrBegin>(token_iterator);
     if (!fn_ptr_seq.success()) {
       return parse_failed;
@@ -630,10 +581,10 @@ template<> struct Parser<FunctionPtrDeclaration> {
     fn_ptr_decl.type = std::get<0>(fn_ptr_seq.value()).str;
     fn_ptr_decl.name = std::get<4>(fn_ptr_seq.value()).str;
     /* Skip Function params. */
-    skip_until_match_paired_symbols(SymbolType::LParen, SymbolType::RParen, token_iterator);
+    skip_until_match_paired_symbols('(', ')', token_iterator);
 
     /* Closing sequence. */
-    if (!parse_t<SemicolonSymbol>(token_iterator).success()) {
+    if (!parse_t<Symbol<';'>>(token_iterator).success()) {
       return parse_failed;
     }
     return fn_ptr_decl;
@@ -647,14 +598,14 @@ template<> struct Parser<ArrayPtrDeclaration> {
   static ParseResult<ArrayPtrDeclaration> parse(TokenIterator &token_iterator)
   {
     using PointerToArraySequence = Sequence<Type,
-                                            LParenSymbol,
-                                            StarSymbol,
+                                            Symbol<'('>,
+                                            Symbol<'*'>,
                                             Identifier,
-                                            RParenSymbol,
-                                            LBracketSymbol,
+                                            Symbol<')'>,
+                                            Symbol<'['>,
                                             IntLiteral,
-                                            RBracketSymbol,
-                                            SemicolonSymbol>;
+                                            Symbol<']'>,
+                                            Symbol<';'>>;
     ParseResult<PointerToArraySequence> array_ptr_seq = parse_t<PointerToArraySequence>(
         token_iterator);
     if (!array_ptr_seq.success()) {
@@ -668,12 +619,6 @@ template<> struct Parser<ArrayPtrDeclaration> {
   }
 };
 
-template<KeywordType... type> static bool is_keyword_type(TokenVariant token)
-{
-  return std::holds_alternative<KeywordToken>(token) &&
-         ((std::get<KeywordToken>(token).type == type) || ...);
-}
-
 /**
  * Parses `#if....#endif` code blocks.
  */
@@ -682,7 +627,7 @@ template<> struct Parser<IfDef> {
   static ParseResult<IfDef> parse(TokenIterator &token_iterator)
   {
     using IfDefBeginSequence =
-        Sequence<HashSymbol, Variant<IfDefKeyword, IfKeyword, IfnDefKeyword>>;
+        Sequence<Symbol<'#'>, Variant<Keyword<ifdef_str>, Keyword<if_str>, Keyword<ifndef_str>>>;
     const ParseResult<IfDefBeginSequence> ifdef_seq = parse_t<IfDefBeginSequence>(token_iterator);
     if (!ifdef_seq.success()) {
       return parse_failed;
@@ -692,18 +637,15 @@ template<> struct Parser<IfDef> {
     for (TokenVariant *token = token_iterator.next_variant(); token;
          token = token_iterator.next_variant())
     {
-      if (hash_carried &&
-          is_keyword_type<KeywordType::If, KeywordType::Ifdef, KeywordType::Ifndef>(*token))
-      {
-        ifdef_deep++;
-      }
-      if (hash_carried && is_keyword_type<KeywordType::Endif>(*token)) {
-        ifdef_deep--;
+      if (std::holds_alternative<KeywordToken>(*token)) {
+        KeywordToken &keyword = std::get<KeywordToken>(*token);
+        ifdef_deep += (hash_carried && ELEM(keyword.where, if_str, ifdef_str, ifndef_str));
+        ifdef_deep -= hash_carried && keyword.where == endif_str;
       }
       if (ifdef_deep == 0) {
         break;
       }
-      hash_carried = is_symbol_type(*token, SymbolType::Hash);
+      hash_carried = is_symbol_type(*token, '#');
     }
     /* Not matching #endif. */
     if (ifdef_deep != 0) {
@@ -719,8 +661,10 @@ template<> struct Parser<IfDef> {
 template<> struct Parser<StructDeclaration> {
   static ParseResult<StructDeclaration> parse(TokenIterator &token_iterator)
   {
-    using StructBeginSequence =
-        Sequence<Optional<TypedefKeyword>, StructKeyword, Optional<Identifier>, LBraceSymbol>;
+    using StructBeginSequence = Sequence<Optional<Keyword<typedef_str>>,
+                                         Keyword<struct_str>,
+                                         Optional<Identifier>,
+                                         Symbol<'{'>>;
     ParseResult<StructBeginSequence> struct_seq = parse_t<StructBeginSequence>(token_iterator);
     if (!struct_seq.success()) {
       return parse_failed;
@@ -730,14 +674,12 @@ template<> struct Parser<StructDeclaration> {
       struct_decl.name = std::get<2>(struct_seq.value()).value().str;
     }
     while (true) {
-      using DNA_DEF_CCX_Macro = MacroCall<lex::KeywordType::DNADefineCxxMethods>;
-
-      if (auto member = parse_t<Variant<VariableDeclaration,
-                                        FunctionPtrDeclaration,
-                                        ArrayPtrDeclaration,
-                                        StructDeclaration>>(token_iterator);
-          member.success())
-      {
+      using DNA_DEF_CCX_Macro = MacroCall<DNA_DEFINE_CXX_METHODS_str>;
+      using MemberVariant = Variant<VariableDeclaration,
+                                    FunctionPtrDeclaration,
+                                    ArrayPtrDeclaration,
+                                    StructDeclaration>;
+      if (auto member = parse_t<MemberVariant>(token_iterator); member.success()) {
         struct_decl.items.append(std::move(member.value()));
       }
       else if (parse_t<Variant<DNA_DEF_CCX_Macro, IfDef>>(token_iterator).success()) {
@@ -746,7 +688,7 @@ template<> struct Parser<StructDeclaration> {
         break;
       }
     }
-    using StructEndSequence = Sequence<RBraceSymbol, Optional<Identifier>, SemicolonSymbol>;
+    using StructEndSequence = Sequence<Symbol<'}'>, Optional<Identifier>, Symbol<';'>>;
     ParseResult<StructEndSequence> struct_end = parse_t<StructEndSequence>(token_iterator);
     if (!struct_end.success()) {
       return parse_failed;
@@ -766,24 +708,24 @@ struct UnusedDeclaration {};
 template<> struct Parser<UnusedDeclaration> {
   static ParseResult<UnusedDeclaration> parse(TokenIterator &token_iterator)
   {
-    using UnusedDeclarations =
-        Variant<Define,
-                Include,
-                IfDef,
-                Sequence<HashSymbol, PragmaKeyword, OnceKeyword>,
-                Sequence<HashSymbol, HashSymbol, StructDeclaration>,
-                Sequence<ExternKeyword, VariableDeclaration>,
-                MacroCall<lex::KeywordType::BLIStaticAssertAlign>,
-                MacroCall<lex::KeywordType::EnumOperators>,
-                Sequence<TypedefKeyword, StructKeyword, Identifier, Identifier, SemicolonSymbol>>;
+    using UnusedDeclarations = Variant<
+        Define,
+        Include,
+        IfDef,
+        Sequence<Symbol<'#'>, Keyword<pragma_str>, Keyword<once_str>>,
+        Sequence<Symbol<'#'>, Symbol<'#'>, StructDeclaration>,
+        Sequence<Keyword<extern_str>, VariableDeclaration>,
+        MacroCall<BLI_STATIC_ASSERT_ALIGN_str>,
+        MacroCall<ENUM_OPERATORS_str>,
+        Sequence<Keyword<typedef_str>, Keyword<struct_str>, Identifier, Identifier, Symbol<';'>>>;
     if (parse_t<UnusedDeclarations>(token_iterator).success()) {
       return UnusedDeclaration{};
     }
     /* Forward declarations. */
-    if (parse_t<Sequence<StructKeyword, Identifier>>(token_iterator).success()) {
-      for (; parse_t<Sequence<CommaSymbol, Identifier>>(token_iterator).success();) {
+    if (parse_t<Sequence<Keyword<struct_str>, Identifier>>(token_iterator).success()) {
+      for (; parse_t<Sequence<Symbol<','>, Identifier>>(token_iterator).success();) {
       }
-      if (parse_t<SemicolonSymbol>(token_iterator).success()) {
+      if (parse_t<Symbol<';'>>(token_iterator).success()) {
         return UnusedDeclaration{};
       }
     }
@@ -798,12 +740,12 @@ template<> struct Parser<UnusedDeclaration> {
 template<> struct Parser<EnumDeclaration> {
   static ParseResult<EnumDeclaration> parse(TokenIterator &token_iterator)
   {
-    using EnumBeginSequence = Sequence<Optional<TypedefKeyword>,
-                                       EnumKeyword,
-                                       Optional<ClassKeyword>,
+    using EnumBeginSequence = Sequence<Optional<Keyword<typedef_str>>,
+                                       Keyword<enum_str>,
+                                       Optional<Keyword<class_str>>,
                                        Optional<Identifier>,
-                                       Optional<Sequence<ColonSymbol, PrimitiveType>>,
-                                       LBraceSymbol>;
+                                       Optional<Sequence<Symbol<':'>, PrimitiveType>>,
+                                       Symbol<'{'>>;
     ParseResult<EnumBeginSequence> enum_begin = parse_t<EnumBeginSequence>(token_iterator);
     if (!enum_begin.success()) {
       return parse_failed;
@@ -816,13 +758,11 @@ template<> struct Parser<EnumDeclaration> {
       enum_decl.type = std::get<1>(std::get<4>(enum_begin.value()).value()).str;
     }
     /* Skip enum body. */
-    skip_until_match_paired_symbols(SymbolType::LBrace, SymbolType::RBrace, token_iterator);
+    skip_until_match_paired_symbols('{', '}', token_iterator);
 
-    /* Enum end sequence. */
-    if (!parse_t<Sequence<Optional<Identifier>, Optional<DNADeprecatedKeyword>, SemicolonSymbol>>(
-             token_iterator)
-             .success())
-    {
+    using EnumEndSeq =
+        Sequence<Optional<Identifier>, Optional<Keyword<DNA_DEPRECATED_str>>, Symbol<';'>>;
+    if (!parse_t<EnumEndSeq>(token_iterator).success()) {
       return parse_failed;
     }
     return enum_decl;
@@ -873,47 +813,42 @@ std::optional<CppFile> parse_file(StringRef filepath)
   token_iterator.process_text(filepath, cpp_file.text);
 
   int dna_deprecated_allow_count = 0;
-  using DNADeprecatedAllowSeq = Sequence<HashSymbol, IfDefKeyword, DNADeprecatedAllowKeyword>;
-  using EndIfSeq = Sequence<HashSymbol, EndIfKeyword>;
+  using DNADeprecatedAllowSeq =
+      Sequence<Symbol<'#'>, Keyword<ifdef_str>, Keyword<DNA_DEPRECATED_ALLOW_str>>;
+  using EndIfSeq = Sequence<Symbol<'#'>, Keyword<endif_str>>;
 
   while (!token_iterator.has_finish()) {
-    using CPPTypeVariant = Variant<StructDeclaration,
-                                   EnumDeclaration,
-                                   Sequence<Optional<TypedefKeyword>, FunctionPtrDeclaration>,
-                                   VariableDeclaration,
-                                   IntDeclaration,
-                                   DNADeprecatedAllowSeq,
-                                   EndIfSeq,
-                                   UnusedDeclaration>;
-    ParseResult<CPPTypeVariant> cpp_variant = parse_t<CPPTypeVariant>(token_iterator);
-    if (!cpp_variant.success()) {
-      print_unhandled_token_error(filepath, cpp_file.text, token_iterator.last_unmatched);
-      return std::nullopt;
+    using CPPTypeVariant =
+        Variant<Sequence<Optional<Keyword<typedef_str>>, FunctionPtrDeclaration>,
+                VariableDeclaration,
+                DNADeprecatedAllowSeq,
+                EndIfSeq,
+                UnusedDeclaration>;
+
+    if (auto struct_decl = parse_t<StructDeclaration>(token_iterator); struct_decl.success()) {
+      cpp_file.cpp_defs.append(std::move(struct_decl.value()));
     }
-    if (std::holds_alternative<StructDeclaration>(cpp_variant.value())) {
-      cpp_file.cpp_defs.append(std::move(std::get<StructDeclaration>(cpp_variant.value())));
-    }
-    else if (std::holds_alternative<IntDeclaration>(cpp_variant.value())) {
-      cpp_file.cpp_defs.append(std::move(std::get<IntDeclaration>(cpp_variant.value())));
-    }
-    else if (std::holds_alternative<VariableDeclaration>(cpp_variant.value())) {
-      continue;
-      cpp_file.cpp_defs.append(std::move(std::get<VariableDeclaration>(cpp_variant.value())));
-    }
-    else if (std::holds_alternative<EnumDeclaration>(cpp_variant.value())) {
-      EnumDeclaration &enum_decl = std::get<EnumDeclaration>(cpp_variant.value());
-      /* Keep only named enums with fixed type. */
-      if (!enum_decl.name.has_value() || !enum_decl.type.has_value()) {
+    else if (auto enum_decl = parse_t<EnumDeclaration>(token_iterator); enum_decl.success()) {
+      if (!enum_decl.value().name.has_value() || !enum_decl.value().type.has_value()) {
         continue;
       }
-      cpp_file.cpp_defs.append(std::move(std::get<EnumDeclaration>(cpp_variant.value())));
+      cpp_file.cpp_defs.append(std::move(enum_decl.value()));
     }
-    else if (std::holds_alternative<DNADeprecatedAllowSeq>(cpp_variant.value())) {
-      dna_deprecated_allow_count++;
+    else if (auto int_decl = parse_t<IntDeclaration>(token_iterator); int_decl.success()) {
+      cpp_file.cpp_defs.append(int_decl.value());
     }
-    else if (std::holds_alternative<EndIfSeq>(cpp_variant.value())) {
-      dna_deprecated_allow_count--;
-      BLI_assert(dna_deprecated_allow_count >= 0);
+    else if (auto cpp_variant = parse_t<CPPTypeVariant>(token_iterator); cpp_variant.success()) {
+      if (std::holds_alternative<DNADeprecatedAllowSeq>(cpp_variant.value())) {
+        dna_deprecated_allow_count++;
+      }
+      else if (std::holds_alternative<EndIfSeq>(cpp_variant.value())) {
+        dna_deprecated_allow_count--;
+        BLI_assert(dna_deprecated_allow_count >= 0);
+      }
+    }
+    else {
+      print_unhandled_token_error(filepath, cpp_file.text, token_iterator.last_unmatched);
+      return std::nullopt;
     }
   }
 #ifdef DNA_DEBUG_PRINT
