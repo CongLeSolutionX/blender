@@ -52,20 +52,21 @@ class VKBeginRenderingNode : public VKNodeInfo<VKNodeType::BEGIN_RENDERING,
    */
   template<typename Node> void set_node_data(Node &node, const CreateInfo &create_info)
   {
-    const bool is_dynamic_rendering = create_info.node_data.vk_render_pass == VK_NULL_HANDLE;
-    BLI_assert_msg(is_dynamic_rendering &&
+    const bool use_render_pass = create_info.node_data.vk_render_pass != VK_NULL_HANDLE;
+    UNUSED_VARS_NDEBUG(use_render_pass);
+    BLI_assert_msg(use_render_pass ||
                        ELEM(create_info.node_data.vk_rendering_info.pColorAttachments,
                             nullptr,
                             create_info.node_data.color_attachments),
                    "When create_info.node_data.vk_rendering_info.pColorAttachments points to "
                    "something, it should point to create_info.node_data.color_attachments.");
-    BLI_assert_msg(is_dynamic_rendering &&
+    BLI_assert_msg(use_render_pass ||
                        ELEM(create_info.node_data.vk_rendering_info.pDepthAttachment,
                             nullptr,
                             &create_info.node_data.depth_attachment),
                    "When create_info.node_data.vk_rendering_info.pDepthAttachment points to "
                    "something, it should point to create_info.node_data.depth_attachment.");
-    BLI_assert_msg(is_dynamic_rendering &&
+    BLI_assert_msg(use_render_pass ||
                        ELEM(create_info.node_data.vk_rendering_info.pStencilAttachment,
                             nullptr,
                             &create_info.node_data.stencil_attachment),

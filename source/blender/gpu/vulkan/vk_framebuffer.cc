@@ -575,7 +575,6 @@ void VKFrameBuffer::rendering_reset()
 
 void VKFrameBuffer::rendering_ensure_render_pass(VKContext &context)
 {
-  BLI_assert_unreachable();
   // TODO: use discard pool.
   VKDevice &device = VKBackend::get().device;
   if (vk_framebuffer != VK_NULL_HANDLE) {
