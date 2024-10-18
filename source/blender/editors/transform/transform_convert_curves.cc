@@ -65,15 +65,33 @@ static void calculate_curve_point_distances_for_proportional_editing(
   }
 }
 
-static void update_handle_types(const IndexMask &auto_handles,
-                                const IndexMask &auto_handles_opposite,
-                                const IndexMask &vector_handles,
-                                const index_mask::Expr &selected_handles,
-                                const index_mask::Expr &selected_handles_opposite,
-                                MutableSpan<int8_t> handle_types,
-                                index_mask::ExprBuilder &builder,
-                                blender::IndexMaskMemory &memory)
+static IndexMask handles_by_type(const IndexMask handles,
+                                 const HandleType type,
+                                 Span<int8_t> types,
+                                 blender::IndexMaskMemory &memory)
 {
+  return IndexMask::from_predicate(
+      handles, GrainSize(4096), memory, [&](const int64_t i) { return types[i] == type; });
+}
+
+static void update_vector_handle_types(const IndexMask &selected_handles,
+                                       MutableSpan<int8_t> handle_types)
+{
+  blender::IndexMaskMemory memory;
+  /* Selected BEZIER_HANDLE_VECTOR handles. */
+  const IndexMask convert_to_free = handles_by_type(
+      selected_handles, BEZIER_HANDLE_VECTOR, handle_types, memory);
+  index_mask::masked_fill(handle_types, int8_t(BEZIER_HANDLE_FREE), convert_to_free);
+}
+
+static void update_auto_handle_types(const IndexMask &auto_handles,
+                                     const IndexMask &auto_handles_opposite,
+                                     const IndexMask &selected_handles,
+                                     const IndexMask &selected_handles_opposite,
+                                     MutableSpan<int8_t> handle_types,
+                                     blender::IndexMaskMemory &memory)
+{
+  index_mask::ExprBuilder builder;
   const IndexMask &convert_to_align = evaluate_expression(
       builder.merge({
           /* Selected BEZIER_HANDLE_AUTO handles from one side. */
@@ -84,10 +102,32 @@ static void update_handle_types(const IndexMask &auto_handles,
       }),
       memory);
   index_mask::masked_fill(handle_types, int8_t(BEZIER_HANDLE_ALIGN), convert_to_align);
-  /* Selected BEZIER_HANDLE_VECTOR handles. */
-  const IndexMask &convert_to_free = evaluate_expression(
-      builder.intersect({&selected_handles, &vector_handles}), memory);
-  index_mask::masked_fill(handle_types, int8_t(BEZIER_HANDLE_FREE), convert_to_free);
+}
+
+static void update_auto_handle_types(const IndexMask &selected_handles_left,
+                                     const IndexMask &selected_handles_right,
+                                     const IndexMask &bezier_points,
+                                     MutableSpan<int8_t> handle_types_left,
+                                     MutableSpan<int8_t> handle_types_right)
+{
+  blender::IndexMaskMemory memory;
+  const IndexMask auto_left = handles_by_type(
+      bezier_points, BEZIER_HANDLE_AUTO, handle_types_left, memory);
+  const IndexMask auto_right = handles_by_type(
+      bezier_points, BEZIER_HANDLE_AUTO, handle_types_right, memory);
+
+  update_auto_handle_types(auto_left,
+                           auto_right,
+                           selected_handles_left,
+                           selected_handles_right,
+                           handle_types_left,
+                           memory);
+  update_auto_handle_types(auto_right,
+                           auto_left,
+                           selected_handles_right,
+                           selected_handles_left,
+                           handle_types_right,
+                           memory);
 }
 
 static MutableSpan<float3> append_positions_to_custom_data(const IndexMask selection,
@@ -148,21 +188,8 @@ static void createTransCurvesVerts(bContext * /*C*/, TransInfo *t)
     /* Alter selection as in legacy curves bezt_select_to_transform_triple_flag(). */
     if (bezier_points.size() > 0) {
       blender::IndexMaskMemory memory;
-      MutableSpan<int8_t> left_handle_types = curves.handle_types_left_for_write();
-      MutableSpan<int8_t> right_handle_types = curves.handle_types_right_for_write();
-
-      auto from_type = [&bezier_points, &memory](Span<int8_t> types, const HandleType type) {
-        return IndexMask::from_predicate(bezier_points,
-                                         GrainSize(4096),
-                                         memory,
-                                         [&](const int64_t i) { return types[i] == type; });
-      };
-
-      const IndexMask auto_left = from_type(left_handle_types, BEZIER_HANDLE_AUTO);
-      const IndexMask auto_right = from_type(right_handle_types, BEZIER_HANDLE_AUTO);
-
-      const IndexMask vector_left = from_type(left_handle_types, BEZIER_HANDLE_VECTOR);
-      const IndexMask vector_right = from_type(right_handle_types, BEZIER_HANDLE_VECTOR);
+      MutableSpan<int8_t> handle_types_left = curves.handle_types_left_for_write();
+      MutableSpan<int8_t> handle_types_right = curves.handle_types_right_for_write();
 
       index_mask::ExprBuilder builder;
       const index_mask::Expr &selected_bezier_points = builder.intersect(
@@ -177,28 +204,17 @@ static void createTransCurvesVerts(bContext * /*C*/, TransInfo *t)
           builder.merge({&selection_per_attribute[2], &selected_bezier_points}),
           curves_transform_data->memory);
 
-      const index_mask::Expr &selected_left = builder.subtract(&selection_per_attribute[1],
-                                                               {&selected_bezier_points});
-      const index_mask::Expr &selected_right = builder.subtract(&selection_per_attribute[2],
-                                                                {&selected_bezier_points});
+      /* Selected handles, but not the control point. */
+      const IndexMask selected_left = evaluate_expression(
+          builder.subtract(&selection_per_attribute[1], {&selected_bezier_points}), memory);
+      const IndexMask selected_right = evaluate_expression(
+          builder.subtract(&selection_per_attribute[2], {&selected_bezier_points}), memory);
 
-      update_handle_types(auto_left,
-                          auto_right,
-                          vector_left,
-                          selected_left,
-                          selected_right,
-                          left_handle_types,
-                          builder,
-                          memory);
+      update_vector_handle_types(selected_left, handle_types_left);
+      update_vector_handle_types(selected_right, handle_types_right);
 
-      update_handle_types(auto_right,
-                          auto_left,
-                          vector_right,
-                          selected_right,
-                          selected_left,
-                          right_handle_types,
-                          builder,
-                          memory);
+      update_auto_handle_types(
+          selected_left, selected_right, bezier_points, handle_types_left, handle_types_right);
     }
 
     if (use_proportional_edit) {
