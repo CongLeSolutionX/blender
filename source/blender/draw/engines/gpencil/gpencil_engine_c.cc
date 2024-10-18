@@ -117,9 +117,9 @@ void GPENCIL_engine_init(void *ved)
     use_scene_world = V3D_USES_SCENE_WORLD(v3d);
 
     stl->pd->v3d_color_type = (v3d->shading.type == OB_SOLID) ? v3d->shading.color_type : -1;
-    /* Special case: If we're in Draw or Vertex Paint mode, show vertex colors. */
+    /* Special case: If we're in Vertex Paint mode, enforce V3D_SHADING_VERTEX_COLOR setting.*/
     if (v3d->shading.type == OB_SOLID && ctx->obact &&
-        ELEM(ctx->obact->mode, OB_MODE_PAINT_GREASE_PENCIL, OB_MODE_VERTEX_GREASE_PENCIL))
+        (ctx->obact->mode & OB_MODE_VERTEX_GREASE_PENCIL) != 0)
     {
       stl->pd->v3d_color_type = V3D_SHADING_VERTEX_COLOR;
     }
@@ -611,7 +611,10 @@ void GPENCIL_cache_populate(void *ved, Object *ob)
   if (ob->data && (ob->type == OB_GREASE_PENCIL) && (ob->dt >= OB_SOLID)) {
     GPENCIL_tObject *tgp_ob = grease_pencil_object_cache_populate(pd, txl, ob);
     gpencil_vfx_cache_populate(
-        vedata, ob, tgp_ob, ELEM(ob->mode, OB_MODE_EDIT, OB_MODE_SCULPT, OB_MODE_WEIGHT_PAINT));
+        vedata,
+        ob,
+        tgp_ob,
+        ELEM(ob->mode, OB_MODE_EDIT, OB_MODE_SCULPT_GREASE_PENCIL, OB_MODE_WEIGHT_GREASE_PENCIL));
   }
 
   if (ob->type == OB_LAMP && pd->use_lights) {
