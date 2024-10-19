@@ -6,6 +6,7 @@
 #include "BKE_grease_pencil.hh"
 #include "BKE_instances.hh"
 #include "BKE_mesh.hh"
+#include "BKE_physics_geometry.hh"
 #include "BKE_pointcloud.hh"
 
 #include "node_geometry_util.hh"
@@ -150,6 +151,12 @@ static void node_geo_exec(GeoNodeExecParams params)
   }
   if (bke::Instances *instances = geometry.get_instances_for_write()) {
     set_instances_position(*instances, selection_field, position_field);
+  }
+  if (bke::PhysicsGeometry *physics = geometry.get_physics_for_write()) {
+    set_points_position(physics->attributes_for_write(),
+                        bke::PhysicsFieldContext(*physics, bke::AttrDomain::Point),
+                        selection_field,
+                        position_field);
   }
 
   params.set_output("Geometry", std::move(geometry));
