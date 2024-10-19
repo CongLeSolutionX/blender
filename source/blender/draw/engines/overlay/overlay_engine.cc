@@ -299,7 +299,9 @@ static bool overlay_object_is_edit_mode(const OVERLAY_PrivateData *pd, const Obj
 
 static bool overlay_object_is_paint_mode(const DRWContextState *draw_ctx, const Object *ob)
 {
-  if (ob->type == OB_GREASE_PENCIL && draw_ctx->object_mode & OB_MODE_WEIGHT_GPENCIL_LEGACY) {
+  if (ob->type == OB_GREASE_PENCIL &&
+      draw_ctx->object_mode & (OB_MODE_WEIGHT_GREASE_PENCIL | OB_MODE_VERTEX_GREASE_PENCIL))
+  {
     return true;
   }
   return (ob == draw_ctx->obact) && (draw_ctx->object_mode & OB_MODE_ALL_PAINT);
@@ -355,8 +357,7 @@ static void OVERLAY_cache_populate(void *vedata, Object *ob)
   const bool in_sculpt_mode = (ob == draw_ctx->obact) && (ob->sculpt != nullptr) &&
                               (ob->sculpt->mode_type == OB_MODE_SCULPT);
   const bool in_grease_pencil_sculpt_mode = (ob->type == OB_GREASE_PENCIL) &&
-                                            (draw_ctx->object_mode &
-                                             OB_MODE_SCULPT_GPENCIL_LEGACY);
+                                            (draw_ctx->object_mode & OB_MODE_SCULPT_GREASE_PENCIL);
   const bool has_surface = ELEM(ob->type,
                                 OB_MESH,
                                 OB_CURVES_LEGACY,
@@ -477,8 +478,11 @@ static void OVERLAY_cache_populate(void *vedata, Object *ob)
       case OB_MODE_TEXTURE_PAINT:
         OVERLAY_paint_texture_cache_populate(data, ob);
         break;
-      case OB_MODE_WEIGHT_GPENCIL_LEGACY:
+      case OB_MODE_WEIGHT_GREASE_PENCIL:
         OVERLAY_weight_grease_pencil_cache_populate(data, ob);
+        break;
+      case OB_MODE_VERTEX_GREASE_PENCIL:
+        OVERLAY_vertex_grease_pencil_cache_populate(data, ob);
         break;
       default:
         break;
@@ -513,9 +517,6 @@ static void OVERLAY_cache_populate(void *vedata, Object *ob)
         if (!in_edit_mode) {
           OVERLAY_metaball_cache_populate(data, ob);
         }
-        break;
-      case OB_GPENCIL_LEGACY:
-        OVERLAY_gpencil_legacy_cache_populate(data, ob);
         break;
     }
   }

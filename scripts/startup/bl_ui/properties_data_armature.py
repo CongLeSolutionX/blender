@@ -282,7 +282,7 @@ class DATA_PT_motion_paths_display(MotionPathButtonsPanel_display, Panel):
 
 
 class DATA_PT_armature_animation(ArmatureButtonsPanel, PropertiesAnimationMixin, PropertyPanel, Panel):
-    _animated_id_context_property = 'armature'
+    _animated_id_context_property = "armature"
 
 
 class DATA_PT_custom_props_arm(ArmatureButtonsPanel, PropertyPanel, Panel):
@@ -398,7 +398,7 @@ class POSE_MT_selection_set_create(Menu):
 
 
 class POSE_MT_selection_sets_select(Menu):
-    bl_label = 'Select Selection Set'
+    bl_label = "Select Selection Set"
 
     @classmethod
     def poll(cls, context):

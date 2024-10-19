@@ -184,7 +184,6 @@ static CLG_LogRef LOG_UNDO = {"blo.readfile.undo"};
 static void read_libraries(FileData *basefd, ListBase *mainlist);
 static void *read_struct(FileData *fd, BHead *bh, const char *blockname, const int id_type_index);
 static BHead *find_bhead_from_code_name(FileData *fd, const short idcode, const char *name);
-static BHead *find_bhead_from_idname(FileData *fd, const char *idname);
 
 struct BHeadN {
   BHeadN *next, *prev;
@@ -1712,7 +1711,7 @@ static void switch_endian_structs(const SDNA *filesdna, BHead *bhead)
  * Generate the final allocation string reference for read blocks of data. If \a blockname is
  * given, use it as 'owner block' info, otherwise use the id type index to get that info.
  *
- * \note: These strings are stored until Blender exits
+ * \note These strings are stored until Blender exits
  */
 static const char *get_alloc_name(FileData *fd,
                                   BHead *bh,
@@ -2088,10 +2087,6 @@ static void direct_link_id_common(
     id->session_uid = MAIN_ID_SESSION_UID_UNSET;
   }
 
-  if ((id_tag & ID_TAG_TEMP_MAIN) == 0) {
-    BKE_lib_libblock_session_uid_ensure(id);
-  }
-
   id->lib = current_library;
   if (id->lib) {
     /* Always fully clear fake user flag for linked data. */
@@ -2109,6 +2104,10 @@ static void direct_link_id_common(
   }
   else {
     id->tag = id_tag;
+  }
+
+  if ((id_tag & ID_TAG_TEMP_MAIN) == 0) {
+    BKE_lib_libblock_session_uid_ensure(id);
   }
 
   if (ID_IS_LINKED(id)) {

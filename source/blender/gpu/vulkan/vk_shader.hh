@@ -39,6 +39,7 @@ class VKShader : public Shader {
    */
   VkPipeline vk_pipeline_base_ = VK_NULL_HANDLE;
 
+  bool is_compute_shader_ = false;
   bool is_static_shader_ = false;
   bool use_batch_compilation_ = false;
 
@@ -114,16 +115,6 @@ class VKShader : public Shader {
 
   const VKShaderInterface &interface_get() const;
 
-  bool is_graphics_shader() const
-  {
-    return !is_compute_shader();
-  }
-
-  bool is_compute_shader() const
-  {
-    return compute_module.vk_shader_module;
-  }
-
   /**
    * Some shaders don't have a descriptor set and should not bind any descriptor set to the
    * pipeline. This function can be used to determine if a descriptor set can be bound when this
@@ -140,8 +131,6 @@ class VKShader : public Shader {
   }
 
  private:
-  Vector<uint32_t> compile_glsl_to_spirv(Span<const char *> sources, shaderc_shader_kind kind);
-  void build_shader_module(Span<uint32_t> spirv_module, VKShaderModule &r_shader_module);
   void build_shader_module(MutableSpan<const char *> sources,
                            shaderc_shader_kind stage,
                            VKShaderModule &r_shader_module);
@@ -155,7 +144,7 @@ class VKShader : public Shader {
    * and layered rendering, necessitate a geometry shader to work on older hardware.
    */
   std::string workaround_geometry_shader_source_create(const shader::ShaderCreateInfo &info);
-  bool do_geometry_shader_injection(const shader::ShaderCreateInfo *info);
+  bool do_geometry_shader_injection(const shader::ShaderCreateInfo *info) const;
 };
 
 static inline VKShader &unwrap(Shader &shader)

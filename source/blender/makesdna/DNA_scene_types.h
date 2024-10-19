@@ -87,11 +87,9 @@ typedef enum eFFMpegPreset {
 } eFFMpegPreset;
 
 /**
- * Mapping from easily-understandable descriptions to CRF values.
- * Assumes we output 8-bit video. Needs to be remapped if 10-bit
- * is output.
- * We use a slightly wider than "subjectively sane range" according
- * to https://trac.ffmpeg.org/wiki/Encode/H.264#a1.ChooseaCRFvalue
+ * Mapping from easily-understandable quality (Constant Rate Factor - CRF) descriptions
+ * to H.264 8-bit CRF values. https://trac.ffmpeg.org/wiki/Encode/H.264#a1.ChooseaCRFvalue
+ * For other video codecs these values might need to be remapped.
  */
 typedef enum eFFMpegCrf {
   FFM_CRF_NONE = -1,
@@ -414,7 +412,7 @@ typedef struct ImageFormatData {
 
   /* --- format specific --- */
 
-  /** OpenEXR. */
+  /** OpenEXR: R_IMF_EXR_CODEC_* values in low OPENEXR_CODEC_MASK bits. */
   char exr_codec;
 
   /** CINEON. */
@@ -2408,7 +2406,7 @@ typedef enum eSnapFlag {
   // SCE_SNAP_PROJECT = (1 << 3), /* DEPRECATED, see #SCE_SNAP_INDIVIDUAL_PROJECT. */
   /** Was `SCE_SNAP_NO_SELF`, but self should be active. */
   SCE_SNAP_NOT_TO_ACTIVE = (1 << 4),
-  /* SCE_SNAP_ABS_GRID = (1 << 5), */ /* UNUSED */
+  SCE_SNAP_ABS_GRID = (1 << 5),
   /* Same value with different name to make it easier to understand in time based code. */
   SCE_SNAP_ABS_TIME_STEP = (1 << 5),
   SCE_SNAP_BACKFACE_CULLING = (1 << 6),

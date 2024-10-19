@@ -37,6 +37,15 @@ enum eUSDMtlNameCollisionMode {
   USD_MTL_NAME_COLLISION_REFERENCE_EXISTING = 1,
 };
 
+/* Enums specifying the USD material purpose,
+ * corresponding to #pxr::UsdShadeTokens 'allPurpose',
+ * 'preview', and 'render', respectively. */
+enum eUSDMtlPurpose {
+  USD_MTL_PURPOSE_ALL = 0,
+  USD_MTL_PURPOSE_PREVIEW = 1,
+  USD_MTL_PURPOSE_FULL = 2
+};
+
 /**
  *  Behavior for importing of custom
  *  attributes / properties outside
@@ -204,6 +213,7 @@ struct USDImportParams {
 
   bool validate_meshes;
 
+  eUSDMtlPurpose mtl_purpose;
   eUSDMtlNameCollisionMode mtl_name_collision_mode;
   eUSDTexImportMode import_textures_mode;
 
@@ -284,7 +294,6 @@ CacheReader *CacheReader_open_usd_object(CacheArchiveHandle *handle,
                                          Object *object,
                                          const char *object_path);
 
-void USD_CacheReader_incref(CacheReader *reader);
 void USD_CacheReader_free(CacheReader *reader);
 
 /** Data for registering USD IO hooks. */

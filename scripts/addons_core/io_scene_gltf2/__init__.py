@@ -5,7 +5,7 @@
 bl_info = {
     'name': 'glTF 2.0 format',
     'author': 'Julien Duroure, Scurest, Norbert Nopper, Urs Hanselmann, Moritz Becher, Benjamin Schmithüsen, Jim Eckerlein, and many external contributors',
-    "version": (4, 3, 32),
+    "version": (4, 4, 0),
     'blender': (4, 2, 0),
     'location': 'File > Import-Export',
     'description': 'Import-Export as glTF 2.0',
@@ -975,7 +975,7 @@ class ExportGLTF2_Base(ConvertGLTF2_Base):
     export_extra_animations: BoolProperty(
         name='Prepare extra animations',
         description=(
-            'Export additional animations'
+            'Export additional animations.\n'
             'This feature is not standard and needs an external extension to be included in the glTF file'
         ),
         default=False
@@ -1721,8 +1721,8 @@ def export_panel_gltfpack(layout, operator):
         col.prop(operator, 'export_gltfpack_vc')
         col = body.column(heading="Vertex positions", align=True)
         col.prop(operator, 'export_gltfpack_vpi')
-        #col = body.column(heading = "Animations", align = True)
-        #col = body.column(heading = "Scene", align = True)
+        # col = body.column(heading = "Animations", align = True)
+        # col = body.column(heading = "Scene", align = True)
         col = body.column(heading="Miscellaneous", align=True)
         col.prop(operator, 'export_gltfpack_noq')
 

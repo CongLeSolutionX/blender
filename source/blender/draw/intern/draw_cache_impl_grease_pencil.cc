@@ -282,6 +282,10 @@ static void grease_pencil_weight_batch_ensure(Object &object,
     total_points_num += curves.points_num();
   }
 
+  if (total_points_num == 0) {
+    return;
+  }
+
   GPU_vertbuf_data_alloc(*cache->edit_points_pos, total_points_num);
   GPU_vertbuf_data_alloc(*cache->edit_points_selection, total_points_num);
 
@@ -1119,7 +1123,7 @@ static void grease_pencil_geom_batch_ensure(Object &object,
   /* Fill buffers with data. */
   for (const int drawing_i : drawings.index_range()) {
     const ed::greasepencil::DrawingInfo &info = drawings[drawing_i];
-    const Layer &layer = *grease_pencil.layer(info.layer_index);
+    const Layer &layer = grease_pencil.layer(info.layer_index);
     const float4x4 layer_space_to_object_space = layer.to_object_space(object);
     const float4x4 object_space_to_layer_space = math::invert(layer_space_to_object_space);
     const bke::CurvesGeometry &curves = info.drawing.strokes();
@@ -1164,7 +1168,7 @@ static void grease_pencil_geom_batch_ensure(Object &object,
     const VArray<float> fill_opacities = *attributes.lookup_or_default<float>(
         "fill_opacity", bke::AttrDomain::Curve, 1.0f);
 
-    const Span<uint3> triangles = info.drawing.triangles();
+    const Span<int3> triangles = info.drawing.triangles();
     const Span<float4x2> texture_matrices = info.drawing.texture_matrices();
     const Span<int> verts_start_offsets = verts_start_offsets_per_visible_drawing[drawing_i];
     const Span<int> tris_start_offsets = tris_start_offsets_per_visible_drawing[drawing_i];
@@ -1231,8 +1235,8 @@ static void grease_pencil_geom_batch_ensure(Object &object,
 
       /* If the stroke has more than 2 points, add the triangle indices to the index buffer. */
       if (points.size() >= 3) {
-        const Span<uint3> tris_slice = triangles.slice(tris_start_offset, points.size() - 2);
-        for (const uint3 tri : tris_slice) {
+        const Span<int3> tris_slice = triangles.slice(tris_start_offset, points.size() - 2);
+        for (const int3 tri : tris_slice) {
           GPU_indexbuf_add_tri_verts(&ibo,
                                      (verts_range[1] + tri.x) << GP_VERTEX_ID_SHIFT,
                                      (verts_range[1] + tri.y) << GP_VERTEX_ID_SHIFT,

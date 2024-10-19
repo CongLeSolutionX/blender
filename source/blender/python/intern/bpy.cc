@@ -32,28 +32,28 @@
 
 #include "WM_api.hh" /* For #WM_ghost_backend */
 
-#include "bpy.h"
-#include "bpy_app.h"
-#include "bpy_cli_command.h"
-#include "bpy_driver.h"
-#include "bpy_library.h"
-#include "bpy_operator.h"
-#include "bpy_props.h"
-#include "bpy_rna.h"
-#include "bpy_rna_data.h"
-#include "bpy_rna_gizmo.h"
-#include "bpy_rna_types_capi.h"
-#include "bpy_utils_previews.h"
-#include "bpy_utils_units.h"
+#include "bpy.hh"
+#include "bpy_app.hh"
+#include "bpy_cli_command.hh"
+#include "bpy_driver.hh"
+#include "bpy_library.hh"
+#include "bpy_operator.hh"
+#include "bpy_props.hh"
+#include "bpy_rna.hh"
+#include "bpy_rna_data.hh"
+#include "bpy_rna_gizmo.hh"
+#include "bpy_rna_types_capi.hh"
+#include "bpy_utils_previews.hh"
+#include "bpy_utils_units.hh"
 
-#include "../generic/py_capi_utils.h"
-#include "../generic/python_compat.h"
-#include "../generic/python_utildefines.h"
+#include "../generic/py_capi_utils.hh"
+#include "../generic/python_compat.hh"
+#include "../generic/python_utildefines.hh"
 
 /* external util modules */
-#include "../generic/idprop_py_api.h"
-#include "../generic/idprop_py_ui_api.h"
-#include "bpy_msgbus.h"
+#include "../generic/idprop_py_api.hh"
+#include "../generic/idprop_py_ui_api.hh"
+#include "bpy_msgbus.hh"
 
 #ifdef WITH_FREESTYLE
 #  include "BPy_Freestyle.h"
@@ -610,38 +610,40 @@ PyDoc_STRVAR(
     "   :rtype: dict\n");
 static PyObject *bpy_wm_capabilities(PyObject *self)
 {
-  static _Py_Identifier PyId_capabilities = {"_wm_capabilities_", -1};
-
+  PyObject *py_id_capabilities = PyUnicode_FromString("_wm_capabilities_");
   PyObject *result = nullptr;
-  switch (_PyObject_LookupAttrId(self, &PyId_capabilities, &result)) {
-    case 1:
-      return result;
-    case 0:
-      break;
-    default:
-      /* Unlikely, but there may be an error, forward it. */
-      return nullptr;
-  }
+  switch (PyObject_GetOptionalAttr(self, py_id_capabilities, &result)) {
+    case 1: {
+      result = PyDict_New();
 
-  result = PyDict_New();
-
-  const eWM_CapabilitiesFlag flag = WM_capabilities_flag();
+      const eWM_CapabilitiesFlag flag = WM_capabilities_flag();
 
 #define SetFlagItem(x) \
   PyDict_SetItemString(result, STRINGIFY(x), PyBool_FromLong((WM_CAPABILITY_##x) & flag));
 
-  SetFlagItem(CURSOR_WARP);
-  SetFlagItem(WINDOW_POSITION);
-  SetFlagItem(PRIMARY_CLIPBOARD);
-  SetFlagItem(GPU_FRONT_BUFFER_READ);
-  SetFlagItem(CLIPBOARD_IMAGES);
-  SetFlagItem(DESKTOP_SAMPLE);
-  SetFlagItem(INPUT_IME);
-  SetFlagItem(TRACKPAD_PHYSICAL_DIRECTION);
+      SetFlagItem(CURSOR_WARP);
+      SetFlagItem(WINDOW_POSITION);
+      SetFlagItem(PRIMARY_CLIPBOARD);
+      SetFlagItem(GPU_FRONT_BUFFER_READ);
+      SetFlagItem(CLIPBOARD_IMAGES);
+      SetFlagItem(DESKTOP_SAMPLE);
+      SetFlagItem(INPUT_IME);
+      SetFlagItem(TRACKPAD_PHYSICAL_DIRECTION);
 
 #undef SetFlagItem
+      PyObject_SetAttr(self, py_id_capabilities, result);
+      break;
+    }
+    case 0:
+      BLI_assert(result != nullptr);
+      break;
+    default:
+      /* Unlikely, but there may be an error, forward it. */
+      BLI_assert(result == nullptr);
+      break;
+  }
 
-  _PyObject_SetAttrId(self, &PyId_capabilities, result);
+  Py_DECREF(py_id_capabilities);
   return result;
 }
 
@@ -765,10 +767,6 @@ void BPy_init_modules(bContext *C)
 
   PointerRNA ctx_ptr = RNA_pointer_create(nullptr, &RNA_Context, C);
   bpy_context_module = (BPy_StructRNA *)pyrna_struct_CreatePyObject(&ctx_ptr);
-  /* odd that this is needed, 1 ref on creation and another for the module
-   * but without we get a crash on exit */
-  Py_INCREF(bpy_context_module);
-
   PyModule_AddObject(mod, "context", (PyObject *)bpy_context_module);
 
   /* Register methods and property get/set for RNA types. */

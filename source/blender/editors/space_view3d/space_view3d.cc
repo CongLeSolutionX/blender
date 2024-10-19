@@ -75,7 +75,7 @@
 #include "BLO_read_write.hh"
 
 #ifdef WITH_PYTHON
-#  include "BPY_extern.h"
+#  include "BPY_extern.hh"
 #endif
 
 #include "DEG_depsgraph.hh"
@@ -403,6 +403,10 @@ static void view3d_main_region_init(wmWindowManager *wm, ARegion *region)
    * annotations.). But for OB_GREASE_PENCIL, we only need it to register the keymaps for the
    * 3D View. */
   keymap = WM_keymap_ensure(
+      wm->defaultconf, "Grease Pencil Selection", SPACE_EMPTY, RGN_TYPE_WINDOW);
+  WM_event_add_keymap_handler(&region->handlers, keymap);
+
+  keymap = WM_keymap_ensure(
       wm->defaultconf, "Grease Pencil Edit Mode", SPACE_EMPTY, RGN_TYPE_WINDOW);
   WM_event_add_keymap_handler(&region->handlers, keymap);
 
@@ -597,7 +601,13 @@ static bool view3d_collection_drop_poll_external_asset(bContext *C,
 
 static bool view3d_mat_drop_poll(bContext *C, wmDrag *drag, const wmEvent *event)
 {
-  return view3d_drop_id_in_main_region_poll(C, drag, event, ID_MA);
+  if (!view3d_drop_id_in_main_region_poll(C, drag, event, ID_MA)) {
+    return false;
+  }
+
+  Object *ob = ED_view3d_give_object_under_cursor(C, event->mval);
+
+  return (ob && ID_IS_EDITABLE(&ob->id) && !ID_IS_OVERRIDE_LIBRARY(&ob->id));
 }
 
 static std::string view3d_mat_drop_tooltip(bContext *C,

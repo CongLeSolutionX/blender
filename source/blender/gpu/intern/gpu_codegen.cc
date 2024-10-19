@@ -786,6 +786,8 @@ GPUPass *GPU_generate_pass(GPUMaterial *material,
     pass->shader = nullptr;
     pass->refcount = 1;
     pass->create_info = codegen.create_info;
+    /* Finalize before adding the pass to the cache, to prevent race conditions. */
+    pass->create_info->finalize();
     pass->engine = engine;
     pass->hash = codegen.hash_get();
     pass->compiled = false;
