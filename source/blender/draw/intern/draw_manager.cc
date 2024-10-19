@@ -175,8 +175,8 @@ void Manager::compute_visibility(View &view)
   bool freeze_culling = (U.experimental.use_viewport_debug && DST.draw_ctx.v3d &&
                          (DST.draw_ctx.v3d->debug_flag & V3D_DEBUG_FREEZE_CULLING) != 0);
 
-  BLI_assert_msg(view.manager_fingerprint_ != fingerprint_get(),
-                 "Scene resources did not changed since last generate_command, no need to update");
+  BLI_assert_msg(view.manager_fingerprint_ != this->fingerprint_get(),
+                 "Resources did not changed, no need to update");
 
   view.manager_fingerprint_ = this->fingerprint_get();
 
@@ -187,10 +187,12 @@ void Manager::compute_visibility(View &view)
 
 void Manager::generate_commands(PassMain &pass, View &view)
 {
-  BLI_assert_msg(
-      (pass.manager_fingerprint_ != fingerprint_get()) ||
-          (pass.view_fingerprint_ != view.fingerprint_get()),
-      "Scene resources and view did not changed since last generate_command, no need to update");
+  BLI_assert_msg((pass.manager_fingerprint_ != this->fingerprint_get()) ||
+                     (pass.view_fingerprint_ != view.fingerprint_get()),
+                 "Resources and view did not changed no need to update");
+  BLI_assert_msg((view.manager_fingerprint_ == this->fingerprint_get()) &&
+                     (view.fingerprint_get() != 0),
+                 "Resources or view changed, but compute_visibility was not called");
 
   pass.manager_fingerprint_ = this->fingerprint_get();
   pass.view_fingerprint_ = view.fingerprint_get();
@@ -205,8 +207,8 @@ void Manager::generate_commands(PassMain &pass, View &view)
 
 void Manager::generate_commands(PassSimple &pass)
 {
-  BLI_assert_msg(pass.manager_fingerprint_ != fingerprint_get(),
-                 "Scene resources did not changed since last generate_command, no need to update");
+  BLI_assert_msg(pass.manager_fingerprint_ != this->fingerprint_get(),
+                 "Resources did not changed since last generate_command, no need to update");
   pass.manager_fingerprint_ = this->fingerprint_get();
 
   pass.draw_commands_buf_.generate_commands(pass.headers_, pass.commands_, pass.sub_passes_);
@@ -214,15 +216,17 @@ void Manager::generate_commands(PassSimple &pass)
 
 void Manager::submit_only(PassMain &pass, View &view)
 {
-  BLI_assert_msg(view.manager_fingerprint_ != 0, "compute_visibility was not called on this pass");
-  BLI_assert_msg(view.manager_fingerprint_ == fingerprint_get(),
-                 "Scene resources changed since last compute_visibility");
+  BLI_assert_msg(view.manager_fingerprint_ != 0, "compute_visibility was not called on this view");
+  BLI_assert_msg(view.manager_fingerprint_ == this->fingerprint_get(),
+                 "Resources changed since last compute_visibility");
   BLI_assert_msg(pass.manager_fingerprint_ != 0, "generate_command was not called on this pass");
-  BLI_assert_msg(pass.manager_fingerprint_ == fingerprint_get(),
-                 "Scene resources changed since last generate_command");
-  BLI_assert_msg(
-      pass.view_fingerprint_ == view.fingerprint_get(),
-      "View have changed since last generate_commands or submitting with a different view");
+  BLI_assert_msg(pass.manager_fingerprint_ == this->fingerprint_get(),
+                 "Resources changed since last generate_command");
+  /* The function generate_commands needs to be called for each view this pass is going to be
+   * submitted with. This is because the commands are stored inside the pass and not per view. */
+  BLI_assert_msg(pass.view_fingerprint_ == view.fingerprint_get(),
+                 "View have changed since last generate_commands or "
+                 "submitting with a different view");
 
   debug_bind();
 
@@ -241,11 +245,13 @@ void Manager::submit_only(PassMain &pass, View &view)
 
 void Manager::submit(PassMain &pass, View &view)
 {
-  if (!view.has_computed_visibility()) {
+  if (view.manager_fingerprint_ != this->fingerprint_get()) {
     compute_visibility(view);
   }
 
-  if (!pass.has_generated_commands() || pass.view_fingerprint_ != view.fingerprint_get()) {
+  if (pass.manager_fingerprint_ != this->fingerprint_get() ||
+      pass.view_fingerprint_ != view.fingerprint_get())
+  {
     generate_commands(pass, view);
   }
 
