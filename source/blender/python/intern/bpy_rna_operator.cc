@@ -35,7 +35,10 @@ static char *pyop_poll_message_get_fn(bContext * /*C*/, void *user_data)
   if (PyUnicode_Check(py_func_or_msg)) {
     Py_ssize_t msg_len;
     const char *msg = PyUnicode_AsUTF8AndSize(py_func_or_msg, &msg_len);
-    return BLI_strdupn(msg, msg_len);
+    char *msg_dup = BLI_strdupn(msg, msg_len);
+
+    PyGILState_Release(gilstate);
+    return msg_dup;
   }
 
   PyObject *py_args_after_first = PyTuple_GetSlice(py_args, 1, PY_SSIZE_T_MAX);
