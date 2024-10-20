@@ -159,7 +159,9 @@ static Mesh *shape_to_mesh(const JPH::Shape &shape, const float4x4 &transform)
     corner_edges[v1] = v1;
     corner_edges[v2] = v2;
   }
-  face_offsets.last() = mesh->faces_num * 3;
+  if (!face_offsets.is_empty()) {
+    face_offsets.last() = mesh->faces_num * 3;
+  }
   mesh->tag_topology_changed();
   mesh->tag_positions_changed();
 
