@@ -439,10 +439,8 @@ struct AllShapesData {
         collision_shapes::make_convex_hull(VArray<float3>::ForSpan(points)));
     mesh_shape = shape_geometry(collision_shapes::make_mesh(*triangle_mesh));
     scaled_shape = shape_geometry(
-        collision_shapes::make_scaled_shape(cylinder_shape.get_collision_shape(), float3(2.5f)));
-    Array<const CollisionShape *> compound_child_shapes = {capsule_shape.get_collision_shape(),
-                                                           mesh_shape.get_collision_shape(),
-                                                           capsule_shape.get_collision_shape()};
+        collision_shapes::make_scaled_shape(cylinder_shape, float3(2.5f)));
+    Array<GeometrySet> compound_child_shapes = {capsule_shape, mesh_shape, capsule_shape};
     Array<float4x4> compound_child_transforms = {
         float4x4::identity(), float4x4::identity(), float4x4::identity()};
     compound_shape = shape_geometry(

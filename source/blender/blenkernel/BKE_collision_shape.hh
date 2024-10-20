@@ -20,6 +20,8 @@
 #include "BLI_utility_mixins.hh"
 #include "BLI_virtual_array_fwd.hh"
 
+#include "BKE_geometry_set.hh"
+
 #include <functional>
 #include <optional>
 
@@ -31,9 +33,6 @@ class Shape;
 
 namespace blender {
 class CPPType;
-namespace bke {
-struct GeometrySet;
-}  // namespace bke
 }  // namespace blender
 
 namespace blender::bke {
@@ -73,15 +72,21 @@ enum class PhysicsShapeParam {
 class CollisionShape {
  public:
   using ShapeType = CollisionShapeType;
+  using ChildTransformReadFunc = FunctionRef<float4x4(const JPH::Shape &shape, int index)>;
+  using ChildTransformWriteFunc =
+      FunctionRef<void(JPH::Shape &shape, int index, const float4x4 &transform)>;
 
  protected:
   JPH::Shape *impl_ = nullptr;
   std::optional<std::string> error_;
+  Array<GeometrySet> child_geometries_;
 
  public:
   CollisionShape();
   CollisionShape(const CollisionShape &other);
-  CollisionShape(JPH::Shape *impl, std::optional<std::string> error = std::nullopt);
+  CollisionShape(JPH::Shape *impl,
+                 std::optional<std::string> error,
+                 Span<GeometrySet> child_geometries);
   ~CollisionShape();
 
   CollisionShape &operator=(const CollisionShape &other);
@@ -92,6 +97,11 @@ class CollisionShape {
   const JPH::Shape &impl() const;
 
   std::optional<StringRef> error() const;
+
+  Span<GeometrySet> child_geometries() const;
+  MutableSpan<GeometrySet> child_geometries_for_write();
+  VArray<float4x4> child_transforms() const;
+  VMutableArray<float4x4> child_transforms_for_write();
 
   ShapeType type() const;
 
@@ -129,15 +139,15 @@ CollisionShape make_convex_hull(const VArray<float3> &points);
 CollisionShape make_capsule(float radius, float height);
 CollisionShape make_tapered_capsule(float top_radius, float bottom_radius, float height);
 CollisionShape make_cylinder(float radius, float height);
-CollisionShape make_scaled_shape(const CollisionShape *child_shape, const float3 &scale);
-CollisionShape make_offset_center_of_mass_shape(const CollisionShape *child_shape,
+CollisionShape make_scaled_shape(const GeometrySet &child_shape, const float3 &scale);
+CollisionShape make_offset_center_of_mass_shape(const GeometrySet &child_shape,
                                                 const float3 &offset);
-CollisionShape make_rotated_translated(const CollisionShape *child_shape,
+CollisionShape make_rotated_translated(const GeometrySet &child_shape,
                                        const math::Quaternion &rotation,
                                        const float3 &translation);
-CollisionShape make_mutable_compound(Span<const CollisionShape *> child_shapes,
+CollisionShape make_mutable_compound(Span<GeometrySet> child_shapes,
                                      Span<float4x4> child_transforms);
-CollisionShape make_static_compound(Span<const CollisionShape *> child_shapes,
+CollisionShape make_static_compound(Span<GeometrySet> child_shapes,
                                     Span<float4x4> child_transforms);
 CollisionShape make_mesh(const Mesh &mesh);
 

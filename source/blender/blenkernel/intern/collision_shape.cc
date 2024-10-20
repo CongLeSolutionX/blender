@@ -90,8 +90,9 @@ static constexpr float shape_convex_radius = JPH::cDefaultConvexRadius;
 static constexpr JPH::PhysicsMaterial *shape_physics_material = nullptr;
 
 /* Fallback shape that can be used when an input pointer is null but some shape is required. */
-static const JPH::Shape *get_shape_or_fallback(const CollisionShape *shape)
+static const JPH::Shape *get_shape_or_fallback(const GeometrySet &geometry)
 {
+  const CollisionShape *shape = geometry.get_collision_shape();
   if (shape == nullptr || shape->is_empty()) {
     static const JPH::RefConst<JPH::Shape> fallback_shape = JPH::RefConst<JPH::Shape>(
         new JPH::SphereShape(1.0f));
@@ -101,16 +102,29 @@ static const JPH::Shape *get_shape_or_fallback(const CollisionShape *shape)
 }
 
 /* Fallback shape that can be used when an error occurred but some shape is required. */
-static CollisionShape construct_shape(const JPH::ShapeSettings &settings)
+static CollisionShape construct_shape(const JPH::ShapeSettings &settings,
+                                      const Span<GeometrySet> child_geometries)
 {
   const JPH::ShapeSettings::ShapeResult result = settings.Create();
   if (result.HasError()) {
-    return CollisionShape(new JPH::SphereShape(1.0f), std::string(result.GetError()));
+    return CollisionShape(new JPH::SphereShape(1.0f), std::string(result.GetError()), {});
   }
   if (result.IsEmpty()) {
-    return CollisionShape(new JPH::SphereShape(1.0f), "Empty shape");
+    return CollisionShape(new JPH::SphereShape(1.0f), "Empty shape", {});
   }
-  return CollisionShape(result.Get());
+  return CollisionShape(result.Get(), std::nullopt, child_geometries);
+}
+
+/* Rotate primary axis from Y to Z. */
+static CollisionShape construct_shape_y_to_z(const JPH::ShapeSettings &settings,
+                                             const Span<GeometrySet> child_geometries)
+{
+  static const math::Quaternion y_to_z_up = {0.707107f, 0.707107f, 0.0f, 0.0f};
+
+  CollisionShape *child_shape = new CollisionShape(construct_shape(settings, child_geometries));
+  JPH::RotatedTranslatedShapeSettings rotated_settings(
+      to_jolt(float3(0)), to_jolt(y_to_z_up), &child_shape->impl());
+  return construct_shape(rotated_settings, {GeometrySet::from_collision_shape(child_shape)});
 }
 
 static Mesh *shape_to_mesh(const JPH::Shape &shape, const float4x4 &transform)
@@ -184,8 +198,10 @@ CollisionShape::CollisionShape(const CollisionShape &other)
   *this = other;
 }
 
-CollisionShape::CollisionShape(JPH::Shape *impl, std::optional<std::string> error)
-    : impl_(impl), error_(error)
+CollisionShape::CollisionShape(JPH::Shape *impl,
+                               std::optional<std::string> error,
+                               Span<GeometrySet> child_geometries)
+    : impl_(impl), error_(error), child_geometries_(child_geometries)
 {
   if (impl_) {
     impl_->AddRef();
@@ -206,6 +222,7 @@ CollisionShape &CollisionShape::operator=(const CollisionShape &other)
   }
   impl_ = other.impl_;
   error_ = other.error_;
+  child_geometries_ = other.child_geometries_;
   if (impl_) {
     impl_->AddRef();
   }
@@ -232,6 +249,172 @@ const JPH::Shape &CollisionShape::impl() const
 std::optional<StringRef> CollisionShape::error() const
 {
   return error_.has_value() ? std::make_optional(error_.value()) : std::nullopt;
+}
+
+Span<GeometrySet> CollisionShape::child_geometries() const
+{
+  return child_geometries_;
+}
+
+MutableSpan<GeometrySet> CollisionShape::child_geometries_for_write()
+{
+  return child_geometries_;
+}
+
+VArray<float4x4> CollisionShape::child_transforms() const
+{
+  if (!impl_) {
+    return {};
+  }
+
+  switch (type()) {
+    case ShapeType::Empty:
+    case ShapeType::Sphere:
+    case ShapeType::Box:
+    case ShapeType::Triangle:
+    case ShapeType::Capsule:
+    case ShapeType::TaperedCapsule:
+    case ShapeType::Cylinder:
+    case ShapeType::ConvexHull:
+      return {};
+
+    case ShapeType::StaticCompound:
+    case ShapeType::MutableCompound: {
+      const JPH::CompoundShape &impl = *static_cast<const JPH::CompoundShape *>(impl_);
+      const JPH::CompoundShape::SubShapes &sub_shapes = impl.GetSubShapes();
+      return VArray<float4x4>::ForFunc(impl.GetNumSubShapes(), [sub_shapes](const int index) {
+        const JPH::CompoundShape::SubShape &sub_shape = sub_shapes[index];
+        return math::from_loc_rot<float4x4>(to_blender(sub_shape.GetPositionCOM()),
+                                            to_blender(sub_shape.GetRotation()));
+      });
+    }
+
+    case ShapeType::RotatedTranslated: {
+      const JPH::RotatedTranslatedShape &impl = *static_cast<const JPH::RotatedTranslatedShape *>(
+          impl_);
+      return VArray<float4x4>::ForSingle(
+          math::from_loc_rot<float4x4>(to_blender(impl.GetPosition()),
+                                       to_blender(impl.GetRotation())),
+          1);
+    }
+    case ShapeType::Scaled: {
+      const JPH::ScaledShape &impl = *static_cast<const JPH::ScaledShape *>(impl_);
+      return VArray<float4x4>::ForSingle(math::from_scale<float4x4>(to_blender(impl.GetScale())),
+                                         1);
+    }
+    case ShapeType::OffsetCenterOfMass: {
+      const JPH::OffsetCenterOfMassShape &impl =
+          *static_cast<const JPH::OffsetCenterOfMassShape *>(impl_);
+      return VArray<float4x4>::ForSingle(
+          math::from_location<float4x4>(to_blender(impl.GetOffset())), 1);
+    }
+
+    case ShapeType::Mesh:
+    case ShapeType::HeightField:
+    case ShapeType::SoftBody:
+      return {};
+  }
+  BLI_assert_unreachable();
+  return {};
+}
+
+class VMutableArrayImpl_For_ChildTransform : public VMutableArrayImpl<float4x4> {
+ private:
+  JPH::MutableCompoundShape *shape_;
+
+ public:
+  VMutableArrayImpl_For_ChildTransform(JPH::MutableCompoundShape &shape)
+      : VMutableArrayImpl<float4x4>(shape.GetNumSubShapes()), shape_(&shape)
+  {
+  }
+
+ private:
+  static float4x4 from_sub_shape(const JPH::CompoundShape::SubShape &sub_shape)
+  {
+    return math::from_loc_rot<float4x4>(to_blender(sub_shape.GetPositionCOM()),
+                                        to_blender(sub_shape.GetRotation()));
+  }
+
+  float4x4 get(const int64_t index) const override
+  {
+    return from_sub_shape(shape_->GetSubShape(index));
+  }
+
+  void set(const int64_t index, float4x4 value) override
+  {
+    float3 loc;
+    math::Quaternion rot;
+    float3 scale;
+    math::to_loc_rot_scale(value, loc, rot, scale);
+    shape_->ModifyShape(index, to_jolt(loc), to_jolt(rot));
+  }
+
+  void materialize(const IndexMask &mask, float4x4 *dst) const override
+  {
+    const JPH::CompoundShape::SubShapes &sub_shapes = shape_->GetSubShapes();
+    mask.foreach_index_optimized<int64_t>(
+        [&](const int64_t i) { dst[i] = from_sub_shape(sub_shapes[i]); });
+  }
+
+  void materialize_to_uninitialized(const IndexMask &mask, float4x4 *dst) const override
+  {
+    const JPH::CompoundShape::SubShapes &sub_shapes = shape_->GetSubShapes();
+    mask.foreach_index_optimized<int64_t>(
+        [&](const int64_t i) { new (dst + i) float4x4(from_sub_shape(sub_shapes[i])); });
+  }
+
+  void materialize_compressed(const IndexMask &mask, float4x4 *dst) const override
+  {
+    const JPH::CompoundShape::SubShapes &sub_shapes = shape_->GetSubShapes();
+    mask.foreach_index_optimized<int64_t>(
+        [&](const int64_t i, const int64_t pos) { dst[pos] = from_sub_shape(sub_shapes[i]); });
+  }
+
+  void materialize_compressed_to_uninitialized(const IndexMask &mask, float4x4 *dst) const override
+  {
+    const JPH::CompoundShape::SubShapes &sub_shapes = shape_->GetSubShapes();
+    mask.foreach_index_optimized<int64_t>([&](const int64_t i, const int64_t pos) {
+      new (dst + pos) float4x4(from_sub_shape(sub_shapes[i]));
+    });
+  }
+};
+
+VMutableArray<float4x4> CollisionShape::child_transforms_for_write()
+{
+  if (!impl_) {
+    return {};
+  }
+
+  switch (type()) {
+    case ShapeType::Empty:
+    case ShapeType::Sphere:
+    case ShapeType::Box:
+    case ShapeType::Triangle:
+    case ShapeType::Capsule:
+    case ShapeType::TaperedCapsule:
+    case ShapeType::Cylinder:
+    case ShapeType::ConvexHull:
+      return {};
+
+    case ShapeType::StaticCompound:
+      return {};
+    case ShapeType::MutableCompound: {
+      JPH::MutableCompoundShape &impl = *static_cast<JPH::MutableCompoundShape *>(impl_);
+      return VMutableArray<float4x4>::For<VMutableArrayImpl_For_ChildTransform>(impl);
+    }
+
+    case ShapeType::RotatedTranslated:
+    case ShapeType::Scaled:
+    case ShapeType::OffsetCenterOfMass:
+      return {};
+
+    case ShapeType::Mesh:
+    case ShapeType::HeightField:
+    case ShapeType::SoftBody:
+      return {};
+  }
+  BLI_assert_unreachable();
+  return {};
 }
 
 CollisionShape::ShapeType CollisionShape::type() const
@@ -333,8 +516,6 @@ GeometrySet CollisionShape::create_mesh_instances() const
 
 namespace collision_shapes {
 
-static const math::Quaternion y_to_z_up = {0.707107f, 0.707107f, 0.0f, 0.0f};
-
 CollisionShape make_empty()
 {
   return CollisionShape();
@@ -346,21 +527,21 @@ CollisionShape make_box(const float3 &half_extent)
       to_jolt(math::max(half_extent, float3(shape_convex_radius + 1.0e-6f))),
       shape_convex_radius,
       shape_physics_material);
-  return construct_shape(settings);
+  return construct_shape(settings, {});
 }
 
 CollisionShape make_sphere(float radius)
 {
   JPH::SphereShapeSettings settings(to_jolt(std::max(radius, shape_size_epsilon)),
                                     shape_physics_material);
-  return construct_shape(settings);
+  return construct_shape(settings, {});
 }
 
 CollisionShape make_triangle(const float3 &pt0, const float3 &pt1, const float3 &pt2)
 {
   JPH::TriangleShapeSettings settings(
       to_jolt(pt0), to_jolt(pt1), to_jolt(pt2), shape_convex_radius, shape_physics_material);
-  return construct_shape(settings);
+  return construct_shape(settings, {});
 }
 
 CollisionShape make_convex_hull(const VArray<float3> &points)
@@ -372,19 +553,15 @@ CollisionShape make_convex_hull(const VArray<float3> &points)
   }
   settings.mMaxConvexRadius = shape_convex_radius;
   settings.mMaterial = shape_physics_material;
-  return construct_shape(settings);
+  return construct_shape(settings, {});
 }
 
 CollisionShape make_capsule(float radius, float height)
 {
-  JPH::RefConst<JPH::ShapeSettings> settings(
-      new JPH::CapsuleShapeSettings(to_jolt(std::max(0.5f * height, shape_size_epsilon)),
-                                    to_jolt(std::max(radius, shape_size_epsilon)),
-                                    shape_physics_material));
-  /* Rotate shape so Z is up. */
-  JPH::RotatedTranslatedShapeSettings rotated_settings(
-      to_jolt(float3(0)), to_jolt(y_to_z_up), settings);
-  return construct_shape(rotated_settings);
+  JPH::CapsuleShapeSettings settings(to_jolt(std::max(0.5f * height, shape_size_epsilon)),
+                                     to_jolt(std::max(radius, shape_size_epsilon)),
+                                     shape_physics_material);
+  return construct_shape_y_to_z(settings, {});
 }
 
 CollisionShape make_tapered_capsule(float top_radius, float bottom_radius, float height)
@@ -394,10 +571,7 @@ CollisionShape make_tapered_capsule(float top_radius, float bottom_radius, float
   settings.mBottomRadius = to_jolt(std::max(bottom_radius, shape_size_epsilon));
   settings.mHalfHeightOfTaperedCylinder = to_jolt(std::max(0.5f * height, shape_size_epsilon));
   settings.mMaterial = shape_physics_material;
-  /* Rotate shape so Z is up. */
-  JPH::RotatedTranslatedShapeSettings rotated_settings(
-      to_jolt(float3(0)), to_jolt(y_to_z_up), &settings);
-  return construct_shape(rotated_settings);
+  return construct_shape_y_to_z(settings, {});
 }
 
 CollisionShape make_cylinder(float radius, float height)
@@ -406,30 +580,27 @@ CollisionShape make_cylinder(float radius, float height)
                                       to_jolt(std::max(radius, shape_convex_radius)),
                                       shape_convex_radius,
                                       shape_physics_material);
-  /* Rotate shape so Z is up. */
-  JPH::RotatedTranslatedShapeSettings rotated_settings(
-      to_jolt(float3(0)), to_jolt(y_to_z_up), &settings);
-  return construct_shape(rotated_settings);
+  return construct_shape_y_to_z(settings, {});
 }
 
-CollisionShape make_scaled_shape(const CollisionShape *child_shape, const float3 &scale)
+CollisionShape make_scaled_shape(const GeometrySet &child_shape, const float3 &scale)
 {
   JPH::ScaledShapeSettings settings;
   settings.mInnerShapePtr = get_shape_or_fallback(child_shape);
   settings.mScale = to_jolt(math::is_zero(scale) ? float3(1.0f) : scale);
-  return construct_shape(settings);
+  return construct_shape(settings, {child_shape});
 }
 
-CollisionShape make_offset_center_of_mass_shape(const CollisionShape *child_shape,
+CollisionShape make_offset_center_of_mass_shape(const GeometrySet &child_shape,
                                                 const float3 &offset)
 {
   JPH::OffsetCenterOfMassShapeSettings settings;
   settings.mInnerShapePtr = get_shape_or_fallback(child_shape);
   settings.mOffset = to_jolt(offset);
-  return construct_shape(settings);
+  return construct_shape(settings, {std::move(child_shape)});
 }
 
-CollisionShape make_rotated_translated(const CollisionShape *child_shape,
+CollisionShape make_rotated_translated(const GeometrySet &child_shape,
                                        const math::Quaternion &rotation,
                                        const float3 &translation)
 {
@@ -437,43 +608,45 @@ CollisionShape make_rotated_translated(const CollisionShape *child_shape,
   settings.mInnerShapePtr = get_shape_or_fallback(child_shape);
   settings.mRotation = to_jolt(rotation);
   settings.mPosition = to_jolt(translation);
-  return construct_shape(settings);
+  return construct_shape(settings, {std::move(child_shape)});
 }
 
-CollisionShape make_mutable_compound(Span<const CollisionShape *> child_shapes,
+CollisionShape make_mutable_compound(Span<GeometrySet> child_shapes,
                                      Span<float4x4> child_transforms)
 {
   JPH::MutableCompoundShapeSettings settings;
   settings.mSubShapes.reserve(child_shapes.size());
   for (const int i : child_shapes.index_range()) {
-    if (child_shapes[i] == nullptr) {
+    const CollisionShape *child_shape = child_shapes[i].get_collision_shape();
+    if (child_shape == nullptr) {
       continue;
     }
     JPH::CompoundShapeSettings::SubShapeSettings child_settings;
-    child_settings.mShapePtr = &child_shapes[i]->impl();
+    child_settings.mShapePtr = &child_shape->impl();
     child_settings.mPosition = to_jolt(child_transforms[i].location());
     child_settings.mRotation = to_jolt(math::to_quaternion(child_transforms[i]));
     settings.mSubShapes.push_back(std::move(child_settings));
   }
-  return construct_shape(settings);
+  return construct_shape(settings, child_shapes);
 }
 
-CollisionShape make_static_compound(Span<const CollisionShape *> child_shapes,
+CollisionShape make_static_compound(Span<GeometrySet> child_shapes,
                                     Span<float4x4> child_transforms)
 {
   JPH::StaticCompoundShapeSettings settings;
   settings.mSubShapes.reserve(child_shapes.size());
   for (const int i : child_shapes.index_range()) {
-    if (child_shapes[i] == nullptr) {
+    const CollisionShape *child_shape = child_shapes[i].get_collision_shape();
+    if (child_shape == nullptr) {
       continue;
     }
     JPH::CompoundShapeSettings::SubShapeSettings child_settings;
-    child_settings.mShapePtr = &child_shapes[i]->impl();
+    child_settings.mShapePtr = &child_shape->impl();
     child_settings.mPosition = to_jolt(child_transforms[i].location());
     child_settings.mRotation = to_jolt(math::to_quaternion(child_transforms[i]));
     settings.mSubShapes.push_back(std::move(child_settings));
   }
-  return construct_shape(settings);
+  return construct_shape(settings, child_shapes);
 }
 
 CollisionShape make_mesh(const Mesh &mesh)
@@ -499,7 +672,7 @@ CollisionShape make_mesh(const Mesh &mesh)
   }
 
   JPH::MeshShapeSettings settings(vertices, triangles);
-  return construct_shape(settings);
+  return construct_shape(settings, {});
 }
 
 }  // namespace collision_shapes

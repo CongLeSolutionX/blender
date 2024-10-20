@@ -194,7 +194,7 @@ static VArray<float3> gather_points(const GeometrySet &geometry_set)
 }
 
 static void find_child_shapes(const GeometrySet &geometry_set,
-                              Vector<const bke::CollisionShape *> &r_child_shapes,
+                              Vector<bke::GeometrySet> &r_child_shapes,
                               Vector<float4x4> &r_child_transforms)
 {
   const bool has_shape = geometry_set.has_collision_shape();
@@ -206,8 +206,7 @@ static void find_child_shapes(const GeometrySet &geometry_set,
   r_child_shapes.reserve(num_child_shapes);
   r_child_transforms.reserve(num_child_shapes);
   if (geometry_set.has_collision_shape()) {
-    const bke::CollisionShape *child_shape = geometry_set.get_collision_shape();
-    r_child_shapes.append(child_shape);
+    r_child_shapes.append(geometry_set);
     r_child_transforms.append(float4x4::identity());
   }
   if (geometry_set.has_instances()) {
@@ -218,7 +217,7 @@ static void find_child_shapes(const GeometrySet &geometry_set,
       const GeometrySet &ref_geometry_set = references[ref_index].geometry_set();
       const float4x4 &transform = transforms[ref_index];
       if (ref_geometry_set.has_collision_shape()) {
-        r_child_shapes.append(ref_geometry_set.get_collision_shape());
+        r_child_shapes.append(ref_geometry_set);
         r_child_transforms.append(transform);
       }
     }
@@ -272,14 +271,14 @@ static bke::CollisionShape make_collision_shape_from_type(const bke::CollisionSh
     }
     case ShapeType::StaticCompound: {
       const GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
-      Vector<const bke::CollisionShape *> child_shapes;
+      Vector<bke::GeometrySet> child_shapes;
       Vector<float4x4> child_transforms;
       find_child_shapes(geometry_set, child_shapes, child_transforms);
       return bke::collision_shapes::make_static_compound(child_shapes, child_transforms);
     }
     case ShapeType::MutableCompound: {
       const GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
-      Vector<const bke::CollisionShape *> child_shapes;
+      Vector<bke::GeometrySet> child_shapes;
       Vector<float4x4> child_transforms;
       find_child_shapes(geometry_set, child_shapes, child_transforms);
       return bke::collision_shapes::make_mutable_compound(child_shapes, child_transforms);
@@ -288,29 +287,17 @@ static bke::CollisionShape make_collision_shape_from_type(const bke::CollisionSh
       const GeometrySet geometry_set = params.extract_input<GeometrySet>("Child Shape");
       const float3 translation = params.extract_input<float3>("Translation");
       const math::Quaternion rotation = params.extract_input<math::Quaternion>("Rotation");
-      const bke::CollisionShape *child_shape = geometry_set.get_collision_shape();
-      if (!child_shape) {
-        return bke::collision_shapes::make_sphere(1.0f);
-      }
-      return bke::collision_shapes::make_rotated_translated(child_shape, rotation, translation);
+      return bke::collision_shapes::make_rotated_translated(geometry_set, rotation, translation);
     }
     case ShapeType::Scaled: {
       const GeometrySet geometry_set = params.extract_input<GeometrySet>("Child Shape");
       const float3 scale = params.extract_input<float3>("Size");
-      const bke::CollisionShape *child_shape = geometry_set.get_collision_shape();
-      if (!child_shape) {
-        return bke::collision_shapes::make_sphere(1.0f);
-      }
-      return bke::collision_shapes::make_scaled_shape(child_shape, scale);
+      return bke::collision_shapes::make_scaled_shape(geometry_set, scale);
     }
     case ShapeType::OffsetCenterOfMass: {
       const GeometrySet geometry_set = params.extract_input<GeometrySet>("Child Shape");
       const float3 offset = params.extract_input<float3>("Translation");
-      const bke::CollisionShape *child_shape = geometry_set.get_collision_shape();
-      if (!child_shape) {
-        return bke::collision_shapes::make_sphere(1.0f);
-      }
-      return bke::collision_shapes::make_offset_center_of_mass_shape(child_shape, offset);
+      return bke::collision_shapes::make_offset_center_of_mass_shape(geometry_set, offset);
     }
     case ShapeType::Mesh: {
       const GeometrySet geometry_set = params.extract_input<GeometrySet>("Mesh");
