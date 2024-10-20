@@ -331,6 +331,8 @@ GeometrySet CollisionShape::create_mesh_instances() const
 
 namespace collision_shapes {
 
+static const math::Quaternion y_to_z_up = {0.707107f, 0.707107f, 0.0f, 0.0f};
+
 CollisionShape make_empty()
 {
   return CollisionShape();
@@ -373,10 +375,14 @@ CollisionShape make_convex_hull(const VArray<float3> &points)
 
 CollisionShape make_capsule(float radius, float height)
 {
-  JPH::CapsuleShapeSettings settings(to_jolt(std::max(0.5f * height, shape_size_epsilon)),
-                                     to_jolt(std::max(radius, shape_size_epsilon)),
-                                     shape_physics_material);
-  return construct_shape(settings);
+  JPH::RefConst<JPH::ShapeSettings> settings(
+      new JPH::CapsuleShapeSettings(to_jolt(std::max(0.5f * height, shape_size_epsilon)),
+                                    to_jolt(std::max(radius, shape_size_epsilon)),
+                                    shape_physics_material));
+  /* Rotate shape so Z is up. */
+  JPH::RotatedTranslatedShapeSettings rotated_settings(
+      to_jolt(float3(0)), to_jolt(y_to_z_up), settings);
+  return construct_shape(rotated_settings);
 }
 
 CollisionShape make_tapered_capsule(float top_radius, float bottom_radius, float height)
@@ -386,7 +392,10 @@ CollisionShape make_tapered_capsule(float top_radius, float bottom_radius, float
   settings.mBottomRadius = to_jolt(std::max(bottom_radius, shape_size_epsilon));
   settings.mHalfHeightOfTaperedCylinder = to_jolt(std::max(0.5f * height, shape_size_epsilon));
   settings.mMaterial = shape_physics_material;
-  return construct_shape(settings);
+  /* Rotate shape so Z is up. */
+  JPH::RotatedTranslatedShapeSettings rotated_settings(
+      to_jolt(float3(0)), to_jolt(y_to_z_up), &settings);
+  return construct_shape(rotated_settings);
 }
 
 CollisionShape make_cylinder(float radius, float height)
@@ -395,7 +404,10 @@ CollisionShape make_cylinder(float radius, float height)
                                       to_jolt(std::max(radius, shape_convex_radius)),
                                       shape_convex_radius,
                                       shape_physics_material);
-  return construct_shape(settings);
+  /* Rotate shape so Z is up. */
+  JPH::RotatedTranslatedShapeSettings rotated_settings(
+      to_jolt(float3(0)), to_jolt(y_to_z_up), &settings);
+  return construct_shape(rotated_settings);
 }
 
 CollisionShape make_scaled_shape(const CollisionShape *child_shape, const float3 &scale)
