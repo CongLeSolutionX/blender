@@ -33,7 +33,8 @@ Manager::~Manager()
 
 void Manager::begin_sync()
 {
-  sync_counter_ = global_sync_counter_++;
+  /* Add 2 to always have a non-null number even in case of overflow. */
+  sync_counter_ = (global_sync_counter_ += 2);
 
   matrix_buf.swap();
   bounds_buf.swap();
@@ -167,7 +168,7 @@ void Manager::resource_bind()
 uint64_t Manager::fingerprint_get()
 {
   /* Covers new sync cycle, added resources and different #Manager. */
-  return 1 | (sync_counter_ << 1) | (uint64_t(resource_len_) << 32);
+  return sync_counter_ | (uint64_t(resource_len_) << 32);
 }
 
 void Manager::compute_visibility(View &view)
