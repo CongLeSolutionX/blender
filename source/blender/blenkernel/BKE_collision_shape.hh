@@ -74,11 +74,6 @@ class CollisionShape {
  public:
   using ShapeType = CollisionShapeType;
 
-  struct InitShape {
-    JPH::Shape *impl = nullptr;
-    std::optional<std::string> error;
-  };
-
  protected:
   JPH::Shape *impl_ = nullptr;
   std::optional<std::string> error_;
