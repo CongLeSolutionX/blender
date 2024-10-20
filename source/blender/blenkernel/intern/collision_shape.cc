@@ -540,6 +540,8 @@ blender::Any<> physics_shape_get_param(const JPH::Shape &shape, PhysicsShapePara
       switch (param) {
         case ShapeParam::radius:
           return to_blender(capsule_shape.GetRadius());
+        case ShapeParam::height:
+          return to_blender(capsule_shape.GetHalfHeightOfCylinder()) * 2.0f;
         default:
           return {};
       }
