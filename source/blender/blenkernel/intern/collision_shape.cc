@@ -773,35 +773,6 @@ blender::Any<> physics_shape_get_param(const JPH::Shape &shape, PhysicsShapePara
           return {};
       }
     }
-    case JPH::EShapeSubType::RotatedTranslated: {
-      const auto &loc_rot_shape = static_cast<const JPH::RotatedTranslatedShape &>(shape);
-      switch (param) {
-        case ShapeParam::translation:
-          return to_blender(loc_rot_shape.GetPosition());
-        case ShapeParam::rotation:
-          return to_blender(loc_rot_shape.GetRotation());
-        default:
-          return {};
-      }
-    }
-    case JPH::EShapeSubType::Scaled: {
-      const auto &scaled_shape = static_cast<const JPH::ScaledShape &>(shape);
-      switch (param) {
-        case ShapeParam::scale:
-          return to_blender(scaled_shape.GetScale());
-        default:
-          return {};
-      }
-    }
-    case JPH::EShapeSubType::OffsetCenterOfMass: {
-      const auto &offset_com_shape = static_cast<const JPH::OffsetCenterOfMassShape &>(shape);
-      switch (param) {
-        case ShapeParam::translation:
-          return to_blender(offset_com_shape.GetOffset());
-        default:
-          return {};
-      }
-    }
 
     default:
       return {};
@@ -814,12 +785,6 @@ StringRef physics_shape_param_name(PhysicsShapeParam param)
 {
   using ShapeParam = PhysicsShapeParam;
   switch (param) {
-    case ShapeParam::translation:
-      return "translation";
-    case ShapeParam::rotation:
-      return "rotation";
-    case ShapeParam::scale:
-      return "scale";
     case ShapeParam::size:
       return "size";
     case ShapeParam::radius:
@@ -902,34 +867,13 @@ StringRef physics_shape_param_label(const bke::CollisionShapeType shape_type,
         default:
           return default_label;
       }
-    case ShapeType::RotatedTranslated:
-      switch (param) {
-        case ShapeParam::rotation:
-          return "Rotation";
-        case ShapeParam::translation:
-          return "Translation";
-        default:
-          return default_label;
-      }
-    case ShapeType::Scaled:
-      switch (param) {
-        case ShapeParam::scale:
-          return "Scale";
-        default:
-          return default_label;
-      }
-    case ShapeType::OffsetCenterOfMass:
-      switch (param) {
-        case ShapeParam::translation:
-          return "Offset";
-        default:
-          return default_label;
-      }
-
     case ShapeType::Empty:
     case ShapeType::ConvexHull:
     case ShapeType::StaticCompound:
     case ShapeType::MutableCompound:
+    case ShapeType::RotatedTranslated:
+    case ShapeType::Scaled:
+    case ShapeType::OffsetCenterOfMass:
     case ShapeType::Mesh:
     case ShapeType::HeightField:
     case ShapeType::SoftBody:
@@ -957,17 +901,14 @@ bool physics_shape_param_valid(const CollisionShapeType shape_type, PhysicsShape
       return ELEM(param, ShapeParam::radius, ShapeParam::radius2, ShapeParam::height);
     case ShapeType::Cylinder:
       return ELEM(param, ShapeParam::radius, ShapeParam::height);
-    case ShapeType::RotatedTranslated:
-      return ELEM(param, ShapeParam::translation, ShapeParam::rotation);
-    case ShapeType::Scaled:
-      return ELEM(param, ShapeParam::scale);
-    case ShapeType::OffsetCenterOfMass:
-      return ELEM(param, ShapeParam::translation);
 
     case ShapeType::Empty:
     case ShapeType::ConvexHull:
     case ShapeType::StaticCompound:
     case ShapeType::MutableCompound:
+    case ShapeType::RotatedTranslated:
+    case ShapeType::Scaled:
+    case ShapeType::OffsetCenterOfMass:
     case ShapeType::Mesh:
     case ShapeType::HeightField:
     case ShapeType::SoftBody:
@@ -977,16 +918,22 @@ bool physics_shape_param_valid(const CollisionShapeType shape_type, PhysicsShape
   return false;
 }
 
+bool physics_shape_has_children(const CollisionShapeType shape_type)
+{
+  using ShapeType = CollisionShapeType;
+
+  return ELEM(shape_type,
+              ShapeType::Scaled,
+              ShapeType::OffsetCenterOfMass,
+              ShapeType::RotatedTranslated,
+              ShapeType::StaticCompound,
+              ShapeType::MutableCompound);
+}
+
 const CPPType &physics_shape_param_type(const PhysicsShapeParam param)
 {
   using ShapeParam = PhysicsShapeParam;
   switch (param) {
-    case ShapeParam::translation:
-      return CPPType::get<float3>();
-    case ShapeParam::rotation:
-      return CPPType::get<math::Quaternion>();
-    case ShapeParam::scale:
-      return CPPType::get<float3>();
     case ShapeParam::size:
       return CPPType::get<float3>();
     case ShapeParam::radius:
@@ -1004,20 +951,6 @@ const CPPType &physics_shape_param_type(const PhysicsShapeParam param)
   }
   BLI_assert_unreachable();
   return CPPType::get<int>();
-}
-
-bool physics_shape_has_geometry(const CollisionShapeType shape_type)
-{
-  using ShapeType = CollisionShapeType;
-
-  return ELEM(shape_type,
-              ShapeType::ConvexHull,
-              ShapeType::Mesh,
-              ShapeType::Scaled,
-              ShapeType::OffsetCenterOfMass,
-              ShapeType::RotatedTranslated,
-              ShapeType::StaticCompound,
-              ShapeType::MutableCompound);
 }
 
 #endif

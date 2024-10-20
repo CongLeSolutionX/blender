@@ -57,9 +57,6 @@ enum class CollisionShapeType {
 };
 
 enum class PhysicsShapeParam {
-  translation,
-  rotation,
-  scale,
   size,
   radius,
   radius2,
@@ -156,8 +153,8 @@ CollisionShape make_mesh(const Mesh &mesh);
 StringRef physics_shape_param_name(PhysicsShapeParam param);
 StringRef physics_shape_param_label(const CollisionShapeType shape_type, PhysicsShapeParam param);
 bool physics_shape_param_valid(const CollisionShapeType shape_type, PhysicsShapeParam param);
+bool physics_shape_has_children(const CollisionShapeType shape_type);
 const CPPType &physics_shape_param_type(const PhysicsShapeParam param);
-bool physics_shape_has_geometry(const CollisionShapeType shape_type);
 blender::Any<> physics_shape_get_param(const JPH::Shape &shape, PhysicsShapeParam param);
 template<typename T> T physics_shape_get_param(const JPH::Shape &shape, PhysicsShapeParam param)
 {
