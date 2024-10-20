@@ -2226,6 +2226,10 @@ static void rna_def_property_funcs(FILE *f, StructRNA *srna, PropertyDefRNA *dp)
         DefRNA.error = true;
       }
 
+      if (dp->dnapointerlevel == 0 && pprop->get == nullptr) {
+        RNA_def_property_flag(prop, PROP_NEVER_NULL);
+      }
+
       pprop->get = reinterpret_cast<PropPointerGetFunc>(
           rna_def_property_get_func(f, srna, prop, dp, (const char *)pprop->get));
       pprop->set = reinterpret_cast<PropPointerSetFunc>(
