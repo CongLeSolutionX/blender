@@ -94,6 +94,8 @@ static void node_declare(NodeDeclarationBuilder &b)
         total_constraints.available(true);
         total_shapes.available(true);
         break;
+      case GeometryComponent::Type::CollisionShape:
+        break;
       default:
         BLI_assert_unreachable();
     }
@@ -185,6 +187,9 @@ static void node_geo_exec(GeoNodeExecParams params)
       }
       break;
     }
+    case GeometryComponent::Type::CollisionShape:
+      params.set_default_remaining_outputs();
+      break;
     default:
       BLI_assert_unreachable();
   }
