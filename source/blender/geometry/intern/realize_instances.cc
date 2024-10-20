@@ -217,6 +217,10 @@ struct RealizePhysicsInfo {
   Array<std::optional<GVArraySpan>> attributes;
 };
 
+struct RealizeCollisionShapeInfo {
+  const bke::CollisionShape *shape;
+};
+
 /** Start indices in the final output curves data-block. */
 struct PhysicsElementStartIndices {
   int body = 0;
@@ -229,6 +233,12 @@ struct RealizePhysicsTask {
   /** Transformation applied to transform and motion state of bodies. */
   float4x4 transform;
   AttributeFallbacksArray attribute_fallbacks;
+};
+
+struct RealizeCollisionShapeTask {
+  const RealizeCollisionShapeInfo *shape_info;
+  /** Transformation applied to child shapes. */
+  float4x4 transform;
 };
 
 struct AllPointCloudsInfo {
@@ -299,6 +309,13 @@ struct AllPhysicsInfo {
   bool create_id_attribute = false;
 };
 
+struct AllCollisionShapesInfo {
+  /** Ordering of the original shapes that are joined. */
+  VectorSet<const bke::CollisionShape *> order;
+  /** Preprocessed data about every original shape. This is ordered by #order. */
+  Array<RealizeCollisionShapeInfo> realize_info;
+};
+
 struct AllInstancesInfo {
   /** Stores an array of void pointer to attributes for each component. */
   Vector<AttributeFallbacksArray> attribute_fallback;
@@ -315,6 +332,7 @@ struct GatherTasks {
   Vector<RealizeCurveTask> curve_tasks;
   Vector<RealizeGreasePencilTask> grease_pencil_tasks;
   Vector<RealizePhysicsTask> physics_tasks;
+  Vector<RealizeCollisionShapeTask> collision_shape_tasks;
   Vector<RealizeEditDataTask> edit_data_tasks;
 
   /* Volumes only have very simple support currently. Only the first found volume is put into the
@@ -338,6 +356,7 @@ struct GatherTasksInfo {
   const AllCurvesInfo &curves;
   const AllGreasePencilsInfo &grease_pencils;
   const AllPhysicsInfo &physics;
+  const AllCollisionShapesInfo &collision_shapes;
   const OrderedAttributes &instances_attributes;
   bool create_id_attribute_on_any_component = false;
 
@@ -820,6 +839,18 @@ static void gather_realize_tasks_recursive(GatherTasksInfo &gather_info,
         }
         break;
       }
+      case bke::GeometryComponent::Type::CollisionShape: {
+        const auto &shape_component = *static_cast<const bke::CollisionShapeComponent *>(
+            component);
+        const bke::CollisionShape *shape = shape_component.get();
+        if (shape != nullptr) {
+          const int shape_index = gather_info.collision_shapes.order.index_of(shape);
+          const RealizeCollisionShapeInfo &shape_info =
+              gather_info.collision_shapes.realize_info[shape_index];
+          gather_info.r_tasks.collision_shape_tasks.append({&shape_info, base_transform});
+        }
+        break;
+      }
       case bke::GeometryComponent::Type::Instance: {
         if (current_depth == target_depth) {
           gather_info.instances.attribute_fallback.append(base_instance_context.instances);
@@ -856,13 +887,6 @@ static void gather_realize_tasks_recursive(GatherTasksInfo &gather_info,
         if (edit_component->gizmo_edit_hints_ || edit_component->curves_edit_hints_) {
           gather_info.r_tasks.edit_data_tasks.append({edit_component, base_transform});
         }
-        break;
-      }
-      case bke::GeometryComponent::Type::CollisionShape: {
-        const auto *shape_component = static_cast<const bke::CollisionShapeComponent *>(component);
-        UNUSED_VARS(shape_component);
-        /* TODO implement me! */
-        BLI_assert_unreachable();
         break;
       }
     }
@@ -2646,7 +2670,7 @@ static void execute_realize_physics_tasks(const RealizeInstancesOptions &options
   const int bodies_num = last_task.start_indices.body + last_physics.bodies_num();
   const int constraints_num = last_task.start_indices.constraint + last_physics.constraints_num();
 
-  /* Allocate new curves data-block. */
+  /* Allocate new physics geometry. */
   bke::PhysicsGeometry *dst_physics = new bke::PhysicsGeometry(bodies_num, constraints_num);
 
   /* Move physics data ahead of copying attributes. */
@@ -2766,6 +2790,78 @@ static void execute_realize_physics_tasks(const RealizeInstancesOptions &options
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name Collision Shapes
+ * \{ */
+
+static void gather_collision_shapes_to_realize(const bke::GeometrySet &geometry_set,
+                                               VectorSet<const bke::CollisionShape *> &r_shapes)
+{
+  if (const bke::CollisionShape *shape = geometry_set.get_collision_shape()) {
+    r_shapes.add(shape);
+  }
+  if (const Instances *instances = geometry_set.get_instances()) {
+    instances->foreach_referenced_geometry([&](const bke::GeometrySet &instance_geometry_set) {
+      gather_collision_shapes_to_realize(instance_geometry_set, r_shapes);
+    });
+  }
+}
+
+static AllCollisionShapesInfo preprocess_collision_shapes(
+    const bke::GeometrySet &geometry_set,
+    const RealizeInstancesOptions &options,
+    const VariedDepthOptions &varied_depth_option)
+{
+  AllCollisionShapesInfo info;
+
+  gather_collision_shapes_to_realize(geometry_set, info.order);
+  info.realize_info.reinitialize(info.order.size());
+
+  for (const int shape_index : info.realize_info.index_range()) {
+    RealizeCollisionShapeInfo &shape_info = info.realize_info[shape_index];
+    const bke::CollisionShape *shape = info.order[shape_index];
+    shape_info.shape = shape;
+  }
+  return info;
+}
+
+static void execute_realize_collision_shape_tasks(const RealizeInstancesOptions &options,
+                                                  const AllCollisionShapesInfo &all_shapes_info,
+                                                  const Span<RealizeCollisionShapeTask> tasks,
+                                                  const OrderedAttributes &ordered_attributes,
+                                                  bke::GeometrySet &r_realized_geometry)
+{
+  if (tasks.is_empty()) {
+    return;
+  }
+  if (tasks.size() == 1 && tasks.first().transform == float4x4::identity()) {
+    r_realized_geometry.replace_collision_shape(
+        new bke::CollisionShape(*all_shapes_info.realize_info[0].shape));
+    return;
+  }
+
+  Array<bke::GeometrySet> dst_child_geometries(tasks.size());
+  Array<float4x4> dst_child_transforms(tasks.size());
+
+  /* Actually execute all tasks. */
+  threading::parallel_for(tasks.index_range(), 100, [&](const IndexRange task_range) {
+    for (const int task_index : task_range) {
+      const RealizeCollisionShapeTask &task = tasks[task_index];
+      dst_child_geometries[task_index].replace_collision_shape(
+          new bke::CollisionShape(*task.shape_info->shape));
+      dst_child_transforms[task_index] = task.transform;
+    }
+  });
+
+  /* Allocate new collision shape. */
+  bke::CollisionShape *dst_shape = new bke::CollisionShape(
+      bke::collision_shapes::make_static_compound(dst_child_geometries, dst_child_transforms));
+
+  r_realized_geometry.replace_collision_shape(dst_shape);
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Realize Instances
  * \{ */
 
@@ -2847,6 +2943,8 @@ bke::GeometrySet realize_instances(bke::GeometrySet geometry_set,
   AllGreasePencilsInfo all_grease_pencils_info = preprocess_grease_pencils(
       geometry_set, options, varied_depth_option);
   AllPhysicsInfo all_physics_info = preprocess_physics(geometry_set, options, varied_depth_option);
+  AllCollisionShapesInfo all_shapes_info = preprocess_collision_shapes(
+      geometry_set, options, varied_depth_option);
   OrderedAttributes all_instance_attributes = gather_generic_instance_attributes_to_propagate(
       geometry_set, options, varied_depth_option);
 
@@ -2859,6 +2957,7 @@ bke::GeometrySet realize_instances(bke::GeometrySet geometry_set,
                                  all_curves_info,
                                  all_grease_pencils_info,
                                  all_physics_info,
+                                 all_shapes_info,
                                  all_instance_attributes,
                                  create_id_attribute,
                                  varied_depth_option.selection,
@@ -2916,6 +3015,11 @@ bke::GeometrySet realize_instances(bke::GeometrySet geometry_set,
                                   gather_info.r_tasks.physics_tasks,
                                   all_physics_info.attributes,
                                   new_geometry_set);
+    execute_realize_collision_shape_tasks(options,
+                                          all_shapes_info,
+                                          gather_info.r_tasks.collision_shape_tasks,
+                                          all_physics_info.attributes,
+                                          new_geometry_set);
   });
   if (gather_info.r_tasks.first_volume) {
     new_geometry_set.add(*gather_info.r_tasks.first_volume);
