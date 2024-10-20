@@ -553,6 +553,8 @@ class NODE_MT_category_GEO_TEXT(Menu):
         node_add_menu.add_node_type(layout, "FunctionNodeStringLength")
         node_add_menu.add_node_type(layout, "GeometryNodeStringToCurves")
         node_add_menu.add_node_type(layout, "FunctionNodeValueToString")
+        node_add_menu.add_node_type(layout,"FunctionNodeStringKeywordCount")
+        node_add_menu.add_node_type(layout,"FunctionNodeStringSelectLine")
         layout.separator()
         node_add_menu.add_node_type(layout, "FunctionNodeInputSpecialCharacters")
         node_add_menu.draw_assets_for_catalog(layout, "Utilities/Text")
