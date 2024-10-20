@@ -296,9 +296,6 @@ class InfoPropertyRNA:
         self.type = rna_prop.type.lower()
         fixed_type = getattr(rna_prop, "fixed_type", "")
         if fixed_type:
-            self.is_never_none = (
-                self.is_never_none or self.type == "collection" or isinstance(fixed_type, bpy.types.PropertyGroup)
-            )
             self.fixed_type = GetInfoStructRNA(fixed_type)  # valid for pointer/collections
         else:
             self.fixed_type = None
