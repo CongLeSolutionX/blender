@@ -940,7 +940,7 @@ void uiTemplateImageSettings(uiLayout *layout, PointerRNA *imfptr, bool color_ma
 {
   ImageFormatData *imf = static_cast<ImageFormatData *>(imfptr->data);
   ID *id = imfptr->owner_id;
-  const int depth_ok = BKE_imtype_valid_depths(imf->imtype);
+  const int depth_ok = BKE_imtype_valid_depths_with_video(imf->imtype, id);
   /* some settings depend on this being a scene that's rendered */
   const bool is_render_out = (id && GS(id->name) == ID_SCE);
 
