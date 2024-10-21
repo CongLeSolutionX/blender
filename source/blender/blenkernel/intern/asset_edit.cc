@@ -48,6 +48,26 @@ namespace blender::bke {
 bool asset_edit_id_is_essential_or_override(const ID &id);
 bool asset_edit_id_is_essential_not_override(const ID &id);
 
+static void asset_id_library_tag_editable(Library *lib)
+{
+  StringRefNull filepath = lib->runtime.filepath_abs;
+
+  lib->runtime.tag |= LIBRARY_ASSET_EDITABLE;
+
+  if ((lib->runtime.tag & LIBRARY_IS_ASSET_EDIT_FILE) &&
+      filepath.endswith(BLENDER_ASSET_FILE_SUFFIX) && BLI_file_is_writable(filepath.c_str()))
+  {
+
+    if (BKE_preferences_asset_library_containing_path(&U, filepath.c_str()) ||
+        /* Path into essentials override directory. */
+        asset_system::essentials_override_is_path_inside(filepath))
+    {
+
+      lib->runtime.tag |= LIBRARY_ASSET_FILE_WRITABLE;
+    }
+  }
+}
+
 static ID *asset_link_id(Main &global_main,
                          const ID_Type id_type,
                          const char *filepath,
@@ -81,20 +101,7 @@ static ID *asset_link_id(Main &global_main,
 
   /* Tag library as being editable. */
   if (local_asset && local_asset->lib) {
-    local_asset->lib->runtime.tag |= LIBRARY_ASSET_EDITABLE;
-
-    if ((local_asset->lib->runtime.tag & LIBRARY_IS_ASSET_EDIT_FILE) &&
-        StringRef(filepath).endswith(BLENDER_ASSET_FILE_SUFFIX) && BLI_file_is_writable(filepath))
-    {
-
-      if (BKE_preferences_asset_library_containing_path(&U, filepath) ||
-          /* Path into essentials override directory. */
-          asset_system::essentials_override_is_path_inside(filepath))
-      {
-
-        local_asset->lib->runtime.tag |= LIBRARY_ASSET_FILE_WRITABLE;
-      }
-    }
+    asset_id_library_tag_editable(local_asset->lib);
   }
 
   return local_asset;
@@ -283,9 +290,27 @@ static bool asset_write_in_library(Main &bmain,
   return success;
 }
 
-static ID *asset_reload(Main &global_main, ID &id, ReportList *reports)
+static Library *find_library_by_path(const Main &global_main, StringRefNull library_path)
+{
+  LISTBASE_FOREACH (Library *, lib_iter, &global_main.libraries) {
+    if (BLI_path_cmp(lib_iter->runtime.filepath_abs, library_path.c_str()) == 0) {
+      return lib_iter;
+    }
+  }
+
+  return nullptr;
+}
+
+static ID *asset_reload(Main &global_main,
+                        ID &id,
+                        ReportList *reports,
+                        StringRefNull new_filepath_abs = "")
 {
   BLI_assert(ID_IS_LINKED(&id));
+
+  /* If #new_filepath_abs is given, check if there is already a library for that location. */
+  const bool has_lib_at_new_path = !new_filepath_abs.is_empty() &&
+                                   find_library_by_path(global_main, new_filepath_abs);
 
   const std::string name = BKE_id_name(id);
   const std::string filepath = id.lib->runtime.filepath_abs;
@@ -294,7 +319,19 @@ static ID *asset_reload(Main &global_main, ID &id, ReportList *reports)
   /* TODO: There's no API to reload a single data block (and its dependencies) yet. For now
    * deleting the brush and re-linking it is the best way to get reloading to work. */
   BKE_id_delete(&global_main, &id);
-  ID *new_id = asset_link_id(global_main, id_type, filepath.c_str(), name.c_str(), reports);
+  ID *new_id = asset_link_id(
+      global_main,
+      id_type,
+      new_filepath_abs.is_empty() ? lib->runtime.filepath_abs : new_filepath_abs.c_str(),,
+      name.c_str(),
+      reports);
+
+  /* Tag library as editable if it's newly added. */
+  if (!new_filepath_abs.is_empty() && !has_lib_at_new_path) {
+    Library *new_lib = find_library_by_path(global_main, new_filepath_abs);
+    BLI_assert(new_lib);
+    asset_id_library_tag_editable(new_lib);
+  }
 
   /* Recreate dependency graph to include new IDs. */
   DEG_relations_tag_update(&global_main);
@@ -393,6 +430,40 @@ bool asset_edit_id_save(Main &global_main, const ID &id, ReportList &reports)
 
   if (!success) {
     BKE_report(&reports, RPT_ERROR, "Failed to write to asset library");
+    return false;
+  }
+
+  return true;
+}
+
+bool asset_edit_id_is_essentials_override(const ID &id)
+{
+  return ID_IS_LINKED(&id) &&
+         asset_system::essentials_override_is_path_inside(id.lib->runtime.filepath_abs);
+}
+
+bool asset_edit_id_essentials_override_remove_and_reload(Main &global_main,
+                                                         ID &id,
+                                                         ReportList &reports)
+{
+  if (!asset_edit_id_is_essentials_override(id)) {
+    return false;
+  }
+
+  const std::string override_path = id.lib->runtime.filepath_abs;
+  const std::string original_essentials_path =
+      asset_system::essentials_asset_override_path_to_essentials_blend_path(
+          id.lib->runtime.filepath_abs);
+
+  if (original_essentials_path.empty()) {
+    BKE_report(&reports, RPT_ERROR, "Failed to locate original essentials asset library file");
+    return false;
+  }
+
+  asset_reload(global_main, id.lib, reports, original_essentials_path);
+
+  if (BLI_delete(override_path.c_str(), false, false) != 0) {
+    BKE_report(&reports, RPT_ERROR, "Failed to delete asset library file");
     return false;
   }
 

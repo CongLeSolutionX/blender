@@ -810,4 +810,65 @@ void BRUSH_OT_asset_revert(wmOperatorType *ot)
   ot->poll = brush_asset_revert_poll;
 }
 
+static bool brush_asset_essentials_override_revert_poll(bContext *C)
+{
+  Paint *paint = BKE_paint_get_active_from_context(C);
+  Brush *brush = (paint) ? BKE_paint_brush(paint) : nullptr;
+  if (paint == nullptr || brush == nullptr) {
+    return false;
+  }
+
+  if (!bke::asset_edit_id_is_essentials_override(brush->id)) {
+    CTX_wm_operator_poll_msg_set(C, "Not a modified essentials library asset");
+    return false;
+  }
+  return true;
+}
+
+static int brush_asset_essentials_override_revert_exec(bContext *C, wmOperator *op)
+{
+  Main *bmain = CTX_data_main(C);
+  Paint *paint = BKE_paint_get_active_from_context(C);
+  Brush *brush = BKE_paint_brush(paint);
+
+  bke::asset_edit_id_essentials_override_remove_and_reload(*bmain, brush->id, *op->reports);
+
+  /* Get reloaded brush. */
+  brush = BKE_paint_brush(paint);
+  if (std::optional<AssetLibraryReference> affected_library =
+          bke::asset_edit_id_get_library_reference(brush->id))
+  {
+    refresh_asset_library(C, *affected_library);
+  }
+
+  WM_main_add_notifier(NC_BRUSH | NA_EDITED, nullptr);
+
+  return OPERATOR_FINISHED;
+}
+
+static int brush_asset_essentials_override_revert_invoke(bContext *C,
+                                                         wmOperator *op,
+                                                         const wmEvent * /*event*/)
+{
+  return WM_operator_confirm_ex(
+      C,
+      op,
+      nullptr,
+      IFACE_("Permanently revert brush asset modifications. This cannot be undone."),
+      IFACE_("Delete"),
+      ALERT_ICON_WARNING,
+      false);
+}
+
+void BRUSH_OT_asset_essentials_override_revert(wmOperatorType *ot)
+{
+  ot->name = "Revert Essentials Brush Asset";
+  ot->description =
+      "Remove changes done to an essentials brush asset so it matches its factory settings state";
+  ot->idname = "BRUSH_OT_asset_essentials_override_revert";
+
+  ot->invoke = brush_asset_essentials_override_revert_invoke;
+  ot->exec = brush_asset_essentials_override_revert_exec;
+  ot->poll = brush_asset_essentials_override_revert_poll;
+}
 }  // namespace blender::ed::sculpt_paint

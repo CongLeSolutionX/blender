@@ -1003,6 +1003,7 @@ void ED_operatortypes_paint()
   WM_operatortype_append(BRUSH_OT_asset_delete);
   WM_operatortype_append(BRUSH_OT_asset_save);
   WM_operatortype_append(BRUSH_OT_asset_revert);
+  WM_operatortype_append(BRUSH_OT_asset_essentials_override_revert);
 
   /* image */
   WM_operatortype_append(PAINT_OT_texture_paint_toggle);

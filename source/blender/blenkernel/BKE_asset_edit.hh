@@ -77,4 +77,8 @@ bool asset_edit_id_save(Main &global_main, const ID &id, ReportList &reports);
 ID *asset_edit_id_revert(Main &global_main, ID &id, ReportList &reports);
 bool asset_edit_id_delete(Main &global_main, ID &id, ReportList &reports);
 
+bool asset_edit_id_is_essentials_override(const ID &id);
+bool asset_edit_id_essentials_override_remove_and_reload(Main &global_main,
+                                                         ID &id,
+                                                         ReportList &reports);
 }  // namespace blender::bke

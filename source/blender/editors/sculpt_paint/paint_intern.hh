@@ -154,6 +154,7 @@ void BRUSH_OT_asset_load_preview(wmOperatorType *ot);
 void BRUSH_OT_asset_delete(wmOperatorType *ot);
 void BRUSH_OT_asset_save(wmOperatorType *ot);
 void BRUSH_OT_asset_revert(wmOperatorType *ot);
+void BRUSH_OT_asset_essentials_override_revert(wmOperatorType *ot);
 
 }  // namespace blender::ed::sculpt_paint
 
