@@ -25,22 +25,64 @@ namespace blender::nodes::node_geo_collision_shape_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Vector>("Translation");
-  b.add_input<decl::Rotation>("Rotation");
-  b.add_input<decl::Vector>("Scale").default_value(float3(1.0f));
-  b.add_input<decl::Vector>("Size", "SizeVector").default_value(float3(1.0f));
-  b.add_input<decl::Float>("Radius").default_value(1.0f);
-  b.add_input<decl::Float>("Radius 2").default_value(1.0f);
-  b.add_input<decl::Float>("Height").default_value(1.0f);
-  b.add_input<decl::Vector>("Point", "Point0");
-  b.add_input<decl::Vector>("Point", "Point1");
-  b.add_input<decl::Vector>("Point", "Point2");
-  b.add_input<decl::Geometry>("Geometry")
-      .supported_type({GeometryComponent::Type::Mesh,
-                       GeometryComponent::Type::Curve,
-                       GeometryComponent::Type::PointCloud});
-  b.add_input<decl::Geometry>("Mesh").supported_type(GeometryComponent::Type::Mesh);
-  b.add_input<decl::Geometry>("Child Shape").supported_type(GeometryComponent::Type::Physics);
+  using ShapeType = bke::CollisionShape::ShapeType;
+  const bNode *node = b.node_or_null();
+  if (node == nullptr) {
+    return;
+  }
+  const ShapeType type = ShapeType(node->custom1);
+
+  if (ELEM(type, ShapeType::RotatedTranslated, ShapeType::OffsetCenterOfMass)) {
+    b.add_input<decl::Vector>("Translation");
+  }
+
+  if (ELEM(type, ShapeType::RotatedTranslated)) {
+    b.add_input<decl::Rotation>("Rotation");
+  }
+  if (ELEM(type, ShapeType::Scaled)) {
+    b.add_input<decl::Vector>("Scale").default_value(float3(1.0f));
+  }
+  if (ELEM(type, ShapeType::Box)) {
+    b.add_input<decl::Vector>("Size", "SizeVector").default_value(float3(1.0f));
+  }
+  if (ELEM(type,
+           ShapeType::Sphere,
+           ShapeType::Cylinder,
+           ShapeType::Capsule,
+           ShapeType::TaperedCapsule))
+  {
+    b.add_input<decl::Float>("Radius").default_value(1.0f);
+  }
+  if (ELEM(type, ShapeType::TaperedCapsule)) {
+    b.add_input<decl::Float>("Radius 2").default_value(1.0f);
+  }
+  if (ELEM(type, ShapeType::Cylinder, ShapeType::Capsule, ShapeType::TaperedCapsule)) {
+    b.add_input<decl::Float>("Height").default_value(1.0f);
+  }
+  if (ELEM(type, ShapeType::Triangle)) {
+    b.add_input<decl::Vector>("Point", "Point0");
+    b.add_input<decl::Vector>("Point", "Point1");
+    b.add_input<decl::Vector>("Point", "Point2");
+  }
+  if (ELEM(type, ShapeType::ConvexHull)) {
+    b.add_input<decl::Geometry>("Geometry")
+        .supported_type({GeometryComponent::Type::Mesh,
+                         GeometryComponent::Type::Curve,
+                         GeometryComponent::Type::PointCloud});
+  }
+  if (ELEM(type, ShapeType::Mesh)) {
+    b.add_input<decl::Geometry>("Mesh").supported_type(GeometryComponent::Type::Mesh);
+  }
+  if (ELEM(type,
+           ShapeType::Scaled,
+           ShapeType::OffsetCenterOfMass,
+           ShapeType::RotatedTranslated,
+           ShapeType::StaticCompound,
+           ShapeType::MutableCompound))
+  {
+    b.add_input<decl::Geometry>("Child Shape").supported_type(GeometryComponent::Type::Physics);
+  }
+
   b.add_output<decl::Geometry>("Shape").propagate_all();
 }
 
@@ -53,69 +95,6 @@ static void node_init(bNodeTree * /*tree*/, bNode *node)
 {
   using ShapeType = bke::CollisionShapeType;
   node->custom1 = int(ShapeType::Box);
-}
-
-static void node_update(bNodeTree *tree, bNode *node)
-{
-  using ShapeType = bke::CollisionShapeType;
-  const ShapeType type = ShapeType(node->custom1);
-
-  bNodeSocket *socket_iter = static_cast<bNodeSocket *>(node->inputs.first);
-  auto next_socket = [&socket_iter]() {
-    bNodeSocket *result = socket_iter;
-    BLI_assert(result != nullptr);
-    socket_iter = socket_iter->next;
-    return result;
-  };
-
-  bNodeSocket *translation_socket = next_socket();
-  bNodeSocket *rotation_socket = next_socket();
-  bNodeSocket *scale_socket = next_socket();
-  bNodeSocket *size_vector_socket = next_socket();
-  bNodeSocket *radius_socket = next_socket();
-  bNodeSocket *radius2_socket = next_socket();
-  bNodeSocket *height_socket = next_socket();
-  bNodeSocket *point0_socket = next_socket();
-  bNodeSocket *point1_socket = next_socket();
-  bNodeSocket *point2_socket = next_socket();
-  bNodeSocket *geometry_socket = next_socket();
-  bNodeSocket *mesh_socket = next_socket();
-  bNodeSocket *child_shape_socket = next_socket();
-
-  bke::node_set_socket_availability(
-      tree,
-      translation_socket,
-      ELEM(type, ShapeType::RotatedTranslated, ShapeType::OffsetCenterOfMass));
-  bke::node_set_socket_availability(
-      tree, rotation_socket, ELEM(type, ShapeType::RotatedTranslated));
-  bke::node_set_socket_availability(tree, scale_socket, ELEM(type, ShapeType::Scaled));
-  bke::node_set_socket_availability(tree, size_vector_socket, ELEM(type, ShapeType::Box));
-  bke::node_set_socket_availability(tree,
-                                    radius_socket,
-                                    ELEM(type,
-                                         ShapeType::Sphere,
-                                         ShapeType::Cylinder,
-                                         ShapeType::Capsule,
-                                         ShapeType::TaperedCapsule));
-  bke::node_set_socket_availability(tree, radius2_socket, ELEM(type, ShapeType::TaperedCapsule));
-  bke::node_set_socket_availability(
-      tree,
-      height_socket,
-      ELEM(type, ShapeType::Cylinder, ShapeType::Capsule, ShapeType::TaperedCapsule));
-  const bool use_points = ELEM(type, ShapeType::Triangle);
-  bke::node_set_socket_availability(tree, point0_socket, use_points);
-  bke::node_set_socket_availability(tree, point1_socket, use_points);
-  bke::node_set_socket_availability(tree, point2_socket, use_points);
-  bke::node_set_socket_availability(tree, geometry_socket, ELEM(type, ShapeType::ConvexHull));
-  bke::node_set_socket_availability(tree, mesh_socket, ELEM(type, ShapeType::Mesh));
-  bke::node_set_socket_availability(tree,
-                                    child_shape_socket,
-                                    ELEM(type,
-                                         ShapeType::Scaled,
-                                         ShapeType::OffsetCenterOfMass,
-                                         ShapeType::RotatedTranslated,
-                                         ShapeType::StaticCompound,
-                                         ShapeType::MutableCompound));
 }
 
 static VArray<float3> gather_points(const GeometrySet &geometry_set)
@@ -291,7 +270,7 @@ static bke::CollisionShape make_collision_shape_from_type(const bke::CollisionSh
     }
     case ShapeType::Scaled: {
       const GeometrySet geometry_set = params.extract_input<GeometrySet>("Child Shape");
-      const float3 scale = params.extract_input<float3>("Size");
+      const float3 scale = params.extract_input<float3>("Scale");
       return bke::collision_shapes::make_scaled_shape(geometry_set, scale);
     }
     case ShapeType::OffsetCenterOfMass: {
@@ -369,7 +348,6 @@ static void node_register()
   geo_node_type_base(&ntype, GEO_NODE_COLLISION_SHAPE, "Collision Shape", NODE_CLASS_GEOMETRY);
   ntype.declare = node_declare;
   ntype.initfunc = node_init;
-  ntype.updatefunc = node_update;
   ntype.draw_buttons = node_layout;
   ntype.geometry_node_execute = node_geo_exec;
   blender::bke::node_register_type(&ntype);
