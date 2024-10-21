@@ -38,7 +38,7 @@ struct ShRepeatItemsAccessor {
 
   static socket_items::SocketItemsRef<NodeRepeatItem> get_items_from_node(bNode &node)
   {
-    auto *storage = static_cast<NodeGeometryRepeatOutput *>(node.storage);
+    auto *storage = static_cast<NodeShaderRepeatOutput *>(node.storage);
     return {&storage->items, &storage->items_num, &storage->active_index};
   }
 
@@ -76,7 +76,7 @@ struct ShRepeatItemsAccessor {
                                              const eNodeSocketDatatype socket_type,
                                              const char *name)
   {
-    auto *storage = static_cast<NodeGeometryRepeatOutput *>(node.storage);
+    auto *storage = static_cast<NodeShaderRepeatOutput *>(node.storage);
     item.socket_type = socket_type;
     item.identifier = storage->next_identifier++;
     socket_items::set_item_name_and_make_unique<ShRepeatItemsAccessor>(node, item, name);
