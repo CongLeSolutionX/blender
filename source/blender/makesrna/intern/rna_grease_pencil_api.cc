@@ -494,6 +494,7 @@ void RNA_api_grease_pencil_drawing(StructRNA *srna)
       srna, "tag_positions_changed", "rna_GreasePencilDrawing_tag_positions_changed");
   RNA_def_function_ui_description(
       func, "Indicate that the positions of points in the drawing have changed");
+}
 
 void RNA_api_grease_pencil_frames(StructRNA *srna)
 {
@@ -686,12 +687,12 @@ void RNA_api_grease_pencil_layer_groups(StructRNA *srna)
   parm = RNA_def_string(
       func, "name", "GreasePencilLayerGroup", MAX_NAME, "Name", "Name of the layer group");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
-  parm = RNA_def_pointer(
-      func,
-      "parent_group",
-      "GreasePencilLayerGroup",
-      "",
-      "The parent layer group the new group will be created in (use None for the main stack)");
+  parm = RNA_def_pointer(func,
+                         "parent_group",
+                         "GreasePencilLayerGroup",
+                         "",
+                         "The parent layer group the new group will be created in (use None "
+                         "for the main stack)");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_RNAPTR);
   parm = RNA_def_pointer(
       func, "layer_group", "GreasePencilLayerGroup", "", "The newly created layer group");
@@ -744,12 +745,12 @@ void RNA_api_grease_pencil_layer_groups(StructRNA *srna)
       func, "layer_group", "GreasePencilLayerGroup", "", "The layer group to move");
   RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED | PARM_RNAPTR);
   RNA_def_parameter_clear_flags(parm, PROP_THICK_WRAP, ParameterFlag(0));
-  parm = RNA_def_pointer(
-      func,
-      "parent_group",
-      "GreasePencilLayerGroup",
-      "",
-      "The parent layer group the layer group will be moved into (use None for the main stack)");
+  parm = RNA_def_pointer(func,
+                         "parent_group",
+                         "GreasePencilLayerGroup",
+                         "",
+                         "The parent layer group the layer group will be moved into (use "
+                         "None for the main stack)");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED | PARM_RNAPTR);
   RNA_def_parameter_clear_flags(parm, PROP_THICK_WRAP, ParameterFlag(0));
 }
