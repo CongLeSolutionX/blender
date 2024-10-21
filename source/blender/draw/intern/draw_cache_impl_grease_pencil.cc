@@ -714,7 +714,7 @@ static void grease_pencil_edit_batch_ensure(Object &object,
 
   static GPUVertFormat format_edit_points_vflag = {0};
   if (format_edit_points_vflag.attr_len == 0) {
-    GPU_vertformat_attr_add(&format_edit_points_vflag, "vflag", GPU_COMP_I32, 1, GPU_FETCH_INT);
+    GPU_vertformat_attr_add(&format_edit_points_vflag, "vflag", GPU_COMP_U32, 1, GPU_FETCH_INT);
   }
 
   static GPUVertFormat format_edit_line_selection = {0};
