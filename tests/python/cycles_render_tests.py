@@ -82,9 +82,11 @@ BLOCKLIST_OPTIX_OSL = [
     'both_displacement.blend',
     'bump_with_displacement.blend',
     'ray_portal.blend',
-    # The Volumetric noise texture uses a different default texture mapping in OptiX OSL. See 129279
+    # Volumetric textures use a different default texture mapping in OptiX OSL. See 129279
     'principled_absorption.blend',
     'denoise_volume.blend',
+    # The 3D texture doesn't have the right mappings
+    'point_density_.*_object.blend',
     # Dicing tests use wireframe node which doesn't appear to be supported in OptiX
     'dicing_camera.blend',
     'offscreen_dicing.blend',
