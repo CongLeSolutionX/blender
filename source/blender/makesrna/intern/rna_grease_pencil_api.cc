@@ -107,6 +107,11 @@ static void rna_GreasePencilDrawing_resize_curves(ID *grease_pencil_id,
   }
 }
 
+static void rna_GreasePencilDrawing_tag_positions_changed(GreasePencilDrawing *drawing_ptr)
+{
+  drawing_ptr->wrap().tag_positions_changed();
+}
+
 static GreasePencilFrame *rna_Frames_frame_new(ID *id,
                                                GreasePencilLayer *layer_in,
                                                ReportList *reports,
@@ -484,7 +489,11 @@ void RNA_api_grease_pencil_drawing(StructRNA *srna)
                            0,
                            10000);
   RNA_def_parameter_flags(parm, PROP_DYNAMIC, ParameterFlag(0));
-}
+
+  func = RNA_def_function(
+      srna, "tag_positions_changed", "rna_GreasePencilDrawing_tag_positions_changed");
+  RNA_def_function_ui_description(
+      func, "Indicate that the positions of points in the drawing have changed");
 
 void RNA_api_grease_pencil_frames(StructRNA *srna)
 {
