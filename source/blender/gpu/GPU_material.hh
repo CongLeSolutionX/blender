@@ -208,8 +208,8 @@ bool GPU_stack_link_zone(GPUMaterial *mat,
                          GPUNodeStack *out,
                          int zone_index,
                          bool is_zone_output,
-                         int parameter_input_count,
-                         int parameter_output_count);
+                         int in_argument_count,
+                         int out_argument_count);
 
 void GPU_material_output_surface(GPUMaterial *material, GPUNodeLink *link);
 void GPU_material_output_volume(GPUMaterial *material, GPUNodeLink *link);

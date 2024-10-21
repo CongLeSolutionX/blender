@@ -61,8 +61,8 @@ static GPUNode *gpu_node_create(const char *name)
   node->name = name;
   node->zone_index = -1;
   node->is_zone_end = false;
-  node->parameter_input_count = -1;
-  node->parameter_output_count = -1;
+  node->in_argument_count = -1;
+  node->out_argument_count = -1;
 
   return node;
 }
@@ -845,8 +845,8 @@ bool GPU_stack_link_zone(GPUMaterial *material,
                          GPUNodeStack *out,
                          int zone_index,
                          bool is_zone_end,
-                         int parameter_input_count,
-                         int parameter_output_count)
+                         int in_argument_count,
+                         int out_argument_count)
 {
   GPUNodeGraph *graph = gpu_material_node_graph(material);
   GPUNode *node;
@@ -855,8 +855,8 @@ bool GPU_stack_link_zone(GPUMaterial *material,
   node = gpu_node_create(name);
   node->zone_index = zone_index;
   node->is_zone_end = is_zone_end;
-  node->parameter_input_count = parameter_input_count;
-  node->parameter_output_count = parameter_output_count;
+  node->in_argument_count = in_argument_count;
+  node->out_argument_count = out_argument_count;
 
   totin = 0;
   totout = 0;

@@ -81,8 +81,8 @@ struct GPUNode {
   int zone_index;
   bool is_zone_end;
   /* If >= 0 overrides the number of parameters passed to the function call. */
-  int parameter_input_count;
-  int parameter_output_count;
+  int in_argument_count;
+  int out_argument_count;
 };
 
 struct GPUNodeLink {

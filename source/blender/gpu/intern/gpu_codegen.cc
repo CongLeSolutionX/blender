@@ -485,135 +485,106 @@ void GPUCodegen::generate_library()
   }
 }
 
-static void zone_node_serialize(std::stringstream &eval_ss, const GPUNode *node) {}
-
 void GPUCodegen::node_serialize(std::stringstream &eval_ss, const GPUNode *node)
 {
-  /* TODO: Cleanup this mess. */
+  auto source_reference = [&](GPUInput *input) {
+    BLI_assert(ELEM(input->source, GPU_SOURCE_OUTPUT, GPU_SOURCE_ATTR));
+    /* These inputs can have non matching types. Do conversion. */
+    eGPUType to = input->type;
+    eGPUType from = (input->source == GPU_SOURCE_ATTR) ? input->attr->gputype :
+                                                         input->link->output->type;
+    if (from != to) {
+      /* Use defines declared inside codegen_lib (i.e: vec4_from_float). */
+      eval_ss << to << "_from_" << from << "(";
+    }
 
-  int input_count = 0;
-  int output_count = 0;
+    if (input->source == GPU_SOURCE_ATTR) {
+      eval_ss << input;
+    }
+    else {
+      eval_ss << input->link->output;
+    }
 
-  bool is_parameter_input = true;
+    if (from != to) {
+      eval_ss << ")";
+    }
+  };
+
+  int i;
   /* Declare constants. */
-  LISTBASE_FOREACH (GPUInput *, input, &node->inputs) {
-    if (node->parameter_input_count == input_count) {
-      is_parameter_input = false;
-    }
-    std::stringstream type;
-    if (is_parameter_input || !node->is_zone_end) {
-      type << input->type;
-    }
-
+  LISTBASE_FOREACH_INDEX (GPUInput *, input, &node->inputs, i) {
+    bool is_argument_input = i < node->in_argument_count || node->in_argument_count == -1;
+    auto type = [&]() {
+      /* Don't declare zone io variables twice. */
+      std::stringstream ss;
+      if (is_argument_input || !node->is_zone_end) {
+        ss << input->type;
+      }
+      return ss.str();
+    };
     switch (input->source) {
       case GPU_SOURCE_FUNCTION_CALL:
-        eval_ss << type.str() << " " << input << "; " << input->function_call << input << ");\n";
+        eval_ss << type() << " " << input << "; " << input->function_call << input << ");\n";
         break;
       case GPU_SOURCE_STRUCT:
-        eval_ss << type.str() << " " << input << " = "
+        eval_ss << type() << " " << input << " = "
                 << (input->type == GPU_CLOSURE ? "CLOSURE_DEFAULT" : "TEXTURE_HANDLE_DEFAULT")
                 << ";\n ";
         break;
       case GPU_SOURCE_CONSTANT:
-        eval_ss << type.str() << " " << input << " = " << (GPUConstant *)input << ";\n";
+        eval_ss << type() << " " << input << " = " << (GPUConstant *)input << ";\n";
         break;
       case GPU_SOURCE_OUTPUT:
       case GPU_SOURCE_ATTR:
-        if (!is_parameter_input) {
-          eval_ss << type.str() << " " << input << " = ";
-          /* These inputs can have non matching types. Do conversion. */
-          eGPUType to = input->type;
-          eGPUType from = (input->source == GPU_SOURCE_ATTR) ? input->attr->gputype :
-                                                               input->link->output->type;
-          if (from != to) {
-            /* Use defines declared inside codegen_lib (i.e: vec4_from_float). */
-            eval_ss << to << "_from_" << from << "(";
-          }
-
-          if (input->source == GPU_SOURCE_ATTR) {
-            eval_ss << input;
-          }
-          else {
-            eval_ss << input->link->output;
-          }
-
-          if (from != to) {
-            eval_ss << ")";
-          }
-
+        if (!is_argument_input) {
+          eval_ss << type() << " " << input << " = ";
+          source_reference(input);
           eval_ss << ";\n";
           break;
         }
       default:
-        if (!is_parameter_input && !node->is_zone_end) {
-          eval_ss << type.str() << " tmp" << input->id << " = " << input << ";\n";
+        if (!is_argument_input && !node->is_zone_end) {
+          eval_ss << type() << " tmp" << input->id << " = " << input << ";\n";
         }
         break;
     }
-    input_count++;
   }
   /* Declare temporary variables for node output storage. */
-  LISTBASE_FOREACH (GPUOutput *, output, &node->outputs) {
-    if (node->parameter_output_count == output_count) {
+  LISTBASE_FOREACH_INDEX (GPUOutput *, output, &node->outputs, i) {
+    if (i == node->out_argument_count) {
       break;
     }
-    output_count++;
     eval_ss << output->type << " " << output << ";\n";
   }
-
-  input_count = 0;
-  output_count = 0;
 
   /* Function call. */
   eval_ss << node->name << "(";
   /* Input arguments. */
-  LISTBASE_FOREACH (GPUInput *, input, &node->inputs) {
-    if (node->parameter_input_count == input_count) {
+  LISTBASE_FOREACH_INDEX (GPUInput *, input, &node->inputs, i) {
+    if (i == node->in_argument_count) {
       break;
     }
-    input_count++;
-
     switch (input->source) {
       case GPU_SOURCE_OUTPUT:
       case GPU_SOURCE_ATTR: {
-        /* These inputs can have non matching types. Do conversion. */
-        eGPUType to = input->type;
-        eGPUType from = (input->source == GPU_SOURCE_ATTR) ? input->attr->gputype :
-                                                             input->link->output->type;
-        if (from != to) {
-          /* Use defines declared inside codegen_lib (i.e: vec4_from_float). */
-          eval_ss << to << "_from_" << from << "(";
-        }
-
-        if (input->source == GPU_SOURCE_ATTR) {
-          eval_ss << input;
-        }
-        else {
-          eval_ss << input->link->output;
-        }
-
-        if (from != to) {
-          eval_ss << ")";
-        }
+        source_reference(input);
         break;
       }
       default:
         eval_ss << input;
         break;
     }
-    if (node->parameter_input_count != input_count || node->parameter_output_count != 0) {
+    if (node->out_argument_count != 0 || i + 1 != node->in_argument_count) {
       eval_ss << ", ";
     }
   }
   /* Output arguments. */
-  LISTBASE_FOREACH (GPUOutput *, output, &node->outputs) {
-    if (node->parameter_output_count == output_count) {
+  LISTBASE_FOREACH_INDEX (GPUOutput *, output, &node->outputs, i) {
+    if (i == node->out_argument_count) {
       break;
     }
-    output_count++;
-
     eval_ss << output;
-    if (output->next && node->parameter_output_count != output_count) {
+    if (output->next && i + 1 != node->out_argument_count) {
       eval_ss << ", ";
     }
   }
@@ -726,7 +697,6 @@ void GPUCodegen::set_unique_ids()
     if (node->zone_index != -1) {
       auto &map = node->is_zone_end ? zone_ends : zone_starts;
       map.add(node->zone_index, node);
-      printf("%s : %d\n", node->is_zone_end ? "END" : "BEGIN", node->zone_index);
     }
   }
 
@@ -742,13 +712,11 @@ void GPUCodegen::set_unique_ids()
   for (GPUNode *start : zone_starts.values()) {
     GPUNode *end = zone_ends.lookup(start->zone_index);
 
-    GPUInput *start_input = list_offset((GPUInput *)start->inputs.first,
-                                        start->parameter_input_count);
+    GPUInput *start_input = list_offset((GPUInput *)start->inputs.first, start->in_argument_count);
     GPUOutput *start_output = list_offset((GPUOutput *)start->outputs.first,
-                                          start->parameter_output_count);
-    GPUInput *end_input = list_offset((GPUInput *)end->inputs.first, end->parameter_input_count);
-    GPUOutput *end_output = list_offset((GPUOutput *)end->outputs.first,
-                                        end->parameter_output_count);
+                                          start->out_argument_count);
+    GPUInput *end_input = list_offset((GPUInput *)end->inputs.first, end->in_argument_count);
+    GPUOutput *end_output = list_offset((GPUOutput *)end->outputs.first, end->out_argument_count);
 
     for (; start_input; start_input = start_input->next,
                         start_output = start_output->next,
