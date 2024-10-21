@@ -179,6 +179,8 @@ ccl_device_inline Spectrum volume_shader_eval_extinction(KernelGlobals kg,
     volume_shader_eval<true>(kg, state, sd, PATH_RAY_SHADOW, volume_read_lambda_pass);
   }
   else {
+    /* TODO(weizhen): PATH_RAY_SHADOW is used for other purposes such as visibility, we need
+     * another flag to evaluate extinction. */
     VOLUME_READ_LAMBDA(integrator_state_read_volume_stack(state, i))
     volume_shader_eval<false>(kg, state, sd, PATH_RAY_SHADOW, volume_read_lambda_pass);
   }

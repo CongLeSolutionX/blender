@@ -144,6 +144,8 @@ ccl_device void kernel_volume_density_evaluate(KernelGlobals kg,
     sd.closure_transparent_extinction = zero_float3();
 
     /* Evaluate volume extinction coefficients. */
+    /* TODO(weizhen): PATH_RAY_SHADOW is used for other purposes such as visibility, we need
+     * another flag to evaluate extinction. */
     volume_shader_eval_entry<false,
                              KERNEL_FEATURE_NODE_MASK_VOLUME & ~KERNEL_FEATURE_NODE_LIGHT_PATH>(
         kg, INTEGRATOR_STATE_NULL, &sd, entry, PATH_RAY_SHADOW);

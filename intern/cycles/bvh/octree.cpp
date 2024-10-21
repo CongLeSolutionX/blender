@@ -349,6 +349,7 @@ static void fill_shader_input(device_vector<KernelShaderEvalInput> &d_input,
             openvdb::Coord coord = openvdb::Coord::round(
                 grid->worldToIndex(openvdb::Vec3s(cell_center.x, cell_center.y, cell_center.z)));
             if (!acc.getValue(coord)) {
+              d_input_data[local_index * 2 + 0].object = OBJECT_NONE;
               d_input_data[local_index * 2 + 1].object = SHADER_NONE;
               continue;
             }
