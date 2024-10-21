@@ -10553,7 +10553,7 @@ static void rna_def_sh_repeat_item(BlenderRNA *brna)
 {
   StructRNA *srna = RNA_def_struct(brna, "ShaderRepeatItem", nullptr);
   RNA_def_struct_ui_text(srna, "Repeat Item", "");
-  RNA_def_struct_sdna(srna, "NodeRepeatItem");
+  RNA_def_struct_sdna(srna, "NodeShaderRepeatItem");
 
   rna_def_node_item_array_socket_item_common(srna, "ShRepeatItemsAccessor", true);
 }
@@ -11762,6 +11762,8 @@ void RNA_def_nodetree(BlenderRNA *brna)
   rna_def_texture_nodetree(brna);
   rna_def_geometry_nodetree(brna);
 
+  rna_def_sh_repeat_item(brna);
+
   rna_def_simulation_state_item(brna);
   rna_def_repeat_item(brna);
   rna_def_geo_foreach_geometry_element_input_item(brna);
@@ -11831,7 +11833,6 @@ void RNA_def_nodetree(BlenderRNA *brna)
   rna_def_bake_items(brna);
   rna_def_geo_capture_attribute_items(brna);
 
-  rna_def_sh_repeat_item(brna);
   rna_def_sh_repeat_output_items(brna);
 
   rna_def_node_instance_hash(brna);

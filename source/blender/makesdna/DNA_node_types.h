@@ -1981,13 +1981,25 @@ typedef struct NodeGeometryRepeatOutput {
 #endif
 } NodeGeometryRepeatOutput;
 
+typedef struct NodeShaderRepeatItem {
+  char *name;
+  /** #eNodeSocketDatatype. */
+  short socket_type;
+  char _pad[2];
+  /**
+   * Generated unique identifier for sockets which stays the same even when the item order or
+   * names change.
+   */
+  int identifier;
+} NodeShaderRepeatItem;
+
 typedef struct NodeShaderRepeatInput {
   /** bNode.identifier of the corresponding output node. */
   int32_t output_node_id;
 } NodeShaderRepeatInput;
 
 typedef struct NodeShaderRepeatOutput {
-  NodeRepeatItem *items;
+  NodeShaderRepeatItem *items;
   int items_num;
   int active_index;
   /** Identifier to give to the next repeat item. */
@@ -1995,8 +2007,8 @@ typedef struct NodeShaderRepeatOutput {
   int _pad0;
 
 #ifdef __cplusplus
-  blender::Span<NodeRepeatItem> items_span() const;
-  blender::MutableSpan<NodeRepeatItem> items_span();
+  blender::Span<NodeShaderRepeatItem> items_span() const;
+  blender::MutableSpan<NodeShaderRepeatItem> items_span();
 #endif
 } NodeShaderRepeatOutput;
 
