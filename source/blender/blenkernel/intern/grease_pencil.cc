@@ -92,6 +92,7 @@ static void grease_pencil_init_data(ID *id)
   MEMCPY_STRUCT_AFTER(grease_pencil, DNA_struct_default_get(GreasePencil), id);
 
   grease_pencil->root_group_ptr = MEM_new<greasepencil::LayerGroup>(__func__);
+  grease_pencil->root_group().as_node().flag |= GP_LAYER_TREE_NODE_HIDE_MASKS;
   grease_pencil->set_active_node(nullptr);
 
   CustomData_reset(&grease_pencil->layers_data);

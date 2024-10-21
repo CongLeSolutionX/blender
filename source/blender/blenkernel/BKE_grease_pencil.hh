@@ -821,8 +821,8 @@ inline bool TreeNode::use_onion_skinning() const
 }
 inline bool TreeNode::use_masks() const
 {
-  return ((this->flag & GP_LAYER_TREE_NODE_HIDE_MASKS) == 0) &&
-         (!this->parent_group() || this->parent_group()->as_node().use_masks());
+  return ((this->flag & GP_LAYER_TREE_NODE_HIDE_MASKS) == 0) ||
+         (this->parent_group() && this->parent_group()->as_node().use_masks());
 }
 inline bool TreeNode::ignore_locked_materials() const
 {
