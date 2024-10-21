@@ -45,7 +45,6 @@ struct GreasePencilBatchCache {
   gpu::Batch *lines_batch;
   gpu::Batch *edit_points;
   gpu::Batch *edit_lines;
-  gpu::Batch *end_points;
 
   /* Crazy-space point positions for original points. */
   gpu::VertBuf *edit_points_pos;
