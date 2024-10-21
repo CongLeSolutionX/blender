@@ -72,7 +72,13 @@ bool OctreeNode::contains_homogeneous_volume() const
     return false;
   }
 
-  return objects[0]->is_homogeneous_volume();
+  const Object *object = dynamic_cast<const Object *>(objects[0]);
+  if (object) {
+    return object->is_homogeneous_volume();
+  }
+
+  const Background *background = dynamic_cast<const Background *>(objects[0]);
+  return !background->get_shader()->has_volume_spatial_varying;
 }
 
 Extrema<float> Octree::get_extrema(const vector<Extrema<float>> &values,
@@ -101,7 +107,8 @@ Extrema<float> Octree::get_extrema(const vector<Extrema<float>> &values,
 
 bool Octree::should_split(std::shared_ptr<OctreeNode> &node) const
 {
-  if (node->objects.empty()) {
+  if (node->objects.empty() || !node->bbox.valid()) {
+    /* If no local volume exists, do not split. */
     return false;
   }
 
@@ -153,9 +160,11 @@ void Octree::recursive_build_(shared_ptr<OctreeNode> &octree_node)
 
   for (auto &child : internal->children_) {
     child->objects.reserve(internal->objects.size());
-    for (Object *object : internal->objects) {
+    for (Node *node : internal->objects) {
       /* TODO(weizhen): more granular than object bounding box is to use the geometry bvh. */
-      if (object->bounds.intersects(child->bbox)) {
+      Object *object = dynamic_cast<Object *>(node);
+      if (!object || object->bounds.intersects(child->bbox)) {
+        /* If world volume or if object bounding box intersect the node bounding box. */
         child->objects.push_back(object);
       }
     }
@@ -272,23 +281,31 @@ openvdb::BoolGrid::ConstPtr Octree::get_vdb(const Geometry *geom) const
 /* Fill in coordinates for shading the volume density. */
 static void fill_shader_input(device_vector<KernelShaderEvalInput> &d_input,
                               const Octree *octree,
-                              const Object *object,
+                              const Node *node,
                               const int3 &index_min,
                               const int3 &index_range)
 {
   /* Get object id. */
-  const int object_id = object->get_device_index();
+  const Object *object = dynamic_cast<const Object *>(node);
+  const int object_id = object ? object->get_device_index() : OBJECT_NONE;
 
   /* Get shader id. */
   uint shader_id;
-  const Geometry *geom = object->get_geometry();
-  for (Node *node : geom->get_used_shaders()) {
-    Shader *shader = static_cast<Shader *>(node);
-    if (shader->has_volume) {
-      /* TODO(weizhen): support multiple shaders. */
-      shader_id = shader->id;
-      break;
+  const Geometry *geom = object ? object->get_geometry() : nullptr;
+  if (object) {
+    for (Node *node : geom->get_used_shaders()) {
+      Shader *shader = static_cast<Shader *>(node);
+      if (shader->has_volume) {
+        /* TODO(weizhen): support multiple shaders. */
+        shader_id = shader->id;
+        break;
+      }
     }
+  }
+  else {
+    /* World volume. */
+    const Background *background = dynamic_cast<const Background *>(node);
+    shader_id = background->get_shader()->id;
   }
 
   /* Get object boundary VDB. */
@@ -393,7 +410,7 @@ void Octree::evaluate_volume_density_(Device *device, Progress &progress)
   /* Min and max. */
   const int num_channels = 2;
 
-  auto eval_density = [&](const Object *object,
+  auto eval_density = [&](const Node *object,
                           vector<Extrema<float>> &dest,
                           const int3 index_min,
                           const int3 index_range) {
@@ -414,19 +431,20 @@ void Octree::evaluate_volume_density_(Device *device, Progress &progress)
         });
   };
 
-  /* TODO(weizhen): add world. */
-  for (const Object *object : root_->objects) {
+  for (const Node *node : root_->objects) {
+    const Object *object = dynamic_cast<const Object *>(node);
+
     /* Evaluate density inside object bounds. */
-    const int3 index_min = world_to_floor_index(object->bounds.min);
-    const int3 index_max = world_to_ceil_index(object->bounds.max);
+    const int3 index_min = object ? world_to_floor_index(object->bounds.min) : make_int3(0);
+    const int3 index_max = object ? world_to_ceil_index(object->bounds.max) : make_int3(width);
 
     const int3 index_range = index_max - index_min;
 
 #ifdef WITH_OPENVDB
     /* Create SDF grid for mesh volumes, to determine whether a certain point is in the
      * interior of the mesh. */
-    const Geometry *geom = object->get_geometry();
-    if (geom->is_mesh() && !vdb_map.count(geom)) {
+    const Geometry *geom = object ? object->get_geometry() : nullptr;
+    if (geom && geom->is_mesh() && !vdb_map.count(geom)) {
       const Mesh *mesh = static_cast<const Mesh *>(geom);
       vdb_map[geom] = mesh_to_sdf_grid(mesh, 1.0f / reduce_max(index_range), 2.0f);
     }
@@ -435,7 +453,48 @@ void Octree::evaluate_volume_density_(Device *device, Progress &progress)
     /* TODO(weizhen): specialize homogeneous volume and evaluate less points? */
 
     /* Evaluate shader on device. */
-    eval_density(object, sigmas, index_min, index_range);
+    eval_density(node, sigmas, index_min, index_range);
+
+    if (!object) {
+      /* NOTE: world volume is the first in the list, so until now `sigma_s` only contains density
+       * evaluation of the world. */
+      background_density = get_extrema(sigmas, index_min, index_max);
+    }
+  }
+
+  /* Check if we should refine the background density. */
+  if (has_world_volume()) {
+    if (!root_->bbox.valid()) {
+      /* Scene has only world volume, the density was already evaluated in the previous loop. */
+      return;
+    }
+    const Background *background = static_cast<const Background *>(root_->objects[0]);
+    const Shader *shader = background->get_shader();
+    if (shader->has_volume_spatial_varying) {
+      /* For spatial varying volume, the density inside the octree bound box are not representative
+       * enough for the whole world, so we evaluate density again in a larger scale. */
+
+      /* Tempararily change the scale for calculating the postions. */
+      const float3 previous_index_to_world_scale = index_to_world_scale_;
+      index_to_world_scale_ = make_float3(10000.0f) / float(width);
+
+      /* Initialize density field. */
+      vector<Extrema<float>> world_density;
+      world_density.resize(size);
+      parallel_for(0, size, [&](int i) { world_density[i] = {0.0f, 0.0f}; });
+
+      const int3 index_min = make_int3(0);
+      const int3 index_max = make_int3(width);
+      const int3 index_range = index_max;
+
+      eval_density(background, world_density, index_min, index_range);
+
+      background_density = join(background_density,
+                                get_extrema(world_density, index_min, index_max));
+
+      /* Change scale back. */
+      index_to_world_scale_ = previous_index_to_world_scale;
+    }
   }
 }
 
@@ -471,6 +530,15 @@ Octree::Octree(const Scene *scene)
 {
   root_ = std::make_shared<OctreeNode>();
 
+  /* Push world volume at the begining of the list. */
+  Shader *bg_shader = scene->background->get_shader(scene);
+  if (bg_shader->has_volume) {
+    root_->objects.push_back(scene->background);
+  }
+  else {
+    background_density = {0.0f, 0.0f};
+  }
+
   /* Loop through the volume objects to initialize the root node. */
   for (Object *object : scene->objects) {
     const Geometry *geom = object->get_geometry();
@@ -487,19 +555,11 @@ Octree::Octree(const Scene *scene)
     }
   }
 
-  /* Evaluate world volume density. */
-  Shader *bg_shader = scene->background->get_shader(scene);
-  background_density.max = volume_density_scale(bg_shader);
-  if (!bg_shader->has_volume_spatial_varying) {
-    background_density.min = background_density.max;
-  }
-  else {
-    background_density.min = 0.0f;
-  }
-
   /* 2^max_level. */
   width = 1 << max_level;
-  world_to_index_scale_ = float(width) / (root_->bbox.max - root_->bbox.min);
+  /* Some large number if only world volume exists. */
+  world_to_index_scale_ = float(width) /
+                          (root_->bbox.valid() ? root_->bbox.size() : make_float3(10000.0f));
   index_to_world_scale_ = 1.0f / world_to_index_scale_;
 
   // if (!root_->bbox.valid()) {
@@ -526,7 +586,7 @@ int Octree::get_num_nodes() const
 
 bool Octree::has_world_volume() const
 {
-  return background_density.max > 0.0f;
+  return !root_->objects.empty() && dynamic_cast<const Background *>(root_->objects[0]);
 }
 
 void Octree::visualize(KernelOctreeNode *knodes, const char *filename) const

@@ -22,15 +22,15 @@ class BoundBox;
 class Device;
 class Geometry;
 class Mesh;
-class Object;
 class Progress;
 class Scene;
 class Shader;
 struct KernelOctreeNode;
+struct Node;
 
 struct OctreeNode {
   BoundBox bbox;
-  vector<Object *> objects;
+  vector<Node *> objects;
   int level;
 
   /* TODO(weizhen): we need visibility for shadow, camera, and indirect. */
