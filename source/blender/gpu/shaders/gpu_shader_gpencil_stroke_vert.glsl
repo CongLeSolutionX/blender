@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "gpu_shader_attribute_load_lib.glsl"
-#include "gpu_shader_index_load_lib.glsl"
 #include "gpu_shader_math_base_lib.glsl"
 #include "gpu_shader_utildefines_lib.glsl"
 
@@ -51,21 +50,10 @@ bool is_equal(vec4 p1, vec4 p2)
   return false;
 }
 
-struct VertIn {
-  vec3 ls_P;
-  vec4 color_in;
-  float thickness_in;
-};
-
-VertIn input_assembly(uint in_vertex_id)
+GreasePencilStrokeData input_assembly(uint in_vertex_id)
 {
-  uint v_i = gpu_index_load(in_vertex_id);
-
-  VertIn vert_in;
-  vert_in.ls_P = gpu_attr_load_float3(pos, gpu_attr_0, v_i);
-  vert_in.color_in = color[gpu_attr_load_index(v_i, gpu_attr_1)];
-  vert_in.thickness_in = thickness[gpu_attr_load_index(v_i, gpu_attr_2)];
-  return vert_in;
+  /* Assume no index buffer. */
+  return gp_vert_data[in_vertex_id];
 }
 
 struct VertOut {
@@ -74,21 +62,21 @@ struct VertOut {
   float final_thickness;
 };
 
-VertOut vertex_main(VertIn vert_in)
+VertOut vertex_main(GreasePencilStrokeData vert_in)
 {
   float defaultpixsize = gpencil_stroke_data.pixsize * (1000.0 / gpencil_stroke_data.pixfactor);
 
   VertOut vert_out;
-  vert_out.gpu_position = ModelViewProjectionMatrix * vec4(vert_in.ls_P, 1.0);
-  vert_out.final_color = vert_in.color_in;
+  vert_out.gpu_position = ModelViewProjectionMatrix * vec4(vert_in.position, 1.0);
+  vert_out.final_color = vert_in.color;
 
   if (gpencil_stroke_data.keep_size) {
-    vert_out.final_thickness = vert_in.thickness_in;
+    vert_out.final_thickness = vert_in.thickness;
   }
   else {
     float size = (ProjectionMatrix[3][3] == 0.0) ?
-                     (vert_in.thickness_in / (vert_out.gpu_position.z * defaultpixsize)) :
-                     (vert_in.thickness_in / defaultpixsize);
+                     (vert_in.thickness / (vert_out.gpu_position.z * defaultpixsize)) :
+                     (vert_in.thickness / defaultpixsize);
     vert_out.final_thickness = max(size * gpencil_stroke_data.objscale, 1.0);
   }
   return vert_out;
@@ -97,14 +85,14 @@ VertOut vertex_main(VertIn vert_in)
 struct GeomOut {
   vec4 gpu_position;
   vec2 tex_coord;
-  vec4 color;
+  vec4 final_color;
 };
 
 void export_vertex(GeomOut geom_out)
 {
   gl_Position = geom_out.gpu_position;
   interp.mTexCoord = geom_out.tex_coord;
-  interp.mColor = geom_out.color;
+  interp.mColor = geom_out.final_color;
 }
 
 void strip_EmitVertex(const uint strip_index,
@@ -197,7 +185,7 @@ void geometry_main(VertOut geom_in[4],
     /* close the gap */
     if (dot(v0, n1) > 0) {
       geom_out.tex_coord = vec2(0, 0);
-      geom_out.color = geom_in[1].final_color;
+      geom_out.final_color = geom_in[1].final_color;
       geom_out.gpu_position = vec4((sp1 + geom_in[1].final_thickness * n0) /
                                        gpencil_stroke_data.viewport,
                                    getZdepth(P1),
@@ -205,7 +193,7 @@ void geometry_main(VertOut geom_in[4],
       strip_EmitVertex(0, out_vertex_id, out_primitive_id, geom_out);
 
       geom_out.tex_coord = vec2(0, 0);
-      geom_out.color = geom_in[1].final_color;
+      geom_out.final_color = geom_in[1].final_color;
       geom_out.gpu_position = vec4((sp1 + geom_in[1].final_thickness * n1) /
                                        gpencil_stroke_data.viewport,
                                    getZdepth(P1),
@@ -213,13 +201,13 @@ void geometry_main(VertOut geom_in[4],
       strip_EmitVertex(1, out_vertex_id, out_primitive_id, geom_out);
 
       geom_out.tex_coord = vec2(0, 0.5);
-      geom_out.color = geom_in[1].final_color;
+      geom_out.final_color = geom_in[1].final_color;
       geom_out.gpu_position = vec4(sp1 / gpencil_stroke_data.viewport, getZdepth(P1), 1.0);
       strip_EmitVertex(2, out_vertex_id, out_primitive_id, geom_out);
     }
     else {
       geom_out.tex_coord = vec2(0, 1);
-      geom_out.color = geom_in[1].final_color;
+      geom_out.final_color = geom_in[1].final_color;
       geom_out.gpu_position = vec4((sp1 - geom_in[1].final_thickness * n1) /
                                        gpencil_stroke_data.viewport,
                                    getZdepth(P1),
@@ -227,7 +215,7 @@ void geometry_main(VertOut geom_in[4],
       strip_EmitVertex(0, out_vertex_id, out_primitive_id, geom_out);
 
       geom_out.tex_coord = vec2(0, 1);
-      geom_out.color = geom_in[1].final_color;
+      geom_out.final_color = geom_in[1].final_color;
       geom_out.gpu_position = vec4((sp1 - geom_in[1].final_thickness * n0) /
                                        gpencil_stroke_data.viewport,
                                    getZdepth(P1),
@@ -235,7 +223,7 @@ void geometry_main(VertOut geom_in[4],
       strip_EmitVertex(1, out_vertex_id, out_primitive_id, geom_out);
 
       geom_out.tex_coord = vec2(0, 0.5);
-      geom_out.color = geom_in[1].final_color;
+      geom_out.final_color = geom_in[1].final_color;
       geom_out.gpu_position = vec4(sp1 / gpencil_stroke_data.viewport, getZdepth(P1), 1.0);
       strip_EmitVertex(2, out_vertex_id, out_primitive_id, geom_out);
     }
@@ -254,19 +242,19 @@ void geometry_main(VertOut geom_in[4],
   float extend = gpencil_stroke_data.fill_stroke ? 2 : 1;
   if ((gpencil_stroke_data.caps_start != GPENCIL_FLATCAP) && is_equal(P0, P2)) {
     geom_out.tex_coord = vec2(1, 0.5);
-    geom_out.color = vec4(geom_in[1].final_color.rgb, geom_in[1].final_color.a * -1.0);
+    geom_out.final_color = vec4(geom_in[1].final_color.rgb, geom_in[1].final_color.a * -1.0);
     vec2 svn1 = normalize(sp1 - sp2) * length_a * 4.0 * extend;
     geom_out.gpu_position = vec4((sp1 + svn1) / gpencil_stroke_data.viewport, getZdepth(P1), 1.0);
     strip_EmitVertex(4, out_vertex_id, out_primitive_id, geom_out);
 
     geom_out.tex_coord = vec2(0, 0);
-    geom_out.color = vec4(geom_in[1].final_color.rgb, geom_in[1].final_color.a * -1.0);
+    geom_out.final_color = vec4(geom_in[1].final_color.rgb, geom_in[1].final_color.a * -1.0);
     geom_out.gpu_position = vec4(
         (sp1 - (length_a * 2.0) * miter_a) / gpencil_stroke_data.viewport, getZdepth(P1), 1.0);
     strip_EmitVertex(5, out_vertex_id, out_primitive_id, geom_out);
 
     geom_out.tex_coord = vec2(0, 1);
-    geom_out.color = vec4(geom_in[1].final_color.rgb, geom_in[1].final_color.a * -1.0);
+    geom_out.final_color = vec4(geom_in[1].final_color.rgb, geom_in[1].final_color.a * -1.0);
     geom_out.gpu_position = vec4(
         (sp1 + (length_a * 2.0) * miter_a) / gpencil_stroke_data.viewport, getZdepth(P1), 1.0);
     strip_EmitVertex(6, out_vertex_id, out_primitive_id, geom_out);
@@ -274,25 +262,25 @@ void geometry_main(VertOut geom_in[4],
 
   /* generate the triangle strip */
   geom_out.tex_coord = vec2(0, 0);
-  geom_out.color = geom_in[1].final_color;
+  geom_out.final_color = geom_in[1].final_color;
   geom_out.gpu_position = vec4(
       (sp1 + length_a * miter_a) / gpencil_stroke_data.viewport, getZdepth(P1), 1.0);
   strip_EmitVertex(7, out_vertex_id, out_primitive_id, geom_out);
 
   geom_out.tex_coord = vec2(0, 1);
-  geom_out.color = geom_in[1].final_color;
+  geom_out.final_color = geom_in[1].final_color;
   geom_out.gpu_position = vec4(
       (sp1 - length_a * miter_a) / gpencil_stroke_data.viewport, getZdepth(P1), 1.0);
   strip_EmitVertex(8, out_vertex_id, out_primitive_id, geom_out);
 
   geom_out.tex_coord = vec2(0, 0);
-  geom_out.color = geom_in[2].final_color;
+  geom_out.final_color = geom_in[2].final_color;
   geom_out.gpu_position = vec4(
       (sp2 + length_b * miter_b) / gpencil_stroke_data.viewport, getZdepth(P2), 1.0);
   strip_EmitVertex(9, out_vertex_id, out_primitive_id, geom_out);
 
   geom_out.tex_coord = vec2(0, 1);
-  geom_out.color = geom_in[2].final_color;
+  geom_out.final_color = geom_in[2].final_color;
   geom_out.gpu_position = vec4(
       (sp2 - length_b * miter_b) / gpencil_stroke_data.viewport, getZdepth(P2), 1.0);
   strip_EmitVertex(10, out_vertex_id, out_primitive_id, geom_out);
@@ -300,19 +288,19 @@ void geometry_main(VertOut geom_in[4],
   /* Generate the end end-cap (alpha < 0 used as end-cap flag). */
   if ((gpencil_stroke_data.caps_end != GPENCIL_FLATCAP) && is_equal(P1, P3)) {
     geom_out.tex_coord = vec2(0, 1);
-    geom_out.color = vec4(geom_in[2].final_color.rgb, geom_in[2].final_color.a * -1.0);
+    geom_out.final_color = vec4(geom_in[2].final_color.rgb, geom_in[2].final_color.a * -1.0);
     geom_out.gpu_position = vec4(
         (sp2 + (length_b * 2.0) * miter_b) / gpencil_stroke_data.viewport, getZdepth(P2), 1.0);
     strip_EmitVertex(11, out_vertex_id, out_primitive_id, geom_out);
 
     geom_out.tex_coord = vec2(0, 0);
-    geom_out.color = vec4(geom_in[2].final_color.rgb, geom_in[2].final_color.a * -1.0);
+    geom_out.final_color = vec4(geom_in[2].final_color.rgb, geom_in[2].final_color.a * -1.0);
     geom_out.gpu_position = vec4(
         (sp2 - (length_b * 2.0) * miter_b) / gpencil_stroke_data.viewport, getZdepth(P2), 1.0);
     strip_EmitVertex(12, out_vertex_id, out_primitive_id, geom_out);
 
     geom_out.tex_coord = vec2(1, 0.5);
-    geom_out.color = vec4(geom_in[2].final_color.rgb, geom_in[2].final_color.a * -1.0);
+    geom_out.final_color = vec4(geom_in[2].final_color.rgb, geom_in[2].final_color.a * -1.0);
     vec2 svn2 = normalize(sp2 - sp1) * length_b * 4.0 * extend;
     geom_out.gpu_position = vec4((sp2 + svn2) / gpencil_stroke_data.viewport, getZdepth(P2), 1.0);
     strip_EmitVertex(13, out_vertex_id, out_primitive_id, geom_out);
@@ -321,8 +309,8 @@ void geometry_main(VertOut geom_in[4],
 
 void main()
 {
-  /* Line Adjacency primitive. */
-  const uint input_primitive_vertex_count = 4u;
+  /* Line Strip Adjacency primitive. */
+  const uint input_primitive_vertex_count = 1u; /* We read 4 but advance 1. Assume no restart. */
   /* Triangle list primitive (emulating triangle strip). */
   const uint ouput_primitive_vertex_count = 3u;
   const uint ouput_primitive_count = 12u;
@@ -341,13 +329,13 @@ void main()
   uint out_invocation_id = (uint(gl_VertexID) / output_vertex_count_per_invocation) %
                            ouput_invocation_count;
 
-  VertIn vert_in[input_primitive_vertex_count];
+  GreasePencilStrokeData vert_in[4];
   vert_in[0] = input_assembly(in_primitive_first_vertex + 0u);
   vert_in[1] = input_assembly(in_primitive_first_vertex + 1u);
   vert_in[2] = input_assembly(in_primitive_first_vertex + 2u);
   vert_in[3] = input_assembly(in_primitive_first_vertex + 3u);
 
-  VertOut vert_out[input_primitive_vertex_count];
+  VertOut vert_out[4];
   vert_out[0] = vertex_main(vert_in[0]);
   vert_out[1] = vertex_main(vert_in[1]);
   vert_out[2] = vertex_main(vert_in[2]);
