@@ -1564,7 +1564,7 @@ static void gwl_display_destroy(GWL_Display *display)
   }
 
 #ifdef WITH_OPENGL_BACKEND
-  if (eglGetDisplay) {
+  if (eglGetDisplay && display->wl.display) {
     ::eglTerminate(eglGetDisplay(EGLNativeDisplayType(display->wl.display)));
   }
 #endif
