@@ -160,8 +160,8 @@ BLI_STATIC_ASSERT_ALIGN(SeqContextDrawData, 16)
 
 struct GreasePencilStrokeData {
   packed_float3 position;
-  float thickness;
-  float4 color;
+  float stroke_thickness;
+  float4 stroke_color;
 };
 BLI_STATIC_ASSERT_ALIGN(GreasePencilStrokeData, 16)
 
