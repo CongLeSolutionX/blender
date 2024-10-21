@@ -1992,7 +1992,7 @@ typedef struct NodeShaderRepeatOutput {
   int active_index;
   /** Identifier to give to the next repeat item. */
   int next_identifier;
-  int inspection_index;
+  int _pad0;
 
 #ifdef __cplusplus
   blender::Span<NodeRepeatItem> items_span() const;
