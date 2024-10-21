@@ -45,11 +45,14 @@ struct GreasePencilBatchCache {
   gpu::Batch *lines_batch;
   gpu::Batch *edit_points;
   gpu::Batch *edit_lines;
+  gpu::Batch *end_points;
 
   /* Crazy-space point positions for original points. */
   gpu::VertBuf *edit_points_pos;
   /* Selection of original points. */
   gpu::VertBuf *edit_points_selection;
+  /* vflag of original points. */
+  gpu::VertBuf *vflag;
   /* Indices of visible points. */
   gpu::IndexBuf *edit_points_indices;
 
@@ -702,6 +705,12 @@ static void grease_pencil_edit_batch_ensure(Object &object,
         &format_edit_points_selection, "selection", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
   }
 
+  static GPUVertFormat format_edit_points_vflag = {0};
+  if (format_edit_points_vflag.attr_len == 0) {
+    GPU_vertformat_attr_add(
+        &format_edit_points_vflag, "vflag", GPU_COMP_I32, 1, GPU_FETCH_INT);
+  }
+
   static GPUVertFormat format_edit_line_selection = {0};
   if (format_edit_line_selection.attr_len == 0) {
     GPU_vertformat_attr_add(
@@ -711,6 +720,8 @@ static void grease_pencil_edit_batch_ensure(Object &object,
   GPUUsageType vbo_flag = GPU_USAGE_STATIC | GPU_USAGE_FLAG_BUFFER_TEXTURE_ONLY;
   cache->edit_points_pos = GPU_vertbuf_create_with_format_ex(format_edit_points_pos, vbo_flag);
   cache->edit_points_selection = GPU_vertbuf_create_with_format_ex(format_edit_points_selection,
+                                                                   vbo_flag);
+  cache->vflag = GPU_vertbuf_create_with_format_ex(format_edit_points_vflag,
                                                                    vbo_flag);
   cache->edit_line_pos = GPU_vertbuf_create_with_format_ex(format_edit_line_pos, vbo_flag);
   cache->edit_line_selection = GPU_vertbuf_create_with_format_ex(format_edit_line_selection,
@@ -763,14 +774,17 @@ static void grease_pencil_edit_batch_ensure(Object &object,
 
   GPU_vertbuf_data_alloc(*cache->edit_points_pos, total_points_num);
   GPU_vertbuf_data_alloc(*cache->edit_points_selection, total_points_num);
+  GPU_vertbuf_data_alloc(*cache->vflag, total_points_num);
   GPU_vertbuf_data_alloc(*cache->edit_line_pos, total_line_points_num);
   GPU_vertbuf_data_alloc(*cache->edit_line_selection, total_line_points_num);
 
   MutableSpan<float3> edit_points = cache->edit_points_pos->data<float3>();
   MutableSpan<float> edit_points_selection = cache->edit_points_selection->data<float>();
+  MutableSpan<int> edit_points_vflag = cache->vflag->data<int>();
   MutableSpan<float3> edit_line_points = cache->edit_line_pos->data<float3>();
   MutableSpan<float> edit_line_selection = cache->edit_line_selection->data<float>();
   edit_points_selection.fill(0.0f);
+  edit_points_vflag.fill(0);
   edit_line_selection.fill(0.0f);
 
   int visible_points_num = 0;
