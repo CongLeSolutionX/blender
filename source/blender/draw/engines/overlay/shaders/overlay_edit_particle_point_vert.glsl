@@ -35,6 +35,7 @@ void main()
     vec4 use_color = useGreasePencil ? colorGpencilVertexSelect : colorVertexSelect;
     finalColor = mix(colorWire, use_color, selection);
 
+#if 1 /* Should be checking CURVES_POINT */
     if (doStrokeEndpoints) {
       bool is_stroke_start = (vflag & GP_EDIT_STROKE_START) != 0u;
       bool is_stroke_end = (vflag & GP_EDIT_STROKE_END) != 0u;
@@ -48,6 +49,7 @@ void main()
         finalColor.rgb = vec3(1.0, 0.0, 0.0);
       }
     }
+#endif
   }
 
   float vsize = useGreasePencil ? sizeVertexGpencil : sizeVertex;

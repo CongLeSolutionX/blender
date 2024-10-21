@@ -760,16 +760,18 @@ GPU_SHADER_CREATE_INFO(overlay_edit_particle_strand_clipped)
 
 GPU_SHADER_CREATE_INFO(overlay_edit_particle_point)
     .do_static_compilation(true)
-    .typedef_source("overlay_shader_shared.h")
     .vertex_in(0, Type::VEC3, "pos")
     .vertex_in(1, Type::FLOAT, "selection")
-    .vertex_in(2, Type::UINT, "vflag")
     .vertex_out(overlay_edit_flat_color_iface)
     .sampler(0, ImageType::FLOAT_1D, "weightTex")
     .push_constant(Type::BOOL, "useWeight")
     .push_constant(Type::BOOL, "useGreasePencil")
-    .push_constant(Type::BOOL, "doStrokeEndpoints")
     .fragment_out(0, Type::VEC4, "fragColor")
+#if 1 /* TODO(fclem): Required for legacy gpencil overlay. To be removed. */
+    .typedef_source("overlay_shader_shared.h")
+    .vertex_in(3, Type::UINT, "vflag")
+    .push_constant(Type::BOOL, "doStrokeEndpoints")
+#endif
     .vertex_source("overlay_edit_particle_point_vert.glsl")
     .fragment_source("overlay_point_varying_color_frag.glsl")
     .additional_info("draw_mesh", "draw_globals");

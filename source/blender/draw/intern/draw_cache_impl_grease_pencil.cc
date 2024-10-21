@@ -786,7 +786,7 @@ static void grease_pencil_edit_batch_ensure(Object &object,
 
   MutableSpan<float3> edit_points = cache->edit_points_pos->data<float3>();
   MutableSpan<float> edit_points_selection = cache->edit_points_selection->data<float>();
-  MutableSpan<int> edit_points_vflag = cache->edit_points_vflag->data<int>();
+  MutableSpan<uint32_t> edit_points_vflag = cache->edit_points_vflag->data<uint32_t>();
   MutableSpan<float3> edit_line_points = cache->edit_line_pos->data<float3>();
   MutableSpan<float> edit_line_selection = cache->edit_line_selection->data<float>();
   edit_points_selection.fill(0.0f);
@@ -828,9 +828,10 @@ static void grease_pencil_edit_batch_ensure(Object &object,
               positions_eval, range, layer_space_to_object_space, positions_eval_slice);
         });
 
-    for (const int i : points_by_curve_eval.index_range().drop_back(1)) {
-      edit_points_vflag[i] |= GREASE_PENCIL_EDIT_STROKE_START;
-      edit_points_vflag[i+1] |= GREASE_PENCIL_EDIT_STROKE_END;
+    for (const int curve_i : points_by_curve_eval.index_range()) {
+      const IndexRange range = points_by_curve_eval[curve_i];
+      edit_points_vflag[range.first()] |= GREASE_PENCIL_EDIT_STROKE_START;
+      edit_points_vflag[range.last()] |= GREASE_PENCIL_EDIT_STROKE_END;
     }
 
     /* Do not show selection for locked layers. */
