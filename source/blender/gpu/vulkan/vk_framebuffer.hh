@@ -84,7 +84,6 @@ class VKFrameBuffer : public FrameBuffer {
 
   void vk_viewports_append(Vector<VkViewport> &r_viewports) const;
   void vk_render_areas_append(Vector<VkRect2D> &r_render_areas) const;
-
   void render_area_update(VkRect2D &render_area) const;
   VkFormat depth_attachment_format_get() const;
   VkFormat stencil_attachment_format_get() const;

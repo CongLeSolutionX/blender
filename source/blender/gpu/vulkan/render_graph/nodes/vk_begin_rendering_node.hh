@@ -21,7 +21,7 @@ struct VKBeginRenderingData {
   VkRenderingAttachmentInfo depth_attachment;
   VkRenderingAttachmentInfo stencil_attachment;
   VkRenderingInfoKHR vk_rendering_info;
-  VkRenderPass vk_render_pass;
+  VkRenderPassBeginInfo vk_render_pass_begin_info;
 };
 
 struct VKBeginRenderingCreateInfo {
@@ -52,7 +52,8 @@ class VKBeginRenderingNode : public VKNodeInfo<VKNodeType::BEGIN_RENDERING,
    */
   template<typename Node> void set_node_data(Node &node, const CreateInfo &create_info)
   {
-    const bool use_render_pass = create_info.node_data.vk_render_pass != VK_NULL_HANDLE;
+    const bool use_render_pass = create_info.node_data.vk_render_pass_begin_info.renderPass !=
+                                 VK_NULL_HANDLE;
     UNUSED_VARS_NDEBUG(use_render_pass);
     BLI_assert_msg(use_render_pass ||
                        ELEM(create_info.node_data.vk_rendering_info.pColorAttachments,
@@ -95,7 +96,7 @@ class VKBeginRenderingNode : public VKNodeInfo<VKNodeType::BEGIN_RENDERING,
                       Data &data,
                       VKBoundPipelines & /*r_bound_pipelines*/) override
   {
-    const bool is_dynamic_rendering = data.vk_render_pass == VK_NULL_HANDLE;
+    const bool is_dynamic_rendering = data.vk_render_pass_begin_info.renderPass == VK_NULL_HANDLE;
     if (is_dynamic_rendering) {
       /* Localize pointers just before sending to the command buffer. Pointer can (and will) change
        * as they are stored in a union which is stored in a vector. When the vector reallocates,
@@ -112,7 +113,7 @@ class VKBeginRenderingNode : public VKNodeInfo<VKNodeType::BEGIN_RENDERING,
       command_buffer.begin_rendering(&data.vk_rendering_info);
     }
     else {
-      // command_buffer.begin_render_pass(data.vk_render_pass);vk
+      command_buffer.begin_render_pass(&data.vk_render_pass_begin_info);
     }
   }
 };

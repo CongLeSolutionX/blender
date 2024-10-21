@@ -672,7 +672,13 @@ void VKFrameBuffer::rendering_ensure_render_pass(VKContext &context)
 
   /* Begin rendering */
   render_graph::VKBeginRenderingNode::CreateInfo begin_rendering(access_info);
-  begin_rendering.node_data.vk_render_pass = vk_render_pass;
+  VkRenderPassBeginInfo &begin_info = begin_rendering.node_data.vk_render_pass_begin_info;
+  begin_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+  begin_info.renderPass = vk_render_pass;
+  begin_info.framebuffer = vk_framebuffer;
+  render_area_update(begin_info.renderArea);
+  /* TODO: Add support for clear operations. */
+
   context.render_graph.add_node(begin_rendering);
 }
 
