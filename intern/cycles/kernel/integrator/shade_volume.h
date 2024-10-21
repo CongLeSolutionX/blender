@@ -677,7 +677,7 @@ ccl_device bool volume_sample_indirect_scatter(
         const Spectrum pdf_s = coeff.sigma_s / sigma_c;
         transmittance *= coeff.sigma_s * inv_maj / dot(channel_pdf, pdf_s);
         if (vstate.direct_sample_method == VOLUME_SAMPLE_DISTANCE && vstate.use_mis) {
-          vstate.distance_pdf *= coeff.sigma_s;
+          vstate.distance_pdf *= channel_pdf * coeff.sigma_s;
         }
 
         result.indirect_throughput *= transmittance;
@@ -740,8 +740,8 @@ ccl_device void volume_integrate_step_scattering(
             kg, state, ray, sd, vstate.t.min, result.direct_t, vstate.step, knode, rng_state);
         const float equiangular_pdf = volume_equiangular_pdf(
             ray, equiangular_coeffs, result.direct_t);
-        const Spectrum mis_weight = power_heuristic(vstate.distance_pdf * extinction,
-                                                    equiangular_pdf);
+        const float distance_pdf = dot(extinction, vstate.distance_pdf);
+        const float mis_weight = power_heuristic(distance_pdf, equiangular_pdf);
         result.direct_throughput *= 2.0f * mis_weight;
       }
     }
@@ -766,8 +766,13 @@ ccl_device void volume_integrate_step_scattering(
 
       /* Multiple importance sampling. */
       if (vstate.use_mis) {
+        const Spectrum albedo = safe_divide_color(coeff.sigma_s, coeff.sigma_t);
+        Spectrum channel_pdf;
+        volume_sample_channel(albedo, result.indirect_throughput, &vstate.rchannel, &channel_pdf);
+
         vstate.distance_pdf *= coeff.sigma_s * extinction;
-        const Spectrum mis_weight = power_heuristic(vstate.equiangular_pdf, vstate.distance_pdf);
+        const float distance_pdf = dot(vstate.distance_pdf, channel_pdf);
+        const float mis_weight = power_heuristic(vstate.equiangular_pdf, distance_pdf);
         result.direct_throughput *= 2.0f * mis_weight;
       }
     }
