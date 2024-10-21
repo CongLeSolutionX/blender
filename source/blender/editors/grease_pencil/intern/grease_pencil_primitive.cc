@@ -121,12 +121,13 @@ struct PrimitiveToolOperation {
   DrawingPlacement placement;
 
   bke::greasepencil::Drawing *drawing;
+  Brush *brush;
   BrushGpencilSettings *settings;
   std::optional<ColorGeometry4f> vertex_color;
   std::optional<ColorGeometry4f> fill_color;
   int material_index;
   float softness;
-  Brush *brush;
+  float fill_opacity;
   float4x2 texture_space;
 
   OperatorMode mode;
@@ -442,6 +443,7 @@ static Set<std::string> skipped_attribute_ids(const PrimitiveToolOperation &ptd,
                 "softness",
                 "start_cap",
                 "end_cap",
+                "fill_opacity",
                 "fill_color"};
       }
       else {
@@ -556,6 +558,16 @@ static void grease_pencil_primitive_init_curves(PrimitiveToolOperation &ptd)
   cyclic.span.last() = is_cyclic;
   materials.span.last() = ptd.material_index;
   softness.span.last() = ptd.softness;
+
+  if (use_fill && (ptd.fill_opacity < 1.0f || attributes.contains("fill_opacity"))) {
+    bke::SpanAttributeWriter<float> fill_opacities =
+        attributes.lookup_or_add_for_write_span<float>(
+            "fill_opacity",
+            bke::AttrDomain::Curve,
+            bke::AttributeInitVArray(VArray<float>::ForSingle(1.0f, curves.curves_num())));
+    fill_opacities.span.last() = ptd.fill_opacity;
+    fill_opacities.finish();
+  }
 
   if (ptd.fill_color) {
     ptd.drawing->fill_colors_for_write().last() = *ptd.fill_color;
@@ -776,6 +788,7 @@ static int grease_pencil_primitive_invoke(bContext *C, wmOperator *op, const wmE
     ptd.fill_color = std::nullopt;
   }
 
+  ptd.fill_opacity = ptd.brush->alpha;
   ptd.softness = 1.0 - ptd.settings->hardness;
 
   ptd.texture_space = ed::greasepencil::calculate_texture_space(
