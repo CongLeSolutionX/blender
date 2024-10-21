@@ -579,11 +579,11 @@ float4 calculate_out_fields_2d_full_roundness_irregular_circular(
                            cos(nearest_ref_MSA_coord) * last_circle_center.x) +
               math::square(l_last_circle_radius) - math::square(last_circle_center.x) -
               math::square(last_circle_center.y));
-    l_angle_bisector_2d = (cos(ref_A_angle_bisector) * l_projection_2d) /
-                          (cos(last_angle_bisector_A_x_axis) * l_coord_R_l_last_angle_bisector_2d);
+    float l_angle_bisector_2d_R_l_last_angle_bisector_2d = cos(ref_A_angle_bisector) /
+                                                           cos(last_angle_bisector_A_x_axis);
+    l_angle_bisector_2d = l_angle_bisector_2d_R_l_last_angle_bisector_2d * l_projection_2d /
+                          l_coord_R_l_last_angle_bisector_2d;
     if (nearest_ref_MSA_coord < 0.0f) {
-      float l_angle_bisector_2d_R_l_last_angle_bisector_2d = cos(ref_A_angle_bisector) /
-                                                             cos(last_angle_bisector_A_x_axis);
       if (calculate_r_gon_parameter_field) {
         r_gon_parameter_2d = (last_angle_bisector_A_x_axis + nearest_ref_MSA_coord) *
                              l_angle_bisector_2d_R_l_last_angle_bisector_2d;
@@ -815,12 +815,11 @@ float4 calculate_out_fields_2d_irregular_circular(bool calculate_r_gon_parameter
                              cos(nearest_ref_MSA_coord) * last_circle_center.x) +
                 math::square(l_last_circle_radius) - math::square(last_circle_center.x) -
                 math::square(last_circle_center.y));
-      l_angle_bisector_2d = (cos(ref_A_angle_bisector) * l_projection_2d) /
-                            (cos(last_angle_bisector_A_x_axis) *
-                             l_coord_R_l_last_angle_bisector_2d);
+      float l_angle_bisector_2d_R_l_last_angle_bisector_2d = cos(ref_A_angle_bisector) /
+                                                             cos(last_angle_bisector_A_x_axis);
+      l_angle_bisector_2d = l_angle_bisector_2d_R_l_last_angle_bisector_2d * l_projection_2d /
+                            l_coord_R_l_last_angle_bisector_2d;
       if (nearest_ref_MSA_coord < 0.0f) {
-        float l_angle_bisector_2d_R_l_last_angle_bisector_2d = cos(ref_A_angle_bisector) /
-                                                               cos(last_angle_bisector_A_x_axis);
         if (calculate_r_gon_parameter_field) {
           r_gon_parameter_2d = l_angle_bisector_2d * tan(fabsf(last_angle_bisector_A_x_axis -
                                                                inner_last_bevel_start_A_x_axis)) +
@@ -912,7 +911,7 @@ float4 calculate_out_fields_2d(bool calculate_r_gon_parameter_field,
                     max_unit_parameter_2d,
                     segment_id * ref_A_next_ref + ref_A_angle_bisector);
     }
-    if (r_gon_roundness == 1.0f) {
+    else if (r_gon_roundness == 1.0f) {
       float r_gon_parameter_2d = 0.0f;
       if (calculate_r_gon_parameter_field) {
         r_gon_parameter_2d = fabsf(ref_A_angle_bisector - ref_A_coord);
@@ -1065,7 +1064,7 @@ float4 calculate_out_fields_2d(bool calculate_r_gon_parameter_field,
                       segment_id * ref_A_next_ref + last_angle_bisector_A_x_axis);
       }
     }
-    if (r_gon_roundness == 1.0f) {
+    else if (r_gon_roundness == 1.0f) {
       if (elliptical_corners) {
         return calculate_out_fields_2d_full_roundness_irregular_elliptical(
 
