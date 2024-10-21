@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "BLI_function_ref.hh"
 #include "BLI_sys_types.h"
 
 /* ******************* Registration Function ********************** */
@@ -161,6 +162,7 @@ void VIEW3D_GGT_xform_shear(wmGizmoGroupType *gzgt);
 
 /* `transform_gizmo_extrude_3d.cc` */
 void VIEW3D_GGT_xform_extrude(wmGizmoGroupType *gzgt);
+void VIEW3D_GGT_xform_extrude_boolean(wmGizmoGroupType *gzgt);
 
 /* Generic 2D transform gizmo callback assignment. */
 void ED_widgetgroup_gizmo2d_xform_callbacks_set(wmGizmoGroupType *gzgt);
@@ -218,3 +220,36 @@ bool ED_transform_snap_sequencer_to_closest_strip_calc(Scene *scene,
                                                        float *r_snap_frame);
 
 void ED_draw_sequencer_snap_point(ARegion *region, float snap_point);
+
+struct TransDataBasic {
+  /** Extra data (#BMVert, #Object, edit-bone for roll fixing...). */
+  void *extra;
+  /** Location of the data to transform. */
+  float *loc;
+  /** Initial location. */
+  float iloc[3];
+  /** Individual data center. */
+  float center[3];
+  /** Value pointer for special transforms. */
+  float *val;
+  /** Old value. */
+  float ival;
+  /** Various flags. */
+  int flag;
+};
+/**
+ * Reserve any type of geometry data to be transformed in the next transform call.
+ * \param userdata: Custom user data to pass to the callback functions.
+ * \param foreach_data_fn: Callback to set up each geometry element to be read for transformation.
+ * \param recalc_data_fn: Optional callback to adjust original geometry during tranformation.
+ * \param finish_fn: callback called when we finish the operation.
+
+ * \returns True if the geometry reservation is successful.
+ */
+bool ED_transform_reserve_custom(
+    Object *obedit,
+    int data_len,
+    void *userdata,
+    blender::FunctionRef<void(int index, TransDataBasic &r_td, float r_no[3])> foreach_data_fn,
+    blender::FunctionRef<void(void *usedata, bool is_alt_pressed)> recalc_data_fn,
+    blender::FunctionRef<void(void *userdata, bool is_cancel)> finish_fn);

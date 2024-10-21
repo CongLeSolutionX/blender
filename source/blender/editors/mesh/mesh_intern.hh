@@ -138,6 +138,10 @@ void MESH_OT_extrude_edges_indiv(wmOperatorType *ot);
 void MESH_OT_extrude_faces_indiv(wmOperatorType *ot);
 void MESH_OT_dupli_extrude_cursor(wmOperatorType *ot);
 
+/* *** `editmesh_extrude_boolean.cc` *** */
+
+void MESH_OT_extrude_boolean_intern(wmOperatorType *ot);
+
 /* *** `editmesh_extrude_screw.cc` *** */
 
 void MESH_OT_screw(wmOperatorType *ot);

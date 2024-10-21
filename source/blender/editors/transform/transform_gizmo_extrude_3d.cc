@@ -108,7 +108,10 @@ static void gizmo_mesh_extrude_orientation_matrix_set_for_adjust(GizmoExtrudeGro
   swap_v3_v3(ggd->adjust[0]->matrix_basis[ggd->adjust_axis], ggd->adjust[0]->matrix_basis[2]);
 }
 
-static void gizmo_mesh_extrude_setup(const bContext *C, wmGizmoGroup *gzgroup)
+static void gizmo_mesh_extrude_setup_impl(const bContext * /*C*/,
+                                          wmGizmoGroup *gzgroup,
+                                          const char *op_idname,
+                                          const int normal_axis)
 {
   GizmoExtrudeGroup *ggd = static_cast<GizmoExtrudeGroup *>(
       MEM_callocN(sizeof(GizmoExtrudeGroup), __func__));
@@ -141,29 +144,9 @@ static void gizmo_mesh_extrude_setup(const bContext *C, wmGizmoGroup *gzgroup)
     }
   }
 
-  {
-    const char *op_idname = nullptr;
-    /* Grease pencil does not use `obedit`. */
-    /* GPXX: Remove if #OB_MODE_EDIT_GPENCIL_LEGACY is merged with #OB_MODE_EDIT. */
-    const Object *obact = CTX_data_active_object(C);
-    if (obact->type == OB_MESH) {
-      op_idname = "MESH_OT_extrude_context_move";
-      ggd->normal_axis = 2;
-    }
-    else if (obact->type == OB_ARMATURE) {
-      op_idname = "ARMATURE_OT_extrude_move";
-      ggd->normal_axis = 1;
-    }
-    else if (obact->type == OB_CURVES_LEGACY) {
-      op_idname = "CURVE_OT_extrude_move";
-      ggd->normal_axis = 2;
-    }
-    else {
-      BLI_assert(0);
-    }
-    ggd->ot_extrude = WM_operatortype_find(op_idname, true);
-    ggd->gzgt_axis_type_prop = RNA_struct_type_find_property(gzgroup->type->srna, "axis_type");
-  }
+  ggd->normal_axis = normal_axis;
+  ggd->ot_extrude = WM_operatortype_find(op_idname, true);
+  ggd->gzgt_axis_type_prop = RNA_struct_type_find_property(gzgroup->type->srna, "axis_type");
 
   for (int i = 0; i < 3; i++) {
     UI_GetThemeColor3fv(TH_AXIS_X + i, ggd->invoke_xyz_no[i]->color);
@@ -215,6 +198,32 @@ static void gizmo_mesh_extrude_setup(const bContext *C, wmGizmoGroup *gzgroup)
     wmGizmoOpElem *gzop = WM_gizmo_operator_get(gz, 0);
     gzop->is_redo = true;
   }
+}
+
+static void gizmo_mesh_extrude_setup(const bContext *C, wmGizmoGroup *gzgroup)
+{
+  const char *op_idname = nullptr;
+  int normal_axis = 2;
+  const Object *obact = CTX_data_active_object(C);
+  if (obact->type == OB_MESH) {
+    op_idname = "MESH_OT_extrude_context_move";
+  }
+  else if (obact->type == OB_ARMATURE) {
+    op_idname = "ARMATURE_OT_extrude_move";
+    normal_axis = 1;
+  }
+  else if (obact->type == OB_CURVES_LEGACY) {
+    op_idname = "CURVE_OT_extrude_move";
+  }
+  else {
+    BLI_assert(0);
+  }
+  gizmo_mesh_extrude_setup_impl(C, gzgroup, op_idname, normal_axis);
+}
+
+static void gizmo_mesh_extrude_boolean_setup(const bContext *C, wmGizmoGroup *gzgroup)
+{
+  gizmo_mesh_extrude_setup_impl(C, gzgroup, "MESH_OT_extrude_boolean", 2);
 }
 
 static void gizmo_mesh_extrude_refresh(const bContext *C, wmGizmoGroup *gzgroup)
@@ -499,6 +508,33 @@ void VIEW3D_GGT_xform_extrude(wmGizmoGroupType *gzgt)
 
   gzgt->poll = ED_gizmo_poll_or_unlink_delayed_from_tool;
   gzgt->setup = gizmo_mesh_extrude_setup;
+  gzgt->setup_keymap = WM_gizmogroup_setup_keymap_generic_maybe_drag;
+  gzgt->refresh = gizmo_mesh_extrude_refresh;
+  gzgt->draw_prepare = gizmo_mesh_extrude_draw_prepare;
+  gzgt->invoke_prepare = gizmo_mesh_extrude_invoke_prepare;
+  gzgt->message_subscribe = gizmo_mesh_extrude_message_subscribe;
+
+  static const EnumPropertyItem axis_type_items[] = {
+      {EXTRUDE_AXIS_NORMAL, "NORMAL", 0, "Normal", "Only show normal axis"},
+      {EXTRUDE_AXIS_XYZ, "XYZ", 0, "XYZ", "Follow scene orientation"},
+      {0, nullptr, 0, nullptr, nullptr},
+  };
+  RNA_def_enum(gzgt->srna, "axis_type", axis_type_items, 0, "Axis Type", "");
+}
+
+void VIEW3D_GGT_xform_extrude_boolean(wmGizmoGroupType *gzgt)
+{
+  gzgt->name = "3D View Extrude Boolean";
+  gzgt->idname = "VIEW3D_GGT_xform_extrude_boolean";
+
+  gzgt->flag = WM_GIZMOGROUPTYPE_3D | WM_GIZMOGROUPTYPE_TOOL_FALLBACK_KEYMAP |
+               WM_GIZMOGROUPTYPE_DELAY_REFRESH_FOR_TWEAK;
+
+  gzgt->gzmap_params.spaceid = SPACE_VIEW3D;
+  gzgt->gzmap_params.regionid = RGN_TYPE_WINDOW;
+
+  gzgt->poll = ED_gizmo_poll_or_unlink_delayed_from_tool;
+  gzgt->setup = gizmo_mesh_extrude_boolean_setup;
   gzgt->setup_keymap = WM_gizmogroup_setup_keymap_generic_maybe_drag;
   gzgt->refresh = gizmo_mesh_extrude_refresh;
   gzgt->draw_prepare = gizmo_mesh_extrude_draw_prepare;

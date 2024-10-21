@@ -12,6 +12,7 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "BLI_function_ref.hh"
 #include "BLI_kdtree.h"
 #include "BLI_linklist_stack.h"
 #include "BLI_listbase.h"
@@ -49,6 +50,8 @@
 #include "transform_convert.hh"
 
 using namespace blender;
+
+static TransDataContainer *g_tc_reserved = nullptr;
 
 bool transform_mode_use_local_origins(const TransInfo *t)
 {
@@ -780,6 +783,17 @@ static void init_proportional_edit(TransInfo *t)
   }
 }
 
+static void setup_local_mat(TransDataContainer *tc, const float4x4 &obmat)
+{
+  copy_m4_m4(tc->mat, obmat.ptr());
+  copy_m3_m4(tc->mat3, tc->mat);
+  /* For non-invertible scale matrices, #invert_m4_m4_fallback()
+   * can still provide a valid pivot. */
+  invert_m4_m4_fallback(tc->imat, tc->mat);
+  invert_m3_m3(tc->imat3, tc->mat3);
+  normalize_m3_m3(tc->mat3_unit, tc->mat3);
+};
+
 /* For multi object editing. */
 static void init_TransDataContainers(TransInfo *t, Object *obact, Span<Object *> objects)
 {
@@ -854,13 +868,7 @@ static void init_TransDataContainers(TransInfo *t, Object *obact, Span<Object *>
 
       if (tc->use_local_mat) {
         BLI_assert((t->flag & T_2D_EDIT) == 0);
-        copy_m4_m4(tc->mat, objects[i]->object_to_world().ptr());
-        copy_m3_m4(tc->mat3, tc->mat);
-        /* For non-invertible scale matrices, #invert_m4_m4_fallback()
-         * can still provide a valid pivot. */
-        invert_m4_m4_fallback(tc->imat, tc->mat);
-        invert_m3_m3(tc->imat3, tc->mat3);
-        normalize_m3_m3(tc->mat3_unit, tc->mat3);
+        setup_local_mat(tc, objects[i]->object_to_world());
       }
       /* Otherwise leave as zero. */
     }
@@ -869,6 +877,10 @@ static void init_TransDataContainers(TransInfo *t, Object *obact, Span<Object *>
 
 static TransConvertTypeInfo *convert_type_get(const TransInfo *t, Object **r_obj_armature)
 {
+  if (g_tc_reserved) {
+    return &TransConvertType_Custom;
+  }
+
   ViewLayer *view_layer = t->view_layer;
   BKE_view_layer_synced_ensure(t->scene, t->view_layer);
   Object *ob = BKE_view_layer_active_object_get(view_layer);
@@ -1022,6 +1034,14 @@ void create_trans_data(bContext *C, TransInfo *t)
 
   if (ob_armature) {
     init_TransDataContainers(t, ob_armature, {ob_armature});
+  }
+  else if (g_tc_reserved) {
+    if (t->data_container) {
+      MEM_freeN(t->data_container);
+    }
+    t->data_container = g_tc_reserved;
+    t->data_container_len = 1;
+    g_tc_reserved = nullptr;
   }
   else {
     BKE_view_layer_synced_ensure(t->scene, t->view_layer);
@@ -1271,3 +1291,45 @@ void recalc_data(TransInfo *t)
 }
 
 /** \} */
+
+bool ED_transform_reserve_custom(
+    Object *obedit,
+    int data_len,
+    void *userdata,
+    blender::FunctionRef<void(int index, TransDataBasic &r_td, float r_no[3])> foreach_data_fn,
+    blender::FunctionRef<void(void *usedata, bool is_alt_pressed)> recalc_data_fn,
+    blender::FunctionRef<void(void *userdata, bool is_cancel)> finish_fn)
+{
+  if (g_tc_reserved) {
+    return false;
+  }
+  g_tc_reserved = MEM_cnew<TransDataContainer>(__func__);
+  if (obedit) {
+    g_tc_reserved->obedit = obedit;
+    g_tc_reserved->use_local_mat = true;
+    setup_local_mat(g_tc_reserved, obedit->object_to_world());
+  }
+  else {
+    unit_m3(g_tc_reserved->mat3);
+  }
+
+  g_tc_reserved->data_len = data_len;
+  g_tc_reserved->data = MEM_cnew_array<TransData>(data_len, __func__);
+  for (int td_index : IndexRange(data_len)) {
+    TransData &td = g_tc_reserved->data[td_index];
+    foreach_data_fn(td_index, td, td.axismtx[2]);
+    copy_m3_m3(td.mtx, g_tc_reserved->mat3);
+    pseudoinverse_m3_m3(td.smtx, td.mtx, PSEUDOINVERSE_EPSILON);
+    td.flag = TD_SELECTED;
+  }
+
+  g_tc_reserved->custom.type.data = new TcReservedData(userdata, recalc_data_fn, finish_fn);
+  g_tc_reserved->custom.type.free_cb =
+      [](TransInfo * /*t*/, TransDataContainer * /*tc*/, TransCustomData *custom_data) {
+        TcReservedData *data = static_cast<TcReservedData *>(custom_data->data);
+        delete data;
+        custom_data->data = nullptr;
+      };
+
+  return true;
+}

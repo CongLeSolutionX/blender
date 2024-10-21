@@ -13,6 +13,7 @@
 
 struct wmEvent;
 struct UnitSettings;
+struct bContext;
 
 struct NumInput {
   /** idx_max < NUM_MAX_ELEMENTS */

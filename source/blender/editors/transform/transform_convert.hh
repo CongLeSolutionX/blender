@@ -105,6 +105,18 @@ struct CurvesTransformData {
   blender::Array<blender::float3> positions;
 };
 
+struct TcReservedData {
+  void *userdata;
+  blender::FunctionRef<void(void *usedata, bool is_alt_pressed)> recalc_data_fn;
+  blender::FunctionRef<void(void *userdata, bool is_cancel)> finish_fn;
+  TcReservedData(void *userdata,
+                 blender::FunctionRef<void(void *usedata, bool is_alt_pressed)> recalc_data_fn,
+                 blender::FunctionRef<void(void *userdata, bool is_cancel)> finish_fn)
+      : userdata(userdata), recalc_data_fn(recalc_data_fn), finish_fn(finish_fn)
+  {
+  }
+};
+
 /* `transform_convert.cc` */
 
 /**
@@ -221,6 +233,10 @@ extern TransConvertTypeInfo TransConvertType_Curve;
 /* `transform_convert_curves.cc` */
 
 extern TransConvertTypeInfo TransConvertType_Curves;
+
+/* `transform_convert_custom.cc` */
+
+extern TransConvertTypeInfo TransConvertType_Custom;
 
 /* `transform_convert_graph.cc` */
 

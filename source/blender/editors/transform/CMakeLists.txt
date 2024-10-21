@@ -28,6 +28,7 @@ set(SRC
   transform_convert_cursor.cc
   transform_convert_curve.cc
   transform_convert_curves.cc
+  transform_convert_custom.cc
   transform_convert_graph.cc
   transform_convert_grease_pencil.cc
   transform_convert_lattice.cc

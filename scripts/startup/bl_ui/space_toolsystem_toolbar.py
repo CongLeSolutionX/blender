@@ -94,6 +94,13 @@ class _template_widget:
             row = layout.row(align=True)
             row.prop(props, "axis_type", expand=True)
 
+    class VIEW3D_GGT_xform_extrude_boolean:
+        @staticmethod
+        def draw_settings(_context, layout, tool):
+            props = tool.gizmo_group_properties("VIEW3D_GGT_xform_extrude_boolean")
+            row = layout.row(align=True)
+            row.prop(props, "axis_type", expand=True)
+
     class VIEW3D_GGT_xform_gizmo:
         @staticmethod
         def draw_settings_with_index(context, layout, index):
@@ -974,6 +981,21 @@ class _defs_edit_mesh:
             icon="ops.mesh.extrude_manifold",
             widget="VIEW3D_GGT_tool_generic_handle_normal",
             keymap=(),
+        )
+
+    @ToolDef.from_fn
+    def extrude_boolean():
+        return dict(
+            idname="builtin.extrude_boolean",
+            label="Extrude Boolean",
+            description=(
+                "Extrude and do a boolean operation"
+            ),
+            icon="ops.mesh.extrude_manifold",
+            widget="VIEW3D_GGT_xform_extrude_boolean",
+            keymap=(),
+            operator="view3d.edit_mesh_extrude_boolean_move_normal",
+            draw_settings=_template_widget.VIEW3D_GGT_xform_extrude_boolean.draw_settings,
         )
 
     @ToolDef.from_fn
@@ -3361,6 +3383,7 @@ class VIEW3D_PT_tools_active(ToolSelectPanelHelper, Panel):
             (
                 _defs_edit_mesh.extrude,
                 _defs_edit_mesh.extrude_manifold,
+                _defs_edit_mesh.extrude_boolean,
                 _defs_edit_mesh.extrude_normals,
                 _defs_edit_mesh.extrude_individual,
                 _defs_edit_mesh.extrude_cursor,

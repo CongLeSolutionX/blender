@@ -112,6 +112,7 @@ void ED_operatortypes_mesh()
 
   WM_operatortype_append(MESH_OT_separate);
   WM_operatortype_append(MESH_OT_dupli_extrude_cursor);
+  WM_operatortype_append(MESH_OT_extrude_boolean_intern);
   WM_operatortype_append(MESH_OT_loop_select);
   WM_operatortype_append(MESH_OT_edge_face_add);
   WM_operatortype_append(MESH_OT_shortest_path_pick);
@@ -355,6 +356,15 @@ void ED_operatormacros_mesh()
                                     OPTYPE_UNDO | OPTYPE_REGISTER);
   WM_operatortype_macro_define(ot, "MESH_OT_polybuild_transform_at_cursor");
   otmacro = WM_operatortype_macro_define(ot, "MESH_OT_extrude_edges_indiv");
+  otmacro = WM_operatortype_macro_define(ot, "TRANSFORM_OT_translate");
+  RNA_boolean_set(otmacro->ptr, "use_proportional_edit", false);
+  RNA_boolean_set(otmacro->ptr, "mirror", false);
+
+  ot = WM_operatortype_append_macro("MESH_OT_extrude_boolean",
+                                    "Mesh Extrude Boolean",
+                                    "Extrude and do a boolean operation",
+                                    OPTYPE_UNDO | OPTYPE_REGISTER);
+  WM_operatortype_macro_define(ot, "MESH_OT_extrude_boolean_intern");
   otmacro = WM_operatortype_macro_define(ot, "TRANSFORM_OT_translate");
   RNA_boolean_set(otmacro->ptr, "use_proportional_edit", false);
   RNA_boolean_set(otmacro->ptr, "mirror", false);

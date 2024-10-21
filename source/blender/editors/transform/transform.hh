@@ -382,24 +382,6 @@ enum {
   TD_GREASE_PENCIL_FRAME = 1 << 19,
 };
 
-struct TransDataBasic {
-  /** Extra data (mirrored element pointer, in edit-mode mesh to #BMVert) \
-   * (edit-bone for roll fixing) (...). */
-  void *extra;
-  /** Location of the data to transform. */
-  float *loc;
-  /** Initial location. */
-  float iloc[3];
-  /** Individual data center. */
-  float center[3];
-  /** Value pointer for special transforms. */
-  float *val;
-  /** Old value. */
-  float ival;
-  /** Various flags. */
-  int flag;
-};
-
 struct TransDataMirror : public TransDataBasic {
   /** Location of the data to transform. */
   float *loc_src;

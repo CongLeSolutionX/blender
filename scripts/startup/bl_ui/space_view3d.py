@@ -4647,6 +4647,7 @@ class VIEW3D_MT_edit_mesh_extrude(Menu):
 
         layout.separator()
 
+        layout.operator("view3d.edit_mesh_extrude_boolean_move_normal", text="Extrude Boolean")
         layout.operator("mesh.extrude_repeat")
         layout.operator("mesh.spin").angle = pi * 2
         layout.template_node_operator_asset_menu_items(catalog_path="Mesh/Extrude")

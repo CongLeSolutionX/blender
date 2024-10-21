@@ -139,6 +139,7 @@ set(SRC
   tools/bmesh_intersect.hh
   tools/bmesh_intersect_edges.cc
   tools/bmesh_intersect_edges.hh
+  tools/bmesh_intersect_v2.cc
   tools/bmesh_path.cc
   tools/bmesh_path.hh
   tools/bmesh_path_region.cc

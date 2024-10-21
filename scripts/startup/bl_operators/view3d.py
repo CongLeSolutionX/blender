@@ -171,6 +171,70 @@ class VIEW3D_OT_edit_mesh_extrude_move(Operator):
         return self.execute(context)
 
 
+class VIEW3D_OT_edit_mesh_extrude_boolean_move(Operator):
+    """Extrude region together along the average normal and do a boolean operation"""
+    bl_label = "Extrude Boolean Moving on Normals"
+    bl_idname = "view3d.edit_mesh_extrude_boolean_move_normal"
+
+    release_confirm: BoolProperty(
+        name="release_confirm",
+        default=False,
+    )
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object
+        return (obj is not None and obj.mode == 'EDIT')
+
+    @staticmethod
+    def extrude_region(operator, context, release_confirm):
+        from bpy_extras.object_utils import object_report_if_active_shape_key_is_locked
+
+        ob = context.object
+        if object_report_if_active_shape_key_is_locked(ob, operator):
+            return {'CANCELLED'}
+
+        mesh = ob.data
+        if mesh.total_face_sel >= 1:
+            bpy.ops.mesh.extrude_boolean(
+                'INVOKE_REGION_WIN',
+                TRANSFORM_OT_translate={
+                    "orient_type": 'NORMAL',
+                    "constraint_axis": (False, False, True),
+                    "release_confirm": release_confirm,
+                },
+            )
+        elif mesh.total_edge_sel == 1:
+            bpy.ops.mesh.extrude_boolean(
+                'INVOKE_REGION_WIN',
+                TRANSFORM_OT_translate={
+                    # Don't set the constraint axis since users will expect MMB
+                    # to use the user setting, see: #61637
+                    # "orient_type": 'NORMAL',
+                    # Not a popular choice, too restrictive for retopology.
+                    # "constraint_axis": (True, True, False),
+                    "constraint_axis": (False, False, False),
+                    "release_confirm": False,
+                })
+        else:
+            bpy.ops.mesh.extrude_boolean(
+                'INVOKE_REGION_WIN',
+                TRANSFORM_OT_translate={
+                    "release_confirm": release_confirm,
+                },
+            )
+
+        # ignore return from operators above because they are 'RUNNING_MODAL',
+        # and cause this one not to be freed. #24671.
+        return {'FINISHED'}
+
+    def execute(self, context):
+        return VIEW3D_OT_edit_mesh_extrude_boolean_move.extrude_region(self, context, self.release_confirm)
+
+    def invoke(self, context, _event):
+        return self.execute(context)
+
+
 class VIEW3D_OT_edit_mesh_extrude_shrink_fatten(Operator):
     """Extrude region together along local normals"""
     bl_label = "Extrude and Move on Individual Normals"
@@ -310,6 +374,7 @@ class VIEW3D_FH_vdb_volume(FileHandler):
 classes = (
     VIEW3D_OT_edit_mesh_extrude_individual_move,
     VIEW3D_OT_edit_mesh_extrude_move,
+    VIEW3D_OT_edit_mesh_extrude_boolean_move,
     VIEW3D_OT_edit_mesh_extrude_shrink_fatten,
     VIEW3D_OT_edit_mesh_extrude_manifold_normal,
     VIEW3D_OT_transform_gizmo_set,
