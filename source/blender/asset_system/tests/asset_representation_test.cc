@@ -176,7 +176,7 @@ TEST_F(AssetRepresentationTest, weak_reference__resolve_to_full_path__current_fi
 
   AssetWeakReference weak_ref = asset.make_weak_reference();
 
-  std::string resolved_path = service->resolve_asset_weak_reference_to_full_path(weak_ref);
+  std::string resolved_path = service->resolve_asset_weak_reference_to_full_path(weak_ref, true);
   EXPECT_EQ(resolved_path, "");
 }
 
@@ -192,7 +192,7 @@ TEST_F(AssetRepresentationTest, weak_reference__resolve_to_full_path__custom_lib
 
   std::string expected_path = utils::normalize_path(asset_library_root_ + "/" + "path/") +
                               "to/an/asset";
-  std::string resolved_path = service->resolve_asset_weak_reference_to_full_path(weak_ref);
+  std::string resolved_path = service->resolve_asset_weak_reference_to_full_path(weak_ref, true);
 
   EXPECT_EQ(BLI_path_cmp(resolved_path.c_str(), expected_path.c_str()), 0);
 }
@@ -209,7 +209,7 @@ TEST_F(AssetRepresentationTest,
 
   std::string expected_path = utils::normalize_path(asset_library_root_ + "\\" + "path\\") +
                               "to\\an\\asset";
-  std::string resolved_path = service->resolve_asset_weak_reference_to_full_path(weak_ref);
+  std::string resolved_path = service->resolve_asset_weak_reference_to_full_path(weak_ref, true);
 
   EXPECT_EQ(BLI_path_cmp(resolved_path.c_str(), expected_path.c_str()), 0);
 }
@@ -225,7 +225,7 @@ TEST_F(AssetRepresentationTest, weak_reference__resolve_to_exploded_path__curren
 
   std::string expected_full_path = utils::normalize_path("path/to/an/asset", 5);
   std::optional<AssetLibraryService::ExplodedPath> resolved_path =
-      service->resolve_asset_weak_reference_to_exploded_path(weak_ref);
+      service->resolve_asset_weak_reference_to_exploded_path(weak_ref, true);
 
   EXPECT_EQ(*resolved_path->full_path, expected_full_path);
   EXPECT_EQ(resolved_path->dir_component, "");
@@ -248,7 +248,7 @@ TEST_F(AssetRepresentationTest, weak_reference__resolve_to_exploded_path__custom
                                                          "/some.blend/Material/") +
                                    "asset/name";
   std::optional<AssetLibraryService::ExplodedPath> resolved_path =
-      service->resolve_asset_weak_reference_to_exploded_path(weak_ref);
+      service->resolve_asset_weak_reference_to_exploded_path(weak_ref, true);
 
   EXPECT_EQ(BLI_path_cmp(resolved_path->full_path->c_str(), expected_full_path.c_str()), 0);
   EXPECT_EQ(BLI_path_cmp_normalized(std::string(resolved_path->dir_component).c_str(),
@@ -274,7 +274,7 @@ TEST_F(AssetRepresentationTest,
                                                          "\\some.blend\\Material\\") +
                                    "asset/name";
   std::optional<AssetLibraryService::ExplodedPath> resolved_path =
-      service->resolve_asset_weak_reference_to_exploded_path(weak_ref);
+      service->resolve_asset_weak_reference_to_exploded_path(weak_ref, true);
 
   EXPECT_EQ(BLI_path_cmp(resolved_path->full_path->c_str(), expected_full_path.c_str()), 0);
   EXPECT_EQ(BLI_path_cmp_normalized(std::string(resolved_path->dir_component).c_str(),
