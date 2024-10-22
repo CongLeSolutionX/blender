@@ -14,7 +14,7 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 #include "BLI_string.h"
 #include "BLI_utildefines.h"
 
@@ -28,12 +28,12 @@
 
 #include "RNA_types.hh"
 
-#include "bpy_capi_utils.h"
-#include "bpy_library.h" /* Declaration for #BPY_library_load_method_def */
-#include "bpy_rna.h"
+#include "bpy_capi_utils.hh"
+#include "bpy_library.hh" /* Declaration for #BPY_library_load_method_def */
+#include "bpy_rna.hh"
 
-#include "../generic/py_capi_utils.h"
-#include "../generic/python_compat.h"
+#include "../generic/py_capi_utils.hh"
+#include "../generic/python_compat.hh"
 
 using namespace blender::bke::blendfile;
 
@@ -136,20 +136,25 @@ static PyObject *bpy_lib_write(BPy_PropertyRNA *self, PyObject *args, PyObject *
       PartialWriteContext::IDAddOperations::ADD_DEPENDENCIES |
       (use_fake_user ? PartialWriteContext::IDAddOperations::SET_FAKE_USER : 0))};
 
-  Py_ssize_t pos, hash;
-  PyObject *key;
-  ID *id = nullptr;
-
-  pos = hash = 0;
-  while (_PySet_NextEntry(datablocks, &pos, &key, &hash)) {
-    if (!pyrna_id_FromPyObject(key, &id)) {
-      PyErr_Format(PyExc_TypeError, "Expected an ID type, not %.200s", Py_TYPE(key)->tp_name);
-      return nullptr;
-    }
-    else {
+  if (PySet_GET_SIZE(datablocks) > 0) {
+    PyObject *it = PyObject_GetIter(datablocks);
+    PyObject *key;
+    while ((key = PyIter_Next(it))) {
+      /* Borrow from the set. */
+      Py_DECREF(key);
+      ID *id;
+      if (!pyrna_id_FromPyObject(key, &id)) {
+        PyErr_Format(PyExc_TypeError, "Expected an ID type, not %.200s", Py_TYPE(key)->tp_name);
+        break;
+      }
       partial_write_ctx.id_add(id, add_options, nullptr);
     }
+    Py_DECREF(it);
+    if (key) {
+      return nullptr;
+    }
   }
+
   BLI_assert(partial_write_ctx.is_valid());
 
   /* write blend */

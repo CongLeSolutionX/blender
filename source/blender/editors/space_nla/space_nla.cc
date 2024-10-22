@@ -12,6 +12,7 @@
 #include "DNA_collection_types.h"
 #include "DNA_scene_types.h"
 
+#include "DNA_screen_types.h"
 #include "MEM_guardedalloc.h"
 
 #include "BLI_blenlib.h"
@@ -196,6 +197,8 @@ static void nla_track_region_draw(const bContext *C, ARegion *region)
   /* Recalculate the height of the track list.
    * Needs to be done before the call to #UI_view2d_view_ortho. */
   int height = NLATRACK_TOT_HEIGHT(&ac, item_count);
+  /* Add padding for the collapsed redo panel. */
+  height += HEADERY;
   if (!BLI_listbase_is_empty(ED_context_get_markers(C))) {
     height += (UI_MARKER_MARGIN_Y - NLATRACK_STEP(snla));
   }
@@ -435,10 +438,10 @@ static void nla_main_region_message_subscribe(const wmRegionMessageSubscribePara
   {
     bool use_preview = (scene->r.flag & SCER_PRV_RANGE);
     const PropertyRNA *props[] = {
-        use_preview ? rna_Scene_frame_preview_start : rna_Scene_frame_start,
-        use_preview ? rna_Scene_frame_preview_end : rna_Scene_frame_end,
-        rna_Scene_use_preview_range,
-        rna_Scene_frame_current,
+        use_preview ? &rna_Scene_frame_preview_start : &rna_Scene_frame_start,
+        use_preview ? &rna_Scene_frame_preview_end : &rna_Scene_frame_end,
+        &rna_Scene_use_preview_range,
+        &rna_Scene_frame_current,
     };
 
     PointerRNA idptr = RNA_id_pointer_create(&scene->id);
@@ -463,6 +466,7 @@ static void nla_track_region_listener(const wmRegionListenerParams *params)
       switch (wmn->data) {
         case ND_OB_ACTIVE:
         case ND_LAYER_CONTENT:
+        case ND_FRAME:
         case ND_OB_SELECT:
           ED_region_tag_redraw(region);
           break;
@@ -663,7 +667,7 @@ void ED_spacetype_nla()
   art = MEM_cnew<ARegionType>("spacetype nla region");
   art->regionid = RGN_TYPE_UI;
   art->prefsizex = UI_SIDEBAR_PANEL_WIDTH;
-  art->keymapflag = ED_KEYMAP_UI;
+  art->keymapflag = ED_KEYMAP_UI | ED_KEYMAP_FRAMES;
   art->listener = nla_region_listener;
   art->init = nla_buttons_region_init;
   art->draw = nla_buttons_region_draw;

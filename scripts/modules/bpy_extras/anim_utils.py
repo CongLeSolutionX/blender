@@ -243,16 +243,19 @@ def bake_action_iter(
         return clean_props
 
     def bake_custom_properties(obj, *, custom_props, frame, group_name=""):
+        import idprop
         if frame is None or not custom_props:
             return
         for key, value in custom_props.items():
             if key in obj.bl_rna.properties and not obj.bl_rna.properties[key].is_animatable:
                 continue
+            if isinstance(obj[key], idprop.types.IDPropertyGroup):
+                continue
             obj[key] = value
             if key in obj.bl_rna.properties:
                 rna_path = key
             else:
-                rna_path = f'["{bpy.utils.escape_identifier(key)}"]'
+                rna_path = "[\"{:s}\"]".format(bpy.utils.escape_identifier(key))
             try:
                 obj.keyframe_insert(rna_path, frame=frame, group=group_name)
             except TypeError:
@@ -364,6 +367,9 @@ def bake_action_iter(
             atd.use_tweak_mode = False
 
         atd.action = action
+        if action.is_action_layered:
+            slot = action.slots.new(for_id=obj)
+            atd.action_slot = slot
 
     # Baking the action only makes sense in Replace mode, so force it (#69105)
     if not atd.use_tweak_mode:

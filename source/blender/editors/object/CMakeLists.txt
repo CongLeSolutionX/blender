@@ -10,7 +10,6 @@ set(INC
   ../../bmesh
   ../../functions
   ../../geometry
-  ../../gpencil_modifiers_legacy
   ../../gpu
   ../../ikplugin
   ../../imbuf
@@ -39,11 +38,11 @@ set(SRC
   object_data_transfer.cc
   object_data_transform.cc
   object_edit.cc
-  object_gpencil_modifier.cc
   object_hook.cc
   object_light_linking_ops.cc
   object_modes.cc
   object_modifier.cc
+  object_multires_modifier.cc
   object_ops.cc
   object_random.cc
   object_relations.cc

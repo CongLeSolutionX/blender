@@ -64,9 +64,20 @@ class BokehImageOperation : public NodeOperation {
 
   void execute() override
   {
+    /* Not yet supported on CPU. */
+    if (!context().use_gpu()) {
+      for (const bNodeSocket *output : this->node()->output_sockets()) {
+        Result &output_result = get_result(output->identifier);
+        if (output_result.should_compute()) {
+          output_result.allocate_invalid();
+        }
+      }
+      return;
+    }
+
     const Domain domain = compute_domain();
 
-    const BokehKernel &bokeh_kernel = context().cache_manager().bokeh_kernels.get(
+    const Result &bokeh_kernel = context().cache_manager().bokeh_kernels.get(
         context(),
         domain.size,
         node_storage(bnode()).flaps,
@@ -76,7 +87,7 @@ class BokehImageOperation : public NodeOperation {
         node_storage(bnode()).lensshift);
 
     Result &output = get_result("Image");
-    output.wrap_external(bokeh_kernel.texture());
+    output.wrap_external(bokeh_kernel);
   }
 
   Domain compute_domain() override
@@ -107,5 +118,5 @@ void register_node_type_cmp_bokehimage()
       &ntype, "NodeBokehImage", node_free_standard_storage, node_copy_standard_storage);
   ntype.get_compositor_operation = file_ns::get_compositor_operation;
 
-  blender::bke::nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }

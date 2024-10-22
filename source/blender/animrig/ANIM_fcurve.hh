@@ -28,6 +28,7 @@ struct FCurveDescriptor {
   StringRefNull rna_path;
   int array_index;
   std::optional<PropertySubType> prop_subtype;
+  std::optional<blender::StringRefNull> channel_group;
 };
 
 /* This is used to pass in the settings for a keyframe into a function. */
@@ -70,6 +71,8 @@ void initialize_bezt(BezTriple *beztr,
 
 /**
  * Delete the keyframe at `time` on `fcurve` if a key exists there.
+ *
+ * This does NOT delete the FCurve if it ends up empty. That is for the caller to do.
  *
  * \note `time` is in fcurve time, not scene time.  Any time remapping must be
  * done prior to calling this function.

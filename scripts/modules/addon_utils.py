@@ -13,6 +13,7 @@ __all__ = (
     "reset_all",
     "module_bl_info",
     "extensions_refresh",
+    "stale_pending_stage_paths",
 )
 
 import bpy as _bpy
@@ -30,11 +31,16 @@ _extensions_incompatible = {}
 # `{addon_module_name: "Warning", ...}`
 _extensions_warnings = {}
 
+# Filename used for stale files (which we can't delete).
+_stale_filename = ".~stale~"
+
 
 # called only once at startup, avoids calling 'reset_all', correct but slower.
 def _initialize_once():
     for path in paths():
         _bpy.utils._sys_path_ensure_append(path)
+
+    _stale_pending_check_and_remove_once()
 
     _initialize_extensions_repos_once()
 
@@ -138,7 +144,7 @@ def _fake_module(mod_name, mod_path, speedy=True):
 
     try:
         ast_data = ast.parse(data, filename=mod_path)
-    except BaseException:
+    except Exception:
         print("Syntax error 'ast.parse' can't read:", repr(mod_path))
         import traceback
         traceback.print_exc()
@@ -160,7 +166,7 @@ def _fake_module(mod_name, mod_path, speedy=True):
             mod.bl_info = ast.literal_eval(body.value)
             mod.__file__ = mod_path
             mod.__time__ = os.path.getmtime(mod_path)
-        except:
+        except Exception:
             print("AST error parsing bl_info for:", repr(mod_path))
             import traceback
             traceback.print_exc()
@@ -363,7 +369,7 @@ def enable(module_name, *, default_set=False, persistent=False, handle_error=Non
             # in most cases the caller should 'check()' first.
             try:
                 mod.unregister()
-            except BaseException as ex:
+            except Exception as ex:
                 print("Exception in module unregister():", (mod_file or module_name))
                 handle_error(ex)
                 return None
@@ -376,7 +382,7 @@ def enable(module_name, *, default_set=False, persistent=False, handle_error=Non
 
             try:
                 importlib.reload(mod)
-            except BaseException as ex:
+            except Exception as ex:
                 handle_error(ex)
                 del sys.modules[module_name]
                 return None
@@ -414,7 +420,7 @@ def enable(module_name, *, default_set=False, persistent=False, handle_error=Non
                 )
             mod.__time__ = os.path.getmtime(mod_file)
             mod.__addon_enabled__ = False
-        except BaseException as ex:
+        except Exception as ex:
             # If the add-on doesn't exist, don't print full trace-back because the back-trace is in this case
             # is verbose without any useful details. A missing path is better communicated in a short message.
             # Account for `ImportError` & `ModuleNotFoundError`.
@@ -480,7 +486,7 @@ def enable(module_name, *, default_set=False, persistent=False, handle_error=Non
         # 3) Try run the modules register function.
         try:
             mod.register()
-        except BaseException as ex:
+        except Exception as ex:
             print("Exception in module register():", (mod_file or module_name))
             handle_error(ex)
             del sys.modules[module_name]
@@ -529,7 +535,7 @@ def disable(module_name, *, default_set=False, handle_error=None):
 
         try:
             mod.unregister()
-        except BaseException as ex:
+        except Exception as ex:
             mod_path = getattr(mod, "__file__", module_name)
             print("Exception in module unregister():", repr(mod_path))
             del mod_path
@@ -562,7 +568,12 @@ def reset_all(*, reload_scripts=False):
 
     # Update extensions compatibility (after reloading preferences).
     # Potentially refreshing wheels too.
-    _initialize_extensions_compat_data(_bpy.utils.user_resource('EXTENSIONS'), True, None)
+    _initialize_extensions_compat_data(
+        _bpy.utils.user_resource('EXTENSIONS'),
+        ensure_wheels=True,
+        addon_modules_pending=None,
+        use_startup_fastpath=False,
+    )
 
     for path, pkg_id in _paths_with_extension_repos():
         if not pkg_id:
@@ -679,6 +690,158 @@ def module_bl_info(mod, *, info_basis=None):
 
 
 # -----------------------------------------------------------------------------
+# Stale File Handling
+#
+# Notes:
+# - On startup, a file exists that indicates cleanup is needed.
+#   In the common case the file doesn't exist.
+#   Otherwise module paths are scanned for files to remove.
+# - Since errors resolving paths to remove could result in user data loss,
+#   ensure the paths are always within the (extension/add-on/app-template) directory.
+# - File locking isn't used, if multiple Blender instances start at the
+#   same time and try to remove the same files, this won't cause errors.
+#   Even so, remove the checking file immediately avoid unnecessary
+#   file-system access overhead for other Blender instances.
+#
+# For more implementation details see `_bpy_internal.extensions.stale_file_manager`.
+# This mainly impacts WIN32 which can't remove open file handles, see: #77837 & #125049.
+#
+# Use for all systems as the problem can impact any system if file removal fails
+# for any reason (typically permissions or file-system error).
+
+def _stale_pending_filepath():
+    # When this file exists, stale file removal is pending.
+    # Try to remove stale files next launch.
+    import os
+    return os.path.join(_bpy.utils.user_resource('CONFIG'), "stale-pending")
+
+
+def _stale_pending_stage(debug):
+    import os
+
+    stale_pending_filepath = _stale_pending_filepath()
+    dirpath = os.path.dirname(stale_pending_filepath)
+
+    if os.path.exists(stale_pending_filepath):
+        return
+
+    try:
+        os.makedirs(dirpath, exist_ok=True)
+        with open(stale_pending_filepath, "wb") as _:
+            pass
+    except Exception as ex:
+        print("Unable to set stale files pending:", str(ex))
+
+
+def _stale_file_directory_iter():
+    import os
+
+    for repo in _preferences.extensions.repos:
+        if not repo.enabled:
+            continue
+        if repo.source == 'SYSTEM':
+            continue
+        yield repo.directory
+
+    # Skip `addons_core` because add-ons because these will never be uninstalled by the user.
+    yield from paths()[1:]
+
+    # The `local_dir`, for wheels.
+    yield os.path.join(_bpy.utils.user_resource('EXTENSIONS'), ".local")
+
+    # The `path_app_templates`, for user app-templates.
+    yield _bpy.utils.user_resource(
+        'SCRIPTS',
+        path=os.path.join("startup", "bl_app_templates_user"),
+        create=False,
+    )
+
+
+def _stale_pending_check_and_remove_once():
+    # This runs on every startup, early exit if no stale data removal is staged.
+    import os
+    stale_pending_filepath = _stale_pending_filepath()
+    if not os.path.exists(stale_pending_filepath):
+        return
+
+    # Some stale data needs to be removed, this is an exceptional case.
+    # Allow for slower logic than is typically accepted on startup.
+    from _bpy_internal.extensions.stale_file_manager import StaleFiles
+    debug = _bpy.app.debug_python
+
+    # Remove the pending file if all are removed.
+    is_empty = True
+
+    for dirpath in _stale_file_directory_iter():
+        if not os.path.exists(os.path.join(dirpath, _stale_filename)):
+            continue
+
+        try:
+            stale_handle = StaleFiles(
+                base_directory=dirpath,
+                stale_filename=_stale_filename,
+                debug=debug,
+            )
+            stale_handle.state_load(check_exists=True)
+            if not stale_handle.is_empty():
+                stale_handle.state_remove_all()
+                if not stale_handle.is_empty():
+                    is_empty = False
+            if stale_handle.is_modified():
+                stale_handle.state_store(check_exists=False)
+        except Exception as ex:
+            print("Unexpected error clearing stale data, this is is a bug!", str(ex))
+
+    if is_empty:
+        try:
+            os.remove(stale_pending_filepath)
+        except Exception as ex:
+            if debug:
+                print("Failed to remove stale-pending file:", str(ex))
+
+
+def stale_pending_stage_paths(path_base, paths):
+    # - `path_base` must a directory iterated over by `_stale_file_directory_iter`.
+    #   Otherwise the stale files will never be removed.
+    # - `paths` must be absolute paths which could not be removed.
+    #   They must be located within `base_path` otherwise they cannot be removed.
+    from _bpy_internal.extensions.stale_file_manager import StaleFiles
+
+    debug = _bpy.app.debug_python
+
+    stale_handle = StaleFiles(
+        base_directory=path_base,
+        stale_filename=_stale_filename,
+        debug=debug,
+    )
+    # Already checked.
+    if stale_handle.state_load_add_and_store(paths=paths):
+        # Force clearing stale files on next restart.
+        _stale_pending_stage(debug)
+
+
+def stale_pending_remove_paths(path_base, paths):
+    # The reverse of: `stale_pending_stage_paths`.
+    from _bpy_internal.extensions.stale_file_manager import StaleFiles
+
+    debug = _bpy.app.debug_python
+
+    stale_handle = StaleFiles(
+        base_directory=path_base,
+        stale_filename=_stale_filename,
+        debug=debug,
+    )
+    # Already checked.
+    if stale_handle.state_load_remove_and_store(paths=paths):
+        # Don't attempt to reverse the `_stale_pending_stage` call.
+        # This is not trivial since other repositories may need to be cleared.
+        # There will be a minor performance hit on restart but this is enough
+        # of a corner case that it's not worth attempting to calculate if
+        # removal of pending files is needed or not.
+        pass
+
+
+# -----------------------------------------------------------------------------
 # Extension Pre-Flight Compatibility Check
 #
 # Check extension compatibility on startup so any extensions which are incompatible with Blender are marked as
@@ -735,10 +898,10 @@ def _extension_repos_module_to_directory_map():
 
 
 def _extension_compat_cache_update_needed(
-        cache_data,  # `Dict[str, Any]`
-        blender_id,  # `Tuple[Any, ...]`
-        extensions_enabled,  # `Set[Tuple[str, str]]`
-        print_debug,  # `Optional[Callable[[Any], None]]`
+        cache_data,  # `dict[str, Any]`
+        blender_id,  # `tuple[Any, ...]`
+        extensions_enabled,  # `set[tuple[str, str]]`
+        print_debug,  # `Callable[[Any], None] | None`
 ):  # `-> bool`
 
     # Detect when Blender itself changes.
@@ -810,11 +973,11 @@ def _extension_compat_cache_update_needed(
 # This function should not run every startup, so it can afford to be slower,
 # although users should not have to wait for it either.
 def _extension_compat_cache_create(
-        blender_id,  # `Tuple[Any, ...]`
-        extensions_enabled,  # `Set[Tuple[str, str]]`
-        wheel_list,  # `List[Tuple[str, List[str]]]`
-        print_debug,  # `Optional[Callable[[Any], None]]`
-):  # `-> Dict[str, Any]`
+        blender_id,  # `tuple[Any, ...]`
+        extensions_enabled,  # `set[tuple[str, str]]`
+        wheel_list,  # `list[tuple[str, List[str]]]`
+        print_debug,  # `Callable[[Any], None] | None`
+):  # `-> dict[str, Any]`
     import os
     from os.path import join
 
@@ -929,7 +1092,7 @@ def _initialize_extensions_compat_ensure_up_to_date(extensions_directory, extens
         try:
             if _extension_compat_cache_update_needed(cache_data, blender_id, extensions_enabled, print_debug):
                 cache_data = None
-        except Exception as ex:
+        except Exception:
             print("Extension: unexpected error reading cache, this is is a bug! (regenerating)")
             import traceback
             traceback.print_exc()
@@ -958,15 +1121,22 @@ def _initialize_extensions_compat_ensure_up_to_date(extensions_directory, extens
     return updated, wheel_list
 
 
-def _initialize_extensions_compat_ensure_up_to_date_wheels(extensions_directory, wheel_list):
+def _initialize_extensions_compat_ensure_up_to_date_wheels(extensions_directory, wheel_list, debug):
     import os
     _extension_sync_wheels(
         local_dir=os.path.join(extensions_directory, ".local"),
         wheel_list=wheel_list,
+        debug=debug,
     )
 
 
-def _initialize_extensions_compat_data(extensions_directory, ensure_wheels, addon_modules_pending):
+def _initialize_extensions_compat_data(
+        extensions_directory,  # `str`
+        *,
+        ensure_wheels,  # `bool`
+        addon_modules_pending,  # `Sequence[str] | None`
+        use_startup_fastpath,  # `bool`
+):
     # WARNING: this function must *never* raise an exception because it would interfere with low level initialization.
     # As the function deals with file IO, use what are typically over zealous exception checks so as to rule out
     # interfering with Blender loading properly in unexpected cases such as disk-full, read-only file-system
@@ -987,14 +1157,18 @@ def _initialize_extensions_compat_data(extensions_directory, ensure_wheels, addo
             if check_extension(module_name):
                 extensions_enabled.add(module_name[extensions_prefix_len:].partition(".")[0::2])
 
-    print_debug = (
-        (lambda *args, **kwargs: print("Extension version cache:", *args, **kwargs)) if _bpy.app.debug_python else
-        None
-    )
+    debug = _bpy.app.debug_python
+    print_debug = (lambda *args, **kwargs: print("Extension version cache:", *args, **kwargs)) if debug else None
 
     # Early exit, use for automated tests.
     # Avoid (relatively) expensive file-system scanning if at all possible.
-    if not extensions_enabled:
+    #
+    # - On startup when there are no extensions enabled, scanning and synchronizing wheels
+    #   adds unnecessary overhead. Especially considering this will run for automated tasks.
+    # - When disabling an add-on from the UI, there may be no extensions enabled afterwards,
+    #   however the extension that was disabled may have had wheels installed which must be removed,
+    #   so in this case it's important not to skip synchronizing wheels, see: #125958.
+    if use_startup_fastpath and (not extensions_enabled):
         if print_debug is not None:
             print_debug("no extensions, skipping cache data.")
         return
@@ -1007,7 +1181,7 @@ def _initialize_extensions_compat_data(extensions_directory, ensure_wheels, addo
             extensions_enabled,
             print_debug,
         )
-    except Exception as ex:
+    except Exception:
         print("Extension: unexpected error detecting cache, this is is a bug!")
         import traceback
         traceback.print_exc()
@@ -1016,8 +1190,8 @@ def _initialize_extensions_compat_data(extensions_directory, ensure_wheels, addo
     if ensure_wheels:
         if updated:
             try:
-                _initialize_extensions_compat_ensure_up_to_date_wheels(extensions_directory, wheel_list)
-            except Exception as ex:
+                _initialize_extensions_compat_ensure_up_to_date_wheels(extensions_directory, wheel_list, debug)
+            except Exception:
                 print("Extension: unexpected error updating wheels, this is is a bug!")
                 import traceback
                 traceback.print_exc()
@@ -1048,7 +1222,7 @@ def _bl_info_from_extension(mod_name, mod_path):
     except FileNotFoundError:
         print("Warning: add-on missing manifest, this can cause poor performance!:", repr(filepath_toml))
         return None, filepath_toml
-    except BaseException as ex:
+    except Exception as ex:
         print("Error:", str(ex), "in", filepath_toml)
         return None, filepath_toml
 
@@ -1072,8 +1246,8 @@ def _bl_info_from_extension(mod_name, mod_path):
             (int if i < 2 else _version_int_left_digits)(x)
             for i, x in enumerate(value.split(".", 2))
         )
-    except BaseException as ex:
-        print("Error: \"version\" is not a semantic version (X.Y.Z) in ", filepath_toml)
+    except Exception as ex:
+        print("Error: \"version\" is not a semantic version (X.Y.Z) in ", filepath_toml, str(ex))
         return None, filepath_toml
     bl_info["version"] = value
 
@@ -1085,7 +1259,7 @@ def _bl_info_from_extension(mod_name, mod_path):
         return None, filepath_toml
     try:
         value = tuple(int(x) for x in value.split("."))
-    except BaseException as ex:
+    except Exception as ex:
         print("Error:", str(ex), "in \"blender_version_min\"", filepath_toml)
         return None, filepath_toml
     bl_info["blender"] = value
@@ -1138,6 +1312,7 @@ def _extension_sync_wheels(
         *,
         local_dir,  # `str`
         wheel_list,  # `List[WheelSource]`
+        debug,           # `bool`
 ):  # `-> None`
     import os
     import sys
@@ -1150,11 +1325,22 @@ def _extension_sync_wheels(
         "site-packages",
     )
 
+    paths_stale = []
+
+    def remove_error_fn(filepath: str, _ex: Exception) -> None:
+        paths_stale.append(filepath)
+
     apply_action(
         local_dir=local_dir,
         local_dir_site_packages=local_dir_site_packages,
         wheel_list=wheel_list,
+        remove_error_fn=remove_error_fn,
+        debug=debug,
     )
+
+    if paths_stale:
+        stale_pending_stage_paths(local_dir, paths_stale)
+
     if os.path.exists(local_dir_site_packages):
         if local_dir_site_packages not in sys.path:
             sys.path.append(local_dir_site_packages)
@@ -1245,7 +1431,7 @@ def _extension_dirpath_from_handle():
         # meddle with the modules.
         try:
             dirpath = module.__path__[0]
-        except BaseException:
+        except Exception:
             dirpath = ""
         repos_info[module_id] = dirpath
     return repos_info
@@ -1580,7 +1766,12 @@ def _initialize_extensions_repos_once():
     _initialize_extensions_site_packages(extensions_directory=extensions_directory)
 
     # Ensure extension compatibility data has been loaded and matches the manifests.
-    _initialize_extensions_compat_data(extensions_directory, True, None)
+    _initialize_extensions_compat_data(
+        extensions_directory,
+        ensure_wheels=True,
+        addon_modules_pending=None,
+        use_startup_fastpath=True,
+    )
 
     # Setup repositories for the first time.
     # Intentionally don't call `_initialize_extension_repos_pre` as this is the first time,
@@ -1602,6 +1793,7 @@ def extensions_refresh(ensure_wheels=True, addon_modules_pending=None):
         _bpy.utils.user_resource('EXTENSIONS'),
         ensure_wheels=ensure_wheels,
         addon_modules_pending=addon_modules_pending,
+        use_startup_fastpath=False,
     )
 
 

@@ -9,6 +9,14 @@ tests, and Blender git repository.
 
 For release branches, this will check out the appropriate branches of
 submodules and libraries.
+
+WARNING:
+Python 3.9 is used on the built-bot.
+Take care *not* to use features from the Python version used by Blender!
+
+NOTE:
+Some type annotations are quoted to avoid errors in Python 3.9.
+These can be unquoted eventually.
 """
 
 import argparse
@@ -21,11 +29,6 @@ import make_utils
 from pathlib import Path
 from make_utils import call, check_output
 from urllib.parse import urljoin, urlsplit
-
-from typing import (
-    Optional,
-    Tuple,
-)
 
 
 def print_stage(text: str) -> None:
@@ -53,6 +56,8 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--use-linux-libraries", action="store_true")
     parser.add_argument("--architecture", type=str,
                         choices=("x86_64", "amd64", "arm64",))
+    parser.add_argument("--prune-destructive", action="store_true",
+                        help="Destructive! Detect and remove stale files from older checkouts")
     return parser.parse_args()
 
 
@@ -94,7 +99,7 @@ def get_effective_architecture(args: argparse.Namespace) -> str:
     NOTE: When cross-compiling the architecture is coming from the command line
     argument.
     """
-    architecture: Optional[str] = args.architecture
+    architecture: "str | None" = args.architecture
     if architecture:
         assert isinstance(architecture, str)
     elif "ARM64" in platform.version():
@@ -106,6 +111,8 @@ def get_effective_architecture(args: argparse.Namespace) -> str:
     # Normalize the architecture name.
     if architecture in {"x86_64", "amd64"}:
         architecture = "x64"
+    if architecture == "aarch64":
+        architecture = "arm64"
 
     assert (architecture in {"x64", "arm64"})
 
@@ -113,7 +120,7 @@ def get_effective_architecture(args: argparse.Namespace) -> str:
     return architecture
 
 
-def get_submodule_directories(args: argparse.Namespace) -> Tuple[Path, ...]:
+def get_submodule_directories(args: argparse.Namespace) -> tuple[Path, ...]:
     """
     Get list of all configured submodule directories.
     """
@@ -133,6 +140,33 @@ def ensure_git_lfs(args: argparse.Namespace) -> None:
     # Use `--skip-repo` to avoid creating git hooks.
     # This is called from the `blender.git` checkout, so we don't need to install hooks there.
     call((args.git_command, "lfs", "install", "--skip-repo"), exit_on_error=True)
+
+
+def prune_stale_files() -> None:
+    """
+    Ensure files from previous Git configurations do not exist anymore
+    """
+    print_stage("Removing stale files")
+
+    blender_git_root = get_blender_git_root()
+    found_stale_files = False
+
+    for relative_dir_to_remove in (
+        Path("scripts") / "addons",
+        Path("scripts") / "addons_contrib",
+    ):
+        dir_to_remove = blender_git_root / relative_dir_to_remove
+        if not dir_to_remove.exists():
+            continue
+        if not dir_to_remove.is_dir():
+            print(f"'{relative_dir_to_remove}' exists but is not a directory")
+            continue
+        print(f"Removing '{relative_dir_to_remove}'")
+        make_utils.remove_directory(dir_to_remove)
+        found_stale_files = True
+
+    if not found_stale_files:
+        print("Checkout looks pristine")
 
 
 def initialize_precompiled_libraries(args: argparse.Namespace) -> str:
@@ -310,7 +344,7 @@ def floating_checkout_initialize_if_needed(
         args: argparse.Namespace,
         repo_name: str,
         directory: Path,
-        old_submodules_dir: Optional[Path] = None,
+        old_submodules_dir: "Path | None" = None,
 ) -> None:
     """Initialize checkout of an external repository"""
 
@@ -406,8 +440,8 @@ def floating_checkout_update(
         args: argparse.Namespace,
         repo_name: str,
         directory: Path,
-        branch: Optional[str],
-        old_submodules_dir: Optional[Path] = None,
+        branch: "str | None",
+        old_submodules_dir: "Path | None" = None,
         only_update: bool = False,
 ) -> str:
     """Update a single external checkout with the given name in the scripts folder"""
@@ -490,7 +524,7 @@ def external_scripts_update(
         args: argparse.Namespace,
         repo_name: str,
         directory_name: str,
-        branch: Optional[str],
+        branch: "str | None",
 ) -> str:
     return floating_checkout_update(
         args,
@@ -501,7 +535,7 @@ def external_scripts_update(
     )
 
 
-def floating_libraries_update(args: argparse.Namespace, branch: Optional[str]) -> str:
+def floating_libraries_update(args: argparse.Namespace, branch: "str | None") -> str:
     """Update libraries checkouts which are floating (not attached as Git submodules)"""
     msg = ""
 
@@ -554,7 +588,7 @@ def add_submodule_push_url(args: argparse.Namespace) -> None:
         make_utils.git_set_config(args.git_command, "remote.origin.pushURL", push_url, str(config))
 
 
-def submodules_lib_update(args: argparse.Namespace, branch: Optional[str]) -> str:
+def submodules_lib_update(args: argparse.Namespace, branch: "str | None") -> str:
     print_stage("Updating Libraries")
 
     msg = ""
@@ -592,6 +626,9 @@ if __name__ == "__main__":
 
     # Submodules and precompiled libraries require Git LFS.
     ensure_git_lfs(args)
+
+    if args.prune_destructive:
+        prune_stale_files()
 
     if not args.no_blender:
         blender_skip_msg = git_update_skip(args)

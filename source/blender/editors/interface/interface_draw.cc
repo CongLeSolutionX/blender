@@ -350,7 +350,7 @@ void ui_draw_but_IMAGE(ARegion * /*region*/,
 
   if (w != ibuf->x || h != ibuf->y) {
     /* We scale the bitmap, rather than have OGL do a worse job. */
-    IMB_scaleImBuf(ibuf, w, h);
+    IMB_scale(ibuf, w, h, IMBScaleFilter::Box, false);
   }
 
   float col[4] = {1.0f, 1.0f, 1.0f, 1.0f};
@@ -602,8 +602,9 @@ static void waveform_draw_one(const float *waveform, int waveform_num, const flo
   /* TODO: store the #blender::gpu::Batch inside the scope. */
   blender::gpu::Batch *batch = GPU_batch_create_ex(
       GPU_PRIM_POINTS, vbo, nullptr, GPU_BATCH_OWNS_VBO);
-  GPU_batch_program_set_builtin(batch, GPU_SHADER_3D_UNIFORM_COLOR);
+  GPU_batch_program_set_builtin(batch, GPU_SHADER_3D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_AA);
   GPU_batch_uniform_4f(batch, "color", col[0], col[1], col[2], 1.0f);
+  GPU_batch_uniform_1f(batch, "size", 1.0f);
   GPU_batch_draw(batch);
 
   GPU_batch_discard(batch);
@@ -1796,6 +1797,8 @@ void ui_draw_but_CURVE(ARegion *region, uiBut *but, const uiWidgetColors *wcol, 
   const uint size = GPU_vertformat_attr_add(format, "size", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
   immBindBuiltinProgram(GPU_SHADER_3D_POINT_VARYING_SIZE_VARYING_COLOR);
 
+  GPU_program_point_size(true);
+
   /* Calculate vertex colors based on text theme. */
   float color_vert[4], color_vert_select[4];
   UI_GetThemeColor4fv(TH_TEXT_HI, color_vert);
@@ -1809,7 +1812,8 @@ void ui_draw_but_CURVE(ARegion *region, uiBut *but, const uiWidgetColors *wcol, 
   }
 
   cmp = cuma->curve;
-  const float point_size = max_ff(1.0f, min_ff(UI_SCALE_FAC / but->block->aspect * 4.0f, 4.0f));
+  const float point_size = max_ff(U.pixelsize * 3.0f,
+                                  min_ff(UI_SCALE_FAC / but->block->aspect * 6.0f, 20.0f));
   immBegin(GPU_PRIM_POINTS, cuma->totpoint);
   for (int a = 0; a < cuma->totpoint; a++) {
     const float fx = rect->xmin + zoomx * (cmp[a].x - offsx);
@@ -1973,13 +1977,13 @@ void ui_draw_but_CURVEPROFILE(ARegion *region,
     BLI_polyfill_calc(table_coords, tot_points, -1, tri_indices);
 
     /* Draw the triangles for the profile fill. */
-    immUniformColor3ubvAlpha((const uchar *)wcol->item, 128);
+    immUniformColor3ubvAlpha(wcol->item, 128);
     GPU_blend(GPU_BLEND_ALPHA);
     GPU_polygon_smooth(false);
     immBegin(GPU_PRIM_TRIS, 3 * tot_triangles);
     for (uint i = 0; i < tot_triangles; i++) {
+      const uint *tri = tri_indices[i];
       for (uint j = 0; j < 3; j++) {
-        uint *tri = tri_indices[i];
         fx = rect->xmin + zoomx * (table_coords[tri[j]][0] - offsx);
         fy = rect->ymin + zoomy * (table_coords[tri[j]][1] - offsy);
         immVertex2f(pos, fx, fy);

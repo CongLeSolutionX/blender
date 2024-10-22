@@ -12,11 +12,11 @@
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 #include "BLI_utildefines.h"
 
 #ifdef WITH_PYTHON
-#  include "BPY_extern.h"
+#  include "BPY_extern.hh"
 #endif
 
 #include "DEG_depsgraph.hh"
@@ -970,7 +970,7 @@ static void rna_def_render_engine(BlenderRNA *brna)
       prop,
       "Use Image Save",
       "Save images/movie to disk while rendering an animation. "
-      "Disabling image saving is only supported when bl_use_postprocess is also disabled");
+      "Disabling image saving is only supported when bl_use_postprocess is also disabled.");
 
   prop = RNA_def_property(srna, "bl_use_gpu_context", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "type->flag", RE_USE_GPU_CONTEXT);

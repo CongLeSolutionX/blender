@@ -761,7 +761,7 @@ static int text_insert_unicode_invoke(bContext *C, wmOperator * /*op*/, const wm
 {
   char *edit_string = static_cast<char *>(MEM_mallocN(24, __func__));
   edit_string[0] = 0;
-  UI_popup_block_invoke(C, wm_block_insert_unicode_create, edit_string, MEM_freeN);
+  UI_popup_block_invoke_ex(C, wm_block_insert_unicode_create, edit_string, MEM_freeN, false);
   return OPERATOR_FINISHED;
 }
 
@@ -2203,7 +2203,10 @@ void ED_curve_editfont_make(Object *obedit)
   ef->len = len_char32;
   BLI_assert(ef->len >= 0);
 
-  memcpy(ef->textbufinfo, cu->strinfo, ef->len * sizeof(CharInfo));
+  /* Old files may not have this initialized (v2.34). Leaving zeroed is OK. */
+  if (cu->strinfo) {
+    memcpy(ef->textbufinfo, cu->strinfo, ef->len * sizeof(CharInfo));
+  }
 
   ef->pos = cu->pos;
   if (ef->pos > ef->len) {

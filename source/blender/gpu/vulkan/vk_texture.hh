@@ -10,15 +10,18 @@
 
 #include "gpu_texture_private.hh"
 
-#include "vk_bindable_resource.hh"
 #include "vk_context.hh"
 #include "vk_image_view.hh"
 
 namespace blender::gpu {
 
 class VKSampler;
+class VKDescriptorSetTracker;
+class VKVertexBuffer;
 
-class VKTexture : public Texture, public VKBindableResource {
+class VKTexture : public Texture {
+  friend class VKDescriptorSetTracker;
+
   /**
    * Texture format how the texture is stored on the device.
    *
@@ -29,6 +32,15 @@ class VKTexture : public Texture, public VKBindableResource {
 
   /** When set the instance is considered to be a texture view from `source_texture_` */
   VKTexture *source_texture_ = nullptr;
+
+  /**
+   * Store of source vertex buffer. Related to `GPU_texture_create_from_vertbuf`.
+   *
+   * In vulkan a texel buffer is a buffer and not a texture. Calls will be forwarded to the vertex
+   * buffer in this case. GPU_texture_create_from_vertbuf should be phased out (currently only used
+   * by particle hair).
+   */
+  VKVertexBuffer *source_buffer_ = nullptr;
   VkImage vk_image_ = VK_NULL_HANDLE;
   VmaAllocation allocation_ = VK_NULL_HANDLE;
 
@@ -73,7 +85,7 @@ class VKTexture : public Texture, public VKBindableResource {
   void mip_range_set(int min, int max) override;
   void *read(int mip, eGPUDataFormat format) override;
   void read_sub(
-      int mip, eGPUDataFormat format, const int area[6], IndexRange layers, void *r_data);
+      int mip, eGPUDataFormat format, const int region[6], IndexRange layers, void *r_data);
   void update_sub(
       int mip, int offset[3], int extent[3], eGPUDataFormat format, const void *data) override;
   void update_sub(int offset[3],
@@ -83,11 +95,6 @@ class VKTexture : public Texture, public VKBindableResource {
 
   /* TODO(fclem): Legacy. Should be removed at some point. */
   uint gl_bindcode_get() const override;
-
-  void add_to_descriptor_set(AddToDescriptorSetContext &data,
-                             int location,
-                             shader::ShaderCreateInfo::Resource::BindType bind_type,
-                             const GPUSamplerState sampler_state) override;
 
   VkImage vk_image_handle() const
   {

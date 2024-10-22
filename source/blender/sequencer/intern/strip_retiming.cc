@@ -20,9 +20,11 @@
 
 #include "BKE_sound.h"
 
+#include "SEQ_iterator.hh"
 #include "SEQ_retiming.hh"
 #include "SEQ_sequencer.hh"
 #include "SEQ_time.hh"
+#include "SEQ_transform.hh"
 
 #include "sequencer.hh"
 #include "strip_time.hh"
@@ -105,9 +107,39 @@ void SEQ_retiming_data_ensure(Sequence *seq)
 
 void SEQ_retiming_data_clear(Sequence *seq)
 {
-  seq->retiming_keys = nullptr;
-  seq->retiming_keys_num = 0;
+  if (seq->retiming_keys != nullptr) {
+    MEM_freeN(seq->retiming_keys);
+    seq->retiming_keys = nullptr;
+    seq->retiming_keys_num = 0;
+  }
   seq->flag &= ~SEQ_SHOW_RETIMING;
+}
+
+static void retiming_key_overlap(Scene *scene, Sequence *seq)
+{
+  ListBase *seqbase = SEQ_active_seqbase_get(SEQ_editing_get(scene));
+  blender::VectorSet<Sequence *> strips;
+  blender::VectorSet<Sequence *> dependant;
+  dependant.add(seq);
+  SEQ_iterator_set_expand(scene, seqbase, dependant, SEQ_query_strip_effect_chain);
+  strips.add_multiple(dependant);
+  dependant.remove(seq);
+  SEQ_transform_handle_overlap(scene, seqbase, strips, dependant, true);
+}
+
+void SEQ_retiming_reset(Scene *scene, Sequence *seq)
+{
+  if (!SEQ_retiming_is_allowed(seq)) {
+    return;
+  }
+
+  SEQ_retiming_data_clear(seq);
+
+  blender::Span effects = seq_sequence_lookup_effects_by_seq(scene, seq);
+  seq_time_update_effects_strip_range(scene, effects);
+  SEQ_time_update_meta_strip_range(scene, seq_sequence_lookup_meta_by_seq(scene, seq));
+
+  retiming_key_overlap(scene, seq);
 }
 
 bool SEQ_retiming_is_active(const Sequence *seq)
@@ -317,7 +349,7 @@ SeqRetimingKey *SEQ_retiming_add_key(const Scene *scene, Sequence *seq, const in
   return added_key;
 }
 
-void SEQ_retiming_transition_key_frame_set(const Scene * /*scene */,
+void SEQ_retiming_transition_key_frame_set(const Scene * /*scene*/,
                                            const Sequence *seq,
                                            SeqRetimingKey *key,
                                            const int timeline_frame)
@@ -383,7 +415,7 @@ void SEQ_retiming_remove_multiple_keys(Sequence *seq,
   }
 
   /* Sanitize keys to be removed. */
-  keys_to_remove.remove_if([&](SeqRetimingKey *key) {
+  keys_to_remove.remove_if([&](const SeqRetimingKey *key) {
     return key->strip_frame_index == 0 || SEQ_retiming_is_last_key(seq, key) ||
            SEQ_retiming_key_is_transition_type(key);
   });
@@ -1055,6 +1087,12 @@ void SEQ_retiming_selection_remove(SeqRetimingKey *key)
   key->flag &= ~SEQ_KEY_SELECTED;
 }
 
+void SEQ_retiming_selection_copy(SeqRetimingKey *dst, const SeqRetimingKey *src)
+{
+  SEQ_retiming_selection_remove(dst);
+  dst->flag |= (src->flag & SEQ_KEY_SELECTED);
+}
+
 blender::Map<SeqRetimingKey *, Sequence *> SEQ_retiming_selection_get(const Editing *ed)
 {
   blender::Map<SeqRetimingKey *, Sequence *> selection;
@@ -1074,7 +1112,7 @@ blender::Map<SeqRetimingKey *, Sequence *> SEQ_retiming_selection_get(const Edit
 bool SEQ_retiming_selection_contains(const Editing *ed, const SeqRetimingKey *key)
 {
   LISTBASE_FOREACH (Sequence *, seq, ed->seqbasep) {
-    for (SeqRetimingKey &key_iter : SEQ_retiming_keys_get(seq)) {
+    for (const SeqRetimingKey &key_iter : SEQ_retiming_keys_get(seq)) {
       if ((key_iter.flag & SEQ_KEY_SELECTED) != 0 && &key_iter == key) {
         return true;
       }

@@ -7,7 +7,6 @@ from bpy.types import (
     Header,
     Menu,
     Panel,
-    UIList,
 )
 from bpy.app.translations import (
     pgettext_iface as iface_,
@@ -198,7 +197,8 @@ class NODE_HT_header(Header):
         if is_compositor:
             layout.prop(snode, "pin", text="", emboss=False)
 
-        layout.operator("node.tree_path_parent", text="", icon='FILE_PARENT')
+        if len(snode.path) > 1:
+            layout.operator("node.tree_path_parent", text="", icon='FILE_PARENT')
 
         # Backdrop
         if is_compositor:
@@ -206,7 +206,7 @@ class NODE_HT_header(Header):
             row.prop(snode, "show_backdrop", toggle=True)
             sub = row.row(align=True)
             sub.active = snode.show_backdrop
-            sub.prop(snode, "backdrop_channels", icon_only=True, text="", expand=True)
+            sub.prop(snode, "backdrop_channels", icon_only=True, text="")
 
         # Snap
         row = layout.row(align=True)
@@ -690,9 +690,16 @@ class NODE_PT_active_node_generic(Panel):
     def draw(self, context):
         layout = self.layout
         node = context.active_node
+        tree = node.id_data
+
+        layout.use_property_split = True
+        layout.use_property_decorate = False
 
         layout.prop(node, "name", icon='NODE')
         layout.prop(node, "label", icon='NODE')
+
+        if tree.type == "GEOMETRY":
+            layout.prop(node, "warning_propagation")
 
 
 class NODE_PT_active_node_color(Panel):
@@ -850,6 +857,28 @@ class NODE_PT_quality(bpy.types.Panel):
         col.prop(tree, "use_viewer_border")
 
 
+class NODE_PT_compositor_debug(Panel):
+    bl_space_type = 'NODE_EDITOR'
+    bl_region_type = 'UI'
+    bl_category = "Options"
+    bl_label = "Debug"
+    bl_parent_id = "NODE_PT_quality"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    @classmethod
+    def poll(cls, context):
+        render_data = context.scene.render
+        if render_data.compositor_device != "CPU":
+            return False
+
+        preferences = context.preferences
+        return preferences.view.show_developer_ui and preferences.experimental.enable_new_cpu_compositor
+
+    def draw(self, context):
+        render_data = context.scene.render
+        self.layout.prop(render_data, "use_new_cpu_compositor", text="Experimental CPU Implementation")
+
+
 class NODE_PT_overlay(Panel):
     bl_space_type = 'NODE_EDITOR'
     bl_region_type = 'HEADER'
@@ -999,6 +1028,9 @@ class NODE_PT_node_tree_properties(Panel):
             layout.prop(group, "description", text="Description")
 
         layout.prop(group, "color_tag")
+        row = layout.row(align=True)
+        row.prop(group, "default_group_node_width", text="Node Width")
+        row.operator("node.default_group_width_set", text="", icon='NODE')
 
         if group.bl_idname == "GeometryNodeTree":
             header, body = layout.panel("group_usage")
@@ -1073,6 +1105,7 @@ classes = (
     NODE_PT_active_tool,
     NODE_PT_backdrop,
     NODE_PT_quality,
+    NODE_PT_compositor_debug,
     NODE_PT_annotation,
     NODE_PT_overlay,
     NODE_PT_active_node_properties,

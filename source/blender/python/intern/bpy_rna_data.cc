@@ -16,8 +16,8 @@
 #include <Python.h>
 #include <cstddef>
 
-#include "../generic/py_capi_utils.h"
-#include "../generic/python_compat.h"
+#include "../generic/py_capi_utils.hh"
+#include "../generic/python_compat.hh"
 
 #include "BLI_string.h"
 #include "BLI_utildefines.h"
@@ -28,8 +28,8 @@
 #include "RNA_access.hh"
 #include "RNA_prototypes.hh"
 
-#include "bpy_rna.h"
-#include "bpy_rna_data.h"
+#include "bpy_rna.hh"
+#include "bpy_rna_data.hh"
 
 struct BPy_DataContext {
   PyObject_HEAD /* Required Python macro. */
@@ -37,7 +37,7 @@ struct BPy_DataContext {
   char filepath[1024];
 };
 
-static PyObject *bpy_rna_data_temp_data(PyObject *self, PyObject *args, PyObject *kwds);
+static PyObject *bpy_rna_data_temp_data(PyObject *self, PyObject *args, PyObject *kw);
 static PyObject *bpy_rna_data_context_enter(BPy_DataContext *self);
 static PyObject *bpy_rna_data_context_exit(BPy_DataContext *self, PyObject *args);
 

@@ -36,6 +36,7 @@ __all__ = (
     "previews",
     "resource_path",
     "script_path_user",
+    "extension_path_user",
     "script_paths",
     "smpte_from_frame",
     "smpte_from_seconds",
@@ -137,7 +138,7 @@ def _test_import(module_name, loaded_modules):
 
     try:
         mod = __import__(module_name)
-    except:
+    except Exception:
         import traceback
         traceback.print_exc()
         return None
@@ -193,8 +194,36 @@ def modules_from_path(path, loaded_modules):
     return modules
 
 
-_global_loaded_modules = []  # store loaded module names for reloading.
-import bpy_types as _bpy_types  # keep for comparisons, never ever reload this.
+# Store registered module names for reloading.
+# Currently used for "startup" modules.
+_registered_module_names = []
+# Keep for comparisons, never ever reload this.
+import bpy_types as _bpy_types
+
+
+def _register_module_call(mod):
+    register = getattr(mod, "register", None)
+    if register:
+        try:
+            register()
+        except Exception:
+            import traceback
+            traceback.print_exc()
+    else:
+        print(
+            "\nWarning! {!r} has no register function, "
+            "this is now a requirement for registerable scripts".format(mod.__file__)
+        )
+
+
+def _unregister_module_call(mod):
+    unregister = getattr(mod, "unregister", None)
+    if unregister:
+        try:
+            unregister()
+        except Exception:
+            import traceback
+            traceback.print_exc()
 
 
 def load_scripts(*, reload_scripts=False, refresh_scripts=False, extensions=True):
@@ -230,29 +259,6 @@ def load_scripts(*, reload_scripts=False, refresh_scripts=False, extensions=True
         for addon_module_name in [ext.module for ext in _preferences.addons]:
             _addon_utils.disable(addon_module_name)
 
-    def register_module_call(mod):
-        register = getattr(mod, "register", None)
-        if register:
-            try:
-                register()
-            except:
-                import traceback
-                traceback.print_exc()
-        else:
-            print(
-                "\nWarning! {!r} has no register function, "
-                "this is now a requirement for registerable scripts".format(mod.__file__)
-            )
-
-    def unregister_module_call(mod):
-        unregister = getattr(mod, "unregister", None)
-        if unregister:
-            try:
-                unregister()
-            except:
-                import traceback
-                traceback.print_exc()
-
     def test_reload(mod):
         import importlib
         # reloading this causes internal errors
@@ -263,7 +269,7 @@ def load_scripts(*, reload_scripts=False, refresh_scripts=False, extensions=True
 
         try:
             return importlib.reload(mod)
-        except:
+        except Exception:
             import traceback
             traceback.print_exc()
 
@@ -277,24 +283,34 @@ def load_scripts(*, reload_scripts=False, refresh_scripts=False, extensions=True
             mod = test_reload(mod)
 
         if mod:
-            register_module_call(mod)
-            _global_loaded_modules.append(mod.__name__)
+            _register_module_call(mod)
+            _registered_module_names.append(mod.__name__)
 
     if reload_scripts:
+        # Module names -> modules.
+        #
+        # Reverse the modules so they are unregistered in the reverse order they're registered.
+        # While this isn't essential for the most part, it ensures any inter-dependencies can be handled properly.
+        registered_modules = [
+            mod for mod in map(_sys.modules.get, reversed(_registered_module_names))
+            if mod is not None
+        ]
 
-        # module names -> modules
-        _global_loaded_modules[:] = [_sys.modules[mod_name]
-                                     for mod_name in _global_loaded_modules]
+        # This should never happen, only report this to notify developers that something unexpected happened.
+        if len(registered_modules) != len(_registered_module_names):
+            print(
+                "Warning: globally loaded modules not found in sys.modules:",
+                [mod_name for mod_name in _registered_module_names if mod_name not in _sys.modules]
+            )
+        _registered_module_names.clear()
 
-        # loop over and unload all scripts
-        _global_loaded_modules.reverse()
-        for mod in _global_loaded_modules:
-            unregister_module_call(mod)
+        # Loop over and unload all scripts.
+        for mod in registered_modules:
+            _unregister_module_call(mod)
 
-        for mod in _global_loaded_modules:
+        for mod in registered_modules:
             test_reload(mod)
-
-        del _global_loaded_modules[:]
+        del registered_modules
 
         # Update key-maps to account for operators no longer existing.
         # Typically unloading operators would refresh the event system (such as disabling an add-on)
@@ -340,6 +356,22 @@ def load_scripts(*, reload_scripts=False, refresh_scripts=False, extensions=True
                 for subcls in cls.__subclasses__():
                     if not subcls.is_registered:
                         print("Warning, unregistered class: {:s}({:s})".format(subcls.__name__, cls.__name__))
+
+
+# Internal only, called on exit by `WM_exit_ex`.
+def _on_exit():
+    # Disable all add-ons.
+    _addon_utils.disable_all()
+
+    # Call `unregister` function on internal startup module.
+    # Must only be used as part of Blender 'exit' process.
+    from bpy_restrict_state import RestrictBlend
+    with RestrictBlend():
+        for mod_name in reversed(_registered_module_names):
+            if (mod := _sys.modules.get(mod_name)) is None:
+                print("Warning: module", repr(mod_name), "not found in sys.modules")
+                continue
+            _unregister_module_call(mod)
 
 
 def load_scripts_extensions(*, reload_scripts=False):
@@ -583,6 +615,31 @@ def unregister_preset_path(path):
     return True
 
 
+def _is_path_parent_of(parent_path, path):
+    try:
+        if _os.path.samefile(
+                _os.path.commonpath([parent_path]),
+                _os.path.commonpath([parent_path, path])
+        ):
+            return True
+
+    # NOTE: skipping in the case files can't be found isn't ideal because
+    # `/a/b` is logically *inside* `/a/` irrespective of the permissions or existence of either paths.
+    # Nevertheless, skip them as it's impractical to operate on paths that can't be accessed.
+    # In all likelihood the caller is also unable to properly handle the result.
+    except FileNotFoundError:
+        # The path we tried to look up doesn't exist.
+        pass
+    except ValueError:
+        # Happens on Windows when paths don't have the same drive.
+        pass
+    except PermissionError:
+        # When either of the paths don't have permissions to access.
+        pass
+
+    return False
+
+
 def is_path_builtin(path):
     """
     Returns True if the path is one of the built-in paths used by Blender.
@@ -605,18 +662,27 @@ def is_path_builtin(path):
             # This can happen on portable installs.
             continue
 
-        try:
-            if _os.path.samefile(
-                    _os.path.commonpath([parent_path]),
-                    _os.path.commonpath([parent_path, path])
-            ):
-                return True
-        except FileNotFoundError:
-            # The path we tried to look up doesn't exist.
-            pass
-        except ValueError:
-            # Happens on Windows when paths don't have the same drive.
-            pass
+        if _is_path_parent_of(parent_path, path):
+            return True
+
+    return False
+
+
+def is_path_extension(path):
+    """
+    Returns True if the path is from an extensions repository.
+
+    :arg path: Path to check if it is within an extension repository.
+    :type path: str
+    :rtype: bool
+    """
+    for repo in _preferences.extensions.repos:
+        if not repo.enabled:
+            continue
+        # NOTE: since these paths are user defined, they can be anything.
+        # Empty or malformed paths will be skipped.
+        if _is_path_parent_of(repo.directory, path):
+            return True
 
     return False
 
@@ -782,7 +848,7 @@ def keyconfig_set(filepath, *, report=None):
     try:
         error_msg = ""
         execfile(filepath)
-    except:
+    except Exception:
         import traceback
         error_msg = traceback.format_exc()
 
@@ -810,8 +876,8 @@ def user_resource(resource_type, *, path="", create=False):
     """
     Return a user resource path (normally from the users home directory).
 
-    :arg type: Resource type in ['DATAFILES', 'CONFIG', 'SCRIPTS', 'EXTENSIONS'].
-    :type type: string
+    :arg resource_type: Resource type in ['DATAFILES', 'CONFIG', 'SCRIPTS', 'EXTENSIONS'].
+    :type resource_type: string
     :arg path: Optional subdirectory.
     :type path: string
     :arg create: Treat the path as a directory and create it if its not existing.
@@ -829,7 +895,7 @@ def user_resource(resource_type, *, path="", create=False):
             if not _os.path.exists(target_path):
                 try:
                     _os.makedirs(target_path)
-                except:
+                except Exception:
                     import traceback
                     traceback.print_exc()
                     target_path = ""
@@ -878,7 +944,7 @@ def extension_path_user(package, *, path="", create=False):
             if not _os.path.exists(target_path):
                 try:
                     _os.makedirs(target_path)
-                except:
+                except Exception:
                     import traceback
                     traceback.print_exc()
                     target_path = ""
@@ -1184,7 +1250,7 @@ def manual_map():
     for cb in reversed(_manual_map):
         try:
             prefix, url_manual_mapping = cb()
-        except:
+        except Exception:
             print("Error calling {!r}".format(cb))
             import traceback
             traceback.print_exc()

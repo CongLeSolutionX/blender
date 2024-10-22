@@ -17,7 +17,7 @@
 #  include "BLI_winstuff.h"
 #endif
 #include "BLI_fileops.h"
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 #include "BLI_string.h"
 #include "BLI_string_utf8.h"
 
@@ -477,7 +477,7 @@ static void PREFERENCES_OT_extension_repo_add(wmOperatorType *ot)
        "REMOTE",
        ICON_INTERNET,
        "Add Remote Repository",
-       "Add a repository referencing an remote repository "
+       "Add a repository referencing a remote repository "
        "with support for listing and updating extensions"},
       {int(bUserExtensionRepoAddType::Local),
        "LOCAL",
@@ -849,9 +849,9 @@ static bool associate_blend_poll(bContext *C)
 }
 
 #if !defined(__APPLE__)
-static bool associate_blend(bool do_register, bool all_users, char **error_msg)
+static bool associate_blend(bool do_register, bool all_users, char **r_error_msg)
 {
-  const bool result = WM_platform_associate_set(do_register, all_users, error_msg);
+  const bool result = WM_platform_associate_set(do_register, all_users, r_error_msg);
 #  ifdef WIN32
   if ((result == false) &&
       /* For some reason the message box isn't shown in this case. */
