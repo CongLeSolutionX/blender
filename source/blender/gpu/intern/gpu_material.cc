@@ -876,7 +876,7 @@ GPUMaterial *GPU_material_from_nodetree(Scene *scene,
   bNodeTree *localtree = nullptr;
   if (!is_npr_shader) {
     localtree = blender::bke::node_tree_localize(ntree, nullptr);
-    ntreeGPUMaterialNodes(localtree, mat, is_npr_shader);
+    ntreeGPUMaterialNodes(localtree, mat);
   }
   else {
     localtree = ntreeGPUNPRNodes(ntree, mat);
