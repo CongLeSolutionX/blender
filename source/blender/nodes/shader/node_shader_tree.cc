@@ -725,6 +725,74 @@ static void ntree_shader_embed_tree(bNodeTree *src, bNodeTree *dst)
   }
 }
 
+static void ntree_shader_embed_tree_branch(bNodeTree *src,
+                                           bNodeTree *dst,
+                                           bNode *root,
+                                           const char *root_socket = nullptr)
+{
+  /* Initialize `runtime->tmp_flag`. */
+  LISTBASE_FOREACH (bNode *, node, &src->nodes) {
+    node->runtime->tmp_flag = 0;
+  }
+
+  auto tag_node =
+      [](bNode *fromnode, bNode * /*tonode*/ = nullptr, void * /*userdata*/ = nullptr) {
+        fromnode->runtime->tmp_flag = 1;
+        return true;
+      };
+
+  tag_node(root);
+  if (root_socket) {
+    bNodeSocket *socket = ntree_shader_node_find_input(root, root_socket);
+    root = socket->link ? socket->link->fromnode : nullptr;
+  }
+
+  if (root) {
+    tag_node(root);
+    blender::bke::node_chain_iterator_backwards(src, root, tag_node, nullptr, 0);
+  }
+
+  blender::Vector<bNode *> new_nodes = {nullptr};
+
+  LISTBASE_FOREACH (bNode *, node, &src->nodes) {
+    if (!node->runtime->tmp_flag) {
+      continue;
+    }
+    /* Avoid creating unique names in the new tree, since it is very slow.
+     * The names on the new nodes will be invalid. */
+    bNode *copy = blender::bke::node_copy(
+        dst, *node, LIB_ID_CREATE_NO_USER_REFCOUNT | LIB_ID_CREATE_NO_MAIN, false);
+    /* But identifiers must be created for the `bNodeTree::all_nodes()` vector,
+     * so they won't match the original. */
+    blender::bke::node_unique_id(dst, copy);
+    /* Make sure to clear all sockets links as they are invalid. */
+    LISTBASE_FOREACH (bNodeSocket *, sock, &copy->inputs) {
+      sock->link = nullptr;
+    }
+    LISTBASE_FOREACH (bNodeSocket *, sock, &copy->outputs) {
+      sock->link = nullptr;
+    }
+    copy->runtime->original = node->runtime->original;
+    node->runtime->tmp_flag = new_nodes.size();
+    new_nodes.append(copy);
+  }
+
+  /* Reconnect the node links. */
+  LISTBASE_FOREACH_MUTABLE (bNodeLink *, link, &src->links) {
+    bNode *from_node = new_nodes[link->fromnode->runtime->tmp_flag];
+    bNode *to_node = new_nodes[link->tonode->runtime->tmp_flag];
+    if (!from_node || !to_node) {
+      continue;
+    }
+    blender::bke::node_add_link(
+        dst,
+        from_node,
+        ntree_shader_node_find_output(from_node, link->fromsock->identifier),
+        to_node,
+        ntree_shader_node_find_input(to_node, link->tosock->identifier));
+  }
+}
+
 /* Generate emission node to convert regular data to closure sockets.
  * Returns validity of the tree.
  */
@@ -1295,8 +1363,10 @@ bNodeTree *ntreeGPUNPRNodes(bNodeTree *material_tree, GPUMaterial *mat)
   bNodeTree *npr_tree = npr_tree_get(material_tree);
   bNodeTree *localtree = blender::bke::node_tree_localize(npr_tree, nullptr);
 
-  /* TODO(NPR): Embed displacement. */
-  // ntree_shader_embed_tree(material_tree, localtree);
+  if (bNode *material_output = ntreeShaderOutputNode(material_tree, SHD_OUTPUT_EEVEE)) {
+    /* Embed material output and Displacement branch. */
+    ntree_shader_embed_tree_branch(material_tree, localtree, material_output, "Displacement");
+  }
 
   ntree_shader_groups_remove_muted_links(localtree);
   ntree_shader_groups_expand_inputs(localtree);
@@ -1306,6 +1376,9 @@ bNodeTree *ntreeGPUNPRNodes(bNodeTree *material_tree, GPUMaterial *mat)
 
   if (bNode *npr_output = ntreeShaderNPROutputNode(localtree)) {
     ntreeExecGPUNodes(exec, mat, npr_output);
+  }
+  if (bNode *material_output = ntreeShaderOutputNode(localtree, SHD_OUTPUT_EEVEE)) {
+    ntreeExecGPUNodes(exec, mat, material_output);
   }
   LISTBASE_FOREACH (bNode *, node, &localtree->nodes) {
     if (node->type == SH_NODE_OUTPUT_AOV) {
