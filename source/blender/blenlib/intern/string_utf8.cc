@@ -361,6 +361,58 @@ size_t BLI_strncpy_utf8_rlen(char *__restrict dst, const char *__restrict src, s
 }
 
 /* -------------------------------------------------------------------- */
+/** \name UTF8 Truncating Copy
+ * \{ */
+
+static size_t str_utf8_rstrip_incomplate(char *str, size_t len)
+
+{
+  BLI_assert(str[len] == '\0');
+  char *end = str + len;
+  /* NOTE:  based on `end`, not `end - 1` reads like it might be and off by one error.
+   * This isn't the case as the search is for all characters that might have been truncated.
+   * In this case the character beforehand is guaranteed not to be. */
+  char *seek_limit = (len > BLI_UTF8_MAX) ? (end - BLI_UTF8_MAX) : str;
+  char *p = end;
+  while (seek_limit <= --p) {
+    if ((*p & 0xc0) != 0x80) {
+      const int skip = utf8_char_compute_skip_or_error(*p);
+      if (skip > 1) {
+        /* Check if the multi-byte sequence was truncated. */
+        if (p + skip > end) {
+          *p = '\0';
+          len = size_t(p - str);
+        }
+      }
+      break;
+    }
+  }
+  return len;
+}
+
+size_t BLI_strncpy_trunc_utf8_rlen(char *__restrict dst,
+                                   const char *__restrict src,
+                                   size_t dst_maxncpy)
+{
+  BLI_assert(dst_maxncpy != 0);
+  BLI_string_debug_size(dst, dst_maxncpy);
+
+  size_t len = BLI_strncpy_rlen(dst, src, dst_maxncpy);
+  if (UNLIKELY(len + 1 == dst_maxncpy && (src[len] != '\0'))) {
+    len = str_utf8_rstrip_incomplate(dst, len);
+  }
+  return len;
+}
+
+char *BLI_strncpy_trunc_utf8(char *__restrict dst, const char *__restrict src, size_t dst_maxncpy)
+{
+  BLI_strncpy_trunc_utf8_rlen(dst, src, dst_maxncpy);
+  return dst;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /* wchar_t / utf8 functions */
 
 size_t BLI_strncpy_wchar_as_utf8(char *__restrict dst,
