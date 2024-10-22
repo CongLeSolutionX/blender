@@ -12,7 +12,8 @@
 
 #include "BLI_listbase.h"
 #include "BLI_math_geom.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_vector_types.hh"
+#include "BKE_attribute.hh"
 #include "BLI_utildefines.h"
 #include "BLI_math_matrix.h"
 
@@ -23,7 +24,6 @@
 #include "BKE_gpencil_geom_legacy.h"
 #include "BKE_gpencil_legacy.h"
 #include "BKE_gpencil_modifier_legacy.h"
-#include "BKE_attribute.hh"
 #include "BKE_curves.hh"
 #include "BKE_deform.hh"
 #include "BKE_geometry_set.hh"
@@ -94,6 +94,7 @@ struct SDefGPDeformData {
   int defgrp_index;
   bool invert_vgroup;
   float strength;
+  bke::AttributeAccessor*  attributes;
   SDefGPVert *vert_binds;
 };
 
@@ -204,23 +205,93 @@ static void deformVert(void *__restrict userdata,
                        const TaskParallelTLS *__restrict /*tls*/)
 {
   const SDefGPDeformData *const data = (SDefGPDeformData *)userdata;
-  
-  int binds_idx = data->sdef_vert_idx_span->data()[index];
-  if (binds_idx == -1)
+  /* if (!data->sdef_vert_idx_span)
     return;
-  /* const GVArray vert_binds_varray = *attributes.lookup(
-      "sdef_binds", bke::AttrDomain::Point);
-  const GVArraySpan vert_binds_span = vert_binds_varray;
-  const SDefGPVert *vert_binds = reinterpret_cast<const SDefGPVert *>(
-      vert_binds_span.data());*/
+  if (!data->sdef_vert_idx_span->data())
+    return;*/
 
-  const Span<SDefGPBind> binds_span = data->vert_binds[binds_idx].binds();
-  //const Span<SDefGPBind> binds_span = reinterpret_cast<const Span<SDefGPBind> *>(
-     // vert_binds_span.get<Span<SDefGPBind>>(index, *vert_binds_fallbackval).binds);
-  const SDefGPBind *sdbind = binds_span.data();
+
+  // Construct attributes for each bind
+  bke::AttributeAccessor *attributes = data->attributes;
+  int sdbind_num = 0;
+  if (auto sdbind_num_lookup = attributes->lookup<int>("sdef_binds_num", bke::AttrDomain::Point)) {
+    sdbind_num = attributes->lookup<int>("sdef_binds_num", bke::AttrDomain::Point).varray.get(index);
+  }
+  if (sdbind_num < 1)
+    return;
+
+
+  SDefBind *sdbinds = new SDefBind[sdbind_num];
+  for (int i = 0; i < sdbind_num; i++) {
+    const std::string index_str = std::to_string(i);
+
+     // verts_num
+    if (auto verts_num_lookup = attributes->lookup<int>("sdef_verts_num_bind" + index_str,
+                                                        bke::AttrDomain::Point))
+    {
+      sdbinds[i].verts_num = verts_num_lookup.varray.get(index);
+    }
+    else
+      return;
+
+    // vert_inds
+    sdbinds[i].vert_inds = new uint[sdbinds[i].verts_num];
+    for (int j = 0; j < sdbinds[i].verts_num; j++) {
+      if (auto vert_inds_lookup = attributes->lookup<int>(
+              "sdef_vert_inds_bind" + index_str + "_" + std::to_string(j), bke::AttrDomain::Point))
+      {
+        sdbinds[i].vert_inds[j] = vert_inds_lookup.varray.get(index);
+      }
+      else {
+        return;
+      }
+    }
+
+    // mode
+    if (auto mode_lookup = attributes->lookup<int>("sdef_mode_bind" + index_str,
+                                                   bke::AttrDomain::Point))
+    {
+      sdbinds[i].mode = mode_lookup.varray.get(index);
+    }
+    else
+      return;
+   
+    // vert_weights
+    
+    sdbinds[i].vert_weights = new float[sdbinds[i].verts_num];
+    for (int j = 0; j < sdbinds[i].verts_num; j++) {
+      if (auto vert_weights_lookup = attributes->lookup<float>("sdef_vert_weights_bind" + index_str +
+                                                                "_" + std::to_string(j), bke::AttrDomain::Point))
+      {
+        sdbinds[i].vert_weights[j] = vert_weights_lookup.varray.get(index);
+      }
+      else {
+        return;
+      }
+    }
+
+
+    // normal_dist
+    if (auto normal_dist_lookup = attributes->lookup<float>("sdef_normal_dist_bind" + index_str,
+                                                            bke::AttrDomain::Point))
+    {
+      sdbinds[i].normal_dist = normal_dist_lookup.varray.get(index);
+    }
+    else
+      return;
+
+    // influence
+    if (auto influence_lookup = attributes->lookup<float>("sdef_influence_bind" + index_str,
+                                                          bke::AttrDomain::Point))
+    {
+      sdbinds[i].influence = influence_lookup.varray.get(index);
+    }
+    else
+      return;
+  }
+
   // const SDefGPBind *sdbind = data->bind_verts[index].binds;
-  int sdbind_num = binds_span.size();
-  // const int sdbind_num = data->bind_verts[index].binds_num; SPAN SIZE
+  
   unsigned int vertex_idx = index;  // ???????????? TODO: verify!!!!!!!!!!!
   // const unsigned int vertex_idx = data->bind_verts[index].vertex_idx;
   float *const vertexCos = data->vertexCos[index];
@@ -246,33 +317,33 @@ static void deformVert(void *__restrict userdata,
   /* Allocate a `coords_buffer` that fits all the temp-data. */
   int max_verts = 0;
   for (int j = 0; j < sdbind_num; j++) {
-    max_verts = std::max(max_verts, int(sdbind[j].verts_num));
+    max_verts = std::max(max_verts, int(sdbinds[j].verts_num));
   }
 
   blender::Array<blender::float3, 256> coords_buffer(max_verts);
 
-  for (int j = 0; j < sdbind_num; j++, sdbind++) {
-    for (int k = 0; k < sdbind->verts_num; k++) {
-      copy_v3_v3(coords_buffer[k], data->targetCos[sdbind->vert_inds[k]]);
+  for (int j = 0; j < sdbind_num; j++) {
+    for (int k = 0; k < sdbinds[j].verts_num; k++) {
+      copy_v3_v3(coords_buffer[k], data->targetCos[sdbinds[j].vert_inds[k]]);
     }
 
      normal_poly_v3(
-        norm, reinterpret_cast<const float(*)[3]>(coords_buffer.data()), sdbind->verts_num);
+        norm, reinterpret_cast<const float(*)[3]>(coords_buffer.data()), sdbinds[j].verts_num);
     zero_v3(temp);
 
-    switch (sdbind->mode) {
+    switch (sdbinds[j].mode) {
       /* ---------- looptri mode ---------- */
       case MOD_SDEF_MODE_CORNER_TRIS: {
-        madd_v3_v3fl(temp, data->targetCos[sdbind->vert_inds[0]], sdbind->vert_weights[0]);
-        madd_v3_v3fl(temp, data->targetCos[sdbind->vert_inds[1]], sdbind->vert_weights[1]);
-        madd_v3_v3fl(temp, data->targetCos[sdbind->vert_inds[2]], sdbind->vert_weights[2]);
+        madd_v3_v3fl(temp, data->targetCos[sdbinds[j].vert_inds[0]], sdbinds[j].vert_weights[0]);
+        madd_v3_v3fl(temp, data->targetCos[sdbinds[j].vert_inds[1]], sdbinds[j].vert_weights[1]);
+        madd_v3_v3fl(temp, data->targetCos[sdbinds[j].vert_inds[2]], sdbinds[j].vert_weights[2]);
         break;
       }
 
       /* ---------- ngon mode ---------- */
       case MOD_SDEF_MODE_NGONS: {
-        for (int k = 0; k < sdbind->verts_num; k++) {
-          madd_v3_v3fl(temp, coords_buffer[k], sdbind->vert_weights[k]);
+        for (int k = 0; k < sdbinds[j].verts_num; k++) {
+          madd_v3_v3fl(temp, coords_buffer[k], sdbinds[j].vert_weights[k]);
         }
         break;
       }
@@ -281,19 +352,19 @@ static void deformVert(void *__restrict userdata,
       case MOD_SDEF_MODE_CENTROID: {
         float cent[3];
         mid_v3_v3_array(
-            cent, reinterpret_cast<const float(*)[3]>(coords_buffer.data()), sdbind->verts_num);
+            cent, reinterpret_cast<const float(*)[3]>(coords_buffer.data()), sdbinds[j].verts_num);
 
-        madd_v3_v3fl(temp, data->targetCos[sdbind->vert_inds[0]], sdbind->vert_weights[0]);
-        madd_v3_v3fl(temp, data->targetCos[sdbind->vert_inds[1]], sdbind->vert_weights[1]);
-        madd_v3_v3fl(temp, cent, sdbind->vert_weights[2]);
+        madd_v3_v3fl(temp, data->targetCos[sdbinds[j].vert_inds[0]], sdbinds[j].vert_weights[0]);
+        madd_v3_v3fl(temp, data->targetCos[sdbinds[j].vert_inds[1]], sdbinds[j].vert_weights[1]);
+        madd_v3_v3fl(temp, cent, sdbinds[j].vert_weights[2]);
         break;
       }
     }
 
     /* Apply normal offset (generic for all modes) */
-    madd_v3_v3fl(temp, norm, sdbind->normal_dist);
+    madd_v3_v3fl(temp, norm, sdbinds[j].normal_dist);
 
-    madd_v3_v3fl(offset, temp, sdbind->influence);
+    madd_v3_v3fl(offset, temp, sdbinds[j].influence);
   }
 
   /* Subtract the vertex coord to get the deformation offset. */
@@ -301,6 +372,13 @@ static void deformVert(void *__restrict userdata,
 
   /* Add the offset to start coord multiplied by the strength and weight values. */
   madd_v3_v3fl(vertexCos, offset, data->strength * weight);
+
+  /*free array*/
+  for (int i = 0; i < sdbind_num; i++) {
+    delete sdbinds[i].vert_inds;
+    delete sdbinds[i].vert_weights;
+  }
+  delete sdbinds;
 
 }
 
@@ -325,8 +403,7 @@ static void surfacedeform_deform(ModifierData *md,
   ModifierData *md_orig = (ModifierData *)smd_orig;
   Object *ob_orig = (Object *)DEG_get_original_id(&ob->id);
   bke::AttributeAccessor attributes = strokes.attributes();
-  const VArraySpan sdef_vert_idx_span = *attributes.lookup<int>("sdef_vert_idx",
-                                                                bke::AttrDomain::Point);
+  
   /* if (md_orig->error)
   {
     MEM_freeN(md_orig->error);
@@ -443,7 +520,6 @@ static void surfacedeform_deform(ModifierData *md,
   /* Actual vertex location update starts here */
 
   SDefGPDeformData data{};
-  data.sdef_vert_idx_span = &sdef_vert_idx_span;
   data.targetCos = static_cast<float(*)[3]>(
       MEM_malloc_arrayN(target_verts_num, sizeof(float[3]), "SDefTargetVertArray"));
   data.dvert = dverts.data();
@@ -452,7 +528,7 @@ static void surfacedeform_deform(ModifierData *md,
   data.strength = smd->strength;
   data.vert_binds = smd->verts_array;
   data.vertexCos = reinterpret_cast<float(*)[3]>(positions.data());
-
+  data.attributes = &attributes;
 
   
 
@@ -591,7 +667,7 @@ typedef struct SDefBindCalcData {
   blender::Span<int> corner_edges;
   blender::Span<blender::int3> corner_tris;
   blender::Span<int> tri_faces;
-  blender::MutableVArraySpan<int> *attr_span;
+  bke::MutableAttributeAccessor *attributes;
   /** Coordinates to bind to, transformed into local space (compatible with `vertexCos`). */
   float (*targetCos)[3];
   /** Coordinates to bind (reference to the modifiers input argument).
@@ -603,7 +679,7 @@ typedef struct SDefBindCalcData {
   int success;
   /** Vertex group lookup data. */
   const MDeformVert *const dvert;
-
+  int stroke_idx;
   const float (*positions)[3];
   MutableSpan<SDefGPVert> vert_binds;
   int defgrp_index;
@@ -1164,7 +1240,6 @@ BLI_INLINE SDefBindWeightData *computeBindWeights(SDefBindCalcData *const data,
 
   return bwdata;
 }
-
 BLI_INLINE float computeNormalDisplacement(const float point_co[3],
                                            const float point_co_proj[3],
                                            const float normal[3])
@@ -1352,14 +1427,15 @@ static void bindVert(void *__restrict userdata,
   bwdata = computeBindWeights(data, point_co);
 
   if (bwdata == NULL) {
-    // TODO empty binds 
+    data->success = MOD_SDEF_BIND_RESULT_MEM_ERR;
+    freeBindData(bwdata);
     return;
   }
   SDefGPBind *binds = static_cast<SDefGPBind *>(
       MEM_calloc_arrayN(bwdata->binds_num, sizeof(SDefGPBind), "SDefVertBindData"));
   if (binds == NULL) {
     data->success = MOD_SDEF_BIND_RESULT_MEM_ERR;
-    // TODO empty binds 
+    freeBindData(bwdata);
     return;
   }
   
@@ -1511,36 +1587,100 @@ static void bindVert(void *__restrict userdata,
     }
   }
 
-
-   // put data in attribute
-  int vert_binds_idx = -1;
- // = data->attr_span[index];
+ sdbind = binds;
   
-    int a = 0;
-    for (SDefGPVert elem : data->vert_binds) {
-    if (elem.vertex_idx == -1) {
-        /* This was just allocated, empty
-        We can put our stuff here*/
-        vert_binds_idx = a;
-        data->attr_span->data()[index] = a;
-        elem.vertex_idx = a;
-        break;
-        
+  bke::MutableAttributeAccessor *attributes = data->attributes;
+
+  // binds_num
+  bke::AttributeWriter<int> binds_num_attr_writer = attributes->lookup_or_add_for_write<int>(
+      "sdef_binds_num", bke::AttrDomain::Point);
+  binds_num_attr_writer.varray.set(index, bwdata->binds_num);
+  binds_num_attr_writer.finish();
+
+  std::string index_str;
+  // Add attributes for each bind
+  for (int i = 0; i < bwdata->binds_num; i++) {
+    index_str = std::to_string(i);
+
+    // vert_inds
+    for (int vi = 0; vi < sdbind->verts_num; vi++) {
+      std::string vi_str = std::to_string(vi);
+      bke::AttributeWriter<int> vert_inds_attr_writer = attributes->lookup_or_add_for_write<int>(
+          "sdef_vert_inds_bind" + index_str + "_" + vi_str, bke::AttrDomain::Point);
+      vert_inds_attr_writer.varray.set(index, static_cast<int>(sdbind->vert_inds[vi]));
+      vert_inds_attr_writer.finish();
     }
-    a++;
+    MEM_SAFE_FREE(sdbind->vert_inds);
+
+    // verts_num
+    bke::AttributeWriter<int> verts_num_attr_writer = attributes->lookup_or_add_for_write<int>(
+        "sdef_verts_num_bind" + index_str, bke::AttrDomain::Point);
+    verts_num_attr_writer.varray.set(index, sdbind->verts_num);
+    verts_num_attr_writer.finish();
+
+    // mode
+    bke::AttributeWriter<int> mode_attr_writer = attributes->lookup_or_add_for_write<int>(
+        "sdef_mode_bind" + index_str, bke::AttrDomain::Point);
+    mode_attr_writer.varray.set(index, sdbind->mode);
+    mode_attr_writer.finish();
+
+    // vert_weights
+    
+    for (int vi = 0; vi < sdbind->verts_num; vi++) {
+      std::string vi_str = std::to_string(vi);
+      bke::AttributeWriter<float> vert_weights_attr_writer =
+          attributes->lookup_or_add_for_write<float>(
+              "sdef_vert_weights_bind" + index_str + "_" + vi_str,
+                                                      bke::AttrDomain::Point);
+      vert_weights_attr_writer.varray.set(index, sdbind->vert_weights[vi]);
+      vert_weights_attr_writer.finish();
+    }
+    MEM_SAFE_FREE(sdbind->vert_weights);
+    
+
+    // normal_dist
+    bke::AttributeWriter<float> normal_dist_attr_writer =
+        attributes->lookup_or_add_for_write<float>("sdef_normal_dist_bind" + index_str,
+                                                  bke::AttrDomain::Point);
+    normal_dist_attr_writer.varray.set(index, sdbind->normal_dist);
+    normal_dist_attr_writer.finish();
+
+    // influence
+    bke::AttributeWriter<float> influence_attr_writer = attributes->lookup_or_add_for_write<float>(
+        "sdef_influence_bind" + index_str, bke::AttrDomain::Point);
+    influence_attr_writer.varray.set(index, sdbind->influence);
+    influence_attr_writer.finish();
+
+    sdbind++;
   }
 
-  if (vert_binds_idx > -1) {
-    data->vert_binds.data()[vert_binds_idx].vertex_idx = a;
-    data->vert_binds.data()[vert_binds_idx].binds_array = binds;
-    data->vert_binds.data()[vert_binds_idx].binds_num = bwdata->binds_num;
-  }
-  else {
-    data->success = MOD_SDEF_BIND_RESULT_MEM_ERR;
-  }
-
-
+  // free arrays
+  MEM_SAFE_FREE(binds);
   freeBindData(bwdata);
+}
+
+bool unbind_drawing(ModifierData *md_eval,
+                  Object *ob,
+                  bke::greasepencil::Drawing *drawing,
+                  Mesh *target)
+{
+  using namespace bke;
+  MutableAttributeAccessor attributes = drawing->strokes_for_write().attributes_for_write();
+  
+  Vector<std::string> to_remove;
+  attributes.for_all([&](const AttributeIDRef &id, const AttributeMetaData /*meta_data*/) {
+    if (id.name().startswith("sdef_")) {
+      to_remove.append(id.name());
+    }
+    return true;
+  });
+
+  for (const std::string &unused_id : to_remove) {
+    attributes.remove(unused_id);
+  }
+
+  return true;
+  
 }
 
 static bool bind_drawing(ModifierData *md_eval,
@@ -1570,11 +1710,8 @@ static bool bind_drawing(ModifierData *md_eval,
   const blender::Span<int> corner_edges = target->corner_edges();
 
   bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
-  // save SDefGPVert indexes directly on points 
-  bke::AttributeWriter<int> sdef_vert_idx_attr_writer = 
-      attributes.lookup_or_add_for_write<int>("sdef_vert_idx", bke::AttrDomain::Point);
-  MutableVArraySpan<int> sdef_vert_idx_span(sdef_vert_idx_attr_writer.varray);
-
+  
+ 
   
   
     // Allocate / Reallocate verts.
@@ -1602,24 +1739,9 @@ static bool bind_drawing(ModifierData *md_eval,
   smd_orig->verts_array = verts;
   
 
-  /*
-  bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
-  bke::SpanAttributeWriter<float4> vert_binds_attr_writer =
-      attributes.lookup_or_add_for_write_only_span<float4>(
-      "sdef_binds", bke::AttrDomain::Point); // float4 has the same size as SDefGPVert. 
-  
-  MutableVArraySpan<float4> *attribute_span = &vert_binds_attr_writer.span;
- // float4 *verts = static_cast<float4 *>(
-    //  MEM_malloc_arrayN(verts_num, sizeof(float4), "SDefGPBindVerts"));
- // attribute_span->copy_from(Span(verts, verts_num));
-  auto ssp = attribute_span->data();
-  SDefGPVert *vert_binds = reinterpret_cast<SDefGPVert *>(attribute_span->data());
   
   // TODO mask vertices by frame, mask, vertex group etc.*/
   
-
-  // printf("target->mpoly: %p, target->mpoly->totloop: %d", target->mpoly,
-  // target->mpoly->totloop); printf("mPoly: %p, mpoly->totloop: %d", mpoly, mpoly->totloop);
 
   vert_edges = static_cast<SDefAdjacencyArray *>(
       MEM_calloc_arrayN(target_verts_num, sizeof(*vert_edges), "SDefVertEdgeMap"));
@@ -1671,7 +1793,7 @@ static bool bind_drawing(ModifierData *md_eval,
   data.vert_binds = smd_orig->verts();
   data.falloff = smd_orig->falloff;
   data.success = MOD_SDEF_BIND_RESULT_SUCCESS;
-  data.attr_span = &sdef_vert_idx_span;
+  data.attributes = &attributes;
   /*.dvert = dvert,
   .defgrp_index = defgrp_index,
   .invert_vgroup = invert_vgroup,
@@ -1694,8 +1816,7 @@ static bool bind_drawing(ModifierData *md_eval,
   BLI_parallel_range_settings_defaults(&settings);
   settings.use_threading = (verts_num > 10000);
   BLI_task_parallel_range(0, verts_num, &data, bindVert, &settings);
-  sdef_vert_idx_span.save();
-  sdef_vert_idx_attr_writer.finish();
+  
   MEM_freeN(data.targetCos);
   return true;
 }
@@ -2007,6 +2128,7 @@ ModifierTypeInfo modifierType_GPencilSurDeform = {
     /*blend_write*/ blender::blend_write,
     /*blend_read*/ blender::blend_read,
 };
+
 /*
 grease_pencil: *geometry_set->get_grease_pencil_for_write()
 frames: vector containing the frames to bind.*/
@@ -2037,42 +2159,76 @@ bool GPencilSurDeformModifierData::bind_drawings(ModifierData *md_orig,
       // select all frames
       for (bke::greasepencil::Layer *layer : grease_pencil_orig.layers_for_write()) {
         blender::ed::greasepencil::select_all_frames(*layer, SELECT_ADD);
+        for (auto [frame_number, frame] : layer->frames_for_write().items()) {
+          const Vector<Drawing *> drawings = modifier::greasepencil::get_drawings_for_write(
+              grease_pencil_orig, layer_mask, frame_number);
+          // unbind drawwing
+          for (Drawing *drawing : drawings) {
+            unbind_drawing(md_orig, ob_eval, drawing, target);
+          }
+        }
       }
-      const ModifierTypeInfo *mti = BKE_modifier_get_info(
-          static_cast<ModifierType>(md_orig->type));
-      mti->free_data(md_orig);
+
+
+      
       DEG_id_tag_update(&grease_pencil_orig.id, ID_RECALC_GEOMETRY);
       
     }
     else if (smd_orig->bind_modes & GP_MOD_SDEF_BIND_CURRENT_FRAME) {
-      // TODO unbind drawing in this frame
+      Vector<GreasePencilFrame *> frames;
+
+      const int frame = grease_pencil_eval.runtime->eval_frame;
+    // unselect all frames
+      for (bke::greasepencil::Layer *layer : grease_pencil_orig.layers_for_write()) {
+        blender::ed::greasepencil::select_all_frames(*layer, SELECT_SUBTRACT);
+        frames.append(layer->frame_at(frame));
+      }
+      const Vector<Drawing *> drawings = modifier::greasepencil::get_drawings_for_write(
+          grease_pencil_orig, layer_mask, frame);
+      // unbind drawwing
+      for (Drawing *drawing : drawings) {
+        unbind_drawing(md_orig, ob_eval, drawing, target);
+      }
+      // select the frames whose type to change
+      for (GreasePencilFrame * f : frames) {
+        f->flag |= GP_FRAME_SELECTED;
+      }
+
       DEG_id_tag_update(&grease_pencil_orig.id, ID_RECALC_GEOMETRY);
-      return false;
     }
     for (bke::greasepencil::Layer *layer : grease_pencil_orig.layers_for_write()) {
       blender::ed::greasepencil::set_selected_frames_type(*layer, BEZT_KEYTYPE_KEYFRAME);
     }
+
     return true;
   }
 
   if (smd_orig->bind_modes & GP_MOD_SDEF_BIND_CURRENT_FRAME) {
+
+    Vector<GreasePencilFrame *> frames;
+    const int frame = grease_pencil_eval.runtime->eval_frame;
+
     // unselect all frames
     for (bke::greasepencil::Layer *layer : grease_pencil_orig.layers_for_write()) {
       blender::ed::greasepencil::select_all_frames(*layer, SELECT_SUBTRACT);
+      frames.append(layer->frame_at(frame));
     }
-    const int frame = grease_pencil_eval.runtime->eval_frame;
+
     const Vector<Drawing *> drawings = modifier::greasepencil::get_drawings_for_write(
         grease_pencil_orig, layer_mask, frame);
     // bind drawwing
-    for (Drawing *drawing : drawings) { bind_drawing(md_orig, ob_eval, drawing, target);
+    for (Drawing *drawing : drawings) {
+      bind_drawing(md_orig, ob_eval, drawing, target);
     }
-    for (bke::greasepencil::Layer *layer : grease_pencil_orig.layers_for_write()) {
-      blender::ed::greasepencil::select_frame_at(*layer, frame, SELECT_ADD);
+    // select the frames whose type to change
+    for (GreasePencilFrame *f : frames) {
+      f->flag |= GP_FRAME_SELECTED;
     }
   }
   else if (smd_orig->bind_modes & GP_MOD_SDEF_BIND_ALL_FRAMES) {
     Array<Vector<ed::greasepencil::MutableDrawingInfo>> drawings_per_frame =
         ed::greasepencil::retrieve_editable_drawings_grouped_per_frame(*sc, grease_pencil_orig);
+
     /* const IndexMask full_mask = drawings_per_frame.index_range();
     IndexMask frame_mask = full_mask;
      IndexMask::from_predicate(
@@ -2094,8 +2250,6 @@ bool GPencilSurDeformModifierData::bind_drawings(ModifierData *md_orig,
       return true;
     });*/
     
-      //const Vector<Drawing *> drawings = modifier::greasepencil::get_drawings_for_write(
-        //  grease_pencil_orig, layer_mask, frame);
     // select all frames
     for (bke::greasepencil::Layer *layer : grease_pencil_orig.layers_for_write()) {
       blender::ed::greasepencil::select_all_frames(*layer, SELECT_ADD);
@@ -2108,17 +2262,6 @@ bool GPencilSurDeformModifierData::bind_drawings(ModifierData *md_orig,
         }
       }
     }
-    /* threading::parallel_for_each(
-        drawings_per_frame,
-                                 [&](Vector<ed::greasepencil::MutableDrawingInfo> frame_vec) {
-          for (ed::greasepencil::MutableDrawingInfo drawing_info : frame_vec) {
-        bind_drawing(md_orig, ob_orig, &drawing_info.drawing, target);
-            
-          }
-
-    });
-  */
-    
     
   }
   for (bke::greasepencil::Layer *layer : grease_pencil_orig.layers_for_write()) {
