@@ -27,6 +27,10 @@ VertIn input_assembly(uint in_vertex_id)
   if (gpu_attr_0_len >= 3) {
     vert_in.ls_P.z = pos[gpu_attr_load_index(v_i, gpu_attr_0) + 2 + ofs];
   }
+
+  if (gpu_attr_0_fetch_int) {
+    vert_in.ls_P = vec3(floatBitsToInt(vert_in.ls_P));
+  }
 #ifndef UNIFORM
   vert_in.final_color = vec4(0.0, 0.0, 0.0, 1.0);
   /* Need to support 1, 2, 3 and 4 dimensional input (sigh). */

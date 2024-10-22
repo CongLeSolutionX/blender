@@ -308,10 +308,13 @@ void Immediate::polyline_draw_workaround(uint64_t offset)
       const char *name = GPU_vertformat_attr_name_get(&format, a, 0);
       if (pos_attr_id == -1 && blender::StringRefNull(name) == "pos") {
         int descriptor[2] = {int(format.stride) / 4, int(a->offset) / 4};
-        BLI_assert_msg(a->comp_type == GPU_COMP_F32, "Only support float attributes");
+        BLI_assert(ELEM(a->comp_type, GPU_COMP_F32, GPU_COMP_I32));
+        BLI_assert(ELEM(a->fetch_mode, GPU_FETCH_FLOAT, GPU_FETCH_INT_TO_FLOAT));
         BLI_assert_msg((a->offset % 4) == 0, "Only support 4byte aligned attributes");
+        const bool fetch_int = a->fetch_mode == GPU_FETCH_INT_TO_FLOAT;
         GPU_shader_uniform_2iv(imm->shader, "gpu_attr_0", descriptor);
         GPU_shader_uniform_1i(imm->shader, "gpu_attr_0_len", a->comp_len);
+        GPU_shader_uniform_1b(imm->shader, "gpu_attr_0_fetch_int", fetch_int);
         pos_attr_id = a_idx;
       }
       else if (col_attr_id == -1 && blender::StringRefNull(name) == "color") {
