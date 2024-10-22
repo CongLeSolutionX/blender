@@ -53,9 +53,6 @@
 #include "ED_grease_pencil.hh"
 #include "DNA_customdata_types.h"
 
-//#include "MOD_gpencil_legacy_modifiertypes.h"
-//#include "MOD_gpencil_legacy_ui_common.h"
-//#include "MOD_gpencil_legacy_util.h"
 
 #include "MOD_util.hh"
 #include "MOD_grease_pencil_util.hh"
@@ -80,7 +77,6 @@
 #include "BKE_mesh_runtime.hh"
 #include "BKE_mesh_wrapper.hh"
 
-/*#include "BLO_read_write.h"*/
 
 
 namespace blender {
@@ -122,7 +118,7 @@ struct GPencilSurDeformModifierData *get_original_modifier(Object *ob,
 
 static void init_data(ModifierData *md)
 {
-  auto *smd = reinterpret_cast<GPencilSurDeformModifierData *>(md);
+  GPencilSurDeformModifierData *smd = reinterpret_cast<GPencilSurDeformModifierData *>(md);
 
   BLI_assert(MEMCMP_STRUCT_AFTER_IS_ZERO(smd, modifier));
 
@@ -205,11 +201,6 @@ static void deformVert(void *__restrict userdata,
                        const TaskParallelTLS *__restrict /*tls*/)
 {
   const SDefGPDeformData *const data = (SDefGPDeformData *)userdata;
-  /* if (!data->sdef_vert_idx_span)
-    return;
-  if (!data->sdef_vert_idx_span->data())
-    return;*/
-
 
   // Construct attributes for each bind
   bke::AttributeAccessor *attributes = data->attributes;
@@ -400,11 +391,12 @@ static void surfacedeform_deform(ModifierData *md,
   uint strokes_num = strokes.curves_num();
   GPencilSurDeformModifierData *smd_orig = reinterpret_cast<GPencilSurDeformModifierData *>(
       BKE_modifier_get_original(ob, md));
-  ModifierData *md_orig = (ModifierData *)smd_orig;
   Object *ob_orig = (Object *)DEG_get_original_id(&ob->id);
+
+  ModifierData *md_orig = BKE_modifier_get_original(ob_orig, md);
   bke::AttributeAccessor attributes = strokes.attributes();
   
-  /* if (md_orig->error)
+   /* if (md_orig->error)
   {
     MEM_freeN(md_orig->error);
     md_orig->error = NULL;
@@ -413,17 +405,9 @@ static void surfacedeform_deform(ModifierData *md,
   Object *ob_target = DEG_get_evaluated_object(depsgraph, smd->target);
   target = BKE_modifier_get_evaluated_mesh_from_evaluated_object(ob_target);
 
-  /*So there might be many reason why the order of the layers (and frames?)
-  stored in the surdef structure may differ from the order of the bGPDlayer list.
-  The best solution for now is to look for the right data at the start of every new layer
-  evaluation. Could be made quicker with a check to see if it corresponds to the saved order,
-  and even to swap it if it doesnt.*/
-  if (!smd->verts_array) {
-    return;
-  }
  
   if (!target) {
-    BKE_modifier_set_error(ob_orig, md_orig, "No valid target mesh");
+    BKE_modifier_set_error(ob_orig, md, "No valid target mesh");
     return;
   }
   target_verts_num = BKE_mesh_wrapper_vert_len(target);
@@ -1355,7 +1339,8 @@ BLI_INLINE void sortPolyVertsTri(uint *indices,
 }
 
 
-static bool makeTreeData(BVHTreeFromMesh *treeData,
+static bool makeTreeData(Object *ob,
+                        BVHTreeFromMesh *treeData,
                          Mesh *target,
                          GPencilSurDeformModifierData *smd_eval,
                          SDefAdjacencyArray *vert_edges,
@@ -1384,7 +1369,7 @@ static bool makeTreeData(BVHTreeFromMesh *treeData,
   }
   BKE_bvhtree_from_mesh_get(treeData, target, BVHTREE_FROM_CORNER_TRIS, 2);
   if (treeData->tree == NULL) {
-    BKE_gpencil_modifier_set_error((GpencilModifierData *)smd_eval, "Out of memory");
+    BKE_modifier_set_error(ob, (ModifierData *)smd_eval, "Out of memory");
     // freeAdjacencyMap(vert_edges, adj_array, edge_polys);
     return false;
   }
@@ -1394,7 +1379,8 @@ static bool makeTreeData(BVHTreeFromMesh *treeData,
   adj_result = buildAdjacencyMap(polys, edges, corner_edges, vert_edges, adj_array, edge_polys);
 
   if (adj_result == MOD_SDEF_BIND_RESULT_NONMANY_ERR) {
-    BKE_gpencil_modifier_set_error((GpencilModifierData *)smd_eval,
+    BKE_modifier_set_error(
+        ob, (ModifierData *)smd_eval,
                                    "Target has edges with more than two polygons");
     // freeAdjacencyMap(vert_edges, adj_array, edge_polys);
     // free_bvhtree_from_mesh(&treeData);
@@ -1668,15 +1654,15 @@ bool unbind_drawing(ModifierData *md_eval,
   MutableAttributeAccessor attributes = drawing->strokes_for_write().attributes_for_write();
   
   Vector<std::string> to_remove;
-  attributes.for_all([&](const AttributeIDRef &id, const AttributeMetaData /*meta_data*/) {
-    if (id.name().startswith("sdef_")) {
-      to_remove.append(id.name());
+  attributes.foreach_attribute([&](const bke::AttributeIter &iter) {
+    if (iter.name.startswith("sdef_")) {
+      to_remove.append(iter.name);
     }
-    return true;
+    
   });
 
-  for (const std::string &unused_id : to_remove) {
-    attributes.remove(unused_id);
+  for (const std::string &iter : to_remove) {
+    attributes.remove(iter);
   }
 
   return true;
@@ -1746,14 +1732,14 @@ static bool bind_drawing(ModifierData *md_eval,
   vert_edges = static_cast<SDefAdjacencyArray *>(
       MEM_calloc_arrayN(target_verts_num, sizeof(*vert_edges), "SDefVertEdgeMap"));
   if (vert_edges == NULL) {
-    BKE_gpencil_modifier_set_error((GpencilModifierData *)smd_eval, "Out of memory");
+    BKE_modifier_set_error(ob, (ModifierData *)smd_eval, "Out of memory");
     return false;
   }
 
   adj_array = static_cast<SDefAdjacency *>(
       MEM_malloc_arrayN(tedges_num, 2 * sizeof(*adj_array), "SDefVertEdge"));
   if (adj_array == NULL) {
-    BKE_gpencil_modifier_set_error((GpencilModifierData *)smd_eval, "Out of memory");
+    BKE_modifier_set_error(ob, (ModifierData *)smd_eval, "Out of memory");
     MEM_freeN(vert_edges);
     return false;
   }
@@ -1761,14 +1747,15 @@ static bool bind_drawing(ModifierData *md_eval,
   edge_polys = static_cast<SDefEdgePolys *>(
       MEM_calloc_arrayN(tedges_num, sizeof(*edge_polys), "SDefEdgeFaceMap"));
   if (edge_polys == NULL) {
-    BKE_gpencil_modifier_set_error((GpencilModifierData *)smd_eval, "Out of memory");
+    BKE_modifier_set_error(ob, (ModifierData *)smd_eval, "Out of memory");
     MEM_freeN(vert_edges);
     MEM_freeN(adj_array);
     return false;
   }
 
   BVHTreeFromMesh treeData = {NULL};
-  if (!makeTreeData(&treeData,
+  if (!makeTreeData(
+          ob, &treeData,
                     target,
                     smd_eval,
                     vert_edges,
@@ -1801,8 +1788,8 @@ static bool bind_drawing(ModifierData *md_eval,
 
   if (data.targetCos == NULL) {
     BKE_modifier_set_error(ob, md_eval, "Out of memory");
-    BKE_gpencil_modifier_get_info(static_cast<GpencilModifierType>(md_eval->type))
-        ->free_data((GpencilModifierData *)smd_orig);
+    BKE_modifier_get_info(static_cast<ModifierType>(md_eval->type))
+        ->free_data((ModifierData *)smd_orig);
     return false;
   }
 
@@ -1877,7 +1864,7 @@ static void modify_geometry_set(ModifierData *md,
 
 static void bake_modifier(
                          Depsgraph *depsgraph,
-                         GpencilModifierData *md,
+                         ModifierData *md,
                          Object *ob)
 {
   return;  // generic_bake_deform_stroke(depsgraph, md, ob, false, deformStroke);
@@ -1910,7 +1897,7 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, &ob_ptr);
 
   PointerRNA target_ptr = RNA_pointer_get(ptr, "target");
-  GpencilModifierData *md = (GpencilModifierData *)ptr->data;
+  ModifierData *md = (ModifierData *)ptr->data;
   GPencilSurDeformModifierData *smd = (GPencilSurDeformModifierData *)md;
 
   // bool unbind_mode = RNA_boolean_get(ptr, "unbind_mode");
@@ -2245,7 +2232,7 @@ bool GPencilSurDeformModifierData::bind_drawings(ModifierData *md_orig,
         if (drawing_base->type == GP_DRAWING)
         {
           GreasePencilDrawing *drawing = (reinterpret_cast<GreasePencilDrawing *>(drawing_base));
-          success_temp = unbind_drawing(md_orig, ob_eval, &drawing->wrap(), target);
+          success_temp = bind_drawing(md_orig, ob_eval, &drawing->wrap(), target);
           if (!success_temp) {
             success = false;
             frame.flag &= ~GP_FRAME_SELECTED;
