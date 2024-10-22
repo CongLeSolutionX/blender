@@ -1840,24 +1840,6 @@ static void free_drawing_bind_data(ModifierData *md_orig, bke::greasepencil::Dra
 }
 
 /*End binding*/
-/*
-static void modify_drawing(
-                          ModifierData *md_eval,
-                           const ModifierEvalContext *ctx,
-                         Object *ob,
-                         bke::greasepencil::Drawing *drawing,
-                         Mesh *target,
-                         SDefGPVert *verts)
-{
-  bke::CurvesGeometry &curves = drawing->strokes_for_write();
-  int verts_num = curves.points_num();
-  SDefGPVert *bind_verts = static_cast<SDefGPVert *>(
-      MEM_malloc_arrayN(verts_num, sizeof(SDefGPVert), "SDefGPVerts"));
-  bind_drawing(md_eval, ob, drawing, target);
-  surfacedeform_deform(md_eval, ctx->depsgraph, *drawing, ctx->object);
-
-}
-*/
 static void modify_geometry_set(ModifierData *md,
                                 const ModifierEvalContext *ctx,
                                 bke::GeometrySet *geometry_set)
@@ -1935,12 +1917,6 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
   bool bind_all_frames = (RNA_enum_get(ptr, "curr_frame_or_all_frames") ==
                           GP_MOD_SDEF_BIND_ALL_FRAMES);
 
- /* bool all_layers_and_frames_bound = RNA_boolean_get(ptr, "all_layers_and_frames_bound");
-  bool all_layers_current_frames_bound = RNA_boolean_get(ptr, "all_layers_current_frames_bound");
-  bool current_layer_all_frames_bound = RNA_boolean_get(ptr, "current_layer_all_frames_bound");
-  bool current_layer_current_frame_bound = RNA_boolean_get(ptr,
-                                                           "current_layer_current_frame_bound");*/
-  // bool something_bound = RNA_boolean_get(ptr, "current_layer_current_frame_bound");
   uiLayoutSetPropSep(layout, true);
 
   col = uiLayoutColumn(layout, false);
@@ -1953,9 +1929,6 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
 
   uiItemR(layout, ptr, "strength", UI_ITEM_NONE, NULL, ICON_NONE);
   row = uiLayoutRow(layout, true);
- // uiItemPointerR(row, ptr, "vertex_group", &ob_ptr, "vertex_groups", NULL, ICON_NONE);
-  //sub = uiLayoutRow(row, true);
-  //uiItemR(sub, ptr, "invert_vertex_group", 0, "", ICON_ARROW_LEFTRIGHT);
   modifier_vgroup_ui(layout, ptr, &ob_ptr, "vertex_group", "invert_vertex_group", nullptr);
 
 
@@ -2153,19 +2126,29 @@ bool GPencilSurDeformModifierData::bind_drawings(ModifierData *md_orig,
   const IndexMask layer_mask = blender::modifier::greasepencil::get_filtered_layer_mask(
       grease_pencil_orig, smd_orig->influence, layer_mask_memory);
   IndexMaskMemory frame_mask_memory;
+  bool success = true;
+  bool success_temp = false;
   
   if (smd_orig->bind_modes & GP_MOD_SDEF_UNBIND_MODE) {
     if (smd_orig->bind_modes & GP_MOD_SDEF_BIND_ALL_FRAMES) {
-      // select all frames
+      // unselect all frames
       for (bke::greasepencil::Layer *layer : grease_pencil_orig.layers_for_write()) {
-        blender::ed::greasepencil::select_all_frames(*layer, SELECT_ADD);
+        blender::ed::greasepencil::select_all_frames(*layer, SELECT_SUBTRACT);
         for (auto [frame_number, frame] : layer->frames_for_write().items()) {
-          const Vector<Drawing *> drawings = modifier::greasepencil::get_drawings_for_write(
-              grease_pencil_orig, layer_mask, frame_number);
-          // unbind drawwing
-          for (Drawing *drawing : drawings) {
-            unbind_drawing(md_orig, ob_eval, drawing, target);
+          // unbind drawing
+          GreasePencilDrawingBase *drawing_base = grease_pencil_orig.drawings()[frame.drawing_index];
+          if (drawing_base->type == GP_DRAWING)
+          {
+            GreasePencilDrawing *drawing = (reinterpret_cast<GreasePencilDrawing *>(drawing_base));
+            success_temp = unbind_drawing(md_orig, ob_eval, &drawing->wrap(), target);
+            if (!success_temp) {
+              success = false;
+              frame.flag &= ~GP_FRAME_SELECTED;
+            }
+            else
+              frame.flag |= GP_FRAME_SELECTED;
           }
+          
         }
       }
 
@@ -2187,7 +2170,9 @@ bool GPencilSurDeformModifierData::bind_drawings(ModifierData *md_orig,
           grease_pencil_orig, layer_mask, frame);
       // unbind drawwing
       for (Drawing *drawing : drawings) {
-        unbind_drawing(md_orig, ob_eval, drawing, target);
+        success_temp = unbind_drawing(md_orig, ob_eval, drawing, target);
+        if (!success_temp)
+          success = false;
       }
       // select the frames whose type to change
       for (GreasePencilFrame * f : frames) {
@@ -2199,8 +2184,7 @@ bool GPencilSurDeformModifierData::bind_drawings(ModifierData *md_orig,
     for (bke::greasepencil::Layer *layer : grease_pencil_orig.layers_for_write()) {
       blender::ed::greasepencil::set_selected_frames_type(*layer, BEZT_KEYTYPE_KEYFRAME);
     }
-
-    return true;
+    return success;
   }
 
   if (smd_orig->bind_modes & GP_MOD_SDEF_BIND_CURRENT_FRAME) {
@@ -2218,7 +2202,9 @@ bool GPencilSurDeformModifierData::bind_drawings(ModifierData *md_orig,
         grease_pencil_orig, layer_mask, frame);
     // bind drawwing
     for (Drawing *drawing : drawings) {
-      bind_drawing(md_orig, ob_eval, drawing, target);
+      success_temp = bind_drawing(md_orig, ob_eval, drawing, target);
+      if (!success_temp)
+        success = false;
     }
     // select the frames whose type to change
     for (GreasePencilFrame *f : frames) {
@@ -2250,15 +2236,22 @@ bool GPencilSurDeformModifierData::bind_drawings(ModifierData *md_orig,
       return true;
     });*/
     
-    // select all frames
+    // unselect all frames
     for (bke::greasepencil::Layer *layer : grease_pencil_orig.layers_for_write()) {
-      blender::ed::greasepencil::select_all_frames(*layer, SELECT_ADD);
+      blender::ed::greasepencil::select_all_frames(*layer, SELECT_SUBTRACT);
       for (auto [frame_number, frame] : layer->frames_for_write().items()) {
-        const Vector<Drawing *> drawings = modifier::greasepencil::get_drawings_for_write(
-            grease_pencil_orig, layer_mask, frame_number);
-        // bind drawwing
-        for (Drawing *drawing : drawings) {
-          bind_drawing(md_orig, ob_eval, drawing, target);
+        // unbind drawing
+        GreasePencilDrawingBase *drawing_base = grease_pencil_orig.drawings()[frame.drawing_index];
+        if (drawing_base->type == GP_DRAWING)
+        {
+          GreasePencilDrawing *drawing = (reinterpret_cast<GreasePencilDrawing *>(drawing_base));
+          success_temp = unbind_drawing(md_orig, ob_eval, &drawing->wrap(), target);
+          if (!success_temp) {
+            success = false;
+            frame.flag &= ~GP_FRAME_SELECTED;
+          }
+          else
+            frame.flag |= GP_FRAME_SELECTED;
         }
       }
     }
@@ -2268,10 +2261,9 @@ bool GPencilSurDeformModifierData::bind_drawings(ModifierData *md_orig,
     blender::ed::greasepencil::set_selected_frames_type(*layer, BEZT_KEYTYPE_SURDEFBOUND);
   }
 
-  // TODO if (!data->success) return false;
 
   DEG_id_tag_update(&grease_pencil_orig.id, ID_RECALC_GEOMETRY);
-  return true;
+  return success;
 }
 blender::Span<SDefGPVert> GPencilSurDeformModifierData::verts() const
 {
