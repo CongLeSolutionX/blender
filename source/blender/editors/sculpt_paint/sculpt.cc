@@ -872,7 +872,7 @@ static void restore_mask_from_undo_step(Object &object)
                                                                                     nodes[i]))
         {
           const Span<int> verts = nodes[i].verts();
-          array_utils::scatter(*orig_data, verts, mask.span);
+          scatter_data_mesh(*orig_data, verts, mask.span);
           bke::pbvh::node_update_mask_mesh(mask.span, nodes[i]);
           node_changed[i] = true;
         }
@@ -1038,40 +1038,43 @@ void restore_position_from_undo_step(const Depsgraph &depsgraph, Object &object)
 
       threading::EnumerableThreadSpecific<LocalData> all_tls;
       node_mask.foreach_index(GrainSize(1), [&](const int i) {
-        LocalData &tls = all_tls.local();
-        const OrigPositionData orig_data = *orig_position_data_lookup_mesh(object, nodes[i]);
+        threading::isolate_task([&] {
+          LocalData &tls = all_tls.local();
+          const OrigPositionData orig_data = *orig_position_data_lookup_mesh(object, nodes[i]);
 
-        const Span<int> verts = nodes[i].verts();
-        const Span<float3> undo_positions = orig_data.positions;
-        if (need_translations) {
-          tls.translations.resize(verts.size());
-          translations_from_new_positions(undo_positions, verts, positions_eval, tls.translations);
-        }
-
-        array_utils::scatter(undo_positions, verts, positions_eval);
-
-        if (positions_eval.data() != positions_orig.data()) {
-          /* When the evaluated positions and original mesh positions don't point to the same
-           * array, they must both be updated. */
-          if (ss.deform_imats.is_empty()) {
-            array_utils::scatter(undo_positions, verts, positions_orig);
+          const Span<int> verts = nodes[i].verts();
+          const Span<float3> undo_positions = orig_data.positions;
+          if (need_translations) {
+            tls.translations.resize(verts.size());
+            translations_from_new_positions(
+                undo_positions, verts, positions_eval, tls.translations);
           }
-          else {
-            /* Because brush deformation is calculated for the evaluated deformed positions,
-             * the translations have to be transformed to the original space. */
-            apply_crazyspace_to_translations(ss.deform_imats, verts, tls.translations);
-            if (ELEM(active_key, nullptr, mesh.key->refkey)) {
-              /* We only ever want to propagate changes back to the base mesh if we either have
-               * no shape key active, or we are working on the basis shape key.
-               * See #126199 for more information. */
-              apply_translations(tls.translations, verts, positions_orig);
+
+          scatter_data_mesh(undo_positions, verts, positions_eval);
+
+          if (positions_eval.data() != positions_orig.data()) {
+            /* When the evaluated positions and original mesh positions don't point to the same
+             * array, they must both be updated. */
+            if (ss.deform_imats.is_empty()) {
+              scatter_data_mesh(undo_positions, verts, positions_orig);
+            }
+            else {
+              /* Because brush deformation is calculated for the evaluated deformed positions,
+               * the translations have to be transformed to the original space. */
+              apply_crazyspace_to_translations(ss.deform_imats, verts, tls.translations);
+              if (ELEM(active_key, nullptr, mesh.key->refkey)) {
+                /* We only ever want to propagate changes back to the base mesh if we either have
+                 * no shape key active, or we are working on the basis shape key.
+                 * See #126199 for more information. */
+                apply_translations(tls.translations, verts, positions_orig);
+              }
             }
           }
-        }
 
-        if (active_key) {
-          update_shape_keys(object, mesh, *active_key, verts, tls.translations, positions_orig);
-        }
+          if (active_key) {
+            update_shape_keys(object, mesh, *active_key, verts, tls.translations, positions_orig);
+          }
+        });
       });
       pbvh.tag_positions_changed(node_mask);
       break;
@@ -2204,6 +2207,10 @@ static float brush_strength(const Sculpt &sd,
     case SCULPT_BRUSH_TYPE_POSE:
     case SCULPT_BRUSH_TYPE_BOUNDARY:
       return root_alpha * feather;
+    case SCULPT_BRUSH_TYPE_SIMPLIFY:
+      /* The Dyntopo Density brush does not use a normal brush workflow to calculate the effect,
+       * and this strength value is unused. */
+      return 0.0f;
   }
   BLI_assert_unreachable();
   return 0.0f;
@@ -4939,7 +4946,11 @@ static void restore_from_undo_step_if_necessary(const Depsgraph &depsgraph,
     undo::restore_from_undo_step(depsgraph, sd, ob);
 
     if (ss.cache) {
+      /* Temporary data within the StrokeCache that is usually cleared at the end of the stroke
+       * needs to be invalidated here so that the brushes do not accumulate and apply extra data.
+       * See #129069. */
       ss.cache->layer_displacement_factor = {};
+      ss.cache->paint_brush.mix_colors = {};
     }
   }
 }
@@ -6168,6 +6179,7 @@ template void gather_data_bmesh<float3>(Span<float3>,
                                         MutableSpan<float3>);
 
 template void scatter_data_mesh<bool>(Span<bool>, Span<int>, MutableSpan<bool>);
+template void scatter_data_mesh<int>(Span<int>, Span<int>, MutableSpan<int>);
 template void scatter_data_mesh<float>(Span<float>, Span<int>, MutableSpan<float>);
 template void scatter_data_mesh<float3>(Span<float3>, Span<int>, MutableSpan<float3>);
 template void scatter_data_mesh<float4>(Span<float4>, Span<int>, MutableSpan<float4>);
