@@ -253,7 +253,7 @@ static void node_register()
 
 namespace blender::nodes {
 
-StructRNA *ShRepeatItemsAccessor::item_srna = &RNA_RepeatItem;
+StructRNA *ShRepeatItemsAccessor::item_srna = &RNA_ShaderRepeatItem;
 int ShRepeatItemsAccessor::node_type = SH_NODE_REPEAT_OUTPUT;
 int ShRepeatItemsAccessor::item_dna_type = SDNA_TYPE_FROM_STRUCT(NodeRepeatItem);
 
