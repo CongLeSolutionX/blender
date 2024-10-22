@@ -361,6 +361,71 @@ size_t BLI_strncpy_utf8_rlen(char *__restrict dst, const char *__restrict src, s
 }
 
 /* -------------------------------------------------------------------- */
+/** \name UTF8 Truncating Copy
+ *
+ * \note Prefer #BLI_strncpy_utf8 for untrusted input.
+ *
+ * While it doesn't validate the result, the behavior of stepping over multi-byte sequences
+ * until a limit is reached can yield different results compared with detecting & stripping
+ * the trailing multi-byte sequence.
+ *
+ * In most cases the difference isn't so important, we could even consider replacing the behavior
+ * of #BLI_strncpy_utf8 with #BLI_strncpy_trunc_utf8 but this must be done very carefully
+ * since there may be some cases where different behavior from invalid byte sequences
+ * would cause problems.
+ * \{ */
+
+static size_t str_utf8_rstrip_incomplate(char *str, size_t len)
+
+{
+  BLI_assert(str[len] == '\0');
+  char *end = str + len;
+
+  /* NOTE: Use `end`, not `end - 1` reads like it might be and off by one error.
+   * This isn't the case as the search is for all characters that might have been truncated.
+   * In this case the character beforehand is guaranteed not to be. */
+  char *seek_limit = (len > BLI_UTF8_MAX) ? (end - BLI_UTF8_MAX) : str;
+
+  char *p = end;
+  while (seek_limit <= --p) {
+    if ((*p & 0xc0) != 0x80) {
+      const int skip = utf8_char_compute_skip_or_error(*p);
+      if (skip > 1) {
+        /* Check if the multi-byte sequence was truncated. */
+        if (p + skip > end) {
+          *p = '\0';
+          len = size_t(p - str);
+        }
+      }
+      break;
+    }
+  }
+  return len;
+}
+
+size_t BLI_strncpy_trunc_utf8_rlen(char *__restrict dst,
+                                   const char *__restrict src,
+                                   size_t dst_maxncpy)
+{
+  BLI_assert(dst_maxncpy != 0);
+  BLI_string_debug_size(dst, dst_maxncpy);
+
+  size_t len = BLI_strncpy_rlen(dst, src, dst_maxncpy);
+  if (UNLIKELY(len + 1 == dst_maxncpy && (src[len] != '\0'))) {
+    len = str_utf8_rstrip_incomplate(dst, len);
+  }
+  return len;
+}
+
+char *BLI_strncpy_trunc_utf8(char *__restrict dst, const char *__restrict src, size_t dst_maxncpy)
+{
+  BLI_strncpy_trunc_utf8_rlen(dst, src, dst_maxncpy);
+  return dst;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /* wchar_t / utf8 functions */
 
 size_t BLI_strncpy_wchar_as_utf8(char *__restrict dst,

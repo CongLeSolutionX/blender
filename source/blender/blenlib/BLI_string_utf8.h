@@ -20,6 +20,28 @@ char *BLI_strncpy_utf8(char *__restrict dst, const char *__restrict src, size_t 
 size_t BLI_strncpy_utf8_rlen(char *__restrict dst,
                              const char *__restrict src,
                              size_t dst_maxncpy) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL(1, 2);
+
+/**
+ * A string copy function that strips incomplete UTF8 byte-sequences
+ * in the case copying truncates the string.
+ *
+ * When `dst` is not truncated, this is equivalent to #BLI_strncpy_rlen.
+ *
+ * \note Use instead of #BLI_strncpy_rlen when `src` contains valid UTF8 byte sequences.
+ */
+size_t BLI_strncpy_trunc_utf8_rlen(char *__restrict dst,
+                                   const char *__restrict src,
+                                   size_t dst_maxncpy);
+/**
+ * A string copy function that strips incomplete UTF8 byte-sequences
+ * in the case copying truncates the string.
+ *
+ * When `dst` is not truncated, this is equivalent to #BLI_strncpy.
+ *
+ * \note Use instead of #BLI_strncpy when `src` contains valid UTF8 byte sequences.
+ */
+char *BLI_strncpy_trunc_utf8(char *__restrict dst, const char *__restrict src, size_t dst_maxncpy);
+
 /**
  * Find first UTF-8 invalid byte in given \a str, of \a length bytes.
  *
