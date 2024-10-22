@@ -1404,6 +1404,7 @@ void node_tree_remove_layer_n(bNodeTree *ntree, Scene *scene, int layer_index);
 #define GEO_NODE_BODY_COLLISION_SHAPE 2174
 #define GEO_NODE_INPUT_SHAPE_MASS 2175
 #define GEO_NODE_SET_SHAPE_DENSITY 2176
+#define GEO_NODE_INPUT_CHILD_SHAPE 2177
 
 /** \} */
 

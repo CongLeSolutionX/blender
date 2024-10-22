@@ -48,10 +48,6 @@ static void node_declare(NodeDeclarationBuilder &b)
   add_param_output(ShapeParam::point0);
   add_param_output(ShapeParam::point1);
   add_param_output(ShapeParam::point2);
-
-  if (bke::physics_shape_has_children(shape_type)) {
-    b.add_output<decl::Geometry>("Children");
-  }
 }
 
 static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
@@ -97,21 +93,6 @@ static void node_geo_exec(GeoNodeExecParams params)
   set_shape_parameter_output<float3>(params, *shape, ShapeParam::point0);
   set_shape_parameter_output<float3>(params, *shape, ShapeParam::point1);
   set_shape_parameter_output<float3>(params, *shape, ShapeParam::point2);
-
-  if (bke::physics_shape_has_children(shape_type)) {
-    bke::Instances *instances = new bke::Instances();
-    const Span<GeometrySet> child_geometries = shape->child_geometries();
-    const VArray<float4x4> child_transforms = shape->child_transforms();
-
-    instances->resize(child_geometries.size());
-    MutableSpan<int> handles = instances->reference_handles_for_write();
-    for (const int i : child_geometries.index_range()) {
-      handles[i] = instances->add_reference({child_geometries[i]});
-    }
-    child_transforms.materialize(instances->transforms_for_write());
-
-    params.set_output("Children", bke::GeometrySet::from_instances(instances));
-  }
 }
 
 static void node_rna(StructRNA *srna)

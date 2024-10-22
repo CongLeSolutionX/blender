@@ -377,6 +377,7 @@ DefNode(GeometryNode, GEO_NODE_INPUT_ACTIVE_CAMERA, 0, "INPUT_ACTIVE_CAMERA", In
 DefNode(GeometryNode, GEO_NODE_INPUT_BODY_ACTIVATION_STATE, 0, "INPUT_BODY_ACTIVATION_STATE", InputBodyActivationState, "Body Activation State", "Current activation state of a body in the simulation")
 DefNode(GeometryNode, GEO_NODE_INPUT_BODY_MASS, 0, "INPUT_BODY_MASS", InputBodyMass, "Body Mass", "Mass properties of rigid bodies")
 DefNode(GeometryNode, GEO_NODE_INPUT_BODY_MOTION_STATE, 0, "INPUT_BODY_MOTION_STATE", InputBodyMotionState, "Body Motion State", "Motion state properties of rigid bodies")
+DefNode(GeometryNode, GEO_NODE_INPUT_CHILD_SHAPE, 0, "INPUT_CHILD_SHAPE", InputChildShape, "Child Shape", "Extract a child shape from a compound collision shape")
 DefNode(GeometryNode, GEO_NODE_INPUT_CURVE_HANDLES, 0, "INPUT_CURVE_HANDLES", InputCurveHandlePositions, "Curve Handle Positions", "Retrieve the position of each Bézier control point's handles")
 DefNode(GeometryNode, GEO_NODE_INPUT_CURVE_TILT, 0, "INPUT_CURVE_TILT", InputCurveTilt, "Curve Tilt", "Retrieve the angle at each control point used to twist the curve's normal around its tangent")
 DefNode(GeometryNode, GEO_NODE_INPUT_EDGE_SMOOTH, 0, "INPUT_EDGE_SMOOTH", InputEdgeSmooth, "Is Edge Smooth", "Retrieve whether each edge is marked for smooth or split normals")
