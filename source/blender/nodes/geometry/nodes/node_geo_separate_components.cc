@@ -65,7 +65,7 @@ static void node_geo_exec(GeoNodeExecParams params)
     physics.add(*geometry_set.get_component<PhysicsComponent>());
   }
   if (geometry_set.has<CollisionShapeComponent>()) {
-    physics.add(*geometry_set.get_component<CollisionShapeComponent>());
+    collision_shape.add(*geometry_set.get_component<CollisionShapeComponent>());
   }
 
   params.set_output("Mesh", meshes);
