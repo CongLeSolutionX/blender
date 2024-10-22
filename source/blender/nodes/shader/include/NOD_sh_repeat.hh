@@ -68,7 +68,7 @@ struct ShRepeatItemsAccessor {
 
   static bool supports_socket_type(const eNodeSocketDatatype socket_type)
   {
-    return ELEM(socket_type, SOCK_FLOAT, SOCK_VECTOR, SOCK_RGBA, SOCK_IMAGE);
+    return ELEM(socket_type, SOCK_FLOAT, SOCK_VECTOR, SOCK_RGBA);
   }
 
   static void init_with_socket_type_and_name(bNode &node,
