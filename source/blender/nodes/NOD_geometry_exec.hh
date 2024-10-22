@@ -35,6 +35,7 @@ using bke::AttributeKind;
 using bke::AttributeMetaData;
 using bke::AttributeReader;
 using bke::AttributeWriter;
+using bke::CollisionShapeComponent;
 using bke::CurveComponent;
 using bke::GAttributeReader;
 using bke::GAttributeWriter;
