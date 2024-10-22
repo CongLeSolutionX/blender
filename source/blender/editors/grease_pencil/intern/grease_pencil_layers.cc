@@ -38,7 +38,7 @@ bool grease_pencil_layer_parent_set(bke::greasepencil::Layer &layer,
                                     const bool keep_transform)
 {
   if (keep_transform) {
-    // TODO apply current transform to geometry
+    /* TODO apply current transform to geometry. */
   }
 
   layer.parent = parent;
@@ -60,7 +60,7 @@ void grease_pencil_layer_parent_clear(bke::greasepencil::Layer &layer, const boo
     return;
   }
   if (keep_transform) {
-    // TODO apply current transform to geometry
+    /* TODO apply current transform to geometry. */
   }
 
   layer.parent = nullptr;
