@@ -108,6 +108,7 @@ set(SRC
   nodes/node_geo_input_body_activation_state.cc
   nodes/node_geo_input_body_mass.cc
   nodes/node_geo_input_body_motion_state.cc
+  nodes/node_geo_input_child_shape.cc
   nodes/node_geo_input_curve_handles.cc
   nodes/node_geo_input_curve_tilt.cc
   nodes/node_geo_input_edge_smooth.cc
