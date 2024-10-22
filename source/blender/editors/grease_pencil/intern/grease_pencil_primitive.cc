@@ -9,6 +9,7 @@
 
 #include <fmt/format.h>
 
+#include <algorithm>
 #include <cstring>
 
 #include "BKE_attribute.hh"
@@ -90,6 +91,7 @@ enum class ModalKeyMode : int8_t {
   Scale,
   IncreaseSubdivision,
   DecreaseSubdivision,
+  Flip,
 };
 
 static constexpr float ui_primary_point_draw_size_px = 8.0f;
@@ -134,8 +136,50 @@ struct PrimitiveToolOperation {
   float2 start_position_2d;
   int active_control_point_index;
 
+  float2 start_drag_position_2d;
+  float2 end_drag_position_2d;
+  bool reverse;
+  bool flip;
+
   ViewOpsData *vod;
 };
+
+/* Copied directly from v3 private function in mesh_fair.cc but using float 2 parameters. */
+static float2 calc_circumcenter_2d(const float2 v1, const float2 v2, const float2 v3)
+{
+  float a[3] = {v1[0], v1[1], 0.0f};
+  float b[3] = {v2[0], v2[1], 0.0f};
+  float c[3] = {v3[0], v3[1], 0.0f};
+  float r[3];
+
+  float ab[3];
+  sub_v3_v3v3(ab, b, a);
+
+  float ac[3];
+  sub_v3_v3v3(ac, c, a);
+
+  float ab_cross_ac[3];
+  cross_v3_v3v3(ab_cross_ac, ab, ac);
+
+  if (len_squared_v3(ab_cross_ac) > 0.0f) {
+    float d[3];
+    cross_v3_v3v3(d, ab_cross_ac, ab);
+    mul_v3_fl(d, len_squared_v3(ac));
+
+    float t[3];
+    cross_v3_v3v3(t, ac, ab_cross_ac);
+    mul_v3_fl(t, len_squared_v3(ab));
+
+    add_v3_v3(d, t);
+
+    mul_v3_fl(d, 1.0f / (2.0f * len_squared_v3(ab_cross_ac)));
+
+    add_v3_v3v3(r, a, d);
+    return float2(r[0], r[1]);
+  }
+  copy_v3_v3(r, a);
+  return float2(r[0], r[1]);
+}
 
 static float2 rotate_point(const float2 p,
                            const float angle,
@@ -175,20 +219,20 @@ static int control_points_per_segment(const PrimitiveToolOperation &ptd)
   return 0;
 }
 
-static bool cyclic_primitive(const PrimitiveToolOperation &ptd)
+static bool primitive_is_cyclic(const PrimitiveToolOperation &ptd)
 {
   return ELEM(ptd.type, PrimitiveType::Circle, PrimitiveType::Box);
 }
 
-static bool multi_segment_primitive(const PrimitiveToolOperation &ptd)
+static bool primitive_is_multi_segment(const PrimitiveToolOperation &ptd)
 {
-  return !cyclic_primitive(ptd);
+  return !primitive_is_cyclic(ptd);
 }
 
 static ControlPointType get_control_point_type(const PrimitiveToolOperation &ptd, const int point)
 {
   BLI_assert(point != -1);
-  if (cyclic_primitive(ptd)) {
+  if (primitive_is_cyclic(ptd)) {
     return ControlPointType::JoinPoint;
   }
 
@@ -222,7 +266,7 @@ static void control_point_colors_and_sizes(const PrimitiveToolOperation &ptd,
     return;
   }
 
-  if (cyclic_primitive(ptd)) {
+  if (primitive_is_cyclic(ptd)) {
     colors.fill(color_gizmo_primary);
     sizes.fill(size_primary);
 
@@ -287,7 +331,7 @@ static void draw_control_points(PrimitiveToolOperation &ptd, const bool drag_lin
   }
 
   if (drag_line) {
-    const float3 point3d = ptd.placement.project(ptd.start_position_2d);
+    const float3 point3d = ptd.placement.project(ptd.start_drag_position_2d);
     ColorGeometry4f color;
     UI_GetThemeColor4fv(TH_GIZMO_B, color);
 
@@ -301,8 +345,8 @@ static void draw_control_points(PrimitiveToolOperation &ptd, const bool drag_lin
   GPU_program_point_size(false);
 
   if (drag_line) {
-    const float3 p1 = ptd.placement.project(ptd.start_position_2d);
-    const float3 p2 = ptd.control_points[ptd.active_control_point_index];
+    const float3 p1 = ptd.placement.project(ptd.start_drag_position_2d);
+    const float3 p2 = ptd.placement.project(ptd.end_drag_position_2d);
 
     GPUVertFormat *format3d = immVertexFormat();
     const uint pos3d = GPU_vertformat_attr_add(format3d, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
@@ -321,7 +365,12 @@ static void draw_control_points(PrimitiveToolOperation &ptd, const bool drag_lin
 static void grease_pencil_primitive_draw(const bContext * /*C*/, ARegion * /*region*/, void *arg)
 {
   PrimitiveToolOperation &ptd = *reinterpret_cast<PrimitiveToolOperation *>(arg);
-  const bool drag_line = ELEM(ptd.mode, OperatorMode::Grab, OperatorMode::Drag);
+  const bool drag_line = ELEM(ptd.mode,
+                              OperatorMode::ScaleAll,
+                              OperatorMode::Grab,
+                              OperatorMode::Drag,
+                              OperatorMode::RotateAll,
+                              OperatorMode::DragAll);
   draw_control_points(ptd, drag_line);
 }
 
@@ -373,9 +422,9 @@ static void primitive_calulate_curve_positions(PrimitiveToolOperation &ptd,
         const float2 MP = math::midpoint(A, B);
         const float2 AB = A - B;
         const float angle_cp = angle_signed_v2v2(A - CP, AB);
-        /* If CP is near MP or near AB, generate straight segment. */
-        if (math::is_equal(A, B) || (math::distance(MP, CP) < math::distance(MP, A) * 0.4f) ||
-            (math::abs(angle_cp) < 0.2f) || (math::numbers::pi - math::abs(angle_cp) < 0.2f))
+        /* Draw straight line if points are virtually collinear or too close. */
+        if (math::is_equal(A, B) || (math::abs(angle_cp) < 0.0075f) ||
+            (math::numbers::pi - math::abs(angle_cp) < 0.0075f))
         {
           for (const int i : IndexRange(subdivision + 1)) {
             const float t = i / float(subdivision + 1);
@@ -383,15 +432,29 @@ static void primitive_calulate_curve_positions(PrimitiveToolOperation &ptd,
           }
         }
         else {
-          const float radius = math::distance(A, MP);
-          const float angle_offset = angle_signed_v2v2(AB, float2(1.0f, 0.0f));
-          const float flip = angle_cp >= 0.0f ? 1.0f : -1.0f;
-          const float theta_step = (-math::numbers::pi) / float(subdivision + 1) * flip;
+          const float2 center_pos = calc_circumcenter_2d(A, B, CP);
+          float2 CEN = float2(center_pos.x, center_pos.y);
+
+          const float radius = math::distance(A, CEN);
+          const float angle_offset = angle_signed_v2v2(A - CEN, float2(1.0f, 0.0f));
+          float flip = angle_cp >= 0.0f ? 1.0f : -1.0f;
+          const float dist_cp_mp = math::distance(CP, MP);
+          const float dist_a_mp = math::distance(A, MP);
+          flip *= dist_a_mp > dist_cp_mp ? -1.0f : 1.0f;
+
+          float angle = math::mod_periodic(angle_v2v2(B - CEN, A - CEN), float(math::numbers::pi));
+
+          /* Use larger angle if CP is beyond reference radius. */
+          if (dist_cp_mp >= dist_a_mp) {
+            angle -= 2.0f * math::numbers::pi;
+          }
+
+          const float theta_step = angle / float(subdivision + 1) * flip;
           for (const int i : IndexRange(subdivision + 1)) {
             const float t = theta_step * i + angle_offset;
             const float x = radius * cos(t);
             const float y = radius * sin(t);
-            new_positions[i + segment_i * (subdivision + 1)] = MP + float2(x, y);
+            new_positions[i + segment_i * (subdivision + 1)] = CEN + float2(x, y);
           }
         }
       }
@@ -646,7 +709,7 @@ static void grease_pencil_primitive_init_curves(PrimitiveToolOperation &ptd)
     end_caps.finish();
   }
 
-  const bool is_cyclic = cyclic_primitive(ptd);
+  const bool is_cyclic = primitive_is_cyclic(ptd);
   cyclic.span.last() = is_cyclic;
   materials.span.last() = ptd.material_index;
   softness.span.last() = ptd.softness;
@@ -739,9 +802,13 @@ static void grease_pencil_primitive_status_indicators(bContext *C,
     header += IFACE_(", Alt: center");
   }
 
-  if (multi_segment_primitive(ptd)) {
-    header += fmt::format(IFACE_(", Shift: constrain or snap to points"));
+  if (primitive_is_multi_segment(ptd)) {
+    header += fmt::format(IFACE_(", Shift: constrain"));
+    header += fmt::format(IFACE_(", Ctrl: snap to points"));
     header += fmt::format(IFACE_(", {}: extrude"), get_modal_key_str(ModalKeyMode::Extrude));
+    if (ptd.type == PrimitiveType::Semicircle) {
+      header += fmt::format(IFACE_(", {}: flip"), get_modal_key_str(ModalKeyMode::Flip));
+    }
   }
 
   header += fmt::format(IFACE_(", {}: grab, {}: rotate, {}: scale"),
@@ -823,6 +890,11 @@ static int grease_pencil_primitive_invoke(bContext *C, wmOperator *op, const wmE
   ptd.control_points.append_n_times(pos, control_points_per_segment(ptd));
   ptd.active_control_point_index = -1;
   ptd.projection = ED_view3d_ob_project_mat_get(ptd.vc.rv3d, ptd.vc.obact);
+
+  ptd.start_drag_position_2d = start_coords;
+  ptd.end_drag_position_2d = start_coords;
+  ptd.reverse = false;
+  ptd.flip = false;
 
   Paint *paint = &vc.scene->toolsettings->gp_paint->paint;
   ptd.brush = BKE_paint_brush(paint);
@@ -938,10 +1010,10 @@ static float2 snap_8_angles(float2 p)
   return sign(p) * length(p) * normalize(sign(normalize(abs(p)) - sin225) + 1.0f);
 }
 
-static float2 snap_cps(PrimitiveToolOperation &ptd,
-                       const float2 p,
-                       const float2 r_default,
-                       const int active_index)
+static float2 snap_to_control_points(PrimitiveToolOperation &ptd,
+                                     const float2 p,
+                                     const float2 r_default,
+                                     const int active_index)
 {
   for (const int point_index : ptd.temp_control_points.index_range()) {
     if (point_index == active_index) {
@@ -949,8 +1021,47 @@ static float2 snap_cps(PrimitiveToolOperation &ptd,
     }
     const float2 pos = ED_view3d_project_float_v2_m4(
         ptd.vc.region, ptd.temp_control_points[point_index], ptd.projection);
-    if (math::distance_manhattan(pos, p) < 15.0f) {
+    const float distance_squared = math::distance_squared(pos, p);
+    const float radius_sq = ui_point_hit_size_px * ui_point_hit_size_px;
+    if (distance_squared <= radius_sq) {
       return pos;
+    }
+  }
+  return r_default;
+}
+
+static void primitive_rotate_cps(PrimitiveToolOperation &ptd,
+                                 const float2 active_pos,
+                                 const int offset)
+{
+  const int end_index = ptd.active_control_point_index;
+  const int cp_index = end_index + offset;
+  const int start_index = cp_index + offset;
+
+  if (start_index < 0 || start_index >= ptd.control_points.size()) {
+    return;
+  }
+
+  const float2 start = ED_view3d_project_float_v2_m4(
+      ptd.vc.region, ptd.temp_control_points[start_index], ptd.projection);
+  const float2 end = ED_view3d_project_float_v2_m4(
+      ptd.vc.region, ptd.temp_control_points[end_index], ptd.projection);
+  const float2 cp = ED_view3d_project_float_v2_m4(
+      ptd.vc.region, ptd.temp_control_points[cp_index], ptd.projection);
+
+  const float angle = angle_signed_v2v2(active_pos - start, end - start);
+  const float scale = math::length(active_pos - start) / math::length(end - start);
+  const float2 pos2 = rotate_point(cp, angle, start, scale);
+  ptd.control_points[cp_index] = ptd.placement.project(pos2);
+}
+
+static float2 snap_2d_list(const float2 p, const float2 r_default, const Vector<float2> points)
+{
+  for (const float2 point : points) {
+    const float distance_squared = math::distance_squared(point, p);
+    const float radius_sq = ui_point_hit_size_px * ui_point_hit_size_px;
+    if (distance_squared <= radius_sq) {
+      return point;
     }
   }
   return r_default;
@@ -966,6 +1077,7 @@ static void grease_pencil_primitive_extruding_update(PrimitiveToolOperation &ptd
   const float2 dif = end - start;
   float2 offset = dif;
 
+  /* Constrain control points. */
   if (event->modifier & KM_SHIFT) {
     if (ptd.type == PrimitiveType::Box) {
       offset = snap_diagonals_box(dif);
@@ -975,9 +1087,14 @@ static void grease_pencil_primitive_extruding_update(PrimitiveToolOperation &ptd
     }
     else { /* Line, Polyline, Arc, Semicircle and Curve. */
       offset = snap_8_angles(dif);
-      offset = snap_cps(ptd, float2(event->mval), offset + start, ptd.temp_control_points.size());
-      offset -= start;
     }
+  }
+
+  /* Snap control points. */
+  if (event->modifier & KM_CTRL) {
+    offset = snap_to_control_points(
+        ptd, float2(event->mval), offset + start, ptd.temp_control_points.size());
+    offset -= start;
   }
 
   offset *= 0.5f;
@@ -993,7 +1110,8 @@ static void grease_pencil_primitive_extruding_update(PrimitiveToolOperation &ptd
     case PrimitiveType::Semicircle: {
       const float2 start = center - offset;
       const float2 end = center + offset;
-      const float2 cp = rotate_point(end, 90, center);
+      const float angle = numbers::pi * 0.5f + ptd.flip * numbers::pi;
+      const float2 cp = rotate_point(end, angle, center);
 
       ptd.control_points.last(2) = ptd.placement.project(start);
       ptd.control_points.last(1) = ptd.placement.project(cp);
@@ -1018,7 +1136,13 @@ static void grease_pencil_primitive_drag_all_update(PrimitiveToolOperation &ptd,
                                                     const wmEvent *event)
 {
   const float2 start = ptd.start_position_2d;
-  const float2 end = float2(event->mval);
+  float2 end = float2(event->mval);
+
+  /* Constrain control points. */
+  if (event->modifier & KM_SHIFT) {
+    end = snap_8_angles(end - start) + start;
+  }
+
   const float2 dif = end - start;
 
   for (const int point_index : ptd.control_points.index_range()) {
@@ -1028,57 +1152,38 @@ static void grease_pencil_primitive_drag_all_update(PrimitiveToolOperation &ptd,
     float3 pos = ptd.placement.project(start_pos2 + dif);
     ptd.control_points[point_index] = pos;
   }
-}
-
-static void grease_pencil_primitive_rotate_cps(PrimitiveToolOperation &ptd,
-                                               const float2 active_pos,
-                                               const int offset)
-{
-  const int end_index = ptd.active_control_point_index;
-  const int cp_index = end_index + offset;
-  const int start_index = cp_index + offset;
-
-  if (start_index < 0 || start_index >= ptd.control_points.size()) {
-    return;
-  }
-
-  const float2 start = ED_view3d_project_float_v2_m4(
-      ptd.vc.region, ptd.temp_control_points[start_index], ptd.projection);
-  const float2 end = ED_view3d_project_float_v2_m4(
-      ptd.vc.region, ptd.temp_control_points[end_index], ptd.projection);
-  const float2 cp = ED_view3d_project_float_v2_m4(
-      ptd.vc.region, ptd.temp_control_points[cp_index], ptd.projection);
-
-  const float angle = angle_signed_v2v2(active_pos - start, end - start);
-  const float scale = math::length(active_pos - start) / math::length(end - start);
-
-  const float2 pos2 = rotate_point(cp, angle, start, scale);
-
-  ptd.control_points[cp_index] = ptd.placement.project(pos2);
+  ptd.start_drag_position_2d = start;
+  ptd.end_drag_position_2d = end;
 }
 
 static void grease_pencil_primitive_grab_update(PrimitiveToolOperation &ptd, const wmEvent *event)
 {
   BLI_assert(ptd.active_control_point_index != -1);
   float2 active_pos = float2(event->mval);
+  const float2 start = ED_view3d_project_float_v2_m4(
+      ptd.vc.region, ptd.temp_control_points[ptd.active_control_point_index], ptd.projection);
 
-  if (multi_segment_primitive(ptd) && event->modifier & KM_SHIFT) {
-    const float2 start = ED_view3d_project_float_v2_m4(
-        ptd.vc.region, ptd.temp_control_points[ptd.active_control_point_index], ptd.projection);
+  if (primitive_is_multi_segment(ptd) && event->modifier & KM_SHIFT) {
     active_pos = snap_8_angles(active_pos - start) + start;
-    active_pos = snap_cps(ptd, float2(event->mval), active_pos, ptd.active_control_point_index);
+  }
+
+  if (primitive_is_multi_segment(ptd) && event->modifier & KM_CTRL) {
+    active_pos = snap_to_control_points(
+        ptd, float2(event->mval), active_pos, ptd.active_control_point_index);
   }
 
   const float3 pos = ptd.placement.project(active_pos);
   ptd.control_points[ptd.active_control_point_index] = pos;
+  ptd.start_drag_position_2d = start;
+  ptd.end_drag_position_2d = active_pos;
 
   if (ptd.type == PrimitiveType::Semicircle) {
-    grease_pencil_primitive_rotate_cps(ptd, active_pos, -1);
-    grease_pencil_primitive_rotate_cps(ptd, active_pos, 1);
+    primitive_rotate_cps(ptd, active_pos, -1);
+    primitive_rotate_cps(ptd, active_pos, 1);
     return;
   }
 
-  if (multi_segment_primitive(ptd)) {
+  if (primitive_is_multi_segment(ptd)) {
     return;
   }
 
@@ -1104,20 +1209,67 @@ static void grease_pencil_primitive_grab_update(PrimitiveToolOperation &ptd, con
 static void grease_pencil_primitive_drag_update(PrimitiveToolOperation &ptd, const wmEvent *event)
 {
   BLI_assert(ptd.active_control_point_index != -1);
-  const float2 start = ptd.start_position_2d;
-  const float2 end = float2(event->mval);
-  const float2 dif = end - start;
 
-  const float2 start_pos2 = ED_view3d_project_float_v2_m4(
+  const float2 start = ED_view3d_project_float_v2_m4(
       ptd.vc.region, ptd.temp_control_points[ptd.active_control_point_index], ptd.projection);
+  // const float2 start = ptd.start_position_2d;
+  const float2 end = float2(event->mval);
+  float2 active_pos = end;
+  const float2 dif = end - start;
+  ptd.start_drag_position_2d = start;
+  ptd.end_drag_position_2d = active_pos;
 
-  const float3 pos = ptd.placement.project(start_pos2 + dif);
+  /* Constrain control points. */
+  if (event->modifier & KM_SHIFT) {
+    if (ptd.type == PrimitiveType::Semicircle) {
+      const float2 start = ED_view3d_project_float_v2_m4(
+          ptd.vc.region,
+          ptd.temp_control_points[ptd.active_control_point_index + 1],
+          ptd.projection);
+      const float2 end = ED_view3d_project_float_v2_m4(
+          ptd.vc.region,
+          ptd.temp_control_points[ptd.active_control_point_index - 1],
+          ptd.projection);
+      float2 mp = math::midpoint(start, end);
+      float2 cp = rotate_point(end, math::numbers::pi * 0.5f, mp);
+      float2 cp2 = rotate_point(end, -math::numbers::pi * 0.5f, mp);
+      const float lambda = closest_to_line_v2(active_pos, active_pos, cp, cp2);
+
+      active_pos = math::interpolate(cp, cp2, math::clamp(lambda, 0.0f, 1.0f));
+      Vector<float2> point_list;
+      point_list.append(cp);
+      point_list.append(cp2);
+      point_list.append(mp);
+      active_pos = snap_2d_list(active_pos, active_pos, point_list);
+      const float3 pos = ptd.placement.project(active_pos);
+      ptd.control_points[ptd.active_control_point_index] = pos;
+      return;
+    }
+    else if (primitive_is_multi_segment(ptd)) {
+      active_pos = snap_8_angles(end - start);
+      const float3 pos = ptd.placement.project(active_pos);
+      ptd.control_points[ptd.active_control_point_index] = pos;
+      return;
+    }
+  }
+
+  /* Snap control points. */
+  if (event->modifier & KM_CTRL) {
+    active_pos = snap_to_control_points(
+        ptd, float2(event->mval), float2(event->mval), ptd.active_control_point_index);
+    const float3 pos = ptd.placement.project(active_pos);
+    ptd.control_points[ptd.active_control_point_index] = pos;
+
+    return;
+  }
+
+  const float3 pos = ptd.placement.project(start + dif);
   ptd.control_points[ptd.active_control_point_index] = pos;
 }
 
 static float2 primitive_center_of_mass(const PrimitiveToolOperation &ptd)
 {
-  if (cyclic_primitive(ptd)) {
+  if (primitive_is_cyclic(ptd)) {
     return ED_view3d_project_float_v2_m4(
         ptd.vc.region, ptd.temp_control_points[control_point_center], ptd.projection);
   }
@@ -1146,15 +1298,12 @@ static void grease_pencil_primitive_rotate_all_update(PrimitiveToolOperation &pt
   for (const int point_index : ptd.control_points.index_range()) {
     const float2 start_pos2 = ED_view3d_project_float_v2_m4(
         ptd.vc.region, ptd.temp_control_points[point_index], ptd.projection);
-
-    const float2 dif = start_pos2 - center_of_mass;
-    const float c = math::cos(rotation);
-    const float s = math::sin(rotation);
-    const float2x2 rot = float2x2(float2(c, s), float2(-s, c));
-    const float2 pos2 = rot * dif + center_of_mass;
+    const float2 pos2 = rotate_point(start_pos2, rotation, center_of_mass);
     const float3 pos = ptd.placement.project(pos2);
     ptd.control_points[point_index] = pos;
   }
+  ptd.start_drag_position_2d = center_of_mass;
+  ptd.end_drag_position_2d = end;
 }
 
 static void grease_pencil_primitive_scale_all_update(PrimitiveToolOperation &ptd,
@@ -1175,6 +1324,8 @@ static void grease_pencil_primitive_scale_all_update(PrimitiveToolOperation &ptd
     const float3 pos = ptd.placement.project(pos2);
     ptd.control_points[point_index] = pos;
   }
+  ptd.start_drag_position_2d = center_of_mass;
+  ptd.end_drag_position_2d = end;
 }
 
 static int primitive_check_ui_hover(const PrimitiveToolOperation &ptd, const wmEvent *event)
@@ -1224,6 +1375,7 @@ static void grease_pencil_primitive_cursor_update(bContext *C,
   }
 
   const int ui_id = primitive_check_ui_hover(ptd, event);
+  ptd.reverse = (ui_id == 0);
   ptd.active_control_point_index = ui_id;
   if (ui_id == -1) {
     if (ptd.type == PrimitiveType::Polyline) {
@@ -1237,6 +1389,16 @@ static void grease_pencil_primitive_cursor_update(bContext *C,
 
   WM_cursor_modal_set(win, WM_CURSOR_NSEW_SCROLL);
   return;
+}
+
+static void primitive_reverse(PrimitiveToolOperation &ptd)
+{
+  if (ptd.reverse == true) {
+    std::reverse(ptd.control_points.begin(), ptd.control_points.end());
+    std::reverse(ptd.temp_control_points.begin(), ptd.temp_control_points.end());
+    ptd.reverse = false;
+    ptd.flip = ptd.flip ? false : true;
+  }
 }
 
 static int grease_pencil_primitive_event_modal_map(bContext *C,
@@ -1264,6 +1426,9 @@ static int grease_pencil_primitive_event_modal_map(bContext *C,
                                                  PrimitiveType::Semicircle))
       {
         ptd.mode = OperatorMode::Extruding;
+
+        primitive_reverse(ptd);
+
         grease_pencil_primitive_save(ptd);
 
         ptd.start_position_2d = ED_view3d_project_float_v2_m4(
@@ -1303,6 +1468,12 @@ static int grease_pencil_primitive_event_modal_map(bContext *C,
         return OPERATOR_RUNNING_MODAL;
       }
 
+      return OPERATOR_RUNNING_MODAL;
+    }
+    case int(ModalKeyMode::Flip): {
+      if (ptd.mode == OperatorMode::Extruding && ELEM(ptd.type, PrimitiveType::Semicircle)) {
+        ptd.flip = ptd.flip ? false : true;
+      }
       return OPERATOR_RUNNING_MODAL;
     }
     case int(ModalKeyMode::Grab): {
@@ -1369,6 +1540,7 @@ static int grease_pencil_primitive_mouse_event(PrimitiveToolOperation &ptd, cons
   if (ptd.mode == OperatorMode::Idle && event->val == KM_PRESS) {
     const int ui_id = primitive_check_ui_hover(ptd, event);
     ptd.active_control_point_index = ui_id;
+    ptd.reverse = (ui_id == 0);
     if (ui_id == -1) {
       if (ptd.type != PrimitiveType::Polyline) {
         ptd.start_position_2d = float2(event->mval);
@@ -1713,6 +1885,7 @@ void ED_primitivetool_modal_keymap(wmKeyConfig *keyconf)
       {int(ModalKeyMode::Grab), "GRAB", 0, "Grab", ""},
       {int(ModalKeyMode::Rotate), "ROTATE", 0, "Rotate", ""},
       {int(ModalKeyMode::Scale), "SCALE", 0, "Scale", ""},
+      {int(ModalKeyMode::Flip), "FLIP", 0, "Flip", ""},
       {int(ModalKeyMode::IncreaseSubdivision),
        "INCREASE_SUBDIVISION",
        0,
