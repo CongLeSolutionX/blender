@@ -112,7 +112,7 @@ void do_vertex(const uint i,
                uint out_vertex_id,
                uint out_primitive_id,
                VertOut geom_in[2],
-               vec4 pos,
+               vec4 position,
                vec2 ofs)
 {
   GeomOut geom_out;
@@ -132,13 +132,13 @@ void do_vertex(const uint i,
 #endif
 
   geom_out.smoothline = (lineWidth + SMOOTH_WIDTH * float(lineSmooth)) * 0.5;
-  geom_out.gpu_position = pos;
-  geom_out.gpu_position.xy += ofs * pos.w;
+  geom_out.gpu_position = position;
+  geom_out.gpu_position.xy += ofs * position.w;
   strip_EmitVertex(i * 2u + 0u, out_vertex_id, out_primitive_id, geom_out);
 
   geom_out.smoothline = -(lineWidth + SMOOTH_WIDTH * float(lineSmooth)) * 0.5;
-  geom_out.gpu_position = pos;
-  geom_out.gpu_position.xy -= ofs * pos.w;
+  geom_out.gpu_position = position;
+  geom_out.gpu_position.xy -= ofs * position.w;
   strip_EmitVertex(i * 2u + 1u, out_vertex_id, out_primitive_id, geom_out);
 }
 
