@@ -167,7 +167,7 @@ void geometry_main(VertOut geom_in[2],
 void main()
 {
   /* Line list primitive. */
-  const uint input_primitive_vertex_count = 2u;
+  uint input_primitive_vertex_count = uint(gpu_vert_stride_count.x);
   /* Triangle list primitive (emulating triangle strip). */
   const uint ouput_primitive_vertex_count = 3u;
   const uint ouput_primitive_count = 2u;
@@ -185,12 +185,14 @@ void main()
                           ouput_primitive_count;
   uint out_invocation_id = (uint(gl_VertexID) / output_vertex_count_per_invocation) %
                            ouput_invocation_count;
+  /* Used to wrap around for the line loop case. */
+  uint input_total_vertex_count = uint(gpu_vert_stride_count.y);
 
-  VertIn vert_in[input_primitive_vertex_count];
+  VertIn vert_in[2];
   vert_in[0] = input_assembly(in_primitive_first_vertex + 0u);
-  vert_in[1] = input_assembly(in_primitive_first_vertex + 1u);
+  vert_in[1] = input_assembly((in_primitive_first_vertex + 1u) % input_total_vertex_count);
 
-  VertOut vert_out[input_primitive_vertex_count];
+  VertOut vert_out[2];
   vert_out[0] = vertex_main(vert_in[0]);
   vert_out[1] = vertex_main(vert_in[1]);
 

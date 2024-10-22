@@ -242,6 +242,73 @@ blender::gpu::Batch *immBeginBatchAtMost(GPUPrimType prim_type, uint vertex_len)
   return immBeginBatch(prim_type, vertex_len);
 }
 
+static void polyline_draw_workaround()
+{
+  /* Check compatible input primitive. */
+  BLI_assert(ELEM(imm->prim_type, GPU_PRIM_LINES, GPU_PRIM_LINE_STRIP, GPU_PRIM_LINE_LOOP));
+
+  Batch *tri_batch = Context::get()->polyline_batch_get();
+  GPU_batch_set_shader(tri_batch, imm->shader);
+
+  /* Setup primitive and index buffer. */
+  int vert_stride_count[2] = {(imm->prim_type == GPU_PRIM_LINES) ? 2 : 1, int(imm->vertex_idx)};
+  GPU_shader_uniform_2iv(imm->shader, "gpu_vert_stride_count", vert_stride_count);
+  GPU_shader_uniform_1b(imm->shader, "gpu_index_no_buffer", true);
+
+  {
+    /* Setup attributes metadata uniforms. */
+    const GPUVertFormat &format = imm->vertex_format;
+    /* Only support 4byte aligned formats. */
+    BLI_assert((format.stride % 4) == 0);
+    BLI_assert(format.attr_len > 0);
+
+    int pos_attr_id = -1;
+    int col_attr_id = -1;
+
+    for (uint a_idx = 0; a_idx < format.attr_len; a_idx++) {
+      const GPUVertAttr *a = &format.attrs[a_idx];
+      const char *name = GPU_vertformat_attr_name_get(&format, a, 0);
+      if (pos_attr_id == -1 && blender::StringRefNull(name) == "pos") {
+        int descriptor[2] = {int(format.stride) / 4, int(a->offset) / 4};
+        BLI_assert_msg(a->comp_type == GPU_COMP_F32, "Only support float attributes");
+        BLI_assert_msg((a->offset % 4) == 0, "Only support 4byte aligned attributes");
+        GPU_shader_uniform_2iv(imm->shader, "gpu_attr_0", descriptor);
+        GPU_shader_uniform_1i(imm->shader, "gpu_attr_0_len", a->comp_len);
+        pos_attr_id = a_idx;
+      }
+      else if (col_attr_id == -1 && blender::StringRefNull(name) == "color") {
+        int descriptor[2] = {int(format.stride) / 4, int(a->offset) / 4};
+        /* Maybe we can relax this if needed. */
+        BLI_assert_msg(a->comp_type == GPU_COMP_F32, "Only support float attributes");
+        BLI_assert_msg((a->offset % 4) == 0, "Only support 4byte aligned attributes");
+        GPU_shader_uniform_2iv(imm->shader, "gpu_attr_1", descriptor);
+        GPU_shader_uniform_1i(imm->shader, "gpu_attr_1_len", a->comp_len);
+        col_attr_id = a_idx;
+      }
+      if (pos_attr_id != -1 && col_attr_id != -1) {
+        break;
+      }
+    }
+
+    BLI_assert(pos_attr_id != -1);
+    /* Could check for color attribute but we need to know which variant of the polyline shader is
+     * the one we are rendering with. */
+    // BLI_assert(pos_attr_id != -1);
+  }
+
+  blender::IndexRange range = GPU_batch_draw_expanded_parameter_get(
+      imm->prim_type, GPU_PRIM_TRIS, imm->vertex_idx, 0, 2);
+  GPU_batch_draw_advanced(tri_batch, range.start(), range.size(), 0, 0);
+
+#ifndef NDEBUG
+  /* Would be nice to treat these SSBOs slot as empty. But each backend has a different appraoch to
+   * these check and unbinding all would trigger false positive errors for user bound SSBOs. */
+  // Context::get()->bound_ssbo_slots &= ~(1 << GPU_SSBO_POLYLINE_POS_BUF_SLOT);
+  // Context::get()->bound_ssbo_slots &= ~(1 << GPU_SSBO_POLYLINE_COL_BUF_SLOT);
+  // Context::get()->bound_ssbo_slots &= ~(1 << GPU_SSBO_INDEX_BUF_SLOT);
+#endif
+}
+
 void immEnd()
 {
   BLI_assert(imm->prim_type != GPU_PRIM_NONE); /* Make sure we're between a Begin/End pair. */
@@ -266,7 +333,12 @@ void immEnd()
     imm->batch = nullptr; /* don't free, batch belongs to caller */
   }
   else {
+    /* NOTE: Expected to bind the polyline buffers when needed. */
     imm->end();
+
+    if (unwrap(imm->shader)->is_polyline) {
+      polyline_draw_workaround();
+    }
   }
 
   /* Prepare for next immBegin. */

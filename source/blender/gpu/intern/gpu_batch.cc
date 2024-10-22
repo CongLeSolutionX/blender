@@ -352,22 +352,28 @@ void GPU_batch_draw_parameter_get(Batch *gpu_batch,
   *r_instance_count = i_count;
 }
 
-blender::IndexRange GPU_batch_draw_expanded_parameter_get(const blender::gpu::Batch *batch,
-                                                          GPUPrimType expanded_prim_type,
+blender::IndexRange GPU_batch_draw_expanded_parameter_get(GPUPrimType input_prim_type,
+                                                          GPUPrimType output_prim_type,
                                                           int vertex_count,
-                                                          int vertex_first)
+                                                          int vertex_first,
+                                                          int output_primitive_cout)
 {
-  int vert_per_original_primitive = indices_per_primitive(batch->prim_type);
-  int vert_per_expanded_primitive = indices_per_primitive(expanded_prim_type);
-
-  BLI_assert_msg(vert_per_original_primitive != -1,
-                 "Primitive expansion only works for primitives with known amount of vertices");
+  int vert_per_original_primitive = indices_per_primitive(input_prim_type);
+  int vert_per_expanded_primitive = indices_per_primitive(output_prim_type);
 
   int prim_first = vertex_first / vert_per_original_primitive;
   int prim_len = vertex_count / vert_per_original_primitive;
 
-  int out_vertex_first = prim_first * vert_per_expanded_primitive;
-  int out_vertex_count = prim_len * vert_per_expanded_primitive;
+  BLI_assert_msg(vert_per_original_primitive != -1,
+                 "Primitive expansion only works for primitives with known amount of vertices");
+
+  /* WORKAROUND: Needed for polyline_draw_workaround. */
+  if (input_prim_type == GPU_PRIM_LINE_STRIP) {
+    prim_len = vertex_count - 1;
+  }
+
+  int out_vertex_first = prim_first * vert_per_expanded_primitive * output_primitive_cout;
+  int out_vertex_count = prim_len * vert_per_expanded_primitive * output_primitive_cout;
 
   return blender::IndexRange(out_vertex_first, out_vertex_count);
 }
@@ -375,10 +381,16 @@ blender::IndexRange GPU_batch_draw_expanded_parameter_get(const blender::gpu::Ba
 static void polyline_draw_workaround(
     Batch *batch, int vertex_first, int vertex_count, int instance_first, int instance_count)
 {
+  /* Check compatible input primitive. */
+  BLI_assert(ELEM(batch->prim_type, GPU_PRIM_LINES, GPU_PRIM_LINE_STRIP, GPU_PRIM_LINE_LOOP));
+
   GPU_batch_bind_as_resources(batch, batch->shader);
   blender::IndexRange range = GPU_batch_draw_expanded_parameter_get(
-      batch, GPU_PRIM_TRIS, vertex_count, vertex_first);
+      batch->prim_type, GPU_PRIM_TRIS, vertex_count, vertex_first, 2);
   Batch *tri_batch = Context::get()->polyline_batch_get();
+  GPU_batch_set_shader(tri_batch, batch->shader);
+  int vert_stride_count[2] = {(batch->prim_type == GPU_PRIM_LINES) ? 2 : 1, int(vertex_count)};
+  GPU_shader_uniform_2iv(batch->shader, "gpu_vert_stride_count", vert_stride_count);
   GPU_batch_draw_advanced(tri_batch, range.start(), range.size(), instance_first, instance_count);
 }
 
