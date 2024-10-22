@@ -557,6 +557,10 @@ void GPUCodegen::node_serialize(std::stringstream &eval_ss, const GPUNode *node)
     eval_ss << output->type << " " << output << ";\n";
   }
 
+  if (node->skip_call) {
+    return;
+  }
+
   /* Function call. */
   eval_ss << node->name << "(";
   /* Input arguments. */
@@ -709,14 +713,27 @@ void GPUCodegen::set_unique_ids()
   };
 
   /* Assign the same id to inputs and outputs of start and end zones. */
-  for (GPUNode *start : zone_starts.values()) {
-    GPUNode *end = zone_ends.lookup(start->zone_index);
+  for (GPUNode *end : zone_ends.values()) {
+
+    GPUInput *end_input = list_offset((GPUInput *)end->inputs.first, end->in_argument_count);
+    GPUOutput *end_output = list_offset((GPUOutput *)end->outputs.first, end->out_argument_count);
+
+    if (!zone_starts.contains(end->zone_index)) {
+      /* The zone input is disconnected.
+       * Skip the call and pretend it's an input so its variables are declared. */
+      end->skip_call = true;
+      end->is_zone_end = false;
+      for (; end_input; end_input = end_input->next, end_output = end_output->next) {
+        end_output->id = end_input->id;
+      }
+      continue;
+    }
+
+    GPUNode *start = zone_starts.lookup(end->zone_index);
 
     GPUInput *start_input = list_offset((GPUInput *)start->inputs.first, start->in_argument_count);
     GPUOutput *start_output = list_offset((GPUOutput *)start->outputs.first,
                                           start->out_argument_count);
-    GPUInput *end_input = list_offset((GPUInput *)end->inputs.first, end->in_argument_count);
-    GPUOutput *end_output = list_offset((GPUOutput *)end->outputs.first, end->out_argument_count);
 
     for (; start_input; start_input = start_input->next,
                         start_output = start_output->next,

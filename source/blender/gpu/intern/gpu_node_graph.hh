@@ -77,6 +77,7 @@ struct GPUNode {
   ListBase inputs;
   ListBase outputs;
 
+  bool skip_call;
   /* Zones. */
   int zone_index;
   bool is_zone_end;
