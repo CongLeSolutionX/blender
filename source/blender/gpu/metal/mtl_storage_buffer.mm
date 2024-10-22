@@ -17,6 +17,7 @@
 #include "mtl_context.hh"
 #include "mtl_debug.hh"
 #include "mtl_index_buffer.hh"
+#include "mtl_memory.hh"
 #include "mtl_storage_buffer.hh"
 #include "mtl_uniform_buffer.hh"
 #include "mtl_vertex_buffer.hh"
@@ -26,6 +27,18 @@ namespace blender::gpu {
 /* -------------------------------------------------------------------- */
 /** \name Creation & Deletion
  * \{ */
+
+/* Only used internally to create a bindable buffer. */
+MTLStorageBuf::MTLStorageBuf(id<MTLDevice> mtl_device,
+                             uint64_t size,
+                             MTLResourceOptions options,
+                             uint alignment)
+    : StorageBuf(size, "Immediate")
+{
+  usage_ = GPU_USAGE_STREAM;
+  storage_source_ = MTL_STORAGE_BUF_TYPE_DEFAULT;
+  metal_buffer_ = new gpu::MTLBuffer(mtl_device, size, options, alignment);
+}
 
 MTLStorageBuf::MTLStorageBuf(size_t size, GPUUsageType usage, const char *name)
     : StorageBuf(size, name)
@@ -61,15 +74,6 @@ MTLStorageBuf::MTLStorageBuf(MTLIndexBuf *index_buf, size_t size)
   storage_source_ = MTL_STORAGE_BUF_TYPE_INDEXBUF;
   index_buffer_ = index_buf;
   BLI_assert(index_buffer_ != nullptr);
-}
-
-MTLStorageBuf::MTLStorageBuf(MTLBufferRange *temp_buffer, size_t size)
-    : StorageBuf(size, "TemporaryBuffer_as_SSBO")
-{
-  usage_ = GPU_USAGE_DYNAMIC;
-  storage_source_ = MTL_STORAGE_BUF_TYPE_TEMPBUF;
-  temp_buffer_ = temp_buffer;
-  BLI_assert(temp_buffer_ != nullptr);
 }
 
 MTLStorageBuf::MTLStorageBuf(MTLTexture *texture, size_t size)
@@ -492,9 +496,6 @@ id<MTLBuffer> MTLStorageBuf::get_metal_buffer()
       source_buffer = vertex_buffer_->vbo_;
     } break;
     /* SSBO buffer comes from Index Buffer. */
-    case MTL_STORAGE_BUF_TYPE_INDEXBUF: {
-      source_buffer = index_buffer_->ibo_;
-    } break;
     case MTL_STORAGE_BUF_TYPE_INDEXBUF: {
       source_buffer = index_buffer_->ibo_;
     } break;

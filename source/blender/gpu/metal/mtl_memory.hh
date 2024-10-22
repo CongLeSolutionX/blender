@@ -101,6 +101,7 @@ namespace blender::gpu {
 class MTLContext;
 class MTLCommandBufferManager;
 class MTLUniformBuf;
+class MTLStorageBuf;
 
 /* -------------------------------------------------------------------- */
 /** \name Memory Management.
@@ -196,17 +197,8 @@ struct MTLBufferRange {
   uint64_t size;
   MTLResourceOptions options;
 
-  MTLStorageBuf *ssbo_wrapper_ = nullptr;
-
-  ~MTLBufferRange()
-  {
-    delete ssbo_wrapper_;
-  }
-
   void flush();
   bool requires_flush();
-
-  void bind_as_ssbo(uint binding);
 };
 
 /* Circular scratch buffer allocations should be seen as temporary and only used within the
@@ -222,6 +214,8 @@ class MTLCircularBuffer {
 
   /* Wrapped MTLBuffer allocation handled. */
   gpu::MTLBuffer *cbuffer_;
+  /* Allocated SSBO that serves as source for cbuffer. */
+  MTLStorageBuf *ssbo_source_ = nullptr;
 
   /* Current offset where next allocation will begin. */
   uint64_t current_offset_;
@@ -523,6 +517,9 @@ class MTLScratchBufferManager {
    * This call will perform a partial flush of the buffer starting from
    * the last offset the data was flushed from, to the current offset. */
   void flush_active_scratch_buffer();
+
+  /* Bind the whole scratch buffer as a SSBO resource. */
+  void bind_as_ssbo(int slot);
 
   MEM_CXX_CLASS_ALLOC_FUNCS("MTLBufferPool");
 };

@@ -369,9 +369,9 @@ void MTLImmediate::end()
         context_->ensure_depth_stencil_state(primitive_type);
 
         if (unwrap(this->shader)->is_polyline) {
-          current_allocation_.metal_buffer.bind_as_ssbo(GPU_SSBO_POLYLINE_POS_BUF_SLOT);
-          current_allocation_.metal_buffer.bind_as_ssbo(GPU_SSBO_POLYLINE_COL_BUF_SLOT);
-          current_allocation_.metal_buffer.bind_as_ssbo(GPU_SSBO_INDEX_BUF_SLOT);
+          context_->get_scratchbuffer_manager().bind_as_ssbo(GPU_SSBO_POLYLINE_POS_BUF_SLOT);
+          context_->get_scratchbuffer_manager().bind_as_ssbo(GPU_SSBO_POLYLINE_COL_BUF_SLOT);
+          context_->get_scratchbuffer_manager().bind_as_ssbo(GPU_SSBO_INDEX_BUF_SLOT);
 
           this->polyline_draw_workaround(current_allocation_.buffer_offset);
         }
