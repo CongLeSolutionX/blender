@@ -17,6 +17,7 @@ static void node_declare(NodeDeclarationBuilder &b)
       .translation_context(BLT_I18NCONTEXT_ID_ID)
       .propagate_all();
   b.add_output<decl::Geometry>("Physics").propagate_all();
+  b.add_output<decl::Geometry>("Collision Shape").propagate_all();
   b.add_output<decl::Geometry>("Instances").propagate_all();
 }
 
@@ -31,6 +32,7 @@ static void node_geo_exec(GeoNodeExecParams params)
   GeometrySet volumes;
   GeometrySet instances;
   GeometrySet physics;
+  GeometrySet collision_shape;
 
   const std::string &name = geometry_set.name;
   meshes.name = name;
@@ -62,6 +64,9 @@ static void node_geo_exec(GeoNodeExecParams params)
   if (geometry_set.has<PhysicsComponent>()) {
     physics.add(*geometry_set.get_component<PhysicsComponent>());
   }
+  if (geometry_set.has<CollisionShapeComponent>()) {
+    physics.add(*geometry_set.get_component<CollisionShapeComponent>());
+  }
 
   params.set_output("Mesh", meshes);
   params.set_output("Curve", curves);
@@ -70,6 +75,7 @@ static void node_geo_exec(GeoNodeExecParams params)
   params.set_output("Volume", volumes);
   params.set_output("Instances", instances);
   params.set_output("Physics", physics);
+  params.set_output("Collision Shape", collision_shape);
 }
 
 static void node_register()
