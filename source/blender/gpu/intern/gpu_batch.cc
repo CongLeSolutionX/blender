@@ -372,21 +372,43 @@ blender::IndexRange GPU_batch_draw_expanded_parameter_get(const blender::gpu::Ba
   return blender::IndexRange(out_vertex_first, out_vertex_count);
 }
 
+static void polyline_draw_workaround(
+    Batch *batch, int vertex_first, int vertex_count, int instance_first, int instance_count)
+{
+  GPU_batch_bind_as_resources(batch, batch->shader);
+  blender::IndexRange range = GPU_batch_draw_expanded_parameter_get(
+      batch, GPU_PRIM_TRIS, vertex_count, vertex_first);
+  Batch *tri_batch = Context::get()->polyline_batch_get();
+  GPU_batch_draw_advanced(tri_batch, range.start(), range.size(), instance_first, instance_count);
+}
+
 void GPU_batch_draw(Batch *batch)
 {
   GPU_shader_bind(batch->shader);
-  GPU_batch_draw_advanced(batch, 0, 0, 0, 0);
+  if (unwrap(batch->shader)->is_polyline) {
+    polyline_draw_workaround(batch, 0, batch->vertex_count_get(), 0, 0);
+  }
+  else {
+    GPU_batch_draw_advanced(batch, 0, 0, 0, 0);
+  }
 }
 
 void GPU_batch_draw_range(Batch *batch, int vertex_first, int vertex_count)
 {
   GPU_shader_bind(batch->shader);
-  GPU_batch_draw_advanced(batch, vertex_first, vertex_count, 0, 0);
+  if (unwrap(batch->shader)->is_polyline) {
+    polyline_draw_workaround(batch, vertex_first, vertex_count, 0, 0);
+  }
+  else {
+    GPU_batch_draw_advanced(batch, vertex_first, vertex_count, 0, 0);
+  }
 }
 
 void GPU_batch_draw_instance_range(Batch *batch, int instance_first, int instance_count)
 {
   BLI_assert(batch->inst[0] == nullptr);
+  /* Not polyline shaders support instancing. */
+  BLI_assert(unwrap(batch->shader)->is_polyline == false);
 
   GPU_shader_bind(batch->shader);
   GPU_batch_draw_advanced(batch, 0, 0, instance_first, instance_count);
