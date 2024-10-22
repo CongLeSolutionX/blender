@@ -21,6 +21,7 @@
 #include "mtl_storage_buffer.hh"
 #include "mtl_uniform_buffer.hh"
 #include "mtl_vertex_buffer.hh"
+#include <cstdio>
 
 namespace blender::gpu {
 
@@ -28,16 +29,11 @@ namespace blender::gpu {
 /** \name Creation & Deletion
  * \{ */
 
-/* Only used internally to create a bindable buffer. */
-MTLStorageBuf::MTLStorageBuf(id<MTLDevice> mtl_device,
-                             uint64_t size,
-                             MTLResourceOptions options,
-                             uint alignment)
-    : StorageBuf(size, "Immediate")
+MTLStorageBuf::MTLStorageBuf(size_t size) : StorageBuf(size, "Immediate")
 {
   usage_ = GPU_USAGE_STREAM;
   storage_source_ = MTL_STORAGE_BUF_TYPE_DEFAULT;
-  metal_buffer_ = new gpu::MTLBuffer(mtl_device, size, options, alignment);
+  metal_buffer_ = MTLContext::get_global_memory_manager()->allocate_aligned(size, 256, true);
 }
 
 MTLStorageBuf::MTLStorageBuf(size_t size, GPUUsageType usage, const char *name)

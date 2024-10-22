@@ -520,6 +520,7 @@ class MTLScratchBufferManager {
 
   /* Bind the whole scratch buffer as a SSBO resource. */
   void bind_as_ssbo(int slot);
+  void unbind_as_ssbo();
 
   MEM_CXX_CLASS_ALLOC_FUNCS("MTLBufferPool");
 };

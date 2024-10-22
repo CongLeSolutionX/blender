@@ -922,15 +922,20 @@ void MTLScratchBufferManager::bind_as_ssbo(int slot)
   active_scratch_buf->ssbo_source_->bind(slot);
 }
 
+void MTLScratchBufferManager::unbind_as_ssbo()
+{
+  /* Fetch active scratch buffer and verify context. */
+  MTLCircularBuffer *active_scratch_buf = scratch_buffers_[current_scratch_buffer_];
+  BLI_assert(&active_scratch_buf->own_context_ == &context_);
+  active_scratch_buf->ssbo_source_->unbind();
+}
+
 /* MTLCircularBuffer implementation. */
 MTLCircularBuffer::MTLCircularBuffer(MTLContext &ctx, uint64_t initial_size, bool allow_grow)
     : own_context_(ctx)
 {
   BLI_assert(this);
-  MTLResourceOptions options = ([own_context_.device hasUnifiedMemory]) ?
-                                   MTLResourceStorageModeShared :
-                                   MTLResourceStorageModeManaged;
-  ssbo_source_ = new gpu::MTLStorageBuf(own_context_.device, initial_size, options, 256);
+  ssbo_source_ = new gpu::MTLStorageBuf(initial_size);
   cbuffer_ = ssbo_source_->metal_buffer_;
   current_offset_ = 0;
   can_resize_ = allow_grow;
@@ -1040,11 +1045,8 @@ MTLTemporaryBuffer MTLCircularBuffer::allocate_range_aligned(uint64_t alloc_size
 
     /* Discard old buffer and create a new one - Relying on Metal reference counting to track
      * in-use buffers */
-    MTLResourceOptions prev_options = cbuffer_->get_resource_options();
-    uint prev_alignment = cbuffer_->get_alignment();
     delete ssbo_source_;
-    ssbo_source_ = new gpu::MTLStorageBuf(
-        own_context_.device, new_size, prev_options, prev_alignment);
+    ssbo_source_ = new gpu::MTLStorageBuf(new_size);
     cbuffer_ = ssbo_source_->metal_buffer_;
     cbuffer_->flag_in_use(true);
     current_offset_ = 0;

@@ -72,11 +72,8 @@ class MTLStorageBuf : public StorageBuf {
   MTLStorageBuf(MTLIndexBuf *uniform_buf, size_t size);
   MTLStorageBuf(MTLTexture *texture, size_t size);
 
-  /* Only used internally to create a bindable buffer. */
-  MTLStorageBuf(id<MTLDevice> mtl_device,
-                uint64_t size,
-                MTLResourceOptions options,
-                uint alignment);
+  /* Only used internally to create a bindable buffer for #Immediate. */
+  MTLStorageBuf(size_t size);
 
   void update(const void *data) override;
   void bind(int slot) override;
