@@ -34,6 +34,7 @@ class MTLStorageBuf : public StorageBuf {
     MTL_STORAGE_BUF_TYPE_VERTBUF = 2,
     MTL_STORAGE_BUF_TYPE_INDEXBUF = 3,
     MTL_STORAGE_BUF_TYPE_TEXTURE = 4,
+    MTL_STORAGE_BUF_TYPE_TEMPBUF = 5,
   } storage_source_ = MTL_STORAGE_BUF_TYPE_DEFAULT;
 
   union {
@@ -43,6 +44,7 @@ class MTLStorageBuf : public StorageBuf {
     MTLUniformBuf *uniform_buffer_;
     MTLVertBuf *vertex_buffer_;
     MTLIndexBuf *index_buffer_;
+    MTLTemporaryBuffer *temp_buffer_;
     gpu::MTLTexture *texture_;
   };
 

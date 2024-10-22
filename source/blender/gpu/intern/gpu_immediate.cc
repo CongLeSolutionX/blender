@@ -242,7 +242,42 @@ blender::gpu::Batch *immBeginBatchAtMost(GPUPrimType prim_type, uint vertex_len)
   return immBeginBatch(prim_type, vertex_len);
 }
 
-static void polyline_draw_workaround()
+void immEnd()
+{
+  BLI_assert(imm->prim_type != GPU_PRIM_NONE); /* Make sure we're between a Begin/End pair. */
+  BLI_assert(imm->vertex_data || imm->batch);
+
+  if (imm->strict_vertex_len) {
+    BLI_assert(imm->vertex_idx == imm->vertex_len); /* With all vertices defined. */
+  }
+  else {
+    BLI_assert(imm->vertex_idx <= imm->vertex_len);
+    BLI_assert(imm->vertex_idx == 0 ||
+               vertex_count_makes_sense_for_primitive(imm->vertex_idx, imm->prim_type));
+  }
+
+  if (imm->batch) {
+    if (imm->vertex_idx < imm->vertex_len) {
+      GPU_vertbuf_data_resize(*imm->batch->verts[0], imm->vertex_idx);
+      /* TODO: resize only if vertex count is much smaller */
+    }
+    GPU_batch_set_shader(imm->batch, imm->shader);
+    imm->batch->flag &= ~GPU_BATCH_BUILDING;
+    imm->batch = nullptr; /* don't free, batch belongs to caller */
+  }
+  else {
+    imm->end();
+  }
+
+  /* Prepare for next immBegin. */
+  imm->prim_type = GPU_PRIM_NONE;
+  imm->strict_vertex_len = true;
+  imm->vertex_data = nullptr;
+
+  wide_line_workaround_end();
+}
+
+void Immediate::polyline_draw_workaround(uint64_t offset)
 {
   /* Check compatible input primitive. */
   BLI_assert(ELEM(imm->prim_type, GPU_PRIM_LINES, GPU_PRIM_LINE_STRIP, GPU_PRIM_LINE_LOOP));
@@ -250,9 +285,12 @@ static void polyline_draw_workaround()
   Batch *tri_batch = Context::get()->polyline_batch_get();
   GPU_batch_set_shader(tri_batch, imm->shader);
 
+  BLI_assert(offset % 4 == 0);
+
   /* Setup primitive and index buffer. */
-  int vert_stride_count[2] = {(imm->prim_type == GPU_PRIM_LINES) ? 2 : 1, int(imm->vertex_idx)};
-  GPU_shader_uniform_2iv(imm->shader, "gpu_vert_stride_count", vert_stride_count);
+  int stride = (imm->prim_type == GPU_PRIM_LINES) ? 2 : 1;
+  int data[3] = {stride, int(imm->vertex_idx), int(offset / 4)};
+  GPU_shader_uniform_3iv(imm->shader, "gpu_vert_stride_count_offset", data);
   GPU_shader_uniform_1b(imm->shader, "gpu_index_no_buffer", true);
 
   {
@@ -299,54 +337,6 @@ static void polyline_draw_workaround()
   blender::IndexRange range = GPU_batch_draw_expanded_parameter_get(
       imm->prim_type, GPU_PRIM_TRIS, imm->vertex_idx, 0, 2);
   GPU_batch_draw_advanced(tri_batch, range.start(), range.size(), 0, 0);
-
-#ifndef NDEBUG
-  /* Would be nice to treat these SSBOs slot as empty. But each backend has a different appraoch to
-   * these check and unbinding all would trigger false positive errors for user bound SSBOs. */
-  // Context::get()->bound_ssbo_slots &= ~(1 << GPU_SSBO_POLYLINE_POS_BUF_SLOT);
-  // Context::get()->bound_ssbo_slots &= ~(1 << GPU_SSBO_POLYLINE_COL_BUF_SLOT);
-  // Context::get()->bound_ssbo_slots &= ~(1 << GPU_SSBO_INDEX_BUF_SLOT);
-#endif
-}
-
-void immEnd()
-{
-  BLI_assert(imm->prim_type != GPU_PRIM_NONE); /* Make sure we're between a Begin/End pair. */
-  BLI_assert(imm->vertex_data || imm->batch);
-
-  if (imm->strict_vertex_len) {
-    BLI_assert(imm->vertex_idx == imm->vertex_len); /* With all vertices defined. */
-  }
-  else {
-    BLI_assert(imm->vertex_idx <= imm->vertex_len);
-    BLI_assert(imm->vertex_idx == 0 ||
-               vertex_count_makes_sense_for_primitive(imm->vertex_idx, imm->prim_type));
-  }
-
-  if (imm->batch) {
-    if (imm->vertex_idx < imm->vertex_len) {
-      GPU_vertbuf_data_resize(*imm->batch->verts[0], imm->vertex_idx);
-      /* TODO: resize only if vertex count is much smaller */
-    }
-    GPU_batch_set_shader(imm->batch, imm->shader);
-    imm->batch->flag &= ~GPU_BATCH_BUILDING;
-    imm->batch = nullptr; /* don't free, batch belongs to caller */
-  }
-  else {
-    /* NOTE: Expected to bind the polyline buffers when needed. */
-    imm->end();
-
-    if (unwrap(imm->shader)->is_polyline) {
-      polyline_draw_workaround();
-    }
-  }
-
-  /* Prepare for next immBegin. */
-  imm->prim_type = GPU_PRIM_NONE;
-  imm->strict_vertex_len = true;
-  imm->vertex_data = nullptr;
-
-  wide_line_workaround_end();
 }
 
 static void setAttrValueBit(uint attr_id)

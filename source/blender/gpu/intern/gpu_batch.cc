@@ -389,8 +389,8 @@ static void polyline_draw_workaround(
       batch->prim_type, GPU_PRIM_TRIS, vertex_count, vertex_first, 2);
   Batch *tri_batch = Context::get()->polyline_batch_get();
   GPU_batch_set_shader(tri_batch, batch->shader);
-  int vert_stride_count[2] = {(batch->prim_type == GPU_PRIM_LINES) ? 2 : 1, int(vertex_count)};
-  GPU_shader_uniform_2iv(batch->shader, "gpu_vert_stride_count", vert_stride_count);
+  int vert_stride_count[3] = {(batch->prim_type == GPU_PRIM_LINES) ? 2 : 1, int(vertex_count), 0};
+  GPU_shader_uniform_3iv(batch->shader, "gpu_vert_stride_count_offset", vert_stride_count);
   GPU_batch_draw_advanced(tri_batch, range.start(), range.size(), instance_first, instance_count);
 }
 

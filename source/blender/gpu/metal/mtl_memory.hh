@@ -196,8 +196,17 @@ struct MTLBufferRange {
   uint64_t size;
   MTLResourceOptions options;
 
+  MTLStorageBuf *ssbo_wrapper_ = nullptr;
+
+  ~MTLBufferRange()
+  {
+    delete ssbo_wrapper_;
+  }
+
   void flush();
   bool requires_flush();
+
+  void bind_as_ssbo(uint binding);
 };
 
 /* Circular scratch buffer allocations should be seen as temporary and only used within the

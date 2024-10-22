@@ -15,29 +15,30 @@ struct VertIn {
 VertIn input_assembly(uint in_vertex_id)
 {
   uint v_i = gpu_index_load(in_vertex_id);
+  uint ofs = uint(gpu_vert_stride_count_offset.z);
 
   VertIn vert_in;
   vert_in.ls_P = vec3(0.0, 0.0, 0.0);
   /* Need to support 1, 2 and 3 dimensional input (sigh). */
-  vert_in.ls_P.x = pos[gpu_attr_load_index(v_i, gpu_attr_0) + 0];
+  vert_in.ls_P.x = pos[gpu_attr_load_index(v_i, gpu_attr_0) + 0 + ofs];
   if (gpu_attr_0_len >= 2) {
-    vert_in.ls_P.y = pos[gpu_attr_load_index(v_i, gpu_attr_0) + 1];
+    vert_in.ls_P.y = pos[gpu_attr_load_index(v_i, gpu_attr_0) + 1 + ofs];
   }
   if (gpu_attr_0_len >= 3) {
-    vert_in.ls_P.z = pos[gpu_attr_load_index(v_i, gpu_attr_0) + 2];
+    vert_in.ls_P.z = pos[gpu_attr_load_index(v_i, gpu_attr_0) + 2 + ofs];
   }
 #ifndef UNIFORM
   vert_in.final_color = vec4(0.0, 0.0, 0.0, 1.0);
   /* Need to support 1, 2, 3 and 4 dimensional input (sigh). */
-  vert_in.final_color.x = color[gpu_attr_load_index(v_i, gpu_attr_1) + 0];
+  vert_in.final_color.x = color[gpu_attr_load_index(v_i, gpu_attr_1) + 0 + ofs];
   if (gpu_attr_1_len >= 2) {
-    vert_in.final_color.y = color[gpu_attr_load_index(v_i, gpu_attr_1) + 1];
+    vert_in.final_color.y = color[gpu_attr_load_index(v_i, gpu_attr_1) + 1 + ofs];
   }
   if (gpu_attr_1_len >= 3) {
-    vert_in.final_color.z = color[gpu_attr_load_index(v_i, gpu_attr_1) + 2];
+    vert_in.final_color.z = color[gpu_attr_load_index(v_i, gpu_attr_1) + 2 + ofs];
   }
   if (gpu_attr_1_len >= 4) {
-    vert_in.final_color.w = color[gpu_attr_load_index(v_i, gpu_attr_1) + 3];
+    vert_in.final_color.w = color[gpu_attr_load_index(v_i, gpu_attr_1) + 3 + ofs];
   }
 #endif
   return vert_in;
@@ -167,7 +168,7 @@ void geometry_main(VertOut geom_in[2],
 void main()
 {
   /* Line list primitive. */
-  uint input_primitive_vertex_count = uint(gpu_vert_stride_count.x);
+  uint input_primitive_vertex_count = uint(gpu_vert_stride_count_offset.x);
   /* Triangle list primitive (emulating triangle strip). */
   const uint ouput_primitive_vertex_count = 3u;
   const uint ouput_primitive_count = 2u;
@@ -186,7 +187,7 @@ void main()
   uint out_invocation_id = (uint(gl_VertexID) / output_vertex_count_per_invocation) %
                            ouput_invocation_count;
   /* Used to wrap around for the line loop case. */
-  uint input_total_vertex_count = uint(gpu_vert_stride_count.y);
+  uint input_total_vertex_count = uint(gpu_vert_stride_count_offset.y);
 
   VertIn vert_in[2];
   vert_in[0] = input_assembly(in_primitive_first_vertex + 0u);

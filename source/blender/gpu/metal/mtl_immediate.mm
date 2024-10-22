@@ -368,7 +368,14 @@ void MTLImmediate::end()
         /* Set depth stencil state (requires knowledge of primitive type). */
         context_->ensure_depth_stencil_state(primitive_type);
 
-        if (active_mtl_shader->get_uses_ssbo_vertex_fetch()) {
+        if (unwrap(this->shader)->is_polyline) {
+          current_allocation_.metal_buffer.bind_as_ssbo(GPU_SSBO_POLYLINE_POS_BUF_SLOT);
+          current_allocation_.metal_buffer.bind_as_ssbo(GPU_SSBO_POLYLINE_COL_BUF_SLOT);
+          current_allocation_.metal_buffer.bind_as_ssbo(GPU_SSBO_INDEX_BUF_SLOT);
+
+          this->polyline_draw_workaround(current_allocation_.buffer_offset);
+        }
+        else if (active_mtl_shader->get_uses_ssbo_vertex_fetch()) {
 
           /* Bind Null Buffers for empty/missing bind slots. */
           id<MTLBuffer> null_buffer = context_->get_null_buffer();

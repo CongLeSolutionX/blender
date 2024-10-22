@@ -820,6 +820,15 @@ void MTLBufferRange::flush()
   }
 }
 
+void MTLBufferRange::bind_as_ssbo(uint binding)
+{
+  /* Create MTLStorageBuffer to wrap this resource and use conventional binding. */
+  if (ssbo_wrapper_ == nullptr) {
+    ssbo_wrapper_ = new MTLStorageBuf(this, ceil_to_multiple_u(alloc_size_, 16));
+  }
+  ssbo_wrapper_->bind(binding);
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */

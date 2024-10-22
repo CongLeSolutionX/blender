@@ -63,6 +63,15 @@ MTLStorageBuf::MTLStorageBuf(MTLIndexBuf *index_buf, size_t size)
   BLI_assert(index_buffer_ != nullptr);
 }
 
+MTLStorageBuf::MTLStorageBuf(MTLBufferRange *temp_buffer, size_t size)
+    : StorageBuf(size, "TemporaryBuffer_as_SSBO")
+{
+  usage_ = GPU_USAGE_DYNAMIC;
+  storage_source_ = MTL_STORAGE_BUF_TYPE_TEMPBUF;
+  temp_buffer_ = temp_buffer;
+  BLI_assert(temp_buffer_ != nullptr);
+}
+
 MTLStorageBuf::MTLStorageBuf(MTLTexture *texture, size_t size)
     : StorageBuf(size, "Texture_as_SSBO")
 {
@@ -483,6 +492,9 @@ id<MTLBuffer> MTLStorageBuf::get_metal_buffer()
       source_buffer = vertex_buffer_->vbo_;
     } break;
     /* SSBO buffer comes from Index Buffer. */
+    case MTL_STORAGE_BUF_TYPE_INDEXBUF: {
+      source_buffer = index_buffer_->ibo_;
+    } break;
     case MTL_STORAGE_BUF_TYPE_INDEXBUF: {
       source_buffer = index_buffer_->ibo_;
     } break;

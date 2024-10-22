@@ -154,6 +154,14 @@ void GLImmediate::end()
     glBindBufferRange(target, GPU_SSBO_POLYLINE_COL_BUF_SLOT, vbo_id(), offset, buffer_bytes_used);
     /* Not used. Satisfy the binding. */
     glBindBufferRange(target, GPU_SSBO_INDEX_BUF_SLOT, vbo_id(), offset, buffer_bytes_used);
+
+    this->polyline_draw_workaround(0);
+
+#ifndef NDEBUG
+    GLContext::get()->bound_ssbo_slots &= ~(1 << GPU_SSBO_POLYLINE_POS_BUF_SLOT);
+    GLContext::get()->bound_ssbo_slots &= ~(1 << GPU_SSBO_POLYLINE_COL_BUF_SLOT);
+    GLContext::get()->bound_ssbo_slots &= ~(1 << GPU_SSBO_INDEX_BUF_SLOT);
+#endif
   }
   else {
     GLContext::get()->state_manager->apply_state();
