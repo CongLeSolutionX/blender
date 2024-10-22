@@ -76,7 +76,7 @@ Context::Context()
 Context::~Context()
 {
   GPU_matrix_state_discard(matrix_state);
-  delete polyline_batch;
+  GPU_BATCH_DISCARD_SAFE(polyline_batch);
   delete state_manager;
   delete front_left;
   delete back_left;
