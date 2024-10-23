@@ -102,9 +102,8 @@ static bool is_subdivision_evaluation_possible_on_gpu()
   }
 
   /* Now that we know it is OpenGL, check for Qualcomm GPUs,
-    * which GPU subdiv is broken on some of (#124515) */
-  if (GPU_type_matches(GPU_DEVICE_QUALCOMM, GPU_OS_WIN, GPU_DRIVER_ANY))
-  {
+   * which GPU subdiv is broken on some of (#124515) */
+  if (GPU_type_matches(GPU_DEVICE_QUALCOMM, GPU_OS_WIN, GPU_DRIVER_ANY)) {
     return false;
   }
 
