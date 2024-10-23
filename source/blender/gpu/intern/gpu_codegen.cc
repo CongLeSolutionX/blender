@@ -197,7 +197,7 @@ static bool gpu_pass_is_valid(const GPUPass *pass)
     link->node->name << "_" << io << BLI_findindex(&link->node->list, (const void *)link) << "_" \
                      << type
 #else
-#  define SRC_NAME(io, list, link, type) type
+#  define SRC_NAME(io, link, list, type) (link->is_non_argument ? "zone" : type)
 #endif
 
 static std::ostream &operator<<(std::ostream &stream, const GPUInput *input)
@@ -531,7 +531,9 @@ void GPUCodegen::node_serialize(std::stringstream &eval_ss, const GPUNode *node)
                 << ";\n ";
         break;
       case GPU_SOURCE_CONSTANT:
-        eval_ss << type() << " " << input << " = " << (GPUConstant *)input << ";\n";
+        if (!input->is_duplicate) {
+          eval_ss << type() << " " << input << " = " << (GPUConstant *)input << ";\n";
+        }
         break;
       case GPU_SOURCE_OUTPUT:
       case GPU_SOURCE_ATTR:
@@ -543,7 +545,7 @@ void GPUCodegen::node_serialize(std::stringstream &eval_ss, const GPUNode *node)
         }
       default:
         if (input->is_non_argument && (!input->is_duplicate || !input->link)) {
-          eval_ss << type() << " tmp" << input->id << " = " << input << ";\n";
+          eval_ss << type() << " zone" << input->id << " = " << input << ";\n";
         }
         break;
     }
