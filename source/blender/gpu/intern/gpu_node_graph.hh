@@ -77,10 +77,10 @@ struct GPUNode {
   ListBase inputs;
   ListBase outputs;
 
-  bool skip_call;
   /* Zones. */
   int zone_index;
   bool is_zone_end;
+  bool skip_call;
 };
 
 struct GPUNodeLink {
@@ -117,8 +117,9 @@ struct GPUOutput {
   GPUNodeLink *link; /* output link */
   int id;            /* unique id as created by code generator */
 
+  /* Zones. */
+  bool is_zone_io;
   bool is_duplicate;
-  bool is_non_argument;
 };
 
 struct GPUInput {
@@ -147,8 +148,9 @@ struct GPUInput {
     char function_call[64];
   };
 
+  /* Zones. */
+  bool is_zone_io;
   bool is_duplicate;
-  bool is_non_argument;
 };
 
 struct GPUNodeGraphOutputLink {

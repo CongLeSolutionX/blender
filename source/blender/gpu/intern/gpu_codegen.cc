@@ -192,22 +192,14 @@ static bool gpu_pass_is_valid(const GPUPass *pass)
 /** \name Type > string conversion
  * \{ */
 
-#if 0
-#  define SRC_NAME(io, link, list, type) \
-    link->node->name << "_" << io << BLI_findindex(&link->node->list, (const void *)link) << "_" \
-                     << type
-#else
-#  define SRC_NAME(io, link, list, type) (link->is_non_argument ? "zone" : type)
-#endif
-
 static std::ostream &operator<<(std::ostream &stream, const GPUInput *input)
 {
   switch (input->source) {
     case GPU_SOURCE_FUNCTION_CALL:
     case GPU_SOURCE_OUTPUT:
-      return stream << SRC_NAME("in", input, inputs, "tmp") << input->id;
+      return stream << (input->is_zone_io ? "zone" : "tmp") << input->id;
     case GPU_SOURCE_CONSTANT:
-      return stream << SRC_NAME("in", input, inputs, "cons") << input->id;
+      return stream << (input->is_zone_io ? "zone" : "cons") << input->id;
     case GPU_SOURCE_UNIFORM:
       return stream << "node_tree.u" << input->id;
     case GPU_SOURCE_ATTR:
@@ -230,7 +222,7 @@ static std::ostream &operator<<(std::ostream &stream, const GPUInput *input)
 
 static std::ostream &operator<<(std::ostream &stream, const GPUOutput *output)
 {
-  return stream << SRC_NAME("out", output, outputs, "tmp") << output->id;
+  return stream << (output->is_zone_io ? "zone" : "tmp") << output->id;
 }
 
 /* Trick type to change overload and keep a somewhat nice syntax. */
@@ -537,14 +529,14 @@ void GPUCodegen::node_serialize(std::stringstream &eval_ss, const GPUNode *node)
         break;
       case GPU_SOURCE_OUTPUT:
       case GPU_SOURCE_ATTR:
-        if (input->is_non_argument) {
+        if (input->is_zone_io) {
           eval_ss << type() << " " << input << " = ";
           source_reference(input);
           eval_ss << ";\n";
           break;
         }
       default:
-        if (input->is_non_argument && (!input->is_duplicate || !input->link)) {
+        if (input->is_zone_io && (!input->is_duplicate || !input->link)) {
           eval_ss << type() << " zone" << input->id << " = " << input << ";\n";
         }
         break;
@@ -552,7 +544,7 @@ void GPUCodegen::node_serialize(std::stringstream &eval_ss, const GPUNode *node)
   }
   /* Declare temporary variables for node output storage. */
   LISTBASE_FOREACH (GPUOutput *, output, &node->outputs) {
-    if (output->is_non_argument) {
+    if (output->is_zone_io) {
       break;
     }
     eval_ss << output->type << " " << output << ";\n";
@@ -566,7 +558,7 @@ void GPUCodegen::node_serialize(std::stringstream &eval_ss, const GPUNode *node)
   eval_ss << node->name << "(";
   /* Input arguments. */
   LISTBASE_FOREACH (GPUInput *, input, &node->inputs) {
-    if (input->is_non_argument) {
+    if (input->is_zone_io) {
       break;
     }
     switch (input->source) {
@@ -579,19 +571,19 @@ void GPUCodegen::node_serialize(std::stringstream &eval_ss, const GPUNode *node)
         eval_ss << input;
         break;
     }
-    if ((input->next && !input->next->is_non_argument) ||
-        ((GPUOutput *)node->outputs.first) && !((GPUOutput *)node->outputs.first)->is_non_argument)
+    if ((input->next && !input->next->is_zone_io) ||
+        ((GPUOutput *)node->outputs.first) && !((GPUOutput *)node->outputs.first)->is_zone_io)
     {
       eval_ss << ", ";
     }
   }
   /* Output arguments. */
   LISTBASE_FOREACH (GPUOutput *, output, &node->outputs) {
-    if (output->is_non_argument) {
+    if (output->is_zone_io) {
       break;
     }
     eval_ss << output;
-    if (output->next && !output->next->is_non_argument) {
+    if (output->next && !output->next->is_zone_io) {
       eval_ss << ", ";
     }
   }
@@ -671,17 +663,13 @@ void GPUCodegen::generate_cryptomatte()
 
 void GPUCodegen::generate_uniform_buffer()
 {
-  blender::Set<int> ubo_ids;
   /* Extract uniform inputs. */
   LISTBASE_FOREACH (GPUNode *, node, &graph.nodes) {
     LISTBASE_FOREACH (GPUInput *, input, &node->inputs) {
-      if (input->source == GPU_SOURCE_UNIFORM && !input->link &&
-          (!input->is_duplicate || !ubo_ids.contains(input->id)))
-      {
+      if (input->source == GPU_SOURCE_UNIFORM && !input->link) {
         /* We handle the UBO uniforms separately. */
         BLI_addtail(&ubo_inputs_, BLI_genericNodeN(input));
         uniforms_total_++;
-        ubo_ids.add(input->id);
       }
     }
   }
@@ -697,13 +685,12 @@ void GPUCodegen::set_unique_ids()
   blender::Map<int, GPUNode *> zone_starts;
   blender::Map<int, GPUNode *> zone_ends;
 
-  int i;
   int id = 1;
   LISTBASE_FOREACH (GPUNode *, node, &graph.nodes) {
-    LISTBASE_FOREACH_INDEX (GPUInput *, input, &node->inputs, i) {
+    LISTBASE_FOREACH (GPUInput *, input, &node->inputs) {
       input->id = id++;
     }
-    LISTBASE_FOREACH_INDEX (GPUOutput *, output, &node->outputs, i) {
+    LISTBASE_FOREACH (GPUOutput *, output, &node->outputs) {
       output->id = id++;
     }
     if (node->zone_index != -1) {
@@ -712,8 +699,8 @@ void GPUCodegen::set_unique_ids()
     }
   }
 
-  auto first_non_arg = [](auto first) {
-    while (first && !first->is_non_argument && first->next) {
+  auto find_zone_io = [](auto first) {
+    while (first && !first->is_zone_io && first->next) {
       first = first->next;
     }
     return first;
@@ -722,8 +709,8 @@ void GPUCodegen::set_unique_ids()
   /* Assign the same id to inputs and outputs of start and end zones. */
   for (GPUNode *end : zone_ends.values()) {
 
-    GPUInput *end_input = first_non_arg((GPUInput *)end->inputs.first);
-    GPUOutput *end_output = first_non_arg((GPUOutput *)end->outputs.first);
+    GPUInput *end_input = find_zone_io((GPUInput *)end->inputs.first);
+    GPUOutput *end_output = find_zone_io((GPUOutput *)end->outputs.first);
 
     if (!zone_starts.contains(end->zone_index)) {
       /* The zone input is disconnected, skip the call. */
@@ -737,8 +724,8 @@ void GPUCodegen::set_unique_ids()
 
     GPUNode *start = zone_starts.lookup(end->zone_index);
 
-    GPUInput *start_input = first_non_arg((GPUInput *)start->inputs.first);
-    GPUOutput *start_output = first_non_arg((GPUOutput *)start->outputs.first);
+    GPUInput *start_input = find_zone_io((GPUInput *)start->inputs.first);
+    GPUOutput *start_output = find_zone_io((GPUOutput *)start->outputs.first);
 
     for (; start_input; start_input = start_input->next,
                         start_output = start_output->next,

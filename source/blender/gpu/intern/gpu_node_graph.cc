@@ -877,10 +877,10 @@ bool GPU_stack_link_zone(GPUMaterial *material,
   }
 
   LISTBASE_FOREACH_INDEX (GPUInput *, input, &node->inputs, i) {
-    input->is_non_argument = i >= in_argument_count;
+    input->is_zone_io = i >= in_argument_count;
   }
   LISTBASE_FOREACH_INDEX (GPUOutput *, output, &node->outputs, i) {
-    output->is_non_argument = i >= out_argument_count;
+    output->is_zone_io = i >= out_argument_count;
   }
 
   BLI_addtail(&graph->nodes, node);
