@@ -2902,7 +2902,7 @@ static void propagate_instances_to_keep(const bke::GeometrySet &geometry_set,
 bke::GeometrySet realize_instances(bke::GeometrySet geometry_set,
                                    const RealizeInstancesOptions &options)
 {
-  if (!geometry_set.has_instances()) {
+  if (!geometry_set.has_instances() && !geometry_set.has_collision_shape()) {
     return geometry_set;
   }
 
@@ -2924,7 +2924,7 @@ bke::GeometrySet realize_instances(bke::GeometrySet geometry_set,
    * 3. Execute all tasks in parallel.
    */
 
-  if (!geometry_set.has_instances()) {
+  if (!geometry_set.has_instances() && !geometry_set.has_collision_shape()) {
     return geometry_set;
   }
 
