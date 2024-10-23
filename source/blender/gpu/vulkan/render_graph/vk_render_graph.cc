@@ -93,7 +93,16 @@ void VKRenderGraph::submit()
 
 void VKRenderGraph::debug_group_begin(const char *name, const ColorTheme4f &color)
 {
-  DebugGroupNameID name_id = debug_.groups.index_of_or_add({std::string(name), color});
+   // Use the parent group color if the color is not set.
+   ColorTheme4f useColor = color;
+   if(color == ColorTheme4f(0.f, 0.f, 0.f, 0.f))
+   {
+     if(debug_.group_stack.size() > 0)
+     {
+       useColor = debug_.groups[debug_.group_stack.last()].color;
+     }
+   }
+  DebugGroupNameID name_id = debug_.groups.index_of_or_add({std::string(name), useColor});
   debug_.group_stack.append(name_id);
   debug_.group_used = false;
 }
