@@ -62,8 +62,6 @@ static GPUNode *gpu_node_create(const char *name)
   node->zone_index = -1;
   node->is_zone_end = false;
   node->skip_call = false;
-  node->in_argument_count = -1;
-  node->out_argument_count = -1;
 
   return node;
 }
@@ -856,8 +854,6 @@ bool GPU_stack_link_zone(GPUMaterial *material,
   node = gpu_node_create(name);
   node->zone_index = zone_index;
   node->is_zone_end = is_zone_end;
-  node->in_argument_count = in_argument_count;
-  node->out_argument_count = out_argument_count;
 
   totin = 0;
   totout = 0;
@@ -878,6 +874,13 @@ bool GPU_stack_link_zone(GPUMaterial *material,
         totout++;
       }
     }
+  }
+
+  LISTBASE_FOREACH_INDEX (GPUInput *, input, &node->inputs, i) {
+    input->is_non_argument = i >= in_argument_count;
+  }
+  LISTBASE_FOREACH_INDEX (GPUOutput *, output, &node->outputs, i) {
+    output->is_non_argument = i >= out_argument_count;
   }
 
   BLI_addtail(&graph->nodes, node);

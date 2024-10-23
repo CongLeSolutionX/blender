@@ -81,9 +81,6 @@ struct GPUNode {
   /* Zones. */
   int zone_index;
   bool is_zone_end;
-  /* If >= 0 overrides the number of parameters passed to the function call. */
-  int in_argument_count;
-  int out_argument_count;
 };
 
 struct GPUNodeLink {
@@ -119,6 +116,9 @@ struct GPUOutput {
   eGPUType type;     /* data type = length of vector/matrix */
   GPUNodeLink *link; /* output link */
   int id;            /* unique id as created by code generator */
+
+  bool is_duplicate;
+  bool is_non_argument;
 };
 
 struct GPUInput {
@@ -146,6 +146,9 @@ struct GPUInput {
     /* GPU_SOURCE_FUNCTION_CALL */
     char function_call[64];
   };
+
+  bool is_duplicate;
+  bool is_non_argument;
 };
 
 struct GPUNodeGraphOutputLink {

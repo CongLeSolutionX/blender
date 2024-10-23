@@ -18,6 +18,7 @@
 #include "BLI_hash_mm2a.hh"
 #include "BLI_link_utils.h"
 #include "BLI_listbase.h"
+#include "BLI_set.hh"
 #include "BLI_string.h"
 #include "BLI_threads.h"
 #include "BLI_time.h"
@@ -510,14 +511,12 @@ void GPUCodegen::node_serialize(std::stringstream &eval_ss, const GPUNode *node)
     }
   };
 
-  int i;
   /* Declare constants. */
-  LISTBASE_FOREACH_INDEX (GPUInput *, input, &node->inputs, i) {
-    bool is_argument_input = i < node->in_argument_count || node->in_argument_count == -1;
+  LISTBASE_FOREACH (GPUInput *, input, &node->inputs) {
     auto type = [&]() {
       /* Don't declare zone io variables twice. */
       std::stringstream ss;
-      if (is_argument_input || !node->is_zone_end) {
+      if (!input->is_duplicate) {
         ss << input->type;
       }
       return ss.str();
@@ -536,22 +535,22 @@ void GPUCodegen::node_serialize(std::stringstream &eval_ss, const GPUNode *node)
         break;
       case GPU_SOURCE_OUTPUT:
       case GPU_SOURCE_ATTR:
-        if (!is_argument_input) {
+        if (input->is_non_argument) {
           eval_ss << type() << " " << input << " = ";
           source_reference(input);
           eval_ss << ";\n";
           break;
         }
       default:
-        if (!is_argument_input && !node->is_zone_end) {
+        if (input->is_non_argument && (!input->is_duplicate || !input->link)) {
           eval_ss << type() << " tmp" << input->id << " = " << input << ";\n";
         }
         break;
     }
   }
   /* Declare temporary variables for node output storage. */
-  LISTBASE_FOREACH_INDEX (GPUOutput *, output, &node->outputs, i) {
-    if (i == node->out_argument_count) {
+  LISTBASE_FOREACH (GPUOutput *, output, &node->outputs) {
+    if (output->is_non_argument) {
       break;
     }
     eval_ss << output->type << " " << output << ";\n";
@@ -564,8 +563,8 @@ void GPUCodegen::node_serialize(std::stringstream &eval_ss, const GPUNode *node)
   /* Function call. */
   eval_ss << node->name << "(";
   /* Input arguments. */
-  LISTBASE_FOREACH_INDEX (GPUInput *, input, &node->inputs, i) {
-    if (i == node->in_argument_count) {
+  LISTBASE_FOREACH (GPUInput *, input, &node->inputs) {
+    if (input->is_non_argument) {
       break;
     }
     switch (input->source) {
@@ -578,17 +577,19 @@ void GPUCodegen::node_serialize(std::stringstream &eval_ss, const GPUNode *node)
         eval_ss << input;
         break;
     }
-    if (node->out_argument_count != 0 || i + 1 != node->in_argument_count) {
+    if ((input->next && !input->next->is_non_argument) ||
+        ((GPUOutput *)node->outputs.first) && !((GPUOutput *)node->outputs.first)->is_non_argument)
+    {
       eval_ss << ", ";
     }
   }
   /* Output arguments. */
-  LISTBASE_FOREACH_INDEX (GPUOutput *, output, &node->outputs, i) {
-    if (i == node->out_argument_count) {
+  LISTBASE_FOREACH (GPUOutput *, output, &node->outputs) {
+    if (output->is_non_argument) {
       break;
     }
     eval_ss << output;
-    if (output->next && i + 1 != node->out_argument_count) {
+    if (output->next && !output->next->is_non_argument) {
       eval_ss << ", ";
     }
   }
@@ -668,13 +669,17 @@ void GPUCodegen::generate_cryptomatte()
 
 void GPUCodegen::generate_uniform_buffer()
 {
+  blender::Set<int> ubo_ids;
   /* Extract uniform inputs. */
   LISTBASE_FOREACH (GPUNode *, node, &graph.nodes) {
     LISTBASE_FOREACH (GPUInput *, input, &node->inputs) {
-      if (input->source == GPU_SOURCE_UNIFORM && !input->link) {
+      if (input->source == GPU_SOURCE_UNIFORM && !input->link &&
+          (!input->is_duplicate || !ubo_ids.contains(input->id)))
+      {
         /* We handle the UBO uniforms separately. */
         BLI_addtail(&ubo_inputs_, BLI_genericNodeN(input));
         uniforms_total_++;
+        ubo_ids.add(input->id);
       }
     }
   }
@@ -690,12 +695,13 @@ void GPUCodegen::set_unique_ids()
   blender::Map<int, GPUNode *> zone_starts;
   blender::Map<int, GPUNode *> zone_ends;
 
+  int i;
   int id = 1;
   LISTBASE_FOREACH (GPUNode *, node, &graph.nodes) {
-    LISTBASE_FOREACH (GPUInput *, input, &node->inputs) {
+    LISTBASE_FOREACH_INDEX (GPUInput *, input, &node->inputs, i) {
       input->id = id++;
     }
-    LISTBASE_FOREACH (GPUOutput *, output, &node->outputs) {
+    LISTBASE_FOREACH_INDEX (GPUOutput *, output, &node->outputs, i) {
       output->id = id++;
     }
     if (node->zone_index != -1) {
@@ -704,9 +710,8 @@ void GPUCodegen::set_unique_ids()
     }
   }
 
-  /* TODO: There must be a built-in function that does this. */
-  auto list_offset = [](auto first, int offset) {
-    for (int i = 0; i < offset; i++) {
+  auto first_non_arg = [](auto first) {
+    while (first && !first->is_non_argument && first->next) {
       first = first->next;
     }
     return first;
@@ -715,25 +720,23 @@ void GPUCodegen::set_unique_ids()
   /* Assign the same id to inputs and outputs of start and end zones. */
   for (GPUNode *end : zone_ends.values()) {
 
-    GPUInput *end_input = list_offset((GPUInput *)end->inputs.first, end->in_argument_count);
-    GPUOutput *end_output = list_offset((GPUOutput *)end->outputs.first, end->out_argument_count);
+    GPUInput *end_input = first_non_arg((GPUInput *)end->inputs.first);
+    GPUOutput *end_output = first_non_arg((GPUOutput *)end->outputs.first);
 
     if (!zone_starts.contains(end->zone_index)) {
-      /* The zone input is disconnected.
-       * Skip the call and pretend it's an input so its variables are declared. */
+      /* The zone input is disconnected, skip the call. */
       end->skip_call = true;
-      end->is_zone_end = false;
       for (; end_input; end_input = end_input->next, end_output = end_output->next) {
         end_output->id = end_input->id;
+        end_output->is_duplicate = true;
       }
       continue;
     }
 
     GPUNode *start = zone_starts.lookup(end->zone_index);
 
-    GPUInput *start_input = list_offset((GPUInput *)start->inputs.first, start->in_argument_count);
-    GPUOutput *start_output = list_offset((GPUOutput *)start->outputs.first,
-                                          start->out_argument_count);
+    GPUInput *start_input = first_non_arg((GPUInput *)start->inputs.first);
+    GPUOutput *start_output = first_non_arg((GPUOutput *)start->outputs.first);
 
     for (; start_input; start_input = start_input->next,
                         start_output = start_output->next,
@@ -741,8 +744,11 @@ void GPUCodegen::set_unique_ids()
                         end_output = end_output->next)
     {
       start_output->id = start_input->id;
+      start_output->is_duplicate = true;
       end_input->id = start_input->id;
+      end_input->is_duplicate = true;
       end_output->id = start_input->id;
+      end_output->is_duplicate = true;
     }
   }
 }
