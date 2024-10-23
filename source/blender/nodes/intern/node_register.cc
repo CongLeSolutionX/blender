@@ -121,16 +121,37 @@ class ShaderRepeatZoneType : public blender::bke::bNodeZoneType {
   }
 };
 
+class ShaderLightLoopZoneType : public blender::bke::bNodeZoneType {
+ public:
+  ShaderLightLoopZoneType()
+  {
+    this->input_idname = "ShaderNodeLightLoopInput";
+    this->output_idname = "ShaderNodeLightLoopOutput";
+    this->input_type = SH_NODE_LIGHT_LOOP_INPUT;
+    this->output_type = SH_NODE_LIGHT_LOOP_OUTPUT;
+    // TODO(NPR)
+    this->theme_id = TH_NODE_ZONE_REPEAT;
+  }
+
+  const int &get_corresponding_output_id(const bNode &input_bnode) const override
+  {
+    BLI_assert(input_bnode.type == this->input_type);
+    return static_cast<NodeShaderLightLoopInput *>(input_bnode.storage)->output_node_id;
+  }
+};
+
 static void register_zone_types()
 {
   static SimulationZoneType simulation_zone_type;
   static RepeatZoneType repeat_zone_type;
   static ForeachGeometryElementZoneType foreach_geometry_element_zone_type;
   static ShaderRepeatZoneType shader_repeat_zone_type;
+  static ShaderLightLoopZoneType shader_light_loop_zone_type;
   blender::bke::register_node_zone_type(simulation_zone_type);
   blender::bke::register_node_zone_type(repeat_zone_type);
   blender::bke::register_node_zone_type(foreach_geometry_element_zone_type);
   blender::bke::register_node_zone_type(shader_repeat_zone_type);
+  blender::bke::register_node_zone_type(shader_light_loop_zone_type);
 }
 
 void register_nodes()

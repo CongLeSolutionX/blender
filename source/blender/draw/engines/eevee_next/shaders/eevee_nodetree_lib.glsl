@@ -819,3 +819,8 @@ vec4 attr_load_uniform(vec4 attr, const uint attr_hash)
   for (var = 0.0; round(var) < round(count); var += 1.0) {
 
 #define REPEAT_END() }
+
+/* TODO */
+#define LIGHT_LOOP_BEGIN() {
+
+#define LIGHT_LOOP_END() }

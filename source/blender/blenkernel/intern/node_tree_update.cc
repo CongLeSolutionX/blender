@@ -1512,7 +1512,8 @@ class NodeTreeMainUpdater {
           case GEO_NODE_REPEAT_OUTPUT:
           case GEO_NODE_SIMULATION_OUTPUT:
           case GEO_NODE_FOREACH_GEOMETRY_ELEMENT_OUTPUT:
-          case SH_NODE_REPEAT_OUTPUT: {
+          case SH_NODE_REPEAT_OUTPUT:
+          case SH_NODE_LIGHT_LOOP_OUTPUT: {
             const bNodeTreeZones *zones = tree.zones();
             if (!zones) {
               break;

@@ -88,6 +88,10 @@ def add_shader_repeat_zone(layout, label):
     props.use_transform = True
     return props
 
+def add_shader_light_loop_zone(layout, label):
+    props = layout.operator("node.add_shader_light_loop_zone", text=label, text_ctxt=i18n_contexts.default)
+    props.use_transform = True
+    return props
 
 class NODE_MT_category_layout(Menu):
     bl_idname = "NODE_MT_category_layout"

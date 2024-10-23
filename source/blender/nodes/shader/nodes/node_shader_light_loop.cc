@@ -26,9 +26,9 @@
 #include "node_shader_util.hh"
 #include "node_util.hh"
 
-namespace blender::nodes::node_shader_repeat_cc {
+namespace blender::nodes::node_shader_light_loop_cc {
 
-/** Shared between repeat zone input and output node. */
+/** Shared between zone input and output node. */
 static void node_layout_ex(uiLayout *layout, bContext *C, PointerRNA *current_node_ptr)
 {
   bNodeTree &ntree = *reinterpret_cast<bNodeTree *>(current_node_ptr->owner_id);
@@ -49,10 +49,12 @@ static void node_layout_ex(uiLayout *layout, bContext *C, PointerRNA *current_no
   PointerRNA output_node_ptr = RNA_pointer_create(
       current_node_ptr->owner_id, &RNA_Node, &output_node);
 
-  if (uiLayout *panel = uiLayoutPanel(C, layout, "repeat_items", false, TIP_("Repeat Items"))) {
-    socket_items::ui::draw_items_list_with_operators<ShRepeatItemsAccessor>(
+  if (uiLayout *panel = uiLayoutPanel(
+          C, layout, "light_loop_items", false, TIP_("Light Loop Items")))
+  {
+    socket_items::ui::draw_items_list_with_operators<ShLightLoopItemsAccessor>(
         C, panel, ntree, output_node);
-    socket_items::ui::draw_active_item_props<ShRepeatItemsAccessor>(
+    socket_items::ui::draw_active_item_props<ShLightLoopItemsAccessor>(
         ntree, output_node, [&](PointerRNA *item_ptr) {
           uiLayoutSetPropSep(panel, true);
           uiLayoutSetPropDecorate(panel, false);
@@ -61,33 +63,33 @@ static void node_layout_ex(uiLayout *layout, bContext *C, PointerRNA *current_no
   }
 }
 
-namespace repeat_input_node {
+namespace light_loop_input_node {
 
-NODE_STORAGE_FUNCS(NodeShaderRepeatInput);
+NODE_STORAGE_FUNCS(NodeShaderLightLoopInput);
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
   b.use_custom_socket_order();
   b.allow_any_socket_order();
-  b.add_output<decl::Float>("Iteration")
-      .description("Index of the current iteration. Starts counting at zero");
-  b.add_input<decl::Float>("Iterations").min(0.0f).default_value(1.0f);
+  /* TODO: Add outputs
+   * b.add_output<decl::Float>("Iteration")
+   *  .description("Index of the current iteration. Starts counting at zero"); */
 
   const bNode *node = b.node_or_null();
   const bNodeTree *tree = b.tree_or_null();
   if (node && tree) {
-    const NodeShaderRepeatInput &storage = node_storage(*node);
+    const NodeShaderLightLoopInput &storage = node_storage(*node);
     const bNode *output_node = tree->node_by_id(storage.output_node_id);
     if (output_node) {
-      const auto &output_storage = *static_cast<const NodeShaderRepeatOutput *>(
+      const auto &output_storage = *static_cast<const NodeShaderLightLoopOutput *>(
           output_node->storage);
       for (const int i : IndexRange(output_storage.items_num)) {
         const NodeShaderZoneItem &item = output_storage.items[i];
         const eNodeSocketDatatype socket_type = eNodeSocketDatatype(item.socket_type);
         const StringRef name = item.name ? item.name : "";
-        const std::string identifier = ShRepeatItemsAccessor::socket_identifier_for_item(item);
+        const std::string identifier = ShLightLoopItemsAccessor::socket_identifier_for_item(item);
         b.add_input(socket_type, name, identifier)
-            .socket_name_ptr(&tree->id, ShRepeatItemsAccessor::item_srna, &item, "name");
+            .socket_name_ptr(&tree->id, ShLightLoopItemsAccessor::item_srna, &item, "name");
         b.add_output(socket_type, name, identifier).align_with_previous();
       }
     }
@@ -98,7 +100,7 @@ static void node_declare(NodeDeclarationBuilder &b)
 
 static void node_init(bNodeTree * /*tree*/, bNode *node)
 {
-  NodeShaderRepeatInput *data = MEM_cnew<NodeShaderRepeatInput>(__func__);
+  NodeShaderLightLoopInput *data = MEM_cnew<NodeShaderLightLoopInput>(__func__);
   /* Needs to be initialized for the node to work. */
   data->output_node_id = 0;
   node->storage = data;
@@ -109,7 +111,7 @@ static void node_label(const bNodeTree * /*ntree*/,
                        char *label,
                        const int label_maxncpy)
 {
-  BLI_strncpy_utf8(label, IFACE_("Repeat"), label_maxncpy);
+  BLI_strncpy_utf8(label, IFACE_("Light Loop"), label_maxncpy);
 }
 
 static bool node_insert_link(bNodeTree *ntree, bNode *node, bNodeLink *link)
@@ -118,7 +120,7 @@ static bool node_insert_link(bNodeTree *ntree, bNode *node, bNodeLink *link)
   if (!output_node) {
     return true;
   }
-  return socket_items::try_add_item_via_any_extend_socket<ShRepeatItemsAccessor>(
+  return socket_items::try_add_item_via_any_extend_socket<ShLightLoopItemsAccessor>(
       *ntree, *node, *output_node, *link);
 }
 
@@ -128,14 +130,14 @@ static int node_shader_fn(GPUMaterial *mat,
                           GPUNodeStack *in,
                           GPUNodeStack *out)
 {
-  int zone_id = ((NodeShaderRepeatInput *)node->storage)->output_node_id;
-  return GPU_stack_link_zone(mat, node, "REPEAT_BEGIN", in, out, zone_id, false, 1, 1);
+  int zone_id = ((NodeShaderLightLoopInput *)node->storage)->output_node_id;
+  return GPU_stack_link_zone(mat, node, "LIGHT_LOOP_BEGIN", in, out, zone_id, false, 0, 0);
 }
 
 static void node_register()
 {
   static blender::bke::bNodeType ntype;
-  sh_node_type_base(&ntype, SH_NODE_REPEAT_INPUT, "Repeat Input", NODE_CLASS_INTERFACE);
+  sh_node_type_base(&ntype, SH_NODE_LIGHT_LOOP_INPUT, "Light Loop Input", NODE_CLASS_INTERFACE);
   ntype.initfunc = node_init;
   ntype.declare = node_declare;
   ntype.labelfunc = node_label;
@@ -144,17 +146,17 @@ static void node_register()
   ntype.no_muting = true;
   ntype.draw_buttons_ex = node_layout_ex;
   blender::bke::node_type_storage(
-      &ntype, "NodeShaderRepeatInput", node_free_standard_storage, node_copy_standard_storage);
+      &ntype, "NodeShaderLightLoopInput", node_free_standard_storage, node_copy_standard_storage);
   ntype.gpu_fn = node_shader_fn;
   blender::bke::node_register_type(&ntype);
 }
 // NOD_REGISTER_NODE(node_register)
 
-}  // namespace repeat_input_node
+}  // namespace light_loop_input_node
 
-namespace repeat_output_node {
+namespace light_loop_output_node {
 
-NODE_STORAGE_FUNCS(NodeShaderRepeatOutput);
+NODE_STORAGE_FUNCS(NodeShaderLightLoopOutput);
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
@@ -163,14 +165,14 @@ static void node_declare(NodeDeclarationBuilder &b)
   const bNodeTree *tree = b.tree_or_null();
   const bNode *node = b.node_or_null();
   if (node) {
-    const NodeShaderRepeatOutput &storage = node_storage(*node);
+    const NodeShaderLightLoopOutput &storage = node_storage(*node);
     for (const int i : IndexRange(storage.items_num)) {
       const NodeShaderZoneItem &item = storage.items[i];
       const eNodeSocketDatatype socket_type = eNodeSocketDatatype(item.socket_type);
       const StringRef name = item.name ? item.name : "";
-      const std::string identifier = ShRepeatItemsAccessor::socket_identifier_for_item(item);
+      const std::string identifier = ShLightLoopItemsAccessor::socket_identifier_for_item(item);
       b.add_input(socket_type, name, identifier)
-          .socket_name_ptr(&tree->id, ShRepeatItemsAccessor::item_srna, &item, "name")
+          .socket_name_ptr(&tree->id, ShLightLoopItemsAccessor::item_srna, &item, "name")
           .hide_value();
       b.add_output(socket_type, name, identifier).align_with_previous();
     }
@@ -181,7 +183,7 @@ static void node_declare(NodeDeclarationBuilder &b)
 
 static void node_init(bNodeTree * /*tree*/, bNode *node)
 {
-  NodeShaderRepeatOutput *data = MEM_cnew<NodeShaderRepeatOutput>(__func__);
+  NodeShaderLightLoopOutput *data = MEM_cnew<NodeShaderLightLoopOutput>(__func__);
 
   data->next_identifier = 0;
 
@@ -196,28 +198,28 @@ static void node_init(bNodeTree * /*tree*/, bNode *node)
 
 static void node_free_storage(bNode *node)
 {
-  socket_items::destruct_array<ShRepeatItemsAccessor>(*node);
+  socket_items::destruct_array<ShLightLoopItemsAccessor>(*node);
   MEM_freeN(node->storage);
 }
 
 static void node_copy_storage(bNodeTree * /*dst_tree*/, bNode *dst_node, const bNode *src_node)
 {
-  const NodeShaderRepeatOutput &src_storage = node_storage(*src_node);
-  auto *dst_storage = MEM_cnew<NodeShaderRepeatOutput>(__func__, src_storage);
+  const NodeShaderLightLoopOutput &src_storage = node_storage(*src_node);
+  auto *dst_storage = MEM_cnew<NodeShaderLightLoopOutput>(__func__, src_storage);
   dst_node->storage = dst_storage;
 
-  socket_items::copy_array<ShRepeatItemsAccessor>(*src_node, *dst_node);
+  socket_items::copy_array<ShLightLoopItemsAccessor>(*src_node, *dst_node);
 }
 
 static bool node_insert_link(bNodeTree *ntree, bNode *node, bNodeLink *link)
 {
-  return socket_items::try_add_item_via_any_extend_socket<ShRepeatItemsAccessor>(
+  return socket_items::try_add_item_via_any_extend_socket<ShLightLoopItemsAccessor>(
       *ntree, *node, *node, *link);
 }
 
 static void node_operators()
 {
-  socket_items::ops::make_common_operators<ShRepeatItemsAccessor>();
+  socket_items::ops::make_common_operators<ShLightLoopItemsAccessor>();
 }
 
 static int node_shader_fn(GPUMaterial *mat,
@@ -227,61 +229,51 @@ static int node_shader_fn(GPUMaterial *mat,
                           GPUNodeStack *out)
 {
   int zone_id = node->identifier;
-  return GPU_stack_link_zone(mat, node, "REPEAT_END", in, out, zone_id, true, 0, 0);
+  return GPU_stack_link_zone(mat, node, "LIGHT_LOOP_END", in, out, zone_id, true, 0, 0);
 }
 
 static void node_register()
 {
   static blender::bke::bNodeType ntype;
-  sh_node_type_base(&ntype, SH_NODE_REPEAT_OUTPUT, "Repeat Output", NODE_CLASS_INTERFACE);
+  sh_node_type_base(&ntype, SH_NODE_LIGHT_LOOP_OUTPUT, "Light Loop Output", NODE_CLASS_INTERFACE);
   ntype.initfunc = node_init;
   ntype.declare = node_declare;
-  ntype.labelfunc = repeat_input_node::node_label;
+  ntype.labelfunc = light_loop_input_node::node_label;
   ntype.insert_link = node_insert_link;
   ntype.no_muting = true;
   ntype.draw_buttons_ex = node_layout_ex;
   ntype.register_operators = node_operators;
   blender::bke::node_type_storage(
-      &ntype, "NodeShaderRepeatOutput", node_free_storage, node_copy_storage);
+      &ntype, "NodeShaderLightLoopOutput", node_free_storage, node_copy_storage);
   ntype.gpu_fn = node_shader_fn;
   blender::bke::node_register_type(&ntype);
 }
 // NOD_REGISTER_NODE(node_register)
 
-}  // namespace repeat_output_node
+}  // namespace light_loop_output_node
 
-}  // namespace blender::nodes::node_shader_repeat_cc
+}  // namespace blender::nodes::node_shader_light_loop_cc
 
 namespace blender::nodes {
 
-StructRNA *ShRepeatItemsAccessor::item_srna = &RNA_ShaderRepeatItem;
-int ShRepeatItemsAccessor::node_type = SH_NODE_REPEAT_OUTPUT;
-int ShRepeatItemsAccessor::item_dna_type = SDNA_TYPE_FROM_STRUCT(NodeShaderZoneItem);
+StructRNA *ShLightLoopItemsAccessor::item_srna = &RNA_ShaderLightLoopItem;
+int ShLightLoopItemsAccessor::node_type = SH_NODE_LIGHT_LOOP_OUTPUT;
+int ShLightLoopItemsAccessor::item_dna_type = SDNA_TYPE_FROM_STRUCT(NodeShaderZoneItem);
 
-void ShRepeatItemsAccessor::blend_write_item(BlendWriter *writer, const ItemT &item)
+void ShLightLoopItemsAccessor::blend_write_item(BlendWriter *writer, const ItemT &item)
 {
   BLO_write_string(writer, item.name);
 }
 
-void ShRepeatItemsAccessor::blend_read_data_item(BlendDataReader *reader, ItemT &item)
+void ShLightLoopItemsAccessor::blend_read_data_item(BlendDataReader *reader, ItemT &item)
 {
   BLO_read_string(reader, &item.name);
 }
 
 }  // namespace blender::nodes
 
-blender::Span<NodeShaderZoneItem> NodeShaderRepeatOutput::items_span() const
+void register_node_type_sh_light_loop()
 {
-  return blender::Span<NodeShaderZoneItem>(items, items_num);
-}
-
-blender::MutableSpan<NodeShaderZoneItem> NodeShaderRepeatOutput::items_span()
-{
-  return blender::MutableSpan<NodeShaderZoneItem>(items, items_num);
-}
-
-void register_node_type_sh_repeat()
-{
-  blender::nodes::node_shader_repeat_cc::repeat_input_node::node_register();
-  blender::nodes::node_shader_repeat_cc::repeat_output_node::node_register();
+  blender::nodes::node_shader_light_loop_cc::light_loop_input_node::node_register();
+  blender::nodes::node_shader_light_loop_cc::light_loop_output_node::node_register();
 }
