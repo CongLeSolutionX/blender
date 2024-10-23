@@ -181,6 +181,12 @@ static float2 calc_circumcenter_2d(const float2 v1, const float2 v2, const float
   return float2(r[0], r[1]);
 }
 
+static float calc_min_angle(const float2 a, const float2 b)
+{
+  const float angle = math::abs(math::abs(angle_v2v2(a, b)) - math::numbers::pi);
+  return math::numbers::pi - angle;
+}
+
 static float2 rotate_point(const float2 p,
                            const float angle,
                            const float2 origin,
@@ -442,8 +448,7 @@ static void primitive_calulate_curve_positions(PrimitiveToolOperation &ptd,
           const float dist_a_mp = math::distance(A, MP);
           flip *= dist_a_mp > dist_cp_mp ? -1.0f : 1.0f;
 
-          float angle = math::mod_periodic(angle_v2v2(B - CEN, A - CEN), float(math::numbers::pi));
-
+          float angle = calc_min_angle(B - CEN, A - CEN);
           /* Use larger angle if CP is beyond reference radius. */
           if (dist_cp_mp >= dist_a_mp) {
             angle -= 2.0f * math::numbers::pi;
