@@ -169,6 +169,10 @@ class Result {
   /* Construct a result of the given type and precision within the given context. */
   Result(Context &context, ResultType type, ResultPrecision precision);
 
+  /* Construct a result of an appropriate type and precision based on the given GPU texture format
+   * within the given context. */
+  Result(Context &context, eGPUTextureFormat format);
+
   /* Returns the appropriate GPU texture format based on the given result type and precision. */
   static eGPUTextureFormat gpu_texture_format(ResultType type, ResultPrecision precision);
 
@@ -278,6 +282,9 @@ class Result {
   /* Identical to GPU variant of wrap_external but wraps an integer buffer instead. */
   void wrap_external(int *texture, int2 size);
 
+  /* Identical to GPU variant of wrap_external but wraps whatever the given result has instead. */
+  void wrap_external(const Result &result);
+
   /* Sets the transformation of the domain of the result to the given transformation. */
   void set_transformation(const float3x3 &transformation);
 
@@ -334,6 +341,10 @@ class Result {
    * reaches zero. This should be called when an operation that used this result no longer needs
    * it. If this result have a master result, the master result is released instead. */
   void release();
+
+  /* Frees the result data. If the result is not allocated or wraps external data, then this does
+   * nothing. If this result have a master result, the master result is freed instead. */
+  void free();
 
   /* Returns true if this result should be computed and false otherwise. The result should be
    * computed if its reference count is not zero, that is, its result is used by at least one

@@ -6,6 +6,10 @@
  * \ingroup cmpnodes
  */
 
+#include "FN_multi_function_builder.hh"
+
+#include "NOD_multi_function.hh"
+
 #include "BKE_texture.h"
 
 #include "RNA_access.hh"
@@ -106,6 +110,83 @@ static ShaderNode *get_compositor_shader_node(DNode node)
   return new MapValueShaderNode(node);
 }
 
+template<bool UseMin, bool UseMax>
+static float map_value(
+    const float value, const float offset, const float size, const float min, const float max)
+{
+  float result = (value + offset) * size;
+
+  if constexpr (UseMin) {
+    if (result < min) {
+      result = min;
+    }
+  }
+
+  if constexpr (UseMax) {
+    if (result > max) {
+      result = max;
+    }
+  }
+
+  return result;
+}
+
+static void node_build_multi_function(blender::nodes::NodeMultiFunctionBuilder &builder)
+{
+  const TexMapping &texture_mapping = node_storage(builder.node());
+  const float offset = texture_mapping.loc[0];
+  const float size = texture_mapping.size[0];
+  const float min = texture_mapping.min[0];
+  const float max = texture_mapping.max[0];
+  const bool use_min = texture_mapping.flag & TEXMAP_CLIP_MIN;
+  const bool use_max = texture_mapping.flag & TEXMAP_CLIP_MAX;
+
+  if (use_min) {
+    if (use_max) {
+      builder.construct_and_set_matching_fn_cb([=]() {
+        return mf::build::SI1_SO<float, float>(
+            "Map Value With Min With Max",
+            [=](const float value) -> float {
+              return map_value<true, true>(value, offset, size, min, max);
+            },
+            mf::build::exec_presets::AllSpanOrSingle());
+      });
+    }
+    else {
+      builder.construct_and_set_matching_fn_cb([=]() {
+        return mf::build::SI1_SO<float, float>(
+            "Map Value With Min No Max",
+            [=](const float value) -> float {
+              return map_value<true, false>(value, offset, size, min, max);
+            },
+            mf::build::exec_presets::AllSpanOrSingle());
+      });
+    }
+  }
+  else {
+    if (use_max) {
+      builder.construct_and_set_matching_fn_cb([=]() {
+        return mf::build::SI1_SO<float, float>(
+            "Map Value No Min With Max",
+            [=](const float value) -> float {
+              return map_value<false, true>(value, offset, size, min, max);
+            },
+            mf::build::exec_presets::AllSpanOrSingle());
+      });
+    }
+    else {
+      builder.construct_and_set_matching_fn_cb([=]() {
+        return mf::build::SI1_SO<float, float>(
+            "Map Value No Min No Max",
+            [=](const float value) -> float {
+              return map_value<false, false>(value, offset, size, min, max);
+            },
+            mf::build::exec_presets::AllSpanOrSingle());
+      });
+    }
+  }
+}
+
 }  // namespace blender::nodes::node_composite_map_value_cc
 
 void register_node_type_cmp_map_value()
@@ -121,6 +202,7 @@ void register_node_type_cmp_map_value()
   blender::bke::node_type_storage(
       &ntype, "TexMapping", node_free_standard_storage, node_copy_standard_storage);
   ntype.get_compositor_shader_node = file_ns::get_compositor_shader_node;
+  ntype.build_multi_function = file_ns::node_build_multi_function;
 
   blender::bke::node_register_type(&ntype);
 }
