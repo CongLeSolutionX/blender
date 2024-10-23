@@ -2374,7 +2374,7 @@ static OrderedAttributes gather_generic_physics_attributes_to_propagate(
   using namespace bke::physics_attributes;
   using bke::PhysicsGeometry;
   using BodyAttribute = bke::PhysicsBodyAttribute;
-  // using ConstraintAttribute = bke::PhysicsConstraintAttribute;
+  using ConstraintAttribute = bke::PhysicsConstraintAttribute;
 
   Vector<bke::GeometryComponent::Type> src_component_types;
   src_component_types.append(bke::GeometryComponent::Type::Physics);
@@ -2391,7 +2391,9 @@ static OrderedAttributes gather_generic_physics_attributes_to_propagate(
             physics_attribute_name(BodyAttribute::position),
             physics_attribute_name(BodyAttribute::rotation),
             physics_attribute_name(BodyAttribute::velocity),
-            physics_attribute_name(BodyAttribute::angular_velocity)};
+            physics_attribute_name(BodyAttribute::angular_velocity),
+            physics_attribute_name(ConstraintAttribute::body1),
+            physics_attribute_name(ConstraintAttribute::body2)};
 
         if (skip_attributes.as_span().contains(name)) {
           return bke::AttributeFilter::Result::AllowSkip;
