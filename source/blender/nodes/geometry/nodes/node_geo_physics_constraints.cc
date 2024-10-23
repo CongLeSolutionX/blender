@@ -95,25 +95,30 @@ static void node_geo_exec(GeoNodeExecParams params)
   const VArray<bool> src_disable_collision = field_evaluator.get_evaluated<bool>(4);
 
   bke::AttributeWriter<int> dst_types = physics->constraint_types_for_write();
-  bke::AttributeWriter<int> dst_body1 = physics->constraint_body1_for_write();
-  bke::AttributeWriter<int> dst_body2 = physics->constraint_body2_for_write();
   bke::AttributeWriter<float4x4> dst_frame1 = physics->constraint_frame1_for_write();
   bke::AttributeWriter<float4x4> dst_frame2 = physics->constraint_frame2_for_write();
   constraints.foreach_index([&](const int index) {
     dst_types.varray.set(index, src_types[index]);
-    dst_body1.varray.set(index, src_body1[index]);
-    dst_body2.varray.set(index, src_body2[index]);
     dst_frame1.varray.set(index, src_frame1[index]);
     dst_frame2.varray.set(index, src_frame2[index]);
   });
   dst_types.finish();
-  dst_body1.finish();
-  dst_body2.finish();
   dst_frame1.finish();
   dst_frame2.finish();
 
   GeometrySet output_geometry = geometry::join_geometries(
       {std::move(geometry_set), bke::GeometrySet::from_physics(physics)}, {});
+
+  /* Update body indices after joining with other geometry to ensure they are valid. */
+  bke::PhysicsGeometry &output_physics = *output_geometry.get_physics_for_write();
+  bke::AttributeWriter<int> dst_body1 = output_physics.constraint_body1_for_write();
+  bke::AttributeWriter<int> dst_body2 = output_physics.constraint_body2_for_write();
+  constraints.foreach_index([&](const int index) {
+    dst_body1.varray.set(index, src_body1[index]);
+    dst_body2.varray.set(index, src_body2[index]);
+  });
+  dst_body1.finish();
+  dst_body2.finish();
 
   params.set_output("Physics", std::move(output_geometry));
 }
