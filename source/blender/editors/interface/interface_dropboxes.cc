@@ -20,6 +20,8 @@
 #include "RNA_access.hh"
 #include "RNA_prototypes.hh"
 
+#include "ED_anim_api.hh"
+
 #include "WM_api.hh"
 
 #include "UI_interface.hh"
@@ -155,17 +157,13 @@ static std::string ui_drop_material_tooltip(bContext *C,
 
 static bool ui_drop_action_poll(bContext *C, wmDrag *drag, const wmEvent * /*event*/)
 {
-  /* TODO: get the animated ID from the context, instead of assuming active object. */
-  const PointerRNA rna_ptr = CTX_data_pointer_get_type(C, "object", &RNA_Object);
-  const Object *ob = (Object *)rna_ptr.data;
-  BLI_assert(ob);
-
-  if (RNA_pointer_is_null(&rna_ptr)) {
+  ID *animated_id = nullptr;
+  ED_actedit_animdata_from_context(C, &animated_id);
+  if (!animated_id) {
     return false;
   }
-
-  return WM_drag_is_ID_type(drag, ID_AC) && ID_IS_EDITABLE(&ob->id) &&
-         !ID_IS_OVERRIDE_LIBRARY(&ob->id);
+  return WM_drag_is_ID_type(drag, ID_AC) && ID_IS_EDITABLE(animated_id) &&
+         !ID_IS_OVERRIDE_LIBRARY(animated_id);
 }
 
 static void ui_drop_action_copy(bContext *C, wmDrag *drag, wmDropBox *drop)
@@ -179,21 +177,20 @@ static std::string ui_drop_action_tooltip(bContext *C,
                                           const int /*xy*/[2],
                                           wmDropBox * /*drop*/)
 {
-  /* TODO: get the animated ID from the context, instead of assuming active object. */
-  const PointerRNA rna_ptr = CTX_data_pointer_get_type(C, "object", &RNA_Object);
-  Object *ob = (Object *)rna_ptr.data;
-  BLI_assert(ob);
+  ID *animated_id = nullptr;
+  ED_actedit_animdata_from_context(C, &animated_id);
+  BLI_assert(animated_id);
 
   const char *dragged_action_name = WM_drag_get_item_name(drag);
 
-  const bAction *prev_action = blender::animrig::get_action(ob->id);
+  const bAction *prev_action = blender::animrig::get_action(*animated_id);
   if (prev_action) {
     return fmt::format(TIP_("Assign {} (replacing {}) to {}"),
                        dragged_action_name,
                        prev_action->id.name + 2,
-                       ob->id.name + 2);
+                       animated_id->name + 2);
   }
-  return fmt::format(TIP_("Assign {} to {}"), dragged_action_name, ob->id.name + 2);
+  return fmt::format(TIP_("Assign {} to {}"), dragged_action_name, animated_id->name + 2);
 }
 
 /** \} */

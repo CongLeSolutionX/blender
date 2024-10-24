@@ -56,6 +56,7 @@
 #include "WM_api.hh"
 #include "WM_types.hh"
 
+#include "ED_anim_api.hh"
 #include "ED_object.hh"
 #include "ED_paint.hh"
 #include "ED_undo.hh"
@@ -2807,15 +2808,9 @@ static void UI_OT_drop_material(wmOperatorType *ot)
 
 static bool ui_drop_action_poll(bContext *C)
 {
-  /* TODO: get the animated ID from the context, instead of assuming active object. */
-  const PointerRNA rna_ptr = CTX_data_pointer_get_type(C, "object", &RNA_Object);
-  const Object *ob = (Object *)rna_ptr.data;
-  if (ob == nullptr) {
-    return false;
-  }
-
-  /* TODO: Check animated ID type is animatable. */
-  return true;
+  ID *animated_id = nullptr;
+  ED_actedit_animdata_from_context(C, &animated_id);
+  return id_can_have_animdata(animated_id);
 }
 
 static int ui_drop_action_exec(bContext *C, wmOperator *op)
@@ -2828,24 +2823,23 @@ static int ui_drop_action_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  /* TODO: get the animated ID from the context, instead of assuming active object. */
-  PointerRNA ptr = CTX_data_pointer_get_type(C, "object", &RNA_Object);
-  Object *ob = static_cast<Object *>(ptr.data);
-  BLI_assert(ob);
+  ID *animated_id = nullptr;
+  ED_actedit_animdata_from_context(C, &animated_id);
+  BLI_assert(animated_id);
 
-  if (!blender::animrig::assign_action(action, ob->id)) {
+  if (!blender::animrig::assign_action(action, *animated_id)) {
     BKE_reportf(op->reports,
                 RPT_ERROR,
                 "Could not assign Action %s to %s",
                 action->id.name + 2,
-                ob->id.name + 2);
+                animated_id->name + 2);
     return OPERATOR_CANCELLED;
   }
 
-  WM_event_add_notifier(C, NC_ANIMATION | ND_NLA_ACTCHANGE, ob);
+  WM_event_add_notifier(C, NC_ANIMATION | ND_NLA_ACTCHANGE, animated_id);
   DEG_relations_tag_update(bmain);
   DEG_id_tag_update_ex(
-      bmain, &ob->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY | ID_RECALC_ANIMATION);
+      bmain, animated_id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY | ID_RECALC_ANIMATION);
 
   return OPERATOR_FINISHED;
 }
