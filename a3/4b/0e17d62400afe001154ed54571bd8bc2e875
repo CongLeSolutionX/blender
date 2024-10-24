@@ -1,4 +1,4 @@
 Referenced by issue #127955, Blender 3.6 / 4.1 crashes executing bpy commands via exec() in Python
 Referenced by issue #128200, Crash when duplicating essential brush asset
 Referenced by issue #128859, Sculpting on a mesh with a deform modifier cannot be undone under certain circumstances
-Referenced by issue #129334, Sculpt: Changing multires sculpt subdivision level changes grid material
+Referenced by issue #129334, Sculpt: Multires face material index is inconsistent across multires "sculpt" levels
