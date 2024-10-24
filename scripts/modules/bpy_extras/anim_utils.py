@@ -14,18 +14,16 @@ import bpy
 from bpy.types import Action
 from dataclasses import dataclass
 
-from typing import (
-    List,
+from collections.abc import (
     Mapping,
     Sequence,
-    Tuple,
 )
 
 from rna_prop_ui import (
     rna_idprop_value_to_python,
 )
 
-FCurveKey = Tuple[
+FCurveKey = tuple[
     # `fcurve.data_path`.
     str,
     # `fcurve.array_index`.
@@ -33,7 +31,7 @@ FCurveKey = Tuple[
 ]
 
 # List of `[frame0, value0, frame1, value1, ...]` pairs.
-ListKeyframes = List[float]
+ListKeyframes = list[float]
 
 
 @dataclass
@@ -367,7 +365,7 @@ def bake_action_iter(
             atd.use_tweak_mode = False
 
         atd.action = action
-        if bpy.context.preferences.experimental.use_animation_baklava and action.is_action_layered:
+        if action.is_action_layered:
             slot = action.slots.new(for_id=obj)
             atd.action_slot = slot
 

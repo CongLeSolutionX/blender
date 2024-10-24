@@ -718,16 +718,6 @@ void DrawCommandBuf::finalize_commands(Vector<Header, 0> &headers,
       cmd.vertex_len = batch_vert_len;
     }
 
-#ifdef WITH_METAL_BACKEND
-    /* For SSBO vertex fetch, mutate output vertex count by ssbo vertex fetch expansion factor. */
-    if (cmd.shader) {
-      int num_input_primitives = gpu_get_prim_count_from_type(cmd.vertex_len,
-                                                              cmd.batch->prim_type);
-      cmd.vertex_len = num_input_primitives *
-                       GPU_shader_get_ssbo_vertex_fetch_num_verts_per_prim(cmd.shader);
-    }
-#endif
-
     if (cmd.handle.raw > 0) {
       /* Save correct offset to start of resource_id buffer region for this draw. */
       uint instance_first = resource_id_count;
@@ -744,17 +734,17 @@ void DrawCommandBuf::finalize_commands(Vector<Header, 0> &headers,
   }
 }
 
-void DrawCommandBuf::bind(RecordingState &state,
-                          Vector<Header, 0> &headers,
-                          Vector<Undetermined, 0> &commands,
-                          SubPassVector &sub_passes)
+void DrawCommandBuf::generate_commands(Vector<Header, 0> &headers,
+                                       Vector<Undetermined, 0> &commands,
+                                       SubPassVector &sub_passes)
 {
   resource_id_count_ = 0;
-
   finalize_commands(headers, commands, sub_passes, resource_id_count_, resource_id_buf_);
-
   resource_id_buf_.push_update();
+}
 
+void DrawCommandBuf::bind(RecordingState &state)
+{
   if (GPU_shader_draw_parameters_support() == false) {
     state.resource_id_buf = resource_id_buf_;
   }
@@ -763,13 +753,12 @@ void DrawCommandBuf::bind(RecordingState &state,
   }
 }
 
-void DrawMultiBuf::bind(RecordingState &state,
-                        Vector<Header, 0> & /*headers*/,
-                        Vector<Undetermined, 0> & /*commands*/,
-                        VisibilityBuf &visibility_buf,
-                        int visibility_word_per_draw,
-                        int view_len,
-                        bool use_custom_ids)
+void DrawMultiBuf::generate_commands(Vector<Header, 0> & /*headers*/,
+                                     Vector<Undetermined, 0> & /*commands*/,
+                                     VisibilityBuf &visibility_buf,
+                                     int visibility_word_per_draw,
+                                     int view_len,
+                                     bool use_custom_ids)
 {
   GPU_debug_group_begin("DrawMultiBuf.bind");
 
@@ -811,21 +800,6 @@ void DrawMultiBuf::bind(RecordingState &state,
       group.base_index = -1;
     }
 
-#ifdef WITH_METAL_BACKEND
-    /* For SSBO vertex fetch, mutate output vertex count by ssbo vertex fetch expansion factor. */
-    if (group.desc.gpu_shader) {
-      int num_input_primitives = gpu_get_prim_count_from_type(group.vertex_len,
-                                                              group.desc.gpu_batch->prim_type);
-      group.vertex_len = num_input_primitives *
-                         GPU_shader_get_ssbo_vertex_fetch_num_verts_per_prim(
-                             group.desc.gpu_shader);
-      /* Override base index to -1, as all SSBO calls are submitted as non-indexed, with the
-       * index buffer indirection handled within the implementation. This is to ensure
-       * command generation can correctly assigns baseInstance in the non-indexed formatting. */
-      group.base_index = -1;
-    }
-#endif
-
     /* Reset counters to 0 for the GPU. */
     group.total_counter = group.front_facing_counter = group.back_facing_counter = 0;
   }
@@ -851,9 +825,9 @@ void DrawMultiBuf::bind(RecordingState &state,
     GPU_storagebuf_bind(command_buf_, GPU_shader_get_ssbo_binding(shader, "command_buf"));
     GPU_storagebuf_bind(resource_id_buf_, DRW_RESOURCE_ID_SLOT);
     GPU_compute_dispatch(shader, divide_ceil_u(prototype_count_, DRW_COMMAND_GROUP_SIZE), 1, 1);
+    /* TODO(@fclem): Investigate moving the barrier in the bind function. */
     if (GPU_shader_draw_parameters_support() == false) {
       GPU_memory_barrier(GPU_BARRIER_VERTEX_ATTRIB_ARRAY);
-      state.resource_id_buf = resource_id_buf_;
     }
     else {
       GPU_memory_barrier(GPU_BARRIER_SHADER_STORAGE);
@@ -862,6 +836,16 @@ void DrawMultiBuf::bind(RecordingState &state,
   }
 
   GPU_debug_group_end();
+}
+
+void DrawMultiBuf::bind(RecordingState &state)
+{
+  if (GPU_shader_draw_parameters_support() == false) {
+    state.resource_id_buf = resource_id_buf_;
+  }
+  else {
+    GPU_storagebuf_bind(resource_id_buf_, DRW_RESOURCE_ID_SLOT);
+  }
 }
 
 /** \} */
