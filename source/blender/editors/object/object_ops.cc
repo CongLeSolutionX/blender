@@ -252,6 +252,7 @@ void operatortypes_object()
   WM_operatortype_append(bake_simulation::OBJECT_OT_geometry_node_bake_pack_single);
   WM_operatortype_append(bake_simulation::OBJECT_OT_geometry_node_bake_unpack_single);
   WM_operatortype_append(OBJECT_OT_drop_named_material);
+  WM_operatortype_append(OBJECT_OT_drop_action);
   WM_operatortype_append(OBJECT_OT_drop_geometry_nodes);
   WM_operatortype_append(OBJECT_OT_unlink_data);
   WM_operatortype_append(OBJECT_OT_laplaciandeform_bind);

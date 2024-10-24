@@ -624,6 +624,31 @@ static std::string view3d_mat_drop_tooltip(bContext *C,
   return blender::ed::object::drop_named_material_tooltip(C, name, mval);
 }
 
+static bool view3d_action_drop_poll(bContext *C, wmDrag *drag, const wmEvent *event)
+{
+  if (!view3d_drop_id_in_main_region_poll(C, drag, event, ID_AC)) {
+    return false;
+  }
+
+  Object *ob = ED_view3d_give_object_under_cursor(C, event->mval);
+
+  return (ob && ID_IS_EDITABLE(&ob->id) && !ID_IS_OVERRIDE_LIBRARY(&ob->id));
+}
+
+static std::string view3d_action_drop_tooltip(bContext *C,
+                                              wmDrag *drag,
+                                              const int xy[2],
+                                              wmDropBox * /*drop*/)
+{
+  const char *name = WM_drag_get_item_name(drag);
+  ARegion *region = CTX_wm_region(C);
+  const int mval[2] = {
+      xy[0] - region->winrct.xmin,
+      xy[1] - region->winrct.ymin,
+  };
+  return blender::ed::object::drop_action_tooltip(C, name, mval);
+}
+
 static bool view3d_world_drop_poll(bContext *C, wmDrag *drag, const wmEvent *event)
 {
   return view3d_drop_id_in_main_region_poll(C, drag, event, ID_WO);
@@ -956,6 +981,12 @@ static void view3d_dropboxes()
                  view3d_id_drop_copy,
                  WM_drag_free_imported_drag_ID,
                  view3d_mat_drop_tooltip);
+  WM_dropbox_add(lb,
+                 "OBJECT_OT_drop_action",
+                 view3d_action_drop_poll,
+                 view3d_id_drop_copy,
+                 WM_drag_free_imported_drag_ID,
+                 view3d_action_drop_tooltip);
   WM_dropbox_add(lb,
                  "OBJECT_OT_drop_geometry_nodes",
                  view3d_geometry_nodes_drop_poll,

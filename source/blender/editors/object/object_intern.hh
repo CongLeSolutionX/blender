@@ -64,6 +64,12 @@ void OBJECT_OT_clear_override_library(wmOperatorType *ot);
  * Assigns to object under cursor, only first material slot.
  */
 void OBJECT_OT_drop_named_material(wmOperatorType *ot);
+
+/**
+ * Used for drop-box.
+ * Assigns Action to object under cursor.
+ */
+void OBJECT_OT_drop_action(wmOperatorType *ot);
 /**
  * Used for drop-box.
  * Assigns to object under cursor, creates a new geometry nodes modifier.

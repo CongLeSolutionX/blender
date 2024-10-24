@@ -2988,6 +2988,75 @@ void OBJECT_OT_drop_named_material(wmOperatorType *ot)
 /** \} */
 
 /* ------------------------------------------------------------------- */
+/** \name Drop Named Material on Object Operator
+ * \{ */
+
+std::string drop_action_tooltip(bContext *C, const char *name, const int mval[2])
+{
+  Object *ob = ED_view3d_give_object_under_cursor(C, mval);
+  if (ob == nullptr) {
+    return {};
+  }
+
+  const bAction *prev_action = blender::animrig::get_action(ob->id);
+  if (prev_action) {
+    return fmt::format(
+        TIP_("Assign {} (replacing {}) to {}"), name, prev_action->id.name + 2, ob->id.name + 2);
+  }
+  return fmt::format(TIP_("Assign {} to {}"), name, ob->id.name + 2);
+}
+
+static int drop_action_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+{
+  Main *bmain = CTX_data_main(C);
+  Object *ob = ED_view3d_give_object_under_cursor(C, event->mval);
+  if (ob == nullptr) {
+    return OPERATOR_CANCELLED;
+  }
+
+  bAction *action = (bAction *)WM_operator_properties_id_lookup_from_name_or_session_uid(
+      bmain, op->ptr, ID_AC);
+  if (action == nullptr) {
+    return OPERATOR_CANCELLED;
+  }
+
+  if (!blender::animrig::assign_action(action, ob->id)) {
+    BKE_reportf(op->reports,
+                RPT_ERROR,
+                "Could not assign Action %s to %s",
+                action->id.name + 2,
+                ob->id.name + 2);
+    return OPERATOR_CANCELLED;
+  }
+
+  WM_event_add_notifier(C, NC_ANIMATION | ND_NLA_ACTCHANGE, &ob->id);
+  DEG_relations_tag_update(bmain);
+  DEG_id_tag_update_ex(
+      bmain, &ob->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY | ID_RECALC_ANIMATION);
+
+  return OPERATOR_FINISHED;
+}
+
+void OBJECT_OT_drop_action(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Drop Action on Object";
+  ot->idname = "OBJECT_OT_drop_action";
+
+  /* api callbacks */
+  ot->invoke = drop_action_invoke;
+  ot->poll = ED_operator_objectmode_with_view3d_poll_msg;
+
+  /* flags */
+  ot->flag = OPTYPE_UNDO | OPTYPE_INTERNAL;
+
+  /* properties */
+  WM_operator_properties_id_lookup(ot, true);
+}
+
+/** \} */
+
+/* ------------------------------------------------------------------- */
 /** \name Drop Geometry Nodes on Object Operator
  * \{ */
 
