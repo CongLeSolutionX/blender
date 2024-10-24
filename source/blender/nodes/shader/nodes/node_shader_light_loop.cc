@@ -71,9 +71,12 @@ static void node_declare(NodeDeclarationBuilder &b)
 {
   b.use_custom_socket_order();
   b.allow_any_socket_order();
-  /* TODO: Add outputs
-   * b.add_output<decl::Float>("Iteration")
-   *  .description("Index of the current iteration. Starts counting at zero"); */
+  b.add_input<decl::Vector>("Normal").hide_value();
+  b.add_output<decl::Color>("Color");
+  b.add_output<decl::Vector>("Direction");
+  b.add_output<decl::Float>("Distance");
+  b.add_output<decl::Float>("Attenuation");
+  b.add_output<decl::Float>("Shadow Mask");
 
   const bNode *node = b.node_or_null();
   const bNodeTree *tree = b.tree_or_null();
@@ -130,8 +133,12 @@ static int node_shader_fn(GPUMaterial *mat,
                           GPUNodeStack *in,
                           GPUNodeStack *out)
 {
+  if (!in[0].link) {
+    GPU_link(mat, "world_normals_get", &in[0].link);
+  }
+
   int zone_id = ((NodeShaderLightLoopInput *)node->storage)->output_node_id;
-  return GPU_stack_link_zone(mat, node, "LIGHT_LOOP_BEGIN", in, out, zone_id, false, 0, 0);
+  return GPU_stack_link_zone(mat, node, "LIGHT_LOOP_BEGIN", in, out, zone_id, false, 1, 5);
 }
 
 static void node_register()
