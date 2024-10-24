@@ -1672,6 +1672,7 @@ def brush_basic_grease_pencil_paint_settings(layout, context, brush, props, *, c
             "builtin.box",
             "builtin.circle",
             "builtin.polyline",
+            "builtin.semicircle",
     }:
         size = "size"
         if brush.use_locked_size == 'SCENE' and (grease_pencil_tool == 'DRAW' or tool.idname in {
@@ -1681,6 +1682,7 @@ def brush_basic_grease_pencil_paint_settings(layout, context, brush, props, *, c
             "builtin.box",
             "builtin.circle",
             "builtin.polyline",
+            "builtin.semicircle",
         }):
             size = "unprojected_radius"
         row = layout.row(align=True)
@@ -1710,6 +1712,7 @@ def brush_basic_grease_pencil_paint_settings(layout, context, brush, props, *, c
             "builtin.box",
             "builtin.circle",
             "builtin.polyline",
+            "builtin.semicircle",
     }:
         row = layout.row(align=True)
         if context.region.type == 'TOOL_HEADER':
