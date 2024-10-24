@@ -705,4 +705,23 @@ void BLO_update_defaults_startup_blend(Main *bmain, const char *app_template)
       SET_FLAG_FROM_TEST(world->flag, true, WO_USE_SUN_SHADOW);
     }
   }
+
+  {
+    LISTBASE_FOREACH (bScreen *, screen, &bmain->screens) {
+      LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
+        bool found = false;
+        LISTBASE_FOREACH (SpaceLink *, sl, &area->spacedata) {
+          if (sl->spacetype == SPACE_VIEW3D) {
+            View3D *v3d = reinterpret_cast<View3D *>(sl);
+            v3d->flag2 |= V3D_SYNC_VIEW_ACCROSS_WORKSPACES;
+            found = true;
+            break;
+          }
+        }
+        if (found) {
+          break;
+        }
+      }
+    }
+  }
 }

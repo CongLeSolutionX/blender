@@ -485,6 +485,7 @@ enum {
 
 /** #View3D::flag2 (int) */
 enum {
+  V3D_SYNC_VIEW_ACCROSS_WORKSPACES = 1 << 1,
   V3D_HIDE_OVERLAYS = 1 << 2,
   V3D_SHOW_VIEWER = 1 << 3,
   V3D_SHOW_ANNOTATION = 1 << 4,

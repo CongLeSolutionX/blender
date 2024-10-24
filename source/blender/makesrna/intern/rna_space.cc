@@ -979,6 +979,30 @@ static void rna_SpaceView3D_camera_update(Main *bmain, Scene *scene, PointerRNA 
   }
 }
 
+static void rna_View3D_use_sync_view_update(Main * /*bmain*/, Scene * /*scene*/, PointerRNA *ptr)
+{
+  View3D *v3d = (View3D *)(ptr->data);
+  if (!(v3d->flag2 & V3D_SYNC_VIEW_ACCROSS_WORKSPACES)) {
+    return;
+  }
+  BLI_assert(GS(ptr->owner_id->name) == ID_SCR);
+
+  const bScreen *screen = reinterpret_cast<bScreen *>(ptr->owner_id);
+  /* Disable syncing for other 3D Views of the current screen. */
+  LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
+    LISTBASE_FOREACH (SpaceLink *, slink, &area->spacedata) {
+      if (slink->spacetype == SPACE_VIEW3D) {
+        View3D *v3d_iter = reinterpret_cast<View3D *>(slink);
+        if (v3d_iter == v3d) {
+          continue;
+        }
+
+        v3d_iter->flag2 &= ~V3D_SYNC_VIEW_ACCROSS_WORKSPACES;
+      }
+    }
+  }
+}
+
 static void rna_SpaceView3D_use_local_camera_set(PointerRNA *ptr, bool value)
 {
   View3D *v3d = (View3D *)(ptr->data);
@@ -5227,6 +5251,14 @@ static void rna_def_space_view3d(BlenderRNA *brna)
   RNA_def_property_ui_text(
       prop, "Lock Camera to View", "Enable view navigation within the camera view");
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, nullptr);
+
+  prop = RNA_def_property(srna, "use_sync_view", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "flag2", V3D_SYNC_VIEW_ACCROSS_WORKSPACES);
+  RNA_def_property_ui_text(prop,
+                           "Syncronize View Across Workspaces",
+                           "Keep the orientation, clipping and focal length of this view "
+                           "consistent accross syncronized 3D Viewports in other workspaces");
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, "rna_View3D_use_sync_view_update");
 
   prop = RNA_def_property(srna, "show_gizmo", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_negative_sdna(prop, nullptr, "gizmo_flag", V3D_GIZMO_HIDE);

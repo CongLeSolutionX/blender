@@ -1454,6 +1454,10 @@ class VIEW3D_MT_view(Menu):
 
         layout.separator()
 
+        layout.prop(view, "use_sync_view")
+
+        layout.separator()
+
         layout.menu("VIEW3D_MT_view_cameras", text="Cameras")
 
         layout.separator()

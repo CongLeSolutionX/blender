@@ -11,6 +11,8 @@
 
 #include "BLI_fileops.h"
 #include "BLI_listbase.h"
+#include "BLI_math_rotation.h"
+#include "BLI_math_vector.h"
 #include "BLI_path_utils.hh"
 #include "BLI_utildefines.h"
 
@@ -127,6 +129,54 @@ static void workspace_scene_pinning_update(WorkSpace *workspace_new,
   BLI_assert(WM_window_get_active_scene(win));
 }
 
+static void workspace_change_syncronize_3d_views(const bScreen *screen_old, bScreen *screen_new)
+{
+  auto find_synced_rv3d = [](const bScreen *screen) -> std::pair<View3D *, RegionView3D *> {
+    LISTBASE_FOREACH (const ScrArea *, area, &screen->areabase) {
+      if (area->spacetype != SPACE_VIEW3D) {
+        continue;
+      }
+      LISTBASE_FOREACH (const ARegion *, region, &area->regionbase) {
+        if (region->regiontype != RGN_TYPE_WINDOW) {
+          continue;
+        }
+        View3D *v3d = static_cast<View3D *>(area->spacedata.first);
+        RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
+
+        if (v3d->flag2 & V3D_SYNC_VIEW_ACCROSS_WORKSPACES) {
+          if (rv3d->view == RV3D_VIEW_USER) {
+            return {v3d, rv3d};
+          }
+        }
+      }
+    }
+    return {nullptr, nullptr};
+  };
+
+  const auto [synced_v3d_old, synced_rv3d_old] = find_synced_rv3d(screen_old);
+  if (!synced_rv3d_old) {
+    return;
+  }
+  auto [synced_v3d_new, synced_rv3d_new] = find_synced_rv3d(screen_new);
+  if (!synced_rv3d_new) {
+    return;
+  }
+
+  /* Taken from #ED_view3d_lastview_store(). */
+  const bool use_last_view = synced_rv3d_old->persp == RV3D_CAMOB || synced_rv3d_old->localvd;
+  copy_qt_qt(synced_rv3d_new->viewquat,
+             use_last_view ? synced_rv3d_old->lviewquat : synced_rv3d_old->viewquat);
+  synced_rv3d_new->dist = synced_rv3d_old->dist;
+  copy_v3_v3(synced_rv3d_new->ofs, synced_rv3d_old->ofs);
+  synced_rv3d_new->view = use_last_view ? synced_rv3d_old->lview : synced_rv3d_old->view;
+  synced_rv3d_new->view_axis_roll = use_last_view ? synced_rv3d_old->lview_axis_roll :
+                                                    synced_rv3d_old->view_axis_roll;
+  synced_rv3d_new->persp = use_last_view ? synced_rv3d_old->lpersp : synced_rv3d_old->persp;
+  synced_v3d_new->clip_start = synced_v3d_old->clip_start;
+  synced_v3d_new->clip_end = synced_v3d_old->clip_end;
+  synced_v3d_new->lens = synced_v3d_old->lens;
+}
+
 /**
  * Changes the object mode (if needed) to the one set in \a workspace_new.
  * Object mode is still stored on object level. In future it should all be workspace level instead.
@@ -203,6 +253,8 @@ bool ED_workspace_change(WorkSpace *workspace_new, bContext *C, wmWindowManager 
    * actual screen change and updates context (including CTX_wm_workspace) */
   screen_change_update(C, win, screen_new);
   workspace_change_update(workspace_new, workspace_old, C, wm);
+  /* Handle #V3D_SYNC_VIEW_ACCROSS_WORKSPACES option. */
+  workspace_change_syncronize_3d_views(screen_old, screen_new);
 
   BLI_assert(CTX_wm_workspace(C) == workspace_new);
 
