@@ -67,6 +67,8 @@
 #include "BLI_ghash.h"
 #include "ED_screen.hh"
 
+#include "ANIM_action.hh"
+
 using namespace blender::ui;
 
 /* -------------------------------------------------------------------- */
@@ -2799,6 +2801,71 @@ static void UI_OT_drop_material(wmOperatorType *ot)
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name Action Drag/Drop Operator
+ *
+ * \{ */
+
+static bool ui_drop_action_poll(bContext *C)
+{
+  /* TODO: get the animated ID from the context, instead of assuming active object. */
+  const PointerRNA rna_ptr = CTX_data_pointer_get_type(C, "object", &RNA_Object);
+  const Object *ob = (Object *)rna_ptr.data;
+  if (ob == nullptr) {
+    return false;
+  }
+
+  /* TODO: Check animated ID type is animatable. */
+  return true;
+}
+
+static int ui_drop_action_exec(bContext *C, wmOperator *op)
+{
+  Main *bmain = CTX_data_main(C);
+
+  bAction *action = (bAction *)WM_operator_properties_id_lookup_from_name_or_session_uid(
+      bmain, op->ptr, ID_AC);
+  if (action == nullptr) {
+    return OPERATOR_CANCELLED;
+  }
+
+  /* TODO: get the animated ID from the context, instead of assuming active object. */
+  PointerRNA ptr = CTX_data_pointer_get_type(C, "object", &RNA_Object);
+  Object *ob = static_cast<Object *>(ptr.data);
+  BLI_assert(ob);
+
+  if (!blender::animrig::assign_action(action, ob->id)) {
+    BKE_reportf(op->reports,
+                RPT_ERROR,
+                "Could not assign Action %s to %s",
+                action->id.name + 2,
+                ob->id.name + 2);
+    return OPERATOR_CANCELLED;
+  }
+
+  WM_event_add_notifier(C, NC_ANIMATION | ND_NLA_ACTCHANGE, ob);
+  DEG_relations_tag_update(bmain);
+  DEG_id_tag_update_ex(
+      bmain, &ob->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY | ID_RECALC_ANIMATION);
+
+  return OPERATOR_FINISHED;
+}
+
+static void UI_OT_drop_action(wmOperatorType *ot)
+{
+  ot->name = "Drop Action to assign";
+  ot->description = "Drag Action to Action selector in Action Editor";
+  ot->idname = "UI_OT_drop_action";
+
+  ot->poll = ui_drop_action_poll;
+  ot->exec = ui_drop_action_exec;
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_INTERNAL;
+
+  WM_operator_properties_id_lookup(ot, false);
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Operator & Keymap Registration
  * \{ */
 
@@ -2817,6 +2884,7 @@ void ED_operatortypes_ui()
   WM_operatortype_append(UI_OT_drop_color);
   WM_operatortype_append(UI_OT_drop_name);
   WM_operatortype_append(UI_OT_drop_material);
+  WM_operatortype_append(UI_OT_drop_action);
 #ifdef WITH_PYTHON
   WM_operatortype_append(UI_OT_editsource);
 #endif

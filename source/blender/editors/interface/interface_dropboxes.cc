@@ -24,6 +24,8 @@
 
 #include "UI_interface.hh"
 
+#include "ANIM_action.hh"
+
 using namespace blender::ui;
 
 /* -------------------------------------------------------------------- */
@@ -148,6 +150,55 @@ static std::string ui_drop_material_tooltip(bContext *C,
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name Action Drag/Drop Callbacks
+ * \{ */
+
+static bool ui_drop_action_poll(bContext *C, wmDrag *drag, const wmEvent * /*event*/)
+{
+  /* TODO: get the animated ID from the context, instead of assuming active object. */
+  const PointerRNA rna_ptr = CTX_data_pointer_get_type(C, "object", &RNA_Object);
+  const Object *ob = (Object *)rna_ptr.data;
+  BLI_assert(ob);
+
+  if (RNA_pointer_is_null(&rna_ptr)) {
+    return false;
+  }
+
+  return WM_drag_is_ID_type(drag, ID_AC) && ID_IS_EDITABLE(&ob->id) &&
+         !ID_IS_OVERRIDE_LIBRARY(&ob->id);
+}
+
+static void ui_drop_action_copy(bContext *C, wmDrag *drag, wmDropBox *drop)
+{
+  const ID *id = WM_drag_get_local_ID_or_import_from_asset(C, drag, ID_AC);
+  RNA_int_set(drop->ptr, "session_uid", int(id->session_uid));
+}
+
+static std::string ui_drop_action_tooltip(bContext *C,
+                                          wmDrag *drag,
+                                          const int /*xy*/[2],
+                                          wmDropBox * /*drop*/)
+{
+  /* TODO: get the animated ID from the context, instead of assuming active object. */
+  const PointerRNA rna_ptr = CTX_data_pointer_get_type(C, "object", &RNA_Object);
+  Object *ob = (Object *)rna_ptr.data;
+  BLI_assert(ob);
+
+  const char *dragged_action_name = WM_drag_get_item_name(drag);
+
+  const bAction *prev_action = blender::animrig::get_action(ob->id);
+  if (prev_action) {
+    return fmt::format(TIP_("Assign {} (replacing {}) to {}"),
+                       dragged_action_name,
+                       prev_action->id.name + 2,
+                       ob->id.name + 2);
+  }
+  return fmt::format(TIP_("Assign {} to {}"), dragged_action_name, ob->id.name + 2);
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Add User Interface Drop Boxes
  * \{ */
 
@@ -168,6 +219,12 @@ void ED_dropboxes_ui()
                  ui_drop_material_copy,
                  WM_drag_free_imported_drag_ID,
                  ui_drop_material_tooltip);
+  WM_dropbox_add(lb,
+                 "UI_OT_drop_action",
+                 ui_drop_action_poll,
+                 ui_drop_action_copy,
+                 WM_drag_free_imported_drag_ID,
+                 ui_drop_action_tooltip);
 }
 
 /** \} */
