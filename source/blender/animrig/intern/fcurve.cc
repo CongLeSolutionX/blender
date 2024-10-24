@@ -673,4 +673,22 @@ void bake_fcurve_segments(FCurve *fcu)
   BKE_fcurve_handles_recalc(fcu);
 }
 
+bool foreach_fcurve_key(FCurve *fcurve,
+                        FunctionRef<bool(FCurve &, int index, BezTriple &bezt)> callback)
+{
+  if (!fcurve->bezt) {
+    return true;
+  }
+
+  int i;
+  BezTriple *bezt;
+  for (i = 0, bezt = fcurve->bezt; i < fcurve->totvert; i++, bezt++) {
+    const bool keep_running = callback(*fcurve, i, *bezt);
+    if (!keep_running) {
+      return false;
+    }
+  }
+  return true;
+}
+
 }  // namespace blender::animrig

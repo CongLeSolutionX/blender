@@ -44,6 +44,7 @@
 #include "ANIM_animdata.hh"
 #include "ANIM_fcurve.hh"
 #include "ANIM_keyframing.hh"
+
 #include "ED_anim_api.hh"
 #include "ED_gpencil_legacy.hh"
 #include "ED_grease_pencil.hh"
@@ -1782,6 +1783,77 @@ void ACTION_OT_keyframe_type(wmOperatorType *ot)
   /* api callbacks */
   ot->invoke = WM_menu_invoke;
   ot->exec = actkeys_keytype_exec;
+  ot->poll = ED_operator_action_active;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+  /* id-props */
+  ot->prop = RNA_def_enum(ot->srna, "type", rna_enum_beztriple_keyframe_type_items, 0, "Type", "");
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Select Keys by Keyframe Type
+ * \{ */
+
+static int action_keys_select_by_keytype_exec(bContext *C, wmOperator *op)
+{
+  bAnimContext ac;
+
+  /* get editor data */
+  if (ANIM_animdata_get_context(C, &ac) == 0) {
+    return OPERATOR_CANCELLED;
+  }
+
+  const eBezTriple_KeyframeType typeToSelect = static_cast<eBezTriple_KeyframeType>(
+      RNA_enum_get(op->ptr, "type"));
+
+  ListBase anim_data = {nullptr, nullptr};
+  const eAnimFilter_Flags filter = ANIMFILTER_DATA_VISIBLE | ANIMFILTER_LIST_VISIBLE |
+                                   ANIMFILTER_FOREDIT | ANIMFILTER_NODUPLIS |
+                                   ANIMFILTER_FCURVESONLY;
+  ANIM_animdata_filter(&ac, &anim_data, filter, ac.data, ac.datatype);
+
+  /* Loop through setting BezTriple interpolation
+   * NOTE: we do not supply KeyframeEditData to the looper yet.
+   * Currently that's not necessary here.
+   */
+  LISTBASE_FOREACH (bAnimListElem *, ale, &anim_data) {
+    BLI_assert(ale->type == ANIMTYPE_FCURVE);
+    FCurve *fcurve = static_cast<FCurve *>(ale->key_data);
+
+    blender::animrig::foreach_fcurve_key(fcurve, [&](FCurve &, const int, BezTriple &bezt) {
+      const eBezTriple_KeyframeType beztType = static_cast<eBezTriple_KeyframeType>(bezt.hide);
+      if (beztType != typeToSelect) {
+        return true;
+      }
+
+      bezt.f2 |= SELECT;
+      return true;
+    });
+
+    ale->update |= ANIM_UPDATE_DEPS | ANIM_UPDATE_HANDLES;
+  }
+
+  ANIM_animdata_freelist(&anim_data);
+
+  /* set notifier that keyframe properties have changed */
+  WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME_PROP, nullptr);
+
+  return OPERATOR_FINISHED;
+}
+
+void ACTION_OT_select_by_keyframe_type(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Select By Keyframe Type";
+  ot->idname = "ACTION_OT_select_by_keyframe_type";
+  ot->description = "Select keys by their type";
+
+  /* api callbacks */
+  ot->exec = action_keys_select_by_keytype_exec;
   ot->poll = ED_operator_action_active;
 
   /* flags */

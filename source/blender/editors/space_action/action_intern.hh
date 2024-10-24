@@ -88,6 +88,7 @@ void ACTION_OT_clean(wmOperatorType *ot);
 void ACTION_OT_bake_keys(wmOperatorType *ot);
 
 void ACTION_OT_keyframe_type(wmOperatorType *ot);
+void ACTION_OT_select_by_keyframe_type(wmOperatorType *ot);
 void ACTION_OT_handle_type(wmOperatorType *ot);
 void ACTION_OT_interpolation_type(wmOperatorType *ot);
 void ACTION_OT_extrapolation_type(wmOperatorType *ot);

@@ -488,6 +488,7 @@ class DOPESHEET_MT_select(Menu):
 
             layout.separator()
             layout.operator("action.select_linked")
+            layout.operator_menu_enum("action.select_by_keyframe_type", "type")
 
         layout.separator()
         layout.operator("action.select_column", text="Columns on Selected Keys").mode = 'KEYS'
