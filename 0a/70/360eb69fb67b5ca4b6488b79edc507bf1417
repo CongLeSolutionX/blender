@@ -1,2 +1,3 @@
 Referenced by issue #124452, Blender LTS: Maintenance Task 4.2
 Referenced by issue #128414, Compositor: Crash on file reopen
+Referenced by issue #129366, 4.3 Regression: Blender crashes opening a file while preferences window is open
