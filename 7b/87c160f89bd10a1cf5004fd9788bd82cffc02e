@@ -1,0 +1,1 @@
+Referenced by commit 1ba6b74cdf42b5dee4b8b07b50ca2054db340a93, Fix error freeing null pointer on exit for debug builds
