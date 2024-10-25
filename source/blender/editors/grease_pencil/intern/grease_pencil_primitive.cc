@@ -92,7 +92,7 @@ enum class ModalKeyMode : int8_t {
   IncreaseSubdivision,
   DecreaseSubdivision,
   Flip,
-  Quad,
+  QuadMode,
 };
 
 static constexpr float ui_active_point_draw_size_px = 10.0f;
@@ -346,7 +346,6 @@ static void control_point_colors_and_sizes(const PrimitiveToolOperation &ptd,
 
   const int active_index = ptd.active_control_point_index;
   if (active_index != -1) {
-    // sizes[active_index] *= 1.5;
     sizes[active_index] = ui_active_point_draw_size_px;
     colors[active_index] = math::interpolate(colors[active_index], color_gizmo_a, 0.5f);
   }
@@ -857,7 +856,7 @@ static void grease_pencil_primitive_status_indicators(bContext *C,
 
   if (primitive_is_cyclic(ptd)) {
     header += fmt::format(IFACE_(", {}: individual corner mode"),
-                          get_modal_key_str(ModalKeyMode::Quad));
+                          get_modal_key_str(ModalKeyMode::QuadMode));
   }
 
   header += fmt::format(IFACE_(", {}: grab, {}: rotate, {}: scale"),
@@ -1640,7 +1639,7 @@ static int grease_pencil_primitive_event_modal_map(bContext *C,
       }
       return OPERATOR_RUNNING_MODAL;
     }
-    case int(ModalKeyMode::Quad): {
+    case int(ModalKeyMode::QuadMode): {
       if (primitive_is_cyclic(ptd)) {
         ptd.quad_mode = !ptd.quad_mode;
       }
@@ -2052,7 +2051,7 @@ void ED_primitivetool_modal_keymap(wmKeyConfig *keyconf)
       {int(ModalKeyMode::Rotate), "ROTATE", 0, "Rotate", ""},
       {int(ModalKeyMode::Scale), "SCALE", 0, "Scale", ""},
       {int(ModalKeyMode::Flip), "FLIP", 0, "Flip", ""},
-      {int(ModalKeyMode::Quad), "QUAD", 0, "Quad", ""},
+      {int(ModalKeyMode::QuadMode), "QUAD_MODE", 0, "Quad Mode", ""},
       {int(ModalKeyMode::IncreaseSubdivision),
        "INCREASE_SUBDIVISION",
        0,

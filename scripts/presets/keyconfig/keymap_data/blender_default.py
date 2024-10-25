@@ -7815,7 +7815,7 @@ def km_grease_pencil_primitive_tool_modal_map(params):
         ("CONFIRM", {"type": 'NUMPAD_ENTER', "value": 'PRESS', "any": True}, None),
         ("EXTRUDE", {"type": 'E', "value": 'PRESS'}, None),
         ("FLIP", {"type": 'M', "value": 'PRESS'}, None),
-        ("QUAD", {"type": 'B', "value": 'PRESS'}, None),
+        ("QUAD_MODE", {"type": 'B', "value": 'PRESS'}, None),
         ("GRAB", {"type": 'G', "value": 'PRESS'}, None),
         ("ROTATE", {"type": 'R', "value": 'PRESS'}, None),
         ("SCALE", {"type": 'S', "value": 'PRESS'}, None),
