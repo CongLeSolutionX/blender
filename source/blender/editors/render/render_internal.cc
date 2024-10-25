@@ -83,7 +83,7 @@ struct RenderJob {
   Render *re;
   Object *camera_override;
   bool v3d_override;
-  bool anim, write_still;
+  bool anim, write_still, sequencer;
   Image *image;
   ImageUser iuser;
   bool image_outdated;
@@ -98,6 +98,9 @@ struct RenderJob {
   ColorManagedDisplaySettings display_settings;
   bool supports_glsl_draw;
   bool interface_locked;
+  /* start_time is also recorded internally by wmJob; perhaps that can be
+   * exposed instead? */
+  double start_time;
 };
 
 /* called inside thread! */
@@ -404,7 +407,8 @@ static void render_freejob(void *rjv)
   MEM_freeN(rj);
 }
 
-static void make_renderinfo_string(const RenderStats *rs,
+static void make_renderinfo_string(const RenderJob *rj,
+                                   const RenderStats *rs,
                                    const Scene *scene,
                                    const bool v3d_override,
                                    const char *error,
@@ -417,6 +421,8 @@ static void make_renderinfo_string(const RenderStats *rs,
     char time_elapsed[32];
     char frame[16];
     char statistics[64];
+    char seq_time_elapsed[32];
+    char seq_time_remaining[32];
   } info_buffers;
 
   const char *ret_array[32];
@@ -495,6 +501,32 @@ static void make_renderinfo_string(const RenderStats *rs,
     }
   }
 
+  /* Remaining time estimate */
+  {
+    // only for sequence render for now.
+    if (rj->sequencer) {
+      char elapsed_str[32];
+      char remaining_str[32] = "Unknown";
+      const double elapsed = BLI_time_now_seconds() - rj->start_time;
+      BLI_timecode_string_from_time_simple(elapsed_str, sizeof(elapsed_str), elapsed);
+
+      if (rj->progress) {
+        const double remaining_sec = (elapsed / double(*rj->progress)) - elapsed;
+        BLI_timecode_string_from_time_simple(remaining_str, sizeof(elapsed_str), remaining_sec);
+      }
+
+      SNPRINTF(
+        info_buffers.seq_time_elapsed, IFACE_("Elapsed:%s"), elapsed_str);
+      SNPRINTF(
+        info_buffers.seq_time_remaining, IFACE_("Remaining:%s"), remaining_str);
+      ret_array[i++] = info_sep;
+      ret_array[i++] = info_buffers.seq_time_elapsed;
+      ret_array[i++] = info_space;
+      ret_array[i++] = info_buffers.seq_time_remaining;
+      ret_array[i++] = info_space;
+    }
+  }
+
   /* Extra info. */
   {
     const char *info_extra = nullptr;
@@ -535,7 +567,7 @@ static void image_renderinfo_cb(void *rjv, RenderStats *rs)
       rr->text = static_cast<char *>(MEM_callocN(IMA_MAX_RENDER_TEXT_SIZE, "rendertext"));
     }
 
-    make_renderinfo_string(rs, rj->scene, rj->v3d_override, rr->error, rr->text);
+    make_renderinfo_string(rj, rs, rj->scene, rj->v3d_override, rr->error, rr->text);
   }
 
   RE_ReleaseResult(rj->re);
@@ -706,6 +738,7 @@ static void render_startjob(void *rjv, wmJobWorkerStatus *worker_status)
   rj->stop = &worker_status->stop;
   rj->do_update = &worker_status->do_update;
   rj->progress = &worker_status->progress;
+  rj->start_time = BLI_time_now_seconds();
 
   RE_SetReports(rj->re, rj->reports);
 
@@ -1044,6 +1077,7 @@ static int screen_render_invoke(bContext *C, wmOperator *op, const wmEvent *even
   rj->depsgraph = CTX_data_depsgraph_pointer(C);
   rj->camera_override = camera_override;
   rj->anim = is_animation;
+  rj->sequencer = RE_seq_render_active(scene, &scene->r);
   rj->write_still = is_write_still && !is_animation;
   rj->iuser.scene = scene;
   rj->reports = op->reports;
@@ -1085,7 +1119,7 @@ static int screen_render_invoke(bContext *C, wmOperator *op, const wmEvent *even
   }
 
   /* setup job */
-  if (RE_seq_render_active(scene, &scene->r)) {
+  if (rj->sequencer) {
     name = "Sequence Render";
   }
   else {
