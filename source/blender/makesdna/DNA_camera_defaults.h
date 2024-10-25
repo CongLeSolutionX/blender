@@ -60,6 +60,14 @@
     .central_cylindrical_range_v_max = 1.0f,\
     .central_cylindrical_radius = 1.0f,\
  \
+    .oblique_angle_x = DEG2RADF(0.0f),\
+    .oblique_angle_y = DEG2RADF(90.0f),\
+    .oblique_angle_z = DEG2RADF(45.0f),\
+    .oblique_length_x = 1.0f,\
+    .oblique_length_y = 1.0f,\
+    .oblique_length_z = 1.0f,\
+    .oblique_focal = 0.0f,\
+ \
     .dof = _DNA_DEFAULT_CameraDOFSettings, \
  \
     .stereo = _DNA_DEFAULT_CameraStereoSettings, \

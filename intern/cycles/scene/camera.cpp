@@ -103,11 +103,13 @@ NODE_DEFINE(Camera)
   SOCKET_FLOAT(fov_pre, "FOV Pre", M_PI_4_F);
   SOCKET_FLOAT(fov_post, "FOV Post", M_PI_4_F);
 
-  SOCKET_FLOAT(fisheye_polynomial_k0, "Fisheye Polynomial K0", 0.0f);
-  SOCKET_FLOAT(fisheye_polynomial_k1, "Fisheye Polynomial K1", 0.0f);
-  SOCKET_FLOAT(fisheye_polynomial_k2, "Fisheye Polynomial K2", 0.0f);
-  SOCKET_FLOAT(fisheye_polynomial_k3, "Fisheye Polynomial K3", 0.0f);
-  SOCKET_FLOAT(fisheye_polynomial_k4, "Fisheye Polynomial K4", 0.0f);
+  SOCKET_FLOAT(oblique_angle_x, "oblique_angle_x", 0.0f);
+  SOCKET_FLOAT(oblique_angle_y, "oblique_angle_y", 0.0f);
+  SOCKET_FLOAT(oblique_angle_z, "oblique_angle_z", 0.0f);
+  SOCKET_FLOAT(oblique_length_x, "oblique_length_x", 0.0f);
+  SOCKET_FLOAT(oblique_length_y, "oblique_length_y", 0.0f);
+  SOCKET_FLOAT(oblique_length_z, "oblique_length_z", 0.0f);
+  SOCKET_FLOAT(oblique_focal, "oblique_focal", 0.0f);
 
   SOCKET_FLOAT(central_cylindrical_range_u_min, "Central Cylindrical Range U Min", -M_PI_F);
   SOCKET_FLOAT(central_cylindrical_range_u_max, "Central Cylindrical Range U Max", M_PI_F);
@@ -266,6 +268,18 @@ void Camera::update(Scene *scene)
   }
   else if (camera_type == CAMERA_ORTHOGRAPHIC) {
     cameratoscreen = projection_orthographic(nearclip, farclip);
+
+    float2 x_axis = make_float2(cosf(oblique_angle_x), sinf(oblique_angle_x)) * oblique_length_x;
+    float2 y_axis = make_float2(cosf(oblique_angle_y), sinf(oblique_angle_y)) * oblique_length_y;
+    float2 z_axis = make_float2(cosf(oblique_angle_z), sinf(oblique_angle_z)) * oblique_length_z;
+    Transform shear = make_transform(make_float3(x_axis.x, y_axis.x, z_axis.x),
+                                     make_float3(x_axis.y, y_axis.y, z_axis.y),
+                                     make_float3(0.0f, 0.0f, 1.0f));
+
+    Transform shift = transform_translate(0.0f, 0.0f, -oblique_focal);
+    Transform shift_inv = transform_translate(0.0f, 0.0f, oblique_focal);
+
+    cameratoscreen = cameratoscreen * (shift_inv * (shear * shift));
   }
   else {
     cameratoscreen = projection_identity();
@@ -428,9 +442,8 @@ void Camera::update(Scene *scene)
                                             -longitude_min,
                                             latitude_min - latitude_max,
                                             -latitude_min + M_PI_2_F);
-  kcam->fisheye_lens_polynomial_bias = fisheye_polynomial_k0;
-  kcam->fisheye_lens_polynomial_coefficients = make_float4(
-      fisheye_polynomial_k1, fisheye_polynomial_k2, fisheye_polynomial_k3, fisheye_polynomial_k4);
+  kcam->fisheye_lens_polynomial_bias = 0.0f;
+  kcam->fisheye_lens_polynomial_coefficients = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
   kcam->central_cylindrical_range = make_float4(-central_cylindrical_range_u_min,
                                                 -central_cylindrical_range_u_max,
                                                 central_cylindrical_range_v_min,

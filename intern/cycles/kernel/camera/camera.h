@@ -171,7 +171,10 @@ ccl_device void camera_sample_orthographic(KernelGlobals kg,
 {
   /* create ray form raster position */
   ProjectionTransform rastertocamera = kernel_data.cam.rastertocamera;
-  float3 Pcamera = transform_perspective(&rastertocamera, float2_to_float3(raster_xy));
+  float3 Pcamera = transform_perspective(&rastertocamera,
+                                         make_float3(raster_xy.x, raster_xy.y, 0.0));
+  float3 Pcamera_far = transform_perspective(&rastertocamera,
+                                             make_float3(raster_xy.x, raster_xy.y, 1.0));
 
   float3 P;
   float3 D = make_float3(0.0f, 0.0f, 1.0f);
@@ -196,6 +199,7 @@ ccl_device void camera_sample_orthographic(KernelGlobals kg,
   }
   else {
     P = Pcamera + make_float3(0.0f, 0.0f, kernel_data.cam.nearclip);
+    D = Pcamera_far - Pcamera;
   }
   /* transform ray from camera to world */
   Transform cameratoworld = kernel_data.cam.cameratoworld;

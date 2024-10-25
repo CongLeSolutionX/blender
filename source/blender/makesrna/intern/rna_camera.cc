@@ -964,6 +964,42 @@ void RNA_def_camera(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Cylinder Radius", "Radius of the virtual cylinder");
   RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Camera_update");
 
+  prop = RNA_def_property(srna, "oblique_angle_x", PROP_FLOAT, PROP_ANGLE);
+  RNA_def_property_ui_text(prop, "Oblique X angle", "Oblique X angle");
+  RNA_def_property_update(prop, NC_CAMERA | ND_DRAW_RENDER_VIEWPORT, nullptr);
+
+  prop = RNA_def_property(srna, "oblique_angle_y", PROP_FLOAT, PROP_ANGLE);
+  RNA_def_property_ui_text(prop, "Oblique Y angle", "Oblique Y angle");
+  RNA_def_property_update(prop, NC_CAMERA | ND_DRAW_RENDER_VIEWPORT, nullptr);
+
+  prop = RNA_def_property(srna, "oblique_angle_z", PROP_FLOAT, PROP_ANGLE);
+  RNA_def_property_ui_text(prop, "Oblique Z angle", "Oblique Z angle");
+  RNA_def_property_update(prop, NC_CAMERA | ND_DRAW_RENDER_VIEWPORT, nullptr);
+
+  prop = RNA_def_property(srna, "oblique_length_x", PROP_FLOAT, PROP_DISTANCE);
+  RNA_def_property_range(prop, 0.00001f, FLT_MAX);
+  RNA_def_property_ui_range(prop, 0.00001f, 1.0f, 0.1f, 3);
+  RNA_def_property_ui_text(prop, "Oblique X length", "Oblique X length");
+  RNA_def_property_update(prop, NC_CAMERA | ND_DRAW_RENDER_VIEWPORT, nullptr);
+
+  prop = RNA_def_property(srna, "oblique_length_y", PROP_FLOAT, PROP_DISTANCE);
+  RNA_def_property_range(prop, 0.00001f, FLT_MAX);
+  RNA_def_property_ui_range(prop, 0.00001f, 1.0f, 0.1f, 3);
+  RNA_def_property_ui_text(prop, "Oblique Y length", "Oblique Y length");
+  RNA_def_property_update(prop, NC_CAMERA | ND_DRAW_RENDER_VIEWPORT, nullptr);
+
+  prop = RNA_def_property(srna, "oblique_length_z", PROP_FLOAT, PROP_DISTANCE);
+  RNA_def_property_range(prop, 0.00001f, FLT_MAX);
+  RNA_def_property_ui_range(prop, 0.00001f, 1.0f, 0.1f, 3);
+  RNA_def_property_ui_text(prop, "Oblique Z length", "Oblique Z length");
+  RNA_def_property_update(prop, NC_CAMERA | ND_DRAW_RENDER_VIEWPORT, nullptr);
+
+  prop = RNA_def_property(srna, "oblique_focal", PROP_FLOAT, PROP_DISTANCE);
+  RNA_def_property_range(prop, 0.0f, FLT_MAX);
+  RNA_def_property_ui_range(prop, 0.0f, 5000.0f, 1, 4);
+  RNA_def_property_ui_text(prop, "Oblique Focal", "Oblique Focal");
+  RNA_def_property_update(prop, NC_CAMERA | ND_DRAW_RENDER_VIEWPORT, nullptr);
+
   /* pointers */
   prop = RNA_def_property(srna, "dof", PROP_POINTER, PROP_NONE);
   RNA_def_property_struct_type(prop, "CameraDOFSettings");

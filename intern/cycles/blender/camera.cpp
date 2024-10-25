@@ -58,11 +58,13 @@ struct BlenderCamera {
   float pole_merge_angle_from;
   float pole_merge_angle_to;
 
-  float fisheye_polynomial_k0;
-  float fisheye_polynomial_k1;
-  float fisheye_polynomial_k2;
-  float fisheye_polynomial_k3;
-  float fisheye_polynomial_k4;
+  float oblique_angle_x;
+  float oblique_angle_y;
+  float oblique_angle_z;
+  float oblique_length_x;
+  float oblique_length_y;
+  float oblique_length_z;
+  float oblique_focal;
 
   float central_cylindrical_range_u_min;
   float central_cylindrical_range_u_max;
@@ -234,11 +236,13 @@ static void blender_camera_from_object(BlenderCamera *bcam,
     bcam->longitude_min = b_camera.longitude_min();
     bcam->longitude_max = b_camera.longitude_max();
 
-    bcam->fisheye_polynomial_k0 = b_camera.fisheye_polynomial_k0();
-    bcam->fisheye_polynomial_k1 = b_camera.fisheye_polynomial_k1();
-    bcam->fisheye_polynomial_k2 = b_camera.fisheye_polynomial_k2();
-    bcam->fisheye_polynomial_k3 = b_camera.fisheye_polynomial_k3();
-    bcam->fisheye_polynomial_k4 = b_camera.fisheye_polynomial_k4();
+    bcam->oblique_angle_x = b_camera.oblique_angle_x();
+    bcam->oblique_angle_y = b_camera.oblique_angle_y();
+    bcam->oblique_angle_z = b_camera.oblique_angle_z();
+    bcam->oblique_length_x = b_camera.oblique_length_x();
+    bcam->oblique_length_y = b_camera.oblique_length_y();
+    bcam->oblique_length_z = b_camera.oblique_length_z();
+    bcam->oblique_focal = b_camera.oblique_focal();
 
     bcam->central_cylindrical_range_u_min = b_camera.central_cylindrical_range_u_min();
     bcam->central_cylindrical_range_u_max = b_camera.central_cylindrical_range_u_max();
@@ -518,11 +522,13 @@ static void blender_camera_sync(Camera *cam,
   cam->set_latitude_min(bcam->latitude_min);
   cam->set_latitude_max(bcam->latitude_max);
 
-  cam->set_fisheye_polynomial_k0(bcam->fisheye_polynomial_k0);
-  cam->set_fisheye_polynomial_k1(bcam->fisheye_polynomial_k1);
-  cam->set_fisheye_polynomial_k2(bcam->fisheye_polynomial_k2);
-  cam->set_fisheye_polynomial_k3(bcam->fisheye_polynomial_k3);
-  cam->set_fisheye_polynomial_k4(bcam->fisheye_polynomial_k4);
+  cam->set_oblique_angle_x(bcam->oblique_angle_x);
+  cam->set_oblique_angle_y(bcam->oblique_angle_y);
+  cam->set_oblique_angle_z(bcam->oblique_angle_z);
+  cam->set_oblique_length_x(bcam->oblique_length_x);
+  cam->set_oblique_length_y(bcam->oblique_length_y);
+  cam->set_oblique_length_z(bcam->oblique_length_z);
+  cam->set_oblique_focal(bcam->oblique_focal);
 
   cam->set_longitude_min(bcam->longitude_min);
   cam->set_longitude_max(bcam->longitude_max);

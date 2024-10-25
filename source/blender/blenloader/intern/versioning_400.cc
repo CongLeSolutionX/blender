@@ -4995,6 +4995,19 @@ void blo_do_versions_400(FileData *fd, Library * /*lib*/, Main *bmain)
     }
   }
 
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 404, 4)) {
+    Camera default_cam = *DNA_struct_default_get(Camera);
+    LISTBASE_FOREACH (Camera *, camera, &bmain->cameras) {
+      camera->oblique_angle_x = default_cam.oblique_angle_x;
+      camera->oblique_angle_y = default_cam.oblique_angle_y;
+      camera->oblique_angle_z = default_cam.oblique_angle_z;
+      camera->oblique_length_x = default_cam.oblique_length_x;
+      camera->oblique_length_y = default_cam.oblique_length_y;
+      camera->oblique_length_z = default_cam.oblique_length_z;
+      camera->oblique_focal = default_cam.oblique_focal;
+    }
+  }
+
   /* Always run this versioning; meshes are written with the legacy format which always needs to
    * be converted to the new format on file load. Can be moved to a subversion check in a larger
    * breaking release. */

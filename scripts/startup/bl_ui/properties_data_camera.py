@@ -101,6 +101,23 @@ class DATA_PT_lens(CameraButtonsPanel, Panel):
         elif cam.type == 'ORTHO':
             col.prop(cam, "ortho_scale")
 
+            sub = col.column(align=True)
+            sub.prop(cam, "oblique_angle_x", text="Oblique Angle X")
+            sub.prop(cam, "oblique_angle_y", text="Y")
+            sub.prop(cam, "oblique_angle_z", text="Z")
+
+            sub = col.column(align=True)
+            sub.prop(cam, "oblique_length_x", text="Oblique Length X")
+            sub.prop(cam, "oblique_length_y", text="Y")
+            sub.prop(cam, "oblique_length_z", text="Z")
+
+            row = col.row(align=True)
+            row.prop(cam, "oblique_focal")
+            row.operator(
+                "ui.eyedropper_depth",
+                icon='EYEDROPPER',
+                text="").prop_data_path = "scene.camera.data.oblique_focal"
+
         elif cam.type == 'PANO':
             engine = context.engine
             if engine == 'CYCLES':
