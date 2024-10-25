@@ -4753,18 +4753,21 @@ static bool edbm_fill_grid_prepare(BMesh *bm, int offset, int *span_p, const boo
 static bool edbm_fill_grid_delete_existing_faces(BMesh *bm)
 {
   bool deletions = false;
-  BM_mesh_elem_hflag_disable_all(bm, BM_FACE | BM_EDGE, BM_ELEM_TAG, true);
+  BM_mesh_elem_hflag_disable_all(bm, BM_FACE | BM_EDGE, BM_ELEM_TAG, false);
 
   BMIter iter;
   BMEdge *e;
   BM_ITER_MESH (e, &iter, bm, BM_EDGES_OF_MESH) {
 
-    if (BM_elem_flag_test_bool(e, BM_ELEM_SELECT)) {
+    if (BM_elem_flag_test_bool(e, BM_ELEM_SELECT) && !BM_elem_flag_test_bool(e, BM_ELEM_HIDDEN)) {
       BMFace *f_a, *f_b;
 
       /* Tag all edges between two selected faces. */
-      if (BM_edge_face_pair(e, &f_a, &f_b) && (BM_elem_flag_test_bool(f_a, BM_ELEM_SELECT) &&
-                                               BM_elem_flag_test_bool(f_b, BM_ELEM_SELECT)))
+      if (BM_edge_face_pair(e, &f_a, &f_b) &&
+          (BM_elem_flag_test_bool(f_a, BM_ELEM_SELECT) &&
+           !BM_elem_flag_test_bool(f_a, BM_ELEM_HIDDEN)) &&
+          (BM_elem_flag_test_bool(f_b, BM_ELEM_SELECT) &&
+           !BM_elem_flag_test_bool(f_b, BM_ELEM_HIDDEN)))
       {
         BM_elem_flag_enable(e, BM_ELEM_TAG);
         BM_elem_flag_enable(f_a, BM_ELEM_TAG);
