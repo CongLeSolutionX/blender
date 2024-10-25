@@ -1,2 +1,3 @@
 Referenced by issue #129334, Sculpt: Multires face material index is inconsistent across "sculpt" levels
 Referenced by pull request #129392, Fix #129334: Multires displays incorrectly in Sculpt mode with materials
+Referenced by commit 1dd6cdb1727fdedb85401fc05e5fd383f64a334a, Fix #129334: Multires displays incorrectly in Sculpt mode with materials
