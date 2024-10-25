@@ -1561,6 +1561,8 @@ static void do_render_sequencer(Render *re)
   else {
     re->progress(1.0f);
   }
+
+  re->i.infostr = IFACE_("Sequence Render");
 }
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
