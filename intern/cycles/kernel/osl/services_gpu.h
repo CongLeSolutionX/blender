@@ -323,21 +323,7 @@ ccl_device_extern void osl_wavelength_color_vf(ccl_private ShaderGlobals *sg,
                                                ccl_private float3 *result,
                                                float lambda_nm)
 {
-  /* See svm_node_wavelength */
-  float ii = (lambda_nm - 380.0f) * (1.0f / 5.0f);  // scaled 0..80
-  int i = float_to_int(ii);
-  float3 color;
-
-  if (i < 0 || i >= 80) {
-    color = make_float3(0.0f, 0.0f, 0.0f);
-  }
-  else {
-    ii -= i;
-    ccl_constant float *c = cie_color_match[i];
-    color = interp(make_float3(c[0], c[1], c[2]), make_float3(c[3], c[4], c[5]), ii);
-  }
-
-  color = xyz_to_rgb(nullptr, color);
+  float3 color = xyz_to_rgb(nullptr, svm_math_wavelength_color_xyz(lambda_nm));
   color *= 1.0f / 2.52f;  // Empirical scale from lg to make all comps <= 1
 
   /* Clamp to zero if values are smaller */
