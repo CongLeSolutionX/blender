@@ -217,6 +217,11 @@ static void move_control_point(PrimitiveToolOperation &ptd,
   ptd.control_points[active_index] = ptd.placement.project(point + offset);
 }
 
+static void save_control_point(PrimitiveToolOperation &ptd, const int active_index)
+{
+  ptd.control_points[active_index] = ptd.temp_control_points[active_index];
+}
+
 static float2 point_2d_from_temp_index(const PrimitiveToolOperation &ptd, const int active_index)
 {
   return ED_view3d_project_float_v2_m4(
@@ -1117,7 +1122,7 @@ static void cage_handle_cps(PrimitiveToolOperation &ptd, const wmEvent *event)
   ptd.end_drag_position_2d = active_pos;
 
   /* Individual corners and edges. */
-  if (ptd.quad_mode) {
+  if (ptd.quad_mode || event->modifier & KM_ALT) {
     if (ELEM(active_index, cage_ne, cage_sw, cage_nw, cage_se)) {
       move_control_point(ptd, active_index, offset);
       return;
@@ -1132,8 +1137,8 @@ static void cage_handle_cps(PrimitiveToolOperation &ptd, const wmEvent *event)
       }
       move_control_point(ptd, cage_index(ptd, active_index + 1), offset);
       move_control_point(ptd, cage_index(ptd, active_index - 1), offset);
-      move_control_point(ptd, cage_index(ptd, active_index + 3), float2(0.0f));
-      move_control_point(ptd, cage_index(ptd, active_index - 3), float2(0.0f));
+      save_control_point(ptd, cage_index(ptd, active_index + 3));
+      save_control_point(ptd, cage_index(ptd, active_index - 3));
       return;
     }
   }
@@ -1150,17 +1155,26 @@ static void cage_handle_cps(PrimitiveToolOperation &ptd, const wmEvent *event)
 
     /* Corners and edges. */
     if (ELEM(active_index, cage_ne, cage_sw, cage_nw, cage_se)) {
-      float2 pos = point_2d_from_temp_index(ptd, active_index) + offset;
+      /* Handle as two edges rather than corner. */
+      const float2 pos = point_2d_from_temp_index(ptd, active_index);
+      const float2 pos2 = pos + offset;                
       const float2 opposite = point_2d_from_temp_index(ptd, cage_index(ptd, active_index + 4));
-      const float2 cw = point_2d_from_temp_index(ptd, cage_index(ptd, active_index + 2));
-      const float2 ccw = point_2d_from_temp_index(ptd, cage_index(ptd, active_index - 2));
-      float2 p_cw;
-      float2 p_ccw;
-      closest_to_line_v2(p_cw, pos, cw, opposite);
-      closest_to_line_v2(p_ccw, pos, ccw, opposite);
-      set_control_point(ptd, cage_index(ptd, active_index + 2), p_cw);
-      set_control_point(ptd, cage_index(ptd, active_index - 2), p_ccw);
-      set_control_point(ptd, cage_index(ptd, active_index), pos);
+      const float2 center = point_2d_from_temp_index(ptd, cage_center);
+
+      const float2 corner1 = point_2d_from_temp_index(ptd, cage_index(ptd, active_index - 2));
+      float2 proj1 = math::project(pos, corner1 - opposite) + opposite;
+      float2 proj2 = math::project(pos2, corner1 - opposite) + opposite;
+      float2 r_offset = proj2 - proj1;
+      move_control_point(ptd, cage_index(ptd, active_index - 2), r_offset);
+
+      const float2 corner2 = point_2d_from_temp_index(ptd, cage_index(ptd, active_index + 2));
+      proj1 = math::project(pos, corner2 - opposite) + opposite;
+      proj2 = math::project(pos2, corner2 - opposite) + opposite;
+      r_offset = proj2 - proj1;
+      move_control_point(ptd, cage_index(ptd, active_index + 2), r_offset);
+
+      set_control_point(ptd, cage_index(ptd, active_index), pos2);
+      save_control_point(ptd, cage_index(ptd, active_index + 4));
       return;
     }
     else if (ELEM(active_index, cage__n, cage__s, cage__w, cage__e)) {
@@ -1170,8 +1184,8 @@ static void cage_handle_cps(PrimitiveToolOperation &ptd, const wmEvent *event)
       closest_to_line_v2(offset2, end, center, edge);
       move_control_point(ptd, cage_index(ptd, active_index + 1), offset2 - edge);
       move_control_point(ptd, cage_index(ptd, active_index - 1), offset2 - edge);
-      move_control_point(ptd, cage_index(ptd, active_index + 3), float2(0.0f));
-      move_control_point(ptd, cage_index(ptd, active_index - 3), float2(0.0f));
+      save_control_point(ptd, cage_index(ptd, active_index + 3));
+      save_control_point(ptd, cage_index(ptd, active_index - 3));
       return;
     }
   }
