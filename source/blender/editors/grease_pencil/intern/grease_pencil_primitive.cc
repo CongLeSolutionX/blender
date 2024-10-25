@@ -208,6 +208,15 @@ static void set_control_point(PrimitiveToolOperation &ptd,
   ptd.control_points[active_index] = ptd.placement.project(point);
 }
 
+static void move_control_point(PrimitiveToolOperation &ptd,
+                               const int active_index,
+                               const float2 offset)
+{
+  const float2 point = ED_view3d_project_float_v2_m4(
+      ptd.vc.region, ptd.temp_control_points[active_index], ptd.projection);
+  ptd.control_points[active_index] = ptd.placement.project(point + offset);
+}
+
 static float2 point_2d_from_temp_index(const PrimitiveToolOperation &ptd, const int active_index)
 {
   return ED_view3d_project_float_v2_m4(
@@ -264,10 +273,6 @@ static ControlPointType get_control_point_type(const PrimitiveToolOperation &ptd
     else {
       return ControlPointType::HandlePoint;
     }
-  }
-
-  if (primitive_is_cyclic(ptd)) {
-    return ControlPointType::JoinPoint;
   }
 
   const int num_shared_points = control_points_per_segment(ptd);
@@ -1074,14 +1079,6 @@ static float2 snap_to_control_points(PrimitiveToolOperation &ptd,
   return r_default;
 }
 
-static void primitive_move_point(PrimitiveToolOperation &ptd,
-                                 const int active_index,
-                                 const float2 offset)
-{
-  const float2 point = point_2d_from_temp_index(ptd, active_index);
-  ptd.control_points[active_index] = ptd.placement.project(point + offset);
-}
-
 static void primitive_scale_all(PrimitiveToolOperation &ptd,
                                 const float2 start,
                                 const float2 end,
@@ -1106,42 +1103,59 @@ static int cage_index(PrimitiveToolOperation &ptd, const int index)
   return math::mod_periodic(index, control_points_per_segment(ptd));
 }
 
-static void cage_move_cps(PrimitiveToolOperation &ptd,
-                          const wmEvent *event,
-                          const int active_index,
-                          const float2 offset)
+static void cage_handle_cps(PrimitiveToolOperation &ptd, const wmEvent *event)
 {
-  /* Scale. */
-  if (event->modifier & KM_SHIFT) {
-    const float2 pos = point_2d_from_temp_index(ptd, active_index);
-    const int origin_index = event->modifier & KM_ALT ? cage_center :
-                                                        cage_index(ptd, active_index + 4);
-    const float2 origin = point_2d_from_temp_index(ptd, origin_index);
-    primitive_scale_all(ptd, pos, pos + offset, origin);
-    return;
-  }
+  const float2 start = point_2d_from_temp_index(ptd, ptd.active_control_point_index);
+  const float2 end = float2(event->mval);
+  float2 active_pos = end;
+  float2 offset = end - start;
+  const int active_index = ptd.active_control_point_index;
+
+  const float3 pos = ptd.placement.project(active_pos);
+  ptd.control_points[ptd.active_control_point_index] = pos;
+  ptd.start_drag_position_2d = start;
+  ptd.end_drag_position_2d = active_pos;
 
   /* Individual corners and edges. */
   if (ptd.quad_mode) {
     if (ELEM(active_index, cage_ne, cage_sw, cage_nw, cage_se)) {
-      primitive_move_point(ptd, active_index, offset);
+      move_control_point(ptd, active_index, offset);
       return;
     }
     else if (ELEM(active_index, cage__n, cage__s, cage__w, cage__e)) {
-      primitive_move_point(ptd, cage_index(ptd, active_index + 1), offset);
-      primitive_move_point(ptd, cage_index(ptd, active_index - 1), offset);
+      if (event->modifier & KM_SHIFT) {
+        const float2 center = point_2d_from_temp_index(ptd, cage_center);
+        const float2 edge = point_2d_from_temp_index(ptd, cage_index(ptd, active_index));
+        float2 offset2;
+        closest_to_line_v2(offset2, end, center, edge);
+        offset = offset2 - edge;
+      }
+      move_control_point(ptd, cage_index(ptd, active_index + 1), offset);
+      move_control_point(ptd, cage_index(ptd, active_index - 1), offset);
+      move_control_point(ptd, cage_index(ptd, active_index + 3), float2(0.0f));
+      move_control_point(ptd, cage_index(ptd, active_index - 3), float2(0.0f));
       return;
     }
   }
   else {
+    /* Scale. */
+    if (event->modifier & KM_SHIFT) {
+      const float2 pos = point_2d_from_temp_index(ptd, active_index);
+      const int origin_index = event->modifier & KM_ALT ? cage_center :
+                                                          cage_index(ptd, active_index + 4);
+      const float2 origin = point_2d_from_temp_index(ptd, origin_index);
+      primitive_scale_all(ptd, pos, pos + offset, origin);
+      return;
+    }
+
     /* Corners and edges. */
     if (ELEM(active_index, cage_ne, cage_sw, cage_nw, cage_se)) {
       float2 pos = point_2d_from_temp_index(ptd, active_index) + offset;
       const float2 opposite = point_2d_from_temp_index(ptd, cage_index(ptd, active_index + 4));
       const float2 cw = point_2d_from_temp_index(ptd, cage_index(ptd, active_index + 2));
       const float2 ccw = point_2d_from_temp_index(ptd, cage_index(ptd, active_index - 2));
-      float2 p_cw = math::project(pos, cw - opposite) - opposite;
-      float2 p_ccw = math::project(pos, ccw - opposite) - opposite;
+      float2 p_cw;
+      float2 p_ccw;
       closest_to_line_v2(p_cw, pos, cw, opposite);
       closest_to_line_v2(p_ccw, pos, ccw, opposite);
       set_control_point(ptd, cage_index(ptd, active_index + 2), p_cw);
@@ -1150,17 +1164,14 @@ static void cage_move_cps(PrimitiveToolOperation &ptd,
       return;
     }
     else if (ELEM(active_index, cage__n, cage__s, cage__w, cage__e)) {
-      float2 pos = point_2d_from_temp_index(ptd, active_index) + offset;
-      const float2 cw = point_2d_from_temp_index(ptd, cage_index(ptd, active_index + 1));
-      const float2 cw2 = point_2d_from_temp_index(ptd, cage_index(ptd, active_index + 3));
-      const float2 ccw = point_2d_from_temp_index(ptd, cage_index(ptd, active_index - 1));
-      const float2 ccw2 = point_2d_from_temp_index(ptd, cage_index(ptd, active_index - 2));
-      float2 p_cw = math::project(pos, cw - cw2) - cw2;
-      float2 p_ccw = math::project(pos, ccw - ccw2) - ccw2;
-      closest_to_line_v2(p_cw, pos, cw, cw2);
-      closest_to_line_v2(p_ccw, pos, ccw, ccw2);
-      set_control_point(ptd, cage_index(ptd, active_index + 1), p_cw);
-      set_control_point(ptd, cage_index(ptd, active_index - 1), p_ccw);
+      const float2 center = point_2d_from_temp_index(ptd, cage_center);
+      const float2 edge = point_2d_from_temp_index(ptd, cage_index(ptd, active_index));
+      float2 offset2;
+      closest_to_line_v2(offset2, end, center, edge);
+      move_control_point(ptd, cage_index(ptd, active_index + 1), offset2 - edge);
+      move_control_point(ptd, cage_index(ptd, active_index - 1), offset2 - edge);
+      move_control_point(ptd, cage_index(ptd, active_index + 3), float2(0.0f));
+      move_control_point(ptd, cage_index(ptd, active_index - 3), float2(0.0f));
       return;
     }
   }
@@ -1300,14 +1311,27 @@ static void grease_pencil_primitive_drag_all_update(PrimitiveToolOperation &ptd,
 static void grease_pencil_primitive_grab_update(PrimitiveToolOperation &ptd, const wmEvent *event)
 {
   BLI_assert(ptd.active_control_point_index != -1);
+
+  if (primitive_is_cyclic(ptd)) {
+    /* If the center point is been grabbed, move all points. */
+    if (ptd.active_control_point_index == cage_center) {
+      grease_pencil_primitive_drag_all_update(ptd, event);
+      return;
+    }
+    else {
+      cage_handle_cps(ptd, event);
+      return;
+    }
+  }
+
   float2 active_pos = float2(event->mval);
   const float2 start = point_2d_from_temp_index(ptd, ptd.active_control_point_index);
 
-  if (primitive_is_multi_segment(ptd) && event->modifier & KM_SHIFT) {
+  if (event->modifier & KM_SHIFT) {
     active_pos = snap_8_angles(active_pos - start) + start;
   }
 
-  if (primitive_is_multi_segment(ptd) && event->modifier & KM_CTRL) {
+  if (event->modifier & KM_CTRL) {
     active_pos = snap_to_control_points(
         ptd, float2(event->mval), active_pos, ptd.active_control_point_index);
   }
@@ -1322,10 +1346,11 @@ static void grease_pencil_primitive_grab_update(PrimitiveToolOperation &ptd, con
     primitive_rotate_cps(ptd, active_pos, 1);
     return;
   }
+}
 
-  if (primitive_is_multi_segment(ptd)) {
-    return;
-  }
+static void grease_pencil_primitive_drag_update(PrimitiveToolOperation &ptd, const wmEvent *event)
+{
+  BLI_assert(ptd.active_control_point_index != -1);
 
   if (primitive_is_cyclic(ptd)) {
     /* If the center point is been grabbed, move all points. */
@@ -1334,20 +1359,10 @@ static void grease_pencil_primitive_grab_update(PrimitiveToolOperation &ptd, con
       return;
     }
     else {
-      const float3 pos = ptd.placement.project(active_pos);
-      ptd.control_points[ptd.active_control_point_index] = pos;
-      ptd.start_drag_position_2d = start;
-      ptd.end_drag_position_2d = active_pos;
-      float2 dif = active_pos - start;
-      cage_move_cps(ptd, event, ptd.active_control_point_index, dif);
+      cage_handle_cps(ptd, event);
       return;
     }
   }
-}
-
-static void grease_pencil_primitive_drag_update(PrimitiveToolOperation &ptd, const wmEvent *event)
-{
-  BLI_assert(ptd.active_control_point_index != -1);
 
   const float2 start = point_2d_from_temp_index(ptd, ptd.active_control_point_index);
   const float2 end = float2(event->mval);
@@ -1355,23 +1370,6 @@ static void grease_pencil_primitive_drag_update(PrimitiveToolOperation &ptd, con
   const float2 dif = end - start;
   ptd.start_drag_position_2d = start;
   ptd.end_drag_position_2d = active_pos;
-
-  if (primitive_is_cyclic(ptd)) {
-    /* If the center point is been grabbed, move all points. */
-    if (ptd.active_control_point_index == cage_center) {
-      grease_pencil_primitive_drag_all_update(ptd, event);
-      return;
-    }
-    else {
-      const float3 pos = ptd.placement.project(active_pos);
-      ptd.control_points[ptd.active_control_point_index] = pos;
-      ptd.start_drag_position_2d = start;
-      ptd.end_drag_position_2d = active_pos;
-      float2 dif = active_pos - start;
-      cage_move_cps(ptd, event, ptd.active_control_point_index, dif);
-      return;
-    }
-  }
 
   /* Constrain control points. */
   if (event->modifier & KM_SHIFT) {
