@@ -195,8 +195,9 @@ bool light_loop_setup(uint l_idx,
   vec3 V = drw_world_incident_vector(g_data.P);
   /* TODO(NPR): specular ? */
   vec4 ltc_mat = vec4(1.0, 0.0, 0.0, 1.0); /* No transform, just plain cosine distribution. */
-  /* TODO(NPR): Broken? */
-  // attenuation *= light_ltc(utility_tx, light, N, V, lv, ltc_mat);
+  /* Make the normal point into the light direction, so the diffuse term can be customized. */
+  float ltc = light_ltc(utility_tx, light, lv.L, V, lv, ltc_mat);
+  attenuation *= ltc * light_power_get(light, LIGHT_DIFFUSE);
   if (attenuation < LIGHT_ATTENUATION_THRESHOLD) {
     return false;
   }
@@ -210,7 +211,6 @@ bool light_loop_setup(uint l_idx,
     shadow_mask *= dot(N, lv.L) > 0.0 ? 1.0 : 0.0;
   }
 
-  /* TODO(NPR): light_power_get? */
   out_color = vec4(light.color, 1.0);
   out_vector = lv.L;
   out_distance = lv.dist;
