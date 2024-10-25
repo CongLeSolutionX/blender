@@ -95,6 +95,7 @@ enum class ModalKeyMode : int8_t {
   Quad,
 };
 
+static constexpr float ui_active_point_draw_size_px = 10.0f;
 static constexpr float ui_primary_point_draw_size_px = 8.0f;
 static constexpr float ui_secondary_point_draw_size_px = 5.0f;
 static constexpr float ui_tertiary_point_draw_size_px = 3.0f;
@@ -166,7 +167,8 @@ struct PrimitiveToolOperation {
   ViewOpsData *vod;
 };
 
-static float2 calc_circumcenter_2d(float2 a, float2 b, float2 c)
+/* Calculate triangle circumcenter. */
+static float2 calc_circumcenter_2d(const float2 a, const float2 b, const float2 c)
 {
   const float2 ba = b - a;
   const float2 ca = c - a;
@@ -199,13 +201,6 @@ static float2 rotate_point(const float2 p,
   const float s = math::sin(angle);
   const float2x2 rot = float2x2(float2(c, s), float2(-s, c));
   return rot * dif * scale + origin;
-}
-
-static void set_control_point(PrimitiveToolOperation &ptd,
-                              const int active_index,
-                              const float2 point)
-{
-  ptd.control_points[active_index] = ptd.placement.project(point);
 }
 
 static void move_control_point(PrimitiveToolOperation &ptd,
@@ -351,7 +346,8 @@ static void control_point_colors_and_sizes(const PrimitiveToolOperation &ptd,
 
   const int active_index = ptd.active_control_point_index;
   if (active_index != -1) {
-    sizes[active_index] *= 1.5;
+    // sizes[active_index] *= 1.5;
+    sizes[active_index] = ui_active_point_draw_size_px;
     colors[active_index] = math::interpolate(colors[active_index], color_gizmo_a, 0.5f);
   }
 }
@@ -1096,8 +1092,7 @@ static void primitive_scale_all(PrimitiveToolOperation &ptd,
     const float2 start_pos2 = point_2d_from_temp_index(ptd, point_index);
 
     const float2 pos2 = (start_pos2 - origin) * scale + origin;
-    const float3 pos = ptd.placement.project(pos2);
-    ptd.control_points[point_index] = pos;
+    ptd.control_points[point_index] = ptd.placement.project(pos2);
   }
   ptd.start_drag_position_2d = origin;
   ptd.end_drag_position_2d = end;
@@ -1116,14 +1111,16 @@ static void cage_handle_cps(PrimitiveToolOperation &ptd, const wmEvent *event)
   float2 offset = end - start;
   const int active_index = ptd.active_control_point_index;
 
-  const float3 pos = ptd.placement.project(active_pos);
-  ptd.control_points[ptd.active_control_point_index] = pos;
+  ptd.control_points[ptd.active_control_point_index] = ptd.placement.project(active_pos);
   ptd.start_drag_position_2d = start;
   ptd.end_drag_position_2d = active_pos;
 
   /* Individual corners and edges. */
   if (ptd.quad_mode || event->modifier & KM_ALT) {
     if (ELEM(active_index, cage_ne, cage_sw, cage_nw, cage_se)) {
+      if (event->modifier & KM_SHIFT) {
+        offset = snap_8_angles(offset);
+      }
       move_control_point(ptd, active_index, offset);
       return;
     }
@@ -1170,7 +1167,7 @@ static void cage_handle_cps(PrimitiveToolOperation &ptd, const wmEvent *event)
       r_offset = proj2 - proj1;
       move_control_point(ptd, cage_index(ptd, active_index + 2), r_offset);
 
-      set_control_point(ptd, cage_index(ptd, active_index), pos2);
+      ptd.control_points[cage_index(ptd, active_index)] = ptd.placement.project(pos2);
       save_control_point(ptd, cage_index(ptd, active_index + 4));
       return;
     }
@@ -1348,8 +1345,7 @@ static void grease_pencil_primitive_grab_update(PrimitiveToolOperation &ptd, con
         ptd, float2(event->mval), active_pos, ptd.active_control_point_index);
   }
 
-  const float3 pos = ptd.placement.project(active_pos);
-  ptd.control_points[ptd.active_control_point_index] = pos;
+  ptd.control_points[ptd.active_control_point_index] = ptd.placement.project(active_pos);
   ptd.start_drag_position_2d = start;
   ptd.end_drag_position_2d = active_pos;
 
@@ -1399,14 +1395,12 @@ static void grease_pencil_primitive_drag_update(PrimitiveToolOperation &ptd, con
       point_list.append(cp2);
       point_list.append(mp);
       active_pos = snap_2d_list(active_pos, active_pos, point_list);
-      const float3 pos = ptd.placement.project(active_pos);
-      ptd.control_points[ptd.active_control_point_index] = pos;
+      ptd.control_points[ptd.active_control_point_index] = ptd.placement.project(active_pos);
       return;
     }
     else if (primitive_is_multi_segment(ptd)) {
       active_pos = snap_8_angles(end - start);
-      const float3 pos = ptd.placement.project(active_pos);
-      ptd.control_points[ptd.active_control_point_index] = pos;
+      ptd.control_points[ptd.active_control_point_index] = ptd.placement.project(active_pos);
       return;
     }
   }
@@ -1415,14 +1409,11 @@ static void grease_pencil_primitive_drag_update(PrimitiveToolOperation &ptd, con
   if (event->modifier & KM_CTRL) {
     active_pos = snap_to_control_points(
         ptd, float2(event->mval), float2(event->mval), ptd.active_control_point_index);
-    const float3 pos = ptd.placement.project(active_pos);
-    ptd.control_points[ptd.active_control_point_index] = pos;
-
+    ptd.control_points[ptd.active_control_point_index] = ptd.placement.project(active_pos);
     return;
   }
 
-  const float3 pos = ptd.placement.project(start + dif);
-  ptd.control_points[ptd.active_control_point_index] = pos;
+  ptd.control_points[ptd.active_control_point_index] = ptd.placement.project(start + dif);
 }
 
 static float2 primitive_center_of_mass(const PrimitiveToolOperation &ptd)
@@ -1459,8 +1450,7 @@ static void grease_pencil_primitive_rotate_all_update(PrimitiveToolOperation &pt
   for (const int point_index : ptd.control_points.index_range()) {
     const float2 start_pos2 = point_2d_from_temp_index(ptd, point_index);
     const float2 pos2 = rotate_point(start_pos2, rotation, center_of_mass);
-    const float3 pos = ptd.placement.project(pos2);
-    ptd.control_points[point_index] = pos;
+    ptd.control_points[point_index] = ptd.placement.project(pos2);
   }
   ptd.start_drag_position_2d = center_of_mass;
   ptd.end_drag_position_2d = end;
@@ -1643,7 +1633,7 @@ static int grease_pencil_primitive_event_modal_map(bContext *C,
             const float2 a = point_2d_from_index(ptd, active_index + 1);
             const float2 b = point_2d_from_index(ptd, active_index - 1);
             const float2 fcp = rotate_point(cp, math::numbers::pi, math::midpoint(a, b));
-            set_control_point(ptd, active_index, fcp);
+            ptd.control_points[active_index] = ptd.placement.project(fcp);
             grease_pencil_primitive_save(ptd);
           }
         }
