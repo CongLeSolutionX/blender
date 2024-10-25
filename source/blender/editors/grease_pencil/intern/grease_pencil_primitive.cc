@@ -102,13 +102,8 @@ static constexpr float ui_point_hit_size_px = 20.0f;
 static constexpr float ui_point_max_hit_size_px = 600.0f;
 static constexpr float ui_point_secondary_max_hit_size_px = 200.0f;
 
-/* These three points are only used for `Circle` type. */
-static constexpr int control_point_first = 0;
-static constexpr int control_point_center = 1;
-static constexpr int control_point_last = 2;
-
-/* These points are only used for `Box` type. */
-/*
+/* These cage points are only used for `Box` and `Circle` type.
+ *
  * Clockwise from nw to w.
  *
  * +-----------+
@@ -120,15 +115,15 @@ static constexpr int control_point_last = 2;
  * +-----------+
  *
  */
-static constexpr int box_____nw = 0;
-static constexpr int box______n = 1;
-static constexpr int box_____ne = 2;
-static constexpr int box______e = 3;
-static constexpr int box_____se = 4;
-static constexpr int box______s = 5;
-static constexpr int box_____sw = 6;
-static constexpr int box______w = 7;
-static constexpr int box_center = 8;
+static constexpr int cage_nw = 0;
+static constexpr int cage__n = 1;
+static constexpr int cage_ne = 2;
+static constexpr int cage__e = 3;
+static constexpr int cage_se = 4;
+static constexpr int cage__s = 5;
+static constexpr int cage_sw = 6;
+static constexpr int cage__w = 7;
+static constexpr int cage_center = 8;
 
 struct PrimitiveToolOperation {
   ARegion *region;
@@ -233,13 +228,13 @@ static int control_points_per_segment(const PrimitiveToolOperation &ptd)
       return 1;
     }
     case PrimitiveType::Semicircle:
-    case PrimitiveType::Circle:
     case PrimitiveType::Arc: {
       return 2;
     }
     case PrimitiveType::Curve: {
       return 3;
     }
+    case PrimitiveType::Circle:
     case PrimitiveType::Box: {
       return 8;
     }
@@ -262,8 +257,8 @@ static bool primitive_is_multi_segment(const PrimitiveToolOperation &ptd)
 static ControlPointType get_control_point_type(const PrimitiveToolOperation &ptd, const int point)
 {
   BLI_assert(point != -1);
-  if (ptd.type == PrimitiveType::Box) {
-    if (ELEM(point, box______n, box______e, box______s, box______w, box_center)) {
+  if (primitive_is_cyclic(ptd)) {
+    if (ELEM(point, cage__n, cage__e, cage__s, cage__w, cage_center)) {
       return ControlPointType::JoinPoint;
     }
     else {
@@ -305,7 +300,7 @@ static void control_point_colors_and_sizes(const PrimitiveToolOperation &ptd,
     return;
   }
 
-  if (ptd.type == PrimitiveType::Box) {
+  if (primitive_is_cyclic(ptd)) {
     colors.fill(color_gizmo_primary);
     sizes.fill(size_primary);
 
@@ -319,16 +314,8 @@ static void control_point_colors_and_sizes(const PrimitiveToolOperation &ptd,
     }
 
     /* Set the center point's color. */
-    colors[box_center] = color_gizmo_b;
-    sizes[box_center] = size_secondary;
-  }
-  else if (ptd.type == PrimitiveType::Circle) {
-    colors.fill(color_gizmo_primary);
-    sizes.fill(size_primary);
-
-    /* Set the center point's color. */
-    colors[control_point_center] = color_gizmo_b;
-    sizes[control_point_center] = size_secondary;
+    colors[cage_center] = color_gizmo_b;
+    sizes[cage_center] = size_secondary;
   }
   else {
     colors.fill(color_gizmo_secondary);
@@ -505,7 +492,8 @@ static void primitive_calulate_curve_positions(PrimitiveToolOperation &ptd,
           for (const int i : IndexRange(subdivision + 1)) {
             const float t = theta_step * i + angle_offset;
             new_positions[i + segment_i * (subdivision + 1)] = center +
-                                                               radius * float2(cos(t), sin(t));
+                                                               radius * float2(math::cos(t),
+                                                                               math::sin(t));
           }
         }
       }
@@ -551,36 +539,48 @@ static void primitive_calulate_curve_positions(PrimitiveToolOperation &ptd,
       new_positions.last() = control_points.last();
       return;
     }
+    case PrimitiveType::Box:
     case PrimitiveType::Circle: {
-      const float2 center = control_points[control_point_center];
-      const float2 offset = control_points[control_point_first] - center;
-      for (const int i : new_positions.index_range()) {
-        const float t = i / float(new_points_num);
-        const float a = t * math::numbers::pi * 2.0f;
-        new_positions[i] = offset * float2(sinf(a), cosf(a)) + center;
-      }
-      return;
-    }
-    case PrimitiveType::Box: {
-      const float2 center = control_points[box_center];
-      const float2 nw = control_points[box_____nw];
-      const float2 ne = control_points[box_____ne];
-      const float2 se = control_points[box_____se];
-      const float2 sw = control_points[box_____sw];
-      /* Update dependent control poonts. */
-      ptd.control_points[box______e] = ptd.placement.project(math::midpoint(ne, se));
-      ptd.control_points[box______w] = ptd.placement.project(math::midpoint(nw, sw));
-      ptd.control_points[box______n] = ptd.placement.project(math::midpoint(nw, ne));
-      ptd.control_points[box______s] = ptd.placement.project(math::midpoint(sw, se));
-      const float2 center_of_mass = (nw + ne + sw + se) / 4.0f;
-      ptd.control_points[box_center] = ptd.placement.project(center_of_mass);
+      const float2 center = control_points[cage_center];
+      const float2 nw = control_points[cage_nw];
+      const float2 ne = control_points[cage_ne];
+      const float2 se = control_points[cage_se];
+      const float2 sw = control_points[cage_sw];
 
-      const float2 corners[4] = {nw, ne, se, sw};
-      for (const int i : new_positions.index_range()) {
-        const float t = math::mod(i / float(subdivision + 1), 1.0f);
-        const int point = int(i / (subdivision + 1));
-        const int point_next = math::mod(point + 1, 4);
-        new_positions[i] = math::interpolate(corners[point], corners[point_next], t);
+      const float2 n = math::midpoint(nw, ne);
+      const float2 e = math::midpoint(ne, se);
+      const float2 s = math::midpoint(sw, se);
+      const float2 w = math::midpoint(nw, sw);
+      /* Update dependent control points. */
+      ptd.control_points[cage__n] = ptd.placement.project(math::midpoint(nw, ne));
+      ptd.control_points[cage__e] = ptd.placement.project(math::midpoint(ne, se));
+      ptd.control_points[cage__s] = ptd.placement.project(math::midpoint(sw, se));
+      ptd.control_points[cage__w] = ptd.placement.project(math::midpoint(nw, sw));
+      const float2 center = (nw + ne + sw + se) / 4.0f;
+      ptd.control_points[cage_center] = ptd.placement.project(center);
+
+      const float2 corners[4] = {sw, nw, ne, se};
+
+      if (ptd.type == PrimitiveType::Box) {
+        for (const int i : new_positions.index_range()) {
+          const float t = math::mod(i / float(subdivision + 1), 1.0f);
+          const int point = int(i / (subdivision + 1));
+          const int point_next = math::mod(point + 1, 4);
+          new_positions[i] = math::interpolate(corners[point], corners[point_next], t);
+        }
+      }
+      else if (ptd.type == PrimitiveType::Circle) {
+        /* Map circle to cage via uv coordinates. */
+        for (const int i : new_positions.index_range()) {
+          const float t = i / float(new_points_num);
+          const float a = t * math::numbers::pi * 2.0f;
+          const float2 uv = float2(math::sin(a), math::cos(a)) * 0.5f + 0.5f;
+          float2 pos = corners[0] * (1 - uv[0]) * (1 - uv[1]);
+          pos += corners[1] * uv[0] * (1 - uv[1]);
+          pos += corners[2] * uv[0] * uv[1];
+          pos += corners[3] * (1 - uv[0]) * uv[1];
+          new_positions[i] = pos;
+        }
       }
       return;
     }
@@ -855,8 +855,9 @@ static void grease_pencil_primitive_status_indicators(bContext *C,
     }
   }
 
-  if (ptd.type == PrimitiveType::Box) {
-    header += fmt::format(IFACE_(", {}: square/quad mode"), get_modal_key_str(ModalKeyMode::Quad));
+  if (primitive_is_cyclic(ptd)) {
+    header += fmt::format(IFACE_(", {}: individual corner mode"),
+                          get_modal_key_str(ModalKeyMode::Quad));
   }
 
   header += fmt::format(IFACE_(", {}: grab, {}: rotate, {}: scale"),
@@ -1043,13 +1044,6 @@ static float2 snap_diagonals(float2 p)
   return sign(p) * float2(1.0f / numbers::sqrt2) * length(p);
 }
 
-/* Using Chebyshev distance instead of Euclidean. */
-static float2 snap_diagonals_box(float2 p)
-{
-  using namespace math;
-  return sign(p) * float2(std::max(abs(p[0]), abs(p[1])));
-}
-
 /* Snaps to the closest diagonal, horizontal or vertical. */
 static float2 snap_8_angles(float2 p)
 {
@@ -1057,15 +1051,6 @@ static float2 snap_8_angles(float2 p)
   /* sin(pi/8) or sin of 22.5 degrees.*/
   const float sin225 = 0.3826834323650897717284599840304f;
   return sign(p) * length(p) * normalize(sign(normalize(abs(p)) - sin225) + 1.0f);
-}
-
-/* Snaps to the closest 15 degrees. */
-static float2 snap_12_angles(float2 p)
-{
-  using namespace math;
-  /* sin(pi/12) or sin of 15 degrees.*/
-  const float sin15 = 0.2588190451f;
-  return sign(p) * length(p) * normalize(sign(normalize(abs(p)) - sin15) + 1.0f);
 }
 
 /* Snap angle to 15 degree intervals in radians. */
@@ -1122,21 +1107,21 @@ static void primitive_scale_all(PrimitiveToolOperation &ptd,
   ptd.end_drag_position_2d = end;
 }
 
-static int box_index(PrimitiveToolOperation &ptd, const int index)
+static int cage_index(PrimitiveToolOperation &ptd, const int index)
 {
   return math::mod_periodic(index, control_points_per_segment(ptd));
 }
 
-static void box_move_cps(PrimitiveToolOperation &ptd,
-                         const wmEvent *event,
-                         const int active_index,
-                         const float2 offset)
+static void cage_move_cps(PrimitiveToolOperation &ptd,
+                          const wmEvent *event,
+                          const int active_index,
+                          const float2 offset)
 {
   /* Scale. */
   if (event->modifier & KM_SHIFT) {
     const float2 pos = point_2d_from_temp_index(ptd, active_index);
-    const int origin_index = event->modifier & KM_ALT ? box_center :
-                                                        box_index(ptd, active_index + 4);
+    const int origin_index = event->modifier & KM_ALT ? cage_center :
+                                                        cage_index(ptd, active_index + 4);
     const float2 origin = point_2d_from_temp_index(ptd, origin_index);
     primitive_scale_all(ptd, pos, pos + offset, origin);
     return;
@@ -1144,44 +1129,44 @@ static void box_move_cps(PrimitiveToolOperation &ptd,
 
   /* Individual corners and edges. */
   if (ptd.quad_mode) {
-    if (ELEM(active_index, box_____ne, box_____sw, box_____nw, box_____se)) {
+    if (ELEM(active_index, cage_ne, cage_sw, cage_nw, cage_se)) {
       primitive_move_point(ptd, active_index, offset);
       return;
     }
-    else if (ELEM(active_index, box______n, box______s, box______w, box______e)) {
-      primitive_move_point(ptd, box_index(ptd, active_index + 1), offset);
-      primitive_move_point(ptd, box_index(ptd, active_index - 1), offset);
+    else if (ELEM(active_index, cage__n, cage__s, cage__w, cage__e)) {
+      primitive_move_point(ptd, cage_index(ptd, active_index + 1), offset);
+      primitive_move_point(ptd, cage_index(ptd, active_index - 1), offset);
       return;
     }
   }
   else {
     /* Corners and edges. */
-    if (ELEM(active_index, box_____ne, box_____sw, box_____nw, box_____se)) {
+    if (ELEM(active_index, cage_ne, cage_sw, cage_nw, cage_se)) {
       float2 pos = point_2d_from_temp_index(ptd, active_index) + offset;
-      const float2 opposite = point_2d_from_temp_index(ptd, box_index(ptd, active_index + 4));
-      const float2 cw = point_2d_from_temp_index(ptd, box_index(ptd, active_index + 2));
-      const float2 ccw = point_2d_from_temp_index(ptd, box_index(ptd, active_index - 2));
+      const float2 opposite = point_2d_from_temp_index(ptd, cage_index(ptd, active_index + 4));
+      const float2 cw = point_2d_from_temp_index(ptd, cage_index(ptd, active_index + 2));
+      const float2 ccw = point_2d_from_temp_index(ptd, cage_index(ptd, active_index - 2));
       float2 p_cw = math::project(pos, cw - opposite) - opposite;
       float2 p_ccw = math::project(pos, ccw - opposite) - opposite;
       closest_to_line_v2(p_cw, pos, cw, opposite);
       closest_to_line_v2(p_ccw, pos, ccw, opposite);
-      set_control_point(ptd, box_index(ptd, active_index + 2), p_cw);
-      set_control_point(ptd, box_index(ptd, active_index - 2), p_ccw);
-      set_control_point(ptd, box_index(ptd, active_index), pos);
+      set_control_point(ptd, cage_index(ptd, active_index + 2), p_cw);
+      set_control_point(ptd, cage_index(ptd, active_index - 2), p_ccw);
+      set_control_point(ptd, cage_index(ptd, active_index), pos);
       return;
     }
-    else if (ELEM(active_index, box______n, box______s, box______w, box______e)) {
+    else if (ELEM(active_index, cage__n, cage__s, cage__w, cage__e)) {
       float2 pos = point_2d_from_temp_index(ptd, active_index) + offset;
-      const float2 cw = point_2d_from_temp_index(ptd, box_index(ptd, active_index + 1));
-      const float2 cw2 = point_2d_from_temp_index(ptd, box_index(ptd, active_index + 3));
-      const float2 ccw = point_2d_from_temp_index(ptd, box_index(ptd, active_index - 1));
-      const float2 ccw2 = point_2d_from_temp_index(ptd, box_index(ptd, active_index - 2));
+      const float2 cw = point_2d_from_temp_index(ptd, cage_index(ptd, active_index + 1));
+      const float2 cw2 = point_2d_from_temp_index(ptd, cage_index(ptd, active_index + 3));
+      const float2 ccw = point_2d_from_temp_index(ptd, cage_index(ptd, active_index - 1));
+      const float2 ccw2 = point_2d_from_temp_index(ptd, cage_index(ptd, active_index - 2));
       float2 p_cw = math::project(pos, cw - cw2) - cw2;
       float2 p_ccw = math::project(pos, ccw - ccw2) - ccw2;
       closest_to_line_v2(p_cw, pos, cw, cw2);
       closest_to_line_v2(p_ccw, pos, ccw, ccw2);
-      set_control_point(ptd, box_index(ptd, active_index + 1), p_cw);
-      set_control_point(ptd, box_index(ptd, active_index - 1), p_ccw);
+      set_control_point(ptd, cage_index(ptd, active_index + 1), p_cw);
+      set_control_point(ptd, cage_index(ptd, active_index - 1), p_ccw);
       return;
     }
   }
@@ -1233,10 +1218,7 @@ static void grease_pencil_primitive_extruding_update(PrimitiveToolOperation &ptd
 
   /* Constrain control points. */
   if (event->modifier & KM_SHIFT) {
-    if (ptd.type == PrimitiveType::Box) {
-      offset = snap_diagonals(dif);  // snap_diagonals_box
-    }
-    else if (ptd.type == PrimitiveType::Circle) {
+    if (primitive_is_cyclic(ptd)) {
       offset = snap_diagonals(dif);
     }
     else { /* Line, Polyline, Arc, Semicircle and Curve. */
@@ -1272,15 +1254,16 @@ static void grease_pencil_primitive_extruding_update(PrimitiveToolOperation &ptd
       ptd.control_points.last(0) = ptd.placement.project(end);
       break;
     }
-    case PrimitiveType::Box: {
+    case PrimitiveType::Box:
+    case PrimitiveType::Circle: {
       const float2 nw = center + offset;
       const float2 se = center - offset;
       const float2 sw = center + float2(offset.y, -offset.x);
       const float2 ne = center + float2(-offset.y, offset.x);
-      ptd.control_points[box_____ne] = ptd.placement.project(ne);
-      ptd.control_points[box_____sw] = ptd.placement.project(sw);
-      ptd.control_points[box_____se] = ptd.placement.project(se);
-      ptd.control_points[box_____nw] = ptd.placement.project(nw);
+      ptd.control_points[cage_ne] = ptd.placement.project(ne);
+      ptd.control_points[cage_sw] = ptd.placement.project(sw);
+      ptd.control_points[cage_se] = ptd.placement.project(se);
+      ptd.control_points[cage_nw] = ptd.placement.project(nw);
       break;
     }
     default: {
@@ -1350,9 +1333,9 @@ static void grease_pencil_primitive_grab_update(PrimitiveToolOperation &ptd, con
     return;
   }
 
-  if (ptd.type == PrimitiveType::Box) {
+  if (primitive_is_cyclic(ptd)) {
     /* If the center point is been grabbed, move all points. */
-    if (ptd.active_control_point_index == box_center) {
+    if (ptd.active_control_point_index == cage_center) {
       grease_pencil_primitive_drag_all_update(ptd, event);
       return;
     }
@@ -1362,27 +1345,10 @@ static void grease_pencil_primitive_grab_update(PrimitiveToolOperation &ptd, con
       ptd.start_drag_position_2d = start;
       ptd.end_drag_position_2d = active_pos;
       float2 dif = active_pos - start;
-      box_move_cps(ptd, event, ptd.active_control_point_index, dif);
+      cage_move_cps(ptd, event, ptd.active_control_point_index, dif);
       return;
     }
   }
-
-  /* If the center point is been grabbed, move all points. */
-  if (ptd.active_control_point_index == control_point_center) {
-    grease_pencil_primitive_drag_all_update(ptd, event);
-    return;
-  }
-
-  const int other_point = ptd.active_control_point_index == control_point_first ?
-                              control_point_last :
-                              control_point_first;
-
-  /* Get the location of the other control point.*/
-  const float2 other_point_2d = point_2d_from_temp_index(ptd, other_point);
-
-  /* Set the center point to between the first and last point. */
-  ptd.control_points[control_point_center] = ptd.placement.project(
-      (other_point_2d + float2(event->mval)) / 2.0f);
 }
 
 static void grease_pencil_primitive_drag_update(PrimitiveToolOperation &ptd, const wmEvent *event)
@@ -1390,16 +1356,15 @@ static void grease_pencil_primitive_drag_update(PrimitiveToolOperation &ptd, con
   BLI_assert(ptd.active_control_point_index != -1);
 
   const float2 start = point_2d_from_temp_index(ptd, ptd.active_control_point_index);
-  // const float2 start = ptd.start_position_2d;
   const float2 end = float2(event->mval);
   float2 active_pos = end;
   const float2 dif = end - start;
   ptd.start_drag_position_2d = start;
   ptd.end_drag_position_2d = active_pos;
 
-  if (ptd.type == PrimitiveType::Box) {
+  if (primitive_is_cyclic(ptd)) {
     /* If the center point is been grabbed, move all points. */
-    if (ptd.active_control_point_index == box_center) {
+    if (ptd.active_control_point_index == cage_center) {
       grease_pencil_primitive_drag_all_update(ptd, event);
       return;
     }
@@ -1409,7 +1374,7 @@ static void grease_pencil_primitive_drag_update(PrimitiveToolOperation &ptd, con
       ptd.start_drag_position_2d = start;
       ptd.end_drag_position_2d = active_pos;
       float2 dif = active_pos - start;
-      box_move_cps(ptd, event, ptd.active_control_point_index, dif);
+      cage_move_cps(ptd, event, ptd.active_control_point_index, dif);
       return;
     }
   }
@@ -1458,12 +1423,8 @@ static void grease_pencil_primitive_drag_update(PrimitiveToolOperation &ptd, con
 
 static float2 primitive_center_of_mass(const PrimitiveToolOperation &ptd)
 {
-  if (ptd.type == PrimitiveType::Box) {
-    return point_2d_from_temp_index(ptd, box_center);
-  }
-
-  if (ptd.type == PrimitiveType::Circle) {
-    return point_2d_from_temp_index(ptd, control_point_center);
+  if (primitive_is_cyclic(ptd)) {
+    return point_2d_from_temp_index(ptd, cage_center);
   }
 
   float2 center_of_mass = float2(0.0f, 0.0f);
@@ -1483,7 +1444,6 @@ static void grease_pencil_primitive_rotate_all_update(PrimitiveToolOperation &pt
   const float2 center_of_mass = primitive_center_of_mass(ptd);
 
   const float2 end_ = end - center_of_mass;
-
   const float2 start_ = start - center_of_mass;
   float rotation = math::atan2(start_[0], start_[1]) - math::atan2(end_[0], end_[1]);
 
@@ -1511,6 +1471,7 @@ static void grease_pencil_primitive_scale_all_update(PrimitiveToolOperation &ptd
   primitive_scale_all(ptd, start, end, center_of_mass);
 }
 
+/* Return nearest control point to the cursor. */
 static int primitive_check_ui_hover(PrimitiveToolOperation &ptd, const wmEvent *event)
 {
   const int ui_hit_point_size = (ptd.type == PrimitiveType::Semicircle) ?
@@ -1528,6 +1489,8 @@ static int primitive_check_ui_hover(PrimitiveToolOperation &ptd, const wmEvent *
     /* If the mouse is over a control point. */
     if (distance_squared <= radius_sq) {
       ptd.last_active_control_point_index = point;
+      ptd.active_control_point_index = point;
+      ptd.reverse_extrude = (point == 0);
       return point;
     }
 
@@ -1545,9 +1508,12 @@ static int primitive_check_ui_hover(PrimitiveToolOperation &ptd, const wmEvent *
 
   if (closest_point != -1) {
     ptd.last_active_control_point_index = closest_point;
+    ptd.active_control_point_index = closest_point;
+    ptd.reverse_extrude = (closest_point == 0);
     return closest_point;
   }
 
+  ptd.active_control_point_index = -1;
   return -1;
 }
 
@@ -1563,8 +1529,6 @@ static void grease_pencil_primitive_cursor_update(bContext *C,
   }
 
   const int ui_id = primitive_check_ui_hover(ptd, event);
-  ptd.reverse_extrude = (ui_id == 0);
-  ptd.active_control_point_index = ui_id;
   if (ui_id == -1) {
     if (ptd.type == PrimitiveType::Polyline) {
       WM_cursor_modal_set(win, WM_CURSOR_CROSS);
@@ -1683,7 +1647,7 @@ static int grease_pencil_primitive_event_modal_map(bContext *C,
       return OPERATOR_RUNNING_MODAL;
     }
     case int(ModalKeyMode::Quad): {
-      if (ELEM(ptd.type, PrimitiveType::Box)) {
+      if (primitive_is_cyclic(ptd)) {
         ptd.quad_mode = !ptd.quad_mode;
       }
       return OPERATOR_RUNNING_MODAL;
@@ -1751,8 +1715,6 @@ static int grease_pencil_primitive_mouse_event(PrimitiveToolOperation &ptd, cons
 
   if (ptd.mode == OperatorMode::Idle && event->val == KM_PRESS) {
     const int ui_id = primitive_check_ui_hover(ptd, event);
-    ptd.active_control_point_index = ui_id;
-    ptd.reverse_extrude = (ui_id == 0);
     if (ui_id == -1) {
       if (ptd.type != PrimitiveType::Polyline) {
         ptd.start_position_2d = float2(event->mval);
@@ -1789,8 +1751,7 @@ static int grease_pencil_primitive_mouse_event(PrimitiveToolOperation &ptd, cons
     ptd.mode = OperatorMode::Extruding;
     grease_pencil_primitive_save(ptd);
 
-    ptd.start_position_2d = ED_view3d_project_float_v2_m4(
-        ptd.vc.region, ptd.control_points[ptd.active_control_point_index], ptd.projection);
+    ptd.start_position_2d = point_2d_from_index(ptd, ptd.active_control_point_index);
     const float3 pos = ptd.placement.project(float2(event->mval));
 
     /* If we have only two points and they're the same then don't extrude new a point. */
