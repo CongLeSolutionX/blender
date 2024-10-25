@@ -541,16 +541,10 @@ static void primitive_calulate_curve_positions(PrimitiveToolOperation &ptd,
     }
     case PrimitiveType::Box:
     case PrimitiveType::Circle: {
-      const float2 center = control_points[cage_center];
       const float2 nw = control_points[cage_nw];
       const float2 ne = control_points[cage_ne];
       const float2 se = control_points[cage_se];
       const float2 sw = control_points[cage_sw];
-
-      const float2 n = math::midpoint(nw, ne);
-      const float2 e = math::midpoint(ne, se);
-      const float2 s = math::midpoint(sw, se);
-      const float2 w = math::midpoint(nw, sw);
       /* Update dependent control points. */
       ptd.control_points[cage__n] = ptd.placement.project(math::midpoint(nw, ne));
       ptd.control_points[cage__e] = ptd.placement.project(math::midpoint(ne, se));
