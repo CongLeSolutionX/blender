@@ -1129,16 +1129,13 @@ static void cage_handle_cps(PrimitiveToolOperation &ptd, const wmEvent *event)
     }
     else if (ELEM(active_index, cage__n, cage__s, cage__w, cage__e)) {
       if (event->modifier & KM_SHIFT) {
-        const float2 center = point_2d_from_temp_index(ptd, cage_center);
-        const float2 edge = point_2d_from_temp_index(ptd, cage_index(ptd, active_index));
-        float2 offset2;
-        closest_to_line_v2(offset2, end, center, edge);
-        offset = offset2 - edge;
+        offset = snap_8_angles(offset);
       }
       move_control_point(ptd, cage_index(ptd, active_index + 1), offset);
       move_control_point(ptd, cage_index(ptd, active_index - 1), offset);
       save_control_point(ptd, cage_index(ptd, active_index + 3));
       save_control_point(ptd, cage_index(ptd, active_index - 3));
+      ptd.end_drag_position_2d = start + offset;
       return;
     }
   }
@@ -1157,7 +1154,7 @@ static void cage_handle_cps(PrimitiveToolOperation &ptd, const wmEvent *event)
     if (ELEM(active_index, cage_ne, cage_sw, cage_nw, cage_se)) {
       /* Handle as two edges rather than corner. */
       const float2 pos = point_2d_from_temp_index(ptd, active_index);
-      const float2 pos2 = pos + offset;                
+      const float2 pos2 = pos + offset;
       const float2 opposite = point_2d_from_temp_index(ptd, cage_index(ptd, active_index + 4));
       const float2 center = point_2d_from_temp_index(ptd, cage_center);
 
@@ -1186,6 +1183,7 @@ static void cage_handle_cps(PrimitiveToolOperation &ptd, const wmEvent *event)
       move_control_point(ptd, cage_index(ptd, active_index - 1), offset2 - edge);
       save_control_point(ptd, cage_index(ptd, active_index + 3));
       save_control_point(ptd, cage_index(ptd, active_index - 3));
+
       return;
     }
   }
