@@ -186,6 +186,11 @@ bool insert_keyframe_direct(ReportList *reports,
                             eInsertKeyFlags flag);
 
 /**
+ * Ensure that there is a slot, layer, and keyframe strip on that layer, for keying.
+ */
+std::pair<Layer *, Slot *> prep_action_layer_for_keying(Action &action, ID &animated_id);
+
+/**
  * \brief Main Delete Key-Framing API call.
  *
  * Use this to delete keyframe on current frame for relevant channel.

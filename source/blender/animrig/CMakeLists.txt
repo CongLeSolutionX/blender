@@ -25,6 +25,7 @@ set(SRC
   intern/action_legacy.cc
   intern/action_runtime.cc
   intern/action_selection.cc
+  intern/asset.cc
   intern/anim_rna.cc
   intern/animdata.cc
   intern/bone_collections.cc

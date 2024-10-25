@@ -91,6 +91,7 @@
 
 #include "ANIM_action.hh"
 #include "ANIM_animdata.hh"
+#include "ANIM_asset.hh"
 
 #include "MOD_nodes.hh"
 
@@ -3008,6 +3009,8 @@ std::string drop_action_tooltip(bContext *C, const char *name, const int mval[2]
 
 static int drop_action_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
+  using namespace blender::animrig::asset;
+
   Main *bmain = CTX_data_main(C);
   Object *ob = ED_view3d_give_object_under_cursor(C, event->mval);
   if (ob == nullptr) {
@@ -3020,13 +3023,20 @@ static int drop_action_invoke(bContext *C, wmOperator *op, const wmEvent *event)
     return OPERATOR_CANCELLED;
   }
 
-  if (!blender::animrig::assign_action(action, ob->id)) {
-    BKE_reportf(op->reports,
-                RPT_ERROR,
-                "Could not assign Action %s to %s",
-                action->id.name + 2,
-                ob->id.name + 2);
-    return OPERATOR_CANCELLED;
+  const Scene *scene = CTX_data_scene(C);
+  const float scene_frame = BKE_scene_frame_get(scene);
+  const InjectActionResult result = inject_action(*bmain, ob->id, action->wrap(), scene_frame);
+
+  switch (result) {
+    case InjectActionResult::OK:
+      break;
+    case InjectActionResult::NO_SUITABLE_SLOT:
+      BKE_reportf(op->reports,
+                  RPT_ERROR,
+                  "Asset %s has no slot with animation for %s",
+                  action->id.name + 2,
+                  ob->id.name + 2);
+      return OPERATOR_CANCELLED;
   }
 
   WM_event_add_notifier(C, NC_ANIMATION | ND_NLA_ACTCHANGE, &ob->id);

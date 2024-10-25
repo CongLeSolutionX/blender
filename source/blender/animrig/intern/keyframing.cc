@@ -864,7 +864,7 @@ static SingleKeyingResult insert_key_layer(
       do_cyclic ? std::optional(action.get_frame_range()) : std::nullopt);
 }
 
-static std::pair<Layer *, Slot *> prep_action_layer_for_keying(Action &action, ID &animated_id)
+std::pair<Layer *, Slot *> prep_action_layer_for_keying(Action &action, ID &animated_id)
 {
   BLI_assert(action.is_action_layered());
   BLI_assert_msg(

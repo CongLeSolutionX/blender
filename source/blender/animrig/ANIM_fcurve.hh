@@ -157,4 +157,7 @@ void bake_fcurve(FCurve *fcu, blender::int2 range, float step, BakeCurveRemove r
  */
 void bake_fcurve_segments(FCurve *fcu);
 
+bool foreach_fcurve_key(FCurve *fcurve,
+                        FunctionRef<bool(FCurve &, int index, BezTriple &)> callback);
+
 }  // namespace blender::animrig
