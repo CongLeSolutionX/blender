@@ -25,7 +25,7 @@ void main()
 
       ShadowTileData tile = shadow_tile_unpack(tiles_buf[tile_index]);
       if (tile.is_used && !tile.is_allocated) {
-        shadow_page_alloc(tile);
+        shadow_page_alloc(pages_free_buf, tile);
         tiles_buf[tile_index] = shadow_tile_pack(tile);
       }
 
