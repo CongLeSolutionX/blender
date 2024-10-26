@@ -266,7 +266,7 @@ def main():
         SpecMeshTest(
             "PlaneFillGridReplaceExistingTris", "testPlaneFillGridReplaceExisting",
             "expectedPlaneFillGridReplaceExistingTris",
-            [OperatorSpecEditMode("fill_grid", {}, "EDGE", {44, 60, 45, 68, 43, 75, 76, 73, 74, 70, 33, 59, 35, 67 })],
+            [OperatorSpecEditMode("fill_grid", {}, "EDGE", {44, 60, 45, 68, 43, 75, 76, 73, 74, 70, 33, 59, 35, 67})],
         ),
         SpecMeshTest(
             "PlaneFillGridReplaceExistingQuads", "testPlaneFillGridReplaceExisting",
