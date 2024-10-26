@@ -30,26 +30,12 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_output<decl::Int>("Weighed Difference Sum").field_source_reference_all();
 }
 
-static void invert_permutation(const Span<int> permutation, MutableSpan<int> reverse)
-{
-  BLI_assert(permutation.size() == reverse.size());
-  threading::parallel_for(permutation.index_range(), 2048, [&](const IndexRange range) {
-    for (const int64_t i : range) {
-      reverse[permutation[i]] = i;
-    }
-  });
-}
-
-static void sort_indices(const Span<float> values, MutableSpan<int> indices)
+static void akdt_recursivly_build(std::array<Span<float>, 3> components, MutableSpan<int> indices)
 {
   std::sort(indices.begin(), indices.end(), [&](const int a, const int b) {
-    return values[a] < values[b];
+    return components[0][a] < components[0][b];
   });
-}
 
-static void kdt_recursivly(std::array<Span<float>, 3> components, MutableSpan<int> indices)
-{
-  sort_indices(components[0], indices);
   if (indices.size() < 3) {
     return;
   }
@@ -60,7 +46,7 @@ static void kdt_recursivly(std::array<Span<float>, 3> components, MutableSpan<in
   kdt_recursivly(components, indices.drop_front(indices.size() / 2));
 }
 
-static Array<int> kdt_from_positions(const Span<float3> positions)
+static Array<int> akdt_from_positions(const Span<float3> positions)
 {
   Array<float> x_position_component(positions.size());
   Array<float> y_position_component(positions.size());
@@ -84,10 +70,10 @@ static Array<int> kdt_from_positions(const Span<float3> positions)
 
   Array<int> indices(positions.size());
   array_utils::fill_index_range<int>(indices);
-  kdt_recursivly({x_position_component.as_span(),
-                  y_position_component.as_span(),
-                  z_position_component.as_span()},
-                 indices);
+  akdt_recursivly_build({x_position_component.as_span(),
+                         y_position_component.as_span(),
+                         z_position_component.as_span()},
+                        indices);
 
   return indices;
 }
@@ -119,7 +105,7 @@ class DifferenceSumFieldInput final : public bke::GeometryFieldInput {
     const VArraySpan<float3> positions = evaluator.get_evaluated<float3>(0);
     const VArraySpan<float3> values = evaluator.get_evaluated<float3>(1);
 
-    const Array<int> indices = kdt_from_positions(positions);
+    const Array<int> indices = akdt_from_positions(positions);
 
     return VArray<int>::ForContainer(std::move(indices));
   }
