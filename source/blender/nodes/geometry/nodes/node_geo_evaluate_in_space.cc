@@ -3,11 +3,11 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "BLI_array.hh"
-#include "BLI_math_bits.h"
 #include "BLI_array_utils.hh"
 #include "BLI_index_mask.hh"
-#include "BLI_virtual_array.hh"
+#include "BLI_math_bits.h"
 #include "BLI_task.hh"
+#include "BLI_virtual_array.hh"
 
 #include "node_geometry_util.hh"
 
@@ -20,7 +20,11 @@ static void node_declare(NodeDeclarationBuilder &b)
 
   b.add_input<decl::Int>("Power").default_value(2);
 
-  b.add_input<decl::Float>("Precision").subtype(PROP_FACTOR).min(0.0f).max(1.0f).default_value(0.5f);
+  b.add_input<decl::Float>("Precision")
+      .subtype(PROP_FACTOR)
+      .min(0.0f)
+      .max(1.0f)
+      .default_value(0.5f);
 
   b.add_output<decl::Vector>("Weighted Sum").field_source_reference_all();
   b.add_output<decl::Int>("Weighed Difference Sum").field_source_reference_all();
@@ -36,78 +40,54 @@ static void invert_permutation(const Span<int> permutation, MutableSpan<int> rev
   });
 }
 
-static uint64_t map_bits_to_x4(uint64_t bits)
+static void sort_indices(const Span<float> values, MutableSpan<int> indices)
 {
-  BLI_assert((bits & (~0b00000000'00000000'00000000'00000000'00000000'00000000'11111111'11111111)) == 0);
-  bits |= bits << (8 * 3);
-  bits &= 0b00000000'00000000'00000000'11111111'00000000'00000000'00000000'11111111;
-  bits |= bits << (4 * 3);
-  bits &= 0b00000000'00001111'00000000'00001111'00000000'00001111'00000000'00001111;
-  bits |= bits << (2 * 3);
-  bits &= 0b00000011'00000011'00000011'00000011'00000011'00000011'00000011'00000011;
-  bits |= bits << (1 * 3);
-  bits &= 0b00010001'00010001'00010001'00010001'00010001'00010001'00010001'00010001;
-  return bits;
+  std::sort(indices.begin(), indices.end(), [&](const int a, const int b) {
+    return values[a] < values[b];
+  });
+}
+
+static void kdt_recursivly(std::array<Span<float>, 3> components, MutableSpan<int> indices)
+{
+  sort_indices(components[0], indices);
+  if (indices.size() < 3) {
+    return;
+  }
+
+  std::rotate(components.begin(), components.begin() + 1, components.end());
+
+  kdt_recursivly(components, indices.take_front(indices.size() / 2));
+  kdt_recursivly(components, indices.drop_front(indices.size() / 2));
 }
 
 static Array<int> kdt_from_positions(const Span<float3> positions)
 {
-  Array<int> x_axis_lookup_indices(positions.size());
-  Array<int> y_axis_lookup_indices(positions.size());
-  Array<int> z_axis_lookup_indices(positions.size());
+  Array<float> x_position_component(positions.size());
+  Array<float> y_position_component(positions.size());
+  Array<float> z_position_component(positions.size());
 
-  {
-    Array<int> x_axis_indices(positions.size());
-    Array<int> y_axis_indices(positions.size());
-    Array<int> z_axis_indices(positions.size());
-
-    array_utils::fill_index_range<int>(x_axis_indices);
-    array_utils::fill_index_range<int>(y_axis_indices);
-    array_utils::fill_index_range<int>(z_axis_indices);
-
-    std::sort(x_axis_indices.begin(), x_axis_indices.end(), [&](const int a, const int b) { return positions[a].x < positions[b].x; });
-    std::sort(y_axis_indices.begin(), y_axis_indices.end(), [&](const int a, const int b) { return positions[a].y < positions[b].y; });
-    std::sort(z_axis_indices.begin(), z_axis_indices.end(), [&](const int a, const int b) { return positions[a].z < positions[b].z; });
-
-    invert_permutation(x_axis_indices, x_axis_lookup_indices);
-    invert_permutation(y_axis_indices, y_axis_lookup_indices);
-    invert_permutation(z_axis_indices, z_axis_lookup_indices);
-  }
+  threading::parallel_for(positions.index_range(), 8192, [&](const IndexRange range) {
+    const Span<float3> src_range = positions.slice(range);
+    std::transform(src_range.begin(),
+                   src_range.end(),
+                   x_position_component.begin() + range.start(),
+                   [](const float3 &position) { return position.x; });
+    std::transform(src_range.begin(),
+                   src_range.end(),
+                   y_position_component.begin() + range.start(),
+                   [](const float3 &position) { return position.y; });
+    std::transform(src_range.begin(),
+                   src_range.end(),
+                   z_position_component.begin() + range.start(),
+                   [](const float3 &position) { return position.z; });
+  });
 
   Array<int> indices(positions.size());
   array_utils::fill_index_range<int>(indices);
-  
-  std::sort(indices.begin(), indices.end(), [&](const int a, const int b) {
-    const uint32_t a_x_bits = x_axis_lookup_indices[a];
-    const uint32_t a_y_bits = y_axis_lookup_indices[a];
-    const uint32_t a_z_bits = z_axis_lookup_indices[a];
-
-    const uint32_t b_x_bits = x_axis_lookup_indices[b];
-    const uint32_t b_y_bits = y_axis_lookup_indices[b];
-    const uint32_t b_z_bits = z_axis_lookup_indices[b];
-
-    const uint64_t a_top_bits = (map_bits_to_x4(a_x_bits >> 16) << 0) |
-                                (map_bits_to_x4(a_y_bits >> 16) << 1) |
-                                (map_bits_to_x4(a_z_bits >> 16) << 2);
-
-    const uint64_t b_top_bits = (map_bits_to_x4(b_x_bits >> 16) << 0) |
-                                (map_bits_to_x4(b_y_bits >> 16) << 1) |
-                                (map_bits_to_x4(b_z_bits >> 16) << 2);
-
-    if (LIKELY(a_top_bits != b_top_bits)) {
-      return a_top_bits < b_top_bits;
-    }
-
-    const uint64_t a_bottom_bits = (map_bits_to_x4(a_x_bits & 0b11111111'11111111) << 0) |
-                                   (map_bits_to_x4(a_y_bits & 0b11111111'11111111) << 1) |
-                                   (map_bits_to_x4(a_z_bits & 0b11111111'11111111) << 2);
-
-    const uint64_t b_bottom_bits = (map_bits_to_x4(b_x_bits & 0b11111111'11111111) << 0) |
-                                   (map_bits_to_x4(b_y_bits & 0b11111111'11111111) << 1) |
-                                   (map_bits_to_x4(b_z_bits & 0b11111111'11111111) << 2);
-
-    return a_bottom_bits < b_bottom_bits;
-  });
+  kdt_recursivly({x_position_component.as_span(),
+                  y_position_component.as_span(),
+                  z_position_component.as_span()},
+                 indices);
 
   return indices;
 }
@@ -158,7 +138,9 @@ static void node_geo_exec(GeoNodeExecParams params)
   Field<float3> value_field = params.extract_input<Field<float3>>("Value");
 
   if (params.output_is_required("Weighed Difference Sum")) {
-    params.set_output("Weighed Difference Sum", Field<int>(std::make_shared<DifferenceSumFieldInput>(position_field, value_field)));
+    params.set_output(
+        "Weighed Difference Sum",
+        Field<int>(std::make_shared<DifferenceSumFieldInput>(position_field, value_field)));
   }
 
   if (params.output_is_required("Weighted Sum")) {
