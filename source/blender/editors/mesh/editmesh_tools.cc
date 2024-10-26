@@ -4753,9 +4753,14 @@ static bool edbm_fill_grid_prepare(BMesh *bm, int offset, int *span_p, const boo
 static bool edbm_fill_grid_delete_existing_faces(BMesh *bm)
 {
   bool faces_deleted = false;
-  BM_mesh_elem_hflag_disable_all(bm, BM_FACE | BM_EDGE, BM_ELEM_TAG, false);
 
+  // Clear ELEM_TAG on faces.  Edges were already cleared prior to this.
   BMIter iter;
+  BMFace *f;
+  BM_ITER_MESH (f, &iter, bm, BM_FACES_OF_MESH) {
+    BM_elem_flag_disable(f, BM_ELEM_TAG);
+  }
+
   BMEdge *e;
   BM_ITER_MESH (e, &iter, bm, BM_EDGES_OF_MESH) {
 
@@ -4831,10 +4836,18 @@ static int edbm_fill_grid_exec(bContext *C, wmOperator *op)
 
       offset = RNA_property_int_get(op->ptr, prop_offset);
 
-      if (edbm_fill_grid_delete_existing_faces(em->bm)) {
-        faces_deleted = true;
-        totedge_orig = em->bm->totedge;
-        totface_orig = em->bm->totface;
+      BMEdge *e;
+      BMIter iter;
+      BM_ITER_MESH (e, &iter, em->bm, BM_EDGES_OF_MESH) {
+        BM_elem_flag_disable(e, BM_ELEM_TAG);
+      }
+
+      if (em->bm->totfacesel != 0) {
+        if (edbm_fill_grid_delete_existing_faces(em->bm)) {
+          faces_deleted = true;
+          totedge_orig = em->bm->totedge;
+          totface_orig = em->bm->totface;
+        }
       }
 
       /* in simple cases, move selection for tags, but also support more advanced cases */
