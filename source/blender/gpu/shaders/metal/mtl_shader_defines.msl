@@ -1176,3 +1176,6 @@ RESHAPE(float3x3, float3x4, m[0].xyz, m[1].xyz, m[2].xyz)
 #define _enum_end \
   } \
   ;
+
+#define CONCAT_(_a, _b) _a##_b
+#define CONCAT(_a, _b) CONCAT_(_a, _b)

@@ -265,8 +265,10 @@ static void print_resource(std::ostream &os, const ShaderCreateInfo::Resource &r
     }
     case ShaderCreateInfo::Resource::BindType::STORAGE_BUFFER: {
       int64_t array_offset = res.storagebuf.name.find_first_of("[");
-      bool writeable = (res.storagebuf.qualifiers & shader::Qualifier::WRITE) ==
-                       shader::Qualifier::WRITE;
+      StringRef name_no_array = (array_offset == -1) ? res.storagebuf.name :
+                                                       res.storagebuf.name.substr(0, array_offset);
+      bool readable = bool(res.storagebuf.qualifiers & shader::Qualifier::READ);
+      bool writeable = bool(res.storagebuf.qualifiers & shader::Qualifier::WRITE);
       const char *memory_scope = ((writeable) ? "device " : "constant ");
       if (array_offset == -1) {
         /* Create local class member as device pointer reference to bound SSBO.
@@ -282,8 +284,18 @@ static void print_resource(std::ostream &os, const ShaderCreateInfo::Resource &r
       else {
         /* For arrays, we can directly provide the constant access pointer, as the array
          * syntax will de-reference this at the correct fetch index. */
-        StringRef name_no_array = StringRef(res.storagebuf.name.c_str(), array_offset);
         os << memory_scope << res.storagebuf.type_name << " *" << name_no_array << ";\n";
+      }
+      std::string buf_slot = "BUF_" + std::to_string(res.slot);
+      const char *array_suffix = (array_offset == -1 ? "" : "_array");
+      os << "#define " << buf_slot << " __" << name_no_array << "\n";
+      os << "#define " << buf_slot << "_RES " << name_no_array << "\n";
+      os << "#define " << buf_slot << "_TYPE_" << res.storagebuf.type_name << array_suffix << "\n";
+      if (readable) {
+        os << "#define " << buf_slot << "_QUAL_read\n";
+      }
+      if (writeable) {
+        os << "#define " << buf_slot << "_QUAL_write\n";
       }
       break;
     }
