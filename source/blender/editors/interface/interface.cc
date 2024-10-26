@@ -1705,7 +1705,11 @@ static bool ui_but_icon_extra_is_visible_search_eyedropper(uiBut *but)
     return false;
   }
 
-  StructRNA *type = RNA_property_pointer_type(&but->rnapoin, but->rnaprop);
+  uiButSearch *search_but = static_cast<uiButSearch *>(but);
+  StructRNA *type = RNA_property_type(but->rnaprop) == PROP_STRING && search_but->rnasearchprop ?
+                        RNA_property_pointer_type(&search_but->rnasearchpoin,
+                                                  search_but->rnasearchprop) :
+                        RNA_property_pointer_type(&but->rnapoin, but->rnaprop);
   const short idcode = RNA_type_to_ID_code(type);
 
   return ((but->editstr == nullptr) && (idcode == ID_OB || OB_DATA_SUPPORT_ID(idcode)));

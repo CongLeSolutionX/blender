@@ -48,6 +48,8 @@
 struct DataDropper {
   PointerRNA ptr;
   PropertyRNA *prop;
+  PointerRNA str_search_ptr;
+  PropertyRNA *str_search_prop;
   short idcode;
   const char *idcode_name;
   bool is_undo;
@@ -82,10 +84,23 @@ static int datadropper_init(bContext *C, wmOperator *op)
 
   uiBut *but = UI_context_active_but_prop_get(C, &ddr->ptr, &ddr->prop, &index_dummy);
 
-  if ((ddr->ptr.data == nullptr) || (ddr->prop == nullptr) ||
-      (RNA_property_editable(&ddr->ptr, ddr->prop) == false) ||
-      (RNA_property_type(ddr->prop) != PROP_POINTER))
-  {
+  bool invalid_prop = (ddr->ptr.data == nullptr) || (ddr->prop == nullptr) ||
+                      (RNA_property_editable(&ddr->ptr, ddr->prop) == false);
+
+  if (!invalid_prop) {
+    const PropertyType prop_type = RNA_property_type(ddr->prop);
+    if (prop_type == PROP_STRING) {
+      uiButSearch *search_but = static_cast<uiButSearch *>(but);
+      ddr->str_search_ptr = search_but->rnasearchpoin;
+      ddr->str_search_prop = search_but->rnasearchprop;
+      invalid_prop = (ddr->str_search_ptr.data == nullptr) || (ddr->str_search_prop == nullptr);
+    }
+    else {
+      invalid_prop = prop_type != PROP_POINTER;
+    }
+  }
+
+  if (invalid_prop) {
     MEM_delete(ddr);
     return false;
   }
@@ -98,15 +113,30 @@ static int datadropper_init(bContext *C, wmOperator *op)
   ddr->draw_handle_pixel = ED_region_draw_cb_activate(
       art, datadropper_draw_cb, ddr, REGION_DRAW_POST_PIXEL);
 
-  type = RNA_property_pointer_type(&ddr->ptr, ddr->prop);
+  type = ddr->str_search_prop ?
+             RNA_property_pointer_type(&ddr->str_search_ptr, ddr->str_search_prop) :
+             RNA_property_pointer_type(&ddr->ptr, ddr->prop);
   ddr->idcode = RNA_type_to_ID_code(type);
   BLI_assert(ddr->idcode != 0);
   /* Note we can translate here (instead of on draw time),
    * because this struct has very short lifetime. */
   ddr->idcode_name = TIP_(BKE_idtype_idcode_to_name(ddr->idcode));
 
-  const PointerRNA ptr = RNA_property_pointer_get(&ddr->ptr, ddr->prop);
-  ddr->init_id = ptr.owner_id;
+  if (ddr->str_search_prop) {
+    if (RNA_property_string_length(&ddr->ptr, ddr->prop) + 1 <= (MAX_ID_NAME - 2)) {
+      char id_name[MAX_ID_NAME - 2];
+      RNA_property_string_get(&ddr->ptr, ddr->prop, id_name);
+
+      PointerRNA ptr;
+      RNA_property_collection_lookup_string(
+          &ddr->str_search_ptr, ddr->str_search_prop, id_name, &ptr);
+      ddr->init_id = ptr.owner_id;
+    }
+  }
+  else {
+    const PointerRNA ptr = RNA_property_pointer_get(&ddr->ptr, ddr->prop);
+    ddr->init_id = ptr.owner_id;
+  }
 
   return true;
 }
@@ -181,7 +211,9 @@ static void datadropper_id_sample_pt(
 
           PointerRNA idptr = RNA_id_pointer_create(id);
 
-          if (id && RNA_property_pointer_poll(&ddr->ptr, ddr->prop, &idptr)) {
+          if (id &&
+              (ddr->str_search_prop || RNA_property_pointer_poll(&ddr->ptr, ddr->prop, &idptr)))
+          {
             SNPRINTF(ddr->name, "%s: %s", ddr->idcode_name, id->name + 2);
             *r_id = id;
           }
@@ -200,15 +232,32 @@ static void datadropper_id_sample_pt(
 /* sets the ID, returns success */
 static bool datadropper_id_set(bContext *C, DataDropper *ddr, ID *id)
 {
-  PointerRNA ptr_value = RNA_id_pointer_create(id);
+  if (ddr->str_search_prop) {
+    const char *name = id ? (id->name + 2) : "";
+    RNA_property_string_set(&ddr->ptr, ddr->prop, name);
 
-  RNA_property_pointer_set(&ddr->ptr, ddr->prop, ptr_value, nullptr);
+    RNA_property_update(C, &ddr->ptr, ddr->prop);
 
-  RNA_property_update(C, &ddr->ptr, ddr->prop);
+    if (RNA_property_string_length(&ddr->ptr, ddr->prop) + 1 <= (MAX_ID_NAME - 2)) {
+      char id_name[MAX_ID_NAME - 2];
+      RNA_property_string_get(&ddr->ptr, ddr->prop, id_name);
 
-  ptr_value = RNA_property_pointer_get(&ddr->ptr, ddr->prop);
+      return strcmp(id_name, name) == 0;
+    }
 
-  return (ptr_value.owner_id == id);
+    return false;
+  }
+  else {
+    PointerRNA ptr_value = RNA_id_pointer_create(id);
+
+    RNA_property_pointer_set(&ddr->ptr, ddr->prop, ptr_value, nullptr);
+
+    RNA_property_update(C, &ddr->ptr, ddr->prop);
+
+    ptr_value = RNA_property_pointer_get(&ddr->ptr, ddr->prop);
+
+    return (ptr_value.owner_id == id);
+  }
 }
 
 /* single point sample & set */
@@ -340,8 +389,21 @@ static bool datadropper_poll(bContext *C)
       (but = UI_context_active_but_prop_get(C, &ptr, &prop, &index_dummy)) &&
       (but->type == UI_BTYPE_SEARCH_MENU) && (but->flag & UI_BUT_VALUE_CLEAR))
   {
-    if (prop && RNA_property_type(prop) == PROP_POINTER) {
-      StructRNA *type = RNA_property_pointer_type(&ptr, prop);
+    uiButSearch *search_but = static_cast<uiButSearch *>(but);
+    StructRNA *type = nullptr;
+    if (prop) {
+      const PropertyType prop_type = RNA_property_type(prop);
+      if (prop_type == PROP_POINTER) {
+        type = RNA_property_pointer_type(&ptr, prop);
+      }
+      else if (prop_type == PROP_STRING && search_but->rnasearchpoin.data != nullptr &&
+               search_but->rnasearchprop != nullptr)
+      {
+        type = RNA_property_pointer_type(&search_but->rnasearchpoin, search_but->rnasearchprop);
+      }
+    }
+
+    if (type) {
       const short idcode = RNA_type_to_ID_code(type);
       if ((idcode == ID_OB) || OB_DATA_SUPPORT_ID(idcode)) {
         return true;
