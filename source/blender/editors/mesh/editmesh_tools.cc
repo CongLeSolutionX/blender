@@ -4752,7 +4752,7 @@ static bool edbm_fill_grid_prepare(BMesh *bm, int offset, int *span_p, const boo
 
 static bool edbm_fill_grid_delete_existing_faces(BMesh *bm)
 {
-  bool deletions = false;
+  bool faces_deleted = false;
   BM_mesh_elem_hflag_disable_all(bm, BM_FACE | BM_EDGE, BM_ELEM_TAG, false);
 
   BMIter iter;
@@ -4772,16 +4772,16 @@ static bool edbm_fill_grid_delete_existing_faces(BMesh *bm)
         BM_elem_flag_enable(e, BM_ELEM_TAG);
         BM_elem_flag_enable(f_a, BM_ELEM_TAG);
         BM_elem_flag_enable(f_b, BM_ELEM_TAG);
-        deletions = true;
+        faces_deleted = true;
       }
     }
   }
 
-  if (deletions) {
+  if (faces_deleted) {
     BM_mesh_delete_hflag_tagged(bm, BM_ELEM_TAG, BM_FACE | BM_EDGE);
   }
 
-  return deletions;
+  return faces_deleted;
 }
 
 static int edbm_fill_grid_exec(bContext *C, wmOperator *op)
@@ -4804,7 +4804,7 @@ static int edbm_fill_grid_exec(bContext *C, wmOperator *op)
     const bool use_smooth = edbm_add_edge_face__smooth_get(em->bm);
     int totedge_orig = em->bm->totedge;
     int totface_orig = em->bm->totface;
-    bool deletions = false;
+    bool faces_deleted = false;
 
     if (use_prepare) {
       /* use when we have a single loop selected */
@@ -4832,7 +4832,7 @@ static int edbm_fill_grid_exec(bContext *C, wmOperator *op)
       offset = RNA_property_int_get(op->ptr, prop_offset);
 
       if (edbm_fill_grid_delete_existing_faces(em->bm)) {
-        deletions = true;
+        faces_deleted = true;
         totedge_orig = em->bm->totedge;
         totface_orig = em->bm->totface;
       }
@@ -4867,7 +4867,7 @@ static int edbm_fill_grid_exec(bContext *C, wmOperator *op)
 
     /* cancel if nothing was done */
     if ((totedge_orig == em->bm->totedge) && (totface_orig == em->bm->totface) &&
-        (deletions == false))
+        (faces_deleted == false))
     {
       EDBM_op_finish(em, &bmop, op, true);
       continue;
@@ -4876,7 +4876,7 @@ static int edbm_fill_grid_exec(bContext *C, wmOperator *op)
     BMO_slot_buffer_hflag_enable(
         em->bm, bmop.slots_out, "faces.out", BM_FACE, BM_ELEM_SELECT, true);
 
-    if (!EDBM_op_finish(em, &bmop, op, true) && !deletions) {
+    if (!EDBM_op_finish(em, &bmop, op, true) && !faces_deleted) {
       continue;
     }
 
