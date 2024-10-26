@@ -348,6 +348,7 @@ DefNode(GeometryNode, GEO_NODE_EDGE_PATHS_TO_CURVES, 0, "EDGE_PATHS_TO_CURVES", 
 DefNode(GeometryNode, GEO_NODE_EDGE_PATHS_TO_SELECTION, 0, "EDGE_PATHS_TO_SELECTION", EdgePathsToSelection, "Edge Paths to Selection", "Output a selection of edges by following paths across mesh edges")
 DefNode(GeometryNode, GEO_NODE_EDGES_TO_FACE_GROUPS, 0, "EDGES_TO_FACE_GROUPS", EdgesToFaceGroups, "Edges to Face Groups", "Group faces into regions surrounded by the selected boundary edges")
 DefNode(GeometryNode, GEO_NODE_EVALUATE_AT_INDEX, 0, "FIELD_AT_INDEX", FieldAtIndex, "Evaluate at Index", "Retrieve data of other elements in the context's geometry")
+DefNode(GeometryNode, GEO_NODE_EVALUATE_IN_SPACE, 0, "FIELD_IN_SPACE", FieldInSpace, "Evaluate in Space", "")
 DefNode(GeometryNode, GEO_NODE_EVALUATE_ON_DOMAIN, 0, "FIELD_ON_DOMAIN", FieldOnDomain, "Evaluate on Domain", "Retrieve values from a field on a different domain besides the domain from the context")
 DefNode(GeometryNode, GEO_NODE_EXTRUDE_MESH, 0, "EXTRUDE_MESH", ExtrudeMesh, "Extrude Mesh", "Generate new vertices, edges, or faces from selected elements and move them based on an offset while keeping them connected by their boundary")
 DefNode(GeometryNode, GEO_NODE_FILL_CURVE, 0, "FILL_CURVE", FillCurve, "Fill Curve", "Generate a mesh on the XY plane with faces on the inside of input curves")
