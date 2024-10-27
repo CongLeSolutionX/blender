@@ -222,7 +222,13 @@ static void modifier_unwrap_state(Object *obedit,
    * only if modifier is first or right after mirror. */
   if (subsurf) {
     if (md && md->type == eModifierType_Subsurf) {
-      subsurf = true;
+      const SubsurfModifierData &smd = *reinterpret_cast<const SubsurfModifierData *>(md);
+      if (smd.levels > 0) {
+        subsurf = true;
+      }
+      else {
+        subsurf = false;
+      }
     }
     else {
       subsurf = false;
