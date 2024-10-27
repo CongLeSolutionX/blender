@@ -91,6 +91,7 @@ NODE_DEFINE(Camera)
   panorama_type_enum.insert("fisheye_equisolid", PANORAMA_FISHEYE_EQUISOLID);
   panorama_type_enum.insert("fisheye_lens_polynomial", PANORAMA_FISHEYE_LENS_POLYNOMIAL);
   panorama_type_enum.insert("panorama_central_cylindrical", PANORAMA_CENTRAL_CYLINDRICAL);
+  panorama_type_enum.insert("script", PANORAMA_SCRIPT);
   SOCKET_ENUM(panorama_type, "Panorama Type", panorama_type_enum, PANORAMA_EQUIRECTANGULAR);
 
   SOCKET_FLOAT(fisheye_fov, "Fisheye FOV", M_PI_F);
@@ -789,6 +790,8 @@ float Camera::world_to_raster_size(float3 P)
     Ray ray;
     memset(&ray, 0, sizeof(ray));
 
+    return differential_zero_compact();  // TODO
+
     /* Distortion can become so great that the results become meaningless, there
      * may be a better way to do this, but calculating differentials from the
      * point directly ahead seems to produce good enough results. */
@@ -807,7 +810,7 @@ float Camera::world_to_raster_size(float3 P)
                              zero_float2(),
                              &ray);
     }
-#else
+#elif 0
     camera_sample_panorama(&kernel_camera,
                            kernel_camera_motion.data(),
                            0.5f * make_float2(full_width, full_height),

@@ -63,6 +63,7 @@ struct OSLGlobals {
   vector<OSL::ShaderGroupRef> displacement_state;
   vector<OSL::ShaderGroupRef> bump_state;
   OSL::ShaderGroupRef background_state;
+  OSL::ShaderGroupRef camera_state;
 
   /* attributes */
   typedef unordered_map<OSLUStringHash, int> ObjectNameMap;

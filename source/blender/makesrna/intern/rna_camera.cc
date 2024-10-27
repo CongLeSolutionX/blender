@@ -638,6 +638,11 @@ void RNA_def_camera(BlenderRNA *brna)
        "Central Cylindrical",
        "Projection onto a virtual cylinder from its center, similar as a rotating panoramic "
        "camera"},
+      {CAM_PANORAMA_SCRIPT,
+       "SCRIPT",
+       0,
+       "Script",
+       "Custom camera type implemented in Open Shading Language"},
       {0, nullptr, 0, nullptr, nullptr},
   };
 

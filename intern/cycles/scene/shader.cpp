@@ -790,7 +790,7 @@ uint ShaderManager::get_kernel_features(Scene *scene)
   }
 
   if (use_osl()) {
-    kernel_features |= KERNEL_FEATURE_OSL;
+    kernel_features |= KERNEL_FEATURE_OSL;  // TODO Camera
   }
 
   return kernel_features;

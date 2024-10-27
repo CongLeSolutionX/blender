@@ -148,6 +148,8 @@ static PanoramaType blender_panorama_type_to_cycles(const BL::Camera::panorama_t
       return PANORAMA_FISHEYE_LENS_POLYNOMIAL;
     case BL::Camera::panorama_type_CENTRAL_CYLINDRICAL:
       return PANORAMA_CENTRAL_CYLINDRICAL;
+    case BL::Camera::panorama_type_SCRIPT:
+      return PANORAMA_SCRIPT;
   }
   /* Could happen if loading a newer file that has an unsupported type. */
   return PANORAMA_FISHEYE_EQUISOLID;
@@ -291,6 +293,10 @@ static Transform blender_camera_matrix(const Transform &tfm,
        */
       result = tfm * make_transform(
                          1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f);
+    }
+    else if (panorama_type == PANORAMA_SCRIPT) {
+      /* note the blender camera points along the negative z-axis */
+      result = tfm * transform_scale(1.0f, 1.0f, -1.0f);
     }
     else {
       /* Make it so environment camera needs to be pointed in the direction

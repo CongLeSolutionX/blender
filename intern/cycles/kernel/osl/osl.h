@@ -66,6 +66,18 @@ ccl_device_inline void shaderdata_to_shaderglobals(KernelGlobals kg,
   globals->Ci = nullptr;
 }
 
+ccl_device_inline void cameradata_to_shaderglobals(KernelGlobals kg,
+                                                   const packed_float3 sensor,
+                                                   const float2 rand_lens,
+                                                   ccl_private ShaderGlobals *globals)
+{
+  // TODO
+  memset(globals, 0, sizeof(ShaderGlobals));
+
+  globals->P = sensor;
+  globals->N = float2_to_float3(rand_lens);
+}
+
 ccl_device void flatten_closure_tree(KernelGlobals kg,
                                      ccl_private ShaderData *sd,
                                      uint32_t path_flag,
@@ -175,6 +187,12 @@ void osl_eval_nodes(const KernelGlobalsCPU *kg,
                     const void *state,
                     ShaderData *sd,
                     uint32_t path_flag);
+
+float osl_eval_camera(KernelGlobals kg,
+                      const packed_float3 sensor,
+                      const float2 rand_lens,
+                      packed_float3 &P,
+                      packed_float3 &D);
 
 #else
 

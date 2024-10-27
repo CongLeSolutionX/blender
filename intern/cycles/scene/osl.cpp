@@ -142,6 +142,57 @@ void OSLShaderManager::device_update_specific(Device *device,
       scene->light_manager->tag_update(scene, LightManager::SHADER_COMPILED);
   }
 
+  /* create camera shader */
+  if (getenv("CYCLES_OSL_CAMERA")) {
+    if (progress.get_cancel())
+      return;
+
+    thread_scoped_lock lock(ss_mutex);
+    device->foreach_device([this, scene](Device *sub_device) {
+      OSLGlobals *og = (OSLGlobals *)sub_device->get_cpu_osl_memory();
+      OSL::ShadingSystem *ss = ss_shared[sub_device->info.type];
+
+      const char *shader = shader_load_filepath(getenv("CYCLES_OSL_CAMERA"));
+      if (!shader) {
+        printf("OSL Camera: Failed to load shader\n");
+        return;
+      }
+      OSL::ShaderGroupRef group = ss->ShaderGroupBegin("camera_group");
+      if (!ss->Shader(*group, "shader", shader, "camera")) {
+        printf("OSL Camera: Failed to add shader\n");
+        return;
+      }
+      if (!ss->ShaderGroupEnd(*group)) {
+        printf("OSL Camera: Failed to finalize shader group\n");
+        return;
+      }
+
+      ss->add_symlocs(group.get(),
+                      OSL::SymLocationDesc("camera.pos",
+                                           OIIO::TypeVector,
+                                           false,
+                                           OSL::SymArena::Outputs,
+                                           0,
+                                           3 * sizeof(float)));
+      ss->add_symlocs(group.get(),
+                      OSL::SymLocationDesc("camera.dir",
+                                           OIIO::TypeVector,
+                                           false,
+                                           OSL::SymArena::Outputs,
+                                           3 * sizeof(float),
+                                           3 * sizeof(float)));
+      ss->add_symlocs(group.get(),
+                      OSL::SymLocationDesc("camera.T",
+                                           OIIO::TypeFloat,
+                                           false,
+                                           OSL::SymArena::Outputs,
+                                           6 * sizeof(float),
+                                           sizeof(float)));
+
+      og->camera_state = group;
+    });
+  }
+
   /* setup shader engine */
   int background_id = scene->shader_manager->get_shader_id(background_shader);
 
@@ -224,6 +275,7 @@ void OSLShaderManager::device_free(Device *device, DeviceScene *dscene, Scene *s
     og->displacement_state.clear();
     og->bump_state.clear();
     og->background_state.reset();
+    og->camera_state.reset();
   });
 
   /* Remove any textures specific to an image manager from shared render services textures, since
@@ -302,6 +354,7 @@ void OSLShaderManager::shading_system_init()
       ss->attribute("commonspace", "world");
       ss->attribute("searchpath:shader", shader_path);
       ss->attribute("greedyjit", 1);
+      ss->attribute("llvm_jit_fma", 1);
 
       const char *groupdata_alloc_str = getenv("CYCLES_OSL_GROUPDATA_ALLOC");
       if (groupdata_alloc_str) {

@@ -302,4 +302,44 @@ void osl_eval_nodes<SHADER_TYPE_DISPLACEMENT>(const KernelGlobalsCPU *kg,
   sd->P = TO_FLOAT3(globals->P);
 }
 
+/* Camera */
+
+float osl_eval_camera(KernelGlobals kg,
+                      const packed_float3 sensor,
+                      const float2 rand_lens,
+                      packed_float3 &P,
+                      packed_float3 &D)
+{
+  if (!kg->osl || !kg->osl->camera_state) {
+    return 0.0f;
+  }
+
+  /* setup shader globals from shader data */
+  OSLThreadData *tdata = kg->osl_tdata;
+  cameradata_to_shaderglobals(
+      kg, sensor, rand_lens, reinterpret_cast<ShaderGlobals *>(&tdata->globals));
+
+  /* clear trace data */
+  tdata->tracedata.init = false;
+
+  /* execute shader */
+  OSL::ShadingSystem *ss = (OSL::ShadingSystem *)kg->osl_ss;
+  OSL::ShaderGlobals *globals = &tdata->globals;
+  OSL::ShadingContext *octx = tdata->context;
+
+  float output[7] = {0.0f};
+
+  if (kg->osl->camera_state) {
+#if OSL_LIBRARY_VERSION_CODE >= 11304
+    ss->execute(*octx, *kg->osl->camera_state, kg->osl_thread_index, 0, *globals, nullptr, output);
+#else
+#  error TODO
+#endif
+  }
+
+  P = make_float3(output[0], output[1], output[2]);
+  D = make_float3(output[3], output[4], output[5]);
+  return output[6];
+}
+
 CCL_NAMESPACE_END
