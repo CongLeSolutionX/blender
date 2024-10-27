@@ -50,11 +50,13 @@ void shadow_page_free(inout ShadowTileData tile)
 }
 
 /* Remove last page from the free heap and give ownership to the tile. */
-void shadow_page_alloc(buffer uint pages_free[], inout ShadowTileData tile)
+void shadow_page_alloc(buffer ShadowPagesInfoData pages_infos,
+                       buffer uint pages_free[],
+                       inout ShadowTileData tile)
 {
   assert(!tile.is_allocated);
 
-  int index = atomicAdd(pages_infos_buf.page_free_count, -1) - 1;
+  int index = atomicAdd(pages_infos.page_free_count, -1) - 1;
   /* This can easily happen in really big scene. */
   if (index < 0) {
     return;
