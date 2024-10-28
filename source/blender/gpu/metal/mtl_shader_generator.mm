@@ -243,8 +243,23 @@ static void print_resource(std::ostream &os, const ShaderCreateInfo::Resource &r
   switch (res.bind_type) {
     case ShaderCreateInfo::Resource::BindType::SAMPLER:
       break;
-    case ShaderCreateInfo::Resource::BindType::IMAGE:
+    case ShaderCreateInfo::Resource::BindType::IMAGE: {
+      std::stringstream ss;
+      print_image_type(ss, res.image.type, res.bind_type);
+      uint64_t type_hash = shader::Preprocessor::hash_32(ss.str());
+
+      bool readable = bool(res.image.qualifiers & shader::Qualifier::READ);
+      bool writeable = bool(res.image.qualifiers & shader::Qualifier::WRITE);
+
+      std::string buf_slot = "IMG_" + std::to_string(res.slot);
+      os << "#undef " << buf_slot << "_TYPE\n";
+      os << "#define " << buf_slot << "_NAME __" << res.image.name.c_str() << "\n";
+      os << "#define " << buf_slot << "_RES " << res.image.name.c_str() << "\n";
+      os << "#define " << buf_slot << "_TYPE " << std::to_string(type_hash) << "\n";
+      os << "#define " << buf_slot << "_READ " << std::to_string(int(readable)) << "\n";
+      os << "#define " << buf_slot << "_WRITE " << std::to_string(int(writeable)) << "\n";
       break;
+    }
     case ShaderCreateInfo::Resource::BindType::UNIFORM_BUFFER: {
       int64_t array_offset = res.uniformbuf.name.find_first_of("[");
       if (array_offset == -1) {

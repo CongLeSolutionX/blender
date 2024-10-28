@@ -435,7 +435,9 @@ class Preprocessor {
               std::count(content.begin(), content.end(), '\n');
 
       /* Early out if no resource keyword is found. Avoid false positive that can degenerate. */
-      if (fn_args.find("buffer") == std::string::npos) {
+      if (fn_args.find("buffer") == std::string::npos &&
+          fn_args.find("image") == std::string::npos)
+      {
         return;
       }
 
@@ -444,6 +446,7 @@ class Preprocessor {
         std::string name;
         std::string type;
         std::string array;
+        std::string prefix;
         std::vector<std::string> mem_qualifiers;
         std::vector<std::string> slots;
       };
@@ -458,11 +461,11 @@ class Preprocessor {
           /* We can have a total of 5 memory qualifiers. Capture them individually. */
           mem_qualifier mem_qualifier mem_qualifier mem_qualifier mem_qualifier
 #undef mem_qualifier
-          R"(\s*(const|buffer|in|out|inout)?)" /* Parameter qualifier (optional). */
-          R"(\s*(\w+))"                        /* Type. */
-          R"(\s*(\w+))"                        /* Name. */
-          R"(\s*(\[\w*\])?)"                   /* Array (optional). */
-          R"(\s*(?:,|\)))"                     /* Separator. */
+          R"(\s*(const|image|buffer|inout|in|out|)?)" /* Parameter qualifier (optional). */
+          R"(\s*(\w+))"                               /* Type. */
+          R"(\s*(\w+))"                               /* Name. */
+          R"(\s*(\[\w*\])?)"                          /* Array (optional). */
+          R"(\s*(?:,|\)))"                            /* Separator. */
       );
 
       size_t permutation_len = 1;
@@ -477,8 +480,12 @@ class Preprocessor {
         arg.type = arg_match[9].str();
         arg.name = arg_match[10].str();
         arg.array = arg_match[11].str();
-        bool is_resource = arg.qualifier == "buffer";
-        if (is_resource) {
+        bool is_image = (arg.qualifier == "image");
+        bool is_buffer = (arg.qualifier == "buffer");
+        if (is_image || is_buffer) {
+          std::cout << "Found image Arg " << arg.name << std::endl;
+          arg.prefix = is_buffer ? "BUF_" : "IMG_";
+
           if (arg_match[1].matched) {
             arg.slots.emplace_back(arg_match[2].str());
           }
@@ -498,12 +505,6 @@ class Preprocessor {
       });
 
       if (resource_args.empty()) {
-        return;
-      }
-
-      /* This limit is only because of how the end macro function is generated. */
-      if (all_args.size() > 26) {
-        std::cerr << "Too many arguments in \"" << fn_name << "\"." << std::endl;
         return;
       }
 
@@ -528,10 +529,10 @@ class Preprocessor {
 
       /* Generate all permutations. */
       std::vector<Permutation> permutations;
-      for (auto &buffer : resource_args) {
+      for (auto &res : resource_args) {
         std::vector<Permutation> permutations_copy = permutations;
         permutations.clear();
-        for (const std::string &slot : buffer.slots) {
+        for (const std::string &slot : res.slots) {
           /* Iterate with copy on purpose. */
           for (Permutation perm : permutations_copy) {
             perm.emplace_back(slot);
@@ -544,22 +545,28 @@ class Preprocessor {
         }
       }
 
+#if 1 /* Eventually remove this if GLSLang get patched. */
       /* Workaround a processor bug in GLSLang which prevent using CONCAT in #if directives. */
-      for (auto &buffer : resource_args) {
-        for (const std::string &slot : buffer.slots) {
-          if (std::isdigit(slot[0])) {
-            continue;
+      for (auto &res : resource_args) {
+        std::string rename = create_string([&](std::stringstream &ss) {
+          for (const std::string &slot : res.slots) {
+            if (std::isdigit(slot[0])) {
+              continue;
+            }
+            std::string &res_type = res.prefix;
+            ss << "#if 0\n";
+            for (int i = 0; i < 8; i++) {
+              ss << "#elif " << slot << "==" << i << "\n";
+              ss << "#define " << res_type << slot << "_TYPE " << res_type << i << "_TYPE\n";
+              ss << "#define " << res_type << slot << "_READ " << res_type << i << "_READ\n";
+              ss << "#define " << res_type << slot << "_WRITE " << res_type << i << "_WRITE\n";
+            }
+            ss << "#endif\n";
           }
-          generated_rename << "#if 0\n";
-          for (int i = 0; i < 8; i++) {
-            generated_rename << "#elif " << slot << "==" << i << "\n";
-            generated_rename << "#define BUF_" << slot << "_TYPE BUF_" << i << "_TYPE\n";
-            generated_rename << "#define BUF_" << slot << "_READ BUF_" << i << "_READ\n";
-            generated_rename << "#define BUF_" << slot << "_WRITE BUF_" << i << "_WRITE\n";
-          }
-          generated_rename << "#endif\n";
-        }
+        });
+        generated_rename << rename;
       }
+#endif
 
       for (const Permutation &permutation : permutations) {
         std::string perm_cond_start = create_string([&](std::stringstream &ss) {
@@ -569,29 +576,30 @@ class Preprocessor {
 
           ss << "#if 1";
           for (int i = 0; i < resource_args.size(); i++) {
-            const Argument &buffer = resource_args[i];
+            const Argument &arg = resource_args[i];
             const std::string &buf_slot = permutation[i];
             /* Preprocessor checks. */
-            const char *array_suffix = (buffer.array.empty() ? "" : "_array");
-            uint64_t type_hash = hash_32(buffer.type + array_suffix);
+            const char *array_suffix = (arg.array.empty() ? "" : "_array");
+            std::string type_hash = std::to_string(hash_32(arg.type + array_suffix));
+            const std::string &res_type = arg.prefix;
 
 #if 0 /* Eventually use this if GLSLang get patched. */
-            ss << " && CONCAT3(BUF_," << buf_slot << ",_TYPE) == " << std::to_string(type_hash);
+            ss << " && CONCAT3(" << res_type << "," << buf_slot << ",_TYPE) == " << type_hash;
 
-            if (contains(buffer.mem_qualifiers, "readonly") || buffer.mem_qualifiers.empty()) {
-              ss << " && CONCAT3(BUF_," << buf_slot << ",_READ)";
+            if (contains(arg.mem_qualifiers, "readonly") || arg.mem_qualifiers.empty()) {
+              ss << " && CONCAT3(" << res_type << "," << buf_slot << ",_READ)";
             }
-            if (contains(buffer.mem_qualifiers, "writeonly") || buffer.mem_qualifiers.empty()) {
-              ss << " && CONCAT3(BUF_," << buf_slot << ",_WRITE)";
+            if (contains(arg.mem_qualifiers, "writeonly") || arg.mem_qualifiers.empty()) {
+              ss << " && CONCAT3(" << res_type << "," << buf_slot << ",_WRITE)";
             }
 #else
-            ss << " && BUF_" << buf_slot << "_TYPE == " << std::to_string(type_hash);
+            ss << " && " << res_type << "" << buf_slot << "_TYPE == " << type_hash;
 
-            if (contains(buffer.mem_qualifiers, "readonly") || buffer.mem_qualifiers.empty()) {
-              ss << " && BUF_" << buf_slot << "_READ";
+            if (contains(arg.mem_qualifiers, "readonly") || arg.mem_qualifiers.empty()) {
+              ss << " && " << res_type << "" << buf_slot << "_READ";
             }
-            if (contains(buffer.mem_qualifiers, "writeonly") || buffer.mem_qualifiers.empty()) {
-              ss << " && BUF_" << buf_slot << "_WRITE";
+            if (contains(arg.mem_qualifiers, "writeonly") || arg.mem_qualifiers.empty()) {
+              ss << " && " << res_type << "" << buf_slot << "_WRITE";
             }
 #endif
           }
@@ -606,7 +614,7 @@ class Preprocessor {
           }
           ss << fn_name << "_";
           for (int i = 0; i < resource_args.size(); i++) {
-            ss << ", CONCAT3(BUF_," << permutation[i] << ",_NAME))";
+            ss << ", CONCAT3(" << resource_args[i].prefix << "," << permutation[i] << ",_NAME))";
           }
         });
 
@@ -623,11 +631,12 @@ class Preprocessor {
         std::string perm_body = create_string([&](std::stringstream &ss) {
           std::string body = fn_body;
           for (int i = 0; i < resource_args.size(); i++) {
-            const Argument &buffer = resource_args[i];
+            const Argument &arg = resource_args[i];
             /* Only replace fullword match. */
-            std::regex regex("\\b" + buffer.name + "\\b");
+            std::regex regex("\\b" + arg.name + "\\b");
             /* Replace argument name by buffer name macro. */
-            body = std::regex_replace(body, regex, "CONCAT3(BUF_," + permutation[i] + ",_RES)");
+            std::string macro_name = "CONCAT3(" + arg.prefix + "," + permutation[i] + ",_RES)";
+            body = std::regex_replace(body, regex, macro_name);
           }
           ss << "\n{" << body << "\n}";
         });

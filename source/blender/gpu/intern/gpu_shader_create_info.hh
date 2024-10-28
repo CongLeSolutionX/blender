@@ -1384,6 +1384,135 @@ struct ShaderCreateInfo {
 #undef TEST_VECTOR_EQUAL
 };
 
+static inline void print_image_type(std::ostream &os,
+                                    const ImageType &type,
+                                    const ShaderCreateInfo::Resource::BindType bind_type)
+{
+  switch (type) {
+    case ImageType::INT_BUFFER:
+    case ImageType::INT_1D:
+    case ImageType::INT_1D_ARRAY:
+    case ImageType::INT_2D:
+    case ImageType::INT_2D_ARRAY:
+    case ImageType::INT_3D:
+    case ImageType::INT_CUBE:
+    case ImageType::INT_CUBE_ARRAY:
+    case ImageType::INT_2D_ATOMIC:
+    case ImageType::INT_2D_ARRAY_ATOMIC:
+    case ImageType::INT_3D_ATOMIC:
+      os << "i";
+      break;
+    case ImageType::UINT_BUFFER:
+    case ImageType::UINT_1D:
+    case ImageType::UINT_1D_ARRAY:
+    case ImageType::UINT_2D:
+    case ImageType::UINT_2D_ARRAY:
+    case ImageType::UINT_3D:
+    case ImageType::UINT_CUBE:
+    case ImageType::UINT_CUBE_ARRAY:
+    case ImageType::UINT_2D_ATOMIC:
+    case ImageType::UINT_2D_ARRAY_ATOMIC:
+    case ImageType::UINT_3D_ATOMIC:
+      os << "u";
+      break;
+    default:
+      break;
+  }
+
+  if (bind_type == ShaderCreateInfo::Resource::BindType::IMAGE) {
+    os << "image";
+  }
+  else {
+    os << "sampler";
+  }
+
+  switch (type) {
+    case ImageType::FLOAT_BUFFER:
+    case ImageType::INT_BUFFER:
+    case ImageType::UINT_BUFFER:
+      os << "Buffer";
+      break;
+    case ImageType::FLOAT_1D:
+    case ImageType::FLOAT_1D_ARRAY:
+    case ImageType::INT_1D:
+    case ImageType::INT_1D_ARRAY:
+    case ImageType::UINT_1D:
+    case ImageType::UINT_1D_ARRAY:
+      os << "1D";
+      break;
+    case ImageType::FLOAT_2D:
+    case ImageType::FLOAT_2D_ARRAY:
+    case ImageType::INT_2D:
+    case ImageType::INT_2D_ARRAY:
+    case ImageType::UINT_2D:
+    case ImageType::UINT_2D_ARRAY:
+    case ImageType::SHADOW_2D:
+    case ImageType::SHADOW_2D_ARRAY:
+    case ImageType::DEPTH_2D:
+    case ImageType::DEPTH_2D_ARRAY:
+    case ImageType::INT_2D_ATOMIC:
+    case ImageType::INT_2D_ARRAY_ATOMIC:
+    case ImageType::UINT_2D_ATOMIC:
+    case ImageType::UINT_2D_ARRAY_ATOMIC:
+      os << "2D";
+      break;
+    case ImageType::FLOAT_3D:
+    case ImageType::INT_3D:
+    case ImageType::INT_3D_ATOMIC:
+    case ImageType::UINT_3D:
+    case ImageType::UINT_3D_ATOMIC:
+      os << "3D";
+      break;
+    case ImageType::FLOAT_CUBE:
+    case ImageType::FLOAT_CUBE_ARRAY:
+    case ImageType::INT_CUBE:
+    case ImageType::INT_CUBE_ARRAY:
+    case ImageType::UINT_CUBE:
+    case ImageType::UINT_CUBE_ARRAY:
+    case ImageType::SHADOW_CUBE:
+    case ImageType::SHADOW_CUBE_ARRAY:
+    case ImageType::DEPTH_CUBE:
+    case ImageType::DEPTH_CUBE_ARRAY:
+      os << "Cube";
+      break;
+    default:
+      break;
+  }
+
+  switch (type) {
+    case ImageType::FLOAT_1D_ARRAY:
+    case ImageType::FLOAT_2D_ARRAY:
+    case ImageType::FLOAT_CUBE_ARRAY:
+    case ImageType::INT_1D_ARRAY:
+    case ImageType::INT_2D_ARRAY:
+    case ImageType::INT_CUBE_ARRAY:
+    case ImageType::UINT_1D_ARRAY:
+    case ImageType::UINT_2D_ARRAY:
+    case ImageType::UINT_CUBE_ARRAY:
+    case ImageType::SHADOW_2D_ARRAY:
+    case ImageType::SHADOW_CUBE_ARRAY:
+    case ImageType::DEPTH_2D_ARRAY:
+    case ImageType::DEPTH_CUBE_ARRAY:
+    case ImageType::UINT_2D_ARRAY_ATOMIC:
+      os << "Array";
+      break;
+    default:
+      break;
+  }
+
+  switch (type) {
+    case ImageType::SHADOW_2D:
+    case ImageType::SHADOW_2D_ARRAY:
+    case ImageType::SHADOW_CUBE:
+    case ImageType::SHADOW_CUBE_ARRAY:
+      os << "Shadow";
+      break;
+    default:
+      break;
+  }
+  os << " ";
+}
+
 }  // namespace blender::gpu::shader
 
 namespace blender {
