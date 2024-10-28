@@ -63,10 +63,10 @@ static void node_declare(NodeDeclarationBuilder &b)
       .subtype(PROP_DISTANCE)
       .make_available([](bNode &node) { node.custom1 = int16_t(IntersectionMode::Plane); })
       .description("Center of plane");
-  b.add_input<decl::Float>("Distance")
+  b.add_input<decl::Float>("Epsilon")
       .subtype(PROP_DISTANCE)
       .min(0.0f)
-      .description("Max distance epsilon between intersections");
+      .description("Epsilon for max distance between intersections");
   b.add_input<decl::Float>("Min Angle")
       .subtype(PROP_ANGLE)
       .min(0.0f)
@@ -995,7 +995,7 @@ static void node_geo_exec(GeoNodeExecParams params)
 
     switch (mode) {
       case IntersectionMode::Curve: {
-        const float distance = params.extract_input<float>("Distance");
+        const float distance = params.extract_input<float>("Epsilon");
         const bool self = params.extract_input<bool>("Self Intersections");
         const bool all = params.extract_input<bool>("All Intersections");
         const float angle = params.extract_input<float>("Min Angle");
