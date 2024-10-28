@@ -25,6 +25,8 @@
 #include "GPU_platform.hh"
 #include "GPU_vertex_format.hh"
 
+#include "../glsl_preprocess/glsl_preprocess.hh"
+
 #include "gpu_shader_dependency_private.hh"
 
 #include "mtl_common.hh"
@@ -286,17 +288,16 @@ static void print_resource(std::ostream &os, const ShaderCreateInfo::Resource &r
          * syntax will de-reference this at the correct fetch index. */
         os << memory_scope << res.storagebuf.type_name << " *" << name_no_array << ";\n";
       }
-      std::string buf_slot = "BUF_" + std::to_string(res.slot);
       const char *array_suffix = (array_offset == -1 ? "" : "_array");
-      os << "#define " << buf_slot << " __" << name_no_array << "\n";
+      uint64_t type_hash = shader::Preprocessor::hash_32(res.storagebuf.type_name + array_suffix);
+
+      std::string buf_slot = "BUF_" + std::to_string(res.slot);
+      os << "#undef " << buf_slot << "_TYPE\n";
+      os << "#define " << buf_slot << "_NAME __" << name_no_array << "\n";
       os << "#define " << buf_slot << "_RES " << name_no_array << "\n";
-      os << "#define " << buf_slot << "_TYPE_" << res.storagebuf.type_name << array_suffix << "\n";
-      if (readable) {
-        os << "#define " << buf_slot << "_QUAL_read\n";
-      }
-      if (writeable) {
-        os << "#define " << buf_slot << "_QUAL_write\n";
-      }
+      os << "#define " << buf_slot << "_TYPE " << std::to_string(type_hash) << "\n";
+      os << "#define " << buf_slot << "_READ " << std::to_string(int(readable)) << "\n";
+      os << "#define " << buf_slot << "_WRITE " << std::to_string(int(writeable)) << "\n";
       break;
     }
   }

@@ -62,6 +62,14 @@ class Preprocessor {
     return hash(name.c_str());
   }
 
+  /* String hash are outputted inside GLSL and needs to fit 32 bits. */
+  static uint64_t hash_32(const std::string &str)
+  {
+    uint64_t hash_64 = hash(str);
+    uint32_t hash_32 = uint32_t(hash_64 ^ (hash_64 >> 32));
+    return hash_32;
+  }
+
   /* Takes a whole source file and output processed source. */
   std::string process(std::string str,
                       const std::string &filename,
@@ -358,14 +366,6 @@ class Preprocessor {
         str, regex, [&](const std::smatch &match) { static_strings_.insert(match[0].str()); });
   }
 
-  /* String hash are outputted inside GLSL and needs to fit 32 bits. */
-  static uint64_t hash_string(const std::string &str)
-  {
-    uint64_t hash_64 = hash(str);
-    uint32_t hash_32 = uint32_t(hash_64 ^ (hash_64 >> 32));
-    return hash_32;
-  }
-
   std::string static_strings_mutation(std::string str)
   {
     /* Replaces all matches by the respective string hash. */
@@ -374,7 +374,7 @@ class Preprocessor {
       std::string str_regex = std::regex_replace(str_var, escape_regex, "\\$&");
 
       std::regex regex(str_regex);
-      str = std::regex_replace(str, regex, std::to_string(hash_string(str_var)) + 'u');
+      str = std::regex_replace(str, regex, std::to_string(hash_32(str_var)) + 'u');
     }
     return str;
   }
@@ -387,7 +387,7 @@ class Preprocessor {
     std::stringstream suffix;
     for (const std::string &str_var : static_strings_) {
       std::string no_quote = str_var.substr(1, str_var.size() - 2);
-      suffix << "// " << hash("string") << " " << hash_string(str_var) << " " << no_quote << "\n";
+      suffix << "// " << hash("string") << " " << hash_32(str_var) << " " << no_quote << "\n";
     }
     return suffix.str();
   }
@@ -444,7 +444,7 @@ class Preprocessor {
         std::string type;
         std::string array;
         std::vector<std::string> mem_qualifiers;
-        std::vector<int> slots;
+        std::vector<std::string> slots;
       };
 
       std::vector<Argument> resource_args;
@@ -452,7 +452,7 @@ class Preprocessor {
       std::vector<Argument> all_args;
 
       std::regex regex_arg(
-          R"(\s*(binding\((\w)+\))?)" /* Resource binding slot (optional). */
+          R"(\s*(binding\((\w+)\))?)" /* Resource binding slot (optional). */
 #define mem_qualifier R"(\s*(coherent|volatile|restrict|readonly|writeonly)?)"
           /* We can have a total of 5 memory qualifiers. Capture them individually. */
           mem_qualifier mem_qualifier mem_qualifier mem_qualifier mem_qualifier
@@ -477,15 +477,16 @@ class Preprocessor {
         arg.name = arg_match[10].str();
         arg.array = arg_match[11].str();
         bool is_resource = arg.qualifier == "buffer";
-        if (arg_match[1].matched) {
-          arg.slots.emplace_back(stoi(arg_match[2].str()));
-        }
-        else {
-          for (int i = 0; i < is_resource * 8; i++) {
-            arg.slots.emplace_back(i);
-          }
-        }
         if (is_resource) {
+          if (arg_match[1].matched) {
+            arg.slots.emplace_back(arg_match[2].str());
+          }
+          else {
+            /* Match with 8 slots by default.*/
+            for (int i = 0; i < 8; i++) {
+              arg.slots.emplace_back(std::to_string(i));
+            }
+          }
           permutation_len *= arg.slots.size();
           resource_args.emplace_back(arg);
         }
@@ -515,21 +516,21 @@ class Preprocessor {
 
       /* `#if 0` out the original declaration. Allows correct error report.  */
       Replacement fn;
-      fn.position = offset - match.length(0) + 1;
+      fn.position = offset - match.length(0);
       fn.length = match.length(0);
       fn.content = content;
       fn.content.replace(fn.length - 1, 1, "#endif //").replace(1, 0, "#if 0 //");
       fn_replace.emplace_back(fn);
 
       /* One slot per resource argument for each slot the resource is declared for. */
-      using Permutation = std::vector<int>;
+      using Permutation = std::vector<std::string>;
 
       /* Generate all permutations. */
       std::vector<Permutation> permutations;
       for (auto &buffer : resource_args) {
         std::vector<Permutation> permutations_copy = permutations;
         permutations.clear();
-        for (int slot : buffer.slots) {
+        for (const std::string &slot : buffer.slots) {
           /* Iterate with copy on purpose. */
           for (Permutation perm : permutations_copy) {
             perm.emplace_back(slot);
@@ -551,16 +552,18 @@ class Preprocessor {
           ss << "#if 1";
           for (int i = 0; i < resource_args.size(); i++) {
             const Argument &buffer = resource_args[i];
-            std::string buf_slot = "BUF_" + std::to_string(permutation[i]);
+            const std::string &buf_slot = permutation[i];
             /* Preprocessor checks. */
             const char *array_suffix = (buffer.array.empty() ? "" : "_array");
 
-            ss << " && defined(" << buf_slot << "_TYPE_" << buffer.type << array_suffix << ")";
+            uint64_t type_hash = hash_32(buffer.type + array_suffix);
+            ss << " && CONCAT3(BUF_," << buf_slot << ",_TYPE) == " << std::to_string(type_hash);
+
             if (contains(buffer.mem_qualifiers, "readonly") || buffer.mem_qualifiers.empty()) {
-              ss << " && defined(" << buf_slot << "_QUAL_read)";
+              ss << " && CONCAT3(BUF_," << buf_slot << ",_READ)";
             }
             if (contains(buffer.mem_qualifiers, "writeonly") || buffer.mem_qualifiers.empty()) {
-              ss << " && defined(" << buf_slot << "_QUAL_write)";
+              ss << " && CONCAT3(BUF_," << buf_slot << ",_WRITE)";
             }
           }
           ss << "\n";
@@ -574,7 +577,7 @@ class Preprocessor {
           }
           ss << fn_name << "_";
           for (int i = 0; i < resource_args.size(); i++) {
-            ss << ",BUF_" << std::to_string(permutation[i]) << ")";
+            ss << ", CONCAT3(BUF_," << permutation[i] << ",_NAME))";
           }
         });
 
@@ -592,11 +595,10 @@ class Preprocessor {
           std::string body = fn_body;
           for (int i = 0; i < resource_args.size(); i++) {
             const Argument &buffer = resource_args[i];
-            /* Replace argument name by buffer name macro. */
-            std::string buf_slot = "BUF_" + std::to_string(permutation[i]);
             /* Only replace fullword match. */
             std::regex regex("\\b" + buffer.name + "\\b");
-            body = std::regex_replace(body, regex, buf_slot + "_RES");
+            /* Replace argument name by buffer name macro. */
+            body = std::regex_replace(body, regex, "CONCAT3(BUF_," + permutation[i] + ",_RES)");
           }
           ss << "\n{" << body << "\n}";
         });
