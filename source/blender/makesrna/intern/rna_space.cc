@@ -355,6 +355,10 @@ static const EnumPropertyItem multiview_camera_items[] = {
 #undef V3D_S3D_CAMERA_S3D
 #undef V3D_S3D_CAMERA_VIEWS
 
+/**
+ * Only used for file browser mode. Asset browsing uses
+ * #rna_enum_fileselect_params_asset_sort_items, see #rna_FileSelectParams_sort_method_itemf().
+ */
 const EnumPropertyItem rna_enum_fileselect_params_sort_items[] = {
     {FILE_SORT_ALPHA, "FILE_SORT_ALPHA", ICON_NONE, "Name", "Sort the file list alphabetically"},
     {FILE_SORT_EXTENSION,
@@ -370,6 +374,24 @@ const EnumPropertyItem rna_enum_fileselect_params_sort_items[] = {
     {FILE_SORT_SIZE, "FILE_SORT_SIZE", ICON_NONE, "Size", "Sort files by size"},
     {0, nullptr, 0, nullptr, nullptr},
 };
+
+#ifdef RNA_RUNTIME
+/**
+ * Only used for asset browser mode. File browsing uses #rna_enum_fileselect_params_sort_items, see
+ * #rna_FileSelectParams_sort_method_itemf().
+ */
+static const EnumPropertyItem rna_enum_fileselect_params_asset_sort_items[] = {
+    {FILE_SORT_ALPHA, "NAME", ICON_NONE, "Name", "Sort the asset list alphabetically"},
+    {FILE_SORT_ASSET_CATALOG,
+     "ASSET_CATALOG",
+     0,
+     "Asset Catalog",
+     "Sort the asset list so that assets in the same catalog are kept together. Within a single "
+     "catalog, assets are ordered by name. The catalogs are in order of the flattened catalog "
+     "hierarchy."},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+#endif
 
 #ifndef RNA_RUNTIME
 static const EnumPropertyItem stereo3d_eye_items[] = {
@@ -2918,6 +2940,20 @@ static const EnumPropertyItem *rna_FileSelectParams_recursion_level_itemf(bConte
 
   *r_free = false;
   return fileselectparams_recursion_level_items;
+}
+
+static const EnumPropertyItem *rna_FileSelectParams_sort_method_itemf(bContext * /*C*/,
+                                                                      PointerRNA *ptr,
+                                                                      PropertyRNA * /*prop*/,
+                                                                      bool *r_free)
+{
+  *r_free = false;
+
+  if (RNA_struct_is_a(ptr->type, &RNA_FileAssetSelectParams)) {
+    return rna_enum_fileselect_params_asset_sort_items;
+  }
+
+  return rna_enum_fileselect_params_sort_items;
 }
 
 static void rna_FileSelectPrams_filter_glob_set(PointerRNA *ptr, const char *value)
@@ -7107,6 +7143,7 @@ static void rna_def_fileselect_params(BlenderRNA *brna)
   prop = RNA_def_property(srna, "sort_method", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, nullptr, "sort");
   RNA_def_property_enum_items(prop, rna_enum_fileselect_params_sort_items);
+  RNA_def_property_enum_funcs(prop, nullptr, nullptr, "rna_FileSelectParams_sort_method_itemf");
   RNA_def_property_ui_text(prop, "Sort", "");
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_FILE_PARAMS, nullptr);
 
