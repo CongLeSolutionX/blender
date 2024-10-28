@@ -41,6 +41,7 @@ class Preprocessor {
   std::unordered_set<std::string> gpu_builtins_;
   /* Note: Could be a set, but for now the order matters. */
   std::vector<std::string> dependencies_;
+  std::stringstream generated_functions_;
   std::stringstream gpu_functions_;
 
  public:
@@ -103,8 +104,9 @@ class Preprocessor {
     str = argument_decorator_macro_injection(str);
     str = array_constructor_macro_injection(str);
     return line_directive_prefix(filename) + str + threadgroup_variables_suffix() +
-           "//__blender_metadata_sta\n" + gpu_functions_.str() + static_strings_suffix() +
-           gpu_builtins_suffix(filename) + dependency_suffix() + "//__blender_metadata_end\n";
+           generated_functions_.str() + "//__blender_metadata_sta\n" + gpu_functions_.str() +
+           static_strings_suffix() + gpu_builtins_suffix(filename) + dependency_suffix() +
+           "//__blender_metadata_end\n";
   }
 
   /* Variant use for python shaders. */
@@ -392,54 +394,62 @@ class Preprocessor {
 
   std::string resource_arguments_mutation(std::string str)
   {
-    struct FunctionArgument {
-      bool is_resource;
-      std::string qualifier;
-      std::string name;
-      std::string type;
-      std::string array;
-      std::vector<std::string> mem_qualifiers;
-      std::vector<int> slots;
+    auto create_string = [](std::function<void(std::stringstream &)> callback) {
+      std::stringstream ss;
+      callback(ss);
+      return ss.str();
     };
 
-    struct FunctionSignature {
+    struct Replacement {
       size_t position, length;
-      std::string return_type;
-      std::string name;
-      std::string body;
-      std::vector<FunctionArgument> arguments;
-      std::string generated;
+      std::string content;
     };
+    std::vector<Replacement> fn_replace;
 
-    std::vector<FunctionSignature> functions;
-
-    std::regex regex_func(R"(\n(\w+)\s+(\w+)\s*\(([^)]+\))\s*\{)");
-
-    std::regex regex_arg(
-#define mem_qualifier R"(\s*(coherent|volatile|restrict|readonly|writeonly)?)"
-        /* We can have a total of 5 memory qualifiers. Capture them individually. */
-        mem_qualifier mem_qualifier mem_qualifier mem_qualifier mem_qualifier
-#undef mem_qualifier
-        R"(\s*(const|buffer|in|out|inout)?)" /* Parameter qualifier (optional). */
-        R"(\s*(\w+))"                        /* Type. */
-        R"(\s*(\w+))"                        /* Name. */
-        R"(\s*(\[\w*\])?)"                   /* Array (optional). */
-        R"(\s*(?:,|\)))"                     /* Separator. */
+    std::regex regex_func(R"(\n(\w+))"                        /* Return type. */
+                          R"(\s+(\w+))"                       /* Function name. */
+                          R"(\s*\(([^)]+\)))"                 /* Arguments. */
+                          R"(\s*\{((?:\S|\ |\n(?!\}))+)\n\})" /* Body (assume formatting). */
     );
 
+    /* Line count from the beginning of the input string. */
     size_t line = 0;
+    /* Offset in char from the beginning of the input string. */
     size_t offset = 0;
     regex_global_search(str, regex_func, [&](const std::smatch &match) {
-      FunctionSignature parsed_fn;
-      parsed_fn.return_type = match[1].str();
-      parsed_fn.name = match[2].str();
-      parsed_fn.name = match[2].str();
+      std::string fn_return = match[1].str();
+      std::string fn_name = match[2].str();
+      std::string fn_args = match[3].str();
+      std::string fn_body = match[4].str();
 
-      std::vector<FunctionArgument> resource_args;
+      struct Argument {
+        std::string qualifier;
+        std::string name;
+        std::string type;
+        std::string array;
+        std::vector<std::string> mem_qualifiers;
+        std::vector<int> slots;
+      };
+
+      std::vector<Argument> resource_args;
+      std::vector<Argument> regular_args;
+      std::vector<Argument> all_args;
+
+      std::regex regex_arg(
+#define mem_qualifier R"(\s*(coherent|volatile|restrict|readonly|writeonly)?)"
+          /* We can have a total of 5 memory qualifiers. Capture them individually. */
+          mem_qualifier mem_qualifier mem_qualifier mem_qualifier mem_qualifier
+#undef mem_qualifier
+          R"(\s*(const|buffer|in|out|inout)?)" /* Parameter qualifier (optional). */
+          R"(\s*(\w+))"                        /* Type. */
+          R"(\s*(\w+))"                        /* Name. */
+          R"(\s*(\[\w*\])?)"                   /* Array (optional). */
+          R"(\s*(?:,|\)))"                     /* Separator. */
+      );
+
       size_t permutation_len = 1;
-      std::string args = match[3].str();
-      regex_global_search(args, regex_arg, [&](const std::smatch &arg) {
-        FunctionArgument parsed_arg;
+      regex_global_search(fn_args, regex_arg, [&](const std::smatch &arg) {
+        Argument parsed_arg;
         for (int i = 1; i <= 5; i++) {
           if (arg[i].str().empty() == false) {
             parsed_arg.mem_qualifiers.emplace_back(arg[i].str());
@@ -449,16 +459,19 @@ class Preprocessor {
         parsed_arg.type = arg[7].str();
         parsed_arg.name = arg[8].str();
         parsed_arg.array = arg[9].str();
-        parsed_arg.is_resource = parsed_arg.qualifier == "buffer";
-        /* TODO. Parse layout */
-        for (int i = 0; i < parsed_arg.is_resource * 8; i++) {
+        bool is_resource = parsed_arg.qualifier == "buffer";
+        /* TODO. Parse layout. */
+        for (int i = 0; i < is_resource * 8; i++) {
           parsed_arg.slots.emplace_back(i);
         }
-        if (parsed_arg.is_resource) {
+        if (is_resource) {
           permutation_len *= parsed_arg.slots.size();
           resource_args.emplace_back(parsed_arg);
         }
-        parsed_fn.arguments.emplace_back(parsed_arg);
+        else {
+          regular_args.emplace_back(parsed_arg);
+        }
+        all_args.emplace_back(parsed_arg);
       });
 
       std::string prefix = match.prefix().str();
@@ -474,25 +487,31 @@ class Preprocessor {
       }
 
       /* This limit is only because of how the end macro function is generated. */
-      if (parsed_fn.arguments.size() > 26) {
-        std::cerr << "Too many arguments in \"" << parsed_fn.name << "\"." << std::endl;
+      if (all_args.size() > 26) {
+        std::cerr << "Too many arguments in \"" << fn_name << "\"." << std::endl;
+        return;
       }
 
       if (permutation_len > 64) {
-        std::cerr << "Too many resource permutations in \"" << parsed_fn.name << "\". "
+        std::cerr << "Too many resource permutations in \"" << fn_name << "\". "
                   << "Use specific layout qualifier to reduce permutations." << std::endl;
         return;
       }
 
-      /* Get body. Assumes formatted source. */
-      std::string body = suffix.substr(0, suffix.find("\n}") + 1);
+      size_t lines_in_body = std::count(fn_body.begin(), fn_body.end(), '\n');
 
-      parsed_fn.position = offset - match.length(0) + 1;
-      parsed_fn.length = match.length(0) + body.size();
+      /* `#if 0` out the original declaration. Allow  */
+      Replacement fn;
+      fn.position = offset - match.length(0) + 1;
+      fn.length = match.length(0);
+      fn.content = content;
+      fn.content.replace(fn.length - 1, 1, "#endif //").replace(1, 0, "#if 0 //");
+      fn_replace.emplace_back(fn);
 
-      /* One int per resource argument for each slot the resource is declared for. */
+      /* One slot per resource argument for each slot the resource is declared for. */
       using Permutation = std::vector<int>;
 
+      /* Generate all permutations. */
       std::vector<Permutation> permutations;
       for (auto &buffer : resource_args) {
         std::vector<Permutation> permutations_copy = permutations;
@@ -509,25 +528,16 @@ class Preprocessor {
           }
         }
       }
-      for (Permutation perm : permutations) {
-        for (auto pair : perm) {
-          std::cout << pair << " ";
-        }
-        std::cout << std::endl;
-      }
 
-      {
-        std::stringstream ss;
-
-        for (const Permutation &permutation : permutations) {
+      for (const Permutation &permutation : permutations) {
+        std::string perm_cond_start = create_string([&](std::stringstream &ss) {
           auto contains = [](const std::vector<std::string> &vec, const std::string item) {
             return (std::find(vec.begin(), vec.end(), item) != vec.end());
           };
 
-          ss << "#line " << std::to_string(line - 2) << "\n";
           ss << "#if 1";
           for (int i = 0; i < resource_args.size(); i++) {
-            const FunctionArgument &buffer = resource_args[i];
+            const Argument &buffer = resource_args[i];
             std::string buf_slot = "BUF_" + std::to_string(permutation[i]);
             /* Preprocessor checks. */
             const char *array_suffix = (buffer.array.empty() ? "" : "_array");
@@ -541,83 +551,86 @@ class Preprocessor {
             }
           }
           ss << "\n";
+        });
 
-          ss << parsed_fn.return_type;
+        std::string perm_cond_end = "\n#endif\n";
+
+        std::string perm_fn_name = create_string([&](std::stringstream &ss) {
           for (int i = 0; i < resource_args.size(); i++) {
             ss << " CONCAT(";
           }
-          ss << parsed_fn.name << "_";
+          ss << fn_name << "_";
           for (int i = 0; i < resource_args.size(); i++) {
             ss << ",BUF_" << std::to_string(permutation[i]) << ")";
           }
+        });
 
+        std::string perm_fn_args = create_string([&](std::stringstream &ss) {
           ss << "(";
           char separator = ' ';
-          for (auto &arg : parsed_fn.arguments) {
-            if (arg.is_resource) {
-              continue;
-            }
+          for (auto &arg : regular_args) {
             ss << separator << arg.qualifier << " " << arg.type << " " << arg.name << arg.array;
             separator = ',';
           }
-          ss << ")\n";
+          ss << ")";
+        });
 
-          ss << "{\n";
-          std::string body_perm = body;
+        std::string perm_body = create_string([&](std::stringstream &ss) {
+          std::string body = fn_body;
           for (int i = 0; i < resource_args.size(); i++) {
-            const FunctionArgument &buffer = resource_args[i];
+            const Argument &buffer = resource_args[i];
             /* Replace argument name by buffer name macro. */
             std::string buf_slot = "BUF_" + std::to_string(permutation[i]);
             /* Only replace fullword match. */
             std::regex regex("\\b" + buffer.name + "\\b");
-            body_perm = std::regex_replace(body_perm, regex, buf_slot + "_RES");
+            body = std::regex_replace(body, regex, buf_slot + "_RES");
           }
-          ss << body_perm;
-          ss << "}\n";
+          ss << "\n{" << body << "\n}";
+        });
 
-          ss << "#endif\n";
-        }
+        generated_functions_ << perm_cond_start;
+        generated_functions_ << fn_return << perm_fn_name << perm_fn_args;
+        generated_functions_ << "\n#line " << std::to_string(line - lines_in_body);
+        generated_functions_ << perm_body;
+        generated_functions_ << perm_cond_end;
+      }
 
-        int arg_len = parsed_fn.arguments.size();
+      /* Add function macro to redirect to correct buffer implementation. */
+      std::string function_macro = create_string([&](std::stringstream &ss) {
+        /* Modify the arg name to avoid referencing another macro by accident. */
+        auto macro_arg_name = [](const std::string &arg_name) { return "___" + arg_name; };
 
-        /* Add function macro to redirect to correct buffer implementation. */
-        ss << "#define " << parsed_fn.name << "(";
-        for (int arg = 0, sep = ' '; arg < arg_len; arg++, sep = ',') {
-          ss << char(sep) << char('a' + arg);
+        /* Function macro. Same number of argument. */
+        ss << "#define " << fn_name << "(";
+        for (int i = 0, sep = ' '; i < all_args.size(); i++, sep = ',') {
+          ss << char(sep) << macro_arg_name(all_args[i].name);
         }
         ss << ") ";
-
+        /* Concatenate resource argument into function name. */
         for (int i = 0; i < resource_args.size(); i++) {
           ss << "CONCAT(";
         }
-        ss << parsed_fn.name << "_";
+        ss << fn_name << "_";
         for (int i = 0; i < resource_args.size(); i++) {
-          ss << ",__##" << char('a' + i) << ")";
+          ss << ",__##" << macro_arg_name(resource_args[i].name) << ")";
         }
-
+        /* Only regular arguments inside real function call. */
         ss << "(";
-        for (int arg = 0, sep = ' '; arg < arg_len; arg++) {
-          if (parsed_fn.arguments[arg].is_resource == false) {
-            ss << char(sep) << char('a' + arg);
-            sep = ',';
-          }
+        for (int i = 0, sep = ' '; i < regular_args.size(); i++) {
+          ss << char(sep) << macro_arg_name(regular_args[i].name);
+          sep = ',';
         }
         ss << ")\n";
+      });
 
-        size_t body_line_count = std::count(body.begin(), body.end(), '\n');
-        ss << "#line " << std::to_string(line + body_line_count + 1);
-
-        parsed_fn.generated = ss.str();
-
-        functions.emplace_back(parsed_fn);
-      }
+      generated_functions_ << function_macro << "\n";
     });
 
     {
       size_t offset = 0;
-      for (auto &fn : functions) {
-        str.replace(fn.position + offset, fn.length, fn.generated);
-        offset += fn.generated.size() - fn.length;
+      for (auto &fn : fn_replace) {
+        str.replace(fn.position + offset, fn.length, fn.content);
+        offset += fn.content.size() - fn.length;
       }
     }
     return str;
