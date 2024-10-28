@@ -241,7 +241,7 @@ bool light_loop_setup(uint l_idx,
     continue; \
   }
 
-#define LIGHT_LOOP_END() LIGHT_FOREACH_ALL_END(l_idx)
+#define LIGHT_LOOP_END() LIGHT_FOREACH_ALL_END()
 
 void main()
 {

@@ -97,7 +97,24 @@ int culling_z_to_zbin(float scale, float bias, float z)
   } \
   }
 
-#if 0
+#ifdef LIGHT_ITER_FORCE_NO_CULLING
+
+#  define LIGHT_FOREACH_ALL_BEGIN( \
+      _culling, _zbins, _words, _pixel, _linearz, _l_index, _is_local) \
+    for (uint _l_index = 0; _l_index < _culling.items_count; \
+         _l_index = (_l_index + 1 == _culling.visible_count) ? _culling.local_lights_len : \
+                                                               ++_l_index) \
+    { \
+      bool _is_local = _l_index < _culling.local_lights_len;
+
+#  define LIGHT_FOREACH_ALL_END() }
+
+#else
+
+#  define LIGHT_LOOP_STATE_LOCAL_SETUP 1
+#  define LIGHT_LOOP_STATE_LOCAL 2
+#  define LIGHT_LOOP_STATE_DIRECTIONAL 3
+
 #  define LIGHT_FOREACH_ALL_BEGIN( \
       _culling, _zbins, _words, _pixel, _linearz, _l_index, _is_local) \
     { \
@@ -115,52 +132,43 @@ int culling_z_to_zbin(float scale, float bias, float z)
       /* Same as divide by 32 but avoid integer division. */ \
       uint word_min = min_index >> 5u; \
       uint word_max = max_index >> 5u; \
-      uint word_idx = word_min; \
-      uint word; \
-      int bit_index; \
       bool _is_local = true; \
-      uint _l_index = 0; \
+      uint word_idx = word_min; \
+      uint word, _l_index; \
+      uint state = LIGHT_LOOP_STATE_LOCAL_SETUP; \
       while (true) { \
-        if (is_local) { \
-          if (word_idx > word_max) { \
-            _is_local = false; \
-            _l_index = _culling.local_lights_len; \
-          } \
-        } \
-        if (is_local) { \
+        if (state == LIGHT_LOOP_STATE_LOCAL_SETUP) { \
           word = _words[tile_word_offset + word_idx]; \
           word &= zbin_mask(word_idx, min_index, max_index); \
           /* Ensure all threads inside a subgroup get the same value to reduce VGPR usage. */ \
           word = subgroupBroadcastFirst(subgroupOr(word)); \
-          bit_index = findLSB(word); \
+          if (word_idx > word_max) { \
+            state = LIGHT_LOOP_STATE_DIRECTIONAL; \
+          } \
+          else { \
+            state = LIGHT_LOOP_STATE_LOCAL; \
+          } \
+        } \
+        if (state == LIGHT_LOOP_STATE_LOCAL) { \
+          int bit_index = findLSB(word); \
           if (bit_index == -1) { \
             word_idx++; \
+            state = LIGHT_LOOP_STATE_LOCAL_SETUP; \
             continue; \
           } \
           word &= ~1u << uint(bit_index); \
           _l_index = word_idx * 32u + bit_index; \
         } \
-        else if (_l_index >= _culling.items_count) { \
-          break; \
+        if (state == LIGHT_LOOP_STATE_DIRECTIONAL) { \
+          _is_local = false; \
+          _l_index = max(_culling.local_lights_len, _l_index + 1); \
+          if (_l_index >= _culling.items_count) { \
+            break; \
+          } \
         }
 
-#  define LIGHT_FOREACH_ALL_END(_l_index) \
-    if (!is_local) { \
-      _l_index++; \
-    } \
+#  define LIGHT_FOREACH_ALL_END() \
     } \
     }
-
-#else
-
-#  define LIGHT_FOREACH_ALL_BEGIN( \
-      _culling, _zbins, _words, _pixel, _linearz, _l_index, _is_local) \
-    for (uint _l_index = 0; _l_index < _culling.items_count; \
-         _l_index = (_l_index + 1 == _culling.visible_count) ? _culling.local_lights_len : \
-                                                               ++_l_index) \
-    { \
-      bool _is_local = _l_index < _culling.local_lights_len;
-
-#  define LIGHT_FOREACH_ALL_END(_l_index) }
 
 #endif
