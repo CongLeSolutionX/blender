@@ -398,6 +398,10 @@ class Preprocessor {
     std::stringstream generated_rename;
     std::stringstream generated_prototypes;
 
+/* Workaround a processor bug in GLSLang which prevent using CONCAT in #if directives.
+ * Eventually remove this if GLSLang get patched. */
+#define GLSL_WORKAROUND
+
     auto create_string = [](std::function<void(std::stringstream &)> callback) {
       std::stringstream ss;
       callback(ss);
@@ -483,7 +487,6 @@ class Preprocessor {
         bool is_image = (arg.qualifier == "image");
         bool is_buffer = (arg.qualifier == "buffer");
         if (is_image || is_buffer) {
-          std::cout << "Found image Arg " << arg.name << std::endl;
           arg.prefix = is_buffer ? "BUF_" : "IMG_";
 
           if (arg_match[1].matched) {
@@ -545,8 +548,7 @@ class Preprocessor {
         }
       }
 
-#if 1 /* Eventually remove this if GLSLang get patched. */
-      /* Workaround a processor bug in GLSLang which prevent using CONCAT in #if directives. */
+#ifdef GLSL_WORKAROUND
       for (auto &res : resource_args) {
         std::string rename = create_string([&](std::stringstream &ss) {
           for (const std::string &slot : res.slots) {
@@ -574,38 +576,53 @@ class Preprocessor {
             return (std::find(vec.begin(), vec.end(), item) != vec.end());
           };
 
-          ss << "#if 1";
+          std::string perm_name = fn_name;
+          for (int i = 0; i < resource_args.size(); i++) {
+            perm_name += "_" + resource_args[i].prefix + permutation[i];
+          }
+
+          ss << "#if 0";
           for (int i = 0; i < resource_args.size(); i++) {
             const Argument &arg = resource_args[i];
             const std::string &buf_slot = permutation[i];
             /* Preprocessor checks. */
             const char *array_suffix = (arg.array.empty() ? "" : "_array");
+            std::cout << "arg.type \"" << arg.type << "\"" << std::endl;
             std::string type_hash = std::to_string(hash_32(arg.type + array_suffix));
             const std::string &res_type = arg.prefix;
 
-#if 0 /* Eventually use this if GLSLang get patched. */
-            ss << " && CONCAT3(" << res_type << "," << buf_slot << ",_TYPE) == " << type_hash;
+#ifndef GLSL_WORKAROUND
+            ss << " || CONCAT3(" << res_type << "," << buf_slot << ",_TYPE) != " << type_hash;
+#else
+            ss << " || " << res_type << buf_slot << "_TYPE != " << type_hash;
+#endif
+          }
+          ss << "\n#warning " << perm_name << " disabled because of resource type mismatch\n";
 
+          ss << "#elif 0";
+          for (int i = 0; i < resource_args.size(); i++) {
+            const Argument &arg = resource_args[i];
+            const std::string &buf_slot = permutation[i];
+            const std::string &res_type = arg.prefix;
+#ifndef GLSL_WORKAROUND
             if (contains(arg.mem_qualifiers, "readonly") || arg.mem_qualifiers.empty()) {
-              ss << " && CONCAT3(" << res_type << "," << buf_slot << ",_READ)";
+              ss << " || CONCAT3(" << res_type << "," << buf_slot << ",_READ) != 1";
             }
             if (contains(arg.mem_qualifiers, "writeonly") || arg.mem_qualifiers.empty()) {
-              ss << " && CONCAT3(" << res_type << "," << buf_slot << ",_WRITE)";
+              ss << " || CONCAT3(" << res_type << "," << buf_slot << ",_WRITE) != 1";
             }
 #else
-            ss << " && " << res_type << "" << buf_slot << "_TYPE == " << type_hash;
-
             if (contains(arg.mem_qualifiers, "readonly") || arg.mem_qualifiers.empty()) {
-              ss << " && " << res_type << "" << buf_slot << "_READ";
+              ss << " || " << res_type << buf_slot << "_READ != 1";
             }
             if (contains(arg.mem_qualifiers, "writeonly") || arg.mem_qualifiers.empty()) {
-              ss << " && " << res_type << "" << buf_slot << "_WRITE";
+              ss << " || " << res_type << buf_slot << "_WRITE != 1";
             }
 #endif
           }
-          ss << "\n";
+          ss << "\n#warning " << perm_name << " disabled because of memory qualifier mismatch\n";
+          ss << "#else\n";
         });
-
         std::string perm_cond_end = "\n#endif\n";
 
         std::string perm_fn_name = create_string([&](std::stringstream &ss) {
@@ -640,6 +657,8 @@ class Preprocessor {
           }
           ss << "\n{" << body << "\n}";
         });
+
+#undef GLSL_WORKAROUND
 
         generated_functions << "\n";
         generated_functions << "// Generated function from " << fn_name << "\n";
