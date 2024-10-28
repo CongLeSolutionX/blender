@@ -1,2 +1,3 @@
 Referenced by issue #103424, Blender 3.5.0 crashes on Cycles when importing images, macOS Mojave 10.14.6 Intel
 Referenced by issue #99618, Library changes for Blender 3.5
+Referenced by issue #127132, Using bpy and usd-core together causes seg fault in Blender 4.2 Linux
