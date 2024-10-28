@@ -1510,7 +1510,6 @@ static inline void print_image_type(std::ostream &os,
     default:
       break;
   }
-  os << " ";
 }
 
 }  // namespace blender::gpu::shader
