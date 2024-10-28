@@ -237,14 +237,17 @@ void dof_coc_tile_pack(CocTile tile, out vec3 out_fg, out vec3 out_bg)
   out_bg.z = tile.bg_min_intersectable_coc;
 }
 
-#define dof_coc_tile_store(tiles_fg_img_, tiles_bg_img_, texel_out_, tile_data_) \
-  if (true) { \
-    vec3 out_fg; \
-    vec3 out_bg; \
-    dof_coc_tile_pack(tile_data_, out_fg, out_bg); \
-    imageStore(tiles_fg_img_, texel_out_, out_fg.xyzz); \
-    imageStore(tiles_bg_img_, texel_out_, out_bg.xyzz); \
-  }
+void dof_coc_tile_store(binding(2) writeonly image image2D tiles_fg,
+                        binding(3) writeonly image image2D tiles_bg,
+                        ivec2 texel_out,
+                        CocTile tile_data)
+{
+  vec3 out_fg;
+  vec3 out_bg;
+  dof_coc_tile_pack(tile_data, out_fg, out_bg);
+  imageStore(tiles_fg, texel_out, out_fg.xyzz);
+  imageStore(tiles_bg, texel_out, out_bg.xyzz);
+}
 
 bool dof_do_fast_gather(float max_absolute_coc, float min_absolute_coc, const bool is_foreground)
 {
