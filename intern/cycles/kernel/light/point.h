@@ -191,16 +191,19 @@ template<bool in_volume_segment>
 ccl_device_forceinline bool point_light_tree_parameters(const ccl_global KernelLight *klight,
                                                         const float3 centroid,
                                                         const float3 closest_P,
+                                                        const float3 bcone_axis,
                                                         ccl_private LightTreeParams &params)
 {
+  if (in_volume_segment) {
+    params.point_to_centroid = -bcone_axis;
+    params.distance = len(centroid - closest_P) * one_float2();
+    /* Any value in [-1, 1], irrelevant since theta = 0 */
+    params.cos_theta_u = 1.0f;
+    return true;
+  }
   float min_distance;
   params.point_to_centroid = safe_normalize_len(centroid - closest_P, &min_distance);
   params.distance = min_distance * one_float2();
-
-  if (in_volume_segment) {
-    params.cos_theta_u = 1.0f; /* Any value in [-1, 1], irrelevant since theta = 0 */
-    return true;
-  }
 
   const float radius = klight->spot.radius;
 

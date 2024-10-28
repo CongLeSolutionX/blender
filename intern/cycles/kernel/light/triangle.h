@@ -295,14 +295,16 @@ ccl_device_forceinline bool triangle_light_tree_parameters(
     const ccl_global KernelLightTreeEmitter *kemitter,
     const float3 centroid,
     const float3 closest_P,
-    const float3 N,
+    const float3 ray_P,
+    const float3 N_or_D,
+    const float t,
     const BoundingCone bcone,
     ccl_private LightTreeParams &params)
 {
   /* TODO: a cheap substitute for minimal distance between point and primitive. Does it worth the
    * overhead to compute the accurate minimal distance? */
   float min_distance;
-  params.point_to_centroid = safe_normalize_len(centroid - closest_P, &min_distance);
+  const float3 closest_point_to_centroid = safe_normalize_len(centroid - closest_P, &min_distance);
   params.distance = make_float2(min_distance, min_distance);
 
   params.cos_theta_u = FLT_MAX;
@@ -316,14 +318,24 @@ ccl_device_forceinline bool triangle_light_tree_parameters(
     float distance_point_to_corner;
     const float3 point_to_corner = safe_normalize_len(corner - closest_P,
                                                       &distance_point_to_corner);
-    params.cos_theta_u = fminf(params.cos_theta_u, dot(params.point_to_centroid, point_to_corner));
-    shape_above_surface |= dot(point_to_corner, N) > 0;
+    params.cos_theta_u = fminf(params.cos_theta_u,
+                               dot(closest_point_to_centroid, point_to_corner));
+    shape_above_surface |= dot(point_to_corner, N_or_D) > 0;
     if (!in_volume_segment) {
       params.distance.x = fmaxf(params.distance.x, distance_point_to_corner);
     }
   }
 
-  const bool front_facing = bcone.theta_o != 0.0f || dot(bcone.axis, params.point_to_centroid) < 0;
+  const bool front_facing = bcone.theta_o != 0.0f ||
+                            dot(bcone.axis, closest_point_to_centroid) < 0;
+
+  if (in_volume_segment) {
+    const float3 ray_D = N_or_D;
+    params.point_to_centroid = -light_tree_v(centroid, ray_P, ray_D, bcone.axis, t);
+  }
+  else {
+    params.point_to_centroid = closest_point_to_centroid;
+  }
 
   return front_facing && shape_above_surface;
 }

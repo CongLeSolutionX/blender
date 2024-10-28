@@ -397,7 +397,7 @@ ccl_device void light_tree_emitter_importance(KernelGlobals kg,
   float energy = kemitter->energy;
   if (is_triangle(kemitter)) {
     is_visible = triangle_light_tree_parameters<in_volume_segment>(
-        kg, kemitter, centroid, P_c, N_or_D, bcone, params);
+        kg, kemitter, centroid, P_c, P, N_or_D, t, bcone, params);
   }
   else {
     kernel_assert(is_light(kemitter));
@@ -406,15 +406,16 @@ ccl_device void light_tree_emitter_importance(KernelGlobals kg,
       /* Function templates only modifies cos_theta_u when in_volume_segment = true. */
       case LIGHT_SPOT:
         is_visible = spot_light_tree_parameters<in_volume_segment>(
-            klight, centroid, P_c, bcone, params, energy);
+            klight, centroid, P_c, P, N_or_D, t, bcone, params, energy);
         break;
       case LIGHT_POINT:
-        is_visible = point_light_tree_parameters<in_volume_segment>(klight, centroid, P_c, params);
+        is_visible = point_light_tree_parameters<in_volume_segment>(
+            klight, centroid, P_c, bcone.axis, params);
         bcone.theta_o = 0.0f;
         break;
       case LIGHT_AREA:
         is_visible = area_light_tree_parameters<in_volume_segment>(
-            klight, centroid, P_c, N_or_D, bcone.axis, params);
+            klight, centroid, P_c, P, N_or_D, t, bcone.axis, params);
         break;
       case LIGHT_BACKGROUND:
         is_visible = background_light_tree_parameters<in_volume_segment>(
@@ -423,9 +424,6 @@ ccl_device void light_tree_emitter_importance(KernelGlobals kg,
       case LIGHT_DISTANT:
         is_visible = distant_light_tree_parameters<in_volume_segment>(
             centroid, bcone.theta_e, t, params, theta_d);
-        if (in_volume_segment) {
-          centroid = P - bcone.axis;
-        }
         break;
       default:
         return;
@@ -435,10 +433,6 @@ ccl_device void light_tree_emitter_importance(KernelGlobals kg,
   is_visible |= has_transmission;
   if (!is_visible) {
     return;
-  }
-
-  if (in_volume_segment) {
-    params.point_to_centroid = -light_tree_v(centroid, P, N_or_D, bcone.axis, t);
   }
 
   light_tree_importance<in_volume_segment>(

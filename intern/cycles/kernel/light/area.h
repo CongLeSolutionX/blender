@@ -496,14 +496,16 @@ template<bool in_volume_segment>
 ccl_device_forceinline bool area_light_tree_parameters(const ccl_global KernelLight *klight,
                                                        const float3 centroid,
                                                        const float3 closest_P,
-                                                       const float3 N,
+                                                       const float3 ray_P,
+                                                       const float3 N_or_D,
+                                                       const float t,
                                                        const float3 bcone_axis,
                                                        ccl_private LightTreeParams &params)
 {
   /* TODO: a cheap substitute for minimal distance between point and primitive. Does it worth the
    * overhead to compute the accurate minimal distance? */
   float min_distance;
-  params.point_to_centroid = safe_normalize_len(centroid - closest_P, &min_distance);
+  const float3 closest_point_to_centroid = safe_normalize_len(centroid - closest_P, &min_distance);
   params.distance = make_float2(min_distance, min_distance);
 
   params.cos_theta_u = FLT_MAX;
@@ -515,16 +517,25 @@ ccl_device_forceinline bool area_light_tree_parameters(const ccl_global KernelLi
     float distance_point_to_corner;
     const float3 point_to_corner = safe_normalize_len(corner - closest_P,
                                                       &distance_point_to_corner);
-    params.cos_theta_u = fminf(params.cos_theta_u, dot(params.point_to_centroid, point_to_corner));
+    params.cos_theta_u = fminf(params.cos_theta_u,
+                               dot(closest_point_to_centroid, point_to_corner));
     if (!in_volume_segment) {
       params.distance.x = fmaxf(params.distance.x, distance_point_to_corner);
     }
   }
 
-  const bool front_facing = dot(bcone_axis, params.point_to_centroid) < 0;
-  const bool shape_above_surface = dot(N, centroid - closest_P) + fabsf(dot(N, extentu)) +
-                                       fabsf(dot(N, extentv)) >
+  const bool front_facing = dot(bcone_axis, closest_point_to_centroid) < 0;
+  const bool shape_above_surface = dot(N_or_D, centroid - closest_P) +
+                                       fabsf(dot(N_or_D, extentu)) + fabsf(dot(N_or_D, extentv)) >
                                    0;
+
+  if (in_volume_segment) {
+    const float3 ray_D = N_or_D;
+    params.point_to_centroid = -light_tree_v(centroid, ray_P, ray_D, bcone_axis, t);
+  }
+  else {
+    params.point_to_centroid = closest_point_to_centroid;
+  }
 
   return front_facing && shape_above_surface;
 }
