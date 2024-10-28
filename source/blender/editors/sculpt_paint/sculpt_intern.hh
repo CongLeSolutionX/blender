@@ -168,8 +168,8 @@ struct StrokeCache {
    * Some brushes change behavior drastically depending on the directional value (i.e. the smooth
    * and enhance details functionality being bound to the Smooth brush).
    *
-   * We store the initial direction here to be able to discern the initial intent without needing
-   * to inspect the sign of the brush direction, as that has ambiguity when the strength is 0.
+   * Storing the initial direction allows discerning the behavior without checking the sign of the
+   * brush direction at every step, which would have ambiguity at 0.
    */
   bool initial_direction_flipped;
 
