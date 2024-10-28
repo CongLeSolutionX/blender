@@ -42,6 +42,7 @@ class Preprocessor {
   /* Note: Could be a set, but for now the order matters. */
   std::vector<std::string> dependencies_;
   std::stringstream gpu_functions_;
+  std::stringstream generated_prototypes_;
 
  public:
   /* Compile-time hashing function which converts string to a 64bit hash. */
@@ -102,9 +103,10 @@ class Preprocessor {
     str = enum_macro_injection(str);
     str = argument_decorator_macro_injection(str);
     str = array_constructor_macro_injection(str);
-    return line_directive_prefix(filename) + str + threadgroup_variables_suffix() +
-           "//__blender_metadata_sta\n" + gpu_functions_.str() + static_strings_suffix() +
-           gpu_builtins_suffix(filename) + dependency_suffix() + "//__blender_metadata_end\n";
+    return generated_prototypes_.str() + line_directive_prefix(filename) + str +
+           threadgroup_variables_suffix() + "//__blender_metadata_sta\n" + gpu_functions_.str() +
+           static_strings_suffix() + gpu_builtins_suffix(filename) + dependency_suffix() +
+           "//__blender_metadata_end\n";
   }
 
   /* Variant use for python shaders. */
@@ -392,7 +394,8 @@ class Preprocessor {
 
   std::string resource_arguments_mutation(std::string str)
   {
-    std::stringstream generated_;
+    std::stringstream generated_functions;
+    std::stringstream generated_prototypes;
 
     auto create_string = [](std::function<void(std::stringstream &)> callback) {
       std::stringstream ss;
@@ -598,13 +601,17 @@ class Preprocessor {
           ss << "\n{" << body << "\n}";
         });
 
-        generated_ << "\n";
-        generated_ << "// Generated function from " << fn_name << "\n";
-        generated_ << perm_cond_start;
-        generated_ << fn_return << perm_fn_name << perm_fn_args;
-        generated_ << "\n#line " << std::to_string(line - lines_in_body);
-        generated_ << perm_body;
-        generated_ << perm_cond_end;
+        generated_functions << "\n";
+        generated_functions << "// Generated function from " << fn_name << "\n";
+        generated_functions << perm_cond_start;
+        generated_functions << fn_return << perm_fn_name << perm_fn_args;
+        generated_functions << "\n#line " << std::to_string(line - lines_in_body);
+        generated_functions << perm_body;
+        generated_functions << perm_cond_end;
+
+        generated_prototypes << perm_cond_start;
+        generated_prototypes << fn_return << perm_fn_name << perm_fn_args << ";";
+        generated_prototypes << perm_cond_end;
       }
 
       /* Add function macro to redirect to correct buffer implementation. */
@@ -635,8 +642,14 @@ class Preprocessor {
         ss << ")\n";
       });
 
-      generated_ << function_macro << "\n";
+      generated_functions << function_macro << "\n";
     });
+
+    if (!fn_replace.empty()) {
+      generated_prototypes_ << "#ifndef GPU_METAL\n";
+      generated_prototypes_ << generated_prototypes.str();
+      generated_prototypes_ << "#endif\n";
+    }
 
     {
       /* Mute original declaration for correct error reports.*/
@@ -646,7 +659,7 @@ class Preprocessor {
         offset += fn.content.size() - fn.length;
       }
     }
-    return str += generated_.str();
+    return str += generated_functions.str();
   }
 
   std::string enum_macro_injection(std::string str)
