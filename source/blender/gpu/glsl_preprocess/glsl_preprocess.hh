@@ -42,7 +42,7 @@ class Preprocessor {
   /* Note: Could be a set, but for now the order matters. */
   std::vector<std::string> dependencies_;
   std::stringstream gpu_functions_;
-  std::stringstream generated_prototypes_;
+  std::stringstream generated_header_;
 
  public:
   /* Compile-time hashing function which converts string to a 64bit hash. */
@@ -111,7 +111,7 @@ class Preprocessor {
     str = enum_macro_injection(str);
     str = argument_decorator_macro_injection(str);
     str = array_constructor_macro_injection(str);
-    return generated_prototypes_.str() + line_directive_prefix(filename) + str +
+    return generated_header_.str() + line_directive_prefix(filename) + str +
            threadgroup_variables_suffix() + "//__blender_metadata_sta\n" + gpu_functions_.str() +
            static_strings_suffix() + gpu_builtins_suffix(filename) + dependency_suffix() +
            "//__blender_metadata_end\n";
@@ -395,6 +395,7 @@ class Preprocessor {
   std::string resource_arguments_mutation(std::string str)
   {
     std::stringstream generated_functions;
+    std::stringstream generated_rename;
     std::stringstream generated_prototypes;
 
     auto create_string = [](std::function<void(std::stringstream &)> callback) {
@@ -543,6 +544,23 @@ class Preprocessor {
         }
       }
 
+      /* Workaround a processor bug in GLSLang which prevent using CONCAT in #if directives. */
+      for (auto &buffer : resource_args) {
+        for (const std::string &slot : buffer.slots) {
+          if (std::isdigit(slot[0])) {
+            continue;
+          }
+          generated_rename << "#if 0\n";
+          for (int i = 0; i < 8; i++) {
+            generated_rename << "#elif " << slot << "==" << i << "\n";
+            generated_rename << "#define BUF_" << slot << "_TYPE BUF_" << i << "_TYPE\n";
+            generated_rename << "#define BUF_" << slot << "_READ BUF_" << i << "_READ\n";
+            generated_rename << "#define BUF_" << slot << "_WRITE BUF_" << i << "_WRITE\n";
+          }
+          generated_rename << "#endif\n";
+        }
+      }
+
       for (const Permutation &permutation : permutations) {
         std::string perm_cond_start = create_string([&](std::stringstream &ss) {
           auto contains = [](const std::vector<std::string> &vec, const std::string item) {
@@ -555,8 +573,9 @@ class Preprocessor {
             const std::string &buf_slot = permutation[i];
             /* Preprocessor checks. */
             const char *array_suffix = (buffer.array.empty() ? "" : "_array");
-
             uint64_t type_hash = hash_32(buffer.type + array_suffix);
+
+#if 0 /* Eventually use this if GLSLang get patched. */
             ss << " && CONCAT3(BUF_," << buf_slot << ",_TYPE) == " << std::to_string(type_hash);
 
             if (contains(buffer.mem_qualifiers, "readonly") || buffer.mem_qualifiers.empty()) {
@@ -565,6 +584,16 @@ class Preprocessor {
             if (contains(buffer.mem_qualifiers, "writeonly") || buffer.mem_qualifiers.empty()) {
               ss << " && CONCAT3(BUF_," << buf_slot << ",_WRITE)";
             }
+#else
+            ss << " && BUF_" << buf_slot << "_TYPE == " << std::to_string(type_hash);
+
+            if (contains(buffer.mem_qualifiers, "readonly") || buffer.mem_qualifiers.empty()) {
+              ss << " && BUF_" << buf_slot << "_READ";
+            }
+            if (contains(buffer.mem_qualifiers, "writeonly") || buffer.mem_qualifiers.empty()) {
+              ss << " && BUF_" << buf_slot << "_WRITE";
+            }
+#endif
           }
           ss << "\n";
         });
@@ -648,9 +677,11 @@ class Preprocessor {
     });
 
     if (!fn_replace.empty()) {
-      generated_prototypes_ << "#ifndef GPU_METAL\n";
-      generated_prototypes_ << generated_prototypes.str();
-      generated_prototypes_ << "#endif\n";
+      generated_header_ << generated_rename.str();
+
+      generated_header_ << "#ifndef GPU_METAL\n";
+      generated_header_ << generated_prototypes.str();
+      generated_header_ << "#endif\n";
     }
 
     {
