@@ -28,6 +28,18 @@ typedef struct LightSample {
   int emitter_id;      /* index in the emitter array */
 } LightSample;
 
+/* Light tree parameters. */
+struct LightTreeParams {
+  /* When in volume segment, this is the normalized vector that forms a minimal angle with the
+   * negative of the emitter axis; when not in volume segment, this is the normalized vector from
+   * the shading point to the centroid. */
+  packed_float3 point_to_centroid;
+
+  float cos_theta_u;
+  /* distance.x = max_distance, distance.y = min_distance */
+  float2 distance;
+};
+
 /* Utilities */
 
 ccl_device_inline float3 ellipse_sample(float3 ru, float3 rv, float2 rand)

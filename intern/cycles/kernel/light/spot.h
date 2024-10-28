@@ -287,44 +287,44 @@ ccl_device_forceinline bool spot_light_tree_parameters(const ccl_global KernelLi
                                                        const float3 centroid,
                                                        const float3 closest_P,
                                                        const ccl_private BoundingCone &bcone,
-                                                       ccl_private float &cos_theta_u,
-                                                       ccl_private float2 &distance,
-                                                       ccl_private float3 &point_to_centroid,
+                                                       ccl_private LightTreeParams &params,
                                                        ccl_private float &energy)
 {
   float min_distance;
-  point_to_centroid = safe_normalize_len(centroid - closest_P, &min_distance);
-  distance = min_distance * one_float2();
+  params.point_to_centroid = safe_normalize_len(centroid - closest_P, &min_distance);
+  params.distance = min_distance * one_float2();
 
   const float radius = klight->spot.radius;
 
   if (klight->spot.is_sphere) {
-    cos_theta_u = (min_distance > radius) ? cos_from_sin(radius / min_distance) : -1.0f;
+    params.cos_theta_u = (min_distance > radius) ? cos_from_sin(radius / min_distance) : -1.0f;
 
     if (in_volume_segment) {
       return true;
     }
 
-    distance = (min_distance > radius) ? min_distance * make_float2(1.0f / cos_theta_u, 1.0f) :
-                                         one_float2() * radius / M_SQRT2_F;
+    params.distance = (min_distance > radius) ?
+                          min_distance * make_float2(1.0f / params.cos_theta_u, 1.0f) :
+                          one_float2() * radius / M_SQRT2_F;
   }
   else {
     const float hypotenus = sqrtf(sqr(radius) + sqr(min_distance));
-    cos_theta_u = min_distance / hypotenus;
+    params.cos_theta_u = min_distance / hypotenus;
 
     if (in_volume_segment) {
       return true;
     }
 
-    distance.x = hypotenus;
+    params.distance.x = hypotenus;
   }
 
   /* Apply a similar scaling as in `spot_light_attenuation()` to account for spot blend. */
   {
     /* Minimum angle formed by the emitter axis and the direction to the shading point,
      * cos(theta') in the paper. */
-    const float cos_min_outgoing_angle = cosf(
-        fmaxf(0.0f, fast_acosf(dot(bcone.axis, -point_to_centroid)) - fast_acosf(cos_theta_u)));
+    const float cos_min_outgoing_angle = cosf(fmaxf(
+        0.0f,
+        fast_acosf(dot(bcone.axis, -params.point_to_centroid)) - fast_acosf(params.cos_theta_u)));
     /* Use `cos(bcone.theta_e)` instead of `klight->spot.cos_half_spot_angle` to account for
      * non-uniform scaling. */
     energy *= smoothstepf((cos_min_outgoing_angle - cosf(bcone.theta_e)) *

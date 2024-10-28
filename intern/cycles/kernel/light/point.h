@@ -191,16 +191,14 @@ template<bool in_volume_segment>
 ccl_device_forceinline bool point_light_tree_parameters(const ccl_global KernelLight *klight,
                                                         const float3 centroid,
                                                         const float3 closest_P,
-                                                        ccl_private float &cos_theta_u,
-                                                        ccl_private float2 &distance,
-                                                        ccl_private float3 &point_to_centroid)
+                                                        ccl_private LightTreeParams &params)
 {
   float min_distance;
-  point_to_centroid = safe_normalize_len(centroid - closest_P, &min_distance);
-  distance = min_distance * one_float2();
+  params.point_to_centroid = safe_normalize_len(centroid - closest_P, &min_distance);
+  params.distance = min_distance * one_float2();
 
   if (in_volume_segment) {
-    cos_theta_u = 1.0f; /* Any value in [-1, 1], irrelevant since theta = 0 */
+    params.cos_theta_u = 1.0f; /* Any value in [-1, 1], irrelevant since theta = 0 */
     return true;
   }
 
@@ -209,21 +207,21 @@ ccl_device_forceinline bool point_light_tree_parameters(const ccl_global KernelL
   if (klight->spot.is_sphere) {
     if (min_distance > radius) {
       /* Equivalent to a disk light with the same angular span. */
-      cos_theta_u = cos_from_sin(radius / min_distance);
-      distance.x = min_distance / cos_theta_u;
+      params.cos_theta_u = cos_from_sin(radius / min_distance);
+      params.distance.x = min_distance / params.cos_theta_u;
     }
     else {
       /* Similar to background light. */
-      cos_theta_u = -1.0f;
+      params.cos_theta_u = -1.0f;
       /* HACK: pack radiance scaling in the distance. */
-      distance = one_float2() * radius / M_SQRT2_F;
+      params.distance = one_float2() * radius / M_SQRT2_F;
     }
   }
   else {
     const float hypotenus = sqrtf(sqr(radius) + sqr(min_distance));
-    cos_theta_u = min_distance / hypotenus;
+    params.cos_theta_u = min_distance / hypotenus;
 
-    distance.x = hypotenus;
+    params.distance.x = hypotenus;
   }
 
   return true;
