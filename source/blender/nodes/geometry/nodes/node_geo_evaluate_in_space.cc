@@ -12,6 +12,8 @@
 
 #include "node_geometry_util.hh"
 
+// TODO: use math::rcp().
+
 namespace blender {
 
 template<typename T> std::ostream &operator<<(std::ostream &stream, Vector<T> data);
@@ -63,11 +65,7 @@ static void node_declare(NodeDeclarationBuilder &b)
 
   b.add_input<decl::Int>("Power").default_value(2);
 
-  b.add_input<decl::Float>("Precision")
-      .subtype(PROP_FACTOR)
-      .min(0.0f)
-      .max(1.0f)
-      .default_value(0.5f);
+  b.add_input<decl::Float>("Precision").subtype(PROP_FACTOR).min(1.0f).default_value(2.0f);
 
   b.add_output<decl::Vector>("Weighted Sum").field_source_reference_all();
   b.add_output<decl::Vector>("Weighed Difference Sum").field_source_reference_all();
@@ -263,10 +261,32 @@ static void akdt_radius_exact(const GroupedSpan<float3> data,
     const int segment_size = (1 << (total_nesting - nesting_i));
     for (const int i : level_dst_radius.index_range()) {
       const IndexRange data_range(segment_size * i, segment_size);
-      level_dst_radius[i] = max_distance(data[data_range],
-                                         level_src_data_values[i]);
+      level_dst_radius[i] = max_distance(data[data_range], level_src_data_values[i]);
     }
   }
+}
+
+static float minimal_dinstance_to(const float radius,
+                                  const int distance_power,
+                                  const float precision)
+{
+  /**
+   * Centre of the sphere with a points inside the centre and some virtual point which is the most
+   * near to the sempler:
+   *
+   * 1 / distance <= 1 / (distance - radius).
+   *
+   * They are equal at ~infinite distance. But with error they can be treat as equal much near
+   * To approximate this use some factor (1 <= precision <= infinite) to say how large error is
+   * acceptable:
+   *
+   * 1 / distance >= 1 / (distance - radius) * precision.
+   *
+   * Version in arbitrary degree:
+   *
+   * (1 / distance) ^ distance_power >= precision * (1 / (distance - radius)) ^ distance_power.
+   * */
+  return radius / (math::pow<float>(precision, distance_power) - 1.0f);
 }
 
 static float3 akdt_average()
@@ -278,12 +298,19 @@ class DifferenceSumFieldInput final : public bke::GeometryFieldInput {
  private:
   const Field<float3> positions_field_;
   const Field<float3> value_field_;
+  const int distance_power_;
+  const float precision_;
 
  public:
-  DifferenceSumFieldInput(Field<float3> positions_field, Field<float3> value_field)
+  DifferenceSumFieldInput(Field<float3> positions_field,
+                          Field<float3> value_field,
+                          const int distance_power,
+                          const float precision)
       : bke::GeometryFieldInput(CPPType::get<float3>(), "Weighed Difference Sum"),
         positions_field_(std::move(positions_field)),
-        value_field_(std::move(value_field))
+        value_field_(std::move(value_field)),
+        distance_power_(distance_power),
+        precision_(precision)
   {
   }
 
@@ -316,7 +343,8 @@ class DifferenceSumFieldInput final : public bke::GeometryFieldInput {
     akdt_from_positions(positions, base_offsets, total_nesting, indices);
 
     Array<float3> akdt_positions(positions.size());
-    array_utils::gather(Span<float3>(positions), indices.as_span(), akdt_positions.as_mutable_span());
+    array_utils::gather(
+        Span<float3>(positions), indices.as_span(), akdt_positions.as_mutable_span());
     const GroupedSpan<float3> adst_data(base_offsets, akdt_positions.as_span());
 
     const int adst_data_size = n_levels_sum(total_nesting);
@@ -328,11 +356,13 @@ class DifferenceSumFieldInput final : public bke::GeometryFieldInput {
     Array<float> radii(adst_data_size);
     akdt_radius_exact(adst_data, total_nesting, centres, radii);
 
+    std::transform(radii.begin(), radii.end(), radii.begin(), [&](const float radius) {
+      return minimal_dinstance_to(radius, distance_power_, precision_);
+    });
+
     std::cout << centres << ";\n";
     std::cout << radii << ";\n";
-    
-    
-    
+
     Array<float3> dst_values(positions.size());
 
     return VArray<float3>::ForContainer(std::move(dst_values));
@@ -355,9 +385,9 @@ static void node_geo_exec(GeoNodeExecParams params)
   const float precision_value = params.extract_input<float>("Precision");
 
   if (params.output_is_required("Weighed Difference Sum")) {
-    params.set_output(
-        "Weighed Difference Sum",
-        Field<float3>(std::make_shared<DifferenceSumFieldInput>(position_field, value_field)));
+    params.set_output("Weighed Difference Sum",
+                      Field<float3>(std::make_shared<DifferenceSumFieldInput>(
+                          position_field, value_field, power_value, precision_value)));
   }
 
   if (params.output_is_required("Weighted Sum")) {
