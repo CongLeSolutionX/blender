@@ -70,7 +70,7 @@ static void node_declare(NodeDeclarationBuilder &b)
       .default_value(0.5f);
 
   b.add_output<decl::Vector>("Weighted Sum").field_source_reference_all();
-  b.add_output<decl::Int>("Weighed Difference Sum").field_source_reference_all();
+  b.add_output<decl::Vector>("Weighed Difference Sum").field_source_reference_all();
 }
 
 static constexpr int min_size = 10;
@@ -162,17 +162,15 @@ static void foreach_bottom_to_top(const int total_elements, const Func &func)
   }
 }
 
-static void akdt_mean_sums(const Span<int> indices,
-                           const OffsetIndices<int> offsets,
-                           const Span<float3> src_values,
+static void akdt_mean_sums(const GroupedSpan<float3> data,
                            const int total_nesting,
                            MutableSpan<float3> dst_values)
 {
   {
     MutableSpan<float3> level_dst_values = dst_values.slice(level_range(total_nesting));
-    BLI_assert(level_dst_values.size() == offsets.size());
-    for (const int i : offsets.index_range()) {
-      const Span<float3> src_base_segment = src_values.slice(offsets[i]);
+    BLI_assert(level_dst_values.size() == data.size());
+    for (const int i : data.index_range()) {
+      const Span<float3> src_base_segment = data[i];
       level_dst_values[i] = std::accumulate(
           src_base_segment.begin(), src_base_segment.end(), float3(0.0f));
     }
@@ -253,9 +251,8 @@ static void akdt_radius(const OffsetIndices<int> base_offsets,
   }
 }
 
-static void akdt_radius_exact(const OffsetIndices<int> base_offsets,
+static void akdt_radius_exact(const GroupedSpan<float3> data,
                               const int total_nesting,
-                              const Span<float3> src_values,
                               const Span<float3> src_data,
                               MutableSpan<float> dst_radius)
 {
@@ -266,10 +263,15 @@ static void akdt_radius_exact(const OffsetIndices<int> base_offsets,
     const int segment_size = (1 << (total_nesting - nesting_i));
     for (const int i : level_dst_radius.index_range()) {
       const IndexRange data_range(segment_size * i, segment_size);
-      level_dst_radius[i] = max_distance(src_values.slice(base_offsets[data_range]),
+      level_dst_radius[i] = max_distance(data[data_range],
                                          level_src_data_values[i]);
     }
   }
+}
+
+static float3 akdt_average()
+{
+  return {};
 }
 
 class DifferenceSumFieldInput final : public bke::GeometryFieldInput {
@@ -279,7 +281,7 @@ class DifferenceSumFieldInput final : public bke::GeometryFieldInput {
 
  public:
   DifferenceSumFieldInput(Field<float3> positions_field, Field<float3> value_field)
-      : bke::GeometryFieldInput(CPPType::get<int>(), "Weighed Difference Sum"),
+      : bke::GeometryFieldInput(CPPType::get<float3>(), "Weighed Difference Sum"),
         positions_field_(std::move(positions_field)),
         value_field_(std::move(value_field))
   {
@@ -297,7 +299,7 @@ class DifferenceSumFieldInput final : public bke::GeometryFieldInput {
     evaluator.add(value_field_);
     evaluator.evaluate();
     const VArraySpan<float3> positions = evaluator.get_evaluated<float3>(0);
-    const VArraySpan<float3> values = evaluator.get_evaluated<float3>(1);
+    const VArraySpan<float3> src_values = evaluator.get_evaluated<float3>(1);
 
     const int total_nesting = akdt_nesting_for_size(positions.size());
 
@@ -313,21 +315,27 @@ class DifferenceSumFieldInput final : public bke::GeometryFieldInput {
     Array<int> indices(positions.size());
     akdt_from_positions(positions, base_offsets, total_nesting, indices);
 
-    const int tree_data_size = akdt_total_for_base(base_offsets.size());
+    Array<float3> akdt_positions(positions.size());
+    array_utils::gather(Span<float3>(positions), indices.as_span(), akdt_positions.as_mutable_span());
+    const GroupedSpan<float3> adst_data(base_offsets, akdt_positions.as_span());
 
     const int adst_data_size = n_levels_sum(total_nesting);
 
     Array<float3> centres(adst_data_size);
-    akdt_mean_sums(indices, base_offsets, positions, total_nesting, centres);
+    akdt_mean_sums(adst_data, total_nesting, centres);
     akdt_normalize_for_size(base_offsets, total_nesting, centres);
 
     Array<float> radii(adst_data_size);
-    akdt_radius_exact(base_offsets, total_nesting, positions, centres, radii);
+    akdt_radius_exact(adst_data, total_nesting, centres, radii);
 
     std::cout << centres << ";\n";
     std::cout << radii << ";\n";
+    
+    
+    
+    Array<float3> dst_values(positions.size());
 
-    return VArray<int>::ForContainer(std::move(indices));
+    return VArray<float3>::ForContainer(std::move(dst_values));
   }
 
  public:
@@ -343,10 +351,13 @@ static void node_geo_exec(GeoNodeExecParams params)
   Field<float3> position_field = params.extract_input<Field<float3>>("Position");
   Field<float3> value_field = params.extract_input<Field<float3>>("Value");
 
+  const int power_value = params.extract_input<int>("Power");
+  const float precision_value = params.extract_input<float>("Precision");
+
   if (params.output_is_required("Weighed Difference Sum")) {
     params.set_output(
         "Weighed Difference Sum",
-        Field<int>(std::make_shared<DifferenceSumFieldInput>(position_field, value_field)));
+        Field<float3>(std::make_shared<DifferenceSumFieldInput>(position_field, value_field)));
   }
 
   if (params.output_is_required("Weighted Sum")) {
