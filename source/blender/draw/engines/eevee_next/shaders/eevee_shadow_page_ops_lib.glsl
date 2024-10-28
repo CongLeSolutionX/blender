@@ -50,8 +50,8 @@ void shadow_page_free(inout ShadowTileData tile)
 }
 
 /* Remove last page from the free heap and give ownership to the tile. */
-void shadow_page_alloc(buffer ShadowPagesInfoData pages_infos,
-                       buffer uint pages_free[],
+void shadow_page_alloc(binding(2) buffer ShadowPagesInfoData pages_infos,
+                       binding(3) buffer uint pages_free[],
                        inout ShadowTileData tile)
 {
   assert(!tile.is_allocated);
@@ -70,7 +70,7 @@ void shadow_page_alloc(buffer ShadowPagesInfoData pages_infos,
 }
 
 /* Remove page ownership from the tile cache and append it to the cache. */
-void shadow_page_cache_append(buffer ShadowPagesInfoData pages_infos,
+void shadow_page_cache_append(binding(2) buffer ShadowPagesInfoData pages_infos,
                               inout ShadowTileData tile,
                               uint tile_index)
 {

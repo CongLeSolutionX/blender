@@ -41,7 +41,6 @@ class Preprocessor {
   std::unordered_set<std::string> gpu_builtins_;
   /* Note: Could be a set, but for now the order matters. */
   std::vector<std::string> dependencies_;
-  std::stringstream generated_functions_;
   std::stringstream gpu_functions_;
 
  public:
@@ -104,9 +103,8 @@ class Preprocessor {
     str = argument_decorator_macro_injection(str);
     str = array_constructor_macro_injection(str);
     return line_directive_prefix(filename) + str + threadgroup_variables_suffix() +
-           generated_functions_.str() + "//__blender_metadata_sta\n" + gpu_functions_.str() +
-           static_strings_suffix() + gpu_builtins_suffix(filename) + dependency_suffix() +
-           "//__blender_metadata_end\n";
+           "//__blender_metadata_sta\n" + gpu_functions_.str() + static_strings_suffix() +
+           gpu_builtins_suffix(filename) + dependency_suffix() + "//__blender_metadata_end\n";
   }
 
   /* Variant use for python shaders. */
@@ -394,6 +392,8 @@ class Preprocessor {
 
   std::string resource_arguments_mutation(std::string str)
   {
+    std::stringstream generated_;
+
     auto create_string = [](std::function<void(std::stringstream &)> callback) {
       std::stringstream ss;
       callback(ss);
@@ -408,7 +408,7 @@ class Preprocessor {
 
     std::regex regex_func(R"(\n(\w+))"                        /* Return type. */
                           R"(\s+(\w+))"                       /* Function name. */
-                          R"(\s*\(([^)]+\)))"                 /* Arguments. */
+                          R"(\s*\(((?:[^)]|\)(?!\n))+\)))"    /* Arguments. */
                           R"(\s*\{((?:\S|\ |\n(?!\}))+)\n\})" /* Body (assume formatting). */
     );
 
@@ -421,6 +421,19 @@ class Preprocessor {
       std::string fn_name = match[2].str();
       std::string fn_args = match[3].str();
       std::string fn_body = match[4].str();
+
+      std::string prefix = match.prefix().str();
+      std::string content = match[0].str();
+      std::string suffix = match.suffix().str();
+
+      offset += match.position(0) + match.length(0);
+      line += std::count(prefix.begin(), prefix.end(), '\n') +
+              std::count(content.begin(), content.end(), '\n');
+
+      /* Early out if no resource keyword is found. Avoid false positive that can degenerate. */
+      if (fn_args.find("buffer") == std::string::npos) {
+        return;
+      }
 
       struct Argument {
         std::string qualifier;
@@ -436,6 +449,7 @@ class Preprocessor {
       std::vector<Argument> all_args;
 
       std::regex regex_arg(
+          R"(\s*(binding\((\w)+\))?)" /* Resource binding slot (optional). */
 #define mem_qualifier R"(\s*(coherent|volatile|restrict|readonly|writeonly)?)"
           /* We can have a total of 5 memory qualifiers. Capture them individually. */
           mem_qualifier mem_qualifier mem_qualifier mem_qualifier mem_qualifier
@@ -448,39 +462,35 @@ class Preprocessor {
       );
 
       size_t permutation_len = 1;
-      regex_global_search(fn_args, regex_arg, [&](const std::smatch &arg) {
-        Argument parsed_arg;
-        for (int i = 1; i <= 5; i++) {
-          if (arg[i].str().empty() == false) {
-            parsed_arg.mem_qualifiers.emplace_back(arg[i].str());
+      regex_global_search(fn_args, regex_arg, [&](const std::smatch &arg_match) {
+        Argument arg;
+        for (int i = 3; i <= 7; i++) {
+          if (arg_match[i].str().empty() == false) {
+            arg.mem_qualifiers.emplace_back(arg_match[i].str());
           }
         }
-        parsed_arg.qualifier = arg[6].str();
-        parsed_arg.type = arg[7].str();
-        parsed_arg.name = arg[8].str();
-        parsed_arg.array = arg[9].str();
-        bool is_resource = parsed_arg.qualifier == "buffer";
-        /* TODO. Parse layout. */
-        for (int i = 0; i < is_resource * 8; i++) {
-          parsed_arg.slots.emplace_back(i);
-        }
-        if (is_resource) {
-          permutation_len *= parsed_arg.slots.size();
-          resource_args.emplace_back(parsed_arg);
+        arg.qualifier = arg_match[8].str();
+        arg.type = arg_match[9].str();
+        arg.name = arg_match[10].str();
+        arg.array = arg_match[11].str();
+        bool is_resource = arg.qualifier == "buffer";
+        if (arg_match[1].matched) {
+          arg.slots.emplace_back(stoi(arg_match[2].str()));
         }
         else {
-          regular_args.emplace_back(parsed_arg);
+          for (int i = 0; i < is_resource * 8; i++) {
+            arg.slots.emplace_back(i);
+          }
         }
-        all_args.emplace_back(parsed_arg);
+        if (is_resource) {
+          permutation_len *= arg.slots.size();
+          resource_args.emplace_back(arg);
+        }
+        else {
+          regular_args.emplace_back(arg);
+        }
+        all_args.emplace_back(arg);
       });
-
-      std::string prefix = match.prefix().str();
-      std::string content = match[0].str();
-      std::string suffix = match.suffix().str();
-
-      offset += match.position(0) + match.length(0);
-      line += std::count(prefix.begin(), prefix.end(), '\n') +
-              std::count(content.begin(), content.end(), '\n');
 
       if (resource_args.empty()) {
         return;
@@ -500,7 +510,7 @@ class Preprocessor {
 
       size_t lines_in_body = std::count(fn_body.begin(), fn_body.end(), '\n');
 
-      /* `#if 0` out the original declaration. Allow  */
+      /* `#if 0` out the original declaration. Allows correct error report.  */
       Replacement fn;
       fn.position = offset - match.length(0) + 1;
       fn.length = match.length(0);
@@ -588,11 +598,13 @@ class Preprocessor {
           ss << "\n{" << body << "\n}";
         });
 
-        generated_functions_ << perm_cond_start;
-        generated_functions_ << fn_return << perm_fn_name << perm_fn_args;
-        generated_functions_ << "\n#line " << std::to_string(line - lines_in_body);
-        generated_functions_ << perm_body;
-        generated_functions_ << perm_cond_end;
+        generated_ << "\n";
+        generated_ << "// Generated function from " << fn_name << "\n";
+        generated_ << perm_cond_start;
+        generated_ << fn_return << perm_fn_name << perm_fn_args;
+        generated_ << "\n#line " << std::to_string(line - lines_in_body);
+        generated_ << perm_body;
+        generated_ << perm_cond_end;
       }
 
       /* Add function macro to redirect to correct buffer implementation. */
@@ -623,17 +635,18 @@ class Preprocessor {
         ss << ")\n";
       });
 
-      generated_functions_ << function_macro << "\n";
+      generated_ << function_macro << "\n";
     });
 
     {
+      /* Mute original declaration for correct error reports.*/
       size_t offset = 0;
       for (auto &fn : fn_replace) {
         str.replace(fn.position + offset, fn.length, fn.content);
         offset += fn.content.size() - fn.length;
       }
     }
-    return str;
+    return str += generated_.str();
   }
 
   std::string enum_macro_injection(std::string str)
