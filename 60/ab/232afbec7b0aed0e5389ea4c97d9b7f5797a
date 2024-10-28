@@ -1,2 +1,3 @@
 Referenced by pull request #128150, Fix: Draw face set does not work for multires / dyntopo
 Referenced by commit 6eac125f2473a78c29bf6a6729ff801dce8e652b, Fix: Draw face set does not work for multires / dyntopo
+Referenced by pull request #129487, Fix #129448: Undoing face set changes produces artifacts on dense mesh
