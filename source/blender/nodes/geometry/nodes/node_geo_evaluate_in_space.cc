@@ -12,8 +12,6 @@
 
 #include "node_geometry_util.hh"
 
-// TODO: use math::rcp().
-
 namespace blender {
 
 template<typename T> std::ostream &operator<<(std::ostream &stream, Vector<T> data);
@@ -68,7 +66,8 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Float>("Precision").subtype(PROP_FACTOR).min(1.0f).default_value(2.0f);
 
   b.add_output<decl::Vector>("Weighted Sum").field_source_reference_all();
-  b.add_output<decl::Vector>("Weighed Difference Sum").field_source_reference_all();
+  b.add_output<decl::Vector>("Weighted Difference Sum").field_source_reference_all();
+  b.add_output<decl::Vector>("Brute Force Weighted Difference Sum").field_source_reference_all();
 }
 
 static constexpr int min_size = 10;
@@ -376,6 +375,67 @@ class DifferenceSumFieldInput final : public bke::GeometryFieldInput {
   }
 };
 
+class BruteForceDifferenceSumFieldInput final : public bke::GeometryFieldInput {
+ private:
+  const Field<float3> positions_field_;
+  const Field<float3> value_field_;
+  const int distance_power_;
+
+ public:
+  BruteForceDifferenceSumFieldInput(Field<float3> positions_field,
+                                    Field<float3> value_field,
+                                    const int distance_power)
+      : bke::GeometryFieldInput(CPPType::get<float3>(), "BF Weighed Difference Sum"),
+        positions_field_(std::move(positions_field)),
+        value_field_(std::move(value_field)),
+        distance_power_(distance_power)
+  {
+  }
+
+  GVArray get_varray_for_context(const bke::GeometryFieldContext &context,
+                                 const IndexMask &mask) const final
+  {
+    if (!context.attributes()) {
+      return {};
+    }
+    const int domain_size = context.attributes()->domain_size(context.domain());
+    fn::FieldEvaluator evaluator{context, domain_size};
+    evaluator.add(positions_field_);
+    evaluator.add(value_field_);
+    evaluator.evaluate();
+    const VArraySpan<float3> positions = evaluator.get_evaluated<float3>(0);
+    const VArraySpan<float3> src_values = evaluator.get_evaluated<float3>(1);
+
+    Array<float3> dst_values(positions.size(), float3(0));
+    threading::parallel_for(positions.index_range(), 4096, [&](const IndexRange range) {
+      for (const int index : range) {
+        const float3 point = positions[index];
+        for (const int i : positions.index_range().take_front(index)) {
+          const float3 vector = positions[i] - point;
+          const float distance = math::length(vector);
+          dst_values[index] += vector *
+                               math::safe_rcp(math::pow<float>(distance, distance_power_));
+        }
+        for (const int i : positions.index_range().drop_front(index + 1)) {
+          const float3 vector = positions[i] - point;
+          const float distance = math::length(vector);
+          dst_values[index] += vector *
+                               math::safe_rcp(math::pow<float>(distance, distance_power_));
+        }
+      }
+    });
+
+    return VArray<float3>::ForContainer(std::move(dst_values));
+  }
+
+ public:
+  void for_each_field_input_recursive(FunctionRef<void(const FieldInput &)> fn) const
+  {
+    positions_field_.node().for_each_field_input_recursive(fn);
+    value_field_.node().for_each_field_input_recursive(fn);
+  }
+};
+
 static void node_geo_exec(GeoNodeExecParams params)
 {
   Field<float3> position_field = params.extract_input<Field<float3>>("Position");
@@ -384,10 +444,16 @@ static void node_geo_exec(GeoNodeExecParams params)
   const int power_value = params.extract_input<int>("Power");
   const float precision_value = params.extract_input<float>("Precision");
 
-  if (params.output_is_required("Weighed Difference Sum")) {
-    params.set_output("Weighed Difference Sum",
+  if (params.output_is_required("Weighted Difference Sum")) {
+    params.set_output("Weighted Difference Sum",
                       Field<float3>(std::make_shared<DifferenceSumFieldInput>(
                           position_field, value_field, power_value, precision_value)));
+  }
+
+  if (params.output_is_required("Brute Force Weighted Difference Sum")) {
+    params.set_output("Brute Force Weighted Difference Sum",
+                      Field<float3>(std::make_shared<BruteForceDifferenceSumFieldInput>(
+                          position_field, value_field, power_value)));
   }
 
   if (params.output_is_required("Weighted Sum")) {
