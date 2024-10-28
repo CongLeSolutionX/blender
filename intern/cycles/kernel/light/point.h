@@ -190,13 +190,13 @@ ccl_device_inline bool point_light_sample_from_intersection(const ccl_global Ker
 template<bool in_volume_segment>
 ccl_device_forceinline bool point_light_tree_parameters(const ccl_global KernelLight *klight,
                                                         const float3 centroid,
-                                                        const float3 P,
+                                                        const float3 closest_P,
                                                         ccl_private float &cos_theta_u,
                                                         ccl_private float2 &distance,
                                                         ccl_private float3 &point_to_centroid)
 {
   float min_distance;
-  point_to_centroid = safe_normalize_len(centroid - P, &min_distance);
+  point_to_centroid = safe_normalize_len(centroid - closest_P, &min_distance);
   distance = min_distance * one_float2();
 
   if (in_volume_segment) {

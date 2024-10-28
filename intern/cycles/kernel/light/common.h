@@ -80,4 +80,27 @@ ccl_device_inline bool is_light_shader_visible_to_path(const int shader, const u
   return true;
 }
 
+/* Compute vector v as in "Importance Sampling of Many Lights with Adaptive Tree Splitting" Fig. 8.
+ * P_v is the corresponding point along the ray. */
+ccl_device float3 light_tree_v(
+    const float3 centroid, const float3 P, const float3 D, const float3 bcone_axis, const float t)
+{
+  const float3 unnormalized_v0 = P - centroid;
+  const float3 unnormalized_v1 = unnormalized_v0 + D * fminf(t, 1e12f);
+  const float3 v0 = normalize(unnormalized_v0);
+  const float3 v1 = normalize(unnormalized_v1);
+
+  const float3 o0 = v0;
+  float3 o1, o2;
+  make_orthonormals_tangent(o0, v1, &o1, &o2);
+
+  const float dot_o0_a = dot(o0, bcone_axis);
+  const float dot_o1_a = dot(o1, bcone_axis);
+  const float inv_len = inversesqrtf(sqr(dot_o0_a) + sqr(dot_o1_a));
+  const float cos_phi0 = dot_o0_a * inv_len;
+
+  return (dot_o1_a < 0 || dot(v0, v1) > cos_phi0) ? (dot_o0_a > dot(v1, bcone_axis) ? v0 : v1) :
+                                                    cos_phi0 * o0 + dot_o1_a * inv_len * o1;
+}
+
 CCL_NAMESPACE_END

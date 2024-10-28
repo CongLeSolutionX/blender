@@ -39,28 +39,6 @@ ccl_device float light_tree_cos_bound_subtended_angle(const BoundingBox bbox,
              safe_sqrtf(1.0f - (radius_sq / distance_to_center_sq));
 }
 
-/* Compute vector v as in Fig .8. P_v is the corresponding point along the ray. */
-ccl_device float3 compute_v(
-    const float3 centroid, const float3 P, const float3 D, const float3 bcone_axis, const float t)
-{
-  const float3 unnormalized_v0 = P - centroid;
-  const float3 unnormalized_v1 = unnormalized_v0 + D * fminf(t, 1e12f);
-  const float3 v0 = normalize(unnormalized_v0);
-  const float3 v1 = normalize(unnormalized_v1);
-
-  const float3 o0 = v0;
-  float3 o1, o2;
-  make_orthonormals_tangent(o0, v1, &o1, &o2);
-
-  const float dot_o0_a = dot(o0, bcone_axis);
-  const float dot_o1_a = dot(o1, bcone_axis);
-  const float inv_len = inversesqrtf(sqr(dot_o0_a) + sqr(dot_o1_a));
-  const float cos_phi0 = dot_o0_a * inv_len;
-
-  return (dot_o1_a < 0 || dot(v0, v1) > cos_phi0) ? (dot_o0_a > dot(v1, bcone_axis) ? v0 : v1) :
-                                                    cos_phi0 * o0 + dot_o1_a * inv_len * o1;
-}
-
 ccl_device_inline bool is_light(const ccl_global KernelLightTreeEmitter *kemitter)
 {
   return kemitter->light.id < 0;
@@ -332,7 +310,7 @@ ccl_device void light_tree_node_importance(KernelGlobals kg,
        * segment in volume. */
       theta_d = fast_atan2f(t - closest_t, distance) + fast_atan2f(closest_t, distance);
       /* Vector that forms a minimal angle with the emitter centroid. */
-      point_to_centroid = -compute_v(centroid, P, D, bcone.axis, t);
+      point_to_centroid = -light_tree_v(centroid, P, D, bcone.axis, t);
       cos_theta_u = light_tree_cos_bound_subtended_angle(bbox, centroid, closest_point);
     }
     else {
@@ -400,7 +378,11 @@ ccl_device void light_tree_emitter_importance(KernelGlobals kg,
   bcone.theta_e = kemitter->theta_e;
   float cos_theta_u, theta_d = 1.0f;
   float2 distance; /* distance.x = max_distance, distance.y = min_distance */
-  float3 centroid, point_to_centroid, P_c = P;
+  float3 centroid, P_c = P;
+  /* When in volume segment, this is the normalized vector that forms a minimal angle with the
+   * negative of the emitter axis; when not in volume segment, this is the normalized vector from
+   * the shading point to the centroid. */
+  float3 point_to_centroid;
 
   if (!compute_emitter_centroid_and_dir<in_volume_segment>(kg, kemitter, P, centroid, bcone.axis))
   {
@@ -463,8 +445,7 @@ ccl_device void light_tree_emitter_importance(KernelGlobals kg,
   }
 
   if (in_volume_segment) {
-    /* Vector that forms a minimal angle with the emitter centroid. */
-    point_to_centroid = -compute_v(centroid, P, N_or_D, bcone.axis, t);
+    point_to_centroid = -light_tree_v(centroid, P, N_or_D, bcone.axis, t);
   }
 
   light_tree_importance<in_volume_segment>(N_or_D,

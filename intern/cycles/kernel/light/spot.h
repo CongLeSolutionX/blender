@@ -285,7 +285,7 @@ ccl_device_inline bool spot_light_valid_ray_segment(const ccl_global KernelLight
 template<bool in_volume_segment>
 ccl_device_forceinline bool spot_light_tree_parameters(const ccl_global KernelLight *klight,
                                                        const float3 centroid,
-                                                       const float3 P,
+                                                       const float3 closest_P,
                                                        const ccl_private BoundingCone &bcone,
                                                        ccl_private float &cos_theta_u,
                                                        ccl_private float2 &distance,
@@ -293,7 +293,7 @@ ccl_device_forceinline bool spot_light_tree_parameters(const ccl_global KernelLi
                                                        ccl_private float &energy)
 {
   float min_distance;
-  point_to_centroid = safe_normalize_len(centroid - P, &min_distance);
+  point_to_centroid = safe_normalize_len(centroid - closest_P, &min_distance);
   distance = min_distance * one_float2();
 
   const float radius = klight->spot.radius;

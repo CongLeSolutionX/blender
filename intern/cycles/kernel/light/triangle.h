@@ -294,7 +294,7 @@ ccl_device_forceinline bool triangle_light_tree_parameters(
     KernelGlobals kg,
     const ccl_global KernelLightTreeEmitter *kemitter,
     const float3 centroid,
-    const float3 P,
+    const float3 closest_P,
     const float3 N,
     const BoundingCone bcone,
     ccl_private float &cos_theta_u,
@@ -304,7 +304,7 @@ ccl_device_forceinline bool triangle_light_tree_parameters(
   /* TODO: a cheap substitute for minimal distance between point and primitive. Does it worth the
    * overhead to compute the accurate minimal distance? */
   float min_distance;
-  point_to_centroid = safe_normalize_len(centroid - P, &min_distance);
+  point_to_centroid = safe_normalize_len(centroid - closest_P, &min_distance);
   distance = make_float2(min_distance, min_distance);
 
   cos_theta_u = FLT_MAX;
@@ -316,7 +316,8 @@ ccl_device_forceinline bool triangle_light_tree_parameters(
   for (int i = 0; i < 3; i++) {
     const float3 corner = vertices[i];
     float distance_point_to_corner;
-    const float3 point_to_corner = safe_normalize_len(corner - P, &distance_point_to_corner);
+    const float3 point_to_corner = safe_normalize_len(corner - closest_P,
+                                                      &distance_point_to_corner);
     cos_theta_u = fminf(cos_theta_u, dot(point_to_centroid, point_to_corner));
     shape_above_surface |= dot(point_to_corner, N) > 0;
     if (!in_volume_segment) {
