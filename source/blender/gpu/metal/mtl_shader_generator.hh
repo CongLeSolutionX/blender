@@ -308,7 +308,7 @@ struct MSLTextureResource {
   {
     std::string str;
     str = this->get_msl_wrapper_type_str() + "<" + this->get_msl_return_type_str() + "," +
-          this->get_msl_access_str() + ">" + ((is_addr) ? "* " : " ") + this->name;
+          this->get_msl_access_str() + ">" + ((is_addr) ? "* _" : " _") + this->name;
     return str;
   }
 

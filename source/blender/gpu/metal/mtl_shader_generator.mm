@@ -242,6 +242,7 @@ static void print_resource(std::ostream &os, const ShaderCreateInfo::Resource &r
 {
   switch (res.bind_type) {
     case ShaderCreateInfo::Resource::BindType::SAMPLER:
+      os << "#define " << res.sampler.name << " _" << res.sampler.name << "\n";
       break;
     case ShaderCreateInfo::Resource::BindType::IMAGE:
       break;
@@ -272,7 +273,7 @@ static void print_resource(std::ostream &os, const ShaderCreateInfo::Resource &r
       os << memory_scope << res.storagebuf.type_name << " *ref_" << name_no_array << ";\n";
       /* For arrays, we can directly provide the constant access pointer, as the array
        * syntax will de-reference this at the correct fetch index. */
-      if (is_array) {
+      if (res.storagebuf.name_has_array()) {
         os << "#define _" << name_no_array << " ref_" << name_no_array << "\n";
       }
       else {
@@ -2968,18 +2969,18 @@ std::string MSLGeneratorInterface::generate_msl_texture_vars(ShaderStage shader_
     if (bool(this->texture_samplers[i].stage & shader_stage)) {
 
       /* Assign texture reference. */
-      out << "\t" << get_shader_stage_instance_name(shader_stage) << "."
+      out << "\t" << get_shader_stage_instance_name(shader_stage) << "._"
           << this->texture_samplers[i].name << ".texture = &" << this->texture_samplers[i].name
           << ";" << std::endl;
 
       /* Assign sampler reference. */
       if (this->use_argument_buffer_for_samplers()) {
-        out << "\t" << get_shader_stage_instance_name(shader_stage) << "."
+        out << "\t" << get_shader_stage_instance_name(shader_stage) << "._"
             << this->texture_samplers[i].name << ".samp = &samplers.sampler_args["
             << this->texture_samplers[i].slot << "];" << std::endl;
       }
       else {
-        out << "\t" << get_shader_stage_instance_name(shader_stage) << "."
+        out << "\t" << get_shader_stage_instance_name(shader_stage) << "._"
             << this->texture_samplers[i].name << ".samp = &" << this->texture_samplers[i].name
             << "_sampler;" << std::endl;
       }
@@ -2988,10 +2989,10 @@ std::string MSLGeneratorInterface::generate_msl_texture_vars(ShaderStage shader_
       int tex_buf_id = this->texture_samplers[i].atomic_fallback_buffer_ssbo_id;
       if (tex_buf_id != -1) {
         MSLBufferBlock &ssbo = this->storage_blocks[tex_buf_id];
-        out << "\t" << get_shader_stage_instance_name(shader_stage) << "."
+        out << "\t" << get_shader_stage_instance_name(shader_stage) << "._"
             << this->texture_samplers[i].name << ".atomic.buffer = " << ssbo.name << ";"
             << std::endl;
-        out << "\t" << get_shader_stage_instance_name(shader_stage) << "."
+        out << "\t" << get_shader_stage_instance_name(shader_stage) << "._"
             << this->texture_samplers[i].name << ".atomic.aligned_width = uniforms->"
             << this->texture_samplers[i].name << "_metadata.w;" << std::endl;
 
@@ -3003,7 +3004,7 @@ std::string MSLGeneratorInterface::generate_msl_texture_vars(ShaderStage shader_
                  ImageType::INT_2D_ARRAY_ATOMIC,
                  ImageType::INT_3D_ATOMIC))
         {
-          out << "\t" << get_shader_stage_instance_name(shader_stage) << "."
+          out << "\t" << get_shader_stage_instance_name(shader_stage) << "._"
               << this->texture_samplers[i].name << ".atomic.texture_size = ushort3(uniforms->"
               << this->texture_samplers[i].name << "_metadata.xyz);" << std::endl;
         }

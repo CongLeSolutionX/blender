@@ -704,9 +704,11 @@ class Preprocessor {
 
         generated_prototypes << "#define" << perm_proto_name << "\n";
         generated_prototypes << perm_cond_start;
+        generated_prototypes << "#ifndef GPU_METAL\n";
         generated_prototypes << "#undef" << perm_proto_name << "\n";
         generated_prototypes << "#define" << perm_proto_name;
-        generated_prototypes << fn_return << perm_fn_name << perm_fn_args << ";";
+        generated_prototypes << fn_return << perm_fn_name << perm_fn_args << ";\n";
+        generated_prototypes << "#endif\n";
         generated_prototypes << perm_cond_end;
       }
 
@@ -727,7 +729,11 @@ class Preprocessor {
         }
         ss << fn_name << "_perm_";
         for (int i = 0; i < resource_args.size(); i++) {
+#ifdef __APPLE__ /* Apple shader compiler will expand macro too much. */
+          ss << ", res_##" << macro_arg_name(resource_args[i].name) << ")";
+#else
           ss << ", CONCAT(res, " << macro_arg_name(resource_args[i].name) << "))";
+#endif
         }
         /* Only regular arguments inside real function call. */
         ss << "(";
@@ -746,9 +752,7 @@ class Preprocessor {
     if (!fn_replace.empty()) {
       generated_header_ << generated_rename.str();
 
-      generated_header_ << "#ifndef GPU_METAL\n";
       generated_header_ << generated_prototypes.str();
-      generated_header_ << "#endif\n";
     }
 
     {
