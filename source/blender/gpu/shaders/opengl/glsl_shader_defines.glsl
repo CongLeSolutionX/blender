@@ -162,3 +162,35 @@ bool is_zero(vec4 A)
 #define _enum_type(name) uint
 #define _enum_decl(name) const uint
 #define _enum_end _enum_dummy;
+
+#define CONCAT_(_a, _b) _a##_b
+#define CONCAT(_a, _b) CONCAT_(_a, _b)
+#define CONCAT3_(_a, _b, _c) _a##_b##_c
+#define CONCAT3(_a, _b, _c) CONCAT3_(_a, _b, _c)
+
+#define BUF_0_TYPE 0
+#define BUF_1_TYPE 0
+#define BUF_2_TYPE 0
+#define BUF_3_TYPE 0
+#define BUF_4_TYPE 0
+#define BUF_5_TYPE 0
+#define BUF_6_TYPE 0
+#define BUF_7_TYPE 0
+
+#define IMG_0_TYPE 0
+#define IMG_1_TYPE 0
+#define IMG_2_TYPE 0
+#define IMG_3_TYPE 0
+#define IMG_4_TYPE 0
+#define IMG_5_TYPE 0
+#define IMG_6_TYPE 0
+#define IMG_7_TYPE 0
+
+#define UNI_0_TYPE 0
+#define UNI_1_TYPE 0
+#define UNI_2_TYPE 0
+#define UNI_3_TYPE 0
+#define UNI_4_TYPE 0
+#define UNI_5_TYPE 0
+#define UNI_6_TYPE 0
+#define UNI_7_TYPE 0

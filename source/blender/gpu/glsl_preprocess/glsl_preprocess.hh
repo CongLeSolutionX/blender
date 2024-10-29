@@ -536,8 +536,8 @@ class Preprocessor {
       fn.position = offset - match.length(0);
       fn.length = match.length(0);
       fn.content = content;
-      fn.content.replace(fn.length - 1, 1, "#endif //").replace(1, 0, "#if 0 //");
-      fn_replace.emplace_back(fn);
+      fn.content.replace(fn.length - 1, 1, "#endif //");
+      fn.content.replace(1, 0, "#if 0 //");
 
       /* One slot per resource argument for each slot the resource is declared for. */
       using Permutation = std::vector<std::string>;
@@ -568,7 +568,8 @@ class Preprocessor {
               continue;
             }
             std::string &res_type = res.prefix;
-            ss << "#if 0\n";
+            ss << "#ifndef IRRADIANCE_GRID_BUF_SLOT\n";
+            ss << "#define " << res_type << slot << "_TYPE 0\n";
             for (int i = 0; i < 8; i++) {
               ss << "#elif " << slot << "==" << i << "\n";
               ss << "#define " << res_type << slot << "_TYPE " << res_type << i << "_TYPE\n";
@@ -583,15 +584,23 @@ class Preprocessor {
 #endif
 
       for (const Permutation &permutation : permutations) {
+        std::string perm_name = create_string([&](std::stringstream &ss) {
+          ss << fn_name;
+          for (int i = 0; i < resource_args.size(); i++) {
+            ss << "_" << resource_args[i].prefix << permutation[i];
+          }
+        });
+
+        std::string perm_proto_name = " prototype_" + perm_name + " ";
+
+        /* Prepend prototype at the original function position to allow in argument type from
+         * inside the file. */
+        fn.content = perm_proto_name + fn.content;
+
         std::string perm_cond_start = create_string([&](std::stringstream &ss) {
           auto contains = [](const std::vector<std::string> &vec, const std::string item) {
             return (std::find(vec.begin(), vec.end(), item) != vec.end());
           };
-
-          std::string perm_name = fn_name;
-          for (int i = 0; i < resource_args.size(); i++) {
-            perm_name += "_" + resource_args[i].prefix + permutation[i];
-          }
 
           ss << "#if 0";
           for (int i = 0; i < resource_args.size(); i++) {
@@ -608,7 +617,14 @@ class Preprocessor {
             ss << " || " << res_type << buf_slot << "_TYPE != " << type_hash;
 #endif
           }
+#ifdef __APPLE__
+          /* Warning directives only available on MSL. GLSL only have errors. */
           ss << "\n#warning " << perm_name << " disabled because of resource type mismatch\n";
+#else
+          /* Can be used for debugging. */
+          // ss << "\n#error " << perm_name << " disabled because of resource type mismatch\n";
+          ss << "\n";
+#endif
 
           ss << "#elif 0";
           for (int i = 0; i < resource_args.size(); i++) {
@@ -631,7 +647,14 @@ class Preprocessor {
             }
 #endif
           }
+#ifdef __APPLE__
+          /* Warning directives only available on MSL. GLSL only have errors. */
           ss << "\n#warning " << perm_name << " disabled because of memory qualifier mismatch\n";
+#else
+          /* Can be used for debugging. */
+          // ss << "\n#error " << perm_name << " disabled because of memory qualifier mismatch\n";
+          ss << "\n";
+#endif
           ss << "#else\n";
         });
         std::string perm_cond_end = "\n#endif\n";
@@ -640,7 +663,7 @@ class Preprocessor {
           for (int i = 0; i < resource_args.size(); i++) {
             ss << " CONCAT(";
           }
-          ss << fn_name << "_";
+          ss << fn_name << "_perm_";
           for (int i = 0; i < resource_args.size(); i++) {
             ss << ", CONCAT3(" << resource_args[i].prefix << "," << permutation[i] << ",_NAME))";
           }
@@ -679,7 +702,10 @@ class Preprocessor {
         generated_functions << perm_body;
         generated_functions << perm_cond_end;
 
+        generated_prototypes << "#define" << perm_proto_name << "\n";
         generated_prototypes << perm_cond_start;
+        generated_prototypes << "#undef" << perm_proto_name << "\n";
+        generated_prototypes << "#define" << perm_proto_name;
         generated_prototypes << fn_return << perm_fn_name << perm_fn_args << ";";
         generated_prototypes << perm_cond_end;
       }
@@ -699,9 +725,9 @@ class Preprocessor {
         for (int i = 0; i < resource_args.size(); i++) {
           ss << "CONCAT(";
         }
-        ss << fn_name << "_";
+        ss << fn_name << "_perm_";
         for (int i = 0; i < resource_args.size(); i++) {
-          ss << ",__##" << macro_arg_name(resource_args[i].name) << ")";
+          ss << ", CONCAT(res, " << macro_arg_name(resource_args[i].name) << "))";
         }
         /* Only regular arguments inside real function call. */
         ss << "(";
@@ -713,6 +739,8 @@ class Preprocessor {
       });
 
       generated_header_ << function_macro << "\n";
+
+      fn_replace.emplace_back(fn);
     });
 
     if (!fn_replace.empty()) {

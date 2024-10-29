@@ -15,6 +15,8 @@
 #include "gpu_shader_create_info.hh"
 #include "gpu_shader_interface.hh"
 
+#include "../glsl_preprocess/glsl_preprocess.hh"
+
 #include "BLI_map.hh"
 
 #include <mutex>
@@ -122,6 +124,10 @@ class Shader {
   /* Only used by SSBO Vertex fetch. */
   virtual bool get_uses_ssbo_vertex_fetch() const = 0;
   virtual int get_ssbo_vertex_fetch_output_num_verts() const = 0;
+
+  /* Used for shader interface definition. */
+  static void print_resource_defines(std::ostream &os,
+                                     const shader::ShaderCreateInfo::Resource &res);
 
   inline const char *const name_get() const
   {

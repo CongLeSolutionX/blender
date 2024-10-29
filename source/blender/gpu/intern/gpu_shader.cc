@@ -45,6 +45,74 @@ std::string Shader::defines_declare(const shader::ShaderCreateInfo &info) const
   return defines;
 }
 
+void Shader::print_resource_defines(std::ostream &os,
+                                    const shader::ShaderCreateInfo::Resource &res)
+{
+  using namespace shader;
+
+  StringRefNull prefix = "";
+  bool readable = false;
+  bool writeable = false;
+  bool is_array = false;
+
+  std::string image_type;
+  StringRef type_name;
+  StringRef name_no_array;
+
+  switch (res.bind_type) {
+    case ShaderCreateInfo::Resource::BindType::SAMPLER:
+      /* No need for these defines for samplers. */
+      return;
+    case ShaderCreateInfo::Resource::BindType::IMAGE:
+      readable = bool(res.image.qualifiers & Qualifier::READ);
+      writeable = bool(res.image.qualifiers & Qualifier::WRITE);
+      prefix = "IMG_";
+      {
+        /* TODO cleanup. Make print_image_type return a static string. */
+        std::stringstream image_type_ss;
+        print_image_type(image_type_ss, res.image.type, res.bind_type);
+        image_type = image_type_ss.str();
+        type_name = image_type;
+      }
+      name_no_array = res.image.name;
+      is_array = false;
+      break;
+    case ShaderCreateInfo::Resource::BindType::UNIFORM_BUFFER:
+      /* By convention so we don't have to have memory qualifier on arguments. */
+      readable = true;
+      writeable = true;
+      prefix = "UNI_";
+      type_name = res.uniformbuf.type_name;
+      name_no_array = res.uniformbuf.name_no_array();
+      is_array = res.uniformbuf.name_has_array();
+      break;
+    case ShaderCreateInfo::Resource::BindType::STORAGE_BUFFER:
+      readable = bool(res.storagebuf.qualifiers & Qualifier::READ);
+      writeable = bool(res.storagebuf.qualifiers & Qualifier::WRITE);
+      prefix = "BUF_";
+      type_name = res.storagebuf.type_name;
+      name_no_array = res.storagebuf.name_no_array();
+      is_array = res.storagebuf.name_has_array();
+      break;
+  }
+
+  /* Needed for correct macro expansion during the resource argument function macro.
+   * See `Preprocessor::resource_arguments_mutation()`.
+   * Backend resource access are expected to start with an underscore. */
+  os << "#define " << name_no_array << " _" << name_no_array << "\n";
+
+  const char *array_suffix = (is_array ? "_array" : "");
+  uint64_t type_hash = shader::Preprocessor::hash_32(type_name + array_suffix);
+
+  std::string buf_slot = prefix + std::to_string(res.slot);
+  os << "#undef " << buf_slot << "_TYPE\n";
+  os << "#define " << buf_slot << "_NAME res_" << name_no_array << "\n";
+  os << "#define " << buf_slot << "_RES " << name_no_array << "\n";
+  os << "#define " << buf_slot << "_TYPE " << std::to_string(type_hash) << "\n";
+  os << "#define " << buf_slot << "_READ " << std::to_string(int(readable)) << "\n";
+  os << "#define " << buf_slot << "_WRITE " << std::to_string(int(writeable)) << "\n";
+}
+
 }  // namespace blender::gpu
 
 using namespace blender;

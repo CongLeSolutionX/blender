@@ -707,6 +707,21 @@ struct ShaderCreateInfo {
 
   Vector<SpecializationConstant> specialization_constants_;
 
+  struct NameWithArraySuffix {
+    StringRefNull name;
+
+    StringRef name_no_array() const
+    {
+      int64_t array_offset = name.find_first_of("[");
+      return name.substr(0, array_offset != -1 ? array_offset : INT64_MAX);
+    }
+
+    bool name_has_array() const
+    {
+      return name.find_first_of("[") != StringRef::not_found;
+    }
+  };
+
   struct Sampler {
     ImageType type;
     GPUSamplerState sampler;
@@ -720,15 +735,13 @@ struct ShaderCreateInfo {
     StringRefNull name;
   };
 
-  struct UniformBuf {
+  struct UniformBuf : NameWithArraySuffix {
     StringRefNull type_name;
-    StringRefNull name;
   };
 
-  struct StorageBuf {
+  struct StorageBuf : NameWithArraySuffix {
     Qualifier qualifiers;
     StringRefNull type_name;
-    StringRefNull name;
   };
 
   struct Resource {

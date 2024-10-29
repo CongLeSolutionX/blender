@@ -243,91 +243,46 @@ static void print_resource(std::ostream &os, const ShaderCreateInfo::Resource &r
   switch (res.bind_type) {
     case ShaderCreateInfo::Resource::BindType::SAMPLER:
       break;
-    case ShaderCreateInfo::Resource::BindType::IMAGE: {
-      std::stringstream ss;
-      print_image_type(ss, res.image.type, res.bind_type);
-      uint64_t type_hash = shader::Preprocessor::hash_32(ss.str());
-
-      bool readable = bool(res.image.qualifiers & shader::Qualifier::READ);
-      bool writeable = bool(res.image.qualifiers & shader::Qualifier::WRITE);
-
-      std::string buf_slot = "IMG_" + std::to_string(res.slot);
-      os << "#undef " << buf_slot << "_TYPE\n";
-      os << "#define " << buf_slot << "_NAME __" << res.image.name.c_str() << "\n";
-      os << "#define " << buf_slot << "_RES " << res.image.name.c_str() << "\n";
-      os << "#define " << buf_slot << "_TYPE " << std::to_string(type_hash) << "\n";
-      os << "#define " << buf_slot << "_READ " << std::to_string(int(readable)) << "\n";
-      os << "#define " << buf_slot << "_WRITE " << std::to_string(int(writeable)) << "\n";
+    case ShaderCreateInfo::Resource::BindType::IMAGE:
       break;
-    }
     case ShaderCreateInfo::Resource::BindType::UNIFORM_BUFFER: {
-      int64_t array_offset = res.uniformbuf.name.find_first_of("[");
-      StringRef name_no_array = (array_offset == -1) ? res.uniformbuf.name :
-                                                       res.uniformbuf.name.substr(0, array_offset);
-
-      if (array_offset == -1) {
-        /* Create local class member as constant pointer reference to bound UBO buffer.
-         * Given usage within a shader follows ubo_name.ubo_element syntax, we can
-         * dereference the pointer as the compiler will optimize this data fetch.
-         * To do this, we also give the UBO name a post-fix of `_local` to avoid
-         * macro accessor collisions. */
-        os << "constant " << res.uniformbuf.type_name << " *" << res.uniformbuf.name
-           << "_local;\n";
-        os << "#define " << res.uniformbuf.name << " (*" << res.uniformbuf.name << "_local)\n";
+      StringRef name_no_array = res.uniformbuf.name_no_array();
+      /* Create local class member as constant pointer reference to bound UBO buffer.
+       * Given usage within a shader follows ubo_name.ubo_element syntax, we can
+       * dereference the pointer as the compiler will optimize this data fetch. */
+      os << "constant " << res.uniformbuf.type_name << " *ref_" << name_no_array << ";\n";
+      /* For arrays, we can directly provide the constant access pointer, as the array
+       * syntax will de-reference this at the correct fetch index. */
+      if (res.uniformbuf.name_has_array()) {
+        os << "#define _" << name_no_array << " ref_" << name_no_array << "\n";
       }
       else {
-        /* For arrays, we can directly provide the constant access pointer, as the array
-         * syntax will de-reference this at the correct fetch index. */
-        os << "constant " << res.uniformbuf.type_name << " *" << name_no_array << ";\n";
+        os << "#define _" << name_no_array << " (*ref_" << name_no_array << ")\n";
       }
-      const char *array_suffix = (array_offset == -1 ? "" : "_array");
-      uint64_t type_hash = shader::Preprocessor::hash_32(res.uniformbuf.type_name + array_suffix);
-
-      std::string buf_slot = "UNI_" + std::to_string(res.slot);
-      os << "#undef " << buf_slot << "_TYPE\n";
-      os << "#define " << buf_slot << "_NAME __" << name_no_array << "\n";
-      os << "#define " << buf_slot << "_RES " << name_no_array << "\n";
-      os << "#define " << buf_slot << "_TYPE " << std::to_string(type_hash) << "\n";
-      os << "#define " << buf_slot << "_READ 1\n";
-      os << "#define " << buf_slot << "_WRITE 1\n";
       break;
     }
     case ShaderCreateInfo::Resource::BindType::STORAGE_BUFFER: {
-      int64_t array_offset = res.storagebuf.name.find_first_of("[");
-      StringRef name_no_array = (array_offset == -1) ? res.storagebuf.name :
-                                                       res.storagebuf.name.substr(0, array_offset);
-      bool readable = bool(res.storagebuf.qualifiers & shader::Qualifier::READ);
-      bool writeable = bool(res.storagebuf.qualifiers & shader::Qualifier::WRITE);
-      const char *memory_scope = ((writeable) ? "device " : "constant ");
-      if (array_offset == -1) {
-        /* Create local class member as device pointer reference to bound SSBO.
-         * Given usage within a shader follows ssbo_name.ssbo_element syntax, we can
-         * dereference the pointer as the compiler will optimize this data fetch.
-         * To do this, we also give the UBO name a post-fix of `_local` to avoid
-         * macro accessor collisions. */
+      StringRef name_no_array = res.storagebuf.name_no_array();
 
-        os << memory_scope << res.storagebuf.type_name << " *" << res.storagebuf.name
-           << "_local;\n";
-        os << "#define " << res.storagebuf.name << " (*" << res.storagebuf.name << "_local)\n";
+      const bool writeable = bool(res.storagebuf.qualifiers & Qualifier::WRITE);
+      const char *memory_scope = ((writeable) ? "device " : "constant ");
+      /* Create local class member as device pointer reference to bound SSBO.
+       * Given usage within a shader follows ssbo_name.ssbo_element syntax, we can
+       * dereference the pointer as the compiler will optimize this data fetch. */
+      os << memory_scope << res.storagebuf.type_name << " *ref_" << name_no_array << ";\n";
+      /* For arrays, we can directly provide the constant access pointer, as the array
+       * syntax will de-reference this at the correct fetch index. */
+      if (is_array) {
+        os << "#define _" << name_no_array << " ref_" << name_no_array << "\n";
       }
       else {
-        /* For arrays, we can directly provide the constant access pointer, as the array
-         * syntax will de-reference this at the correct fetch index. */
-        os << memory_scope << res.storagebuf.type_name << " *" << name_no_array << ";\n";
+        os << "#define _" << name_no_array << " (*ref_" << name_no_array << ")\n";
       }
-      const char *array_suffix = (array_offset == -1 ? "" : "_array");
-      uint64_t type_hash = shader::Preprocessor::hash_32(res.storagebuf.type_name + array_suffix);
-
-      std::string buf_slot = "BUF_" + std::to_string(res.slot);
-      os << "#undef " << buf_slot << "_TYPE\n";
-      os << "#define " << buf_slot << "_NAME __" << name_no_array << "\n";
-      os << "#define " << buf_slot << "_RES " << name_no_array << "\n";
-      os << "#define " << buf_slot << "_TYPE " << std::to_string(type_hash) << "\n";
-      os << "#define " << buf_slot << "_READ " << std::to_string(int(readable)) << "\n";
-      os << "#define " << buf_slot << "_WRITE " << std::to_string(int(writeable)) << "\n";
       break;
     }
   }
+
+  Shader::print_resource_defines(os, res);
 }
 
 std::string MTLShader::resources_declare(const ShaderCreateInfo &info) const
@@ -2607,15 +2562,8 @@ std::string MSLGeneratorInterface::generate_msl_uniform_block_population(ShaderS
 
     /* Only include blocks which are used within this stage. */
     if (bool(ubo.stage & stage)) {
-      /* Generate UBO reference assignment.
-       * NOTE(Metal): We append `_local` post-fix onto the class member name
-       * for the ubo to avoid name collision with the UBO accessor macro.
-       * We only need to add this post-fix for the non-array access variant,
-       * as the array is indexed directly, rather than requiring a dereference. */
-      out << "\t" << get_shader_stage_instance_name(stage) << "." << ubo.name;
-      if (!ubo.is_array) {
-        out << "_local";
-      }
+      /* Generate UBO reference assignment. */
+      out << "\t" << get_shader_stage_instance_name(stage) << ".ref_" << ubo.name;
       out << " = " << ubo.name << ";" << std::endl;
     }
   }
@@ -2626,15 +2574,8 @@ std::string MSLGeneratorInterface::generate_msl_uniform_block_population(ShaderS
 
     /* Only include blocks which are used within this stage. */
     if (bool(ssbo.stage & stage) && !ssbo.is_texture_buffer) {
-      /* Generate UBO reference assignment.
-       * NOTE(Metal): We append `_local` post-fix onto the class member name
-       * for the ubo to avoid name collision with the UBO accessor macro.
-       * We only need to add this post-fix for the non-array access variant,
-       * as the array is indexed directly, rather than requiring a dereference. */
-      out << "\t" << get_shader_stage_instance_name(stage) << "." << ssbo.name;
-      if (!ssbo.is_array) {
-        out << "_local";
-      }
+      /* Generate UBO reference assignment. */
+      out << "\t" << get_shader_stage_instance_name(stage) << ".ref_" << ssbo.name;
       out << " = " << ssbo.name << ";" << std::endl;
     }
   }
