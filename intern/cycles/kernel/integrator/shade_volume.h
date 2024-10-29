@@ -605,7 +605,6 @@ ccl_device bool volume_sample_indirect_scatter(
     float sigma_max,
     ccl_private uint &lcg_state,
     ccl_private VolumeIntegrateState &ccl_restrict vstate,
-    ccl_private const EquiangularCoefficients &equiangular_coeffs,
     ccl_private VolumeIntegrateResult &ccl_restrict result)
 {
   if (result.indirect_scatter) {
@@ -725,7 +724,7 @@ ccl_device void volume_integrate_step_scattering(
   const ccl_global KernelOctreeNode *knode = volume_voxel_get(kg, ray, vstate, sd->P);
 
   if (volume_sample_indirect_scatter(
-          kg, state, ray, sd, knode->sigma.max, lcg_state, vstate, equiangular_coeffs, result))
+          kg, state, ray, sd, knode->sigma.max, lcg_state, vstate, result))
   {
     if (vstate.direct_sample_method == VOLUME_SAMPLE_DISTANCE) {
       /* If using distance sampling for direct light, just copy parameters of indirect light

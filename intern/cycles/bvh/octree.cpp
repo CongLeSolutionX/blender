@@ -25,36 +25,6 @@
 
 CCL_NAMESPACE_BEGIN
 
-/* TODO(weizhen): this is only for testing. Need to support procedural shaders and multiple
- * shaders. */
-float volume_density_scale(const Shader *shader)
-{
-  if (!shader->has_volume) {
-    return 0.0f;
-  }
-
-  VolumeNode *volume_node = dynamic_cast<VolumeNode *>(
-      shader->graph->output()->input("Volume")->link->parent);
-  if (!volume_node) {
-    return 0.0f;
-  }
-
-  float3 color = volume_node->get_color();
-
-  if (auto *absorption_volume_node = dynamic_cast<AbsorptionVolumeNode *>(volume_node)) {
-    color = one_spectrum() - color;
-  }
-
-  if (auto *principled_volume_node = dynamic_cast<PrincipledVolumeNode *>(volume_node)) {
-    Spectrum zero = zero_spectrum();
-    Spectrum one = one_spectrum();
-    Spectrum absorption = max(one - color, zero) *
-                          max(one - principled_volume_node->get_absorption_color(), zero);
-    color += absorption;
-  }
-  return reduce_max(volume_node->get_density() * color);
-}
-
 __forceinline static int flatten_index(int x, int y, int z, int3 size)
 {
   return x + size.x * (y + z * size.y);
