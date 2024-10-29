@@ -16,14 +16,12 @@
 #include "BKE_attribute.hh"
 #include "BLI_utildefines.h"
 #include "BLI_math_matrix.h"
+#include "BLO_read_write.hh"
 
 #include "BLT_translation.hh"
 
 #include "BKE_context.hh"
 #include "BKE_scene.hh"
-#include "BKE_gpencil_geom_legacy.h"
-#include "BKE_gpencil_legacy.h"
-#include "BKE_gpencil_modifier_legacy.h"
 #include "BKE_curves.hh"
 #include "BKE_deform.hh"
 #include "BKE_geometry_set.hh"
@@ -34,7 +32,6 @@
 #include "BKE_screen.hh"
 #include "BKE_shrinkwrap.hh"
 #include "DNA_defaults.h"
-#include "DNA_gpencil_legacy_types.h"
 #include "DNA_gpencil_modifier_types.h"
 #include "DNA_meshdata_types.h"
 #include "DNA_object_types.h"
@@ -91,7 +88,6 @@ struct SDefGPDeformData {
   bool invert_vgroup;
   float strength;
   bke::AttributeAccessor*  attributes;
-  SDefGPVert *vert_binds;
 };
 
 
@@ -124,7 +120,7 @@ static void init_data(ModifierData *md)
 
   MEMCPY_STRUCT_AFTER(smd, DNA_struct_default_get(GPencilSurDeformModifierData), modifier);
 
-  //modifier::greasepencil::init_influence_data(&smd->influence, false); TODO_INFLUENCE
+  modifier::greasepencil::init_influence_data(&smd->influence, false); //TODO_INFLUENCE
 }
 
 static void required_data_mask(ModifierData *md, CustomData_MeshMasks *r_cddata_masks)
@@ -140,14 +136,12 @@ static void required_data_mask(ModifierData *md, CustomData_MeshMasks *r_cddata_
 static void free_data(ModifierData *md)
 {
   auto *smd = reinterpret_cast<GPencilSurDeformModifierData *>(md);
+  smd->bind_modes = 0;
+  
+  
+  
   modifier::greasepencil::free_influence_data(&smd->influence);
-  //TODO remove data from point attributes!!!
-  for (int i = 0; i < smd->verts_array_tot; i++) {
-    MEM_SAFE_FREE(smd->verts_array[i].binds_array);
-  }
-  MEM_SAFE_FREE(smd->verts_array);
-  smd->verts_array_tot = 0;
-  smd->verts_array_occupied = 0;
+  
 }
 
 static void copy_data(const ModifierData *md, ModifierData *target, const int flag)
@@ -159,13 +153,6 @@ static void copy_data(const ModifierData *md, ModifierData *target, const int fl
 
   BKE_modifier_copydata_generic(md, target, flag);
   modifier::greasepencil::copy_influence_data(&smd->influence, &tsmd->influence, flag);
-  tsmd->verts_array = reinterpret_cast<SDefGPVert *>(
-      MEM_dupallocN(smd->verts_array));
-  for (int i = 0; i < smd->verts_array_tot; i++) {
-    tsmd->verts_array[i].binds_array = reinterpret_cast<SDefGPBind *>(
-        MEM_dupallocN(smd->verts_array[i].binds_array));
-  }
- 
   
 }
 
@@ -178,7 +165,7 @@ static bool dependsOnTime(ModifierData *md)
 static void foreach_ID_link(ModifierData *md, Object *ob, IDWalkFunc walk, void *user_data)
 {
   GPencilSurDeformModifierData *smd = (GPencilSurDeformModifierData *)md;
-
+  modifier::greasepencil::foreach_influence_ID_link(&smd->influence, ob, walk, user_data);
   walk(user_data, ob, (ID **)&smd->target, IDWALK_NOP);
 }
 
@@ -510,7 +497,6 @@ static void surfacedeform_deform(ModifierData *md,
   data.defgrp_index = defgrp_index;
   data.invert_vgroup = invert_vgroup;
   data.strength = smd->strength;
-  data.vert_binds = smd->verts_array;
   data.vertexCos = reinterpret_cast<float(*)[3]>(positions.data());
   data.attributes = &attributes;
 
@@ -665,7 +651,6 @@ typedef struct SDefBindCalcData {
   const MDeformVert *const dvert;
   int stroke_idx;
   const float (*positions)[3];
-  MutableSpan<SDefGPVert> vert_binds;
   int defgrp_index;
   bool invert_vgroup;
   bool sparse_bind;
@@ -1697,34 +1682,6 @@ static bool bind_drawing(ModifierData *md_eval,
 
   bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
   
- 
-  
-  
-    // Allocate / Reallocate verts.
-  SDefGPVert *verts;
-  if (smd_orig->verts_array == nullptr) {
-    verts = static_cast<SDefGPVert *>(
-        MEM_calloc_arrayN(verts_num, sizeof(SDefGPVert), "surdef GP verts"));
-    for (int i = 0; i < verts_num; i++)
-      verts[i].vertex_idx = -1;
-     smd_orig->verts_array_tot = verts_num;
-    smd_orig->verts_array_occupied = verts_num;
-  }
-  else
-  {
-    int n_of_verts_total = smd_orig->verts_array_occupied + verts_num;
-    int n_of_verts_extra_allocated = n_of_verts_total - smd_orig->verts_array_tot;
-    verts = static_cast<SDefGPVert *>(
-        MEM_calloc_arrayN(n_of_verts_total, sizeof(SDefGPVert), "surdef GP verts"));
-    memcpy(verts, smd_orig->verts_array, sizeof(SDefGPVert) * smd_orig->verts_array_tot);
-    MEM_SAFE_FREE(smd_orig->verts_array);
-    for (int i = 0; i < n_of_verts_extra_allocated; i++)
-      verts[smd_orig->verts_array_tot + i].vertex_idx = -1;
-    smd_orig->verts_array_tot = n_of_verts_total;
-  }
-  smd_orig->verts_array = verts;
-  
-
   
   // TODO mask vertices by frame, mask, vertex group etc.*/
   
@@ -1777,7 +1734,6 @@ static bool bind_drawing(ModifierData *md_eval,
   data.targetCos = static_cast<float(*)[3]>(
       MEM_malloc_arrayN(target_verts_num, sizeof(float[3]), "SDefTargetBindVertArray"));
   data.positions = reinterpret_cast<float(*)[3]>(positions.data());
-  data.vert_binds = smd_orig->verts();
   data.falloff = smd_orig->falloff;
   data.success = MOD_SDEF_BIND_RESULT_SUCCESS;
   data.attributes = &attributes;
@@ -1806,24 +1762,6 @@ static bool bind_drawing(ModifierData *md_eval,
   
   MEM_freeN(data.targetCos);
   return true;
-}
-
-static void free_drawing_bind_data(ModifierData *md_orig, bke::greasepencil::Drawing *drawing)
-{
-  auto smd_orig = reinterpret_cast<GPencilSurDeformModifierData *>(md_orig);
-  bke::CurvesGeometry &curves = drawing->strokes_for_write();
-  bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
-  bke::SpanAttributeWriter<int> sdef_vert_idx_attr_writer =
-      attributes.lookup_or_add_for_write_only_span<int>("sdef_vert_idx", bke::AttrDomain::Point);
-  MutableSpan<int> sdef_vert_idx_span = sdef_vert_idx_attr_writer.span;
-  for (int vert_binds_idx : sdef_vert_idx_span) {
-    const SDefGPBind *databind = smd_orig->verts_array[vert_binds_idx].binds_array;
-    MEM_SAFE_FREE(databind);
-    smd_orig->verts_array[vert_binds_idx].vertex_idx = -1;
-    smd_orig->verts_array_occupied--;
-  }
-  sdef_vert_idx_attr_writer.finish();
-
 }
 
 /*End binding*/
@@ -1916,7 +1854,7 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
 
   uiItemR(layout, ptr, "strength", UI_ITEM_NONE, NULL, ICON_NONE);
   row = uiLayoutRow(layout, true);
-  modifier_vgroup_ui(layout, ptr, &ob_ptr, "vertex_group", "invert_vertex_group", nullptr);
+  //modifier_vgroup_ui(layout, ptr, &ob_ptr, "vertex_group", "invert_vertex_group", nullptr);
 
 
   uiItemS(layout);
@@ -2046,13 +1984,21 @@ static void panel_register(ARegionType *region_type)
 }
 
 static void blend_write(BlendWriter *writer, const ID *id_owner, const ModifierData *md){
+  const GPencilSurDeformModifierData *smd = reinterpret_cast<const GPencilSurDeformModifierData *>(
+      md);
+
+  BLO_write_struct(writer, GPencilSurDeformModifierData, smd);
+  modifier::greasepencil::write_influence_data(writer, &smd->influence);
   return;
 }
 
 static void blend_read(BlendDataReader *reader, ModifierData *md)
 {
+  GPencilSurDeformModifierData *smd = reinterpret_cast<GPencilSurDeformModifierData *>(md);
+  modifier::greasepencil::read_influence_data(reader, &smd->influence);
   return;
 }
+
 }  // namespace blender
 
 ModifierTypeInfo modifierType_GPencilSurDeform = {
@@ -2093,9 +2039,8 @@ ModifierTypeInfo modifierType_GPencilSurDeform = {
 grease_pencil: *geometry_set->get_grease_pencil_for_write()
 frames: vector containing the frames to bind.*/
 bool GPencilSurDeformModifierData::bind_drawings(ModifierData *md_orig,
-                                                                  const Depsgraph *depsgraph,
+                                                         const Depsgraph *depsgraph,
                                                          Scene *sc,
-                                                        // Vector<int> frames,
                                                         Object *ob)
 { using namespace blender;
   using bke::greasepencil::Drawing;
@@ -2139,8 +2084,7 @@ bool GPencilSurDeformModifierData::bind_drawings(ModifierData *md_orig,
         }
       }
 
-
-      
+      smd_orig->bound = NULL;
       DEG_id_tag_update(&grease_pencil_orig.id, ID_RECALC_GEOMETRY);
       
     }
@@ -2175,7 +2119,7 @@ bool GPencilSurDeformModifierData::bind_drawings(ModifierData *md_orig,
   }
 
   if (smd_orig->bind_modes & GP_MOD_SDEF_BIND_CURRENT_FRAME) {
-
+    
     Vector<GreasePencilFrame *> frames;
     const int frame = grease_pencil_eval.runtime->eval_frame;
 
@@ -2248,26 +2192,61 @@ bool GPencilSurDeformModifierData::bind_drawings(ModifierData *md_orig,
     blender::ed::greasepencil::set_selected_frames_type(*layer, BEZT_KEYTYPE_SURDEFBOUND);
   }
 
-
+  smd_orig->bound = ob_orig;
   DEG_id_tag_update(&grease_pencil_orig.id, ID_RECALC_GEOMETRY);
   return success;
 }
-blender::Span<SDefGPVert> GPencilSurDeformModifierData::verts() const
+
+/*  BAKE */
+
+bool GPencilSurDeformModifierData::bake_frames(ModifierData *md_orig,
+                                               Depsgraph *depsgraph,
+                                               Scene *sc, Object *ob, int frame_start,
+                                               int frame_end)
 {
-  return {this->verts_array, this->verts_array_tot};
+  using namespace blender;
+  using bke::greasepencil::Drawing;
+
+ 
+  GPencilSurDeformModifierData *smd_orig = reinterpret_cast<GPencilSurDeformModifierData *>(md_orig);
+  ModifierData *md = &(smd_orig->modifier);
+  ModifierData *md_eval;
+  const ModifierTypeInfo *mti = BKE_modifier_get_info(
+      static_cast<ModifierType>(md->type));
+  Scene *scene_eval = DEG_get_evaluated_scene(depsgraph);
+  Scene *scene_orig = DEG_get_input_scene(depsgraph);
+  Object *object_eval = DEG_get_evaluated_object(depsgraph, ob);
+  GreasePencil *gpd_eval = static_cast<GreasePencil *>(object_eval->data);
+  GreasePencil *gpd_orig = static_cast<GreasePencil *>(ob->data);
+  GreasePencilDrawing *gpdr;
+
+  /*Iterate the frames in the range backwards, so each can still be evaluated and baked
+  based on the previous bound frame*/
+
+   for (int frame = frame_end; frame >= frame_start; frame--) {
+    BKE_scene_frame_set(scene_orig, frame);
+    BKE_scene_graph_update_for_newframe(depsgraph);
+
+    /*Iterate all the layers*/
+    for (bke::greasepencil::Layer *layer : gpd_orig->layers_for_write()) {
+      if (layer->is_empty())
+        continue;
+
+      /*What if the user decides to bake a bound/existing frame? It must be skipped.*/
+      if (layer->has_drawing_at(frame))
+        continue;
+
+      /* get the current state in current frame (orig)*/
+      gpdr = gpd_orig->insert_frame(*layer, frame);
+
+      /*Deform new drawing*/
+      surfacedeform_deform(md, depsgraph, gpdr->wrap(), ob);
+
+    }
+  }
+
+
+  DEG_id_tag_update(&gpd_orig->id, ID_RECALC_GEOMETRY | ID_RECALC_ANIMATION);
+  return true;
 }
 
-blender::MutableSpan<SDefGPVert> GPencilSurDeformModifierData::verts()
-{
-  return {this->verts_array, this->verts_array_tot};
-}
-
-blender::Span<SDefGPBind> SDefGPVert::binds() const
-{
-  return {this->binds_array, this->binds_num};
-}
-
-blender::MutableSpan<SDefGPBind> SDefGPVert::binds()
-{
-  return {this->binds_array, this->binds_num};
-}

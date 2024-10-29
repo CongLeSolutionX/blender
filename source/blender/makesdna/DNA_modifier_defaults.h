@@ -1090,13 +1090,10 @@
 #define _DNA_DEFAULT_GPencilSurDeformModifierData { \
   .depsgraph = NULL, \
   .target = NULL, \
-  .verts_array = NULL, \
-  .verts_array_tot = 0, \
-  .verts_array_occupied = 0, \
+  .bound = NULL, \
   .bake_range_start = 0, \
   .bake_range_end = 100, \
   .falloff = 4.0f, \
-  .num_of_layers = 0, \
   .target_verts_num = 0, \
   .target_polys_num = 0, \
   .flags = 0, \

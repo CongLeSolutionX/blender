@@ -3548,30 +3548,30 @@ typedef struct GPencilSurDeformModifierData {
   struct Depsgraph *depsgraph;
   /** Bind target object. */
   struct Object *target;
-  /** Vertex bind data. */
+  /** Bound object. */
+  struct Object *bound;
+
   
   #ifdef __cplusplus
   blender::Span<SDefGPVert> verts() const;
   blender::MutableSpan<SDefGPVert> verts();
   bool bind_drawings(ModifierData *md, const Depsgraph *depsgraph, Scene *sc, Object *ob);
+  bool bake_frames(ModifierData *md,
+                   Depsgraph *depsgraph,
+                   Scene *sc,
+                   Object *ob, int frame_start,
+                   int frame_end);
   #endif
-  SDefGPVert *verts_array;
-  unsigned int verts_array_tot;
-  unsigned int verts_array_occupied;
   
-  //char _pad2[4];
-
   int bake_range_start;
   int bake_range_end;
   float falloff;
 
-  /* Number of layers in the `frames` array of this modifier. */
-  unsigned int num_of_layers;
   /* Number of vertices and polygons on the target mesh upon bind process. */
   unsigned int target_verts_num, target_polys_num;
 
   int flags;
-
+  char _pad1[4];
   int bound_flags;
   int bind_modes;
   float strength;

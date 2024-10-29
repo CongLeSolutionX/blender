@@ -4290,7 +4290,34 @@ static int gpencil_surfacedeform_bake_exec(bContext *C, wmOperator *op)
   WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | NA_EDITED, ob);
   WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, nullptr);
 
-  return 1; //bake_frames(C, op);
+  ModifierData *md = edit_modifier_property_get(op, ob, eModifierType_GPencilSurDeform);
+  ModifierData *md_orig = BKE_modifier_get_original(ob, md);
+  GPencilSurDeformModifierData *smd_orig = (GPencilSurDeformModifierData *)md_orig;
+
+  if (smd_orig == NULL) {
+    BKE_report(op->reports, RPT_ERROR, "Modifier not found");
+    return OPERATOR_CANCELLED;
+  }
+
+  if (smd_orig->target == NULL) {
+    BKE_report(op->reports, RPT_ERROR, "Target missing");
+    return OPERATOR_CANCELLED;
+  }
+
+ 
+  Scene *scn = CTX_data_scene(C);
+  Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
+  bool ret = smd_orig->bake_frames(md,
+                                   depsgraph,
+                                   scn,
+                                   ob,
+                                   RNA_int_get(op->ptr, "frame_start"),
+                                   RNA_int_get(op->ptr, "frame_end"));
+  // CTX_data_ensure_evaluated_depsgraph(C);
+  if (!ret)
+    return OPERATOR_CANCELLED;
+  else
+    return OPERATOR_FINISHED;
 }
 
 static int gpencil_surfacedeform_bind_exec(bContext *C, wmOperator *op)
