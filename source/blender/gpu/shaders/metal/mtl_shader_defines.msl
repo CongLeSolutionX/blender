@@ -1198,3 +1198,12 @@ RESHAPE(float3x3, float3x4, m[0].xyz, m[1].xyz, m[2].xyz)
 #define IMG_5_TYPE 0
 #define IMG_6_TYPE 0
 #define IMG_7_TYPE 0
+
+#define UNI_0_TYPE 0
+#define UNI_1_TYPE 0
+#define UNI_2_TYPE 0
+#define UNI_3_TYPE 0
+#define UNI_4_TYPE 0
+#define UNI_5_TYPE 0
+#define UNI_6_TYPE 0
+#define UNI_7_TYPE 0

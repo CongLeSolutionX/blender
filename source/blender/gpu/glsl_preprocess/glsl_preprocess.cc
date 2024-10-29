@@ -95,8 +95,15 @@ int main(int argc, char **argv)
 
   blender::gpu::shader::Preprocessor processor;
 
-  output_file << processor.process(
-      buffer.str(), input_file_name, true, is_library, is_glsl, is_glsl, is_shared, report_error);
+  output_file << processor.process(buffer.str(),
+                                   input_file_name,
+                                   true,
+                                   is_library,
+                                   is_glsl,
+                                   is_glsl,
+                                   is_shared,
+                                   is_glsl,
+                                   report_error);
 
   input_file.close();
   output_file.close();

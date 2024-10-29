@@ -78,6 +78,7 @@ class Preprocessor {
                       bool do_string_mutation,
                       bool do_include_parsing,
                       bool do_small_type_linting,
+                      bool do_resource_argument,
                       report_callback report_error)
   {
     str = remove_comments(str, report_error);
@@ -105,7 +106,7 @@ class Preprocessor {
       small_type_linting(str, report_error);
     }
     str = remove_quotes(str);
-    if (true) {
+    if (do_resource_argument) {
       str = resource_arguments_mutation(str);
     }
     str = enum_macro_injection(str);
@@ -121,7 +122,7 @@ class Preprocessor {
   std::string process(const std::string &str)
   {
     auto no_err_report = [](std::smatch, const char *) {};
-    return process(str, "", false, false, false, false, false, no_err_report);
+    return process(str, "", false, false, false, false, false, false, no_err_report);
   }
 
  private:
@@ -398,6 +399,11 @@ class Preprocessor {
     std::stringstream generated_rename;
     std::stringstream generated_prototypes;
 
+    /* Early out if no resource keyword is found. Avoid false positive that can degenerate. */
+    if (!regex_search(str, std::regex(R"(\b(buffer|uniform|image)\b)"))) {
+      return str;
+    }
+
 /* Workaround a processor bug in GLSLang which prevent using CONCAT in #if directives.
  * Eventually remove this if GLSLang get patched. */
 #define GLSL_WORKAROUND
@@ -416,7 +422,7 @@ class Preprocessor {
 
     std::regex regex_func(R"(\n(\w+))"                        /* Return type. */
                           R"(\s+(\w+))"                       /* Function name. */
-                          R"(\s*\(((?:[^)]|\)(?!\n))+\)))"    /* Arguments. */
+                          R"(\s*\(((?:[^)]|\)(?!\n\{))+\)))"  /* Arguments. */
                           R"(\s*\{((?:\S|\ |\n(?!\}))+)\n\})" /* Body (assume formatting). */
     );
 
@@ -439,9 +445,7 @@ class Preprocessor {
               std::count(content.begin(), content.end(), '\n');
 
       /* Early out if no resource keyword is found. Avoid false positive that can degenerate. */
-      if (fn_args.find("buffer") == std::string::npos &&
-          fn_args.find("image") == std::string::npos)
-      {
+      if (!regex_search(str, std::regex(R"(\b(buffer|uniform|image)\b)"))) {
         return;
       }
 
@@ -465,11 +469,12 @@ class Preprocessor {
           /* We can have a total of 5 memory qualifiers. Capture them individually. */
           mem_qualifier mem_qualifier mem_qualifier mem_qualifier mem_qualifier
 #undef mem_qualifier
-          R"(\s*(const|image|buffer|inout|in|out|)?)" /* Parameter qualifier (optional). */
-          R"(\s*(\w+))"                               /* Type. */
-          R"(\s*(\w+))"                               /* Name. */
-          R"(\s*(\[\w*\])?)"                          /* Array (optional). */
-          R"(\s*(?:,|\)))"                            /* Separator. */
+          R"(\s*\b(image|uniform|buffer)?\b)" /* Resource qualifier (optional). */
+          R"(\s*\b(const|inout|in|out|)?\b)"  /* Parameter qualifier (optional). */
+          R"(\s*(\w+))"                       /* Type. */
+          R"(\s*(\w+))"                       /* Name. */
+          R"(\s*(\[\w*\])?)"                  /* Array (optional). */
+          R"(\s*(?:,|\)))"                    /* Separator. */
       );
 
       size_t permutation_len = 1;
@@ -480,14 +485,22 @@ class Preprocessor {
             arg.mem_qualifiers.emplace_back(arg_match[i].str());
           }
         }
-        arg.qualifier = arg_match[8].str();
-        arg.type = arg_match[9].str();
-        arg.name = arg_match[10].str();
-        arg.array = arg_match[11].str();
-        bool is_image = (arg.qualifier == "image");
-        bool is_buffer = (arg.qualifier == "buffer");
-        if (is_image || is_buffer) {
-          arg.prefix = is_buffer ? "BUF_" : "IMG_";
+        arg.qualifier = arg_match[9].str();
+        arg.type = arg_match[10].str();
+        arg.name = arg_match[11].str();
+        arg.array = arg_match[12].str();
+        if (arg_match[8].matched) {
+          switch (hash(arg_match[8].str())) {
+            case hash("uniform"):
+              arg.prefix = "UNI_";
+              break;
+            case hash("image"):
+              arg.prefix = "IMG_";
+              break;
+            case hash("buffer"):
+              arg.prefix = "BUF_";
+              break;
+          }
 
           if (arg_match[1].matched) {
             arg.slots.emplace_back(arg_match[2].str());
@@ -587,7 +600,6 @@ class Preprocessor {
             const std::string &buf_slot = permutation[i];
             /* Preprocessor checks. */
             const char *array_suffix = (arg.array.empty() ? "" : "_array");
-            std::cout << "arg.type \"" << arg.type << "\"" << std::endl;
             std::string type_hash = std::to_string(hash_32(arg.type + array_suffix));
             const std::string &res_type = arg.prefix;
 
@@ -701,7 +713,7 @@ class Preprocessor {
         ss << ")\n";
       });
 
-      generated_functions << function_macro << "\n";
+      generated_header_ << function_macro << "\n";
     });
 
     if (!fn_replace.empty()) {

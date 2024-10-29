@@ -262,6 +262,9 @@ static void print_resource(std::ostream &os, const ShaderCreateInfo::Resource &r
     }
     case ShaderCreateInfo::Resource::BindType::UNIFORM_BUFFER: {
       int64_t array_offset = res.uniformbuf.name.find_first_of("[");
+      StringRef name_no_array = (array_offset == -1) ? res.uniformbuf.name :
+                                                       res.uniformbuf.name.substr(0, array_offset);
+
       if (array_offset == -1) {
         /* Create local class member as constant pointer reference to bound UBO buffer.
          * Given usage within a shader follows ubo_name.ubo_element syntax, we can
@@ -275,9 +278,18 @@ static void print_resource(std::ostream &os, const ShaderCreateInfo::Resource &r
       else {
         /* For arrays, we can directly provide the constant access pointer, as the array
          * syntax will de-reference this at the correct fetch index. */
-        StringRef name_no_array = StringRef(res.uniformbuf.name.c_str(), array_offset);
         os << "constant " << res.uniformbuf.type_name << " *" << name_no_array << ";\n";
       }
+      const char *array_suffix = (array_offset == -1 ? "" : "_array");
+      uint64_t type_hash = shader::Preprocessor::hash_32(res.uniformbuf.type_name + array_suffix);
+
+      std::string buf_slot = "UNI_" + std::to_string(res.slot);
+      os << "#undef " << buf_slot << "_TYPE\n";
+      os << "#define " << buf_slot << "_NAME __" << name_no_array << "\n";
+      os << "#define " << buf_slot << "_RES " << name_no_array << "\n";
+      os << "#define " << buf_slot << "_TYPE " << std::to_string(type_hash) << "\n";
+      os << "#define " << buf_slot << "_READ 1\n";
+      os << "#define " << buf_slot << "_WRITE 1\n";
       break;
     }
     case ShaderCreateInfo::Resource::BindType::STORAGE_BUFFER: {
