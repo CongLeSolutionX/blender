@@ -523,7 +523,7 @@ class Preprocessor {
         return;
       }
 
-      if (permutation_len > 64) {
+      if (permutation_len > 8) {
         std::cerr << "Too many resource permutations in \"" << fn_name << "\". "
                   << "Use specific layout qualifier to reduce permutations." << std::endl;
         return;
