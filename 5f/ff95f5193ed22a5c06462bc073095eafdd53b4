@@ -1,1 +1,2 @@
 Referenced by issue #129334, Sculpt: Multires face material index is inconsistent across "sculpt" levels
+Referenced by pull request #129526, Fix #129353: GPv3: Crash when using Catmul-Rom curve type
