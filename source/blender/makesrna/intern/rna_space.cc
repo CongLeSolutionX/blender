@@ -2946,7 +2946,7 @@ static const EnumPropertyItem *rna_FileSelectParams_sort_method_itemf(bContext *
         &items, &totitem, rna_enum_fileselect_params_sort_items, FILE_SORT_ALPHA);
     /* Address small annoyance: Tooltip talks about "file list", override to be "asset list"
      * instead. */
-    items[0].description = TIP_("Sort the asset list alphabetically");
+    items[0].description = N_("Sort the asset list alphabetically");
 
     RNA_enum_items_add_value(
         &items, &totitem, rna_enum_fileselect_params_sort_items, FILE_SORT_ASSET_CATALOG);
