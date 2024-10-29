@@ -357,6 +357,11 @@ def bake_action_iter(
     is_new_action = action is None
     if is_new_action:
         action = bpy.data.actions.new("Action")
+    else:
+        # When baking into the current action, a slot needs to be assigned.
+        if not atd.action_slot:
+            slot = action.slots.new(for_id=obj)
+            atd.action_slot = slot
 
     # Only leave tweak mode if we actually need to modify the action (#57159)
     if action != atd.action:
@@ -377,7 +382,22 @@ def bake_action_iter(
     # Apply transformations to action
 
     # pose
-    lookup_fcurves = {(fcurve.data_path, fcurve.array_index): fcurve for fcurve in action.fcurves}
+    lookup_fcurves = {}
+    if action.is_action_layered:
+        # This is on purpose limited to the first layer and strip. To support more
+        # than 1 layer, a rewrite of this function is needed which ideally would
+        # happen in C++.
+        for layer in action.layers:
+            for strip in layer.strips:
+                channelbag = strip.channels(atd.action_slot.handle)
+                if not channelbag:
+                    continue
+                lookup_fcurves = {(fcurve.data_path, fcurve.array_index): fcurve for fcurve in channelbag.fcurves}
+                break
+            break
+    else:
+        lookup_fcurves = {(fcurve.data_path, fcurve.array_index): fcurve for fcurve in action.fcurves}
+
     if bake_options.do_pose:
         for f, armature_custom_properties in armature_info:
             bake_custom_properties(obj, custom_props=armature_custom_properties,
@@ -470,7 +490,8 @@ def bake_action_iter(
             if is_new_action:
                 keyframes.insert_keyframes_into_new_action(total_new_keys, action, name)
             else:
-                keyframes.insert_keyframes_into_existing_action(lookup_fcurves, total_new_keys, action, name)
+                keyframes.insert_keyframes_into_existing_action(
+                    lookup_fcurves, total_new_keys, action, name, atd.action_slot)
 
     # object. TODO. multiple objects
     if bake_options.do_object:
@@ -536,7 +557,8 @@ def bake_action_iter(
         if is_new_action:
             keyframes.insert_keyframes_into_new_action(total_new_keys, action, name)
         else:
-            keyframes.insert_keyframes_into_existing_action(lookup_fcurves, total_new_keys, action, name)
+            keyframes.insert_keyframes_into_existing_action(
+                lookup_fcurves, total_new_keys, action, name, atd.action_slot)
 
         if bake_options.do_parents_clear:
             obj.parent = None
@@ -653,6 +675,7 @@ class KeyframesCo:
         total_new_keys: int,
         action: Action,
         action_group_name: str,
+        action_slot,
     ) -> None:
         """
         Assumes the action already exists, that it might already have F-curves. Otherwise, the
@@ -675,9 +698,24 @@ class KeyframesCo:
             fcurve = lookup_fcurves.get(fc_key, None)
             if fcurve is None:
                 data_path, array_index = fc_key
-                fcurve = action.fcurves.new(
-                    data_path, index=array_index, action_group=action_group_name
-                )
+                if action.is_action_layered:
+                    # Assuming a single layer and strip here.
+                    for layer in action.layers:
+                        for strip in layer.strips:
+                            channelbag = strip.channels(action_slot.handle)
+                            if not channelbag:
+                                channelbag = strip.channelbags.new(action_slot)
+                            fcurve = channelbag.fcurves.new(data_path, index=array_index)
+                            break
+                        break
+                else:
+                    fcurve = action.fcurves.new(
+                        data_path, index=array_index, action_group=action_group_name
+                    )
+
+            if not fcurve:
+                # Could happen if no layers or strips exist on the action.
+                continue
 
             keyframe_points = fcurve.keyframe_points
 
