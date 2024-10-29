@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.3.0 Beta (b'89e3ab2a4533')\n"
+"Project-Id-Version: Blender 4.3.0 Beta (b'28a8486e2b3f')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-10-14 08:43+0000\n"
+"POT-Creation-Date: 2024-10-29 10:02+0000\n"
 "PO-Revision-Date: 2024-09-20 01:56+0000\n"
 "Last-Translator: Kamil <uhkamil@gmail.com>\n"
 "Language-Team: Polish <https://translate.blender.org/projects/blender-ui/ui/pl/>\n"
@@ -2373,10 +2373,6 @@ msgstr "Kolekcja czcionek"
 
 msgid "Main Grease Pencils"
 msgstr "Główny Grease Pencils"
-
-
-msgid "Collection of grease pencils"
-msgstr "Kolekcja grease pencils"
 
 
 msgid "Main Hair Curves"
@@ -8343,10 +8339,6 @@ msgid "Show Font data-blocks"
 msgstr "Pokaż bloki danych dla czcionek"
 
 
-msgid "Show Grease pencil data-blocks"
-msgstr "Pokaż bloki danych dla Grease pencil"
-
-
 msgid "Show Image data-blocks"
 msgstr "Pokaż bloki danych dla obrazów"
 
@@ -11242,6 +11234,10 @@ msgid "Use Material Mask"
 msgstr "Używa maski materiału"
 
 
+msgid "Mirror"
+msgstr "Odbicie lustrzane"
+
+
 msgid "Snap"
 msgstr "Przyciągaj"
 
@@ -11312,10 +11308,6 @@ msgstr "Scal"
 
 msgid "Proportional Editing Falloff"
 msgstr "Proporcjonalne edytowanie spadku"
-
-
-msgid "Mirror"
-msgstr "Odbicie lustrzane"
 
 
 msgid "Catalog"
@@ -14326,10 +14318,6 @@ msgid "Extrude selected points and move them"
 msgstr "Wydłuża zaznaczone punkty i przesuwa je"
 
 
-msgid "Only Selected"
-msgstr "Tylko wybrane"
-
-
 msgctxt "Operator"
 msgid "Merge"
 msgstr "Połącz"
@@ -14462,6 +14450,10 @@ msgstr "Odwróć wektory normalne"
 msgctxt "Mesh"
 msgid "Screen"
 msgstr "Ekran"
+
+
+msgid "Only Selected"
+msgstr "Tylko wybrane"
 
 
 msgid "Measurements"
@@ -16418,16 +16410,28 @@ msgid "Palette Color"
 msgstr "Kolor palety"
 
 
+msgid "Motion Tracking"
+msgstr "Śledzenie ruchu"
+
+
+msgid "Mesh Edit Mode"
+msgstr "Tryb edycji siatki"
+
+
+msgid "Measurement"
+msgstr "Pomiar"
+
+
+msgid "Curve Edit Mode"
+msgstr "Tryb edycji krzywej"
+
+
 msgid "Snapping"
 msgstr "Przyciąganie"
 
 
 msgid "Transform Orientations"
 msgstr "Orientacje przekształcenia"
-
-
-msgid "Curve Edit Mode"
-msgstr "Tryb edycji krzywej"
 
 
 msgid "Active Tool"
@@ -16440,18 +16444,6 @@ msgstr "Ustawienia cienia"
 
 msgid "Compositor"
 msgstr "Kompozytor"
-
-
-msgid "Motion Tracking"
-msgstr "Śledzenie ruchu"
-
-
-msgid "Mesh Edit Mode"
-msgstr "Tryb edycji siatki"
-
-
-msgid "Measurement"
-msgstr "Pomiar"
 
 
 msgid "Aperture"
@@ -22200,16 +22192,8 @@ msgid "Active region not set"
 msgstr "Nie ustawiony aktywny region"
 
 
-msgid "Nowhere for grease pencil data to go"
-msgstr "Dane szkicownika nie mają gdzie iść"
-
-
 msgid "Cannot delete locked layers"
 msgstr "Nie można usunąć zablokowanych warstw"
-
-
-msgid "No grease pencil data"
-msgstr "Brak danych szkicownika"
 
 
 msgid "No active frame to delete"
@@ -24225,10 +24209,6 @@ msgid "Keyframe pasting is not available for mask mode"
 msgstr "Wklejanie klatek kluczowych nie dostępne dla trybu maski"
 
 
-msgid "Keyframe pasting is not available for grease pencil or mask mode"
-msgstr "Wklejanie klatek kluczowych nie dostępne dla szkicownika lub w trybie maski"
-
-
 msgid "No selected F-Curves to paste into"
 msgstr "Brak zaznaczonej krzywej-F na którą można wkleić"
 
@@ -25664,11 +25644,6 @@ msgstr "Obiekt ma niejednolitą skalę, odwijanie (unwrap) będzie używało nie
 
 msgid "Object has negative scale, unwrap will operate on a non-flipped version of the mesh"
 msgstr "Obiekt posiada ujemną skalę, odwijanie (unwrap) będzie używało nie odwróconej wersji siatki"
-
-
-msgctxt "Action"
-msgid "Group"
-msgstr "Grupa"
 
 
 msgid "Index out of range"
