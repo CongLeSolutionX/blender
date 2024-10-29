@@ -20,7 +20,6 @@ from bl_ui.properties_grease_pencil_common import (
     AnnotationDataPanel,
     AnnotationOnionSkin,
     GreasePencilMaterialsPanel,
-    GreasePencilVertexcolorPanel,
 )
 from bl_ui.space_toolsystem_common import (
     ToolActivePanelHelper,
@@ -539,8 +538,10 @@ class _draw_tool_settings_context_mode:
 
         tool_settings = context.tool_settings
         paint = tool_settings.curves_sculpt
-
         brush = paint.brush
+
+        BrushAssetShelf.draw_popup_selector(layout, context, brush)
+
         if brush is None:
             return False
 
@@ -8629,6 +8630,13 @@ class TOPBAR_PT_grease_pencil_vertex_color(Panel):
         row.template_ID(paint, "palette", new="palette.new")
         if paint.palette:
             layout.template_palette(paint, "palette", color=True)
+
+        gp_settings = brush.gpencil_settings
+        if brush.gpencil_tool in {'DRAW', 'FILL'}:
+            row = layout.row(align=True)
+            row.prop(gp_settings, "vertex_mode", text="Mode")
+            row = layout.row(align=True)
+            row.prop(gp_settings, "vertex_color_factor", slider=True, text="Mix Factor")
 
 
 class VIEW3D_PT_curves_sculpt_add_shape(Panel):
