@@ -973,15 +973,18 @@ void DeferredPipeline::begin_sync()
   use_combined_lightprobe_eval = !use_raytracing;
 
   opaque_layer_.begin_sync();
+  refraction_layers_.clear();
 }
 
 void DeferredPipeline::end_sync()
 {
   opaque_layer_.end_sync(true, refraction_layers_.empty(), !refraction_layers_.empty());
 
-  const uint16_t last_index = refraction_layers_.end()->first;
-  for (auto &[index, layer] : refraction_layers_) {
-    layer->end_sync(opaque_layer_.is_empty(), index == last_index, index != last_index);
+  if (!refraction_layers_.empty()) {
+    const uint16_t last_index = refraction_layers_.rbegin()->first;
+    for (auto &[index, layer] : refraction_layers_) {
+      layer->end_sync(opaque_layer_.is_empty(), index == last_index, index != last_index);
+    }
   }
 
   debug_pass_sync();
