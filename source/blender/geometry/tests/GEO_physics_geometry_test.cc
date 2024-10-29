@@ -162,27 +162,25 @@ static void compute_body_inertia(bke::PhysicsGeometry &physics, const IndexMask 
       bke::physics_attributes::physics_attribute_name(BodyAttribute::mass),
       AttrDomain::Point,
       1.0f);
-  AttributeWriter<float3> local_inertias = attributes.lookup_or_add_for_write<float3>(
+  AttributeWriter<float4x4> local_inertias = attributes.lookup_or_add_for_write<float4x4>(
       bke::physics_attributes::physics_attribute_name(BodyAttribute::inertia), AttrDomain::Point);
 
   selection.foreach_index([&](const int body_i) {
     const int shape_index = body_shapes[body_i];
     const Span<bke::InstanceReference> shapes = physics.state().shapes();
     if (!shapes.index_range().contains(shape_index)) {
-      local_inertias.varray.set(body_i, float3(1.0f));
+      local_inertias.varray.set(body_i, float4x4::identity());
       return;
     }
     const InstanceReference &reference = shapes[shape_index];
     const CollisionShape *shape = reference.geometry_set().get_collision_shape();
     if (shape == nullptr) {
-      local_inertias.varray.set(body_i, float3(1.0f));
+      local_inertias.varray.set(body_i, float4x4::identity());
       return;
     }
 
     const float4x4 inertia_tensor = shape->inertia();
-    const float3 inertia_diagonal = float3(
-        inertia_tensor.x.x, inertia_tensor.y.y, inertia_tensor.z.z);
-    local_inertias.varray.set(body_i, inertia_diagonal);
+    local_inertias.varray.set(body_i, inertia_tensor);
   });
 
   local_inertias.finish();
