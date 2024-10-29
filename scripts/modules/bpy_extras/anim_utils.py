@@ -269,7 +269,7 @@ def bake_action_iter(
         bbones = {}
         custom_props = {}
         for name, pbone in obj.pose.bones.items():
-            if bake_options.do_visual_keying or bake_options.do_constraint_clear:
+            if bake_options.do_visual_keying:
                 # Get the final transform of the bone in its own local space...
                 matrix[name] = obj.convert_space(pose_bone=pbone, matrix=pbone.matrix,
                                                  from_space='POSE', to_space='LOCAL')
@@ -291,7 +291,7 @@ def bake_action_iter(
         return clean_custom_properties(obj)
 
     if bake_options.do_parents_clear:
-        if bake_options.do_visual_keying or bake_options.do_constraint_clear:
+        if bake_options.do_visual_keying:
             def obj_frame_info(obj):
                 return obj.matrix_world.copy(), clean_custom_properties(obj)
         else:
@@ -303,7 +303,7 @@ def bake_action_iter(
                 else:
                     return matrix.copy(), clean_custom_properties(obj)
     else:
-        if bake_options.do_visual_keying or bake_options.do_constraint_clear:
+        if bake_options.do_visual_keying:
             def obj_frame_info(obj):
                 parent = obj.parent
                 matrix = obj.matrix_world
