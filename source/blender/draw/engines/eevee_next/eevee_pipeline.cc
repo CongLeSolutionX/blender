@@ -973,13 +973,16 @@ void DeferredPipeline::begin_sync()
   use_combined_lightprobe_eval = !use_raytracing;
 
   opaque_layer_.begin_sync();
-  refraction_layer_.begin_sync();
 }
 
 void DeferredPipeline::end_sync()
 {
-  opaque_layer_.end_sync(true, refraction_layer_.is_empty(), refraction_layer_.has_transmission());
-  refraction_layer_.end_sync(opaque_layer_.is_empty(), true, false);
+  opaque_layer_.end_sync(true, refraction_layers_.empty(), !refraction_layers_.empty());
+
+  const uint16_t last_index = refraction_layers_.end()->first;
+  for (auto &[index, layer] : refraction_layers_) {
+    layer->end_sync(opaque_layer_.is_empty(), index == last_index, index != last_index);
+  }
 
   debug_pass_sync();
 }
@@ -1031,30 +1034,35 @@ void DeferredPipeline::debug_draw(draw::View &view, GPUFrameBuffer *combined_fb)
 
 PassMain::Sub *DeferredPipeline::prepass_add(::Material *blender_mat,
                                              GPUMaterial *gpumat,
-                                             bool has_motion)
+                                             bool has_motion,
+                                             uint16_t refraction_layer)
 {
   if (!use_combined_lightprobe_eval && (blender_mat->blend_flag & MA_BL_SS_REFRACTION)) {
-    return refraction_layer_.prepass_add(blender_mat, gpumat, has_motion);
+    return get_refraction_layer(refraction_layer).prepass_add(blender_mat, gpumat, has_motion);
   }
   else {
     return opaque_layer_.prepass_add(blender_mat, gpumat, has_motion);
   }
 }
 
-PassMain::Sub *DeferredPipeline::material_add(::Material *blender_mat, GPUMaterial *gpumat)
+PassMain::Sub *DeferredPipeline::material_add(::Material *blender_mat,
+                                              GPUMaterial *gpumat,
+                                              uint16_t refraction_layer)
 {
   if (!use_combined_lightprobe_eval && (blender_mat->blend_flag & MA_BL_SS_REFRACTION)) {
-    return refraction_layer_.material_add(blender_mat, gpumat);
+    return get_refraction_layer(refraction_layer).material_add(blender_mat, gpumat);
   }
   else {
     return opaque_layer_.material_add(blender_mat, gpumat);
   }
 }
 
-PassMain::Sub *DeferredPipeline::npr_add(::Material *blender_mat, GPUMaterial *gpumat)
+PassMain::Sub *DeferredPipeline::npr_add(::Material *blender_mat,
+                                         GPUMaterial *gpumat,
+                                         uint16_t refraction_layer)
 {
   if (!use_combined_lightprobe_eval && (blender_mat->blend_flag & MA_BL_SS_REFRACTION)) {
-    return refraction_layer_.npr_add(blender_mat, gpumat);
+    return get_refraction_layer(refraction_layer).npr_add(blender_mat, gpumat);
   }
   else {
     return opaque_layer_.npr_add(blender_mat, gpumat);
@@ -1084,15 +1092,26 @@ void DeferredPipeline::render(View &main_view,
   DRW_stats_group_end();
 
   DRW_stats_group_start("Deferred.Refract");
-  feedback_tx = refraction_layer_.render(main_view,
-                                         render_view,
-                                         prepass_fb,
-                                         combined_fb,
-                                         gbuffer_fb,
-                                         extent,
-                                         rt_buffer_refract_layer,
-                                         feedback_tx);
+  for (auto &[index, layer] : refraction_layers_) {
+    feedback_tx = layer->render(main_view,
+                                render_view,
+                                prepass_fb,
+                                combined_fb,
+                                gbuffer_fb,
+                                extent,
+                                rt_buffer_refract_layer,
+                                feedback_tx);
+  }
   DRW_stats_group_end();
+}
+
+DeferredLayer &DeferredPipeline::get_refraction_layer(uint16_t index)
+{
+  if (refraction_layers_.find(index) == refraction_layers_.end()) {
+    refraction_layers_[index] = std::make_unique<DeferredLayer>(inst_);
+    refraction_layers_[index]->begin_sync();
+  }
+  return *refraction_layers_[index].get();
 }
 
 /** \} */
