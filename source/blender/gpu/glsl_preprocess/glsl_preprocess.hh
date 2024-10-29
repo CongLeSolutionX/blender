@@ -14,7 +14,6 @@
 #include <regex>
 #include <sstream>
 #include <string>
-#include <sys/_types/_size_t.h>
 #include <unordered_set>
 #include <vector>
 
