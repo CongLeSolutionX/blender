@@ -351,10 +351,9 @@ static void update_shapekeys(const Object &ob, KeyBlock *kb, const Span<float3> 
   }
 
   /* Apply new coords on active key block, no need to re-allocate kb->data here! */
-  BKE_keyblock_update_from_vertcos(&ob, kb, reinterpret_cast<const float(*)[3]>(new_positions.data()));
+  BKE_keyblock_update_from_vertcos(
+      &ob, kb, reinterpret_cast<const float(*)[3]>(new_positions.data()));
 }
-
-
 
 static void restore_position_mesh(const Depsgraph &depsgraph,
                                   Object &object,
@@ -459,7 +458,6 @@ static void restore_position_mesh(const Depsgraph &depsgraph,
         modified_verts.fill_indices(verts, true);
       }
     });
-
   }
 }
 
@@ -1217,7 +1215,8 @@ static void store_positions_mesh(const Depsgraph &depsgraph, const Object &objec
                                                                   mesh.verts_num) :
                                                              mesh.vert_positions();
 
-    gather_data_mesh(orig_positions, unode.vert_indices.as_span(), unode.orig_position.as_mutable_span());
+    gather_data_mesh(
+        orig_positions, unode.vert_indices.as_span(), unode.orig_position.as_mutable_span());
   }
 }
 
