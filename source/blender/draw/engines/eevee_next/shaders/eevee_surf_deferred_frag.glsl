@@ -9,13 +9,13 @@
  * Some render-pass are written during this pass.
  */
 
-#pragma BLENDER_REQUIRE(draw_view_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_gbuffer_lib.glsl)
-#pragma BLENDER_REQUIRE(common_hair_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_ambient_occlusion_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_surf_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_nodetree_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_sampling_lib.glsl)
+#include "common_hair_lib.glsl"
+#include "draw_view_lib.glsl"
+#include "eevee_ambient_occlusion_lib.glsl"
+#include "eevee_gbuffer_lib.glsl"
+#include "eevee_nodetree_lib.glsl"
+#include "eevee_sampling_lib.glsl"
+#include "eevee_surf_lib.glsl"
 
 vec4 closure_to_rgba(Closure cl)
 {
@@ -24,7 +24,9 @@ vec4 closure_to_rgba(Closure cl)
   out_color.a = saturate(1.0 - average(g_transmittance));
 
   /* Reset for the next closure tree. */
-  closure_weights_reset();
+  float noise = utility_tx_fetch(utility_tx, gl_FragCoord.xy, UTIL_BLUE_NOISE_LAYER).r;
+  float closure_rand = fract(noise + sampling_rng_1D_get(SAMPLING_CLOSURE));
+  closure_weights_reset(closure_rand);
 
   return out_color;
 }
@@ -37,107 +39,80 @@ void main()
   init_globals();
 
   float noise = utility_tx_fetch(utility_tx, gl_FragCoord.xy, UTIL_BLUE_NOISE_LAYER).r;
-  g_closure_rand = fract(noise + sampling_rng_1D_get(SAMPLING_CLOSURE));
+  float closure_rand = fract(noise + sampling_rng_1D_get(SAMPLING_CLOSURE));
 
   fragment_displacement();
 
-  nodetree_surface();
+  nodetree_surface(closure_rand);
 
   g_holdout = saturate(g_holdout);
 
-  float thickness = nodetree_thickness();
+  float thickness = nodetree_thickness() * thickness_mode;
 
-  g_diffuse_data.color *= g_diffuse_data.weight;
-  g_reflection_data.color *= g_reflection_data.weight;
-  g_refraction_data.color *= g_refraction_data.weight;
+  /** Transparency weight is already applied through dithering, remove it from other closures. */
+  float alpha = 1.0 - average(g_transmittance);
+  float alpha_rcp = safe_rcp(alpha);
 
-  /* TODO(fclem): This feels way too complex for what is it. */
-  bool has_any_bsdf_weight = g_diffuse_data.weight != 0.0 || g_reflection_data.weight != 0.0 ||
-                             g_refraction_data.weight != 0.0;
-  vec3 out_normal = has_any_bsdf_weight ? vec3(0.0) : g_data.N;
-  out_normal += g_diffuse_data.N * g_diffuse_data.weight;
-  out_normal += g_reflection_data.N * g_reflection_data.weight;
-  out_normal += g_refraction_data.N * g_refraction_data.weight;
-  out_normal = safe_normalize(out_normal);
+  /* Object holdout. */
+  eObjectInfoFlag ob_flag = eObjectInfoFlag(floatBitsToUint(drw_infos[resource_id].infos.w));
+  if (flag_test(ob_flag, OBJECT_HOLDOUT)) {
+    /* alpha is set from rejected pixels / dithering. */
+    g_holdout = 1.0;
 
-  vec3 specular_color = g_reflection_data.color + g_refraction_data.color;
+    /* Set alpha to 0.0 so that lighting is not computed. */
+    alpha_rcp = 0.0;
+  }
+
+  g_emission *= alpha_rcp;
+
+  ivec2 out_texel = ivec2(gl_FragCoord.xy);
 
   /* ----- Render Passes output ----- */
 
-  ivec2 out_texel = ivec2(gl_FragCoord.xy);
 #ifdef MAT_RENDER_PASS_SUPPORT /* Needed because node_tree isn't present in test shaders. */
   /* Some render pass can be written during the gbuffer pass. Light passes are written later. */
   if (imageSize(rp_cryptomatte_img).x > 1) {
     vec4 cryptomatte_output = vec4(
         cryptomatte_object_buf[resource_id], node_tree.crypto_hash, 0.0);
-    imageStore(rp_cryptomatte_img, out_texel, cryptomatte_output);
+    imageStoreFast(rp_cryptomatte_img, out_texel, cryptomatte_output);
   }
-  output_renderpass_color(uniform_buf.render_pass.normal_id, vec4(out_normal, 1.0));
   output_renderpass_color(uniform_buf.render_pass.position_id, vec4(g_data.P, 1.0));
-  output_renderpass_color(uniform_buf.render_pass.diffuse_color_id,
-                          vec4(g_diffuse_data.color, 1.0));
-  output_renderpass_color(uniform_buf.render_pass.specular_color_id, vec4(specular_color, 1.0));
   output_renderpass_color(uniform_buf.render_pass.emission_id, vec4(g_emission, 1.0));
 #endif
 
   /* ----- GBuffer output ----- */
 
-  uint header = 0u;
+  GBufferData gbuf_data;
+  gbuf_data.closure[0] = g_closure_get_resolved(0, alpha_rcp);
+#if CLOSURE_BIN_COUNT > 1
+  gbuf_data.closure[1] = g_closure_get_resolved(1, alpha_rcp);
+#endif
+#if CLOSURE_BIN_COUNT > 2
+  gbuf_data.closure[2] = g_closure_get_resolved(2, alpha_rcp);
+#endif
+  ObjectInfos object_infos = drw_infos[resource_id];
+  gbuf_data.surface_N = g_data.N;
+  gbuf_data.thickness = thickness;
+  gbuf_data.object_id = resource_id;
+  gbuf_data.receiver_light_set = receiver_light_set_get(object_infos);
 
-  if (g_reflection_data.weight > 0.0) {
-    /* Reflection. */
-    vec4 closure;
-    closure.xy = gbuffer_normal_pack(g_reflection_data.N);
-    closure.z = g_reflection_data.roughness;
-    closure.w = 0.0;
-    imageStore(out_gbuf_closure_img, ivec3(out_texel, 0), closure);
+  GBufferWriter gbuf = gbuffer_pack(gbuf_data);
 
-    vec4 color = gbuffer_color_pack(g_reflection_data.color);
-    imageStore(out_gbuf_color_img, ivec3(out_texel, 0), color);
-    header |= CLOSURE_REFLECTION;
+  /* Output header and first closure using frame-buffer attachment. */
+  out_gbuf_header = gbuf.header;
+  out_gbuf_closure1 = gbuf.data[0];
+  out_gbuf_closure2 = gbuf.data[1];
+  out_gbuf_normal = gbuf.N[0];
+
+  /* Output remaining closures using image store. */
+  /* NOTE: The image view start at layer 2 so all destination layer is `layer - 2`. */
+  for (int layer = 2; layer < GBUFFER_DATA_MAX && layer < gbuf.data_len; layer++) {
+    imageStoreFast(out_gbuf_closure_img, ivec3(out_texel, layer - 2), gbuf.data[layer]);
   }
-
-  float combined_weight = g_refraction_data.weight + g_diffuse_data.weight;
-  if (combined_weight > 0.0) {
-    /* TODO(fclem) other RNG. */
-    float refract_rand = fract(g_closure_rand * 6.1803398875);
-    bool output_refraction = (refract_rand * combined_weight) < g_refraction_data.weight;
-    if (output_refraction) {
-      /* Refraction. */
-      vec4 closure;
-      closure.xy = gbuffer_normal_pack(g_refraction_data.N);
-      closure.z = g_refraction_data.roughness;
-      closure.w = gbuffer_ior_pack(g_refraction_data.ior);
-      imageStore(out_gbuf_closure_img, ivec3(out_texel, 1), closure);
-
-      vec4 color = gbuffer_color_pack(g_refraction_data.color);
-      imageStore(out_gbuf_color_img, ivec3(out_texel, 1), color);
-      header |= CLOSURE_REFRACTION;
-    }
-    else {
-      /* Diffuse. */
-      vec4 closure;
-      closure.xy = gbuffer_normal_pack(g_diffuse_data.N);
-      closure.z = gbuffer_thickness_pack(thickness);
-      closure.w = 0.0; /* Unused. */
-      imageStore(out_gbuf_closure_img, ivec3(out_texel, 1), closure);
-
-      vec4 color = gbuffer_color_pack(g_diffuse_data.color);
-      imageStore(out_gbuf_color_img, ivec3(out_texel, 1), color);
-      header |= CLOSURE_DIFFUSE;
-    }
-
-    if (g_diffuse_data.sss_id > 0) {
-      /* SubSurface Scattering. */
-      vec4 closure;
-      closure.xyz = gbuffer_sss_radii_pack(g_diffuse_data.sss_radius);
-      closure.w = gbuffer_object_id_unorm16_pack(uint(resource_id));
-      imageStore(out_gbuf_closure_img, ivec3(out_texel, 2), closure);
-      header |= CLOSURE_SSS;
-    }
+  /* NOTE: The image view start at layer 1 so all destination layer is `layer - 1`. */
+  for (int layer = 1; layer < GBUFFER_NORMAL_MAX && layer < gbuf.normal_len; layer++) {
+    imageStoreFast(out_gbuf_normal_img, ivec3(out_texel, layer - 1), gbuf.N[layer].xyyy);
   }
-
-  imageStore(out_gbuf_header_img, out_texel, uvec4(header));
 
   /* ----- Radiance output ----- */
 

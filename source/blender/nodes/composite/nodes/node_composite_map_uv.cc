@@ -6,8 +6,8 @@
  * \ingroup cmpnodes
  */
 
-#include "GPU_shader.h"
-#include "GPU_texture.h"
+#include "GPU_shader.hh"
+#include "GPU_texture.hh"
 
 #include "UI_interface.hh"
 #include "UI_resources.hh"
@@ -36,7 +36,13 @@ static void cmp_node_map_uv_declare(NodeDeclarationBuilder &b)
 
 static void node_composit_buts_map_uv(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 {
+  uiItemR(layout, ptr, "filter_type", UI_ITEM_R_SPLIT_EMPTY_NAME, "", ICON_NONE);
   uiItemR(layout, ptr, "alpha", UI_ITEM_R_SPLIT_EMPTY_NAME, nullptr, ICON_NONE);
+}
+
+static void node_composit_init_map_uv(bNodeTree * /*ntree*/, bNode *node)
+{
+  node->custom2 = CMP_NODE_MAP_UV_FILTERING_ANISOTROPIC;
 }
 
 using namespace blender::realtime_compositor;
@@ -47,21 +53,43 @@ class MapUVOperation : public NodeOperation {
 
   void execute() override
   {
+    /* Not yet supported on CPU. */
+    if (!context().use_gpu()) {
+      for (const bNodeSocket *output : this->node()->output_sockets()) {
+        Result &output_result = get_result(output->identifier);
+        if (output_result.should_compute()) {
+          output_result.allocate_invalid();
+        }
+      }
+      return;
+    }
+
     if (get_input("Image").is_single_value()) {
       get_input("Image").pass_through(get_result("Image"));
       return;
     }
+    bool nearest_neighbour = get_nearest_neighbour();
 
-    GPUShader *shader = context().get_shader("compositor_map_uv");
+    GPUShader *shader = context().get_shader(get_shader_name());
+
     GPU_shader_bind(shader);
 
-    GPU_shader_uniform_1f(
-        shader, "gradient_attenuation_factor", get_gradient_attenuation_factor());
+    if (!nearest_neighbour) {
+      GPU_shader_uniform_1f(
+          shader, "gradient_attenuation_factor", get_gradient_attenuation_factor());
+    }
 
     const Result &input_image = get_input("Image");
-    GPU_texture_mipmap_mode(input_image.texture(), true, true);
-    GPU_texture_anisotropic_filter(input_image.texture(), true);
-    GPU_texture_extend_mode(input_image.texture(), GPU_SAMPLER_EXTEND_MODE_CLAMP_TO_BORDER);
+    if (nearest_neighbour) {
+      GPU_texture_mipmap_mode(input_image, false, false);
+      GPU_texture_anisotropic_filter(input_image, false);
+    }
+    else {
+      GPU_texture_mipmap_mode(input_image, true, true);
+      GPU_texture_anisotropic_filter(input_image, true);
+    }
+
+    GPU_texture_extend_mode(input_image, GPU_SAMPLER_EXTEND_MODE_CLAMP_TO_BORDER);
     input_image.bind_as_texture(shader, "input_tx");
 
     const Result &input_uv = get_input("UV");
@@ -87,6 +115,17 @@ class MapUVOperation : public NodeOperation {
   {
     return bnode().custom1 / 100.0f;
   }
+
+  bool get_nearest_neighbour()
+  {
+    return bnode().custom2 == CMP_NODE_MAP_UV_FILTERING_NEAREST;
+  }
+
+  char const *get_shader_name()
+  {
+    return get_nearest_neighbour() ? "compositor_map_uv_nearest_neighbour" :
+                                     "compositor_map_uv_anisotropic";
+  }
 };
 
 static NodeOperation *get_compositor_operation(Context &context, DNode node)
@@ -100,12 +139,13 @@ void register_node_type_cmp_mapuv()
 {
   namespace file_ns = blender::nodes::node_composite_map_uv_cc;
 
-  static bNodeType ntype;
+  static blender::bke::bNodeType ntype;
 
   cmp_node_type_base(&ntype, CMP_NODE_MAP_UV, "Map UV", NODE_CLASS_DISTORT);
   ntype.declare = file_ns::cmp_node_map_uv_declare;
   ntype.draw_buttons = file_ns::node_composit_buts_map_uv;
   ntype.get_compositor_operation = file_ns::get_compositor_operation;
+  ntype.initfunc = file_ns::node_composit_init_map_uv;
 
-  nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }

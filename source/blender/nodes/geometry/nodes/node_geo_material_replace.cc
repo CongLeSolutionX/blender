@@ -4,14 +4,9 @@
 
 #include "node_geometry_util.hh"
 
-#include "UI_interface.hh"
-#include "UI_resources.hh"
-
 #include "DNA_mesh_types.h"
-#include "DNA_meshdata_types.h"
 
 #include "BKE_grease_pencil.hh"
-#include "BKE_material.h"
 
 namespace blender::nodes::node_geo_material_replace_cc {
 
@@ -58,12 +53,12 @@ static void node_geo_exec(GeoNodeExecParams params)
 
 static void node_register()
 {
-  static bNodeType ntype;
+  static blender::bke::bNodeType ntype;
 
   geo_node_type_base(&ntype, GEO_NODE_REPLACE_MATERIAL, "Replace Material", NODE_CLASS_GEOMETRY);
   ntype.declare = node_declare;
   ntype.geometry_node_execute = node_geo_exec;
-  nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }
 NOD_REGISTER_NODE(node_register)
 

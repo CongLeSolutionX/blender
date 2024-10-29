@@ -4,7 +4,7 @@
 
 #include "node_shader_util.hh"
 
-#include "IMB_colormanagement.h"
+#include "IMB_colormanagement.hh"
 
 namespace blender::nodes::node_shader_volume_principled_cc {
 
@@ -38,9 +38,13 @@ static void node_declare(NodeDeclarationBuilder &b)
 #define SOCK_BLACKBODY_INTENSITY_ID 8
   b.add_input<decl::Color>("Blackbody Tint").default_value({1.0f, 1.0f, 1.0f, 1.0f});
 #define SOCK_BLACKBODY_TINT_ID 8
-  b.add_input<decl::Float>("Temperature").default_value(1000.0f).min(0.0f).max(6500.0f);
+  b.add_input<decl::Float>("Temperature")
+      .default_value(1000.0f)
+      .min(0.0f)
+      .max(6500.0f)
+      .subtype(PROP_COLOR_TEMPERATURE);
   b.add_input<decl::String>("Temperature Attribute").default_value("temperature");
-  b.add_input<decl::Float>("Weight").unavailable();
+  b.add_input<decl::Float>("Weight").available(false);
   b.add_output<decl::Shader>("Volume").translation_context(BLT_I18NCONTEXT_ID_ID);
 }
 
@@ -56,16 +60,6 @@ static void attribute_post_process(GPUMaterial *mat,
   }
 }
 
-#define socket_not_zero(sock) (in[sock].link || (clamp_f(in[sock].vec[0], 0.0f, 1.0f) > 1e-5f))
-#define socket_not_black(sock) \
-  (in[sock].link || (clamp_f(in[sock].vec[0], 0.0f, 1.0f) > 1e-5f && \
-                     clamp_f(in[sock].vec[1], 0.0f, 1.0f) > 1e-5f && \
-                     clamp_f(in[sock].vec[2], 0.0f, 1.0f) > 1e-5f))
-#define socket_not_white(sock) \
-  (in[sock].link || \
-   (clamp_f(in[sock].vec[0], 0.0f, 1.0f) < 1.0f && clamp_f(in[sock].vec[1], 0.0f, 1.0f) < 1.0f && \
-    clamp_f(in[sock].vec[2], 0.0f, 1.0f) < 1.0f))
-
 static int node_shader_gpu_volume_principled(GPUMaterial *mat,
                                              bNode *node,
                                              bNodeExecData * /*execdata*/,
@@ -73,14 +67,16 @@ static int node_shader_gpu_volume_principled(GPUMaterial *mat,
                                              GPUNodeStack *out)
 {
   /* Test if blackbody intensity is enabled. */
-  bool use_blackbody = socket_not_zero(SOCK_BLACKBODY_INTENSITY_ID);
+  bool use_blackbody = node_socket_not_zero(in[SOCK_BLACKBODY_INTENSITY_ID]);
 
-  if (socket_not_zero(SOCK_DENSITY_ID) && socket_not_black(SOCK_COLOR_ID)) {
+  if (node_socket_not_zero(in[SOCK_DENSITY_ID]) && node_socket_not_black(in[SOCK_COLOR_ID])) {
     /* Consider there is absorption phenomenon when there is scattering since
      * `extinction = scattering + absorption`. */
     GPU_material_flag_set(mat, GPU_MATFLAG_VOLUME_SCATTER | GPU_MATFLAG_VOLUME_ABSORPTION);
   }
-  if (socket_not_zero(SOCK_DENSITY_ID) && socket_not_white(SOCK_ABSORPTION_COLOR_ID)) {
+  if (node_socket_not_zero(in[SOCK_DENSITY_ID]) &&
+      node_socket_not_white(in[SOCK_ABSORPTION_COLOR_ID]))
+  {
     GPU_material_flag_set(mat, GPU_MATFLAG_VOLUME_ABSORPTION);
   }
 
@@ -113,7 +109,7 @@ static int node_shader_gpu_volume_principled(GPUMaterial *mat,
   }
 
   /* Default values if attributes not found. */
-  static float white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+  static const float white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
   if (!density) {
     density = GPU_constant(white);
   }
@@ -166,12 +162,12 @@ void register_node_type_sh_volume_principled()
 {
   namespace file_ns = blender::nodes::node_shader_volume_principled_cc;
 
-  static bNodeType ntype;
+  static blender::bke::bNodeType ntype;
 
   sh_node_type_base(&ntype, SH_NODE_VOLUME_PRINCIPLED, "Principled Volume", NODE_CLASS_SHADER);
   ntype.declare = file_ns::node_declare;
-  blender::bke::node_type_size_preset(&ntype, blender::bke::eNodeSizePreset::LARGE);
+  blender::bke::node_type_size_preset(&ntype, blender::bke::eNodeSizePreset::Large);
   ntype.gpu_fn = file_ns::node_shader_gpu_volume_principled;
 
-  nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }

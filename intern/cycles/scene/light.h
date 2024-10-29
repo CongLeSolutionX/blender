@@ -48,6 +48,8 @@ class Light : public Node {
   NODE_SOCKET_API(int, map_resolution)
   NODE_SOCKET_API(float, average_radiance)
 
+  NODE_SOCKET_API(bool, is_sphere)
+
   NODE_SOCKET_API(float, spot_angle)
   NODE_SOCKET_API(float, spot_smooth)
 
@@ -140,7 +142,7 @@ class LightManager {
    */
   void test_enabled_lights(Scene *scene);
 
-  void device_update_lights(Device *device, DeviceScene *dscene, Scene *scene);
+  void device_update_lights(DeviceScene *dscene, Scene *scene);
   void device_update_distribution(Device *device,
                                   DeviceScene *dscene,
                                   Scene *scene,

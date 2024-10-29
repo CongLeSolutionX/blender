@@ -12,22 +12,22 @@
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 #include "BLI_utildefines.h"
 
 #ifdef WITH_PYTHON
-#  include "BPY_extern.h"
+#  include "BPY_extern.hh"
 #endif
 
 #include "DEG_depsgraph.hh"
 
 #include "BKE_image.h"
-#include "BKE_scene.h"
+#include "BKE_scene.hh"
 
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
 
-#include "rna_internal.h"
+#include "rna_internal.hh"
 
 #include "RE_engine.h"
 #include "RE_pipeline.h"
@@ -86,14 +86,14 @@ const EnumPropertyItem rna_enum_bake_pass_type_items[] = {
 
 #  include "RNA_access.hh"
 
-#  include "BKE_appdir.h"
+#  include "BKE_appdir.hh"
 #  include "BKE_context.hh"
-#  include "BKE_report.h"
+#  include "BKE_report.hh"
 
-#  include "GPU_capabilities.h"
-#  include "GPU_shader.h"
-#  include "IMB_colormanagement.h"
-#  include "IMB_imbuf_types.h"
+#  include "GPU_capabilities.hh"
+#  include "GPU_shader.hh"
+#  include "IMB_colormanagement.hh"
+#  include "IMB_imbuf_types.hh"
 
 #  include "DEG_depsgraph_query.hh"
 
@@ -348,6 +348,13 @@ static StructRNA *rna_RenderEngine_register(Main *bmain,
   et = static_cast<RenderEngineType *>(
       BLI_findstring(&R_engines, dummy_et.idname, offsetof(RenderEngineType, idname)));
   if (et) {
+    BKE_reportf(reports,
+                RPT_INFO,
+                "%s '%s', bl_idname '%s' has been registered before, unregistering previous",
+                error_prefix,
+                identifier,
+                dummy_et.idname);
+
     StructRNA *srna = et->rna_ext.srna;
     if (!(srna && rna_RenderEngine_unregister(bmain, srna))) {
       BKE_reportf(reports,
@@ -963,7 +970,7 @@ static void rna_def_render_engine(BlenderRNA *brna)
       prop,
       "Use Image Save",
       "Save images/movie to disk while rendering an animation. "
-      "Disabling image saving is only supported when bl_use_postprocess is also disabled");
+      "Disabling image saving is only supported when bl_use_postprocess is also disabled.");
 
   prop = RNA_def_property(srna, "bl_use_gpu_context", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "type->flag", RE_USE_GPU_CONTEXT);
@@ -980,7 +987,7 @@ static void rna_def_render_engine(BlenderRNA *brna)
   RNA_def_property_ui_text(prop,
                            "Use Custom Shading Nodes",
                            "Don't expose Cycles and EEVEE shading nodes in the node editor user "
-                           "interface, so own nodes can be used instead");
+                           "interface, so separate nodes can be used instead");
 
   prop = RNA_def_property(srna, "bl_use_spherical_stereo", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "type->flag", RE_USE_SPHERICAL_STEREO);

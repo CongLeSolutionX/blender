@@ -2,6 +2,8 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#pragma once
+
 /* [Drobot2014a] Low Level Optimizations for GCN */
 vec4 fast_rcp(vec4 v)
 {
@@ -10,7 +12,7 @@ vec4 fast_rcp(vec4 v)
 
 vec3 brdf_approx(vec3 spec_color, float roughness, float NV)
 {
-  /* Very rough own approx. We don't need it to be correct, just fast.
+  /* Very rough approximation. We don't need it to be correct, just fast.
    * Just simulate fresnel effect with roughness attenuation. */
   float fresnel = exp2(-8.35 * NV) * (1.0 - roughness);
   return mix(spec_color, vec3(1.0), fresnel);

@@ -11,7 +11,6 @@ void node_eevee_specular(vec4 diffuse,
                          float clearcoat,
                          float clearcoat_roughness,
                          vec3 CN,
-                         float occlusion,
                          float weight,
                          const float use_clearcoat,
                          out Closure result)
@@ -24,7 +23,6 @@ void node_eevee_specular(vec4 diffuse,
   clearcoat = saturate(clearcoat);
   clearcoat_roughness = saturate(clearcoat_roughness);
   CN = safe_normalize(CN);
-  occlusion = saturate(occlusion);
 
   vec3 V = coordinate_incoming(g_data.P);
 
@@ -39,18 +37,16 @@ void node_eevee_specular(vec4 diffuse,
 
   float alpha = (1.0 - transp) * weight;
 
+#ifdef GPU_SHADER_EEVEE_LEGACY_DEFINES
+  ClosureSubsurface diffuse_data;
+  /* Flag subsurface as disabled. */
+  diffuse_data.sss_radius.b = -1.0;
+#else
   ClosureDiffuse diffuse_data;
+#endif
   diffuse_data.weight = alpha;
   diffuse_data.color = diffuse.rgb;
   diffuse_data.N = N;
-  diffuse_data.sss_id = 0u;
-
-  /* WORKAROUND: Nasty workaround to the current interface with the closure evaluation.
-   * Ideally the occlusion input should be move to the output node or removed all-together.
-   * This is temporary to avoid a regression in 3.2 and should be removed after EEVEE-Next rewrite.
-   */
-  diffuse_data.sss_radius.r = occlusion;
-  diffuse_data.sss_radius.g = -1.0; /* Flag */
 
   ClosureReflection reflection_data;
   reflection_data.weight = alpha;
@@ -76,7 +72,7 @@ void node_eevee_specular(vec4 diffuse,
     clearcoat_data.roughness = clearcoat_roughness;
   }
 
-  if (use_clearcoat != 0.0f) {
+  if (use_clearcoat != 0.0) {
     result = closure_eval(diffuse_data, reflection_data, clearcoat_data);
   }
   else {

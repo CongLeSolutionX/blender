@@ -7,7 +7,7 @@
  */
 #include "BLI_rect.h"
 
-#include "DRW_render.h"
+#include "DRW_render.hh"
 
 #include "BKE_object.hh"
 
@@ -17,7 +17,7 @@
 
 #include "RE_pipeline.h"
 
-#include "IMB_imbuf_types.h"
+#include "IMB_imbuf_types.hh"
 
 #include "gpencil_engine.h"
 
@@ -57,7 +57,7 @@ void GPENCIL_render_init(GPENCIL_Data *vedata,
 
   if (!pix_z || !pix_col) {
     RE_engine_set_error_message(engine,
-                                "Warning: To render grease pencil, enable Combined and Z passes.");
+                                "Warning: To render Grease Pencil, enable Combined and Z passes.");
   }
 
   if (pix_z) {
@@ -146,7 +146,7 @@ static void GPENCIL_render_cache(void *vedata,
                                  RenderEngine * /*engine*/,
                                  Depsgraph * /*depsgraph*/)
 {
-  if (ob && ELEM(ob->type, OB_GPENCIL_LEGACY, OB_LAMP)) {
+  if (ob && ELEM(ob->type, OB_GPENCIL_LEGACY, OB_GREASE_PENCIL, OB_LAMP)) {
     if (DRW_object_visibility_in_active_context(ob) & OB_VISIBLE_SELF) {
       GPENCIL_cache_populate(vedata, ob);
     }

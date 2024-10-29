@@ -8,13 +8,18 @@ import os
 import subprocess
 import sys
 
+from collections.abc import (
+    Iterator,
+    Sequence,
+)
 
-def run(cmd, *, env=None):
+
+def run(cmd: Sequence[str], *, env: dict[str, str] | None = None) -> None:
     print("   ", " ".join(cmd))
     subprocess.check_call(cmd, env=env)
 
 
-def edit_text_file(filename, marker_begin, marker_end, content):
+def edit_text_file(filename: str, marker_begin: str, marker_end: str, content: str) -> None:
     with open(filename, 'r', encoding='utf-8') as f:
         data = f.read()
     marker_begin_index = data.find(marker_begin)
@@ -23,10 +28,10 @@ def edit_text_file(filename, marker_begin, marker_end, content):
     while data[marker_end_index - 1] in {'\t', ' '}:
         marker_end_index -= 1
     if marker_begin_index == -1:
-        print('Error: %r not found' % marker_begin)
+        print('Error: {!r} not found'.format(marker_begin))
         return
     if marker_end_index == -1:
-        print('Error: %r not found' % marker_end)
+        print('Error: {!r} not found'.format(marker_end))
         return
     marker_begin_index += len(marker_begin) + 1
     data_update = data[:marker_begin_index] + content + data[marker_end_index:]
@@ -49,11 +54,11 @@ if not os.path.exists(blender_bin):
             blender_bin = blender_app_path
 
 icons_blend = (
-    os.path.join(ROOTDIR, "..", "lib", "resources", "icon_geom.blend"),
+    os.path.join(ROOTDIR, "release", "datafiles", "assets", "icons", "toolbar.blend"),
 )
 
 
-def names_and_time_from_path(path):
+def names_and_time_from_path(path: str) -> Iterator[tuple[str, float]]:
     for entry in os.scandir(path):
         name = entry.name
         if name.endswith(".dat"):
@@ -68,7 +73,7 @@ for blend in icons_blend:
     output_dir = os.path.join(BASEDIR, "icons")
     files_old = set(names_and_time_from_path(output_dir))
     cmd = (
-        blender_bin, "--background", "--factory-startup", "-noaudio",
+        blender_bin, "--background", "--factory-startup",
         blend,
         "--python", os.path.join(BASEDIR, "blender_icons_geom.py"),
         "--",

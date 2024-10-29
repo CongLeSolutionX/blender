@@ -6,7 +6,7 @@
 """
 Script for checking source code spelling.
 
-   python3 tools/check_source/check_spelling.py some_soure_file.py
+   python3 tools/check_source/check_spelling.py some_source_file.py
 
 - Pass in a path for it to be checked recursively.
 - Pass in '--strings' to check strings instead of comments.
@@ -18,23 +18,18 @@ import os
 import argparse
 import sys
 
-from typing import (
+from collections.abc import (
     Callable,
-    Dict,
-    Generator,
-    List,
-    Optional,
-    Set,
-    Tuple,
+    Iterator,
 )
 
 
 # Report: word, line, column.
-Report = Tuple[str, int, int]
+Report = tuple[str, int, int]
 # Cache: {filepath: length, hash, reports}.
-CacheData = Dict[str, Tuple[int, bytes, List[Report]]]
+CacheData = dict[str, tuple[int, bytes, list[Report]]]
 # Map word to suggestions.
-SuggestMap = Dict[str, str]
+SuggestMap = dict[str, str]
 
 ONLY_ONCE = True
 USE_COLOR = True
@@ -84,6 +79,8 @@ SOURCE_EXT = (
     "glsl",
     "osl",
     "py",
+    "txt",  # for `CMakeLists.txt`.
+    "cmake",
 )
 
 BASEDIR = os.path.abspath(os.path.dirname(__file__))
@@ -116,7 +113,7 @@ def dictionary_create():  # type: ignore
     return dict_spelling
 
 
-def dictionary_check(w: str, code_words: Set[str]) -> bool:
+def dictionary_check(w: str, code_words: set[str]) -> bool:
     w_lower = w.lower()
     if w_lower in dict_ignore:
         return True
@@ -150,7 +147,7 @@ def dictionary_check(w: str, code_words: Set[str]) -> bool:
     return is_correct
 
 
-def dictionary_suggest(w: str) -> List[str]:
+def dictionary_suggest(w: str) -> list[str]:
     return _dict.suggest(w)  # type: ignore
 
 
@@ -160,7 +157,7 @@ _dict = dictionary_create()  # type: ignore
 # -----------------------------------------------------------------------------
 # General Utilities
 
-def hash_of_file_and_len(fp: str) -> Tuple[bytes, int]:
+def hash_of_file_and_len(fp: str) -> tuple[bytes, int]:
     import hashlib
     with open(fp, 'rb') as fh:
         data = fh.read()
@@ -183,7 +180,7 @@ re_ignore = re.compile(
     r"<\w+@[\w\.\-]+>|"
 
     # Convention for TODO/FIXME messages: TODO(my name) OR FIXME(name+name) OR XXX(some-name) OR NOTE(name/other-name):
-    r"\b(TODO|FIXME|XXX|NOTE|WARNING)\(@?[\w\s\+\-/]+\)|"
+    r"\b(TODO|FIXME|XXX|NOTE|WARNING|WORKAROUND)\(@?[\w\s\+\-/]+\)|"
 
     # DOXYGEN style: <pre> ... </pre>
     r"<pre>.+</pre>|"
@@ -230,7 +227,7 @@ if USE_SKIP_SINGLE_IDENTIFIER_COMMENTS:
     re_single_word_c_comments = re.compile(r"\/\*[\s]*[a-zA-Z_]+[a-zA-Z0-9_]*[\s]*\*\/")
 
 
-def words_from_text(text: str, check_type: str) -> List[Tuple[str, int]]:
+def words_from_text(text: str, check_type: str) -> list[tuple[str, int]]:
     """ Extract words to treat as English for spell checking.
     """
     # Replace non-newlines with white-space, so all alignment is kept.
@@ -272,7 +269,7 @@ def words_from_text(text: str, check_type: str) -> List[Tuple[str, int]]:
             w_prev = w_lower
             w_prev_start = w_start
     else:
-        assert False
+        assert False, "unreachable"
 
     return words
 
@@ -291,10 +288,10 @@ class Comment:
         self.line = line
         self.type = type
 
-    def parse(self, check_type: str) -> List[Tuple[str, int]]:
+    def parse(self, check_type: str) -> list[tuple[str, int]]:
         return words_from_text(self.text, check_type=check_type)
 
-    def line_and_column_from_comment_offset(self, pos: int) -> Tuple[int, int]:
+    def line_and_column_from_comment_offset(self, pos: int) -> tuple[int, int]:
         text = self.text
         slineno = self.line + text.count("\n", 0, pos)
         # Allow for -1 to be not found.
@@ -307,8 +304,7 @@ class Comment:
         return slineno, scol
 
 
-def extract_code_strings(filepath: str) -> Tuple[List[Comment], Set[str]]:
-    import pygments
+def extract_code_strings(filepath: str) -> tuple[list[Comment], set[str]]:
     from pygments import lexers
     from pygments.token import Token
 
@@ -320,6 +316,8 @@ def extract_code_strings(filepath: str) -> Tuple[List[Comment], Set[str]]:
     #     return comments, code_words
     if filepath.endswith(".py"):
         lex = lexers.get_lexer_by_name("python")
+    elif filepath.endswith((".cmake", ".txt")):
+        lex = lexers.get_lexer_by_name("cmake")
     else:
         lex = lexers.get_lexer_by_name("c")
 
@@ -339,7 +337,7 @@ def extract_code_strings(filepath: str) -> Tuple[List[Comment], Set[str]]:
     return comments, code_words
 
 
-def extract_py_comments(filepath: str) -> Tuple[List[Comment], Set[str]]:
+def extract_py_comments(filepath: str) -> tuple[list[Comment], set[str]]:
 
     import token
     import tokenize
@@ -368,7 +366,36 @@ def extract_py_comments(filepath: str) -> Tuple[List[Comment], Set[str]]:
     return comments, code_words
 
 
-def extract_c_comments(filepath: str) -> Tuple[List[Comment], Set[str]]:
+def extract_cmake_comments(filepath: str) -> tuple[list[Comment], set[str]]:
+    from pygments import lexers
+    from pygments.token import Token
+
+    lex = lexers.get_lexer_by_name("cmake")
+
+    with open(filepath, encoding='utf-8') as fh:
+        source = fh.read()
+
+    comments = []
+    code_words = set()
+
+    slineno = 0
+    for ty, ttext in lex.get_tokens(source):
+        if ty in {Token.Literal.String, Token.Literal.String.Double, Token.Literal.String.Single}:
+            # Disable because most CMake strings are references to paths/code."
+            if False:
+                comments.append(Comment(filepath, ttext, slineno, 'STRING'))
+        elif ty in {Token.Comment, Token.Comment.Single}:
+            comments.append(Comment(filepath, ttext, slineno, 'COMMENT'))
+        else:
+            for match in re_vars.finditer(ttext):
+                code_words.add(match.group(0))
+        # Ugh - not nice or fast.
+        slineno += ttext.count("\n")
+
+    return comments, code_words
+
+
+def extract_c_comments(filepath: str) -> tuple[list[Comment], set[str]]:
     """
     Extracts comments like this:
 
@@ -380,8 +407,6 @@ def extract_c_comments(filepath: str) -> Tuple[List[Comment], Set[str]]:
 
     BEGIN = "/*"
     END = "*/"
-    TABSIZE = 4
-    SINGLE_LINE = False
 
     # reverse these to find blocks we won't parse
     PRINT_NON_ALIGNED = False
@@ -426,7 +451,7 @@ def extract_c_comments(filepath: str) -> Tuple[List[Comment], Set[str]]:
                 star_offsets.add(l.find("*", l_ofs_first))
                 l_ofs_first = 0
                 if len(star_offsets) > 1:
-                    print("%s:%d" % (filepath, line_index + text.count("\n", 0, i)))
+                    print("{:s}:{:d}".format(filepath, line_index + text.count("\n", 0, i)))
                     break
 
     if not PRINT_SPELLING:
@@ -495,7 +520,7 @@ def spell_check_report(filepath: str, check_type: str, report: Report) -> None:
         if suggest is None:
             _suggest_map[w_lower] = suggest = " ".join(dictionary_suggest(w))
 
-        print("%s:%d:%d: %s%s%s, suggest (%s)" % (
+        print("{:s}:{:d}:{:d}: {:s}{:s}{:s}, suggest ({:s})".format(
             filepath,
             slineno + 1,
             scol + 1,
@@ -505,7 +530,7 @@ def spell_check_report(filepath: str, check_type: str, report: Report) -> None:
             suggest,
         ))
     elif check_type == 'DUPLICATES':
-        print("%s:%d:%d: %s%s%s, duplicate" % (
+        print("{:s}:{:d}:{:d}: {:s}{:s}{:s}, duplicate".format(
             filepath,
             slineno + 1,
             scol + 1,
@@ -519,10 +544,12 @@ def spell_check_file(
         filepath: str,
         check_type: str,
         extract_type: str = 'COMMENTS',
-) -> Generator[Report, None, None]:
+) -> Iterator[Report]:
     if extract_type == 'COMMENTS':
         if filepath.endswith(".py"):
             comment_list, code_words = extract_py_comments(filepath)
+        elif filepath.endswith((".cmake", ".txt")):
+            comment_list, code_words = extract_cmake_comments(filepath)
         else:
             comment_list, code_words = extract_c_comments(filepath)
     elif extract_type == 'STRINGS':
@@ -553,23 +580,23 @@ def spell_check_file(
                 # print(filepath + ":" + str(slineno + 1) + ":" + str(scol), w, "(duplicates)")
                 yield (w, slineno, scol)
     else:
-        assert False
+        assert False, "unreachable"
 
 
 def spell_check_file_recursive(
         dirpath: str,
         check_type: str,
-        regex_list: List[re.Pattern[str]],
+        regex_list: list[re.Pattern[str]],
         extract_type: str = 'COMMENTS',
-        cache_data: Optional[CacheData] = None,
+        cache_data: CacheData | None = None,
 ) -> None:
     import os
     from os.path import join
 
     def source_list(
             path: str,
-            filename_check: Optional[Callable[[str], bool]] = None,
-    ) -> Generator[str, None, None]:
+            filename_check: Callable[[str], bool] | None = None,
+    ) -> Iterator[str]:
         for dirpath, dirnames, filenames in os.walk(path):
             # Only needed so this can be matches with ignore paths.
             dirpath = os.path.abspath(dirpath)
@@ -620,16 +647,16 @@ def spell_check_file_recursive(
 # )
 #
 
-def spell_cache_read(cache_filepath: str) -> Tuple[CacheData, SuggestMap]:
+def spell_cache_read(cache_filepath: str) -> tuple[CacheData, SuggestMap]:
     import pickle
-    cache_store: Tuple[CacheData, SuggestMap] = {}, {}
+    cache_store: tuple[CacheData, SuggestMap] = {}, {}
     if os.path.exists(cache_filepath):
         with open(cache_filepath, 'rb') as fh:
             cache_store = pickle.load(fh)
     return cache_store
 
 
-def spell_cache_write(cache_filepath: str, cache_store: Tuple[CacheData, SuggestMap]) -> None:
+def spell_cache_write(cache_filepath: str, cache_store: tuple[CacheData, SuggestMap]) -> None:
     import pickle
     with open(cache_filepath, 'wb') as fh:
         pickle.dump(cache_store, fh)
@@ -640,8 +667,8 @@ def spell_check_file_with_cache_support(
         check_type: str,
         *,
         extract_type: str = 'COMMENTS',
-        cache_data: Optional[CacheData] = None,
-) -> Generator[Report, None, None]:
+        cache_data: CacheData | None = None,
+) -> Iterator[Report]:
     """
     Iterator each item is a report: (word, line_number, column_number)
     """
@@ -766,7 +793,7 @@ def main() -> int:
     cache_filepath = args.cache_file
     check_type = args.check_type
 
-    cache_data: Optional[CacheData] = None
+    cache_data: CacheData | None = None
     if cache_filepath:
         cache_data, _suggest_map = spell_cache_read(cache_filepath)
         clear_stale_cache = True

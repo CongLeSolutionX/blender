@@ -10,6 +10,8 @@
 #  include "device/device.h"
 #  include "device/hip/device_impl.h"
 
+#  include "integrator/denoiser_oidn_gpu.h"
+
 #  include "util/string.h"
 #  include "util/windows.h"
 #endif /* WITH_HIP */
@@ -68,19 +70,20 @@ bool device_hip_init()
 #endif /* WITH_HIP_DYNLOAD */
 }
 
-Device *device_hip_create(const DeviceInfo &info, Stats &stats, Profiler &profiler)
+Device *device_hip_create(const DeviceInfo &info, Stats &stats, Profiler &profiler, bool headless)
 {
 #ifdef WITH_HIPRT
   if (info.use_hardware_raytracing)
-    return new HIPRTDevice(info, stats, profiler);
+    return new HIPRTDevice(info, stats, profiler, headless);
   else
-    return new HIPDevice(info, stats, profiler);
+    return new HIPDevice(info, stats, profiler, headless);
 #elif defined(WITH_HIP)
-  return new HIPDevice(info, stats, profiler);
+  return new HIPDevice(info, stats, profiler, headless);
 #else
   (void)info;
   (void)stats;
   (void)profiler;
+  (void)headless;
 
   LOG(FATAL) << "Request to create HIP device without compiled-in support. Should never happen.";
 
@@ -155,9 +158,7 @@ void device_hip_info(vector<DeviceInfo> &devices)
     info.num = num;
 
     info.has_nanovdb = true;
-    info.has_light_tree = true;
     info.has_mnee = true;
-    info.denoisers = 0;
 
     info.has_gpu_queue = true;
     /* Check if the device has P2P access to any other device in the system. */
@@ -181,6 +182,19 @@ void device_hip_info(vector<DeviceInfo> &devices)
                             (unsigned int)pci_location[1],
                             (unsigned int)pci_location[2]);
 
+    info.denoisers = 0;
+#  if defined(WITH_OPENIMAGEDENOISE)
+    /* Check first if OIDN supports it, not doing so can crash the HIP driver with
+     * "hipErrorNoBinaryForGpu: Unable to find code object for all current devices". */
+#    if OIDN_VERSION >= 20300
+    if (hipSupportsDeviceOIDN(num) && oidnIsHIPDeviceSupported(num)) {
+#    else
+    if (hipSupportsDeviceOIDN(num) && OIDNDenoiserGPU::is_device_supported(info)) {
+#    endif
+      info.denoisers |= DENOISER_OPENIMAGEDENOISE;
+    }
+#  endif
+
     /* If device has a kernel timeout and no compute preemption, we assume
      * it is connected to a display and will freeze the display while doing
      * computations. */
@@ -198,7 +212,11 @@ void device_hip_info(vector<DeviceInfo> &devices)
       devices.push_back(info);
     }
 
-    VLOG_INFO << "Added device \"" << name << "\" with id \"" << info.id << "\".";
+    VLOG_INFO << "Added device \"" << info.description << "\" with id \"" << info.id << "\".";
+
+    if (info.denoisers & DENOISER_OPENIMAGEDENOISE)
+      VLOG_INFO << "Device with id \"" << info.id << "\" supports "
+                << denoiserTypeToHumanReadable(DENOISER_OPENIMAGEDENOISE) << ".";
   }
 
   if (!display_devices.empty())

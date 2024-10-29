@@ -20,8 +20,25 @@ struct IDProperty;
 struct ListBase;
 struct Main;
 struct ViewLayer;
+struct SceneRenderLayer;
 
 using blender::FunctionRef;
+
+/**
+ * Mapping from new ID types to old converted ID types.
+ *
+ * This is used by linking code, when a directly linked data comes from a library where it exists
+ * as an older, different type of ID.
+ *
+ * Since the current blend-file will convert that older ID type to the new one as part of its
+ * versioning process, when saved, it will store a reference to that linked ID using the _new_ ID
+ * type, which will not be found on next blend-file opening/reloading when searching for that ID in
+ * the library blend-file.
+ *
+ * \returns The old, deprecated ID type code if any matches the given `id_code_new` one, otherwise
+ * `ID_LINK_PLACEHOLDER`.
+ */
+short do_versions_new_to_old_idcode_get(short id_code_new);
 
 /**
  * Check if a region of type \a region_type exists in \a regionbase. Otherwise add it after the
@@ -63,6 +80,26 @@ void version_node_output_socket_name(bNodeTree *ntree,
                                      int node_type,
                                      const char *old_name,
                                      const char *new_name);
+
+/**
+ * Adds a new node for versioning purposes. This is intended to be used to create raw DNA that
+ * might have been read from a file. The created node does not have storage or sockets. Both have
+ * to be added manually afterwards.
+ *
+ * This may seem redundant because the set of sockets is already part of the node declaration.
+ * However, the declaration should not be used here, because it changes over time. The versioning
+ * code generally expects to get the sockets that the node had at the time of writing the
+ * versioning code. Changing the declaration later can break the versioning code in ways that are
+ * hard to detect.
+ */
+bNode &version_node_add_empty(bNodeTree &ntree, const char *idname);
+bNodeSocket &version_node_add_socket(bNodeTree &ntree,
+                                     bNode &node,
+                                     eNodeSocketInOut in_out,
+                                     const char *idname,
+                                     const char *identifier);
+bNodeLink &version_node_add_link(
+    bNodeTree &ntree, bNode &node_a, bNodeSocket &socket_a, bNode &node_b, bNodeSocket &socket_b);
 
 /**
  * Adjust animation data for newly added node sockets.
@@ -126,6 +163,7 @@ float *version_cycles_node_socket_vector_value(bNodeSocket *socket);
 
 IDProperty *version_cycles_properties_from_ID(ID *id);
 IDProperty *version_cycles_properties_from_view_layer(ViewLayer *view_layer);
+IDProperty *version_cycles_properties_from_render_layer(SceneRenderLayer *render_layer);
 IDProperty *version_cycles_visibility_properties_from_ID(ID *id);
 
 float version_cycles_property_float(IDProperty *idprop, const char *name, float default_value);
@@ -144,3 +182,5 @@ void version_update_node_input(
     const char *socket_identifier,
     FunctionRef<void(bNode *, bNodeSocket *)> update_input,
     FunctionRef<void(bNode *, bNodeSocket *, bNode *, bNodeSocket *)> update_input_link);
+
+bNode *version_eevee_output_node_get(bNodeTree *ntree, int16_t node_type);

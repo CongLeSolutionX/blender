@@ -49,17 +49,16 @@ endif()
 
 if(NOT DEFINED LIBDIR)
   if("${CMAKE_OSX_ARCHITECTURES}" STREQUAL "x86_64")
-    set(LIBDIR ${CMAKE_SOURCE_DIR}/../lib/darwin)
+    set(LIBDIR ${CMAKE_SOURCE_DIR}/lib/macos_x64)
   else()
-    set(LIBDIR ${CMAKE_SOURCE_DIR}/../lib/darwin_${CMAKE_OSX_ARCHITECTURES})
-  endif()
-else()
-  if(FIRST_RUN)
-    message(STATUS "Using pre-compiled LIBDIR: ${LIBDIR}")
+    set(LIBDIR ${CMAKE_SOURCE_DIR}/lib/macos_${CMAKE_OSX_ARCHITECTURES})
   endif()
 endif()
-if(NOT EXISTS "${LIBDIR}/")
+if(NOT EXISTS "${LIBDIR}/.git")
   message(FATAL_ERROR "Mac OSX requires pre-compiled libs at: '${LIBDIR}'")
+endif()
+if(FIRST_RUN)
+  message(STATUS "Using pre-compiled LIBDIR: ${LIBDIR}")
 endif()
 
 # Avoid searching for headers since this would otherwise override our lib
@@ -109,6 +108,12 @@ if(WITH_OPENSUBDIV)
 endif()
 add_bundled_libraries(opensubdiv/lib)
 
+if(WITH_VULKAN_BACKEND)
+  find_package(MoltenVK REQUIRED)
+  find_package(ShaderC REQUIRED)
+  find_package(Vulkan REQUIRED)
+endif()
+
 if(WITH_CODEC_SNDFILE)
   find_package(SndFile)
   find_library(_sndfile_FLAC_LIBRARY NAMES flac HINTS ${LIBDIR}/sndfile/lib)
@@ -154,9 +159,8 @@ if(WITH_FRIBIDI)
   find_package(Fribidi)
 endif()
 
-if(WITH_IMAGE_OPENEXR)
-  find_package(OpenEXR)
-endif()
+# Header dependency of required OpenImageIO.
+find_package(OpenEXR REQUIRED)
 add_bundled_libraries(openexr/lib)
 add_bundled_libraries(imath/lib)
 
@@ -169,6 +173,9 @@ if(WITH_CODEC_FFMPEG)
     vorbisfile vpx x264)
   if(EXISTS ${LIBDIR}/ffmpeg/lib/libaom.a)
     list(APPEND FFMPEG_FIND_COMPONENTS aom)
+  endif()
+  if(EXISTS ${LIBDIR}/ffmpeg/lib/libx265.a)
+    list(APPEND FFMPEG_FIND_COMPONENTS x265)
   endif()
   if(EXISTS ${LIBDIR}/ffmpeg/lib/libxvidcore.a)
     list(APPEND FFMPEG_FIND_COMPONENTS xvidcore)
@@ -329,6 +336,7 @@ endif()
 if(WITH_CYCLES AND WITH_CYCLES_OSL)
   find_package(OSL REQUIRED)
 endif()
+add_bundled_libraries(osl/lib)
 
 if(WITH_CYCLES AND WITH_CYCLES_EMBREE)
   find_package(Embree 3.8.0 REQUIRED)
@@ -428,9 +436,22 @@ string(APPEND PLATFORM_LINKFLAGS
   " -Wl,-unexported_symbols_list,'${PLATFORM_SYMBOLS_MAP}'"
 )
 
-# Use old, slower linker for now to avoid many linker warnings.
 if(${XCODE_VERSION} VERSION_GREATER_EQUAL 15.0)
-  string(APPEND PLATFORM_LINKFLAGS " -Wl,-ld_classic")
+  if("${CMAKE_OSX_ARCHITECTURES}" STREQUAL "x86_64")
+    # Silence "no platform load command found in <static library>, assuming: macOS".
+    string(APPEND PLATFORM_LINKFLAGS " -Wl,-ld_classic")
+  else()
+    # Silence "ld: warning: ignoring duplicate libraries".
+    #
+    # The warning is introduced with Xcode 15 and is triggered when the same library
+    # is passed to the linker ultiple times. This situation could happen with either
+    # cyclic libraries, or some transitive dependencies where CMake might decide to
+    # pass library to the linker multiple times to force it re-scan symbols. It is
+    # not neeed for Xcode linker to ensure all symbols from library are used and it
+    # is corrected in CMake 3.29:
+    #    https://gitlab.kitware.com/cmake/cmake/-/issues/25297
+    string(APPEND PLATFORM_LINKFLAGS " -Xlinker -no_warn_duplicate_libraries")
+  endif()
 endif()
 
 # Make stack size more similar to Embree, required for Embree.
@@ -512,8 +533,9 @@ if(PLATFORM_BUNDLED_LIBRARIES)
 
   # Environment variables to run precompiled executables that needed libraries.
   list(JOIN PLATFORM_BUNDLED_LIBRARY_DIRS ":" _library_paths)
-  set(PLATFORM_ENV_BUILD "DYLD_LIBRARY_PATH=\"${_library_paths};$DYLD_LIBRARY_PATH\"")
-  set(PLATFORM_ENV_INSTALL "DYLD_LIBRARY_PATH=${CMAKE_INSTALL_PREFIX_WITH_CONFIG}/Blender.app/Contents/Resources/lib/;$DYLD_LIBRARY_PATH")
+  # Intentionally double "$$" which expands into "$" when instantiated.
+  set(PLATFORM_ENV_BUILD "DYLD_LIBRARY_PATH=\"${_library_paths};$$DYLD_LIBRARY_PATH\"")
+  set(PLATFORM_ENV_INSTALL "DYLD_LIBRARY_PATH=${CMAKE_INSTALL_PREFIX_WITH_CONFIG}/Blender.app/Contents/Resources/lib/;$$DYLD_LIBRARY_PATH")
   unset(_library_paths)
 endif()
 

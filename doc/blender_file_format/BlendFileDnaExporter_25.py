@@ -40,7 +40,6 @@
 #
 ######################################################
 
-import struct
 import sys
 from string import Template     # strings completion
 
@@ -363,15 +362,15 @@ class DNACatalogHTML:
 
 
 def usage():
-    print("\nUsage: \n\tblender2.5 --background -noaudio --python BlendFileDnaExporter_25.py [-- [options]]")
+    print("\nUsage: \n\tblender2.5 --background --python BlendFileDnaExporter_25.py [-- [options]]")
     print("Options:")
     print("\t--dna-keep-blend:      doesn't delete the produced blend file DNA export to html")
     print("\t--dna-debug:           sets the logging level to DEBUG (lots of additional info)")
     print("\t--dna-versioned        saves version information in the html and blend filenames")
     print("\t--dna-overwrite-css    overwrite dna.css, useful when modifying css in the script")
     print("Examples:")
-    print("\tdefault:       % blender2.5 --background -noaudio --python BlendFileDnaExporter_25.py")
-    print("\twith options:  % blender2.5 --background -noaudio --python BlendFileDnaExporter_25.py -- --dna-keep-blend --dna-debug\n")
+    print("\tdefault:       % blender2.5 --background --python BlendFileDnaExporter_25.py")
+    print("\twith options:  % blender2.5 --background --python BlendFileDnaExporter_25.py -- --dna-keep-blend --dna-debug\n")
 
 
 ######################################################
@@ -403,7 +402,7 @@ def main():
             log.info("   saving to: " + Path_Blend)
             try:
                 bpy.ops.wm.save_as_mainfile(filepath=Path_Blend, copy=True, compress=False)
-            except:
+            except Exception:
                 log.error("Filename {0} does not exist and can't be created... quitting".format(Path_Blend))
                 return
         else:

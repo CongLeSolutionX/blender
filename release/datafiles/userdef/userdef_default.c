@@ -16,9 +16,9 @@
 
 #include "BKE_blender_version.h"
 
-#include "GPU_platform.h"
+#include "GPU_platform_backend_enum.h"
 
-#include "BLO_readfile.h" /* own include */
+#include "BLO_userdef_default.h" /* own include */
 
 const UserDef U_default = {
     .versionfile = BLENDER_FILE_VERSION,
@@ -78,7 +78,7 @@ const UserDef U_default = {
     .virtual_pixel = 0,
 
     .scrollback = 256,
-    .node_margin = 80,
+    .node_margin = 40,
     .node_preview_res = 120,
     .transopts = USER_TR_TOOLTIPS,
     .menuthreshold1 = 5,
@@ -102,6 +102,10 @@ const UserDef U_default = {
     .user_menus = {NULL},
 
     .keyconfigstr = "Blender",
+
+    .network_timeout = 10,
+    .network_connection_limit = 5,
+
     .undosteps = 32,
     .undomemory = 0,
     .gp_manhattandist = 1,
@@ -114,6 +118,7 @@ const UserDef U_default = {
 #else
     .gpu_backend = GPU_BACKEND_OPENGL,
 #endif
+    .max_shader_compilation_subprocesses = 0,
 
     /** Initialized by: #BKE_studiolight_default. */
     .light_param = {{0}},
@@ -153,7 +158,7 @@ const UserDef U_default = {
     .pressure_softness = 0.0,
     .ndof_sensitivity = 4.0,
     .ndof_orbit_sensitivity = 4.0,
-    .ndof_deadzone = 0.1,
+    .ndof_deadzone = 0.0,
     .ndof_flag = (NDOF_MODE_ORBIT | NDOF_LOCK_HORIZON | NDOF_SHOULD_PAN | NDOF_SHOULD_ZOOM |
                   NDOF_SHOULD_ROTATE |
                   /* Software from the driver authors follows this convention
@@ -164,8 +169,9 @@ const UserDef U_default = {
     .image_draw_method = IMAGE_DRAW_METHOD_AUTO,
     .glalphaclip = 0.004,
     .autokey_mode = (AUTOKEY_MODE_NORMAL & ~AUTOKEY_ON),
-    .autokey_flag = AUTOKEY_FLAG_XYZ2RGB,
-    .key_insert_channels = USER_ANIM_KEY_CHANNEL_LOCATION,
+    .keying_flag = KEYING_FLAG_XYZ2RGB | AUTOKEY_FLAG_INSERTNEEDED,
+    .key_insert_channels = (USER_ANIM_KEY_CHANNEL_LOCATION | USER_ANIM_KEY_CHANNEL_ROTATION |
+                            USER_ANIM_KEY_CHANNEL_SCALE | USER_ANIM_KEY_CHANNEL_CUSTOM_PROPERTIES),
     .animation_flag = USER_ANIM_HIGH_QUALITY_DRAWING,
     .text_render = 0,
     .navigation_mode = VIEW_NAVIGATION_WALK,
@@ -233,8 +239,10 @@ const UserDef U_default = {
 
     .collection_instance_empty_size = 1.0f,
 
-    .statusbar_flag = STATUSBAR_SHOW_VERSION,
+    .statusbar_flag = STATUSBAR_SHOW_VERSION | STATUSBAR_SHOW_EXTENSIONS_UPDATES,
     .file_preview_type = USER_FILE_PREVIEW_AUTO,
+
+    .sequencer_editor_flag = USER_SEQ_ED_SIMPLE_TWEAKING,
 
     .runtime =
         {

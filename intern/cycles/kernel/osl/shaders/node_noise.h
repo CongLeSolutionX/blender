@@ -7,76 +7,102 @@
 
 #define vector3 point
 
-float safe_noise(float p)
+float safe_noise(float co)
 {
-  float f = noise("noise", p);
-  if (isinf(f)) {
-    return 0.5;
-  }
-  return f;
+  float precision_correction = 0.5 * float(fabs(co) >= 1000000.0);
+  /* Repeat Perlin noise texture every 100000.0 on each axis to prevent floating point
+   * representation issues. */
+  float p = fmod(co, 100000.0) + precision_correction;
+
+  return noise("noise", p);
 }
 
-float safe_noise(vector2 p)
+float safe_noise(vector2 co)
 {
-  float f = noise("noise", p.x, p.y);
-  if (isinf(f)) {
-    return 0.5;
-  }
-  return f;
+  vector2 precision_correction = 0.5 * vector2(float(fabs(co.x) >= 1000000.0),
+                                               float(fabs(co.y) >= 1000000.0));
+  /* Repeat Perlin noise texture every 100000.0 on each axis to prevent floating point
+   * representation issues. This causes discontinuities every 100000.0, however at such scales this
+   * usually shouldn't be noticeable. */
+  vector2 p = fmod(co, 100000.0) + precision_correction;
+
+  return noise("noise", p.x, p.y);
 }
 
-float safe_noise(vector3 p)
+float safe_noise(vector3 co)
 {
-  float f = noise("noise", p);
-  if (isinf(f)) {
-    return 0.5;
-  }
-  return f;
+  vector3 precision_correction = 0.5 * vector3(float(fabs(co.x) >= 1000000.0),
+                                               float(fabs(co.y) >= 1000000.0),
+                                               float(fabs(co.z) >= 1000000.0));
+  /* Repeat Perlin noise texture every 100000.0 on each axis to prevent floating point
+   * representation issues. This causes discontinuities every 100000.0, however at such scales this
+   * usually shouldn't be noticeable. */
+  vector3 p = fmod(co, 100000.0) + precision_correction;
+
+  return noise("noise", p);
 }
 
-float safe_noise(vector4 p)
+float safe_noise(vector4 co)
 {
-  float f = noise("noise", vector3(p.x, p.y, p.z), p.w);
-  if (isinf(f)) {
-    return 0.5;
-  }
-  return f;
+  vector4 precision_correction = 0.5 * vector4(float(fabs(co.x) >= 1000000.0),
+                                               float(fabs(co.y) >= 1000000.0),
+                                               float(fabs(co.z) >= 1000000.0),
+                                               float(fabs(co.w) >= 1000000.0));
+  /* Repeat Perlin noise texture every 100000.0 on each axis to prevent floating point
+   * representation issues. This causes discontinuities every 100000.0, however at such scales this
+   * usually shouldn't be noticeable. */
+  vector4 p = fmod(co, 100000.0) + precision_correction;
+
+  return noise("noise", vector3(p.x, p.y, p.z), p.w);
 }
 
-float safe_snoise(float p)
+float safe_snoise(float co)
 {
-  float f = noise("snoise", p);
-  if (isinf(f)) {
-    return 0.0;
-  }
-  return f;
+  float precision_correction = 0.5 * float(fabs(co) >= 1000000.0);
+  /* Repeat Perlin noise texture every 100000.0 on each axis to prevent floating point
+   * representation issues. */
+  float p = fmod(co, 100000.0) + precision_correction;
+
+  return noise("snoise", p);
 }
 
-float safe_snoise(vector2 p)
+float safe_snoise(vector2 co)
 {
-  float f = noise("snoise", p.x, p.y);
-  if (isinf(f)) {
-    return 0.0;
-  }
-  return f;
+  vector2 precision_correction = 0.5 * vector2(float(fabs(co.x) >= 1000000.0),
+                                               float(fabs(co.y) >= 1000000.0));
+  /* Repeat Perlin noise texture every 100000.0 on each axis to prevent floating point
+   * representation issues. This causes discontinuities every 100000.0, however at such scales this
+   * usually shouldn't be noticeable. */
+  vector2 p = fmod(co, 100000.0) + precision_correction;
+
+  return noise("snoise", p.x, p.y);
 }
 
-float safe_snoise(vector3 p)
+float safe_snoise(vector3 co)
 {
-  float f = noise("snoise", p);
-  if (isinf(f)) {
-    return 0.0;
-  }
-  return f;
+  vector3 precision_correction = 0.5 * vector3(float(fabs(co.x) >= 1000000.0),
+                                               float(fabs(co.y) >= 1000000.0),
+                                               float(fabs(co.z) >= 1000000.0));
+  /* Repeat Perlin noise texture every 100000.0 on each axis to prevent floating point
+   * representation issues. This causes discontinuities every 100000.0, however at such scales this
+   * usually shouldn't be noticeable. */
+  vector3 p = fmod(co, 100000.0) + precision_correction;
+
+  return noise("snoise", p);
 }
 
-float safe_snoise(vector4 p)
+float safe_snoise(vector4 co)
 {
-  float f = noise("snoise", vector3(p.x, p.y, p.z), p.w);
-  if (isinf(f)) {
-    return 0.0;
-  }
-  return f;
+  vector4 precision_correction = 0.5 * vector4(float(fabs(co.x) >= 1000000.0),
+                                               float(fabs(co.y) >= 1000000.0),
+                                               float(fabs(co.z) >= 1000000.0),
+                                               float(fabs(co.w) >= 1000000.0));
+  /* Repeat Perlin noise texture every 100000.0 on each axis to prevent floating point
+   * representation issues. This causes discontinuities every 100000.0, however at such scales this
+   * usually shouldn't be noticeable. */
+  vector4 p = fmod(co, 100000.0) + precision_correction;
+
+  return noise("snoise", vector3(p.x, p.y, p.z), p.w);
 }
 
 #define NOISE_FBM(T) \
@@ -213,35 +239,35 @@ float safe_snoise(vector4 p)
     return value; \
   }
 
-/* Noise fBM */
+/* Noise fBM. */
 
 NOISE_FBM(float)
 NOISE_FBM(vector2)
 NOISE_FBM(vector3)
 NOISE_FBM(vector4)
 
-/* Noise Multifractal */
+/* Noise Multi-fractal. */
 
 NOISE_MULTI_FRACTAL(float)
 NOISE_MULTI_FRACTAL(vector2)
 NOISE_MULTI_FRACTAL(vector3)
 NOISE_MULTI_FRACTAL(vector4)
 
-/* Noise Hetero Terrain */
+/* Noise Hetero Terrain. */
 
 NOISE_HETERO_TERRAIN(float)
 NOISE_HETERO_TERRAIN(vector2)
 NOISE_HETERO_TERRAIN(vector3)
 NOISE_HETERO_TERRAIN(vector4)
 
-/* Noise Hybrid Multifractal */
+/* Noise Hybrid Multi-fractal. */
 
 NOISE_HYBRID_MULTI_FRACTAL(float)
 NOISE_HYBRID_MULTI_FRACTAL(vector2)
 NOISE_HYBRID_MULTI_FRACTAL(vector3)
 NOISE_HYBRID_MULTI_FRACTAL(vector4)
 
-/* Noise Ridged Multifractal */
+/* Noise Ridged Multi-fractal. */
 
 NOISE_RIDGED_MULTI_FRACTAL(float)
 NOISE_RIDGED_MULTI_FRACTAL(vector2)

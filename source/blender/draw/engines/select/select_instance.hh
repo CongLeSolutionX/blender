@@ -12,9 +12,9 @@
 
 #include "DRW_gpu_wrapper.hh"
 
-#include "GPU_select.h"
+#include "GPU_select.hh"
 
-#include "../intern/gpu_select_private.h"
+#include "../intern/gpu_select_private.hh"
 
 #include "draw_manager.hh"
 #include "draw_pass.hh"
@@ -25,6 +25,8 @@
 #include "select_shader_shared.hh"
 
 namespace blender::draw::select {
+
+// #define DEBUG_PRINT
 
 enum class SelectionType { DISABLED = 0, ENABLED = 1 };
 
@@ -70,7 +72,7 @@ struct SelectBuf {
     }
   }
 
-  void select_bind(PassSimple &pass)
+  void select_bind(PassSimple::Sub &pass)
   {
     if (selection_type != SelectionType::DISABLED) {
       select_buf.push_update();
@@ -88,7 +90,7 @@ struct SelectMap {
 
   /** Mapping between internal IDs and `object->runtime->select_id`. */
   Vector<uint> select_id_map;
-#ifdef DEBUG
+#ifndef NDEBUG
   /** Debug map containing a copy of the object name. */
   Vector<std::string> map_names;
 #endif
@@ -99,7 +101,7 @@ struct SelectMap {
   /** Uniform buffer to bind to all passes to pass information about the selection state. */
   UniformBuffer<SelectInfoData> info_buf;
   /** Will remove the depth test state from any pass drawing objects with select id. */
-  bool disable_depth_test;
+  bool disable_depth_test = false;
 
   SelectMap(const SelectionType selection_type) : selection_type(selection_type){};
 
@@ -111,16 +113,35 @@ struct SelectMap {
       return {0};
     }
 
+    if (sub_object_id == uint(-1)) {
+      /* WORKAROUND: Armature code set the sub_object_id to -1 when individual bones are not
+       * selectable (i.e. in object mode). */
+      sub_object_id = 0;
+    }
+
     uint object_id = ob_ref.object->runtime->select_id;
     uint id = select_id_map.append_and_get_index(object_id | sub_object_id);
-#ifdef DEBUG
+
+#ifdef DEBUG_PRINT
+    /* Print mapping from object name, select id and the mapping to internal select id.
+     * If something is wrong at this stage, it indicates an error in the caller code. */
+    printf("%s : %u | %u = %u -> %u\n",
+           ob_ref.object->id.name,
+           object_id,
+           sub_object_id,
+           object_id | sub_object_id,
+           id);
+#endif
+
+#ifndef NDEBUG
     map_names.append(ob_ref.object->id.name);
 #endif
     return {id};
   }
 
+  /* TODO: refactor this method to select::ID::invalid(). */
   /* Load an invalid index that will not write to the output (not selectable). */
-  [[nodiscard]] const ID select_invalid_id()
+  [[nodiscard]] static const ID select_invalid_id()
   {
     return {uint32_t(-1)};
   }
@@ -153,12 +174,12 @@ struct SelectMap {
     info_buf.push_update();
 
     select_id_map.clear();
-#ifdef DEBUG
+#ifndef NDEBUG
     map_names.clear();
 #endif
   }
 
-  /** IMPORTANT: Changes the draw state. Need to be called after the pass own state_set. */
+  /** IMPORTANT: Changes the draw state. Need to be called after the pass's own state_set. */
   void select_bind(PassSimple &pass)
   {
     if (selection_type == SelectionType::DISABLED) {
@@ -173,7 +194,7 @@ struct SelectMap {
     pass.bind_ssbo(SELECT_ID_OUT, &select_output_buf);
   }
 
-  /** IMPORTANT: Changes the draw state. Need to be called after the pass own state_set. */
+  /** IMPORTANT: Changes the draw state. Need to be called after the pass's own state_set. */
   void select_bind(PassMain &pass)
   {
     if (selection_type == SelectionType::DISABLED) {
@@ -189,6 +210,25 @@ struct SelectMap {
     /* IMPORTANT: This binds a dummy buffer `in_select_buf` but it is not supposed to be used. */
     pass.bind_ssbo(SELECT_ID_IN, &dummy_select_buf);
     pass.bind_ssbo(SELECT_ID_OUT, &select_output_buf);
+  }
+
+  /* TODO: Deduplicate. */
+  /** IMPORTANT: Changes the draw state. Need to be called after the pass's own state_set. */
+  void select_bind(PassMain &pass, PassMain::Sub &sub)
+  {
+    if (selection_type == SelectionType::DISABLED) {
+      return;
+    }
+
+    pass.use_custom_ids = true;
+    if (disable_depth_test) {
+      /* TODO: clipping state. */
+      sub.state_set(DRW_STATE_WRITE_COLOR);
+    }
+    sub.bind_ubo(SELECT_DATA, &info_buf);
+    /* IMPORTANT: This binds a dummy buffer `in_select_buf` but it is not supposed to be used. */
+    sub.bind_ssbo(SELECT_ID_IN, &dummy_select_buf);
+    sub.bind_ssbo(SELECT_ID_OUT, &select_output_buf);
   }
 
   void end_sync()
@@ -218,14 +258,17 @@ struct SelectMap {
     GPU_memory_barrier(GPU_BARRIER_BUFFER_UPDATE);
     select_output_buf.read();
 
-    Vector<GPUSelectResult> result;
+    Vector<GPUSelectResult> hit_results;
 
     /* Convert raw data from GPU to #GPUSelectResult. */
     switch (info_buf.mode) {
       case SelectType::SELECT_ALL:
         for (auto i : IndexRange(select_id_map.size())) {
           if (((select_output_buf[i / 32] >> (i % 32)) & 1) != 0) {
-            result.append({select_id_map[i], 0xFFFFu});
+            GPUSelectResult hit_result{};
+            hit_result.id = select_id_map[i];
+            hit_result.depth = 0xFFFF;
+            hit_results.append(hit_result);
           }
         }
         break;
@@ -236,13 +279,23 @@ struct SelectMap {
           if (select_output_buf[i] != 0xFFFFFFFFu) {
             /* NOTE: For `SELECT_PICK_NEAREST`, `select_output_buf` also contains the screen
              * distance to cursor in the lowest bits. */
-            result.append({select_id_map[i], select_output_buf[i]});
+            GPUSelectResult hit_result{};
+            hit_result.id = select_id_map[i];
+            hit_result.depth = select_output_buf[i];
+            hit_results.append(hit_result);
           }
         }
         break;
     }
+#ifdef DEBUG_PRINT
+    for (auto &hit : hit_results) {
+      /* Print hit results right out of the GPU selection buffer.
+       * If something is wrong at this stage, it indicates an error in the selection shaders. */
+      printf(" hit: %u: depth %u\n", hit_result.id, hit_result.depth);
+    }
+#endif
 
-    gpu_select_next_set_result(result.data(), result.size());
+    gpu_select_next_set_result(hit_results.data(), hit_results.size());
   }
 };
 

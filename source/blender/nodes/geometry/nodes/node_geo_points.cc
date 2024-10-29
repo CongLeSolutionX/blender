@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BKE_pointcloud.h"
+#include "BKE_pointcloud.hh"
 #include "DNA_pointcloud_types.h"
 
 #include "BLI_task.hh"
@@ -72,7 +72,7 @@ static void node_geo_exec(GeoNodeExecParams params)
   PointCloud *points = BKE_pointcloud_new_nomain(count);
   MutableAttributeAccessor attributes = points->attributes_for_write();
   AttributeWriter<float> output_radii = attributes.lookup_or_add_for_write<float>(
-      "radius", ATTR_DOMAIN_POINT);
+      "radius", AttrDomain::Point);
 
   PointsFieldContext context{count};
   fn::FieldEvaluator evaluator{context, count};
@@ -86,11 +86,11 @@ static void node_geo_exec(GeoNodeExecParams params)
 
 static void node_register()
 {
-  static bNodeType ntype;
+  static blender::bke::bNodeType ntype;
   geo_node_type_base(&ntype, GEO_NODE_POINTS, "Points", NODE_CLASS_GEOMETRY);
   ntype.geometry_node_execute = node_geo_exec;
   ntype.declare = node_declare;
-  nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }
 NOD_REGISTER_NODE(node_register)
 

@@ -8,24 +8,24 @@
  * Draw engine to draw the Image/UV editor
  */
 
-#include "DRW_render.h"
+#include "DRW_render.hh"
 
 #include <memory>
 #include <optional>
 
 #include "BKE_image.h"
-#include "BKE_main.h"
+#include "BKE_main.hh"
 #include "BKE_object.hh"
 
 #include "DNA_camera_types.h"
 #include "DNA_screen_types.h"
 
-#include "IMB_imbuf.h"
-#include "IMB_imbuf_types.h"
+#include "IMB_imbuf.hh"
+#include "IMB_imbuf_types.hh"
 
 #include "ED_image.hh"
 
-#include "GPU_batch.h"
+#include "GPU_batch.hh"
 
 #include "image_drawing_mode.hh"
 #include "image_engine.h"
@@ -100,10 +100,10 @@ class ImageEngine {
     /* Setup the matrix to go from screen UV coordinates to UV texture space coordinates. */
     float image_resolution[2] = {image_buffer ? image_buffer->x : 1024.0f,
                                  image_buffer ? image_buffer->y : 1024.0f};
-    float image_offset[2] = {float(instance_data->image->offset_x),
-                             float(instance_data->image->offset_y)};
-    space->init_ss_to_texture_matrix(
-        draw_ctx->region, image_offset, image_resolution, instance_data->ss_to_texture);
+    space->init_ss_to_texture_matrix(draw_ctx->region,
+                                     instance_data->image->runtime.backdrop_offset,
+                                     image_resolution,
+                                     instance_data->ss_to_texture);
 
     const Scene *scene = DRW_context_state_get()->scene;
     instance_data->sh_params.update(space.get(), scene, instance_data->image, image_buffer);

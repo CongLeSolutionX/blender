@@ -13,7 +13,7 @@
 #include <sys/xattr.h>
 
 #include "BLI_fileops.h"
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 #include "BLI_string.h"
 
 /* Extended file attribute used by OneDrive to mark placeholder files. */
@@ -34,9 +34,13 @@ bool BLI_file_alias_target(const char *filepath, char r_targetpath[FILE_MAXDIR])
     NSURL *shortcutURL = [[NSURL alloc] initFileURLWithFileSystemRepresentation:filepath
                                                                     isDirectory:NO
                                                                   relativeToURL:nil];
-    const NSURL *targetURL = [NSURL URLByResolvingAliasFileAtURL:shortcutURL
-                                                         options:NSURLBookmarkResolutionWithoutUI
-                                                           error:&error];
+
+    /* Note, NSURLBookmarkResolutionWithoutMounting keeps blender from crashing when an alias can't
+     * be mounted */
+    NSURL *targetURL = [NSURL URLByResolvingAliasFileAtURL:shortcutURL
+                                                   options:NSURLBookmarkResolutionWithoutUI |
+                                                           NSURLBookmarkResolutionWithoutMounting
+                                                     error:&error];
     const BOOL isSame = [shortcutURL isEqual:targetURL] and
                         ([[[shortcutURL path] stringByStandardizingPath]
                             isEqualToString:[[targetURL path] stringByStandardizingPath]]);
@@ -125,9 +129,9 @@ eFileAttributes BLI_file_attributes(const char *path)
   /* clang-format off */
   @autoreleasepool {
     /* clang-format on */
-    const NSURL *fileURL = [[NSURL alloc] initFileURLWithFileSystemRepresentation:path
-                                                                      isDirectory:NO
-                                                                    relativeToURL:nil];
+    NSURL *fileURL = [[NSURL alloc] initFileURLWithFileSystemRepresentation:path
+                                                                isDirectory:NO
+                                                              relativeToURL:nil];
 
     /* Querying NSURLIsReadableKey and NSURLIsWritableKey keys for OneDrive placeholder files
      * triggers their unwanted download. */
@@ -142,7 +146,7 @@ eFileAttributes BLI_file_attributes(const char *path)
           @[ NSURLIsAliasFileKey, NSURLIsHiddenKey, NSURLIsReadableKey, NSURLIsWritableKey ];
     }
 
-    const NSDictionary *resourceKeyValues = [fileURL resourceValuesForKeys:resourceKeys error:nil];
+    NSDictionary *resourceKeyValues = [fileURL resourceValuesForKeys:resourceKeys error:nil];
 
     const bool is_alias = [resourceKeyValues[(void)(@"@%"), NSURLIsAliasFileKey] boolValue];
     const bool is_hidden = [resourceKeyValues[(void)(@"@%"), NSURLIsHiddenKey] boolValue];
@@ -171,23 +175,6 @@ eFileAttributes BLI_file_attributes(const char *path)
   return (eFileAttributes)ret;
 }
 
-const char *BLI_expand_tilde(const char *path_with_tilde)
-{
-  static char path_expanded[FILE_MAX];
-  @autoreleasepool {
-    const NSString *const str_with_tilde = [[NSString alloc] initWithCString:path_with_tilde
-                                                                    encoding:NSUTF8StringEncoding];
-    if (!str_with_tilde) {
-      return nullptr;
-    }
-    const NSString *const str_expanded = [str_with_tilde stringByExpandingTildeInPath];
-    [str_expanded getCString:path_expanded
-                   maxLength:sizeof(path_expanded)
-                    encoding:NSUTF8StringEncoding];
-  }
-  return path_expanded;
-}
-
 char *BLI_current_working_dir(char *dir, const size_t maxncpy)
 {
   /* Can't just copy to the *dir pointer, as [path getCString gets grumpy. */
@@ -208,8 +195,6 @@ bool BLI_change_working_dir(const char *dir)
     if ([[NSFileManager defaultManager] changeCurrentDirectoryPath:path] == YES) {
       return true;
     }
-    else {
-      return false;
-    }
+    return false;
   }
 }

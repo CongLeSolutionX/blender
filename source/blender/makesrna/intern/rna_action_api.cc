@@ -17,11 +17,11 @@
 
 #include "DNA_action_types.h"
 
-#include "rna_internal.h" /* own include */
+#include "rna_internal.hh" /* own include */
 
 #ifdef RNA_RUNTIME
 
-#  include "BKE_action.h"
+#  include "BKE_action.hh"
 
 #  include "DNA_anim_types.h"
 #  include "DNA_curve_types.h"

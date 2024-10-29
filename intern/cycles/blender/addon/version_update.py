@@ -101,7 +101,7 @@ def do_versions(self):
         library_versions.setdefault(library.version, []).append(library)
 
     # Do versioning per library, since they might have different versions.
-    max_need_versioning = (3, 5, 2)
+    max_need_versioning = (4, 2, 52)
     for version, libraries in library_versions.items():
         if version > max_need_versioning:
             continue
@@ -253,6 +253,13 @@ def do_versions(self):
                 # Tabulated Sobol.
                 cscene.sampling_pattern = 'TABULATED_SOBOL'
 
+            if version <= (4, 2, 52):
+                cscene = scene.cycles
+                # Previous versions defaulted to Tabulated Sobol unless debugging options
+                # were enabled, so keep this behavior instead of suddenly defaulting to
+                # blue noise if the file happens to contain a different option for the enum.
+                cscene.sampling_pattern = 'TABULATED_SOBOL'
+
         # Lamps
         for light in bpy.data.lights:
             if light.library not in libraries:
@@ -300,15 +307,15 @@ def do_versions(self):
 
             if version <= (2, 79, 2):
                 cmat = mat.cycles
-                if not cmat.is_property_set("displacement_method"):
-                    cmat.displacement_method = 'BUMP'
+                if cmat.get("displacement_method", -1) == -1:
+                    cmat['displacement_method'] = 0
 
             # Change default to bump again.
             if version <= (2, 79, 6) or \
                (version >= (2, 80, 0) and version <= (2, 80, 41)):
                 cmat = mat.cycles
-                if not cmat.is_property_set("displacement_method"):
-                    cmat.displacement_method = 'DISPLACEMENT'
+                if cmat.get("displacement_method", -1) == -1:
+                    cmat['displacement_method'] = 1
 
             if version <= (3, 5, 3):
                 cmat = mat.cycles

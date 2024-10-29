@@ -9,18 +9,25 @@
 
 #include "BLI_math_vector_types.hh"
 
-#include <Alembic/Abc/All.h>
-#include <Alembic/AbcGeom/All.h>
+#include <Alembic/Abc/ICompoundProperty.h>
+#include <Alembic/Abc/ISampleSelector.h>
+#include <Alembic/Abc/OCompoundProperty.h>
+#include <Alembic/Abc/TypedArraySample.h>
+#include <Alembic/AbcCoreAbstract/Foundation.h>
+#include <Alembic/AbcGeom/GeometryScope.h>
+#include <Alembic/AbcGeom/OGeomParam.h>
 
+#include <cstdint>
 #include <map>
-
-#include "BLI_math_vector_types.hh"
+#include <string>
+#include <vector>
 
 struct CustomData;
 struct Mesh;
 
 using Alembic::Abc::ICompoundProperty;
 using Alembic::Abc::OCompoundProperty;
+using Alembic::Abc::V3fArraySamplePtr;
 namespace blender::io::alembic {
 
 struct UVSample {
@@ -89,6 +96,10 @@ struct CDStreamConfig {
 const char *get_uv_sample(UVSample &sample, const CDStreamConfig &config, CustomData *data);
 
 void write_generated_coordinates(const OCompoundProperty &prop, CDStreamConfig &config);
+
+void read_velocity(const V3fArraySamplePtr &velocities,
+                   const CDStreamConfig &config,
+                   const float velocity_scale);
 
 void read_generated_coordinates(const ICompoundProperty &prop,
                                 const CDStreamConfig &config,

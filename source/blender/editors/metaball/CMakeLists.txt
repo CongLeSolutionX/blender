@@ -5,12 +5,11 @@
 set(INC
   ../include
   ../../blenkernel
-  ../../depsgraph
+  ../../blentranslation
   ../../gpu
   ../../makesrna
   ../../render
   ../../windowmanager
-  ../../../../intern/clog
 )
 
 set(INC_SYS
@@ -22,12 +21,14 @@ set(SRC
   mball_edit.cc
   mball_ops.cc
 
-  mball_intern.h
+  mball_intern.hh
 )
 
 set(LIB
   PRIVATE bf::blenlib
+  PRIVATE bf::depsgraph
   PRIVATE bf::dna
+  PRIVATE bf::intern::clog
   PRIVATE bf::intern::guardedalloc
 )
 

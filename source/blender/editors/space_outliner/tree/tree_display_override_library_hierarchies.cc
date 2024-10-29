@@ -6,7 +6,6 @@
  * \ingroup spoutliner
  */
 
-#include "DNA_key_types.h"
 #include "DNA_space_types.h"
 
 #include "BLI_function_ref.hh"
@@ -15,11 +14,11 @@
 
 #include "BLI_set.hh"
 
-#include "BLT_translation.h"
+#include "BLT_translation.hh"
 
 #include "BKE_lib_override.hh"
-#include "BKE_lib_query.h"
-#include "BKE_main.h"
+#include "BKE_lib_query.hh"
+#include "BKE_main.hh"
 
 #include "../outliner_intern.hh"
 #include "common.hh"
@@ -101,10 +100,10 @@ class OverrideIDHierarchyBuilder {
     const ID &override_root_id_;
     /* The ancestor IDs leading to the current ID, to avoid IDs recursing into themselves. Changes
      * with every level of recursion. */
-    Set<const ID *> parent_ids{};
+    Set<const ID *> parent_ids;
     /* The IDs that were already added to #parent_te, to avoid duplicates. Entirely new set with
      * every level of recursion. */
-    Set<const ID *> sibling_ids{};
+    Set<const ID *> sibling_ids;
   };
 
  public:

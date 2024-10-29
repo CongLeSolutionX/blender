@@ -9,10 +9,10 @@
  * This renders the bounding boxes for transparent objects in order to tag the correct shadows.
  */
 
-#pragma BLENDER_REQUIRE(gpu_shader_utildefines_lib.glsl)
-#pragma BLENDER_REQUIRE(gpu_shader_math_vector_lib.glsl)
-#pragma BLENDER_REQUIRE(draw_model_lib.glsl)
-#pragma BLENDER_REQUIRE(common_shape_lib.glsl)
+#include "common_shape_lib.glsl"
+#include "draw_model_lib.glsl"
+#include "gpu_shader_math_vector_lib.glsl"
+#include "gpu_shader_utildefines_lib.glsl"
 
 /* Inflate bounds by half a pixel as a conservative rasterization alternative,
  * to ensure the tiles needed by all LOD0 pixels get tagged */
@@ -20,7 +20,7 @@ void inflate_bounds(vec3 ls_center, inout vec3 P, inout vec3 lP)
 {
   vec3 vP = drw_point_world_to_view(P);
 
-  float inflate_scale = pixel_world_radius * exp2(float(fb_lod));
+  float inflate_scale = uniform_buf.shadow.film_pixel_radius * exp2(float(fb_lod));
   if (drw_view_is_perspective()) {
     inflate_scale *= -vP.z;
   }
@@ -43,6 +43,11 @@ void main()
   DRW_RESOURCE_ID_VARYING_SET
 
   ObjectBounds bounds = bounds_buf[resource_id];
+  if (!drw_bounds_are_valid(bounds)) {
+    /* Discard. */
+    gl_Position = vec4(NAN_FLT);
+    return;
+  }
 
   Box box = shape_box(bounds.bounding_corners[0].xyz,
                       bounds.bounding_corners[0].xyz + bounds.bounding_corners[1].xyz,

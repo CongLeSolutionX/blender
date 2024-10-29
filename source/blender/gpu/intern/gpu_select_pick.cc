@@ -12,10 +12,10 @@
 #include <cstdlib>
 #include <cstring>
 
-#include "GPU_debug.h"
-#include "GPU_framebuffer.h"
-#include "GPU_select.h"
-#include "GPU_state.h"
+#include "GPU_debug.hh"
+#include "GPU_framebuffer.hh"
+#include "GPU_select.hh"
+#include "GPU_state.hh"
 
 #include "MEM_guardedalloc.h"
 
@@ -23,11 +23,11 @@
 #include "BLI_rect.h"
 #include "BLI_utildefines.h"
 
-#include "gpu_select_private.h"
+#include "gpu_select_private.hh"
 
-#include "BLI_strict_flags.h"
+#include "BLI_strict_flags.h" /* Keep last. */
 
-/* #define DEBUG_PRINT */
+// #define DEBUG_PRINT
 
 /* Alloc number for depths */
 #define ALLOC_DEPTHS 200
@@ -163,7 +163,7 @@ static bool depth_buf_subrect_depth_any_filled(const DepthBufCache *rect_src,
                                                const DepthBufCache *rect_dst,
                                                const SubRectStride *sub_rect)
 {
-  /* Same as above but different rectangle sizes. */
+  /* Same as #depth_buf_rect_depth_any_filled but different rectangle sizes. */
   const depth_t *prev = rect_src->buf + sub_rect->start;
   const depth_t *curr = rect_dst->buf + sub_rect->start;
   for (uint i = 0; i < sub_rect->span_len; i++) {
@@ -227,8 +227,7 @@ static int depth_cmp(const void *v1, const void *v2)
 /** Depth sorting. */
 struct GPUPickState {
   /** Cache on initialization. */
-  GPUSelectResult *buffer;
-  uint buffer_len;
+  GPUSelectBuffer *buffer;
   /** Mode of this operation. */
   eGPUSelectMode mode;
 
@@ -294,10 +293,7 @@ struct GPUPickState {
 
 static GPUPickState g_pick_state{};
 
-void gpu_select_pick_begin(GPUSelectResult *buffer,
-                           const uint buffer_len,
-                           const rcti *input,
-                           eGPUSelectMode mode)
+void gpu_select_pick_begin(GPUSelectBuffer *buffer, const rcti *input, eGPUSelectMode mode)
 {
   GPUPickState *ps = &g_pick_state;
 
@@ -312,7 +308,6 @@ void gpu_select_pick_begin(GPUSelectResult *buffer,
   GPU_debug_group_begin("Selection Pick");
 
   ps->buffer = buffer;
-  ps->buffer_len = buffer_len;
   ps->mode = mode;
 
   const uint rect_len = uint(BLI_rcti_size_x(input) * BLI_rcti_size_y(input));
@@ -520,7 +515,7 @@ bool gpu_select_pick_load_id(uint id, bool end)
         ps->gpu.rect_depth = depth_buf_malloc(ps->src.rect_len);
       }
 
-      SWAP(DepthBufCache *, ps->gpu.rect_depth, ps->gpu.rect_depth_test);
+      std::swap(ps->gpu.rect_depth, ps->gpu.rect_depth_test);
 
       if (g_pick_state.mode == GPU_SELECT_PICK_ALL) {
         /* (fclem) This is to be on the safe side. I don't know if this is required. */
@@ -577,7 +572,6 @@ uint gpu_select_pick_end()
     rect_depth_final = ps->gpu.rect_depth;
   }
 
-  uint maxhits = g_pick_state.buffer_len;
   DepthID *depth_data;
   uint depth_data_len = 0;
 
@@ -662,22 +656,19 @@ uint gpu_select_pick_end()
    * so the final hit-list is sorted by depth (nearest first). */
   uint hits = 0;
 
-  if (depth_data_len > maxhits) {
-    hits = uint(-1);
-  }
-  else {
-    /* Leave sorting up to the caller. */
-    qsort(depth_data, depth_data_len, sizeof(DepthID), depth_cmp);
+  /* Leave sorting up to the caller. */
+  qsort(depth_data, depth_data_len, sizeof(DepthID), depth_cmp);
 
-    for (uint i = 0; i < depth_data_len; i++) {
+  g_pick_state.buffer->storage.reserve(g_pick_state.buffer->storage.size() + depth_data_len);
+  for (uint i = 0; i < depth_data_len; i++) {
 #ifdef DEBUG_PRINT
-      printf("  hit: %u: depth %u\n", depth_data[i].id, depth_data[i].depth);
+    printf("  hit: %u: depth %u\n", depth_data[i].id, depth_data[i].depth);
 #endif
-      g_pick_state.buffer[hits].depth = depth_data[i].depth;
-      g_pick_state.buffer[hits].id = depth_data[i].id;
-      hits++;
-    }
-    BLI_assert(hits < maxhits);
+    GPUSelectResult hit_result{};
+    hit_result.id = depth_data[i].id;
+    hit_result.depth = depth_data[i].depth;
+    g_pick_state.buffer->storage.append_unchecked(hit_result);
+    hits++;
   }
 
   MEM_freeN(depth_data);

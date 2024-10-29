@@ -16,17 +16,17 @@
 
 #include "BLI_utildefines.h"
 
-#include "GPU_batch.h"
+#include "GPU_batch.hh"
 
-#include "../generic/py_capi_utils.h"
-#include "../generic/python_compat.h"
+#include "../generic/py_capi_utils.hh"
+#include "../generic/python_compat.hh"
 
-#include "gpu_py.h"
-#include "gpu_py_element.h"
-#include "gpu_py_shader.h"
-#include "gpu_py_vertex_buffer.h"
+#include "gpu_py.hh"
+#include "gpu_py_element.hh"
+#include "gpu_py_shader.hh"
+#include "gpu_py_vertex_buffer.hh"
 
-#include "gpu_py_batch.h" /* own include */
+#include "gpu_py_batch.hh" /* own include */
 
 /* -------------------------------------------------------------------- */
 /** \name Utility Functions
@@ -49,6 +49,8 @@ static bool pygpu_batch_is_program_or_error(BPyGPUBatch *self)
 
 static PyObject *pygpu_batch__tp_new(PyTypeObject * /*type*/, PyObject *args, PyObject *kwds)
 {
+  BPYGPU_IS_INIT_OR_ERROR_OBJ;
+
   const char *exc_str_missing_arg = "GPUBatch.__new__() missing required argument '%s' (pos %d)";
 
   PyC_StringEnum prim_type = {bpygpu_primtype_items, GPU_PRIM_NONE};
@@ -98,9 +100,9 @@ static PyObject *pygpu_batch__tp_new(PyTypeObject * /*type*/, PyObject *args, Py
     return nullptr;
   }
 
-  GPUBatch *batch = GPU_batch_create(GPUPrimType(prim_type.value_found),
-                                     py_vertbuf->buf,
-                                     py_indexbuf ? py_indexbuf->elem : nullptr);
+  blender::gpu::Batch *batch = GPU_batch_create(GPUPrimType(prim_type.value_found),
+                                                py_vertbuf->buf,
+                                                py_indexbuf ? py_indexbuf->elem : nullptr);
 
   BPyGPUBatch *ret = (BPyGPUBatch *)BPyGPUBatch_CreatePyObject(batch);
 
@@ -121,7 +123,9 @@ static PyObject *pygpu_batch__tp_new(PyTypeObject * /*type*/, PyObject *args, Py
   return (PyObject *)ret;
 }
 
-PyDoc_STRVAR(pygpu_batch_vertbuf_add_doc, ".. method:: vertbuf_add(buf)\n"
+PyDoc_STRVAR(
+    /* Wrap. */
+    pygpu_batch_vertbuf_add_doc, ".. method:: vertbuf_add(buf)\n"
 "\n"
 "   Add another vertex buffer to the Batch.\n"
 "   It is not possible to add more vertices to the batch using this method.\n"
@@ -166,6 +170,7 @@ static PyObject *pygpu_batch_vertbuf_add(BPyGPUBatch *self, BPyGPUVertBuf *py_bu
 }
 
 PyDoc_STRVAR(
+    /* Wrap. */
     pygpu_batch_program_set_doc,
     ".. method:: program_set(program)\n"
     "\n"
@@ -178,6 +183,18 @@ PyDoc_STRVAR(
     "   :type program: :class:`gpu.types.GPUShader`\n");
 static PyObject *pygpu_batch_program_set(BPyGPUBatch *self, BPyGPUShader *py_shader)
 {
+  static bool deprecation_warning_issued = false;
+
+  /* Deprecation warning raised when calling `gpu.types.GPUBatch.program_set`.  */
+  if (!deprecation_warning_issued) {
+    PyErr_WarnEx(PyExc_DeprecationWarning,
+                 "Calls to GPUBatch.program_set are deprecated."
+                 "Please set the shader via the 'program' parameter when calling "
+                 "GPUBatch.draw/draw_instanced/draw_range.",
+                 1);
+    deprecation_warning_issued = true;
+  }
+
   if (!BPyGPUShader_Check(py_shader)) {
     PyErr_Format(PyExc_TypeError, "Expected a GPUShader, got %s", Py_TYPE(py_shader)->tp_name);
     return nullptr;
@@ -207,22 +224,37 @@ static PyObject *pygpu_batch_program_set(BPyGPUBatch *self, BPyGPUShader *py_sha
   Py_RETURN_NONE;
 }
 
-PyDoc_STRVAR(pygpu_batch_draw_doc,
-             ".. method:: draw(program=None)\n"
-             "\n"
-             "   Run the drawing program with the parameters assigned to the batch.\n"
-             "\n"
-             "   :arg program: Program that performs the drawing operations.\n"
-             "      If ``None`` is passed, the last program set to this batch will run.\n"
-             "   :type program: :class:`gpu.types.GPUShader`\n");
+PyDoc_STRVAR(
+    /* Wrap. */
+    pygpu_batch_draw_doc,
+    ".. method:: draw(program=None)\n"
+    "\n"
+    "   Run the drawing program with the parameters assigned to the batch.\n"
+    "\n"
+    "   :arg program: Program that performs the drawing operations.\n"
+    "      If ``None`` is passed, the last program set to this batch will run.\n"
+    "   :type program: :class:`gpu.types.GPUShader`\n");
 static PyObject *pygpu_batch_draw(BPyGPUBatch *self, PyObject *args)
 {
+  static bool deprecation_warning_issued = false;
+
   BPyGPUShader *py_program = nullptr;
 
   if (!PyArg_ParseTuple(args, "|O!:GPUBatch.draw", &BPyGPUShader_Type, &py_program)) {
     return nullptr;
   }
   if (py_program == nullptr) {
+
+    if (!deprecation_warning_issued) {
+      /* Deprecation warning raised when calling gpu.types.GPUBatch.draw without a valid GPUShader.
+       */
+      PyErr_WarnEx(PyExc_DeprecationWarning,
+                   "Calling GPUBatch.draw without specifying a program is deprecated. "
+                   "Please provide a valid GPUShader as the 'program' parameter.",
+                   1);
+      deprecation_warning_issued = true;
+    }
+
     if (!pygpu_batch_is_program_or_error(self)) {
       return nullptr;
     }
@@ -236,6 +268,7 @@ static PyObject *pygpu_batch_draw(BPyGPUBatch *self, PyObject *args)
 }
 
 PyDoc_STRVAR(
+    /* Wrap. */
     pygpu_batch_draw_instanced_doc,
     ".. method:: draw_instanced(program, *, instance_start=0, instance_count=0)\n"
     "\n"
@@ -279,21 +312,23 @@ static PyObject *pygpu_batch_draw_instanced(BPyGPUBatch *self, PyObject *args, P
   Py_RETURN_NONE;
 }
 
-PyDoc_STRVAR(pygpu_batch_draw_range_doc,
-             ".. method:: draw_range(program, *, elem_start=0, elem_count=0)\n"
-             "\n"
-             "   Run the drawing program with the parameters assigned to the batch. Only draw\n"
-             "   the `elem_count` elements of the index buffer starting at `elem_start` \n"
-             "\n"
-             "   :arg program: Program that performs the drawing operations.\n"
-             "   :type program: :class:`gpu.types.GPUShader`\n"
-             "   :arg elem_start: First index to draw. When not provided or set to 0 drawing\n"
-             "      will start from the first element of the index buffer.\n"
-             "   :type elem_start: int\n"
-             "   :arg elem_count: Number of elements of the index buffer to draw. When not\n"
-             "      provided or set to 0 all elements from `elem_start` to the end of the\n"
-             "      index buffer will be drawn.\n"
-             "   :type elem_count: int\n");
+PyDoc_STRVAR(
+    /* Wrap. */
+    pygpu_batch_draw_range_doc,
+    ".. method:: draw_range(program, *, elem_start=0, elem_count=0)\n"
+    "\n"
+    "   Run the drawing program with the parameters assigned to the batch. Only draw\n"
+    "   the `elem_count` elements of the index buffer starting at `elem_start` \n"
+    "\n"
+    "   :arg program: Program that performs the drawing operations.\n"
+    "   :type program: :class:`gpu.types.GPUShader`\n"
+    "   :arg elem_start: First index to draw. When not provided or set to 0 drawing\n"
+    "      will start from the first element of the index buffer.\n"
+    "   :type elem_start: int\n"
+    "   :arg elem_count: Number of elements of the index buffer to draw. When not\n"
+    "      provided or set to 0 all elements from `elem_start` to the end of the\n"
+    "      index buffer will be drawn.\n"
+    "   :type elem_count: int\n");
 static PyObject *pygpu_batch_draw_range(BPyGPUBatch *self, PyObject *args, PyObject *kw)
 {
   BPyGPUShader *py_program = nullptr;
@@ -403,6 +438,7 @@ static void pygpu_batch__tp_dealloc(BPyGPUBatch *self)
 }
 
 PyDoc_STRVAR(
+    /* Wrap. */
     pygpu_batch__tp_doc,
     ".. class:: GPUBatch(type, buf, elem=None)\n"
     "\n"
@@ -490,7 +526,7 @@ PyTypeObject BPyGPUBatch_Type = {
 /** \name Public API
  * \{ */
 
-PyObject *BPyGPUBatch_CreatePyObject(GPUBatch *batch)
+PyObject *BPyGPUBatch_CreatePyObject(blender::gpu::Batch *batch)
 {
   BPyGPUBatch *self;
 

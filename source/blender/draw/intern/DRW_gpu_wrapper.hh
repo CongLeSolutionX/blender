@@ -57,14 +57,14 @@
  *   Simple wrapper to #GPUFramebuffer that can be moved.
  */
 
-#include "DRW_render.h"
+#include "DRW_render.hh"
 
 #include "MEM_guardedalloc.h"
 
-#include "draw_manager.h"
-#include "draw_texture_pool.h"
+#include "draw_manager_c.hh"
+#include "draw_texture_pool.hh"
 
-#include "BKE_global.h"
+#include "BKE_global.hh"
 
 #include "BLI_math_vector_types.hh"
 #include "BLI_span.hh"
@@ -72,10 +72,10 @@
 #include "BLI_utility_mixins.hh"
 #include "BLI_vector.hh"
 
-#include "GPU_framebuffer.h"
-#include "GPU_storage_buffer.h"
-#include "GPU_texture.h"
-#include "GPU_uniform_buffer.h"
+#include "GPU_framebuffer.hh"
+#include "GPU_storage_buffer.hh"
+#include "GPU_texture.hh"
+#include "GPU_uniform_buffer.hh"
 
 namespace blender::draw {
 
@@ -172,7 +172,7 @@ class UniformCommon : public DataBuffer<T, len, false>, NonMovable, NonCopyable 
  protected:
   GPUUniformBuf *ubo_;
 
-#ifdef DEBUG
+#ifndef NDEBUG
   const char *name_ = typeid(T).name();
 #else
   const char *name_ = "UniformBuffer";
@@ -215,7 +215,7 @@ class StorageCommon : public DataBuffer<T, len, false>, NonMovable, NonCopyable 
  protected:
   GPUStorageBuf *ssbo_;
 
-#ifdef DEBUG
+#ifndef NDEBUG
   const char *name_ = typeid(T).name();
 #else
   const char *name_ = "StorageBuffer";
@@ -399,10 +399,10 @@ class StorageArrayBuffer : public detail::StorageCommon<T, len, device_only> {
 
   static void swap(StorageArrayBuffer &a, StorageArrayBuffer &b)
   {
-    SWAP(T *, a.data_, b.data_);
-    SWAP(GPUStorageBuf *, a.ssbo_, b.ssbo_);
-    SWAP(int64_t, a.len_, b.len_);
-    SWAP(const char *, a.name_, b.name_);
+    std::swap(a.data_, b.data_);
+    std::swap(a.ssbo_, b.ssbo_);
+    std::swap(a.len_, b.len_);
+    std::swap(a.name_, b.name_);
   }
 };
 
@@ -462,7 +462,7 @@ class StorageVectorBuffer : public StorageArrayBuffer<T, len, false> {
     new (ptr) T(std::forward<ForwardT>(value)...);
   }
 
-  void extend(const Span<T> &values)
+  void extend(const Span<T> values)
   {
     /* TODO(fclem): Optimize to a single memcpy. */
     for (auto v : values) {
@@ -486,7 +486,7 @@ class StorageVectorBuffer : public StorageArrayBuffer<T, len, false> {
   static void swap(StorageVectorBuffer &a, StorageVectorBuffer &b)
   {
     StorageArrayBuffer<T, len, false>::swap(a, b);
-    SWAP(int64_t, a.item_len_, b.item_len_);
+    std::swap(a.item_len_, b.item_len_);
   }
 };
 
@@ -529,6 +529,7 @@ class Texture : NonCopyable {
   GPUTexture *stencil_view_ = nullptr;
   Vector<GPUTexture *, 0> mip_views_;
   Vector<GPUTexture *, 0> layer_views_;
+  GPUTexture *layer_range_view_ = nullptr;
   const char *name_;
 
  public:
@@ -538,7 +539,7 @@ class Texture : NonCopyable {
           eGPUTextureFormat format,
           eGPUTextureUsage usage,
           int extent,
-          float *data = nullptr,
+          const float *data = nullptr,
           bool cubemap = false,
           int mip_len = 1)
       : name_(name)
@@ -551,7 +552,7 @@ class Texture : NonCopyable {
           eGPUTextureUsage usage,
           int extent,
           int layers,
-          float *data = nullptr,
+          const float *data = nullptr,
           bool cubemap = false,
           int mip_len = 1)
       : name_(name)
@@ -563,7 +564,7 @@ class Texture : NonCopyable {
           eGPUTextureFormat format,
           eGPUTextureUsage usage,
           int2 extent,
-          float *data = nullptr,
+          const float *data = nullptr,
           int mip_len = 1)
       : name_(name)
   {
@@ -575,7 +576,7 @@ class Texture : NonCopyable {
           eGPUTextureUsage usage,
           int2 extent,
           int layers,
-          float *data = nullptr,
+          const float *data = nullptr,
           int mip_len = 1)
       : name_(name)
   {
@@ -586,7 +587,7 @@ class Texture : NonCopyable {
           eGPUTextureFormat format,
           eGPUTextureUsage usage,
           int3 extent,
-          float *data = nullptr,
+          const float *data = nullptr,
           int mip_len = 1)
       : name_(name)
   {
@@ -597,6 +598,11 @@ class Texture : NonCopyable {
   ~Texture()
   {
     free();
+  }
+
+  GPUTexture *gpu_texture()
+  {
+    return tx_;
   }
 
   /* To be able to use it with DRW_shgroup_uniform_texture(). */
@@ -626,12 +632,14 @@ class Texture : NonCopyable {
       this->tx_ = a.tx_;
       this->name_ = a.name_;
       this->stencil_view_ = a.stencil_view_;
+      this->layer_range_view_ = a.layer_range_view_;
       this->mip_views_ = std::move(a.mip_views_);
       this->layer_views_ = std::move(a.layer_views_);
 
       a.tx_ = nullptr;
       a.name_ = nullptr;
       a.stencil_view_ = nullptr;
+      a.layer_range_view_ = nullptr;
       a.mip_views_.clear();
       a.layer_views_.clear();
     }
@@ -645,7 +653,7 @@ class Texture : NonCopyable {
   bool ensure_1d(eGPUTextureFormat format,
                  int extent,
                  eGPUTextureUsage usage = GPU_TEXTURE_USAGE_GENERAL,
-                 float *data = nullptr,
+                 const float *data = nullptr,
                  int mip_len = 1)
   {
     return ensure_impl(extent, 0, 0, mip_len, format, usage, data, false, false);
@@ -659,7 +667,7 @@ class Texture : NonCopyable {
                        int extent,
                        int layers,
                        eGPUTextureUsage usage = GPU_TEXTURE_USAGE_GENERAL,
-                       float *data = nullptr,
+                       const float *data = nullptr,
                        int mip_len = 1)
   {
     BLI_assert(layers > 0);
@@ -673,7 +681,7 @@ class Texture : NonCopyable {
   bool ensure_2d(eGPUTextureFormat format,
                  int2 extent,
                  eGPUTextureUsage usage = GPU_TEXTURE_USAGE_GENERAL,
-                 float *data = nullptr,
+                 const float *data = nullptr,
                  int mip_len = 1)
   {
     return ensure_impl(UNPACK2(extent), 0, mip_len, format, usage, data, false, false);
@@ -687,7 +695,7 @@ class Texture : NonCopyable {
                        int2 extent,
                        int layers,
                        eGPUTextureUsage usage = GPU_TEXTURE_USAGE_GENERAL,
-                       float *data = nullptr,
+                       const float *data = nullptr,
                        int mip_len = 1)
   {
     BLI_assert(layers > 0);
@@ -701,7 +709,7 @@ class Texture : NonCopyable {
   bool ensure_3d(eGPUTextureFormat format,
                  int3 extent,
                  eGPUTextureUsage usage = GPU_TEXTURE_USAGE_GENERAL,
-                 float *data = nullptr,
+                 const float *data = nullptr,
                  int mip_len = 1)
   {
     return ensure_impl(UNPACK3(extent), mip_len, format, usage, data, false, false);
@@ -728,7 +736,7 @@ class Texture : NonCopyable {
                          int extent,
                          int layers,
                          eGPUTextureUsage usage = GPU_TEXTURE_USAGE_GENERAL,
-                         float *data = nullptr,
+                         const float *data = nullptr,
                          int mip_len = 1)
   {
     return ensure_impl(extent, extent, layers, mip_len, format, usage, data, true, true);
@@ -769,7 +777,7 @@ class Texture : NonCopyable {
   }
 
   /**
-   * Ensure the availability of mipmap views.
+   * Ensure the availability of layer views.
    * Layer views covers all layers of array textures.
    * Returns true if the views were (re)created.
    */
@@ -803,6 +811,33 @@ class Texture : NonCopyable {
           name_, tx_, format, 0, 9999, 0, 9999, cube_as_array, true);
     }
     return stencil_view_;
+  }
+
+  /**
+   * Layer range view cover only the given range.
+   * This can only called to create one range.
+   * View is recreated if:
+   * - The source texture is recreated.
+   * - The layer_len is different from the last call the this function.
+   * IMPORTANT: It is not recreated if the layer_start is different from the last call.
+   * IMPORTANT: If this view is recreated any reference to it should be updated.
+   */
+  GPUTexture *layer_range_view(int layer_start, int layer_len, bool cube_as_array = false)
+  {
+    BLI_assert(this->is_valid());
+    /* Make sure the range is valid as the GPU_texture_layer_count only returns the effective
+     * (clipped) range and not the requested range. */
+    BLI_assert_msg((layer_start + layer_len) <= GPU_texture_layer_count(tx_),
+                   "Layer range needs to be valid");
+
+    int view_layer_len = (layer_range_view_) ? GPU_texture_layer_count(layer_range_view_) : -1;
+    if (layer_len != view_layer_len) {
+      GPU_TEXTURE_FREE_SAFE(layer_range_view_);
+      eGPUTextureFormat format = GPU_texture_format(tx_);
+      layer_range_view_ = GPU_texture_create_view(
+          name_, tx_, format, 0, 9999, layer_start, layer_len, cube_as_array, false);
+    }
+    return layer_range_view_;
   }
 
   /**
@@ -935,6 +970,7 @@ class Texture : NonCopyable {
       GPU_TEXTURE_FREE_SAFE(view);
     }
     GPU_TEXTURE_FREE_SAFE(stencil_view_);
+    GPU_TEXTURE_FREE_SAFE(layer_range_view_);
     mip_views_.clear();
     layer_views_.clear();
   }
@@ -944,8 +980,12 @@ class Texture : NonCopyable {
    */
   static void swap(Texture &a, Texture &b)
   {
-    SWAP(GPUTexture *, a.tx_, b.tx_);
-    SWAP(const char *, a.name_, b.name_);
+    std::swap(a.tx_, b.tx_);
+    std::swap(a.name_, b.name_);
+    std::swap(a.stencil_view_, b.stencil_view_);
+    std::swap(a.layer_range_view_, b.layer_range_view_);
+    std::swap(a.mip_views_, b.mip_views_);
+    std::swap(a.layer_views_, b.layer_views_);
   }
 
  private:
@@ -955,7 +995,7 @@ class Texture : NonCopyable {
                    int mip_len = 1,
                    eGPUTextureFormat format = GPU_RGBA8,
                    eGPUTextureUsage usage = GPU_TEXTURE_USAGE_GENERAL,
-                   float *data = nullptr,
+                   const float *data = nullptr,
                    bool layered = false,
                    bool cubemap = false)
 
@@ -973,7 +1013,7 @@ class Texture : NonCopyable {
     }
     if (tx_ == nullptr) {
       tx_ = create(w, h, d, mip_len, format, usage, data, layered, cubemap);
-      if (data == nullptr && (G.debug & G_DEBUG_GPU)) {
+      if (is_valid() && data == nullptr && (G.debug & G_DEBUG_GPU)) {
         debug_clear();
       }
       return true;
@@ -987,7 +1027,7 @@ class Texture : NonCopyable {
                      int mip_len,
                      eGPUTextureFormat format,
                      eGPUTextureUsage usage,
-                     float *data,
+                     const float *data,
                      bool layered,
                      bool cubemap)
   {
@@ -1076,13 +1116,15 @@ class TextureFromPool : public Texture, NonMovable {
   }
 
   /** Remove methods that are forbidden with this type of textures. */
-  bool ensure_1d(int, int, eGPUTextureFormat, eGPUTextureUsage, float *) = delete;
-  bool ensure_1d_array(int, int, int, eGPUTextureFormat, eGPUTextureUsage, float *) = delete;
+  bool ensure_1d(int, int, eGPUTextureFormat, eGPUTextureUsage, const float *) = delete;
+  bool ensure_1d_array(int, int, int, eGPUTextureFormat, eGPUTextureUsage, const float *) = delete;
   bool ensure_2d(int, int, int, eGPUTextureFormat, eGPUTextureUsage, float *) = delete;
-  bool ensure_2d_array(int, int, int, int, eGPUTextureFormat, eGPUTextureUsage, float *) = delete;
-  bool ensure_3d(int, int, int, int, eGPUTextureFormat, eGPUTextureUsage, float *) = delete;
-  bool ensure_cube(int, int, eGPUTextureFormat, eGPUTextureUsage, float *) = delete;
-  bool ensure_cube_array(int, int, int, eGPUTextureFormat, eGPUTextureUsage, float *) = delete;
+  bool ensure_2d_array(int, int, int, int, eGPUTextureFormat, eGPUTextureUsage, const float *) =
+      delete;
+  bool ensure_3d(int, int, int, int, eGPUTextureFormat, eGPUTextureUsage, const float *) = delete;
+  bool ensure_cube(int, int, eGPUTextureFormat, eGPUTextureUsage, const float *) = delete;
+  bool ensure_cube_array(int, int, int, eGPUTextureFormat, eGPUTextureUsage, const float *) =
+      delete;
   void filter_mode(bool) = delete;
   void free() = delete;
   GPUTexture *mip_view(int) = delete;
@@ -1105,13 +1147,13 @@ class TextureRef : public Texture {
   }
 
   /** Remove methods that are forbidden with this type of textures. */
-  bool ensure_1d(int, int, eGPUTextureFormat, float *) = delete;
-  bool ensure_1d_array(int, int, int, eGPUTextureFormat, float *) = delete;
-  bool ensure_2d(int, int, int, eGPUTextureFormat, float *) = delete;
-  bool ensure_2d_array(int, int, int, int, eGPUTextureFormat, float *) = delete;
-  bool ensure_3d(int, int, int, int, eGPUTextureFormat, float *) = delete;
-  bool ensure_cube(int, int, eGPUTextureFormat, float *) = delete;
-  bool ensure_cube_array(int, int, int, eGPUTextureFormat, float *) = delete;
+  bool ensure_1d(int, int, eGPUTextureFormat, const float *) = delete;
+  bool ensure_1d_array(int, int, int, eGPUTextureFormat, const float *) = delete;
+  bool ensure_2d(int, int, int, eGPUTextureFormat, const float *) = delete;
+  bool ensure_2d_array(int, int, int, int, eGPUTextureFormat, const float *) = delete;
+  bool ensure_3d(int, int, int, int, eGPUTextureFormat, const float *) = delete;
+  bool ensure_cube(int, int, eGPUTextureFormat, const float *) = delete;
+  bool ensure_cube_array(int, int, int, eGPUTextureFormat, const float *) = delete;
   void filter_mode(bool) = delete;
   void free() = delete;
   GPUTexture *mip_view(int) = delete;
@@ -1123,8 +1165,7 @@ class TextureRef : public Texture {
  * Dummy type to bind texture as image.
  * It is just a GPUTexture in disguise.
  */
-class Image {
-};
+class Image {};
 
 static inline Image *as_image(GPUTexture *tex)
 {
@@ -1176,7 +1217,7 @@ class Framebuffer : NonCopyable {
               GPUAttachment color7 = GPU_ATTACHMENT_NONE,
               GPUAttachment color8 = GPU_ATTACHMENT_NONE)
   {
-    if (fb_ == NULL) {
+    if (fb_ == nullptr) {
       fb_ = GPU_framebuffer_create(name_);
     }
     GPUAttachment config[] = {
@@ -1189,7 +1230,7 @@ class Framebuffer : NonCopyable {
    */
   void ensure(int2 target_size)
   {
-    if (fb_ == NULL) {
+    if (fb_ == nullptr) {
       fb_ = GPU_framebuffer_create(name_);
     }
     GPU_framebuffer_default_size(fb_, UNPACK2(target_size));
@@ -1230,8 +1271,8 @@ class Framebuffer : NonCopyable {
    */
   static void swap(Framebuffer &a, Framebuffer &b)
   {
-    SWAP(GPUFrameBuffer *, a.fb_, b.fb_);
-    SWAP(const char *, a.name_, b.name_);
+    std::swap(a.fb_, b.fb_);
+    std::swap(a.name_, b.name_);
   }
 };
 
@@ -1254,7 +1295,7 @@ template<typename T, int64_t len> class SwapChain {
     for (auto i : IndexRange(len - 1)) {
       auto i_next = (i + 1) % len;
       if constexpr (std::is_trivial_v<T>) {
-        SWAP(T, chain_[i], chain_[i_next]);
+        std::swap(chain_[i], chain_[i_next]);
       }
       else {
         T::swap(chain_[i], chain_[i_next]);

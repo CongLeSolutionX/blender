@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#pragma BLENDER_REQUIRE(gpu_shader_compositor_texture_utilities.glsl)
+#include "gpu_shader_compositor_texture_utilities.glsl"
 
 void main()
 {
@@ -20,8 +20,8 @@ void main()
     int count = 0;
     for (int j = -edge_search_radius; j <= edge_search_radius; j++) {
       for (int i = -edge_search_radius; i <= edge_search_radius; i++) {
-        float neighbour_matte = texture_load(input_matte_tx, texel + ivec2(i, j)).x;
-        count += int(distance(matte, neighbour_matte) < edge_tolerance);
+        float neighbor_matte = texture_load(input_matte_tx, texel + ivec2(i, j)).x;
+        count += int(distance(matte, neighbor_matte) < edge_tolerance);
       }
     }
 

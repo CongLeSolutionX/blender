@@ -15,7 +15,7 @@
 #include "DNA_movieclip_types.h"
 #include "DNA_tracking_types.h"
 
-#include "GPU_texture.h"
+#include "GPU_texture.hh"
 
 #include "BKE_movieclip.h"
 #include "BKE_tracking.h"
@@ -30,7 +30,7 @@ namespace blender::realtime_compositor {
  * Distortion Grid Key.
  */
 
-DistortionGridKey::DistortionGridKey(MovieTrackingCamera camera,
+DistortionGridKey::DistortionGridKey(const MovieTrackingCamera &camera,
                                      int2 size,
                                      DistortionType type,
                                      int2 calibration_size)
@@ -40,7 +40,7 @@ DistortionGridKey::DistortionGridKey(MovieTrackingCamera camera,
 
 uint64_t DistortionGridKey::hash() const
 {
-  return get_default_hash_4(
+  return get_default_hash(
       BKE_tracking_camera_distortion_hash(&camera), size, type, calibration_size);
 }
 
@@ -93,7 +93,7 @@ DistortionGrid::DistortionGrid(
       size.x,
       size.y,
       1,
-      Result::texture_format(ResultType::Float2, context.get_precision()),
+      Result::gpu_texture_format(ResultType::Float2, context.get_precision()),
       GPU_TEXTURE_USAGE_SHADER_READ,
       *distortion_grid.data());
 }

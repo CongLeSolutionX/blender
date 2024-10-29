@@ -6,21 +6,22 @@ set(INC
   ../asset
   ../include
   ../../asset_system
-  ../../blenfont
   ../../blenkernel
   ../../blenloader
   ../../blentranslation
   ../../bmesh
-  ../../depsgraph
   ../../draw
+  ../../functions
   ../../gpu
   ../../imbuf
   ../../makesrna
+  ../../modifiers
+  ../../nodes
   ../../render
   ../../windowmanager
   ../../../../intern/mantaflow/extern
 
-  # RNA_prototypes.h
+  # RNA_prototypes.hh
   ${CMAKE_BINARY_DIR}/source/blender/makesrna
 )
 
@@ -40,6 +41,7 @@ set(SRC
   view3d_gizmo_camera.cc
   view3d_gizmo_empty.cc
   view3d_gizmo_forcefield.cc
+  view3d_gizmo_geometry_nodes.cc
   view3d_gizmo_light.cc
   view3d_gizmo_navigate.cc
   view3d_gizmo_navigate_type.cc
@@ -76,13 +78,15 @@ set(SRC
   view3d_utils.cc
   view3d_view.cc
 
-  view3d_intern.h
+  view3d_intern.hh
   view3d_navigate.hh
 )
 
 set(LIB
   PRIVATE bf::animrig
+  PRIVATE bf::blenfont
   PRIVATE bf::blenlib
+  PRIVATE bf::depsgraph
   PRIVATE bf::dna
   bf_editor_curves
   bf_editor_lattice
@@ -105,5 +109,5 @@ endif()
 
 blender_add_lib(bf_editor_space_view3d "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 
-# RNA_prototypes.h
+# RNA_prototypes.hh
 add_dependencies(bf_editor_space_view3d bf_rna)

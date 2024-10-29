@@ -15,37 +15,6 @@
 
 namespace blender::nodes {
 
-template<typename T>
-void copy_with_checked_indices(const VArray<T> &src,
-                               const VArray<int> &indices,
-                               const IndexMask &mask,
-                               MutableSpan<T> dst)
-{
-  const IndexRange src_range = src.index_range();
-  devirtualize_varray2(src, indices, [&](const auto src, const auto indices) {
-    mask.foreach_index(GrainSize(4096), [&](const int i) {
-      const int index = indices[i];
-      if (src_range.contains(index)) {
-        dst[i] = src[index];
-      }
-      else {
-        dst[i] = {};
-      }
-    });
-  });
-}
-
-void copy_with_checked_indices(const GVArray &src,
-                               const VArray<int> &indices,
-                               const IndexMask &mask,
-                               GMutableSpan dst)
-{
-  bke::attribute_math::convert_to_static_type(src.type(), [&](auto dummy) {
-    using T = decltype(dummy);
-    copy_with_checked_indices(src.typed<T>(), indices, mask, dst.typed<T>());
-  });
-}
-
 }  // namespace blender::nodes
 
 namespace blender::nodes::node_geo_sample_index_cc {
@@ -84,7 +53,7 @@ static void node_init(bNodeTree * /*tree*/, bNode *node)
 {
   NodeGeometrySampleIndex *data = MEM_cnew<NodeGeometrySampleIndex>(__func__);
   data->data_type = CD_PROP_FLOAT;
-  data->domain = ATTR_DOMAIN_POINT;
+  data->domain = int8_t(AttrDomain::Point);
   data->clamp = 0;
   node->storage = data;
 }
@@ -108,7 +77,7 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
 
 static bool component_is_available(const GeometrySet &geometry,
                                    const GeometryComponent::Type type,
-                                   const eAttrDomain domain)
+                                   const AttrDomain domain)
 {
   if (!geometry.has(type)) {
     return false;
@@ -118,7 +87,7 @@ static bool component_is_available(const GeometrySet &geometry,
 }
 
 static const GeometryComponent *find_source_component(const GeometrySet &geometry,
-                                                      const eAttrDomain domain)
+                                                      const AttrDomain domain)
 {
   /* Choose the other component based on a consistent order, rather than some more complicated
    * heuristic. This is the same order visible in the spreadsheet and used in the ray-cast node. */
@@ -159,7 +128,7 @@ void copy_with_clamped_indices(const VArray<T> &src,
 class SampleIndexFunction : public mf::MultiFunction {
   GeometrySet src_geometry_;
   GField src_field_;
-  eAttrDomain domain_;
+  AttrDomain domain_;
   bool clamp_;
 
   mf::Signature signature_;
@@ -171,7 +140,7 @@ class SampleIndexFunction : public mf::MultiFunction {
  public:
   SampleIndexFunction(GeometrySet geometry,
                       GField src_field,
-                      const eAttrDomain domain,
+                      const AttrDomain domain,
                       const bool clamp)
       : src_geometry_(std::move(geometry)),
         src_field_(std::move(src_field)),
@@ -220,7 +189,7 @@ class SampleIndexFunction : public mf::MultiFunction {
       });
     }
     else {
-      copy_with_checked_indices(*src_data_, indices, mask, dst);
+      bke::copy_with_checked_indices(*src_data_, indices, mask, dst);
     }
   }
 };
@@ -229,25 +198,25 @@ static void node_geo_exec(GeoNodeExecParams params)
 {
   GeometrySet geometry = params.extract_input<GeometrySet>("Geometry");
   const NodeGeometrySampleIndex &storage = node_storage(params.node());
-  const eAttrDomain domain = eAttrDomain(storage.domain);
+  const AttrDomain domain = AttrDomain(storage.domain);
   const bool use_clamp = bool(storage.clamp);
 
   GField value_field = params.extract_input<GField>("Value");
-  ValueOrField<int> index_value_or_field = params.extract_input<ValueOrField<int>>("Index");
+  SocketValueVariant index_value_variant = params.extract_input<SocketValueVariant>("Index");
   const CPPType &cpp_type = value_field.cpp_type();
 
-  if (index_value_or_field.is_field()) {
+  if (index_value_variant.is_context_dependent_field()) {
     /* If the index is a field, the output has to be a field that still depends on the input. */
     auto fn = std::make_shared<SampleIndexFunction>(
         std::move(geometry), std::move(value_field), domain, use_clamp);
-    auto op = FieldOperation::Create(std::move(fn), {index_value_or_field.as_field()});
+    auto op = FieldOperation::Create(std::move(fn), {index_value_variant.extract<Field<int>>()});
     params.set_output("Value", GField(std::move(op)));
   }
   else if (const GeometryComponent *component = find_source_component(geometry, domain)) {
     /* Optimization for the case when the index is a single value. Here only that one index has to
      * be evaluated. */
     const int domain_size = component->attribute_domain_size(domain);
-    int index = index_value_or_field.as_value();
+    int index = index_value_variant.extract<int>();
     if (use_clamp) {
       index = std::clamp(index, 0, domain_size - 1);
     }
@@ -275,17 +244,17 @@ static void node_geo_exec(GeoNodeExecParams params)
 
 static void node_register()
 {
-  static bNodeType ntype;
+  static blender::bke::bNodeType ntype;
 
   geo_node_type_base(&ntype, GEO_NODE_SAMPLE_INDEX, "Sample Index", NODE_CLASS_GEOMETRY);
   ntype.initfunc = node_init;
   ntype.declare = node_declare;
-  node_type_storage(
+  blender::bke::node_type_storage(
       &ntype, "NodeGeometrySampleIndex", node_free_standard_storage, node_copy_standard_storage);
   ntype.geometry_node_execute = node_geo_exec;
   ntype.draw_buttons = node_layout;
   ntype.gather_link_search_ops = node_gather_link_searches;
-  nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }
 NOD_REGISTER_NODE(node_register)
 

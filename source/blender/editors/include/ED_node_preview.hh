@@ -6,7 +6,7 @@
 
 #include "RE_pipeline.h"
 
-#include "IMB_imbuf.h"
+#include "IMB_imbuf.hh"
 
 #include "DNA_material_types.h"
 
@@ -46,6 +46,5 @@ ImBuf *node_preview_acquire_ibuf(bNodeTree &ntree,
                                  const bNode &node);
 void node_release_preview_ibuf(NestedTreePreviews &tree_previews);
 NestedTreePreviews *get_nested_previews(const bContext &C, SpaceNode &snode);
-void stop_preview_job(wmWindowManager &wm);
 
 }  // namespace blender::ed::space_node

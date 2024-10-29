@@ -6,7 +6,6 @@
  * \ingroup spseq
  */
 
-#include "BLI_blenlib.h"
 #include "BLI_utildefines.h"
 
 #include "DNA_scene_types.h"
@@ -21,7 +20,6 @@
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
 
-#include "SEQ_iterator.hh"
 #include "SEQ_modifier.hh"
 #include "SEQ_relations.hh"
 #include "SEQ_select.hh"
@@ -79,10 +77,7 @@ void SEQUENCER_OT_strip_modifier_add(wmOperatorType *ot)
 
   /* api callbacks */
   ot->exec = strip_modifier_add_exec;
-
-  /*
-   * No poll because a modifier can be applied to any kind of strip
-   */
+  ot->poll = sequencer_strip_editable_poll;
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -138,9 +133,7 @@ void SEQUENCER_OT_strip_modifier_remove(wmOperatorType *ot)
 
   /* api callbacks */
   ot->exec = strip_modifier_remove_exec;
-  /*
-   * No poll is needed because all kind of strips can have their modifiers erased
-   */
+  ot->poll = sequencer_strip_editable_poll;
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -219,10 +212,7 @@ void SEQUENCER_OT_strip_modifier_move(wmOperatorType *ot)
 
   /* api callbacks */
   ot->exec = strip_modifier_move_exec;
-
-  /*
-   * No poll is needed because all strips can have modifiers
-   */
+  ot->poll = sequencer_strip_editable_poll;
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -321,9 +311,7 @@ void SEQUENCER_OT_strip_modifier_copy(wmOperatorType *ot)
   /* api callbacks */
   ot->invoke = WM_menu_invoke;
   ot->exec = strip_modifier_copy_exec;
-  /*
-   * No poll is needed because all kind of strips can have modifier
-   */
+  ot->poll = sequencer_strip_editable_poll;
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -378,10 +366,7 @@ void SEQUENCER_OT_strip_modifier_equalizer_redefine(wmOperatorType *ot)
 
   /* api callbacks */
   ot->exec = strip_modifier_equalizer_redefine_exec;
-
-  /*
-   * No poll because a modifier can be applied to any kind of strip
-   */
+  ot->poll = sequencer_strip_editable_poll;
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;

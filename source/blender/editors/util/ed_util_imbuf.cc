@@ -6,27 +6,27 @@
  * \ingroup edutil
  */
 
+#include <algorithm>
+
 #include "MEM_guardedalloc.h"
 
 #include "BLI_math_vector_types.hh"
 #include "BLI_rect.h"
 
-#include "BKE_colortools.h"
+#include "BKE_colortools.hh"
 #include "BKE_context.hh"
 #include "BKE_image.h"
-#include "BKE_main.h"
-#include "BKE_screen.hh"
 
 #include "ED_image.hh"
 #include "ED_screen.hh"
 #include "ED_space_api.hh"
 
-#include "GPU_immediate.h"
-#include "GPU_state.h"
+#include "GPU_immediate.hh"
+#include "GPU_state.hh"
 
-#include "IMB_colormanagement.h"
-#include "IMB_imbuf.h"
-#include "IMB_imbuf_types.h"
+#include "IMB_colormanagement.hh"
+#include "IMB_imbuf.hh"
+#include "IMB_imbuf_types.hh"
 
 #include "SEQ_render.hh"
 #include "SEQ_sequencer.hh"
@@ -124,10 +124,10 @@ static void image_sample_rect_color_ubyte(const ImBuf *ibuf,
   }
   mul_v4_fl(r_col_linear, 1.0 / float(col_tot));
 
-  r_col[0] = MIN2(col_accum_ub[0] / col_tot, 255);
-  r_col[1] = MIN2(col_accum_ub[1] / col_tot, 255);
-  r_col[2] = MIN2(col_accum_ub[2] / col_tot, 255);
-  r_col[3] = MIN2(col_accum_ub[3] / col_tot, 255);
+  r_col[0] = std::min<uchar>(col_accum_ub[0] / col_tot, 255);
+  r_col[1] = std::min<uchar>(col_accum_ub[1] / col_tot, 255);
+  r_col[2] = std::min<uchar>(col_accum_ub[2] / col_tot, 255);
+  r_col[3] = std::min<uchar>(col_accum_ub[3] / col_tot, 255);
 }
 
 static void image_sample_rect_color_float(ImBuf *ibuf, const rcti *rect, float r_col[4])
@@ -174,12 +174,13 @@ static void image_sample_apply(bContext *C, wmOperator *op, const wmEvent *event
     return;
   }
 
-  if (uv[0] >= 0.0f && uv[1] >= 0.0f && uv[0] < 1.0f && uv[1] < 1.0f) {
-    int x = int(uv[0] * ibuf->x), y = int(uv[1] * ibuf->y);
+  int offset[2];
+  offset[0] = image->runtime.backdrop_offset[0];
+  offset[1] = image->runtime.backdrop_offset[1];
 
-    CLAMP(x, 0, ibuf->x - 1);
-    CLAMP(y, 0, ibuf->y - 1);
+  int x = int(uv[0] * ibuf->x), y = int(uv[1] * ibuf->y);
 
+  if (x >= offset[0] && y >= offset[1] && x < (ibuf->x + offset[0]) && y < (ibuf->y + offset[1])) {
     info->width = ibuf->x;
     info->height = ibuf->y;
     info->x = x;
@@ -196,10 +197,12 @@ static void image_sample_apply(bContext *C, wmOperator *op, const wmEvent *event
     info->use_default_view = (image->flag & IMA_VIEW_AS_RENDER) ? false : true;
 
     rcti sample_rect;
-    sample_rect.xmin = max_ii(0, x - info->sample_size / 2);
-    sample_rect.ymin = max_ii(0, y - info->sample_size / 2);
-    sample_rect.xmax = min_ii(ibuf->x, sample_rect.xmin + info->sample_size) - 1;
-    sample_rect.ymax = min_ii(ibuf->y, sample_rect.ymin + info->sample_size) - 1;
+    sample_rect.xmin = max_ii(0, x - image->runtime.backdrop_offset[0] - info->sample_size / 2);
+    sample_rect.ymin = max_ii(0, y - image->runtime.backdrop_offset[1] - info->sample_size / 2);
+    /* image_sample_rect_color_*() expects a rect, but we only want to retrieve a single value, so
+     * create a sample rect with size 1. */
+    sample_rect.xmax = sample_rect.xmin;
+    sample_rect.ymax = sample_rect.ymin;
 
     if (ibuf->byte_buffer.data) {
       image_sample_rect_color_ubyte(ibuf, &sample_rect, info->col, info->linearcol);
@@ -272,13 +275,9 @@ static void image_sample_apply(bContext *C, wmOperator *op, const wmEvent *event
 
 static void sequencer_sample_apply(bContext *C, wmOperator *op, const wmEvent *event)
 {
-  Main *bmain = CTX_data_main(C);
-  Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   Scene *scene = CTX_data_scene(C);
-  SpaceSeq *sseq = (SpaceSeq *)CTX_wm_space_data(C);
   ARegion *region = CTX_wm_region(C);
-  ImBuf *ibuf = sequencer_ibuf_get(
-      bmain, region, depsgraph, scene, sseq, scene->r.cfra, 0, nullptr);
+  ImBuf *ibuf = sequencer_ibuf_get(C, scene->r.cfra, 0, nullptr);
   ImageSampleInfo *info = static_cast<ImageSampleInfo *>(op->customdata);
   float fx, fy;
 
@@ -298,7 +297,7 @@ static void sequencer_sample_apply(bContext *C, wmOperator *op, const wmEvent *e
 
   if (fx >= 0.0f && fy >= 0.0f && fx < ibuf->x && fy < ibuf->y) {
     const float *fp;
-    uchar *cp;
+    const uchar *cp;
     int x = int(fx), y = int(fy);
 
     info->x = x;

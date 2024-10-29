@@ -5,9 +5,10 @@
  *
  * Adapted from the Blender Alembic importer implementation. */
 
-#include "usd_reader_nurbs.h"
+#include "usd_reader_nurbs.hh"
 
 #include "BKE_curve.hh"
+#include "BKE_geometry_set.hh"
 #include "BKE_mesh.hh"
 #include "BKE_object.hh"
 
@@ -18,10 +19,7 @@
 
 #include "MEM_guardedalloc.h"
 
-#include <pxr/base/vt/array.h>
 #include <pxr/base/vt/types.h>
-#include <pxr/base/vt/value.h>
-#include <pxr/usd/sdf/types.h>
 
 #include <pxr/usd/usdGeom/curves.h>
 
@@ -46,14 +44,14 @@ namespace blender::io::usd {
 
 void USDNurbsReader::create_object(Main *bmain, const double /*motionSampleTime*/)
 {
-  curve_ = BKE_curve_add(bmain, name_.c_str(), OB_CURVES_LEGACY);
+  Curve *cu = BKE_curve_add(bmain, name_.c_str(), OB_CURVES_LEGACY);
 
-  curve_->flag |= CU_3D;
-  curve_->actvert = CU_ACT_NONE;
-  curve_->resolu = 2;
+  cu->flag |= CU_3D;
+  cu->actvert = CU_ACT_NONE;
+  cu->resolu = 2;
 
   object_ = BKE_object_add_only_object(bmain, OB_CURVES_LEGACY, name_.c_str());
-  object_->data = curve_;
+  object_->data = cu;
 }
 
 void USDNurbsReader::read_object_data(Main *bmain, const double motionSampleTime)
@@ -70,8 +68,6 @@ void USDNurbsReader::read_object_data(Main *bmain, const double motionSampleTime
 
 void USDNurbsReader::read_curve_sample(Curve *cu, const double motionSampleTime)
 {
-  curve_prim_ = pxr::UsdGeomNurbsCurves(prim_);
-
   pxr::UsdAttribute widthsAttr = curve_prim_.GetWidthsAttr();
   pxr::UsdAttribute vertexAttr = curve_prim_.GetCurveVertexCountsAttr();
   pxr::UsdAttribute pointsAttr = curve_prim_.GetPointsAttr();
@@ -98,11 +94,11 @@ void USDNurbsReader::read_curve_sample(Curve *cu, const double motionSampleTime)
    * Perhaps to be replaced by Blender USD Schema. */
   if (!usdNormals.empty()) {
     /* Set extrusion to 1. */
-    curve_->extrude = 1.0f;
+    cu->extrude = 1.0f;
   }
   else {
     /* Set bevel depth to 1. */
-    curve_->bevel_radius = 1.0f;
+    cu->bevel_radius = 1.0f;
   }
 
   size_t idx = 0;
@@ -168,15 +164,24 @@ void USDNurbsReader::read_curve_sample(Curve *cu, const double motionSampleTime)
   }
 }
 
+void USDNurbsReader::read_geometry(bke::GeometrySet &geometry_set,
+                                   const USDMeshReadParams params,
+                                   const char **r_err_str)
+{
+  BLI_assert(geometry_set.has_mesh());
+  Mesh *new_mesh = read_mesh(nullptr, params, r_err_str);
+  geometry_set.replace_mesh(new_mesh);
+}
+
 Mesh *USDNurbsReader::read_mesh(Mesh * /*existing_mesh*/,
                                 const USDMeshReadParams params,
-                                const char ** /*err_str*/)
+                                const char ** /*r_err_str*/)
 {
-  pxr::UsdGeomCurves curve_prim_(prim_);
+  pxr::UsdGeomCurves curve_prim(prim_);
 
-  pxr::UsdAttribute widthsAttr = curve_prim_.GetWidthsAttr();
-  pxr::UsdAttribute vertexAttr = curve_prim_.GetCurveVertexCountsAttr();
-  pxr::UsdAttribute pointsAttr = curve_prim_.GetPointsAttr();
+  pxr::UsdAttribute widthsAttr = curve_prim.GetWidthsAttr();
+  pxr::UsdAttribute vertexAttr = curve_prim.GetCurveVertexCountsAttr();
+  pxr::UsdAttribute pointsAttr = curve_prim.GetPointsAttr();
 
   pxr::VtIntArray usdCounts;
 

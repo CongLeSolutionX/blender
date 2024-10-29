@@ -6,93 +6,138 @@
  * Compute light objects lighting contribution using Gbuffer data.
  */
 
-#pragma BLENDER_REQUIRE(draw_view_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_gbuffer_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_renderpass_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_light_eval_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_thickness_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_subsurface_lib.glsl)
+#include "draw_view_lib.glsl"
+#include "eevee_gbuffer_lib.glsl"
+#include "eevee_light_eval_lib.glsl"
+#include "eevee_lightprobe_eval_lib.glsl"
+#include "eevee_renderpass_lib.glsl"
+#include "eevee_subsurface_lib.glsl"
+#include "eevee_thickness_lib.glsl"
+#include "gpu_shader_codegen_lib.glsl"
+#include "gpu_shader_shared_exponent_lib.glsl"
+
+void write_radiance_direct(int layer_index, ivec2 texel, vec3 radiance)
+{
+  /* TODO(fclem): Layered texture. */
+  uint data = rgb9e5_encode(radiance);
+  if (layer_index == 0) {
+    imageStore(direct_radiance_1_img, texel, uvec4(data));
+  }
+  else if (layer_index == 1) {
+    imageStore(direct_radiance_2_img, texel, uvec4(data));
+  }
+  else if (layer_index == 2) {
+    imageStore(direct_radiance_3_img, texel, uvec4(data));
+  }
+}
+
+void write_radiance_indirect(int layer_index, ivec2 texel, vec3 radiance)
+{
+  /* TODO(fclem): Layered texture. */
+  if (layer_index == 0) {
+    imageStore(indirect_radiance_1_img, texel, vec4(radiance, 1.0));
+  }
+  else if (layer_index == 1) {
+    imageStore(indirect_radiance_2_img, texel, vec4(radiance, 1.0));
+  }
+  else if (layer_index == 2) {
+    imageStore(indirect_radiance_3_img, texel, vec4(radiance, 1.0));
+  }
+}
 
 void main()
 {
   ivec2 texel = ivec2(gl_FragCoord.xy);
 
   float depth = texelFetch(hiz_tx, texel, 0).r;
-  GBufferData gbuf = gbuffer_read(gbuf_header_tx, gbuf_closure_tx, gbuf_color_tx, texel);
+  GBufferReader gbuf = gbuffer_read(gbuf_header_tx, gbuf_closure_tx, gbuf_normal_tx, texel);
+
+  /* Bias the shading point position because of depth buffer precision.
+   * Constant is taken from https://www.terathon.com/gdc07_lengyel.pdf. */
+  const float bias = 2.4e-7;
+  depth -= bias;
 
   vec3 P = drw_point_screen_to_world(vec3(uvcoordsvar.xy, depth));
-  /* Assume reflection closure normal is always somewhat representative of the geometric normal.
-   * Ng is only used for shadow biases and subsurface check in this case. */
-  vec3 Ng = gbuf.has_reflection ? gbuf.reflection.N : gbuf.diffuse.N;
+  vec3 Ng = gbuf.surface_N;
   vec3 V = drw_world_incident_vector(P);
   float vPz = dot(drw_view_forward(), P) - dot(drw_view_forward(), drw_view_position());
 
   ClosureLightStack stack;
+  /* Unroll light stack array assignments to avoid non-constant indexing. */
+  for (int i = 0; i < LIGHT_CLOSURE_EVAL_COUNT && i < gbuf.closure_count; i++) {
+    closure_light_set(stack, i, closure_light_new(gbuffer_closure_get(gbuf, i), V));
+  }
 
-  ClosureLight cl_diff;
-  cl_diff.N = gbuf.diffuse.N;
-  cl_diff.ltc_mat = LTC_LAMBERT_MAT;
-  cl_diff.type = LIGHT_DIFFUSE;
-  stack.cl[0] = cl_diff;
+  /* TODO(fclem): If transmission (no SSS) is present, we could reduce LIGHT_CLOSURE_EVAL_COUNT
+   * by 1 for this evaluation and skip evaluating the transmission closure twice. */
+  uchar receiver_light_set = gbuffer_light_link_receiver_unpack(gbuf.header);
+  light_eval_reflection(stack, P, Ng, V, vPz, receiver_light_set);
 
-  ClosureLight cl_refl;
-  cl_refl.N = gbuf.reflection.N;
-  cl_refl.ltc_mat = LTC_GGX_MAT(dot(gbuf.reflection.N, V), gbuf.reflection.roughness);
-  cl_refl.type = LIGHT_SPECULAR;
-  stack.cl[1] = cl_refl;
-
-#ifdef SSS_TRANSMITTANCE
-  ClosureLight cl_sss;
-  cl_sss.N = -gbuf.diffuse.N;
-  cl_sss.ltc_mat = LTC_LAMBERT_MAT;
-  cl_sss.type = LIGHT_DIFFUSE;
-  stack.cl[2] = cl_sss;
+  if (use_transmission) {
+    ClosureUndetermined cl_transmit = gbuffer_closure_get(gbuf, 0);
+#if 1 /* TODO Limit to SSS. */
+    vec3 sss_reflect_shadowed, sss_reflect_unshadowed;
+    if (cl_transmit.type == CLOSURE_BSSRDF_BURLEY_ID) {
+      sss_reflect_shadowed = stack.cl[0].light_shadowed;
+      sss_reflect_unshadowed = stack.cl[0].light_unshadowed;
+    }
 #endif
 
-#ifdef SSS_TRANSMITTANCE
-  float shadow_thickness = thickness_from_shadow(P, Ng, vPz);
-  float thickness = (shadow_thickness != THICKNESS_NO_VALUE) ?
-                        max(shadow_thickness, gbuf.thickness) :
-                        gbuf.thickness;
-#else
-  float thickness = 0.0;
+    stack.cl[0] = closure_light_new(cl_transmit, V, gbuf.thickness);
+
+    /* NOTE: Only evaluates `stack.cl[0]`. */
+    light_eval_transmission(stack, P, Ng, V, vPz, gbuf.thickness, receiver_light_set);
+
+#if 1 /* TODO Limit to SSS. */
+    if (cl_transmit.type == CLOSURE_BSSRDF_BURLEY_ID) {
+      /* Apply transmission profile onto transmitted light and sum with reflected light. */
+      vec3 sss_profile = subsurface_transmission(to_closure_subsurface(cl_transmit).sss_radius,
+                                                 abs(gbuf.thickness));
+      stack.cl[0].light_shadowed *= sss_profile;
+      stack.cl[0].light_unshadowed *= sss_profile;
+      stack.cl[0].light_shadowed += sss_reflect_shadowed;
+      stack.cl[0].light_unshadowed += sss_reflect_unshadowed;
+    }
 #endif
+  }
 
-  light_eval(stack, P, Ng, V, vPz, thickness);
+  if (render_pass_shadow_id != -1) {
+    vec3 radiance_shadowed = vec3(0);
+    vec3 radiance_unshadowed = vec3(0);
+    for (int i = 0; i < LIGHT_CLOSURE_EVAL_COUNT && i < gbuf.closure_count; i++) {
+      radiance_shadowed += closure_light_get(stack, i).light_shadowed;
+      radiance_unshadowed += closure_light_get(stack, i).light_unshadowed;
+    }
+    vec3 shadows = radiance_shadowed * safe_rcp(radiance_unshadowed);
+    output_renderpass_value(render_pass_shadow_id, average(shadows));
+  }
 
-#ifdef SSS_TRANSMITTANCE
-  if (gbuf.diffuse.sss_id != 0u) {
-    vec3 sss_profile = subsurface_transmission(gbuf.diffuse.sss_radius, thickness);
-    stack.cl[2].light_shadowed *= sss_profile;
-    stack.cl[2].light_unshadowed *= sss_profile;
+  if (use_lightprobe_eval) {
+    LightProbeSample samp = lightprobe_load(P, Ng, V);
+
+    float clamp_indirect = uniform_buf.clamp.surface_indirect;
+    samp.volume_irradiance = spherical_harmonics_clamp(samp.volume_irradiance, clamp_indirect);
+
+    for (int i = 0; i < LIGHT_CLOSURE_EVAL_COUNT && i < gbuf.closure_count; i++) {
+      ClosureUndetermined cl = gbuffer_closure_get(gbuf, i);
+      vec3 indirect_light = lightprobe_eval(samp, cl, P, V, gbuf.thickness);
+
+      int layer_index = gbuffer_closure_get_bin_index(gbuf, i);
+      vec3 direct_light = closure_light_get(stack, i).light_shadowed;
+      if (use_split_indirect) {
+        write_radiance_indirect(layer_index, texel, indirect_light);
+        write_radiance_direct(layer_index, texel, direct_light);
+      }
+      else {
+        write_radiance_direct(layer_index, texel, direct_light + indirect_light);
+      }
+    }
   }
   else {
-    stack.cl[2].light_shadowed = vec3(0.0);
-    stack.cl[2].light_unshadowed = vec3(0.0);
+    for (int i = 0; i < LIGHT_CLOSURE_EVAL_COUNT && i < gbuf.closure_count; i++) {
+      int layer_index = gbuffer_closure_get_bin_index(gbuf, i);
+      vec3 direct_light = closure_light_get(stack, i).light_shadowed;
+      write_radiance_direct(layer_index, texel, direct_light);
+    }
   }
-#endif
-
-  vec3 radiance_diffuse = stack.cl[0].light_shadowed;
-  vec3 radiance_specular = stack.cl[1].light_shadowed;
-#ifdef SSS_TRANSMITTANCE
-  radiance_diffuse += stack.cl[2].light_shadowed;
-#endif
-
-  vec3 radiance_shadowed = stack.cl[0].light_shadowed;
-  vec3 radiance_unshadowed = stack.cl[0].light_unshadowed;
-  radiance_shadowed += stack.cl[1].light_shadowed;
-  radiance_unshadowed += stack.cl[1].light_unshadowed;
-#ifdef SSS_TRANSMITTANCE
-  radiance_shadowed += stack.cl[2].light_shadowed;
-  radiance_unshadowed += stack.cl[2].light_unshadowed;
-#endif
-
-  /* TODO(fclem): Change shadow pass to be colored. */
-  vec3 shadows = radiance_shadowed * safe_rcp(radiance_unshadowed);
-  output_renderpass_value(uniform_buf.render_pass.shadow_id, average(shadows));
-
-  imageStore(direct_diffuse_img, texel, vec4(radiance_diffuse, 1.0));
-  imageStore(direct_reflect_img, texel, vec4(radiance_specular, 1.0));
-  /* TODO(fclem): Support LTC for refraction. */
-  // imageStore(direct_refract_img, texel, vec4(cl_refr.light_shadowed, 1.0));
 }

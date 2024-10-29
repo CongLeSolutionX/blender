@@ -61,7 +61,6 @@
  *     };
  */
 
-#include <functional>
 #include <memory>
 #include <string>
 #include <utility>
@@ -145,7 +144,8 @@ TRIVIAL_DEFAULT_INT_HASH(uint64_t);
 template<> struct DefaultHash<float> {
   uint64_t operator()(float value) const
   {
-    return *reinterpret_cast<uint32_t *>(&value);
+    /* Explicit `uint64_t` cast to suppress CPPCHECK warning.  */
+    return uint64_t(*reinterpret_cast<uint32_t *>(&value));
   }
 };
 
@@ -221,7 +221,7 @@ template<typename T> uint64_t get_default_hash(const T &v)
   return DefaultHash<std::decay_t<T>>{}(v);
 }
 
-template<typename T1, typename T2> uint64_t get_default_hash_2(const T1 &v1, const T2 &v2)
+template<typename T1, typename T2> uint64_t get_default_hash(const T1 &v1, const T2 &v2)
 {
   const uint64_t h1 = get_default_hash(v1);
   const uint64_t h2 = get_default_hash(v2);
@@ -229,7 +229,7 @@ template<typename T1, typename T2> uint64_t get_default_hash_2(const T1 &v1, con
 }
 
 template<typename T1, typename T2, typename T3>
-uint64_t get_default_hash_3(const T1 &v1, const T2 &v2, const T3 &v3)
+uint64_t get_default_hash(const T1 &v1, const T2 &v2, const T3 &v3)
 {
   const uint64_t h1 = get_default_hash(v1);
   const uint64_t h2 = get_default_hash(v2);
@@ -238,7 +238,7 @@ uint64_t get_default_hash_3(const T1 &v1, const T2 &v2, const T3 &v3)
 }
 
 template<typename T1, typename T2, typename T3, typename T4>
-uint64_t get_default_hash_4(const T1 &v1, const T2 &v2, const T3 &v3, const T4 &v4)
+uint64_t get_default_hash(const T1 &v1, const T2 &v2, const T3 &v3, const T4 &v4)
 {
   const uint64_t h1 = get_default_hash(v1);
   const uint64_t h2 = get_default_hash(v2);
@@ -255,10 +255,8 @@ template<typename T> struct PointerHashes {
   }
 };
 
-template<typename T> struct DefaultHash<std::unique_ptr<T>> : public PointerHashes<T> {
-};
-template<typename T> struct DefaultHash<std::shared_ptr<T>> : public PointerHashes<T> {
-};
+template<typename T> struct DefaultHash<std::unique_ptr<T>> : public PointerHashes<T> {};
+template<typename T> struct DefaultHash<std::shared_ptr<T>> : public PointerHashes<T> {};
 
 template<typename T> struct DefaultHash<std::reference_wrapper<T>> {
   uint64_t operator()(const std::reference_wrapper<T> &value) const
@@ -270,7 +268,7 @@ template<typename T> struct DefaultHash<std::reference_wrapper<T>> {
 template<typename T1, typename T2> struct DefaultHash<std::pair<T1, T2>> {
   uint64_t operator()(const std::pair<T1, T2> &value) const
   {
-    return get_default_hash_2(value.first, value.second);
+    return get_default_hash(value.first, value.second);
   }
 };
 

@@ -73,9 +73,7 @@ class CONSOLE_MT_language(Menu):
         languages.sort()
 
         for language in languages:
-            layout.operator("console.language",
-                            text=language.title(),
-                            translate=False).language = language
+            layout.operator("console.language", text=language.title(), translate=False).language = language
 
 
 class CONSOLE_MT_console(Menu):
@@ -142,11 +140,6 @@ class CONSOLE_MT_context_menu(Menu):
         layout.separator()
 
         layout.operator("console.autocomplete", text="Autocomplete")
-
-
-def add_scrollback(text, text_type):
-    for l in text.split("\n"):
-        bpy.ops.console.scrollback_append(text=l.expandtabs(4), type=text_type)
 
 
 classes = (

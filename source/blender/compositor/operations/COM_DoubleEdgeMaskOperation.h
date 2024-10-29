@@ -4,57 +4,44 @@
 
 #pragma once
 
+#include "BLI_span.hh"
+
 #include "COM_MultiThreadedOperation.h"
 
 namespace blender::compositor {
 
 class DoubleEdgeMaskOperation : public NodeOperation {
  private:
-  /**
-   * Cached reference to the input_program
-   */
-  SocketReader *input_outer_mask_;
-  SocketReader *input_inner_mask_;
-  bool adjacent_only_;
-  bool keep_inside_;
-
-  /* TODO(manzanilla): To be removed with tiled implementation. */
-  float *cached_instance_;
+  bool include_all_inner_edges_;
+  bool include_edges_of_image_;
 
   bool is_output_rendered_;
 
  public:
   DoubleEdgeMaskOperation();
 
-  void do_double_edge_mask(float *imask, float *omask, float *res);
-  /**
-   * The inner loop of this operation.
-   */
-  void execute_pixel(float output[4], int x, int y, void *data) override;
+  void compute_boundary(const float *inner_mask,
+                        const float *outer_mask,
+                        MutableSpan<int2> inner_boundary,
+                        MutableSpan<int2> outer_boundary);
 
-  /**
-   * Initialize the execution
-   */
-  void init_execution() override;
+  void compute_gradient(const float *inner_mask_buffer,
+                        const float *outer_mask_buffer,
+                        MutableSpan<int2> flooded_inner_boundary,
+                        MutableSpan<int2> flooded_outer_boundary,
+                        float *output_mask);
 
-  /**
-   * Deinitialize the execution
-   */
-  void deinit_execution() override;
+  void compute_double_edge_mask(const float *inner_mask,
+                                const float *outer_mask,
+                                float *output_mask);
 
-  void *initialize_tile_data(rcti *rect) override;
-
-  bool determine_depending_area_of_interest(rcti *input,
-                                            ReadBufferOperation *read_operation,
-                                            rcti *output) override;
-
-  void set_adjecent_only(bool adjacent_only)
+  void set_include_all_inner_edges(bool include_all_inner_edges)
   {
-    adjacent_only_ = adjacent_only;
+    include_all_inner_edges_ = include_all_inner_edges;
   }
-  void set_keep_inside(bool keep_inside)
+  void set_include_edges_of_image(bool include_edges_of_image)
   {
-    keep_inside_ = keep_inside;
+    include_edges_of_image_ = include_edges_of_image;
   }
 
   void get_area_of_interest(int input_idx, const rcti &output_area, rcti &r_input_area) override;

@@ -17,7 +17,7 @@
 #include "COM_node_operation.hh"
 #include "COM_utilities.hh"
 
-#include "GPU_shader.h"
+#include "GPU_shader.hh"
 
 #include "node_composite_util.hh"
 
@@ -64,6 +64,17 @@ class ZCombineOperation : public NodeOperation {
 
   void execute() override
   {
+    /* Not yet supported on CPU. */
+    if (!context().use_gpu()) {
+      for (const bNodeSocket *output : this->node()->output_sockets()) {
+        Result &output_result = get_result(output->identifier);
+        if (output_result.should_compute()) {
+          output_result.allocate_invalid();
+        }
+      }
+      return;
+    }
+
     if (compute_domain().size == int2(1)) {
       execute_single_value();
     }
@@ -192,29 +203,24 @@ class ZCombineOperation : public NodeOperation {
     GPUShader *shader = context().get_shader("compositor_z_combine_compute_mask");
     GPU_shader_bind(shader);
 
-    GPU_shader_uniform_1b(shader, "use_alpha", use_alpha());
-
-    const Result &first = get_input("Image");
-    first.bind_as_texture(shader, "first_tx");
     const Result &first_z = get_input("Z");
     first_z.bind_as_texture(shader, "first_z_tx");
     const Result &second_z = get_input("Z_001");
     second_z.bind_as_texture(shader, "second_z_tx");
 
     const Domain domain = compute_domain();
-    Result mask = context().create_temporary_result(ResultType::Float);
+    Result mask = context().create_result(ResultType::Float);
     mask.allocate_texture(domain);
     mask.bind_as_image(shader, "mask_img");
 
     compute_dispatch_threads_at_least(shader, domain.size);
 
-    first.unbind_as_texture();
     first_z.unbind_as_texture();
     second_z.unbind_as_texture();
     mask.unbind_as_image();
     GPU_shader_unbind();
 
-    Result anti_aliased_mask = context().create_temporary_result(ResultType::Float);
+    Result anti_aliased_mask = context().create_result(ResultType::Float);
     smaa(context(), mask, anti_aliased_mask);
     mask.release();
 
@@ -243,12 +249,12 @@ void register_node_type_cmp_zcombine()
 {
   namespace file_ns = blender::nodes::node_composite_zcombine_cc;
 
-  static bNodeType ntype;
+  static blender::bke::bNodeType ntype;
 
   cmp_node_type_base(&ntype, CMP_NODE_ZCOMBINE, "Z Combine", NODE_CLASS_OP_COLOR);
   ntype.declare = file_ns::cmp_node_zcombine_declare;
   ntype.draw_buttons = file_ns::node_composit_buts_zcombine;
   ntype.get_compositor_operation = file_ns::get_compositor_operation;
 
-  nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }

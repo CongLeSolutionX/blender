@@ -17,32 +17,29 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_blenlib.h"
 #include "BLI_math_vector.h"
 #include "BLI_utildefines.h"
 
-#include "BLT_translation.h"
+#include "BLT_translation.hh"
 
 #include "DNA_key_types.h"
 #include "DNA_lattice_types.h"
 #include "DNA_mesh_types.h"
-#include "DNA_meshdata_types.h"
 #include "DNA_object_types.h"
 
 #include "BKE_context.hh"
-#include "BKE_crazyspace.hh"
-#include "BKE_key.h"
+#include "BKE_key.hh"
 #include "BKE_lattice.hh"
-#include "BKE_main.h"
 #include "BKE_object.hh"
-#include "BKE_report.h"
+#include "BKE_report.hh"
 
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_build.hh"
-#include "DEG_depsgraph_query.hh"
 
 #include "BLI_sys_types.h" /* for intptr_t support */
 
+#include "ED_curve.hh"
+#include "ED_lattice.hh"
 #include "ED_mesh.hh"
 #include "ED_object.hh"
 
@@ -52,7 +49,85 @@
 #include "WM_api.hh"
 #include "WM_types.hh"
 
-#include "object_intern.h"
+#include "object_intern.hh"
+
+namespace blender::ed::object {
+
+/* -------------------------------------------------------------------- */
+/** \name Shape Key Lock Checks
+ * \{ */
+
+bool shape_key_report_if_locked(const Object *obedit, ReportList *reports)
+{
+  KeyBlock *key_block;
+
+  switch (obedit->type) {
+    case OB_MESH:
+      key_block = ED_mesh_get_edit_shape_key(static_cast<Mesh *>(obedit->data));
+      break;
+    case OB_SURF:
+    case OB_CURVES_LEGACY:
+      key_block = ED_curve_get_edit_shape_key(static_cast<Curve *>(obedit->data));
+      break;
+    case OB_LATTICE:
+      key_block = ED_lattice_get_edit_shape_key(static_cast<Lattice *>(obedit->data));
+      break;
+    default:
+      return false;
+  }
+
+  if (key_block && (key_block->flag & KEYBLOCK_LOCKED_SHAPE) != 0) {
+    if (reports) {
+      BKE_reportf(reports, RPT_ERROR, "The active shape key of %s is locked", obedit->id.name + 2);
+    }
+    return true;
+  }
+
+  return false;
+}
+
+bool shape_key_report_if_active_locked(Object *ob, ReportList *reports)
+{
+  const KeyBlock *kb = BKE_keyblock_from_object(ob);
+
+  if (kb && (kb->flag & KEYBLOCK_LOCKED_SHAPE) != 0) {
+    if (reports) {
+      BKE_reportf(reports, RPT_ERROR, "The active shape key of %s is locked", ob->id.name + 2);
+    }
+    return true;
+  }
+
+  return false;
+}
+
+static bool object_is_any_shape_key_locked(Object *ob)
+{
+  const Key *key = BKE_key_from_object(ob);
+
+  if (key) {
+    LISTBASE_FOREACH (const KeyBlock *, kb, &key->block) {
+      if (kb->flag & KEYBLOCK_LOCKED_SHAPE) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+bool shape_key_report_if_any_locked(Object *ob, ReportList *reports)
+{
+  if (object_is_any_shape_key_locked(ob)) {
+    if (reports) {
+      BKE_reportf(reports, RPT_ERROR, "The object %s has locked shape keys", ob->id.name + 2);
+    }
+    return true;
+  }
+
+  return false;
+}
+
+/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Add Shape Key Function
@@ -115,14 +190,14 @@ static bool object_shape_key_mirror(
         MEM_callocN(sizeof(char) * kb->totelem, "shape_key_mirror"));
 
     if (ob->type == OB_MESH) {
-      Mesh *me = static_cast<Mesh *>(ob->data);
+      Mesh *mesh = static_cast<Mesh *>(ob->data);
       int i1, i2;
       float *fp1, *fp2;
       float tvec[3];
 
       ED_mesh_mirror_spatial_table_begin(ob, nullptr, nullptr);
 
-      for (i1 = 0; i1 < me->totvert; i1++) {
+      for (i1 = 0; i1 < mesh->verts_num; i1++) {
         i2 = mesh_get_x_mirror_vert(ob, nullptr, i1, use_topology);
         if (i2 == i1) {
           fp1 = ((float *)kb->data) + i1 * 3;
@@ -154,7 +229,7 @@ static bool object_shape_key_mirror(
       ED_mesh_mirror_spatial_table_end(ob);
     }
     else if (ob->type == OB_LATTICE) {
-      Lattice *lt = static_cast<Lattice *>(ob->data);
+      const Lattice *lt = static_cast<const Lattice *>(ob->data);
       int i1, i2;
       float *fp1, *fp2;
       int u, v, w;
@@ -218,23 +293,32 @@ static bool object_shape_key_mirror(
 
 static bool shape_key_poll(bContext *C)
 {
-  Object *ob = ED_object_context(C);
+  Object *ob = context_object(C);
   ID *data = static_cast<ID *>((ob) ? ob->data : nullptr);
 
-  return (ob != nullptr && !ID_IS_LINKED(ob) && !ID_IS_OVERRIDE_LIBRARY(ob) && data != nullptr &&
-          !ID_IS_LINKED(data) && !ID_IS_OVERRIDE_LIBRARY(data));
+  return (ob != nullptr && ID_IS_EDITABLE(ob) && !ID_IS_OVERRIDE_LIBRARY(ob) && data != nullptr &&
+          ID_IS_EDITABLE(data) && !ID_IS_OVERRIDE_LIBRARY(data));
+}
+
+static bool shape_key_exists_poll(bContext *C)
+{
+  Object *ob = context_object(C);
+
+  return (shape_key_poll(C) &&
+          /* check a keyblock exists */
+          (BKE_keyblock_from_object(ob) != nullptr));
 }
 
 static bool shape_key_mode_poll(bContext *C)
 {
-  Object *ob = ED_object_context(C);
+  Object *ob = context_object(C);
 
   return (shape_key_poll(C) && ob->mode != OB_MODE_EDIT);
 }
 
 static bool shape_key_mode_exists_poll(bContext *C)
 {
-  Object *ob = ED_object_context(C);
+  Object *ob = context_object(C);
 
   return (shape_key_mode_poll(C) &&
           /* check a keyblock exists */
@@ -244,7 +328,7 @@ static bool shape_key_mode_exists_poll(bContext *C)
 static bool shape_key_move_poll(bContext *C)
 {
   /* Same as shape_key_mode_exists_poll above, but ensure we have at least two shapes! */
-  Object *ob = ED_object_context(C);
+  Object *ob = context_object(C);
   Key *key = BKE_key_from_object(ob);
 
   return (shape_key_mode_poll(C) && key != nullptr && key->totkey > 1);
@@ -258,7 +342,7 @@ static bool shape_key_move_poll(bContext *C)
 
 static int shape_key_add_exec(bContext *C, wmOperator *op)
 {
-  Object *ob = ED_object_context(C);
+  Object *ob = context_object(C);
   const bool from_mix = RNA_boolean_get(op->ptr, "from_mix");
 
   ED_object_shape_key_add(C, ob, from_mix);
@@ -300,10 +384,14 @@ void OBJECT_OT_shape_key_add(wmOperatorType *ot)
 static int shape_key_remove_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
-  Object *ob = ED_object_context(C);
+  Object *ob = context_object(C);
   bool changed = false;
 
   if (RNA_boolean_get(op->ptr, "all")) {
+    if (shape_key_report_if_any_locked(ob, op->reports)) {
+      return OPERATOR_CANCELLED;
+    }
+
     if (RNA_boolean_get(op->ptr, "apply_mix")) {
       float *arr = BKE_key_evaluate_object_ex(
           ob, nullptr, nullptr, 0, static_cast<ID *>(ob->data));
@@ -312,6 +400,10 @@ static int shape_key_remove_exec(bContext *C, wmOperator *op)
     changed = BKE_object_shapekey_free(bmain, ob);
   }
   else {
+    if (shape_key_report_if_active_locked(ob, op->reports)) {
+      return OPERATOR_CANCELLED;
+    }
+
     changed = object_shapekey_remove(bmain, ob);
   }
 
@@ -384,16 +476,15 @@ void OBJECT_OT_shape_key_remove(wmOperatorType *ot)
 
 static int shape_key_clear_exec(bContext *C, wmOperator * /*op*/)
 {
-  Object *ob = ED_object_context(C);
+  Object *ob = context_object(C);
   Key *key = BKE_key_from_object(ob);
-  KeyBlock *kb = BKE_keyblock_from_object(ob);
 
-  if (!key || !kb) {
+  if (!key || BLI_listbase_is_empty(&key->block)) {
     return OPERATOR_CANCELLED;
   }
 
   LISTBASE_FOREACH (KeyBlock *, kb, &key->block) {
-    kb->curval = 0.0f;
+    kb->curval = clamp_f(0.0f, kb->slidermin, kb->slidermax);
   }
 
   DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
@@ -406,7 +497,8 @@ void OBJECT_OT_shape_key_clear(wmOperatorType *ot)
 {
   /* identifiers */
   ot->name = "Clear Shape Keys";
-  ot->description = "Clear weights for all shape keys";
+  ot->description =
+      "Reset the weights of all shape keys to 0 or to the closest value respecting the limits";
   ot->idname = "OBJECT_OT_shape_key_clear";
 
   /* api callbacks */
@@ -420,12 +512,11 @@ void OBJECT_OT_shape_key_clear(wmOperatorType *ot)
 /* starting point and step size could be optional */
 static int shape_key_retime_exec(bContext *C, wmOperator * /*op*/)
 {
-  Object *ob = ED_object_context(C);
+  Object *ob = context_object(C);
   Key *key = BKE_key_from_object(ob);
-  KeyBlock *kb = BKE_keyblock_from_object(ob);
   float cfra = 0.0f;
 
-  if (!key || !kb) {
+  if (!key || BLI_listbase_is_empty(&key->block)) {
     return OPERATOR_CANCELLED;
   }
 
@@ -463,9 +554,13 @@ void OBJECT_OT_shape_key_retime(wmOperatorType *ot)
 
 static int shape_key_mirror_exec(bContext *C, wmOperator *op)
 {
-  Object *ob = ED_object_context(C);
+  Object *ob = context_object(C);
   int totmirr = 0, totfail = 0;
   bool use_topology = RNA_boolean_get(op->ptr, "use_topology");
+
+  if (shape_key_report_if_active_locked(ob, op->reports)) {
+    return OPERATOR_CANCELLED;
+  }
 
   if (!object_shape_key_mirror(C, ob, &totmirr, &totfail, use_topology)) {
     return OPERATOR_CANCELLED;
@@ -514,7 +609,7 @@ enum {
 
 static int shape_key_move_exec(bContext *C, wmOperator *op)
 {
-  Object *ob = ED_object_context(C);
+  Object *ob = context_object(C);
 
   Key *key = BKE_key_from_object(ob);
   const int type = RNA_enum_get(op->ptr, "type");
@@ -572,3 +667,91 @@ void OBJECT_OT_shape_key_move(wmOperatorType *ot)
 }
 
 /** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Shape Key Lock (Unlock) Operator
+ * \{ */
+
+enum {
+  SHAPE_KEY_LOCK,
+  SHAPE_KEY_UNLOCK,
+};
+
+static int shape_key_lock_exec(bContext *C, wmOperator *op)
+{
+  Object *ob = CTX_data_active_object(C);
+  const int action = RNA_enum_get(op->ptr, "action");
+  const Key *keys = BKE_key_from_object(ob);
+
+  if (!keys || BLI_listbase_is_empty(&keys->block)) {
+    return OPERATOR_CANCELLED;
+  }
+
+  LISTBASE_FOREACH (KeyBlock *, kb, &keys->block) {
+    switch (action) {
+      case SHAPE_KEY_LOCK:
+        kb->flag |= KEYBLOCK_LOCKED_SHAPE;
+        break;
+      case SHAPE_KEY_UNLOCK:
+        kb->flag &= ~KEYBLOCK_LOCKED_SHAPE;
+        break;
+      default:
+        BLI_assert(0);
+    }
+  }
+
+  WM_event_add_notifier(C, NC_OBJECT | ND_DRAW, ob);
+
+  return OPERATOR_FINISHED;
+}
+
+static std::string shape_key_lock_get_description(bContext * /*C*/,
+                                                  wmOperatorType * /*op*/,
+                                                  PointerRNA *ptr)
+{
+  const int action = RNA_enum_get(ptr, "action");
+
+  switch (action) {
+    case SHAPE_KEY_LOCK:
+      return TIP_("Lock all shape keys of the active object");
+      break;
+    case SHAPE_KEY_UNLOCK:
+      return TIP_("Unlock all shape keys of the active object");
+      break;
+    default:
+      return "";
+  }
+}
+
+void OBJECT_OT_shape_key_lock(wmOperatorType *ot)
+{
+  static const EnumPropertyItem shape_key_lock_actions[] = {
+      {SHAPE_KEY_LOCK, "LOCK", 0, "Lock", "Lock all shape keys"},
+      {SHAPE_KEY_UNLOCK, "UNLOCK", 0, "Unlock", "Unlock all shape keys"},
+      {0, nullptr, 0, nullptr, nullptr},
+  };
+
+  /* identifiers */
+  ot->name = "Change the Lock On Shape Keys";
+  ot->idname = "OBJECT_OT_shape_key_lock";
+  ot->description = "Change the lock state of all shape keys of active object";
+
+  /* api callbacks */
+  ot->poll = shape_key_exists_poll;
+  ot->exec = shape_key_lock_exec;
+  ot->get_description = shape_key_lock_get_description;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+  RNA_def_enum(ot->srna,
+               "action",
+               shape_key_lock_actions,
+               SHAPE_KEY_LOCK,
+               "Action",
+               "Lock action to execute on vertex groups");
+}
+
+/** \} */
+
+}  // namespace blender::ed::object

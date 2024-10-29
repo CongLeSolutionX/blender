@@ -5,7 +5,7 @@
 
 """
 Call as follows:
-python collada_mesh_simple.py --blender PATH_TO_BLENDER_EXE --testdir PATH_TO_SVN/lib/tests/collada/mesh
+python collada_mesh_simple.py --blender PATH_TO_BLENDER_EXE --testdir tests/data/collada/mesh
 """
 
 import sys
@@ -107,7 +107,7 @@ class MeshExportTest(AbstractColladaTest):
         outfile = tempdir / Path("%s_out.dae" % test)
 
         bpy.ops.wm.collada_export(
-            filepath="%s" % str(outfile),
+            filepath=str(outfile),
             check_existing=True,
             filemode=8,
             display_type="DEFAULT",

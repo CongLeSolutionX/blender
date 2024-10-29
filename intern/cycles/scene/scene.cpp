@@ -208,6 +208,7 @@ void Scene::device_update(Device *device_, Progress &progress)
   if (film->update_lightgroups(this)) {
     light_manager->tag_update(this, ccl::LightManager::LIGHT_MODIFIED);
     object_manager->tag_update(this, ccl::ObjectManager::OBJECT_MODIFIED);
+    background->tag_modified();
   }
   if (film->exposure_is_modified()) {
     integrator->tag_modified();
@@ -545,7 +546,8 @@ void Scene::update_kernel_features()
   }
 
   dscene.data.integrator.use_caustics = false;
-  if (has_caustics_caster && has_caustics_receiver && has_caustics_light) {
+  if (device->info.has_mnee && has_caustics_caster && has_caustics_receiver && has_caustics_light)
+  {
     dscene.data.integrator.use_caustics = true;
     kernel_features |= KERNEL_FEATURE_MNEE;
   }

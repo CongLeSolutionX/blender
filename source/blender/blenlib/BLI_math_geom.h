@@ -57,13 +57,19 @@ float area_poly_signed_v2(const float verts[][2], unsigned int nr);
 float cotangent_tri_weight_v3(const float v1[3], const float v2[3], const float v3[3]);
 
 void cross_tri_v3(float n[3], const float v1[3], const float v2[3], const float v3[3]);
+/**
+ * Scalar cross product of a 2D triangle.
+ *
+ * - Equivalent to `area * 2`.
+ * - Useful for checking polygon winding (a negative value is clockwise).
+ */
 MINLINE float cross_tri_v2(const float v1[2], const float v2[2], const float v3[2]);
 void cross_poly_v3(float n[3], const float verts[][3], unsigned int nr);
 /**
- * Scalar cross product of a 2d polygon.
+ * Scalar cross product of a 2D polygon.
  *
- * - equivalent to `area * 2`
- * - useful for checking polygon winding (a positive value is clockwise).
+ * - Equivalent to `area * 2`.
+ * - Useful for checking polygon winding (a negative value is clockwise).
  */
 float cross_poly_v2(const float verts[][2], unsigned int nr);
 
@@ -128,7 +134,10 @@ float volume_tri_tetrahedron_signed_v3(const float v1[3], const float v2[3], con
  * (depends on face winding)
  * Copied from BM_edge_is_convex().
  */
-bool is_edge_convex_v3(const float v1[3], const float v2[3], const float v3[3], const float v4[3]);
+bool is_edge_convex_v3(const float v1[3],
+                       const float v2[3],
+                       const float f1_no[3],
+                       const float f2_no[3]);
 /**
  * Evaluate if entire quad is a proper convex quad
  */
@@ -250,9 +259,8 @@ struct DistRayAABB_Precalc {
   float ray_direction[3];
   float ray_inv_dir[3];
 };
-void dist_squared_ray_to_aabb_v3_precalc(struct DistRayAABB_Precalc *neasrest_precalc,
-                                         const float ray_origin[3],
-                                         const float ray_direction[3]);
+struct DistRayAABB_Precalc dist_squared_ray_to_aabb_v3_precalc(const float ray_origin[3],
+                                                               const float ray_direction[3]);
 /**
  * Returns the distance from a ray to a bound-box (projected on ray)
  */
@@ -352,6 +360,18 @@ float closest_to_line_segment_v3(float r_close[3],
                                  const float p[3],
                                  const float l1[3],
                                  const float l2[3]);
+
+/**
+ * Finds the points where a ray and a segment are closest to each other.
+ *
+ * \return A value in [0, 1] that corresponds to the position of #r_close on the line segment.
+ */
+float closest_ray_to_segment_v3(const float ray_origin[3],
+                                const float ray_direction[3],
+                                const float v0[3],
+                                const float v1[3],
+                                float r_close[3]);
+
 void closest_to_plane_normalized_v3(float r_close[3], const float plane[4], const float pt[3]);
 /**
  * Find the closest point on a plane.
@@ -460,9 +480,9 @@ int isect_seg_seg_v2_point_ex(const float v0[2],
                               const float v2[2],
                               const float v3[2],
                               float endpoint_bias,
-                              float vi[2]);
+                              float r_vi[2]);
 int isect_seg_seg_v2_point(
-    const float v0[2], const float v1[2], const float v2[2], const float v3[2], float vi[2]);
+    const float v0[2], const float v1[2], const float v2[2], const float v3[2], float r_vi[2]);
 bool isect_seg_seg_v2_simple(const float v1[2],
                              const float v2[2],
                              const float v3[2],
@@ -526,8 +546,8 @@ int isect_line_line_epsilon_v3(const float v1[3],
                                const float v2[3],
                                const float v3[3],
                                const float v4[3],
-                               float i1[3],
-                               float i2[3],
+                               float r_i1[3],
+                               float r_i2[3],
                                float epsilon);
 int isect_line_line_v3(const float v1[3],
                        const float v2[3],
@@ -571,6 +591,12 @@ bool isect_ray_ray_v3(const float ray_origin_a[3],
  *
  * \note #line_plane_factor_v3() shares logic.
  */
+bool isect_ray_plane_v3_factor(const float ray_origin[3],
+                               const float ray_direction[3],
+                               const float plane_co[3],
+                               const float plane_no[3],
+                               float *r_lambda);
+
 bool isect_ray_plane_v3(const float ray_origin[3],
                         const float ray_direction[3],
                         const float plane[4],
@@ -580,7 +606,7 @@ bool isect_ray_plane_v3(const float ray_origin[3],
 /**
  * Check if a point is behind all planes.
  */
-bool isect_point_planes_v3(float (*planes)[4], int totplane, const float p[3]);
+bool isect_point_planes_v3(const float (*planes)[4], int totplane, const float p[3]);
 /**
  * Check if a point is in front all planes.
  * Same as isect_point_planes_v3 but with planes facing the opposite direction.
@@ -735,12 +761,12 @@ bool isect_tri_tri_v3(const float t_a0[3],
                       float r_i1[3],
                       float r_i2[3]);
 
-bool isect_tri_tri_v2(const float p1[2],
-                      const float q1[2],
-                      const float r1[2],
-                      const float p2[2],
-                      const float q2[2],
-                      const float r2[2]);
+bool isect_tri_tri_v2(const float t_a0[2],
+                      const float t_a1[2],
+                      const float t_a2[2],
+                      const float t_b0[2],
+                      const float t_b1[2],
+                      const float t_b2[2]);
 
 /**
  * Water-tight ray-cast (requires pre-calculation).
@@ -760,7 +786,7 @@ bool isect_ray_tri_watertight_v3(const float ray_origin[3],
                                  const float v0[3],
                                  const float v1[3],
                                  const float v2[3],
-                                 float *r_dist,
+                                 float *r_lambda,
                                  float r_uv[2]);
 /**
  * Slower version which calculates #IsectRayPrecalc each time.
@@ -851,7 +877,7 @@ void isect_ray_aabb_v3_precalc(struct IsectRayAABB_Precalc *data,
 bool isect_ray_aabb_v3(const struct IsectRayAABB_Precalc *data,
                        const float bb_min[3],
                        const float bb_max[3],
-                       float *tmin);
+                       float *r_tmin);
 /**
  * Test a bounding box (AABB) for ray intersection.
  * Assumes the ray is already local to the boundbox space.
@@ -1121,7 +1147,7 @@ void projmat_dimensions(const float winmat[4][4],
                         float *r_top,
                         float *r_near,
                         float *r_far);
-void projmat_dimensions_db(const float winmat[4][4],
+void projmat_dimensions_db(const float winmat_fl[4][4],
                            double *r_left,
                            double *r_right,
                            double *r_bottom,

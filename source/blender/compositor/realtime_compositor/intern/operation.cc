@@ -39,6 +39,8 @@ void Operation::evaluate()
   release_inputs();
 
   release_unneeded_results();
+
+  context().evaluate_operation_post();
 }
 
 Result &Operation::get_result(StringRef identifier)
@@ -49,6 +51,13 @@ Result &Operation::get_result(StringRef identifier)
 void Operation::map_input_to_result(StringRef identifier, Result *result)
 {
   results_mapped_to_inputs_.add_new(identifier, result);
+}
+
+void Operation::free_results()
+{
+  for (Result &result : results_.values()) {
+    result.free();
+  }
 }
 
 Domain Operation::compute_domain()

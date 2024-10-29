@@ -18,8 +18,8 @@
 #include "BLI_hash.h"
 #include "BLI_utildefines.h"
 
-#include "GPU_shader.h"
-#include "GPU_vertex_format.h" /* GPU_VERT_ATTR_MAX_LEN */
+#include "GPU_shader.hh"
+#include "GPU_vertex_format.hh" /* GPU_VERT_ATTR_MAX_LEN */
 #include "gpu_shader_create_info.hh"
 
 namespace blender::gpu {
@@ -48,7 +48,7 @@ class ShaderInterface {
   friend shader::ShaderCreateInfo;
   /* TODO(fclem): should be protected. */
  public:
-  /** Flat array. In this order: Attributes, Ubos, Uniforms. */
+  /** Flat array. In this order: Attributes, Ubos, Uniforms, SSBOs, Constants. */
   ShaderInput *inputs_ = nullptr;
   /** Buffer containing all inputs names separated by '\0'. */
   char *name_buffer_ = nullptr;
@@ -57,12 +57,15 @@ class ShaderInterface {
   uint ubo_len_ = 0;
   uint uniform_len_ = 0;
   uint ssbo_len_ = 0;
+  uint constant_len_ = 0;
   /** Enabled bind-points that needs to be fed with data. */
   uint16_t enabled_attr_mask_ = 0;
   uint16_t enabled_ubo_mask_ = 0;
   uint8_t enabled_ima_mask_ = 0;
   uint64_t enabled_tex_mask_ = 0;
   uint16_t enabled_ssbo_mask_ = 0;
+  /* Bitmask to apply to enabled_ssbo_mask_ to get attributes that are sourced from SSBOs. */
+  uint16_t ssbo_attr_mask_ = 0;
   /** Location of builtin uniforms. Fast access, no lookup needed. */
   int32_t builtins_[GPU_NUM_UNIFORMS];
   int32_t builtin_blocks_[GPU_NUM_UNIFORM_BLOCKS];
@@ -115,6 +118,12 @@ class ShaderInterface {
   inline const ShaderInput *ssbo_get(const int binding) const
   {
     return input_lookup(inputs_ + attr_len_ + ubo_len_ + uniform_len_, ssbo_len_, binding);
+  }
+
+  inline const ShaderInput *constant_get(const char *name) const
+  {
+    return input_lookup(
+        inputs_ + attr_len_ + ubo_len_ + uniform_len_ + ssbo_len_, constant_len_, name);
   }
 
   inline const char *input_name_get(const ShaderInput *input) const

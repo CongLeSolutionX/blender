@@ -123,35 +123,32 @@ class TIME_MT_view(Menu):
         scene = context.scene
         st = context.space_data
 
-        layout.menu("INFO_MT_area")
-
+        layout.prop(st, "show_region_hud")
+        layout.prop(st, "show_region_channels")
         layout.separator()
 
         # NOTE: "action" now, since timeline is in the dopesheet editor, instead of as own editor
-        layout.operator("action.view_frame")
         layout.operator("action.view_all")
-
-        layout.separator()
-
-        layout.menu("TIME_MT_cache")
-
-        layout.separator()
-
-        layout.prop(st.dopesheet, "show_only_errors")
-        layout.prop(scene, "show_keys_from_selected_only")
-
+        if context.scene.use_preview_range:
+            layout.operator("anim.scene_range_frame", text="Frame Preview Range")
+        else:
+            layout.operator("anim.scene_range_frame", text="Frame Scene Range")
+        layout.operator("action.view_frame")
         layout.separator()
 
         layout.prop(st, "show_markers")
-
-        layout.separator()
-
-        layout.prop(st, "show_locked_time")
         layout.prop(st, "show_seconds")
-
+        layout.prop(st, "show_locked_time")
         layout.separator()
 
-        layout.prop(st, "show_region_hud")
+        layout.prop(scene, "show_keys_from_selected_only")
+        layout.prop(st.dopesheet, "show_only_errors")
+        layout.separator()
+
+        layout.menu("TIME_MT_cache")
+        layout.separator()
+
+        layout.menu("INFO_MT_area")
 
 
 class TIME_MT_cache(Menu):
@@ -197,7 +194,7 @@ def marker_menu_generic(layout, context):
 
     layout.separator()
 
-    layout.menu('NLA_MT_marker_select')
+    layout.menu("NLA_MT_marker_select")
 
     layout.separator()
 
@@ -235,7 +232,7 @@ class TimelinePanelButtons:
 class TIME_PT_playback(TimelinePanelButtons, Panel):
     bl_label = "Playback"
     bl_region_type = 'HEADER'
-    bl_ui_units_x = 11
+    bl_ui_units_x = 13
 
     def draw(self, context):
         layout = self.layout
@@ -248,7 +245,7 @@ class TIME_PT_playback(TimelinePanelButtons, Panel):
         layout.prop(scene, "sync_mode", text="Sync")
         col = layout.column(heading="Audio")
         col.prop(scene, "use_audio_scrub", text="Scrubbing")
-        col.prop(scene, "use_audio", text="Mute")
+        col.prop(scene, "use_audio")
 
         col = layout.column(heading="Playback")
         col.prop(scene, "lock_frame_selection_to_range", text="Limit to Frame Range")
@@ -259,7 +256,7 @@ class TIME_PT_playback(TimelinePanelButtons, Panel):
         col.prop(screen, "use_play_3d_editors", text="3D Viewport")
         col.prop(screen, "use_play_animation_editors", text="Animation Editors")
         col.prop(screen, "use_play_image_editors", text="Image Editor")
-        col.prop(screen, "use_play_properties_editors", text="Properties Editor")
+        col.prop(screen, "use_play_properties_editors", text="Properties and Sidebars")
         col.prop(screen, "use_play_clip_editors", text="Movie Clip Editor")
         col.prop(screen, "use_play_node_editors", text="Node Editors")
         col.prop(screen, "use_play_sequence_editors", text="Video Sequencer")

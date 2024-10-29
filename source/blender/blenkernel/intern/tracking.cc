@@ -36,24 +36,27 @@
 #include "BLI_threads.h"
 #include "BLI_utildefines.h"
 
-#include "BLT_translation.h"
+#include "BLT_translation.hh"
 
-#include "BKE_fcurve.h"
-#include "BKE_layer.h"
-#include "BKE_lib_id.h"
+#include "BKE_fcurve.hh"
+#include "BKE_layer.hh"
+#include "BKE_lib_id.hh"
 #include "BKE_movieclip.h"
 #include "BKE_object.hh"
-#include "BKE_scene.h"
+#include "BKE_scene.hh"
 #include "BKE_tracking.h"
 
-#include "IMB_imbuf.h"
-#include "IMB_imbuf_types.h"
+#include "IMB_imbuf.hh"
+#include "IMB_imbuf_types.hh"
 
 #include "RNA_access.hh"
-#include "RNA_prototypes.h"
+#include "RNA_prototypes.hh"
 
 #include "libmv-capi.h"
 #include "tracking_private.h"
+
+using blender::Array;
+using blender::int2;
 
 struct MovieDistortion {
   libmv_CameraIntrinsics *intrinsics;
@@ -364,7 +367,7 @@ void BKE_tracking_settings_init(MovieTracking *tracking)
   BKE_tracking_object_add(tracking, DATA_("Camera"));
 }
 
-void BKE_tracking_get_camera_object_matrix(Object *camera_object, float mat[4][4])
+void BKE_tracking_get_camera_object_matrix(const Object *camera_object, float mat[4][4])
 {
   BLI_assert(camera_object != nullptr);
   /* NOTE: Construct matrix from scratch rather than using obmat because the camera object here
@@ -500,7 +503,7 @@ MovieTrackingTrack *BKE_tracking_track_add_empty(MovieTracking *tracking, ListBa
   const MovieTrackingSettings *settings = &tracking->settings;
 
   MovieTrackingTrack *track = MEM_cnew<MovieTrackingTrack>("add_marker_exec track");
-  STRNCPY(track->name, "Track");
+  STRNCPY(track->name, CTX_DATA_(BLT_I18NCONTEXT_ID_MOVIECLIP, "Track"));
 
   /* Fill track's settings from default settings. */
   track->motion_model = settings->default_motion_model;
@@ -1115,23 +1118,14 @@ static void track_mask_gpencil_layer_rasterize(const int frame_width,
     while (stroke) {
       const bGPDspoint *stroke_points = stroke->points;
       if (stroke->flag & GP_STROKE_2DSPACE) {
-        int *mask_points, *point;
-        point = mask_points = MEM_cnew_array<int>(2 * stroke->totpoints,
-                                                  "track mask rasterization points");
-        for (int i = 0; i < stroke->totpoints; i++, point += 2) {
-          point[0] = stroke_points[i].x * frame_width - region_min[0];
-          point[1] = stroke_points[i].y * frame_height - region_min[1];
+        Array<int2> mask_points(stroke->totpoints);
+        for (const int i : mask_points.index_range()) {
+          mask_points[i][0] = stroke_points[i].x * frame_width - region_min[0];
+          mask_points[i][1] = stroke_points[i].y * frame_height - region_min[1];
         }
         /* TODO: add an option to control whether AA is enabled or not */
-        BLI_bitmap_draw_2d_poly_v2i_n(0,
-                                      0,
-                                      mask_width,
-                                      mask_height,
-                                      (const int(*)[2])mask_points,
-                                      stroke->totpoints,
-                                      track_mask_set_pixel_cb,
-                                      &data);
-        MEM_freeN(mask_points);
+        BLI_bitmap_draw_2d_poly_v2i_n(
+            0, 0, mask_width, mask_height, mask_points, track_mask_set_pixel_cb, &data);
       }
       stroke = stroke->next;
     }
@@ -1179,7 +1173,7 @@ float BKE_tracking_track_get_weight_for_marker(MovieClip *clip,
                                                MovieTrackingTrack *track,
                                                MovieTrackingMarker *marker)
 {
-  FCurve *weight_fcurve;
+  const FCurve *weight_fcurve;
   float weight = track->weight;
 
   weight_fcurve = id_data_find_fcurve(
@@ -1580,7 +1574,7 @@ MovieTrackingPlaneTrack *BKE_tracking_plane_track_add(MovieTracking *tracking,
   plane_track = MEM_cnew<MovieTrackingPlaneTrack>("new plane track");
 
   /* Use some default name. */
-  STRNCPY(plane_track->name, "Plane Track");
+  STRNCPY(plane_track->name, DATA_("Plane Track"));
 
   plane_track->image_opacity = 1.0f;
 
@@ -2164,7 +2158,7 @@ void BKE_tracking_camera_get_reconstructed_interpolate(MovieTracking * /*trackin
     return;
   }
 
-  if (cameras[a].framenr != framenr && a < reconstruction->camnr - 1) {
+  if ((a < reconstruction->camnr - 1) && (cameras[a].framenr != framenr)) {
     float t = (float(framenr) - cameras[a].framenr) /
               (cameras[a + 1].framenr - cameras[a].framenr);
     blend_m4_m4m4(mat, cameras[a].mat, cameras[a + 1].mat, t);
@@ -2237,22 +2231,22 @@ uint64_t BKE_tracking_camera_distortion_hash(const MovieTrackingCamera *camera)
   using namespace blender;
   switch (camera->distortion_model) {
     case TRACKING_DISTORTION_MODEL_POLYNOMIAL:
-      return get_default_hash_4(camera->distortion_model,
-                                float2(camera->pixel_aspect, camera->focal),
-                                float2(camera->principal_point),
-                                float3(camera->k1, camera->k2, camera->k3));
+      return get_default_hash(camera->distortion_model,
+                              float2(camera->pixel_aspect, camera->focal),
+                              float2(camera->principal_point),
+                              float3(camera->k1, camera->k2, camera->k3));
     case TRACKING_DISTORTION_MODEL_DIVISION:
-      return get_default_hash_4(camera->distortion_model,
-                                float2(camera->pixel_aspect, camera->focal),
-                                float2(camera->principal_point),
-                                float2(camera->division_k1, camera->division_k2));
+      return get_default_hash(camera->distortion_model,
+                              float2(camera->pixel_aspect, camera->focal),
+                              float2(camera->principal_point),
+                              float2(camera->division_k1, camera->division_k2));
     case TRACKING_DISTORTION_MODEL_NUKE:
-      return get_default_hash_4(camera->distortion_model,
-                                float2(camera->pixel_aspect, camera->focal),
-                                float2(camera->principal_point),
-                                float2(camera->nuke_k1, camera->nuke_k2));
+      return get_default_hash(camera->distortion_model,
+                              float2(camera->pixel_aspect, camera->focal),
+                              float2(camera->principal_point),
+                              float2(camera->nuke_k1, camera->nuke_k2));
     case TRACKING_DISTORTION_MODEL_BROWN:
-      return get_default_hash_4(
+      return get_default_hash(
           float2(camera->pixel_aspect, camera->focal),
           float2(camera->principal_point),
           float4(camera->brown_k1, camera->brown_k2, camera->brown_k3, camera->brown_k4),
@@ -2519,15 +2513,15 @@ ImBuf *BKE_tracking_distort_frame(MovieTracking *tracking,
 }
 
 void BKE_tracking_max_distortion_delta_across_bound(MovieTracking *tracking,
-                                                    int image_width,
-                                                    int image_height,
-                                                    rcti *rect,
-                                                    bool undistort,
-                                                    float delta[2])
+                                                    const int image_width,
+                                                    const int image_height,
+                                                    const rcti *rect,
+                                                    const bool undistort,
+                                                    float r_delta[2])
 {
   float pos[2], warped_pos[2];
   const int coord_delta = 5;
-  void (*apply_distortion)(MovieTracking * tracking,
+  void (*apply_distortion)(MovieTracking *tracking,
                            int image_width,
                            int image_height,
                            const float pos[2],
@@ -2540,7 +2534,7 @@ void BKE_tracking_max_distortion_delta_across_bound(MovieTracking *tracking,
     apply_distortion = BKE_tracking_distort_v2;
   }
 
-  delta[0] = delta[1] = -FLT_MAX;
+  r_delta[0] = r_delta[1] = -FLT_MAX;
 
   for (int a = rect->xmin; a <= rect->xmax + coord_delta; a += coord_delta) {
     if (a > rect->xmax) {
@@ -2553,8 +2547,8 @@ void BKE_tracking_max_distortion_delta_across_bound(MovieTracking *tracking,
 
     apply_distortion(tracking, image_width, image_height, pos, warped_pos);
 
-    delta[0] = max_ff(delta[0], fabsf(pos[0] - warped_pos[0]));
-    delta[1] = max_ff(delta[1], fabsf(pos[1] - warped_pos[1]));
+    r_delta[0] = max_ff(r_delta[0], fabsf(pos[0] - warped_pos[0]));
+    r_delta[1] = max_ff(r_delta[1], fabsf(pos[1] - warped_pos[1]));
 
     /* top edge */
     pos[0] = a;
@@ -2562,8 +2556,8 @@ void BKE_tracking_max_distortion_delta_across_bound(MovieTracking *tracking,
 
     apply_distortion(tracking, image_width, image_height, pos, warped_pos);
 
-    delta[0] = max_ff(delta[0], fabsf(pos[0] - warped_pos[0]));
-    delta[1] = max_ff(delta[1], fabsf(pos[1] - warped_pos[1]));
+    r_delta[0] = max_ff(r_delta[0], fabsf(pos[0] - warped_pos[0]));
+    r_delta[1] = max_ff(r_delta[1], fabsf(pos[1] - warped_pos[1]));
 
     if (a >= rect->xmax) {
       break;
@@ -2581,8 +2575,8 @@ void BKE_tracking_max_distortion_delta_across_bound(MovieTracking *tracking,
 
     apply_distortion(tracking, image_width, image_height, pos, warped_pos);
 
-    delta[0] = max_ff(delta[0], fabsf(pos[0] - warped_pos[0]));
-    delta[1] = max_ff(delta[1], fabsf(pos[1] - warped_pos[1]));
+    r_delta[0] = max_ff(r_delta[0], fabsf(pos[0] - warped_pos[0]));
+    r_delta[1] = max_ff(r_delta[1], fabsf(pos[1] - warped_pos[1]));
 
     /* right edge */
     pos[0] = rect->xmax;
@@ -2590,8 +2584,8 @@ void BKE_tracking_max_distortion_delta_across_bound(MovieTracking *tracking,
 
     apply_distortion(tracking, image_width, image_height, pos, warped_pos);
 
-    delta[0] = max_ff(delta[0], fabsf(pos[0] - warped_pos[0]));
-    delta[1] = max_ff(delta[1], fabsf(pos[1] - warped_pos[1]));
+    r_delta[0] = max_ff(r_delta[0], fabsf(pos[0] - warped_pos[0]));
+    r_delta[1] = max_ff(r_delta[1], fabsf(pos[1] - warped_pos[1]));
 
     if (a >= rect->ymax) {
       break;

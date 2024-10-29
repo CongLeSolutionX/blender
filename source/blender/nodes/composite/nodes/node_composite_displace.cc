@@ -8,8 +8,8 @@
 
 #include "BLI_math_vector.hh"
 
-#include "GPU_shader.h"
-#include "GPU_texture.h"
+#include "GPU_shader.hh"
+#include "GPU_texture.hh"
 
 #include "COM_node_operation.hh"
 #include "COM_utilities.hh"
@@ -52,6 +52,17 @@ class DisplaceOperation : public NodeOperation {
 
   void execute() override
   {
+    /* Not yet supported on CPU. */
+    if (!context().use_gpu()) {
+      for (const bNodeSocket *output : this->node()->output_sockets()) {
+        Result &output_result = get_result(output->identifier);
+        if (output_result.should_compute()) {
+          output_result.allocate_invalid();
+        }
+      }
+      return;
+    }
+
     if (is_identity()) {
       get_input("Image").pass_through(get_result("Image"));
       return;
@@ -61,9 +72,9 @@ class DisplaceOperation : public NodeOperation {
     GPU_shader_bind(shader);
 
     const Result &input_image = get_input("Image");
-    GPU_texture_mipmap_mode(input_image.texture(), true, true);
-    GPU_texture_anisotropic_filter(input_image.texture(), true);
-    GPU_texture_extend_mode(input_image.texture(), GPU_SAMPLER_EXTEND_MODE_CLAMP_TO_BORDER);
+    GPU_texture_mipmap_mode(input_image, true, true);
+    GPU_texture_anisotropic_filter(input_image, true);
+    GPU_texture_extend_mode(input_image, GPU_SAMPLER_EXTEND_MODE_CLAMP_TO_BORDER);
     input_image.bind_as_texture(shader, "input_tx");
 
     const Result &input_displacement = get_input("Vector");
@@ -97,7 +108,8 @@ class DisplaceOperation : public NodeOperation {
 
     const Result &input_displacement = get_input("Vector");
     if (input_displacement.is_single_value() &&
-        math::is_zero(input_displacement.get_vector_value())) {
+        math::is_zero(input_displacement.get_vector_value()))
+    {
       return true;
     }
 
@@ -124,11 +136,11 @@ void register_node_type_cmp_displace()
 {
   namespace file_ns = blender::nodes::node_composite_displace_cc;
 
-  static bNodeType ntype;
+  static blender::bke::bNodeType ntype;
 
   cmp_node_type_base(&ntype, CMP_NODE_DISPLACE, "Displace", NODE_CLASS_DISTORT);
   ntype.declare = file_ns::cmp_node_displace_declare;
   ntype.get_compositor_operation = file_ns::get_compositor_operation;
 
-  nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }

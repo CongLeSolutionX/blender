@@ -12,9 +12,9 @@ CCL_NAMESPACE_BEGIN
 
 typedef struct LightSample {
   float3 P;            /* position on light, or direction for distant light */
-  float3 Ng;           /* normal on light */
-  float3 D;            /* direction from shading point to light */
+  packed_float3 Ng;    /* normal on light */
   float t;             /* distance to light (FLT_MAX for distant light) */
+  float3 D;            /* direction from shading point to light */
   float u, v;          /* parametric coordinate on primitive */
   float pdf;           /* pdf for selecting light and point on light */
   float pdf_selection; /* pdf for selecting light */
@@ -25,6 +25,7 @@ typedef struct LightSample {
   int lamp;            /* lamp id */
   int group;           /* lightgroup */
   LightType type;      /* type of light */
+  int emitter_id;      /* index in the emitter array */
 } LightSample;
 
 /* Utilities */
@@ -49,7 +50,7 @@ ccl_device float3 disk_light_sample(float3 n, float2 rand)
   return ellipse_sample(ru, rv, rand);
 }
 
-ccl_device float lamp_light_pdf(const float3 Ng, const float3 I, float t)
+ccl_device float light_pdf_area_to_solid_angle(const float3 Ng, const float3 I, float t)
 {
   float cos_pi = dot(Ng, I);
 

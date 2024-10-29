@@ -2,37 +2,92 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#pragma BLENDER_REQUIRE(draw_view_lib.glsl)
-#pragma BLENDER_REQUIRE(gpu_shader_utildefines_lib.glsl)
-#pragma BLENDER_REQUIRE(gpu_shader_math_base_lib.glsl)
-#pragma BLENDER_REQUIRE(gpu_shader_codegen_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_renderpass_lib.glsl)
+#pragma once
+
+#include "draw_model_lib.glsl"
+#include "draw_view_lib.glsl"
+#include "eevee_renderpass_lib.glsl"
+#include "gpu_shader_codegen_lib.glsl"
+#include "gpu_shader_math_base_lib.glsl"
+#include "gpu_shader_math_vector_lib.glsl"
+#include "gpu_shader_utildefines_lib.glsl"
 
 vec3 g_emission;
 vec3 g_transmittance;
 float g_holdout;
 
+vec3 g_volume_scattering;
+float g_volume_anisotropy;
+vec3 g_volume_absorption;
+
 /* The Closure type is never used. Use float as dummy type. */
 #define Closure float
 #define CLOSURE_DEFAULT 0.0
 
+/* Maximum number of picked closure. */
+#ifndef CLOSURE_BIN_COUNT
+#  define CLOSURE_BIN_COUNT 1
+#endif
 /* Sampled closure parameters. */
-ClosureDiffuse g_diffuse_data;
-ClosureReflection g_reflection_data;
-ClosureRefraction g_refraction_data;
-ClosureVolumeScatter g_volume_scatter_data;
-ClosureVolumeAbsorption g_volume_absorption_data;
+ClosureUndetermined g_closure_bins[CLOSURE_BIN_COUNT];
 /* Random number per sampled closure type. */
-float g_diffuse_rand;
-float g_reflection_rand;
-float g_refraction_rand;
-float g_volume_scatter_rand;
-float g_volume_absorption_rand;
+float g_closure_rand[CLOSURE_BIN_COUNT];
+
+ClosureUndetermined g_closure_get(int i)
+{
+  switch (i) {
+    case 0:
+      return g_closure_bins[0];
+#if CLOSURE_BIN_COUNT > 1
+    case 1:
+      return g_closure_bins[1];
+#endif
+#if CLOSURE_BIN_COUNT > 2
+    case 2:
+      return g_closure_bins[2];
+#endif
+  }
+  /* TODO: this should be unreachable, better to have an assert. */
+  ClosureUndetermined cl_empty;
+  return cl_empty;
+}
+
+ClosureUndetermined g_closure_get_resolved(int i, float weight_fac)
+{
+  ClosureUndetermined cl = g_closure_get(i);
+  cl.color *= cl.weight * weight_fac;
+  return cl;
+}
+
+ClosureType closure_type_get(ClosureDiffuse cl)
+{
+  return CLOSURE_BSDF_DIFFUSE_ID;
+}
+
+ClosureType closure_type_get(ClosureTranslucent cl)
+{
+  return CLOSURE_BSDF_TRANSLUCENT_ID;
+}
+
+ClosureType closure_type_get(ClosureReflection cl)
+{
+  return CLOSURE_BSDF_MICROFACET_GGX_REFLECTION_ID;
+}
+
+ClosureType closure_type_get(ClosureRefraction cl)
+{
+  return CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID;
+}
+
+ClosureType closure_type_get(ClosureSubsurface cl)
+{
+  return CLOSURE_BSSRDF_BURLEY_ID;
+}
 
 /**
  * Returns true if the closure is to be selected based on the input weight.
  */
-bool closure_select(float weight, inout float total_weight, inout float r)
+bool closure_select_check(float weight, inout float total_weight, inout float r)
 {
   if (weight < 1e-5) {
     return false;
@@ -46,79 +101,146 @@ bool closure_select(float weight, inout float total_weight, inout float r)
   return chosen;
 }
 
-#define SELECT_CLOSURE(destination, random, candidate) \
-  if (closure_select(candidate.weight, destination.weight, random)) { \
-    float tmp = destination.weight; \
-    destination = candidate; \
-    destination.weight = tmp; \
-  }
-
-float g_closure_rand;
-
-void closure_weights_reset()
+/**
+ * Assign `candidate` to `destination` based on a random value and the respective weights.
+ */
+void closure_select(inout ClosureUndetermined destination,
+                    inout float random,
+                    ClosureUndetermined candidate)
 {
-  g_diffuse_data.weight = 0.0;
-  g_diffuse_data.color = vec3(0.0);
-  g_diffuse_data.N = vec3(0.0);
-  g_diffuse_data.sss_radius = vec3(0.0);
-  g_diffuse_data.sss_id = uint(0);
+  float candidate_color_weight = average(abs(candidate.color));
+  if (closure_select_check(candidate.weight * candidate_color_weight, destination.weight, random))
+  {
+    float total_weight = destination.weight;
+    destination = candidate;
+    destination.color /= candidate_color_weight;
+    destination.weight = total_weight;
+  }
+}
 
-  g_reflection_data.weight = 0.0;
-  g_reflection_data.color = vec3(0.0);
-  g_reflection_data.N = vec3(0.0);
-  g_reflection_data.roughness = 0.0;
-
-  g_refraction_data.weight = 0.0;
-  g_refraction_data.color = vec3(0.0);
-  g_refraction_data.N = vec3(0.0);
-  g_refraction_data.roughness = 0.0;
-  g_refraction_data.ior = 0.0;
-
-  g_volume_scatter_data.weight = 0.0;
-  g_volume_scatter_data.scattering = vec3(0.0);
-  g_volume_scatter_data.anisotropy = 0.0;
-
-  g_volume_absorption_data.weight = 0.0;
-  g_volume_absorption_data.absorption = vec3(0.0);
-
-#if defined(GPU_FRAGMENT_SHADER)
-  g_diffuse_rand = g_reflection_rand = g_refraction_rand = g_closure_rand;
-  g_volume_scatter_rand = g_volume_absorption_rand = g_closure_rand;
-#else
-  g_diffuse_rand = 0.0;
-  g_reflection_rand = 0.0;
-  g_refraction_rand = 0.0;
-  g_volume_scatter_rand = 0.0;
-  g_volume_absorption_rand = 0.0;
+void closure_weights_reset(float closure_rand)
+{
+  g_closure_rand[0] = closure_rand;
+  g_closure_bins[0].weight = 0.0;
+#if CLOSURE_BIN_COUNT > 1
+  g_closure_rand[1] = closure_rand;
+  g_closure_bins[1].weight = 0.0;
 #endif
+#if CLOSURE_BIN_COUNT > 2
+  g_closure_rand[2] = closure_rand;
+  g_closure_bins[2].weight = 0.0;
+#endif
+
+  g_volume_scattering = vec3(0.0);
+  g_volume_anisotropy = 0.0;
+  g_volume_absorption = vec3(0.0);
 
   g_emission = vec3(0.0);
   g_transmittance = vec3(0.0);
+  g_volume_scattering = vec3(0.0);
+  g_volume_absorption = vec3(0.0);
   g_holdout = 0.0;
 }
+
+#define closure_base_copy(cl, in_cl) \
+  cl.weight = in_cl.weight; \
+  cl.color = in_cl.color; \
+  cl.N = in_cl.N; \
+  cl.type = closure_type_get(in_cl);
 
 /* Single BSDFs. */
 Closure closure_eval(ClosureDiffuse diffuse)
 {
-  SELECT_CLOSURE(g_diffuse_data, g_diffuse_rand, diffuse);
+  ClosureUndetermined cl;
+  closure_base_copy(cl, diffuse);
+#if (CLOSURE_BIN_COUNT > 1) && defined(MAT_TRANSLUCENT) && !defined(MAT_CLEARCOAT)
+  /* Use second slot so we can have diffuse + translucent without noise. */
+  closure_select(g_closure_bins[1], g_closure_rand[1], cl);
+#else
+  /* Either is single closure or use same bin as transmission bin. */
+  closure_select(g_closure_bins[0], g_closure_rand[0], cl);
+#endif
+  return Closure(0);
+}
+
+Closure closure_eval(ClosureSubsurface diffuse)
+{
+  ClosureUndetermined cl;
+  closure_base_copy(cl, diffuse);
+  cl.data.rgb = diffuse.sss_radius;
+  /* Transmission Closures are always in first bin. */
+  closure_select(g_closure_bins[0], g_closure_rand[0], cl);
   return Closure(0);
 }
 
 Closure closure_eval(ClosureTranslucent translucent)
 {
-  /* TODO */
+  ClosureUndetermined cl;
+  closure_base_copy(cl, translucent);
+  /* Transmission Closures are always in first bin. */
+  closure_select(g_closure_bins[0], g_closure_rand[0], cl);
   return Closure(0);
 }
 
+/* Alternate between two bins on a per closure basis.
+ * Allow clearcoat layer without noise.
+ * Choosing the bin with the least weight can choose a
+ * different bin for the same closure and
+ * produce issue with ray-tracing denoiser.
+ * Always start with the second bin, this one doesn't
+ * overlap with other closure. */
+bool g_closure_reflection_bin = true;
+#define CHOOSE_MIN_WEIGHT_CLOSURE_BIN(a, b) \
+  if (g_closure_reflection_bin) { \
+    closure_select(g_closure_bins[b], g_closure_rand[b], cl); \
+  } \
+  else { \
+    closure_select(g_closure_bins[a], g_closure_rand[a], cl); \
+  } \
+  g_closure_reflection_bin = !g_closure_reflection_bin;
+
 Closure closure_eval(ClosureReflection reflection)
 {
-  SELECT_CLOSURE(g_reflection_data, g_reflection_rand, reflection);
+  ClosureUndetermined cl;
+  closure_base_copy(cl, reflection);
+  cl.data.r = reflection.roughness;
+
+#ifdef MAT_CLEARCOAT
+#  if CLOSURE_BIN_COUNT == 2
+  /* Multiple reflection closures. */
+  CHOOSE_MIN_WEIGHT_CLOSURE_BIN(0, 1);
+#  elif CLOSURE_BIN_COUNT == 3
+  /* Multiple reflection closures and one other closure. */
+  CHOOSE_MIN_WEIGHT_CLOSURE_BIN(1, 2);
+#  else
+#    error Clearcoat should always have at least 2 bins
+#  endif
+#else
+#  if CLOSURE_BIN_COUNT == 1
+  /* Only one reflection closure is present in the whole tree. */
+  closure_select(g_closure_bins[0], g_closure_rand[0], cl);
+#  elif CLOSURE_BIN_COUNT == 2
+  /* Only one reflection and one other closure. */
+  closure_select(g_closure_bins[1], g_closure_rand[1], cl);
+#  elif CLOSURE_BIN_COUNT == 3
+  /* Only one reflection and two other closures. */
+  closure_select(g_closure_bins[2], g_closure_rand[2], cl);
+#  endif
+#endif
+
+#undef CHOOSE_MIN_WEIGHT_CLOSURE_BIN
+
   return Closure(0);
 }
 
 Closure closure_eval(ClosureRefraction refraction)
 {
-  SELECT_CLOSURE(g_refraction_data, g_refraction_rand, refraction);
+  ClosureUndetermined cl;
+  closure_base_copy(cl, refraction);
+  cl.data.r = refraction.roughness;
+  cl.data.g = refraction.ior;
+  /* Transmission Closures are always in first bin. */
+  closure_select(g_closure_bins[0], g_closure_rand[0], cl);
   return Closure(0);
 }
 
@@ -137,15 +259,14 @@ Closure closure_eval(ClosureTransparency transparency)
 
 Closure closure_eval(ClosureVolumeScatter volume_scatter)
 {
-  /* TODO: Combine instead of selecting. */
-  SELECT_CLOSURE(g_volume_scatter_data, g_volume_scatter_rand, volume_scatter);
+  g_volume_scattering += volume_scatter.scattering * volume_scatter.weight;
+  g_volume_anisotropy += volume_scatter.anisotropy * volume_scatter.weight;
   return Closure(0);
 }
 
 Closure closure_eval(ClosureVolumeAbsorption volume_absorption)
 {
-  /* TODO: Combine instead of selecting. */
-  SELECT_CLOSURE(g_volume_absorption_data, g_volume_absorption_rand, volume_absorption);
+  g_volume_absorption += volume_absorption.absorption * volume_absorption.weight;
   return Closure(0);
 }
 
@@ -158,24 +279,24 @@ Closure closure_eval(ClosureHair hair)
 /* Glass BSDF. */
 Closure closure_eval(ClosureReflection reflection, ClosureRefraction refraction)
 {
-  SELECT_CLOSURE(g_reflection_data, g_reflection_rand, reflection);
-  SELECT_CLOSURE(g_refraction_data, g_refraction_rand, refraction);
+  closure_eval(reflection);
+  closure_eval(refraction);
   return Closure(0);
 }
 
 /* Dielectric BSDF. */
 Closure closure_eval(ClosureDiffuse diffuse, ClosureReflection reflection)
 {
-  SELECT_CLOSURE(g_diffuse_data, g_diffuse_rand, diffuse);
-  SELECT_CLOSURE(g_reflection_data, g_reflection_rand, reflection);
+  closure_eval(diffuse);
+  closure_eval(reflection);
   return Closure(0);
 }
 
 /* Coat BSDF. */
 Closure closure_eval(ClosureReflection reflection, ClosureReflection coat)
 {
-  SELECT_CLOSURE(g_reflection_data, g_reflection_rand, reflection);
-  SELECT_CLOSURE(g_reflection_data, g_reflection_rand, coat);
+  closure_eval(reflection);
+  closure_eval(coat);
   return Closure(0);
 }
 
@@ -193,9 +314,9 @@ Closure closure_eval(ClosureVolumeScatter volume_scatter,
 /* Specular BSDF. */
 Closure closure_eval(ClosureDiffuse diffuse, ClosureReflection reflection, ClosureReflection coat)
 {
-  SELECT_CLOSURE(g_diffuse_data, g_diffuse_rand, diffuse);
-  SELECT_CLOSURE(g_reflection_data, g_reflection_rand, reflection);
-  SELECT_CLOSURE(g_reflection_data, g_reflection_rand, coat);
+  closure_eval(diffuse);
+  closure_eval(reflection);
+  closure_eval(coat);
   return Closure(0);
 }
 
@@ -205,10 +326,10 @@ Closure closure_eval(ClosureDiffuse diffuse,
                      ClosureReflection coat,
                      ClosureRefraction refraction)
 {
-  SELECT_CLOSURE(g_diffuse_data, g_diffuse_rand, diffuse);
-  SELECT_CLOSURE(g_reflection_data, g_reflection_rand, reflection);
-  SELECT_CLOSURE(g_reflection_data, g_reflection_rand, coat);
-  SELECT_CLOSURE(g_refraction_data, g_refraction_rand, refraction);
+  closure_eval(diffuse);
+  closure_eval(reflection);
+  closure_eval(coat);
+  closure_eval(refraction);
   return Closure(0);
 }
 
@@ -232,19 +353,53 @@ float ambient_occlusion_eval(vec3 normal,
   // clang-format off
 #if defined(GPU_FRAGMENT_SHADER) && defined(MAT_AMBIENT_OCCLUSION) && !defined(MAT_DEPTH) && !defined(MAT_SHADOW)
   // clang-format on
+#  if 0 /* TODO(fclem): Finish inverted horizon scan. */
+  /* TODO(fclem): Replace eevee_ambient_occlusion_lib by eevee_horizon_scan_eval_lib when this is
+   * finished. */
+  vec3 vP = drw_point_world_to_view(g_data.P);
+  vec3 vN = drw_normal_world_to_view(normal);
+
+  ivec2 texel = ivec2(gl_FragCoord.xy);
+  vec2 noise;
+  noise.x = interlieved_gradient_noise(vec2(texel), 3.0, 0.0);
+  noise.y = utility_tx_fetch(utility_tx, vec2(texel), UTIL_BLUE_NOISE_LAYER).r;
+  noise = fract(noise + sampling_rng_2D_get(SAMPLING_AO_U));
+
+  ClosureOcclusion occlusion;
+  occlusion.N = (inverted != 0.0) ? -vN : vN;
+
+  HorizonScanContext ctx;
+  ctx.occlusion = occlusion;
+
+  horizon_scan_eval(vP,
+                    ctx,
+                    noise,
+                    uniform_buf.ao.pixel_size,
+                    max_distance,
+                    uniform_buf.ao.thickness_near,
+                    uniform_buf.ao.thickness_far,
+                    uniform_buf.ao.angle_bias,
+                    2,
+                    10,
+                    inverted != 0.0,
+                    true);
+
+  return saturate(ctx.occlusion_result.r);
+#  else
   vec3 vP = drw_point_world_to_view(g_data.P);
   ivec2 texel = ivec2(gl_FragCoord.xy);
   OcclusionData data = ambient_occlusion_search(
       vP, hiz_tx, texel, max_distance, inverted, sample_count);
 
   vec3 V = drw_world_incident_vector(g_data.P);
-  vec3 N = g_data.N;
+  vec3 N = normal;
   vec3 Ng = g_data.Ng;
 
   float unused_error, visibility;
   vec3 unused;
   ambient_occlusion_eval(data, texel, V, N, Ng, inverted, visibility, unused_error, unused);
   return visibility;
+#  endif
 #else
   return 1.0;
 #endif
@@ -252,8 +407,8 @@ float ambient_occlusion_eval(vec3 normal,
 
 #ifndef GPU_METAL
 void attrib_load();
-Closure nodetree_surface();
-/* Closure nodetree_volume(); */
+Closure nodetree_surface(float closure_rand);
+Closure nodetree_volume();
 vec3 nodetree_displacement();
 float nodetree_thickness();
 vec4 closure_to_rgba(Closure cl);
@@ -438,9 +593,10 @@ vec2 bsdf_lut(float cos_theta, float roughness, float ior, bool do_multiscatter)
 #ifdef EEVEE_MATERIAL_STUBS
 #  define attrib_load()
 #  define nodetree_displacement() vec3(0.0)
-#  define nodetree_surface() Closure(0)
+#  define nodetree_surface(closure_rand) Closure(0)
 #  define nodetree_volume() Closure(0)
 #  define nodetree_thickness() 0.1
+#  define thickness_mode 1.0
 #endif
 
 #ifdef GPU_VERTEX_SHADER
@@ -486,7 +642,7 @@ vec3 displacement_bump()
 void fragment_displacement()
 {
 #ifdef MAT_DISPLACEMENT_BUMP
-  g_data.N = displacement_bump();
+  g_data.N = g_data.Ni = displacement_bump();
 #endif
 }
 
@@ -557,6 +713,20 @@ vec3 coordinate_incoming(vec3 P)
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name Mixed render resolution
+ *
+ * Callbacks image texture sampling.
+ *
+ * \{ */
+
+float texture_lod_bias_get()
+{
+  return uniform_buf.film.texture_lod_bias;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Volume Attribute post
  *
  * TODO(@fclem): These implementation details should concern the DRWManager and not be a fix on
@@ -564,39 +734,35 @@ vec3 coordinate_incoming(vec3 P)
  *
  * \{ */
 
-#if defined(MAT_GEOM_VOLUME_OBJECT) || defined(MAT_GEOM_VOLUME_WORLD)
+/* Point clouds and curves are not compatible with volume grids.
+ * They will fallback to their own attributes loading. */
+#if defined(MAT_VOLUME) && !defined(MAT_GEOM_CURVES) && !defined(MAT_GEOM_POINT_CLOUD)
+#  if defined(VOLUME_INFO_LIB) && !defined(MAT_GEOM_WORLD)
+/* We could just check for GRID_ATTRIBUTES but this avoids for header dependency. */
+#    define GRID_ATTRIBUTES_LOAD_POST
+#  endif
+#endif
 
 float attr_load_temperature_post(float attr)
 {
-#  ifdef MAT_GEOM_VOLUME_OBJECT
-  /* Bring the into standard range without having to modify the grid values */
+#ifdef GRID_ATTRIBUTES_LOAD_POST
+  /* Bring the value into standard range without having to modify the grid values */
   attr = (attr > 0.01) ? (attr * drw_volume.temperature_mul + drw_volume.temperature_bias) : 0.0;
-#  endif
+#endif
   return attr;
 }
 vec4 attr_load_color_post(vec4 attr)
 {
-#  ifdef MAT_GEOM_VOLUME_OBJECT
+#ifdef GRID_ATTRIBUTES_LOAD_POST
   /* Density is premultiplied for interpolation, divide it out here. */
   attr.rgb *= safe_rcp(attr.a);
   attr.rgb *= drw_volume.color_mul.rgb;
   attr.a = 1.0;
-#  endif
-  return attr;
-}
-
-#else /* NOP for any other surface. */
-
-float attr_load_temperature_post(float attr)
-{
-  return attr;
-}
-vec4 attr_load_color_post(vec4 attr)
-{
-  return attr;
-}
-
 #endif
+  return attr;
+}
+
+#undef GRID_ATTRIBUTES_LOAD_POST
 
 /** \} */
 

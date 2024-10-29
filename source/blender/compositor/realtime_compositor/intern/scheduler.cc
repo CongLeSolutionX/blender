@@ -10,7 +10,6 @@
 
 #include "NOD_derived_node_tree.hh"
 
-#include "BKE_node.hh"
 #include "BKE_node_runtime.hh"
 
 #include "COM_context.hh"
@@ -22,19 +21,11 @@ namespace blender::realtime_compositor {
 using namespace nodes::derived_node_tree_types;
 
 /* Add the viewer node which is marked as NODE_DO_OUTPUT in the given context to the given stack.
- * If multiple types of viewer nodes are marked, then the preference will be CMP_NODE_VIEWER >
- * CMP_NODE_SPLITVIEWER. If no viewer nodes were found, composite nodes can be added as a fallback
+ * If no viewer nodes were found, composite nodes can be added as a fallback
  * viewer node. */
 static bool add_viewer_nodes_in_context(const DTreeContext *context, Stack<DNode> &node_stack)
 {
   for (const bNode *node : context->btree().nodes_by_type("CompositorNodeViewer")) {
-    if (node->flag & NODE_DO_OUTPUT && !(node->flag & NODE_MUTED)) {
-      node_stack.push(DNode(context, node));
-      return true;
-    }
-  }
-
-  for (const bNode *node : context->btree().nodes_by_type("CompositorNodeSplitViewer")) {
     if (node->flag & NODE_DO_OUTPUT && !(node->flag & NODE_MUTED)) {
       node_stack.push(DNode(context, node));
       return true;
@@ -129,17 +120,17 @@ using NeededBuffers = Map<DNode, int>;
  * needs the largest number of buffers, because those buffers can be reused by any input node
  * that needs a lesser number of buffers.
  *
- * Shader nodes, however, are a special case because links between two shader nodes inside the same
- * shader operation don't pass a buffer, but a single value in the compiled shader. So for shader
- * nodes, only inputs and outputs linked to nodes that are not shader nodes should be considered.
- * Note that this might not actually be true, because the compiler may decide to split a shader
+ * Pixel nodes, however, are a special case because links between two pixel nodes inside the same
+ * pixel operation don't pass a buffer, but a single value in the pixel processor. So for pixel
+ * nodes, only inputs and outputs linked to nodes that are not pixel nodes should be considered.
+ * Note that this might not actually be true, because the compiler may decide to split a pixel
  * operation into multiples ones that will pass buffers, but this is not something that can be
  * known at scheduling-time. See the discussion in COM_compile_state.hh, COM_evaluator.hh, and
  * COM_shader_operation.hh for more information. In the node tree shown below, node 4 will have
  * exactly the same number of needed buffers by node 3, because its inputs and outputs are all
- * internally linked in the shader operation.
+ * internally linked in the pixel operation.
  *
- *                                      Shader Operation
+ *                                      Pixel Operation
  *                   +------------------------------------------------------+
  * .------------.    |  .------------.  .------------.      .------------.  |  .------------.
  * |   Node 1   |    |  |   Node 3   |  |   Node 4   |      |   Node 5   |  |  |   Node 6   |
@@ -227,9 +218,9 @@ static NeededBuffers compute_number_of_needed_buffers(Stack<DNode> &output_nodes
         continue;
       }
 
-      /* Since this input is linked, if the link is not between two shader nodes, it means that the
+      /* Since this input is linked, if the link is not between two pixel nodes, it means that the
        * node takes a buffer through this input and so we increment the number of input buffers. */
-      if (!is_shader_node(node) || !is_shader_node(doutput.node())) {
+      if (!is_pixel_node(node) || !is_pixel_node(doutput.node())) {
         number_of_input_buffers++;
       }
 
@@ -252,10 +243,9 @@ static NeededBuffers compute_number_of_needed_buffers(Stack<DNode> &output_nodes
         continue;
       }
 
-      /* If any of the links is not between two shader nodes, it means that the node outputs
+      /* If any of the links is not between two pixel nodes, it means that the node outputs
        * a buffer through this output and so we increment the number of output buffers. */
-      if (!is_output_linked_to_node_conditioned(doutput, is_shader_node) || !is_shader_node(node))
-      {
+      if (!is_output_linked_to_node_conditioned(doutput, is_pixel_node) || !is_pixel_node(node)) {
         number_of_output_buffers++;
       }
     }
@@ -282,7 +272,7 @@ static NeededBuffers compute_number_of_needed_buffers(Stack<DNode> &output_nodes
  * stored in extra buffers in addition to the buffers needed by A. The number of buffers needed by
  * each node is estimated as described in the compute_number_of_needed_buffers function.
  *
- * This is a heuristic generalization of the Sethi–Ullman algorithm, a generalization that
+ * This is a heuristic generalization of the Sethi-Ullman algorithm, a generalization that
  * doesn't always guarantee an optimal evaluation order, as the optimal evaluation order is very
  * difficult to compute, however, this method works well in most cases. Moreover it assumes that
  * all buffers will have roughly the same size, which may not always be the case. */
@@ -345,7 +335,8 @@ Schedule compute_schedule(const Context &context, const DerivedNodeTree &tree)
       int insertion_position = 0;
       for (int i = 0; i < sorted_dependency_nodes.size(); i++) {
         if (needed_buffers.lookup(doutput.node()) >
-            needed_buffers.lookup(sorted_dependency_nodes[i])) {
+            needed_buffers.lookup(sorted_dependency_nodes[i]))
+        {
           insertion_position++;
         }
         else {

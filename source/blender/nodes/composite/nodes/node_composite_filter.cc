@@ -47,6 +47,17 @@ class FilterOperation : public NodeOperation {
 
   void execute() override
   {
+    /* Not yet supported on CPU. */
+    if (!context().use_gpu()) {
+      for (const bNodeSocket *output : this->node()->output_sockets()) {
+        Result &output_result = get_result(output->identifier);
+        if (output_result.should_compute()) {
+          output_result.allocate_invalid();
+        }
+      }
+      return;
+    }
+
     GPUShader *shader = context().get_shader(get_shader_name());
     GPU_shader_bind(shader);
 
@@ -158,7 +169,7 @@ void register_node_type_cmp_filter()
 {
   namespace file_ns = blender::nodes::node_composite_filter_cc;
 
-  static bNodeType ntype;
+  static blender::bke::bNodeType ntype;
 
   cmp_node_type_base(&ntype, CMP_NODE_FILTER, "Filter", NODE_CLASS_OP_FILTER);
   ntype.declare = file_ns::cmp_node_filter_declare;
@@ -167,5 +178,5 @@ void register_node_type_cmp_filter()
   ntype.flag |= NODE_PREVIEW;
   ntype.get_compositor_operation = file_ns::get_compositor_operation;
 
-  nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }

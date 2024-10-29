@@ -155,7 +155,7 @@ static void add_bidomain(uint8_t domains[][BDS],
   (*bd_pos)++;
 }
 
-static int calc_bound(uint8_t domains[][BDS], int bd_pos, int cur_pos)
+static int calc_bound(const uint8_t domains[][BDS], int bd_pos, int cur_pos)
 {
   int bound = 0;
   for (int i = bd_pos - 1; i >= 0 && domains[i][P] == cur_pos; i--) {
@@ -249,8 +249,11 @@ static uint8_t find_min_value(const uint8_t *arr, uint8_t start_idx, uint8_t len
   return min_v;
 }
 
-static void select_bidomain(
-    uint8_t domains[][BDS], int bd_pos, uint8_t *left, int current_matching_size, bool connected)
+static void select_bidomain(uint8_t domains[][BDS],
+                            int bd_pos,
+                            const uint8_t *left,
+                            int current_matching_size,
+                            bool connected)
 {
   int i;
   int min_size = INT_MAX;
@@ -346,7 +349,8 @@ static void maximum_common_subgraph_internal(int incumbent[][2],
     }
     bd = &domains[bd_pos - 1][L];
     if (calc_bound(domains, bd_pos, bd[P]) + bd[P] <= *inc_pos ||
-        (bd[LL] == 0 && bd[RL] == bd[IRL])) {
+        (bd[LL] == 0 && bd[RL] == bd[IRL]))
+    {
       bd_pos--;
     }
     else {

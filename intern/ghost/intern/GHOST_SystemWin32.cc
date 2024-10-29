@@ -7,6 +7,7 @@
  */
 
 #include <limits>
+#include <map>
 
 #include "GHOST_EventDragnDrop.hh"
 #include "GHOST_EventTrackpad.hh"
@@ -29,8 +30,8 @@
 #include "utf_winfunc.hh"
 #include "utfconv.hh"
 
-#include "IMB_imbuf.h"
-#include "IMB_imbuf_types.h"
+#include "IMB_imbuf.hh"
+#include "IMB_imbuf_types.hh"
 
 #include "GHOST_DisplayManagerWin32.hh"
 #include "GHOST_EventButton.hh"
@@ -105,6 +106,33 @@
 
 static bool isStartedFromCommandPrompt();
 
+/**
+ * SpaceMouse devices ship with an internal identifier number for each long press event.
+ * These values can be found in `<3DxWare installation path>/3DxWinCore/Cfg/Base.xml`.
+ * For input processing purposes these identifiers have to be mapped to particular button events.
+ */
+static const std::map<uint16_t, GHOST_NDOF_ButtonT> longButtonHIDsToGHOST_NDOFButtons = {
+    {3, GHOST_NDOF_BUTTON_BOTTOM},
+    {5, GHOST_NDOF_BUTTON_LEFT},
+    {6, GHOST_NDOF_BUTTON_BACK},
+    {9, GHOST_NDOF_BUTTON_ROLL_CCW},
+    {11, GHOST_NDOF_BUTTON_ISO2},
+    {32, GHOST_NDOF_BUTTON_SPIN_CCW},
+    {34, GHOST_NDOF_BUTTON_TILT_CCW},
+    {103, GHOST_NDOF_BUTTON_SAVE_V1},
+    {104, GHOST_NDOF_BUTTON_SAVE_V2},
+    {105, GHOST_NDOF_BUTTON_SAVE_V3},
+};
+
+static GHOST_NDOF_ButtonT translateLongButtonToNDOFButton(uint16_t longKey)
+{
+  const auto iter = longButtonHIDsToGHOST_NDOFButtons.find(longKey);
+  if (iter == longButtonHIDsToGHOST_NDOFButtons.end()) {
+    return static_cast<GHOST_NDOF_ButtonT>(longKey);
+  }
+  return iter->second;
+}
+
 static void initRawInput()
 {
 #ifdef WITH_INPUT_NDOF
@@ -149,8 +177,7 @@ static void initRawInput()
 
 typedef BOOL(API *GHOST_WIN32_EnableNonClientDpiScaling)(HWND);
 
-GHOST_SystemWin32::GHOST_SystemWin32()
-    : m_hasPerformanceCounter(false), m_freq(0), m_start(0), m_lfstart(0)
+GHOST_SystemWin32::GHOST_SystemWin32() : m_hasPerformanceCounter(false), m_freq(0)
 {
   m_displayManager = new GHOST_DisplayManagerWin32();
   GHOST_ASSERT(m_displayManager, "GHOST_SystemWin32::GHOST_SystemWin32(): m_displayManager==0\n");
@@ -196,22 +223,17 @@ GHOST_SystemWin32::~GHOST_SystemWin32()
 uint64_t GHOST_SystemWin32::performanceCounterToMillis(__int64 perf_ticks) const
 {
   /* Calculate the time passed since system initialization. */
-  __int64 delta = (perf_ticks - m_start) * 1000;
+  __int64 delta = perf_ticks * 1000;
 
   uint64_t t = uint64_t(delta / m_freq);
   return t;
-}
-
-uint64_t GHOST_SystemWin32::tickCountToMillis(__int64 ticks) const
-{
-  return ticks - m_lfstart;
 }
 
 uint64_t GHOST_SystemWin32::getMilliSeconds() const
 {
   /* Hardware does not support high resolution timers. We will use GetTickCount instead then. */
   if (!m_hasPerformanceCounter) {
-    return tickCountToMillis(::GetTickCount());
+    return ::GetTickCount64();
   }
 
   /* Retrieve current count */
@@ -219,6 +241,25 @@ uint64_t GHOST_SystemWin32::getMilliSeconds() const
   ::QueryPerformanceCounter((LARGE_INTEGER *)&count);
 
   return performanceCounterToMillis(count);
+}
+
+/**
+ * Returns the message time, compatible with the time value from #getMilliSeconds.
+ * This should be used instead of #getMilliSeconds when you need the time a message was delivered
+ * versus collected, so for all event creation that are in response to receiving a Windows message.
+ */
+static uint64_t getMessageTime(GHOST_SystemWin32 *system)
+{
+  /* Get difference between last message time and now. */
+  int64_t t_delta = GetMessageTime() - GetTickCount();
+
+  /* Handle 32-bit rollover. */
+  if (t_delta > 0) {
+    t_delta -= int64_t(UINT32_MAX) + 1;
+  }
+
+  /* Return message time as 64-bit milliseconds with the delta applied. */
+  return system->getMilliSeconds() + t_delta;
 }
 
 uint8_t GHOST_SystemWin32::getNumDisplays() const
@@ -265,7 +306,8 @@ GHOST_IWindow *GHOST_SystemWin32::createWindow(const char *title,
       false,
       (GHOST_WindowWin32 *)parentWindow,
       ((gpuSettings.flags & GHOST_gpuDebugContext) != 0),
-      is_dialog);
+      is_dialog,
+      gpuSettings.preferred_device);
 
   if (window->getValid()) {
     /* Store the pointer to the window */
@@ -293,7 +335,8 @@ GHOST_IContext *GHOST_SystemWin32::createOffscreenContext(GHOST_GPUSettings gpuS
   switch (gpuSettings.context_type) {
 #ifdef WITH_VULKAN_BACKEND
     case GHOST_kDrawingContextTypeVulkan: {
-      GHOST_Context *context = new GHOST_ContextVK(false, (HWND)0, 1, 2, debug_context);
+      GHOST_Context *context = new GHOST_ContextVK(
+          false, (HWND)0, 1, 2, debug_context, gpuSettings.preferred_device);
       if (context->initializeDrawingContext()) {
         return context;
       }
@@ -573,16 +616,8 @@ GHOST_TSuccess GHOST_SystemWin32::init()
   SetProcessDPIAware();
   initRawInput();
 
-  m_lfstart = ::GetTickCount();
   /* Determine whether this system has a high frequency performance counter. */
   m_hasPerformanceCounter = ::QueryPerformanceFrequency((LARGE_INTEGER *)&m_freq) == TRUE;
-  if (m_hasPerformanceCounter) {
-    GHOST_PRINT("GHOST_SystemWin32::init: High Frequency Performance Timer available\n");
-    ::QueryPerformanceCounter((LARGE_INTEGER *)&m_start);
-  }
-  else {
-    GHOST_PRINT("GHOST_SystemWin32::init: High Frequency Performance Timer not available\n");
-  }
 
   if (success) {
     WNDCLASSW wc = {0};
@@ -661,7 +696,7 @@ GHOST_TKey GHOST_SystemWin32::processSpecialKey(short vKey, short /*scanCode*/) 
       key = GHOST_kKeyAccentGrave;
       break;
     case u'i':
-      /* `i` key on Turkish kbd. */
+      /* `i` key on Turkish keyboard. */
       key = GHOST_kKeyI;
       break;
     default:
@@ -881,6 +916,7 @@ GHOST_EventButton *GHOST_SystemWin32::processButtonEvent(GHOST_TEventType type,
   GHOST_SystemWin32 *system = (GHOST_SystemWin32 *)getSystem();
 
   GHOST_TabletData td = window->getTabletData();
+  const uint64_t event_ms = getMessageTime(system);
 
   /* Move mouse to button event position. */
   if (window->getTabletData().Active != GHOST_kTabletModeNone) {
@@ -888,8 +924,8 @@ GHOST_EventButton *GHOST_SystemWin32::processButtonEvent(GHOST_TEventType type,
     DWORD msgPos = ::GetMessagePos();
     int msgPosX = GET_X_LPARAM(msgPos);
     int msgPosY = GET_Y_LPARAM(msgPos);
-    system->pushEvent(new GHOST_EventCursor(
-        ::GetMessageTime(), GHOST_kEventCursorMove, window, msgPosX, msgPosY, td));
+    system->pushEvent(
+        new GHOST_EventCursor(event_ms, GHOST_kEventCursorMove, window, msgPosX, msgPosY, td));
 
     if (type == GHOST_kEventButtonDown) {
       WINTAB_PRINTF("HWND %p OS button down\n", window->getHWND());
@@ -900,7 +936,7 @@ GHOST_EventButton *GHOST_SystemWin32::processButtonEvent(GHOST_TEventType type,
   }
 
   window->updateMouseCapture(type == GHOST_kEventButtonDown ? MousePressed : MouseReleased);
-  return new GHOST_EventButton(system->getMilliSeconds(), type, window, mask, td);
+  return new GHOST_EventButton(event_ms, type, window, mask, td);
 }
 
 void GHOST_SystemWin32::processWintabEvent(GHOST_WindowWin32 *window)
@@ -961,7 +997,8 @@ void GHOST_SystemWin32::processWintabEvent(GHOST_WindowWin32 *window)
          * event queue. */
         MSG msg;
         if (PeekMessage(&msg, window->getHWND(), message, message, PM_NOYIELD) &&
-            msg.message != WM_QUIT) {
+            msg.message != WM_QUIT)
+        {
 
           /* Test for Win32/Wintab button down match. */
           useWintabPos = wt->testCoordinates(msg.pt.x, msg.pt.y, info.x, info.y);
@@ -1044,8 +1081,8 @@ void GHOST_SystemWin32::processWintabEvent(GHOST_WindowWin32 *window)
     int y = GET_Y_LPARAM(pos);
     GHOST_TabletData td = wt->getLastTabletData();
 
-    system->pushEvent(new GHOST_EventCursor(
-        system->getMilliSeconds(), GHOST_kEventCursorMove, window, x, y, td));
+    system->pushEvent(
+        new GHOST_EventCursor(getMessageTime(system), GHOST_kEventCursorMove, window, x, y, td));
   }
 }
 
@@ -1199,7 +1236,7 @@ GHOST_EventCursor *GHOST_SystemWin32::processCursorEvent(GHOST_WindowWin32 *wind
     y_screen += y_accum;
   }
 
-  return new GHOST_EventCursor(system->getMilliSeconds(),
+  return new GHOST_EventCursor(getMessageTime(system),
                                GHOST_kEventCursorMove,
                                window,
                                x_screen,
@@ -1225,7 +1262,7 @@ void GHOST_SystemWin32::processWheelEvent(GHOST_WindowWin32 *window,
   acc = abs(acc);
 
   while (acc >= WHEEL_DELTA) {
-    system->pushEvent(new GHOST_EventWheel(system->getMilliSeconds(), window, direction));
+    system->pushEvent(new GHOST_EventWheel(getMessageTime(system), window, direction));
     acc -= WHEEL_DELTA;
   }
   system->m_wheelDeltaAccum = acc * direction;
@@ -1280,7 +1317,8 @@ GHOST_EventKey *GHOST_SystemWin32::processKeyEvent(GHOST_WindowWin32 *window, RA
       /* TODO: #ToUnicodeEx can respond with up to 4 utf16 chars (only 2 here).
        * Could be up to 24 utf8 bytes. */
       if ((r = ToUnicodeEx(
-               vk, raw.data.keyboard.MakeCode, state, utf16, 2, 0, system->m_keylayout))) {
+               vk, raw.data.keyboard.MakeCode, state, utf16, 2, 0, system->m_keylayout)))
+      {
         if ((r > 0 && r < 3)) {
           utf16[r] = 0;
           conv_utf_16_to_8(utf16, utf8_char, 6);
@@ -1304,7 +1342,7 @@ GHOST_EventKey *GHOST_SystemWin32::processKeyEvent(GHOST_WindowWin32 *window, RA
     }
 #endif /* WITH_INPUT_IME */
 
-    event = new GHOST_EventKey(system->getMilliSeconds(),
+    event = new GHOST_EventKey(getMessageTime(system),
                                key_down ? GHOST_kEventKeyDown : GHOST_kEventKeyUp,
                                window,
                                key,
@@ -1325,8 +1363,7 @@ GHOST_EventKey *GHOST_SystemWin32::processKeyEvent(GHOST_WindowWin32 *window, RA
 GHOST_Event *GHOST_SystemWin32::processWindowSizeEvent(GHOST_WindowWin32 *window)
 {
   GHOST_SystemWin32 *system = (GHOST_SystemWin32 *)getSystem();
-  GHOST_Event *sizeEvent = new GHOST_Event(
-      system->getMilliSeconds(), GHOST_kEventWindowSize, window);
+  GHOST_Event *sizeEvent = new GHOST_Event(getMessageTime(system), GHOST_kEventWindowSize, window);
 
   /* We get WM_SIZE before we fully init. Do not dispatch before we are continuously resizing. */
   if (window->m_inLiveResize) {
@@ -1346,7 +1383,7 @@ GHOST_Event *GHOST_SystemWin32::processWindowEvent(GHOST_TEventType type,
     system->getWindowManager()->setActiveWindow(window);
   }
 
-  return new GHOST_Event(system->getMilliSeconds(), type, window);
+  return new GHOST_Event(getMessageTime(system), type, window);
 }
 
 #ifdef WITH_INPUT_IME
@@ -1355,7 +1392,7 @@ GHOST_Event *GHOST_SystemWin32::processImeEvent(GHOST_TEventType type,
                                                 GHOST_TEventImeData *data)
 {
   GHOST_SystemWin32 *system = (GHOST_SystemWin32 *)getSystem();
-  return new GHOST_EventIME(system->getMilliSeconds(), type, window, data);
+  return new GHOST_EventIME(getMessageTime(system), type, window, data);
 }
 #endif
 
@@ -1368,7 +1405,7 @@ GHOST_TSuccess GHOST_SystemWin32::pushDragDropEvent(GHOST_TEventType eventType,
 {
   GHOST_SystemWin32 *system = (GHOST_SystemWin32 *)getSystem();
   return system->pushEvent(new GHOST_EventDragnDrop(
-      system->getMilliSeconds(), eventType, draggedObjectType, window, mouseX, mouseY, data));
+      getMessageTime(system), eventType, draggedObjectType, window, mouseX, mouseY, data));
 }
 
 void GHOST_SystemWin32::setTabletAPI(GHOST_TTabletAPI api)
@@ -1414,20 +1451,17 @@ bool GHOST_SystemWin32::processNDOF(RAWINPUT const &raw)
   bool eventSent = false;
   uint64_t now = getMilliSeconds();
 
-  static bool firstEvent = true;
-  if (firstEvent) { /* Determine exactly which device is plugged in. */
-    RID_DEVICE_INFO info;
-    unsigned infoSize = sizeof(RID_DEVICE_INFO);
-    info.cbSize = infoSize;
+  RID_DEVICE_INFO info;
+  unsigned infoSize = sizeof(RID_DEVICE_INFO);
+  info.cbSize = infoSize;
 
-    GetRawInputDeviceInfo(raw.header.hDevice, RIDI_DEVICEINFO, &info, &infoSize);
-    if (info.dwType == RIM_TYPEHID) {
-      m_ndofManager->setDevice(info.hid.dwVendorId, info.hid.dwProductId);
-    }
-    else {
-      GHOST_PRINT("<!> not a HID device... mouse/kb perhaps?\n");
-    }
-    firstEvent = false;
+  GetRawInputDeviceInfo(raw.header.hDevice, RIDI_DEVICEINFO, &info, &infoSize);
+  /* Since there can be multiple NDOF devices connected, always set the current device. */
+  if (info.dwType == RIM_TYPEHID) {
+    m_ndofManager->setDevice(info.hid.dwVendorId, info.hid.dwProductId);
+  }
+  else {
+    GHOST_PRINT("<!> not a HID device... mouse/kb perhaps?\n");
   }
 
   /* The NDOF manager sends button changes immediately, and *pretends* to
@@ -1438,7 +1472,7 @@ bool GHOST_SystemWin32::processNDOF(RAWINPUT const &raw)
 
   BYTE packetType = data[0];
   switch (packetType) {
-    case 1: { /* Translation. */
+    case 0x1: { /* Translation. */
       const short *axis = (short *)(data + 1);
       /* Massage into blender view coords (same goes for rotation). */
       const int t[3] = {axis[0], -axis[2], axis[1]};
@@ -1454,17 +1488,35 @@ bool GHOST_SystemWin32::processNDOF(RAWINPUT const &raw)
       }
       break;
     }
-    case 2: { /* Rotation. */
+    case 0x2: { /* Rotation. */
 
       const short *axis = (short *)(data + 1);
       const int r[3] = {-axis[0], axis[2], -axis[1]};
       m_ndofManager->updateRotation(r, now);
       break;
     }
-    case 3: { /* Buttons. */
+    case 0x3: { /* Buttons bitmask (older devices). */
       int button_bits;
       memcpy(&button_bits, data + 1, sizeof(button_bits));
-      m_ndofManager->updateButtons(button_bits, now);
+      m_ndofManager->updateButtonsBitmask(button_bits, now);
+      break;
+    }
+    case 0x1c: { /* Buttons numbers (newer devices). */
+      NDOF_Button_Array buttons;
+      const uint16_t *payload = reinterpret_cast<const uint16_t *>(data + 1);
+      for (int i = 0; i < buttons.size(); i++) {
+        buttons[i] = static_cast<GHOST_NDOF_ButtonT>(*(payload + i));
+      }
+      m_ndofManager->updateButtonsArray(buttons, now, NDOF_Button_Type::ShortButton);
+      break;
+    }
+    case 0x1d: { /* Buttons (long press, newer devices). */
+      NDOF_Button_Array buttons;
+      const uint16_t *payload = reinterpret_cast<const uint16_t *>(data + 1);
+      for (int i = 0; i < buttons.size(); i++) {
+        buttons[i] = translateLongButtonToNDOFButton(*(payload + i));
+      }
+      m_ndofManager->updateButtonsArray(buttons, now, NDOF_Button_Type::LongButton);
       break;
     }
   }
@@ -1497,7 +1549,7 @@ void GHOST_SystemWin32::processTrackpad()
   system->getCursorPosition(cursor_x, cursor_y);
 
   if (trackpad_info.x != 0 || trackpad_info.y != 0) {
-    system->pushEvent(new GHOST_EventTrackpad(system->getMilliSeconds(),
+    system->pushEvent(new GHOST_EventTrackpad(getMessageTime(system),
                                               active_window,
                                               GHOST_kTrackpadEventScroll,
                                               cursor_x,
@@ -1507,7 +1559,7 @@ void GHOST_SystemWin32::processTrackpad()
                                               trackpad_info.isScrollDirectionInverted));
   }
   if (trackpad_info.scale != 0) {
-    system->pushEvent(new GHOST_EventTrackpad(system->getMilliSeconds(),
+    system->pushEvent(new GHOST_EventTrackpad(getMessageTime(system),
                                               active_window,
                                               GHOST_kTrackpadEventMagnify,
                                               cursor_x,
@@ -2390,9 +2442,6 @@ static uint *getClipboardImageDibV5(int *r_width, int *r_height)
 
   int offset = bitmapV5Header->bV5Size + bitmapV5Header->bV5ClrUsed * sizeof(RGBQUAD);
 
-  if (bitmapV5Header->bV5Compression == BI_BITFIELDS) {
-    offset += 12;
-  }
   BYTE *buffer = (BYTE *)bitmapV5Header + offset;
   int bitcount = bitmapV5Header->bV5BitCount;
   int width = bitmapV5Header->bV5Width;
@@ -2541,8 +2590,7 @@ static bool putClipboardImageDibV5(uint *rgba, int width, int height)
 
   DWORD size_pixels = width * height * 4;
 
-  /* Pixel data is 12 bytes after the header. */
-  HGLOBAL hMem = GlobalAlloc(GHND, sizeof(BITMAPV5HEADER) + 12 + size_pixels);
+  HGLOBAL hMem = GlobalAlloc(GHND, sizeof(BITMAPV5HEADER) + size_pixels);
   if (!hMem) {
     return false;
   }
@@ -2568,7 +2616,7 @@ static bool putClipboardImageDibV5(uint *rgba, int width, int height)
   hdr->bV5Intent = LCS_GM_IMAGES;
   hdr->bV5ClrUsed = 0;
 
-  memcpy((char *)hdr + sizeof(BITMAPV5HEADER) + 12, rgba, size_pixels);
+  memcpy((char *)hdr + sizeof(BITMAPV5HEADER), rgba, size_pixels);
 
   GlobalUnlock(hMem);
 

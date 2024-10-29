@@ -6,9 +6,9 @@
  * compute some information about the inpainting region, like the distance to the boundary, as well
  * as the blur radius to use to smooth out that region. */
 
-#pragma BLENDER_REQUIRE(gpu_shader_math_base_lib.glsl)
-#pragma BLENDER_REQUIRE(gpu_shader_compositor_texture_utilities.glsl)
-#pragma BLENDER_REQUIRE(gpu_shader_compositor_jump_flooding_lib.glsl)
+#include "gpu_shader_compositor_jump_flooding_lib.glsl"
+#include "gpu_shader_compositor_texture_utilities.glsl"
+#include "gpu_shader_math_base_lib.glsl"
 
 void main()
 {
@@ -28,7 +28,7 @@ void main()
   float distance_to_boundary = distance(vec2(texel), vec2(closest_boundary_texel));
   imageStore(distance_to_boundary_img, texel, vec4(distance_to_boundary));
 
-  /* We follow this shader by a blur shader that smoothes out the inpainting region, where the blur
+  /* We follow this shader by a blur shader that smooths out the inpainting region, where the blur
    * radius is the radius of the circle that touches the boundary. We can imagine the blur window
    * to be inscribed in that circle and thus the blur radius is the distance to the boundary
    * divided by square root two. As a performance optimization, we limit the blurring to areas that

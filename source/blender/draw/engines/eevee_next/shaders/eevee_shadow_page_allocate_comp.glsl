@@ -9,8 +9,8 @@
  * Note that allocation can fail, in this case the tile is left with no page.
  */
 
-#pragma BLENDER_REQUIRE(eevee_shadow_page_ops_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_shadow_tilemap_lib.glsl)
+#include "eevee_shadow_page_ops_lib.glsl"
+#include "eevee_shadow_tilemap_lib.glsl"
 
 void main()
 {
@@ -26,7 +26,6 @@ void main()
       ShadowTileData tile = shadow_tile_unpack(tiles_buf[tile_index]);
       if (tile.is_used && !tile.is_allocated) {
         shadow_page_alloc(tile);
-        tile.lod = lod;
         tiles_buf[tile_index] = shadow_tile_pack(tile);
       }
 

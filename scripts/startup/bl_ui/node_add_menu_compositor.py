@@ -2,11 +2,11 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-import bpy
 from bpy.types import Menu
 from bl_ui import node_add_menu
 from bpy.app.translations import (
     pgettext_iface as iface_,
+    contexts as i18n_contexts,
 )
 
 
@@ -71,7 +71,6 @@ class NODE_MT_category_compositor_output(Menu):
 
         layout = self.layout
         node_add_menu.add_node_type(layout, "CompositorNodeComposite")
-        node_add_menu.add_node_type(layout, "CompositorNodeSplitViewer")
         node_add_menu.add_node_type(layout, "CompositorNodeViewer")
         layout.separator()
         node_add_menu.add_node_type(layout, "CompositorNodeOutputFile")
@@ -232,6 +231,7 @@ class NODE_MT_category_compositor_mask(Menu):
 class NODE_MT_category_compositor_tracking(Menu):
     bl_idname = "NODE_MT_category_compositor_tracking"
     bl_label = "Tracking"
+    bl_translation_context = i18n_contexts.id_movieclip
 
     def draw(self, _context):
         layout = self.layout
@@ -279,6 +279,7 @@ class NODE_MT_category_compositor_utilities(Menu):
         node_add_menu.add_node_type(layout, "CompositorNodeLevels")
         node_add_menu.add_node_type(layout, "CompositorNodeNormalize")
         layout.separator()
+        node_add_menu.add_node_type(layout, "CompositorNodeSplit")
         node_add_menu.add_node_type(layout, "CompositorNodeSwitch")
         node_add_menu.add_node_type(
             layout, "CompositorNodeSwitchView",
@@ -298,18 +299,6 @@ class NODE_MT_category_compositor_vector(Menu):
         layout.separator()
         node_add_menu.add_node_type(layout, "CompositorNodeNormal")
         node_add_menu.add_node_type(layout, "CompositorNodeCurveVec")
-
-        node_add_menu.draw_assets_for_catalog(layout, self.bl_label)
-
-
-class NODE_MT_category_compositor_LAYOUT(Menu):
-    bl_idname = "NODE_MT_category_compositor_LAYOUT"
-    bl_label = "Layout"
-
-    def draw(self, _context):
-        layout = self.layout
-        node_add_menu.add_node_type(layout, "NodeFrame")
-        node_add_menu.add_node_type(layout, "NodeReroute")
 
         node_add_menu.draw_assets_for_catalog(layout, self.bl_label)
 

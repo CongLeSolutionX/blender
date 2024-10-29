@@ -14,7 +14,7 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLF_api.h"
+#include "BLF_api.hh"
 
 #include "BLI_ghash.h"
 #include "BLI_listbase.h"
@@ -22,8 +22,8 @@
 #include "BLI_string_utf8.h"
 
 #include "BKE_curve.hh"
-#include "BKE_vfont.h"
-#include "BKE_vfontdata.h"
+#include "BKE_vfont.hh"
+#include "BKE_vfontdata.hh"
 
 #include "DNA_packedFile_types.h"
 #include "DNA_vfont_types.h"
@@ -33,7 +33,7 @@ extern int builtin_font_size;
 
 VFontData *BKE_vfontdata_from_freetypefont(PackedFile *pf)
 {
-  int fontid = BLF_load_mem("FTVFont", static_cast<const unsigned char *>(pf->data), pf->size);
+  int fontid = BLF_load_mem("FTVFont", static_cast<const uchar *>(pf->data), pf->size);
   if (fontid == -1) {
     return nullptr;
   }
@@ -84,18 +84,19 @@ VChar *BKE_vfontdata_char_from_freetypefont(VFont *vfont, ulong character)
   int font_id = -1;
 
   if (BKE_vfont_is_builtin(vfont)) {
-    font_id = BLF_load_mem(vfont->data->name,
-                           static_cast<const unsigned char *>(builtin_font_data),
-                           builtin_font_size);
+    font_id = BLF_load_mem(
+        vfont->data->name, static_cast<const uchar *>(builtin_font_data), builtin_font_size);
   }
   else if (vfont->temp_pf) {
-    font_id = BLF_load_mem(vfont->data->name,
-                           static_cast<const unsigned char *>(vfont->temp_pf->data),
-                           vfont->temp_pf->size);
+    font_id = BLF_load_mem(
+        vfont->data->name, static_cast<const uchar *>(vfont->temp_pf->data), vfont->temp_pf->size);
   }
 
   if (font_id == -1) {
-    return nullptr;
+    /* This could happen for a saved file with an unpacked local font that was
+     * later removed. Load the default UI font so we can still show _something_. */
+    font_id = BLF_load_mem(
+        vfont->data->name, static_cast<const uchar *>(builtin_font_data), builtin_font_size);
   }
 
   VChar *che = (VChar *)MEM_callocN(sizeof(VChar), "objfnt_char");

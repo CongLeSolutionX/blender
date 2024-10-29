@@ -4,7 +4,7 @@
 
 import bpy
 from bpy.types import Panel
-from rna_prop_ui import PropertyPanel
+import rna_prop_ui
 
 from bpy.app.translations import contexts as i18n_contexts
 
@@ -106,6 +106,7 @@ class BONE_PT_transform(BoneButtonsPanel, Panel):
 
             col = layout.column()
             col.prop(bone, "roll")
+            col.prop(bone, "length")
             col.prop(bone, "lock")
 
 
@@ -260,6 +261,16 @@ class BONE_PT_collections(BoneButtonsPanel, Panel):
         layout.use_property_split = False
 
         bone = context.bone or context.edit_bone
+        object = context.pose_object or context.edit_object or context.object
+        if not object:
+            layout.active = False
+            sub = layout.column(align=True)
+            sub.label(text="Cannot figure out which object this bone belongs to.")
+            sub.label(text="Please file a bug report.")
+            return
+
+        armature = object.data
+        is_solo_active = armature.collections.is_solo_active
 
         if not bone.collections:
             layout.active = False
@@ -275,12 +286,16 @@ class BONE_PT_collections(BoneButtonsPanel, Panel):
             # Name & visibility of bcoll. Safe things, so aligned together.
             row = bcoll_row.row(align=True)
             row.label(text=bcoll.name)
-            row.prop(bcoll, "is_visible", text="",
-                     icon='HIDE_OFF' if bcoll.is_visible else 'HIDE_ON')
 
-            # Unassignment operator, less safe so with a bit of spacing.
-            props = bcoll_row.operator("armature.collection_unassign_named",
-                                       text="", icon='X')
+            # Sub-layout that's dimmed when the bone collection's own visibility flag doesn't matter.
+            sub_visible = row.row(align=True)
+            sub_visible.active = (not is_solo_active) and bcoll.is_visible_ancestors
+            sub_visible.prop(bcoll, "is_visible", text="", icon='HIDE_OFF' if bcoll.is_visible else 'HIDE_ON')
+
+            row.prop(bcoll, "is_solo", text="", icon='SOLO_ON' if bcoll.is_solo else 'SOLO_OFF')
+
+            # Unassign operator, less safe so with a bit of spacing.
+            props = bcoll_row.operator("armature.collection_unassign_named", text="", icon='X')
             props.name = bcoll.name
             props.bone_name = bone.name
 
@@ -309,6 +324,9 @@ class BONE_PT_display(BoneButtonsPanel, Panel):
 
         col = layout.column()
         col.prop(bone, "hide", text="Hide", toggle=False)
+        hide_select_sub = col.column()
+        hide_select_sub.active = not bone.hide
+        hide_select_sub.prop(bone, "hide_select", invert_checkbox=True)
 
         # Figure out the pose bone.
         ob = context.object
@@ -338,6 +356,9 @@ class BONE_PT_display(BoneButtonsPanel, Panel):
 
         col = layout.column()
         col.prop(bone, "hide", text="Hide", toggle=False)
+        hide_select_sub = col.column()
+        hide_select_sub.active = not bone.hide
+        hide_select_sub.prop(bone, "hide_select", invert_checkbox=True)
         layout.prop(bone.color, "palette", text="Bone Color")
         self.draw_bone_color_ui(layout, bone.color)
 
@@ -369,6 +390,7 @@ class BONE_PT_display_custom_shape(BoneButtonsPanel, Panel):
         return context.bone
 
     def draw(self, context):
+        import platform
         layout = self.layout
         layout.use_property_split = True
 
@@ -393,12 +415,21 @@ class BONE_PT_display_custom_shape(BoneButtonsPanel, Panel):
             sub.prop(pchan, "custom_shape_translation", text="Translation")
             sub.prop(pchan, "custom_shape_rotation_euler", text="Rotation")
 
-            sub.prop_search(pchan, "custom_shape_transform",
-                            ob.pose, "bones", text="Override Transform")
+            sub.prop_search(pchan, "custom_shape_transform", ob.pose, "bones", text="Override Transform")
             sub.prop(pchan, "use_custom_shape_bone_size")
 
             sub.separator()
             sub.prop(bone, "show_wire", text="Wireframe")
+
+            # Disabled on Mac due to drawing issues with lacking geometry shader support. See #124691.
+            is_darwin = platform.system() == "Darwin"
+
+            width_sub = sub.column()
+            width_sub.active = not is_darwin
+            width_sub.prop(pchan, "custom_shape_wire_width")
+
+            if is_darwin:
+                sub.label(text="Custom wire width not available on MacOS", icon='INFO')
 
 
 class BONE_PT_inverse_kinematics(BoneButtonsPanel, Panel):
@@ -530,7 +561,7 @@ class BONE_PT_deform(BoneButtonsPanel, Panel):
         col.prop(bone, "tail_radius", text="Tail")
 
 
-class BONE_PT_custom_props(BoneButtonsPanel, PropertyPanel, Panel):
+class BONE_PT_custom_props(BoneButtonsPanel, rna_prop_ui.PropertyPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
@@ -539,13 +570,47 @@ class BONE_PT_custom_props(BoneButtonsPanel, PropertyPanel, Panel):
     }
     _property_type = bpy.types.Bone, bpy.types.EditBone, bpy.types.PoseBone
 
-    @property
-    def _context_path(self):
-        obj = bpy.context.object
-        if obj and obj.mode == 'POSE':
-            return "active_pose_bone"
-        else:
+    @classmethod
+    def _poll(cls, context):
+        context_path = cls._get_context_path(context)
+        rna_item, _context_member = rna_prop_ui.rna_idprop_context_value(context, context_path, cls._property_type)
+        return bool(rna_item)
+
+    def draw(self, context):
+        context_path = self._get_context_path(context)
+        rna_prop_ui.draw(self.layout, context, context_path, self._property_type)
+
+    @classmethod
+    def _get_context_path(self, context):
+        if context.mode == 'EDIT_ARMATURE':
+            # This also accounts for pinned armatures.
+            return "edit_bone"
+
+        obj = context.object
+        if not obj:
+            # We have to return _something_. If there is some bone by some
+            # miracle, just use it.
+            return "bone"
+
+        if obj.mode != 'POSE':
+            # Outside of pose mode, active_bone is the one to use. It's either a
+            # Bone or an EditBone, depending on the mode.
             return "active_bone"
+
+        if context.active_pose_bone is not None:
+            # There is an active pose bone, so use it.
+            return "active_pose_bone"
+
+        # When the active bone is hidden, `context.active_pose_bone` is None, but
+        # `context.bone` still points to it. Use that to still get the pose bone.
+        if context.bone is None:
+            # If there is no active bone, let the rest of the code refer to the
+            # also-None active pose bone, as that's more appropriate given we're
+            # currently in pose mode.
+            return "active_pose_bone"
+
+        bone_path = obj.pose.bones[context.bone.name].path_from_id()
+        return "object." + bone_path
 
 
 classes = (

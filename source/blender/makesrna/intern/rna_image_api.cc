@@ -10,30 +10,30 @@
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
+#include <fcntl.h>
 
 #include "DNA_packedFile_types.h"
 
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 #include "BLI_utildefines.h"
 
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
 
-#include "BKE_packedFile.h"
+#include "BKE_packedFile.hh"
 
-#include "rna_internal.h" /* own include */
+#include "rna_internal.hh" /* own include */
 
 #ifdef RNA_RUNTIME
 
 #  include "BKE_image.h"
 #  include "BKE_image_format.h"
 #  include "BKE_image_save.h"
-#  include "BKE_main.h"
-#  include "BKE_scene.h"
+#  include "BKE_main.hh"
+#  include "BKE_scene.hh"
 #  include <errno.h>
 
-#  include "IMB_colormanagement.h"
-#  include "IMB_imbuf.h"
+#  include "IMB_imbuf.hh"
 
 #  include "DNA_image_types.h"
 #  include "DNA_scene_types.h"
@@ -144,15 +144,21 @@ static void rna_Image_unpack(Image *image, Main *bmain, ReportList *reports, int
 {
   if (!BKE_image_has_packedfile(image)) {
     BKE_report(reports, RPT_ERROR, "Image not packed");
+    return;
   }
-  else if (ELEM(image->source, IMA_SRC_MOVIE, IMA_SRC_SEQUENCE)) {
+
+  if (!ID_IS_EDITABLE(&image->id)) {
+    BKE_report(reports, RPT_ERROR, "Image is not editable");
+    return;
+  }
+
+  if (ELEM(image->source, IMA_SRC_MOVIE, IMA_SRC_SEQUENCE)) {
     BKE_report(reports, RPT_ERROR, "Unpacking movies or image sequences not supported");
     return;
   }
-  else {
-    /* reports its own error on failure */
-    BKE_packedfile_unpack_image(bmain, reports, image, ePF_FileStatus(method));
-  }
+
+  /* reports its own error on failure */
+  BKE_packedfile_unpack_image(bmain, reports, image, ePF_FileStatus(method));
 }
 
 static void rna_Image_reload(Image *image, Main *bmain)
@@ -180,10 +186,21 @@ static void rna_Image_update(Image *image, ReportList *reports)
   BKE_image_release_ibuf(image, ibuf, nullptr);
 }
 
-static void rna_Image_scale(Image *image, ReportList *reports, int width, int height)
+static void rna_Image_scale(
+    Image *image, ReportList *reports, int width, int height, int frame, int tile_index)
 {
-  if (!BKE_image_scale(image, width, height)) {
-    BKE_reportf(reports, RPT_ERROR, "Image '%s' does not have any image data", image->id.name + 2);
+  ImageUser iuser{};
+  BKE_imageuser_default(&iuser);
+  iuser.framenr = frame;
+  if (image->source == IMA_SRC_TILED) {
+    const ImageTile *tile = static_cast<ImageTile *>(BLI_findlink(&image->tiles, tile_index));
+    if (tile != nullptr) {
+      iuser.tile = tile->tile_number;
+    }
+  }
+
+  if (!BKE_image_scale(image, width, height, &iuser)) {
+    BKE_reportf(reports, RPT_ERROR, "Image '%s' failed to load image buffer", image->id.name + 2);
     return;
   }
   BKE_image_partial_update_mark_full_update(image);
@@ -202,7 +219,7 @@ static int rna_Image_gl_load(
     BKE_image_multilayer_index(image->rr, &iuser);
   }
 
-  GPUTexture *tex = BKE_image_get_gpu_texture(image, &iuser, nullptr);
+  GPUTexture *tex = BKE_image_get_gpu_texture(image, &iuser);
 
   if (tex == nullptr) {
     BKE_reportf(reports, RPT_ERROR, "Failed to load image texture '%s'", image->id.name + 2);
@@ -335,6 +352,9 @@ void RNA_api_image(StructRNA *srna)
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   parm = RNA_def_int(func, "height", 1, 1, INT_MAX, "", "Height", 1, INT_MAX);
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  RNA_def_int(func, "frame", 0, 0, INT_MAX, "Frame", "Frame (for image sequences)", 0, INT_MAX);
+  RNA_def_int(
+      func, "tile_index", 0, 0, INT_MAX, "Tile", "Tile index (for tiled images)", 0, INT_MAX);
 
   func = RNA_def_function(srna, "gl_touch", "rna_Image_gl_touch");
   RNA_def_function_ui_description(
@@ -370,7 +390,7 @@ void RNA_api_image(StructRNA *srna)
       func,
       "Load the image into an OpenGL texture. On success, image.bindcode will contain the "
       "OpenGL texture bindcode. Colors read from the texture will be in scene linear color space "
-      "and have premultiplied or straight alpha matching the image alpha mode");
+      "and have premultiplied or straight alpha matching the image alpha mode.");
   RNA_def_function_flag(func, FUNC_USE_REPORTS);
   RNA_def_int(
       func, "frame", 0, 0, INT_MAX, "Frame", "Frame of image sequence or movie", 0, INT_MAX);

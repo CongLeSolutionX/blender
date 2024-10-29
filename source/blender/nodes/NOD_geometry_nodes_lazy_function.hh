@@ -29,6 +29,7 @@
 #include "NOD_multi_function.hh"
 
 #include "BLI_compute_context.hh"
+#include "BLI_math_quaternion_types.hh"
 
 #include "BKE_bake_items.hh"
 #include "BKE_node_tree_zones.hh"
@@ -41,6 +42,7 @@ namespace blender::nodes {
 
 using lf::LazyFunction;
 using mf::MultiFunction;
+using ReferenceSetIndex = int;
 
 /** The structs in here describe the different possible behaviors of a simulation input node. */
 namespace sim_input {
@@ -49,8 +51,7 @@ namespace sim_input {
  * The data is just passed through the node. Data that is incompatible with simulations (like
  * anonymous attributes), is removed though.
  */
-struct PassThrough {
-};
+struct PassThrough {};
 
 /**
  * The input is not evaluated, instead the values provided here are output by the node.
@@ -61,8 +62,9 @@ struct OutputCopy {
 };
 
 /**
- * Same as above, but the values can be output by move, instead of copy. This can reduce the amount
- * of unnecessary copies, when the old simulation state is not needed anymore.
+ * Same as #OutputCopy, but the values can be output by move, instead of copy.
+ * This can reduce the amount of unnecessary copies,
+ * when the old simulation state is not needed anymore.
  */
 struct OutputMove {
   float delta_time;
@@ -80,8 +82,7 @@ namespace sim_output {
  * Output the data that comes from the corresponding simulation input node, ignoring the nodes in
  * the zone.
  */
-struct PassThrough {
-};
+struct PassThrough {};
 
 /**
  * Computes the simulation step and calls the given function to cache the new simulation state.
@@ -108,7 +109,14 @@ struct ReadInterpolated {
   bke::bake::BakeStateRef next_state;
 };
 
-using Behavior = std::variant<PassThrough, StoreNewState, ReadSingle, ReadInterpolated>;
+/**
+ * Used when there was some issue loading the baked data from disk.
+ */
+struct ReadError {
+  std::string message;
+};
+
+using Behavior = std::variant<PassThrough, StoreNewState, ReadSingle, ReadInterpolated, ReadError>;
 
 }  // namespace sim_output
 
@@ -116,6 +124,7 @@ using Behavior = std::variant<PassThrough, StoreNewState, ReadSingle, ReadInterp
 struct SimulationZoneBehavior {
   sim_input::Behavior input;
   sim_output::Behavior output;
+  bke::bake::BakeDataBlockMap *data_block_map = nullptr;
 };
 
 class GeoNodesSimulationParams {
@@ -128,13 +137,24 @@ class GeoNodesSimulationParams {
   virtual SimulationZoneBehavior *get(const int zone_id) const = 0;
 };
 
+struct BakeNodeBehavior {
+  /** The set of possible behaviors are the same for both of these nodes currently. */
+  sim_output::Behavior behavior;
+  bke::bake::BakeDataBlockMap *data_block_map = nullptr;
+};
+
+class GeoNodesBakeParams {
+ public:
+  virtual BakeNodeBehavior *get(const int id) const = 0;
+};
+
 struct GeoNodesSideEffectNodes {
   MultiValueMap<ComputeContextHash, const lf::FunctionNode *> nodes_by_context;
   /**
-   * The repeat zone is identified by the compute context of the parent and the identifier of the
-   * repeat output node.
+   * The repeat/foreach zone is identified by the compute context of the parent and the identifier
+   * of the repeat output node.
    */
-  MultiValueMap<std::pair<ComputeContextHash, int32_t>, int> iterations_by_repeat_zone;
+  MultiValueMap<std::pair<ComputeContextHash, int32_t>, int> iterations_by_iteration_zone;
 };
 
 /**
@@ -145,11 +165,67 @@ struct GeoNodesModifierData {
   const Object *self_object = nullptr;
   /** Depsgraph that is evaluating the modifier. */
   Depsgraph *depsgraph = nullptr;
-  /** Optional logger. */
+};
+
+struct GeoNodesOperatorDepsgraphs {
+  /** Current evaluated depsgraph from the viewport. Shouldn't be null. */
+  const Depsgraph *active = nullptr;
+  /**
+   * Depsgraph containing IDs referenced by the node tree and the node tree itself and from node
+   * group inputs (the redo panel).
+   */
+  Depsgraph *extra = nullptr;
+
+  ~GeoNodesOperatorDepsgraphs();
+
+  /**
+   * The evaluated data-block might be in the scene's active depsgraph, in that case we should use
+   * it directly. Otherwise retrieve it from the extra depsgraph that was built for all other
+   * data-blocks. Return null if it isn't found, generally geometry nodes can handle null ID
+   * pointers.
+   */
+  const ID *get_evaluated_id(const ID &id_orig) const;
+};
+
+struct GeoNodesOperatorData {
+  eObjectMode mode;
+  /** The object currently effected by the operator. */
+  const Object *self_object_orig = nullptr;
+  const GeoNodesOperatorDepsgraphs *depsgraphs = nullptr;
+  Scene *scene_orig = nullptr;
+  int2 mouse_position;
+  int2 region_size;
+
+  float3 cursor_position;
+  math::Quaternion cursor_rotation;
+
+  float4x4 viewport_winmat;
+  float4x4 viewport_viewmat;
+  bool viewport_is_perspective;
+
+  int active_point_index = -1;
+  int active_edge_index = -1;
+  int active_face_index = -1;
+};
+
+struct GeoNodesCallData {
+  /**
+   * Top-level node tree of the current evaluation.
+   */
+  const bNodeTree *root_ntree = nullptr;
+  /**
+   * Optional logger that keeps track of data generated during evaluation to allow for better
+   * debugging afterwards.
+   */
   geo_eval_log::GeoModifierLog *eval_log = nullptr;
-
+  /**
+   * Optional injected behavior for simulations.
+   */
   GeoNodesSimulationParams *simulation_params = nullptr;
-
+  /**
+   * Optional injected behavior for bake nodes.
+   */
+  GeoNodesBakeParams *bake_params = nullptr;
   /**
    * Some nodes should be executed even when their output is not used (e.g. active viewer nodes and
    * the node groups they are contained in).
@@ -163,24 +239,7 @@ struct GeoNodesModifierData {
    * If this is null, all socket values will be logged.
    */
   const Set<ComputeContextHash> *socket_log_contexts = nullptr;
-};
 
-struct GeoNodesOperatorData {
-  eObjectMode mode;
-  /** The object currently effected by the operator. */
-  const Object *self_object = nullptr;
-  /** Current evaluated depsgraph. */
-  Depsgraph *depsgraph = nullptr;
-  Scene *scene = nullptr;
-
-  /** Optional logger. */
-  geo_eval_log::GeoModifierLog *eval_log = nullptr;
-};
-
-/**
- * Custom user data that is passed to every geometry nodes related lazy-function evaluation.
- */
-struct GeoNodesLFUserData : public lf::UserData {
   /**
    * Data from the modifier that is being evaluated.
    */
@@ -189,6 +248,22 @@ struct GeoNodesLFUserData : public lf::UserData {
    * Data from execution as operator in 3D viewport.
    */
   GeoNodesOperatorData *operator_data = nullptr;
+
+  /**
+   * Self object has slightly different semantics depending on how geometry nodes is called.
+   * Therefor, it is not stored directly in the global data.
+   */
+  const Object *self_object() const;
+};
+
+/**
+ * Custom user data that is passed to every geometry nodes related lazy-function evaluation.
+ */
+struct GeoNodesLFUserData : public lf::UserData {
+  /**
+   * Data provided by the root caller of geometry nodes.
+   */
+  const GeoNodesCallData *call_data = nullptr;
   /**
    * Current compute context. This is different depending in the (nested) node group that is being
    * evaluated.
@@ -198,10 +273,6 @@ struct GeoNodesLFUserData : public lf::UserData {
    * Log socket values in the current compute context. Child contexts might use logging again.
    */
   bool log_socket_values = true;
-  /**
-   * Top-level node tree of the current evaluation.
-   */
-  const bNodeTree *root_ntree = nullptr;
 
   destruct_ptr<lf::LocalUserData> get_local(LinearAllocator<> &allocator) override;
 };
@@ -280,7 +351,7 @@ struct GeometryNodeLazyFunctionGraphMapping {
   /* Indexed by #bNodeSocket::index_in_all_outputs. */
   Array<int> lf_input_index_for_output_bsocket_usage;
   /* Indexed by #bNodeSocket::index_in_all_outputs. */
-  Array<int> lf_input_index_for_attribute_propagation_to_output;
+  Array<int> lf_input_index_for_reference_set_for_output;
   /* Indexed by #bNodeSocket::index_in_tree. */
   Array<int> lf_index_by_bsocket;
 };
@@ -314,7 +385,7 @@ struct GeometryNodesGroupFunction {
     struct {
       IndexRange range;
       Vector<int> geometry_outputs;
-    } attributes_to_propagate;
+    } references_to_propagate;
   } inputs;
 
   struct {
@@ -344,6 +415,7 @@ struct GeometryNodesLazyFunctionGraphInfo {
    * The actual lazy-function graph.
    */
   lf::Graph graph;
+  Map<int, const lf::Graph *> debug_zone_body_graphs;
   /**
    * Mappings between the lazy-function graph and the #bNodeTree.
    */
@@ -362,7 +434,29 @@ std::unique_ptr<LazyFunction> get_simulation_input_lazy_function(
     const bNode &node,
     GeometryNodesLazyFunctionGraphInfo &own_lf_graph_info);
 std::unique_ptr<LazyFunction> get_switch_node_lazy_function(const bNode &node);
-std::unique_ptr<LazyFunction> get_index_switch_node_lazy_function(const bNode &node);
+std::unique_ptr<LazyFunction> get_index_switch_node_lazy_function(
+    const bNode &node, GeometryNodesLazyFunctionGraphInfo &lf_graph_info);
+std::unique_ptr<LazyFunction> get_bake_lazy_function(
+    const bNode &node, GeometryNodesLazyFunctionGraphInfo &own_lf_graph_info);
+std::unique_ptr<LazyFunction> get_menu_switch_node_lazy_function(
+    const bNode &node, GeometryNodesLazyFunctionGraphInfo &lf_graph_info);
+std::unique_ptr<LazyFunction> get_menu_switch_node_socket_usage_lazy_function(const bNode &node);
+std::unique_ptr<LazyFunction> get_warning_node_lazy_function(const bNode &node);
+
+/**
+ * Outputs the default value of each output socket that has not been output yet. This needs the
+ * #bNode because otherwise the default values for the outputs are not known. The lazy-function
+ * parameters do not differentiate between e.g. float and vector sockets. The #SocketValueVariant
+ * type is used for both.
+ */
+void set_default_remaining_node_outputs(lf::Params &params, const bNode &node);
+void set_default_value_for_output_socket(lf::Params &params,
+                                         const int lf_index,
+                                         const bNodeSocket &bsocket);
+
+std::string make_anonymous_attribute_socket_inspection_string(const bNodeSocket &socket);
+std::string make_anonymous_attribute_socket_inspection_string(StringRef node_name,
+                                                              StringRef socket_name);
 
 struct FoundNestedNodeID {
   int id;
@@ -374,28 +468,140 @@ std::optional<FoundNestedNodeID> find_nested_node_id(const GeoNodesLFUserData &u
                                                      const int node_id);
 
 /**
- * An anonymous attribute created by a node.
- */
-class NodeAnonymousAttributeID : public bke::AnonymousAttributeID {
-  std::string long_name_;
-  std::string socket_name_;
-
- public:
-  NodeAnonymousAttributeID(const Object &object,
-                           const ComputeContext &compute_context,
-                           const bNode &bnode,
-                           const StringRef identifier,
-                           const StringRef name);
-
-  std::string user_name() const override;
-};
-
-/**
  * Main function that converts a #bNodeTree into a lazy-function graph. If the graph has been
  * generated already, nothing is done. Under some circumstances a valid graph cannot be created. In
  * those cases null is returned.
  */
 const GeometryNodesLazyFunctionGraphInfo *ensure_geometry_nodes_lazy_function_graph(
     const bNodeTree &btree);
+
+/**
+ * Utility to measure the time that is spend in a specific compute context during geometry nodes
+ * evaluation.
+ */
+class ScopedComputeContextTimer {
+ private:
+  lf::Context &context_;
+  geo_eval_log::TimePoint start_;
+
+ public:
+  ScopedComputeContextTimer(lf::Context &entered_context) : context_(entered_context)
+  {
+    start_ = geo_eval_log::Clock::now();
+  }
+
+  ~ScopedComputeContextTimer()
+  {
+    const geo_eval_log::TimePoint end = geo_eval_log::Clock::now();
+    auto &user_data = static_cast<GeoNodesLFUserData &>(*context_.user_data);
+    auto &local_user_data = static_cast<GeoNodesLFLocalUserData &>(*context_.local_user_data);
+    if (geo_eval_log::GeoTreeLogger *tree_logger = local_user_data.try_get_tree_logger(user_data))
+    {
+      tree_logger->execution_time += (end - start_);
+    }
+  }
+};
+
+/**
+ * Utility to measure the time that is spend in a specific node during geometry nodes evaluation.
+ */
+class ScopedNodeTimer {
+ private:
+  const lf::Context &context_;
+  const bNode &node_;
+  geo_eval_log::TimePoint start_;
+
+ public:
+  ScopedNodeTimer(const lf::Context &context, const bNode &node) : context_(context), node_(node)
+  {
+    start_ = geo_eval_log::Clock::now();
+  }
+
+  ~ScopedNodeTimer()
+  {
+    const geo_eval_log::TimePoint end = geo_eval_log::Clock::now();
+    auto &user_data = static_cast<GeoNodesLFUserData &>(*context_.user_data);
+    auto &local_user_data = static_cast<GeoNodesLFLocalUserData &>(*context_.local_user_data);
+    if (geo_eval_log::GeoTreeLogger *tree_logger = local_user_data.try_get_tree_logger(user_data))
+    {
+      tree_logger->node_execution_times.append(*tree_logger->allocator,
+                                               {node_.identifier, start_, end});
+    }
+  }
+};
+
+bool should_log_socket_values_for_context(const GeoNodesLFUserData &user_data,
+                                          const ComputeContextHash hash);
+
+/**
+ * Computes the logical or of the inputs and supports short-circuit evaluation (i.e. if the first
+ * input is true already, the other inputs are not checked).
+ */
+class LazyFunctionForLogicalOr : public lf::LazyFunction {
+ public:
+  LazyFunctionForLogicalOr(const int inputs_num);
+
+  void execute_impl(lf::Params &params, const lf::Context &context) const override;
+};
+
+struct ZoneFunctionIndices {
+  struct {
+    Vector<int> main;
+    Vector<int> border_links;
+    Vector<int> output_usages;
+    Map<ReferenceSetIndex, int> reference_sets;
+  } inputs;
+  struct {
+    Vector<int> main;
+    Vector<int> border_link_usages;
+    Vector<int> input_usages;
+  } outputs;
+};
+
+struct ZoneBuildInfo {
+  /** The lazy function that contains the zone. */
+  const LazyFunction *lazy_function = nullptr;
+
+  /** Information about what the various inputs and outputs of the lazy-function are. */
+  ZoneFunctionIndices indices;
+};
+
+/**
+ * Contains the lazy-function for the "body" of a zone. It contains all the nodes inside of the
+ * zone. The "body" function is wrapped by another lazy-function which represents the zone as a
+ * hole. The wrapper function might invoke the zone body multiple times (like for repeat zones).
+ */
+struct ZoneBodyFunction {
+  const LazyFunction *function = nullptr;
+  ZoneFunctionIndices indices;
+};
+
+LazyFunction &build_repeat_zone_lazy_function(ResourceScope &scope,
+                                              const bNodeTree &btree,
+                                              const bke::bNodeTreeZone &zone,
+                                              ZoneBuildInfo &zone_info,
+                                              const ZoneBodyFunction &body_fn);
+
+LazyFunction &build_foreach_geometry_element_zone_lazy_function(ResourceScope &scope,
+                                                                const bNodeTree &btree,
+                                                                const bke::bNodeTreeZone &zone,
+                                                                ZoneBuildInfo &zone_info,
+                                                                const ZoneBodyFunction &body_fn);
+
+void initialize_zone_wrapper(const bke::bNodeTreeZone &zone,
+                             ZoneBuildInfo &zone_info,
+                             const ZoneBodyFunction &body_fn,
+                             Vector<lf::Input> &r_inputs,
+                             Vector<lf::Output> &r_outputs);
+
+std::string zone_wrapper_input_name(const ZoneBuildInfo &zone_info,
+                                    const bke::bNodeTreeZone &zone,
+                                    const Span<lf::Input> inputs,
+                                    const int lf_socket_i);
+
+std::string zone_wrapper_output_name(const ZoneBuildInfo &zone_info,
+                                     const bke::bNodeTreeZone &zone,
+                                     const Span<lf::Output> outputs,
+                                     const int lf_socket_i);
 
 }  // namespace blender::nodes

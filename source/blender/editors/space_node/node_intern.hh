@@ -46,6 +46,7 @@ struct NestedTreePreviews;
 struct bNodeLinkDrag {
   /** Links dragged by the operator. */
   Vector<bNodeLink> links;
+  /** Which side of the links is fixed. */
   eNodeSocketInOut in_out;
 
   /** Draw handler for the tooltip icon when dragging a link in empty space. */
@@ -87,13 +88,6 @@ struct SpaceNode_Runtime {
 
   /** Mouse position for drawing socket-less links and adding nodes. */
   float2 cursor;
-
-  /**
-   * Indicates that the compositing tree in the space needs to be re-evaluated using the
-   * auto-compositing pipeline.
-   * Takes priority over the regular compositing.
-   */
-  bool recalc_auto_compositing;
 
   /**
    * Indicates that the compositing int the space tree needs to be re-evaluated using
@@ -187,7 +181,7 @@ Array<bNode *> tree_draw_order_calc_nodes(bNodeTree &ntree);
 /** Return the nodes in reverse draw order, with the top nodes at the start. */
 Array<bNode *> tree_draw_order_calc_nodes_reversed(bNodeTree &ntree);
 
-void node_set_cursor(wmWindow &win, SpaceNode &snode, const float2 &cursor);
+void node_set_cursor(wmWindow &win, ARegion &region, SpaceNode &snode, const float2 &cursor);
 /* DPI scaled coords */
 float2 node_to_view(const bNode &node, const float2 &co);
 void node_to_updated_rect(const bNode &node, rctf &r_rect);
@@ -203,7 +197,7 @@ void node_keymap(wmKeyConfig *keyconf);
 rctf node_frame_rect_inside(const SpaceNode &snode, const bNode &node);
 bool node_or_socket_isect_event(const bContext &C, const wmEvent &event);
 
-void node_deselect_all(bNodeTree &node_tree);
+bool node_deselect_all(bNodeTree &node_tree);
 void node_socket_select(bNode *node, bNodeSocket &sock);
 void node_socket_deselect(bNode *node, bNodeSocket &sock, bool deselect_node);
 void node_deselect_all_input_sockets(bNodeTree &node_tree, bool deselect_nodes);
@@ -308,6 +302,8 @@ void NODE_OT_group_ungroup(wmOperatorType *ot);
 void NODE_OT_group_separate(wmOperatorType *ot);
 void NODE_OT_group_edit(wmOperatorType *ot);
 
+void NODE_OT_default_group_width_set(wmOperatorType *ot);
+
 /* `node_relationships.cc` */
 
 void update_multi_input_indices_for_removed_links(bNode &node);
@@ -350,6 +346,7 @@ void node_set_hidden_sockets(bNode *node, int set);
 bool node_is_previewable(const SpaceNode &snode, const bNodeTree &ntree, const bNode &node);
 int node_render_changed_exec(bContext *, wmOperator *);
 bNodeSocket *node_find_indicated_socket(SpaceNode &snode,
+                                        ARegion &region,
                                         const float2 &cursor,
                                         eNodeSocketInOut in_out);
 float node_link_dim_factor(const View2D &v2d, const bNodeLink &link);
@@ -377,8 +374,6 @@ void NODE_OT_output_file_add_socket(wmOperatorType *ot);
 void NODE_OT_output_file_remove_active_socket(wmOperatorType *ot);
 void NODE_OT_output_file_move_active_socket(wmOperatorType *ot);
 
-void NODE_OT_switch_view_update(wmOperatorType *ot);
-
 /**
  * \note clipboard_cut is a simple macro of copy + delete.
  */
@@ -405,7 +400,8 @@ void NODE_GGT_backdrop_corner_pin(wmGizmoGroupType *gzgt);
 void node_geometry_add_attribute_search_button(const bContext &C,
                                                const bNode &node,
                                                PointerRNA &socket_ptr,
-                                               uiLayout &layout);
+                                               uiLayout &layout,
+                                               StringRefNull placeholder = "");
 
 /* `node_context_path.cc` */
 

@@ -21,14 +21,14 @@
 #include "DNA_node_types.h"
 
 #include "BKE_context.hh"
-#include "BKE_lib_id.h"
-#include "BKE_main.h"
+#include "BKE_lib_id.hh"
+#include "BKE_main.hh"
 #include "BKE_mesh.hh"
 #include "BKE_node.hh"
 #include "BLI_fileops.h"
 #include "BLI_math_vector_types.hh"
-#include "BLI_path_util.h"
-#include "BLO_readfile.h"
+#include "BLI_path_utils.hh"
+#include "BLO_readfile.hh"
 
 #include "BKE_node_runtime.hh"
 
@@ -36,8 +36,9 @@
 
 #include "WM_api.hh"
 
-#include "usd.h"
-#include "usd_writer_material.h"
+#include "usd.hh"
+#include "usd_utils.hh"
+#include "usd_writer_material.hh"
 
 namespace blender::io::usd {
 
@@ -191,10 +192,10 @@ class UsdExportTest : public BlendfileLoadingBaseTest {
     mesh_prim.GetPointsAttr().Get(&positions, 0.0);
     mesh_prim.GetNormalsAttr().Get(&normals, 0.0);
 
-    EXPECT_EQ(mesh->totvert, positions.size());
+    EXPECT_EQ(mesh->verts_num, positions.size());
     EXPECT_EQ(mesh->faces_num, face_counts.size());
-    EXPECT_EQ(mesh->totloop, face_indices.size());
-    EXPECT_EQ(mesh->totloop, normals.size());
+    EXPECT_EQ(mesh->corners_num, face_indices.size());
+    EXPECT_EQ(mesh->corners_num, normals.size());
   }
 };
 
@@ -263,9 +264,9 @@ TEST_F(UsdExportTest, usd_export_material)
   }
 
   /* File sanity checks. */
-  EXPECT_EQ(BLI_listbase_count(&bfile->main->objects), 1);
-  /* There are two materials because of the Dots Stroke. */
-  EXPECT_EQ(BLI_listbase_count(&bfile->main->materials), 2);
+  EXPECT_EQ(BLI_listbase_count(&bfile->main->objects), 6);
+  /* There is 1 additional material because of the "Dots Stroke". */
+  EXPECT_EQ(BLI_listbase_count(&bfile->main->materials), 7);
 
   Material *material = reinterpret_cast<Material *>(
       BKE_libblock_find_name(bfile->main, ID_MA, "Material"));
@@ -278,6 +279,8 @@ TEST_F(UsdExportTest, usd_export_material)
   params.export_textures = false;
   params.export_uvmaps = true;
   params.generate_preview_surface = true;
+  params.generate_materialx_network = false;
+  params.convert_world_material = false;
   params.relative_paths = false;
 
   const bool result = USD_export(context, output_filename.c_str(), &params, false, nullptr);
@@ -309,6 +312,33 @@ TEST_F(UsdExportTest, usd_export_material)
                                 << output_filename;
 
   compare_blender_image_to_usd_image_shader(image_node, image_prim);
+}
+
+TEST(utilities, make_safe_name)
+{
+  ASSERT_EQ(make_safe_name("", false), std::string("_"));
+  ASSERT_EQ(make_safe_name("1", false), std::string("_"));
+  ASSERT_EQ(make_safe_name("1Test", false), std::string("_Test"));
+
+  ASSERT_EQ(make_safe_name("Test", false), std::string("Test"));
+  ASSERT_EQ(make_safe_name("Test|$bézier @ world", false), std::string("Test__b__zier___world"));
+  ASSERT_EQ(make_safe_name("Test|ハローワールド", false),
+            std::string("Test______________________"));
+  ASSERT_EQ(make_safe_name("Test|Γεια σου κόσμε", false),
+            std::string("Test___________________________"));
+  ASSERT_EQ(make_safe_name("Test|∧hello ○ wórld", false), std::string("Test____hello_____w__rld"));
+
+#if PXR_VERSION >= 2403
+  ASSERT_EQ(make_safe_name("", true), std::string("_"));
+  ASSERT_EQ(make_safe_name("1", true), std::string("_"));
+  ASSERT_EQ(make_safe_name("1Test", true), std::string("_Test"));
+
+  ASSERT_EQ(make_safe_name("Test", true), std::string("Test"));
+  ASSERT_EQ(make_safe_name("Test|$bézier @ world", true), std::string("Test__bézier___world"));
+  ASSERT_EQ(make_safe_name("Test|ハローワールド", true), std::string("Test_ハローワールド"));
+  ASSERT_EQ(make_safe_name("Test|Γεια σου κόσμε", true), std::string("Test_Γεια_σου_κόσμε"));
+  ASSERT_EQ(make_safe_name("Test|∧hello ○ wórld", true), std::string("Test__hello___wórld"));
+#endif
 }
 
 }  // namespace blender::io::usd

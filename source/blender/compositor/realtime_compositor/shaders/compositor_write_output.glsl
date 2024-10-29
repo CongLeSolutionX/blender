@@ -2,11 +2,16 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#pragma BLENDER_REQUIRE(gpu_shader_compositor_texture_utilities.glsl)
+#include "gpu_shader_compositor_texture_utilities.glsl"
 
 void main()
 {
   ivec2 texel = ivec2(gl_GlobalInvocationID.xy);
+  ivec2 output_texel = texel + lower_bound;
+  if (any(greaterThan(output_texel, upper_bound))) {
+    return;
+  }
+
   vec4 input_color = texture_load(input_tx, texel);
 
 #if defined(DIRECT_OUTPUT)

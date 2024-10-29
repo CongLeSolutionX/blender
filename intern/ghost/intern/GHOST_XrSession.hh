@@ -109,10 +109,13 @@ class GHOST_XrSession {
       std::vector<XrCompositionLayerProjectionView> &r_proj_layer_views, void *draw_customdata);
   void drawView(GHOST_XrSwapchain &swapchain,
                 XrCompositionLayerProjectionView &r_proj_layer_view,
-                XrSpaceLocation &view_location,
-                XrView &view,
+                const XrSpaceLocation &view_location,
+                const XrView &view,
                 uint32_t view_idx,
                 void *draw_customdata);
   void beginFrameDrawing();
   void endFrameDrawing(std::vector<XrCompositionLayerBaseHeader *> &layers);
+
+  /** Meta Quest Passthrough. */
+  void enablePassthrough();
 };

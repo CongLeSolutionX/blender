@@ -69,7 +69,7 @@ set(SRC_DNA_INC
   ${CMAKE_CURRENT_SOURCE_DIR}/makesdna/DNA_screen_types.h
   ${CMAKE_CURRENT_SOURCE_DIR}/makesdna/DNA_sdna_types.h
   ${CMAKE_CURRENT_SOURCE_DIR}/makesdna/DNA_sequence_types.h
-  ${CMAKE_CURRENT_SOURCE_DIR}/makesdna/DNA_session_uuid_types.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/makesdna/DNA_session_uid_types.h
   ${CMAKE_CURRENT_SOURCE_DIR}/makesdna/DNA_shader_fx_types.h
   ${CMAKE_CURRENT_SOURCE_DIR}/makesdna/DNA_sound_types.h
   ${CMAKE_CURRENT_SOURCE_DIR}/makesdna/DNA_space_types.h
@@ -94,6 +94,7 @@ set(SRC_DNA_INC
 )
 
 set(SRC_DNA_DEFAULTS_INC
+  ${CMAKE_CURRENT_SOURCE_DIR}/makesdna/DNA_action_defaults.h
   ${CMAKE_CURRENT_SOURCE_DIR}/makesdna/DNA_armature_defaults.h
   ${CMAKE_CURRENT_SOURCE_DIR}/makesdna/DNA_asset_defaults.h
   ${CMAKE_CURRENT_SOURCE_DIR}/makesdna/DNA_brush_defaults.h
@@ -105,6 +106,7 @@ set(SRC_DNA_DEFAULTS_INC
   ${CMAKE_CURRENT_SOURCE_DIR}/makesdna/DNA_defaults.h
   ${CMAKE_CURRENT_SOURCE_DIR}/makesdna/DNA_fluid_defaults.h
   ${CMAKE_CURRENT_SOURCE_DIR}/makesdna/DNA_gpencil_modifier_defaults.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/makesdna/DNA_grease_pencil_defaults.h
   ${CMAKE_CURRENT_SOURCE_DIR}/makesdna/DNA_image_defaults.h
   ${CMAKE_CURRENT_SOURCE_DIR}/makesdna/DNA_lattice_defaults.h
   ${CMAKE_CURRENT_SOURCE_DIR}/makesdna/DNA_light_defaults.h
@@ -129,7 +131,13 @@ set(SRC_DNA_DEFAULTS_INC
   ${CMAKE_CURRENT_SOURCE_DIR}/makesdna/DNA_world_defaults.h
 )
 
+# Utility & other headers.
+set(SRC_DNA_OTHER_INC
+  ${CMAKE_CURRENT_SOURCE_DIR}/makesdna/DNA_array_utils.hh
+)
+
 add_subdirectory(datatoc)
+add_subdirectory(gpu/glsl_preprocess)
 add_subdirectory(editors)
 add_subdirectory(windowmanager)
 add_subdirectory(animrig)
@@ -151,7 +159,6 @@ add_subdirectory(imbuf)
 add_subdirectory(imbuf/intern/oiio)
 add_subdirectory(nodes)
 add_subdirectory(modifiers)
-add_subdirectory(gpencil_modifiers_legacy)
 add_subdirectory(sequencer)
 add_subdirectory(shader_fx)
 add_subdirectory(io)
@@ -179,4 +186,8 @@ endif()
 
 if(WITH_FREESTYLE)
   add_subdirectory(freestyle)
+endif()
+
+if(WITH_CPU_CHECK)
+  add_subdirectory(cpucheck)
 endif()

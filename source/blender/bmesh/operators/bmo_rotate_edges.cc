@@ -12,9 +12,9 @@
 
 #include "BLI_heap.h"
 
-#include "bmesh.h"
+#include "bmesh.hh"
 
-#include "intern/bmesh_operators_private.h" /* own include */
+#include "intern/bmesh_operators_private.hh" /* own include */
 
 #define EDGE_OUT 1
 #define FACE_MARK 1
@@ -55,7 +55,7 @@ static float bm_edge_calc_rotate_cost(const BMEdge *e)
 /**
  * Check if this edge is a boundary: Are more than one of the connected faces edges rotating too?
  */
-static float bm_edge_rotate_is_boundary(const BMEdge *e)
+static bool bm_edge_rotate_is_boundary(const BMEdge *e)
 {
   /* Number of adjacent shared faces. */
   int count = 0;

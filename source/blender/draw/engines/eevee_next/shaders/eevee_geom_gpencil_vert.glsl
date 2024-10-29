@@ -2,18 +2,18 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#pragma BLENDER_REQUIRE(draw_model_lib.glsl)
+#include "draw_model_lib.glsl"
 /* Grease pencil includes commmon_view_lib. */
-// #pragma BLENDER_REQUIRE(common_gpencil_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_attributes_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_surf_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_velocity_lib.glsl)
+// #include "common_gpencil_lib.glsl"
+#include "eevee_attributes_lib.glsl"
+#include "eevee_surf_lib.glsl"
+#include "eevee_velocity_lib.glsl"
 
 void main()
 {
   DRW_VIEW_FROM_RESOURCE_ID;
 #ifdef MAT_SHADOW
-  shadow_viewport_layer_set(int(drw_view_id), int(viewport_index_buf[drw_view_id]));
+  shadow_viewport_layer_set(int(drw_view_id), int(render_view_buf[drw_view_id].viewport_index));
 #endif
 
   init_interface();
@@ -55,5 +55,12 @@ void main()
 
 #ifdef MAT_CLIP_PLANE
   clip_interp.clip_distance = dot(clip_plane.plane, vec4(interp.P, 1.0));
+#endif
+
+#ifdef MAT_SHADOW
+  vec3 vs_P = drw_point_world_to_view(interp.P);
+  ShadowRenderView view = render_view_buf[drw_view_id];
+  shadow_clip.position = shadow_position_vector_get(vs_P, view);
+  shadow_clip.vector = shadow_clip_vector_get(vs_P, view.clip_distance_inv);
 #endif
 }

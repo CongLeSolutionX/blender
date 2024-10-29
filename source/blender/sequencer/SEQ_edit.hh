@@ -16,7 +16,7 @@ struct Sequence;
 bool SEQ_edit_sequence_swap(Scene *scene,
                             Sequence *seq_a,
                             Sequence *seq_b,
-                            const char **error_str);
+                            const char **r_error_str);
 /**
  * Move sequence to seqbase.
  *
@@ -35,13 +35,12 @@ bool SEQ_edit_move_strip_to_seqbase(Scene *scene,
  * \param scene: Scene containing the editing
  * \param src_seq: Sequence to move
  * \param dst_seqm: Target Meta sequence
- * \param error_str: Error message
+ * \param r_error_str: Error message
  */
 bool SEQ_edit_move_strip_to_meta(Scene *scene,
                                  Sequence *src_seq,
                                  Sequence *dst_seqm,
-                                 const char **error_str);
-bool SEQ_meta_separate(Scene *scene, Sequence *src_meta, const char **error_str);
+                                 const char **r_error_str);
 /**
  * Flag seq and its users (effects) for removal.
  */
@@ -52,10 +51,10 @@ void SEQ_edit_flag_for_removal(Scene *scene, ListBase *seqbase, Sequence *seq);
 void SEQ_edit_remove_flagged_sequences(Scene *scene, ListBase *seqbase);
 void SEQ_edit_update_muting(Editing *ed);
 
-typedef enum eSeqSplitMethod {
+enum eSeqSplitMethod {
   SEQ_SPLIT_SOFT,
   SEQ_SPLIT_HARD,
-} eSeqSplitMethod;
+};
 
 /**
  * Split Sequence at timeline_frame in two.

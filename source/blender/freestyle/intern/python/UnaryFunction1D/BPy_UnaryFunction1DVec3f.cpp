@@ -33,21 +33,21 @@ int UnaryFunction1DVec3f_Init(PyObject *module)
   if (PyType_Ready(&UnaryFunction1DVec3f_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&UnaryFunction1DVec3f_Type);
-  PyModule_AddObject(module, "UnaryFunction1DVec3f", (PyObject *)&UnaryFunction1DVec3f_Type);
+  PyModule_AddObjectRef(module, "UnaryFunction1DVec3f", (PyObject *)&UnaryFunction1DVec3f_Type);
 
   if (PyType_Ready(&Orientation3DF1D_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&Orientation3DF1D_Type);
-  PyModule_AddObject(module, "Orientation3DF1D", (PyObject *)&Orientation3DF1D_Type);
+  PyModule_AddObjectRef(module, "Orientation3DF1D", (PyObject *)&Orientation3DF1D_Type);
 
   return 0;
 }
 
 //------------------------INSTANCE METHODS ----------------------------------
 
-static char UnaryFunction1DVec3f___doc__[] =
+PyDoc_STRVAR(
+    /* Wrap. */
+    UnaryFunction1DVec3f___doc__,
     "Class hierarchy: :class:`UnaryFunction1D` > :class:`UnaryFunction1DVec3f`\n"
     "\n"
     "Base class for unary functions (functors) that work on\n"
@@ -60,7 +60,7 @@ static char UnaryFunction1DVec3f___doc__[] =
     "   or the integration method given as an argument.\n"
     "\n"
     "   :arg integration_type: An integration method.\n"
-    "   :type integration_type: :class:`IntegrationType`\n";
+    "   :type integration_type: :class:`IntegrationType`\n");
 
 static int UnaryFunction1DVec3f___init__(BPy_UnaryFunction1DVec3f *self,
                                          PyObject *args,
@@ -70,7 +70,8 @@ static int UnaryFunction1DVec3f___init__(BPy_UnaryFunction1DVec3f *self,
   PyObject *obj = nullptr;
 
   if (!PyArg_ParseTupleAndKeywords(
-          args, kwds, "|O!", (char **)kwlist, &IntegrationType_Type, &obj)) {
+          args, kwds, "|O!", (char **)kwlist, &IntegrationType_Type, &obj))
+  {
     return -1;
   }
 
@@ -124,10 +125,12 @@ static PyObject *UnaryFunction1DVec3f___call__(BPy_UnaryFunction1DVec3f *self,
 
 /*----------------------UnaryFunction1DVec3f get/setters ----------------------------*/
 
-PyDoc_STRVAR(integration_type_doc,
-             "The integration method.\n"
-             "\n"
-             ":type: :class:`IntegrationType`");
+PyDoc_STRVAR(
+    /* Wrap. */
+    integration_type_doc,
+    "The integration method.\n"
+    "\n"
+    ":type: :class:`IntegrationType`");
 
 static PyObject *integration_type_get(BPy_UnaryFunction1DVec3f *self, void * /*closure*/)
 {

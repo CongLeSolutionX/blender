@@ -19,12 +19,13 @@
 
 #include "DNA_object_types.h"
 #include "DNA_screen_types.h"
+#include "DNA_sequence_types.h"
 #include "DNA_space_types.h"
 #include "DNA_view3d_types.h"
 
 #include "BKE_context.hh"
-#include "BKE_global.h"
-#include "BKE_layer.h"
+#include "BKE_global.hh"
+#include "BKE_layer.hh"
 
 #include "RNA_access.hh"
 
@@ -44,11 +45,12 @@
 #include "SEQ_channels.hh"
 #include "SEQ_iterator.hh"
 #include "SEQ_sequencer.hh"
-#include "SEQ_time.hh"
 #include "SEQ_transform.hh"
 
 #include "transform.hh"
 #include "transform_gizmo.hh"
+
+using blender::Vector;
 
 /* -------------------------------------------------------------------- */
 /** \name Shared Callback's
@@ -148,7 +150,7 @@ static void gizmo2d_pivot_point_message_subscribe(wmGizmoGroup *gzgroup,
  *
  * \{ */
 
-/* axes as index */
+/* Axes as index. */
 enum {
   MAN2D_AXIS_TRANS_X = 0,
   MAN2D_AXIS_TRANS_Y,
@@ -160,7 +162,7 @@ struct GizmoGroup2D {
   wmGizmo *translate_xy[3];
   wmGizmo *cage;
 
-  /* Current origin in view space, used to update widget origin for possible view changes */
+  /* Current origin in view space, used to update widget origin for possible view changes. */
   float origin[2];
   float min[2];
   float max[2];
@@ -236,13 +238,11 @@ static bool gizmo2d_calc_bounds(const bContext *C, float *r_center, float *r_min
   if (area->spacetype == SPACE_IMAGE) {
     Scene *scene = CTX_data_scene(C);
     ViewLayer *view_layer = CTX_data_view_layer(C);
-    uint objects_len = 0;
-    Object **objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
-        scene, view_layer, nullptr, &objects_len);
-    if (ED_uvedit_minmax_multi(scene, objects, objects_len, r_min, r_max)) {
+    Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
+        scene, view_layer, nullptr);
+    if (ED_uvedit_minmax_multi(scene, objects, r_min, r_max)) {
       has_select = true;
     }
-    MEM_freeN(objects);
   }
   else if (area->spacetype == SPACE_SEQ) {
     Scene *scene = CTX_data_scene(C);
@@ -441,14 +441,14 @@ static void gizmo2d_xform_setup(const bContext * /*C*/, wmGizmoGroup *gzgroup)
   for (int i = 0; i < ARRAY_SIZE(ggd->translate_xy); i++) {
     wmGizmo *gz = ggd->translate_xy[i];
 
-    /* custom handler! */
+    /* Custom handler! */
     WM_gizmo_set_fn_custom_modal(gz, gizmo2d_modal);
 
     if (i < 2) {
       float color[4], color_hi[4];
       gizmo2d_get_axis_color(i, color, color_hi);
 
-      /* set up widget data */
+      /* Set up widget data. */
       RNA_float_set(gz->ptr, "length", 0.8f);
       float axis[3] = {0.0f};
       axis[i] = 1.0f;
@@ -502,7 +502,7 @@ static void gizmo2d_xform_setup(const bContext * /*C*/, wmGizmoGroup *gzgroup)
     wmOperatorType *ot_rotate = WM_operatortype_find("TRANSFORM_OT_rotate", true);
     PointerRNA *ptr;
 
-    /* assign operator */
+    /* Assign operator. */
     ptr = WM_gizmo_operator_set(ggd->cage, 0, ot_translate, nullptr);
     RNA_boolean_set(ptr, "release_confirm", true);
 
@@ -849,14 +849,14 @@ static void gizmo2d_resize_setup(const bContext * /*C*/, wmGizmoGroup *gzgroup)
   for (int i = 0; i < ARRAY_SIZE(ggd->gizmo_xy); i++) {
     wmGizmo *gz = ggd->gizmo_xy[i];
 
-    /* custom handler! */
+    /* Custom handler! */
     WM_gizmo_set_fn_custom_modal(gz, gizmo2d_modal);
 
     if (i < 2) {
       float color[4], color_hi[4];
       gizmo2d_get_axis_color(i, color, color_hi);
 
-      /* set up widget data */
+      /* Set up widget data. */
       RNA_float_set(gz->ptr, "length", 1.0f);
       RNA_enum_set(gz->ptr, "draw_style", ED_GIZMO_ARROW_STYLE_BOX);
 
@@ -997,7 +997,7 @@ static void gizmo2d_rotate_setup(const bContext * /*C*/, wmGizmoGroup *gzgroup)
   {
     wmGizmo *gz = ggd->gizmo;
 
-    /* custom handler! */
+    /* Custom handler! */
     WM_gizmo_set_fn_custom_modal(gz, gizmo2d_modal);
     WM_gizmo_set_scale(gz, 1.2f);
 

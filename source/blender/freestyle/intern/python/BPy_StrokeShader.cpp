@@ -48,126 +48,113 @@ int StrokeShader_Init(PyObject *module)
   if (PyType_Ready(&StrokeShader_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&StrokeShader_Type);
-  PyModule_AddObject(module, "StrokeShader", (PyObject *)&StrokeShader_Type);
+  PyModule_AddObjectRef(module, "StrokeShader", (PyObject *)&StrokeShader_Type);
 
   if (PyType_Ready(&BackboneStretcherShader_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&BackboneStretcherShader_Type);
-  PyModule_AddObject(module, "BackboneStretcherShader", (PyObject *)&BackboneStretcherShader_Type);
+  PyModule_AddObjectRef(
+      module, "BackboneStretcherShader", (PyObject *)&BackboneStretcherShader_Type);
 
   if (PyType_Ready(&BezierCurveShader_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&BezierCurveShader_Type);
-  PyModule_AddObject(module, "BezierCurveShader", (PyObject *)&BezierCurveShader_Type);
+  PyModule_AddObjectRef(module, "BezierCurveShader", (PyObject *)&BezierCurveShader_Type);
 
   if (PyType_Ready(&BlenderTextureShader_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&BlenderTextureShader_Type);
-  PyModule_AddObject(module, "BlenderTextureShader", (PyObject *)&BlenderTextureShader_Type);
+  PyModule_AddObjectRef(module, "BlenderTextureShader", (PyObject *)&BlenderTextureShader_Type);
 
   if (PyType_Ready(&CalligraphicShader_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&CalligraphicShader_Type);
-  PyModule_AddObject(module, "CalligraphicShader", (PyObject *)&CalligraphicShader_Type);
+  PyModule_AddObjectRef(module, "CalligraphicShader", (PyObject *)&CalligraphicShader_Type);
 
   if (PyType_Ready(&ColorNoiseShader_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&ColorNoiseShader_Type);
-  PyModule_AddObject(module, "ColorNoiseShader", (PyObject *)&ColorNoiseShader_Type);
+  PyModule_AddObjectRef(module, "ColorNoiseShader", (PyObject *)&ColorNoiseShader_Type);
 
   if (PyType_Ready(&ConstantColorShader_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&ConstantColorShader_Type);
-  PyModule_AddObject(module, "ConstantColorShader", (PyObject *)&ConstantColorShader_Type);
+  PyModule_AddObjectRef(module, "ConstantColorShader", (PyObject *)&ConstantColorShader_Type);
 
   if (PyType_Ready(&ConstantThicknessShader_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&ConstantThicknessShader_Type);
-  PyModule_AddObject(module, "ConstantThicknessShader", (PyObject *)&ConstantThicknessShader_Type);
+  PyModule_AddObjectRef(
+      module, "ConstantThicknessShader", (PyObject *)&ConstantThicknessShader_Type);
 
   if (PyType_Ready(&ConstrainedIncreasingThicknessShader_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&ConstrainedIncreasingThicknessShader_Type);
-  PyModule_AddObject(module,
-                     "ConstrainedIncreasingThicknessShader",
-                     (PyObject *)&ConstrainedIncreasingThicknessShader_Type);
+  PyModule_AddObjectRef(module,
+                        "ConstrainedIncreasingThicknessShader",
+                        (PyObject *)&ConstrainedIncreasingThicknessShader_Type);
 
   if (PyType_Ready(&GuidingLinesShader_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&GuidingLinesShader_Type);
-  PyModule_AddObject(module, "GuidingLinesShader", (PyObject *)&GuidingLinesShader_Type);
+  PyModule_AddObjectRef(module, "GuidingLinesShader", (PyObject *)&GuidingLinesShader_Type);
 
   if (PyType_Ready(&IncreasingColorShader_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&IncreasingColorShader_Type);
-  PyModule_AddObject(module, "IncreasingColorShader", (PyObject *)&IncreasingColorShader_Type);
+  PyModule_AddObjectRef(module, "IncreasingColorShader", (PyObject *)&IncreasingColorShader_Type);
 
   if (PyType_Ready(&IncreasingThicknessShader_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&IncreasingThicknessShader_Type);
-  PyModule_AddObject(
+  PyModule_AddObjectRef(
       module, "IncreasingThicknessShader", (PyObject *)&IncreasingThicknessShader_Type);
 
   if (PyType_Ready(&PolygonalizationShader_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&PolygonalizationShader_Type);
-  PyModule_AddObject(module, "PolygonalizationShader", (PyObject *)&PolygonalizationShader_Type);
+  PyModule_AddObjectRef(
+      module, "PolygonalizationShader", (PyObject *)&PolygonalizationShader_Type);
 
   if (PyType_Ready(&SamplingShader_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&SamplingShader_Type);
-  PyModule_AddObject(module, "SamplingShader", (PyObject *)&SamplingShader_Type);
+  PyModule_AddObjectRef(module, "SamplingShader", (PyObject *)&SamplingShader_Type);
 
   if (PyType_Ready(&SmoothingShader_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&SmoothingShader_Type);
-  PyModule_AddObject(module, "SmoothingShader", (PyObject *)&SmoothingShader_Type);
+  PyModule_AddObjectRef(module, "SmoothingShader", (PyObject *)&SmoothingShader_Type);
 
   if (PyType_Ready(&SpatialNoiseShader_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&SpatialNoiseShader_Type);
-  PyModule_AddObject(module, "SpatialNoiseShader", (PyObject *)&SpatialNoiseShader_Type);
+  PyModule_AddObjectRef(module, "SpatialNoiseShader", (PyObject *)&SpatialNoiseShader_Type);
 
   if (PyType_Ready(&StrokeTextureStepShader_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&StrokeTextureStepShader_Type);
-  PyModule_AddObject(module, "StrokeTextureStepShader", (PyObject *)&StrokeTextureStepShader_Type);
+  PyModule_AddObjectRef(
+      module, "StrokeTextureStepShader", (PyObject *)&StrokeTextureStepShader_Type);
 
   if (PyType_Ready(&ThicknessNoiseShader_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&ThicknessNoiseShader_Type);
-  PyModule_AddObject(module, "ThicknessNoiseShader", (PyObject *)&ThicknessNoiseShader_Type);
+  PyModule_AddObjectRef(module, "ThicknessNoiseShader", (PyObject *)&ThicknessNoiseShader_Type);
 
   if (PyType_Ready(&TipRemoverShader_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&TipRemoverShader_Type);
-  PyModule_AddObject(module, "TipRemoverShader", (PyObject *)&TipRemoverShader_Type);
+  PyModule_AddObjectRef(module, "TipRemoverShader", (PyObject *)&TipRemoverShader_Type);
 
   return 0;
 }
 
 //------------------------INSTANCE METHODS ----------------------------------
 
-static char StrokeShader___doc__[] =
+PyDoc_STRVAR(
+    /* Wrap. */
+    StrokeShader___doc__,
     "Base class for stroke shaders. Any stroke shader must inherit from\n"
     "this class and overload the shade() method. A StrokeShader is\n"
     "designed to modify stroke attributes such as thickness, color,\n"
@@ -184,7 +171,7 @@ static char StrokeShader___doc__[] =
     "\n"
     ".. method:: __init__()\n"
     "\n"
-    "   Default constructor.\n";
+    "   Default constructor.\n");
 
 static int StrokeShader___init__(BPy_StrokeShader *self, PyObject *args, PyObject *kwds)
 {
@@ -209,13 +196,15 @@ static PyObject *StrokeShader___repr__(BPy_StrokeShader *self)
   return PyUnicode_FromFormat("type: %s - address: %p", Py_TYPE(self)->tp_name, self->ss);
 }
 
-static char StrokeShader_shade___doc__[] =
+PyDoc_STRVAR(
+    /* Wrap. */
+    StrokeShader_shade___doc__,
     ".. method:: shade(stroke)\n"
     "\n"
     "   The shading method. Must be overloaded by inherited classes.\n"
     "\n"
     "   :arg stroke: A Stroke object.\n"
-    "   :type stroke: :class:`Stroke`\n";
+    "   :type stroke: :class:`Stroke`\n");
 
 static PyObject *StrokeShader_shade(BPy_StrokeShader *self, PyObject *args, PyObject *kwds)
 {
@@ -250,10 +239,12 @@ static PyMethodDef BPy_StrokeShader_methods[] = {
 
 /*----------------------StrokeShader get/setters ----------------------------*/
 
-PyDoc_STRVAR(StrokeShader_name_doc,
-             "The name of the stroke shader.\n"
-             "\n"
-             ":type: str");
+PyDoc_STRVAR(
+    /* Wrap. */
+    StrokeShader_name_doc,
+    "The name of the stroke shader.\n"
+    "\n"
+    ":type: str");
 
 static PyObject *StrokeShader_name_get(BPy_StrokeShader *self, void * /*closure*/)
 {

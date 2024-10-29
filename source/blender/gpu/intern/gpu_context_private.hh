@@ -12,7 +12,7 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "GPU_context.h"
+#include "GPU_context.hh"
 
 #include "gpu_debug_private.hh"
 #include "gpu_framebuffer_private.hh"
@@ -34,6 +34,8 @@ class Context {
   GPUMatrixState *matrix_state = nullptr;
   StateManager *state_manager = nullptr;
   Immediate *imm = nullptr;
+
+  ShaderCompiler *compiler = nullptr;
 
   /**
    * All 4 window frame-buffers.
@@ -58,6 +60,8 @@ class Context {
   static int context_counter;
   int context_id = 0;
 
+  GPUStorageBuf *printf_buf = nullptr;
+
  protected:
   /** Thread on which this context is active. */
   pthread_t thread_;
@@ -81,17 +85,22 @@ class Context {
   /* Will wait until the GPU has finished executing all command. */
   virtual void finish() = 0;
 
-  virtual void memory_statistics_get(int *total_mem, int *free_mem) = 0;
+  virtual void memory_statistics_get(int *r_total_mem, int *r_free_mem) = 0;
 
   virtual void debug_group_begin(const char *, int){};
   virtual void debug_group_end(){};
 
   /* Returns true if capture successfully started. */
-  virtual bool debug_capture_begin() = 0;
+  virtual bool debug_capture_begin(const char *title) = 0;
   virtual void debug_capture_end() = 0;
   virtual void *debug_capture_scope_create(const char *name) = 0;
   virtual bool debug_capture_scope_begin(void *scope) = 0;
   virtual void debug_capture_scope_end(void *scope) = 0;
+
+  /* Consider all buffers slot empty after these call for error checking.
+   * But doesn't really free them. */
+  virtual void debug_unbind_all_ubo() = 0;
+  virtual void debug_unbind_all_ssbo() = 0;
 
   bool is_active_on_thread();
 };

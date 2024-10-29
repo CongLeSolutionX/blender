@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#pragma BLENDER_REQUIRE(gpu_shader_material_transform_utils.glsl)
+#include "gpu_shader_material_transform_utils.glsl"
 
 void node_vector_displacement_tangent(
     vec4 vector, float midlevel, float scale, vec4 T, out vec3 result)
@@ -16,13 +16,13 @@ void node_vector_displacement_tangent(
 
   vec3 disp = (vector.xyz - midlevel) * scale;
   disp = disp.x * oT + disp.y * oN + disp.z * oB;
-  point_transform_object_to_world(disp, result);
+  direction_transform_object_to_world(disp, result);
 }
 
 void node_vector_displacement_object(vec4 vector, float midlevel, float scale, out vec3 result)
 {
   vec3 disp = (vector.xyz - midlevel) * scale;
-  point_transform_object_to_world(disp, result);
+  direction_transform_object_to_world(disp, result);
 }
 
 void node_vector_displacement_world(vec4 vector, float midlevel, float scale, out vec3 result)

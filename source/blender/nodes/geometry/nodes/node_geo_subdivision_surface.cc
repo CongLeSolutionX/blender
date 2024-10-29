@@ -2,13 +2,12 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_array_utils.hh"
 #include "BLI_task.hh"
 
 #include "DNA_modifier_types.h"
 
 #include "BKE_attribute.hh"
-#include "BKE_lib_id.h"
+#include "BKE_lib_id.hh"
 #include "BKE_mesh.hh"
 #include "BKE_subdiv.hh"
 #include "BKE_subdiv_mesh.hh"
@@ -67,14 +66,14 @@ static void write_vert_creases(Mesh &mesh, const VArray<float> &creases)
 {
   bke::MutableAttributeAccessor attributes = mesh.attributes_for_write();
   attributes.remove("crease_vert");
-  attributes.add<float>("crease_vert", ATTR_DOMAIN_POINT, bke::AttributeInitVArray(creases));
+  attributes.add<float>("crease_vert", AttrDomain::Point, bke::AttributeInitVArray(creases));
 }
 
 static void write_edge_creases(Mesh &mesh, const VArray<float> &creases)
 {
   bke::MutableAttributeAccessor attributes = mesh.attributes_for_write();
   attributes.remove("crease_edge");
-  attributes.add<float>("crease_edge", ATTR_DOMAIN_EDGE, bke::AttributeInitVArray(creases));
+  attributes.add<float>("crease_edge", AttrDomain::Edge, bke::AttributeInitVArray(creases));
 }
 
 static bool varray_is_single_zero(const VArray<float> &varray)
@@ -101,13 +100,13 @@ static Mesh *mesh_subsurf_calc(const Mesh *mesh,
                                const int boundary_smooth,
                                const int uv_smooth)
 {
-  const bke::MeshFieldContext point_context{*mesh, ATTR_DOMAIN_POINT};
-  FieldEvaluator point_evaluator(point_context, mesh->totvert);
+  const bke::MeshFieldContext point_context{*mesh, AttrDomain::Point};
+  FieldEvaluator point_evaluator(point_context, mesh->verts_num);
   point_evaluator.add(clamp_crease(vert_crease_field));
   point_evaluator.evaluate();
 
-  const bke::MeshFieldContext edge_context{*mesh, ATTR_DOMAIN_EDGE};
-  FieldEvaluator edge_evaluator(edge_context, mesh->totedge);
+  const bke::MeshFieldContext edge_context{*mesh, AttrDomain::Edge};
+  FieldEvaluator edge_evaluator(edge_context, mesh->edges_num);
   edge_evaluator.add(clamp_crease(edge_crease_field));
   edge_evaluator.evaluate();
 
@@ -121,33 +120,33 @@ static Mesh *mesh_subsurf_calc(const Mesh *mesh,
     /* Due to the "BKE_subdiv" API, the crease layers must be on the input mesh. But in this node
      * they are provided as separate inputs, not as custom data layers. When needed, retrieve the
      * mesh with write access and store the new crease values there. */
-    mesh_copy = BKE_mesh_copy_for_eval(mesh);
+    mesh_copy = BKE_mesh_copy_for_eval(*mesh);
     write_vert_creases(*mesh_copy, vert_creases);
     write_edge_creases(*mesh_copy, edge_creases);
     mesh = mesh_copy;
   }
 
-  SubdivToMeshSettings mesh_settings;
+  bke::subdiv::ToMeshSettings mesh_settings;
   mesh_settings.resolution = (1 << level) + 1;
   mesh_settings.use_optimal_display = false;
 
-  SubdivSettings subdiv_settings;
+  bke::subdiv::Settings subdiv_settings;
   subdiv_settings.is_simple = false;
   subdiv_settings.is_adaptive = false;
   subdiv_settings.use_creases = use_creases;
   subdiv_settings.level = level;
-  subdiv_settings.vtx_boundary_interpolation = BKE_subdiv_vtx_boundary_interpolation_from_subsurf(
-      boundary_smooth);
-  subdiv_settings.fvar_linear_interpolation = BKE_subdiv_fvar_interpolation_from_uv_smooth(
+  subdiv_settings.vtx_boundary_interpolation =
+      bke::subdiv::vtx_boundary_interpolation_from_subsurf(boundary_smooth);
+  subdiv_settings.fvar_linear_interpolation = bke::subdiv::fvar_interpolation_from_uv_smooth(
       uv_smooth);
 
-  Subdiv *subdiv = BKE_subdiv_new_from_mesh(&subdiv_settings, mesh);
+  bke::subdiv::Subdiv *subdiv = bke::subdiv::new_from_mesh(&subdiv_settings, mesh);
   if (!subdiv) {
     return nullptr;
   }
 
-  Mesh *result = BKE_subdiv_to_mesh(subdiv, &mesh_settings, mesh);
-  BKE_subdiv_free(subdiv);
+  Mesh *result = bke::subdiv::subdiv_to_mesh(subdiv, &mesh_settings, mesh);
+  bke::subdiv::free(subdiv);
 
   if (use_creases) {
     /* Remove the layer in case it was created by the node from the field input. The fact
@@ -206,7 +205,9 @@ static void node_rna(StructRNA *srna)
                     "Controls how smoothing is applied to UVs",
                     rna_enum_subdivision_uv_smooth_items,
                     NOD_storage_enum_accessors(uv_smooth),
-                    SUBSURF_UV_SMOOTH_PRESERVE_BOUNDARIES);
+                    SUBSURF_UV_SMOOTH_PRESERVE_BOUNDARIES,
+                    nullptr,
+                    true);
 
   RNA_def_node_enum(srna,
                     "boundary_smooth",
@@ -214,12 +215,14 @@ static void node_rna(StructRNA *srna)
                     "Controls how open boundaries are smoothed",
                     rna_enum_subdivision_boundary_smooth_items,
                     NOD_storage_enum_accessors(boundary_smooth),
-                    SUBSURF_BOUNDARY_SMOOTH_ALL);
+                    SUBSURF_BOUNDARY_SMOOTH_ALL,
+                    nullptr,
+                    true);
 }
 
 static void node_register()
 {
-  static bNodeType ntype;
+  static blender::bke::bNodeType ntype;
 
   geo_node_type_base(
       &ntype, GEO_NODE_SUBDIVISION_SURFACE, "Subdivision Surface", NODE_CLASS_GEOMETRY);
@@ -227,12 +230,12 @@ static void node_register()
   ntype.geometry_node_execute = node_geo_exec;
   ntype.draw_buttons = node_layout;
   ntype.initfunc = node_init;
-  bke::node_type_size_preset(&ntype, bke::eNodeSizePreset::MIDDLE);
-  node_type_storage(&ntype,
-                    "NodeGeometrySubdivisionSurface",
-                    node_free_standard_storage,
-                    node_copy_standard_storage);
-  nodeRegisterType(&ntype);
+  bke::node_type_size_preset(&ntype, bke::eNodeSizePreset::Middle);
+  blender::bke::node_type_storage(&ntype,
+                                  "NodeGeometrySubdivisionSurface",
+                                  node_free_standard_storage,
+                                  node_copy_standard_storage);
+  blender::bke::node_register_type(&ntype);
 
   node_rna(ntype.rna_ext.srna);
 }

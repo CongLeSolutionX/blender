@@ -6,25 +6,19 @@
  * \ingroup edtransform
  */
 
-#include <cstdlib>
-
 #include "DNA_gpencil_legacy_types.h"
 
 #include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
 #include "BLI_string.h"
 #include "BLI_task.h"
 
-#include "BKE_context.hh"
-#include "BKE_unit.h"
+#include "BKE_unit.hh"
 
 #include "ED_screen.hh"
 
-#include "WM_types.hh"
-
 #include "UI_interface.hh"
 
-#include "BLT_translation.h"
+#include "BLT_translation.hh"
 
 #include "transform.hh"
 #include "transform_convert.hh"
@@ -152,7 +146,7 @@ static eRedrawFlag handleEventShear(TransInfo *t, const wmEvent *event)
   eRedrawFlag status = TREDRAW_NOTHING;
 
   if (event->type == MIDDLEMOUSE && event->val == KM_PRESS) {
-    /* Use custom.mode.data pointer to signal Shear direction */
+    /* Use custom.mode.data pointer to signal Shear direction. */
     do {
       t->orient_axis_ortho = (t->orient_axis_ortho + 1) % 3;
     } while (t->orient_axis_ortho == t->orient_axis);
@@ -173,6 +167,10 @@ static eRedrawFlag handleEventShear(TransInfo *t, const wmEvent *event)
 
     status = TREDRAW_HARD;
   }
+
+  bool is_event_handled = (event->type != MOUSEMOVE) && (status || t->redraw);
+  bool update_status_bar = t->custom.mode.data || is_event_handled;
+  t->custom.mode.data = POINTER_FROM_INT(update_status_bar);
 
   return status;
 }
@@ -265,7 +263,7 @@ static bool clip_uv_transform_shear(const TransInfo *t, float *vec, float *vec_i
     /* Binary search. */
     const float value_mid = (value_inside_bounds + value) / 2.0f;
     if (ELEM(value_mid, value_inside_bounds, value)) {
-      break; /* float precision reached. */
+      break; /* Float precision reached. */
     }
     if (uv_shear_in_clip_bounds_test(t, value_mid)) {
       value_inside_bounds = value_mid;
@@ -303,18 +301,31 @@ static void apply_shear(TransInfo *t)
   recalc_data(t);
 
   char str[UI_MAX_DRAW_STR];
-  /* header print for NumInput */
+  /* Header print for NumInput. */
   if (hasNumInput(&t->num)) {
     char c[NUM_STR_REP_LEN];
     outputNumInput(&(t->num), c, &t->scene->unit);
-    SNPRINTF(str, TIP_("Shear: %s %s"), c, t->proptext);
+    SNPRINTF(str, IFACE_("Shear: %s %s"), c, t->proptext);
   }
   else {
-    /* default header print */
-    SNPRINTF(str, TIP_("Shear: %.3f %s (Press X or Y to set shear axis)"), value, t->proptext);
+    /* Default header print. */
+    SNPRINTF(str, IFACE_("Shear: %.3f %s"), value, t->proptext);
   }
 
   ED_area_status_text(t->area, str);
+
+  bool update_status_bar = POINTER_AS_INT(t->custom.mode.data);
+  if (update_status_bar) {
+    t->custom.mode.data = POINTER_FROM_INT(0);
+
+    WorkspaceStatus status(t->context);
+    status.item(IFACE_("Confirm"), ICON_MOUSE_LMB);
+    status.item(IFACE_("Cancel"), ICON_MOUSE_RMB);
+    status.item_bool({}, t->orient_axis_ortho == (t->orient_axis + 1) % 3, ICON_EVENT_X);
+    status.item_bool({}, t->orient_axis_ortho == (t->orient_axis + 2) % 3, ICON_EVENT_Y);
+    status.item(IFACE_("Shear Axis"), ICON_NONE);
+    status.item(IFACE_("Swap Axes"), ICON_MOUSE_MMB);
+  }
 }
 
 static void initShear(TransInfo *t, wmOperator * /*op*/)
@@ -336,6 +347,9 @@ static void initShear(TransInfo *t, wmOperator * /*op*/)
   copy_v3_fl(t->num.val_inc, t->snap[0]);
   t->num.unit_sys = t->scene->unit.system;
   t->num.unit_type[0] = B_UNIT_NONE; /* Don't think we have any unit here? */
+
+  bool update_status_bar = true;
+  t->custom.mode.data = POINTER_FROM_INT(update_status_bar);
 
   transform_mode_default_modal_orientation_set(t, V3D_ORIENT_VIEW);
 }

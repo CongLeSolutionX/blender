@@ -15,7 +15,7 @@ struct Sequence;
 /**
  * Callback format for the for_each function below.
  */
-typedef bool (*SeqForEachFunc)(Sequence *seq, void *user_data);
+using SeqForEachFunc = bool (*)(Sequence *seq, void *user_data);
 
 /**
  * Utility function to recursively iterate through all sequence strips in a `seqbase` list.
@@ -86,7 +86,7 @@ blender::VectorSet<Sequence *> SEQ_query_all_strips(ListBase *seqbase);
  * \param seqbase: ListBase in which strips are queried
  * \return set of strips
  */
-blender::VectorSet<Sequence *> SEQ_query_all_strips_recursive(ListBase *seqbase);
+blender::VectorSet<Sequence *> SEQ_query_all_strips_recursive(const ListBase *seqbase);
 
 /**
  * Query all effect strips that are directly or indirectly connected to seq_reference.

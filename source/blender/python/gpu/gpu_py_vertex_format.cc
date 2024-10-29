@@ -11,11 +11,11 @@
 
 #include <Python.h>
 
-#include "../generic/py_capi_utils.h"
-#include "../generic/python_compat.h"
-#include "../generic/python_utildefines.h"
+#include "../generic/py_capi_utils.hh"
+#include "../generic/python_compat.hh"
 
-#include "gpu_py_vertex_format.h" /* own include */
+#include "gpu_py.hh"
+#include "gpu_py_vertex_format.hh" /* own include */
 
 /* -------------------------------------------------------------------- */
 /** \name Enum Conversion
@@ -51,6 +51,8 @@ static PyC_StringEnumItems pygpu_vertfetchmode_items[] = {
 
 static PyObject *pygpu_vertformat__tp_new(PyTypeObject * /*type*/, PyObject *args, PyObject *kwds)
 {
+  BPYGPU_IS_INIT_OR_ERROR_OBJ;
+
   if (PyTuple_GET_SIZE(args) || (kwds && PyDict_Size(kwds))) {
     PyErr_SetString(PyExc_ValueError, "This function takes no arguments");
     return nullptr;
@@ -59,6 +61,7 @@ static PyObject *pygpu_vertformat__tp_new(PyTypeObject * /*type*/, PyObject *arg
 }
 
 PyDoc_STRVAR(
+    /* Wrap. */
     pygpu_vertformat_attr_add_doc,
     ".. method:: attr_add(id, comp_type, len, fetch_mode)\n"
     "\n"
@@ -145,10 +148,12 @@ static void pygpu_vertformat__tp_dealloc(BPyGPUVertFormat *self)
   Py_TYPE(self)->tp_free(self);
 }
 
-PyDoc_STRVAR(pygpu_vertformat__tp_doc,
-             ".. class:: GPUVertFormat()\n"
-             "\n"
-             "   This object contains information about the structure of a vertex buffer.\n");
+PyDoc_STRVAR(
+    /* Wrap. */
+    pygpu_vertformat__tp_doc,
+    ".. class:: GPUVertFormat()\n"
+    "\n"
+    "   This object contains information about the structure of a vertex buffer.\n");
 PyTypeObject BPyGPUVertFormat_Type = {
     /*ob_base*/ PyVarObject_HEAD_INIT(nullptr, 0)
     /*tp_name*/ "GPUVertFormat",

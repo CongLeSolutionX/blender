@@ -2,8 +2,8 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#pragma BLENDER_REQUIRE(common_math_lib.glsl)
-#pragma BLENDER_REQUIRE(gpu_shader_compositor_texture_utilities.glsl)
+#include "common_math_lib.glsl"
+#include "gpu_shader_compositor_texture_utilities.glsl"
 
 /* Get the 2D vertex position of the vertex with the given index in the regular polygon
  * representing this bokeh. The polygon is rotated by the rotation amount and have a unit
@@ -96,7 +96,7 @@ void main()
   float circumradius = float(imageSize(output_img).x) / 2.0;
 
   /* Move the texel coordinates such that the regular polygon is centered. */
-  vec2 point = vec2(texel) - circumradius;
+  vec2 point = vec2(texel) + vec2(0.5) - circumradius;
 
   /* Each of the color channels of the output image contains a bokeh with a different circumradius.
    * The largest one occupies the whole image as stated above, while the other two have circumradii

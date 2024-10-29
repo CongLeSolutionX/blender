@@ -25,8 +25,10 @@ ccl_device_inline DeviceString make_string(const char *str, size_t hash)
   (void)str;
   return hash;
 #elif defined(OPENIMAGEIO_USTRING_H)
-  (void)hash;
-  return ustring(str);
+  (void)hash; /* Ignored in release builds. */
+  const DeviceString result = ustring(str);
+  kernel_assert(result.hash() == hash);
+  return result;
 #else
   (void)hash;
   return str;
@@ -86,8 +88,10 @@ struct ShaderGlobals {
   ccl_private void *tracedata;
   ccl_private void *objdata;
   void *context;
-#if OSL_LIBRARY_VERSION_CODE >= 11302
+#if OSL_LIBRARY_VERSION_CODE >= 11304
   void *shadingStateUniform;
+  int thread_index;
+  int shade_index;
 #endif
   void *renderer;
   ccl_private void *object2common;
@@ -99,11 +103,9 @@ struct ShaderGlobals {
   int backfacing;
 };
 
-struct OSLNoiseOptions {
-};
+struct OSLNoiseOptions {};
 
-struct OSLTextureOptions {
-};
+struct OSLTextureOptions {};
 
 #define OSL_TEXTURE_HANDLE_TYPE_IES ((uintptr_t)0x2 << 30)
 #define OSL_TEXTURE_HANDLE_TYPE_SVM ((uintptr_t)0x1 << 30)

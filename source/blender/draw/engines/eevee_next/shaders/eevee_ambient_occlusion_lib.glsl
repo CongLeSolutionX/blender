@@ -2,13 +2,15 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#pragma BLENDER_REQUIRE(draw_view_lib.glsl)
-#pragma BLENDER_REQUIRE(gpu_shader_utildefines_lib.glsl)
-#pragma BLENDER_REQUIRE(gpu_shader_math_base_lib.glsl)
-#pragma BLENDER_REQUIRE(gpu_shader_math_fast_lib.glsl)
-#pragma BLENDER_REQUIRE(draw_math_geom_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_sampling_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_ray_types_lib.glsl)
+#pragma once
+
+#include "draw_math_geom_lib.glsl"
+#include "draw_view_lib.glsl"
+#include "eevee_ray_types_lib.glsl"
+#include "eevee_sampling_lib.glsl"
+#include "gpu_shader_math_base_lib.glsl"
+#include "gpu_shader_math_fast_lib.glsl"
+#include "gpu_shader_utildefines_lib.glsl"
 
 /* TODO(Miguel Pozo): Move this function somewhere else. */
 /* Return a fitted cone angle given the input roughness */
@@ -105,7 +107,7 @@ float ambient_ambient_occlusion_search_horizon(vec3 vI,
     /* Gives us good precision at center and ensure we cross at least one pixel per iteration. */
     time = 1.0 + iter + square((iter + noise) / sample_count) * ssray.max_time;
     float stride = time - prev_time;
-    float lod = (log2(stride) - noise) / (1.0 + uniform_buf.ao.quality);
+    float lod = (log2(stride) - noise) * uniform_buf.ao.lod_factor_ao;
 
     vec2 uv = ssray.origin.xy + ssray.direction.xy * time;
     float depth = textureLod(depth_tx, uv * uniform_buf.hiz.uv_scale, floor(lod)).r;

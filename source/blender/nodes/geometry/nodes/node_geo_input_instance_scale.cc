@@ -22,11 +22,10 @@ class InstanceScaleFieldInput final : public bke::InstancesFieldInput {
   GVArray get_varray_for_context(const bke::Instances &instances,
                                  const IndexMask & /*mask*/) const final
   {
-    auto scale_fn = [&](const int i) -> float3 {
-      return math::to_scale(instances.transforms()[i]);
-    };
-
-    return VArray<float3>::ForFunc(instances.instances_num(), scale_fn);
+    const Span<float4x4> transforms = instances.transforms();
+    return VArray<float3>::ForFunc(instances.instances_num(), [transforms](const int i) {
+      return math::to_scale<true>(transforms[i]);
+    });
   }
 
   uint64_t hash() const override
@@ -48,11 +47,11 @@ static void node_geo_exec(GeoNodeExecParams params)
 
 static void node_register()
 {
-  static bNodeType ntype;
+  static blender::bke::bNodeType ntype;
   geo_node_type_base(&ntype, GEO_NODE_INPUT_INSTANCE_SCALE, "Instance Scale", NODE_CLASS_INPUT);
   ntype.geometry_node_execute = node_geo_exec;
   ntype.declare = node_declare;
-  nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }
 NOD_REGISTER_NODE(node_register)
 

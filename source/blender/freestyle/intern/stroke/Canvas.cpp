@@ -26,13 +26,13 @@
 
 #include "BLI_sys_types.h"
 
-#include "BKE_global.h"
+#include "BKE_global.hh"
 
 // soc #include <qimage.h>
 // soc #include <QString>
 
-#include "IMB_imbuf.h"
-#include "IMB_imbuf_types.h"
+#include "IMB_imbuf.hh"
+#include "IMB_imbuf_types.hh"
 
 using namespace std;
 
@@ -121,7 +121,8 @@ void Canvas::Clear()
 {
   if (!_Layers.empty()) {
     for (deque<StrokeLayer *>::iterator sl = _Layers.begin(), slend = _Layers.end(); sl != slend;
-         ++sl) {
+         ++sl)
+    {
       if (*sl) {
         delete (*sl);
       }
@@ -151,7 +152,8 @@ void Canvas::Erase()
 {
   if (!_Layers.empty()) {
     for (deque<StrokeLayer *>::iterator sl = _Layers.begin(), slend = _Layers.end(); sl != slend;
-         ++sl) {
+         ++sl)
+    {
       if (*sl) {
         (*sl)->clear();
       }
@@ -353,7 +355,7 @@ void Canvas::loadMap(const char *iFileName, const char *iMapName, uint iNbLevels
   ImBuf *scaledImg;
   if ((qimg->x != width()) || (qimg->y != height())) {
     scaledImg = IMB_dupImBuf(qimg);
-    IMB_scaleImBuf(scaledImg, width(), height());
+    IMB_scale(scaledImg, width(), height(), IMBScaleFilter::Box, false);
   }
 
   // deal with color image

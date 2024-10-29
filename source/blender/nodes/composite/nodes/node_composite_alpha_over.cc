@@ -6,10 +6,16 @@
  * \ingroup cmpnodes
  */
 
+#include "BLI_math_vector_types.hh"
+
+#include "FN_multi_function_builder.hh"
+
+#include "NOD_multi_function.hh"
+
 #include "UI_interface.hh"
 #include "UI_resources.hh"
 
-#include "GPU_material.h"
+#include "GPU_material.hh"
 
 #include "COM_shader_node.hh"
 
@@ -98,21 +104,34 @@ static ShaderNode *get_compositor_shader_node(DNode node)
   return new AlphaOverShaderNode(node);
 }
 
+static void node_build_multi_function(blender::nodes::NodeMultiFunctionBuilder &builder)
+{
+  /* Not yet implemented. Return zero. */
+  static auto function = mf::build::SI3_SO<float, float4, float4, float4>(
+      "Alpha Over",
+      [](const float /*factor*/,
+         const float4 & /*color*/,
+         const float4 & /*over_color*/) -> float4 { return float4(0.0f); },
+      mf::build::exec_presets::SomeSpanOrSingle<1, 2>());
+  builder.set_matching_fn(function);
+}
+
 }  // namespace blender::nodes::node_composite_alpha_over_cc
 
 void register_node_type_cmp_alphaover()
 {
   namespace file_ns = blender::nodes::node_composite_alpha_over_cc;
 
-  static bNodeType ntype;
+  static blender::bke::bNodeType ntype;
 
   cmp_node_type_base(&ntype, CMP_NODE_ALPHAOVER, "Alpha Over", NODE_CLASS_OP_COLOR);
   ntype.declare = file_ns::cmp_node_alphaover_declare;
   ntype.draw_buttons = file_ns::node_composit_buts_alphaover;
   ntype.initfunc = file_ns::node_alphaover_init;
-  node_type_storage(
+  blender::bke::node_type_storage(
       &ntype, "NodeTwoFloats", node_free_standard_storage, node_copy_standard_storage);
   ntype.get_compositor_shader_node = file_ns::get_compositor_shader_node;
+  ntype.build_multi_function = file_ns::node_build_multi_function;
 
-  nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }

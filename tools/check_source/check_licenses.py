@@ -17,13 +17,11 @@ import re
 
 from dataclasses import dataclass
 
-from typing import (
+from collections.abc import (
     Callable,
-    Dict,
-    Generator,
-    List,
-    Tuple,
+    Iterator,
 )
+
 
 # -----------------------------------------------------------------------------
 # Constants
@@ -42,7 +40,7 @@ EXPECT_SPDX_IN_FIRST_CHARS = 1024
 # Show unique headers after modifying them.
 # Useful when reviewing changes as there may be many duplicates.
 REPORT_UNIQUE_HEADER_MAPPING = False
-mapping: Dict[str, List[str]] = {}
+mapping: dict[str, list[str]] = {}
 
 SOURCE_DIR = os.path.normpath(
     os.path.abspath(
@@ -64,7 +62,7 @@ del fh
 # Global Variables
 
 # Count how many licenses are used.
-SPDX_IDENTIFIER_STATS: Dict[str, int] = {SPDX_IDENTIFIER_UNKNOWN: 0}
+SPDX_IDENTIFIER_STATS: dict[str, int] = {SPDX_IDENTIFIER_UNKNOWN: 0}
 
 # -----------------------------------------------------------------------------
 # File Type Checks
@@ -192,7 +190,7 @@ def txt_anonymous_years(text: str) -> str:
     return text
 
 
-def txt_find_next_indented_block(text: str, find: str, pos: int, limit: int) -> Tuple[int, int]:
+def txt_find_next_indented_block(text: str, find: str, pos: int, limit: int) -> tuple[int, int]:
     """
     Support for finding an indented block of text.
     Return the identifier index and the end of the block.
@@ -405,9 +403,9 @@ operation = check_contents
 
 def source_files(
     path: str,
-    paths_exclude: Tuple[str, ...],
+    paths_exclude: tuple[str, ...],
     filename_test: Callable[[str], bool],
-) -> Generator[str, None, None]:
+) -> Iterator[str]:
     # Split paths into directories & files.
     dirs_exclude_list = []
     files_exclude_list = []
@@ -487,8 +485,8 @@ def main() -> None:
     @dataclass
     class Pass:
         filename_test: Callable[[str], bool]
-        source_paths_include: Tuple[str, ...]
-        source_paths_exclude: Tuple[str, ...]
+        source_paths_include: tuple[str, ...]
+        source_paths_exclude: tuple[str, ...]
 
     passes = (
         Pass(
@@ -497,9 +495,10 @@ def main() -> None:
             source_paths_exclude=(
                 # Directories:
                 "./extern",
-                "./scripts/addons_contrib",
                 "./scripts/templates_osl",
                 "./tools",
+                # Exclude library sources (GIT-LFS).
+                "./lib",
                 # Needs manual handling as it mixes two licenses.
                 "./intern/atomic",
                 # Practically an "extern" within an "intern" module, leave as-is.
@@ -524,6 +523,8 @@ def main() -> None:
                 # This is an exception, it has its own CMake files we do not maintain.
                 "./extern/audaspace",
                 "./extern/quadriflow/3rd/lemon-1.3.1",
+                # Exclude library sources (GIT-LFS).
+                "./lib",
             ),
         ),
         Pass(
@@ -533,12 +534,14 @@ def main() -> None:
                 # Directories:
                 # This is an exception, it has its own CMake files we do not maintain.
                 "./extern",
-                "./scripts/addons_contrib",
+                # Exclude library sources (GIT-LFS).
+                "./lib",
                 # Just data.
                 "./doc/python_api/examples",
-                "./scripts/addons/presets",
                 "./scripts/presets",
                 "./scripts/templates_py",
+
+
             ),
         ),
     )

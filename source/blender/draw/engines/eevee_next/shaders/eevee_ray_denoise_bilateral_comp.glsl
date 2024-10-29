@@ -15,40 +15,14 @@
  * https://www.ea.com/seed/news/seed-dd18-presentation-slides-raytracing
  */
 
-#pragma BLENDER_REQUIRE(draw_view_lib.glsl)
-#pragma BLENDER_REQUIRE(gpu_shader_utildefines_lib.glsl)
-#pragma BLENDER_REQUIRE(gpu_shader_math_vector_lib.glsl)
-#pragma BLENDER_REQUIRE(gpu_shader_codegen_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_sampling_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_gbuffer_lib.glsl)
-
-float bilateral_depth_weight(vec3 center_N, vec3 center_P, vec3 sample_P)
-{
-  vec4 center_plane_eq = vec4(center_N, -dot(center_N, center_P));
-  /* Only compare distance to the center plane formed by the normal. */
-  float depth_delta = dot(center_plane_eq, vec4(sample_P, 1.0));
-  /* TODO(fclem): Scene parameter. This is dependent on scene scale. */
-  const float scale = 10000.0;
-  float weight = exp2(-scale * square(depth_delta));
-  return weight;
-}
-
-float bilateral_spatial_weight(float sigma, vec2 offset_from_center)
-{
-  /* From https://github.com/tranvansang/bilateral-filter/blob/master/fshader.frag */
-  float fac = -1.0 / square(sigma);
-  /* Take two standard deviation. */
-  fac *= 2.0;
-  float weight = exp2(fac * length_squared(offset_from_center));
-  return weight;
-}
-
-float bilateral_normal_weight(vec3 center_N, vec3 sample_N)
-{
-  float facing_ratio = dot(center_N, sample_N);
-  float weight = saturate(pow8f(facing_ratio));
-  return weight;
-}
+#include "draw_view_lib.glsl"
+#include "eevee_closure_lib.glsl"
+#include "eevee_filter_lib.glsl"
+#include "eevee_gbuffer_lib.glsl"
+#include "eevee_sampling_lib.glsl"
+#include "gpu_shader_codegen_lib.glsl"
+#include "gpu_shader_math_vector_lib.glsl"
+#include "gpu_shader_utildefines_lib.glsl"
 
 /* In order to remove some more fireflies, "tone-map" the color samples during the accumulation. */
 vec3 to_accumulation_space(vec3 color)
@@ -58,42 +32,6 @@ vec3 to_accumulation_space(vec3 color)
 vec3 from_accumulation_space(vec3 color)
 {
   return color / (1.0 - reduce_add(color));
-}
-
-void gbuffer_load_closure_data(sampler2DArray gbuf_closure_tx,
-                               ivec2 texel,
-                               out ClosureDiffuse closure)
-{
-  vec4 data_in = texelFetch(gbuf_closure_tx, ivec3(texel, 1), 0);
-
-  closure.N = gbuffer_normal_unpack(data_in.xy);
-}
-
-void gbuffer_load_closure_data(sampler2DArray gbuf_closure_tx,
-                               ivec2 texel,
-                               out ClosureRefraction closure)
-{
-  vec4 data_in = texelFetch(gbuf_closure_tx, ivec3(texel, 1), 0);
-
-  closure.N = gbuffer_normal_unpack(data_in.xy);
-  if (gbuffer_is_refraction(data_in)) {
-    closure.roughness = data_in.z;
-    closure.ior = gbuffer_ior_unpack(data_in.w);
-  }
-  else {
-    closure.roughness = 1.0;
-    closure.ior = 1.1;
-  }
-}
-
-void gbuffer_load_closure_data(sampler2DArray gbuf_closure_tx,
-                               ivec2 texel,
-                               out ClosureReflection closure)
-{
-  vec4 data_in = texelFetch(gbuf_closure_tx, ivec3(texel, 0), 0);
-
-  closure.N = gbuffer_normal_unpack(data_in.xy);
-  closure.roughness = data_in.z;
 }
 
 void main()
@@ -106,25 +44,17 @@ void main()
   float center_depth = texelFetch(depth_tx, texel_fullres, 0).r;
   vec3 center_P = drw_point_screen_to_world(vec3(center_uv, center_depth));
 
-#if defined(RAYTRACE_DIFFUSE)
-  ClosureDiffuse sample_closure, center_closure;
-#elif defined(RAYTRACE_REFRACT)
-  ClosureRefraction sample_closure, center_closure;
-#elif defined(RAYTRACE_REFLECT)
-  ClosureReflection sample_closure, center_closure;
-#else
-#  error
-#endif
-  gbuffer_load_closure_data(gbuf_closure_tx, texel_fullres, center_closure);
+  ClosureUndetermined center_closure = gbuffer_read_bin(
+      gbuf_header_tx, gbuf_closure_tx, gbuf_normal_tx, texel_fullres, closure_index);
 
-#if defined(RAYTRACE_DIFFUSE)
-  float roughness = 1.0;
-#else
-  float roughness = center_closure.roughness;
-#endif
+  if (center_closure.type == CLOSURE_NONE_ID) {
+    /* Output nothing. This shouldn't even be loaded. */
+    return;
+  }
 
-  float variance = imageLoad(in_variance_img, texel_fullres).r;
-  vec3 in_radiance = imageLoad(in_radiance_img, texel_fullres).rgb;
+  float roughness = closure_apparent_roughness_get(center_closure);
+  float variance = imageLoadFast(in_variance_img, texel_fullres).r;
+  vec3 in_radiance = imageLoadFast(in_radiance_img, texel_fullres).rgb;
 
   bool is_background = (center_depth == 0.0);
   bool is_smooth = (roughness < 0.05);
@@ -138,7 +68,7 @@ void main()
 
   if (is_smooth || is_background || is_low_variance) {
     /* Early out cases. */
-    imageStore(out_radiance_img, texel_fullres, vec4(in_radiance, 0.0));
+    imageStoreFast(out_radiance_img, texel_fullres, vec4(in_radiance, 0.0));
     return;
   }
 
@@ -155,11 +85,9 @@ void main()
     ivec2 offset = ivec2(floor(offset_f + 0.5));
 
     ivec2 sample_texel = texel_fullres + offset;
-    ivec2 sample_tile = sample_texel / RAYTRACE_GROUP_SIZE;
+    ivec3 sample_tile = ivec3(sample_texel / RAYTRACE_GROUP_SIZE, closure_index);
     /* Make sure the sample has been processed and do not contain garbage data. */
-    uint tile_mask = imageLoad(tile_mask_img, sample_tile).r;
-    bool unprocessed_tile = !flag_test(tile_mask, 1u << 0u);
-    if (unprocessed_tile) {
+    if (imageLoad(tile_mask_img, sample_tile).r == 0u) {
       continue;
     }
 
@@ -172,19 +100,28 @@ void main()
       continue;
     }
 
-    gbuffer_load_closure_data(gbuf_closure_tx, sample_texel, sample_closure);
+    vec3 radiance = imageLoadFast(in_radiance_img, sample_texel).rgb;
 
-    float depth_weight = bilateral_depth_weight(center_closure.N, center_P, sample_P);
-    float spatial_weight = bilateral_spatial_weight(filter_size, vec2(offset));
-    float normal_weight = bilateral_normal_weight(center_closure.N, sample_closure.N);
-
-    float weight = depth_weight * spatial_weight * normal_weight;
-
-    vec3 radiance = imageLoad(in_radiance_img, sample_texel).rgb;
     /* Do not gather unprocessed pixels. */
     if (all(equal(radiance, FLT_11_11_10_MAX))) {
       continue;
     }
+
+    ClosureUndetermined sample_closure = gbuffer_read_bin(
+        gbuf_header_tx, gbuf_closure_tx, gbuf_normal_tx, sample_texel, closure_index);
+
+    if (sample_closure.type == CLOSURE_NONE_ID) {
+      continue;
+    }
+
+    float gauss = filter_gaussian_factor(filter_size, 1.5);
+
+    /* TODO(fclem): Scene parameter. 10000.0 is dependent on scene scale. */
+    float depth_weight = filter_planar_weight(center_closure.N, center_P, sample_P, 10000.0);
+    float spatial_weight = filter_gaussian_weight(gauss, length_squared(vec2(offset)));
+    float normal_weight = filter_angle_weight(center_closure.N, sample_closure.N);
+    float weight = depth_weight * spatial_weight * normal_weight;
+
     accum_radiance += to_accumulation_space(radiance) * weight;
     accum_weight += weight;
   }
@@ -192,5 +129,5 @@ void main()
   vec3 out_radiance = accum_radiance * safe_rcp(accum_weight);
   out_radiance = from_accumulation_space(out_radiance);
 
-  imageStore(out_radiance_img, texel_fullres, vec4(out_radiance, 0.0));
+  imageStoreFast(out_radiance_img, texel_fullres, vec4(out_radiance, 0.0));
 }

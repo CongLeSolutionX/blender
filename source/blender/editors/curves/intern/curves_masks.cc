@@ -6,13 +6,36 @@
  * \ingroup edcurves
  */
 
+#include "BLI_offset_indices.hh"
 #include "BLI_rand.hh"
 
+#include "BKE_attribute.hh"
 #include "BKE_curves.hh"
 
 #include "ED_curves.hh"
 
 namespace blender::ed::curves {
+
+IndexMask curve_mask_from_points(const bke::CurvesGeometry &curves,
+                                 const IndexMask &point_mask,
+                                 const GrainSize grain_size,
+                                 IndexMaskMemory &memory)
+{
+  Array<bool> selected(curves.points_num());
+  point_mask.to_bools(selected);
+
+  const OffsetIndices points_by_curve = curves.points_by_curve();
+  return IndexMask::from_predicate(
+      curves.curves_range(), grain_size, memory, [&](const int curve_i) {
+        const IndexRange points = points_by_curve[curve_i];
+        for (const int point_i : points) {
+          if (selected[point_i]) {
+            return true;
+          }
+        }
+        return false;
+      });
+}
 
 IndexMask end_points(const bke::CurvesGeometry &curves,
                      const IndexMask &curves_mask,
@@ -44,7 +67,7 @@ IndexMask end_points(const bke::CurvesGeometry &curves,
 
 IndexMask random_mask(const bke::CurvesGeometry &curves,
                       const IndexMask &mask,
-                      const eAttrDomain selection_domain,
+                      const bke::AttrDomain selection_domain,
                       const uint32_t random_seed,
                       const float probability,
                       IndexMaskMemory &memory)
@@ -62,7 +85,7 @@ IndexMask random_mask(const bke::CurvesGeometry &curves,
 }
 
 IndexMask random_mask(const bke::CurvesGeometry &curves,
-                      const eAttrDomain selection_domain,
+                      const bke::AttrDomain selection_domain,
                       const uint32_t random_seed,
                       const float probability,
                       IndexMaskMemory &memory)

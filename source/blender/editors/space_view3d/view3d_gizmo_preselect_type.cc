@@ -19,10 +19,11 @@
 
 #include "BKE_context.hh"
 #include "BKE_editmesh.hh"
-#include "BKE_global.h"
-#include "BKE_layer.h"
+#include "BKE_global.hh"
+#include "BKE_layer.hh"
 #include "BKE_mesh.hh"
 #include "BKE_mesh_wrapper.hh"
+#include "BKE_object.hh"
 
 #include "BLI_math_matrix.h"
 #include "BLI_math_vector.h"
@@ -36,12 +37,17 @@
 #include "WM_api.hh"
 #include "WM_types.hh"
 
-#include "bmesh.h"
+#include "bmesh.hh"
 
 #include "ED_gizmo_library.hh"
 #include "ED_mesh.hh"
 #include "ED_screen.hh"
 #include "ED_view3d.hh"
+
+using blender::Array;
+using blender::float3;
+using blender::Span;
+using blender::Vector;
 
 /* -------------------------------------------------------------------- */
 /** \name Shared Internal API
@@ -82,8 +88,7 @@ static bool gizmo_preselect_poll_for_draw(const bContext *C, wmGizmo *gz)
 
 struct MeshElemGizmo3D {
   wmGizmo gizmo;
-  Base **bases;
-  uint bases_len;
+  Vector<Base *> bases;
   int base_index;
   int vert_index;
   int edge_index;
@@ -100,7 +105,7 @@ static void gizmo_preselect_elem_draw(const bContext *C, wmGizmo *gz)
   MeshElemGizmo3D *gz_ele = (MeshElemGizmo3D *)gz;
   if (gz_ele->base_index != -1) {
     Object *ob = gz_ele->bases[gz_ele->base_index]->object;
-    EDBM_preselect_elem_draw(gz_ele->psel, ob->object_to_world);
+    EDBM_preselect_elem_draw(gz_ele->psel, ob->object_to_world().ptr());
   }
 }
 
@@ -133,11 +138,10 @@ static int gizmo_preselect_elem_test_select(bContext *C, wmGizmo *gz, const int 
     ViewLayer *view_layer = CTX_data_view_layer(C);
     View3D *v3d = CTX_wm_view3d(C);
     BKE_view_layer_synced_ensure(scene, view_layer);
-    if ((gz_ele->bases) == nullptr ||
-        (gz_ele->bases[0] != BKE_view_layer_active_base_get(view_layer))) {
-      MEM_SAFE_FREE(gz_ele->bases);
-      gz_ele->bases = BKE_view_layer_array_from_bases_in_edit_mode(
-          scene, view_layer, v3d, &gz_ele->bases_len);
+    if (gz_ele->bases.is_empty() ||
+        (gz_ele->bases[0] != BKE_view_layer_active_base_get(view_layer)))
+    {
+      gz_ele->bases = BKE_view_layer_array_from_bases_in_edit_mode(scene, view_layer, v3d);
     }
   }
 
@@ -155,7 +159,6 @@ static int gizmo_preselect_elem_test_select(bContext *C, wmGizmo *gz, const int 
 
     if (EDBM_unified_findnearest_from_raycast(&vc,
                                               gz_ele->bases,
-                                              gz_ele->bases_len,
                                               false,
                                               true,
                                               &base_index_vert,
@@ -188,7 +191,8 @@ static int gizmo_preselect_elem_test_select(bContext *C, wmGizmo *gz, const int 
         BMVert *vert = (BMVert *)eve_test;
         float vert_p_co[2], vert_co[3];
         const float mval_f[2] = {float(vc.mval[0]), float(vc.mval[1])};
-        mul_v3_m4v3(vert_co, gz_ele->bases[base_index_vert]->object->object_to_world, vert->co);
+        mul_v3_m4v3(
+            vert_co, gz_ele->bases[base_index_vert]->object->object_to_world().ptr(), vert->co);
         ED_view3d_project_v2(vc.region, vert_co, vert_p_co);
         float len = len_v2v2(vert_p_co, mval_f);
         if (len < 35) {
@@ -235,16 +239,17 @@ static int gizmo_preselect_elem_test_select(bContext *C, wmGizmo *gz, const int 
   }
 
   if (best.ele) {
-    const float(*coords)[3] = nullptr;
+    Span<float3> vert_positions;
     {
       Object *ob = gz_ele->bases[gz_ele->base_index]->object;
-      Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
-      Mesh *me_eval = (Mesh *)DEG_get_evaluated_id(depsgraph, static_cast<ID *>(ob->data));
-      if (BKE_mesh_wrapper_vert_len(me_eval) == bm->totvert) {
-        coords = BKE_mesh_wrapper_vert_coords(me_eval);
+      const Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
+      const Object *ob_eval = DEG_get_evaluated_object(depsgraph, ob);
+      const Mesh *mesh_eval = BKE_object_get_editmesh_eval_cage(ob_eval);
+      if (BKE_mesh_wrapper_vert_len(mesh_eval) == bm->totvert) {
+        vert_positions = BKE_mesh_wrapper_vert_coords(mesh_eval);
       }
     }
-    EDBM_preselect_elem_update_from_single(gz_ele->psel, bm, best.ele, coords);
+    EDBM_preselect_elem_update_from_single(gz_ele->psel, bm, best.ele, vert_positions);
     EDBM_preselect_elem_update_preview(gz_ele->psel, &vc, bm, best.ele, mval);
   }
   else {
@@ -262,17 +267,21 @@ static int gizmo_preselect_elem_test_select(bContext *C, wmGizmo *gz, const int 
     ED_region_tag_redraw_editor_overlays(region);
   }
 
-  // return best.eed ? 0 : -1;
-  return -1;
+  return best.ele ? 0 : -1;
 }
 
 static void gizmo_preselect_elem_setup(wmGizmo *gz)
 {
+  /* Needed so it's possible to "highlight" the gizmo without having the
+   * tweak operator attempting to handle it's input. */
+  gz->flag |= WM_GIZMO_HIDDEN_KEYMAP;
+
   MeshElemGizmo3D *gz_ele = (MeshElemGizmo3D *)gz;
   if (gz_ele->psel == nullptr) {
     gz_ele->psel = EDBM_preselect_elem_create();
   }
   gz_ele->base_index = -1;
+  new (&gz_ele->bases) Vector<Base *>();
 }
 
 static void gizmo_preselect_elem_free(wmGizmo *gz)
@@ -280,7 +289,7 @@ static void gizmo_preselect_elem_free(wmGizmo *gz)
   MeshElemGizmo3D *gz_ele = (MeshElemGizmo3D *)gz;
   EDBM_preselect_elem_destroy(gz_ele->psel);
   gz_ele->psel = nullptr;
-  MEM_SAFE_FREE(gz_ele->bases);
+  gz_ele->bases.~Vector();
 }
 
 static int gizmo_preselect_elem_invoke(bContext * /*C*/,
@@ -318,8 +327,7 @@ static void GIZMO_GT_mesh_preselect_elem_3d(wmGizmoType *gzt)
 
 struct MeshEdgeRingGizmo3D {
   wmGizmo gizmo;
-  Base **bases;
-  uint bases_len;
+  Vector<Base *> bases;
   int base_index;
   int edge_index;
   EditMesh_PreSelEdgeRing *psel;
@@ -334,7 +342,7 @@ static void gizmo_preselect_edgering_draw(const bContext *C, wmGizmo *gz)
   MeshEdgeRingGizmo3D *gz_ring = (MeshEdgeRingGizmo3D *)gz;
   if (gz_ring->base_index != -1) {
     Object *ob = gz_ring->bases[gz_ring->base_index]->object;
-    EDBM_preselect_edgering_draw(gz_ring->psel, ob->object_to_world);
+    EDBM_preselect_edgering_draw(gz_ring->psel, ob->object_to_world().ptr());
   }
 }
 
@@ -361,12 +369,10 @@ static int gizmo_preselect_edgering_test_select(bContext *C, wmGizmo *gz, const 
     ViewLayer *view_layer = CTX_data_view_layer(C);
     View3D *v3d = CTX_wm_view3d(C);
     BKE_view_layer_synced_ensure(scene, view_layer);
-    if ((gz_ring->bases) == nullptr ||
+    if (gz_ring->bases.is_empty() ||
         (gz_ring->bases[0] != BKE_view_layer_active_base_get(view_layer)))
     {
-      MEM_SAFE_FREE(gz_ring->bases);
-      gz_ring->bases = BKE_view_layer_array_from_bases_in_edit_mode(
-          scene, view_layer, v3d, &gz_ring->bases_len);
+      gz_ring->bases = BKE_view_layer_array_from_bases_in_edit_mode(scene, view_layer, v3d);
     }
   }
 
@@ -374,15 +380,8 @@ static int gizmo_preselect_edgering_test_select(bContext *C, wmGizmo *gz, const 
   copy_v2_v2_int(vc.mval, mval);
 
   uint base_index;
-  BMEdge *eed_test = EDBM_edge_find_nearest_ex(&vc,
-                                               &best.dist,
-                                               nullptr,
-                                               false,
-                                               false,
-                                               nullptr,
-                                               gz_ring->bases,
-                                               gz_ring->bases_len,
-                                               &base_index);
+  BMEdge *eed_test = EDBM_edge_find_nearest_ex(
+      &vc, &best.dist, nullptr, false, false, nullptr, gz_ring->bases, &base_index);
 
   if (eed_test) {
     best.ob = gz_ring->bases[base_index]->object;
@@ -413,13 +412,10 @@ static int gizmo_preselect_edgering_test_select(bContext *C, wmGizmo *gz, const 
       BMEditMesh *em_eval = BKE_editmesh_from_object(ob_eval);
       /* Re-allocate coords each update isn't ideal, however we can't be sure
        * the mesh hasn't been edited since last update. */
-      bool is_alloc = false;
-      const float(*coords)[3] = BKE_editmesh_vert_coords_when_deformed(
-          vc.depsgraph, em_eval, scene_eval, ob_eval, nullptr, &is_alloc);
-      EDBM_preselect_edgering_update_from_edge(gz_ring->psel, bm, best.eed, 1, coords);
-      if (is_alloc) {
-        MEM_freeN((void *)coords);
-      }
+      Array<float3> storage;
+      const Span<float3> vert_positions = BKE_editmesh_vert_coords_when_deformed(
+          vc.depsgraph, em_eval, scene_eval, ob_eval, storage);
+      EDBM_preselect_edgering_update_from_edge(gz_ring->psel, bm, best.eed, 1, vert_positions);
     }
     else {
       EDBM_preselect_edgering_clear(gz_ring->psel);
@@ -432,17 +428,21 @@ static int gizmo_preselect_edgering_test_select(bContext *C, wmGizmo *gz, const 
     ED_region_tag_redraw_editor_overlays(region);
   }
 
-  // return best.eed ? 0 : -1;
-  return -1;
+  return best.eed ? 0 : -1;
 }
 
 static void gizmo_preselect_edgering_setup(wmGizmo *gz)
 {
+  /* Needed so it's possible to "highlight" the gizmo without having the
+   * tweak operator attempting to handle it's input. */
+  gz->flag |= WM_GIZMO_HIDDEN_KEYMAP;
+
   MeshEdgeRingGizmo3D *gz_ring = (MeshEdgeRingGizmo3D *)gz;
   if (gz_ring->psel == nullptr) {
     gz_ring->psel = EDBM_preselect_edgering_create();
   }
   gz_ring->base_index = -1;
+  new (&gz_ring->bases) Vector<Base *>();
 }
 
 static void gizmo_preselect_edgering_free(wmGizmo *gz)
@@ -450,7 +450,7 @@ static void gizmo_preselect_edgering_free(wmGizmo *gz)
   MeshEdgeRingGizmo3D *gz_ring = (MeshEdgeRingGizmo3D *)gz;
   EDBM_preselect_edgering_destroy(gz_ring->psel);
   gz_ring->psel = nullptr;
-  MEM_SAFE_FREE(gz_ring->bases);
+  gz_ring->bases.~Vector();
 }
 
 static int gizmo_preselect_edgering_invoke(bContext * /*C*/,
@@ -499,8 +499,8 @@ void ED_gizmotypes_preselect_3d()
  * the information from this gizmo.
  * \{ */
 
-void ED_view3d_gizmo_mesh_preselect_get_active(bContext *C,
-                                               wmGizmo *gz,
+void ED_view3d_gizmo_mesh_preselect_get_active(const bContext *C,
+                                               const wmGizmo *gz,
                                                Base **r_base,
                                                BMElem **r_ele)
 {
@@ -512,15 +512,13 @@ void ED_view3d_gizmo_mesh_preselect_get_active(bContext *C,
   /* weak, allocate an array just to access the index. */
   Base *base = nullptr;
   Object *obedit = nullptr;
-  {
-    uint bases_len;
-    Base **bases = BKE_view_layer_array_from_bases_in_edit_mode(
-        scene, view_layer, CTX_wm_view3d(C), &bases_len);
-    if (object_index < bases_len) {
+  if (object_index != -1) {
+    Vector<Base *> bases = BKE_view_layer_array_from_bases_in_edit_mode(
+        scene, view_layer, CTX_wm_view3d(C));
+    if (object_index < bases.size()) {
       base = bases[object_index];
       obedit = base->object;
     }
-    MEM_freeN(bases);
   }
 
   *r_base = base;

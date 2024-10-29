@@ -8,10 +8,11 @@
 #include "BLI_array.hh"
 #include "BLI_hash.hh"
 #include "BLI_index_range.hh"
+#include "BLI_math_vector.h"
 #include "BLI_math_vector_types.hh"
 #include "BLI_task.hh"
 
-#include "GPU_texture.h"
+#include "GPU_texture.hh"
 
 #include "BKE_image.h"
 #include "BKE_texture.h"
@@ -32,14 +33,14 @@ namespace blender::realtime_compositor {
  * Cached Texture Key.
  */
 
-CachedTextureKey::CachedTextureKey(int2 size, float2 offset, float2 scale)
+CachedTextureKey::CachedTextureKey(int2 size, float3 offset, float3 scale)
     : size(size), offset(offset), scale(scale)
 {
 }
 
 uint64_t CachedTextureKey::hash() const
 {
-  return get_default_hash_3(size, offset, scale);
+  return get_default_hash(size, offset, scale);
 }
 
 bool operator==(const CachedTextureKey &a, const CachedTextureKey &b)
@@ -55,8 +56,8 @@ CachedTexture::CachedTexture(Context &context,
                              Tex *texture,
                              bool use_color_management,
                              int2 size,
-                             float2 offset,
-                             float2 scale)
+                             float3 offset,
+                             float3 scale)
 {
   ImagePool *image_pool = BKE_image_pool_new();
   BKE_texture_fetch_images_for_pool(texture, image_pool);
@@ -68,15 +69,22 @@ CachedTexture::CachedTexture(Context &context,
       for (const int64_t x : IndexRange(size.x)) {
         /* Compute the coordinates in the [-1, 1] range and add 0.5 to evaluate the texture at the
          * center of pixels in case it was interpolated. */
-        float2 coordinates = ((float2(x, y) + 0.5f) / float2(size)) * 2.0f - 1.0f;
+        const float2 pixel_coordinates = ((float2(x, y) + 0.5f) / float2(size)) * 2.0f - 1.0f;
         /* Note that it is expected that the offset is scaled by the scale. */
-        coordinates = (coordinates + offset) * scale;
+        const float3 coordinates = (float3(pixel_coordinates, 0.0f) + offset) * scale;
+
         TexResult texture_result;
-        BKE_texture_get_value_ex(
-            texture, coordinates, &texture_result, image_pool, use_color_management);
-        color_pixels[y * size.x + x] = float4(texture_result.trgba);
-        value_pixels[y * size.x + x] = texture_result.talpha ? texture_result.trgba[3] :
-                                                               texture_result.tin;
+        const int result_type = multitex_ext_safe(
+            texture, coordinates, &texture_result, image_pool, use_color_management, false);
+
+        float4 color = float4(texture_result.trgba);
+        color.w = texture_result.talpha ? color.w : texture_result.tin;
+        if (!(result_type & TEX_RGB)) {
+          copy_v3_fl(color, color.w);
+        }
+
+        color_pixels[y * size.x + x] = color;
+        value_pixels[y * size.x + x] = color.w;
       }
     }
   });
@@ -88,7 +96,7 @@ CachedTexture::CachedTexture(Context &context,
       size.x,
       size.y,
       1,
-      Result::texture_format(ResultType::Color, context.get_precision()),
+      Result::gpu_texture_format(ResultType::Color, context.get_precision()),
       GPU_TEXTURE_USAGE_SHADER_READ,
       *color_pixels.data());
 
@@ -97,7 +105,7 @@ CachedTexture::CachedTexture(Context &context,
       size.x,
       size.y,
       1,
-      Result::texture_format(ResultType::Float, context.get_precision()),
+      Result::gpu_texture_format(ResultType::Float, context.get_precision()),
       GPU_TEXTURE_USAGE_SHADER_READ,
       value_pixels.data());
 }
@@ -143,12 +151,14 @@ CachedTexture &CachedTextureContainer::get(Context &context,
                                            Tex *texture,
                                            bool use_color_management,
                                            int2 size,
-                                           float2 offset,
-                                           float2 scale)
+                                           float3 offset,
+                                           float3 scale)
 {
   const CachedTextureKey key(size, offset, scale);
 
-  auto &cached_textures_for_id = map_.lookup_or_add_default(texture->id.name);
+  const std::string library_key = texture->id.lib ? texture->id.lib->id.name : "";
+  const std::string id_key = std::string(texture->id.name) + library_key;
+  auto &cached_textures_for_id = map_.lookup_or_add_default(id_key);
 
   /* Invalidate the cache for that texture ID if it was changed and reset the recalculate flag. */
   if (context.query_id_recalc_flag(reinterpret_cast<ID *>(texture)) & ID_RECALC_ALL) {

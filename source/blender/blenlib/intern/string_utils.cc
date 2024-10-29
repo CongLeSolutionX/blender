@@ -6,9 +6,9 @@
  * \ingroup bli
  */
 
-#include <ctype.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cctype>
+#include <cstdlib>
+#include <cstring>
 
 #include <array>
 
@@ -24,7 +24,7 @@
 
 #include "DNA_listBase.h"
 
-#include "BLI_strict_flags.h"
+#include "BLI_strict_flags.h" /* Keep last. */
 
 /* -------------------------------------------------------------------- */
 /** \name String Replace
@@ -96,15 +96,15 @@ void BLI_string_replace_char(char *str, char src, char dst)
 }
 
 bool BLI_string_replace_table_exact(char *string,
-                                    const size_t string_maxncpy,
+                                    const size_t string_len,
                                     const char *replace_table[][2],
                                     int replace_table_len)
 {
-  BLI_string_debug_size_after_nil(string, string_maxncpy);
+  BLI_string_debug_size_after_nil(string, string_len);
 
   for (int i = 0; i < replace_table_len; i++) {
     if (STREQ(string, replace_table[i][0])) {
-      BLI_strncpy(string, replace_table[i][1], string_maxncpy);
+      BLI_strncpy(string, replace_table[i][1], string_len);
       return true;
     }
   }
@@ -284,7 +284,7 @@ size_t BLI_string_flip_side_name(char *name_dst,
   /* always copy the name, since this can be called with an uninitialized string */
   len = BLI_strncpy_rlen(name_dst, name_src, name_dst_maxncpy);
   if (len < 3) {
-    /* we don't do names like .R or .L */
+    /* We don't support names such as `.R` or `.L`. */
     return len;
   }
 
@@ -468,7 +468,10 @@ std::string BLI_uniquename_cb(blender::FunctionRef<bool(blender::StringRef)> uni
  * \param name_offset: should be calculated using `offsetof(structname, membername)`
  * macro from `stddef.h`
  */
-static bool uniquename_find_dupe(ListBase *list, void *vlink, const char *name, int name_offset)
+static bool uniquename_find_dupe(const ListBase *list,
+                                 void *vlink,
+                                 const char *name,
+                                 int name_offset)
 {
   for (Link *link = static_cast<Link *>(list->first); link; link = link->next) {
     if (link != vlink) {
@@ -483,7 +486,7 @@ static bool uniquename_find_dupe(ListBase *list, void *vlink, const char *name, 
 }
 
 struct UniqueNameCheckData {
-  ListBase *lb;
+  const ListBase *lb;
   void *vlink;
   int name_offset;
 };
@@ -495,7 +498,7 @@ static bool uniquename_unique_check(void *arg, const char *name)
   return uniquename_find_dupe(data->lb, data->vlink, name, data->name_offset);
 }
 
-void BLI_uniquename(ListBase *list,
+void BLI_uniquename(const ListBase *list,
                     void *vlink,
                     const char *defname,
                     char delim,

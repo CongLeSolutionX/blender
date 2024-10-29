@@ -24,7 +24,7 @@
 #include "WM_api.hh"
 #include "WM_types.hh"
 
-#include "wm_xr_intern.h"
+#include "wm_xr_intern.hh"
 
 #include <cstring>
 
@@ -542,4 +542,4 @@ void WM_xr_haptic_action_stop(wmXrData *xr,
   GHOST_XrStopHapticAction(xr->runtime->context, action_set_name, action_name, subaction_path);
 }
 
-/** \} */ /* XR-Action API */
+/** \} */ /* XR-Action API. */

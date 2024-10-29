@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-# ./blender.bin --background -noaudio --python tests/python/bl_blendfile_library_overrides.py -- --output-dir=/tmp/
+# ./blender.bin --background --python tests/python/bl_blendfile_library_overrides.py -- --output-dir=/tmp/
 import pathlib
 import bpy
 import sys
@@ -41,9 +41,6 @@ class TestLibraryOverrides(TestHelper, unittest.TestCase):
         mesh = bpy.data.meshes.new(TestLibraryOverrides.MESH_LIBRARY_PERMISSIVE)
         obj = bpy.data.objects.new(TestLibraryOverrides.OBJECT_LIBRARY_PERMISSIVE, object_data=mesh)
         bpy.context.collection.objects.link(obj)
-        obj.override_template_create()
-        prop = obj.override_library.properties.add(rna_path='scale')
-        prop.operations.add(operation='NOOP')
 
         bpy.ops.wm.save_as_mainfile(filepath=str(self.output_path), check_existing=False, compress=False)
 
@@ -104,12 +101,6 @@ class TestLibraryOverrides(TestHelper, unittest.TestCase):
         assert bpy.data.objects.get((local_id_name, None), None) is None
 
     def test_link_permissive(self):
-        """
-        Linked assets with a permissive template.
-
-        - Checks if the NOOP is properly handled.
-        - Checks if the correct properties and operations are created/updated.
-        """
         bpy.ops.wm.read_homefile(use_empty=True, use_factory_startup=True)
         bpy.data.orphans_purge()
 
@@ -117,70 +108,24 @@ class TestLibraryOverrides(TestHelper, unittest.TestCase):
         bpy.ops.wm.link(directory=str(link_dir), filename=TestLibraryOverrides.OBJECT_LIBRARY_PERMISSIVE)
 
         obj = bpy.data.objects[TestLibraryOverrides.OBJECT_LIBRARY_PERMISSIVE]
-        self.assertIsNotNone(obj.override_library)
+        self.assertIsNone(obj.override_library)
         local_id = obj.override_create()
         self.assertIsNotNone(local_id.override_library)
         self.assertIsNone(local_id.data.override_library)
-        assert len(local_id.override_library.properties) == 1
-        override_prop = local_id.override_library.properties[0]
-        assert override_prop.rna_path == "scale"
-        assert len(override_prop.operations) == 1
-        override_operation = override_prop.operations[0]
-        assert override_operation.operation == 'NOOP'
-        assert override_operation.subitem_local_index == -1
+        assert len(local_id.override_library.properties) == 0
         local_id.location.y = 1.0
-        local_id.scale.x = 0.5
-        # `scale.x` will apply, but will be reverted when the library overrides
-        # are updated. This is by design so python scripts can still alter the
-        # properties locally what is a typical usecase in productions.
-        assert local_id.scale.x == 0.5
         assert local_id.location.y == 1.0
 
         local_id.override_library.operations_update()
-        assert local_id.scale.x == 1.0
         assert local_id.location.y == 1.0
 
-        assert len(local_id.override_library.properties) == 2
+        assert len(local_id.override_library.properties) == 1
         override_prop = local_id.override_library.properties[0]
-        assert override_prop.rna_path == "scale"
-        assert len(override_prop.operations) == 1
-        override_operation = override_prop.operations[0]
-        assert override_operation.operation == 'NOOP'
-        assert override_operation.subitem_local_index == -1
-
-        override_prop = local_id.override_library.properties[1]
         assert override_prop.rna_path == "location"
         assert len(override_prop.operations) == 1
         override_operation = override_prop.operations[0]
         assert override_operation.operation == 'REPLACE'
         assert override_operation.subitem_local_index == -1
-
-
-class TestLibraryTemplate(TestHelper, unittest.TestCase):
-    MESH_LIBRARY_PERMISSIVE = "LibMeshPermissive"
-    OBJECT_LIBRARY_PERMISSIVE = "LibMeshPermissive"
-
-    def __init__(self, args):
-        pass
-
-    def test_permissive_template(self):
-        """
-        Test setting up a permissive template.
-        """
-        bpy.ops.wm.read_homefile(use_empty=True, use_factory_startup=True)
-        mesh = bpy.data.meshes.new(TestLibraryTemplate.MESH_LIBRARY_PERMISSIVE)
-        obj = bpy.data.objects.new(TestLibraryTemplate.OBJECT_LIBRARY_PERMISSIVE, object_data=mesh)
-        bpy.context.collection.objects.link(obj)
-        assert obj.override_library is None
-        obj.override_template_create()
-        assert obj.override_library is not None
-        assert len(obj.override_library.properties) == 0
-        prop = obj.override_library.properties.add(rna_path='scale')
-        assert len(obj.override_library.properties) == 1
-        assert len(prop.operations) == 0
-        operation = prop.operations.add(operation='NOOP')
-        assert len(prop.operations) == 1
-        assert operation.operation == 'NOOP'
 
 
 class TestLibraryOverridesComplex(TestHelper, unittest.TestCase):
@@ -797,9 +742,8 @@ class TestLibraryOverridesComplex(TestHelper, unittest.TestCase):
         # Objects and collections are duplicated as overrides, but meshes and armatures remain only linked data.
         assert len(bpy.data.collections) == 3 * 3 + 3
         assert all((id_.library is None and id_.override_library is not None) for id_ in bpy.data.collections[:3 * 3])
-        # Note that the 'missing' renamed objects from the library are still here as empty placeholders,
-        # hence the 8 linked ones instead of 6.
-        assert len(bpy.data.objects) == 3 * 6 + 8
+        # Note that the 'missing' renamed objects from the library are now cleared as part of the resync process.
+        assert len(bpy.data.objects) == 3 * 6 + 6
         assert all((id_.library is None and id_.override_library is not None) for id_ in bpy.data.objects[:3 * 6])
         assert len(bpy.data.meshes) == 0 + 1
         assert len(bpy.data.armatures) == 0 + 1
@@ -829,9 +773,8 @@ class TestLibraryOverridesComplex(TestHelper, unittest.TestCase):
         assert len(bpy.data.collections) == 3 + 6
         assert all((id_.override_library is not None)
                    for id_ in bpy.data.collections if id_.library == test_output_path_lib)
-        # Note that the 'missing' renamed objects from the library are still here as empty placeholders,
-        # hence the 8 + 6 linked ones instead of 6 + 6.
-        assert len(bpy.data.objects) == 6 + 14
+        # Note that the 'missing' renamed objects from the library are now cleared as part of the resync process.
+        assert len(bpy.data.objects) == 6 + 12
         assert all((id_.override_library is not None)
                    for id_ in bpy.data.objects if id_.library == test_output_path_lib)
         assert len(bpy.data.meshes) == 0 + 1
@@ -868,7 +811,6 @@ class TestLibraryOverridesFromProxies(TestHelper, unittest.TestCase):
 
 TESTS = (
     TestLibraryOverrides,
-    TestLibraryTemplate,
     TestLibraryOverridesComplex,
     TestLibraryOverridesFromProxies,
 )
@@ -903,7 +845,6 @@ def main():
 
     # Don't write thumbnails into the home directory.
     bpy.context.preferences.filepaths.file_preview_type = 'NONE'
-    bpy.context.preferences.experimental.use_override_templates = True
 
     for Test in TESTS:
         Test(args).run_all_tests()

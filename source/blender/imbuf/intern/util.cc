@@ -13,23 +13,23 @@
 #include <cstdlib>
 
 #include "BLI_fileops.h"
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 #include "BLI_utildefines.h"
 #ifdef _WIN32
 #  include "BLI_winstuff.h"
 #endif
 
-#include "IMB_filetype.h"
-#include "IMB_imbuf.h"
-#include "IMB_imbuf_types.h"
-#include "imbuf.h"
+#include "IMB_filetype.hh"
+#include "IMB_imbuf.hh"
+#include "IMB_imbuf_types.hh"
+#include "imbuf.hh"
 
-#include "IMB_anim.h"
+#include "IMB_anim.hh"
 
 #ifdef WITH_FFMPEG
 #  include "BLI_string.h" /* BLI_vsnprintf */
 
-#  include "BKE_global.h" /* G.debug */
+#  include "BKE_global.hh" /* G.debug */
 
 extern "C" {
 #  include <libavcodec/avcodec.h>
@@ -37,7 +37,7 @@ extern "C" {
 #  include <libavformat/avformat.h>
 #  include <libavutil/log.h>
 
-#  include "ffmpeg_compat.h"
+#  include "ffmpeg_compat.h" /* Keep for compatibility. */
 }
 
 #endif
@@ -66,7 +66,7 @@ const char *imb_ext_image[] = {
 const char *imb_ext_movie[] = {
     ".avi",  ".flc", ".mov", ".movie", ".mp4",  ".m4v",  ".m2v", ".m2t",  ".m2ts", ".mts",
     ".ts",   ".mv",  ".avs", ".wmv",   ".ogv",  ".ogg",  ".r3d", ".dv",   ".mpeg", ".mpg",
-    ".mpg2", ".vob", ".mkv", ".flv",   ".divx", ".xvid", ".mxf", ".webm", nullptr,
+    ".mpg2", ".vob", ".mkv", ".flv",   ".divx", ".xvid", ".mxf", ".webm", ".gif",  nullptr,
 };
 
 /** Sort of wrong having audio extensions in imbuf. */
@@ -86,6 +86,7 @@ const char *imb_ext_audio[] = {
     ".aiff",
     ".m4a",
     ".mka",
+    ".opus",
     nullptr,
 };
 
@@ -170,16 +171,6 @@ bool IMB_ispic(const char *filepath)
   return (IMB_ispic_type(filepath) != IMB_FTYPE_NONE);
 }
 
-static bool isavi(const char *filepath)
-{
-#ifdef WITH_AVI
-  return AVI_is_avi(filepath);
-#else
-  (void)filepath;
-  return false;
-#endif
-}
-
 #ifdef WITH_FFMPEG
 
 /* BLI_vsnprintf in ffmpeg_log_callback() causes invalid warning */
@@ -224,7 +215,7 @@ void IMB_ffmpeg_init()
     av_log_set_level(AV_LOG_DEBUG);
   }
 
-  /* set own callback which could store last error to report to UI */
+  /* set separate callback which could store last error to report to UI */
   av_log_set_callback(ffmpeg_log_callback);
 }
 
@@ -308,72 +299,19 @@ static int isffmpeg(const char *filepath)
 }
 #endif
 
-int imb_get_anim_type(const char *filepath)
+bool IMB_isanim(const char *filepath)
 {
-  BLI_stat_t st;
-
   BLI_assert(!BLI_path_is_rel(filepath));
 
   if (UTIL_DEBUG) {
     printf("%s: %s\n", __func__, filepath);
   }
 
-#ifndef _WIN32
-#  ifdef WITH_FFMPEG
-  /* stat test below fails on large files > 4GB */
+#ifdef WITH_FFMPEG
   if (isffmpeg(filepath)) {
-    return ANIM_FFMPEG;
+    return true;
   }
-#  endif
-  if (BLI_stat(filepath, &st) == -1) {
-    return 0;
-  }
-  if (((st.st_mode) & S_IFMT) != S_IFREG) {
-    return 0;
-  }
+#endif
 
-  if (isavi(filepath)) {
-    return ANIM_AVI;
-  }
-
-  if (ismovie(filepath)) {
-    return ANIM_MOVIE;
-  }
-#else /* !_WIN32 */
-  if (BLI_stat(filepath, &st) == -1) {
-    return 0;
-  }
-  if (((st.st_mode) & S_IFMT) != S_IFREG) {
-    return 0;
-  }
-
-  if (ismovie(filepath)) {
-    return ANIM_MOVIE;
-  }
-#  ifdef WITH_FFMPEG
-  if (isffmpeg(filepath)) {
-    return ANIM_FFMPEG;
-  }
-#  endif
-
-  if (isavi(filepath)) {
-    return ANIM_AVI;
-  }
-#endif /* !_WIN32 */
-
-  /* Assume a single image is part of an image sequence. */
-  if (IMB_ispic(filepath)) {
-    return ANIM_SEQUENCE;
-  }
-
-  return ANIM_NONE;
-}
-
-bool IMB_isanim(const char *filepath)
-{
-  int type;
-
-  type = imb_get_anim_type(filepath);
-
-  return (type && type != ANIM_SEQUENCE);
+  return false;
 }

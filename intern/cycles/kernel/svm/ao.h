@@ -59,7 +59,7 @@ ccl_device float svm_ao(
     /* Create ray. */
     Ray ray;
     ray.P = sd->P;
-    ray.D = D.x * T + D.y * B + D.z * N;
+    ray.D = to_global(D, T, B, N);
     ray.tmin = 0.0f;
     ray.tmax = max_dist;
     ray.time = sd->time;
@@ -77,8 +77,7 @@ ccl_device float svm_ao(
       }
     }
     else {
-      Intersection isect;
-      if (!scene_intersect(kg, &ray, PATH_RAY_SHADOW_OPAQUE, &isect)) {
+      if (!scene_intersect_shadow(kg, &ray, PATH_RAY_SHADOW_OPAQUE)) {
         unoccluded++;
       }
     }

@@ -15,26 +15,35 @@
  * https://www.ea.com/seed/news/seed-dd18-presentation-slides-raytracing
  */
 
-#pragma BLENDER_REQUIRE(draw_view_lib.glsl)
-#pragma BLENDER_REQUIRE(gpu_shader_codegen_lib.glsl)
-#pragma BLENDER_REQUIRE(gpu_shader_utildefines_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_gbuffer_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_sampling_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_bxdf_lib.glsl)
+#include "draw_view_lib.glsl"
+#include "eevee_bxdf_lib.glsl"
+#include "eevee_bxdf_sampling_lib.glsl"
+#include "eevee_closure_lib.glsl"
+#include "eevee_gbuffer_lib.glsl"
+#include "eevee_ray_types_lib.glsl"
+#include "eevee_sampling_lib.glsl"
+#include "eevee_thickness_lib.glsl"
+#include "gpu_shader_codegen_lib.glsl"
+#include "gpu_shader_math_matrix_lib.glsl"
+#include "gpu_shader_utildefines_lib.glsl"
 
-float bxdf_eval(ClosureDiffuse closure, vec3 L, vec3 V)
+void transmission_thickness_amend_closure(inout ClosureUndetermined cl,
+                                          inout vec3 V,
+                                          float thickness)
 {
-  return bsdf_lambert(closure.N, L);
+  switch (cl.type) {
+    case CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID:
+      bxdf_ggx_context_amend_transmission(cl, V, thickness);
+      break;
+  }
 }
 
-float bxdf_eval(ClosureRefraction closure, vec3 L, vec3 V)
+/* Tag pixel radiance as invalid. */
+void invalid_pixel_write(ivec2 texel)
 {
-  return btdf_ggx(closure.N, L, V, closure.roughness, closure.ior);
-}
-
-float bxdf_eval(ClosureReflection closure, vec3 L, vec3 V)
-{
-  return bsdf_ggx(closure.N, L, V, closure.roughness);
+  imageStoreFast(out_radiance_img, texel, vec4(FLT_11_11_10_MAX, 0.0));
+  imageStoreFast(out_variance_img, texel, vec4(0.0));
+  imageStoreFast(out_hit_depth_img, texel, vec4(0.0));
 }
 
 void main()
@@ -43,9 +52,9 @@ void main()
   uvec2 tile_coord = unpackUvec2x16(tiles_coord_buf[gl_WorkGroupID.x]);
 
   ivec2 texel_fullres = ivec2(gl_LocalInvocationID.xy + tile_coord * tile_size);
-  ivec2 texel = (texel_fullres) / uniform_buf.raytrace.resolution_scale;
+  ivec2 texel = (texel_fullres) / raytrace_resolution_scale;
 
-  if (uniform_buf.raytrace.skip_denoise) {
+  if (skip_denoise) {
     imageStore(out_radiance_img, texel_fullres, imageLoad(ray_radiance_img, texel));
     return;
   }
@@ -63,60 +72,54 @@ void main()
         continue;
       }
 
-      uint tile_mask = imageLoad(tile_mask_img, tile_coord_neighbor).r;
+      ivec3 sample_tile = ivec3(tile_coord_neighbor, closure_index);
+
+      uint tile_mask = imageLoadFast(tile_mask_img, sample_tile).r;
       bool tile_is_unused = !flag_test(tile_mask, 1u << 0u);
       if (tile_is_unused) {
         ivec2 texel_fullres_neighbor = texel_fullres + ivec2(x, y) * int(tile_size);
-
-        imageStore(out_radiance_img, texel_fullres_neighbor, vec4(FLT_11_11_10_MAX, 0.0));
-        imageStore(out_variance_img, texel_fullres_neighbor, vec4(0.0));
-        imageStore(out_hit_depth_img, texel_fullres_neighbor, vec4(0.0));
+        invalid_pixel_write(texel_fullres_neighbor);
       }
     }
   }
 
   bool valid_texel = in_texture_range(texel_fullres, gbuf_header_tx);
-  uint closure_bits = (!valid_texel) ? 0u : texelFetch(gbuf_header_tx, texel_fullres, 0).r;
-  if (!flag_test(closure_bits, CLOSURE_ACTIVE)) {
-    imageStore(out_radiance_img, texel_fullres, vec4(FLT_11_11_10_MAX, 0.0));
-    imageStore(out_variance_img, texel_fullres, vec4(0.0));
-    imageStore(out_hit_depth_img, texel_fullres, vec4(0.0));
+  if (!valid_texel) {
+    invalid_pixel_write(texel_fullres);
+    return;
+  }
+
+  uint gbuf_header = texelFetch(gbuf_header_tx, texel_fullres, 0).r;
+
+  ClosureUndetermined closure = gbuffer_read_bin(
+      gbuf_header, gbuf_closure_tx, gbuf_normal_tx, texel_fullres, closure_index);
+
+  if (closure.type == CLOSURE_NONE_ID) {
+    invalid_pixel_write(texel_fullres);
     return;
   }
 
   vec2 uv = (vec2(texel_fullres) + 0.5) * uniform_buf.raytrace.full_resolution_inv;
-
   vec3 P = drw_point_screen_to_world(vec3(uv, 0.5));
   vec3 V = drw_world_incident_vector(P);
 
-  GBufferData gbuf = gbuffer_read(gbuf_header_tx, gbuf_closure_tx, gbuf_color_tx, texel_fullres);
+  float thickness = gbuffer_read_thickness(gbuf_header, gbuf_normal_tx, texel_fullres);
+  if (thickness != 0.0) {
+    transmission_thickness_amend_closure(closure, V, thickness);
+  }
 
-#if defined(RAYTRACE_DIFFUSE)
-  ClosureDiffuse closure = gbuf.diffuse;
-#elif defined(RAYTRACE_REFRACT)
-  ClosureRefraction closure = gbuf.refraction;
-#elif defined(RAYTRACE_REFLECT)
-  ClosureReflection closure = gbuf.reflection;
-#else
-#  error
-#endif
-
-  uint sample_count = 16u;
-  float filter_size = 9.0;
-#if defined(RAYTRACE_REFRACT) || defined(RAYTRACE_REFLECT)
-  float filter_size_factor = saturate(closure.roughness * 8.0);
-  sample_count = 1u + uint(15.0 * filter_size_factor + 0.5);
+  /* Compute filter size and needed sample count */
+  float apparent_roughness = closure_apparent_roughness_get(closure);
+  float filter_size_factor = saturate(apparent_roughness * 8.0);
+  uint sample_count = 1u + uint(15.0 * filter_size_factor + 0.5);
   /* NOTE: filter_size should never be greater than twice RAYTRACE_GROUP_SIZE. Otherwise, the
    * reconstruction can becomes ill defined since we don't know if further tiles are valid. */
-  filter_size = 12.0 * sqrt(filter_size_factor);
-  if (uniform_buf.raytrace.resolution_scale > 1) {
+  float filter_size = 12.0 * sqrt(filter_size_factor);
+  if (raytrace_resolution_scale > 1) {
     /* Filter at least 1 trace pixel to fight the undersampling. */
     filter_size = max(filter_size, 3.0);
     sample_count = max(sample_count, 5u);
   }
-  /* NOTE: Roughness is squared now. */
-  closure.roughness = max(1e-3, square(closure.roughness));
-#endif
 
   vec2 noise = utility_tx_fetch(utility_tx, vec2(texel_fullres), UTIL_BLUE_NOISE_LAYER).ba;
   noise += sampling_rng_1D_get(SAMPLING_CLOSURE);
@@ -145,8 +148,10 @@ void main()
     closest_hit_time = min(closest_hit_time, ray_time);
 
     /* Slide 54. */
-    /* TODO(fclem): Apparently, ratio estimator should be pdf_bsdf / pdf_ray. */
-    float weight = bxdf_eval(closure, ray_direction, V) * ray_pdf_inv;
+    /* The reference is wrong.
+     * The ratio estimator is `pdf_local / pdf_ray` instead of `bsdf_local / pdf_ray`. */
+    float pdf = closure_evaluate_pdf(closure, ray_direction, V, thickness);
+    float weight = pdf * ray_pdf_inv;
 
     radiance_accum += ray_radiance.rgb * weight;
     weight_accum += weight;
@@ -166,7 +171,7 @@ void main()
   float scene_z = drw_depth_screen_to_view(texelFetch(depth_tx, texel_fullres, 0).r);
   float hit_depth = drw_depth_view_to_screen(scene_z - closest_hit_time);
 
-  imageStore(out_radiance_img, texel_fullres, vec4(radiance_accum, 0.0));
-  imageStore(out_variance_img, texel_fullres, vec4(hit_variance));
-  imageStore(out_hit_depth_img, texel_fullres, vec4(hit_depth));
+  imageStoreFast(out_radiance_img, texel_fullres, vec4(radiance_accum, 0.0));
+  imageStoreFast(out_variance_img, texel_fullres, vec4(hit_variance));
+  imageStoreFast(out_hit_depth_img, texel_fullres, vec4(hit_depth));
 }

@@ -2,8 +2,8 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#pragma BLENDER_REQUIRE(draw_view_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_lightprobe_lib.glsl)
+#include "draw_view_lib.glsl"
+#include "eevee_lightprobe_lib.glsl"
 
 void main()
 {
@@ -23,7 +23,7 @@ void main()
   grid_sample.y = (sample_id / grid_resolution.x) % grid_resolution.y;
   grid_sample.z = (sample_id / (grid_resolution.x * grid_resolution.y));
 
-  vec3 P = lightprobe_irradiance_grid_sample_position(grid_mat, grid_resolution, grid_sample);
+  vec3 P = lightprobe_volume_grid_sample_position(grid_mat, grid_resolution, grid_sample);
 
   vec4 debug_data = texelFetch(debug_data_tx, grid_sample, 0);
   if (debug_mode == DEBUG_IRRADIANCE_CACHE_VALIDITY) {

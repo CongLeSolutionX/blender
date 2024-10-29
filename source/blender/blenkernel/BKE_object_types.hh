@@ -4,13 +4,15 @@
 
 #pragma once
 
+#include <optional>
+
 #include "BLI_array.hh"
+#include "BLI_bounds_types.hh"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_math_vector_types.hh"
 
 #include "DNA_customdata_types.h" /* #CustomData_MeshMasks. */
 
-struct BoundBox;
 struct bGPdata;
 struct Curve;
 struct CurveCache;
@@ -23,6 +25,10 @@ namespace blender::bke {
 struct GeometrySet;
 
 struct ObjectRuntime {
+  /** Final transformation matrices with constraints & animsys applied. */
+  float4x4 object_to_world = float4x4::identity();
+  float4x4 world_to_object = float4x4::identity();
+
   /**
    * The custom data layer mask that was last used
    * to calculate data_eval and mesh_deform_eval.
@@ -50,13 +56,18 @@ struct ObjectRuntime {
   /** Start time of the mode transfer overlay animation. */
   double overlay_mode_transfer_start_time = 0.0f;
 
-  /** Axis aligned bound-box (in local-space). */
-  BoundBox *bb = nullptr;
+  /**
+   * The bounding box of the object's evaluated geometry in the active dependency graph. The bounds
+   * are copied back to the original object for the RNA API and for display in the interface.
+   *
+   * Only set on original objects.
+   */
+  std::optional<Bounds<float3>> bounds_eval;
 
   /**
    * Original data pointer, before object->data was changed to point
    * to data_eval.
-   * Is assigned by dependency graph's copy-on-write evaluation.
+   * Is assigned by dependency graph's copy-on-evaluation.
    */
   ID *data_orig = nullptr;
   /**
@@ -79,20 +90,15 @@ struct ObjectRuntime {
    */
   Mesh *mesh_deform_eval = nullptr;
 
-  /* Evaluated mesh cage in edit mode. */
+  /**
+   * Evaluated mesh cage in edit mode.
+   *
+   * \note When the mesh's `runtime->deformed_only` is true, the meshes vertex positions
+   * and other geometry arrays will be aligned the edit-mesh. Otherwise the #CD_ORIGINDEX
+   * custom-data should be used to map the cage geometry back to the original indices, see
+   * #eModifierTypeFlag_SupportsMapping.
+   */
   Mesh *editmesh_eval_cage = nullptr;
-
-  /**
-   * Original grease pencil bGPdata pointer, before object->data was changed to point
-   * to gpd_eval.
-   * Is assigned by dependency graph's copy-on-write evaluation.
-   */
-  bGPdata *gpd_orig = nullptr;
-  /**
-   * bGPdata structure created during object evaluation.
-   * It has all modifiers applied.
-   */
-  bGPdata *gpd_eval = nullptr;
 
   /**
    * This is a mesh representation of corresponding object.
@@ -121,6 +127,11 @@ struct ObjectRuntime {
 
   Array<float3x3, 0> crazyspace_deform_imats;
   Array<float3, 0> crazyspace_deform_cos;
+
+  /* The Depsgraph::update_count when this object was last updated. */
+  uint64_t last_update_transform = 0;
+  uint64_t last_update_geometry = 0;
+  uint64_t last_update_shading = 0;
 };
 
 }  // namespace blender::bke

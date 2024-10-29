@@ -6,11 +6,10 @@ from . import TestQueue
 
 import json
 import pathlib
-from typing import Dict, List
 
 
 class TestGraph:
-    def __init__(self, json_filepaths: List[pathlib.Path]):
+    def __init__(self, json_filepaths: list[pathlib.Path]):
         # Initialize graph from JSON file. Note that this is implemented without
         # accessing any benchmark environment or configuration. This ways benchmarks
         # run on various machines can be aggregated and the graph generated on another
@@ -52,6 +51,8 @@ class TestGraph:
                         outputs.add(output)
 
                 chart_type = 'line' if entries[0].benchmark_type == 'time_series' else 'comparison'
+                if chart_type == 'comparison':
+                    entries = sorted(entries, key=lambda entry: (entry.revision, entry.test))
 
                 for output in outputs:
                     chart_name = f"{category} ({output})"
@@ -59,7 +60,7 @@ class TestGraph:
 
         self.json = json.dumps(data, indent=2)
 
-    def chart(self, device_name: str, chart_name: str, entries: List, chart_type: str, output: str) -> Dict:
+    def chart(self, device_name: str, chart_name: str, entries: list, chart_type: str, output: str) -> dict:
         # Gather used tests.
         tests = {}
         for entry in entries:

@@ -32,9 +32,11 @@ class SpellChecker:
         "duplications",
         "effector",
         "equi",  # equi-angular, etc.
+        "eszett",  # German Eszett
         "et",  # et al.
         "fader",
         "globbing",
+        "guillemet",
         "gridded",
         "haptics",
         "hasn",  # hasn't
@@ -49,10 +51,12 @@ class SpellChecker:
         "kyrgyz",
         "latin",
         "merchantability",
+        "mille",  # Per Mille
         "mplayer",
         "ons",  # add-ons
         "pong",  # ping pong
         "procedurals",  # Used as noun
+        "recurse",
         "resumable",
         "runtimes",
         "scalable",
@@ -193,6 +197,7 @@ class SpellChecker:
         "raytree",
         "readonly",
         "realtime",
+        "recompute", "recomputation",
         "reinject", "reinjected",
         "rekey",
         "relink",
@@ -233,6 +238,7 @@ class SpellChecker:
         "subsize",
         "substep", "substeps",
         "substring",
+        "supercompress", "supercompression",
         "targetless",
         "textbox", "textboxes",
         "tilemode",
@@ -266,7 +272,7 @@ class SpellChecker:
         "unprotect",
         "unreacted",
         "unreferenced",
-        "unregister", "unregistration",
+        "unregister", "unregistration", "unregistering",
         "unselect", "unselected", "unselectable",
         "unsets",
         "unshadowed",
@@ -408,6 +414,7 @@ class SpellChecker:
         "anisotropic", "anisotropy",
         "arcminute", "arcminutes",
         "arcsecond", "arcseconds",
+        "autokey",
         "bimanual",  # OpenXR?
         "bitangent",
         "boid", "boids",
@@ -451,6 +458,7 @@ class SpellChecker:
         "parametrization",
         "pheomelanin",
         "photoreceptor",
+        "picometer", "picometers",
         "poly",
         "polyline", "polylines",
         "probabilistically",
@@ -460,6 +468,7 @@ class SpellChecker:
         "quartic",
         "quaternion", "quaternions",
         "quintic",
+        "reallocations",
         "samplerate",
         "sandboxed",
         "sawtooth",
@@ -501,6 +510,7 @@ class SpellChecker:
         "chrominance",
         "clearcoat",
         "codec", "codecs",
+        "codepoint",
         "collada",
         "colorspace",
         "compositing",
@@ -670,7 +680,7 @@ class SpellChecker:
         "ptcache",
         "dpaint",
 
-        # Algorithm/library names
+        # Algorithm/library/tools names
         "ashikhmin",  # Ashikhmin-Shirley
         "arsloe",  # Texel-Marsen-Arsloe
         "beckmann",
@@ -688,6 +698,7 @@ class SpellChecker:
         "devlin",
         "embree",
         "gmp",
+        "gltfpack",
         "hosek",
         "kutta",
         "kuwahara",
@@ -807,7 +818,7 @@ class SpellChecker:
         "tma",
         "ui",
         "unix",
-        "uuid",
+        "uuid", "uid",
         "vbo", "vbos",
         "vfx",
         "vmm",

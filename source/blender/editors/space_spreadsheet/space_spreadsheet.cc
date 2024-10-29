@@ -7,8 +7,6 @@
 #include "BLI_listbase.h"
 #include "BLI_string.h"
 
-#include "BKE_global.h"
-#include "BKE_lib_remap.h"
 #include "BKE_screen.hh"
 
 #include "ED_screen.hh"
@@ -30,17 +28,14 @@
 
 #include "DEG_depsgraph_query.hh"
 
-#include "RNA_access.hh"
-
 #include "WM_api.hh"
 #include "WM_types.hh"
 
-#include "BLT_translation.h"
+#include "BLT_translation.hh"
 
-#include "BLF_api.h"
+#include "BLF_api.hh"
 
 #include "spreadsheet_data_source_geometry.hh"
-#include "spreadsheet_dataset_draw.hh"
 #include "spreadsheet_intern.hh"
 #include "spreadsheet_layout.hh"
 #include "spreadsheet_row_filter.hh"
@@ -48,8 +43,7 @@
 
 #include <sstream>
 
-using namespace blender;
-using namespace blender::ed::spreadsheet;
+namespace blender::ed::spreadsheet {
 
 static SpaceLink *spreadsheet_create(const ScrArea * /*area*/, const Scene * /*scene*/)
 {
@@ -113,6 +107,7 @@ static void spreadsheet_free(SpaceLink *sl)
   LISTBASE_FOREACH_MUTABLE (SpreadsheetColumn *, column, &sspreadsheet->columns) {
     spreadsheet_column_free(column);
   }
+  MEM_SAFE_FREE(sspreadsheet->instance_ids);
   BKE_viewer_path_clear(&sspreadsheet->viewer_path);
 }
 
@@ -147,6 +142,8 @@ static SpaceLink *spreadsheet_duplicate(SpaceLink *sl)
     BLI_addtail(&sspreadsheet_new->columns, new_column);
   }
 
+  sspreadsheet_new->instance_ids = static_cast<SpreadsheetInstanceID *>(
+      MEM_dupallocN(sspreadsheet_old->instance_ids));
   BKE_viewer_path_copy(&sspreadsheet_new->viewer_path, &sspreadsheet_old->viewer_path);
 
   return (SpaceLink *)sspreadsheet_new;
@@ -158,7 +155,9 @@ static void spreadsheet_keymap(wmKeyConfig *keyconf)
   WM_keymap_ensure(keyconf, "Spreadsheet Generic", SPACE_SPREADSHEET, RGN_TYPE_WINDOW);
 }
 
-static void spreadsheet_id_remap(ScrArea * /*area*/, SpaceLink *slink, const IDRemapper *mappings)
+static void spreadsheet_id_remap(ScrArea * /*area*/,
+                                 SpaceLink *slink,
+                                 const blender::bke::id::IDRemapper &mappings)
 {
   SpaceSpreadsheet *sspreadsheet = (SpaceSpreadsheet *)slink;
   BKE_viewer_path_id_remap(&sspreadsheet->viewer_path, mappings);
@@ -193,7 +192,7 @@ static void spreadsheet_main_region_init(wmWindowManager *wm, ARegion *region)
   }
 }
 
-ID *ED_spreadsheet_get_current_id(const SpaceSpreadsheet *sspreadsheet)
+ID *get_current_id(const SpaceSpreadsheet *sspreadsheet)
 {
   if (BLI_listbase_is_empty(&sspreadsheet->viewer_path.path)) {
     return nullptr;
@@ -296,7 +295,7 @@ static void spreadsheet_update_context(const bContext *C)
 Object *spreadsheet_get_object_eval(const SpaceSpreadsheet *sspreadsheet,
                                     const Depsgraph *depsgraph)
 {
-  ID *used_id = ED_spreadsheet_get_current_id(sspreadsheet);
+  ID *used_id = get_current_id(sspreadsheet);
   if (used_id == nullptr) {
     return nullptr;
   }
@@ -345,6 +344,7 @@ static float get_default_column_width(const ColumnValues &values)
   static const float float_width = 3;
   switch (values.type()) {
     case SPREADSHEET_VALUE_TYPE_BOOL:
+    case SPREADSHEET_VALUE_TYPE_FLOAT4X4:
       return 2.0f;
     case SPREADSHEET_VALUE_TYPE_INT8:
     case SPREADSHEET_VALUE_TYPE_INT32:
@@ -677,19 +677,22 @@ static void spreadsheet_blend_read_data(BlendDataReader *reader, SpaceLink *sl)
   SpaceSpreadsheet *sspreadsheet = (SpaceSpreadsheet *)sl;
 
   sspreadsheet->runtime = nullptr;
-  BLO_read_list(reader, &sspreadsheet->row_filters);
+  BLO_read_struct_list(reader, SpreadsheetRowFilter, &sspreadsheet->row_filters);
   LISTBASE_FOREACH (SpreadsheetRowFilter *, row_filter, &sspreadsheet->row_filters) {
-    BLO_read_data_address(reader, &row_filter->value_string);
+    BLO_read_string(reader, &row_filter->value_string);
   }
-  BLO_read_list(reader, &sspreadsheet->columns);
+  BLO_read_struct_list(reader, SpreadsheetColumn, &sspreadsheet->columns);
   LISTBASE_FOREACH (SpreadsheetColumn *, column, &sspreadsheet->columns) {
-    BLO_read_data_address(reader, &column->id);
-    BLO_read_data_address(reader, &column->id->name);
+    BLO_read_struct(reader, SpreadsheetColumnID, &column->id);
+    BLO_read_string(reader, &column->id->name);
     /* While the display name is technically runtime data, it is loaded here, otherwise the row
      * filters might not now their type if their region draws before the main region.
      * This would ideally be cleared here. */
-    BLO_read_data_address(reader, &column->display_name);
+    BLO_read_string(reader, &column->display_name);
   }
+
+  BLO_read_struct_array(
+      reader, SpreadsheetInstanceID, sspreadsheet->instance_ids_num, &sspreadsheet->instance_ids);
 
   BKE_viewer_path_blend_read_data(reader, &sspreadsheet->viewer_path);
 }
@@ -714,12 +717,14 @@ static void spreadsheet_blend_write(BlendWriter *writer, SpaceLink *sl)
     BLO_write_string(writer, column->display_name);
   }
 
+  BLO_write_struct_array(
+      writer, SpreadsheetInstanceID, sspreadsheet->instance_ids_num, sspreadsheet->instance_ids);
   BKE_viewer_path_blend_write(writer, &sspreadsheet->viewer_path);
 }
 
-void ED_spacetype_spreadsheet()
+void register_spacetype()
 {
-  SpaceType *st = MEM_cnew<SpaceType>("spacetype spreadsheet");
+  std::unique_ptr<SpaceType> st = std::make_unique<SpaceType>();
   ARegionType *art;
 
   st->spaceid = SPACE_SPREADSHEET;
@@ -801,8 +806,10 @@ void ED_spacetype_spreadsheet()
   art->init = ED_region_panels_init;
   art->draw = spreadsheet_dataset_region_draw;
   art->listener = spreadsheet_dataset_region_listener;
-  blender::ed::spreadsheet::spreadsheet_data_set_region_panels_register(*art);
+  spreadsheet_data_set_region_panels_register(*art);
   BLI_addhead(&st->regiontypes, art);
 
-  BKE_spacetype_register(st);
+  BKE_spacetype_register(std::move(st));
 }
+
+}  // namespace blender::ed::spreadsheet

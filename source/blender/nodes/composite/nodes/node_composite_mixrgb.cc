@@ -7,13 +7,17 @@
  */
 
 #include "BLI_assert.h"
+#include "BLI_math_vector_types.hh"
+
+#include "FN_multi_function_builder.hh"
 
 #include "DNA_material_types.h"
 
-#include "GPU_material.h"
+#include "GPU_material.hh"
 
 #include "COM_shader_node.hh"
 
+#include "NOD_multi_function.hh"
 #include "NOD_socket_search_link.hh"
 
 #include "RNA_enum_types.hh"
@@ -58,7 +62,8 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
   const int weight = ELEM(params.other_socket().type, SOCK_RGBA) ? 0 : -1;
 
   for (const EnumPropertyItem *item = rna_enum_ramp_blend_items; item->identifier != nullptr;
-       item++) {
+       item++)
+  {
     if (item->name != nullptr && item->identifier[0] != '\0') {
       params.add_item(IFACE_(item->name), SocketSearchOp{"Image", item->value}, weight);
     }
@@ -168,13 +173,25 @@ static ShaderNode *get_compositor_shader_node(DNode node)
   return new MixRGBShaderNode(node);
 }
 
+static void node_build_multi_function(blender::nodes::NodeMultiFunctionBuilder &builder)
+{
+  /* Not yet implemented. Return zero. */
+  static auto function = mf::build::SI3_SO<float, float4, float4, float4>(
+      "Mix RGB",
+      [](const float /*factor*/, const float4 & /*color1*/, const float4 & /*color2*/) -> float4 {
+        return float4(0.0f);
+      },
+      mf::build::exec_presets::SomeSpanOrSingle<1, 2>());
+  builder.set_matching_fn(function);
+}
+
 }  // namespace blender::nodes::node_composite_mixrgb_cc
 
 void register_node_type_cmp_mix_rgb()
 {
   namespace file_ns = blender::nodes::node_composite_mixrgb_cc;
 
-  static bNodeType ntype;
+  static blender::bke::bNodeType ntype;
 
   cmp_node_type_base(&ntype, CMP_NODE_MIX_RGB, "Mix", NODE_CLASS_OP_COLOR);
   ntype.flag |= NODE_PREVIEW;
@@ -182,6 +199,7 @@ void register_node_type_cmp_mix_rgb()
   ntype.labelfunc = node_blend_label;
   ntype.get_compositor_shader_node = file_ns::get_compositor_shader_node;
   ntype.gather_link_search_ops = file_ns::node_gather_link_searches;
+  ntype.build_multi_function = file_ns::node_build_multi_function;
 
-  nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }

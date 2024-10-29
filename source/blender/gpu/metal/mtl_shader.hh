@@ -10,16 +10,17 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "GPU_batch.h"
-#include "GPU_capabilities.h"
-#include "GPU_shader.h"
-#include "GPU_vertex_format.h"
+#include "GPU_batch.hh"
+#include "GPU_capabilities.hh"
+#include "GPU_shader.hh"
+#include "GPU_vertex_format.hh"
 
 #include <Metal/Metal.h>
 #include <QuartzCore/QuartzCore.h>
 #include <functional>
 #include <unordered_map>
 
+#include <deque>
 #include <mutex>
 #include <thread>
 
@@ -47,6 +48,13 @@ class MTLContext;
 #else
 #  define shader_debug_printf(...) /* Null print. */
 #endif
+
+/* Offset base specialization constant ID for function constants declared in CreateInfo. */
+#define MTL_SHADER_SPECIALIZATION_CONSTANT_BASE_ID 30
+/* Maximum threshold for specialized shader variant count.
+ * This is a catch-all to prevent excessive PSO permutations from being created and also catch
+ * parameters which should ideally not be used for specialization. */
+#define MTL_SHADER_MAX_SPECIALIZED_PSOS 5
 
 /* Desired reflection data for a buffer binding. */
 struct MTLBufferArgumentData {
@@ -92,19 +100,10 @@ struct MTLRenderPipelineStateInstance {
   blender::Vector<MTLBufferArgumentData> buffer_bindings_reflection_data_frag;
 };
 
-/* Metal COmpute Pipeline State instance. */
-struct MTLComputePipelineStateInstance {
-  /* Function instances with specialization.
-   * Required for argument encoder construction. */
-  id<MTLFunction> compute = nil;
-  /* PSO handle. */
-  id<MTLComputePipelineState> pso = nil;
-  /* Base bind index for binding uniform buffers, offset based on other
-   * bound buffers such as vertex buffers, as the count can vary. */
-  int base_uniform_buffer_index = -1;
-  /* Base bind index for binding storage buffers. */
-  int base_storage_buffer_index = -1;
+/* Common compute pipeline state. */
+struct MTLComputePipelineStateCommon {
 
+  /* Thread-group information is common for all PSO variants. */
   int threadgroup_x_len = 1;
   int threadgroup_y_len = 1;
   int threadgroup_z_len = 1;
@@ -117,6 +116,25 @@ struct MTLComputePipelineStateInstance {
     this->threadgroup_y_len = workgroup_size_y;
     this->threadgroup_z_len = workgroup_size_z;
   }
+};
+
+/* Metal Compute Pipeline State instance per PSO. */
+struct MTLComputePipelineStateInstance {
+
+  /** Derived information. */
+  /* Unique index for PSO variant. */
+  uint32_t shader_pso_index;
+  /* Base bind index for binding uniform buffers, offset based on other
+   * bound buffers such as vertex buffers, as the count can vary. */
+  int base_uniform_buffer_index = -1;
+  /* Base bind index for binding storage buffers. */
+  int base_storage_buffer_index = -1;
+
+  /* Function instances with specialization.
+   * Required for argument encoder construction. */
+  id<MTLFunction> compute = nil;
+  /* PSO handle. */
+  id<MTLComputePipelineState> pso = nil;
 };
 
 /* #MTLShaderBuilder source wrapper used during initial compilation. */
@@ -146,7 +164,7 @@ struct MTLShaderBuilder {
  * - set MSL source.
  * - set Vertex/Fragment function names.
  * - Create and populate #MTLShaderInterface.
- **/
+ */
 class MTLShader : public Shader {
   friend shader::ShaderCreateInfo;
   friend shader::StageInterfaceInfo;
@@ -157,6 +175,7 @@ class MTLShader : public Shader {
   int uni_ssbo_input_vert_count_loc = -1;
   int uni_ssbo_uses_indexed_rendering = -1;
   int uni_ssbo_uses_index_mode_u16 = -1;
+  int uni_ssbo_index_base_loc = -1;
 
  private:
   /* Context Handle. */
@@ -170,7 +189,7 @@ class MTLShader : public Shader {
   /* Whether transform feedback is currently active. */
   bool transform_feedback_active_ = false;
   /* Vertex buffer to write transform feedback data into. */
-  GPUVertBuf *transform_feedback_vertbuf_ = nullptr;
+  VertBuf *transform_feedback_vertbuf_ = nullptr;
 
   /** Shader source code. */
   MTLShaderBuilder *shd_builder_ = nullptr;
@@ -195,7 +214,9 @@ class MTLShader : public Shader {
   std::mutex pso_cache_lock_;
 
   /** Compute pipeline state and Compute PSO caching. */
-  MTLComputePipelineStateInstance compute_pso_instance_;
+  MTLComputePipelineStateCommon compute_pso_common_state_;
+  blender::Map<MTLComputePipelineStateDescriptor, MTLComputePipelineStateInstance *>
+      compute_pso_cache_;
 
   /* True to enable multi-layered rendering support. */
   bool uses_gpu_layer = false;
@@ -244,6 +265,14 @@ class MTLShader : public Shader {
   void *push_constant_data_ = nullptr;
   bool push_constant_modified_ = false;
 
+  /* Special definition for Max TotalThreadsPerThreadgroup tuning. */
+  uint maxTotalThreadsPerThreadgroup_Tuning_ = 0;
+
+  /* Set to true when batch compiling */
+  bool async_compilation_ = false;
+
+  bool finalize_shader(const shader::ShaderCreateInfo *info = nullptr);
+
  public:
   MTLShader(MTLContext *ctx, const char *name);
   MTLShader(MTLContext *ctx,
@@ -254,6 +283,8 @@ class MTLShader : public Shader {
             NSString *vertex_function_name_,
             NSString *fragment_function_name_);
   ~MTLShader();
+
+  void init(const shader::ShaderCreateInfo & /*info*/, bool is_batch_compilation) override;
 
   /* Assign GLSL source. */
   void vertex_shader_from_glsl(MutableSpan<const char *> sources) override;
@@ -270,6 +301,14 @@ class MTLShader : public Shader {
   bool is_valid()
   {
     return valid_;
+  }
+  bool has_compute_shader_lib()
+  {
+    return (shader_library_compute_ != nil);
+  }
+  bool has_parent_shader()
+  {
+    return (parent_shader_ != nil);
   }
   MTLRenderPipelineStateDescriptor &get_current_pipeline_state()
   {
@@ -296,7 +335,7 @@ class MTLShader : public Shader {
 
   void transform_feedback_names_set(Span<const char *> name_list,
                                     const eGPUShaderTFBType geom_type) override;
-  bool transform_feedback_enable(GPUVertBuf *buf) override;
+  bool transform_feedback_enable(VertBuf *buf) override;
   void transform_feedback_disable() override;
 
   void bind() override;
@@ -350,11 +389,15 @@ class MTLShader : public Shader {
       MTLPrimitiveTopologyClass prim_type,
       const MTLRenderPipelineStateDescriptor &pipeline_descriptor);
 
-  bool bake_compute_pipeline_state(MTLContext *ctx);
-  const MTLComputePipelineStateInstance &get_compute_pipeline_state();
+  MTLComputePipelineStateInstance *bake_compute_pipeline_state(
+      MTLContext *ctx, MTLComputePipelineStateDescriptor &compute_pipeline_descriptor);
 
+  const MTLComputePipelineStateCommon &get_compute_common_state()
+  {
+    return compute_pso_common_state_;
+  }
   /* Transform Feedback. */
-  GPUVertBuf *get_transform_feedback_active_buffer();
+  VertBuf *get_transform_feedback_active_buffer();
   bool has_transform_feedback_varying(std::string str);
 
  private:
@@ -363,6 +406,94 @@ class MTLShader : public Shader {
   bool generate_msl_from_glsl_compute(const shader::ShaderCreateInfo *info);
 
   MEM_CXX_CLASS_ALLOC_FUNCS("MTLShader");
+};
+
+class MTLParallelShaderCompiler {
+ private:
+  enum ParallelWorkType {
+    PARALLELWORKTYPE_UNSPECIFIED,
+    PARALLELWORKTYPE_COMPILE_SHADER,
+    PARALLELWORKTYPE_BAKE_PSO,
+  };
+
+  struct ParallelWork {
+    const shader::ShaderCreateInfo *info = nullptr;
+    class MTLShaderCompiler *shader_compiler = nullptr;
+    MTLShader *shader = nullptr;
+    Vector<Shader::Constants::Value> specialization_values;
+
+    ParallelWorkType work_type = PARALLELWORKTYPE_UNSPECIFIED;
+    bool is_ready = false;
+  };
+
+  struct Batch {
+    Vector<ParallelWork *> items;
+    bool is_ready = false;
+  };
+
+  std::mutex batch_mutex;
+  BatchHandle next_batch_handle = 1;
+  Map<BatchHandle, Batch> batches;
+
+  std::vector<std::thread> compile_threads;
+
+  volatile bool terminate_compile_threads;
+  std::condition_variable cond_var;
+  std::mutex queue_mutex;
+  std::deque<ParallelWork *> parallel_work_queue;
+
+  void parallel_compilation_thread_func(GPUContext *blender_gpu_context);
+  BatchHandle create_batch(size_t batch_size);
+  void add_item_to_batch(ParallelWork *work_item, BatchHandle batch_handle);
+  void add_parallel_item_to_queue(ParallelWork *add_parallel_item_to_queuework_item,
+                                  BatchHandle batch_handle);
+
+  std::atomic<int> ref_count;
+
+ public:
+  MTLParallelShaderCompiler();
+  ~MTLParallelShaderCompiler();
+
+  void create_compile_threads();
+  BatchHandle batch_compile(MTLShaderCompiler *shade_compiler,
+                            Span<const shader::ShaderCreateInfo *> &infos);
+  bool batch_is_ready(BatchHandle handle);
+  Vector<Shader *> batch_finalize(BatchHandle &handle);
+
+  SpecializationBatchHandle precompile_specializations(Span<ShaderSpecialization> specializations);
+  bool specialization_batch_is_ready(SpecializationBatchHandle &handle);
+
+  void increment_ref_count()
+  {
+    ref_count++;
+  }
+  void decrement_ref_count()
+  {
+    ref_count--;
+  }
+  int get_ref_count()
+  {
+    return ref_count;
+  }
+};
+
+class MTLShaderCompiler : public ShaderCompiler {
+ private:
+  MTLParallelShaderCompiler *parallel_shader_compiler;
+
+ public:
+  MTLShaderCompiler();
+  virtual ~MTLShaderCompiler() override;
+
+  virtual BatchHandle batch_compile(Span<const shader::ShaderCreateInfo *> &infos) override;
+  virtual bool batch_is_ready(BatchHandle handle) override;
+  virtual Vector<Shader *> batch_finalize(BatchHandle &handle) override;
+
+  virtual SpecializationBatchHandle precompile_specializations(
+      Span<ShaderSpecialization> specializations) override;
+  virtual bool specialization_batch_is_ready(SpecializationBatchHandle &handle) override;
+
+  void release_parallel_shader_compiler();
 };
 
 /* Vertex format conversion.

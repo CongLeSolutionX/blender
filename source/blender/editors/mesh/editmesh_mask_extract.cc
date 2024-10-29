@@ -10,21 +10,19 @@
 #include "DNA_modifier_types.h"
 #include "DNA_object_types.h"
 
-#include "BLT_translation.h"
-
 #include "BKE_attribute.hh"
 #include "BKE_context.hh"
+#include "BKE_customdata.hh"
 #include "BKE_editmesh.hh"
-#include "BKE_layer.h"
-#include "BKE_lib_id.h"
+#include "BKE_lib_id.hh"
 #include "BKE_mesh.hh"
 #include "BKE_modifier.hh"
 #include "BKE_paint.hh"
-#include "BKE_report.h"
-#include "BKE_screen.hh"
-#include "BKE_shrinkwrap.h"
+#include "BKE_shrinkwrap.hh"
 
 #include "BLI_math_vector.h"
+
+#include "BLT_translation.hh"
 
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_build.hh"
@@ -35,25 +33,23 @@
 #include "WM_api.hh"
 #include "WM_types.hh"
 
-#include "ED_mesh.hh"
 #include "ED_object.hh"
 #include "ED_screen.hh"
 #include "ED_sculpt.hh"
 #include "ED_undo.hh"
-#include "ED_view3d.hh"
 
-#include "bmesh_tools.h"
+#include "bmesh_tools.hh"
 
 #include "MEM_guardedalloc.h"
 
-#include "mesh_intern.h" /* own include */
+#include "mesh_intern.hh" /* own include */
 
 static bool geometry_extract_poll(bContext *C)
 {
   Object *ob = CTX_data_active_object(C);
   if (ob != nullptr && ob->mode == OB_MODE_SCULPT) {
     if (ob->sculpt->bm) {
-      CTX_wm_operator_poll_msg_set(C, "The geometry can not be extracted with dyntopo activated");
+      CTX_wm_operator_poll_msg_set(C, "The geometry cannot be extracted with dyntopo activated");
       return false;
     }
     return ED_operator_object_active_editable_mesh(C);
@@ -87,11 +83,11 @@ static int geometry_extract_apply(bContext *C,
   Object *ob = CTX_data_active_object(C);
   View3D *v3d = CTX_wm_view3d(C);
   Scene *scene = CTX_data_scene(C);
-  Depsgraph *depsgraph = CTX_data_depsgraph_on_load(C);
+  Depsgraph &depsgraph = *CTX_data_depsgraph_on_load(C);
 
-  ED_object_sculptmode_exit(C, depsgraph);
+  blender::ed::sculpt_paint::object_sculpt_mode_exit(C, depsgraph);
 
-  BKE_sculpt_mask_layers_ensure(depsgraph, bmain, ob, nullptr);
+  BKE_sculpt_mask_layers_ensure(&depsgraph, bmain, ob, nullptr);
 
   /* Ensures that deformation from sculpt mode is taken into account before duplicating the mesh to
    * extract the geometry. */
@@ -190,39 +186,35 @@ static int geometry_extract_apply(bContext *C,
   bm_to_mesh_params.calc_object_remap = false;
   new_mesh = BKE_mesh_from_bmesh_nomain(bm, &bm_to_mesh_params, mesh);
 
-  BKE_editmesh_free_data(em);
-  MEM_freeN(em);
+  /* Remove the Face Sets as they need to be recreated when entering Sculpt Mode in the new object.
+   * TODO(pablodobarro): In the future we can try to preserve them from the original mesh. */
+  new_mesh->attributes_for_write().remove(".sculpt_face_set");
 
-  if (new_mesh->totvert == 0) {
+  /* Remove the mask from the new object so it can be sculpted directly after extracting. */
+  new_mesh->attributes_for_write().remove(".sculpt_mask");
+
+  BKE_editmesh_free_data(em);
+  MEM_delete(em);
+
+  if (new_mesh->verts_num == 0) {
     BKE_id_free(bmain, new_mesh);
     return OPERATOR_FINISHED;
   }
 
   ushort local_view_bits = 0;
   if (v3d && v3d->localvd) {
-    local_view_bits = v3d->local_view_uuid;
+    local_view_bits = v3d->local_view_uid;
   }
-  Object *new_ob = ED_object_add_type(
+  Object *new_ob = blender::ed::object::add_type(
       C, OB_MESH, nullptr, ob->loc, ob->rot, false, local_view_bits);
   BKE_mesh_nomain_to_mesh(new_mesh, static_cast<Mesh *>(new_ob->data), new_ob);
 
-  Mesh *new_ob_mesh = static_cast<Mesh *>(new_ob->data);
-
-  /* Remove the Face Sets as they need to be recreated when entering Sculpt Mode in the new object.
-   * TODO(pablodobarro): In the future we can try to preserve them from the original mesh. */
-  new_ob_mesh->attributes_for_write().remove(".sculpt_face_set");
-
-  /* Remove the mask from the new object so it can be sculpted directly after extracting. */
-  new_ob_mesh->attributes_for_write().remove(".sculpt_mask");
-
-  BKE_mesh_copy_parameters_for_eval(new_ob_mesh, mesh);
-
   if (params->apply_shrinkwrap) {
-    BKE_shrinkwrap_mesh_nearest_surface_deform(C, new_ob, ob);
+    BKE_shrinkwrap_mesh_nearest_surface_deform(CTX_data_depsgraph_pointer(C), scene, new_ob, ob);
   }
 
   if (params->add_solidify) {
-    ED_object_modifier_add(
+    blender::ed::object::modifier_add(
         op->reports, bmain, scene, new_ob, "geometry_extract_solidify", eModifierType_Solidify);
     SolidifyModifierData *sfmd = (SolidifyModifierData *)BKE_modifiers_findby_name(
         new_ob, "mask_extract_solidify");
@@ -254,6 +246,10 @@ static void geometry_extract_tag_masked_faces(BMesh *bm, GeometryExtractParams *
     bool keep_face = true;
     BMVert *v;
     BMIter face_iter;
+    if (BM_elem_flag_test_bool(f, BM_ELEM_HIDDEN)) {
+      BM_elem_flag_set(f, BM_ELEM_TAG, true);
+      continue;
+    };
     BM_ITER_ELEM (v, &face_iter, f, BM_VERTS_OF_FACE) {
       const float mask = BM_ELEM_CD_GET_FLOAT(v, cd_vert_mask_offset);
       if (mask < threshold) {
@@ -304,7 +300,8 @@ static int paint_mask_extract_exec(bContext *C, wmOperator *op)
 
 static int paint_mask_extract_invoke(bContext *C, wmOperator *op, const wmEvent *e)
 {
-  return WM_operator_props_popup_confirm(C, op, e);
+  return WM_operator_props_popup_confirm_ex(
+      C, op, e, IFACE_("Create Mesh From Paint Mask"), IFACE_("Extract"));
 }
 
 static void geometry_extract_props(StructRNA *srna)
@@ -338,12 +335,10 @@ static void geometry_extract_props(StructRNA *srna)
 
 void MESH_OT_paint_mask_extract(wmOperatorType *ot)
 {
-  /* identifiers */
   ot->name = "Mask Extract";
   ot->description = "Create a new mesh object from the current paint mask";
   ot->idname = "MESH_OT_paint_mask_extract";
 
-  /* api callbacks */
   ot->poll = geometry_extract_poll;
   ot->invoke = paint_mask_extract_invoke;
   ot->exec = paint_mask_extract_exec;
@@ -366,6 +361,7 @@ void MESH_OT_paint_mask_extract(wmOperatorType *ot)
 
 static int face_set_extract_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
+  using namespace blender::ed;
   if (!CTX_wm_region_view3d(C)) {
     return OPERATOR_CANCELLED;
   }
@@ -374,8 +370,8 @@ static int face_set_extract_invoke(bContext *C, wmOperator *op, const wmEvent *e
   const float mval[2] = {float(event->xy[0] - region->winrct.xmin),
                          float(event->xy[1] - region->winrct.ymin)};
 
-  Object *ob = CTX_data_active_object(C);
-  const int face_set_id = ED_sculpt_face_sets_active_update_and_get(C, ob, mval);
+  Object &ob = *CTX_data_active_object(C);
+  const int face_set_id = sculpt_paint::face_set::active_update_and_get(C, ob, mval);
   if (face_set_id == SCULPT_FACE_SET_NONE) {
     return OPERATOR_CANCELLED;
   }
@@ -391,12 +387,10 @@ static int face_set_extract_invoke(bContext *C, wmOperator *op, const wmEvent *e
 
 void MESH_OT_face_set_extract(wmOperatorType *ot)
 {
-  /* identifiers */
   ot->name = "Face Set Extract";
   ot->description = "Create a new mesh object from the selected Face Set";
   ot->idname = "MESH_OT_face_set_extract";
 
-  /* api callbacks */
   ot->poll = geometry_extract_poll;
   ot->invoke = face_set_extract_invoke;
 
@@ -427,6 +421,10 @@ static void slice_paint_mask(BMesh *bm, bool invert, bool fill_holes, float mask
         break;
       }
     }
+    if (BM_elem_flag_test_bool(f, BM_ELEM_HIDDEN)) {
+      keep_face = false;
+    };
+    /* This invert behavior is fragile, as it potentially marks faces which are hidden */
     if (invert) {
       keep_face = !keep_face;
     }
@@ -458,17 +456,25 @@ static void slice_paint_mask(BMesh *bm, bool invert, bool fill_holes, float mask
 
 static int paint_mask_slice_exec(bContext *C, wmOperator *op)
 {
-  Main *bmain = CTX_data_main(C);
-  Object *ob = CTX_data_active_object(C);
+  using namespace blender;
+  using namespace blender::ed;
+  const Scene &scene = *CTX_data_scene(C);
+  Main &bmain = *CTX_data_main(C);
+  Object &ob = *CTX_data_active_object(C);
   View3D *v3d = CTX_wm_view3d(C);
 
-  BKE_sculpt_mask_layers_ensure(nullptr, nullptr, ob, nullptr);
+  BKE_sculpt_mask_layers_ensure(nullptr, nullptr, &ob, nullptr);
 
-  Mesh *mesh = static_cast<Mesh *>(ob->data);
-  Mesh *new_mesh = (Mesh *)BKE_id_copy(bmain, &mesh->id);
+  bool create_new_object = RNA_boolean_get(op->ptr, "new_object");
+  bool fill_holes = RNA_boolean_get(op->ptr, "fill_holes");
+  float mask_threshold = RNA_float_get(op->ptr, "mask_threshold");
 
-  if (ob->mode == OB_MODE_SCULPT) {
-    ED_sculpt_undo_geometry_begin(ob, op);
+  Mesh *mesh = static_cast<Mesh *>(ob.data);
+  Mesh *new_mesh = (Mesh *)BKE_id_copy(&bmain, &mesh->id);
+
+  /* Undo crashes when new object is created in the middle of a sculpt, see #87243. */
+  if (ob.mode == OB_MODE_SCULPT && !create_new_object) {
+    sculpt_paint::undo::geometry_begin(scene, ob, op);
   }
 
   const BMAllocTemplate allocsize = BMALLOC_TEMPLATE_FROM_ME(new_mesh);
@@ -480,33 +486,29 @@ static int paint_mask_slice_exec(bContext *C, wmOperator *op)
   mesh_to_bm_params.calc_face_normal = true;
   BM_mesh_bm_from_me(bm, new_mesh, &mesh_to_bm_params);
 
-  slice_paint_mask(
-      bm, false, RNA_boolean_get(op->ptr, "fill_holes"), RNA_float_get(op->ptr, "mask_threshold"));
-  BKE_id_free(bmain, new_mesh);
+  slice_paint_mask(bm, false, fill_holes, mask_threshold);
+  BKE_id_free(&bmain, new_mesh);
   BMeshToMeshParams bm_to_mesh_params{};
   bm_to_mesh_params.calc_object_remap = false;
   new_mesh = BKE_mesh_from_bmesh_nomain(bm, &bm_to_mesh_params, mesh);
   BM_mesh_free(bm);
 
-  if (RNA_boolean_get(op->ptr, "new_object")) {
+  if (create_new_object) {
     ushort local_view_bits = 0;
     if (v3d && v3d->localvd) {
-      local_view_bits = v3d->local_view_uuid;
+      local_view_bits = v3d->local_view_uid;
     }
-    Object *new_ob = ED_object_add_type(
-        C, OB_MESH, nullptr, ob->loc, ob->rot, false, local_view_bits);
-    Mesh *new_ob_mesh = (Mesh *)BKE_id_copy(bmain, &mesh->id);
+    Object *new_ob = blender::ed::object::add_type(
+        C, OB_MESH, nullptr, ob.loc, ob.rot, false, local_view_bits);
+    Mesh *new_ob_mesh = (Mesh *)BKE_id_copy(&bmain, &mesh->id);
 
     const BMAllocTemplate allocsize_new_ob = BMALLOC_TEMPLATE_FROM_ME(new_ob_mesh);
     bm = BM_mesh_create(&allocsize_new_ob, &bm_create_params);
 
     BM_mesh_bm_from_me(bm, new_ob_mesh, &mesh_to_bm_params);
 
-    slice_paint_mask(bm,
-                     true,
-                     RNA_boolean_get(op->ptr, "fill_holes"),
-                     RNA_float_get(op->ptr, "mask_threshold"));
-    BKE_id_free(bmain, new_ob_mesh);
+    slice_paint_mask(bm, true, fill_holes, mask_threshold);
+    BKE_id_free(&bmain, new_ob_mesh);
     new_ob_mesh = BKE_mesh_from_bmesh_nomain(bm, &bm_to_mesh_params, mesh);
     BM_mesh_free(bm);
 
@@ -517,28 +519,28 @@ static int paint_mask_slice_exec(bContext *C, wmOperator *op)
     BKE_mesh_nomain_to_mesh(new_ob_mesh, new_mesh, new_ob);
     WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER, new_ob);
     BKE_mesh_batch_cache_dirty_tag(new_mesh, BKE_MESH_BATCH_DIRTY_ALL);
-    DEG_relations_tag_update(bmain);
+    DEG_relations_tag_update(&bmain);
     DEG_id_tag_update(&new_ob->id, ID_RECALC_GEOMETRY);
     WM_event_add_notifier(C, NC_GEOM | ND_DATA, new_mesh);
   }
 
-  mesh = static_cast<Mesh *>(ob->data);
-  BKE_mesh_nomain_to_mesh(new_mesh, mesh, ob);
+  mesh = static_cast<Mesh *>(ob.data);
+  BKE_mesh_nomain_to_mesh(new_mesh, mesh, &ob);
 
-  if (ob->mode == OB_MODE_SCULPT) {
-    SculptSession *ss = ob->sculpt;
-    ss->face_sets = static_cast<int *>(CustomData_get_layer_named_for_write(
-        &mesh->face_data, CD_PROP_INT32, ".sculpt_face_set", mesh->faces_num));
-    if (ss->face_sets) {
+  if (ob.mode == OB_MODE_SCULPT) {
+    if (mesh->attributes().contains(".sculpt_face_set")) {
       /* Assign a new Face Set ID to the new faces created by the slice operation. */
-      const int next_face_set_id = ED_sculpt_face_sets_find_next_available_id(mesh);
-      ED_sculpt_face_sets_initialize_none_to_id(mesh, next_face_set_id);
+      const int next_face_set_id = sculpt_paint::face_set::find_next_available_id(ob);
+      sculpt_paint::face_set::initialize_none_to_id(mesh, next_face_set_id);
     }
-    ED_sculpt_undo_geometry_end(ob);
+    if (!create_new_object) {
+      sculpt_paint::undo::geometry_end(ob);
+      BKE_sculptsession_free_pbvh(ob);
+    }
   }
 
   BKE_mesh_batch_cache_dirty_tag(mesh, BKE_MESH_BATCH_DIRTY_ALL);
-  DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
+  DEG_id_tag_update(&ob.id, ID_RECALC_GEOMETRY);
   WM_event_add_notifier(C, NC_GEOM | ND_DATA, mesh);
 
   return OPERATOR_FINISHED;
@@ -547,12 +549,11 @@ static int paint_mask_slice_exec(bContext *C, wmOperator *op)
 void MESH_OT_paint_mask_slice(wmOperatorType *ot)
 {
   PropertyRNA *prop;
-  /* identifiers */
+
   ot->name = "Mask Slice";
   ot->description = "Slices the paint mask from the mesh";
   ot->idname = "MESH_OT_paint_mask_slice";
 
-  /* api callbacks */
   ot->poll = geometry_extract_poll;
   ot->exec = paint_mask_slice_exec;
 

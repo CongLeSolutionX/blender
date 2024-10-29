@@ -10,7 +10,6 @@ import glob
 import pathlib
 import shutil
 import sys
-from typing import List
 
 
 def find_blender_git_dir() -> pathlib.Path:
@@ -32,8 +31,7 @@ def get_tests_base_dir(blender_git_dir: pathlib.Path) -> pathlib.Path:
 def use_revision_columns(config: api.TestConfig) -> bool:
     return (
         config.benchmark_type == "comparison" and
-        len(config.queue.entries) > 0 and
-        not config.queue.has_multiple_revisions_to_build
+        len(config.queue.entries) > 0
     )
 
 
@@ -50,7 +48,7 @@ def print_header(config: api.TestConfig) -> None:
         print(header)
 
 
-def print_row(config: api.TestConfig, entries: List, end='\n') -> None:
+def print_row(config: api.TestConfig, entries: list, end='\n') -> None:
     # Print one or more test entries on a row.
     row = ""
 
@@ -62,7 +60,10 @@ def print_row(config: api.TestConfig, entries: List, end='\n') -> None:
         row += f"{revision: <15} "
 
     if config.queue.has_multiple_categories:
-        row += f"{entries[0].category: <15} "
+        category_name = entries[0].category
+        if entries[0].device_type != "CPU":
+            category_name += " " + entries[0].device_type
+        row += f"{category_name: <15} "
     row += f"{entries[0].test: <40} "
 
     for entry in entries:
@@ -70,7 +71,7 @@ def print_row(config: api.TestConfig, entries: List, end='\n') -> None:
         status = entry.status
         output = entry.output
         result = ''
-        if status in ('done', 'outdated') and output:
+        if status in {'done', 'outdated'} and output:
             result = '%.4fs' % output['time']
 
             if status == 'outdated':
@@ -97,13 +98,16 @@ def match_entry(entry: api.TestEntry, args: argparse.Namespace):
 
 def run_entry(env: api.TestEnvironment,
               config: api.TestConfig,
-              row: List,
+              row: list,
               entry: api.TestEntry,
               update_only: bool):
+    updated = False
+    failed = False
+
     # Check if entry needs to be run.
-    if update_only and entry.status not in ('queued', 'outdated'):
+    if update_only and entry.status not in {'queued', 'outdated'}:
         print_row(config, row, end='\r')
-        return False
+        return updated, failed
 
     # Run test entry.
     revision = entry.revision
@@ -116,7 +120,9 @@ def run_entry(env: api.TestEnvironment,
 
     test = config.tests.find(testname, testcategory)
     if not test:
-        return False
+        return updated, failed
+
+    updated = True
 
     # Log all output to dedicated log file.
     logname = testcategory + '_' + testname + '_' + revision
@@ -129,19 +135,25 @@ def run_entry(env: api.TestEnvironment,
     entry.error_msg = ''
 
     # Build revision, or just set path to existing executable.
-    entry.status = 'building'
-    print_row(config, row, end='\r')
     executable_ok = True
     if len(entry.executable):
         env.set_blender_executable(pathlib.Path(entry.executable), environment)
     else:
-        env.checkout(git_hash)
-        executable_ok = env.build()
+        entry.status = 'building'
+        print_row(config, row, end='\r')
+
+        if config.benchmark_type == "comparison":
+            install_dir = config.builds_dir / revision
+        else:
+            install_dir = env.install_dir
+        executable_ok = env.build(git_hash, install_dir)
+
         if not executable_ok:
             entry.status = 'failed'
             entry.error_msg = 'Failed to build'
+            failed = True
         else:
-            env.set_blender_executable(env.blender_executable, environment)
+            env.set_blender_executable(install_dir, environment)
 
     # Run test and update output and status.
     if executable_ok:
@@ -156,6 +168,7 @@ def run_entry(env: api.TestEnvironment,
         except KeyboardInterrupt as e:
             raise e
         except Exception as e:
+            failed = True
             entry.status = 'failed'
             entry.error_msg = str(e)
 
@@ -168,10 +181,10 @@ def run_entry(env: api.TestEnvironment,
     env.unset_log_file()
     env.set_default_blender_executable()
 
-    return True
+    return updated, failed
 
 
-def cmd_init(env: api.TestEnvironment, argv: List):
+def cmd_init(env: api.TestEnvironment, argv: list):
     # Initialize benchmarks folder.
     parser = argparse.ArgumentParser()
     parser.add_argument('--build', default=False, action='store_true')
@@ -181,7 +194,7 @@ def cmd_init(env: api.TestEnvironment, argv: List):
     env.unset_log_file()
 
 
-def cmd_list(env: api.TestEnvironment, argv: List) -> None:
+def cmd_list(env: api.TestEnvironment, argv: list) -> None:
     # List devices, tests and configurations.
     print('DEVICES')
     machine = env.get_machine()
@@ -202,7 +215,7 @@ def cmd_list(env: api.TestEnvironment, argv: List) -> None:
         print(config_name)
 
 
-def cmd_status(env: api.TestEnvironment, argv: List):
+def cmd_status(env: api.TestEnvironment, argv: list):
     # Print status of tests in configurations.
     parser = argparse.ArgumentParser()
     parser.add_argument('config', nargs='?', default=None)
@@ -225,7 +238,7 @@ def cmd_status(env: api.TestEnvironment, argv: List):
                 print_row(config, row)
 
 
-def cmd_reset(env: api.TestEnvironment, argv: List):
+def cmd_reset(env: api.TestEnvironment, argv: list):
     # Reset tests to re-run them.
     parser = argparse.ArgumentParser()
     parser.add_argument('config', nargs='?', default=None)
@@ -248,12 +261,14 @@ def cmd_reset(env: api.TestEnvironment, argv: List):
             shutil.rmtree(config.logs_dir)
 
 
-def cmd_run(env: api.TestEnvironment, argv: List, update_only: bool):
+def cmd_run(env: api.TestEnvironment, argv: list, update_only: bool):
     # Run tests.
     parser = argparse.ArgumentParser()
     parser.add_argument('config', nargs='?', default=None)
     parser.add_argument('test', nargs='?', default='*')
     args = parser.parse_args(argv)
+
+    exit_code = 0
 
     configs = env.get_configs(args.config)
     for config in configs:
@@ -264,11 +279,14 @@ def cmd_run(env: api.TestEnvironment, argv: List, update_only: bool):
             if match_entry(row[0], args):
                 for entry in row:
                     try:
-                        if run_entry(env, config, row, entry, update_only):
+                        test_updated, test_failed = run_entry(env, config, row, entry, update_only)
+                        if test_updated:
                             updated = True
                             # Write queue every time in case running gets interrupted,
                             # so it can be resumed.
                             config.queue.write()
+                        if test_failed:
+                            exit_code = 1
                     except KeyboardInterrupt as e:
                         cancel = True
                         break
@@ -287,8 +305,10 @@ def cmd_run(env: api.TestEnvironment, argv: List, update_only: bool):
 
             print("\nfile://" + str(html_filepath))
 
+    sys.exit(exit_code)
 
-def cmd_graph(argv: List):
+
+def cmd_graph(argv: list):
     # Create graph from a given JSON results file.
     parser = argparse.ArgumentParser()
     parser.add_argument('json_file', nargs='+')

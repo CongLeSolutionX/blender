@@ -12,8 +12,14 @@
  * only concerned with low level operations on the #BMEditMesh structure.
  */
 
+#include <array>
+
+#include "BLI_array.hh"
+#include "BLI_math_vector_types.hh"
+
 #include "DNA_customdata_types.h"
-#include "bmesh.h"
+
+#include "bmesh.hh"
 
 struct BMLoop;
 struct BMPartialUpdate;
@@ -31,19 +37,19 @@ struct Scene;
  * and various data that doesn't belong in the #BMesh struct itself
  * (mostly related to mesh evaluation).
  *
- * The entire modifier system works with this structure, and not #BMesh.
- * #Mesh.edit_bmesh stores a pointer to this structure. */
+ * #Mesh.runtime.edit_mesh stores a pointer to this structure.
+ */
 struct BMEditMesh {
+  /* Always owned by an original mesh in edit mode. */
   BMesh *bm;
 
   /**
    * Face triangulation (tessellation) is stored as triplets of three loops,
    * which each define a triangle.
    *
-   * \see #MLoopTri as the documentation gives useful hints that apply to this data too.
+   * \see #Mesh::corner_tris() as the documentation gives useful hints that apply to this data too.
    */
-  BMLoop *(*looptris)[3];
-  int tottri;
+  blender::Array<std::array<BMLoop *, 3>> looptris;
 
   /** Selection mode (#SCE_SELECT_VERTEX, #SCE_SELECT_EDGE & #SCE_SELECT_FACE). */
   short selectmode;
@@ -54,11 +60,6 @@ struct BMEditMesh {
   int mirror_cdlayer;
 
   /**
-   * Enable for evaluated copies, causes the edit-mesh to free the memory, not its contents.
-   */
-  char is_shallow_copy;
-
-  /**
    * ID data is older than edit-mode data.
    * Set #Main.is_memfile_undo_flush_needed when enabling.
    */
@@ -67,23 +68,23 @@ struct BMEditMesh {
 
 /* editmesh.cc */
 
-void BKE_editmesh_looptri_calc_ex(BMEditMesh *em, const BMeshCalcTessellation_Params *params);
-void BKE_editmesh_looptri_calc(BMEditMesh *em);
-void BKE_editmesh_looptri_calc_with_partial_ex(BMEditMesh *em,
-                                               BMPartialUpdate *bmpinfo,
-                                               const BMeshCalcTessellation_Params *params);
-void BKE_editmesh_looptri_calc_with_partial(BMEditMesh *em, BMPartialUpdate *bmpinfo);
-void BKE_editmesh_looptri_and_normals_calc_with_partial(BMEditMesh *em, BMPartialUpdate *bmpinfo);
+void BKE_editmesh_looptris_calc_ex(BMEditMesh *em, const BMeshCalcTessellation_Params *params);
+void BKE_editmesh_looptris_calc(BMEditMesh *em);
+void BKE_editmesh_looptris_calc_with_partial_ex(BMEditMesh *em,
+                                                BMPartialUpdate *bmpinfo,
+                                                const BMeshCalcTessellation_Params *params);
+void BKE_editmesh_looptris_calc_with_partial(BMEditMesh *em, BMPartialUpdate *bmpinfo);
+void BKE_editmesh_looptris_and_normals_calc_with_partial(BMEditMesh *em, BMPartialUpdate *bmpinfo);
 
 /**
  * Performing the face normal calculation at the same time as tessellation
  * gives a reasonable performance boost (approx ~20% faster).
  */
-void BKE_editmesh_looptri_and_normals_calc(BMEditMesh *em);
+void BKE_editmesh_looptris_and_normals_calc(BMEditMesh *em);
 
 /**
  * \note The caller is responsible for ensuring triangulation data,
- * typically by calling #BKE_editmesh_looptri_calc.
+ * typically by calling #BKE_editmesh_looptris_calc.
  */
 BMEditMesh *BKE_editmesh_create(BMesh *bm);
 BMEditMesh *BKE_editmesh_copy(BMEditMesh *em);
@@ -99,14 +100,16 @@ BMEditMesh *BKE_editmesh_from_object(Object *ob);
  */
 void BKE_editmesh_free_data(BMEditMesh *em);
 
-float (*BKE_editmesh_vert_coords_alloc(
-    Depsgraph *depsgraph, BMEditMesh *em, Scene *scene, Object *ob, int *r_vert_len))[3];
-float (*BKE_editmesh_vert_coords_alloc_orco(BMEditMesh *em, int *r_vert_len))[3];
-const float (*BKE_editmesh_vert_coords_when_deformed(Depsgraph *depsgraph,
-                                                     BMEditMesh *em,
-                                                     Scene *scene,
-                                                     Object *obedit,
-                                                     int *r_vert_len,
-                                                     bool *r_is_alloc))[3];
+blender::Array<blender::float3> BKE_editmesh_vert_coords_alloc(Depsgraph *depsgraph,
+                                                               BMEditMesh *em,
+                                                               Scene *scene,
+                                                               Object *ob);
+blender::Array<blender::float3> BKE_editmesh_vert_coords_alloc_orco(BMEditMesh *em);
+blender::Span<blender::float3> BKE_editmesh_vert_coords_when_deformed(
+    Depsgraph *depsgraph,
+    BMEditMesh *em,
+    Scene *scene,
+    Object *obedit,
+    blender::Array<blender::float3> &r_alloc);
 
 void BKE_editmesh_lnorspace_update(BMEditMesh *em);

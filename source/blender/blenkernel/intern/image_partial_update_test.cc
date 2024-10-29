@@ -5,15 +5,17 @@
 
 #include "CLG_log.h"
 
-#include "BKE_appdir.h"
-#include "BKE_global.h"
-#include "BKE_idtype.h"
+#include "GHOST_Path-api.hh"
+
+#include "BKE_appdir.hh"
+#include "BKE_global.hh"
+#include "BKE_idtype.hh"
 #include "BKE_image.h"
 #include "BKE_image_partial_update.hh"
-#include "BKE_main.h"
+#include "BKE_main.hh"
 
-#include "IMB_imbuf.h"
-#include "IMB_moviecache.h"
+#include "IMB_imbuf.hh"
+#include "IMB_moviecache.hh"
 
 #include "DNA_image_types.h"
 
@@ -80,6 +82,7 @@ class ImagePartialUpdateTest : public testing::Test {
 
     IMB_moviecache_destruct();
     IMB_exit();
+    GHOST_DisposeSystemPaths();
     BKE_appdir_exit();
     CLG_exit();
   }

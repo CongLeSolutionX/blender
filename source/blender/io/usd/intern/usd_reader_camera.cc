@@ -5,7 +5,7 @@
  *
  * Adapted from the Blender Alembic importer implementation. */
 
-#include "usd_reader_camera.h"
+#include "usd_reader_camera.hh"
 
 #include "DNA_camera_types.h"
 #include "DNA_object_types.h"
@@ -15,14 +15,13 @@
 #include "BKE_camera.h"
 #include "BKE_object.hh"
 
-#include <pxr/pxr.h>
 #include <pxr/usd/usdGeom/camera.h>
 
 namespace blender::io::usd {
 
 void USDCameraReader::create_object(Main *bmain, const double /*motionSampleTime*/)
 {
-  Camera *bcam = static_cast<Camera *>(BKE_camera_add(bmain, name_.c_str()));
+  Camera *bcam = BKE_camera_add(bmain, name_.c_str());
 
   object_ = BKE_object_add_only_object(bmain, OB_CAMERA, name_.c_str());
   object_->data = bcam;
@@ -32,30 +31,24 @@ void USDCameraReader::read_object_data(Main *bmain, const double motionSampleTim
 {
   Camera *bcam = (Camera *)object_->data;
 
-  pxr::UsdGeomCamera cam_prim(prim_);
-
-  if (!cam_prim) {
-    return;
-  }
-
   pxr::VtValue val;
-  cam_prim.GetFocalLengthAttr().Get(&val, motionSampleTime);
+  cam_prim_.GetFocalLengthAttr().Get(&val, motionSampleTime);
   pxr::VtValue verApOffset;
-  cam_prim.GetVerticalApertureOffsetAttr().Get(&verApOffset, motionSampleTime);
+  cam_prim_.GetVerticalApertureOffsetAttr().Get(&verApOffset, motionSampleTime);
   pxr::VtValue horApOffset;
-  cam_prim.GetHorizontalApertureOffsetAttr().Get(&horApOffset, motionSampleTime);
+  cam_prim_.GetHorizontalApertureOffsetAttr().Get(&horApOffset, motionSampleTime);
   pxr::VtValue clippingRangeVal;
-  cam_prim.GetClippingRangeAttr().Get(&clippingRangeVal, motionSampleTime);
+  cam_prim_.GetClippingRangeAttr().Get(&clippingRangeVal, motionSampleTime);
   pxr::VtValue focalDistanceVal;
-  cam_prim.GetFocusDistanceAttr().Get(&focalDistanceVal, motionSampleTime);
+  cam_prim_.GetFocusDistanceAttr().Get(&focalDistanceVal, motionSampleTime);
   pxr::VtValue fstopVal;
-  cam_prim.GetFStopAttr().Get(&fstopVal, motionSampleTime);
+  cam_prim_.GetFStopAttr().Get(&fstopVal, motionSampleTime);
   pxr::VtValue projectionVal;
-  cam_prim.GetProjectionAttr().Get(&projectionVal, motionSampleTime);
+  cam_prim_.GetProjectionAttr().Get(&projectionVal, motionSampleTime);
   pxr::VtValue verAp;
-  cam_prim.GetVerticalApertureAttr().Get(&verAp, motionSampleTime);
+  cam_prim_.GetVerticalApertureAttr().Get(&verAp, motionSampleTime);
   pxr::VtValue horAp;
-  cam_prim.GetHorizontalApertureAttr().Get(&horAp, motionSampleTime);
+  cam_prim_.GetHorizontalApertureAttr().Get(&horAp, motionSampleTime);
 
   /*
    * For USD, these camera properties are in tenths of a world unit.
@@ -82,6 +75,7 @@ void USDCameraReader::read_object_data(Main *bmain, const double motionSampleTim
 
   /* Call UncheckedGet() to silence compiler warnings.
    * Clamp to 1e-6 matching range defined in RNA. */
+  bcam->clip_start = max_ff(1e-6f, clippingRangeVal.UncheckedGet<pxr::GfVec2f>()[0]);
   bcam->clip_end = clippingRangeVal.UncheckedGet<pxr::GfVec2f>()[1];
 
   bcam->dof.focus_distance = focalDistanceVal.Get<float>();

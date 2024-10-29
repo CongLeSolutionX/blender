@@ -32,22 +32,22 @@ int UnaryFunction0DEdgeNature_Init(PyObject *module)
   if (PyType_Ready(&UnaryFunction0DEdgeNature_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&UnaryFunction0DEdgeNature_Type);
-  PyModule_AddObject(
+  PyModule_AddObjectRef(
       module, "UnaryFunction0DEdgeNature", (PyObject *)&UnaryFunction0DEdgeNature_Type);
 
   if (PyType_Ready(&CurveNatureF0D_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&CurveNatureF0D_Type);
-  PyModule_AddObject(module, "CurveNatureF0D", (PyObject *)&CurveNatureF0D_Type);
+  PyModule_AddObjectRef(module, "CurveNatureF0D", (PyObject *)&CurveNatureF0D_Type);
 
   return 0;
 }
 
 //------------------------INSTANCE METHODS ----------------------------------
 
-static char UnaryFunction0DEdgeNature___doc__[] =
+PyDoc_STRVAR(
+    /* Wrap. */
+    UnaryFunction0DEdgeNature___doc__,
     "Class hierarchy: :class:`UnaryFunction0D` > :class:`UnaryFunction0DEdgeNature`\n"
     "\n"
     "Base class for unary functions (functors) that work on\n"
@@ -55,7 +55,7 @@ static char UnaryFunction0DEdgeNature___doc__[] =
     "\n"
     ".. method:: __init__()\n"
     "\n"
-    "   Default constructor.\n";
+    "   Default constructor.\n");
 
 static int UnaryFunction0DEdgeNature___init__(BPy_UnaryFunction0DEdgeNature *self,
                                               PyObject *args,

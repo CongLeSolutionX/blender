@@ -11,7 +11,7 @@ namespace blender::nodes::node_fn_rotate_vector_cc {
 static void node_declare(NodeDeclarationBuilder &b)
 {
   b.is_function_node();
-  b.add_input<decl::Vector>("Vector");
+  b.add_input<decl::Vector>("Vector").is_default_link_socket();
   b.add_input<decl::Rotation>("Rotation");
   b.add_output<decl::Vector>("Vector");
 };
@@ -26,11 +26,11 @@ static void node_build_multi_function(NodeMultiFunctionBuilder &builder)
 
 static void node_register()
 {
-  static bNodeType ntype;
+  static blender::bke::bNodeType ntype;
   fn_node_type_base(&ntype, FN_NODE_ROTATE_VECTOR, "Rotate Vector", NODE_CLASS_CONVERTER);
   ntype.declare = node_declare;
   ntype.build_multi_function = node_build_multi_function;
-  nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }
 NOD_REGISTER_NODE(node_register)
 

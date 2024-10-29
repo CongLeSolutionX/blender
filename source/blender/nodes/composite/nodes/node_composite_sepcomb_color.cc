@@ -3,8 +3,13 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "BLI_assert.h"
+#include "BLI_math_vector_types.hh"
 
-#include "GPU_material.h"
+#include "FN_multi_function_builder.hh"
+
+#include "NOD_multi_function.hh"
+
+#include "GPU_material.hh"
 
 #include "COM_shader_node.hh"
 
@@ -129,23 +134,39 @@ static ShaderNode *get_compositor_shader_node(DNode node)
   return new SeparateColorShaderNode(node);
 }
 
+static void node_build_multi_function(blender::nodes::NodeMultiFunctionBuilder &builder)
+{
+  /* Not yet implemented. Return zero. */
+  static auto function = mf::build::SI1_SO4<float4, float, float, float, float>(
+      "Separate Color",
+      [](const float4 & /*color*/, float &red, float &green, float &blue, float &alpha) -> void {
+        red = 0.0f;
+        green = 0.0f;
+        blue = 0.0f;
+        alpha = 0.0f;
+      },
+      mf::build::exec_presets::AllSpanOrSingle());
+  builder.set_matching_fn(function);
+}
+
 }  // namespace blender::nodes::node_composite_separate_color_cc
 
 void register_node_type_cmp_separate_color()
 {
   namespace file_ns = blender::nodes::node_composite_separate_color_cc;
 
-  static bNodeType ntype;
+  static blender::bke::bNodeType ntype;
 
   cmp_node_type_base(&ntype, CMP_NODE_SEPARATE_COLOR, "Separate Color", NODE_CLASS_CONVERTER);
   ntype.declare = file_ns::cmp_node_separate_color_declare;
   ntype.initfunc = node_cmp_combsep_color_init;
-  node_type_storage(
+  blender::bke::node_type_storage(
       &ntype, "NodeCMPCombSepColor", node_free_standard_storage, node_copy_standard_storage);
   ntype.updatefunc = file_ns::cmp_node_separate_color_update;
   ntype.get_compositor_shader_node = file_ns::get_compositor_shader_node;
+  ntype.build_multi_function = file_ns::node_build_multi_function;
 
-  nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }
 
 /* **************** COMBINE COLOR ******************** */
@@ -235,21 +256,33 @@ static ShaderNode *get_compositor_shader_node(DNode node)
   return new CombineColorShaderNode(node);
 }
 
+static void node_build_multi_function(blender::nodes::NodeMultiFunctionBuilder &builder)
+{
+  /* Not yet implemented. Return zero. */
+  static auto function = mf::build::SI4_SO<float, float, float, float, float4>(
+      "Combine Color",
+      [](const float /*red*/, const float /*green*/, const float /*blue*/, const float /*alpha*/)
+          -> float4 { return float4(0.0f); },
+      mf::build::exec_presets::Materialized());
+  builder.set_matching_fn(function);
+}
+
 }  // namespace blender::nodes::node_composite_combine_color_cc
 
 void register_node_type_cmp_combine_color()
 {
   namespace file_ns = blender::nodes::node_composite_combine_color_cc;
 
-  static bNodeType ntype;
+  static blender::bke::bNodeType ntype;
 
   cmp_node_type_base(&ntype, CMP_NODE_COMBINE_COLOR, "Combine Color", NODE_CLASS_CONVERTER);
   ntype.declare = file_ns::cmp_node_combine_color_declare;
   ntype.initfunc = node_cmp_combsep_color_init;
-  node_type_storage(
+  blender::bke::node_type_storage(
       &ntype, "NodeCMPCombSepColor", node_free_standard_storage, node_copy_standard_storage);
   ntype.updatefunc = file_ns::cmp_node_combine_color_update;
   ntype.get_compositor_shader_node = file_ns::get_compositor_shader_node;
+  ntype.build_multi_function = file_ns::node_build_multi_function;
 
-  nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }

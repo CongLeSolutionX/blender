@@ -2,8 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#pragma once
+
 /* NOTE: To be used with UNIFORM_RESOURCE_ID and INSTANCED_ATTR as define. */
-#pragma BLENDER_REQUIRE(common_view_lib.glsl)
+#include "common_view_lib.glsl"
 #ifdef POINTCLOUD_SHADER
 #  define COMMON_POINTCLOUD_LIB
 
@@ -14,7 +16,8 @@
 int pointcloud_get_point_id()
 {
 #  ifdef GPU_VERTEX_SHADER
-  return gl_VertexID / 32;
+  /* Remove shape indices. */
+  return gl_VertexID >> 3;
 #  endif
   return 0;
 }
@@ -34,7 +37,7 @@ void pointcloud_get_pos_and_radius(out vec3 outpos, out float outradius)
   int id = pointcloud_get_point_id();
   vec4 pos_rad = texelFetch(ptcloud_pos_rad_tx, id);
   outpos = point_object_to_world(pos_rad.xyz);
-  outradius = dot(abs(mat3(ModelMatrix) * pos_rad.www), vec3(1.0 / 3.0));
+  outradius = dot(abs(to_float3x3(ModelMatrix) * pos_rad.www), vec3(1.0 / 3.0));
 }
 
 /* Return world position and normal. */
@@ -46,10 +49,10 @@ void pointcloud_get_pos_nor_radius(out vec3 outpos, out vec3 outnor, out float o
 
   mat3 facing_mat = pointcloud_get_facing_matrix(p);
 
-  int vert_id = 0;
+  uint vert_id = 0u;
 #  ifdef GPU_VERTEX_SHADER
-  /* NOTE: Avoid modulo by non-power-of-two in shader. See Index buffer setup. */
-  vert_id = gl_VertexID % 32;
+  /* Mask point indices. */
+  vert_id = uint(gl_VertexID) & ~(0xFFFFFFFFu << 3u);
 #  endif
 
   vec3 pos_inst = vec3(0.0);

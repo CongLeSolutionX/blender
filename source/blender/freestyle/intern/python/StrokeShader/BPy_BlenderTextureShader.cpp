@@ -10,7 +10,7 @@
 
 #include "../../stroke/BasicStrokeShaders.h"
 
-#include "../../../../python/generic/py_capi_utils.h"
+#include "../../../../python/generic/py_capi_utils.hh"
 
 #ifdef __cplusplus
 extern "C" {
@@ -22,7 +22,9 @@ using namespace Freestyle;
 
 //------------------------INSTANCE METHODS ----------------------------------
 
-static char BlenderTextureShader___doc__[] =
+PyDoc_STRVAR(
+    /* Wrap. */
+    BlenderTextureShader___doc__,
     "Class hierarchy: :class:`freestyle.types.StrokeShader` > :class:`BlenderTextureShader`\n"
     "\n"
     "[Texture shader]\n"
@@ -42,7 +44,7 @@ static char BlenderTextureShader___doc__[] =
     "   simulate marks.\n"
     "\n"
     "   :arg stroke: A Stroke object.\n"
-    "   :type stroke: :class:`freestyle.types.Stroke`\n";
+    "   :type stroke: :class:`freestyle.types.Stroke`\n");
 
 static int BlenderTextureShader___init__(BPy_BlenderTextureShader *self,
                                          PyObject *args,

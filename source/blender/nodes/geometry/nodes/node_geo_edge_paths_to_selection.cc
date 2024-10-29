@@ -2,7 +2,6 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BKE_attribute_math.hh"
 #include "BKE_mesh.hh"
 
 #include "BLI_map.hh"
@@ -27,9 +26,9 @@ static void edge_paths_to_selection(const Mesh &src_mesh,
                                     const Span<int> next_indices,
                                     MutableSpan<bool> r_edge_selection)
 {
-  Array<bool> vert_selection(src_mesh.totvert, false);
+  Array<bool> vert_selection(src_mesh.verts_num, false);
 
-  const IndexRange vert_range(src_mesh.totvert);
+  const IndexRange vert_range(src_mesh.verts_num);
   start_selection.foreach_index(GrainSize(2048), [&](const int start_vert) {
     /* If vertex is selected, all next is already selected too. */
     for (int current_vert = start_vert; !vert_selection[current_vert];
@@ -71,11 +70,11 @@ class PathToEdgeSelectionFieldInput final : public bke::MeshFieldInput {
   }
 
   GVArray get_varray_for_context(const Mesh &mesh,
-                                 const eAttrDomain domain,
+                                 const AttrDomain domain,
                                  const IndexMask & /*mask*/) const final
   {
-    const bke::MeshFieldContext context{mesh, ATTR_DOMAIN_POINT};
-    fn::FieldEvaluator evaluator{context, mesh.totvert};
+    const bke::MeshFieldContext context{mesh, AttrDomain::Point};
+    fn::FieldEvaluator evaluator{context, mesh.verts_num};
     evaluator.add(next_vertex_);
     evaluator.add(start_vertices_);
     evaluator.evaluate();
@@ -85,11 +84,11 @@ class PathToEdgeSelectionFieldInput final : public bke::MeshFieldInput {
       return {};
     }
 
-    Array<bool> selection(mesh.totedge, false);
+    Array<bool> selection(mesh.edges_num, false);
     edge_paths_to_selection(mesh, start_verts, next_vert, selection);
 
     return mesh.attributes().adapt_domain<bool>(
-        VArray<bool>::ForContainer(std::move(selection)), ATTR_DOMAIN_EDGE, domain);
+        VArray<bool>::ForContainer(std::move(selection)), AttrDomain::Edge, domain);
   }
 
   void for_each_field_input_recursive(FunctionRef<void(const FieldInput &)> fn) const override
@@ -100,7 +99,7 @@ class PathToEdgeSelectionFieldInput final : public bke::MeshFieldInput {
 
   uint64_t hash() const override
   {
-    return get_default_hash_2(start_vertices_, next_vertex_);
+    return get_default_hash(start_vertices_, next_vertex_);
   }
 
   bool is_equal_to(const fn::FieldNode &other) const override
@@ -114,9 +113,9 @@ class PathToEdgeSelectionFieldInput final : public bke::MeshFieldInput {
     return false;
   }
 
-  std::optional<eAttrDomain> preferred_domain(const Mesh & /*mesh*/) const override
+  std::optional<AttrDomain> preferred_domain(const Mesh & /*mesh*/) const override
   {
-    return ATTR_DOMAIN_EDGE;
+    return AttrDomain::Edge;
   }
 };
 
@@ -131,14 +130,14 @@ static void node_geo_exec(GeoNodeExecParams params)
 
 static void node_register()
 {
-  static bNodeType ntype;
+  static blender::bke::bNodeType ntype;
 
   geo_node_type_base(
       &ntype, GEO_NODE_EDGE_PATHS_TO_SELECTION, "Edge Paths to Selection", NODE_CLASS_INPUT);
   ntype.declare = node_declare;
   blender::bke::node_type_size(&ntype, 150, 100, 300);
   ntype.geometry_node_execute = node_geo_exec;
-  nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }
 NOD_REGISTER_NODE(node_register)
 

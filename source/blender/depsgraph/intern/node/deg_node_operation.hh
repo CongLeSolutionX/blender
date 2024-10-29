@@ -20,7 +20,7 @@ struct ComponentNode;
 
 /* Evaluation Operation for atomic operation */
 /* XXX: move this to another header that can be exposed? */
-typedef function<void(::Depsgraph *)> DepsEvalOperationCb;
+using DepsEvalOperationCb = function<void(::Depsgraph *)>;
 
 /* Identifiers for common operations (as an enum). */
 enum class OperationCode {
@@ -159,10 +159,11 @@ enum class OperationCode {
   VIEW_LAYER_EVAL,
 
   /* Copy on Write. ------------------------------------------------------- */
-  COPY_ON_WRITE,
+  COPY_ON_EVAL,
 
   /* Shading. ------------------------------------------------------------- */
   SHADING,
+  SHADING_DONE,
   MATERIAL_UPDATE,
   LIGHT_UPDATE,
   WORLD_UPDATE,
@@ -197,8 +198,14 @@ enum class OperationCode {
 
   SEQUENCES_EVAL,
 
-  /* Duplication/instancing system. --------------------------------------- */
-  DUPLI,
+  /* instancing system. --------------------------------------------------- */
+
+  /* Operation on an instancer object. Relations from instanced objects go here. */
+  INSTANCER,
+
+  /* Operation on an object which is being instanced. */
+  INSTANCE,
+  INSTANCE_GEOMETRY,
 };
 const char *operationCodeAsString(OperationCode opcode);
 

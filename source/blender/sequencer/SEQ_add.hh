@@ -14,8 +14,11 @@
 
 struct ListBase;
 struct Main;
+struct Mask;
+struct MovieClip;
 struct Scene;
 struct Sequence;
+struct Stereo3dFormat;
 
 /** #SeqLoadData.flags */
 enum eSeqLoadFlags {
@@ -36,22 +39,21 @@ struct SeqLoadData {
   struct {
     int len;
     int end_frame;
-  } image;                /* Only for image strips. */
-  struct Scene *scene;    /* Only for scene strips. */
-  struct MovieClip *clip; /* Only for clip strips. */
-  struct Mask *mask;      /* Only for mask strips. */
+  } image;         /* Only for image strips. */
+  Scene *scene;    /* Only for scene strips. */
+  MovieClip *clip; /* Only for clip strips. */
+  Mask *mask;      /* Only for mask strips. */
   struct {
     int type;
     int end_frame;
-    struct Sequence *seq1;
-    struct Sequence *seq2;
-    struct Sequence *seq3;
+    Sequence *seq1;
+    Sequence *seq2;
   } effect; /* Only for effect strips. */
   eSeqLoadFlags flags;
   eSeqImageFitMethod fit_method;
   bool use_multiview;
   char views_format;
-  struct Stereo3dFormat *stereo3d_format;
+  Stereo3dFormat *stereo3d_format;
   bool allow_invalid_file;     /* Used by RNA API to create placeholder strips. */
   double r_video_stream_start; /* For AV synchronization. Set by `SEQ_add_movie_strip`. */
   bool adjust_playback_rate;
@@ -96,6 +98,18 @@ Sequence *SEQ_add_sound_strip(Main *bmain,
                               Scene *scene,
                               ListBase *seqbase,
                               SeqLoadData *load_data);
+
+/**
+ * Sync up the sound strip 'seq' with the video data in 'load_data'.
+ * This is intended to be used after adding a movie strip and you want to make sure that the audio
+ * track is properly synced up with the video.
+ *
+ * \param bmain: Main reference
+ * \param scene: Scene where the sound strip is located
+ * \param seq: The sound strip that will be synced
+ * \param load_data: SeqLoadData with information necessary to sync the sound strip
+ */
+void SEQ_add_sound_av_sync(Main *bmain, Scene *scene, Sequence *seq, SeqLoadData *load_data);
 /**
  * Add meta strip.
  *

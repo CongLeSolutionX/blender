@@ -10,15 +10,13 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "DNA_anim_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_sequence_types.h"
 #include "DNA_space_types.h"
 
 #include "BLI_fileops.h"
 #include "BLI_listbase.h"
-#include "BLI_path_util.h"
-#include "BLI_session_uuid.h"
+#include "BLI_path_utils.hh"
 #include "BLI_string.h"
 
 #ifdef WIN32
@@ -27,21 +25,17 @@
 #  include <unistd.h>
 #endif
 
-#include "BKE_global.h"
+#include "BKE_global.hh"
 #include "BKE_image.h"
-#include "BKE_main.h"
-#include "BKE_scene.h"
-
-#include "DEG_depsgraph.hh"
+#include "BKE_main.hh"
+#include "BKE_scene.hh"
 
 #include "WM_types.hh"
 
-#include "IMB_colormanagement.h"
-#include "IMB_imbuf.h"
-#include "IMB_imbuf_types.h"
-#include "IMB_metadata.h"
+#include "IMB_imbuf.hh"
+#include "IMB_imbuf_types.hh"
+#include "IMB_metadata.hh"
 
-#include "SEQ_iterator.hh"
 #include "SEQ_proxy.hh"
 #include "SEQ_relations.hh"
 #include "SEQ_render.hh"
@@ -52,7 +46,6 @@
 #include "proxy.hh"
 #include "render.hh"
 #include "sequencer.hh"
-#include "strip_time.hh"
 #include "utils.hh"
 
 struct SeqIndexBuildContext {
@@ -68,7 +61,7 @@ struct SeqIndexBuildContext {
   Depsgraph *depsgraph;
   Scene *scene;
   Sequence *seq, *orig_seq;
-  SessionUUID orig_seq_uuid;
+  SessionUID orig_seq_uid;
 };
 
 int SEQ_rendersize_to_proxysize(int render_size)
@@ -191,7 +184,7 @@ static bool seq_proxy_get_filepath(Scene *scene,
   return true;
 }
 
-bool SEQ_can_use_proxy(const SeqRenderData *context, Sequence *seq, int psize)
+bool SEQ_can_use_proxy(const SeqRenderData *context, const Sequence *seq, int psize)
 {
   if (seq->strip->proxy == nullptr || !context->use_proxies) {
     return false;
@@ -246,7 +239,7 @@ ImBuf *seq_proxy_fetch(const SeqRenderData *context, Sequence *seq, int timeline
   }
 
   if (BLI_exists(filepath)) {
-    ImBuf *ibuf = IMB_loadiffname(filepath, IB_rect, nullptr);
+    ImBuf *ibuf = IMB_loadiffname(filepath, IB_rect | IB_metadata, nullptr);
 
     if (ibuf) {
       seq_imbuf_assign_spaces(context->scene, ibuf);
@@ -266,8 +259,6 @@ static void seq_proxy_build_frame(const SeqRenderData *context,
                                   const bool overwrite)
 {
   char filepath[PROXY_MAXFILE];
-  int quality;
-  int rectx, recty;
   ImBuf *ibuf_tmp, *ibuf;
   Scene *scene = context->scene;
 
@@ -287,33 +278,35 @@ static void seq_proxy_build_frame(const SeqRenderData *context,
 
   ibuf_tmp = seq_render_strip(context, state, seq, timeline_frame);
 
-  rectx = (proxy_render_size * ibuf_tmp->x) / 100;
-  recty = (proxy_render_size * ibuf_tmp->y) / 100;
+  int rectx = (proxy_render_size * ibuf_tmp->x) / 100;
+  int recty = (proxy_render_size * ibuf_tmp->y) / 100;
 
   if (ibuf_tmp->x != rectx || ibuf_tmp->y != recty) {
-    ibuf = IMB_dupImBuf(ibuf_tmp);
-    IMB_metadata_copy(ibuf, ibuf_tmp);
+    ibuf = IMB_scale_into_new(ibuf_tmp, rectx, recty, IMBScaleFilter::Nearest, true);
     IMB_freeImBuf(ibuf_tmp);
-    IMB_scalefastImBuf(ibuf, short(rectx), short(recty));
   }
   else {
     ibuf = ibuf_tmp;
   }
 
-  /* depth = 32 is intentionally left in, otherwise ALPHA channels
-   * won't work... */
-  quality = seq->strip->proxy->quality;
-  ibuf->ftype = IMB_FTYPE_JPG;
+  const int quality = seq->strip->proxy->quality;
+  const bool save_float = ibuf->float_buffer.data != nullptr;
   ibuf->foptions.quality = quality;
-
-  /* unsupported feature only confuses other s/w */
-  if (ibuf->planes == 32) {
-    ibuf->planes = 24;
+  if (save_float) {
+    /* Float image: save as EXR with FP16 data and DWAA compression. */
+    ibuf->ftype = IMB_FTYPE_OPENEXR;
+    ibuf->foptions.flag = OPENEXR_HALF | R_IMF_EXR_CODEC_DWAA;
   }
-
+  else {
+    /* Byte image: save as JPG. */
+    ibuf->ftype = IMB_FTYPE_JPG;
+    if (ibuf->planes == 32) {
+      ibuf->planes = 24; /* JPGs do not support alpha. */
+    }
+  }
   BLI_file_ensure_parent_dir_exists(filepath);
 
-  const bool ok = IMB_saveiff(ibuf, filepath, IB_rect);
+  const bool ok = IMB_saveiff(ibuf, filepath, save_float ? IB_rectfloat : IB_rect);
   if (ok == false) {
     perror(filepath);
   }
@@ -413,7 +406,7 @@ static int seq_proxy_context_count(Sequence *seq, Scene *scene)
   return num_views;
 }
 
-static bool seq_proxy_need_rebuild(Sequence *seq, anim *anim)
+static bool seq_proxy_need_rebuild(Sequence *seq, ImBufAnim *anim)
 {
   if ((seq->strip->proxy->build_flags & SEQ_PROXY_SKIP_EXISTING) == 0) {
     return true;
@@ -478,7 +471,7 @@ bool SEQ_proxy_rebuild_context(Main *bmain,
     context->depsgraph = depsgraph;
     context->scene = scene;
     context->orig_seq = seq;
-    context->orig_seq_uuid = seq->runtime.session_uuid;
+    context->orig_seq_uid = seq->runtime.session_uid;
     context->seq = nseq;
 
     context->view_id = i; /* only for images */
@@ -551,7 +544,6 @@ void SEQ_proxy_rebuild(SeqIndexBuildContext *context, wmJobWorkerStatus *worker_
   render_context.view_id = context->view_id;
 
   SeqRenderState state;
-  seq_render_state_init(&state);
 
   for (timeline_frame = SEQ_time_left_handle_frame_get(scene, seq);
        timeline_frame < SEQ_time_right_handle_frame_get(scene, seq);
@@ -609,7 +601,7 @@ void SEQ_proxy_set(Sequence *seq, bool value)
   }
 }
 
-void seq_proxy_index_dir_set(anim *anim, const char *base_dir)
+void seq_proxy_index_dir_set(ImBufAnim *anim, const char *base_dir)
 {
   char dirname[FILE_MAX];
   char filename[FILE_MAXFILE];

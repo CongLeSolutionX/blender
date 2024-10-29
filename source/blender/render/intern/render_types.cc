@@ -8,9 +8,7 @@
 
 #include "render_types.h"
 
-#include "BLI_ghash.h"
-
-#include "BKE_colortools.h"
+#include "BKE_colortools.hh"
 
 #include "RE_compositor.hh"
 #include "RE_engine.h"

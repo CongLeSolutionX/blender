@@ -25,6 +25,11 @@ void BKE_image_format_init(struct ImageFormatData *imf, const bool render);
 void BKE_image_format_copy(struct ImageFormatData *imf_dst, const struct ImageFormatData *imf_src);
 void BKE_image_format_free(struct ImageFormatData *imf);
 
+/* Updates the color space of the given image format based on its image type. This can be used to
+ * set a good default color space when the user changes the image type. See the implementation for
+ * more information on the logic. */
+void BKE_image_format_update_color_space_for_type(struct ImageFormatData *format);
+
 void BKE_image_format_blend_read_data(struct BlendDataReader *reader, struct ImageFormatData *imf);
 void BKE_image_format_blend_write(struct BlendWriter *writer, struct ImageFormatData *imf);
 
@@ -86,11 +91,11 @@ char BKE_imtype_valid_depths(char imtype);
 
 /**
  * String is from command line `--render-format` argument,
- * keep in sync with `creator_args.c` help info.
+ * keep in sync with `creator_args.cc` help info.
  */
 char BKE_imtype_from_arg(const char *imtype_arg);
 
-/* Conversion between ImBuf settings. */
+/* Conversion between #ImBuf settings. */
 
 void BKE_image_format_from_imbuf(struct ImageFormatData *im_format, const struct ImBuf *imbuf);
 void BKE_image_format_to_imbuf(struct ImBuf *ibuf, const struct ImageFormatData *imf);

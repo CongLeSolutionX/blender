@@ -255,7 +255,7 @@ def gen_commit_pretty(c, unreported=None, rstate=None):
 
     if rstate is not None:
         return "* [%s] %s ({{GitCommit|rB%s}})." % (rstate, body, c.sha1.decode()[:10])
-    return "* %s ({{GitCommit|rB%s}})." % (rstate, body, c.sha1.decode()[:10])
+    return "* %s ({{GitCommit|rB%s}})." % (body, c.sha1.decode()[:10])
 
 
 def gen_commit_unprettify(body):
@@ -406,8 +406,6 @@ def release_log_init(path, source_dir, blender_rev, start_sha1, end_sha1, rstate
 
 
 def write_release_log(path, release_log, c, cat, rstate, rstate_list):
-    import io
-
     main_cat, sub_cats = BUGFIX_CATEGORIES[cat[0]]
     sub_cat = sub_cats[cat[1]] if cat[1] is not None else None
 
@@ -668,7 +666,6 @@ def main():
         print_commit(c)
         sys.stdout.flush()
 
-        accept = False
         while True:
             print("Space=" + colorize("Accept", 'green'),
                   "Enter=" + colorize("Skip", 'red'),

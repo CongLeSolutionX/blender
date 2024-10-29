@@ -2,20 +2,12 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "DEG_depsgraph_query.hh"
 #include "node_geometry_util.hh"
 
-#include "BKE_lib_id.h"
+#include "BKE_lib_id.hh"
 #include "BKE_mesh.hh"
-#include "BKE_mesh_runtime.hh"
-#include "BKE_mesh_wrapper.hh"
-#include "BKE_object.hh"
-#include "BKE_volume.hh"
 
 #include "GEO_mesh_to_volume.hh"
-
-#include "DNA_mesh_types.h"
-#include "DNA_meshdata_types.h"
 
 #include "NOD_rna_define.hh"
 
@@ -30,12 +22,13 @@ static void node_declare(NodeDeclarationBuilder &b)
 {
   b.add_input<decl::Geometry>("Mesh").supported_type(GeometryComponent::Type::Mesh);
   b.add_input<decl::Float>("Density").default_value(1.0f).min(0.01f).max(FLT_MAX);
-  b.add_input<decl::Float>("Voxel Size")
-      .default_value(0.3f)
-      .min(0.01f)
-      .max(FLT_MAX)
-      .subtype(PROP_DISTANCE);
-  b.add_input<decl::Float>("Voxel Amount").default_value(64.0f).min(0.0f).max(FLT_MAX);
+  auto &voxel_size = b.add_input<decl::Float>("Voxel Size")
+                         .default_value(0.3f)
+                         .min(0.01f)
+                         .max(FLT_MAX)
+                         .subtype(PROP_DISTANCE);
+  auto &voxel_amount =
+      b.add_input<decl::Float>("Voxel Amount").default_value(64.0f).min(0.0f).max(FLT_MAX);
   b.add_input<decl::Float>("Interior Band Width")
       .default_value(0.2f)
       .min(0.0001f)
@@ -43,6 +36,13 @@ static void node_declare(NodeDeclarationBuilder &b)
       .subtype(PROP_DISTANCE)
       .description("Width of the gradient inside of the mesh");
   b.add_output<decl::Geometry>("Volume").translation_context(BLT_I18NCONTEXT_ID_ID);
+
+  const bNode *node = b.node_or_null();
+  if (node != nullptr) {
+    const NodeGeometryMeshToVolume &data = node_storage(*node);
+    voxel_size.available(data.resolution_mode == MESH_TO_VOLUME_RESOLUTION_MODE_VOXEL_SIZE);
+    voxel_amount.available(data.resolution_mode == MESH_TO_VOLUME_RESOLUTION_MODE_VOXEL_AMOUNT);
+  }
 }
 
 static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
@@ -57,20 +57,6 @@ static void node_init(bNodeTree * /*tree*/, bNode *node)
   NodeGeometryMeshToVolume *data = MEM_cnew<NodeGeometryMeshToVolume>(__func__);
   data->resolution_mode = MESH_TO_VOLUME_RESOLUTION_MODE_VOXEL_AMOUNT;
   node->storage = data;
-}
-
-static void node_update(bNodeTree *ntree, bNode *node)
-{
-  NodeGeometryMeshToVolume &data = node_storage(*node);
-
-  bNodeSocket *voxel_size_socket = nodeFindSocket(node, SOCK_IN, "Voxel Size");
-  bNodeSocket *voxel_amount_socket = nodeFindSocket(node, SOCK_IN, "Voxel Amount");
-  bke::nodeSetSocketAvailability(ntree,
-                                 voxel_amount_socket,
-                                 data.resolution_mode ==
-                                     MESH_TO_VOLUME_RESOLUTION_MODE_VOXEL_AMOUNT);
-  bke::nodeSetSocketAvailability(
-      ntree, voxel_size_socket, data.resolution_mode == MESH_TO_VOLUME_RESOLUTION_MODE_VOXEL_SIZE);
 }
 
 #ifdef WITH_OPENVDB
@@ -98,7 +84,7 @@ static Volume *create_volume_from_mesh(const Mesh &mesh, GeoNodeExecParams &para
     }
   }
 
-  if (mesh.totvert == 0 || mesh.faces_num == 0) {
+  if (mesh.verts_num == 0 || mesh.faces_num == 0) {
     return nullptr;
   }
 
@@ -116,7 +102,9 @@ static Volume *create_volume_from_mesh(const Mesh &mesh, GeoNodeExecParams &para
   /* Convert mesh to grid and add to volume. */
   geometry::fog_volume_grid_add_from_mesh(volume,
                                           "density",
-                                          &mesh,
+                                          mesh.vert_positions(),
+                                          mesh.corner_verts(),
+                                          mesh.corner_tris(),
                                           mesh_to_volume_space_transform,
                                           voxel_size,
                                           interior_band_width,
@@ -140,9 +128,7 @@ static void node_geo_exec(GeoNodeExecParams params)
   });
   params.set_output("Volume", std::move(geometry_set));
 #else
-  params.set_default_remaining_outputs();
-  params.error_message_add(NodeWarningType::Error,
-                           TIP_("Disabled, Blender was compiled without OpenVDB"));
+  node_geo_exec_with_missing_openvdb(params);
   return;
 #endif
 }
@@ -174,18 +160,17 @@ static void node_rna(StructRNA *srna)
 
 static void node_register()
 {
-  static bNodeType ntype;
+  static blender::bke::bNodeType ntype;
 
   geo_node_type_base(&ntype, GEO_NODE_MESH_TO_VOLUME, "Mesh to Volume", NODE_CLASS_GEOMETRY);
   ntype.declare = node_declare;
   bke::node_type_size(&ntype, 200, 120, 700);
   ntype.initfunc = node_init;
-  ntype.updatefunc = node_update;
   ntype.geometry_node_execute = node_geo_exec;
   ntype.draw_buttons = node_layout;
-  node_type_storage(
+  blender::bke::node_type_storage(
       &ntype, "NodeGeometryMeshToVolume", node_free_standard_storage, node_copy_standard_storage);
-  nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 
   node_rna(ntype.rna_ext.srna);
 }

@@ -16,26 +16,24 @@
 #include "DNA_node_types.h"
 #include "DNA_screen_types.h"
 #include "DNA_space_types.h"
-#include "DNA_windowmanager_types.h"
 
 #include "BLI_blenlib.h"
-#include "BLI_dlrbTree.h"
 #include "BLI_range.h"
 #include "BLI_utildefines.h"
 
-#include "BKE_action.h"
-#include "BKE_context.hh"
-#include "BKE_fcurve.h"
-#include "BKE_nla.h"
-#include "BKE_screen.hh"
+#include "BLT_translation.hh"
+
+#include "BKE_action.hh"
+#include "BKE_fcurve.hh"
+#include "BKE_nla.hh"
 
 #include "ED_anim_api.hh"
 #include "ED_keyframes_draw.hh"
 #include "ED_keyframes_keylist.hh"
 
-#include "GPU_immediate.h"
-#include "GPU_immediate_util.h"
-#include "GPU_state.h"
+#include "GPU_immediate.hh"
+#include "GPU_immediate_util.hh"
+#include "GPU_state.hh"
 
 #include "WM_types.hh"
 
@@ -45,6 +43,8 @@
 
 #include "nla_intern.hh" /* own include */
 #include "nla_private.h"
+
+using namespace blender;
 
 /* *********************************************** */
 /* Strips */
@@ -85,7 +85,7 @@ static void nla_action_draw_keyframes(
 
   /* get a list of the keyframes with NLA-scaling applied */
   AnimKeylist *keylist = ED_keylist_create();
-  action_to_keylist(adt, act, keylist, 0, {-FLT_MAX, FLT_MAX});
+  action_to_keylist(adt, act, keylist, 0, {v2d->cur.xmin, v2d->cur.xmax});
 
   if (ED_keylist_is_empty(keylist)) {
     ED_keylist_free(keylist);
@@ -240,65 +240,55 @@ static void nla_strip_draw_markers(NlaStrip *strip, float yminc, float ymaxc)
 
 /* Strips (Proper) ---------------------- */
 
-/* get colors for drawing NLA-Strips */
+/* Get colors for drawing NLA Strips. */
 static void nla_strip_get_color_inside(AnimData *adt, NlaStrip *strip, float color[3])
 {
-  if (strip->type == NLASTRIP_TYPE_TRANSITION) {
-    /* Transition Clip */
-    if (strip->flag & NLASTRIP_FLAG_SELECT) {
-      /* selected - use a bright blue color */
-      UI_GetThemeColor3fv(TH_NLA_TRANSITION_SEL, color);
-    }
-    else {
-      /* normal, unselected strip - use (hardly noticeable) blue tinge */
-      UI_GetThemeColor3fv(TH_NLA_TRANSITION, color);
-    }
-  }
-  else if (strip->type == NLASTRIP_TYPE_META) {
-    /* Meta Clip */
-    /* TODO: should temporary meta-strips get different colors too? */
-    if (strip->flag & NLASTRIP_FLAG_SELECT) {
-      /* selected - use a bold purple color */
-      UI_GetThemeColor3fv(TH_NLA_META_SEL, color);
-    }
-    else {
-      /* normal, unselected strip - use (hardly noticeable) dark purple tinge */
-      UI_GetThemeColor3fv(TH_NLA_META, color);
-    }
-  }
-  else if (strip->type == NLASTRIP_TYPE_SOUND) {
-    /* Sound Clip */
-    if (strip->flag & NLASTRIP_FLAG_SELECT) {
-      /* selected - use a bright teal color */
-      UI_GetThemeColor3fv(TH_NLA_SOUND_SEL, color);
-    }
-    else {
-      /* normal, unselected strip - use (hardly noticeable) teal tinge */
-      UI_GetThemeColor3fv(TH_NLA_SOUND, color);
-    }
-  }
-  else {
-    /* Action Clip (default/normal type of strip) */
-    if (adt && (adt->flag & ADT_NLA_EDIT_ON) && (adt->actstrip == strip)) {
-      /* active strip should be drawn green when it is acting as the tweaking strip.
-       * however, this case should be skipped for when not in EditMode...
-       */
-      UI_GetThemeColor3fv(TH_NLA_TWEAK, color);
-    }
-    else if (strip->flag & NLASTRIP_FLAG_TWEAKUSER) {
-      /* alert user that this strip is also used by the tweaking track (this is set when going into
-       * 'editmode' for that strip), since the edits made here may not be what the user anticipated
-       */
-      UI_GetThemeColor3fv(TH_NLA_TWEAK_DUPLI, color);
-    }
-    else if (strip->flag & NLASTRIP_FLAG_SELECT) {
-      /* selected strip - use theme color for selected */
-      UI_GetThemeColor3fv(TH_STRIP_SELECT, color);
-    }
-    else {
-      /* normal, unselected strip - use standard strip theme color */
+  const bool is_selected = strip->flag & NLASTRIP_FLAG_SELECT;
+  switch (strip->type) {
+    case NLASTRIP_TYPE_CLIP:
+      /* Action Strip. */
+      if (adt && (adt->flag & ADT_NLA_EDIT_ON) && (adt->actstrip == strip)) {
+        /* Active strip tweak - tweak theme is applied only to active edit strip,
+         * not linked-duplicates.
+         */
+        UI_GetThemeColor3fv(TH_NLA_TWEAK, color);
+        break;
+      }
+
+      if (strip->flag & NLASTRIP_FLAG_TWEAKUSER) {
+        /* Non-active strip tweak - display warning theme
+         * for non active linked-duplicates.
+         */
+        UI_GetThemeColor3fv(TH_NLA_TWEAK_DUPLI, color);
+        break;
+      }
+      if (strip->flag & NLASTRIP_FLAG_SELECT) {
+        /* selected. */
+        UI_GetThemeColor3fv(TH_STRIP_SELECT, color);
+        break;
+      }
+
+      /* unselected - use standard strip theme. */
       UI_GetThemeColor3fv(TH_STRIP, color);
+      break;
+
+    case NLASTRIP_TYPE_META:
+      /* Meta Strip. */
+      UI_GetThemeColor3fv(is_selected ? TH_NLA_META_SEL : TH_NLA_META, color);
+      break;
+    case NLASTRIP_TYPE_TRANSITION: {
+      /* Transition Strip. */
+      UI_GetThemeColor3fv(is_selected ? TH_NLA_TRANSITION_SEL : TH_NLA_TRANSITION, color);
+      break;
     }
+    case NLASTRIP_TYPE_SOUND:
+      /* Sound Strip. */
+      UI_GetThemeColor3fv(is_selected ? TH_NLA_SOUND_SEL : TH_NLA_SOUND, color);
+      break;
+    default: {
+      /* default to unselected theme. */
+      UI_GetThemeColor3fv(TH_STRIP, color);
+    } break;
   }
 }
 
@@ -322,7 +312,7 @@ static void nla_draw_strip_curves(NlaStrip *strip, float yminc, float ymaxc, uin
 
   /* influence -------------------------- */
   if (strip->flag & NLASTRIP_FLAG_USR_INFLUENCE) {
-    FCurve *fcu = BKE_fcurve_find(&strip->fcurves, "influence", 0);
+    const FCurve *fcu = BKE_fcurve_find(&strip->fcurves, "influence", 0);
 
     /* plot the curve (over the strip's main region) */
     if (fcu) {
@@ -433,8 +423,15 @@ static void nla_draw_strip(SpaceNla *snla,
                            float yminc,
                            float ymaxc)
 {
-  const bool solo = !((adt && (adt->flag & ADT_NLA_SOLO_TRACK)) &&
-                      (nlt->flag & NLATRACK_SOLO) == 0);
+  /* If there is no 'adt', this strip came from nowhere. */
+  BLI_assert(adt);
+  if (!adt) {
+    return;
+  }
+
+  const bool adt_has_solo_track = (adt->flag & ADT_NLA_SOLO_TRACK);
+  const bool is_track_solo = (nlt->flag & NLATRACK_SOLO);
+  const bool is_other_track_soloed = adt_has_solo_track && !is_track_solo;
 
   const bool muted = ((nlt->flag & NLATRACK_MUTED) || (strip->flag & NLASTRIP_FLAG_MUTED));
   float color[4] = {1.0f, 1.0f, 1.0f, 1.0f};
@@ -449,7 +446,7 @@ static void nla_draw_strip(SpaceNla *snla,
   /* draw extrapolation info first (as backdrop)
    * - but this should only be drawn if track has some contribution
    */
-  if ((strip->extendmode != NLASTRIP_EXTEND_NOTHING) && solo) {
+  if ((strip->extendmode != NLASTRIP_EXTEND_NOTHING) && !is_other_track_soloed) {
     /* enable transparency... */
     GPU_blend(GPU_BLEND_ALPHA);
 
@@ -487,9 +484,8 @@ static void nla_draw_strip(SpaceNla *snla,
   }
 
   /* draw 'inside' of strip itself */
-  if (solo && is_nlastrip_enabled(adt, nlt, strip) &&
-      !(strip->flag & NLASTRIP_FLAG_INVALID_LOCATION))
-  {
+  const bool is_invalid_location = (strip->flag & NLASTRIP_FLAG_INVALID_LOCATION);
+  if (!is_other_track_soloed && is_nlastrip_enabled(adt, nlt, strip) && !is_invalid_location) {
     immUnbindProgram();
 
     /* strip is in normal track */
@@ -532,7 +528,7 @@ static void nla_draw_strip(SpaceNla *snla,
   /* draw strip outline
    * - color used here is to indicate active vs non-active
    */
-  if (strip->flag & NLASTRIP_FLAG_INVALID_LOCATION) {
+  if (is_invalid_location) {
     color[0] = 1.0f;
     color[1] = color[2] = 0.15f;
   }
@@ -637,7 +633,7 @@ static void nla_draw_strip_text(AnimData *adt,
 
   /* just print the name and the range */
   if (strip->flag & NLASTRIP_FLAG_TEMP_META) {
-    str_len = BLI_snprintf_rlen(str, sizeof(str), "Temp-Meta");
+    str_len = STRNCPY_RLEN(str, DATA_("Temp-Meta"));
   }
   else {
     str_len = STRNCPY_RLEN(str, strip->name);
@@ -650,7 +646,7 @@ static void nla_draw_strip_text(AnimData *adt,
   else {
     col[0] = col[1] = col[2] = 255;
   }
-  // Default strip to 100% opacity.
+  /* Default strip to 100% opacity. */
   col[3] = 255;
 
   /* Reduce text opacity if a track is soloed,
@@ -816,11 +812,12 @@ void draw_nla_main_data(bAnimContext *ac, SpaceNla *snla, ARegion *region)
        ale = ale->next, ymax -= NLATRACK_STEP(snla))
   {
     float ymin = ymax - NLATRACK_HEIGHT(snla);
-    float ycenter = (ymax + ymin) / 2.0f;
+    float ycenter = (ymax + ymin + 2 * NLATRACK_SKIP - 1) / 2.0f;
 
     /* check if visible */
     if (IN_RANGE(ymin, v2d->cur.ymin, v2d->cur.ymax) ||
-        IN_RANGE(ymax, v2d->cur.ymin, v2d->cur.ymax)) {
+        IN_RANGE(ymax, v2d->cur.ymin, v2d->cur.ymax))
+    {
       /* data to draw depends on the type of track */
       switch (ale->type) {
         case ANIMTYPE_NLATRACK: {
@@ -878,17 +875,20 @@ void draw_nla_main_data(bAnimContext *ac, SpaceNla *snla, ARegion *region)
            */
           switch (adt->act_extendmode) {
             case NLASTRIP_EXTEND_HOLD: {
-              immRectf(
-                  pos, v2d->cur.xmin, ymin + NLATRACK_SKIP, v2d->cur.xmax, ymax - NLATRACK_SKIP);
+              immRectf(pos,
+                       v2d->cur.xmin,
+                       ymin + NLATRACK_SKIP,
+                       v2d->cur.xmax,
+                       ymax + NLATRACK_SKIP - 1);
               break;
             }
             case NLASTRIP_EXTEND_HOLD_FORWARD: {
-              float r_start;
-              float r_end;
-              BKE_action_frame_range_get(static_cast<bAction *>(ale->data), &r_start, &r_end);
-              BKE_nla_clip_length_ensure_nonzero(&r_start, &r_end);
+              const animrig::Action &action = static_cast<bAction *>(ale->data)->wrap();
+              float2 frame_range = action.get_frame_range();
+              BKE_nla_clip_length_ensure_nonzero(&frame_range[0], &frame_range[1]);
 
-              immRectf(pos, r_end, ymin + NLATRACK_SKIP, v2d->cur.xmax, ymax - NLATRACK_SKIP);
+              immRectf(
+                  pos, frame_range[1], ymin + NLATRACK_SKIP, v2d->cur.xmax, ymax - NLATRACK_SKIP);
               break;
             }
             case NLASTRIP_EXTEND_NOTHING:
@@ -903,11 +903,57 @@ void draw_nla_main_data(bAnimContext *ac, SpaceNla *snla, ARegion *region)
                                     static_cast<bAction *>(ale->data),
                                     ycenter,
                                     ymin + NLATRACK_SKIP,
-                                    ymax - NLATRACK_SKIP);
+                                    ymax + NLATRACK_SKIP - 1);
 
           GPU_blend(GPU_BLEND_NONE);
           break;
         }
+        case ANIMTYPE_NONE:
+        case ANIMTYPE_ANIMDATA:
+        case ANIMTYPE_SPECIALDATA__UNUSED:
+        case ANIMTYPE_SUMMARY:
+        case ANIMTYPE_SCENE:
+        case ANIMTYPE_OBJECT:
+        case ANIMTYPE_GROUP:
+        case ANIMTYPE_FCURVE:
+        case ANIMTYPE_NLACONTROLS:
+        case ANIMTYPE_NLACURVE:
+        case ANIMTYPE_FILLACT_LAYERED:
+        case ANIMTYPE_ACTION_SLOT:
+        case ANIMTYPE_FILLACTD:
+        case ANIMTYPE_FILLDRIVERS:
+        case ANIMTYPE_DSMAT:
+        case ANIMTYPE_DSLAM:
+        case ANIMTYPE_DSCAM:
+        case ANIMTYPE_DSCACHEFILE:
+        case ANIMTYPE_DSCUR:
+        case ANIMTYPE_DSSKEY:
+        case ANIMTYPE_DSWOR:
+        case ANIMTYPE_DSNTREE:
+        case ANIMTYPE_DSPART:
+        case ANIMTYPE_DSMBALL:
+        case ANIMTYPE_DSARM:
+        case ANIMTYPE_DSMESH:
+        case ANIMTYPE_DSTEX:
+        case ANIMTYPE_DSLAT:
+        case ANIMTYPE_DSLINESTYLE:
+        case ANIMTYPE_DSSPK:
+        case ANIMTYPE_DSGPENCIL:
+        case ANIMTYPE_DSMCLIP:
+        case ANIMTYPE_DSHAIR:
+        case ANIMTYPE_DSPOINTCLOUD:
+        case ANIMTYPE_DSVOLUME:
+        case ANIMTYPE_SHAPEKEY:
+        case ANIMTYPE_GPDATABLOCK:
+        case ANIMTYPE_GPLAYER:
+        case ANIMTYPE_GREASE_PENCIL_DATABLOCK:
+        case ANIMTYPE_GREASE_PENCIL_LAYER_GROUP:
+        case ANIMTYPE_GREASE_PENCIL_LAYER:
+        case ANIMTYPE_MASKDATABLOCK:
+        case ANIMTYPE_MASKLAYER:
+        case ANIMTYPE_PALETTE:
+        case ANIMTYPE_NUM_TYPES:
+          break;
       }
     }
   }
@@ -919,27 +965,14 @@ void draw_nla_main_data(bAnimContext *ac, SpaceNla *snla, ARegion *region)
 /* *********************************************** */
 /* Track List */
 
-void draw_nla_track_list(const bContext *C, bAnimContext *ac, ARegion *region)
+void draw_nla_track_list(const bContext *C,
+                         bAnimContext *ac,
+                         ARegion *region,
+                         const ListBase /*bAnimListElem*/ &anim_data)
 {
-  ListBase anim_data = {nullptr, nullptr};
 
   SpaceNla *snla = reinterpret_cast<SpaceNla *>(ac->sl);
   View2D *v2d = &region->v2d;
-  size_t items;
-
-  /* build list of tracks to draw */
-  eAnimFilter_Flags filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_LIST_VISIBLE |
-                              ANIMFILTER_LIST_CHANNELS | ANIMFILTER_FCURVESONLY);
-  items = ANIM_animdata_filter(ac, &anim_data, filter, ac->data, eAnimCont_Types(ac->datatype));
-
-  /* Update max-extent of tracks here (taking into account scrollers):
-   * - this is done to allow the track list to be scrollable, but must be done here
-   *   to avoid regenerating the list again and/or also because tracks list is drawn first
-   * - offset of NLATRACK_HEIGHT*2 is added to the height of the tracks, as first is for
-   *  start of list offset, and the second is as a correction for the scrollers.
-   */
-  int height = NLATRACK_TOT_HEIGHT(ac, items);
-  v2d->tot.ymin = -height;
 
   /* need to do a view-sync here, so that the keys area doesn't jump around
    * (it must copy this) */
@@ -957,7 +990,8 @@ void draw_nla_track_list(const bContext *C, bAnimContext *ac, ARegion *region)
 
       /* check if visible */
       if (IN_RANGE(ymin, v2d->cur.ymin, v2d->cur.ymax) ||
-          IN_RANGE(ymax, v2d->cur.ymin, v2d->cur.ymax)) {
+          IN_RANGE(ymax, v2d->cur.ymin, v2d->cur.ymax))
+      {
         /* draw all tracks using standard channel-drawing API */
         ANIM_channel_draw(ac, ale, ymin, ymax, track_index);
       }
@@ -979,7 +1013,8 @@ void draw_nla_track_list(const bContext *C, bAnimContext *ac, ARegion *region)
 
       /* check if visible */
       if (IN_RANGE(ymin, v2d->cur.ymin, v2d->cur.ymax) ||
-          IN_RANGE(ymax, v2d->cur.ymin, v2d->cur.ymax)) {
+          IN_RANGE(ymax, v2d->cur.ymin, v2d->cur.ymax))
+      {
         /* draw all tracks using standard channel-drawing API */
         rctf track_rect;
         BLI_rctf_init(&track_rect, 0, v2d->cur.xmax, ymin, ymax);
@@ -992,9 +1027,6 @@ void draw_nla_track_list(const bContext *C, bAnimContext *ac, ARegion *region)
 
     GPU_blend(GPU_BLEND_NONE);
   }
-
-  /* free temporary tracks */
-  ANIM_animdata_freelist(&anim_data);
 }
 
 /* *********************************************** */

@@ -2,7 +2,8 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "world.h"
+#include "world.hh"
+#include "usd_private.hh"
 
 #include <pxr/base/gf/rotation.h>
 #include <pxr/base/gf/vec2f.h>
@@ -16,16 +17,16 @@
 #include "DNA_scene_types.h"
 
 #include "BLI_math_rotation.h"
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 
-#include "BKE_node.h"
+#include "BKE_node.hh"
 #include "BKE_node_runtime.hh"
 #include "BKE_studiolight.h"
 
 #include "NOD_shader.h"
 
-#include "hydra_scene_delegate.h"
-#include "image.h"
+#include "hydra_scene_delegate.hh"
+#include "image.hh"
 
 /* TODO: add custom `tftoken` "transparency"? */
 
@@ -72,10 +73,10 @@ void WorldData::init()
       if (!input_socket) {
         return;
       }
-      bNodeLink const *link = input_socket->directly_linked_links()[0];
       if (input_socket->directly_linked_links().is_empty()) {
         return;
       }
+      bNodeLink const *link = input_socket->directly_linked_links()[0];
 
       bNode *input_node = link->fromnode;
       if (input_node->type != SH_NODE_BACKGROUND) {
@@ -112,7 +113,7 @@ void WorldData::init()
 
     if (texture_file.GetAssetPath().empty()) {
       float fill_color[4] = {color[0], color[1], color[2], 1.0f};
-      std::string image_path = cache_image_color(fill_color);
+      std::string image_path = blender::io::usd::cache_image_color(fill_color);
       texture_file = pxr::SdfAssetPath(image_path, image_path);
     }
   }

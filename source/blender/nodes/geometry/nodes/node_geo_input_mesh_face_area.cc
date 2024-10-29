@@ -2,9 +2,6 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "DNA_mesh_types.h"
-#include "DNA_meshdata_types.h"
-
 #include "BKE_mesh.hh"
 
 #include "node_geometry_util.hh"
@@ -19,7 +16,7 @@ static void node_declare(NodeDeclarationBuilder &b)
       .description("The surface area of each of the mesh's faces");
 }
 
-static VArray<float> construct_face_area_varray(const Mesh &mesh, const eAttrDomain domain)
+static VArray<float> construct_face_area_varray(const Mesh &mesh, const AttrDomain domain)
 {
   const Span<float3> positions = mesh.vert_positions();
   const OffsetIndices faces = mesh.faces();
@@ -30,7 +27,7 @@ static VArray<float> construct_face_area_varray(const Mesh &mesh, const eAttrDom
   };
 
   return mesh.attributes().adapt_domain<float>(
-      VArray<float>::ForFunc(faces.size(), area_fn), ATTR_DOMAIN_FACE, domain);
+      VArray<float>::ForFunc(faces.size(), area_fn), AttrDomain::Face, domain);
 }
 
 class FaceAreaFieldInput final : public bke::MeshFieldInput {
@@ -41,7 +38,7 @@ class FaceAreaFieldInput final : public bke::MeshFieldInput {
   }
 
   GVArray get_varray_for_context(const Mesh &mesh,
-                                 const eAttrDomain domain,
+                                 const AttrDomain domain,
                                  const IndexMask & /*mask*/) const final
   {
     return construct_face_area_varray(mesh, domain);
@@ -58,9 +55,9 @@ class FaceAreaFieldInput final : public bke::MeshFieldInput {
     return dynamic_cast<const FaceAreaFieldInput *>(&other) != nullptr;
   }
 
-  std::optional<eAttrDomain> preferred_domain(const Mesh & /*mesh*/) const override
+  std::optional<AttrDomain> preferred_domain(const Mesh & /*mesh*/) const override
   {
-    return ATTR_DOMAIN_FACE;
+    return AttrDomain::Face;
   }
 };
 
@@ -71,11 +68,11 @@ static void node_geo_exec(GeoNodeExecParams params)
 
 static void node_register()
 {
-  static bNodeType ntype;
+  static blender::bke::bNodeType ntype;
   geo_node_type_base(&ntype, GEO_NODE_INPUT_MESH_FACE_AREA, "Face Area", NODE_CLASS_INPUT);
   ntype.declare = node_declare;
   ntype.geometry_node_execute = node_geo_exec;
-  nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }
 NOD_REGISTER_NODE(node_register)
 

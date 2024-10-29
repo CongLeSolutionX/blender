@@ -15,27 +15,28 @@
 #include "DNA_image_types.h"
 #include "DNA_material_types.h"
 #include "DNA_mesh_types.h"
-#include "DNA_meshdata_types.h"
 #include "DNA_node_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_space_types.h"
 
 #include "BLI_kdtree.h"
+#include "BLI_math_base.hh"
 #include "BLI_math_geom.h"
 #include "BLI_math_vector.h"
+#include "BLI_math_vector.hh"
 #include "BLI_utildefines.h"
 
-#include "BLT_translation.h"
+#include "BLT_translation.hh"
 
 #include "BKE_context.hh"
 #include "BKE_customdata.hh"
 #include "BKE_editmesh.hh"
-#include "BKE_layer.h"
-#include "BKE_main.h"
+#include "BKE_layer.hh"
 #include "BKE_material.h"
 #include "BKE_mesh_mapping.hh"
-#include "BKE_node.h"
+#include "BKE_mesh_types.hh"
+#include "BKE_node.hh"
 
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_query.hh"
@@ -57,7 +58,7 @@
 #include "UI_resources.hh"
 #include "UI_view2d.hh"
 
-#include "uvedit_intern.h"
+#include "uvedit_intern.hh"
 
 using namespace blender;
 
@@ -89,9 +90,9 @@ static int UNUSED_FUNCTION(ED_operator_uvmap_mesh)(bContext *C)
   Object *ob = CTX_data_active_object(C);
 
   if (ob && ob->type == OB_MESH) {
-    Mesh *me = static_cast<Mesh *>(ob->data);
+    Mesh *mesh = static_cast<Mesh *>(ob->data);
 
-    if (CustomData_get_layer(&me->loop_data, CD_PROP_FLOAT2) != nullptr) {
+    if (CustomData_get_layer(&mesh->corner_data, CD_PROP_FLOAT2) != nullptr) {
       return 1;
     }
   }
@@ -120,7 +121,7 @@ bool ED_object_get_active_image(Object *ob,
   Material *ma = DEG_is_evaluated_object(ob) ? BKE_object_material_get_eval(ob, mat_nr) :
                                                BKE_object_material_get(ob, mat_nr);
   bNodeTree *ntree = (ma && ma->use_nodes) ? ma->nodetree : nullptr;
-  bNode *node = (ntree) ? nodeGetActiveTexture(ntree) : nullptr;
+  bNode *node = (ntree) ? bke::node_get_active_texture(ntree) : nullptr;
 
   if (node && is_image_texture_node(node)) {
     if (r_ima) {
@@ -165,7 +166,7 @@ bool ED_object_get_active_image(Object *ob,
 void ED_object_assign_active_image(Main *bmain, Object *ob, int mat_nr, Image *ima)
 {
   Material *ma = BKE_object_material_get(ob, mat_nr);
-  bNode *node = (ma && ma->use_nodes) ? nodeGetActiveTexture(ma->nodetree) : nullptr;
+  bNode *node = (ma && ma->use_nodes) ? bke::node_get_active_texture(ma->nodetree) : nullptr;
 
   if (node && is_image_texture_node(node)) {
     node->id = &ima->id;
@@ -182,9 +183,9 @@ void ED_object_assign_active_image(Main *bmain, Object *ob, int mat_nr, Image *i
 void uvedit_live_unwrap_update(SpaceImage *sima, Scene *scene, Object *obedit)
 {
   if (sima && (sima->flag & SI_LIVE_UNWRAP)) {
-    ED_uvedit_live_unwrap_begin(scene, obedit);
+    ED_uvedit_live_unwrap_begin(scene, obedit, nullptr);
     ED_uvedit_live_unwrap_re_solve();
-    ED_uvedit_live_unwrap_end(0);
+    ED_uvedit_live_unwrap_end(false);
   }
 }
 
@@ -227,25 +228,25 @@ void ED_uvedit_foreach_uv(const Scene *scene,
 }
 
 void ED_uvedit_foreach_uv_multi(const Scene *scene,
-                                Object **objects_edit,
-                                uint objects_len,
+                                const Span<Object *> objects_edit,
                                 const bool skip_invisible,
                                 const bool skip_nonselected,
                                 FunctionRef<void(float[2])> user_fn)
 {
-  for (uint ob_index = 0; ob_index < objects_len; ob_index++) {
-    Object *obedit = objects_edit[ob_index];
+  for (Object *obedit : objects_edit) {
     BMEditMesh *em = BKE_editmesh_from_object(obedit);
     ED_uvedit_foreach_uv(scene, em->bm, skip_invisible, skip_nonselected, user_fn);
   }
 }
 
-bool ED_uvedit_minmax_multi(
-    const Scene *scene, Object **objects_edit, uint objects_len, float r_min[2], float r_max[2])
+bool ED_uvedit_minmax_multi(const Scene *scene,
+                            const Span<Object *> objects_edit,
+                            float r_min[2],
+                            float r_max[2])
 {
   bool changed = false;
   INIT_MINMAX2(r_min, r_max);
-  ED_uvedit_foreach_uv_multi(scene, objects_edit, objects_len, true, true, [&](float luv[2]) {
+  ED_uvedit_foreach_uv_multi(scene, objects_edit, true, true, [&](float luv[2]) {
     minmax_v2v2_v2(r_min, r_max, luv);
     changed = true;
   });
@@ -268,14 +269,13 @@ void ED_uvedit_select_all(BMesh *bm)
 }
 
 static bool ED_uvedit_median_multi(const Scene *scene,
-                                   Object **objects_edit,
-                                   uint objects_len,
+                                   const Span<Object *> objects_edit,
                                    float co[2])
 {
   uint sel = 0;
   zero_v2(co);
 
-  ED_uvedit_foreach_uv_multi(scene, objects_edit, objects_len, true, true, [&](float luv[2]) {
+  ED_uvedit_foreach_uv_multi(scene, objects_edit, true, true, [&](float luv[2]) {
     add_v2_v2(co, luv);
     sel++;
   });
@@ -285,20 +285,22 @@ static bool ED_uvedit_median_multi(const Scene *scene,
   return (sel != 0);
 }
 
-bool ED_uvedit_center_multi(
-    const Scene *scene, Object **objects_edit, uint objects_len, float cent[2], char mode)
+bool ED_uvedit_center_multi(const Scene *scene,
+                            Span<Object *> objects_edit,
+                            float cent[2],
+                            char mode)
 {
   bool changed = false;
 
   if (mode == V3D_AROUND_CENTER_BOUNDS) { /* bounding box */
     float min[2], max[2];
-    if (ED_uvedit_minmax_multi(scene, objects_edit, objects_len, min, max)) {
+    if (ED_uvedit_minmax_multi(scene, objects_edit, min, max)) {
       mid_v2_v2v2(cent, min, max);
       changed = true;
     }
   }
   else {
-    if (ED_uvedit_median_multi(scene, objects_edit, objects_len, cent)) {
+    if (ED_uvedit_median_multi(scene, objects_edit, cent)) {
       changed = true;
     }
   }
@@ -319,20 +321,18 @@ bool ED_uvedit_center_from_pivot_ex(SpaceImage *sima,
       copy_v2_v2(r_center, sima->cursor);
       changed = true;
       if (r_has_select != nullptr) {
-        uint objects_len = 0;
-        Object **objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
-            scene, view_layer, ((View3D *)nullptr), &objects_len);
-        *r_has_select = uvedit_select_is_any_selected_multi(scene, objects, objects_len);
-        MEM_freeN(objects);
+        Vector<Object *> objects =
+            BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
+                scene, view_layer, nullptr);
+        *r_has_select = uvedit_select_is_any_selected_multi(scene, objects);
       }
       break;
     }
     default: {
-      uint objects_len = 0;
-      Object **objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
-          scene, view_layer, ((View3D *)nullptr), &objects_len);
-      changed = ED_uvedit_center_multi(scene, objects, objects_len, r_center, mode);
-      MEM_freeN(objects);
+      Vector<Object *> objects =
+          BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
+              scene, view_layer, nullptr);
+      changed = ED_uvedit_center_multi(scene, objects, r_center, mode);
       if (r_has_select != nullptr) {
         *r_has_select = changed;
       }
@@ -547,21 +547,18 @@ static void uv_weld_align(bContext *C, eUVWeldAlign tool)
 
   INIT_MINMAX2(min, max);
 
-  uint objects_len = 0;
-  Object **objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
-      scene, view_layer, ((View3D *)nullptr), &objects_len);
+  Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
+      scene, view_layer, nullptr);
 
   if (tool == UV_ALIGN_AUTO) {
-    ED_uvedit_foreach_uv_multi(scene, objects, objects_len, true, true, [&](float luv[2]) {
-      minmax_v2v2_v2(min, max, luv);
-    });
+    ED_uvedit_foreach_uv_multi(
+        scene, objects, true, true, [&](float luv[2]) { minmax_v2v2_v2(min, max, luv); });
     tool = (max[0] - min[0] >= max[1] - min[1]) ? UV_ALIGN_Y : UV_ALIGN_X;
   }
 
-  ED_uvedit_center_multi(scene, objects, objects_len, cent, 0);
+  ED_uvedit_center_multi(scene, objects, cent, 0);
 
-  for (uint ob_index = 0; ob_index < objects_len; ob_index++) {
-    Object *obedit = objects[ob_index];
+  for (Object *obedit : objects) {
     BMEditMesh *em = BKE_editmesh_from_object(obedit);
     bool changed = false;
 
@@ -583,8 +580,6 @@ static void uv_weld_align(bContext *C, eUVWeldAlign tool)
       WM_event_add_notifier(C, NC_GEOM | ND_DATA, obedit->data);
     }
   }
-
-  MEM_freeN(objects);
 }
 
 static int uv_align_exec(bContext *C, wmOperator *op)
@@ -653,21 +648,19 @@ static int uv_remove_doubles_to_selected(bContext *C, wmOperator *op)
   const float threshold = RNA_float_get(op->ptr, "threshold");
   const bool synced_selection = (ts->uv_flag & UV_SYNC_SELECTION) != 0;
 
-  uint objects_len = 0;
-  Object **objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
-      scene, view_layer, ((View3D *)nullptr), &objects_len);
+  Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
+      scene, view_layer, nullptr);
 
-  bool *changed = static_cast<bool *>(MEM_callocN(sizeof(bool) * objects_len, __func__));
+  bool *changed = static_cast<bool *>(MEM_callocN(sizeof(bool) * objects.size(), __func__));
 
   /* Maximum index of an objects[i]'s UVs in UV_arr.
    * It helps find which UV in *mloopuv_arr belongs to which object. */
   uint *ob_mloopuv_max_idx = static_cast<uint *>(
-      MEM_callocN(sizeof(uint) * objects_len, __func__));
+      MEM_callocN(sizeof(uint) * objects.size(), __func__));
 
   /* Calculate max possible number of kdtree nodes. */
   int uv_maxlen = 0;
-  for (uint ob_index = 0; ob_index < objects_len; ob_index++) {
-    Object *obedit = objects[ob_index];
+  for (Object *obedit : objects) {
     BMEditMesh *em = BKE_editmesh_from_object(obedit);
 
     if (synced_selection && (em->bm->totvertsel == 0)) {
@@ -684,7 +677,7 @@ static int uv_remove_doubles_to_selected(bContext *C, wmOperator *op)
 
   int mloopuv_count = 0; /* Also used for *duplicates count. */
 
-  for (uint ob_index = 0; ob_index < objects_len; ob_index++) {
+  for (const int ob_index : objects.index_range()) {
     Object *obedit = objects[ob_index];
     BMEditMesh *em = BKE_editmesh_from_object(obedit);
     ED_uvedit_foreach_uv(scene, em->bm, true, true, [&](float luv[2]) {
@@ -746,7 +739,7 @@ static int uv_remove_doubles_to_selected(bContext *C, wmOperator *op)
       changed[ob_index] = true;
     }
 
-    for (ob_index = 0; ob_index < objects_len; ob_index++) {
+    for (ob_index = 0; ob_index < objects.size(); ob_index++) {
       if (changed[ob_index]) {
         Object *obedit = objects[ob_index];
         uvedit_live_unwrap_update(sima, scene, obedit);
@@ -758,7 +751,6 @@ static int uv_remove_doubles_to_selected(bContext *C, wmOperator *op)
 
   BLI_kdtree_2d_free(tree);
   MEM_freeN(changed);
-  MEM_freeN(objects);
   MEM_freeN(ob_mloopuv_max_idx);
 
   return OPERATOR_FINISHED;
@@ -771,14 +763,12 @@ static int uv_remove_doubles_to_unselected(bContext *C, wmOperator *op)
   SpaceImage *sima = CTX_wm_space_image(C);
   const float threshold = RNA_float_get(op->ptr, "threshold");
 
-  uint objects_len = 0;
-  Object **objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
-      scene, view_layer, ((View3D *)nullptr), &objects_len);
+  Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
+      scene, view_layer, nullptr);
 
   /* Calculate max possible number of kdtree nodes. */
   int uv_maxlen = 0;
-  for (uint ob_index = 0; ob_index < objects_len; ob_index++) {
-    Object *obedit = objects[ob_index];
+  for (Object *obedit : objects) {
     BMEditMesh *em = BKE_editmesh_from_object(obedit);
     uv_maxlen += em->bm->totloop;
   }
@@ -790,7 +780,7 @@ static int uv_remove_doubles_to_unselected(bContext *C, wmOperator *op)
   int mloopuv_count = 0;
 
   /* Add visible non-selected uvs to tree */
-  ED_uvedit_foreach_uv_multi(scene, objects, objects_len, true, false, [&](float luv[2]) {
+  ED_uvedit_foreach_uv_multi(scene, objects, true, false, [&](float luv[2]) {
     BLI_kdtree_2d_insert(tree, mloopuv_count, luv);
     mloopuv_arr.append(luv);
     mloopuv_count++;
@@ -799,9 +789,8 @@ static int uv_remove_doubles_to_unselected(bContext *C, wmOperator *op)
   BLI_kdtree_2d_balance(tree);
 
   /* For each selected uv, find duplicate non selected uv. */
-  for (uint ob_index = 0; ob_index < objects_len; ob_index++) {
+  for (Object *obedit : objects) {
     bool changed = false;
-    Object *obedit = objects[ob_index];
     BMEditMesh *em = BKE_editmesh_from_object(obedit);
     ED_uvedit_foreach_uv(scene, em->bm, true, true, [&](float luv[2]) {
       KDTreeNearest_2d nearest;
@@ -821,7 +810,116 @@ static int uv_remove_doubles_to_unselected(bContext *C, wmOperator *op)
   }
 
   BLI_kdtree_2d_free(tree);
-  MEM_freeN(objects);
+
+  return OPERATOR_FINISHED;
+}
+
+static int uv_remove_doubles_to_selected_shared_vertex(bContext *C, wmOperator *op)
+{
+  /* NOTE: The calculation for the center-point of loops belonging to a vertex will be skewed
+   * if one UV coordinate holds more loops than the others. */
+
+  Scene *scene = CTX_data_scene(C);
+  SpaceImage *sima = CTX_wm_space_image(C);
+  ViewLayer *view_layer = CTX_data_view_layer(C);
+  Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
+      scene, view_layer, nullptr);
+
+  /* Only use the squared distance, to avoid a square-root. */
+  const float threshold_sq = math::square(RNA_float_get(op->ptr, "threshold"));
+
+  for (Object *obedit : objects) {
+    BMEditMesh *em = BKE_editmesh_from_object(obedit);
+    BMUVOffsets offsets = BM_uv_map_get_offsets(em->bm);
+    BMVert *v;
+    BMLoop *l;
+    BMIter viter, liter;
+
+    /* The `changed` variable keeps track if any loops from the current object are merged. */
+    blender::Vector<float *> uvs;
+    uvs.reserve(32);
+    bool changed = false;
+
+    BM_ITER_MESH (v, &viter, em->bm, BM_VERTS_OF_MESH) {
+
+      BLI_assert(uvs.size() == 0);
+      BM_ITER_ELEM (l, &liter, v, BM_LOOPS_OF_VERT) {
+        if (uvedit_uv_select_test(scene, l, offsets)) {
+          uvs.append(BM_ELEM_CD_GET_FLOAT_P(l, offsets.uv));
+        }
+      }
+      if (uvs.size() <= 1) {
+        uvs.clear();
+        continue;
+      }
+
+      while (uvs.size() > 1) {
+        const int uvs_num = uvs.size();
+        float2 uv_average = {0.0f, 0.0f};
+        for (const float *luv : uvs) {
+          uv_average += float2(luv);
+        }
+        uv_average /= uvs_num;
+
+        /* Find the loop closest to the uv_average. This loop will be the base that all
+         * other loop's distances are calculated from. */
+
+        float dist_best_sq = math::distance_squared(uv_average, float2(uvs[0]));
+        float *uv_ref = uvs[0];
+        int uv_ref_index = 0;
+        for (int i = 1; i < uvs_num; i++) {
+          const float dist_test_sq = math::distance_squared(uv_average, float2(uvs[i]));
+          if (dist_test_sq < dist_best_sq) {
+            dist_best_sq = dist_test_sq;
+            uv_ref = uvs[i];
+            uv_ref_index = i;
+          }
+        }
+
+        const int uvs_end = uvs_num - 1;
+        std::swap(uvs[uv_ref_index], uvs[uvs_end]);
+
+        /* Move all the UVs within threshold to the end of the array. Sum of all UV coordinates
+         * within threshold is initialized with `uv_ref` coordinate data since while loop
+         * ends once it hits `uv_ref` UV. */
+        float2 uv_merged_average = {uv_ref[0], uv_ref[1]};
+        int i = 0;
+        int uvs_num_merged = 1;
+        while (uvs[i] != uv_ref && i < uvs_num - uvs_num_merged) {
+          const float dist_test_sq = len_squared_v2v2(uv_ref, uvs[i]);
+          if (dist_test_sq < threshold_sq) {
+            uv_merged_average += float2(uvs[i]);
+            std::swap(uvs[i], uvs[uvs_end - uvs_num_merged]);
+            uvs_num_merged++;
+            if (dist_test_sq != 0.0f) {
+              changed = true;
+            }
+          }
+          else {
+            i++;
+          }
+        }
+
+        /* Recalculate `uv_average` so it only considers UV's that are being included in merge
+         * operation. Then Shift all loops to that position. */
+        if (uvs_num_merged > 1) {
+          uv_merged_average /= uvs_num_merged;
+
+          for (int j = uvs_num - uvs_num_merged; j < uvs_num; j++) {
+            copy_v2_v2(uvs[j], uv_merged_average);
+          }
+        }
+
+        uvs.resize(uvs_num - uvs_num_merged);
+      }
+      uvs.clear();
+    }
+    if (changed) {
+      uvedit_live_unwrap_update(sima, scene, obedit);
+      DEG_id_tag_update(static_cast<ID *>(obedit->data), 0);
+      WM_event_add_notifier(C, NC_GEOM | ND_DATA, obedit->data);
+    }
+  }
 
   return OPERATOR_FINISHED;
 }
@@ -830,6 +928,9 @@ static int uv_remove_doubles_exec(bContext *C, wmOperator *op)
 {
   if (RNA_boolean_get(op->ptr, "use_unselected")) {
     return uv_remove_doubles_to_unselected(C, op);
+  }
+  if (RNA_boolean_get(op->ptr, "use_shared_vertex")) {
+    return uv_remove_doubles_to_selected_shared_vertex(C, op);
   }
   return uv_remove_doubles_to_selected(C, op);
 }
@@ -861,6 +962,8 @@ static void UV_OT_remove_doubles(wmOperatorType *ot)
                   false,
                   "Unselected",
                   "Merge selected to other unselected vertices");
+  RNA_def_boolean(
+      ot->srna, "use_shared_vertex", false, "Shared Vertex", "Weld UVs based on shared vertices");
 }
 
 /** \} */
@@ -910,11 +1013,10 @@ static void uv_snap_cursor_to_pixels(SpaceImage *sima)
 }
 
 static bool uv_snap_cursor_to_selection(Scene *scene,
-                                        Object **objects_edit,
-                                        uint objects_len,
+                                        Span<Object *> objects_edit,
                                         SpaceImage *sima)
 {
-  return ED_uvedit_center_multi(scene, objects_edit, objects_len, sima->cursor, sima->around);
+  return ED_uvedit_center_multi(scene, objects_edit, sima->cursor, sima->around);
 }
 
 static void uv_snap_cursor_to_origin(float uvco[2])
@@ -938,11 +1040,10 @@ static int uv_snap_cursor_exec(bContext *C, wmOperator *op)
       Scene *scene = CTX_data_scene(C);
       ViewLayer *view_layer = CTX_data_view_layer(C);
 
-      uint objects_len = 0;
-      Object **objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
-          scene, view_layer, ((View3D *)nullptr), &objects_len);
-      changed = uv_snap_cursor_to_selection(scene, objects, objects_len, sima);
-      MEM_freeN(objects);
+      Vector<Object *> objects =
+          BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
+              scene, view_layer, nullptr);
+      changed = uv_snap_cursor_to_selection(scene, objects, sima);
       break;
     }
     case 2:
@@ -1100,22 +1201,19 @@ static int uv_snap_selection_exec(bContext *C, wmOperator *op)
   const int target = RNA_enum_get(op->ptr, "target");
   float offset[2] = {0};
 
-  uint objects_len = 0;
-  Object **objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
-      scene, view_layer, ((View3D *)nullptr), &objects_len);
+  Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
+      scene, view_layer, nullptr);
 
   if (target == 2) {
     float center[2];
-    if (!ED_uvedit_center_multi(scene, objects, objects_len, center, sima->around)) {
-      MEM_freeN(objects);
+    if (!ED_uvedit_center_multi(scene, objects, center, sima->around)) {
       return OPERATOR_CANCELLED;
     }
     sub_v2_v2v2(offset, sima->cursor, center);
   }
 
   bool changed_multi = false;
-  for (uint ob_index = 0; ob_index < objects_len; ob_index++) {
-    Object *obedit = objects[ob_index];
+  for (Object *obedit : objects) {
     BMEditMesh *em = BKE_editmesh_from_object(obedit);
 
     if (synced_selection && (em->bm->totvertsel == 0)) {
@@ -1145,7 +1243,6 @@ static int uv_snap_selection_exec(bContext *C, wmOperator *op)
       WM_event_add_notifier(C, NC_GEOM | ND_DATA, obedit->data);
     }
   }
-  MEM_freeN(objects);
 
   return changed_multi ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
 }
@@ -1193,12 +1290,10 @@ static int uv_pin_exec(bContext *C, wmOperator *op)
   const bool invert = RNA_boolean_get(op->ptr, "invert");
   const bool synced_selection = (ts->uv_flag & UV_SYNC_SELECTION) != 0;
 
-  uint objects_len = 0;
-  Object **objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
-      scene, view_layer, ((View3D *)nullptr), &objects_len);
+  Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
+      scene, view_layer, nullptr);
 
-  for (uint ob_index = 0; ob_index < objects_len; ob_index++) {
-    Object *obedit = objects[ob_index];
+  for (Object *obedit : objects) {
     BMEditMesh *em = BKE_editmesh_from_object(obedit);
 
     bool changed = false;
@@ -1231,10 +1326,9 @@ static int uv_pin_exec(bContext *C, wmOperator *op)
 
     if (changed) {
       WM_event_add_notifier(C, NC_GEOM | ND_DATA, obedit->data);
-      DEG_id_tag_update(static_cast<ID *>(obedit->data), ID_RECALC_COPY_ON_WRITE);
+      DEG_id_tag_update(static_cast<ID *>(obedit->data), ID_RECALC_SYNC_TO_EVAL);
     }
   }
-  MEM_freeN(objects);
 
   return OPERATOR_FINISHED;
 }
@@ -1302,12 +1396,10 @@ static int uv_hide_exec(bContext *C, wmOperator *op)
   const bool swap = RNA_boolean_get(op->ptr, "unselected");
   const bool use_face_center = (ts->uv_selectmode == UV_SELECT_FACE);
 
-  uint objects_len = 0;
-  Object **objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
-      scene, view_layer, ((View3D *)nullptr), &objects_len);
+  Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
+      scene, view_layer, nullptr);
 
-  for (uint ob_index = 0; ob_index < objects_len; ob_index++) {
-    Object *ob = objects[ob_index];
+  for (Object *ob : objects) {
     BMEditMesh *em = BKE_editmesh_from_object(ob);
     BMFace *efa;
     BMLoop *l;
@@ -1320,12 +1412,12 @@ static int uv_hide_exec(bContext *C, wmOperator *op)
 
     if (ts->uv_flag & UV_SYNC_SELECTION) {
       if (EDBM_mesh_hide(em, swap)) {
-        Mesh *me = static_cast<Mesh *>(ob->data);
+        Mesh *mesh = static_cast<Mesh *>(ob->data);
         EDBMUpdate_Params params = {0};
-        params.calc_looptri = true;
+        params.calc_looptris = true;
         params.calc_normals = false;
         params.is_destructive = false;
-        EDBM_update(me, &params);
+        EDBM_update(mesh, &params);
       }
       continue;
     }
@@ -1433,8 +1525,6 @@ static int uv_hide_exec(bContext *C, wmOperator *op)
     WM_event_add_notifier(C, NC_GEOM | ND_SELECT, ob->data);
   }
 
-  MEM_freeN(objects);
-
   return OPERATOR_FINISHED;
 }
 
@@ -1473,12 +1563,10 @@ static int uv_reveal_exec(bContext *C, wmOperator *op)
   const bool use_face_center = (ts->uv_selectmode == UV_SELECT_FACE);
   const bool select = RNA_boolean_get(op->ptr, "select");
 
-  uint objects_len = 0;
-  Object **objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
-      scene, view_layer, ((View3D *)nullptr), &objects_len);
+  Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
+      scene, view_layer, nullptr);
 
-  for (uint ob_index = 0; ob_index < objects_len; ob_index++) {
-    Object *ob = objects[ob_index];
+  for (Object *ob : objects) {
     BMEditMesh *em = BKE_editmesh_from_object(ob);
     BMFace *efa;
     BMLoop *l;
@@ -1497,12 +1585,12 @@ static int uv_reveal_exec(bContext *C, wmOperator *op)
     /* call the mesh function if we are in mesh sync sel */
     if (ts->uv_flag & UV_SYNC_SELECTION) {
       if (EDBM_mesh_reveal(em, select)) {
-        Mesh *me = static_cast<Mesh *>(ob->data);
+        Mesh *mesh = static_cast<Mesh *>(ob->data);
         EDBMUpdate_Params params = {0};
-        params.calc_looptri = true;
+        params.calc_looptris = true;
         params.calc_normals = false;
         params.is_destructive = false;
-        EDBM_update(me, &params);
+        EDBM_update(mesh, &params);
       }
       continue;
     }
@@ -1585,8 +1673,6 @@ static int uv_reveal_exec(bContext *C, wmOperator *op)
     DEG_id_tag_update(static_cast<ID *>(ob->data), ID_RECALC_SELECT);
     WM_event_add_notifier(C, NC_GEOM | ND_SELECT, ob->data);
   }
-
-  MEM_freeN(objects);
 
   return OPERATOR_FINISHED;
 }
@@ -1692,14 +1778,12 @@ static int uv_seams_from_islands_exec(bContext *C, wmOperator *op)
   const bool mark_sharp = RNA_boolean_get(op->ptr, "mark_sharp");
   bool changed_multi = false;
 
-  uint objects_len = 0;
-  Object **objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
-      scene, view_layer, ((View3D *)nullptr), &objects_len);
+  Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
+      scene, view_layer, nullptr);
 
-  for (uint ob_index = 0; ob_index < objects_len; ob_index++) {
-    Object *ob = objects[ob_index];
-    Mesh *me = (Mesh *)ob->data;
-    BMEditMesh *em = me->edit_mesh;
+  for (Object *ob : objects) {
+    Mesh *mesh = (Mesh *)ob->data;
+    BMEditMesh *em = mesh->runtime->edit_mesh.get();
     BMesh *bm = em->bm;
     BMIter iter;
 
@@ -1751,11 +1835,10 @@ static int uv_seams_from_islands_exec(bContext *C, wmOperator *op)
 
     if (changed) {
       changed_multi = true;
-      DEG_id_tag_update(&me->id, 0);
-      WM_event_add_notifier(C, NC_GEOM | ND_DATA, me);
+      DEG_id_tag_update(&mesh->id, 0);
+      WM_event_add_notifier(C, NC_GEOM | ND_DATA, mesh);
     }
   }
-  MEM_freeN(objects);
 
   return changed_multi ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
 }
@@ -1797,16 +1880,14 @@ static int uv_mark_seam_exec(bContext *C, wmOperator *op)
   const bool flag_set = !RNA_boolean_get(op->ptr, "clear");
   const bool synced_selection = (ts->uv_flag & UV_SYNC_SELECTION) != 0;
 
-  uint objects_len = 0;
-  Object **objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
-      scene, view_layer, ((View3D *)nullptr), &objects_len);
+  Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
+      scene, view_layer, nullptr);
 
   bool changed = false;
 
-  for (uint ob_index = 0; ob_index < objects_len; ob_index++) {
-    Object *ob = objects[ob_index];
-    Mesh *me = (Mesh *)ob->data;
-    BMEditMesh *em = me->edit_mesh;
+  for (Object *ob : objects) {
+    Mesh *mesh = (Mesh *)ob->data;
+    BMEditMesh *em = mesh->runtime->edit_mesh.get();
     BMesh *bm = em->bm;
 
     if (synced_selection && (bm->totedgesel == 0)) {
@@ -1827,16 +1908,14 @@ static int uv_mark_seam_exec(bContext *C, wmOperator *op)
     }
 
     if (changed) {
-      DEG_id_tag_update(&me->id, 0);
-      WM_event_add_notifier(C, NC_GEOM | ND_DATA, me);
+      DEG_id_tag_update(&mesh->id, 0);
+      WM_event_add_notifier(C, NC_GEOM | ND_DATA, mesh);
     }
   }
 
   if (changed) {
-    ED_uvedit_live_unwrap(scene, objects, objects_len);
+    ED_uvedit_live_unwrap(scene, objects);
   }
-
-  MEM_freeN(objects);
 
   return OPERATOR_FINISHED;
 }

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2006 Blender Authors
+# SPDX-FileCopyrightText: 2024 Blender Authors
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
@@ -36,6 +36,7 @@ set(SRC
   intern/format_tiff.cc
   intern/imageprocess.cc
   intern/indexer.cc
+  intern/interp.cc
   intern/iris.cc
   intern/jpeg.cc
   intern/metadata.cc
@@ -54,20 +55,22 @@ set(SRC
   intern/util_gpu.cc
   intern/writeimage.cc
 
-  IMB_colormanagement.h
-  IMB_imbuf.h
-  IMB_imbuf_types.h
-  IMB_metadata.h
-  IMB_moviecache.h
-  IMB_openexr.h
-  IMB_thumbs.h
-  intern/IMB_allocimbuf.h
-  intern/IMB_anim.h
-  intern/IMB_colormanagement_intern.h
-  intern/IMB_filetype.h
-  intern/IMB_filter.h
-  intern/IMB_indexer.h
-  intern/imbuf.h
+  IMB_colormanagement.hh
+  IMB_imbuf.hh
+  IMB_imbuf_enums.h
+  IMB_imbuf_types.hh
+  IMB_interp.hh
+  IMB_metadata.hh
+  IMB_moviecache.hh
+  IMB_openexr.hh
+  IMB_thumbs.hh
+  intern/IMB_allocimbuf.hh
+  intern/IMB_anim.hh
+  intern/IMB_colormanagement_intern.hh
+  intern/IMB_filetype.hh
+  intern/IMB_filter.hh
+  intern/IMB_indexer.hh
+  intern/imbuf.hh
 
   # orphan include
   ../../../intern/ffmpeg/ffmpeg_compat.h
@@ -98,6 +101,14 @@ else()
   )
 endif()
 
+# Keep until APPLE/ARM libraries are updated.
+if((APPLE AND CMAKE_OSX_ARCHITECTURES MATCHES arm64) OR
+   (CMAKE_SYSTEM_PROCESSOR MATCHES "ARM64|aarch64"))
+  list(APPEND INC_SYS
+    ${IMATH_INCLUDE_DIRS}
+  )
+endif()
+
 if(WITH_IMAGE_OPENJPEG)
   list(APPEND INC_SYS
     ${OPENJPEG_INCLUDE_DIRS}
@@ -110,16 +121,6 @@ if(WITH_IMAGE_OPENJPEG)
   )
 
   add_definitions(-DWITH_OPENJPEG ${OPENJPEG_DEFINES})
-endif()
-
-if(WITH_CODEC_AVI)
-  list(APPEND INC
-    ../io/avi
-  )
-  list(APPEND LIB
-    bf_avi
-  )
-  add_definitions(-DWITH_AVI)
 endif()
 
 if(WITH_CODEC_FFMPEG)
@@ -159,18 +160,6 @@ if(WITH_IMAGE_WEBP)
   add_definitions(-DWITH_WEBP)
 endif()
 
-if(WITH_TBB)
-  add_definitions(-DWITH_TBB)
-
-  list(APPEND INC_SYS
-    ${TBB_INCLUDE_DIRS}
-  )
-
-  list(APPEND LIB
-    ${TBB_LIBRARIES}
-  )
-endif()
-
 list(APPEND INC
   ../../../intern/opencolorio
 )
@@ -181,6 +170,10 @@ if(WIN32)
   )
 endif()
 
+if(WIN32)
+  add_definitions(-DNOMINMAX)
+endif()
+
 # no need to compile object files for inline headers.
 set_source_files_properties(
   intern/colormanagement_inline.cc
@@ -188,3 +181,12 @@ set_source_files_properties(
 )
 
 blender_add_lib(bf_imbuf "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
+
+if(WITH_GTESTS)
+  set(TEST_SRC
+    tests/IMB_scaling_test.cc
+    tests/IMB_transform_test.cc
+  )
+  blender_add_test_suite_lib(imbuf "${TEST_SRC}" "${INC}" "${INC_SYS}" "${LIB}")
+  add_subdirectory(tests/performance)
+endif()

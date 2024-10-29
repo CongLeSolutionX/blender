@@ -6,11 +6,11 @@
  * \ingroup ply
  */
 
-#include "BKE_layer.h"
-#include "BKE_lib_id.h"
+#include "BKE_context.hh"
+#include "BKE_layer.hh"
 #include "BKE_mesh.hh"
 #include "BKE_object.hh"
-#include "BKE_report.h"
+#include "BKE_report.hh"
 
 #include "DNA_collection_types.h"
 #include "DNA_object_types.h"
@@ -19,7 +19,7 @@
 #include "BLI_math_matrix.h"
 #include "BLI_math_rotation.h"
 #include "BLI_math_vector.h"
-#include "BLI_memory_utils.hh"
+#include "BLI_span.hh"
 #include "BLI_string.h"
 
 #include "DEG_depsgraph.hh"
@@ -147,7 +147,8 @@ const char *read_header(PlyReadBuffer &file, PlyHeader &r_header)
       break;
     }
     else if (line.is_empty() || (line.first() >= '0' && line.first() <= '9') ||
-             line.first() == '-') {
+             line.first() == '-')
+    {
       /* A value was found before we broke out of the loop. No end_header. */
       return "No end_header.";
     }
@@ -160,25 +161,8 @@ const char *read_header(PlyReadBuffer &file, PlyHeader &r_header)
   return nullptr;
 }
 
-void importer_main(bContext *C, const PLYImportParams &import_params, wmOperator *op)
+static Mesh *read_ply_to_mesh(const PLYImportParams &import_params, const char *ob_name)
 {
-  Main *bmain = CTX_data_main(C);
-  Scene *scene = CTX_data_scene(C);
-  ViewLayer *view_layer = CTX_data_view_layer(C);
-  importer_main(bmain, scene, view_layer, import_params, op);
-}
-
-void importer_main(Main *bmain,
-                   Scene *scene,
-                   ViewLayer *view_layer,
-                   const PLYImportParams &import_params,
-                   wmOperator *op)
-{
-  /* File base name used for both mesh and object. */
-  char ob_name[FILE_MAX];
-  STRNCPY(ob_name, BLI_path_basename(import_params.filepath));
-  BLI_path_extension_strip(ob_name);
-
   /* Parse header. */
   PlyReadBuffer file(import_params.filepath, 64 * 1024);
 
@@ -186,25 +170,64 @@ void importer_main(Main *bmain,
   const char *err = read_header(file, header);
   if (err != nullptr) {
     fprintf(stderr, "PLY Importer: %s: %s\n", ob_name, err);
-    BKE_reportf(op->reports, RPT_ERROR, "PLY Importer: %s: %s", ob_name, err);
-    return;
+    BKE_reportf(import_params.reports, RPT_ERROR, "PLY Importer: %s: %s", ob_name, err);
+    return nullptr;
   }
 
   /* Parse actual file data. */
   std::unique_ptr<PlyData> data = import_ply_data(file, header);
   if (data == nullptr) {
     fprintf(stderr, "PLY Importer: failed importing %s, unknown error\n", ob_name);
-    BKE_report(op->reports, RPT_ERROR, "PLY Importer: failed importing, unknown error");
-    return;
+    BKE_report(import_params.reports, RPT_ERROR, "PLY Importer: failed importing, unknown error");
+    return nullptr;
   }
   if (!data->error.empty()) {
     fprintf(stderr, "PLY Importer: failed importing %s: %s\n", ob_name, data->error.c_str());
-    BKE_report(op->reports, RPT_ERROR, "PLY Importer: failed importing, unknown error");
-    return;
+    BKE_report(import_params.reports, RPT_ERROR, "PLY Importer: failed importing, unknown error");
+    return nullptr;
   }
   if (data->vertices.is_empty()) {
     fprintf(stderr, "PLY Importer: file %s contains no vertices\n", ob_name);
-    BKE_report(op->reports, RPT_ERROR, "PLY Importer: failed importing, no vertices");
+    BKE_report(import_params.reports, RPT_ERROR, "PLY Importer: failed importing, no vertices");
+    return nullptr;
+  }
+
+  return convert_ply_to_mesh(*data, import_params);
+}
+
+Mesh *import_mesh(const PLYImportParams &import_params)
+{
+  /* File base name used for both mesh and object. */
+  char ob_name[FILE_MAX];
+  STRNCPY(ob_name, BLI_path_basename(import_params.filepath));
+  BLI_path_extension_strip(ob_name);
+
+  /* Stuff ply data into the mesh. */
+  return read_ply_to_mesh(import_params, ob_name);
+}
+
+void importer_main(bContext *C, const PLYImportParams &import_params)
+{
+  Main *bmain = CTX_data_main(C);
+  Scene *scene = CTX_data_scene(C);
+  ViewLayer *view_layer = CTX_data_view_layer(C);
+  importer_main(bmain, scene, view_layer, import_params);
+}
+
+void importer_main(Main *bmain,
+                   Scene *scene,
+                   ViewLayer *view_layer,
+                   const PLYImportParams &import_params)
+{
+  /* File base name used for both mesh and object. */
+  char ob_name[FILE_MAX];
+  STRNCPY(ob_name, BLI_path_basename(import_params.filepath));
+  BLI_path_extension_strip(ob_name);
+
+  /* Stuff ply data into the mesh. */
+  Mesh *mesh = read_ply_to_mesh(import_params, ob_name);
+
+  if (mesh == nullptr) {
     return;
   }
 
@@ -213,20 +236,18 @@ void importer_main(Main *bmain,
   BKE_view_layer_base_deselect_all(scene, view_layer);
   LayerCollection *lc = BKE_layer_collection_get_active(view_layer);
   Object *obj = BKE_object_add_only_object(bmain, OB_MESH, ob_name);
-  BKE_mesh_assign_object(bmain, obj, mesh_in_main);
+  obj->data = mesh_in_main;
   BKE_collection_object_add(bmain, lc->collection, obj);
   BKE_view_layer_synced_ensure(scene, view_layer);
   Base *base = BKE_view_layer_base_find(view_layer, obj);
   BKE_view_layer_base_select_and_set_active(view_layer, base);
 
-  /* Stuff ply data into the mesh. */
-  Mesh *mesh = convert_ply_to_mesh(*data, import_params);
   BKE_mesh_nomain_to_mesh(mesh, mesh_in_main, obj);
 
   /* Object matrix and finishing up. */
   float global_scale = import_params.global_scale;
   if ((scene->unit.system != USER_UNIT_NONE) && import_params.use_scene_unit) {
-    global_scale *= scene->unit.scale_length;
+    global_scale /= scene->unit.scale_length;
   }
   float scale_vec[3] = {global_scale, global_scale, global_scale};
   float obmat3x3[3][3];
@@ -240,7 +261,7 @@ void importer_main(Main *bmain,
   rescale_m4(obmat4x4, scale_vec);
   BKE_object_apply_mat4(obj, obmat4x4, true, false);
 
-  DEG_id_tag_update(&lc->collection->id, ID_RECALC_COPY_ON_WRITE);
+  DEG_id_tag_update(&lc->collection->id, ID_RECALC_SYNC_TO_EVAL);
   int flags = ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY | ID_RECALC_ANIMATION |
               ID_RECALC_BASE_FLAGS;
   DEG_id_tag_update_ex(bmain, &obj->id, flags);

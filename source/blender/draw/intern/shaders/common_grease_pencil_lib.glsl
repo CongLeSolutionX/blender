@@ -2,8 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#pragma BLENDER_REQUIRE(common_view_lib.glsl)
-#pragma BLENDER_REQUIRE(common_math_lib.glsl)
+#pragma once
+
+#include "common_math_lib.glsl"
+#include "common_view_lib.glsl"
 
 #ifndef DRW_GPENCIL_INFO
 #  error Missing additional info draw_gpencil
@@ -244,18 +246,18 @@ vec4 gpencil_vertex(vec4 viewport_size,
     out_hardness = gpencil_decode_hardness(use_curr ? hardness1 : hardness2);
 
     if (is_dot) {
-      uint alignement_mode = material_flags & GP_STROKE_ALIGNMENT;
+      uint alignment_mode = material_flags & GP_STROKE_ALIGNMENT;
 
       /* For one point strokes use object alignment. */
-      if (alignement_mode == GP_STROKE_ALIGNMENT_STROKE && ma.x == -1 && ma2.x == -1) {
-        alignement_mode = GP_STROKE_ALIGNMENT_OBJECT;
+      if (alignment_mode == GP_STROKE_ALIGNMENT_STROKE && ma.x == -1 && ma2.x == -1) {
+        alignment_mode = GP_STROKE_ALIGNMENT_OBJECT;
       }
 
       vec2 x_axis;
-      if (alignement_mode == GP_STROKE_ALIGNMENT_STROKE) {
+      if (alignment_mode == GP_STROKE_ALIGNMENT_STROKE) {
         x_axis = (ma2.x == -1) ? line_adj : line;
       }
-      else if (alignement_mode == GP_STROKE_ALIGNMENT_FIXED) {
+      else if (alignment_mode == GP_STROKE_ALIGNMENT_FIXED) {
         /* Default for no-material drawing. */
         x_axis = vec2(1.0, 0.0);
       }
@@ -385,7 +387,7 @@ vec4 gpencil_vertex(vec4 viewport_size,
                     out float out_hardness)
 {
   return gpencil_vertex(viewport_size,
-                        0u,
+                        gpMaterialFlag(0u),
                         vec2(1.0, 0.0),
                         out_P,
                         out_N,

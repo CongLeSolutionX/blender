@@ -10,19 +10,16 @@
 #include "BLI_set.hh"
 
 #include "BKE_idprop.hh"
-#include "BKE_node.h"
+#include "BKE_node.hh"
 
 struct bNodeTree;
-struct bNodeSocket;
 struct bNodeTreeInterfaceSocket;
-struct Depsgraph;
 namespace blender::bke {
 struct GeometrySet;
 }
 struct IDProperty;
-struct Object;
 namespace blender::nodes {
-struct GeoNodesLFUserData;
+struct GeoNodesCallData;
 namespace geo_eval_log {
 class GeoModifierLog;
 }  // namespace geo_eval_log
@@ -32,7 +29,8 @@ namespace blender::nodes {
 
 void find_node_tree_dependencies(const bNodeTree &tree,
                                  Set<ID *> &r_ids,
-                                 bool &r_needs_own_transform_relation);
+                                 bool &r_needs_own_transform_relation,
+                                 bool &r_needs_scene_camera_relation);
 
 StringRef input_use_attribute_suffix();
 StringRef input_attribute_name_suffix();
@@ -52,22 +50,22 @@ bool socket_type_has_attribute_toggle(eNodeSocketDatatype type);
 bool input_has_attribute_toggle(const bNodeTree &node_tree, const int socket_index);
 
 bool id_property_type_matches_socket(const bNodeTreeInterfaceSocket &socket,
-                                     const IDProperty &property);
+                                     const IDProperty &property,
+                                     bool use_name_for_ids = false);
 
 std::unique_ptr<IDProperty, bke::idprop::IDPropertyDeleter> id_property_create_from_socket(
-    const bNodeTreeInterfaceSocket &socket);
+    const bNodeTreeInterfaceSocket &socket, bool use_name_for_ids);
 
-bke::GeometrySet execute_geometry_nodes_on_geometry(
-    const bNodeTree &btree,
-    const IDProperty *properties,
-    const ComputeContext &base_compute_context,
-    bke::GeometrySet input_geometry,
-    FunctionRef<void(nodes::GeoNodesLFUserData &)> fill_user_data);
+bke::GeometrySet execute_geometry_nodes_on_geometry(const bNodeTree &btree,
+                                                    const IDProperty *properties,
+                                                    const ComputeContext &base_compute_context,
+                                                    GeoNodesCallData &call_data,
+                                                    bke::GeometrySet input_geometry);
 
 void update_input_properties_from_node_tree(const bNodeTree &tree,
                                             const IDProperty *old_properties,
-                                            bool use_bool_for_use_attribute,
-                                            IDProperty &properties);
+                                            IDProperty &properties,
+                                            bool use_name_for_ids = false);
 
 void update_output_properties_from_node_tree(const bNodeTree &tree,
                                              const IDProperty *old_properties,

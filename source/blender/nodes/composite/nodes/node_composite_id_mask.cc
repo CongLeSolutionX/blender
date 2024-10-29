@@ -11,7 +11,7 @@
 #include "UI_interface.hh"
 #include "UI_resources.hh"
 
-#include "GPU_shader.h"
+#include "GPU_shader.hh"
 
 #include "COM_algorithm_smaa.hh"
 #include "COM_node_operation.hh"
@@ -47,6 +47,17 @@ class IDMaskOperation : public NodeOperation {
 
   void execute() override
   {
+    /* Not yet supported on CPU. */
+    if (!context().use_gpu()) {
+      for (const bNodeSocket *output : this->node()->output_sockets()) {
+        Result &output_result = get_result(output->identifier);
+        if (output_result.should_compute()) {
+          output_result.allocate_invalid();
+        }
+      }
+      return;
+    }
+
     const Result &input_mask = get_input("ID value");
     if (input_mask.is_single_value()) {
       execute_single_value();
@@ -62,7 +73,7 @@ class IDMaskOperation : public NodeOperation {
 
     /* If anti-aliasing is disabled, write to the output directly, otherwise, write to a temporary
      * result to later perform anti-aliasing. */
-    Result non_anti_aliased_mask = context().create_temporary_result(ResultType::Float);
+    Result non_anti_aliased_mask = context().create_result(ResultType::Float);
     Result &output_mask = use_anti_aliasing() ? non_anti_aliased_mask : get_result("Alpha");
 
     const Domain domain = compute_domain();
@@ -111,12 +122,12 @@ void register_node_type_cmp_idmask()
 {
   namespace file_ns = blender::nodes::node_composite_id_mask_cc;
 
-  static bNodeType ntype;
+  static blender::bke::bNodeType ntype;
 
   cmp_node_type_base(&ntype, CMP_NODE_ID_MASK, "ID Mask", NODE_CLASS_CONVERTER);
   ntype.declare = file_ns::cmp_node_idmask_declare;
   ntype.draw_buttons = file_ns::node_composit_buts_id_mask;
   ntype.get_compositor_operation = file_ns::get_compositor_operation;
 
-  nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }

@@ -13,7 +13,6 @@
 
 struct BMLoop;
 struct MemArena;
-struct MLoopTri;
 
 /* UvVertMap */
 #define STD_UV_CONNECT_LIMIT 0.0001f
@@ -25,27 +24,29 @@ struct UvMapVert {
   bool separate;
 };
 
-/* Map from uv vertex to face. Used by select linked, uv subdivision-surface and obj exporter. */
+/** Map from UV vertex to face. Used by select linked, UV subdivision-surface and obj exporter. */
 struct UvVertMap {
   UvMapVert **vert;
   UvMapVert *buf;
 };
 
-/* UvElement stores per uv information so that we can quickly access information for a uv.
+/**
+ * UvElement stores per uv information so that we can quickly access information for a uv.
  * it is actually an improved UvMapVert, including an island and a direct pointer to the face
- * to avoid initializing face arrays */
+ * to avoid initializing face arrays.
+ */
 struct UvElement {
-  /* Next UvElement corresponding to same vertex */
+  /** Next UvElement corresponding to same vertex */
   UvElement *next;
-  /* Face the element belongs to */
+  /** Face the element belongs to */
   BMLoop *l;
-  /* index in loop. */
+  /** Index in loop. */
   unsigned short loop_of_face_index;
-  /* Whether this element is the first of coincident elements */
+  /** Whether this element is the first of coincident elements */
   bool separate;
-  /* general use flag */
+  /** general use flag. */
   unsigned char flag;
-  /* If generating element map with island sorting, this stores the island index */
+  /** If generating element map with island sorting, this stores the island index */
   unsigned int island;
 };
 
@@ -113,16 +114,16 @@ void BKE_mesh_uv_vert_map_free(UvVertMap *vmap);
 
 /**
  * Generates a map where the key is the edge and the value
- * is a list of looptris that use that edge.
+ * is a list of corner_tris that use that edge.
  * The lists are allocated from one memory pool.
  */
-void BKE_mesh_vert_looptri_map_create(MeshElemMap **r_map,
-                                      int **r_mem,
-                                      int totvert,
-                                      const MLoopTri *mlooptri,
-                                      int totlooptri,
-                                      const int *corner_verts,
-                                      int totloop);
+void BKE_mesh_vert_corner_tri_map_create(MeshElemMap **r_map,
+                                         int **r_mem,
+                                         int totvert,
+                                         const blender::int3 *corner_tris,
+                                         int tris_num,
+                                         const int *corner_verts,
+                                         int corners_num);
 /**
  * This function creates a map so the source-data (vert/edge/loop/face)
  * can loop over the destination data (using the destination arrays origindex).
@@ -140,14 +141,14 @@ void BKE_mesh_vert_looptri_map_create(MeshElemMap **r_map,
 void BKE_mesh_origindex_map_create(
     MeshElemMap **r_map, int **r_mem, int totsource, const int *final_origindex, int totfinal);
 /**
- * A version of #BKE_mesh_origindex_map_create that takes a looptri array.
- * Making a face -> looptri map.
+ * A version of #BKE_mesh_origindex_map_create that takes a corner tri array.
+ * Making a face -> corner tri map.
  */
-void BKE_mesh_origindex_map_create_looptri(MeshElemMap **r_map,
-                                           int **r_mem,
-                                           blender::OffsetIndices<int> faces,
-                                           const int *looptri_faces,
-                                           int looptri_num);
+void BKE_mesh_origindex_map_create_corner_tri(MeshElemMap **r_map,
+                                              int **r_mem,
+                                              blender::OffsetIndices<int> faces,
+                                              const int *corner_tri_faces,
+                                              int corner_tris_num);
 
 /* islands */
 
@@ -199,7 +200,7 @@ using MeshRemapIslandsCalc = bool (*)(const float (*vert_positions)[3],
                                       blender::OffsetIndices<int> faces,
                                       const int *corner_verts,
                                       const int *corner_edges,
-                                      int totloop,
+                                      int corners_num,
                                       MeshIslandStore *r_island_store);
 
 /* Above vert/UV mapping stuff does not do what we need here, but does things we do not need here.
@@ -217,7 +218,7 @@ bool BKE_mesh_calc_islands_loop_face_edgeseam(const float (*vert_positions)[3],
                                               blender::OffsetIndices<int> faces,
                                               const int *corner_verts,
                                               const int *corner_edges,
-                                              int totloop,
+                                              int corners_num,
                                               MeshIslandStore *r_island_store);
 
 /**
@@ -241,13 +242,15 @@ bool BKE_mesh_calc_islands_loop_face_uvmap(float (*vert_positions)[3],
                                            blender::OffsetIndices<int> faces,
                                            const int *corner_verts,
                                            const int *corner_edges,
-                                           int totloop,
+                                           int corners_num,
                                            const float (*luvs)[2],
                                            MeshIslandStore *r_island_store);
 
 /**
  * Calculate smooth groups from sharp edges.
  *
+ * \param sharp_edges: Optional (possibly empty) span.
+ * \param sharp_faces: Optional (possibly empty) span.
  * \param r_totgroup: The total number of groups, 1 or more.
  * \return Polygon aligned array of group index values (bitflags if use_bitflags is true),
  * starting at 1 (0 being used as 'invalid' flag).
@@ -256,12 +259,12 @@ bool BKE_mesh_calc_islands_loop_face_uvmap(float (*vert_positions)[3],
 int *BKE_mesh_calc_smoothgroups(int edges_num,
                                 blender::OffsetIndices<int> faces,
                                 blender::Span<int> corner_edges,
-                                const bool *sharp_edges,
-                                const bool *sharp_faces,
+                                blender::Span<bool> sharp_edges,
+                                blender::Span<bool> sharp_faces,
                                 int *r_totgroup,
                                 bool use_bitflags);
 
-/* use on looptri vertex values */
+/* Use on corner_tri vertex values. */
 #define BKE_MESH_TESSTRI_VINDEX_ORDER(_tri, _v) \
   ((CHECK_TYPE_ANY( \
         _tri, unsigned int *, int *, int[3], const unsigned int *, const int *, const int[3]), \
@@ -273,7 +276,7 @@ int *BKE_mesh_calc_smoothgroups(int edges_num,
 
 namespace blender::bke::mesh {
 
-Array<int> build_loop_to_face_map(OffsetIndices<int> faces);
+Array<int> build_corner_to_face_map(OffsetIndices<int> faces);
 
 GroupedSpan<int> build_vert_to_edge_map(Span<int2> edges,
                                         int verts_num,
@@ -291,15 +294,15 @@ GroupedSpan<int> build_vert_to_face_map(OffsetIndices<int> faces,
                                         Array<int> &r_indices);
 
 Array<int> build_vert_to_corner_indices(Span<int> corner_verts, OffsetIndices<int> offsets);
-GroupedSpan<int> build_vert_to_loop_map(Span<int> corner_verts,
-                                        int verts_num,
-                                        Array<int> &r_offsets,
-                                        Array<int> &r_indices);
+GroupedSpan<int> build_vert_to_corner_map(Span<int> corner_verts,
+                                          int verts_num,
+                                          Array<int> &r_offsets,
+                                          Array<int> &r_indices);
 
-GroupedSpan<int> build_edge_to_loop_map(Span<int> corner_edges,
-                                        int edges_num,
-                                        Array<int> &r_offsets,
-                                        Array<int> &r_indices);
+GroupedSpan<int> build_edge_to_corner_map(Span<int> corner_edges,
+                                          int edges_num,
+                                          Array<int> &r_offsets,
+                                          Array<int> &r_indices);
 
 GroupedSpan<int> build_edge_to_face_map(OffsetIndices<int> faces,
                                         Span<int> corner_edges,

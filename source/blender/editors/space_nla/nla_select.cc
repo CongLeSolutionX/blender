@@ -14,12 +14,9 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_blenlib.h"
 #include "BLI_math_base.h"
 
-#include "BKE_context.hh"
-#include "BKE_nla.h"
-#include "BKE_screen.hh"
+#include "BKE_nla.hh"
 
 #include "ED_anim_api.hh"
 #include "ED_keyframes_edit.hh"
@@ -32,7 +29,6 @@
 #include "WM_api.hh"
 #include "WM_types.hh"
 
-#include "UI_interface.hh"
 #include "UI_view2d.hh"
 
 #include "nla_intern.hh" /* own include */
@@ -241,7 +237,8 @@ static void box_select_nla_strips(bAnimContext *ac, rcti rect, short mode, short
         /* only select strips if they fall within the required ranges (if applicable) */
         LISTBASE_FOREACH (NlaStrip *, strip, &nlt->strips) {
           if ((mode == NLA_BOXSEL_CHANNELS) ||
-              BKE_nlastrip_within_bounds(strip, rectf.xmin, rectf.xmax)) {
+              BKE_nlastrip_within_bounds(strip, rectf.xmin, rectf.xmax))
+          {
             /* set selection */
             ACHANNEL_SET_FLAG(strip, selectmode, NLASTRIP_FLAG_SELECT);
 

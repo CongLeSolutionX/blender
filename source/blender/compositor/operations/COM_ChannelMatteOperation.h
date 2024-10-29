@@ -14,8 +14,6 @@ namespace blender::compositor {
  */
 class ChannelMatteOperation : public MultiThreadedOperation {
  private:
-  SocketReader *input_image_program_;
-
   // int color_space_; /* node->custom1 */ /* UNUSED */ /* TODO? */
   int matte_channel_; /* node->custom2 */
   int limit_method_;  /* node->algorithm */
@@ -27,28 +25,19 @@ class ChannelMatteOperation : public MultiThreadedOperation {
 
   /**
    * ids to use for the operations (max and simple)
-   * alpha = in[ids[0]] - MAX2(in[ids[1]], in[ids[2]])
+   * alpha = in[ids[0]] - std::max(in[ids[1]], in[ids[2]])
    * the simple operation is using:
    * alpha = in[ids[0]] - in[ids[1]]
    * but to use the same formula and operation for both we do:
    * ids[2] = ids[1]
-   * alpha = in[ids[0]] - MAX2(in[ids[1]], in[ids[2]])
+   * alpha = in[ids[0]] - std::max(in[ids[1]], in[ids[2]])
    */
   int ids_[3];
 
  public:
-  /**
-   * Default constructor
-   */
   ChannelMatteOperation();
 
-  /**
-   * The inner loop of this operation.
-   */
-  void execute_pixel_sampled(float output[4], float x, float y, PixelSampler sampler) override;
-
   void init_execution() override;
-  void deinit_execution() override;
 
   void set_settings(NodeChroma *node_chroma, const int custom2)
   {

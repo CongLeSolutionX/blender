@@ -32,14 +32,14 @@
 
 #include "BLI_scanfill.h" /* own include */
 
-#include "BLI_strict_flags.h"
+#include "BLI_strict_flags.h" /* Keep last. */
 
 /* local types */
 typedef struct PolyFill {
   uint edges, verts;
   float min_xy[2], max_xy[2];
   ushort nr;
-  bool f;
+  uchar f;
 } PolyFill;
 
 typedef struct ScanFillVertLink {
@@ -52,19 +52,19 @@ typedef struct ScanFillVertLink {
 #define SF_EPSILON 0.00003f
 #define SF_EPSILON_SQ (SF_EPSILON * SF_EPSILON)
 
-/** #ScanFillVert.status */
+/** #ScanFillVert::f (status) */
 #define SF_VERT_NEW 0       /* all new verts have this flag set */
 #define SF_VERT_AVAILABLE 1 /* available - in an edge */
 #define SF_VERT_ZERO_LEN 2
 
-/** #ScanFillEdge.status */
+/** #ScanFillEdge::f (status) */
 /* Optionally set ScanFillEdge f to this to mark original boundary edges.
  * Only needed if there are internal diagonal edges passed to BLI_scanfill_calc. */
 #define SF_EDGE_NEW 0 /* all new edges have this flag set */
 // #define SF_EDGE_BOUNDARY 1  /* UNUSED */
 #define SF_EDGE_INTERNAL 2 /* edge is created while scan-filling */
 
-/** #PolyFill.status */
+/** #PolyFill::f (status) */
 #define SF_POLY_NEW 0   /* all polys initialized to this */
 #define SF_POLY_VALID 1 /* has at least 3 verts */
 
@@ -348,7 +348,7 @@ static ScanFillVertLink *addedgetoscanlist(ScanFillVertLink *scdata, ScanFillEdg
 /**
  * Return true if `eve` inside the bound-box of `eed`.
  */
-static bool boundinsideEV(ScanFillEdge *eed, ScanFillVert *eve)
+static bool boundinsideEV(const ScanFillEdge *eed, const ScanFillVert *eve)
 {
   float minx, maxx, miny, maxy;
 
@@ -545,14 +545,16 @@ static uint scanfill(ScanFillContext *sf_ctx, PolyFill *pf, const int flag)
       if (eed->v1->f == SF_VERT_ZERO_LEN) {
         v1 = eed->v1;
         while ((eed->v1->f == SF_VERT_ZERO_LEN) && (eed->v1->tmp.v != v1) &&
-               (eed->v1 != eed->v1->tmp.v)) {
+               (eed->v1 != eed->v1->tmp.v))
+        {
           eed->v1 = eed->v1->tmp.v;
         }
       }
       if (eed->v2->f == SF_VERT_ZERO_LEN) {
         v2 = eed->v2;
         while ((eed->v2->f == SF_VERT_ZERO_LEN) && (eed->v2->tmp.v != v2) &&
-               (eed->v2 != eed->v2->tmp.v)) {
+               (eed->v2 != eed->v2->tmp.v))
+        {
           eed->v2 = eed->v2->tmp.v;
         }
       }
@@ -842,7 +844,7 @@ uint BLI_scanfill_calc_ex(ScanFillContext *sf_ctx, const int flag, const float n
 
   BLI_assert(!nor_proj || len_squared_v3(nor_proj) > FLT_EPSILON);
 
-#ifdef DEBUG
+#ifndef NDEBUG
   for (eve = sf_ctx->fillvertbase.first; eve; eve = eve->next) {
     /* these values used to be set,
      * however they should always be zero'd so check instead */
@@ -984,7 +986,7 @@ uint BLI_scanfill_calc_ex(ScanFillContext *sf_ctx, const int flag, const float n
     }
     if (eed) {
       /* otherwise it's impossible to be sure you can clear vertices */
-#ifdef DEBUG
+#ifndef NDEBUG
       printf("No vertices with 250 edges allowed!\n");
 #endif
       return 0;
@@ -1027,7 +1029,7 @@ uint BLI_scanfill_calc_ex(ScanFillContext *sf_ctx, const int flag, const float n
       eed->v1->edge_count++;
       eed->v2->edge_count++;
     }
-#ifdef DEBUG
+#ifndef NDEBUG
     /* ensure we're right! */
     for (eed = sf_ctx->filledgebase.first; eed; eed = eed->next) {
       BLI_assert(eed->v1->edge_count != 1);

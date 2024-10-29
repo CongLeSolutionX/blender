@@ -7,11 +7,13 @@
  * \ingroup bke
  */
 #include "BLI_compiler_attrs.h"
+#include "BLI_function_ref.hh"
 #include "BLI_math_matrix_types.hh"
+#include "BLI_span.hh"
 
-#include "DNA_modifier_types.h" /* needed for all enum typdefs */
+#include "DNA_modifier_types.h" /* Needed for all enum type definitions. */
 
-#include "BKE_customdata.hh"
+#include "DNA_customdata_types.h"
 
 namespace blender::bke {
 struct GeometrySet;
@@ -30,8 +32,11 @@ struct Main;
 struct Mesh;
 struct ModifierData;
 struct Object;
+struct PointerRNA;
+struct PropertyRNA;
 struct Scene;
 struct StructRNA;
+struct IDCacheKey;
 
 enum class ModifierTypeType {
   /* Should not be used, only for None modifier type */
@@ -67,6 +72,22 @@ enum class ModifierTypeType {
 enum ModifierTypeFlag {
   eModifierTypeFlag_AcceptsMesh = (1 << 0),
   eModifierTypeFlag_AcceptsCVs = (1 << 1),
+  /**
+   * Modifiers that enable this flag can have the modifiers "On Cage" option toggled,
+   * see: #eModifierMode_OnCage, where the output of the modifier can be selected directly.
+   * In some cases the cage geometry use read to tool code as well (loop-cut & knife are examples).
+   *
+   * When set, geometry from the resulting mesh can be mapped back to the original indices
+   * via #CD_ORIGINDEX.
+   *
+   * While many modifiers using this flag preserve the order of geometry arrays,
+   * this isn't always the case, this flag doesn't imply #ModifierTypeType::OnlyDeform.
+   * Geometry from the original mesh may be removed from the resulting mesh or new geometry
+   * may be added (where the #CD_ORIGINDEX value will be #ORIGINDEX_NONE).
+   *
+   * Modifiers that create entirely new geometry from the input should not enable this flag
+   * because none of the geometry will be selectable when "On Cage" is enabled.
+   */
   eModifierTypeFlag_SupportsMapping = (1 << 2),
   eModifierTypeFlag_SupportsEditmode = (1 << 3),
 
@@ -81,7 +102,7 @@ enum ModifierTypeFlag {
 
   /**
    * For modifiers that require original data and so cannot
-   * be placed after any non-deformative modifier.
+   * be placed after any non-deforming modifier.
    */
   eModifierTypeFlag_RequiresOriginalData = (1 << 5),
 
@@ -97,8 +118,6 @@ enum ModifierTypeFlag {
   /** Some modifier can't be added manually by user */
   eModifierTypeFlag_NoUserAdd = (1 << 8),
 
-  /** For modifiers that use CD_PREVIEW_MCOL for preview. */
-  eModifierTypeFlag_UsesPreview = (1 << 9),
   eModifierTypeFlag_AcceptsVertexCosOnly = (1 << 10),
 
   /** Accepts #BMesh input (without conversion). */
@@ -107,10 +126,14 @@ enum ModifierTypeFlag {
   /** Accepts #GreasePencil data input. */
   eModifierTypeFlag_AcceptsGreasePencil = (1 << 12),
 };
-ENUM_OPERATORS(ModifierTypeFlag, eModifierTypeFlag_AcceptsBMesh)
+ENUM_OPERATORS(ModifierTypeFlag, eModifierTypeFlag_AcceptsGreasePencil)
 
 using IDWalkFunc = void (*)(void *user_data, Object *ob, ID **idpoin, int cb_flag);
-using TexWalkFunc = void (*)(void *user_data, Object *ob, ModifierData *md, const char *propname);
+using TexWalkFunc = void (*)(void *user_data,
+                             Object *ob,
+                             ModifierData *md,
+                             const PointerRNA *ptr,
+                             PropertyRNA *texture_prop);
 
 enum ModifierApplyFlag {
   /** Render time. */
@@ -123,13 +146,13 @@ enum ModifierApplyFlag {
   /** Ignore scene simplification flag and use subdivisions
    * level set in multires modifier. */
   MOD_APPLY_IGNORE_SIMPLIFY = 1 << 3,
-  /** The effect of this modifier will be applied to the base mesh
+  /** The effect of this modifier will be applied to the original geometry
    * The modifier itself will be removed from the modifier stack.
    * This flag can be checked to ignore rendering display data to the mesh.
    * See `OBJECT_OT_modifier_apply` operator. */
-  MOD_APPLY_TO_BASE_MESH = 1 << 4,
+  MOD_APPLY_TO_ORIGINAL = 1 << 4,
 };
-ENUM_OPERATORS(ModifierApplyFlag, MOD_APPLY_TO_BASE_MESH);
+ENUM_OPERATORS(ModifierApplyFlag, MOD_APPLY_TO_ORIGINAL);
 
 struct ModifierUpdateDepsgraphContext {
   Scene *scene;
@@ -148,15 +171,15 @@ struct ModifierEvalContext {
 struct ModifierTypeInfo {
   /* A unique identifier for this modifier. Used to generate the panel id type name.
    * See #BKE_modifier_type_panel_id. */
-  char idname[32];
+  char idname[64];
 
   /* The user visible name for this modifier */
-  char name[32];
+  char name[64];
 
   /* The DNA struct name for the modifier data type, used to
    * write the DNA data out.
    */
-  char struct_name[32];
+  char struct_name[64];
 
   /* The size of the modifier data type, used by allocation. */
   int struct_size;
@@ -176,15 +199,15 @@ struct ModifierTypeInfo {
    * Copy instance data for this modifier type. Should copy all user
    * level settings to the target modifier.
    *
-   * \param flag: Copying options (see BKE_lib_id.h's LIB_ID_COPY_... flags for more).
+   * \param flag: Copying options (see BKE_lib_id.hh's LIB_ID_COPY_... flags for more).
    */
   void (*copy_data)(const ModifierData *md, ModifierData *target, int flag);
 
   /********************* Deform modifier functions *********************/
 
   /**
-   * Apply a deformation to the positions in the \a vertexCos array. If the \a mesh argument is
-   * non-null, if will contain proper (not wrapped) mesh data. The \a vertexCos array may or may
+   * Apply a deformation to the positions in the \a positions array. If the \a mesh argument is
+   * non-null, if will contain proper (not wrapped) mesh data. The \a positions array may or may
    * not be the same as the mesh's position attribute.
    */
   void (*deform_verts)(ModifierData *md,
@@ -206,14 +229,14 @@ struct ModifierTypeInfo {
    */
   void (*deform_verts_EM)(ModifierData *md,
                           const ModifierEvalContext *ctx,
-                          BMEditMesh *em,
+                          const BMEditMesh *em,
                           Mesh *mesh,
                           blender::MutableSpan<blender::float3> positions);
 
   /* Set deform matrix per vertex for crazy-space correction */
   void (*deform_matrices_EM)(ModifierData *md,
                              const ModifierEvalContext *ctx,
-                             BMEditMesh *em,
+                             const BMEditMesh *em,
                              Mesh *mesh,
                              blender::MutableSpan<blender::float3> positions,
                              blender::MutableSpan<blender::float3x3> matrices);
@@ -305,12 +328,9 @@ struct ModifierTypeInfo {
   bool (*depends_on_time)(Scene *scene, ModifierData *md);
 
   /**
-   * True when a deform modifier uses normals, the required_data_mask
-   * can't be used here because that refers to a normal layer whereas
-   * in this case we need to know if the deform modifier uses normals.
-   *
-   * this is needed because applying 2 deform modifiers will give the
-   * second modifier bogus normals.
+   * Returns true when a deform modifier uses mesh normals as input. This callback is only required
+   * for deform modifiers that support deforming positions with an edit mesh (when #deform_verts_EM
+   * is implemented).
    */
   bool (*depends_on_normals)(ModifierData *md);
 
@@ -366,6 +386,14 @@ struct ModifierTypeInfo {
    * not been written (e.g. runtime data) can be reset.
    */
   void (*blend_read)(BlendDataReader *reader, ModifierData *md);
+
+  /**
+   * Iterate over all cache pointers of given modifier. Also see #IDTypeInfo::foreach_cache.
+   */
+  void (*foreach_cache)(
+      Object *object,
+      ModifierData *md,
+      blender::FunctionRef<void(const IDCacheKey &cache_key, void **cache_p, uint flags)> fn);
 };
 
 /* Used to set a modifier's panel type. */
@@ -395,9 +423,6 @@ void BKE_modifier_free(ModifierData *md);
  * Use instead of `BLI_remlink` when the object's active modifier should change.
  */
 void BKE_modifier_remove_from_list(Object *ob, ModifierData *md);
-
-/* Generate new UUID for the given modifier. */
-void BKE_modifier_session_uuid_generate(ModifierData *md);
 
 void BKE_modifier_unique_name(ListBase *modifiers, ModifierData *md);
 
@@ -442,15 +467,25 @@ void BKE_modifier_set_error(const Object *ob, ModifierData *md, const char *form
 void BKE_modifier_set_warning(const Object *ob, ModifierData *md, const char *format, ...)
     ATTR_PRINTF_FORMAT(3, 4);
 
-bool BKE_modifier_is_preview(ModifierData *md);
-
 void BKE_modifiers_foreach_ID_link(Object *ob, IDWalkFunc walk, void *user_data);
 void BKE_modifiers_foreach_tex_link(Object *ob, TexWalkFunc walk, void *user_data);
 
 ModifierData *BKE_modifiers_findby_type(const Object *ob, ModifierType type);
 ModifierData *BKE_modifiers_findby_name(const Object *ob, const char *name);
-ModifierData *BKE_modifiers_findby_session_uuid(const Object *ob, const SessionUUID *session_uuid);
+ModifierData *BKE_modifiers_findby_persistent_uid(const Object *ob, int persistent_uid);
+
 void BKE_modifiers_clear_errors(Object *ob);
+
+/**
+ * Updates `md.persistent_uid` so that it is a valid identifier (>=1) and is unique in the object.
+ */
+void BKE_modifiers_persistent_uid_init(const Object &object, ModifierData &md);
+/**
+ * Returns true when all the modifier identifiers are positive and unique. This should generally be
+ * true and should only be used by asserts.
+ */
+bool BKE_modifiers_persistent_uids_are_valid(const Object &object);
+
 /**
  * used for buttons, to find out if the 'draw deformed in edit-mode option is there.
  *
@@ -461,11 +496,6 @@ int BKE_modifiers_get_cage_index(const Scene *scene,
                                  Object *ob,
                                  int *r_lastPossibleCageIndex,
                                  bool is_virtual);
-
-bool BKE_modifiers_is_modifier_enabled(Object *ob, int modifierType);
-bool BKE_modifiers_is_softbody_enabled(Object *ob);
-bool BKE_modifiers_is_cloth_enabled(Object *ob);
-bool BKE_modifiers_is_particle_enabled(Object *ob);
 
 /**
  * Takes an object and returns its first selected armature, else just its armature.
@@ -502,12 +532,7 @@ struct CDMaskLink {
 CDMaskLink *BKE_modifier_calc_data_masks(const Scene *scene,
                                          ModifierData *md,
                                          CustomData_MeshMasks *final_datamask,
-                                         int required_mode,
-                                         ModifierData *previewmd,
-                                         const CustomData_MeshMasks *previewmask);
-ModifierData *BKE_modifier_get_last_preview(const Scene *scene,
-                                            ModifierData *md,
-                                            int required_mode);
+                                         int required_mode);
 
 struct VirtualModifierData {
   ArmatureModifierData amd;
@@ -550,28 +575,26 @@ ModifierData *BKE_modifier_get_evaluated(Depsgraph *depsgraph, Object *object, M
 
 /* wrappers for modifier callbacks that ensure valid normals */
 
-Mesh *BKE_modifier_modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *me);
+Mesh *BKE_modifier_modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *mesh);
 
 void BKE_modifier_deform_verts(ModifierData *md,
                                const ModifierEvalContext *ctx,
-                               Mesh *me,
+                               Mesh *mesh,
                                blender::MutableSpan<blender::float3> positions);
 
 void BKE_modifier_deform_vertsEM(ModifierData *md,
                                  const ModifierEvalContext *ctx,
-                                 BMEditMesh *em,
-                                 Mesh *me,
+                                 const BMEditMesh *em,
+                                 Mesh *mesh,
                                  blender::MutableSpan<blender::float3> positions);
 
 /**
  * Get evaluated mesh for other evaluated object, which is used as an operand for the modifier,
  * e.g. second operand for boolean modifier.
- * Note that modifiers in stack always get fully evaluated COW ID pointers,
+ * Note that modifiers in stack always get fully evaluated ID pointers,
  * never original ones. Makes things simpler.
  */
 Mesh *BKE_modifier_get_evaluated_mesh_from_evaluated_object(Object *ob_eval);
-
-void BKE_modifier_check_uuids_unique_and_report(const Object *object);
 
 void BKE_modifier_blend_write(BlendWriter *writer, const ID *id_owner, ListBase *modbase);
 void BKE_modifier_blend_read_data(BlendDataReader *reader, ListBase *lb, Object *ob);

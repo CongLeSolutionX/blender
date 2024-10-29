@@ -8,26 +8,23 @@
 
 #pragma once
 
-#include <algorithm>
-
+#include "BLI_math_matrix_types.hh"
 #include "BLI_utildefines.h"
 
-#include "DNA_customdata_types.h"
-#include "DNA_mesh_types.h"
-#include "DNA_view3d_enums.h"
-
-#include "BKE_attribute.h"
-#include "BKE_object.hh"
-
-#include "GPU_batch.h"
-#include "GPU_index_buffer.h"
-#include "GPU_vertex_buffer.h"
+#include "GPU_shader.hh"
 
 #include "draw_attributes.hh"
 
-struct DRWSubdivCache;
-struct MeshRenderData;
+namespace blender::gpu {
+class Batch;
+class IndexBuf;
+}  // namespace blender::gpu
 struct TaskGraph;
+
+namespace blender::draw {
+
+struct MeshRenderData;
+struct DRWSubdivCache;
 
 /* Vertex Group Selection and display options */
 struct DRW_MeshWeightState {
@@ -53,131 +50,103 @@ enum {
   DRW_MESH_WEIGHT_STATE_LOCK_RELATIVE = (1 << 2),
 };
 
-enum eMRIterType {
-  MR_ITER_LOOPTRI = 1 << 0,
-  MR_ITER_POLY = 1 << 1,
-  MR_ITER_LOOSE_EDGE = 1 << 2,
-  MR_ITER_LOOSE_VERT = 1 << 3,
-};
-ENUM_OPERATORS(eMRIterType, MR_ITER_LOOSE_VERT)
-
-enum eMRDataType {
-  MR_DATA_NONE = 0,
-  MR_DATA_POLY_NOR = 1 << 1,
-  MR_DATA_LOOP_NOR = 1 << 2,
-  MR_DATA_LOOPTRI = 1 << 3,
-  MR_DATA_LOOSE_GEOM = 1 << 4,
-  /** Force loop normals calculation. */
-  MR_DATA_TAN_LOOP_NOR = 1 << 5,
-  MR_DATA_POLYS_SORTED = 1 << 6,
-};
-ENUM_OPERATORS(eMRDataType, MR_DATA_POLYS_SORTED)
-
-BLI_INLINE int mesh_render_mat_len_get(const Object *object, const Mesh *me)
-{
-  if (me->edit_mesh != NULL) {
-    const Mesh *editmesh_eval_final = BKE_object_get_editmesh_eval_final(object);
-    if (editmesh_eval_final != NULL) {
-      return std::max<int>(1, editmesh_eval_final->totcol);
-    }
-  }
-  return std::max<int>(1, me->totcol);
-}
+int mesh_render_mat_len_get(const Object &object, const Mesh &mesh);
 
 struct MeshBufferList {
   /* Every VBO below contains at least enough data for every loop in the mesh
    * (except fdots and skin roots). For some VBOs, it extends to (in this exact order) :
    * loops + loose_edges * 2 + loose_verts */
   struct {
-    GPUVertBuf *pos_nor;  /* extend */
-    GPUVertBuf *lnor;     /* extend */
-    GPUVertBuf *edge_fac; /* extend */
-    GPUVertBuf *weights;  /* extend */
-    GPUVertBuf *uv;
-    GPUVertBuf *tan;
-    GPUVertBuf *sculpt_data;
-    GPUVertBuf *orco;
+    gpu::VertBuf *pos;      /* extend */
+    gpu::VertBuf *nor;      /* extend */
+    gpu::VertBuf *edge_fac; /* extend */
+    gpu::VertBuf *weights;  /* extend */
+    gpu::VertBuf *uv;
+    gpu::VertBuf *tan;
+    gpu::VertBuf *sculpt_data;
+    gpu::VertBuf *orco;
     /* Only for edit mode. */
-    GPUVertBuf *edit_data; /* extend */
-    GPUVertBuf *edituv_data;
-    GPUVertBuf *edituv_stretch_area;
-    GPUVertBuf *edituv_stretch_angle;
-    GPUVertBuf *mesh_analysis;
-    GPUVertBuf *fdots_pos;
-    GPUVertBuf *fdots_nor;
-    GPUVertBuf *fdots_uv;
-    // GPUVertBuf *fdots_edit_data; /* inside fdots_nor for now. */
-    GPUVertBuf *fdots_edituv_data;
-    GPUVertBuf *skin_roots;
+    gpu::VertBuf *edit_data; /* extend */
+    gpu::VertBuf *edituv_data;
+    gpu::VertBuf *edituv_stretch_area;
+    gpu::VertBuf *edituv_stretch_angle;
+    gpu::VertBuf *mesh_analysis;
+    gpu::VertBuf *fdots_pos;
+    gpu::VertBuf *fdots_nor;
+    gpu::VertBuf *fdots_uv;
+    // gpu::VertBuf *fdots_edit_data; /* inside fdots_nor for now. */
+    gpu::VertBuf *fdots_edituv_data;
+    gpu::VertBuf *skin_roots;
     /* Selection */
-    GPUVertBuf *vert_idx; /* extend */
-    GPUVertBuf *edge_idx; /* extend */
-    GPUVertBuf *face_idx;
-    GPUVertBuf *fdot_idx;
-    GPUVertBuf *attr[GPU_MAX_ATTR];
-    GPUVertBuf *attr_viewer;
+    gpu::VertBuf *vert_idx; /* extend */
+    gpu::VertBuf *edge_idx; /* extend */
+    gpu::VertBuf *face_idx;
+    gpu::VertBuf *fdot_idx;
+    gpu::VertBuf *attr[GPU_MAX_ATTR];
+    gpu::VertBuf *attr_viewer;
+    gpu::VertBuf *vnor;
   } vbo;
   /* Index Buffers:
    * Only need to be updated when topology changes. */
   struct {
     /* Indices to vloops. Ordered per material. */
-    GPUIndexBuf *tris;
+    gpu::IndexBuf *tris;
     /* Loose edges last. */
-    GPUIndexBuf *lines;
-    /* Sub buffer of `lines` only containing the loose edges. */
-    GPUIndexBuf *lines_loose;
-    GPUIndexBuf *points;
-    GPUIndexBuf *fdots;
+    gpu::IndexBuf *lines;
+    /* Potentially a sub buffer of `lines` only containing the loose edges. */
+    gpu::IndexBuf *lines_loose;
+    gpu::IndexBuf *points;
+    gpu::IndexBuf *fdots;
     /* 3D overlays. */
     /* no loose edges. */
-    GPUIndexBuf *lines_paint_mask;
-    GPUIndexBuf *lines_adjacency;
-    /* Uv overlays. (visibility can differ from 3D view) */
-    GPUIndexBuf *edituv_tris;
-    GPUIndexBuf *edituv_lines;
-    GPUIndexBuf *edituv_points;
-    GPUIndexBuf *edituv_fdots;
+    gpu::IndexBuf *lines_paint_mask;
+    gpu::IndexBuf *lines_adjacency;
+    /** UV overlays. (visibility can differ from 3D view). */
+    gpu::IndexBuf *edituv_tris;
+    gpu::IndexBuf *edituv_lines;
+    gpu::IndexBuf *edituv_points;
+    gpu::IndexBuf *edituv_fdots;
   } ibo;
 };
 
 struct MeshBatchList {
   /* Surfaces / Render */
-  GPUBatch *surface;
-  GPUBatch *surface_weights;
+  gpu::Batch *surface;
+  gpu::Batch *surface_weights;
   /* Edit mode */
-  GPUBatch *edit_triangles;
-  GPUBatch *edit_vertices;
-  GPUBatch *edit_edges;
-  GPUBatch *edit_vnor;
-  GPUBatch *edit_lnor;
-  GPUBatch *edit_fdots;
-  GPUBatch *edit_mesh_analysis;
-  GPUBatch *edit_skin_roots;
+  gpu::Batch *edit_triangles;
+  gpu::Batch *edit_vertices;
+  gpu::Batch *edit_edges;
+  gpu::Batch *edit_vnor;
+  gpu::Batch *edit_lnor;
+  gpu::Batch *edit_fdots;
+  gpu::Batch *edit_mesh_analysis;
+  gpu::Batch *edit_skin_roots;
   /* Edit UVs */
-  GPUBatch *edituv_faces_stretch_area;
-  GPUBatch *edituv_faces_stretch_angle;
-  GPUBatch *edituv_faces;
-  GPUBatch *edituv_edges;
-  GPUBatch *edituv_verts;
-  GPUBatch *edituv_fdots;
+  gpu::Batch *edituv_faces_stretch_area;
+  gpu::Batch *edituv_faces_stretch_angle;
+  gpu::Batch *edituv_faces;
+  gpu::Batch *edituv_edges;
+  gpu::Batch *edituv_verts;
+  gpu::Batch *edituv_fdots;
   /* Edit selection */
-  GPUBatch *edit_selection_verts;
-  GPUBatch *edit_selection_edges;
-  GPUBatch *edit_selection_faces;
-  GPUBatch *edit_selection_fdots;
+  gpu::Batch *edit_selection_verts;
+  gpu::Batch *edit_selection_edges;
+  gpu::Batch *edit_selection_faces;
+  gpu::Batch *edit_selection_fdots;
   /* Common display / Other */
-  GPUBatch *all_verts;
-  GPUBatch *all_edges;
-  GPUBatch *loose_edges;
-  GPUBatch *edge_detection;
+  gpu::Batch *all_verts;
+  gpu::Batch *all_edges;
+  gpu::Batch *loose_edges;
+  gpu::Batch *edge_detection;
   /* Individual edges with face normals. */
-  GPUBatch *wire_edges;
+  gpu::Batch *wire_edges;
   /* Loops around faces. no edges between selected faces */
-  GPUBatch *wire_loops;
+  gpu::Batch *wire_loops;
   /* Same as wire_loops but only has uvs. */
-  GPUBatch *wire_loops_uvs;
-  GPUBatch *sculpt_overlays;
-  GPUBatch *surface_viewer_attribute;
+  gpu::Batch *wire_loops_uvs;
+  gpu::Batch *sculpt_overlays;
+  gpu::Batch *surface_viewer_attribute;
 };
 
 #define MBC_BATCH_LEN (sizeof(MeshBatchList) / sizeof(void *))
@@ -224,18 +193,21 @@ BLI_STATIC_ASSERT(MBC_BATCH_LEN < 32, "Number of batches exceeded the limit of b
 
 struct MeshExtractLooseGeom {
   /** Indices of all vertices not used by edges in the #Mesh or #BMesh. */
-  blender::Array<int> verts;
+  Array<int> verts;
   /** Indices of all edges not used by faces in the #Mesh or #BMesh. */
-  blender::Array<int> edges;
+  Array<int> edges;
 };
 
 struct SortedFaceData {
-  /** The first triangle index for each polygon, sorted into slices by material. */
-  blender::Array<int> tri_first_index;
+  /* The total number of visible triangles (a sum of the values in #mat_tri_counts). */
+  int visible_tris_num;
   /** The number of visible triangles assigned to each material. */
-  blender::Array<int> mat_tri_len;
-  /* The total number of visible triangles (a sum of the values in #mat_tri_len). */
-  int visible_tri_len;
+  Array<int> tris_num_by_material;
+  /**
+   * The first triangle index for each face, sorted into slices by material.
+   * May be empty if the mesh only has a single material.
+   */
+  std::optional<Array<int>> face_tri_offsets;
 };
 
 /**
@@ -256,7 +228,7 @@ struct MeshBufferCache {
        mbc == &batch_cache.final || mbc == &batch_cache.cage || mbc == &batch_cache.uv_cage; \
        mbc = (mbc == &batch_cache.final) ? \
                  &batch_cache.cage : \
-                 ((mbc == &batch_cache.cage) ? &batch_cache.uv_cage : NULL))
+                 ((mbc == &batch_cache.cage) ? &batch_cache.uv_cage : nullptr))
 
 struct MeshBatchCache {
   MeshBufferCache final, cage, uv_cage;
@@ -264,9 +236,8 @@ struct MeshBatchCache {
   MeshBatchList batch;
 
   /* Index buffer per material. These are sub-ranges of `ibo.tris`. */
-  GPUIndexBuf **tris_per_mat;
-
-  GPUBatch **surface_per_mat;
+  Array<gpu::IndexBuf *> tris_per_mat;
+  Array<gpu::Batch *> surface_per_mat;
 
   DRWSubdivCache *subdiv_cache;
 
@@ -304,27 +275,24 @@ struct MeshBatchCache {
   bool no_loose_wire;
 
   eV3DShadingColorType color_type;
-  bool pbvh_is_drawing;
 };
 
 #define MBC_EDITUV \
   (MBC_EDITUV_FACES_STRETCH_AREA | MBC_EDITUV_FACES_STRETCH_ANGLE | MBC_EDITUV_FACES | \
    MBC_EDITUV_EDGES | MBC_EDITUV_VERTS | MBC_EDITUV_FACEDOTS | MBC_WIRE_LOOPS_UVS)
 
-namespace blender::draw {
-
-void mesh_buffer_cache_create_requested(TaskGraph *task_graph,
+void mesh_buffer_cache_create_requested(TaskGraph &task_graph,
                                         MeshBatchCache &cache,
                                         MeshBufferCache &mbc,
-                                        Object *object,
-                                        Mesh *me,
+                                        Object &object,
+                                        Mesh &mesh,
                                         bool is_editmode,
                                         bool is_paint_mode,
-                                        bool is_mode_active,
-                                        const float obmat[4][4],
+                                        bool edit_mode_active,
+                                        const float4x4 &object_to_world,
                                         bool do_final,
                                         bool do_uvedit,
-                                        const Scene *scene,
+                                        const Scene &scene,
                                         const ToolSettings *ts,
                                         bool use_hide);
 

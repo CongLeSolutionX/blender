@@ -19,24 +19,21 @@
 #ifdef __GNUC__
 #  define CHECK_TYPE(var, type) \
     { \
-      typeof(var) *__tmp; \
-      __tmp = (type *)NULL; \
+      typeof(var) *__tmp = (type *)NULL; \
       (void)__tmp; \
     } \
     (void)0
 
 #  define CHECK_TYPE_PAIR(var_a, var_b) \
     { \
-      const typeof(var_a) *__tmp; \
-      __tmp = (typeof(var_b) *)NULL; \
+      const typeof(var_a) *__tmp = (typeof(var_b) *)NULL; \
       (void)__tmp; \
     } \
     (void)0
 
 #  define CHECK_TYPE_PAIR_INLINE(var_a, var_b) \
     ((void)({ \
-      const typeof(var_a) *__tmp; \
-      __tmp = (typeof(var_b) *)NULL; \
+      const typeof(var_a) *__tmp = (typeof(var_b) *)NULL; \
       (void)__tmp; \
     }))
 
@@ -57,10 +54,10 @@
 /* can be used in simple macros */
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
 #  define CHECK_TYPE_INLINE(val, type) \
-    (void)((void)(((type)0) != (0 ? (val) : ((type)0))), _Generic((val), type : 0, const type : 0))
+    (void)((void)(((type)0) != (0 ? (val) : ((type)0))), _Generic((val), type: 0, const type: 0))
 /* NOTE: The NONCONST version is needed for scalar types on CLANG, to avoid warnings. */
 #  define CHECK_TYPE_INLINE_NONCONST(val, type) \
-    (void)((void)(((type)0) != (0 ? (val) : ((type)0))), _Generic((val), type : 0))
+    (void)((void)(((type)0) != (0 ? (val) : ((type)0))), _Generic((val), type: 0))
 #else
 #  define CHECK_TYPE_INLINE_NONCONST(val, type) ((void)(((type)0) != (0 ? (val) : ((type)0))))
 #  define CHECK_TYPE_INLINE(val, type) ((void)(((type)0) != (0 ? (val) : ((type)0))))

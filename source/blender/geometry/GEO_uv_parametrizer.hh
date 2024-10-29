@@ -6,6 +6,10 @@
 
 #include "BLI_sys_types.h" /* for intptr_t support */
 
+namespace slim {
+struct MatrixTransfer;
+}
+
 /** \file
  * \ingroup geo
  */
@@ -35,26 +39,29 @@ class ParamHandle {
   ParamHandle();
   ~ParamHandle();
 
-  PHandleState state;
-  MemArena *arena;
-  MemArena *polyfill_arena;
-  Heap *polyfill_heap;
+  PHandleState state = PHANDLE_STATE_ALLOCATED;
+  MemArena *arena = nullptr;
+  MemArena *polyfill_arena = nullptr;
+  Heap *polyfill_heap = nullptr;
 
-  PChart *construction_chart;
-  PHash *hash_verts;
-  PHash *hash_edges;
-  PHash *hash_faces;
+  PChart *construction_chart = nullptr;
+  PHash *hash_verts = nullptr;
+  PHash *hash_edges = nullptr;
+  PHash *hash_faces = nullptr;
 
-  GHash *pin_hash;
-  int unique_pin_count;
+  GHash *pin_hash = nullptr;
+  int unique_pin_count = 0;
 
-  PChart **charts;
-  int ncharts;
+  PChart **charts = nullptr;
+  int ncharts = 0;
 
-  float aspect_y;
+  float aspect_y = 1.0f;
 
-  RNG *rng;
-  float blend;
+  RNG *rng = nullptr;
+  float blend = 0.0f;
+
+  /* SLIM uv unwrapping */
+  slim::MatrixTransfer *slim_mt = nullptr;
 };
 
 /* -------------------------------------------------------------------- */
@@ -84,15 +91,44 @@ void uv_parametrizer_face_add(ParamHandle *handle,
                               const ParamKey *vkeys,
                               const float **co,
                               float **uv, /* Output will eventually be written to `uv`. */
+                              const float *weight,
                               const bool *pin,
                               const bool *select);
 
-void uv_parametrizer_edge_set_seam(ParamHandle *handle, ParamKey *vkeys);
+void uv_parametrizer_edge_set_seam(ParamHandle *phandle, const ParamKey *vkeys);
 
-void uv_parametrizer_construct_end(ParamHandle *handle,
+void uv_parametrizer_construct_end(ParamHandle *phandle,
                                    bool fill_holes,
                                    bool topology_from_uvs,
                                    int *r_count_failed = nullptr);
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name SLIM:
+ *
+ * - begin: data is gathered into matrices and transferred to SLIM.
+ * - solve: compute cheap initialization (if necessary) and refine iteratively.
+ * - end: clean up.
+ * \{ */
+
+struct ParamSlimOptions {
+  float weight_influence = 0.0f;
+  int iterations = 0;
+  bool no_flip = false;
+  bool skip_init = false;
+};
+
+void uv_parametrizer_slim_solve(ParamHandle *phandle,
+                                const ParamSlimOptions *slim_options,
+                                int *count_changed,
+                                int *count_failed);
+
+void uv_parametrizer_slim_live_begin(ParamHandle *phandle, const ParamSlimOptions *slim_options);
+void uv_parametrizer_slim_live_solve_iteration(ParamHandle *phandle);
+void uv_parametrizer_slim_live_end(ParamHandle *phandle);
+void uv_parametrizer_slim_stretch_iteration(ParamHandle *phandle, float blend);
+bool uv_parametrizer_is_slim(const ParamHandle *phandle);
 
 /** \} */
 

@@ -3,22 +3,20 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 set(INC
+  ../asset
   ../include
-  ../../blenfont
   ../../blenkernel
   ../../blenloader
   ../../blentranslation
   ../../bmesh
-  ../../depsgraph
   ../../draw
   ../../gpu
   ../../imbuf
   ../../makesrna
   ../../render
   ../../windowmanager
-  ../../../../intern/clog
 
-  # RNA_prototypes.h
+  # RNA_prototypes.hh
   ${CMAKE_BINARY_DIR}/source/blender/makesrna
 )
 
@@ -34,14 +32,17 @@ set(SRC
   image_undo.cc
   space_image.cc
 
-  image_intern.h
+  image_intern.hh
 )
 
 set(LIB
+  PRIVATE bf::blenfont
   bf_blenkernel
   PRIVATE bf::blenlib
+  PRIVATE bf::depsgraph
   PRIVATE bf::dna
   bf_editor_uvedit
+  PRIVATE bf::intern::clog
   PRIVATE bf::intern::guardedalloc
 )
 
@@ -61,7 +62,8 @@ if(WITH_IMAGE_WEBP)
   add_definitions(-DWITH_WEBP)
 endif()
 
+
 blender_add_lib(bf_editor_space_image "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 
-# RNA_prototypes.h dna_type_offsets.h
+# RNA_prototypes.hh dna_type_offsets.h
 add_dependencies(bf_editor_space_image bf_rna)

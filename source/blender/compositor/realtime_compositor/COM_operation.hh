@@ -94,7 +94,7 @@ class Operation {
    * 2. Resetting the results of the operation.
    * 3. Calling the execute method of the operation.
    * 4. Releasing the results mapped to the inputs. */
-  void evaluate();
+  virtual void evaluate();
 
   /* Get a reference to the output result identified by the given identifier. */
   Result &get_result(StringRef identifier);
@@ -103,6 +103,12 @@ class Operation {
    * results_mapped_to_inputs_ for more details. This should be called by the evaluator to
    * establish links between different operations. */
   void map_input_to_result(StringRef identifier, Result *result);
+
+  /* Free the results of the operation. Note that normally, operation results aren't freed by the
+   * operation itself, but by the operations that consume those results, see the release_inputs
+   * method. But this is used to force free results in cases like canceled evaluations where later
+   * operations will not get evaluated and thus will not free the results it consumes. */
+  void free_results();
 
  protected:
   /* Compute the operation domain of this operation. By default, this implements a default logic

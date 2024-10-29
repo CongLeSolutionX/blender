@@ -15,14 +15,14 @@
 #include "DNA_userdef_types.h"
 
 #include "BLI_fnmatch.h"
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 #include "BLI_utildefines.h"
 
 #ifdef WIN32
 #  include "BLI_string.h"
 #endif
 
-#include "BKE_autoexec.h" /* own include */
+#include "BKE_autoexec.hh" /* own include */
 
 bool BKE_autoexec_match(const char *path)
 {

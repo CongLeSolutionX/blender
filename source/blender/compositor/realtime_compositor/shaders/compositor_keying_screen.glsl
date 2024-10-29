@@ -2,14 +2,14 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#pragma BLENDER_REQUIRE(gpu_shader_math_base_lib.glsl)
+#include "gpu_shader_math_base_lib.glsl"
 
 #define CACHE_SIZE (gl_WorkGroupSize.x * gl_WorkGroupSize.y)
 shared vec2 cached_marker_positions[CACHE_SIZE];
 shared vec4 cached_marker_colors[CACHE_SIZE];
 
 /* Cache the initial part of the marker SSBOs in shared memory to make the interpolation loop
- * faster.  */
+ * faster. */
 void populate_cache()
 {
   if (int(gl_LocalInvocationIndex) < number_of_markers) {

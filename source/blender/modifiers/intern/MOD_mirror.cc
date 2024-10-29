@@ -8,32 +8,27 @@
 
 #include "BLI_span.hh"
 
-#include "BLT_translation.h"
+#include "BLT_translation.hh"
 
 #include "DNA_defaults.h"
 #include "DNA_mesh_types.h"
-#include "DNA_object_types.h"
 #include "DNA_screen_types.h"
 
-#include "BKE_context.hh"
-#include "BKE_lib_id.h"
-#include "BKE_lib_query.h"
+#include "BKE_lib_id.hh"
+#include "BKE_lib_query.hh"
 #include "BKE_mesh_mirror.hh"
 #include "BKE_modifier.hh"
-#include "BKE_screen.hh"
 
 #include "UI_interface.hh"
 #include "UI_resources.hh"
 
 #include "RNA_access.hh"
-#include "RNA_prototypes.h"
+#include "RNA_prototypes.hh"
 
 #include "MEM_guardedalloc.h"
 
 #include "DEG_depsgraph_build.hh"
-#include "DEG_depsgraph_query.hh"
 
-#include "MOD_modifiertypes.hh"
 #include "MOD_ui_common.hh"
 
 #include "GEO_mesh_merge_by_distance.hh"
@@ -86,7 +81,7 @@ static Mesh *mirror_apply_on_axis(MirrorModifierData *mmd,
     if (vert_merge_map_len) {
       Mesh *tmp = result;
       result = geometry::mesh_merge_verts(
-          *tmp, MutableSpan<int>{vert_merge_map, result->totvert}, vert_merge_map_len, false);
+          *tmp, MutableSpan<int>{vert_merge_map, result->verts_num}, vert_merge_map_len, false);
       BKE_id_free(nullptr, tmp);
     }
     MEM_freeN(vert_merge_map);
@@ -145,7 +140,7 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, &ob_ptr);
   MirrorModifierData *mmd = (MirrorModifierData *)ptr->data;
   bool has_bisect = (mmd->flag &
-                     (MOD_MIR_BISECT_AXIS_X | MOD_MIR_BISECT_AXIS_X | MOD_MIR_BISECT_AXIS_X));
+                     (MOD_MIR_BISECT_AXIS_X | MOD_MIR_BISECT_AXIS_Y | MOD_MIR_BISECT_AXIS_Z));
 
   col = uiLayoutColumn(layout, false);
   uiLayoutSetPropSep(col, true);
@@ -245,9 +240,7 @@ ModifierTypeInfo modifierType_Mirror = {
     /*type*/ ModifierTypeType::Constructive,
     /*flags*/ eModifierTypeFlag_AcceptsMesh | eModifierTypeFlag_SupportsMapping |
         eModifierTypeFlag_SupportsEditmode | eModifierTypeFlag_EnableInEditmode |
-        eModifierTypeFlag_AcceptsCVs |
-        /* this is only the case when 'MOD_MIR_VGROUP' is used */
-        eModifierTypeFlag_UsesPreview,
+        eModifierTypeFlag_AcceptsCVs,
     /*icon*/ ICON_MOD_MIRROR,
 
     /*copy_data*/ BKE_modifier_copydata_generic,
@@ -272,4 +265,5 @@ ModifierTypeInfo modifierType_Mirror = {
     /*panel_register*/ panel_register,
     /*blend_write*/ nullptr,
     /*blend_read*/ nullptr,
+    /*foreach_cache*/ nullptr,
 };

@@ -2,16 +2,18 @@
  *
  * SPDX-License-Identifier: Apache-2.0 */
 
+#include "testing/testing.h"
+
 #include "BLI_linear_allocator.hh"
 #include "BLI_rand.hh"
-#include "BLI_strict_flags.h"
-#include "testing/testing.h"
+
+#include "BLI_strict_flags.h" /* Keep last. */
 
 namespace blender::tests {
 
 static bool is_aligned(void *ptr, uint alignment)
 {
-  BLI_assert(is_power_of_2_i(int(alignment)));
+  BLI_assert(is_power_of_2(int(alignment)));
   return (POINTER_AS_UINT(ptr) & (alignment - 1)) == 0;
 }
 

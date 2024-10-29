@@ -28,7 +28,7 @@
 #include "BKE_particle.h"
 #include "BLI_kdopbvh.h"
 
-#include "BLT_translation.h"
+#include "BLT_translation.hh"
 
 #include "BKE_modifier.hh"
 
@@ -282,7 +282,7 @@ static bool rule_avoid_collision(BoidRule *rule,
     }
   }
 
-  /* Check boids in own system. */
+  /* Check boids in their own system. */
   if (acbr->options & BRULE_ACOLL_WITH_BOIDS) {
     neighbors = BLI_kdtree_3d_range_search_with_len_squared_cb(bbd->sim->psys->tree,
                                                                pa->prev_state.co,
@@ -690,7 +690,7 @@ static bool rule_fight(BoidRule *rule, BoidBrainData *bbd, BoidValues *val, Part
   int n;
   bool ret = false;
 
-  /* calculate own group strength */
+  /* calculate its own group strength */
   int neighbors = BLI_kdtree_3d_range_search(
       bbd->sim->psys->tree, pa->prev_state.co, &ptn, fbr->distance);
   for (n = 0; n < neighbors; n++) {
@@ -705,7 +705,7 @@ static bool rule_fight(BoidRule *rule, BoidBrainData *bbd, BoidValues *val, Part
   /* add other friendlies and calculate enemy strength and find closest enemy */
   LISTBASE_FOREACH (ParticleTarget *, pt, &bbd->sim->psys->targets) {
     ParticleSystem *epsys = psys_get_target_system(bbd->sim->ob, pt);
-    if (epsys) {
+    if (epsys && epsys->part->boids) {
       epars = epsys->particles;
 
       neighbors = BLI_kdtree_3d_range_search(epsys->tree, pa->prev_state.co, &ptn, fbr->distance);
@@ -962,7 +962,7 @@ void boids_precalc_rules(ParticleSettings *part, float cfra)
         if (flbr->ob && flbr->cfra != cfra) {
           /* save object locations for velocity calculations */
           copy_v3_v3(flbr->oloc, flbr->loc);
-          copy_v3_v3(flbr->loc, flbr->ob->object_to_world[3]);
+          copy_v3_v3(flbr->loc, flbr->ob->object_to_world().location());
           flbr->cfra = cfra;
         }
       }
@@ -1181,7 +1181,7 @@ void boid_brain(BoidBrainData *bbd, int p, ParticleData *pa)
           if (len < val.jump_speed * mul || bbd->part->boids->options & BOID_ALLOW_FLIGHT) {
             jump = 1;
 
-            len = MIN2(len, val.jump_speed);
+            len = std::min(len, val.jump_speed);
 
             copy_v3_v3(jump_v, dir);
             jump_v[2] = z_v;
@@ -1320,7 +1320,7 @@ void boid_body(BoidBrainData *bbd, ParticleData *pa)
     old_speed = len_v3(pa->prev_state.vel);
 
     if (bbd->wanted_speed < old_speed) {
-      new_speed = MAX2(bbd->wanted_speed, old_speed - val.max_acc);
+      new_speed = std::max(bbd->wanted_speed, old_speed - val.max_acc);
     }
     else {
       new_speed = std::min(bbd->wanted_speed, old_speed + val.max_acc);
@@ -1346,7 +1346,7 @@ void boid_body(BoidBrainData *bbd, ParticleData *pa)
 
     /* finally constrain speed to max speed */
     new_speed = normalize_v3(new_vel);
-    mul_v3_fl(new_vel, MIN2(new_speed, val.max_speed));
+    mul_v3_fl(new_vel, std::min(new_speed, val.max_speed));
 
     /* get acceleration from difference of velocities */
     sub_v3_v3v3(acc, new_vel, pa->prev_state.vel);

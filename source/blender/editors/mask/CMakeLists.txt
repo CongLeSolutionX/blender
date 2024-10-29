@@ -5,7 +5,7 @@
 set(INC
   ../include
   ../../blenkernel
-  ../../depsgraph
+  ../../blentranslation
   ../../gpu
   ../../makesrna
   ../../windowmanager
@@ -25,11 +25,12 @@ set(SRC
   mask_select.cc
   mask_shapekey.cc
 
-  mask_intern.h
+  mask_intern.hh
 )
 
 set(LIB
   PRIVATE bf::blenlib
+  PRIVATE bf::depsgraph
   PRIVATE bf::dna
   PRIVATE bf::intern::guardedalloc
   PRIVATE bf::animrig

@@ -8,7 +8,6 @@ set(INC
   ../intern
   ../../blenkernel
   ../../blentranslation
-  ../../depsgraph
   ../../editors/include
   ../../functions
   ../../gpu
@@ -16,9 +15,8 @@ set(INC
   ../../makesrna
   ../../render
   ../../windowmanager
-  ../../../../intern/clog
   ../../../../intern/sky/include
-  # RNA_prototypes.h
+  # RNA_prototypes.hh
   ${CMAKE_BINARY_DIR}/source/blender/makesrna
 )
 
@@ -38,7 +36,9 @@ set(SRC
   nodes/node_shader_bsdf_glossy.cc
   nodes/node_shader_bsdf_hair.cc
   nodes/node_shader_bsdf_hair_principled.cc
+  nodes/node_shader_bsdf_metallic.cc
   nodes/node_shader_bsdf_principled.cc
+  nodes/node_shader_bsdf_ray_portal.cc
   nodes/node_shader_bsdf_refraction.cc
   nodes/node_shader_bsdf_sheen.cc
   nodes/node_shader_bsdf_toon.cc
@@ -95,6 +95,7 @@ set(SRC
   nodes/node_shader_tex_checker.cc
   nodes/node_shader_tex_coord.cc
   nodes/node_shader_tex_environment.cc
+  nodes/node_shader_tex_gabor.cc
   nodes/node_shader_tex_gradient.cc
   nodes/node_shader_tex_image.cc
   nodes/node_shader_tex_magic.cc
@@ -129,8 +130,10 @@ set(SRC
 
 set(LIB
   PRIVATE bf::blenlib
+  PRIVATE bf::depsgraph
   PRIVATE bf::dna
   bf_functions
+  PRIVATE bf::intern::clog
   PRIVATE bf::intern::guardedalloc
   bf_intern_sky
   bf_nodes
@@ -168,27 +171,16 @@ if(WITH_FREESTYLE)
 endif()
 
 if(WITH_TBB)
-  add_definitions(-DWITH_TBB)
   if(WIN32)
     # TBB includes Windows.h which will define min/max macros
-    # that will collide with the stl versions.
+    # that will collide with the STL versions.
     add_definitions(-DNOMINMAX)
   endif()
-  list(APPEND INC_SYS
-    ${TBB_INCLUDE_DIRS}
-  )
-
-  list(APPEND LIB
-    ${TBB_LIBRARIES}
-  )
 endif()
 
 blender_add_lib(bf_nodes_shader "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 
-if(WITH_UNITY_BUILD)
-  set_target_properties(bf_nodes_shader PROPERTIES UNITY_BUILD ON)
-  set_target_properties(bf_nodes_shader PROPERTIES UNITY_BUILD_BATCH_SIZE 10)
-endif()
+blender_set_target_unity_build(bf_nodes_shader 10)
 
-# RNA_prototypes.h
+# RNA_prototypes.hh
 add_dependencies(bf_nodes_shader bf_rna)

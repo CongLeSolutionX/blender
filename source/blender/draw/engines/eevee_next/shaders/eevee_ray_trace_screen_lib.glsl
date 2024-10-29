@@ -2,6 +2,8 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#pragma once
+
 /**
  * Screen-space ray-tracing routine.
  *
@@ -12,10 +14,11 @@
  * Many modifications were made for our own usage.
  */
 
-#pragma BLENDER_REQUIRE(draw_view_lib.glsl)
-#pragma BLENDER_REQUIRE(gpu_shader_math_matrix_lib.glsl)
-#pragma BLENDER_REQUIRE(gpu_shader_math_fast_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_ray_types_lib.glsl)
+#include "draw_view_lib.glsl"
+#include "eevee_ray_types_lib.glsl"
+#include "eevee_thickness_lib.glsl"
+#include "gpu_shader_math_fast_lib.glsl"
+#include "gpu_shader_math_matrix_lib.glsl"
 
 /* Inputs expected to be in view-space. */
 void raytrace_clip_ray_to_near_plane(inout Ray ray)
@@ -164,7 +167,7 @@ METAL_ATTR ScreenTraceHitData raytrace_screen(RayTraceData rt_data,
 
 ScreenTraceHitData raytrace_planar(RayTraceData rt_data,
                                    depth2DArray planar_depth_tx,
-                                   ProbePlanarData planar,
+                                   PlanarProbeData planar,
                                    float stride_rand,
                                    Ray ray)
 {
@@ -221,3 +224,16 @@ ScreenTraceHitData raytrace_planar(RayTraceData rt_data,
 }
 
 #endif
+
+/* Modify the ray origin before tracing it. We must do this because ray origin is implicitly
+ * reconstructed from gbuffer depth which we cannot modify. */
+Ray raytrace_thickness_ray_amend(Ray ray, ClosureUndetermined cl, vec3 V, float thickness)
+{
+  switch (cl.type) {
+    case CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID:
+      return bxdf_ggx_ray_amend_transmission(cl, V, ray, thickness);
+    case CLOSURE_BSDF_TRANSLUCENT_ID:
+      return bxdf_translucent_ray_amend(cl, V, ray, thickness);
+  }
+  return ray;
+}

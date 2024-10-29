@@ -38,13 +38,19 @@ aggressive = 2
 #   which can contain their own configuration and be handled separately.
 # - `./scripts/modules/rna_manual_reference.py` because it's a generated data-file.
 exclude = """
-./extern/*,
-./scripts/addons/*,
-./scripts/addons_contrib/*,
-./scripts/modules/rna_manual_reference.py,
-./tools/svn_rev_map/sha1_to_rev.py,
-./tools/svn_rev_map/rev_to_sha1.py,
+extern/*,
+scripts/addons_core/*,
+scripts/modules/rna_manual_reference.py,
+tools/svn_rev_map/sha1_to_rev.py,
+tools/svn_rev_map/rev_to_sha1.py,
 """
 
 # Omit settings such as `jobs`, `in_place` & `recursive` as they can cause editor utilities that auto-format on save
 # to fail if the STDIN/STDOUT is used for formatting (which isn't compatible with these options).
+
+# Black shouldn't be used as a formatter. But if it's accidentally
+# used, it certainly shouldn't change all the quote marks around
+# strings. This simply makes such a mistake easier to recover from.
+[tool.black]
+skip-string-normalization = true
+line-length = 120

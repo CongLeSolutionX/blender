@@ -2,10 +2,8 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "DNA_volume_types.h"
-
 #include "BKE_geometry_set.hh"
-#include "BKE_lib_id.h"
+#include "BKE_lib_id.hh"
 #include "BKE_volume.hh"
 
 namespace blender::bke {
@@ -21,14 +19,14 @@ VolumeComponent::~VolumeComponent()
   this->clear();
 }
 
-GeometryComponent *VolumeComponent::copy() const
+GeometryComponentPtr VolumeComponent::copy() const
 {
   VolumeComponent *new_component = new VolumeComponent();
   if (volume_ != nullptr) {
     new_component->volume_ = BKE_volume_copy_for_eval(volume_);
     new_component->ownership_ = GeometryOwnershipType::Owned;
   }
-  return new_component;
+  return GeometryComponentPtr(new_component);
 }
 
 void VolumeComponent::clear()
@@ -87,8 +85,17 @@ void VolumeComponent::ensure_owns_direct_data()
 {
   BLI_assert(this->is_mutable());
   if (ownership_ != GeometryOwnershipType::Owned) {
-    volume_ = BKE_volume_copy_for_eval(volume_);
+    if (volume_) {
+      volume_ = BKE_volume_copy_for_eval(volume_);
+    }
     ownership_ = GeometryOwnershipType::Owned;
+  }
+}
+
+void VolumeComponent::count_memory(MemoryCounter &memory) const
+{
+  if (volume_) {
+    BKE_volume_count_memory(*volume_, memory);
   }
 }
 

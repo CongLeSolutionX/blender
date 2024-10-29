@@ -2,11 +2,14 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-from _bpy import types as bpy_types
+# NOTE: all members of this module which are _not_ exposed by `bpy.types`
+# must use a `_` prefix to prevent attempts to have their `bl_rna` initialized.
 
-StructRNA = bpy_types.bpy_struct
-StructMetaPropGroup = bpy_types.bpy_struct_meta_idprop
-# StructRNA = bpy_types.Struct
+from _bpy import types as _types
+
+_StructRNA = _types.bpy_struct
+_StructMetaPropGroup = _types.bpy_struct_meta_idprop
+# StructRNA = _types.Struct
 
 # Private dummy object use for comparison only.
 _sentinel = object()
@@ -14,7 +17,7 @@ _sentinel = object()
 # Note that methods extended in C are defined in: `bpy_rna_types_capi.cc`.
 
 
-class Context(StructRNA):
+class Context(_StructRNA):
     __slots__ = ()
 
     def path_resolve(self, path, coerce=True):
@@ -26,8 +29,8 @@ class Context(StructRNA):
         :arg coerce: optional argument, when True, the property will be converted into its Python representation.
         :type coerce: boolean
         """
-        # This is a convenience wrapper around `StructRNA.path_resolve` which doesn't support accessing context members.
-        # Without this wrapper many users were writing `exec("context.%s" % data_path)` which is a security
+        # This is a convenience wrapper around `_StructRNA.path_resolve` which doesn't support accessing context members.
+        # Without this wrapper many users were writing `exec("context.{:s}".format(data_path))` which is a security
         # concern if the `data_path` comes from an unknown source.
         # This function performs the initial lookup, after that the regular `path_resolve` function is used.
 
@@ -53,7 +56,7 @@ class Context(StructRNA):
         # to simplify exception handling for the caller.
         value = getattr(self, attr, _sentinel)
         if value is _sentinel:
-            raise ValueError("Path could not be resolved: %r" % attr)
+            raise ValueError("Path could not be resolved: {!r}".format(attr))
 
         if value is None:
             return value
@@ -62,22 +65,22 @@ class Context(StructRNA):
         if isinstance(value, list) and path_rest.startswith("["):
             index_str, div, index_tail = path_rest[1:].partition("]")
             if not div:
-                raise ValueError("Path index is not terminated: %s%s" % (attr, path_rest))
+                raise ValueError("Path index is not terminated: {:s}{:s}".format(attr, path_rest))
             try:
                 index = int(index_str)
             except ValueError:
-                raise ValueError("Path index is invalid: %s[%s]" % (attr, index_str))
+                raise ValueError("Path index is invalid: {:s}[{:s}]".format(attr, index_str))
             if 0 <= index < len(value):
                 path_rest = index_tail
                 value = value[index]
             else:
-                raise IndexError("Path index out of range: %s[%s]" % (attr, index_str))
+                raise IndexError("Path index out of range: {:s}[{:s}]".format(attr, index_str))
 
         # Resolve the rest of the path if necessary.
         if path_rest:
             path_resolve_fn = getattr(value, "path_resolve", None)
             if path_resolve_fn is None:
-                raise ValueError("Path %s resolves to a non RNA value" % attr)
+                raise ValueError("Path {:s} resolves to a non RNA value".format(attr))
             return path_resolve_fn(path_rest, coerce)
 
         return value
@@ -86,19 +89,27 @@ class Context(StructRNA):
         from types import BuiltinMethodType
         new_context = {}
         generic_attrs = (
-            *StructRNA.__dict__.keys(),
-            "bl_rna", "rna_type", "copy",
+            *_StructRNA.__dict__.keys(),
+            "bl_rna",
+            "rna_type",
+            "copy",
         )
+        function_types = {BuiltinMethodType, _types.bpy_func}
         for attr in dir(self):
-            if not (attr.startswith("_") or attr in generic_attrs):
-                value = getattr(self, attr)
-                if type(value) != BuiltinMethodType:
-                    new_context[attr] = value
+            if attr.startswith("_"):
+                continue
+            if attr in generic_attrs:
+                continue
+            value = getattr(self, attr)
+            if type(value) in function_types:
+                continue
+
+            new_context[attr] = value
 
         return new_context
 
 
-class Library(bpy_types.ID):
+class Library(_types.ID):
     __slots__ = ()
 
     @property
@@ -123,7 +134,7 @@ class Library(bpy_types.ID):
                      if id_block.library == self)
 
 
-class Texture(bpy_types.ID):
+class Texture(_types.ID):
     __slots__ = ()
 
     @property
@@ -149,7 +160,7 @@ class Texture(bpy_types.ID):
         )
 
 
-class Collection(bpy_types.ID):
+class Collection(_types.ID):
     __slots__ = ()
 
     @property
@@ -173,7 +184,7 @@ class Collection(bpy_types.ID):
                      if self == obj.instance_collection)
 
 
-class Object(bpy_types.ID):
+class Object(_types.ID):
     __slots__ = ()
 
     @property
@@ -244,7 +255,7 @@ class Object(bpy_types.ID):
                      if self in scene.objects[:])
 
 
-class WindowManager(bpy_types.ID):
+class WindowManager(_types.ID):
     __slots__ = ()
 
     def popup_menu(
@@ -292,7 +303,7 @@ class WindowManager(bpy_types.ID):
                 self.piemenu_end__internal(pie)
 
 
-class WorkSpace(bpy_types.ID):
+class WorkSpace(_types.ID):
     __slots__ = ()
 
     def status_text_set(self, text):
@@ -460,10 +471,10 @@ class _GenericBone:
             return id_data.edit_bones
         if isinstance(self, Bone):
             return id_data.bones
-        raise RuntimeError("Invalid type %r" % self)
+        raise RuntimeError("Invalid type {!r}".format(self))
 
 
-class PoseBone(StructRNA, _GenericBone, metaclass=StructMetaPropGroup):
+class PoseBone(_StructRNA, _GenericBone, metaclass=_StructMetaPropGroup):
     __slots__ = ()
 
     @property
@@ -475,13 +486,13 @@ class PoseBone(StructRNA, _GenericBone, metaclass=StructMetaPropGroup):
         return tuple(pbones[bone.name] for bone in self.bone.children)
 
 
-class Bone(StructRNA, _GenericBone, metaclass=StructMetaPropGroup):
+class Bone(_StructRNA, _GenericBone, metaclass=_StructMetaPropGroup):
     __slots__ = ()
 
     # NOTE: `children` is implemented in RNA.
 
 
-class EditBone(StructRNA, _GenericBone, metaclass=StructMetaPropGroup):
+class EditBone(_StructRNA, _GenericBone, metaclass=_StructMetaPropGroup):
     __slots__ = ()
 
     @property
@@ -502,7 +513,7 @@ class EditBone(StructRNA, _GenericBone, metaclass=StructMetaPropGroup):
 
     def transform(self, matrix, *, scale=True, roll=True):
         """
-        Transform the the bones head, tail, roll and envelope
+        Transform the bones head, tail, roll and envelope
         (when the matrix has a scale component).
 
         :arg matrix: 3x3 or 4x4 transformation matrix.
@@ -530,7 +541,23 @@ class EditBone(StructRNA, _GenericBone, metaclass=StructMetaPropGroup):
             self.align_roll(matrix @ z_vec)
 
 
-def ord_ind(i1, i2):
+class BoneCollection(_StructRNA, metaclass=_StructMetaPropGroup):
+    __slots__ = ()
+
+    @property
+    def bones_recursive(self):
+        """A set of all bones assigned to this bone collection and its child collections."""
+        bones = set()
+        collections = [self]
+
+        while collections:
+            visit = collections.pop()
+            bones.update(visit.bones)
+            collections.extend(visit.children)
+        return bones
+
+
+def _ord_ind(i1, i2):
     if i1 < i2:
         return i1, i2
     return i2, i1
@@ -566,7 +593,7 @@ def _name_convention_attribute_remove(attributes, name):
         pass
 
 
-class Mesh(bpy_types.ID):
+class Mesh(_types.ID):
     __slots__ = ()
 
     def from_pydata(self, vertices, edges, faces, shade_flat=True):
@@ -699,15 +726,15 @@ class Mesh(bpy_types.ID):
         _name_convention_attribute_remove(self.attributes, "sharp_face")
 
 
-class MeshEdge(StructRNA):
+class MeshEdge(_StructRNA):
     __slots__ = ()
 
     @property
     def key(self):
-        return ord_ind(*tuple(self.vertices))
+        return _ord_ind(*tuple(self.vertices))
 
 
-class MeshLoopTriangle(StructRNA):
+class MeshLoopTriangle(_StructRNA):
     __slots__ = ()
 
     @property
@@ -725,20 +752,20 @@ class MeshLoopTriangle(StructRNA):
     def edge_keys(self):
         verts = self.vertices[:]
         return (
-            ord_ind(verts[0], verts[1]),
-            ord_ind(verts[1], verts[2]),
-            ord_ind(verts[2], verts[0]),
+            _ord_ind(verts[0], verts[1]),
+            _ord_ind(verts[1], verts[2]),
+            _ord_ind(verts[2], verts[0]),
         )
 
 
-class MeshPolygon(StructRNA):
+class MeshPolygon(_StructRNA):
     __slots__ = ()
 
     @property
     def edge_keys(self):
         verts = self.vertices[:]
         vlen = len(self.vertices)
-        return [ord_ind(verts[i], verts[(i + 1) % vlen]) for i in range(vlen)]
+        return [_ord_ind(verts[i], verts[(i + 1) % vlen]) for i in range(vlen)]
 
     @property
     def loop_indices(self):
@@ -747,7 +774,7 @@ class MeshPolygon(StructRNA):
         return range(start, end)
 
 
-class Text(bpy_types.ID):
+class Text(_types.ID):
     __slots__ = ()
 
     def as_module(self):
@@ -768,7 +795,7 @@ class Text(bpy_types.ID):
         return mod
 
 
-class Sound(bpy_types.ID):
+class Sound(_types.ID):
     __slots__ = ()
 
     @property
@@ -778,38 +805,38 @@ class Sound(bpy_types.ID):
         return aud._sound_from_pointer(self.as_pointer())
 
 
-class RNAMeta(type):
+class _RNAMeta(type):
     # TODO(campbell): move to C-API
     @property
     def is_registered(cls):
         return "bl_rna" in cls.__dict__
 
 
-class RNAMetaPropGroup(StructMetaPropGroup, RNAMeta):
+class _RNAMetaPropGroup(_StructMetaPropGroup, _RNAMeta):
     pass
 
 
 # Same as `Operator`.
 # only without 'as_keywords'
-class Gizmo(StructRNA):
+class Gizmo(_StructRNA):
     __slots__ = ()
 
     def __getattribute__(self, attr):
-        properties = StructRNA.path_resolve(self, "properties")
+        properties = _StructRNA.path_resolve(self, "properties")
         bl_rna = getattr(properties, "bl_rna", None)
         if (bl_rna is not None) and (attr in bl_rna.properties):
             return getattr(properties, attr)
         return super().__getattribute__(attr)
 
     def __setattr__(self, attr, value):
-        properties = StructRNA.path_resolve(self, "properties")
+        properties = _StructRNA.path_resolve(self, "properties")
         bl_rna = getattr(properties, "bl_rna", None)
         if (bl_rna is not None) and (attr in bl_rna.properties):
             return setattr(properties, attr, value)
         return super().__setattr__(attr, value)
 
     def __delattr__(self, attr):
-        properties = StructRNA.path_resolve(self, "properties")
+        properties = _StructRNA.path_resolve(self, "properties")
         bl_rna = getattr(properties, "bl_rna", None)
         if (bl_rna is not None) and (attr in bl_rna.properties):
             return delattr(properties, attr)
@@ -871,7 +898,7 @@ class Gizmo(StructRNA):
         :arg type: The type of shape to create in (POINTS, LINES, TRIS, LINE_STRIP).
         :type type: string
         :arg verts: Coordinates.
-        :type verts: sequence of of 2D or 3D coordinates.
+        :type verts: sequence of 2D or 3D coordinates.
         :arg display_name: Optional callback that takes the full path, returns the name to display.
         :type display_name: Callable that takes a string and returns a string.
         :return: The newly created shape.
@@ -898,31 +925,31 @@ class Gizmo(StructRNA):
 
 # Dummy class to keep the reference in `bpy_types_dict` and avoid
 # errors like: "TypeError: expected GizmoGroup subclass of class ..."
-class GizmoGroup(StructRNA):
+class GizmoGroup(_StructRNA):
     __slots__ = ()
 
 
 # Only defined so operators members can be used by accessing self.order
 # with doc generation 'self.properties.bl_rna.properties' can fail
-class Operator(StructRNA, metaclass=RNAMeta):
+class Operator(_StructRNA, metaclass=_RNAMeta):
     __slots__ = ()
 
     def __getattribute__(self, attr):
-        properties = StructRNA.path_resolve(self, "properties")
+        properties = _StructRNA.path_resolve(self, "properties")
         bl_rna = getattr(properties, "bl_rna", None)
         if (bl_rna is not None) and (attr in bl_rna.properties):
             return getattr(properties, attr)
         return super().__getattribute__(attr)
 
     def __setattr__(self, attr, value):
-        properties = StructRNA.path_resolve(self, "properties")
+        properties = _StructRNA.path_resolve(self, "properties")
         bl_rna = getattr(properties, "bl_rna", None)
         if (bl_rna is not None) and (attr in bl_rna.properties):
             return setattr(properties, attr, value)
         return super().__setattr__(attr, value)
 
     def __delattr__(self, attr):
-        properties = StructRNA.path_resolve(self, "properties")
+        properties = _StructRNA.path_resolve(self, "properties")
         bl_rna = getattr(properties, "bl_rna", None)
         if (bl_rna is not None) and (attr in bl_rna.properties):
             return delattr(properties, attr)
@@ -936,30 +963,38 @@ class Operator(StructRNA, metaclass=RNAMeta):
                 if attr not in ignore}
 
 
-class Macro(StructRNA):
-    # bpy_types is imported before ops is defined
+class Macro(_StructRNA):
+    # _types is imported before ops is defined
     # so we have to do a local import on each run
     __slots__ = ()
 
     @classmethod
-    def define(cls, opname):
+    def define(cls, operator):
+        """
+        Append an operator to a registered macro class.
+
+        :arg operator: Identifier of the operator. This does not have to be defined when this function is called.
+        :type operator: string
+        :return: The operator macro for property access.
+        :rtype: :class:`OperatorMacro`
+        """
         from _bpy import ops
-        return ops.macro_define(cls, opname)
+        return ops.macro_define(cls, operator)
 
 
-class PropertyGroup(StructRNA, metaclass=RNAMetaPropGroup):
+class PropertyGroup(_StructRNA, metaclass=_RNAMetaPropGroup):
     __slots__ = ()
 
 
-class KeyingSetInfo(StructRNA, metaclass=RNAMeta):
+class KeyingSetInfo(_StructRNA, metaclass=_RNAMeta):
     __slots__ = ()
 
 
-class USDHook(StructRNA, metaclass=RNAMeta):
+class USDHook(_StructRNA, metaclass=_RNAMeta):
     __slots__ = ()
 
 
-class AddonPreferences(StructRNA, metaclass=RNAMeta):
+class AddonPreferences(_StructRNA, metaclass=_RNAMeta):
     __slots__ = ()
 
 
@@ -1000,7 +1035,7 @@ class _GenericUI:
                     # the entire menu from drawing
                     try:
                         func(self, context)
-                    except:
+                    except Exception:
                         import traceback
                         traceback.print_exc()
 
@@ -1020,7 +1055,12 @@ class _GenericUI:
 
     @classmethod
     def is_extended(cls):
-        return bool(getattr(cls.draw, "_draw_funcs", None))
+        draw_funcs = getattr(cls.draw, "_draw_funcs", None)
+        if draw_funcs is None:
+            return False
+        # Ignore the first item (the original draw function).
+        # This can happen when enabling then disabling add-ons.
+        return len(draw_funcs) > 1
 
     @classmethod
     def append(cls, draw_func):
@@ -1052,25 +1092,25 @@ class _GenericUI:
             pass
 
 
-class Panel(StructRNA, _GenericUI, metaclass=RNAMeta):
+class Panel(_StructRNA, _GenericUI, metaclass=_RNAMeta):
     __slots__ = ()
 
 
-class UIList(StructRNA, _GenericUI, metaclass=RNAMeta):
+class UIList(_StructRNA, _GenericUI, metaclass=_RNAMeta):
     __slots__ = ()
 
 
-class Header(StructRNA, _GenericUI, metaclass=RNAMeta):
+class Header(_StructRNA, _GenericUI, metaclass=_RNAMeta):
     __slots__ = ()
 
 
-class Menu(StructRNA, _GenericUI, metaclass=RNAMeta):
+class Menu(_StructRNA, _GenericUI, metaclass=_RNAMeta):
     __slots__ = ()
 
     def path_menu(self, searchpaths, operator, *,
                   props_default=None, prop_filepath="filepath",
                   filter_ext=None, filter_path=None, display_name=None,
-                  add_operator=None):
+                  add_operator=None, add_operator_props=None):
         """
         Populate a menu from a list of paths.
 
@@ -1147,6 +1187,9 @@ class Menu(StructRNA, _GenericUI, metaclass=RNAMeta):
                 props = row.operator(add_operator, text="", icon='REMOVE')
                 props.name = name
                 props.remove_name = True
+                if add_operator_props is not None:
+                    for attr, value in add_operator_props.items():
+                        setattr(props, attr, value)
 
         if add_operator:
             wm = bpy.data.window_managers[0]
@@ -1160,6 +1203,9 @@ class Menu(StructRNA, _GenericUI, metaclass=RNAMeta):
 
             props = row.operator(add_operator, text="", icon='ADD')
             props.name = wm.preset_name
+            if add_operator_props is not None:
+                for attr, value in add_operator_props.items():
+                    setattr(props, attr, value)
 
     def draw_preset(self, _context):
         """
@@ -1176,12 +1222,14 @@ class Menu(StructRNA, _GenericUI, metaclass=RNAMeta):
         ext_valid = getattr(self, "preset_extensions", {".py", ".xml"})
         props_default = getattr(self, "preset_operator_defaults", None)
         add_operator = getattr(self, "preset_add_operator", None)
+        add_operator_props = getattr(self, "preset_add_operator_properties", None)
         self.path_menu(
             bpy.utils.preset_paths(self.preset_subdir),
             self.preset_operator,
             props_default=props_default,
             filter_ext=lambda ext: ext.lower() in ext_valid,
             add_operator=add_operator,
+            add_operator_props=add_operator_props,
             display_name=lambda name: bpy.path.display_name(name, title_case=False)
         )
 
@@ -1196,15 +1244,19 @@ class Menu(StructRNA, _GenericUI, metaclass=RNAMeta):
             layout.menu(cls.__name__, icon='COLLAPSEMENU')
 
 
-class AssetShelf(StructRNA, metaclass=RNAMeta):
+class AssetShelf(_StructRNA, metaclass=_RNAMeta):
     __slots__ = ()
 
 
-class NodeTree(bpy_types.ID, metaclass=RNAMetaPropGroup):
+class FileHandler(_StructRNA, metaclass=_RNAMeta):
     __slots__ = ()
 
 
-class Node(StructRNA, metaclass=RNAMetaPropGroup):
+class NodeTree(_types.ID, metaclass=_RNAMetaPropGroup):
+    __slots__ = ()
+
+
+class Node(_StructRNA, metaclass=_RNAMetaPropGroup):
     __slots__ = ()
 
     @classmethod
@@ -1216,7 +1268,7 @@ class NodeInternal(Node):
     __slots__ = ()
 
 
-class NodeSocket(StructRNA, metaclass=RNAMetaPropGroup):
+class NodeSocket(_StructRNA, metaclass=_RNAMetaPropGroup):
     __slots__ = ()
 
     @property
@@ -1224,18 +1276,25 @@ class NodeSocket(StructRNA, metaclass=RNAMetaPropGroup):
         """
         List of node links from or to this socket.
 
+        :type: :class:`NodeLinks`
+
         .. note:: Takes ``O(len(nodetree.links))`` time."""
-        return tuple(
-            link for link in self.id_data.links
-            if (link.from_socket == self or
-                link.to_socket == self))
+        links = (link for link in self.id_data.links
+                 if self in (link.from_socket, link.to_socket))
+
+        if not self.is_output:
+            links = sorted(links,
+                           key=lambda link: link.multi_input_sort_id,
+                           reverse=True)
+
+        return tuple(links)
 
 
-class NodeTreeInterfaceItem(StructRNA):
+class NodeTreeInterfaceItem(_StructRNA):
     __slots__ = ()
 
 
-class NodeTreeInterfaceSocket(NodeTreeInterfaceItem, metaclass=RNAMetaPropGroup):
+class NodeTreeInterfaceSocket(NodeTreeInterfaceItem, metaclass=_RNAMetaPropGroup):
     __slots__ = ()
 
 
@@ -1275,7 +1334,7 @@ class GeometryNode(NodeInternal):
         return ntree.bl_idname == 'GeometryNodeTree'
 
 
-class RenderEngine(StructRNA, metaclass=RNAMeta):
+class RenderEngine(_StructRNA, metaclass=_RNAMeta):
     __slots__ = ()
 
 
@@ -1341,3 +1400,27 @@ class HydraRenderEngine(RenderEngine):
 
         import _bpy_hydra
         _bpy_hydra.engine_view_draw(self.engine_ptr, context)
+
+
+class GreasePencilDrawing(_StructRNA):
+    __slots__ = ()
+
+    @property
+    def strokes(self):
+        """
+        Return a collection of all the Grease Pencil strokes in this drawing.
+
+        .. note::
+
+           This API should *not* be used for performance critical operations.
+           Use the :class:`GreasePencilDrawing.attributes` API instead.
+
+        .. note::
+
+            When point/curves count of a drawing is changed, the slice returned by this
+            call prior to the change is no longer valid. You need to get the new stroke
+            slice via `drawing.strokes[n]`.
+        """
+        from _bpy_internal.grease_pencil.stroke import GreasePencilStrokeSlice
+        num_strokes = self.attributes.domain_size('CURVE')
+        return GreasePencilStrokeSlice(self, 0, num_strokes)

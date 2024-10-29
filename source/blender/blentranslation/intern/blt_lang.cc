@@ -18,16 +18,16 @@
 
 #include "RNA_types.hh"
 
-#include "BLT_lang.h" /* own include */
-#include "BLT_translation.h"
+#include "BLT_lang.hh" /* own include */
+#include "BLT_translation.hh"
 
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 #include "BLI_string.h"
 #include "BLI_utildefines.h"
 
-#include "BKE_appdir.h"
+#include "BKE_appdir.hh"
 
-#include "IMB_thumbs.h"
+#include "IMB_thumbs.hh"
 
 #include "DNA_userdef_types.h"
 
@@ -65,16 +65,18 @@ static void free_locales()
 
 static void fill_locales()
 {
-  const char *const languages_path = BKE_appdir_folder_id(BLENDER_DATAFILES, "locale");
+  std::optional<std::string> languages_path = BKE_appdir_folder_id(BLENDER_DATAFILES, "locale");
   char languages[FILE_MAX];
-  LinkNode *lines = nullptr, *line;
+  LinkNode *lines = nullptr, *line = nullptr;
   char *str;
   int idx = 0;
 
   free_locales();
 
-  BLI_path_join(languages, FILE_MAX, languages_path, "languages");
-  line = lines = BLI_file_read_as_lines(languages);
+  if (languages_path.has_value()) {
+    BLI_path_join(languages, FILE_MAX, languages_path->c_str(), "languages");
+    line = lines = BLI_file_read_as_lines(languages);
+  }
 
   /* This whole "parsing" code is a bit weak, in that it expects strictly formatted input file...
    * Should not be a problem, though, as this file is script-generated! */
@@ -105,8 +107,7 @@ static void fill_locales()
   if (num_locales > 0) {
     locales = static_cast<const char **>(MEM_callocN(num_locales * sizeof(char *), __func__));
     while (line) {
-      int id;
-      char *loc, *sep1, *sep2, *sep3;
+      const char *loc, *sep1, *sep2, *sep3;
 
       str = (char *)line->link;
       if (ELEM(str[0], '#', '\0')) {
@@ -114,7 +115,7 @@ static void fill_locales()
         continue;
       }
 
-      id = atoi(str);
+      const int id = atoi(str);
       sep1 = strchr(str, ':');
       if (sep1) {
         sep1++;
@@ -169,7 +170,7 @@ static void fill_locales()
 }
 #endif /* WITH_INTERNATIONAL */
 
-EnumPropertyItem *BLT_lang_RNA_enum_properties()
+const EnumPropertyItem *BLT_lang_RNA_enum_properties()
 {
 #ifdef WITH_INTERNATIONAL
   return locales_menu;
@@ -181,7 +182,7 @@ EnumPropertyItem *BLT_lang_RNA_enum_properties()
 void BLT_lang_init()
 {
 #ifdef WITH_INTERNATIONAL
-  const char *const messagepath = BKE_appdir_folder_id(BLENDER_DATAFILES, "locale");
+  const std::optional<std::string> messagepath = BKE_appdir_folder_id(BLENDER_DATAFILES, "locale");
 #endif
 
 /* Make sure LANG is correct and wouldn't cause #std::runtime_error. */
@@ -212,8 +213,8 @@ void BLT_lang_init()
 #endif
 
 #ifdef WITH_INTERNATIONAL
-  if (messagepath) {
-    bl_locale_init(messagepath, TEXT_DOMAIN_NAME);
+  if (messagepath.has_value()) {
+    bl_locale_init(messagepath->c_str(), TEXT_DOMAIN_NAME);
     fill_locales();
   }
   else {
@@ -232,8 +233,18 @@ void BLT_lang_free()
 }
 
 #ifdef WITH_INTERNATIONAL
-#  define ULANGUAGE \
-    ((U.language >= ULANGUAGE_AUTO && U.language < num_locales) ? U.language : ULANGUAGE_ENGLISH)
+static uint lang_from_userdef()
+{
+  const uint language = uint(U.language);
+  if ((language >= ULANGUAGE_AUTO) && (language < num_locales)) {
+    return language;
+  }
+  return uint(ULANGUAGE_ENGLISH);
+}
+#endif
+
+#ifdef WITH_INTERNATIONAL
+#  define ULANGUAGE lang_from_userdef()
 #  define LOCALE(_id) (locales ? locales[(_id)] : "")
 #endif
 

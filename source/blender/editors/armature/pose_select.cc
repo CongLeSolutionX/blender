@@ -19,15 +19,14 @@
 
 #include "BLI_blenlib.h"
 
-#include "BKE_action.h"
+#include "BKE_action.hh"
 #include "BKE_armature.hh"
 #include "BKE_constraint.h"
 #include "BKE_context.hh"
-#include "BKE_gpencil_modifier_legacy.h"
-#include "BKE_layer.h"
+#include "BKE_layer.hh"
 #include "BKE_modifier.hh"
 #include "BKE_object.hh"
-#include "BKE_report.h"
+#include "BKE_report.hh"
 
 #include "DEG_depsgraph.hh"
 
@@ -41,15 +40,20 @@
 #include "ED_keyframing.hh"
 #include "ED_mesh.hh"
 #include "ED_object.hh"
+#include "ED_object_vgroup.hh"
 #include "ED_outliner.hh"
 #include "ED_screen.hh"
 #include "ED_select_utils.hh"
 #include "ED_view3d.hh"
 
-#include "ANIM_bone_collections.h"
+#include "ANIM_bone_collections.hh"
 #include "ANIM_bonecolor.hh"
+#include "ANIM_keyingsets.hh"
 
-#include "armature_intern.h"
+#include "armature_intern.hh"
+
+using blender::Span;
+using blender::Vector;
 
 /* utility macros for storing a temp int in the bone (selection flag) */
 #define PBONE_PREV_FLAG_GET(pchan) ((void)0, POINTER_AS_INT((pchan)->temp))
@@ -139,7 +143,7 @@ bool ED_armature_pose_select_pick_bone(const Scene *scene,
   bool found = false;
   bool changed = false;
 
-  if (ob || ob->pose) {
+  if (ob->pose) {
     if (bone && ((bone->flag & BONE_UNSELECTABLE) == 0)) {
       found = true;
     }
@@ -230,7 +234,7 @@ bool ED_armature_pose_select_pick_bone(const Scene *scene,
       /* In weight-paint we select the associated vertex group too. */
       if (ob_act->mode & OB_MODE_ALL_WEIGHT_PAINT) {
         if (bone == arm->act_bone) {
-          ED_vgroup_select_by_name(ob_act, bone->name);
+          blender::ed::object::vgroup_select_by_name(ob_act, bone->name);
           DEG_id_tag_update(&ob_act->id, ID_RECALC_GEOMETRY);
         }
       }
@@ -244,8 +248,8 @@ bool ED_armature_pose_select_pick_bone(const Scene *scene,
         DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
       }
 
-      /* Tag armature for copy-on-write update (since act_bone is in armature not object). */
-      DEG_id_tag_update(&arm->id, ID_RECALC_COPY_ON_WRITE);
+      /* Tag armature for copy-on-evaluation update (since act_bone is in armature not object). */
+      DEG_id_tag_update(&arm->id, ID_RECALC_SYNC_TO_EVAL);
     }
 
     changed = true;
@@ -258,8 +262,8 @@ bool ED_armature_pose_select_pick_with_buffer(const Scene *scene,
                                               ViewLayer *view_layer,
                                               View3D *v3d,
                                               Base *base,
-                                              const GPUSelectResult *buffer,
-                                              const short hits,
+                                              const GPUSelectResult *hit_results,
+                                              const int hits,
                                               const SelectPick_Params *params,
                                               bool do_nearest)
 {
@@ -273,7 +277,7 @@ bool ED_armature_pose_select_pick_with_buffer(const Scene *scene,
   /* Callers happen to already get the active base */
   Base *base_dummy = nullptr;
   nearBone = ED_armature_pick_bone_from_selectbuffer(
-      &base, 1, buffer, hits, true, do_nearest, &base_dummy);
+      {base}, hit_results, hits, true, do_nearest, &base_dummy);
 
   return ED_armature_pose_select_pick_bone(scene, view_layer, v3d, ob, nearBone, params);
 }
@@ -287,43 +291,23 @@ void ED_armature_pose_select_in_wpaint_mode(const Scene *scene,
   Object *ob_active = BKE_view_layer_active_object_get(view_layer);
   BLI_assert(ob_active && (ob_active->mode & OB_MODE_ALL_WEIGHT_PAINT));
 
-  if (ob_active->type == OB_GPENCIL_LEGACY) {
-    GpencilVirtualModifierData virtual_modifier_data;
-    GpencilModifierData *md = BKE_gpencil_modifiers_get_virtual_modifierlist(
-        ob_active, &virtual_modifier_data);
-    for (; md; md = md->next) {
-      if (md->type == eGpencilModifierType_Armature) {
-        ArmatureGpencilModifierData *agmd = (ArmatureGpencilModifierData *)md;
-        Object *ob_arm = agmd->object;
-        if (ob_arm != nullptr) {
-          Base *base_arm = BKE_view_layer_base_find(view_layer, ob_arm);
-          if ((base_arm != nullptr) && (base_arm != base_select) &&
-              (base_arm->flag & BASE_SELECTED)) {
-            ED_object_base_select(base_arm, BA_DESELECT);
-          }
-        }
-      }
-    }
-  }
-  else {
-    VirtualModifierData virtual_modifier_data;
-    ModifierData *md = BKE_modifiers_get_virtual_modifierlist(ob_active, &virtual_modifier_data);
-    for (; md; md = md->next) {
-      if (md->type == eModifierType_Armature) {
-        ArmatureModifierData *amd = (ArmatureModifierData *)md;
-        Object *ob_arm = amd->object;
-        if (ob_arm != nullptr) {
-          Base *base_arm = BKE_view_layer_base_find(view_layer, ob_arm);
-          if ((base_arm != nullptr) && (base_arm != base_select) &&
-              (base_arm->flag & BASE_SELECTED)) {
-            ED_object_base_select(base_arm, BA_DESELECT);
-          }
+  VirtualModifierData virtual_modifier_data;
+  ModifierData *md = BKE_modifiers_get_virtual_modifierlist(ob_active, &virtual_modifier_data);
+  for (; md; md = md->next) {
+    if (md->type == eModifierType_Armature) {
+      ArmatureModifierData *amd = (ArmatureModifierData *)md;
+      Object *ob_arm = amd->object;
+      if (ob_arm != nullptr) {
+        Base *base_arm = BKE_view_layer_base_find(view_layer, ob_arm);
+        if ((base_arm != nullptr) && (base_arm != base_select) && (base_arm->flag & BASE_SELECTED))
+        {
+          blender::ed::object::base_select(base_arm, blender::ed::object::BA_DESELECT);
         }
       }
     }
   }
   if ((base_select->flag & BASE_SELECTED) == 0) {
-    ED_object_base_select(base_select, BA_SELECT);
+    blender::ed::object::base_select(base_select, blender::ed::object::BA_SELECT);
   }
 }
 
@@ -375,10 +359,10 @@ static bool ed_pose_is_any_selected(Object *ob, bool ignore_visibility)
   return false;
 }
 
-static bool ed_pose_is_any_selected_multi(Base **bases, uint bases_len, bool ignore_visibility)
+static bool ed_pose_is_any_selected_multi(const Span<Base *> bases, bool ignore_visibility)
 {
-  for (uint base_index = 0; base_index < bases_len; base_index++) {
-    Object *ob_iter = bases[base_index]->object;
+  for (Base *base : bases) {
+    Object *ob_iter = base->object;
     if (ed_pose_is_any_selected(ob_iter, ignore_visibility)) {
       return true;
     }
@@ -386,20 +370,18 @@ static bool ed_pose_is_any_selected_multi(Base **bases, uint bases_len, bool ign
   return false;
 }
 
-bool ED_pose_deselect_all_multi_ex(Base **bases,
-                                   uint bases_len,
+bool ED_pose_deselect_all_multi_ex(const Span<Base *> bases,
                                    int select_mode,
                                    const bool ignore_visibility)
 {
   if (select_mode == SEL_TOGGLE) {
-    select_mode = ed_pose_is_any_selected_multi(bases, bases_len, ignore_visibility) ?
-                      SEL_DESELECT :
-                      SEL_SELECT;
+    select_mode = ed_pose_is_any_selected_multi(bases, ignore_visibility) ? SEL_DESELECT :
+                                                                            SEL_SELECT;
   }
 
   bool changed_multi = false;
-  for (uint base_index = 0; base_index < bases_len; base_index++) {
-    Object *ob_iter = bases[base_index]->object;
+  for (Base *base : bases) {
+    Object *ob_iter = base->object;
     if (ED_pose_deselect_all(ob_iter, select_mode, ignore_visibility)) {
       ED_pose_bone_select_tag_update(ob_iter);
       changed_multi = true;
@@ -412,14 +394,9 @@ bool ED_pose_deselect_all_multi(bContext *C, int select_mode, const bool ignore_
 {
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   ViewContext vc = ED_view3d_viewcontext_init(C, depsgraph);
-  uint bases_len = 0;
 
-  Base **bases = BKE_object_pose_base_array_get_unique(
-      vc.scene, vc.view_layer, vc.v3d, &bases_len);
-  bool changed_multi = ED_pose_deselect_all_multi_ex(
-      bases, bases_len, select_mode, ignore_visibility);
-  MEM_freeN(bases);
-  return changed_multi;
+  Vector<Base *> bases = BKE_object_pose_base_array_get_unique(vc.scene, vc.view_layer, vc.v3d);
+  return ED_pose_deselect_all_multi_ex(bases, select_mode, ignore_visibility);
 }
 
 /* ***************** Selections ********************** */
@@ -607,7 +584,7 @@ static int pose_de_select_all_exec(bContext *C, wmOperator *op)
         DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
       }
       /* need to tag armature for cow updates, or else selection doesn't update */
-      DEG_id_tag_update(&arm->id, ID_RECALC_COPY_ON_WRITE);
+      DEG_id_tag_update(&arm->id, ID_RECALC_SYNC_TO_EVAL);
       ob_prev = ob;
     }
   }
@@ -977,7 +954,7 @@ static bool pose_select_same_keyingset(bContext *C, ReportList *reports, bool ex
     BKE_report(reports, RPT_ERROR, "No active Keying Set to use");
     return false;
   }
-  if (ANIM_validate_keyingset(C, nullptr, ks) != 0) {
+  if (ANIM_validate_keyingset(C, nullptr, ks) != blender::animrig::ModifyKeyReturn::SUCCESS) {
     if (ks->paths.first == nullptr) {
       if ((ks->flag & KEYINGSET_ABSOLUTE) == 0) {
         BKE_report(reports,
@@ -1002,11 +979,9 @@ static bool pose_select_same_keyingset(bContext *C, ReportList *reports, bool ex
     CTX_DATA_END;
   }
 
-  uint objects_len = 0;
-  Object **objects = BKE_object_pose_array_get_unique(
-      scene, view_layer, CTX_wm_view3d(C), &objects_len);
+  Vector<Object *> objects = BKE_object_pose_array_get_unique(scene, view_layer, CTX_wm_view3d(C));
 
-  for (uint ob_index = 0; ob_index < objects_len; ob_index++) {
+  for (const int ob_index : objects.index_range()) {
     Object *ob = BKE_object_pose_armature_get(objects[ob_index]);
     bArmature *arm = static_cast<bArmature *>((ob) ? ob->data : nullptr);
     bPose *pose = (ob) ? ob->pose : nullptr;
@@ -1045,7 +1020,6 @@ static bool pose_select_same_keyingset(bContext *C, ReportList *reports, bool ex
       changed_multi = true;
     }
   }
-  MEM_freeN(objects);
 
   return changed_multi;
 }
@@ -1144,12 +1118,8 @@ static int pose_select_mirror_exec(bContext *C, wmOperator *op)
   const bool active_only = RNA_boolean_get(op->ptr, "only_active");
   const bool extend = RNA_boolean_get(op->ptr, "extend");
 
-  uint objects_len = 0;
-  Object **objects = BKE_object_pose_array_get_unique(
-      scene, view_layer, CTX_wm_view3d(C), &objects_len);
-
-  for (uint ob_index = 0; ob_index < objects_len; ob_index++) {
-    Object *ob = objects[ob_index];
+  Vector<Object *> objects = BKE_object_pose_array_get_unique(scene, view_layer, CTX_wm_view3d(C));
+  for (Object *ob : objects) {
     bArmature *arm = static_cast<bArmature *>(ob->data);
     bPoseChannel *pchan_mirror_act = nullptr;
 
@@ -1189,7 +1159,7 @@ static int pose_select_mirror_exec(bContext *C, wmOperator *op)
 
       /* In weight-paint we select the associated vertex group too. */
       if (is_weight_paint) {
-        ED_vgroup_select_by_name(ob_active, pchan_mirror_act->name);
+        blender::ed::object::vgroup_select_by_name(ob_active, pchan_mirror_act->name);
         DEG_id_tag_update(&ob_active->id, ID_RECALC_GEOMETRY);
       }
     }
@@ -1197,9 +1167,8 @@ static int pose_select_mirror_exec(bContext *C, wmOperator *op)
     WM_event_add_notifier(C, NC_OBJECT | ND_BONE_SELECT, ob);
 
     /* Need to tag armature for cow updates, or else selection doesn't update. */
-    DEG_id_tag_update(&arm->id, ID_RECALC_COPY_ON_WRITE);
+    DEG_id_tag_update(&arm->id, ID_RECALC_SYNC_TO_EVAL);
   }
-  MEM_freeN(objects);
 
   ED_outliner_select_sync_from_pose_bone_tag(C);
 

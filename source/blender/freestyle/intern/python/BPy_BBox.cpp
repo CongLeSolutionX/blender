@@ -27,20 +27,21 @@ int BBox_Init(PyObject *module)
   if (PyType_Ready(&BBox_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&BBox_Type);
-  PyModule_AddObject(module, "BBox", (PyObject *)&BBox_Type);
+  PyModule_AddObjectRef(module, "BBox", (PyObject *)&BBox_Type);
 
   return 0;
 }
 
 //------------------------INSTANCE METHODS ----------------------------------
 
-PyDoc_STRVAR(BBox_doc,
-             "Class for representing a bounding box.\n"
-             "\n"
-             ".. method:: __init__()\n"
-             "\n"
-             "   Default constructor.");
+PyDoc_STRVAR(
+    /* Wrap. */
+    BBox_doc,
+    "Class for representing a bounding box.\n"
+    "\n"
+    ".. method:: __init__()\n"
+    "\n"
+    "   Default constructor.");
 
 static int BBox_init(BPy_BBox *self, PyObject *args, PyObject *kwds)
 {

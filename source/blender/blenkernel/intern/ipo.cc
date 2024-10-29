@@ -41,20 +41,22 @@
 #include "BLI_string_utils.hh"
 #include "BLI_utildefines.h"
 
-#include "BLT_translation.h"
+#include "BLT_translation.hh"
 
-#include "BKE_action.h"
-#include "BKE_anim_data.h"
-#include "BKE_fcurve.h"
+#include "BKE_action.hh"
+#include "BKE_anim_data.hh"
+#include "BKE_fcurve.hh"
 #include "BKE_fcurve_driver.h"
-#include "BKE_global.h"
-#include "BKE_idtype.h"
+#include "BKE_global.hh"
+#include "BKE_idtype.hh"
 #include "BKE_ipo.h"
-#include "BKE_key.h"
-#include "BKE_lib_id.h"
-#include "BKE_lib_query.h"
-#include "BKE_main.h"
-#include "BKE_nla.h"
+#include "BKE_key.hh"
+#include "BKE_lib_id.hh"
+#include "BKE_lib_query.hh"
+#include "BKE_main.hh"
+#include "BKE_nla.hh"
+
+#include "ANIM_action.hh"
 
 #include "CLG_log.h"
 
@@ -69,6 +71,8 @@
 #endif
 
 static CLG_LogRef LOG = {"bke.ipo"};
+
+using namespace blender;
 
 static void ipo_free_data(ID *id)
 {
@@ -117,12 +121,12 @@ static void ipo_blend_read_data(BlendDataReader *reader, ID *id)
 {
   Ipo *ipo = (Ipo *)id;
 
-  BLO_read_list(reader, &(ipo->curve));
+  BLO_read_struct_list(reader, IpoCurve, &(ipo->curve));
 
   LISTBASE_FOREACH (IpoCurve *, icu, &ipo->curve) {
-    BLO_read_data_address(reader, &icu->bezt);
-    BLO_read_data_address(reader, &icu->bp);
-    BLO_read_data_address(reader, &icu->driver);
+    BLO_read_struct_array(reader, BezTriple, icu->totvert, &icu->bezt);
+    BLO_read_struct_array(reader, BPoint, icu->totvert, &icu->bp);
+    BLO_read_struct(reader, IpoDriver, &icu->driver);
 
     /* Undo generic endian switching. */
     if (BLO_read_requires_endian_switch(reader)) {
@@ -156,7 +160,8 @@ static void ipo_blend_read_data(BlendDataReader *reader, ID *id)
 
 IDTypeInfo IDType_ID_IP = {
     /*id_code*/ ID_IP,
-    /*id_filter*/ 0,
+    /*id_filter*/ FILTER_ID_IP,
+    /*dependencies_id_types*/ 0,
     /*main_listbase_index*/ INDEX_ID_IP,
     /*struct_size*/ sizeof(Ipo),
     /*name*/ "Ipo",
@@ -238,80 +243,80 @@ static AdrBit2Path *adrcode_bitmaps_to_paths(int blocktype, int adrcode, int *to
 /* ADRCODE to RNA-Path Conversion Code  - Standard */
 
 /* Object types */
-static const char *ob_adrcodes_to_paths(int adrcode, int *array_index)
+static const char *ob_adrcodes_to_paths(int adrcode, int *r_array_index)
 {
   /* Set array index like this in-case nothing sets it correctly. */
-  *array_index = 0;
+  *r_array_index = 0;
 
   /* result depends on adrcode */
   switch (adrcode) {
     case OB_LOC_X:
-      *array_index = 0;
+      *r_array_index = 0;
       return "location";
     case OB_LOC_Y:
-      *array_index = 1;
+      *r_array_index = 1;
       return "location";
     case OB_LOC_Z:
-      *array_index = 2;
+      *r_array_index = 2;
       return "location";
     case OB_DLOC_X:
-      *array_index = 0;
+      *r_array_index = 0;
       return "delta_location";
     case OB_DLOC_Y:
-      *array_index = 1;
+      *r_array_index = 1;
       return "delta_location";
     case OB_DLOC_Z:
-      *array_index = 2;
+      *r_array_index = 2;
       return "delta_location";
 
     case OB_ROT_X:
-      *array_index = 0;
+      *r_array_index = 0;
       return "rotation_euler";
     case OB_ROT_Y:
-      *array_index = 1;
+      *r_array_index = 1;
       return "rotation_euler";
     case OB_ROT_Z:
-      *array_index = 2;
+      *r_array_index = 2;
       return "rotation_euler";
     case OB_DROT_X:
-      *array_index = 0;
+      *r_array_index = 0;
       return "delta_rotation_euler";
     case OB_DROT_Y:
-      *array_index = 1;
+      *r_array_index = 1;
       return "delta_rotation_euler";
     case OB_DROT_Z:
-      *array_index = 2;
+      *r_array_index = 2;
       return "delta_rotation_euler";
 
     case OB_SIZE_X:
-      *array_index = 0;
+      *r_array_index = 0;
       return "scale";
     case OB_SIZE_Y:
-      *array_index = 1;
+      *r_array_index = 1;
       return "scale";
     case OB_SIZE_Z:
-      *array_index = 2;
+      *r_array_index = 2;
       return "scale";
     case OB_DSIZE_X:
-      *array_index = 0;
+      *r_array_index = 0;
       return "delta_scale";
     case OB_DSIZE_Y:
-      *array_index = 1;
+      *r_array_index = 1;
       return "delta_scale";
     case OB_DSIZE_Z:
-      *array_index = 2;
+      *r_array_index = 2;
       return "delta_scale";
     case OB_COL_R:
-      *array_index = 0;
+      *r_array_index = 0;
       return "color";
     case OB_COL_G:
-      *array_index = 1;
+      *r_array_index = 1;
       return "color";
     case OB_COL_B:
-      *array_index = 2;
+      *r_array_index = 2;
       return "color";
     case OB_COL_A:
-      *array_index = 3;
+      *r_array_index = 3;
       return "color";
 #if 0
     case OB_PD_FSTR:
@@ -353,54 +358,54 @@ static const char *ob_adrcodes_to_paths(int adrcode, int *array_index)
 /* PoseChannel types
  * NOTE: pchan name comes from 'actname' added earlier...
  */
-static const char *pchan_adrcodes_to_paths(int adrcode, int *array_index)
+static const char *pchan_adrcodes_to_paths(int adrcode, int *r_array_index)
 {
   /* Set array index like this in-case nothing sets it correctly. */
-  *array_index = 0;
+  *r_array_index = 0;
 
   /* result depends on adrcode */
   switch (adrcode) {
     case AC_QUAT_W:
-      *array_index = 0;
+      *r_array_index = 0;
       return "rotation_quaternion";
     case AC_QUAT_X:
-      *array_index = 1;
+      *r_array_index = 1;
       return "rotation_quaternion";
     case AC_QUAT_Y:
-      *array_index = 2;
+      *r_array_index = 2;
       return "rotation_quaternion";
     case AC_QUAT_Z:
-      *array_index = 3;
+      *r_array_index = 3;
       return "rotation_quaternion";
 
     case AC_EUL_X:
-      *array_index = 0;
+      *r_array_index = 0;
       return "rotation_euler";
     case AC_EUL_Y:
-      *array_index = 1;
+      *r_array_index = 1;
       return "rotation_euler";
     case AC_EUL_Z:
-      *array_index = 2;
+      *r_array_index = 2;
       return "rotation_euler";
 
     case AC_LOC_X:
-      *array_index = 0;
+      *r_array_index = 0;
       return "location";
     case AC_LOC_Y:
-      *array_index = 1;
+      *r_array_index = 1;
       return "location";
     case AC_LOC_Z:
-      *array_index = 2;
+      *r_array_index = 2;
       return "location";
 
     case AC_SIZE_X:
-      *array_index = 0;
+      *r_array_index = 0;
       return "scale";
     case AC_SIZE_Y:
-      *array_index = 1;
+      *r_array_index = 1;
       return "scale";
     case AC_SIZE_Z:
-      *array_index = 2;
+      *r_array_index = 2;
       return "scale";
   }
 
@@ -410,10 +415,10 @@ static const char *pchan_adrcodes_to_paths(int adrcode, int *array_index)
 }
 
 /* Constraint types */
-static const char *constraint_adrcodes_to_paths(int adrcode, int *array_index)
+static const char *constraint_adrcodes_to_paths(int adrcode, int *r_array_index)
 {
   /* Set array index like this in-case nothing sets it correctly. */
-  *array_index = 0;
+  *r_array_index = 0;
 
   /* result depends on adrcode */
   switch (adrcode) {
@@ -431,7 +436,7 @@ static const char *constraint_adrcodes_to_paths(int adrcode, int *array_index)
  * NOTE: as we don't have access to the keyblock where the data comes from (for now),
  *       we'll just use numerical indices for now...
  */
-static char *shapekey_adrcodes_to_paths(ID *id, int adrcode, int * /*array_index*/)
+static char *shapekey_adrcodes_to_paths(ID *id, int adrcode, int * /*r_array_index*/)
 {
   static char buf[128];
 
@@ -443,7 +448,7 @@ static char *shapekey_adrcodes_to_paths(ID *id, int adrcode, int * /*array_index
   else {
     /* Find the name of the ShapeKey (i.e. KeyBlock) to look for */
     Key *key = (Key *)id;
-    KeyBlock *kb = BKE_keyblock_from_key(key, adrcode);
+    KeyBlock *kb = BKE_keyblock_find_by_index(key, adrcode);
 
     /* setting that we alter is the "value" (i.e. keyblock.curval) */
     if (kb) {
@@ -461,7 +466,7 @@ static char *shapekey_adrcodes_to_paths(ID *id, int adrcode, int * /*array_index
 }
 
 /* MTex (Texture Slot) types */
-static const char *mtex_adrcodes_to_paths(int adrcode, int * /*array_index*/)
+static const char *mtex_adrcodes_to_paths(int adrcode, int * /*r_array_index*/)
 {
   const char *base = nullptr, *prop = nullptr;
   static char buf[128];
@@ -581,10 +586,10 @@ static const char *mtex_adrcodes_to_paths(int adrcode, int * /*array_index*/)
 }
 
 /* Texture types */
-static const char *texture_adrcodes_to_paths(int adrcode, int *array_index)
+static const char *texture_adrcodes_to_paths(int adrcode, int *r_array_index)
 {
   /* Set array index like this in-case nothing sets it correctly. */
-  *array_index = 0;
+  *r_array_index = 0;
 
   /* result depends on adrcode */
   switch (adrcode) {
@@ -607,16 +612,16 @@ static const char *texture_adrcodes_to_paths(int adrcode, int *array_index)
 
     /* voronoi */
     case TE_VNW1:
-      *array_index = 0;
+      *r_array_index = 0;
       return "feature_weights";
     case TE_VNW2:
-      *array_index = 1;
+      *r_array_index = 1;
       return "feature_weights";
     case TE_VNW3:
-      *array_index = 2;
+      *r_array_index = 2;
       return "feature_weights";
     case TE_VNW4:
-      *array_index = 3;
+      *r_array_index = 3;
       return "feature_weights";
     case TE_VNMEXP:
       return "minkovsky_exponent";
@@ -649,13 +654,13 @@ static const char *texture_adrcodes_to_paths(int adrcode, int *array_index)
       return "gain";
 
     case TE_COL_R:
-      *array_index = 0;
+      *r_array_index = 0;
       return "rgb_factor";
     case TE_COL_G:
-      *array_index = 1;
+      *r_array_index = 1;
       return "rgb_factor";
     case TE_COL_B:
-      *array_index = 2;
+      *r_array_index = 2;
       return "rgb_factor";
 
     case TE_BRIGHT:
@@ -668,41 +673,41 @@ static const char *texture_adrcodes_to_paths(int adrcode, int *array_index)
 }
 
 /* Material Types */
-static const char *material_adrcodes_to_paths(int adrcode, int *array_index)
+static const char *material_adrcodes_to_paths(int adrcode, int *r_array_index)
 {
   /* Set array index like this in-case nothing sets it correctly. */
-  *array_index = 0;
+  *r_array_index = 0;
 
   /* result depends on adrcode */
   switch (adrcode) {
     case MA_COL_R:
-      *array_index = 0;
+      *r_array_index = 0;
       return "diffuse_color";
     case MA_COL_G:
-      *array_index = 1;
+      *r_array_index = 1;
       return "diffuse_color";
     case MA_COL_B:
-      *array_index = 2;
+      *r_array_index = 2;
       return "diffuse_color";
 
     case MA_SPEC_R:
-      *array_index = 0;
+      *r_array_index = 0;
       return "specular_color";
     case MA_SPEC_G:
-      *array_index = 1;
+      *r_array_index = 1;
       return "specular_color";
     case MA_SPEC_B:
-      *array_index = 2;
+      *r_array_index = 2;
       return "specular_color";
 
     case MA_MIR_R:
-      *array_index = 0;
+      *r_array_index = 0;
       return "mirror_color";
     case MA_MIR_G:
-      *array_index = 1;
+      *r_array_index = 1;
       return "mirror_color";
     case MA_MIR_B:
-      *array_index = 2;
+      *r_array_index = 2;
       return "mirror_color";
 
     case MA_ALPHA:
@@ -754,30 +759,30 @@ static const char *material_adrcodes_to_paths(int adrcode, int *array_index)
       return "halo.add";
 
     default: /* for now, we assume that the others were MTex channels */
-      return mtex_adrcodes_to_paths(adrcode, array_index);
+      return mtex_adrcodes_to_paths(adrcode, r_array_index);
   }
 
   return nullptr;
 }
 
 /* Camera Types */
-static const char *camera_adrcodes_to_paths(int adrcode, int *array_index)
+static const char *camera_adrcodes_to_paths(int adrcode, int *r_array_index)
 {
   /* Set array index like this in-case nothing sets it correctly. */
-  *array_index = 0;
+  *r_array_index = 0;
 
   /* result depends on adrcode */
   switch (adrcode) {
     case CAM_LENS:
-#if 0  /* XXX this cannot be resolved easily... \
-        * perhaps we assume camera is perspective (works for most cases... */
+#if 0 /* XXX this cannot be resolved easily... \
+       * perhaps we assume camera is perspective (works for most cases... */
       if (ca->type == CAM_ORTHO) {
         return "ortho_scale";
       }
       else {
         return "lens";
       }
-#else  /* XXX lazy hack for now... */
+#else /* XXX lazy hack for now... */
       return "lens";
 #endif /* XXX this cannot be resolved easily */
 
@@ -806,10 +811,10 @@ static const char *camera_adrcodes_to_paths(int adrcode, int *array_index)
 }
 
 /* Light Types */
-static const char *light_adrcodes_to_paths(int adrcode, int *array_index)
+static const char *light_adrcodes_to_paths(int adrcode, int *r_array_index)
 {
   /* Set array index like this in-case nothing sets it correctly. */
-  *array_index = 0;
+  *r_array_index = 0;
 
   /* result depends on adrcode */
   switch (adrcode) {
@@ -817,13 +822,13 @@ static const char *light_adrcodes_to_paths(int adrcode, int *array_index)
       return "energy";
 
     case LA_COL_R:
-      *array_index = 0;
+      *r_array_index = 0;
       return "color";
     case LA_COL_G:
-      *array_index = 1;
+      *r_array_index = 1;
       return "color";
     case LA_COL_B:
-      *array_index = 2;
+      *r_array_index = 2;
       return "color";
 
     case LA_DIST:
@@ -843,7 +848,7 @@ static const char *light_adrcodes_to_paths(int adrcode, int *array_index)
       return "halo_intensity";
 
     default: /* for now, we assume that the others were MTex channels */
-      return mtex_adrcodes_to_paths(adrcode, array_index);
+      return mtex_adrcodes_to_paths(adrcode, r_array_index);
   }
 
   /* unrecognized adrcode, or not-yet-handled ones! */
@@ -851,10 +856,10 @@ static const char *light_adrcodes_to_paths(int adrcode, int *array_index)
 }
 
 /* Sound Types */
-static const char *sound_adrcodes_to_paths(int adrcode, int *array_index)
+static const char *sound_adrcodes_to_paths(int adrcode, int *r_array_index)
 {
   /* Set array index like this in-case nothing sets it correctly. */
-  *array_index = 0;
+  *r_array_index = 0;
 
   /* result depends on adrcode */
   switch (adrcode) {
@@ -877,30 +882,30 @@ static const char *sound_adrcodes_to_paths(int adrcode, int *array_index)
 }
 
 /* World Types */
-static const char *world_adrcodes_to_paths(int adrcode, int *array_index)
+static const char *world_adrcodes_to_paths(int adrcode, int *r_array_index)
 {
   /* Set array index like this in-case nothing sets it correctly. */
-  *array_index = 0;
+  *r_array_index = 0;
 
   /* result depends on adrcode */
   switch (adrcode) {
     case WO_HOR_R:
-      *array_index = 0;
+      *r_array_index = 0;
       return "horizon_color";
     case WO_HOR_G:
-      *array_index = 1;
+      *r_array_index = 1;
       return "horizon_color";
     case WO_HOR_B:
-      *array_index = 2;
+      *r_array_index = 2;
       return "horizon_color";
     case WO_ZEN_R:
-      *array_index = 0;
+      *r_array_index = 0;
       return "zenith_color";
     case WO_ZEN_G:
-      *array_index = 1;
+      *r_array_index = 1;
       return "zenith_color";
     case WO_ZEN_B:
-      *array_index = 2;
+      *r_array_index = 2;
       return "zenith_color";
 
     case WO_EXPOS:
@@ -916,17 +921,17 @@ static const char *world_adrcodes_to_paths(int adrcode, int *array_index)
       return "mist.height";
 
     default: /* for now, we assume that the others were MTex channels */
-      return mtex_adrcodes_to_paths(adrcode, array_index);
+      return mtex_adrcodes_to_paths(adrcode, r_array_index);
   }
 
   return nullptr;
 }
 
 /* Particle Types */
-static const char *particle_adrcodes_to_paths(int adrcode, int *array_index)
+static const char *particle_adrcodes_to_paths(int adrcode, int *r_array_index)
 {
   /* Set array index like this in-case nothing sets it correctly. */
-  *array_index = 0;
+  *r_array_index = 0;
 
   /* result depends on adrcode */
   switch (adrcode) {
@@ -945,13 +950,13 @@ static const char *particle_adrcodes_to_paths(int adrcode, int *array_index)
     case PART_LENGTH:
       return "settings.length";
     case PART_GRAV_X:
-      *array_index = 0;
+      *r_array_index = 0;
       return "settings.acceleration";
     case PART_GRAV_Y:
-      *array_index = 1;
+      *r_array_index = 1;
       return "settings.acceleration";
     case PART_GRAV_Z:
-      *array_index = 2;
+      *r_array_index = 2;
       return "settings.acceleration";
     case PART_KINK_AMP:
       return "settings.kink_amplitude";
@@ -1015,16 +1020,16 @@ static const char *particle_adrcodes_to_paths(int adrcode, int *array_index)
  *     - blocktype, adrcode      - determines setting to get
  *     - actname, constname, seq - used to build path
  * Output:
- *     - array_index             - index in property's array (if applicable) to use
+ *     - r_array_index           - index in property's array (if applicable) to use
  *     - return                  - the allocated path...
  */
 static char *get_rna_access(ID *id,
                             int blocktype,
                             int adrcode,
-                            char actname[],
-                            char constname[],
+                            const char actname[],
+                            const char constname[],
                             Sequence *seq,
-                            int *array_index)
+                            int *r_array_index)
 {
   DynStr *path = BLI_dynstr_new();
   const char *propname = nullptr;
@@ -1125,8 +1130,8 @@ static char *get_rna_access(ID *id,
    */
   if ((propname == nullptr) && (blocktype > 0)) {
     /* nothing was found, so exit */
-    if (array_index) {
-      *array_index = 0;
+    if (r_array_index) {
+      *r_array_index = 0;
     }
 
     BLI_dynstr_free(path);
@@ -1134,8 +1139,8 @@ static char *get_rna_access(ID *id,
     return nullptr;
   }
 
-  if (array_index) {
-    *array_index = dummy_index;
+  if (r_array_index) {
+    *r_array_index = dummy_index;
   }
 
   /* 'buf' _must_ be initialized in this block */
@@ -1193,7 +1198,7 @@ static char *get_rna_access(ID *id,
   BLI_dynstr_append(path, propname);
 
   /* if there was no array index pointer provided, add it to the path */
-  if (array_index == nullptr) {
+  if (r_array_index == nullptr) {
     SNPRINTF(buf, "[\"%d\"]", dummy_index);
     BLI_dynstr_append(path, buf);
   }
@@ -1620,10 +1625,10 @@ static void icu_to_fcurves(ID *id,
          * - their values were 0-1
          * - we now need as 'frames'
          */
-        if ((id) && (icu->blocktype == GS(id->name)) &&
+        if ((id) && (icu->blocktype == GS(id->name)) && (GS(id->name) == ID_CU_LEGACY) &&
             (fcu->rna_path && STREQ(fcu->rna_path, "eval_time")))
         {
-          Curve *cu = (Curve *)id;
+          const Curve *cu = (const Curve *)id;
 
           dst->vec[0][1] *= cu->pathlen;
           dst->vec[1][1] *= cu->pathlen;
@@ -1636,8 +1641,8 @@ static void icu_to_fcurves(ID *id,
          * - were also degrees/10
          */
         if (fcu->driver && fcu->driver->variables.first) {
-          DriverVar *dvar = static_cast<DriverVar *>(fcu->driver->variables.first);
-          DriverTarget *dtar = &dvar->targets[0];
+          const DriverVar *dvar = static_cast<const DriverVar *>(fcu->driver->variables.first);
+          const DriverTarget *dtar = &dvar->targets[0];
 
           if (ELEM(dtar->transChan, DTAR_TRANSCHAN_ROTX, DTAR_TRANSCHAN_ROTY, DTAR_TRANSCHAN_ROTZ))
           {
@@ -1777,6 +1782,10 @@ static void action_to_animato(
   bActionChannel *achan, *achann;
   bConstraintChannel *conchan, *conchann;
 
+  BLI_assert_msg(
+      act->wrap().is_action_legacy(),
+      "Conversion from pre-2.5 animation data should happen before conversion to layered Actions");
+
   /* only continue if there are Action Channels (indicating unconverted data) */
   if (BLI_listbase_is_empty(&act->chanbase)) {
     return;
@@ -1873,7 +1882,12 @@ static void ipo_to_animdata(
 
       SNPRINTF(nameBuf, "CDA:%s", ipo->id.name + 2);
 
-      adt->action = BKE_action_add(bmain, nameBuf);
+      bAction *action = BKE_action_add(bmain, nameBuf);
+      id_us_min(&action->id);
+      const bool assign_ok = animrig::assign_action(action, {*id, *adt});
+      BLI_assert_msg(assign_ok, "Expecting the assignment of a new Action to always work");
+      UNUSED_VARS_NDEBUG(assign_ok);
+
       if (G.debug & G_DEBUG) {
         printf("\t\tadded new action - '%s'\n", nameBuf);
       }
@@ -1911,7 +1925,9 @@ static void action_to_animdata(ID *id, bAction *act)
     if (G.debug & G_DEBUG) {
       printf("act_to_adt - set adt action to act\n");
     }
-    adt->action = act;
+    const bool assign_ok = animrig::assign_action(act, {*id, *adt});
+    BLI_assert_msg(assign_ok, "Expecting the assignment of a just-converted Action to work");
+    UNUSED_VARS_NDEBUG(assign_ok);
   }
 
   /* convert Action data */
@@ -2126,18 +2142,14 @@ void do_versions_ipos_to_animato(Main *bmain)
       nlastrips_to_animdata(id, &ob->nlastrips);
     }
     else if ((ob->ipo) || (ob->action)) {
-      /* Add AnimData block */
-      AnimData *adt = BKE_animdata_ensure_id(id);
+      BKE_animdata_ensure_id(id);
 
       /* Action first - so that Action name get conserved */
       if (ob->action) {
         action_to_animdata(id, ob->action);
 
-        /* Only decrease user-count if this Action isn't now being used by AnimData. */
-        if (ob->action != adt->action) {
-          id_us_min(&ob->action->id);
-          ob->action = nullptr;
-        }
+        id_us_min(&ob->action->id);
+        ob->action = nullptr;
       }
 
       /* IPO second... */
@@ -2152,7 +2164,7 @@ void do_versions_ipos_to_animato(Main *bmain)
     if (ob->pose) {
       LISTBASE_FOREACH (bPoseChannel *, pchan, &ob->pose->chanbase) {
         LISTBASE_FOREACH (bConstraint *, con, &pchan->constraints) {
-          /* if constraint has own IPO, convert add these to Object
+          /* if constraint has its own IPO, convert add these to Object
            * (NOTE: they're most likely to be drivers too)
            */
           if (con->ipo) {
@@ -2172,7 +2184,7 @@ void do_versions_ipos_to_animato(Main *bmain)
 
     /* check constraints for local IPO's */
     LISTBASE_FOREACH (bConstraint *, con, &ob->constraints) {
-      /* if constraint has own IPO, convert add these to Object
+      /* if constraint has its own IPO, convert add these to Object
        * (NOTE: they're most likely to be drivers too)
        */
       if (con->ipo) {
@@ -2459,7 +2471,7 @@ void do_versions_ipos_to_animato(Main *bmain)
 
     /* clear fake-users, and set user-count to zero to make sure it is cleared on file-save */
     ipo->id.us = 0;
-    ipo->id.flag &= ~LIB_FAKEUSER;
+    ipo->id.flag &= ~ID_FLAG_FAKEUSER;
   }
 
   /* free unused drivers from actions + ipos */

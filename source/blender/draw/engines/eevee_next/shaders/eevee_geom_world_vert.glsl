@@ -6,12 +6,15 @@
  * Custom full-screen triangle with placeholders varyings.
  */
 
-#pragma BLENDER_REQUIRE(draw_view_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_nodetree_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_surf_lib.glsl)
+#include "draw_view_lib.glsl"
+#include "eevee_nodetree_lib.glsl"
+#include "eevee_surf_lib.glsl"
 
 void main()
 {
+  /* (W)Intel drivers require all varying iface to be written to inside the Vertex shader. */
+  drw_ResourceID_iface.resource_index = 0;
+
   /* Full-screen triangle. */
   int v = gl_VertexID % 3;
   float x = float((v & 1) << 2) - 1.0;

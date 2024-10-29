@@ -15,6 +15,7 @@
 
 #include "BLI_ghash.h"
 #include "BLI_listbase.h"
+#include "BLI_string.h"
 #include "BLI_utildefines.h"
 
 #include "WM_message.hh"
@@ -293,10 +294,10 @@ void WM_msg_subscribe_rna_params(wmMsgBus *mbus,
 {
   wmMsgSubscribeKey_RNA msg_key_test = {{nullptr}};
 
-  /* use when added */
+  /* Use when added. */
   msg_key_test.msg.head.id = id_repr;
   msg_key_test.msg.head.type = WM_MSG_TYPE_RNA;
-  /* for lookup */
+  /* For lookup. */
   msg_key_test.msg.params = *msg_key_params;
 
   const char *none = "<none>";
@@ -316,7 +317,9 @@ void WM_msg_subscribe_rna_params(wmMsgBus *mbus,
     if (msg_key->msg.params.data_path == nullptr) {
       if (msg_key->msg.params.ptr.data != msg_key->msg.params.ptr.owner_id) {
         /* We assume prop type can't change. */
-        msg_key->msg.params.data_path = RNA_path_from_ID_to_struct(&msg_key->msg.params.ptr);
+        const std::optional<std::string> str = RNA_path_from_ID_to_struct(
+            &msg_key->msg.params.ptr);
+        msg_key->msg.params.data_path = str ? BLI_strdupn(str->c_str(), str->size()) : nullptr;
       }
     }
   }

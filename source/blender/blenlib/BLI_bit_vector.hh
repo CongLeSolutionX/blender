@@ -37,9 +37,8 @@
  * - `BLI_bitmap` should only be used in C code that can not use `blender::BitVector`.
  */
 
-#include <cstring>
-
 #include "BLI_allocator.hh"
+#include "BLI_bit_bool_conversion.hh"
 #include "BLI_bit_span.hh"
 #include "BLI_span.hh"
 
@@ -95,10 +94,10 @@ class BitVector {
 
   BitVector(NoExceptConstructor, Allocator allocator = {}) noexcept : BitVector(allocator) {}
 
-  BitVector(const BitVector &other) : BitVector(NoExceptConstructor(), other.allocator_)
+  BitVector(const BoundedBitSpan span) : BitVector(NoExceptConstructor())
   {
-    const int64_t ints_to_copy = other.used_ints_amount();
-    if (other.size_in_bits_ <= BitsInInlineBuffer) {
+    const int64_t ints_to_copy = required_ints_for_bits(span.size());
+    if (span.size() <= BitsInInlineBuffer) {
       /* The data is copied into the owned inline buffer. */
       data_ = inline_buffer_;
       capacity_in_bits_ = BitsInInlineBuffer;
@@ -109,15 +108,26 @@ class BitVector {
           allocator_.allocate(ints_to_copy * sizeof(BitInt), AllocationAlignment, __func__));
       capacity_in_bits_ = ints_to_copy * BitsPerInt;
     }
-    size_in_bits_ = other.size_in_bits_;
-    uninitialized_copy_n(other.data_, ints_to_copy, data_);
+    size_in_bits_ = span.size();
+    uninitialized_copy_n(span.data(), ints_to_copy, data_);
+  }
+
+  BitVector(const BitVector &other) : BitVector(BoundedBitSpan(other))
+  {
+    allocator_ = other.allocator_;
   }
 
   BitVector(BitVector &&other) noexcept : BitVector(NoExceptConstructor(), other.allocator_)
   {
     if (other.is_inline()) {
       /* Copy the data into the inline buffer. */
-      const int64_t ints_to_copy = other.used_ints_amount();
+      /* For small inline buffers, always copy all the bits because checking how many bits to copy
+       * would add additional overhead. */
+      int64_t ints_to_copy = IntsInInlineBuffer;
+      if constexpr (IntsInInlineBuffer > 8) {
+        /* Avoid copying too much unnecessary data in case the inline buffer is large. */
+        ints_to_copy = other.used_ints_amount();
+      }
       data_ = inline_buffer_;
       uninitialized_copy_n(other.data_, ints_to_copy, data_);
     }
@@ -149,10 +159,8 @@ class BitVector {
   explicit BitVector(const Span<bool> values, Allocator allocator = {})
       : BitVector(NoExceptConstructor(), allocator)
   {
-    this->resize(values.size());
-    for (const int64_t i : this->index_range()) {
-      (*this)[i].set(values[i]);
-    }
+    this->resize(values.size(), false);
+    or_bools_into_bits(values, *this);
   }
 
   ~BitVector()
@@ -188,6 +196,14 @@ class BitVector {
   int64_t size() const
   {
     return size_in_bits_;
+  }
+
+  /**
+   * Number of bits that can be stored before the BitVector has to grow.
+   */
+  int64_t capacity() const
+  {
+    return capacity_in_bits_;
   }
 
   bool is_empty() const
@@ -227,7 +243,7 @@ class BitVector {
 
   IndexRange index_range() const
   {
-    return {0, size_in_bits_};
+    return IndexRange(size_in_bits_);
   }
 
   /**
@@ -274,7 +290,7 @@ class BitVector {
     }
     size_in_bits_ = new_size_in_bits;
     if (old_size_in_bits < new_size_in_bits) {
-      MutableBitSpan(data_, IndexRange(old_size_in_bits, new_size_in_bits - old_size_in_bits))
+      MutableBitSpan(data_, IndexRange::from_begin_end(old_size_in_bits, new_size_in_bits))
           .set_all(value);
     }
   }

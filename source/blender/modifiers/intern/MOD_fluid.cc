@@ -13,35 +13,29 @@
 #include "BLI_task.h"
 #include "BLI_utildefines.h"
 
-#include "BLT_translation.h"
+#include "BLT_translation.hh"
 
-#include "DNA_collection_types.h"
 #include "DNA_fluid_types.h"
-#include "DNA_mesh_types.h"
 #include "DNA_object_force_types.h"
 #include "DNA_object_types.h"
-#include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
 
-#include "BKE_context.hh"
 #include "BKE_fluid.h"
-#include "BKE_layer.h"
-#include "BKE_lib_query.h"
+#include "BKE_lib_query.hh"
 #include "BKE_modifier.hh"
-#include "BKE_screen.hh"
+
+#include "RNA_access.hh"
 
 #include "UI_interface.hh"
 #include "UI_resources.hh"
 
-#include "RNA_access.hh"
-#include "RNA_prototypes.h"
+#include "RNA_prototypes.hh"
 
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_build.hh"
 #include "DEG_depsgraph_physics.hh"
 #include "DEG_depsgraph_query.hh"
 
-#include "MOD_modifiertypes.hh"
 #include "MOD_ui_common.hh"
 
 static void init_data(ModifierData *md)
@@ -114,16 +108,16 @@ static void fluid_modifier_do_isolated(void *userdata)
 }
 #endif /* WITH_FLUID */
 
-static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *me)
+static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *mesh)
 {
 #ifndef WITH_FLUID
   UNUSED_VARS(md, ctx);
-  return me;
+  return mesh;
 #else
   FluidModifierData *fmd = (FluidModifierData *)md;
 
   if (ctx->flag & MOD_APPLY_ORCO) {
-    return me;
+    return mesh;
   }
 
   /* Isolate execution of Mantaflow when running from dependency graph. The reason for this is
@@ -134,7 +128,7 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
   FluidIsolationData isolation_data;
   isolation_data.depsgraph = ctx->depsgraph;
   isolation_data.object = ctx->object;
-  isolation_data.mesh = me;
+  isolation_data.mesh = mesh;
   isolation_data.fmd = fmd;
   BLI_task_isolate(fluid_modifier_do_isolated, &isolation_data);
 
@@ -215,13 +209,25 @@ static void foreach_ID_link(ModifierData *md, Object *ob, IDWalkFunc walk, void 
   }
 }
 
+static void foreach_tex_link(ModifierData *md, Object *ob, TexWalkFunc walk, void *user_data)
+{
+  FluidModifierData *fmd = (FluidModifierData *)md;
+
+  if (fmd->type == MOD_FLUID_TYPE_FLOW && fmd->flow) {
+    PointerRNA ptr = RNA_pointer_create(&ob->id, &RNA_FluidFlowSettings, fmd->flow);
+    PropertyRNA *prop = RNA_struct_find_property(&ptr, "noise_texture");
+
+    walk(user_data, ob, md, &ptr, prop);
+  }
+}
+
 static void panel_draw(const bContext * /*C*/, Panel *panel)
 {
   uiLayout *layout = panel->layout;
 
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, nullptr);
 
-  uiItemL(layout, TIP_("Settings are inside the Physics tab"), ICON_NONE);
+  uiItemL(layout, RPT_("Settings are inside the Physics tab"), ICON_NONE);
 
   modifier_panel_end(layout, ptr);
 }
@@ -258,9 +264,10 @@ ModifierTypeInfo modifierType_Fluid = {
     /*depends_on_time*/ depends_on_time,
     /*depends_on_normals*/ nullptr,
     /*foreach_ID_link*/ foreach_ID_link,
-    /*foreach_tex_link*/ nullptr,
+    /*foreach_tex_link*/ foreach_tex_link,
     /*free_runtime_data*/ nullptr,
     /*panel_register*/ panel_register,
     /*blend_write*/ nullptr,
     /*blend_read*/ nullptr,
+    /*foreach_cache*/ nullptr,
 };

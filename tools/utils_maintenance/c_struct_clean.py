@@ -15,11 +15,6 @@ import os
 import sys
 import re
 
-from typing import (
-    Dict,
-    Optional,
-)
-
 PWD = os.path.dirname(__file__)
 sys.path.append(os.path.join(PWD, "modules"))
 
@@ -44,11 +39,11 @@ re_words = re.compile("[A-Za-z_][A-Za-z_0-9]*")
 re_match_struct = re.compile(r"struct\s+([A-Za-z_][A-Za-z_0-9]*)\s*;")
 
 
-def clean_structs(fn: str, data_src: str) -> Optional[str]:
+def clean_structs(fn: str, data_src: str) -> str | None:
     from pygments.token import Token
     from pygments import lexers
 
-    word_occurance: Dict[str, int] = {}
+    word_occurance: dict[str, int] = {}
 
     lex = lexers.get_lexer_by_name("c++")
     lex.get_tokens(data_src)
@@ -62,12 +57,12 @@ def clean_structs(fn: str, data_src: str) -> Optional[str]:
             if ty in Token.Comment:  # type: ignore
                 continue
 
-        for w_match in re_words.finditer(data_src):
-            w = w_match.group(0)
-            try:
-                word_occurance[w] += 1
-            except KeyError:
-                word_occurance[w] = 1
+    for w_match in re_words.finditer(data_src):
+        w = w_match.group(0)
+        try:
+            word_occurance[w] += 1
+        except KeyError:
+            word_occurance[w] = 1
 
     lines = data_src.splitlines(keepends=True)
 

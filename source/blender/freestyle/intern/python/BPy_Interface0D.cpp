@@ -36,44 +36,37 @@ int Interface0D_Init(PyObject *module)
   if (PyType_Ready(&Interface0D_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&Interface0D_Type);
-  PyModule_AddObject(module, "Interface0D", (PyObject *)&Interface0D_Type);
+  PyModule_AddObjectRef(module, "Interface0D", (PyObject *)&Interface0D_Type);
 
   if (PyType_Ready(&CurvePoint_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&CurvePoint_Type);
-  PyModule_AddObject(module, "CurvePoint", (PyObject *)&CurvePoint_Type);
+  PyModule_AddObjectRef(module, "CurvePoint", (PyObject *)&CurvePoint_Type);
 
   if (PyType_Ready(&SVertex_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&SVertex_Type);
-  PyModule_AddObject(module, "SVertex", (PyObject *)&SVertex_Type);
+  PyModule_AddObjectRef(module, "SVertex", (PyObject *)&SVertex_Type);
 
   if (PyType_Ready(&ViewVertex_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&ViewVertex_Type);
-  PyModule_AddObject(module, "ViewVertex", (PyObject *)&ViewVertex_Type);
+  PyModule_AddObjectRef(module, "ViewVertex", (PyObject *)&ViewVertex_Type);
 
   if (PyType_Ready(&StrokeVertex_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&StrokeVertex_Type);
-  PyModule_AddObject(module, "StrokeVertex", (PyObject *)&StrokeVertex_Type);
+  PyModule_AddObjectRef(module, "StrokeVertex", (PyObject *)&StrokeVertex_Type);
 
   if (PyType_Ready(&NonTVertex_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&NonTVertex_Type);
-  PyModule_AddObject(module, "NonTVertex", (PyObject *)&NonTVertex_Type);
+  PyModule_AddObjectRef(module, "NonTVertex", (PyObject *)&NonTVertex_Type);
 
   if (PyType_Ready(&TVertex_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&TVertex_Type);
-  PyModule_AddObject(module, "TVertex", (PyObject *)&TVertex_Type);
+  PyModule_AddObjectRef(module, "TVertex", (PyObject *)&TVertex_Type);
 
   SVertex_mathutils_register_callback();
   StrokeVertex_mathutils_register_callback();
@@ -83,12 +76,14 @@ int Interface0D_Init(PyObject *module)
 
 /*----------------------Interface1D methods ----------------------------*/
 
-PyDoc_STRVAR(Interface0D_doc,
-             "Base class for any 0D element.\n"
-             "\n"
-             ".. method:: __init__()\n"
-             "\n"
-             "   Default constructor.");
+PyDoc_STRVAR(
+    /* Wrap. */
+    Interface0D_doc,
+    "Base class for any 0D element.\n"
+    "\n"
+    ".. method:: __init__()\n"
+    "\n"
+    "   Default constructor.");
 
 static int Interface0D_init(BPy_Interface0D *self, PyObject *args, PyObject *kwds)
 {
@@ -116,16 +111,18 @@ static PyObject *Interface0D_repr(BPy_Interface0D *self)
       "type: %s - address: %p", self->if0D->getExactTypeName().c_str(), self->if0D);
 }
 
-PyDoc_STRVAR(Interface0D_get_fedge_doc,
-             ".. method:: get_fedge(inter)\n"
-             "\n"
-             "   Returns the FEdge that lies between this 0D element and the 0D\n"
-             "   element given as the argument.\n"
-             "\n"
-             "   :arg inter: A 0D element.\n"
-             "   :type inter: :class:`Interface0D`\n"
-             "   :return: The FEdge lying between the two 0D elements.\n"
-             "   :rtype: :class:`FEdge`");
+PyDoc_STRVAR(
+    /* Wrap. */
+    Interface0D_get_fedge_doc,
+    ".. method:: get_fedge(inter)\n"
+    "\n"
+    "   Returns the FEdge that lies between this 0D element and the 0D\n"
+    "   element given as the argument.\n"
+    "\n"
+    "   :arg inter: A 0D element.\n"
+    "   :type inter: :class:`Interface0D`\n"
+    "   :return: The FEdge lying between the two 0D elements.\n"
+    "   :rtype: :class:`FEdge`");
 
 static PyObject *Interface0D_get_fedge(BPy_Interface0D *self, PyObject *args, PyObject *kwds)
 {
@@ -156,20 +153,24 @@ static PyMethodDef BPy_Interface0D_methods[] = {
 
 /*----------------------Interface1D get/setters ----------------------------*/
 
-PyDoc_STRVAR(Interface0D_name_doc,
-             "The string of the name of this 0D element.\n"
-             "\n"
-             ":type: str");
+PyDoc_STRVAR(
+    /* Wrap. */
+    Interface0D_name_doc,
+    "The string of the name of this 0D element.\n"
+    "\n"
+    ":type: str");
 
 static PyObject *Interface0D_name_get(BPy_Interface0D *self, void * /*closure*/)
 {
   return PyUnicode_FromString(Py_TYPE(self)->tp_name);
 }
 
-PyDoc_STRVAR(Interface0D_point_3d_doc,
-             "The 3D point of this 0D element.\n"
-             "\n"
-             ":type: :class:`mathutils.Vector`");
+PyDoc_STRVAR(
+    /* Wrap. */
+    Interface0D_point_3d_doc,
+    "The 3D point of this 0D element.\n"
+    "\n"
+    ":type: :class:`mathutils.Vector`");
 
 static PyObject *Interface0D_point_3d_get(BPy_Interface0D *self, void * /*closure*/)
 {
@@ -180,10 +181,12 @@ static PyObject *Interface0D_point_3d_get(BPy_Interface0D *self, void * /*closur
   return Vector_from_Vec3f(p);
 }
 
-PyDoc_STRVAR(Interface0D_projected_x_doc,
-             "The X coordinate of the projected 3D point of this 0D element.\n"
-             "\n"
-             ":type: float");
+PyDoc_STRVAR(
+    /* Wrap. */
+    Interface0D_projected_x_doc,
+    "The X coordinate of the projected 3D point of this 0D element.\n"
+    "\n"
+    ":type: float");
 
 static PyObject *Interface0D_projected_x_get(BPy_Interface0D *self, void * /*closure*/)
 {
@@ -194,10 +197,12 @@ static PyObject *Interface0D_projected_x_get(BPy_Interface0D *self, void * /*clo
   return PyFloat_FromDouble(x);
 }
 
-PyDoc_STRVAR(Interface0D_projected_y_doc,
-             "The Y coordinate of the projected 3D point of this 0D element.\n"
-             "\n"
-             ":type: float");
+PyDoc_STRVAR(
+    /* Wrap. */
+    Interface0D_projected_y_doc,
+    "The Y coordinate of the projected 3D point of this 0D element.\n"
+    "\n"
+    ":type: float");
 
 static PyObject *Interface0D_projected_y_get(BPy_Interface0D *self, void * /*closure*/)
 {
@@ -208,10 +213,12 @@ static PyObject *Interface0D_projected_y_get(BPy_Interface0D *self, void * /*clo
   return PyFloat_FromDouble(y);
 }
 
-PyDoc_STRVAR(Interface0D_projected_z_doc,
-             "The Z coordinate of the projected 3D point of this 0D element.\n"
-             "\n"
-             ":type: float");
+PyDoc_STRVAR(
+    /* Wrap. */
+    Interface0D_projected_z_doc,
+    "The Z coordinate of the projected 3D point of this 0D element.\n"
+    "\n"
+    ":type: float");
 
 static PyObject *Interface0D_projected_z_get(BPy_Interface0D *self, void * /*closure*/)
 {
@@ -222,10 +229,12 @@ static PyObject *Interface0D_projected_z_get(BPy_Interface0D *self, void * /*clo
   return PyFloat_FromDouble(z);
 }
 
-PyDoc_STRVAR(Interface0D_point_2d_doc,
-             "The 2D point of this 0D element.\n"
-             "\n"
-             ":type: :class:`mathutils.Vector`");
+PyDoc_STRVAR(
+    /* Wrap. */
+    Interface0D_point_2d_doc,
+    "The 2D point of this 0D element.\n"
+    "\n"
+    ":type: :class:`mathutils.Vector`");
 
 static PyObject *Interface0D_point_2d_get(BPy_Interface0D *self, void * /*closure*/)
 {
@@ -236,10 +245,12 @@ static PyObject *Interface0D_point_2d_get(BPy_Interface0D *self, void * /*closur
   return Vector_from_Vec2f(p);
 }
 
-PyDoc_STRVAR(Interface0D_id_doc,
-             "The Id of this 0D element.\n"
-             "\n"
-             ":type: :class:`Id`");
+PyDoc_STRVAR(
+    /* Wrap. */
+    Interface0D_id_doc,
+    "The Id of this 0D element.\n"
+    "\n"
+    ":type: :class:`Id`");
 
 static PyObject *Interface0D_id_get(BPy_Interface0D *self, void * /*closure*/)
 {
@@ -250,10 +261,12 @@ static PyObject *Interface0D_id_get(BPy_Interface0D *self, void * /*closure*/)
   return BPy_Id_from_Id(id);  // return a copy
 }
 
-PyDoc_STRVAR(Interface0D_nature_doc,
-             "The nature of this 0D element.\n"
-             "\n"
-             ":type: :class:`Nature`");
+PyDoc_STRVAR(
+    /* Wrap. */
+    Interface0D_nature_doc,
+    "The nature of this 0D element.\n"
+    "\n"
+    ":type: :class:`Nature`");
 
 static PyObject *Interface0D_nature_get(BPy_Interface0D *self, void * /*closure*/)
 {

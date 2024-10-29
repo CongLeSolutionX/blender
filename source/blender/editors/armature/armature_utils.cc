@@ -17,21 +17,18 @@
 #include "BLI_string_utils.hh"
 
 #include "BKE_armature.hh"
-#include "BKE_context.hh"
-#include "BKE_deform.h"
-#include "BKE_global.h"
-#include "BKE_idprop.h"
-#include "BKE_lib_id.h"
-#include "BKE_main.h"
+#include "BKE_global.hh"
+#include "BKE_idprop.hh"
+#include "BKE_lib_id.hh"
+#include "BKE_main.hh"
 
 #include "DEG_depsgraph.hh"
 
 #include "ED_armature.hh"
-#include "ED_util.hh"
 
-#include "ANIM_bone_collections.h"
+#include "ANIM_bone_collections.hh"
 
-#include "armature_intern.h"
+#include "armature_intern.hh"
 
 #include <cstring>
 
@@ -59,17 +56,6 @@ void ED_armature_edit_sync_selection(ListBase *edbo)
       else {
         ebo->flag &= ~BONE_SELECTED;
       }
-    }
-  }
-}
-
-void ED_armature_edit_validate_active(bArmature *arm)
-{
-  EditBone *ebone = arm->act_edbone;
-
-  if (ebone) {
-    if (ebone->flag & BONE_HIDDEN_A) {
-      arm->act_edbone = nullptr;
     }
   }
 }
@@ -132,6 +118,7 @@ void bone_free(bArmature *arm, EditBone *bone)
     }
   }
 
+  BLI_freelistN(&bone->bone_collections);
   BLI_freelinkN(arm->edbo, bone);
 }
 
@@ -179,7 +166,8 @@ EditBone *ED_armature_ebone_find_shared_parent(EditBone *ebone_child[], const ui
   /* accumulate */
   for (uint i = 0; i < ebone_child_tot; i++) {
     for (EditBone *ebone_iter = ebone_child[i]->parent; ebone_iter;
-         ebone_iter = ebone_iter->parent) {
+         ebone_iter = ebone_iter->parent)
+    {
       EBONE_TEMP_UINT(ebone_iter) += 1;
     }
   }

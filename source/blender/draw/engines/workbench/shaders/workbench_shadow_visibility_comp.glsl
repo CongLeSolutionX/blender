@@ -2,8 +2,8 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#pragma BLENDER_REQUIRE(common_math_lib.glsl)
-#pragma BLENDER_REQUIRE(common_intersect_lib.glsl)
+#include "common_intersect_lib.glsl"
+#include "common_math_lib.glsl"
 
 shared uint shared_result;
 
@@ -77,6 +77,10 @@ void main()
   }
 
   ObjectBounds bounds = bounds_buf[gl_GlobalInvocationID.x];
+  if (!drw_bounds_are_valid(bounds)) {
+    /* Invalid bounding box. */
+    return;
+  }
   IsectBox box = isect_box_setup(bounds.bounding_corners[0].xyz,
                                  bounds.bounding_corners[1].xyz,
                                  bounds.bounding_corners[2].xyz,

@@ -10,18 +10,18 @@
  * needed.
  */
 
-#pragma BLENDER_REQUIRE(eevee_shadow_tag_usage_lib.glsl)
+#include "eevee_shadow_tag_usage_lib.glsl"
 
 void main()
 {
   ivec2 texel = ivec2(gl_GlobalInvocationID.xy);
-  ivec2 tex_size = textureSize(depth_tx, 0).xy;
+  ivec2 tex_size = input_depth_extent;
 
   if (!in_range_inclusive(texel, ivec2(0), ivec2(tex_size - 1))) {
     return;
   }
 
-  float depth = texelFetch(depth_tx, texel, 0).r;
+  float depth = texelFetch(hiz_tx, texel, 0).r;
   if (depth == 1.0) {
     return;
   }

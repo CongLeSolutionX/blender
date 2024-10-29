@@ -23,6 +23,8 @@
 #include "blender/sync.h"
 #include "blender/util.h"
 
+#include "integrator/denoiser.h"
+
 #include "util/debug.h"
 #include "util/foreach.h"
 #include "util/hash.h"
@@ -131,7 +133,7 @@ void BlenderSync::sync_recalc(BL::Depsgraph &b_depsgraph, BL::SpaceView3D &b_v3d
   /* Iterate over all IDs in this depsgraph. */
   for (BL::DepsgraphUpdate &b_update : b_depsgraph.updates) {
     /* TODO(sergey): Can do more selective filter here. For example, ignore changes made to
-     * screen datablock. Note that sync_data() needs to be called after object deletion, and
+     * screen data-block. Note that sync_data() needs to be called after object deletion, and
      * currently this is ensured by the scene ID tagged for update, which sets the `has_updates_`
      * flag. */
     has_updates_ = true;
@@ -187,7 +189,8 @@ void BlenderSync::sync_recalc(BL::Depsgraph &b_depsgraph, BL::SpaceView3D &b_v3d
           if (updated_geometry) {
             BL::Object::particle_systems_iterator b_psys;
             for (b_ob.particle_systems.begin(b_psys); b_psys != b_ob.particle_systems.end();
-                 ++b_psys) {
+                 ++b_psys)
+            {
               particle_system_map.set_recalc(b_ob);
             }
           }
@@ -250,7 +253,8 @@ void BlenderSync::sync_data(BL::RenderSettings &b_render,
                             BL::Object &b_override,
                             int width,
                             int height,
-                            void **python_thread_state)
+                            void **python_thread_state,
+                            const DeviceInfo &denoise_device_info)
 {
   /* For auto refresh images. */
   ImageManager *image_manager = scene->image_manager;
@@ -270,7 +274,7 @@ void BlenderSync::sync_data(BL::RenderSettings &b_render,
   const bool background = !b_v3d;
 
   sync_view_layer(b_view_layer);
-  sync_integrator(b_view_layer, background);
+  sync_integrator(b_view_layer, background, denoise_device_info);
   sync_film(b_view_layer, b_v3d);
   sync_shaders(b_depsgraph, b_v3d, auto_refresh_update);
   sync_images();
@@ -290,8 +294,6 @@ void BlenderSync::sync_data(BL::RenderSettings &b_render,
    * false = don't delete unused shaders, not supported. */
   shader_map.post_sync(false);
 
-  free_data_after_sync(b_depsgraph);
-
   VLOG_INFO << "Total time spent synchronizing data: " << timer.get_time();
 
   has_updates_ = false;
@@ -299,7 +301,9 @@ void BlenderSync::sync_data(BL::RenderSettings &b_render,
 
 /* Integrator */
 
-void BlenderSync::sync_integrator(BL::ViewLayer &b_view_layer, bool background)
+void BlenderSync::sync_integrator(BL::ViewLayer &b_view_layer,
+                                  bool background,
+                                  const DeviceInfo &denoise_device_info)
 {
   PointerRNA cscene = RNA_pointer_get(&b_scene.ptr, "cycles");
 
@@ -355,14 +359,43 @@ void BlenderSync::sync_integrator(BL::ViewLayer &b_view_layer, bool background)
     scene->light_manager->tag_update(scene, LightManager::UPDATE_ALL);
   }
 
-  SamplingPattern sampling_pattern;
-  if (use_developer_ui) {
-    sampling_pattern = (SamplingPattern)get_enum(
-        cscene, "sampling_pattern", SAMPLING_NUM_PATTERNS, SAMPLING_PATTERN_TABULATED_SOBOL);
+  SamplingPattern sampling_pattern = (SamplingPattern)get_enum(
+      cscene, "sampling_pattern", SAMPLING_NUM_PATTERNS, SAMPLING_PATTERN_TABULATED_SOBOL);
+
+  switch (sampling_pattern) {
+    case SAMPLING_PATTERN_AUTOMATIC:
+      if (!background) {
+        /* For interactive rendering, ensure that the first sample is in itself
+         * blue-noise-distributed for smooth viewport navigation. */
+        sampling_pattern = SAMPLING_PATTERN_BLUE_NOISE_FIRST;
+      }
+      else {
+        /* For non-interactive rendering, default to a full blue-noise pattern. */
+        sampling_pattern = SAMPLING_PATTERN_BLUE_NOISE_PURE;
+      }
+      break;
+    case SAMPLING_PATTERN_TABULATED_SOBOL:
+    case SAMPLING_PATTERN_BLUE_NOISE_PURE:
+      /* Always allowed. */
+      break;
+    default:
+      /* If not using developer UI, default to blue noise for "advanced" patterns. */
+      if (!use_developer_ui) {
+        sampling_pattern = SAMPLING_PATTERN_BLUE_NOISE_PURE;
+      }
+      break;
   }
-  else {
+
+  const bool is_vertex_baking = scene->bake_manager->get_baking() &&
+                                b_scene.render().bake().target() !=
+                                    BL::BakeSettings::target_IMAGE_TEXTURES;
+  scene->bake_manager->set_use_seed(is_vertex_baking);
+  if (is_vertex_baking) {
+    /* When baking vertex colors, the "pixels" in the output are unrelated to their neighbors,
+     * so blue-noise sampling makes no sense. */
     sampling_pattern = SAMPLING_PATTERN_TABULATED_SOBOL;
   }
+
   integrator->set_sampling_pattern(sampling_pattern);
 
   int samples = 1;
@@ -405,7 +438,8 @@ void BlenderSync::sync_integrator(BL::ViewLayer &b_view_layer, bool background)
   /* Only use scrambling distance in the viewport if user wants to. */
   bool preview_scrambling_distance = get_boolean(cscene, "preview_scrambling_distance");
   if ((preview && !preview_scrambling_distance) ||
-      sampling_pattern == SAMPLING_PATTERN_SOBOL_BURLEY) {
+      sampling_pattern != SAMPLING_PATTERN_TABULATED_SOBOL)
+  {
     scrambling_distance = 1.0f;
   }
 
@@ -455,13 +489,12 @@ void BlenderSync::sync_integrator(BL::ViewLayer &b_view_layer, bool background)
     integrator->set_guiding_roughness_threshold(get_float(cscene, "guiding_roughness_threshold"));
   }
 
-  DenoiseParams denoise_params = get_denoise_params(b_scene, b_view_layer, background);
+  DenoiseParams denoise_params = get_denoise_params(
+      b_scene, b_view_layer, background, denoise_device_info);
 
   /* No denoising support for vertex color baking, vertices packed into image
    * buffer have no relation to neighbors. */
-  if (scene->bake_manager->get_baking() &&
-      b_scene.render().bake().target() != BL::BakeSettings::target_IMAGE_TEXTURES)
-  {
+  if (is_vertex_baking) {
     denoise_params.use = false;
   }
 
@@ -472,10 +505,12 @@ void BlenderSync::sync_integrator(BL::ViewLayer &b_view_layer, bool background)
    * is that the interface and the integrator are technically out of sync. */
   if (denoise_params.use) {
     integrator->set_denoiser_type(denoise_params.type);
+    integrator->set_denoise_use_gpu(denoise_params.use_gpu);
     integrator->set_denoise_start_sample(denoise_params.start_sample);
     integrator->set_use_denoise_pass_albedo(denoise_params.use_pass_albedo);
     integrator->set_use_denoise_pass_normal(denoise_params.use_pass_normal);
     integrator->set_denoiser_prefilter(denoise_params.prefilter);
+    integrator->set_denoiser_quality(denoise_params.quality);
   }
 
   /* UPDATE_NONE as we don't want to tag the integrator as modified (this was done by the
@@ -551,6 +586,8 @@ void BlenderSync::sync_view_layer(BL::ViewLayer &b_view_layer)
 
   /* Material override. */
   view_layer.material_override = b_view_layer.material_override();
+  /* World override. */
+  view_layer.world_override = b_view_layer.world_override();
 
   /* Sample override. */
   PointerRNA cscene = RNA_pointer_get(&b_scene.ptr, "cycles");
@@ -579,12 +616,7 @@ void BlenderSync::sync_images()
   }
   /* Free buffers used by images which are not needed for render. */
   for (BL::Image &b_image : b_data.images) {
-    /* TODO(sergey): Consider making it an utility function to check
-     * whether image is considered builtin.
-     */
-    const bool is_builtin = b_image.packed_file() ||
-                            b_image.source() == BL::Image::source_GENERATED ||
-                            b_image.source() == BL::Image::source_MOVIE || b_engine.is_preview();
+    const bool is_builtin = image_is_builtin(b_image, b_engine);
     if (is_builtin == false) {
       b_image.buffers_free();
     }
@@ -638,6 +670,7 @@ static bool get_known_pass_type(BL::RenderPass &b_pass, PassType &type, PassMode
   MAP_PASS("AO", PASS_AO, false);
 
   MAP_PASS("BakePrimitive", PASS_BAKE_PRIMITIVE, false);
+  MAP_PASS("BakeSeed", PASS_BAKE_SEED, false);
   MAP_PASS("BakeDifferential", PASS_BAKE_DIFFERENTIAL, false);
 
   MAP_PASS("Denoising Normal", PASS_DENOISING_NORMAL, true);
@@ -785,6 +818,11 @@ void BlenderSync::free_data_after_sync(BL::Depsgraph &b_depsgraph)
    * but that will need some API support first.
    */
   for (BL::Object &b_ob : b_depsgraph.objects) {
+    /* Grease pencil render requires all evaluated objects available as-is after Cycles is done
+     * with its part. */
+    if (b_ob.type() == BL::Object::type_GREASEPENCIL || b_ob.type() == BL::Object::type_GPENCIL) {
+      continue;
+    }
     b_ob.cache_release();
   }
 }
@@ -878,7 +916,7 @@ SessionParams BlenderSync::get_session_params(BL::RenderEngine &b_engine,
   /* Device */
   params.threads = blender_device_threads(b_scene);
   params.device = blender_device_info(
-      b_preferences, b_scene, params.background, b_engine.is_preview());
+      b_preferences, b_scene, params.background, b_engine.is_preview(), params.denoise_device);
 
   /* samples */
   int samples = get_int(cscene, "samples");
@@ -949,7 +987,8 @@ SessionParams BlenderSync::get_session_params(BL::RenderEngine &b_engine,
 
 DenoiseParams BlenderSync::get_denoise_params(BL::Scene &b_scene,
                                               BL::ViewLayer &b_view_layer,
-                                              bool background)
+                                              bool background,
+                                              const DeviceInfo &denoise_device_info)
 {
   enum DenoiserInput {
     DENOISER_INPUT_RGB = 1,
@@ -968,8 +1007,11 @@ DenoiseParams BlenderSync::get_denoise_params(BL::Scene &b_scene,
     /* Final Render Denoising */
     denoising.use = get_boolean(cscene, "use_denoising");
     denoising.type = (DenoiserType)get_enum(cscene, "denoiser", DENOISER_NUM, DENOISER_NONE);
+    denoising.use_gpu = get_boolean(cscene, "denoising_use_gpu");
     denoising.prefilter = (DenoiserPrefilter)get_enum(
         cscene, "denoising_prefilter", DENOISER_PREFILTER_NUM, DENOISER_PREFILTER_NONE);
+    denoising.quality = (DenoiserQuality)get_enum(
+        cscene, "denoising_quality", DENOISER_QUALITY_NUM, DENOISER_QUALITY_HIGH);
 
     input_passes = (DenoiserInput)get_enum(
         cscene, "denoising_input_passes", DENOISER_INPUT_NUM, DENOISER_INPUT_RGB_ALBEDO_NORMAL);
@@ -986,8 +1028,11 @@ DenoiseParams BlenderSync::get_denoise_params(BL::Scene &b_scene,
     denoising.use = get_boolean(cscene, "use_preview_denoising");
     denoising.type = (DenoiserType)get_enum(
         cscene, "preview_denoiser", DENOISER_NUM, DENOISER_NONE);
+    denoising.use_gpu = get_boolean(cscene, "preview_denoising_use_gpu");
     denoising.prefilter = (DenoiserPrefilter)get_enum(
         cscene, "preview_denoising_prefilter", DENOISER_PREFILTER_NUM, DENOISER_PREFILTER_FAST);
+    denoising.quality = (DenoiserQuality)get_enum(
+        cscene, "preview_denoising_quality", DENOISER_QUALITY_NUM, DENOISER_QUALITY_BALANCED);
     denoising.start_sample = get_int(cscene, "preview_denoising_start_sample");
 
     input_passes = (DenoiserInput)get_enum(
@@ -995,13 +1040,8 @@ DenoiseParams BlenderSync::get_denoise_params(BL::Scene &b_scene,
 
     /* Auto select fastest denoiser. */
     if (denoising.type == DENOISER_NONE) {
-      if (!Device::available_devices(DEVICE_MASK_OPTIX).empty()) {
-        denoising.type = DENOISER_OPTIX;
-      }
-      else if (openimagedenoise_supported()) {
-        denoising.type = DENOISER_OPENIMAGEDENOISE;
-      }
-      else {
+      denoising.type = Denoiser::automatic_viewport_denoiser_type(denoise_device_info);
+      if (denoising.type == DENOISER_NONE) {
         denoising.use = false;
       }
     }

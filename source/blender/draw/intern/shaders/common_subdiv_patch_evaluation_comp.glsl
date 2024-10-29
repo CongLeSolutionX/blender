@@ -47,7 +47,7 @@ layout(std430, binding = 7) buffer patchParam_buffer
   OsdPatchParam patchParamBuffer[];
 };
 
-  /* Output buffer(s). */
+/* Output buffer(s). */
 
 #if defined(FVAR_EVALUATION)
 layout(std430, binding = 8) writeonly buffer outputFVarData
@@ -96,8 +96,8 @@ layout(std430, binding = 8) readonly buffer inputFlagsBuffer
 };
 float get_flag(int vertex)
 {
-  int char4 = flags_buffer[vertex / 4];
-  int flag = (char4 >> ((vertex % 4) * 8)) & 0xFF;
+  int char_4 = flags_buffer[vertex / 4];
+  int flag = (char_4 >> ((vertex % 4) * 8)) & 0xFF;
   if (flag >= 128) {
     flag = -128 + (flag - 128);
   }

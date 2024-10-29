@@ -15,12 +15,11 @@
  * https://www.ea.com/seed/news/seed-dd18-presentation-slides-raytracing
  */
 
-#pragma BLENDER_REQUIRE(draw_view_lib.glsl)
-#pragma BLENDER_REQUIRE(gpu_shader_codegen_lib.glsl)
-#pragma BLENDER_REQUIRE(gpu_shader_utildefines_lib.glsl)
-#pragma BLENDER_REQUIRE(gpu_shader_math_matrix_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_gbuffer_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_colorspace_lib.glsl)
+#include "draw_view_lib.glsl"
+#include "eevee_colorspace_lib.glsl"
+#include "gpu_shader_codegen_lib.glsl"
+#include "gpu_shader_math_matrix_lib.glsl"
+#include "gpu_shader_utildefines_lib.glsl"
 
 struct LocalStatistics {
   vec3 mean;
@@ -33,10 +32,12 @@ struct LocalStatistics {
 
 LocalStatistics local_statistics_get(ivec2 texel, vec3 center_radiance)
 {
+  vec3 center_radiance_YCoCg = colorspace_YCoCg_from_scene_linear(center_radiance);
+
   /* Build Local statistics (slide 46). */
   LocalStatistics result;
-  result.mean = center_radiance;
-  result.variance = center_radiance;
+  result.mean = center_radiance_YCoCg;
+  result.moment = square(center_radiance_YCoCg);
   float weight_accum = 1.0;
 
   for (int x = -1; x <= 1; x++) {
@@ -93,7 +94,8 @@ vec4 radiance_history_fetch(ivec2 texel, float bilinear_weight)
   if (!in_texture_range(texel, radiance_history_tx)) {
     return vec4(0.0);
   }
-  ivec2 history_tile = texel / RAYTRACE_GROUP_SIZE;
+
+  ivec3 history_tile = ivec3(texel / RAYTRACE_GROUP_SIZE, closure_index);
   /* Fetch previous tilemask to avoid loading invalid data. */
   bool is_valid_history = texelFetch(tilemask_history_tx, history_tile, 0).r != 0;
   /* Exclude unprocessed pixels. */
@@ -148,7 +150,7 @@ vec2 variance_history_sample(vec3 P)
   float history_variance = texture(variance_history_tx, uv).r;
 
   ivec2 history_texel = ivec2(floor(uv * vec2(textureSize(variance_history_tx, 0).xy)));
-  ivec2 history_tile = history_texel / RAYTRACE_GROUP_SIZE;
+  ivec3 history_tile = ivec3(history_texel / RAYTRACE_GROUP_SIZE, closure_index);
   /* Fetch previous tilemask to avoid loading invalid data. */
   bool is_valid_history = texelFetch(tilemask_history_tx, history_tile, 0).r != 0;
 
@@ -165,13 +167,19 @@ void main()
   ivec2 texel_fullres = ivec2(gl_LocalInvocationID.xy + tile_coord * tile_size);
   vec2 uv = (vec2(texel_fullres) + 0.5) * uniform_buf.raytrace.full_resolution_inv;
 
-  float in_variance = imageLoad(in_variance_img, texel_fullres).r;
-  vec3 in_radiance = imageLoad(in_radiance_img, texel_fullres).rgb;
+  /* Check if texel is out of bounds,
+   * so we can utilize fast texture functions and early-out if not. */
+  if (any(greaterThanEqual(texel_fullres, imageSize(in_radiance_img).xy))) {
+    return;
+  }
+
+  float in_variance = imageLoadFast(in_variance_img, texel_fullres).r;
+  vec3 in_radiance = imageLoadFast(in_radiance_img, texel_fullres).rgb;
 
   if (all(equal(in_radiance, FLT_11_11_10_MAX))) {
     /* Early out on pixels that were marked unprocessed by the previous pass. */
-    imageStore(out_radiance_img, texel_fullres, vec4(FLT_11_11_10_MAX, 0.0));
-    imageStore(out_variance_img, texel_fullres, vec4(0.0));
+    imageStoreFast(out_radiance_img, texel_fullres, vec4(FLT_11_11_10_MAX, 0.0));
+    imageStoreFast(out_variance_img, texel_fullres, vec4(0.0));
     return;
   }
 
@@ -185,7 +193,7 @@ void main()
   vec3 P = drw_point_screen_to_world(vec3(uv, scene_depth));
   vec4 history_radiance = radiance_history_sample(P, local);
   /* Reflection reprojection. */
-  float hit_depth = imageLoad(hit_depth_img, texel_fullres).r;
+  float hit_depth = imageLoadFast(hit_depth_img, texel_fullres).r;
   vec3 P_hit = drw_point_screen_to_world(vec3(uv, hit_depth));
   history_radiance += radiance_history_sample(P_hit, local);
   /* Finalize accumulation. */
@@ -201,7 +209,7 @@ void main()
   vec3 out_radiance = mix(
       colorspace_safe_color(in_radiance), colorspace_safe_color(history_radiance.rgb), mix_fac);
   /* This is feedback next frame as radiance_history_tx. */
-  imageStore(out_radiance_img, texel_fullres, vec4(out_radiance, 0.0));
+  imageStoreFast(out_radiance_img, texel_fullres, vec4(out_radiance, 0.0));
 
   /* Variance. */
 
@@ -211,5 +219,5 @@ void main()
   float mix_variance_fac = (history_variance.y == 0.0) ? 0.0 : 0.90;
   float out_variance = mix(in_variance, history_variance.x, mix_variance_fac);
   /* This is feedback next frame as variance_history_tx. */
-  imageStore(out_variance_img, texel_fullres, vec4(out_variance));
+  imageStoreFast(out_variance_img, texel_fullres, vec4(out_variance));
 }

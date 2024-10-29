@@ -4,15 +4,16 @@
 
 #include <sstream>
 
-#include "BKE_appdir.h"
+#include "BKE_appdir.hh"
 
 #include "DNA_userdef_types.h"
 
 #include "UI_string_search.hh"
 
+#include "BLI_fileops.h"
 #include "BLI_fileops.hh"
 #include "BLI_map.hh"
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 
 namespace blender::ui::string_search {
 
@@ -52,12 +53,14 @@ const RecentCache *get_recent_cache_or_null()
 
 static std::optional<std::string> get_recent_searches_file_path()
 {
-  const char *user_config_dir = BKE_appdir_folder_id_create(BLENDER_USER_CONFIG, nullptr);
-  if (!user_config_dir) {
+  const std::optional<std::string> user_config_dir = BKE_appdir_folder_id_create(
+      BLENDER_USER_CONFIG, nullptr);
+  if (!user_config_dir.has_value()) {
     return std::nullopt;
   }
   char filepath[FILE_MAX];
-  BLI_path_join(filepath, sizeof(filepath), user_config_dir, BLENDER_RECENT_SEARCHES_FILE);
+  BLI_path_join(
+      filepath, sizeof(filepath), user_config_dir->c_str(), BLENDER_RECENT_SEARCHES_FILE);
   return std::string(filepath);
 }
 
@@ -73,6 +76,11 @@ void write_recent_searches_file()
   }
 
   const RecentCacheStorage &storage = get_recent_cache_storage();
+  /* Avoid creating an empty file. */
+  if (storage.cache.logical_time_by_str.is_empty() && !BLI_exists((*path).c_str())) {
+    return;
+  }
+
   Vector<std::pair<int, std::string>> values;
   for (const auto item : storage.cache.logical_time_by_str.items()) {
     values.append({item.value, item.key});

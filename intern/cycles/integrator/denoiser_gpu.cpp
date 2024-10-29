@@ -15,9 +15,11 @@
 
 CCL_NAMESPACE_BEGIN
 
-DenoiserGPU::DenoiserGPU(Device *path_trace_device, const DenoiseParams &params)
-    : Denoiser(path_trace_device, params)
+DenoiserGPU::DenoiserGPU(Device *denoiser_device, const DenoiseParams &params)
+    : Denoiser(denoiser_device, params)
 {
+  denoiser_queue_ = denoiser_device->gpu_queue_create();
+  DCHECK(denoiser_queue_);
 }
 
 DenoiserGPU::~DenoiserGPU()
@@ -154,23 +156,6 @@ bool DenoiserGPU::denoise_filter_guiding_preprocess(const DenoiseContext &contex
                              &context.num_samples);
 
   return denoiser_queue_->enqueue(DEVICE_KERNEL_FILTER_GUIDING_PREPROCESS, work_size, args);
-}
-
-Device *DenoiserGPU::ensure_denoiser_device(Progress *progress)
-{
-  Device *denoiser_device = Denoiser::ensure_denoiser_device(progress);
-  if (!denoiser_device) {
-    return nullptr;
-  }
-
-  if (!denoiser_queue_) {
-    denoiser_queue_ = denoiser_device->gpu_queue_create();
-    if (!denoiser_queue_) {
-      return nullptr;
-    }
-  }
-
-  return denoiser_device;
 }
 
 DenoiserGPU::DenoiseContext::DenoiseContext(Device *device, const DenoiseTask &task)
@@ -324,9 +309,9 @@ void DenoiserGPU::denoise_color_read(const DenoiseContext &context, const Denois
       denoiser_queue_.get(), pass_access_info, 1.0f, context.num_samples);
 
   PassAccessor::Destination destination(pass_access_info.type);
-  destination.d_pixels = context.render_buffers->buffer.device_pointer +
-                         pass.denoised_offset * sizeof(float);
+  destination.d_pixels = context.render_buffers->buffer.device_pointer;
   destination.num_components = 3;
+  destination.pixel_offset = pass.denoised_offset;
   destination.pixel_stride = context.buffer_params.pass_stride;
 
   BufferParams buffer_params = context.buffer_params;

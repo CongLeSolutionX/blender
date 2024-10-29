@@ -19,7 +19,6 @@
 #include "BLI_utildefines.h"
 
 #include "DNA_anim_types.h"
-#include "DNA_collection_types.h"
 #include "DNA_curve_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_space_types.h"
@@ -28,17 +27,18 @@
 
 #include "BKE_addon.h"
 #include "BKE_blender_version.h"
-#include "BKE_colorband.h"
-#include "BKE_idprop.h"
+#include "BKE_colorband.hh"
+#include "BKE_idprop.hh"
 #include "BKE_keyconfig.h"
-#include "BKE_main.h"
+#include "BKE_main.hh"
 #include "BKE_preferences.h"
 
-#include "BLO_readfile.h"
+#include "BLO_readfile.hh"
+#include "BLO_userdef_default.h"
 
-#include "BLT_translation.h"
+#include "BLT_translation.hh"
 
-#include "GPU_platform.h"
+#include "GPU_platform.hh"
 
 #include "MEM_guardedalloc.h"
 
@@ -52,7 +52,7 @@
  * If this is important we can set the translations as part of versioning preferences,
  * however that should only be done if there are important use-cases. */
 #if 0
-#  include "BLT_translation.h"
+#  include "BLT_translation.hh"
 #else
 #  define N_(msgid) msgid
 #endif
@@ -67,7 +67,7 @@ static void do_versions_theme(const UserDef *userdef, bTheme *btheme)
 #define FROM_DEFAULT_V4_UCHAR(member) copy_v4_v4_uchar(btheme->member, U_theme_default.member)
 
   if (!USER_VERSION_ATLEAST(300, 41)) {
-    memcpy(btheme, &U_theme_default, sizeof(*btheme));
+    MEMCPY_STRUCT_AFTER(btheme, &U_theme_default, name);
   }
 
   /* Again reset the theme, but only if stored with an early 3.1 alpha version. Some changes were
@@ -76,7 +76,7 @@ static void do_versions_theme(const UserDef *userdef, bTheme *btheme)
    * don't want to reset theme changes stored in the eventual 3.0 release once opened in a 3.1
    * build. */
   if (userdef->versionfile > 300 && !USER_VERSION_ATLEAST(301, 1)) {
-    memcpy(btheme, &U_theme_default, sizeof(*btheme));
+    MEMCPY_STRUCT_AFTER(btheme, &U_theme_default, name);
   }
 
   if (!USER_VERSION_ATLEAST(301, 2)) {
@@ -140,18 +140,76 @@ static void do_versions_theme(const UserDef *userdef, bTheme *btheme)
     FROM_DEFAULT_V4_UCHAR(space_view3d.face_mode_select);
   }
 
+  if (!USER_VERSION_ATLEAST(402, 13)) {
+    FROM_DEFAULT_V4_UCHAR(space_text.hilite);
+    FROM_DEFAULT_V4_UCHAR(space_console.console_cursor);
+  }
+
+  if (!USER_VERSION_ATLEAST(402, 16)) {
+    BLI_uniquename(
+        &userdef->themes, btheme, "Theme", '.', offsetof(bTheme, name), sizeof(btheme->name));
+  }
+
+  if (!USER_VERSION_ATLEAST(402, 17)) {
+    FROM_DEFAULT_V4_UCHAR(space_action.keytype_generated);
+    FROM_DEFAULT_V4_UCHAR(space_action.keytype_generated_select);
+  }
+
+  if (!USER_VERSION_ATLEAST(402, 21)) {
+    FROM_DEFAULT_V4_UCHAR(space_image.asset_shelf.back);
+    FROM_DEFAULT_V4_UCHAR(space_image.asset_shelf.header_back);
+  }
+
+  if (!USER_VERSION_ATLEAST(402, 47)) {
+    FROM_DEFAULT_V4_UCHAR(space_view3d.time_gp_keyframe);
+  }
+
+  if (!USER_VERSION_ATLEAST(403, 1)) {
+    FROM_DEFAULT_V4_UCHAR(space_sequencer.keytype_generated);
+    FROM_DEFAULT_V4_UCHAR(space_sequencer.keytype_generated_select);
+  }
+
+  if (!USER_VERSION_ATLEAST(402, 62)) {
+    FROM_DEFAULT_V4_UCHAR(space_sequencer.audio);
+    FROM_DEFAULT_V4_UCHAR(space_sequencer.color_strip);
+    FROM_DEFAULT_V4_UCHAR(space_sequencer.effect);
+    FROM_DEFAULT_V4_UCHAR(space_sequencer.image);
+    FROM_DEFAULT_V4_UCHAR(space_sequencer.mask);
+    FROM_DEFAULT_V4_UCHAR(space_sequencer.meta);
+    FROM_DEFAULT_V4_UCHAR(space_sequencer.movie);
+    FROM_DEFAULT_V4_UCHAR(space_sequencer.movieclip);
+    FROM_DEFAULT_V4_UCHAR(space_sequencer.scene);
+    FROM_DEFAULT_V4_UCHAR(space_sequencer.text_strip);
+    FROM_DEFAULT_V4_UCHAR(space_sequencer.transition);
+  }
+
+  if (!USER_VERSION_ATLEAST(403, 5)) {
+    FROM_DEFAULT_V4_UCHAR(space_view3d.before_current_frame);
+    FROM_DEFAULT_V4_UCHAR(space_view3d.after_current_frame);
+    FROM_DEFAULT_V4_UCHAR(space_sequencer.before_current_frame);
+    FROM_DEFAULT_V4_UCHAR(space_sequencer.after_current_frame);
+  }
+
+  if (!USER_VERSION_ATLEAST(403, 18)) {
+    FROM_DEFAULT_V4_UCHAR(tui.icon_autokey);
+  }
+
+  if (!USER_VERSION_ATLEAST(403, 25)) {
+    FROM_DEFAULT_V4_UCHAR(space_node.node_zone_foreach_geometry_element);
+  }
+
+  if (!USER_VERSION_ATLEAST(403, 27)) {
+    FROM_DEFAULT_V4_UCHAR(tui.editor_border);
+    FROM_DEFAULT_V4_UCHAR(tui.editor_outline);
+    FROM_DEFAULT_V4_UCHAR(tui.editor_outline_active);
+  }
+
   /**
-   * Versioning code until next subversion bump goes here.
-   *
-   * \note Be sure to check when bumping the version:
-   * - #blo_do_versions_userdef in this file.
-   * - "versioning_{BLENDER_VERSION}.c"
+   * Always bump subversion in BKE_blender_version.h when adding versioning
+   * code here, and wrap it inside a USER_VERSION_ATLEAST check.
    *
    * \note Keep this message at the bottom of the function.
    */
-  {
-    /* Keep this block, even when empty. */
-  }
 
 #undef FROM_DEFAULT_V4_UCHAR
 
@@ -161,7 +219,7 @@ static void do_versions_theme(const UserDef *userdef, bTheme *btheme)
 /** #UserDef.flag */
 #define USER_LMOUSESELECT (1 << 14) /* deprecated */
 
-static void do_version_select_mouse(UserDef *userdef, wmKeyMapItem *kmi)
+static void do_version_select_mouse(const UserDef *userdef, wmKeyMapItem *kmi)
 {
   /* Remove select/action mouse from user defined keymaps. */
   enum {
@@ -267,6 +325,18 @@ void blo_do_versions_userdef(UserDef *userdef)
   if (userdef->pad_rot_angle == 0.0f) {
     userdef->pad_rot_angle = 15.0f;
   }
+
+  /* If the userdef was created on a different platform, it may have an
+   * unsupported GPU backend selected.  If so, pick a supported default. */
+#ifdef __APPLE__
+  if (userdef->gpu_backend == GPU_BACKEND_OPENGL) {
+    userdef->gpu_backend = GPU_BACKEND_METAL;
+  }
+#else
+  if (userdef->gpu_backend == GPU_BACKEND_METAL) {
+    userdef->gpu_backend = GPU_BACKEND_OPENGL;
+  }
+#endif
 
   /* graph editor - unselected F-Curve visibility */
   if (userdef->fcu_inactive_alpha == 0) {
@@ -409,7 +479,7 @@ void blo_do_versions_userdef(UserDef *userdef)
   if (!USER_VERSION_ATLEAST(257, 0)) {
     /* Clear #AUTOKEY_FLAG_ONLYKEYINGSET flag from user-preferences,
      * so that it doesn't linger around from old configurations like a ghost. */
-    userdef->autokey_flag &= ~AUTOKEY_FLAG_ONLYKEYINGSET;
+    userdef->keying_flag &= ~AUTOKEY_FLAG_ONLYKEYINGSET;
   }
 
   if (!USER_VERSION_ATLEAST(260, 3)) {
@@ -475,7 +545,7 @@ void blo_do_versions_userdef(UserDef *userdef)
   }
 
   if (!USER_VERSION_ATLEAST(275, 2)) {
-    userdef->ndof_deadzone = 0.1;
+    userdef->ndof_deadzone = 0.0;
   }
 
   if (!USER_VERSION_ATLEAST(275, 4)) {
@@ -485,11 +555,11 @@ void blo_do_versions_userdef(UserDef *userdef)
   if (!USER_VERSION_ATLEAST(278, 6)) {
     /* Clear preference flags for re-use. */
     userdef->flag &= ~(USER_FLAG_NUMINPUT_ADVANCED | (1 << 2) | USER_FLAG_UNUSED_3 |
-                       USER_FLAG_UNUSED_6 | USER_FLAG_UNUSED_7 | USER_FLAG_UNUSED_9 |
+                       USER_FLAG_UNUSED_6 | USER_FLAG_UNUSED_7 | USER_INTERNET_ALLOW |
                        USER_DEVELOPER_UI);
     userdef->uiflag &= ~(USER_HEADER_BOTTOM);
-    userdef->transopts &= ~(USER_TR_UNUSED_2 | USER_TR_UNUSED_3 | USER_TR_UNUSED_4 |
-                            USER_TR_UNUSED_6 | USER_TR_UNUSED_7);
+    userdef->transopts &= ~(USER_TR_UNUSED_3 | USER_TR_UNUSED_4 | USER_TR_UNUSED_6 |
+                            USER_TR_UNUSED_7);
 
     userdef->uiflag |= USER_LOCK_CURSOR_ADJUST;
   }
@@ -499,7 +569,7 @@ void blo_do_versions_userdef(UserDef *userdef)
 
     /* Reset theme, old themes will not be compatible with minor version updates from now on. */
     LISTBASE_FOREACH (bTheme *, btheme, &userdef->themes) {
-      memcpy(btheme, &U_theme_default, sizeof(*btheme));
+      MEMCPY_STRUCT_AFTER(btheme, &U_theme_default, name);
     }
 
     /* Annotations - new layer color
@@ -862,15 +932,6 @@ void blo_do_versions_userdef(UserDef *userdef)
     BKE_addon_remove_safe(&userdef->addons, "io_scene_obj");
   }
 
-  if (!USER_VERSION_ATLEAST(400, 12)) {
-#ifdef __APPLE__
-    /* Drop OpenGL support on MAC devices as they don't support OpenGL 4.3. */
-    if (userdef->gpu_backend == GPU_BACKEND_OPENGL) {
-      userdef->gpu_backend = GPU_BACKEND_METAL;
-    }
-#endif
-  }
-
   if (!USER_VERSION_ATLEAST(400, 15)) {
     userdef->node_preview_res = 120;
   }
@@ -885,7 +946,7 @@ void blo_do_versions_userdef(UserDef *userdef)
 
   if (!USER_VERSION_ATLEAST(400, 24)) {
     /* Clear deprecated USER_MENUFIXEDORDER user flag for reuse. */
-    userdef->uiflag &= ~USER_UIFLAG_UNUSED_4;
+    userdef->uiflag &= ~(1 << 23);
   }
 
   if (!USER_VERSION_ATLEAST(400, 26)) {
@@ -900,26 +961,133 @@ void blo_do_versions_userdef(UserDef *userdef)
     LISTBASE_FOREACH (uiStyle *, style, &userdef->uistyles) {
       style->paneltitle.character_weight = 400;
       style->grouplabel.character_weight = 400;
-      style->widgetlabel.character_weight = 400;
       style->widget.character_weight = 400;
     }
   }
 
-  /**
-   * Versioning code until next subversion bump goes here.
-   *
-   * \note Be sure to check when bumping the version:
-   * - #do_versions_theme in this file.
-   * - "versioning_{BLENDER_VERSION}.c"
-   *
-   * \note Keep this message at the bottom of the function.
-   */
-  {
-    /* Keep this block, even when empty. */
+  if (!USER_VERSION_ATLEAST(401, 9)) {
     userdef->key_insert_channels = (USER_ANIM_KEY_CHANNEL_LOCATION |
                                     USER_ANIM_KEY_CHANNEL_ROTATION | USER_ANIM_KEY_CHANNEL_SCALE |
                                     USER_ANIM_KEY_CHANNEL_CUSTOM_PROPERTIES);
   }
+
+  if (!USER_VERSION_ATLEAST(401, 13)) {
+    if (userdef->keying_flag & AUTOKEY_FLAG_INSERTNEEDED) {
+      userdef->keying_flag |= MANUALKEY_FLAG_INSERTNEEDED;
+    }
+    userdef->keying_flag |= AUTOKEY_FLAG_INSERTNEEDED;
+  }
+
+  if (!USER_VERSION_ATLEAST(401, 21)) {
+    LISTBASE_FOREACH (wmKeyMap *, km, &userdef->user_keymaps) {
+      if (STREQ(km->idname, "NLA Channels")) {
+        STRNCPY(km->idname, "NLA Tracks");
+      }
+    }
+  }
+
+  if (!USER_VERSION_ATLEAST(402, 36)) {
+    /* Reset repositories. */
+    while (!BLI_listbase_is_empty(&userdef->extension_repos)) {
+      BKE_preferences_extension_repo_remove(
+          userdef, static_cast<bUserExtensionRepo *>(userdef->extension_repos.first));
+    }
+
+    BKE_preferences_extension_repo_add_default_remote(userdef);
+    BKE_preferences_extension_repo_add_default_user(userdef);
+  }
+
+  if (!USER_VERSION_ATLEAST(402, 42)) {
+    /* 80 was the old default. */
+    if (userdef->node_margin == 80) {
+      userdef->node_margin = 40;
+    }
+  }
+
+  if (!USER_VERSION_ATLEAST(402, 51)) {
+    userdef->sequencer_editor_flag |= USER_SEQ_ED_SIMPLE_TWEAKING;
+  }
+
+  if (!USER_VERSION_ATLEAST(402, 56)) {
+    BKE_preferences_extension_repo_add_default_system(userdef);
+  }
+
+  if (!USER_VERSION_ATLEAST(402, 58)) {
+    /* Remove add-ons which are no longer bundled by default
+     * and have no upgrade path to extensions in the UI. */
+    const char *addon_modules[] = {
+        "depsgraph_debug",
+        "io_coat3D",
+        "io_import_images_as_planes",
+        "io_mesh_stl",
+        "io_scene_x3d",
+    };
+    for (int i = 0; i < ARRAY_SIZE(addon_modules); i++) {
+      BKE_addon_remove_safe(&userdef->addons, addon_modules[i]);
+    }
+  }
+
+  if (!USER_VERSION_ATLEAST(402, 59)) {
+    userdef->network_timeout = 10;
+    userdef->network_connection_limit = 5;
+  }
+
+  if (!USER_VERSION_ATLEAST(402, 63)) {
+    userdef->statusbar_flag |= STATUSBAR_SHOW_EXTENSIONS_UPDATES;
+  }
+
+  if (!USER_VERSION_ATLEAST(402, 65)) {
+    /* Bone Selection Sets is no longer an add-on, but core functionality. */
+    BKE_addon_remove_safe(&userdef->addons, "bone_selection_sets");
+  }
+
+  if (!USER_VERSION_ATLEAST(403, 3)) {
+    BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
+        userdef, "VIEW3D_AST_brush_sculpt", "Brushes/Mesh Sculpt/Cloth");
+    BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
+        userdef, "VIEW3D_AST_brush_sculpt", "Brushes/Mesh Sculpt/General");
+    BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
+        userdef, "VIEW3D_AST_brush_sculpt", "Brushes/Mesh Sculpt/Paint");
+  }
+
+  if (!USER_VERSION_ATLEAST(403, 12)) {
+    LISTBASE_FOREACH (uiStyle *, style, &userdef->uistyles) {
+      style->tooltip.points = 11.0f; /* UI_DEFAULT_TOOLTIP_POINTS */
+      style->tooltip.character_weight = 400;
+      style->tooltip.shadow = 0;
+      style->tooltip.shady = -1;
+      style->tooltip.shadowalpha = 0.5f;
+      style->tooltip.shadowcolor = 0.0f;
+    }
+  }
+  if (!USER_VERSION_ATLEAST(403, 19)) {
+    userdef->sequencer_editor_flag |= USER_SEQ_ED_CONNECT_STRIPS_BY_DEFAULT;
+  }
+
+  if (!USER_VERSION_ATLEAST(404, 3)) {
+    userdef->uiflag &= ~USER_FILTER_BRUSHES_BY_TOOL;
+
+    BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
+        userdef, "VIEW3D_AST_brush_gpencil_paint", "Brushes/Grease Pencil Draw/Draw");
+    BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
+        userdef, "VIEW3D_AST_brush_gpencil_paint", "Brushes/Grease Pencil Draw/Erase");
+    BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
+        userdef, "VIEW3D_AST_brush_gpencil_paint", "Brushes/Grease Pencil Draw/Utilities");
+
+    BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
+        userdef, "VIEW3D_AST_brush_gpencil_sculpt", "Brushes/Grease Pencil Sculpt/Contrast");
+    BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
+        userdef, "VIEW3D_AST_brush_gpencil_sculpt", "Brushes/Grease Pencil Sculpt/Transform");
+    BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
+        userdef, "VIEW3D_AST_brush_gpencil_sculpt", "Brushes/Grease Pencil Sculpt/Utilities");
+  }
+
+  /**
+   * Always bump subversion in BKE_blender_version.h when adding versioning
+   * code here, and wrap it inside a USER_VERSION_ATLEAST check.
+   *
+   * \note Keep this message at the bottom of the function.
+   */
 
   LISTBASE_FOREACH (bTheme *, btheme, &userdef->themes) {
     do_versions_theme(userdef, btheme);
@@ -937,10 +1105,11 @@ void BLO_sanitize_experimental_features_userpref_blend(UserDef *userdef)
    *
    * At that time master already has its version bumped so its user preferences
    * are not touched by these settings. */
-
+#ifdef WITH_EXPERIMENTAL_FEATURES
   if (BKE_blender_version_is_alpha()) {
     return;
   }
+#endif
 
   MEMSET_STRUCT_AFTER(&userdef->experimental, 0, SANITIZE_AFTER_HERE);
 }

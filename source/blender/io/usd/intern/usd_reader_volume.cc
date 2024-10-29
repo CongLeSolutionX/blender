@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "usd_reader_volume.h"
+#include "usd_reader_volume.hh"
 
 #include "BLI_string.h"
 
@@ -15,8 +15,6 @@
 #include <pxr/usd/usdVol/openVDBAsset.h>
 #include <pxr/usd/usdVol/volume.h>
 
-#include <iostream>
-
 namespace usdtokens {
 
 static const pxr::TfToken density("density", pxr::TfToken::Immortal);
@@ -27,7 +25,7 @@ namespace blender::io::usd {
 
 void USDVolumeReader::create_object(Main *bmain, const double /*motionSampleTime*/)
 {
-  Volume *volume = (Volume *)BKE_volume_add(bmain, name_.c_str());
+  Volume *volume = BKE_volume_add(bmain, name_.c_str());
 
   object_ = BKE_object_add_only_object(bmain, OB_VOLUME, name_.c_str());
   object_->data = volume;
@@ -35,15 +33,7 @@ void USDVolumeReader::create_object(Main *bmain, const double /*motionSampleTime
 
 void USDVolumeReader::read_object_data(Main *bmain, const double motionSampleTime)
 {
-  if (!volume_) {
-    return;
-  }
-
   Volume *volume = static_cast<Volume *>(object_->data);
-
-  if (!volume) {
-    return;
-  }
 
   pxr::UsdVolVolume::FieldMap fields = volume_.GetFieldPaths();
 

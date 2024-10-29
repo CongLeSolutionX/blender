@@ -28,20 +28,6 @@ CCL_NAMESPACE_BEGIN
 
 namespace {
 
-/* Some helpers to silence warning in templated function. */
-bool isfinite(uchar /*value*/)
-{
-  return true;
-}
-bool isfinite(half /*value*/)
-{
-  return true;
-}
-bool isfinite(uint16_t /*value*/)
-{
-  return true;
-}
-
 const char *name_from_type(ImageDataType type)
 {
   switch (type) {
@@ -620,14 +606,15 @@ bool ImageManager::file_load_image(Image *img, int texture_limit)
   }
 
   if (img->metadata.colorspace != u_colorspace_raw &&
-      img->metadata.colorspace != u_colorspace_srgb) {
+      img->metadata.colorspace != u_colorspace_srgb)
+  {
     /* Convert to scene linear. */
     ColorSpaceManager::to_scene_linear(
         img->metadata.colorspace, pixels, num_pixels, is_rgba, img->metadata.compress_as_srgb);
   }
 
   /* Make sure we don't have buggy values. */
-  if (FileFormat == TypeDesc::FLOAT) {
+  if constexpr (FileFormat == TypeDesc::FLOAT) {
     /* For RGBA buffers we put all channels to 0 if either of them is not
      * finite. This way we avoid possible artifacts caused by fully changed
      * hue. */
@@ -635,7 +622,8 @@ bool ImageManager::file_load_image(Image *img, int texture_limit)
       for (size_t i = 0; i < num_pixels; i += 4) {
         StorageType *pixel = &pixels[i * 4];
         if (!isfinite(pixel[0]) || !isfinite(pixel[1]) || !isfinite(pixel[2]) ||
-            !isfinite(pixel[3])) {
+            !isfinite(pixel[3]))
+        {
           pixel[0] = 0;
           pixel[1] = 0;
           pixel[2] = 0;

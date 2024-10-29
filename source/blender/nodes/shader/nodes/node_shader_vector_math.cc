@@ -9,9 +9,11 @@
 #include "node_shader_util.hh"
 #include "node_util.hh"
 
+#include "NOD_inverse_eval_params.hh"
 #include "NOD_math_functions.hh"
 #include "NOD_multi_function.hh"
 #include "NOD_socket_search_link.hh"
+#include "NOD_value_elem_eval.hh"
 
 #include "RNA_enum_types.hh"
 
@@ -163,44 +165,44 @@ static void node_shader_update_vector_math(bNodeTree *ntree, bNode *node)
 {
   bNodeSocket *sockB = (bNodeSocket *)BLI_findlink(&node->inputs, 1);
   bNodeSocket *sockC = (bNodeSocket *)BLI_findlink(&node->inputs, 2);
-  bNodeSocket *sockScale = nodeFindSocket(node, SOCK_IN, "Scale");
+  bNodeSocket *sockScale = bke::node_find_socket(node, SOCK_IN, "Scale");
 
-  bNodeSocket *sockVector = nodeFindSocket(node, SOCK_OUT, "Vector");
-  bNodeSocket *sockValue = nodeFindSocket(node, SOCK_OUT, "Value");
+  bNodeSocket *sockVector = bke::node_find_socket(node, SOCK_OUT, "Vector");
+  bNodeSocket *sockValue = bke::node_find_socket(node, SOCK_OUT, "Value");
 
-  bke::nodeSetSocketAvailability(ntree,
-                                 sockB,
-                                 !ELEM(node->custom1,
-                                       NODE_VECTOR_MATH_SINE,
-                                       NODE_VECTOR_MATH_COSINE,
-                                       NODE_VECTOR_MATH_TANGENT,
-                                       NODE_VECTOR_MATH_CEIL,
-                                       NODE_VECTOR_MATH_SCALE,
-                                       NODE_VECTOR_MATH_FLOOR,
-                                       NODE_VECTOR_MATH_LENGTH,
-                                       NODE_VECTOR_MATH_ABSOLUTE,
-                                       NODE_VECTOR_MATH_FRACTION,
-                                       NODE_VECTOR_MATH_NORMALIZE));
-  bke::nodeSetSocketAvailability(ntree,
-                                 sockC,
-                                 ELEM(node->custom1,
-                                      NODE_VECTOR_MATH_WRAP,
-                                      NODE_VECTOR_MATH_FACEFORWARD,
-                                      NODE_VECTOR_MATH_MULTIPLY_ADD));
-  bke::nodeSetSocketAvailability(
+  bke::node_set_socket_availability(ntree,
+                                    sockB,
+                                    !ELEM(node->custom1,
+                                          NODE_VECTOR_MATH_SINE,
+                                          NODE_VECTOR_MATH_COSINE,
+                                          NODE_VECTOR_MATH_TANGENT,
+                                          NODE_VECTOR_MATH_CEIL,
+                                          NODE_VECTOR_MATH_SCALE,
+                                          NODE_VECTOR_MATH_FLOOR,
+                                          NODE_VECTOR_MATH_LENGTH,
+                                          NODE_VECTOR_MATH_ABSOLUTE,
+                                          NODE_VECTOR_MATH_FRACTION,
+                                          NODE_VECTOR_MATH_NORMALIZE));
+  bke::node_set_socket_availability(ntree,
+                                    sockC,
+                                    ELEM(node->custom1,
+                                         NODE_VECTOR_MATH_WRAP,
+                                         NODE_VECTOR_MATH_FACEFORWARD,
+                                         NODE_VECTOR_MATH_MULTIPLY_ADD));
+  bke::node_set_socket_availability(
       ntree, sockScale, ELEM(node->custom1, NODE_VECTOR_MATH_SCALE, NODE_VECTOR_MATH_REFRACT));
-  bke::nodeSetSocketAvailability(ntree,
-                                 sockVector,
-                                 !ELEM(node->custom1,
-                                       NODE_VECTOR_MATH_LENGTH,
-                                       NODE_VECTOR_MATH_DISTANCE,
-                                       NODE_VECTOR_MATH_DOT_PRODUCT));
-  bke::nodeSetSocketAvailability(ntree,
-                                 sockValue,
-                                 ELEM(node->custom1,
-                                      NODE_VECTOR_MATH_LENGTH,
-                                      NODE_VECTOR_MATH_DISTANCE,
-                                      NODE_VECTOR_MATH_DOT_PRODUCT));
+  bke::node_set_socket_availability(ntree,
+                                    sockVector,
+                                    !ELEM(node->custom1,
+                                          NODE_VECTOR_MATH_LENGTH,
+                                          NODE_VECTOR_MATH_DISTANCE,
+                                          NODE_VECTOR_MATH_DOT_PRODUCT));
+  bke::node_set_socket_availability(ntree,
+                                    sockValue,
+                                    ELEM(node->custom1,
+                                         NODE_VECTOR_MATH_LENGTH,
+                                         NODE_VECTOR_MATH_DISTANCE,
+                                         NODE_VECTOR_MATH_DOT_PRODUCT));
 
   /* Labels */
   node_sock_label_clear(sockB);
@@ -223,7 +225,7 @@ static void node_shader_update_vector_math(bNodeTree *ntree, bNode *node)
       node_sock_label(sockB, "Increment");
       break;
     case NODE_VECTOR_MATH_REFRACT:
-      node_sock_label(sockScale, "Ior");
+      node_sock_label(sockScale, "IOR");
       break;
     case NODE_VECTOR_MATH_SCALE:
       node_sock_label(sockScale, "Scale");
@@ -316,17 +318,105 @@ static void sh_node_vector_math_build_multi_function(NodeMultiFunctionBuilder &b
   builder.set_matching_fn(fn);
 }
 
+static void node_eval_elem(value_elem::ElemEvalParams &params)
+{
+  using namespace value_elem;
+  const NodeVectorMathOperation op = NodeVectorMathOperation(params.node.custom1);
+  switch (op) {
+    case NODE_VECTOR_MATH_ADD:
+    case NODE_VECTOR_MATH_SUBTRACT:
+    case NODE_VECTOR_MATH_MULTIPLY:
+    case NODE_VECTOR_MATH_DIVIDE: {
+      VectorElem output_elem;
+      output_elem.merge(params.get_input_elem<VectorElem>("Vector"));
+      output_elem.merge(params.get_input_elem<VectorElem>("Vector_001"));
+      params.set_output_elem("Vector", output_elem);
+      break;
+    }
+    case NODE_VECTOR_MATH_SCALE: {
+      VectorElem output_elem;
+      output_elem.merge(params.get_input_elem<VectorElem>("Vector"));
+      if (params.get_input_elem<FloatElem>("Scale")) {
+        output_elem = VectorElem::all();
+      }
+      params.set_output_elem("Vector", output_elem);
+    }
+    default:
+      break;
+  }
+}
+
+static void node_eval_inverse_elem(value_elem::InverseElemEvalParams &params)
+{
+  const NodeVectorMathOperation op = NodeVectorMathOperation(params.node.custom1);
+  switch (op) {
+    case NODE_VECTOR_MATH_ADD:
+    case NODE_VECTOR_MATH_SUBTRACT:
+    case NODE_VECTOR_MATH_MULTIPLY:
+    case NODE_VECTOR_MATH_DIVIDE:
+    case NODE_VECTOR_MATH_SCALE: {
+      params.set_input_elem("Vector", params.get_output_elem<value_elem::VectorElem>("Vector"));
+      break;
+    }
+    default:
+      break;
+  }
+}
+
+static void node_eval_inverse(inverse_eval::InverseEvalParams &params)
+{
+  const NodeVectorMathOperation op = NodeVectorMathOperation(params.node.custom1);
+  const StringRef first_input_id = "Vector";
+  const StringRef second_input_id = "Vector_001";
+  const StringRef scale_input_id = "Scale";
+  const StringRef output_vector_id = "Vector";
+  switch (op) {
+    case NODE_VECTOR_MATH_ADD: {
+      params.set_input(first_input_id,
+                       params.get_output<float3>(output_vector_id) -
+                           params.get_input<float3>(second_input_id));
+      break;
+    }
+    case NODE_VECTOR_MATH_SUBTRACT: {
+      params.set_input(first_input_id,
+                       params.get_output<float3>(output_vector_id) +
+                           params.get_input<float3>(second_input_id));
+      break;
+    }
+    case NODE_VECTOR_MATH_MULTIPLY: {
+      params.set_input(first_input_id,
+                       math::safe_divide(params.get_output<float3>(output_vector_id),
+                                         params.get_input<float3>(second_input_id)));
+      break;
+    }
+    case NODE_VECTOR_MATH_DIVIDE: {
+      params.set_input(first_input_id,
+                       params.get_output<float3>(output_vector_id) *
+                           params.get_input<float3>(second_input_id));
+      break;
+    }
+    case NODE_VECTOR_MATH_SCALE: {
+      params.set_input(first_input_id,
+                       math::safe_divide(params.get_output<float3>(output_vector_id),
+                                         float3(params.get_input<float>(scale_input_id))));
+      break;
+    }
+    default: {
+      break;
+    }
+  }
+}
+
 NODE_SHADER_MATERIALX_BEGIN
 #ifdef WITH_MATERIALX
 {
-  CLG_LogRef *LOG_MATERIALX_SHADER = materialx::LOG_MATERIALX_SHADER;
-
-  /* TODO: finish some math operations */
   auto op = node_->custom1;
   NodeItem res = empty();
+  const NodeItem null_vec = val(MaterialX::Vector3(0.0f));
 
   /* Single operand operations */
   NodeItem x = get_input_value(0, NodeItem::Type::Vector3);
+
   switch (op) {
     case NODE_VECTOR_MATH_SINE:
       res = x.sin();
@@ -350,15 +440,19 @@ NODE_SHADER_MATERIALX_BEGIN
       res = x % val(1.0f);
       break;
     case NODE_VECTOR_MATH_LENGTH:
-      CLOG_WARN(LOG_MATERIALX_SHADER, "Unimplemented math operation %d", op);
+      res = x.length();
       break;
-    case NODE_VECTOR_MATH_NORMALIZE:
-      CLOG_WARN(LOG_MATERIALX_SHADER, "Unimplemented math operation %d", op);
+    case NODE_VECTOR_MATH_NORMALIZE: {
+      NodeItem length = x.length();
+      res = length.if_else(NodeItem::CompareOp::Eq, val(0.0f), null_vec, x / length);
       break;
+    }
 
     default: {
       /* 2-operand operations */
       NodeItem y = get_input_value(1, NodeItem::Type::Vector3);
+      NodeItem w = get_input_value(3, NodeItem::Type::Float);
+
       switch (op) {
         case NODE_VECTOR_MATH_ADD:
           res = x + y;
@@ -382,44 +476,65 @@ NODE_SHADER_MATERIALX_BEGIN
           res = x % y;
           break;
         case NODE_VECTOR_MATH_SNAP:
-          CLOG_WARN(LOG_MATERIALX_SHADER, "Unimplemented math operation %d", op);
+          res = (x / y).floor() * y;
           break;
         case NODE_VECTOR_MATH_CROSS_PRODUCT:
-          CLOG_WARN(LOG_MATERIALX_SHADER, "Unimplemented math operation %d", op);
+          res = create_node("crossproduct", NodeItem::Type::Vector3, {{"in1", x}, {"in2", y}});
           break;
         case NODE_VECTOR_MATH_DOT_PRODUCT:
-          CLOG_WARN(LOG_MATERIALX_SHADER, "Unimplemented math operation %d", op);
+          res = x.dotproduct(y);
           break;
-        case NODE_VECTOR_MATH_PROJECT:
-          CLOG_WARN(LOG_MATERIALX_SHADER, "Unimplemented math operation %d", op);
+        case NODE_VECTOR_MATH_PROJECT: {
+          NodeItem len_sq = y.dotproduct(y);
+          res = len_sq.if_else(
+              NodeItem::CompareOp::NotEq, val(0.0f), (x.dotproduct(y) / len_sq) * y, null_vec);
           break;
+        }
         case NODE_VECTOR_MATH_REFLECT:
-          CLOG_WARN(LOG_MATERIALX_SHADER, "Unimplemented math operation %d", op);
+          /* TODO: use <reflect> node in MaterialX 1.38.9 */
+          res = x - val(2.0f) * y.dotproduct(x) * y;
           break;
         case NODE_VECTOR_MATH_DISTANCE:
-          CLOG_WARN(LOG_MATERIALX_SHADER, "Unimplemented math operation %d", op);
+          res = (y - x).length();
           break;
         case NODE_VECTOR_MATH_SCALE:
-          CLOG_WARN(LOG_MATERIALX_SHADER, "Unimplemented math operation %d", op);
+          res = x * w;
           break;
 
         default: {
           /* 3-operand operations */
           NodeItem z = get_input_value(2, NodeItem::Type::Vector3);
+
           switch (op) {
             case NODE_VECTOR_MATH_MULTIPLY_ADD:
               res = x * y + z;
               break;
-            case NODE_VECTOR_MATH_REFRACT:
-              CLOG_WARN(LOG_MATERIALX_SHADER, "Unimplemented math operation %d", op);
+            case NODE_VECTOR_MATH_REFRACT: {
+              /* TODO: use <refract> node in MaterialX 1.38.9 */
+              NodeItem dot_yx = y.dotproduct(x);
+              NodeItem k = val(1.0f) - (w * w * (val(1.0f) - (dot_yx * dot_yx)));
+              NodeItem r = w * x - ((w * dot_yx + k.sqrt()) * y);
+              res = k.if_else(NodeItem::CompareOp::GreaterEq, val(0.0f), r, null_vec);
               break;
-            case NODE_VECTOR_MATH_FACEFORWARD:
-              CLOG_WARN(LOG_MATERIALX_SHADER, "Unimplemented math operation %d", op);
+            }
+            case NODE_VECTOR_MATH_FACEFORWARD: {
+              res = z.dotproduct(y).if_else(NodeItem::CompareOp::GreaterEq, val(0.0f), -x, x);
               break;
-            case NODE_VECTOR_MATH_WRAP:
-              CLOG_WARN(LOG_MATERIALX_SHADER, "Unimplemented math operation %d", op);
-              break;
+            }
+            case NODE_VECTOR_MATH_WRAP: {
+              NodeItem range = (y - z);
+              NodeItem if_branch = x - (range * ((x - z) / range).floor());
 
+              res = create_node("combine3", NodeItem::Type::Vector3);
+              std::vector<std::string> inputs = {"in1", "in2", "in3"};
+
+              for (size_t i = 0; i < inputs.size(); ++i) {
+                res.set_input(
+                    inputs[i],
+                    range[i].if_else(NodeItem::CompareOp::NotEq, val(0.0f), if_branch[i], z[i]));
+              }
+              break;
+            }
             default:
               BLI_assert_unreachable();
           }
@@ -439,7 +554,7 @@ void register_node_type_sh_vect_math()
 {
   namespace file_ns = blender::nodes::node_shader_vector_math_cc;
 
-  static bNodeType ntype;
+  static blender::bke::bNodeType ntype;
 
   sh_fn_node_type_base(&ntype, SH_NODE_VECTOR_MATH, "Vector Math", NODE_CLASS_OP_VECTOR);
   ntype.declare = file_ns::sh_node_vector_math_declare;
@@ -450,6 +565,9 @@ void register_node_type_sh_vect_math()
   ntype.build_multi_function = file_ns::sh_node_vector_math_build_multi_function;
   ntype.gather_link_search_ops = file_ns::sh_node_vector_math_gather_link_searches;
   ntype.materialx_fn = file_ns::node_shader_materialx;
+  ntype.eval_elem = file_ns::node_eval_elem;
+  ntype.eval_inverse_elem = file_ns::node_eval_inverse_elem;
+  ntype.eval_inverse = file_ns::node_eval_inverse;
 
-  nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }

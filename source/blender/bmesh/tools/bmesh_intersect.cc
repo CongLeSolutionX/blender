@@ -30,20 +30,18 @@
 
 #include "BLI_linklist_stack.h"
 #include "BLI_utildefines_stack.h"
-#ifndef NDEBUG
-#endif
 
 #include "BLI_buffer.h"
 #include "BLI_kdopbvh.h"
 
-#include "bmesh.h"
-#include "intern/bmesh_private.h"
+#include "bmesh.hh"
+#include "intern/bmesh_private.hh"
 
-#include "bmesh_intersect.h" /* own include */
+#include "bmesh_intersect.hh" /* own include */
 
-#include "tools/bmesh_edgesplit.h"
+#include "tools/bmesh_edgesplit.hh"
 
-#include "BLI_strict_flags.h"
+#include "BLI_strict_flags.h" /* Keep last. */
 
 /*
  * Some of these depend on each other:
@@ -248,7 +246,7 @@ static void face_edges_split(BMesh *bm,
   UNUSED_VARS(use_island_connect, mem_arena_edgenet);
 #  endif
 
-  BM_face_split_edgenet(bm, f, edge_arr, int(edge_arr_len), nullptr, nullptr);
+  BM_face_split_edgenet(bm, f, edge_arr, int(edge_arr_len), nullptr);
 }
 #endif
 
@@ -317,7 +315,8 @@ static enum ISectType intersect_line_tri(const float p0[3],
   /* check ray isn't planar with tri */
   if (fabsf(dot_v3v3(p_dir, t_nor)) >= e->eps) {
     if (isect_line_segment_tri_epsilon_v3(
-            p0, p1, t_cos[0], t_cos[1], t_cos[2], &fac, nullptr, 0.0f)) {
+            p0, p1, t_cos[0], t_cos[1], t_cos[2], &fac, nullptr, 0.0f))
+    {
       if ((fac >= e->eps_margin) && (fac <= 1.0f - e->eps_margin)) {
         interp_v3_v3v3(r_ix, p0, p1, fac);
         if (min_fff(len_squared_v3v3(t_cos[0], r_ix),
@@ -350,7 +349,7 @@ static BMVert *bm_isect_edge_tri(ISectState *s,
   float ix[3];
 
   if (BM_elem_index_get(e_v0) > BM_elem_index_get(e_v1)) {
-    SWAP(BMVert *, e_v0, e_v1);
+    std::swap(e_v0, e_v1);
   }
 
 #ifdef USE_PARANOID
@@ -375,11 +374,11 @@ static BMVert *bm_isect_edge_tri(ISectState *s,
 #define KEY_EDGE_TRI_ORDER(k) \
   { \
     if (k[2] > k[3]) { \
-      SWAP(int, k[2], k[3]); \
+      std::swap(k[2], k[3]); \
     } \
     if (k[0] > k[2]) { \
-      SWAP(int, k[0], k[2]); \
-      SWAP(int, k[1], k[3]); \
+      std::swap(k[0], k[2]); \
+      std::swap(k[1], k[3]); \
     } \
   } \
   (void)0
@@ -498,11 +497,15 @@ static bool bm_loop_filter_fn(const BMLoop *l, void *user_data)
 /**
  * Return true if we have any intersections.
  */
-static void bm_isect_tri_tri(
-    ISectState *s, int a_index, int b_index, BMLoop **a, BMLoop **b, bool no_shared)
+static void bm_isect_tri_tri(ISectState *s,
+                             int a_index,
+                             int b_index,
+                             const std::array<BMLoop *, 3> &a,
+                             const std::array<BMLoop *, 3> &b,
+                             bool no_shared)
 {
-  BMFace *f_a = (*a)->f;
-  BMFace *f_b = (*b)->f;
+  BMFace *f_a = a[0]->f;
+  BMFace *f_b = b[0]->f;
   BMVert *fv_a[3] = {UNPACK3_EX(, a, ->v)};
   BMVert *fv_b[3] = {UNPACK3_EX(, b, ->v)};
   const float *f_a_cos[3] = {UNPACK3_EX(, fv_a, ->co)};
@@ -947,8 +950,7 @@ static int isect_bvhtree_point_v3(BVHTree *tree, const float **looptris, const f
 #endif /* USE_BVH */
 
 bool BM_mesh_intersect(BMesh *bm,
-                       BMLoop *(*looptris)[3],
-                       const int looptris_tot,
+                       const blender::Span<std::array<BMLoop *, 3>> looptris,
                        int (*test_fn)(BMFace *f, void *user_data),
                        void *user_data,
                        const bool use_self,
@@ -1032,8 +1034,8 @@ bool BM_mesh_intersect(BMesh *bm,
     int i, j;
 
     cos = static_cast<float **>(
-        MEM_mallocN(size_t(looptris_tot) * sizeof(*looptri_coords) * 3, __func__));
-    for (i = 0, j = 0; i < looptris_tot; i++) {
+        MEM_mallocN(size_t(looptris.size()) * sizeof(*looptri_coords) * 3, __func__));
+    for (i = 0, j = 0; i < int(looptris.size()); i++) {
       cos[j++] = looptris[i][0]->v->co;
       cos[j++] = looptris[i][1]->v->co;
       cos[j++] = looptris[i][2]->v->co;
@@ -1044,8 +1046,8 @@ bool BM_mesh_intersect(BMesh *bm,
 #ifdef USE_BVH
   {
     int i;
-    tree_a = BLI_bvhtree_new(looptris_tot, s.epsilon.eps_margin, 8, 8);
-    for (i = 0; i < looptris_tot; i++) {
+    tree_a = BLI_bvhtree_new(int(looptris.size()), s.epsilon.eps_margin, 8, 8);
+    for (i = 0; i < int(looptris.size()); i++) {
       if (test_fn(looptris[i][0]->f, user_data) == 0) {
         const float t_cos[3][3] = {
             {UNPACK3(looptris[i][0]->v->co)},
@@ -1061,8 +1063,8 @@ bool BM_mesh_intersect(BMesh *bm,
 
   if (use_self == false) {
     int i;
-    tree_b = BLI_bvhtree_new(looptris_tot, s.epsilon.eps_margin, 8, 8);
-    for (i = 0; i < looptris_tot; i++) {
+    tree_b = BLI_bvhtree_new(int(looptris.size()), s.epsilon.eps_margin, 8, 8);
+    for (i = 0; i < int(looptris.size()); i++) {
       if (test_fn(looptris[i][0]->f, user_data) == 1) {
         const float t_cos[3][3] = {
             {UNPACK3(looptris[i][0]->v->co)},
@@ -1086,10 +1088,10 @@ bool BM_mesh_intersect(BMesh *bm,
   const bool isect_tri_tri_no_shared = (boolean_mode != BMESH_ISECT_BOOLEAN_NONE);
 
   int flag = BVH_OVERLAP_USE_THREADING | BVH_OVERLAP_RETURN_PAIRS;
-#  ifdef DEBUG
+#  ifndef NDEBUG
   /* The overlap result must match that obtained in Release to succeed
    * in the `bmesh_boolean` test. */
-  if (looptris_tot < 1024) {
+  if (looptris.size() < 1024) {
     flag &= ~BVH_OVERLAP_USE_THREADING;
   }
 #  endif
@@ -1125,9 +1127,9 @@ bool BM_mesh_intersect(BMesh *bm,
 
 #else
   {
-    for (i_a = 0; i_a < looptris_tot; i_a++) {
+    for (i_a = 0; i_a < looptris.size(); i_a++) {
       const int t_a = test_fn(looptris[i_a][0]->f, user_data);
-      for (i_b = i_a + 1; i_b < looptris_tot; i_b++) {
+      for (i_b = i_a + 1; i_b < looptris.size(); i_b++) {
         const int t_b = test_fn(looptris[i_b][0]->f, user_data);
 
         if (use_self) {
@@ -1306,7 +1308,7 @@ bool BM_mesh_intersect(BMesh *bm,
 #  endif
         }
         else {
-          SWAP(BMVert *, v_a, v_b);
+          std::swap(v_a, v_b);
           e = e_pair[1];
 #  ifdef USE_PARANOID
           e_keep = e_pair[0];
@@ -1428,7 +1430,8 @@ bool BM_mesh_intersect(BMesh *bm,
               !BLI_gset_haskey(verts_invalid, splice_ls[i][1]))
           {
             if (!BM_edge_exists(UNPACK2(splice_ls[i])) &&
-                !BM_vert_splice_check_double(UNPACK2(splice_ls[i]))) {
+                !BM_vert_splice_check_double(UNPACK2(splice_ls[i])))
+            {
               BM_vert_splice(bm, splice_ls[i][1], splice_ls[i][0]);
             }
           }

@@ -23,7 +23,7 @@
 
 #include "BLI_fileops.h"
 #include "BLI_listbase.h"
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 #include "BLI_string.h"
 #include "BLI_task.h"
 #include "BLI_threads.h"
@@ -33,48 +33,40 @@
 #include "BLO_undofile.hh"
 #include "BLO_writefile.hh"
 
-#include "BKE_blender.h"
-#include "BKE_blendfile.h"
-#include "BKE_callbacks.h"
+#include "BKE_blender.hh"
+#include "BKE_blendfile.hh"
 #include "BKE_context.hh"
-#include "BKE_global.h"
+#include "BKE_global.hh"
 #include "BKE_icons.h"
 #include "BKE_image.h"
 #include "BKE_keyconfig.h"
-#include "BKE_lib_remap.h"
-#include "BKE_main.h"
-#include "BKE_mball_tessellate.h"
-#include "BKE_node.hh"
+#include "BKE_lib_remap.hh"
+#include "BKE_main.hh"
+#include "BKE_mball_tessellate.hh"
 #include "BKE_preview_image.hh"
-#include "BKE_report.h"
-#include "BKE_scene.h"
+#include "BKE_scene.hh"
 #include "BKE_screen.hh"
 #include "BKE_sound.h"
-#include "BKE_vfont.h"
+#include "BKE_vfont.hh"
 
 #include "BKE_addon.h"
-#include "BKE_appdir.h"
-#include "BKE_mask.h"     /* free mask clipboard */
-#include "BKE_material.h" /* BKE_material_copybuf_clear */
+#include "BKE_appdir.hh"
+#include "BKE_blender_cli_command.hh"
+#include "BKE_mask.h"     /* Free mask clipboard. */
+#include "BKE_material.h" /* #BKE_material_copybuf_clear. */
 #include "BKE_studiolight.h"
 #include "BKE_subdiv.hh"
-#include "BKE_tracking.h" /* free tracking clipboard */
+#include "BKE_tracking.h" /* Free tracking clipboard. */
 
 #include "RE_engine.h"
-#include "RE_pipeline.h" /* RE_ free stuff */
-
-#include "SEQ_clipboard.hh" /* free seq clipboard */
-
-#include "IMB_thumbs.h"
+#include "RE_pipeline.h" /* `RE_` free stuff. */
 
 #ifdef WITH_PYTHON
-#  include "BPY_extern.h"
-#  include "BPY_extern_python.h"
-#  include "BPY_extern_run.h"
+#  include "BPY_extern_python.hh"
+#  include "BPY_extern_run.hh"
 #endif
 
 #include "GHOST_C-api.h"
-#include "GHOST_Path-api.hh"
 
 #include "RNA_define.hh"
 
@@ -84,16 +76,16 @@
 
 #include "wm.hh"
 #include "wm_cursors.hh"
-#include "wm_event_system.h"
+#include "wm_event_system.hh"
 #include "wm_files.hh"
-#include "wm_platform_support.h"
+#include "wm_platform_support.hh"
 #include "wm_surface.hh"
 #include "wm_window.hh"
 
 #include "ED_anim_api.hh"
-#include "ED_armature.hh"
 #include "ED_asset.hh"
 #include "ED_gpencil_legacy.hh"
+#include "ED_grease_pencil.hh"
 #include "ED_keyframes_edit.hh"
 #include "ED_keyframing.hh"
 #include "ED_node.hh"
@@ -102,25 +94,25 @@
 #include "ED_space_api.hh"
 #include "ED_undo.hh"
 #include "ED_util.hh"
-#include "ED_view3d.hh"
 
-#include "BLF_api.h"
-#include "BLT_lang.h"
+#include "BLF_api.hh"
+#include "BLT_lang.hh"
 
 #include "UI_interface.hh"
 #include "UI_resources.hh"
 #include "UI_string_search.hh"
 
-#include "GPU_context.h"
-#include "GPU_init_exit.h"
-#include "GPU_material.h"
+#include "GPU_compilation_subprocess.hh"
+#include "GPU_context.hh"
+#include "GPU_init_exit.hh"
+#include "GPU_material.hh"
 
 #include "COM_compositor.hh"
 
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_query.hh"
 
-#include "DRW_engine.h"
+#include "DRW_engine.hh"
 
 CLG_LOGREF_DECLARE_GLOBAL(WM_LOG_OPERATORS, "wm.operator");
 CLG_LOGREF_DECLARE_GLOBAL(WM_LOG_HANDLERS, "wm.handler");
@@ -169,6 +161,10 @@ void WM_init_gpu()
 
   GPU_pass_cache_init();
 
+  if (G.debug & G_DEBUG_GPU_COMPILE_SHADERS) {
+    GPU_shader_compile_static();
+  }
+
   gpu_is_init = true;
 }
 
@@ -207,12 +203,9 @@ void WM_init(bContext *C, int argc, const char **argv)
     BKE_sound_jack_sync_callback_set(sound_jack_sync_callback);
   }
 
-  GHOST_CreateSystemPaths();
-
   BKE_addon_pref_type_init();
   BKE_keyconfig_pref_type_init();
 
-  wm_operatortype_init();
   wm_operatortypes_register();
 
   WM_paneltype_init(); /* Lookup table only. */
@@ -281,6 +274,7 @@ void WM_init(bContext *C, int argc, const char **argv)
   read_homefile_params.use_empty_data = false;
   read_homefile_params.filepath_startup_override = nullptr;
   read_homefile_params.app_template_override = WM_init_state_app_template_get();
+  read_homefile_params.is_first_time = true;
 
   wm_homefile_read_ex(C, &read_homefile_params, nullptr, &params_file_read_post);
 
@@ -313,7 +307,7 @@ void WM_init(bContext *C, int argc, const char **argv)
     GPU_render_end();
   }
 
-  BKE_subdiv_init();
+  blender::bke::subdiv::init();
 
   ED_spacemacros_init();
 
@@ -377,10 +371,10 @@ static bool wm_init_splash_show_on_startup_check()
   else {
     /* A less common case, if there is no user preferences, show the splash screen
      * so the user has the opportunity to restore settings from a previous version. */
-    const char *const cfgdir = BKE_appdir_folder_id(BLENDER_USER_CONFIG, nullptr);
-    if (cfgdir) {
+    const std::optional<std::string> cfgdir = BKE_appdir_folder_id(BLENDER_USER_CONFIG, nullptr);
+    if (cfgdir.has_value()) {
       char userpref[FILE_MAX];
-      BLI_path_join(userpref, sizeof(userpref), cfgdir, BLENDER_USERPREF_FILE);
+      BLI_path_join(userpref, sizeof(userpref), cfgdir->c_str(), BLENDER_USERPREF_FILE);
       if (!BLI_exists(userpref)) {
         use_splash = true;
       }
@@ -427,7 +421,7 @@ static void wm_init_scripts_extensions_once(bContext *C)
 #endif
 }
 
-/* free strings of open recent files */
+/* Free strings of open recent files. */
 static void free_openrecent()
 {
   LISTBASE_FOREACH (RecentFile *, recent, &G.recent_files) {
@@ -456,13 +450,14 @@ void wm_exit_schedule_delayed(const bContext *C)
    * Could add separate WM handlers or so, but probably not worth it. */
   WM_event_add_ui_handler(
       C, &win->modalhandlers, wm_exit_handler, nullptr, nullptr, eWM_EventHandlerFlag(0));
-  WM_event_add_mousemove(win); /* ensure handler actually gets called */
+  WM_event_add_mousemove(win); /* Ensure handler actually gets called. */
 }
 
 void UV_clipboard_free();
 
 void WM_exit_ex(bContext *C, const bool do_python_exit, const bool do_user_exit_actions)
 {
+  using namespace blender;
   wmWindowManager *wm = C ? CTX_wm_manager(C) : nullptr;
 
   /* While nothing technically prevents saving user data in background mode,
@@ -471,31 +466,24 @@ void WM_exit_ex(bContext *C, const bool do_python_exit, const bool do_user_exit_
    * Saving #BLENDER_QUIT_FILE is also not likely to be desired either. */
   BLI_assert(G.background ? (do_user_exit_actions == false) : true);
 
-  /* first wrap up running stuff, we assume only the active WM is running */
-  /* modal handlers are on window level freed, others too? */
+  /* First wrap up running stuff, we assume only the active WM is running. */
+  /* Modal handlers are on window level freed, others too? */
   /* NOTE: same code copied in `wm_files.cc`. */
   if (C && wm) {
     if (do_user_exit_actions) {
-      MemFile *undo_memfile = wm->undo_stack ?
-                                  ED_undosys_stack_memfile_get_active(wm->undo_stack) :
-                                  nullptr;
-      if (undo_memfile != nullptr) {
-        /* save the undo state as quit.blend */
-        Main *bmain = CTX_data_main(C);
-        char filepath[FILE_MAX];
-        const int fileflags = G.fileflags & ~G_FILE_COMPRESS;
+      /* Save quit.blend. */
+      Main *bmain = CTX_data_main(C);
+      char filepath[FILE_MAX];
+      int fileflags = G.fileflags & ~G_FILE_COMPRESS;
+      fileflags |= G_FILE_RECOVER_WRITE;
 
-        BLI_path_join(filepath, sizeof(filepath), BKE_tempdir_base(), BLENDER_QUIT_FILE);
+      BLI_path_join(filepath, sizeof(filepath), BKE_tempdir_base(), BLENDER_QUIT_FILE);
 
-        /* When true, the `undo_memfile` doesn't contain all information necessary
-         * for writing and up to date blend file. */
-        const bool is_memfile_outdated = ED_editors_flush_edits(bmain);
+      ED_editors_flush_edits(bmain);
 
-        BlendFileWriteParams blend_file_write_params{};
-        if (is_memfile_outdated ?
-                BLO_write_file(bmain, filepath, fileflags, &blend_file_write_params, nullptr) :
-                BLO_memfile_write_file(undo_memfile, filepath))
-        {
+      BlendFileWriteParams blend_file_write_params{};
+      if (BLO_write_file(bmain, filepath, fileflags, &blend_file_write_params, nullptr)) {
+        if (!G.quiet) {
           printf("Saved session recovery to \"%s\"\n", filepath);
         }
       }
@@ -504,7 +492,7 @@ void WM_exit_ex(bContext *C, const bool do_python_exit, const bool do_user_exit_
     WM_jobs_kill_all(wm);
 
     LISTBASE_FOREACH (wmWindow *, win, &wm->windows) {
-      CTX_wm_window_set(C, win); /* needed by operator close callbacks */
+      CTX_wm_window_set(C, win); /* Needed by operator close callbacks. */
       WM_event_remove_handlers(C, &win->handlers);
       WM_event_remove_handlers(C, &win->modalhandlers);
       ED_screen_exit(C, win, WM_window_get_active_screen(win));
@@ -545,10 +533,19 @@ void WM_exit_ex(bContext *C, const bool do_python_exit, const bool do_user_exit_
    * Which can happen when the GPU backend fails to initialize.
    */
   if (C && CTX_py_init_get(C)) {
-    const char *imports[2] = {"addon_utils", nullptr};
-    BPY_run_string_eval(C, imports, "addon_utils.disable_all()");
+    /* Calls `addon_utils.disable_all()` as well as unregistering all "startup" modules.  */
+    const char *imports[] = {"bpy", "bpy.utils", nullptr};
+    BPY_run_string_eval(C, imports, "bpy.utils._on_exit()");
   }
 #endif
+
+  /* Perform this early in case commands reference other data freed later in this function.
+   * This most run:
+   * - After add-ons are disabled because they may unregister commands.
+   * - Before Python exits so Python objects can be de-referenced.
+   * - Before #BKE_blender_atexit runs they free the `argv` on WIN32.
+   */
+  BKE_blender_cli_command_free_all();
 
   BLI_timer_free();
 
@@ -563,7 +560,7 @@ void WM_exit_ex(bContext *C, const bool do_python_exit, const bool do_user_exit_
   wm_dropbox_free();
   WM_menutype_free();
 
-  /* all non-screen and non-space stuff editors did, like editmode */
+  /* All non-screen and non-space stuff editors did, like edit-mode. */
   if (C) {
     Main *bmain = CTX_data_main(C);
     ED_editors_exit(bmain, true);
@@ -573,19 +570,19 @@ void WM_exit_ex(bContext *C, const bool do_python_exit, const bool do_user_exit_
 
   BKE_mball_cubeTable_free();
 
-  /* render code might still access databases */
+  /* Render code might still access databases. */
   RE_FreeAllRender();
   RE_engines_exit();
 
-  ED_preview_free_dbase(); /* frees a Main dbase, before BKE_blender_free! */
+  ED_preview_free_dbase(); /* Frees a Main dbase, before #BKE_blender_free! */
   ED_preview_restart_queue_free();
-  ED_assetlist_storage_exit();
+  ed::asset::list::storage_exit();
 
-  SEQ_clipboard_free(); /* `sequencer.cc` */
   BKE_tracking_clipboard_free();
   BKE_mask_clipboard_free();
   BKE_vfont_clipboard_free();
   ED_node_clipboard_free();
+  ed::greasepencil::clipboard_free();
   UV_clipboard_free();
   wm_clipboard_free();
 
@@ -593,7 +590,7 @@ void WM_exit_ex(bContext *C, const bool do_python_exit, const bool do_user_exit_
   COM_deinitialize();
 #endif
 
-  BKE_subdiv_exit();
+  bke::subdiv::exit();
 
   if (gpu_is_init) {
     BKE_image_free_unused_gpu_textures();
@@ -610,7 +607,7 @@ void WM_exit_ex(bContext *C, const bool do_python_exit, const bool do_user_exit_
   /* Free the GPU subdivision data after the database to ensure that subdivision structs used by
    * the modifiers were garbage collected. */
   if (gpu_is_init) {
-    DRW_subdiv_free();
+    blender::draw::DRW_subdiv_free();
   }
 
   ANIM_fcurves_copybuf_free();
@@ -620,7 +617,7 @@ void WM_exit_ex(bContext *C, const bool do_python_exit, const bool do_user_exit_
   ED_gpencil_anim_copybuf_free();
   ED_gpencil_strokes_copybuf_free();
 
-  /* free gizmo-maps after freeing blender,
+  /* Free gizmo-maps after freeing blender,
    * so no deleted data get accessed during cleaning up of areas. */
   wm_gizmomaptypes_free();
   wm_gizmogrouptype_free();
@@ -660,6 +657,7 @@ void WM_exit_ex(bContext *C, const bool do_python_exit, const bool do_user_exit_
     DRW_gpu_context_enable_ex(false);
     UI_exit();
     GPU_pass_cache_free();
+    GPU_shader_cache_dir_clear_old();
     GPU_exit();
     DRW_gpu_context_disable_ex(false);
     DRW_gpu_context_destroy();
@@ -670,15 +668,13 @@ void WM_exit_ex(bContext *C, const bool do_python_exit, const bool do_user_exit_
 
   BKE_blender_userdef_data_free(&U, false);
 
-  RNA_exit(); /* should be after BPY_python_end so struct python slots are cleared */
+  RNA_exit(); /* Should be after #BPY_python_end so struct python slots are cleared. */
 
   wm_ghost_exit();
 
   if (C) {
     CTX_free(C);
   }
-
-  GHOST_DisposeSystemPaths();
 
   DNA_sdna_current_free();
 
@@ -707,7 +703,9 @@ void WM_exit(bContext *C, const int exit_code)
   const bool do_user_exit_actions = G.background ? false : (exit_code == EXIT_SUCCESS);
   WM_exit_ex(C, true, do_user_exit_actions);
 
-  printf("\nBlender quit\n");
+  if (!G.quiet) {
+    printf("\nBlender quit\n");
+  }
 
   exit(exit_code);
 }
@@ -715,4 +713,11 @@ void WM_exit(bContext *C, const int exit_code)
 void WM_script_tag_reload()
 {
   UI_interface_tag_script_reload();
+
+  /* Any operators referenced by gizmos may now be a dangling pointer.
+   *
+   * While it is possible to inspect the gizmos it's simpler to re-create them,
+   * especially for script reloading - where we can accept slower logic
+   * for the sake of simplicity, see #126852. */
+  WM_gizmoconfig_update_tag_reinit_all();
 }

@@ -5,8 +5,8 @@
 #include "WM_api.hh"
 
 #include "BKE_context.hh"
-#include "BKE_global.h"
-#include "BKE_main.h"
+#include "BKE_global.hh"
+#include "BKE_main.hh"
 
 #include "DEG_depsgraph.hh"
 

@@ -13,8 +13,8 @@
 #include "UI_interface.hh"
 #include "UI_resources.hh"
 
-#include "GPU_state.h"
-#include "GPU_texture.h"
+#include "GPU_state.hh"
+#include "GPU_texture.hh"
 
 #include "DNA_node_types.h"
 
@@ -59,12 +59,12 @@ static void node_composit_init_denonise(bNodeTree * /*ntree*/, bNode *node)
 static void node_composit_buts_denoise(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 {
 #ifndef WITH_OPENIMAGEDENOISE
-  uiItemL(layout, IFACE_("Disabled, built without OpenImageDenoise"), ICON_ERROR);
+  uiItemL(layout, RPT_("Disabled, built without OpenImageDenoise"), ICON_ERROR);
 #else
   /* Always supported through Accelerate framework BNNS on macOS. */
 #  ifndef __APPLE__
-  if (!BLI_cpu_support_sse41()) {
-    uiItemL(layout, IFACE_("Disabled, CPU with SSE4.1 is required"), ICON_ERROR);
+  if (!BLI_cpu_support_sse42()) {
+    uiItemL(layout, RPT_("Disabled, CPU with SSE4.2 is required"), ICON_ERROR);
   }
 #  endif
 #endif
@@ -76,12 +76,34 @@ static void node_composit_buts_denoise(uiLayout *layout, bContext * /*C*/, Point
 
 using namespace blender::realtime_compositor;
 
+/* A callback to cancel the filter operations by evaluating the context's is_canceled method. The
+ * API specifies that true indicates the filter should continue, while false indicates it should
+ * stop, so invert the condition. This callback can also be used to track progress using the given
+ * n argument, but we currently don't make use of it. See OIDNProgressMonitorFunction in the API
+ * for more information. */
+[[maybe_unused]] static bool oidn_progress_monitor_function(void *user_ptr, double /*n*/)
+{
+  const Context *context = static_cast<const Context *>(user_ptr);
+  return !context->is_canceled();
+}
+
 class DenoiseOperation : public NodeOperation {
  public:
   using NodeOperation::NodeOperation;
 
   void execute() override
   {
+    /* Not yet supported on CPU. */
+    if (!context().use_gpu()) {
+      for (const bNodeSocket *output : this->node()->output_sockets()) {
+        Result &output_result = get_result(output->identifier);
+        if (output_result.should_compute()) {
+          output_result.allocate_invalid();
+        }
+      }
+      return;
+    }
+
     Result &input_image = get_input("Image");
     Result &output_image = get_result("Image");
 
@@ -102,19 +124,20 @@ class DenoiseOperation : public NodeOperation {
     /* Download the input texture and set it as both the input and output of the filter to denoise
      * it in-place. */
     GPU_memory_barrier(GPU_BARRIER_TEXTURE_UPDATE);
-    float *color = static_cast<float *>(GPU_texture_read(input_image.texture(), data_format, 0));
+    float *color = static_cast<float *>(GPU_texture_read(input_image, data_format, 0));
     oidn::FilterRef filter = device.newFilter("RT");
     filter.setImage("color", color, oidn::Format::Float3, width, height, 0, pixel_stride);
     filter.setImage("output", color, oidn::Format::Float3, width, height, 0, pixel_stride);
     filter.set("hdr", use_hdr());
     filter.set("cleanAux", auxiliary_passes_are_clean());
+    filter.setProgressMonitorFunction(oidn_progress_monitor_function, &context());
 
     /* If the albedo input is not a single value input, download the albedo texture, denoise it
      * in-place if denoising auxiliary passes is needed, and set it to the main filter. */
     float *albedo = nullptr;
     Result &input_albedo = get_input("Albedo");
     if (!input_albedo.is_single_value()) {
-      albedo = static_cast<float *>(GPU_texture_read(input_albedo.texture(), data_format, 0));
+      albedo = static_cast<float *>(GPU_texture_read(input_albedo, data_format, 0));
 
       if (should_denoise_auxiliary_passes()) {
         oidn::FilterRef albedoFilter = device.newFilter("RT");
@@ -122,6 +145,7 @@ class DenoiseOperation : public NodeOperation {
             "albedo", albedo, oidn::Format::Float3, width, height, 0, pixel_stride);
         albedoFilter.setImage(
             "output", albedo, oidn::Format::Float3, width, height, 0, pixel_stride);
+        albedoFilter.setProgressMonitorFunction(oidn_progress_monitor_function, &context());
         albedoFilter.commit();
         albedoFilter.execute();
       }
@@ -136,7 +160,7 @@ class DenoiseOperation : public NodeOperation {
     float *normal = nullptr;
     Result &input_normal = get_input("Normal");
     if (albedo && !input_normal.is_single_value()) {
-      normal = static_cast<float *>(GPU_texture_read(input_normal.texture(), data_format, 0));
+      normal = static_cast<float *>(GPU_texture_read(input_normal, data_format, 0));
 
       if (should_denoise_auxiliary_passes()) {
         oidn::FilterRef normalFilter = device.newFilter("RT");
@@ -144,6 +168,7 @@ class DenoiseOperation : public NodeOperation {
             "normal", normal, oidn::Format::Float3, width, height, 0, pixel_stride);
         normalFilter.setImage(
             "output", normal, oidn::Format::Float3, width, height, 0, pixel_stride);
+        normalFilter.setProgressMonitorFunction(oidn_progress_monitor_function, &context());
         normalFilter.commit();
         normalFilter.execute();
       }
@@ -155,7 +180,7 @@ class DenoiseOperation : public NodeOperation {
     filter.execute();
 
     output_image.allocate_texture(input_image.domain());
-    GPU_texture_update(output_image.texture(), data_format, color);
+    GPU_texture_update(output_image, data_format, color);
 
     MEM_freeN(color);
     if (albedo) {
@@ -206,7 +231,7 @@ class DenoiseOperation : public NodeOperation {
 #  ifdef __APPLE__
     return true;
 #  else
-    return BLI_cpu_support_sse41();
+    return BLI_cpu_support_sse42();
 #  endif
 #endif
   }
@@ -223,14 +248,15 @@ void register_node_type_cmp_denoise()
 {
   namespace file_ns = blender::nodes::node_composite_denoise_cc;
 
-  static bNodeType ntype;
+  static blender::bke::bNodeType ntype;
 
   cmp_node_type_base(&ntype, CMP_NODE_DENOISE, "Denoise", NODE_CLASS_OP_FILTER);
   ntype.declare = file_ns::cmp_node_denoise_declare;
   ntype.draw_buttons = file_ns::node_composit_buts_denoise;
   ntype.initfunc = file_ns::node_composit_init_denonise;
-  node_type_storage(&ntype, "NodeDenoise", node_free_standard_storage, node_copy_standard_storage);
+  blender::bke::node_type_storage(
+      &ntype, "NodeDenoise", node_free_standard_storage, node_copy_standard_storage);
   ntype.get_compositor_operation = file_ns::get_compositor_operation;
 
-  nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }

@@ -37,34 +37,32 @@ int UnaryFunction1DVectorViewShape_Init(PyObject *module)
   if (PyType_Ready(&UnaryFunction1DVectorViewShape_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&UnaryFunction1DVectorViewShape_Type);
-  PyModule_AddObject(
+  PyModule_AddObjectRef(
       module, "UnaryFunction1DVectorViewShape", (PyObject *)&UnaryFunction1DVectorViewShape_Type);
 
   if (PyType_Ready(&GetOccludeeF1D_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&GetOccludeeF1D_Type);
-  PyModule_AddObject(module, "GetOccludeeF1D", (PyObject *)&GetOccludeeF1D_Type);
+  PyModule_AddObjectRef(module, "GetOccludeeF1D", (PyObject *)&GetOccludeeF1D_Type);
 
   if (PyType_Ready(&GetOccludersF1D_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&GetOccludersF1D_Type);
-  PyModule_AddObject(module, "GetOccludersF1D", (PyObject *)&GetOccludersF1D_Type);
+  PyModule_AddObjectRef(module, "GetOccludersF1D", (PyObject *)&GetOccludersF1D_Type);
 
   if (PyType_Ready(&GetShapeF1D_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&GetShapeF1D_Type);
-  PyModule_AddObject(module, "GetShapeF1D", (PyObject *)&GetShapeF1D_Type);
+  PyModule_AddObjectRef(module, "GetShapeF1D", (PyObject *)&GetShapeF1D_Type);
 
   return 0;
 }
 
 //------------------------INSTANCE METHODS ----------------------------------
 
-static char UnaryFunction1DVectorViewShape___doc__[] =
+PyDoc_STRVAR(
+    /* Wrap. */
+    UnaryFunction1DVectorViewShape___doc__,
     "Class hierarchy: :class:`UnaryFunction1D` > :class:`UnaryFunction1DVectorViewShape`\n"
     "\n"
     "Base class for unary functions (functors) that work on\n"
@@ -78,7 +76,7 @@ static char UnaryFunction1DVectorViewShape___doc__[] =
     "   or the integration method given as an argument.\n"
     "\n"
     "   :arg integration_type: An integration method.\n"
-    "   :type integration_type: :class:`IntegrationType`\n";
+    "   :type integration_type: :class:`IntegrationType`\n");
 
 static int UnaryFunction1DVectorViewShape___init__(BPy_UnaryFunction1DVectorViewShape *self,
                                                    PyObject *args,
@@ -88,7 +86,8 @@ static int UnaryFunction1DVectorViewShape___init__(BPy_UnaryFunction1DVectorView
   PyObject *obj = nullptr;
 
   if (!PyArg_ParseTupleAndKeywords(
-          args, kwds, "|O!", (char **)kwlist, &IntegrationType_Type, &obj)) {
+          args, kwds, "|O!", (char **)kwlist, &IntegrationType_Type, &obj))
+  {
     return -1;
   }
 
@@ -152,10 +151,12 @@ static PyObject *UnaryFunction1DVectorViewShape___call__(BPy_UnaryFunction1DVect
 
 /*----------------------UnaryFunction1DVectorViewShape get/setters ----------------------------*/
 
-PyDoc_STRVAR(integration_type_doc,
-             "The integration method.\n"
-             "\n"
-             ":type: :class:`IntegrationType`");
+PyDoc_STRVAR(
+    /* Wrap. */
+    integration_type_doc,
+    "The integration method.\n"
+    "\n"
+    ":type: :class:`IntegrationType`");
 
 static PyObject *integration_type_get(BPy_UnaryFunction1DVectorViewShape *self, void * /*closure*/)
 {

@@ -37,8 +37,8 @@
 
 #include "BLI_utildefines.h"
 
-#include "bmesh.h"
-#include "intern/bmesh_operators_private.h"
+#include "bmesh.hh"
+#include "intern/bmesh_operators_private.hh"
 
 #include "DNA_modifier_types.h"
 
@@ -61,7 +61,7 @@
  * Another paragraph.
  * """
  *
- * so the first line is the "title" of the bmop.
+ * so the first line is the "title" of the BMOP.
  * subsequent line blocks separated by blank lines
  * are paragraphs. individual descriptions of slots
  * are extracted from comments next to them.
@@ -366,7 +366,7 @@ static BMOpDefine bmo_mirror_def = {
  * Find Doubles.
  *
  * Takes input verts and find vertices they should weld to.
- * Outputs a mapping slot suitable for use with the weld verts bmop.
+ * Outputs a mapping slot suitable for use with the weld verts BMOP.
  *
  * If keep_verts is used, vertices outside that set can only be merged
  * with vertices in that set.
@@ -391,7 +391,7 @@ static BMOpDefine bmo_find_doubles_def = {
  * Remove Doubles.
  *
  * Finds groups of vertices closer than dist and merges them together,
- * using the weld verts bmop.
+ * using the weld verts BMOP.
  */
 static BMOpDefine bmo_remove_doubles_def = {
   "remove_doubles",
@@ -503,7 +503,7 @@ static BMOpDefine bmo_collapse_uvs_def = {
  * Weld Verts.
  *
  * Welds verts together (kind-of like remove doubles, merge, etc, all of which
- * use or will use this bmop). You pass in mappings from vertices to the vertices
+ * use or will use this BMOP). You pass in mappings from vertices to the vertices
  * they weld with.
  */
 static BMOpDefine bmo_weld_verts_def = {
@@ -523,7 +523,7 @@ static BMOpDefine bmo_weld_verts_def = {
 /*
  * Make Vertex.
  *
- * Creates a single vertex; this bmop was necessary
+ * Creates a single vertex; this BMOP was necessary
  * for click-create-vertex.
  */
 static BMOpDefine bmo_create_vert_def = {
@@ -546,6 +546,11 @@ static BMOpDefine bmo_create_vert_def = {
  * Tries to intelligently join triangles according
  * to angle threshold and delimiters.
  */
+
+#if 0 /* See comments at top of bmo_join_triangles.cc */
+#  define USE_JOIN_TRIANGLE_INTERACTIVE_TESTING
+#endif
+
 static BMOpDefine bmo_join_triangles_def = {
   "join_triangles",
   /*slot_types_in*/
@@ -557,6 +562,12 @@ static BMOpDefine bmo_join_triangles_def = {
    {"cmp_materials", BMO_OP_SLOT_BOOL}, /* compare materials */
    {"angle_face_threshold", BMO_OP_SLOT_FLT},
    {"angle_shape_threshold", BMO_OP_SLOT_FLT},
+   {"topology_influence", BMO_OP_SLOT_FLT},
+   {"deselect_joined", BMO_OP_SLOT_BOOL},
+#ifdef USE_JOIN_TRIANGLE_INTERACTIVE_TESTING
+   {"merge_limit", BMO_OP_SLOT_INT},
+   {"neighbor_debug", BMO_OP_SLOT_INT},
+#endif
    {{'\0'}},
   },
   /*slot_types_out*/
@@ -853,7 +864,7 @@ static BMOpDefine bmo_transform_def = {
  * Object Load BMesh.
  *
  * Loads a bmesh into an object/mesh. This is a "private"
- * bmop.
+ * BMOP.
  */
 static BMOpDefine bmo_object_load_bmesh_def = {
   "object_load_bmesh",
@@ -889,7 +900,7 @@ static BMOpDefine bmo_bmesh_to_mesh_def = {
 /*
  * Mesh to BMesh.
  *
- * Load the contents of a mesh into the bmesh. this bmop is private, it's
+ * Load the contents of a mesh into the bmesh. this BMOP is private, it's
  * reserved exclusively for entering editmode.
  */
 static BMOpDefine bmo_mesh_to_bmesh_def = {

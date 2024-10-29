@@ -16,6 +16,7 @@
 namespace blender::eevee {
 
 class Instance;
+class LookdevView;
 
 /* -------------------------------------------------------------------- */
 /** \name Parameters
@@ -67,9 +68,19 @@ class LookdevWorld {
     return &world;
   }
 
-  float background_opacity_get()
+  float background_opacity_get() const
   {
     return parameters_.background_opacity;
+  }
+
+  float background_blur_get() const
+  {
+    return parameters_.blur;
+  }
+
+  float intensity_get() const
+  {
+    return parameters_.intensity;
   }
 };
 
@@ -81,14 +92,51 @@ class LookdevWorld {
  * \{ */
 
 class LookdevModule {
- public:
  private:
   Instance &inst_;
 
- public:
-  LookdevModule(Instance &inst) : inst_(inst){};
+  bool enabled_;
 
-  /* TODO(fclem): This is where the lookdev balls display should go. */
+  static constexpr int num_spheres = 2;
+
+  /* Size and position of the look-dev spheres in world space. */
+  float sphere_radius_;
+  float3 sphere_position_;
+
+  rcti visible_rect_;
+
+  /* Dummy textures: required to reuse forward mesh shader and avoid another shader variation. */
+  Texture dummy_cryptomatte_tx_;
+  Texture dummy_aov_color_tx_;
+  Texture dummy_aov_value_tx_;
+
+  struct Sphere {
+    Framebuffer framebuffer = {"Lookdev.Framebuffer"};
+    Texture color_tx_ = {"Lookdev.Color"};
+    PassSimple pass = {"Lookdev.Sphere"};
+  };
+
+  Sphere spheres_[num_spheres];
+  PassSimple display_ps_ = {"Lookdev.Display"};
+
+ public:
+  LookdevModule(Instance &inst);
+  ~LookdevModule();
+
+  void init(const rcti *visible_rect);
+  void sync();
+
+  void draw(View &view);
+
+  void display();
+
+ private:
+  void sync_pass(PassSimple &pass, gpu::Batch *geom, ::Material *mat, ResourceHandle res_handle);
+  void sync_display();
+
+  float calc_viewport_scale();
+
+  friend class LookdevView;
 };
 
 /** \} */

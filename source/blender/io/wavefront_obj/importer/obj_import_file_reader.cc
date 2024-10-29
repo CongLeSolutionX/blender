@@ -6,9 +6,12 @@
  * \ingroup obj
  */
 
+#include "BKE_report.hh"
+
+#include "BLI_fileops.hh"
 #include "BLI_map.hh"
-#include "BLI_math_color.h"
 #include "BLI_math_vector.h"
+#include "BLI_math_vector_types.hh"
 #include "BLI_string.h"
 #include "BLI_string_ref.hh"
 #include "BLI_vector.hh"
@@ -70,6 +73,7 @@ static Geometry *create_geometry(Geometry *const prev_geometry,
 
 static void geom_add_vertex(const char *p, const char *end, GlobalVertices &r_global_vertices)
 {
+  r_global_vertices.flush_mrgb_block();
   float3 vert;
   p = parse_floats(p, end, 0.0f, vert, 3);
   r_global_vertices.vertices.append(vert);
@@ -82,20 +86,10 @@ static void geom_add_vertex(const char *p, const char *end, GlobalVertices &r_gl
     if (srgb.x >= 0 && srgb.y >= 0 && srgb.z >= 0) {
       float3 linear;
       srgb_to_linearrgb_v3_v3(linear, srgb);
-
-      auto &blocks = r_global_vertices.vertex_colors;
-      /* If we don't have vertex colors yet, or the previous vertex
-       * was without color, we need to start a new vertex colors block. */
-      if (blocks.is_empty() || (blocks.last().start_vertex_index + blocks.last().colors.size() !=
-                                r_global_vertices.vertices.size() - 1))
-      {
-        GlobalVertices::VertexColorsBlock block;
-        block.start_vertex_index = r_global_vertices.vertices.size() - 1;
-        blocks.append(block);
-      }
-      blocks.last().colors.append(linear);
+      r_global_vertices.set_vertex_color(r_global_vertices.vertices.size() - 1, linear);
     }
   }
+  UNUSED_VARS(p);
 }
 
 static void geom_add_mrgb_colors(const char *p, const char *end, GlobalVertices &r_global_vertices)
@@ -119,20 +113,7 @@ static void geom_add_mrgb_colors(const char *p, const char *end, GlobalVertices 
     float linear[4];
     srgb_to_linearrgb_uchar4(linear, srgb);
 
-    auto &blocks = r_global_vertices.vertex_colors;
-    /* If we don't have vertex colors yet, or the previous vertex
-     * was without color, we need to start a new vertex colors block. */
-    if (blocks.is_empty() || (blocks.last().start_vertex_index + blocks.last().colors.size() !=
-                              r_global_vertices.vertices.size()))
-    {
-      GlobalVertices::VertexColorsBlock block;
-      block.start_vertex_index = r_global_vertices.vertices.size();
-      blocks.append(block);
-    }
-    blocks.last().colors.append({linear[0], linear[1], linear[2]});
-    /* MRGB colors are specified after vertex positions; each new color
-     * "pushes" the vertex colors block further back into which vertices it is for. */
-    blocks.last().start_vertex_index--;
+    r_global_vertices.mrgb_block.append(float3(linear[0], linear[1], linear[2]));
 
     p += mrgb_length;
   }
@@ -229,7 +210,7 @@ static void geom_add_polygon(Geometry *geom,
                              const int group_index,
                              const bool shaded_smooth)
 {
-  PolyElem curr_face;
+  FaceElem curr_face;
   curr_face.shaded_smooth = shaded_smooth;
   curr_face.material_index = material_index;
   if (group_index >= 0) {
@@ -243,10 +224,16 @@ static void geom_add_polygon(Geometry *geom,
   bool face_valid = true;
   p = drop_whitespace(p, end);
   while (p < end && face_valid) {
-    PolyCorner corner;
+    FaceCorner corner;
     bool got_uv = false, got_normal = false;
     /* Parse vertex index. */
     p = parse_int(p, end, INT32_MAX, corner.vert_index, false);
+
+    /* Skip parsing when we reach start of the comment. */
+    if (*p == '#') {
+      break;
+    }
+
     face_valid &= corner.vert_index != INT32_MAX;
     if (p < end && *p == '/') {
       /* Parse UV index. */
@@ -313,7 +300,7 @@ static void geom_add_polygon(Geometry *geom,
 
   if (face_valid) {
     geom->face_elements_.append(curr_face);
-    geom->total_loops_ += curr_face.corner_count_;
+    geom->total_corner_ += curr_face.corner_count_;
   }
   else {
     /* Remove just-added corners for the invalid face. */
@@ -348,9 +335,8 @@ static void geom_add_curve_vertex_indices(Geometry *geom,
                                           const char *end,
                                           const GlobalVertices &global_vertices)
 {
-  /* Curve lines always have "0.0" and "1.0", skip over them. */
-  float dummy[2];
-  p = parse_floats(p, end, 0, dummy, 2);
+  /* Parse curve parameter range. */
+  p = parse_floats(p, end, 0, geom->nurbs_element_.range, 2);
   /* Parse indices. */
   while (p < end) {
     int index;
@@ -441,6 +427,10 @@ OBJParser::OBJParser(const OBJImportParams &import_params, size_t read_buffer_si
   obj_file_ = BLI_fopen(import_params_.filepath, "rb");
   if (!obj_file_) {
     fprintf(stderr, "Cannot read from OBJ file:'%s'.\n", import_params_.filepath);
+    BKE_reportf(import_params_.reports,
+                RPT_ERROR,
+                "OBJ Import: Cannot open file '%s'",
+                import_params_.filepath);
     return;
   }
 }
@@ -474,7 +464,7 @@ static bool parse_keyword(const char *&p, const char *end, StringRef keyword)
 /* Special case: if there were no faces/edges in any geometries,
  * treat all the vertices as a point cloud. */
 static void use_all_vertices_if_no_faces(Geometry *geom,
-                                         const Vector<std::unique_ptr<Geometry>> &all_geometries,
+                                         const Span<std::unique_ptr<Geometry>> all_geometries,
                                          const GlobalVertices &global_vertices)
 {
   if (!global_vertices.vertices.is_empty() && geom && geom->geom_type_ == GEOM_MESH) {
@@ -689,6 +679,7 @@ void OBJParser::parse(Vector<std::unique_ptr<Geometry>> &r_all_geometries,
     buffer_offset = left_size;
   }
 
+  r_global_vertices.flush_mrgb_block();
   use_all_vertices_if_no_faces(curr_geom, r_all_geometries, r_global_vertices);
   add_default_mtl_library();
 }
@@ -835,8 +826,8 @@ void OBJParser::add_mtl_library(StringRef path)
 
 void OBJParser::add_default_mtl_library()
 {
-  /* Add any existing .mtl file that's with the same base name as the .obj file
-   * into candidate .mtl files to search through. This is not technically following the
+  /* Add any existing `.mtl` file that's with the same base name as the `.obj` file
+   * into candidate `.mtl` files to search through. This is not technically following the
    * spec, but the old python importer was doing it, and there are user files out there
    * that contain "mtllib bar.mtl" for a foo.obj, and depend on finding materials
    * from foo.mtl (see #97757). */

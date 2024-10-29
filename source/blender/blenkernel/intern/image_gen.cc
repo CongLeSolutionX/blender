@@ -15,10 +15,10 @@
 
 #include "BKE_image.h"
 
-#include "IMB_imbuf.h"
-#include "IMB_imbuf_types.h"
+#include "IMB_imbuf.hh"
+#include "IMB_imbuf_types.hh"
 
-#include "BLF_api.h"
+#include "BLF_api.hh"
 
 struct FillColorThreadData {
   uchar *rect;
@@ -268,7 +268,8 @@ static void checker_board_color_tint(
   for (y = offset; y < height + offset; y++) {
     for (x = 0; x < width; x++) {
       if (((y / size) % 2 == 1 && (x / size) % 2 == 1) ||
-          ((y / size) % 2 == 0 && (x / size) % 2 == 0)) {
+          ((y / size) % 2 == 0 && (x / size) % 2 == 0))
+      {
         if (rect) {
           rect[0] = char(BLEND_CHAR(rect[0], blend));
           rect[1] = char(BLEND_CHAR(rect[1], blend));
@@ -360,7 +361,7 @@ static void checker_board_text(
    *            this is correct since currently generated images are assumed to be in sRGB space,
    *            but this would probably needed to be fixed in some way
    */
-  BLF_buffer(mono, rect_float, rect, width, height, 4, nullptr);
+  BLF_buffer(mono, rect_float, rect, width, height, nullptr);
 
   const float text_color[4] = {0.0, 0.0, 0.0, 1.0};
   const float text_outline[4] = {1.0, 1.0, 1.0, 1.0};
@@ -412,7 +413,7 @@ static void checker_board_text(
   }
 
   /* cleanup the buffer. */
-  BLF_buffer(mono, nullptr, nullptr, 0, 0, 0, nullptr);
+  BLF_buffer(mono, nullptr, nullptr, 0, 0, nullptr);
 }
 
 static void checker_board_color_prepare_slice(

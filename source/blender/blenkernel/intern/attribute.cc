@@ -17,7 +17,6 @@
 #include "DNA_curves_types.h"
 #include "DNA_customdata_types.h"
 #include "DNA_mesh_types.h"
-#include "DNA_meshdata_types.h"
 #include "DNA_pointcloud_types.h"
 
 #include "BLI_index_range.hh"
@@ -25,159 +24,244 @@
 #include "BLI_string_utf8.h"
 #include "BLI_string_utils.hh"
 
-#include "BLT_translation.h"
+#include "BLT_translation.hh"
 
-#include "BKE_attribute.h"
 #include "BKE_attribute.hh"
 #include "BKE_curves.hh"
 #include "BKE_customdata.hh"
 #include "BKE_editmesh.hh"
 #include "BKE_grease_pencil.hh"
 #include "BKE_mesh.hh"
-#include "BKE_pointcloud.h"
-#include "BKE_report.h"
+#include "BKE_pointcloud.hh"
+#include "BKE_report.hh"
 
 #include "RNA_access.hh"
 
 using blender::IndexRange;
+using blender::bke::AttrDomain;
+
+AttributeOwner AttributeOwner::from_id(ID *id)
+{
+  if (id == nullptr) {
+    return {};
+  }
+  switch (GS(id->name)) {
+    case ID_ME:
+      return AttributeOwner(AttributeOwnerType::Mesh, id);
+    case ID_PT:
+      return AttributeOwner(AttributeOwnerType::PointCloud, id);
+    case ID_CV:
+      return AttributeOwner(AttributeOwnerType::Curves, id);
+    case ID_GP:
+      return AttributeOwner(AttributeOwnerType::GreasePencil, id);
+    default:
+      return {};
+  }
+}
+
+AttributeOwnerType AttributeOwner::type() const
+{
+  return type_;
+}
+
+bool AttributeOwner::is_valid() const
+{
+  return ptr_ != nullptr;
+}
+
+Mesh *AttributeOwner::get_mesh() const
+{
+  BLI_assert(this->is_valid());
+  BLI_assert(type_ == AttributeOwnerType::Mesh);
+  return reinterpret_cast<Mesh *>(ptr_);
+}
+
+PointCloud *AttributeOwner::get_pointcloud() const
+{
+  BLI_assert(this->is_valid());
+  BLI_assert(type_ == AttributeOwnerType::PointCloud);
+  return reinterpret_cast<PointCloud *>(ptr_);
+}
+
+Curves *AttributeOwner::get_curves() const
+{
+  BLI_assert(this->is_valid());
+  BLI_assert(type_ == AttributeOwnerType::Curves);
+  return reinterpret_cast<Curves *>(ptr_);
+}
+
+GreasePencil *AttributeOwner::get_grease_pencil() const
+{
+  BLI_assert(this->is_valid());
+  BLI_assert(type_ == AttributeOwnerType::GreasePencil);
+  return reinterpret_cast<GreasePencil *>(ptr_);
+}
+
+GreasePencilDrawing *AttributeOwner::get_grease_pencil_drawing() const
+{
+  BLI_assert(this->is_valid());
+  BLI_assert(type_ == AttributeOwnerType::GreasePencilDrawing);
+  return reinterpret_cast<GreasePencilDrawing *>(ptr_);
+}
 
 struct DomainInfo {
-  CustomData *customdata;
-  int length;
+  CustomData *customdata = nullptr;
+  int length = 0;
 };
 
-static void get_domains(const ID *id, DomainInfo info[ATTR_DOMAIN_NUM])
+static std::array<DomainInfo, ATTR_DOMAIN_NUM> get_domains(const AttributeOwner &owner)
 {
-  memset(info, 0, sizeof(DomainInfo) * ATTR_DOMAIN_NUM);
+  std::array<DomainInfo, ATTR_DOMAIN_NUM> info;
 
-  switch (GS(id->name)) {
-    case ID_PT: {
-      PointCloud *pointcloud = (PointCloud *)id;
-      info[ATTR_DOMAIN_POINT].customdata = &pointcloud->pdata;
-      info[ATTR_DOMAIN_POINT].length = pointcloud->totpoint;
+  switch (owner.type()) {
+    case AttributeOwnerType::PointCloud: {
+      PointCloud *pointcloud = owner.get_pointcloud();
+      info[int(AttrDomain::Point)].customdata = &pointcloud->pdata;
+      info[int(AttrDomain::Point)].length = pointcloud->totpoint;
       break;
     }
-    case ID_ME: {
-      Mesh *mesh = (Mesh *)id;
-      BMEditMesh *em = mesh->edit_mesh;
-      if (em != nullptr) {
+    case AttributeOwnerType::Mesh: {
+      Mesh *mesh = owner.get_mesh();
+      if (BMEditMesh *em = mesh->runtime->edit_mesh.get()) {
         BMesh *bm = em->bm;
-        info[ATTR_DOMAIN_POINT].customdata = &bm->vdata;
-        info[ATTR_DOMAIN_POINT].length = bm->totvert;
-        info[ATTR_DOMAIN_EDGE].customdata = &bm->edata;
-        info[ATTR_DOMAIN_EDGE].length = bm->totedge;
-        info[ATTR_DOMAIN_CORNER].customdata = &bm->ldata;
-        info[ATTR_DOMAIN_CORNER].length = bm->totloop;
-        info[ATTR_DOMAIN_FACE].customdata = &bm->pdata;
-        info[ATTR_DOMAIN_FACE].length = bm->totface;
+        info[int(AttrDomain::Point)].customdata = &bm->vdata;
+        info[int(AttrDomain::Point)].length = bm->totvert;
+        info[int(AttrDomain::Edge)].customdata = &bm->edata;
+        info[int(AttrDomain::Edge)].length = bm->totedge;
+        info[int(AttrDomain::Corner)].customdata = &bm->ldata;
+        info[int(AttrDomain::Corner)].length = bm->totloop;
+        info[int(AttrDomain::Face)].customdata = &bm->pdata;
+        info[int(AttrDomain::Face)].length = bm->totface;
       }
       else {
-        info[ATTR_DOMAIN_POINT].customdata = &mesh->vert_data;
-        info[ATTR_DOMAIN_POINT].length = mesh->totvert;
-        info[ATTR_DOMAIN_EDGE].customdata = &mesh->edge_data;
-        info[ATTR_DOMAIN_EDGE].length = mesh->totedge;
-        info[ATTR_DOMAIN_CORNER].customdata = &mesh->loop_data;
-        info[ATTR_DOMAIN_CORNER].length = mesh->totloop;
-        info[ATTR_DOMAIN_FACE].customdata = &mesh->face_data;
-        info[ATTR_DOMAIN_FACE].length = mesh->faces_num;
+        info[int(AttrDomain::Point)].customdata = &mesh->vert_data;
+        info[int(AttrDomain::Point)].length = mesh->verts_num;
+        info[int(AttrDomain::Edge)].customdata = &mesh->edge_data;
+        info[int(AttrDomain::Edge)].length = mesh->edges_num;
+        info[int(AttrDomain::Corner)].customdata = &mesh->corner_data;
+        info[int(AttrDomain::Corner)].length = mesh->corners_num;
+        info[int(AttrDomain::Face)].customdata = &mesh->face_data;
+        info[int(AttrDomain::Face)].length = mesh->faces_num;
       }
       break;
     }
-    case ID_CV: {
-      Curves *curves = (Curves *)id;
-      info[ATTR_DOMAIN_POINT].customdata = &curves->geometry.point_data;
-      info[ATTR_DOMAIN_POINT].length = curves->geometry.point_num;
-      info[ATTR_DOMAIN_CURVE].customdata = &curves->geometry.curve_data;
-      info[ATTR_DOMAIN_CURVE].length = curves->geometry.curve_num;
+    case AttributeOwnerType::Curves: {
+      Curves *curves = owner.get_curves();
+      info[int(AttrDomain::Point)].customdata = &curves->geometry.point_data;
+      info[int(AttrDomain::Point)].length = curves->geometry.point_num;
+      info[int(AttrDomain::Curve)].customdata = &curves->geometry.curve_data;
+      info[int(AttrDomain::Curve)].length = curves->geometry.curve_num;
       break;
     }
-    case ID_GP: {
-      GreasePencil *grease_pencil = (GreasePencil *)id;
-      info[ATTR_DOMAIN_LAYER].customdata = &grease_pencil->layers_data;
-      info[ATTR_DOMAIN_LAYER].length = grease_pencil->layers().size();
+    case AttributeOwnerType::GreasePencil: {
+      GreasePencil *grease_pencil = owner.get_grease_pencil();
+      info[int(AttrDomain::Layer)].customdata = &grease_pencil->layers_data;
+      info[int(AttrDomain::Layer)].length = grease_pencil->layers().size();
       break;
     }
-    default:
+    case AttributeOwnerType::GreasePencilDrawing: {
+      blender::bke::greasepencil::Drawing &drawing = owner.get_grease_pencil_drawing()->wrap();
+      info[int(AttrDomain::Point)].customdata = &drawing.geometry.point_data;
+      info[int(AttrDomain::Point)].length = drawing.geometry.point_num;
+      info[int(AttrDomain::Curve)].customdata = &drawing.geometry.curve_data;
+      info[int(AttrDomain::Curve)].length = drawing.geometry.curve_num;
       break;
+    }
   }
+
+  return info;
 }
 
 namespace blender::bke {
 
 static std::optional<blender::bke::MutableAttributeAccessor> get_attribute_accessor_for_write(
-    ID &id)
+    AttributeOwner &owner)
 {
-  switch (GS(id.name)) {
-    case ID_ME: {
-      Mesh &mesh = reinterpret_cast<Mesh &>(id);
+  switch (owner.type()) {
+    case AttributeOwnerType::Mesh: {
+      Mesh &mesh = *owner.get_mesh();
       /* The attribute API isn't implemented for BMesh, so edit mode meshes are not supported. */
-      BLI_assert(mesh.edit_mesh == nullptr);
+      BLI_assert(mesh.runtime->edit_mesh == nullptr);
       return mesh.attributes_for_write();
     }
-    case ID_PT: {
-      PointCloud &pointcloud = reinterpret_cast<PointCloud &>(id);
+    case AttributeOwnerType::PointCloud: {
+      PointCloud &pointcloud = *owner.get_pointcloud();
       return pointcloud.attributes_for_write();
     }
-    case ID_CV: {
-      Curves &curves_id = reinterpret_cast<Curves &>(id);
+    case AttributeOwnerType::Curves: {
+      Curves &curves_id = *owner.get_curves();
       CurvesGeometry &curves = curves_id.geometry.wrap();
       return curves.attributes_for_write();
     }
-    case ID_GP: {
-      GreasePencil &grease_pencil = reinterpret_cast<GreasePencil &>(id);
+    case AttributeOwnerType::GreasePencil: {
+      GreasePencil &grease_pencil = *owner.get_grease_pencil();
       return grease_pencil.attributes_for_write();
     }
-    default: {
-      BLI_assert_unreachable();
-      return {};
+    case AttributeOwnerType::GreasePencilDrawing: {
+      blender::bke::greasepencil::Drawing &drawing = owner.get_grease_pencil_drawing()->wrap();
+      return drawing.strokes_for_write().attributes_for_write();
     }
   }
+  return {};
 }
 
 }  // namespace blender::bke
 
-bool BKE_id_attributes_supported(const ID *id)
+static bool bke_attribute_rename_if_exists(AttributeOwner &owner,
+                                           const char *old_name,
+                                           const char *new_name,
+                                           ReportList *reports)
 {
-  DomainInfo info[ATTR_DOMAIN_NUM];
-  get_domains(id, info);
-  for (const int domain : IndexRange(ATTR_DOMAIN_NUM)) {
-    if (info[domain].customdata) {
-      return true;
-    }
-  }
-  return false;
-}
-
-bool BKE_attribute_allow_procedural_access(const char *attribute_name)
-{
-  return blender::bke::allow_procedural_attribute_access(attribute_name);
-}
-
-static bool bke_id_attribute_rename_if_exists(ID *id,
-                                              const char *old_name,
-                                              const char *new_name,
-                                              ReportList *reports)
-{
-  CustomDataLayer *layer = BKE_id_attribute_search_for_write(
-      id, old_name, CD_MASK_PROP_ALL, ATTR_DOMAIN_MASK_ALL);
+  CustomDataLayer *layer = BKE_attribute_search_for_write(
+      owner, old_name, CD_MASK_PROP_ALL, ATTR_DOMAIN_MASK_ALL);
   if (layer == nullptr) {
     return false;
   }
-  return BKE_id_attribute_rename(id, old_name, new_name, reports);
+  return BKE_attribute_rename(owner, old_name, new_name, reports);
 }
 
-bool BKE_id_attribute_rename(ID *id,
-                             const char *old_name,
-                             const char *new_name,
-                             ReportList *reports)
+static bool mesh_edit_mode_attribute_valid(const blender::StringRef name,
+                                           const AttrDomain domain,
+                                           const eCustomDataType data_type,
+                                           ReportList *reports)
+{
+  if (ELEM(name,
+           "position",
+           ".edge_verts",
+           ".corner_vert",
+           ".corner_edge",
+           "sharp_edge",
+           "sharp_face",
+           "material_index"))
+  {
+    BKE_report(reports, RPT_ERROR, "Unable to create builtin attribute in edit mode");
+    return false;
+  }
+  if (name == "id") {
+    if (domain != AttrDomain::Point) {
+      BKE_report(reports, RPT_ERROR, "Domain unsupported for \"id\" attribute");
+      return false;
+    }
+    if (data_type != CD_PROP_INT32) {
+      BKE_report(reports, RPT_ERROR, "Type unsupported for \"id\" attribute");
+      return false;
+    }
+  }
+  return true;
+}
+
+bool BKE_attribute_rename(AttributeOwner &owner,
+                          const char *old_name,
+                          const char *new_name,
+                          ReportList *reports)
 {
   using namespace blender;
-  if (BKE_id_attribute_required(id, old_name)) {
+  if (BKE_attribute_required(owner, old_name)) {
     BLI_assert_msg(0, "Required attribute name is not editable");
     return false;
   }
   if (STREQ(new_name, "")) {
-    BKE_report(reports, RPT_ERROR, "Attribute name can not be empty");
+    BKE_report(reports, RPT_ERROR, "Attribute name cannot be empty");
     return false;
   }
 
@@ -194,56 +278,65 @@ bool BKE_id_attribute_rename(ID *id,
     }
   }
 
-  CustomDataLayer *layer = BKE_id_attribute_search_for_write(
-      id, old_name, CD_MASK_PROP_ALL, ATTR_DOMAIN_MASK_ALL);
+  CustomDataLayer *layer = BKE_attribute_search_for_write(
+      owner, old_name, CD_MASK_PROP_ALL, ATTR_DOMAIN_MASK_ALL);
   if (layer == nullptr) {
     BKE_report(reports, RPT_ERROR, "Attribute is not part of this geometry");
     return false;
   }
 
-  char result_name[MAX_CUSTOMDATA_LAYER_NAME];
-  BKE_id_attribute_calc_unique_name(id, new_name, result_name);
+  if (owner.type() == AttributeOwnerType::Mesh) {
+    Mesh *mesh = owner.get_mesh();
+    if (mesh->runtime->edit_mesh) {
+      if (!mesh_edit_mode_attribute_valid(
+              new_name, BKE_attribute_domain(owner, layer), eCustomDataType(layer->type), reports))
+      {
+        return false;
+      }
+    }
+  }
 
-  if (layer->type == CD_PROP_FLOAT2 && GS(id->name) == ID_ME) {
+  std::string result_name = BKE_attribute_calc_unique_name(owner, new_name);
+
+  if (layer->type == CD_PROP_FLOAT2 && owner.type() == AttributeOwnerType::Mesh) {
     /* Rename UV sub-attributes. */
     char buffer_src[MAX_CUSTOMDATA_LAYER_NAME];
     char buffer_dst[MAX_CUSTOMDATA_LAYER_NAME];
 
-    bke_id_attribute_rename_if_exists(id,
-                                      BKE_uv_map_vert_select_name_get(layer->name, buffer_src),
-                                      BKE_uv_map_vert_select_name_get(result_name, buffer_dst),
-                                      reports);
-    bke_id_attribute_rename_if_exists(id,
-                                      BKE_uv_map_edge_select_name_get(layer->name, buffer_src),
-                                      BKE_uv_map_edge_select_name_get(result_name, buffer_dst),
-                                      reports);
-    bke_id_attribute_rename_if_exists(id,
-                                      BKE_uv_map_pin_name_get(layer->name, buffer_src),
-                                      BKE_uv_map_pin_name_get(result_name, buffer_dst),
-                                      reports);
-  }
-  if (StringRef(old_name) == BKE_id_attributes_active_color_name(id)) {
-    BKE_id_attributes_active_color_set(id, result_name);
-  }
-  if (StringRef(old_name) == BKE_id_attributes_default_color_name(id)) {
-    BKE_id_attributes_default_color_set(id, result_name);
+    bke_attribute_rename_if_exists(
+        owner,
+        BKE_uv_map_vert_select_name_get(layer->name, buffer_src),
+        BKE_uv_map_vert_select_name_get(result_name.c_str(), buffer_dst),
+        reports);
+    bke_attribute_rename_if_exists(
+        owner,
+        BKE_uv_map_edge_select_name_get(layer->name, buffer_src),
+        BKE_uv_map_edge_select_name_get(result_name.c_str(), buffer_dst),
+        reports);
+    bke_attribute_rename_if_exists(owner,
+                                   BKE_uv_map_pin_name_get(layer->name, buffer_src),
+                                   BKE_uv_map_pin_name_get(result_name.c_str(), buffer_dst),
+                                   reports);
   }
 
-  STRNCPY_UTF8(layer->name, result_name);
+  if (owner.type() == AttributeOwnerType::Mesh) {
+    Mesh *mesh = owner.get_mesh();
+    if (StringRef(old_name) == BKE_id_attributes_active_color_name(&mesh->id)) {
+      BKE_id_attributes_active_color_set(&mesh->id, result_name.c_str());
+    }
+    if (StringRef(old_name) == BKE_id_attributes_default_color_name(&mesh->id)) {
+      BKE_id_attributes_default_color_set(&mesh->id, result_name.c_str());
+    }
+  }
+
+  STRNCPY_UTF8(layer->name, result_name.c_str());
 
   return true;
 }
 
-struct AttrUniqueData {
-  ID *id;
-};
-
-static bool unique_name_cb(void *arg, const char *name)
+static bool attribute_name_exists(const AttributeOwner &owner, const blender::StringRef name)
 {
-  AttrUniqueData *data = (AttrUniqueData *)arg;
-
-  DomainInfo info[ATTR_DOMAIN_NUM];
-  get_domains(data->id, info);
+  const std::array<DomainInfo, ATTR_DOMAIN_NUM> info = get_domains(owner);
 
   for (const int domain : IndexRange(ATTR_DOMAIN_NUM)) {
     if (!info[domain].customdata) {
@@ -254,7 +347,7 @@ static bool unique_name_cb(void *arg, const char *name)
     for (int i = 0; i < cdata->totlayer; i++) {
       const CustomDataLayer *layer = cdata->layers + i;
 
-      if (STREQ(layer->name, name)) {
+      if (layer->name == name) {
         return true;
       }
     }
@@ -263,49 +356,45 @@ static bool unique_name_cb(void *arg, const char *name)
   return false;
 }
 
-void BKE_id_attribute_calc_unique_name(ID *id, const char *name, char *outname)
+std::string BKE_attribute_calc_unique_name(const AttributeOwner &owner,
+                                           const blender::StringRef name)
 {
-  AttrUniqueData data{id};
-
-  const int name_maxncpy = CustomData_name_maxncpy_calc(name);
-
-  /* Set default name if none specified.
-   * NOTE: We only call DATA_() if needed to avoid locale lookup overhead. */
-  BLI_strncpy_utf8(outname, (name && name[0]) ? name : DATA_("Attribute"), name_maxncpy);
-
-  const char *defname = ""; /* Dummy argument, never used as `name` is never zero length. */
-  BLI_uniquename_cb(unique_name_cb, &data, defname, '.', outname, name_maxncpy);
+  return BLI_uniquename_cb(
+      [&](const blender::StringRef new_name) { return attribute_name_exists(owner, new_name); },
+      '.',
+      name.is_empty() ? DATA_("Attribute") : name);
 }
 
-CustomDataLayer *BKE_id_attribute_new(ID *id,
-                                      const char *name,
-                                      const eCustomDataType type,
-                                      const eAttrDomain domain,
-                                      ReportList *reports)
+CustomDataLayer *BKE_attribute_new(AttributeOwner &owner,
+                                   const char *name,
+                                   const eCustomDataType type,
+                                   const AttrDomain domain,
+                                   ReportList *reports)
 {
   using namespace blender::bke;
-  DomainInfo info[ATTR_DOMAIN_NUM];
-  get_domains(id, info);
+  const std::array<DomainInfo, ATTR_DOMAIN_NUM> info = get_domains(owner);
 
-  CustomData *customdata = info[domain].customdata;
+  CustomData *customdata = info[int(domain)].customdata;
   if (customdata == nullptr) {
     BKE_report(reports, RPT_ERROR, "Attribute domain not supported by this geometry type");
     return nullptr;
   }
 
-  char uniquename[MAX_CUSTOMDATA_LAYER_NAME];
-  BKE_id_attribute_calc_unique_name(id, name, uniquename);
+  std::string uniquename = BKE_attribute_calc_unique_name(owner, name);
 
-  if (GS(id->name) == ID_ME) {
-    Mesh *mesh = reinterpret_cast<Mesh *>(id);
-    if (BMEditMesh *em = mesh->edit_mesh) {
-      BM_data_layer_add_named(em->bm, customdata, type, uniquename);
+  if (owner.type() == AttributeOwnerType::Mesh) {
+    Mesh *mesh = owner.get_mesh();
+    if (BMEditMesh *em = mesh->runtime->edit_mesh.get()) {
+      if (!mesh_edit_mode_attribute_valid(name, domain, type, reports)) {
+        return nullptr;
+      }
+      BM_data_layer_add_named(em->bm, customdata, type, uniquename.c_str());
       const int index = CustomData_get_named_layer_index(customdata, type, uniquename);
       return (index == -1) ? nullptr : &(customdata->layers[index]);
     }
   }
 
-  std::optional<MutableAttributeAccessor> attributes = get_attribute_accessor_for_write(*id);
+  std::optional<MutableAttributeAccessor> attributes = get_attribute_accessor_for_write(owner);
   if (!attributes) {
     return nullptr;
   }
@@ -314,17 +403,19 @@ CustomDataLayer *BKE_id_attribute_new(ID *id,
 
   const int index = CustomData_get_named_layer_index(customdata, type, uniquename);
   if (index == -1) {
-    BKE_reportf(reports, RPT_WARNING, "Layer '%s' could not be created", uniquename);
+    BKE_reportf(reports, RPT_WARNING, "Layer '%s' could not be created", uniquename.c_str());
   }
 
   return (index == -1) ? nullptr : &(customdata->layers[index]);
 }
 
-static void bke_id_attribute_copy_if_exists(ID *id, const char *srcname, const char *dstname)
+static void bke_attribute_copy_if_exists(AttributeOwner &owner,
+                                         const char *srcname,
+                                         const char *dstname)
 {
   using namespace blender::bke;
 
-  std::optional<MutableAttributeAccessor> attributes = get_attribute_accessor_for_write(*id);
+  std::optional<MutableAttributeAccessor> attributes = get_attribute_accessor_for_write(owner);
   if (!attributes) {
     return;
   }
@@ -338,22 +429,22 @@ static void bke_id_attribute_copy_if_exists(ID *id, const char *srcname, const c
   attributes->add(dstname, src.domain, type, AttributeInitVArray(src.varray));
 }
 
-CustomDataLayer *BKE_id_attribute_duplicate(ID *id, const char *name, ReportList *reports)
+CustomDataLayer *BKE_attribute_duplicate(AttributeOwner &owner,
+                                         const char *name,
+                                         ReportList *reports)
 {
   using namespace blender::bke;
-  char uniquename[MAX_CUSTOMDATA_LAYER_NAME];
-  BKE_id_attribute_calc_unique_name(id, name, uniquename);
+  std::string uniquename = BKE_attribute_calc_unique_name(owner, name);
 
-  if (GS(id->name) == ID_ME) {
-    Mesh *mesh = reinterpret_cast<Mesh *>(id);
-    if (BMEditMesh *em = mesh->edit_mesh) {
+  if (owner.type() == AttributeOwnerType::Mesh) {
+    Mesh *mesh = owner.get_mesh();
+    if (mesh->runtime->edit_mesh) {
       BLI_assert_unreachable();
-      UNUSED_VARS(em);
       return nullptr;
     }
   }
 
-  std::optional<MutableAttributeAccessor> attributes = get_attribute_accessor_for_write(*id);
+  std::optional<MutableAttributeAccessor> attributes = get_attribute_accessor_for_write(owner);
   if (!attributes) {
     return nullptr;
   }
@@ -367,46 +458,47 @@ CustomDataLayer *BKE_id_attribute_duplicate(ID *id, const char *name, ReportList
   const eCustomDataType type = cpp_type_to_custom_data_type(src.varray.type());
   attributes->add(uniquename, src.domain, type, AttributeInitVArray(src.varray));
 
-  if (GS(id->name) == ID_ME && type == CD_PROP_FLOAT2) {
+  if (owner.type() == AttributeOwnerType::Mesh && type == CD_PROP_FLOAT2) {
     /* Duplicate UV sub-attributes. */
     char buffer_src[MAX_CUSTOMDATA_LAYER_NAME];
     char buffer_dst[MAX_CUSTOMDATA_LAYER_NAME];
 
-    bke_id_attribute_copy_if_exists(id,
-                                    BKE_uv_map_vert_select_name_get(name, buffer_src),
-                                    BKE_uv_map_vert_select_name_get(uniquename, buffer_dst));
-    bke_id_attribute_copy_if_exists(id,
-                                    BKE_uv_map_edge_select_name_get(name, buffer_src),
-                                    BKE_uv_map_edge_select_name_get(uniquename, buffer_dst));
-    bke_id_attribute_copy_if_exists(id,
-                                    BKE_uv_map_pin_name_get(name, buffer_src),
-                                    BKE_uv_map_pin_name_get(uniquename, buffer_dst));
+    bke_attribute_copy_if_exists(owner,
+                                 BKE_uv_map_vert_select_name_get(name, buffer_src),
+                                 BKE_uv_map_vert_select_name_get(uniquename.c_str(), buffer_dst));
+    bke_attribute_copy_if_exists(owner,
+                                 BKE_uv_map_edge_select_name_get(name, buffer_src),
+                                 BKE_uv_map_edge_select_name_get(uniquename.c_str(), buffer_dst));
+    bke_attribute_copy_if_exists(owner,
+                                 BKE_uv_map_pin_name_get(name, buffer_src),
+                                 BKE_uv_map_pin_name_get(uniquename.c_str(), buffer_dst));
   }
 
-  return BKE_id_attribute_search_for_write(id, uniquename, CD_MASK_PROP_ALL, ATTR_DOMAIN_MASK_ALL);
+  return BKE_attribute_search_for_write(
+      owner, uniquename.c_str(), CD_MASK_PROP_ALL, ATTR_DOMAIN_MASK_ALL);
 }
 
-static int color_name_to_index(ID *id, const char *name)
+static int color_name_to_index(AttributeOwner &owner, const char *name)
 {
-  const CustomDataLayer *layer = BKE_id_attribute_search(
-      id, name, CD_MASK_COLOR_ALL, ATTR_DOMAIN_MASK_COLOR);
-  return BKE_id_attribute_to_index(id, layer, ATTR_DOMAIN_MASK_COLOR, CD_MASK_COLOR_ALL);
+  const CustomDataLayer *layer = BKE_attribute_search(
+      owner, name, CD_MASK_COLOR_ALL, ATTR_DOMAIN_MASK_COLOR);
+  return BKE_attribute_to_index(owner, layer, ATTR_DOMAIN_MASK_COLOR, CD_MASK_COLOR_ALL);
 }
 
-static int color_clamp_index(ID *id, int index)
+static int color_clamp_index(AttributeOwner &owner, int index)
 {
-  const int length = BKE_id_attributes_length(id, ATTR_DOMAIN_MASK_COLOR, CD_MASK_COLOR_ALL);
+  const int length = BKE_attributes_length(owner, ATTR_DOMAIN_MASK_COLOR, CD_MASK_COLOR_ALL);
   return min_ii(index, length - 1);
 }
 
-static const char *color_name_from_index(ID *id, int index)
+static const char *color_name_from_index(AttributeOwner &owner, int index)
 {
-  const CustomDataLayer *layer = BKE_id_attribute_from_index(
-      id, index, ATTR_DOMAIN_MASK_COLOR, CD_MASK_COLOR_ALL);
+  const CustomDataLayer *layer = BKE_attribute_from_index(
+      owner, index, ATTR_DOMAIN_MASK_COLOR, CD_MASK_COLOR_ALL);
   return layer ? layer->name : nullptr;
 }
 
-bool BKE_id_attribute_remove(ID *id, const char *name, ReportList *reports)
+bool BKE_attribute_remove(AttributeOwner &owner, const char *name, ReportList *reports)
 {
   using namespace blender;
   using namespace blender::bke;
@@ -414,21 +506,20 @@ bool BKE_id_attribute_remove(ID *id, const char *name, ReportList *reports)
     BKE_report(reports, RPT_ERROR, "The attribute name must not be empty");
     return false;
   }
-  if (BKE_id_attribute_required(id, name)) {
+  if (BKE_attribute_required(owner, name)) {
     BKE_report(reports, RPT_ERROR, "Attribute is required and can't be removed");
     return false;
   }
 
-  DomainInfo info[ATTR_DOMAIN_NUM];
-  get_domains(id, info);
+  const std::array<DomainInfo, ATTR_DOMAIN_NUM> info = get_domains(owner);
 
-  if (GS(id->name) == ID_ME) {
-    Mesh *mesh = reinterpret_cast<Mesh *>(id);
-    if (BMEditMesh *em = mesh->edit_mesh) {
+  if (owner.type() == AttributeOwnerType::Mesh) {
+    Mesh *mesh = owner.get_mesh();
+    if (BMEditMesh *em = mesh->runtime->edit_mesh.get()) {
       for (const int domain : IndexRange(ATTR_DOMAIN_NUM)) {
         if (CustomData *data = info[domain].customdata) {
           const std::string name_copy = name;
-          const int layer_index = CustomData_get_named_layer_index_notype(data, name_copy.c_str());
+          const int layer_index = CustomData_get_named_layer_index_notype(data, name_copy);
           if (layer_index == -1) {
             continue;
           }
@@ -438,8 +529,9 @@ bool BKE_id_attribute_remove(ID *id, const char *name, ReportList *reports)
                                                  StringRef(mesh->active_color_attribute);
           const bool is_default_color_attribute = name_copy.c_str() ==
                                                   StringRef(mesh->default_color_attribute);
-          const int active_color_index = color_name_to_index(id, mesh->active_color_attribute);
-          const int default_color_index = color_name_to_index(id, mesh->default_color_attribute);
+          const int active_color_index = color_name_to_index(owner, mesh->active_color_attribute);
+          const int default_color_index = color_name_to_index(owner,
+                                                              mesh->default_color_attribute);
 
           if (!BM_data_layer_free_named(em->bm, data, name_copy.c_str())) {
             BLI_assert_unreachable();
@@ -447,14 +539,16 @@ bool BKE_id_attribute_remove(ID *id, const char *name, ReportList *reports)
 
           if (is_active_color_attribute) {
             BKE_id_attributes_active_color_set(
-                id, color_name_from_index(id, color_clamp_index(id, active_color_index)));
+                &mesh->id,
+                color_name_from_index(owner, color_clamp_index(owner, active_color_index)));
           }
           if (is_default_color_attribute) {
             BKE_id_attributes_default_color_set(
-                id, color_name_from_index(id, color_clamp_index(id, default_color_index)));
+                &mesh->id,
+                color_name_from_index(owner, color_clamp_index(owner, default_color_index)));
           }
 
-          if (type == CD_PROP_FLOAT2 && domain == ATTR_DOMAIN_CORNER) {
+          if (type == CD_PROP_FLOAT2 && domain == int(AttrDomain::Corner)) {
             char buffer[MAX_CUSTOMDATA_LAYER_NAME];
             BM_data_layer_free_named(
                 em->bm, data, BKE_uv_map_vert_select_name_get(name_copy.c_str(), buffer));
@@ -470,12 +564,12 @@ bool BKE_id_attribute_remove(ID *id, const char *name, ReportList *reports)
     }
   }
 
-  std::optional<MutableAttributeAccessor> attributes = get_attribute_accessor_for_write(*id);
+  std::optional<MutableAttributeAccessor> attributes = get_attribute_accessor_for_write(owner);
   if (!attributes) {
     return false;
   }
 
-  if (GS(id->name) == ID_ME) {
+  if (owner.type() == AttributeOwnerType::Mesh) {
     const std::string name_copy = name;
     std::optional<blender::bke::AttributeMetaData> metadata = attributes->lookup_meta_data(
         name_copy);
@@ -483,11 +577,11 @@ bool BKE_id_attribute_remove(ID *id, const char *name, ReportList *reports)
       return false;
     }
     /* Update active and default color attributes. */
-    Mesh *mesh = reinterpret_cast<Mesh *>(id);
+    Mesh *mesh = owner.get_mesh();
     const bool is_active_color_attribute = name_copy == StringRef(mesh->active_color_attribute);
     const bool is_default_color_attribute = name_copy == StringRef(mesh->default_color_attribute);
-    const int active_color_index = color_name_to_index(id, mesh->active_color_attribute);
-    const int default_color_index = color_name_to_index(id, mesh->default_color_attribute);
+    const int active_color_index = color_name_to_index(owner, mesh->active_color_attribute);
+    const int default_color_index = color_name_to_index(owner, mesh->default_color_attribute);
 
     if (!attributes->remove(name_copy)) {
       BLI_assert_unreachable();
@@ -495,14 +589,14 @@ bool BKE_id_attribute_remove(ID *id, const char *name, ReportList *reports)
 
     if (is_active_color_attribute) {
       BKE_id_attributes_active_color_set(
-          id, color_name_from_index(id, color_clamp_index(id, active_color_index)));
+          &mesh->id, color_name_from_index(owner, color_clamp_index(owner, active_color_index)));
     }
     if (is_default_color_attribute) {
       BKE_id_attributes_default_color_set(
-          id, color_name_from_index(id, color_clamp_index(id, default_color_index)));
+          &mesh->id, color_name_from_index(owner, color_clamp_index(owner, default_color_index)));
     }
 
-    if (metadata->data_type == CD_PROP_FLOAT2 && metadata->domain == ATTR_DOMAIN_CORNER) {
+    if (metadata->data_type == CD_PROP_FLOAT2 && metadata->domain == AttrDomain::Corner) {
       char buffer[MAX_CUSTOMDATA_LAYER_NAME];
       attributes->remove(BKE_uv_map_vert_select_name_get(name_copy.c_str(), buffer));
       attributes->remove(BKE_uv_map_edge_select_name_get(name_copy.c_str(), buffer));
@@ -514,18 +608,17 @@ bool BKE_id_attribute_remove(ID *id, const char *name, ReportList *reports)
   return attributes->remove(name);
 }
 
-CustomDataLayer *BKE_id_attribute_find(const ID *id,
-                                       const char *name,
-                                       const eCustomDataType type,
-                                       const eAttrDomain domain)
+CustomDataLayer *BKE_attribute_find(const AttributeOwner &owner,
+                                    const char *name,
+                                    const eCustomDataType type,
+                                    const AttrDomain domain)
 {
   if (!name) {
     return nullptr;
   }
-  DomainInfo info[ATTR_DOMAIN_NUM];
-  get_domains(id, info);
+  const std::array<DomainInfo, ATTR_DOMAIN_NUM> info = get_domains(owner);
 
-  CustomData *customdata = info[domain].customdata;
+  CustomData *customdata = info[int(domain)].customdata;
   if (customdata == nullptr) {
     return nullptr;
   }
@@ -540,25 +633,24 @@ CustomDataLayer *BKE_id_attribute_find(const ID *id,
   return nullptr;
 }
 
-const CustomDataLayer *BKE_id_attribute_search(const ID *id,
-                                               const char *name,
-                                               const eCustomDataMask type_mask,
-                                               const eAttrDomainMask domain_mask)
+const CustomDataLayer *BKE_attribute_search(const AttributeOwner &owner,
+                                            const char *name,
+                                            const eCustomDataMask type_mask,
+                                            const AttrDomainMask domain_mask)
 {
   if (!name) {
     return nullptr;
   }
-  DomainInfo info[ATTR_DOMAIN_NUM];
-  get_domains(id, info);
+  const std::array<DomainInfo, ATTR_DOMAIN_NUM> info = get_domains(owner);
 
-  for (eAttrDomain domain = ATTR_DOMAIN_POINT; domain < ATTR_DOMAIN_NUM;
-       domain = static_cast<eAttrDomain>(int(domain) + 1))
+  for (AttrDomain domain = AttrDomain::Point; int(domain) < ATTR_DOMAIN_NUM;
+       domain = AttrDomain(int(domain) + 1))
   {
     if (!(domain_mask & ATTR_DOMAIN_AS_MASK(domain))) {
       continue;
     }
 
-    CustomData *customdata = info[domain].customdata;
+    CustomData *customdata = info[int(domain)].customdata;
     if (customdata == nullptr) {
       continue;
     }
@@ -574,32 +666,32 @@ const CustomDataLayer *BKE_id_attribute_search(const ID *id,
   return nullptr;
 }
 
-CustomDataLayer *BKE_id_attribute_search_for_write(ID *id,
-                                                   const char *name,
-                                                   const eCustomDataMask type_mask,
-                                                   const eAttrDomainMask domain_mask)
+CustomDataLayer *BKE_attribute_search_for_write(AttributeOwner &owner,
+                                                const char *name,
+                                                const eCustomDataMask type_mask,
+                                                const AttrDomainMask domain_mask)
 {
   /* Reuse the implementation of the const version.
    * Implicit sharing for the layer's data is handled below. */
   CustomDataLayer *layer = const_cast<CustomDataLayer *>(
-      BKE_id_attribute_search(id, name, type_mask, domain_mask));
+      BKE_attribute_search(owner, name, type_mask, domain_mask));
   if (!layer) {
     return nullptr;
   }
 
-  DomainInfo info[ATTR_DOMAIN_NUM];
-  get_domains(id, info);
+  const std::array<DomainInfo, ATTR_DOMAIN_NUM> info = get_domains(owner);
 
-  const eAttrDomain domain = BKE_id_attribute_domain(id, layer);
-  CustomData_ensure_data_is_mutable(layer, info[domain].length);
+  const AttrDomain domain = BKE_attribute_domain(owner, layer);
+  CustomData_ensure_data_is_mutable(layer, info[int(domain)].length);
 
   return layer;
 }
 
-int BKE_id_attributes_length(const ID *id, eAttrDomainMask domain_mask, eCustomDataMask mask)
+int BKE_attributes_length(const AttributeOwner &owner,
+                          AttrDomainMask domain_mask,
+                          eCustomDataMask mask)
 {
-  DomainInfo info[ATTR_DOMAIN_NUM];
-  get_domains(id, info);
+  const std::array<DomainInfo, ATTR_DOMAIN_NUM> info = get_domains(owner);
 
   int length = 0;
 
@@ -617,51 +709,50 @@ int BKE_id_attributes_length(const ID *id, eAttrDomainMask domain_mask, eCustomD
   return length;
 }
 
-eAttrDomain BKE_id_attribute_domain(const ID *id, const CustomDataLayer *layer)
+AttrDomain BKE_attribute_domain(const AttributeOwner &owner, const CustomDataLayer *layer)
 {
-  DomainInfo info[ATTR_DOMAIN_NUM];
-  get_domains(id, info);
+  const std::array<DomainInfo, ATTR_DOMAIN_NUM> info = get_domains(owner);
 
   for (const int domain : IndexRange(ATTR_DOMAIN_NUM)) {
     const CustomData *customdata = info[domain].customdata;
     if (customdata == nullptr) {
       continue;
     }
-    if (ARRAY_HAS_ITEM((CustomDataLayer *)layer, customdata->layers, customdata->totlayer)) {
-      return static_cast<eAttrDomain>(domain);
+    if (blender::Span(customdata->layers, customdata->totlayer).contains_ptr(layer)) {
+      return AttrDomain(domain);
     }
   }
 
   BLI_assert_msg(0, "Custom data layer not found in geometry");
-  return static_cast<eAttrDomain>(ATTR_DOMAIN_POINT);
+  return AttrDomain(AttrDomain::Point);
 }
 
-int BKE_id_attribute_data_length(ID *id, CustomDataLayer *layer)
+int BKE_attribute_domain_size(const AttributeOwner &owner, const int domain)
+{
+  const std::array<DomainInfo, ATTR_DOMAIN_NUM> info = get_domains(owner);
+  return info[domain].length;
+}
+
+int BKE_attribute_data_length(AttributeOwner &owner, CustomDataLayer *layer)
 {
   /* When in mesh editmode, attributes point to bmesh customdata layers, the attribute data is
    * empty since custom data is stored per element instead of a single array there (same es UVs
    * etc.), see D11998. */
-  switch (GS(id->name)) {
-    case ID_ME: {
-      Mesh *mesh = (Mesh *)id;
-      if (mesh->edit_mesh != nullptr) {
-        return 0;
-      }
-      break;
+  if (owner.type() == AttributeOwnerType::Mesh) {
+    Mesh *mesh = owner.get_mesh();
+    if (mesh->runtime->edit_mesh != nullptr) {
+      return 0;
     }
-    default:
-      break;
   }
 
-  DomainInfo info[ATTR_DOMAIN_NUM];
-  get_domains(id, info);
+  const std::array<DomainInfo, ATTR_DOMAIN_NUM> info = get_domains(owner);
 
   for (const int domain : IndexRange(ATTR_DOMAIN_NUM)) {
     const CustomData *customdata = info[domain].customdata;
     if (customdata == nullptr) {
       continue;
     }
-    if (ARRAY_HAS_ITEM((CustomDataLayer *)layer, customdata->layers, customdata->totlayer)) {
+    if (blender::Span(customdata->layers, customdata->totlayer).contains_ptr(layer)) {
       return info[domain].length;
     }
   }
@@ -670,29 +761,34 @@ int BKE_id_attribute_data_length(ID *id, CustomDataLayer *layer)
   return 0;
 }
 
-bool BKE_id_attribute_required(const ID *id, const char *name)
+bool BKE_attribute_required(const AttributeOwner &owner, const char *name)
 {
-  switch (GS(id->name)) {
-    case ID_PT:
-      return BKE_pointcloud_attribute_required((const PointCloud *)id, name);
-    case ID_CV:
-      return BKE_curves_attribute_required((const Curves *)id, name);
-    case ID_ME:
+  switch (owner.type()) {
+    case AttributeOwnerType::PointCloud:
+      return BKE_pointcloud_attribute_required(owner.get_pointcloud(), name);
+    case AttributeOwnerType::Curves:
+      return BKE_curves_attribute_required(owner.get_curves(), name);
+    case AttributeOwnerType::Mesh:
       return BKE_mesh_attribute_required(name);
-    default:
+    case AttributeOwnerType::GreasePencil:
       return false;
+    case AttributeOwnerType::GreasePencilDrawing:
+      return BKE_grease_pencil_drawing_attribute_required(owner.get_grease_pencil_drawing(), name);
   }
+  return false;
 }
 
-CustomDataLayer *BKE_id_attributes_active_get(ID *id)
+CustomDataLayer *BKE_attributes_active_get(AttributeOwner &owner)
 {
-  int active_index = *BKE_id_attributes_active_index_p(id);
-  if (active_index > BKE_id_attributes_length(id, ATTR_DOMAIN_MASK_ALL, CD_MASK_PROP_ALL)) {
+  int active_index = *BKE_attributes_active_index_p(owner);
+  if (active_index == -1) {
+    return nullptr;
+  }
+  if (active_index > BKE_attributes_length(owner, ATTR_DOMAIN_MASK_ALL, CD_MASK_PROP_ALL)) {
     active_index = 0;
   }
 
-  DomainInfo info[ATTR_DOMAIN_NUM];
-  get_domains(id, info);
+  const std::array<DomainInfo, ATTR_DOMAIN_NUM> info = get_domains(owner);
 
   int index = 0;
 
@@ -705,7 +801,7 @@ CustomDataLayer *BKE_id_attributes_active_get(ID *id)
       CustomDataLayer *layer = &customdata->layers[i];
       if (CD_MASK_PROP_ALL & CD_TYPE_AS_MASK(layer->type)) {
         if (index == active_index) {
-          if (BKE_attribute_allow_procedural_access(layer->name)) {
+          if (blender::bke::allow_procedural_attribute_access(layer->name)) {
             return layer;
           }
           return nullptr;
@@ -718,40 +814,46 @@ CustomDataLayer *BKE_id_attributes_active_get(ID *id)
   return nullptr;
 }
 
-void BKE_id_attributes_active_set(ID *id, const char *name)
+void BKE_attributes_active_set(AttributeOwner &owner, const char *name)
 {
-  const CustomDataLayer *layer = BKE_id_attribute_search(
-      id, name, CD_MASK_PROP_ALL, ATTR_DOMAIN_MASK_ALL);
+  const CustomDataLayer *layer = BKE_attribute_search(
+      owner, name, CD_MASK_PROP_ALL, ATTR_DOMAIN_MASK_ALL);
   BLI_assert(layer != nullptr);
 
-  const int index = BKE_id_attribute_to_index(id, layer, ATTR_DOMAIN_MASK_ALL, CD_MASK_PROP_ALL);
-  *BKE_id_attributes_active_index_p(id) = index;
+  const int index = BKE_attribute_to_index(owner, layer, ATTR_DOMAIN_MASK_ALL, CD_MASK_PROP_ALL);
+  *BKE_attributes_active_index_p(owner) = index;
 }
 
-int *BKE_id_attributes_active_index_p(ID *id)
+void BKE_attributes_active_clear(AttributeOwner &owner)
 {
-  switch (GS(id->name)) {
-    case ID_PT: {
-      return &((PointCloud *)id)->attributes_active_index;
+  *BKE_attributes_active_index_p(owner) = -1;
+}
+
+int *BKE_attributes_active_index_p(AttributeOwner &owner)
+{
+  switch (owner.type()) {
+    case AttributeOwnerType::PointCloud: {
+      return &owner.get_pointcloud()->attributes_active_index;
     }
-    case ID_ME: {
-      return &((Mesh *)id)->attributes_active_index;
+    case AttributeOwnerType::Mesh: {
+      return &owner.get_mesh()->attributes_active_index;
     }
-    case ID_CV: {
-      return &((Curves *)id)->attributes_active_index;
+    case AttributeOwnerType::Curves: {
+      return &owner.get_curves()->geometry.attributes_active_index;
     }
-    case ID_GP: {
-      return &((GreasePencil *)id)->attributes_active_index;
+    case AttributeOwnerType::GreasePencil: {
+      return &owner.get_grease_pencil()->attributes_active_index;
     }
-    default:
-      return nullptr;
+    case AttributeOwnerType::GreasePencilDrawing: {
+      return &owner.get_grease_pencil_drawing()->geometry.attributes_active_index;
+    }
   }
+  return nullptr;
 }
 
-CustomData *BKE_id_attributes_iterator_next_domain(ID *id, CustomDataLayer *layers)
+CustomData *BKE_attributes_iterator_next_domain(AttributeOwner &owner, CustomDataLayer *layers)
 {
-  DomainInfo info[ATTR_DOMAIN_NUM];
-  get_domains(id, info);
+  const std::array<DomainInfo, ATTR_DOMAIN_NUM> info = get_domains(owner);
 
   bool use_next = (layers == nullptr);
 
@@ -773,13 +875,12 @@ CustomData *BKE_id_attributes_iterator_next_domain(ID *id, CustomDataLayer *laye
   return nullptr;
 }
 
-CustomDataLayer *BKE_id_attribute_from_index(ID *id,
-                                             int lookup_index,
-                                             eAttrDomainMask domain_mask,
-                                             eCustomDataMask layer_mask)
+CustomDataLayer *BKE_attribute_from_index(AttributeOwner &owner,
+                                          int lookup_index,
+                                          AttrDomainMask domain_mask,
+                                          eCustomDataMask layer_mask)
 {
-  DomainInfo info[ATTR_DOMAIN_NUM];
-  get_domains(id, info);
+  const std::array<DomainInfo, ATTR_DOMAIN_NUM> info = get_domains(owner);
 
   int index = 0;
   for (const int domain : IndexRange(ATTR_DOMAIN_NUM)) {
@@ -807,46 +908,30 @@ CustomDataLayer *BKE_id_attribute_from_index(ID *id,
   return nullptr;
 }
 
-/**
- * Get list of domain types but with ATTR_DOMAIN_FACE and
- * ATTR_DOMAIN_CORNER swapped.
- */
-static void get_domains_types(eAttrDomain domains[ATTR_DOMAIN_NUM])
-{
-  for (const int i : IndexRange(ATTR_DOMAIN_NUM)) {
-    domains[i] = static_cast<eAttrDomain>(i);
-  }
-
-  /* Swap corner and face. */
-  std::swap(domains[ATTR_DOMAIN_FACE], domains[ATTR_DOMAIN_CORNER]);
-}
-
-int BKE_id_attribute_to_index(const ID *id,
-                              const CustomDataLayer *layer,
-                              eAttrDomainMask domain_mask,
-                              eCustomDataMask layer_mask)
+int BKE_attribute_to_index(const AttributeOwner &owner,
+                           const CustomDataLayer *layer,
+                           AttrDomainMask domain_mask,
+                           eCustomDataMask layer_mask)
 {
   if (!layer) {
     return -1;
   }
 
-  DomainInfo info[ATTR_DOMAIN_NUM];
-  eAttrDomain domains[ATTR_DOMAIN_NUM];
-  get_domains_types(domains);
-  get_domains(id, info);
+  const std::array<DomainInfo, ATTR_DOMAIN_NUM> info = get_domains(owner);
 
   int index = 0;
-  for (int i = 0; i < ATTR_DOMAIN_NUM; i++) {
-    if (!(domain_mask & (1 << domains[i])) || !info[domains[i]].customdata) {
+  for (const int domain : IndexRange(ATTR_DOMAIN_NUM)) {
+    const CustomData *customdata = info[domain].customdata;
+
+    if (!customdata || !((1 << int(domain)) & domain_mask)) {
       continue;
     }
 
-    const CustomData *cdata = info[domains[i]].customdata;
-    for (int j = 0; j < cdata->totlayer; j++) {
-      const CustomDataLayer *layer_iter = cdata->layers + j;
-
-      if (!(CD_TYPE_AS_MASK(layer_iter->type) & layer_mask) ||
-          (layer_iter->flag & CD_FLAG_TEMPORARY)) {
+    for (int i = 0; i < customdata->totlayer; i++) {
+      const CustomDataLayer *layer_iter = customdata->layers + i;
+      if (!(layer_mask & CD_TYPE_AS_MASK(layer_iter->type)) ||
+          (layer_iter->flag & CD_FLAG_TEMPORARY))
+      {
         continue;
       }
 
@@ -893,6 +978,19 @@ void BKE_id_attributes_active_color_set(ID *id, const char *name)
   }
 }
 
+void BKE_id_attributes_active_color_clear(ID *id)
+{
+  switch (GS(id->name)) {
+    case ID_ME: {
+      Mesh *mesh = reinterpret_cast<Mesh *>(id);
+      MEM_SAFE_FREE(mesh->active_color_attribute);
+      break;
+    }
+    default:
+      break;
+  }
+}
+
 void BKE_id_attributes_default_color_set(ID *id, const char *name)
 {
   switch (GS(id->name)) {
@@ -911,8 +1009,24 @@ void BKE_id_attributes_default_color_set(ID *id, const char *name)
 
 const CustomDataLayer *BKE_id_attributes_color_find(const ID *id, const char *name)
 {
-  return BKE_id_attribute_search(
-      const_cast<ID *>(id), name, CD_MASK_COLOR_ALL, ATTR_DOMAIN_MASK_COLOR);
+  AttributeOwner owner = AttributeOwner::from_id(const_cast<ID *>(id));
+  return BKE_attribute_search(owner, name, CD_MASK_COLOR_ALL, ATTR_DOMAIN_MASK_COLOR);
+}
+
+bool BKE_color_attribute_supported(const Mesh &mesh, const blender::StringRef name)
+{
+  std::optional<blender::bke::AttributeMetaData> meta_data = mesh.attributes().lookup_meta_data(
+      name);
+
+  if (!meta_data) {
+    return false;
+  }
+  if (!(ATTR_DOMAIN_AS_MASK(meta_data->domain) & ATTR_DOMAIN_MASK_COLOR) ||
+      !(CD_TYPE_AS_MASK(meta_data->data_type) & CD_MASK_COLOR_ALL))
+  {
+    return false;
+  }
+  return true;
 }
 
 const char *BKE_uv_map_vert_select_name_get(const char *uv_map_name, char *buffer)

@@ -15,7 +15,7 @@
  * - Separated foreground and background CoC. 1/8th of half-res resolution. So 1/16th of full-res.
  */
 
-#pragma BLENDER_REQUIRE(eevee_depth_of_field_lib.glsl)
+#include "eevee_depth_of_field_lib.glsl"
 
 /**
  * In order to use atomic operations, we have to use uints. But this means having to deal with the
@@ -29,11 +29,11 @@ shared uint bg_min_coc;
 shared uint bg_max_coc;
 shared uint bg_min_intersectable_coc;
 
-uint dof_tile_large_coc_uint = floatBitsToUint(dof_tile_large_coc);
+#define dof_tile_large_coc_uint floatBitsToUint(dof_tile_large_coc)
 
 void main()
 {
-  if (all(equal(gl_LocalInvocationID.xy, uvec2(0)))) {
+  if (gl_LocalInvocationIndex == 0u) {
     /* NOTE: Min/Max flipped because of inverted fg_coc sign. */
     fg_min_coc = floatBitsToUint(0.0);
     fg_max_coc = dof_tile_large_coc_uint;
@@ -61,7 +61,7 @@ void main()
 
   barrier();
 
-  if (all(equal(gl_LocalInvocationID.xy, uvec2(0)))) {
+  if (gl_LocalInvocationIndex == 0u) {
     if (fg_max_intersectable_coc == dof_tile_large_coc_uint) {
       fg_max_intersectable_coc = floatBitsToUint(0.0);
     }

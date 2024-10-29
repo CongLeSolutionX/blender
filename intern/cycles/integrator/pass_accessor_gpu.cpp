@@ -38,6 +38,7 @@ void PassAccessorGPU::run_film_convert_kernels(DeviceKernel kernel,
   const int offset = buffer_params.window_x * buffer_params.pass_stride +
                      buffer_params.window_y * buffer_params.stride * buffer_params.pass_stride;
 
+  queue_->init_execution();
   if (destination.d_pixels) {
     DCHECK_EQ(destination.stride, 0) << "Custom stride for float destination is not implemented.";
 
@@ -48,6 +49,7 @@ void PassAccessorGPU::run_film_convert_kernels(DeviceKernel kernel,
                                &buffer_params.window_width,
                                &offset,
                                &buffer_params.stride,
+                               &destination.pixel_offset,
                                &destination.offset,
                                &destination_stride);
 

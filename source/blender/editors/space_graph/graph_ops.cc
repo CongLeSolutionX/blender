@@ -11,20 +11,18 @@
 
 #include "DNA_scene_types.h"
 
-#include "BLI_blenlib.h"
 #include "BLI_math_base.h"
 #include "BLI_utildefines.h"
 
 #include "BKE_context.hh"
-#include "BKE_global.h"
+#include "BKE_global.hh"
 
 #include "UI_view2d.hh"
 
 #include "ED_anim_api.hh"
 #include "ED_screen.hh"
-#include "ED_transform.hh"
 
-#include "graph_intern.h"
+#include "graph_intern.hh"
 
 #include "RNA_access.hh"
 #include "RNA_define.hh"
@@ -472,6 +470,7 @@ void graphedit_operatortypes()
   WM_operatortype_append(GRAPH_OT_ease);
   WM_operatortype_append(GRAPH_OT_shear);
   WM_operatortype_append(GRAPH_OT_scale_average);
+  WM_operatortype_append(GRAPH_OT_scale_from_neighbor);
   WM_operatortype_append(GRAPH_OT_blend_offset);
   WM_operatortype_append(GRAPH_OT_blend_to_ease);
   WM_operatortype_append(GRAPH_OT_match_slope);

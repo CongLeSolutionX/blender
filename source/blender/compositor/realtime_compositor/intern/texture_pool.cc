@@ -9,7 +9,7 @@
 #include "BLI_math_vector_types.hh"
 #include "BLI_vector.hh"
 
-#include "GPU_texture.h"
+#include "GPU_texture.hh"
 
 #include "COM_texture_pool.hh"
 
@@ -29,7 +29,7 @@ TexturePoolKey::TexturePoolKey(const GPUTexture *texture)
 
 uint64_t TexturePoolKey::hash() const
 {
-  return get_default_hash_3(size.x, size.y, format);
+  return get_default_hash(size.x, size.y, format);
 }
 
 bool operator==(const TexturePoolKey &a, const TexturePoolKey &b)

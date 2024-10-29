@@ -6,16 +6,14 @@
  * \ingroup cmpnodes
  */
 
-#include "RNA_access.hh"
-
 #include "BLI_string.h"
 
 #include "UI_interface.hh"
 #include "UI_resources.hh"
 
-#include "IMB_colormanagement.h"
+#include "IMB_colormanagement.hh"
 
-#include "GPU_shader.h"
+#include "GPU_shader.hh"
 
 #include "COM_node_operation.hh"
 #include "COM_ocio_color_space_conversion_shader.hh"
@@ -56,6 +54,10 @@ static void node_composit_buts_convert_colorspace(uiLayout *layout,
                                                   bContext * /*C*/,
                                                   PointerRNA *ptr)
 {
+#ifndef WITH_OCIO
+  uiItemL(layout, RPT_("Disabled, built without OpenColorIO"), ICON_ERROR);
+#endif
+
   uiItemR(layout, ptr, "from_color_space", UI_ITEM_R_SPLIT_EMPTY_NAME, nullptr, ICON_NONE);
   uiItemR(layout, ptr, "to_color_space", UI_ITEM_R_SPLIT_EMPTY_NAME, nullptr, ICON_NONE);
 }
@@ -68,6 +70,17 @@ class ConvertColorSpaceOperation : public NodeOperation {
 
   void execute() override
   {
+    /* Not yet supported on CPU. */
+    if (!context().use_gpu()) {
+      for (const bNodeSocket *output : this->node()->output_sockets()) {
+        Result &output_result = get_result(output->identifier);
+        if (output_result.should_compute()) {
+          output_result.allocate_invalid();
+        }
+      }
+      return;
+    }
+
     Result &input_image = get_input("Image");
     Result &output_image = get_result("Image");
     if (is_identity()) {
@@ -155,17 +168,17 @@ static NodeOperation *get_compositor_operation(Context &context, DNode node)
 void register_node_type_cmp_convert_color_space()
 {
   namespace file_ns = blender::nodes::node_composite_convert_color_space_cc;
-  static bNodeType ntype;
+  static blender::bke::bNodeType ntype;
 
   cmp_node_type_base(
       &ntype, CMP_NODE_CONVERT_COLOR_SPACE, "Convert Colorspace", NODE_CLASS_CONVERTER);
   ntype.declare = file_ns::CMP_NODE_CONVERT_COLOR_SPACE_declare;
   ntype.draw_buttons = file_ns::node_composit_buts_convert_colorspace;
-  blender::bke::node_type_size_preset(&ntype, blender::bke::eNodeSizePreset::MIDDLE);
+  blender::bke::node_type_size_preset(&ntype, blender::bke::eNodeSizePreset::Middle);
   ntype.initfunc = file_ns::node_composit_init_convert_colorspace;
-  node_type_storage(
+  blender::bke::node_type_storage(
       &ntype, "NodeConvertColorSpace", node_free_standard_storage, node_copy_standard_storage);
   ntype.get_compositor_operation = file_ns::get_compositor_operation;
 
-  nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }

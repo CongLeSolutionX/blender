@@ -13,8 +13,8 @@
 
 #include "RE_pipeline.h"
 
-#include "GPU_shader.h"
-#include "GPU_texture.h"
+#include "GPU_shader.hh"
+#include "GPU_texture.hh"
 
 #include "COM_context.hh"
 #include "COM_result.hh"
@@ -33,7 +33,7 @@ SymmetricBlurWeightsKey::SymmetricBlurWeightsKey(int type, float2 radius)
 
 uint64_t SymmetricBlurWeightsKey::hash() const
 {
-  return get_default_hash_3(type, radius.x, radius.y);
+  return get_default_hash(type, radius.x, radius.y);
 }
 
 bool operator==(const SymmetricBlurWeightsKey &a, const SymmetricBlurWeightsKey &b)
@@ -103,7 +103,7 @@ SymmetricBlurWeights::SymmetricBlurWeights(Context &context, int type, float2 ra
       size.x,
       size.y,
       1,
-      Result::texture_format(ResultType::Float, context.get_precision()),
+      Result::gpu_texture_format(ResultType::Float, context.get_precision()),
       GPU_TEXTURE_USAGE_GENERAL,
       weights.data());
 }

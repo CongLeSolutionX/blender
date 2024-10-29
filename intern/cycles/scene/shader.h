@@ -228,7 +228,7 @@ class ShaderManager {
 
   uint32_t update_flags;
 
-  typedef unordered_map<ustring, uint64_t, ustringHash> AttributeIDMap;
+  typedef unordered_map<ustring, uint64_t> AttributeIDMap;
   AttributeIDMap unique_attribute_id;
 
   static thread_mutex lookup_table_mutex;
@@ -250,6 +250,7 @@ class ShaderManager {
   float3 xyz_to_g;
   float3 xyz_to_b;
   float3 rgb_to_y;
+  float3 white_xyz;
   float3 rec709_to_r;
   float3 rec709_to_g;
   float3 rec709_to_b;

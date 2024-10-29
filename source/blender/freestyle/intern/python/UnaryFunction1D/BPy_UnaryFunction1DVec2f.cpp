@@ -34,27 +34,26 @@ int UnaryFunction1DVec2f_Init(PyObject *module)
   if (PyType_Ready(&UnaryFunction1DVec2f_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&UnaryFunction1DVec2f_Type);
-  PyModule_AddObject(module, "UnaryFunction1DVec2f", (PyObject *)&UnaryFunction1DVec2f_Type);
+  PyModule_AddObjectRef(module, "UnaryFunction1DVec2f", (PyObject *)&UnaryFunction1DVec2f_Type);
 
   if (PyType_Ready(&Normal2DF1D_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&Normal2DF1D_Type);
-  PyModule_AddObject(module, "Normal2DF1D", (PyObject *)&Normal2DF1D_Type);
+  PyModule_AddObjectRef(module, "Normal2DF1D", (PyObject *)&Normal2DF1D_Type);
 
   if (PyType_Ready(&Orientation2DF1D_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&Orientation2DF1D_Type);
-  PyModule_AddObject(module, "Orientation2DF1D", (PyObject *)&Orientation2DF1D_Type);
+  PyModule_AddObjectRef(module, "Orientation2DF1D", (PyObject *)&Orientation2DF1D_Type);
 
   return 0;
 }
 
 //------------------------INSTANCE METHODS ----------------------------------
 
-static char UnaryFunction1DVec2f___doc__[] =
+PyDoc_STRVAR(
+    /* Wrap. */
+    UnaryFunction1DVec2f___doc__,
     "Class hierarchy: :class:`UnaryFunction1D` > :class:`UnaryFunction1DVec2f`\n"
     "\n"
     "Base class for unary functions (functors) that work on\n"
@@ -67,7 +66,7 @@ static char UnaryFunction1DVec2f___doc__[] =
     "   or the integration method given as an argument.\n"
     "\n"
     "   :arg integration_type: An integration method.\n"
-    "   :type integration_type: :class:`IntegrationType`\n";
+    "   :type integration_type: :class:`IntegrationType`\n");
 
 static int UnaryFunction1DVec2f___init__(BPy_UnaryFunction1DVec2f *self,
                                          PyObject *args,
@@ -77,7 +76,8 @@ static int UnaryFunction1DVec2f___init__(BPy_UnaryFunction1DVec2f *self,
   PyObject *obj = nullptr;
 
   if (!PyArg_ParseTupleAndKeywords(
-          args, kwds, "|O!", (char **)kwlist, &IntegrationType_Type, &obj)) {
+          args, kwds, "|O!", (char **)kwlist, &IntegrationType_Type, &obj))
+  {
     return -1;
   }
 
@@ -131,10 +131,12 @@ static PyObject *UnaryFunction1DVec2f___call__(BPy_UnaryFunction1DVec2f *self,
 
 /*----------------------UnaryFunction1DVec2f get/setters ----------------------------*/
 
-PyDoc_STRVAR(integration_type_doc,
-             "The integration method.\n"
-             "\n"
-             ":type: :class:`IntegrationType`");
+PyDoc_STRVAR(
+    /* Wrap. */
+    integration_type_doc,
+    "The integration method.\n"
+    "\n"
+    ":type: :class:`IntegrationType`");
 
 static PyObject *integration_type_get(BPy_UnaryFunction1DVec2f *self, void * /*closure*/)
 {

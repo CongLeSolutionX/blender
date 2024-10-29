@@ -19,96 +19,7 @@ KeyingClipOperation::KeyingClipOperation()
 
   is_edge_matte_ = false;
 
-  flags_.complex = true;
-}
-
-void *KeyingClipOperation::initialize_tile_data(rcti *rect)
-{
-  void *buffer = get_input_operation(0)->initialize_tile_data(rect);
-
-  return buffer;
-}
-
-void KeyingClipOperation::execute_pixel(float output[4], int x, int y, void *data)
-{
-  const int delta = kernel_radius_;
-  const float tolerance = kernel_tolerance_;
-
-  MemoryBuffer *input_buffer = (MemoryBuffer *)data;
-  float *buffer = input_buffer->get_buffer();
-
-  int buffer_width = input_buffer->get_width();
-  int buffer_height = input_buffer->get_height();
-
-  float value = buffer[(y * buffer_width + x)];
-
-  bool ok = false;
-  int start_x = max_ff(0, x - delta + 1), start_y = max_ff(0, y - delta + 1),
-      end_x = min_ff(x + delta - 1, buffer_width - 1),
-      end_y = min_ff(y + delta - 1, buffer_height - 1);
-
-  int count = 0, total_count = (end_x - start_x + 1) * (end_y - start_y + 1) - 1;
-  int threshold_count = ceil(float(total_count) * 0.9f);
-
-  if (delta == 0) {
-    ok = true;
-  }
-
-  for (int cx = start_x; ok == false && cx <= end_x; cx++) {
-    for (int cy = start_y; ok == false && cy <= end_y; cy++) {
-      if (UNLIKELY(cx == x && cy == y)) {
-        continue;
-      }
-
-      int buffer_index = (cy * buffer_width + cx);
-      float current_value = buffer[buffer_index];
-
-      if (fabsf(current_value - value) < tolerance) {
-        count++;
-        if (count >= threshold_count) {
-          ok = true;
-        }
-      }
-    }
-  }
-
-  if (is_edge_matte_) {
-    if (ok) {
-      output[0] = 0.0f;
-    }
-    else {
-      output[0] = 1.0f;
-    }
-  }
-  else {
-    output[0] = value;
-
-    if (ok) {
-      if (output[0] < clip_black_) {
-        output[0] = 0.0f;
-      }
-      else if (output[0] >= clip_white_) {
-        output[0] = 1.0f;
-      }
-      else {
-        output[0] = (output[0] - clip_black_) / (clip_white_ - clip_black_);
-      }
-    }
-  }
-}
-
-bool KeyingClipOperation::determine_depending_area_of_interest(rcti *input,
-                                                               ReadBufferOperation *read_operation,
-                                                               rcti *output)
-{
-  rcti new_input;
-
-  new_input.xmin = input->xmin - kernel_radius_;
-  new_input.ymin = input->ymin - kernel_radius_;
-  new_input.xmax = input->xmax + kernel_radius_;
-  new_input.ymax = input->ymax + kernel_radius_;
-
-  return NodeOperation::determine_depending_area_of_interest(&new_input, read_operation, output);
+  flags_.can_be_constant = true;
 }
 
 void KeyingClipOperation::get_area_of_interest(const int input_idx,
@@ -140,14 +51,14 @@ void KeyingClipOperation::update_memory_buffer_partial(MemoryBuffer *output,
     const int x = it.x;
     const int y = it.y;
 
-    const int start_x = std::max(0, x - delta + 1);
-    const int start_y = std::max(0, y - delta + 1);
-    const int end_x = std::min(x + delta, width);
-    const int end_y = std::min(y + delta, height);
-    const int x_len = end_x - start_x;
-    const int y_len = end_y - start_y;
+    const int start_x = std::max(0, x - delta);
+    const int start_y = std::max(0, y - delta);
+    const int end_x = std::min(x + delta, width - 1);
+    const int end_y = std::min(y + delta, height - 1);
+    const int x_len = end_x - start_x + 1;
+    const int y_len = end_y - start_y + 1;
 
-    const int total_count = x_len * y_len - 1;
+    const int total_count = x_len * y_len;
     const int threshold_count = ceil(float(total_count) * 0.9f);
     bool ok = false;
     if (delta == 0) {
@@ -162,10 +73,6 @@ void KeyingClipOperation::update_memory_buffer_partial(MemoryBuffer *output,
     for (; ok == false && row < end_row; row += row_stride) {
       const float *end_elem = row + x_len * elem_stride;
       for (const float *elem = row; ok == false && elem < end_elem; elem += elem_stride) {
-        if (UNLIKELY(elem == main_elem)) {
-          continue;
-        }
-
         const float current_value = *elem;
         if (fabsf(current_value - value) < tolerance) {
           count++;

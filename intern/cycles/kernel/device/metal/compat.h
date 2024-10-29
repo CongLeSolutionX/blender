@@ -47,6 +47,7 @@ using namespace metal::raytracing;
 #define ccl_global device
 #define ccl_inline_constant static constant constexpr
 #define ccl_device_constant constant
+#define ccl_static_constexpr static constant constexpr
 #define ccl_constant constant
 #define ccl_gpu_shared threadgroup
 #define ccl_private thread
@@ -64,6 +65,8 @@ using namespace metal::raytracing;
 /* No assert supported for Metal */
 
 #define kernel_assert(cond)
+
+#define offsetof(t, d) __builtin_offsetof(t, d)
 
 #define ccl_gpu_global_id_x() metal_global_id
 #define ccl_gpu_warp_size simdgroup_size
@@ -180,7 +183,7 @@ void kernel_gpu_##name::run(thread MetalKernelContext& context, \
 #define ccl_gpu_kernel_call(x) context.x
 #define ccl_gpu_kernel_within_bounds(i,n) true
 
-/* define a function object where "func" is the lambda body, and additional parameters are used to specify captured state  */
+/* define a function object where "func" is the lambda body, and additional parameters are used to specify captured state. */
 #define ccl_gpu_kernel_lambda(func, ...) \
   struct KernelLambda \
   { \
@@ -249,6 +252,21 @@ ccl_device_forceinline int3 make_int3(const int x, const int y, const int z)
 ccl_device_forceinline int4 make_int4(const int x, const int y, const int z, const int w)
 {
   return int4(x, y, z, w);
+}
+
+ccl_device_forceinline uint2 make_uint2(const uint x, const uint y)
+{
+  return uint2(x, y);
+}
+
+ccl_device_forceinline uint3 make_uint3(const uint x, const uint y, const uint z)
+{
+  return uint3(x, y, z);
+}
+
+ccl_device_forceinline uint4 make_uint4(const uint x, const uint y, const uint z, const uint w)
+{
+  return uint4(x, y, z, w);
 }
 
 ccl_device_forceinline uchar4 make_uchar4(const uchar x,
@@ -358,9 +376,12 @@ struct MetalAncillaries {
   metalrt_as_type accel_struct;
   metalrt_ift_type ift_default;
   metalrt_ift_type ift_shadow;
+  metalrt_ift_type ift_shadow_all;
   metalrt_ift_type ift_volume;
-  metalrt_ift_type ift_local;
-  metalrt_blas_ift_type ift_local_prim;
+  metalrt_blas_ift_type ift_local;
+  metalrt_ift_type ift_local_mblur;
+  metalrt_blas_ift_type ift_local_single_hit;
+  metalrt_ift_type ift_local_single_hit_mblur;
   constant MetalRTBlasWrapper *blas_accel_structs;
 #endif
 };

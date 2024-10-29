@@ -6,7 +6,6 @@
 
 #include "BLI_math_vector.hh"
 
-#include "BLI_enumerable_thread_specific.hh"
 #include "BLI_length_parameterize.hh"
 #include "BLI_math_geom.h"
 #include "BLI_math_matrix_types.hh"
@@ -70,19 +69,19 @@ class ShrinkCurvesEffect : public CurvesEffect {
 
   /** Storage of per-curve parameterization data to avoid reallocation. */
   struct ParameterizationBuffers {
-    Array<float3> old_positions;
-    Array<float> old_lengths;
-    Array<float> sample_lengths;
-    Array<int> indices;
-    Array<float> factors;
+    Vector<float3> old_positions;
+    Vector<float> old_lengths;
+    Vector<float> sample_lengths;
+    Vector<int> indices;
+    Vector<float> factors;
 
-    void reinitialize(const int points_num)
+    void resize(const int points_num)
     {
-      this->old_positions.reinitialize(points_num);
-      this->old_lengths.reinitialize(length_parameterize::segments_num(points_num, false));
-      this->sample_lengths.reinitialize(points_num);
-      this->indices.reinitialize(points_num);
-      this->factors.reinitialize(points_num);
+      this->old_positions.resize(points_num);
+      this->old_lengths.resize(length_parameterize::segments_num(points_num, false));
+      this->sample_lengths.resize(points_num);
+      this->indices.resize(points_num);
+      this->factors.resize(points_num);
     }
   };
 
@@ -111,7 +110,7 @@ class ShrinkCurvesEffect : public CurvesEffect {
                     ParameterizationBuffers &data) const
   {
     namespace lp = length_parameterize;
-    data.reinitialize(positions.size());
+    data.resize(positions.size());
 
     /* Copy the old positions to facilitate mixing from neighbors for the resulting curve. */
     data.old_positions.as_mutable_span().copy_from(positions);
@@ -156,7 +155,8 @@ class ExtrapolateCurvesEffect : public CurvesEffect {
         const float3 old_last_pos_cu = positions_cu[points.last()];
         /* Use some point within the curve rather than the end point to smooth out some random
          * variation. */
-        const float3 direction_reference_point = positions_cu[points[points.size() / 2]];
+        const float3 direction_reference_point =
+            positions_cu[points.size() > 2 ? points[points.size() / 2] : points.first()];
         const float3 direction = math::normalize(old_last_pos_cu - direction_reference_point);
 
         const float3 new_last_pos_cu = old_last_pos_cu + direction * move_distance_cu;
@@ -273,7 +273,7 @@ struct CurvesEffectOperationExecutor {
     }
 
     curve_selection_factors_ = *curves_->attributes().lookup_or_default(
-        ".selection", ATTR_DOMAIN_CURVE, 1.0f);
+        ".selection", bke::AttrDomain::Curve, 1.0f);
     curve_selection_ = curves::retrieve_selected_curves(*curves_id_, selected_curve_memory_);
 
     const CurvesSculpt &curves_sculpt = *ctx_.scene->toolsettings->curves_sculpt;
@@ -341,8 +341,7 @@ struct CurvesEffectOperationExecutor {
         bke::crazyspace::get_evaluated_curves_deformation(*ctx_.depsgraph, *object_);
     const OffsetIndices points_by_curve = curves_->points_by_curve();
 
-    float4x4 projection;
-    ED_view3d_ob_project_mat_get(ctx_.rv3d, object_, projection.ptr());
+    const float4x4 projection = ED_view3d_ob_project_mat_get(ctx_.rv3d, object_);
 
     const Vector<float4x4> symmetry_brush_transforms = get_symmetry_brush_transforms(
         eCurvesSymmetryType(curves_id_->symmetry));
@@ -367,9 +366,8 @@ struct CurvesEffectOperationExecutor {
           const float3 p2_cu = math::transform_point(brush_transform_inv,
                                                      deformation.positions[segment_i + 1]);
 
-          float2 p1_re, p2_re;
-          ED_view3d_project_float_v2_m4(ctx_.region, p1_cu, p1_re, projection.ptr());
-          ED_view3d_project_float_v2_m4(ctx_.region, p2_cu, p2_re, projection.ptr());
+          const float2 p1_re = ED_view3d_project_float_v2_m4(ctx_.region, p1_cu, projection);
+          const float2 p2_re = ED_view3d_project_float_v2_m4(ctx_.region, p2_cu, projection);
 
           float2 closest_on_brush_re;
           float2 closest_on_segment_re;

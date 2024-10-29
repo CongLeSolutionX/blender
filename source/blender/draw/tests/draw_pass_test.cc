@@ -8,7 +8,7 @@
 
 #include "draw_manager.hh"
 #include "draw_pass.hh"
-#include "draw_shader.h"
+#include "draw_shader.hh"
 #include "draw_testing.hh"
 
 #include <bitset>
@@ -27,8 +27,8 @@ static void test_draw_pass_all_commands()
   ssbo.push_update();
 
   /* Won't be dereferenced. */
-  GPUVertBuf *vbo = (GPUVertBuf *)1;
-  GPUIndexBuf *ibo = (GPUIndexBuf *)1;
+  gpu::VertBuf *vbo = (gpu::VertBuf *)1;
+  gpu::IndexBuf *ibo = (gpu::IndexBuf *)1;
   GPUFrameBuffer *fb = nullptr;
 
   float4 color(1.0f, 1.0f, 1.0f, 0.0f);
@@ -44,7 +44,7 @@ static void test_draw_pass_all_commands()
   const int mvp_location = GPU_shader_get_uniform(sh, "ModelViewProjectionMatrix");
   pass.shader_set(sh);
   pass.framebuffer_set(&fb);
-  pass.subpass_transition(GPU_ATTACHEMENT_IGNORE, {GPU_ATTACHEMENT_WRITE, GPU_ATTACHEMENT_READ});
+  pass.subpass_transition(GPU_ATTACHMENT_IGNORE, {GPU_ATTACHMENT_WRITE, GPU_ATTACHMENT_READ});
   pass.bind_texture("image", tex);
   pass.bind_texture("image", &tex);
   pass.bind_image("missing_image", tex);       /* Should not crash. */
@@ -304,13 +304,12 @@ static void test_draw_resource_id_gen()
   drw.resource_handle(obmat_2, float3(2), float3(1));
   drw.end_sync();
 
-  StringRefNull expected = "2 1 1 1 1 3 3 1 1 1 1 1 3 2 2 2 2 2 2 1 1 1 ";
-
   {
     /* Computed on CPU. */
     PassSimple pass = {"test.resource_id"};
     pass.init();
-    pass.shader_set(GPU_shader_get_builtin_shader(GPU_SHADER_3D_IMAGE_COLOR));
+    pass.shader_set(
+        GPU_shader_get_builtin_shader(GPU_SHADER_3D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_AA));
     pass.draw_procedural(GPU_PRIM_TRIS, 1, -1, -1, handle2);
     pass.draw_procedural(GPU_PRIM_POINTS, 4, -1, -1, handle1);
     pass.draw_procedural(GPU_PRIM_TRIS, 2, -1, -1, handle3);
@@ -326,13 +325,16 @@ static void test_draw_resource_id_gen()
       result << val << " ";
     }
 
-    EXPECT_EQ(result.str(), expected);
+    StringRefNull expected_simple = "2 1 1 1 1 3 3 1 1 1 1 1 3 2 2 2 2 2 2 1 1 1 ";
+    EXPECT_EQ(result.str(), expected_simple);
   }
+
   {
     /* Same thing with PassMain (computed on GPU) */
-    PassSimple pass = {"test.resource_id"};
+    PassMain pass = {"test.resource_id"};
     pass.init();
-    pass.shader_set(GPU_shader_get_builtin_shader(GPU_SHADER_3D_IMAGE_COLOR));
+    pass.shader_set(
+        GPU_shader_get_builtin_shader(GPU_SHADER_3D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_AA));
     pass.draw_procedural(GPU_PRIM_TRIS, 1, -1, -1, handle2);
     pass.draw_procedural(GPU_PRIM_POINTS, 4, -1, -1, handle1);
     pass.draw_procedural(GPU_PRIM_TRIS, 2, -1, -1, handle3);
@@ -348,7 +350,11 @@ static void test_draw_resource_id_gen()
       result << val << " ";
     }
 
-    EXPECT_EQ(result.str(), expected);
+    /* When using PassMain the handles are sorted based on their handles and GPUBatches. Different
+     * primitives use different batches.
+     */
+    StringRefNull expected_main = "2 3 3 1 1 1 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 3 ";
+    EXPECT_EQ(result.str(), expected_main);
   }
 
   GPU_render_end();
@@ -496,5 +502,134 @@ static void test_draw_manager_sync()
   DRW_shaders_free();
 }
 DRAW_TEST(draw_manager_sync)
+
+static void test_draw_submit_only()
+{
+  float4x4 projmat = math::projection::orthographic(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f);
+  float4x4 viewmat = float4x4::identity();
+
+  Manager manager;
+  View view = {"Test"};
+  View view_other = {"Test"};
+  PassSimple pass = {"Test"};
+  PassMain pass_main = {"Test"};
+  PassMain pass_manual = {"Test"};
+
+  manager.begin_sync();
+  manager.end_sync();
+  view.sync(viewmat, projmat);
+  view_other.sync(viewmat, projmat);
+  pass.init();
+  pass_main.init();
+  pass_manual.init();
+
+  /* Auto command and visibility computation. */
+  manager.submit(pass);
+  manager.submit(pass_main, view);
+
+  /* Update manager. */
+  manager.begin_sync();
+  manager.end_sync();
+
+  /* Auto command and visibility computation. */
+  manager.submit(pass);
+  manager.submit(pass_main, view);
+
+  /* Update view. */
+  view.sync(viewmat, projmat);
+
+  /* Auto command and visibility computation. */
+  manager.submit(pass);
+  manager.submit(pass_main, view);
+
+  /* Update both. */
+  manager.begin_sync();
+  manager.end_sync();
+  view.sync(viewmat, projmat);
+
+  /* Auto command and visibility computation. */
+  manager.submit(pass);
+  manager.submit(pass_main, view);
+
+  /* Update both. */
+  manager.begin_sync();
+  manager.end_sync();
+  view.sync(viewmat, projmat);
+
+  {
+    /* Manual command and visibility computation. */
+    manager.compute_visibility(view);
+    manager.generate_commands(pass_manual, view);
+    manager.submit_only(pass_manual, view);
+
+    /* Redundant updates. */
+    EXPECT_BLI_ASSERT(manager.compute_visibility(view),
+                      "Resources did not changed, no need to update");
+    EXPECT_BLI_ASSERT(manager.generate_commands(pass_manual, view),
+                      "Resources and view did not changed no need to update");
+  }
+  {
+    /* Update view. */
+    view.sync(viewmat, projmat);
+
+    /* Submit before visibility. */
+    EXPECT_BLI_ASSERT(manager.submit_only(pass_manual, view),
+                      "compute_visibility was not called on this view");
+    /* Update commands before visibility. */
+    EXPECT_BLI_ASSERT(manager.generate_commands(pass_manual, view),
+                      "Resources or view changed, but compute_visibility was not called");
+
+    manager.compute_visibility(view);
+
+    /* Submit before command generation. */
+    EXPECT_BLI_ASSERT(manager.submit_only(pass_manual, view),
+                      "View have changed since last generate_commands");
+
+    manager.generate_commands(pass_manual, view);
+    manager.submit_only(pass_manual, view);
+  }
+  {
+    /* Update manager. */
+    manager.begin_sync();
+    manager.end_sync();
+
+    /* Update commands before visibility. */
+    EXPECT_BLI_ASSERT(manager.generate_commands(pass_manual, view),
+                      "Resources or view changed, but compute_visibility was not called");
+    /* Submit before visibility. */
+    EXPECT_BLI_ASSERT(manager.submit_only(pass_manual, view),
+                      "Resources changed since last compute_visibility");
+
+    manager.compute_visibility(view);
+
+    /* Submit with stale commands. */
+    EXPECT_BLI_ASSERT(manager.submit_only(pass_manual, view),
+                      "Resources changed since last generate_command");
+
+    manager.generate_commands(pass_manual, view);
+    manager.submit_only(pass_manual, view);
+  }
+  {
+    pass_manual.init();
+
+    /* Submit before command generation. */
+    EXPECT_BLI_ASSERT(manager.submit_only(pass_manual, view),
+                      "generate_command was not called on this pass");
+    manager.generate_commands(pass_manual, view);
+    manager.submit_only(pass_manual, view);
+  }
+  {
+    manager.compute_visibility(view_other);
+
+    /* Submit with a different view before command generation. */
+    EXPECT_BLI_ASSERT(manager.submit_only(pass_manual, view_other),
+                      "submitting with a different view");
+    manager.generate_commands(pass_manual, view_other);
+    manager.submit_only(pass_manual, view_other);
+  }
+
+  DRW_shaders_free();
+}
+DRAW_TEST(draw_submit_only)
 
 }  // namespace blender::draw

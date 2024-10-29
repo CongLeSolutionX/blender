@@ -2,8 +2,6 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "DNA_mesh_types.h"
-#include "DNA_meshdata_types.h"
 #include "DNA_pointcloud_types.h"
 
 #include "BKE_curves.hh"
@@ -49,7 +47,7 @@ static Mesh *hull_from_bullet(const Mesh *mesh, Span<float3> coords)
     result = BKE_mesh_new_nomain(verts_num, edges_num, faces_num, loops_num);
     BKE_id_material_eval_ensure_default_slot(&result->id);
   }
-  BKE_mesh_smooth_flag_set(result, false);
+  bke::mesh_smooth_set(*result, false);
 
   /* Copy vertices. */
   MutableSpan<float3> dst_positions = result->vert_positions_for_write();
@@ -60,7 +58,7 @@ static Mesh *hull_from_bullet(const Mesh *mesh, Span<float3> coords)
     if (original_index >= 0 && original_index < coords.size()) {
 #  if 0 /* Disabled because it only works for meshes, not predictable enough. */
       /* Copy custom data on vertices, like vertex groups etc. */
-      if (mesh && original_index < mesh->totvert) {
+      if (mesh && original_index < mesh->verts_num) {
         CustomData_copy_data(&mesh->vert_data, &result->vert_data, int(original_index), int(i), 1);
       }
 #  endif
@@ -217,7 +215,7 @@ static void convex_hull_grease_pencil(GeometrySet &geometry_set)
   Array<Mesh *> mesh_by_layer(grease_pencil.layers().size(), nullptr);
 
   for (const int layer_index : grease_pencil.layers().index_range()) {
-    const Drawing *drawing = get_eval_grease_pencil_layer_drawing(grease_pencil, layer_index);
+    const Drawing *drawing = grease_pencil.get_eval_drawing(grease_pencil.layer(layer_index));
     if (drawing == nullptr) {
       continue;
     }
@@ -286,12 +284,12 @@ static void node_geo_exec(GeoNodeExecParams params)
 
 static void node_register()
 {
-  static bNodeType ntype;
+  static blender::bke::bNodeType ntype;
 
   geo_node_type_base(&ntype, GEO_NODE_CONVEX_HULL, "Convex Hull", NODE_CLASS_GEOMETRY);
   ntype.declare = node_declare;
   ntype.geometry_node_execute = node_geo_exec;
-  nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }
 NOD_REGISTER_NODE(node_register)
 

@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 """
-./blender.bin --background -noaudio --factory-startup --python tests/python/bl_constraints.py -- --testdir /path/to/lib/tests/constraints
+./blender.bin --background --factory-startup --python tests/python/bl_constraints.py -- --testdir /path/to/tests/data/constraints
 """
 
 import pathlib
@@ -11,6 +11,7 @@ import sys
 import unittest
 
 import bpy
+from bpy.types import Constraint
 from mathutils import Matrix
 
 
@@ -437,6 +438,27 @@ class CopyTransformsTest(AbstractConstraintTests):
             (0.38079890608787537, -0.7963172793388367, 1.0880682468414307, 0.1584688276052475),
             (0.0, 0.0, 0.0, 1.0)
         )))
+
+
+class ActionConstraintTest(AbstractConstraintTests):
+    layer_collection = "Action"
+
+    def constraint(self) -> Constraint:
+        owner = bpy.context.scene.objects["Action.owner"]
+        constraint = owner.constraints["Action"]
+        return constraint
+
+    def test_assign_action_slot_virgin(self):
+        action = bpy.data.actions.new("Slotted")
+        slot = action.slots.new()
+
+        con = self.constraint()
+        con.action = action
+
+        self.assertEqual(
+            slot,
+            con.action_slot,
+            "Assigning an Action with a virgin slot should automatically select that slot")
 
 
 def main():

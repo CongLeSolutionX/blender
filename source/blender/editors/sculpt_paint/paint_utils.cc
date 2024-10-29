@@ -11,7 +11,6 @@
 
 #include "DNA_material_types.h"
 #include "DNA_mesh_types.h"
-#include "DNA_meshdata_types.h"
 #include "DNA_object_types.h"
 
 #include "DNA_brush_types.h"
@@ -19,50 +18,48 @@
 
 #include "BLI_listbase.h"
 #include "BLI_math_color.h"
+#include "BLI_math_geom.h"
+#include "BLI_math_matrix.h"
+#include "BLI_math_matrix.hh"
+#include "BLI_math_vector.hh"
 #include "BLI_rect.h"
 #include "BLI_utildefines.h"
 
-#include "BLT_translation.h"
+#include "BLT_translation.hh"
 
 #include "BKE_brush.hh"
-#include "BKE_colortools.h"
+#include "BKE_bvhutils.hh"
+#include "BKE_colortools.hh"
 #include "BKE_context.hh"
 #include "BKE_customdata.hh"
 #include "BKE_image.h"
-#include "BKE_layer.h"
+#include "BKE_layer.hh"
 #include "BKE_material.h"
 #include "BKE_mesh.hh"
-#include "BKE_mesh_runtime.hh"
+#include "BKE_mesh_sample.hh"
 #include "BKE_object.hh"
 #include "BKE_paint.hh"
-#include "BKE_report.h"
+#include "BKE_report.hh"
 
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_query.hh"
 
 #include "RNA_access.hh"
 #include "RNA_define.hh"
-#include "RNA_prototypes.h"
+#include "RNA_prototypes.hh"
 
-#include "GPU_framebuffer.h"
-#include "GPU_matrix.h"
-#include "GPU_state.h"
-#include "GPU_texture.h"
-
-#include "IMB_colormanagement.h"
-#include "IMB_imbuf.h"
-#include "IMB_imbuf_types.h"
+#include "IMB_imbuf_types.hh"
+#include "IMB_interp.hh"
 
 #include "RE_texture.h"
 
 #include "ED_image.hh"
 #include "ED_screen.hh"
+#include "ED_select_utils.hh"
 #include "ED_view3d.hh"
 
 #include "BLI_sys_types.h"
 #include "ED_mesh.hh" /* for face mask functions */
-
-#include "DRW_select_buffer.hh"
 
 #include "WM_api.hh"
 #include "WM_types.hh"
@@ -72,11 +69,10 @@
 bool paint_convert_bb_to_rect(rcti *rect,
                               const float bb_min[3],
                               const float bb_max[3],
-                              const ARegion *region,
-                              RegionView3D *rv3d,
-                              Object *ob)
+                              const ARegion &region,
+                              const RegionView3D &rv3d,
+                              const Object &ob)
 {
-  float projection_mat[4][4];
   int i, j, k;
 
   BLI_rcti_init_minmax(rect);
@@ -86,18 +82,18 @@ bool paint_convert_bb_to_rect(rcti *rect,
     return false;
   }
 
-  ED_view3d_ob_project_mat_get(rv3d, ob, projection_mat);
+  const blender::float4x4 projection = ED_view3d_ob_project_mat_get(&rv3d, &ob);
 
   for (i = 0; i < 2; i++) {
     for (j = 0; j < 2; j++) {
       for (k = 0; k < 2; k++) {
-        float vec[3], proj[2];
+        float vec[3];
         int proj_i[2];
         vec[0] = i ? bb_min[0] : bb_max[0];
         vec[1] = j ? bb_min[1] : bb_max[1];
         vec[2] = k ? bb_min[2] : bb_max[2];
         /* convert corner to screen space */
-        ED_view3d_project_float_v2_m4(region, vec, proj, projection_mat);
+        const blender::float2 proj = ED_view3d_project_float_v2_m4(&region, vec, projection);
         /* expand 2D rectangle */
 
         /* we could project directly to int? */
@@ -114,35 +110,37 @@ bool paint_convert_bb_to_rect(rcti *rect,
 }
 
 void paint_calc_redraw_planes(float planes[4][4],
-                              const ARegion *region,
-                              Object *ob,
-                              const rcti *screen_rect)
+                              const ARegion &region,
+                              const Object &ob,
+                              const rcti &screen_rect)
 {
   BoundBox bb;
   rcti rect;
 
   /* use some extra space just in case */
-  rect = *screen_rect;
+  rect = screen_rect;
   rect.xmin -= 2;
   rect.xmax += 2;
   rect.ymin -= 2;
   rect.ymax += 2;
 
-  ED_view3d_clipping_calc(&bb, planes, region, ob, &rect);
+  ED_view3d_clipping_calc(&bb, planes, &region, &ob, &rect);
 }
 
-float paint_calc_object_space_radius(ViewContext *vc, const float center[3], float pixel_radius)
+float paint_calc_object_space_radius(const ViewContext &vc,
+                                     const blender::float3 &center,
+                                     const float pixel_radius)
 {
-  Object *ob = vc->obact;
+  Object *ob = vc.obact;
   float delta[3], scale, loc[3];
   const float xy_delta[2] = {pixel_radius, 0.0f};
 
-  mul_v3_m4v3(loc, ob->object_to_world, center);
+  mul_v3_m4v3(loc, ob->object_to_world().ptr(), center);
 
-  const float zfac = ED_view3d_calc_zfac(vc->rv3d, loc);
-  ED_view3d_win_to_delta(vc->region, xy_delta, zfac, delta);
+  const float zfac = ED_view3d_calc_zfac(vc.rv3d, loc);
+  ED_view3d_win_to_delta(vc.region, xy_delta, zfac, delta);
 
-  scale = fabsf(mat4_to_scale(ob->object_to_world));
+  scale = fabsf(mat4_to_scale(ob->object_to_world().ptr()));
   scale = (scale == 0.0f) ? 1.0f : scale;
 
   return len_v3(delta) / scale;
@@ -187,6 +185,11 @@ void paint_stroke_operator_properties(wmOperatorType *ot)
        0,
        "Smooth",
        "Switch brush to smooth mode for duration of stroke"},
+      {BRUSH_STROKE_ERASE,
+       "ERASE",
+       0,
+       "Erase",
+       "Switch brush to erase mode for duration of stroke"},
       {0},
   };
 
@@ -206,174 +209,104 @@ void paint_stroke_operator_properties(wmOperatorType *ot)
 
 /* 3D Paint */
 
-static void imapaint_project(const float matrix[4][4], const float co[3], float pco[4])
-{
-  copy_v3_v3(pco, co);
-  pco[3] = 1.0f;
-
-  mul_m4_v4(matrix, pco);
-}
-
-static void imapaint_tri_weights(float matrix[4][4],
-                                 const int view[4],
-                                 const float v1[3],
-                                 const float v2[3],
-                                 const float v3[3],
-                                 const float co[2],
-                                 float w[3])
-{
-  float pv1[4], pv2[4], pv3[4], h[3], divw;
-  float wmat[3][3], invwmat[3][3];
-
-  /* compute barycentric coordinates */
-
-  /* project the verts */
-  imapaint_project(matrix, v1, pv1);
-  imapaint_project(matrix, v2, pv2);
-  imapaint_project(matrix, v3, pv3);
-
-  /* do inverse view mapping, see gluProject man page */
-  h[0] = (co[0] - view[0]) * 2.0f / view[2] - 1.0f;
-  h[1] = (co[1] - view[1]) * 2.0f / view[3] - 1.0f;
-  h[2] = 1.0f;
-
-  /* Solve for `(w1,w2,w3)/perspdiv` in:
-   * `h * perspdiv = Project * Model * (w1 * v1 + w2 * v2 + w3 * v3)`. */
-
-  wmat[0][0] = pv1[0];
-  wmat[1][0] = pv2[0];
-  wmat[2][0] = pv3[0];
-  wmat[0][1] = pv1[1];
-  wmat[1][1] = pv2[1];
-  wmat[2][1] = pv3[1];
-  wmat[0][2] = pv1[3];
-  wmat[1][2] = pv2[3];
-  wmat[2][2] = pv3[3];
-
-  invert_m3_m3(invwmat, wmat);
-  mul_m3_v3(invwmat, h);
-
-  copy_v3_v3(w, h);
-
-  /* w is still divided by `perspdiv`, make it sum to one */
-  divw = w[0] + w[1] + w[2];
-  if (divw != 0.0f) {
-    mul_v3_fl(w, 1.0f / divw);
-  }
-}
-
 /* compute uv coordinates of mouse in face */
-static void imapaint_pick_uv(const Mesh *me_eval,
-                             Scene *scene,
-                             Object *ob_eval,
-                             uint faceindex,
-                             const int xy[2],
-                             float uv[2])
+static blender::float2 imapaint_pick_uv(const Mesh *mesh_eval,
+                                        Scene *scene,
+                                        Object *ob_eval,
+                                        const int tri_index,
+                                        const blender::float3 &bary_coord)
 {
-  float p[2], w[3], absw, minabsw;
-  float matrix[4][4], proj[4][4];
-  int view[4];
   const ePaintCanvasSource mode = ePaintCanvasSource(scene->toolsettings->imapaint.mode);
 
-  const blender::Span<MLoopTri> tris = me_eval->looptris();
-  const blender::Span<int> looptri_faces = me_eval->looptri_faces();
-
-  const blender::Span<blender::float3> positions = me_eval->vert_positions();
-  const blender::Span<int> corner_verts = me_eval->corner_verts();
-  const int *index_mp_to_orig = static_cast<const int *>(
-      CustomData_get_layer(&me_eval->face_data, CD_ORIGINDEX));
-
-  /* get the needed opengl matrices */
-  GPU_viewport_size_get_i(view);
-  GPU_matrix_model_view_get(matrix);
-  GPU_matrix_projection_get(proj);
-  view[0] = view[1] = 0;
-  mul_m4_m4m4(matrix, matrix, ob_eval->object_to_world);
-  mul_m4_m4m4(matrix, proj, matrix);
-
-  minabsw = 1e10;
-  uv[0] = uv[1] = 0.0;
+  const blender::Span<blender::int3> tris = mesh_eval->corner_tris();
+  const blender::Span<int> tri_faces = mesh_eval->corner_tri_faces();
 
   const int *material_indices = (const int *)CustomData_get_layer_named(
-      &me_eval->face_data, CD_PROP_INT32, "material_index");
+      &mesh_eval->face_data, CD_PROP_INT32, "material_index");
 
-  /* test all faces in the derivedmesh with the original index of the picked face */
   /* face means poly here, not triangle, indeed */
-  for (const int i : tris.index_range()) {
-    const int face_i = looptri_faces[i];
-    const int findex = index_mp_to_orig ? index_mp_to_orig[face_i] : face_i;
+  const int face_i = tri_faces[tri_index];
 
-    if (findex == faceindex) {
-      const float(*mloopuv)[2];
-      const float *tri_uv[3];
-      float tri_co[3][3];
+  const float(*mloopuv)[2];
 
-      for (int j = 3; j--;) {
-        copy_v3_v3(tri_co[j], positions[corner_verts[tris[i].tri[j]]]);
-      }
+  if (mode == PAINT_CANVAS_SOURCE_MATERIAL) {
+    const Material *ma;
+    const TexPaintSlot *slot;
 
-      if (mode == PAINT_CANVAS_SOURCE_MATERIAL) {
-        const Material *ma;
-        const TexPaintSlot *slot;
+    ma = BKE_object_material_get(ob_eval,
+                                 material_indices == nullptr ? 1 : material_indices[face_i] + 1);
+    slot = &ma->texpaintslot[ma->paint_active_slot];
 
-        ma = BKE_object_material_get(
-            ob_eval, material_indices == nullptr ? 1 : material_indices[face_i] + 1);
-        slot = &ma->texpaintslot[ma->paint_active_slot];
-
-        if (!(slot && slot->uvname &&
-              (mloopuv = static_cast<const float(*)[2]>(CustomData_get_layer_named(
-                   &me_eval->loop_data, CD_PROP_FLOAT2, slot->uvname)))))
-        {
-          mloopuv = static_cast<const float(*)[2]>(
-              CustomData_get_layer(&me_eval->loop_data, CD_PROP_FLOAT2));
-        }
-      }
-      else {
-        mloopuv = static_cast<const float(*)[2]>(
-            CustomData_get_layer(&me_eval->loop_data, CD_PROP_FLOAT2));
-      }
-
-      tri_uv[0] = mloopuv[tris[i].tri[0]];
-      tri_uv[1] = mloopuv[tris[i].tri[1]];
-      tri_uv[2] = mloopuv[tris[i].tri[2]];
-
-      p[0] = xy[0];
-      p[1] = xy[1];
-
-      imapaint_tri_weights(matrix, view, UNPACK3(tri_co), p, w);
-      absw = fabsf(w[0]) + fabsf(w[1]) + fabsf(w[2]);
-      if (absw < minabsw) {
-        uv[0] = tri_uv[0][0] * w[0] + tri_uv[1][0] * w[1] + tri_uv[2][0] * w[2];
-        uv[1] = tri_uv[0][1] * w[0] + tri_uv[1][1] * w[1] + tri_uv[2][1] * w[2];
-        minabsw = absw;
-      }
+    if (!(slot && slot->uvname &&
+          (mloopuv = static_cast<const float(*)[2]>(CustomData_get_layer_named(
+               &mesh_eval->corner_data, CD_PROP_FLOAT2, slot->uvname)))))
+    {
+      mloopuv = static_cast<const float(*)[2]>(
+          CustomData_get_layer(&mesh_eval->corner_data, CD_PROP_FLOAT2));
     }
   }
+  else {
+    mloopuv = static_cast<const float(*)[2]>(
+        CustomData_get_layer(&mesh_eval->corner_data, CD_PROP_FLOAT2));
+  }
+
+  return blender::bke::mesh_surface_sample::sample_corner_attribute_with_bary_coords(
+      bary_coord,
+      tris[tri_index],
+      blender::Span(reinterpret_cast<const blender::float2 *>(mloopuv), mesh_eval->corners_num));
 }
 
 /* returns 0 if not found, otherwise 1 */
-static int imapaint_pick_face(ViewContext *vc, const int mval[2], uint *r_index, uint faces_num)
+static int imapaint_pick_face(ViewContext *vc,
+                              const int mval[2],
+                              int *r_tri_index,
+                              int *r_face_index,
+                              blender::float3 *r_bary_coord,
+                              const Mesh &mesh)
 {
-  if (faces_num == 0) {
+  using namespace blender;
+  if (mesh.faces_num == 0) {
     return 0;
   }
 
-  /* sample only on the exact position */
-  ED_view3d_select_id_validate(vc);
-  *r_index = DRW_select_buffer_sample_point(vc->depsgraph, vc->region, vc->v3d, mval);
+  float3 start_world, end_world;
+  ED_view3d_win_to_segment_clipped(
+      vc->depsgraph, vc->region, vc->v3d, float2(mval[0], mval[1]), start_world, end_world, true);
 
-  if ((*r_index) == 0 || (*r_index) > uint(faces_num)) {
+  const float4x4 &world_to_object = vc->obact->world_to_object();
+  const float3 start_object = math::transform_point(world_to_object, start_world);
+  const float3 end_object = math::transform_point(world_to_object, end_world);
+
+  BVHTreeFromMesh mesh_bvh;
+  BKE_bvhtree_from_mesh_get(&mesh_bvh, &mesh, BVHTREE_FROM_CORNER_TRIS, 2);
+  BLI_SCOPED_DEFER([&]() { free_bvhtree_from_mesh(&mesh_bvh); });
+
+  BVHTreeRayHit ray_hit;
+  ray_hit.dist = FLT_MAX;
+  ray_hit.index = -1;
+  BLI_bvhtree_ray_cast(mesh_bvh.tree,
+                       start_object,
+                       math::normalize(end_object - start_object),
+                       0.0f,
+                       &ray_hit,
+                       mesh_bvh.raycast_callback,
+                       &mesh_bvh);
+  if (ray_hit.index == -1) {
     return 0;
   }
 
-  (*r_index)--;
+  *r_bary_coord = bke::mesh_surface_sample::compute_bary_coord_in_triangle(
+      mesh.vert_positions(), mesh.corner_verts(), mesh.corner_tris()[ray_hit.index], ray_hit.co);
 
+  *r_tri_index = ray_hit.index;
+  *r_face_index = mesh.corner_tri_faces()[ray_hit.index];
   return 1;
 }
 
 void paint_sample_color(
     bContext *C, ARegion *region, int x, int y, bool texpaint_proj, bool use_palette)
 {
+  using namespace blender;
   Scene *scene = CTX_data_scene(C);
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   Paint *paint = BKE_paint_get_active_from_context(C);
@@ -407,23 +340,18 @@ void paint_sample_color(
     bool use_material = (imapaint->mode == IMAGEPAINT_MODE_MATERIAL);
 
     if (ob) {
-      CustomData_MeshMasks cddata_masks = CD_MASK_BAREMESH;
-      cddata_masks.pmask |= CD_MASK_ORIGINDEX;
-      Mesh *me = (Mesh *)ob->data;
-      const Mesh *me_eval = BKE_object_get_evaluated_mesh(ob_eval);
+      const Mesh *mesh_eval = BKE_object_get_evaluated_mesh(ob_eval);
       const int *material_indices = (const int *)CustomData_get_layer_named(
-          &me_eval->face_data, CD_PROP_INT32, "material_index");
+          &mesh_eval->face_data, CD_PROP_INT32, "material_index");
 
-      const int mval[2] = {x, y};
-      uint faceindex;
-      uint faces_num = me->faces_num;
-
-      if (CustomData_has_layer(&me_eval->loop_data, CD_PROP_FLOAT2)) {
+      if (CustomData_has_layer(&mesh_eval->corner_data, CD_PROP_FLOAT2)) {
         ViewContext vc = ED_view3d_viewcontext_init(C, depsgraph);
 
-        view3d_operator_needs_opengl(C);
-
-        if (imapaint_pick_face(&vc, mval, &faceindex, faces_num)) {
+        const int mval[2] = {x, y};
+        int tri_index;
+        float3 bary_coord;
+        int faceindex;
+        if (imapaint_pick_face(&vc, mval, &tri_index, &faceindex, &bary_coord, *mesh_eval)) {
           Image *image = nullptr;
           int interp = SHD_INTERP_LINEAR;
 
@@ -447,46 +375,30 @@ void paint_sample_color(
           }
 
           if (image) {
-            float uv[2];
-            float u, v;
             /* XXX get appropriate ImageUser instead */
             ImageUser iuser;
             BKE_imageuser_default(&iuser);
             iuser.framenr = image->lastframe;
 
-            imapaint_pick_uv(me_eval, scene, ob_eval, faceindex, mval, uv);
+            float2 uv = imapaint_pick_uv(mesh_eval, scene, ob_eval, tri_index, bary_coord);
 
             if (image->source == IMA_SRC_TILED) {
               float new_uv[2];
               iuser.tile = BKE_image_get_tile_from_pos(image, uv, new_uv, nullptr);
-              u = new_uv[0];
-              v = new_uv[1];
-            }
-            else {
-              u = fmodf(uv[0], 1.0f);
-              v = fmodf(uv[1], 1.0f);
-
-              if (u < 0.0f) {
-                u += 1.0f;
-              }
-              if (v < 0.0f) {
-                v += 1.0f;
-              }
+              uv[0] = new_uv[0];
+              uv[1] = new_uv[1];
             }
 
             ImBuf *ibuf = BKE_image_acquire_ibuf(image, &iuser, nullptr);
             if (ibuf && (ibuf->byte_buffer.data || ibuf->float_buffer.data)) {
-              u = u * ibuf->x;
-              v = v * ibuf->y;
+              float u = uv[0] * ibuf->x;
+              float v = uv[1] * ibuf->y;
 
               if (ibuf->float_buffer.data) {
-                float rgba_f[4];
-                if (interp == SHD_INTERP_CLOSEST) {
-                  nearest_interpolation_color_wrap(ibuf, nullptr, rgba_f, u, v);
-                }
-                else {
-                  bilinear_interpolation_color_wrap(ibuf, nullptr, rgba_f, u, v);
-                }
+                float4 rgba_f = interp == SHD_INTERP_CLOSEST ?
+                                    imbuf::interpolate_nearest_wrap_fl(ibuf, u, v) :
+                                    imbuf::interpolate_bilinear_wrap_fl(ibuf, u, v);
+                rgba_f = math::clamp(rgba_f, 0.0f, 1.0f);
                 straight_to_premul_v4(rgba_f);
                 if (use_palette) {
                   linearrgb_to_srgb_v3_v3(color->rgb, rgba_f);
@@ -497,13 +409,9 @@ void paint_sample_color(
                 }
               }
               else {
-                uchar rgba[4];
-                if (interp == SHD_INTERP_CLOSEST) {
-                  nearest_interpolation_color_wrap(ibuf, rgba, nullptr, u, v);
-                }
-                else {
-                  bilinear_interpolation_color_wrap(ibuf, rgba, nullptr, u, v);
-                }
+                uchar4 rgba = interp == SHD_INTERP_CLOSEST ?
+                                  imbuf::interpolate_nearest_wrap_byte(ibuf, u, v) :
+                                  imbuf::interpolate_bilinear_wrap_byte(ibuf, u, v);
                 if (use_palette) {
                   rgb_uchar_to_float(color->rgb, rgba);
                 }
@@ -618,6 +526,7 @@ static int brush_sculpt_curves_falloff_preset_exec(bContext *C, wmOperator *op)
   mapping->preset = RNA_enum_get(op->ptr, "shape");
   CurveMap *map = mapping->cm;
   BKE_curvemap_reset(map, &mapping->clipr, mapping->preset, CURVEMAP_SLOPE_POSITIVE);
+  BKE_brush_tag_unsaved_changes(brush);
   return OPERATOR_FINISHED;
 }
 
@@ -819,9 +728,9 @@ void PAINT_OT_vert_select_all(wmOperatorType *ot)
 static int vert_select_ungrouped_exec(bContext *C, wmOperator *op)
 {
   Object *ob = CTX_data_active_object(C);
-  Mesh *me = static_cast<Mesh *>(ob->data);
+  Mesh *mesh = static_cast<Mesh *>(ob->data);
 
-  if (BLI_listbase_is_empty(&me->vertex_group_names) || (BKE_mesh_deform_verts(me) == nullptr)) {
+  if (BLI_listbase_is_empty(&mesh->vertex_group_names) || mesh->deform_verts().is_empty()) {
     BKE_report(op->reports, RPT_ERROR, "No weights/vertex groups on object");
     return OPERATOR_CANCELLED;
   }

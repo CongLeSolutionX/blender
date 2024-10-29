@@ -39,6 +39,11 @@ if "%FORMAT%" == "1" (
 	goto EOF
 )
 
+if "%LICENSE%" == "1" (
+	call "%BLENDER_DIR%\build_files\windows\license.cmd"
+	goto EOF
+)
+
 call "%BLENDER_DIR%\build_files\windows\detect_architecture.cmd"
 if errorlevel 1 goto EOF
 
@@ -56,11 +61,6 @@ if "%BUILD_VS_YEAR%" == "" (
 	)
 )
 
-if "%SVN_FIX%" == "1" (
-	call "%BLENDER_DIR%\build_files\windows\svn_fix.cmd"
-	goto EOF
-)
-
 if "%BUILD_UPDATE%" == "1" (
 	REM First see if the SVN libs are there and check them out if they are not.
 	call "%BLENDER_DIR%\build_files\windows\check_libraries.cmd"
@@ -70,7 +70,7 @@ if "%BUILD_UPDATE%" == "1" (
 		REM running tends to be problematic. The python script that update_sources
 		REM calls later on may still try to switch branches and run into trouble,
 		REM but for *most* people this will side step the problem.
-		call "%BLENDER_DIR%\build_files\windows\svn_update.cmd"
+		call "%BLENDER_DIR%\build_files\windows\lib_update.cmd"
 	)
 	REM Finally call the python script shared between all platforms that updates git
 	REM and does any other SVN work like update the tests or branch switches
@@ -82,11 +82,6 @@ if "%BUILD_UPDATE%" == "1" (
 call "%BLENDER_DIR%\build_files\windows\set_build_dir.cmd"
 
 :convenience_targets
-
-if "%ICONS%" == "1" (
-	call "%BLENDER_DIR%\build_files\windows\icons.cmd"
-	goto EOF
-)
 
 if "%ICONS_GEOM%" == "1" (
 	call "%BLENDER_DIR%\build_files\windows\icons_geom.cmd"

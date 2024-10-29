@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <functional>
 #include <optional>
 
 #include "BLI_function_ref.hh"
@@ -15,6 +16,7 @@
 
 #include "BKE_anonymous_attribute_id.hh"
 #include "BKE_attribute.h"
+#include "BKE_attribute_filters.hh"
 
 struct Mesh;
 struct PointCloud;
@@ -27,34 +29,28 @@ class GField;
 
 namespace blender::bke {
 
-/**
- * Identifies an attribute with optional anonymous attribute information.
- * It does not own the identifier, so it is just a reference.
- */
-class AttributeIDRef {
- private:
-  StringRef name_;
-  const AnonymousAttributeID *anonymous_id_ = nullptr;
-
- public:
-  AttributeIDRef();
-  AttributeIDRef(StringRef name);
-  AttributeIDRef(StringRefNull name);
-  AttributeIDRef(const char *name);
-  AttributeIDRef(const std::string &name);
-  AttributeIDRef(const AnonymousAttributeID &anonymous_id);
-  AttributeIDRef(const AnonymousAttributeID *anonymous_id);
-
-  operator bool() const;
-  uint64_t hash() const;
-  bool is_anonymous() const;
-  StringRef name() const;
-  const AnonymousAttributeID &anonymous_id() const;
-
-  BLI_STRUCT_EQUALITY_OPERATORS_1(AttributeIDRef, name_)
-
-  friend std::ostream &operator<<(std::ostream &stream, const AttributeIDRef &attribute_id);
+enum class AttrDomain : int8_t {
+  /* Used to choose automatically based on other data. */
+  Auto = -1,
+  /* Mesh, Curve or Point Cloud Point. */
+  Point = 0,
+  /* Mesh Edge. */
+  Edge = 1,
+  /* Mesh Face. */
+  Face = 2,
+  /* Mesh Corner. */
+  Corner = 3,
+  /* A single curve in a larger curve data-block. */
+  Curve = 4,
+  /* Instance. */
+  Instance = 5,
+  /* A layer in a grease pencil data-block. */
+  Layer = 6,
 };
+#define ATTR_DOMAIN_NUM 7
+
+const CPPType *custom_data_type_to_cpp_type(eCustomDataType type);
+eCustomDataType cpp_type_to_custom_data_type(const CPPType &type);
 
 /**
  * Contains information about an attribute in a geometry component.
@@ -62,14 +58,14 @@ class AttributeIDRef {
  * stored (uv map, vertex group, ...).
  */
 struct AttributeMetaData {
-  eAttrDomain domain;
+  AttrDomain domain;
   eCustomDataType data_type;
 
   BLI_STRUCT_EQUALITY_OPERATORS_2(AttributeMetaData, domain, data_type)
 };
 
 struct AttributeKind {
-  eAttrDomain domain;
+  AttrDomain domain;
   eCustomDataType data_type;
 };
 
@@ -148,7 +144,7 @@ struct AttributeInitShared : public AttributeInit {
 
 /* Returns false when the iteration should be stopped. */
 using AttributeForeachCallback =
-    FunctionRef<bool(const AttributeIDRef &attribute_id, const AttributeMetaData &meta_data)>;
+    FunctionRef<bool(StringRefNull attribute_id, const AttributeMetaData &meta_data)>;
 
 /**
  * Result when looking up an attribute from some geometry with the intention of only reading from
@@ -162,7 +158,7 @@ template<typename T> struct AttributeReader {
   /**
    * Domain where the attribute is stored. This also determines the size of the virtual array.
    */
-  eAttrDomain domain;
+  AttrDomain domain;
 
   /**
    * Information about shared ownership of the attribute array. This will only be provided
@@ -170,13 +166,19 @@ template<typename T> struct AttributeReader {
    */
   const ImplicitSharingInfo *sharing_info;
 
-  const VArray<T> &operator*() const
+  const VArray<T> &operator*() const &
   {
     return this->varray;
   }
-  VArray<T> &operator*()
+
+  VArray<T> &operator*() &
   {
     return this->varray;
+  }
+
+  VArray<T> operator*() &&
+  {
+    return std::move(this->varray);
   }
 
   operator bool() const
@@ -221,7 +223,7 @@ template<typename T> struct AttributeWriter {
    * Domain where the attribute is stored on the geometry. Also determines the size of the virtual
    * array.
    */
-  eAttrDomain domain;
+  AttrDomain domain;
   /**
    * A function that has to be called after the attribute has been edited. This may be empty.
    */
@@ -256,7 +258,7 @@ template<typename T> struct SpanAttributeWriter {
   /**
    * Domain of the attribute. Also determines the size of the span.
    */
-  eAttrDomain domain;
+  AttrDomain domain;
   /**
    * Has to be called after writing to the span.
    */
@@ -297,7 +299,7 @@ template<typename T> struct SpanAttributeWriter {
  */
 struct GAttributeReader {
   GVArray varray;
-  eAttrDomain domain;
+  AttrDomain domain;
   const ImplicitSharingInfo *sharing_info;
 
   operator bool() const
@@ -305,13 +307,19 @@ struct GAttributeReader {
     return this->varray;
   }
 
-  const GVArray &operator*() const
+  const GVArray &operator*() const &
   {
     return this->varray;
   }
-  GVArray &operator*()
+
+  GVArray &operator*() &
   {
     return this->varray;
+  }
+
+  GVArray operator*() &&
+  {
+    return std::move(this->varray);
   }
 
   template<typename T> AttributeReader<T> typed() const
@@ -325,7 +333,7 @@ struct GAttributeReader {
  */
 struct GAttributeWriter {
   GVMutableArray varray;
-  eAttrDomain domain;
+  AttrDomain domain;
   std::function<void()> tag_modified_fn;
 
   operator bool() const
@@ -351,7 +359,7 @@ struct GAttributeWriter {
  */
 struct GSpanAttributeWriter {
   GMutableVArraySpan span;
-  eAttrDomain domain;
+  AttrDomain domain;
   std::function<void()> tag_modified_fn;
 
   GSpanAttributeWriter() = default;
@@ -380,6 +388,71 @@ struct GSpanAttributeWriter {
 };
 
 /**
+ * This is used when iterating over attributes, e.g. with #foreach_attribute. It contains meta-data
+ * for the current attribute and provides easy access to the actual attribute data.
+ */
+class AttributeIter {
+ public:
+  StringRefNull name;
+  AttrDomain domain;
+  eCustomDataType data_type;
+  bool is_builtin = false;
+  mutable const AttributeAccessor *accessor = nullptr;
+
+ private:
+  FunctionRef<GAttributeReader()> get_fn_;
+  mutable bool stop_iteration_ = false;
+
+ public:
+  AttributeIter(const StringRefNull name,
+                const AttrDomain domain,
+                const eCustomDataType data_type,
+                const FunctionRef<GAttributeReader()> get_fn)
+      : name(name), domain(domain), data_type(data_type), get_fn_(get_fn)
+  {
+  }
+
+  /** Stops the iteration. Remaining attributes will be skipped. */
+  void stop() const
+  {
+    stop_iteration_ = true;
+  }
+
+  bool is_stopped() const
+  {
+    return stop_iteration_;
+  }
+
+  /** Get read-only access to the current attribute. This method always succeeds. */
+  GAttributeReader get() const
+  {
+    return get_fn_();
+  }
+
+  /** Same as above, but may perform type and domain interpolation. This may return none. */
+  GAttributeReader get(std::optional<AttrDomain> domain,
+                       std::optional<eCustomDataType> data_type) const;
+
+  GAttributeReader get(const AttrDomain domain) const
+  {
+    return this->get(domain, std::nullopt);
+  }
+
+  GAttributeReader get(const eCustomDataType data_type) const
+  {
+    return this->get(std::nullopt, data_type);
+  }
+
+  template<typename T>
+  AttributeReader<T> get(const std::optional<AttrDomain> domain = std::nullopt) const
+  {
+    const CPPType &cpp_type = CPPType::get<T>();
+    const eCustomDataType data_type = cpp_type_to_custom_data_type(cpp_type);
+    return this->get(domain, data_type).typed<T>();
+  }
+};
+
+/**
  * Core functions which make up the attribute API. They should not be called directly, but through
  * #AttributesAccessor or #MutableAttributesAccessor.
  *
@@ -388,25 +461,23 @@ struct GSpanAttributeWriter {
  * makes it easy to return the attribute accessor for a geometry from a function.
  */
 struct AttributeAccessorFunctions {
-  bool (*contains)(const void *owner, const AttributeIDRef &attribute_id);
-  std::optional<AttributeMetaData> (*lookup_meta_data)(const void *owner,
-                                                       const AttributeIDRef &attribute_id);
-  bool (*domain_supported)(const void *owner, eAttrDomain domain);
-  int (*domain_size)(const void *owner, eAttrDomain domain);
-  bool (*is_builtin)(const void *owner, const AttributeIDRef &attribute_id);
-  GAttributeReader (*lookup)(const void *owner, const AttributeIDRef &attribute_id);
+  bool (*domain_supported)(const void *owner, AttrDomain domain);
+  int (*domain_size)(const void *owner, AttrDomain domain);
+  bool (*is_builtin)(const void *owner, StringRef attribute_id);
+  GAttributeReader (*lookup)(const void *owner, StringRef attribute_id);
   GVArray (*adapt_domain)(const void *owner,
                           const GVArray &varray,
-                          eAttrDomain from_domain,
-                          eAttrDomain to_domain);
-  bool (*for_all)(const void *owner,
-                  FunctionRef<bool(const AttributeIDRef &, const AttributeMetaData &)> fn);
-  AttributeValidator (*lookup_validator)(const void *owner, const AttributeIDRef &attribute_id);
-  GAttributeWriter (*lookup_for_write)(void *owner, const AttributeIDRef &attribute_id);
-  bool (*remove)(void *owner, const AttributeIDRef &attribute_id);
+                          AttrDomain from_domain,
+                          AttrDomain to_domain);
+  void (*foreach_attribute)(const void *owner,
+                            FunctionRef<void(const AttributeIter &iter)> fn,
+                            const AttributeAccessor &accessor);
+  AttributeValidator (*lookup_validator)(const void *owner, StringRef attribute_id);
+  GAttributeWriter (*lookup_for_write)(void *owner, StringRef attribute_id);
+  bool (*remove)(void *owner, StringRef attribute_id);
   bool (*add)(void *owner,
-              const AttributeIDRef &attribute_id,
-              eAttrDomain domain,
+              StringRef attribute_id,
+              AttrDomain domain,
               eCustomDataType data_type,
               const AttributeInit &initializer);
 };
@@ -423,8 +494,8 @@ class AttributeAccessor {
    * The data that actually owns the attributes, for example, a pointer to a #Mesh or #PointCloud
    * Most commonly this is a pointer to a #Mesh or #PointCloud.
    * Under some circumstances this can be null. In that case most methods can't be used. Allowed
-   * methods are #domain_size, #for_all and #is_builtin. We could potentially make these methods
-   * accessible without #AttributeAccessor and then #owner_ could always be non-null.
+   * methods are #domain_size, #foreach_attribute and #is_builtin. We could potentially make these
+   * methods accessible without #AttributeAccessor and then #owner_ could always be non-null.
    *
    * \note This class cannot modify the owner's attributes, but the pointer is still non-const, so
    * this class can be a base class for the mutable version.
@@ -442,25 +513,24 @@ class AttributeAccessor {
   }
 
   /**
+   * Construct an #AttributeAccessor from an ID.
+   */
+  static std::optional<AttributeAccessor> from_id(const ID &id);
+
+  /**
    * \return True, when the attribute is available.
    */
-  bool contains(const AttributeIDRef &attribute_id) const
-  {
-    return fn_->contains(owner_, attribute_id);
-  }
+  bool contains(const StringRef attribute_id) const;
 
   /**
    * \return Information about the attribute if it exists.
    */
-  std::optional<AttributeMetaData> lookup_meta_data(const AttributeIDRef &attribute_id) const
-  {
-    return fn_->lookup_meta_data(owner_, attribute_id);
-  }
+  std::optional<AttributeMetaData> lookup_meta_data(const StringRef attribute_id) const;
 
   /**
    * \return True, when attributes can exist on that domain.
    */
-  bool domain_supported(const eAttrDomain domain) const
+  bool domain_supported(const AttrDomain domain) const
   {
     return fn_->domain_supported(owner_, domain);
   }
@@ -468,7 +538,7 @@ class AttributeAccessor {
   /**
    * \return Number of elements in the given domain.
    */
-  int domain_size(const eAttrDomain domain) const
+  int domain_size(const AttrDomain domain) const
   {
     return fn_->domain_size(owner_, domain);
   }
@@ -477,7 +547,7 @@ class AttributeAccessor {
    * \return True, when the attribute has a special meaning for Blender and can't be used for
    * arbitrary things.
    */
-  bool is_builtin(const AttributeIDRef &attribute_id) const
+  bool is_builtin(const StringRef attribute_id) const
   {
     return fn_->is_builtin(owner_, attribute_id);
   }
@@ -486,7 +556,7 @@ class AttributeAccessor {
    * Get read-only access to the attribute. If the attribute does not exist, the return value is
    * empty.
    */
-  GAttributeReader lookup(const AttributeIDRef &attribute_id) const
+  GAttributeReader lookup(const StringRef attribute_id) const
   {
     return fn_->lookup(owner_, attribute_id);
   }
@@ -495,15 +565,15 @@ class AttributeAccessor {
    * Get read-only access to the attribute. If necessary, the attribute is interpolated to the
    * given domain, and converted to the given type, in that order.  The result may be empty.
    */
-  GAttributeReader lookup(const AttributeIDRef &attribute_id,
-                          const std::optional<eAttrDomain> domain,
-                          const std::optional<eCustomDataType> data_type) const;
+  GAttributeReader lookup(StringRef attribute_id,
+                          std::optional<AttrDomain> domain,
+                          std::optional<eCustomDataType> data_type) const;
 
   /**
    * Get read-only access to the attribute whereby the attribute is interpolated to the given
    * domain. The result may be empty.
    */
-  GAttributeReader lookup(const AttributeIDRef &attribute_id, const eAttrDomain domain) const
+  GAttributeReader lookup(const StringRef attribute_id, const AttrDomain domain) const
   {
     return this->lookup(attribute_id, domain, std::nullopt);
   }
@@ -512,8 +582,7 @@ class AttributeAccessor {
    * Get read-only access to the attribute whereby the attribute is converted to the given type.
    * The result may be empty.
    */
-  GAttributeReader lookup(const AttributeIDRef &attribute_id,
-                          const eCustomDataType data_type) const
+  GAttributeReader lookup(const StringRef attribute_id, const eCustomDataType data_type) const
   {
     return this->lookup(attribute_id, std::nullopt, data_type);
   }
@@ -523,8 +592,8 @@ class AttributeAccessor {
    * given domain and then converted to the given type, in that order. The result may be empty.
    */
   template<typename T>
-  AttributeReader<T> lookup(const AttributeIDRef &attribute_id,
-                            const std::optional<eAttrDomain> domain = std::nullopt) const
+  AttributeReader<T> lookup(const StringRef attribute_id,
+                            const std::optional<AttrDomain> domain = std::nullopt) const
   {
     const CPPType &cpp_type = CPPType::get<T>();
     const eCustomDataType data_type = cpp_type_to_custom_data_type(cpp_type);
@@ -537,17 +606,17 @@ class AttributeAccessor {
    * If the attribute does not exist, a virtual array with the given default value is returned.
    * If the passed in default value is null, the default value of the type is used (generally 0).
    */
-  GAttributeReader lookup_or_default(const AttributeIDRef &attribute_id,
-                                     const eAttrDomain domain,
-                                     const eCustomDataType data_type,
+  GAttributeReader lookup_or_default(StringRef attribute_id,
+                                     AttrDomain domain,
+                                     eCustomDataType data_type,
                                      const void *default_value = nullptr) const;
 
   /**
    * Same as the generic version above, but should be used when the type is known at compile time.
    */
   template<typename T>
-  AttributeReader<T> lookup_or_default(const AttributeIDRef &attribute_id,
-                                       const eAttrDomain domain,
+  AttributeReader<T> lookup_or_default(const StringRef attribute_id,
+                                       const AttrDomain domain,
                                        const T &default_value) const
   {
     if (AttributeReader<T> varray = this->lookup<T>(attribute_id, domain)) {
@@ -559,7 +628,7 @@ class AttributeAccessor {
   /**
    * Same as the generic version above, but should be used when the type is known at compile time.
    */
-  AttributeValidator lookup_validator(const AttributeIDRef &attribute_id) const
+  AttributeValidator lookup_validator(const StringRef attribute_id) const
   {
     return fn_->lookup_validator(owner_, attribute_id);
   }
@@ -568,8 +637,8 @@ class AttributeAccessor {
    * Interpolate data from one domain to another.
    */
   GVArray adapt_domain(const GVArray &varray,
-                       const eAttrDomain from_domain,
-                       const eAttrDomain to_domain) const
+                       const AttrDomain from_domain,
+                       const AttrDomain to_domain) const
   {
     return fn_->adapt_domain(owner_, varray, from_domain, to_domain);
   }
@@ -579,8 +648,8 @@ class AttributeAccessor {
    */
   template<typename T>
   VArray<T> adapt_domain(const VArray<T> &varray,
-                         const eAttrDomain from_domain,
-                         const eAttrDomain to_domain) const
+                         const AttrDomain from_domain,
+                         const AttrDomain to_domain) const
   {
     return this->adapt_domain(GVArray(varray), from_domain, to_domain).typed<T>();
   }
@@ -589,18 +658,17 @@ class AttributeAccessor {
    * Run the provided function for every attribute.
    * Attributes should not be removed or added during iteration.
    */
-  bool for_all(const AttributeForeachCallback fn) const
+  void foreach_attribute(const FunctionRef<void(const AttributeIter &)> fn) const
   {
     if (owner_ != nullptr) {
-      return fn_->for_all(owner_, fn);
+      fn_->foreach_attribute(owner_, fn, *this);
     }
-    return true;
   }
 
   /**
    * Get a set of all attributes.
    */
-  Set<AttributeIDRef> all_ids() const;
+  Set<StringRefNull> all_ids() const;
 };
 
 /**
@@ -618,18 +686,18 @@ class MutableAttributeAccessor : public AttributeAccessor {
    * Get a writable attribute or none if it does not exist.
    * Make sure to call #finish after changes are done.
    */
-  GAttributeWriter lookup_for_write(const AttributeIDRef &attribute_id);
+  GAttributeWriter lookup_for_write(StringRef attribute_id);
 
   /**
    * Same as above, but returns a type that makes it easier to work with the attribute as a span.
    */
-  GSpanAttributeWriter lookup_for_write_span(const AttributeIDRef &attribute_id);
+  GSpanAttributeWriter lookup_for_write_span(StringRef attribute_id);
 
   /**
    * Get a writable attribute or non if it does not exist.
    * Make sure to call #finish after changes are done.
    */
-  template<typename T> AttributeWriter<T> lookup_for_write(const AttributeIDRef &attribute_id)
+  template<typename T> AttributeWriter<T> lookup_for_write(const StringRef attribute_id)
   {
     GAttributeWriter attribute = this->lookup_for_write(attribute_id);
     if (!attribute) {
@@ -644,8 +712,7 @@ class MutableAttributeAccessor : public AttributeAccessor {
   /**
    * Same as above, but returns a type that makes it easier to work with the attribute as a span.
    */
-  template<typename T>
-  SpanAttributeWriter<T> lookup_for_write_span(const AttributeIDRef &attribute_id)
+  template<typename T> SpanAttributeWriter<T> lookup_for_write_span(const StringRef attribute_id)
   {
     AttributeWriter<T> attribute = this->lookup_for_write<T>(attribute_id);
     if (attribute) {
@@ -657,24 +724,25 @@ class MutableAttributeAccessor : public AttributeAccessor {
   /**
    * Replace the existing attribute with a new one with a different name.
    */
-  bool rename(const AttributeIDRef &old_attribute_id, const AttributeIDRef &new_attribute_id);
+  bool rename(StringRef old_attribute_id, StringRef new_attribute_id);
 
   /**
    * Create a new attribute.
    * \return True, when a new attribute has been created. False, when it's not possible to create
    * this attribute or there is already an attribute with that id.
    */
-  bool add(const AttributeIDRef &attribute_id,
-           const eAttrDomain domain,
+  bool add(const StringRef attribute_id,
+           const AttrDomain domain,
            const eCustomDataType data_type,
            const AttributeInit &initializer)
   {
+    if (this->contains(attribute_id)) {
+      return false;
+    }
     return fn_->add(owner_, attribute_id, domain, data_type, initializer);
   }
   template<typename T>
-  bool add(const AttributeIDRef &attribute_id,
-           const eAttrDomain domain,
-           const AttributeInit &initializer)
+  bool add(const StringRef attribute_id, const AttrDomain domain, const AttributeInit &initializer)
   {
     const CPPType &cpp_type = CPPType::get<T>();
     const eCustomDataType data_type = cpp_type_to_custom_data_type(cpp_type);
@@ -687,9 +755,9 @@ class MutableAttributeAccessor : public AttributeAccessor {
    * exists on a different domain or with a different type), none is returned.
    */
   GAttributeWriter lookup_or_add_for_write(
-      const AttributeIDRef &attribute_id,
-      const eAttrDomain domain,
-      const eCustomDataType data_type,
+      StringRef attribute_id,
+      AttrDomain domain,
+      eCustomDataType data_type,
       const AttributeInit &initializer = AttributeInitDefaultValue());
 
   /**
@@ -698,9 +766,9 @@ class MutableAttributeAccessor : public AttributeAccessor {
    * #lookup_or_add_for_write_only_span.
    */
   GSpanAttributeWriter lookup_or_add_for_write_span(
-      const AttributeIDRef &attribute_id,
-      const eAttrDomain domain,
-      const eCustomDataType data_type,
+      StringRef attribute_id,
+      AttrDomain domain,
+      eCustomDataType data_type,
       const AttributeInit &initializer = AttributeInitDefaultValue());
 
   /**
@@ -708,8 +776,8 @@ class MutableAttributeAccessor : public AttributeAccessor {
    */
   template<typename T>
   AttributeWriter<T> lookup_or_add_for_write(
-      const AttributeIDRef &attribute_id,
-      const eAttrDomain domain,
+      const StringRef attribute_id,
+      const AttrDomain domain,
       const AttributeInit &initializer = AttributeInitDefaultValue())
   {
     const CPPType &cpp_type = CPPType::get<T>();
@@ -722,8 +790,8 @@ class MutableAttributeAccessor : public AttributeAccessor {
    */
   template<typename T>
   SpanAttributeWriter<T> lookup_or_add_for_write_span(
-      const AttributeIDRef &attribute_id,
-      const eAttrDomain domain,
+      const StringRef attribute_id,
+      const AttrDomain domain,
       const AttributeInit &initializer = AttributeInitDefaultValue())
   {
     AttributeWriter<T> attribute = this->lookup_or_add_for_write<T>(
@@ -744,16 +812,16 @@ class MutableAttributeAccessor : public AttributeAccessor {
    *
    * For trivial types, the values in a newly created attribute will not be initialized.
    */
-  GSpanAttributeWriter lookup_or_add_for_write_only_span(const AttributeIDRef &attribute_id,
-                                                         const eAttrDomain domain,
-                                                         const eCustomDataType data_type);
+  GSpanAttributeWriter lookup_or_add_for_write_only_span(StringRef attribute_id,
+                                                         AttrDomain domain,
+                                                         eCustomDataType data_type);
 
   /**
    * Same as above, but should be used when the type is known at compile time.
    */
   template<typename T>
-  SpanAttributeWriter<T> lookup_or_add_for_write_only_span(const AttributeIDRef &attribute_id,
-                                                           const eAttrDomain domain)
+  SpanAttributeWriter<T> lookup_or_add_for_write_only_span(const StringRef attribute_id,
+                                                           const AttrDomain domain)
   {
     AttributeWriter<T> attribute = this->lookup_or_add_for_write<T>(
         attribute_id, domain, AttributeInitConstruct());
@@ -769,7 +837,7 @@ class MutableAttributeAccessor : public AttributeAccessor {
    * \return True, when the attribute has been deleted. False, when it's not possible to delete
    * this attribute or if there is no attribute with that id.
    */
-  bool remove(const AttributeIDRef &attribute_id)
+  bool remove(const StringRef attribute_id)
   {
     return fn_->remove(owner_, attribute_id);
   }
@@ -784,18 +852,17 @@ struct AttributeTransferData {
   /* Expect that if an attribute exists, it is stored as a contiguous array internally anyway. */
   GVArraySpan src;
   AttributeMetaData meta_data;
-  bke::GSpanAttributeWriter dst;
+  GSpanAttributeWriter dst;
 };
 /**
  * Retrieve attribute arrays and writers for attributes that should be transferred between
  * data-blocks of the same type.
  */
 Vector<AttributeTransferData> retrieve_attributes_for_transfer(
-    const bke::AttributeAccessor src_attributes,
-    bke::MutableAttributeAccessor dst_attributes,
-    eAttrDomainMask domain_mask,
-    const AnonymousAttributePropagationInfo &propagation_info,
-    const Set<std::string> &skip = {});
+    const AttributeAccessor src_attributes,
+    MutableAttributeAccessor dst_attributes,
+    AttrDomainMask domain_mask,
+    const AttributeFilter &attribute_filter = {});
 
 bool allow_procedural_attribute_access(StringRef attribute_name);
 extern const char *no_procedural_access_message;
@@ -805,65 +872,12 @@ eCustomDataType attribute_data_type_highest_complexity(Span<eCustomDataType> dat
  * Domains with a higher "information density" have a higher priority,
  * in order to choose a domain that will not lose data through domain conversion.
  */
-eAttrDomain attribute_domain_highest_priority(Span<eAttrDomain> domains);
-
-/* -------------------------------------------------------------------- */
-/** \name #AttributeIDRef Inline Methods
- * \{ */
-
-inline AttributeIDRef::AttributeIDRef() = default;
-
-inline AttributeIDRef::AttributeIDRef(StringRef name) : name_(name) {}
-
-inline AttributeIDRef::AttributeIDRef(StringRefNull name) : name_(name) {}
-
-inline AttributeIDRef::AttributeIDRef(const char *name) : name_(name) {}
-
-inline AttributeIDRef::AttributeIDRef(const std::string &name) : name_(name) {}
-
-/* The anonymous id is only borrowed, the caller has to keep a reference to it. */
-inline AttributeIDRef::AttributeIDRef(const AnonymousAttributeID &anonymous_id)
-    : AttributeIDRef(anonymous_id.name())
-{
-  anonymous_id_ = &anonymous_id;
-}
-
-inline AttributeIDRef::AttributeIDRef(const AnonymousAttributeID *anonymous_id)
-    : AttributeIDRef(anonymous_id ? anonymous_id->name() : "")
-{
-  anonymous_id_ = anonymous_id;
-}
-
-inline AttributeIDRef::operator bool() const
-{
-  return !name_.is_empty();
-}
-
-inline uint64_t AttributeIDRef::hash() const
-{
-  return get_default_hash(name_);
-}
-
-inline bool AttributeIDRef::is_anonymous() const
-{
-  return anonymous_id_ != nullptr;
-}
-
-inline StringRef AttributeIDRef::name() const
-{
-  return name_;
-}
-
-inline const AnonymousAttributeID &AttributeIDRef::anonymous_id() const
-{
-  BLI_assert(this->is_anonymous());
-  return *anonymous_id_;
-}
+AttrDomain attribute_domain_highest_priority(Span<AttrDomain> domains);
 
 void gather_attributes(AttributeAccessor src_attributes,
-                       eAttrDomain domain,
-                       const AnonymousAttributePropagationInfo &propagation_info,
-                       const Set<std::string> &skip,
+                       AttrDomain src_domain,
+                       AttrDomain dst_domain,
+                       const AttributeFilter &attribute_filter,
                        const IndexMask &selection,
                        MutableAttributeAccessor dst_attributes);
 
@@ -871,10 +885,10 @@ void gather_attributes(AttributeAccessor src_attributes,
  * Fill the destination attribute by gathering indexed values from src attributes.
  */
 void gather_attributes(AttributeAccessor src_attributes,
-                       eAttrDomain domain,
-                       const AnonymousAttributePropagationInfo &propagation_info,
-                       const Set<std::string> &skip,
-                       const Span<int> indices,
+                       AttrDomain src_domain,
+                       AttrDomain dst_domain,
+                       const AttributeFilter &attribute_filter,
+                       Span<int> indices,
                        MutableAttributeAccessor dst_attributes);
 
 /**
@@ -883,35 +897,40 @@ void gather_attributes(AttributeAccessor src_attributes,
  * source and result group must be the same.
  */
 void gather_attributes_group_to_group(AttributeAccessor src_attributes,
-                                      eAttrDomain domain,
-                                      const AnonymousAttributePropagationInfo &propagation_info,
-                                      const Set<std::string> &skip,
+                                      AttrDomain src_domain,
+                                      AttrDomain dst_domain,
+                                      const AttributeFilter &attribute_filter,
                                       OffsetIndices<int> src_offsets,
                                       OffsetIndices<int> dst_offsets,
                                       const IndexMask &selection,
                                       MutableAttributeAccessor dst_attributes);
 
 void gather_attributes_to_groups(AttributeAccessor src_attributes,
-                                 eAttrDomain domain,
-                                 const AnonymousAttributePropagationInfo &propagation_info,
-                                 const Set<std::string> &skip,
+                                 AttrDomain src_domain,
+                                 AttrDomain dst_domain,
+                                 const AttributeFilter &attribute_filter,
                                  OffsetIndices<int> dst_offsets,
                                  const IndexMask &src_selection,
                                  MutableAttributeAccessor dst_attributes);
 
 void copy_attributes(const AttributeAccessor src_attributes,
-                     const eAttrDomain domain,
-                     const AnonymousAttributePropagationInfo &propagation_info,
-                     const Set<std::string> &skip,
+                     AttrDomain src_domain,
+                     AttrDomain dst_domain,
+                     const AttributeFilter &attribute_filter,
                      MutableAttributeAccessor dst_attributes);
 
 void copy_attributes_group_to_group(AttributeAccessor src_attributes,
-                                    eAttrDomain domain,
-                                    const AnonymousAttributePropagationInfo &propagation_info,
-                                    const Set<std::string> &skip,
+                                    AttrDomain src_domain,
+                                    AttrDomain dst_domain,
+                                    const AttributeFilter &attribute_filter,
                                     OffsetIndices<int> src_offsets,
                                     OffsetIndices<int> dst_offsets,
                                     const IndexMask &selection,
                                     MutableAttributeAccessor dst_attributes);
+
+void fill_attribute_range_default(MutableAttributeAccessor dst_attributes,
+                                  AttrDomain domain,
+                                  const AttributeFilter &attribute_filter,
+                                  IndexRange range);
 
 }  // namespace blender::bke

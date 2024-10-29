@@ -4,8 +4,8 @@
 
 #include "COM_ZCombineNode.h"
 
-#include "COM_AntiAliasOperation.h"
 #include "COM_MathBaseOperation.h"
+#include "COM_SMAAOperation.h"
 #include "COM_ZCombineOperation.h"
 
 namespace blender::compositor {
@@ -54,11 +54,10 @@ void ZCombineNode::convert_to_operations(NodeConverter &converter,
     converter.map_input_socket(get_input_socket(3), maskoperation->get_input_socket(1));
 
     /* Step 2 anti alias mask bit of an expensive operation, but does the trick. */
-    AntiAliasOperation *antialiasoperation = new AntiAliasOperation();
-    converter.add_operation(antialiasoperation);
+    SMAAOperation *smaa_operation = new SMAAOperation();
+    converter.add_operation(smaa_operation);
 
-    converter.add_link(maskoperation->get_output_socket(),
-                       antialiasoperation->get_input_socket(0));
+    converter.add_link(maskoperation->get_output_socket(), smaa_operation->get_input_socket(0));
 
     /* use mask to blend between the input colors. */
     ZCombineMaskOperation *zcombineoperation = this->get_bnode()->custom1 ?
@@ -66,7 +65,7 @@ void ZCombineNode::convert_to_operations(NodeConverter &converter,
                                                    new ZCombineMaskOperation();
     converter.add_operation(zcombineoperation);
 
-    converter.add_link(antialiasoperation->get_output_socket(),
+    converter.add_link(smaa_operation->get_output_socket(),
                        zcombineoperation->get_input_socket(0));
     converter.map_input_socket(get_input_socket(0), zcombineoperation->get_input_socket(1));
     converter.map_input_socket(get_input_socket(2), zcombineoperation->get_input_socket(2));

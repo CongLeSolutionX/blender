@@ -14,31 +14,35 @@
 
 #include "BLI_listbase.h"
 #include "BLI_math_base.h"
+#include "BLI_math_matrix.hh"
 #include "BLI_math_vector.h"
 #include "BLI_utildefines.h"
 
 #include "DNA_object_types.h"
 #include "DNA_volume_types.h"
 
-#include "BKE_global.h"
+#include "BKE_global.hh"
 #include "BKE_volume.hh"
+#include "BKE_volume_grid_fwd.hh"
 #include "BKE_volume_render.hh"
 
-#include "GPU_batch.h"
-#include "GPU_capabilities.h"
-#include "GPU_texture.h"
+#include "GPU_batch.hh"
+#include "GPU_capabilities.hh"
+#include "GPU_texture.hh"
 
 #include "DEG_depsgraph_query.hh"
 
-#include "DRW_render.h"
+#include "DRW_render.hh"
 
-#include "draw_cache.h"       /* own include */
+#include "draw_cache.hh"      /* own include */
 #include "draw_cache_impl.hh" /* own include */
+
+namespace blender::draw {
 
 static void volume_batch_cache_clear(Volume *volume);
 
 /* ---------------------------------------------------------------------- */
-/* Volume GPUBatch Cache */
+/* Volume gpu::Batch Cache */
 
 struct VolumeBatchCache {
   /* 3D textures */
@@ -46,18 +50,18 @@ struct VolumeBatchCache {
 
   /* Wireframe */
   struct {
-    GPUVertBuf *pos_nor_in_order;
-    GPUBatch *batch;
+    gpu::VertBuf *pos_nor_in_order;
+    gpu::Batch *batch;
   } face_wire;
 
   /* Surface for selection */
-  GPUBatch *selection_surface;
+  gpu::Batch *selection_surface;
 
   /* settings to determine if cache is invalid */
   bool is_dirty;
 };
 
-/* GPUBatch cache management. */
+/* gpu::Batch cache management. */
 
 static bool volume_batch_cache_valid(Volume *volume)
 {
@@ -169,14 +173,14 @@ static void drw_volume_wireframe_cb(
   uint pos_id = do_hq_normals ? attr_id.pos_hq_id : attr_id.pos_id;
   uint nor_id = do_hq_normals ? attr_id.nor_hq_id : attr_id.nor_id;
 
-  cache->face_wire.pos_nor_in_order = GPU_vertbuf_create_with_format(do_hq_normals ? &format_hq :
-                                                                                     &format);
-  GPU_vertbuf_data_alloc(cache->face_wire.pos_nor_in_order, totvert);
+  cache->face_wire.pos_nor_in_order = GPU_vertbuf_create_with_format(do_hq_normals ? format_hq :
+                                                                                     format);
+  GPU_vertbuf_data_alloc(*cache->face_wire.pos_nor_in_order, totvert);
   GPU_vertbuf_attr_fill(cache->face_wire.pos_nor_in_order, pos_id, verts);
   GPU_vertbuf_attr_fill_stride(cache->face_wire.pos_nor_in_order, nor_id, 0, &packed_normal);
 
   /* Create wiredata. */
-  GPUVertBuf *vbo_wiredata = GPU_vertbuf_calloc();
+  gpu::VertBuf *vbo_wiredata = GPU_vertbuf_calloc();
   DRW_vertbuf_create_wiredata(vbo_wiredata, totvert);
 
   if (volume->display.wireframe_type == VOLUME_WIREFRAME_POINTS) {
@@ -191,7 +195,7 @@ static void drw_volume_wireframe_cb(
     for (int i = 0; i < totedge; i++) {
       GPU_indexbuf_add_line_verts(&elb, edges[i][0], edges[i][1]);
     }
-    GPUIndexBuf *ibo = GPU_indexbuf_build(&elb);
+    gpu::IndexBuf *ibo = GPU_indexbuf_build(&elb);
 
     /* Create batch. */
     cache->face_wire.batch = GPU_batch_create_ex(
@@ -201,7 +205,7 @@ static void drw_volume_wireframe_cb(
   GPU_batch_vertbuf_add(cache->face_wire.batch, vbo_wiredata, true);
 }
 
-GPUBatch *DRW_volume_batch_cache_get_wireframes_face(Volume *volume)
+gpu::Batch *DRW_volume_batch_cache_get_wireframes_face(Volume *volume)
 {
   if (volume->display.wireframe_type == VOLUME_WIREFRAME_NONE) {
     return nullptr;
@@ -210,7 +214,7 @@ GPUBatch *DRW_volume_batch_cache_get_wireframes_face(Volume *volume)
   VolumeBatchCache *cache = volume_batch_cache_get(volume);
 
   if (cache->face_wire.batch == nullptr) {
-    const VolumeGrid *volume_grid = BKE_volume_grid_active_get_for_read(volume);
+    const bke::VolumeGridData *volume_grid = BKE_volume_grid_active_get_for_read(volume);
     if (volume_grid == nullptr) {
       return nullptr;
     }
@@ -239,8 +243,8 @@ static void drw_volume_selection_surface_cb(
   }
 
   /* Create vertex buffer. */
-  GPUVertBuf *vbo_surface = GPU_vertbuf_create_with_format(&format);
-  GPU_vertbuf_data_alloc(vbo_surface, totvert);
+  gpu::VertBuf *vbo_surface = GPU_vertbuf_create_with_format(format);
+  GPU_vertbuf_data_alloc(*vbo_surface, totvert);
   GPU_vertbuf_attr_fill(vbo_surface, pos_id, verts);
 
   /* Create index buffer. */
@@ -249,17 +253,17 @@ static void drw_volume_selection_surface_cb(
   for (int i = 0; i < tottris; i++) {
     GPU_indexbuf_add_tri_verts(&elb, UNPACK3(tris[i]));
   }
-  GPUIndexBuf *ibo_surface = GPU_indexbuf_build(&elb);
+  gpu::IndexBuf *ibo_surface = GPU_indexbuf_build(&elb);
 
   cache->selection_surface = GPU_batch_create_ex(
       GPU_PRIM_TRIS, vbo_surface, ibo_surface, GPU_BATCH_OWNS_VBO | GPU_BATCH_OWNS_INDEX);
 }
 
-GPUBatch *DRW_volume_batch_cache_get_selection_surface(Volume *volume)
+gpu::Batch *DRW_volume_batch_cache_get_selection_surface(Volume *volume)
 {
   VolumeBatchCache *cache = volume_batch_cache_get(volume);
   if (cache->selection_surface == nullptr) {
-    const VolumeGrid *volume_grid = BKE_volume_grid_active_get_for_read(volume);
+    const bke::VolumeGridData *volume_grid = BKE_volume_grid_active_get_for_read(volume);
     if (volume_grid == nullptr) {
       return nullptr;
     }
@@ -270,21 +274,21 @@ GPUBatch *DRW_volume_batch_cache_get_selection_surface(Volume *volume)
 }
 
 static DRWVolumeGrid *volume_grid_cache_get(const Volume *volume,
-                                            const VolumeGrid *grid,
+                                            const bke::VolumeGridData *grid,
                                             VolumeBatchCache *cache)
 {
-  const char *name = BKE_volume_grid_name(grid);
+  const std::string name = bke::volume_grid::get_name(*grid);
 
   /* Return cached grid. */
   LISTBASE_FOREACH (DRWVolumeGrid *, cache_grid, &cache->grids) {
-    if (STREQ(cache_grid->name, name)) {
+    if (cache_grid->name == name) {
       return cache_grid;
     }
   }
 
   /* Allocate new grid. */
   DRWVolumeGrid *cache_grid = MEM_cnew<DRWVolumeGrid>(__func__);
-  cache_grid->name = BLI_strdup(name);
+  cache_grid->name = BLI_strdup(name.c_str());
   BLI_addtail(&cache->grids, cache_grid);
 
   /* TODO: can we load this earlier, avoid accessing the global and take
@@ -292,19 +296,15 @@ static DRWVolumeGrid *volume_grid_cache_get(const Volume *volume,
   BKE_volume_load(volume, G.main);
 
   /* Test if we support textures with the number of channels. */
-  size_t channels = BKE_volume_grid_channels(grid);
+  size_t channels = bke::volume_grid::get_channels_num(bke::volume_grid::get_type(*grid));
   if (!ELEM(channels, 1, 3)) {
     return cache_grid;
   }
 
-  /* Remember if grid was loaded. If it was not, we want to unload it after the GPUTexture has been
-   * created. */
-  const bool was_loaded = BKE_volume_grid_is_loaded(grid);
-
   DenseFloatVolumeGrid dense_grid;
   if (BKE_volume_grid_dense_floats(volume, grid, &dense_grid)) {
-    copy_m4_m4(cache_grid->texture_to_object, dense_grid.texture_to_object);
-    invert_m4_m4(cache_grid->object_to_texture, dense_grid.texture_to_object);
+    cache_grid->texture_to_object = float4x4(dense_grid.texture_to_object);
+    cache_grid->object_to_texture = math::invert(cache_grid->texture_to_object);
 
     /* Create GPU texture. */
     eGPUTextureFormat format = (channels == 3) ? GPU_RGB16F : GPU_R16F;
@@ -327,22 +327,20 @@ static DRWVolumeGrid *volume_grid_cache_get(const Volume *volume,
     }
   }
 
-  /* Free grid from memory if it wasn't previously loaded. */
-  if (!was_loaded) {
-    BKE_volume_grid_unload(volume, grid);
-  }
-
   return cache_grid;
 }
 
-DRWVolumeGrid *DRW_volume_batch_cache_get_grid(Volume *volume, const VolumeGrid *volume_grid)
+DRWVolumeGrid *DRW_volume_batch_cache_get_grid(Volume *volume,
+                                               const bke::VolumeGridData *volume_grid)
 {
   VolumeBatchCache *cache = volume_batch_cache_get(volume);
   DRWVolumeGrid *grid = volume_grid_cache_get(volume, volume_grid, cache);
   return (grid->texture != nullptr) ? grid : nullptr;
 }
 
-int DRW_volume_material_count_get(Volume *volume)
+int DRW_volume_material_count_get(const Volume *volume)
 {
   return max_ii(1, volume->totcol);
 }
+
+}  // namespace blender::draw

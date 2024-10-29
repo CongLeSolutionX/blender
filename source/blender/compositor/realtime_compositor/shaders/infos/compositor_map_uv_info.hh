@@ -4,11 +4,22 @@
 
 #include "gpu_shader_create_info.hh"
 
-GPU_SHADER_CREATE_INFO(compositor_map_uv)
-    .local_group_size(16, 16)
-    .push_constant(Type::FLOAT, "gradient_attenuation_factor")
-    .sampler(0, ImageType::FLOAT_2D, "input_tx")
-    .sampler(1, ImageType::FLOAT_2D, "uv_tx")
-    .image(0, GPU_RGBA16F, Qualifier::WRITE, ImageType::FLOAT_2D, "output_img")
-    .compute_source("compositor_map_uv.glsl")
-    .do_static_compilation(true);
+GPU_SHADER_CREATE_INFO(compositor_map_uv_shared)
+LOCAL_GROUP_SIZE(16, 16)
+SAMPLER(0, FLOAT_2D, input_tx)
+SAMPLER(1, FLOAT_2D, uv_tx)
+IMAGE(0, GPU_RGBA16F, WRITE, FLOAT_2D, output_img)
+GPU_SHADER_CREATE_END()
+
+GPU_SHADER_CREATE_INFO(compositor_map_uv_anisotropic)
+ADDITIONAL_INFO(compositor_map_uv_shared)
+PUSH_CONSTANT(FLOAT, gradient_attenuation_factor)
+COMPUTE_SOURCE("compositor_map_uv_anisotropic.glsl")
+DO_STATIC_COMPILATION()
+GPU_SHADER_CREATE_END()
+
+GPU_SHADER_CREATE_INFO(compositor_map_uv_nearest_neighbour)
+ADDITIONAL_INFO(compositor_map_uv_shared)
+COMPUTE_SOURCE("compositor_map_uv_nearest_neighbour.glsl")
+DO_STATIC_COMPILATION()
+GPU_SHADER_CREATE_END()

@@ -2,6 +2,8 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#pragma once
+
 /**
  * Various utilities related to object subsurface light transport.
  *
@@ -9,7 +11,9 @@
  * - utility_tx
  */
 
-#pragma BLENDER_REQUIRE(eevee_shadow_lib.glsl)
+#include "eevee_shadow_lib.glsl"
+
+#ifdef EEVEE_UTILITY_TX
 
 float subsurface_transmittance_profile(float u)
 {
@@ -30,3 +34,5 @@ vec3 subsurface_transmission(vec3 sss_radii, float thickness)
   translucency.z = (sss_radii.z > 0.0) ? subsurface_transmittance_profile(channels_co.z) : 0.0;
   return translucency;
 }
+
+#endif

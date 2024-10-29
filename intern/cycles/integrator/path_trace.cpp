@@ -22,11 +22,13 @@
 CCL_NAMESPACE_BEGIN
 
 PathTrace::PathTrace(Device *device,
+                     Device *denoise_device,
                      Film *film,
                      DeviceScene *device_scene,
                      RenderScheduler &render_scheduler,
                      TileManager &tile_manager)
     : device_(device),
+      denoise_device_(denoise_device),
       film_(film),
       device_scene_(device_scene),
       render_scheduler_(render_scheduler),
@@ -38,7 +40,8 @@ PathTrace::PathTrace(Device *device,
     vector<DeviceInfo> cpu_devices;
     device_cpu_info(cpu_devices);
 
-    cpu_device_.reset(device_cpu_create(cpu_devices[0], device->stats, device->profiler));
+    cpu_device_.reset(
+        device_cpu_create(cpu_devices[0], device->stats, device->profiler, device_->headless));
   }
 
   /* Create path tracing work in advance, so that it can be reused by incremental sampling as much
@@ -483,27 +486,68 @@ void PathTrace::adaptive_sample(RenderWork &render_work)
 
 void PathTrace::set_denoiser_params(const DenoiseParams &params)
 {
-  render_scheduler_.set_denoiser_params(params);
-
   if (!params.use) {
     denoiser_.reset();
     return;
   }
 
+  Device *effective_denoise_device;
+  Device *cpu_fallback_device = cpu_device_.get();
+  DenoiseParams effective_denoise_params = get_effective_denoise_params(
+      denoise_device_, cpu_fallback_device, params, effective_denoise_device);
+
+  bool need_to_recreate_denoiser = false;
   if (denoiser_) {
     const DenoiseParams old_denoiser_params = denoiser_->get_params();
-    if (old_denoiser_params.type == params.type) {
-      denoiser_->set_params(params);
+
+    const bool is_cpu_denoising = old_denoiser_params.type == DENOISER_OPENIMAGEDENOISE &&
+                                  old_denoiser_params.use_gpu == false;
+    const bool requested_gpu_denoising = effective_denoise_params.type == DENOISER_OPTIX ||
+                                         (effective_denoise_params.type ==
+                                              DENOISER_OPENIMAGEDENOISE &&
+                                          effective_denoise_params.use_gpu == true);
+    if (requested_gpu_denoising && is_cpu_denoising &&
+        effective_denoise_device->info.type == DEVICE_CPU)
+    {
+      /* It won't be possible to use GPU denoising when according to user settings we have
+       * only CPU as available denoising device. So we just exiting early to avoid
+       * unnecessary denoiser recreation or parameters update. */
       return;
     }
+
+    const bool is_same_denoising_device_type = old_denoiser_params.use_gpu ==
+                                               effective_denoise_params.use_gpu;
+    /* Optix Denoiser is not supporting CPU devices, so use_gpu option is not
+     * shown in the UI and changes in the option value should not be checked. */
+    if (old_denoiser_params.type == effective_denoise_params.type &&
+        (is_same_denoising_device_type || effective_denoise_params.type == DENOISER_OPTIX))
+    {
+      denoiser_->set_params(effective_denoise_params);
+    }
+    else {
+      need_to_recreate_denoiser = true;
+    }
+  }
+  else {
+    /* if there is no denoiser and param.use is true, then we need to create it. */
+    need_to_recreate_denoiser = true;
   }
 
-  denoiser_ = Denoiser::create(device_, params);
+  if (need_to_recreate_denoiser) {
+    denoiser_ = Denoiser::create(
+        effective_denoise_device, cpu_fallback_device, effective_denoise_params);
 
-  /* Only take into account the "immediate" cancel to have interactive rendering responding to
-   * navigation as quickly as possible, but allow to run denoiser after user hit Escape key while
-   * doing offline rendering. */
-  denoiser_->is_cancelled_cb = [this]() { return render_cancel_.is_requested; };
+    /* Only take into account the "immediate" cancel to have interactive rendering responding to
+     * navigation as quickly as possible, but allow to run denoiser after user hit Escape key while
+     * doing offline rendering. */
+    denoiser_->is_cancelled_cb = [this]() { return render_cancel_.is_requested; };
+  }
+
+  /* Use actual parameters, if available */
+  if (denoise_device_)
+    render_scheduler_.set_denoiser_params(denoiser_->get_params());
+  else
+    render_scheduler_.set_denoiser_params(effective_denoise_params);
 }
 
 void PathTrace::set_adaptive_sampling(const AdaptiveSampling &adaptive_sampling)
@@ -997,6 +1041,9 @@ void PathTrace::process_full_buffer_from_disk(string_view filename)
   if (denoise_params.use) {
     progress_set_status(layer_view_name, "Denoising");
 
+    /* If GPU should be used is not based on file metadata. */
+    denoise_params.use_gpu = render_scheduler_.is_denoiser_gpu_used();
+
     /* Re-use the denoiser as much as possible, avoiding possible device re-initialization.
      *
      * It will not conflict with the regular rendering as:
@@ -1277,42 +1324,78 @@ void PathTrace::set_guiding_params(const GuidingParams &guiding_params, const bo
   if (guiding_params_.modified(guiding_params)) {
     guiding_params_ = guiding_params;
 
+#  if !(OPENPGL_VERSION_MAJOR == 0 && OPENPGL_VERSION_MINOR <= 5)
+#    define OPENPGL_USE_FIELD_CONFIG
+#  endif
+
     if (guiding_params_.use) {
+#  ifdef OPENPGL_USE_FIELD_CONFIG
+      openpgl::cpp::FieldConfig field_config;
+#  else
       PGLFieldArguments field_args;
+#  endif
       switch (guiding_params_.type) {
         default:
         /* Parallax-aware von Mises-Fisher mixture models. */
         case GUIDING_TYPE_PARALLAX_AWARE_VMM: {
+#  ifdef OPENPGL_USE_FIELD_CONFIG
+          field_config.Init(
+              PGL_SPATIAL_STRUCTURE_TYPE::PGL_SPATIAL_STRUCTURE_KDTREE,
+              PGL_DIRECTIONAL_DISTRIBUTION_TYPE::PGL_DIRECTIONAL_DISTRIBUTION_PARALLAX_AWARE_VMM,
+              guiding_params.deterministic);
+#  else
           pglFieldArgumentsSetDefaults(
               field_args,
               PGL_SPATIAL_STRUCTURE_TYPE::PGL_SPATIAL_STRUCTURE_KDTREE,
               PGL_DIRECTIONAL_DISTRIBUTION_TYPE::PGL_DIRECTIONAL_DISTRIBUTION_PARALLAX_AWARE_VMM);
+#  endif
           break;
         }
         /* Directional quad-trees. */
         case GUIDING_TYPE_DIRECTIONAL_QUAD_TREE: {
+#  ifdef OPENPGL_USE_FIELD_CONFIG
+          field_config.Init(
+              PGL_SPATIAL_STRUCTURE_TYPE::PGL_SPATIAL_STRUCTURE_KDTREE,
+              PGL_DIRECTIONAL_DISTRIBUTION_TYPE::PGL_DIRECTIONAL_DISTRIBUTION_QUADTREE,
+              guiding_params.deterministic);
+#  else
           pglFieldArgumentsSetDefaults(
               field_args,
               PGL_SPATIAL_STRUCTURE_TYPE::PGL_SPATIAL_STRUCTURE_KDTREE,
               PGL_DIRECTIONAL_DISTRIBUTION_TYPE::PGL_DIRECTIONAL_DISTRIBUTION_QUADTREE);
+#  endif
           break;
         }
         /* von Mises-Fisher mixture models. */
         case GUIDING_TYPE_VMM: {
+#  ifdef OPENPGL_USE_FIELD_CONFIG
+          field_config.Init(PGL_SPATIAL_STRUCTURE_TYPE::PGL_SPATIAL_STRUCTURE_KDTREE,
+                            PGL_DIRECTIONAL_DISTRIBUTION_TYPE::PGL_DIRECTIONAL_DISTRIBUTION_VMM,
+                            guiding_params.deterministic);
+#  else
           pglFieldArgumentsSetDefaults(
               field_args,
               PGL_SPATIAL_STRUCTURE_TYPE::PGL_SPATIAL_STRUCTURE_KDTREE,
               PGL_DIRECTIONAL_DISTRIBUTION_TYPE::PGL_DIRECTIONAL_DISTRIBUTION_VMM);
+#  endif
           break;
         }
       }
+#  ifdef OPENPGL_USE_FIELD_CONFIG
+      field_config.SetSpatialStructureArgMaxDepth(16);
+#  else
       field_args.deterministic = guiding_params.deterministic;
       reinterpret_cast<PGLKDTreeArguments *>(field_args.spatialSturctureArguments)->maxDepth = 16;
+#  endif
       openpgl::cpp::Device *guiding_device = static_cast<openpgl::cpp::Device *>(
           device_->get_guiding_device());
       if (guiding_device) {
         guiding_sample_data_storage_ = make_unique<openpgl::cpp::SampleStorage>();
+#  ifdef OPENPGL_USE_FIELD_CONFIG
+        guiding_field_ = make_unique<openpgl::cpp::Field>(guiding_device, field_config);
+#  else
         guiding_field_ = make_unique<openpgl::cpp::Field>(guiding_device, field_args);
+#  endif
       }
       else {
         guiding_sample_data_storage_ = nullptr;

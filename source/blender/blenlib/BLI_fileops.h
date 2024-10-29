@@ -52,18 +52,36 @@ int BLI_copy(const char *path_src, const char *path_dst) ATTR_NONNULL();
 int BLI_path_move(const char *path_src, const char *path_dst) ATTR_NONNULL();
 
 /**
- * Rename a file or directory.
+ * Rename a file or directory, unless `to` already exists.
  *
+ * \note This matches Windows `rename` logic, _not_ Unix one. It does not allow to replace an
+ * existing target. Use #BLI_rename_overwrite instead if existing file should be replaced.
+ *
+ * \param from: The path to rename from (return failure if it does not exist).
+ * \param to: The destination path.
  * \return zero on success (matching 'rename' behavior).
  */
-int BLI_rename(const char *from, const char *to);
+int BLI_rename(const char *from, const char *to) ATTR_NONNULL();
 
 /**
- * Rename a file or directory.
+ * Rename a file or directory, replacing target `to` path if it exists.
  *
- * \warning It's up to the caller to ensure `from` & `to` don't point to the same file
- * as this will result in `to` being deleted to make room for `from`
- * (which will then also be deleted).
+ * \note This matches Unix `rename` logic. It does allow to replace an existing target. Use
+ * #BLI_rename instead if existing file should never be replaced. However, if `to` is an existing,
+ * non-empty directory, the operation will fail.
+ *
+ * \note There is still no feature-parity between behaviors on Windows and Unix, in case the target
+ * `to` exists and is opened by some process in the system:
+ *   - On Unix, it will typically succeed
+ *     (see https://man7.org/linux/man-pages/man2/rename.2.html for details).
+ *   - On Windows, it will always fail
+ *     (see https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-movefileexw for
+ *      details).
+ *
+ * \warning Due to internal limitation/implementation, on Windows, in case paths point to
+ * directories, it's up to the caller to ensure that `from` and `to` are not the same directory.
+ * Since `to` is being deleted to make room for `from`, this will result in `from` being deleted as
+ * well.
  *
  * See #BLI_path_move to move directories.
  *
@@ -74,8 +92,19 @@ int BLI_rename(const char *from, const char *to);
  */
 int BLI_rename_overwrite(const char *from, const char *to) ATTR_NONNULL();
 /**
- * Deletes the specified file or directory (depending on dir), optionally
- * doing recursive delete of directory contents.
+ * Deletes the specified file or directory.
+ *
+ * \param dir: Delete an empty directory instead of a file.
+ * The value is ignored when `recursive` is true but should true to make the intention clear.
+ * If the directory is not empty, delete fails.
+ * \param recursive: Recursively delete files including `path` which may be a directory of a file.
+ *
+ * \note Symbolic-Links for (UNIX) behave as follows:
+ * - Never followed, treated as regular files.
+ * - Links are removed, not the files/directories they references.
+ * - When `path` itself links to another directory,
+ *   deleting `path` behaves as if a regular file is being deleted.
+ * - If `dir` is true and `path` is a link, delete fails.
  *
  * \return zero on success (matching 'remove' behavior).
  */
@@ -86,7 +115,7 @@ int BLI_delete(const char *path, bool dir, bool recursive) ATTR_NONNULL();
  *
  * \return zero on success (matching 'remove' behavior).
  */
-int BLI_delete_soft(const char *filepath, const char **error_message) ATTR_NONNULL();
+int BLI_delete_soft(const char *filepath, const char **r_error_message) ATTR_NONNULL();
 #if 0 /* Unused */
 int BLI_create_symlink(const char *path, const char *path_dst) ATTR_NONNULL();
 #endif
@@ -184,7 +213,7 @@ bool BLI_is_file(const char *path) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
 /**
  * \return true on success (i.e. given path now exists on FS), false otherwise.
  */
-bool BLI_dir_create_recursive(const char *dir) ATTR_NONNULL();
+bool BLI_dir_create_recursive(const char *dirname) ATTR_NONNULL();
 /**
  * Returns the number of free bytes on the volume containing the specified path.
  *
@@ -198,6 +227,14 @@ double BLI_dir_free_space(const char *dir) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL(
  * \note can return NULL when the size is not big enough
  */
 char *BLI_current_working_dir(char *dir, size_t maxncpy) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
+
+/**
+ * Get the user's home directory, i.e.
+ * - Unix: `$HOME`
+ * - Windows: `%userprofile%`
+ */
+const char *BLI_dir_home(void);
+
 eFileAttributes BLI_file_attributes(const char *path);
 /**
  * Changes the current working directory to the provided path.
@@ -219,12 +256,12 @@ bool BLI_change_working_dir(const char *dir);
  * \{ */
 
 /**
- * Scans the contents of the directory named `dir`, and allocates and fills in an
+ * Scans the contents of the directory named `dirname`, and allocates and fills in an
  * array of entries describing them in `r_filelist`.
  *
  * \return The length of `r_filelist` array.
  */
-unsigned int BLI_filelist_dir_contents(const char *dir, struct direntry **r_filelist);
+unsigned int BLI_filelist_dir_contents(const char *dirname, struct direntry **r_filelist);
 /**
  * Deep-duplicate of a single direntry.
  */
@@ -351,7 +388,19 @@ bool BLI_file_older(const char *file1, const char *file2) ATTR_WARN_UNUSED_RESUL
  *
  * \return the lines in a linked list (an empty list when file reading fails).
  */
-struct LinkNode *BLI_file_read_as_lines(const char *file) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
+struct LinkNode *BLI_file_read_as_lines(const char *filepath) ATTR_WARN_UNUSED_RESULT
+    ATTR_NONNULL();
+
+/**
+ * Read the contents of `fp`, returning the result as a buffer or null when it can't be read.
+ *
+ * \param r_size: The size of the file contents read into the buffer (excluding `pad_bytes`).
+ */
+void *BLI_file_read_data_as_mem_from_handle(FILE *fp,
+                                            bool read_size_exact,
+                                            size_t pad_bytes,
+                                            size_t *r_size);
+
 void *BLI_file_read_text_as_mem(const char *filepath, size_t pad_bytes, size_t *r_size);
 /**
  * Return the text file data with:
@@ -368,6 +417,7 @@ void *BLI_file_read_text_as_mem(const char *filepath, size_t pad_bytes, size_t *
  * \param pad_bytes: When this is non-zero, the first byte is set to nil,
  * to simplify parsing the file.
  * It's recommended to pass in 1, so all text is nil terminated.
+ * \param r_size: The size of the file contents read into the buffer (excluding `pad_bytes`).
  *
  * Example looping over lines:
  *
@@ -390,14 +440,6 @@ void *BLI_file_read_binary_as_mem(const char *filepath, size_t pad_bytes, size_t
  */
 void BLI_file_free_lines(struct LinkNode *lines);
 
-#ifdef __APPLE__
-/**
- * Expand the leading `~` in the given path to `/Users/$USER`.
- * This doesn't preserve the trailing path separator.
- * Giving a path without leading `~` is not an error.
- */
-const char *BLI_expand_tilde(const char *path_with_tilde);
-#endif
 /* This weirdo pops up in two places. */
 #if !defined(WIN32)
 #  ifndef O_BINARY

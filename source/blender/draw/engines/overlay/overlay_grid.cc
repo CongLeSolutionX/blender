@@ -8,7 +8,7 @@
 
 #include "BLI_math_color.h"
 
-#include "DRW_render.h"
+#include "DRW_render.hh"
 
 #include "DNA_camera_types.h"
 #include "DNA_screen_types.h"
@@ -158,7 +158,8 @@ void OVERLAY_grid_init(OVERLAY_Data *vedata)
       /* Perspective: If camera is below floor plane, we switch clipping.
        * Orthographic: If eye vector is looking up, we switch clipping. */
       if (((winmat[3][3] == 0.0f) && (campos[2] > 0.0f)) ||
-          ((winmat[3][3] != 0.0f) && (zvec[2] < 0.0f))) {
+          ((winmat[3][3] != 0.0f) && (zvec[2] < 0.0f)))
+      {
         zpos_flag |= CLIP_ZPOS;
         zneg_flag |= CLIP_ZNEG;
       }
@@ -219,13 +220,13 @@ void OVERLAY_grid_init(OVERLAY_Data *vedata)
   pd->grid.zpos_flag = zpos_flag;
 }
 
-void OVERLAY_grid_cache_init(OVERLAY_Data *ved)
+void OVERLAY_grid_cache_init(OVERLAY_Data *vedata)
 {
-  OVERLAY_StorageList *stl = ved->stl;
+  OVERLAY_StorageList *stl = vedata->stl;
   OVERLAY_PrivateData *pd = stl->pd;
   OVERLAY_GridData *grid = &pd->grid_data;
 
-  OVERLAY_PassList *psl = ved->psl;
+  OVERLAY_PassList *psl = vedata->psl;
   DefaultTextureList *dtxl = DRW_viewport_texture_list_get();
 
   psl->grid_ps = nullptr;
@@ -234,7 +235,7 @@ void OVERLAY_grid_cache_init(OVERLAY_Data *ved)
     return;
   }
 
-  GPUUniformBuf *&grid_ubo = reinterpret_cast<Instance *>(ved->instance)->grid_ubo;
+  GPUUniformBuf *&grid_ubo = reinterpret_cast<Instance *>(vedata->instance)->grid_ubo;
   if (grid_ubo == nullptr) {
     grid_ubo = GPU_uniformbuf_create(sizeof(OVERLAY_GridData));
   }
@@ -262,7 +263,7 @@ void OVERLAY_grid_cache_init(OVERLAY_Data *ved)
 
   {
     DRWShadingGroup *grp;
-    GPUBatch *geom = DRW_cache_grid_get();
+    blender::gpu::Batch *geom = DRW_cache_grid_get();
 
     GPUShader *sh = OVERLAY_shader_grid();
 

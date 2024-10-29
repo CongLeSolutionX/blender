@@ -5,26 +5,23 @@
 /** \file
  * \ingroup wm
  */
-#include "wm_platform_support.h"
-#include "wm_window_private.h"
+#include "wm_platform_support.hh"
+#include "wm_window_private.hh"
 
 #include <cstring>
 
 #include "BLI_dynstr.h"
 #include "BLI_fileops.h"
 #include "BLI_linklist.h"
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 #include "BLI_string.h"
-#include "BLI_sys_types.h"
 
-#include "BLT_translation.h"
+#include "BLT_translation.hh"
 
-#include "BKE_appdir.h"
-#include "BKE_global.h"
+#include "BKE_appdir.hh"
+#include "BKE_global.hh"
 
-#include "GPU_platform.h"
-
-#include "GHOST_C-api.h"
+#include "GPU_platform.hh"
 
 #define WM_PLATFORM_SUPPORT_TEXT_SIZE 1024
 
@@ -36,14 +33,14 @@ static bool wm_platform_support_check_approval(const char *platform_support_key,
   if (G.factory_startup) {
     return false;
   }
-  const char *const cfgdir = BKE_appdir_folder_id(BLENDER_USER_CONFIG, nullptr);
-  if (!cfgdir) {
+  const std::optional<std::string> cfgdir = BKE_appdir_folder_id(BLENDER_USER_CONFIG, nullptr);
+  if (!cfgdir.has_value()) {
     return false;
   }
 
   bool result = false;
   char filepath[FILE_MAX];
-  BLI_path_join(filepath, sizeof(filepath), cfgdir, BLENDER_PLATFORM_SUPPORT_FILE);
+  BLI_path_join(filepath, sizeof(filepath), cfgdir->c_str(), BLENDER_PLATFORM_SUPPORT_FILE);
   LinkNode *lines = BLI_file_read_as_lines(filepath);
   for (LinkNode *line_node = lines; line_node; line_node = line_node->next) {
     const char *line = static_cast<char *>(line_node->link);
@@ -74,7 +71,7 @@ static void wm_platform_support_create_link(char *link)
   BLI_dynstr_append(ds, "windows/");
 #elif defined(__APPLE__)
   BLI_dynstr_append(ds, "apple/");
-#else /* UNIX */
+#else /* UNIX. */
   BLI_dynstr_append(ds, "linux/");
 #endif
 
@@ -116,7 +113,7 @@ bool WM_platform_support_perform_checks()
     return result;
   }
 
-  /* update the message and link based on the found support level */
+  /* Update the message and link based on the found support level. */
   GHOST_DialogOptions dialog_options = GHOST_DialogOptions(0);
 
   switch (support_level) {

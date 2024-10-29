@@ -6,7 +6,6 @@ set(INC
   .
   ../../blenkernel
   ../../bmesh
-  ../../depsgraph
   ../../imbuf
 )
 
@@ -27,21 +26,22 @@ set(SRC
   mathutils_kdtree.cc
   mathutils_noise.cc
 
-  mathutils.h
-  mathutils_Color.h
-  mathutils_Euler.h
-  mathutils_Matrix.h
-  mathutils_Quaternion.h
-  mathutils_Vector.h
-  mathutils_bvhtree.h
-  mathutils_geometry.h
-  mathutils_interpolate.h
-  mathutils_kdtree.h
-  mathutils_noise.h
+  mathutils.hh
+  mathutils_Color.hh
+  mathutils_Euler.hh
+  mathutils_Matrix.hh
+  mathutils_Quaternion.hh
+  mathutils_Vector.hh
+  mathutils_bvhtree.hh
+  mathutils_geometry.hh
+  mathutils_interpolate.hh
+  mathutils_kdtree.hh
+  mathutils_noise.hh
 )
 
 set(LIB
   PRIVATE bf::blenlib
+  PRIVATE bf::depsgraph
   PRIVATE bf::dna
   bf_imbuf
   PRIVATE bf::intern::guardedalloc

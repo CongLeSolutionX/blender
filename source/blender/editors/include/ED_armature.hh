@@ -8,9 +8,9 @@
 
 #pragma once
 
-#include <stdbool.h>
-
+#include "BLI_compiler_attrs.h"
 #include "BLI_listbase.h"
+#include "BLI_span.hh"
 
 struct Base;
 struct Bone;
@@ -39,7 +39,7 @@ struct wmOperator;
 #define BONESEL_BONE (1u << 31)
 #define BONESEL_ANY (BONESEL_TIP | BONESEL_ROOT | BONESEL_BONE)
 
-/* useful macros, be sure to #include "ANIM_bone_collections.h". */
+/* useful macros, be sure to #include "ANIM_bone_collections.hh". */
 #define EBONE_VISIBLE(arm, ebone) ANIM_bone_is_visible_editbone(arm, ebone)
 
 #define EBONE_SELECTABLE(arm, ebone) \
@@ -66,7 +66,10 @@ EditBone *ED_armature_ebone_add_primitive(Object *obedit_arm, float length, bool
 
 void ED_armature_ebone_copy(EditBone *dest, const EditBone *source);
 
-/* `armature_edit.cc` */
+/**
+ * Get current armature from the context, including properties editor pinning.
+ */
+bArmature *ED_armature_context(const bContext *C);
 
 /**
  * Adjust bone roll to align Z axis with vector `align_axis` is in local space and is normalized.
@@ -134,29 +137,25 @@ int ED_armature_join_objects_exec(bContext *C, wmOperator *op);
 
 /* `armature_select.cc` */
 
-Base *ED_armature_base_and_ebone_from_select_buffer(Base **bases,
-                                                    uint bases_len,
+Base *ED_armature_base_and_ebone_from_select_buffer(blender::Span<Base *> bases,
                                                     unsigned int select_id,
                                                     EditBone **r_ebone);
-Object *ED_armature_object_and_ebone_from_select_buffer(Object **objects,
-                                                        uint objects_len,
+Object *ED_armature_object_and_ebone_from_select_buffer(blender::Span<Object *> objects,
                                                         unsigned int select_id,
                                                         EditBone **r_ebone);
-Base *ED_armature_base_and_pchan_from_select_buffer(Base **bases,
-                                                    uint bases_len,
+Base *ED_armature_base_and_pchan_from_select_buffer(blender::Span<Base *> bases,
                                                     unsigned int select_id,
                                                     bPoseChannel **r_pchan);
 /**
  * For callers that don't need the pose channel.
  */
-Base *ED_armature_base_and_bone_from_select_buffer(Base **bases,
-                                                   uint bases_len,
+Base *ED_armature_base_and_bone_from_select_buffer(blender::Span<Base *> bases,
                                                    unsigned int select_id,
                                                    Bone **r_bone);
 bool ED_armature_edit_deselect_all(Object *obedit);
 bool ED_armature_edit_deselect_all_visible(Object *obedit);
-bool ED_armature_edit_deselect_all_multi_ex(Base **bases, uint bases_len);
-bool ED_armature_edit_deselect_all_visible_multi_ex(Base **bases, uint bases_len);
+bool ED_armature_edit_deselect_all_multi_ex(blender::Span<Base *> bases);
+bool ED_armature_edit_deselect_all_visible_multi_ex(blender::Span<Base *> bases);
 bool ED_armature_edit_deselect_all_visible_multi(bContext *C);
 /**
  * \return True when pick finds an element or the selection changed.
@@ -194,7 +193,7 @@ void ED_object_vgroup_calc_from_armature(ReportList *reports,
                                          int mode,
                                          bool mirror);
 
-/* editarmature_undo.cc */
+/* `editarmature_undo.cc` */
 
 /** Export for ED_undo_sys. */
 void ED_armature_undosys_type(UndoType *ut);
@@ -203,7 +202,6 @@ void ED_armature_undosys_type(UndoType *ut);
 
 /** Sync selection to parent for connected children. */
 void ED_armature_edit_sync_selection(ListBase *edbo);
-void ED_armature_edit_validate_active(bArmature *arm);
 /**
  * \param clear_connected: When false caller is responsible for keeping the flag in a valid state.
  */
@@ -289,7 +287,8 @@ bool ED_armature_pose_select_pick_bone(const Scene *scene,
                                        View3D *v3d,
                                        Object *ob,
                                        Bone *bone,
-                                       const SelectPick_Params *params);
+                                       const SelectPick_Params *params)
+    ATTR_NONNULL(1, 2, 3, 4, 6);
 /**
  * Called for mode-less pose selection.
  * assumes the active object is still on old situation.
@@ -300,10 +299,10 @@ bool ED_armature_pose_select_pick_with_buffer(const Scene *scene,
                                               ViewLayer *view_layer,
                                               View3D *v3d,
                                               Base *base,
-                                              const GPUSelectResult *buffer,
-                                              short hits,
+                                              const GPUSelectResult *hit_results,
+                                              int hits,
                                               const SelectPick_Params *params,
-                                              bool do_nearest);
+                                              bool do_nearest) ATTR_NONNULL(1, 2, 3, 4, 5, 7);
 /**
  * While in weight-paint mode, a single pose may be active as well.
  * While not common, it's possible we have multiple armatures deforming a mesh.
@@ -315,8 +314,7 @@ bool ED_armature_pose_select_pick_with_buffer(const Scene *scene,
 void ED_armature_pose_select_in_wpaint_mode(const Scene *scene,
                                             ViewLayer *view_layer,
                                             Base *base_select);
-bool ED_pose_deselect_all_multi_ex(Base **bases,
-                                   uint bases_len,
+bool ED_pose_deselect_all_multi_ex(blender::Span<Base *> bases,
                                    int select_mode,
                                    bool ignore_visibility);
 bool ED_pose_deselect_all_multi(bContext *C, int select_mode, bool ignore_visibility);
@@ -334,7 +332,7 @@ void ED_pose_bone_select_tag_update(Object *ob);
  */
 void ED_pose_bone_select(Object *ob, bPoseChannel *pchan, bool select, bool change_active);
 
-/* meshlaplacian.cc */
+/* `meshlaplacian.cc` */
 
 void ED_mesh_deform_bind_callback(Object *object,
                                   MeshDeformModifierData *mmd,
@@ -342,3 +340,7 @@ void ED_mesh_deform_bind_callback(Object *object,
                                   float *vertexcos,
                                   int verts_num,
                                   float cagemat[4][4]);
+
+EditBone *ED_armature_pick_ebone(bContext *C, const int xy[2], bool findunsel, Base **r_base);
+bPoseChannel *ED_armature_pick_pchan(bContext *C, const int xy[2], bool findunsel, Base **r_base);
+Bone *ED_armature_pick_bone(bContext *C, const int xy[2], bool findunsel, Base **r_base);

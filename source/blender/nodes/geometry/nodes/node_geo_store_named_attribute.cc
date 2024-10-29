@@ -10,6 +10,8 @@
 #include "RNA_access.hh"
 #include "RNA_enum_types.hh"
 
+#include "BKE_instances.hh"
+#include "BKE_mesh.hh"
 #include "BKE_type_conversions.hh"
 
 #include "NOD_rna_define.hh"
@@ -31,7 +33,7 @@ static void node_declare(NodeDeclarationBuilder &b)
 
   b.add_input<decl::Geometry>("Geometry");
   b.add_input<decl::Bool>("Selection").default_value(true).hide_value().field_on_all();
-  b.add_input<decl::String>("Name").is_attribute_name();
+  b.add_input<decl::String>("Name").is_attribute_name().hide_label();
 
   if (node != nullptr) {
     const NodeGeometryStoreNamedAttribute &storage = node_storage(*node);
@@ -54,7 +56,7 @@ static void node_init(bNodeTree * /*tree*/, bNode *node)
 {
   NodeGeometryStoreNamedAttribute *data = MEM_cnew<NodeGeometryStoreNamedAttribute>(__func__);
   data->data_type = CD_PROP_FLOAT;
-  data->domain = ATTR_DOMAIN_POINT;
+  data->domain = int8_t(AttrDomain::Point);
   node->storage = data;
 }
 
@@ -92,35 +94,49 @@ static void node_geo_exec(GeoNodeExecParams params)
     params.set_output("Geometry", std::move(geometry_set));
     return;
   }
+  if (bke::attribute_name_is_anonymous(name)) {
+    params.error_message_add(NodeWarningType::Info,
+                             TIP_("Anonymous attributes can't be created here"));
+    params.set_output("Geometry", std::move(geometry_set));
+    return;
+  }
 
   params.used_named_attribute(name, NamedAttributeUsage::Write);
 
   const NodeGeometryStoreNamedAttribute &storage = node_storage(params.node());
   const eCustomDataType data_type = eCustomDataType(storage.data_type);
-  const eAttrDomain domain = eAttrDomain(storage.domain);
+  const AttrDomain domain = AttrDomain(storage.domain);
 
   const Field<bool> selection = params.extract_input<Field<bool>>("Selection");
 
   GField field = params.extract_input<GField>("Value");
-  if (data_type == CD_PROP_FLOAT2) {
-    field = bke::get_implicit_type_conversions().try_convert(std::move(field),
-                                                             CPPType::get<float2>());
-  }
-  if (data_type == CD_PROP_BYTE_COLOR) {
-    field = bke::get_implicit_type_conversions().try_convert(std::move(field),
-                                                             CPPType::get<ColorGeometry4b>());
+  if (ELEM(data_type, CD_PROP_FLOAT2, CD_PROP_BYTE_COLOR, CD_PROP_INT8)) {
+    field = bke::get_implicit_type_conversions().try_convert(
+        std::move(field), *bke::custom_data_type_to_cpp_type(data_type));
   }
 
   std::atomic<bool> failure = false;
 
   /* Run on the instances component separately to only affect the top level of instances. */
-  if (domain == ATTR_DOMAIN_INSTANCE) {
+  if (domain == AttrDomain::Instance) {
     if (geometry_set.has_instances()) {
       GeometryComponent &component = geometry_set.get_component_for_write(
           GeometryComponent::Type::Instance);
-      if (!bke::try_capture_field_on_geometry(component, name, domain, selection, field)) {
-        if (component.attribute_domain_size(domain) != 0) {
-          failure.store(true);
+
+      if (name == "position" && data_type == CD_PROP_FLOAT3) {
+        /* Special case for "position" which is no longer an attribute on instances. */
+        bke::Instances &instances = *geometry_set.get_instances_for_write();
+        bke::InstancesFieldContext context(instances);
+        fn::FieldEvaluator evaluator{context, instances.instances_num()};
+        evaluator.set_selection(selection);
+        evaluator.add_with_destination(field, bke::instance_position_varray_for_write(instances));
+        evaluator.evaluate();
+      }
+      else {
+        if (!bke::try_capture_field_on_geometry(component, name, domain, selection, field)) {
+          if (component.attribute_domain_size(domain) != 0) {
+            failure.store(true);
+          }
         }
       }
     }
@@ -134,10 +150,14 @@ static void node_geo_exec(GeoNodeExecParams params)
       {
         if (geometry_set.has(type)) {
           GeometryComponent &component = geometry_set.get_component_for_write(type);
-          if (!bke::try_capture_field_on_geometry(component, name, domain, selection, field)) {
-            if (component.attribute_domain_size(domain) != 0) {
-              failure.store(true);
+          if (bke::try_capture_field_on_geometry(component, name, domain, selection, field)) {
+            if (component.type() == GeometryComponent::Type::Mesh) {
+              Mesh &mesh = *geometry_set.get_mesh_for_write();
+              bke::mesh_ensure_default_color_attribute_on_add(mesh, name, domain, data_type);
             }
+          }
+          else if (component.attribute_domain_size(domain) != 0) {
+            failure.store(true);
           }
         }
       }
@@ -146,7 +166,7 @@ static void node_geo_exec(GeoNodeExecParams params)
 
   if (failure) {
     const char *domain_name = nullptr;
-    RNA_enum_name_from_value(rna_enum_attribute_domain_items, domain, &domain_name);
+    RNA_enum_name_from_value(rna_enum_attribute_domain_items, int(domain), &domain_name);
     const char *type_name = nullptr;
     RNA_enum_name_from_value(rna_enum_attribute_type_items, data_type, &type_name);
     const std::string message = fmt::format(
@@ -182,27 +202,26 @@ static void node_rna(StructRNA *srna)
                     "Which domain to store the data in",
                     rna_enum_attribute_domain_items,
                     NOD_storage_enum_accessors(domain),
-                    ATTR_DOMAIN_POINT,
-                    enums::domain_experimental_grease_pencil_version3_fn);
+                    int(AttrDomain::Point));
 }
 
 static void node_register()
 {
-  static bNodeType ntype;
+  static blender::bke::bNodeType ntype;
 
   geo_node_type_base(
       &ntype, GEO_NODE_STORE_NAMED_ATTRIBUTE, "Store Named Attribute", NODE_CLASS_ATTRIBUTE);
-  node_type_storage(&ntype,
-                    "NodeGeometryStoreNamedAttribute",
-                    node_free_standard_storage,
-                    node_copy_standard_storage);
+  blender::bke::node_type_storage(&ntype,
+                                  "NodeGeometryStoreNamedAttribute",
+                                  node_free_standard_storage,
+                                  node_copy_standard_storage);
   blender::bke::node_type_size(&ntype, 140, 100, 700);
   ntype.initfunc = node_init;
   ntype.declare = node_declare;
   ntype.gather_link_search_ops = node_gather_link_searches;
   ntype.geometry_node_execute = node_geo_exec;
   ntype.draw_buttons = node_layout;
-  nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 
   node_rna(ntype.rna_ext.srna);
 }

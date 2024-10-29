@@ -6,16 +6,22 @@
  * \ingroup cmpnodes
  */
 
+#include "BLI_math_vector_types.hh"
+
+#include "FN_multi_function_builder.hh"
+
+#include "NOD_multi_function.hh"
+
 #include "UI_interface.hh"
 #include "UI_resources.hh"
 
-#include "GPU_material.h"
+#include "GPU_material.hh"
 
 #include "COM_shader_node.hh"
 
 #include "node_composite_util.hh"
 
-/* **************** Premul and Key Alpha Convert ******************** */
+/* **************** Pre-multiply and Key Alpha Convert ******************** */
 
 namespace blender::nodes::node_composite_premulkey_cc {
 
@@ -34,6 +40,11 @@ static void node_composit_buts_premulkey(uiLayout *layout, bContext * /*C*/, Poi
 
 using namespace blender::realtime_compositor;
 
+static CMPNodeAlphaConvertMode get_mode(const bNode &node)
+{
+  return static_cast<CMPNodeAlphaConvertMode>(node.custom1);
+}
+
 class AlphaConvertShaderNode : public ShaderNode {
  public:
   using ShaderNode::ShaderNode;
@@ -43,17 +54,12 @@ class AlphaConvertShaderNode : public ShaderNode {
     GPUNodeStack *inputs = get_inputs_array();
     GPUNodeStack *outputs = get_outputs_array();
 
-    if (get_mode() == 0) {
+    if (get_mode(bnode()) == CMP_NODE_ALPHA_CONVERT_PREMULTIPLY) {
       GPU_stack_link(material, &bnode(), "color_alpha_premultiply", inputs, outputs);
       return;
     }
 
     GPU_stack_link(material, &bnode(), "color_alpha_unpremultiply", inputs, outputs);
-  }
-
-  CMPNodeAlphaConvertMode get_mode()
-  {
-    return (CMPNodeAlphaConvertMode)bnode().custom1;
   }
 };
 
@@ -62,18 +68,46 @@ static ShaderNode *get_compositor_shader_node(DNode node)
   return new AlphaConvertShaderNode(node);
 }
 
+static void node_build_multi_function(blender::nodes::NodeMultiFunctionBuilder &builder)
+{
+  static auto premultiply_function = mf::build::SI1_SO<float4, float4>(
+      "Alpha Convert Premultiply",
+      [](const float4 &color) -> float4 { return float4(color.xyz() * color.w, color.w); },
+      mf::build::exec_presets::AllSpanOrSingle());
+
+  static auto unpremultiply_function = mf::build::SI1_SO<float4, float4>(
+      "Alpha Convert Unpremultiply",
+      [](const float4 &color) -> float4 {
+        if (color.w == 0.0f || color.w == 1.0f) {
+          return color;
+        }
+        return float4(color.xyz() / color.w, color.w);
+      },
+      mf::build::exec_presets::AllSpanOrSingle());
+
+  switch (get_mode(builder.node())) {
+    case CMP_NODE_ALPHA_CONVERT_PREMULTIPLY:
+      builder.set_matching_fn(premultiply_function);
+      break;
+    case CMP_NODE_ALPHA_CONVERT_UNPREMULTIPLY:
+      builder.set_matching_fn(unpremultiply_function);
+      break;
+  }
+}
+
 }  // namespace blender::nodes::node_composite_premulkey_cc
 
 void register_node_type_cmp_premulkey()
 {
   namespace file_ns = blender::nodes::node_composite_premulkey_cc;
 
-  static bNodeType ntype;
+  static blender::bke::bNodeType ntype;
 
   cmp_node_type_base(&ntype, CMP_NODE_PREMULKEY, "Alpha Convert", NODE_CLASS_CONVERTER);
   ntype.declare = file_ns::cmp_node_premulkey_declare;
   ntype.draw_buttons = file_ns::node_composit_buts_premulkey;
   ntype.get_compositor_shader_node = file_ns::get_compositor_shader_node;
+  ntype.build_multi_function = file_ns::node_build_multi_function;
 
-  nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }

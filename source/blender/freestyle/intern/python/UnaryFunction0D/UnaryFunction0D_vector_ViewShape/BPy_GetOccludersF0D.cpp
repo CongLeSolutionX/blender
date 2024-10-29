@@ -20,7 +20,9 @@ using namespace Freestyle;
 
 //------------------------INSTANCE METHODS ----------------------------------
 
-static char GetOccludersF0D___doc__[] =
+PyDoc_STRVAR(
+    /* Wrap. */
+    GetOccludersF0D___doc__,
     "Class hierarchy: :class:`freestyle.types.UnaryFunction0D` > "
     ":class:`freestyle.types.UnaryFunction0DVectorViewShape` > :class:`GetOccludersF0D`\n"
     "\n"
@@ -30,14 +32,14 @@ static char GetOccludersF0D___doc__[] =
     "\n"
     ".. method:: __call__(it)\n"
     "\n"
-    "   Returns a list of :class:`freestyle.types.ViewShape` objects occluding the\n"
+    "   Returns a list of :class:`freestyle.types.ViewShape` occluding the\n"
     "   :class:`freestyle.types.Interface0D` pointed by the Interface0DIterator.\n"
     "\n"
     "   :arg it: An Interface0DIterator object.\n"
     "   :type it: :class:`freestyle.types.Interface0DIterator`\n"
     "   :return: A list of ViewShape objects occluding the pointed\n"
     "      Interface0D.\n"
-    "   :rtype: list of :class:`freestyle.types.ViewShape` objects\n";
+    "   :rtype: list of :class:`freestyle.types.ViewShape`\n");
 
 static int GetOccludersF0D___init__(BPy_GetOccludersF0D *self, PyObject *args, PyObject *kwds)
 {

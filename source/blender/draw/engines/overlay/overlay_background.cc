@@ -6,11 +6,11 @@
  * \ingroup draw_engine
  */
 
-#include "DRW_render.h"
+#include "DRW_render.hh"
 
 #include "UI_resources.hh"
 
-#include "draw_manager_text.h"
+#include "draw_manager_text.hh"
 #include "overlay_private.hh"
 
 void OVERLAY_background_cache_init(OVERLAY_Data *vedata)
@@ -94,7 +94,7 @@ void OVERLAY_background_cache_init(OVERLAY_Data *vedata)
     DRW_shgroup_uniform_vec4_copy(grp, "ucolor", G_draw.block.color_clipping_border);
     DRW_shgroup_uniform_vec3(grp, "boundbox", &bb->vec[0][0], 8);
 
-    GPUBatch *cube = DRW_cache_cube_get();
+    blender::gpu::Batch *cube = DRW_cache_cube_get();
     DRW_shgroup_call(grp, cube, nullptr);
   }
   else {

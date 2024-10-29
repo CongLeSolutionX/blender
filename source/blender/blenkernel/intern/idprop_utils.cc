@@ -6,6 +6,7 @@
  * \ingroup bke
  */
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 
@@ -16,12 +17,12 @@
 
 #include "DNA_ID.h"
 
-#include "BKE_idprop.h"
-#include "BKE_idtype.h"
+#include "BKE_idprop.hh"
+#include "BKE_idtype.hh"
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_strict_flags.h"
+#include "BLI_strict_flags.h" /* Keep last. */
 
 /* -------------------------------------------------------------------- */
 /** \name IDProp Repr
@@ -96,10 +97,13 @@ static void idp_repr_fn_recursive(ReprState *state, const IDProperty *prop)
 
   switch (prop->type) {
     case IDP_STRING: {
-      STR_APPEND_STR_LEN_QUOTE(IDP_String(prop), uint(MAX2(0, prop->len - 1)));
+      STR_APPEND_STR_LEN_QUOTE(IDP_String(prop), uint(std::max(0, prop->len - 1)));
       break;
     }
     case IDP_INT: {
+      if (const IDPropertyUIDataEnumItem *item = IDP_EnumItemFind(prop)) {
+        STR_APPEND_FMT("%s", item->name);
+      }
       STR_APPEND_FMT("%d", IDP_Int(prop));
       break;
     }
@@ -256,6 +260,55 @@ void IDP_print(const IDProperty *prop)
   printf("IDProperty(%p): ", prop);
   puts(repr);
   MEM_freeN(repr);
+}
+
+const char *IDP_type_str(const eIDPropertyType type, const short sub_type)
+{
+  switch (type) {
+    case IDP_STRING:
+      switch (sub_type) {
+        case IDP_STRING_SUB_UTF8:
+          return "String";
+        case IDP_STRING_SUB_BYTE:
+          return "Bytes";
+        default:
+          return "String";
+      }
+    case IDP_INT:
+      return "Int";
+    case IDP_FLOAT:
+      return "Float";
+    case IDP_ARRAY:
+      switch (sub_type) {
+        case IDP_INT:
+          return "Array (Int)";
+        case IDP_FLOAT:
+          return "Array (Float)";
+        case IDP_DOUBLE:
+          return "Array (Double)";
+        case IDP_BOOLEAN:
+          return "Array (Boolean)";
+        default:
+          return "Array";
+      }
+    case IDP_GROUP:
+      return "Group";
+    case IDP_ID:
+      return "ID";
+    case IDP_DOUBLE:
+      return "Double";
+    case IDP_IDPARRAY:
+      return "Array of Properties";
+    case IDP_BOOLEAN:
+      return "Boolean";
+  }
+  BLI_assert_unreachable();
+  return "Unknown";
+}
+
+const char *IDP_type_str(const IDProperty *prop)
+{
+  return IDP_type_str(eIDPropertyType(prop->type), prop->subtype);
 }
 
 /** \} */

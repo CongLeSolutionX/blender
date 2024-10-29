@@ -32,21 +32,21 @@ int UnaryFunction0DId_Init(PyObject *module)
   if (PyType_Ready(&UnaryFunction0DId_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&UnaryFunction0DId_Type);
-  PyModule_AddObject(module, "UnaryFunction0DId", (PyObject *)&UnaryFunction0DId_Type);
+  PyModule_AddObjectRef(module, "UnaryFunction0DId", (PyObject *)&UnaryFunction0DId_Type);
 
   if (PyType_Ready(&ShapeIdF0D_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&ShapeIdF0D_Type);
-  PyModule_AddObject(module, "ShapeIdF0D", (PyObject *)&ShapeIdF0D_Type);
+  PyModule_AddObjectRef(module, "ShapeIdF0D", (PyObject *)&ShapeIdF0D_Type);
 
   return 0;
 }
 
 //------------------------INSTANCE METHODS ----------------------------------
 
-static char UnaryFunction0DId___doc__[] =
+PyDoc_STRVAR(
+    /* Wrap. */
+    UnaryFunction0DId___doc__,
     "Class hierarchy: :class:`UnaryFunction0D` > :class:`UnaryFunction0DId`\n"
     "\n"
     "Base class for unary functions (functors) that work on\n"
@@ -54,7 +54,7 @@ static char UnaryFunction0DId___doc__[] =
     "\n"
     ".. method:: __init__()\n"
     "\n"
-    "   Default constructor.\n";
+    "   Default constructor.\n");
 
 static int UnaryFunction0DId___init__(BPy_UnaryFunction0DId *self, PyObject *args, PyObject *kwds)
 {

@@ -12,7 +12,7 @@
 
 #pragma once
 
-#include "DRW_render.h"
+#include "DRW_render.hh"
 
 #include "eevee_shader_shared.hh"
 
@@ -63,7 +63,7 @@ class RenderBuffers {
     }
   }
 
-  void sync();
+  void init();
 
   /* Acquires (also ensures) the render buffer before rendering to them. */
   void acquire(int2 extent);

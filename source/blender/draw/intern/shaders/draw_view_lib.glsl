@@ -2,7 +2,11 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#ifndef DRAW_VIEW_CREATE_INFO
+#pragma once
+
+#include "gpu_glsl_cpp_stubs.hh"
+
+#if !defined(DRAW_VIEW_CREATE_INFO) && !defined(GLSL_CPP_STUBS)
 #  error Missing draw_view additional create info on shader create info
 #endif
 
@@ -22,6 +26,12 @@ vec3 drw_view_forward()
 vec3 drw_view_position()
 {
   return drw_view.viewinv[3].xyz;
+}
+
+/* Positive Z distance from the view origin. Faster than using `drw_point_world_to_view`. */
+float drw_view_z_distance(vec3 P)
+{
+  return dot(P - drw_view_position(), -drw_view_forward());
 }
 
 /* Returns the projection matrix far clip distance. */
@@ -98,12 +108,12 @@ float drw_ndc_to_screen(float ndc_P)
 
 vec3 drw_normal_view_to_world(vec3 vN)
 {
-  return (mat3x3(drw_view.viewinv) * vN);
+  return (to_float3x3(drw_view.viewinv) * vN);
 }
 
 vec3 drw_normal_world_to_view(vec3 N)
 {
-  return (mat3x3(drw_view.viewmat) * N);
+  return (to_float3x3(drw_view.viewmat) * N);
 }
 
 /** \} */

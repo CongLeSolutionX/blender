@@ -2,70 +2,70 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#pragma once
+
 /**
  * Ray generation routines for each BSDF types.
  */
 
-#pragma BLENDER_REQUIRE(gpu_shader_utildefines_lib.glsl)
-#pragma BLENDER_REQUIRE(gpu_shader_math_vector_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_bxdf_sampling_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_gbuffer_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_ray_types_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_sampling_lib.glsl)
-#pragma BLENDER_REQUIRE(gpu_shader_codegen_lib.glsl)
-
-/* Could maybe become parameters. */
-#define RAY_BIAS_REFLECTION 0.02
-#define RAY_BIAS_REFRACTION 0.02
-#define RAY_BIAS_DIFFUSE 0.05
+#include "eevee_bxdf_sampling_lib.glsl"
+#include "eevee_ray_types_lib.glsl"
+#include "eevee_sampling_lib.glsl"
+#include "eevee_thickness_lib.glsl"
+#include "gpu_shader_codegen_lib.glsl"
+#include "gpu_shader_math_matrix_lib.glsl"
+#include "gpu_shader_math_vector_lib.glsl"
+#include "gpu_shader_utildefines_lib.glsl"
 
 /* Returns view-space ray. */
-vec3 ray_generate_direction(vec2 noise, ClosureReflection reflection, vec3 V, out float pdf)
+BsdfSample ray_generate_direction(vec2 noise, ClosureUndetermined cl, vec3 V, float thickness)
 {
-  vec2 noise_offset = sampling_rng_2D_get(SAMPLING_RAYTRACE_U);
-  vec3 Xi = sample_cylinder(fract(noise_offset + noise));
+  vec3 random_point_on_cylinder = sample_cylinder(noise);
   /* Bias the rays so we never get really high energy rays almost parallel to the surface. */
-  Xi.x = Xi.x * (1.0 - RAY_BIAS_REFLECTION) + RAY_BIAS_REFLECTION;
-
-  float roughness_sqr = max(1e-3, square(reflection.roughness));
-  /* Gives *perfect* reflection for very small roughness. */
-  if (reflection.roughness < 0.0016) {
-    Xi = vec3(0.0);
+  const float rng_bias = 0.08;
+  /* When modeling object thickness as a sphere, the outgoing rays are distributed uniformly
+   * over the sphere. We don't want the RAY_BIAS in this case. */
+  if (cl.type != CLOSURE_BSDF_TRANSLUCENT_ID || thickness <= 0.0) {
+    random_point_on_cylinder.x = 1.0 - random_point_on_cylinder.x * (1.0 - rng_bias);
   }
 
-  vec3 T, B, N = reflection.N;
-  make_orthonormal_basis(N, T, B);
-  return sample_ggx_reflect(Xi, roughness_sqr, V, N, T, B, pdf);
-}
-
-/* Returns view-space ray. */
-vec3 ray_generate_direction(vec2 noise, ClosureRefraction refraction, vec3 V, out float pdf)
-{
-  vec2 noise_offset = sampling_rng_2D_get(SAMPLING_RAYTRACE_U);
-  vec3 Xi = sample_cylinder(fract(noise_offset + noise));
-  /* Bias the rays so we never get really high energy rays almost parallel to the surface. */
-  Xi.x = Xi.x * (1.0 - RAY_BIAS_REFRACTION) + RAY_BIAS_REFRACTION;
-
-  float roughness_sqr = max(1e-3, square(refraction.roughness));
-  /* Gives *perfect* refraction for very small roughness. */
-  if (refraction.roughness < 0.0016) {
-    Xi = vec3(0.0);
+  switch (cl.type) {
+    case CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID:
+      bxdf_ggx_context_amend_transmission(cl, V, thickness);
+      break;
   }
 
-  vec3 T, B, N = refraction.N;
-  make_orthonormal_basis(N, T, B);
-  return sample_ggx_refract(Xi, roughness_sqr, refraction.ior, V, N, T, B, pdf);
-}
+  mat3 tangent_to_world = from_up_axis(cl.N);
 
-/* Returns view-space ray. */
-vec3 ray_generate_direction(vec2 noise, ClosureDiffuse diffuse, vec3 V, out float pdf)
-{
-  vec2 noise_offset = sampling_rng_2D_get(SAMPLING_RAYTRACE_U);
-  vec3 Xi = sample_cylinder(fract(noise_offset + noise));
-  /* Bias the rays so we never get really high energy rays almost parallel to the surface. */
-  Xi.x = Xi.x * (1.0 - RAY_BIAS_DIFFUSE) + RAY_BIAS_DIFFUSE;
+  BsdfSample samp;
+  samp.pdf = 0.0;
+  samp.direction = vec3(0.0);
+  switch (cl.type) {
+    case CLOSURE_BSDF_TRANSLUCENT_ID:
+      samp = bxdf_translucent_sample(random_point_on_cylinder, thickness);
+      break;
+    case CLOSURE_BSSRDF_BURLEY_ID:
+    case CLOSURE_BSDF_DIFFUSE_ID:
+      samp = bxdf_diffuse_sample(random_point_on_cylinder);
+      break;
+    case CLOSURE_BSDF_MICROFACET_GGX_REFLECTION_ID: {
+      samp = bxdf_ggx_sample_reflection(random_point_on_cylinder,
+                                        V * tangent_to_world,
+                                        square(to_closure_reflection(cl).roughness),
+                                        true);
+      break;
+    }
+    case CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID: {
+      samp = bxdf_ggx_sample_refraction(random_point_on_cylinder,
+                                        V * tangent_to_world,
+                                        square(to_closure_refraction(cl).roughness),
+                                        to_closure_refraction(cl).ior,
+                                        thickness,
+                                        true);
+      break;
+    }
+  }
+  samp.direction = tangent_to_world * samp.direction;
 
-  vec3 T, B, N = diffuse.N;
-  make_orthonormal_basis(N, T, B);
-  return sample_cosine_hemisphere(Xi, N, T, B, pdf);
+  return samp;
 }

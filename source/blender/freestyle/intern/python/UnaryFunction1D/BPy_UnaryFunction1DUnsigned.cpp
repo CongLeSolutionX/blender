@@ -35,14 +35,13 @@ int UnaryFunction1DUnsigned_Init(PyObject *module)
   if (PyType_Ready(&UnaryFunction1DUnsigned_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&UnaryFunction1DUnsigned_Type);
-  PyModule_AddObject(module, "UnaryFunction1DUnsigned", (PyObject *)&UnaryFunction1DUnsigned_Type);
+  PyModule_AddObjectRef(
+      module, "UnaryFunction1DUnsigned", (PyObject *)&UnaryFunction1DUnsigned_Type);
 
   if (PyType_Ready(&QuantitativeInvisibilityF1D_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&QuantitativeInvisibilityF1D_Type);
-  PyModule_AddObject(
+  PyModule_AddObjectRef(
       module, "QuantitativeInvisibilityF1D", (PyObject *)&QuantitativeInvisibilityF1D_Type);
 
   return 0;
@@ -50,7 +49,9 @@ int UnaryFunction1DUnsigned_Init(PyObject *module)
 
 //------------------------INSTANCE METHODS ----------------------------------
 
-static char UnaryFunction1DUnsigned___doc__[] =
+PyDoc_STRVAR(
+    /* Wrap. */
+    UnaryFunction1DUnsigned___doc__,
     "Class hierarchy: :class:`UnaryFunction1D` > :class:`UnaryFunction1DUnsigned`\n"
     "\n"
     "Base class for unary functions (functors) that work on\n"
@@ -63,7 +64,7 @@ static char UnaryFunction1DUnsigned___doc__[] =
     "   or the integration method given as an argument.\n"
     "\n"
     "   :arg integration_type: An integration method.\n"
-    "   :type integration_type: :class:`IntegrationType`\n";
+    "   :type integration_type: :class:`IntegrationType`\n");
 
 static int UnaryFunction1DUnsigned___init__(BPy_UnaryFunction1DUnsigned *self,
                                             PyObject *args,
@@ -73,7 +74,8 @@ static int UnaryFunction1DUnsigned___init__(BPy_UnaryFunction1DUnsigned *self,
   PyObject *obj = nullptr;
 
   if (!PyArg_ParseTupleAndKeywords(
-          args, kwds, "|O!", (char **)kwlist, &IntegrationType_Type, &obj)) {
+          args, kwds, "|O!", (char **)kwlist, &IntegrationType_Type, &obj))
+  {
     return -1;
   }
 
@@ -128,10 +130,12 @@ static PyObject *UnaryFunction1DUnsigned___call__(BPy_UnaryFunction1DUnsigned *s
 
 /*----------------------UnaryFunction1DUnsigned get/setters ----------------------------*/
 
-PyDoc_STRVAR(integration_type_doc,
-             "The integration method.\n"
-             "\n"
-             ":type: :class:`IntegrationType`");
+PyDoc_STRVAR(
+    /* Wrap. */
+    integration_type_doc,
+    "The integration method.\n"
+    "\n"
+    ":type: :class:`IntegrationType`");
 
 static PyObject *integration_type_get(BPy_UnaryFunction1DUnsigned *self, void * /*closure*/)
 {

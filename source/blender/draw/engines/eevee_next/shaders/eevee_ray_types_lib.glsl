@@ -2,17 +2,11 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#pragma BLENDER_REQUIRE(draw_view_lib.glsl)
-#pragma BLENDER_REQUIRE(draw_math_geom_lib.glsl)
+#pragma once
 
-/**
- * General purpose 3D ray.
- */
-struct Ray {
-  vec3 origin;
-  vec3 direction;
-  float max_time;
-};
+#include "draw_math_geom_lib.glsl"
+#include "draw_view_lib.glsl"
+#include "eevee_bxdf_lib.glsl" /* Needed for Ray. */
 
 /* Screen-space ray ([0..1] "uv" range) where direction is normalize to be as small as one
  * full-resolution pixel. The ray is also clipped to all frustum sides.

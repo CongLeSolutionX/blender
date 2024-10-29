@@ -23,7 +23,7 @@ CCL_NAMESPACE_BEGIN
       metal_printf("%s\n", str.c_str()); \
     }
 
-//#  define BVH_THROTTLE_DIAGNOSTICS
+// #  define BVH_THROTTLE_DIAGNOSTICS
 #  ifdef BVH_THROTTLE_DIAGNOSTICS
 #    define bvh_throttle_printf(...) printf("BVHMetalBuildThrottler::" __VA_ARGS__)
 #  else
@@ -113,26 +113,39 @@ BVHMetal::BVHMetal(const BVHParams &params_,
                    const vector<Geometry *> &geometry_,
                    const vector<Object *> &objects_,
                    Device *device)
-    : BVH(params_, geometry_, objects_), stats(device->stats)
+    : BVH(params_, geometry_, objects_), device(device)
 {
 }
 
 BVHMetal::~BVHMetal()
 {
   if (@available(macos 12.0, *)) {
-    if (accel_struct) {
-      stats.mem_free(accel_struct.allocatedSize);
-      [accel_struct release];
-    }
-
+    set_accel_struct(nil);
     if (null_BLAS) {
       [null_BLAS release];
     }
   }
 }
 
+API_AVAILABLE(macos(11.0))
+void BVHMetal::set_accel_struct(id<MTLAccelerationStructure> new_accel_struct)
+{
+  if (@available(macos 12.0, *)) {
+    if (accel_struct) {
+      device->stats.mem_free(accel_struct.allocatedSize);
+      [accel_struct release];
+      accel_struct = nil;
+    }
+
+    if (new_accel_struct) {
+      accel_struct = new_accel_struct;
+      device->stats.mem_alloc(accel_struct.allocatedSize);
+    }
+  }
+}
+
 bool BVHMetal::build_BLAS_mesh(Progress &progress,
-                               id<MTLDevice> device,
+                               id<MTLDevice> mtl_device,
                                id<MTLCommandQueue> queue,
                                Geometry *const geom,
                                bool refit)
@@ -163,7 +176,7 @@ bool BVHMetal::build_BLAS_mesh(Progress &progress,
     }
 
     MTLResourceOptions storage_mode;
-    if (device.hasUnifiedMemory) {
+    if (mtl_device.hasUnifiedMemory) {
       storage_mode = MTLResourceStorageModeShared;
     }
     else {
@@ -172,18 +185,19 @@ bool BVHMetal::build_BLAS_mesh(Progress &progress,
 
     /* Upload the mesh data to the GPU */
     id<MTLBuffer> posBuf = nil;
-    id<MTLBuffer> indexBuf = [device newBufferWithBytes:tris.data()
-                                                 length:num_indices * sizeof(tris.data()[0])
-                                                options:storage_mode];
+    id<MTLBuffer> indexBuf = [mtl_device newBufferWithBytes:tris.data()
+                                                     length:num_indices * sizeof(tris.data()[0])
+                                                    options:storage_mode];
 
     if (num_motion_steps == 1) {
-      posBuf = [device newBufferWithBytes:verts.data()
-                                   length:num_verts * sizeof(verts.data()[0])
-                                  options:storage_mode];
+      posBuf = [mtl_device newBufferWithBytes:verts.data()
+                                       length:num_verts * sizeof(verts.data()[0])
+                                      options:storage_mode];
     }
     else {
-      posBuf = [device newBufferWithLength:num_verts * num_motion_steps * sizeof(verts.data()[0])
-                                   options:storage_mode];
+      posBuf = [mtl_device
+          newBufferWithLength:num_verts * num_motion_steps * sizeof(verts.data()[0])
+                      options:storage_mode];
       float3 *dest_data = (float3 *)[posBuf contents];
       size_t center_step = (num_motion_steps - 1) / 2;
       for (size_t step = 0; step < num_motion_steps; ++step) {
@@ -264,13 +278,14 @@ bool BVHMetal::build_BLAS_mesh(Progress &progress,
                           MTLAccelerationStructureUsagePreferFastBuild);
     }
 
-    MTLAccelerationStructureSizes accelSizes = [device
+    MTLAccelerationStructureSizes accelSizes = [mtl_device
         accelerationStructureSizesWithDescriptor:accelDesc];
-    id<MTLAccelerationStructure> accel_uncompressed = [device
+    id<MTLAccelerationStructure> accel_uncompressed = [mtl_device
         newAccelerationStructureWithSize:accelSizes.accelerationStructureSize];
-    id<MTLBuffer> scratchBuf = [device newBufferWithLength:accelSizes.buildScratchBufferSize
-                                                   options:MTLResourceStorageModePrivate];
-    id<MTLBuffer> sizeBuf = [device newBufferWithLength:8 options:MTLResourceStorageModeShared];
+    id<MTLBuffer> scratchBuf = [mtl_device newBufferWithLength:accelSizes.buildScratchBufferSize
+                                                       options:MTLResourceStorageModePrivate];
+    id<MTLBuffer> sizeBuf = [mtl_device newBufferWithLength:8
+                                                    options:MTLResourceStorageModeShared];
     id<MTLCommandBuffer> accelCommands = [queue commandBuffer];
     id<MTLAccelerationStructureCommandEncoder> accelEnc =
         [accelCommands accelerationStructureCommandEncoder];
@@ -314,15 +329,13 @@ bool BVHMetal::build_BLAS_mesh(Progress &progress,
           id<MTLCommandBuffer> accelCommands = [queue commandBuffer];
           id<MTLAccelerationStructureCommandEncoder> accelEnc =
               [accelCommands accelerationStructureCommandEncoder];
-          id<MTLAccelerationStructure> accel = [device
+          id<MTLAccelerationStructure> accel = [mtl_device
               newAccelerationStructureWithSize:compressed_size];
           [accelEnc copyAndCompactAccelerationStructure:accel_uncompressed
                                 toAccelerationStructure:accel];
           [accelEnc endEncoding];
           [accelCommands addCompletedHandler:^(id<MTLCommandBuffer> /*command_buffer*/) {
-            uint64_t allocated_size = [accel allocatedSize];
-            stats.mem_alloc(allocated_size);
-            accel_struct = accel;
+            set_accel_struct(accel);
             [accel_uncompressed release];
 
             /* Signal that we've finished doing GPU acceleration struct build. */
@@ -333,10 +346,7 @@ bool BVHMetal::build_BLAS_mesh(Progress &progress,
       }
       else {
         /* set our acceleration structure to the uncompressed structure */
-        accel_struct = accel_uncompressed;
-
-        uint64_t allocated_size = [accel_struct allocatedSize];
-        stats.mem_alloc(allocated_size);
+        set_accel_struct(accel_uncompressed);
 
         /* Signal that we've finished doing GPU acceleration struct build. */
         g_bvh_build_throttler.release(wired_size);
@@ -355,7 +365,7 @@ bool BVHMetal::build_BLAS_mesh(Progress &progress,
 }
 
 bool BVHMetal::build_BLAS_hair(Progress &progress,
-                               id<MTLDevice> device,
+                               id<MTLDevice> mtl_device,
                                id<MTLCommandQueue> queue,
                                Geometry *const geom,
                                bool refit)
@@ -382,7 +392,7 @@ bool BVHMetal::build_BLAS_hair(Progress &progress,
     }
 
     MTLResourceOptions storage_mode;
-    if (device.hasUnifiedMemory) {
+    if (mtl_device.hasUnifiedMemory) {
       storage_mode = MTLResourceStorageModeShared;
     }
     else {
@@ -445,17 +455,17 @@ bool BVHMetal::build_BLAS_hair(Progress &progress,
       }
 
       /* Allocate and populate MTLBuffers for geometry. */
-      idxBuffer = [device newBufferWithBytes:idxData.data()
-                                      length:idxData.size() * sizeof(int)
-                                     options:storage_mode];
+      idxBuffer = [mtl_device newBufferWithBytes:idxData.data()
+                                          length:idxData.size() * sizeof(int)
+                                         options:storage_mode];
 
-      cpBuffer = [device newBufferWithBytes:cpData.data()
-                                     length:cpData.size() * sizeof(float3)
-                                    options:storage_mode];
-
-      radiusBuffer = [device newBufferWithBytes:radiusData.data()
-                                         length:radiusData.size() * sizeof(float)
+      cpBuffer = [mtl_device newBufferWithBytes:cpData.data()
+                                         length:cpData.size() * sizeof(float3)
                                         options:storage_mode];
+
+      radiusBuffer = [mtl_device newBufferWithBytes:radiusData.data()
+                                             length:radiusData.size() * sizeof(float)
+                                            options:storage_mode];
 
       std::vector<MTLMotionKeyframeData *> cp_ptrs;
       std::vector<MTLMotionKeyframeData *> radius_ptrs;
@@ -541,17 +551,17 @@ bool BVHMetal::build_BLAS_hair(Progress &progress,
       }
 
       /* Allocate and populate MTLBuffers for geometry. */
-      idxBuffer = [device newBufferWithBytes:idxData.data()
-                                      length:idxData.size() * sizeof(int)
-                                     options:storage_mode];
+      idxBuffer = [mtl_device newBufferWithBytes:idxData.data()
+                                          length:idxData.size() * sizeof(int)
+                                         options:storage_mode];
 
-      cpBuffer = [device newBufferWithBytes:cpData.data()
-                                     length:cpData.size() * sizeof(float3)
-                                    options:storage_mode];
-
-      radiusBuffer = [device newBufferWithBytes:radiusData.data()
-                                         length:radiusData.size() * sizeof(float)
+      cpBuffer = [mtl_device newBufferWithBytes:cpData.data()
+                                         length:cpData.size() * sizeof(float3)
                                         options:storage_mode];
+
+      radiusBuffer = [mtl_device newBufferWithBytes:radiusData.data()
+                                             length:radiusData.size() * sizeof(float)
+                                            options:storage_mode];
 
       if (storage_mode == MTLResourceStorageModeManaged) {
         [cpBuffer didModifyRange:NSMakeRange(0, cpBuffer.length)];
@@ -600,13 +610,14 @@ bool BVHMetal::build_BLAS_hair(Progress &progress,
     }
     accelDesc.usage |= MTLAccelerationStructureUsageExtendedLimits;
 
-    MTLAccelerationStructureSizes accelSizes = [device
+    MTLAccelerationStructureSizes accelSizes = [mtl_device
         accelerationStructureSizesWithDescriptor:accelDesc];
-    id<MTLAccelerationStructure> accel_uncompressed = [device
+    id<MTLAccelerationStructure> accel_uncompressed = [mtl_device
         newAccelerationStructureWithSize:accelSizes.accelerationStructureSize];
-    id<MTLBuffer> scratchBuf = [device newBufferWithLength:accelSizes.buildScratchBufferSize
-                                                   options:MTLResourceStorageModePrivate];
-    id<MTLBuffer> sizeBuf = [device newBufferWithLength:8 options:MTLResourceStorageModeShared];
+    id<MTLBuffer> scratchBuf = [mtl_device newBufferWithLength:accelSizes.buildScratchBufferSize
+                                                       options:MTLResourceStorageModePrivate];
+    id<MTLBuffer> sizeBuf = [mtl_device newBufferWithLength:8
+                                                    options:MTLResourceStorageModeShared];
     id<MTLCommandBuffer> accelCommands = [queue commandBuffer];
     id<MTLAccelerationStructureCommandEncoder> accelEnc =
         [accelCommands accelerationStructureCommandEncoder];
@@ -651,15 +662,13 @@ bool BVHMetal::build_BLAS_hair(Progress &progress,
           id<MTLCommandBuffer> accelCommands = [queue commandBuffer];
           id<MTLAccelerationStructureCommandEncoder> accelEnc =
               [accelCommands accelerationStructureCommandEncoder];
-          id<MTLAccelerationStructure> accel = [device
+          id<MTLAccelerationStructure> accel = [mtl_device
               newAccelerationStructureWithSize:compressed_size];
           [accelEnc copyAndCompactAccelerationStructure:accel_uncompressed
                                 toAccelerationStructure:accel];
           [accelEnc endEncoding];
           [accelCommands addCompletedHandler:^(id<MTLCommandBuffer> /*command_buffer*/) {
-            uint64_t allocated_size = [accel allocatedSize];
-            stats.mem_alloc(allocated_size);
-            accel_struct = accel;
+            set_accel_struct(accel);
             [accel_uncompressed release];
 
             /* Signal that we've finished doing GPU acceleration struct build. */
@@ -670,10 +679,7 @@ bool BVHMetal::build_BLAS_hair(Progress &progress,
       }
       else {
         /* set our acceleration structure to the uncompressed structure */
-        accel_struct = accel_uncompressed;
-
-        uint64_t allocated_size = [accel_struct allocatedSize];
-        stats.mem_alloc(allocated_size);
+        set_accel_struct(accel_uncompressed);
 
         /* Signal that we've finished doing GPU acceleration struct build. */
         g_bvh_build_throttler.release(wired_size);
@@ -690,7 +696,7 @@ bool BVHMetal::build_BLAS_hair(Progress &progress,
   }
 #  else  /* MAC_OS_VERSION_14_0 */
   (void)progress;
-  (void)device;
+  (void)mtl_device;
   (void)queue;
   (void)geom;
   (void)(refit);
@@ -699,7 +705,7 @@ bool BVHMetal::build_BLAS_hair(Progress &progress,
 }
 
 bool BVHMetal::build_BLAS_pointcloud(Progress &progress,
-                                     id<MTLDevice> device,
+                                     id<MTLDevice> mtl_device,
                                      id<MTLCommandQueue> queue,
                                      Geometry *const geom,
                                      bool refit)
@@ -732,7 +738,7 @@ bool BVHMetal::build_BLAS_pointcloud(Progress &progress,
     const size_t num_aabbs = num_motion_steps * num_points;
 
     MTLResourceOptions storage_mode;
-    if (device.hasUnifiedMemory) {
+    if (mtl_device.hasUnifiedMemory) {
       storage_mode = MTLResourceStorageModeShared;
     }
     else {
@@ -740,7 +746,7 @@ bool BVHMetal::build_BLAS_pointcloud(Progress &progress,
     }
 
     /* Allocate a GPU buffer for the AABB data and populate it */
-    id<MTLBuffer> aabbBuf = [device
+    id<MTLBuffer> aabbBuf = [mtl_device
         newBufferWithLength:num_aabbs * sizeof(MTLAxisAlignedBoundingBox)
                     options:storage_mode];
     MTLAxisAlignedBoundingBox *aabb_data = (MTLAxisAlignedBoundingBox *)[aabbBuf contents];
@@ -848,13 +854,14 @@ bool BVHMetal::build_BLAS_pointcloud(Progress &progress,
                           MTLAccelerationStructureUsagePreferFastBuild);
     }
 
-    MTLAccelerationStructureSizes accelSizes = [device
+    MTLAccelerationStructureSizes accelSizes = [mtl_device
         accelerationStructureSizesWithDescriptor:accelDesc];
-    id<MTLAccelerationStructure> accel_uncompressed = [device
+    id<MTLAccelerationStructure> accel_uncompressed = [mtl_device
         newAccelerationStructureWithSize:accelSizes.accelerationStructureSize];
-    id<MTLBuffer> scratchBuf = [device newBufferWithLength:accelSizes.buildScratchBufferSize
-                                                   options:MTLResourceStorageModePrivate];
-    id<MTLBuffer> sizeBuf = [device newBufferWithLength:8 options:MTLResourceStorageModeShared];
+    id<MTLBuffer> scratchBuf = [mtl_device newBufferWithLength:accelSizes.buildScratchBufferSize
+                                                       options:MTLResourceStorageModePrivate];
+    id<MTLBuffer> sizeBuf = [mtl_device newBufferWithLength:8
+                                                    options:MTLResourceStorageModeShared];
     id<MTLCommandBuffer> accelCommands = [queue commandBuffer];
     id<MTLAccelerationStructureCommandEncoder> accelEnc =
         [accelCommands accelerationStructureCommandEncoder];
@@ -897,15 +904,13 @@ bool BVHMetal::build_BLAS_pointcloud(Progress &progress,
           id<MTLCommandBuffer> accelCommands = [queue commandBuffer];
           id<MTLAccelerationStructureCommandEncoder> accelEnc =
               [accelCommands accelerationStructureCommandEncoder];
-          id<MTLAccelerationStructure> accel = [device
+          id<MTLAccelerationStructure> accel = [mtl_device
               newAccelerationStructureWithSize:compressed_size];
           [accelEnc copyAndCompactAccelerationStructure:accel_uncompressed
                                 toAccelerationStructure:accel];
           [accelEnc endEncoding];
           [accelCommands addCompletedHandler:^(id<MTLCommandBuffer> /*command_buffer*/) {
-            uint64_t allocated_size = [accel allocatedSize];
-            stats.mem_alloc(allocated_size);
-            accel_struct = accel;
+            set_accel_struct(accel);
             [accel_uncompressed release];
 
             /* Signal that we've finished doing GPU acceleration struct build. */
@@ -916,10 +921,7 @@ bool BVHMetal::build_BLAS_pointcloud(Progress &progress,
       }
       else {
         /* set our acceleration structure to the uncompressed structure */
-        accel_struct = accel_uncompressed;
-
-        uint64_t allocated_size = [accel_struct allocatedSize];
-        stats.mem_alloc(allocated_size);
+        set_accel_struct(accel_uncompressed);
 
         /* Signal that we've finished doing GPU acceleration struct build. */
         g_bvh_build_throttler.release(wired_size);
@@ -937,7 +939,7 @@ bool BVHMetal::build_BLAS_pointcloud(Progress &progress,
 }
 
 bool BVHMetal::build_BLAS(Progress &progress,
-                          id<MTLDevice> device,
+                          id<MTLDevice> mtl_device,
                           id<MTLCommandQueue> queue,
                           bool refit)
 {
@@ -948,11 +950,11 @@ bool BVHMetal::build_BLAS(Progress &progress,
   switch (geom->geometry_type) {
     case Geometry::VOLUME:
     case Geometry::MESH:
-      return build_BLAS_mesh(progress, device, queue, geom, refit);
+      return build_BLAS_mesh(progress, mtl_device, queue, geom, refit);
     case Geometry::HAIR:
-      return build_BLAS_hair(progress, device, queue, geom, refit);
+      return build_BLAS_hair(progress, mtl_device, queue, geom, refit);
     case Geometry::POINTCLOUD:
-      return build_BLAS_pointcloud(progress, device, queue, geom, refit);
+      return build_BLAS_pointcloud(progress, mtl_device, queue, geom, refit);
     default:
       return false;
   }
@@ -960,7 +962,7 @@ bool BVHMetal::build_BLAS(Progress &progress,
 }
 
 bool BVHMetal::build_TLAS(Progress &progress,
-                          id<MTLDevice> device,
+                          id<MTLDevice> mtl_device,
                           id<MTLCommandQueue> queue,
                           bool refit)
 {
@@ -969,14 +971,14 @@ bool BVHMetal::build_TLAS(Progress &progress,
 
   if (@available(macos 12.0, *)) {
     /* Defined inside available check, for return type to be available. */
-    auto make_null_BLAS = [](id<MTLDevice> device,
+    auto make_null_BLAS = [](id<MTLDevice> mtl_device,
                              id<MTLCommandQueue> queue) -> id<MTLAccelerationStructure> {
       MTLResourceOptions storage_mode = MTLResourceStorageModeManaged;
-      if (device.hasUnifiedMemory) {
+      if (mtl_device.hasUnifiedMemory) {
         storage_mode = MTLResourceStorageModeShared;
       }
 
-      id<MTLBuffer> nullBuf = [device newBufferWithLength:sizeof(float3) options:storage_mode];
+      id<MTLBuffer> nullBuf = [mtl_device newBufferWithLength:sizeof(float3) options:storage_mode];
 
       /* Create an acceleration structure. */
       MTLAccelerationStructureTriangleGeometryDescriptor *geomDesc =
@@ -997,13 +999,14 @@ bool BVHMetal::build_TLAS(Progress &progress,
       accelDesc.geometryDescriptors = @[ geomDesc ];
       accelDesc.usage |= MTLAccelerationStructureUsageExtendedLimits;
 
-      MTLAccelerationStructureSizes accelSizes = [device
+      MTLAccelerationStructureSizes accelSizes = [mtl_device
           accelerationStructureSizesWithDescriptor:accelDesc];
-      id<MTLAccelerationStructure> accel_struct = [device
+      id<MTLAccelerationStructure> accel_struct = [mtl_device
           newAccelerationStructureWithSize:accelSizes.accelerationStructureSize];
-      id<MTLBuffer> scratchBuf = [device newBufferWithLength:accelSizes.buildScratchBufferSize
-                                                     options:MTLResourceStorageModePrivate];
-      id<MTLBuffer> sizeBuf = [device newBufferWithLength:8 options:MTLResourceStorageModeShared];
+      id<MTLBuffer> scratchBuf = [mtl_device newBufferWithLength:accelSizes.buildScratchBufferSize
+                                                         options:MTLResourceStorageModePrivate];
+      id<MTLBuffer> sizeBuf = [mtl_device newBufferWithLength:8
+                                                      options:MTLResourceStorageModeShared];
       id<MTLCommandBuffer> accelCommands = [queue commandBuffer];
       id<MTLAccelerationStructureCommandEncoder> accelEnc =
           [accelCommands accelerationStructureCommandEncoder];
@@ -1027,10 +1030,6 @@ bool BVHMetal::build_TLAS(Progress &progress,
     uint32_t num_motion_transforms = 0;
     for (Object *ob : objects) {
       num_instances++;
-
-      /* Skip motion for non-traceable objects */
-      if (!ob->is_traceable())
-        continue;
 
       if (ob->use_motion()) {
         num_motion_transforms += max((size_t)1, ob->get_motion().size());
@@ -1070,7 +1069,7 @@ bool BVHMetal::build_TLAS(Progress &progress,
     };
 
     MTLResourceOptions storage_mode;
-    if (device.hasUnifiedMemory) {
+    if (mtl_device.hasUnifiedMemory) {
       storage_mode = MTLResourceStorageModeShared;
     }
     else {
@@ -1086,12 +1085,12 @@ bool BVHMetal::build_TLAS(Progress &progress,
     }
 
     /* Allocate a GPU buffer for the instance data and populate it */
-    id<MTLBuffer> instanceBuf = [device newBufferWithLength:num_instances * instance_size
-                                                    options:storage_mode];
+    id<MTLBuffer> instanceBuf = [mtl_device newBufferWithLength:num_instances * instance_size
+                                                        options:storage_mode];
     id<MTLBuffer> motion_transforms_buf = nil;
     MTLPackedFloat4x3 *motion_transforms = nullptr;
     if (motion_blur && num_motion_transforms) {
-      motion_transforms_buf = [device
+      motion_transforms_buf = [mtl_device
           newBufferWithLength:num_motion_transforms * sizeof(MTLPackedFloat4x3)
                       options:storage_mode];
       motion_transforms = (MTLPackedFloat4x3 *)motion_transforms_buf.contents;
@@ -1107,7 +1106,7 @@ bool BVHMetal::build_TLAS(Progress &progress,
       /* Skip non-traceable objects */
       Geometry const *geom = ob->get_geometry();
       BVHMetal const *blas = static_cast<BVHMetal const *>(geom->bvh);
-      if (!blas || !blas->accel_struct) {
+      if (!blas || !blas->accel_struct || !ob->is_traceable()) {
         /* Place a degenerate instance, to ensure [[instance_id]] equals ob->get_device_index()
          * in our intersection functions */
         blas = nullptr;
@@ -1115,7 +1114,7 @@ bool BVHMetal::build_TLAS(Progress &progress,
         /* Workaround for issue in macOS <= 14.1: Insert degenerate BLAS instead of zero-filling
          * the descriptor. */
         if (!null_BLAS) {
-          null_BLAS = make_null_BLAS(device, queue);
+          null_BLAS = make_null_BLAS(mtl_device, queue);
         }
         blas_array.push_back(null_BLAS);
       }
@@ -1259,12 +1258,12 @@ bool BVHMetal::build_TLAS(Progress &progress,
                           MTLAccelerationStructureUsagePreferFastBuild);
     }
 
-    MTLAccelerationStructureSizes accelSizes = [device
+    MTLAccelerationStructureSizes accelSizes = [mtl_device
         accelerationStructureSizesWithDescriptor:accelDesc];
-    id<MTLAccelerationStructure> accel = [device
+    id<MTLAccelerationStructure> accel = [mtl_device
         newAccelerationStructureWithSize:accelSizes.accelerationStructureSize];
-    id<MTLBuffer> scratchBuf = [device newBufferWithLength:accelSizes.buildScratchBufferSize
-                                                   options:MTLResourceStorageModePrivate];
+    id<MTLBuffer> scratchBuf = [mtl_device newBufferWithLength:accelSizes.buildScratchBufferSize
+                                                       options:MTLResourceStorageModePrivate];
     id<MTLCommandBuffer> accelCommands = [queue commandBuffer];
     id<MTLAccelerationStructureCommandEncoder> accelEnc =
         [accelCommands accelerationStructureCommandEncoder];
@@ -1291,11 +1290,8 @@ bool BVHMetal::build_TLAS(Progress &progress,
     [instanceBuf release];
     [scratchBuf release];
 
-    uint64_t allocated_size = [accel allocatedSize];
-    stats.mem_alloc(allocated_size);
-
     /* Cache top and bottom-level acceleration structs */
-    accel_struct = accel;
+    set_accel_struct(accel);
 
     unique_blas_array.clear();
     unique_blas_array.reserve(all_blas.count);
@@ -1309,29 +1305,31 @@ bool BVHMetal::build_TLAS(Progress &progress,
 }
 
 bool BVHMetal::build(Progress &progress,
-                     id<MTLDevice> device,
+                     id<MTLDevice> mtl_device,
                      id<MTLCommandQueue> queue,
                      bool refit)
 {
   if (@available(macos 12.0, *)) {
-    if (refit && params.bvh_type != BVH_TYPE_STATIC) {
-      assert(accel_struct);
-    }
-    else {
-      if (accel_struct) {
-        stats.mem_free(accel_struct.allocatedSize);
-        [accel_struct release];
-        accel_struct = nil;
+    if (refit) {
+      /* It isn't valid to refit a non-existent BVH, or one which wasn't constructed as dynamic.
+       * In such cases, assert in development but try to recover in the wild. */
+      if (params.bvh_type != BVH_TYPE_DYNAMIC || !accel_struct) {
+        assert(false);
+        refit = false;
       }
+    }
+
+    if (!refit) {
+      set_accel_struct(nil);
     }
   }
 
   @autoreleasepool {
     if (!params.top_level) {
-      return build_BLAS(progress, device, queue, refit);
+      return build_BLAS(progress, mtl_device, queue, refit);
     }
     else {
-      return build_TLAS(progress, device, queue, refit);
+      return build_TLAS(progress, mtl_device, queue, refit);
     }
   }
 }

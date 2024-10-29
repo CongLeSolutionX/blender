@@ -99,8 +99,9 @@ class RenderScheduler {
   bool is_background() const;
 
   void set_denoiser_params(const DenoiseParams &params);
-  void set_adaptive_sampling(const AdaptiveSampling &adaptive_sampling);
+  bool is_denoiser_gpu_used() const;
 
+  void set_adaptive_sampling(const AdaptiveSampling &adaptive_sampling);
   bool is_adaptive_sampling_used() const;
 
   /* Start sample for path tracing.
@@ -293,6 +294,8 @@ class RenderScheduler {
 
       average_time_accumulator_ = 0.0;
       num_average_times_ = 0;
+
+      last_sample_time_ = 0.0;
     }
 
     inline void add_wall(double time)
@@ -304,6 +307,7 @@ class RenderScheduler {
     {
       average_time_accumulator_ += time;
       num_average_times_ += num_measurements;
+      last_sample_time_ = time / num_measurements;
     }
 
     inline double get_wall() const
@@ -319,6 +323,11 @@ class RenderScheduler {
       return average_time_accumulator_ / num_average_times_;
     }
 
+    inline double get_last_sample_time() const
+    {
+      return last_sample_time_;
+    }
+
     inline void reset_average()
     {
       average_time_accumulator_ = 0.0;
@@ -330,6 +339,8 @@ class RenderScheduler {
 
     double average_time_accumulator_ = 0.0;
     int num_average_times_ = 0;
+
+    double last_sample_time_ = 0.0;
   };
 
   struct {

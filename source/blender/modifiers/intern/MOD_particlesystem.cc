@@ -11,34 +11,29 @@
 
 #include "BLI_utildefines.h"
 
-#include "BLT_translation.h"
+#include "BLT_translation.hh"
 
 #include "DNA_defaults.h"
-#include "DNA_material_types.h"
 #include "DNA_mesh_types.h"
 #include "DNA_screen_types.h"
 
-#include "BKE_context.hh"
 #include "BKE_editmesh.hh"
-#include "BKE_lib_id.h"
+#include "BKE_lib_id.hh"
 #include "BKE_mesh.hh"
 #include "BKE_mesh_legacy_convert.hh"
 #include "BKE_modifier.hh"
 #include "BKE_particle.h"
-#include "BKE_screen.hh"
 
 #include "UI_interface.hh"
 #include "UI_resources.hh"
 
-#include "RNA_access.hh"
-#include "RNA_prototypes.h"
+#include "RNA_prototypes.hh"
 
 #include "DEG_depsgraph_query.hh"
 
 #include "BLO_read_write.hh"
 
 #include "MOD_ui_common.hh"
-#include "MOD_util.hh"
 
 static void init_data(ModifierData *md)
 {
@@ -62,7 +57,7 @@ static void free_data(ModifierData *md)
   }
   psmd->totdmvert = psmd->totdmedge = psmd->totdmface = 0;
 
-  /* ED_object_modifier_remove may have freed this first before calling
+  /* blender::ed::object::modifier_remove may have freed this first before calling
    * BKE_modifier_free (which calls this function) */
   if (psmd->psys) {
     psmd->psys->flag |= PSYS_DELETE;
@@ -146,8 +141,9 @@ static void deform_verts(ModifierData *md,
   }
 
   /* make new mesh */
-  psmd->mesh_final = BKE_mesh_copy_for_eval(mesh);
-  BKE_mesh_vert_coords_apply(psmd->mesh_final, reinterpret_cast<float(*)[3]>(positions.data()));
+  psmd->mesh_final = BKE_mesh_copy_for_eval(*mesh);
+  psmd->mesh_final->vert_positions_for_write().copy_from(positions);
+  psmd->mesh_final->tag_positions_changed();
 
   BKE_mesh_tessface_ensure(psmd->mesh_final);
 
@@ -177,7 +173,7 @@ static void deform_verts(ModifierData *md,
       /* Make a persistent copy of the mesh. We don't actually need
        * all this data, just some topology for remapping. Could be
        * optimized once. */
-      psmd->mesh_original = BKE_mesh_copy_for_eval(mesh_original);
+      psmd->mesh_original = BKE_mesh_copy_for_eval(*mesh_original);
     }
 
     BKE_mesh_tessface_ensure(psmd->mesh_original);
@@ -187,14 +183,14 @@ static void deform_verts(ModifierData *md,
    * This is an unreliable check for the topology check, but allows some
    * handy configuration like emitting particles from inside particle
    * instance. */
-  if (had_mesh_final && (psmd->mesh_final->totvert != psmd->totdmvert ||
-                         psmd->mesh_final->totedge != psmd->totdmedge ||
+  if (had_mesh_final && (psmd->mesh_final->verts_num != psmd->totdmvert ||
+                         psmd->mesh_final->edges_num != psmd->totdmedge ||
                          psmd->mesh_final->totface_legacy != psmd->totdmface))
   {
     psys->recalc |= ID_RECALC_PSYS_RESET;
   }
-  psmd->totdmvert = psmd->mesh_final->totvert;
-  psmd->totdmedge = psmd->mesh_final->totedge;
+  psmd->totdmvert = psmd->mesh_final->verts_num;
+  psmd->totdmedge = psmd->mesh_final->edges_num;
   psmd->totdmface = psmd->mesh_final->totface_legacy;
 
   {
@@ -225,7 +221,7 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
   ModifierData *md = (ModifierData *)ptr->data;
   ParticleSystem *psys = ((ParticleSystemModifierData *)md)->psys;
 
-  uiItemL(layout, TIP_("Settings are in the particle tab"), ICON_NONE);
+  uiItemL(layout, RPT_("Settings are inside the Particles tab"), ICON_NONE);
 
   if (!(ob->mode & OB_MODE_PARTICLE_EDIT)) {
     if (ELEM(psys->part->ren_as, PART_DRAW_GR, PART_DRAW_OB)) {
@@ -257,7 +253,7 @@ static void blend_read(BlendDataReader *reader, ModifierData *md)
   psmd->mesh_final = nullptr;
   psmd->mesh_original = nullptr;
   /* This is written as part of ob->particlesystem. */
-  BLO_read_data_address(reader, &psmd->psys);
+  BLO_read_struct(reader, ParticleSystem, &psmd->psys);
   psmd->flag &= ~eParticleSystemFlag_psys_updated;
   psmd->flag |= eParticleSystemFlag_file_loaded;
 }
@@ -295,4 +291,5 @@ ModifierTypeInfo modifierType_ParticleSystem = {
     /*panel_register*/ panel_register,
     /*blend_write*/ nullptr,
     /*blend_read*/ blend_read,
+    /*foreach_cache*/ nullptr,
 };

@@ -18,9 +18,9 @@ static void set_id_in_component(GeometryComponent &component,
                                 const Field<bool> &selection_field,
                                 const Field<int> &id_field)
 {
-  const eAttrDomain domain = (component.type() == GeometryComponent::Type::Instance) ?
-                                 ATTR_DOMAIN_INSTANCE :
-                                 ATTR_DOMAIN_POINT;
+  const AttrDomain domain = (component.type() == GeometryComponent::Type::Instance) ?
+                                AttrDomain::Instance :
+                                AttrDomain::Point;
   const int domain_size = component.attribute_domain_size(domain);
   if (domain_size == 0) {
     return;
@@ -73,12 +73,12 @@ static void node_geo_exec(GeoNodeExecParams params)
 
 static void node_register()
 {
-  static bNodeType ntype;
+  static blender::bke::bNodeType ntype;
 
   geo_node_type_base(&ntype, GEO_NODE_SET_ID, "Set ID", NODE_CLASS_GEOMETRY);
   ntype.geometry_node_execute = node_geo_exec;
   ntype.declare = node_declare;
-  nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }
 NOD_REGISTER_NODE(node_register)
 

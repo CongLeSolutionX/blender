@@ -8,20 +8,14 @@
 
 #include <iostream>
 
-#include "BKE_customdata.hh"
-#include "BKE_lib_id.h"
-#include "BKE_main.h"
 #include "BKE_mesh.hh"
 
-#include "BLI_array.hh"
 #include "BLI_array_utils.hh"
-#include "BLI_math_vector.h"
-#include "BLI_math_vector.hh"
-#include "BLI_task.hh"
+#include "BLI_span.hh"
 
 #include "DNA_mesh_types.h"
-#include "DNA_meshdata_types.h"
 
+#include "stl_data.hh"
 #include "stl_import_mesh.hh"
 
 namespace blender::io::stl {
@@ -39,11 +33,11 @@ STLMeshHelper::STLMeshHelper(int tris_num, bool use_custom_normals)
   }
 }
 
-bool STLMeshHelper::add_triangle(const float3 &a, const float3 &b, const float3 &c)
+bool STLMeshHelper::add_triangle(const PackedTriangle &data)
 {
-  int v1_id = verts_.index_of_or_add(a);
-  int v2_id = verts_.index_of_or_add(b);
-  int v3_id = verts_.index_of_or_add(c);
+  int v1_id = verts_.index_of_or_add(data.vertices[0]);
+  int v2_id = verts_.index_of_or_add(data.vertices[1]);
+  int v3_id = verts_.index_of_or_add(data.vertices[2]);
   if ((v1_id == v2_id) || (v1_id == v3_id) || (v2_id == v3_id)) {
     degenerate_tris_num_++;
     return false;
@@ -52,17 +46,11 @@ bool STLMeshHelper::add_triangle(const float3 &a, const float3 &b, const float3 
     duplicate_tris_num_++;
     return false;
   }
-  return true;
-}
 
-void STLMeshHelper::add_triangle(const float3 &a,
-                                 const float3 &b,
-                                 const float3 &c,
-                                 const float3 &custom_normal)
-{
-  if (add_triangle(a, b, c)) {
-    loop_normals_.append_n_times(custom_normal, 3);
+  if (use_custom_normals_) {
+    loop_normals_.append_n_times(data.normal, 3);
   }
+  return true;
 }
 
 Mesh *STLMeshHelper::to_mesh()
@@ -81,10 +69,12 @@ Mesh *STLMeshHelper::to_mesh()
   offset_indices::fill_constant_group_size(3, 0, mesh->face_offsets_for_write());
   array_utils::copy(tris_.as_span().cast<int>(), mesh->corner_verts_for_write());
 
-  /* NOTE: edges must be calculated first before setting custom normals. */
-  BKE_mesh_calc_edges(mesh, false, false);
+  bke::mesh_smooth_set(*mesh, false);
 
-  if (use_custom_normals_ && loop_normals_.size() == mesh->totloop) {
+  /* NOTE: edges must be calculated first before setting custom normals. */
+  bke::mesh_calc_edges(*mesh, false, false);
+
+  if (use_custom_normals_ && loop_normals_.size() == mesh->corners_num) {
     BKE_mesh_set_custom_normals(mesh, reinterpret_cast<float(*)[3]>(loop_normals_.data()));
   }
 

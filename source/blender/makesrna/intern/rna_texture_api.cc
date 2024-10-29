@@ -14,16 +14,16 @@
 
 #include "RNA_define.hh"
 
-#include "rna_internal.h" /* own include */
+#include "rna_internal.hh" /* own include */
 
 #ifdef RNA_RUNTIME
 
 #  include "BKE_context.hh"
-#  include "BKE_global.h"
+#  include "BKE_global.hh"
 #  include "BLI_math_vector.h"
 #  include "DNA_scene_types.h"
-#  include "IMB_imbuf.h"
-#  include "IMB_imbuf_types.h"
+#  include "IMB_imbuf.hh"
+#  include "IMB_imbuf_types.hh"
 #  include "RE_pipeline.h"
 #  include "RE_texture.h"
 
@@ -57,7 +57,7 @@ void RNA_api_texture(StructRNA *srna)
       -FLT_MAX,
       FLT_MAX,
       "The coordinates (x,y,z) of the texture, in case of a 3D texture, the z value is the slice "
-      "of the texture that is evaluated. For 2D textures such as images, the z value is ignored",
+      "of the texture that is evaluated. For 2D textures such as images, the z value is ignored.",
       "",
       -1e4,
       1e4);
@@ -72,7 +72,7 @@ void RNA_api_texture(StructRNA *srna)
       -FLT_MAX,
       FLT_MAX,
       "The result of the texture where (x,y,z,w) are (red, green, blue, intensity). "
-      "For grayscale textures, often intensity only will be used",
+      "For grayscale textures, often intensity only will be used.",
       nullptr,
       -1e4,
       1e4);

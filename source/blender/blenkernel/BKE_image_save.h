@@ -49,7 +49,7 @@ bool BKE_image_save_options_init(ImageSaveOptions *opts,
                                  struct ImageUser *iuser,
                                  const bool guess_path,
                                  const bool save_as_render);
-void BKE_image_save_options_update(struct ImageSaveOptions *opts, const struct Image *ima);
+void BKE_image_save_options_update(struct ImageSaveOptions *opts, const struct Image *image);
 void BKE_image_save_options_free(struct ImageSaveOptions *opts);
 
 bool BKE_image_save(struct ReportList *reports,
@@ -74,12 +74,15 @@ bool BKE_image_render_write_exr(struct ReportList *reports,
 
 /**
  * \param filepath_basis: May be used as-is, or used as a basis for multi-view images.
+ * \param format: The image format to use for saving, if null, the scene format will be used.
  */
 bool BKE_image_render_write(struct ReportList *reports,
                             struct RenderResult *rr,
                             const struct Scene *scene,
                             const bool stamp,
-                            const char *filepath_basis);
+                            const char *filepath_basis,
+                            const struct ImageFormatData *format = nullptr,
+                            bool save_as_render = true);
 
 #ifdef __cplusplus
 }
