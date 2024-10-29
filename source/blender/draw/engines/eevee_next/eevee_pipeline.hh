@@ -362,13 +362,11 @@ class DeferredPipeline {
   PassMain::Sub *prepass_add(::Material *material,
                              GPUMaterial *gpumat,
                              bool has_motion,
-                             uint16_t refraction_layer = 0);
+                             uint16_t refraction_layer);
   PassMain::Sub *material_add(::Material *material,
                               GPUMaterial *gpumat,
-                              uint16_t refraction_layer = 0);
-  PassMain::Sub *npr_add(::Material *blender_mat,
-                         GPUMaterial *gpumat,
-                         uint16_t refraction_layer = 0);
+                              uint16_t refraction_layer);
+  PassMain::Sub *npr_add(::Material *blender_mat, GPUMaterial *gpumat, uint16_t refraction_layer);
 
   void render(View &main_view,
               View &render_view,
@@ -752,7 +750,8 @@ class PipelineModule {
                               ::Material *blender_mat,
                               GPUMaterial *gpumat,
                               eMaterialPipeline pipeline_type,
-                              eMaterialProbe probe_capture)
+                              eMaterialProbe probe_capture,
+                              uint16_t refraction_layer)
   {
     if (probe_capture == MAT_PROBE_REFLECTION) {
       switch (pipeline_type) {
@@ -779,7 +778,7 @@ class PipelineModule {
 
     switch (pipeline_type) {
       case MAT_PIPE_PREPASS_DEFERRED:
-        return deferred.prepass_add(blender_mat, gpumat, false);
+        return deferred.prepass_add(blender_mat, gpumat, false, refraction_layer);
       case MAT_PIPE_PREPASS_FORWARD:
         return forward.prepass_opaque_add(blender_mat, gpumat, false);
       case MAT_PIPE_PREPASS_OVERLAP:
@@ -787,14 +786,14 @@ class PipelineModule {
         return nullptr;
 
       case MAT_PIPE_PREPASS_DEFERRED_VELOCITY:
-        return deferred.prepass_add(blender_mat, gpumat, true);
+        return deferred.prepass_add(blender_mat, gpumat, true, refraction_layer);
       case MAT_PIPE_PREPASS_FORWARD_VELOCITY:
         return forward.prepass_opaque_add(blender_mat, gpumat, true);
 
       case MAT_PIPE_DEFERRED:
-        return deferred.material_add(blender_mat, gpumat);
+        return deferred.material_add(blender_mat, gpumat, refraction_layer);
       case MAT_PIPE_DEFERRED_NPR:
-        return deferred.npr_add(blender_mat, gpumat);
+        return deferred.npr_add(blender_mat, gpumat, refraction_layer);
       case MAT_PIPE_FORWARD:
         return forward.material_opaque_add(blender_mat, gpumat);
       case MAT_PIPE_SHADOW:
