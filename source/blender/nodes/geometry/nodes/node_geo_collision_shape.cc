@@ -80,7 +80,8 @@ static void node_declare(NodeDeclarationBuilder &b)
            ShapeType::StaticCompound,
            ShapeType::MutableCompound))
   {
-    b.add_input<decl::Geometry>("Child Shape").supported_type(GeometryComponent::Type::CollisionShape);
+    b.add_input<decl::Geometry>("Child Shape")
+        .supported_type(GeometryComponent::Type::CollisionShape);
   }
 
   b.add_output<decl::Geometry>("Shape").propagate_all();

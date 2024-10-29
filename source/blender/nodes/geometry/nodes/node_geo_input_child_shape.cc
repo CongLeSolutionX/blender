@@ -19,11 +19,14 @@ namespace blender::nodes::node_geo_input_child_shape_cc {
 static void node_declare(NodeDeclarationBuilder &b)
 {
   b.add_input<decl::Geometry>("Shape");
-  b.add_input<decl::Int>("Index").min(0).description("Index of the child shape to extract from the compound shape");
+  b.add_input<decl::Int>("Index").min(0).description(
+      "Index of the child shape to extract from the compound shape");
 
-  b.add_output<decl::Bool>("Valid").description("True if a child shape was found at the given index");
+  b.add_output<decl::Bool>("Valid").description(
+      "True if a child shape was found at the given index");
   b.add_output<decl::Geometry>("Child Shape");
-  b.add_output<decl::Matrix>("Transform").description("Transform of the child shape relative to the parent shape");
+  b.add_output<decl::Matrix>("Transform")
+      .description("Transform of the child shape relative to the parent shape");
 }
 
 template<typename T>
@@ -50,7 +53,7 @@ static void node_geo_exec(GeoNodeExecParams params)
 
   const Span<bke::GeometrySet> child_geometries = shape->child_geometries();
   const VArray<float4x4> child_transforms = shape->child_transforms();
-  if (!child_geometries.index_range().contains(index)){
+  if (!child_geometries.index_range().contains(index)) {
     params.set_default_remaining_outputs();
     return;
   }
