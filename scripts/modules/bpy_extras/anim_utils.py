@@ -11,7 +11,7 @@ __all__ = (
 )
 
 import bpy
-from bpy.types import Action
+from bpy.types import Action, ActionSlot
 from dataclasses import dataclass
 
 from collections.abc import (
@@ -71,6 +71,26 @@ class BakeOptions:
 
     do_custom_props: bool
     """Bake custom properties."""
+
+
+def _get_channelbag_for_slot(action: Action, slot: ActionSlot):
+    # This is on purpose limited to the first layer and strip. To support more
+    # than 1 layer, a rewrite of this operator is needed which ideally would
+    # happen in C++.
+    for layer in action.layers:
+        for strip in layer.strips:
+            channelbag = strip.channels(slot.handle)
+            return channelbag
+
+
+def _ensure_channelbag_exists(action: Action, slot: ActionSlot):
+    channelbag = _get_channelbag_for_slot(action, slot)
+    if channelbag:
+        return channelbag
+
+    for layer in action.layers:
+        for strip in layer.strips:
+            return strip.channelbags.new(slot)
 
 
 def bake_action(
@@ -383,20 +403,11 @@ def bake_action_iter(
 
     # pose
     lookup_fcurves = {}
-    if action.is_action_layered:
-        # This is on purpose limited to the first layer and strip. To support more
-        # than 1 layer, a rewrite of this function is needed which ideally would
-        # happen in C++.
-        for layer in action.layers:
-            for strip in layer.strips:
-                channelbag = strip.channels(atd.action_slot.handle)
-                if not channelbag:
-                    continue
-                lookup_fcurves = {(fcurve.data_path, fcurve.array_index): fcurve for fcurve in channelbag.fcurves}
-                break
-            break
-    else:
-        lookup_fcurves = {(fcurve.data_path, fcurve.array_index): fcurve for fcurve in action.fcurves}
+    assert action.is_action_layered
+    channelbag = _get_channelbag_for_slot(action, atd.action_slot)
+    if channelbag:
+        # channelbag can be None if no layers or strips exist in the action.
+        lookup_fcurves = {(fcurve.data_path, fcurve.array_index): fcurve for fcurve in channelbag.fcurves}
 
     if bake_options.do_pose:
         for f, armature_custom_properties in armature_info:
@@ -491,7 +502,7 @@ def bake_action_iter(
                 keyframes.insert_keyframes_into_new_action(total_new_keys, action, name)
             else:
                 keyframes.insert_keyframes_into_existing_action(
-                    lookup_fcurves, total_new_keys, action, name, atd.action_slot)
+                    lookup_fcurves, total_new_keys, action, atd.action_slot)
 
     # object. TODO. multiple objects
     if bake_options.do_object:
@@ -558,7 +569,7 @@ def bake_action_iter(
             keyframes.insert_keyframes_into_new_action(total_new_keys, action, name)
         else:
             keyframes.insert_keyframes_into_existing_action(
-                lookup_fcurves, total_new_keys, action, name, atd.action_slot)
+                lookup_fcurves, total_new_keys, action, atd.action_slot)
 
         if bake_options.do_parents_clear:
             obj.parent = None
@@ -674,8 +685,7 @@ class KeyframesCo:
         lookup_fcurves: Mapping[FCurveKey, bpy.types.FCurve],
         total_new_keys: int,
         action: Action,
-        action_group_name: str,
-        action_slot,
+        action_slot: ActionSlot,
     ) -> None:
         """
         Assumes the action already exists, that it might already have F-curves. Otherwise, the
@@ -698,24 +708,12 @@ class KeyframesCo:
             fcurve = lookup_fcurves.get(fc_key, None)
             if fcurve is None:
                 data_path, array_index = fc_key
-                if action.is_action_layered:
-                    # Assuming a single layer and strip here.
-                    for layer in action.layers:
-                        for strip in layer.strips:
-                            channelbag = strip.channels(action_slot.handle)
-                            if not channelbag:
-                                channelbag = strip.channelbags.new(action_slot)
-                            fcurve = channelbag.fcurves.new(data_path, index=array_index)
-                            break
-                        break
-                else:
-                    fcurve = action.fcurves.new(
-                        data_path, index=array_index, action_group=action_group_name
-                    )
-
-            if not fcurve:
-                # Could happen if no layers or strips exist on the action.
-                continue
+                assert action.is_action_layered
+                channelbag = _ensure_channelbag_exists(action, action_slot)
+                if not channelbag:
+                    # Can happen if no layers or strips exist on the action.
+                    continue
+                fcurve = channelbag.fcurves.new(data_path, index=array_index)
 
             keyframe_points = fcurve.keyframe_points
 
