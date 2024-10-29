@@ -2222,9 +2222,8 @@ def km_spreadsheet_generic(_params):
     )
 
     items.extend([
-        *_template_space_region_type_toggle(
-            channels_key={"type": 'T', "value": 'PRESS'},
-        ),
+        ("wm.context_toggle", {"type": 'LEFT_BRACKET', "value": 'PRESS', "ctrl": True},
+         {"properties": [("data_path", "space_data.show_region_toolbar")]}),
         ("wm.context_toggle", {"type": 'RIGHT_BRACKET', "value": 'PRESS', "ctrl": True},
          {"properties": [("data_path", "space_data.show_region_ui")]}),
     ])
@@ -2589,7 +2588,6 @@ def km_paint_curve(params):
         ("transform.translate", {"type": 'LEFTMOUSE', "value": 'CLICK_DRAG'}, None),
         ("transform.rotate", {"type": 'E', "value": 'PRESS'}, None),
         ("transform.resize", {"type": 'R', "value": 'PRESS'}, None),
-        op_asset_shelf_popup("VIEW3D_AST_brush_sculpt_curves", {"type": 'B', "value": 'PRESS'}),
     ])
 
     return keymap
@@ -3409,6 +3407,7 @@ def km_sculpt_curves(params):
         ("sculpt_curves.min_distance_edit", {"type": 'D', "value": 'PRESS', "ctrl": True}, {}),
         # Tools
         op_tool_cycle("builtin.annotate", {"type": 'D', "value": 'PRESS'}),
+        op_asset_shelf_popup("VIEW3D_AST_brush_sculpt_curves", {"type": 'B', "value": 'PRESS'}),
     ])
 
     return keymap
@@ -3741,6 +3740,7 @@ def generate_keymaps_impl(params=None):
         km_clip_editor(params),
         km_clip_graph_editor(params),
         km_clip_dopesheet_editor(params),
+        km_spreadsheet_generic(params),
 
         # Animation.
         km_frames(params),

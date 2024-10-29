@@ -440,8 +440,7 @@ static PyObject *app_translations_contexts_make()
 
 #define SetObjString(item) \
   PyStructSequence_SET_ITEM(translations_contexts, pos++, PyUnicode_FromString(item))
-#define SetObjNone() \
-  PyStructSequence_SET_ITEM(translations_contexts, pos++, Py_INCREF_RET(Py_None))
+#define SetObjNone() PyStructSequence_SET_ITEM(translations_contexts, pos++, Py_NewRef(Py_None))
 
   for (ctxt = _contexts; ctxt->c_id; ctxt++) {
     if (ctxt->value) {
@@ -575,7 +574,7 @@ static PyObject *_py_pgettext(PyObject *args,
     return nullptr;
   }
 
-  return Py_INCREF_RET(msgid);
+  return Py_NewRef(msgid);
 #endif
 }
 
@@ -644,7 +643,7 @@ static PyObject *app_translations_pgettext_n(BlenderAppTranslations * /*self*/,
     return nullptr;
   }
 
-  return Py_INCREF_RET(msgid);
+  return Py_NewRef(msgid);
 }
 
 PyDoc_STRVAR(
@@ -867,9 +866,13 @@ static PyObject *app_translations_new(PyTypeObject *type, PyObject * /*args*/, P
   return (PyObject *)_translations;
 }
 
-static void app_translations_free(void *obj)
+static void app_translations_free(BlenderAppTranslations *self)
 {
-  PyObject_Del(obj);
+  Py_DECREF(self->contexts);
+  Py_DECREF(self->contexts_C_to_py);
+  Py_DECREF(self->py_messages);
+
+  PyObject_Del(self);
 #ifdef WITH_INTERNATIONAL
   _clear_translations_cache();
 #endif
@@ -921,7 +924,7 @@ static PyTypeObject BlenderAppTranslationsType = {
     /*tp_init*/ nullptr,
     /*tp_alloc*/ nullptr,
     /*tp_new*/ (newfunc)app_translations_new,
-    /*tp_free*/ app_translations_free,
+    /*tp_free*/ (freefunc)app_translations_free,
     /*tp_is_gc*/ nullptr,
     /*tp_bases*/ nullptr,
     /*tp_mro*/ nullptr,

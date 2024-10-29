@@ -2773,7 +2773,7 @@ static void file_expand_directory(const Main *bmain, FileSelectParams *params)
     /* While path handling expansion typically doesn't support home directory expansion
      * in Blender, this is a convenience to be able to type in a single character.
      * Even though this is a UNIX convention, it's harmless to expand on WIN32 as well. */
-    if (const char *home_dir = BKE_appdir_folder_home()) {
+    if (const char *home_dir = BLI_dir_home()) {
       char tmpstr[sizeof(params->dir) - 1];
       STRNCPY(tmpstr, params->dir + 1);
       BLI_path_join(params->dir, sizeof(params->dir), home_dir, tmpstr);
@@ -2874,7 +2874,7 @@ void file_directory_enter_handle(bContext *C, void * /*arg_unused*/, void * /*ar
     return;
   }
 
-  Main *bmain = CTX_data_main(C);
+  const Main *bmain = CTX_data_main(C);
   char old_dir[sizeof(params->dir)];
 
   STRNCPY(old_dir, params->dir);
@@ -2961,7 +2961,7 @@ void file_filename_enter_handle(bContext *C, void * /*arg_unused*/, void *arg_bu
     return;
   }
 
-  Main *bmain = CTX_data_main(C);
+  const Main *bmain = CTX_data_main(C);
   uiBut *but = static_cast<uiBut *>(arg_but);
 
   file_expand_directory(bmain, params);

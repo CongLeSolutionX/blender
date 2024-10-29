@@ -104,6 +104,8 @@ static void node_declare(NodeDeclarationBuilder &b)
   const bNode *node = b.node_or_null();
   const bNodeTree *tree = b.tree_or_null();
 
+  b.add_default_layout();
+
   if (!node || !tree) {
     return;
   }
@@ -116,13 +118,13 @@ static void node_declare(NodeDeclarationBuilder &b)
                                    nullptr;
 
   b.add_output<decl::Int>("Index").description(
-      "Index of the element in the source geometry. Note that the same index can occure more than "
+      "Index of the element in the source geometry. Note that the same index can occur more than "
       "once when iterating over multiple components at once");
 
   b.add_output<decl::Geometry>("Element")
       .description(
-          "Single element geometry for the current iteration. Note that it can be quite "
-          "inefficient to splitup large geometries into many small geometries")
+          "Single-element geometry for the current iteration. Note that it can be quite "
+          "inefficient to split up large geometries into many small geometries")
       .propagate_all()
       .available(output_storage && AttrDomain(output_storage->domain) != AttrDomain::Corner);
 

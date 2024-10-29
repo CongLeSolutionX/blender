@@ -855,7 +855,7 @@ static PyObject *pyrna_struct_richcmp(PyObject *a, PyObject *b, int op)
       return nullptr;
   }
 
-  return Py_INCREF_RET(res);
+  return Py_NewRef(res);
 }
 
 static PyObject *pyrna_prop_richcmp(PyObject *a, PyObject *b, int op)
@@ -886,7 +886,7 @@ static PyObject *pyrna_prop_richcmp(PyObject *a, PyObject *b, int op)
       return nullptr;
   }
 
-  return Py_INCREF_RET(res);
+  return Py_NewRef(res);
 }
 
 /*----------------------repr--------------------------------------------*/
@@ -3565,7 +3565,7 @@ PyDoc_STRVAR(
     "   dictionary function of the same name).\n"
     "\n"
     "   :return: custom property keys.\n"
-    "   :rtype: :class:`idprop.type.IDPropertyGroupViewKeys`\n"
+    "   :rtype: :class:`idprop.types.IDPropertyGroupViewKeys`\n"
     "\n" BPY_DOC_ID_PROP_TYPE_NOTE);
 static PyObject *pyrna_struct_keys(BPy_StructRNA *self)
 {
@@ -3590,7 +3590,7 @@ PyDoc_STRVAR(
     "   dictionary function of the same name).\n"
     "\n"
     "   :return: custom property key, value pairs.\n"
-    "   :rtype: :class:`idprop.type.IDPropertyGroupViewItems`\n"
+    "   :rtype: :class:`idprop.types.IDPropertyGroupViewItems`\n"
     "\n" BPY_DOC_ID_PROP_TYPE_NOTE);
 static PyObject *pyrna_struct_items(BPy_StructRNA *self)
 {
@@ -3615,7 +3615,7 @@ PyDoc_STRVAR(
     "   dictionary function of the same name).\n"
     "\n"
     "   :return: custom property values.\n"
-    "   :rtype: :class:`idprop.type.IDPropertyGroupViewValues`\n"
+    "   :rtype: :class:`idprop.types.IDPropertyGroupViewValues`\n"
     "\n" BPY_DOC_ID_PROP_TYPE_NOTE);
 static PyObject *pyrna_struct_values(BPy_StructRNA *self)
 {
@@ -4114,7 +4114,7 @@ static PyObject *pyrna_struct_bl_rna_get_subclass_py(PyObject *cls, PyObject *ar
   if (ret == nullptr) {
     ret = ret_default;
   }
-  return Py_INCREF_RET(ret);
+  return Py_NewRef(ret);
 }
 
 PyDoc_STRVAR(
@@ -4160,7 +4160,7 @@ static PyObject *pyrna_struct_bl_rna_get_subclass(PyObject *cls, PyObject *args)
     return nullptr;
   }
 
-  return Py_INCREF_RET(ret_default);
+  return Py_NewRef(ret_default);
 }
 
 static void pyrna_dir_members_py__add_keys(PyObject *list, PyObject *dict)
@@ -4299,7 +4299,7 @@ PyDoc_STRVAR(
     ".. method:: id_properties_ensure()\n"
     "\n"
     "   :return: the parent group for an RNA struct's custom IDProperties.\n"
-    "   :rtype: :class:`bpy.types.IDPropertyGroup`\n");
+    "   :rtype: :class:`idprop.types.IDPropertyGroup`\n");
 static PyObject *pyrna_struct_id_properties_ensure(BPy_StructRNA *self)
 {
   PYRNA_STRUCT_CHECK_OBJ(self);
@@ -5169,7 +5169,7 @@ static PyObject *pyrna_struct_get(BPy_StructRNA *self, PyObject *args)
     }
   }
 
-  return Py_INCREF_RET(def);
+  return Py_NewRef(def);
 }
 
 PyDoc_STRVAR(
@@ -5225,7 +5225,7 @@ static PyObject *pyrna_struct_pop(BPy_StructRNA *self, PyObject *args)
     PyErr_SetString(PyExc_KeyError, "key not found");
     return nullptr;
   }
-  return Py_INCREF_RET(def);
+  return Py_NewRef(def);
 }
 
 PyDoc_STRVAR(
@@ -5296,7 +5296,7 @@ static PyObject *pyrna_prop_collection_get(BPy_PropertyRNA *self, PyObject *args
                  Py_TYPE(key_ob)->tp_name);
   }
 
-  return Py_INCREF_RET(def);
+  return Py_NewRef(def);
 }
 
 PyDoc_STRVAR(
@@ -6237,7 +6237,7 @@ static PyObject *pyrna_prop_new(PyTypeObject *type, PyObject *args, PyObject * /
   }
 
   if (type == Py_TYPE(base)) {
-    return Py_INCREF_RET((PyObject *)base);
+    return Py_NewRef(base);
   }
   if (PyType_IsSubtype(type, &pyrna_prop_Type)) {
     BPy_PropertyRNA *ret = (BPy_PropertyRNA *)type->tp_alloc(type, 0);
@@ -7560,7 +7560,7 @@ static PyObject *pyrna_srna_Subtype(StructRNA *srna)
 
       /* arg[1] (bases=...) */
       PyTuple_SET_ITEM(args, 1, item = PyTuple_New(1));
-      PyTuple_SET_ITEM(item, 0, Py_INCREF_RET(py_base));
+      PyTuple_SET_ITEM(item, 0, Py_NewRef(py_base));
 
       /* arg[2] (dict=...) */
       PyTuple_SET_ITEM(args, 2, item = PyDict_New());
@@ -8639,7 +8639,7 @@ static int bpy_class_validate_recursive(PointerRNA *dummy_ptr,
       continue;
     }
 
-    /* TODO(@ideasman42): Use Python3.7x _PyObject_LookupAttr(), also in the macro below. */
+    /* TODO(@ideasman42): Use #PyObject_GetOptionalAttr(), also in the macro below. */
     identifier = RNA_property_identifier(prop);
     item = PyObject_GetAttrString(py_class, identifier);
 
@@ -9096,26 +9096,14 @@ void pyrna_alloc_types()
 #endif /* !NDEBUG */
 }
 
-void pyrna_free_types()
+void BPY_free_srna_pytype(StructRNA *srna)
 {
-  PropertyRNA *prop;
+  void *py_ptr = RNA_struct_py_type_get(srna);
 
-  /* Avoid doing this lookup for every getattr. */
-  PointerRNA ptr = RNA_blender_rna_pointer_create();
-  prop = RNA_struct_find_property(&ptr, "structs");
-
-  RNA_PROP_BEGIN (&ptr, itemptr, prop) {
-    StructRNA *srna = srna_from_ptr(&itemptr);
-    void *py_ptr = RNA_struct_py_type_get(srna);
-
-    if (py_ptr) {
-#if 0 /* XXX: should be able to do this, but makes Python crash on exit. */
-      bpy_class_free(py_ptr);
-#endif
-      RNA_struct_py_type_set(srna, nullptr);
-    }
+  if (py_ptr) {
+    bpy_class_free(py_ptr);
+    RNA_struct_py_type_set(srna, nullptr);
   }
-  RNA_PROP_END;
 }
 
 /**
@@ -9255,11 +9243,13 @@ static PyObject *pyrna_register_class(PyObject * /*self*/, PyObject *py_class)
   pyrna_subtype_set_rna(py_class, srna_new);
 
   /* Old srna still references us, keep the check in case registering somehow can free it. */
-  if (RNA_struct_py_type_get(srna)) {
+  if (PyObject *old_py_class = static_cast<PyObject *>(RNA_struct_py_type_get(srna))) {
     RNA_struct_py_type_set(srna, nullptr);
 #if 0
     /* Should be able to do this XXX since the old RNA adds a new ref. */
-    Py_DECREF(py_class);
+    Py_DECREF(old_py_class);
+#else
+    UNUSED_VARS(old_py_class);
 #endif
   }
 
@@ -9273,7 +9263,7 @@ static PyObject *pyrna_register_class(PyObject * /*self*/, PyObject *py_class)
 
   /* Call classed register method.
    * Note that zero falls through, no attribute, no error. */
-  switch (_PyObject_LookupAttr(py_class, bpy_intern_str_register, &py_cls_meth)) {
+  switch (PyObject_GetOptionalAttr(py_class, bpy_intern_str_register, &py_cls_meth)) {
     case 1: {
       PyObject *ret = PyObject_CallObject(py_cls_meth, nullptr);
       Py_DECREF(py_cls_meth);
@@ -9388,7 +9378,7 @@ static PyObject *pyrna_unregister_class(PyObject * /*self*/, PyObject *py_class)
 
   /* Call classed unregister method.
    * Note that zero falls through, no attribute, no error. */
-  switch (_PyObject_LookupAttr(py_class, bpy_intern_str_unregister, &py_cls_meth)) {
+  switch (PyObject_GetOptionalAttr(py_class, bpy_intern_str_unregister, &py_cls_meth)) {
     case 1: {
       PyObject *ret = PyObject_CallObject(py_cls_meth, nullptr);
       Py_DECREF(py_cls_meth);
