@@ -4290,7 +4290,9 @@ static uiBut *ui_def_but(uiBlock *block,
   but->poin = (char *)poin;
   but->hardmin = but->softmin = min;
   but->hardmax = but->softmax = max;
-  but->tip = tip;
+  if (tip) {
+    but->tip = tip;
+  }
 
   but->disabled_info = block->lockstr;
   but->emboss = block->emboss;
