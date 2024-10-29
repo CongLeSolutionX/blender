@@ -312,7 +312,7 @@ def _extensions_repo_temp_files_make_stale(
 
 def _extensions_repo_uninstall_stale_package_fallback(
         repo_directory,  # `str`
-        pkg_id_sequence,  # `List[str]`
+        pkg_id_sequence,  # `list[str]`
 ):  # `-> None`
     # If uninstall failed, make the package stale (by renaming it & queue to remove later).
     import addon_utils
@@ -332,7 +332,7 @@ def _extensions_repo_uninstall_stale_package_fallback(
 
 def _extensions_repo_install_stale_package_clear(
         repo_directory,  # `str`
-        pkg_id_sequence,  # `List[str]`
+        pkg_id_sequence,  # `list[str]`
 ):  # `-> None`
     # If install succeeds, ensure the package is not stale.
     #
@@ -545,8 +545,8 @@ def pkg_manifest_params_compatible_or_error_for_this_system(
     *,
     blender_version_min,  # `str`
     blender_version_max,  # `str`
-    platforms,  # `List[str]`
-):  # `Optional[str]`
+    platforms,  # `list[str]`
+):  # `str | None`
     # Return true if the parameters are compatible with this system.
     from .bl_extension_utils import (
         pkg_manifest_params_compatible_or_error,
@@ -609,8 +609,8 @@ def repo_cache_store_refresh_from_prefs(repo_cache_store, include_disabled=False
 
 def _preferences_pkg_id_sequence_filter_enabled(
         repo_item,  # `RepoItem`
-        pkg_id_sequence,  # `List[str]`
-):  # `-> List[str]`
+        pkg_id_sequence,  # `list[str]`
+):  # `-> list[str]`
     import addon_utils
     result = []
 
@@ -632,10 +632,10 @@ def _preferences_pkg_id_sequence_filter_enabled(
 def _preferences_ensure_disabled(
         *,
         repo_item,  # `RepoItem`
-        pkg_id_sequence,  # `List[str]`
+        pkg_id_sequence,  # `list[str]`
         default_set,  # `bool`
         error_fn,  # `Callable[[Exception], None]`
-):  # `-> Dict[str, Tuple[boo, bool]]`
+):  # `-> dict[str, tuple[boo, bool]]`
     import sys
     import addon_utils
 
@@ -981,8 +981,8 @@ def pkg_wheel_filter(
         repo_module,  # `str`
         pkg_id,  # `str`
         repo_directory,  # `str`
-        wheels_rel,  # `List[str]`
-):  # `-> Tuple[str, List[str]]`
+        wheels_rel,  # `list[str]`
+):  # `-> tuple[str, list[str]]`
     # Filter only the wheels for this platform.
     wheels_rel = _extensions_wheel_filter_for_platform(wheels_rel)
     if not wheels_rel:
@@ -1083,13 +1083,20 @@ def _extensions_repo_refresh_on_change(repo_cache_store, *, extensions_enabled, 
 
     if compat_calc:
         # NOTE: `extensions_enabled` may contain add-ons which are not yet enabled (these are pending).
-        # These will *not* have their compatibility information refreshed here.
-        # This is acceptable because:
-        # - Installing & enabling an extension relies on the extension being compatible,
-        #   so it can be assumed to already be the compatible.
-        # - If the add-on existed and was incompatible it *will* have it's compatibility recalculated.
-        # - Any missing cache entries will cause cache to be re-generated on next start or from an explicit refresh.
-        addon_utils.extensions_refresh(ensure_wheels=False)
+        # They *must* have their compatibility information refreshed here,
+        # even though compatibility is guaranteed based on the code-path that calls this function.
+        #
+        # Without updating compatibility information, un-installing the extensions won't detect the
+        # add-on as having been removed and won't remove any wheels the extension may use, see #125958.
+        addon_modules_pending = None if extensions_enabled is None else ([
+            "{:s}{:s}.{:s}".format(_ext_base_pkg_idname_with_dot, repo_module, pkg_id)
+            for repo_module, pkg_id in extensions_enabled
+        ])
+
+        addon_utils.extensions_refresh(
+            ensure_wheels=False,
+            addon_modules_pending=addon_modules_pending,
+        )
 
     if stats_calc:
         repo_stats_calc()
@@ -3106,7 +3113,7 @@ class EXTENSIONS_OT_package_install(Operator, _ExtCmdMixIn):
             *,
             context,  # `bpy.types.Context`
             op_notify,  # `OperatorNonBlockingSyncHelper`
-            remote_url,  # `Optional[str]`
+            remote_url,  # `str | None`
             repo_from_url_name,  # `str`
             url,  # `str`
     ):
@@ -3132,7 +3139,7 @@ class EXTENSIONS_OT_package_install(Operator, _ExtCmdMixIn):
             self,
             *,
             context,  # `bpy.types.Context`
-            remote_url,   # `Optional[str]`
+            remote_url,   # `str | None`
             repo_from_url_name,  # `str`
             url,  # `str`
     ):
@@ -3377,7 +3384,7 @@ class EXTENSIONS_OT_package_uninstall(Operator, _ExtCmdMixIn):
 
         _extensions_repo_refresh_on_change(
             repo_cache_store,
-            extensions_enabled=None,
+            extensions_enabled=_extensions_enabled(),
             compat_calc=True,
             stats_calc=True,
         )
