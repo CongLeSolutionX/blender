@@ -224,6 +224,8 @@ static void modifier_unwrap_state(Object *obedit,
     if (md && md->type == eModifierType_Subsurf) {
       const SubsurfModifierData &smd = *reinterpret_cast<const SubsurfModifierData *>(md);
       if (smd.levels > 0) {
+        /* Skip all calculation for zero subdivision levels, similar to the way the modifier is
+         * disabled in that case. */
         subsurf = true;
       }
       else {
