@@ -9,15 +9,12 @@ CCL_NAMESPACE_BEGIN
 /* Given a random number, sample a direction that makes an angle of theta with direction D. */
 ccl_device float3 phase_sample_direction(float3 D, float cos_theta, float rand)
 {
-  float sin_theta = sin_from_cos(cos_theta);
   float phi = M_2PI_F * rand;
-  float3 dir = make_float3(sin_theta * cosf(phi), sin_theta * sinf(phi), cos_theta);
+  float3 dir = spherical_cos_to_direction(cos_theta, phi);
 
   float3 T, B;
   make_orthonormals(D, &T, &B);
-  dir = dir.x * T + dir.y * B + dir.z * D;
-
-  return dir;
+  return to_global(dir, T, B, D);
 }
 
 /* Given cosine between rays, return probability density that a photon bounces
@@ -61,7 +58,7 @@ ccl_device float3 phase_rayleigh_sample(float3 D, float2 rand, ccl_private float
   const float a = 2 - 4 * rand.x;
   /* Metal doesn't have cbrtf, but since we compute u - 1/u anyways, we can just as well
    * use the inverse cube root for which there is a simple Quake-style fast implementation.*/
-  const float inv_u = -fast_inv_cbrtf(sqrtf(1 + sqr(a)) - a);
+  const float inv_u = -fast_inv_cbrtf(sqrtf(1 + sqr(a)) + a);
   const float cos_theta = 1 / inv_u - inv_u;
   *pdf = phase_rayleigh(cos_theta);
 
@@ -94,6 +91,14 @@ ccl_device float phase_draine(float cos_theta, float g, float alpha)
 /* Adapted from the HLSL code provided in https://research.nvidia.com/labs/rtr/approximate-mie/ */
 ccl_device float phase_draine_sample_cos(float g, float alpha, float rand)
 {
+  if (fabsf(g) < 1e-2f) {
+    /* Special case to prevent division by zero.
+     * The sample technique is similar as in https://doi.org/10.1364/JOSAA.28.002436. */
+    const float inv_alpha = 1.0f / alpha;
+    const float b_2 = (3 + alpha) * inv_alpha * (0.5f - rand);
+    const float inv_u = -fast_inv_cbrtf(b_2 + sqrtf(sqr(b_2) + sqr(inv_alpha) * inv_alpha));
+    return 1 / inv_u - inv_u / alpha;
+  }
   const float g2 = sqr(g), g3 = g * g2, g4 = sqr(g2), g6 = g2 * g4;
   const float pgp1_2 = sqr(1 + g2);
   const float T1a = alpha * (g4 - 1), T1a3 = sqr(T1a) * T1a;

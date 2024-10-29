@@ -8,7 +8,14 @@
  * language.
  */
 
-#ifndef USE_GPU_SHADER_CREATE_INFO
+/* __cplusplus is true when compiling with MSL, so ensure we are not inside a shader. */
+#if defined(GPU_SHADER) || defined(GLSL_CPP_STUBS)
+#  define IS_CPP 0
+#else
+#  define IS_CPP 1
+#endif
+
+#if IS_CPP
 #  pragma once
 
 #  include "BLI_math_bits.h"
@@ -32,13 +39,6 @@ using namespace draw;
 
 constexpr GPUSamplerState no_filter = GPUSamplerState::default_sampler();
 constexpr GPUSamplerState with_filter = {GPU_SAMPLER_FILTERING_LINEAR};
-#endif
-
-/* __cplusplus is true when compiling with MSL, so ensure we are not inside a shader. */
-#ifdef GPU_SHADER
-#  define IS_CPP 0
-#else
-#  define IS_CPP 1
 #endif
 
 /** WORKAROUND(@fclem): This is because this file is included before common_math_lib.glsl. */
@@ -706,7 +706,7 @@ struct DepthOfFieldData {
   float4 filter_samples_weight;
   float filter_center_weight;
   /** Max number of sprite in the scatter pass for each ground. */
-  int scatter_max_rect;
+  uint scatter_max_rect;
 
   int _pad0, _pad1;
 };

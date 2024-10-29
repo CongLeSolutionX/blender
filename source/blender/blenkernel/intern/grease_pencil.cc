@@ -68,8 +68,8 @@
 #include "MEM_guardedalloc.h"
 
 using blender::float3;
+using blender::int3;
 using blender::Span;
-using blender::uint3;
 using blender::VectorSet;
 
 static const char *ATTR_POSITION = "position";
@@ -396,7 +396,7 @@ static void update_triangle_cache(const Span<float3> positions,
                                   const OffsetIndices<int> points_by_curve,
                                   const OffsetIndices<int> triangle_offsets,
                                   const IndexMask &curve_mask,
-                                  MutableSpan<uint3> triangles)
+                                  MutableSpan<int3> triangles)
 {
   struct LocalMemArena {
     MemArena *pf_arena = nullptr;
@@ -417,7 +417,7 @@ static void update_triangle_cache(const Span<float3> positions,
       if (points.size() < 3) {
         continue;
       }
-      MutableSpan<uint3> r_tris = triangles.slice(triangle_offsets[curve_i]);
+      MutableSpan<int3> r_tris = triangles.slice(triangle_offsets[curve_i]);
 
       float(*projverts)[2] = static_cast<float(*)[2]>(
           BLI_memarena_alloc(pf_arena, sizeof(*projverts) * size_t(points.size())));
@@ -436,11 +436,11 @@ static void update_triangle_cache(const Span<float3> positions,
   });
 }
 
-Span<uint3> Drawing::triangles() const
+Span<int3> Drawing::triangles() const
 {
   const CurvesGeometry &curves = this->strokes();
   const OffsetIndices<int> triangle_offsets = this->triangle_offsets();
-  this->runtime->triangles_cache.ensure([&](Vector<uint3> &r_data) {
+  this->runtime->triangles_cache.ensure([&](Vector<int3> &r_data) {
     const int total_triangles = triangle_offsets.total_size();
     r_data.resize(total_triangles);
 
@@ -810,7 +810,7 @@ void Drawing::tag_positions_changed(const IndexMask &changed_curves)
     update_curve_plane_normal_cache(
         curves.positions(), curves.points_by_curve(), changed_curves, normals);
   });
-  this->runtime->triangles_cache.update([&](Vector<uint3> &triangles) {
+  this->runtime->triangles_cache.update([&](Vector<int3> &triangles) {
     const CurvesGeometry &curves = this->strokes();
     update_triangle_cache(curves.evaluated_positions(),
                           this->curve_plane_normals(),
@@ -865,21 +865,20 @@ void Drawing::tag_topology_changed(const IndexMask &changed_curves)
    * triangle offsets. */
   this->runtime->triangle_offsets_cache.tag_dirty();
 
-  this->runtime->triangles_cache.update([&](Vector<uint3> &triangles) {
+  this->runtime->triangles_cache.update([&](Vector<int3> &triangles) {
     const CurvesGeometry &curves = this->strokes();
     const OffsetIndices<int> dst_triangle_offsets = this->triangle_offsets();
 
     IndexMaskMemory memory;
     const IndexMask curves_to_copy = changed_curves.complement(curves.curves_range(), memory);
 
-    const Vector<uint3> src_triangles(triangles);
+    const Vector<int3> src_triangles(triangles);
     triangles.reinitialize(dst_triangle_offsets.total_size());
-    /* Copy groups to groups. */
-    curves_to_copy.foreach_index(GrainSize(1024), [&](const int i) {
-      triangles.as_mutable_span()
-          .slice(dst_triangle_offsets[i])
-          .copy_from(src_triangles.as_span().slice(src_triangle_offsets[i]));
-    });
+    array_utils::copy_group_to_group(src_triangle_offsets,
+                                     dst_triangle_offsets,
+                                     curves_to_copy,
+                                     src_triangles.as_span(),
+                                     triangles.as_mutable_span());
 
     update_triangle_cache(curves.evaluated_positions(),
                           this->curve_plane_normals(),
@@ -1896,7 +1895,7 @@ bool BKE_grease_pencil_drawing_attribute_required(const GreasePencilDrawing * /*
   return STREQ(name, ATTR_POSITION);
 }
 
-void *BKE_grease_pencil_add(Main *bmain, const char *name)
+GreasePencil *BKE_grease_pencil_add(Main *bmain, const char *name)
 {
   GreasePencil *grease_pencil = reinterpret_cast<GreasePencil *>(BKE_id_new(bmain, ID_GP, name));
 
@@ -2483,11 +2482,12 @@ void BKE_grease_pencil_material_remap(GreasePencil *grease_pencil, const uint *r
     }
     greasepencil::Drawing &drawing = reinterpret_cast<GreasePencilDrawing *>(base)->wrap();
     MutableAttributeAccessor attributes = drawing.strokes_for_write().attributes_for_write();
-    SpanAttributeWriter<int> material_indices = attributes.lookup_or_add_for_write_span<int>(
-        "material_index", AttrDomain::Curve);
+    SpanAttributeWriter<int> material_indices = attributes.lookup_for_write_span<int>(
+        "material_index");
     if (!material_indices) {
-      return;
+      continue;
     }
+    BLI_assert(material_indices.domain == AttrDomain::Curve);
     for (const int i : material_indices.span.index_range()) {
       BLI_assert(blender::IndexRange(totcol).contains(remap[material_indices.span[i]]));
       UNUSED_VARS_NDEBUG(totcol);
@@ -2497,7 +2497,7 @@ void BKE_grease_pencil_material_remap(GreasePencil *grease_pencil, const uint *r
   }
 }
 
-void BKE_grease_pencil_material_index_remove(GreasePencil *grease_pencil, int index)
+void BKE_grease_pencil_material_index_remove(GreasePencil *grease_pencil, const int index)
 {
   using namespace blender;
   using namespace blender::bke;
@@ -2506,21 +2506,19 @@ void BKE_grease_pencil_material_index_remove(GreasePencil *grease_pencil, int in
     if (base->type != GP_DRAWING) {
       continue;
     }
-
     greasepencil::Drawing &drawing = reinterpret_cast<GreasePencilDrawing *>(base)->wrap();
     MutableAttributeAccessor attributes = drawing.strokes_for_write().attributes_for_write();
-    AttributeWriter<int> material_indices = attributes.lookup_for_write<int>("material_index");
+    SpanAttributeWriter<int> material_indices = attributes.lookup_for_write_span<int>(
+        "material_index");
     if (!material_indices) {
-      return;
+      continue;
     }
-
-    MutableVArraySpan<int> indices_span(material_indices.varray);
-    for (const int i : indices_span.index_range()) {
-      if (indices_span[i] > 0 && indices_span[i] >= index) {
-        indices_span[i]--;
+    BLI_assert(material_indices.domain == AttrDomain::Curve);
+    for (const int i : material_indices.span.index_range()) {
+      if (material_indices.span[i] > 0 && material_indices.span[i] >= index) {
+        material_indices.span[i]--;
       }
     }
-    indices_span.save();
     material_indices.finish();
   }
 }
