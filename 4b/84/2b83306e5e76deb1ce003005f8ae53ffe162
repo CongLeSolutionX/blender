@@ -1,0 +1,1 @@
+Referenced by issue #129578, Blender crashes when using context.temp_override with bpy.ops.object.mode_set in some cases
