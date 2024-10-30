@@ -141,6 +141,7 @@ enum {
   CAM_PERSP = 0,
   CAM_ORTHO = 1,
   CAM_PANO = 2,
+  CAM_OBLIQUE = 3,
 };
 
 /* panorama_type */

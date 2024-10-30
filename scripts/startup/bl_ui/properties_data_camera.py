@@ -97,6 +97,9 @@ class DATA_PT_lens(CameraButtonsPanel, Panel):
         elif cam.type == 'ORTHO':
             col.prop(cam, "ortho_scale")
 
+        elif cam.type == 'OBLIQUE':
+            col.prop(cam, "ortho_scale")
+
             sub = col.column(align=True)
             sub.prop(cam, "oblique_angle_x", text="Oblique Angle X")
             sub.prop(cam, "oblique_angle_y", text="Y")

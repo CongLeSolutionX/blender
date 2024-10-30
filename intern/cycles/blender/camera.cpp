@@ -211,8 +211,29 @@ static void blender_camera_from_object(BlenderCamera *bcam,
     bcam->farclip = b_camera.clip_end();
 
     switch (b_camera.type()) {
+      case BL::Camera::type_OBLIQUE:
+        bcam->type = CAMERA_ORTHOGRAPHIC;
+        /* Oblique reuses the orthographic camera mode.
+         * Load the correct values for oblique case. */
+        bcam->oblique_angle_x = b_camera.oblique_angle_x();
+        bcam->oblique_angle_y = b_camera.oblique_angle_y();
+        bcam->oblique_angle_z = b_camera.oblique_angle_z();
+        bcam->oblique_length_x = b_camera.oblique_length_x();
+        bcam->oblique_length_y = b_camera.oblique_length_y();
+        bcam->oblique_length_z = b_camera.oblique_length_z();
+        bcam->oblique_focal = b_camera.oblique_focal();
+        break;
       case BL::Camera::type_ORTHO:
         bcam->type = CAMERA_ORTHOGRAPHIC;
+        /* Oblique reuses the orthographic camera mode.
+         * Load default values (no shear) for orthographic case. */
+        bcam->oblique_angle_x = 0.0f;
+        bcam->oblique_angle_y = M_PI_2_F;
+        bcam->oblique_angle_z = 0.0f;
+        bcam->oblique_length_x = 1.0f;
+        bcam->oblique_length_y = 1.0f;
+        bcam->oblique_length_z = 0.0f;
+        bcam->oblique_focal = 0.0f;
         break;
       case BL::Camera::type_PANO:
         if (!skip_panorama) {
@@ -235,14 +256,6 @@ static void blender_camera_from_object(BlenderCamera *bcam,
     bcam->latitude_max = b_camera.latitude_max();
     bcam->longitude_min = b_camera.longitude_min();
     bcam->longitude_max = b_camera.longitude_max();
-
-    bcam->oblique_angle_x = b_camera.oblique_angle_x();
-    bcam->oblique_angle_y = b_camera.oblique_angle_y();
-    bcam->oblique_angle_z = b_camera.oblique_angle_z();
-    bcam->oblique_length_x = b_camera.oblique_length_x();
-    bcam->oblique_length_y = b_camera.oblique_length_y();
-    bcam->oblique_length_z = b_camera.oblique_length_z();
-    bcam->oblique_focal = b_camera.oblique_focal();
 
     bcam->central_cylindrical_range_u_min = b_camera.central_cylindrical_range_u_min();
     bcam->central_cylindrical_range_u_max = b_camera.central_cylindrical_range_u_max();
