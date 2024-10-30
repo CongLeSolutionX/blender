@@ -771,6 +771,8 @@ void VolumeManager::device_update(Device *device,
   else {
     /* TODO(weizhen): maybe there is shader with volume but the object scale is zero, so this is
      * needed. but does this belong to volume or integrator manager? How about subsurface? */
+    printf("No volume in the scene.\n");
+    VLOG_INFO << "No volume in the scene.";
     dscene->data.integrator.use_volumes = false;
   }
 

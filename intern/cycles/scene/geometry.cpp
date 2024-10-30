@@ -369,6 +369,7 @@ void GeometryManager::device_update_preprocess(Device *device, Scene *scene, Pro
   bool volume_images_updated = false;
 
   foreach (Geometry *geom, scene->geometry) {
+    const bool prev_has_volume = geom->has_volume;
     geom->has_volume = false;
 
     update_attribute_realloc_flags(device_update_flags, geom->attributes);
@@ -449,6 +450,14 @@ void GeometryManager::device_update_preprocess(Device *device, Scene *scene, Pro
 
       /* always reallocate when we have a volume, as we need to rebuild the BVH */
       device_update_flags |= DEVICE_MESH_DATA_NEEDS_REALLOC;
+    }
+
+    if (geom->is_modified() && geom->has_volume) {
+      scene->volume_manager->need_update_ = true;
+    }
+
+    if (geom->has_volume != prev_has_volume) {
+      scene->volume_manager->need_update_ = true;
     }
 
     if (geom->is_hair()) {

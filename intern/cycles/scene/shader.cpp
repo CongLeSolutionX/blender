@@ -19,6 +19,7 @@
 #include "scene/shader_nodes.h"
 #include "scene/svm.h"
 #include "scene/tables.h"
+#include "scene/volume.h"
 
 #include "util/foreach.h"
 #include "util/murmurhash.h"
@@ -345,8 +346,9 @@ void Shader::tag_update(Scene *scene)
    * be more fine grained but it's better than nothing */
   OutputNode *output = graph->output();
   bool prev_has_volume = has_volume;
-  has_surface = has_surface || output->input("Surface")->link;
-  has_volume = has_volume || output->input("Volume")->link;
+  /* TODO(sergey): Verify it works fine. */
+  has_surface = output->input("Surface")->link;
+  has_volume = output->input("Volume")->link;
   has_displacement = has_displacement || output->input("Displacement")->link;
 
   if (!has_surface && !has_volume) {
@@ -405,6 +407,10 @@ void Shader::tag_update(Scene *scene)
     scene->geometry_manager->need_flags_update = true;
     scene->object_manager->need_flags_update = true;
     prev_volume_step_rate = volume_step_rate;
+  }
+
+  if (has_volume || prev_has_volume) {
+    scene->volume_manager->need_update_ = true;
   }
 }
 

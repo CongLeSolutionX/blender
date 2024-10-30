@@ -229,15 +229,11 @@ void Object::tag_update(Scene *scene)
   if (geometry) {
     if (tfm_is_modified() || motion_is_modified()) {
       flag |= ObjectManager::TRANSFORM_MODIFIED;
+      scene->volume_manager->need_update_ |= geometry->has_volume;
     }
 
     if (visibility_is_modified()) {
       flag |= ObjectManager::VISIBILITY_MODIFIED;
-    }
-
-    if (geometry->has_volume) {
-      /* TODO(weizhen): only update when necessary, and consider world volume. */
-      scene->volume_manager->need_update_ = true;
     }
 
     foreach (Node *node, geometry->get_used_shaders()) {
