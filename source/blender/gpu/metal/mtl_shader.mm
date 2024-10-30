@@ -170,7 +170,7 @@ MTLShader::~MTLShader()
     }
     compute_pso_cache_.clear();
     pso_cache_lock_.unlock();
-    
+
     /* Free shader libraries. */
     if (shader_library_vert_ != nil) {
       [shader_library_vert_ release];
@@ -1635,11 +1635,11 @@ MTLComputePipelineStateInstance *MTLShader::bake_compute_pipeline_state(
     }
 
     [desc release];
-    
+
     /* Gather reflection data and create MTLComputePipelineStateInstance to store results. */
     MTLComputePipelineStateInstance *compute_pso_instance = new MTLComputePipelineStateInstance();
     compute_pso_instance->compute = compute_function;
-    compute_pso_instance->pso = pso; 
+    compute_pso_instance->pso = pso;
     compute_pso_instance->base_uniform_buffer_index = MTL_uniform_buffer_base_index;
     compute_pso_instance->base_storage_buffer_index = MTL_storage_buffer_base_index;
     pso_cache_lock_.lock();
