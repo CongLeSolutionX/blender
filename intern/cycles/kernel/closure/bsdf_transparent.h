@@ -19,9 +19,9 @@ ccl_device void bsdf_transparent_setup(ccl_private ShaderData *sd,
     return;
   }
 
-  if (sd->flag & SD_TRANSPARENT) {
-    sd->closure_transparent_extinction += weight;
+  sd->closure_transparent_extinction += weight;
 
+  if (sd->flag & SD_TRANSPARENT) {
     /* Add weight to existing transparent BSDF. */
     for (int i = 0; i < sd->num_closure; i++) {
       ccl_private ShaderClosure *sc = &sd->closure[i];
@@ -35,7 +35,6 @@ ccl_device void bsdf_transparent_setup(ccl_private ShaderData *sd,
   }
   else {
     sd->flag |= SD_BSDF | SD_TRANSPARENT;
-    sd->closure_transparent_extinction = weight;
 
     if (path_flag & PATH_RAY_TERMINATE) {
       /* In this case the number of closures is set to zero to disable
@@ -76,8 +75,9 @@ ccl_device int bsdf_transparent_sample(ccl_private const ShaderClosure *sc,
 {
   // only one direction is possible
   *wo = -wi;
-  *pdf = 1;
-  *eval = one_spectrum();
+  /* Some high number for MIS. */
+  *pdf = 1e6f;
+  *eval = one_spectrum() * 1e6f;
   return LABEL_TRANSMIT | LABEL_TRANSPARENT;
 }
 

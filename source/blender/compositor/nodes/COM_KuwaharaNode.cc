@@ -7,8 +7,7 @@
 
 #include "COM_KuwaharaNode.h"
 
-#include "COM_GaussianXBlurOperation.h"
-#include "COM_GaussianYBlurOperation.h"
+#include "COM_GaussianBlurBaseOperation.h"
 #include "COM_KuwaharaAnisotropicOperation.h"
 #include "COM_KuwaharaAnisotropicStructureTensorOperation.h"
 #include "COM_KuwaharaClassicOperation.h"
@@ -25,6 +24,7 @@ void KuwaharaNode::convert_to_operations(NodeConverter &converter,
   switch (data->variation) {
     case CMP_NODE_KUWAHARA_CLASSIC: {
       KuwaharaClassicOperation *kuwahara_classic = new KuwaharaClassicOperation();
+      kuwahara_classic->set_high_precision(data->high_precision);
       converter.add_operation(kuwahara_classic);
       converter.map_input_socket(get_input_socket(0), kuwahara_classic->get_input_socket(0));
       converter.map_input_socket(get_input_socket(1), kuwahara_classic->get_input_socket(1));
@@ -76,7 +76,8 @@ void KuwaharaNode::convert_to_operations(NodeConverter &converter,
 
       KuwaharaAnisotropicOperation *kuwahara_anisotropic_operation =
           new KuwaharaAnisotropicOperation();
-      kuwahara_anisotropic_operation->data = *data;
+      kuwahara_anisotropic_operation->set_sharpness(data->sharpness);
+      kuwahara_anisotropic_operation->set_eccentricity(data->eccentricity);
 
       converter.add_operation(kuwahara_anisotropic_operation);
       converter.map_input_socket(get_input_socket(0),

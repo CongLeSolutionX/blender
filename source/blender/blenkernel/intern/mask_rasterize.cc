@@ -46,8 +46,6 @@
  * This is getting a bit complicated with the addition of unfilled splines and end capping -
  * If large changes are needed here we would be better off using an iterable
  * BLI_mempool for triangles and converting to a contiguous array afterwards.
- *
- * - Campbell
  */
 
 #include <algorithm> /* For `min/max`. */
@@ -73,7 +71,7 @@
 
 #include "BKE_mask.h"
 
-#include "BLI_strict_flags.h"
+#include "BLI_strict_flags.h" /* Keep last. */
 
 /* this is rather and annoying hack, use define to isolate it.
  * problem is caused by scanfill removing edges on us. */
@@ -292,7 +290,8 @@ static void maskrasterize_spline_differentiate_point_outset(float (*diff_feather
     normalize_v2(d_next);
 
     if ((do_test == false) ||
-        (len_squared_v2v2(diff_feather_points[k], diff_points[k]) < ofs_squared)) {
+        (len_squared_v2v2(diff_feather_points[k], diff_points[k]) < ofs_squared))
+    {
 
       add_v2_v2v2(d, d_prev, d_next);
 
@@ -539,7 +538,8 @@ static void layer_bucket_init(MaskRasterLayer *layer, const float pixel_size)
           buckets_face[bucket_index] = bucket;
 
           for (bucket_node = bucketstore[bucket_index]; bucket_node;
-               bucket_node = bucket_node->next) {
+               bucket_node = bucket_node->next)
+          {
             *bucket = POINTER_AS_UINT(bucket_node->link);
             bucket++;
           }
@@ -630,9 +630,9 @@ void BKE_maskrasterize_handle_init(MaskRasterHandle *mr_handle,
       float(*diff_feather_points_flip)[2];
       uint tot_diff_feather_points;
 
-      const uint resol_a = BKE_mask_spline_resolution(spline, width, height) / 4;
+      const uint resol_a = uint(BKE_mask_spline_resolution(spline, width, height) / 4);
       const uint resol_b = BKE_mask_spline_feather_resolution(spline, width, height) / 4;
-      const uint resol = CLAMPIS(std::max(resol_a, resol_b), 4, 512);
+      const uint resol = std::clamp(std::max(resol_a, resol_b), 4u, 512u);
 
       diff_points = BKE_mask_spline_differentiate_with_resolution(spline, resol, &tot_diff_point);
 
@@ -972,6 +972,35 @@ void BKE_maskrasterize_handle_init(MaskRasterHandle *mr_handle,
         scanfill_flag |= BLI_SCANFILL_CALC_HOLES;
       }
 
+      /* Store an array of edges from `sf_ctx.filledgebase`
+       * because filling may remove edges, see: #127692. */
+      ScanFillEdge **sf_edge_array = nullptr;
+      uint sf_edge_array_num = 0;
+      if (tot_feather_quads) {
+        ListBase *lb_array[] = {&sf_ctx.filledgebase, &isect_remedgebase};
+        for (int pass = 0; pass < 2; pass++) {
+          LISTBASE_FOREACH (ScanFillEdge *, sf_edge, lb_array[pass]) {
+            if (sf_edge->tmp.c == SF_EDGE_IS_BOUNDARY) {
+              sf_edge_array_num += 1;
+            }
+          }
+        }
+
+        if (sf_edge_array_num > 0) {
+          sf_edge_array = static_cast<ScanFillEdge **>(
+              MEM_mallocN(sizeof(ScanFillEdge **) * size_t(sf_edge_array_num), __func__));
+          uint edge_index = 0;
+          for (int pass = 0; pass < 2; pass++) {
+            LISTBASE_FOREACH (ScanFillEdge *, sf_edge, lb_array[pass]) {
+              if (sf_edge->tmp.c == SF_EDGE_IS_BOUNDARY) {
+                sf_edge_array[edge_index++] = sf_edge;
+              }
+            }
+          }
+          BLI_assert(edge_index == sf_edge_array_num);
+        }
+      }
+
       sf_tri_tot = uint(BLI_scanfill_calc_ex(&sf_ctx, scanfill_flag, zvec));
 
       if (is_isect) {
@@ -1005,25 +1034,23 @@ void BKE_maskrasterize_handle_init(MaskRasterHandle *mr_handle,
       BLI_assert(face_index == sf_tri_tot);
       UNUSED_VARS_NDEBUG(face_index);
 
-      if (tot_feather_quads) {
-        ScanFillEdge *sf_edge;
-
-        for (sf_edge = static_cast<ScanFillEdge *>(sf_ctx.filledgebase.first); sf_edge;
-             sf_edge = sf_edge->next)
-        {
-          if (sf_edge->tmp.c == SF_EDGE_IS_BOUNDARY) {
-            *(face++) = sf_edge->v1->tmp.u;
-            *(face++) = sf_edge->v2->tmp.u;
-            *(face++) = sf_edge->v2->keyindex;
-            *(face++) = sf_edge->v1->keyindex;
-            face_index++;
-            FACE_ASSERT(face - 4, sf_vert_tot);
+      if (sf_edge_array) {
+        BLI_assert(tot_feather_quads);
+        for (uint i = 0; i < sf_edge_array_num; i++) {
+          ScanFillEdge *sf_edge = sf_edge_array[i];
+          BLI_assert(sf_edge->tmp.c == SF_EDGE_IS_BOUNDARY);
+          *(face++) = sf_edge->v1->tmp.u;
+          *(face++) = sf_edge->v2->tmp.u;
+          *(face++) = sf_edge->v2->keyindex;
+          *(face++) = sf_edge->v1->keyindex;
+          face_index++;
+          FACE_ASSERT(face - 4, sf_vert_tot);
 
 #ifdef USE_SCANFILL_EDGE_WORKAROUND
-            tot_boundary_found++;
+          tot_boundary_found++;
 #endif
-          }
         }
+        MEM_freeN(sf_edge_array);
       }
 
 #ifdef USE_SCANFILL_EDGE_WORKAROUND

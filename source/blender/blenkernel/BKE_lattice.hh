@@ -8,11 +8,14 @@
  * \ingroup bke
  */
 
+#include <optional>
+
+#include "BLI_bounds_types.hh"
 #include "BLI_compiler_attrs.h"
+#include "BLI_math_vector_types.hh"
 #include "BLI_sys_types.h"
 
 struct BMEditMesh;
-struct BoundBox;
 struct BPoint;
 struct Depsgraph;
 struct Lattice;
@@ -23,7 +26,7 @@ struct Mesh;
 struct Object;
 struct Scene;
 
-void BKE_lattice_resize(Lattice *lt, int u, int v, int w, Object *ltOb);
+void BKE_lattice_resize(Lattice *lt, int u_new, int v_new, int w_new, Object *lt_ob);
 Lattice *BKE_lattice_add(Main *bmain, const char *name);
 void calc_lat_fudu(int flag, int res, float *r_fu, float *r_du);
 
@@ -40,21 +43,18 @@ void BKE_lattice_modifiers_calc(Depsgraph *depsgraph, Scene *scene, Object *ob);
 MDeformVert *BKE_lattice_deform_verts_get(const Object *oblatt);
 BPoint *BKE_lattice_active_point_get(Lattice *lt);
 
-BoundBox *BKE_lattice_boundbox_get(Object *ob);
-void BKE_lattice_minmax_dl(Object *ob, Lattice *lt, float min[3], float max[3]);
-void BKE_lattice_minmax(Lattice *lt, float min[3], float max[3]);
+std::optional<blender::Bounds<blender::float3>> BKE_lattice_minmax(const Lattice *lt);
 void BKE_lattice_center_median(Lattice *lt, float cent[3]);
-void BKE_lattice_center_bounds(Lattice *lt, float cent[3]);
 void BKE_lattice_translate(Lattice *lt, const float offset[3], bool do_keys);
 void BKE_lattice_transform(Lattice *lt, const float mat[4][4], bool do_keys);
 
 bool BKE_lattice_is_any_selected(const Lattice *lt);
 
-int BKE_lattice_index_from_uvw(Lattice *lt, int u, int v, int w);
-void BKE_lattice_index_to_uvw(Lattice *lt, int index, int *r_u, int *r_v, int *r_w);
-int BKE_lattice_index_flip(Lattice *lt, int index, bool flip_u, bool flip_v, bool flip_w);
+int BKE_lattice_index_from_uvw(const Lattice *lt, int u, int v, int w);
+void BKE_lattice_index_to_uvw(const Lattice *lt, int index, int *r_u, int *r_v, int *r_w);
+int BKE_lattice_index_flip(const Lattice *lt, int index, bool flip_u, bool flip_v, bool flip_w);
 void BKE_lattice_bitmap_from_flag(
-    Lattice *lt, unsigned int *bitmap, uint8_t flag, bool clear, bool respecthide);
+    const Lattice *lt, unsigned int *bitmap, uint8_t flag, bool clear, bool respecthide);
 
 /* **** Depsgraph evaluation **** */
 
@@ -106,6 +106,6 @@ void BKE_lattice_deform_coords_with_editmesh(const Object *ob_lattice,
                                              short flag,
                                              const char *defgrp_name,
                                              float fac,
-                                             BMEditMesh *em_target);
+                                             const BMEditMesh *em_target);
 
 /** \} */

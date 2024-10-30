@@ -9,6 +9,8 @@
  * \brief An implementation of the A* (AStar) algorithm to solve shortest path problem.
  */
 
+#include "DNA_listBase.h"
+
 #include "BLI_utildefines.h"
 
 #include "BLI_bitmap.h"
@@ -86,8 +88,8 @@ int BLI_astar_node_link_other_node(BLI_AStarGNLink *lnk, int idx);
 /**
  * Initialize a solution data for given A* graph. Does not compute anything!
  *
- * \param custom_data: an opaque pointer attached to this link, available e.g
- * . to cost callback function.
+ * \param custom_data: an opaque pointer attached to this link, available e.g.
+ * to cost callback function.
  *
  * \note BLI_AStarSolution stores nearly all data needed during solution compute.
  */

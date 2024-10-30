@@ -14,7 +14,25 @@ import bpy
 args = None
 
 
-type_info = {
+base_idname = {
+    "VALUE": "NodeSocketFloat",
+    "INT": "NodeSocketInt",
+    "BOOLEAN": "NodeSocketBool",
+    "ROTATION": "NodeSocketRotation",
+    "VECTOR": "NodeSocketVector",
+    "RGBA": "NodeSocketColor",
+    "STRING": "NodeSocketString",
+    "SHADER": "NodeSocketShader",
+    "OBJECT": "NodeSocketObject",
+    "IMAGE": "NodeSocketImage",
+    "GEOMETRY": "NodeSocketGeometry",
+    "COLLECTION": "NodeSocketCollection",
+    "TEXTURE": "NodeSocketTexture",
+    "MATERIAL": "NodeSocketMaterial",
+}
+
+
+subtype_idname = {
     ("VALUE", "NONE"): "NodeSocketFloat",
     ("VALUE", "UNSIGNED"): "NodeSocketFloatUnsigned",
     ("VALUE", "PERCENTAGE"): "NodeSocketFloatPercentage",
@@ -38,6 +56,7 @@ type_info = {
     ("VECTOR", "XYZ"): "NodeSocketVectorXYZ",
     ("RGBA", "NONE"): "NodeSocketColor",
     ("STRING", "NONE"): "NodeSocketString",
+    ("STRING", "FILEPATH"): "NodeSocketStringFilePath",
     ("SHADER", "NONE"): "NodeSocketShader",
     ("OBJECT", "NONE"): "NodeSocketObject",
     ("IMAGE", "NONE"): "NodeSocketImage",
@@ -63,8 +82,12 @@ class SocketSpec():
     external_links: int = 1
 
     @property
-    def idname(self):
-        return type_info[(self.type, self.subtype)]
+    def base_idname(self):
+        return base_idname[self.type]
+
+    @property
+    def subtype_idname(self):
+        return subtype_idname[(self.type, self.subtype)]
 
 
 class AbstractNodeGroupInterfaceTest(unittest.TestCase):
@@ -95,7 +118,7 @@ class AbstractNodeGroupInterfaceTest(unittest.TestCase):
 
         # Examine the interface item.
         self.assertEqual(item.name, spec.name)
-        self.assertEqual(item.bl_socket_idname, spec.idname)
+        self.assertEqual(item.bl_socket_idname, spec.base_idname)
         self.assertEqual(item.identifier, spec.identifier)
 
         # Types that have subtypes.
@@ -134,7 +157,7 @@ class AbstractNodeGroupInterfaceTest(unittest.TestCase):
             socket = next(s for s in node.inputs if s.identifier == spec.identifier)
             self.assertIsNotNone(socket, f"Could not find socket for group input identifier {spec.identifier}")
             self.assertEqual(socket.name, spec.name)
-            self.assertEqual(socket.bl_idname, spec.idname)
+            self.assertEqual(socket.bl_idname, spec.subtype_idname)
             self.assertEqual(socket.type, spec.type)
             self.assertEqual(socket.hide_value, spec.hide_value)
             if test_links:
@@ -147,7 +170,7 @@ class AbstractNodeGroupInterfaceTest(unittest.TestCase):
             self.assertIsNotNone(
                 socket, f"Could not find group input socket for group input identifier {spec.identifier}")
             self.assertEqual(socket.name, spec.name)
-            self.assertEqual(socket.bl_idname, spec.idname)
+            self.assertEqual(socket.bl_idname, spec.subtype_idname)
             self.assertEqual(socket.type, spec.type)
             self.assertEqual(socket.hide_value, spec.hide_value)
             if test_links:
@@ -158,7 +181,7 @@ class AbstractNodeGroupInterfaceTest(unittest.TestCase):
             socket = next(s for s in node.outputs if s.identifier == spec.identifier)
             self.assertIsNotNone(socket, f"Could not find socket for group output identifier {spec.identifier}")
             self.assertEqual(socket.name, spec.name)
-            self.assertEqual(socket.bl_idname, spec.idname)
+            self.assertEqual(socket.bl_idname, spec.subtype_idname)
             self.assertEqual(socket.type, spec.type)
             self.assertEqual(socket.hide_value, spec.hide_value)
             if test_links:
@@ -171,7 +194,7 @@ class AbstractNodeGroupInterfaceTest(unittest.TestCase):
             self.assertIsNotNone(
                 socket, f"Could not find group output socket for group output identifier {spec.identifier}")
             self.assertEqual(socket.name, spec.name)
-            self.assertEqual(socket.bl_idname, spec.idname)
+            self.assertEqual(socket.bl_idname, spec.subtype_idname)
             self.assertEqual(socket.type, spec.type)
             self.assertEqual(socket.hide_value, spec.hide_value)
             if test_links:

@@ -8,8 +8,8 @@
 
 #include "BLI_string.h"
 
-#include "GPU_framebuffer.h"
-#include "GPU_texture.h"
+#include "GPU_framebuffer.hh"
+#include "GPU_texture.hh"
 
 #include "gpu_backend.hh"
 #include "gpu_context_private.hh"
@@ -118,7 +118,7 @@ bool Texture::init_cubemap(int w, int layers, int mip_len, eGPUTextureFormat for
   return this->init_internal();
 }
 
-bool Texture::init_buffer(GPUVertBuf *vbo, eGPUTextureFormat format)
+bool Texture::init_buffer(VertBuf *vbo, eGPUTextureFormat format)
 {
   /* See to_texture_format(). */
   if (format == GPU_DEPTH_COMPONENT24) {
@@ -414,12 +414,12 @@ GPUTexture *GPU_texture_create_compressed_2d(const char *name,
   return reinterpret_cast<GPUTexture *>(tex);
 }
 
-GPUTexture *GPU_texture_create_from_vertbuf(const char *name, GPUVertBuf *vert)
+GPUTexture *GPU_texture_create_from_vertbuf(const char *name, blender::gpu::VertBuf *vert)
 {
 #ifndef NDEBUG
   /* Vertex buffers used for texture buffers must be flagged with:
    * GPU_USAGE_FLAG_BUFFER_TEXTURE_ONLY. */
-  BLI_assert_msg(unwrap(vert)->extended_usage_ & GPU_USAGE_FLAG_BUFFER_TEXTURE_ONLY,
+  BLI_assert_msg(vert->extended_usage_ & GPU_USAGE_FLAG_BUFFER_TEXTURE_ONLY,
                  "Vertex Buffers used for textures should have usage flag "
                  "GPU_USAGE_FLAG_BUFFER_TEXTURE_ONLY.");
 #endif
@@ -436,7 +436,7 @@ GPUTexture *GPU_texture_create_from_vertbuf(const char *name, GPUVertBuf *vert)
 
 GPUTexture *GPU_texture_create_error(int dimension, bool is_array)
 {
-  float pixel[4] = {1.0f, 0.0f, 1.0f, 1.0f};
+  const float pixel[4] = {1.0f, 0.0f, 1.0f, 1.0f};
   int w = 1;
   int h = (dimension < 2 && !is_array) ? 0 : 1;
   int d = (dimension < 3 && !is_array) ? 0 : 1;
@@ -469,9 +469,13 @@ GPUTexture *GPU_texture_create_view(const char *name,
 {
   BLI_assert(mip_len > 0);
   BLI_assert(layer_len > 0);
-  BLI_assert_msg(
-      GPU_texture_usage(src) & GPU_TEXTURE_USAGE_MIP_SWIZZLE_VIEW,
-      "Source texture of TextureView must have GPU_TEXTURE_USAGE_MIP_SWIZZLE_VIEW usage flag.");
+  BLI_assert_msg(use_stencil == false || (GPU_texture_usage(src) & GPU_TEXTURE_USAGE_FORMAT_VIEW),
+                 "Source texture of TextureView must have GPU_TEXTURE_USAGE_FORMAT_VIEW usage "
+                 "flag if view texture uses stencil texturing.");
+  BLI_assert_msg((format == GPU_texture_format(src)) ||
+                     (GPU_texture_usage(src) & GPU_TEXTURE_USAGE_FORMAT_VIEW),
+                 "Source texture of TextureView must have GPU_TEXTURE_USAGE_FORMAT_VIEW usage "
+                 "flag if view texture format is different.");
   Texture *view = GPUBackend::get()->texture_alloc(name);
   view->init_view(src,
                   format,

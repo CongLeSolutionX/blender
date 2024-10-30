@@ -39,9 +39,9 @@ void BLI_mempool_free(BLI_mempool *pool, void *addr) ATTR_NONNULL(1, 2);
  * Empty the pool, as if it were just created.
  *
  * \param pool: The pool to clear.
- * \param totelem_reserve: Optionally reserve how many items should be kept from clearing.
+ * \param elem_num_reserve: Optionally reserve how many items should be kept from clearing.
  */
-void BLI_mempool_clear_ex(BLI_mempool *pool, int totelem_reserve) ATTR_NONNULL(1);
+void BLI_mempool_clear_ex(BLI_mempool *pool, int elem_num_reserve) ATTR_NONNULL(1);
 /**
  * Wrap #BLI_mempool_clear_ex with no reserve set.
  */
@@ -54,20 +54,6 @@ int BLI_mempool_len(const BLI_mempool *pool) ATTR_NONNULL(1);
 void *BLI_mempool_findelem(BLI_mempool *pool, unsigned int index) ATTR_WARN_UNUSED_RESULT
     ATTR_NONNULL(1);
 
-/**
- * Fill in \a data with pointers to each element of the mempool,
- * to create lookup table.
- *
- * \param pool: Pool to create a table from.
- * \param data: array of pointers at least the size of 'pool->totused'
- */
-void BLI_mempool_as_table(BLI_mempool *pool, void **data) ATTR_NONNULL(1, 2);
-/**
- * A version of #BLI_mempool_as_table that allocates and returns the data.
- */
-void **BLI_mempool_as_tableN(BLI_mempool *pool,
-                             const char *allocstr) ATTR_MALLOC ATTR_WARN_UNUSED_RESULT
-    ATTR_NONNULL(1, 2);
 /**
  * Fill in \a data with the contents of the mempool.
  */

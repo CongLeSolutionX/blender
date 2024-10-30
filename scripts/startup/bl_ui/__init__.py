@@ -11,6 +11,7 @@ if "bpy" in locals():
     del reload
 
 _modules = [
+    "anim",
     "asset_shelf",
     "node_add_menu",
     "node_add_menu_compositor",
@@ -25,7 +26,6 @@ _modules = [
     "properties_data_curve",
     "properties_data_curves",
     "properties_data_empty",
-    "properties_data_gpencil",
     "properties_data_grease_pencil",
     "properties_data_light",
     "properties_data_lattice",
@@ -104,8 +104,17 @@ _modules_loaded = [_namespace[name] for name in _modules]
 del _namespace
 
 
+# Bypass the caching mechanism in the "Format" panel to make sure it is properly translated on language update.
+@bpy.app.handlers.persistent
+def translation_update(_):
+    from .properties_output import RENDER_PT_format
+    RENDER_PT_format._frame_rate_args_prev = None
+
+
 def register():
     from bpy.utils import register_class
+    for cls in classes:
+        register_class(cls)
     for mod in _modules_loaded:
         for cls in mod.classes:
             register_class(cls)
@@ -132,8 +141,8 @@ def register():
         items_unique = set()
 
         for mod in addon_utils.modules(refresh=False):
-            info = addon_utils.module_bl_info(mod)
-            items_unique.add(info["category"])
+            bl_info = addon_utils.module_bl_info(mod)
+            items_unique.add(bl_info["category"])
 
         items.extend([(cat, cat, "") for cat in sorted(items_unique)])
         return items
@@ -166,6 +175,8 @@ def register():
     )
     del items
 
+    bpy.app.handlers.translation_update_post.append(translation_update)
+
     # done...
 
 
@@ -175,6 +186,14 @@ def unregister():
         for cls in reversed(mod.classes):
             if cls.is_registered:
                 unregister_class(cls)
+    for cls in reversed(classes):
+        if cls.is_registered:
+            unregister_class(cls)
+
+    try:
+        bpy.app.handlers.translation_update_post.remove(translation_update)
+    except ValueError:
+        pass
 
 # Define a default UIList, when a list does not need any custom drawing...
 # Keep in sync with its #defined name in UI_interface.hh
@@ -202,7 +221,7 @@ class UI_UL_list(bpy.types.UIList):
             flags = [0] * len(items)
 
         # Implicitly add heading/trailing wildcards.
-        pattern_regex = re.compile(fnmatch.translate("*" + pattern + "*"))
+        pattern_regex = re.compile(fnmatch.translate("*" + pattern + "*"), re.IGNORECASE)
 
         for i, item in enumerate(items):
             name = getattr(item, propname, None)
@@ -231,13 +250,10 @@ class UI_UL_list(bpy.types.UIList):
         Re-order items using their names (case-insensitive).
         propname is the name of the string property to use for sorting.
         return a list mapping org_idx -> new_idx,
-               or an empty list if no sorting has been done.
+        or an empty list if no sorting has been done.
         """
         _sort = [(idx, getattr(it, propname, "")) for idx, it in enumerate(items)]
         return cls.sort_items_helper(_sort, lambda e: e[1].lower())
-
-
-bpy.utils.register_class(UI_UL_list)
 
 
 class UI_MT_list_item_context_menu(bpy.types.Menu):
@@ -254,9 +270,6 @@ class UI_MT_list_item_context_menu(bpy.types.Menu):
         # Dummy function. This type is just for scripts to append their own
         # context menu items.
         pass
-
-
-bpy.utils.register_class(UI_MT_list_item_context_menu)
 
 
 class UI_MT_button_context_menu(bpy.types.Menu):
@@ -276,4 +289,8 @@ class UI_MT_button_context_menu(bpy.types.Menu):
             self.layout.menu_contents("WM_MT_button_context")
 
 
-bpy.utils.register_class(UI_MT_button_context_menu)
+classes = (
+    UI_UL_list,
+    UI_MT_list_item_context_menu,
+    UI_MT_button_context_menu,
+)

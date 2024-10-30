@@ -3,10 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0 */
 
 #include "BLI_exception_safety_test_utils.hh"
-#include "BLI_strict_flags.h"
 #include "BLI_vector.hh"
 #include "testing/testing.h"
 #include <forward_list>
+
+#include "BLI_strict_flags.h" /* Keep last. */
 
 namespace blender::tests {
 
@@ -429,6 +430,17 @@ TEST(vector, RemoveIf)
   const Vector<int> expected_vec = {1, 3, 5, 7};
   EXPECT_EQ(vec.size(), expected_vec.size());
   EXPECT_EQ_ARRAY(vec.data(), expected_vec.data(), size_t(vec.size()));
+}
+
+TEST(vector, RemoveIfNonTrivialDestructible)
+{
+  Vector<Vector<int, 0, GuardedAllocator>> vec;
+  for ([[maybe_unused]] const int64_t i : IndexRange(10)) {
+    /* This test relies on leak detection to run after tests. */
+    vec.append(Vector<int, 0, GuardedAllocator>(100));
+  }
+  vec.remove_if([&](const auto & /*value*/) { return true; });
+  EXPECT_TRUE(vec.is_empty());
 }
 
 TEST(vector, ExtendSmallVector)

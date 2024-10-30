@@ -75,12 +75,14 @@ ccl_device_inline Transform object_fetch_transform_motion(KernelGlobals kg, int 
 
   return tfm;
 }
+#endif /* __OBJECT_MOTION__ */
 
 ccl_device_inline Transform object_fetch_transform_motion_test(KernelGlobals kg,
                                                                int object,
                                                                float time,
                                                                ccl_private Transform *itfm)
 {
+#ifdef __OBJECT_MOTION__
   int object_flag = kernel_data_fetch(object_flag, object);
   if (object_flag & SD_OBJECT_MOTION) {
     /* if we do motion blur */
@@ -91,7 +93,9 @@ ccl_device_inline Transform object_fetch_transform_motion_test(KernelGlobals kg,
 
     return tfm;
   }
-  else {
+  else
+#endif /* __OBJECT_MOTION__ */
+  {
     Transform tfm = object_fetch_transform(kg, object, OBJECT_TRANSFORM);
     if (itfm)
       *itfm = object_fetch_transform(kg, object, OBJECT_INVERSE_TRANSFORM);
@@ -99,7 +103,6 @@ ccl_device_inline Transform object_fetch_transform_motion_test(KernelGlobals kg,
     return tfm;
   }
 }
-#endif
 
 /* Get transform matrix for shading point. */
 
@@ -169,7 +172,7 @@ ccl_device_inline void object_inverse_normal_transform(KernelGlobals kg,
 #ifdef __OBJECT_MOTION__
   if (sd->object_flag & SD_OBJECT_MOTION) {
     if ((sd->object != OBJECT_NONE) || (sd->type == PRIMITIVE_LAMP)) {
-      *N = normalize(transform_direction_transposed_auto(&sd->ob_tfm_motion, *N));
+      *N = safe_normalize(transform_direction_transposed_auto(&sd->ob_tfm_motion, *N));
     }
     return;
   }
@@ -177,11 +180,11 @@ ccl_device_inline void object_inverse_normal_transform(KernelGlobals kg,
 
   if (sd->object != OBJECT_NONE) {
     Transform tfm = object_fetch_transform(kg, sd->object, OBJECT_TRANSFORM);
-    *N = normalize(transform_direction_transposed(&tfm, *N));
+    *N = safe_normalize(transform_direction_transposed(&tfm, *N));
   }
   else if (sd->type == PRIMITIVE_LAMP) {
     Transform tfm = lamp_fetch_transform(kg, sd->lamp, false);
-    *N = normalize(transform_direction_transposed(&tfm, *N));
+    *N = safe_normalize(transform_direction_transposed(&tfm, *N));
   }
 }
 
@@ -366,24 +369,6 @@ ccl_device_inline float3 object_dupli_uv(KernelGlobals kg, int object)
 
   ccl_global const KernelObject *kobject = &kernel_data_fetch(objects, object);
   return make_float3(kobject->dupli_uv[0], kobject->dupli_uv[1], 0.0f);
-}
-
-/* Information about mesh for motion blurred triangles and curves */
-
-ccl_device_inline void object_motion_info(KernelGlobals kg,
-                                          int object,
-                                          ccl_private int *numsteps,
-                                          ccl_private int *numverts,
-                                          ccl_private int *numkeys)
-{
-  if (numkeys) {
-    *numkeys = kernel_data_fetch(objects, object).numkeys;
-  }
-
-  if (numsteps)
-    *numsteps = kernel_data_fetch(objects, object).numsteps;
-  if (numverts)
-    *numverts = kernel_data_fetch(objects, object).numverts;
 }
 
 /* Offset to an objects patch map */

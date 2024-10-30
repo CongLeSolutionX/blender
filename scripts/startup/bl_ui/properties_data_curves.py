@@ -5,6 +5,7 @@
 import bpy
 from bpy.types import Menu, Panel, UIList
 from rna_prop_ui import PropertyPanel
+from .space_properties import PropertiesAnimationMixin
 
 
 class DataButtonsPanel:
@@ -59,11 +60,17 @@ class DATA_PT_curves_surface(DataButtonsPanel, Panel):
         layout.prop(ob.data, "surface")
         has_surface = ob.data.surface is not None
         if has_surface:
-            layout.prop_search(ob.data, "surface_uv_map", ob.data.surface.data, "uv_layers", text="UV Map")
+            layout.prop_search(
+                ob.data,
+                "surface_uv_map",
+                ob.data.surface.data,
+                "uv_layers",
+                text="UV Map",
+                icon='GROUP_UVS')
         else:
             row = layout.row()
             row.prop(ob.data, "surface_uv_map", text="UV Map")
-            row.enabled = has_surface
+            row.active = has_surface
 
 
 class CURVES_MT_add_attribute(Menu):
@@ -111,6 +118,10 @@ class CURVES_UL_attributes(UIList):
         # Filtering internal attributes
         for idx, item in enumerate(attributes):
             flags[idx] = 0 if item.is_internal else flags[idx]
+
+        # Reorder by name.
+        if self.use_filter_sort_alpha:
+            indices = bpy.types.UI_UL_list.sort_items_by_name(attributes, "name")
 
         return flags, indices
 
@@ -160,6 +171,16 @@ class DATA_PT_CURVES_attributes(DataButtonsPanel, Panel):
         col.operator("geometry.attribute_remove", icon='REMOVE', text="")
 
 
+class DATA_PT_curves_animation(DataButtonsPanel, PropertiesAnimationMixin, PropertyPanel, Panel):
+    COMPAT_ENGINES = {
+        'BLENDER_RENDER',
+        'BLENDER_EEVEE',
+        'BLENDER_EEVEE_NEXT',
+        'BLENDER_WORKBENCH',
+    }
+    _animated_id_context_property = "curves"
+
+
 class DATA_PT_custom_props_curves(DataButtonsPanel, PropertyPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
@@ -175,6 +196,7 @@ classes = (
     DATA_PT_context_curves,
     DATA_PT_CURVES_attributes,
     DATA_PT_curves_surface,
+    DATA_PT_curves_animation,
     DATA_PT_custom_props_curves,
     CURVES_MT_add_attribute,
     CURVES_UL_attributes,

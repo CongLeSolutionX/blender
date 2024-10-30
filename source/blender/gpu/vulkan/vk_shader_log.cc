@@ -8,11 +8,13 @@
 
 #include "vk_shader_log.hh"
 
-#include "GPU_platform.h"
+#include "GPU_platform.hh"
 
 namespace blender::gpu {
 
-const char *VKLogParser::parse_line(const char *log_line, GPULogItem &log_item)
+const char *VKLogParser::parse_line(const char * /*source_combined*/,
+                                    const char *log_line,
+                                    GPULogItem &log_item)
 {
   log_line = skip_name(log_line);
   log_line = skip_separators(log_line, ":");

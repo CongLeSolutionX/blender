@@ -28,12 +28,11 @@
 
 #include "BIF_glutil.hh"
 
-#include "GPU_immediate.h"
-#include "GPU_matrix.h"
-#include "GPU_shader.h"
-#include "GPU_state.h"
+#include "GPU_immediate.hh"
+#include "GPU_matrix.hh"
+#include "GPU_shader.hh"
+#include "GPU_state.hh"
 
-#include "UI_interface.hh"
 #include "UI_resources.hh"
 #include "UI_view2d.hh"
 
@@ -125,14 +124,14 @@ static void draw_single_handle(const MaskLayer *mask_layer,
 
   switch (handle_type) {
     case HD_FREE:
-      immUniformThemeColor(TH_HANDLE_FREE);
+      immUniformThemeColor3(TH_HANDLE_FREE);
       break;
     case HD_AUTO:
-      immUniformThemeColor(TH_HANDLE_AUTO);
+      immUniformThemeColor3(TH_HANDLE_AUTO);
       break;
     case HD_ALIGN:
     case HD_ALIGN_DOUBLESIDE:
-      immUniformThemeColor(TH_HANDLE_ALIGN);
+      immUniformThemeColor3(TH_HANDLE_ALIGN);
       break;
   }
 

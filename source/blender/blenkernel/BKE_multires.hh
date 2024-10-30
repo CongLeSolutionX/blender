@@ -16,18 +16,19 @@ struct DerivedMesh;
 struct MDisps;
 struct Mesh;
 struct ModifierData;
-struct MLoopTri;
 struct MultiresModifierData;
 struct Object;
 struct Scene;
 struct SubdivCCG;
-struct SubdivSettings;
-struct SubdivToMeshSettings;
+namespace blender::bke::subdiv {
+struct Settings;
+struct ToMeshSettings;
+}  // namespace blender::bke::subdiv
 
 /**
  * Delete mesh mdisps and grid paint masks.
  */
-void multires_customdata_delete(Mesh *me);
+void multires_customdata_delete(Mesh *mesh);
 
 void multires_set_tot_level(Object *ob, MultiresModifierData *mmd, int lvl);
 
@@ -78,10 +79,8 @@ Mesh *BKE_multires_create_mesh(Depsgraph *depsgraph, Object *object, MultiresMod
  * Get coordinates of a deformed base mesh which is an input to the given multi-res modifier.
  * \note The modifiers will be re-evaluated.
  */
-float (*BKE_multires_create_deformed_base_mesh_vert_coords(Depsgraph *depsgraph,
-                                                           Object *object,
-                                                           MultiresModifierData *mmd,
-                                                           int *r_num_deformed_verts))[3];
+blender::Array<blender::float3> BKE_multires_create_deformed_base_mesh_vert_coords(
+    Depsgraph *depsgraph, Object *object, MultiresModifierData *mmd);
 
 /**
  * \param direction: 1 for delete higher, 0 for lower (not implemented yet).
@@ -101,7 +100,7 @@ int multiresModifier_rebuild_subdiv(Depsgraph *depsgraph,
  * synchronize them such that `ob_dst` has the same total number of levels as `ob_src`.
  */
 void multiresModifier_sync_levels_ex(Object *ob_dst,
-                                     MultiresModifierData *mmd_src,
+                                     const MultiresModifierData *mmd_src,
                                      MultiresModifierData *mmd_dst);
 
 void multires_stitch_grids(Object *);
@@ -114,7 +113,7 @@ int multires_mdisp_corners(const MDisps *s);
 /**
  * Update multi-res data after topology changing.
  */
-void multires_topology_changed(Mesh *me);
+void multires_topology_changed(Mesh *mesh);
 
 /**
  * Makes sure data from an external file is fully read.
@@ -183,10 +182,11 @@ void multiresModifier_subdivide_to_level(Object *object,
 
 /* Subdivision integration, defined in multires_subdiv.cc */
 
-void BKE_multires_subdiv_settings_init(SubdivSettings *settings, const MultiresModifierData *mmd);
+void BKE_multires_subdiv_settings_init(blender::bke::subdiv::Settings *settings,
+                                       const MultiresModifierData *mmd);
 
 /* TODO(sergey): Replace this set of boolean flags with bitmask. */
-void BKE_multires_subdiv_mesh_settings_init(SubdivToMeshSettings *mesh_settings,
+void BKE_multires_subdiv_mesh_settings_init(blender::bke::subdiv::ToMeshSettings *mesh_settings,
                                             const Scene *scene,
                                             const Object *object,
                                             const MultiresModifierData *mmd,

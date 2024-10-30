@@ -14,7 +14,7 @@
 #include "BLI_math_vector.h"
 #include "BLI_task.h"
 
-#include "BLT_translation.h"
+#include "BLT_translation.hh"
 
 #include "DNA_defaults.h"
 #include "DNA_mesh_types.h"
@@ -22,21 +22,18 @@
 #include "DNA_object_types.h"
 #include "DNA_screen_types.h"
 
-#include "BKE_action.h" /* BKE_pose_channel_find_name */
-#include "BKE_context.hh"
-#include "BKE_deform.h"
-#include "BKE_lib_query.h"
+#include "BKE_action.hh" /* BKE_pose_channel_find_name */
+#include "BKE_customdata.hh"
+#include "BKE_deform.hh"
+#include "BKE_lib_query.hh"
 #include "BKE_mesh.hh"
 #include "BKE_modifier.hh"
-#include "BKE_screen.hh"
 
 #include "UI_interface.hh"
 #include "UI_resources.hh"
 
 #include "RNA_access.hh"
-#include "RNA_prototypes.h"
-
-#include "DEG_depsgraph_query.hh"
+#include "RNA_prototypes.hh"
 
 #include "MOD_ui_common.hh"
 #include "MOD_util.hh"
@@ -75,10 +72,10 @@ static void matrix_from_obj_pchan(float mat[4][4], Object *ob, const char *bonen
 {
   bPoseChannel *pchan = BKE_pose_channel_find_name(ob->pose, bonename);
   if (pchan) {
-    mul_m4_m4m4(mat, ob->object_to_world, pchan->pose_mat);
+    mul_m4_m4m4(mat, ob->object_to_world().ptr(), pchan->pose_mat);
   }
   else {
-    copy_m4_m4(mat, ob->object_to_world);
+    copy_m4_m4(mat, ob->object_to_world().ptr());
   }
 }
 
@@ -142,7 +139,7 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
   const bool invert_vgroup = (umd->flag & MOD_UVWARP_INVERT_VGROUP) != 0;
 
   /* make sure there are UV Maps available */
-  if (!CustomData_has_layer(&mesh->loop_data, CD_PROP_FLOAT2)) {
+  if (!CustomData_has_layer(&mesh->corner_data, CD_PROP_FLOAT2)) {
     return mesh;
   }
 
@@ -193,13 +190,13 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
   translate_m4(warp_mat, -umd->center[0], -umd->center[1], 0.0f);
 
   /* make sure we're using an existing layer */
-  CustomData_validate_layer_name(&mesh->loop_data, CD_PROP_FLOAT2, umd->uvlayer_name, uvname);
+  CustomData_validate_layer_name(&mesh->corner_data, CD_PROP_FLOAT2, umd->uvlayer_name, uvname);
 
   const blender::OffsetIndices faces = mesh->faces();
   const blender::Span<int> corner_verts = mesh->corner_verts();
 
   float(*mloopuv)[2] = static_cast<float(*)[2]>(CustomData_get_layer_named_for_write(
-      &mesh->loop_data, CD_PROP_FLOAT2, uvname, corner_verts.size()));
+      &mesh->corner_data, CD_PROP_FLOAT2, uvname, corner_verts.size()));
   MOD_get_vgroup(ctx->object, mesh, umd->vgroup_name, &dvert, &defgrp_index);
 
   UVWarpData data{};
@@ -336,4 +333,5 @@ ModifierTypeInfo modifierType_UVWarp = {
     /*panel_register*/ panel_register,
     /*blend_write*/ nullptr,
     /*blend_read*/ nullptr,
+    /*foreach_cache*/ nullptr,
 };

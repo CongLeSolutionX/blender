@@ -16,34 +16,30 @@
 #include "DNA_scene_types.h"
 #include "DNA_userdef_types.h"
 
-#include "BLI_easing.h"
 #include "BLI_link_utils.h"
 #include "BLI_listbase.h"
 #include "BLI_math_matrix.h"
 #include "BLI_memarena.h"
 #include "BLI_rect.h"
-#include "BLI_string.h"
-#include "BLI_timecode.h"
 #include "BLI_utildefines.h"
 
 #include "BKE_context.hh"
-#include "BKE_global.h"
+#include "BKE_global.hh"
 #include "BKE_screen.hh"
 
-#include "GPU_immediate.h"
-#include "GPU_matrix.h"
-#include "GPU_state.h"
+#include "GPU_immediate.hh"
+#include "GPU_matrix.hh"
+#include "GPU_state.hh"
 
 #include "WM_api.hh"
 
-#include "BLF_api.h"
+#include "BLF_api.hh"
 
 #include "ED_screen.hh"
 
 #include "UI_interface.hh"
 #include "UI_view2d.hh"
 
-#include "interface_intern.hh"
 #include "view2d_intern.hh"
 
 static void ui_view2d_curRect_validate_resize(View2D *v2d, bool resize);
@@ -179,13 +175,6 @@ static void view2d_masks(View2D *v2d, const rcti *mask_scroll)
       v2d->vert = *mask_scroll;
       v2d->vert.xmax++; /* one pixel extra... was leaving a minor gap... */
       v2d->vert.xmin = v2d->vert.xmax - scroll_width;
-    }
-
-    /* Currently, all regions that have vertical scale handles,
-     * also have the scrubbing area at the top.
-     * So the scroll-bar has to move down a bit. */
-    if (scroll & V2D_SCROLL_VERTICAL_HANDLES) {
-      v2d->vert.ymax -= UI_TIME_SCRUB_MARGIN_Y;
     }
 
     /* horizontal scroller */
@@ -393,7 +382,7 @@ static void ui_view2d_curRect_validate_resize(View2D *v2d, bool resize)
   rctf *cur, *tot;
 
   /* use mask as size of region that View2D resides in, as it takes into account
-   * scroll-bars already - keep in sync with zoomx/zoomy in #view_zoomstep_apply_ex! */
+   * scroll-bars already - keep in sync with `zoomx/zoomy` in #view_zoomstep_apply_ex! */
   winx = float(BLI_rcti_size_x(&v2d->mask) + 1);
   winy = float(BLI_rcti_size_y(&v2d->mask) + 1);
 
@@ -415,7 +404,7 @@ static void ui_view2d_curRect_validate_resize(View2D *v2d, bool resize)
    */
   totwidth = BLI_rctf_size_x(tot);
   totheight = BLI_rctf_size_y(tot);
-  /* keep in sync with zoomx/zoomy in view_zoomstep_apply_ex! */
+  /* Keep in sync with `zoomx/zoomy` in #view_zoomstep_apply_ex! */
   curwidth = width = BLI_rctf_size_x(cur);
   curheight = height = BLI_rctf_size_y(cur);
 
@@ -651,7 +640,8 @@ static void ui_view2d_curRect_validate_resize(View2D *v2d, bool resize)
 
     /* width */
     if ((curwidth > totwidth) &&
-        !(v2d->keepzoom & (V2D_KEEPZOOM | V2D_LOCKZOOM_X | V2D_LIMITZOOM))) {
+        !(v2d->keepzoom & (V2D_KEEPZOOM | V2D_LOCKZOOM_X | V2D_LIMITZOOM)))
+    {
       /* if zoom doesn't have to be maintained, just clamp edges */
       if (cur->xmin < tot->xmin) {
         cur->xmin = tot->xmin;
@@ -740,7 +730,8 @@ static void ui_view2d_curRect_validate_resize(View2D *v2d, bool resize)
 
     /* height */
     if ((curheight > totheight) &&
-        !(v2d->keepzoom & (V2D_KEEPZOOM | V2D_LOCKZOOM_Y | V2D_LIMITZOOM))) {
+        !(v2d->keepzoom & (V2D_KEEPZOOM | V2D_LOCKZOOM_Y | V2D_LIMITZOOM)))
+    {
       /* if zoom doesn't have to be maintained, just clamp edges */
       if (cur->ymin < tot->ymin) {
         cur->ymin = tot->ymin;
@@ -1356,13 +1347,11 @@ void UI_view2d_dot_grid_draw(const View2D *v2d,
     int count_x;
     float start_x;
 
-    /* Count points that fit in viewport minus space for the scroll-bars. */
-    grid_axis_start_and_count(
-        step, v2d->cur.xmin, v2d->cur.xmax - V2D_SCROLL_WIDTH, &start_x, &count_x);
+    /* Count points that fit in viewport. */
+    grid_axis_start_and_count(step, v2d->cur.xmin, v2d->cur.xmax, &start_x, &count_x);
     int count_y;
     float start_y;
-    grid_axis_start_and_count(
-        step, v2d->cur.ymin + V2D_SCROLL_HEIGHT, v2d->cur.ymax, &start_y, &count_y);
+    grid_axis_start_and_count(step, v2d->cur.ymin, v2d->cur.ymax, &start_y, &count_y);
     if (count_x == 0 || count_y == 0) {
       continue;
     }
@@ -2167,7 +2156,7 @@ void UI_view2d_text_cache_draw(ARegion *region)
     }
 
     if (col_pack_prev != v2s->col.pack) {
-      BLF_color3ubv(font_id, v2s->col.ub);
+      BLF_color4ubv(font_id, v2s->col.ub);
       col_pack_prev = v2s->col.pack;
     }
 

@@ -8,6 +8,7 @@
  * Deform coordinates by a lattice object (used by modifier).
  */
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -17,7 +18,7 @@
 
 #include "BLI_math_matrix.h"
 #include "BLI_math_vector.h"
-#include "BLI_simd.h"
+#include "BLI_simd.hh"
 #include "BLI_task.h"
 #include "BLI_utildefines.h"
 
@@ -30,14 +31,13 @@
 #include "BKE_curve.hh"
 #include "BKE_displist.h"
 #include "BKE_editmesh.hh"
-#include "BKE_key.h"
+#include "BKE_key.hh"
 #include "BKE_lattice.hh"
-#include "BKE_mesh.hh"
 #include "BKE_modifier.hh"
 #include "BKE_object.hh"
 #include "BKE_object_types.hh"
 
-#include "BKE_deform.h"
+#include "BKE_deform.hh"
 
 /* -------------------------------------------------------------------- */
 /** \name Lattice Deform API
@@ -82,15 +82,15 @@ LatticeDeformData *BKE_lattice_deform_data_create(const Object *oblatt, const Ob
   /* for example with a particle system: (ob == nullptr) */
   if (ob == nullptr) {
     /* In deform-space, calc matrix. */
-    invert_m4_m4(latmat, oblatt->object_to_world);
+    invert_m4_m4(latmat, oblatt->object_to_world().ptr());
 
     /* back: put in deform array */
     invert_m4_m4(imat, latmat);
   }
   else {
     /* In deform-space, calc matrix. */
-    invert_m4_m4(imat, oblatt->object_to_world);
-    mul_m4_m4m4(latmat, imat, ob->object_to_world);
+    invert_m4_m4(imat, oblatt->object_to_world().ptr());
+    mul_m4_m4m4(latmat, imat, ob->object_to_world().ptr());
 
     /* back: put in deform array. */
     invert_m4_m4(imat, latmat);
@@ -113,11 +113,12 @@ LatticeDeformData *BKE_lattice_deform_data_create(const Object *oblatt, const Ob
 
   for (w = 0, fw = lt->fw; w < lt->pntsw; w++, fw += lt->dw) {
     for (v = 0, fv = lt->fv; v < lt->pntsv; v++, fv += lt->dv) {
-      for (u = 0, fu = lt->fu; u < lt->pntsu; u++, co += 3, fp += 3, fu += lt->du) {
+      for (u = 0, fu = lt->fu; u < lt->pntsu; u++, fp += 3, fu += lt->du) {
         if (dl) {
           fp[0] = co[0] - fu;
           fp[1] = co[1] - fv;
           fp[2] = co[2] - fw;
+          co += 3;
         }
         else {
           fp[0] = bp->vec[0] - fu;
@@ -210,13 +211,13 @@ void BKE_lattice_deform_data_eval_co(LatticeDeformData *lattice_deform_data,
 
   for (ww = wi - 1; ww <= wi + 2; ww++) {
     w = weight * tw[ww - wi + 1];
-    idx_w = CLAMPIS(ww * w_stride, 0, idx_w_max);
+    idx_w = std::clamp(ww * w_stride, 0, idx_w_max);
     for (vv = vi - 1; vv <= vi + 2; vv++) {
       v = w * tv[vv - vi + 1];
-      idx_v = CLAMPIS(vv * v_stride, 0, idx_v_max);
+      idx_v = std::clamp(vv * v_stride, 0, idx_v_max);
       for (uu = ui - 1; uu <= ui + 2; uu++) {
         u = v * tu[uu - ui + 1];
-        idx_u = CLAMPIS(uu, 0, idx_u_max);
+        idx_u = std::clamp(uu, 0, idx_u_max);
         const int idx = idx_w + idx_v + idx_u;
 #if BLI_HAVE_SSE2
         {
@@ -339,7 +340,7 @@ static void lattice_deform_coords_impl(const Object *ob_lattice,
                                        const char *defgrp_name,
                                        const float fac,
                                        const Mesh *me_target,
-                                       BMEditMesh *em_target)
+                                       const BMEditMesh *em_target)
 {
   LatticeDeformData *lattice_deform_data;
   const MDeformVert *dvert = nullptr;
@@ -372,7 +373,7 @@ static void lattice_deform_coords_impl(const Object *ob_lattice,
         dvert = ((Lattice *)ob_target->data)->dvert;
       }
       else {
-        dvert = BKE_mesh_deform_verts((Mesh *)ob_target->data);
+        dvert = ((Mesh *)ob_target->data)->deform_verts().data();
       }
     }
   }
@@ -459,7 +460,7 @@ void BKE_lattice_deform_coords_with_editmesh(const Object *ob_lattice,
                                              const short flag,
                                              const char *defgrp_name,
                                              const float fac,
-                                             BMEditMesh *em_target)
+                                             const BMEditMesh *em_target)
 {
   lattice_deform_coords_impl(ob_lattice,
                              ob_target,

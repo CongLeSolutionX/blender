@@ -35,45 +35,42 @@ int BinaryPredicate1D_Init(PyObject *module)
   if (PyType_Ready(&BinaryPredicate1D_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&BinaryPredicate1D_Type);
-  PyModule_AddObject(module, "BinaryPredicate1D", (PyObject *)&BinaryPredicate1D_Type);
+  PyModule_AddObjectRef(module, "BinaryPredicate1D", (PyObject *)&BinaryPredicate1D_Type);
 
   if (PyType_Ready(&FalseBP1D_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&FalseBP1D_Type);
-  PyModule_AddObject(module, "FalseBP1D", (PyObject *)&FalseBP1D_Type);
+  PyModule_AddObjectRef(module, "FalseBP1D", (PyObject *)&FalseBP1D_Type);
 
   if (PyType_Ready(&Length2DBP1D_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&Length2DBP1D_Type);
-  PyModule_AddObject(module, "Length2DBP1D", (PyObject *)&Length2DBP1D_Type);
+  PyModule_AddObjectRef(module, "Length2DBP1D", (PyObject *)&Length2DBP1D_Type);
 
   if (PyType_Ready(&SameShapeIdBP1D_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&SameShapeIdBP1D_Type);
-  PyModule_AddObject(module, "SameShapeIdBP1D", (PyObject *)&SameShapeIdBP1D_Type);
+  PyModule_AddObjectRef(module, "SameShapeIdBP1D", (PyObject *)&SameShapeIdBP1D_Type);
 
   if (PyType_Ready(&TrueBP1D_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&TrueBP1D_Type);
-  PyModule_AddObject(module, "TrueBP1D", (PyObject *)&TrueBP1D_Type);
+  PyModule_AddObjectRef(module, "TrueBP1D", (PyObject *)&TrueBP1D_Type);
 
   if (PyType_Ready(&ViewMapGradientNormBP1D_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&ViewMapGradientNormBP1D_Type);
-  PyModule_AddObject(module, "ViewMapGradientNormBP1D", (PyObject *)&ViewMapGradientNormBP1D_Type);
+  PyModule_AddObjectRef(
+      module, "ViewMapGradientNormBP1D", (PyObject *)&ViewMapGradientNormBP1D_Type);
 
   return 0;
 }
 
 //------------------------INSTANCE METHODS ----------------------------------
 
-static char BinaryPredicate1D___doc__[] =
+PyDoc_STRVAR(
+    /* Wrap. */
+    BinaryPredicate1D___doc__,
     "Base class for binary predicates working on :class:`Interface1D`\n"
     "objects. A BinaryPredicate1D is typically an ordering relation\n"
     "between two Interface1D objects. The predicate evaluates a relation\n"
@@ -94,7 +91,7 @@ static char BinaryPredicate1D___doc__[] =
     "   :arg inter2: The second Interface1D object.\n"
     "   :type inter2: :class:`Interface1D`\n"
     "   :return: True or false.\n"
-    "   :rtype: bool\n";
+    "   :rtype: bool\n");
 
 static int BinaryPredicate1D___init__(BPy_BinaryPredicate1D *self, PyObject *args, PyObject *kwds)
 {
@@ -147,10 +144,12 @@ static PyObject *BinaryPredicate1D___call__(BPy_BinaryPredicate1D *self,
 
 /*----------------------BinaryPredicate0D get/setters ----------------------------*/
 
-PyDoc_STRVAR(BinaryPredicate1D_name_doc,
-             "The name of the binary 1D predicate.\n"
-             "\n"
-             ":type: str");
+PyDoc_STRVAR(
+    /* Wrap. */
+    BinaryPredicate1D_name_doc,
+    "The name of the binary 1D predicate.\n"
+    "\n"
+    ":type: str");
 
 static PyObject *BinaryPredicate1D_name_get(BPy_BinaryPredicate1D *self, void * /*closure*/)
 {

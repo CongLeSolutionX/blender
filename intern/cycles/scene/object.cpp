@@ -366,6 +366,7 @@ float Object::compute_volume_step_size() const
 
   if (step_size == FLT_MAX) {
     /* Fall back to 1/10th of bounds for procedural volumes. */
+    assert(bounds.valid());
     step_size = 0.1f * average(bounds.size());
   }
 
@@ -390,7 +391,9 @@ bool Object::usable_as_light() const
     return false;
   }
   /* Skip if we are not visible for BSDFs. */
-  if (!(get_visibility() & (PATH_RAY_DIFFUSE | PATH_RAY_GLOSSY | PATH_RAY_TRANSMIT))) {
+  if (!(get_visibility() &
+        (PATH_RAY_DIFFUSE | PATH_RAY_GLOSSY | PATH_RAY_TRANSMIT | PATH_RAY_VOLUME_SCATTER)))
+  {
     return false;
   }
   /* Skip if we have no emission shaders. */
@@ -569,11 +572,6 @@ void ObjectManager::device_update_object_transform(UpdateObjectTransformState *s
   kobject.dupli_generated[0] = ob->dupli_generated[0];
   kobject.dupli_generated[1] = ob->dupli_generated[1];
   kobject.dupli_generated[2] = ob->dupli_generated[2];
-  kobject.numkeys = (geom->geometry_type == Geometry::HAIR) ?
-                        static_cast<Hair *>(geom)->get_curve_keys().size() :
-                    (geom->geometry_type == Geometry::POINTCLOUD) ?
-                        static_cast<PointCloud *>(geom)->num_points() :
-                        0;
   kobject.dupli_uv[0] = ob->dupli_uv[0];
   kobject.dupli_uv[1] = ob->dupli_uv[1];
   int totalsteps = geom->get_motion_steps();
@@ -581,6 +579,10 @@ void ObjectManager::device_update_object_transform(UpdateObjectTransformState *s
   kobject.numverts = (geom->geometry_type == Geometry::MESH ||
                       geom->geometry_type == Geometry::VOLUME) ?
                          static_cast<Mesh *>(geom)->get_verts().size() :
+                     (geom->geometry_type == Geometry::HAIR) ?
+                         static_cast<Hair *>(geom)->get_curve_keys().size() :
+                     (geom->geometry_type == Geometry::POINTCLOUD) ?
+                         static_cast<PointCloud *>(geom)->num_points() :
                          0;
   kobject.patch_map_offset = 0;
   kobject.attribute_map_offset = 0;
@@ -857,8 +859,15 @@ void ObjectManager::device_update_flags(
     }
   });
 
-  update_flags = UPDATE_NONE;
-  need_flags_update = false;
+  if (bounds_valid) {
+    /* Object flags and calculations related to volume depend on proper bounds calculated, which
+     * might not be available yet when object flags are updated for displacement or hair
+     * transparency calculation. In this case do not clear the need_flags_update, so that these
+     * values which depend on bounds are re-calculated when the device_update process comes back
+     * here from the "Updating Objects Flags" stage. */
+    update_flags = UPDATE_NONE;
+    need_flags_update = false;
+  }
 
   if (scene->objects.size() == 0) {
     return;
@@ -873,11 +882,17 @@ void ObjectManager::device_update_flags(
   bool has_volume_objects = false;
   foreach (Object *object, scene->objects) {
     if (object->geometry->has_volume) {
+      /* If the bounds are not valid it is not always possible to calculate the volume step, and
+       * the step size is not needed for the displacement. So, delay calculation of the volume
+       * step size until the final bounds are known. */
       if (bounds_valid) {
         volume_objects.push_back(object);
+        object_volume_step[object->index] = object->compute_volume_step_size();
+      }
+      else {
+        object_volume_step[object->index] = FLT_MAX;
       }
       has_volume_objects = true;
-      object_volume_step[object->index] = object->compute_volume_step_size();
     }
     else {
       object_volume_step[object->index] = FLT_MAX;

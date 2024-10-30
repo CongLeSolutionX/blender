@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BKE_global.h"
+#include "BKE_global.hh"
 
 #include "DNA_userdef_types.h"
 
@@ -329,19 +329,18 @@ void MTLBufferPool::update_memory_pools()
         deletion_time_threshold_s = 2;
       }
       else
-          /* Spare pool memory >= 1GB. */
-          if (allocations_in_pool_ >= MEMORY_SIZE_1GB)
-      {
-        deletion_time_threshold_s = 4;
-      }
-      /* Spare pool memory >= 512MB. */
-      else if (allocations_in_pool_ >= MEMORY_SIZE_512MB) {
-        deletion_time_threshold_s = 15;
-      }
-      /* Spare pool memory >= 256MB. */
-      else if (allocations_in_pool_ >= MEMORY_SIZE_256MB) {
-        deletion_time_threshold_s = 60;
-      }
+        /* Spare pool memory >= 1GB. */
+        if (allocations_in_pool_ >= MEMORY_SIZE_1GB) {
+          deletion_time_threshold_s = 4;
+        }
+        /* Spare pool memory >= 512MB. */
+        else if (allocations_in_pool_ >= MEMORY_SIZE_512MB) {
+          deletion_time_threshold_s = 15;
+        }
+        /* Spare pool memory >= 256MB. */
+        else if (allocations_in_pool_ >= MEMORY_SIZE_256MB) {
+          deletion_time_threshold_s = 60;
+        }
 
       if (time_passed > deletion_time_threshold_s) {
 
@@ -439,7 +438,7 @@ void MTLBufferPool::begin_new_safe_list()
   safelist_lock_.unlock();
 
   /* Release final reference for previous list.
-   * Note: Outside of lock as this function itself locks. */
+   * NOTE: Outside of lock as this function itself locks. */
   if (previous_list) {
     previous_list->decrement_reference();
   }

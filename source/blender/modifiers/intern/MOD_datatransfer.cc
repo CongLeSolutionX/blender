@@ -8,38 +8,32 @@
 
 #include "BLI_utildefines.h"
 
-#include "BLT_translation.h"
+#include "BLT_translation.hh"
 
 #include "DNA_mesh_types.h"
-#include "DNA_meshdata_types.h"
 #include "DNA_modifier_types.h"
 #include "DNA_object_types.h"
 #include "DNA_screen_types.h"
 
-#include "BKE_context.hh"
 #include "BKE_customdata.hh"
 #include "BKE_data_transfer.h"
-#include "BKE_lib_id.h"
-#include "BKE_lib_query.h"
+#include "BKE_lib_id.hh"
+#include "BKE_lib_query.hh"
 #include "BKE_mesh.hh"
 #include "BKE_mesh_mapping.hh"
 #include "BKE_mesh_remap.hh"
 #include "BKE_modifier.hh"
-#include "BKE_report.h"
-#include "BKE_screen.hh"
+#include "BKE_report.hh"
 
 #include "UI_interface.hh"
 #include "UI_resources.hh"
 
 #include "RNA_access.hh"
-#include "RNA_prototypes.h"
-
-#include "DEG_depsgraph_query.hh"
+#include "RNA_prototypes.hh"
 
 #include "MEM_guardedalloc.h"
 
 #include "MOD_ui_common.hh"
-#include "MOD_util.hh"
 
 /**************************************
  * Modifiers functions.               *
@@ -82,27 +76,6 @@ static void required_data_mask(ModifierData *md, CustomData_MeshMasks *r_cddata_
   }
 
   BKE_object_data_transfer_dttypes_to_cdmask(dtmd->data_types, r_cddata_masks);
-}
-
-static bool depends_on_normals(ModifierData *md)
-{
-  DataTransferModifierData *dtmd = (DataTransferModifierData *)md;
-  int item_types = BKE_object_data_transfer_get_dttypes_item_types(dtmd->data_types);
-
-  if ((item_types & ME_VERT) && (dtmd->vmap_mode & (MREMAP_USE_NORPROJ | MREMAP_USE_NORMAL))) {
-    return true;
-  }
-  if ((item_types & ME_EDGE) && (dtmd->emap_mode & (MREMAP_USE_NORPROJ | MREMAP_USE_NORMAL))) {
-    return true;
-  }
-  if ((item_types & ME_LOOP) && (dtmd->lmap_mode & (MREMAP_USE_NORPROJ | MREMAP_USE_NORMAL))) {
-    return true;
-  }
-  if ((item_types & ME_POLY) && (dtmd->pmap_mode & (MREMAP_USE_NORPROJ | MREMAP_USE_NORMAL))) {
-    return true;
-  }
-
-  return false;
 }
 
 static void foreach_ID_link(ModifierData *md, Object *ob, IDWalkFunc walk, void *user_data)
@@ -153,7 +126,7 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
   ReportList reports;
 
   /* Only used to check whether we are operating on org data or not... */
-  const Mesh *me = static_cast<const Mesh *>(ctx->object->data);
+  const Mesh *mesh = static_cast<const Mesh *>(ctx->object->data);
 
   Object *ob_source = dtmd->ob_source;
 
@@ -171,13 +144,13 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
     BLI_SPACE_TRANSFORM_SETUP(space_transform, ctx->object, ob_source);
   }
 
-  const blender::Span<blender::float3> me_positions = me->vert_positions();
-  const blender::Span<blender::int2> me_edges = me->edges();
+  const blender::Span<blender::float3> me_positions = mesh->vert_positions();
+  const blender::Span<blender::int2> me_edges = mesh->edges();
   const blender::Span<blender::float3> result_positions = result->vert_positions();
 
   const blender::Span<blender::int2> result_edges = result->edges();
 
-  if (((result == me) || (me_positions.data() == result_positions.data()) ||
+  if (((result == mesh) || (me_positions.data() == result_positions.data()) ||
        (me_edges.data() == result_edges.data())) &&
       (dtmd->data_types & DT_TYPES_AFFECT_MESH))
   {
@@ -506,7 +479,7 @@ ModifierTypeInfo modifierType_DataTransfer = {
     /*srna*/ &RNA_DataTransferModifier,
     /*type*/ ModifierTypeType::NonGeometrical,
     /*flags*/ eModifierTypeFlag_AcceptsMesh | eModifierTypeFlag_SupportsMapping |
-        eModifierTypeFlag_SupportsEditmode | eModifierTypeFlag_UsesPreview,
+        eModifierTypeFlag_SupportsEditmode,
     /*icon*/ ICON_MOD_DATA_TRANSFER,
 
     /*copy_data*/ BKE_modifier_copydata_generic,
@@ -524,11 +497,12 @@ ModifierTypeInfo modifierType_DataTransfer = {
     /*is_disabled*/ is_disabled,
     /*update_depsgraph*/ update_depsgraph,
     /*depends_on_time*/ nullptr,
-    /*depends_on_normals*/ depends_on_normals,
+    /*depends_on_normals*/ nullptr,
     /*foreach_ID_link*/ foreach_ID_link,
     /*foreach_tex_link*/ nullptr,
     /*free_runtime_data*/ nullptr,
     /*panel_register*/ panel_register,
     /*blend_write*/ nullptr,
     /*blend_read*/ nullptr,
+    /*foreach_cache*/ nullptr,
 };

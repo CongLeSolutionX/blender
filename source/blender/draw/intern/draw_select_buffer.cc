@@ -17,17 +17,20 @@
 
 #include "DNA_screen_types.h"
 
-#include "GPU_select.h"
+#include "GPU_select.hh"
 
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_query.hh"
 
-#include "DRW_engine.h"
+#include "DRW_engine.hh"
 #include "DRW_select_buffer.hh"
 
-#include "draw_manager.h"
+#include "draw_manager_c.hh"
 
 #include "../engines/select/select_engine.hh"
+
+using blender::int2;
+using blender::Span;
 
 bool SELECTID_Context::is_dirty(RegionView3D *rv3d)
 {
@@ -229,8 +232,7 @@ static void drw_select_mask_px_cb(int x, int x_end, int y, void *user_data)
 uint *DRW_select_buffer_bitmap_from_poly(Depsgraph *depsgraph,
                                          ARegion *region,
                                          View3D *v3d,
-                                         const int poly[][2],
-                                         const int face_len,
+                                         const Span<int2> poly,
                                          const rcti *rect,
                                          uint *r_bitmap_len)
 {
@@ -257,7 +259,6 @@ uint *DRW_select_buffer_bitmap_from_poly(Depsgraph *depsgraph,
                                 rect_px.xmax,
                                 rect_px.ymax,
                                 poly,
-                                face_len,
                                 drw_select_mask_px_cb,
                                 &poly_mask_data);
 
@@ -473,18 +474,17 @@ uint DRW_select_buffer_context_offset_for_object_elem(Depsgraph *depsgraph,
  * \{ */
 
 void DRW_select_buffer_context_create(Depsgraph *depsgraph,
-                                      Base **bases,
-                                      const uint bases_len,
+                                      const blender::Span<Base *> bases,
                                       short select_mode)
 {
   SELECTID_Context *select_ctx = DRW_select_engine_context_get();
 
-  select_ctx->objects.reinitialize(bases_len);
-  select_ctx->index_offsets.reinitialize(bases_len);
+  select_ctx->objects.reinitialize(bases.size());
+  select_ctx->index_offsets.reinitialize(bases.size());
 
-  for (uint base_index = 0; base_index < bases_len; base_index++) {
-    Object *obj = bases[base_index]->object;
-    select_ctx->objects[base_index] = DEG_get_evaluated_object(depsgraph, obj);
+  for (const int i : bases.index_range()) {
+    Object *obj = bases[i]->object;
+    select_ctx->objects[i] = DEG_get_evaluated_object(depsgraph, obj);
   }
 
   select_ctx->select_mode = select_mode;

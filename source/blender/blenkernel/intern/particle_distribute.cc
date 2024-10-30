@@ -22,15 +22,12 @@
 #include "DNA_meshdata_types.h"
 #include "DNA_modifier_types.h"
 #include "DNA_particle_types.h"
-#include "DNA_scene_types.h"
 
 #include "BKE_customdata.hh"
-#include "BKE_global.h"
-#include "BKE_lib_id.h"
+#include "BKE_global.hh"
+#include "BKE_lib_id.hh"
 #include "BKE_mesh.hh"
 #include "BKE_mesh_legacy_convert.hh"
-#include "BKE_mesh_runtime.hh"
-#include "BKE_object.hh"
 #include "BKE_particle.h"
 
 #include "DEG_depsgraph_query.hh"
@@ -100,7 +97,7 @@ static void distribute_grid(Mesh *mesh, ParticleSystem *psys)
   ParticleData *pa = nullptr;
   float min[3], max[3], delta[3], d;
   const blender::Span<blender::float3> positions = mesh->vert_positions();
-  int totvert = mesh->totvert, from = psys->part->from;
+  int totvert = mesh->verts_num, from = psys->part->from;
   int i, j, k, p, res = psys->part->grid_res, size[3], axis;
 
   /* find bounding box of dm */
@@ -127,7 +124,7 @@ static void distribute_grid(Mesh *mesh, ParticleSystem *psys)
   size[(axis + 2) % 3] = int(ceil(delta[(axis + 2) % 3] / d));
 
   /* float errors grrr. */
-  size[(axis + 1) % 3] = MIN2(size[(axis + 1) % 3], res);
+  size[(axis + 1) % 3] = std::min(size[(axis + 1) % 3], res);
   size[(axis + 2) % 3] = std::min(size[(axis + 2) % 3], res);
 
   size[0] = std::max(size[0], 1);
@@ -475,7 +472,7 @@ static void distribute_from_verts_exec(ParticleTask *thread, ParticleData *pa, i
 
   zero_v4(pa->fuv);
 
-  if (pa->num != DMCACHE_NOTFOUND && pa->num < ctx->mesh->totvert) {
+  if (pa->num != DMCACHE_NOTFOUND && pa->num < ctx->mesh->verts_num) {
 
     /* This finds the first face to contain the emitting vertex,
      * this is not ideal, but is mostly fine as UV seams generally
@@ -837,8 +834,8 @@ static int distribute_compare_orig_index(const void *p1, const void *p2, void *u
     return -1;
   }
   if (index1 == index2) {
-    /* this pointer comparison appears to make qsort stable for glibc,
-     * and apparently on solaris too, makes the renders reproducible */
+    /* This pointer comparison appears to make #qsort stable for GLIBC,
+     * and apparently on SOLARIS too, makes the renders reproducible. */
     if (p1 < p2) {
       return -1;
     }
@@ -1024,7 +1021,7 @@ static int psys_thread_context_init_distribute(ParticleThreadContext *ctx,
       const blender::Span<blender::float3> positions = mesh->vert_positions();
       const float(*orcodata)[3] = static_cast<const float(*)[3]>(
           CustomData_get_layer(&mesh->vert_data, CD_ORCO));
-      int totvert = mesh->totvert;
+      int totvert = mesh->verts_num;
 
       tree = BLI_kdtree_3d_new(totvert);
 
@@ -1044,7 +1041,7 @@ static int psys_thread_context_init_distribute(ParticleThreadContext *ctx,
   }
 
   /* Get total number of emission elements and allocate needed arrays */
-  totelem = (from == PART_FROM_VERT) ? mesh->totvert : mesh->totface_legacy;
+  totelem = (from == PART_FROM_VERT) ? mesh->verts_num : mesh->totface_legacy;
 
   if (totelem == 0) {
     distribute_invalid(sim, children ? PART_FROM_CHILD : 0);
@@ -1122,7 +1119,7 @@ static int psys_thread_context_init_distribute(ParticleThreadContext *ctx,
     maxweight /= totarea;
   }
   else {
-    float min = 1.0f / float(MIN2(totelem, totpart));
+    float min = 1.0f / float(std::min(totelem, totpart));
     for (i = 0; i < totelem; i++) {
       element_weight[i] = min;
     }
@@ -1260,7 +1257,7 @@ static int psys_thread_context_init_distribute(ParticleThreadContext *ctx,
     const int *orig_index = nullptr;
 
     if (from == PART_FROM_VERT) {
-      if (mesh->totvert) {
+      if (mesh->verts_num) {
         orig_index = static_cast<const int *>(
             CustomData_get_layer(&mesh->vert_data, CD_ORIGINDEX));
       }

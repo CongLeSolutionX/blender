@@ -10,21 +10,20 @@
 #include "COLLADASWImage.h"
 
 #include "DNA_image_types.h"
-#include "DNA_meshdata_types.h"
 #include "DNA_texture_types.h"
 
 #include "BKE_customdata.hh"
-#include "BKE_global.h"
+#include "BKE_global.hh"
 #include "BKE_image.h"
 #include "BKE_image_format.h"
-#include "BKE_main.h"
+#include "BKE_main.hh"
 #include "BKE_mesh.hh"
 
 #include "BLI_fileops.h"
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 #include "BLI_string.h"
 
-#include "IMB_imbuf_types.h"
+#include "IMB_imbuf_types.hh"
 
 #include "ImageExporter.h"
 #include "MaterialExporter.h"
@@ -83,7 +82,7 @@ void ImagesExporter::export_UV_Image(Image *image, bool use_copies)
      * So we have to export it. The export will keep the image state intact,
      * so the exported file will not be associated with the image. */
 
-    if (BKE_imbuf_write_as(imbuf, export_path, &imageFormat, true) == 0) {
+    if (BKE_imbuf_write_as(imbuf, export_path, &imageFormat, true) == false) {
       fprintf(stderr, "Collada export: Cannot export image to:\n%s\n", export_path);
       return;
     }

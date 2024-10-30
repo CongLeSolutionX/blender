@@ -176,6 +176,7 @@ vec3 orthogonal(vec3 v);
  * \note Returned vector is always rotated 90 degrees counter clock wise.
  */
 vec2 orthogonal(vec2 v);
+ivec2 orthogonal(ivec2 v);
 
 /**
  * Return true if the difference between`a` and `b` is below the `epsilon` value.
@@ -215,13 +216,23 @@ int reduce_add(ivec3 a);
 int reduce_add(ivec4 a);
 
 /**
+ * Return the product of the components of a vector.
+ */
+float reduce_mul(vec2 a);
+float reduce_mul(vec3 a);
+float reduce_mul(vec4 a);
+int reduce_mul(ivec2 a);
+int reduce_mul(ivec3 a);
+int reduce_mul(ivec4 a);
+
+/**
  * Return the average of the components of a vector.
  */
 float average(vec2 a);
 float average(vec3 a);
 float average(vec4 a);
 
-#  endif /* GPU_METAL */
+#  endif /* !GPU_METAL */
 
 /* ---------------------------------------------------------------------- */
 /** \name Implementation
@@ -240,7 +251,7 @@ bool is_zero(vec4 vec)
 {
   return all(equal(vec, vec4(0.0)));
 }
-#  endif
+#  endif /* GPU_METAL */
 
 bool is_any_zero(vec2 vec)
 {
@@ -469,7 +480,7 @@ vec2 normalize_and_get_length(vec2 vector, out float out_length)
     out_length = sqrt(out_length);
     return vector / out_length;
   }
-  /* Either the vector is small or one of it's values contained `nan`. */
+  /* Either the vector is small or one of its values contained `nan`. */
   out_length = 0.0;
   return vec2(0.0);
 }
@@ -481,7 +492,7 @@ vec3 normalize_and_get_length(vec3 vector, out float out_length)
     out_length = sqrt(out_length);
     return vector / out_length;
   }
-  /* Either the vector is small or one of it's values contained `nan`. */
+  /* Either the vector is small or one of its values contained `nan`. */
   out_length = 0.0;
   return vec3(0.0);
 }
@@ -493,7 +504,7 @@ vec4 normalize_and_get_length(vec4 vector, out float out_length)
     out_length = sqrt(out_length);
     return vector / out_length;
   }
-  /* Either the vector is small or one of it's values contained `nan`. */
+  /* Either the vector is small or one of its values contained `nan`. */
   out_length = 0.0;
   return vec4(0.0);
 }
@@ -506,7 +517,7 @@ vec2 safe_normalize_and_get_length(vec2 vector, out float out_length)
     out_length = sqrt(out_length);
     return vector / out_length;
   }
-  /* Either the vector is small or one of it's values contained `nan`. */
+  /* Either the vector is small or one of its values contained `nan`. */
   out_length = 0.0;
   return vec2(1.0, 0.0);
 }
@@ -518,7 +529,7 @@ vec3 safe_normalize_and_get_length(vec3 vector, out float out_length)
     out_length = sqrt(out_length);
     return vector / out_length;
   }
-  /* Either the vector is small or one of it's values contained `nan`. */
+  /* Either the vector is small or one of its values contained `nan`. */
   out_length = 0.0;
   return vec3(1.0, 0.0, 0.0);
 }
@@ -530,7 +541,7 @@ vec4 safe_normalize_and_get_length(vec4 vector, out float out_length)
     out_length = sqrt(out_length);
     return vector / out_length;
   }
-  /* Either the vector is small or one of it's values contained `nan`. */
+  /* Either the vector is small or one of its values contained `nan`. */
   out_length = 0.0;
   return vec4(1.0, 0.0, 0.0, 0.0);
 }
@@ -612,6 +623,10 @@ vec3 orthogonal(vec3 v)
 vec2 orthogonal(vec2 v)
 {
   return vec2(-v.y, v.x);
+}
+ivec2 orthogonal(ivec2 v)
+{
+  return ivec2(-v.y, v.x);
 }
 
 bool is_equal(vec2 a, vec2 b, const float epsilon)
@@ -700,6 +715,31 @@ int reduce_add(ivec3 a)
 int reduce_add(ivec4 a)
 {
   return a.x + a.y + a.z + a.w;
+}
+
+float reduce_mul(vec2 a)
+{
+  return a.x * a.y;
+}
+float reduce_mul(vec3 a)
+{
+  return a.x * a.y * a.z;
+}
+float reduce_mul(vec4 a)
+{
+  return a.x * a.y * a.z * a.w;
+}
+int reduce_mul(ivec2 a)
+{
+  return a.x * a.y;
+}
+int reduce_mul(ivec3 a)
+{
+  return a.x * a.y * a.z;
+}
+int reduce_mul(ivec4 a)
+{
+  return a.x * a.y * a.z * a.w;
 }
 
 float average(vec2 a)

@@ -2,7 +2,9 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "usd_writer_volume.h"
+#include "usd_writer_volume.hh"
+#include "usd_hierarchy_iterator.hh"
+#include "usd_utils.hh"
 
 #include <pxr/base/tf/pathUtils.h>
 #include <pxr/usd/usdVol/openVDBAsset.h>
@@ -11,18 +13,15 @@
 #include "DNA_volume_types.h"
 #include "DNA_windowmanager_types.h"
 
-#include "BKE_report.h"
+#include "BKE_report.hh"
 #include "BKE_volume.hh"
 
 #include "BLI_fileops.h"
 #include "BLI_index_range.hh"
 #include "BLI_math_base.h"
-#include "BLI_path_util.h"
+#include "BLI_math_vector_types.hh"
+#include "BLI_path_utils.hh"
 #include "BLI_string.h"
-
-#include "WM_api.hh"
-
-#include "usd_hierarchy_iterator.h"
 
 namespace blender::io::usd {
 
@@ -73,9 +72,10 @@ void USDVolumeWriter::do_write(HierarchyContext &context)
   pxr::UsdVolVolume usd_volume = pxr::UsdVolVolume::Define(stage, volume_path);
 
   for (const int i : IndexRange(num_grids)) {
-    const VolumeGrid *grid = BKE_volume_grid_get_for_read(volume, i);
-    const std::string grid_name = BKE_volume_grid_name(grid);
-    const std::string grid_id = pxr::TfMakeValidIdentifier(grid_name);
+    const bke::VolumeGridData *grid = BKE_volume_grid_get(volume, i);
+    const std::string grid_name = bke::volume_grid::get_name(*grid);
+    const std::string grid_id = make_safe_name(grid_name,
+                                               usd_export_context_.export_params.allow_unicode);
     const pxr::SdfPath grid_path = volume_path.AppendPath(pxr::SdfPath(grid_id));
     pxr::UsdVolOpenVDBAsset usd_grid = pxr::UsdVolOpenVDBAsset::Define(stage, grid_path);
     usd_grid.GetFieldNameAttr().Set(pxr::TfToken(grid_name), timecode);
@@ -83,11 +83,9 @@ void USDVolumeWriter::do_write(HierarchyContext &context)
     usd_volume.CreateFieldRelationship(pxr::TfToken(grid_id), grid_path);
   }
 
-  float3 volume_bound_min(std::numeric_limits<float>::max());
-  float3 volume_bound_max(std::numeric_limits<float>::lowest());
-  if (BKE_volume_min_max(volume, volume_bound_min, volume_bound_max)) {
-    const pxr::VtArray<pxr::GfVec3f> volume_extent = {pxr::GfVec3f(&volume_bound_min[0]),
-                                                      pxr::GfVec3f(&volume_bound_max[0])};
+  if (const std::optional<Bounds<float3>> bounds = BKE_volume_min_max(volume)) {
+    const pxr::VtArray<pxr::GfVec3f> volume_extent = {pxr::GfVec3f(&bounds->min.x),
+                                                      pxr::GfVec3f(&bounds->max.x)};
     usd_volume.GetExtentAttr().Set(volume_extent, timecode);
   }
 
@@ -99,8 +97,8 @@ std::optional<std::string> USDVolumeWriter::resolve_vdb_file(const Volume *volum
   std::optional<std::string> vdb_file_path;
   if (volume->filepath[0] == '\0') {
     /* Entering this section should mean that Volume object contains OpenVDB data that is not
-     * obtained from external .vdb file but rather generated inside of Blender (i.e. by 'Mesh to
-     * Volume' modifier). Try to save this data to a .vdb file. */
+     * obtained from external `.vdb` file but rather generated inside of Blender (i.e. by 'Mesh to
+     * Volume' modifier). Try to save this data to a `.vdb` file. */
 
     vdb_file_path = construct_vdb_file_path(volume);
     if (!BKE_volume_save(

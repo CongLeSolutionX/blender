@@ -49,19 +49,36 @@ void PulseAudioDevice::updateRingBuffer()
 
 	while(m_valid)
 	{
-		size_t size = m_ring_buffer.getWriteSize();
-
-		size_t sample_count = size / samplesize;
-
-		if(sample_count > 0)
 		{
-			size = sample_count * samplesize;
+			std::lock_guard<ILockable> device_lock(*this);
 
-			buffer.assureSize(size);
+			if(m_playback)
+			{
+				size_t size = m_ring_buffer.getWriteSize();
 
-			mix(reinterpret_cast<data_t*>(buffer.getBuffer()), sample_count);
+				size_t sample_count = size / samplesize;
 
-			m_ring_buffer.write(reinterpret_cast<data_t*>(buffer.getBuffer()), size);
+				if(sample_count > 0)
+				{
+					size = sample_count * samplesize;
+
+					buffer.assureSize(size);
+
+					mix(reinterpret_cast<data_t*>(buffer.getBuffer()), sample_count);
+
+					m_ring_buffer.write(reinterpret_cast<data_t*>(buffer.getBuffer()), size);
+				}
+			}
+			else
+			{
+				if(m_ring_buffer.getReadSize() == 0)
+				{
+					AUD_pa_threaded_mainloop_lock(m_mainloop);
+					AUD_pa_stream_cork(m_stream, 1, nullptr, nullptr);
+					AUD_pa_stream_flush(m_stream, nullptr, nullptr);
+					AUD_pa_threaded_mainloop_unlock(m_mainloop);
+				}
+			}
 		}
 
 		m_mixingCondition.wait(lock);
@@ -114,14 +131,19 @@ void PulseAudioDevice::PulseAudio_request(pa_stream *stream, size_t total_bytes,
 
 void PulseAudioDevice::playing(bool playing)
 {
+	std::lock_guard<ILockable> lock(*this);
+
 	m_playback = playing;
 
-	AUD_pa_threaded_mainloop_lock(m_mainloop);
-	AUD_pa_stream_cork(m_stream, playing ? 0 : 1, nullptr, nullptr);
-	AUD_pa_threaded_mainloop_unlock(m_mainloop);
+	if(playing)
+	{
+		AUD_pa_threaded_mainloop_lock(m_mainloop);
+		AUD_pa_stream_cork(m_stream, 0, nullptr, nullptr);
+		AUD_pa_threaded_mainloop_unlock(m_mainloop);
+	}
 }
 
-PulseAudioDevice::PulseAudioDevice(std::string name, DeviceSpecs specs, int buffersize) :
+PulseAudioDevice::PulseAudioDevice(const std::string &name, DeviceSpecs specs, int buffersize) :
 	m_synchronizer(this),
 	m_playback(false),
 	m_state(PA_CONTEXT_UNCONNECTED),
@@ -321,7 +343,7 @@ public:
 		m_buffersize = buffersize;
 	}
 
-	virtual void setName(std::string name)
+	virtual void setName(const std::string &name)
 	{
 		m_name = name;
 	}

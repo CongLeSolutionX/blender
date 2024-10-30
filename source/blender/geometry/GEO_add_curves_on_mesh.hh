@@ -4,18 +4,15 @@
 
 #pragma once
 
-#include "BLI_kdtree.h"
-#include "BLI_math_matrix_types.hh"
-#include "BLI_math_vector.hh"
+#include "BLI_math_vector_types.hh"
 #include "BLI_span.hh"
 
-#include "BKE_bvhutils.hh"
 #include "BKE_curves.hh"
 
-#include "DNA_mesh_types.h"
-#include "DNA_meshdata_types.h"
-
 #include "GEO_reverse_uv_sampler.hh"
+
+struct Mesh;
+struct KDTree_3d;
 
 namespace blender::geometry {
 
@@ -25,15 +22,17 @@ struct AddCurvesOnMeshInputs {
 
   /** Determines shape of new curves. */
   bool interpolate_length = false;
+  bool interpolate_radius = false;
   bool interpolate_shape = false;
   bool interpolate_point_count = false;
   bool interpolate_resolution = false;
   float fallback_curve_length = 0.0f;
+  float fallback_curve_radius = 0.0f;
   int fallback_point_count = 0;
 
   /** Information about the surface that the new curves are attached to. */
   const Mesh *surface = nullptr;
-  Span<MLoopTri> surface_looptris;
+  Span<int3> surface_corner_tris;
   const ReverseUVSampler *reverse_uv_sampler = nullptr;
   Span<float3> corner_normals_su;
 
@@ -60,8 +59,8 @@ struct AddCurvesOnMeshOutputs {
 AddCurvesOnMeshOutputs add_curves_on_mesh(bke::CurvesGeometry &curves,
                                           const AddCurvesOnMeshInputs &inputs);
 
-float3 compute_surface_point_normal(const MLoopTri &looptri,
+float3 compute_surface_point_normal(const int3 &tri,
                                     const float3 &bary_coord,
-                                    const Span<float3> corner_normals);
+                                    Span<float3> corner_normals);
 
 }  // namespace blender::geometry

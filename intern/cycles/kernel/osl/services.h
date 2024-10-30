@@ -189,7 +189,14 @@ class OSLRenderServices : public OSL::RendererServices {
                   void *val,
                   bool derivatives) override;
 
-#if OSL_LIBRARY_VERSION_CODE >= 11100
+#if OSL_LIBRARY_VERSION_CODE >= 11304
+  TextureSystem::TextureHandle *get_texture_handle(OSL::ustring filename,
+                                                   OSL::ShadingContext *context,
+                                                   const TextureOpt *options) override;
+  TextureSystem::TextureHandle *get_texture_handle(OSLUStringHash filename,
+                                                   OSL::ShadingContext *context,
+                                                   const TextureOpt *options) override;
+#elif OSL_LIBRARY_VERSION_CODE >= 11100
   TextureSystem::TextureHandle *get_texture_handle(OSLUStringHash filename,
                                                    OSL::ShadingContext *context) override;
 #else
@@ -245,7 +252,17 @@ class OSLRenderServices : public OSL::RendererServices {
                    float *dresultdt,
                    OSLUStringHash *errormessage) override;
 
-#if OSL_LIBRARY_VERSION_CODE >= 11100
+#if OSL_LIBRARY_VERSION_CODE >= 11304
+  bool get_texture_info(OSLUStringHash filename,
+                        TextureHandle *texture_handle,
+                        TexturePerthread *texture_thread_info,
+                        OSL::ShaderGlobals *sg,
+                        int subimage,
+                        OSLUStringHash dataname,
+                        TypeDesc datatype,
+                        void *data,
+                        OSLUStringHash *errormessage) override;
+#elif OSL_LIBRARY_VERSION_CODE >= 11100
   bool get_texture_info(OSLUStringHash filename,
                         TextureHandle *texture_handle,
                         TexturePerthread *texture_thread_info,
@@ -289,6 +306,7 @@ class OSLRenderServices : public OSL::RendererServices {
   static ustring u_object_color;
   static ustring u_object_alpha;
   static ustring u_object_index;
+  static ustring u_object_is_light;
   static ustring u_geom_dupli_generated;
   static ustring u_geom_dupli_uv;
   static ustring u_material_index;

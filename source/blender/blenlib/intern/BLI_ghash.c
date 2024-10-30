@@ -24,8 +24,7 @@
 #define GHASH_INTERNAL_API
 #include "BLI_ghash.h" /* own include */
 
-/* keep last */
-#include "BLI_strict_flags.h"
+#include "BLI_strict_flags.h" /* Keep last. */
 
 /* -------------------------------------------------------------------- */
 /** \name Structs & Constants
@@ -35,16 +34,12 @@
 
 /**
  * Next prime after `2^n` (skipping 2 & 3).
- *
- * \note Also used by: `BLI_smallhash`.
  */
-extern const uint BLI_ghash_hash_sizes[]; /* Quiet warning, this is only used by smallhash.c */
-const uint BLI_ghash_hash_sizes[] = {
+static const uint hashsizes[] = {
     5,       11,      17,      37,      67,       131,      257,      521,       1031,
     2053,    4099,    8209,    16411,   32771,    65537,    131101,   262147,    524309,
     1048583, 2097169, 4194319, 8388617, 16777259, 33554467, 67108879, 134217757, 268435459,
 };
-#define hashsizes BLI_ghash_hash_sizes
 
 #ifdef GHASH_USE_MODULO_BUCKETS
 #  define GHASH_MAX_SIZE 27
@@ -62,8 +57,8 @@ BLI_STATIC_ASSERT(ARRAY_SIZE(hashsizes) == GHASH_MAX_SIZE, "Invalid 'hashsizes' 
  * about 25% - 30% quicker 'dynamic-topology' stroke drawing e.g.).
  * Min load #GHASH_LIMIT_SHRINK is a quarter of max load, to avoid resizing to quickly.
  */
-#define GHASH_LIMIT_GROW(_nbkt) (((_nbkt)*3) / 4)
-#define GHASH_LIMIT_SHRINK(_nbkt) (((_nbkt)*3) / 16)
+#define GHASH_LIMIT_GROW(_nbkt) (((_nbkt) * 3) / 4)
+#define GHASH_LIMIT_SHRINK(_nbkt) (((_nbkt) * 3) / 16)
 
 /* WARNING! Keep in sync with ugly _gh_Entry in header!!! */
 typedef struct Entry {
@@ -806,7 +801,7 @@ bool BLI_ghash_remove(GHash *gh,
 
 void *BLI_ghash_popkey(GHash *gh, const void *key, GHashKeyFreeFP keyfreefp)
 {
-  /* Same as above but return the value,
+  /* Same as #BLI_ghash_remove but return the value,
    * no free value argument since it will be returned. */
 
   const uint hash = ghash_keyhash(gh, key);
@@ -1094,7 +1089,7 @@ int BLI_gset_buckets_len(const GSet *gs)
   return BLI_ghash_buckets_len((const GHash *)gs);
 }
 
-double BLI_ghash_calc_quality_ex(GHash *gh,
+double BLI_ghash_calc_quality_ex(const GHash *gh,
                                  double *r_load,
                                  double *r_variance,
                                  double *r_prop_empty_buckets,
@@ -1181,14 +1176,14 @@ double BLI_ghash_calc_quality_ex(GHash *gh,
             ((double)gh->nentries * (gh->nentries + 2 * gh->nbuckets - 1)));
   }
 }
-double BLI_gset_calc_quality_ex(GSet *gs,
+double BLI_gset_calc_quality_ex(const GSet *gs,
                                 double *r_load,
                                 double *r_variance,
                                 double *r_prop_empty_buckets,
                                 double *r_prop_overloaded_buckets,
                                 int *r_biggest_bucket)
 {
-  return BLI_ghash_calc_quality_ex((GHash *)gs,
+  return BLI_ghash_calc_quality_ex((const GHash *)gs,
                                    r_load,
                                    r_variance,
                                    r_prop_empty_buckets,
@@ -1196,11 +1191,11 @@ double BLI_gset_calc_quality_ex(GSet *gs,
                                    r_biggest_bucket);
 }
 
-double BLI_ghash_calc_quality(GHash *gh)
+double BLI_ghash_calc_quality(const GHash *gh)
 {
   return BLI_ghash_calc_quality_ex(gh, NULL, NULL, NULL, NULL, NULL);
 }
-double BLI_gset_calc_quality(GSet *gs)
+double BLI_gset_calc_quality(const GSet *gs)
 {
   return BLI_ghash_calc_quality_ex((GHash *)gs, NULL, NULL, NULL, NULL, NULL);
 }

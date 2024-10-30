@@ -12,8 +12,7 @@
 #include "BLI_listbase.h"
 #include "BLI_utildefines.h"
 
-#include "BKE_context.hh"
-#include "BKE_main.h"
+#include "BKE_main.hh"
 
 #include "DNA_screen_types.h"
 #include "DNA_space_types.h"
@@ -22,19 +21,15 @@
 
 #include "RNA_access.hh"
 #include "RNA_define.hh"
-#include "RNA_prototypes.h"
+#include "RNA_prototypes.hh"
 
-#include "WM_api.hh"
 #include "WM_types.hh"
 
 #include "ED_screen.hh"
 
-/* only for own init/exit calls (wm_gizmotype_init/wm_gizmotype_free) */
-#include "wm.hh"
-
-/* own includes */
-#include "wm_gizmo_intern.h"
-#include "wm_gizmo_wmapi.h"
+/* Own includes. */
+#include "wm_gizmo_intern.hh"
+#include "wm_gizmo_wmapi.hh"
 
 /* -------------------------------------------------------------------- */
 /** \name Gizmo Type Append
@@ -134,7 +129,8 @@ static void gizmotype_unlink(bContext *C, Main *bmain, wmGizmoType *gzt)
           if (gzmap) {
             LISTBASE_FOREACH (wmGizmoGroup *, gzgroup, &gzmap->groups) {
               for (wmGizmo *gz = static_cast<wmGizmo *>(gzgroup->gizmos.first), *gz_next; gz;
-                   gz = gz_next) {
+                   gz = gz_next)
+              {
                 gz_next = gz->next;
                 BLI_assert(gzgroup->parent_gzmap == gzmap);
                 if (gz->type == gzt) {
@@ -185,7 +181,7 @@ void wm_gizmotype_free()
 
 void wm_gizmotype_init()
 {
-  /* reserve size is set based on blender default setup */
+  /* Reserve size is set based on blender default setup. */
   global_gizmotype_hash = BLI_ghash_str_new_ex("wm_gizmotype_init gh", 128);
 }
 

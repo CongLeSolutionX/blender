@@ -13,12 +13,28 @@
 
 #pragma once
 
+#include "BLI_hash.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_vector.hh"
-#include "GPU_material.h"
-#include "GPU_texture.h"
+#include "GPU_common_types.hh"
+#include "GPU_material.hh"
+#include "GPU_texture.hh"
 
 #include <iostream>
+
+/* Force enable `printf` support in release build. */
+#define GPU_FORCE_ENABLE_SHADER_PRINTF 0
+
+#if !defined(NDEBUG) || GPU_FORCE_ENABLE_SHADER_PRINTF
+#  define GPU_SHADER_PRINTF_ENABLE 1
+#else
+#  define GPU_SHADER_PRINTF_ENABLE 0
+#endif
+#define GPU_SHADER_PRINTF_SLOT 13
+#define GPU_SHADER_PRINTF_MAX_CAPACITY (1024 * 4)
+
+/* Used for primitive expansion. */
+#define GPU_SSBO_INDEX_BUF_SLOT 7
 
 namespace blender::gpu::shader {
 
@@ -31,48 +47,6 @@ namespace blender::gpu::shader {
     ShaderCreateInfo _info(#_info); \
     _info
 #endif
-
-enum class Type {
-  /* Types supported natively across all GPU back-ends. */
-  FLOAT = 0,
-  VEC2,
-  VEC3,
-  VEC4,
-  MAT3,
-  MAT4,
-  UINT,
-  UVEC2,
-  UVEC3,
-  UVEC4,
-  INT,
-  IVEC2,
-  IVEC3,
-  IVEC4,
-  BOOL,
-  /* Additionally supported types to enable data optimization and native
-   * support in some GPU back-ends.
-   * NOTE: These types must be representable in all APIs. E.g. `VEC3_101010I2` is aliased as vec3
-   * in the GL back-end, as implicit type conversions from packed normal attribute data to vec3 is
-   * supported. UCHAR/CHAR types are natively supported in Metal and can be used to avoid
-   * additional data conversions for `GPU_COMP_U8` vertex attributes. */
-  VEC3_101010I2,
-  UCHAR,
-  UCHAR2,
-  UCHAR3,
-  UCHAR4,
-  CHAR,
-  CHAR2,
-  CHAR3,
-  CHAR4,
-  USHORT,
-  USHORT2,
-  USHORT3,
-  USHORT4,
-  SHORT,
-  SHORT2,
-  SHORT3,
-  SHORT4
-};
 
 /* All of these functions is a bit out of place */
 static inline Type to_type(const eGPUType type)
@@ -161,6 +135,8 @@ static inline std::ostream &operator<<(std::ostream &stream, const Type type)
       return stream << "short3";
     case Type::SHORT4:
       return stream << "short4";
+    case Type::BOOL:
+      return stream << "bool";
     default:
       BLI_assert(0);
       return stream;
@@ -212,6 +188,7 @@ enum class BuiltinBits {
   TEXTURE_ATOMIC = (1 << 18),
 
   /* Not a builtin but a flag we use to tag shaders that use the debug features. */
+  USE_PRINTF = (1 << 28),
   USE_DEBUG_DRAW = (1 << 29),
   USE_DEBUG_PRINT = (1 << 30),
 };
@@ -265,6 +242,20 @@ enum class ImageType {
   DEPTH_2D_ARRAY,
   DEPTH_CUBE,
   DEPTH_CUBE_ARRAY,
+  /** Atomic texture type wrappers.
+   * For OpenGL, these map to the equivalent (U)INT_* types.
+   * NOTE: Atomic variants MUST be used if the texture bound to this resource has usage flag:
+   * `GPU_TEXTURE_USAGE_ATOMIC`, even if atomic texture operations are not used in the given
+   * shader.
+   * The shader source MUST also utilize the correct atomic sampler handle e.g.
+   * `usampler2DAtomic` in conjunction with these types, for passing texture/image resources into
+   * functions. */
+  UINT_2D_ATOMIC,
+  UINT_2D_ARRAY_ATOMIC,
+  UINT_3D_ATOMIC,
+  INT_2D_ATOMIC,
+  INT_2D_ARRAY_ATOMIC,
+  INT_3D_ATOMIC
 };
 
 /* Storage qualifiers. */
@@ -279,19 +270,22 @@ enum class Qualifier {
 };
 ENUM_OPERATORS(Qualifier, Qualifier::QUALIFIER_MAX);
 
+/** Maps to different descriptor sets. */
 enum class Frequency {
   BATCH = 0,
   PASS,
+  /** Special frequency tag that will automatically source storage buffers from GPUBatch. */
+  GEOMETRY,
 };
 
-/* Dual Source Blending Index. */
+/** Dual Source Blending Index. */
 enum class DualBlend {
   NONE = 0,
   SRC_0,
   SRC_1,
 };
 
-/* Interpolation qualifiers. */
+/** Interpolation qualifiers. */
 enum class Interpolation {
   SMOOTH = 0,
   FLAT,
@@ -432,7 +426,7 @@ struct ShaderCreateInfo {
     /** Set to -1 by default to check if used. */
     int max_vertices = -1;
 
-    bool operator==(const GeometryStageLayout &b)
+    bool operator==(const GeometryStageLayout &b) const
     {
       TEST_EQUAL(*this, b, primitive_in);
       TEST_EQUAL(*this, b, invocations);
@@ -448,7 +442,7 @@ struct ShaderCreateInfo {
     int local_size_y = -1;
     int local_size_z = -1;
 
-    bool operator==(const ComputeStageLayout &b)
+    bool operator==(const ComputeStageLayout &b) const
     {
       TEST_EQUAL(*this, b, local_size_x);
       TEST_EQUAL(*this, b, local_size_y);
@@ -463,7 +457,7 @@ struct ShaderCreateInfo {
     Type type;
     DualBlend blend;
     StringRefNull name;
-    /* Note: Currently only supported by Metal. */
+    /* NOTE: Currently only supported by Metal. */
     int raster_order_group;
 
     bool operator==(const FragOut &b) const
@@ -480,6 +474,8 @@ struct ShaderCreateInfo {
 
   using SubpassIn = FragOut;
   Vector<SubpassIn> subpass_inputs_;
+
+  Vector<SpecializationConstant> specialization_constants_;
 
   struct Sampler {
     ImageType type;
@@ -557,9 +553,34 @@ struct ShaderCreateInfo {
    * Resources are grouped by frequency of change.
    * Pass resources are meant to be valid for the whole pass.
    * Batch resources can be changed in a more granular manner (per object/material).
-   * Mis-usage will only produce suboptimal performance.
+   * Geometry resources can be changed in a very granular manner (per draw-call).
+   * Misuse will only produce suboptimal performance.
    */
-  Vector<Resource> pass_resources_, batch_resources_;
+  Vector<Resource> pass_resources_, batch_resources_, geometry_resources_;
+
+  Vector<Resource> &resources_get_(Frequency freq)
+  {
+    switch (freq) {
+      case Frequency::PASS:
+        return pass_resources_;
+      case Frequency::BATCH:
+        return batch_resources_;
+      case Frequency::GEOMETRY:
+        return geometry_resources_;
+    }
+    BLI_assert_unreachable();
+    return pass_resources_;
+  }
+
+  /* Return all resources regardless of their frequency. */
+  Vector<Resource> resources_get_all_() const
+  {
+    Vector<Resource> all_resources;
+    all_resources.extend(pass_resources_);
+    all_resources.extend(batch_resources_);
+    all_resources.extend(geometry_resources_);
+    return all_resources;
+  }
 
   Vector<StageInterfaceInfo *> vertex_out_interfaces_;
   Vector<StageInterfaceInfo *> geometry_out_interfaces_;
@@ -596,6 +617,11 @@ struct ShaderCreateInfo {
   eGPUShaderTFBType tf_type_ = GPU_SHADER_TFB_NONE;
   Vector<const char *> tf_names_;
 
+  /* Api-specific parameters. */
+#ifdef WITH_METAL_BACKEND
+  ushort mtl_max_threads_per_threadgroup_ = 0;
+#endif
+
  public:
   ShaderCreateInfo(const char *name) : name_(name){};
   ~ShaderCreateInfo(){};
@@ -619,12 +645,6 @@ struct ShaderCreateInfo {
     return *(Self *)this;
   }
 
-  /**
-   * IMPORTANT: invocations count is only used if GL_ARB_gpu_shader5 is supported. On
-   * implementations that do not supports it, the max_vertices will be multiplied by invocations.
-   * Your shader needs to account for this fact. Use `#ifdef GPU_ARB_gpu_shader5` and make a code
-   * path that does not rely on #gl_InvocationID.
-   */
   Self &geometry_layout(PrimitiveIn prim_in,
                         PrimitiveOut prim_out,
                         int max_vertices,
@@ -700,6 +720,63 @@ struct ShaderCreateInfo {
   /** \} */
 
   /* -------------------------------------------------------------------- */
+  /** \name Shader specialization constants
+   * \{ */
+
+  /* Adds a specialization constant which is a dynamically modifiable value, which will be
+   * statically compiled into a PSO configuration to provide optimal runtime performance,
+   * with a reduced re-compilation cost vs Macro's with easier generation of unique permutations
+   * based on run-time values.
+   *
+   * Tip: To evaluate use-cases of where specialization constants can provide a performance
+   * gain, benchmark a given shader in its default case. Attempt to statically disable branches or
+   * conditions which rely on uniform look-ups and measure if there is a marked improvement in
+   * performance and/or reduction in memory bandwidth/register pressure.
+   *
+   * NOTE: Specialization constants will incur new compilation of PSOs and thus can incur an
+   * unexpected cost. Specialization constants should be reserved for infrequently changing
+   * parameters (e.g. user setting parameters such as toggling of features or quality level
+   * presets), or those with a low set of possible runtime permutations.
+   *
+   * Specialization constants are assigned at runtime using:
+   *  - `GPU_shader_constant_*(shader, name, value)`
+   * or
+   *  - `DrawPass::specialize_constant(shader, name, value)`
+   *
+   * All constants **MUST** be specified before binding a shader.
+   */
+  Self &specialization_constant(Type type, StringRefNull name, double default_value)
+  {
+    SpecializationConstant constant;
+    constant.type = type;
+    constant.name = name;
+    switch (type) {
+      case Type::INT:
+        constant.value.i = static_cast<int>(default_value);
+        break;
+      case Type::BOOL:
+      case Type::UINT:
+        constant.value.u = static_cast<uint>(default_value);
+        break;
+      case Type::FLOAT:
+        constant.value.f = static_cast<float>(default_value);
+        break;
+      default:
+        BLI_assert_msg(0, "Only scalar types can be used as constants");
+        break;
+    }
+    specialization_constants_.append(constant);
+    interface_names_size_ += name.size() + 1;
+    return *(Self *)this;
+  }
+
+  /* TODO: Add API to specify unique specialization config permutations in CreateInfo, allowing
+   * specialized compilation to be primed and handled in the background at start-up, rather than
+   * waiting for a given permutation to occur dynamically. */
+
+  /** \} */
+
+  /* -------------------------------------------------------------------- */
   /** \name Resources bindings points
    * \{ */
 
@@ -711,7 +788,7 @@ struct ShaderCreateInfo {
     Resource res(Resource::BindType::UNIFORM_BUFFER, slot);
     res.uniformbuf.name = name;
     res.uniformbuf.type_name = type_name;
-    ((freq == Frequency::PASS) ? pass_resources_ : batch_resources_).append(res);
+    resources_get_(freq).append(res);
     interface_names_size_ += name.size() + 1;
     return *(Self *)this;
   }
@@ -726,7 +803,7 @@ struct ShaderCreateInfo {
     res.storagebuf.qualifiers = qualifiers;
     res.storagebuf.type_name = type_name;
     res.storagebuf.name = name;
-    ((freq == Frequency::PASS) ? pass_resources_ : batch_resources_).append(res);
+    resources_get_(freq).append(res);
     interface_names_size_ += name.size() + 1;
     return *(Self *)this;
   }
@@ -743,7 +820,7 @@ struct ShaderCreateInfo {
     res.image.qualifiers = qualifiers;
     res.image.type = type;
     res.image.name = name;
-    ((freq == Frequency::PASS) ? pass_resources_ : batch_resources_).append(res);
+    resources_get_(freq).append(res);
     interface_names_size_ += name.size() + 1;
     return *(Self *)this;
   }
@@ -760,7 +837,7 @@ struct ShaderCreateInfo {
     /* Produces ASAN errors for the moment. */
     // res.sampler.sampler = sampler;
     UNUSED_VARS(sampler);
-    ((freq == Frequency::PASS) ? pass_resources_ : batch_resources_).append(res);
+    resources_get_(freq).append(res);
     interface_names_size_ += name.size() + 1;
     return *(Self *)this;
   }
@@ -805,6 +882,8 @@ struct ShaderCreateInfo {
 
   Self &push_constant(Type type, StringRefNull name, int array_size = 0)
   {
+    /* We don't have support for UINT push constants yet, use INT instead. */
+    BLI_assert(type != Type::UINT);
     BLI_assert_msg(name.find("[") == -1,
                    "Array syntax is forbidden for push constants."
                    "Use the array_size parameter instead.");
@@ -929,14 +1008,39 @@ struct ShaderCreateInfo {
   /** \} */
 
   /* -------------------------------------------------------------------- */
+  /** \name API-Specific Parameters
+   *
+   * Optional parameters exposed by specific back-ends to enable additional features and
+   * performance tuning.
+   * NOTE: These functions can be exposed as a pass-through on unsupported configurations.
+   * \{ */
+
+  /* \name mtl_max_total_threads_per_threadgroup
+   * \a  max_total_threads_per_threadgroup - Provides compiler hint for maximum threadgroup size up
+   * front. Maximum value is 1024. */
+  Self &mtl_max_total_threads_per_threadgroup(ushort max_total_threads_per_threadgroup)
+  {
+#ifdef WITH_METAL_BACKEND
+    mtl_max_threads_per_threadgroup_ = max_total_threads_per_threadgroup;
+#else
+    UNUSED_VARS(max_total_threads_per_threadgroup);
+#endif
+    return *(Self *)this;
+  }
+
+  /** \} */
+
+  /* -------------------------------------------------------------------- */
   /** \name Recursive evaluation.
    *
    * Flatten all dependency so that this descriptor contains all the data from the additional
    * descriptors. This avoids tedious traversal in shader source creation.
    * \{ */
 
-  /* WARNING: Recursive. */
-  void finalize();
+  /* WARNING: Recursive evaluation is not thread safe.
+   * Non-recursive evaluation expects their dependencies to be already finalized.
+   * (All statically declared CreateInfos are automatically finalized at startup) */
+  void finalize(const bool recursive = false);
 
   std::string check_error() const;
   bool is_vulkan_compatible() const;
@@ -954,7 +1058,7 @@ struct ShaderCreateInfo {
 
   /* Comparison operator for GPUPass cache. We only compare if it will create the same shader
    * code. So we do not compare name and some other internal stuff. */
-  bool operator==(const ShaderCreateInfo &b)
+  bool operator==(const ShaderCreateInfo &b) const
   {
     TEST_EQUAL(*this, b, builtins_);
     TEST_EQUAL(*this, b, vertex_source_generated);
@@ -967,6 +1071,7 @@ struct ShaderCreateInfo {
     TEST_VECTOR_EQUAL(*this, b, fragment_outputs_);
     TEST_VECTOR_EQUAL(*this, b, pass_resources_);
     TEST_VECTOR_EQUAL(*this, b, batch_resources_);
+    TEST_VECTOR_EQUAL(*this, b, geometry_resources_);
     TEST_VECTOR_EQUAL(*this, b, vertex_out_interfaces_);
     TEST_VECTOR_EQUAL(*this, b, geometry_out_interfaces_);
     TEST_VECTOR_EQUAL(*this, b, push_constants_);
@@ -1012,6 +1117,9 @@ struct ShaderCreateInfo {
     for (auto &res : info.pass_resources_) {
       print_resource(res);
     }
+    for (auto &res : info.geometry_resources_) {
+      print_resource(res);
+    }
     return stream;
   }
 
@@ -1023,6 +1131,11 @@ struct ShaderCreateInfo {
       }
     }
     for (auto &res : pass_resources_) {
+      if (res.bind_type == bind_type) {
+        return true;
+      }
+    }
+    for (auto &res : geometry_resources_) {
       if (res.bind_type == bind_type) {
         return true;
       }
@@ -1042,3 +1155,16 @@ struct ShaderCreateInfo {
 };
 
 }  // namespace blender::gpu::shader
+
+namespace blender {
+template<> struct DefaultHash<Vector<blender::gpu::shader::SpecializationConstant::Value>> {
+  uint64_t operator()(const Vector<blender::gpu::shader::SpecializationConstant::Value> &key) const
+  {
+    uint64_t hash = 0;
+    for (const blender::gpu::shader::SpecializationConstant::Value &value : key) {
+      hash = hash * 33 ^ uint64_t(value.u);
+    }
+    return hash;
+  }
+};
+}  // namespace blender

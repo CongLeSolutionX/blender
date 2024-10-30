@@ -5,17 +5,15 @@
 set(INC
   .
   intern
-  ../blenfont
   ../blenkernel
   ../blentranslation
   ../bmesh
-  ../depsgraph
   ../editors/include
   ../makesrna
   ../render
   ../windowmanager
   ../../../intern/eigen
-  # RNA_prototypes.h
+  # RNA_prototypes.hh
   ${CMAKE_BINARY_DIR}/source/blender/makesrna
 )
 
@@ -43,7 +41,9 @@ set(SRC
 )
 
 set(LIB
+  PRIVATE bf::blenfont
   PRIVATE bf::blenlib
+  PRIVATE bf::depsgraph
   PRIVATE bf::dna
   PRIVATE bf::intern::guardedalloc
 )
@@ -51,5 +51,5 @@ set(LIB
 
 blender_add_lib(bf_shader_fx "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 
-# RNA_prototypes.h
+# RNA_prototypes.hh
 add_dependencies(bf_shader_fx bf_rna)

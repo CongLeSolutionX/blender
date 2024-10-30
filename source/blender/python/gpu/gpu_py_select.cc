@@ -18,26 +18,30 @@
 
 #include "BLI_utildefines.h"
 
-#include "../generic/py_capi_utils.h"
+#include "../generic/py_capi_utils.hh"
 
-#include "GPU_select.h"
+#include "GPU_select.hh"
 
-#include "gpu_py.h"
-#include "gpu_py_select.h" /* Own include. */
+#include "gpu_py.hh"
+#include "gpu_py_select.hh" /* Own include. */
 
 /* -------------------------------------------------------------------- */
 /** \name Methods
  * \{ */
 
-PyDoc_STRVAR(pygpu_select_load_id_doc,
-             ".. function:: load_id(id)\n"
-             "\n"
-             "   Set the selection ID.\n"
-             "\n"
-             "   :arg id: Number (32-bit uint).\n"
-             "   :type select: int\n");
+PyDoc_STRVAR(
+    /* Wrap. */
+    pygpu_select_load_id_doc,
+    ".. function:: load_id(id)\n"
+    "\n"
+    "   Set the selection ID.\n"
+    "\n"
+    "   :arg id: Number (32-bit uint).\n"
+    "   :type select: int\n");
 static PyObject *pygpu_select_load_id(PyObject * /*self*/, PyObject *value)
 {
+  BPYGPU_IS_INIT_OR_ERROR_OBJ;
+
   uint id;
   if ((id = PyC_Long_AsU32(value)) == uint(-1)) {
     return nullptr;
@@ -58,7 +62,10 @@ static PyMethodDef pygpu_select__tp_methods[] = {
     {nullptr, nullptr, 0, nullptr},
 };
 
-PyDoc_STRVAR(pygpu_select__tp_doc, "This module provides access to selection.");
+PyDoc_STRVAR(
+    /* Wrap. */
+    pygpu_select__tp_doc,
+    "This module provides access to selection.");
 static PyModuleDef pygpu_select_module_def = {
     /*m_base*/ PyModuleDef_HEAD_INIT,
     /*m_name*/ "gpu.select",
@@ -75,7 +82,7 @@ PyObject *bpygpu_select_init()
 {
   PyObject *submodule;
 
-  submodule = bpygpu_create_module(&pygpu_select_module_def);
+  submodule = PyModule_Create(&pygpu_select_module_def);
 
   return submodule;
 }

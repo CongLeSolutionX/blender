@@ -6,13 +6,11 @@ set(INC
   ../include
   ../../blenkernel
   ../../blentranslation
-  ../../depsgraph
   ../../gpu
   ../../makesrna
   ../../windowmanager
-  ../../../../intern/clog
   ../../../../intern/mantaflow/extern
-  # RNA_prototypes.h
+  # RNA_prototypes.hh
   ${CMAKE_BINARY_DIR}/source/blender/makesrna
 )
 
@@ -33,13 +31,15 @@ set(SRC
   rigidbody_world.cc
 
   particle_edit_utildefines.h
-  physics_intern.h
+  physics_intern.hh
 )
 
 set(LIB
   bf_blenkernel
   PRIVATE bf::blenlib
+  PRIVATE bf::depsgraph
   PRIVATE bf::dna
+  PRIVATE bf::intern::clog
   PRIVATE bf::intern::guardedalloc
 )
 
@@ -60,5 +60,5 @@ endif()
 
 blender_add_lib(bf_editor_physics "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 
-# RNA_prototypes.h
+# RNA_prototypes.hh
 add_dependencies(bf_editor_physics bf_rna)

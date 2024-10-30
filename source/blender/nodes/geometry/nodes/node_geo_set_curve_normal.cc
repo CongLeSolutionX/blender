@@ -21,7 +21,17 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Geometry>("Curve").supported_type(
       {GeometryComponent::Type::Curve, GeometryComponent::Type::GreasePencil});
   b.add_input<decl::Bool>("Selection").default_value(true).hide_value().field_on_all();
+  auto &normal = b.add_input<decl::Vector>("Normal")
+                     .default_value({0.0f, 0.0f, 1.0f})
+                     .subtype(PROP_XYZ)
+                     .field_on_all();
   b.add_output<decl::Geometry>("Curve").propagate_all();
+
+  const bNode *node = b.node_or_null();
+  if (node != nullptr) {
+    const NormalMode mode = NormalMode(node->custom1);
+    normal.available(mode == NORMAL_MODE_FREE);
+  }
 }
 
 static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
@@ -36,31 +46,49 @@ static void node_init(bNodeTree * /*tree*/, bNode *node)
 
 static void set_curve_normal(bke::CurvesGeometry &curves,
                              const NormalMode mode,
-                             const fn::FieldContext field_context,
-                             const Field<bool> &selection_field)
+                             const fn::FieldContext &curve_context,
+                             const fn::FieldContext &point_context,
+                             const Field<bool> &selection_field,
+                             const Field<float3> &custom_normal)
 {
-  fn::FieldEvaluator evaluator{field_context, curves.curves_num()};
-  evaluator.set_selection(selection_field);
-  evaluator.evaluate();
-  const IndexMask selection = evaluator.get_evaluated_selection_as_mask();
-  index_mask::masked_fill<int8_t>(curves.normal_mode_for_write(), mode, selection);
+  bke::try_capture_field_on_geometry(curves.attributes_for_write(),
+                                     curve_context,
+                                     "normal_mode",
+                                     AttrDomain::Curve,
+                                     selection_field,
+                                     fn::make_constant_field<int8_t>(mode));
+
+  if (mode == NORMAL_MODE_FREE) {
+    bke::try_capture_field_on_geometry(curves.attributes_for_write(),
+                                       point_context,
+                                       "custom_normal",
+                                       AttrDomain::Point,
+                                       Field<bool>(std::make_shared<bke::EvaluateOnDomainInput>(
+                                           selection_field, AttrDomain::Curve)),
+                                       custom_normal);
+  }
+
   curves.tag_normals_changed();
 }
 
 static void set_grease_pencil_normal(GreasePencil &grease_pencil,
                                      const NormalMode mode,
-                                     const Field<bool> &selection_field)
+                                     const Field<bool> &selection_field,
+                                     const Field<float3> &custom_normal)
 {
   using namespace blender::bke::greasepencil;
   for (const int layer_index : grease_pencil.layers().index_range()) {
-    Drawing *drawing = get_eval_grease_pencil_layer_drawing_for_write(grease_pencil, layer_index);
+    Drawing *drawing = grease_pencil.get_eval_drawing(grease_pencil.layer(layer_index));
     if (drawing == nullptr) {
       continue;
     }
-    bke::CurvesGeometry &curves = drawing->strokes_for_write();
-    const bke::GreasePencilLayerFieldContext field_context(
-        grease_pencil, ATTR_DOMAIN_CURVE, layer_index);
-    set_curve_normal(curves, mode, field_context, selection_field);
+    set_curve_normal(
+        drawing->strokes_for_write(),
+        mode,
+        bke::GreasePencilLayerFieldContext(grease_pencil, AttrDomain::Curve, layer_index),
+        bke::GreasePencilLayerFieldContext(grease_pencil, AttrDomain::Point, layer_index),
+        selection_field,
+        custom_normal);
   }
 }
 
@@ -70,15 +98,23 @@ static void node_geo_exec(GeoNodeExecParams params)
 
   GeometrySet geometry_set = params.extract_input<GeometrySet>("Curve");
   Field<bool> selection_field = params.extract_input<Field<bool>>("Selection");
+  Field<float3> custom_normal;
+  if (mode == NORMAL_MODE_FREE) {
+    custom_normal = params.extract_input<Field<float3>>("Normal");
+  }
 
   geometry_set.modify_geometry_sets([&](GeometrySet &geometry_set) {
     if (Curves *curves_id = geometry_set.get_curves_for_write()) {
       bke::CurvesGeometry &curves = curves_id->geometry.wrap();
-      const bke::CurvesFieldContext field_context{curves, ATTR_DOMAIN_CURVE};
-      set_curve_normal(curves, mode, field_context, selection_field);
+      set_curve_normal(curves,
+                       mode,
+                       bke::CurvesFieldContext(*curves_id, AttrDomain::Curve),
+                       bke::CurvesFieldContext(*curves_id, AttrDomain::Point),
+                       selection_field,
+                       custom_normal);
     }
-    if (geometry_set.has_grease_pencil()) {
-      set_grease_pencil_normal(*geometry_set.get_grease_pencil_for_write(), mode, selection_field);
+    if (GreasePencil *grease_pencil = geometry_set.get_grease_pencil_for_write()) {
+      set_grease_pencil_normal(*grease_pencil, mode, selection_field, custom_normal);
     }
   });
 
@@ -97,14 +133,14 @@ static void node_rna(StructRNA *srna)
 
 static void node_register()
 {
-  static bNodeType ntype;
+  static blender::bke::bNodeType ntype;
   geo_node_type_base(&ntype, GEO_NODE_SET_CURVE_NORMAL, "Set Curve Normal", NODE_CLASS_GEOMETRY);
   ntype.declare = node_declare;
   ntype.geometry_node_execute = node_geo_exec;
   ntype.initfunc = node_init;
   ntype.draw_buttons = node_layout;
 
-  nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 
   node_rna(ntype.rna_ext.srna);
 }

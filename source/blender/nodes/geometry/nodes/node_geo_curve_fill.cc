@@ -3,11 +3,8 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "BLI_array.hh"
-#include "BLI_delaunay_2d.h"
+#include "BLI_delaunay_2d.hh"
 #include "BLI_math_vector_types.hh"
-
-#include "DNA_mesh_types.h"
-#include "DNA_meshdata_types.h"
 
 #include "BKE_curves.hh"
 #include "BKE_grease_pencil.hh"
@@ -32,7 +29,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Geometry>("Curve").supported_type(
       {GeometryComponent::Type::Curve, GeometryComponent::Type::GreasePencil});
   b.add_input<decl::Int>("Group ID")
-      .supports_field()
+      .field_on_all()
       .hide_value()
       .description(
           "An index used to group curves together. Filling is done separately for each group");
@@ -52,32 +49,39 @@ static void node_init(bNodeTree * /*tree*/, bNode *node)
   node->storage = data;
 }
 
+static void fill_curve_vert_indices(const OffsetIndices<int> offsets,
+                                    MutableSpan<Vector<int>> faces)
+{
+  threading::parallel_for(faces.index_range(), 1024, [&](const IndexRange range) {
+    for (const int i : range) {
+      faces[i].resize(offsets[i].size());
+      array_utils::fill_index_range<int>(faces[i], offsets[i].start());
+    }
+  });
+}
+
 static meshintersect::CDT_result<double> do_cdt(const bke::CurvesGeometry &curves,
                                                 const CDT_output_type output_type)
 {
   const OffsetIndices points_by_curve = curves.evaluated_points_by_curve();
   const Span<float3> positions = curves.evaluated_positions();
 
+  Array<double2> positions_2d(positions.size());
+  threading::parallel_for(positions.index_range(), 2048, [&](const IndexRange range) {
+    for (const int i : range) {
+      positions_2d[i] = double2(positions[i].x, positions[i].y);
+    }
+  });
+
+  Array<Vector<int>> faces(curves.curves_num());
+  fill_curve_vert_indices(points_by_curve, faces);
+
   meshintersect::CDT_input<double> input;
   input.need_ids = false;
-  input.vert.reinitialize(points_by_curve.total_size());
-  input.face.reinitialize(curves.curves_num());
+  input.vert = std::move(positions_2d);
+  input.face = std::move(faces);
 
-  for (const int i_curve : curves.curves_range()) {
-    const IndexRange points = points_by_curve[i_curve];
-
-    for (const int i : points) {
-      input.vert[i] = double2(positions[i].x, positions[i].y);
-    }
-
-    input.face[i_curve].resize(points.size());
-    MutableSpan<int> face_verts = input.face[i_curve];
-    for (const int i : face_verts.index_range()) {
-      face_verts[i] = points[i];
-    }
-  }
-  meshintersect::CDT_result<double> result = delaunay_2d_calc(input, output_type);
-  return result;
+  return delaunay_2d_calc(input, output_type);
 }
 
 static meshintersect::CDT_result<double> do_cdt_with_mask(const bke::CurvesGeometry &curves,
@@ -87,34 +91,30 @@ static meshintersect::CDT_result<double> do_cdt_with_mask(const bke::CurvesGeome
   const OffsetIndices points_by_curve = curves.evaluated_points_by_curve();
   const Span<float3> positions = curves.evaluated_positions();
 
-  int vert_len = 0;
-  mask.foreach_index([&](const int i) { vert_len += points_by_curve[i].size(); });
-
-  meshintersect::CDT_input<double> input;
-  input.need_ids = false;
-  input.vert.reinitialize(vert_len);
-  input.face.reinitialize(mask.size());
-
   Array<int> offsets_data(mask.size() + 1);
   const OffsetIndices points_by_curve_masked = offset_indices::gather_selected_offsets(
       points_by_curve, mask, offsets_data);
 
+  Array<double2> positions_2d(points_by_curve_masked.total_size());
   mask.foreach_index(GrainSize(1024), [&](const int src_curve, const int dst_curve) {
     const IndexRange src_points = points_by_curve[src_curve];
     const IndexRange dst_points = points_by_curve_masked[dst_curve];
-
     for (const int i : src_points.index_range()) {
       const int src = src_points[i];
       const int dst = dst_points[i];
-      input.vert[dst] = double2(positions[src].x, positions[src].y);
+      positions_2d[dst] = double2(positions[src].x, positions[src].y);
     }
-
-    input.face[dst_curve].resize(src_points.size());
-    array_utils::fill_index_range<int>(input.face[dst_curve], dst_points.start());
   });
 
-  meshintersect::CDT_result<double> result = delaunay_2d_calc(input, output_type);
-  return result;
+  Array<Vector<int>> faces(points_by_curve_masked.size());
+  fill_curve_vert_indices(points_by_curve_masked, faces);
+
+  meshintersect::CDT_input<double> input;
+  input.need_ids = false;
+  input.vert = std::move(positions_2d);
+  input.face = std::move(faces);
+
+  return delaunay_2d_calc(input, output_type);
 }
 
 static Array<meshintersect::CDT_result<double>> do_group_aware_cdt(
@@ -122,7 +122,7 @@ static Array<meshintersect::CDT_result<double>> do_group_aware_cdt(
     const CDT_output_type output_type,
     const Field<int> &group_index_field)
 {
-  const bke::GeometryFieldContext field_context{curves, ATTR_DOMAIN_CURVE};
+  const bke::GeometryFieldContext field_context{curves, AttrDomain::Curve};
   fn::FieldEvaluator data_evaluator{field_context, curves.curves_num()};
   data_evaluator.add(group_index_field);
   data_evaluator.evaluate();
@@ -132,26 +132,16 @@ static Array<meshintersect::CDT_result<double>> do_group_aware_cdt(
     return {do_cdt(curves, output_type)};
   }
 
-  const VArraySpan<int> group_ids_span(curve_group_ids);
-  const int domain_size = group_ids_span.size();
-
-  VectorSet<int> group_indexing(group_ids_span);
-  const int groups_num = group_indexing.size();
-
+  VectorSet<int> group_indexing;
   IndexMaskMemory mask_memory;
-  Array<IndexMask> group_masks(groups_num);
-  IndexMask::from_groups<int>(
-      IndexMask(domain_size),
-      mask_memory,
-      [&](const int i) {
-        const int group_id = group_ids_span[i];
-        return group_indexing.index_of(group_id);
-      },
-      group_masks);
+  const Vector<IndexMask> group_masks = IndexMask::from_group_ids(
+      curve_group_ids, mask_memory, group_indexing);
+  const int groups_num = group_masks.size();
 
   Array<meshintersect::CDT_result<double>> cdt_results(groups_num);
 
   /* The grain size should be larger as each group gets smaller. */
+  const int domain_size = curve_group_ids.size();
   const int avg_group_size = domain_size / groups_num;
   const int grain_size = std::max(8192 / avg_group_size, 1);
   threading::parallel_for(IndexRange(groups_num), grain_size, [&](const IndexRange range) {
@@ -244,8 +234,8 @@ static Mesh *cdts_to_mesh(const Span<meshintersect::CDT_result<double>> results)
 
   /* The delaunay triangulation doesn't seem to return all of the necessary all_edges, even in
    * triangulation mode. */
-  BKE_mesh_calc_edges(mesh, true, false);
-  BKE_mesh_smooth_flag_set(mesh, false);
+  bke::mesh_calc_edges(*mesh, true, false);
+  bke::mesh_smooth_set(*mesh, false);
 
   mesh->tag_overlapping_none();
 
@@ -276,7 +266,7 @@ static void curve_fill_calculate(GeometrySet &geometry_set,
     const GreasePencil &grease_pencil = *geometry_set.get_grease_pencil();
     Vector<Mesh *> mesh_by_layer(grease_pencil.layers().size(), nullptr);
     for (const int layer_index : grease_pencil.layers().index_range()) {
-      const Drawing *drawing = get_eval_grease_pencil_layer_drawing(grease_pencil, layer_index);
+      const Drawing *drawing = grease_pencil.get_eval_drawing(grease_pencil.layer(layer_index));
       if (drawing == nullptr) {
         continue;
       }
@@ -347,17 +337,17 @@ static void node_rna(StructRNA *srna)
 
 static void node_register()
 {
-  static bNodeType ntype;
+  static blender::bke::bNodeType ntype;
 
   geo_node_type_base(&ntype, GEO_NODE_FILL_CURVE, "Fill Curve", NODE_CLASS_GEOMETRY);
 
   ntype.initfunc = node_init;
-  node_type_storage(
+  blender::bke::node_type_storage(
       &ntype, "NodeGeometryCurveFill", node_free_standard_storage, node_copy_standard_storage);
   ntype.declare = node_declare;
   ntype.geometry_node_execute = node_geo_exec;
   ntype.draw_buttons = node_layout;
-  nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 
   node_rna(ntype.rna_ext.srna);
 }

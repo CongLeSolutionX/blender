@@ -88,8 +88,11 @@ typedef struct BezTriple {
   /** F1, f2, f3: used for selection status. */
   uint8_t f1, f2, f3;
 
-  /** Hide: used to indicate whether BezTriple is hidden (3D),
-   * type of keyframe (eBezTriple_KeyframeType). */
+  /**
+   * Hide is used to indicate whether BezTriple is hidden (3D).
+   *
+   * \warning For #FCurve this is used to store the key-type, see #BEZKEYTYPE.
+   */
   char hide;
 
   /** Easing: easing type for interpolation mode (eBezTriple_Easing). */
@@ -103,6 +106,13 @@ typedef struct BezTriple {
   char auto_handle_type;
   char _pad[3];
 } BezTriple;
+
+/**
+ * Provide access to Keyframe Type info #eBezTriple_KeyframeType in #BezTriple::hide.
+ * \note this is so that we can change it to another location.
+ */
+#define BEZKEYTYPE(bezt) (eBezTriple_KeyframeType((bezt)->hide))
+#define BEZKEYTYPE_LVALUE(bezt) ((bezt)->hide)
 
 /**
  * \note #BPoint.tilt location in struct is abused by Key system.
@@ -501,6 +511,11 @@ typedef enum eBezTriple_KeyframeType {
   BEZT_KEYTYPE_BREAKDOWN = 2, /* 'breakdown' keyframe */
   BEZT_KEYTYPE_JITTER = 3,    /* 'jitter' keyframe (for adding 'filler' secondary motion) */
   BEZT_KEYTYPE_MOVEHOLD = 4,  /* one end of a 'moving hold' */
+  /**
+   * Key set by some automatic helper tool, marking that this key can be erased
+   * and the tool re-run.
+   */
+  BEZT_KEYTYPE_GENERATED = 5,
 } eBezTriple_KeyframeType;
 
 /* checks if the given BezTriple is selected */

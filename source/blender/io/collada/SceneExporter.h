@@ -21,7 +21,6 @@
 #include "DNA_image_types.h"
 #include "DNA_material_types.h"
 #include "DNA_mesh_types.h"
-#include "DNA_meshdata_types.h"
 #include "DNA_modifier_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
@@ -29,9 +28,9 @@
 #include "DNA_userdef_types.h"
 
 #include "BKE_constraint.h"
-#include "BKE_fcurve.h"
+#include "BKE_fcurve.hh"
 #include "BLI_fileops.h"
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 #include "ED_keyframing.hh"
 
 #include "COLLADASWAsset.h"

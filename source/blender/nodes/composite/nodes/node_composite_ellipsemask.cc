@@ -13,7 +13,7 @@
 #include "UI_interface.hh"
 #include "UI_resources.hh"
 
-#include "GPU_shader.h"
+#include "GPU_shader.hh"
 
 #include "COM_node_operation.hh"
 #include "COM_utilities.hh"
@@ -59,8 +59,10 @@ static void node_composit_buts_ellipsemask(uiLayout *layout, bContext * /*C*/, P
   uiItemR(row, ptr, "x", UI_ITEM_R_SPLIT_EMPTY_NAME, nullptr, ICON_NONE);
   uiItemR(row, ptr, "y", UI_ITEM_R_SPLIT_EMPTY_NAME, nullptr, ICON_NONE);
   row = uiLayoutRow(layout, true);
-  uiItemR(row, ptr, "width", UI_ITEM_R_SPLIT_EMPTY_NAME | UI_ITEM_R_SLIDER, nullptr, ICON_NONE);
-  uiItemR(row, ptr, "height", UI_ITEM_R_SPLIT_EMPTY_NAME | UI_ITEM_R_SLIDER, nullptr, ICON_NONE);
+  uiItemR(
+      row, ptr, "mask_width", UI_ITEM_R_SPLIT_EMPTY_NAME | UI_ITEM_R_SLIDER, nullptr, ICON_NONE);
+  uiItemR(
+      row, ptr, "mask_height", UI_ITEM_R_SPLIT_EMPTY_NAME | UI_ITEM_R_SLIDER, nullptr, ICON_NONE);
 
   uiItemR(layout, ptr, "rotation", UI_ITEM_R_SPLIT_EMPTY_NAME, nullptr, ICON_NONE);
   uiItemR(layout, ptr, "mask_type", UI_ITEM_R_SPLIT_EMPTY_NAME, nullptr, ICON_NONE);
@@ -74,6 +76,15 @@ class EllipseMaskOperation : public NodeOperation {
 
   void execute() override
   {
+    const Result &input_mask = get_input("Mask");
+    Result &output_mask = get_result("Mask");
+    /* For single value masks, the output will assume the compositing region, so ensure it is valid
+     * first. See the compute_domain method. */
+    if (input_mask.is_single_value() && !context().is_valid_compositing_region()) {
+      output_mask.allocate_invalid();
+      return;
+    }
+
     GPUShader *shader = context().get_shader(get_shader_name());
     GPU_shader_bind(shader);
 
@@ -86,13 +97,11 @@ class EllipseMaskOperation : public NodeOperation {
     GPU_shader_uniform_1f(shader, "cos_angle", std::cos(get_angle()));
     GPU_shader_uniform_1f(shader, "sin_angle", std::sin(get_angle()));
 
-    const Result &input_mask = get_input("Mask");
     input_mask.bind_as_texture(shader, "base_mask_tx");
 
     const Result &value = get_input("Value");
     value.bind_as_texture(shader, "mask_value_tx");
 
-    Result &output_mask = get_result("Mask");
     output_mask.allocate_texture(domain);
     output_mask.bind_as_image(shader, "output_mask_img");
 
@@ -159,16 +168,16 @@ void register_node_type_cmp_ellipsemask()
 {
   namespace file_ns = blender::nodes::node_composite_ellipsemask_cc;
 
-  static bNodeType ntype;
+  static blender::bke::bNodeType ntype;
 
   cmp_node_type_base(&ntype, CMP_NODE_MASK_ELLIPSE, "Ellipse Mask", NODE_CLASS_MATTE);
   ntype.declare = file_ns::cmp_node_ellipsemask_declare;
   ntype.draw_buttons = file_ns::node_composit_buts_ellipsemask;
   blender::bke::node_type_size(&ntype, 260, 110, 320);
   ntype.initfunc = file_ns::node_composit_init_ellipsemask;
-  node_type_storage(
+  blender::bke::node_type_storage(
       &ntype, "NodeEllipseMask", node_free_standard_storage, node_copy_standard_storage);
   ntype.get_compositor_operation = file_ns::get_compositor_operation;
 
-  nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }

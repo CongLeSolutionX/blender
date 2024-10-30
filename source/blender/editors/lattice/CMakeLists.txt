@@ -5,11 +5,9 @@
 set(INC
   ../include
   ../../blenkernel
-  ../../depsgraph
   ../../makesrna
   ../../render
   ../../windowmanager
-  ../../../../intern/clog
 )
 
 set(INC_SYS
@@ -22,12 +20,14 @@ set(SRC
   editlattice_undo.cc
   lattice_ops.cc
 
-  lattice_intern.h
+  lattice_intern.hh
 )
 
 set(LIB
   PRIVATE bf::blenlib
+  PRIVATE bf::depsgraph
   PRIVATE bf::dna
+  PRIVATE bf::intern::clog
   PRIVATE bf::intern::guardedalloc
 )
 

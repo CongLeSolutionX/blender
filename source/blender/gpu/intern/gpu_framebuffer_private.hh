@@ -15,11 +15,11 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "GPU_framebuffer.h"
+#include "GPU_framebuffer.hh"
 
 struct GPUTexture;
 
-typedef enum GPUAttachmentType : int {
+enum GPUAttachmentType : int {
   GPU_FB_DEPTH_ATTACHMENT = 0,
   GPU_FB_DEPTH_STENCIL_ATTACHMENT,
   GPU_FB_COLOR_ATTACHMENT0,
@@ -35,7 +35,7 @@ typedef enum GPUAttachmentType : int {
    * the maximum number of COLOR attachments specified by glDrawBuffers. */
   GPU_FB_MAX_ATTACHMENT,
 
-} GPUAttachmentType;
+};
 
 #define GPU_FB_MAX_COLOR_ATTACHMENT (GPU_FB_MAX_ATTACHMENT - GPU_FB_COLOR_ATTACHMENT0)
 
@@ -64,7 +64,7 @@ inline GPUAttachmentType &operator--(GPUAttachmentType &a)
 namespace blender {
 namespace gpu {
 
-#ifdef DEBUG
+#ifndef NDEBUG
 #  define DEBUG_NAME_LEN 64
 #else
 #  define DEBUG_NAME_LEN 16
@@ -86,6 +86,8 @@ class FrameBuffer {
   bool multi_viewport_ = false;
   bool scissor_test_ = false;
   bool dirty_state_ = true;
+  /* Flag specifying the current bind operation should use explicit load-store state. */
+  bool use_explicit_load_store_ = false;
 
 #ifndef GPU_NO_USE_PY_REFERENCES
  public:
@@ -127,8 +129,13 @@ class FrameBuffer {
                        int dst_offset_x,
                        int dst_offset_y) = 0;
 
-  virtual void subpass_transition(const GPUAttachmentState depth_attachment_state,
-                                  Span<GPUAttachmentState> color_attachment_states) = 0;
+ protected:
+  virtual void subpass_transition_impl(const GPUAttachmentState depth_attachment_state,
+                                       Span<GPUAttachmentState> color_attachment_states) = 0;
+
+ public:
+  void subpass_transition(const GPUAttachmentState depth_attachment_state,
+                          Span<GPUAttachmentState> color_attachment_states);
 
   void load_store_config_array(const GPULoadStore *load_store_actions, uint actions_len);
 
@@ -235,6 +242,16 @@ class FrameBuffer {
   {
     return name_;
   };
+
+  inline void set_use_explicit_loadstore(bool use_explicit_loadstore)
+  {
+    use_explicit_load_store_ = use_explicit_loadstore;
+  }
+
+  inline bool get_use_explicit_loadstore() const
+  {
+    return use_explicit_load_store_;
+  }
 };
 
 /* Syntactic sugar. */

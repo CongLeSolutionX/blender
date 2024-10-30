@@ -14,21 +14,21 @@
 
 #include "BLI_fileops.h"
 #include "BLI_mmap.h"
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh" /* For assertions. */
 #include "BLI_string.h"
 #include "BLI_utildefines.h"
 #include <cstdlib>
 
-#include "IMB_allocimbuf.h"
-#include "IMB_filetype.h"
-#include "IMB_imbuf.h"
-#include "IMB_imbuf_types.h"
-#include "IMB_metadata.h"
-#include "IMB_thumbs.h"
-#include "imbuf.h"
+#include "IMB_allocimbuf.hh"
+#include "IMB_filetype.hh"
+#include "IMB_imbuf.hh"
+#include "IMB_imbuf_types.hh"
+#include "IMB_metadata.hh"
+#include "IMB_thumbs.hh"
+#include "imbuf.hh"
 
-#include "IMB_colormanagement.h"
-#include "IMB_colormanagement_intern.h"
+#include "IMB_colormanagement.hh"
+#include "IMB_colormanagement_intern.hh"
 
 static void imb_handle_alpha(ImBuf *ibuf,
                              int flags,
@@ -118,7 +118,6 @@ ImBuf *IMB_ibImageFromMemory(
 ImBuf *IMB_loadifffile(int file, int flags, char colorspace[IM_MAX_SPACE], const char *descr)
 {
   ImBuf *ibuf;
-  uchar *mem;
 
   if (file == -1) {
     return nullptr;
@@ -132,7 +131,7 @@ ImBuf *IMB_loadifffile(int file, int flags, char colorspace[IM_MAX_SPACE], const
     return nullptr;
   }
 
-  mem = static_cast<uchar *>(BLI_mmap_get_pointer(mmap_file));
+  const uchar *mem = static_cast<const uchar *>(BLI_mmap_get_pointer(mmap_file));
   const size_t size = BLI_mmap_get_length(mmap_file);
 
   ibuf = IMB_ibImageFromMemory(mem, size, flags, colorspace, descr);
@@ -169,7 +168,8 @@ ImBuf *IMB_loadiffname(const char *filepath, int flags, char colorspace[IM_MAX_S
 
 ImBuf *IMB_thumb_load_image(const char *filepath,
                             size_t max_thumb_size,
-                            char colorspace[IM_MAX_SPACE])
+                            char colorspace[IM_MAX_SPACE],
+                            IMBThumbLoadFlags load_flags)
 {
   const ImFileType *type = IMB_file_type_from_ftype(IMB_ispic_type(filepath));
   if (type == nullptr) {
@@ -193,9 +193,11 @@ ImBuf *IMB_thumb_load_image(const char *filepath,
   }
   else {
     /* Skip images of other types if over 100MB. */
-    const size_t file_size = BLI_file_size(filepath);
-    if (file_size != size_t(-1) && file_size > THUMB_SIZE_MAX) {
-      return nullptr;
+    if ((load_flags & IMBThumbLoadFlags::LoadLargeFiles) == IMBThumbLoadFlags::Zero) {
+      const size_t file_size = BLI_file_size(filepath);
+      if (file_size != size_t(-1) && file_size > THUMB_SIZE_MAX) {
+        return nullptr;
+      }
     }
     ibuf = IMB_loadiffname(filepath, flags, colorspace);
     if (ibuf) {

@@ -10,6 +10,7 @@
 #include "vk_context.hh"
 #include "vk_shader.hh"
 #include "vk_shader_interface.hh"
+#include "vk_staging_buffer.hh"
 #include "vk_state_manager.hh"
 
 namespace blender::gpu {
@@ -19,7 +20,12 @@ void VKUniformBuffer::update(const void *data)
   if (!buffer_.is_allocated()) {
     allocate();
   }
-  buffer_.update(data);
+
+  /* TODO: when buffer is mapped and newly created we should use `buffer_.update_immediately`. */
+  void *data_copy = MEM_mallocN(size_in_bytes_, __func__);
+  memcpy(data_copy, data, size_in_bytes_);
+  VKContext &context = *VKContext::get();
+  buffer_.update_render_graph(context, data_copy);
 }
 
 void VKUniformBuffer::allocate()
@@ -27,7 +33,8 @@ void VKUniformBuffer::allocate()
   buffer_.create(size_in_bytes_,
                  GPU_USAGE_STATIC,
                  VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
-                     VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+                     VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                 false);
   debug::object_label(buffer_.vk_handle(), name_);
 }
 
@@ -40,9 +47,7 @@ void VKUniformBuffer::clear_to_zero()
   buffer_.clear(context, 0);
 }
 
-void VKUniformBuffer::bind(int slot,
-                           shader::ShaderCreateInfo::Resource::BindType bind_type,
-                           const GPUSamplerState /*sampler_state*/)
+void VKUniformBuffer::ensure_updated()
 {
   if (!buffer_.is_allocated()) {
     allocate();
@@ -50,24 +55,10 @@ void VKUniformBuffer::bind(int slot,
 
   /* Upload attached data, during bind time. */
   if (data_) {
-    buffer_.update(data_);
-    MEM_SAFE_FREE(data_);
-  }
-
-  VKContext &context = *VKContext::get();
-  VKShader *shader = static_cast<VKShader *>(context.shader);
-  const VKShaderInterface &shader_interface = shader->interface_get();
-  const std::optional<VKDescriptorSet::Location> location =
-      shader_interface.descriptor_set_location(bind_type, slot);
-  if (location) {
-    VKDescriptorSetTracker &descriptor_set = context.descriptor_set_get();
-    /* TODO: move to descriptor set. */
-    if (bind_type == shader::ShaderCreateInfo::Resource::BindType::UNIFORM_BUFFER) {
-      descriptor_set.bind(*this, *location);
-    }
-    else {
-      descriptor_set.bind_as_ssbo(*this, *location);
-    }
+    /* TODO: when buffer is mapped and newly created we should use `buffer_.update_immediately`. */
+    VKContext &context = *VKContext::get();
+    buffer_.update_render_graph(context, std::move(data_));
+    data_ = nullptr;
   }
 }
 
@@ -80,7 +71,8 @@ void VKUniformBuffer::bind(int slot)
 void VKUniformBuffer::bind_as_ssbo(int slot)
 {
   VKContext &context = *VKContext::get();
-  context.state_manager_get().storage_buffer_bind(*this, slot);
+  context.state_manager_get().storage_buffer_bind(
+      BindSpaceStorageBuffers::Type::UniformBuffer, this, slot);
 }
 
 void VKUniformBuffer::unbind()
@@ -89,7 +81,7 @@ void VKUniformBuffer::unbind()
   if (context != nullptr) {
     VKStateManager &state_manager = context->state_manager_get();
     state_manager.uniform_buffer_unbind(this);
-    state_manager.storage_buffer_unbind(*this);
+    state_manager.storage_buffer_unbind(this);
   }
 }
 

@@ -34,10 +34,13 @@
  *   run on different threads.
  */
 
+#include <optional>
+
 #include "BLI_array.hh"
 #include "BLI_linear_allocator.hh"
 #include "BLI_stack.hh"
 #include "BLI_string_ref.hh"
+#include "BLI_struct_equality_utils.hh"
 
 namespace blender {
 
@@ -46,7 +49,6 @@ namespace blender {
  * have enough bits to make collisions practically impossible.
  */
 struct ComputeContextHash {
-  static constexpr int64_t HashSizeInBytes = 16;
   uint64_t v1 = 0;
   uint64_t v2 = 0;
 
@@ -55,22 +57,12 @@ struct ComputeContextHash {
     return v1;
   }
 
-  friend bool operator==(const ComputeContextHash &a, const ComputeContextHash &b)
-  {
-    return a.v1 == b.v1 && a.v2 == b.v2;
-  }
-
-  friend bool operator!=(const ComputeContextHash &a, const ComputeContextHash &b)
-  {
-    return !(a == b);
-  }
+  BLI_STRUCT_EQUALITY_OPERATORS_2(ComputeContextHash, v1, v2)
 
   void mix_in(const void *data, int64_t len);
 
   friend std::ostream &operator<<(std::ostream &stream, const ComputeContextHash &hash);
 };
-
-static_assert(sizeof(ComputeContextHash) == ComputeContextHash::HashSizeInBytes);
 
 /**
  * Identifies the context in which a computation happens. This context can be used to identify
@@ -143,8 +135,20 @@ class ComputeContextBuilder {
  private:
   LinearAllocator<> allocator_;
   Stack<destruct_ptr<ComputeContext>> contexts_;
+  std::optional<Vector<destruct_ptr<ComputeContext>>> old_contexts_;
 
  public:
+  /**
+   * If called, compute contexts are not destructed when they are popped. Instead their lifetime
+   * will be the lifetime of this builder.
+   */
+  void keep_old_contexts()
+  {
+    if (!old_contexts_.has_value()) {
+      old_contexts_.emplace();
+    }
+  }
+
   bool is_empty() const
   {
     return contexts_.is_empty();
@@ -173,7 +177,23 @@ class ComputeContextBuilder {
 
   void pop()
   {
-    contexts_.pop();
+    auto context = contexts_.pop();
+    if (old_contexts_) {
+      old_contexts_->append(std::move(context));
+    }
+  }
+
+  /** Pops all compute contexts until the given one is at the top. */
+  void pop_until(const ComputeContext *context)
+  {
+    while (!contexts_.is_empty()) {
+      if (contexts_.peek().get() == context) {
+        return;
+      }
+      this->pop();
+    }
+    /* Should have found the context above if it's not null. */
+    BLI_assert(context == nullptr);
   }
 };
 

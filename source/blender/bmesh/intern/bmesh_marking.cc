@@ -23,11 +23,11 @@
 #include "BLI_math_vector.h"
 #include "BLI_task.h"
 
-#include "bmesh.h"
-#include "bmesh_structure.h"
+#include "bmesh.hh"
+#include "bmesh_structure.hh"
 
 /* For '_FLAG_OVERLAP'. */
-#include "bmesh_private.h"
+#include "bmesh_private.hh"
 
 /* -------------------------------------------------------------------- */
 /** \name Recounting total selection.
@@ -381,7 +381,7 @@ static void bm_mesh_select_mode_flush_vert_to_edge(BMesh *bm)
 
   TaskParallelSettings settings;
   BLI_parallel_range_settings_defaults(&settings);
-  settings.use_threading = bm->totedge >= BM_OMP_LIMIT;
+  settings.use_threading = bm->totedge >= BM_THREAD_LIMIT;
   settings.userdata_chunk = &chunk_data;
   settings.userdata_chunk_size = sizeof(chunk_data);
   settings.func_reduce = bm_mesh_select_mode_flush_reduce_fn;
@@ -397,7 +397,7 @@ static void bm_mesh_select_mode_flush_edge_to_face(BMesh *bm)
 
   TaskParallelSettings settings;
   BLI_parallel_range_settings_defaults(&settings);
-  settings.use_threading = bm->totface >= BM_OMP_LIMIT;
+  settings.use_threading = bm->totface >= BM_THREAD_LIMIT;
   settings.userdata_chunk = &chunk_data;
   settings.userdata_chunk_size = sizeof(chunk_data);
   settings.func_reduce = bm_mesh_select_mode_flush_reduce_fn;
@@ -838,6 +838,30 @@ void BM_mesh_active_face_set(BMesh *bm, BMFace *f)
   bm->act_face = f;
 }
 
+int BM_mesh_active_face_index_get(BMesh *bm, bool is_sloppy, bool is_selected)
+{
+  const BMFace *f = BM_mesh_active_face_get(bm, is_sloppy, is_selected);
+  return f ? BM_elem_index_get(f) : -1;
+}
+
+int BM_mesh_active_edge_index_get(BMesh *bm)
+{
+  const BMEdge *e = BM_mesh_active_edge_get(bm);
+  return e ? BM_elem_index_get(e) : -1;
+}
+
+int BM_mesh_active_vert_index_get(BMesh *bm)
+{
+  const BMVert *v = BM_mesh_active_vert_get(bm);
+  return v ? BM_elem_index_get(v) : -1;
+}
+
+int BM_mesh_active_elem_index_get(BMesh *bm)
+{
+  const BMElem *e = BM_mesh_active_elem_get(bm);
+  return e ? BM_elem_index_get(e) : -1;
+}
+
 BMFace *BM_mesh_active_face_get(BMesh *bm, const bool is_sloppy, const bool is_selected)
 {
   if (bm->act_face && (!is_selected || BM_elem_flag_test(bm->act_face, BM_ELEM_SELECT))) {
@@ -973,7 +997,7 @@ void BM_editselection_plane(BMEditSelection *ese, float r_plane[3])
     }
     else {
       /* make a fake plane that's at right-angles to the normal
-       * we can't make a crossvec from a vec that's the same as the vec
+       * we can't make a cross-vector from a vec that's the same as the vec
        * unlikely but possible, so make sure if the normal is (0, 0, 1)
        * that vec isn't the same or in the same direction even. */
       if (eve->no[0] < 0.5f) {
@@ -1156,7 +1180,7 @@ void BM_select_history_merge_from_targetmap(
     BMesh *bm, GHash *vert_map, GHash *edge_map, GHash *face_map, const bool use_chain)
 {
 
-#ifdef DEBUG
+#ifndef NDEBUG
   LISTBASE_FOREACH (BMEditSelection *, ese, &bm->selected) {
     BLI_assert(BM_ELEM_API_FLAG_TEST(ese->ele, _FLAG_OVERLAP) == 0);
   }

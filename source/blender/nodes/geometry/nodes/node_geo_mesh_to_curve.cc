@@ -28,18 +28,18 @@ static void node_geo_exec(GeoNodeExecParams params)
       return;
     }
 
-    const bke::MeshFieldContext context{*mesh, ATTR_DOMAIN_EDGE};
-    fn::FieldEvaluator evaluator{context, mesh->totedge};
+    const bke::MeshFieldContext context{*mesh, AttrDomain::Edge};
+    fn::FieldEvaluator evaluator{context, mesh->edges_num};
     evaluator.add(params.get_input<Field<bool>>("Selection"));
     evaluator.evaluate();
     const IndexMask selection = evaluator.get_evaluated_as_mask(0);
-    if (selection.size() == 0) {
+    if (selection.is_empty()) {
       geometry_set.remove_geometry_during_modify();
       return;
     }
 
     bke::CurvesGeometry curves = geometry::mesh_to_curve_convert(
-        *mesh, selection, params.get_output_propagation_info("Curve"));
+        *mesh, selection, params.get_attribute_filter("Curve"));
     geometry_set.replace_curves(bke::curves_new_nomain(std::move(curves)));
     geometry_set.keep_only_during_modify({GeometryComponent::Type::Curve});
   });
@@ -49,12 +49,12 @@ static void node_geo_exec(GeoNodeExecParams params)
 
 static void node_register()
 {
-  static bNodeType ntype;
+  static blender::bke::bNodeType ntype;
 
   geo_node_type_base(&ntype, GEO_NODE_MESH_TO_CURVE, "Mesh to Curve", NODE_CLASS_GEOMETRY);
   ntype.declare = node_declare;
   ntype.geometry_node_execute = node_geo_exec;
-  nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }
 NOD_REGISTER_NODE(node_register)
 

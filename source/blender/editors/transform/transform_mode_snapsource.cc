@@ -165,8 +165,14 @@ void transform_mode_snap_source_init(TransInfo *t, wmOperator * /*op*/)
     return;
   }
 
+  if (!t->tsnap.snap_target_fn) {
+    /* A `snap_target_fn` is required for the operation to work.
+     * `snap_target_fn` can be `nullptr` when transforming camera in camera view. */
+    return;
+  }
+
   if (ELEM(t->mode, TFM_INIT, TFM_DUMMY)) {
-    /* Fallback */
+    /* Fallback. */
     transform_mode_init(t, nullptr, TFM_TRANSLATION);
   }
 
@@ -188,17 +194,20 @@ void transform_mode_snap_source_init(TransInfo *t, wmOperator * /*op*/)
   }
 
   t->mode_info = &TransMode_snapsource;
-  t->flag |= T_DRAW_SNAP_SOURCE;
   t->tsnap.target_operation = SCE_SNAP_TARGET_ALL;
   t->tsnap.status &= ~SNAP_SOURCE_FOUND;
+
+  if (t->spacetype == SPACE_VIEW3D) {
+    t->flag |= T_DRAW_SNAP_SOURCE;
+  }
 
   customdata->snap_mode_confirm = t->tsnap.mode;
   t->tsnap.mode &= ~(SCE_SNAP_TO_EDGE_PERPENDICULAR | SCE_SNAP_INDIVIDUAL_PROJECT |
                      SCE_SNAP_INDIVIDUAL_NEAREST);
 
-  if ((t->tsnap.mode & ~(SCE_SNAP_TO_INCREMENT | SCE_SNAP_TO_GRID)) == 0) {
+  if ((t->tsnap.mode & ~SCE_SNAP_TO_INCREMENT) == 0) {
     /* Initialize snap modes for geometry. */
-    t->tsnap.mode &= ~(SCE_SNAP_TO_INCREMENT | SCE_SNAP_TO_GRID);
+    t->tsnap.mode &= ~SCE_SNAP_TO_INCREMENT;
     t->tsnap.mode |= SCE_SNAP_TO_GEOM & ~SCE_SNAP_TO_EDGE_PERPENDICULAR;
 
     if (!(customdata->snap_mode_confirm & SCE_SNAP_TO_EDGE_PERPENDICULAR)) {
@@ -231,7 +240,9 @@ void transform_mode_snap_source_init(TransInfo *t, wmOperator * /*op*/)
     const wmEvent *event = CTX_wm_window(t->context)->eventstate;
 #  ifdef RESET_TRANSFORMATION
     wmGizmoFnModal modal_fn = gz->custom_modal ? gz->custom_modal : gz->type->modal;
-    modal_fn(t->context, gz, event, eWM_GizmoFlagTweak(0));
+    if (modal_fn) {
+      modal_fn(t->context, gz, event, eWM_GizmoFlagTweak(0));
+    }
 #  endif
 
     WM_gizmo_modal_set_while_modal(t->region->gizmo_map, t->context, nullptr, event);

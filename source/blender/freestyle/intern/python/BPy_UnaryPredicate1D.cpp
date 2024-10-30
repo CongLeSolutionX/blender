@@ -40,77 +40,69 @@ int UnaryPredicate1D_Init(PyObject *module)
   if (PyType_Ready(&UnaryPredicate1D_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&UnaryPredicate1D_Type);
-  PyModule_AddObject(module, "UnaryPredicate1D", (PyObject *)&UnaryPredicate1D_Type);
+  PyModule_AddObjectRef(module, "UnaryPredicate1D", (PyObject *)&UnaryPredicate1D_Type);
 
   if (PyType_Ready(&ContourUP1D_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&ContourUP1D_Type);
-  PyModule_AddObject(module, "ContourUP1D", (PyObject *)&ContourUP1D_Type);
+  PyModule_AddObjectRef(module, "ContourUP1D", (PyObject *)&ContourUP1D_Type);
 
   if (PyType_Ready(&DensityLowerThanUP1D_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&DensityLowerThanUP1D_Type);
-  PyModule_AddObject(module, "DensityLowerThanUP1D", (PyObject *)&DensityLowerThanUP1D_Type);
+  PyModule_AddObjectRef(module, "DensityLowerThanUP1D", (PyObject *)&DensityLowerThanUP1D_Type);
 
   if (PyType_Ready(&EqualToChainingTimeStampUP1D_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&EqualToChainingTimeStampUP1D_Type);
-  PyModule_AddObject(
+  PyModule_AddObjectRef(
       module, "EqualToChainingTimeStampUP1D", (PyObject *)&EqualToChainingTimeStampUP1D_Type);
 
   if (PyType_Ready(&EqualToTimeStampUP1D_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&EqualToTimeStampUP1D_Type);
-  PyModule_AddObject(module, "EqualToTimeStampUP1D", (PyObject *)&EqualToTimeStampUP1D_Type);
+  PyModule_AddObjectRef(module, "EqualToTimeStampUP1D", (PyObject *)&EqualToTimeStampUP1D_Type);
 
   if (PyType_Ready(&ExternalContourUP1D_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&ExternalContourUP1D_Type);
-  PyModule_AddObject(module, "ExternalContourUP1D", (PyObject *)&ExternalContourUP1D_Type);
+  PyModule_AddObjectRef(module, "ExternalContourUP1D", (PyObject *)&ExternalContourUP1D_Type);
 
   if (PyType_Ready(&FalseUP1D_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&FalseUP1D_Type);
-  PyModule_AddObject(module, "FalseUP1D", (PyObject *)&FalseUP1D_Type);
+  PyModule_AddObjectRef(module, "FalseUP1D", (PyObject *)&FalseUP1D_Type);
 
   if (PyType_Ready(&QuantitativeInvisibilityUP1D_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&QuantitativeInvisibilityUP1D_Type);
-  PyModule_AddObject(
+  PyModule_AddObjectRef(
       module, "QuantitativeInvisibilityUP1D", (PyObject *)&QuantitativeInvisibilityUP1D_Type);
 
   if (PyType_Ready(&ShapeUP1D_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&ShapeUP1D_Type);
-  PyModule_AddObject(module, "ShapeUP1D", (PyObject *)&ShapeUP1D_Type);
+  PyModule_AddObjectRef(module, "ShapeUP1D", (PyObject *)&ShapeUP1D_Type);
 
   if (PyType_Ready(&TrueUP1D_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&TrueUP1D_Type);
-  PyModule_AddObject(module, "TrueUP1D", (PyObject *)&TrueUP1D_Type);
+  PyModule_AddObjectRef(module, "TrueUP1D", (PyObject *)&TrueUP1D_Type);
 
   if (PyType_Ready(&WithinImageBoundaryUP1D_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&WithinImageBoundaryUP1D_Type);
-  PyModule_AddObject(module, "WithinImageBoundaryUP1D", (PyObject *)&WithinImageBoundaryUP1D_Type);
+  PyModule_AddObjectRef(
+      module, "WithinImageBoundaryUP1D", (PyObject *)&WithinImageBoundaryUP1D_Type);
 
   return 0;
 }
 
 //------------------------INSTANCE METHODS ----------------------------------
 
-static char UnaryPredicate1D___doc__[] =
+PyDoc_STRVAR(
+    /* Wrap. */
+    UnaryPredicate1D___doc__,
     "Base class for unary predicates that work on :class:`Interface1D`. A\n"
     "UnaryPredicate1D is a functor that evaluates a condition on a\n"
     "Interface1D and returns true or false depending on whether this\n"
@@ -129,7 +121,7 @@ static char UnaryPredicate1D___doc__[] =
     "   :arg inter: The Interface1D on which we wish to evaluate the predicate.\n"
     "   :type inter: :class:`Interface1D`\n"
     "   :return: True if the condition is satisfied, false otherwise.\n"
-    "   :rtype: bool\n";
+    "   :rtype: bool\n");
 
 static int UnaryPredicate1D___init__(BPy_UnaryPredicate1D *self, PyObject *args, PyObject *kwds)
 {
@@ -189,10 +181,12 @@ static PyObject *UnaryPredicate1D___call__(BPy_UnaryPredicate1D *self,
 
 /*----------------------UnaryPredicate1D get/setters ----------------------------*/
 
-PyDoc_STRVAR(UnaryPredicate1D_name_doc,
-             "The name of the unary 1D predicate.\n"
-             "\n"
-             ":type: str");
+PyDoc_STRVAR(
+    /* Wrap. */
+    UnaryPredicate1D_name_doc,
+    "The name of the unary 1D predicate.\n"
+    "\n"
+    ":type: str");
 
 static PyObject *UnaryPredicate1D_name_get(BPy_UnaryPredicate1D *self, void * /*closure*/)
 {

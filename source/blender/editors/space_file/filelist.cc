@@ -12,6 +12,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
+#include <memory>
 #include <optional>
 #include <sys/stat.h>
 
@@ -22,13 +23,12 @@
 #  include <io.h>
 #endif
 
-#include "AS_asset_library.h"
 #include "AS_asset_library.hh"
 #include "AS_asset_representation.hh"
 
 #include "MEM_guardedalloc.h"
 
-#include "BLF_api.h"
+#include "BLF_api.hh"
 
 #include "BLI_blenlib.h"
 #include "BLI_fileops.h"
@@ -49,14 +49,12 @@
 #endif
 
 #include "BKE_asset.hh"
-#include "BKE_blendfile.h"
+#include "BKE_blendfile.hh"
 #include "BKE_context.hh"
-#include "BKE_global.h"
+#include "BKE_global.hh"
 #include "BKE_icons.h"
-#include "BKE_idtype.h"
-#include "BKE_lib_id.h"
-#include "BKE_main.h"
-#include "BKE_main_idmap.h"
+#include "BKE_idtype.hh"
+#include "BKE_main.hh"
 #include "BKE_preferences.h"
 #include "BKE_preview_image.hh"
 
@@ -65,13 +63,10 @@
 
 #include "ED_datafiles.h"
 #include "ED_fileselect.hh"
-#include "ED_screen.hh"
 
-#include "IMB_imbuf.h"
-#include "IMB_imbuf_types.h"
-#include "IMB_thumbs.h"
-
-#include "PIL_time.h"
+#include "IMB_imbuf.hh"
+#include "IMB_imbuf_types.hh"
+#include "IMB_thumbs.hh"
 
 #include "WM_api.hh"
 #include "WM_types.hh"
@@ -92,20 +87,20 @@ using namespace blender;
 /* ------------------FILELIST------------------------ */
 
 struct FileListInternEntry {
-  FileListInternEntry *next, *prev;
+  FileListInternEntry *next = nullptr, *prev = nullptr;
 
-  FileUID uid;
+  FileUID uid = 0;
 
-  eFileSel_File_Types typeflag;
+  eFileSel_File_Types typeflag = eFileSel_File_Types(0);
   /** ID type, in case typeflag has FILE_TYPE_BLENDERLIB set. */
-  int blentype;
+  int blentype = 0;
 
-  char *relpath;
+  char *relpath = nullptr;
   /** Optional argument for shortcuts, aliases etc. */
-  char *redirection_path;
+  char *redirection_path = nullptr;
   /** not strictly needed, but used during sorting, avoids to have to recompute it there... */
-  const char *name;
-  bool free_name;
+  const char *name = nullptr;
+  bool free_name = false;
 
   /**
    * This is data from the current main, represented by this file. It's crucial that this is
@@ -114,22 +109,45 @@ struct FileListInternEntry {
    */
   struct {
     /** When showing local IDs (FILE_MAIN, FILE_MAIN_ASSET), the ID this file entry represents. */
-    ID *id;
+    ID *id = nullptr;
 
     /* For the few file types that have the preview already in memory. For others, there's delayed
      * preview reading from disk. Non-owning pointer. */
-    PreviewImage *preview_image;
+    PreviewImage *preview_image = nullptr;
   } local_data;
 
-  /* References an asset in the asset library storage. */
-  asset_system::AssetRepresentation *asset; /* Non-owning. */
+  /**
+   * References an asset in the asset library storage.
+   * The file list inserts this asset representation into the library, and removes it again when
+   * the file list is destructed. In that sense it manages the asset but doesn't own it.
+   *
+   * Weak pointer so access is protected in case the asset library gets destructed externally.
+   */
+  std::weak_ptr<asset_system::AssetRepresentation> asset;
 
   /* See #FILE_ENTRY_BLENDERLIB_NO_PREVIEW. */
-  bool blenderlib_has_no_preview;
+  bool blenderlib_has_no_preview = false;
 
   /** Defined in BLI_fileops.h */
-  eFileAttributes attributes;
-  BLI_stat_t st;
+  eFileAttributes attributes = eFileAttributes(0);
+  BLI_stat_t st = {0};
+
+  /**
+   * Be careful not to use the returned asset pointer in a context where it might be dangling, e.g.
+   * because the file list or the asset library were destroyed.
+   */
+  asset_system::AssetRepresentation *get_asset() const
+  {
+    if (std::shared_ptr<asset_system::AssetRepresentation> asset_ptr = asset.lock()) {
+      /* Returning a raw pointer from a shared pointer and destructing the shared pointer
+       * immediately afterwards isn't entirely clean. But it's just a way to get the raw pointer
+       * from the weak pointer. Nothing should free the asset in the asset library meanwhile, so
+       * this should be fine really. */
+      BLI_assert(asset_ptr.use_count() > 1);
+      return asset_ptr.get();
+    }
+    return nullptr;
+  }
 };
 
 struct FileListIntern {
@@ -199,7 +217,7 @@ struct FileListFilter {
   char filter_search[66]; /* + 2 for heading/trailing implicit '*' wildcards. */
   short flags;
 
-  FileAssetCatalogFilterSettingsHandle *asset_catalog_filter;
+  blender::ed::asset_browser::AssetCatalogFilterSettings *asset_catalog_filter;
 };
 
 /** #FileListFilter.flags */
@@ -295,22 +313,15 @@ enum FileListTags {
   FILELIST_TAGS_NO_THREADS = (1 << 2),
 };
 
-#define SPECIAL_IMG_SIZE 256
-#define SPECIAL_IMG_ROWS 1
-#define SPECIAL_IMG_COLS 7
-
-enum {
-  SPECIAL_IMG_DOCUMENT = 0,
-  SPECIAL_IMG_DRIVE_DISC = 1,
-  SPECIAL_IMG_FOLDER = 2,
-  SPECIAL_IMG_PARENT = 3,
-  SPECIAL_IMG_DRIVE_FIXED = 4,
-  SPECIAL_IMG_DRIVE_ATTACHED = 5,
-  SPECIAL_IMG_DRIVE_REMOTE = 6,
-  SPECIAL_IMG_MAX,
+enum class SpecialFileImages {
+  Document,
+  Folder,
+  Parent,
+  /* Keep this last. */
+  _Max,
 };
 
-static ImBuf *gSpecialFileImages[SPECIAL_IMG_MAX];
+static ImBuf *gSpecialFileImages[int(SpecialFileImages::_Max)];
 
 static void filelist_readjob_main(FileListReadJob *job_params,
                                   bool *stop,
@@ -573,6 +584,62 @@ static int compare_extension(void *user_data, const void *a1, const void *a2)
   return compare_apply_inverted(compare_tiebreaker(entry1, entry2), sort_data);
 }
 
+static int compare_asset_catalog(void *user_data, const void *a1, const void *a2)
+{
+  const FileListInternEntry *entry1 = static_cast<const FileListInternEntry *>(a1);
+  const FileListInternEntry *entry2 = static_cast<const FileListInternEntry *>(a2);
+  const FileSortData *sort_data = static_cast<const FileSortData *>(user_data);
+  const asset_system::AssetRepresentation *asset1 = entry1->get_asset();
+  const asset_system::AssetRepresentation *asset2 = entry2->get_asset();
+
+  /* Order non-assets. */
+  if (asset1 && !asset2) {
+    return 1;
+  }
+  else if (!asset1 && asset2) {
+    return -1;
+  }
+  else if (!asset1 && !asset2) {
+    if (int order = compare_direntry_generic(entry1, entry2); order) {
+      return compare_apply_inverted(order, sort_data);
+    }
+
+    return compare_apply_inverted(compare_tiebreaker(entry1, entry2), sort_data);
+  }
+
+  const asset_system::AssetLibrary &asset_library1 = asset1->owner_asset_library();
+  const asset_system::AssetLibrary &asset_library2 = asset2->owner_asset_library();
+
+  const asset_system::AssetCatalog *catalog1 = asset_library1.catalog_service().find_catalog(
+      asset1->get_metadata().catalog_id);
+  const asset_system::AssetCatalog *catalog2 = asset_library2.catalog_service().find_catalog(
+      asset2->get_metadata().catalog_id);
+
+  /* Order by catalog. Always keep assets without catalog last. */
+  int order = 0;
+
+  if (catalog1 && !catalog2) {
+    order = 1;
+  }
+  else if (!catalog1 && catalog2) {
+    order = -1;
+  }
+  else if (catalog1 && catalog2) {
+    order = BLI_strcasecmp_natural(catalog1->path.name().c_str(), catalog2->path.name().c_str());
+  }
+
+  if (!order) {
+    /* Order by name. */
+    order = compare_tiebreaker(entry1, entry2);
+    if (!order) {
+      /* Order by library name. */
+      order = BLI_strcasecmp_natural(asset_library1.name().c_str(), asset_library2.name().c_str());
+    }
+  }
+
+  return compare_apply_inverted(order, sort_data);
+}
+
 void filelist_sort(FileList *filelist)
 {
   if (filelist->flags & FL_NEED_SORTING) {
@@ -590,6 +657,9 @@ void filelist_sort(FileList *filelist)
         break;
       case FILE_SORT_EXTENSION:
         sort_cb = compare_extension;
+        break;
+      case FILE_SORT_ASSET_CATALOG:
+        sort_cb = compare_asset_catalog;
         break;
       case FILE_SORT_DEFAULT:
       default:
@@ -620,46 +690,6 @@ void filelist_setsorting(FileList *filelist, const short sort, bool invert_sort)
 
 /* ********** Filter helpers ********** */
 
-/* True if filename is meant to be hidden, eg. starting with period. */
-static bool is_hidden_dot_filename(const char *filename, const FileListInternEntry *file)
-{
-  if (filename[0] == '.' && !ELEM(filename[1], '.', '\0')) {
-    return true; /* ignore .file */
-  }
-
-  int len = strlen(filename);
-  if ((len > 0) && (filename[len - 1] == '~')) {
-    return true; /* ignore file~ */
-  }
-
-  /* filename might actually be a piece of path, in which case we have to check all its parts. */
-
-  bool hidden = false;
-  char *sep = (char *)BLI_path_slash_rfind(filename);
-
-  if (!hidden && sep) {
-    char tmp_filename[FILE_MAX_LIBEXTRA];
-
-    STRNCPY(tmp_filename, filename);
-    sep = tmp_filename + (sep - filename);
-    while (sep) {
-      /* This happens when a path contains 'ALTSEP', '\' on Unix for e.g.
-       * Supporting alternate slashes in paths is a bigger task involving changes
-       * in many parts of the code, for now just prevent an assert, see #74579. */
-#if 0
-      BLI_assert(sep[1] != '\0');
-#endif
-      if (is_hidden_dot_filename(sep + 1, file)) {
-        hidden = true;
-        break;
-      }
-      *sep = '\0';
-      sep = (char *)BLI_path_slash_rfind(tmp_filename);
-    }
-  }
-  return hidden;
-}
-
 /* True if should be hidden, based on current filtering. */
 static bool is_filtered_hidden(const char *filename,
                                const FileListFilter *filter,
@@ -675,16 +705,13 @@ static bool is_filtered_hidden(const char *filename,
     }
   }
 
+  /* Check for _OUR_ "hidden" attribute. This not only mirrors OS-level hidden file
+   * attribute but is also set for Linux/Mac "dot" files. See `filelist_readjob_list_dir`.
+   */
   if ((filter->flags & FLF_HIDE_DOT) && (file->attributes & FILE_ATTR_HIDDEN)) {
-    return true; /* Ignore files with Hidden attribute. */
-  }
-
-#ifndef WIN32
-  /* Check for unix-style names starting with period. */
-  if ((filter->flags & FLF_HIDE_DOT) && is_hidden_dot_filename(filename, file)) {
     return true;
   }
-#endif
+
   /* For data-blocks (but not the group directories), check the asset-only filter. */
   if (!(file->typeflag & FILE_TYPE_DIR) && (file->typeflag & FILE_TYPE_BLENDERLIB) &&
       (filter->flags & FLF_ASSETS_ONLY) && !(file->typeflag & FILE_TYPE_ASSET))
@@ -798,10 +825,10 @@ static bool is_filtered_id_file_type(const FileListInternEntry *file,
  */
 static AssetMetaData *filelist_file_internal_get_asset_data(const FileListInternEntry *file)
 {
-  if (!file->asset) {
-    return nullptr;
+  if (asset_system::AssetRepresentation *asset = file->get_asset()) {
+    return &asset->get_metadata();
   }
-  return &file->asset->get_metadata();
+  return nullptr;
 }
 
 static void prepare_filter_asset_library(const FileList *filelist, FileListFilter *filter)
@@ -1040,7 +1067,8 @@ void filelist_set_asset_catalog_filter_options(
 {
   if (!filelist->filter_data.asset_catalog_filter) {
     /* There's no filter data yet. */
-    filelist->filter_data.asset_catalog_filter = file_create_asset_catalog_filter_settings();
+    filelist->filter_data.asset_catalog_filter =
+        blender::ed::asset_browser::file_create_asset_catalog_filter_settings();
   }
 
   const bool needs_update = file_set_asset_catalog_filter_settings(
@@ -1084,7 +1112,7 @@ void filelist_setlibrary(FileList *filelist, const AssetLibraryReference *asset_
   }
 
   if (!filelist->asset_library_ref) {
-    filelist->asset_library_ref = MEM_new<AssetLibraryReference>("filelist asset library");
+    filelist->asset_library_ref = MEM_cnew<AssetLibraryReference>("filelist asset library");
     *filelist->asset_library_ref = *asset_library_ref;
 
     filelist->flags |= FL_FORCE_RESET;
@@ -1097,50 +1125,11 @@ void filelist_setlibrary(FileList *filelist, const AssetLibraryReference *asset_
 
 /* ********** Icon/image helpers ********** */
 
-void filelist_init_icons()
-{
-  short x, y, k;
-  ImBuf *bbuf;
-  ImBuf *ibuf;
-
-  BLI_assert(G.background == false);
-
-#ifdef WITH_HEADLESS
-  bbuf = nullptr;
-#else
-  bbuf = IMB_ibImageFromMemory((const uchar *)datatoc_prvicons_png,
-                               datatoc_prvicons_png_size,
-                               IB_rect,
-                               nullptr,
-                               "<splash>");
-#endif
-  if (bbuf) {
-    for (y = 0; y < SPECIAL_IMG_ROWS; y++) {
-      for (x = 0; x < SPECIAL_IMG_COLS; x++) {
-        int tile = SPECIAL_IMG_COLS * y + x;
-        if (tile < SPECIAL_IMG_MAX) {
-          ibuf = IMB_allocImBuf(SPECIAL_IMG_SIZE, SPECIAL_IMG_SIZE, 32, IB_rect);
-          for (k = 0; k < SPECIAL_IMG_SIZE; k++) {
-            memcpy(
-                &ibuf->byte_buffer.data[4 * (k * SPECIAL_IMG_SIZE)],
-                &bbuf->byte_buffer
-                     .data[4 * ((k + y * SPECIAL_IMG_SIZE) * SPECIAL_IMG_SIZE * SPECIAL_IMG_COLS +
-                                x * SPECIAL_IMG_SIZE)],
-                SPECIAL_IMG_SIZE * sizeof(uint8_t) * 4);
-          }
-          gSpecialFileImages[tile] = ibuf;
-        }
-      }
-    }
-    IMB_freeImBuf(bbuf);
-  }
-}
-
 void filelist_free_icons()
 {
   BLI_assert(G.background == false);
 
-  for (int i = 0; i < SPECIAL_IMG_MAX; i++) {
+  for (int i = 0; i < int(SpecialFileImages::_Max); i++) {
     IMB_freeImBuf(gSpecialFileImages[i]);
     gSpecialFileImages[i] = nullptr;
   }
@@ -1151,7 +1140,7 @@ void filelist_file_get_full_path(const FileList *filelist,
                                  char r_filepath[/*FILE_MAX_LIBEXTRA*/])
 {
   if (file->asset) {
-    const std::string asset_path = file->asset->get_identifier().full_path();
+    const std::string asset_path = file->asset->full_path();
     BLI_strncpy(r_filepath, asset_path.c_str(), FILE_MAX_LIBEXTRA);
     return;
   }
@@ -1187,20 +1176,29 @@ ImBuf *filelist_file_getimage(const FileDirEntry *file)
   return file->preview_icon_id ? BKE_icon_imbuf_get_buffer(file->preview_icon_id) : nullptr;
 }
 
+static ImBuf *filelist_ensure_special_file_image(SpecialFileImages image, int icon)
+{
+  ImBuf *ibuf = gSpecialFileImages[int(image)];
+  if (ibuf) {
+    return ibuf;
+  }
+  return gSpecialFileImages[int(image)] = UI_svg_icon_bitmap(icon, 256.0f, false);
+}
+
 ImBuf *filelist_geticon_image_ex(const FileDirEntry *file)
 {
   ImBuf *ibuf = nullptr;
 
   if (file->typeflag & FILE_TYPE_DIR) {
     if (FILENAME_IS_PARENT(file->relpath)) {
-      ibuf = gSpecialFileImages[SPECIAL_IMG_PARENT];
+      ibuf = filelist_ensure_special_file_image(SpecialFileImages::Parent, ICON_FILE_PARENT_LARGE);
     }
     else {
-      ibuf = gSpecialFileImages[SPECIAL_IMG_FOLDER];
+      ibuf = filelist_ensure_special_file_image(SpecialFileImages::Folder, ICON_FILE_FOLDER_LARGE);
     }
   }
   else {
-    ibuf = gSpecialFileImages[SPECIAL_IMG_DOCUMENT];
+    ibuf = filelist_ensure_special_file_image(SpecialFileImages::Document, ICON_FILE_LARGE);
   }
 
   return ibuf;
@@ -1447,9 +1445,9 @@ static void filelist_direntryarr_free(FileDirEntryArr *array)
 
 static void filelist_intern_entry_free(FileList *filelist, FileListInternEntry *entry)
 {
-  if (entry->asset) {
+  if (auto asset_ptr = entry->asset.lock()) {
     BLI_assert(filelist->asset_library);
-    filelist->asset_library->remove_asset(*entry->asset);
+    filelist->asset_library->remove_asset(*asset_ptr);
   }
 
   if (entry->relpath) {
@@ -1461,7 +1459,7 @@ static void filelist_intern_entry_free(FileList *filelist, FileListInternEntry *
   if (entry->name && entry->free_name) {
     MEM_freeN((char *)entry->name);
   }
-  MEM_freeN(entry);
+  MEM_delete(entry);
 }
 
 static void filelist_intern_free(FileList *filelist)
@@ -1640,7 +1638,8 @@ static void filelist_cache_previews_push(FileList *filelist, FileDirEntry *entry
    * some time in heavy files, because otherwise for each missing preview and for each preview
    * reload, we'd reopen the .blend to look for the preview. */
   if ((entry->typeflag & FILE_TYPE_BLENDERLIB) &&
-      (entry->flags & FILE_ENTRY_BLENDERLIB_NO_PREVIEW)) {
+      (entry->flags & FILE_ENTRY_BLENDERLIB_NO_PREVIEW))
+  {
     return;
   }
 
@@ -1661,7 +1660,7 @@ static void filelist_cache_previews_push(FileList *filelist, FileDirEntry *entry
   filelist_cache_preview_ensure_running(cache);
   entry->flags |= FILE_ENTRY_PREVIEW_LOADING;
 
-  FileListEntryPreview *preview = MEM_new<FileListEntryPreview>(__func__);
+  FileListEntryPreview *preview = MEM_cnew<FileListEntryPreview>(__func__);
   preview->index = index;
   preview->flags = entry->typeflag;
   preview->icon_id = 0;
@@ -1685,7 +1684,7 @@ static void filelist_cache_previews_push(FileList *filelist, FileDirEntry *entry
     }
     // printf("%s: %d - %s\n", __func__, preview->index, preview->filepath);
 
-    FileListEntryPreviewTaskData *preview_taskdata = MEM_new<FileListEntryPreviewTaskData>(
+    FileListEntryPreviewTaskData *preview_taskdata = MEM_cnew<FileListEntryPreviewTaskData>(
         __func__);
     preview_taskdata->preview = preview;
     BLI_task_pool_push(cache->previews_pool,
@@ -1948,9 +1947,9 @@ void filelist_free(FileList *filelist)
   filelist->flags &= ~(FL_NEED_SORTING | FL_NEED_FILTERING);
 }
 
-AssetLibrary *filelist_asset_library(FileList *filelist)
+blender::asset_system::AssetLibrary *filelist_asset_library(FileList *filelist)
 {
-  return reinterpret_cast<::AssetLibrary *>(filelist->asset_library);
+  return filelist->asset_library;
 }
 
 void filelist_freelib(FileList *filelist)
@@ -1973,8 +1972,8 @@ int filelist_files_num_entries(FileList *filelist)
 
 static const char *fileentry_uiname(const char *root, FileListInternEntry *entry, char *buff)
 {
-  if (entry->asset) {
-    const StringRefNull asset_name = entry->asset->get_name();
+  if (asset_system::AssetRepresentation *asset = entry->get_asset()) {
+    const StringRefNull asset_name = asset->get_name();
     return BLI_strdupn(asset_name.c_str(), asset_name.size());
   }
 
@@ -2121,7 +2120,7 @@ static FileDirEntry *filelist_file_create_entry(FileList *filelist, const int in
     ret->redirection_path = BLI_strdup(entry->redirection_path);
   }
   ret->id = entry->local_data.id;
-  ret->asset = entry->asset;
+  ret->asset = entry->get_asset();
   /* For some file types the preview is already available. */
   if (entry->local_data.preview_image &&
       BKE_previewimg_is_finished(entry->local_data.preview_image, ICON_SIZE_PREVIEW))
@@ -2252,6 +2251,13 @@ ID *filelist_entry_get_id(const FileList *filelist, const int index)
 {
   const FileListInternEntry *intern_entry = filelist_entry_intern_get(filelist, index);
   return intern_entry->local_data.id;
+}
+
+asset_system::AssetRepresentation *filelist_entry_get_asset_representation(
+    const FileList *filelist, const int index)
+{
+  const FileListInternEntry *intern_entry = filelist_entry_intern_get(filelist, index);
+  return intern_entry->get_asset();
 }
 
 ID *filelist_file_get_id(const FileDirEntry *file)
@@ -2734,9 +2740,10 @@ int ED_path_extension_type(const char *path)
   {
     return FILE_TYPE_TEXT;
   }
-  if (BLI_path_extension_check_n(
-          path, ".ttf", ".ttc", ".pfb", ".otf", ".otc", ".woff", ".woff2", nullptr))
-  {
+
+  /* NOTE: While `.ttc` & `.otc` files can be loaded, only a single "face" is supported,
+   * users will have to extract bold/italic etc manually for Blender to use them, see #44254. */
+  if (BLI_path_extension_check_n(path, ".ttf", ".pfb", ".otf", ".woff", ".woff2", nullptr)) {
     return FILE_TYPE_FTFONT;
   }
   if (BLI_path_extension_check(path, ".btx")) {
@@ -3074,7 +3081,7 @@ static int filelist_readjob_list_dir(FileListReadJob *job_params,
         continue;
       }
 
-      entry = MEM_cnew<FileListInternEntry>(__func__);
+      entry = MEM_new<FileListInternEntry>(__func__);
       entry->relpath = current_relpath_append(job_params, files[i].relname);
       entry->st = files[i].s;
 
@@ -3135,7 +3142,7 @@ static int filelist_readjob_list_dir(FileListReadJob *job_params,
 
 #ifndef WIN32
       /* Set linux-style dot files hidden too. */
-      if (is_hidden_dot_filename(entry->relpath, entry)) {
+      if (BLI_path_has_hidden_component(entry->relpath)) {
         entry->attributes |= FILE_ATTR_HIDDEN;
       }
 #endif
@@ -3166,7 +3173,7 @@ ENUM_OPERATORS(ListLibOptions, LIST_LIB_ADD_PARENT);
 static FileListInternEntry *filelist_readjob_list_lib_group_create(
     const FileListReadJob *job_params, const int idcode, const char *group_name)
 {
-  FileListInternEntry *entry = MEM_cnew<FileListInternEntry>(__func__);
+  FileListInternEntry *entry = MEM_new<FileListInternEntry>(__func__);
   entry->relpath = current_relpath_append(job_params, group_name);
   entry->typeflag |= FILE_TYPE_BLENDERLIB | FILE_TYPE_DIR;
   entry->blentype = idcode;
@@ -3184,7 +3191,7 @@ static void filelist_readjob_list_lib_add_datablock(FileListReadJob *job_params,
                                                     const int idcode,
                                                     const char *group_name)
 {
-  FileListInternEntry *entry = MEM_cnew<FileListInternEntry>(__func__);
+  FileListInternEntry *entry = MEM_new<FileListInternEntry>(__func__);
   if (prefix_relpath_with_group_name) {
     std::string datablock_path = StringRef(group_name) + SEP_STR + datablock_info->name;
     entry->relpath = current_relpath_append(job_params, datablock_path.c_str());
@@ -3202,14 +3209,15 @@ static void filelist_readjob_list_lib_add_datablock(FileListReadJob *job_params,
       if (job_params->load_asset_library) {
         /* Take ownership over the asset data (shallow copies into unique_ptr managed memory) to
          * pass it on to the asset system. */
-        std::unique_ptr metadata = std::make_unique<AssetMetaData>(*datablock_info->asset_data);
-        MEM_freeN(datablock_info->asset_data);
+        std::unique_ptr metadata = std::make_unique<AssetMetaData>(
+            std::move(*datablock_info->asset_data));
+        MEM_delete(datablock_info->asset_data);
         /* Give back a non-owning pointer, because the data-block info is still needed (e.g. to
          * update the asset index). */
         datablock_info->asset_data = metadata.get();
         datablock_info->free_asset_data = false;
 
-        entry->asset = &job_params->load_asset_library->add_external_asset(
+        entry->asset = job_params->load_asset_library->add_external_asset(
             entry->relpath, datablock_info->name, idcode, std::move(metadata));
       }
     }
@@ -3253,7 +3261,7 @@ static void filelist_readjob_list_lib_add_from_indexer_entries(
 static FileListInternEntry *filelist_readjob_list_lib_navigate_to_parent_entry_create(
     const FileListReadJob *job_params)
 {
-  FileListInternEntry *entry = MEM_cnew<FileListInternEntry>(__func__);
+  FileListInternEntry *entry = MEM_new<FileListInternEntry>(__func__);
   entry->relpath = current_relpath_append(job_params, FILENAME_PARENT);
   entry->typeflag |= (FILE_TYPE_BLENDERLIB | FILE_TYPE_DIR);
   return entry;
@@ -3546,7 +3554,7 @@ static void filelist_readjob_main_recursive(Main *bmain, FileList *filelist)
 #  endif
           //                  files->entry->nr = totbl + 1;
           files->entry->poin = id;
-          fake = id->flag & LIB_FAKEUSER;
+          fake = id->flag & ID_FLAG_FAKEUSER;
           if (ELEM(idcode, ID_MA, ID_TE, ID_LA, ID_WO, ID_IM)) {
             files->typeflag |= FILE_TYPE_IMAGE;
           }
@@ -3693,7 +3701,7 @@ static void filelist_readjob_recursive_dir_add_items(const bool do_lib,
 
     BLI_stack_discard(todo_dirs);
 
-    /* ARRRG! We have to be very careful *not to use* common BLI_path_util helpers over
+    /* ARRRG! We have to be very careful *not to use* common `BLI_path_utils.hh` helpers over
      * entry->relpath itself (nor any path containing it), since it may actually be a datablock
      * name inside .blend file, which can have slashes and backslashes! See #46827.
      * Note that in the end, this means we 'cache' valid relative subdir once here,
@@ -3747,7 +3755,8 @@ static void filelist_readjob_recursive_dir_add_items(const bool do_lib,
       entry->free_name = true;
 
       if (filelist_readjob_should_recurse_into_entry(
-              max_recursion, is_lib, recursion_level, entry)) {
+              max_recursion, is_lib, recursion_level, entry))
+      {
         /* We have a directory we want to list, add it to todo list!
          * Using #BLI_path_join works but isn't needed as `root` has a trailing slash. */
         BLI_string_join(dir, sizeof(dir), root, entry->relpath);
@@ -3872,7 +3881,7 @@ static void filelist_readjob_main_assets_add_items(FileListReadJob *job_params,
 
     const char *id_code_name = BKE_idtype_idcode_to_name(GS(id_iter->name));
 
-    entry = MEM_cnew<FileListInternEntry>(__func__);
+    entry = MEM_new<FileListInternEntry>(__func__);
     std::string datablock_path = StringRef(id_code_name) + SEP_STR + (id_iter->name + 2);
     entry->relpath = current_relpath_append(job_params, datablock_path.c_str());
     entry->name = id_iter->name + 2;
@@ -3884,7 +3893,7 @@ static void filelist_readjob_main_assets_add_items(FileListReadJob *job_params,
                                                                              id_iter);
     entry->local_data.id = id_iter;
     if (job_params->load_asset_library) {
-      entry->asset = &job_params->load_asset_library->add_local_id_asset(entry->relpath, *id_iter);
+      entry->asset = job_params->load_asset_library->add_local_id_asset(entry->relpath, *id_iter);
     }
     entries_num++;
     BLI_addtail(&tmp_entries, entry);
@@ -4166,6 +4175,21 @@ static void filelist_readjob_free(void *flrjv)
   MEM_freeN(flrj);
 }
 
+static eWM_JobType filelist_jobtype_get(const FileList *filelist)
+{
+  if (filelist->asset_library_ref) {
+    return WM_JOB_TYPE_ASSET_LIBRARY_LOAD;
+  }
+  return WM_JOB_TYPE_FILESEL_READDIR;
+}
+
+/* TODO(Julian): This is temporary, because currently the job system identifies jobs to suspend by
+ * the startjob callback, rather than the type. See PR #123033. */
+static void assetlibrary_readjob_startjob(void *flrjv, wmJobWorkerStatus *worker_status)
+{
+  filelist_readjob_startjob(flrjv, worker_status);
+}
+
 void filelist_readjob_start(FileList *filelist, const int space_notifier, const bContext *C)
 {
   Main *bmain = CTX_data_main(C);
@@ -4214,11 +4238,12 @@ void filelist_readjob_start(FileList *filelist, const int space_notifier, const 
                        filelist,
                        "Listing Dirs...",
                        WM_JOB_PROGRESS,
-                       WM_JOB_TYPE_FILESEL_READDIR);
+                       filelist_jobtype_get(filelist));
   WM_jobs_customdata_set(wm_job, flrj, filelist_readjob_free);
   WM_jobs_timer(wm_job, 0.01, space_notifier, space_notifier | NA_JOB_FINISHED);
   WM_jobs_callbacks(wm_job,
-                    filelist_readjob_startjob,
+                    filelist->asset_library_ref ? assetlibrary_readjob_startjob :
+                                                  filelist_readjob_startjob,
                     nullptr,
                     filelist_readjob_update,
                     filelist_readjob_endjob);
@@ -4229,10 +4254,10 @@ void filelist_readjob_start(FileList *filelist, const int space_notifier, const 
 
 void filelist_readjob_stop(FileList *filelist, wmWindowManager *wm)
 {
-  WM_jobs_kill_type(wm, filelist, WM_JOB_TYPE_FILESEL_READDIR);
+  WM_jobs_kill_type(wm, filelist, filelist_jobtype_get(filelist));
 }
 
 int filelist_readjob_running(FileList *filelist, wmWindowManager *wm)
 {
-  return WM_jobs_test(wm, filelist, WM_JOB_TYPE_FILESEL_READDIR);
+  return WM_jobs_test(wm, filelist, filelist_jobtype_get(filelist));
 }

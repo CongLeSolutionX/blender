@@ -27,11 +27,11 @@
 
 #include "BKE_customdata.hh"
 
-#include "bmesh.h"
-#include "bmesh_log.h"
+#include "bmesh.hh"
+#include "bmesh_log.hh"
 #include "range_tree.h"
 
-#include "BLI_strict_flags.h"
+#include "BLI_strict_flags.h" /* Keep last. */
 
 struct BMLogEntry {
   BMLogEntry *next, *prev;
@@ -228,7 +228,8 @@ static BMLogFace *bm_log_face_alloc(BMLog *log, BMFace *f)
 
 static void bm_log_verts_unmake(BMesh *bm, BMLog *log, GHash *verts)
 {
-  const int cd_vert_mask_offset = CustomData_get_offset(&bm->vdata, CD_PAINT_MASK);
+  const int cd_vert_mask_offset = CustomData_get_offset_named(
+      &bm->vdata, CD_PROP_FLOAT, ".sculpt_mask");
 
   GHashIterator gh_iter;
   GHASH_ITER (gh_iter, verts) {
@@ -273,7 +274,8 @@ static void bm_log_faces_unmake(BMesh *bm, BMLog *log, GHash *faces)
 
 static void bm_log_verts_restore(BMesh *bm, BMLog *log, GHash *verts)
 {
-  const int cd_vert_mask_offset = CustomData_get_offset(&bm->vdata, CD_PAINT_MASK);
+  const int cd_vert_mask_offset = CustomData_get_offset_named(
+      &bm->vdata, CD_PROP_FLOAT, ".sculpt_mask");
 
   GHashIterator gh_iter;
   GHASH_ITER (gh_iter, verts) {
@@ -316,7 +318,8 @@ static void bm_log_faces_restore(BMesh *bm, BMLog *log, GHash *faces)
 
 static void bm_log_vert_values_swap(BMesh *bm, BMLog *log, GHash *verts)
 {
-  const int cd_vert_mask_offset = CustomData_get_offset(&bm->vdata, CD_PAINT_MASK);
+  const int cd_vert_mask_offset = CustomData_get_offset_named(
+      &bm->vdata, CD_PROP_FLOAT, ".sculpt_mask");
 
   GHashIterator gh_iter;
   GHASH_ITER (gh_iter, verts) {
@@ -328,7 +331,7 @@ static void bm_log_vert_values_swap(BMesh *bm, BMLog *log, GHash *verts)
 
     swap_v3_v3(v->co, lv->co);
     swap_v3_v3(v->no, lv->no);
-    SWAP(char, v->head.hflag, lv->hflag);
+    std::swap(v->head.hflag, lv->hflag);
     mask = lv->mask;
     lv->mask = vert_mask_get(v, cd_vert_mask_offset);
     vert_mask_set(v, mask, cd_vert_mask_offset);
@@ -344,7 +347,7 @@ static void bm_log_face_values_swap(BMLog *log, GHash *faces)
     uint id = POINTER_AS_UINT(key);
     BMFace *f = bm_log_face_from_id(log, id);
 
-    SWAP(char, f->head.hflag, lf->hflag);
+    std::swap(f->head.hflag, lf->hflag);
   }
 }
 
@@ -870,7 +873,8 @@ void BM_log_face_removed(BMLog *log, BMFace *f)
 
 void BM_log_all_added(BMesh *bm, BMLog *log)
 {
-  const int cd_vert_mask_offset = CustomData_get_offset(&bm->vdata, CD_PAINT_MASK);
+  const int cd_vert_mask_offset = CustomData_get_offset_named(
+      &bm->vdata, CD_PROP_FLOAT, ".sculpt_mask");
   BMIter bm_iter;
   BMVert *v;
   BMFace *f;
@@ -897,7 +901,8 @@ void BM_log_all_added(BMesh *bm, BMLog *log)
 
 void BM_log_before_all_removed(BMesh *bm, BMLog *log)
 {
-  const int cd_vert_mask_offset = CustomData_get_offset(&bm->vdata, CD_PAINT_MASK);
+  const int cd_vert_mask_offset = CustomData_get_offset_named(
+      &bm->vdata, CD_PROP_FLOAT, ".sculpt_mask");
   BMIter bm_iter;
   BMVert *v;
   BMFace *f;
@@ -911,6 +916,28 @@ void BM_log_before_all_removed(BMesh *bm, BMLog *log)
   BM_ITER_MESH (v, &bm_iter, bm, BM_VERTS_OF_MESH) {
     BM_log_vert_removed(log, v, cd_vert_mask_offset);
   }
+}
+
+const float *BM_log_find_original_vert_co(BMLog *log, BMVert *v)
+{
+  BMLogEntry *entry = log->current_entry;
+  const BMLogVert *lv;
+  uint v_id = bm_log_vert_id_get(log, v);
+  void *key = POINTER_FROM_UINT(v_id);
+
+  lv = static_cast<const BMLogVert *>(BLI_ghash_lookup(entry->modified_verts, key));
+  return lv == nullptr ? nullptr : lv->co;
+}
+
+const float *BM_log_find_original_vert_mask(BMLog *log, BMVert *v)
+{
+  BMLogEntry *entry = log->current_entry;
+  const BMLogVert *lv;
+  uint v_id = bm_log_vert_id_get(log, v);
+  void *key = POINTER_FROM_UINT(v_id);
+
+  lv = static_cast<const BMLogVert *>(BLI_ghash_lookup(entry->modified_verts, key));
+  return lv == nullptr ? nullptr : &lv->mask;
 }
 
 const float *BM_log_original_vert_co(BMLog *log, BMVert *v)

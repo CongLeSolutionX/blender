@@ -10,20 +10,18 @@
 #include <cstring>
 
 #include "DNA_action_types.h"
-#include "DNA_anim_types.h"
 #include "DNA_collection_types.h"
-#include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
+#include "DNA_screen_types.h"
 #include "MEM_guardedalloc.h"
 
 #include "BLI_blenlib.h"
 #include "BLI_utildefines.h"
 
 #include "BKE_context.hh"
-#include "BKE_lib_query.h"
-#include "BKE_lib_remap.h"
-#include "BKE_nla.h"
+#include "BKE_lib_query.hh"
+#include "BKE_lib_remap.hh"
 #include "BKE_screen.hh"
 
 #include "RNA_access.hh"
@@ -46,7 +44,7 @@
 
 #include "BLO_read_write.hh"
 
-#include "GPU_matrix.h"
+#include "GPU_matrix.hh"
 
 #include "action_intern.hh" /* own include */
 
@@ -250,7 +248,9 @@ static void action_main_region_draw_overlay(const bContext *C, ARegion *region)
   ED_time_scrub_draw_current_frame(region, scene, saction->flag & SACTION_DRAWTIME);
 
   /* scrollers */
-  UI_view2d_scrollers_draw(v2d, nullptr);
+  if (region->winy > HEADERY * UI_SCALE_FAC) {
+    UI_view2d_scrollers_draw(v2d, nullptr);
+  }
 }
 
 /* add handlers, stuff you only do once or on area/region changes */
@@ -271,21 +271,43 @@ static void action_channel_region_init(wmWindowManager *wm, ARegion *region)
   WM_event_add_keymap_handler(&region->handlers, keymap);
 }
 
+static void set_v2d_height(View2D *v2d, const size_t item_count, const bool add_marker_padding)
+{
+  const int height = ANIM_UI_get_channels_total_height(v2d, item_count);
+  float pad_bottom = add_marker_padding ? UI_MARKER_MARGIN_Y : 0;
+  /* Add padding for the collapsed redo panel. */
+  pad_bottom += HEADERY;
+  v2d->tot.ymin = -(height + pad_bottom);
+  UI_view2d_curRect_clamp_y(v2d);
+}
+
 static void action_channel_region_draw(const bContext *C, ARegion *region)
 {
   /* draw entirely, view changes should be handled here */
   bAnimContext ac;
-  View2D *v2d = &region->v2d;
+  const bool has_valid_animcontext = ANIM_animdata_get_context(C, &ac);
 
   /* clear and setup matrix */
   UI_ThemeClearColor(TH_BACK);
 
-  UI_view2d_view_ortho(v2d);
-
-  /* data */
-  if (ANIM_animdata_get_context(C, &ac)) {
-    draw_channel_names((bContext *)C, &ac, region);
+  if (!has_valid_animcontext) {
+    return;
   }
+
+  View2D *v2d = &region->v2d;
+
+  ListBase anim_data = {nullptr, nullptr};
+  /* Build list of channels to draw. */
+  const eAnimFilter_Flags filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_LIST_VISIBLE |
+                                    ANIMFILTER_LIST_CHANNELS);
+  const size_t item_count = ANIM_animdata_filter(
+      &ac, &anim_data, filter, ac.data, eAnimCont_Types(ac.datatype));
+  /* The View2D's height needs to be set before calling UI_view2d_view_ortho because the latter
+   * uses the View2D's `cur` rect which might be modified when setting the height. */
+  set_v2d_height(v2d, item_count, !BLI_listbase_is_empty(ac.markers));
+
+  UI_view2d_view_ortho(v2d);
+  draw_channel_names((bContext *)C, &ac, region, anim_data);
 
   /* channel filter next to scrubbing area */
   ED_time_scrub_channel_search_draw(C, region, ac.ads);
@@ -294,6 +316,7 @@ static void action_channel_region_draw(const bContext *C, ARegion *region)
   UI_view2d_view_restore(C);
 
   /* no scrollers here */
+  ANIM_animdata_freelist(&anim_data);
 }
 
 /* add handlers, stuff you only do once or on area/region changes */
@@ -373,7 +396,7 @@ static void saction_channel_region_message_subscribe(const wmRegionMessageSubscr
   msg_sub_value_region_tag_redraw.notify = ED_region_do_msg_notify_tag_redraw;
 
   /* All dopesheet filter settings, etc. affect the drawing of this editor,
-   * also same applies for all animation-related datatypes that may appear here,
+   * also same applies for all animation-related data-types that may appear here,
    * so just whitelist the entire structs for updates
    */
   {
@@ -786,13 +809,15 @@ static void action_refresh(const bContext *C, ScrArea *area)
   /* XXX re-sizing y-extents of tot should go here? */
 }
 
-static void action_id_remap(ScrArea * /*area*/, SpaceLink *slink, const IDRemapper *mappings)
+static void action_id_remap(ScrArea * /*area*/,
+                            SpaceLink *slink,
+                            const blender::bke::id::IDRemapper &mappings)
 {
   SpaceAction *sact = (SpaceAction *)slink;
 
-  BKE_id_remapper_apply(mappings, (ID **)&sact->action, ID_REMAP_APPLY_DEFAULT);
-  BKE_id_remapper_apply(mappings, (ID **)&sact->ads.filter_grp, ID_REMAP_APPLY_DEFAULT);
-  BKE_id_remapper_apply(mappings, &sact->ads.source, ID_REMAP_APPLY_DEFAULT);
+  mappings.apply(reinterpret_cast<ID **>(&sact->action), ID_REMAP_APPLY_DEFAULT);
+  mappings.apply(reinterpret_cast<ID **>(&sact->ads.filter_grp), ID_REMAP_APPLY_DEFAULT);
+  mappings.apply(&sact->ads.source, ID_REMAP_APPLY_DEFAULT);
 }
 
 static void action_foreach_id(SpaceLink *space_link, LibraryForeachIDData *data)
@@ -801,11 +826,11 @@ static void action_foreach_id(SpaceLink *space_link, LibraryForeachIDData *data)
   const int data_flags = BKE_lib_query_foreachid_process_flags_get(data);
   const bool is_readonly = (data_flags & IDWALK_READONLY) != 0;
 
-  BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, sact->action, IDWALK_CB_NOP);
+  BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, sact->action, IDWALK_CB_DIRECT_WEAK_LINK);
 
   /* NOTE: Could be deduplicated with the #bDopeSheet handling of #SpaceNla and #SpaceGraph. */
-  BKE_LIB_FOREACHID_PROCESS_ID(data, sact->ads.source, IDWALK_CB_NOP);
-  BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, sact->ads.filter_grp, IDWALK_CB_NOP);
+  BKE_LIB_FOREACHID_PROCESS_ID(data, sact->ads.source, IDWALK_CB_DIRECT_WEAK_LINK);
+  BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, sact->ads.filter_grp, IDWALK_CB_DIRECT_WEAK_LINK);
 
   if (!is_readonly) {
     /* Force recalc of list of channels, potentially updating the active action while we're
@@ -846,6 +871,22 @@ static void action_space_subtype_item_extend(bContext * /*C*/,
   RNA_enum_items_add(item, totitem, rna_enum_space_action_mode_items);
 }
 
+static blender::StringRefNull action_space_name_get(const ScrArea *area)
+{
+  SpaceAction *sact = static_cast<SpaceAction *>(area->spacedata.first);
+  const int index = max_ii(0, RNA_enum_from_value(rna_enum_space_action_mode_items, sact->mode));
+  const EnumPropertyItem item = rna_enum_space_action_mode_items[index];
+  return item.name;
+}
+
+static int action_space_icon_get(const ScrArea *area)
+{
+  SpaceAction *sact = static_cast<SpaceAction *>(area->spacedata.first);
+  const int index = max_ii(0, RNA_enum_from_value(rna_enum_space_action_mode_items, sact->mode));
+  const EnumPropertyItem item = rna_enum_space_action_mode_items[index];
+  return item.icon;
+}
+
 static void action_space_blend_read_data(BlendDataReader * /*reader*/, SpaceLink *sl)
 {
   SpaceAction *saction = (SpaceAction *)sl;
@@ -857,15 +898,9 @@ static void action_space_blend_write(BlendWriter *writer, SpaceLink *sl)
   BLO_write_struct(writer, SpaceAction, sl);
 }
 
-static void action_main_region_view2d_changed(const bContext * /*C*/, ARegion *region)
-{
-  View2D *v2d = &region->v2d;
-  UI_view2d_curRect_clamp_y(v2d);
-}
-
 void ED_spacetype_action()
 {
-  SpaceType *st = MEM_cnew<SpaceType>("spacetype action");
+  std::unique_ptr<SpaceType> st = std::make_unique<SpaceType>();
   ARegionType *art;
 
   st->spaceid = SPACE_ACTION;
@@ -884,6 +919,8 @@ void ED_spacetype_action()
   st->space_subtype_item_extend = action_space_subtype_item_extend;
   st->space_subtype_get = action_space_subtype_get;
   st->space_subtype_set = action_space_subtype_set;
+  st->space_name_get = action_space_name_get;
+  st->space_icon_get = action_space_icon_get;
   st->blend_read_data = action_space_blend_read_data;
   st->blend_read_after_liblink = nullptr;
   st->blend_write = action_space_blend_write;
@@ -896,7 +933,6 @@ void ED_spacetype_action()
   art->draw_overlay = action_main_region_draw_overlay;
   art->listener = action_main_region_listener;
   art->message_subscribe = saction_main_region_message_subscribe;
-  art->on_view2d_changed = action_main_region_view2d_changed;
   art->keymapflag = ED_KEYMAP_GIZMO | ED_KEYMAP_VIEW2D | ED_KEYMAP_ANIMATION | ED_KEYMAP_FRAMES;
 
   BLI_addhead(&st->regiontypes, art);
@@ -930,7 +966,7 @@ void ED_spacetype_action()
   art = MEM_cnew<ARegionType>("spacetype action region");
   art->regionid = RGN_TYPE_UI;
   art->prefsizex = UI_SIDEBAR_PANEL_WIDTH;
-  art->keymapflag = ED_KEYMAP_UI;
+  art->keymapflag = ED_KEYMAP_UI | ED_KEYMAP_FRAMES;
   art->listener = action_region_listener;
   art->init = action_buttons_area_init;
   art->draw = action_buttons_area_draw;
@@ -942,7 +978,7 @@ void ED_spacetype_action()
   art = ED_area_type_hud(st->spaceid);
   BLI_addhead(&st->regiontypes, art);
 
-  BKE_spacetype_register(st);
+  BKE_spacetype_register(std::move(st));
 }
 
 /** \} */

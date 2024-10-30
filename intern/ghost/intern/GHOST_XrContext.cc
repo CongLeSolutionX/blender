@@ -169,10 +169,10 @@ void GHOST_XrContext::printInstanceInfo()
 void GHOST_XrContext::printAvailableAPILayersAndExtensionsInfo()
 {
   puts("Available OpenXR API-layers/extensions:");
-  for (XrApiLayerProperties &layer_info : m_oxr->layers) {
+  for (const XrApiLayerProperties &layer_info : m_oxr->layers) {
     printf("Layer: %s\n", layer_info.layerName);
   }
-  for (XrExtensionProperties &ext_info : m_oxr->extensions) {
+  for (const XrExtensionProperties &ext_info : m_oxr->extensions) {
     printf("Extension: %s\n", ext_info.extensionName);
   }
 }
@@ -329,7 +329,7 @@ void GHOST_XrContext::initApiLayers()
   /* Actually get the layers. */
   CHECK_XR(xrEnumerateApiLayerProperties(layer_count, &layer_count, m_oxr->layers.data()),
            "Failed to query OpenXR runtime information. Do you have an active runtime set up?");
-  for (XrApiLayerProperties &layer : m_oxr->layers) {
+  for (const XrApiLayerProperties &layer : m_oxr->layers) {
     /* Each layer may have own extensions. */
     initExtensionsEx(m_oxr->extensions, layer.layerName);
   }
@@ -429,6 +429,9 @@ void GHOST_XrContext::getExtensionsToEnable(
 
   /* Varjo foveated extension. */
   try_ext.push_back(XR_VARJO_FOVEATED_RENDERING_EXTENSION_NAME);
+
+  /* Meta/Facebook passthrough extension. */
+  try_ext.push_back(XR_FB_PASSTHROUGH_EXTENSION_NAME);
 
   r_ext_names.reserve(try_ext.size() + graphics_binding_types.size());
 
@@ -554,7 +557,8 @@ void GHOST_XrContext::drawSessionViews(void *draw_customdata)
 void GHOST_XrContext::handleSessionStateChange(const XrEventDataSessionStateChanged &lifecycle)
 {
   if (m_session &&
-      m_session->handleStateChangeEvent(lifecycle) == GHOST_XrSession::SESSION_DESTROY) {
+      m_session->handleStateChangeEvent(lifecycle) == GHOST_XrSession::SESSION_DESTROY)
+  {
     m_session = nullptr;
   }
 }
@@ -590,6 +594,18 @@ void GHOST_XrContext::setGraphicsContextBindFuncs(GHOST_XrGraphicsContextBindFn 
 void GHOST_XrContext::setDrawViewFunc(GHOST_XrDrawViewFn draw_view_fn)
 {
   m_custom_funcs.draw_view_fn = draw_view_fn;
+}
+
+void GHOST_XrContext::setPassthroughEnabledFunc(
+    GHOST_XrPassthroughEnabledFn passthrough_enabled_fn)
+{
+  m_custom_funcs.passthrough_enabled_fn = passthrough_enabled_fn;
+}
+
+void GHOST_XrContext::setDisablePassthroughFunc(
+    GHOST_XrDisablePassthroughFn disable_passthrough_fn)
+{
+  m_custom_funcs.disable_passthrough_fn = disable_passthrough_fn;
 }
 
 bool GHOST_XrContext::needsUpsideDownDrawing() const

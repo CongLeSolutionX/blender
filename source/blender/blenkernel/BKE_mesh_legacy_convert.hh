@@ -17,6 +17,11 @@ struct Main;
 struct Mesh;
 struct MFace;
 
+namespace blender::bke {
+void mesh_sculpt_mask_to_legacy(MutableSpan<CustomDataLayer> vert_layers);
+void mesh_sculpt_mask_to_generic(Mesh &mesh);
+}  // namespace blender::bke
+
 void BKE_mesh_legacy_convert_uvs_to_generic(Mesh *mesh);
 
 /**
@@ -105,11 +110,16 @@ void BKE_mesh_convert_mfaces_to_mpolys(Mesh *mesh);
  */
 void BKE_mesh_do_versions_convert_mfaces_to_mpolys(Mesh *mesh);
 
-void BKE_mesh_calc_edges_legacy(Mesh *me);
+void BKE_mesh_calc_edges_legacy(Mesh *mesh);
 
 void BKE_mesh_do_versions_cd_flag_init(Mesh *mesh);
 
 void BKE_main_mesh_legacy_convert_auto_smooth(Main &bmain);
+
+/**
+ * Calculate/create edges from tessface data
+ */
+void BKE_mesh_calc_edges_tessface(Mesh *mesh);
 
 /* Inlines */
 

@@ -53,8 +53,8 @@ void CUDADevice::set_error(const string &error)
   }
 }
 
-CUDADevice::CUDADevice(const DeviceInfo &info, Stats &stats, Profiler &profiler)
-    : GPUDevice(info, stats, profiler)
+CUDADevice::CUDADevice(const DeviceInfo &info, Stats &stats, Profiler &profiler, bool headless)
+    : GPUDevice(info, stats, profiler, headless)
 {
   /* Verify that base class types can be used with specific backend types */
   static_assert(sizeof(texMemObject) == sizeof(CUtexObject));
@@ -97,17 +97,29 @@ CUDADevice::CUDADevice(const DeviceInfo &info, Stats &stats, Profiler &profiler)
   cuda_assert(cuDeviceGetAttribute(
       &pitch_alignment, CU_DEVICE_ATTRIBUTE_TEXTURE_PITCH_ALIGNMENT, cuDevice));
 
-  unsigned int ctx_flags = CU_CTX_LMEM_RESIZE_TO_MAX;
   if (can_map_host) {
-    ctx_flags |= CU_CTX_MAP_HOST;
     init_host_memory();
   }
 
+  int active = 0;
+  unsigned int ctx_flags = 0;
+  cuda_assert(cuDevicePrimaryCtxGetState(cuDevice, &ctx_flags, &active));
+
+  /* Configure primary context only once. */
+  if (active == 0) {
+    ctx_flags |= CU_CTX_LMEM_RESIZE_TO_MAX;
+    result = cuDevicePrimaryCtxSetFlags(cuDevice, ctx_flags);
+    if (result != CUDA_SUCCESS && result != CUDA_ERROR_PRIMARY_CONTEXT_ACTIVE) {
+      set_error(string_printf("Failed to configure CUDA context (%s)", cuewErrorString(result)));
+      return;
+    }
+  }
+
   /* Create context. */
-  result = cuCtxCreate(&cuContext, ctx_flags, cuDevice);
+  result = cuDevicePrimaryCtxRetain(&cuContext, cuDevice);
 
   if (result != CUDA_SUCCESS) {
-    set_error(string_printf("Failed to create CUDA context (%s)", cuewErrorString(result)));
+    set_error(string_printf("Failed to retain CUDA context (%s)", cuewErrorString(result)));
     return;
   }
 
@@ -115,16 +127,15 @@ CUDADevice::CUDADevice(const DeviceInfo &info, Stats &stats, Profiler &profiler)
   cuDeviceGetAttribute(&major, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, cuDevId);
   cuDeviceGetAttribute(&minor, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR, cuDevId);
   cuDevArchitecture = major * 100 + minor * 10;
-
-  /* Pop context set by cuCtxCreate. */
-  cuCtxPopCurrent(NULL);
 }
 
 CUDADevice::~CUDADevice()
 {
   texture_info.free();
-
-  cuda_assert(cuCtxDestroy(cuContext));
+  if (cuModule) {
+    cuda_assert(cuModuleUnload(cuModule));
+  }
+  cuda_assert(cuDevicePrimaryCtxRelease(cuDevice));
 }
 
 bool CUDADevice::support_device(const uint /*kernel_features*/)
@@ -173,7 +184,7 @@ bool CUDADevice::check_peer_access(Device *peer_device)
   {
     const CUDAContextScope scope(this);
     CUresult result = cuCtxEnablePeerAccess(peer_device_cuda->cuContext, 0);
-    if (result != CUDA_SUCCESS) {
+    if (result != CUDA_SUCCESS && result != CUDA_ERROR_PEER_ACCESS_ALREADY_ENABLED) {
       set_error(string_printf("Failed to enable peer access on CUDA context (%s)",
                               cuewErrorString(result)));
       return false;
@@ -182,7 +193,7 @@ bool CUDADevice::check_peer_access(Device *peer_device)
   {
     const CUDAContextScope scope(peer_device_cuda);
     CUresult result = cuCtxEnablePeerAccess(cuContext, 0);
-    if (result != CUDA_SUCCESS) {
+    if (result != CUDA_SUCCESS && result != CUDA_ERROR_PEER_ACCESS_ALREADY_ENABLED) {
       set_error(string_printf("Failed to enable peer access on CUDA context (%s)",
                               cuewErrorString(result)));
       return false;
@@ -245,7 +256,7 @@ string CUDADevice::compile_kernel(const string &common_cflags,
   /* Attempt to use kernel provided with Blender. */
   if (!use_adaptive_compilation()) {
     if (!force_ptx) {
-      const string cubin = path_get(string_printf("lib/%s_sm_%d%d.cubin", name, major, minor));
+      const string cubin = path_get(string_printf("lib/%s_sm_%d%d.cubin.zst", name, major, minor));
       VLOG_INFO << "Testing for pre-compiled kernel " << cubin << ".";
       if (path_exists(cubin)) {
         VLOG_INFO << "Using precompiled kernel.";
@@ -257,7 +268,7 @@ string CUDADevice::compile_kernel(const string &common_cflags,
     int ptx_major = major, ptx_minor = minor;
     while (ptx_major >= 3) {
       const string ptx = path_get(
-          string_printf("lib/%s_compute_%d%d.ptx", name, ptx_major, ptx_minor));
+          string_printf("lib/%s_compute_%d%d.ptx.zst", name, ptx_major, ptx_minor));
       VLOG_INFO << "Testing for pre-compiled kernel " << ptx << ".";
       if (path_exists(ptx)) {
         VLOG_INFO << "Using precompiled kernel.";
@@ -333,12 +344,10 @@ string CUDADevice::compile_kernel(const string &common_cflags,
         nvcc_cuda_version % 10);
     return string();
   }
-  else if (!(nvcc_cuda_version == 101 || nvcc_cuda_version == 102 || nvcc_cuda_version == 111 ||
-             nvcc_cuda_version == 112 || nvcc_cuda_version == 113 || nvcc_cuda_version == 114))
-  {
+  else if (!(nvcc_cuda_version >= 102 && nvcc_cuda_version < 130)) {
     printf(
         "CUDA version %d.%d detected, build may succeed but only "
-        "CUDA 10.1 to 11.4 are officially supported.\n",
+        "CUDA 10.1 to 12 are officially supported.\n",
         nvcc_cuda_version / 10,
         nvcc_cuda_version % 10);
   }
@@ -431,7 +440,7 @@ bool CUDADevice::load_kernels(const uint kernel_features)
   string cubin_data;
   CUresult result;
 
-  if (path_read_text(cubin, cubin_data)) {
+  if (path_read_compressed_text(cubin, cubin_data)) {
     result = cuModuleLoadData(&cuModule, cubin_data.c_str());
   }
   else {
@@ -721,6 +730,15 @@ void CUDADevice::tex_alloc(device_texture &mem)
   }
 
   /* Image Texture Storage */
+  /* Cycles expects to read all texture data as normalized float values in
+   * kernel/device/gpu/image.h. But storing all data as floats would be very inefficient due to the
+   * huge size of float textures. So in the code below, we define different texture types including
+   * integer types, with the aim of using CUDA's default promotion behavior of integer data to
+   * floating point data in the range [0, 1], as noted in the CUDA documentation on
+   * cuTexObjectCreate API Call.
+   * Note that 32-bit integers are not supported by this promotion behavior and cannot be used
+   * with Cycles's current implementation in kernel/device/gpu/image.h.
+   */
   CUarray_format_enum format;
   switch (mem.data_type) {
     case TYPE_UCHAR:
@@ -728,12 +746,6 @@ void CUDADevice::tex_alloc(device_texture &mem)
       break;
     case TYPE_UINT16:
       format = CU_AD_FORMAT_UNSIGNED_INT16;
-      break;
-    case TYPE_UINT:
-      format = CU_AD_FORMAT_UNSIGNED_INT32;
-      break;
-    case TYPE_INT:
-      format = CU_AD_FORMAT_SIGNED_INT32;
       break;
     case TYPE_FLOAT:
       format = CU_AD_FORMAT_FLOAT;
@@ -888,6 +900,8 @@ void CUDADevice::tex_alloc(device_texture &mem)
     texDesc.addressMode[1] = address_mode;
     texDesc.addressMode[2] = address_mode;
     texDesc.filterMode = filter_mode;
+    /* CUDA's flag CU_TRSF_READ_AS_INTEGER is intentionally not used and it is
+     * significant, see above an explanation about how Blender treat textures. */
     texDesc.flags = CU_TRSF_NORMALIZED_COORDINATES;
 
     thread_scoped_lock lock(device_mem_map_mutex);
@@ -947,6 +961,13 @@ bool CUDADevice::should_use_graphics_interop()
    * Using CUDA device for graphics interoperability which is not part of the OpenGL context is
    * possible, but from the empiric measurements it can be considerably slower than using naive
    * pixels copy. */
+
+  if (headless) {
+    /* Avoid any call which might involve interaction with a graphics backend when we know that
+     * we don't have active graphics context. This avoid crash on certain platforms when calling
+     * cuGLGetDevices(). */
+    return false;
+  }
 
   CUDAContextScope scope(this);
 

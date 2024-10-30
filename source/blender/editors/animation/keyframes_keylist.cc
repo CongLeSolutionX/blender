@@ -19,7 +19,7 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_array.hh"
-#include "BLI_dlrbTree.h"
+#include "BLI_bounds.hh"
 #include "BLI_listbase.h"
 #include "BLI_range.h"
 #include "BLI_utildefines.h"
@@ -31,11 +31,15 @@
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
-#include "BKE_fcurve.h"
+#include "BKE_fcurve.hh"
 #include "BKE_grease_pencil.hh"
 
 #include "ED_anim_api.hh"
 #include "ED_keyframes_keylist.hh"
+
+#include "ANIM_action.hh"
+
+using namespace blender;
 
 /* *************************** Keyframe Processing *************************** */
 
@@ -519,13 +523,14 @@ static ActKeyColumn *nalloc_ak_cel(void *data)
   /* Store settings based on state of BezTriple */
   ak->cfra = cel.frame_number;
   ak->sel = (cel.frame.flag & SELECT) != 0;
-  ak->key_type = cel.frame.type;
+  ak->key_type = eBezTriple_KeyframeType(cel.frame.type);
 
   /* Count keyframes in this column */
   ak->totkey = 1;
   /* Set as visible block. */
   ak->totblock = 1;
   ak->block.sel = ak->sel;
+  ak->block.flag |= ACTKEYBLOCK_FLAG_GPENCIL;
 
   return ak;
 }
@@ -560,7 +565,7 @@ static ActKeyColumn *nalloc_ak_gpframe(void *data)
   /* store settings based on state of BezTriple */
   ak->cfra = gpf->framenum;
   ak->sel = (gpf->flag & GP_FRAME_SELECT) ? SELECT : 0;
-  ak->key_type = gpf->key_type;
+  ak->key_type = eBezTriple_KeyframeType(gpf->key_type);
 
   /* Count keyframes in this column. */
   ak->totkey = 1;
@@ -885,7 +890,7 @@ static void update_keyblocks(AnimKeylist *keylist, BezTriple *bezt, const int be
   int max_curve = 0;
 
   LISTBASE_FOREACH (ActKeyColumn *, col, &keylist->key_columns) {
-    max_curve = MAX2(max_curve, col->totcurve);
+    max_curve = std::max(max_curve, int(col->totcurve));
   }
 
   /* Propagate blocks to inserted keys. */
@@ -928,7 +933,10 @@ int actkeyblock_get_valid_hold(const ActKeyColumn *ac)
 
 /* *************************** Keyframe List Conversions *************************** */
 
-void summary_to_keylist(bAnimContext *ac, AnimKeylist *keylist, const int saction_flag)
+void summary_to_keylist(bAnimContext *ac,
+                        AnimKeylist *keylist,
+                        const int saction_flag,
+                        blender::float2 range)
 {
   if (!ac) {
     return;
@@ -950,7 +958,8 @@ void summary_to_keylist(bAnimContext *ac, AnimKeylist *keylist, const int sactio
      * there isn't really any benefit at all from including them. - Aligorith */
     switch (ale->datatype) {
       case ALE_FCURVE:
-        fcurve_to_keylist(ale->adt, static_cast<FCurve *>(ale->data), keylist, saction_flag);
+        fcurve_to_keylist(
+            ale->adt, static_cast<FCurve *>(ale->data), keylist, saction_flag, range);
         break;
       case ALE_MASKLAY:
         mask_to_keylist(ac->ads, static_cast<MaskLayer *>(ale->data), keylist);
@@ -970,7 +979,11 @@ void summary_to_keylist(bAnimContext *ac, AnimKeylist *keylist, const int sactio
   ANIM_animdata_freelist(&anim_data);
 }
 
-void scene_to_keylist(bDopeSheet *ads, Scene *sce, AnimKeylist *keylist, const int saction_flag)
+void scene_to_keylist(bDopeSheet *ads,
+                      Scene *sce,
+                      AnimKeylist *keylist,
+                      const int saction_flag,
+                      blender::float2 range)
 {
   bAnimContext ac = {nullptr};
   ListBase anim_data = {nullptr, nullptr};
@@ -999,13 +1012,17 @@ void scene_to_keylist(bDopeSheet *ads, Scene *sce, AnimKeylist *keylist, const i
 
   /* Loop through each F-Curve, grabbing the keyframes. */
   LISTBASE_FOREACH (const bAnimListElem *, ale, &anim_data) {
-    fcurve_to_keylist(ale->adt, static_cast<FCurve *>(ale->data), keylist, saction_flag);
+    fcurve_to_keylist(ale->adt, static_cast<FCurve *>(ale->data), keylist, saction_flag, range);
   }
 
   ANIM_animdata_freelist(&anim_data);
 }
 
-void ob_to_keylist(bDopeSheet *ads, Object *ob, AnimKeylist *keylist, const int saction_flag)
+void ob_to_keylist(bDopeSheet *ads,
+                   Object *ob,
+                   AnimKeylist *keylist,
+                   const int saction_flag,
+                   blender::float2 range)
 {
   bAnimContext ac = {nullptr};
   ListBase anim_data = {nullptr, nullptr};
@@ -1036,7 +1053,7 @@ void ob_to_keylist(bDopeSheet *ads, Object *ob, AnimKeylist *keylist, const int 
 
   /* Loop through each F-Curve, grabbing the keyframes. */
   LISTBASE_FOREACH (const bAnimListElem *, ale, &anim_data) {
-    fcurve_to_keylist(ale->adt, static_cast<FCurve *>(ale->data), keylist, saction_flag);
+    fcurve_to_keylist(ale->adt, static_cast<FCurve *>(ale->data), keylist, saction_flag, range);
   }
 
   ANIM_animdata_freelist(&anim_data);
@@ -1071,13 +1088,37 @@ void cachefile_to_keylist(bDopeSheet *ads,
 
   /* Loop through each F-Curve, grabbing the keyframes. */
   LISTBASE_FOREACH (const bAnimListElem *, ale, &anim_data) {
-    fcurve_to_keylist(ale->adt, static_cast<FCurve *>(ale->data), keylist, saction_flag);
+    fcurve_to_keylist(
+        ale->adt, static_cast<FCurve *>(ale->data), keylist, saction_flag, {-FLT_MAX, FLT_MAX});
   }
 
   ANIM_animdata_freelist(&anim_data);
 }
 
-void fcurve_to_keylist(AnimData *adt, FCurve *fcu, AnimKeylist *keylist, const int saction_flag)
+static inline void set_up_beztriple_chain(BezTripleChain &chain,
+                                          const FCurve *fcu,
+                                          const int key_index,
+                                          const bool do_extremes,
+                                          const bool is_cyclic)
+{
+  chain.cur = &fcu->bezt[key_index];
+
+  /* Neighbor columns, accounting for being cyclic. */
+  if (do_extremes) {
+    chain.prev = (key_index > 0) ? &fcu->bezt[key_index - 1] :
+                 is_cyclic       ? &fcu->bezt[fcu->totvert - 2] :
+                                   nullptr;
+    chain.next = (key_index + 1 < fcu->totvert) ? &fcu->bezt[key_index + 1] :
+                 is_cyclic                      ? &fcu->bezt[1] :
+                                                  nullptr;
+  }
+}
+
+void fcurve_to_keylist(AnimData *adt,
+                       FCurve *fcu,
+                       AnimKeylist *keylist,
+                       const int saction_flag,
+                       blender::float2 range)
 {
   if (!fcu || fcu->totvert == 0 || !fcu->bezt) {
     return;
@@ -1092,25 +1133,57 @@ void fcurve_to_keylist(AnimData *adt, FCurve *fcu, AnimKeylist *keylist, const i
   const bool do_extremes = (saction_flag & SACTION_SHOW_EXTREMES) != 0;
 
   BezTripleChain chain = {nullptr};
-
+  /* The indices for which keys have been added to the key columns. Initialized as invalid bounds
+   * for the case that no keyframes get added to the key-columns, which happens when the given
+   * range doesn't overlap with the existing keyframes. */
+  blender::Bounds<int> index_bounds(int(fcu->totvert), 0);
+  /* The following is used to find the keys that are JUST outside the range. This is done so
+   * drawing in the dope sheet can create lines that extend off-screen. */
+  float left_outside_key_x = -FLT_MAX;
+  float right_outside_key_x = FLT_MAX;
+  int left_outside_key_index = -1;
+  int right_outside_key_index = -1;
   /* Loop through beztriples, making ActKeysColumns. */
   for (int v = 0; v < fcu->totvert; v++) {
-    chain.cur = &fcu->bezt[v];
-
-    /* Neighbor columns, accounting for being cyclic. */
-    if (do_extremes) {
-      chain.prev = (v > 0)   ? &fcu->bezt[v - 1] :
-                   is_cyclic ? &fcu->bezt[fcu->totvert - 2] :
-                               nullptr;
-      chain.next = (v + 1 < fcu->totvert) ? &fcu->bezt[v + 1] :
-                   is_cyclic              ? &fcu->bezt[1] :
-                                            nullptr;
+    /* Not using binary search to limit the range because the FCurve might not be sorted e.g. when
+     * transforming in the Dope Sheet. */
+    const float x = fcu->bezt[v].vec[1][0];
+    if (x < range[0] && x > left_outside_key_x) {
+      left_outside_key_x = x;
+      left_outside_key_index = v;
     }
+    if (x > range[1] && x < right_outside_key_x) {
+      right_outside_key_x = x;
+      right_outside_key_index = v;
+    }
+    if (x < range[0] || x > range[1]) {
+      continue;
+    }
+    blender::math::min_max(v, index_bounds.min, index_bounds.max);
+    set_up_beztriple_chain(chain, fcu, v, do_extremes, is_cyclic);
 
     add_bezt_to_keycolumns_list(keylist, &chain);
   }
 
-  update_keyblocks(keylist, fcu->bezt, fcu->totvert);
+  if (left_outside_key_index >= 0) {
+    set_up_beztriple_chain(chain, fcu, left_outside_key_index, do_extremes, is_cyclic);
+    add_bezt_to_keycolumns_list(keylist, &chain);
+    /* Checking min and max because the FCurve might not be sorted. */
+    index_bounds.min = blender::math::min(index_bounds.min, left_outside_key_index);
+    index_bounds.max = blender::math::max(index_bounds.max, left_outside_key_index);
+  }
+  if (right_outside_key_index >= 0) {
+    set_up_beztriple_chain(chain, fcu, right_outside_key_index, do_extremes, is_cyclic);
+    add_bezt_to_keycolumns_list(keylist, &chain);
+    index_bounds.min = blender::math::min(index_bounds.min, right_outside_key_index);
+    index_bounds.max = blender::math::max(index_bounds.max, right_outside_key_index);
+  }
+  /* Not using index_bounds.is_empty() because that returns true if min and max are the same. That
+   * is a valid configuration in this case though. */
+  if (index_bounds.min <= index_bounds.max) {
+    update_keyblocks(
+        keylist, &fcu->bezt[index_bounds.min], (index_bounds.max + 1) - index_bounds.min);
+  }
 
   if (adt) {
     ANIM_nla_mapping_apply_fcurve(adt, fcu, true, false);
@@ -1120,29 +1193,71 @@ void fcurve_to_keylist(AnimData *adt, FCurve *fcu, AnimKeylist *keylist, const i
 void action_group_to_keylist(AnimData *adt,
                              bActionGroup *agrp,
                              AnimKeylist *keylist,
-                             const int saction_flag)
+                             const int saction_flag,
+                             blender::float2 range)
 {
   if (!agrp) {
     return;
   }
 
-  LISTBASE_FOREACH (FCurve *, fcu, &agrp->channels) {
-    if (fcu->grp != agrp) {
-      break;
+  /* Legacy actions. */
+  if (agrp->wrap().is_legacy()) {
+    LISTBASE_FOREACH (FCurve *, fcu, &agrp->channels) {
+      if (fcu->grp != agrp) {
+        break;
+      }
+      fcurve_to_keylist(adt, fcu, keylist, saction_flag, range);
     }
-    fcurve_to_keylist(adt, fcu, keylist, saction_flag);
-  }
-}
-
-void action_to_keylist(AnimData *adt, bAction *act, AnimKeylist *keylist, const int saction_flag)
-{
-  if (!act) {
     return;
   }
 
-  LISTBASE_FOREACH (FCurve *, fcu, &act->curves) {
-    fcurve_to_keylist(adt, fcu, keylist, saction_flag);
+  /* Layered actions. */
+  animrig::ChannelBag &channel_bag = agrp->channel_bag->wrap();
+  Span<FCurve *> fcurves = channel_bag.fcurves().slice(agrp->fcurve_range_start,
+                                                       agrp->fcurve_range_length);
+  for (FCurve *fcurve : fcurves) {
+    fcurve_to_keylist(adt, fcurve, keylist, saction_flag, range);
   }
+}
+
+void action_slot_to_keylist(AnimData *adt,
+                            animrig::Action &action,
+                            const animrig::slot_handle_t slot_handle,
+                            AnimKeylist *keylist,
+                            const int saction_flag,
+                            blender::float2 range)
+{
+  BLI_assert(GS(action.id.name) == ID_AC);
+  for (FCurve *fcurve : fcurves_for_action_slot(action, slot_handle)) {
+    fcurve_to_keylist(adt, fcurve, keylist, saction_flag, range);
+  }
+}
+
+void action_to_keylist(AnimData *adt,
+                       bAction *dna_action,
+                       AnimKeylist *keylist,
+                       const int saction_flag,
+                       blender::float2 range)
+{
+  if (!dna_action) {
+    return;
+  }
+
+  blender::animrig::Action &action = dna_action->wrap();
+
+  /* TODO: move this into fcurves_for_action_slot(). */
+  if (action.is_action_legacy()) {
+    LISTBASE_FOREACH (FCurve *, fcu, &action.curves) {
+      fcurve_to_keylist(adt, fcu, keylist, saction_flag, range);
+    }
+    return;
+  }
+
+  /**
+   * Assumption: the animation is bound to adt->slot_handle. This assumption will break when we
+   * have things like reference strips, where the strip can reference another slot handle.
+   */
+  action_slot_to_keylist(adt, action, adt->slot_handle, keylist, saction_flag, range);
 }
 
 void gpencil_to_keylist(bDopeSheet *ads, bGPdata *gpd, AnimKeylist *keylist, const bool active)

@@ -15,12 +15,8 @@
 #include "DNA_curve_types.h"
 #include "DNA_mesh_types.h"
 #include "DNA_object_types.h"
-#include "DNA_scene_types.h"
-#include "DNA_vfont_types.h"
 
-#include "BLI_bitmap.h"
 #include "BLI_index_range.hh"
-#include "BLI_linklist.h"
 #include "BLI_listbase.h"
 #include "BLI_math_rotation.h"
 #include "BLI_memarena.h"
@@ -34,14 +30,13 @@
 #include "BKE_curve_legacy_convert.hh"
 #include "BKE_displist.h"
 #include "BKE_geometry_set.hh"
-#include "BKE_key.h"
-#include "BKE_lib_id.h"
-#include "BKE_mball.h"
+#include "BKE_key.hh"
+#include "BKE_lib_id.hh"
 #include "BKE_mesh.hh"
 #include "BKE_modifier.hh"
 #include "BKE_object.hh"
 #include "BKE_object_types.hh"
-#include "BKE_vfont.h"
+#include "BKE_vfont.hh"
 
 #include "BLI_sys_types.h" /* For #intptr_t support. */
 
@@ -744,7 +739,7 @@ static blender::bke::GeometrySet curve_calc_modifiers_post(Depsgraph *depsgraph,
 
     if (mti->type == ModifierTypeType::OnlyDeform) {
       mti->deform_verts(md, &mectx_deform, mesh, mesh->vert_positions_for_write());
-      BKE_mesh_tag_positions_changed(mesh);
+      mesh->tag_positions_changed();
     }
     else {
       Mesh *output_mesh = mti->modify_mesh(md, &mectx_apply, mesh);
@@ -1366,8 +1361,6 @@ void BKE_displist_make_curveTypes(Depsgraph *depsgraph,
 
     ob->runtime->geometry_set_eval = new blender::bke::GeometrySet(std::move(geometry));
   }
-
-  BKE_object_boundbox_calc_from_evaluated_geometry(ob);
 }
 
 void BKE_displist_minmax(const ListBase *dispbase, float min[3], float max[3])

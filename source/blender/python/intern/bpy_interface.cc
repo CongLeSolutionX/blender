@@ -23,51 +23,53 @@
 
 #include "BLI_fileops.h"
 #include "BLI_listbase.h"
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 #include "BLI_string.h"
 #include "BLI_string_utf8.h"
 #include "BLI_threads.h"
 #include "BLI_utildefines.h"
 
+#include "BLT_translation.hh"
+
 #include "RNA_types.hh"
 
-#include "bpy.h"
-#include "bpy_capi_utils.h"
-#include "bpy_intern_string.h"
-#include "bpy_path.h"
-#include "bpy_props.h"
-#include "bpy_rna.h"
-#include "bpy_traceback.h"
+#include "bpy.hh"
+#include "bpy_capi_utils.hh"
+#include "bpy_intern_string.hh"
+#include "bpy_path.hh"
+#include "bpy_props.hh"
+#include "bpy_rna.hh"
+#include "bpy_traceback.hh"
 
-#include "bpy_app_translations.h"
+#include "bpy_app_translations.hh"
 
 #include "DNA_text_types.h"
 
-#include "BKE_appdir.h"
+#include "BKE_appdir.hh"
 #include "BKE_context.hh"
-#include "BKE_global.h" /* Only for script checking. */
-#include "BKE_main.h"
+#include "BKE_global.hh" /* Only for script checking. */
+#include "BKE_main.hh"
 #include "BKE_text.h"
 
 #ifdef WITH_CYCLES
 #  include "CCL_api.h"
 #endif
 
-#include "BPY_extern.h"
-#include "BPY_extern_python.h"
-#include "BPY_extern_run.h"
+#include "BPY_extern.hh"
+#include "BPY_extern_python.hh"
+#include "BPY_extern_run.hh"
 
-#include "../generic/py_capi_utils.h"
+#include "../generic/py_capi_utils.hh"
 
 /* `inittab` initialization functions. */
-#include "../bmesh/bmesh_py_api.h"
+#include "../bmesh/bmesh_py_api.hh"
 #include "../generic/bgl.h"
-#include "../generic/bl_math_py_api.h"
-#include "../generic/blf_py_api.h"
-#include "../generic/idprop_py_api.h"
-#include "../generic/imbuf_py_api.h"
-#include "../gpu/gpu_py_api.h"
-#include "../mathutils/mathutils.h"
+#include "../generic/bl_math_py_api.hh"
+#include "../generic/blf_py_api.hh"
+#include "../generic/idprop_py_api.hh"
+#include "../generic/imbuf_py_api.hh"
+#include "../gpu/gpu_py_api.hh"
+#include "../mathutils/mathutils.hh"
 
 /* Logging types to use anywhere in the Python modules. */
 
@@ -87,7 +89,7 @@ static bool py_use_system_env = false;
 // #define TIME_PY_RUN /* Simple python tests. prints on exit. */
 
 #ifdef TIME_PY_RUN
-#  include "PIL_time.h"
+#  include "BLI_time.h"
 static int bpy_timer_count = 0;
 /** Time since python starts. */
 static double bpy_timer;
@@ -126,10 +128,10 @@ void bpy_context_set(bContext *C, PyGILState_STATE *gilstate)
 #ifdef TIME_PY_RUN
     if (bpy_timer_count == 0) {
       /* Record time from the beginning. */
-      bpy_timer = PIL_check_seconds_timer();
+      bpy_timer = BLI_time_now_seconds();
       bpy_timer_run = bpy_timer_run_tot = 0.0;
     }
-    bpy_timer_run = PIL_check_seconds_timer();
+    bpy_timer_run = BLI_time_now_seconds();
 
     bpy_timer_count++;
 #endif
@@ -155,7 +157,7 @@ void bpy_context_clear(bContext * /*C*/, const PyGILState_STATE *gilstate)
 #endif
 
 #ifdef TIME_PY_RUN
-    bpy_timer_run_tot += PIL_check_seconds_timer() - bpy_timer_run;
+    bpy_timer_run_tot += BLI_time_now_seconds() - bpy_timer_run;
     bpy_timer_count++;
 #endif
   }
@@ -314,7 +316,7 @@ static _inittab bpy_internal_modules[] = {
  * Show an error just to avoid silent failure in the unlikely event something goes wrong,
  * in this case a developer will need to track down the root cause.
  */
-static void pystatus_exit_on_error(PyStatus status)
+static void pystatus_exit_on_error(const PyStatus &status)
 {
   if (UNLIKELY(PyStatus_Exception(status))) {
     fputs("Internal error initializing Python!\n", stderr);
@@ -327,6 +329,7 @@ static void pystatus_exit_on_error(PyStatus status)
 void BPY_python_start(bContext *C, int argc, const char **argv)
 {
 #ifndef WITH_PYTHON_MODULE
+  BLI_assert_msg(Py_IsInitialized() == 0, "Python has already been initialized");
 
   /* #PyPreConfig (early-configuration). */
   {
@@ -382,7 +385,12 @@ void BPY_python_start(bContext *C, int argc, const char **argv)
     PyStatus status;
     bool has_python_executable = false;
 
-    PyConfig_InitPythonConfig(&config);
+    if (py_use_system_env) {
+      PyConfig_InitPythonConfig(&config);
+    }
+    else {
+      PyConfig_InitIsolatedConfig(&config);
+    }
 
     /* Suppress error messages when calculating the module search path.
      * While harmless, it's noisy. */
@@ -434,21 +442,22 @@ void BPY_python_start(bContext *C, int argc, const char **argv)
 
     /* Allow to use our own included Python. `py_path_bundle` may be nullptr. */
     {
-      const char *py_path_bundle = BKE_appdir_folder_id(BLENDER_SYSTEM_PYTHON, nullptr);
-      if (py_path_bundle != nullptr) {
+      const std::optional<std::string> py_path_bundle = BKE_appdir_folder_id(BLENDER_SYSTEM_PYTHON,
+                                                                             nullptr);
+      if (py_path_bundle.has_value()) {
 
 #  ifdef __APPLE__
         /* Mac-OS allows file/directory names to contain `:` character
          * (represented as `/` in the Finder) but current Python lib (as of release 3.1.1)
          * doesn't handle these correctly. */
-        if (strchr(py_path_bundle, ':')) {
+        if (strchr(py_path_bundle->c_str(), ':')) {
           fprintf(stderr,
                   "Warning! Blender application is located in a path containing ':' or '/' chars\n"
                   "This may make Python import function fail\n");
         }
 #  endif /* __APPLE__ */
 
-        status = PyConfig_SetBytesString(&config, &config.home, py_path_bundle);
+        status = PyConfig_SetBytesString(&config, &config.home, py_path_bundle->c_str());
         pystatus_exit_on_error(status);
 
 #  ifdef PYTHON_SSL_CERT_FILE
@@ -458,7 +467,7 @@ void BPY_python_start(bContext *C, int argc, const char **argv)
           const char *ssl_cert_file_suffix = PYTHON_SSL_CERT_FILE;
           char ssl_cert_file[FILE_MAX];
           BLI_path_join(
-              ssl_cert_file, sizeof(ssl_cert_file), py_path_bundle, ssl_cert_file_suffix);
+              ssl_cert_file, sizeof(ssl_cert_file), py_path_bundle->c_str(), ssl_cert_file_suffix);
           BLI_setenv(ssl_cert_file_env, ssl_cert_file);
         }
 #  endif /* PYTHON_SSL_CERT_FILE */
@@ -549,6 +558,10 @@ void BPY_python_start(bContext *C, int argc, const char **argv)
 
 void BPY_python_end(const bool do_python_exit)
 {
+#ifndef WITH_PYTHON_MODULE
+  BLI_assert_msg(Py_IsInitialized() != 0, "Python must be initialized");
+#endif
+
   PyGILState_STATE gilstate;
 
   /* Finalizing, no need to grab the state, except when we are a module. */
@@ -590,7 +603,7 @@ void BPY_python_end(const bool do_python_exit)
 
 #ifdef TIME_PY_RUN
   /* Measure time since Python started. */
-  bpy_timer = PIL_check_seconds_timer() - bpy_timer;
+  bpy_timer = BLI_time_now_seconds() - bpy_timer;
 
   printf("*bpy stats* - ");
   printf("tot exec: %d,  ", bpy_timer_count);
@@ -609,6 +622,8 @@ void BPY_python_end(const bool do_python_exit)
 
 void BPY_python_reset(bContext *C)
 {
+  BLI_assert_msg(Py_IsInitialized() != 0, "Python must be initialized");
+
   /* Unrelated security stuff. */
   G.f &= ~(G_FLAG_SCRIPT_AUTOEXEC_FAIL | G_FLAG_SCRIPT_AUTOEXEC_FAIL_QUIET);
   G.autoexec_fail[0] = '\0';
@@ -622,6 +637,11 @@ void BPY_python_use_system_env()
 {
   BLI_assert(!Py_IsInitialized());
   py_use_system_env = true;
+}
+
+bool BPY_python_use_system_env_get()
+{
+  return py_use_system_env;
 }
 
 void BPY_python_backtrace(FILE *fp)
@@ -688,7 +708,7 @@ void BPY_modules_load_user(bContext *C)
       if (!(G.f & G_FLAG_SCRIPT_AUTOEXEC)) {
         if (!(G.f & G_FLAG_SCRIPT_AUTOEXEC_FAIL_QUIET)) {
           G.f |= G_FLAG_SCRIPT_AUTOEXEC_FAIL;
-          SNPRINTF(G.autoexec_fail, "Text '%s'", text->id.name + 2);
+          SNPRINTF(G.autoexec_fail, RPT_("Text '%s'"), text->id.name + 2);
 
           printf("scripts disabled for \"%s\", skipping '%s'\n",
                  BKE_main_blendfile_path(bmain),
@@ -754,12 +774,6 @@ int BPY_context_member_get(bContext *C, const char *member, bContextDataResult *
         PyObject *list_item = seq_fast_items[i];
 
         if (BPy_StructRNA_Check(list_item)) {
-#if 0
-          CollectionPointerLink *link = MEM_callocN(sizeof(CollectionPointerLink),
-                                                    "bpy_context_get");
-          link->ptr = ((BPy_StructRNA *)item)->ptr;
-          BLI_addtail(&result->list, link);
-#endif
           ptr = &(((BPy_StructRNA *)list_item)->ptr);
           CTX_data_list_add_ptr(result, ptr);
         }
@@ -855,25 +869,11 @@ static void bpy_module_delay_init(PyObject *bpy_proxy)
  */
 static bool bpy_module_ensure_compatible_version()
 {
-/* First check the Python version used matches the major version that Blender was built with.
- * While this isn't essential, the error message in this case may be cryptic and misleading.
- * NOTE: using `Py_LIMITED_API` would remove the need for this, in practice it's
- * unlikely Blender will ever used the limited API though. */
-#  if PY_VERSION_HEX >= 0x030b0000 /* Python 3.11 & newer. */
+  /* First check the Python version used matches the major version that Blender was built with.
+   * While this isn't essential, the error message in this case may be cryptic and misleading.
+   * NOTE: using `Py_LIMITED_API` would remove the need for this, in practice it's
+   * unlikely Blender will ever used the limited API though. */
   const uint version_runtime = Py_Version;
-#  else
-  uint version_runtime;
-  {
-    uint version_runtime_major = 0, version_runtime_minor = 0;
-    const char *version_str = Py_GetVersion();
-    if (sscanf(version_str, "%u.%u.", &version_runtime_major, &version_runtime_minor) != 2) {
-      /* Should never happen, raise an error to ensure this check never fails silently. */
-      PyErr_Format(PyExc_ImportError, "Failed to extract the version from \"%s\"", version_str);
-      return false;
-    }
-    version_runtime = (version_runtime_major << 24) | (version_runtime_minor << 16);
-  }
-#  endif
 
   uint version_compile_major = PY_VERSION_HEX >> 24;
   uint version_compile_minor = ((PY_VERSION_HEX & 0x00ff0000) >> 16);

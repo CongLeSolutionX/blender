@@ -14,8 +14,9 @@
 #include "BLI_math_quaternion.hh"
 #include "BLI_math_vector.h"
 #include "BLI_math_vector.hh"
+#include "BLI_offset_indices.hh"
 
-#include "BKE_customdata.hh"
+#include "BKE_attribute.hh"
 
 namespace blender::bke::attribute_math {
 
@@ -34,7 +35,8 @@ inline void convert_to_static_type(const CPPType &cpp_type, const Func &func)
                               int8_t,
                               ColorGeometry4f,
                               ColorGeometry4b,
-                              math::Quaternion>([&](auto type_tag) {
+                              math::Quaternion,
+                              float4x4>([&](auto type_tag) {
     using T = typename decltype(type_tag)::type;
     if constexpr (std::is_same_v<T, void>) {
       /* It's expected that the given cpp type is one of the supported ones. */
@@ -516,6 +518,26 @@ class ColorGeometry4bMixer {
   void finalize(const IndexMask &mask);
 };
 
+class float4x4Mixer {
+ private:
+  MutableSpan<float4x4> buffer_;
+  Array<float> total_weights_;
+  Array<float3> location_buffer_;
+  Array<float3> expmap_buffer_;
+  Array<float3> scale_buffer_;
+
+ public:
+  float4x4Mixer(MutableSpan<float4x4> buffer);
+  /**
+   * \param mask: Only initialize these indices. Other indices in the buffer will be invalid.
+   */
+  float4x4Mixer(MutableSpan<float4x4> buffer, const IndexMask &mask);
+  void set(int64_t index, const float4x4 &value, float weight = 1.0f);
+  void mix_in(int64_t index, const float4x4 &value, float weight = 1.0f);
+  void finalize();
+  void finalize(const IndexMask &mask);
+};
+
 template<typename T> struct DefaultMixerStruct {
   /* Use void by default. This can be checked for in `if constexpr` statements. */
   using type = void;
@@ -536,6 +558,9 @@ template<> struct DefaultMixerStruct<ColorGeometry4f> {
 };
 template<> struct DefaultMixerStruct<ColorGeometry4b> {
   using type = ColorGeometry4bMixer;
+};
+template<> struct DefaultMixerStruct<float4x4> {
+  using type = float4x4Mixer;
 };
 template<> struct DefaultMixerStruct<int> {
   static double int_to_double(const int &value)
@@ -634,6 +659,15 @@ template<typename T> using DefaultMixer = typename DefaultMixerStruct<T>::type;
 
 void gather(GSpan src, Span<int> map, GMutableSpan dst);
 void gather(const GVArray &src, Span<int> map, GMutableSpan dst);
+void gather_group_to_group(OffsetIndices<int> src_offsets,
+                           OffsetIndices<int> dst_offsets,
+                           const IndexMask &selection,
+                           GSpan src,
+                           GMutableSpan dst);
+void gather_to_groups(OffsetIndices<int> dst_offsets,
+                      const IndexMask &src_selection,
+                      GSpan src,
+                      GMutableSpan dst);
 
 /** \} */
 

@@ -174,6 +174,7 @@
 #  define UNIFORM_SSBO_INDEX_MODE_U16_STR "uniform_ssbo_index_mode_u16"
 #  define UNIFORM_SSBO_INPUT_PRIM_TYPE_STR "uniform_ssbo_input_prim_type"
 #  define UNIFORM_SSBO_INPUT_VERT_COUNT_STR "uniform_ssbo_input_vert_count"
+#  define UNIFORM_SSBO_INDEX_BASE_STR "uniform_ssbo_index_base_"
 /* Per-attribute. */
 #  define UNIFORM_SSBO_OFFSET_STR "uniform_ssbo_offset_"
 #  define UNIFORM_SSBO_STRIDE_STR "uniform_ssbo_stride_"
@@ -186,6 +187,7 @@
 #  define UNIFORM_SSBO_INDEX_MODE_U16_STR "_mu"
 #  define UNIFORM_SSBO_INPUT_PRIM_TYPE_STR "_pt"
 #  define UNIFORM_SSBO_INPUT_VERT_COUNT_STR "_vc"
+#  define UNIFORM_SSBO_INDEX_BASE_STR "_ib"
 /* Per-attribute. */
 #  define UNIFORM_SSBO_OFFSET_STR "_so"
 #  define UNIFORM_SSBO_STRIDE_STR "_ss"
@@ -218,6 +220,15 @@ struct MSLUniform {
   }
 };
 
+struct MSLConstant {
+  shader::Type type;
+  std::string name;
+
+  MSLConstant(shader::Type const_type, std::string const_name) : type(const_type), name(const_name)
+  {
+  }
+};
+
 struct MSLBufferBlock {
   std::string type_name;
   std::string name;
@@ -227,6 +238,8 @@ struct MSLBufferBlock {
   uint slot;
   uint location;
   shader::Qualifier qualifiers;
+  /* Flag for use with texture atomic fallback. */
+  bool is_texture_buffer = false;
 
   bool operator==(const MSLBufferBlock &right) const
   {
@@ -253,6 +266,9 @@ struct MSLTextureResource {
   uint slot;
   /* Explicit bind index provided by ShaderCreateInfo. */
   uint location;
+
+  /* Atomic fallback buffer information. */
+  int atomic_fallback_buffer_ssbo_id = -1;
 
   eGPUTextureType get_texture_binding_type() const;
   eGPUSamplerFormat get_sampler_format() const;
@@ -396,8 +412,11 @@ class MSLGeneratorInterface {
   blender::Vector<MSLTextureResource> texture_samplers;
   blender::Vector<MSLVertexInputAttribute> vertex_input_attributes;
   blender::Vector<MSLVertexOutputAttribute> vertex_output_varyings;
+  /* Specialization Constants. */
+  blender::Vector<MSLConstant> constants;
   /* Fragment tile inputs. */
   blender::Vector<MSLFragmentTileInputAttribute> fragment_tile_inputs;
+  bool supports_native_tile_inputs;
   /* Should match vertex outputs, but defined separately as
    * some shader permutations will not utilize all inputs/outputs.
    * Final shader uses the intersection between the two sets. */
@@ -429,6 +448,7 @@ class MSLGeneratorInterface {
   bool uses_gl_PrimitiveID;
   /* Sets the output render target array index when using multilayered rendering. */
   bool uses_gl_FragDepth;
+  bool uses_gl_FragStencilRefARB;
   bool uses_gpu_layer;
   bool uses_gpu_viewport_index;
   bool uses_transform_feedback;
@@ -476,7 +496,7 @@ class MSLGeneratorInterface {
    * vertex lookup throughout the bound VBOs.
    *
    * Some parameters are global for the shader, others change with the currently bound
-   * VertexBuffers, and their format, as they do with regular GPUBatch's.
+   * VertexBuffers, and their format, as they do with regular gpu::Batch's.
    *
    * (Where ##attr is the attributes name)
    *  uniform_ssbo_stride_##attr  -- Representing the stride between elements of attribute(attr)
@@ -532,7 +552,8 @@ class MSLGeneratorInterface {
   void resolve_fragment_output_locations();
 
   /* Create shader interface for converted GLSL shader. */
-  MTLShaderInterface *bake_shader_interface(const char *name);
+  MTLShaderInterface *bake_shader_interface(const char *name,
+                                            const shader::ShaderCreateInfo *info = nullptr);
 
   /* Fetch combined shader source header. */
   char *msl_patch_default_get();

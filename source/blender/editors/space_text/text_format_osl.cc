@@ -4,6 +4,9 @@
 
 /** \file
  * \ingroup sptext
+ *
+ * Note that this formatter shares core logic with `text_format_glsl.cc`,
+ * improvements here may apply there too.
  */
 
 #include <cstring>
@@ -26,7 +29,7 @@
  * list is from
  * https://github.com/imageworks/OpenShadingLanguage/raw/master/src/doc/osl-languagespec.pdf
  */
-static const char *text_format_osl_literals_builtinfunc_data[]{
+static const char *text_format_osl_literals_builtinfunc_data[] = {
     /* Force single column, sorted list. */
     /* clang-format off */
     "break",
@@ -64,7 +67,7 @@ static const Span<const char *> text_format_osl_literals_builtinfunc(
  * See:
  * https://github.com/imageworks/OpenShadingLanguage/raw/master/src/doc/osl-languagespec.pdf
  */
-static const char *text_format_osl_literals_reserved_data[]{
+static const char *text_format_osl_literals_reserved_data[] = {
     /* Force single column, sorted list. */
     /* clang-format off */
     "bool",
@@ -109,7 +112,7 @@ static const Span<const char *> text_format_osl_literals_reserved(
     text_format_osl_literals_reserved_data, ARRAY_SIZE(text_format_osl_literals_reserved_data));
 
 /* OSL shader types */
-static const char *text_format_osl_literals_specialvar_data[]{
+static const char *text_format_osl_literals_specialvar_data[] = {
     /* Force single column, sorted list. */
     /* clang-format off */
     "displacement",

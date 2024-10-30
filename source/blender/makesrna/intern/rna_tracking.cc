@@ -15,12 +15,12 @@
 #include "BKE_node_tree_update.hh"
 #include "BKE_tracking.h"
 
-#include "BLT_translation.h"
+#include "BLT_translation.hh"
 
 #include "RNA_access.hh"
 #include "RNA_define.hh"
 
-#include "rna_internal.h"
+#include "rna_internal.hh"
 
 #include "DNA_defaults.h"
 #include "DNA_movieclip_types.h"
@@ -35,20 +35,25 @@
 
 #  include "BLI_math_vector.h"
 
-#  include "BKE_anim_data.h"
+#  include "BKE_anim_data.hh"
 #  include "BKE_animsys.h"
-#  include "BKE_node.h"
-#  include "BKE_report.h"
+#  include "BKE_node.hh"
+#  include "BKE_report.hh"
 
 #  include "DEG_depsgraph.hh"
 
-#  include "IMB_imbuf.h"
+#  include "IMB_imbuf.hh"
 
 #  include "WM_api.hh"
 
-static char *rna_tracking_path(const PointerRNA * /*ptr*/)
+static std::optional<std::string> rna_tracking_path(const PointerRNA * /*ptr*/)
 {
-  return BLI_strdup("tracking");
+  return "tracking";
+}
+
+static std::optional<std::string> rna_trackingSettings_path(const PointerRNA * /*ptr*/)
+{
+  return "tracking.settings";
 }
 
 static void rna_tracking_defaultSettings_patternUpdate(Main * /*bmain*/,
@@ -77,14 +82,14 @@ static void rna_tracking_defaultSettings_searchUpdate(Main * /*bmain*/,
   }
 }
 
-static char *rna_trackingTrack_path(const PointerRNA *ptr)
+static std::optional<std::string> rna_trackingTrack_path(const PointerRNA *ptr)
 {
   MovieClip *clip = (MovieClip *)ptr->owner_id;
   MovieTrackingTrack *track = (MovieTrackingTrack *)ptr->data;
   /* Escaped object name, escaped track name, rest of the path. */
   char rna_path[MAX_NAME * 4 + 64];
   BKE_tracking_get_rna_path_for_track(&clip->tracking, track, rna_path, sizeof(rna_path));
-  return BLI_strdup(rna_path);
+  return rna_path;
 }
 
 static void rna_trackingTracks_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)
@@ -333,7 +338,7 @@ static void rna_trackingPlaneMarker_frame_set(PointerRNA *ptr, int value)
   }
 }
 
-static char *rna_trackingPlaneTrack_path(const PointerRNA *ptr)
+static std::optional<std::string> rna_trackingPlaneTrack_path(const PointerRNA *ptr)
 {
   MovieClip *clip = (MovieClip *)ptr->owner_id;
   MovieTrackingPlaneTrack *plane_track = (MovieTrackingPlaneTrack *)ptr->data;
@@ -341,7 +346,7 @@ static char *rna_trackingPlaneTrack_path(const PointerRNA *ptr)
   char rna_path[MAX_NAME * 4 + 64];
   BKE_tracking_get_rna_path_for_plane_track(
       &clip->tracking, plane_track, rna_path, sizeof(rna_path));
-  return BLI_strdup(rna_path);
+  return rna_path;
 }
 
 static void rna_trackingPlaneTrack_name_set(PointerRNA *ptr, const char *value)
@@ -367,9 +372,9 @@ static void rna_trackingPlaneTrack_name_set(PointerRNA *ptr, const char *value)
   }
 }
 
-static char *rna_trackingCamera_path(const PointerRNA * /*ptr*/)
+static std::optional<std::string> rna_trackingCamera_path(const PointerRNA * /*ptr*/)
 {
-  return BLI_strdup("tracking.camera");
+  return "tracking.camera";
 }
 
 static float rna_trackingCamera_focal_mm_get(PointerRNA *ptr)
@@ -413,31 +418,31 @@ static void rna_trackingCamera_principal_point_pixels_set(PointerRNA *ptr,
   BKE_tracking_camera_principal_point_pixel_set(clip, principal_point_pixels);
 }
 
-static char *rna_trackingStabilization_path(const PointerRNA * /*ptr*/)
+static std::optional<std::string> rna_trackingStabilization_path(const PointerRNA * /*ptr*/)
 {
-  return BLI_strdup("tracking.stabilization");
+  return "tracking.stabilization";
 }
 
-static int rna_track_2d_stabilization(CollectionPropertyIterator * /*iter*/, void *data)
+static bool rna_track_2d_stabilization(CollectionPropertyIterator * /*iter*/, void *data)
 {
   MovieTrackingTrack *track = (MovieTrackingTrack *)data;
 
   if ((track->flag & TRACK_USE_2D_STAB) == 0) {
-    return 1;
+    return true;
   }
 
-  return 0;
+  return false;
 }
 
-static int rna_track_2d_stabilization_rotation(CollectionPropertyIterator * /*iter*/, void *data)
+static bool rna_track_2d_stabilization_rotation(CollectionPropertyIterator * /*iter*/, void *data)
 {
   MovieTrackingTrack *track = (MovieTrackingTrack *)data;
 
   if ((track->flag & TRACK_USE_2D_STAB_ROT) == 0) {
-    return 1;
+    return true;
   }
 
-  return 0;
+  return false;
 }
 
 static void rna_tracking_stabTracks_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)
@@ -635,6 +640,11 @@ static void rna_tracking_markerPattern_boundbox_get(PointerRNA *ptr, float *valu
 
   copy_v2_v2(values, min);
   copy_v2_v2(values + 2, max);
+}
+
+static std::optional<std::string> rna_trackingDopesheet_path(const PointerRNA * /*ptr*/)
+{
+  return "tracking.dopesheet";
 }
 
 static void rna_trackingDopesheet_tagUpdate(Main * /*bmain*/, Scene * /*scene*/, PointerRNA *ptr)
@@ -921,6 +931,7 @@ static void rna_def_trackingSettings(BlenderRNA *brna)
   };
 
   srna = RNA_def_struct(brna, "MovieTrackingSettings", nullptr);
+  RNA_def_struct_path_func(srna, "rna_trackingSettings_path");
   RNA_def_struct_ui_text(srna, "Movie tracking settings", "Match moving settings");
 
   /* speed */
@@ -1584,7 +1595,7 @@ static void rna_def_trackingTrack(BlenderRNA *brna)
       prop, nullptr, "algorithm_flag", TRACK_ALGORITHM_FLAG_USE_NORMALIZATION);
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
   RNA_def_property_ui_text(
-      prop, "Normalize", "Normalize light intensities while tracking. Slower");
+      prop, "Normalize", "Normalize light intensities while tracking (Slower)");
   RNA_def_property_update(prop, NC_MOVIECLIP | ND_DISPLAY, nullptr);
 
   /* markers */
@@ -2101,7 +2112,7 @@ static void rna_def_trackingStabilization(BlenderRNA *brna)
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", TRACKING_SHOW_STAB_TRACKS);
   RNA_def_property_ui_text(
       prop, "Show Tracks", "Show UI list of tracks participating in stabilization");
-  RNA_def_property_ui_icon(prop, ICON_DISCLOSURE_TRI_RIGHT, 1);
+  RNA_def_property_ui_icon(prop, ICON_RIGHTARROW, 1);
 }
 
 static void rna_def_reconstructedCamera(BlenderRNA *brna)
@@ -2505,6 +2516,7 @@ static void rna_def_trackingDopesheet(BlenderRNA *brna)
   };
 
   srna = RNA_def_struct(brna, "MovieTrackingDopesheet", nullptr);
+  RNA_def_struct_path_func(srna, "rna_trackingDopesheet_path");
   RNA_def_struct_ui_text(srna, "Movie Tracking Dopesheet", "Match-moving dopesheet data");
 
   /* dopesheet sort */

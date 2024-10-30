@@ -10,7 +10,7 @@
 
 #include "DNA_material_types.h"
 
-#include "GPU_material.h"
+#include "GPU_material.hh"
 
 #include "COM_shader_node.hh"
 
@@ -58,7 +58,8 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
   const int weight = ELEM(params.other_socket().type, SOCK_RGBA) ? 0 : -1;
 
   for (const EnumPropertyItem *item = rna_enum_ramp_blend_items; item->identifier != nullptr;
-       item++) {
+       item++)
+  {
     if (item->name != nullptr && item->identifier[0] != '\0') {
       params.add_item(IFACE_(item->name), SocketSearchOp{"Image", item->value}, weight);
     }
@@ -174,7 +175,7 @@ void register_node_type_cmp_mix_rgb()
 {
   namespace file_ns = blender::nodes::node_composite_mixrgb_cc;
 
-  static bNodeType ntype;
+  static blender::bke::bNodeType ntype;
 
   cmp_node_type_base(&ntype, CMP_NODE_MIX_RGB, "Mix", NODE_CLASS_OP_COLOR);
   ntype.flag |= NODE_PREVIEW;
@@ -183,5 +184,5 @@ void register_node_type_cmp_mix_rgb()
   ntype.get_compositor_shader_node = file_ns::get_compositor_shader_node;
   ntype.gather_link_search_ops = file_ns::node_gather_link_searches;
 
-  nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }

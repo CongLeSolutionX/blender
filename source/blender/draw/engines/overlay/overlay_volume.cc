@@ -8,8 +8,8 @@
 
 #include "DNA_volume_types.h"
 
-#include "DRW_render.h"
-#include "GPU_shader.h"
+#include "DRW_render.hh"
+#include "GPU_shader.hh"
 
 #include "overlay_private.hh"
 
@@ -34,11 +34,12 @@ void OVERLAY_volume_cache_init(OVERLAY_Data *vedata)
 
 void OVERLAY_volume_cache_populate(OVERLAY_Data *vedata, Object *ob)
 {
+  using namespace blender::draw;
   OVERLAY_PrivateData *pd = vedata->stl->pd;
   const bool is_select = DRW_state_is_select();
 
   if (is_select) {
-    GPUBatch *geom = DRW_cache_volume_selection_surface_get(ob);
+    blender::gpu::Batch *geom = DRW_cache_volume_selection_surface_get(ob);
     if (geom != nullptr) {
       DRW_shgroup_call(pd->volume_selection_surface_grp, geom, ob);
     }

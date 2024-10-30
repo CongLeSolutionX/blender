@@ -14,7 +14,7 @@
 
 #include "BLI_string_utf8_symbols.h"
 
-#include "BLT_translation.h"
+#include "BLT_translation.hh"
 
 #include "DNA_dynamicpaint_types.h"
 #include "DNA_modifier_types.h"
@@ -25,7 +25,7 @@
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
 
-#include "rna_internal.h"
+#include "rna_internal.hh"
 
 #include "WM_types.hh"
 
@@ -37,33 +37,35 @@ const EnumPropertyItem rna_enum_prop_dynamicpaint_type_items[] = {
 
 #ifdef RNA_RUNTIME
 
+#  include <fmt/format.h>
+
 #  include "BKE_context.hh"
 #  include "BKE_particle.h"
 
 #  include "DEG_depsgraph.hh"
 #  include "DEG_depsgraph_build.hh"
 
-static char *rna_DynamicPaintCanvasSettings_path(const PointerRNA *ptr)
+static std::optional<std::string> rna_DynamicPaintCanvasSettings_path(const PointerRNA *ptr)
 {
   const DynamicPaintCanvasSettings *settings = (DynamicPaintCanvasSettings *)ptr->data;
   const ModifierData *md = (ModifierData *)settings->pmd;
   char name_esc[sizeof(md->name) * 2];
 
   BLI_str_escape(name_esc, md->name, sizeof(name_esc));
-  return BLI_sprintfN("modifiers[\"%s\"].canvas_settings", name_esc);
+  return fmt::format("modifiers[\"{}\"].canvas_settings", name_esc);
 }
 
-static char *rna_DynamicPaintBrushSettings_path(const PointerRNA *ptr)
+static std::optional<std::string> rna_DynamicPaintBrushSettings_path(const PointerRNA *ptr)
 {
   const DynamicPaintBrushSettings *settings = (DynamicPaintBrushSettings *)ptr->data;
   const ModifierData *md = (ModifierData *)settings->pmd;
   char name_esc[sizeof(md->name) * 2];
 
   BLI_str_escape(name_esc, md->name, sizeof(name_esc));
-  return BLI_sprintfN("modifiers[\"%s\"].brush_settings", name_esc);
+  return fmt::format("modifiers[\"{}\"].brush_settings", name_esc);
 }
 
-static char *rna_DynamicPaintSurface_path(const PointerRNA *ptr)
+static std::optional<std::string> rna_DynamicPaintSurface_path(const PointerRNA *ptr)
 {
   const DynamicPaintSurface *surface = (DynamicPaintSurface *)ptr->data;
   const ModifierData *md = (ModifierData *)surface->canvas->pmd;
@@ -72,8 +74,8 @@ static char *rna_DynamicPaintSurface_path(const PointerRNA *ptr)
 
   BLI_str_escape(name_esc, md->name, sizeof(name_esc));
   BLI_str_escape(name_esc_surface, surface->name, sizeof(name_esc_surface));
-  return BLI_sprintfN(
-      "modifiers[\"%s\"].canvas_settings.canvas_surfaces[\"%s\"]", name_esc, name_esc_surface);
+  return fmt::format(
+      "modifiers[\"{}\"].canvas_settings.canvas_surfaces[\"{}\"]", name_esc, name_esc_surface);
 }
 
 /*
@@ -126,7 +128,13 @@ static void rna_DynamicPaintSurfaces_changeFormat(Main *bmain, Scene *scene, Poi
 {
   DynamicPaintSurface *surface = (DynamicPaintSurface *)ptr->data;
 
-  surface->type = MOD_DPAINT_SURFACE_T_PAINT;
+  /* Only #MOD_DPAINT_SURFACE_F_VERTEX supports #MOD_DPAINT_SURFACE_T_WEIGHT. */
+  if (surface->format == MOD_DPAINT_SURFACE_F_IMAGESEQ &&
+      surface->type == MOD_DPAINT_SURFACE_T_WEIGHT)
+  {
+    surface->type = MOD_DPAINT_SURFACE_T_PAINT;
+  }
+
   dynamicPaintSurface_updateType((DynamicPaintSurface *)ptr->data);
   rna_DynamicPaintSurface_reset(bmain, scene, ptr);
 }
@@ -401,6 +409,7 @@ static void rna_def_canvas_surface(BlenderRNA *brna)
   prop = RNA_def_property(srna, "use_dissolve", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flags", MOD_DPAINT_DISSOLVE);
   RNA_def_property_ui_text(prop, "Dissolve", "Enable to make surface changes disappear over time");
+  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_SIMULATION);
 
   prop = RNA_def_property(srna, "dissolve_speed", PROP_INT, PROP_TIME);
   RNA_def_property_int_sdna(prop, nullptr, "diss_speed");

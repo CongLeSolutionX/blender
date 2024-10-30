@@ -55,14 +55,6 @@ class GHOST_System : public GHOST_ISystem {
    ***************************************************************************************/
 
   /**
-   * Returns the system time.
-   * Returns the number of milliseconds since the start of the system process.
-   * Based on ANSI clock() routine.
-   * \return The number of milliseconds.
-   */
-  virtual uint64_t getMilliSeconds() const;
-
-  /**
    * Installs a timer.
    *
    * \note On most operating systems, messages need to be processed in order
@@ -254,7 +246,7 @@ class GHOST_System : public GHOST_ISystem {
    * \param api: Enum indicating which API to use.
    */
   virtual void setTabletAPI(GHOST_TTabletAPI api);
-  GHOST_TTabletAPI getTabletAPI(void);
+  GHOST_TTabletAPI getTabletAPI();
 
   /**
    * Get the color of the pixel at the current mouse cursor location
@@ -340,7 +332,7 @@ class GHOST_System : public GHOST_ISystem {
   /**
    * Returns GHOST_kSuccess if the clipboard contains an image.
    */
-  GHOST_TSuccess hasClipboardImage(void) const;
+  GHOST_TSuccess hasClipboardImage() const;
 
   /**
    * Get image data from the Clipboard

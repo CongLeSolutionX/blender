@@ -5,15 +5,16 @@
 #include <memory>
 #include <unordered_map>
 
+#include "testing/testing.h"
+
 #include "BLI_exception_safety_test_utils.hh"
 #include "BLI_map.hh"
 #include "BLI_rand.h"
 #include "BLI_set.hh"
-#include "BLI_strict_flags.h"
 #include "BLI_timeit.hh"
 #include "BLI_vector.hh"
 
-#include "testing/testing.h"
+#include "BLI_strict_flags.h" /* Keep last. */
 
 namespace blender::tests {
 
@@ -692,6 +693,22 @@ TEST(map, VectorKey)
 
   map.remove_as(Vector<int>({1, 2, 3}).as_mutable_span());
   EXPECT_EQ(map.size(), 1);
+}
+
+TEST(map, Equality)
+{
+  Map<int, int> a;
+  Map<int, int> b;
+
+  EXPECT_EQ(a, b);
+  a.add(3, 4);
+  EXPECT_NE(a, b);
+  b.add(3, 4);
+  EXPECT_EQ(a, b);
+
+  a.add(4, 10);
+  b.add(4, 11);
+  EXPECT_NE(a, b);
 }
 
 /**

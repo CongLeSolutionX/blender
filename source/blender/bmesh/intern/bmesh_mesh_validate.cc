@@ -9,22 +9,29 @@
  */
 
 /* debug builds only */
-#ifdef DEBUG
+#ifndef NDEBUG
 
 #  include "BLI_map.hh"
 #  include "BLI_ordered_edge.hh"
 #  include "BLI_set.hh"
 #  include "BLI_utildefines.h"
 
-#  include "bmesh.h"
+#  include "bmesh.hh"
 
-#  include "bmesh_mesh_validate.h"
+#  include "bmesh_mesh_validate.hh"
 
 /* macro which inserts the function name */
 #  if defined __GNUC__
 #    define ERRMSG(format, args...) \
       { \
         fprintf(stderr, "%s: " format ", " AT "\n", __func__, ##args); \
+        errtot++; \
+      } \
+      (void)0
+#  elif defined(_MSVC_TRADITIONAL) && !_MSVC_TRADITIONAL
+#    define ERRMSG(format, ...) \
+      { \
+        fprintf(stderr, "%s: " format ", " AT "\n", __func__, ##__VA_ARGS__); \
         errtot++; \
       } \
       (void)0
@@ -42,7 +49,7 @@ template<> struct blender::DefaultHash<blender::Set<const BMVert *>> {
   {
     uint64_t hash = 0;
     for (const BMVert *vert : value) {
-      hash = get_default_hash_2(hash, vert);
+      hash = get_default_hash(hash, vert);
     }
     return hash;
   }

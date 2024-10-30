@@ -8,7 +8,10 @@
 #include <cmath>
 #include <cstdint>
 
+#include "BLI_math_base.hh"
 #include "BLI_math_base_safe.h"
+#include "BLI_math_matrix_types.hh"
+#include "BLI_math_numbers.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_noise.hh"
 #include "BLI_utildefines.h"
@@ -148,6 +151,11 @@ uint32_t hash_float(float4 k)
   return hash(float_as_uint(k.x), float_as_uint(k.y), float_as_uint(k.z), float_as_uint(k.w));
 }
 
+uint32_t hash_float(const float4x4 &k)
+{
+  return hash(hash_float(k.x), hash_float(k.y), hash_float(k.z), hash_float(k.w));
+}
+
 /* Hashing a number of uint32_t into a float in the range [0, 1]. */
 
 BLI_INLINE float uint_to_float_01(uint32_t k)
@@ -200,6 +208,18 @@ float hash_float_to_float(float4 k)
 float2 hash_float_to_float2(float2 k)
 {
   return float2(hash_float_to_float(k), hash_float_to_float(float3(k.x, k.y, 1.0)));
+}
+
+float2 hash_float_to_float2(float3 k)
+{
+  return float2(hash_float_to_float(float3(k.x, k.y, k.z)),
+                hash_float_to_float(float3(k.z, k.x, k.y)));
+}
+
+float2 hash_float_to_float2(float4 k)
+{
+  return float2(hash_float_to_float(float4(k.x, k.y, k.z, k.w)),
+                hash_float_to_float(float4(k.z, k.x, k.w, k.y)));
 }
 
 float3 hash_float_to_float3(float k)
@@ -490,21 +510,50 @@ BLI_INLINE float perlin_noise(float4 position)
 
 float perlin_signed(float position)
 {
+  float precision_correction = 0.5f * float(math::abs(position) >= 1000000.0f);
+  /* Repeat Perlin noise texture every 100000.0 on each axis to prevent floating point
+   * representation issues. */
+  position = math::mod(position, 100000.0f) + precision_correction;
+
   return perlin_noise(position) * 0.2500f;
 }
 
 float perlin_signed(float2 position)
 {
+  float2 precision_correction = 0.5f * float2(float(math::abs(position.x) >= 1000000.0f),
+                                              float(math::abs(position.y) >= 1000000.0f));
+  /* Repeat Perlin noise texture every 100000.0f on each axis to prevent floating point
+   * representation issues. This causes discontinuities every 100000.0f, however at such scales
+   * this usually shouldn't be noticeable. */
+  position = math::mod(position, 100000.0f) + precision_correction;
+
   return perlin_noise(position) * 0.6616f;
 }
 
 float perlin_signed(float3 position)
 {
+  float3 precision_correction = 0.5f * float3(float(math::abs(position.x) >= 1000000.0f),
+                                              float(math::abs(position.y) >= 1000000.0f),
+                                              float(math::abs(position.z) >= 1000000.0f));
+  /* Repeat Perlin noise texture every 100000.0f on each axis to prevent floating point
+   * representation issues. This causes discontinuities every 100000.0f, however at such scales
+   * this usually shouldn't be noticeable. */
+  position = math::mod(position, 100000.0f) + precision_correction;
+
   return perlin_noise(position) * 0.9820f;
 }
 
 float perlin_signed(float4 position)
 {
+  float4 precision_correction = 0.5f * float4(float(math::abs(position.x) >= 1000000.0f),
+                                              float(math::abs(position.y) >= 1000000.0f),
+                                              float(math::abs(position.z) >= 1000000.0f),
+                                              float(math::abs(position.w) >= 1000000.0f));
+  /* Repeat Perlin noise texture every 100000.0f on each axis to prevent floating point
+   * representation issues. This causes discontinuities every 100000.0f, however at such scales
+   * this usually shouldn't be noticeable. */
+  position = math::mod(position, 100000.0f) + precision_correction;
+
   return perlin_noise(position) * 0.8344f;
 }
 
@@ -530,59 +579,190 @@ float perlin(float4 position)
   return perlin_signed(position) / 2.0f + 0.5f;
 }
 
-/* Positive fractal perlin noise. */
+/* Fractal perlin noise. */
 
+/* fBM = Fractal Brownian Motion */
 template<typename T>
-float perlin_fractal_template(
-    T position, float octaves, float roughness, float lacunarity, bool normalize)
+float perlin_fbm(
+    T p, const float detail, const float roughness, const float lacunarity, const bool normalize)
 {
   float fscale = 1.0f;
   float amp = 1.0f;
   float maxamp = 0.0f;
   float sum = 0.0f;
-  octaves = CLAMPIS(octaves, 0.0f, 15.0f);
-  int n = int(octaves);
-  for (int i = 0; i <= n; i++) {
-    float t = perlin_signed(fscale * position);
+
+  for (int i = 0; i <= int(detail); i++) {
+    float t = perlin_signed(fscale * p);
     sum += t * amp;
     maxamp += amp;
-    amp *= CLAMPIS(roughness, 0.0f, 1.0f);
+    amp *= roughness;
     fscale *= lacunarity;
   }
-  float rmd = octaves - std::floor(octaves);
+  float rmd = detail - std::floor(detail);
   if (rmd != 0.0f) {
-    float t = perlin_signed(fscale * position);
+    float t = perlin_signed(fscale * p);
     float sum2 = sum + t * amp;
     return normalize ? mix(0.5f * sum / maxamp + 0.5f, 0.5f * sum2 / (maxamp + amp) + 0.5f, rmd) :
                        mix(sum, sum2, rmd);
   }
-  else {
-    return normalize ? 0.5f * sum / maxamp + 0.5f : sum;
+  return normalize ? 0.5f * sum / maxamp + 0.5f : sum;
+}
+
+/* Explicit instantiation for Wave Texture. */
+template float perlin_fbm<float3>(float3 p,
+                                  const float detail,
+                                  const float roughness,
+                                  const float lacunarity,
+                                  const bool normalize);
+
+template<typename T>
+float perlin_multi_fractal(T p, const float detail, const float roughness, const float lacunarity)
+{
+  float value = 1.0f;
+  float pwr = 1.0f;
+
+  for (int i = 0; i <= int(detail); i++) {
+    value *= (pwr * perlin_signed(p) + 1.0f);
+    pwr *= roughness;
+    p *= lacunarity;
   }
+
+  const float rmd = detail - floorf(detail);
+  if (rmd != 0.0f) {
+    value *= (rmd * pwr * perlin_signed(p) + 1.0f); /* correct? */
+  }
+
+  return value;
 }
 
-float perlin_fractal(
-    float position, float octaves, float roughness, float lacunarity, bool normalize)
+template<typename T>
+float perlin_hetero_terrain(
+    T p, const float detail, const float roughness, const float lacunarity, const float offset)
 {
-  return perlin_fractal_template(position, octaves, roughness, lacunarity, normalize);
+  float pwr = roughness;
+
+  /* First unscaled octave of function; later octaves are scaled. */
+  float value = offset + perlin_signed(p);
+  p *= lacunarity;
+
+  for (int i = 1; i <= int(detail); i++) {
+    float increment = (perlin_signed(p) + offset) * pwr * value;
+    value += increment;
+    pwr *= roughness;
+    p *= lacunarity;
+  }
+
+  const float rmd = detail - floorf(detail);
+  if (rmd != 0.0f) {
+    float increment = (perlin_signed(p) + offset) * pwr * value;
+    value += rmd * increment;
+  }
+
+  return value;
 }
 
-float perlin_fractal(
-    float2 position, float octaves, float roughness, float lacunarity, bool normalize)
+template<typename T>
+float perlin_hybrid_multi_fractal(T p,
+                                  const float detail,
+                                  const float roughness,
+                                  const float lacunarity,
+                                  const float offset,
+                                  const float gain)
 {
-  return perlin_fractal_template(position, octaves, roughness, lacunarity, normalize);
+  float pwr = 1.0f;
+  float value = 0.0f;
+  float weight = 1.0f;
+
+  for (int i = 0; (weight > 0.001f) && (i <= int(detail)); i++) {
+    if (weight > 1.0f) {
+      weight = 1.0f;
+    }
+
+    float signal = (perlin_signed(p) + offset) * pwr;
+    pwr *= roughness;
+    value += weight * signal;
+    weight *= gain * signal;
+    p *= lacunarity;
+  }
+
+  const float rmd = detail - floorf(detail);
+  if ((rmd != 0.0f) && (weight > 0.001f)) {
+    if (weight > 1.0f) {
+      weight = 1.0f;
+    }
+    float signal = (perlin_signed(p) + offset) * pwr;
+    value += rmd * weight * signal;
+  }
+
+  return value;
 }
 
-float perlin_fractal(
-    float3 position, float octaves, float roughness, float lacunarity, bool normalize)
+template<typename T>
+float perlin_ridged_multi_fractal(T p,
+                                  const float detail,
+                                  const float roughness,
+                                  const float lacunarity,
+                                  const float offset,
+                                  const float gain)
 {
-  return perlin_fractal_template(position, octaves, roughness, lacunarity, normalize);
+  float pwr = roughness;
+
+  float signal = offset - std::abs(perlin_signed(p));
+  signal *= signal;
+  float value = signal;
+  float weight = 1.0f;
+
+  for (int i = 1; i <= int(detail); i++) {
+    p *= lacunarity;
+    weight = std::clamp(signal * gain, 0.0f, 1.0f);
+    signal = offset - std::abs(perlin_signed(p));
+    signal *= signal;
+    signal *= weight;
+    value += signal * pwr;
+    pwr *= roughness;
+  }
+
+  return value;
 }
 
-float perlin_fractal(
-    float4 position, float octaves, float roughness, float lacunarity, bool normalize)
+enum {
+  NOISE_SHD_PERLIN_MULTIFRACTAL = 0,
+  NOISE_SHD_PERLIN_FBM = 1,
+  NOISE_SHD_PERLIN_HYBRID_MULTIFRACTAL = 2,
+  NOISE_SHD_PERLIN_RIDGED_MULTIFRACTAL = 3,
+  NOISE_SHD_PERLIN_HETERO_TERRAIN = 4,
+};
+
+template<typename T>
+float perlin_select(T p,
+                    float detail,
+                    float roughness,
+                    float lacunarity,
+                    float offset,
+                    float gain,
+                    int type,
+                    bool normalize)
 {
-  return perlin_fractal_template(position, octaves, roughness, lacunarity, normalize);
+  switch (type) {
+    case NOISE_SHD_PERLIN_MULTIFRACTAL: {
+      return perlin_multi_fractal<T>(p, detail, roughness, lacunarity);
+    }
+    case NOISE_SHD_PERLIN_FBM: {
+      return perlin_fbm<T>(p, detail, roughness, lacunarity, normalize);
+    }
+    case NOISE_SHD_PERLIN_HYBRID_MULTIFRACTAL: {
+      return perlin_hybrid_multi_fractal<T>(p, detail, roughness, lacunarity, offset, gain);
+    }
+    case NOISE_SHD_PERLIN_RIDGED_MULTIFRACTAL: {
+      return perlin_ridged_multi_fractal<T>(p, detail, roughness, lacunarity, offset, gain);
+    }
+    case NOISE_SHD_PERLIN_HETERO_TERRAIN: {
+      return perlin_hetero_terrain<T>(p, detail, roughness, lacunarity, offset);
+    }
+    default: {
+      return 0.0;
+    }
+  }
 }
 
 /* The following offset functions generate random offsets to be added to
@@ -646,746 +826,185 @@ BLI_INLINE float4 perlin_distortion(float4 position, float strength)
                 perlin_signed(position + random_float4_offset(3.0f)) * strength);
 }
 
-/* Positive distorted fractal perlin noise. */
+/* Distorted fractal perlin noise. */
 
-float perlin_fractal_distorted(float position,
-                               float octaves,
+template<typename T>
+float perlin_fractal_distorted(T position,
+                               float detail,
                                float roughness,
                                float lacunarity,
+                               float offset,
+                               float gain,
                                float distortion,
+                               int type,
                                bool normalize)
 {
   position += perlin_distortion(position, distortion);
-  return perlin_fractal(position, octaves, roughness, lacunarity, normalize);
+  return perlin_select<T>(position, detail, roughness, lacunarity, offset, gain, type, normalize);
 }
 
-float perlin_fractal_distorted(float2 position,
-                               float octaves,
-                               float roughness,
-                               float lacunarity,
-                               float distortion,
-                               bool normalize)
-{
-  position += perlin_distortion(position, distortion);
-  return perlin_fractal(position, octaves, roughness, lacunarity, normalize);
-}
+template float perlin_fractal_distorted<float>(float position,
+                                               float detail,
+                                               float roughness,
+                                               float lacunarity,
+                                               float offset,
+                                               float gain,
+                                               float distortion,
+                                               int type,
+                                               bool normalize);
+template float perlin_fractal_distorted<float2>(float2 position,
+                                                float detail,
+                                                float roughness,
+                                                float lacunarity,
+                                                float offset,
+                                                float gain,
+                                                float distortion,
+                                                int type,
+                                                bool normalize);
+template float perlin_fractal_distorted<float3>(float3 position,
+                                                float detail,
+                                                float roughness,
+                                                float lacunarity,
+                                                float offset,
+                                                float gain,
+                                                float distortion,
+                                                int type,
+                                                bool normalize);
+template float perlin_fractal_distorted<float4>(float4 position,
+                                                float detail,
+                                                float roughness,
+                                                float lacunarity,
+                                                float offset,
+                                                float gain,
+                                                float distortion,
+                                                int type,
+                                                bool normalize);
 
-float perlin_fractal_distorted(float3 position,
-                               float octaves,
-                               float roughness,
-                               float lacunarity,
-                               float distortion,
-                               bool normalize)
-{
-  position += perlin_distortion(position, distortion);
-  return perlin_fractal(position, octaves, roughness, lacunarity, normalize);
-}
-
-float perlin_fractal_distorted(float4 position,
-                               float octaves,
-                               float roughness,
-                               float lacunarity,
-                               float distortion,
-                               bool normalize)
-{
-  position += perlin_distortion(position, distortion);
-  return perlin_fractal(position, octaves, roughness, lacunarity, normalize);
-}
-
-/* Positive distorted fractal perlin noise that outputs a float3. The arbitrary seeds are for
+/* Distorted fractal perlin noise that outputs a float3. The arbitrary seeds are for
  * compatibility with shading functions. */
 
 float3 perlin_float3_fractal_distorted(float position,
-                                       float octaves,
+                                       float detail,
                                        float roughness,
                                        float lacunarity,
+                                       float offset,
+                                       float gain,
                                        float distortion,
+                                       int type,
                                        bool normalize)
 {
   position += perlin_distortion(position, distortion);
   return float3(
-      perlin_fractal(position, octaves, roughness, lacunarity, normalize),
-      perlin_fractal(
-          position + random_float_offset(1.0f), octaves, roughness, lacunarity, normalize),
-      perlin_fractal(
-          position + random_float_offset(2.0f), octaves, roughness, lacunarity, normalize));
+      perlin_select<float>(position, detail, roughness, lacunarity, offset, gain, type, normalize),
+      perlin_select<float>(position + random_float_offset(1.0f),
+                           detail,
+                           roughness,
+                           lacunarity,
+                           offset,
+                           gain,
+                           type,
+                           normalize),
+      perlin_select<float>(position + random_float_offset(2.0f),
+                           detail,
+                           roughness,
+                           lacunarity,
+                           offset,
+                           gain,
+                           type,
+                           normalize));
 }
 
 float3 perlin_float3_fractal_distorted(float2 position,
-                                       float octaves,
+                                       float detail,
                                        float roughness,
                                        float lacunarity,
+                                       float offset,
+                                       float gain,
                                        float distortion,
+                                       int type,
                                        bool normalize)
 {
   position += perlin_distortion(position, distortion);
-  return float3(
-      perlin_fractal(position, octaves, roughness, lacunarity, normalize),
-      perlin_fractal(
-          position + random_float2_offset(2.0f), octaves, roughness, lacunarity, normalize),
-      perlin_fractal(
-          position + random_float2_offset(3.0f), octaves, roughness, lacunarity, normalize));
+  return float3(perlin_select<float2>(
+                    position, detail, roughness, lacunarity, offset, gain, type, normalize),
+                perlin_select<float2>(position + random_float2_offset(2.0f),
+                                      detail,
+                                      roughness,
+                                      lacunarity,
+                                      offset,
+                                      gain,
+                                      type,
+                                      normalize),
+                perlin_select<float2>(position + random_float2_offset(3.0f),
+                                      detail,
+                                      roughness,
+                                      lacunarity,
+                                      offset,
+                                      gain,
+                                      type,
+                                      normalize));
 }
 
 float3 perlin_float3_fractal_distorted(float3 position,
-                                       float octaves,
+                                       float detail,
                                        float roughness,
                                        float lacunarity,
+                                       float offset,
+                                       float gain,
                                        float distortion,
+                                       int type,
                                        bool normalize)
 {
   position += perlin_distortion(position, distortion);
-  return float3(
-      perlin_fractal(position, octaves, roughness, lacunarity, normalize),
-      perlin_fractal(
-          position + random_float3_offset(3.0f), octaves, roughness, lacunarity, normalize),
-      perlin_fractal(
-          position + random_float3_offset(4.0f), octaves, roughness, lacunarity, normalize));
+  return float3(perlin_select<float3>(
+                    position, detail, roughness, lacunarity, offset, gain, type, normalize),
+                perlin_select<float3>(position + random_float3_offset(3.0f),
+                                      detail,
+                                      roughness,
+                                      lacunarity,
+                                      offset,
+                                      gain,
+                                      type,
+                                      normalize),
+                perlin_select<float3>(position + random_float3_offset(4.0f),
+                                      detail,
+                                      roughness,
+                                      lacunarity,
+                                      offset,
+                                      gain,
+                                      type,
+                                      normalize));
 }
 
 float3 perlin_float3_fractal_distorted(float4 position,
-                                       float octaves,
+                                       float detail,
                                        float roughness,
                                        float lacunarity,
+                                       float offset,
+                                       float gain,
                                        float distortion,
+                                       int type,
                                        bool normalize)
 {
   position += perlin_distortion(position, distortion);
-  return float3(
-      perlin_fractal(position, octaves, roughness, lacunarity, normalize),
-      perlin_fractal(
-          position + random_float4_offset(4.0f), octaves, roughness, lacunarity, normalize),
-      perlin_fractal(
-          position + random_float4_offset(5.0f), octaves, roughness, lacunarity, normalize));
-}
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
-/** \name Musgrave Noise
- * \{ */
-
-float musgrave_fBm(const float co,
-                   const float H,
-                   const float lacunarity,
-                   const float octaves_unclamped)
-{
-  /* From "Texturing and Modelling: A procedural approach". */
-
-  float p = co;
-  float value = 0.0f;
-  float pwr = 1.0f;
-  const float pwHL = std::pow(lacunarity, -H);
-  const float octaves = CLAMPIS(octaves_unclamped, 0.0f, 15.0f);
-
-  for (int i = 0; i < int(octaves); i++) {
-    value += perlin_signed(p) * pwr;
-    pwr *= pwHL;
-    p *= lacunarity;
-  }
-
-  float rmd = octaves - floorf(octaves);
-  if (rmd != 0.0f) {
-    value += rmd * perlin_signed(p) * pwr;
-  }
-
-  return value;
-}
-
-float musgrave_multi_fractal(const float co,
-                             const float H,
-                             const float lacunarity,
-                             const float octaves_unclamped)
-{
-  float p = co;
-  float value = 1.0f;
-  float pwr = 1.0f;
-  const float pwHL = std::pow(lacunarity, -H);
-  const float octaves = CLAMPIS(octaves_unclamped, 0.0f, 15.0f);
-
-  for (int i = 0; i < int(octaves); i++) {
-    value *= (pwr * perlin_signed(p) + 1.0f);
-    pwr *= pwHL;
-    p *= lacunarity;
-  }
-
-  const float rmd = octaves - floorf(octaves);
-  if (rmd != 0.0f) {
-    value *= (rmd * pwr * perlin_signed(p) + 1.0f); /* correct? */
-  }
-
-  return value;
-}
-
-float musgrave_hetero_terrain(const float co,
-                              const float H,
-                              const float lacunarity,
-                              const float octaves_unclamped,
-                              const float offset)
-{
-  float p = co;
-  const float pwHL = std::pow(lacunarity, -H);
-  float pwr = pwHL;
-  const float octaves = CLAMPIS(octaves_unclamped, 0.0f, 15.0f);
-
-  /* First unscaled octave of function; later octaves are scaled. */
-  float value = offset + perlin_signed(p);
-  p *= lacunarity;
-
-  for (int i = 1; i < int(octaves); i++) {
-    float increment = (perlin_signed(p) + offset) * pwr * value;
-    value += increment;
-    pwr *= pwHL;
-    p *= lacunarity;
-  }
-
-  const float rmd = octaves - floorf(octaves);
-  if (rmd != 0.0f) {
-    float increment = (perlin_signed(p) + offset) * pwr * value;
-    value += rmd * increment;
-  }
-
-  return value;
-}
-
-float musgrave_hybrid_multi_fractal(const float co,
-                                    const float H,
-                                    const float lacunarity,
-                                    const float octaves_unclamped,
-                                    const float offset,
-                                    const float gain)
-{
-  float p = co;
-  const float pwHL = std::pow(lacunarity, -H);
-
-  float pwr = 1.0f;
-  float value = 0.0f;
-  float weight = 1.0f;
-
-  const float octaves = CLAMPIS(octaves_unclamped, 0.0f, 15.0f);
-
-  for (int i = 0; (weight > 0.001f) && (i < int(octaves)); i++) {
-    if (weight > 1.0f) {
-      weight = 1.0f;
-    }
-
-    float signal = (perlin_signed(p) + offset) * pwr;
-    pwr *= pwHL;
-    value += weight * signal;
-    weight *= gain * signal;
-    p *= lacunarity;
-  }
-
-  const float rmd = octaves - floorf(octaves);
-  if ((rmd != 0.0f) && (weight > 0.001f)) {
-    if (weight > 1.0f) {
-      weight = 1.0f;
-    }
-    float signal = (perlin_signed(p) + offset) * pwr;
-    value += rmd * weight * signal;
-  }
-
-  return value;
-}
-
-float musgrave_ridged_multi_fractal(const float co,
-                                    const float H,
-                                    const float lacunarity,
-                                    const float octaves_unclamped,
-                                    const float offset,
-                                    const float gain)
-{
-  float p = co;
-  const float pwHL = std::pow(lacunarity, -H);
-  float pwr = pwHL;
-
-  float signal = offset - std::abs(perlin_signed(p));
-  signal *= signal;
-  float value = signal;
-  float weight = 1.0f;
-
-  const float octaves = CLAMPIS(octaves_unclamped, 0.0f, 15.0f);
-
-  for (int i = 1; i < int(octaves); i++) {
-    p *= lacunarity;
-    weight = CLAMPIS(signal * gain, 0.0f, 1.0f);
-    signal = offset - std::abs(perlin_signed(p));
-    signal *= signal;
-    signal *= weight;
-    value += signal * pwr;
-    pwr *= pwHL;
-  }
-
-  return value;
-}
-
-float musgrave_fBm(const float2 co,
-                   const float H,
-                   const float lacunarity,
-                   const float octaves_unclamped)
-{
-  /* From "Texturing and Modelling: A procedural approach". */
-
-  float2 p = co;
-  float value = 0.0f;
-  float pwr = 1.0f;
-  const float pwHL = std::pow(lacunarity, -H);
-  const float octaves = CLAMPIS(octaves_unclamped, 0.0f, 15.0f);
-
-  for (int i = 0; i < int(octaves); i++) {
-    value += perlin_signed(p) * pwr;
-    pwr *= pwHL;
-    p *= lacunarity;
-  }
-
-  const float rmd = octaves - floorf(octaves);
-  if (rmd != 0.0f) {
-    value += rmd * perlin_signed(p) * pwr;
-  }
-
-  return value;
-}
-
-float musgrave_multi_fractal(const float2 co,
-                             const float H,
-                             const float lacunarity,
-                             const float octaves_unclamped)
-{
-  float2 p = co;
-  float value = 1.0f;
-  float pwr = 1.0f;
-  const float pwHL = std::pow(lacunarity, -H);
-  const float octaves = CLAMPIS(octaves_unclamped, 0.0f, 15.0f);
-
-  for (int i = 0; i < int(octaves); i++) {
-    value *= (pwr * perlin_signed(p) + 1.0f);
-    pwr *= pwHL;
-    p *= lacunarity;
-  }
-
-  const float rmd = octaves - floorf(octaves);
-  if (rmd != 0.0f) {
-    value *= (rmd * pwr * perlin_signed(p) + 1.0f); /* correct? */
-  }
-
-  return value;
-}
-
-float musgrave_hetero_terrain(const float2 co,
-                              const float H,
-                              const float lacunarity,
-                              const float octaves_unclamped,
-                              const float offset)
-{
-  float2 p = co;
-  const float pwHL = std::pow(lacunarity, -H);
-  float pwr = pwHL;
-
-  /* First unscaled octave of function; later octaves are scaled. */
-  float value = offset + perlin_signed(p);
-  p *= lacunarity;
-
-  const float octaves = CLAMPIS(octaves_unclamped, 0.0f, 15.0f);
-
-  for (int i = 1; i < int(octaves); i++) {
-    float increment = (perlin_signed(p) + offset) * pwr * value;
-    value += increment;
-    pwr *= pwHL;
-    p *= lacunarity;
-  }
-
-  const float rmd = octaves - floorf(octaves);
-  if (rmd != 0.0f) {
-    float increment = (perlin_signed(p) + offset) * pwr * value;
-    value += rmd * increment;
-  }
-
-  return value;
-}
-
-float musgrave_hybrid_multi_fractal(const float2 co,
-                                    const float H,
-                                    const float lacunarity,
-                                    const float octaves_unclamped,
-                                    const float offset,
-                                    const float gain)
-{
-  float2 p = co;
-  const float pwHL = std::pow(lacunarity, -H);
-
-  float pwr = 1.0f;
-  float value = 0.0f;
-  float weight = 1.0f;
-
-  const float octaves = CLAMPIS(octaves_unclamped, 0.0f, 15.0f);
-
-  for (int i = 0; (weight > 0.001f) && (i < int(octaves)); i++) {
-    if (weight > 1.0f) {
-      weight = 1.0f;
-    }
-
-    float signal = (perlin_signed(p) + offset) * pwr;
-    pwr *= pwHL;
-    value += weight * signal;
-    weight *= gain * signal;
-    p *= lacunarity;
-  }
-
-  const float rmd = octaves - floorf(octaves);
-  if ((rmd != 0.0f) && (weight > 0.001f)) {
-    if (weight > 1.0f) {
-      weight = 1.0f;
-    }
-    float signal = (perlin_signed(p) + offset) * pwr;
-    value += rmd * weight * signal;
-  }
-
-  return value;
-}
-
-float musgrave_ridged_multi_fractal(const float2 co,
-                                    const float H,
-                                    const float lacunarity,
-                                    const float octaves_unclamped,
-                                    const float offset,
-                                    const float gain)
-{
-  float2 p = co;
-  const float pwHL = std::pow(lacunarity, -H);
-  float pwr = pwHL;
-
-  float signal = offset - std::abs(perlin_signed(p));
-  signal *= signal;
-  float value = signal;
-  float weight = 1.0f;
-
-  const float octaves = CLAMPIS(octaves_unclamped, 0.0f, 15.0f);
-
-  for (int i = 1; i < int(octaves); i++) {
-    p *= lacunarity;
-    weight = CLAMPIS(signal * gain, 0.0f, 1.0f);
-    signal = offset - std::abs(perlin_signed(p));
-    signal *= signal;
-    signal *= weight;
-    value += signal * pwr;
-    pwr *= pwHL;
-  }
-
-  return value;
-}
-
-float musgrave_fBm(const float3 co,
-                   const float H,
-                   const float lacunarity,
-                   const float octaves_unclamped)
-{
-  /* From "Texturing and Modelling: A procedural approach". */
-
-  float3 p = co;
-  float value = 0.0f;
-  float pwr = 1.0f;
-  const float pwHL = std::pow(lacunarity, -H);
-
-  const float octaves = CLAMPIS(octaves_unclamped, 0.0f, 15.0f);
-
-  for (int i = 0; i < int(octaves); i++) {
-    value += perlin_signed(p) * pwr;
-    pwr *= pwHL;
-    p *= lacunarity;
-  }
-
-  const float rmd = octaves - floorf(octaves);
-  if (rmd != 0.0f) {
-    value += rmd * perlin_signed(p) * pwr;
-  }
-
-  return value;
-}
-
-float musgrave_multi_fractal(const float3 co,
-                             const float H,
-                             const float lacunarity,
-                             const float octaves_unclamped)
-{
-  float3 p = co;
-  float value = 1.0f;
-  float pwr = 1.0f;
-  const float pwHL = std::pow(lacunarity, -H);
-
-  const float octaves = CLAMPIS(octaves_unclamped, 0.0f, 15.0f);
-
-  for (int i = 0; i < int(octaves); i++) {
-    value *= (pwr * perlin_signed(p) + 1.0f);
-    pwr *= pwHL;
-    p *= lacunarity;
-  }
-
-  const float rmd = octaves - floorf(octaves);
-  if (rmd != 0.0f) {
-    value *= (rmd * pwr * perlin_signed(p) + 1.0f); /* correct? */
-  }
-
-  return value;
-}
-
-float musgrave_hetero_terrain(const float3 co,
-                              const float H,
-                              const float lacunarity,
-                              const float octaves_unclamped,
-                              const float offset)
-{
-  float3 p = co;
-  const float pwHL = std::pow(lacunarity, -H);
-  float pwr = pwHL;
-
-  /* first unscaled octave of function; later octaves are scaled */
-  float value = offset + perlin_signed(p);
-  p *= lacunarity;
-
-  const float octaves = CLAMPIS(octaves_unclamped, 0.0f, 15.0f);
-
-  for (int i = 1; i < int(octaves); i++) {
-    float increment = (perlin_signed(p) + offset) * pwr * value;
-    value += increment;
-    pwr *= pwHL;
-    p *= lacunarity;
-  }
-
-  const float rmd = octaves - floorf(octaves);
-  if (rmd != 0.0f) {
-    float increment = (perlin_signed(p) + offset) * pwr * value;
-    value += rmd * increment;
-  }
-
-  return value;
-}
-
-float musgrave_hybrid_multi_fractal(const float3 co,
-                                    const float H,
-                                    const float lacunarity,
-                                    const float octaves_unclamped,
-                                    const float offset,
-                                    const float gain)
-{
-  float3 p = co;
-  const float pwHL = std::pow(lacunarity, -H);
-
-  float pwr = 1.0f;
-  float value = 0.0f;
-  float weight = 1.0f;
-
-  const float octaves = CLAMPIS(octaves_unclamped, 0.0f, 15.0f);
-
-  for (int i = 0; (weight > 0.001f) && (i < int(octaves)); i++) {
-    if (weight > 1.0f) {
-      weight = 1.0f;
-    }
-
-    float signal = (perlin_signed(p) + offset) * pwr;
-    pwr *= pwHL;
-    value += weight * signal;
-    weight *= gain * signal;
-    p *= lacunarity;
-  }
-
-  const float rmd = octaves - floorf(octaves);
-  if ((rmd != 0.0f) && (weight > 0.001f)) {
-    if (weight > 1.0f) {
-      weight = 1.0f;
-    }
-    float signal = (perlin_signed(p) + offset) * pwr;
-    value += rmd * weight * signal;
-  }
-
-  return value;
-}
-
-float musgrave_ridged_multi_fractal(const float3 co,
-                                    const float H,
-                                    const float lacunarity,
-                                    const float octaves_unclamped,
-                                    const float offset,
-                                    const float gain)
-{
-  float3 p = co;
-  const float pwHL = std::pow(lacunarity, -H);
-  float pwr = pwHL;
-
-  float signal = offset - std::abs(perlin_signed(p));
-  signal *= signal;
-  float value = signal;
-  float weight = 1.0f;
-
-  const float octaves = CLAMPIS(octaves_unclamped, 0.0f, 15.0f);
-
-  for (int i = 1; i < int(octaves); i++) {
-    p *= lacunarity;
-    weight = CLAMPIS(signal * gain, 0.0f, 1.0f);
-    signal = offset - std::abs(perlin_signed(p));
-    signal *= signal;
-    signal *= weight;
-    value += signal * pwr;
-    pwr *= pwHL;
-  }
-
-  return value;
-}
-
-float musgrave_fBm(const float4 co,
-                   const float H,
-                   const float lacunarity,
-                   const float octaves_unclamped)
-{
-  /* From "Texturing and Modelling: A procedural approach". */
-
-  float4 p = co;
-  float value = 0.0f;
-  float pwr = 1.0f;
-  const float pwHL = std::pow(lacunarity, -H);
-
-  const float octaves = CLAMPIS(octaves_unclamped, 0.0f, 15.0f);
-
-  for (int i = 0; i < int(octaves); i++) {
-    value += perlin_signed(p) * pwr;
-    pwr *= pwHL;
-    p *= lacunarity;
-  }
-
-  const float rmd = octaves - floorf(octaves);
-  if (rmd != 0.0f) {
-    value += rmd * perlin_signed(p) * pwr;
-  }
-
-  return value;
-}
-
-float musgrave_multi_fractal(const float4 co,
-                             const float H,
-                             const float lacunarity,
-                             const float octaves_unclamped)
-{
-  float4 p = co;
-  float value = 1.0f;
-  float pwr = 1.0f;
-  const float pwHL = std::pow(lacunarity, -H);
-
-  const float octaves = CLAMPIS(octaves_unclamped, 0.0f, 15.0f);
-
-  for (int i = 0; i < int(octaves); i++) {
-    value *= (pwr * perlin_signed(p) + 1.0f);
-    pwr *= pwHL;
-    p *= lacunarity;
-  }
-
-  const float rmd = octaves - floorf(octaves);
-  if (rmd != 0.0f) {
-    value *= (rmd * pwr * perlin_signed(p) + 1.0f); /* correct? */
-  }
-
-  return value;
-}
-
-float musgrave_hetero_terrain(const float4 co,
-                              const float H,
-                              const float lacunarity,
-                              const float octaves_unclamped,
-                              const float offset)
-{
-  float4 p = co;
-  const float pwHL = std::pow(lacunarity, -H);
-  float pwr = pwHL;
-
-  /* first unscaled octave of function; later octaves are scaled */
-  float value = offset + perlin_signed(p);
-  p *= lacunarity;
-
-  const float octaves = CLAMPIS(octaves_unclamped, 0.0f, 15.0f);
-
-  for (int i = 1; i < int(octaves); i++) {
-    float increment = (perlin_signed(p) + offset) * pwr * value;
-    value += increment;
-    pwr *= pwHL;
-    p *= lacunarity;
-  }
-
-  const float rmd = octaves - floorf(octaves);
-  if (rmd != 0.0f) {
-    float increment = (perlin_signed(p) + offset) * pwr * value;
-    value += rmd * increment;
-  }
-
-  return value;
-}
-
-float musgrave_hybrid_multi_fractal(const float4 co,
-                                    const float H,
-                                    const float lacunarity,
-                                    const float octaves_unclamped,
-                                    const float offset,
-                                    const float gain)
-{
-  float4 p = co;
-  const float pwHL = std::pow(lacunarity, -H);
-
-  float pwr = 1.0f;
-  float value = 0.0f;
-  float weight = 1.0f;
-
-  const float octaves = CLAMPIS(octaves_unclamped, 0.0f, 15.0f);
-
-  for (int i = 0; (weight > 0.001f) && (i < int(octaves)); i++) {
-    if (weight > 1.0f) {
-      weight = 1.0f;
-    }
-
-    float signal = (perlin_signed(p) + offset) * pwr;
-    pwr *= pwHL;
-    value += weight * signal;
-    weight *= gain * signal;
-    p *= lacunarity;
-  }
-
-  const float rmd = octaves - floorf(octaves);
-  if ((rmd != 0.0f) && (weight > 0.001f)) {
-    if (weight > 1.0f) {
-      weight = 1.0f;
-    }
-    float signal = (perlin_signed(p) + offset) * pwr;
-    value += rmd * weight * signal;
-  }
-
-  return value;
-}
-
-float musgrave_ridged_multi_fractal(const float4 co,
-                                    const float H,
-                                    const float lacunarity,
-                                    const float octaves_unclamped,
-                                    const float offset,
-                                    const float gain)
-{
-  float4 p = co;
-  const float pwHL = std::pow(lacunarity, -H);
-  float pwr = pwHL;
-
-  float signal = offset - std::abs(perlin_signed(p));
-  signal *= signal;
-  float value = signal;
-  float weight = 1.0f;
-
-  const float octaves = CLAMPIS(octaves_unclamped, 0.0f, 15.0f);
-
-  for (int i = 1; i < int(octaves); i++) {
-    p *= lacunarity;
-    weight = CLAMPIS(signal * gain, 0.0f, 1.0f);
-    signal = offset - std::abs(perlin_signed(p));
-    signal *= signal;
-    signal *= weight;
-    value += signal * pwr;
-    pwr *= pwHL;
-  }
-
-  return value;
+  return float3(perlin_select<float4>(
+                    position, detail, roughness, lacunarity, offset, gain, type, normalize),
+                perlin_select<float4>(position + random_float4_offset(4.0f),
+                                      detail,
+                                      roughness,
+                                      lacunarity,
+                                      offset,
+                                      gain,
+                                      type,
+                                      normalize),
+                perlin_select<float4>(position + random_float4_offset(5.0f),
+                                      detail,
+                                      roughness,
+                                      lacunarity,
+                                      offset,
+                                      gain,
+                                      type,
+                                      normalize));
 }
 
 /** \} */
@@ -2337,7 +1956,7 @@ VoronoiOutput fractal_voronoi_x_fx(const VoronoiParams &params,
       output = octave;
       break;
     }
-    else if (i <= params.detail) {
+    if (i <= params.detail) {
       max_amplitude += amplitude;
       output.distance += octave.distance * amplitude;
       output.color += octave.color * amplitude;
@@ -2388,7 +2007,7 @@ float fractal_voronoi_distance_to_edge(const VoronoiParams &params, const T coor
       distance = octave_distance;
       break;
     }
-    else if (i <= params.detail) {
+    if (i <= params.detail) {
       max_amplitude = mix(max_amplitude, params.max_distance / scale, amplitude);
       distance = mix(distance, math::min(distance, octave_distance / scale), amplitude);
       scale *= params.lacunarity;
@@ -2436,6 +2055,380 @@ template float fractal_voronoi_distance_to_edge<float3>(const VoronoiParams &par
                                                         const float3 coord);
 template float fractal_voronoi_distance_to_edge<float4>(const VoronoiParams &params,
                                                         const float4 coord);
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Gabor Noise
+ *
+ * Implements Gabor noise based on the paper:
+ *
+ *   Lagae, Ares, et al. "Procedural noise using sparse Gabor convolution." ACM Transactions on
+ *   Graphics (TOG) 28.3 (2009): 1-10.
+ *
+ * But with the improvements from the paper:
+ *
+ *   Tavernier, Vincent, et al. "Making gabor noise fast and normalized." Eurographics 2019-40th
+ *   Annual Conference of the European Association for Computer Graphics. 2019.
+ *
+ * And compute the Phase and Intensity of the Gabor based on the paper:
+ *
+ *   Tricard, Thibault, et al. "Procedural phasor noise." ACM Transactions on Graphics (TOG) 38.4
+ *   (2019): 1-13.
+ *
+ * \{ */
+
+/* The original Gabor noise paper specifies that the impulses count for each cell should be
+ * computed by sampling a Poisson distribution whose mean is the impulse density. However,
+ * Tavernier's paper showed that stratified Poisson point sampling is better assuming the weights
+ * are sampled using a Bernoulli distribution, as shown in Figure (3). By stratified sampling, they
+ * mean a constant number of impulses per cell, so the stratification is the grid itself in that
+ * sense, as described in the supplementary material of the paper. */
+static constexpr int gabor_impulses_count = 8;
+
+/* Computes a 2D Gabor kernel based on Equation (6) in the original Gabor noise paper. Where the
+ * frequency argument is the F_0 parameter and the orientation argument is the w_0 parameter. We
+ * assume the Gaussian envelope has a unit magnitude, that is, K = 1. That is because we will
+ * eventually normalize the final noise value to the unit range, so the multiplication by the
+ * magnitude will be canceled by the normalization. Further, we also assume a unit Gaussian width,
+ * that is, a = 1. That is because it does not provide much artistic control. It follows that the
+ * Gaussian will be truncated at pi.
+ *
+ * To avoid the discontinuities caused by the aforementioned truncation, the Gaussian is windowed
+ * using a Hann window, that is because contrary to the claim made in the original Gabor paper,
+ * truncating the Gaussian produces significant artifacts especially when differentiated for bump
+ * mapping. The Hann window is C1 continuous and has limited effect on the shape of the Gaussian,
+ * so it felt like an appropriate choice.
+ *
+ * Finally, instead of computing the Gabor value directly, we instead use the complex phasor
+ * formulation described in section 3.1.1 in Tricard's paper. That's done to be able to compute the
+ * phase and intensity of the Gabor noise after summation based on equations (8) and (9). The
+ * return value of the Gabor kernel function is then a complex number whose real value is the
+ * value computed in the original Gabor noise paper, and whose imaginary part is the sine
+ * counterpart of the real part, which is the only extra computation in the new formulation.
+ *
+ * Note that while the original Gabor noise paper uses the cosine part of the phasor, that is, the
+ * real part of the phasor, we use the sine part instead, that is, the imaginary part of the
+ * phasor, as suggested by Tavernier's paper in "Section 3.3. Instance stationarity and
+ * normalization", to ensure a zero mean, which should help with normalization. */
+static float2 compute_2d_gabor_kernel(const float2 position,
+                                      const float frequency,
+                                      const float orientation)
+{
+  const float distance_squared = math::length_squared(position);
+  const float hann_window = 0.5f + 0.5f * math::cos(math::numbers::pi * distance_squared);
+  const float gaussian_envelop = math::exp(-math::numbers::pi * distance_squared);
+  const float windowed_gaussian_envelope = gaussian_envelop * hann_window;
+
+  const float2 frequency_vector = frequency * float2(cos(orientation), sin(orientation));
+  const float angle = 2.0f * math::numbers::pi * math::dot(position, frequency_vector);
+  const float2 phasor = float2(math::cos(angle), math::sin(angle));
+
+  return windowed_gaussian_envelope * phasor;
+}
+
+/* Computes the approximate standard deviation of the zero mean normal distribution representing
+ * the amplitude distribution of the noise based on Equation (9) in the original Gabor noise paper.
+ * For simplicity, the Hann window is ignored and the orientation is fixed since the variance is
+ * orientation invariant. We start integrating the squared Gabor kernel with respect to x:
+ *
+ *   \int_{-\infty}^{-\infty} (e^{- \pi (x^2 + y^2)} cos(2 \pi f_0 x))^2 dx
+ *
+ * Which gives:
+ *
+ *  \frac{(e^{2 \pi f_0^2}-1) e^{-2 \pi y^2 - 2 pi f_0^2}}{2^\frac{3}{2}}
+ *
+ * Then we similarly integrate with respect to y to get:
+ *
+ *  \frac{1 - e^{-2 \pi f_0^2}}{4}
+ *
+ * Secondly, we note that the second moment of the weights distribution is 0.5 since it is a
+ * fair Bernoulli distribution. So the final standard deviation expression is square root the
+ * integral multiplied by the impulse density multiplied by the second moment.
+ *
+ * Note however that the integral is almost constant for all frequencies larger than one, and
+ * converges to an upper limit as the frequency approaches infinity, so we replace the expression
+ * with the following limit:
+ *
+ *  \lim_{x \to \infty} \frac{1 - e^{-2 \pi f_0^2}}{4}
+ *
+ * To get an approximation of 0.25. */
+static float compute_2d_gabor_standard_deviation()
+{
+  const float integral_of_gabor_squared = 0.25f;
+  const float second_moment = 0.5f;
+  return math::sqrt(gabor_impulses_count * second_moment * integral_of_gabor_squared);
+}
+
+/* Computes the Gabor noise value at the given position for the given cell. This is essentially the
+ * sum in Equation (8) in the original Gabor noise paper, where we sum Gabor kernels sampled at a
+ * random position with a random weight. The orientation of the kernel is constant for anisotropic
+ * noise while it is random for isotropic noise. The original Gabor noise paper mentions that the
+ * weights should be uniformly distributed in the [-1, 1] range, however, Tavernier's paper showed
+ * that using a Bernoulli distribution yields better results, so that is what we do. */
+static float2 compute_2d_gabor_noise_cell(const float2 cell,
+                                          const float2 position,
+                                          const float frequency,
+                                          const float isotropy,
+                                          const float base_orientation)
+
+{
+  float2 noise(0.0f);
+  for (const int i : IndexRange(gabor_impulses_count)) {
+    /* Compute unique seeds for each of the needed random variables. */
+    const float3 seed_for_orientation(cell.x, cell.y, i * 3);
+    const float3 seed_for_kernel_center(cell.x, cell.y, i * 3 + 1);
+    const float3 seed_for_weight(cell.x, cell.y, i * 3 + 2);
+
+    /* For isotropic noise, add a random orientation amount, while for anisotropic noise, use the
+     * base orientation. Linearly interpolate between the two cases using the isotropy factor. Note
+     * that the random orientation range spans pi as opposed to two pi, that's because the Gabor
+     * kernel is symmetric around pi. */
+    const float random_orientation = (noise::hash_float_to_float(seed_for_orientation) - 0.5f) *
+                                     math::numbers::pi;
+    const float orientation = base_orientation + random_orientation * isotropy;
+
+    const float2 kernel_center = noise::hash_float_to_float2(seed_for_kernel_center);
+    const float2 position_in_kernel_space = position - kernel_center;
+
+    /* The kernel is windowed beyond the unit distance, so early exit with a zero for points that
+     * are further than a unit radius. */
+    if (math::length_squared(position_in_kernel_space) >= 1.0f) {
+      continue;
+    }
+
+    /* We either add or subtract the Gabor kernel based on a Bernoulli distribution of equal
+     * probability. */
+    const float weight = noise::hash_float_to_float(seed_for_weight) < 0.5f ? -1.0f : 1.0f;
+
+    noise += weight * compute_2d_gabor_kernel(position_in_kernel_space, frequency, orientation);
+  }
+  return noise;
+}
+
+/* Computes the Gabor noise value by dividing the space into a grid and evaluating the Gabor noise
+ * in the space of each cell of the 3x3 cell neighborhood. */
+static float2 compute_2d_gabor_noise(const float2 coordinates,
+                                     const float frequency,
+                                     const float isotropy,
+                                     const float base_orientation)
+{
+  const float2 cell_position = math::floor(coordinates);
+  const float2 local_position = coordinates - cell_position;
+
+  float2 sum(0.0f);
+  for (int j = -1; j <= 1; j++) {
+    for (int i = -1; i <= 1; i++) {
+      const float2 cell_offset = float2(i, j);
+      const float2 current_cell_position = cell_position + cell_offset;
+      const float2 position_in_cell_space = local_position - cell_offset;
+      sum += compute_2d_gabor_noise_cell(
+          current_cell_position, position_in_cell_space, frequency, isotropy, base_orientation);
+    }
+  }
+
+  return sum;
+}
+
+/* Identical to compute_2d_gabor_kernel, except it is evaluated in 3D space. Notice that Equation
+ * (6) in the original Gabor noise paper computes the frequency vector using (cos(w_0), sin(w_0)),
+ * which we also do in the 2D variant, however, for 3D, the orientation is already a unit frequency
+ * vector, so we just need to scale it by the frequency value. */
+static float2 compute_3d_gabor_kernel(const float3 position,
+                                      const float frequency,
+                                      const float3 orientation)
+{
+  const float distance_squared = math::length_squared(position);
+  const float hann_window = 0.5f + 0.5f * math::cos(math::numbers::pi * distance_squared);
+  const float gaussian_envelop = math::exp(-math::numbers::pi * distance_squared);
+  const float windowed_gaussian_envelope = gaussian_envelop * hann_window;
+
+  const float3 frequency_vector = frequency * orientation;
+  const float angle = 2.0f * math::numbers::pi * math::dot(position, frequency_vector);
+  const float2 phasor = float2(math::cos(angle), math::sin(angle));
+
+  return windowed_gaussian_envelope * phasor;
+}
+
+/* Identical to compute_2d_gabor_standard_deviation except we do triple integration in 3D. The only
+ * difference is the denominator in the integral expression, which is 2^{5 / 2} for the 3D case
+ * instead of 4 for the 2D case. Similarly, the limit evaluates to 1 / (4 * sqrt(2)). */
+static float compute_3d_gabor_standard_deviation()
+{
+  const float integral_of_gabor_squared = 1.0f / (4.0f * math::numbers::sqrt2);
+  const float second_moment = 0.5f;
+  return math::sqrt(gabor_impulses_count * second_moment * integral_of_gabor_squared);
+}
+
+/* Computes the orientation of the Gabor kernel such that it is constant for anisotropic
+ * noise while it is random for isotropic noise. We randomize in spherical coordinates for a
+ * uniform distribution. */
+static float3 compute_3d_orientation(const float3 orientation,
+                                     const float isotropy,
+                                     const float4 seed)
+{
+  /* Return the base orientation in case we are completely anisotropic. */
+  if (isotropy == 0.0) {
+    return orientation;
+  }
+
+  /* Compute the orientation in spherical coordinates. */
+  float inclination = math::acos(orientation.z);
+  float azimuth = math::sign(orientation.y) *
+                  math::acos(orientation.x / math::length(float2(orientation.x, orientation.y)));
+
+  /* For isotropic noise, add a random orientation amount, while for anisotropic noise, use the
+   * base orientation. Linearly interpolate between the two cases using the isotropy factor. Note
+   * that the random orientation range is to pi as opposed to two pi, that's because the Gabor
+   * kernel is symmetric around pi. */
+  const float2 random_angles = noise::hash_float_to_float2(seed) * math::numbers::pi;
+  inclination += random_angles.x * isotropy;
+  azimuth += random_angles.y * isotropy;
+
+  /* Convert back to Cartesian coordinates, */
+  return float3(math::sin(inclination) * math::cos(azimuth),
+                math::sin(inclination) * math::sin(azimuth),
+                math::cos(inclination));
+}
+
+static float2 compute_3d_gabor_noise_cell(const float3 cell,
+                                          const float3 position,
+                                          const float frequency,
+                                          const float isotropy,
+                                          const float3 base_orientation)
+
+{
+  float2 noise(0.0f);
+  for (const int i : IndexRange(gabor_impulses_count)) {
+    /* Compute unique seeds for each of the needed random variables. */
+    const float4 seed_for_orientation(cell.x, cell.y, cell.z, i * 3);
+    const float4 seed_for_kernel_center(cell.x, cell.y, cell.z, i * 3 + 1);
+    const float4 seed_for_weight(cell.x, cell.y, cell.z, i * 3 + 2);
+
+    const float3 orientation = compute_3d_orientation(
+        base_orientation, isotropy, seed_for_orientation);
+
+    const float3 kernel_center = noise::hash_float_to_float3(seed_for_kernel_center);
+    const float3 position_in_kernel_space = position - kernel_center;
+
+    /* The kernel is windowed beyond the unit distance, so early exit with a zero for points that
+     * are further than a unit radius. */
+    if (math::length_squared(position_in_kernel_space) >= 1.0f) {
+      continue;
+    }
+
+    /* We either add or subtract the Gabor kernel based on a Bernoulli distribution of equal
+     * probability. */
+    const float weight = noise::hash_float_to_float(seed_for_weight) < 0.5f ? -1.0f : 1.0f;
+
+    noise += weight * compute_3d_gabor_kernel(position_in_kernel_space, frequency, orientation);
+  }
+  return noise;
+}
+
+/* Identical to compute_2d_gabor_noise but works in the 3D neighborhood of the noise. */
+static float2 compute_3d_gabor_noise(const float3 coordinates,
+                                     const float frequency,
+                                     const float isotropy,
+                                     const float3 base_orientation)
+{
+  const float3 cell_position = math::floor(coordinates);
+  const float3 local_position = coordinates - cell_position;
+
+  float2 sum(0.0f);
+  for (int k = -1; k <= 1; k++) {
+    for (int j = -1; j <= 1; j++) {
+      for (int i = -1; i <= 1; i++) {
+        const float3 cell_offset = float3(i, j, k);
+        const float3 current_cell_position = cell_position + cell_offset;
+        const float3 position_in_cell_space = local_position - cell_offset;
+        sum += compute_3d_gabor_noise_cell(
+            current_cell_position, position_in_cell_space, frequency, isotropy, base_orientation);
+      }
+    }
+  }
+
+  return sum;
+}
+
+void gabor(const float2 coordinates,
+           const float scale,
+           const float frequency,
+           const float anisotropy,
+           const float orientation,
+           float *r_value,
+           float *r_phase,
+           float *r_intensity)
+{
+  const float2 scaled_coordinates = coordinates * scale;
+  const float isotropy = 1.0f - math::clamp(anisotropy, 0.0f, 1.0f);
+  const float sanitized_frequency = math::max(0.001f, frequency);
+
+  const float2 phasor = compute_2d_gabor_noise(
+      scaled_coordinates, sanitized_frequency, isotropy, orientation);
+  const float standard_deviation = compute_2d_gabor_standard_deviation();
+
+  /* Normalize the noise by dividing by six times the standard deviation, which was determined
+   * empirically. */
+  const float normalization_factor = 6.0f * standard_deviation;
+
+  /* As discussed in compute_2d_gabor_kernel, we use the imaginary part of the phasor as the Gabor
+   * value. But remap to [0, 1] from [-1, 1]. */
+  if (r_value) {
+    *r_value = (phasor.y / normalization_factor) * 0.5f + 0.5f;
+  }
+
+  /* Compute the phase based on equation (9) in Tricard's paper. But remap the phase into the
+   * [0, 1] range. */
+  if (r_phase) {
+    *r_phase = (math::atan2(phasor.y, phasor.x) + math::numbers::pi) / (2.0f * math::numbers::pi);
+  }
+
+  /* Compute the intensity based on equation (8) in Tricard's paper. */
+  if (r_intensity) {
+    *r_intensity = math::length(phasor) / normalization_factor;
+  }
+}
+
+void gabor(const float3 coordinates,
+           const float scale,
+           const float frequency,
+           const float anisotropy,
+           const float3 orientation,
+           float *r_value,
+           float *r_phase,
+           float *r_intensity)
+{
+  const float3 scaled_coordinates = coordinates * scale;
+  const float isotropy = 1.0f - math::clamp(anisotropy, 0.0f, 1.0f);
+  const float sanitized_frequency = math::max(0.001f, frequency);
+
+  const float3 normalized_orientation = math::normalize(orientation);
+  const float2 phasor = compute_3d_gabor_noise(
+      scaled_coordinates, sanitized_frequency, isotropy, normalized_orientation);
+  const float standard_deviation = compute_3d_gabor_standard_deviation();
+
+  /* Normalize the noise by dividing by six times the standard deviation, which was determined
+   * empirically. */
+  const float normalization_factor = 6.0f * standard_deviation;
+
+  /* As discussed in compute_2d_gabor_kernel, we use the imaginary part of the phasor as the Gabor
+   * value. But remap to [0, 1] from [-1, 1]. */
+  if (r_value) {
+    *r_value = (phasor.y / normalization_factor) * 0.5f + 0.5f;
+  }
+
+  /* Compute the phase based on equation (9) in Tricard's paper. But remap the phase into the
+   * [0, 1] range. */
+  if (r_phase) {
+    *r_phase = (math::atan2(phasor.y, phasor.x) + math::numbers::pi) / (2.0f * math::numbers::pi);
+  }
+
+  /* Compute the intensity based on equation (8) in Tricard's paper. */
+  if (r_intensity) {
+    *r_intensity = math::length(phasor) / normalization_factor;
+  }
+}
+
 /** \} */
 
 }  // namespace blender::noise

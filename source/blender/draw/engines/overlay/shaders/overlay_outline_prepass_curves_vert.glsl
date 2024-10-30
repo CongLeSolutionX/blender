@@ -5,11 +5,17 @@
 #pragma BLENDER_REQUIRE(common_view_clipping_lib.glsl)
 #pragma BLENDER_REQUIRE(common_view_lib.glsl)
 #pragma BLENDER_REQUIRE(common_hair_lib.glsl)
+#pragma BLENDER_REQUIRE(gpu_shader_utildefines_lib.glsl)
 
 uint outline_colorid_get(void)
 {
+#ifdef OBINFO_NEW
+  eObjectInfoFlag ob_flag = eObjectInfoFlag(floatBitsToUint(drw_infos[resource_id].infos.w));
+  bool is_active = flag_test(ob_flag, OBJECT_ACTIVE);
+#else
   int flag = int(abs(ObjectInfo.w));
   bool is_active = (flag & DRW_BASE_ACTIVE) != 0;
+#endif
 
   if (isTransform) {
     return 0u; /* colorTransform */
@@ -26,8 +32,8 @@ uint outline_colorid_get(void)
 
 /* Replace top 2 bits (of the 16bit output) by outlineId.
  * This leaves 16K different IDs to create outlines between objects.
-  vec3 world_pos = point_object_to_world(pos);
- * SHIFT = (32 - (16 - 2)) */
+ * `vec3 world_pos = point_object_to_world(pos);`
+ * `SHIFT = (32 - (16 - 2))`. */
 #define SHIFT 18u
 
 void main()
@@ -47,7 +53,7 @@ void main()
                                      thickness);
   vec3 world_pos;
   if (hairThicknessRes > 1) {
-    /* Calculate the thickness, thick-time, worldpos taken into account the outline. */
+    /* Calculate the thickness, thick-time, world-position taken into account the outline. */
     float outline_width = point_world_to_ndc(center_wpos).w * 1.25 * sizeViewportInv.y *
                           drw_view.wininv[1][1];
     thickness += outline_width;

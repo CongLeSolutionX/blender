@@ -13,9 +13,9 @@
 #include "DNA_userdef_types.h"
 #include "DNA_windowmanager_types.h"
 
-#include "BLI_blenlib.h"
 #include "BLI_math_base.h"
 #include "BLI_math_vector.h"
+#include "BLI_time.h" /* USER_ZOOM_CONTINUE */
 #include "BLI_utildefines.h"
 
 #include "BKE_context.hh"
@@ -30,8 +30,6 @@
 
 #include "UI_interface.hh"
 #include "UI_view2d.hh"
-
-#include "PIL_time.h" /* USER_ZOOM_CONTINUE */
 
 #include "view2d_intern.hh"
 
@@ -258,14 +256,16 @@ static int view_pan_invoke(bContext *C, wmOperator *op, const wmEvent *event)
   RNA_int_set(op->ptr, "deltax", 0);
   RNA_int_set(op->ptr, "deltay", 0);
 
-  if (v2d->keepofs & V2D_LOCKOFS_X) {
-    WM_cursor_modal_set(window, WM_CURSOR_NS_SCROLL);
-  }
-  else if (v2d->keepofs & V2D_LOCKOFS_Y) {
-    WM_cursor_modal_set(window, WM_CURSOR_EW_SCROLL);
-  }
-  else {
-    WM_cursor_modal_set(window, WM_CURSOR_NSEW_SCROLL);
+  if (window->grabcursor == 0) {
+    if (v2d->keepofs & V2D_LOCKOFS_X) {
+      WM_cursor_modal_set(window, WM_CURSOR_NS_SCROLL);
+    }
+    else if (v2d->keepofs & V2D_LOCKOFS_Y) {
+      WM_cursor_modal_set(window, WM_CURSOR_EW_SCROLL);
+    }
+    else {
+      WM_cursor_modal_set(window, WM_CURSOR_NSEW_SCROLL);
+    }
   }
 
   /* add temp handler */
@@ -785,7 +785,8 @@ static void view_zoomstep_apply_ex(bContext *C,
 
         /* only move view to mouse if zoom fac is inside minzoom/maxzoom */
         if (((v2d->keepzoom & V2D_LIMITZOOM) == 0) ||
-            IN_RANGE_INCL(zoomx, v2d->minzoom, v2d->maxzoom)) {
+            IN_RANGE_INCL(zoomx, v2d->minzoom, v2d->maxzoom))
+        {
           const float mval_fac = (vzd->mx_2d - cur_old.xmin) / BLI_rctf_size_x(&cur_old);
           const float mval_faci = 1.0f - mval_fac;
           const float ofs = (mval_fac * dx) - (mval_faci * dx);
@@ -820,7 +821,8 @@ static void view_zoomstep_apply_ex(bContext *C,
 
         /* only move view to mouse if zoom fac is inside minzoom/maxzoom */
         if (((v2d->keepzoom & V2D_LIMITZOOM) == 0) ||
-            IN_RANGE_INCL(zoomy, v2d->minzoom, v2d->maxzoom)) {
+            IN_RANGE_INCL(zoomy, v2d->minzoom, v2d->maxzoom))
+        {
           const float mval_fac = (vzd->my_2d - cur_old.ymin) / BLI_rctf_size_y(&cur_old);
           const float mval_faci = 1.0f - mval_fac;
           const float ofs = (mval_fac * dy) - (mval_faci * dy);
@@ -1031,7 +1033,7 @@ static void view_zoomdrag_apply(bContext *C, wmOperator *op)
   /* Check if the 'timer' is initialized, as zooming with the trackpad
    * never uses the "Continuous" zoom method, and the 'timer' is not initialized. */
   if ((U.viewzoom == USER_ZOOM_CONTINUE) && vzd->timer) { /* XXX store this setting as RNA prop? */
-    const double time = PIL_check_seconds_timer();
+    const double time = BLI_time_now_seconds();
     const float time_step = float(time - vzd->timer_lastdraw);
 
     dx *= time_step * 5.0f;
@@ -1174,7 +1176,8 @@ static int view_zoomdrag_invoke(bContext *C, wmOperator *op, const wmEvent *even
     /* Only respect user setting zoom axis if the view does not have any zoom restrictions
      * any will be scaled uniformly. */
     if (((v2d->keepzoom & (V2D_LOCKZOOM_X | V2D_LOCKZOOM_Y)) == 0) &&
-        (v2d->keepzoom & V2D_KEEPASPECT)) {
+        (v2d->keepzoom & V2D_KEEPASPECT))
+    {
       if (U.uiflag & USER_ZOOM_HORIZ) {
         facy = 0.0f;
       }
@@ -1214,14 +1217,16 @@ static int view_zoomdrag_invoke(bContext *C, wmOperator *op, const wmEvent *even
   /* for modal exit test */
   vzd->invoke_event = event->type;
 
-  if (v2d->keepofs & V2D_LOCKOFS_X) {
-    WM_cursor_modal_set(window, WM_CURSOR_NS_SCROLL);
-  }
-  else if (v2d->keepofs & V2D_LOCKOFS_Y) {
-    WM_cursor_modal_set(window, WM_CURSOR_EW_SCROLL);
-  }
-  else {
-    WM_cursor_modal_set(window, WM_CURSOR_NSEW_SCROLL);
+  if (window->grabcursor == 0) {
+    if (v2d->keepofs & V2D_LOCKOFS_X) {
+      WM_cursor_modal_set(window, WM_CURSOR_NS_SCROLL);
+    }
+    else if (v2d->keepofs & V2D_LOCKOFS_Y) {
+      WM_cursor_modal_set(window, WM_CURSOR_EW_SCROLL);
+    }
+    else {
+      WM_cursor_modal_set(window, WM_CURSOR_NSEW_SCROLL);
+    }
   }
 
   /* add temp handler */
@@ -1230,7 +1235,7 @@ static int view_zoomdrag_invoke(bContext *C, wmOperator *op, const wmEvent *even
   if (U.viewzoom == USER_ZOOM_CONTINUE) {
     /* needs a timer to continue redrawing */
     vzd->timer = WM_event_timer_add(CTX_wm_manager(C), window, TIMER, 0.01f);
-    vzd->timer_lastdraw = PIL_check_seconds_timer();
+    vzd->timer_lastdraw = BLI_time_now_seconds();
   }
 
   return OPERATOR_RUNNING_MODAL;
@@ -1711,7 +1716,7 @@ static int view2d_smoothview_invoke(bContext *C, wmOperator * /*op*/, const wmEv
   if (step >= 1.0f) {
     v2d->cur = sms->new_cur;
 
-    MEM_freeN(v2d->sms);
+    MEM_delete(v2d->sms);
     v2d->sms = nullptr;
 
     WM_event_timer_remove(CTX_wm_manager(C), win, v2d->smooth_timer);
@@ -1906,7 +1911,18 @@ static void scroller_activate_init(bContext *C,
    * - zooming must be allowed on this axis, otherwise, default to pan
    */
   View2DScrollers scrollers;
-  view2d_scrollers_calc(v2d, nullptr, &scrollers);
+  /* Reconstruct the custom scroller mask passed to #UI_view2d_scrollers_draw().
+   *
+   * Some editors like the File Browser, Spreadsheet or scrubbing UI already set up custom masks
+   * for scroll-bars (they don't cover the whole region width or height), these need to be
+   * considered, otherwise coords for `mouse_in_scroller_handle` later are not compatible. This
+   * should be a reliable way to do it. Otherwise the custom scroller mask could also be stored in
+   * #View2D.
+   */
+  rcti scroller_mask = v2d->hor;
+  BLI_rcti_union(&scroller_mask, &v2d->vert);
+
+  view2d_scrollers_calc(v2d, &scroller_mask, &scrollers);
 
   /* Use a union of 'cur' & 'tot' in case the current view is far outside 'tot'. In this cases
    * moving the scroll bars has far too little effect and the view can get stuck #31476. */

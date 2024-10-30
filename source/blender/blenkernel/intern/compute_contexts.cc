@@ -23,7 +23,7 @@ void ModifierComputeContext::print_current_in_line(std::ostream &stream) const
   stream << "Modifier: " << modifier_name_;
 }
 
-NodeGroupComputeContext::NodeGroupComputeContext(
+GroupNodeComputeContext::GroupNodeComputeContext(
     const ComputeContext *parent,
     const int32_t node_id,
     const std::optional<ComputeContextHash> &cached_hash)
@@ -45,23 +45,21 @@ NodeGroupComputeContext::NodeGroupComputeContext(
   }
 }
 
-NodeGroupComputeContext::NodeGroupComputeContext(const ComputeContext *parent, const bNode &node)
-    : NodeGroupComputeContext(parent, node.identifier)
+GroupNodeComputeContext::GroupNodeComputeContext(const ComputeContext *parent,
+                                                 const bNode &node,
+                                                 const bNodeTree &caller_tree)
+    : GroupNodeComputeContext(parent, node.identifier)
 {
-#ifdef DEBUG
-  debug_node_name_ = node.name;
-#endif
+  caller_group_node_ = &node;
+  caller_tree_ = &caller_tree;
 }
 
-void NodeGroupComputeContext::print_current_in_line(std::ostream &stream) const
+void GroupNodeComputeContext::print_current_in_line(std::ostream &stream) const
 {
-#ifdef DEBUG
-  if (!debug_node_name_.empty()) {
-    stream << "Node: " << debug_node_name_;
+  if (caller_group_node_ != nullptr) {
+    stream << "Node: " << caller_group_node_->name;
     return;
   }
-#endif
-  stream << "Node ID: " << node_id_;
 }
 
 SimulationZoneComputeContext::SimulationZoneComputeContext(const ComputeContext *parent,
@@ -117,6 +115,46 @@ RepeatZoneComputeContext::RepeatZoneComputeContext(const ComputeContext *parent,
 void RepeatZoneComputeContext::print_current_in_line(std::ostream &stream) const
 {
   stream << "Repeat Zone ID: " << output_node_id_;
+}
+
+ForeachGeometryElementZoneComputeContext::ForeachGeometryElementZoneComputeContext(
+    const ComputeContext *parent, const int32_t output_node_id, const int index)
+    : ComputeContext(s_static_type, parent), output_node_id_(output_node_id), index_(index)
+{
+  /* Mix static type and node id into a single buffer so that only a single call to #mix_in is
+   * necessary. */
+  const int type_size = strlen(s_static_type);
+  const int buffer_size = type_size + 1 + sizeof(int32_t) + sizeof(int);
+  DynamicStackBuffer<64, 8> buffer_owner(buffer_size, 8);
+  char *buffer = static_cast<char *>(buffer_owner.buffer());
+  memcpy(buffer, s_static_type, type_size + 1);
+  memcpy(buffer + type_size + 1, &output_node_id_, sizeof(int32_t));
+  memcpy(buffer + type_size + 1 + sizeof(int32_t), &index_, sizeof(int));
+  hash_.mix_in(buffer, buffer_size);
+}
+
+ForeachGeometryElementZoneComputeContext::ForeachGeometryElementZoneComputeContext(
+    const ComputeContext *parent, const bNode &node, const int index)
+    : ForeachGeometryElementZoneComputeContext(parent, node.identifier, index)
+{
+}
+
+void ForeachGeometryElementZoneComputeContext::print_current_in_line(std::ostream &stream) const
+{
+  stream << "Foreach Geometry Element Zone ID: " << output_node_id_;
+}
+
+OperatorComputeContext::OperatorComputeContext() : OperatorComputeContext(nullptr) {}
+
+OperatorComputeContext::OperatorComputeContext(const ComputeContext *parent)
+    : ComputeContext(s_static_type, parent)
+{
+  hash_.mix_in(s_static_type, strlen(s_static_type));
+}
+
+void OperatorComputeContext::print_current_in_line(std::ostream &stream) const
+{
+  stream << "Operator";
 }
 
 }  // namespace blender::bke

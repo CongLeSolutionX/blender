@@ -12,12 +12,11 @@
 #include "COLLADASWSource.h"
 
 #include "DNA_action_types.h"
-#include "DNA_meshdata_types.h"
 #include "DNA_modifier_types.h"
 
-#include "BKE_action.h"
+#include "BKE_action.hh"
 #include "BKE_armature.hh"
-#include "BKE_global.h"
+#include "BKE_global.hh"
 #include "BKE_mesh.hh"
 
 #include "ED_armature.hh"
@@ -39,7 +38,7 @@ void ArmatureExporter::add_bone_collections(Object *ob_arm, COLLADASW::Node &nod
 
   std::stringstream collection_stream;
   std::stringstream visible_stream;
-  LISTBASE_FOREACH (const BoneCollection *, bcoll, &armature->collections) {
+  for (const BoneCollection *bcoll : armature->collections_span()) {
     collection_stream << bcoll->name << "\n";
 
     if (bcoll->flags & BONE_COLLECTION_VISIBLE) {
@@ -49,13 +48,13 @@ void ArmatureExporter::add_bone_collections(Object *ob_arm, COLLADASW::Node &nod
 
   std::string collection_names = collection_stream.str();
   if (collection_names.length() > 1) {
-    collection_names.pop_back();  // Pop off the last \n.
+    collection_names.pop_back(); /* Pop off the last `\n`. */
     node.addExtraTechniqueParameter("blender", "collections", collection_names);
   }
 
   std::string visible_names = visible_stream.str();
   if (visible_names.length() > 1) {
-    visible_names.pop_back();  // Pop off the last \n.
+    visible_names.pop_back(); /* Pop off the last `\n`. */
     node.addExtraTechniqueParameter("blender", "visible_collections", visible_names);
   }
 
@@ -114,8 +113,8 @@ bool ArmatureExporter::add_instance_controller(Object *ob)
   COLLADASW::InstanceController ins(mSW);
   ins.setUrl(COLLADASW::URI(COLLADABU::Utils::EMPTY_STRING, controller_id));
 
-  Mesh *me = (Mesh *)ob->data;
-  if (BKE_mesh_deform_verts(me) == nullptr) {
+  Mesh *mesh = (Mesh *)ob->data;
+  if (mesh->deform_verts().is_empty()) {
     return false;
   }
 
@@ -196,7 +195,7 @@ void ArmatureExporter::add_bone_node(Bone *bone,
         collection_names += std::string(bcoll_ref->bcoll->name) + "\n";
       }
       if (collection_names.length() > 1) {
-        collection_names.pop_back();  // Pop off the last \n.
+        collection_names.pop_back(); /* Pop off the last `\n`. */
         node.addExtraTechniqueParameter("blender", "", collection_names, "", "collections");
       }
 

@@ -6,11 +6,13 @@
  * \ingroup gpu
  */
 
-#include "BKE_global.h"
+#include "BKE_global.hh"
 
-#include "PIL_time.h"
+#include "DNA_userdef_types.h"
 
 #include "BLI_string.h"
+#include "BLI_time.h"
+
 #include <algorithm>
 #include <fstream>
 #include <iostream>
@@ -22,9 +24,10 @@
 
 #include <cstring>
 
-#include "GPU_platform.h"
-#include "GPU_vertex_format.h"
+#include "GPU_platform.hh"
+#include "GPU_vertex_format.hh"
 
+#include "gpu_shader_dependency_private.hh"
 #include "mtl_common.hh"
 #include "mtl_context.hh"
 #include "mtl_debug.hh"
@@ -36,7 +39,9 @@
 #include "mtl_texture.hh"
 #include "mtl_vertex_buffer.hh"
 
-extern char datatoc_mtl_shader_common_msl[];
+#include "GHOST_C-api.h"
+
+extern const char datatoc_mtl_shader_common_msl[];
 
 using namespace blender;
 using namespace blender::gpu;
@@ -144,17 +149,19 @@ MTLShader::~MTLShader()
       delete pso_inst;
     }
     pso_cache_.clear();
+
+    /* Free Compute pipeline cache. */
+    for (const MTLComputePipelineStateInstance *pso_inst : compute_pso_cache_.values()) {
+      if (pso_inst->compute) {
+        [pso_inst->compute release];
+      }
+      if (pso_inst->pso) {
+        [pso_inst->pso release];
+      }
+    }
+    compute_pso_cache_.clear();
     pso_cache_lock_.unlock();
 
-    /* Free Compute pipeline state object. */
-    if (compute_pso_instance_.compute) {
-      [compute_pso_instance_.compute release];
-      compute_pso_instance_.compute = nil;
-    }
-    if (compute_pso_instance_.pso) {
-      [compute_pso_instance_.pso release];
-      compute_pso_instance_.pso = nil;
-    }
     /* NOTE(Metal): #ShaderInterface deletion is handled in the super destructor `~Shader()`. */
   }
   valid_ = false;
@@ -163,6 +170,11 @@ MTLShader::~MTLShader()
     delete shd_builder_;
     shd_builder_ = nullptr;
   }
+}
+
+void MTLShader::init(const shader::ShaderCreateInfo & /*info*/, bool is_batch_compilation)
+{
+  async_compilation_ = is_batch_compilation;
 }
 
 /** \} */
@@ -178,7 +190,7 @@ void MTLShader::vertex_shader_from_glsl(MutableSpan<const char *> sources)
   shd_builder_->source_from_msl_ = false;
 
   /* Remove #version tag entry. */
-  sources[0] = "";
+  sources[SOURCES_INDEX_VERSION] = "";
 
   /* Consolidate GLSL vertex sources. */
   std::stringstream ss;
@@ -200,13 +212,24 @@ void MTLShader::fragment_shader_from_glsl(MutableSpan<const char *> sources)
   shd_builder_->source_from_msl_ = false;
 
   /* Remove #version tag entry. */
-  sources[0] = "";
+  sources[SOURCES_INDEX_VERSION] = "";
 
   /* Consolidate GLSL fragment sources. */
   std::stringstream ss;
-  for (int i = 0; i < sources.size(); i++) {
-    ss << sources[i] << std::endl;
+  int i;
+  for (i = 0; i < sources.size(); i++) {
+    /* Output preprocessor directive to improve shader log. */
+    StringRefNull name = shader::gpu_shader_dependency_get_filename_from_source_string(sources[i]);
+    if (name.is_empty()) {
+      ss << "#line 1 \"generated_code_" << i << "\"\n";
+    }
+    else {
+      ss << "#line 1 \"" << name << "\"\n";
+    }
+
+    ss << sources[i] << '\n';
   }
+  ss << "#line 1 \"msl_wrapper_code\"\n";
   shd_builder_->glsl_fragment_source_ = ss.str();
 }
 
@@ -217,11 +240,19 @@ void MTLShader::compute_shader_from_glsl(MutableSpan<const char *> sources)
   shd_builder_->source_from_msl_ = false;
 
   /* Remove #version tag entry. */
-  sources[0] = "";
+  sources[SOURCES_INDEX_VERSION] = "";
 
   /* Consolidate GLSL compute sources. */
   std::stringstream ss;
   for (int i = 0; i < sources.size(); i++) {
+    /* Output preprocessor directive to improve shader log. */
+    StringRefNull name = shader::gpu_shader_dependency_get_filename_from_source_string(sources[i]);
+    if (name.is_empty()) {
+      ss << "#line 1 \"generated_code_" << i << "\"\n";
+    }
+    else {
+      ss << "#line 1 \"" << name << "\"\n";
+    }
     ss << sources[i] << std::endl;
   }
   shd_builder_->glsl_compute_source_ = ss.str();
@@ -262,6 +293,15 @@ bool MTLShader::finalize(const shader::ShaderCreateInfo *info)
     }
   }
 
+  /** Extract desired custom parameters from CreateInfo. */
+  /* Tuning parameters for compute kernels. */
+  if (is_compute) {
+    int threadgroup_tuning_param = info->mtl_max_threads_per_threadgroup_;
+    if (threadgroup_tuning_param > 0) {
+      maxTotalThreadsPerThreadgroup_Tuning_ = threadgroup_tuning_param;
+    }
+  }
+
   /* Ensure we have a valid shader interface. */
   MTLShaderInterface *mtl_interface = this->get_interface();
   BLI_assert(mtl_interface != nullptr);
@@ -291,14 +331,13 @@ bool MTLShader::finalize(const shader::ShaderCreateInfo *info)
     MTLCompileOptions *options = [[[MTLCompileOptions alloc] init] autorelease];
     options.languageVersion = MTLLanguageVersion2_2;
     options.fastMathEnabled = YES;
+    options.preserveInvariance = YES;
 
-    if (@available(macOS 11.00, *)) {
-      /* Raster order groups for tile data in struct require Metal 2.3.
-       * Retaining Metal 2.2. for old shaders to maintain backwards
-       * compatibility for existing features. */
-      if (info->subpass_inputs_.size() > 0) {
-        options.languageVersion = MTLLanguageVersion2_3;
-      }
+    /* Raster order groups for tile data in struct require Metal 2.3.
+     * Retaining Metal 2.2. for old shaders to maintain backwards
+     * compatibility for existing features. */
+    if (info->subpass_inputs_.size() > 0) {
+      options.languageVersion = MTLLanguageVersion2_3;
     }
 #if defined(MAC_OS_VERSION_14_0)
     if (@available(macOS 14.00, *)) {
@@ -339,14 +378,6 @@ bool MTLShader::finalize(const shader::ShaderCreateInfo *info)
       /* Inject unique context ID to avoid cross-context shader cache collisions.
        * Required on macOS 11.0. */
       NSString *source_with_header = source_with_header_a;
-      if (@available(macos 11.0, *)) {
-        /* Pass-through. Availability syntax requirement, expression cannot be negated. */
-      }
-      else {
-        source_with_header = [source_with_header_a
-            stringByAppendingString:[NSString stringWithFormat:@"\n\n#define MTL_CONTEXT_IND %d\n",
-                                                               context_->context_id]];
-      }
       [source_with_header retain];
 
       /* Prepare Shader Library. */
@@ -357,9 +388,11 @@ bool MTLShader::finalize(const shader::ShaderCreateInfo *info)
       if (error) {
         /* Only exit out if genuine error and not warning. */
         if ([[error localizedDescription] rangeOfString:@"Compilation succeeded"].location ==
-            NSNotFound) {
+            NSNotFound)
+        {
           const char *errors_c_str = [[error localizedDescription] UTF8String];
-          const char *sources_c_str = shd_builder_->glsl_fragment_source_.c_str();
+          const char *sources_c_str = (is_compute) ? shd_builder_->glsl_compute_source_.c_str() :
+                                                     shd_builder_->glsl_fragment_source_.c_str();
 
           MTLLogParser parser;
           print_log(Span<const char *>(&sources_c_str, 1),
@@ -435,9 +468,13 @@ bool MTLShader::finalize(const shader::ShaderCreateInfo *info)
       push_constant_data_ = nullptr;
     }
 
-    /* If this is a compute shader, bake PSO for compute straight-away. */
+    /* If this is a compute shader, bake base PSO for compute straight-away.
+     * NOTE: This will compile the base unspecialized variant. */
     if (is_compute) {
-      this->bake_compute_pipeline_state(context_);
+      /* Set descriptor to default shader constants */
+      MTLComputePipelineStateDescriptor compute_pipeline_descriptor(this->constants.values);
+
+      this->bake_compute_pipeline_state(context_, compute_pipeline_descriptor);
     }
   }
 
@@ -445,11 +482,6 @@ bool MTLShader::finalize(const shader::ShaderCreateInfo *info)
   delete shd_builder_;
   shd_builder_ = nullptr;
   return true;
-}
-
-const MTLComputePipelineStateInstance &MTLShader::get_compute_pipeline_state()
-{
-  return this->compute_pso_instance_;
 }
 
 void MTLShader::transform_feedback_names_set(Span<const char *> name_list,
@@ -462,13 +494,13 @@ void MTLShader::transform_feedback_names_set(Span<const char *> name_list,
   transform_feedback_type_ = geom_type;
 }
 
-bool MTLShader::transform_feedback_enable(GPUVertBuf *buf)
+bool MTLShader::transform_feedback_enable(blender::gpu::VertBuf *buf)
 {
   BLI_assert(transform_feedback_type_ != GPU_SHADER_TFB_NONE);
   BLI_assert(buf);
   transform_feedback_active_ = true;
   transform_feedback_vertbuf_ = buf;
-  BLI_assert(static_cast<MTLVertBuf *>(unwrap(transform_feedback_vertbuf_))->get_usage_type() ==
+  BLI_assert(static_cast<MTLVertBuf *>(transform_feedback_vertbuf_)->get_usage_type() ==
              GPU_USAGE_DEVICE_ONLY);
   return true;
 }
@@ -487,7 +519,7 @@ void MTLShader::transform_feedback_disable()
 
 void MTLShader::bind()
 {
-  MTLContext *ctx = static_cast<MTLContext *>(unwrap(GPU_context_active_get()));
+  MTLContext *ctx = MTLContext::get();
   if (interface == nullptr || !this->is_valid()) {
     MTL_LOG_WARNING(
         "MTLShader::bind - Shader '%s' has no valid implementation in Metal, draw calls will be "
@@ -499,7 +531,7 @@ void MTLShader::bind()
 
 void MTLShader::unbind()
 {
-  MTLContext *ctx = static_cast<MTLContext *>(unwrap(GPU_context_active_get()));
+  MTLContext *ctx = MTLContext::get();
   ctx->pipeline_state.active_shader = nullptr;
 }
 
@@ -638,15 +670,43 @@ void MTLShader::uniform_int(int location, int comp_len, int array_size, const in
   uint8_t *ptr = (uint8_t *)push_constant_data_;
   ptr += uniform.byte_offset;
 
+  /** Determine size of data to copy. */
+  const char *data_to_copy = (char *)data;
+  uint data_size_to_copy = sizeof(int) * comp_len * array_size;
+
+  /* Special cases for small types support where storage is shader push constant buffer is smaller
+   * than the incoming data. */
+  ushort us;
+  uchar uc;
+  if (uniform.size_in_bytes == 1) {
+    /* Convert integer storage value down to uchar. */
+    data_size_to_copy = uniform.size_in_bytes;
+    uc = *data;
+    data_to_copy = (char *)&uc;
+  }
+  else if (uniform.size_in_bytes == 2) {
+    /* Convert integer storage value down to ushort. */
+    data_size_to_copy = uniform.size_in_bytes;
+    us = *data;
+    data_to_copy = (char *)&us;
+  }
+  else {
+    BLI_assert_msg(
+        (mtl_get_data_type_alignment(uniform.type) % sizeof(int)) == 0,
+        "When uniform inputs are provided as integers, the underlying type must adhere "
+        "to alignment per-component. If this test fails, the input data cannot be directly copied "
+        "to the buffer. e.g. Array of small types uchar/bool/ushort etc; are currently not "
+        "handled.");
+  }
+
   /* Copy data into local block. Only flag UBO as modified if data is different
    * This can avoid re-binding of unmodified local uniform data, reducing
    * the total number of copy operations needed and data transfers between
    * CPU and GPU. */
-  bool data_changed = (memcmp((void *)ptr, (void *)data, sizeof(int) * comp_len * array_size) !=
-                       0);
+  bool data_changed = (memcmp((void *)ptr, (void *)data_to_copy, data_size_to_copy) != 0);
   if (data_changed) {
     this->push_constant_bindstate_mark_dirty(true);
-    memcpy((void *)ptr, (void *)data, sizeof(int) * comp_len * array_size);
+    memcpy((void *)ptr, (void *)data_to_copy, data_size_to_copy);
   }
 }
 
@@ -660,6 +720,8 @@ void MTLShader::push_constant_bindstate_mark_dirty(bool is_dirty)
   push_constant_modified_ = is_dirty;
 }
 
+/* Attempts to pre-generate a PSO based on the parent shaders PSO
+ * (Render shaders only) */
 void MTLShader::warm_cache(int limit)
 {
   if (parent_shader_ != nullptr) {
@@ -734,6 +796,44 @@ void MTLShader::set_interface(MTLShaderInterface *interface)
   Shader::interface = interface;
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Shader specialization common utilities.
+ *
+ * \{ */
+
+/**
+ * Populates `values` with the given `SpecializationStateDescriptor` values.
+ */
+static void populate_specialization_constant_values(
+    MTLFunctionConstantValues *values,
+    const Shader::Constants &shader_constants,
+    const SpecializationStateDescriptor &specialization_descriptor)
+{
+  for (auto i : shader_constants.types.index_range()) {
+    const Shader::Constants::Value &value = specialization_descriptor.values[i];
+
+    uint index = i + MTL_SHADER_SPECIALIZATION_CONSTANT_BASE_ID;
+    switch (shader_constants.types[i]) {
+      case Type::INT:
+        [values setConstantValue:&value.i type:MTLDataTypeInt atIndex:index];
+        break;
+      case Type::UINT:
+        [values setConstantValue:&value.u type:MTLDataTypeUInt atIndex:index];
+        break;
+      case Type::BOOL:
+        [values setConstantValue:&value.u type:MTLDataTypeBool atIndex:index];
+        break;
+      case Type::FLOAT:
+        [values setConstantValue:&value.f type:MTLDataTypeFloat atIndex:index];
+        break;
+      default:
+        BLI_assert_msg(false, "Unsupported custom constant type.");
+        break;
+    }
+  }
+}
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -828,6 +928,9 @@ MTLRenderPipelineStateInstance *MTLShader::bake_current_pipeline_state(
   pipeline_descriptor.vertex_descriptor.prim_topology_class =
       (requires_specific_topology_class) ? prim_type : MTLPrimitiveTopologyClassUnspecified;
 
+  /* Specialization configuration. */
+  pipeline_descriptor.specialization_state = {this->constants.values};
+
   /* Bake pipeline state using global descriptor. */
   return bake_pipeline_state(ctx, prim_type, pipeline_descriptor);
 }
@@ -854,6 +957,13 @@ MTLRenderPipelineStateInstance *MTLShader::bake_pipeline_state(
     return pipeline_state;
   }
 
+  /* TODO: When fetching a specialized variant of a shader, if this does not yet exist, verify
+   * whether the base unspecialized variant exists:
+   * - If unspecialized version exists: Compile specialized PSO asynchronously, returning base PSO
+   * and flagging state of specialization in cache as being built.
+   * - If unspecialized does NOT exist, build specialized version straight away, as we pay the
+   * cost of compilation in both cases regardless. */
+
   /* Generate new Render Pipeline State Object (PSO). */
   @autoreleasepool {
     /* Prepare Render Pipeline Descriptor. */
@@ -861,6 +971,10 @@ MTLRenderPipelineStateInstance *MTLShader::bake_pipeline_state(
     /* Setup function specialization constants, used to modify and optimize
      * generated code based on current render pipeline configuration. */
     MTLFunctionConstantValues *values = [[MTLFunctionConstantValues new] autorelease];
+
+    /* Custom function constant values: */
+    populate_specialization_constant_values(
+        values, this->constants, pipeline_descriptor.specialization_state);
 
     /* Prepare Vertex descriptor based on current pipeline vertex binding state. */
     MTLRenderPipelineDescriptor *desc = pso_descriptor_;
@@ -895,7 +1009,8 @@ MTLRenderPipelineStateInstance *MTLShader::bake_pipeline_state(
     }
     else {
       for (const uint i :
-           IndexRange(pipeline_descriptor.vertex_descriptor.max_attribute_value + 1)) {
+           IndexRange(pipeline_descriptor.vertex_descriptor.max_attribute_value + 1))
+      {
 
         /* Metal back-end attribute descriptor state. */
         const MTLVertexAttributeDescriptorPSO &attribute_desc =
@@ -937,7 +1052,7 @@ MTLRenderPipelineStateInstance *MTLShader::bake_pipeline_state(
         {
           shader_debug_printf(
               "TODO(Metal): Shader %s needs to support internal format conversion\n",
-              mtl_interface->name);
+              mtl_interface->get_name());
         }
 
         /* Copy metal back-end attribute descriptor state into PSO descriptor.
@@ -1088,7 +1203,8 @@ MTLRenderPipelineStateInstance *MTLShader::bake_pipeline_state(
     bool null_pointsize = true;
     float MTL_pointsize = pipeline_descriptor.point_size;
     if (pipeline_descriptor.vertex_descriptor.prim_topology_class ==
-        MTLPrimitiveTopologyClassPoint) {
+        MTLPrimitiveTopologyClassPoint)
+    {
       /* `if pointsize is > 0.0`, PROGRAM_POINT_SIZE is enabled, and `gl_PointSize` shader keyword
        * overrides the value. Otherwise, if < 0.0, use global constant point size. */
       if (MTL_pointsize < 0.0) {
@@ -1160,7 +1276,8 @@ MTLRenderPipelineStateInstance *MTLShader::bake_pipeline_state(
 
     /* Setup pixel format state */
     for (int color_attachment = 0; color_attachment < GPU_FB_MAX_COLOR_ATTACHMENT;
-         color_attachment++) {
+         color_attachment++)
+    {
       /* Fetch color attachment pixel format in back-end pipeline state. */
       MTLPixelFormat pixel_format = pipeline_descriptor.color_attachment_format[color_attachment];
       /* Populate MTL API PSO attachment descriptor. */
@@ -1347,7 +1464,8 @@ MTLRenderPipelineStateInstance *MTLShader::bake_pipeline_state(
   }
 }
 
-bool MTLShader::bake_compute_pipeline_state(MTLContext *ctx)
+MTLComputePipelineStateInstance *MTLShader::bake_compute_pipeline_state(
+    MTLContext *ctx, MTLComputePipelineStateDescriptor &compute_pipeline_descriptor)
 {
   /* NOTE(Metal): Bakes and caches a PSO for compute. */
   BLI_assert(this);
@@ -1356,12 +1474,30 @@ bool MTLShader::bake_compute_pipeline_state(MTLContext *ctx)
   BLI_assert(this->is_valid());
   BLI_assert(shader_library_compute_ != nil);
 
-  if (compute_pso_instance_.pso == nil) {
+  /* Check if current PSO exists in the cache. */
+  pso_cache_lock_.lock();
+  MTLComputePipelineStateInstance **pso_lookup = compute_pso_cache_.lookup_ptr(
+      compute_pipeline_descriptor);
+  MTLComputePipelineStateInstance *pipeline_state = (pso_lookup) ? *pso_lookup : nullptr;
+  pso_cache_lock_.unlock();
+
+  if (pipeline_state != nullptr) {
+    /* Return cached PSO state. */
+    BLI_assert(pipeline_state->pso != nil);
+    return pipeline_state;
+  }
+  else {
     /* Prepare Compute Pipeline Descriptor. */
 
     /* Setup function specialization constants, used to modify and optimize
      * generated code based on current render pipeline configuration. */
     MTLFunctionConstantValues *values = [[MTLFunctionConstantValues new] autorelease];
+
+    /* TODO: Compile specialized shader variants asynchronously. */
+
+    /* Custom function constant values: */
+    populate_specialization_constant_values(
+        values, this->constants, compute_pipeline_descriptor.specialization_state);
 
     /* Offset the bind index for Uniform buffers such that they begin after the VBO
      * buffer bind slots. `MTL_uniform_buffer_base_index` is passed as a function
@@ -1401,16 +1537,35 @@ bool MTLShader::bake_compute_pipeline_state(MTLContext *ctx)
 
       /* Only exit out if genuine error and not warning */
       if ([[error localizedDescription] rangeOfString:@"Compilation succeeded"].location ==
-          NSNotFound) {
+          NSNotFound)
+      {
         BLI_assert(false);
-        return false;
+        return nullptr;
       }
     }
 
     /* Compile PSO. */
     MTLComputePipelineDescriptor *desc = [[MTLComputePipelineDescriptor alloc] init];
-    desc.maxTotalThreadsPerThreadgroup = 1024;
+    desc.label = [NSString stringWithUTF8String:this->name];
     desc.computeFunction = compute_function;
+
+    /** If Max Total threads per threadgroup tuning parameters are specified, compile with these.
+     * This enables the compiler to make informed decisions based on the upper bound of threads
+     * issued for a given compute call.
+     * This per-shader tuning can reduce the static register memory allocation by reducing the
+     * worst-case allocation and increasing thread occupancy.
+     *
+     * NOTE: This is only enabled on Apple M1 and M2 GPUs. Apple M3 GPUs feature dynamic caching
+     * which controls register allocation dynamically based on the runtime state.  */
+    const MTLCapabilities &capabilities = MTLBackend::get_capabilities();
+    if (ELEM(capabilities.gpu, APPLE_GPU_M1, APPLE_GPU_M2)) {
+      if (maxTotalThreadsPerThreadgroup_Tuning_ > 0) {
+        desc.maxTotalThreadsPerThreadgroup = this->maxTotalThreadsPerThreadgroup_Tuning_;
+        MTL_LOG_INFO("Using custom parameter for shader %s value %u\n",
+                     this->name,
+                     maxTotalThreadsPerThreadgroup_Tuning_);
+      }
+    }
 
     id<MTLComputePipelineState> pso = [ctx->device
         newComputePipelineStateWithDescriptor:desc
@@ -1418,16 +1573,43 @@ bool MTLShader::bake_compute_pipeline_state(MTLContext *ctx)
                                    reflection:nullptr
                                         error:&error];
 
+    /* If PSO has compiled but max theoretical threads-per-threadgroup is lower than required
+     * dispatch size, recompile with increased limit. NOTE: This will result in a performance drop,
+     * ideally the source shader should be modified to reduce local register pressure, or, local
+     * work-group size should be reduced.
+     * Similarly, the custom tuning parameter "mtl_max_total_threads_per_threadgroup" can be
+     * specified to a sufficiently large value to avoid this.  */
+    if (pso) {
+      uint num_required_threads_per_threadgroup = compute_pso_common_state_.threadgroup_x_len *
+                                                  compute_pso_common_state_.threadgroup_y_len *
+                                                  compute_pso_common_state_.threadgroup_z_len;
+      if (pso.maxTotalThreadsPerThreadgroup < num_required_threads_per_threadgroup) {
+        MTL_LOG_WARNING(
+            "Shader '%s' requires %u threads per threadgroup, but PSO limit is: %lu. Recompiling "
+            "with increased limit on descriptor.\n",
+            this->name,
+            num_required_threads_per_threadgroup,
+            (unsigned long)pso.maxTotalThreadsPerThreadgroup);
+        [pso release];
+        pso = nil;
+        desc.maxTotalThreadsPerThreadgroup = 1024;
+        pso = [ctx->device newComputePipelineStateWithDescriptor:desc
+                                                         options:MTLPipelineOptionNone
+                                                      reflection:nullptr
+                                                           error:&error];
+      }
+    }
+
     if (error) {
       NSLog(@"Failed to create PSO for compute shader: %s error %@\n", this->name, error);
       BLI_assert(false);
-      return false;
+      return nullptr;
     }
     else if (!pso) {
       NSLog(@"Failed to create PSO for compute shader: %s, but no error was provided!\n",
             this->name);
       BLI_assert(false);
-      return false;
+      return nullptr;
     }
     else {
 #if 0
@@ -1438,12 +1620,19 @@ bool MTLShader::bake_compute_pipeline_state(MTLContext *ctx)
     }
 
     /* Gather reflection data and create MTLComputePipelineStateInstance to store results. */
-    compute_pso_instance_.compute = [compute_function retain];
-    compute_pso_instance_.pso = [pso retain];
-    compute_pso_instance_.base_uniform_buffer_index = MTL_uniform_buffer_base_index;
-    compute_pso_instance_.base_storage_buffer_index = MTL_storage_buffer_base_index;
+    MTLComputePipelineStateInstance *compute_pso_instance = new MTLComputePipelineStateInstance();
+    compute_pso_instance->compute = [compute_function retain];
+    compute_pso_instance->pso = [pso retain];
+    compute_pso_instance->base_uniform_buffer_index = MTL_uniform_buffer_base_index;
+    compute_pso_instance->base_storage_buffer_index = MTL_storage_buffer_base_index;
+
+    pso_cache_lock_.lock();
+    compute_pso_instance->shader_pso_index = compute_pso_cache_.size();
+    compute_pso_cache_.add(compute_pipeline_descriptor, compute_pso_instance);
+    pso_cache_lock_.unlock();
+
+    return compute_pso_instance;
   }
-  return true;
 }
 /** \} */
 
@@ -1598,7 +1787,7 @@ void MTLShader::ssbo_vertex_fetch_bind_attributes_end(
     }
 
     /* Bind NULL buffer to given VBO slot. */
-    MTLContext *ctx = static_cast<MTLContext *>(unwrap(GPU_context_active_get()));
+    MTLContext *ctx = MTLContext::get();
     id<MTLBuffer> null_buf = ctx->get_null_attribute_buffer();
     BLI_assert(null_buf);
 
@@ -1607,7 +1796,7 @@ void MTLShader::ssbo_vertex_fetch_bind_attributes_end(
   }
 }
 
-GPUVertBuf *MTLShader::get_transform_feedback_active_buffer()
+blender::gpu::VertBuf *MTLShader::get_transform_feedback_active_buffer()
 {
   if (transform_feedback_type_ == GPU_SHADER_TFB_NONE || !transform_feedback_active_) {
     return nullptr;
@@ -1624,5 +1813,445 @@ bool MTLShader::has_transform_feedback_varying(std::string str)
   return (std::find(tf_output_name_list_.begin(), tf_output_name_list_.end(), str) !=
           tf_output_name_list_.end());
 }
+
+/** \} */
+
+/* Since this is going to be compiling shaders in a multi-threaded fashion we
+ * don't want to create an instance per context as we want to restrict the
+ * number of simultaneous compilation threads to ensure system responsiveness.
+ * Hence the global shared instance. */
+MTLParallelShaderCompiler *g_shared_parallel_shader_compiler = nullptr;
+std::mutex g_shared_parallel_shader_compiler_mutex;
+
+MTLParallelShaderCompiler *get_shared_parallel_shader_compiler()
+{
+  std::scoped_lock lock(g_shared_parallel_shader_compiler_mutex);
+
+  if (!g_shared_parallel_shader_compiler) {
+    g_shared_parallel_shader_compiler = new MTLParallelShaderCompiler();
+  }
+  else {
+    g_shared_parallel_shader_compiler->increment_ref_count();
+  }
+  return g_shared_parallel_shader_compiler;
+}
+
+void release_shared_parallel_shader_compiler()
+{
+  std::scoped_lock lock(g_shared_parallel_shader_compiler_mutex);
+
+  if (!g_shared_parallel_shader_compiler) {
+    return;
+  }
+
+  g_shared_parallel_shader_compiler->decrement_ref_count();
+  if (g_shared_parallel_shader_compiler->get_ref_count() == 0) {
+    delete g_shared_parallel_shader_compiler;
+    g_shared_parallel_shader_compiler = nullptr;
+  }
+}
+
+/* -------------------------------------------------------------------- */
+/** \name MTLParallelShaderCompiler
+ * \{ */
+
+MTLParallelShaderCompiler::MTLParallelShaderCompiler()
+{
+  BLI_assert(GPU_use_parallel_compilation());
+
+  terminate_compile_threads = false;
+}
+
+MTLParallelShaderCompiler::~MTLParallelShaderCompiler()
+{
+  /* Shutdown the compiler threads. */
+  terminate_compile_threads = true;
+  cond_var.notify_all();
+
+  for (auto &thread : compile_threads) {
+    thread.join();
+  }
+
+  /* Mark any unprocessed work items as ready so we can move
+   * them into a batch for cleanup. */
+  if (!parallel_work_queue.empty()) {
+    std::unique_lock<std::mutex> lock(queue_mutex);
+    while (!parallel_work_queue.empty()) {
+      ParallelWork *work_item = parallel_work_queue.front();
+      work_item->is_ready = true;
+      parallel_work_queue.pop_front();
+    }
+  }
+
+  /* Clean up any outstanding batches. */
+  for (BatchHandle handle : batches.keys()) {
+    Vector<Shader *> shaders = batch_finalize(handle);
+    /* Delete any shaders in the batch. */
+    for (Shader *shader : shaders) {
+      if (shader) {
+        delete shader;
+      }
+    }
+  }
+  BLI_assert(batches.is_empty());
+}
+
+void MTLParallelShaderCompiler::create_compile_threads()
+{
+  std::unique_lock<std::mutex> lock(queue_mutex);
+
+  /* Return if the compilation threads already exist */
+  if (!compile_threads.empty()) {
+    return;
+  }
+
+  /* Limit to the number of compiler threads to (performance cores - 1) to
+   * leave one thread free for main thread/UI responsiveness */
+  const MTLCapabilities &capabilities = MTLBackend::get_capabilities();
+  int max_mtlcompiler_threads = capabilities.num_performance_cores - 1;
+
+  /* Save the main thread context */
+  GPUContext *main_thread_context = GPU_context_active_get();
+  MTLContext *metal_context = static_cast<MTLContext *>(unwrap(main_thread_context));
+  id<MTLDevice> metal_device = metal_context->device;
+
+#if defined(MAC_OS_VERSION_13_3)
+  /* Clamp the number of threads if necessary. */
+  if (@available(macOS 13.3, *)) {
+    /* Check we've set the flag to allow more than 2 compile threads. */
+    BLI_assert(metal_device.shouldMaximizeConcurrentCompilation);
+    max_mtlcompiler_threads = MIN(int([metal_device maximumConcurrentCompilationTaskCount]),
+                                  max_mtlcompiler_threads);
+  }
+#endif
+
+  /* GPU settings for context creation. */
+  GHOST_GPUSettings gpuSettings = {0};
+  gpuSettings.context_type = GHOST_kDrawingContextTypeMetal;
+  if (G.debug & G_DEBUG_GPU) {
+    gpuSettings.flags |= GHOST_gpuDebugContext;
+  }
+  gpuSettings.preferred_device.index = U.gpu_preferred_index;
+  gpuSettings.preferred_device.vendor_id = U.gpu_preferred_vendor_id;
+  gpuSettings.preferred_device.device_id = U.gpu_preferred_device_id;
+
+  /* Spawn the compiler threads. */
+  for (int i = 0; i < max_mtlcompiler_threads; i++) {
+
+    /* Grab the system handle.  */
+    GHOST_SystemHandle ghost_system = reinterpret_cast<GHOST_SystemHandle>(
+        GPU_backend_ghost_system_get());
+    BLI_assert(ghost_system);
+
+    /* Create a Ghost GPU Context using the system handle. */
+    GHOST_ContextHandle ghost_gpu_context = GHOST_CreateGPUContext(ghost_system, gpuSettings);
+
+    /* Create a GPU context for the compile thread to use. */
+    GPUContext *per_thread_context = GPU_context_create(nullptr, ghost_gpu_context);
+
+    /* Restore the main thread context.
+     * (required as the above context creation also makes it active). */
+    GPU_context_active_set(main_thread_context);
+
+    /* Create a new thread */
+    compile_threads.push_back(std::thread([this, per_thread_context] {
+      this->parallel_compilation_thread_func(per_thread_context);
+    }));
+  }
+}
+
+void MTLParallelShaderCompiler::parallel_compilation_thread_func(GPUContext *blender_gpu_context)
+{
+  /* Contexts can only be created on the main thread so we have to
+   * pass one in and make it active here  */
+  GPU_context_active_set(blender_gpu_context);
+
+  MTLContext *metal_context = static_cast<MTLContext *>(unwrap(blender_gpu_context));
+  MTLShaderCompiler *shader_compiler = static_cast<MTLShaderCompiler *>(metal_context->compiler);
+
+  /* This context is only for compilation, it does not need it's own instance of the compiler */
+  shader_compiler->release_parallel_shader_compiler();
+
+  /* Loop until we get the terminate signal */
+  while (!terminate_compile_threads) {
+    /* Grab the next shader off of the queue or wait... */
+    ParallelWork *work_item = nullptr;
+    {
+      std::unique_lock<std::mutex> lock(queue_mutex);
+      cond_var.wait(lock,
+                    [&] { return terminate_compile_threads || !parallel_work_queue.empty(); });
+      if (terminate_compile_threads || parallel_work_queue.empty()) {
+        continue;
+      }
+      work_item = parallel_work_queue.front();
+      parallel_work_queue.pop_front();
+    }
+
+    /* Compile a shader */
+    if (work_item->work_type == PARALLELWORKTYPE_COMPILE_SHADER) {
+      BLI_assert(work_item->info);
+
+      const shader::ShaderCreateInfo *shader_info = work_item->info;
+      work_item->shader = static_cast<MTLShader *>(
+          work_item->shader_compiler->compile(*shader_info, true));
+
+      if (work_item->shader) {
+        /* Generate and cache any render PSOs if possible (typically materials only)
+         * (Finalize() will already bake a Compute PSO if possible) */
+        work_item->shader->warm_cache(-1);
+      }
+    }
+    /* Bake PSO */
+    else if (work_item->work_type == PARALLELWORKTYPE_BAKE_PSO) {
+      MTLShader *shader = work_item->shader;
+      /* Currently only support Compute */
+      BLI_assert(shader && shader->has_compute_shader_lib());
+
+      /* Create descriptor using these specialization constants. */
+      MTLComputePipelineStateDescriptor compute_pipeline_descriptor(
+          work_item->specialization_values);
+
+      shader->bake_compute_pipeline_state(metal_context, compute_pipeline_descriptor);
+    }
+    else {
+      BLI_assert(false);
+    }
+    work_item->is_ready = true;
+  }
+
+  GPU_context_discard(blender_gpu_context);
+}
+
+BatchHandle MTLParallelShaderCompiler::create_batch(size_t batch_size)
+{
+  std::scoped_lock lock(batch_mutex);
+  BatchHandle batch_handle = next_batch_handle++;
+  batches.add(batch_handle, {});
+  Batch &batch = batches.lookup(batch_handle);
+  if (batch_size) {
+    batch.items.reserve(batch_size);
+  }
+  batch.is_ready = false;
+  shader_debug_printf("Created batch %llu\n", batch_handle);
+  return batch_handle;
+}
+
+void MTLParallelShaderCompiler::add_item_to_batch(ParallelWork *work_item,
+                                                  BatchHandle batch_handle)
+{
+  std::scoped_lock lock(batch_mutex);
+  Batch &batch = batches.lookup(batch_handle);
+  batch.items.append(work_item);
+}
+
+void MTLParallelShaderCompiler::add_parallel_item_to_queue(ParallelWork *work_item,
+                                                           BatchHandle batch_handle)
+{
+  shader_debug_printf("Request add shader work\n");
+  if (!terminate_compile_threads) {
+
+    /* Defer creation of compilation threads until required */
+    if (compile_threads.empty()) {
+      create_compile_threads();
+    }
+
+    add_item_to_batch(work_item, batch_handle);
+    std::lock_guard<std::mutex> lock(queue_mutex);
+    parallel_work_queue.push_back(work_item);
+    cond_var.notify_one();
+  }
+}
+
+BatchHandle MTLParallelShaderCompiler::batch_compile(MTLShaderCompiler *shader_compiler,
+                                                     Span<const shader::ShaderCreateInfo *> &infos)
+{
+  BLI_assert(GPU_use_parallel_compilation());
+
+  BatchHandle batch_handle = create_batch(infos.size());
+
+  shader_debug_printf("Batch compile %llu shaders (Batch = %llu)\n", infos.size(), batch_handle);
+
+  /* Have to finalize all shaderInfos *before* any parallel compilation as
+   * ShaderCreateInfo::finalize() is not thread safe */
+  for (const shader::ShaderCreateInfo *info : infos) {
+    const_cast<ShaderCreateInfo *>(info)->finalize();
+  }
+
+  for (const shader::ShaderCreateInfo *info : infos) {
+    ParallelWork *work_item = new ParallelWork;
+    work_item->info = info;
+    work_item->shader_compiler = shader_compiler;
+    work_item->is_ready = false;
+    work_item->shader = nullptr;
+    work_item->work_type = PARALLELWORKTYPE_COMPILE_SHADER;
+    add_parallel_item_to_queue(work_item, batch_handle);
+  }
+
+  return batch_handle;
+}
+
+bool MTLParallelShaderCompiler::batch_is_ready(BatchHandle handle)
+{
+  std::scoped_lock lock(batch_mutex);
+  Batch &batch = batches.lookup(handle);
+  if (batch.is_ready) {
+    return true;
+  }
+
+  for (ParallelWork *item : batch.items) {
+    if (item->is_ready) {
+      continue;
+    }
+    else {
+      return false;
+    }
+  }
+
+  batch.is_ready = true;
+  shader_debug_printf("Batch %llu is now ready\n", handle);
+  return batch.is_ready;
+}
+
+Vector<Shader *> MTLParallelShaderCompiler::batch_finalize(BatchHandle &handle)
+{
+  while (!batch_is_ready(handle)) {
+    BLI_time_sleep_ms(1);
+  }
+  std::scoped_lock lock(batch_mutex);
+
+  Batch batch = batches.pop(handle);
+  Vector<Shader *> result;
+  for (ParallelWork *item : batch.items) {
+    result.append(item->shader);
+    delete item;
+  }
+  handle = 0;
+  return result;
+}
+
+SpecializationBatchHandle MTLParallelShaderCompiler::precompile_specializations(
+    Span<ShaderSpecialization> specializations)
+{
+  BLI_assert(GPU_use_parallel_compilation());
+  /* Zero indicates no batch was created */
+  SpecializationBatchHandle batch_handle = 0;
+
+  for (auto &specialization : specializations) {
+    MTLShader *sh = static_cast<MTLShader *>(unwrap(specialization.shader));
+
+    /* Specialization constants only take effect when we create the PSO.
+     * We don't have the relevant info to create a Render PSO Descriptor unless
+     * the shader has a has_parent_shader() but in that case it would (currently) be
+     * invalid to apply specialization constants. For those reasons we currently only
+     * support pre-compilation of Compute shaders.
+     * (technically we could call makeFunction but the benefit would likely be minimal) */
+    if (!sh->has_compute_shader_lib()) {
+      continue;
+    }
+
+    BLI_assert_msg(sh->is_valid(), "Shader must be finalized before precompiling specializations");
+
+    /* Defer batch creation until we have some work to do */
+    if (!batch_handle) {
+      batch_handle = create_batch(1);
+    }
+
+    ParallelWork *work_item = new ParallelWork;
+    work_item->info = nullptr;
+    work_item->is_ready = false;
+    work_item->shader = sh;
+    work_item->work_type = PARALLELWORKTYPE_BAKE_PSO;
+
+    /* Add the specialization constants to the work-item */
+    for (const SpecializationConstant &constant : specialization.constants) {
+      const ShaderInput *input = sh->interface->constant_get(constant.name.c_str());
+      BLI_assert_msg(input != nullptr, "The specialization constant doesn't exists");
+      work_item->specialization_values[input->location].u = constant.value.u;
+    }
+    sh->constants.is_dirty = true;
+
+    add_parallel_item_to_queue(work_item, batch_handle);
+  }
+  return batch_handle;
+}
+
+bool MTLParallelShaderCompiler::specialization_batch_is_ready(SpecializationBatchHandle &handle)
+{
+  /* Check empty batch case where we have no handle */
+  if (!handle) {
+    return true;
+  }
+
+  std::scoped_lock lock(batch_mutex);
+  Batch &batch = batches.lookup(handle);
+  if (batch.is_ready) {
+    return true;
+  }
+
+  for (ParallelWork *item : batch.items) {
+    if (item->is_ready) {
+      continue;
+    }
+    else {
+      return false;
+    }
+  }
+
+  /* Handle is zeroed once the batch is ready */
+  handle = 0;
+  batch.is_ready = true;
+  shader_debug_printf("Specialization Batch %llu is now ready\n", handle);
+  return batch.is_ready;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name MTLShaderCompiler
+ * \{ */
+
+MTLShaderCompiler::MTLShaderCompiler()
+{
+  parallel_shader_compiler = get_shared_parallel_shader_compiler();
+}
+
+MTLShaderCompiler::~MTLShaderCompiler()
+{
+  release_parallel_shader_compiler();
+}
+
+void MTLShaderCompiler::release_parallel_shader_compiler()
+{
+  if (parallel_shader_compiler) {
+    release_shared_parallel_shader_compiler();
+    parallel_shader_compiler = nullptr;
+  }
+}
+
+BatchHandle MTLShaderCompiler::batch_compile(Span<const shader::ShaderCreateInfo *> &infos)
+{
+  BLI_assert(parallel_shader_compiler);
+  return parallel_shader_compiler->batch_compile(this, infos);
+}
+bool MTLShaderCompiler::batch_is_ready(BatchHandle handle)
+{
+  return parallel_shader_compiler->batch_is_ready(handle);
+}
+Vector<Shader *> MTLShaderCompiler::batch_finalize(BatchHandle &handle)
+{
+  return parallel_shader_compiler->batch_finalize(handle);
+}
+SpecializationBatchHandle MTLShaderCompiler::precompile_specializations(
+    Span<ShaderSpecialization> specializations)
+{
+  return parallel_shader_compiler->precompile_specializations(specializations);
+}
+
+bool MTLShaderCompiler::specialization_batch_is_ready(SpecializationBatchHandle &handle)
+{
+  return parallel_shader_compiler->specialization_batch_is_ready(handle);
+}
+
+/** \} */
 
 }  // namespace blender::gpu

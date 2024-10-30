@@ -14,11 +14,8 @@
 
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
-#include "DNA_object_types.h"
 
-#include "BLI_alloca.h"
 #include "BLI_array_utils.hh"
-#include "BLI_bitmap.h"
 #include "BLI_index_range.hh"
 #include "BLI_math_geom.h"
 #include "BLI_span.hh"
@@ -26,9 +23,7 @@
 #include "BLI_virtual_array.hh"
 
 #include "BKE_attribute.hh"
-#include "BKE_customdata.hh"
 #include "BKE_mesh.hh"
-#include "BKE_multires.hh"
 
 using blender::float3;
 using blender::int2;
@@ -92,11 +87,11 @@ float face_area_calc(const Span<float3> vert_positions, const Span<int> face_ver
 
 }  // namespace blender::bke::mesh
 
-float BKE_mesh_calc_area(const Mesh *me)
+float BKE_mesh_calc_area(const Mesh *mesh)
 {
-  const Span<float3> positions = me->vert_positions();
-  const blender::OffsetIndices faces = me->faces();
-  const Span<int> corner_verts = me->corner_verts();
+  const Span<float3> positions = mesh->vert_positions();
+  const blender::OffsetIndices faces = mesh->faces();
+  const Span<int> corner_verts = mesh->corner_verts();
 
   float total_area = 0.0f;
   for (const int i : faces.index_range()) {
@@ -244,26 +239,26 @@ void face_angles_calc(const Span<float3> vert_positions,
 /** \name Mesh Center Calculation
  * \{ */
 
-bool BKE_mesh_center_median(const Mesh *me, float r_cent[3])
+bool BKE_mesh_center_median(const Mesh *mesh, float r_cent[3])
 {
-  const Span<float3> positions = me->vert_positions();
+  const Span<float3> positions = mesh->vert_positions();
   zero_v3(r_cent);
   for (const int i : positions.index_range()) {
     add_v3_v3(r_cent, positions[i]);
   }
   /* otherwise we get NAN for 0 verts */
-  if (me->totvert) {
-    mul_v3_fl(r_cent, 1.0f / float(me->totvert));
+  if (mesh->verts_num) {
+    mul_v3_fl(r_cent, 1.0f / float(mesh->verts_num));
   }
-  return (me->totvert != 0);
+  return (mesh->verts_num != 0);
 }
 
-bool BKE_mesh_center_median_from_faces(const Mesh *me, float r_cent[3])
+bool BKE_mesh_center_median_from_faces(const Mesh *mesh, float r_cent[3])
 {
   int tot = 0;
-  const Span<float3> positions = me->vert_positions();
-  const blender::OffsetIndices faces = me->faces();
-  const Span<int> corner_verts = me->corner_verts();
+  const Span<float3> positions = mesh->vert_positions();
+  const blender::OffsetIndices faces = mesh->faces();
+  const Span<int> corner_verts = mesh->corner_verts();
   zero_v3(r_cent);
   for (const int i : faces.index_range()) {
     for (const int vert : corner_verts.slice(faces[i])) {
@@ -272,20 +267,20 @@ bool BKE_mesh_center_median_from_faces(const Mesh *me, float r_cent[3])
     tot += faces[i].size();
   }
   /* otherwise we get NAN for 0 verts */
-  if (me->faces_num) {
+  if (mesh->faces_num) {
     mul_v3_fl(r_cent, 1.0f / float(tot));
   }
-  return (me->faces_num != 0);
+  return (mesh->faces_num != 0);
 }
 
-bool BKE_mesh_center_of_surface(const Mesh *me, float r_cent[3])
+bool BKE_mesh_center_of_surface(const Mesh *mesh, float r_cent[3])
 {
   float face_area;
   float total_area = 0.0f;
   float face_cent[3];
-  const Span<float3> positions = me->vert_positions();
-  const blender::OffsetIndices faces = me->faces();
-  const Span<int> corner_verts = me->corner_verts();
+  const Span<float3> positions = mesh->vert_positions();
+  const blender::OffsetIndices faces = mesh->faces();
+  const Span<int> corner_verts = mesh->corner_verts();
 
   zero_v3(r_cent);
 
@@ -298,30 +293,30 @@ bool BKE_mesh_center_of_surface(const Mesh *me, float r_cent[3])
     total_area += face_area;
   }
   /* otherwise we get NAN for 0 faces */
-  if (me->faces_num) {
+  if (mesh->faces_num) {
     mul_v3_fl(r_cent, 1.0f / total_area);
   }
 
   /* zero area faces cause this, fallback to median */
   if (UNLIKELY(!is_finite_v3(r_cent))) {
-    return BKE_mesh_center_median(me, r_cent);
+    return BKE_mesh_center_median(mesh, r_cent);
   }
 
-  return (me->faces_num != 0);
+  return (mesh->faces_num != 0);
 }
 
-bool BKE_mesh_center_of_volume(const Mesh *me, float r_cent[3])
+bool BKE_mesh_center_of_volume(const Mesh *mesh, float r_cent[3])
 {
   float face_volume;
   float total_volume = 0.0f;
   float face_cent[3];
-  const Span<float3> positions = me->vert_positions();
-  const blender::OffsetIndices faces = me->faces();
-  const Span<int> corner_verts = me->corner_verts();
+  const Span<float3> positions = mesh->vert_positions();
+  const blender::OffsetIndices faces = mesh->faces();
+  const Span<int> corner_verts = mesh->corner_verts();
 
   /* Use an initial center to avoid numeric instability of geometry far away from the center. */
   float init_cent[3];
-  const bool init_cent_result = BKE_mesh_center_median_from_faces(me, init_cent);
+  const bool init_cent_result = BKE_mesh_center_median_from_faces(mesh, init_cent);
 
   zero_v3(r_cent);
 
@@ -348,7 +343,7 @@ bool BKE_mesh_center_of_volume(const Mesh *me, float r_cent[3])
     return init_cent_result;
   }
   add_v3_v3(r_cent, init_cent);
-  return (me->faces_num != 0);
+  return (mesh->faces_num != 0);
 }
 
 /** \} */
@@ -359,25 +354,24 @@ bool BKE_mesh_center_of_volume(const Mesh *me, float r_cent[3])
 
 static bool mesh_calc_center_centroid_ex(const float (*positions)[3],
                                          int /*mverts_num*/,
-                                         const MLoopTri *looptri,
-                                         int looptri_num,
+                                         const blender::int3 *corner_tris,
+                                         int corner_tris_num,
                                          const int *corner_verts,
                                          float r_center[3])
 {
 
   zero_v3(r_center);
 
-  if (looptri_num == 0) {
+  if (corner_tris_num == 0) {
     return false;
   }
 
   float totweight = 0.0f;
-  const MLoopTri *lt;
   int i;
-  for (i = 0, lt = looptri; i < looptri_num; i++, lt++) {
-    const float *v1 = positions[corner_verts[lt->tri[0]]];
-    const float *v2 = positions[corner_verts[lt->tri[1]]];
-    const float *v3 = positions[corner_verts[lt->tri[2]]];
+  for (i = 0; i < corner_tris_num; i++) {
+    const float *v1 = positions[corner_verts[corner_tris[i][0]]];
+    const float *v2 = positions[corner_verts[corner_tris[i][1]]];
+    const float *v3 = positions[corner_verts[corner_tris[i][2]]];
     float area;
 
     area = area_tri_v3(v1, v2, v3);
@@ -397,13 +391,12 @@ static bool mesh_calc_center_centroid_ex(const float (*positions)[3],
 
 void BKE_mesh_calc_volume(const float (*vert_positions)[3],
                           const int mverts_num,
-                          const MLoopTri *looptri,
-                          const int looptri_num,
+                          const blender::int3 *corner_tris,
+                          const int corner_tris_num,
                           const int *corner_verts,
                           float *r_volume,
                           float r_center[3])
 {
-  const MLoopTri *lt;
   float center[3];
   float totvol;
   int i;
@@ -415,22 +408,22 @@ void BKE_mesh_calc_volume(const float (*vert_positions)[3],
     zero_v3(r_center);
   }
 
-  if (looptri_num == 0) {
+  if (corner_tris_num == 0) {
     return;
   }
 
   if (!mesh_calc_center_centroid_ex(
-          vert_positions, mverts_num, looptri, looptri_num, corner_verts, center))
+          vert_positions, mverts_num, corner_tris, corner_tris_num, corner_verts, center))
   {
     return;
   }
 
   totvol = 0.0f;
 
-  for (i = 0, lt = looptri; i < looptri_num; i++, lt++) {
-    const float *v1 = vert_positions[corner_verts[lt->tri[0]]];
-    const float *v2 = vert_positions[corner_verts[lt->tri[1]]];
-    const float *v3 = vert_positions[corner_verts[lt->tri[2]]];
+  for (i = 0; i < corner_tris_num; i++) {
+    const float *v1 = vert_positions[corner_verts[corner_tris[i][0]]];
+    const float *v2 = vert_positions[corner_verts[corner_tris[i][1]]];
+    const float *v3 = vert_positions[corner_verts[corner_tris[i][2]]];
     float vol;
 
     vol = volume_tetrahedron_signed_v3(center, v1, v2, v3);
@@ -510,10 +503,11 @@ void BKE_mesh_mdisp_flip(MDisps *md, const bool use_loop_mdisp_flip)
 /** \name Visibility Interpolation
  * \{ */
 
-/* Hide edges when either of their vertices are hidden. */
-static void edge_hide_from_vert(const Span<int2> edges,
-                                const Span<bool> hide_vert,
-                                MutableSpan<bool> hide_edge)
+namespace blender::bke {
+
+void mesh_edge_hide_from_vert(const Span<int2> edges,
+                              const Span<bool> hide_vert,
+                              MutableSpan<bool> hide_edge)
 {
   using namespace blender;
   threading::parallel_for(edges.index_range(), 4096, [&](const IndexRange range) {
@@ -523,11 +517,10 @@ static void edge_hide_from_vert(const Span<int2> edges,
   });
 }
 
-/* Hide faces when any of their vertices are hidden. */
-static void face_hide_from_vert(const OffsetIndices<int> faces,
-                                const Span<int> corner_verts,
-                                const Span<bool> hide_vert,
-                                MutableSpan<bool> hide_poly)
+void mesh_face_hide_from_vert(const OffsetIndices<int> faces,
+                              const Span<int> corner_verts,
+                              const Span<bool> hide_vert,
+                              MutableSpan<bool> hide_poly)
 {
   using namespace blender;
   threading::parallel_for(faces.index_range(), 4096, [&](const IndexRange range) {
@@ -539,14 +532,12 @@ static void face_hide_from_vert(const OffsetIndices<int> faces,
   });
 }
 
-void BKE_mesh_flush_hidden_from_verts(Mesh *me)
+void mesh_hide_vert_flush(Mesh &mesh)
 {
-  using namespace blender;
-  using namespace blender::bke;
-  MutableAttributeAccessor attributes = me->attributes_for_write();
+  MutableAttributeAccessor attributes = mesh.attributes_for_write();
 
   const VArray<bool> hide_vert = *attributes.lookup_or_default<bool>(
-      ".hide_vert", ATTR_DOMAIN_POINT, false);
+      ".hide_vert", AttrDomain::Point, false);
   if (hide_vert.is_single() && !hide_vert.get_internal_single()) {
     attributes.remove(".hide_edge");
     attributes.remove(".hide_poly");
@@ -555,38 +546,36 @@ void BKE_mesh_flush_hidden_from_verts(Mesh *me)
   const VArraySpan<bool> hide_vert_span{hide_vert};
 
   SpanAttributeWriter<bool> hide_edge = attributes.lookup_or_add_for_write_only_span<bool>(
-      ".hide_edge", ATTR_DOMAIN_EDGE);
+      ".hide_edge", AttrDomain::Edge);
   SpanAttributeWriter<bool> hide_poly = attributes.lookup_or_add_for_write_only_span<bool>(
-      ".hide_poly", ATTR_DOMAIN_FACE);
+      ".hide_poly", AttrDomain::Face);
 
-  edge_hide_from_vert(me->edges(), hide_vert_span, hide_edge.span);
-  face_hide_from_vert(me->faces(), me->corner_verts(), hide_vert_span, hide_poly.span);
+  mesh_edge_hide_from_vert(mesh.edges(), hide_vert_span, hide_edge.span);
+  mesh_face_hide_from_vert(mesh.faces(), mesh.corner_verts(), hide_vert_span, hide_poly.span);
 
   hide_edge.finish();
   hide_poly.finish();
 }
 
-void BKE_mesh_flush_hidden_from_faces(Mesh *me)
+void mesh_hide_face_flush(Mesh &mesh)
 {
-  using namespace blender;
-  using namespace blender::bke;
-  MutableAttributeAccessor attributes = me->attributes_for_write();
+  MutableAttributeAccessor attributes = mesh.attributes_for_write();
 
   const VArray<bool> hide_poly = *attributes.lookup_or_default<bool>(
-      ".hide_poly", ATTR_DOMAIN_FACE, false);
+      ".hide_poly", AttrDomain::Face, false);
   if (hide_poly.is_single() && !hide_poly.get_internal_single()) {
     attributes.remove(".hide_vert");
     attributes.remove(".hide_edge");
     return;
   }
   const VArraySpan<bool> hide_poly_span{hide_poly};
-  const OffsetIndices faces = me->faces();
-  const Span<int> corner_verts = me->corner_verts();
-  const Span<int> corner_edges = me->corner_edges();
+  const OffsetIndices faces = mesh.faces();
+  const Span<int> corner_verts = mesh.corner_verts();
+  const Span<int> corner_edges = mesh.corner_edges();
   SpanAttributeWriter<bool> hide_vert = attributes.lookup_or_add_for_write_only_span<bool>(
-      ".hide_vert", ATTR_DOMAIN_POINT);
+      ".hide_vert", AttrDomain::Point);
   SpanAttributeWriter<bool> hide_edge = attributes.lookup_or_add_for_write_only_span<bool>(
-      ".hide_edge", ATTR_DOMAIN_EDGE);
+      ".hide_edge", AttrDomain::Edge);
 
   /* Hide all edges or vertices connected to hidden polygons. */
   threading::parallel_for(faces.index_range(), 1024, [&](const IndexRange range) {
@@ -617,65 +606,61 @@ void BKE_mesh_flush_hidden_from_faces(Mesh *me)
 /** \name Selection Interpolation
  * \{ */
 
-void BKE_mesh_flush_select_from_faces(Mesh *me)
+void mesh_select_face_flush(Mesh &mesh)
 {
-  using namespace blender;
-  using namespace blender::bke;
-  MutableAttributeAccessor attributes = me->attributes_for_write();
+  MutableAttributeAccessor attributes = mesh.attributes_for_write();
   const VArray<bool> select_poly = *attributes.lookup_or_default<bool>(
-      ".select_poly", ATTR_DOMAIN_FACE, false);
+      ".select_poly", AttrDomain::Face, false);
   if (select_poly.is_single() && !select_poly.get_internal_single()) {
     attributes.remove(".select_vert");
     attributes.remove(".select_edge");
     return;
   }
   SpanAttributeWriter<bool> select_vert = attributes.lookup_or_add_for_write_only_span<bool>(
-      ".select_vert", ATTR_DOMAIN_POINT);
+      ".select_vert", AttrDomain::Point);
   SpanAttributeWriter<bool> select_edge = attributes.lookup_or_add_for_write_only_span<bool>(
-      ".select_edge", ATTR_DOMAIN_EDGE);
+      ".select_edge", AttrDomain::Edge);
 
   /* Use generic domain interpolation to read the face attribute on the other domains.
    * Assume selected faces are not hidden and none of their vertices/edges are hidden. */
-  array_utils::copy(*attributes.lookup_or_default<bool>(".select_poly", ATTR_DOMAIN_POINT, false),
+  array_utils::copy(*attributes.lookup_or_default<bool>(".select_poly", AttrDomain::Point, false),
                     select_vert.span);
-  array_utils::copy(*attributes.lookup_or_default<bool>(".select_poly", ATTR_DOMAIN_EDGE, false),
+  array_utils::copy(*attributes.lookup_or_default<bool>(".select_poly", AttrDomain::Edge, false),
                     select_edge.span);
 
   select_vert.finish();
   select_edge.finish();
 }
 
-void BKE_mesh_flush_select_from_verts(Mesh *me)
+void mesh_select_vert_flush(Mesh &mesh)
 {
-  using namespace blender;
-  using namespace blender::bke;
-  MutableAttributeAccessor attributes = me->attributes_for_write();
+  MutableAttributeAccessor attributes = mesh.attributes_for_write();
   const VArray<bool> select_vert = *attributes.lookup_or_default<bool>(
-      ".select_vert", ATTR_DOMAIN_POINT, false);
+      ".select_vert", AttrDomain::Point, false);
   if (select_vert.is_single() && !select_vert.get_internal_single()) {
     attributes.remove(".select_edge");
     attributes.remove(".select_poly");
     return;
   }
   SpanAttributeWriter<bool> select_edge = attributes.lookup_or_add_for_write_only_span<bool>(
-      ".select_edge", ATTR_DOMAIN_EDGE);
+      ".select_edge", AttrDomain::Edge);
   SpanAttributeWriter<bool> select_poly = attributes.lookup_or_add_for_write_only_span<bool>(
-      ".select_poly", ATTR_DOMAIN_FACE);
+      ".select_poly", AttrDomain::Face);
   {
     IndexMaskMemory memory;
     const VArray<bool> hide_edge = *attributes.lookup_or_default<bool>(
-        ".hide_edge", ATTR_DOMAIN_EDGE, false);
+        ".hide_edge", AttrDomain::Edge, false);
     array_utils::copy(
-        *attributes.lookup_or_default<bool>(".select_vert", ATTR_DOMAIN_EDGE, false),
+        *attributes.lookup_or_default<bool>(".select_vert", AttrDomain::Edge, false),
         IndexMask::from_bools(hide_edge, memory).complement(hide_edge.index_range(), memory),
         select_edge.span);
   }
   {
     IndexMaskMemory memory;
     const VArray<bool> hide_poly = *attributes.lookup_or_default<bool>(
-        ".hide_poly", ATTR_DOMAIN_FACE, false);
+        ".hide_poly", AttrDomain::Face, false);
     array_utils::copy(
-        *attributes.lookup_or_default<bool>(".select_vert", ATTR_DOMAIN_FACE, false),
+        *attributes.lookup_or_default<bool>(".select_vert", AttrDomain::Face, false),
         IndexMask::from_bools(hide_poly, memory).complement(hide_poly.index_range(), memory),
         select_poly.span);
   }
@@ -683,43 +668,43 @@ void BKE_mesh_flush_select_from_verts(Mesh *me)
   select_poly.finish();
 }
 
-void BKE_mesh_flush_select_from_edges(Mesh *me)
+void mesh_select_edge_flush(Mesh &mesh)
 {
-  using namespace blender;
-  using namespace blender::bke;
-  MutableAttributeAccessor attributes = me->attributes_for_write();
+  MutableAttributeAccessor attributes = mesh.attributes_for_write();
   const VArray<bool> select_edge = *attributes.lookup_or_default<bool>(
-      ".select_edge", ATTR_DOMAIN_POINT, false);
+      ".select_edge", AttrDomain::Point, false);
   if (select_edge.is_single() && !select_edge.get_internal_single()) {
     attributes.remove(".select_vert");
     attributes.remove(".select_poly");
     return;
   }
   SpanAttributeWriter<bool> select_vert = attributes.lookup_or_add_for_write_only_span<bool>(
-      ".select_vert", ATTR_DOMAIN_POINT);
+      ".select_vert", AttrDomain::Point);
   SpanAttributeWriter<bool> select_poly = attributes.lookup_or_add_for_write_only_span<bool>(
-      ".select_poly", ATTR_DOMAIN_FACE);
+      ".select_poly", AttrDomain::Face);
   {
     IndexMaskMemory memory;
     const VArray<bool> hide_vert = *attributes.lookup_or_default<bool>(
-        ".hide_vert", ATTR_DOMAIN_POINT, false);
+        ".hide_vert", AttrDomain::Point, false);
     array_utils::copy(
-        *attributes.lookup_or_default<bool>(".select_vert", ATTR_DOMAIN_POINT, false),
+        *attributes.lookup_or_default<bool>(".select_edge", AttrDomain::Point, false),
         IndexMask::from_bools(hide_vert, memory).complement(hide_vert.index_range(), memory),
         select_vert.span);
   }
   {
     IndexMaskMemory memory;
     const VArray<bool> hide_poly = *attributes.lookup_or_default<bool>(
-        ".hide_poly", ATTR_DOMAIN_FACE, false);
+        ".hide_poly", AttrDomain::Face, false);
     array_utils::copy(
-        *attributes.lookup_or_default<bool>(".select_vert", ATTR_DOMAIN_FACE, false),
+        *attributes.lookup_or_default<bool>(".select_edge", AttrDomain::Face, false),
         IndexMask::from_bools(hide_poly, memory).complement(hide_poly.index_range(), memory),
         select_poly.span);
   }
   select_vert.finish();
   select_poly.finish();
 }
+
+}  // namespace blender::bke
 
 /** \} */
 

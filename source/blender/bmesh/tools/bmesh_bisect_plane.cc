@@ -23,13 +23,12 @@
 #include "BLI_linklist.h"
 #include "BLI_linklist_stack.h"
 #include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
 #include "BLI_math_vector.h"
 #include "BLI_utildefines.h"
 #include "BLI_utildefines_stack.h"
 
-#include "bmesh.h"
-#include "bmesh_bisect_plane.h" /* Own include. */
+#include "bmesh.hh"
+#include "bmesh_bisect_plane.hh" /* Own include. */
 
 #include "BLI_strict_flags.h" /* Keep last. */
 

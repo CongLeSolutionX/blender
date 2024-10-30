@@ -5,9 +5,7 @@
 #include "BKE_attribute_math.hh"
 #include "BKE_curves.hh"
 #include "BKE_curves_utils.hh"
-#include "BKE_geometry_set.hh"
 
-#include "BLI_math_geom.h"
 #include "BLI_math_rotation_legacy.hh"
 #include "BLI_task.hh"
 
@@ -15,51 +13,22 @@
 
 namespace blender::geometry {
 
-template<typename T>
-static void threaded_slice_fill(const Span<T> src,
-                                const OffsetIndices<int> offsets,
-                                MutableSpan<T> dst)
-{
-  threading::parallel_for(src.index_range(), 512, [&](IndexRange range) {
-    for (const int i : range) {
-      dst.slice(offsets[i]).fill(src[i]);
-    }
-  });
-}
-
-template<typename T>
 static void duplicate_fillet_point_data(const OffsetIndices<int> src_points_by_curve,
                                         const OffsetIndices<int> dst_points_by_curve,
                                         const IndexMask &curve_selection,
                                         const Span<int> all_point_offsets,
-                                        const Span<T> src,
-                                        MutableSpan<T> dst)
+                                        const GSpan src,
+                                        GMutableSpan dst)
 {
   curve_selection.foreach_index(GrainSize(512), [&](const int curve_i) {
     const IndexRange src_points = src_points_by_curve[curve_i];
     const IndexRange dst_points = dst_points_by_curve[curve_i];
     const IndexRange offsets_range = bke::curves::per_curve_point_offsets_range(src_points,
                                                                                 curve_i);
-    const OffsetIndices<int> offsets(all_point_offsets.slice(offsets_range));
-    threaded_slice_fill(src.slice(src_points), offsets, dst.slice(dst_points));
-  });
-}
-
-static void duplicate_fillet_point_data(const OffsetIndices<int> src_points_by_curve,
-                                        const OffsetIndices<int> dst_points_by_curve,
-                                        const IndexMask &selection,
-                                        const Span<int> all_point_offsets,
-                                        const GSpan src,
-                                        GMutableSpan dst)
-{
-  bke::attribute_math::convert_to_static_type(dst.type(), [&](auto dummy) {
-    using T = decltype(dummy);
-    duplicate_fillet_point_data(src_points_by_curve,
-                                dst_points_by_curve,
-                                selection,
-                                all_point_offsets,
-                                src.typed<T>(),
-                                dst.typed<T>());
+    bke::attribute_math::gather_to_groups(all_point_offsets.slice(offsets_range),
+                                          IndexRange(src_points.size()),
+                                          src.slice(src_points),
+                                          dst.slice(dst_points));
   });
 }
 
@@ -393,14 +362,13 @@ static void calculate_bezier_handles_poly_mode(const Span<float3> src_handles_l,
   });
 }
 
-static bke::CurvesGeometry fillet_curves(
-    const bke::CurvesGeometry &src_curves,
-    const IndexMask &curve_selection,
-    const VArray<float> &radius_input,
-    const VArray<int> &counts,
-    const bool limit_radius,
-    const bool use_bezier_mode,
-    const bke::AnonymousAttributePropagationInfo &propagation_info)
+static bke::CurvesGeometry fillet_curves(const bke::CurvesGeometry &src_curves,
+                                         const IndexMask &curve_selection,
+                                         const VArray<float> &radius_input,
+                                         const VArray<int> &counts,
+                                         const bool limit_radius,
+                                         const bool use_bezier_mode,
+                                         const bke::AttributeFilter &attribute_filter)
 {
   const OffsetIndices src_points_by_curve = src_curves.points_by_curve();
   const Span<float3> positions = src_curves.positions();
@@ -521,8 +489,12 @@ static bke::CurvesGeometry fillet_curves(
            src_attributes,
            dst_attributes,
            ATTR_DOMAIN_MASK_POINT,
-           propagation_info,
-           {"position", "handle_type_left", "handle_type_right", "handle_right", "handle_left"}))
+           bke::attribute_filter_with_skip_ref(attribute_filter,
+                                               {"position",
+                                                "handle_type_left",
+                                                "handle_type_right",
+                                                "handle_right",
+                                                "handle_left"})))
   {
     duplicate_fillet_point_data(src_points_by_curve,
                                 dst_points_by_curve,
@@ -534,9 +506,9 @@ static bke::CurvesGeometry fillet_curves(
   }
 
   bke::copy_attributes_group_to_group(src_attributes,
-                                      ATTR_DOMAIN_POINT,
-                                      propagation_info,
-                                      {},
+                                      bke::AttrDomain::Point,
+                                      bke::AttrDomain::Point,
+                                      attribute_filter,
                                       src_points_by_curve,
                                       dst_points_by_curve,
                                       unselected,
@@ -545,24 +517,22 @@ static bke::CurvesGeometry fillet_curves(
   return dst_curves;
 }
 
-bke::CurvesGeometry fillet_curves_poly(
-    const bke::CurvesGeometry &src_curves,
-    const IndexMask &curve_selection,
-    const VArray<float> &radius,
-    const VArray<int> &count,
-    const bool limit_radius,
-    const bke::AnonymousAttributePropagationInfo &propagation_info)
+bke::CurvesGeometry fillet_curves_poly(const bke::CurvesGeometry &src_curves,
+                                       const IndexMask &curve_selection,
+                                       const VArray<float> &radius,
+                                       const VArray<int> &count,
+                                       const bool limit_radius,
+                                       const bke::AttributeFilter &attribute_filter)
 {
   return fillet_curves(
-      src_curves, curve_selection, radius, count, limit_radius, false, propagation_info);
+      src_curves, curve_selection, radius, count, limit_radius, false, attribute_filter);
 }
 
-bke::CurvesGeometry fillet_curves_bezier(
-    const bke::CurvesGeometry &src_curves,
-    const IndexMask &curve_selection,
-    const VArray<float> &radius,
-    const bool limit_radius,
-    const bke::AnonymousAttributePropagationInfo &propagation_info)
+bke::CurvesGeometry fillet_curves_bezier(const bke::CurvesGeometry &src_curves,
+                                         const IndexMask &curve_selection,
+                                         const VArray<float> &radius,
+                                         const bool limit_radius,
+                                         const bke::AttributeFilter &attribute_filter)
 {
   return fillet_curves(src_curves,
                        curve_selection,
@@ -570,7 +540,7 @@ bke::CurvesGeometry fillet_curves_bezier(
                        VArray<int>::ForSingle(1, src_curves.points_num()),
                        limit_radius,
                        true,
-                       propagation_info);
+                       attribute_filter);
 }
 
 }  // namespace blender::geometry

@@ -8,7 +8,7 @@
  */
 
 /* struct DerivedMesh is used directly */
-#include "BKE_DerivedMesh.hh"
+#include "BKE_mesh_legacy_derived_mesh.hh"
 
 /* Thread sync primitives used directly. */
 #include "BLI_ordered_edge.hh"
@@ -21,13 +21,15 @@ struct CCGElem;
 struct CCGFace;
 struct CCGSubSurf;
 struct CCGVert;
-struct DMFlagMat;
 struct DerivedMesh;
 struct Mesh;
-struct MeshElemMap;
 struct MultiresModifierData;
 struct Object;
-struct PBVH;
+struct Scene;
+
+namespace blender::bke::pbvh {
+class Tree;
+}
 struct SubsurfModifierData;
 
 /**************************** External *****************************/
@@ -49,7 +51,7 @@ DerivedMesh *subsurf_make_derived_from_derived(DerivedMesh *dm,
                                                float (*vertCos)[3],
                                                SubsurfFlags flags);
 
-void subsurf_calculate_limit_positions(Mesh *me, float (*r_positions)[3]);
+void subsurf_calculate_limit_positions(Mesh *mesh, float (*r_positions)[3]);
 
 /**
  * Get grid-size from 'level', level must be greater than zero.
@@ -82,32 +84,22 @@ struct CCGDerivedMesh {
   struct {
     int startVert;
     CCGVert *vert;
-  } * vertMap;
+  } *vertMap;
   struct {
     int startVert;
     int startEdge;
     CCGEdge *edge;
-  } * edgeMap;
+  } *edgeMap;
   struct {
     int startVert;
     int startEdge;
     int startFace;
     CCGFace *face;
-  } * faceMap;
-
-  DMFlagMat *faceFlags;
-
-  int *reverseFaceMap;
-
-  PBVH *pbvh;
-
-  MeshElemMap *pmap;
-  int *pmap_mem;
+  } *faceMap;
 
   CCGElem **gridData;
   int *gridOffset;
   CCGFace **gridFaces;
-  DMFlagMat *gridFlagMats;
   unsigned int **gridHidden;
   /* Elements in arrays above. */
   unsigned int numGrid;

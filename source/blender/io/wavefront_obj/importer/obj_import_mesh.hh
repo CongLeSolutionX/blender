@@ -8,14 +8,15 @@
 
 #pragma once
 
-#include "BKE_lib_id.h"
-
 #include "BLI_utility_mixins.hh"
 
 #include "obj_import_mtl.hh"
 #include "obj_import_objects.hh"
 
+struct Main;
+struct Mesh;
 struct Material;
+struct Object;
 
 namespace blender::io::obj {
 
@@ -33,23 +34,25 @@ class MeshFromGeometry : NonMovable, NonCopyable {
   {
   }
 
-  Object *create_mesh(Main *bmain,
-                      Map<std::string, std::unique_ptr<MTLMaterial>> &materials,
-                      Map<std::string, Material *> &created_materials,
-                      const OBJImportParams &import_params);
+  Mesh *create_mesh(const OBJImportParams &import_params);
+
+  Object *create_mesh_object(Main *bmain,
+                             Map<std::string, std::unique_ptr<MTLMaterial>> &materials,
+                             Map<std::string, Material *> &created_materials,
+                             const OBJImportParams &import_params);
 
  private:
   /**
    * OBJ files coming from the wild might have faces that are invalid in Blender
    * (mostly with duplicate vertex indices, used by some software to indicate
-   * polygons with holes). This method tries to fix them up.
+   * faces with holes). This method tries to fix them up.
    */
   void fixup_invalid_faces();
   void create_vertices(Mesh *mesh);
   /**
-   * Create polygons for the Mesh, set smooth shading flags, Materials.
+   * Create faces for the Mesh, set smooth shading flags, Materials.
    */
-  void create_faces_loops(Mesh *mesh, bool use_vertex_groups);
+  void create_faces(Mesh *mesh, bool use_vertex_groups);
   /**
    * Add explicitly imported OBJ edges to the mesh.
    */
@@ -69,6 +72,8 @@ class MeshFromGeometry : NonMovable, NonCopyable {
   void create_normals(Mesh *mesh);
   void create_colors(Mesh *mesh);
   void create_vertex_groups(Object *obj);
+
+  bool has_normals() const;
 };
 
 }  // namespace blender::io::obj

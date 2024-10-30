@@ -4,12 +4,9 @@
 
 #include "node_geometry_util.hh"
 
-#include "UI_interface.hh"
 #include "UI_resources.hh"
 
 #include "DNA_curves_types.h"
-#include "DNA_mesh_types.h"
-#include "DNA_meshdata_types.h"
 #include "DNA_pointcloud_types.h"
 #include "DNA_volume_types.h"
 
@@ -37,7 +34,7 @@ static void assign_material_to_id_geometry(ID *id,
                                            const fn::FieldContext &field_context,
                                            const Field<bool> &selection_field,
                                            MutableAttributeAccessor &attributes,
-                                           const eAttrDomain domain,
+                                           const AttrDomain domain,
                                            Material *material)
 {
   const int domain_size = attributes.domain_size(domain);
@@ -86,15 +83,15 @@ static void node_geo_exec(GeoNodeExecParams params)
   geometry_set.modify_geometry_sets([&](GeometrySet &geometry_set) {
     if (Mesh *mesh = geometry_set.get_mesh_for_write()) {
       if (mesh->faces_num == 0) {
-        if (mesh->totvert > 0) {
+        if (mesh->verts_num > 0) {
           no_faces_warning = true;
         }
       }
       else {
-        const bke::MeshFieldContext field_context{*mesh, ATTR_DOMAIN_FACE};
+        const bke::MeshFieldContext field_context{*mesh, AttrDomain::Face};
         MutableAttributeAccessor attributes = mesh->attributes_for_write();
         assign_material_to_id_geometry(
-            &mesh->id, field_context, selection_field, attributes, ATTR_DOMAIN_FACE, material);
+            &mesh->id, field_context, selection_field, attributes, AttrDomain::Face, material);
       }
     }
     if (Volume *volume = geometry_set.get_volume_for_write()) {
@@ -119,8 +116,7 @@ static void node_geo_exec(GeoNodeExecParams params)
       using namespace blender::bke::greasepencil;
       Vector<Mesh *> mesh_by_layer(grease_pencil->layers().size(), nullptr);
       for (const int layer_index : grease_pencil->layers().index_range()) {
-        Drawing *drawing = get_eval_grease_pencil_layer_drawing_for_write(*grease_pencil,
-                                                                          layer_index);
+        Drawing *drawing = grease_pencil->get_eval_drawing(grease_pencil->layer(layer_index));
         if (drawing == nullptr) {
           continue;
         }
@@ -130,13 +126,13 @@ static void node_geo_exec(GeoNodeExecParams params)
         }
 
         const bke::GreasePencilLayerFieldContext field_context{
-            *grease_pencil, ATTR_DOMAIN_CURVE, layer_index};
+            *grease_pencil, AttrDomain::Curve, layer_index};
         MutableAttributeAccessor attributes = curves.attributes_for_write();
         assign_material_to_id_geometry(&grease_pencil->id,
                                        field_context,
                                        selection_field,
                                        attributes,
-                                       ATTR_DOMAIN_CURVE,
+                                       AttrDomain::Curve,
                                        material);
       }
     }
@@ -149,17 +145,17 @@ static void node_geo_exec(GeoNodeExecParams params)
   if (volume_selection_warning) {
     params.error_message_add(
         NodeWarningType::Info,
-        TIP_("Volumes only support a single material; selection input can not be a field"));
+        TIP_("Volumes only support a single material; selection input cannot be a field"));
   }
   if (point_selection_warning) {
     params.error_message_add(
         NodeWarningType::Info,
-        TIP_("Point clouds only support a single material; selection input can not be a field"));
+        TIP_("Point clouds only support a single material; selection input cannot be a field"));
   }
   if (curves_selection_warning) {
     params.error_message_add(
         NodeWarningType::Info,
-        TIP_("Curves only support a single material; selection input can not be a field"));
+        TIP_("Curves only support a single material; selection input cannot be a field"));
   }
 
   params.set_output("Geometry", std::move(geometry_set));
@@ -167,12 +163,12 @@ static void node_geo_exec(GeoNodeExecParams params)
 
 static void node_register()
 {
-  static bNodeType ntype;
+  static blender::bke::bNodeType ntype;
 
   geo_node_type_base(&ntype, GEO_NODE_SET_MATERIAL, "Set Material", NODE_CLASS_GEOMETRY);
   ntype.declare = node_declare;
   ntype.geometry_node_execute = node_geo_exec;
-  nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }
 NOD_REGISTER_NODE(node_register)
 

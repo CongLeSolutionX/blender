@@ -18,19 +18,19 @@
 #include "BLI_string.h"
 #include "BLI_utildefines.h"
 
-#include "bpy_utils_units.h"
+#include "bpy_utils_units.hh"
 
-#include "../generic/py_capi_utils.h"
-#include "../generic/python_compat.h"
+#include "../generic/py_capi_utils.hh"
+#include "../generic/python_compat.hh"
 
-#include "BKE_unit.h"
+#include "BKE_unit.hh"
 
 /***** C-defined systems and types *****/
 
 static PyTypeObject BPyUnitsSystemsType;
 static PyTypeObject BPyUnitsCategoriesType;
 
-/* XXX: Maybe better as `extern` of `BKE_unit.h` ? */
+/* XXX: Maybe better as `extern` of `BKE_unit.hh` ? */
 static const char *bpyunits_usystem_items[] = {
     "NONE",
     "METRIC",
@@ -52,6 +52,9 @@ static const char *bpyunits_ucategories_items[] = {
     "CAMERA",
     "POWER",
     "TEMPERATURE",
+    "WAVELENGTH",
+    "COLOR_TEMPERATURE",
+    "FREQUENCY",
     nullptr,
 };
 
@@ -62,22 +65,22 @@ BLI_STATIC_ASSERT(
 /**
  * These fields are just empty placeholders, actual values get set in initializations functions.
  * This allows us to avoid many handwriting, and above all,
- * to keep all systems/categories definition stuff in `BKE_unit.h`.
+ * to keep all systems/categories definition stuff in `BKE_unit.hh`.
  */
 static PyStructSequence_Field bpyunits_systems_fields[ARRAY_SIZE(bpyunits_usystem_items)];
 static PyStructSequence_Field bpyunits_categories_fields[ARRAY_SIZE(bpyunits_ucategories_items)];
 
 static PyStructSequence_Desc bpyunits_systems_desc = {
-    "bpy.utils.units.systems",                               /* name */
-    "This named tuple contains all predefined unit systems", /* doc */
-    bpyunits_systems_fields,                                 /* fields */
-    ARRAY_SIZE(bpyunits_systems_fields) - 1,
+    /*name*/ "bpy.utils.units.systems",
+    /*doc*/ "This named tuple contains all predefined unit systems",
+    /*fields*/ bpyunits_systems_fields,
+    /*n_in_sequence*/ ARRAY_SIZE(bpyunits_systems_fields) - 1,
 };
 static PyStructSequence_Desc bpyunits_categories_desc = {
-    "bpy.utils.units.categories",                          /* name */
-    "This named tuple contains all predefined unit names", /* doc */
-    bpyunits_categories_fields,                            /* fields */
-    ARRAY_SIZE(bpyunits_categories_fields) - 1,
+    /*name*/ "bpy.utils.units.categories",
+    /*doc*/ "This named tuple contains all predefined unit names",
+    /*fields*/ bpyunits_categories_fields,
+    /*n_in_sequence*/ ARRAY_SIZE(bpyunits_categories_fields) - 1,
 };
 
 /**
@@ -141,6 +144,7 @@ static bool bpyunits_validate(const char *usys_str, const char *ucat_str, int *r
 }
 
 PyDoc_STRVAR(
+    /* Wrap. */
     bpyunits_to_value_doc,
     ".. method:: to_value(unit_system, unit_category, str_input, str_ref_unit=None)\n"
     "\n"
@@ -223,31 +227,33 @@ static PyObject *bpyunits_to_value(PyObject * /*self*/, PyObject *args, PyObject
   return ret;
 }
 
-PyDoc_STRVAR(bpyunits_to_string_doc,
-             ".. method:: to_string(unit_system, unit_category, value, precision=3, "
-             "split_unit=False, compatible_unit=False)\n"
-             "\n"
-             "   Convert a given input float value into a string with units.\n"
-             "\n"
-             "   :arg unit_system: The unit system, from :attr:`bpy.utils.units.systems`.\n"
-             "   :type unit_system: string\n"
-             "   :arg unit_category: The category of data we are converting (length, area, "
-             "rotation, etc.),\n"
-             "      from :attr:`bpy.utils.units.categories`.\n"
-             "   :type unit_category: string\n"
-             "   :arg value: The value to convert to a string.\n"
-             "   :type value: float\n"
-             "   :arg precision: Number of digits after the comma.\n"
-             "   :type precision: int\n"
-             "   :arg split_unit: Whether to use several units if needed (1m1cm), or always only "
-             "one (1.01m).\n"
-             "   :type split_unit: bool\n"
-             "   :arg compatible_unit: Whether to use keyboard-friendly units (1m2) or nicer "
-             "utf-8 ones (1m²).\n"
-             "   :type compatible_unit: bool\n"
-             "   :return: The converted string.\n"
-             "   :rtype: str\n"
-             "   :raises ValueError: if conversion fails to generate a valid Python string.\n");
+PyDoc_STRVAR(
+    /* Wrap. */
+    bpyunits_to_string_doc,
+    ".. method:: to_string(unit_system, unit_category, value, precision=3, "
+    "split_unit=False, compatible_unit=False)\n"
+    "\n"
+    "   Convert a given input float value into a string with units.\n"
+    "\n"
+    "   :arg unit_system: The unit system, from :attr:`bpy.utils.units.systems`.\n"
+    "   :type unit_system: string\n"
+    "   :arg unit_category: The category of data we are converting (length, area, "
+    "rotation, etc.),\n"
+    "      from :attr:`bpy.utils.units.categories`.\n"
+    "   :type unit_category: string\n"
+    "   :arg value: The value to convert to a string.\n"
+    "   :type value: float\n"
+    "   :arg precision: Number of digits after the comma.\n"
+    "   :type precision: int\n"
+    "   :arg split_unit: Whether to use several units if needed (1m1cm), or always only "
+    "one (1.01m).\n"
+    "   :type split_unit: bool\n"
+    "   :arg compatible_unit: Whether to use keyboard-friendly units (1m2) or nicer "
+    "utf-8 ones (1m²).\n"
+    "   :type compatible_unit: bool\n"
+    "   :return: The converted string.\n"
+    "   :rtype: str\n"
+    "   :raises ValueError: if conversion fails to generate a valid Python string.\n");
 static PyObject *bpyunits_to_string(PyObject * /*self*/, PyObject *args, PyObject *kw)
 {
   char *usys_str = nullptr, *ucat_str = nullptr;
@@ -307,7 +313,8 @@ static PyObject *bpyunits_to_string(PyObject * /*self*/, PyObject *args, PyObjec
      * (spaces, trailing '\0'...).
      * So in practice, 64 should be more than enough.
      */
-    char buf1[64], buf2[64], *str;
+    char buf1[64], buf2[64];
+    const char *str;
     PyObject *result;
 
     BKE_unit_value_as_string_adaptive(
@@ -348,7 +355,10 @@ static PyMethodDef bpyunits_methods[] = {
 #  pragma GCC diagnostic pop
 #endif
 
-PyDoc_STRVAR(bpyunits_doc, "This module contains some data/methods regarding units handling.");
+PyDoc_STRVAR(
+    /* Wrap. */
+    bpyunits_doc,
+    "This module contains some data/methods regarding units handling.");
 
 static PyModuleDef bpyunits_module = {
     /*m_base*/ PyModuleDef_HEAD_INIT,

@@ -13,7 +13,6 @@
 #include "DNA_curveprofile_types.h"
 #include "DNA_meshdata_types.h"
 #include "DNA_modifier_types.h"
-#include "DNA_scene_types.h"
 
 #include "BLI_alloca.h"
 #include "BLI_math_geom.h"
@@ -26,21 +25,21 @@
 
 #include "BKE_curveprofile.h"
 #include "BKE_customdata.hh"
-#include "BKE_deform.h"
+#include "BKE_deform.hh"
 #include "BKE_mesh.hh"
 
 #include "eigen_capi.h"
 
-#include "bmesh.h"
-#include "bmesh_bevel.h" /* own include */
+#include "bmesh.hh"
+#include "bmesh_bevel.hh" /* own include */
 
-#include "./intern/bmesh_private.h"
+#include "./intern/bmesh_private.hh"
 
 using blender::Vector;
 
 // #define BEVEL_DEBUG_TIME
 #ifdef BEVEL_DEBUG_TIME
-#  include "PIL_time.h"
+#  include "BLI_time.h"
 #endif
 
 #define BEVEL_EPSILON_D 1e-6
@@ -58,7 +57,7 @@ using blender::Vector;
 #define BEVEL_MAX_AUTO_ADJUST_PCT 300.0f
 #define BEVEL_MATCH_SPEC_WEIGHT 0.2
 
-//#define DEBUG_CUSTOM_PROFILE_CUTOFF
+// #define DEBUG_CUSTOM_PROFILE_CUTOFF
 /* Happens far too often, uncomment for development. */
 // #define BEVEL_ASSERT_PROJECT
 
@@ -331,7 +330,7 @@ struct BevelParams {
   BMesh *bm;
   /** Blender units to offset each side of a beveled edge. */
   float offset;
-  /** How offset is measured; enum defined in bmesh_operators.h. */
+  /** How offset is measured; enum defined in bmesh_operators.hh. */
   int offset_type;
   /** Profile type: radius, superellipse, or custom */
   int profile_type;
@@ -684,7 +683,7 @@ static BMFace *bev_create_ngon(BMesh *bm,
   BMFace *f = BM_face_create_verts(bm, vert_arr, totv, facerep, BM_CREATE_NOP, true);
 
   if ((facerep || (face_arr && face_arr[0])) && f) {
-    BM_elem_attrs_copy(bm, bm, facerep ? facerep : face_arr[0], f);
+    BM_elem_attrs_copy(bm, facerep ? facerep : face_arr[0], f);
     if (do_interp) {
       int i = 0;
       BMIter iter;
@@ -763,7 +762,7 @@ static bool contig_ldata_across_edge(BMesh *bm, BMEdge *e, BMFace *f1, BMFace *f
    * should now have lef1 and lef2 being f1 and f2 in either order.
    */
   if (lef1->f == f2) {
-    SWAP(BMLoop *, lef1, lef2);
+    std::swap(lef1, lef2);
   }
   if (lef1->f != f1 || lef2->f != f2) {
     return false;
@@ -1972,8 +1971,8 @@ static bool make_unit_square_map(const float va[3],
   normalize_v3(vddir);
   add_v3_v3v3(vd, vo, vddir);
 
-  /* The cols of m are: {vmid - va, vmid - vb, vmid + vd - va -vb, va + vb - vmid;
-   * Blender transform matrices are stored such that m[i][*] is ith column;
+  /* The cols of m are: `vmid - va, vmid - vb, vmid + vd - va -vb, va + vb - vmid`;
+   * Blender transform matrices are stored such that `m[i][*]` is `i-th` column;
    * the last elements of each col remain as they are in unity matrix. */
   sub_v3_v3v3(&r_mat[0][0], vmid, va);
   r_mat[0][3] = 0.0f;
@@ -2283,14 +2282,29 @@ static void snap_to_superellipsoid(float co[3], const float super_r, bool midlin
 
 #define BEV_EXTEND_EDGE_DATA_CHECK(eh, flag) BM_elem_flag_test(eh->e, flag)
 
-static void check_edge_data_seam_sharp_edges(BevVert *bv, int flag, bool neg)
+/* If a beveled edge has a seam (flag == BM_ELEM_SEAM) or a sharp
+ * (flag == BM_ELEM_SMOOTH and the test is for the negation of that flag),
+ * then we may need to correct for discontinuities in those edge flags after
+ * beveling. The code will automatically make the outer edges of a multi-segment
+ * beveled edge have the same flags. So beveled edges next to each other will not
+ * lead to discontinuities. But if there are beveled edges that do NOT have a seam
+ * (or sharp), then we need to mark all the edge segments of such beveled edges
+ * with seam (or sharp) until we hit the next beveled edge that has such a mark.
+ * This routine sets, for each rightv of a beveled edge that has seam (or sharp),
+ * how many edges follow without the corresponding property. The count is put in
+ * the seam_len field for seams and the sharp_len field for sharps.
+ *
+ * TODO: This approach doesn't work for terminal edges or miters.
+ */
+#define HASNOT_SEAMSHARP(eh, flag) \
+  ((flag == BM_ELEM_SEAM && !BM_elem_flag_test(eh->e, BM_ELEM_SEAM)) || \
+   (flag == BM_ELEM_SMOOTH && BM_elem_flag_test(eh->e, BM_ELEM_SMOOTH)))
+static void check_edge_data_seam_sharp_edges(BevVert *bv, int flag)
 {
   EdgeHalf *e = &bv->edges[0], *efirst = &bv->edges[0];
 
-  /* First edge with seam or sharp edge data. */
-  while ((!neg && !BEV_EXTEND_EDGE_DATA_CHECK(e, flag)) ||
-         (neg && BEV_EXTEND_EDGE_DATA_CHECK(e, flag)))
-  {
+  /* Get to first edge with seam or sharp edge data. */
+  while (HASNOT_SEAMSHARP(e, flag)) {
     e = e->next;
     if (e == efirst) {
       break;
@@ -2298,8 +2312,7 @@ static void check_edge_data_seam_sharp_edges(BevVert *bv, int flag, bool neg)
   }
 
   /* If no such edge found, return. */
-  if ((!neg && !BEV_EXTEND_EDGE_DATA_CHECK(e, flag)) ||
-      (neg && BEV_EXTEND_EDGE_DATA_CHECK(e, flag))) {
+  if (HASNOT_SEAMSHARP(e, flag)) {
     return;
   }
 
@@ -2310,18 +2323,13 @@ static void check_edge_data_seam_sharp_edges(BevVert *bv, int flag, bool neg)
     int flag_count = 0;
     EdgeHalf *ne = e->next;
 
-    while (((!neg && !BEV_EXTEND_EDGE_DATA_CHECK(ne, flag)) ||
-            (neg && BEV_EXTEND_EDGE_DATA_CHECK(ne, flag))) &&
-           ne != efirst)
-    {
+    while (HASNOT_SEAMSHARP(ne, flag) && ne != efirst) {
       if (ne->is_bev) {
         flag_count++;
       }
       ne = ne->next;
     }
-    if (ne == e || (ne == efirst && ((!neg && !BEV_EXTEND_EDGE_DATA_CHECK(efirst, flag)) ||
-                                     (neg && BEV_EXTEND_EDGE_DATA_CHECK(efirst, flag)))))
-    {
+    if (ne == e || (ne == efirst && HASNOT_SEAMSHARP(efirst, flag))) {
       break;
     }
     /* Set seam_len / sharp_len of starting edge. */
@@ -2335,28 +2343,30 @@ static void check_edge_data_seam_sharp_edges(BevVert *bv, int flag, bool neg)
   } while (e != efirst);
 }
 
-static void bevel_extend_edge_data(BevVert *bv)
-{
-  VMesh *vm = bv->vmesh;
+/* Extend the marking of edges as seam (if flag == BM_ELEM_SEAM) or sharp
+ * (if flag == BM_ELEM_SMOOTH) around the appropriate edges added as part
+ * of doing a bevel at vert bv. */
 
-  if (vm->mesh_kind == M_TRI_FAN) {
-    return;
-  }
+static void bevel_extend_edge_data_ex(BevVert *bv, int flag)
+{
+  BLI_assert(flag == BM_ELEM_SEAM || flag == BM_ELEM_SMOOTH);
+  VMesh *vm = bv->vmesh;
 
   BoundVert *bcur = bv->vmesh->boundstart, *start = bcur;
 
   do {
-    /* If current boundvert has a seam length > 0 then it has a seam running along its edges. */
-    if (bcur->seam_len) {
+    /* If current boundvert has a seam/sharp length > 0 then we need to extend here. */
+    int extend_len = flag == BM_ELEM_SEAM ? bcur->seam_len : bcur->sharp_len;
+    if (extend_len) {
       if (!bv->vmesh->boundstart->seam_len && start == bv->vmesh->boundstart) {
         start = bcur; /* Set start to first boundvert with seam_len > 0. */
       }
 
-      /* Now for all the mesh_verts starting at current index and ending at idxlen
+      /* Now for all the mesh_verts starting at current index and ending at `idx_end`
        * we go through outermost ring and through all its segments and add seams
        * for those edges. */
-      int idxlen = bcur->index + bcur->seam_len;
-      for (int i = bcur->index; i < idxlen; i++) {
+      int idx_end = bcur->index + extend_len;
+      for (int i = bcur->index; i < idx_end; i++) {
         BMVert *v1 = mesh_vert(vm, i % vm->count, 0, 0)->v, *v2;
         BMEdge *e;
         for (int k = 1; k < vm->seg; k++) {
@@ -2366,73 +2376,27 @@ static void bevel_extend_edge_data(BevVert *bv)
            * we find common edge and set its edge data. */
           e = v1->e;
           while (e->v1 != v2 && e->v2 != v2) {
-            if (e->v1 == v1) {
-              e = e->v1_disk_link.next;
-            }
-            else {
-              e = e->v2_disk_link.next;
-            }
+            e = BM_DISK_EDGE_NEXT(e, v1);
           }
-          BM_elem_flag_set(e, BM_ELEM_SEAM, true);
+          if (flag == BM_ELEM_SEAM) {
+            BM_elem_flag_set(e, BM_ELEM_SEAM, true);
+          }
+          else {
+            BM_elem_flag_set(e, BM_ELEM_SMOOTH, false);
+          }
           v1 = v2;
         }
         BMVert *v3 = mesh_vert(vm, (i + 1) % vm->count, 0, 0)->v;
         e = v1->e; /* Do same as above for first and last vert. */
         while (e->v1 != v3 && e->v2 != v3) {
-          if (e->v1 == v1) {
-            e = e->v1_disk_link.next;
-          }
-          else {
-            e = e->v2_disk_link.next;
-          }
+          e = BM_DISK_EDGE_NEXT(e, v1);
         }
-        BM_elem_flag_set(e, BM_ELEM_SEAM, true);
-        bcur = bcur->next;
-      }
-    }
-    else {
-      bcur = bcur->next;
-    }
-  } while (bcur != start);
-
-  bcur = bv->vmesh->boundstart;
-  start = bcur;
-  do {
-    if (bcur->sharp_len) {
-      if (!bv->vmesh->boundstart->sharp_len && start == bv->vmesh->boundstart) {
-        start = bcur;
-      }
-
-      int idxlen = bcur->index + bcur->sharp_len;
-      for (int i = bcur->index; i < idxlen; i++) {
-        BMVert *v1 = mesh_vert(vm, i % vm->count, 0, 0)->v, *v2;
-        BMEdge *e;
-        for (int k = 1; k < vm->seg; k++) {
-          v2 = mesh_vert(vm, i % vm->count, 0, k)->v;
-
-          e = v1->e;
-          while (e->v1 != v2 && e->v2 != v2) {
-            if (e->v1 == v1) {
-              e = e->v1_disk_link.next;
-            }
-            else {
-              e = e->v2_disk_link.next;
-            }
-          }
+        if (flag == BM_ELEM_SEAM) {
+          BM_elem_flag_set(e, BM_ELEM_SEAM, true);
+        }
+        else {
           BM_elem_flag_set(e, BM_ELEM_SMOOTH, false);
-          v1 = v2;
         }
-        BMVert *v3 = mesh_vert(vm, (i + 1) % vm->count, 0, 0)->v;
-        e = v1->e;
-        while (e->v1 != v3 && e->v2 != v3) {
-          if (e->v1 == v1) {
-            e = e->v1_disk_link.next;
-          }
-          else {
-            e = e->v2_disk_link.next;
-          }
-        }
-        BM_elem_flag_set(e, BM_ELEM_SMOOTH, false);
         bcur = bcur->next;
       }
     }
@@ -2440,6 +2404,18 @@ static void bevel_extend_edge_data(BevVert *bv)
       bcur = bcur->next;
     }
   } while (bcur != start);
+}
+
+static void bevel_extend_edge_data(BevVert *bv)
+{
+  VMesh *vm = bv->vmesh;
+
+  if (vm->mesh_kind == M_TRI_FAN || bv->selcount < 2) {
+    return;
+  }
+
+  bevel_extend_edge_data_ex(bv, BM_ELEM_SEAM);
+  bevel_extend_edge_data_ex(bv, BM_ELEM_SMOOTH);
 }
 
 /* Mark edges as sharp if they are between a smooth reconstructed face and a new face. */
@@ -2664,10 +2640,10 @@ static void set_bound_vert_seams(BevVert *bv, bool mark_seam, bool mark_sharp)
   } while ((v = v->next) != bv->vmesh->boundstart);
 
   if (mark_seam) {
-    check_edge_data_seam_sharp_edges(bv, BM_ELEM_SEAM, false);
+    check_edge_data_seam_sharp_edges(bv, BM_ELEM_SEAM);
   }
   if (mark_sharp) {
-    check_edge_data_seam_sharp_edges(bv, BM_ELEM_SMOOTH, true);
+    check_edge_data_seam_sharp_edges(bv, BM_ELEM_SMOOTH);
   }
 }
 
@@ -6404,13 +6380,13 @@ static BevVert *bevel_vert_construct(BMesh *bm, BevelParams *bp, BMVert *v)
     }
     if (ccw_test_sum < 0) {
       for (int i = 0; i <= (tot_edges / 2) - 1; i++) {
-        SWAP(EdgeHalf, bv->edges[i], bv->edges[tot_edges - i - 1]);
-        SWAP(BMFace *, bv->edges[i].fprev, bv->edges[i].fnext);
-        SWAP(BMFace *, bv->edges[tot_edges - i - 1].fprev, bv->edges[tot_edges - i - 1].fnext);
+        std::swap(bv->edges[i], bv->edges[tot_edges - i - 1]);
+        std::swap(bv->edges[i].fprev, bv->edges[i].fnext);
+        std::swap(bv->edges[tot_edges - i - 1].fprev, bv->edges[tot_edges - i - 1].fnext);
       }
       if (tot_edges % 2 == 1) {
         int i = tot_edges / 2;
-        SWAP(BMFace *, bv->edges[i].fprev, bv->edges[i].fnext);
+        std::swap(bv->edges[i].fprev, bv->edges[i].fnext);
       }
     }
   }
@@ -6740,7 +6716,7 @@ static bool bev_rebuild_polygon(BMesh *bm, BevelParams *bp, BMFace *f)
       BMEdge *bme_new = BM_edge_exists(vv[k], vv[(k + 1) % n]);
       BLI_assert(ee[k] && bme_new);
       if (ee[k] != bme_new) {
-        BM_elem_attrs_copy(bm, bm, ee[k], bme_new);
+        BM_elem_attrs_copy(bm, ee[k], bme_new);
         /* Want to undo seam and smooth for corner segments
          * if those attrs aren't contiguous around face. */
         if (k < n - 1 && ee[k] == ee[k + 1]) {
@@ -6750,7 +6726,8 @@ static bool bev_rebuild_polygon(BMesh *bm, BevelParams *bp, BMFace *f)
           }
           /* Actually want "sharp" to be contiguous, so reverse the test. */
           if (!BM_elem_flag_test(ee[k], BM_ELEM_SMOOTH) &&
-              BM_elem_flag_test(bme_prev, BM_ELEM_SMOOTH)) {
+              BM_elem_flag_test(bme_prev, BM_ELEM_SMOOTH))
+          {
             BM_elem_flag_enable(bme_new, BM_ELEM_SMOOTH);
           }
         }
@@ -6924,7 +6901,7 @@ static void weld_cross_attrs_copy(BMesh *bm, BevVert *bv, VMesh *vm, int vmindex
     BMEdge *bme = BM_edge_exists(mesh_vert(vm, vmindex, 0, i)->v,
                                  mesh_vert(vm, vmindex, 0, i + 1)->v);
     BLI_assert(bme);
-    BM_elem_attrs_copy(bm, bm, bme_prev, bme);
+    BM_elem_attrs_copy(bm, bme_prev, bme);
     if (disable_seam) {
       BM_elem_flag_disable(bme, BM_ELEM_SEAM);
     }
@@ -7094,8 +7071,8 @@ static void bevel_build_edge_polygons(BMesh *bm, BevelParams *bp, BMEdge *bme)
   BMEdge *bme1 = BM_edge_exists(bmv1, bmv2);
   BMEdge *bme2 = BM_edge_exists(bmv3, bmv4);
   BLI_assert(bme1 && bme2);
-  BM_elem_attrs_copy(bm, bm, bme, bme1);
-  BM_elem_attrs_copy(bm, bm, bme, bme2);
+  BM_elem_attrs_copy(bm, bme, bme1);
+  BM_elem_attrs_copy(bm, bme, bme2);
 
   /* If either end is a "weld cross", want continuity of edge attributes across end edge(s). */
   if (bevvert_is_weld_cross(bv1)) {
@@ -7717,7 +7694,9 @@ void BM_mesh_bevel(BMesh *bm,
                    const int miter_inner,
                    const float spread,
                    const CurveProfile *custom_profile,
-                   const int vmesh_method)
+                   const int vmesh_method,
+                   const int bweight_offset_vert,
+                   const int bweight_offset_edge)
 {
   BMIter iter, liter;
   BMVert *v, *v_next;
@@ -7734,10 +7713,8 @@ void BM_mesh_bevel(BMesh *bm,
   bp.pro_super_r = -logf(2.0) / logf(sqrtf(profile)); /* Convert to superellipse exponent. */
   bp.affect_type = affect_type;
   bp.use_weights = use_weights;
-  bp.bweight_offset_vert = CustomData_get_offset_named(
-      &bm->vdata, CD_PROP_FLOAT, "bevel_weight_vert");
-  bp.bweight_offset_edge = CustomData_get_offset_named(
-      &bm->edata, CD_PROP_FLOAT, "bevel_weight_edge");
+  bp.bweight_offset_vert = bweight_offset_vert;
+  bp.bweight_offset_edge = bweight_offset_edge;
   bp.loop_slide = loop_slide;
   bp.limit_offset = limit_offset;
   bp.offset_adjust = (bp.affect_type != BEVEL_AFFECT_VERTICES) &&
@@ -7762,7 +7739,7 @@ void BM_mesh_bevel(BMesh *bm,
   }
 
 #ifdef BEVEL_DEBUG_TIME
-  double start_time = PIL_check_seconds_timer();
+  double start_time = BLI_time_now_seconds();
 #endif
 
   /* Disable the miters with the cutoff vertex mesh method, the combination isn't useful anyway. */
@@ -7930,7 +7907,7 @@ void BM_mesh_bevel(BMesh *bm,
   BLI_memarena_free(bp.mem_arena);
 
 #ifdef BEVEL_DEBUG_TIME
-  double end_time = PIL_check_seconds_timer();
+  double end_time = BLI_time_now_seconds();
   printf("BMESH BEVEL TIME = %.3f\n", end_time - start_time);
 #endif
 }

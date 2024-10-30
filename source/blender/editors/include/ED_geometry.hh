@@ -8,21 +8,25 @@
 
 #pragma once
 
-#include "BLI_string_ref.hh"
-
-#include "DNA_customdata_types.h"
-
-#include "BKE_attribute.h"
-#include "BKE_screen.hh"
-
-struct Mesh;
-struct ReportList;
+#include <string>
 
 #include "BLI_generic_pointer.hh"
 #include "BLI_string_ref.hh"
 
+#include "DNA_customdata_types.h"
+
+#include "BKE_screen.hh"
+
+struct Mesh;
+struct ReportList;
 struct PointerRNA;
 struct PropertyRNA;
+namespace blender::bke {
+enum class AttrDomain : int8_t;
+}
+namespace blender::nodes::geo_eval_log {
+class GeoModifierLog;
+}
 
 namespace blender::ed::geometry {
 
@@ -40,6 +44,7 @@ GPointer rna_property_for_attribute_type_retrieve_value(PointerRNA &ptr,
                                                         const eCustomDataType type,
                                                         void *buffer);
 void rna_property_for_attribute_type_set_value(PointerRNA &ptr, PropertyRNA &prop, GPointer value);
+bool attribute_set_poll(bContext &C, const ID &object_data);
 
 /** \} */
 
@@ -56,10 +61,20 @@ void ED_operatortypes_geometry();
 bool ED_geometry_attribute_convert(Mesh *mesh,
                                    const char *name,
                                    eCustomDataType dst_type,
-                                   eAttrDomain dst_domain,
+                                   blender::bke::AttrDomain dst_domain,
                                    ReportList *reports);
 
 namespace blender::ed::geometry {
+
+struct GeoOperatorLog {
+  std::string node_group_name;
+  std::unique_ptr<nodes::geo_eval_log::GeoModifierLog> log;
+
+  GeoOperatorLog() = default;
+  ~GeoOperatorLog();
+};
+
+const GeoOperatorLog &node_group_operator_static_eval_log();
 
 MenuType node_group_operator_assets_menu();
 MenuType node_group_operator_assets_menu_unassigned();

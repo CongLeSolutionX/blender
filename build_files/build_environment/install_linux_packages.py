@@ -133,18 +133,20 @@ BUILD_MANDATORY_SUBPACKAGES = (
                                   DISTRO_ID_ARCH: "base-devel",
                                   },
             ),
-    Package(name="Git",
+    Package(name="Git", is_group=True,
+            sub_packages=(
+                Package(name="Git LFS",
+                        distro_package_names={DISTRO_ID_DEBIAN: "git-lfs",
+                                              DISTRO_ID_FEDORA: "git-lfs",
+                                              DISTRO_ID_SUSE: "git-lfs",
+                                              DISTRO_ID_ARCH: "git-lfs",
+                                              },
+                        ),
+            ),
             distro_package_names={DISTRO_ID_DEBIAN: "git",
                                   DISTRO_ID_FEDORA: "git",
-                                  DISTRO_ID_SUSE: None,
+                                  DISTRO_ID_SUSE: "git",
                                   DISTRO_ID_ARCH: "git",
-                                  },
-            ),
-    Package(name="Subversion (aka svn)",
-            distro_package_names={DISTRO_ID_DEBIAN: "subversion",
-                                  DISTRO_ID_FEDORA: "subversion",
-                                  DISTRO_ID_SUSE: "subversion",
-                                  DISTRO_ID_ARCH: "subversion",
                                   },
             ),
     Package(name="CMake",
@@ -303,7 +305,7 @@ DEPS_MANDATORY_SUBPACKAGES = (
                                   },
             ),
     Package(name="FreeType Library",
-            distro_package_names={DISTRO_ID_DEBIAN: "libfreetype6-dev",
+            distro_package_names={DISTRO_ID_DEBIAN: "libfreetype-dev",
                                   DISTRO_ID_FEDORA: "freetype-devel",
                                   DISTRO_ID_SUSE: "freetype2-devel",
                                   DISTRO_ID_ARCH: "freetype2",
@@ -505,6 +507,13 @@ DEPS_OPTIONAL_SUBPACKAGES = (
                                   DISTRO_ID_ARCH: ...,
                                   },
             ),
+    Package(name="Deflate Library",
+            distro_package_names={DISTRO_ID_DEBIAN: "libdeflate-dev",
+                                  DISTRO_ID_FEDORA: "libdeflate-devel",
+                                  DISTRO_ID_SUSE: "libdeflate-devel",
+                                  DISTRO_ID_ARCH: "libdeflate",
+                                  },
+            ),
 )
 
 
@@ -548,7 +557,7 @@ PYTHON_SUBPACKAGES = (
                                   DISTRO_ID_ARCH: "python-urllib3",
                                   },
             ),
-    Package(name="Certifi", version="2021.10.08", version_short="2021.10", version_min="2021.0", version_mex="2023.0",
+    Package(name="Certifi", version="2021.10.08", version_short="2021.10", version_min="2021.0", version_mex="2025.0",
             distro_package_names={DISTRO_ID_DEBIAN: "python3-certifi",
                                   DISTRO_ID_FEDORA: "python3-certifi",
                                   DISTRO_ID_SUSE: suse_pypackages_name_gen("certifi"),
@@ -569,14 +578,14 @@ PYTHON_SUBPACKAGES = (
                                   DISTRO_ID_ARCH: "python-zstandard",
                                   },
             ),
-    Package(name="NumPy", version="1.23.5", version_short="1.23", version_min="1.14", version_mex="2.0",
+    Package(name="NumPy", version="1.24.3", version_short="1.24", version_min="1.14", version_mex="2.0",
             distro_package_names={DISTRO_ID_DEBIAN: "python3-numpy",
                                   DISTRO_ID_FEDORA: "python3-numpy",
                                   DISTRO_ID_SUSE: suse_pypackages_name_gen("numpy"),
                                   DISTRO_ID_ARCH: "python-numpy",
                                   },
             ),
-    Package(name="NumPy Devel", version="1.23.5", version_short="1.23", version_min="1.14", version_mex="2.0",
+    Package(name="NumPy Devel", version="1.24.3", version_short="1.24", version_min="1.14", version_mex="2.0",
             distro_package_names={DISTRO_ID_DEBIAN: ...,
                                   DISTRO_ID_FEDORA: ...,
                                   DISTRO_ID_SUSE: suse_pypackages_name_gen("numpy-devel"),
@@ -706,7 +715,7 @@ PACKAGES_ALL = (
                                   DISTRO_ID_ARCH: "clang",  # clang-format is part of the main clang package.
                                   },
             ),
-    Package(name="Python", is_mandatory=True, version="3.10.12", version_short="3.10", version_min="3.10", version_mex="3.12",
+    Package(name="Python", is_mandatory=True, version="3.11.9", version_short="3.11", version_min="3.11", version_mex="3.13",
             sub_packages=PYTHON_SUBPACKAGES,
             distro_package_names={DISTRO_ID_DEBIAN: "python3-dev",
                                   DISTRO_ID_FEDORA: "python3-devel",
@@ -714,7 +723,7 @@ PACKAGES_ALL = (
                                   DISTRO_ID_ARCH: "python",
                                   },
             ),
-    Package(name="Boost Libraries", is_mandatory=True, version="1.80.0", version_short="1.80", version_min="1.49", version_mex="2.0",
+    Package(name="Boost Libraries", is_mandatory=True, version="1.82.0", version_short="1.82", version_min="1.49", version_mex="2.0",
             sub_packages=BOOST_SUBPACKAGES,
             distro_package_names={DISTRO_ID_DEBIAN: "libboost-dev",
                                   DISTRO_ID_FEDORA: "boost-devel",
@@ -730,7 +739,7 @@ PACKAGES_ALL = (
                                   DISTRO_ID_ARCH: "intel-oneapi-tbb",
                                   },
             ),
-    Package(name="OpenColorIO Library", is_mandatory=False, version="2.2.0", version_short="2.2", version_min="2.0", version_mex="3.0",
+    Package(name="OpenColorIO Library", is_mandatory=False, version="2.3.2", version_short="2.3", version_min="2.0", version_mex="3.0",
             sub_packages=(),
             distro_package_names={DISTRO_ID_DEBIAN: "libopencolorio-dev",
                                   DISTRO_ID_FEDORA: "OpenColorIO-devel",
@@ -738,7 +747,7 @@ PACKAGES_ALL = (
                                   DISTRO_ID_ARCH: "opencolorio",
                                   },
             ),
-    Package(name="IMath Library", is_mandatory=False, version="3.1.7", version_short="3.1", version_min="3.0", version_mex="4.0",
+    Package(name="IMath Library", is_mandatory=False, version="3.2.1", version_short="3.2", version_min="3.0", version_mex="4.0",
             sub_packages=(),
             distro_package_names={DISTRO_ID_DEBIAN: "libimath-dev",
                                   DISTRO_ID_FEDORA: "imath-devel",
@@ -746,7 +755,7 @@ PACKAGES_ALL = (
                                   DISTRO_ID_ARCH: "imath",
                                   },
             ),
-    Package(name="OpenEXR Library", is_mandatory=False, version="3.1.7", version_short="3.1", version_min="3.0", version_mex="4.0",
+    Package(name="OpenEXR Library", is_mandatory=False, version="3.2.4", version_short="3.2", version_min="3.0", version_mex="4.0",
             sub_packages=(),
             distro_package_names={DISTRO_ID_DEBIAN: "libopenexr-dev",
                                   DISTRO_ID_FEDORA: "openexr-devel",
@@ -754,7 +763,7 @@ PACKAGES_ALL = (
                                   DISTRO_ID_ARCH: "openexr",
                                   },
             ),
-    Package(name="OpenImageIO Library", is_mandatory=True, version="2.4.11.0", version_short="2.4", version_min="2.2.0", version_mex="2.5.0",
+    Package(name="OpenImageIO Library", is_mandatory=True, version="2.5.11.0", version_short="2.5", version_min="2.5.0", version_mex="2.6.0",
             sub_packages=(
                 Package(name="OpenImageIO Tools", is_mandatory=False,
                         distro_package_names={DISTRO_ID_DEBIAN: "openimageio-tools",
@@ -770,7 +779,7 @@ PACKAGES_ALL = (
                                   DISTRO_ID_ARCH: "openimageio",
                                   },
             ),
-    Package(name="LLVM Library", is_mandatory=False, version="12.0.0", version_short="12.0", version_min="11.0", version_mex="16.0",
+    Package(name="LLVM Library", is_mandatory=False, version="17.0.6", version_short="17.0", version_min="15.0", version_mex="18.0",
             sub_packages=(
                 Package(name="Clang Compiler", is_mandatory=False,
                         distro_package_names={DISTRO_ID_DEBIAN: "clang",
@@ -793,7 +802,7 @@ PACKAGES_ALL = (
                                   DISTRO_ID_ARCH: "llvm",
                                   },
             ),
-    Package(name="OpenShadingLanguage Library", is_mandatory=False, version="1.13.0.2", version_short="1.13", version_min="1.11", version_mex="2.0",
+    Package(name="OpenShadingLanguage Library", is_mandatory=False, version="1.13.2.0", version_short="1.13", version_min="1.11", version_mex="2.0",
             sub_packages=(),
             distro_package_names={DISTRO_ID_DEBIAN: None,  # No package currently.
                                   DISTRO_ID_FEDORA: "openshadinglanguage-devel",
@@ -801,7 +810,7 @@ PACKAGES_ALL = (
                                   DISTRO_ID_ARCH: "openshadinglanguage",
                                   },
             ),
-    Package(name="OpenSubDiv Library", is_mandatory=False, version="3.5.0", version_short="3.5", version_min="3.5", version_mex="4.0",
+    Package(name="OpenSubDiv Library", is_mandatory=False, version="3.6.0", version_short="3.6", version_min="3.5", version_mex="4.0",
             sub_packages=(),
             distro_package_names={DISTRO_ID_DEBIAN: "libosd-dev",
                                   DISTRO_ID_FEDORA: "opensubdiv-devel",
@@ -809,7 +818,7 @@ PACKAGES_ALL = (
                                   DISTRO_ID_ARCH: "opensubdiv",
                                   },
             ),
-    Package(name="OpenVDB Library", is_mandatory=False, version="10.0.0", version_short="10.0", version_min="10.0", version_mex="11.0",
+    Package(name="OpenVDB Library", is_mandatory=False, version="11.0.0", version_short="11.0", version_min="10.0", version_mex="12.0",
             sub_packages=(
                 # Assume packaged versions of the dependencies are compatible with OpenVDB package.
                 Package(name="OpenVDB Dependencies", is_mandatory=False, is_group=True,
@@ -845,7 +854,7 @@ PACKAGES_ALL = (
                                   DISTRO_ID_ARCH: "alembic",
                                   },
             ),
-    Package(name="MaterialX Library", is_mandatory=False, version="1.38.6", version_short="1.38", version_min="1.38", version_mex="1.40",
+    Package(name="MaterialX Library", is_mandatory=False, version="1.38.8", version_short="1.38", version_min="1.38", version_mex="1.40",
             sub_packages=(),
             distro_package_names={DISTRO_ID_DEBIAN: None,
                                   DISTRO_ID_FEDORA: None,
@@ -853,7 +862,7 @@ PACKAGES_ALL = (
                                   DISTRO_ID_ARCH: "materialx-git",
                                   },
             ),
-    Package(name="USD Library", is_mandatory=False, version="23.05", version_short="23.05", version_min="20.05", version_mex="24.00",
+    Package(name="USD Library", is_mandatory=False, version="24.05", version_short="24.05", version_min="22.05", version_mex="25.00",
             sub_packages=(),
             distro_package_names={DISTRO_ID_DEBIAN: None,
                                   DISTRO_ID_FEDORA: "usd-devel",
@@ -868,7 +877,7 @@ PACKAGES_ALL = (
                                   DISTRO_ID_ARCH: "opencollada",
                                   },
             ),
-    Package(name="Embree Library", is_mandatory=False, version="4.1.0", version_short="4.1", version_min="3.13", version_mex="5.0",
+    Package(name="Embree Library", is_mandatory=False, version="4.3.2", version_short="4.3", version_min="3.13", version_mex="5.0",
             sub_packages=(),
             distro_package_names={DISTRO_ID_DEBIAN: "libembree-dev",
                                   DISTRO_ID_FEDORA: "embree-devel",
@@ -876,7 +885,7 @@ PACKAGES_ALL = (
                                   DISTRO_ID_ARCH: "embree",
                                   },
             ),
-    Package(name="OpenImageDenoiser Library", is_mandatory=False, version="1.4.3", version_short="1.4", version_min="1.4.0", version_mex="1.5",
+    Package(name="OpenImageDenoiser Library", is_mandatory=False, version="2.3.0", version_short="2.3", version_min="2.0.0", version_mex="3.0",
             sub_packages=(),
             distro_package_names={DISTRO_ID_DEBIAN: None,
                                   DISTRO_ID_FEDORA: "oidn-devel",
@@ -884,7 +893,7 @@ PACKAGES_ALL = (
                                   DISTRO_ID_ARCH: "openimagedenoise",
                                   },
             ),
-    Package(name="Level Zero Library", is_mandatory=False, version="1.8.8", version_short="1.8", version_min="1.7", version_mex="2.0",
+    Package(name="Level Zero Library", is_mandatory=False, version="1.16.1", version_short="1.16", version_min="1.7", version_mex="2.0",
             sub_packages=(),
             distro_package_names={DISTRO_ID_DEBIAN: None,
                                   DISTRO_ID_FEDORA: "oneapi-level-zero-devel",
@@ -892,7 +901,7 @@ PACKAGES_ALL = (
                                   DISTRO_ID_ARCH: "level-zero-headers",  # ???
                                   },
             ),
-    Package(name="OpenPGL Library", is_mandatory=False, version="0.5.0", version_short="0.5", version_min="0.5.0", version_mex="0.6",
+    Package(name="OpenPGL Library", is_mandatory=False, version="0.6.0", version_short="0.6", version_min="0.5.0", version_mex="0.7",
             sub_packages=(),
             distro_package_names={DISTRO_ID_DEBIAN: None,
                                   DISTRO_ID_FEDORA: "openpgl-devel",
@@ -1694,7 +1703,7 @@ def argparse_create():
         "Attempt to install dependencies to build Blender from current linux distribution's packages only.\n"
         "\n"
         "By default, only installs critical tools and dependencies to build Blender, excluding any library provided\n"
-        "by the precompiled SVN repository.\n"
+        "by the precompiled git-lfs repository.\n"
         "`make update` should then be ran after this script to download all precompiled libraries.\n"
         "\n"
         "When ran with the `--all` option, this tool will try to install all mandatory and optional dependencies\n"
@@ -1707,7 +1716,7 @@ def argparse_create():
         "NOTE: To build with system package libraries instead of the precompiled ones when both are available,\n"
         "the `WITH_LIBS_PRECOMPILED` option must be disabled in CMake.\n"
         "\n"
-        "See https://wiki.blender.org/wiki/Building_Blender for more details.\n"
+        "See https://developer.blender.org/docs/handbook/building_blender/ for more details.\n"
         "\n"
     )
 

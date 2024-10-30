@@ -8,13 +8,11 @@
 
 #include "oiio/openimageio_support.hh"
 
-#include "IMB_filetype.h"
-#include "IMB_imbuf_types.h"
+#include "IMB_filetype.hh"
+#include "IMB_imbuf_types.hh"
 
 OIIO_NAMESPACE_USING
 using namespace blender::imbuf;
-
-extern "C" {
 
 bool imb_is_a_tga(const uchar *mem, size_t size)
 {
@@ -41,5 +39,4 @@ bool imb_save_tga(ImBuf *ibuf, const char *filepath, int flags)
   file_spec.attribute("compression", (ibuf->foptions.flag & RAWTGA) ? "none" : "rle");
 
   return imb_oiio_write(ctx, filepath, file_spec);
-}
 }

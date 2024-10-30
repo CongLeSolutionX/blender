@@ -10,7 +10,7 @@
 #include "gpu_shader_create_info.hh"
 
 GPU_SHADER_CREATE_INFO(gpu_shader_test)
-    .typedef_source("GPU_shader_shared.h")
+    .typedef_source("GPU_shader_shared.hh")
     .fragment_out(0, Type::UVEC4, "out_test")
     .additional_info("draw_fullscreen");
 
@@ -86,12 +86,40 @@ GPU_SHADER_CREATE_INFO(gpu_push_constants_512bytes_test)
     .push_constant(Type::FLOAT, "filler3", 64)
     .do_static_compilation(true);
 
+GPU_SHADER_CREATE_INFO(gpu_push_constants_8192bytes_test)
+    .additional_info("gpu_push_constants_512bytes_test")
+    .push_constant(Type::FLOAT, "filler4", 1920)
+    .do_static_compilation(true);
+
 GPU_SHADER_CREATE_INFO(gpu_buffer_texture_test)
     .local_group_size(1)
     .sampler(0, ImageType::FLOAT_BUFFER, "bufferTexture")
     .storage_buf(0, Qualifier::WRITE, "float", "data_out[]")
     .compute_source("gpu_buffer_texture_test.glsl")
     .do_static_compilation(true);
+
+/* Specialization constants. */
+
+GPU_SHADER_CREATE_INFO(gpu_specialization_constants_base_test)
+    .storage_buf(0, Qualifier::WRITE, "int", "data_out[]")
+    .specialization_constant(Type::FLOAT, "float_in", 2)
+    .specialization_constant(Type::UINT, "uint_in", 3)
+    .specialization_constant(Type::INT, "int_in", 4)
+    .specialization_constant(Type::BOOL, "bool_in", true);
+
+GPU_SHADER_CREATE_INFO(gpu_compute_specialization_test)
+    .local_group_size(1)
+    .additional_info("gpu_specialization_constants_base_test")
+    .compute_source("gpu_specialization_test.glsl")
+    .do_static_compilation(true);
+
+GPU_SHADER_CREATE_INFO(gpu_graphic_specialization_test)
+    .additional_info("gpu_specialization_constants_base_test")
+    .vertex_source("gpu_specialization_test.glsl")
+    .fragment_source("gpu_specialization_test.glsl")
+    .do_static_compilation(true);
+
+/* EEVEE test. */
 
 GPU_SHADER_CREATE_INFO(eevee_shadow_test)
     .fragment_source("eevee_shadow_test.glsl")
@@ -101,6 +129,18 @@ GPU_SHADER_CREATE_INFO(eevee_shadow_test)
 
 GPU_SHADER_CREATE_INFO(eevee_occupancy_test)
     .fragment_source("eevee_occupancy_test.glsl")
+    .additional_info("gpu_shader_test")
+    .additional_info("eevee_shared")
+    .do_static_compilation(true);
+
+GPU_SHADER_CREATE_INFO(eevee_gbuffer_normal_test)
+    .fragment_source("eevee_gbuffer_normal_test.glsl")
+    .additional_info("gpu_shader_test")
+    .additional_info("eevee_shared")
+    .do_static_compilation(true);
+
+GPU_SHADER_CREATE_INFO(eevee_gbuffer_closure_test)
+    .fragment_source("eevee_gbuffer_closure_test.glsl")
     .additional_info("gpu_shader_test")
     .additional_info("eevee_shared")
     .do_static_compilation(true);

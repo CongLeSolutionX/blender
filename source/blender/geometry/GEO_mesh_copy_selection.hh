@@ -8,7 +8,7 @@
 
 #include "BLI_index_mask.hh"
 
-#include "BKE_attribute.h"
+#include "BKE_attribute_filter.hh"
 
 struct Mesh;
 namespace blender {
@@ -16,28 +16,27 @@ namespace fn {
 template<typename T> class Field;
 }
 namespace bke {
-class AnonymousAttributePropagationInfo;
-}
+enum class AttrDomain : int8_t;
+}  // namespace bke
 }  // namespace blender
 
 namespace blender::geometry {
 
-std::optional<Mesh *> mesh_copy_selection(
-    const Mesh &src_mesh,
-    const VArray<bool> &selection,
-    eAttrDomain selection_domain,
-    const bke::AnonymousAttributePropagationInfo &propagation_info);
+std::optional<Mesh *> mesh_copy_selection(const Mesh &src_mesh,
+                                          const VArray<bool> &selection,
+                                          bke::AttrDomain selection_domain,
+                                          const bke::AttributeFilter &attribute_filter = {});
 
 std::optional<Mesh *> mesh_copy_selection_keep_verts(
     const Mesh &src_mesh,
     const VArray<bool> &selection,
-    eAttrDomain selection_domain,
-    const bke::AnonymousAttributePropagationInfo &propagation_info);
+    bke::AttrDomain selection_domain,
+    const bke::AttributeFilter &attribute_filter = {});
 
 std::optional<Mesh *> mesh_copy_selection_keep_edges(
     const Mesh &mesh,
     const VArray<bool> &selection,
-    eAttrDomain selection_domain,
-    const bke::AnonymousAttributePropagationInfo &propagation_info);
+    bke::AttrDomain selection_domain,
+    const bke::AttributeFilter &attribute_filter = {});
 
 }  // namespace blender::geometry

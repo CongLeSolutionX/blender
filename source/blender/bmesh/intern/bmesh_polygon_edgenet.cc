@@ -13,7 +13,6 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_alloca.h"
-#include "BLI_array.h"
 #include "BLI_kdopbvh.h"
 #include "BLI_linklist_stack.h"
 #include "BLI_math_geom.h"
@@ -22,11 +21,12 @@
 #include "BLI_memarena.h"
 #include "BLI_sort_utils.h"
 #include "BLI_utildefines_stack.h"
+#include "BLI_vector.hh"
 
 #include "BKE_customdata.hh"
 
-#include "bmesh.h"
-#include "intern/bmesh_private.h"
+#include "bmesh.hh"
+#include "intern/bmesh_private.hh"
 
 /* -------------------------------------------------------------------- */
 /** \name Face Split Edge-Net
@@ -201,7 +201,7 @@ static bool bm_face_split_edgenet_find_loop_pair(BMVert *v_init,
     swap = !swap;
   }
   if (swap) {
-    SWAP(BMEdge *, e_pair[0], e_pair[1]);
+    std::swap(e_pair[0], e_pair[1]);
   }
 
   return true;
@@ -427,7 +427,8 @@ static bool bm_face_split_edgenet_find_loop(BMVert *v_init,
              (bm_edge_flagged_radial_count(e_pair[1]) == 1));
 
   if (bm_face_split_edgenet_find_loop_walk(
-          v_init, face_normal, edge_order, edge_order_len, e_pair)) {
+          v_init, face_normal, edge_order, edge_order_len, e_pair))
+  {
     uint i = 0;
 
     r_face_verts[i++] = v_init;
@@ -445,15 +446,11 @@ bool BM_face_split_edgenet(BMesh *bm,
                            BMFace *f,
                            BMEdge **edge_net,
                            const int edge_net_len,
-                           BMFace ***r_face_arr,
-                           int *r_face_arr_len)
+                           blender::Vector<BMFace *> *r_face_arr)
 {
   /* re-use for new face verts */
   BMVert **face_verts;
   int face_verts_len;
-
-  BMFace **face_arr = nullptr;
-  BLI_array_declare(face_arr);
 
   BMVert **vert_queue;
   STACK_DECLARE(vert_queue);
@@ -468,8 +465,7 @@ bool BM_face_split_edgenet(BMesh *bm,
 
   if (!edge_net_len) {
     if (r_face_arr) {
-      *r_face_arr = nullptr;
-      *r_face_arr_len = 0;
+      r_face_arr->clear_and_shrink();
     }
     return false;
   }
@@ -492,7 +488,7 @@ bool BM_face_split_edgenet(BMesh *bm,
   BLI_assert(BM_ELEM_API_FLAG_TEST(f, FACE_NET) == 0);
   BM_ELEM_API_FLAG_ENABLE(f, FACE_NET);
 
-#ifdef DEBUG
+#ifndef NDEBUG
   for (i = 0; i < edge_net_len; i++) {
     BLI_assert(BM_ELEM_API_FLAG_TEST(edge_net[i], EDGE_NET) == 0);
     BLI_assert(BM_edge_in_face(edge_net[i], f) == false);
@@ -527,6 +523,7 @@ bool BM_face_split_edgenet(BMesh *bm,
   STACK_PUSH(vert_queue, l_first->v);
   BM_ELEM_API_FLAG_ENABLE(l_first->v, VERT_IN_QUEUE);
 
+  blender::Vector<BMFace *> face_arr;
   while ((v = STACK_POP(vert_queue))) {
     BM_ELEM_API_FLAG_DISABLE(v, VERT_IN_QUEUE);
     if (bm_face_split_edgenet_find_loop(
@@ -541,7 +538,7 @@ bool BM_face_split_edgenet(BMesh *bm,
       }
 
       if (f_new) {
-        BLI_array_append(face_arr, f_new);
+        face_arr.append(f_new);
         copy_v3_v3(f_new->no, f->no);
 
         /* warning, normally don't do this,
@@ -590,8 +587,7 @@ bool BM_face_split_edgenet(BMesh *bm,
     do {
       BM_ITER_ELEM (l_other, &iter, l_iter->v, BM_LOOPS_OF_VERT) {
         if ((l_other->f != f) && BM_ELEM_API_FLAG_TEST(l_other->f, FACE_NET)) {
-          CustomData_bmesh_copy_data(
-              &bm->ldata, &bm->ldata, l_iter->head.data, &l_other->head.data);
+          CustomData_bmesh_copy_block(bm->ldata, l_iter->head.data, &l_other->head.data);
         }
       }
       /* tag not to interpolate */
@@ -622,8 +618,7 @@ bool BM_face_split_edgenet(BMesh *bm,
                 l_first = l_iter;
               }
               else {
-                CustomData_bmesh_copy_data(
-                    &bm->ldata, &bm->ldata, l_first->head.data, &l_iter->head.data);
+                CustomData_bmesh_copy_block(bm->ldata, l_first->head.data, &l_iter->head.data);
               }
             }
           }
@@ -646,7 +641,7 @@ bool BM_face_split_edgenet(BMesh *bm,
     BM_ELEM_API_FLAG_DISABLE(l_iter->v, VERT_VISIT);
   } while ((l_iter = l_iter->next) != l_first);
 
-  if (BLI_array_len(face_arr)) {
+  if (!face_arr.is_empty()) {
     bmesh_face_swap_data(f, face_arr[0]);
     BM_face_kill(bm, face_arr[0]);
     face_arr[0] = f;
@@ -655,18 +650,12 @@ bool BM_face_split_edgenet(BMesh *bm,
     BM_ELEM_API_FLAG_DISABLE(f, FACE_NET);
   }
 
-  for (i = 0; i < BLI_array_len(face_arr); i++) {
-    BM_ELEM_API_FLAG_DISABLE(face_arr[i], FACE_NET);
+  for (BMFace *face : face_arr) {
+    BM_ELEM_API_FLAG_DISABLE(face, FACE_NET);
   }
 
   if (r_face_arr) {
-    *r_face_arr = face_arr;
-    *r_face_arr_len = BLI_array_len(face_arr);
-  }
-  else {
-    if (face_arr) {
-      MEM_freeN(face_arr);
-    }
+    *r_face_arr = std::move(face_arr);
   }
 
   MEM_freeN(edge_order);
@@ -825,7 +814,8 @@ static void bvhtree_test_edges_isect_2d_ray_cb(void *user_data,
   /* direction is normalized, so this will be the distance */
   float dist_new;
   if (isect_ray_seg_v2(
-          data->v_origin->co, ray->direction, e->v1->co, e->v2->co, &dist_new, nullptr)) {
+          data->v_origin->co, ray->direction, e->v1->co, e->v2->co, &dist_new, nullptr))
+  {
     /* avoid float precision issues, possible this is greater,
      * check above zero to allow some overlap
      * (and needed for partial-connect which will overlap vertices) */
@@ -1000,7 +990,8 @@ static int bm_face_split_edgenet_find_connection(const EdgeGroup_FindConnection_
       BMVert *v_pair[2];
       /* ensure the closest vertex is popped back off the stack first */
       if (len_squared_v2v2(v_origin->co, e_hit->v1->co) >
-          len_squared_v2v2(v_origin->co, e_hit->v2->co)) {
+          len_squared_v2v2(v_origin->co, e_hit->v2->co))
+      {
         ARRAY_SET_ITEMS(v_pair, e_hit->v1, e_hit->v2);
       }
       else {
@@ -1496,7 +1487,7 @@ bool BM_face_split_edgenet_connect_islands(BMesh *bm,
 
   bm->elem_index_dirty |= BM_VERT;
 
-  /* Now create bvh tree
+  /* Now create BVH tree.
    *
    * Note that a large epsilon is used because meshes with dimensions of around 100+ need it.
    * see #52329. */
@@ -1639,9 +1630,9 @@ finally:
   if (use_partial_connect) {
 
 /* Sanity check: ensure we don't have connecting edges before splicing begins. */
-#  ifdef DEBUG
+#  ifndef NDEBUG
     {
-      struct TempVertPair *tvp = temp_vert_pairs.list;
+      TempVertPair *tvp = temp_vert_pairs.list;
       do {
         /* We must _never_ create connections here
          * (in case the islands can't have a connection at all). */

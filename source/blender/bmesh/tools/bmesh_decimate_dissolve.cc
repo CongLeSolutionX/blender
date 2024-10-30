@@ -17,8 +17,8 @@
 
 #include "BKE_customdata.hh"
 
-#include "bmesh.h"
-#include "bmesh_decimate.h" /* own include */
+#include "bmesh.hh"
+#include "bmesh_decimate.hh" /* own include */
 
 /* check that collapsing a vertex between 2 edges doesn't cause a degenerate face. */
 #define USE_DEGENERATE_CHECK
@@ -303,7 +303,8 @@ void BM_mesh_decimate_dissolve_ex(BMesh *bm,
       delimit_data.cd_loop_type = CD_PROP_FLOAT2;
       delimit_data.cd_loop_size = CustomData_sizeof(eCustomDataType(delimit_data.cd_loop_type));
       delimit_data.cd_loop_offset = CustomData_get_n_offset(&bm->ldata, CD_PROP_FLOAT2, 0);
-      delimit_data.cd_loop_offset_end = delimit_data.cd_loop_size * layer_len;
+      delimit_data.cd_loop_offset_end = delimit_data.cd_loop_offset +
+                                        delimit_data.cd_loop_size * layer_len;
     }
   }
 
@@ -513,7 +514,8 @@ void BM_mesh_decimate_dissolve_ex(BMesh *bm,
               do {
                 const int j = BM_elem_index_get(l_cycle_iter->v);
                 if (j != -1 && vheap_table[j] &&
-                    (BLI_heap_node_value(vheap_table[j]) == COST_INVALID)) {
+                    (BLI_heap_node_value(vheap_table[j]) == COST_INVALID))
+                {
                   const float cost = bm_vert_edge_face_angle(
                       l_cycle_iter->v, delimit, &delimit_data);
                   BLI_heap_node_value_update(vheap, vheap_table[j], cost);

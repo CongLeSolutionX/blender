@@ -6,8 +6,8 @@
  * \ingroup gpu
  */
 
+#include "GPU_vertex_buffer.hh"
 #include "gpu_shader_interface.hh"
-#include "gpu_vertex_buffer_private.hh"
 
 #include "gl_batch.hh"
 #include "gl_context.hh"
@@ -94,7 +94,7 @@ static uint16_t vbo_bind(const ShaderInterface *interface,
 }
 
 void GLVertArray::update_bindings(const GLuint vao,
-                                  const GPUBatch *batch_, /* Should be GLBatch. */
+                                  const Batch *batch_, /* Should be GLBatch. */
                                   const ShaderInterface *interface,
                                   const int base_instance)
 {
@@ -138,7 +138,7 @@ void GLVertArray::update_bindings(const GLuint vao,
     }
   }
 
-  if (attr_mask != 0 && GLContext::vertex_attrib_binding_support) {
+  if (attr_mask != 0) {
     for (uint16_t mask = 1, a = 0; a < 16; a++, mask <<= 1) {
       if (attr_mask & mask) {
         GLContext *ctx = GLContext::get();
@@ -154,7 +154,7 @@ void GLVertArray::update_bindings(const GLuint vao,
 
   if (batch->elem) {
     /* Binds the index buffer. This state is also saved in the VAO. */
-    static_cast<GLIndexBuf *>(unwrap(batch->elem))->bind();
+    static_cast<GLIndexBuf *>(batch->elem)->bind();
   }
 }
 

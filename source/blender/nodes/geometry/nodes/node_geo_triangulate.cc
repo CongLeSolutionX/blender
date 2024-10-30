@@ -5,8 +5,8 @@
 #include "BKE_customdata.hh"
 #include "BKE_mesh.hh"
 
-#include "bmesh.h"
-#include "bmesh_tools.h"
+#include "bmesh.hh"
+#include "bmesh_tools.hh"
 
 #include "DNA_mesh_types.h"
 
@@ -91,7 +91,7 @@ static void node_geo_exec(GeoNodeExecParams params)
     }
     const Mesh &mesh_in = *geometry_set.get_mesh();
 
-    const bke::MeshFieldContext context{mesh_in, ATTR_DOMAIN_FACE};
+    const bke::MeshFieldContext context{mesh_in, AttrDomain::Face};
     FieldEvaluator evaluator{context, mesh_in.faces_num};
     evaluator.add(selection_field);
     evaluator.evaluate();
@@ -156,7 +156,9 @@ static void node_rna(StructRNA *srna)
                     "Method for splitting the quads into triangles",
                     rna_node_geometry_triangulate_quad_method_items,
                     NOD_inline_enum_accessors(custom1),
-                    GEO_NODE_POINTS_TO_VOLUME_RESOLUTION_MODE_AMOUNT);
+                    GEO_NODE_POINTS_TO_VOLUME_RESOLUTION_MODE_AMOUNT,
+                    nullptr,
+                    true);
 
   RNA_def_node_enum(srna,
                     "ngon_method",
@@ -164,19 +166,21 @@ static void node_rna(StructRNA *srna)
                     "Method for splitting the n-gons into triangles",
                     rna_node_geometry_triangulate_ngon_method_items,
                     NOD_inline_enum_accessors(custom2),
-                    GEO_NODE_POINTS_TO_VOLUME_RESOLUTION_MODE_AMOUNT);
+                    GEO_NODE_POINTS_TO_VOLUME_RESOLUTION_MODE_AMOUNT,
+                    nullptr,
+                    true);
 }
 
 static void node_register()
 {
-  static bNodeType ntype;
+  static blender::bke::bNodeType ntype;
 
   geo_node_type_base(&ntype, GEO_NODE_TRIANGULATE, "Triangulate", NODE_CLASS_GEOMETRY);
   ntype.declare = node_declare;
   ntype.initfunc = geo_triangulate_init;
   ntype.geometry_node_execute = node_geo_exec;
   ntype.draw_buttons = node_layout;
-  nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 
   node_rna(ntype.rna_ext.srna);
 }

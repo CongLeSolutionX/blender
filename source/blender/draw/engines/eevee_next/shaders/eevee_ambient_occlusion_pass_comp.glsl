@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma BLENDER_REQUIRE(gpu_shader_math_vector_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_ambient_occlusion_lib.glsl)
 #pragma BLENDER_REQUIRE(eevee_horizon_scan_eval_lib.glsl)
 
 void main()
@@ -27,23 +26,21 @@ void main()
   vec3 N = imageLoad(in_normal_img, ivec3(texel, in_normal_img_layer_index)).xyz;
   vec3 vN = drw_normal_world_to_view(N);
 
-  vec2 noise;
-  noise.x = interlieved_gradient_noise(vec2(texel), 3.0, 0.0);
-  noise.y = utility_tx_fetch(utility_tx, texel, UTIL_BLUE_NOISE_LAYER).r;
-  noise = fract(noise + sampling_rng_2D_get(SAMPLING_AO_U));
+  vec4 noise = utility_tx_fetch(utility_tx, vec2(texel), UTIL_BLUE_NOISE_LAYER);
+  noise = fract(noise + sampling_rng_3D_get(SAMPLING_AO_U).xyzx);
 
-  vec3 ambient_occlusion = horizon_scan_eval(vP,
+  HorizonScanResult scan = horizon_scan_eval(vP,
                                              vN,
-                                             hiz_tx,
                                              noise,
                                              uniform_buf.ao.pixel_size,
                                              uniform_buf.ao.distance,
-                                             uniform_buf.ao.thickness,
+                                             uniform_buf.ao.thickness_near,
+                                             uniform_buf.ao.thickness_far,
                                              uniform_buf.ao.angle_bias,
-                                             10);
+                                             ao_slice_count,
+                                             ao_step_count,
+                                             false,
+                                             true);
 
-  /* We can have some float imprecision because of the weighted accumulation. */
-  ambient_occlusion = saturate(ambient_occlusion * 1.02);
-
-  imageStore(out_ao_img, ivec3(texel, out_ao_img_layer_index), saturate(ambient_occlusion.rrrr));
+  imageStore(out_ao_img, ivec3(texel, out_ao_img_layer_index), vec4(saturate(scan.result)));
 }

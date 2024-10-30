@@ -91,7 +91,7 @@ else()
     message(FATAL_ERROR "No Xcode or Command Line Tools detected")
   endif()
 
-  unset( _cltools_pkg_info)
+  unset(_cltools_pkg_info)
   unset(__cltools_pkg_info_result)
 endif()
 
@@ -152,13 +152,9 @@ endif()
 unset(OSX_SDKROOT)
 
 
-if("${CMAKE_OSX_ARCHITECTURES}" STREQUAL "arm64")
-  # M1 chips run Big Sur onwards.
-  set(OSX_MIN_DEPLOYMENT_TARGET 11.00)
-else()
-  # 10.15 is our min. target, if you use higher sdk, weak linking happens
-  set(OSX_MIN_DEPLOYMENT_TARGET 10.15)
-endif()
+# This is our minimum target, if you use higher sdk, weak linking happens
+# Mainly required because of Metal drivers.
+set(OSX_MIN_DEPLOYMENT_TARGET 11.2)
 
 set(CMAKE_OSX_DEPLOYMENT_TARGET "${OSX_MIN_DEPLOYMENT_TARGET}" CACHE STRING "" FORCE)
 

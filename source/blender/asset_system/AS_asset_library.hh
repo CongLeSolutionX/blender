@@ -9,6 +9,7 @@
 #pragma once
 
 #include <memory>
+#include <mutex>
 
 #include "AS_asset_catalog.hh"
 
@@ -18,17 +19,17 @@
 #include "BLI_string_ref.hh"
 #include "BLI_vector.hh"
 
-#include "BKE_callbacks.h"
+#include "BKE_callbacks.hh"
 
-struct AssetLibrary;
-struct IDRemapper;
 struct Main;
+
+namespace blender::bke::id {
+class IDRemapper;
+}
 
 namespace blender::asset_system {
 
-class AssetIdentifier;
 class AssetRepresentation;
-class AssetStorage;
 
 /**
  * AssetLibrary provides access to an asset library's data.
@@ -50,9 +51,9 @@ class AssetLibrary {
   std::shared_ptr<std::string> root_path_;
 
   /**
-   * Storage for assets (better said their representations) that are considered to be part of this
-   * library. Assets are not automatically loaded into this when loading an asset library. Assets
-   * have to be loaded externally and added to this storage via #add_external_asset() or
+   * AssetStorage for assets (better said their representations) that are considered to be part of
+   * this library. Assets are not automatically loaded into this when loading an asset library.
+   * Assets have to be loaded externally and added to this storage via #add_external_asset() or
    * #add_local_id_asset(). So this really is arbitrary storage as far as #AssetLibrary is
    * concerned (allowing the API user to manage partial library storage and partial loading, so
    * only relevant parts of a library are kept in memory).
@@ -63,9 +64,24 @@ class AssetLibrary {
    * already in memory and which not. Neither do we keep track of how many parts of Blender are
    * using an asset or an asset library, which is needed to know when assets can be freed.
    */
-  std::unique_ptr<AssetStorage> asset_storage_;
+  struct AssetStorage {
+    /* Uses shared pointers so the UI can acquire weak pointers. It can then ensure pointers are
+     * not dangling before accessing. */
 
-  std::function<void(AssetLibrary &self)> on_refresh_;
+    Set<std::shared_ptr<AssetRepresentation>> external_assets;
+    /* Store local ID assets separately for efficient lookups.
+     * TODO(Julian): A [ID *, asset] or even [ID.session_uid, asset] map would be preferable for
+     * faster lookups. Not possible until each asset is only represented once in the storage. */
+    Set<std::shared_ptr<AssetRepresentation>> local_id_assets;
+  };
+  AssetStorage asset_storage_;
+
+ protected:
+  /* Changing this pointer should be protected using #catalog_service_mutex_. Note that changes
+   * within the catalog service may still happen without the mutex being locked. They should be
+   * protected separately. */
+  std::unique_ptr<AssetCatalogService> catalog_service_;
+  std::mutex catalog_service_mutex_;
 
   std::optional<eAssetImportMethod> import_method_;
   /** Assets owned by this library may be imported with a different method than set in
@@ -77,11 +93,9 @@ class AssetLibrary {
   bCallbackFuncStore on_save_callback_store_{};
 
  public:
-  /* Controlled by #ED_asset_catalogs_set_save_catalogs_when_file_is_saved,
+  /* Controlled by #ed::asset::catalogs_set_save_catalogs_when_file_is_saved,
    * for managing the "Save Catalog Changes" in the quit-confirmation dialog box. */
   static bool save_catalogs_when_file_is_saved;
-
-  std::unique_ptr<AssetCatalogService> catalog_service;
 
   friend class AssetLibraryService;
   friend class AssetRepresentation;
@@ -95,7 +109,7 @@ class AssetLibrary {
    * \param root_path: If this is an asset library on disk, the top-level directory path.
    */
   AssetLibrary(eAssetLibraryType library_type, StringRef name = "", StringRef root_path = "");
-  ~AssetLibrary();
+  virtual ~AssetLibrary();
 
   /**
    * Execute \a fn for every asset library that is loaded. The asset library is passed to the
@@ -109,8 +123,7 @@ class AssetLibrary {
 
   void load_catalogs();
 
-  /** Load catalogs that have changed on disk. */
-  void refresh();
+  AssetCatalogService &catalog_service() const;
 
   /**
    * Create a representation of an asset to be considered part of this library. Once the
@@ -121,18 +134,21 @@ class AssetLibrary {
    * \param relative_asset_path: The path of the asset relative to the asset library root. With
    *                             this the asset must be uniquely identifiable within the asset
    *                             library.
+   * \return A weak pointer to the new asset representation. The caller needs to keep some
+   *         reference stored to be able to call #remove_asset(). This would be dangling once the
+   *         asset library is destructed, so a weak pointer should be used to reference it.
    */
-  AssetRepresentation &add_external_asset(StringRef relative_asset_path,
-                                          StringRef name,
-                                          int id_type,
-                                          std::unique_ptr<AssetMetaData> metadata);
+  std::weak_ptr<AssetRepresentation> add_external_asset(StringRef relative_asset_path,
+                                                        StringRef name,
+                                                        int id_type,
+                                                        std::unique_ptr<AssetMetaData> metadata);
   /** See #AssetLibrary::add_external_asset(). */
-  AssetRepresentation &add_local_id_asset(StringRef relative_asset_path, ID &id);
+  std::weak_ptr<AssetRepresentation> add_local_id_asset(StringRef relative_asset_path, ID &id);
   /**
    * Remove an asset from the library that was added using #add_external_asset() or
    * #add_local_id_asset(). Can usually be expected to be constant time complexity (worst case may
    * differ).
-   * \note This is save to call if \a asset is freed (dangling reference), will not perform any
+   * \note This is safe to call if \a asset is freed (dangling reference), will not perform any
    *       change then.
    * \return True on success, false if the asset couldn't be found inside the library (also the
    *         case when the reference is dangling).
@@ -140,11 +156,11 @@ class AssetLibrary {
   bool remove_asset(AssetRepresentation &asset);
 
   /**
-   * Remap ID pointers for local ID assets, see #BKE_lib_remap.h. When an ID pointer would be
+   * Remap ID pointers for local ID assets, see #BKE_lib_remap.hh. When an ID pointer would be
    * mapped to null (typically when an ID gets removed), the asset is removed, because we don't
    * support such empty/null assets.
    */
-  void remap_ids_and_remove_invalid(const IDRemapper &mappings);
+  void remap_ids_and_remove_invalid(const blender::bke::id::IDRemapper &mappings);
 
   /**
    * Update `catalog_simple_name` by looking up the asset's catalog by its ID.
@@ -160,22 +176,21 @@ class AssetLibrary {
 
   void on_blend_save_post(Main *bmain, PointerRNA **pointers, int num_pointers);
 
-  /**
-   * Create an asset identifier from the root path of this asset library and the given relative
-   * asset path (relative to the asset library root directory).
-   */
-  AssetIdentifier asset_identifier_from_library(StringRef relative_asset_path);
-
   std::string resolve_asset_weak_reference_to_full_path(const AssetWeakReference &asset_reference);
 
   eAssetLibraryType library_type() const;
   StringRefNull name() const;
   StringRefNull root_path() const;
+
+ protected:
+  /** Load catalogs that have changed on disk. */
+  virtual void refresh_catalogs();
 };
 
 Vector<AssetLibraryReference> all_valid_asset_library_refs();
 
 AssetLibraryReference all_library_reference();
+void all_library_reload_catalogs_if_dirty();
 
 }  // namespace blender::asset_system
 
@@ -230,7 +245,53 @@ std::string AS_asset_library_find_suitable_root_path_from_path(blender::StringRe
  */
 std::string AS_asset_library_find_suitable_root_path_from_main(const Main *bmain);
 
-blender::asset_system::AssetCatalogService *AS_asset_library_get_catalog_service(
-    const ::AssetLibrary *library);
-blender::asset_system::AssetCatalogTree *AS_asset_library_get_catalog_tree(
-    const ::AssetLibrary *library);
+/**
+ * Force clearing of all asset library data. After calling this, new asset libraries can be loaded
+ * just as usual using #AS_asset_library_load(), no init or other setup is needed.
+ *
+ * Does not need to be called on exit, this is handled internally.
+ */
+void AS_asset_libraries_exit();
+
+/**
+ * Return the #AssetLibrary rooted at the given directory path.
+ *
+ * Will return the same pointer for repeated calls, until another blend file is loaded.
+ *
+ * To get the in-memory-only "current file" asset library, pass an empty path.
+ */
+blender::asset_system::AssetLibrary *AS_asset_library_load(const char *name,
+                                                           const char *library_dirpath);
+
+/** Return whether any loaded AssetLibrary has unsaved changes to its catalogs. */
+bool AS_asset_library_has_any_unsaved_catalogs();
+
+/**
+ * An asset library can include local IDs (IDs in the current file). Their pointers need to be
+ * remapped on change (or assets removed as IDs gets removed).
+ */
+void AS_asset_library_remap_ids(const blender::bke::id::IDRemapper &mappings);
+
+/**
+ * Attempt to resolve a full path to an asset based on the currently available (not necessary
+ * loaded) asset libraries, and split it into it's directory, ID group and ID name components. The
+ * path is not guaranteed to exist on disk. On failure to resolve the reference, return arguments
+ * will point to null.
+ *
+ * \note Only works for asset libraries on disk and the "Current File" one (others can't be
+ *       resolved).
+ *
+ * \param r_path_buffer: Buffer to hold the result in on success. Will be the full path with null
+ *                       terminators instead of slashes separating the directory, group and name
+ *                       components. Must be at least #FILE_MAX_LIBEXTRA long.
+ * \param r_dir: Returns the .blend file path with native slashes on success. Optional (passing
+ *               null is allowed). For the "Current File" library this will be empty.
+ * \param r_group: Returns the ID group such as "Object", "Material" or "Brush". Optional (passing
+ *                 null is allowed).
+ * \param r_name: Returns the ID name on success. Optional (passing null is allowed).
+ */
+void AS_asset_full_path_explode_from_weak_ref(const AssetWeakReference *asset_reference,
+                                              char r_path_buffer[1090 /* FILE_MAX_LIBEXTRA */],
+                                              char **r_dir,
+                                              char **r_group,
+                                              char **r_name);

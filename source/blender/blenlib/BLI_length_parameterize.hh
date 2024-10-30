@@ -30,13 +30,15 @@ inline int segments_num(const int points_num, const bool cyclic)
 template<typename T>
 void accumulate_lengths(const Span<T> values, const bool cyclic, MutableSpan<float> lengths)
 {
-  BLI_assert(lengths.size() == segments_num(values.size(), cyclic));
+  /* For cyclic curves with a single point the lengths array is empty. */
+  BLI_assert(lengths.size() ==
+             (cyclic && values.size() <= 1 ? 0 : segments_num(values.size(), cyclic)));
   float length = 0.0f;
   for (const int i : IndexRange(values.size() - 1)) {
     length += math::distance(values[i], values[i + 1]);
     lengths[i] = length;
   }
-  if (cyclic) {
+  if (cyclic && values.size() > 1) {
     lengths.last() = length + math::distance(values.last(), values.first());
   }
 }
@@ -154,6 +156,20 @@ void sample_uniform(Span<float> accumulated_segment_lengths,
                     bool include_last_point,
                     MutableSpan<int> r_segment_indices,
                     MutableSpan<float> r_factors);
+
+/**
+ * Find evenly spaced samples along the lengths, starting at the end.
+ *
+ * \param accumulated_segment_lengths: The accumulated lengths of the original elements being
+ * sampled. Could be calculated by #accumulate_lengths.
+ * \param include_first_point: Generally false for cyclic sequences and true otherwise.
+ * \param r_segment_indices: The index of the previous point at each sample.
+ * \param r_factors: The portion of the length in each segment at each sample.
+ */
+void sample_uniform_reverse(Span<float> accumulated_segment_lengths,
+                            bool include_first_point,
+                            MutableSpan<int> r_segment_indices,
+                            MutableSpan<float> r_factors);
 
 /**
  * For each provided sample length, find the segment index and interpolation factor.

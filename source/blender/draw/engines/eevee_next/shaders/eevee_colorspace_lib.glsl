@@ -2,6 +2,9 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#pragma BLENDER_REQUIRE(gpu_shader_utildefines_lib.glsl)
+#pragma BLENDER_REQUIRE(gpu_shader_math_vector_lib.glsl)
+
 /* -------------------------------------------------------------------- */
 /** \name YCoCg
  * \{ */
@@ -50,4 +53,16 @@ vec4 colorspace_safe_color(vec4 c)
 vec3 colorspace_safe_color(vec3 c)
 {
   return clamp(c, vec3(0.0), vec3(1e20));
+}
+
+/**
+ * Clamp all components to the specified maximum and avoid color shifting.
+ */
+vec3 colorspace_brightness_clamp_max(vec3 color, float limit)
+{
+  return color * saturate(limit / max(1e-8, reduce_max(abs(color))));
+}
+vec4 colorspace_brightness_clamp_max(vec4 color, float limit)
+{
+  return vec4(colorspace_brightness_clamp_max(color.rgb, limit), color.a);
 }

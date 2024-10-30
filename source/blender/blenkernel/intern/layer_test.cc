@@ -5,22 +5,20 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BKE_appdir.h"
-#include "BKE_idtype.h"
-#include "BKE_layer.h"
+#include "BKE_appdir.hh"
+#include "BKE_idtype.hh"
+#include "BKE_layer.hh"
 
 #include "BLI_string.h"
 
 #include "RE_engine.h"
 
-#include "IMB_imbuf.h"
+#include "IMB_imbuf.hh"
 
 #include "CLG_log.h"
 
 #include "RNA_access.hh"
-#include "RNA_prototypes.h"
-
-#include "GHOST_Path-api.hh"
+#include "RNA_prototypes.hh"
 
 namespace blender::bke::tests {
 
@@ -83,7 +81,6 @@ TEST(view_layer, aov_unique_names)
   IMB_exit();
   BKE_appdir_exit();
   CLG_exit();
-  GHOST_DisposeSystemPaths();
 }
 
 static void test_render_pass_conflict(Scene *scene,
@@ -162,7 +159,6 @@ TEST(view_layer, aov_conflict)
   IMB_exit();
   BKE_appdir_exit();
   CLG_exit();
-  GHOST_DisposeSystemPaths();
 }
 
 }  // namespace blender::bke::tests

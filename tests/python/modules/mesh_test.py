@@ -167,12 +167,20 @@ class MeshTest(ABC):
     A mesh testing Abstract class that hold common functionalities for testting operations.
     """
 
-    def __init__(self, test_object_name, exp_object_name, test_name=None, threshold=None, do_compare=True):
+    def __init__(
+            self,
+            test_object_name,
+            exp_object_name,
+            test_name=None,
+            threshold=None,
+            allow_index_change=False,
+            do_compare=True):
         """
         :arg test_object_name: str - Name of object of mesh type to run the operations on.
         :arg exp_object_name: str - Name of object of mesh type that has the expected
                                 geometry after running the operations.
         :arg test_name: str - Name of the test.
+        :arg allow_index_change: Allow the test to pass even if the mesh element indices are different.
         :arg threshold: exponent: To allow variations and accept difference to a certain degree.
         :arg do_compare: bool - True if we want to compare the test and expected objects, False otherwise.
         """
@@ -184,6 +192,7 @@ class MeshTest(ABC):
             filepath = bpy.data.filepath
             self.test_name = bpy.path.display_name_from_filepath(filepath)
         self.threshold = threshold
+        self.allow_index_change = allow_index_change
         self.do_compare = do_compare
         self.update = os.getenv("BLENDER_TEST_UPDATE") is not None
         self.verbose = os.getenv("BLENDER_VERBOSE") is not None
@@ -254,7 +263,11 @@ class MeshTest(ABC):
             print("Compare evaluated and expected object in Blender.\n")
             return False
 
-        result = self.compare_meshes(self.evaluated_object, self.expected_object, self.threshold)
+        result = self.compare_meshes(
+            self.evaluated_object,
+            self.expected_object,
+            self.threshold,
+            self.allow_index_change)
 
         # Initializing with True to get correct resultant of result_code booleans.
         success = True
@@ -371,7 +384,7 @@ class MeshTest(ABC):
         self.expected_object = self.evaluated_object
 
     @staticmethod
-    def compare_meshes(evaluated_object, expected_object, threshold):
+    def compare_meshes(evaluated_object, expected_object, threshold, allow_index_change):
         """
         Compares evaluated object mesh with expected object mesh.
 
@@ -385,7 +398,6 @@ class MeshTest(ABC):
         expected_mesh = expected_object.data
         result_codes = {}
 
-        # Mesh Comparison.
         if threshold:
             result_mesh = expected_mesh.unit_test_compare(
                 mesh=evaluated_test_mesh, threshold=threshold)
@@ -395,22 +407,10 @@ class MeshTest(ABC):
 
         if result_mesh == "Same":
             result_codes['Mesh Comparison'] = (True, result_mesh)
+        elif allow_index_change and result_mesh == "The meshes are the same up to a change of indices":
+            result_codes['Mesh Comparison'] = (True, result_mesh)
         else:
             result_codes['Mesh Comparison'] = (False, result_mesh)
-
-        # Selection comparison.
-
-        selected_evaluated_verts = [
-            v.index for v in evaluated_test_mesh.vertices if v.select]
-        selected_expected_verts = [
-            v.index for v in expected_mesh.vertices if v.select]
-
-        if selected_evaluated_verts == selected_expected_verts:
-            result_selection = "Same"
-            result_codes['Selection Comparison'] = (True, result_selection)
-        else:
-            result_selection = "Selection doesn't match."
-            result_codes['Selection Comparison'] = (False, result_selection)
 
         # Validation check.
         result_validation = evaluated_test_mesh.validate(verbose=True)
@@ -444,7 +444,8 @@ class SpecMeshTest(MeshTest):
                  exp_object_name,
                  operations_stack=None,
                  apply_modifier=True,
-                 threshold=None):
+                 threshold=None,
+                 allow_index_change=False):
         """
         Constructor for SpecMeshTest.
 
@@ -458,7 +459,7 @@ class SpecMeshTest(MeshTest):
                              This affects operations of type ModifierSpec and DeformModifierSpec.
         """
 
-        super().__init__(test_object_name, exp_object_name, test_name, threshold)
+        super().__init__(test_object_name, exp_object_name, test_name, threshold, allow_index_change)
         self.test_name = test_name
         if operations_stack is None:
             self.operations_stack = []
@@ -737,6 +738,11 @@ class BlendFileTest(MeshTest):
     A mesh testing class inherited from MeshTest aimed at testing operations like modifiers loaded directly from
     blend file i.e. without adding them from scratch or without adding specifications.
     """
+
+    def __init__(self, test_object_name, exp_object_name, threshold=None):
+        super().__init__(test_object_name, exp_object_name, threshold)
+        if bpy.data.objects[test_object_name].get("allow_index_change"):
+            self.allow_index_change = True
 
     def apply_operations(self, evaluated_test_object_name):
 

@@ -13,7 +13,7 @@
 
 #include "draw_handle.hh"
 #include "draw_manager.hh"
-#include "draw_shader_shared.h"
+#include "draw_shader_shared.hh"
 
 /* -------------------------------------------------------------------- */
 /** \name ObjectAttributes
@@ -42,7 +42,7 @@ bool ObjectAttribute::sync(const blender::draw::ObjectRef &ref, const GPUUniform
 /** \name LayerAttributes
  * \{ */
 
-bool LayerAttribute::sync(Scene *scene, ViewLayer *layer, const GPULayerAttr &attr)
+bool LayerAttribute::sync(const Scene *scene, const ViewLayer *layer, const GPULayerAttr &attr)
 {
   hash_code = attr.hash_code;
 

@@ -15,7 +15,6 @@
 
 #include "COM_cached_mask.hh"
 #include "COM_node_operation.hh"
-#include "COM_utilities.hh"
 
 #include "node_composite_util.hh"
 
@@ -52,16 +51,7 @@ static void node_composit_buts_mask(uiLayout *layout, bContext *C, PointerRNA *p
 {
   bNode *node = (bNode *)ptr->data;
 
-  uiTemplateID(layout,
-               C,
-               ptr,
-               "mask",
-               nullptr,
-               nullptr,
-               nullptr,
-               UI_TEMPLATE_ID_FILTER_ALL,
-               false,
-               nullptr);
+  uiTemplateID(layout, C, ptr, "mask", nullptr, nullptr, nullptr);
   uiItemR(layout, ptr, "use_feather", UI_ITEM_R_SPLIT_EMPTY_NAME, nullptr, ICON_NONE);
 
   uiItemR(layout, ptr, "size_source", UI_ITEM_R_SPLIT_EMPTY_NAME, "", ICON_NONE);
@@ -87,7 +77,7 @@ class MaskOperation : public NodeOperation {
   void execute() override
   {
     Result &output_mask = get_result("Mask");
-    if (!get_mask()) {
+    if (!get_mask() || (!is_fixed_size() && !context().is_valid_compositing_region())) {
       output_mask.allocate_invalid();
       return;
     }
@@ -97,12 +87,12 @@ class MaskOperation : public NodeOperation {
         context(),
         get_mask(),
         domain.size,
+        get_aspect_ratio(),
         get_use_feather(),
         get_motion_blur_samples(),
         get_motion_blur_shutter());
 
-    output_mask.allocate_texture(domain);
-    GPU_texture_copy(output_mask.texture(), cached_mask.texture());
+    output_mask.wrap_external(cached_mask.texture());
   }
 
   Domain compute_domain() override
@@ -126,6 +116,20 @@ class MaskOperation : public NodeOperation {
   int2 get_size()
   {
     return int2(node_storage(bnode()).size_x, node_storage(bnode()).size_y);
+  }
+
+  float get_aspect_ratio()
+  {
+    if (is_fixed_size()) {
+      return 1.0f;
+    }
+
+    return context().get_render_data().yasp / context().get_render_data().xasp;
+  }
+
+  bool is_fixed_size()
+  {
+    return get_flags() & (CMP_NODE_MASK_FLAG_SIZE_FIXED | CMP_NODE_MASK_FLAG_SIZE_FIXED_SCENE);
   }
 
   bool get_use_feather()
@@ -170,7 +174,7 @@ void register_node_type_cmp_mask()
 {
   namespace file_ns = blender::nodes::node_composite_mask_cc;
 
-  static bNodeType ntype;
+  static blender::bke::bNodeType ntype;
 
   cmp_node_type_base(&ntype, CMP_NODE_MASK, "Mask", NODE_CLASS_INPUT);
   ntype.declare = file_ns::cmp_node_mask_declare;
@@ -179,7 +183,8 @@ void register_node_type_cmp_mask()
   ntype.labelfunc = file_ns::node_mask_label;
   ntype.get_compositor_operation = file_ns::get_compositor_operation;
 
-  node_type_storage(&ntype, "NodeMask", node_free_standard_storage, node_copy_standard_storage);
+  blender::bke::node_type_storage(
+      &ntype, "NodeMask", node_free_standard_storage, node_copy_standard_storage);
 
-  nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }

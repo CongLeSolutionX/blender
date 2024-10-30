@@ -13,7 +13,7 @@ struct Main;
 struct Scene;
 struct Sequence;
 struct bSound;
-struct SequencerSoundEqualizer;
+struct SequenceModifierData;
 struct SoundModifierWorkerInfo;
 struct BlendWriter;
 struct BlendDataReader;
@@ -50,7 +50,7 @@ EQCurveMappingData *SEQ_sound_equalizermodifier_add_graph(SoundEqualizerModifier
                                                           float min_freq,
                                                           float max_freq);
 void SEQ_sound_equalizermodifier_remove_graph(SoundEqualizerModifierData *semd,
-                                              EQCurveMappingData *gsed);
+                                              EQCurveMappingData *eqcmd);
 
 struct SoundModifierWorkerInfo {
   int type;

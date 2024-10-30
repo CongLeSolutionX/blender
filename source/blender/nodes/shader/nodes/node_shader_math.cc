@@ -9,9 +9,11 @@
 #include "node_shader_util.hh"
 #include "node_util.hh"
 
+#include "NOD_inverse_eval_params.hh"
 #include "NOD_math_functions.hh"
 #include "NOD_multi_function.hh"
 #include "NOD_socket_search_link.hh"
+#include "NOD_value_elem_eval.hh"
 
 #include "RNA_enum_types.hh"
 
@@ -49,10 +51,11 @@ static void sh_node_math_gather_link_searches(GatherLinkSearchOpParams &params)
   }
 
   const bool is_geometry_node_tree = params.node_tree().type == NTREE_GEOMETRY;
-  const int weight = ELEM(params.other_socket().type, SOCK_FLOAT, SOCK_BOOLEAN, SOCK_INT) ? 0 : -1;
+  const int weight = ELEM(params.other_socket().type, SOCK_FLOAT, SOCK_INT, SOCK_BOOLEAN) ? 0 : -1;
 
   for (const EnumPropertyItem *item = rna_enum_node_math_items; item->identifier != nullptr;
-       item++) {
+       item++)
+  {
     if (item->name != nullptr && item->identifier[0] != '\0') {
       const int gn_weight =
           (is_geometry_node_tree &&
@@ -177,18 +180,86 @@ static void sh_node_math_build_multi_function(NodeMultiFunctionBuilder &builder)
   }
 }
 
+static void node_eval_elem(value_elem::ElemEvalParams &params)
+{
+  using namespace value_elem;
+  const NodeMathOperation op = NodeMathOperation(params.node.custom1);
+  switch (op) {
+    case NODE_MATH_ADD:
+    case NODE_MATH_SUBTRACT:
+    case NODE_MATH_MULTIPLY:
+    case NODE_MATH_DIVIDE: {
+      FloatElem output_elem = params.get_input_elem<FloatElem>("Value");
+      output_elem.merge(params.get_input_elem<FloatElem>("Value_001"));
+      params.set_output_elem("Value", output_elem);
+      break;
+    }
+    default:
+      break;
+  }
+}
+
+static void node_eval_inverse_elem(value_elem::InverseElemEvalParams &params)
+{
+  const NodeMathOperation op = NodeMathOperation(params.node.custom1);
+  switch (op) {
+    case NODE_MATH_ADD:
+    case NODE_MATH_SUBTRACT:
+    case NODE_MATH_MULTIPLY:
+    case NODE_MATH_DIVIDE: {
+      params.set_input_elem("Value", params.get_output_elem<value_elem::FloatElem>("Value"));
+      break;
+    }
+    default:
+      break;
+  }
+}
+
+static void node_eval_inverse(inverse_eval::InverseEvalParams &params)
+{
+  const NodeMathOperation op = NodeMathOperation(params.node.custom1);
+  const StringRef first_input_id = "Value";
+  const StringRef second_input_id = "Value_001";
+  const StringRef output_id = "Value";
+  switch (op) {
+    case NODE_MATH_ADD: {
+      params.set_input(first_input_id,
+                       params.get_output<float>(output_id) -
+                           params.get_input<float>(second_input_id));
+      break;
+    }
+    case NODE_MATH_SUBTRACT: {
+      params.set_input(first_input_id,
+                       params.get_output<float>(output_id) +
+                           params.get_input<float>(second_input_id));
+      break;
+    }
+    case NODE_MATH_MULTIPLY: {
+      params.set_input(first_input_id,
+                       math::safe_divide(params.get_output<float>(output_id),
+                                         params.get_input<float>(second_input_id)));
+      break;
+    }
+    case NODE_MATH_DIVIDE: {
+      params.set_input(first_input_id,
+                       params.get_output<float>(output_id) *
+                           params.get_input<float>(second_input_id));
+      break;
+    }
+    default: {
+      break;
+    }
+  }
+}
+
 NODE_SHADER_MATERIALX_BEGIN
 #ifdef WITH_MATERIALX
 {
-  CLG_LogRef *LOG_MATERIALX_SHADER = materialx::LOG_MATERIALX_SHADER;
-
-  /* TODO: finish some math operations */
   NodeMathOperation op = NodeMathOperation(node_->custom1);
   NodeItem res = empty();
 
   /* Single operand operations */
   NodeItem x = get_input_value(0, NodeItem::Type::Float);
-  /* TODO: Seems we have to use average if Vector or Color are added */
 
   switch (op) {
     case NODE_MATH_SINE:
@@ -258,6 +329,7 @@ NODE_SHADER_MATERIALX_BEGIN
     default: {
       /* 2-operand operations */
       NodeItem y = get_input_value(1, NodeItem::Type::Float);
+
       switch (op) {
         case NODE_MATH_ADD:
           res = x + y;
@@ -296,22 +368,30 @@ NODE_SHADER_MATERIALX_BEGIN
           res = x.atan2(y);
           break;
         case NODE_MATH_SNAP:
-          CLOG_WARN(LOG_MATERIALX_SHADER, "Unimplemented math operation %d", op);
+          res = (x / y).floor() * y;
           break;
-        case NODE_MATH_PINGPONG:
-          CLOG_WARN(LOG_MATERIALX_SHADER, "Unimplemented math operation %d", op);
+        case NODE_MATH_PINGPONG: {
+          NodeItem fract_part = (x - y) / (y * val(2.0f));
+          NodeItem if_branch = ((fract_part - fract_part.floor()) * y * val(2.0f) - y).abs();
+          res = y.if_else(NodeItem::CompareOp::NotEq, val(0.0f), if_branch, val(0.0f));
           break;
+        }
         case NODE_MATH_FLOORED_MODULO:
-          CLOG_WARN(LOG_MATERIALX_SHADER, "Unimplemented math operation %d", op);
+          res = y.if_else(
+              NodeItem::CompareOp::NotEq, val(0.0f), (x - (x / y).floor() * y), val(0.0f));
           break;
 
         default: {
           /* 3-operand operations */
           NodeItem z = get_input_value(2, NodeItem::Type::Float);
+
           switch (op) {
-            case NODE_MATH_WRAP:
-              CLOG_WARN(LOG_MATERIALX_SHADER, "Unimplemented math operation %d", op);
+            case NODE_MATH_WRAP: {
+              NodeItem range = (y - z);
+              NodeItem if_branch = x - (range * ((x - z) / range).floor());
+              res = range.if_else(NodeItem::CompareOp::NotEq, val(0.0f), if_branch, z);
               break;
+            }
             case NODE_MATH_COMPARE:
               res = z.if_else(NodeItem::CompareOp::Less, (x - y).abs(), val(1.0f), val(0.0f));
               break;
@@ -319,12 +399,20 @@ NODE_SHADER_MATERIALX_BEGIN
               res = x * y + z;
               break;
             case NODE_MATH_SMOOTH_MIN:
-              CLOG_WARN(LOG_MATERIALX_SHADER, "Unimplemented math operation %d", op);
+            case NODE_MATH_SMOOTH_MAX: {
+              auto make_smoothmin = [&](NodeItem a, NodeItem b, NodeItem k) {
+                NodeItem h = (k - (a - b).abs()).max(val(0.0f)) / k;
+                NodeItem if_branch = a.min(b) - h * h * h * k * val(1.0f / 6.0f);
+                return k.if_else(NodeItem::CompareOp::NotEq, val(0.0f), if_branch, a.min(b));
+              };
+              if (op == NODE_MATH_SMOOTH_MIN) {
+                res = make_smoothmin(x, y, z);
+              }
+              else {
+                res = -make_smoothmin(-x, -y, -z);
+              }
               break;
-            case NODE_MATH_SMOOTH_MAX:
-              CLOG_WARN(LOG_MATERIALX_SHADER, "Unimplemented math operation %d", op);
-              break;
-
+            }
             default:
               BLI_assert_unreachable();
           }
@@ -349,7 +437,7 @@ void register_node_type_sh_math()
 {
   namespace file_ns = blender::nodes::node_shader_math_cc;
 
-  static bNodeType ntype;
+  static blender::bke::bNodeType ntype;
 
   sh_fn_node_type_base(&ntype, SH_NODE_MATH, "Math", NODE_CLASS_CONVERTER);
   ntype.declare = file_ns::sh_node_math_declare;
@@ -359,6 +447,9 @@ void register_node_type_sh_math()
   ntype.build_multi_function = file_ns::sh_node_math_build_multi_function;
   ntype.gather_link_search_ops = file_ns::sh_node_math_gather_link_searches;
   ntype.materialx_fn = file_ns::node_shader_materialx;
+  ntype.eval_elem = file_ns::node_eval_elem;
+  ntype.eval_inverse_elem = file_ns::node_eval_inverse_elem;
+  ntype.eval_inverse = file_ns::node_eval_inverse;
 
-  nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }

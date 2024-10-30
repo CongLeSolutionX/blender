@@ -11,16 +11,16 @@
 #include "BLI_task.hh"
 #include "BLI_utildefines.h"
 
-#include "IMB_colormanagement.h"
-#include "IMB_imbuf.h"
+#include "IMB_colormanagement.hh"
+#include "IMB_imbuf.hh"
 
 #include "DNA_node_types.h"
 
 #include "NOD_derived_node_tree.hh"
 #include "NOD_node_declaration.hh"
 
-#include "GPU_compute.h"
-#include "GPU_shader.h"
+#include "GPU_compute.hh"
+#include "GPU_shader.hh"
 
 #include "COM_operation.hh"
 #include "COM_result.hh"
@@ -101,14 +101,9 @@ int number_of_inputs_linked_to_output_conditioned(DOutputSocket output,
   return count;
 }
 
-bool is_shader_node(DNode node)
+bool is_pixel_node(DNode node)
 {
   return node->typeinfo->get_compositor_shader_node;
-}
-
-bool is_node_supported(DNode node)
-{
-  return node->typeinfo->get_compositor_operation || node->typeinfo->get_compositor_shader_node;
 }
 
 InputDescriptor input_descriptor_from_input_socket(const bNodeSocket *socket)
@@ -163,6 +158,21 @@ bool is_node_preview_needed(const DNode &node)
   return true;
 }
 
+DOutputSocket find_preview_output_socket(const DNode &node)
+{
+  if (!is_node_preview_needed(node)) {
+    return DOutputSocket();
+  }
+
+  for (const bNodeSocket *output : node->output_sockets()) {
+    if (output->is_logically_linked()) {
+      return DOutputSocket(node.context(), output);
+    }
+  }
+
+  return DOutputSocket();
+}
+
 /* Given the size of a result, compute a lower resolution size for a preview. The greater dimension
  * will be assigned an arbitrarily chosen size of 128, while the other dimension will get the size
  * that maintains the same aspect ratio. */
@@ -183,7 +193,7 @@ void compute_preview_from_result(Context &context, const DNode &node, Result &in
   bNodeTree *root_tree = const_cast<bNodeTree *>(
       &node.context()->derived_tree().root_context().btree());
   if (!root_tree->previews) {
-    root_tree->previews = BKE_node_instance_hash_new("node previews");
+    root_tree->previews = bke::node_instance_hash_new("node previews");
   }
 
   const int2 preview_size = compute_preview_size(input_result.domain().size);
@@ -197,12 +207,12 @@ void compute_preview_from_result(Context &context, const DNode &node, Result &in
   GPU_shader_bind(shader);
 
   if (input_result.type() == ResultType::Float) {
-    GPU_texture_swizzle_set(input_result.texture(), "rrr1");
+    GPU_texture_swizzle_set(input_result, "rrr1");
   }
 
   input_result.bind_as_texture(shader, "input_tx");
 
-  Result preview_result = context.create_temporary_result(ResultType::Color);
+  Result preview_result = context.create_result(ResultType::Color);
   preview_result.allocate_texture(Domain(preview_size));
   preview_result.bind_as_image(shader, "preview_img");
 
@@ -214,7 +224,7 @@ void compute_preview_from_result(Context &context, const DNode &node, Result &in
 
   GPU_memory_barrier(GPU_BARRIER_TEXTURE_FETCH);
   float *preview_pixels = static_cast<float *>(
-      GPU_texture_read(preview_result.texture(), GPU_DATA_FLOAT, 0));
+      GPU_texture_read(preview_result, GPU_DATA_FLOAT, 0));
   preview_result.release();
 
   ColormanageProcessor *color_processor = IMB_colormanagement_display_processor_new(
@@ -232,11 +242,22 @@ void compute_preview_from_result(Context &context, const DNode &node, Result &in
 
   /* Restore original swizzle mask set above. */
   if (input_result.type() == ResultType::Float) {
-    GPU_texture_swizzle_set(input_result.texture(), "rgba");
+    GPU_texture_swizzle_set(input_result, "rgba");
   }
 
   IMB_colormanagement_processor_free(color_processor);
   MEM_freeN(preview_pixels);
+}
+
+void parallel_for(const int2 range, FunctionRef<void(int2)> function)
+{
+  threading::parallel_for(IndexRange(range.y), 1, [&](const IndexRange sub_y_range) {
+    for (const int64_t y : sub_y_range) {
+      for (const int64_t x : IndexRange(range.x)) {
+        function(int2(x, y));
+      }
+    }
+  });
 }
 
 }  // namespace blender::realtime_compositor

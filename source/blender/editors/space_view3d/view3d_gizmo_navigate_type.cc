@@ -14,6 +14,8 @@
  * - matrix_offset: used to store the orientation.
  */
 
+#include <algorithm>
+
 #include "MEM_guardedalloc.h"
 
 #include "BLI_math_matrix.h"
@@ -22,17 +24,12 @@
 
 #include "BKE_context.hh"
 
-#include "GPU_batch.h"
-#include "GPU_batch_presets.h"
-#include "GPU_immediate.h"
-#include "GPU_immediate_util.h"
-#include "GPU_matrix.h"
-#include "GPU_state.h"
+#include "GPU_batch.hh"
+#include "GPU_immediate.hh"
+#include "GPU_matrix.hh"
+#include "GPU_state.hh"
 
-#include "BLF_api.h"
-
-#include "RNA_access.hh"
-#include "RNA_define.hh"
+#include "BLF_api.hh"
 
 #include "UI_interface.hh"
 #include "UI_resources.hh"
@@ -40,9 +37,7 @@
 #include "WM_api.hh"
 #include "WM_types.hh"
 
-#include "ED_screen.hh"
-
-#include "view3d_intern.h"
+#include "view3d_intern.hh"
 
 /* Radius of the entire background. */
 #define WIDGET_RADIUS ((U.gizmo_size_navigate_v3d / 2.0f) * UI_SCALE_FAC)
@@ -118,7 +113,7 @@ static void gizmo_axis_draw(const bContext *C, wmGizmo *gz)
   } font;
 
   font.id = BLF_default();
-  BLF_disable(font.id, BLF_ROTATION | BLF_SHADOW | BLF_MATRIX | BLF_ASPECT | BLF_WORD_WRAP);
+  BLF_disable(font.id, BLF_ROTATION | BLF_SHADOW | BLF_ASPECT | BLF_WORD_WRAP);
   BLF_enable(font.id, BLF_BOLD);
   BLF_size(font.id, AXIS_TEXT_SIZE);
   BLF_position(font.id, 0, 0, 0);
@@ -225,12 +220,12 @@ static void gizmo_axis_draw(const bContext *C, wmGizmo *gz)
         if (is_aligned_front) {
           interp_v4_v4v4(
               negative_color, blender::float4{1.0f, 1.0f, 1.0f, 1.0f}, axis_color[axis], 0.5f);
-          negative_color[3] = MIN2(depth + 1, 1.0f);
+          negative_color[3] = std::min(depth + 1, 1.0f);
           outline_color = negative_color;
         }
         else {
           interp_v4_v4v4(negative_color, view_color, axis_color[axis], 0.25f);
-          negative_color[3] = MIN2(depth + 1, 1.0f);
+          negative_color[3] = std::min(depth + 1, 1.0f);
           inner_color = negative_color;
         }
       }

@@ -11,9 +11,9 @@
 
 #include "BLI_utildefines.h"
 
-#include "BLT_translation.h"
+#include "BLT_translation.hh"
 
-#include "BKE_report.h"
+#include "BKE_report.hh"
 
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
@@ -22,7 +22,7 @@
 
 #include "WM_api.hh"
 
-#include "rna_internal.h" /* own include */
+#include "rna_internal.hh" /* own include */
 
 #ifdef RNA_RUNTIME
 
@@ -156,17 +156,13 @@ static PointerRNA rna_gizmo_target_set_operator(wmGizmo *gz,
     BKE_reportf(reports,
                 RPT_ERROR,
                 "%s '%s'",
-                ot ? TIP_("unknown operator") : TIP_("operator missing srna"),
+                ot ? RPT_("Operator missing srna") : RPT_("Unknown operator"),
                 opname);
     return PointerRNA_NULL;
   }
 
   /* For the return value to be usable, we need 'PointerRNA.data' to be set. */
-  IDProperty *properties;
-  {
-    IDPropertyTemplate val = {0};
-    properties = IDP_New(IDP_GROUP, &val, "wmGizmoProperties");
-  }
+  IDProperty *properties = blender::bke::idprop::create_group("wmGizmoProperties").release();
 
   return *WM_gizmo_operator_set(gz, part_index, ot, properties);
 }
@@ -223,7 +219,7 @@ void RNA_api_gizmo(StructRNA *srna)
               -1,
               -1,
               INT_MAX,
-              "ID to use when gizmo is selectable. Use -1 when not selecting",
+              "ID to use when gizmo is selectable. Use -1 when not selecting.",
               "",
               -1,
               INT_MAX);
@@ -241,7 +237,7 @@ void RNA_api_gizmo(StructRNA *srna)
               -1,
               -1,
               INT_MAX,
-              "ID to use when gizmo is selectable. Use -1 when not selecting",
+              "ID to use when gizmo is selectable. Use -1 when not selecting.",
               "",
               -1,
               INT_MAX);
@@ -258,7 +254,7 @@ void RNA_api_gizmo(StructRNA *srna)
               -1,
               -1,
               INT_MAX,
-              "ID to use when gizmo is selectable. Use -1 when not selecting",
+              "ID to use when gizmo is selectable. Use -1 when not selecting.",
               "",
               -1,
               INT_MAX);

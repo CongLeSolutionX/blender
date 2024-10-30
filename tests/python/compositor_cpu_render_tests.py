@@ -15,18 +15,20 @@ try:
 except ImportError:
     inside_blender = False
 
+SET_COMPOSITOR_DEVICE_SCRIPT = "import bpy; " \
+    "bpy.data.scenes[0].render.compositor_device = 'CPU'"
+
 
 def get_arguments(filepath, output_filepath):
     return [
         "--background",
-        "-noaudio",
         "--factory-startup",
         "--enable-autoexec",
         "--debug-memory",
         "--debug-exit-on-error",
         filepath,
-        "-P",
-        os.path.realpath(__file__),
+        "-P", os.path.realpath(__file__),
+        "--python-expr", SET_COMPOSITOR_DEVICE_SCRIPT,
         "-o", output_filepath,
         "-F", "PNG",
         "-f", "1"]
@@ -37,7 +39,7 @@ def create_argparse():
     parser.add_argument("-blender", nargs="+")
     parser.add_argument("-testdir", nargs=1)
     parser.add_argument("-outdir", nargs=1)
-    parser.add_argument("-idiff", nargs=1)
+    parser.add_argument("-oiiotool", nargs=1)
     parser.add_argument('--batch', default=False, action='store_true')
     return parser
 
@@ -48,11 +50,11 @@ def main():
 
     blender = args.blender[0]
     test_dir = args.testdir[0]
-    idiff = args.idiff[0]
+    oiiotool = args.oiiotool[0]
     output_dir = args.outdir[0]
 
     from modules import render_report
-    report = render_report.Report("Compositor CPU", output_dir, idiff)
+    report = render_report.Report("Compositor CPU", output_dir, oiiotool)
     report.set_pixelated(True)
     report.set_reference_dir("compositor_cpu_renders")
 

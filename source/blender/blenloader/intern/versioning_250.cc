@@ -24,10 +24,8 @@
 #include "DNA_cloth_types.h"
 #include "DNA_constraint_types.h"
 #include "DNA_fluid_types.h"
-#include "DNA_ipo_types.h"
 #include "DNA_key_types.h"
 #include "DNA_lattice_types.h"
-#include "DNA_light_types.h"
 #include "DNA_material_types.h"
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
@@ -41,7 +39,6 @@
 #include "DNA_sound_types.h"
 #include "DNA_space_types.h"
 #include "DNA_view3d_types.h"
-#include "DNA_world_types.h"
 
 #include "MEM_guardedalloc.h"
 
@@ -51,27 +48,25 @@
 #include "BLI_math_rotation.h"
 #include "BLI_utildefines.h"
 
-#include "BKE_anim_data.h"
+#include "BKE_anim_data.hh"
 #include "BKE_anim_visualization.h"
 #include "BKE_armature.hh"
-#include "BKE_colortools.h"
-#include "BKE_global.h" /* for G */
-#include "BKE_lib_id.h"
-#include "BKE_main.h"
-#include "BKE_mesh.hh"
+#include "BKE_colortools.hh"
+#include "BKE_customdata.hh"
+#include "BKE_global.hh" /* for G */
+#include "BKE_lib_id.hh"
+#include "BKE_main.hh"
 #include "BKE_modifier.hh"
 #include "BKE_multires.hh"
-#include "BKE_node.h"
+#include "BKE_node.hh"
 #include "BKE_node_tree_update.hh"
 #include "BKE_particle.h"
-#include "BKE_pointcache.h"
 #include "BKE_screen.hh"
-#include "BKE_sound.h"
 #include "BKE_texture.h"
 
 #include "SEQ_iterator.hh"
 
-#include "BLO_readfile.h"
+#include "BLO_readfile.hh"
 
 #include "readfile.hh"
 
@@ -319,7 +314,7 @@ static void area_add_window_regions(ScrArea *area, SpaceLink *sl, ListBase *lb)
       case SPACE_ACTION: {
         SpaceAction *saction = (SpaceAction *)sl;
 
-        /* We totally reinit the view for the Action Editor,
+        /* We totally reinitialize the view for the Action Editor,
          * as some old instances had some weird cruft set. */
         region->v2d.tot.xmin = -20.0f;
         region->v2d.tot.ymin = float(-area->winy) / 3.0f;
@@ -442,14 +437,14 @@ static void versions_gpencil_add_main(Main *bmain, ListBase *lb, ID *id, const c
 {
   BLI_addtail(lb, id);
   id->us = 1;
-  id->flag = LIB_FAKEUSER;
+  id->flag = ID_FLAG_FAKEUSER;
   *((short *)id->name) = ID_GD_LEGACY;
 
-  BKE_id_new_name_validate(bmain, lb, id, name, false);
+  BKE_id_new_name_validate(*bmain, *lb, *id, name, IDNewNameMode::RenameExistingNever, false);
   /* alphabetic insertion: is in BKE_id_new_name_validate */
 
-  if ((id->tag & LIB_TAG_TEMP_MAIN) == 0) {
-    BKE_lib_libblock_session_uuid_ensure(id);
+  if ((id->tag & ID_TAG_TEMP_MAIN) == 0) {
+    BKE_lib_libblock_session_uid_ensure(id);
   }
 
   if (G.debug & G_DEBUG) {
@@ -961,9 +956,9 @@ void blo_do_versions_250(FileData *fd, Library * /*lib*/, Main *bmain)
           key->refkey)
       {
         data = static_cast<const float *>(key->refkey->data);
-        tot = std::min(me->totvert, key->refkey->totelem);
+        tot = std::min(me->verts_num, key->refkey->totelem);
         MVert *verts = (MVert *)CustomData_get_layer_for_write(
-            &me->vert_data, CD_MVERT, me->totvert);
+            &me->vert_data, CD_MVERT, me->verts_num);
         for (a = 0; a < tot; a++, data += 3) {
           copy_v3_v3(verts[a].co_legacy, data);
         }
@@ -1040,7 +1035,7 @@ void blo_do_versions_250(FileData *fd, Library * /*lib*/, Main *bmain)
         bNode *node = static_cast<bNode *>(ntree->nodes.first);
 
         while (node) {
-          nodeUniqueName(ntree, node);
+          blender::bke::node_unique_name(ntree, node);
           node = node->next;
         }
 
@@ -1865,7 +1860,7 @@ void blo_do_versions_250(FileData *fd, Library * /*lib*/, Main *bmain)
             /* initialize the default socket value */
             copy_v4_v4(gsock->ns.vec, sock->ns.vec);
 
-            /* XXX nodeAddLink does not work with incomplete (node==nullptr) links any longer,
+            /* XXX node_add_link does not work with incomplete (node==nullptr) links any longer,
              * have to create these directly here.
              * These links are updated again in subsequent do_version!
              */
@@ -1881,15 +1876,16 @@ void blo_do_versions_250(FileData *fd, Library * /*lib*/, Main *bmain)
           }
         }
         LISTBASE_FOREACH (bNodeSocket *, sock, &node->outputs) {
-          if (nodeCountSocketLinks(ntree, sock) == 0 &&
-              !((sock->flag & (SOCK_HIDDEN | SOCK_UNAVAIL)) != 0)) {
+          if (blender::bke::node_count_socket_links(ntree, sock) == 0 &&
+              !((sock->flag & (SOCK_HIDDEN | SOCK_UNAVAIL)) != 0))
+          {
             bNodeSocket *gsock = do_versions_node_group_add_socket_2_56_2(
                 ntree, sock->name, sock->type, SOCK_OUT);
 
             /* initialize the default socket value */
             copy_v4_v4(gsock->ns.vec, sock->ns.vec);
 
-            /* XXX nodeAddLink does not work with incomplete (node==nullptr) links any longer,
+            /* XXX node_add_link does not work with incomplete (node==nullptr) links any longer,
              * have to create these directly here.
              * These links are updated again in subsequent do_version!
              */

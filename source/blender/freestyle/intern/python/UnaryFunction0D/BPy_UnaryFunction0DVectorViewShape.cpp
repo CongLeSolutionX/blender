@@ -34,22 +34,22 @@ int UnaryFunction0DVectorViewShape_Init(PyObject *module)
   if (PyType_Ready(&UnaryFunction0DVectorViewShape_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&UnaryFunction0DVectorViewShape_Type);
-  PyModule_AddObject(
+  PyModule_AddObjectRef(
       module, "UnaryFunction0DVectorViewShape", (PyObject *)&UnaryFunction0DVectorViewShape_Type);
 
   if (PyType_Ready(&GetOccludersF0D_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&GetOccludersF0D_Type);
-  PyModule_AddObject(module, "GetOccludersF0D", (PyObject *)&GetOccludersF0D_Type);
+  PyModule_AddObjectRef(module, "GetOccludersF0D", (PyObject *)&GetOccludersF0D_Type);
 
   return 0;
 }
 
 //------------------------INSTANCE METHODS ----------------------------------
 
-static char UnaryFunction0DVectorViewShape___doc__[] =
+PyDoc_STRVAR(
+    /* Wrap. */
+    UnaryFunction0DVectorViewShape___doc__,
     "Class hierarchy: :class:`UnaryFunction0D` > :class:`UnaryFunction0DVectorViewShape`\n"
     "\n"
     "Base class for unary functions (functors) that work on\n"
@@ -58,7 +58,7 @@ static char UnaryFunction0DVectorViewShape___doc__[] =
     "\n"
     ".. method:: __init__()\n"
     "\n"
-    "   Default constructor.\n";
+    "   Default constructor.\n");
 
 static int UnaryFunction0DVectorViewShape___init__(BPy_UnaryFunction0DVectorViewShape *self,
                                                    PyObject *args,

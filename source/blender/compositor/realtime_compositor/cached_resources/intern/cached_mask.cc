@@ -8,13 +8,12 @@
 #include "BLI_array.hh"
 #include "BLI_hash.hh"
 #include "BLI_index_range.hh"
-#include "BLI_listbase.h"
 #include "BLI_math_vector_types.hh"
 #include "BLI_task.hh"
 
-#include "GPU_texture.h"
+#include "GPU_texture.hh"
 
-#include "BKE_lib_id.h"
+#include "BKE_lib_id.hh"
 #include "BKE_mask.h"
 
 #include "DNA_ID.h"
@@ -31,10 +30,12 @@ namespace blender::realtime_compositor {
  */
 
 CachedMaskKey::CachedMaskKey(int2 size,
+                             float aspect_ratio,
                              bool use_feather,
                              int motion_blur_samples,
                              float motion_blur_shutter)
     : size(size),
+      aspect_ratio(aspect_ratio),
       use_feather(use_feather),
       motion_blur_samples(motion_blur_samples),
       motion_blur_shutter(motion_blur_shutter)
@@ -43,12 +44,13 @@ CachedMaskKey::CachedMaskKey(int2 size,
 
 uint64_t CachedMaskKey::hash() const
 {
-  return get_default_hash_4(size, use_feather, motion_blur_samples, motion_blur_shutter);
+  return get_default_hash(
+      size, use_feather, motion_blur_samples, float2(motion_blur_shutter, aspect_ratio));
 }
 
 bool operator==(const CachedMaskKey &a, const CachedMaskKey &b)
 {
-  return a.size == b.size && a.use_feather == b.use_feather &&
+  return a.size == b.size && a.aspect_ratio == b.aspect_ratio && a.use_feather == b.use_feather &&
          a.motion_blur_samples == b.motion_blur_samples &&
          a.motion_blur_shutter == b.motion_blur_shutter;
 }
@@ -104,6 +106,7 @@ CachedMask::CachedMask(Context &context,
                        Mask *mask,
                        int2 size,
                        int frame,
+                       float aspect_ratio,
                        bool use_feather,
                        int motion_blur_samples,
                        float motion_blur_shutter)
@@ -117,7 +120,10 @@ CachedMask::CachedMask(Context &context,
       for (const int64_t x : IndexRange(size.x)) {
         /* Compute the coordinates in the [0, 1] range and add 0.5 to evaluate the mask at the
          * center of pixels. */
-        const float2 coordinates = (float2(x, y) + 0.5f) / float2(size);
+        float2 coordinates = (float2(x, y) + 0.5f) / float2(size);
+        /* Do aspect ratio correction around the center 0.5 point. */
+        coordinates = (coordinates - float2(0.5)) * float2(1.0, aspect_ratio) + float2(0.5);
+
         float mask_value = 0.0f;
         for (MaskRasterHandle *handle : handles) {
           mask_value += BKE_maskrasterize_handle_sample(handle, coordinates);
@@ -136,7 +142,7 @@ CachedMask::CachedMask(Context &context,
       size.x,
       size.y,
       1,
-      Result::texture_format(ResultType::Float, context.get_precision()),
+      Result::gpu_texture_format(ResultType::Float, context.get_precision()),
       GPU_TEXTURE_USAGE_SHADER_READ,
       evaluated_mask.data());
 }
@@ -175,13 +181,17 @@ void CachedMaskContainer::reset()
 CachedMask &CachedMaskContainer::get(Context &context,
                                      Mask *mask,
                                      int2 size,
+                                     float aspect_ratio,
                                      bool use_feather,
                                      int motion_blur_samples,
                                      float motion_blur_shutter)
 {
-  const CachedMaskKey key(size, use_feather, motion_blur_samples, motion_blur_shutter);
+  const CachedMaskKey key(
+      size, aspect_ratio, use_feather, motion_blur_samples, motion_blur_shutter);
 
-  auto &cached_masks_for_id = map_.lookup_or_add_default(mask->id.name);
+  const std::string library_key = mask->id.lib ? mask->id.lib->id.name : "";
+  const std::string id_key = std::string(mask->id.name) + library_key;
+  auto &cached_masks_for_id = map_.lookup_or_add_default(id_key);
 
   /* Invalidate the cache for that mask ID if it was changed and reset the recalculate flag. */
   if (context.query_id_recalc_flag(reinterpret_cast<ID *>(mask)) & ID_RECALC_ALL) {
@@ -193,6 +203,7 @@ CachedMask &CachedMaskContainer::get(Context &context,
                                         mask,
                                         size,
                                         context.get_frame_number(),
+                                        aspect_ratio,
                                         use_feather,
                                         motion_blur_samples,
                                         motion_blur_shutter);

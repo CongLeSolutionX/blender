@@ -188,7 +188,7 @@ void eval_volume_step(inout vec3 Lscat, float extinction, float step_len, out fl
 
 vec4 volume_integration(vec3 ray_ori, vec3 ray_dir, float ray_inc, float ray_max, float step_len)
 {
-  /* Note: Constant array declared inside function scope to reduce shader core thread memory
+  /* NOTE: Constant array declared inside function scope to reduce shader core thread memory
    * pressure on Apple Silicon. */
   const vec4 dither_mat[4] = vec4[4](vec4(P(0.0), P(8.0), P(2.0), P(10.0)),
                                      vec4(P(12.0), P(4.0), P(14.0), P(6.0)),
@@ -227,7 +227,7 @@ void main()
 {
   uint stencil = texelFetch(stencil_tx, ivec2(gl_FragCoord.xy), 0).r;
   const uint in_front_stencil_bits = 1u << 1;
-  if ((stencil & in_front_stencil_bits) != 0) {
+  if (do_depth_test && (stencil & in_front_stencil_bits) != 0) {
     /* Don't draw on top of "in front" objects. */
     discard;
     return;
@@ -236,7 +236,7 @@ void main()
 #ifdef VOLUME_SLICE
   /* Manual depth test. TODO: remove. */
   float depth = texelFetch(depthBuffer, ivec2(gl_FragCoord.xy), 0).r;
-  if (gl_FragCoord.z >= depth) {
+  if (do_depth_test && gl_FragCoord.z >= depth) {
     /* NOTE: In the Metal API, prior to Metal 2.3, Discard is not an explicit return and can
      * produce undefined behavior. This is especially prominent with derivatives if control-flow
      * divergence is present.
@@ -260,7 +260,7 @@ void main()
 
   vec3 volume_center = ModelMatrix[3].xyz;
 
-  float depth = texelFetch(depthBuffer, ivec2(gl_FragCoord.xy), 0).r;
+  float depth = do_depth_test ? texelFetch(depthBuffer, ivec2(gl_FragCoord.xy), 0).r : 1.0;
   float depth_end = min(depth, gl_FragCoord.z);
   vec3 vs_ray_end = get_view_space_from_depth(screen_uv, depth_end);
   vec3 vs_ray_ori = get_view_space_from_depth(screen_uv, 0.0);

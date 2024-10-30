@@ -154,6 +154,9 @@ class GHOST_Context : public GHOST_IContext {
    * \param r_queue: After calling this function the VkQueue
    *     referenced by this parameter will contain the VKQueue handle
    *     of the context associated with the `context` parameter.
+   * \param r_queue_mutex: After calling this function the std::mutex referred
+   *     by this parameter will contain the mutex of the context associated
+   *     with the context parameter.
    * \returns GHOST_kFailure when context isn't a Vulkan context.
    *     GHOST_kSuccess when the context is a Vulkan context and the
    *     handles have been set.
@@ -162,13 +165,14 @@ class GHOST_Context : public GHOST_IContext {
                                           void * /*r_physical_device*/,
                                           void * /*r_device*/,
                                           uint32_t * /*r_graphic_queue_family*/,
-                                          void * /*r_queue*/) override
+                                          void * /*r_queue*/,
+                                          void ** /*r_queue_mutex*/) override
   {
     return GHOST_kFailure;
   };
 
   virtual GHOST_TSuccess getVulkanSwapChainFormat(
-      GHOST_VulkanSwapChainData * /*r_swap_chain_data */) override
+      GHOST_VulkanSwapChainData * /*r_swap_chain_data*/) override
   {
     return GHOST_kFailure;
   }
@@ -201,7 +205,7 @@ bool win32_chk(bool result, const char *file = nullptr, int line = 0, const char
 bool win32_silent_chk(bool result);
 
 #  ifndef NDEBUG
-#    define WIN32_CHK(x) win32_chk((x), __FILE__, __LINE__, #    x)
+#    define WIN32_CHK(x) win32_chk((x), __FILE__, __LINE__, #x)
 #  else
 #    define WIN32_CHK(x) win32_chk(x)
 #  endif

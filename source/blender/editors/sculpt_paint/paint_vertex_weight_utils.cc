@@ -8,6 +8,8 @@
  * Intended for use by `paint_vertex.cc` & `paint_vertex_weight_ops.cc`.
  */
 
+#include <algorithm>
+
 #include "BLI_listbase.h"
 #include "BLI_string_utils.hh"
 
@@ -15,19 +17,19 @@
 #include "DNA_mesh_types.h"
 #include "DNA_object_types.h"
 
-#include "BKE_action.h"
+#include "BKE_action.hh"
 #include "BKE_context.hh"
-#include "BKE_deform.h"
+#include "BKE_deform.hh"
 #include "BKE_mesh.hh"
 #include "BKE_modifier.hh"
 #include "BKE_object.hh"
 #include "BKE_object_deform.h"
-#include "BKE_report.h"
+#include "BKE_report.hh"
 
 #include "DEG_depsgraph_build.hh"
 
 /* Only for blend modes. */
-#include "IMB_imbuf.h"
+#include "IMB_imbuf.hh"
 
 #include "WM_api.hh"
 #include "WM_types.hh"
@@ -44,7 +46,7 @@ bool ED_wpaint_ensure_data(bContext *C,
                            WPaintVGroupIndex *vgroup_index)
 {
   Object *ob = CTX_data_active_object(C);
-  Mesh *me = BKE_mesh_from_object(ob);
+  Mesh *mesh = BKE_mesh_from_object(ob);
 
   if (vgroup_index) {
     vgroup_index->active = -1;
@@ -55,20 +57,20 @@ bool ED_wpaint_ensure_data(bContext *C,
     return false;
   }
 
-  if (me == nullptr || me->faces_num == 0) {
+  if (mesh == nullptr || mesh->faces_num == 0) {
     return false;
   }
 
   /* If nothing was added yet, we make deform-verts and a vertex deform group. */
-  if (BKE_mesh_deform_verts(me) == nullptr) {
-    BKE_object_defgroup_data_create(&me->id);
-    WM_event_add_notifier(C, NC_GEOM | ND_DATA, me);
+  if (mesh->deform_verts().is_empty()) {
+    BKE_object_defgroup_data_create(&mesh->id);
+    WM_event_add_notifier(C, NC_GEOM | ND_DATA, mesh);
   }
 
   const ListBase *defbase = BKE_object_defgroup_list(ob);
 
   /* this happens on a Bone select, when no vgroup existed yet */
-  if (me->vertex_group_active_index <= 0) {
+  if (mesh->vertex_group_active_index <= 0) {
     Object *modob;
     if ((modob = BKE_modifiers_is_deformed_by_armature(ob))) {
       Bone *actbone = ((bArmature *)modob->data)->act_bone;
@@ -85,7 +87,7 @@ bool ED_wpaint_ensure_data(bContext *C,
 
             int actdef = 1 + BLI_findindex(defbase, dg);
             BLI_assert(actdef >= 0);
-            me->vertex_group_active_index = actdef;
+            mesh->vertex_group_active_index = actdef;
           }
         }
       }
@@ -97,18 +99,18 @@ bool ED_wpaint_ensure_data(bContext *C,
   }
 
   /* ensure we don't try paint onto an invalid group */
-  if (me->vertex_group_active_index <= 0) {
+  if (mesh->vertex_group_active_index <= 0) {
     BKE_report(reports, RPT_WARNING, "No active vertex group for painting, aborting");
     return false;
   }
 
   if (vgroup_index) {
-    vgroup_index->active = me->vertex_group_active_index - 1;
+    vgroup_index->active = mesh->vertex_group_active_index - 1;
   }
 
   if (flag & WPAINT_ENSURE_MIRROR) {
-    if (ME_USING_MIRROR_X_VERTEX_GROUPS(me)) {
-      int mirror = ED_wpaint_mirror_vgroup_ensure(ob, me->vertex_group_active_index - 1);
+    if (ME_USING_MIRROR_X_VERTEX_GROUPS(mesh)) {
+      int mirror = ED_wpaint_mirror_vgroup_ensure(ob, mesh->vertex_group_active_index - 1);
       if (vgroup_index) {
         vgroup_index->mirror = mirror;
       }
@@ -150,7 +152,7 @@ int ED_wpaint_mirror_vgroup_ensure(Object *ob, const int vgroup_active)
 
 BLI_INLINE float wval_blend(const float weight, const float paintval, const float alpha)
 {
-  const float talpha = min_ff(alpha, 1.0f); /* blending with values over 1 doesn't make sense */
+  const float talpha = std::min(alpha, 1.0f); /* blending with values over 1 doesn't make sense */
   return (paintval * talpha) + (weight * (1.0f - talpha));
 }
 BLI_INLINE float wval_add(const float weight, const float paintval, const float alpha)
@@ -183,7 +185,7 @@ BLI_INLINE float wval_colordodge(float weight, float paintval, float fac)
   }
   mfac = 1.0f - fac;
   temp = (paintval == 1.0f) ? 1.0f :
-                              min_ff((weight * (225.0f / 255.0f)) / (1.0f - paintval), 1.0f);
+                              std::min((weight * (225.0f / 255.0f)) / (1.0f - paintval), 1.0f);
   return mfac * weight + temp * fac;
 }
 BLI_INLINE float wval_difference(float weight, float paintval, float fac)
@@ -203,7 +205,7 @@ BLI_INLINE float wval_screen(float weight, float paintval, float fac)
     return weight;
   }
   mfac = 1.0f - fac;
-  temp = max_ff(1.0f - ((1.0f - weight) * (1.0f - paintval)), 0);
+  temp = std::max(1.0f - ((1.0f - weight) * (1.0f - paintval)), 0.0f);
   return mfac * weight + temp * fac;
 }
 BLI_INLINE float wval_hardlight(float weight, float paintval, float fac)

@@ -14,13 +14,13 @@
 #include "BLI_math_vector.h"
 #include "BLI_string.h"
 
-#include "BLT_translation.h"
+#include "BLT_translation.hh"
 
 #include "BKE_context.hh"
 #include "BKE_editmesh.hh"
-#include "BKE_global.h"
-#include "BKE_layer.h"
-#include "BKE_unit.h"
+#include "BKE_global.hh"
+#include "BKE_layer.hh"
+#include "BKE_unit.hh"
 
 #include "RNA_access.hh"
 #include "RNA_define.hh"
@@ -38,7 +38,9 @@
 #include "ED_util.hh"
 #include "ED_view3d.hh"
 
-#include "mesh_intern.h" /* own include */
+#include "mesh_intern.hh" /* own include */
+
+using blender::Vector;
 
 struct InsetObjectStore {
   /** Must have a valid edit-mesh. */
@@ -70,17 +72,11 @@ struct InsetData {
 static void edbm_inset_update_header(wmOperator *op, bContext *C)
 {
   InsetData *opdata = static_cast<InsetData *>(op->customdata);
-
-  const char *str = TIP_(
-      "Confirm: Enter/LClick, Cancel: (Esc/RClick), Thickness: %s, "
-      "Depth (Ctrl to tweak): %s (%s), Outset (O): (%s), Boundary (B): (%s), Individual (I): "
-      "(%s)");
-
-  char msg[UI_MAX_DRAW_STR];
   ScrArea *area = CTX_wm_area(C);
   Scene *sce = CTX_data_scene(C);
 
   if (area) {
+    char msg[UI_MAX_DRAW_STR];
     char flts_str[NUM_STR_REP_LEN * 2];
     if (hasNumInput(&opdata->num_input)) {
       outputNumInput(&opdata->num_input, flts_str, &sce->unit);
@@ -101,17 +97,17 @@ static void edbm_inset_update_header(wmOperator *op, bContext *C)
                                &sce->unit,
                                true);
     }
-    SNPRINTF(msg,
-             str,
-             flts_str,
-             flts_str + NUM_STR_REP_LEN,
-             WM_bool_as_string(opdata->modify_depth),
-             WM_bool_as_string(RNA_boolean_get(op->ptr, "use_outset")),
-             WM_bool_as_string(RNA_boolean_get(op->ptr, "use_boundary")),
-             WM_bool_as_string(RNA_boolean_get(op->ptr, "use_individual")));
-
+    SNPRINTF(msg, IFACE_("Thickness: %s, Depth: %s"), flts_str, flts_str + NUM_STR_REP_LEN);
     ED_area_status_text(area, msg);
   }
+
+  WorkspaceStatus status(C);
+  status.item(IFACE_("Confirm"), ICON_EVENT_RETURN, ICON_MOUSE_LMB);
+  status.item(IFACE_("Cancel"), ICON_EVENT_ESC, ICON_MOUSE_RMB);
+  status.item_bool(IFACE_("Tweak"), opdata->modify_depth, ICON_EVENT_CTRL);
+  status.item_bool(IFACE_("Outset"), RNA_boolean_get(op->ptr, "use_outset"), ICON_EVENT_O);
+  status.item_bool(IFACE_("Boundary"), RNA_boolean_get(op->ptr, "use_boundary"), ICON_EVENT_B);
+  status.item_bool(IFACE_("Individual"), RNA_boolean_get(op->ptr, "use_individual"), ICON_EVENT_I);
 }
 
 static bool edbm_inset_init(bContext *C, wmOperator *op, const bool is_modal)
@@ -133,14 +129,13 @@ static bool edbm_inset_init(bContext *C, wmOperator *op, const bool is_modal)
   opdata->max_obj_scale = FLT_MIN;
 
   {
-    uint ob_store_len = 0;
-    Object **objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
-        scene, view_layer, CTX_wm_view3d(C), &ob_store_len);
+    Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
+        scene, view_layer, CTX_wm_view3d(C));
     opdata->ob_store = static_cast<InsetObjectStore *>(
-        MEM_malloc_arrayN(ob_store_len, sizeof(*opdata->ob_store), __func__));
-    for (uint ob_index = 0; ob_index < ob_store_len; ob_index++) {
+        MEM_malloc_arrayN(objects.size(), sizeof(*opdata->ob_store), __func__));
+    for (uint ob_index = 0; ob_index < objects.size(); ob_index++) {
       Object *obedit = objects[ob_index];
-      float scale = mat4_to_scale(obedit->object_to_world);
+      float scale = mat4_to_scale(obedit->object_to_world().ptr());
       opdata->max_obj_scale = max_ff(opdata->max_obj_scale, scale);
       BMEditMesh *em = BKE_editmesh_from_object(obedit);
       if (em->bm->totvertsel > 0) {
@@ -148,7 +143,6 @@ static bool edbm_inset_init(bContext *C, wmOperator *op, const bool is_modal)
         objects_used_len++;
       }
     }
-    MEM_freeN(objects);
     opdata->ob_store_len = objects_used_len;
   }
 
@@ -201,6 +195,7 @@ static void edbm_inset_exit(bContext *C, wmOperator *op)
   if (area) {
     ED_area_status_text(area, nullptr);
   }
+  ED_workspace_status_text(C, nullptr);
 
   MEM_SAFE_FREE(opdata->ob_store);
   MEM_SAFE_FREE(op->customdata);
@@ -217,7 +212,7 @@ static void edbm_inset_cancel(bContext *C, wmOperator *op)
       BMEditMesh *em = BKE_editmesh_from_object(obedit);
       EDBM_redo_state_restore_and_free(&opdata->ob_store[ob_index].mesh_backup, em, true);
       EDBMUpdate_Params params{};
-      params.calc_looptri = false;
+      params.calc_looptris = false;
       params.calc_normals = false;
       params.is_destructive = true;
       EDBM_update(static_cast<Mesh *>(obedit->data), &params);
@@ -311,7 +306,7 @@ static bool edbm_inset_calc(wmOperator *op)
     }
 
     EDBMUpdate_Params params{};
-    params.calc_looptri = true;
+    params.calc_looptris = true;
     params.calc_normals = false;
     params.is_destructive = true;
     EDBM_update(static_cast<Mesh *>(obedit->data), &params);

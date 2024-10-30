@@ -8,82 +8,114 @@
  * This mostly follows the paper:
  * "Screen Space Indirect Lighting with Visibility Bitmask"
  * by Olivier Therrien, Yannick Levesque, Guillaume Gilet
+ *
+ * Expects `screen_radiance_tx` and `screen_normal_tx` to be bound if `HORIZON_OCCLUSION` is not
+ * defined.
  */
 
 #pragma BLENDER_REQUIRE(common_shape_lib.glsl)
 #pragma BLENDER_REQUIRE(draw_view_lib.glsl)
 #pragma BLENDER_REQUIRE(eevee_sampling_lib.glsl)
 #pragma BLENDER_REQUIRE(eevee_horizon_scan_lib.glsl)
+#pragma BLENDER_REQUIRE(eevee_ray_types_lib.glsl)
+#pragma BLENDER_REQUIRE(gpu_shader_codegen_lib.glsl)
+#pragma BLENDER_REQUIRE(eevee_bxdf_lib.glsl)
+#pragma BLENDER_REQUIRE(eevee_spherical_harmonics_lib.glsl)
 
-/**
- * Returns the start and end point of a ray clipped to its intersection
- * with a sphere.
- */
-void horizon_scan_occluder_intersection_ray_sphere_clip(Ray ray,
-                                                        Sphere sphere,
-                                                        out vec3 P_entry,
-                                                        out vec3 P_exit)
+#ifdef HORIZON_OCCLUSION
+/* Do nothing. */
+#elif defined(MAT_DEFERRED) || defined(MAT_FORWARD)
+/* Enable AO node computation for material shaders. */
+#  define HORIZON_OCCLUSION
+#else
+#  define HORIZON_CLOSURE
+#endif
+
+vec3 horizon_scan_sample_radiance(vec2 uv)
 {
-  vec3 f = ray.origin - sphere.center;
-  float a = length_squared(ray.direction);
-  float b = 2.0 * dot(ray.direction, f);
-  float c = length_squared(f) - square(sphere.radius);
-  float determinant = b * b - 4.0 * a * c;
-  if (determinant <= 0.0) {
-    /* No intersection. Return null segment. */
-    P_entry = P_exit = ray.origin;
-    return;
-  }
-  /* Using fast sqrt_fast doesn't seem to cause artifact here. */
-  float t_min = (-b - sqrt_fast(determinant)) / (2.0 * a);
-  float t_max = (-b + sqrt_fast(determinant)) / (2.0 * a);
-  /* Clip segment to the intersection range. */
-  float t_entry = clamp(0.0, t_min, t_max);
-  float t_exit = clamp(ray.max_time, t_min, t_max);
-
-  P_entry = ray.origin + ray.direction * t_entry;
-  P_exit = ray.origin + ray.direction * t_exit;
+#ifndef HORIZON_OCCLUSION
+  return texture(screen_radiance_tx, uv).rgb;
+#else
+  return vec3(0.0);
+#endif
 }
+
+vec3 horizon_scan_sample_normal(vec2 uv)
+{
+#ifndef HORIZON_OCCLUSION
+  return texture(screen_normal_tx, uv).rgb * 2.0 - 1.0;
+#else
+  return vec3(0.0);
+#endif
+}
+
+struct HorizonScanResult {
+#ifdef HORIZON_OCCLUSION
+  float result;
+#endif
+#ifdef HORIZON_CLOSURE
+  SphericalHarmonicL1 result;
+#endif
+};
 
 /**
  * Scans the horizon in many directions and returns the indirect lighting radiance.
- * Returned lighting depends on configuration.
+ * Returned lighting is stored inside the context in `_accum` members already normalized.
+ * If `reversed` is set to true, the input normal must be negated.
  */
-vec3 horizon_scan_eval(vec3 vP,
-                       vec3 vN,
-                       sampler2D depth_tx,
-                       vec2 noise,
-                       vec2 pixel_size,
-                       float search_distance,
-                       float global_thickness,
-                       float angle_bias,
-                       const int sample_count)
+HorizonScanResult horizon_scan_eval(vec3 vP,
+                                    vec3 vN,
+                                    vec4 noise,
+                                    vec2 pixel_size,
+                                    float search_distance,
+                                    float thickness_near,
+                                    float thickness_far,
+                                    float angle_bias,
+                                    const int slice_count,
+                                    const int sample_count,
+                                    const bool reversed,
+                                    const bool ao_only)
 {
   vec3 vV = drw_view_incident_vector(vP);
 
-  /* Only a quarter of a turn because we integrate using 2 slices.
-   * We use this instead of using full circle noise to improve cache hits
-   * since all tracing direction will be in the same quadrant. */
-  vec2 v_dir = sample_circle(noise.x * 0.25);
+  vec2 v_dir;
+  if (slice_count <= 2) {
+    /* We cover half the circle because we trace in both directions. */
+    v_dir = sample_circle(noise.x / float(2 * slice_count));
+  }
 
-  vec3 accum_light = vec3(0.0);
-  float accum_weight = 0.0;
+  float weight_accum = 0.0;
+  float occlusion_accum = 0.0;
+  SphericalHarmonicL1 sh_accum = spherical_harmonics_L1_new();
 
-  for (int i = 0; i < 2; i++) {
+#if defined(GPU_METAL) && defined(GPU_APPLE)
+/* NOTE: Full loop unroll hint increases performance on Apple Silicon. */
+#  pragma clang loop unroll(full)
+#endif
+  for (int slice = 0; slice < slice_count; slice++) {
+    if (slice_count > 2) {
+      /* We cover half the circle because we trace in both directions. */
+      v_dir = sample_circle(((float(slice) + noise.x) / float(2 * slice_count)));
+    }
+
     /* Setup integration domain around V. */
     vec3 vB = normalize(cross(vV, vec3(v_dir, 0.0)));
     vec3 vT = cross(vB, vV);
-    /* Projected view normal onto the integration plane. */
-    float vN_proj_len;
-    vec3 vN_proj = normalize_and_get_length(vN - vB * dot(vN, vB), vN_proj_len);
 
-    float vN_sin = dot(vN_proj, vT);
-    float vN_cos = saturate(dot(vN_proj, vV));
-    /* Angle between normalized projected normal and view vector. */
-    float vN_angle = sign(vN_sin) * acos_fast(vN_cos);
-
-    vec3 slice_light = vec3(0.0);
+    /* Bitmask representing the occluded sectors on the slice. */
     uint slice_bitmask = 0u;
+
+    /* Angle between vN and the horizon slice plane. */
+    float vN_angle;
+    /* Length of vN projected onto the horizon slice plane. */
+    float vN_length;
+
+    horizon_scan_projected_normal_to_plane_angle_and_length(vN, vV, vT, vB, vN_length, vN_angle);
+
+    vN_angle += (noise.z - 0.5) * (M_PI / 32.0) * angle_bias;
+
+    SphericalHarmonicL1 sh_slice = spherical_harmonics_L1_new();
+    float weight_slice;
 
     /* For both sides of the view vector. */
     for (int side = 0; side < 2; side++) {
@@ -96,76 +128,95 @@ vec3 horizon_scan_eval(vec3 vP,
        * screen at once and just scan through. */
       ScreenSpaceRay ssray = raytrace_screenspace_ray_create(ray, pixel_size);
 
+#if defined(GPU_METAL) && defined(GPU_APPLE)
+/* NOTE: Full loop unroll hint increases performance on Apple Silicon. */
+#  pragma clang loop unroll(full)
+#endif
       for (int j = 0; j < sample_count; j++) {
         /* Always cross at least one pixel. */
         float time = 1.0 + square((float(j) + noise.y) / float(sample_count)) * ssray.max_time;
 
-        float lod = float(j >> 2) / (1.0 + uniform_buf.ao.quality);
+        if (reversed) {
+          /* We need to cross at least 2 pixels to avoid artifacts form the HiZ storing only the
+           * max depth. The HiZ would need to contain the min depth instead to avoid this. */
+          time += 1.0;
+        }
+
+        float lod = 1.0 + saturate(float(j) - noise.w) * uniform_buf.ao.lod_factor;
 
         vec2 sample_uv = ssray.origin.xy + ssray.direction.xy * time;
-        float sample_depth =
-            textureLod(depth_tx, sample_uv * uniform_buf.hiz.uv_scale, floor(lod)).r;
+        float sample_depth = textureLod(hiz_tx, sample_uv * uniform_buf.hiz.uv_scale, lod).r;
 
-        if (sample_depth == 1.0) {
+        if (sample_depth == 1.0 && !reversed) {
           /* Skip background. Avoids making shadow on the geometry near the far plane. */
           continue;
         }
 
-        bool front_facing = vN.z > 0.0;
-
         /* Bias depth a bit to avoid self shadowing issues. */
         const float bias = 2.0 * 2.4e-7;
-        sample_depth += front_facing ? bias : -bias;
+        sample_depth += reversed ? -bias : bias;
 
-        vec3 vP_sample = drw_point_screen_to_view(vec3(sample_uv, sample_depth));
+        vec3 vP_sample_front = drw_point_screen_to_view(vec3(sample_uv, sample_depth));
+        vec3 vP_sample_back = vP_sample_front - vV * thickness_near;
 
-        Ray ray;
-        ray.origin = vP_sample;
-        ray.direction = -vV;
-        ray.max_time = global_thickness;
-
-        Sphere sphere = shape_sphere(vP, search_distance);
-
-        vec3 vP_front, vP_back;
-        horizon_scan_occluder_intersection_ray_sphere_clip(ray, sphere, vP_front, vP_back);
-
-        vec3 vL_front = normalize(vP_front - vP);
-        vec3 vL_back = normalize(vP_back - vP);
+        float sample_distance;
+        vec3 vL_front = normalize_and_get_length(vP_sample_front - vP, sample_distance);
+        vec3 vL_back = normalize(vP_sample_back - vP);
+        if (sample_distance > search_distance) {
+          continue;
+        }
 
         /* Ordered pair of angle. Minimum in X, Maximum in Y.
          * Front will always have the smallest angle here since it is the closest to the view. */
         vec2 theta = acos_fast(vec2(dot(vL_front, vV), dot(vL_back, vV)));
+        theta.y = max(theta.x + thickness_far, theta.y);
         /* If we are tracing backward, the angles are negative. Swizzle to keep correct order. */
         theta = (side == 0) ? theta.xy : -theta.yx;
-        theta -= vN_angle;
-        /* Angular bias. Shrink the visibility bitmask around the projected normal. */
-        theta *= angle_bias;
 
-        uint sample_bitmask = horizon_scan_angles_to_bitmask(theta);
-#ifdef USE_RADIANCE_ACCUMULATION
-        float sample_visibility = horizon_scan_bitmask_to_visibility_uniform(sample_bitmask &
-                                                                             ~slice_bitmask);
-        if (sample_visibility > 0.0) {
-          vec3 sample_radiance = horizon_scan_sample_radiance(sample_uv);
-#  ifdef USE_NORMAL_MASKING
-          vec3 sample_normal = horizon_scan_sample_normal(sample_uv);
-          sample_visibility *= dot(sample_normal, -vL_front);
-#  endif
-          slice_light += sample_radiance * (bsdf_eval(vN, vL_front) * sample_visibility);
-        }
-#endif
+        vec3 sample_radiance = ao_only ? vec3(0.0) : horizon_scan_sample_radiance(sample_uv);
+        /* Take emitter surface normal into consideration. */
+        vec3 sample_normal = horizon_scan_sample_normal(sample_uv);
+        /* Discard back-facing samples.
+         * The 2 factor is to avoid loosing too much energy v(which is something not
+         * explained in the paper...). Likely to be wrong, but we need a soft falloff. */
+        float facing_weight = saturate(-dot(sample_normal, vL_front) * 2.0);
+
+        /* Angular bias shrinks the visibility bitmask around the projected normal. */
+        vec2 biased_theta = (theta - vN_angle) * angle_bias;
+        uint sample_bitmask = horizon_scan_angles_to_bitmask(biased_theta);
+        float weight_bitmask = horizon_scan_bitmask_to_visibility_uniform(sample_bitmask &
+                                                                          ~slice_bitmask);
+
+        sample_radiance *= facing_weight * weight_bitmask;
+        spherical_harmonics_encode_signal_sample(
+            vL_front, vec4(sample_radiance, weight_bitmask), sh_slice);
+
         slice_bitmask |= sample_bitmask;
       }
     }
 
-    /* Add distant lighting. */
-    slice_light = vec3(horizon_scan_bitmask_to_occlusion_cosine(slice_bitmask));
+    float occlusion_slice = horizon_scan_bitmask_to_occlusion_cosine(slice_bitmask);
+
     /* Correct normal not on plane (Eq. 8 of GTAO paper). */
-    accum_light += slice_light * vN_proj_len;
-    accum_weight += vN_proj_len;
+    occlusion_accum += occlusion_slice * vN_length;
+    /* Use uniform visibility since this is what we use for near field lighting. */
+    sh_accum = spherical_harmonics_madd(sh_slice, vN_length, sh_accum);
+
+    weight_accum += vN_length;
 
     /* Rotate 90 degrees. */
     v_dir = orthogonal(v_dir);
   }
-  return accum_light * safe_rcp(accum_weight);
+
+  float weight_rcp = safe_rcp(weight_accum);
+
+  HorizonScanResult res;
+#ifdef HORIZON_OCCLUSION
+  res.result = occlusion_accum * weight_rcp;
+#endif
+#ifdef HORIZON_CLOSURE
+  /* Weight by area of the sphere. This is expected for correct SH evaluation. */
+  res.result = spherical_harmonics_mul(sh_accum, weight_rcp * 4.0 * M_PI);
+#endif
+  return res;
 }

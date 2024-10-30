@@ -26,19 +26,19 @@
 
 #include "DNA_scene_types.h"
 
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 #include "BLI_string.h"
 #include "BLI_utildefines.h"
 
-#include "BKE_appdir.h"
-#include "BKE_blender_undo.h" /* own include */
-#include "BKE_blendfile.h"
+#include "BKE_appdir.hh"
+#include "BKE_blender_undo.hh" /* own include */
+#include "BKE_blendfile.hh"
 #include "BKE_context.hh"
-#include "BKE_global.h"
-#include "BKE_main.h"
-#include "BKE_undo_system.h"
+#include "BKE_global.hh"
+#include "BKE_main.hh"
+#include "BKE_undo_system.hh"
 
-#include "BLO_readfile.h"
+#include "BLO_readfile.hh"
 #include "BLO_undofile.hh"
 #include "BLO_writefile.hh"
 
@@ -104,7 +104,9 @@ MemFileUndoData *BKE_memfile_undo_encode(Main *bmain, MemFileUndoData *mfu_prev)
 {
   MemFileUndoData *mfu = MEM_cnew<MemFileUndoData>(__func__);
 
-  /* Include recovery information since undo-data is written out as #BLENDER_QUIT_FILE. */
+  /* This flag used to be set because the undo step was written as #BLENDER_QUIT_FILE. It's not
+   * clear whether there are still good reasons to keep it. Undo can also be thought of as a kind
+   * of recovery, so better keep it for now. */
   const int fileflags = G.fileflags | G_FILE_RECOVER_WRITE;
 
   /* disk save version */

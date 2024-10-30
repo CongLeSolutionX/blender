@@ -2,13 +2,19 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#include "BLI_math_vector.hh"
 #include "BLI_rect.h"
 
+#include "DNA_node_types.h"
 #include "DNA_vec_types.h"
 
-#include "GPU_shader.h"
+#include "GPU_shader.hh"
+
+#include "BKE_node_runtime.hh"
 
 #include "COM_context.hh"
+#include "COM_profiler.hh"
+#include "COM_render_context.hh"
 #include "COM_static_cache_manager.hh"
 #include "COM_texture_pool.hh"
 
@@ -16,10 +22,53 @@ namespace blender::realtime_compositor {
 
 Context::Context(TexturePool &texture_pool) : texture_pool_(texture_pool) {}
 
+void Context::populate_meta_data_for_pass(const Scene * /*scene*/,
+                                          int /*view_layer_id*/,
+                                          const char * /*pass_name*/,
+                                          MetaData & /*meta_data*/) const
+{
+}
+
+RenderContext *Context::render_context() const
+{
+  return nullptr;
+}
+
+Profiler *Context::profiler() const
+{
+  return nullptr;
+}
+
+void Context::evaluate_operation_post() const {}
+
+bool Context::is_canceled() const
+{
+  if (!this->get_node_tree().runtime->test_break) {
+    return false;
+  }
+  return this->get_node_tree().runtime->test_break(get_node_tree().runtime->tbh);
+}
+
+void Context::reset()
+{
+  texture_pool_.reset();
+  cache_manager_.reset();
+}
+
 int2 Context::get_compositing_region_size() const
 {
   const rcti compositing_region = get_compositing_region();
-  return int2(BLI_rcti_size_x(&compositing_region), BLI_rcti_size_y(&compositing_region));
+  const int x = BLI_rcti_size_x(&compositing_region);
+  const int y = BLI_rcti_size_y(&compositing_region);
+  return math::max(int2(1), int2(x, y));
+}
+
+bool Context::is_valid_compositing_region() const
+{
+  const rcti compositing_region = get_compositing_region();
+  const int x = BLI_rcti_size_x(&compositing_region);
+  const int y = BLI_rcti_size_y(&compositing_region);
+  return x != 0 && y != 0;
 }
 
 float Context::get_render_percentage() const
@@ -52,22 +101,12 @@ GPUShader *Context::get_shader(const char *info_name)
 
 Result Context::create_result(ResultType type, ResultPrecision precision)
 {
-  return Result::Temporary(type, texture_pool_, precision);
+  return Result(*this, type, precision);
 }
 
 Result Context::create_result(ResultType type)
 {
   return create_result(type, get_precision());
-}
-
-Result Context::create_temporary_result(ResultType type, ResultPrecision precision)
-{
-  return Result::Temporary(type, texture_pool_, precision);
-}
-
-Result Context::create_temporary_result(ResultType type)
-{
-  return create_temporary_result(type, get_precision());
 }
 
 TexturePool &Context::texture_pool()

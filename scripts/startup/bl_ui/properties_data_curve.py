@@ -5,6 +5,7 @@
 import bpy
 from bpy.types import Panel
 from rna_prop_ui import PropertyPanel
+from .space_properties import PropertiesAnimationMixin
 
 from bpy.types import Curve, SurfaceCurve, TextCurve
 
@@ -201,6 +202,25 @@ class DATA_PT_geometry_curve_bevel(CurveButtonsPanelCurve, Panel):
             col.template_curveprofile(curve, "bevel_profile")
 
 
+class DATA_PT_curve_animation(CurveButtonsPanel, PropertiesAnimationMixin, PropertyPanel, Panel):
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+
+        # MeshButtonsPanel.poll ensures this is not None.
+        curve = context.curve
+
+        col = layout.column(align=True)
+        col.label(text=curve.bl_rna.name)  # "Surface Curve" or "Curve".
+        self.draw_action_and_slot_selector(context, col, curve)
+
+        if shape_keys := curve.shape_keys:
+            col = layout.column(align=True)
+            col.label(text="Shape Keys")
+            self.draw_action_and_slot_selector(context, col, shape_keys)
+
+
 class DATA_PT_geometry_curve_start_end(CurveButtonsPanelCurve, Panel):
     bl_label = "Start & End Mapping"
     bl_parent_id = "DATA_PT_geometry_curve"
@@ -289,7 +309,7 @@ class DATA_PT_active_spline(CurveButtonsPanelActive, Panel):
                 sub.prop(act_spline, "use_cyclic_v", text="V")
 
             if act_spline.type == 'NURBS':
-                sub = col.column(heading="Bezier", align=True)
+                sub = col.column(heading="Bézier", align=True)
                 # sub.active = (not act_spline.use_cyclic_u)
                 sub.prop(act_spline, "use_bezier_u", text="U")
 
@@ -523,6 +543,7 @@ classes = (
     DATA_PT_paragraph_alignment,
     DATA_PT_paragraph_spacing,
     DATA_PT_text_boxes,
+    DATA_PT_curve_animation,
     DATA_PT_custom_props_curve,
 )
 

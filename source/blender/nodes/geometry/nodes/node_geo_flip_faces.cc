@@ -23,7 +23,7 @@ static void node_geo_exec(GeoNodeExecParams params)
 
   geometry_set.modify_geometry_sets([&](GeometrySet &geometry_set) {
     if (Mesh *mesh = geometry_set.get_mesh_for_write()) {
-      const bke::MeshFieldContext field_context(*mesh, ATTR_DOMAIN_FACE);
+      const bke::MeshFieldContext field_context(*mesh, AttrDomain::Face);
       fn::FieldEvaluator evaluator(field_context, mesh->faces_num);
       evaluator.add(selection_field);
       evaluator.evaluate();
@@ -41,12 +41,12 @@ static void node_geo_exec(GeoNodeExecParams params)
 
 static void node_register()
 {
-  static bNodeType ntype;
+  static blender::bke::bNodeType ntype;
 
   geo_node_type_base(&ntype, GEO_NODE_FLIP_FACES, "Flip Faces", NODE_CLASS_GEOMETRY);
   ntype.geometry_node_execute = node_geo_exec;
   ntype.declare = node_declare;
-  nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }
 NOD_REGISTER_NODE(node_register)
 

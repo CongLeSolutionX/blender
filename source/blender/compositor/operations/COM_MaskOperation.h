@@ -7,7 +7,7 @@
 #include "BLI_listbase.h"
 #include "COM_MultiThreadedOperation.h"
 #include "DNA_mask_types.h"
-#include "IMB_imbuf_types.h"
+#include "IMB_imbuf_types.hh"
 
 /* Forward declarations. */
 struct MaskRasterHandle;
@@ -83,14 +83,12 @@ class MaskOperation : public MultiThreadedOperation {
 
   void set_motion_blur_samples(int samples)
   {
-    raster_mask_handle_tot_ = MIN2(MAX2(1, samples), CMP_NODE_MASK_MBLUR_SAMPLES_MAX);
+    raster_mask_handle_tot_ = std::min(std::max(1, samples), CMP_NODE_MASK_MBLUR_SAMPLES_MAX);
   }
   void set_motion_blur_shutter(float shutter)
   {
     frame_shutter_ = shutter;
   }
-
-  void execute_pixel_sampled(float output[4], float x, float y, PixelSampler sampler) override;
 
   void update_memory_buffer_partial(MemoryBuffer *output,
                                     const rcti &area,

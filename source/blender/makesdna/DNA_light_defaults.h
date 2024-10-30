@@ -8,7 +8,6 @@
 
 #pragma once
 
-/* Struct members on own line. */
 /* clang-format off */
 
 /* -------------------------------------------------------------------- */
@@ -24,7 +23,7 @@
     .energy_deprecated = 10.0f, \
     .spotsize = DEG2RADF(45.0f), \
     .spotblend = 0.15f, \
-    .mode = LA_SHADOW, \
+    .mode = LA_SHADOW | LA_USE_SOFT_FALLOFF, \
     .clipsta = 0.05f, \
     .clipend = 40.0f, \
     .bias = 1.0f, \
@@ -41,9 +40,11 @@
     .contact_thickness = 0.2f, \
     .diff_fac = 1.0f, \
     .spec_fac = 1.0f, \
+    .transmission_fac = 1.0f, \
     .volume_fac = 1.0f, \
-    .shadow_softness_factor = 1.0f, \
-    .shadow_trace_distance = 10.0f, \
+    .shadow_filter_radius = 1.0f, \
+    .shadow_maximum_resolution = 0.001f, \
+    .shadow_jitter_overblur = 10.0f, \
     .att_dist = 40.0f, \
     .sun_angle = DEG2RADF(0.526f), \
     .area_spread = DEG2RADF(180.0f), \

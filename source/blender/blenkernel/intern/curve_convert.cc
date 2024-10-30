@@ -8,15 +8,13 @@
 
 #include "DNA_curve_types.h"
 #include "DNA_object_types.h"
-#include "DNA_vfont_types.h"
 
 #include "BLI_utildefines.h"
 
 #include "BKE_curve.hh"
 #include "BKE_displist.h"
-#include "BKE_lib_id.h"
-#include "BKE_modifier.hh"
-#include "BKE_vfont.h"
+#include "BKE_lib_id.hh"
+#include "BKE_vfont.hh"
 
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_query.hh"

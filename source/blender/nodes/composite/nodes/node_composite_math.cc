@@ -6,7 +6,7 @@
  * \ingroup cmpnodes
  */
 
-#include "GPU_material.h"
+#include "GPU_material.hh"
 
 #include "COM_shader_node.hh"
 
@@ -58,7 +58,8 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
   const int weight = ELEM(params.other_socket().type, SOCK_FLOAT) ? 0 : -1;
 
   for (const EnumPropertyItem *item = rna_enum_node_math_items; item->identifier != nullptr;
-       item++) {
+       item++)
+  {
     if (item->name != nullptr && item->identifier[0] != '\0') {
       params.add_item(CTX_IFACE_(BLT_I18NCONTEXT_ID_NODETREE, item->name),
                       SocketSearchOp{"Value", (NodeMathOperation)item->value},
@@ -121,7 +122,7 @@ void register_node_type_cmp_math()
 {
   namespace file_ns = blender::nodes::node_composite_math_cc;
 
-  static bNodeType ntype;
+  static blender::bke::bNodeType ntype;
 
   cmp_node_type_base(&ntype, CMP_NODE_MATH, "Math", NODE_CLASS_CONVERTER);
   ntype.declare = file_ns::cmp_node_math_declare;
@@ -130,5 +131,5 @@ void register_node_type_cmp_math()
   ntype.get_compositor_shader_node = file_ns::get_compositor_shader_node;
   ntype.gather_link_search_ops = file_ns::node_gather_link_searches;
 
-  nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }

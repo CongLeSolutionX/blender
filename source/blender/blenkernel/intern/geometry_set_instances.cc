@@ -2,10 +2,9 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BKE_collection.h"
+#include "BKE_collection.hh"
 #include "BKE_geometry_set_instances.hh"
 #include "BKE_instances.hh"
-#include "BKE_mesh.hh"
 #include "BKE_mesh_wrapper.hh"
 #include "BKE_modifier.hh"
 #include "BKE_object_types.hh"
@@ -13,6 +12,8 @@
 #include "DNA_collection_types.h"
 #include "DNA_layer_types.h"
 #include "DNA_object_types.h"
+
+#include "DEG_depsgraph_query.hh"
 
 namespace blender::bke {
 
@@ -29,6 +30,9 @@ static void add_final_mesh_as_geometry_component(const Object &object, GeometryS
 
 GeometrySet object_get_evaluated_geometry_set(const Object &object)
 {
+  if (!DEG_object_geometry_is_evaluated(object)) {
+    return {};
+  }
   if (object.type == OB_MESH && object.mode == OB_MODE_EDIT) {
     GeometrySet geometry_set;
     if (object.runtime->geometry_set_eval != nullptr) {
@@ -103,7 +107,10 @@ void Instances::ensure_geometry_instances()
   new_references.reserve(references_.size());
   for (const InstanceReference &reference : references_) {
     switch (reference.type()) {
-      case InstanceReference::Type::None:
+      case InstanceReference::Type::None: {
+        new_references.append(InstanceReference(GeometrySet{}));
+        break;
+      }
       case InstanceReference::Type::GeometrySet: {
         /* Those references can stay as their were. */
         new_references.append(reference);
@@ -112,7 +119,11 @@ void Instances::ensure_geometry_instances()
       case InstanceReference::Type::Object: {
         /* Create a new reference that contains the geometry set of the object. We may want to
          * treat e.g. lamps and similar object types separately here. */
-        const Object &object = reference.object();
+        Object &object = reference.object();
+        if (ELEM(object.type, OB_LAMP, OB_CAMERA, OB_SPEAKER, OB_ARMATURE, OB_GPENCIL_LEGACY)) {
+          new_references.append(InstanceReference(object));
+          break;
+        }
         GeometrySet object_geometry_set = object_get_evaluated_geometry_set(object);
         if (object_geometry_set.has_instances()) {
           object_geometry_set.get_instances_for_write()->ensure_geometry_instances();
@@ -125,13 +136,21 @@ void Instances::ensure_geometry_instances()
          * collection as instances. */
         std::unique_ptr<Instances> instances = std::make_unique<Instances>();
         Collection &collection = reference.collection();
+
+        Vector<Object *, 8> objects;
         FOREACH_COLLECTION_OBJECT_RECURSIVE_BEGIN (&collection, object) {
-          const int handle = instances->add_reference(*object);
-          instances->add_instance(handle, float4x4(object->object_to_world));
-          float4x4 &transform = instances->transforms().last();
-          transform.location() -= collection.instance_offset;
+          objects.append(object);
         }
         FOREACH_COLLECTION_OBJECT_RECURSIVE_END;
+
+        instances->resize(objects.size());
+        MutableSpan<int> handles = instances->reference_handles_for_write();
+        MutableSpan<float4x4> transforms = instances->transforms_for_write();
+        for (const int i : objects.index_range()) {
+          handles[i] = instances->add_reference(*objects[i]);
+          transforms[i] = objects[i]->object_to_world();
+          transforms[i].location() -= collection.instance_offset;
+        }
         instances->ensure_geometry_instances();
         new_references.append(GeometrySet::from_instances(instances.release()));
         break;

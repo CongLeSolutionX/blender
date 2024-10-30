@@ -67,12 +67,15 @@ extern "C" {
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 
-#include "generic/python_utildefines.h"
-#include "mathutils/mathutils.h"
+#include "generic/python_utildefines.hh"
+#include "mathutils/mathutils.hh"
 
 //==============================
 // C++ => Python
 //==============================
+
+PyObject *PyLong_subtype_new(PyTypeObject *ty, long value);
+void PyLong_subtype_add_to_dict(PyObject *dict, PyTypeObject *ty, const char *attr, long value);
 
 PyObject *PyBool_from_bool(bool b);
 PyObject *Vector_from_Vec2f(Freestyle::Geometry::Vec2f &v);

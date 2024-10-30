@@ -38,81 +38,74 @@ int Iterator_Init(PyObject *module)
   if (PyType_Ready(&Iterator_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&Iterator_Type);
-  PyModule_AddObject(module, "Iterator", (PyObject *)&Iterator_Type);
+  PyModule_AddObjectRef(module, "Iterator", (PyObject *)&Iterator_Type);
 
   if (PyType_Ready(&AdjacencyIterator_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&AdjacencyIterator_Type);
-  PyModule_AddObject(module, "AdjacencyIterator", (PyObject *)&AdjacencyIterator_Type);
+  PyModule_AddObjectRef(module, "AdjacencyIterator", (PyObject *)&AdjacencyIterator_Type);
 
   if (PyType_Ready(&Interface0DIterator_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&Interface0DIterator_Type);
-  PyModule_AddObject(module, "Interface0DIterator", (PyObject *)&Interface0DIterator_Type);
+  PyModule_AddObjectRef(module, "Interface0DIterator", (PyObject *)&Interface0DIterator_Type);
 
   if (PyType_Ready(&CurvePointIterator_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&CurvePointIterator_Type);
-  PyModule_AddObject(module, "CurvePointIterator", (PyObject *)&CurvePointIterator_Type);
+  PyModule_AddObjectRef(module, "CurvePointIterator", (PyObject *)&CurvePointIterator_Type);
 
   if (PyType_Ready(&StrokeVertexIterator_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&StrokeVertexIterator_Type);
-  PyModule_AddObject(module, "StrokeVertexIterator", (PyObject *)&StrokeVertexIterator_Type);
+  PyModule_AddObjectRef(module, "StrokeVertexIterator", (PyObject *)&StrokeVertexIterator_Type);
 
   if (PyType_Ready(&SVertexIterator_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&SVertexIterator_Type);
-  PyModule_AddObject(module, "SVertexIterator", (PyObject *)&SVertexIterator_Type);
+  PyModule_AddObjectRef(module, "SVertexIterator", (PyObject *)&SVertexIterator_Type);
 
   if (PyType_Ready(&orientedViewEdgeIterator_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&orientedViewEdgeIterator_Type);
-  PyModule_AddObject(
+  PyModule_AddObjectRef(
       module, "orientedViewEdgeIterator", (PyObject *)&orientedViewEdgeIterator_Type);
 
   if (PyType_Ready(&ViewEdgeIterator_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&ViewEdgeIterator_Type);
-  PyModule_AddObject(module, "ViewEdgeIterator", (PyObject *)&ViewEdgeIterator_Type);
+  PyModule_AddObjectRef(module, "ViewEdgeIterator", (PyObject *)&ViewEdgeIterator_Type);
 
   if (PyType_Ready(&ChainingIterator_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&ChainingIterator_Type);
-  PyModule_AddObject(module, "ChainingIterator", (PyObject *)&ChainingIterator_Type);
+  PyModule_AddObjectRef(module, "ChainingIterator", (PyObject *)&ChainingIterator_Type);
 
   if (PyType_Ready(&ChainPredicateIterator_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&ChainPredicateIterator_Type);
-  PyModule_AddObject(module, "ChainPredicateIterator", (PyObject *)&ChainPredicateIterator_Type);
+  PyModule_AddObjectRef(
+      module, "ChainPredicateIterator", (PyObject *)&ChainPredicateIterator_Type);
 
   if (PyType_Ready(&ChainSilhouetteIterator_Type) < 0) {
     return -1;
   }
-  Py_INCREF(&ChainSilhouetteIterator_Type);
-  PyModule_AddObject(module, "ChainSilhouetteIterator", (PyObject *)&ChainSilhouetteIterator_Type);
+  PyModule_AddObjectRef(
+      module, "ChainSilhouetteIterator", (PyObject *)&ChainSilhouetteIterator_Type);
 
   return 0;
 }
 
 //------------------------INSTANCE METHODS ----------------------------------
 
-PyDoc_STRVAR(Iterator_doc,
-             "Base class to define iterators.\n"
-             "\n"
-             ".. method:: __init__()\n"
-             "\n"
-             "   Default constructor.");
+PyDoc_STRVAR(
+    /* Wrap. */
+    Iterator_doc,
+    "Base class to define iterators.\n"
+    "\n"
+    ".. method:: __init__()\n"
+    "\n"
+    "   Default constructor.");
 
 static int Iterator_init(BPy_Iterator *self, PyObject *args, PyObject *kwds)
 {
@@ -136,10 +129,12 @@ static PyObject *Iterator_repr(BPy_Iterator *self)
   return PyUnicode_FromFormat("type: %s - address: %p", Py_TYPE(self)->tp_name, self->it);
 }
 
-PyDoc_STRVAR(Iterator_increment_doc,
-             ".. method:: increment()\n"
-             "\n"
-             "   Makes the iterator point the next element.");
+PyDoc_STRVAR(
+    /* Wrap. */
+    Iterator_increment_doc,
+    ".. method:: increment()\n"
+    "\n"
+    "   Makes the iterator point the next element.");
 
 static PyObject *Iterator_increment(BPy_Iterator *self)
 {
@@ -151,10 +146,12 @@ static PyObject *Iterator_increment(BPy_Iterator *self)
   Py_RETURN_NONE;
 }
 
-PyDoc_STRVAR(Iterator_decrement_doc,
-             ".. method:: decrement()\n"
-             "\n"
-             "   Makes the iterator point the previous element.");
+PyDoc_STRVAR(
+    /* Wrap. */
+    Iterator_decrement_doc,
+    ".. method:: decrement()\n"
+    "\n"
+    "   Makes the iterator point the previous element.");
 
 static PyObject *Iterator_decrement(BPy_Iterator *self)
 {
@@ -174,30 +171,36 @@ static PyMethodDef BPy_Iterator_methods[] = {
 
 /*----------------------Iterator get/setters ----------------------------*/
 
-PyDoc_STRVAR(Iterator_name_doc,
-             "The string of the name of this iterator.\n"
-             "\n"
-             ":type: str");
+PyDoc_STRVAR(
+    /* Wrap. */
+    Iterator_name_doc,
+    "The string of the name of this iterator.\n"
+    "\n"
+    ":type: str");
 
 static PyObject *Iterator_name_get(BPy_Iterator *self, void * /*closure*/)
 {
   return PyUnicode_FromString(Py_TYPE(self)->tp_name);
 }
 
-PyDoc_STRVAR(Iterator_is_begin_doc,
-             "True if the iterator points to the first element.\n"
-             "\n"
-             ":type: bool");
+PyDoc_STRVAR(
+    /* Wrap. */
+    Iterator_is_begin_doc,
+    "True if the iterator points to the first element.\n"
+    "\n"
+    ":type: bool");
 
 static PyObject *Iterator_is_begin_get(BPy_Iterator *self, void * /*closure*/)
 {
   return PyBool_from_bool(self->it->isBegin());
 }
 
-PyDoc_STRVAR(Iterator_is_end_doc,
-             "True if the iterator points to the last element.\n"
-             "\n"
-             ":type: bool");
+PyDoc_STRVAR(
+    /* Wrap. */
+    Iterator_is_end_doc,
+    "True if the iterator points to the last element.\n"
+    "\n"
+    ":type: bool");
 
 static PyObject *Iterator_is_end_get(BPy_Iterator *self, void * /*closure*/)
 {

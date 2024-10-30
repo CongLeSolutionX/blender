@@ -22,7 +22,7 @@
 #include "BKE_camera.h"
 #include "BKE_screen.hh"
 
-#include "GPU_matrix.h"
+#include "GPU_matrix.hh"
 
 #include "ED_view3d.hh" /* own include */
 
@@ -31,10 +31,9 @@
 /* Non Clipping Projection Functions
  * ********************************* */
 
-void ED_view3d_project_float_v2_m4(const ARegion *region,
-                                   const float co[3],
-                                   float r_co[2],
-                                   const float mat[4][4])
+blender::float2 ED_view3d_project_float_v2_m4(const ARegion *region,
+                                              const float co[3],
+                                              const blender::float4x4 &mat)
 {
   float vec4[4];
 
@@ -42,8 +41,9 @@ void ED_view3d_project_float_v2_m4(const ARegion *region,
   vec4[3] = 1.0;
   // r_co[0] = IS_CLIPPED; /* Always overwritten. */
 
-  mul_m4_v4(mat, vec4);
+  mul_m4_v4(mat.ptr(), vec4);
 
+  blender::float2 r_co;
   if (vec4[3] > FLT_EPSILON) {
     r_co[0] = float(region->winx / 2.0f) + (region->winx / 2.0f) * vec4[0] / vec4[3];
     r_co[1] = float(region->winy / 2.0f) + (region->winy / 2.0f) * vec4[1] / vec4[3];
@@ -51,6 +51,7 @@ void ED_view3d_project_float_v2_m4(const ARegion *region,
   else {
     zero_v2(r_co);
   }
+  return r_co;
 }
 
 void ED_view3d_project_float_v3_m4(const ARegion *region,
@@ -82,7 +83,7 @@ void ED_view3d_project_float_v3_m4(const ARegion *region,
 eV3DProjStatus ED_view3d_project_base(const ARegion *region, Base *base, float r_co[2])
 {
   eV3DProjStatus ret = ED_view3d_project_float_global(
-      region, base->object->object_to_world[3], r_co, V3D_PROJ_TEST_CLIP_DEFAULT);
+      region, base->object->object_to_world().location(), r_co, V3D_PROJ_TEST_CLIP_DEFAULT);
 
   /* Prevent uninitialized values when projection fails,
    * although the callers should check the return value. */
@@ -348,7 +349,7 @@ static void view3d_win_to_ray_segment(const Depsgraph *depsgraph,
     start_offset = -end_offset;
   }
   else {
-    ED_view3d_clip_range_get(depsgraph, v3d, rv3d, &start_offset, &end_offset, false);
+    ED_view3d_clip_range_get(depsgraph, v3d, rv3d, false, &start_offset, &end_offset);
   }
 
   if (r_ray_start) {
@@ -399,8 +400,16 @@ bool ED_view3d_win_to_ray_clipped(Depsgraph *depsgraph,
                                   float r_ray_normal[3],
                                   const bool do_clip_planes)
 {
-  return ED_view3d_win_to_ray_clipped_ex(
-      depsgraph, region, v3d, mval, do_clip_planes, nullptr, r_ray_normal, r_ray_start, nullptr);
+  float ray_end_dummy[3];
+  return ED_view3d_win_to_ray_clipped_ex(depsgraph,
+                                         region,
+                                         v3d,
+                                         mval,
+                                         do_clip_planes,
+                                         nullptr,
+                                         r_ray_normal,
+                                         r_ray_start,
+                                         ray_end_dummy);
 }
 
 void ED_view3d_win_to_ray(const ARegion *region,
@@ -412,7 +421,7 @@ void ED_view3d_win_to_ray(const ARegion *region,
   ED_view3d_win_to_vector(region, mval, r_ray_normal);
 }
 
-void ED_view3d_global_to_vector(const RegionView3D *rv3d, const float coord[3], float vec[3])
+void ED_view3d_global_to_vector(const RegionView3D *rv3d, const float coord[3], float r_out[3])
 {
   if (rv3d->is_persp) {
     float p1[4], p2[4];
@@ -427,12 +436,12 @@ void ED_view3d_global_to_vector(const RegionView3D *rv3d, const float coord[3], 
 
     mul_m4_v4(rv3d->viewinv, p2);
 
-    sub_v3_v3v3(vec, p1, p2);
+    sub_v3_v3v3(r_out, p1, p2);
   }
   else {
-    copy_v3_v3(vec, rv3d->viewinv[2]);
+    copy_v3_v3(r_out, rv3d->viewinv[2]);
   }
-  normalize_v3(vec);
+  normalize_v3(r_out);
 }
 
 /* very similar to ED_view3d_win_to_3d() but has no advantage, de-duplicating */
@@ -483,17 +492,14 @@ void ED_view3d_win_to_3d(const View3D *v3d,
   float lambda;
 
   if (rv3d->is_persp) {
-    float plane[4];
-
     copy_v3_v3(ray_origin, rv3d->viewinv[3]);
     ED_view3d_win_to_vector(region, mval, ray_direction);
 
     /* NOTE: we could use #isect_line_plane_v3()
      * however we want the intersection to be in front of the view no matter what,
      * so apply the unsigned factor instead. */
-    plane_from_point_normal_v3(plane, depth_pt, rv3d->viewinv[2]);
+    isect_ray_plane_v3_factor(ray_origin, ray_direction, depth_pt, rv3d->viewinv[2], &lambda);
 
-    isect_ray_plane_v3(ray_origin, ray_direction, plane, &lambda, false);
     lambda = fabsf(lambda);
   }
   else {
@@ -690,22 +696,20 @@ bool ED_view3d_win_to_segment_clipped(const Depsgraph *depsgraph,
 /** \name Utility functions for projection
  * \{ */
 
-void ED_view3d_ob_project_mat_get(const RegionView3D *rv3d, const Object *ob, float r_pmat[4][4])
+blender::float4x4 ED_view3d_ob_project_mat_get(const RegionView3D *rv3d, const Object *ob)
 {
   float vmat[4][4];
+  blender::float4x4 r_pmat;
 
-  mul_m4_m4m4(vmat, rv3d->viewmat, ob->object_to_world);
-  mul_m4_m4m4(r_pmat, rv3d->winmat, vmat);
+  mul_m4_m4m4(vmat, rv3d->viewmat, ob->object_to_world().ptr());
+  mul_m4_m4m4(r_pmat.ptr(), rv3d->winmat, vmat);
+  return r_pmat;
 }
 
-void ED_view3d_ob_project_mat_get_from_obmat(const RegionView3D *rv3d,
-                                             const float obmat[4][4],
-                                             float r_pmat[4][4])
+blender::float4x4 ED_view3d_ob_project_mat_get_from_obmat(const RegionView3D *rv3d,
+                                                          const blender::float4x4 &obmat)
 {
-  float vmat[4][4];
-
-  mul_m4_m4m4(vmat, rv3d->viewmat, obmat);
-  mul_m4_m4m4(r_pmat, rv3d->winmat, vmat);
+  return blender::float4x4_view(rv3d->winmat) * blender::float4x4_view(rv3d->viewmat) * obmat;
 }
 
 void ED_view3d_project_v3(const ARegion *region, const float world[3], float r_region_co[3])

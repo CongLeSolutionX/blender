@@ -12,12 +12,12 @@
 
 #include "node_composite_util.hh"
 
-bool cmp_node_poll_default(const bNodeType * /*ntype*/,
+bool cmp_node_poll_default(const blender::bke::bNodeType * /*ntype*/,
                            const bNodeTree *ntree,
                            const char **r_disabled_hint)
 {
   if (!STREQ(ntree->idname, "CompositorNodeTree")) {
-    *r_disabled_hint = TIP_("Not a compositor node tree");
+    *r_disabled_hint = RPT_("Not a compositor node tree");
     return false;
   }
   return true;
@@ -28,7 +28,7 @@ void cmp_node_update_default(bNodeTree * /*ntree*/, bNode *node)
   node->runtime->need_exec = 1;
 }
 
-void cmp_node_type_base(bNodeType *ntype, int type, const char *name, short nclass)
+void cmp_node_type_base(blender::bke::bNodeType *ntype, int type, const char *name, short nclass)
 {
   blender::bke::node_type_base(ntype, type, name, nclass);
 

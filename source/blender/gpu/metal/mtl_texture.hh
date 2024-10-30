@@ -17,7 +17,7 @@
 #include "gpu_texture_private.hh"
 
 #include "BLI_map.hh"
-#include "GPU_texture.h"
+#include "GPU_texture.hh"
 #include <mutex>
 #include <thread>
 
@@ -127,6 +127,8 @@ namespace blender::gpu {
 
 class MTLContext;
 class MTLVertBuf;
+class MTLStorageBuf;
+class MTLBuffer;
 
 /* Metal Texture internal implementation. */
 static const int MTL_MAX_MIPMAP_COUNT = 15; /* Max: 16384x16384 */
@@ -167,12 +169,13 @@ struct MTLSamplerState {
   }
 };
 
-const MTLSamplerState DEFAULT_SAMPLER_STATE = {GPUSamplerState::default_sampler() /*, 0, 9999*/};
+const MTLSamplerState DEFAULT_SAMPLER_STATE = {GPUSamplerState::default_sampler() /*, 0, 9999 */};
 
 class MTLTexture : public Texture {
   friend class MTLContext;
   friend class MTLStateManager;
   friend class MTLFrameBuffer;
+  friend class MTLStorageBuf;
 
  private:
   /* Where the textures data comes from. */
@@ -191,8 +194,18 @@ class MTLTexture : public Texture {
   id<MTLTexture> texture_ = nil;
 
   /* Texture Storage. */
-  id<MTLBuffer> texture_buffer_ = nil;
   size_t aligned_w_ = 0;
+
+  /* Storage buffer view.
+   * Buffer backed textures can be wrapped with a storage buffer instance for direct data
+   * reading/writing. Required for atomic operations on texture data when texture atomics are
+   * unsupported.
+   *
+   * tex_buffer_metadata_ packs 4 parameters required by the shader to perform texture space
+   * remapping: (x, y, z) = (width, height, depth/layers) (w) = aligned width. */
+  MTLBuffer *backing_buffer_ = nullptr;
+  MTLStorageBuf *storage_buffer_ = nullptr;
+  int tex_buffer_metadata_[4];
 
   /* Blit Frame-buffer. */
   GPUFrameBuffer *blit_fb_ = nullptr;
@@ -278,6 +291,14 @@ class MTLTexture : public Texture {
     return name_;
   }
 
+  bool has_custom_swizzle()
+  {
+    return (mtl_swizzle_mask_.red != MTLTextureSwizzleRed ||
+            mtl_swizzle_mask_.green != MTLTextureSwizzleGreen ||
+            mtl_swizzle_mask_.blue != MTLTextureSwizzleBlue ||
+            mtl_swizzle_mask_.alpha != MTLTextureSwizzleAlpha);
+  }
+
   id<MTLBuffer> get_vertex_buffer() const
   {
     if (resource_mode_ == MTL_TEXTURE_MODE_VBO) {
@@ -286,9 +307,16 @@ class MTLTexture : public Texture {
     return nil;
   }
 
+  MTLStorageBuf *get_storagebuf();
+
+  const int *get_texture_metdata_ptr() const
+  {
+    return tex_buffer_metadata_;
+  }
+
  protected:
   bool init_internal() override;
-  bool init_internal(GPUVertBuf *vbo) override;
+  bool init_internal(VertBuf *vbo) override;
   bool init_internal(GPUTexture *src,
                      int mip_offset,
                      int layer_offset,
@@ -453,7 +481,7 @@ class MTLPixelBuffer : public PixelBuffer {
   id<MTLBuffer> buffer_ = nil;
 
  public:
-  MTLPixelBuffer(uint size);
+  MTLPixelBuffer(size_t size);
   ~MTLPixelBuffer();
 
   void *map() override;
@@ -620,13 +648,12 @@ inline MTLTextureUsage mtl_usage_from_gpu(eGPUTextureUsage usage)
   if (usage & GPU_TEXTURE_USAGE_ATTACHMENT) {
     mtl_usage = mtl_usage | MTLTextureUsageRenderTarget;
   }
-  if (usage & GPU_TEXTURE_USAGE_MIP_SWIZZLE_VIEW) {
+  if (usage & GPU_TEXTURE_USAGE_FORMAT_VIEW) {
     mtl_usage = mtl_usage | MTLTextureUsagePixelFormatView;
   }
 #if defined(MAC_OS_VERSION_14_0)
   if (@available(macOS 14.0, *)) {
     if (usage & GPU_TEXTURE_USAGE_ATOMIC) {
-
       mtl_usage = mtl_usage | MTLTextureUsageShaderAtomic;
     }
   }
@@ -650,7 +677,7 @@ inline eGPUTextureUsage gpu_usage_from_mtl(MTLTextureUsage mtl_usage)
     usage = usage | GPU_TEXTURE_USAGE_ATTACHMENT;
   }
   if (mtl_usage & MTLTextureUsagePixelFormatView) {
-    usage = usage | GPU_TEXTURE_USAGE_MIP_SWIZZLE_VIEW;
+    usage = usage | GPU_TEXTURE_USAGE_FORMAT_VIEW;
   }
   return usage;
 }

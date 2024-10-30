@@ -21,18 +21,17 @@
 #include "DNA_space_types.h"
 #include "DNA_view2d_types.h"
 
-#include "PIL_time.h"
-
 #include "BLI_listbase.h"
 #include "BLI_rect.h"
 #include "BLI_string.h"
 #include "BLI_threads.h"
+#include "BLI_time.h"
 #include "BLI_utildefines.h"
 
-#include "IMB_colormanagement.h"
-#include "IMB_imbuf.h"
-#include "IMB_imbuf_types.h"
-#include "IMB_moviecache.h"
+#include "IMB_colormanagement.hh"
+#include "IMB_imbuf.hh"
+#include "IMB_imbuf_types.hh"
+#include "IMB_moviecache.hh"
 
 #include "BKE_context.hh"
 #include "BKE_image.h"
@@ -40,13 +39,13 @@
 
 #include "BIF_glutil.hh"
 
-#include "GPU_framebuffer.h"
-#include "GPU_immediate.h"
-#include "GPU_immediate_util.h"
-#include "GPU_matrix.h"
-#include "GPU_state.h"
+#include "GPU_framebuffer.hh"
+#include "GPU_immediate.hh"
+#include "GPU_immediate_util.hh"
+#include "GPU_matrix.hh"
+#include "GPU_state.hh"
 
-#include "BLF_api.h"
+#include "BLF_api.hh"
 
 #include "ED_gpencil_legacy.hh"
 #include "ED_image.hh"
@@ -62,7 +61,7 @@
 #include "RE_engine.h"
 #include "RE_pipeline.h"
 
-#include "image_intern.h"
+#include "image_intern.hh"
 
 static void draw_render_info(
     const bContext *C, Scene *scene, Image *ima, ARegion *region, float zoomx, float zoomy)
@@ -80,7 +79,7 @@ static void draw_render_info(
     ED_region_info_draw(region, rr->text, fill_color, true);
   }
 
-  BKE_image_release_renderresult(stats_scene, ima);
+  BKE_image_release_renderresult(stats_scene, ima, rr);
 
   if (re) {
     int total_tiles;

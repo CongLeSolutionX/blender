@@ -15,7 +15,7 @@
 
 #include "gl_shader_interface.hh"
 
-#include "GPU_capabilities.h"
+#include "GPU_capabilities.hh"
 
 using namespace blender::gpu::shader;
 namespace blender::gpu {
@@ -390,12 +390,11 @@ GLShaderInterface::GLShaderInterface(GLuint program, const shader::ShaderCreateI
 
   attr_len_ = info.vertex_inputs_.size();
   uniform_len_ = info.push_constants_.size();
+  constant_len_ = info.specialization_constants_.size();
   ubo_len_ = 0;
   ssbo_len_ = 0;
 
-  Vector<ShaderCreateInfo::Resource> all_resources;
-  all_resources.extend(info.pass_resources_);
-  all_resources.extend(info.batch_resources_);
+  Vector<ShaderCreateInfo::Resource> all_resources = info.resources_get_all_();
 
   for (ShaderCreateInfo::Resource &res : all_resources) {
     switch (res.bind_type) {
@@ -430,7 +429,7 @@ GLShaderInterface::GLShaderInterface(GLuint program, const shader::ShaderCreateI
 
   BLI_assert_msg(ubo_len_ <= 16, "enabled_ubo_mask_ is uint16_t");
 
-  int input_tot_len = attr_len_ + ubo_len_ + uniform_len_ + ssbo_len_;
+  int input_tot_len = attr_len_ + ubo_len_ + uniform_len_ + ssbo_len_ + constant_len_;
   inputs_ = (ShaderInput *)MEM_callocN(sizeof(ShaderInput) * input_tot_len, __func__);
   ShaderInput *input = inputs_;
 
@@ -526,6 +525,23 @@ GLShaderInterface::GLShaderInterface(GLuint program, const shader::ShaderCreateI
       enabled_ssbo_mask_ |= (1 << input->binding);
       input++;
     }
+  }
+
+  for (const ShaderCreateInfo::Resource &res : info.geometry_resources_) {
+    if (res.bind_type == ShaderCreateInfo::Resource::BindType::STORAGE_BUFFER) {
+      ssbo_attr_mask_ |= (1 << res.slot);
+    }
+    else {
+      BLI_assert_msg(0, "Resource type is not supported for Geometry frequency");
+    }
+  }
+
+  /* Constants */
+  int constant_id = 0;
+  for (const SpecializationConstant &constant : info.specialization_constants_) {
+    copy_input_name(input, constant.name, name_buffer_, name_buffer_offset);
+    input->location = constant_id++;
+    input++;
   }
 
   this->sort_inputs();

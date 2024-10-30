@@ -15,12 +15,12 @@
 #include "DNA_tracking_types.h"
 
 #include "BKE_context.hh"
-#include "BKE_lib_id.h"
+#include "BKE_lib_id.hh"
 #include "BKE_movieclip.h"
 #include "BKE_tracking.h"
 
 #include "RNA_access.hh"
-#include "RNA_prototypes.h"
+#include "RNA_prototypes.hh"
 
 #include "UI_interface.hh"
 #include "UI_resources.hh"
@@ -68,16 +68,7 @@ static void node_composit_buts_trackpos(uiLayout *layout, bContext *C, PointerRN
 {
   bNode *node = (bNode *)ptr->data;
 
-  uiTemplateID(layout,
-               C,
-               ptr,
-               "clip",
-               nullptr,
-               "CLIP_OT_open",
-               nullptr,
-               UI_TEMPLATE_ID_FILTER_ALL,
-               false,
-               nullptr);
+  uiTemplateID(layout, C, ptr, "clip", nullptr, "CLIP_OT_open", nullptr);
 
   if (node->id) {
     MovieClip *clip = (MovieClip *)node->id;
@@ -169,13 +160,13 @@ class TrackPositionOperation : public NodeOperation {
     /* Compute the speed as the difference between the previous marker position and the current
      * marker position. Notice that we compute the speed from the current to the previous position,
      * not the other way around. */
-    const float2 previous_marker_position = compute_temporally_neighbouring_marker_position(
+    const float2 previous_marker_position = compute_temporally_neighboring_marker_position(
         track, current_marker_position, -1);
     const float2 speed_toward_previous = previous_marker_position - current_marker_position;
 
     /* Compute the speed as the difference between the current marker position and the next marker
      * position. */
-    const float2 next_marker_position = compute_temporally_neighbouring_marker_position(
+    const float2 next_marker_position = compute_temporally_neighboring_marker_position(
         track, current_marker_position, 1);
     const float2 speed_toward_next = current_marker_position - next_marker_position;
 
@@ -210,9 +201,9 @@ class TrackPositionOperation : public NodeOperation {
    * marker exist for that particular frame or is disabled, the current marker position is
    * returned. This is useful for computing the speed by providing small negative and positive
    * delta times. */
-  float2 compute_temporally_neighbouring_marker_position(MovieTrackingTrack *track,
-                                                         float2 current_marker_position,
-                                                         int time_delta)
+  float2 compute_temporally_neighboring_marker_position(MovieTrackingTrack *track,
+                                                        float2 current_marker_position,
+                                                        int time_delta)
   {
     const int local_frame_number = BKE_movieclip_remap_scene_to_clip_frame(
         get_movie_clip(), get_frame() + time_delta);
@@ -362,15 +353,15 @@ void register_node_type_cmp_trackpos()
 {
   namespace file_ns = blender::nodes::node_composite_trackpos_cc;
 
-  static bNodeType ntype;
+  static blender::bke::bNodeType ntype;
 
   cmp_node_type_base(&ntype, CMP_NODE_TRACKPOS, "Track Position", NODE_CLASS_INPUT);
   ntype.declare = file_ns::cmp_node_trackpos_declare;
   ntype.draw_buttons = file_ns::node_composit_buts_trackpos;
   ntype.initfunc_api = file_ns::init;
-  node_type_storage(
+  blender::bke::node_type_storage(
       &ntype, "NodeTrackPosData", node_free_standard_storage, node_copy_standard_storage);
   ntype.get_compositor_operation = file_ns::get_compositor_operation;
 
-  nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }

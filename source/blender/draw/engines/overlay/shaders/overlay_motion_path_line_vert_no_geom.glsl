@@ -28,41 +28,37 @@ vec2 compute_dir(vec2 v0, vec2 v1)
   return dir;
 }
 
-void do_vertex_shader(vec4 pos, int vertex_id, out vec2 out_sspos, out vec4 out_finalcolour)
+void do_vertex_shader(vec4 pos, int vertex_id, out vec2 out_sspos, out vec4 out_finalcolor)
 {
   out_sspos = proj(pos);
-  out_finalcolour = vec4(0.0);
+  out_finalcolor = vec4(0.0);
 
   int frame = vertex_id + cacheStart;
   float intensity; /* how faint */
   vec3 blend_base = (abs(frame - frameCurrent) == 0) ?
                         colorCurrentFrame.rgb :
                         colorBackground.rgb; /* "bleed" CFRAME color to ease color blending. */
-  bool use_custom_color = customColor.x >= 0.0;
-  /* TODO: We might want something more consistent with custom color and standard colors. */
+  bool use_custom_color = customColorPre.x >= 0.0;
+
   if (frame < frameCurrent) {
     if (use_custom_color) {
-      /* Custom color: previous frames color is darker than current frame */
-      out_finalcolour.rgb = customColor * 0.25;
+      out_finalcolor.rgb = customColorPre;
     }
     else {
-      /* black - before frameCurrent */
       if (selected) {
         intensity = SET_INTENSITY(frameStart, frame, frameCurrent, 0.25, 0.75);
       }
       else {
         intensity = SET_INTENSITY(frameStart, frame, frameCurrent, 0.68, 0.92);
       }
-      out_finalcolour.rgb = mix(colorWire.rgb, blend_base, intensity);
+      out_finalcolor.rgb = mix(colorWire.rgb, blend_base, intensity);
     }
   }
   else if (frame > frameCurrent) {
     if (use_custom_color) {
-      /* Custom color: next frames color is equal to user selected color */
-      out_finalcolour.rgb = customColor;
+      out_finalcolor.rgb = customColorPost;
     }
     else {
-      /* blue - after frameCurrent */
       if (selected) {
         intensity = SET_INTENSITY(frameCurrent, frame, frameEnd, 0.25, 0.75);
       }
@@ -70,26 +66,25 @@ void do_vertex_shader(vec4 pos, int vertex_id, out vec2 out_sspos, out vec4 out_
         intensity = SET_INTENSITY(frameCurrent, frame, frameEnd, 0.68, 0.92);
       }
 
-      out_finalcolour.rgb = mix(colorBonePose.rgb, blend_base, intensity);
+      out_finalcolor.rgb = mix(colorBonePose.rgb, blend_base, intensity);
     }
   }
   else {
     if (use_custom_color) {
-      /* Custom color: current frame color is slightly darker than user selected color */
-      out_finalcolour.rgb = customColor * 0.5;
+      out_finalcolor.rgb = colorCurrentFrame.rgb;
     }
     else {
-      /* green - on frameCurrent */
       if (selected) {
         intensity = 0.92f;
       }
       else {
         intensity = 0.75f;
       }
-      out_finalcolour.rgb = mix(colorBackground.rgb, blend_base, intensity);
+      out_finalcolor.rgb = mix(colorCurrentFrame.rgb, blend_base, intensity);
     }
   }
-  out_finalcolour.a = 1.0;
+
+  out_finalcolor.a = 1.0;
 }
 
 void main()
@@ -104,7 +99,7 @@ void main()
    *  - IF PrimType == LineList:  base_vertex_id = quad_id*2
    *  - IF PrimType == LineStrip: base_vertex_id = quad_id
    *
-   *  Note: Primitive is LineStrip for this shader. */
+   * NOTE: Primitive is LineStrip for this shader. */
   int base_vertex_id = quad_id;
 
   /* Fetch attributes for self and neighboring vertex. */

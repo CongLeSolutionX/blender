@@ -12,7 +12,7 @@
 
 #include "BKE_context.hh"
 #include "BKE_movieclip.h"
-#include "BKE_report.h"
+#include "BKE_report.hh"
 #include "BKE_tracking.h"
 
 #include "WM_api.hh"
@@ -20,14 +20,14 @@
 
 #include "ED_clip.hh"
 
-#include "IMB_imbuf.h"
-#include "IMB_imbuf_types.h"
+#include "IMB_imbuf.hh"
+#include "IMB_imbuf_types.hh"
 
 #include "RNA_access.hh"
 #include "RNA_define.hh"
 
-#include "clip_intern.h"
-#include "tracking_ops_intern.h"
+#include "clip_intern.hh"
+#include "tracking_ops_intern.hh"
 
 /********************** detect features operator *********************/
 

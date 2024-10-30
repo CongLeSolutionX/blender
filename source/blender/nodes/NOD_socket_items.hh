@@ -20,8 +20,10 @@
 #include "BLI_string.h"
 #include "BLI_string_utils.hh"
 
-#include "BKE_node.h"
+#include "BKE_node.hh"
 #include "BKE_node_runtime.hh"
+
+#include "DNA_array_utils.hh"
 
 #include "NOD_socket.hh"
 
@@ -51,90 +53,6 @@ inline bNode *find_node_by_item(bNodeTree &ntree, const typename Accessor::ItemT
     }
   }
   return nullptr;
-}
-
-/**
- * Low level utility to remove an item from the array and to shift the elements after it.
- */
-template<typename T>
-inline void remove_item(T **items,
-                        int *items_num,
-                        int *active_index,
-                        const int remove_index,
-                        void (*destruct_item)(T *))
-{
-  static_assert(std::is_trivial_v<T>);
-  BLI_assert(remove_index >= 0);
-  BLI_assert(remove_index < *items_num);
-
-  const int old_items_num = *items_num;
-  const int new_items_num = old_items_num - 1;
-  const int old_active_index = *active_index;
-
-  T *old_items = *items;
-  T *new_items = MEM_cnew_array<T>(new_items_num, __func__);
-
-  std::copy_n(old_items, remove_index, new_items);
-  std::copy_n(
-      old_items + remove_index + 1, old_items_num - remove_index - 1, new_items + remove_index);
-
-  destruct_item(&old_items[remove_index]);
-  MEM_SAFE_FREE(old_items);
-
-  const int new_active_index = std::max(
-      0, old_active_index == new_items_num ? new_items_num - 1 : old_active_index);
-
-  *items = new_items;
-  *items_num = new_items_num;
-  *active_index = new_active_index;
-}
-
-/**
- * Low level utility to remove all elements from an items array.
- */
-template<typename T>
-inline void clear_items(T **items, int *items_num, int *active_index, void (*destruct_item)(T *))
-{
-  static_assert(std::is_trivial_v<T>);
-  for (const int i : blender::IndexRange(*items_num)) {
-    destruct_item(&(*items)[i]);
-  }
-  MEM_SAFE_FREE(*items);
-  *items_num = 0;
-  *active_index = 0;
-}
-
-/**
- * Low level utility to move one item from one index to another.
- */
-template<typename T>
-inline void move_item(T *items, const int items_num, const int from_index, const int to_index)
-{
-  static_assert(std::is_trivial_v<T>);
-  BLI_assert(from_index >= 0);
-  BLI_assert(from_index < items_num);
-  BLI_assert(to_index >= 0);
-  BLI_assert(to_index < items_num);
-  UNUSED_VARS_NDEBUG(items_num);
-
-  if (from_index == to_index) {
-    return;
-  }
-
-  if (from_index < to_index) {
-    const T tmp = items[from_index];
-    for (int i = from_index; i < to_index; i++) {
-      items[i] = items[i + 1];
-    }
-    items[to_index] = tmp;
-  }
-  else if (from_index > to_index) {
-    const T tmp = items[from_index];
-    for (int i = from_index; i > to_index; i--) {
-      items[i] = items[i - 1];
-    }
-    items[to_index] = tmp;
-  }
 }
 
 /**
@@ -177,7 +95,10 @@ inline void set_item_name_and_make_unique(bNode &node,
 {
   using ItemT = typename Accessor::ItemT;
   SocketItemsRef array = Accessor::get_items_from_node(node);
-  const char *default_name = nodeStaticSocketLabel(*Accessor::get_socket_type(item), 0);
+  const char *default_name = "Item";
+  if constexpr (Accessor::has_type) {
+    default_name = bke::node_static_socket_label(Accessor::get_socket_type(item), 0);
+  }
 
   char unique_name[MAX_NAME + 4];
   STRNCPY(unique_name, value);
@@ -209,16 +130,11 @@ inline void set_item_name_and_make_unique(bNode &node,
   *item_name = BLI_strdup(unique_name);
 }
 
-/**
- * Add a new item at the end with the given socket type and name.
- */
-template<typename Accessor>
-inline typename Accessor::ItemT *add_item_with_socket_and_name(
-    bNode &node, const eNodeSocketDatatype socket_type, const char *name)
+namespace detail {
+
+template<typename Accessor> inline typename Accessor::ItemT &add_item_to_array(bNode &node)
 {
   using ItemT = typename Accessor::ItemT;
-  BLI_assert(Accessor::supports_socket_type(socket_type));
-
   SocketItemsRef array = Accessor::get_items_from_node(node);
 
   ItemT *old_items = *array.items;
@@ -229,14 +145,70 @@ inline typename Accessor::ItemT *add_item_with_socket_and_name(
   std::copy_n(old_items, old_items_num, new_items);
   ItemT &new_item = new_items[old_items_num];
 
-  Accessor::init_with_socket_type_and_name(node, new_item, socket_type, name);
-
   MEM_SAFE_FREE(old_items);
   *array.items = new_items;
   *array.items_num = new_items_num;
-  *array.active_index = old_items_num;
+  if (array.active_index) {
+    *array.active_index = old_items_num;
+  }
 
+  return new_item;
+}
+
+}  // namespace detail
+
+/**
+ * Add a new item at the end with the given socket type and name.
+ */
+template<typename Accessor>
+inline typename Accessor::ItemT *add_item_with_socket_type_and_name(
+    bNode &node, const eNodeSocketDatatype socket_type, const char *name)
+{
+  using ItemT = typename Accessor::ItemT;
+  BLI_assert(Accessor::supports_socket_type(socket_type));
+  ItemT &new_item = detail::add_item_to_array<Accessor>(node);
+  Accessor::init_with_socket_type_and_name(node, new_item, socket_type, name);
   return &new_item;
+}
+
+/**
+ * Add a new item at the end with the given name.
+ */
+template<typename Accessor>
+inline typename Accessor::ItemT *add_item_with_name(bNode &node, const char *name)
+{
+  using ItemT = typename Accessor::ItemT;
+  ItemT &new_item = detail::add_item_to_array<Accessor>(node);
+  Accessor::init_with_name(node, new_item, name);
+  return &new_item;
+}
+
+/**
+ * Add a new item at the end.
+ */
+template<typename Accessor> inline typename Accessor::ItemT *add_item(bNode &node)
+{
+  using ItemT = typename Accessor::ItemT;
+  ItemT &new_item = detail::add_item_to_array<Accessor>(node);
+  Accessor::init(node, new_item);
+  return &new_item;
+}
+
+template<typename Accessor>
+inline std::string get_socket_identifier(const typename Accessor::ItemT &item,
+                                         const eNodeSocketInOut in_out)
+{
+  if constexpr (Accessor::has_single_identifier_str) {
+    return Accessor::socket_identifier_for_item(item);
+  }
+  else {
+    if (in_out == SOCK_IN) {
+      return Accessor::input_socket_identifier_for_item(item);
+    }
+    else {
+      return Accessor::output_socket_identifier_for_item(item);
+    }
+  }
 }
 
 /**
@@ -262,23 +234,37 @@ template<typename Accessor>
   else {
     return false;
   }
-  const eNodeSocketDatatype socket_type = eNodeSocketDatatype(src_socket->type);
-  if (!Accessor::supports_socket_type(socket_type)) {
-    return false;
+
+  const ItemT *item = nullptr;
+  if constexpr (Accessor::has_name && Accessor::has_type) {
+    const eNodeSocketDatatype socket_type = eNodeSocketDatatype(src_socket->type);
+    if (!Accessor::supports_socket_type(socket_type)) {
+      return false;
+    }
+    item = add_item_with_socket_type_and_name<Accessor>(
+        storage_node, socket_type, src_socket->name);
   }
-  const ItemT *item = add_item_with_socket_and_name<Accessor>(
-      storage_node, socket_type, src_socket->name);
+  else if constexpr (Accessor::has_name && !Accessor::has_type) {
+    item = add_item_with_name<Accessor>(storage_node, src_socket->name);
+  }
+  else {
+    item = add_item<Accessor>(storage_node);
+  }
   if (item == nullptr) {
     return false;
   }
+
   update_node_declaration_and_sockets(ntree, extend_node);
-  const std::string item_identifier = Accessor::socket_identifier_for_item(*item);
   if (extend_socket.is_input()) {
-    bNodeSocket *new_socket = nodeFindSocket(&extend_node, SOCK_IN, item_identifier.c_str());
+    const std::string item_identifier = get_socket_identifier<Accessor>(*item, SOCK_IN);
+    bNodeSocket *new_socket = bke::node_find_socket(
+        &extend_node, SOCK_IN, item_identifier.c_str());
     link.tosock = new_socket;
   }
   else {
-    bNodeSocket *new_socket = nodeFindSocket(&extend_node, SOCK_OUT, item_identifier.c_str());
+    const std::string item_identifier = get_socket_identifier<Accessor>(*item, SOCK_OUT);
+    bNodeSocket *new_socket = bke::node_find_socket(
+        &extend_node, SOCK_OUT, item_identifier.c_str());
     link.fromsock = new_socket;
   }
   return true;
@@ -289,10 +275,12 @@ template<typename Accessor>
  * \return False if the link should be removed.
  */
 template<typename Accessor>
-[[nodiscard]] inline bool try_add_item_via_any_extend_socket(bNodeTree &ntree,
-                                                             bNode &extend_node,
-                                                             bNode &storage_node,
-                                                             bNodeLink &link)
+[[nodiscard]] inline bool try_add_item_via_any_extend_socket(
+    bNodeTree &ntree,
+    bNode &extend_node,
+    bNode &storage_node,
+    bNodeLink &link,
+    const std::optional<StringRef> socket_identifier = std::nullopt)
 {
   bNodeSocket *possible_extend_socket = nullptr;
   if (link.fromnode == &extend_node) {
@@ -306,6 +294,11 @@ template<typename Accessor>
   }
   if (!STREQ(possible_extend_socket->idname, "NodeSocketVirtual")) {
     return true;
+  }
+  if (socket_identifier.has_value()) {
+    if (possible_extend_socket->identifier != socket_identifier) {
+      return true;
+    }
   }
   return try_add_item_via_extend_socket<Accessor>(
       ntree, extend_node, *possible_extend_socket, storage_node, link);

@@ -8,7 +8,7 @@
 
 /* TODO: #pxr::UsdMtlxRead() doesn't perform node-graphs.
  * Uncomment USE_MATERIALX_NODEGRAPH after fixing it. */
-//#define USE_MATERIALX_NODEGRAPH
+// #define USE_MATERIALX_NODEGRAPH
 
 namespace blender::nodes::materialx {
 
@@ -28,7 +28,7 @@ class GroupNodeParser : public NodeParser {
                   const bNodeSocket *socket_out,
                   NodeItem::Type to_type,
                   GroupNodeParser *group_parser,
-                  ExportImageFunction export_image_fn,
+                  ExportParams export_params,
                   bool use_group_default);
   NodeItem compute() override;
   NodeItem compute_full() override;

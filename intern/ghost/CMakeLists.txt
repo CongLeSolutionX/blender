@@ -4,7 +4,6 @@
 
 set(INC
   PUBLIC .
-  ../clog
   ../../source/blender/imbuf
 )
 
@@ -73,6 +72,7 @@ set(SRC
 set(LIB
   PRIVATE bf::blenlib
   PRIVATE bf::dna
+  PRIVATE bf::intern::clog
 )
 
 if(WITH_INPUT_IME)
@@ -90,8 +90,7 @@ if(WITH_OPENGL_BACKEND)
 endif()
 
 if(WITH_VULKAN_BACKEND)
-
-  if(APPLE)
+  if(WITH_VULKAN_MOLTENVK)
     list(APPEND INC_SYS
       PUBLIC ${MOLTENVK_INCLUDE_DIRS}
     )
@@ -170,16 +169,9 @@ elseif(WITH_GHOST_SDL)
   list(APPEND INC_SYS
     ${SDL_INCLUDE_DIR}
   )
-  if(WITH_SDL_DYNLOAD)
-    list(APPEND LIB
-      extern_sdlew
-    )
-  else()
-    list(APPEND LIB
-      ${SDL_LIBRARY}
-    )
-  endif()
-
+  list(APPEND LIB
+    ${SDL_LIBRARY}
+  )
 elseif(APPLE AND NOT WITH_GHOST_X11)
   list(APPEND SRC
     intern/GHOST_DisplayManagerCocoa.mm
@@ -345,6 +337,14 @@ elseif(WITH_GHOST_X11 OR WITH_GHOST_WAYLAND)
     check_symbol_exists(poll "poll.h" HAVE_POLL)
     if(HAVE_POLL)
       add_definitions(-DHAVE_POLL)
+    endif()
+
+    if(WITH_GHOST_WAYLAND_LIBDECOR)
+      # See code-comment for `USE_LIBDECOR_CONFIG_COPY_WORKAROUND`.
+      check_symbol_exists(malloc_usable_size "malloc.h" HAVE_MALLOC_USABLE_SIZE)
+      if(HAVE_MALLOC_USABLE_SIZE)
+        add_definitions(-DHAVE_MALLOC_USABLE_SIZE)
+      endif()
     endif()
 
     list(APPEND SRC

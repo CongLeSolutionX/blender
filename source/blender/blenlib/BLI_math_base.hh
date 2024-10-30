@@ -12,7 +12,7 @@
 #include <cmath>
 #include <type_traits>
 
-#include "BLI_math_base.h"
+#include "BLI_math_numbers.hh"
 #include "BLI_utildefines.h"
 
 namespace blender::math {
@@ -65,6 +65,11 @@ template<typename T> inline T clamp(const T &a, const T &min, const T &max)
   return std::clamp(a, min, max);
 }
 
+template<typename T> inline T step(const T &edge, const T &value)
+{
+  return value < edge ? 0 : 1;
+}
+
 template<typename T> inline T mod(const T &a, const T &b)
 {
   return std::fmod(a, b);
@@ -98,18 +103,18 @@ template<typename T> inline T round(const T &a)
 
 /**
  * Repeats the saw-tooth pattern even on negative numbers.
- * ex: `mod_periodic(-3, 4) = 1`, `mod(-3, 4)= -3`
+ * ex: `mod_periodic(-3, 4) = 1`, `mod(-3, 4)= -3`. This will cause undefined behavior for negative
+ * b.
  */
 template<typename T> inline T mod_periodic(const T &a, const T &b)
 {
+  BLI_assert(b != 0);
+  if constexpr (std::is_integral_v<T>) {
+    BLI_assert(std::numeric_limits<T>::max() - math::abs(a) >= b);
+    return ((a % b) + b) % b;
+  }
+
   return a - (b * math::floor(a / b));
-}
-template<> inline int64_t mod_periodic(const int64_t &a, const int64_t &b)
-{
-  int64_t c = (a >= 0) ? a : (-1 - a);
-  int64_t tmp = c - (b * (c / b));
-  /* Negative integers have different rounding that do not match floor(). */
-  return (a >= 0) ? tmp : (b - 1 - tmp);
 }
 
 template<typename T> inline T ceil(const T &a)
@@ -184,7 +189,7 @@ template<typename T> inline T exp(const T &x)
 template<typename T> inline T safe_acos(const T &a)
 {
   if (UNLIKELY(a <= T(-1))) {
-    return T(M_PI);
+    return T(numbers::pi);
   }
   else if (UNLIKELY(a >= T(1))) {
     return T(0);
@@ -207,7 +212,7 @@ inline float safe_acos_approx(float x)
    */
   const float a = std::sqrt(1.0f - m) *
                   (1.5707963267f + m * (-0.213300989f + m * (0.077980478f + m * -0.02164095f)));
-  return x < 0.0f ? float(M_PI) - a : a;
+  return x < 0.0f ? float(numbers::pi) - a : a;
 }
 
 template<typename T> inline T asin(const T &a)

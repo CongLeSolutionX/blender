@@ -50,6 +50,7 @@
 #include "COM_DistanceMatteNode.h"
 #include "COM_DoubleEdgeMaskNode.h"
 #include "COM_EllipseMaskNode.h"
+#include "COM_FileOutputNode.h"
 #include "COM_FilterNode.h"
 #include "COM_FlipNode.h"
 #include "COM_GammaNode.h"
@@ -75,7 +76,6 @@
 #include "COM_MovieDistortionNode.h"
 #include "COM_NormalNode.h"
 #include "COM_NormalizeNode.h"
-#include "COM_OutputFileNode.h"
 #include "COM_PixelateNode.h"
 #include "COM_PlaneTrackDeformNode.h"
 #include "COM_PosterizeNode.h"
@@ -89,7 +89,7 @@
 #include "COM_SeparateXYZNode.h"
 #include "COM_SetAlphaNode.h"
 #include "COM_SetValueOperation.h"
-#include "COM_SplitViewerNode.h"
+#include "COM_SplitNode.h"
 #include "COM_Stabilize2dNode.h"
 #include "COM_SunBeamsNode.h"
 #include "COM_SwitchNode.h"
@@ -109,23 +109,6 @@
 #include "COM_ZCombineNode.h"
 
 namespace blender::compositor {
-
-bool COM_bnode_is_fast_node(const bNode &b_node)
-{
-  return !ELEM(b_node.type,
-               CMP_NODE_BLUR,
-               CMP_NODE_VECBLUR,
-               CMP_NODE_BILATERALBLUR,
-               CMP_NODE_DEFOCUS,
-               CMP_NODE_BOKEHBLUR,
-               CMP_NODE_GLARE,
-               CMP_NODE_DBLUR,
-               CMP_NODE_MOVIEDISTORTION,
-               CMP_NODE_LENSDIST,
-               CMP_NODE_DOUBLEEDGEMASK,
-               CMP_NODE_DILATEERODE,
-               CMP_NODE_DENOISE);
-}
 
 Node *COM_convert_bnode(bNode *b_node)
 {
@@ -212,8 +195,8 @@ Node *COM_convert_bnode(bNode *b_node)
     case CMP_NODE_VIEWER:
       node = new ViewerNode(b_node);
       break;
-    case CMP_NODE_SPLITVIEWER:
-      node = new SplitViewerNode(b_node);
+    case CMP_NODE_SPLIT:
+      node = new SplitNode(b_node);
       break;
     case CMP_NODE_INVERT:
       node = new InvertNode(b_node);
@@ -347,7 +330,7 @@ Node *COM_convert_bnode(bNode *b_node)
       node = new ColorSpillNode(b_node);
       break;
     case CMP_NODE_OUTPUT_FILE:
-      node = new OutputFileNode(b_node);
+      node = new FileOutputNode(b_node);
       break;
     case CMP_NODE_MAP_VALUE:
       node = new MapValueNode(b_node);
@@ -477,7 +460,7 @@ void COM_convert_canvas(NodeOperationBuilder &builder,
                         NodeOperationInput *to_socket)
 {
   /* Data type conversions are executed before resolutions to ensure convert operations have
-   * resolution. This method have to ensure same datatypes are linked for new operations. */
+   * resolution. This method have to ensure same data-types are linked for new operations. */
   BLI_assert(from_socket->get_data_type() == to_socket->get_data_type());
 
   ResizeMode mode = to_socket->get_resize_mode();
@@ -550,13 +533,11 @@ void COM_convert_canvas(NodeOperationBuilder &builder,
     builder.add_operation(syop);
 
     rcti scale_canvas = from_operation->get_canvas();
-    if (builder.context().get_execution_model() == eExecutionModel::FullFrame) {
-      ScaleOperation::scale_area(scale_canvas, scaleX, scaleY);
-      scale_canvas.xmax = scale_canvas.xmin + to_operation->get_width();
-      scale_canvas.ymax = scale_canvas.ymin + to_operation->get_height();
-      addX = 0;
-      addY = 0;
-    }
+    ScaleOperation::scale_area(scale_canvas, scaleX, scaleY);
+    scale_canvas.xmax = scale_canvas.xmin + to_operation->get_width();
+    scale_canvas.ymax = scale_canvas.ymin + to_operation->get_height();
+    addX = 0;
+    addY = 0;
     scale_operation->set_canvas(scale_canvas);
     sxop->set_canvas(scale_canvas);
     syop->set_canvas(scale_canvas);

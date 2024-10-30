@@ -36,8 +36,6 @@ void ScaleNode::convert_to_operations(NodeConverter &converter,
       converter.map_output_socket(output_socket, operation->get_output_socket(0));
 
       operation->set_variable_size(input_xsocket->is_linked() || input_ysocket->is_linked());
-      operation->set_scale_canvas_max_size(context.get_render_size() * 1.5f);
-
       break;
     }
     case CMP_NODE_SCALE_RENDER_PERCENT: {
@@ -56,7 +54,6 @@ void ScaleNode::convert_to_operations(NodeConverter &converter,
       converter.map_output_socket(output_socket, operation->get_output_socket(0));
 
       operation->set_variable_size(input_xsocket->is_linked() || input_ysocket->is_linked());
-      operation->set_scale_canvas_max_size(context.get_render_size() * 1.5f);
 
       break;
     }
@@ -69,15 +66,14 @@ void ScaleNode::convert_to_operations(NodeConverter &converter,
           ELEM(bnode->custom2, CMP_NODE_SCALE_RENDER_SIZE_FIT, CMP_NODE_SCALE_RENDER_SIZE_CROP));
       operation->set_is_crop(bnode->custom2 == CMP_NODE_SCALE_RENDER_SIZE_CROP);
       operation->set_offset(bnode->custom3, bnode->custom4);
-      operation->set_new_width(rd->xsch * render_size_factor);
-      operation->set_new_height(rd->ysch * render_size_factor);
+      operation->set_new_width(int(math::round(rd->xsch * render_size_factor)));
+      operation->set_new_height(int(math::round(rd->ysch * render_size_factor)));
       converter.add_operation(operation);
 
       converter.map_input_socket(input_socket, operation->get_input_socket(0));
       converter.map_output_socket(output_socket, operation->get_output_socket(0));
 
       operation->set_variable_size(input_xsocket->is_linked() || input_ysocket->is_linked());
-      operation->set_scale_canvas_max_size(context.get_render_size() * 3.0f);
 
       break;
     }
@@ -92,7 +88,6 @@ void ScaleNode::convert_to_operations(NodeConverter &converter,
       converter.map_output_socket(output_socket, operation->get_output_socket(0));
 
       operation->set_variable_size(input_xsocket->is_linked() || input_ysocket->is_linked());
-      operation->set_scale_canvas_max_size(context.get_render_size() * 1.5f);
 
       break;
     }

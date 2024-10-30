@@ -70,7 +70,8 @@ static void group_copy_inputs(bNode *gnode, bNodeStack **in, bNodeStack *gstack)
   LISTBASE_FOREACH (bNode *, node, &ngroup->nodes) {
     if (node->type == NODE_GROUP_INPUT) {
       for (sock = static_cast<bNodeSocket *>(node->outputs.first), a = 0; sock;
-           sock = sock->next, a++) {
+           sock = sock->next, a++)
+      {
         if (in[a]) { /* shouldn't need to check this #36694. */
           ns = node_get_socket_stack(gstack, sock);
           if (ns) {
@@ -140,12 +141,13 @@ static void group_execute(void *data,
 
 void register_node_type_tex_group()
 {
-  static bNodeType ntype;
+  static blender::bke::bNodeType ntype;
 
   /* NOTE: Cannot use #sh_node_type_base for node group, because it would map the node type
    * to the shared #NODE_GROUP integer type id. */
 
-  node_type_base_custom(&ntype, "TextureNodeGroup", "Group", "GROUP", NODE_CLASS_GROUP);
+  blender::bke::node_type_base_custom(
+      &ntype, "TextureNodeGroup", "Group", "GROUP", NODE_CLASS_GROUP);
   ntype.type = NODE_GROUP;
   ntype.poll = tex_node_poll_default;
   ntype.poll_instance = node_group_poll_instance;
@@ -161,5 +163,5 @@ void register_node_type_tex_group()
   ntype.free_exec_fn = group_freeexec;
   ntype.exec_fn = group_execute;
 
-  nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }

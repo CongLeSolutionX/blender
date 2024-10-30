@@ -10,7 +10,7 @@
 
 #include "gpu_context_private.hh"
 
-#include "GPU_framebuffer.h"
+#include "GPU_framebuffer.hh"
 
 #include "BLI_set.hh"
 #include "BLI_vector.hh"
@@ -47,14 +47,10 @@ class GLContext : public Context {
 
   /** Extensions. */
 
-  static bool base_instance_support;
   static bool clear_texture_support;
-  static bool copy_image_support;
   static bool debug_layer_support;
   static bool direct_state_access_support;
   static bool explicit_location_support;
-  static bool geometry_shader_invocations;
-  static bool fixed_restart_index_support;
   static bool framebuffer_fetch_support;
   static bool layered_rendering_support;
   static bool native_barycentric_support;
@@ -64,11 +60,7 @@ class GLContext : public Context {
   static bool shader_draw_parameters_support;
   static bool stencil_texturing_support;
   static bool texture_barrier_support;
-  static bool texture_cube_map_array_support;
   static bool texture_filter_anisotropic_support;
-  static bool texture_gather_support;
-  static bool texture_storage_support;
-  static bool vertex_attrib_binding_support;
 
   /** Workarounds. */
 
@@ -77,15 +69,16 @@ class GLContext : public Context {
   static bool generate_mipmap_workaround;
   static float derivative_signs[2];
 
-  /** VBO for missing vertex attrib binding. Avoid undefined behavior on some implementation. */
+  /** VBO for missing vertex attribute binding. Avoid undefined behavior on some implementation. */
   GLuint default_attr_vbo_;
 
   /** Used for debugging purpose. Bitflags of all bound slots. */
   uint16_t bound_ubo_slots;
+  uint16_t bound_ssbo_slots;
 
  private:
   /**
-   * #GPUBatch & #GPUFramebuffer have references to the context they are from, in the case the
+   * #Batch & #GPUFramebuffer have references to the context they are from, in the case the
    * context is destroyed, we need to remove any reference to it.
    */
   Set<GLVaoCache *> vao_caches_;
@@ -112,7 +105,7 @@ class GLContext : public Context {
   void flush() override;
   void finish() override;
 
-  void memory_statistics_get(int *total_mem, int *free_mem) override;
+  void memory_statistics_get(int *r_total_mem, int *r_free_mem) override;
 
   static GLContext *get()
   {
@@ -137,11 +130,14 @@ class GLContext : public Context {
 
   void debug_group_begin(const char *name, int index) override;
   void debug_group_end() override;
-  bool debug_capture_begin() override;
+  bool debug_capture_begin(const char *title) override;
   void debug_capture_end() override;
   void *debug_capture_scope_create(const char *name) override;
   bool debug_capture_scope_begin(void *scope) override;
   void debug_capture_scope_end(void *scope) override;
+
+  void debug_unbind_all_ubo() override;
+  void debug_unbind_all_ssbo() override;
 
  private:
   static void orphans_add(Vector<GLuint> &orphan_list, std::mutex &list_mutex, GLuint id);

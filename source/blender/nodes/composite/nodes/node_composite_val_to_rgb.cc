@@ -8,17 +8,15 @@
 
 #include "BLI_assert.h"
 
-#include "IMB_colormanagement.h"
+#include "IMB_colormanagement.hh"
 
-#include "BKE_colorband.h"
+#include "BKE_colorband.hh"
 
-#include "GPU_material.h"
+#include "GPU_material.hh"
 
 #include "COM_shader_node.hh"
 
 #include "node_composite_util.hh"
-
-#include "BKE_colorband.h"
 
 /* **************** VALTORGB ******************** */
 
@@ -134,16 +132,17 @@ void register_node_type_cmp_valtorgb()
 {
   namespace file_ns = blender::nodes::node_composite_color_ramp_cc;
 
-  static bNodeType ntype;
+  static blender::bke::bNodeType ntype;
 
   cmp_node_type_base(&ntype, CMP_NODE_VALTORGB, "Color Ramp", NODE_CLASS_CONVERTER);
   ntype.declare = file_ns::cmp_node_valtorgb_declare;
   blender::bke::node_type_size(&ntype, 240, 200, 320);
   ntype.initfunc = file_ns::node_composit_init_valtorgb;
-  node_type_storage(&ntype, "ColorBand", node_free_standard_storage, node_copy_standard_storage);
+  blender::bke::node_type_storage(
+      &ntype, "ColorBand", node_free_standard_storage, node_copy_standard_storage);
   ntype.get_compositor_shader_node = file_ns::get_compositor_shader_node;
 
-  nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }
 
 /* **************** RGBTOBW ******************** */
@@ -192,12 +191,12 @@ void register_node_type_cmp_rgbtobw()
 {
   namespace file_ns = blender::nodes::node_composite_rgb_to_bw_cc;
 
-  static bNodeType ntype;
+  static blender::bke::bNodeType ntype;
 
   cmp_node_type_base(&ntype, CMP_NODE_RGBTOBW, "RGB to BW", NODE_CLASS_CONVERTER);
   ntype.declare = file_ns::cmp_node_rgbtobw_declare;
-  blender::bke::node_type_size_preset(&ntype, blender::bke::eNodeSizePreset::DEFAULT);
+  blender::bke::node_type_size_preset(&ntype, blender::bke::eNodeSizePreset::Default);
   ntype.get_compositor_shader_node = file_ns::get_compositor_shader_node;
 
-  nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }

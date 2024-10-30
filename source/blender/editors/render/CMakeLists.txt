@@ -8,7 +8,6 @@ set(INC
   ../../blenloader
   ../../blentranslation
   ../../bmesh
-  ../../depsgraph
   ../../draw
   ../../gpu
   ../../imbuf
@@ -17,7 +16,7 @@ set(INC
   ../../render
   ../../sequencer
   ../../windowmanager
-  # RNA_prototypes.h
+  # RNA_prototypes.hh
   ${CMAKE_BINARY_DIR}/source/blender/makesrna
 )
 
@@ -38,9 +37,11 @@ set(SRC
 
 set(LIB
   PRIVATE bf::blenlib
+  PRIVATE bf::depsgraph
   PRIVATE bf::dna
   bf_draw
   PRIVATE bf::intern::guardedalloc
+  PRIVATE bf::animrig
 )
 
 if(WITH_HEADLESS)
@@ -60,18 +61,14 @@ if(WITH_FREESTYLE)
 endif()
 
 if(WITH_TBB)
-  list(APPEND INC_SYS
-    ${TBB_INCLUDE_DIRS}
-  )
-  add_definitions(-DWITH_TBB)
   if(WIN32)
     # TBB includes Windows.h which will define min/max macros
-    # that will collide with the stl versions.
+    # that will collide with the STL versions.
     add_definitions(-DNOMINMAX)
   endif()
 endif()
 
 blender_add_lib(bf_editor_render "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 
-# RNA_prototypes.h
+# RNA_prototypes.hh
 add_dependencies(bf_editor_render bf_rna)

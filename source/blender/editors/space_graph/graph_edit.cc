@@ -21,7 +21,6 @@
 
 #include "BLI_blenlib.h"
 #include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
 #include "BLI_utildefines.h"
 
 #include "DNA_anim_types.h"
@@ -30,21 +29,21 @@
 #include "RNA_access.hh"
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
-#include "RNA_prototypes.h"
+#include "RNA_prototypes.hh"
 
-#include "BLT_translation.h"
+#include "BLT_translation.hh"
 
 #include "BKE_animsys.h"
 #include "BKE_context.hh"
-#include "BKE_fcurve.h"
-#include "BKE_global.h"
-#include "BKE_nla.h"
-#include "BKE_report.h"
-#include "BKE_scene.h"
+#include "BKE_fcurve.hh"
+#include "BKE_global.hh"
+#include "BKE_nla.hh"
+#include "BKE_report.hh"
+#include "BKE_scene.hh"
 
 #include "DEG_depsgraph_build.hh"
 
-#include "UI_interface.hh"
+#include "UI_interface_icons.hh"
 #include "UI_view2d.hh"
 
 #include "ANIM_animdata.hh"
@@ -60,7 +59,7 @@
 #include "WM_api.hh"
 #include "WM_types.hh"
 
-#include "graph_intern.h"
+#include "graph_intern.hh"
 
 /* -------------------------------------------------------------------- */
 /** \name Insert Keyframes Operator
@@ -107,6 +106,7 @@ static const EnumPropertyItem prop_graphkeys_insertkey_types[] = {
 /* This function is responsible for snapping keyframes to frame-times. */
 static void insert_graph_keys(bAnimContext *ac, eGraphKeys_InsertKey_Types mode)
 {
+  using namespace blender::animrig;
   ListBase anim_data = {nullptr, nullptr};
   int filter;
   size_t num_items;
@@ -115,7 +115,6 @@ static void insert_graph_keys(bAnimContext *ac, eGraphKeys_InsertKey_Types mode)
   SpaceGraph *sipo = (SpaceGraph *)ac->sl;
   Scene *scene = ac->scene;
   ToolSettings *ts = scene->toolsettings;
-  eInsertKeyFlags flag = eInsertKeyFlags(0);
 
   /* Filter data. */
   filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_CURVE_VISIBLE | ANIMFILTER_FCURVESONLY |
@@ -146,7 +145,9 @@ static void insert_graph_keys(bAnimContext *ac, eGraphKeys_InsertKey_Types mode)
   }
 
   /* Init key-framing flag. */
-  flag = ANIM_get_keyframing_flags(scene, true);
+  eInsertKeyFlags flag = blender::animrig::get_keyframing_flags(scene);
+  KeyframeSettings settings = get_keyframe_settings(true);
+  settings.keyframe_type = eBezTriple_KeyframeType(ts->keyframe_type);
 
   /* Insert keyframes. */
   if (mode & GRAPHKEYS_INSERTKEY_CURSOR) {
@@ -181,8 +182,7 @@ static void insert_graph_keys(bAnimContext *ac, eGraphKeys_InsertKey_Types mode)
       }
 
       /* Insert keyframe directly into the F-Curve. */
-      blender::animrig::insert_vert_fcurve(
-          fcu, x, y, eBezTriple_KeyframeType(ts->keyframe_type), eInsertKeyFlags(0));
+      insert_vert_fcurve(fcu, {x, y}, settings, eInsertKeyFlags(0));
 
       ale->update |= ANIM_UPDATE_DEFAULT;
     }
@@ -205,17 +205,22 @@ static void insert_graph_keys(bAnimContext *ac, eGraphKeys_InsertKey_Types mode)
        *   If this is set, then it's a driver. If we don't check for this, we'd end
        *   up adding the keyframes on a new F-Curve in the action data instead.
        */
+      const std::optional<blender::StringRefNull> channel_group = fcu->grp ? std::optional(
+                                                                                 fcu->grp->name) :
+                                                                             std::nullopt;
       if (ale->id && !ale->owner && !fcu->driver) {
-        blender::animrig::insert_keyframe(ac->bmain,
-                                          reports,
-                                          ale->id,
-                                          nullptr,
-                                          ((fcu->grp) ? (fcu->grp->name) : (nullptr)),
-                                          fcu->rna_path,
-                                          fcu->array_index,
-                                          &anim_eval_context,
-                                          eBezTriple_KeyframeType(ts->keyframe_type),
-                                          flag);
+        PointerRNA id_rna_pointer = RNA_id_pointer_create(ale->id);
+        CombinedKeyingResult result = insert_keyframes(ac->bmain,
+                                                       &id_rna_pointer,
+                                                       channel_group,
+                                                       {{fcu->rna_path, {}, fcu->array_index}},
+                                                       std::nullopt,
+                                                       anim_eval_context,
+                                                       eBezTriple_KeyframeType(ts->keyframe_type),
+                                                       flag);
+        if (result.get_count(SingleKeyingResult::SUCCESS) == 0) {
+          result.generate_reports(reports);
+        }
       }
       else {
         AnimData *adt = ANIM_nla_mapping_get(ac, ale);
@@ -230,8 +235,7 @@ static void insert_graph_keys(bAnimContext *ac, eGraphKeys_InsertKey_Types mode)
         }
 
         const float curval = evaluate_fcurve_only_curve(fcu, cfra);
-        blender::animrig::insert_vert_fcurve(
-            fcu, cfra, curval, eBezTriple_KeyframeType(ts->keyframe_type), eInsertKeyFlags(0));
+        insert_vert_fcurve(fcu, {cfra, curval}, settings, eInsertKeyFlags(0));
       }
 
       ale->update |= ANIM_UPDATE_DEFAULT;
@@ -253,6 +257,8 @@ static int graphkeys_insertkey_exec(bContext *C, wmOperator *op)
   if (ANIM_animdata_get_context(C, &ac) == 0) {
     return OPERATOR_CANCELLED;
   }
+
+  ANIM_deselect_keys_in_animation_editors(C);
 
   /* Which channels to affect? */
   mode = eGraphKeys_InsertKey_Types(RNA_enum_get(op->ptr, "type"));
@@ -293,6 +299,7 @@ void GRAPH_OT_keyframe_insert(wmOperatorType *ot)
 
 static int graphkeys_click_insert_exec(bContext *C, wmOperator *op)
 {
+  using namespace blender::animrig;
   bAnimContext ac;
   bAnimListElem *ale;
   AnimData *adt;
@@ -346,9 +353,11 @@ static int graphkeys_click_insert_exec(bContext *C, wmOperator *op)
 
     val = val * scale - offset;
 
+    KeyframeSettings settings = get_keyframe_settings(true);
+    settings.keyframe_type = eBezTriple_KeyframeType(ts->keyframe_type);
+
     /* Insert keyframe on the specified frame + value. */
-    blender::animrig::insert_vert_fcurve(
-        fcu, frame, val, eBezTriple_KeyframeType(ts->keyframe_type), eInsertKeyFlags(0));
+    insert_vert_fcurve(fcu, {frame, val}, settings, eInsertKeyFlags(0));
 
     ale->update |= ANIM_UPDATE_DEPS;
 
@@ -602,9 +611,9 @@ static int graphkeys_paste_exec(bContext *C, wmOperator *op)
   return OPERATOR_FINISHED;
 }
 
-static std::string graphkeys_paste_description(bContext * /*C*/,
-                                               wmOperatorType * /*ot*/,
-                                               PointerRNA *ptr)
+static std::string graphkeys_paste_get_description(bContext * /*C*/,
+                                                   wmOperatorType * /*ot*/,
+                                                   PointerRNA *ptr)
 {
   /* Custom description if the 'flipped' option is used. */
   if (RNA_boolean_get(ptr, "flipped")) {
@@ -630,7 +639,7 @@ void GRAPH_OT_paste(wmOperatorType *ot)
   /* API callbacks */
 
   // ot->invoke = WM_operator_props_popup; /* better wait for graph redo panel */
-  ot->get_description = graphkeys_paste_description;
+  ot->get_description = graphkeys_paste_get_description;
   ot->exec = graphkeys_paste_exec;
   ot->poll = graphop_editable_keyframes_poll;
 
@@ -799,6 +808,20 @@ static int graphkeys_delete_exec(bContext *C, wmOperator * /*op*/)
   return OPERATOR_FINISHED;
 }
 
+static int graphkeys_delete_invoke(bContext *C, wmOperator *op, const wmEvent * /*event*/)
+{
+  if (RNA_boolean_get(op->ptr, "confirm")) {
+    return WM_operator_confirm_ex(C,
+                                  op,
+                                  IFACE_("Delete selected keyframes?"),
+                                  nullptr,
+                                  IFACE_("Delete"),
+                                  ALERT_ICON_NONE,
+                                  false);
+  }
+  return graphkeys_delete_exec(C, op);
+}
+
 void GRAPH_OT_delete(wmOperatorType *ot)
 {
   /* Identifiers */
@@ -807,7 +830,7 @@ void GRAPH_OT_delete(wmOperatorType *ot)
   ot->description = "Remove all selected keyframes";
 
   /* API callbacks */
-  ot->invoke = WM_operator_confirm_or_exec;
+  ot->invoke = graphkeys_delete_invoke;
   ot->exec = graphkeys_delete_exec;
   ot->poll = graphop_editable_keyframes_poll;
 
@@ -974,13 +997,11 @@ void GRAPH_OT_keys_to_samples(wmOperatorType *ot)
       "Convert selected channels to an uneditable set of samples to save storage space";
 
   /* API callbacks */
-  ot->invoke = WM_operator_confirm_or_exec;
   ot->exec = graphkeys_keys_to_samples_exec;
   ot->poll = graphop_selected_fcurve_poll;
 
   /* Flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
-  WM_operator_properties_confirm_or_exec(ot);
 
   /* TODO: add props for start/end frames (Joshua Leung 2009) */
 }
@@ -1322,7 +1343,7 @@ static void bake_graph_keys(bAnimContext *ac)
 
   /* Loop through filtered data and add keys between selected keyframes on every frame. */
   LISTBASE_FOREACH (bAnimListElem *, ale, &anim_data) {
-    bake_fcurve_segments((FCurve *)ale->key_data);
+    blender::animrig::bake_fcurve_segments((FCurve *)ale->key_data);
 
     ale->update |= ANIM_UPDATE_DEPS;
   }
@@ -1798,7 +1819,7 @@ static ListBase /*tEulerFilter*/ euler_filter_group_channels(
       BKE_reportf(reports,
                   RPT_WARNING,
                   "Euler Rotation F-Curve has invalid index (ID='%s', Path='%s', Index=%d)",
-                  (ale->id) ? ale->id->name : TIP_("<No ID>"),
+                  (ale->id) ? ale->id->name : RPT_("<No ID>"),
                   fcu->rna_path,
                   fcu->array_index);
       continue;
@@ -1808,7 +1829,7 @@ static ListBase /*tEulerFilter*/ euler_filter_group_channels(
      * saves another loop over the animation data. */
     ale->update |= ANIM_UPDATE_DEFAULT;
 
-    /* Optimization: assume that xyz curves will always be stored consecutively,
+    /* Optimization: assume that XYZ curves will always be stored consecutively,
      * so if the paths or the ID's don't match up, then a curve needs to be added
      * to a new group.
      */
@@ -2141,9 +2162,13 @@ static KeyframeEditData sum_selected_keyframes(bAnimContext *ac)
           &current_ked, static_cast<FCurve *>(ale->key_data), nullptr, bezt_calc_average, nullptr);
     }
 
+    if (current_ked.i1 == 0) {
+      continue;
+    }
+
     ked.f1 += current_ked.f1;
     ked.i1 += current_ked.i1;
-    ked.f2 += (current_ked.f2 + offset) * unit_scale;
+    ked.f2 += (current_ked.f2 + offset * current_ked.i1) * unit_scale;
     ked.i2 += current_ked.i2;
   }
 
@@ -2269,18 +2294,25 @@ static int keyframe_jump_exec(bContext *C, wmOperator *op)
       continue;
     }
     AnimData *adt = ANIM_nla_mapping_get(&ac, ale);
-    ANIM_nla_mapping_apply_fcurve(adt, fcu, false, true);
+
     float closest_fcu_frame;
-    if (!find_closest_frame(fcu, current_frame, next, &closest_fcu_frame)) {
+    ANIM_nla_mapping_apply_fcurve(adt, fcu, false, true);
+    const bool success = find_closest_frame(fcu, current_frame, next, &closest_fcu_frame);
+    ANIM_nla_mapping_apply_fcurve(adt, fcu, true, true);
+
+    if (!success) {
       continue;
     }
+
     if ((next && closest_fcu_frame < closest_frame) ||
-        (!next && closest_fcu_frame > closest_frame)) {
+        (!next && closest_fcu_frame > closest_frame))
+    {
       closest_frame = closest_fcu_frame;
       found = true;
     }
-    ANIM_nla_mapping_apply_fcurve(adt, fcu, true, true);
   }
+
+  ANIM_animdata_freelist(&anim_data);
 
   if (!found) {
     BKE_report(op->reports, RPT_INFO, "No more keyframes to jump to in this direction");
@@ -2288,8 +2320,6 @@ static int keyframe_jump_exec(bContext *C, wmOperator *op)
   }
 
   BKE_scene_frame_set(scene, closest_frame);
-
-  ANIM_animdata_freelist(&anim_data);
 
   /* Set notifier that things have changed. */
   WM_event_add_notifier(C, NC_SCENE | ND_FRAME, ac.scene);
@@ -2641,14 +2671,14 @@ void GRAPH_OT_equalize_handles(wmOperatorType *ot)
                           prop_graphkeys_equalize_handles_sides,
                           0,
                           "Side",
-                          "Side of the keyframes' bezier handles to affect");
+                          "Side of the keyframes' Bézier handles to affect");
   RNA_def_float(ot->srna,
                 "handle_length",
                 5.0f,
                 0.1f,
                 FLT_MAX,
                 "Handle Length",
-                "Length to make selected keyframes' bezier handles",
+                "Length to make selected keyframes' Bézier handles",
                 1.0f,
                 50.0f);
   RNA_def_boolean(
@@ -3275,7 +3305,7 @@ void GRAPH_OT_driver_variables_paste(wmOperatorType *ot)
 /** \name Delete Invalid Drivers Operator
  * \{ */
 
-static int graph_driver_delete_invalid_exec(bContext *C, wmOperator *op)
+static int graph_driver_delete_invalid_exec(bContext *C, wmOperator * /*op*/)
 {
   bAnimContext ac;
   ListBase anim_data = {nullptr, nullptr};
@@ -3306,7 +3336,7 @@ static int graph_driver_delete_invalid_exec(bContext *C, wmOperator *op)
       continue;
     }
 
-    ok |= ANIM_remove_driver(op->reports, ale->id, fcu->rna_path, fcu->array_index, 0);
+    ok |= ANIM_remove_driver(ale->id, fcu->rna_path, fcu->array_index);
     if (!ok) {
       break;
     }

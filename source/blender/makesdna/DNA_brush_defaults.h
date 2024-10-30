@@ -10,7 +10,6 @@
 
 #include "DNA_texture_defaults.h"
 
-/* Struct members on own line. */
 /* clang-format off */
 
 /* -------------------------------------------------------------------- */
@@ -25,9 +24,10 @@
  \
     .ob_mode = OB_MODE_ALL_PAINT, \
  \
-    /* BRUSH SCULPT TOOL SETTINGS */ \
+    /* BRUSH SCULPT BRUSH SETTINGS */ \
     .weight = 1.0f, /* weight of brush 0 - 1.0 */ \
     .size = 35,     /* radius of the brush in pixels */ \
+    .unprojected_radius = 0.05f, /* radius of the brush in Blender units */ \
     .alpha = 1.0f,  /* brush strength/intensity probably variable should be renamed? */ \
     .autosmooth_factor = 0.0f, \
     .topology_rake_factor = 0.0f, \
@@ -48,7 +48,7 @@
     .normal_weight = 0.0f, \
     .fill_threshold = 0.2f, \
  \
-    /* BRUSH PAINT TOOL SETTINGS */ \
+    /* BRUSH PAINT BRUSH SETTINGS */ \
     /* Default rgb color of the brush when painting - white. */ \
     .rgb = {1.0f, 1.0f, 1.0f}, \
  \
@@ -66,6 +66,7 @@
  \
     .jitter = 0.0f, \
  \
+    .input_samples = 1, \
     /* Dash */ \
     .dash_ratio = 1.0f, \
     .dash_samples = 20, \
@@ -87,12 +88,17 @@
     .stencil_pos = {256, 256}, \
     .stencil_dimension = {256, 256}, \
  \
-    /* sculpting defaults to the draw tool for new brushes */ \
-    .sculpt_tool = SCULPT_TOOL_DRAW, \
+    /* sculpting defaults to the draw brush for new brushes */ \
+    .sculpt_brush_type = SCULPT_BRUSH_TYPE_DRAW, \
     .pose_smooth_iterations = 4, \
     .pose_ik_segments = 1, \
     .hardness = 0.0f, \
+ \
     .automasking_boundary_edges_propagation_steps = 1, \
+    .automasking_start_normal_limit = 0.34906585f, /* 20 degrees */ \
+    .automasking_start_normal_falloff = 0.25f, \
+    .automasking_view_normal_limit = 1.570796, /* 90 degrees */ \
+    .automasking_view_normal_falloff = 0.25f, \
     .automasking_cavity_blur_steps = 0,\
     .automasking_cavity_factor = 1.0f,\
  \

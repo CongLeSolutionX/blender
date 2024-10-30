@@ -11,20 +11,16 @@
 
 #include <Python.h>
 
-#include "BLI_dynstr.h"
 #include "BLI_listbase.h"
 #include "BLI_utildefines.h"
 
-#include "bpy_capi_utils.h"
+#include "bpy_capi_utils.hh"
 
 #include "MEM_guardedalloc.h"
 
-#include "BKE_context.hh"
-#include "BKE_report.h"
+#include "BKE_report.hh"
 
-#include "BLT_translation.h"
-
-#include "../generic/py_capi_utils.h"
+#include "../generic/py_capi_utils.hh"
 
 short BPy_reports_to_error(ReportList *reports, PyObject *exception, const bool clear)
 {
@@ -46,17 +42,31 @@ short BPy_reports_to_error(ReportList *reports, PyObject *exception, const bool 
 
 void BPy_reports_write_stdout(const ReportList *reports, const char *header)
 {
+  const Report *report;
+  for (report = static_cast<const Report *>(reports->list.first); report; report = report->next) {
+    if (report->type < reports->printlevel) {
+      continue;
+    }
+    break;
+  }
+  if (report == nullptr) {
+    return;
+  }
+
   if (header) {
     PySys_WriteStdout("%s\n", header);
   }
 
-  LISTBASE_FOREACH (const Report *, report, &reports->list) {
+  for (; report; report = report->next) {
+    if (report->type < reports->printlevel) {
+      continue;
+    }
     PySys_WriteStdout("%s: %s\n", report->typestr, report->message);
   }
 }
 
 bool BPy_errors_to_report_ex(ReportList *reports,
-                             const char *err_prefix,
+                             const char *error_prefix,
                              const bool use_full,
                              const bool use_location)
 {
@@ -74,9 +84,9 @@ bool BPy_errors_to_report_ex(ReportList *reports,
     err_str_len -= 1;
   }
 
-  if (err_prefix == nullptr) {
+  if (error_prefix == nullptr) {
     /* Not very helpful, better than nothing. */
-    err_prefix = "Python";
+    error_prefix = "Python";
   }
 
   const char *location_filepath = nullptr;
@@ -87,20 +97,36 @@ bool BPy_errors_to_report_ex(ReportList *reports,
     PyC_FileAndNum(&location_filepath, &location_line_number);
   }
 
+  /* Create a temporary report list so none of the reports are printed (only stored).
+   * In practically all cases printing should be handled by #PyErr_Print since this invokes
+   * `sys.excepthook` as expected. */
+  ReportList _reports_buf = {{nullptr}};
+  ReportList *reports_orig = reports;
+  if ((reports->flag & RPT_PRINT_HANDLED_BY_OWNER) == 0) {
+    reports = &_reports_buf;
+    BKE_reports_init(reports, reports_orig->flag | RPT_PRINT_HANDLED_BY_OWNER);
+    reports->storelevel = reports_orig->storelevel;
+  }
+
   if (location_filepath) {
     BKE_reportf(reports,
                 RPT_ERROR,
                 "%s: %.*s\n"
                 /* Location (when available). */
                 "Location: %s:%d",
-                err_prefix,
+                error_prefix,
                 int(err_str_len),
                 err_str,
                 location_filepath,
                 location_line_number);
   }
   else {
-    BKE_reportf(reports, RPT_ERROR, "%s: %.*s", err_prefix, int(err_str_len), err_str);
+    BKE_reportf(reports, RPT_ERROR, "%s: %.*s", error_prefix, int(err_str_len), err_str);
+  }
+
+  if (reports != reports_orig) {
+    BKE_reports_move_to_reports(reports_orig, reports);
+    BKE_reports_free(reports);
   }
 
   /* Ensure this is _always_ printed to the output so developers don't miss exceptions. */

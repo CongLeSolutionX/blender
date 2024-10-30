@@ -2,16 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "DNA_collection_types.h"
-
 #include "BLI_array_utils.hh"
-#include "BLI_hash.h"
 #include "BLI_math_matrix.h"
 #include "BLI_math_matrix.hh"
 #include "BLI_task.hh"
-
-#include "UI_interface.hh"
-#include "UI_resources.hh"
 
 #include "BKE_attribute_math.hh"
 #include "BKE_curves.hh"
@@ -53,9 +47,9 @@ static void add_instances_from_component(
     const GeometrySet &instance,
     const fn::FieldContext &field_context,
     const GeoNodeExecParams &params,
-    const Map<AttributeIDRef, AttributeKind> &attributes_to_propagate)
+    const Map<StringRef, AttributeKind> &attributes_to_propagate)
 {
-  const eAttrDomain domain = ATTR_DOMAIN_POINT;
+  const AttrDomain domain = AttrDomain::Point;
   const int domain_num = src_attributes.domain_size(domain);
 
   VArray<bool> pick_instance;
@@ -85,8 +79,10 @@ static void add_instances_from_component(
   const int select_len = selection.index_range().size();
   dst_component.resize(start_len + select_len);
 
-  MutableSpan<int> dst_handles = dst_component.reference_handles().slice(start_len, select_len);
-  MutableSpan<float4x4> dst_transforms = dst_component.transforms().slice(start_len, select_len);
+  MutableSpan<int> dst_handles = dst_component.reference_handles_for_write().slice(start_len,
+                                                                                   select_len);
+  MutableSpan<float4x4> dst_transforms = dst_component.transforms_for_write().slice(start_len,
+                                                                                    select_len);
 
   const VArraySpan positions = *src_attributes.lookup<float3>("position");
 
@@ -157,9 +153,9 @@ static void add_instances_from_component(
 
   bke::MutableAttributeAccessor dst_attributes = dst_component.attributes_for_write();
   for (const auto item : attributes_to_propagate.items()) {
-    const AttributeIDRef &id = item.key;
+    const StringRef id = item.key;
     const eCustomDataType data_type = item.value.data_type;
-    const bke::GAttributeReader src = src_attributes.lookup(id, ATTR_DOMAIN_POINT, data_type);
+    const bke::GAttributeReader src = src_attributes.lookup(id, AttrDomain::Point, data_type);
     if (!src) {
       /* Domain interpolation can fail if the source domain is empty. */
       continue;
@@ -167,13 +163,14 @@ static void add_instances_from_component(
 
     if (!dst_attributes.contains(id)) {
       if (src.varray.size() == dst_component.instances_num() && src.sharing_info &&
-          src.varray.is_span()) {
+          src.varray.is_span())
+      {
         const bke::AttributeInitShared init(src.varray.get_internal_span().data(),
                                             *src.sharing_info);
-        dst_attributes.add(id, ATTR_DOMAIN_INSTANCE, data_type, init);
+        dst_attributes.add(id, AttrDomain::Instance, data_type, init);
         continue;
       }
-      dst_attributes.add(id, ATTR_DOMAIN_INSTANCE, data_type, bke::AttributeInitConstruct());
+      dst_attributes.add(id, AttrDomain::Instance, data_type, bke::AttributeInitConstruct());
     }
 
     GSpanAttributeWriter dst = dst_attributes.lookup_for_write_span(id);
@@ -187,8 +184,7 @@ static void node_geo_exec(GeoNodeExecParams params)
   GeometrySet geometry_set = params.extract_input<GeometrySet>("Points");
   GeometrySet instance = params.get_input<GeometrySet>("Instance");
   instance.ensure_owns_direct_data();
-  const AnonymousAttributePropagationInfo &propagation_info = params.get_output_propagation_info(
-      "Instances");
+  const NodeAttributeFilter &attribute_filter = params.get_attribute_filter("Instances");
 
   geometry_set.modify_geometry_sets([&](GeometrySet &geometry_set) {
     /* It's important not to invalidate the existing #InstancesComponent because it owns references
@@ -205,18 +201,19 @@ static void node_geo_exec(GeoNodeExecParams params)
                                                GeometryComponent::Type::PointCloud,
                                                GeometryComponent::Type::Curve};
 
-    Map<AttributeIDRef, AttributeKind> attributes_to_propagate;
+    Map<StringRef, AttributeKind> attributes_to_propagate;
     geometry_set.gather_attributes_for_propagation(types,
                                                    GeometryComponent::Type::Instance,
                                                    false,
-                                                   propagation_info,
+                                                   attribute_filter,
                                                    attributes_to_propagate);
     attributes_to_propagate.remove("position");
+    attributes_to_propagate.remove(".reference_index");
 
     for (const GeometryComponent::Type type : types) {
       if (geometry_set.has(type)) {
         const GeometryComponent &component = *geometry_set.get_component(type);
-        const bke::GeometryFieldContext field_context{component, ATTR_DOMAIN_POINT};
+        const bke::GeometryFieldContext field_context{component, AttrDomain::Point};
         add_instances_from_component(*dst_instances,
                                      *component.attributes(),
                                      instance,
@@ -229,7 +226,7 @@ static void node_geo_exec(GeoNodeExecParams params)
       using namespace bke::greasepencil;
       const GreasePencil &grease_pencil = *geometry_set.get_grease_pencil();
       for (const int layer_index : grease_pencil.layers().index_range()) {
-        const Drawing *drawing = get_eval_grease_pencil_layer_drawing(grease_pencil, layer_index);
+        const Drawing *drawing = grease_pencil.get_eval_drawing(grease_pencil.layer(layer_index));
         if (drawing == nullptr) {
           continue;
         }
@@ -245,7 +242,7 @@ static void node_geo_exec(GeoNodeExecParams params)
         /* TODO: Attributes are not propagating from the curves or the points. */
         bke::Instances *instances = new bke::Instances();
         const bke::GreasePencilLayerFieldContext field_context(
-            grease_pencil, ATTR_DOMAIN_POINT, layer_index);
+            grease_pencil, AttrDomain::Point, layer_index);
         add_instances_from_component(*instances,
                                      src_curves.attributes(),
                                      instance,
@@ -256,10 +253,12 @@ static void node_geo_exec(GeoNodeExecParams params)
         const int handle = dst_instances->add_reference(bke::InstanceReference{temp_set});
         dst_instances->add_instance(handle, float4x4::identity());
       }
-      GeometrySet::propagate_attributes_from_layer_to_instances(
-          geometry_set.get_grease_pencil()->attributes(),
-          geometry_set.get_instances_for_write()->attributes_for_write(),
-          propagation_info);
+      if (geometry_set.has_instances()) {
+        GeometrySet::propagate_attributes_from_layer_to_instances(
+            geometry_set.get_grease_pencil()->attributes(),
+            geometry_set.get_instances_for_write()->attributes_for_write(),
+            attribute_filter);
+      }
       geometry_set.replace_grease_pencil(nullptr);
     }
     geometry_set.remove_geometry_during_modify();
@@ -278,13 +277,13 @@ static void node_geo_exec(GeoNodeExecParams params)
 
 static void node_register()
 {
-  static bNodeType ntype;
+  static blender::bke::bNodeType ntype;
 
   geo_node_type_base(
       &ntype, GEO_NODE_INSTANCE_ON_POINTS, "Instance on Points", NODE_CLASS_GEOMETRY);
   ntype.declare = node_declare;
   ntype.geometry_node_execute = node_geo_exec;
-  nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }
 NOD_REGISTER_NODE(node_register)
 

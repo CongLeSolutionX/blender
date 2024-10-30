@@ -10,19 +10,18 @@
 
 #include "BKE_armature.hh"
 #include "BKE_bvhutils.hh"
-#include "BKE_mesh.hh"
 #include "DNA_armature_types.h"
 
 #include "ED_transform_snap_object_context.hh"
 
-#include "ANIM_bone_collections.h"
+#include "ANIM_bone_collections.hh"
 
 #include "transform_snap_object.hh"
 
 using blender::float4x4;
 
 eSnapMode snapArmature(SnapObjectContext *sctx,
-                       Object *ob_eval,
+                       const Object *ob_eval,
                        const float4x4 &obmat,
                        bool is_object_active)
 {
@@ -40,8 +39,8 @@ eSnapMode snapArmature(SnapObjectContext *sctx,
   const bool is_editmode = arm->edbo != nullptr;
 
   if (is_editmode == false) {
-    const BoundBox *bb = BKE_armature_boundbox_get(ob_eval);
-    if (bb && !nearest2d.snap_boundbox(bb->vec[0], bb->vec[6])) {
+    const std::optional<blender::Bounds<blender::float3>> bounds = BKE_armature_min_max(ob_eval);
+    if (bounds && !nearest2d.snap_boundbox(bounds->min, bounds->max)) {
       return retval;
     }
   }

@@ -18,15 +18,15 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BKE_colorband.h"
+#include "BKE_colorband.hh"
 
-#include "IMB_colormanagement.h"
+#include "IMB_colormanagement.hh"
 
-#include "GPU_texture.h"
+#include "GPU_texture.hh"
 
-#include "draw_manager.h"
+#include "draw_manager_c.hh"
 
-#include "draw_common.h" /* Own include. */
+#include "draw_common_c.hh" /* Own include. */
 
 #ifdef WITH_FLUID
 #  include "manta_fluid_API.h"
@@ -179,12 +179,8 @@ static GPUTexture *create_volume_texture(const int dim[3],
   }
 
   while (true) {
-    tex = GPU_texture_create_3d("volume",
-                                UNPACK3(final_dim),
-                                1,
-                                texture_format,
-                                GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_MIP_SWIZZLE_VIEW,
-                                nullptr);
+    tex = GPU_texture_create_3d(
+        "volume", UNPACK3(final_dim), 1, texture_format, GPU_TEXTURE_USAGE_SHADER_READ, nullptr);
 
     if (tex != nullptr) {
       break;

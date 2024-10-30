@@ -9,7 +9,7 @@
 #include "BLI_string.h"
 #include "BLI_utildefines.h"
 
-#include "BLT_translation.h"
+#include "BLT_translation.hh"
 
 #include "DNA_defaults.h"
 #include "DNA_mesh_types.h"
@@ -19,29 +19,27 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BKE_context.hh"
-#include "BKE_deform.h"
+#include "BKE_deform.hh"
 #include "BKE_mesh.hh"
-#include "BKE_screen.hh"
 
 #include "UI_interface.hh"
 #include "UI_resources.hh"
 
 #include "RNA_access.hh"
-#include "RNA_prototypes.h"
+#include "RNA_prototypes.hh"
 
 #include "DEG_depsgraph_query.hh"
 
 #include "GEO_randomize.hh"
 
-#include "bmesh.h"
-#include "bmesh_tools.h"
+#include "bmesh.hh"
+#include "bmesh_tools.hh"
 
 // #define USE_TIMEIT
 
 #ifdef USE_TIMEIT
-#  include "PIL_time.h"
-#  include "PIL_time_utildefines.h"
+#  include "BLI_time.h"
+#  include "BLI_time_utildefines.h"
 #endif
 
 #include "MOD_ui_common.hh"
@@ -141,7 +139,7 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
       MOD_get_vgroup(ctx->object, mesh, dmd->defgrp_name, &dvert, &defgrp_index);
 
       if (dvert) {
-        const uint vert_tot = mesh->totvert;
+        const uint vert_tot = mesh->verts_num;
         uint i;
 
         vweights = static_cast<float *>(MEM_malloc_arrayN(vert_tot, sizeof(float), __func__));
@@ -201,7 +199,7 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
 
   updateFaceCount(ctx, dmd, bm->totface);
 
-  /* make sure we never alloc'd these */
+  /* Make sure we never allocated these. */
   BLI_assert(bm->vtoolflagpool == nullptr && bm->etoolflagpool == nullptr &&
              bm->ftoolflagpool == nullptr);
 
@@ -228,7 +226,7 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
 
   int decimate_type = RNA_enum_get(ptr, "decimate_type");
   char count_info[64];
-  SNPRINTF(count_info, TIP_("Face Count: %d"), RNA_int_get(ptr, "face_count"));
+  SNPRINTF(count_info, RPT_("Face Count: %d"), RNA_int_get(ptr, "face_count"));
 
   uiItemR(layout, ptr, "decimate_type", UI_ITEM_R_EXPAND, nullptr, ICON_NONE);
 
@@ -305,4 +303,5 @@ ModifierTypeInfo modifierType_Decimate = {
     /*panel_register*/ panel_register,
     /*blend_write*/ nullptr,
     /*blend_read*/ nullptr,
+    /*foreach_cache*/ nullptr,
 };

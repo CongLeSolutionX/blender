@@ -11,9 +11,13 @@
 #include "DNA_scene_types.h"
 #include "DNA_vec_types.h"
 
-#include "GPU_shader.h"
-#include "GPU_texture.h"
+#include "GPU_shader.hh"
+#include "GPU_texture.hh"
 
+#include "COM_domain.hh"
+#include "COM_meta_data.hh"
+#include "COM_profiler.hh"
+#include "COM_render_context.hh"
 #include "COM_result.hh"
 #include "COM_static_cache_manager.hh"
 #include "COM_texture_pool.hh"
@@ -47,8 +51,14 @@ class Context {
   /* Get the node tree used for compositing. */
   virtual const bNodeTree &get_node_tree() const = 0;
 
+  /* True if the compositor should use GPU acceleration. */
+  virtual bool use_gpu() const = 0;
+
   /* True if the compositor should write file outputs, false otherwise. */
   virtual bool use_file_output() const = 0;
+
+  /* True if the compositor should compute node previews, false otherwise. */
+  virtual bool should_compute_node_previews() const = 0;
 
   /* True if the compositor should write the composite output, otherwise, the compositor is assumed
    * to not support the composite output and just displays its viewer output. In that case, the
@@ -67,17 +77,19 @@ class Context {
    * the compositing region. In the base case, the compositing region covers the entirety of the
    * render region with a lower bound of zero and an upper bound of the render size returned by the
    * get_render_size method. In other cases, the compositing region might be a subset of the render
-   * region. */
+   * region. Callers should check the validity of the region through is_valid_compositing_region(),
+   * since the region can be zero sized. */
   virtual rcti get_compositing_region() const = 0;
 
-  /* Get the texture where the result of the compositor should be written. This should be called by
-   * the composite output node to get its target texture. */
-  virtual GPUTexture *get_output_texture() = 0;
+  /* Get the result where the result of the compositor should be written. */
+  virtual Result get_output_result() = 0;
 
-  /* Get the texture where the result of the compositor viewer should be written, given the size of
-   * the result to be viewed. This should be called by viewer output nodes to get their target
-   * texture. */
-  virtual GPUTexture *get_viewer_output_texture(int2 size) = 0;
+  /* Get the result where the result of the compositor viewer should be written, given the domain
+   * of the result to be viewed, its precision, and whether the output is a non-color data image
+   * that should be displayed without view transform. */
+  virtual Result get_viewer_output_result(Domain domain,
+                                          bool is_data,
+                                          ResultPrecision precision) = 0;
 
   /* Get the texture where the given render pass is stored. This should be called by the Render
    * Layer node to populate its outputs. */
@@ -86,7 +98,7 @@ class Context {
                                         const char *pass_name) = 0;
 
   /* Get the name of the view currently being rendered. */
-  virtual StringRef get_view_name() = 0;
+  virtual StringRef get_view_name() const = 0;
 
   /* Get the precision of the intermediate results of the compositor. */
   virtual ResultPrecision get_precision() const = 0;
@@ -104,8 +116,41 @@ class Context {
    * that is, to ready it to track the next change. */
   virtual IDRecalcFlag query_id_recalc_flag(ID *id) const = 0;
 
-  /* Get the size of the compositing region. See get_compositing_region(). */
+  /* Populates the given meta data from the render stamp information of the given render pass. */
+  virtual void populate_meta_data_for_pass(const Scene *scene,
+                                           int view_layer_id,
+                                           const char *pass_name,
+                                           MetaData &meta_data) const;
+
+  /* Get a pointer to the render context of this context. A render context stores information about
+   * the current render. It might be null if the compositor is not being evaluated as part of a
+   * render pipeline. */
+  virtual RenderContext *render_context() const;
+
+  /* Get a pointer to the profiler of this context. It might be null if the compositor context does
+   * not support profiling. */
+  virtual Profiler *profiler() const;
+
+  /* Gets called after the evaluation of each compositor operation. See overrides for possible
+   * uses. */
+  virtual void evaluate_operation_post() const;
+
+  /* Returns true if the compositor evaluation is canceled and that the evaluator should stop
+   * executing as soon as possible. */
+  virtual bool is_canceled() const;
+
+  /* Resets the context's internal structures like texture pool and cache manager. This should be
+   * called before every evaluation. */
+  void reset();
+
+  /* Get the size of the compositing region. See get_compositing_region(). The output size is
+   * sanitized such that it is at least 1 in both dimensions. However, the developer is expected to
+   * gracefully handled zero sizes regions by checking the is_valid_compositing_region method. */
   int2 get_compositing_region_size() const;
+
+  /* Returns true if the compositing region has a valid size, that is, has at least one pixel in
+   * both dimensions, returns false otherwise. */
+  bool is_valid_compositing_region() const;
 
   /* Get the normalized render percentage of the active scene. */
   float get_render_percentage() const;
@@ -122,19 +167,11 @@ class Context {
   /* Get a GPU shader with the given info name and context's precision. */
   GPUShader *get_shader(const char *info_name);
 
-  /* Create a result of the given type and precision using the context's texture pool. */
+  /* Create a result of the given type and precision. */
   Result create_result(ResultType type, ResultPrecision precision);
 
-  /* Create a result of the given type using the context's texture pool and precision. */
+  /* Create a result of the given type using the context's precision. */
   Result create_result(ResultType type);
-
-  /* Create a temporary result of the given type and precision using the context's texture pool.
-   * See Result::Temporary for more information. */
-  Result create_temporary_result(ResultType type, ResultPrecision precision);
-
-  /* Create a temporary result of the given type using the context's texture pool and precision.
-   * See Result::Temporary for more information. */
-  Result create_temporary_result(ResultType type);
 
   /* Get a reference to the texture pool of this context. */
   TexturePool &texture_pool();

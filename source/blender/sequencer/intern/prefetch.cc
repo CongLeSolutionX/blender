@@ -12,26 +12,23 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "DNA_anim_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
 #include "DNA_sequence_types.h"
-#include "DNA_windowmanager_types.h"
+#include "DNA_space_types.h"
 
 #include "BLI_listbase.h"
 #include "BLI_threads.h"
 
-#include "IMB_imbuf.h"
-#include "IMB_imbuf_types.h"
+#include "IMB_imbuf.hh"
+#include "IMB_imbuf_types.hh"
 
-#include "BKE_anim_data.h"
+#include "BKE_anim_data.hh"
 #include "BKE_animsys.h"
 #include "BKE_context.hh"
-#include "BKE_global.h"
-#include "BKE_layer.h"
-#include "BKE_lib_id.h"
-#include "BKE_main.h"
-#include "BKE_scene.h"
+#include "BKE_global.hh"
+#include "BKE_layer.hh"
+#include "BKE_main.hh"
 
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_build.hh"
@@ -73,36 +70,14 @@ struct PrefetchJob {
   float cfra;
   int num_frames_prefetched;
 
-  /* control */
+  /* Control: */
+  /* Set by prefetch. */
   bool running;
   bool waiting;
   bool stop;
+  /* Set from outside. */
+  bool is_scrubbing;
 };
-
-static bool seq_prefetch_is_playing(const Main *bmain)
-{
-  for (bScreen *screen = static_cast<bScreen *>(bmain->screens.first); screen;
-       screen = static_cast<bScreen *>(screen->id.next))
-  {
-    if (screen->animtimer) {
-      return true;
-    }
-  }
-  return false;
-}
-
-static bool seq_prefetch_is_scrubbing(const Main *bmain)
-{
-
-  for (bScreen *screen = static_cast<bScreen *>(bmain->screens.first); screen;
-       screen = static_cast<bScreen *>(screen->id.next))
-  {
-    if (screen->scrubbing) {
-      return true;
-    }
-  }
-  return false;
-}
 
 static PrefetchJob *seq_prefetch_job_get(Scene *scene)
 {
@@ -121,6 +96,17 @@ bool seq_prefetch_job_is_running(Scene *scene)
   }
 
   return pfjob->running;
+}
+
+static void seq_prefetch_job_scrubbing_set(Scene *scene, bool is_scrubbing)
+{
+  PrefetchJob *pfjob = seq_prefetch_job_get(scene);
+
+  if (!pfjob) {
+    return;
+  }
+
+  pfjob->is_scrubbing = is_scrubbing;
 }
 
 static bool seq_prefetch_job_is_waiting(Scene *scene)
@@ -185,12 +171,12 @@ static AnimationEvalContext seq_prefetch_anim_eval_context(PrefetchJob *pfjob)
   return BKE_animsys_eval_context_construct(pfjob->depsgraph, seq_prefetch_cfra(pfjob));
 }
 
-void seq_prefetch_get_time_range(Scene *scene, int *start, int *end)
+void seq_prefetch_get_time_range(Scene *scene, int *r_start, int *r_end)
 {
   PrefetchJob *pfjob = seq_prefetch_job_get(scene);
 
-  *start = pfjob->cfra;
-  *end = seq_prefetch_cfra(pfjob);
+  *r_start = pfjob->cfra;
+  *r_end = seq_prefetch_cfra(pfjob);
 }
 
 static void seq_prefetch_free_depsgraph(PrefetchJob *pfjob)
@@ -401,14 +387,14 @@ static bool seq_prefetch_scene_strip_is_rendered(PrefetchJob *pfjob,
                                                  bool is_recursive_check)
 {
   float cfra = seq_prefetch_cfra(pfjob);
-  Sequence *seq_arr[MAXSEQ + 1];
-  int count = seq_get_shown_sequences(pfjob->scene_eval, channels, seqbase, cfra, 0, seq_arr);
+  blender::Vector<Sequence *> strips = seq_get_shown_sequences(
+      pfjob->scene_eval, channels, seqbase, cfra, 0);
 
   /* Iterate over rendered strips. */
-  for (int i = 0; i < count; i++) {
-    Sequence *seq = seq_arr[i];
+  for (Sequence *seq : strips) {
     if (seq->type == SEQ_TYPE_META &&
-        seq_prefetch_scene_strip_is_rendered(pfjob, channels, &seq->seqbase, scene_strips, true))
+        seq_prefetch_scene_strip_is_rendered(
+            pfjob, &seq->channels, &seq->seqbase, scene_strips, true))
     {
       return true;
     }
@@ -434,7 +420,7 @@ static blender::VectorSet<Sequence *> query_scene_strips(ListBase *seqbase)
 {
   blender::VectorSet<Sequence *> strips;
   LISTBASE_FOREACH (Sequence *, seq, seqbase) {
-    if (seq->type != SEQ_TYPE_SCENE || (seq->flag & SEQ_SCENE_STRIPS) != 0) {
+    if (seq->type == SEQ_TYPE_SCENE && (seq->flag & SEQ_SCENE_STRIPS) == 0) {
       strips.add(seq);
     }
   }
@@ -454,7 +440,7 @@ static bool seq_prefetch_must_skip_frame(PrefetchJob *pfjob, ListBase *channels,
 
 static bool seq_prefetch_need_suspend(PrefetchJob *pfjob)
 {
-  return seq_prefetch_is_cache_full(pfjob->scene) || seq_prefetch_is_scrubbing(pfjob->bmain) ||
+  return seq_prefetch_is_cache_full(pfjob->scene) || pfjob->is_scrubbing ||
          (seq_prefetch_cfra(pfjob) >= pfjob->scene->r.efra);
 }
 
@@ -576,10 +562,12 @@ void seq_prefetch_start(const SeqRenderData *context, float timeline_frame)
   bool has_strips = bool(ed->seqbasep->first);
 
   if (!context->is_prefetch_render && !context->is_proxy_render) {
-    bool playing = seq_prefetch_is_playing(context->bmain);
-    bool scrubbing = seq_prefetch_is_scrubbing(context->bmain);
+    bool playing = context->is_playing;
+    bool scrubbing = context->is_scrubbing;
     bool running = seq_prefetch_job_is_running(scene);
+    seq_prefetch_job_scrubbing_set(scene, scrubbing);
     seq_prefetch_resume(scene);
+
     /* conditions to start:
      * prefetch enabled, prefetch not running, not scrubbing, not playing,
      * cache storage enabled, has strips to render, not rendering, not doing modal transform -
@@ -587,21 +575,24 @@ void seq_prefetch_start(const SeqRenderData *context, float timeline_frame)
     if ((ed->cache_flag & SEQ_CACHE_PREFETCH_ENABLE) && !running && !scrubbing && !playing &&
         ed->cache_flag & SEQ_CACHE_ALL_TYPES && has_strips && !G.is_rendering && !G.moving)
     {
-
       seq_prefetch_start_ex(context, timeline_frame);
     }
   }
 }
 
-bool SEQ_prefetch_need_redraw(Main *bmain, Scene *scene)
+bool SEQ_prefetch_need_redraw(const bContext *C, Scene *scene)
 {
-  bool playing = seq_prefetch_is_playing(bmain);
-  bool scrubbing = seq_prefetch_is_scrubbing(bmain);
+  bScreen *screen = CTX_wm_screen(C);
+  bool playing = screen->animtimer != nullptr;
+  bool scrubbing = screen->scrubbing;
   bool running = seq_prefetch_job_is_running(scene);
   bool suspended = seq_prefetch_job_is_waiting(scene);
 
+  SpaceSeq *sseq = CTX_wm_space_seq(C);
+  bool showing_cache = sseq->cache_overlay.flag & SEQ_CACHE_SHOW;
+
   /* force redraw, when prefetching and using cache view. */
-  if (running && !playing && !suspended && scene->ed->cache_flag & SEQ_CACHE_VIEW_ENABLE) {
+  if (running && !playing && !suspended && showing_cache) {
     return true;
   }
   /* Sometimes scrubbing flag is set when not scrubbing. In that case I want to catch "event" of

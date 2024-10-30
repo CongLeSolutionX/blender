@@ -19,7 +19,12 @@
 #elif defined(__APPLE__)
 #  include "GHOST_SystemCocoa.hh"
 #else
-#  include "GHOST_SystemX11.hh"
+#  ifdef WITH_GHOST_X11
+#    include "GHOST_SystemX11.hh"
+#  else
+#    define Display void
+#    define Window void *
+#  endif
 #  ifdef WITH_GHOST_WAYLAND
 #    include "GHOST_SystemWayland.hh"
 #  else
@@ -40,9 +45,11 @@
 #endif
 
 typedef enum {
+#ifdef WITH_GHOST_X11
   GHOST_kVulkanPlatformX11 = 0,
+#endif
 #ifdef WITH_GHOST_WAYLAND
-  GHOST_kVulkanPlatformWayland,
+  GHOST_kVulkanPlatformWayland = 1,
 #endif
 } GHOST_TVulkanPlatformType;
 
@@ -73,7 +80,8 @@ class GHOST_ContextVK : public GHOST_Context {
 #endif
                   int contextMajorVersion,
                   int contextMinorVersion,
-                  int m_debug);
+                  int debug,
+                  const GHOST_GPUDevice &preferred_device);
 
   /**
    * Destructor.
@@ -84,32 +92,32 @@ class GHOST_ContextVK : public GHOST_Context {
    * Swaps front and back buffers of a window.
    * \return  A boolean success indicator.
    */
-  GHOST_TSuccess swapBuffers();
+  GHOST_TSuccess swapBuffers() override;
 
   /**
    * Activates the drawing context of this window.
    * \return  A boolean success indicator.
    */
-  GHOST_TSuccess activateDrawingContext();
+  GHOST_TSuccess activateDrawingContext() override;
 
   /**
    * Release the drawing context of the calling thread.
    * \return  A boolean success indicator.
    */
-  GHOST_TSuccess releaseDrawingContext();
+  GHOST_TSuccess releaseDrawingContext() override;
 
   /**
    * Call immediately after new to initialize.  If this fails then immediately delete the object.
    * \return Indication as to whether initialization has succeeded.
    */
-  GHOST_TSuccess initializeDrawingContext();
+  GHOST_TSuccess initializeDrawingContext() override;
 
   /**
    * Removes references to native handles from this context and then returns
    * \return GHOST_kSuccess if it is OK for the parent to release the handles and
    * GHOST_kFailure if releasing the handles will interfere with sharing
    */
-  GHOST_TSuccess releaseNativeHandles();
+  GHOST_TSuccess releaseNativeHandles() override;
 
   /**
    * Gets the Vulkan context related resource handles.
@@ -119,7 +127,8 @@ class GHOST_ContextVK : public GHOST_Context {
                                   void *r_physical_device,
                                   void *r_device,
                                   uint32_t *r_graphic_queue_family,
-                                  void *r_queue);
+                                  void *r_queue,
+                                  void **r_queue_mutex) override;
 
   GHOST_TSuccess getVulkanSwapChainFormat(GHOST_VulkanSwapChainData *r_swap_chain_data) override;
 
@@ -132,7 +141,7 @@ class GHOST_ContextVK : public GHOST_Context {
    * \param interval: The swap interval to use.
    * \return A boolean success indicator.
    */
-  GHOST_TSuccess setSwapInterval(int /* interval */)
+  GHOST_TSuccess setSwapInterval(int /*interval*/) override
   {
     return GHOST_kFailure;
   }
@@ -142,7 +151,7 @@ class GHOST_ContextVK : public GHOST_Context {
    * \param intervalOut: Variable to store the swap interval if it can be read.
    * \return Whether the swap interval can be read.
    */
-  GHOST_TSuccess getSwapInterval(int &)
+  GHOST_TSuccess getSwapInterval(int & /*intervalOut*/) override
   {
     return GHOST_kFailure;
   };
@@ -166,6 +175,7 @@ class GHOST_ContextVK : public GHOST_Context {
   const int m_context_major_version;
   const int m_context_minor_version;
   const int m_debug;
+  const GHOST_GPUDevice m_preferred_device;
 
   VkCommandPool m_command_pool;
   VkCommandBuffer m_command_buffer;
@@ -183,10 +193,17 @@ class GHOST_ContextVK : public GHOST_Context {
   VkSurfaceFormatKHR m_surface_format;
   VkFence m_fence;
 
-  /** frame modulo swapchain_len. Used as index for sync objects. */
-  int m_currentFrame = 0;
-  /** Image index in the swapchain. Used as index for render objects. */
-  uint32_t m_currentImage = 0;
+  /**
+   * Image index in the swapchain. Used as index for render objects.
+   *
+   * The swap chain images are kept in sync between multiple contexts; this allows sharing the same
+   * resource pools. When not in sync additional complexity is needed to find the correct resource
+   * pools or to add more resource pools per swapchain*swapchain images.
+   *
+   * This is solved by storing current image index as a static variable. Code wise the number of
+   * images in the swap chain should be the same (3).
+   */
+  static uint32_t s_currentImage;
 
   std::function<void(const GHOST_VulkanSwapChainData *)> swap_buffers_pre_callback_;
   std::function<void(void)> swap_buffers_post_callback_;

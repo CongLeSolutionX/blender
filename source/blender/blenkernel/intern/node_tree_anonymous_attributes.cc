@@ -24,7 +24,7 @@ using nodes::NodeDeclaration;
 
 static bool socket_is_field(const bNodeSocket &socket)
 {
-  return socket.display_shape == SOCK_DISPLAY_SHAPE_DIAMOND;
+  return socket.runtime->field_state == FieldSocketState::IsField;
 }
 
 static const aal::RelationsInNode &get_relations_in_node(const bNode &node, ResourceScope &scope)
@@ -32,7 +32,7 @@ static const aal::RelationsInNode &get_relations_in_node(const bNode &node, Reso
   if (node.is_group()) {
     if (const bNodeTree *group = reinterpret_cast<const bNodeTree *>(node.id)) {
       /* Undefined tree types have no relations. */
-      if (!ntreeIsRegistered(group)) {
+      if (!bke::node_tree_is_registered(group)) {
         return scope.construct<aal::RelationsInNode>();
       }
       /* It's possible that the inferencing failed on the group. */
@@ -61,7 +61,22 @@ static const aal::RelationsInNode &get_relations_in_node(const bNode &node, Reso
       return geometry_relations;
     }
   }
-  if (ELEM(node.type, GEO_NODE_SIMULATION_INPUT, GEO_NODE_SIMULATION_OUTPUT)) {
+  if (node.is_muted()) {
+    aal::RelationsInNode &relations = scope.construct<aal::RelationsInNode>();
+    for (const bNodeLink &link : node.internal_links()) {
+      const bNodeSocket &input = *link.fromsock;
+      const bNodeSocket &output = *link.tosock;
+      if (socket_is_field(input) || socket_is_field(output)) {
+        relations.reference_relations.append({input.index(), output.index()});
+      }
+      else if (input.type == SOCK_GEOMETRY) {
+        BLI_assert(input.type == output.type);
+        relations.propagate_relations.append({input.index(), output.index()});
+      }
+    }
+    return relations;
+  }
+  if (ELEM(node.type, GEO_NODE_SIMULATION_INPUT, GEO_NODE_SIMULATION_OUTPUT, GEO_NODE_BAKE)) {
     aal::RelationsInNode &relations = scope.construct<aal::RelationsInNode>();
     {
       /* Add eval relations. */
@@ -101,31 +116,14 @@ static const aal::RelationsInNode &get_relations_in_node(const bNode &node, Reso
   }
   if (ELEM(node.type, GEO_NODE_REPEAT_INPUT, GEO_NODE_REPEAT_OUTPUT)) {
     aal::RelationsInNode &relations = scope.construct<aal::RelationsInNode>();
-    /* TODO: Add a smaller set of relations. This requires changing the inferencing algorithm to
-     * make it aware of loops. */
+    /* TODO: Use smaller set of eval and available relations. For now this makes the pessimistic
+     * assumption that every field may belong to any geometry. In many cases it should be possible
+     * to reduce this set a bit with static analysis. */
     for (const bNodeSocket *socket : node.output_sockets()) {
       if (socket->type == SOCK_GEOMETRY) {
         for (const bNodeSocket *other_output : node.output_sockets()) {
           if (socket_is_field(*other_output)) {
             relations.available_relations.append({other_output->index(), socket->index()});
-          }
-        }
-        for (const bNodeSocket *input_socket : node.input_sockets()) {
-          if (input_socket->type == SOCK_GEOMETRY) {
-            relations.propagate_relations.append({input_socket->index(), socket->index()});
-          }
-        }
-      }
-      else if (socket_is_field(*socket)) {
-        /* Reference relations are not added for the output node, because then nodes after the
-         * repeat zone would have to know about the individual field sources within the repeat
-         * zone. This is not necessary, because the field outputs of a repeat zone already serve as
-         * field sources and anonymous attributes are extracted from them. */
-        if (node.type == GEO_NODE_REPEAT_INPUT) {
-          for (const bNodeSocket *input_socket : node.input_sockets()) {
-            if (socket_is_field(*input_socket)) {
-              relations.reference_relations.append({input_socket->index(), socket->index()});
-            }
           }
         }
       }
@@ -137,6 +135,20 @@ static const aal::RelationsInNode &get_relations_in_node(const bNode &node, Reso
             relations.eval_relations.append({other_input->index(), socket->index()});
           }
         }
+      }
+    }
+    const int input_items_start = (node.type == GEO_NODE_REPEAT_INPUT) ? 1 : 0;
+    const int output_items_start = (node.type == GEO_NODE_REPEAT_INPUT) ? 1 : 0;
+    const int items_num = node.output_sockets().size() - 1 - output_items_start;
+    for (const int i : IndexRange(items_num)) {
+      const int input_index = input_items_start + i;
+      const int output_index = output_items_start + i;
+      const bNodeSocket &input_socket = node.input_socket(input_index);
+      if (input_socket.type == SOCK_GEOMETRY) {
+        relations.propagate_relations.append({input_index, output_index});
+      }
+      else if (socket_is_field(input_socket)) {
+        relations.reference_relations.append({input_index, output_index});
       }
     }
     return relations;
@@ -171,7 +183,7 @@ class bNodeTreeToDotOptionsForAnonymousAttributeInferencing : public bNodeTreeTo
   {
   }
 
-  std::string socket_name(const bNodeSocket &socket) const
+  std::string socket_name(const bNodeSocket &socket) const override
   {
     if (socket.type == SOCK_GEOMETRY) {
       std::stringstream ss;
@@ -185,7 +197,7 @@ class bNodeTreeToDotOptionsForAnonymousAttributeInferencing : public bNodeTreeTo
       ss << "]";
       return ss.str();
     }
-    else if (nodes::socket_type_supports_fields(eNodeSocketDatatype(socket.type))) {
+    if (nodes::socket_type_supports_fields(eNodeSocketDatatype(socket.type))) {
       std::stringstream ss;
       ss << socket.identifier << " [";
       bits::foreach_1_index(result_.propagated_fields_by_socket[socket.index_in_tree()],
@@ -232,7 +244,7 @@ static bool or_into_each_other(BitGroupVector<> &vec, const int64_t a, const int
   return or_into_each_other(vec[a], vec[b]);
 }
 
-static AnonymousAttributeInferencingResult analyse_anonymous_attribute_usages(
+static AnonymousAttributeInferencingResult analyze_anonymous_attribute_usages(
     const bNodeTree &tree)
 {
   BLI_assert(!tree.has_available_link_cycle());
@@ -263,7 +275,7 @@ static AnonymousAttributeInferencingResult analyse_anonymous_attribute_usages(
   /* Find input field and geometry sources. */
   for (const int i : tree.interface_inputs().index_range()) {
     const bNodeTreeInterfaceSocket &interface_socket = *tree.interface_inputs()[i];
-    const bNodeSocketType *typeinfo = nodeSocketTypeFind(interface_socket.socket_type);
+    const bNodeSocketType *typeinfo = bke::node_socket_type_find(interface_socket.socket_type);
     const eNodeSocketDatatype type = typeinfo ? eNodeSocketDatatype(typeinfo->type) : SOCK_CUSTOM;
     if (type == SOCK_GEOMETRY) {
       all_geometry_sources.append_and_get_index({InputGeometrySource{i}});
@@ -371,45 +383,132 @@ static AnonymousAttributeInferencingResult analyse_anonymous_attribute_usages(
           }
         }
       }
-      const aal::RelationsInNode &relations = *relations_by_node[node->index()];
-      for (const aal::ReferenceRelation &relation : relations.reference_relations) {
-        const bNodeSocket &from_socket = node->input_socket(relation.from_field_input);
-        const bNodeSocket &to_socket = node->output_socket(relation.to_field_output);
-        if (!from_socket.is_available() || !to_socket.is_available()) {
-          continue;
-        }
-        const int src_index = from_socket.index_in_tree();
-        const int dst_index = to_socket.index_in_tree();
-        propagated_fields_by_socket[dst_index] |= propagated_fields_by_socket[src_index];
-      }
-      for (const aal::PropagateRelation &relation : relations.propagate_relations) {
-        const bNodeSocket &from_socket = node->input_socket(relation.from_geometry_input);
-        const bNodeSocket &to_socket = node->output_socket(relation.to_geometry_output);
-        if (!from_socket.is_available() || !to_socket.is_available()) {
-          continue;
-        }
-        const int src_index = from_socket.index_in_tree();
-        const int dst_index = to_socket.index_in_tree();
-        propagated_geometries_by_socket[dst_index] |= propagated_geometries_by_socket[src_index];
-        available_fields_by_geometry_socket[dst_index] |=
-            available_fields_by_geometry_socket[src_index];
-      }
-      if (node->type == GEO_NODE_REPEAT_OUTPUT && zones) {
-        /* If the amount of iterations is zero, the data is directly forwarded from the Repeat
-         * Input to the Repeat Output node. Therefor, all anonymous attributes may be propagated as
-         * well. */
-        const bNodeTreeZone *zone = zones->get_zone_by_node(node->identifier);
-        if (const bNode *input_node = zone->input_node) {
-          const int items_num = node->output_sockets().size();
-          for (const int i : IndexRange(items_num)) {
-            const int src_index = input_node->input_socket(i + 1).index_in_tree();
-            const int dst_index = node->output_socket(i).index_in_tree();
+      switch (node->type) {
+        default: {
+          const aal::RelationsInNode &relations = *relations_by_node[node->index()];
+          for (const aal::ReferenceRelation &relation : relations.reference_relations) {
+            const bNodeSocket &from_socket = node->input_socket(relation.from_field_input);
+            const bNodeSocket &to_socket = node->output_socket(relation.to_field_output);
+            if (!from_socket.is_available() || !to_socket.is_available()) {
+              continue;
+            }
+            const int src_index = from_socket.index_in_tree();
+            const int dst_index = to_socket.index_in_tree();
             propagated_fields_by_socket[dst_index] |= propagated_fields_by_socket[src_index];
+          }
+          for (const aal::PropagateRelation &relation : relations.propagate_relations) {
+            const bNodeSocket &from_socket = node->input_socket(relation.from_geometry_input);
+            const bNodeSocket &to_socket = node->output_socket(relation.to_geometry_output);
+            if (!from_socket.is_available() || !to_socket.is_available()) {
+              continue;
+            }
+            const int src_index = from_socket.index_in_tree();
+            const int dst_index = to_socket.index_in_tree();
             propagated_geometries_by_socket[dst_index] |=
                 propagated_geometries_by_socket[src_index];
             available_fields_by_geometry_socket[dst_index] |=
                 available_fields_by_geometry_socket[src_index];
           }
+          /* This zone needs additional special handling because attributes from the input geometry
+           * are propagated to the output node. */
+          if (node->type == GEO_NODE_FOREACH_GEOMETRY_ELEMENT_OUTPUT) {
+            if (zones == nullptr) {
+              break;
+            }
+            const bNodeTreeZone *zone = zones->get_zone_by_node(node->identifier);
+            if (!zone->input_node) {
+              break;
+            }
+            const bNode *input_node = zone->input_node;
+            const bNode *output_node = node;
+            const int src_index = input_node->input_socket(0).index_in_tree();
+            for (const bNodeSocket *output_socket : output_node->output_sockets()) {
+              if (output_socket->type == SOCK_GEOMETRY) {
+                const int dst_index = output_socket->index_in_tree();
+                propagated_geometries_by_socket[dst_index] |=
+                    propagated_geometries_by_socket[src_index];
+                available_fields_by_geometry_socket[dst_index] |=
+                    available_fields_by_geometry_socket[src_index];
+              }
+            }
+          }
+          break;
+        }
+        /* The repeat output node needs special handling for two reasons:
+         * - It propagates data directly from the zone input in case the iteration count is zero.
+         * - Fields coming out of the repeat zone are wrapped by a new #FieldSource, because the
+         *   intermediate fields from within the zone are not available afterwards. */
+        case GEO_NODE_REPEAT_OUTPUT: {
+          if (zones == nullptr) {
+            break;
+          }
+          /* If the amount of iterations is zero, the data is directly forwarded from the Repeat
+           * Input to the Repeat Output node. Therefor, all anonymous attributes may be propagated
+           * as well. */
+          const bNodeTreeZone *zone = zones->get_zone_by_node(node->identifier);
+          const int items_num = node->output_sockets().size() - 1;
+          if (const bNode *input_node = zone->input_node) {
+            for (const int i : IndexRange(items_num)) {
+              const int src_index = input_node->input_socket(i + 1).index_in_tree();
+              const int dst_index = node->output_socket(i).index_in_tree();
+              propagated_fields_by_socket[dst_index] |= propagated_fields_by_socket[src_index];
+              propagated_geometries_by_socket[dst_index] |=
+                  propagated_geometries_by_socket[src_index];
+              available_fields_by_geometry_socket[dst_index] |=
+                  available_fields_by_geometry_socket[src_index];
+            }
+          }
+
+          auto can_propagate_field_source_out_of_zone = [&](const int field_source_index) {
+            const FieldSource &field_source = all_field_sources[field_source_index];
+            if (const auto *socket_field_source = std::get_if<SocketFieldSource>(
+                    &field_source.data))
+            {
+              const bNode &field_source_node = socket_field_source->socket->owner_node();
+              if (zone->contains_node_recursively(field_source_node)) {
+                return false;
+              }
+            }
+            return true;
+          };
+          auto can_propagated_geometry_source_out_of_zone = [&](const int geometry_source_index) {
+            const GeometrySource &geometry_source = all_geometry_sources[geometry_source_index];
+            if (const auto *socket_geometry_source = std::get_if<SocketGeometrySource>(
+                    &geometry_source.data))
+            {
+              const bNode &geometry_source_node = socket_geometry_source->socket->owner_node();
+              if (zone->contains_node_recursively(geometry_source_node)) {
+                return false;
+              }
+            }
+            return true;
+          };
+
+          /* Propagate fields that have not been created inside of the repeat zones. Field sources
+           * from inside the repeat zone become new field sources on the outside. */
+          for (const int i : IndexRange(items_num)) {
+            const int src_index = node->input_socket(i).index_in_tree();
+            const int dst_index = node->output_socket(i).index_in_tree();
+            bits::foreach_1_index(
+                propagated_fields_by_socket[src_index], [&](const int field_source_index) {
+                  if (can_propagate_field_source_out_of_zone(field_source_index)) {
+                    propagated_fields_by_socket[dst_index][field_source_index].set();
+                  }
+                });
+            bits::foreach_1_index(
+                available_fields_by_geometry_socket[src_index], [&](const int field_source_index) {
+                  if (can_propagate_field_source_out_of_zone(field_source_index)) {
+                    available_fields_by_geometry_socket[dst_index][field_source_index].set();
+                  }
+                });
+            bits::foreach_1_index(
+                propagated_geometries_by_socket[src_index], [&](const int geometry_source_index) {
+                  if (can_propagated_geometry_source_out_of_zone(geometry_source_index)) {
+                    propagated_geometries_by_socket[dst_index][geometry_source_index].set();
+                  }
+                });
+          }
+          break;
         }
       }
     }
@@ -440,7 +539,7 @@ static AnonymousAttributeInferencingResult analyse_anonymous_attribute_usages(
         input_propagated_geometries |= propagated_geometries_by_socket[src];
       }
       for (const int i : IndexRange(storage.items_num)) {
-        const bNodeSocket &body_input_socket = zone->input_node->output_socket(i);
+        const bNodeSocket &body_input_socket = zone->input_node->output_socket(i + 1);
         const bNodeSocket &body_output_socket = zone->output_node->input_socket(i);
         const int in_index = body_input_socket.index_in_tree();
         const int out_index = body_output_socket.index_in_tree();
@@ -483,12 +582,14 @@ static AnonymousAttributeInferencingResult analyse_anonymous_attribute_usages(
                 geometry_source.data);
             for (const int field_source_index : geometry_source.field_sources) {
               for (const bNodeSocket *other_socket :
-                   group_output_node->input_sockets().drop_back(1)) {
+                   group_output_node->input_sockets().drop_back(1))
+              {
                 if (!nodes::socket_type_supports_fields(eNodeSocketDatatype(other_socket->type))) {
                   continue;
                 }
                 if (propagated_fields_by_socket[other_socket->index_in_tree()][field_source_index]
-                        .test()) {
+                        .test())
+                {
                   tree_relations.available_relations.append(
                       aal::AvailableRelation{other_socket->index(), socket->index()});
                   required_fields_by_geometry_socket[socket->index_in_tree()][field_source_index]
@@ -561,6 +662,32 @@ static AnonymousAttributeInferencingResult analyse_anonymous_attribute_usages(
         required_fields_by_geometry_socket[geometry_socket.index_in_tree()] |=
             propagated_fields_by_socket[field_socket.index_in_tree()];
       }
+
+      switch (node->type) {
+        case GEO_NODE_FOREACH_GEOMETRY_ELEMENT_INPUT: {
+          if (!zones) {
+            break;
+          }
+          /* Propagate from the geometry outputs to the geometry input. */
+          const bNodeTreeZone *zone = zones->get_zone_by_node(node->identifier);
+          if (!zone) {
+            break;
+          }
+          const bNode *input_node = node;
+          const bNode *output_node = zone->output_node;
+          const int dst_index = input_node->input_socket(0).index_in_tree();
+          for (const bNodeSocket *output_socket : output_node->output_sockets()) {
+            if (output_socket->type == SOCK_GEOMETRY) {
+              const int src_index = output_socket->index_in_tree();
+              required_fields_by_geometry_socket[dst_index] |=
+                  required_fields_by_geometry_socket[src_index];
+              propagate_to_output_by_geometry_socket[dst_index] |=
+                  propagate_to_output_by_geometry_socket[src_index];
+            }
+          }
+          break;
+        }
+      }
     }
   };
 
@@ -574,7 +701,7 @@ static AnonymousAttributeInferencingResult analyse_anonymous_attribute_usages(
       const auto &storage = *static_cast<const NodeGeometryRepeatOutput *>(
           zone->output_node->storage);
       for (const int i : IndexRange(storage.items_num)) {
-        const bNodeSocket &body_input_socket = zone->input_node->output_socket(i);
+        const bNodeSocket &body_input_socket = zone->input_node->output_socket(i + 1);
         const bNodeSocket &body_output_socket = zone->output_node->input_socket(i);
         const int in_index = body_input_socket.index_in_tree();
         const int out_index = body_output_socket.index_in_tree();
@@ -638,12 +765,12 @@ bool update_anonymous_attribute_relations(bNodeTree &tree)
   tree.ensure_topology_cache();
 
   if (tree.has_available_link_cycle()) {
-    const bool changed = tree.runtime->anonymous_attribute_inferencing.get() != nullptr;
+    const bool changed = bool(tree.runtime->anonymous_attribute_inferencing);
     tree.runtime->anonymous_attribute_inferencing.reset();
     return changed;
   }
 
-  AnonymousAttributeInferencingResult result = analyse_anonymous_attribute_usages(tree);
+  AnonymousAttributeInferencingResult result = analyze_anonymous_attribute_usages(tree);
 
   const bool group_interface_changed =
       !tree.runtime->anonymous_attribute_inferencing ||

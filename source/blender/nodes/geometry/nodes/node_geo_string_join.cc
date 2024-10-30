@@ -15,13 +15,12 @@ static void node_declare(NodeDeclarationBuilder &b)
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
-  Vector<fn::ValueOrField<std::string>> strings =
-      params.extract_input<Vector<fn::ValueOrField<std::string>>>("Strings");
+  Vector<SocketValueVariant> strings = params.extract_input<Vector<SocketValueVariant>>("Strings");
   const std::string delim = params.extract_input<std::string>("Delimiter");
 
   std::string output;
   for (const int i : strings.index_range()) {
-    output += strings[i].as_value();
+    output += strings[i].extract<std::string>();
     if (i < (strings.size() - 1)) {
       output += delim;
     }
@@ -31,12 +30,12 @@ static void node_geo_exec(GeoNodeExecParams params)
 
 static void node_register()
 {
-  static bNodeType ntype;
+  static blender::bke::bNodeType ntype;
 
   geo_node_type_base(&ntype, GEO_NODE_STRING_JOIN, "Join Strings", NODE_CLASS_CONVERTER);
   ntype.geometry_node_execute = node_geo_exec;
   ntype.declare = node_declare;
-  nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }
 NOD_REGISTER_NODE(node_register)
 

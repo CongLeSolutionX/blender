@@ -28,7 +28,7 @@
 
 #include "BLI_sys_types.h"
 
-#include "BKE_global.h"
+#include "BKE_global.hh"
 
 namespace Freestyle {
 
@@ -1125,7 +1125,8 @@ void ViewMapBuilder::CullViewEdges(ViewMap *ioViewMap,
   ViewMap::viewedges_container::iterator ve, veend;
 
   for (ve = ioViewMap->ViewEdges().begin(), veend = ioViewMap->ViewEdges().end(); ve != veend;
-       ve++) {
+       ve++)
+  {
     // Overview:
     //    Search for a visible feature edge
     //    If none: mark view edge as non-displayable
@@ -1229,7 +1230,8 @@ void ViewMapBuilder::CullViewEdges(ViewMap *ioViewMap,
   if (extensiveFEdgeSearch) {
     // For each view edge,
     for (ve = ioViewMap->ViewEdges().begin(), veend = ioViewMap->ViewEdges().end(); ve != veend;
-         ve++) {
+         ve++)
+    {
       if (!(*ve)->isInImage()) {
         continue;
       }
@@ -1293,7 +1295,6 @@ void ViewMapBuilder::computeInitialViewEdges(WingedEdge &we)
 
 void ViewMapBuilder::computeCusps(ViewMap *ioViewMap)
 {
-  vector<ViewVertex *> newVVertices;
   vector<ViewEdge *> newVEdges;
   ViewMap::viewedges_container &vedges = ioViewMap->ViewEdges();
   ViewMap::viewedges_container::iterator ve = vedges.begin(), veend = vedges.end();
@@ -1974,7 +1975,8 @@ void ViewMapBuilder::FindOccludee(FEdge *fe,
       }
       else {
         if (GeomUtils::COINCIDENT ==
-            GeomUtils::intersectRayPlane(origin, edgeDir, normal, d, t, epsilon)) {
+            GeomUtils::intersectRayPlane(origin, edgeDir, normal, d, t, epsilon))
+        {
           continue;
         }
       }
@@ -2001,8 +2003,6 @@ void ViewMapBuilder::FindOccludee(FEdge *fe,
 void ViewMapBuilder::FindOccludee(
     FEdge *fe, Grid *iGrid, real epsilon, Polygon3r **oaPolygon, uint timestamp)
 {
-  OccludersSet occluders;
-
   Vec3r A;
   Vec3r edgeDir;
   Vec3r origin;
@@ -2201,7 +2201,8 @@ int ViewMapBuilder::ComputeRayCastingVisibility(FEdge *fe,
       // first let us compute the plane equation.
 
       if (GeomUtils::COINCIDENT ==
-          GeomUtils::intersectRayPlane(origin, edgeDir, normal, d, t, epsilon)) {
+          GeomUtils::intersectRayPlane(origin, edgeDir, normal, d, t, epsilon))
+      {
 #if LOGGING
         if (_global.debug & G_DEBUG_FREESTYLE) {
           cout << "\t\tRejecting occluder for target coincidence." << endl;

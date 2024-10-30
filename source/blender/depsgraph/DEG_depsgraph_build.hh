@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include "BLI_span.hh"
 #include "BLI_sys_types.h"
 
 /* ************************************************* */
@@ -53,9 +54,14 @@ void DEG_graph_build_for_render_pipeline(Depsgraph *graph);
 void DEG_graph_build_for_compositor_preview(Depsgraph *graph, bNodeTree *nodetree);
 
 /**
+ * Builds the minimal dependency graph needed for evaluation of all IDs within the Collection.
+ */
+void DEG_graph_build_from_collection(Depsgraph *graph, Collection *collection);
+
+/**
  * Builds the minimal dependency graph needed for evaluation of the given IDs.
  */
-void DEG_graph_build_from_ids(Depsgraph *graph, ID **ids, int num_ids);
+void DEG_graph_build_from_ids(Depsgraph *graph, blender::Span<ID *> ids);
 
 /** Tag relations from the given graph for update. */
 void DEG_graph_tag_relations_update(Depsgraph *graph);
@@ -76,7 +82,7 @@ void DEG_relations_tag_update(Main *bmain);
  */
 struct DepsNodeHandle;
 
-typedef enum eDepsSceneComponentType {
+enum eDepsSceneComponentType {
   /* Parameters Component - Default when nothing else fits
    * (i.e. just SDNA property setting). */
   DEG_SCENE_COMP_PARAMETERS,
@@ -85,9 +91,9 @@ typedef enum eDepsSceneComponentType {
   DEG_SCENE_COMP_ANIMATION,
   /* Sequencer Component (Scene Only). */
   DEG_SCENE_COMP_SEQUENCER,
-} eDepsSceneComponentType;
+};
 
-typedef enum eDepsObjectComponentType {
+enum eDepsObjectComponentType {
   /* Used in query API, to denote which component caller is interested in. */
   DEG_OB_COMP_ANY,
 
@@ -114,12 +120,16 @@ typedef enum eDepsObjectComponentType {
   DEG_OB_COMP_SHADING,
   /* Cache Component */
   DEG_OB_COMP_CACHE,
-} eDepsObjectComponentType;
+};
 
 void DEG_add_scene_relation(DepsNodeHandle *node_handle,
                             Scene *scene,
                             eDepsSceneComponentType component,
                             const char *description);
+void DEG_add_scene_camera_relation(DepsNodeHandle *node_handle,
+                                   Scene *scene,
+                                   eDepsObjectComponentType component,
+                                   const char *description);
 void DEG_add_object_relation(DepsNodeHandle *node_handle,
                              Object *object,
                              eDepsObjectComponentType component,

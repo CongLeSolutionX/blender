@@ -179,13 +179,13 @@ class CurveParameterFieldInput final : public bke::CurvesFieldInput {
   }
 
   GVArray get_varray_for_context(const bke::CurvesGeometry &curves,
-                                 const eAttrDomain domain,
+                                 const AttrDomain domain,
                                  const IndexMask & /*mask*/) const final
   {
     switch (domain) {
-      case ATTR_DOMAIN_POINT:
+      case AttrDomain::Point:
         return VArray<float>::ForContainer(calculate_point_parameters(curves));
-      case ATTR_DOMAIN_CURVE:
+      case AttrDomain::Curve:
         return VArray<float>::ForContainer(calculate_curve_parameters(curves));
       default:
         BLI_assert_unreachable();
@@ -213,14 +213,14 @@ class CurveLengthParameterFieldInput final : public bke::CurvesFieldInput {
   }
 
   GVArray get_varray_for_context(const bke::CurvesGeometry &curves,
-                                 const eAttrDomain domain,
+                                 const AttrDomain domain,
                                  const IndexMask & /*mask*/) const final
   {
     switch (domain) {
-      case ATTR_DOMAIN_POINT:
+      case AttrDomain::Point:
         return VArray<float>::ForContainer(calculate_point_lengths(
             curves, [](MutableSpan<float> /*lengths*/, const float /*total*/) {}));
-      case ATTR_DOMAIN_CURVE:
+      case AttrDomain::Curve:
         return VArray<float>::ForContainer(accumulated_lengths_curve_domain(curves));
       default:
         BLI_assert_unreachable();
@@ -247,10 +247,10 @@ class IndexOnSplineFieldInput final : public bke::CurvesFieldInput {
   }
 
   GVArray get_varray_for_context(const bke::CurvesGeometry &curves,
-                                 const eAttrDomain domain,
+                                 const AttrDomain domain,
                                  const IndexMask & /*mask*/) const final
   {
-    if (domain != ATTR_DOMAIN_POINT) {
+    if (domain != AttrDomain::Point) {
       return {};
     }
     Array<int> result(curves.points_num());
@@ -264,19 +264,19 @@ class IndexOnSplineFieldInput final : public bke::CurvesFieldInput {
     return VArray<int>::ForContainer(std::move(result));
   }
 
-  uint64_t hash() const override
+  uint64_t hash() const final
   {
     return 4536246522;
   }
 
-  bool is_equal_to(const fn::FieldNode &other) const override
+  bool is_equal_to(const fn::FieldNode &other) const final
   {
     return dynamic_cast<const IndexOnSplineFieldInput *>(&other) != nullptr;
   }
 
-  std::optional<eAttrDomain> preferred_domain(const CurvesGeometry & /*curves*/) const
+  std::optional<AttrDomain> preferred_domain(const bke::CurvesGeometry & /*curves*/) const final
   {
-    return ATTR_DOMAIN_POINT;
+    return AttrDomain::Point;
   }
 };
 
@@ -292,12 +292,12 @@ static void node_geo_exec(GeoNodeExecParams params)
 
 static void node_register()
 {
-  static bNodeType ntype;
+  static blender::bke::bNodeType ntype;
   geo_node_type_base(
       &ntype, GEO_NODE_CURVE_SPLINE_PARAMETER, "Spline Parameter", NODE_CLASS_INPUT);
   ntype.geometry_node_execute = node_geo_exec;
   ntype.declare = node_declare;
-  nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }
 NOD_REGISTER_NODE(node_register)
 

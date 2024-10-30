@@ -17,7 +17,9 @@ namespace blender::compositor {
 ConstantFolder::ConstantFolder(NodeOperationBuilder &operations_builder)
     : operations_builder_(operations_builder)
 {
-  BLI_rcti_init(&max_area_, INT_MIN, INT_MAX, INT_MIN, INT_MAX);
+  /* Use maximum render resolution. Avoid having large integers to prevent integer overflows. */
+  const int max_size = 65536;
+  BLI_rcti_init(&max_area_, -max_size, max_size, -max_size, max_size);
   BLI_rcti_init(&first_elem_area_, 0, 1, 0, 1);
 }
 
@@ -119,7 +121,7 @@ Vector<MemoryBuffer *> ConstantFolder::get_constant_input_buffers(NodeOperation 
 Vector<ConstantOperation *> ConstantFolder::try_fold_operations(Span<NodeOperation *> operations)
 {
   Set<NodeOperation *> foldable_ops = find_constant_foldable_operations(operations);
-  if (foldable_ops.size() == 0) {
+  if (foldable_ops.is_empty()) {
     return Vector<ConstantOperation *>();
   }
 
@@ -133,7 +135,7 @@ Vector<ConstantOperation *> ConstantFolder::try_fold_operations(Span<NodeOperati
 
 int ConstantFolder::fold_operations()
 {
-  WorkScheduler::start(operations_builder_.context());
+  WorkScheduler::start();
   Vector<ConstantOperation *> last_folds = try_fold_operations(
       operations_builder_.get_operations());
   int folds_count = last_folds.size();

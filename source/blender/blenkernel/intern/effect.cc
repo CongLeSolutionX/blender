@@ -6,19 +6,17 @@
  * \ingroup bke
  */
 
+#include <algorithm>
+#include <cmath>
 #include <cstdarg>
 #include <cstddef>
-
-#include <cmath>
 #include <cstdlib>
 
 #include "MEM_guardedalloc.h"
 
-#include "DNA_collection_types.h"
 #include "DNA_curve_types.h"
 #include "DNA_listBase.h"
 #include "DNA_mesh_types.h"
-#include "DNA_meshdata_types.h"
 #include "DNA_object_force_types.h"
 #include "DNA_object_types.h"
 #include "DNA_particle_types.h"
@@ -33,26 +31,22 @@
 #include "BLI_math_vector.h"
 #include "BLI_noise.h"
 #include "BLI_rand.h"
+#include "BLI_time.h"
 #include "BLI_utildefines.h"
-
-#include "PIL_time.h"
 
 #include "BKE_anim_path.h" /* needed for where_on_path */
 #include "BKE_bvhutils.hh"
-#include "BKE_collection.h"
+#include "BKE_collection.hh"
 #include "BKE_collision.h"
 #include "BKE_curve.hh"
 #include "BKE_displist.h"
 #include "BKE_effect.h"
 #include "BKE_fluid.h"
-#include "BKE_global.h"
-#include "BKE_layer.h"
-#include "BKE_mesh.hh"
+#include "BKE_global.hh"
 #include "BKE_modifier.hh"
 #include "BKE_object.hh"
 #include "BKE_object_types.hh"
 #include "BKE_particle.h"
-#include "BKE_scene.h"
 
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_physics.hh"
@@ -85,7 +79,7 @@ PartDeflect *BKE_partdeflect_new(int type)
   pd->pdef_sbift = 0.2f;
   pd->pdef_sboft = 0.02f;
   pd->pdef_cfrict = 5.0f;
-  pd->seed = (uint(ceil(PIL_check_seconds_timer())) + 1) % 128;
+  pd->seed = (uint(ceil(BLI_time_now_seconds())) + 1) % 128;
   pd->f_strength = 1.0f;
   pd->f_damp = 1.0f;
 
@@ -119,9 +113,6 @@ PartDeflect *BKE_partdeflect_copy(const PartDeflect *pd_src)
     return nullptr;
   }
   PartDeflect *pd_dst = static_cast<PartDeflect *>(MEM_dupallocN(pd_src));
-  if (pd_dst->rng != nullptr) {
-    pd_dst->rng = BLI_rng_copy(pd_dst->rng);
-  }
   return pd_dst;
 }
 
@@ -129,9 +120,6 @@ void BKE_partdeflect_free(PartDeflect *pd)
 {
   if (!pd) {
     return;
-  }
-  if (pd->rng) {
-    BLI_rng_free(pd->rng);
   }
   MEM_freeN(pd);
 }
@@ -142,12 +130,8 @@ static void precalculate_effector(Depsgraph *depsgraph, EffectorCache *eff)
 {
   float ctime = DEG_get_ctime(depsgraph);
   uint cfra = uint(ctime >= 0 ? ctime : -ctime);
-  if (!eff->pd->rng) {
-    eff->pd->rng = BLI_rng_new(eff->pd->seed + cfra);
-  }
-  else {
-    BLI_rng_srandom(eff->pd->rng, eff->pd->seed + cfra);
-  }
+
+  eff->rng = BLI_rng_new(eff->pd->seed + cfra);
 
   if (eff->pd->forcefield == PFIELD_GUIDE && eff->ob->type == OB_CURVES_LEGACY) {
     Curve *cu = static_cast<Curve *>(eff->ob->data);
@@ -161,8 +145,8 @@ static void precalculate_effector(Depsgraph *depsgraph, EffectorCache *eff)
       if (eff->ob->runtime->curve_cache->anim_path_accum_length) {
         BKE_where_on_path(
             eff->ob, 0.0, eff->guide_loc, eff->guide_dir, nullptr, &eff->guide_radius, nullptr);
-        mul_m4_v3(eff->ob->object_to_world, eff->guide_loc);
-        mul_mat3_m4_v3(eff->ob->object_to_world, eff->guide_dir);
+        mul_m4_v3(eff->ob->object_to_world().ptr(), eff->guide_loc);
+        mul_mat3_m4_v3(eff->ob->object_to_world().ptr(), eff->guide_dir);
       }
     }
   }
@@ -381,6 +365,9 @@ void BKE_effectors_free(ListBase *lb)
 {
   if (lb) {
     LISTBASE_FOREACH (EffectorCache *, eff, lb) {
+      if (eff->rng) {
+        BLI_rng_free(eff->rng);
+      }
       if (eff->guide_data) {
         MEM_freeN(eff->guide_data);
       }
@@ -525,7 +512,7 @@ static float eff_calc_visibility(ListBase *colliders,
         absorption = col->ob->pd->absorption;
 
         /* visibility is only between 0 and 1, calculated from 1-absorption */
-        visibility *= CLAMPIS(1.0f - absorption, 0.0f, 1.0f);
+        visibility *= std::clamp(1.0f - absorption, 0.0f, 1.0f);
 
         if (visibility <= 0.0f) {
           break;
@@ -670,12 +657,12 @@ bool closest_point_on_surface(SurfaceModifierData *surmd,
     }
 
     if (surface_vel) {
-      const int *corner_verts = bvhtree->corner_verts;
-      const MLoopTri *lt = &bvhtree->looptri[nearest.index];
+      const int *corner_verts = bvhtree->corner_verts.data();
+      const blender::int3 &tri = bvhtree->corner_tris[nearest.index];
 
-      copy_v3_v3(surface_vel, surmd->runtime.vert_velocities[corner_verts[lt->tri[0]]]);
-      add_v3_v3(surface_vel, surmd->runtime.vert_velocities[corner_verts[lt->tri[1]]]);
-      add_v3_v3(surface_vel, surmd->runtime.vert_velocities[corner_verts[lt->tri[2]]]);
+      copy_v3_v3(surface_vel, surmd->runtime.vert_velocities[corner_verts[tri[0]]]);
+      add_v3_v3(surface_vel, surmd->runtime.vert_velocities[corner_verts[tri[1]]]);
+      add_v3_v3(surface_vel, surmd->runtime.vert_velocities[corner_verts[tri[2]]]);
 
       mul_v3_fl(surface_vel, (1.0f / 3.0f));
     }
@@ -695,7 +682,8 @@ bool get_effector_data(EffectorCache *eff,
   /* In case surface object is in Edit mode when loading the .blend,
    * surface modifier is never executed and bvhtree never built, see #48415. */
   if (eff->pd && eff->pd->shape == PFIELD_SHAPE_SURFACE && eff->surmd &&
-      eff->surmd->runtime.bvhtree) {
+      eff->surmd->runtime.bvhtree)
+  {
     /* closest point in the object surface is an effector */
     float vec[3];
 
@@ -711,15 +699,15 @@ bool get_effector_data(EffectorCache *eff,
   }
   else if (eff->pd && eff->pd->shape == PFIELD_SHAPE_POINTS) {
     /* TODO: hair and points object support */
-    const Mesh *me_eval = BKE_object_get_evaluated_mesh(eff->ob);
-    const blender::Span<blender::float3> positions = me_eval->vert_positions();
-    const blender::Span<blender::float3> vert_normals = me_eval->vert_normals();
-    if (me_eval != nullptr) {
+    const Mesh *mesh_eval = BKE_object_get_evaluated_mesh(eff->ob);
+    if (mesh_eval != nullptr) {
+      const blender::Span<blender::float3> positions = mesh_eval->vert_positions();
+      const blender::Span<blender::float3> vert_normals = mesh_eval->vert_normals();
       copy_v3_v3(efd->loc, positions[*efd->index]);
       copy_v3_v3(efd->nor, vert_normals[*efd->index]);
 
-      mul_m4_v3(eff->ob->object_to_world, efd->loc);
-      mul_mat3_m4_v3(eff->ob->object_to_world, efd->nor);
+      mul_m4_v3(eff->ob->object_to_world().ptr(), efd->loc);
+      mul_mat3_m4_v3(eff->ob->object_to_world().ptr(), efd->nor);
 
       normalize_v3(efd->nor);
 
@@ -771,23 +759,23 @@ bool get_effector_data(EffectorCache *eff,
     const Object *ob = eff->ob;
 
     /* Use z-axis as normal. */
-    normalize_v3_v3(efd->nor, ob->object_to_world[2]);
+    normalize_v3_v3(efd->nor, ob->object_to_world().ptr()[2]);
 
     if (eff->pd && ELEM(eff->pd->shape, PFIELD_SHAPE_PLANE, PFIELD_SHAPE_LINE)) {
       float temp[3], translate[3];
-      sub_v3_v3v3(temp, point->loc, ob->object_to_world[3]);
+      sub_v3_v3v3(temp, point->loc, ob->object_to_world().location());
       project_v3_v3v3(translate, temp, efd->nor);
 
       /* for vortex the shape chooses between old / new force */
       if (eff->pd->forcefield == PFIELD_VORTEX || eff->pd->shape == PFIELD_SHAPE_LINE) {
-        add_v3_v3v3(efd->loc, ob->object_to_world[3], translate);
+        add_v3_v3v3(efd->loc, ob->object_to_world().location(), translate);
       }
       else { /* Normally `efd->loc` is closest point on effector XY-plane. */
         sub_v3_v3v3(efd->loc, point->loc, translate);
       }
     }
     else {
-      copy_v3_v3(efd->loc, ob->object_to_world[3]);
+      copy_v3_v3(efd->loc, ob->object_to_world().location());
     }
 
     zero_v3(efd->vel);
@@ -812,8 +800,8 @@ bool get_effector_data(EffectorCache *eff,
     }
     else {
       /* for some effectors we need the object center every time */
-      sub_v3_v3v3(efd->vec_to_point2, point->loc, eff->ob->object_to_world[3]);
-      normalize_v3_v3(efd->nor2, eff->ob->object_to_world[2]);
+      sub_v3_v3v3(efd->vec_to_point2, point->loc, eff->ob->object_to_world().location());
+      normalize_v3_v3(efd->nor2, eff->ob->object_to_world().ptr()[2]);
     }
   }
 
@@ -827,8 +815,8 @@ static void get_effector_tot(
 
   if (eff->pd->shape == PFIELD_SHAPE_POINTS) {
     /* TODO: hair and points object support */
-    const Mesh *me_eval = BKE_object_get_evaluated_mesh(eff->ob);
-    *tot = me_eval != nullptr ? me_eval->totvert : 1;
+    const Mesh *mesh_eval = BKE_object_get_evaluated_mesh(eff->ob);
+    *tot = mesh_eval != nullptr ? mesh_eval->verts_num : 1;
 
     if (*tot && eff->pd->forcefield == PFIELD_HARMONIC && point->index >= 0) {
       *p = point->index % *tot;
@@ -848,7 +836,8 @@ static void get_effector_tot(
       efd->charge = eff->pd->f_strength;
     }
     else if (eff->pd->forcefield == PFIELD_HARMONIC &&
-             (eff->pd->flag & PFIELD_MULTIPLE_SPRINGS) == 0) {
+             (eff->pd->flag & PFIELD_MULTIPLE_SPRINGS) == 0)
+    {
       /* every particle is mapped to only one harmonic effector particle */
       *p = point->index % eff->psys->totpart;
       *tot = *p + 1;
@@ -885,7 +874,7 @@ static void do_texture_effector(EffectorCache *eff,
   copy_v3_v3(tex_co, point->loc);
 
   if (eff->pd->flag & PFIELD_TEX_OBJECT) {
-    mul_m4_v3(eff->ob->world_to_object, tex_co);
+    mul_m4_v3(eff->ob->world_to_object().ptr(), tex_co);
 
     if (eff->pd->flag & PFIELD_TEX_2D) {
       tex_co[2] = 0.0f;
@@ -964,7 +953,7 @@ static void do_physical_effector(EffectorCache *eff,
                                  float *total_force)
 {
   PartDeflect *pd = eff->pd;
-  RNG *rng = pd->rng;
+  RNG *rng = eff->rng;
   float force[3] = {0, 0, 0};
   float temp[3];
   float fac;
@@ -1074,8 +1063,8 @@ static void do_physical_effector(EffectorCache *eff,
       copy_v3_v3(force, point->vel);
       fac = normalize_v3(force) * point->vel_to_sec;
 
-      strength = MIN2(strength, 2.0f);
-      damp = MIN2(damp, 2.0f);
+      strength = std::min(strength, 2.0f);
+      damp = std::min(damp, 2.0f);
 
       mul_v3_fl(force, -efd->falloff * fac * (strength * fac + damp));
       break;

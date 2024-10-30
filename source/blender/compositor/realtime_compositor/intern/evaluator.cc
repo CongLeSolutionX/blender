@@ -27,17 +27,23 @@ Evaluator::Evaluator(Context &context) : context_(context) {}
 
 void Evaluator::evaluate()
 {
-  context_.cache_manager().reset();
-  context_.texture_pool().reset();
+  context_.reset();
 
   if (!is_compiled_) {
     compile_and_evaluate();
-    is_compiled_ = true;
-    return;
+  }
+  else {
+    for (const std::unique_ptr<Operation> &operation : operations_stream_) {
+      if (context_.is_canceled()) {
+        context_.cache_manager().skip_next_reset();
+        break;
+      }
+      operation->evaluate();
+    }
   }
 
-  for (const std::unique_ptr<Operation> &operation : operations_stream_) {
-    operation->evaluate();
+  if (context_.profiler()) {
+    context_.profiler()->finalize(context_.get_node_tree());
   }
 }
 
@@ -72,22 +78,36 @@ void Evaluator::compile_and_evaluate()
     return;
   }
 
+  if (context_.is_canceled()) {
+    context_.cache_manager().skip_next_reset();
+    reset();
+    return;
+  }
+
   const Schedule schedule = compute_schedule(context_, *derived_node_tree_);
 
   CompileState compile_state(schedule);
 
   for (const DNode &node : schedule) {
-    if (compile_state.should_compile_shader_compile_unit(node)) {
-      compile_and_evaluate_shader_compile_unit(compile_state);
+    if (context_.is_canceled()) {
+      context_.cache_manager().skip_next_reset();
+      reset();
+      return;
     }
 
-    if (is_shader_node(node)) {
-      compile_state.add_node_to_shader_compile_unit(node);
+    if (compile_state.should_compile_pixel_compile_unit(node)) {
+      compile_and_evaluate_pixel_compile_unit(compile_state);
+    }
+
+    if (is_pixel_node(node)) {
+      compile_state.add_node_to_pixel_compile_unit(node);
     }
     else {
       compile_and_evaluate_node(node, compile_state);
     }
   }
+
+  is_compiled_ = true;
 }
 
 void Evaluator::compile_and_evaluate_node(DNode node, CompileState &compile_state)
@@ -139,16 +159,56 @@ void Evaluator::map_node_operation_inputs_to_their_results(DNode node,
   }
 }
 
-void Evaluator::compile_and_evaluate_shader_compile_unit(CompileState &compile_state)
+void Evaluator::compile_and_evaluate_pixel_compile_unit(CompileState &compile_state)
 {
-  ShaderCompileUnit &compile_unit = compile_state.get_shader_compile_unit();
-  ShaderOperation *operation = new ShaderOperation(context_, compile_unit);
+  PixelCompileUnit &compile_unit = compile_state.get_pixel_compile_unit();
 
-  for (DNode node : compile_unit) {
-    compile_state.map_node_to_shader_operation(node, operation);
+  /* GPUs have hardware limitations on the number of output images shaders can have, so we might
+   * have to split the compile unit into smaller units to workaround this limitation. In practice,
+   * splitting will almost always never happen due to the scheduling strategy we use, so the base
+   * case remains fast. */
+  int number_of_outputs = 0;
+  for (int i : compile_unit.index_range()) {
+    const DNode node = compile_unit[i];
+    number_of_outputs += compile_state.compute_pixel_node_operation_outputs_count(node);
+
+    /* The GPU module currently only supports up to 8 output images in shaders, but once this
+     * limitation is lifted, we can replace that with GPU_max_images(). */
+    if (number_of_outputs <= 8) {
+      continue;
+    }
+
+    /* The number of outputs surpassed the limit, so we split the compile unit into two equal parts
+     * and recursively call this method on each of them. It might seem unexpected that we split in
+     * half as opposed to split at the node that surpassed the limit, but that is because the act
+     * of splitting might actually introduce new outputs, since links that were previously internal
+     * to the compile unit might now be external. So we can't precisely split and guarantee correct
+     * units, and we just rely or recursive splitting until units are small enough. Further, half
+     * splitting helps balancing the shaders, where we don't want to have one gigantic shader and
+     * a tiny one. */
+    const int split_index = compile_unit.size() / 2;
+    const PixelCompileUnit start_compile_unit(compile_unit.as_span().take_front(split_index));
+    const PixelCompileUnit end_compile_unit(compile_unit.as_span().drop_front(split_index));
+
+    compile_state.get_pixel_compile_unit() = start_compile_unit;
+    this->compile_and_evaluate_pixel_compile_unit(compile_state);
+
+    compile_state.get_pixel_compile_unit() = end_compile_unit;
+    this->compile_and_evaluate_pixel_compile_unit(compile_state);
+
+    /* No need to continue, the above recursive calls will eventually exist the loop and do the
+     * actual compilation. */
+    return;
   }
 
-  map_shader_operation_inputs_to_their_results(operation, compile_state);
+  const Schedule &schedule = compile_state.get_schedule();
+  PixelOperation *operation = new ShaderOperation(context_, compile_unit, schedule);
+
+  for (DNode node : compile_unit) {
+    compile_state.map_node_to_pixel_operation(node, operation);
+  }
+
+  map_pixel_operation_inputs_to_their_results(operation, compile_state);
 
   operations_stream_.append(std::unique_ptr<Operation>(operation));
 
@@ -156,11 +216,11 @@ void Evaluator::compile_and_evaluate_shader_compile_unit(CompileState &compile_s
 
   operation->evaluate();
 
-  compile_state.reset_shader_compile_unit();
+  compile_state.reset_pixel_compile_unit();
 }
 
-void Evaluator::map_shader_operation_inputs_to_their_results(ShaderOperation *operation,
-                                                             CompileState &compile_state)
+void Evaluator::map_pixel_operation_inputs_to_their_results(PixelOperation *operation,
+                                                            CompileState &compile_state)
 {
   for (const auto item : operation->get_inputs_to_linked_outputs_map().items()) {
     Result &result = compile_state.get_result_from_output_socket(item.value);

@@ -18,15 +18,18 @@
 
 #include "BKE_attribute.hh"
 #include "BKE_attribute_math.hh"
-#include "BKE_pointcloud.h"
+#include "BKE_pointcloud.hh"
 
 CCL_NAMESPACE_BEGIN
 
-static void attr_create_motion(PointCloud *pointcloud,
-                               const blender::Span<blender::float3> b_attribute,
-                               const float motion_scale)
+static void attr_create_motion_from_velocity(PointCloud *pointcloud,
+                                             const blender::Span<blender::float3> b_attribute,
+                                             const float motion_scale)
 {
   const int num_points = pointcloud->get_points().size();
+
+  /* Override motion steps to fixed number. */
+  pointcloud->set_motion_steps(3);
 
   /* Find or add attribute */
   float3 *P = pointcloud->get_points().data();
@@ -57,26 +60,25 @@ static void copy_attributes(PointCloud *pointcloud,
                             const float motion_scale)
 {
   const blender::bke::AttributeAccessor b_attributes = b_pointcloud.attributes();
-  if (b_attributes.domain_size(ATTR_DOMAIN_POINT) == 0) {
+  if (b_attributes.domain_size(blender::bke::AttrDomain::Point) == 0) {
     return;
   }
 
   AttributeSet &attributes = pointcloud->attributes;
   static const ustring u_velocity("velocity");
-  b_attributes.for_all([&](const blender::bke::AttributeIDRef &id,
-                           const blender::bke::AttributeMetaData /*meta_data*/) {
-    const ustring name{std::string_view(id.name())};
+  b_attributes.foreach_attribute([&](const blender::bke::AttributeIter &iter) {
+    const ustring name{std::string_view(iter.name)};
 
     if (need_motion && name == u_velocity) {
-      const blender::VArraySpan b_attr = *b_attributes.lookup<blender::float3>(id);
-      attr_create_motion(pointcloud, b_attr, motion_scale);
+      const blender::VArraySpan b_attr = *iter.get<blender::float3>();
+      attr_create_motion_from_velocity(pointcloud, b_attr, motion_scale);
     }
 
     if (attributes.find(name)) {
-      return true;
+      return;
     }
 
-    const blender::bke::GAttributeReader b_attr = b_attributes.lookup(id);
+    const blender::bke::GAttributeReader b_attr = iter.get();
     blender::bke::attribute_math::convert_to_static_type(b_attr.varray.type(), [&](auto dummy) {
       using BlenderT = decltype(dummy);
       using Converter = typename ccl::AttributeConverter<BlenderT>;
@@ -91,8 +93,6 @@ static void copy_attributes(PointCloud *pointcloud,
         }
       }
     });
-
-    return true;
   });
 }
 
@@ -103,8 +103,8 @@ static void export_pointcloud(Scene *scene,
                               const float motion_scale)
 {
   const blender::Span<blender::float3> b_positions = b_pointcloud.positions();
-  const blender::VArraySpan b_radius = *b_pointcloud.attributes().lookup<float>("radius",
-                                                                                ATTR_DOMAIN_POINT);
+  const blender::VArraySpan b_radius = *b_pointcloud.attributes().lookup<float>(
+      "radius", blender::bke::AttrDomain::Point);
 
   pointcloud->resize(b_positions.size());
 
@@ -158,8 +158,8 @@ static void export_pointcloud_motion(PointCloud *pointcloud,
   const array<float3> &pointcloud_points = pointcloud->get_points();
 
   const blender::Span<blender::float3> b_positions = b_pointcloud.positions();
-  const blender::VArraySpan b_radius = *b_pointcloud.attributes().lookup<float>("radius",
-                                                                                ATTR_DOMAIN_POINT);
+  const blender::VArraySpan b_radius = *b_pointcloud.attributes().lookup<float>(
+      "radius", blender::bke::AttrDomain::Point);
 
   for (int i = 0; i < std::min<int>(num_points, b_positions.size()); i++) {
     const float3 P = make_float3(b_positions[i][0], b_positions[i][1], b_positions[i][2]);

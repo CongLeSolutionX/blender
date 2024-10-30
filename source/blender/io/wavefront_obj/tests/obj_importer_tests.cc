@@ -9,18 +9,18 @@
 
 #include "BKE_curve.hh"
 #include "BKE_customdata.hh"
-#include "BKE_main.h"
+#include "BKE_main.hh"
 #include "BKE_material.h"
 #include "BKE_mesh.hh"
 #include "BKE_object.hh"
-#include "BKE_scene.h"
+#include "BKE_scene.hh"
 
 #include "BLI_listbase.h"
 #include "BLI_math_base.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_string.h"
 
-#include "BLO_readfile.h"
+#include "BLO_readfile.hh"
 
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_query.hh"
@@ -40,8 +40,8 @@ namespace blender::io::obj {
 struct Expectation {
   std::string name;
   short type; /* OB_MESH, ... */
-  int totvert, mesh_totedge_or_curve_endp, mesh_faces_num_or_curve_order,
-      mesh_totloop_or_curve_cyclic;
+  int totvert, mesh_edges_num_or_curve_endp, mesh_faces_num_or_curve_order,
+      mesh_corner_num_or_curve_cyclic;
   float3 vert_first, vert_last;
   float3 normal_first;
   float2 uv_first;
@@ -49,9 +49,9 @@ struct Expectation {
   std::string first_mat;
 };
 
-class obj_importer_test : public BlendfileLoadingBaseTest {
+class OBJImportTest : public BlendfileLoadingBaseTest {
  public:
-  obj_importer_test()
+  OBJImportTest()
   {
     params.global_scale = 1.0f;
     params.clamp_size = 0;
@@ -98,10 +98,10 @@ class obj_importer_test : public BlendfileLoadingBaseTest {
           Mesh *mesh = BKE_object_get_evaluated_mesh(object);
           const Span<float3> positions = mesh->vert_positions();
           printf("OB_MESH, %i, %i, %i, %i, float3(%g, %g, %g), float3(%g, %g, %g)",
-                 mesh->totvert,
-                 mesh->totedge,
+                 mesh->verts_num,
+                 mesh->edges_num,
                  mesh->faces_num,
-                 mesh->totloop,
+                 mesh->corners_num,
                  positions.first().x,
                  positions.first().y,
                  positions.first().z,
@@ -130,20 +130,20 @@ class obj_importer_test : public BlendfileLoadingBaseTest {
       EXPECT_V3_NEAR(object->scale, float3(1, 1, 1), 0.0001f);
       if (object->type == OB_MESH) {
         Mesh *mesh = BKE_object_get_evaluated_mesh(object);
-        EXPECT_EQ(mesh->totvert, exp.totvert);
-        EXPECT_EQ(mesh->totedge, exp.mesh_totedge_or_curve_endp);
+        EXPECT_EQ(mesh->verts_num, exp.totvert);
+        EXPECT_EQ(mesh->edges_num, exp.mesh_edges_num_or_curve_endp);
         EXPECT_EQ(mesh->faces_num, exp.mesh_faces_num_or_curve_order);
-        EXPECT_EQ(mesh->totloop, exp.mesh_totloop_or_curve_cyclic);
+        EXPECT_EQ(mesh->corners_num, exp.mesh_corner_num_or_curve_cyclic);
         const Span<float3> positions = mesh->vert_positions();
         EXPECT_V3_NEAR(positions.first(), exp.vert_first, 0.0001f);
         EXPECT_V3_NEAR(positions.last(), exp.vert_last, 0.0001f);
-        const float3 *lnors = mesh->normals_domain() == bke::MeshNormalDomain::Corner ?
-                                  mesh->corner_normals().data() :
-                                  nullptr;
-        float3 normal_first = lnors != nullptr ? lnors[0] : float3(0, 0, 0);
+        const float3 *corner_normals = mesh->normals_domain() == bke::MeshNormalDomain::Corner ?
+                                           mesh->corner_normals().data() :
+                                           nullptr;
+        float3 normal_first = corner_normals != nullptr ? corner_normals[0] : float3(0, 0, 0);
         EXPECT_V3_NEAR(normal_first, exp.normal_first, 0.0001f);
         const float2 *mloopuv = static_cast<const float2 *>(
-            CustomData_get_layer(&mesh->loop_data, CD_PROP_FLOAT2));
+            CustomData_get_layer(&mesh->corner_data, CD_PROP_FLOAT2));
         float2 uv_first = mloopuv ? *mloopuv : float2(0, 0);
         EXPECT_V2_NEAR(uv_first, exp.uv_first, 0.0001f);
         if (exp.color_first.x >= 0) {
@@ -167,10 +167,10 @@ class obj_importer_test : public BlendfileLoadingBaseTest {
         const Nurb *nurb = static_cast<const Nurb *>(BLI_findlink(&curve->nurb, 0));
         int endpoint = (nurb->flagu & CU_NURB_ENDPOINT) ? 1 : 0;
         EXPECT_EQ(nurb->orderu, exp.mesh_faces_num_or_curve_order);
-        EXPECT_EQ(endpoint, exp.mesh_totedge_or_curve_endp);
+        EXPECT_EQ(endpoint, exp.mesh_edges_num_or_curve_endp);
         /* Cyclic flag is not set by the importer yet. */
         // int cyclic = (nurb->flagu & CU_NURB_CYCLIC) ? 1 : 0;
-        // EXPECT_EQ(cyclic, exp.mesh_totloop_or_curve_cyclic);
+        // EXPECT_EQ(cyclic, exp.mesh_corner_num_or_curve_cyclic);
       }
       if (!exp.first_mat.empty()) {
         Material *mat = BKE_object_material_get(object, 1);
@@ -192,7 +192,7 @@ class obj_importer_test : public BlendfileLoadingBaseTest {
   OBJImportParams params;
 };
 
-TEST_F(obj_importer_test, import_cube)
+TEST_F(OBJImportTest, import_cube)
 {
   Expectation expect[] = {
       {"OBCube", OB_MESH, 8, 12, 6, 24, float3(1, 1, -1), float3(-1, 1, 1)},
@@ -204,12 +204,12 @@ TEST_F(obj_importer_test, import_cube)
        24,
        float3(-1, -1, 1),
        float3(1, -1, -1),
-       float3(-0.57735f, 0.57735f, -0.57735f)},
+       float3(-0.57758f, 0.57735f, -0.57711f)},
   };
   import_and_check("cube.obj", expect, std::size(expect), 1);
 }
 
-TEST_F(obj_importer_test, import_cube_o_after_verts)
+TEST_F(OBJImportTest, import_cube_o_after_verts)
 {
   Expectation expect[] = {
       {"OBCube", OB_MESH, 8, 12, 6, 24, float3(1, 1, -1), float3(-1, 1, 1)},
@@ -222,7 +222,7 @@ TEST_F(obj_importer_test, import_cube_o_after_verts)
           24,
           float3(-1, -1, 1),
           float3(1, -1, -1),
-          float3(0, 0, 1),
+          float3(0.57735f, -0.57735f, 0.57735f),
       },
       {
           "OBSparseTri",
@@ -239,7 +239,7 @@ TEST_F(obj_importer_test, import_cube_o_after_verts)
   import_and_check("cube_o_after_verts.obj", expect, std::size(expect), 2);
 }
 
-TEST_F(obj_importer_test, import_suzanne_all_data)
+TEST_F(OBJImportTest, import_suzanne_all_data)
 {
   Expectation expect[] = {
       {"OBCube", OB_MESH, 8, 12, 6, 24, float3(1, 1, -1), float3(-1, 1, 1)},
@@ -257,7 +257,7 @@ TEST_F(obj_importer_test, import_suzanne_all_data)
   import_and_check("suzanne_all_data.obj", expect, std::size(expect), 0);
 }
 
-TEST_F(obj_importer_test, import_nurbs)
+TEST_F(OBJImportTest, import_nurbs)
 {
   Expectation expect[] = {
       {"OBCube", OB_MESH, 8, 12, 6, 24, float3(1, 1, -1), float3(-1, 1, 1)},
@@ -273,7 +273,7 @@ TEST_F(obj_importer_test, import_nurbs)
   import_and_check("nurbs.obj", expect, std::size(expect), 0);
 }
 
-TEST_F(obj_importer_test, import_nurbs_curves)
+TEST_F(OBJImportTest, import_nurbs_curves)
 {
   Expectation expect[] = {
       {"OBCube", OB_MESH, 8, 12, 6, 24, float3(1, 1, -1), float3(-1, 1, 1)},
@@ -300,7 +300,7 @@ TEST_F(obj_importer_test, import_nurbs_curves)
   import_and_check("nurbs_curves.obj", expect, std::size(expect), 0);
 }
 
-TEST_F(obj_importer_test, import_nurbs_cyclic)
+TEST_F(OBJImportTest, import_nurbs_cyclic)
 {
   Expectation expect[] = {
       {"OBCube", OB_MESH, 8, 12, 6, 24, float3(1, 1, -1), float3(-1, 1, 1)},
@@ -316,7 +316,39 @@ TEST_F(obj_importer_test, import_nurbs_cyclic)
   import_and_check("nurbs_cyclic.obj", expect, std::size(expect), 0);
 }
 
-TEST_F(obj_importer_test, import_nurbs_manual)
+TEST_F(OBJImportTest, import_nurbs_endpoint)
+{
+  Expectation expect[] = {
+      {"OBCube", OB_MESH, 8, 12, 6, 24, float3(1, 1, -1), float3(-1, 1, 1)},
+      {"OBCurveEndpointRange01",
+       OB_CURVES_LEGACY,
+       15,
+       1,
+       4,
+       0,
+       float3(0.29f, 0, -0.11f),
+       float3(22.17f, 0, -5.31f)},
+      {"OBCurveEndpointRangeNon01",
+       OB_CURVES_LEGACY,
+       15,
+       1,
+       4,
+       0,
+       float3(0.29f, 0, -0.11f),
+       float3(22.17f, 0, -5.31f)},
+      {"OBCurveNoEndpointRange01",
+       OB_CURVES_LEGACY,
+       15,
+       0,
+       4,
+       0,
+       float3(0.29f, 0, -0.11f),
+       float3(22.17f, 0, -5.31f)},
+  };
+  import_and_check("nurbs_endpoint.obj", expect, std::size(expect), 0);
+}
+
+TEST_F(OBJImportTest, import_nurbs_manual)
 {
   Expectation expect[] = {
       {"OBCube", OB_MESH, 8, 12, 6, 24, float3(1, 1, -1), float3(-1, 1, 1)},
@@ -335,7 +367,7 @@ TEST_F(obj_importer_test, import_nurbs_manual)
   import_and_check("nurbs_manual.obj", expect, std::size(expect), 0);
 }
 
-TEST_F(obj_importer_test, import_nurbs_mesh)
+TEST_F(OBJImportTest, import_nurbs_mesh)
 {
   Expectation expect[] = {
       {"OBCube", OB_MESH, 8, 12, 6, 24, float3(1, 1, -1), float3(-1, 1, 1)},
@@ -351,7 +383,7 @@ TEST_F(obj_importer_test, import_nurbs_mesh)
   import_and_check("nurbs_mesh.obj", expect, std::size(expect), 0);
 }
 
-TEST_F(obj_importer_test, import_materials)
+TEST_F(OBJImportTest, import_materials)
 {
   Expectation expect[] = {
       {"OBCube", OB_MESH, 8, 12, 6, 24, float3(1, 1, -1), float3(-1, 1, 1)},
@@ -395,7 +427,7 @@ TEST_F(obj_importer_test, import_materials)
   import_and_check("materials.obj", expect, std::size(expect), 4, 8);
 }
 
-TEST_F(obj_importer_test, import_cubes_with_textures_rel)
+TEST_F(OBJImportTest, import_cubes_with_textures_rel)
 {
   Expectation expect[] = {
       {"OBCube", OB_MESH, 8, 12, 6, 24, float3(1, 1, -1), float3(-1, 1, 1)},
@@ -451,7 +483,7 @@ TEST_F(obj_importer_test, import_cubes_with_textures_rel)
   import_and_check("cubes_with_textures_rel.obj", expect, std::size(expect), 4, 4);
 }
 
-TEST_F(obj_importer_test, import_faces_invalid_or_with_holes)
+TEST_F(OBJImportTest, import_faces_invalid_or_with_holes)
 {
   Expectation expect[] = {
       {"OBCube", OB_MESH, 8, 12, 6, 24, float3(1, 1, -1), float3(-1, 1, 1)},
@@ -493,7 +525,7 @@ TEST_F(obj_importer_test, import_faces_invalid_or_with_holes)
   import_and_check("faces_invalid_or_with_holes.obj", expect, std::size(expect), 0);
 }
 
-TEST_F(obj_importer_test, import_invalid_faces)
+TEST_F(OBJImportTest, import_invalid_faces)
 {
   Expectation expect[] = {
       {"OBCube", OB_MESH, 8, 12, 6, 24, float3(1, 1, -1), float3(-1, 1, 1)},
@@ -502,7 +534,7 @@ TEST_F(obj_importer_test, import_invalid_faces)
   import_and_check("invalid_faces.obj", expect, std::size(expect), 0);
 }
 
-TEST_F(obj_importer_test, import_invalid_indices)
+TEST_F(OBJImportTest, import_invalid_indices)
 {
   Expectation expect[] = {
       {"OBCube", OB_MESH, 8, 12, 6, 24, float3(1, 1, -1), float3(-1, 1, 1)},
@@ -520,7 +552,7 @@ TEST_F(obj_importer_test, import_invalid_indices)
   import_and_check("invalid_indices.obj", expect, std::size(expect), 0);
 }
 
-TEST_F(obj_importer_test, import_invalid_syntax)
+TEST_F(OBJImportTest, import_invalid_syntax)
 {
   Expectation expect[] = {
       {"OBCube", OB_MESH, 8, 12, 6, 24, float3(1, 1, -1), float3(-1, 1, 1)},
@@ -538,11 +570,11 @@ TEST_F(obj_importer_test, import_invalid_syntax)
   import_and_check("invalid_syntax.obj", expect, std::size(expect), 0);
 }
 
-TEST_F(obj_importer_test, import_all_objects)
+TEST_F(OBJImportTest, import_all_objects)
 {
   Expectation expect[] = {
       {"OBCube", OB_MESH, 8, 12, 6, 24, float3(1, 1, -1), float3(-1, 1, 1)},
-      /* .obj file has empty EmptyText and EmptyMesh objects; these are ignored and skipped */
+      /* `.obj` file has empty EmptyText and EmptyMesh objects; these are ignored and skipped. */
       {"OBBezierCurve", OB_MESH, 13, 12, 0, 0, float3(-1, -2, 0), float3(1, -2, 0)},
       {"OBBlankCube", OB_MESH, 8, 13, 7, 26, float3(1, 1, -1), float3(-1, 1, 1), float3(0, 0, 1)},
       {"OBMaterialCube",
@@ -699,7 +731,7 @@ TEST_F(obj_importer_test, import_all_objects)
   import_and_check("all_objects.obj", expect, std::size(expect), 7);
 }
 
-TEST_F(obj_importer_test, import_cubes_vertex_colors)
+TEST_F(OBJImportTest, import_cubes_vertex_colors)
 {
   Expectation expect[] = {
       {"OBCube", OB_MESH, 8, 12, 6, 24, float3(1, 1, -1), float3(-1, 1, 1)},
@@ -770,7 +802,7 @@ TEST_F(obj_importer_test, import_cubes_vertex_colors)
   import_and_check("cubes_vertex_colors.obj", expect, std::size(expect), 0);
 }
 
-TEST_F(obj_importer_test, import_cubes_vertex_colors_mrgb)
+TEST_F(OBJImportTest, import_cubes_vertex_colors_mrgb)
 {
   Expectation expect[] = {
       {"OBCube", OB_MESH, 8, 12, 6, 24, float3(1, 1, -1), float3(-1, 1, 1)},
@@ -821,7 +853,37 @@ TEST_F(obj_importer_test, import_cubes_vertex_colors_mrgb)
   import_and_check("cubes_vertex_colors_mrgb.obj", expect, std::size(expect), 0);
 }
 
-TEST_F(obj_importer_test, import_vertices)
+TEST_F(OBJImportTest, import_vertex_colors_non_contiguous)
+{
+  Expectation expect[] = {
+      {"OBCube", OB_MESH, 8, 12, 6, 24, float3(1, 1, -1), float3(-1, 1, 1)},
+      {"OBNoColor",
+       OB_MESH,
+       3,
+       3,
+       1,
+       3,
+       float3(0, 0, 1),
+       float3(1, 0, 1),
+       float3(0, 0, 0),
+       float2(0, 0),
+       float4(-1, -1, -1, -1)},
+      {"OBRed",
+       OB_MESH,
+       3,
+       3,
+       1,
+       3,
+       float3(0, 0, 0),
+       float3(1, 0, 0),
+       float3(0, 0, 0),
+       float2(0, 0),
+       float4(1, 0, 0, 1)},
+  };
+  import_and_check("vertex_colors_non_contiguous.obj", expect, std::size(expect), 0);
+}
+
+TEST_F(OBJImportTest, import_vertices)
 {
   Expectation expect[] = {
       {"OBCube", OB_MESH, 8, 12, 6, 24, float3(1, 1, -1), float3(-1, 1, 1)},
@@ -831,7 +893,7 @@ TEST_F(obj_importer_test, import_vertices)
   import_and_check("vertices.obj", expect, std::size(expect), 0);
 }
 
-TEST_F(obj_importer_test, import_split_options_by_object)
+TEST_F(OBJImportTest, import_split_options_by_object)
 {
   /* Default is to split by object */
   Expectation expect[] = {
@@ -842,7 +904,7 @@ TEST_F(obj_importer_test, import_split_options_by_object)
   import_and_check("split_options.obj", expect, std::size(expect), 0);
 }
 
-TEST_F(obj_importer_test, import_split_options_by_group)
+TEST_F(OBJImportTest, import_split_options_by_group)
 {
   params.use_split_objects = false;
   params.use_split_groups = true;
@@ -858,7 +920,7 @@ TEST_F(obj_importer_test, import_split_options_by_group)
   import_and_check("split_options.obj", expect, std::size(expect), 0);
 }
 
-TEST_F(obj_importer_test, import_split_options_by_object_and_group)
+TEST_F(OBJImportTest, import_split_options_by_object_and_group)
 {
   params.use_split_objects = true;
   params.use_split_groups = true;
@@ -874,7 +936,7 @@ TEST_F(obj_importer_test, import_split_options_by_object_and_group)
   import_and_check("split_options.obj", expect, std::size(expect), 0);
 }
 
-TEST_F(obj_importer_test, import_split_options_none)
+TEST_F(OBJImportTest, import_split_options_none)
 {
   params.use_split_objects = false;
   params.use_split_groups = false;
@@ -885,7 +947,7 @@ TEST_F(obj_importer_test, import_split_options_none)
   import_and_check("split_options.obj", expect, std::size(expect), 0);
 }
 
-TEST_F(obj_importer_test, import_polylines)
+TEST_F(OBJImportTest, import_polylines)
 {
   Expectation expect[] = {
       {"OBCube", OB_MESH, 8, 12, 6, 24, float3(1, 1, -1), float3(-1, 1, 1)},

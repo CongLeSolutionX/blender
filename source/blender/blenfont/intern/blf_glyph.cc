@@ -25,19 +25,30 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_listbase.h"
+#include "BLI_math_color.h"
 #include "BLI_rect.h"
+#include "BLI_string.h"
 #include "BLI_threads.h"
 
-#include "BLF_api.h"
+#include "BLF_api.hh"
 
-#include "GPU_capabilities.h"
+#include "DNA_curve_types.h"
 
-#include "blf_internal.h"
-#include "blf_internal_types.h"
+#include "GPU_capabilities.hh"
+
+#include "blf_internal.hh"
+#include "blf_internal_types.hh"
 
 #include "BLI_math_vector.h"
-#include "BLI_strict_flags.h"
 #include "BLI_string_utf8.h"
+
+#ifndef WITH_HEADLESS
+#  include "nanosvgrast.h"
+
+#  include "svg_icons.h"
+#endif /* WITH_HEADLESS */
+
+#include "BLI_strict_flags.h" /* Keep last. */
 
 /**
  * Convert glyph coverage amounts to lightness values. Uses a LUT that perceptually improves
@@ -72,28 +83,24 @@ static float from_16dot16(FT_Fixed value)
 /** \name Glyph Cache
  * \{ */
 
-static GlyphCacheBLF *blf_glyph_cache_find(const FontBLF *font, const float size)
+static GlyphCacheBLF *blf_glyph_cache_find(const FontBLF *font)
 {
-  GlyphCacheBLF *gc = (GlyphCacheBLF *)font->cache.first;
-  while (gc) {
-    if (gc->size == size && (gc->bold == ((font->flags & BLF_BOLD) != 0)) &&
+  for (const std::unique_ptr<GlyphCacheBLF> &gc : font->cache) {
+    if (gc->size == font->size && (gc->bold == ((font->flags & BLF_BOLD) != 0)) &&
         (gc->italic == ((font->flags & BLF_ITALIC) != 0)) &&
         (gc->char_weight == font->char_weight) && (gc->char_slant == font->char_slant) &&
         (gc->char_width == font->char_width) && (gc->char_spacing == font->char_spacing))
     {
-      return gc;
+      return gc.get();
     }
-    gc = gc->next;
   }
   return nullptr;
 }
 
 static GlyphCacheBLF *blf_glyph_cache_new(FontBLF *font)
 {
-  GlyphCacheBLF *gc = (GlyphCacheBLF *)MEM_callocN(sizeof(GlyphCacheBLF), "blf_glyph_cache_new");
+  std::unique_ptr<GlyphCacheBLF> gc = std::make_unique<GlyphCacheBLF>();
 
-  gc->next = nullptr;
-  gc->prev = nullptr;
   gc->size = font->size;
   gc->bold = ((font->flags & BLF_BOLD) != 0);
   gc->italic = ((font->flags & BLF_ITALIC) != 0);
@@ -101,8 +108,6 @@ static GlyphCacheBLF *blf_glyph_cache_new(FontBLF *font)
   gc->char_slant = font->char_slant;
   gc->char_width = font->char_width;
   gc->char_spacing = font->char_spacing;
-
-  memset(gc->bucket, 0, sizeof(gc->bucket));
 
   blf_ensure_size(font);
 
@@ -122,15 +127,16 @@ static GlyphCacheBLF *blf_glyph_cache_new(FontBLF *font)
     gc->fixed_width = 1;
   }
 
-  BLI_addhead(&font->cache, gc);
-  return gc;
+  font->cache.append(std::move(gc));
+
+  return font->cache.last().get();
 }
 
 GlyphCacheBLF *blf_glyph_cache_acquire(FontBLF *font)
 {
-  BLI_mutex_lock(&font->glyph_cache_mutex);
+  font->glyph_cache_mutex.lock();
 
-  GlyphCacheBLF *gc = blf_glyph_cache_find(font, font->size);
+  GlyphCacheBLF *gc = blf_glyph_cache_find(font);
 
   if (!gc) {
     gc = blf_glyph_cache_new(font);
@@ -141,34 +147,24 @@ GlyphCacheBLF *blf_glyph_cache_acquire(FontBLF *font)
 
 void blf_glyph_cache_release(FontBLF *font)
 {
-  BLI_mutex_unlock(&font->glyph_cache_mutex);
+  font->glyph_cache_mutex.unlock();
 }
 
-static void blf_glyph_cache_free(GlyphCacheBLF *gc)
+GlyphCacheBLF::~GlyphCacheBLF()
 {
-  for (uint i = 0; i < ARRAY_SIZE(gc->bucket); i++) {
-    while (GlyphBLF *g = static_cast<GlyphBLF *>(BLI_pophead(&gc->bucket[i]))) {
-      blf_glyph_free(g);
-    }
+  this->glyphs.clear_and_shrink();
+  if (this->texture) {
+    GPU_texture_free(this->texture);
   }
-  if (gc->texture) {
-    GPU_texture_free(gc->texture);
+  if (this->bitmap_result) {
+    MEM_freeN(this->bitmap_result);
   }
-  if (gc->bitmap_result) {
-    MEM_freeN(gc->bitmap_result);
-  }
-  MEM_freeN(gc);
 }
 
 void blf_glyph_cache_clear(FontBLF *font)
 {
-  BLI_mutex_lock(&font->glyph_cache_mutex);
-
-  while (GlyphCacheBLF *gc = static_cast<GlyphCacheBLF *>(BLI_pophead(&font->cache))) {
-    blf_glyph_cache_free(gc);
-  }
-
-  BLI_mutex_unlock(&font->glyph_cache_mutex);
+  std::lock_guard lock{font->glyph_cache_mutex};
+  font->cache.clear_and_shrink();
 }
 
 /**
@@ -180,12 +176,10 @@ static GlyphBLF *blf_glyph_cache_find_glyph(const GlyphCacheBLF *gc,
                                             uint charcode,
                                             uint8_t subpixel)
 {
-  GlyphBLF *g = static_cast<GlyphBLF *>(gc->bucket[blf_hash(charcode << 6 | subpixel)].first);
-  while (g) {
-    if (g->c == charcode && g->subpixel == subpixel) {
-      return g;
-    }
-    g = g->next;
+  const std::unique_ptr<GlyphBLF> *ptr = gc->glyphs.lookup_ptr_as(
+      GlyphCacheKey{charcode, subpixel});
+  if (ptr != nullptr) {
+    return ptr->get();
   }
   return nullptr;
 }
@@ -230,22 +224,13 @@ static uchar blf_glyph_gamma(uchar c)
 /**
  * Add a rendered glyph to a cache.
  */
-static GlyphBLF *blf_glyph_cache_add_glyph(FontBLF *font,
-                                           GlyphCacheBLF *gc,
-                                           FT_GlyphSlot glyph,
-                                           uint charcode,
-                                           FT_UInt glyph_index,
-                                           uint8_t subpixel)
+static GlyphBLF *blf_glyph_cache_add_glyph(
+    GlyphCacheBLF *gc, FT_GlyphSlot glyph, uint charcode, FT_UInt glyph_index, uint8_t subpixel)
 {
-  GlyphBLF *g = (GlyphBLF *)MEM_callocN(sizeof(GlyphBLF), "blf_glyph_get");
+  std::unique_ptr<GlyphBLF> g = std::make_unique<GlyphBLF>();
   g->c = charcode;
   g->idx = glyph_index;
   g->advance_x = (ft_pix)glyph->advance.x;
-  g->pos[0] = glyph->bitmap_left;
-  g->pos[1] = glyph->bitmap_top;
-  g->dims[0] = int(glyph->bitmap.width);
-  g->dims[1] = int(glyph->bitmap.rows);
-  g->pitch = glyph->bitmap.pitch;
   g->subpixel = subpixel;
 
   FT_BBox bbox;
@@ -259,30 +244,203 @@ static GlyphBLF *blf_glyph_cache_add_glyph(FontBLF *font,
   g->lsb_delta = (ft_pix)glyph->lsb_delta;
   g->rsb_delta = (ft_pix)glyph->rsb_delta;
 
-  const int buffer_size = int(glyph->bitmap.width * glyph->bitmap.rows);
-  if (buffer_size != 0) {
-    if (font->flags & BLF_MONOCHROME) {
-      /* Font buffer uses only 0 or 1 values, Blender expects full 0..255 range. */
+  if (glyph->format == FT_GLYPH_FORMAT_BITMAP) {
+    /* This has been rendered and we have a bitmap. */
+    g->pos[0] = glyph->bitmap_left;
+    g->pos[1] = glyph->bitmap_top;
+    g->dims[0] = int(glyph->bitmap.width);
+    g->dims[1] = int(glyph->bitmap.rows);
+    g->pitch = glyph->bitmap.pitch;
+    g->num_channels = 1;
+
+    switch (glyph->bitmap.pixel_mode) {
+      case FT_PIXEL_MODE_LCD:
+        g->num_channels = 3;
+        g->dims[0] /= 3;
+        break;
+      case FT_PIXEL_MODE_LCD_V:
+        g->num_channels = 3;
+        g->dims[1] /= 3;
+        g->pitch *= 3;
+        break;
+      case FT_PIXEL_MODE_BGRA:
+        g->num_channels = 4;
+        break;
+    }
+
+    const int buffer_size = g->dims[0] * g->dims[1] * g->num_channels;
+    g->bitmap = static_cast<uchar *>(MEM_mallocN(size_t(buffer_size), "glyph bitmap"));
+
+    if (ELEM(glyph->bitmap.pixel_mode,
+             FT_PIXEL_MODE_GRAY,
+             FT_PIXEL_MODE_GRAY2,
+             FT_PIXEL_MODE_GRAY4))
+    {
+      /* Scale 1, 2, 4-bit gray to 8-bit. */
+      const char scale = char(255 / (glyph->bitmap.num_grays - 1));
       for (int i = 0; i < buffer_size; i++) {
-        glyph->bitmap.buffer[i] = glyph->bitmap.buffer[i] ? 255 : 0;
+#ifdef BLF_GAMMA_CORRECT_GLYPHS
+        /* Convert coverage amounts to perceptually-improved lightness values. */
+        g->bitmap[i] = blf_glyph_gamma(glyph->bitmap.buffer[i] * scale);
+#else
+        g->bitmap[i] = glyph->bitmap.buffer[i] * scale;
+#endif /* BLF_GAMMA_CORRECT_GLYPHS */
+      }
+    }
+    else if (glyph->bitmap.pixel_mode == FT_PIXEL_MODE_LCD) {
+      /* RGB (BGR) in successive columns. */
+      for (size_t y = 0; y < size_t(g->dims[1]); y++) {
+        for (size_t x = 0; x < size_t(g->dims[0]); x++) {
+          size_t offs_in = (y * size_t(glyph->bitmap.pitch)) + (x * size_t(g->num_channels));
+          size_t offs_out = (y * size_t(g->dims[0]) * size_t(g->num_channels)) +
+                            (x * size_t(g->num_channels));
+          g->bitmap[offs_out + 0] = glyph->bitmap.buffer[offs_in + 2];
+          g->bitmap[offs_out + 1] = glyph->bitmap.buffer[offs_in + 1];
+          g->bitmap[offs_out + 2] = glyph->bitmap.buffer[offs_in + 0];
+        }
+      }
+    }
+    else if (glyph->bitmap.pixel_mode == FT_PIXEL_MODE_LCD_V) {
+      /* RGB (BGR) in successive ROWS. */
+      for (size_t y = 0; y < size_t(g->dims[1]); y++) {
+        for (size_t x = 0; x < size_t(g->dims[0]); x++) {
+          size_t offs_in = (y * size_t(glyph->bitmap.pitch) * size_t(g->num_channels)) + x;
+          size_t offs_out = (y * size_t(g->dims[0]) * size_t(g->num_channels)) +
+                            (x * size_t(g->num_channels));
+          g->bitmap[offs_out + 2] = glyph->bitmap.buffer[offs_in];
+          g->bitmap[offs_out + 1] = glyph->bitmap.buffer[offs_in + size_t(glyph->bitmap.pitch)];
+          g->bitmap[offs_out + 0] = glyph->bitmap.buffer[offs_in + size_t(glyph->bitmap.pitch) +
+                                                         size_t(glyph->bitmap.pitch)];
+        }
+      }
+    }
+    else if (glyph->bitmap.pixel_mode == FT_PIXEL_MODE_BGRA) {
+      /* Convert from BGRA to RGBA. */
+      for (size_t y = 0; y < size_t(g->dims[1]); y++) {
+        for (size_t x = 0; x < size_t(g->dims[0]); x++) {
+          size_t offs_in = (y * size_t(g->pitch)) + (x * size_t(g->num_channels));
+          size_t offs_out = (y * size_t(g->dims[0]) * size_t(g->num_channels)) +
+                            (x * size_t(g->num_channels));
+          g->bitmap[offs_out + 0] = glyph->bitmap.buffer[offs_in + 2];
+          g->bitmap[offs_out + 1] = glyph->bitmap.buffer[offs_in + 1];
+          g->bitmap[offs_out + 2] = glyph->bitmap.buffer[offs_in + 0];
+          g->bitmap[offs_out + 3] = glyph->bitmap.buffer[offs_in + 3];
+        }
       }
     }
     else {
-#ifdef BLF_GAMMA_CORRECT_GLYPHS
-      /* Convert coverage amounts to perceptually-improved lightness values. */
-      for (int i = 0; i < buffer_size; i++) {
-        glyph->bitmap.buffer[i] = blf_glyph_gamma(glyph->bitmap.buffer[i]);
-      }
-#endif /* BLF_GAMMA_CORRECT_GLYPHS */
+      memcpy(g->bitmap, glyph->bitmap.buffer, size_t(buffer_size));
     }
-    g->bitmap = static_cast<uchar *>(MEM_mallocN(size_t(buffer_size), "glyph bitmap"));
-    memcpy(g->bitmap, glyph->bitmap.buffer, size_t(buffer_size));
   }
 
-  BLI_addhead(&(gc->bucket[blf_hash(g->c << 6 | subpixel)]), g);
-
-  return g;
+  GlyphBLF *result = g.get();
+  GlyphCacheKey key = {charcode, subpixel};
+  gc->glyphs.add(key, std::move(g));
+  return result;
 }
+
+#ifndef WITH_HEADLESS
+static GlyphBLF *blf_glyph_cache_add_blank(GlyphCacheBLF *gc, uint charcode)
+{
+  /* Add an empty GlyphBLF to the cache and return it. With
+   * zero dimensions it will be skipped by blf_glyph_draw. */
+  std::unique_ptr<GlyphBLF> g = std::make_unique<GlyphBLF>();
+  g->c = charcode;
+  GlyphBLF *result = g.get();
+  GlyphCacheKey key = {charcode, 0};
+  gc->glyphs.add(key, std::move(g));
+  return result;
+}
+
+static GlyphBLF *blf_glyph_cache_add_svg(
+    GlyphCacheBLF *gc,
+    uint charcode,
+    bool color,
+    blender::FunctionRef<void(std::string &)> edit_source_cb = nullptr)
+{
+  std::string svg_source = blf_get_icon_svg(int(charcode) - BLF_ICON_OFFSET);
+  if (edit_source_cb) {
+    edit_source_cb(svg_source);
+  }
+
+  NSVGimage *image = nsvgParse(svg_source.data(), "px", 96.0f);
+
+  if (image == nullptr) {
+    return blf_glyph_cache_add_blank(gc, charcode);
+  }
+
+  if (image->width == 0 || image->height == 0) {
+    nsvgDelete(image);
+    return blf_glyph_cache_add_blank(gc, charcode);
+  }
+
+  NSVGrasterizer *rast = nsvgCreateRasterizer();
+  if (rast == nullptr) {
+    nsvgDelete(image);
+    return blf_glyph_cache_add_blank(gc, charcode);
+  }
+
+  float scale = (gc->size / 1600.0f);
+  const int dest_w = int(ceil(image->width * scale));
+  const int dest_h = int(ceil(image->height * scale));
+  scale = float(dest_w) / image->width;
+
+  blender::Array<uchar> render_bmp(dest_w * dest_h * 4);
+
+  nsvgRasterize(rast, image, 0.0f, 0.0f, scale, render_bmp.data(), dest_w, dest_h, dest_w * 4);
+  nsvgDeleteRasterizer(rast);
+
+  /* Bitmaps vary in size, so calculate the offsets needed when drawn. */
+  const int offset_x = std::max(int(round((gc->size - (image->width * scale)) / 2.0f)),
+                                int(-100.0f * scale));
+
+  const int offset_y = std::max(int(ceil((gc->size + float(dest_h)) / 2.0f)),
+                                dest_h - int(100.0f * scale));
+
+  nsvgDelete(image);
+
+  std::unique_ptr<GlyphBLF> g = std::make_unique<GlyphBLF>();
+  g->c = charcode;
+  g->idx = 0;
+  g->advance_x = dest_w * 64;
+  g->subpixel = 0;
+  g->box_xmin = 0;
+  g->box_xmax = dest_w * 64;
+  g->box_ymin = 0;
+  g->box_ymax = dest_h * 64;
+  g->lsb_delta = 0;
+  g->rsb_delta = 0;
+  g->pos[0] = offset_x;
+  g->pos[1] = offset_y;
+  g->dims[0] = dest_w;
+  g->dims[1] = dest_h;
+  g->pitch = dest_w;
+  g->num_channels = color ? 4 : 1;
+
+  const int buffer_size = g->dims[0] * g->dims[1] * g->num_channels;
+  g->bitmap = static_cast<uchar *>(MEM_mallocN(size_t(buffer_size), "glyph bitmap"));
+
+  if (color) {
+    memcpy(g->bitmap, render_bmp.data(), size_t(buffer_size));
+  }
+  else {
+    /* Convert from RGBA to coverage map. */
+    for (int64_t y = 0; y < int64_t(g->dims[1]); y++) {
+      for (int64_t x = 0; x < int64_t(g->dims[0]); x++) {
+        int64_t offs_in = (y * int64_t(dest_w) * 4) + (x * 4);
+        int64_t offs_out = (y * int64_t(g->dims[0]) + x);
+        g->bitmap[offs_out] = uchar(float(rgb_to_grayscale_byte(&render_bmp[int64_t(offs_in)])) *
+                                    (float(render_bmp[int64_t(offs_in + 3)]) / 255.0f));
+      }
+    }
+  }
+
+  GlyphBLF *result = g.get();
+  GlyphCacheKey key = {charcode, 0};
+  gc->glyphs.add(key, std::move(g));
+  return result;
+}
+#endif /* WITH_HEADLESS */
 
 /** \} */
 
@@ -693,7 +851,7 @@ static FT_UInt blf_glyph_index_from_charcode(FontBLF **font, const uint charcode
     }
   }
 
-#ifdef DEBUG
+#ifndef NDEBUG
   printf("Unicode character U+%04X not found in loaded fonts. \n", charcode);
 #endif
 
@@ -718,11 +876,14 @@ static FT_UInt blf_glyph_index_from_charcode(FontBLF **font, const uint charcode
 /**
  * Load a glyph into the glyph slot of a font's face object.
  */
-static FT_GlyphSlot blf_glyph_load(FontBLF *font, FT_UInt glyph_index)
+static FT_GlyphSlot blf_glyph_load(FontBLF *font, FT_UInt glyph_index, bool outline_only)
 {
   int load_flags;
 
-  if (font->flags & BLF_MONOCHROME) {
+  if (outline_only) {
+    load_flags = FT_LOAD_NO_SCALE | FT_LOAD_NO_BITMAP;
+  }
+  else if (font->flags & BLF_MONOCHROME) {
     load_flags = FT_LOAD_TARGET_MONO;
   }
   else {
@@ -742,6 +903,10 @@ static FT_GlyphSlot blf_glyph_load(FontBLF *font, FT_UInt glyph_index)
     }
   }
 
+  if (!outline_only && FT_HAS_COLOR(font->face)) {
+    load_flags |= FT_LOAD_COLOR;
+  }
+
   if (FT_Load_Glyph(font->face, glyph_index, load_flags) == FT_Err_Ok) {
     return font->face->glyph;
   }
@@ -759,8 +924,17 @@ static FT_GlyphSlot blf_glyph_load(FontBLF *font, FT_UInt glyph_index)
  */
 static bool blf_glyph_render_bitmap(FontBLF *font, FT_GlyphSlot glyph)
 {
-  const int render_mode = (font->flags & BLF_MONOCHROME) ? FT_RENDER_MODE_MONO :
-                                                           FT_RENDER_MODE_NORMAL;
+  int render_mode;
+
+  if (font->flags & BLF_MONOCHROME) {
+    render_mode = FT_RENDER_MODE_MONO;
+  }
+  else if (font->flags & BLF_HINTING_SLIGHT) {
+    render_mode = FT_RENDER_MODE_LIGHT;
+  }
+  else {
+    render_mode = FT_RENDER_MODE_NORMAL;
+  }
 
   /* Render the glyph curves to a bitmap. */
   FT_Error err = FT_Render_Glyph(glyph, FT_Render_Mode(render_mode));
@@ -768,11 +942,10 @@ static bool blf_glyph_render_bitmap(FontBLF *font, FT_GlyphSlot glyph)
     return false;
   }
 
-  FT_Bitmap tempbitmap;
-
-  if (font->flags & BLF_MONOCHROME) {
-    /* Convert result from 1 bit per pixel to 8 bit per pixel */
-    /* Accumulate errors for later, fine if not interested beyond "ok vs any error" */
+  if (ELEM(glyph->bitmap.pixel_mode, FT_PIXEL_MODE_MONO, FT_PIXEL_MODE_GRAY2, FT_PIXEL_MODE_GRAY4))
+  {
+    /* Convert to 8 bit per pixel */
+    FT_Bitmap tempbitmap;
     FT_Bitmap_New(&tempbitmap);
 
     /* Does Blender use Pitch 1 always? It works so far */
@@ -781,11 +954,7 @@ static bool blf_glyph_render_bitmap(FontBLF *font, FT_GlyphSlot glyph)
     err += FT_Bitmap_Done(font->ft_lib, &tempbitmap);
   }
 
-  if (err || glyph->format != FT_GLYPH_FORMAT_BITMAP) {
-    return false;
-  }
-
-  return true;
+  return (err == FT_Err_Ok);
 }
 
 /** \} */
@@ -813,7 +982,6 @@ static const FT_Var_Axis *blf_var_axis_by_tag(const FT_MM_Var *variations,
     if (variations->axis[i].tag == tag) {
       *r_axis_index = i;
       return &(variations->axis)[i];
-      break;
     }
   }
   return nullptr;
@@ -876,7 +1044,7 @@ static const FT_Var_Axis *blf_var_axis_by_tag(const FT_MM_Var *variations,
  * \param value: New float value. Converted to 16.16 and clamped within allowed range.
  * \return success if able to set this value.
  */
-static bool blf_glyph_set_variation_float(FontBLF *font,
+static bool blf_glyph_set_variation_float(const FontBLF *font,
                                           FT_Fixed coords[],
                                           uint32_t tag,
                                           float *value)
@@ -900,7 +1068,7 @@ static bool blf_glyph_set_variation_float(FontBLF *font,
  * \param weight: Weight class value (1-1000 allowed, 100-900 typical).
  * \return value set (could be clamped), or current weight if the axis does not exist.
  */
-static float blf_glyph_set_variation_weight(FontBLF *font,
+static float blf_glyph_set_variation_weight(const FontBLF *font,
                                             FT_Fixed coords[],
                                             float current_weight,
                                             float target_weight)
@@ -919,7 +1087,7 @@ static float blf_glyph_set_variation_weight(FontBLF *font,
  * \param degrees: Slant in clockwise (opposite to spec) degrees.
  * \return value set (could be clamped), or current slant if the axis does not exist.
  */
-static float blf_glyph_set_variation_slant(FontBLF *font,
+static float blf_glyph_set_variation_slant(const FontBLF *font,
                                            FT_Fixed coords[],
                                            float current_degrees,
                                            float target_degrees)
@@ -938,7 +1106,7 @@ static float blf_glyph_set_variation_slant(FontBLF *font,
  * \param width: Glyph width value. 1.0 is normal, as per spec (which uses percent).
  * \return value set (could be clamped), or current width if the axis does not exist.
  */
-static float blf_glyph_set_variation_width(FontBLF *font,
+static float blf_glyph_set_variation_width(const FontBLF *font,
                                            FT_Fixed coords[],
                                            float current_width,
                                            float target_width)
@@ -957,7 +1125,7 @@ static float blf_glyph_set_variation_width(FontBLF *font,
  * \param spacing: Glyph spacing value. 0.0 is normal, as per spec.
  * \return value set (could be clamped), or current spacing if the axis does not exist.
  */
-static float blf_glyph_set_variation_spacing(FontBLF *font,
+static float blf_glyph_set_variation_spacing(const FontBLF *font,
                                              FT_Fixed coords[],
                                              float current_spacing,
                                              float target_spacing)
@@ -976,7 +1144,7 @@ static float blf_glyph_set_variation_spacing(FontBLF *font,
  * \param points: Non-zero size in typographic points.
  * \return success if able to set this value.
  */
-static bool blf_glyph_set_variation_optical_size(FontBLF *font,
+static bool blf_glyph_set_variation_optical_size(const FontBLF *font,
                                                  FT_Fixed coords[],
                                                  const float points)
 {
@@ -1084,7 +1252,7 @@ static bool blf_glyph_transform_monospace(FT_GlyphSlot glyph, int width)
 {
   if (glyph->format == FT_GLYPH_FORMAT_OUTLINE) {
     FT_Fixed current = glyph->linearHoriAdvance;
-    FT_Fixed target = width << 16; /* Do math in 16.16 values. */
+    FT_Fixed target = FT_Fixed(width) << 16; /* Do math in 16.16 values. */
     if (target < current) {
       const FT_Pos embolden = (FT_Pos)((current - target) >> 13);
       /* Horizontally widen strokes to counteract narrowing. */
@@ -1117,7 +1285,8 @@ static FT_GlyphSlot blf_glyph_render(FontBLF *settings_font,
                                      FT_UInt glyph_index,
                                      uint charcode,
                                      uint8_t subpixel,
-                                     int fixed_width)
+                                     int fixed_width,
+                                     bool outline_only)
 {
   if (glyph_font != settings_font) {
     blf_font_size(glyph_font, settings_font->size);
@@ -1161,7 +1330,7 @@ static FT_GlyphSlot blf_glyph_render(FontBLF *settings_font,
     FT_Set_Var_Design_Coordinates(glyph_font->face, BLF_VARIATIONS_MAX, &coords[0]);
   }
 
-  FT_GlyphSlot glyph = blf_glyph_load(glyph_font, glyph_index);
+  FT_GlyphSlot glyph = blf_glyph_load(glyph_font, glyph_index, outline_only);
   if (!glyph) {
     return nullptr;
   }
@@ -1188,6 +1357,10 @@ static FT_GlyphSlot blf_glyph_render(FontBLF *settings_font,
     blf_glyph_transform_spacing(glyph, spacing_target - spacing);
   }
 
+  if (outline_only) {
+    return glyph;
+  }
+
   FT_Outline_Translate(&glyph->outline, (FT_Pos)subpixel, 0);
 
   if (blf_glyph_render_bitmap(glyph_font, glyph)) {
@@ -1196,10 +1369,7 @@ static FT_GlyphSlot blf_glyph_render(FontBLF *settings_font,
   return nullptr;
 }
 
-static GlyphBLF *blf_glyph_ensure_ex(FontBLF *font,
-                                     GlyphCacheBLF *gc,
-                                     const uint charcode,
-                                     uint8_t subpixel)
+GlyphBLF *blf_glyph_ensure(FontBLF *font, GlyphCacheBLF *gc, const uint charcode, uint8_t subpixel)
 {
   GlyphBLF *g = blf_glyph_cache_find_glyph(gc, charcode, subpixel);
   if (g) {
@@ -1215,25 +1385,34 @@ static GlyphBLF *blf_glyph_ensure_ex(FontBLF *font,
   }
 
   FT_GlyphSlot glyph = blf_glyph_render(
-      font, font_with_glyph, glyph_index, charcode, subpixel, gc->fixed_width);
+      font, font_with_glyph, glyph_index, charcode, subpixel, gc->fixed_width, false);
 
   if (glyph) {
     /* Save this glyph in the initial font's cache. */
-    g = blf_glyph_cache_add_glyph(font, gc, glyph, charcode, glyph_index, subpixel);
+    g = blf_glyph_cache_add_glyph(gc, glyph, charcode, glyph_index, subpixel);
   }
 
   return g;
 }
 
-GlyphBLF *blf_glyph_ensure(FontBLF *font, GlyphCacheBLF *gc, const uint charcode)
+#ifndef WITH_HEADLESS
+GlyphBLF *blf_glyph_ensure_icon(GlyphCacheBLF *gc,
+                                const uint icon_id,
+                                bool color,
+                                blender::FunctionRef<void(std::string &)> edit_source_cb)
 {
-  return blf_glyph_ensure_ex(font, gc, charcode, 0);
+  GlyphBLF *g = blf_glyph_cache_find_glyph(gc, icon_id + BLF_ICON_OFFSET, 0);
+  if (g) {
+    return g;
+  }
+  return blf_glyph_cache_add_svg(gc, icon_id + BLF_ICON_OFFSET, color, edit_source_cb);
 }
+#endif /* WITH_HEADLESS */
 
 #ifdef BLF_SUBPIXEL_AA
 GlyphBLF *blf_glyph_ensure_subpixel(FontBLF *font, GlyphCacheBLF *gc, GlyphBLF *g, int32_t pen_x)
 {
-  if (!(font->flags & BLF_RENDER_SUBPIXELAA) || (font->flags & BLF_MONOCHROME)) {
+  if (!(font->flags & BLF_RENDER_SUBPIXELAA)) {
     /* Not if we are in mono mode (aliased) or the feature is turned off. */
     return g;
   }
@@ -1247,18 +1426,17 @@ GlyphBLF *blf_glyph_ensure_subpixel(FontBLF *font, GlyphCacheBLF *gc, GlyphBLF *
   const uint8_t subpixel = uint8_t(pen_x & ((font->size > 16.0f) ? 32L : 48L));
 
   if (g->subpixel != subpixel) {
-    g = blf_glyph_ensure_ex(font, gc, g->c, subpixel);
+    g = blf_glyph_ensure(font, gc, g->c, subpixel);
   }
   return g;
 }
 #endif
 
-void blf_glyph_free(GlyphBLF *g)
+GlyphBLF::~GlyphBLF()
 {
-  if (g->bitmap) {
-    MEM_freeN(g->bitmap);
+  if (this->bitmap) {
+    MEM_freeN(this->bitmap);
   }
-  MEM_freeN(g);
 }
 
 /** \} */
@@ -1267,29 +1445,29 @@ void blf_glyph_free(GlyphBLF *g)
 /** \name Glyph Bounds Calculation
  * \{ */
 
-static void blf_glyph_calc_rect(rcti *rect, GlyphBLF *g, const int x, const int y)
+static void blf_glyph_calc_rect(const GlyphBLF *g, const int x, const int y, rcti *r_rect)
 {
-  rect->xmin = x + g->pos[0];
-  rect->xmax = rect->xmin + g->dims[0];
-  rect->ymin = y + g->pos[1];
-  rect->ymax = rect->ymin - g->dims[1];
+  r_rect->xmin = x + g->pos[0];
+  r_rect->xmax = r_rect->xmin + g->dims[0];
+  r_rect->ymin = y + g->pos[1];
+  r_rect->ymax = r_rect->ymin - g->dims[1];
 }
 
-static void blf_glyph_calc_rect_test(rcti *rect, GlyphBLF *g, const int x, const int y)
+static void blf_glyph_calc_rect_test(const GlyphBLF *g, const int x, const int y, rcti *r_rect)
 {
   /* Intentionally check with `g->advance`, because this is the
    * width used by BLF_width. This allows that the text slightly
    * overlaps the clipping border to achieve better alignment. */
-  rect->xmin = x + g->pos[0] + 1;
-  rect->xmax = x + std::min(ft_pix_to_int(g->advance_x), g->dims[0]);
-  rect->ymin = y;
-  rect->ymax = rect->ymin - g->dims[1];
+  r_rect->xmin = x + abs(g->pos[0]) + 1;
+  r_rect->xmax = x + std::min(ft_pix_to_int(g->advance_x), g->dims[0]);
+  r_rect->ymin = y;
+  r_rect->ymax = r_rect->ymin - g->dims[1];
 }
 
 static void blf_glyph_calc_rect_shadow(
-    rcti *rect, GlyphBLF *g, const int x, const int y, FontBLF *font)
+    const GlyphBLF *g, const int x, const int y, const FontBLF *font, rcti *r_rect)
 {
-  blf_glyph_calc_rect(rect, g, x + font->shadow_x, y + font->shadow_y);
+  blf_glyph_calc_rect(g, x + font->shadow_x, y + font->shadow_y, r_rect);
 }
 
 /** \} */
@@ -1298,62 +1476,32 @@ static void blf_glyph_calc_rect_shadow(
 /** \name Glyph Drawing
  * \{ */
 
-static void blf_texture_draw(const uchar color[4],
-                             const int glyph_size[2],
-                             const int offset,
+static void blf_texture_draw(const GlyphBLF *g,
+                             const uchar color[4],
+                             const FontShadowType shadow,
                              const int x1,
                              const int y1,
                              const int x2,
                              const int y2)
 {
-  /* Only one vertex per glyph, geometry shader expand it into a quad. */
-  /* TODO: Get rid of Geom Shader because it's not optimal AT ALL for the GPU. */
+  /* One vertex per glyph, instancing expands it into a quad. */
   copy_v4_fl4(static_cast<float *>(GPU_vertbuf_raw_step(&g_batch.pos_step)),
               float(x1 + g_batch.ofs[0]),
               float(y1 + g_batch.ofs[1]),
               float(x2 + g_batch.ofs[0]),
               float(y2 + g_batch.ofs[1]));
   copy_v4_v4_uchar(static_cast<uchar *>(GPU_vertbuf_raw_step(&g_batch.col_step)), color);
-  copy_v2_v2_int(static_cast<int *>(GPU_vertbuf_raw_step(&g_batch.glyph_size_step)), glyph_size);
-  *((int *)GPU_vertbuf_raw_step(&g_batch.offset_step)) = offset;
+  copy_v2_v2_int(static_cast<int *>(GPU_vertbuf_raw_step(&g_batch.glyph_size_step)), g->dims);
+  *((int *)GPU_vertbuf_raw_step(&g_batch.offset_step)) = g->offset;
+  /* Glyph flags packs color channel count and shadow type. */
+  uint32_t flags = uint32_t(shadow) | (uint32_t(g->num_channels) << 4);
+  *((uint32_t *)GPU_vertbuf_raw_step(&g_batch.glyph_flags_step)) = flags;
 
   g_batch.glyph_len++;
   /* Flush cache if it's full. */
   if (g_batch.glyph_len == BLF_BATCH_DRAW_LEN_MAX) {
     blf_batch_draw();
   }
-}
-
-static void blf_texture5_draw(const uchar color_in[4],
-                              const int glyph_size[2],
-                              const int offset,
-                              const int x1,
-                              const int y1,
-                              const int x2,
-                              const int y2)
-{
-  int glyph_size_flag[2];
-  /* flag the x and y component signs for 5x5 blurring */
-  glyph_size_flag[0] = -glyph_size[0];
-  glyph_size_flag[1] = -glyph_size[1];
-
-  blf_texture_draw(color_in, glyph_size_flag, offset, x1, y1, x2, y2);
-}
-
-static void blf_texture3_draw(const uchar color_in[4],
-                              const int glyph_size[2],
-                              const int offset,
-                              const int x1,
-                              const int y1,
-                              const int x2,
-                              const int y2)
-{
-  int glyph_size_flag[2];
-  /* flag the x component sign for 3x3 blurring */
-  glyph_size_flag[0] = -glyph_size[0];
-  glyph_size_flag[1] = glyph_size[1];
-
-  blf_texture_draw(color_in, glyph_size_flag, offset, x1, y1, x2, y2);
 }
 
 void blf_glyph_draw(FontBLF *font, GlyphCacheBLF *gc, GlyphBLF *g, const int x, const int y)
@@ -1369,7 +1517,7 @@ void blf_glyph_draw(FontBLF *font, GlyphCacheBLF *gc, GlyphBLF *g, const int x, 
 
     g->offset = gc->bitmap_len;
 
-    int buff_size = g->dims[0] * g->dims[1];
+    int buff_size = g->dims[0] * g->dims[1] * g->num_channels;
     int bitmap_len = gc->bitmap_len + buff_size;
 
     if (bitmap_len > gc->bitmap_len_alloc) {
@@ -1409,7 +1557,7 @@ void blf_glyph_draw(FontBLF *font, GlyphCacheBLF *gc, GlyphBLF *g, const int x, 
     }
 
     rcti rect_test;
-    blf_glyph_calc_rect_test(&rect_test, g, int(float(x) * xa), int(float(y) * ya));
+    blf_glyph_calc_rect_test(g, int(float(x) * xa), int(float(y) * ya), &rect_test);
     BLI_rcti_translate(&rect_test, font->pos[0], font->pos[1]);
     if (!BLI_rcti_inside_rcti(&font->clip_rec, &rect_test)) {
       return;
@@ -1423,57 +1571,324 @@ void blf_glyph_draw(FontBLF *font, GlyphCacheBLF *gc, GlyphBLF *g, const int x, 
 
   if (font->flags & BLF_SHADOW) {
     rcti rect_ofs;
-    blf_glyph_calc_rect_shadow(&rect_ofs, g, x, y, font);
+    blf_glyph_calc_rect_shadow(g, x, y, font, &rect_ofs);
 
-    if (font->shadow == 0) {
-      blf_texture_draw(font->shadow_color,
-                       g->dims,
-                       g->offset,
-                       rect_ofs.xmin,
-                       rect_ofs.ymin,
-                       rect_ofs.xmax,
-                       rect_ofs.ymax);
-    }
-    else if (font->shadow <= 4) {
-      blf_texture3_draw(font->shadow_color,
-                        g->dims,
-                        g->offset,
-                        rect_ofs.xmin,
-                        rect_ofs.ymin,
-                        rect_ofs.xmax,
-                        rect_ofs.ymax);
-    }
-    else {
-      blf_texture5_draw(font->shadow_color,
-                        g->dims,
-                        g->offset,
-                        rect_ofs.xmin,
-                        rect_ofs.ymin,
-                        rect_ofs.xmax,
-                        rect_ofs.ymax);
-    }
+    blf_texture_draw(g,
+                     font->shadow_color,
+                     font->shadow,
+                     rect_ofs.xmin,
+                     rect_ofs.ymin,
+                     rect_ofs.xmax,
+                     rect_ofs.ymax);
   }
 
   rcti rect;
-  blf_glyph_calc_rect(&rect, g, x, y);
+  blf_glyph_calc_rect(g, x, y, &rect);
+  blf_texture_draw(
+      g, font->color, FontShadowType::None, rect.xmin, rect.ymin, rect.xmax, rect.ymax);
+}
 
-#if BLF_BLUR_ENABLE
-  switch (font->blur) {
-    case 3:
-      blf_texture3_draw(
-          font->color, g->dims, g->offset, rect.xmin, rect.ymin, rect.xmax, rect.ymax);
-      break;
-    case 5:
-      blf_texture5_draw(
-          font->color, g->dims, g->offset, rect.xmin, rect.ymin, rect.xmax, rect.ymax);
-      break;
-    default:
-      blf_texture_draw(
-          font->color, g->dims, g->offset, rect.xmin, rect.ymin, rect.xmax, rect.ymax);
+/* -------------------------------------------------------------------- */
+/** \name Convert Glyph to Curves
+ * \{ */
+
+/**
+ * from: http://www.freetype.org/freetype2/docs/glyphs/glyphs-6.html#section-1
+ *
+ * Vectorial representation of Freetype glyphs
+ *
+ * The source format of outlines is a collection of closed paths called "contours". Each contour is
+ * made of a series of line segments and bezier arcs. Depending on the file format, these can be
+ * second-order or third-order polynomials. The former are also called quadratic or conic arcs, and
+ * they come from the TrueType format. The latter are called cubic arcs and mostly come from the
+ * Type1 format.
+ *
+ * Each arc is described through a series of start, end and control points.
+ * Each point of the outline has a specific tag which indicates whether it is
+ * used to describe a line segment or an arc.
+ * The following rules are applied to decompose the contour's points into segments and arcs :
+ *
+ * # two successive "on" points indicate a line segment joining them.
+ *
+ * # one conic "off" point midst two "on" points indicates a conic bezier arc,
+ *   the "off" point being the control point, and the "on" ones the start and end points.
+ *
+ * # Two successive cubic "off" points midst two "on" points indicate a cubic bezier arc.
+ *   There must be exactly two cubic control points and two on points for each cubic arc
+ *   (using a single cubic "off" point between two "on" points is forbidden, for example).
+ *
+ * # finally, two successive conic "off" points forces the rasterizer to create
+ *   (during the scan-line conversion process exclusively) a virtual "on" point midst them,
+ *   at their exact middle.
+ *   This greatly facilitates the definition of successive conic bezier arcs.
+ *   Moreover, it's the way outlines are described in the TrueType specification.
+ *
+ * Note that it is possible to mix conic and cubic arcs in a single contour, even though no current
+ * font driver produces such outlines.
+ *
+ * <pre>
+ *                                   *            # on
+ *                                                * off
+ *                                __---__
+ *   #-__                      _--       -_
+ *       --__                _-            -
+ *           --__           #               \
+ *               --__                        #
+ *                   -#
+ *                            Two "on" points
+ *    Two "on" points       and one "conic" point
+ *                             between them
+ *                 *
+ *   #            __      Two "on" points with two "conic"
+ *    \          -  -     points between them. The point
+ *     \        /    \    marked '0' is the middle of the
+ *      -      0      \   "off" points, and is a 'virtual'
+ *       -_  _-       #   "on" point where the curve passes.
+ *         --             It does not appear in the point
+ *                        list.
+ *         *
+ *         *                # on
+ *                    *     * off
+ *          __---__
+ *       _--       -_
+ *     _-            -
+ *    #               \
+ *                     #
+ *
+ *      Two "on" points
+ *    and two "cubic" point
+ *       between them
+ * </pre>
+ *
+ * Each glyphs original outline points are located on a grid of indivisible units.
+ * The points are stored in the font file as 16-bit integer grid coordinates,
+ * with the grid origin's being at (0, 0); they thus range from -16384 to 16383.
+ *
+ * Convert conic to bezier arcs:
+ * Conic P0 P1 P2
+ * Bezier B0 B1 B2 B3
+ * B0=P0
+ * B1=(P0+2*P1)/3
+ * B2=(P2+2*P1)/3
+ * B3=P2
+ */
+
+static void blf_glyph_to_curves(const FT_Outline &ftoutline,
+                                ListBase *nurbsbase,
+                                const float scale)
+{
+  const float eps = 0.0001f;
+  const float eps_sq = eps * eps;
+  Nurb *nu;
+  BezTriple *bezt;
+  float dx, dy;
+  int j, k, l, l_first = 0;
+
+  /* initialize as -1 to add 1 on first loop each time */
+  int contour_prev;
+
+  /* Start converting the FT data */
+  int *onpoints = static_cast<int *>(
+      MEM_callocN(size_t(ftoutline.n_contours) * sizeof(int), "onpoints"));
+
+  /* Get number of on-curve points for bezier-triples (including conic virtual on-points). */
+  for (j = 0, contour_prev = -1; j < ftoutline.n_contours; j++) {
+    const int n = ftoutline.contours[j] - contour_prev;
+    contour_prev = ftoutline.contours[j];
+
+    for (k = 0; k < n; k++) {
+      l = (j > 0) ? (k + ftoutline.contours[j - 1] + 1) : k;
+      if (k == 0) {
+        l_first = l;
+      }
+
+      if (ftoutline.tags[l] == FT_Curve_Tag_On) {
+        onpoints[j]++;
+      }
+
+      {
+        const int l_next = (k < n - 1) ? (l + 1) : l_first;
+        if (ftoutline.tags[l] == FT_Curve_Tag_Conic &&
+            ftoutline.tags[l_next] == FT_Curve_Tag_Conic)
+        {
+          onpoints[j]++;
+        }
+      }
+    }
   }
-#else
-  blf_texture_draw(font->color, g->dims, g->offset, rect.xmin, rect.ymin, rect.xmax, rect.ymax);
-#endif
+
+  /* contour loop, bezier & conic styles merged */
+  for (j = 0, contour_prev = -1; j < ftoutline.n_contours; j++) {
+    const int n = ftoutline.contours[j] - contour_prev;
+    contour_prev = ftoutline.contours[j];
+
+    /* add new curve */
+    nu = (Nurb *)MEM_callocN(sizeof(Nurb), "objfnt_nurb");
+    bezt = static_cast<BezTriple *>(
+        MEM_callocN(size_t(onpoints[j]) * sizeof(BezTriple), "objfnt_bezt"));
+    BLI_addtail(nurbsbase, nu);
+
+    nu->type = CU_BEZIER;
+    nu->pntsu = onpoints[j];
+    nu->resolu = 8;
+    nu->flagu = CU_NURB_CYCLIC;
+    nu->bezt = bezt;
+
+    /* individual curve loop, start-end */
+    for (k = 0; k < n; k++) {
+      l = (j > 0) ? (k + ftoutline.contours[j - 1] + 1) : k;
+      if (k == 0) {
+        l_first = l;
+      }
+
+      /* virtual conic on-curve points */
+      {
+        const int l_next = (k < n - 1) ? (l + 1) : l_first;
+        if (ftoutline.tags[l] == FT_Curve_Tag_Conic &&
+            ftoutline.tags[l_next] == FT_Curve_Tag_Conic)
+        {
+          dx = float(ftoutline.points[l].x + ftoutline.points[l_next].x) * scale / 2.0f;
+          dy = float(ftoutline.points[l].y + ftoutline.points[l_next].y) * scale / 2.0f;
+
+          /* left handle */
+          bezt->vec[0][0] = (dx + (2.0f * float(ftoutline.points[l].x)) * scale) / 3.0f;
+          bezt->vec[0][1] = (dy + (2.0f * float(ftoutline.points[l].y)) * scale) / 3.0f;
+
+          /* midpoint (virtual on-curve point) */
+          bezt->vec[1][0] = dx;
+          bezt->vec[1][1] = dy;
+
+          /* right handle */
+          bezt->vec[2][0] = (dx + (2.0f * float(ftoutline.points[l_next].x)) * scale) / 3.0f;
+          bezt->vec[2][1] = (dy + (2.0f * float(ftoutline.points[l_next].y)) * scale) / 3.0f;
+
+          bezt->h1 = bezt->h2 = HD_ALIGN;
+          bezt->radius = 1.0f;
+          bezt++;
+        }
+      }
+
+      /* on-curve points */
+      if (ftoutline.tags[l] == FT_Curve_Tag_On) {
+        const int l_prev = (k > 0) ? (l - 1) : ftoutline.contours[j];
+        const int l_next = (k < n - 1) ? (l + 1) : l_first;
+
+        /* left handle */
+        if (ftoutline.tags[l_prev] == FT_Curve_Tag_Cubic) {
+          bezt->vec[0][0] = float(ftoutline.points[l_prev].x) * scale;
+          bezt->vec[0][1] = float(ftoutline.points[l_prev].y) * scale;
+          bezt->h1 = HD_FREE;
+        }
+        else if (ftoutline.tags[l_prev] == FT_Curve_Tag_Conic) {
+          bezt->vec[0][0] = (float(ftoutline.points[l].x) +
+                             (2.0f * float(ftoutline.points[l_prev].x))) *
+                            scale / 3.0f;
+          bezt->vec[0][1] = (float(ftoutline.points[l].y) +
+                             (2.0f * float(ftoutline.points[l_prev].y))) *
+                            scale / 3.0f;
+          bezt->h1 = HD_FREE;
+        }
+        else {
+          bezt->vec[0][0] = float(ftoutline.points[l].x) * scale -
+                            (float(ftoutline.points[l].x) - float(ftoutline.points[l_prev].x)) *
+                                scale / 3.0f;
+          bezt->vec[0][1] = float(ftoutline.points[l].y) * scale -
+                            (float(ftoutline.points[l].y) - float(ftoutline.points[l_prev].y)) *
+                                scale / 3.0f;
+          bezt->h1 = HD_VECT;
+        }
+
+        /* midpoint (on-curve point) */
+        bezt->vec[1][0] = float(ftoutline.points[l].x) * scale;
+        bezt->vec[1][1] = float(ftoutline.points[l].y) * scale;
+
+        /* right handle */
+        if (ftoutline.tags[l_next] == FT_Curve_Tag_Cubic) {
+          bezt->vec[2][0] = float(ftoutline.points[l_next].x) * scale;
+          bezt->vec[2][1] = float(ftoutline.points[l_next].y) * scale;
+          bezt->h2 = HD_FREE;
+        }
+        else if (ftoutline.tags[l_next] == FT_Curve_Tag_Conic) {
+          bezt->vec[2][0] = (float(ftoutline.points[l].x) +
+                             (2.0f * float(ftoutline.points[l_next].x))) *
+                            scale / 3.0f;
+          bezt->vec[2][1] = (float(ftoutline.points[l].y) +
+                             (2.0f * float(ftoutline.points[l_next].y))) *
+                            scale / 3.0f;
+          bezt->h2 = HD_FREE;
+        }
+        else {
+          bezt->vec[2][0] = float(ftoutline.points[l].x) * scale -
+                            (float(ftoutline.points[l].x) - float(ftoutline.points[l_next].x)) *
+                                scale / 3.0f;
+          bezt->vec[2][1] = float(ftoutline.points[l].y) * scale -
+                            (float(ftoutline.points[l].y) - float(ftoutline.points[l_next].y)) *
+                                scale / 3.0f;
+          bezt->h2 = HD_VECT;
+        }
+
+        /* get the handles that are aligned, tricky...
+         * - check if one of them is a vector handle.
+         * - dist_squared_to_line_v2, check if the three beztriple points are on one line
+         * - len_squared_v2v2, see if there's a distance between the three points
+         * - len_squared_v2v2 again, to check the angle between the handles
+         */
+        if ((bezt->h1 != HD_VECT && bezt->h2 != HD_VECT) &&
+            (dist_squared_to_line_v2(bezt->vec[0], bezt->vec[1], bezt->vec[2]) <
+             (0.001f * 0.001f)) &&
+            (len_squared_v2v2(bezt->vec[0], bezt->vec[1]) > eps_sq) &&
+            (len_squared_v2v2(bezt->vec[1], bezt->vec[2]) > eps_sq) &&
+            (len_squared_v2v2(bezt->vec[0], bezt->vec[2]) > eps_sq) &&
+            (len_squared_v2v2(bezt->vec[0], bezt->vec[2]) >
+             max_ff(len_squared_v2v2(bezt->vec[0], bezt->vec[1]),
+                    len_squared_v2v2(bezt->vec[1], bezt->vec[2]))))
+        {
+          bezt->h1 = bezt->h2 = HD_ALIGN;
+        }
+        bezt->radius = 1.0f;
+        bezt++;
+      }
+    }
+  }
+
+  MEM_freeN(onpoints);
+}
+
+static FT_GlyphSlot blf_glyphslot_ensure_outline(FontBLF *font, const uint charcode)
+{
+  /* Glyph might not come from the initial font. */
+  FontBLF *font_with_glyph = font;
+  FT_UInt glyph_index = blf_glyph_index_from_charcode(&font_with_glyph, charcode);
+
+  if (!blf_ensure_face(font_with_glyph)) {
+    return nullptr;
+  }
+
+  FT_GlyphSlot glyph = blf_glyph_render(font, font_with_glyph, glyph_index, charcode, 0, 0, true);
+
+  if (font != font_with_glyph) {
+    if (!blf_ensure_face(font)) {
+      return nullptr;
+    }
+    double ratio = float(font->face->units_per_EM) / float(font_with_glyph->face->units_per_EM);
+    FT_Matrix transform = {to_16dot16(ratio), 0, 0, to_16dot16(ratio)};
+    FT_Outline_Transform(&glyph->outline, &transform);
+    glyph->advance.x = int(float(glyph->advance.x) * ratio);
+    glyph->metrics.horiAdvance = int(float(glyph->metrics.horiAdvance) * ratio);
+  }
+
+  return glyph;
+}
+
+float blf_character_to_curves(FontBLF *font, uint unicode, ListBase *nurbsbase, const float scale)
+{
+  FT_GlyphSlot glyph = blf_glyphslot_ensure_outline(font, unicode);
+  if (!glyph) {
+    return 0.0f;
+  }
+
+  blf_glyph_to_curves(glyph->outline, nurbsbase, scale);
+  return float(glyph->advance.x) * scale;
 }
 
 /** \} */

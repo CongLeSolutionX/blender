@@ -3,10 +3,9 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "COM_DilateErodeNode.h"
-#include "COM_AntiAliasOperation.h"
 #include "COM_DilateErodeOperation.h"
-#include "COM_GaussianAlphaXBlurOperation.h"
-#include "COM_GaussianAlphaYBlurOperation.h"
+#include "COM_GaussianAlphaBlurBaseOperation.h"
+#include "COM_SMAAOperation.h"
 
 namespace blender::compositor {
 
@@ -26,7 +25,7 @@ DilateErodeNode::DilateErodeNode(bNode *editor_node) : Node(editor_node)
 }
 
 void DilateErodeNode::convert_to_operations(NodeConverter &converter,
-                                            const CompositorContext &context) const
+                                            const CompositorContext & /*context*/) const
 {
   const bNode *editor_node = this->get_bnode();
   if (editor_node->custom1 == CMP_NODE_DILATE_ERODE_DISTANCE_THRESHOLD) {
@@ -38,11 +37,10 @@ void DilateErodeNode::convert_to_operations(NodeConverter &converter,
     converter.map_input_socket(get_input_socket(0), operation->get_input_socket(0));
 
     if (editor_node->custom3 < 2.0f) {
-      AntiAliasOperation *anti_alias = new AntiAliasOperation();
-      converter.add_operation(anti_alias);
-
-      converter.add_link(operation->get_output_socket(), anti_alias->get_input_socket(0));
-      converter.map_output_socket(get_output_socket(0), anti_alias->get_output_socket(0));
+      SMAAOperation *smaa_operation = new SMAAOperation();
+      converter.add_operation(smaa_operation);
+      converter.add_link(operation->get_output_socket(), smaa_operation->get_input_socket(0));
+      converter.map_output_socket(get_output_socket(0), smaa_operation->get_output_socket());
     }
     else {
       converter.map_output_socket(get_output_socket(0), operation->get_output_socket(0));
@@ -67,12 +65,8 @@ void DilateErodeNode::convert_to_operations(NodeConverter &converter,
     }
   }
   else if (editor_node->custom1 == CMP_NODE_DILATE_ERODE_DISTANCE_FEATHER) {
-    /* this uses a modified gaussian blur function otherwise its far too slow */
-    eCompositorQuality quality = context.get_quality();
-
     GaussianAlphaXBlurOperation *operationx = new GaussianAlphaXBlurOperation();
     operationx->set_data(&alpha_blur_);
-    operationx->set_quality(quality);
     operationx->set_falloff(PROP_SMOOTH);
     converter.add_operation(operationx);
 
@@ -82,7 +76,6 @@ void DilateErodeNode::convert_to_operations(NodeConverter &converter,
 
     GaussianAlphaYBlurOperation *operationy = new GaussianAlphaYBlurOperation();
     operationy->set_data(&alpha_blur_);
-    operationy->set_quality(quality);
     operationy->set_falloff(PROP_SMOOTH);
     converter.add_operation(operationy);
 

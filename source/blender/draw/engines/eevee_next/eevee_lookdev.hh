@@ -16,6 +16,7 @@
 namespace blender::eevee {
 
 class Instance;
+class LookdevView;
 
 /* -------------------------------------------------------------------- */
 /** \name Parameters
@@ -35,30 +36,52 @@ struct LookdevParameters {
   LookdevParameters(const ::View3D *v3d);
   bool operator==(const LookdevParameters &other) const;
   bool operator!=(const LookdevParameters &other) const;
-  bool gpu_parameters_changed(const LookdevParameters &other) const;
 };
 
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name Viewport Override Node-Tree
+/** \name Viewport Override World
  *
  * In a viewport the world can be overridden by a custom HDRI and some settings.
  * \{ */
 
-class LookdevWorldNodeTree {
+class LookdevWorld {
  private:
-  bNodeTree *ntree_ = nullptr;
   bNode *environment_node_ = nullptr;
   bNodeSocketValueFloat *intensity_socket_ = nullptr;
   bNodeSocketValueFloat *angle_socket_ = nullptr;
   ::Image image = {};
+  ::World world = {};
+
+  LookdevParameters parameters_;
 
  public:
-  LookdevWorldNodeTree();
-  ~LookdevWorldNodeTree();
+  LookdevWorld();
+  ~LookdevWorld();
 
-  bNodeTree *nodetree_get(const LookdevParameters &parameters);
+  /* Returns true if an update was detected. */
+  bool sync(const LookdevParameters &new_parameters);
+
+  ::World *world_get()
+  {
+    return &world;
+  }
+
+  float background_opacity_get() const
+  {
+    return parameters_.background_opacity;
+  }
+
+  float background_blur_get() const
+  {
+    return parameters_.blur;
+  }
+
+  float intensity_get() const
+  {
+    return parameters_.intensity;
+  }
 };
 
 /** \} */
@@ -66,30 +89,54 @@ class LookdevWorldNodeTree {
 /* -------------------------------------------------------------------- */
 /** \name Lookdev
  *
- * Look Development can override the world.
- *
  * \{ */
 
 class LookdevModule {
- public:
  private:
   Instance &inst_;
 
-  LookdevWorldNodeTree world_override_tree;
+  bool enabled_;
 
-  LookdevParameters parameters_;
-  ListBase gpu_materials_ = {nullptr, nullptr};
-  GPUMaterial *gpu_material_ = nullptr;
-  eGPUMaterialStatus gpu_status_ = GPU_MAT_CREATED;
+  static constexpr int num_spheres = 2;
+
+  /* Size and position of the look-dev spheres in world space. */
+  float sphere_radius_;
+  float3 sphere_position_;
+
+  rcti visible_rect_;
+
+  /* Dummy textures: required to reuse forward mesh shader and avoid another shader variation. */
+  Texture dummy_cryptomatte_tx_;
+  Texture dummy_aov_color_tx_;
+  Texture dummy_aov_value_tx_;
+
+  struct Sphere {
+    Framebuffer framebuffer = {"Lookdev.Framebuffer"};
+    Texture color_tx_ = {"Lookdev.Color"};
+    PassSimple pass = {"Lookdev.Sphere"};
+  };
+
+  Sphere spheres_[num_spheres];
+  PassSimple display_ps_ = {"Lookdev.Display"};
 
  public:
-  LookdevModule(Instance &inst) : inst_(inst){};
+  LookdevModule(Instance &inst);
   ~LookdevModule();
 
-  bool sync_world();
+  void init(const rcti *visible_rect);
+  void sync();
+
+  void draw(View &view);
+
+  void display();
 
  private:
-  ::World *get_world(::bNodeTree *node_tree);
+  void sync_pass(PassSimple &pass, gpu::Batch *geom, ::Material *mat, ResourceHandle res_handle);
+  void sync_display();
+
+  float calc_viewport_scale();
+
+  friend class LookdevView;
 };
 
 /** \} */

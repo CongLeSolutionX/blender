@@ -24,8 +24,8 @@ class TestEnvironment:
         self.base_dir = base_dir
         self.blender_dir = base_dir / 'blender'
         self.build_dir = base_dir / 'build'
-        self.lib_dir = base_dir / 'lib'
-        self.benchmarks_dir = self.blender_git_dir.parent / 'lib' / 'benchmarks'
+        self.install_dir = self.build_dir / "bin"
+        self.benchmarks_dir = self.blender_git_dir / 'tests' / 'benchmarks'
         self.git_executable = 'git'
         self.cmake_executable = 'cmake'
         self.cmake_options = ['-DWITH_INTERNATIONAL=OFF', '-DWITH_BUILDINFO=OFF']
@@ -55,12 +55,6 @@ class TestEnvironment:
             TestConfig.write_default_config(self, config_dir)
 
         if build:
-            if not self.lib_dir.exists():
-                print(f'Creating symlink at {self.lib_dir}')
-                self.lib_dir.symlink_to(self.blender_git_dir.parent / 'lib')
-            else:
-                print(f'Exists {self.lib_dir}')
-
             if not self.blender_dir.exists():
                 print(f'Init git worktree in {self.blender_dir}')
                 self.call([self.git_executable, 'worktree', 'add', '--detach',
@@ -81,7 +75,7 @@ class TestEnvironment:
 
         print('Done')
 
-    def checkout(self, git_hash) -> None:
+    def checkout(self, git_hash: str) -> None:
         # Checkout Blender revision
         if not self.blender_dir.exists():
             sys.stderr.write('\n\nError: no build set up, run `./benchmark init --build` first\n')
@@ -91,16 +85,34 @@ class TestEnvironment:
         self.call([self.git_executable, 'reset', '--hard', 'HEAD'], self.blender_dir)
         self.call([self.git_executable, 'checkout', '--detach', git_hash], self.blender_dir)
 
-    def build(self) -> bool:
+    def build(self, git_hash: str, install_dir: pathlib.Path) -> bool:
         # Build Blender revision
         if not self.build_dir.exists():
             sys.stderr.write('\n\nError: no build set up, run `./benchmark init --build` first\n')
             sys.exit(1)
 
+        # Skip if build with same hash is already done.
+        if install_dir.resolve() != self.install_dir.resolve():
+            complete_txt = pathlib.Path(install_dir) / "complete.txt"
+            if complete_txt.is_file():
+                if complete_txt.read_text().strip() == git_hash:
+                    self._init_default_blender_executable()
+                    return True
+                # Different hash, build again.
+                complete_txt.unlink()
+        else:
+            complete_txt = None
+
+        self.checkout(git_hash)
+
         jobs = str(multiprocessing.cpu_count())
+        cmake_options = list(self.cmake_options)
+        cmake_options += [f"-DCMAKE_INSTALL_PREFIX={install_dir}"]
         try:
-            self.call([self.cmake_executable, '.'] + self.cmake_options, self.build_dir)
+            self.call([self.cmake_executable, '.'] + cmake_options, self.build_dir)
             self.call([self.cmake_executable, '--build', '.', '-j', jobs, '--target', 'install'], self.build_dir)
+            if complete_txt:
+                complete_txt.write_text(git_hash)
         except KeyboardInterrupt as e:
             raise e
         except:
@@ -110,6 +122,9 @@ class TestEnvironment:
         return True
 
     def set_blender_executable(self, executable_path: pathlib.Path, environment: Dict = {}) -> None:
+        if executable_path.is_dir():
+            executable_path = self._blender_executable_from_path(executable_path)
+
         # Run all Blender commands with this executable.
         self.blender_executable = executable_path
         self.blender_executable_environment = environment
@@ -138,7 +153,7 @@ class TestEnvironment:
     def _init_default_blender_executable(self) -> None:
         # Find a default executable to run commands independent of testing a specific build.
         # Try own built executable.
-        built_executable = self._blender_executable_from_path(self.build_dir / 'bin')
+        built_executable = self._blender_executable_from_path(self.install_dir)
         if built_executable:
             self.default_blender_executable = built_executable
             return

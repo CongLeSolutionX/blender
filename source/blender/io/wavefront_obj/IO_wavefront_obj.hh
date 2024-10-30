@@ -8,20 +8,24 @@
 
 #pragma once
 
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 
-#include "BKE_context.hh"
+#include "BKE_geometry_set.hh"
 
 #include "DEG_depsgraph.hh"
 
 #include "IO_orientation.hh"
 #include "IO_path_util_types.hh"
 
+struct bContext;
+struct ReportList;
+
 struct OBJExportParams {
-  /** Full path to the destination .OBJ file. */
+  /** Full path to the destination `.OBJ` file. */
   char filepath[FILE_MAX];
   /** Pretend that destination file folder is this, if non-empty. Used only for tests. */
   char file_base_for_tests[FILE_MAX];
+  char collection[MAX_IDPROP_NAME] = "";
 
   /** Full path to current blender file (used for comments in output). */
   const char *blen_filepath;
@@ -59,23 +63,34 @@ struct OBJExportParams {
   bool export_smooth_groups;
   /* Create bitflags instead of the default "0"/"1" group IDs. */
   bool smooth_groups_bitflags;
+
+  ReportList *reports = nullptr;
 };
 
 struct OBJImportParams {
   /** Full path to the source OBJ file to import. */
   char filepath[FILE_MAX];
   /** Value 0 disables clamping. */
-  float clamp_size;
-  float global_scale;
-  eIOAxis forward_axis;
-  eIOAxis up_axis;
-  bool use_split_objects;
-  bool use_split_groups;
-  bool import_vertex_groups;
-  bool validate_meshes;
-  bool relative_paths;
-  bool clear_selection;
+  float clamp_size = 0.0f;
+  float global_scale = 1.0f;
+  eIOAxis forward_axis = IO_AXIS_NEGATIVE_Z;
+  eIOAxis up_axis = IO_AXIS_Y;
+  char collection_separator = 0;
+  bool use_split_objects = true;
+  bool use_split_groups = false;
+  bool import_vertex_groups = false;
+  bool validate_meshes = true;
+  bool relative_paths = true;
+  bool clear_selection = true;
+
+  ReportList *reports = nullptr;
 };
+
+/**
+ * Reads and returns just the meshes in the obj file
+ */
+void OBJ_import_geometries(const OBJImportParams *import_params,
+                           blender::Vector<blender::bke::GeometrySet> &geometries);
 
 /**
  * Perform the full import process.

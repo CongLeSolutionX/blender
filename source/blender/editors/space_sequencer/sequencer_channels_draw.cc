@@ -19,16 +19,10 @@
 
 #include "ED_screen.hh"
 
-#include "GPU_framebuffer.h"
-#include "GPU_immediate.h"
-#include "GPU_immediate_util.h"
-#include "GPU_matrix.h"
-#include "GPU_state.h"
-#include "GPU_vertex_buffer.h"
-#include "GPU_viewport.h"
+#include "GPU_matrix.hh"
+#include "GPU_vertex_buffer.hh"
 
-#include "RNA_access.hh"
-#include "RNA_prototypes.h"
+#include "RNA_prototypes.hh"
 
 #include "SEQ_channels.hh"
 #include "SEQ_sequencer.hh"
@@ -89,13 +83,13 @@ static void displayed_channel_range_get(const SeqChannelDrawContext *context,
   BLI_rctf_init(&strip_boundbox, 0.0f, 0.0f, 1.0f, r_channel_range[1]);
   SEQ_timeline_expand_boundbox(context->scene, context->seqbase, &strip_boundbox);
   CLAMP(r_channel_range[0], strip_boundbox.ymin, strip_boundbox.ymax);
-  CLAMP(r_channel_range[1], strip_boundbox.ymin, MAXSEQ);
+  CLAMP(r_channel_range[1], strip_boundbox.ymin, SEQ_MAX_CHANNELS);
 }
 
-static char *draw_channel_widget_tooltip(bContext * /*C*/, void *argN, const char * /*tip*/)
+static std::string draw_channel_widget_tooltip(bContext * /*C*/, void *argN, const char * /*tip*/)
 {
   char *dyn_tooltip = static_cast<char *>(argN);
-  return BLI_strdup(dyn_tooltip);
+  return dyn_tooltip;
 }
 
 static float draw_channel_widget_mute(const SeqChannelDrawContext *context,
@@ -123,8 +117,6 @@ static float draw_channel_widget_mute(const SeqChannelDrawContext *context,
                                   width,
                                   &ptr,
                                   hide_prop,
-                                  0,
-                                  0,
                                   0,
                                   0,
                                   0,
@@ -166,8 +158,6 @@ static float draw_channel_widget_lock(const SeqChannelDrawContext *context,
                                   0,
                                   0,
                                   0,
-                                  0,
-                                  0,
                                   "");
 
   char *tooltip = BLI_sprintfN(
@@ -179,7 +169,7 @@ static float draw_channel_widget_lock(const SeqChannelDrawContext *context,
 
 static bool channel_is_being_renamed(const SpaceSeq *sseq, const int channel_index)
 {
-  return sseq->runtime.rename_channel_index == channel_index;
+  return sseq->runtime->rename_channel_index == channel_index;
 }
 
 static float text_size_get(const SeqChannelDrawContext *context)
@@ -200,7 +190,8 @@ static rctf label_rect_init(const SeqChannelDrawContext *context,
   float margin_x = icon_width_get(context) * 0.65;
   float width = max_ff(0.0f, context->v2d->cur.xmax / context->scale - used_width);
 
-  /* Text input has own margin. Prevent text jumping around and use as much space as possible. */
+  /* Text input has its own margin. Prevent text jumping around and use as much space as possible.
+   */
   if (channel_is_being_renamed(CTX_wm_space_seq(context->C), channel_index)) {
     float input_box_margin = icon_width_get(context) * 0.5f;
     margin_x -= input_box_margin;
@@ -244,13 +235,11 @@ static void draw_channel_labels(const SeqChannelDrawContext *context,
                            -1,
                            0,
                            0,
-                           0,
-                           0,
                            nullptr);
     UI_block_emboss_set(block, UI_EMBOSS_NONE);
 
     if (UI_but_active_only(context->C, context->region, block, but) == false) {
-      sseq->runtime.rename_channel_index = 0;
+      sseq->runtime->rename_channel_index = 0;
     }
 
     WM_event_add_notifier(context->C, NC_SCENE | ND_SEQUENCER, context->scene);
@@ -268,22 +257,8 @@ static void draw_channel_labels(const SeqChannelDrawContext *context,
              nullptr,
              0,
              0,
-             0,
-             0,
              nullptr);
   }
-}
-
-/* TODO: different text/buttons alignment. */
-static void draw_channel_header(const SeqChannelDrawContext *context,
-                                uiBlock *block,
-                                const int channel_index)
-{
-  float offset = icon_width_get(context) * 1.5f;
-  offset += draw_channel_widget_lock(context, block, channel_index, offset);
-  offset += draw_channel_widget_mute(context, block, channel_index, offset);
-
-  draw_channel_labels(context, block, channel_index, offset);
 }
 
 static void draw_channel_headers(const SeqChannelDrawContext *context)
@@ -296,8 +271,18 @@ static void draw_channel_headers(const SeqChannelDrawContext *context)
   int channel_range[2];
   displayed_channel_range_get(context, channel_range);
 
+  const float icon_width = icon_width_get(context);
+  const float offset_lock = icon_width * 1.5f;
+  const float offset_mute = icon_width * 2.5f;
+  const float offset_width = icon_width * 3.5f;
+  /* Draw widgets separately from text labels so they are batched together,
+   * instead of alternating between two fonts (regular and SVG/icons). */
   for (int channel = channel_range[0]; channel <= channel_range[1]; channel++) {
-    draw_channel_header(context, block, channel);
+    draw_channel_widget_lock(context, block, channel, offset_lock);
+    draw_channel_widget_mute(context, block, channel, offset_mute);
+  }
+  for (int channel = channel_range[0]; channel <= channel_range[1]; channel++) {
+    draw_channel_labels(context, block, channel, offset_width);
   }
 
   UI_block_end(context->C, block);
