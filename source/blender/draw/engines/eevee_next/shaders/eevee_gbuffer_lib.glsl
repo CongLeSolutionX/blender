@@ -45,7 +45,7 @@ struct GBufferData {
   float thickness;
   uint object_id;
   /* First world normal stored in the gbuffer. Only valid if `has_any_surface` is true. */
-  vec3 surface_N;
+  packed_float3 surface_N;
   /* Index into `light_set_membership` bitmask of Lights for light linking. */
   uchar receiver_light_set;
 };
@@ -60,31 +60,32 @@ struct GBufferWriter {
   uint header;
   /** Only used for book-keeping. Not actually written. Can be derived from header. */
   /* Number of bins written in the header. Counts empty bins. */
-  int bins_len;
+  uchar bins_len;
   /* Number of data written in the data array. */
-  int data_len;
+  uchar data_len;
   /* Number of normal written in the normal array. */
-  int normal_len;
+  uchar normal_len;
 };
 
 /* Result of loading the GBuffer. */
 struct GBufferReader {
   ClosureUndetermined closures[GBUFFER_LAYER_MAX];
+  /* Texel of the gbuffer being read. */
+  ivec2 texel;
+
+  uint object_id;
+  uint header;
+
   /* First world normal stored in the gbuffer. Only valid if `has_any_surface` is true. */
-  vec3 surface_N;
+  packed_float3 surface_N;
   /* Additional object information if any closure needs it. */
   float thickness;
-  uint object_id;
-
-  uint header;
   /* Number of valid closure encoded in the gbuffer. */
   int closure_count;
   /* Only used for book-keeping when reading. */
   int data_len;
   /* Only used for debugging and testing. */
   int normal_len;
-  /* Texel of the gbuffer being read. */
-  ivec2 texel;
 };
 
 ClosureType gbuffer_mode_to_closure_type(uint mode)
@@ -505,7 +506,7 @@ vec3 gbuffer_normal_get(inout GBufferReader gbuf, int bin_id, samplerGBufferNorm
 {
   int normal_layer_id = gbuffer_header_normal_layer_id_get(gbuf.header, bin_id);
   vec2 normal_packed = fetchGBuffer(normal_tx, gbuf.texel, normal_layer_id).rg;
-  gbuf.normal_len = max(gbuf.normal_len, normal_layer_id + 1);
+  gbuf.normal_len = max(gbuf.normal_len, uchar(normal_layer_id + 1));
   return gbuffer_normal_unpack(normal_packed);
 }
 void gbuffer_skip_normal(inout GBufferReader gbuf)
