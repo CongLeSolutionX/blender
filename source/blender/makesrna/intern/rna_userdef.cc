@@ -600,7 +600,7 @@ static bUserAssetLibrary *rna_userdef_asset_library_new(const bContext *C,
   return new_library;
 }
 
-static void rna_userdef_asset_library_remove(ReportList *reports, PointerRNA *ptr)
+static void rna_userdef_asset_library_remove(bContext *C, ReportList *reports, PointerRNA *ptr)
 {
   bUserAssetLibrary *library = static_cast<bUserAssetLibrary *>(ptr->data);
 
@@ -7134,7 +7134,7 @@ static void rna_def_userdef_asset_library_collection(BlenderRNA *brna, PropertyR
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_userdef_asset_library_remove");
-  RNA_def_function_flag(func, FUNC_NO_SELF | FUNC_USE_REPORTS);
+  RNA_def_function_flag(func, FUNC_NO_SELF | FUNC_USE_CONTEXT | FUNC_USE_REPORTS);
   RNA_def_function_ui_description(func, "Remove an Asset Library");
   parm = RNA_def_pointer(func, "library", "UserAssetLibrary", "", "");
   RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED | PARM_RNAPTR);
