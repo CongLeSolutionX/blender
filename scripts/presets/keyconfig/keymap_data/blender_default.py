@@ -1632,6 +1632,8 @@ def km_view3d(params):
         ("view3d.view_selected", {"type": 'NDOF_BUTTON_FIT', "value": 'PRESS'}, None),
         ("view3d.view_roll", {"type": 'NDOF_BUTTON_ROLL_CW', "value": 'PRESS'},
          {"properties": [("angle", PI_2)]}),
+        ("view3d.ndof_set_cor", {"type": 'RIGHTMOUSE', "value": 'PRESS', "alt": True}, None),
+        ("view3d.ndof_clear_cor", {"type": 'RIGHTMOUSE', "value": 'PRESS', "alt": True, "shift": True}, None),
         ("view3d.view_roll", {"type": 'NDOF_BUTTON_ROLL_CCW', "value": 'PRESS'},
          {"properties": [("angle", -PI_2)]}),
         ("view3d.view_axis", {"type": 'NDOF_BUTTON_FRONT', "value": 'PRESS'},

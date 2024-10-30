@@ -159,13 +159,14 @@ const UserDef U_default = {
     .ndof_sensitivity = 4.0,
     .ndof_orbit_sensitivity = 4.0,
     .ndof_deadzone = 0.0,
-    .ndof_flag = (NDOF_MODE_ORBIT | NDOF_LOCK_HORIZON | NDOF_SHOULD_PAN | NDOF_SHOULD_ZOOM |
+    .ndof_flag = (NDOF_AUTO_COR | NDOF_MODE_ORBIT | NDOF_LOCK_HORIZON | NDOF_SHOULD_PAN | NDOF_SHOULD_ZOOM |
                   NDOF_SHOULD_ROTATE |
                   /* Software from the driver authors follows this convention
                    * so invert this by default, see: #67579. */
                   NDOF_ROTX_INVERT_AXIS | NDOF_ROTY_INVERT_AXIS | NDOF_ROTZ_INVERT_AXIS |
                   NDOF_PANX_INVERT_AXIS | NDOF_PANY_INVERT_AXIS | NDOF_PANZ_INVERT_AXIS |
                   NDOF_ZOOM_INVERT | NDOF_CAMERA_PAN_ZOOM),
+    .ndof_cor_visibility = COR_ON_ROTATION,
     .image_draw_method = IMAGE_DRAW_METHOD_AUTO,
     .glalphaclip = 0.004,
     .autokey_mode = (AUTOKEY_MODE_NORMAL & ~AUTOKEY_ON),
