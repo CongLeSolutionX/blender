@@ -2104,6 +2104,7 @@ bool BKE_ffmpeg_codec_supports_crf(int av_codec_id)
 int BKE_ffmpeg_valid_bit_depths(int av_codec_id)
 {
   int bit_depths = R_IMF_CHAN_DEPTH_8;
+  /* Note: update properties_output.py `use_bpp` when changing this function. */
   if (ELEM(av_codec_id, AV_CODEC_ID_H264, AV_CODEC_ID_H265, AV_CODEC_ID_AV1)) {
     bit_depths |= R_IMF_CHAN_DEPTH_10;
   }
