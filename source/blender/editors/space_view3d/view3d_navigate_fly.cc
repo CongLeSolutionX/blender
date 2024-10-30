@@ -376,14 +376,6 @@ static bool initFlyInfo(bContext *C, FlyInfo *fly, wmOperator *op, const wmEvent
   fly->ndof = nullptr;
 #endif
 
-#ifdef WITH_INPUT_GAMEPAD
-  fly->gamepad.reset();
-#endif
-
-#ifdef WITH_INPUT_GAMEPAD
-  fly->gamepad.reset();
-#endif
-
   fly->time_lastdraw = fly->time_lastwheel = BLI_time_now_seconds();
 
   fly->draw_handle_pixel = ED_region_draw_cb_activate(
@@ -476,10 +468,6 @@ static int flyEnd(bContext *C, FlyInfo *fly)
   if (fly->ndof) {
     MEM_freeN(fly->ndof);
   }
-#endif
-
-#ifdef WITH_INPUT_GAMEPAD
-  fly->gamepad.reset();
 #endif
 
   if (fly->state == FLY_CONFIRM) {

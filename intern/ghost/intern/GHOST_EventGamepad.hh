@@ -16,9 +16,8 @@
 
 /**
  * Gamepad trigger event.
- * Events that contains input reading from gamepad triggers. Gamepad triggers generates analog data
- * and this input data can change so often. These events are only sent one in a frame and only
- * send the data from the active trigger snapshots.
+ * Events that contains input reading from gamepad triggers, which generates 1d analog data.
+ * These events are only sent once every frame.
  */
 class GHOST_EventGamepadTrigger : public GHOST_Event {
  protected:
@@ -34,9 +33,8 @@ class GHOST_EventGamepadTrigger : public GHOST_Event {
 
 /**
  * Gamepad thumbstick event.
- * Events that contains input reading from gamepad thumbsticks. Gamepad thumbsticks generates
- * analog data and this input data can change so often. These events are only sent one in a frame
- * and only send the data from the active thumbsticks snapshots.
+ * Events that contains input reading from gamepad thumbsticks, which generates 2d analog data.
+ * These events are only sent once every frame.
  */
 class GHOST_EventGamepadThumb : public GHOST_Event {
  protected:

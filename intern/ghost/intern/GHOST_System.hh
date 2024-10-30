@@ -183,8 +183,8 @@ class GHOST_System : public GHOST_ISystem {
   void dispatchEvents();
 
   /**
-   * Dispatches events that can be continuous over time, like analog input, and send them to the
-   * event consumers.
+   * Dispatches events that are generated once per frame, such as gamepad events, and send them
+   * to the event consumers.
    */
   void dispatch_frame_events();
 

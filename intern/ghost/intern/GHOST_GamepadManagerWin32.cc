@@ -17,23 +17,27 @@ GHOST_GamepadManagerWin32::GHOST_GamepadManagerWin32(GHOST_System &sys)
 {
 }
 
-GHOST_GamepadManagerWin32::~GHOST_GamepadManagerWin32() {}
-
-bool GHOST_GamepadManagerWin32::send_gamepad_events(float delta_time)
+void GHOST_GamepadManagerWin32::send_gamepad_events(float delta_time)
 {
   const uint64_t time = system_.getMilliSeconds();
 
   if (!this->gamepad_active_) {
-    if (time - this->gamepad_last_time_poll_ < this->gamepad_poll_interval_) {
-      return false;
+    if (time - this->gamepad_last_time_poll_ < this->gamepad_wait_poll_interval_) {
+      return;
     }
   }
+
   this->gamepad_last_time_poll_ = time;
 
   XINPUT_STATE input_state{0};
   DWORD dwResult = XInputGetState(0, &input_state);
 
   if (dwResult == ERROR_SUCCESS) {
+    if (!this->gamepad_active_) {
+      printf("A gamepad has been connected.");
+    }
+    this->gamepad_active_ = true;
+
     XINPUT_GAMEPAD &gamepad = input_state.Gamepad;
 
     constexpr float shrt_max_float = float(std::numeric_limits<short>::max());
@@ -49,7 +53,7 @@ bool GHOST_GamepadManagerWin32::send_gamepad_events(float delta_time)
     new_state.right_trigger = float(gamepad.bRightTrigger) / uchar_max_float;
 
     struct ButtonMap {
-      GamepadButtonMask dst;
+      GamepadButtonMask mask;
       int src;
     };
     constexpr ButtonMap buttons_map[]{
@@ -74,14 +78,12 @@ bool GHOST_GamepadManagerWin32::send_gamepad_events(float delta_time)
     };
 
     for (const ButtonMap &button_map : buttons_map) {
-      new_state.button_depressed[int(button_map.dst)] = bool(gamepad.wButtons & button_map.src);
+      new_state.button_depressed[int(button_map.mask)] = bool(gamepad.wButtons & button_map.src);
     }
 
     GHOST_GamepadManager::send_gamepad_events(new_state, delta_time);
-    return true;
   }
   else {
     GHOST_GamepadManager::reset_gamepad_state();
-    return false;
   }
 }

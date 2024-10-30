@@ -44,29 +44,15 @@ struct GHOST_GamepadState {
 class GHOST_GamepadManager {
  public:
   GHOST_GamepadManager(GHOST_System &);
-  virtual ~GHOST_GamepadManager();
-
+  virtual ~GHOST_GamepadManager() = default;
   void set_dead_zone(const float);
+  virtual void send_gamepad_events(float delta_time);
 
  protected:
-  /** Reset the current gamepad status, used if a gamepad is not longer available. */
-  bool reset_gamepad_state();
+  /** Reset the current gamepad status, used when a gamepad is not longer available. */
+  void reset_gamepad_state();
 
- public:
-  virtual bool send_gamepad_events(float delta_time);
-
- protected:
-  /** Active gamepad input snapshot. */
-
-  /** Update the current gamepad status, and sends events for buttons that status changed. */
- protected:
   void send_gamepad_events(GHOST_GamepadState new_state, float delta_time);
-
-  /** Send button events. */
-  void send_button_event(GHOST_TGamepadButton button,
-                         bool press,
-                         uint64_t time,
-                         GHOST_IWindow *window);
 
   GHOST_System &system_;
   bool gamepad_active_;

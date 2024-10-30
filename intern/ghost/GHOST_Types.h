@@ -710,18 +710,18 @@ typedef enum {
 } GHOST_TGamepadButton;
 
 typedef struct {
-  /* 1d Axis trigger value. */
+  /** 1d Axis trigger value. */
   float value;
-  /* Time since the previos frame reading. */
+  /** Time since the previos frame reading. */
   float dt;
   GHOST_TGamepadTrigger trigger;
   GHOST_TButtonAction action;
 } GHOST_TEventGamepadTriggerData;
 
 typedef struct {
-  /* 2d Axis value from the thumbstick. */
+  /** 2d Axis value from the thumbstick. */
   float value[2];
-  /* Time since the previos frame reading. */
+  /** Time since the previos frame reading. */
   float dt;
   GHOST_TGamepadThumb thumb;
   GHOST_TButtonAction action;

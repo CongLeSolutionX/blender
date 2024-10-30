@@ -9,13 +9,13 @@
 class GHOST_GamepadManagerWin32 : public GHOST_GamepadManager {
  private:
   /** 2s.*/
-  static constexpr uint64_t gamepad_poll_interval_ = 2000;
-  uint64_t gamepad_last_time_poll_ = 2000;
+  static constexpr uint64_t gamepad_wait_poll_interval_ = 2000;
+  uint64_t gamepad_last_time_poll_;
 
  public:
   GHOST_GamepadManagerWin32(GHOST_System &);
-  ~GHOST_GamepadManagerWin32();
+  virtual ~GHOST_GamepadManagerWin32() override = default;
 
   /** Retrieves the current state of the gamepad reported by the system. */
-  virtual bool send_gamepad_events(float delta_time) override final;
+  virtual void send_gamepad_events(float delta_time) override final;
 };
