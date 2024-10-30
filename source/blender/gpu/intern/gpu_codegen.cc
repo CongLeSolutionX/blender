@@ -740,6 +740,20 @@ void GPUCodegen::set_unique_ids()
       end_output->is_duplicate = true;
     }
   }
+
+  for (GPUNode *start : zone_starts.values()) {
+    if (!zone_ends.contains(start->zone_index)) {
+      /* The zone output is disconnected, skip the call. */
+      GPUInput *start_input = find_zone_io((GPUInput *)start->inputs.first);
+      GPUOutput *start_output = find_zone_io((GPUOutput *)start->outputs.first);
+      start->skip_call = true;
+      for (; start_input; start_input = start_input->next, start_output = start_output->next) {
+        start_output->id = start_input->id;
+        start_output->is_duplicate = true;
+      }
+      continue;
+    }
+  }
 }
 
 void GPUCodegen::generate_graphs()

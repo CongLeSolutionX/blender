@@ -542,7 +542,7 @@ static void flatten_group_do(bNodeTree *ntree, bNode *gnode)
       node_zone_id(nodes.first) = node_zone_id(nodes.second);
     }
     else if (nodes.first) {
-      node_zone_id(nodes.first) = -1;
+      node_zone_id(nodes.first) = nodes.first->identifier;
     }
   }
 
