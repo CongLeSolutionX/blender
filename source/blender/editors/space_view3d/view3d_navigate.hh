@@ -284,6 +284,8 @@ extern const ViewOpsType ViewOpsType_ndof_orbit;
 extern const ViewOpsType ViewOpsType_ndof_orbit_zoom;
 extern const ViewOpsType ViewOpsType_ndof_pan;
 extern const ViewOpsType ViewOpsType_ndof_all;
+
+void ndof_recalculate_cor(bContext *C);
 #endif /* WITH_INPUT_NDOF */
 
 /* view3d_navigate_roll.cc */
