@@ -91,9 +91,9 @@ bool Octree::should_split(std::shared_ptr<OctreeNode> &node) const
   node->sigma.min = node->contains_homogeneous_volume() ? sigma_extrema.max : sigma_extrema.min;
 
   /* TODO(weizhen): force subdivision of aggregate nodes that are larger than the volume contained,
-   * regardless of the volume’s majorant extinction. */
+   * regardless of the volume's majorant extinction. */
 
-  /* From "Volume Rendering for Pixar’s Elemental". */
+  /* From "Volume Rendering for Pixar's Elemental". */
   if ((node->sigma.max - node->sigma.min) * len(node->bbox.size()) < 1.442f ||
       node->level == max_level)
   {

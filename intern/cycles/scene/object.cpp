@@ -286,6 +286,7 @@ uint Object::visibility_for_tracing() const
   return SHADOW_CATCHER_OBJECT_VISIBILITY(is_shadow_catcher, visibility & PATH_RAY_ALL_VISIBILITY);
 }
 
+/* TODO(weizhen): remove. */
 float Object::compute_volume_step_size() const
 {
   if (geometry->geometry_type != Geometry::MESH && geometry->geometry_type != Geometry::VOLUME) {

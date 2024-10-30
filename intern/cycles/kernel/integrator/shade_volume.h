@@ -301,8 +301,6 @@ ccl_device void volume_shadow_homogeneous(KernelGlobals kg, IntegratorState stat
 
 /* TODO(weizhen): compute component-wise volume majorant and minorant instead of float, and use
  * spectral MIS for distance sampling. */
-#  define MAJORANT 31.0f
-#  define MINORANT 0.0f
 
 /**
  * Compute elementary symmetric means from X[0,...,N] - X[i], skipping X[i].

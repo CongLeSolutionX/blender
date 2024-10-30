@@ -687,7 +687,6 @@ int Scene::get_max_closure_count()
   return max_closure_global;
 }
 
-/* TODO(weizhen): remove. */
 int Scene::get_volume_stack_size() const
 {
   int volume_stack_size = 0;
