@@ -118,8 +118,15 @@ ccl_device_inline ProjectionTransform projection_identity()
                          1.0f);
 }
 
-#if !defined(__KERNEL_METAL__)
-ccl_device_inline ProjectionTransform projection_transpose(const ProjectionTransform &a)
+#ifndef __KERNEL_GPU__
+ccl_device_inline Transform projection_to_transform(const ProjectionTransform &a)
+{
+  Transform tfm = {a.x, a.y, a.z};
+  return tfm;
+}
+#endif
+
+ccl_device_inline ProjectionTransform projection_transpose(const ProjectionTransform a)
 {
   ProjectionTransform t;
 
@@ -143,7 +150,8 @@ ccl_device_inline ProjectionTransform projection_transpose(const ProjectionTrans
   return t;
 }
 
-ccl_device_inline ProjectionTransform projection_inverse(const ProjectionTransform &tfm)
+#if !defined(__KERNEL_METAL__)
+ccl_device_inline ProjectionTransform projection_inverse(const ProjectionTransform tfm)
 {
   ProjectionTransform tfmR = projection_identity();
   float M[4][4], R[4][4];
@@ -160,8 +168,8 @@ ccl_device_inline ProjectionTransform projection_inverse(const ProjectionTransfo
   return tfmR;
 }
 
-ccl_device_inline ProjectionTransform operator*(const ProjectionTransform &a,
-                                                const ProjectionTransform &b)
+ccl_device_inline ProjectionTransform operator*(const ProjectionTransform a,
+                                                const ProjectionTransform b)
 {
   ProjectionTransform c = projection_transpose(b);
   ProjectionTransform t;
@@ -194,12 +202,6 @@ ccl_device_inline void print_projection(const char *label, const ProjectionTrans
   print_float4(label, t.z);
   print_float4(label, t.w);
   printf("\n");
-}
-
-ccl_device_inline Transform projection_to_transform(const ProjectionTransform &a)
-{
-  Transform tfm = {a.x, a.y, a.z};
-  return tfm;
 }
 
 ccl_device_inline ProjectionTransform projection_perspective(float fov, float n, float f)
