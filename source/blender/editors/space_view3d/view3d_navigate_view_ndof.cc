@@ -980,6 +980,112 @@ void VIEW3D_OT_ndof_all(wmOperatorType *ot)
   ot->flag = 0;
 }
 
+static int ndof_set_cor_invoke(bContext *C, wmOperator *, const wmEvent *event)
+{
+  ScrArea *area = CTX_wm_area(C);
+  ARegion *region = CTX_wm_region(C);
+
+  if (!area || area->spacetype != SPACE_VIEW3D) {
+    return OPERATOR_CANCELLED;
+  }
+
+  if (!region || region->regiontype != RGN_TYPE_WINDOW) {
+    return OPERATOR_CANCELLED;
+  }
+
+  wmWindow *window = CTX_wm_window(C);
+  RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
+
+  view3d_region_operator_needs_opengl(window, region);
+
+  ViewDepths depth_temp = {0};
+  {
+    const int offset = 2;
+    rcti rect;
+    rect.xmin = event->mval[0] - offset;
+    rect.ymin = event->mval[1] - offset;
+    rect.xmax = event->mval[0] + offset;
+    rect.ymax = event->mval[1] + offset;
+
+    view3d_depths_rect_create(region, &rect, &depth_temp);
+  }
+
+  /* find the closest Z pixel */
+  float depth_near = view3d_depth_near(&depth_temp);
+  MEM_SAFE_FREE(depth_temp.depths);
+
+  if (depth_near != FLT_MAX) {
+    float3 point{};
+    if (ED_view3d_unproject_v3(region, event->mval[0], event->mval[1], depth_near, point)) {
+      negate_v3_v3(rv3d->cor, point);
+      ED_region_tag_redraw_no_rebuild(region);
+      rv3d->auto_cor_override = true;
+      return OPERATOR_FINISHED;
+    }
+  }
+
+  /* If clicked on empty space then disable CoR override and recalculate CoR. */
+  float3 cor{0};
+  zero_v3(rv3d->cor);
+  rv3d->auto_cor_override = false;
+  ndof_recalculate_cor(C);
+
+  ED_region_tag_redraw_no_rebuild(region);
+  return OPERATOR_FINISHED;
+}
+
+void VIEW3D_OT_ndof_set_cor(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "NDOF Set CoR";
+  ot->idname = "VIEW3D_OT_ndof_set_cor";
+  ot->description = "Manually set the CoR";
+
+  /* api callbacks */
+  ot->invoke = ndof_set_cor_invoke;
+  ot->poll = ED_operator_view3d_active;
+
+  /* flags */
+  ot->flag = 0;
+}
+
+static int ndof_clear_cor_exec(bContext *C, wmOperator *)
+{
+  ScrArea *area = CTX_wm_area(C);
+  ARegion *region = CTX_wm_region(C);
+
+  if (!area || area->spacetype != SPACE_VIEW3D) {
+    return OPERATOR_CANCELLED;
+  }
+
+  if (!region || region->regiontype != RGN_TYPE_WINDOW) {
+    return OPERATOR_CANCELLED;
+  }
+
+  RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
+  zero_v3(rv3d->cor);
+  rv3d->auto_cor_override = false;
+  ndof_recalculate_cor(C);
+
+  ED_region_tag_redraw_no_rebuild(region);
+  return OPERATOR_FINISHED;
+}
+
+void VIEW3D_OT_ndof_clear_cor(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "NDOF Clear CoR";
+  ot->idname = "VIEW3D_OT_ndof_clear_cor";
+  ot->description = "Clear manually set CoR";
+
+  /* api callbacks */
+  ot->exec = ndof_clear_cor_exec;
+  ot->poll = ED_operator_view3d_active;
+
+  /* flags */
+  ot->flag = 0;
+}
+
 const ViewOpsType ViewOpsType_ndof_orbit = {
     /*flag*/ VIEWOPS_FLAG_ORBIT_SELECT,
     /*idname*/ "VIEW3D_OT_ndof_orbit",

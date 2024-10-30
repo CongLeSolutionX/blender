@@ -279,6 +279,8 @@ void VIEW3D_OT_ndof_orbit(wmOperatorType *ot);
 void VIEW3D_OT_ndof_orbit_zoom(wmOperatorType *ot);
 void VIEW3D_OT_ndof_pan(wmOperatorType *ot);
 void VIEW3D_OT_ndof_all(wmOperatorType *ot);
+void VIEW3D_OT_ndof_set_cor(wmOperatorType *ot);
+void VIEW3D_OT_ndof_clear_cor(wmOperatorType *ot);
 
 extern const ViewOpsType ViewOpsType_ndof_orbit;
 extern const ViewOpsType ViewOpsType_ndof_orbit_zoom;

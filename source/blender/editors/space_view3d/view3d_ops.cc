@@ -172,6 +172,8 @@ void view3d_operatortypes()
   WM_operatortype_append(VIEW3D_OT_ndof_orbit);
   WM_operatortype_append(VIEW3D_OT_ndof_pan);
   WM_operatortype_append(VIEW3D_OT_ndof_all);
+  WM_operatortype_append(VIEW3D_OT_ndof_set_cor);
+  WM_operatortype_append(VIEW3D_OT_ndof_clear_cor);
 #endif /* WITH_INPUT_NDOF */
   WM_operatortype_append(VIEW3D_OT_view_all);
   WM_operatortype_append(VIEW3D_OT_view_axis);
