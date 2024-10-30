@@ -363,6 +363,9 @@ static int viewzoom_modal_impl(bContext *C,
     case VIEW_CONFIRM: {
       use_autokey = true;
       ret = OPERATOR_FINISHED;
+#ifdef WITH_INPUT_NDOF
+      ndof_recalculate_cor(C);
+#endif
       break;
     }
     case VIEW_CANCEL: {

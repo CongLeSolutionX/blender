@@ -12,6 +12,8 @@
 
 #include "ED_screen.hh"
 
+#include "BLI_math_vector.h"
+
 #include "view3d_intern.hh"
 #include "view3d_navigate.hh" /* own include */
 
@@ -65,6 +67,9 @@ static int viewmove_modal_impl(bContext *C,
     case VIEW_CONFIRM: {
       use_autokey = true;
       ret = OPERATOR_FINISHED;
+#ifdef WITH_INPUT_NDOF
+      ndof_recalculate_cor(C);
+#endif
       break;
     }
     case VIEW_CANCEL: {

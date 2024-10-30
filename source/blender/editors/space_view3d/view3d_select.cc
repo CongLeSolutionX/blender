@@ -106,6 +106,7 @@
 #include "ANIM_bone_collections.hh"
 
 #include "view3d_intern.hh" /* own include */
+#include "view3d_navigate.hh"
 
 // #include "BLI_time_utildefines.h"
 
@@ -3491,6 +3492,11 @@ static int view3d_select_exec(bContext *C, wmOperator *op)
   /* Pass-through allows tweaks
    * FINISHED to signal one operator worked */
   if (changed) {
+#ifdef WITH_INPUT_NDOF
+    if (U.ndof_flag & NDOF_ORBIT_SELECTION) {
+      ndof_recalculate_cor(C);
+    }
+#endif
     WM_event_add_notifier(C, NC_SCENE | ND_OB_SELECT, scene);
     return OPERATOR_PASS_THROUGH | OPERATOR_FINISHED;
   }

@@ -13,6 +13,7 @@ set(INC
   ../../render
   ../../sequencer
   ../../windowmanager
+  ../space_view3d
   # RNA_prototypes.hh
   ${CMAKE_BINARY_DIR}/source/blender/makesrna
 )

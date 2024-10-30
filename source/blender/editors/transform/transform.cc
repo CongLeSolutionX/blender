@@ -50,6 +50,7 @@
 #include "transform_orientations.hh"
 #include "transform_snap.hh"
 
+#include "view3d_navigate.hh"
 /* Disabling, since when you type you know what you are doing,
  * and being able to set it to zero is handy. */
 // #define USE_NUM_NO_ZERO.
@@ -2138,6 +2139,9 @@ int transformEnd(bContext *C, TransInfo *t)
           BM_lnorspace_rebuild(em->bm, true);
         }
       }
+#ifdef WITH_INPUT_NDOF
+      ndof_recalculate_cor(C);
+#endif
       exit_code = OPERATOR_FINISHED;
     }
 
