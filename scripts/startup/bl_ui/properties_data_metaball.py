@@ -62,7 +62,6 @@ class DATA_PT_mball_texture_space(DataButtonsPanel, Panel):
     bl_options = {'DEFAULT_CLOSED'}
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
@@ -126,7 +125,6 @@ class DATA_PT_metaball_animation(DataButtonsPanel, PropertiesAnimationMixin, Pro
 class DATA_PT_custom_props_metaball(DataButtonsPanel, PropertyPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }

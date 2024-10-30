@@ -122,7 +122,6 @@ class DATA_PT_curve_texture_space(CurveButtonsPanel, Panel):
     bl_options = {'DEFAULT_CLOSED'}
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
@@ -520,7 +519,6 @@ class DATA_PT_text_boxes(CurveButtonsPanelText, Panel):
 class DATA_PT_custom_props_curve(CurveButtonsPanel, PropertyPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
