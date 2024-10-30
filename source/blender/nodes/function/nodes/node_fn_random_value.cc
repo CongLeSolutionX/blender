@@ -35,13 +35,21 @@ static void node_declare(NodeDeclarationBuilder &b)
       .subtype(PROP_FACTOR)
       .supports_field()
       .make_available([](bNode &node) { node_storage(node).data_type = CD_PROP_BOOL; });
-  b.add_input<decl::Int>("ID").implicit_field(implicit_field_inputs::id_or_index);
+  b.add_input<decl::Int>("ID")
+      .implicit_field(implicit_field_inputs::id_or_index)
+      .structure_type(StructureType::Dynamic);
   b.add_input<decl::Int>("Seed").default_value(0).min(-10000).max(10000).supports_field();
 
-  b.add_output<decl::Vector>("Value").dependent_field();
-  b.add_output<decl::Float>("Value", "Value_001").dependent_field();
-  b.add_output<decl::Int>("Value", "Value_002").dependent_field();
-  b.add_output<decl::Bool>("Value", "Value_003").dependent_field();
+  b.add_output<decl::Vector>("Value").dependent_field().structure_type(StructureType::Dynamic);
+  b.add_output<decl::Float>("Value", "Value_001")
+      .dependent_field()
+      .structure_type(StructureType::Dynamic);
+  b.add_output<decl::Int>("Value", "Value_002")
+      .dependent_field()
+      .structure_type(StructureType::Dynamic);
+  b.add_output<decl::Bool>("Value", "Value_003")
+      .dependent_field()
+      .structure_type(StructureType::Dynamic);
 }
 
 static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
