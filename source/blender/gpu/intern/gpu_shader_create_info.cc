@@ -32,11 +32,10 @@
 namespace blender::gpu::shader {
 
 using CreateInfoDictionnary = Map<StringRef, ShaderCreateInfo *>;
-using CreateInfoValueDictionnary = Map<StringRef, ShaderCreateInfo>;
 using InterfaceDictionnary = Map<StringRef, StageInterfaceInfo *>;
 
 static CreateInfoDictionnary *g_create_infos = nullptr;
-static CreateInfoValueDictionnary *g_create_infos_unfinalized = nullptr;
+static CreateInfoDictionnary *g_create_infos_unfinalized = nullptr;
 static InterfaceDictionnary *g_interfaces = nullptr;
 
 /* -------------------------------------------------------------------- */
@@ -452,7 +451,7 @@ using namespace blender::gpu::shader;
 void gpu_shader_create_info_init()
 {
   g_create_infos = new CreateInfoDictionnary();
-  g_create_infos_unfinalized = new CreateInfoValueDictionnary();
+  g_create_infos_unfinalized = new CreateInfoDictionnary();
   g_interfaces = new InterfaceDictionnary();
 
 #define GPU_SHADER_NAMED_INTERFACE_INFO(_interface, _inst_name) \
@@ -537,9 +536,6 @@ void gpu_shader_create_info_init()
     /* Edit UV Edges. */
     overlay_edit_uv_edges = overlay_edit_uv_edges_no_geom;
 
-    /* GPencil stroke. */
-    gpu_shader_gpencil_stroke = gpu_shader_gpencil_stroke_no_geom;
-
     /* NOTE: As atomic data types can alter shader gen if native atomics are unsupported, we need
      * to use differing create info's to handle the tile optimized check. This does prevent
      * the shadow techniques from being dynamically switchable. */
@@ -577,7 +573,7 @@ void gpu_shader_create_info_init()
   }
 
   for (auto [key, info] : g_create_infos->items()) {
-    g_create_infos_unfinalized->add_new(key, *info);
+    g_create_infos_unfinalized->add_new(key, new ShaderCreateInfo(*info));
   }
 
   for (ShaderCreateInfo *info : g_create_infos->values()) {
@@ -598,6 +594,9 @@ void gpu_shader_create_info_exit()
   }
   delete g_create_infos;
 
+  for (auto *value : g_create_infos_unfinalized->values()) {
+    delete value;
+  }
   delete g_create_infos_unfinalized;
 
   for (auto *value : g_interfaces->values()) {
@@ -713,7 +712,7 @@ void gpu_shader_create_info_get_unfinalized_copy(const char *info_name,
   }
   else {
     ShaderCreateInfo &info = reinterpret_cast<ShaderCreateInfo &>(r_info);
-    info = g_create_infos_unfinalized->lookup(info_name);
+    info = *g_create_infos_unfinalized->lookup(info_name);
     BLI_assert(!info.finalized_);
   }
 }
