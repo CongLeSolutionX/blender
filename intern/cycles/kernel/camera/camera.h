@@ -9,8 +9,7 @@
 #include "kernel/util/differential.h"
 #include "kernel/util/lookup_table.h"
 
-// TODO
-#include "kernel/osl/osl.h"
+#include "kernel/osl/camera.h"
 
 CCL_NAMESPACE_BEGIN
 

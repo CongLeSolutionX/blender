@@ -22,6 +22,7 @@
 #include "kernel/geom/object.h"
 #include "kernel/util/differential.h"
 
+#include "kernel/osl/camera.h"
 #include "kernel/osl/osl.h"
 
 #define TO_VEC3(v) OSL::Vec3(v.x, v.y, v.z)
