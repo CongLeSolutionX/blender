@@ -120,6 +120,10 @@ typedef struct RegionView3D {
   /** Active rotation from NDOF or elsewhere. */
   float rot_angle;
   float rot_axis[3];
+
+  float cor[3];
+  char auto_cor_override;
+  char _pad9[3];
 } RegionView3D;
 
 typedef struct View3DCursor {
