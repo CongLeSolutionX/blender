@@ -143,6 +143,7 @@ bool ShaderEval::eval_gpu(Device *device,
       break;
     case SHADER_EVAL_VOLUME_DENSITY:
       kernel = DEVICE_KERNEL_SHADER_EVAL_VOLUME_DENSITY;
+      break;
   };
 
   /* Create device queue. */
