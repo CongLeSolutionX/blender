@@ -1034,6 +1034,8 @@ typedef struct UserDef {
   float ndof_deadzone;
   /** #eNdof_Flag, flags for 3D mouse. */
   int ndof_flag;
+  short ndof_cor_visibility;
+  char _pad17[6];
 
   /** #eMultiSample_Type, amount of samples for OpenGL FSA, if zero no FSA. */
   short ogl_multisamples;
@@ -1505,6 +1507,12 @@ typedef enum eTimecodeStyles {
    */
   USER_TIMECODE_SUBRIP = 100,
 } eTimecodeStyles;
+
+/** #UserDef.ndof_cor_visibility (3D mouse options) */
+typedef enum eNdof_cor_visibility {
+  COR_ON_ROTATION = (1 << 0),
+  COR_ALWAYS = (1 << 1),
+} eNdof_cor_visibility;
 
 /** #UserDef.ndof_flag (3D mouse options) */
 typedef enum eNdof_Flag {

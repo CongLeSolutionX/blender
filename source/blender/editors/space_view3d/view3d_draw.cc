@@ -1024,6 +1024,36 @@ static void draw_view_axis(RegionView3D *rv3d, const rcti *rect)
 }
 
 #ifdef WITH_INPUT_NDOF
+static void draw_point(const float center[3], const uchar color[4])
+{
+  GPU_blend(GPU_BLEND_ALPHA);
+  GPU_depth_mask(false); /* Don't overwrite the Z-buffer. */
+
+  GPUVertFormat *format = immVertexFormat();
+  uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+  uint col = GPU_vertformat_attr_add(format, "color", GPU_COMP_U8, 4, GPU_FETCH_INT_TO_FLOAT_UNIT);
+
+  immBindBuiltinProgram(GPU_SHADER_3D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_AA);
+  immUniform1f("size", 7.0f);
+  immUniform4fv("color", float4(color));
+  immBegin(GPU_PRIM_POINTS, 1);
+  immAttr4ubv(col, color);
+  immVertex3fv(pos, center);
+  immEnd();
+  immUnbindProgram();
+
+  GPU_blend(GPU_BLEND_NONE);
+  GPU_depth_mask(true);
+}
+
+static void draw_rotation_center(const RegionView3D *rv3d)
+{
+  float center[3] = {0, 0, 0};
+  uchar color[4] = {0, 108, 255, 255}; /* bright blue so it matches device LEDs */
+  negate_v3_v3(center, rv3d->cor);
+  draw_point(center, color);
+}
+
 /* draw center and axis of rotation for ongoing 3D mouse navigation */
 static void draw_rotation_guide(const RegionView3D *rv3d)
 {
@@ -1455,6 +1485,15 @@ void view3d_draw_region_info(const bContext *C, ARegion *region)
   {
     /* TODO: draw something else (but not this) during fly mode */
     draw_rotation_guide(rv3d);
+  }
+
+  /* Draw this only when orbitting */
+  if (U.ndof_flag & NDOF_MODE_ORBIT) {
+    if ((U.ndof_cor_visibility & COR_ALWAYS) ||
+        ((U.ndof_cor_visibility & COR_ON_ROTATION) && rv3d->rot_angle != 0.0f))
+    {
+      draw_rotation_center(rv3d);
+    }
   }
 #endif
 
