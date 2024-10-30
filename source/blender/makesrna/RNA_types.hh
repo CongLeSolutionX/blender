@@ -40,8 +40,6 @@ struct PointerRNA {
   ID *owner_id = nullptr;
   StructRNA *type = nullptr;
   void *data = nullptr;
-
-  blender::Vector<int, 2> foo = {1, 2, 3, 4, 5, 6};
 };
 
 extern const PointerRNA PointerRNA_NULL;
