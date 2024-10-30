@@ -129,7 +129,7 @@ static void workspace_scene_pinning_update(WorkSpace *workspace_new,
   BLI_assert(WM_window_get_active_scene(win));
 }
 
-static void workspace_change_syncronize_3d_views(const bScreen *screen_old, bScreen *screen_new)
+static void workspace_change_sync_3d_views(const bScreen *screen_old, bScreen *screen_new)
 {
   auto find_synced_rv3d = [](const bScreen *screen) -> std::pair<View3D *, RegionView3D *> {
     LISTBASE_FOREACH (const ScrArea *, area, &screen->areabase) {
@@ -254,7 +254,7 @@ bool ED_workspace_change(WorkSpace *workspace_new, bContext *C, wmWindowManager 
   screen_change_update(C, win, screen_new);
   workspace_change_update(workspace_new, workspace_old, C, wm);
   /* Handle #V3D_SYNC_VIEW_ACCROSS_WORKSPACES option. */
-  workspace_change_syncronize_3d_views(screen_old, screen_new);
+  workspace_change_sync_3d_views(screen_old, screen_new);
 
   BLI_assert(CTX_wm_workspace(C) == workspace_new);
 

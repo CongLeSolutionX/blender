@@ -5255,9 +5255,9 @@ static void rna_def_space_view3d(BlenderRNA *brna)
   prop = RNA_def_property(srna, "use_sync_view", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag2", V3D_SYNC_VIEW_ACCROSS_WORKSPACES);
   RNA_def_property_ui_text(prop,
-                           "Syncronize View Across Workspaces",
+                           "Synchronize View Across Workspaces",
                            "Keep the orientation, clipping and focal length of this view "
-                           "consistent accross syncronized 3D Viewports in other workspaces");
+                           "consistent accross synchronized 3D Viewports in other workspaces");
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, "rna_View3D_use_sync_view_update");
 
   prop = RNA_def_property(srna, "show_gizmo", PROP_BOOLEAN, PROP_NONE);
