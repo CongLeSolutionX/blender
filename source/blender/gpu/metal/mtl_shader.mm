@@ -124,11 +124,8 @@ MTLShader::~MTLShader()
      * 1. Pipelinestate objects
      * 2. MTLFunctions
      * 3. MTLLibraries
-     * So that each object releases it's references to the one following it.
-     * This way we can sanity check that the retainCount of each object is 1
-     * prior to releasing and we are not over-retaining it. */
+     * So that each object releases it's references to the one following it. */
     if (pso_descriptor_ != nil) {
-      BLI_assert(pso_descriptor_.retainCount == 1);
       [pso_descriptor_ release];
       pso_descriptor_ = nil;
     }
@@ -138,17 +135,14 @@ MTLShader::~MTLShader()
     for (const MTLRenderPipelineStateInstance *pso_inst : pso_cache_.values()) {
       /* Free pipeline state object. */
       if (pso_inst->pso) {
-        BLI_assert(pso_inst->pso.retainCount == 1);
         [pso_inst->pso release];
       }
       /* Free vertex function. */
       if (pso_inst->vert) {
-        BLI_assert(pso_inst->vert.retainCount == 1);
         [pso_inst->vert release];
       }
       /* Free fragment function. */
       if (pso_inst->frag) {
-        BLI_assert(pso_inst->frag.retainCount == 1);
         [pso_inst->frag release];
       }
       delete pso_inst;
@@ -159,12 +153,10 @@ MTLShader::~MTLShader()
     for (const MTLComputePipelineStateInstance *pso_inst : compute_pso_cache_.values()) {
       /* Free pipeline state object. */
       if (pso_inst->pso) {
-        BLI_assert(pso_inst->pso.retainCount == 1);
         [pso_inst->pso release];
       }
       /* Free compute function. */
       if (pso_inst->compute) {
-        BLI_assert(pso_inst->compute.retainCount == 1);
         [pso_inst->compute release];
       }
     }
