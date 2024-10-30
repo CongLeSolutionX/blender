@@ -77,7 +77,7 @@ static CLG_LogRef LOG = {"rna.access"};
 /* Init/Exit */
 
 /* NOTE: Initializing this object here is fine for now, as it should not allocate any memory. */
-extern const PointerRNA PointerRNA_NULL = {nullptr, nullptr, nullptr, {}};
+extern const PointerRNA PointerRNA_NULL = {};
 
 void RNA_init()
 {
