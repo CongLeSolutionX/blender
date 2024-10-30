@@ -734,7 +734,7 @@ void GeometryManager::create_volume_mesh(const Scene *scene, Volume *volume, Pro
 
 VolumeManager::VolumeManager()
 {
-  /* TODO(weizhen): update the tree when mesh object is unhiden. */
+  /* TODO(weizhen): update the tree when mesh object is unhidden. */
   need_update_ = true;
 }
 
