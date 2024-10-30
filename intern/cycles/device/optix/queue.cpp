@@ -30,6 +30,10 @@ static bool is_optix_specific_kernel(DeviceKernel kernel, bool use_osl)
   if (use_osl && device_kernel_has_shading(kernel)) {
     return true;
   }
+  // TODO Split "use osl"
+  if (use_osl && kernel == DEVICE_KERNEL_INTEGRATOR_INIT_FROM_CAMERA) {
+    return true;
+  }
 #  else
   (void)use_osl;
 #  endif
@@ -80,6 +84,12 @@ bool OptiXDeviceQueue::enqueue(DeviceKernel kernel,
       kernel == DEVICE_KERNEL_SHADER_EVAL_CURVE_SHADOW_TRANSPARENCY)
   {
     set_launch_param(offsetof(KernelParamsOptiX, offset), sizeof(int32_t), 2);
+  }
+
+  if (kernel == DEVICE_KERNEL_INTEGRATOR_INIT_FROM_CAMERA) {
+    set_launch_param(offsetof(KernelParamsOptiX, num_tiles), sizeof(int32_t), 1);
+    set_launch_param(offsetof(KernelParamsOptiX, render_buffer), sizeof(device_ptr), 2);
+    set_launch_param(offsetof(KernelParamsOptiX, max_tile_work_size), sizeof(int32_t), 3);
   }
 
   cuda_device_assert(cuda_device_, cuStreamSynchronize(cuda_stream_));
@@ -155,6 +165,11 @@ bool OptiXDeviceQueue::enqueue(DeviceKernel kernel,
       pipeline = optix_device->pipelines[PIP_SHADE];
       sbt_params.raygenRecord = sbt_data_ptr +
                                 PG_RGEN_EVAL_CURVE_SHADOW_TRANSPARENCY * sizeof(SbtRecord);
+      break;
+
+    case DEVICE_KERNEL_INTEGRATOR_INIT_FROM_CAMERA:
+      pipeline = optix_device->pipelines[PIP_SHADE];
+      sbt_params.raygenRecord = sbt_data_ptr + PG_RGEN_INIT_FROM_CAMERA * sizeof(SbtRecord);
       break;
 
     default:

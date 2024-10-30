@@ -569,6 +569,10 @@ bool OptiXDevice::load_kernels(const uint kernel_features)
     group_descs[PG_RGEN_EVAL_CURVE_SHADOW_TRANSPARENCY].raygen.module = optix_module;
     group_descs[PG_RGEN_EVAL_CURVE_SHADOW_TRANSPARENCY].raygen.entryFunctionName =
         "__raygen__kernel_optix_shader_eval_curve_shadow_transparency";
+    group_descs[PG_RGEN_INIT_FROM_CAMERA].kind = OPTIX_PROGRAM_GROUP_KIND_RAYGEN;
+    group_descs[PG_RGEN_INIT_FROM_CAMERA].raygen.module = optix_module;
+    group_descs[PG_RGEN_INIT_FROM_CAMERA].raygen.entryFunctionName =
+        "__raygen__kernel_optix_integrator_init_from_camera";
   }
 
   optix_assert(optixProgramGroupCreate(
@@ -750,6 +754,7 @@ bool OptiXDevice::load_osl_kernels()
     return OSLKernel{std::move(osl_ptx), std::move(fused_name)};
   };
 
+  osl_kernels.emplace_back(get_osl_kernel(osl_globals.camera_state));
   for (const OSL::ShaderGroupRef &group : osl_globals.surface_state) {
     osl_kernels.emplace_back(get_osl_kernel(group));
   }
@@ -952,6 +957,7 @@ bool OptiXDevice::load_osl_kernels()
     pipeline_groups.push_back(groups[PG_RGEN_EVAL_DISPLACE]);
     pipeline_groups.push_back(groups[PG_RGEN_EVAL_BACKGROUND]);
     pipeline_groups.push_back(groups[PG_RGEN_EVAL_CURVE_SHADOW_TRANSPARENCY]);
+    pipeline_groups.push_back(groups[PG_RGEN_INIT_FROM_CAMERA]);
 
     for (const OptixProgramGroup &group : osl_groups) {
       if (group != NULL) {
