@@ -288,13 +288,15 @@ extern const ViewOpsType ViewOpsType_ndof_all;
 
 #ifdef WITH_INPUT_GAMEPAD
 struct wmGamepadAxisData;
-void view3d_gamepad_fly(const wmGamepadAxisData &gamepad,
-                        View3D *v3d,
-                        RegionView3D *rv3d,
-                        bool use_precision,
-                        short protect_flag,
-                        bool &r_has_translate,
-                        bool &r_has_rotate);
+namespace blender::view3d {
+void gamepad_fly(const wmGamepadAxisData &gamepad,
+                 View3D *v3d,
+                 RegionView3D *rv3d,
+                 bool use_precision,
+                 short protect_flag,
+                 bool &r_has_translate,
+                 bool &r_has_rotate);
+}
 void VIEW3D_OT_gamepad_all(wmOperatorType *ot);
 #endif /* WITH_INPUT_GAMEPAD */
 

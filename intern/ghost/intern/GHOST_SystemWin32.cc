@@ -26,7 +26,6 @@
 #include <tlhelp32.h>
 #include <windowsx.h>
 
-#include "hidusage.h"
 #include "utf_winfunc.hh"
 #include "utfconv.hh"
 
@@ -57,6 +56,7 @@
 #ifdef WITH_INPUT_GAMEPAD
 #  include "GHOST_GamepadManagerWin32.hh"
 #endif
+
 /* Key code values not found in `winuser.h`. */
 #ifndef VK_MINUS
 #  define VK_MINUS 0xBD
@@ -136,36 +136,25 @@ static GHOST_NDOF_ButtonT translateLongButtonToNDOFButton(uint16_t longKey)
 static void initRawInput()
 {
 #ifdef WITH_INPUT_NDOF
-  constexpr int NDOF = 1;
+#  define DEVICE_COUNT 2
 #else
-  constexpr int NDOF = 0;
-#endif
-#ifdef WITH_INPUT_GAMEPAD
-  constexpr int GAMEPAD = 1;
-#else
-  constexpr int GAMEPAD = 0;
-#endif
-  constexpr int DEVICE_COUNT = 1 + NDOF + GAMEPAD;
-  RAWINPUTDEVICE devices[DEVICE_COUNT];
-  memset(devices, 0, DEVICE_COUNT * sizeof(RAWINPUTDEVICE));
-  int idx = 0;
-  /* Initiates WM_INPUT messages from keyboard
-   * That way GHOST can retrieve true keys. */
-  devices[idx].usUsagePage = HID_USAGE_PAGE_GENERIC;
-  devices[idx].usUsage = HID_USAGE_GENERIC_KEYBOARD;
-#ifdef WITH_INPUT_NDOF
-  /* multi-axis mouse (SpaceNavigator, etc.). */
-  idx++;
-  devices[idx].usUsagePage = HID_USAGE_PAGE_GENERIC;
-  devices[idx].usUsage = HID_USAGE_GENERIC_MULTI_AXIS_CONTROLLER;
+#  define DEVICE_COUNT 1
 #endif
 
-#ifdef WITH_INPUT_GAMEPAD
-  idx++;
-  devices[idx].usUsagePage = HID_USAGE_PAGE_GENERIC;
-  devices[idx].usUsage = HID_USAGE_GENERIC_GAMEPAD;
-  devices[idx].dwFlags = 0x00;
+  RAWINPUTDEVICE devices[DEVICE_COUNT];
+  memset(devices, 0, DEVICE_COUNT * sizeof(RAWINPUTDEVICE));
+
+  /* Initiates WM_INPUT messages from keyboard
+   * That way GHOST can retrieve true keys. */
+  devices[0].usUsagePage = 0x01;
+  devices[0].usUsage = 0x06; /* http://msdn.microsoft.com/en-us/windows/hardware/gg487473.aspx */
+
+#ifdef WITH_INPUT_NDOF
+  /* multi-axis mouse (SpaceNavigator, etc.). */
+  devices[1].usUsagePage = 0x01;
+  devices[1].usUsage = 0x08;
 #endif
+
   if (RegisterRawInputDevices(devices, DEVICE_COUNT, sizeof(RAWINPUTDEVICE))) {
     /* Success. */
   }
@@ -206,7 +195,7 @@ GHOST_SystemWin32::GHOST_SystemWin32() : m_hasPerformanceCounter(false), m_freq(
 #endif
 
 #ifdef WITH_INPUT_GAMEPAD
-  _gamepad_manager = std::make_unique<GHOST_GamepadManagerWin32>(*this);
+  gamepad_manager_ = std::make_unique<GHOST_GamepadManagerWin32>(*this);
 #endif
 }
 
@@ -1630,17 +1619,11 @@ LRESULT WINAPI GHOST_SystemWin32::s_wndProc(HWND hwnd, uint msg, WPARAM wParam, 
               }
               break;
             }
-#if defined WITH_INPUT_NDOF || defined WITH_INPUT_GAMEPAD
+#ifdef WITH_INPUT_NDOF
             case RIM_TYPEHID: {
-#  ifdef WITH_INPUT_GAMEPAD
-              static_cast<GHOST_GamepadManagerWin32 *>(system->get_gamepad_manager())
-                  ->update_gamepad();
-#  endif
-#  ifdef WITH_INPUT_NDOF
               if (system->processNDOF(raw)) {
                 eventHandled = true;
               }
-#  endif
               break;
             }
 #endif

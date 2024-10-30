@@ -152,6 +152,12 @@ if(WITH_INPUT_GAMEPAD)
     intern/GHOST_EventGamepad.hh
     intern/GHOST_GamepadManager.hh
   )
+  list(APPEND INC_SYS
+    ${GAMEPAD_INCLUDE_DIRS}
+  )
+  list(APPEND LIB
+    ${GAMEPAD_LIBRARIES}
+  )
 endif()
 
 list(APPEND SRC

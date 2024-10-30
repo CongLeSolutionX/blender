@@ -483,11 +483,11 @@ static int flyEnd(bContext *C, FlyInfo *fly)
 #endif
 
   if (fly->state == FLY_CONFIRM) {
-    MEM_freeN(fly);
+    MEM_delete(fly);
     return OPERATOR_FINISHED;
   }
 
-  MEM_freeN(fly);
+  MEM_delete(fly);
   return OPERATOR_CANCELLED;
 }
 
@@ -1135,13 +1135,13 @@ static void flyApply_gamepad(bContext *C, FlyInfo *fly, bool is_confirm)
   Object *lock_ob = ED_view3d_cameracontrol_object_get(fly->v3d_camera_control);
   bool has_translate, has_rotate;
 
-  view3d_gamepad_fly(*fly->gamepad.get(),
-                     fly->v3d,
-                     fly->rv3d,
-                     fly->use_precision,
-                     lock_ob ? lock_ob->protectflag : 0,
-                     has_translate,
-                     has_rotate);
+  blender::view3d::gamepad_fly(*fly->gamepad.get(),
+                               fly->v3d,
+                               fly->rv3d,
+                               fly->use_precision,
+                               lock_ob ? lock_ob->protectflag : 0,
+                               has_translate,
+                               has_rotate);
 
   if (has_translate || has_rotate) {
     fly->redraw = true;

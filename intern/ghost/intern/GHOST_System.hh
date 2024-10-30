@@ -186,7 +186,7 @@ class GHOST_System : public GHOST_ISystem {
    * Dispatches events that can be continuous over time, like analog input, and send them to the
    * event consumers.
    */
-  void dispatchFrameEvents();
+  void dispatch_frame_events();
 
   /**
    * Adds the given event consumer to our list.
@@ -440,9 +440,9 @@ class GHOST_System : public GHOST_ISystem {
 
 #ifdef WITH_INPUT_GAMEPAD
   /** The Gamepad manager. */
-  std::unique_ptr<GHOST_GamepadManager> _gamepad_manager;
+  std::unique_ptr<GHOST_GamepadManager> gamepad_manager_;
   /** Time since the last frame. */
-  uint64_t _time_stamp;
+  uint64_t time_stamp_;
 #endif
 
   /** Prints all the events. */
@@ -487,6 +487,6 @@ inline GHOST_NDOFManager *GHOST_System::getNDOFManager() const
 #ifdef WITH_INPUT_GAMEPAD
 inline GHOST_GamepadManager *GHOST_System::get_gamepad_manager() const
 {
-  return _gamepad_manager.get();
+  return gamepad_manager_.get();
 }
 #endif

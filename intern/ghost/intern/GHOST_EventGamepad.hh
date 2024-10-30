@@ -22,13 +22,13 @@
  */
 class GHOST_EventGamepadTrigger : public GHOST_Event {
  protected:
-  GHOST_TEventGamepadTriggerData _trigger_data;
+  GHOST_TEventGamepadTriggerData trigger_data_;
 
  public:
   GHOST_EventGamepadTrigger(uint64_t time, GHOST_IWindow *window)
       : GHOST_Event(time, GHOST_kEventGamepadTrigger, window)
   {
-    m_data = &_trigger_data;
+    m_data = &trigger_data_;
   }
 };
 
@@ -40,13 +40,13 @@ class GHOST_EventGamepadTrigger : public GHOST_Event {
  */
 class GHOST_EventGamepadThumb : public GHOST_Event {
  protected:
-  GHOST_TEventGamepadThumbData _thumb_data;
+  GHOST_TEventGamepadThumbData thumb_data_;
 
  public:
   GHOST_EventGamepadThumb(uint64_t time, GHOST_IWindow *window)
       : GHOST_Event(time, GHOST_kEventGamepadThumb, window)
   {
-    m_data = &_thumb_data;
+    m_data = &thumb_data_;
   }
 };
 
@@ -55,12 +55,12 @@ class GHOST_EventGamepadThumb : public GHOST_Event {
  */
 class GHOST_EventGamepadButton : public GHOST_Event {
  protected:
-  GHOST_TEventGamepadButtonData _button_data;
+  GHOST_TEventGamepadButtonData button_data_;
 
  public:
   GHOST_EventGamepadButton(uint64_t time, GHOST_IWindow *window)
       : GHOST_Event(time, GHOST_kEventGamepadButton, window)
   {
-    m_data = &_button_data;
+    m_data = &button_data_;
   }
 };

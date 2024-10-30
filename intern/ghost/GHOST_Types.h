@@ -702,10 +702,10 @@ typedef enum {
   GHOST_kGamepadButtonLeftThumb,
   GHOST_kGamepadButtonRightThumb,
 
-  GHOST_kGamepadButtonDPADUp,
-  GHOST_kGamepadButtonDPADDown,
-  GHOST_kGamepadButtonDPADLeft,
-  GHOST_kGamepadButtonDPADRight,
+  GHOST_kGamepadButtonDPadUp,
+  GHOST_kGamepadButtonDPadDown,
+  GHOST_kGamepadButtonDPadLeft,
+  GHOST_kGamepadButtonDPadRight,
 
 } GHOST_TGamepadButton;
 
