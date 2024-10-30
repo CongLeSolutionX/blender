@@ -2112,21 +2112,24 @@ class USERPREF_PT_ndof_settings(Panel):
     def draw_settings(layout, props, show_3dview_settings=True):
         col = layout.column()
         col.prop(props, "ndof_sensitivity", text="Pan Sensitivity")
-        col.prop(props, "ndof_orbit_sensitivity")
-        col.prop(props, "ndof_deadzone")
 
+        if show_3dview_settings:
+            col.prop(props, "ndof_orbit_sensitivity")
+
+        col.prop(props, "ndof_deadzone")
         layout.separator()
 
+        col = layout.column()
+
         if show_3dview_settings:
-            col = layout.column()
             col.row().prop(props, "ndof_view_navigate_method", expand=True, text="Navigation")
             col.row().prop(props, "ndof_view_rotate_method", expand=True, text="Rotation")
+            col.separator()
+            col.prop(props, "ndof_cor_visibility", text="Center Of Rotation")
+            col.prop(props, "ndof_auto_cor")
+            col.prop(props, "ndof_orbit_selection")
+            col.separator()
 
-            layout.separator()
-
-        col = layout.column()
-        if show_3dview_settings:
-            col.prop(props, "ndof_show_guide")
         col.prop(props, "ndof_zoom_invert")
         col.prop(props, "ndof_lock_camera_pan_zoom")
         row = col.row(heading="Pan")
