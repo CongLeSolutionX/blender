@@ -5316,6 +5316,7 @@ bool RNA_boolean_get(PointerRNA *ptr, const char *name)
     return RNA_property_boolean_get(ptr, prop);
   }
   printf("%s: %s.%s not found.\n", __func__, ptr->type->identifier, name);
+  BLI_assert(false);
   return false;
 }
 
@@ -5328,6 +5329,7 @@ void RNA_boolean_set(PointerRNA *ptr, const char *name, bool value)
   }
   else {
     printf("%s: %s.%s not found.\n", __func__, ptr->type->identifier, name);
+    BLI_assert(false);
   }
 }
 
@@ -5340,6 +5342,7 @@ void RNA_boolean_get_array(PointerRNA *ptr, const char *name, bool *values)
   }
   else {
     printf("%s: %s.%s not found.\n", __func__, ptr->type->identifier, name);
+    BLI_assert(false);
   }
 }
 
@@ -5352,6 +5355,7 @@ void RNA_boolean_set_array(PointerRNA *ptr, const char *name, const bool *values
   }
   else {
     printf("%s: %s.%s not found.\n", __func__, ptr->type->identifier, name);
+    BLI_assert(false);
   }
 }
 
@@ -5363,6 +5367,7 @@ int RNA_int_get(PointerRNA *ptr, const char *name)
     return RNA_property_int_get(ptr, prop);
   }
   printf("%s: %s.%s not found.\n", __func__, ptr->type->identifier, name);
+  BLI_assert(false);
   return 0;
 }
 
@@ -5375,6 +5380,7 @@ void RNA_int_set(PointerRNA *ptr, const char *name, int value)
   }
   else {
     printf("%s: %s.%s not found.\n", __func__, ptr->type->identifier, name);
+    BLI_assert(false);
   }
 }
 
@@ -5387,6 +5393,7 @@ void RNA_int_get_array(PointerRNA *ptr, const char *name, int *values)
   }
   else {
     printf("%s: %s.%s not found.\n", __func__, ptr->type->identifier, name);
+    BLI_assert(false);
   }
 }
 
@@ -5399,6 +5406,7 @@ void RNA_int_set_array(PointerRNA *ptr, const char *name, const int *values)
   }
   else {
     printf("%s: %s.%s not found.\n", __func__, ptr->type->identifier, name);
+    BLI_assert(false);
   }
 }
 
@@ -5410,6 +5418,7 @@ float RNA_float_get(PointerRNA *ptr, const char *name)
     return RNA_property_float_get(ptr, prop);
   }
   printf("%s: %s.%s not found.\n", __func__, ptr->type->identifier, name);
+  BLI_assert(false);
   return 0;
 }
 
@@ -5422,6 +5431,7 @@ void RNA_float_set(PointerRNA *ptr, const char *name, float value)
   }
   else {
     printf("%s: %s.%s not found.\n", __func__, ptr->type->identifier, name);
+    BLI_assert(false);
   }
 }
 
@@ -5434,6 +5444,7 @@ void RNA_float_get_array(PointerRNA *ptr, const char *name, float *values)
   }
   else {
     printf("%s: %s.%s not found.\n", __func__, ptr->type->identifier, name);
+    BLI_assert(false);
   }
 }
 
@@ -5446,6 +5457,7 @@ void RNA_float_set_array(PointerRNA *ptr, const char *name, const float *values)
   }
   else {
     printf("%s: %s.%s not found.\n", __func__, ptr->type->identifier, name);
+    BLI_assert(false);
   }
 }
 
@@ -5457,6 +5469,7 @@ int RNA_enum_get(PointerRNA *ptr, const char *name)
     return RNA_property_enum_get(ptr, prop);
   }
   printf("%s: %s.%s not found.\n", __func__, ptr->type->identifier, name);
+  BLI_assert(false);
   return 0;
 }
 
@@ -5469,6 +5482,7 @@ void RNA_enum_set(PointerRNA *ptr, const char *name, int value)
   }
   else {
     printf("%s: %s.%s not found.\n", __func__, ptr->type->identifier, name);
+    BLI_assert(false);
   }
 }
 
@@ -5487,6 +5501,7 @@ void RNA_enum_set_identifier(bContext *C, PointerRNA *ptr, const char *name, con
   }
   else {
     printf("%s: %s.%s not found.\n", __func__, ptr->type->identifier, name);
+    BLI_assert(false);
   }
 }
 
@@ -5515,9 +5530,11 @@ bool RNA_enum_is_equal(bContext *C, PointerRNA *ptr, const char *name, const cha
     }
 
     printf("%s: %s.%s item %s not found.\n", __func__, ptr->type->identifier, name, enumname);
+    BLI_assert(false);
     return false;
   }
   printf("%s: %s.%s not found.\n", __func__, ptr->type->identifier, name);
+  BLI_assert(false);
   return false;
 }
 
@@ -5570,6 +5587,7 @@ void RNA_string_get(PointerRNA *ptr, const char *name, char *value)
   }
   else {
     printf("%s: %s.%s not found.\n", __func__, ptr->type->identifier, name);
+    BLI_assert(false);
     value[0] = '\0';
   }
 }
@@ -5583,6 +5601,7 @@ char *RNA_string_get_alloc(
     return RNA_property_string_get_alloc(ptr, prop, fixedbuf, fixedlen, r_len);
   }
   printf("%s: %s.%s not found.\n", __func__, ptr->type->identifier, name);
+  BLI_assert(false);
   if (r_len != nullptr) {
     *r_len = 0;
   }
@@ -5597,6 +5616,7 @@ int RNA_string_length(PointerRNA *ptr, const char *name)
     return RNA_property_string_length(ptr, prop);
   }
   printf("%s: %s.%s not found.\n", __func__, ptr->type->identifier, name);
+  BLI_assert(false);
   return 0;
 }
 
@@ -5609,6 +5629,7 @@ void RNA_string_set(PointerRNA *ptr, const char *name, const char *value)
   }
   else {
     printf("%s: %s.%s not found.\n", __func__, ptr->type->identifier, name);
+    BLI_assert(false);
   }
 }
 
@@ -5620,6 +5641,7 @@ PointerRNA RNA_pointer_get(PointerRNA *ptr, const char *name)
     return RNA_property_pointer_get(ptr, prop);
   }
   printf("%s: %s.%s not found.\n", __func__, ptr->type->identifier, name);
+  BLI_assert(false);
 
   return PointerRNA_NULL;
 }
@@ -5633,6 +5655,7 @@ void RNA_pointer_set(PointerRNA *ptr, const char *name, PointerRNA ptr_value)
   }
   else {
     printf("%s: %s.%s not found.\n", __func__, ptr->type->identifier, name);
+    BLI_assert(false);
   }
 }
 
@@ -5645,6 +5668,7 @@ void RNA_pointer_add(PointerRNA *ptr, const char *name)
   }
   else {
     printf("%s: %s.%s not found.\n", __func__, ptr->type->identifier, name);
+    BLI_assert(false);
   }
 }
 
@@ -5657,6 +5681,7 @@ void RNA_collection_begin(PointerRNA *ptr, const char *name, CollectionPropertyI
   }
   else {
     printf("%s: %s.%s not found.\n", __func__, ptr->type->identifier, name);
+    BLI_assert(false);
   }
 }
 
@@ -5669,6 +5694,7 @@ void RNA_collection_add(PointerRNA *ptr, const char *name, PointerRNA *r_value)
   }
   else {
     printf("%s: %s.%s not found.\n", __func__, ptr->type->identifier, name);
+    BLI_assert(false);
   }
 }
 
@@ -5681,6 +5707,7 @@ void RNA_collection_clear(PointerRNA *ptr, const char *name)
   }
   else {
     printf("%s: %s.%s not found.\n", __func__, ptr->type->identifier, name);
+    BLI_assert(false);
   }
 }
 
@@ -5692,6 +5719,7 @@ int RNA_collection_length(PointerRNA *ptr, const char *name)
     return RNA_property_collection_length(ptr, prop);
   }
   printf("%s: %s.%s not found.\n", __func__, ptr->type->identifier, name);
+  BLI_assert(false);
   return 0;
 }
 
@@ -5703,6 +5731,7 @@ bool RNA_collection_is_empty(PointerRNA *ptr, const char *name)
     return RNA_property_collection_is_empty(ptr, prop);
   }
   printf("%s: %s.%s not found.\n", __func__, ptr->type->identifier, name);
+  BLI_assert(false);
   return false;
 }
 
