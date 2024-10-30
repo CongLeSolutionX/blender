@@ -681,7 +681,7 @@ if(WITH_CYCLES_HIP_BINARIES AND WITH_CYCLES_DEVICE_HIP)
     if(WIN32 AND ((${arch} MATCHES "gfx90[a-z0-9]+") OR (${HIP_VERSION} STREQUAL "6.1.40252")))
       set(hip_opt_flags "-O1")
     else()
-      set(hip_opt_flags)
+      set(hip_opt_flags "-O1")
     endif()
 
     set(hip_flags
