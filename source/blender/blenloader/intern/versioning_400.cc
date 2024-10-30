@@ -4996,6 +4996,22 @@ void blo_do_versions_400(FileData *fd, Library * /*lib*/, Main *bmain)
   }
 
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 404, 4)) {
+    LISTBASE_FOREACH (bScreen *, screen, &bmain->screens) {
+      LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
+        LISTBASE_FOREACH (SpaceLink *, sl, &area->spacedata) {
+          if (sl->spacetype != SPACE_FILE) {
+            continue;
+          }
+          SpaceFile *sfile = reinterpret_cast<SpaceFile *>(sl);
+          if (sfile->asset_params) {
+            sfile->asset_params->base_params.sort = FILE_SORT_ASSET_CATALOG;
+          }
+        }
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 404, 5)) {
     Camera default_cam = *DNA_struct_default_get(Camera);
     LISTBASE_FOREACH (Camera *, camera, &bmain->cameras) {
       camera->oblique_angle_x = default_cam.oblique_angle_x;
