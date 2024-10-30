@@ -2,10 +2,14 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#pragma BLENDER_REQUIRE(common_view_clipping_lib.glsl)
-#pragma BLENDER_REQUIRE(common_view_lib.glsl)
+#include "common_view_clipping_lib.glsl"
+#include "common_view_lib.glsl"
 
 #define no_active_weight 666.0
+
+#define DISCARD_VERTEX \
+  gl_Position = vec4(0.0, 0.0, -3e36, 0.0); \
+  return;
 
 vec3 weight_to_rgb(float t)
 {
@@ -24,6 +28,17 @@ vec3 weight_to_rgb(float t)
 
 void main()
 {
+#ifdef CURVES_POINT
+  bool is_active = (data & EDIT_CURVES_ACTIVE_HANDLE) != 0u;
+  bool is_bezier_handle = (data & EDIT_CURVES_BEZIER_HANDLE) != 0u;
+
+  if (is_bezier_handle && ((uint(curveHandleDisplay) == CURVE_HANDLE_NONE) ||
+                           (uint(curveHandleDisplay) == CURVE_HANDLE_SELECTED) && !is_active))
+  {
+    DISCARD_VERTEX
+  }
+#endif
+
   vec3 world_pos = point_object_to_world(pos);
   gl_Position = point_world_to_ndc(world_pos);
   float end_point_size_factor = 1.0f;

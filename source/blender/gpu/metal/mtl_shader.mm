@@ -218,18 +218,8 @@ void MTLShader::fragment_shader_from_glsl(MutableSpan<const char *> sources)
   std::stringstream ss;
   int i;
   for (i = 0; i < sources.size(); i++) {
-    /* Output preprocessor directive to improve shader log. */
-    StringRefNull name = shader::gpu_shader_dependency_get_filename_from_source_string(sources[i]);
-    if (name.is_empty()) {
-      ss << "#line 1 \"generated_code_" << i << "\"\n";
-    }
-    else {
-      ss << "#line 1 \"" << name << "\"\n";
-    }
-
     ss << sources[i] << '\n';
   }
-  ss << "#line 1 \"msl_wrapper_code\"\n";
   shd_builder_->glsl_fragment_source_ = ss.str();
 }
 
@@ -245,14 +235,6 @@ void MTLShader::compute_shader_from_glsl(MutableSpan<const char *> sources)
   /* Consolidate GLSL compute sources. */
   std::stringstream ss;
   for (int i = 0; i < sources.size(); i++) {
-    /* Output preprocessor directive to improve shader log. */
-    StringRefNull name = shader::gpu_shader_dependency_get_filename_from_source_string(sources[i]);
-    if (name.is_empty()) {
-      ss << "#line 1 \"generated_code_" << i << "\"\n";
-    }
-    else {
-      ss << "#line 1 \"" << name << "\"\n";
-    }
     ss << sources[i] << std::endl;
   }
   shd_builder_->glsl_compute_source_ = ss.str();
@@ -1028,13 +1010,13 @@ MTLRenderPipelineStateInstance *MTLShader::bake_pipeline_state(
          * https://developer.apple.com/documentation/metal/mtlvertexattributedescriptor/1516081-format?language=objc
          */
         if (attribute_desc.format == MTLVertexFormatInvalid) {
-          /* If attributes are non-contiguous, we can skip over gaps. */
+#if 0 /* Disable warning as it is too verbose and is supported. */
           MTL_LOG_WARNING(
               "MTLShader: baking pipeline state for '%s'- skipping input attribute at "
               "index '%d' but none was specified in the current vertex state",
               mtl_interface->get_name(),
               i);
-
+#endif
           /* Write out null conversion constant if attribute unused. */
           int MTL_attribute_conversion_mode = 0;
           [values setConstantValue:&MTL_attribute_conversion_mode

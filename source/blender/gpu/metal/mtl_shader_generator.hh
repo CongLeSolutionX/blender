@@ -426,8 +426,6 @@ class MSLGeneratorInterface {
   blender::Vector<MSLVertexOutputAttribute> vertex_output_varyings_tf;
   /* Clip Distances. */
   blender::Vector<char> clip_distances;
-  /* Shared Memory Blocks. */
-  blender::Vector<MSLSharedMemoryBlock> shared_memory_blocks;
   /* Max bind IDs. */
   int max_tex_bind_index = 0;
   /** GL Global usage. */
@@ -757,7 +755,7 @@ inline const char *to_string(const shader::Interpolation &interp)
       return "noperspective";
     default:
       BLI_assert(false);
-      return "unkown";
+      return "unknown";
   }
 }
 
@@ -844,7 +842,7 @@ inline const char *to_string(const shader::Type &type)
       return "short4";
     default:
       BLI_assert(false);
-      return "unkown";
+      return "unknown";
   }
 }
 

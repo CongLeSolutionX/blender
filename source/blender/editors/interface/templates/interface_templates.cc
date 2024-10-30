@@ -347,15 +347,16 @@ static uiBlock *template_common_search_menu(const bContext *C,
  * \{ */
 
 struct TemplateID {
-  PointerRNA ptr;
-  PropertyRNA *prop;
+  PointerRNA ptr = {};
+  PropertyRNA *prop = nullptr;
 
-  ListBase *idlb;
-  short idcode;
-  short filter;
-  int prv_rows, prv_cols;
-  bool preview;
-  float scale;
+  ListBase *idlb = nullptr;
+  short idcode = 0;
+  short filter = 0;
+  int prv_rows = 0;
+  int prv_cols = 0;
+  bool preview = false;
+  float scale = 0.0f;
 };
 
 /* Search browse menu, assign. */
@@ -1818,7 +1819,7 @@ static void ui_template_id(uiLayout *layout,
     return;
   }
 
-  TemplateID template_ui;
+  TemplateID template_ui = {};
   template_ui.ptr = *ptr;
   template_ui.prop = prop;
   template_ui.prv_rows = prv_rows;
@@ -1922,7 +1923,7 @@ void uiTemplateAction(uiLayout *layout,
   AnimData *adt = BKE_animdata_from_id(id);
   PointerRNA adt_ptr = RNA_pointer_create(id, &RNA_AnimData, adt);
 
-  TemplateID template_ui;
+  TemplateID template_ui = {};
   template_ui.ptr = adt_ptr;
   template_ui.prop = adt_action_prop;
   template_ui.prv_rows = 0;
@@ -2205,16 +2206,12 @@ static void template_search_add_button_name(uiBlock *block,
   }
 
   PropertyRNA *name_prop;
-#ifdef WITH_ANIM_BAKLAVA
   if (type == &RNA_ActionSlot) {
     name_prop = RNA_struct_find_property(active_ptr, "name_display");
   }
   else {
-#endif /* WITH_ANIM_BAKLAVA */
     name_prop = RNA_struct_name_property(type);
-#ifdef WITH_ANIM_BAKLAVA
   }
-#endif /* WITH_ANIM_BAKLAVA */
 
   const int width = template_search_textbut_width(active_ptr, name_prop);
   const int height = template_search_textbut_height();

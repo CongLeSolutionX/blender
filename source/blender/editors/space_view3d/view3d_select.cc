@@ -1911,15 +1911,15 @@ static bool bone_mouse_select_menu(bContext *C,
   for (const GPUSelectResult &hit_result : hit_results) {
     void *bone_ptr = nullptr;
     Base *bone_base = nullptr;
-    uint hitresult = hit_result.id;
+    uint select_id = hit_result.id;
 
-    if (!(hitresult & BONESEL_ANY)) {
+    if (!(select_id & BONESEL_ANY)) {
       /* To avoid including objects in selection. */
       continue;
     }
 
-    hitresult &= ~BONESEL_ANY;
-    const uint hit_object = hitresult & 0xFFFF;
+    select_id &= ~BONESEL_ANY;
+    const uint hit_object = select_id & 0xFFFF;
 
     /* Find the hit bone base (armature object). */
     CTX_DATA_BEGIN (C, Base *, base, selectable_bases) {
@@ -1936,7 +1936,7 @@ static bool bone_mouse_select_menu(bContext *C,
 
     /* Determine what the current bone is */
     if (is_editmode) {
-      const uint hit_bone = (hitresult & ~BONESEL_ANY) >> 16;
+      const uint hit_bone = (select_id & ~BONESEL_ANY) >> 16;
       bArmature *arm = static_cast<bArmature *>(bone_base->object->data);
       EditBone *ebone = static_cast<EditBone *>(BLI_findlink(arm->edbo, hit_bone));
       if (ebone && !(ebone->flag & BONE_UNSELECTABLE)) {
@@ -1944,7 +1944,7 @@ static bool bone_mouse_select_menu(bContext *C,
       }
     }
     else {
-      const uint hit_bone = (hitresult & ~BONESEL_ANY) >> 16;
+      const uint hit_bone = (select_id & ~BONESEL_ANY) >> 16;
       bPoseChannel *pchan = static_cast<bPoseChannel *>(
           BLI_findlink(&bone_base->object->pose->chanbase, hit_bone));
       if (pchan && !(pchan->bone->flag & BONE_UNSELECTABLE)) {
@@ -2493,21 +2493,21 @@ static bool ed_object_select_pick_camera_track(bContext *C,
   MovieTrackingTrack *track = nullptr;
 
   for (int i = 0; i < hits; i++) {
-    const int hitresult = buffer.storage[i].id;
+    const int select_id = buffer.storage[i].id;
 
     /* If there's bundles in buffer select bundles first,
      * so non-camera elements should be ignored in buffer. */
-    if (basact->object->runtime->select_id != (hitresult & 0xFFFF)) {
+    if (basact->object->runtime->select_id != (select_id & 0xFFFF)) {
       continue;
     }
     /* Index of bundle is 1<<16-based. if there's no "bone" index
      * in height word, this buffer value belongs to camera. not to bundle. */
-    if ((hitresult & 0xFFFF0000) == 0) {
+    if ((select_id & 0xFFFF0000) == 0) {
       continue;
     }
 
     track = BKE_tracking_track_get_for_selection_index(
-        &clip->tracking, hitresult >> 16, &tracksbase);
+        &clip->tracking, select_id >> 16, &tracksbase);
     found = true;
     break;
   }
@@ -3129,10 +3129,18 @@ static bool ed_curves_select_pick(bContext &C, const int mval[2], const SelectPi
               };
 
           if (selection_domain == bke::AttrDomain::Point) {
-            ed::curves::foreach_selectable_point_range(curves, deformation, range_consumer);
+            ed::curves::foreach_selectable_point_range(
+                curves,
+                deformation,
+                eHandleDisplay(vc.v3d->overlay.handle_display),
+                range_consumer);
           }
           else if (selection_domain == bke::AttrDomain::Curve) {
-            ed::curves::foreach_selectable_curve_range(curves, deformation, range_consumer);
+            ed::curves::foreach_selectable_curve_range(
+                curves,
+                deformation,
+                eHandleDisplay(vc.v3d->overlay.handle_display),
+                range_consumer);
           };
         }
         return new_closest;
@@ -3283,10 +3291,18 @@ static bool ed_grease_pencil_select_pick(bContext *C,
           };
 
           if (selection_domain == bke::AttrDomain::Point) {
-            ed::curves::foreach_selectable_point_range(curves, deformation, range_consumer);
+            ed::curves::foreach_selectable_point_range(
+                curves,
+                deformation,
+                eHandleDisplay(vc.v3d->overlay.handle_display),
+                range_consumer);
           }
           else if (selection_domain == bke::AttrDomain::Curve) {
-            ed::curves::foreach_selectable_curve_range(curves, deformation, range_consumer);
+            ed::curves::foreach_selectable_curve_range(
+                curves,
+                deformation,
+                eHandleDisplay(vc.v3d->overlay.handle_display),
+                range_consumer);
           };
         }
         return new_closest;
@@ -4005,27 +4021,27 @@ static bool do_meta_box_select(const ViewContext *vc, const rcti *rect, const eS
     bool is_inside_stiff = false;
 
     for (a = 0; a < hits; a++) {
-      const int hitresult = buffer.storage[a].id;
+      const int select_id = buffer.storage[a].id;
 
-      if (hitresult == -1) {
+      if (select_id == -1) {
         continue;
       }
 
-      const uint hit_object = hitresult & 0xFFFF;
+      const uint hit_object = select_id & 0xFFFF;
       if (vc->obedit->runtime->select_id != hit_object) {
         continue;
       }
 
-      if (metaelem_id != (hitresult & 0xFFFF0000 & ~MBALLSEL_ANY)) {
+      if (metaelem_id != (select_id & 0xFFFF0000 & ~MBALLSEL_ANY)) {
         continue;
       }
 
-      if (hitresult & MBALLSEL_RADIUS) {
+      if (select_id & MBALLSEL_RADIUS) {
         is_inside_radius = true;
         break;
       }
 
-      if (hitresult & MBALLSEL_STIFF) {
+      if (select_id & MBALLSEL_STIFF) {
         is_inside_stiff = true;
         break;
       }

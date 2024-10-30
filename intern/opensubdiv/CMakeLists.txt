@@ -88,7 +88,6 @@ if(WITH_OPENSUBDIV)
   data_to_c_simple(
     internal/evaluator/shaders/glsl_compute_kernel.glsl
     SRC
-    STRIP_LEADING_C_COMMENTS
   )
 else()
   list(APPEND SRC
