@@ -468,10 +468,43 @@ static void ntree_shader_groups_remove_muted_links(bNodeTree *ntree)
   }
 }
 
+static bool is_zone_input_node(bNode *node)
+{
+  return ELEM(node->type, SH_NODE_REPEAT_INPUT, SH_NODE_LIGHT_LOOP_INPUT);
+}
+
+static bool is_zone_output_node(bNode *node)
+{
+  return ELEM(node->type, SH_NODE_REPEAT_OUTPUT, SH_NODE_LIGHT_LOOP_OUTPUT);
+}
+
+static bool is_zone_node(bNode *node)
+{
+  return is_zone_input_node(node) || is_zone_output_node(node);
+}
+
+static int &node_zone_id(bNode *node)
+{
+  switch (node->type) {
+    case SH_NODE_REPEAT_INPUT:
+      return ((NodeShaderRepeatInput *)node->storage)->output_node_id;
+    case SH_NODE_LIGHT_LOOP_INPUT:
+      return ((NodeShaderLightLoopInput *)node->storage)->output_node_id;
+    case SH_NODE_REPEAT_OUTPUT:
+    case SH_NODE_LIGHT_LOOP_OUTPUT:
+      return node->identifier;
+    default:
+      BLI_assert_unreachable();
+      return node->identifier;
+  }
+}
+
 static void flatten_group_do(bNodeTree *ntree, bNode *gnode)
 {
   LinkNode *group_interface_nodes = nullptr;
   bNodeTree *ngroup = (bNodeTree *)gnode->id;
+
+  Map<int, std::pair<bNode *, bNode *>> zone_ids;
 
   /* Add the nodes into the ntree */
   LISTBASE_FOREACH_MUTABLE (bNode *, node, &ngroup->nodes) {
@@ -484,12 +517,34 @@ static void flatten_group_do(bNodeTree *ntree, bNode *gnode)
     /* migrate node */
     BLI_remlink(&ngroup->nodes, node);
     BLI_addtail(&ntree->nodes, node);
+    int old_id = 0;
+    if (is_zone_node(node)) {
+      old_id = node_zone_id(node);
+      if (!zone_ids.contains(old_id)) {
+        zone_ids.add(old_id, {nullptr, nullptr});
+      }
+    }
     blender::bke::node_unique_id(ntree, node);
     /* ensure unique node name in the node tree */
     /* This is very slow and it has no use for GPU nodetree. (see #70609) */
     // blender::bke::node_unique_name(ntree, node);
+    if (is_zone_input_node(node)) {
+      zone_ids.lookup(old_id).first = node;
+    }
+    else if (is_zone_output_node(node)) {
+      zone_ids.lookup(old_id).second = node;
+    }
   }
   ngroup->runtime->nodes_by_id.clear();
+
+  for (auto &nodes : zone_ids.values()) {
+    if (nodes.first && nodes.second) {
+      node_zone_id(nodes.first) = node_zone_id(nodes.second);
+    }
+    else if (nodes.first) {
+      node_zone_id(nodes.first) = -1;
+    }
+  }
 
   /* Save first and last link to iterate over flattened group links. */
   bNodeLink *glinks_first = static_cast<bNodeLink *>(ntree->links.last);
