@@ -24,7 +24,7 @@ void GHOST_GamepadManager::send_gamepad_events(GHOST_GamepadState new_state, flo
     }
   };
 
-  auto send_thumb_event =
+  const auto send_thumb_event =
       [&, this](float(&old_state)[2], float(&new_state)[2], GHOST_TGamepadThumb thumb) -> void {
     apply_death_zone(new_state[0]);
     apply_death_zone(new_state[1]);
@@ -126,6 +126,7 @@ void GHOST_GamepadManager::reset_gamepad_state()
   }
   printf("The gamepad has been disconnected.");
   gamepad_active_ = false;
+  /* The controller was disconnected, set all buttons as released. */
   send_gamepad_events(GHOST_GamepadState{}, 0.0f);
 }
 

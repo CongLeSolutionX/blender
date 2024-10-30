@@ -15,16 +15,12 @@ enum class GamepadButtonMask {
   B,
   X,
   Y,
-
   LeftShoulder,
   RightShoulder,
-
   View,
   Menu,
-
   LeftThumb,
   RightThumb,
-
   DPadUp,
   DPadDown,
   DPadLeft,
@@ -46,12 +42,20 @@ class GHOST_GamepadManager {
   GHOST_GamepadManager(GHOST_System &);
   virtual ~GHOST_GamepadManager() = default;
   void set_dead_zone(const float);
+
+  /** Once per frame checks any change in the gamepad state and send events. */
   virtual void send_gamepad_events(float delta_time);
 
  protected:
-  /** Reset the current gamepad status, used when a gamepad is not longer available. */
+  /**
+   * Reset the current gamepad state, used when a gamepad is not longer available.
+   * This will trigger release button events if any button was being hold.
+   */
   void reset_gamepad_state();
-
+  /**
+   * Generate gamepad events by checking any change in the stored gamepad snapshot against the new
+   * gamepad state. Also updates the gamepad snapshot.
+   */
   void send_gamepad_events(GHOST_GamepadState new_state, float delta_time);
 
   GHOST_System &system_;

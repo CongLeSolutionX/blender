@@ -8,7 +8,7 @@
 
 class GHOST_GamepadManagerWin32 : public GHOST_GamepadManager {
  private:
-  /** 2s.*/
+  /** Wait interval to check if a controller is connected (2s). */
   static constexpr uint64_t gamepad_wait_poll_interval_ = 2000;
   uint64_t gamepad_last_time_poll_;
 
@@ -16,6 +16,5 @@ class GHOST_GamepadManagerWin32 : public GHOST_GamepadManager {
   GHOST_GamepadManagerWin32(GHOST_System &);
   virtual ~GHOST_GamepadManagerWin32() override = default;
 
-  /** Retrieves the current state of the gamepad reported by the system. */
   virtual void send_gamepad_events(float delta_time) override final;
 };

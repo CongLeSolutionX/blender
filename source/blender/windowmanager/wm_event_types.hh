@@ -322,28 +322,25 @@ enum {
 #define _NDOF_MAX NDOF_BUTTON_SAVE_V3
 #define _NDOF_BUTTON_MAX NDOF_BUTTON_SAVE_V3
 
-#define _GAMEPAD_MIN GAMEPAD_LEFT_THUMB
-#define _GAMEPAD_BUTTON_MIN GAMEPAD_BUTTON_A
-  GAMEPAD_LEFT_THUMB = 0x001be,            /* 446*/
-  GAMEPAD_RIGHT_THUMB = 0x001bf,           /* 447 */
-  GAMEPAD_LEFT_TRIGGER = 0x001c0,          /* 448 */
-  GAMEPAD_RIGHT_TRIGGER = 0x001c1,         /* 449 */
-  GAMEPAD_BUTTON_A = 0x001c2,              /* 450 */
-  GAMEPAD_BUTTON_B = 0x001c3,              /* 451 */
-  GAMEPAD_BUTTON_X = 0x001c4,              /* 452 */
-  GAMEPAD_BUTTON_Y = 0x001c5,              /* 453 */
-  GAMEPAD_BUTTON_LEFT_SHOULDER = 0x001c6,  /* 454 */
-  GAMEPAD_BUTTON_RIGHT_SHOULDER = 0x001c7, /* 455 */
-  GAMEPAD_BUTTON_VIEW = 0x001c8,           /* 456 */
-  GAMEPAD_BUTTON_MENU = 0x001c9,           /* 457 */
-  GAMEPAD_BUTTON_LEFT_THUMB = 0x001ca,     /* 458 */
-  GAMEPAD_BUTTON_RIGHT_THUMB = 0x001cb,    /* 459 */
-  GAMEPAD_BUTTON_DPAD_UP = 0x001cc,        /* 460 */
-  GAMEPAD_BUTTON_DPAD_DOWN = 0x001cd,      /* 461 */
-  GAMEPAD_BUTTON_DPAD_LEFT = 0x001ce,      /* 462 */
-  GAMEPAD_BUTTON_DPAD_RIGHT = 0x001cf,     /* 463 */
-#define _GAMEPAD_MAX GAMEPAD_BUTTON_DPAD_RIGHT
-#define _GAMEPAD_BUTTON_MAX GAMEPAD_BUTTON_DPAD_RIGHT
+  GAMEPAD_LEFT_THUMB = 0x01f4,    /* 500 */
+  GAMEPAD_RIGHT_THUMB = 0x01f5,   /* 501 */
+  GAMEPAD_LEFT_TRIGGER = 0x01f6,  /* 502 */
+  GAMEPAD_RIGHT_TRIGGER = 0x01f7, /* 503 */
+  GAMEPAD_BUTTON_A = 0x01f8,      /* 504 */
+
+  GAMEPAD_BUTTON_B = 0x01f9,              /* 505 */
+  GAMEPAD_BUTTON_X = 0x01fa,              /* 506 */
+  GAMEPAD_BUTTON_Y = 0x01fb,              /* 507 */
+  GAMEPAD_BUTTON_LEFT_SHOULDER = 0x01fc,  /* 508 */
+  GAMEPAD_BUTTON_RIGHT_SHOULDER = 0x01fd, /* 509 */
+  GAMEPAD_BUTTON_VIEW = 0x01fe,           /* 510 */
+  GAMEPAD_BUTTON_MENU = 0x01ff,           /* 511 */
+  GAMEPAD_BUTTON_LEFT_THUMB = 0x0200,     /* 512 */
+  GAMEPAD_BUTTON_RIGHT_THUMB = 0x0201,    /* 513 */
+  GAMEPAD_BUTTON_DPAD_UP = 0x0202,        /* 514 */
+  GAMEPAD_BUTTON_DPAD_DOWN = 0x0203,      /* 515 */
+  GAMEPAD_BUTTON_DPAD_LEFT = 0x0204,      /* 516 */
+  GAMEPAD_BUTTON_DPAD_RIGHT = 0x0205,     /* 517 */
 
   /* ********** End of Input devices. ********** */
 
@@ -391,6 +388,11 @@ enum {
   EVT_XR_ACTION = 0x5030, /* 20528 */
   /* ********** End of Blender internal events. ********** */
 };
+
+constexpr int GAMEPAD_MIN = GAMEPAD_LEFT_THUMB;
+constexpr int GAMEPAD_BUTTON_MIN = GAMEPAD_BUTTON_A;
+constexpr int GAMEPAD_MAX = GAMEPAD_BUTTON_DPAD_RIGHT;
+constexpr int GAMEPAD_BUTTON_MAX = GAMEPAD_BUTTON_DPAD_RIGHT;
 
 /* -------------------------------------------------------------------- */
 /** \name #wmEvent.type Helpers
@@ -452,9 +454,9 @@ enum {
   ((event_type) >= _NDOF_BUTTON_MIN && (event_type) <= _NDOF_BUTTON_MAX)
 
 /** Test whether the event is a NDOF event. */
-#define ISGAMEPAD(event_type) ((event_type) >= _GAMEPAD_MIN && (event_type) <= _GAMEPAD_MAX)
+#define ISGAMEPAD(event_type) ((event_type) >= GAMEPAD_MIN && (event_type) <= GAMEPAD_MAX)
 #define ISGAMEPAD_BUTTON(event_type) \
-  ((event_type) >= _GAMEPAD_BUTTON_MIN && (event_type) <= _GAMEPAD_BUTTON_MAX)
+  ((event_type) >= GAMEPAD_BUTTON_MIN && (event_type) <= GAMEPAD_BUTTON_MAX)
 
 #define IS_EVENT_ACTIONZONE(event_type) \
   ELEM(event_type, EVT_ACTIONZONE_AREA, EVT_ACTIONZONE_REGION, EVT_ACTIONZONE_FULLSCREEN)
@@ -492,10 +494,6 @@ enum eEventType_Mask {
 #define EVT_TYPE_MASK_HOTKEY_INCLUDE \
   (EVT_TYPE_MASK_KEYBOARD | EVT_TYPE_MASK_MOUSE | EVT_TYPE_MASK_NDOF | EVT_TYPE_MASK_GAMEPAD)
 #define EVT_TYPE_MASK_HOTKEY_EXCLUDE EVT_TYPE_MASK_KEYBOARD_MODIFIER
-
-#define NDOF_BUTTON_INDEX_AS_EVENT(i) (_NDOF_BUTTON_MIN + (i))
-
-#define GAMEPAD_BUTTON_INDEX_AS_EVENT(i) (_GAMEPAD_BUTTON_MIN + (i))
 
 bool WM_event_type_mask_test(int event_type, enum eEventType_Mask mask);
 

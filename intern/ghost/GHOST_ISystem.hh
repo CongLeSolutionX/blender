@@ -361,8 +361,8 @@ class GHOST_ISystem {
   virtual void dispatchEvents() = 0;
 
   /**
-   * Retrieves events that can be continuous over time, like analog input, and send them to the
-   * event consumers.
+   * Retrieves events that are generated once per frame, such as gamepad events, and send them to
+   * the event consumers.
    */
   virtual void dispatch_frame_events() = 0;
 

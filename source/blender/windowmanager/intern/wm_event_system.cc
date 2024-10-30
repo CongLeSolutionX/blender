@@ -5135,6 +5135,44 @@ static int wm_event_type_from_ndof_button(GHOST_NDOF_ButtonT button)
 
 #endif /* WITH_INPUT_NDOF */
 
+#ifdef WITH_INPUT_GAMEPAD
+static int wm_event_type_from_gamepad_buttton(GHOST_TGamepadButton button)
+{
+  switch (button) {
+    case GHOST_kGamepadButtonA:
+      return GAMEPAD_BUTTON_A;
+    case GHOST_kGamepadButtonB:
+      return GAMEPAD_BUTTON_B;
+    case GHOST_kGamepadButtonX:
+      return GAMEPAD_BUTTON_X;
+    case GHOST_kGamepadButtonY:
+      return GAMEPAD_BUTTON_Y;
+    case GHOST_kGamepadButtonLeftShoulder:
+      return GAMEPAD_BUTTON_LEFT_SHOULDER;
+    case GHOST_kGamepadButtonRightShoulder:
+      return GAMEPAD_BUTTON_RIGHT_SHOULDER;
+    case GHOST_kgamepadButtonView:
+      return GAMEPAD_BUTTON_VIEW;
+    case GHOST_kgamepadButtonMenu:
+      return GAMEPAD_BUTTON_MENU;
+    case GHOST_kGamepadButtonLeftThumb:
+      return GAMEPAD_BUTTON_LEFT_THUMB;
+    case GHOST_kGamepadButtonRightThumb:
+      return GAMEPAD_BUTTON_RIGHT_THUMB;
+    case GHOST_kGamepadButtonDPadUp:
+      return GAMEPAD_BUTTON_DPAD_UP;
+    case GHOST_kGamepadButtonDPadDown:
+      return GAMEPAD_BUTTON_DPAD_DOWN;
+    case GHOST_kGamepadButtonDPadLeft:
+      return GAMEPAD_BUTTON_DPAD_LEFT;
+    case GHOST_kGamepadButtonDPadRight:
+      return GAMEPAD_BUTTON_DPAD_RIGHT;
+  }
+  CLOG_WARN(WM_LOG_EVENTS, "unknown event type %d from gamepad button", int(button));
+  return EVENT_NONE;
+}
+#endif
+
 /**
  * \return The WM enum for key or #EVENT_NONE (which should be ignored).
  */
@@ -6245,7 +6283,7 @@ void wm_event_add_ghostevent(wmWindowManager *wm,
       const GHOST_TEventGamepadButtonData *button =
           static_cast<const GHOST_TEventGamepadButtonData *>(customdata);
 
-      event.type = GAMEPAD_BUTTON_INDEX_AS_EVENT(button->button);
+      event.type = wm_event_type_from_gamepad_buttton(button->button);
       event.custom = 0;
       event.customdata = nullptr;
 

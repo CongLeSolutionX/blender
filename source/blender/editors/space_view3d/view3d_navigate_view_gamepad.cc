@@ -27,14 +27,14 @@ void gamepad_fly(const wmGamepadAxisData &gamepad,
                  bool &r_has_translate,
                  bool &r_has_rotate)
 {
-  float3 translation_vector{gamepad.left_thumb.value[0], 0.0, -gamepad.left_thumb.value[1]};
+  float3 translation_vector{gamepad.left_thumb.value[0], 0.0f, -gamepad.left_thumb.value[1]};
   float4 view_inv;
 
   invert_qt_qt_normalized(view_inv, rv3d->viewquat);
 
   bool has_translation = translation_vector;
   if (has_translation) {
-    const float speed = 50.0;
+    const float speed = 50.0f;
     translation_vector *= speed * gamepad.dt;
     mul_qt_v3(view_inv, translation_vector);
     sub_v3_v3(rv3d->ofs, translation_vector);
@@ -47,7 +47,7 @@ void gamepad_fly(const wmGamepadAxisData &gamepad,
   bool has_rotation = rotation_vector;
   if (has_rotation) {
     float4 rotation{};
-    const float3 rotation_speed{1.5, 2.0, 2.0};
+    const float3 rotation_speed{1.5f, 2.0f, 2.0f};
     rotation_vector *= rotation_speed * gamepad.dt;
     mul_qt_v3(view_inv, rotation_vector);
 
@@ -68,7 +68,7 @@ static void gamepad_move(bContext *C, float3 translation, const float dt)
 
   bool has_translation = translation;
   if (has_translation) {
-    const float speed = 50.0;
+    const float speed = 50.0f;
     translation *= speed * dt;
     mul_qt_v3(view_inv, translation);
     sub_v3_v3(rv3d->ofs, translation);
@@ -83,7 +83,7 @@ static void gamepad_rotate(bContext *C, float3 rotation, float dt)
   float4 view_inv;
   invert_qt_qt_normalized(view_inv, rv3d->viewquat);
 
-  const float3 rotation_speed{1.5, 2.0, 2.0};
+  const float3 rotation_speed{1.5f, 2.0f, 2.0f};
   rotation *= rotation_speed * dt;
   mul_qt_v3(view_inv, rotation);
   float4 quad_rotation;
@@ -111,24 +111,24 @@ static int gamepad_all_invoke_impl(bContext *C, wmOperator * /*op*/, const wmEve
            GAMEPAD_BUTTON_DPAD_LEFT,
            GAMEPAD_BUTTON_DPAD_RIGHT))
   {
-    const float up = event->type == GAMEPAD_BUTTON_DPAD_UP   ? 1.0 :
-                     event->type == GAMEPAD_BUTTON_DPAD_DOWN ? -1.0 :
+    const float up = event->type == GAMEPAD_BUTTON_DPAD_UP   ? 1.0f :
+                     event->type == GAMEPAD_BUTTON_DPAD_DOWN ? -1.0f :
                                                                0.0f;
-    const float right = event->type == GAMEPAD_BUTTON_DPAD_RIGHT ? 1.0 :
-                        event->type == GAMEPAD_BUTTON_DPAD_LEFT  ? -1.0 :
+    const float right = event->type == GAMEPAD_BUTTON_DPAD_RIGHT ? 1.0f :
+                        event->type == GAMEPAD_BUTTON_DPAD_LEFT  ? -1.0f :
                                                                    0.0f;
     gamepad_move(C, {right, up, 0.0f}, 0.01f);
   }
   if (event->type == GAMEPAD_LEFT_THUMB) {
-    gamepad_move(C, {event->axis_value[0], 0.0, -event->axis_value[1]}, event->dt);
+    gamepad_move(C, {event->axis_value[0], event->axis_value[1], 0.0f}, event->dt);
   }
   if (event->type == GAMEPAD_RIGHT_THUMB) {
     gamepad_rotate(C, {-event->axis_value[1], event->axis_value[0], 0.0f}, event->dt);
   }
-  //   if (event->type == GAMEPAD_LEFT_TRIGGER || event->type == GAMEPAD_RIGHT_TRIGGER) {
-  //     const float dir = event->type == GAMEPAD_LEFT_TRIGGER ? -1.0 : 1.0;
-  //     gamepad_rotate(C, event, {0.0f, dir * event->axis_value[0], 0.0f}, 0.01f);
-  //   }
+  if (event->type == GAMEPAD_LEFT_TRIGGER || event->type == GAMEPAD_RIGHT_TRIGGER) {
+    const float dir = event->type == GAMEPAD_LEFT_TRIGGER ? 1.0f : -1.0f;
+    gamepad_move(C, {0.0f, 0.0f, dir * event->axis_value[0]}, 0.01f);
+  }
 
   ARegion *region = CTX_wm_region(C);
   ED_region_tag_redraw(region);

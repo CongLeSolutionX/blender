@@ -21,6 +21,9 @@ void GHOST_GamepadManagerWin32::send_gamepad_events(float delta_time)
 {
   const uint64_t time = system_.getMilliSeconds();
 
+  /* #XInputGetState also can be used to check whenever a controller is connected or not, however
+   * when no controller is active this may affect performance, check if a controller is connected
+   * every now and then. */
   if (!this->gamepad_active_) {
     if (time - this->gamepad_last_time_poll_ < this->gamepad_wait_poll_interval_) {
       return;
@@ -34,7 +37,7 @@ void GHOST_GamepadManagerWin32::send_gamepad_events(float delta_time)
 
   if (dwResult == ERROR_SUCCESS) {
     if (!this->gamepad_active_) {
-      printf("A gamepad has been connected.");
+      printf("A gamepad has been connected.\n");
     }
     this->gamepad_active_ = true;
 
