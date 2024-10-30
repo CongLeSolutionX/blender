@@ -1656,7 +1656,7 @@ static bool view3d_camera_to_view_selected_impl(Main *bmain,
     bool is_ortho_camera = false;
 
     if ((camera_ob_eval->type == OB_CAMERA) &&
-        (((Camera *)camera_ob_eval->data)->type == CAM_ORTHO))
+        ELEM(((Camera *)camera_ob_eval->data)->type, CAM_ORTHO, CAM_OBLIQUE))
     {
       ((Camera *)camera_ob->data)->ortho_scale = scale;
       is_ortho_camera = true;

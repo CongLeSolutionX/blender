@@ -350,7 +350,7 @@ void BKE_camera_params_from_object(CameraParams *params, const Object *cam_ob)
     /* camera object */
     const Camera *cam = static_cast<const Camera *>(cam_ob->data);
 
-    if (cam->type == CAM_ORTHO) {
+    if (ELEM(cam->type, CAM_ORTHO, CAM_OBLIQUE)) {
       params->is_ortho = true;
     }
     params->lens = cam->lens;

@@ -1229,6 +1229,9 @@ static const char *view3d_get_name(View3D *v3d, RegionView3D *rv3d)
           else if (cam->type == CAM_ORTHO) {
             name = IFACE_("Camera Orthographic");
           }
+          else if (cam->type == CAM_OBLIQUE) {
+            name = IFACE_("Camera Oblique");
+          }
           else {
             BLI_assert(cam->type == CAM_PANO);
             name = IFACE_("Camera Panoramic");
