@@ -200,7 +200,12 @@ void Camera::sync()
     float4x4 shift = math::from_location<float4x4>(float3(0.0f, 0.0f, focal));
     float4x4 shift_inv = math::from_location<float4x4>(float3(0.0f, 0.0f, -focal));
 
-    data.winmat = data.winmat * shift_inv * float4x4(shear) * shift;
+    oblique_mat_ = shift_inv * float4x4(shear) * shift;
+
+    data.winmat = data.winmat * oblique_mat_;
+  }
+  else {
+    oblique_mat_ = float4x4::identity();
   }
 
   data.wininv = math::invert(data.winmat);

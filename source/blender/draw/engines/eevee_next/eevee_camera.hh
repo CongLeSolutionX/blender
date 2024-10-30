@@ -8,6 +8,8 @@
  * \ingroup eevee
  */
 
+#include "BLI_math_matrix_types.hh"
+
 #include "eevee_shader_shared.hh"
 
 namespace blender::eevee {
@@ -94,6 +96,8 @@ class Camera {
   Instance &inst_;
 
   CameraData &data_;
+  /* Oblique camera shift. Applied before projection matrix. */
+  float4x4 oblique_mat_;
 
   struct {
     float3 center;
@@ -166,6 +170,10 @@ class Camera {
   bool camera_changed() const
   {
     return camera_changed_;
+  }
+  const float4x4 &oblique_matrix() const
+  {
+    return oblique_mat_;
   }
 
  private:

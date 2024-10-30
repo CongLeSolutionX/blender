@@ -16,6 +16,7 @@
  */
 
 #include "BKE_global.hh"
+#include "BLI_math_matrix_types.hh"
 #include "DRW_render.hh"
 
 #include "eevee_instance.hh"
@@ -211,6 +212,10 @@ void ShadingView::update_view()
   float4x4 winmat = main_view_.winmat();
 
   if (film.scaling_factor_get() > 1) {
+    if (!main_view_.is_persp()) {
+      winmat = winmat * math::invert(inst_.camera.oblique_matrix());
+    }
+
     /* This whole section ensures that the render target pixel grid will match the film pixel pixel
      * grid. Otherwise the weight computation inside the film accumulation will be wrong. */
 
@@ -262,6 +267,8 @@ void ShadingView::update_view()
                                               render_top_right.y,
                                               near,
                                               far);
+
+      winmat = winmat * inst_.camera.oblique_matrix();
     }
   }
 
