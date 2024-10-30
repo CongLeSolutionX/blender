@@ -529,8 +529,12 @@ static void node_reroute_declare(blender::nodes::NodeDeclarationBuilder &b)
 
   const blender::StringRefNull socket_idname(
       static_cast<const NodeReroute *>(node->storage)->type_idname);
-  b.add_input<blender::nodes::decl::Custom>("Input").idname(socket_idname.c_str());
-  b.add_output<blender::nodes::decl::Custom>("Output").idname(socket_idname.c_str());
+  b.add_input<blender::nodes::decl::Custom>("Input")
+      .idname(socket_idname.c_str())
+      .structure_type(blender::nodes::StructureType::Dynamic);
+  b.add_output<blender::nodes::decl::Custom>("Output")
+      .idname(socket_idname.c_str())
+      .structure_type(blender::nodes::StructureType::Dynamic);
 }
 
 static void node_reroute_init(bNodeTree * /*ntree*/, bNode *node)
