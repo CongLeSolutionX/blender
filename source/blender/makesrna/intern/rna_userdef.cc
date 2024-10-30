@@ -610,6 +610,7 @@ static void rna_userdef_asset_library_remove(ReportList *reports, PointerRNA *pt
   }
 
   BKE_preferences_asset_library_remove(&U, library);
+  blender::ed::asset::list::clear_all_library(C);
 
   /* Update active library index to be in range. */
   const int count_remaining = BLI_listbase_count(&U.asset_libraries);

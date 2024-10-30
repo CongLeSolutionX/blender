@@ -206,7 +206,7 @@ static bool preferences_asset_library_remove_poll(bContext *C)
   return true;
 }
 
-static int preferences_asset_library_remove_exec(bContext * /*C*/, wmOperator *op)
+static int preferences_asset_library_remove_exec(bContext *C, wmOperator *op)
 {
   const int index = RNA_int_get(op->ptr, "index");
   bUserAssetLibrary *library = static_cast<bUserAssetLibrary *>(
@@ -221,6 +221,7 @@ static int preferences_asset_library_remove_exec(bContext * /*C*/, wmOperator *o
   CLAMP(U.active_asset_library, 0, count_remaining - 1);
   U.runtime.is_dirty = true;
 
+  blender::ed::asset::list::clear_all_library(C);
   /* Trigger refresh for the Asset Browser. */
   WM_main_add_notifier(NC_SPACE | ND_SPACE_ASSET_PARAMS, nullptr);
 
