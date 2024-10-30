@@ -1473,7 +1473,7 @@ int paint_stroke_modal(bContext *C, wmOperator *op, const wmEvent *event, PaintS
   /* see if tablet affects event. Line, anchored and drag dot strokes do not support pressure */
   const float tablet_pressure = WM_event_tablet_data(event, &stroke->pen_flip, nullptr);
   float pressure = ((br->flag & (BRUSH_LINE | BRUSH_ANCHORED | BRUSH_DRAG_DOT)) ? 1.0f :
-                                                                            tablet_pressure);
+                                                                                  tablet_pressure);
 
   /* When processing a timer event the pressure from the event is 0, so use the last valid
    * pressure. */
