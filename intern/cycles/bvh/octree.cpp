@@ -173,26 +173,27 @@ openvdb::BoolGrid::ConstPtr Octree::mesh_to_sdf_grid(const Mesh *mesh,
 }
 #endif
 
-int Octree::flatten_(KernelOctreeNode *knodes, shared_ptr<OctreeNode> &node, int &node_index)
+void Octree::flatten_(KernelOctreeNode *knodes,
+                      KernelOctreeNode &knode,
+                      shared_ptr<OctreeNode> &node,
+                      int &node_index)
 {
-  const int current_index = node_index++;
-
-  KernelOctreeNode &knode = knodes[current_index];
   knode.bbox.max = node->bbox.max;
   knode.bbox.min = node->bbox.min;
+
   if (auto internal_ptr = std::dynamic_pointer_cast<OctreeInternalNode>(node)) {
     knode.is_leaf = false;
+    knode.first_child = node_index;
+    node_index += 8;
     /* Loop through all the children. */
     for (int i = 0; i < 8; i++) {
-      knode.children[i] = flatten_(knodes, internal_ptr->children_[i], node_index);
+      flatten_(knodes, knodes[knode.first_child + i], internal_ptr->children_[i], node_index);
     }
   }
   else {
     knode.is_leaf = true;
     knode.sigma = node->sigma;
   }
-
-  return current_index;
 }
 
 void Octree::flatten(KernelOctreeNode *knodes)
@@ -207,7 +208,8 @@ void Octree::flatten(KernelOctreeNode *knodes)
   knode.bbox.max = make_float3(FLT_MAX);
   knode.bbox.min = -make_float3(FLT_MAX);
 
-  flatten_(knodes, root_, node_index);
+  const int root_index = node_index++;
+  flatten_(knodes, knodes[root_index], root_, node_index);
   /* TODO(weizhen): rescale the bounding box to match its resolution, for more robust traversing.
    */
 }

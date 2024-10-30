@@ -85,7 +85,11 @@ class Octree {
  private:
   std::shared_ptr<OctreeInternalNode> make_internal(std::shared_ptr<OctreeNode> &node);
   void recursive_build_(std::shared_ptr<OctreeNode> &node);
-  int flatten_(KernelOctreeNode *knodes, std::shared_ptr<OctreeNode> &node, int &index);
+  /* Breadth-first flatten, so that children are stored in consecutive indices. */
+  void flatten_(KernelOctreeNode *knodes,
+                KernelOctreeNode &knode,
+                std::shared_ptr<OctreeNode> &node,
+                int &node_index);
   void evaluate_volume_density_(Device *device, Progress &progress);
   Extrema<float> get_extrema(const vector<Extrema<float>> &values,
                              const int3 index_min,

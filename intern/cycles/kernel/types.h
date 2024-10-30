@@ -1719,15 +1719,12 @@ static_assert_align(KernelLightTreeNode, 16);
 
 struct KernelOctreeNode {
   bool is_leaf;
+  /* TODO(weizhen): only 22 bits needed. Also leaf node doesn't need this field, can use union. */
+  int first_child;
   Extrema<float> sigma;
 
   /* TODO(weizhen): probably we just need center and level, the size is a global constant. */
   KernelBoundingBox bbox;
-
-  /* TODO(weizhen): leaf node doesn't need this field, can store in a separate array or use union
-   * if we use spectrum sigma. If using union, only 7 nodes is needed because children[0] is always
-   * node_index + 1. Or, if stored as breadth-first, only one int with 22 bits is needed. */
-  int children[8];
 };
 
 typedef struct KernelLightTreeEmitter {

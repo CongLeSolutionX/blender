@@ -146,7 +146,7 @@ ccl_device ccl_global const KernelOctreeNode *volume_voxel_get(
       vstate.t.max = fminf(vstate.t.max, ray->tmax);
       return knode;
     }
-    node_index = knode->children[volume_tree_get_octant(knode->bbox, ray, P)];
+    node_index = knode->first_child + volume_tree_get_octant(knode->bbox, ray, P);
   }
 }
 
