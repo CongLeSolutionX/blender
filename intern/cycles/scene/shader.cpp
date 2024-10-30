@@ -75,8 +75,6 @@ NODE_DEFINE(Shader)
               volume_interpolation_method_enum,
               VOLUME_INTERPOLATION_LINEAR);
 
-  SOCKET_FLOAT(volume_step_rate, "Volume Step Rate", 1.0f);
-
   static NodeEnum displacement_method_enum;
   displacement_method_enum.insert("bump", DISPLACE_BUMP);
   displacement_method_enum.insert("true", DISPLACE_TRUE);
@@ -106,7 +104,6 @@ Shader::Shader() : Node(get_node_type())
   has_volume_spatial_varying = false;
   has_volume_attribute_dependency = false;
   has_volume_connected = false;
-  prev_volume_step_rate = 0.0f;
 
   emission_estimate = zero_float3();
   emission_sampling = EMISSION_SAMPLING_NONE;
@@ -403,10 +400,9 @@ void Shader::tag_update(Scene *scene)
     scene->procedural_manager->tag_update();
   }
 
-  if (has_volume != prev_has_volume || volume_step_rate != prev_volume_step_rate) {
+  if (has_volume != prev_has_volume) {
     scene->geometry_manager->need_flags_update = true;
     scene->object_manager->need_flags_update = true;
-    prev_volume_step_rate = volume_step_rate;
   }
 
   if (has_volume || prev_has_volume) {

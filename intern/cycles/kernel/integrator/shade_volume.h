@@ -220,68 +220,6 @@ ccl_device_inline bool volume_shader_sample(KernelGlobals kg,
   return true;
 }
 
-#  if 0
-ccl_device_forceinline void volume_step_init(KernelGlobals kg,
-                                             ccl_private const RNGState *rng_state,
-                                             const float object_step_size,
-                                             const float tmin,
-                                             const float tmax,
-                                             ccl_private float *step_size,
-                                             ccl_private float *step_shade_offset,
-                                             ccl_private float *steps_offset,
-                                             ccl_private int *max_steps)
-{
-  if (object_step_size == FLT_MAX) {
-    /* Homogeneous volume. */
-    *step_size = tmax - tmin;
-    *step_shade_offset = 0.0f;
-    *steps_offset = 1.0f;
-    *max_steps = 1;
-  }
-  else {
-    /* Heterogeneous volume. */
-    const float t = tmax - tmin;
-
-    *max_steps = kernel_data.integrator.volume_max_steps;
-    const float max_step_size = min(object_step_size, t);
-    if (t <= *max_steps * max_step_size) {
-      /* Reduce number of steps if possible. */
-      /* TODO(weizhen): for some reason t can be zero. Check why this happens. */
-      *max_steps = max(1, int(ceilf(t / max_step_size)));
-    }
-
-    *step_size = t / (float)*max_steps;
-
-    /* Perform shading at this offset within a step, to integrate over
-     * over the entire step segment. */
-    *step_shade_offset = path_state_rng_1D(kg, rng_state, PRNG_VOLUME_SHADE_OFFSET);
-
-    /* Shift starting point of all segment by this random amount to avoid
-     * banding artifacts from the volume bounding shape. */
-    *steps_offset = path_state_rng_1D(kg, rng_state, PRNG_VOLUME_OFFSET);
-  }
-}
-
-/* Volume Shadows
- *
- * These functions are used to attenuate shadow rays to lights. Both absorption
- * and scattering will block light, represented by the extinction coefficient. */
-
-/* homogeneous volume: assume shader evaluation at the starts gives
- * the extinction coefficient for the entire line segment */
-ccl_device void volume_shadow_homogeneous(KernelGlobals kg, IntegratorState state,
-                                          ccl_private Ray *ccl_restrict ray,
-                                          ccl_private ShaderData *ccl_restrict sd,
-                                          ccl_global Spectrum *ccl_restrict throughput)
-{
-  Spectrum sigma_t = zero_spectrum();
-
-  if (shadow_volume_shader_sample(kg, state, sd, &sigma_t)) {
-    *throughput *= volume_color_transmittance(sigma_t, ray->tmax - ray->tmin);
-  }
-}
-#  endif
-
 /* --------------------------------------------------------------------
  * Volume transmittance estimation based on "An unbiased ray-marching transmittance estimator" by
  * Kettunen et al.

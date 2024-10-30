@@ -381,7 +381,7 @@ ccl_device_inline uint object_patch_map_offset(KernelGlobals kg, int object)
   return kernel_data_fetch(objects, object).patch_map_offset;
 }
 
-/* Volume step size */
+/* Volume density */
 
 ccl_device_inline float object_volume_density(KernelGlobals kg, int object)
 {
@@ -390,15 +390,6 @@ ccl_device_inline float object_volume_density(KernelGlobals kg, int object)
   }
 
   return kernel_data_fetch(objects, object).volume_density;
-}
-
-ccl_device_inline float object_volume_step_size(KernelGlobals kg, int object)
-{
-  if (object == OBJECT_NONE) {
-    return kernel_data.background.volume_step_size;
-  }
-
-  return kernel_data_fetch(object_volume_step, object);
 }
 
 /* Pass ID for shader */

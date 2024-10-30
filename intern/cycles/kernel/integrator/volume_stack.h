@@ -153,27 +153,6 @@ ccl_device_inline bool volume_is_homogeneous(KernelGlobals kg,
   return true;
 }
 
-template<typename StackReadOp>
-ccl_device float volume_stack_step_size(KernelGlobals kg, StackReadOp stack_read)
-{
-  float step_size = FLT_MAX;
-
-  for (int i = 0;; i++) {
-    VolumeStack entry = stack_read(i);
-    if (entry.shader == SHADER_NONE) {
-      break;
-    }
-
-    if (!volume_is_homogeneous(kg, entry)) {
-      float object_step_size = object_volume_step_size(kg, entry.object);
-      object_step_size *= kernel_data.integrator.volume_step_rate;
-      step_size = fminf(object_step_size, step_size);
-    }
-  }
-
-  return step_size;
-}
-
 typedef enum VolumeSampleMethod {
   VOLUME_SAMPLE_NONE = 0,
   VOLUME_SAMPLE_DISTANCE = (1 << 0),

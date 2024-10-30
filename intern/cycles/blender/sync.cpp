@@ -323,9 +323,6 @@ void BlenderSync::sync_integrator(BL::ViewLayer &b_view_layer,
   integrator->set_transparent_max_bounce(get_int(cscene, "transparent_max_bounces"));
 
   integrator->set_volume_max_steps(get_int(cscene, "volume_max_steps"));
-  float volume_step_rate = (preview) ? get_float(cscene, "volume_preview_step_rate") :
-                                       get_float(cscene, "volume_step_rate");
-  integrator->set_volume_step_rate(volume_step_rate);
 
   integrator->set_caustics_reflective(get_boolean(cscene, "caustics_reflective"));
   integrator->set_caustics_refractive(get_boolean(cscene, "caustics_refractive"));

@@ -548,8 +548,6 @@ class CYCLES_RENDER_PT_volumes(CyclesButtonsPanel, Panel):
         cscene = scene.cycles
 
         col = layout.column(align=True)
-        col.prop(cscene, "volume_step_rate", text="Step Rate Render")
-        col.prop(cscene, "volume_preview_step_rate", text="Viewport")
 
         layout.prop(cscene, "volume_max_steps", text="Max Steps")
 
@@ -1758,7 +1756,6 @@ class CYCLES_WORLD_PT_settings_volume(CyclesButtonsPanel, Panel):
         col.prop(cworld, "homogeneous_volume", text="Homogeneous")
         sub = col.column()
         sub.active = not cworld.homogeneous_volume
-        sub.prop(cworld, "volume_step_size")
 
 
 class CYCLES_WORLD_PT_settings_light_group(CyclesButtonsPanel, Panel):
@@ -1934,7 +1931,6 @@ class CYCLES_MATERIAL_PT_settings_volume(CyclesButtonsPanel, Panel):
         col.prop(cmat, "homogeneous_volume", text="Homogeneous")
         sub = col.column()
         sub.active = not cmat.homogeneous_volume
-        sub.prop(cmat, "volume_step_rate")
 
     def draw(self, context):
         self.draw_shared(self, context, context.material)

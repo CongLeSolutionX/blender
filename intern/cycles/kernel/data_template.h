@@ -25,7 +25,6 @@ KERNEL_STRUCT_MEMBER(background, int, use_sun_guiding)
 /* Only shader index. */
 KERNEL_STRUCT_MEMBER(background, int, surface_shader)
 KERNEL_STRUCT_MEMBER(background, int, volume_shader)
-KERNEL_STRUCT_MEMBER(background, float, volume_step_size)
 KERNEL_STRUCT_MEMBER(background, int, transparent)
 KERNEL_STRUCT_MEMBER(background, float, transparent_roughness_squared_threshold)
 /* Sun sampling. */
@@ -202,7 +201,6 @@ KERNEL_STRUCT_MEMBER(integrator, int, blue_noise_sequence_length)
 /* Volume render. */
 KERNEL_STRUCT_MEMBER(integrator, int, use_volumes)
 KERNEL_STRUCT_MEMBER(integrator, int, volume_max_steps)
-KERNEL_STRUCT_MEMBER(integrator, float, volume_step_rate)
 /* Shadow catcher. */
 KERNEL_STRUCT_MEMBER(integrator, int, has_shadow_catcher)
 /* Closure filter. */

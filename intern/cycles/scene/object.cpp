@@ -286,98 +286,6 @@ uint Object::visibility_for_tracing() const
   return SHADOW_CATCHER_OBJECT_VISIBILITY(is_shadow_catcher, visibility & PATH_RAY_ALL_VISIBILITY);
 }
 
-/* TODO(weizhen): remove. */
-float Object::compute_volume_step_size() const
-{
-  if (geometry->geometry_type != Geometry::MESH && geometry->geometry_type != Geometry::VOLUME) {
-    return FLT_MAX;
-  }
-
-  Mesh *mesh = static_cast<Mesh *>(geometry);
-
-  if (!mesh->has_volume) {
-    return FLT_MAX;
-  }
-
-  /* Compute step rate from shaders. */
-  float step_rate = FLT_MAX;
-
-  foreach (Node *node, mesh->get_used_shaders()) {
-    Shader *shader = static_cast<Shader *>(node);
-    if (shader->has_volume) {
-      if ((shader->get_heterogeneous_volume() && shader->has_volume_spatial_varying) ||
-          (shader->has_volume_attribute_dependency))
-      {
-        step_rate = fminf(shader->get_volume_step_rate(), step_rate);
-      }
-    }
-  }
-
-  if (step_rate == FLT_MAX) {
-    /* TODO(weizhen): homogeneous volume, write majorant and minorant. */
-    return FLT_MAX;
-  }
-
-  /* Compute step size from voxel grids. */
-  float step_size = FLT_MAX;
-
-  if (geometry->is_volume()) {
-    Volume *volume = static_cast<Volume *>(geometry);
-
-    foreach (Attribute &attr, volume->attributes.attributes) {
-      if (attr.element == ATTR_ELEMENT_VOXEL) {
-        ImageHandle &handle = attr.data_voxel();
-        const ImageMetaData &metadata = handle.metadata();
-        if (metadata.width == 0 || metadata.height == 0 || metadata.depth == 0) {
-          continue;
-        }
-
-        /* User specified step size. */
-        float voxel_step_size = volume->get_step_size();
-
-        if (voxel_step_size == 0.0f) {
-          /* Auto detect step size. */
-          float3 size = one_float3();
-#ifdef WITH_NANOVDB
-          /* Dimensions were not applied to image transform with NanoVDB (see image_vdb.cpp) */
-          if (metadata.type != IMAGE_DATA_TYPE_NANOVDB_FLOAT &&
-              metadata.type != IMAGE_DATA_TYPE_NANOVDB_FLOAT3 &&
-              metadata.type != IMAGE_DATA_TYPE_NANOVDB_FPN &&
-              metadata.type != IMAGE_DATA_TYPE_NANOVDB_FP16)
-#endif
-            size /= make_float3(metadata.width, metadata.height, metadata.depth);
-
-          /* Step size is transformed from voxel to world space. */
-          Transform voxel_tfm = tfm;
-          if (metadata.use_transform_3d) {
-            voxel_tfm = tfm * transform_inverse(metadata.transform_3d);
-          }
-          voxel_step_size = reduce_min(fabs(transform_direction(&voxel_tfm, size)));
-        }
-        else if (volume->get_object_space()) {
-          /* User specified step size in object space. */
-          float3 size = make_float3(voxel_step_size, voxel_step_size, voxel_step_size);
-          voxel_step_size = reduce_min(fabs(transform_direction(&tfm, size)));
-        }
-
-        if (voxel_step_size > 0.0f) {
-          step_size = fminf(voxel_step_size, step_size);
-        }
-      }
-    }
-  }
-
-  if (step_size == FLT_MAX) {
-    /* Fall back to 1/10th of bounds for procedural volumes. */
-    assert(bounds.valid());
-    step_size = 0.1f * average(bounds.size());
-  }
-
-  step_size *= step_rate;
-
-  return step_size;
-}
-
 int Object::get_device_index() const
 {
   return index;
@@ -908,27 +816,16 @@ void ObjectManager::device_update_flags(
 
   /* Object info flag. */
   uint *object_flag = dscene->object_flag.data();
-  float *object_volume_step = dscene->object_volume_step.data();
 
   /* Object volume intersection. */
   vector<Object *> volume_objects;
   bool has_volume_objects = false;
   foreach (Object *object, scene->objects) {
     if (object->geometry->has_volume) {
-      /* If the bounds are not valid it is not always possible to calculate the volume step, and
-       * the step size is not needed for the displacement. So, delay calculation of the volume
-       * step size until the final bounds are known. */
       if (bounds_valid) {
         volume_objects.push_back(object);
-        object_volume_step[object->index] = object->compute_volume_step_size();
-      }
-      else {
-        object_volume_step[object->index] = FLT_MAX;
       }
       has_volume_objects = true;
-    }
-    else {
-      object_volume_step[object->index] = FLT_MAX;
     }
   }
 
