@@ -2348,6 +2348,46 @@ static PlaneAABBIsect test_frustum_aabb(const Bounds<float3> &bounds,
   return ret;
 }
 
+static PlaneAABBIsect test_frustum_aabb(const Bounds<float3> &bounds,
+                                        const Span<float4> frustum_planes)
+{
+  PlaneAABBIsect ret = ISECT_INSIDE;
+
+  for (const int i : frustum_planes.index_range()) {
+    float vmin[3], vmax[3];
+
+    for (int axis = 0; axis < 3; axis++) {
+      if (frustum_planes[i][axis] < 0) {
+        vmin[axis] = bounds.min[axis];
+        vmax[axis] = bounds.max[axis];
+      }
+      else {
+        vmin[axis] = bounds.max[axis];
+        vmax[axis] = bounds.min[axis];
+      }
+    }
+
+    if (dot_v3v3(frustum_planes[i], vmin) + frustum_planes[i][3] < 0) {
+      return ISECT_OUTSIDE;
+    }
+    if (dot_v3v3(frustum_planes[i], vmax) + frustum_planes[i][3] <= 0) {
+      ret = ISECT_INTERSECT;
+    }
+  }
+
+  return ret;
+}
+
+bool frustum_contain_AABB(const Node *node, const Span<float4> frustum_planes)
+{
+  return test_frustum_aabb(node->bounds_, frustum_planes) != ISECT_OUTSIDE;
+}
+
+bool frustum_exclude_AABB(const Node *node, const Span<float4> frustum_planes)
+{
+  return test_frustum_aabb(node->bounds_, frustum_planes) != ISECT_INSIDE;
+}
+
 }  // namespace blender::bke::pbvh
 
 bool BKE_pbvh_node_frustum_contain_AABB(const blender::bke::pbvh::Node *node,

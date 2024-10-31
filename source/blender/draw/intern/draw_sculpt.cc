@@ -91,7 +91,7 @@ static Vector<SculptBatch> sculpt_batches_get_ex(const Object *ob,
   const IndexMask visible_nodes = bke::pbvh::search_nodes(
       *pbvh, memory, [&](const bke::pbvh::Node &node) {
         return !BKE_pbvh_node_fully_hidden_get(node) &&
-               BKE_pbvh_node_frustum_contain_AABB(&node, &draw_frustum);
+               bke::pbvh::frustum_contain_AABB(&node, draw_frustum_planes);
       });
 
   const IndexMask nodes_to_update = update_only_visible ? visible_nodes :

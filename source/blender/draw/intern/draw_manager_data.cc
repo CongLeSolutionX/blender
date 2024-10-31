@@ -1301,7 +1301,7 @@ void DRW_sculpt_debug_cb(blender::bke::pbvh::Node *node,
 #endif
 }
 
-static void drw_sculpt_get_frustum_planes(const Object *ob, float planes[6][4])
+static void drw_sculpt_get_frustum_planes(const Object *ob, blender::Vector<float4> &planes)
 {
   /* TODO: take into account partial redraw for clipping planes. */
   DRW_view_frustum_planes_get(DRW_view_default_get(), planes);
@@ -1311,7 +1311,7 @@ static void drw_sculpt_get_frustum_planes(const Object *ob, float planes[6][4])
    * The inverse cancels out here since we transform by inverse(obmat). */
   float tmat[4][4];
   transpose_m4_m4(tmat, ob->object_to_world().ptr());
-  for (int i = 0; i < 6; i++) {
+  for (const int i : planes.index_range()) {
     mul_m4_v4(tmat, planes[i]);
   }
 }
@@ -1365,7 +1365,7 @@ static void drw_sculpt_generate_calls(DRWSculptCallbackData *scd)
   const IndexMask visible_nodes = bke::pbvh::search_nodes(
       *pbvh, memory, [&](const bke::pbvh::Node &node) {
         return !BKE_pbvh_node_fully_hidden_get(node) &&
-               BKE_pbvh_node_frustum_contain_AABB(&node, &draw_frustum);
+               bke::pbvh::frustum_contain_AABB(&node, draw_frustum_planes);
       });
 
   const IndexMask nodes_to_update = update_only_visible ? visible_nodes :
@@ -2339,6 +2339,13 @@ void DRW_view_frustum_corners_get(const DRWView *view, BoundBox *corners)
 void DRW_view_frustum_planes_get(const DRWView *view, float planes[6][4])
 {
   memcpy(planes, &view->frustum_planes, sizeof(view->frustum_planes));
+}
+
+void DRW_view_frustum_planes_get(const DRWView *view, std::array<float4, 6> &r_planes)
+{
+  std::copy_n(blender::Span<float4>(reinterpret_cast<const float4 *>(&view->frustum_planes), 6),
+              6,
+              r_planes.begin());
 }
 
 bool DRW_view_is_persp_get(const DRWView *view)

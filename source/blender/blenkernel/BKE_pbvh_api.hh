@@ -396,6 +396,9 @@ bool find_nearest_to_ray_node(Tree &pbvh,
  */
 Bounds<float3> bounds_get(const Tree &pbvh);
 
+bool frustum_contain_AABB(const Node *node, Span<float4> frustum_planes);
+bool frustum_exclude_AABB(const Node *node, Span<float4> frustum_planes);
+
 }  // namespace blender::bke::pbvh
 
 void BKE_pbvh_sync_visibility_from_verts(Object &object);
