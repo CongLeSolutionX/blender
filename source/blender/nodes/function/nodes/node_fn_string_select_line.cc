@@ -52,7 +52,7 @@ static std::string string_Select_Line(const std::string *a,const std::string *b,
 static void node_build_multi_function(NodeMultiFunctionBuilder &builder)
 {
   static auto count = mf::build::SI3_SO<std::string, std::string, int, std::string>(
-    "Keyword Count", [](const std::string &a , const std::string &b,const int &i) 
+    "Select Line", [](const std::string &a , const std::string &b,const int &i) 
   { return string_Select_Line(&a,&b,&i); });//static auto count
 
   builder.set_matching_fn(&count);
