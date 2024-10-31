@@ -33,6 +33,14 @@ typedef struct HuangHairExtra {
   /* The projected width of half a pixel at `sd->P` in `h` space. */
   float pixel_coverage;
 
+  /* debug mode
+   * 0: simpson rule (original)
+   * 1: monte carlo gamma
+   * 2: monte carlo h */
+  int mode;
+
+  int sample_count;
+
   /* Valid integration interval. */
   float gamma_m_min, gamma_m_max;
 } HuangHairExtra;
@@ -317,7 +325,8 @@ ccl_device_inline float bsdf_Go(float alpha2, float cos_NI, float cos_NO)
 ccl_device Spectrum bsdf_hair_huang_eval_r(KernelGlobals kg,
                                            ccl_private const ShaderClosure *sc,
                                            const float3 wi,
-                                           const float3 wo)
+                                           const float3 wo,
+                                           uint rng_quadrature)
 {
   ccl_private HuangHairBSDF *bsdf = (ccl_private HuangHairBSDF *)sc;
 
@@ -333,35 +342,88 @@ ccl_device Spectrum bsdf_hair_huang_eval_r(KernelGlobals kg,
   const float roughness = bsdf->roughness;
   const float roughness2 = sqr(roughness);
 
-  /* Maximal sample resolution. */
-  float res = roughness * 0.7f;
-
-  const float gamma_m_range = bsdf->extra->gamma_m_max - bsdf->extra->gamma_m_min;
-
-  /* Number of intervals should be even. */
-  const size_t intervals = 2 * (size_t)ceilf(gamma_m_range / res * 0.5f);
-
-  /* Modified resolution based on numbers of intervals. */
-  res = gamma_m_range / float(intervals);
-
-  /* Integrate using Composite Simpson's 1/3 rule. */
   float integral = 0.0f;
-  for (size_t i = 0; i <= intervals; i++) {
-    const float gamma_m = bsdf->extra->gamma_m_min + i * res;
-    const float3 wm = sphg_dir(bsdf->tilt, gamma_m, b);
+  if (bsdf->extra->mode == 1) {
+    /*
+     * Mode = 1: Monte Carlo Jitter sampling - Gamma measure
+     */
+    const float gamma_m_range = bsdf->extra->gamma_m_max - bsdf->extra->gamma_m_min;
+    const float resolution = gamma_m_range / float(bsdf->extra->sample_count);
+    for (size_t i = 0; i < bsdf->extra->sample_count; i++) {
 
-    if (microfacet_visible(wi, wo, make_float3(wm.x, 0.0f, wm.z), wh)) {
-      const float weight = (i == 0 || i == intervals) ? 0.5f : (i % 2 + 1);
-      const float cos_mi = dot(wm, wi);
-      const float G = bsdf_G<MicrofacetType::GGX>(roughness2, cos_mi, dot(wm, wo));
-      integral += weight * bsdf_D<MicrofacetType::GGX>(roughness2, dot(wm, wh)) * G *
-                  arc_length(bsdf->extra->e2, gamma_m) *
-                  bsdf_hair_huang_energy_scale(kg, cos_mi, sqrtf(roughness), bsdf->eta);
+      const float gamma_m = bsdf->extra->gamma_m_min +
+                            resolution * (i + lcg_step_float(&rng_quadrature));
+
+      const float3 wm = sphg_dir(bsdf->tilt, gamma_m, b);
+      if (microfacet_visible(wi, wo, make_float3(wm.x, 0.0f, wm.z), wh)) {
+        const float cos_mi = dot(wm, wi);
+        const float G = bsdf_G<MicrofacetType::GGX>(roughness2, cos_mi, dot(wm, wo));
+        integral += bsdf_D<MicrofacetType::GGX>(roughness2, dot(wm, wh)) * G *
+                    arc_length(bsdf->extra->e2, gamma_m) *
+                    bsdf_hair_huang_energy_scale(kg, cos_mi, sqrtf(roughness), bsdf->eta);
+      }
     }
+    integral *= resolution;
   }
+  else if (bsdf->extra->mode == 2) {
+    /*
+     * Mode = 2: Monte Carlo Jitter sampling - h measure with jacobian
+     */
+    const float h_min = bsdf->extra->gamma_m_min;
+    const float h_max = bsdf->extra->gamma_m_max;
+    const float h_range = h_max - h_min;
+    const float resolution = h_range / float(bsdf->extra->sample_count);
+    for (size_t i = 0; i < bsdf->extra->sample_count; i++) {
 
-  /* Simpson coefficient */
-  integral *= (2.0f / 3.0f * res);
+      const float h = h_min + resolution * (i + lcg_step_float(&rng_quadrature));
+      const float jacobian = 1.f / sqrt(1.f - sqr(h));
+      const float gamma_m = h_to_gamma(h, b, wi);
+
+      const float3 wm = sphg_dir(bsdf->tilt, gamma_m, b);
+      if (microfacet_visible(wi, wo, make_float3(wm.x, 0.0f, wm.z), wh)) {
+        const float cos_mi = dot(wm, wi);
+        const float G = bsdf_G<MicrofacetType::GGX>(roughness2, cos_mi, dot(wm, wo));
+        integral += jacobian * bsdf_D<MicrofacetType::GGX>(roughness2, dot(wm, wh)) * G *
+                    arc_length(bsdf->extra->e2, gamma_m) *
+                    bsdf_hair_huang_energy_scale(kg, cos_mi, sqrtf(roughness), bsdf->eta);
+      }
+    }
+    integral *= resolution;
+  }
+  else {
+    /*
+     * Mode = 0: Composite Simpson 1/3 rule (Original code)
+     */
+
+    /* Maximal sample resolution. */
+    float res = roughness * 0.7f;
+
+    const float gamma_m_range = bsdf->extra->gamma_m_max - bsdf->extra->gamma_m_min;
+
+    /* Number of intervals should be even. */
+    const size_t intervals = 2 * (size_t)ceilf(gamma_m_range / res * 0.5f);
+
+    /* Modified resolution based on numbers of intervals. */
+    res = gamma_m_range / float(intervals);
+
+    /* Integrate using Composite Simpson's 1/3 rule. */
+    for (size_t i = 0; i <= intervals; i++) {
+      const float gamma_m = bsdf->extra->gamma_m_min + i * res;
+      const float3 wm = sphg_dir(bsdf->tilt, gamma_m, b);
+
+      if (microfacet_visible(wi, wo, make_float3(wm.x, 0.0f, wm.z), wh)) {
+        const float weight = (i == 0 || i == intervals) ? 0.5f : (i % 2 + 1);
+        const float cos_mi = dot(wm, wi);
+        const float G = bsdf_G<MicrofacetType::GGX>(roughness2, cos_mi, dot(wm, wo));
+        integral += weight * bsdf_D<MicrofacetType::GGX>(roughness2, dot(wm, wh)) * G *
+                    arc_length(bsdf->extra->e2, gamma_m) *
+                    bsdf_hair_huang_energy_scale(kg, cos_mi, sqrtf(roughness), bsdf->eta);
+      }
+    }
+
+    /* Simpson coefficient */
+    integral *= (2.0f / 3.0f * res);
+  }
 
   const float F = fresnel_dielectric_cos(dot(wi, wh), bsdf->eta);
 
@@ -832,25 +894,36 @@ ccl_device Spectrum bsdf_hair_huang_eval(KernelGlobals kg,
     /* At the boundaries the hair might not cover the whole pixel. */
     dh = h_max - h_min;
 
-    float nearfield_gamma_min = h_to_gamma(h_max / r, bsdf->aspect_ratio, local_I);
-    float nearfield_gamma_max = h_to_gamma(h_min / r, bsdf->aspect_ratio, local_I);
-
-    if (nearfield_gamma_max < nearfield_gamma_min) {
-      nearfield_gamma_max += M_2PI_F;
+    if (bsdf->extra->mode == 2) {
+      gamma_m_min = fmaxf(h_max / r, -.999f);
+      gamma_m_max = fminf(h_min / r, +.999f);
     }
+    else {
+      float nearfield_gamma_min = h_to_gamma(h_max / r, bsdf->aspect_ratio, local_I);
+      float nearfield_gamma_max = h_to_gamma(h_min / r, bsdf->aspect_ratio, local_I);
 
-    /* Wrap range to compute the intersection. */
-    if ((gamma_m_max - nearfield_gamma_min) > M_2PI_F) {
-      gamma_m_min -= M_2PI_F;
-      gamma_m_max -= M_2PI_F;
-    }
-    else if ((nearfield_gamma_max - gamma_m_min) > M_2PI_F) {
-      nearfield_gamma_min -= M_2PI_F;
-      nearfield_gamma_max -= M_2PI_F;
-    }
+      if (nearfield_gamma_max < nearfield_gamma_min) {
+        nearfield_gamma_max += M_2PI_F;
+      }
 
-    gamma_m_min = fmaxf(gamma_m_min, nearfield_gamma_min);
-    gamma_m_max = fminf(gamma_m_max, nearfield_gamma_max);
+      /* Wrap range to compute the intersection. */
+      if ((gamma_m_max - nearfield_gamma_min) > M_2PI_F) {
+        gamma_m_min -= M_2PI_F;
+        gamma_m_max -= M_2PI_F;
+      }
+      else if ((nearfield_gamma_max - gamma_m_min) > M_2PI_F) {
+        nearfield_gamma_min -= M_2PI_F;
+        nearfield_gamma_max -= M_2PI_F;
+      }
+
+      gamma_m_min = fmaxf(gamma_m_min, nearfield_gamma_min);
+      gamma_m_max = fminf(gamma_m_max, nearfield_gamma_max);
+    }
+  }
+  else if (bsdf->extra->mode == 2) {
+    // Far field and h mode
+    gamma_m_min = -.999f;
+    gamma_m_max = +.999f;
   }
 
   bsdf->extra->gamma_m_min = gamma_m_min;
@@ -858,7 +931,7 @@ ccl_device Spectrum bsdf_hair_huang_eval(KernelGlobals kg,
 
   const float projected_area = cos_theta(local_I) * dh;
 
-  return (bsdf_hair_huang_eval_r(kg, sc, local_I, local_O) +
+  return (bsdf_hair_huang_eval_r(kg, sc, local_I, local_O, sd->lcg_state) +
           bsdf_hair_huang_eval_residual(kg, sc, local_I, local_O, sd->lcg_state)) /
          projected_area;
 }

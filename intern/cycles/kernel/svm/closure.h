@@ -910,6 +910,9 @@ ccl_device
             bsdf->extra->pixel_coverage = 0.5f * sd->dP / radius;
           }
 
+          bsdf->extra->pixel_coverage *= ior; // ior repurposed for pixel coverge multiplier
+          bsdf->extra->mode = int(alpha * 180.f / M_PI_F + .5f); // alpha repurposed for integration mode
+
           bsdf->aspect_ratio = stack_load_float_default(stack, shared_ofs1, data_node3.w);
           if (bsdf->aspect_ratio != 1.0f) {
             /* Align ellipse major axis with the curve normal direction. */
@@ -918,9 +921,11 @@ ccl_device
           }
 
           bsdf->roughness = roughness;
-          bsdf->tilt = alpha;
-          bsdf->eta = ior;
+          bsdf->tilt = 2.f * M_PI_F / 180.f; // hard-coded
+          bsdf->eta = 1.55f; // hard-coded
           bsdf->sigma = sigma;
+
+          bsdf->extra->sample_count = 64;
 
           sd->flag |= bsdf_hair_huang_setup(sd, bsdf, path_flag);
         }
