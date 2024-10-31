@@ -766,7 +766,7 @@ void ED_previews_tag_dirty_by_id(const Main &bmain, const ID &id)
     LISTBASE_FOREACH (const ScrArea *, area, &screen->areabase) {
       LISTBASE_FOREACH (const ARegion *, region, &area->regionbase) {
         LISTBASE_FOREACH (uiPreview *, preview, &region->ui_previews) {
-          if (preview->session_uid == id.session_uid) {
+          if (preview->id_session_uid == id.session_uid) {
             preview->tag |= UI_PREVIEW_TAG_DIRTY;
           }
         }

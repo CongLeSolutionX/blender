@@ -111,6 +111,10 @@ void ED_preview_kill_jobs(wmWindowManager *wm, Main *bmain);
 void ED_preview_draw(
     const bContext *C, void *idp, void *parentp, void *slotp, uiPreview *preview, rcti *rect);
 
+/**
+ * For UI previews (i.e. #uiPreview, not #PreviewImage): Tag all previews for \a id as dirty, so
+ * the next redraw triggers a rerender in #ED_preview_draw().
+ */
 void ED_previews_tag_dirty_by_id(const Main &bmain, const ID &id);
 
 void ED_render_clear_mtex_copybuf();

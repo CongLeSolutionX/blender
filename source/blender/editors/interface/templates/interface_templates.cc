@@ -3410,12 +3410,12 @@ void uiTemplatePreview(uiLayout *layout,
     ui_preview = MEM_cnew<uiPreview>(__func__);
     STRNCPY(ui_preview->preview_id, preview_id);
     ui_preview->height = short(UI_UNIT_Y * 7.6f);
-    ui_preview->session_uid = pid->session_uid;
+    ui_preview->id_session_uid = pid->session_uid;
     ui_preview->tag = UI_PREVIEW_TAG_DIRTY;
     BLI_addtail(&region->ui_previews, ui_preview);
   }
-  else if (ui_preview->session_uid != pid->session_uid) {
-    ui_preview->session_uid = pid->session_uid;
+  else if (ui_preview->id_session_uid != pid->session_uid) {
+    ui_preview->id_session_uid = pid->session_uid;
     ui_preview->tag |= UI_PREVIEW_TAG_DIRTY;
   }
 

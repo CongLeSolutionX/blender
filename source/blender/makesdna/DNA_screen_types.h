@@ -337,11 +337,12 @@ typedef struct uiPreview {
 
   short tag; /* #uiPreviewTag */
 
-  /** Session UID of the ID this preview is made for. */
-  unsigned int session_uid;
+  /** #ID.session_uid of the ID this preview is made for. */
+  unsigned int id_session_uid;
 } uiPreview;
 
 typedef enum uiPreviewTag {
+  /** Preview needs rerendering, handled in #ED_preview_draw(). */
   UI_PREVIEW_TAG_DIRTY = (1 << 0),
 } uiPreviewTag;
 
