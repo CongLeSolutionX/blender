@@ -282,7 +282,8 @@ static void resample_to_uniform(const CurvesGeometry &src_curves,
    * smaller sections of data that ideally fit into CPU cache better than simply one attribute at a
    * time or one curve at a time. */
   selection.foreach_segment(GrainSize(512), [&](const IndexMaskSegment selection_segment) {
-    Vector<std::byte> evaluated_buffer;
+    /* Use a default alignment that works for all attribute types. */
+    Vector<std::byte, 512, GuardedAlignedAllocator<>> evaluated_buffer;
 
     /* Gather uniform samples based on the accumulated lengths of the original curve. */
     for (const int i_curve : selection_segment) {
@@ -310,6 +311,7 @@ static void resample_to_uniform(const CurvesGeometry &src_curves,
         using T = decltype(dummy);
         Span<T> src = attributes.src[i_attribute].typed<T>();
         MutableSpan<T> dst = attributes.dst[i_attribute].typed<T>();
+        BLI_assert(alignof(T) <= typeof(evaluated_buffer)::allocator_type::min_alignment);
 
         for (const int i_curve : selection_segment) {
           const IndexRange src_points = src_points_by_curve[i_curve];
