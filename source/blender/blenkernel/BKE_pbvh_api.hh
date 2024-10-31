@@ -294,11 +294,6 @@ class Tree {
 
 }  // namespace blender::bke::pbvh
 
-struct PBVHFrustumPlanes {
-  float (*planes)[4];
-  int num_planes;
-};
-
 /* Callbacks */
 
 namespace blender::bke::pbvh {
@@ -396,8 +391,15 @@ bool find_nearest_to_ray_node(Tree &pbvh,
  */
 Bounds<float3> bounds_get(const Tree &pbvh);
 
-bool frustum_contain_AABB(const Node *node, Span<float4> frustum_planes);
-bool frustum_exclude_AABB(const Node *node, Span<float4> frustum_planes);
+/**
+ * Test if AABB is at least partially inside the #PBVHFrustumPlanes volume.
+ */
+bool node_frustum_contain_aabb(const Node &node, Span<float4> frustum_planes);
+
+/**
+ * Test if AABB is at least partially outside the #PBVHFrustumPlanes volume.
+ */
+bool node_frustum_exclude_aabb(const Node &node, Span<float4> frustum_planes);
 
 }  // namespace blender::bke::pbvh
 
@@ -474,17 +476,6 @@ blender::Bounds<blender::float3> BKE_pbvh_node_get_original_BB(
     const blender::bke::pbvh::Node *node);
 
 float BKE_pbvh_node_get_tmin(const blender::bke::pbvh::Node *node);
-
-/**
- * Test if AABB is at least partially inside the #PBVHFrustumPlanes volume.
- */
-bool BKE_pbvh_node_frustum_contain_AABB(const blender::bke::pbvh::Node *node,
-                                        const PBVHFrustumPlanes *frustum);
-/**
- * Test if AABB is at least partially outside the #PBVHFrustumPlanes volume.
- */
-bool BKE_pbvh_node_frustum_exclude_AABB(const blender::bke::pbvh::Node *node,
-                                        const PBVHFrustumPlanes *frustum);
 
 const blender::Set<BMVert *, 0> &BKE_pbvh_bmesh_node_unique_verts(
     blender::bke::pbvh::BMeshNode *node);

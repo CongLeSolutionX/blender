@@ -2318,37 +2318,6 @@ enum PlaneAABBIsect {
  * (ok, not a real frustum), false otherwise.
  */
 static PlaneAABBIsect test_frustum_aabb(const Bounds<float3> &bounds,
-                                        const PBVHFrustumPlanes *frustum)
-{
-  PlaneAABBIsect ret = ISECT_INSIDE;
-  const float(*planes)[4] = frustum->planes;
-
-  for (int i = 0; i < frustum->num_planes; i++) {
-    float vmin[3], vmax[3];
-
-    for (int axis = 0; axis < 3; axis++) {
-      if (planes[i][axis] < 0) {
-        vmin[axis] = bounds.min[axis];
-        vmax[axis] = bounds.max[axis];
-      }
-      else {
-        vmin[axis] = bounds.max[axis];
-        vmax[axis] = bounds.min[axis];
-      }
-    }
-
-    if (dot_v3v3(planes[i], vmin) + planes[i][3] < 0) {
-      return ISECT_OUTSIDE;
-    }
-    if (dot_v3v3(planes[i], vmax) + planes[i][3] <= 0) {
-      ret = ISECT_INTERSECT;
-    }
-  }
-
-  return ret;
-}
-
-static PlaneAABBIsect test_frustum_aabb(const Bounds<float3> &bounds,
                                         const Span<float4> frustum_planes)
 {
   PlaneAABBIsect ret = ISECT_INSIDE;
@@ -2378,31 +2347,17 @@ static PlaneAABBIsect test_frustum_aabb(const Bounds<float3> &bounds,
   return ret;
 }
 
-bool frustum_contain_AABB(const Node *node, const Span<float4> frustum_planes)
+bool node_frustum_contain_aabb(const Node &node, const Span<float4> frustum_planes)
 {
-  return test_frustum_aabb(node->bounds_, frustum_planes) != ISECT_OUTSIDE;
+  return test_frustum_aabb(node.bounds_, frustum_planes) != ISECT_OUTSIDE;
 }
 
-bool frustum_exclude_AABB(const Node *node, const Span<float4> frustum_planes)
+bool node_frustum_exclude_aabb(const Node &node, const Span<float4> frustum_planes)
 {
-  return test_frustum_aabb(node->bounds_, frustum_planes) != ISECT_INSIDE;
+  return test_frustum_aabb(node.bounds_, frustum_planes) != ISECT_INSIDE;
 }
 
 }  // namespace blender::bke::pbvh
-
-bool BKE_pbvh_node_frustum_contain_AABB(const blender::bke::pbvh::Node *node,
-                                        const PBVHFrustumPlanes *data)
-{
-  return blender::bke::pbvh::test_frustum_aabb(node->bounds_, data) !=
-         blender::bke::pbvh::ISECT_OUTSIDE;
-}
-
-bool BKE_pbvh_node_frustum_exclude_AABB(const blender::bke::pbvh::Node *node,
-                                        const PBVHFrustumPlanes *data)
-{
-  return blender::bke::pbvh::test_frustum_aabb(node->bounds_, data) !=
-         blender::bke::pbvh::ISECT_INSIDE;
-}
 
 void BKE_pbvh_draw_debug_cb(blender::bke::pbvh::Tree &pbvh,
                             void (*draw_fn)(blender::bke::pbvh::Node *node,
