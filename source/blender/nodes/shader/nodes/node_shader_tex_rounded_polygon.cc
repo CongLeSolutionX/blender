@@ -281,6 +281,8 @@ float4 calculate_out_fields_irregular_elliptical(bool calculate_r_gon_parameter_
   if ((x_axis_A_coord >= ref_A_bevel_start) &&
       (x_axis_A_coord < M_TAU_F - last_ref_A_x_axis - ref_A_bevel_start))
   {
+    float bevel_start_A_angle_bisector = ref_A_angle_bisector - ref_A_bevel_start;
+
     if ((ref_A_coord >= ref_A_bevel_start) && (ref_A_coord < ref_A_next_ref - ref_A_bevel_start)) {
       float l_angle_bisector = 0.0f;
       float r_gon_parameter = 0.0f;
@@ -296,20 +298,17 @@ float4 calculate_out_fields_irregular_elliptical(bool calculate_r_gon_parameter_
           r_gon_parameter *= -1.0f;
         }
         if (normalize_r_gon_parameter) {
-          r_gon_parameter /= l_angle_bisector *
-                                 math::tan(ref_A_angle_bisector - ref_A_bevel_start) +
-                             spline_start_bevel_start *
-                                 ((0.5f * l_angle_bisector /
-                                   math::cos(ref_A_angle_bisector - ref_A_bevel_start)) +
-                                  0.5f) +
-                             r_gon_roundness * ref_A_bevel_start;
+          float normalize_based_on_l_angle_bisector = l_angle_bisector *
+                                                          math::tan(bevel_start_A_angle_bisector) +
+                                                      spline_start_bevel_start *
+                                                          (0.5f * l_angle_bisector + 0.5f) +
+                                                      r_gon_roundness * ref_A_bevel_start;
+
+          r_gon_parameter /= normalize_based_on_l_angle_bisector;
         }
       }
       if (calculate_max_unit_parameter) {
-        max_unit_parameter = math::tan(ref_A_angle_bisector - ref_A_bevel_start) +
-                             spline_start_bevel_start *
-                                 ((0.5f / math::cos(ref_A_angle_bisector - ref_A_bevel_start)) +
-                                  0.5f) +
+        max_unit_parameter = math::tan(bevel_start_A_angle_bisector) + spline_start_bevel_start +
                              r_gon_roundness * ref_A_bevel_start;
       }
       return float4(l_angle_bisector,
@@ -327,44 +326,57 @@ float4 calculate_out_fields_irregular_elliptical(bool calculate_r_gon_parameter_
       float max_unit_parameter = 0.0f;
 
       float l_circle_radius = math::sin(ref_A_bevel_start) / math::sin(ref_A_angle_bisector);
-      float l_circle_center = math::sin(ref_A_angle_bisector - ref_A_bevel_start) /
+      float l_circle_center = math::sin(bevel_start_A_angle_bisector) /
                               math::sin(ref_A_angle_bisector);
       float l_coord_R_l_bevel_start =
           math::cos(nearest_ref_SA_coord) * l_circle_center +
           math::sqrt(math::square(math::cos(nearest_ref_SA_coord) * l_circle_center) +
                      math::square(l_circle_radius) - math::square(l_circle_center));
 
-      l_angle_bisector = l_coord * math::cos(ref_A_angle_bisector - ref_A_bevel_start) /
+      l_angle_bisector = l_coord * math::cos(bevel_start_A_angle_bisector) /
                          l_coord_R_l_bevel_start;
 
       float spline_start_bevel_start = (1.0f - r_gon_roundness) * ref_A_bevel_start;
       if (calculate_r_gon_parameter_field) {
         float coord_A_bevel_start = ref_A_bevel_start - math::abs(nearest_ref_SA_coord);
-        r_gon_parameter = l_coord * math::sin(ref_A_angle_bisector - ref_A_bevel_start);
+        r_gon_parameter = l_coord * math::sin(bevel_start_A_angle_bisector);
 
         if (coord_A_bevel_start < spline_start_bevel_start) {
-          r_gon_parameter += l_coord * coord_A_bevel_start +
-                             0.5f * (1.0f - l_coord) * math::square(coord_A_bevel_start) /
-                                 spline_start_bevel_start;
+          r_gon_parameter += l_coord * math::cos(bevel_start_A_angle_bisector) *
+                                 coord_A_bevel_start +
+                             0.5f * (1.0f - l_coord * math::cos(bevel_start_A_angle_bisector)) *
+                                 math::square(coord_A_bevel_start) / spline_start_bevel_start;
         }
         else {
-          r_gon_parameter += spline_start_bevel_start * (0.5f * l_coord - 0.5f) +
+          r_gon_parameter += spline_start_bevel_start *
+                                 (0.5f * l_coord * math::cos(bevel_start_A_angle_bisector) -
+                                  0.5f) +
                              coord_A_bevel_start;
         }
         if (ref_A_coord < ref_A_angle_bisector) {
           r_gon_parameter *= -1.0f;
         }
         if (normalize_r_gon_parameter) {
-          r_gon_parameter /= l_coord * math::sin(ref_A_angle_bisector - ref_A_bevel_start) +
-                             spline_start_bevel_start * (0.5f * l_coord + 0.5f) +
-                             r_gon_roundness * ref_A_bevel_start;
+          float normalize_based_on_l_angle_bisector = l_angle_bisector *
+                                                          math::tan(bevel_start_A_angle_bisector) +
+                                                      spline_start_bevel_start *
+                                                          (0.5f * l_angle_bisector + 0.5f) +
+                                                      r_gon_roundness * ref_A_bevel_start;
+          float normalize_based_on_l_coord =
+              l_coord * math::sin(bevel_start_A_angle_bisector) +
+              spline_start_bevel_start *
+                  (0.5f * l_coord * math::cos(bevel_start_A_angle_bisector) + 0.5f) +
+              r_gon_roundness * ref_A_bevel_start;
+
+          /* For r_gon_roundness -> 1.0 the normalize_based_on_l_angle_bisector field and
+           * normalize_based_on_l_coord field converge against the same scalar field. */
+          r_gon_parameter /= math::mix(normalize_based_on_l_angle_bisector,
+                                       normalize_based_on_l_coord,
+                                       coord_A_bevel_start / ref_A_bevel_start);
         }
       }
       if (calculate_max_unit_parameter) {
-        max_unit_parameter = math::tan(ref_A_angle_bisector - ref_A_bevel_start) +
-                             spline_start_bevel_start *
-                                 ((0.5f / math::cos(ref_A_angle_bisector - ref_A_bevel_start)) +
-                                  0.5f) +
+        max_unit_parameter = math::tan(bevel_start_A_angle_bisector) + spline_start_bevel_start +
                              r_gon_roundness * ref_A_bevel_start;
       }
       return float4(l_angle_bisector,
@@ -433,6 +445,8 @@ float4 calculate_out_fields_irregular_elliptical(bool calculate_r_gon_parameter_
         nearest_ref_MSA_coord += last_ref_A_x_axis;
         nearest_ref_MSA_coord *= -1.0f;
       }
+      float bevel_start_A_angle_bisector = ref_A_angle_bisector - ref_A_bevel_start;
+
       float l_angle_bisector = 0.0f;
       float r_gon_parameter = 0.0f;
       float max_unit_parameter = 0.0f;
@@ -441,12 +455,11 @@ float4 calculate_out_fields_irregular_elliptical(bool calculate_r_gon_parameter_
       float l_basis_vector_1 = r_gon_roundness * math::tan(ref_A_angle_bisector);
       float l_basis_vector_2 = r_gon_roundness * math::sin(last_angle_bisector_A_x_axis) *
                                math::sqrt(math::square(math::tan(ref_A_angle_bisector)) + 1.0f);
-      float2 ellipse_center = float2(math::cos(ref_A_bevel_start) /
-                                         math::cos(ref_A_angle_bisector - ref_A_bevel_start),
-                                     math::sin(ref_A_bevel_start) /
-                                         math::cos(ref_A_angle_bisector - ref_A_bevel_start)) -
-                              l_basis_vector_2 * float2(math::sin(last_angle_bisector_A_x_axis),
-                                                        math::cos(last_angle_bisector_A_x_axis));
+      float2 ellipse_center =
+          float2(math::cos(ref_A_bevel_start) / math::cos(bevel_start_A_angle_bisector),
+                 math::sin(ref_A_bevel_start) / math::cos(bevel_start_A_angle_bisector)) -
+          l_basis_vector_2 * float2(math::sin(last_angle_bisector_A_x_axis),
+                                    math::cos(last_angle_bisector_A_x_axis));
       float2 transformed_direction_vector = float2(
           math::cos(last_angle_bisector_A_x_axis + nearest_ref_MSA_coord) /
               (l_basis_vector_1 * math::sin(ref_A_angle_bisector + last_angle_bisector_A_x_axis)),
@@ -514,31 +527,43 @@ float4 calculate_out_fields_irregular_elliptical(bool calculate_r_gon_parameter_
         float spline_start_bevel_start = (1.0f - r_gon_roundness) * ref_A_bevel_start;
         if (calculate_r_gon_parameter_field) {
           float coord_A_bevel_start = ref_A_bevel_start - math::abs(nearest_ref_MSA_coord);
-          r_gon_parameter = l_coord * math::sin(ref_A_angle_bisector - ref_A_bevel_start);
+          r_gon_parameter = l_coord * math::sin(bevel_start_A_angle_bisector);
 
           if (coord_A_bevel_start < spline_start_bevel_start) {
-            r_gon_parameter += l_coord * coord_A_bevel_start +
-                               0.5f * (1.0f - l_coord) * math::square(coord_A_bevel_start) /
-                                   spline_start_bevel_start;
+            r_gon_parameter += l_coord * math::cos(bevel_start_A_angle_bisector) *
+                                   coord_A_bevel_start +
+                               0.5f * (1.0f - l_coord * math::cos(bevel_start_A_angle_bisector)) *
+                                   math::square(coord_A_bevel_start) / spline_start_bevel_start;
           }
           else {
-            r_gon_parameter += spline_start_bevel_start * (0.5f * l_coord - 0.5f) +
+            r_gon_parameter += spline_start_bevel_start *
+                                   (0.5f * l_coord * math::cos(bevel_start_A_angle_bisector) -
+                                    0.5f) +
                                coord_A_bevel_start;
           }
           if (ref_A_coord < ref_A_angle_bisector) {
             r_gon_parameter *= -1.0f;
           }
           if (normalize_r_gon_parameter) {
-            r_gon_parameter /= l_coord * math::sin(ref_A_angle_bisector - ref_A_bevel_start) +
-                               spline_start_bevel_start * (0.5f * l_coord + 0.5f) +
-                               r_gon_roundness * ref_A_bevel_start;
+            float normalize_based_on_l_angle_bisector =
+                l_angle_bisector * math::tan(bevel_start_A_angle_bisector) +
+                spline_start_bevel_start * (0.5f * l_angle_bisector + 0.5f) +
+                r_gon_roundness * ref_A_bevel_start;
+            float normalize_based_on_l_coord =
+                l_coord * math::sin(bevel_start_A_angle_bisector) +
+                spline_start_bevel_start *
+                    (0.5f * l_coord * math::cos(bevel_start_A_angle_bisector) + 0.5f) +
+                r_gon_roundness * ref_A_bevel_start;
+
+            /* For r_gon_roundness -> 1.0 the normalize_based_on_l_angle_bisector field and
+             * normalize_based_on_l_coord field converge against the same scalar field. */
+            r_gon_parameter /= math::mix(normalize_based_on_l_angle_bisector,
+                                         normalize_based_on_l_coord,
+                                         coord_A_bevel_start / ref_A_bevel_start);
           }
         }
         if (calculate_max_unit_parameter) {
-          max_unit_parameter = math::tan(ref_A_angle_bisector - ref_A_bevel_start) +
-                               spline_start_bevel_start *
-                                   ((0.5f / math::cos(ref_A_angle_bisector - ref_A_bevel_start)) +
-                                    0.5f) +
+          max_unit_parameter = math::tan(bevel_start_A_angle_bisector) + spline_start_bevel_start +
                                r_gon_roundness * ref_A_bevel_start;
         }
         x_axis_A_angle_bisector = segment_id * ref_A_next_ref + ref_A_angle_bisector;
@@ -770,6 +795,8 @@ float4 calculate_out_fields_irregular_circular(bool calculate_r_gon_parameter_fi
   if ((x_axis_A_coord >= x_axis_A_outer_last_bevel_start) &&
       (x_axis_A_coord < M_TAU_F - last_ref_A_x_axis - x_axis_A_outer_last_bevel_start))
   {
+    float bevel_start_A_angle_bisector = ref_A_angle_bisector - ref_A_bevel_start;
+
     if (((ref_A_coord >= ref_A_bevel_start) &&
          (ref_A_coord < ref_A_next_ref - ref_A_bevel_start)) ||
         (x_axis_A_coord >= M_TAU_F - last_ref_A_x_axis - ref_A_bevel_start) ||
@@ -824,20 +851,16 @@ float4 calculate_out_fields_irregular_circular(bool calculate_r_gon_parameter_fi
             r_gon_parameter *= -1.0f;
           }
           if (normalize_r_gon_parameter) {
-            r_gon_parameter /= l_angle_bisector *
-                                   math::tan(ref_A_angle_bisector - ref_A_bevel_start) +
-                               spline_start_bevel_start *
-                                   ((0.5f * l_angle_bisector /
-                                     math::cos(ref_A_angle_bisector - ref_A_bevel_start)) +
-                                    0.5f) +
-                               r_gon_roundness * ref_A_bevel_start;
+            float normalize_based_on_l_angle_bisector =
+                l_angle_bisector * math::tan(bevel_start_A_angle_bisector) +
+                spline_start_bevel_start * (0.5f * l_angle_bisector + 0.5f) +
+                r_gon_roundness * ref_A_bevel_start;
+
+            r_gon_parameter /= normalize_based_on_l_angle_bisector;
           }
         }
         if (calculate_max_unit_parameter) {
-          max_unit_parameter = math::tan(ref_A_angle_bisector - ref_A_bevel_start) +
-                               spline_start_bevel_start *
-                                   ((0.5f / math::cos(ref_A_angle_bisector - ref_A_bevel_start)) +
-                                    0.5f) +
+          max_unit_parameter = math::tan(bevel_start_A_angle_bisector) + spline_start_bevel_start +
                                r_gon_roundness * ref_A_bevel_start;
         }
       }
@@ -856,44 +879,57 @@ float4 calculate_out_fields_irregular_circular(bool calculate_r_gon_parameter_fi
       float max_unit_parameter = 0.0f;
 
       float l_circle_radius = math::sin(ref_A_bevel_start) / math::sin(ref_A_angle_bisector);
-      float l_circle_center = math::sin(ref_A_angle_bisector - ref_A_bevel_start) /
+      float l_circle_center = math::sin(bevel_start_A_angle_bisector) /
                               math::sin(ref_A_angle_bisector);
       float l_coord_R_l_bevel_start =
           math::cos(nearest_ref_SA_coord) * l_circle_center +
           math::sqrt(math::square(math::cos(nearest_ref_SA_coord) * l_circle_center) +
                      math::square(l_circle_radius) - math::square(l_circle_center));
 
-      l_angle_bisector = l_coord * math::cos(ref_A_angle_bisector - ref_A_bevel_start) /
+      l_angle_bisector = l_coord * math::cos(bevel_start_A_angle_bisector) /
                          l_coord_R_l_bevel_start;
 
       float spline_start_bevel_start = (1.0f - r_gon_roundness) * ref_A_bevel_start;
       if (calculate_r_gon_parameter_field) {
         float coord_A_bevel_start = ref_A_bevel_start - math::abs(nearest_ref_SA_coord);
-        r_gon_parameter = l_coord * math::sin(ref_A_angle_bisector - ref_A_bevel_start);
+        r_gon_parameter = l_coord * math::sin(bevel_start_A_angle_bisector);
 
         if (coord_A_bevel_start < spline_start_bevel_start) {
-          r_gon_parameter += l_coord * coord_A_bevel_start +
-                             0.5f * (1.0f - l_coord) * math::square(coord_A_bevel_start) /
-                                 spline_start_bevel_start;
+          r_gon_parameter += l_coord * math::cos(bevel_start_A_angle_bisector) *
+                                 coord_A_bevel_start +
+                             0.5f * (1.0f - l_coord * math::cos(bevel_start_A_angle_bisector)) *
+                                 math::square(coord_A_bevel_start) / spline_start_bevel_start;
         }
         else {
-          r_gon_parameter += spline_start_bevel_start * (0.5f * l_coord - 0.5f) +
+          r_gon_parameter += spline_start_bevel_start *
+                                 (0.5f * l_coord * math::cos(bevel_start_A_angle_bisector) -
+                                  0.5f) +
                              coord_A_bevel_start;
         }
         if (ref_A_coord < ref_A_angle_bisector) {
           r_gon_parameter *= -1.0f;
         }
         if (normalize_r_gon_parameter) {
-          r_gon_parameter /= l_coord * math::sin(ref_A_angle_bisector - ref_A_bevel_start) +
-                             spline_start_bevel_start * (0.5f * l_coord + 0.5f) +
-                             r_gon_roundness * ref_A_bevel_start;
+          float normalize_based_on_l_angle_bisector = l_angle_bisector *
+                                                          math::tan(bevel_start_A_angle_bisector) +
+                                                      spline_start_bevel_start *
+                                                          (0.5f * l_angle_bisector + 0.5f) +
+                                                      r_gon_roundness * ref_A_bevel_start;
+          float normalize_based_on_l_coord =
+              l_coord * math::sin(bevel_start_A_angle_bisector) +
+              spline_start_bevel_start *
+                  (0.5f * l_coord * math::cos(bevel_start_A_angle_bisector) + 0.5f) +
+              r_gon_roundness * ref_A_bevel_start;
+
+          /* For r_gon_roundness -> 1.0 the normalize_based_on_l_angle_bisector field and
+           * normalize_based_on_l_coord field converge against the same scalar field. */
+          r_gon_parameter /= math::mix(normalize_based_on_l_angle_bisector,
+                                       normalize_based_on_l_coord,
+                                       coord_A_bevel_start / ref_A_bevel_start);
         }
       }
       if (calculate_max_unit_parameter) {
-        max_unit_parameter = math::tan(ref_A_angle_bisector - ref_A_bevel_start) +
-                             spline_start_bevel_start *
-                                 ((0.5f / math::cos(ref_A_angle_bisector - ref_A_bevel_start)) +
-                                  0.5f) +
+        max_unit_parameter = math::tan(bevel_start_A_angle_bisector) + spline_start_bevel_start +
                              r_gon_roundness * ref_A_bevel_start;
       }
       return float4(l_angle_bisector,
@@ -1122,6 +1158,7 @@ float4 calculate_out_fields(bool calculate_r_gon_parameter_field,
     else {
       float ref_A_bevel_start = ref_A_angle_bisector - math::atan((1.0f - r_gon_roundness) *
                                                                   math::tan(ref_A_angle_bisector));
+      float bevel_start_A_angle_bisector = ref_A_angle_bisector - ref_A_bevel_start;
 
       if ((ref_A_coord >= ref_A_next_ref - ref_A_bevel_start) || (ref_A_coord < ref_A_bevel_start))
       {
@@ -1134,44 +1171,56 @@ float4 calculate_out_fields(bool calculate_r_gon_parameter_field,
         float max_unit_parameter = 0.0f;
 
         float l_circle_radius = math::sin(ref_A_bevel_start) / math::sin(ref_A_angle_bisector);
-        float l_circle_center = math::sin(ref_A_angle_bisector - ref_A_bevel_start) /
+        float l_circle_center = math::sin(bevel_start_A_angle_bisector) /
                                 math::sin(ref_A_angle_bisector);
         float l_coord_R_l_bevel_start =
             math::cos(nearest_ref_SA_coord) * l_circle_center +
             math::sqrt(math::square(math::cos(nearest_ref_SA_coord) * l_circle_center) +
                        math::square(l_circle_radius) - math::square(l_circle_center));
 
-        l_angle_bisector = l_coord * math::cos(ref_A_angle_bisector - ref_A_bevel_start) /
+        l_angle_bisector = l_coord * math::cos(bevel_start_A_angle_bisector) /
                            l_coord_R_l_bevel_start;
 
         float spline_start_bevel_start = (1.0f - r_gon_roundness) * ref_A_bevel_start;
         if (calculate_r_gon_parameter_field) {
           float coord_A_bevel_start = ref_A_bevel_start - math::abs(nearest_ref_SA_coord);
-          r_gon_parameter = l_coord * math::sin(ref_A_angle_bisector - ref_A_bevel_start);
+          r_gon_parameter = l_coord * math::sin(bevel_start_A_angle_bisector);
 
           if (coord_A_bevel_start < spline_start_bevel_start) {
-            r_gon_parameter += l_coord * coord_A_bevel_start +
-                               0.5f * (1.0f - l_coord) * math::square(coord_A_bevel_start) /
-                                   spline_start_bevel_start;
+            r_gon_parameter += l_coord * math::cos(bevel_start_A_angle_bisector) *
+                                   coord_A_bevel_start +
+                               0.5f * (1.0f - l_coord * math::cos(bevel_start_A_angle_bisector)) *
+                                   math::square(coord_A_bevel_start) / spline_start_bevel_start;
           }
           else {
-            r_gon_parameter += spline_start_bevel_start * (0.5f * l_coord - 0.5f) +
+            r_gon_parameter += spline_start_bevel_start *
+                                   (0.5f * l_coord * math::cos(bevel_start_A_angle_bisector) -
+                                    0.5f) +
                                coord_A_bevel_start;
           }
           if (ref_A_coord < ref_A_angle_bisector) {
             r_gon_parameter *= -1.0f;
           }
           if (normalize_r_gon_parameter) {
-            r_gon_parameter /= l_coord * math::sin(ref_A_angle_bisector - ref_A_bevel_start) +
-                               spline_start_bevel_start * (0.5f * l_coord + 0.5f) +
-                               r_gon_roundness * ref_A_bevel_start;
+            float normalize_based_on_l_angle_bisector =
+                l_angle_bisector * math::tan(bevel_start_A_angle_bisector) +
+                spline_start_bevel_start * (0.5f * l_angle_bisector + 0.5f) +
+                r_gon_roundness * ref_A_bevel_start;
+            float normalize_based_on_l_coord =
+                l_coord * math::sin(bevel_start_A_angle_bisector) +
+                spline_start_bevel_start *
+                    (0.5f * l_coord * math::cos(bevel_start_A_angle_bisector) + 0.5f) +
+                r_gon_roundness * ref_A_bevel_start;
+
+            /* For r_gon_roundness -> 1.0 the normalize_based_on_l_angle_bisector field and
+             * normalize_based_on_l_coord field converge against the same scalar field. */
+            r_gon_parameter /= math::mix(normalize_based_on_l_angle_bisector,
+                                         normalize_based_on_l_coord,
+                                         coord_A_bevel_start / ref_A_bevel_start);
           }
         }
         if (calculate_max_unit_parameter) {
-          max_unit_parameter = math::tan(ref_A_angle_bisector - ref_A_bevel_start) +
-                               spline_start_bevel_start *
-                                   ((0.5f / math::cos(ref_A_angle_bisector - ref_A_bevel_start)) +
-                                    0.5f) +
+          max_unit_parameter = math::tan(bevel_start_A_angle_bisector) + spline_start_bevel_start +
                                r_gon_roundness * ref_A_bevel_start;
         }
         return float4(l_angle_bisector,
@@ -1194,20 +1243,16 @@ float4 calculate_out_fields(bool calculate_r_gon_parameter_field,
             r_gon_parameter *= -1.0f;
           }
           if (normalize_r_gon_parameter) {
-            r_gon_parameter /= l_angle_bisector *
-                                   math::tan(ref_A_angle_bisector - ref_A_bevel_start) +
-                               spline_start_bevel_start *
-                                   ((0.5f * l_angle_bisector /
-                                     math::cos(ref_A_angle_bisector - ref_A_bevel_start)) +
-                                    0.5f) +
-                               r_gon_roundness * ref_A_bevel_start;
+            float normalize_based_on_l_angle_bisector =
+                l_angle_bisector * math::tan(bevel_start_A_angle_bisector) +
+                spline_start_bevel_start * (0.5f * l_angle_bisector + 0.5f) +
+                r_gon_roundness * ref_A_bevel_start;
+
+            r_gon_parameter /= normalize_based_on_l_angle_bisector;
           }
         }
         if (calculate_max_unit_parameter) {
-          max_unit_parameter = math::tan(ref_A_angle_bisector - ref_A_bevel_start) +
-                               spline_start_bevel_start *
-                                   ((0.5f / math::cos(ref_A_angle_bisector - ref_A_bevel_start)) +
-                                    0.5f) +
+          max_unit_parameter = math::tan(bevel_start_A_angle_bisector) + spline_start_bevel_start +
                                r_gon_roundness * ref_A_bevel_start;
         }
         return float4(l_angle_bisector,
