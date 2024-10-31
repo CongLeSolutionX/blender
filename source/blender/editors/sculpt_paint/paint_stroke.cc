@@ -1413,7 +1413,7 @@ static bool paint_stroke_curve_end(bContext *C, wmOperator *op, PaintStroke *str
   return true;
 }
 
-static void paint_stroke_line_constrain(PaintStroke *stroke, float2 mouse)
+static void paint_stroke_line_constrain(PaintStroke *stroke, float2 &mouse)
 {
   if (stroke->constrain_line) {
     float2 line = mouse - stroke->last_mouse_position;
