@@ -1583,6 +1583,48 @@ void PlanarProbePipeline::begin_sync()
 
   closure_bits_ = CLOSURE_NONE;
   closure_count_ = 0;
+
+  {
+    npr_ps_.init();
+    /* Textures. */
+    npr_ps_.bind_texture(RBUFS_UTILITY_TEX_SLOT, inst_.pipelines.utility_tx);
+    npr_ps_.bind_texture(INDEX_NPR_TX_SLOT, &inst_.render_buffers.npr_index_tx);
+#if 0
+  npr_ps_.bind_resources(inst_.gbuffer);
+#else
+    /* Bind manually to pre-defined slots. */
+    npr_ps_.bind_texture(GBUF_NORMAL_NPR_TX_SLOT, &inst_.gbuffer.normal_tx);
+    npr_ps_.bind_texture(GBUF_HEADER_NPR_TX_SLOT, &inst_.gbuffer.header_tx);
+    npr_ps_.bind_texture(GBUF_CLOSURE_NPR_TX_SLOT, &inst_.gbuffer.closure_tx);
+#endif
+    npr_ps_.bind_texture(RADIANCE_TX_SLOT, &npr_radiance_input_tx_);
+    for (int i : IndexRange(3)) {
+      npr_ps_.bind_texture(DIRECT_RADIANCE_NPR_TX_SLOT_1 + i, &dummy_black_);
+      npr_ps_.bind_texture(INDIRECT_RADIANCE_NPR_TX_SLOT_1 + i, &dummy_black_);
+    };
+    npr_ps_.bind_texture(BACK_RADIANCE_TX_SLOT, &dummy_black_);
+    npr_ps_.bind_texture(BACK_HIZ_TX_SLOT, &dummy_black_);
+
+    /* Images. */
+    npr_ps_.bind_image(RBUFS_COLOR_SLOT, &dummy_black_);
+    npr_ps_.bind_image(RBUFS_VALUE_SLOT, &dummy_black_);
+
+    npr_ps_.bind_resources(inst_.uniform_data);
+    npr_ps_.bind_resources(inst_.sampling);
+
+    npr_ps_.bind_resources(inst_.hiz_buffer.front);
+
+    npr_ps_.bind_resources(inst_.lights);
+    npr_ps_.bind_resources(inst_.shadows);
+
+    DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_CUSTOM | DRW_STATE_DEPTH_EQUAL;
+
+    npr_double_sided_ps_ = &npr_ps_.sub("DoubleSided");
+    npr_double_sided_ps_->state_set(state);
+
+    npr_single_sided_ps_ = &npr_ps_.sub("SingleSided");
+    npr_single_sided_ps_->state_set(state | DRW_STATE_CULL_BACK);
+  }
 }
 
 void PlanarProbePipeline::end_sync()
@@ -1644,7 +1686,8 @@ void PlanarProbePipeline::render(View &view,
                                  GPUTexture *depth_layer_tx,
                                  Framebuffer &gbuffer_fb,
                                  Framebuffer &combined_fb,
-                                 int2 extent)
+                                 int2 extent,
+                                 GPUTexture *combined_tx)
 {
   GPU_debug_group_begin("Planar.Capture");
 
@@ -1673,6 +1716,21 @@ void PlanarProbePipeline::render(View &view,
 
   inst_.pipelines.data.is_sphere_probe = false;
   inst_.uniform_data.push_update();
+
+  float4 data(0.0f);
+  dummy_black_.ensure_2d(RAYTRACE_RADIANCE_FORMAT, int2(1), GPU_TEXTURE_USAGE_SHADER_READ, data);
+
+  TextureFromPool npr_radiance_input = "NPR Radiance Input";
+  {
+    /* TODO(NPR): There should be separate PBR/NPR combined_tx. Then this copy can be skipped. */
+    npr_radiance_input.acquire(extent, GPU_texture_format(combined_tx));
+    npr_radiance_input_tx_ = npr_radiance_input;
+    GPU_texture_copy(npr_radiance_input_tx_, combined_tx);
+  }
+
+  inst_.manager->submit(npr_ps_, view);
+
+  npr_radiance_input.release();
 
   GPU_debug_group_end();
 }

@@ -576,6 +576,9 @@ class PlanarProbePipeline : DeferredLayerBase {
 
   PassSimple eval_light_ps_ = {"EvalLights"};
 
+  Texture dummy_black_ = {"dummy_black"};
+  GPUTexture *npr_radiance_input_tx_ = nullptr;
+
  public:
   PlanarProbePipeline(Instance &inst) : inst_(inst){};
 
@@ -590,7 +593,8 @@ class PlanarProbePipeline : DeferredLayerBase {
               GPUTexture *depth_layer_tx,
               Framebuffer &gbuffer,
               Framebuffer &combined_fb,
-              int2 extent);
+              int2 extent,
+              GPUTexture *combined_tx);
 };
 
 /** \} */
