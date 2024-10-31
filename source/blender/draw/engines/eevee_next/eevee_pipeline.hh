@@ -531,6 +531,9 @@ class DeferredProbePipeline {
 
   PassSimple eval_light_ps_ = {"EvalLights"};
 
+  Texture dummy_black_ = {"dummy_black"};
+  GPUTexture *npr_radiance_input_tx_ = nullptr;
+
  public:
   DeferredProbePipeline(Instance &inst) : inst_(inst){};
 
@@ -545,7 +548,8 @@ class DeferredProbePipeline {
               Framebuffer &prepass_fb,
               Framebuffer &combined_fb,
               Framebuffer &gbuffer_fb,
-              int2 extent);
+              int2 extent,
+              GPUTexture *combined_tx);
 
   /* Return the maximum amount of gbuffer layer needed. */
   int closure_layer_count() const
