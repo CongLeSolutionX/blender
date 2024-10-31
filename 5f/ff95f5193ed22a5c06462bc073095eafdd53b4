@@ -2,3 +2,4 @@ Referenced by issue #129334, Sculpt: Multires face material index is inconsisten
 Referenced by pull request #129526, Fix #129353: GPv3: Crash when using Catmul-Rom curve type
 Referenced by commit 18144705cfbe19bbbacc3efe4d43cbd81973a1e2, Fix #129353: GPv3: Crash when using Catmul-Rom curve type
 Referenced by pull request #129625, Fix #129518: GPv3: Crash entering edit mode with locked layers
+Referenced by commit ab89e367da5b90ec77e7e782db36886e648b4854, Fix #129518: GPv3: Crash entering edit mode with locked layers
