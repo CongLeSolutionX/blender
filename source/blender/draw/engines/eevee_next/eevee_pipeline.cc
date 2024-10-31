@@ -1427,6 +1427,25 @@ PassMain::Sub *DeferredProbePipeline::material_add(::Material *blender_mat, GPUM
   return &pass->sub(GPU_material_get_name(gpumat));
 }
 
+PassMain::Sub *DeferredProbePipeline::npr_add(::Material *blender_mat, GPUMaterial *gpumat)
+{
+  PassMain::Sub *pass = (blender_mat->blend_flag & MA_BL_CULL_BACKFACE) ?
+                            opaque_layer_.npr_single_sided_ps_ :
+                            opaque_layer_.npr_double_sided_ps_;
+
+  PassMain::Sub *material_ps = &pass->sub(GPU_material_get_name(gpumat));
+
+  /* We have to bind the shader to be able to push constants. */
+  GPUPass *gpupass = GPU_material_get_pass(gpumat);
+  material_ps->shader_set(GPU_pass_shader_get(gpupass));
+  /* TODO(NPR) */
+  // material_ps->push_constant("npr_index", index);
+  /* TODO(NPR): Check use_split_radiance. */
+  material_ps->push_constant("use_split_radiance", false);
+
+  return material_ps;
+}
+
 void DeferredProbePipeline::render(View &view,
                                    Framebuffer &prepass_fb,
                                    Framebuffer &combined_fb,
@@ -1542,6 +1561,24 @@ PassMain::Sub *PlanarProbePipeline::material_add(::Material *blender_mat, GPUMat
                                                   gbuffer_double_sided_ps_);
 
   return &pass->sub(GPU_material_get_name(gpumat));
+}
+
+PassMain::Sub *PlanarProbePipeline::npr_add(::Material *blender_mat, GPUMaterial *gpumat)
+{
+  PassMain::Sub *pass = (blender_mat->blend_flag & MA_BL_CULL_BACKFACE) ? npr_single_sided_ps_ :
+                                                                          npr_double_sided_ps_;
+
+  PassMain::Sub *material_ps = &pass->sub(GPU_material_get_name(gpumat));
+
+  /* We have to bind the shader to be able to push constants. */
+  GPUPass *gpupass = GPU_material_get_pass(gpumat);
+  material_ps->shader_set(GPU_pass_shader_get(gpupass));
+  /* TODO(NPR) */
+  // material_ps->push_constant("npr_index", index);
+  /* TODO(NPR): Check use_split_radiance. */
+  material_ps->push_constant("use_split_radiance", false);
+
+  return material_ps;
 }
 
 void PlanarProbePipeline::render(View &view,

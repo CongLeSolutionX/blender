@@ -539,6 +539,7 @@ class DeferredProbePipeline {
 
   PassMain::Sub *prepass_add(::Material *material, GPUMaterial *gpumat);
   PassMain::Sub *material_add(::Material *material, GPUMaterial *gpumat);
+  PassMain::Sub *npr_add(::Material *blender_mat, GPUMaterial *gpumat);
 
   void render(View &view,
               Framebuffer &prepass_fb,
@@ -579,6 +580,7 @@ class PlanarProbePipeline : DeferredLayerBase {
 
   PassMain::Sub *prepass_add(::Material *material, GPUMaterial *gpumat);
   PassMain::Sub *material_add(::Material *material, GPUMaterial *gpumat);
+  PassMain::Sub *npr_add(::Material *blender_mat, GPUMaterial *gpumat);
 
   void render(View &view,
               GPUTexture *depth_layer_tx,
@@ -757,6 +759,8 @@ class PipelineModule {
           return probe.prepass_add(blender_mat, gpumat);
         case MAT_PIPE_DEFERRED:
           return probe.material_add(blender_mat, gpumat);
+        case MAT_PIPE_DEFERRED_NPR:
+          return probe.npr_add(blender_mat, gpumat);
         default:
           BLI_assert_unreachable();
           break;
@@ -768,6 +772,8 @@ class PipelineModule {
           return planar.prepass_add(blender_mat, gpumat);
         case MAT_PIPE_DEFERRED:
           return planar.material_add(blender_mat, gpumat);
+        case MAT_PIPE_DEFERRED_NPR:
+          return planar.npr_add(blender_mat, gpumat);
         default:
           BLI_assert_unreachable();
           break;
