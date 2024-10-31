@@ -499,7 +499,7 @@ void ANIM_deselect_keys_in_animation_editors(bContext *C)
         continue;
       }
       ListBase anim_data = {nullptr, nullptr};
-      eAnimFilter_Flags filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_LIST_CHANNELS);
+      eAnimFilter_Flags filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_FCURVESONLY);
       ANIM_animdata_filter(&ac, &anim_data, filter, ac.data, eAnimCont_Types(ac.datatype));
       LISTBASE_FOREACH (bAnimListElem *, ale, &anim_data) {
         if (!ale->adt || !ale->adt->action) {
