@@ -1564,8 +1564,10 @@ static void gwl_display_destroy(GWL_Display *display)
   }
 
 #ifdef WITH_OPENGL_BACKEND
-  if (eglGetDisplay) {
-    ::eglTerminate(eglGetDisplay(EGLNativeDisplayType(display->wl.display)));
+  if (display->wl.display) {
+    if (eglGetDisplay) {
+      ::eglTerminate(eglGetDisplay(EGLNativeDisplayType(display->wl.display)));
+    }
   }
 #endif
 
@@ -7928,6 +7930,10 @@ static constexpr const char *ghost_wl_mime_img_png = "image/png";
 
 GHOST_TSuccess GHOST_SystemWayland::hasClipboardImage(void) const
 {
+#ifdef USE_EVENT_BACKGROUND_THREAD
+  std::lock_guard lock_server_guard{*server_mutex};
+#endif
+
   GWL_Seat *seat = gwl_display_seat_active_get(display_);
   if (UNLIKELY(!seat)) {
     return GHOST_kFailure;
@@ -7997,6 +8003,8 @@ uint *GHOST_SystemWayland::getClipboardImage(int *r_width, int *r_height) const
                                             IB_rect,
                                             nullptr,
                                             "<clipboard>");
+        free(thread_result.data);
+
         if (ibuf) {
           *r_width = ibuf->x;
           *r_height = ibuf->y;
