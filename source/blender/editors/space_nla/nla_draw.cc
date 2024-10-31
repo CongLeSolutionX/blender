@@ -811,6 +811,9 @@ void draw_nla_main_data(bAnimContext *ac, SpaceNla *snla, ARegion *region)
   for (bAnimListElem *ale = static_cast<bAnimListElem *>(anim_data.first); ale;
        ale = ale->next, ymax -= NLATRACK_STEP(snla))
   {
+    if (ale->data == nullptr) {
+      continue;
+    }
     float ymin = ymax - NLATRACK_HEIGHT(snla);
     float ycenter = (ymax + ymin + 2 * NLATRACK_SKIP - 1) / 2.0f;
 
