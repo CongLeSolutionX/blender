@@ -102,9 +102,7 @@ class Octree {
 
   TaskPool task_pool;
 #ifdef WITH_OPENVDB
-  openvdb::BoolGrid::ConstPtr mesh_to_sdf_grid(const Mesh *mesh,
-                                               const float voxel_size,
-                                               const float half_width);
+  openvdb::BoolGrid::ConstPtr mesh_to_sdf_grid(const Mesh *mesh, const float half_width);
   std::map<const Geometry *, openvdb::BoolGrid::ConstPtr> vdb_map;
 #endif
 

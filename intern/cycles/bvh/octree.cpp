@@ -146,9 +146,7 @@ void Octree::recursive_build_(shared_ptr<OctreeNode> &octree_node)
 }
 
 #ifdef WITH_OPENVDB
-openvdb::BoolGrid::ConstPtr Octree::mesh_to_sdf_grid(const Mesh *mesh,
-                                                     const float voxel_size,
-                                                     const float half_width)
+openvdb::BoolGrid::ConstPtr Octree::mesh_to_sdf_grid(const Mesh *mesh, const float half_width)
 {
   const int num_verts = mesh->get_verts().size();
   std::vector<openvdb::Vec3s> points(num_verts);
@@ -165,7 +163,11 @@ openvdb::BoolGrid::ConstPtr Octree::mesh_to_sdf_grid(const Mesh *mesh,
                                   mesh->get_triangles()[i * 3 + 2]);
   });
 
-  auto xform = openvdb::math::Transform::createLinearTransform(voxel_size);
+  /* TODO(weizhen): add hard limit on voxel size in case object has extreme proportions. Also
+   * should consider object instead of mesh size. */
+  const float voxel_size_ = reduce_min(voxel_size());
+  auto xform = openvdb::math::Transform::createLinearTransform(voxel_size_);
+
   auto sdf_grid = openvdb::tools::meshToLevelSet<openvdb::FloatGrid>(
       *xform, points, triangles, half_width);
 
@@ -419,7 +421,7 @@ void Octree::evaluate_volume_density_(Device *device, Progress &progress)
     const Geometry *geom = object ? object->get_geometry() : nullptr;
     if (geom && geom->is_mesh() && !vdb_map.count(geom)) {
       const Mesh *mesh = static_cast<const Mesh *>(geom);
-      vdb_map[geom] = mesh_to_sdf_grid(mesh, 1.0f / reduce_max(index_range), 2.0f);
+      vdb_map[geom] = mesh_to_sdf_grid(mesh, 2.0f);
     }
 #endif
 
