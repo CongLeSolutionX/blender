@@ -1041,8 +1041,8 @@ bool OptiXDevice::build_optix_bvh(BVHOptiX *bvh,
   if (build_input.type == OPTIX_BUILD_INPUT_TYPE_CURVES) {
     /* The build flags have to match the ones used to query the built-in curve intersection
      * program (see optixBuiltinISModuleGet above) */
-    options.buildFlags = OPTIX_BUILD_FLAG_PREFER_FAST_TRACE |
-                         OPTIX_BUILD_FLAG_ALLOW_COMPACTION | OPTIX_BUILD_FLAG_ALLOW_UPDATE;
+    options.buildFlags = OPTIX_BUILD_FLAG_PREFER_FAST_TRACE | OPTIX_BUILD_FLAG_ALLOW_COMPACTION |
+                         OPTIX_BUILD_FLAG_ALLOW_UPDATE;
     use_fast_trace_bvh = true;
   }
   else if (use_fast_trace_bvh) {
