@@ -312,7 +312,7 @@ static void resample_to_uniform(const CurvesGeometry &src_curves,
         Span<T> src = attributes.src[i_attribute].typed<T>();
         MutableSpan<T> dst = attributes.dst[i_attribute].typed<T>();
 #ifndef NDEBUG
-        using AllocatorType = typename decltype(evaluated_buffer)::allocator_type;
+        using AllocatorType = std::decay_t<decltype(evaluated_buffer)>::allocator_type;
         BLI_assert(alignof(T) <= AllocatorType::min_alignment);
 #endif
 
