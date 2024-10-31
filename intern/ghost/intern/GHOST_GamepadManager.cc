@@ -22,48 +22,47 @@ void GHOST_GamepadManager::send_gamepad_events(GHOST_GamepadState new_state, flo
       val = 0.0f;
     }
   };
+  const auto is_zero_input = [this](float(&val)[2]) { return val[0] == 0.0f && val[1] == 0.0f; };
 
   const auto send_thumb_event =
-      [&, this](float(&old_state)[2], float(&new_state)[2], GHOST_TGamepadThumb thumb) -> void {
-    apply_death_zone(new_state[0]);
-    apply_death_zone(new_state[1]);
+      [&, this](float(&old_vals)[2], float(&new_vals)[2], GHOST_TGamepadThumb thumb) -> void {
+    apply_death_zone(new_vals[0]);
+    apply_death_zone(new_vals[1]);
     /* Send only thumb events if there is non-zero reading or the thumb has just been released. */
-    if ((old_state[0] == 0.0f && old_state[1] == 0.0f) &&
-        (new_state[0] == 0.0f && new_state[1] == 0.0f))
-    {
+    if (is_zero_input(old_vals) && is_zero_input(new_vals)) {
       return;
     }
     GHOST_EventGamepadThumb *event = new GHOST_EventGamepadThumb(now, window);
     GHOST_TEventGamepadThumbData *data = (GHOST_TEventGamepadThumbData *)event->getData();
-    data->value[0] = new_state[0];
-    data->value[1] = new_state[1];
+    data->value[0] = new_vals[0];
+    data->value[1] = new_vals[1];
     data->thumb = thumb;
-    data->action = new_state ? GHOST_kPress : GHOST_kRelease;
+    data->action = !is_zero_input(new_vals) ? GHOST_kPress : GHOST_kRelease;
     data->dt = delta_time;
     system_.pushEvent(event);
-    old_state[0] = new_state[0];
-    old_state[1] = new_state[1];
+    old_vals[0] = new_vals[0];
+    old_vals[1] = new_vals[1];
   };
 
   send_thumb_event(gamepad_state_.left_thumb, new_state.left_thumb, GHOST_kGamepadLeftThumb);
   send_thumb_event(gamepad_state_.right_thumb, new_state.right_thumb, GHOST_kGamepadRightThumb);
 
   const auto send_trigger_event =
-      [&, this](float &old_state, float new_state, GHOST_TGamepadTrigger trigger) -> void {
-    apply_death_zone(new_state);
+      [&, this](float &old_val, float new_val, GHOST_TGamepadTrigger trigger) -> void {
+    apply_death_zone(new_val);
     /* Send only triggers events if there is non-zero reading or the triggers has just been
      * released. */
-    if (old_state == 0.0f && new_state == 0.0f) {
+    if (old_val == 0.0f && new_val == 0.0f) {
       return;
     }
     GHOST_EventGamepadTrigger *event = new GHOST_EventGamepadTrigger(now, window);
     GHOST_TEventGamepadTriggerData *data = (GHOST_TEventGamepadTriggerData *)event->getData();
-    data->value = new_state;
+    data->value = new_val;
     data->trigger = trigger;
-    data->action = new_state ? GHOST_kPress : GHOST_kRelease;
+    data->action = new_val ? GHOST_kPress : GHOST_kRelease;
     data->dt = delta_time;
     system_.pushEvent(event);
-    old_state = new_state;
+    old_val = new_val;
   };
 
   send_trigger_event(
