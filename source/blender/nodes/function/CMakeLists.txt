@@ -63,6 +63,7 @@ set(SRC
   nodes/node_fn_value_to_string.cc
   nodes/node_fn_string_keyword_count.cc
   nodes/node_fn_string_select_line.cc
+  nodes/node_fn_string_find.cc
   node_function_util.cc
 
   node_function_util.hh
