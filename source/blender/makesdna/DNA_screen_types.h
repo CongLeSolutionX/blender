@@ -335,9 +335,10 @@ typedef struct uiPreview {
   char preview_id[64];
   short height;
 
+  /* Unset on file read. */
   short tag; /* #uiPreviewTag */
 
-  /** #ID.session_uid of the ID this preview is made for. */
+  /** #ID.session_uid of the ID this preview is made for. Unset on file read. */
   unsigned int id_session_uid;
 } uiPreview;
 
