@@ -311,7 +311,10 @@ static void resample_to_uniform(const CurvesGeometry &src_curves,
         using T = decltype(dummy);
         Span<T> src = attributes.src[i_attribute].typed<T>();
         MutableSpan<T> dst = attributes.dst[i_attribute].typed<T>();
-        BLI_assert(alignof(T) <= typeof(evaluated_buffer)::allocator_type::min_alignment);
+#ifndef NDEBUG
+        using AllocatorType = typename typeof(evaluated_buffer)::allocator_type;
+        BLI_assert(alignof(T) <= AllocatorType::min_alignment);
+#endif
 
         for (const int i_curve : selection_segment) {
           const IndexRange src_points = src_points_by_curve[i_curve];
