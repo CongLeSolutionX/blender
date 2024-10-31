@@ -1,2 +1,3 @@
 Referenced by issue #127602, Sculpt: Crash with multiresolution modifier on imported mesh
 Referenced by issue #129334, Sculpt: Multires face material index is inconsistent across "sculpt" levels
+Referenced by pull request #129649, Cleanup: Sculpt: Remove PBVH frustum plane and related calculation
