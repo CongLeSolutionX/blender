@@ -1,15 +1,17 @@
-/* SPDX-FileCopyrightText: 2023 Blender Authors
+/* SPDX-FileCopyrightText: 2024 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
+
 #ifndef WITH_INPUT_GAMEPAD
 #  error Gamepad code included in non-Gamepad-enabled build
 #endif
 
+#include "GHOST_System.hh"
+
 #include <bitset>
 
-#include "GHOST_System.hh"
 enum class GamepadButtonMask {
   A = 0,
   B,
@@ -44,7 +46,7 @@ class GHOST_GamepadManager {
   void set_dead_zone(const float);
 
   /** Once per frame checks any change in the gamepad state and send events. */
-  virtual void send_gamepad_events(float delta_time);
+  virtual void send_gamepad_events(float delta_time) = 0;
 
  protected:
   /**

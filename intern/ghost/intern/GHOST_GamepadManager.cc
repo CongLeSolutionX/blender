@@ -1,11 +1,10 @@
-/* SPDX-FileCopyrightText: 2023 Blender Authors
+/* SPDX-FileCopyrightText: 2024 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "GHOST_GamepadManager.hh"
 #include "GHOST_EventGamepad.hh"
 #include "GHOST_WindowManager.hh"
-#include <ratio>
 
 GHOST_GamepadManager::GHOST_GamepadManager(GHOST_System &sys)
     : system_(sys), gamepad_active_(false), gamepad_state_{}, dead_zone_(0.2)
@@ -85,8 +84,8 @@ void GHOST_GamepadManager::send_gamepad_events(GHOST_GamepadState new_state, flo
       {GamepadButtonMask::LeftShoulder, GHOST_kGamepadButtonLeftShoulder},
       {GamepadButtonMask::RightShoulder, GHOST_kGamepadButtonRightShoulder},
 
-      {GamepadButtonMask::View, GHOST_kgamepadButtonView},
-      {GamepadButtonMask::Menu, GHOST_kgamepadButtonMenu},
+      {GamepadButtonMask::View, GHOST_kGamepadButtonView},
+      {GamepadButtonMask::Menu, GHOST_kGamepadButtonMenu},
 
       {GamepadButtonMask::LeftThumb, GHOST_kGamepadButtonLeftThumb},
       {GamepadButtonMask::RightThumb, GHOST_kGamepadButtonRightThumb},
@@ -116,7 +115,7 @@ void GHOST_GamepadManager::send_gamepad_events(GHOST_GamepadState new_state, flo
 
 void GHOST_GamepadManager::set_dead_zone(const float dz)
 {
-  dead_zone_ = std::max(dz, 0.1f);
+  dead_zone_ = std::max(dz, 1.0f);
 }
 
 void GHOST_GamepadManager::reset_gamepad_state()
@@ -129,5 +128,3 @@ void GHOST_GamepadManager::reset_gamepad_state()
   /* The controller was disconnected, set all buttons as released. */
   send_gamepad_events(GHOST_GamepadState{}, 0.0f);
 }
-
-void GHOST_GamepadManager::send_gamepad_events(float) {}

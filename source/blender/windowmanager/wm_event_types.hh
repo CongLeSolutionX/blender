@@ -453,7 +453,7 @@ constexpr int GAMEPAD_BUTTON_MAX = GAMEPAD_BUTTON_DPAD_RIGHT;
 #define ISNDOF_BUTTON(event_type) \
   ((event_type) >= _NDOF_BUTTON_MIN && (event_type) <= _NDOF_BUTTON_MAX)
 
-/** Test whether the event is a NDOF event. */
+/* Test whether the event is a gamepad event. */
 #define ISGAMEPAD(event_type) ((event_type) >= GAMEPAD_MIN && (event_type) <= GAMEPAD_MAX)
 #define ISGAMEPAD_BUTTON(event_type) \
   ((event_type) >= GAMEPAD_BUTTON_MIN && (event_type) <= GAMEPAD_BUTTON_MAX)

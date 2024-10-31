@@ -683,9 +683,15 @@ typedef struct {
 
 #ifdef WITH_INPUT_GAMEPAD
 
-typedef enum { GHOST_kGamepadLeftThumb = 0, GHOST_kGamepadRightThumb } GHOST_TGamepadThumb;
+typedef enum {
+  GHOST_kGamepadLeftThumb = 0,
+  GHOST_kGamepadRightThumb,
+} GHOST_TGamepadThumb;
 
-typedef enum { GHOST_kGamepadLeftTrigger = 0, GHOST_kGamepadRightTrigger } GHOST_TGamepadTrigger;
+typedef enum {
+  GHOST_kGamepadLeftTrigger = 0,
+  GHOST_kGamepadRightTrigger,
+} GHOST_TGamepadTrigger;
 
 typedef enum {
   GHOST_kGamepadButtonA = 0,
@@ -696,8 +702,8 @@ typedef enum {
   GHOST_kGamepadButtonLeftShoulder,
   GHOST_kGamepadButtonRightShoulder,
 
-  GHOST_kgamepadButtonView,
-  GHOST_kgamepadButtonMenu,
+  GHOST_kGamepadButtonView,
+  GHOST_kGamepadButtonMenu,
 
   GHOST_kGamepadButtonLeftThumb,
   GHOST_kGamepadButtonRightThumb,

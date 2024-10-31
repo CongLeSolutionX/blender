@@ -309,13 +309,6 @@ class GHOST_System : public GHOST_ISystem {
   inline GHOST_NDOFManager *getNDOFManager() const;
 #endif
 
-#ifdef WITH_INPUT_GAMEPAD
-  /**
-   * \return A pointer to our gamepad manager.
-   */
-  inline GHOST_GamepadManager *get_gamepad_manager() const;
-#endif
-
   /**
    * Returns the state of all modifier keys.
    * \param keys: The state of all modifier keys (true == pressed).
@@ -481,12 +474,5 @@ inline GHOST_WindowManager *GHOST_System::getWindowManager() const
 inline GHOST_NDOFManager *GHOST_System::getNDOFManager() const
 {
   return m_ndofManager;
-}
-#endif
-
-#ifdef WITH_INPUT_GAMEPAD
-inline GHOST_GamepadManager *GHOST_System::get_gamepad_manager() const
-{
-  return gamepad_manager_.get();
 }
 #endif
