@@ -56,6 +56,7 @@ template<typename T> std::ostream &operator<<(std::ostream &stream, Array<T> dat
 }  // namespace blender
 
 namespace blender::nodes::node_geo_evaluate_in_space_cc {
+
 static void node_declare(NodeDeclarationBuilder &b)
 {
   b.add_input<decl::Vector>("Position").implicit_field(implicit_field_inputs::position);
@@ -117,6 +118,74 @@ static void akdt_base_offsets(const int total_elements,
   r_offsets.as_mutable_span().last() = total_elements;
 }
 
+template<typename FuncT>
+static void for_each_to_bottom(const OffsetIndices<int> base_offsets,
+                               const int total_nesting,
+                               const FuncT &func)
+{
+  BLI_assert(base_offsets.size() == int(1 << total_nesting));
+  for (const int nesting_i : IndexRange(total_nesting + 1)) {
+    const int segment_size = (1 << (total_nesting - nesting_i));
+    const int total_segments = 1 << nesting_i;
+    const int data_start = n_levels_sum(nesting_i - 1);
+
+    for (const int segment_i : IndexRange(total_segments)) {
+      const IndexRange data_segment = IndexRange::from_begin_size(segment_size * segment_i,
+                                                                  segment_size);
+      const IndexRange data_range = base_offsets[data_segment];
+      const int data_index = data_start + segment_i;
+      func(data_range, data_index, nesting_i);
+    }
+  }
+}
+
+template<typename FuncT>
+static void for_each_to_top(const OffsetIndices<int> base_offsets,
+                            const int total_nesting,
+                            const FuncT &func)
+{
+  BLI_assert(base_offsets.size() == int(1 << total_nesting));
+  for (const int nesting_i : IndexRange(total_nesting + 1)) {
+    const int segment_size = 1 << nesting_i;
+    const int total_segments = (1 << (total_nesting - nesting_i));
+    const int data_start = n_levels_sum(total_nesting - nesting_i);
+
+    for (const int segment_i : IndexRange(total_segments)) {
+      const IndexRange data_segment = IndexRange::from_begin_size(segment_size * segment_i,
+                                                                  segment_size);
+      const IndexRange data_range = base_offsets[data_segment];
+      const int data_index = data_start + segment_i;
+      func(data_range, data_index, nesting_i);
+    }
+  }
+}
+
+template<typename LeafFunc, typename JoinFunc>
+static void for_each_to_top(const OffsetIndices<int> base_offsets,
+                            const int total_nesting,
+                            const LeafFunc &leaf_func,
+                            const JoinFunc &join_func)
+{
+  const IndexRange base_range = level_range(total_nesting);
+  for (const int base_i : base_offsets.index_range()) {
+    leaf_func(base_offsets[base_i], int(base_range[base_i]), total_nesting);
+  }
+
+  BLI_assert(base_offsets.size() == int(1 << total_nesting));
+  for (const int nesting_i : IndexRange(total_nesting)) {
+    const int total_segments = (1 << (total_nesting - nesting_i));
+
+    const IndexRange level_range_value = level_range(total_nesting - nesting_i - 1);
+    const IndexRange nested_level_range = level_range(total_nesting - nesting_i);
+    BLI_assert(level_range_value.size() * 2 == nested_level_range.size());
+
+    for (const int segment_i : IndexRange(total_segments)) {
+      const int2 sub_indices = int2(nested_level_range.start()) + int2(segment_i) * 2 + int2(0, 1);
+      join_func(level_range_value[segment_i], sub_indices, total_nesting - nesting_i - 1);
+    }
+  }
+}
+
 static void akdt_from_positions(const Span<float3> positions,
                                 const OffsetIndices<int> offsets,
                                 const int total_nesting,
@@ -124,65 +193,34 @@ static void akdt_from_positions(const Span<float3> positions,
 {
   array_utils::fill_index_range<int>(indices);
 
-  int axis_index = 0;
-  for (const int nesting_i : IndexRange(total_nesting)) {
-    const int size = int(offsets.size()) >> nesting_i;
-    const int total = 1 << nesting_i;
-
-    for (const int segment_i : IndexRange(total)) {
-      const IndexRange segment_range(segment_i * size, size);
-      MutableSpan<int> segment = indices.slice(offsets[segment_range]);
-      std::sort(segment.begin(), segment.end(), [&](const int a, const int b) {
-        return positions[a][axis_index] < positions[b][axis_index];
+  for_each_to_bottom(
+      offsets,
+      total_nesting,
+      [&](const IndexRange data_range, const int /*data_index*/, const int nesting_i) {
+        const int axis_index = math::mod_periodic(nesting_i, 3);
+        MutableSpan<int> segment = indices.slice(data_range);
+        std::sort(segment.begin(), segment.end(), [&](const int a, const int b) {
+          return positions[a][axis_index] < positions[b][axis_index];
+        });
       });
-    }
-    axis_index = math::mod_periodic(axis_index + 1, 3);
-  }
-}
-
-template<typename Func>
-static void foreach_bottom_to_top(const int total_elements, const Func &func)
-{
-  Vector<IndexRange> stack;
-  for (IndexRange range(total_elements); range.size() > 2;) {
-    const int half = range.size() / 2;
-    stack.append(range.drop_front(half));
-    stack.append(range.take_front(half));
-    range = range.take_front(half);
-  }
-
-  while (!stack.is_empty()) {
-    const IndexRange range = stack.pop_last();
-    if (range.size() <= 4) {
-      continue;
-    }
-  }
 }
 
 static void akdt_mean_sums(const GroupedSpan<float3> data,
                            const int total_nesting,
                            MutableSpan<float3> dst_values)
 {
-  {
-    MutableSpan<float3> level_dst_values = dst_values.slice(level_range(total_nesting));
-    BLI_assert(level_dst_values.size() == data.size());
-    for (const int i : data.index_range()) {
-      const Span<float3> src_base_segment = data[i];
-      level_dst_values[i] = std::accumulate(
-          src_base_segment.begin(), src_base_segment.end(), float3(0.0f));
-    }
-  }
 
-  for (const int r_nesting_i : IndexRange(total_nesting)) {
-    const int nesting_i = total_nesting - r_nesting_i - 1;
-    const int prev_nesting_i = nesting_i + 1;
-    const Span<float3> prev_level_dst_values = dst_values.slice(level_range(prev_nesting_i));
-    MutableSpan<float3> level_dst_values = dst_values.slice(level_range(nesting_i));
-    BLI_assert(prev_level_dst_values.size() == level_dst_values.size() * 2);
-    for (const int i : level_dst_values.index_range()) {
-      level_dst_values[i] = prev_level_dst_values[i * 2 + 0] + prev_level_dst_values[i * 2 + 1];
-    }
-  }
+  for_each_to_top(
+      data.offsets,
+      total_nesting,
+      [&](const IndexRange range, const int index, const int /*nesting_i*/) {
+        const Span<float3> src_base_segment = data.data.slice(range);
+        dst_values[index] = std::accumulate(
+            src_base_segment.begin(), src_base_segment.end(), float3(0.0f));
+      },
+      [&](const int index, const int2 sub_indices, const int /*nesting_i*/) {
+        dst_values[index] = dst_values[sub_indices[0]] + dst_values[sub_indices[1]];
+      });
 }
 
 static void akdt_normalize_for_size(const OffsetIndices<int> base_offsets,
@@ -314,7 +352,7 @@ class DifferenceSumFieldInput final : public bke::GeometryFieldInput {
   }
 
   GVArray get_varray_for_context(const bke::GeometryFieldContext &context,
-                                 const IndexMask &mask) const final
+                                 const IndexMask & /*mask*/) const final
   {
     if (!context.attributes()) {
       return {};
@@ -333,7 +371,7 @@ class DifferenceSumFieldInput final : public bke::GeometryFieldInput {
     akdt_base_offsets(positions.size(), total_nesting, start_indices);
     const OffsetIndices<int> base_offsets(start_indices);
     BLI_assert(count_bits_i(base_offsets.size()) == 1);
-    BLI_assert(base_offsets.size() == (1 << total_nesting));
+    BLI_assert(base_offsets.size() == int(1 << total_nesting));
 
     std::cout << total_nesting << ";\n";
     std::cout << start_indices << ";\n";
@@ -364,6 +402,7 @@ class DifferenceSumFieldInput final : public bke::GeometryFieldInput {
 
     Array<float3> dst_values(positions.size());
 
+    // return VArray<int>::ForContainer(std::move(indices));
     return VArray<float3>::ForContainer(std::move(dst_values));
   }
 
@@ -393,7 +432,7 @@ class BruteForceDifferenceSumFieldInput final : public bke::GeometryFieldInput {
   }
 
   GVArray get_varray_for_context(const bke::GeometryFieldContext &context,
-                                 const IndexMask &mask) const final
+                                 const IndexMask & /*mask*/) const final
   {
     if (!context.attributes()) {
       return {};
