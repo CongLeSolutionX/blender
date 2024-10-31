@@ -106,6 +106,14 @@ static IndexRange joints_range_at_depth(const int depth_i)
                                      total_joints_at_depth(depth_i));
 }
 
+static IndexRange joint_buckets_range_at_depth(const int total_depth,
+                                               const int depth_i,
+                                               const int joint_i)
+{
+  const int joint_size = joint_size_at_depth(total_depth, depth_i);
+  return IndexRange::from_begin_size(joint_size * joint_i, joint_size);
+}
+
 static void test()
 {
   BLI_assert(total_depth_from_total(100) == 6);
@@ -120,14 +128,14 @@ static void test()
   BLI_assert(total_joints_at_depth(2) == 4);
   BLI_assert(total_joints_at_depth(3) == 8);
 
-  BLI_assert(joint_size_at_depth(1, 0), 2);
+  BLI_assert(joint_size_at_depth(1, 0) == 2);
 
-  BLI_assert(joint_size_at_depth(2, 0), 4);
-  BLI_assert(joint_size_at_depth(2, 1), 2);
+  BLI_assert(joint_size_at_depth(2, 0) == 4);
+  BLI_assert(joint_size_at_depth(2, 1) == 2);
 
-  BLI_assert(joint_size_at_depth(3, 0), 8);
-  BLI_assert(joint_size_at_depth(3, 1), 4);
-  BLI_assert(joint_size_at_depth(3, 2), 2);
+  BLI_assert(joint_size_at_depth(3, 0) == 8);
+  BLI_assert(joint_size_at_depth(3, 1) == 4);
+  BLI_assert(joint_size_at_depth(3, 2) == 2);
 
   BLI_assert(joints_range_at_depth(0) == IndexRange(0, 1));
   BLI_assert(joints_range_at_depth(1) == IndexRange(1, 2));
@@ -135,12 +143,14 @@ static void test()
   BLI_assert(joints_range_at_depth(2) == IndexRange(1 + 2 + 4, 8));
 }
 
-static OffsetIndices<int> fill_buckets_linear(const int total_elements, MutableSpan<int> r_offsets)
+static OffsetIndices<int> fill_buckets_linear(const int total_elements,
+                                              const int total_depth,
+                                              MutableSpan<int> r_offsets)
 {
   for (const int i : r_offsets.index_range().drop_back(1)) {
-    r_offsets[i] = int64_t(total_elements) * i / total_base;
+    r_offsets[i] = (int64_t(total_elements) * i) >> total_depth;
   }
-  r_offsets.as_mutable_span().last() = total_elements;
+  r_offsets.last() = total_elements;
   return r_offsets.as_span();
 }
 
@@ -149,77 +159,54 @@ static void for_each_to_bottom(const OffsetIndices<int> buckets_offsets,
                                const int total_depth,
                                const FuncT &func)
 {
-  const IndexRange depth_range(total_depth);
-  for (const int depth_i : depth_range) {
-    const int total_joints = total_joints_at_depth(depth_i);
-    const int joint_size = joint_size_at_depth(total_depth, depth_i);
-    for (const int joint_i : IndexRange(total_joints)) {
-      const IndexRange joints_range = IndexRange::from_begin_size(joint_size * joint_i,
-                                                                  joint_size);
-      const IndexRange data_range = buckets_offsets[data_segment];
-      const int data_index = data_start + segment_i;
-      func(data_range, data_index, nesting_i);
+  for (const int depth_i : IndexRange(total_depth)) {
+    const IndexRange joints_range = joints_range_at_depth(depth_i);
+    for (const int joint_i : joints_range.index_range()) {
+      const IndexRange joint_buckets = joint_buckets_range_at_depth(total_depth, depth_i, joint_i);
+      func(buckets_offsets[joint_buckets], joints_range[joint_i], depth_i);
     }
   }
 }
 
 template<typename FuncT>
-static void for_each_to_top(const OffsetIndices<int> base_offsets,
-                            const int total_nesting,
+static void for_each_to_top(const OffsetIndices<int> buckets_offsets,
+                            const int total_depth,
                             const FuncT &func)
 {
-  BLI_assert(base_offsets.size() == int(1 << total_nesting));
-  for (const int nesting_i : IndexRange(total_nesting + 1)) {
-    const int segment_size = 1 << nesting_i;
-    const int total_segments = (1 << (total_nesting - nesting_i));
-    const int data_start = n_levels_sum(total_nesting - nesting_i);
-
-    for (const int segment_i : IndexRange(total_segments)) {
-      const IndexRange data_segment = IndexRange::from_begin_size(segment_size * segment_i,
-                                                                  segment_size);
-      const IndexRange data_range = base_offsets[data_segment];
-      const int data_index = data_start + segment_i;
-      func(data_range, data_index, nesting_i);
+  const IndexRange depth_range(total_depth);
+  for (const int r_depth_i : depth_range.drop_front(1)) {
+    const int depth_i = depth_range.last(r_depth_i);
+    const IndexRange joints_range = joints_range_at_depth(depth_i);
+    const IndexRange prev_joints_range = joints_range_at_depth(depth_i + 1);
+    for (const int joint_i : joints_range.index_range()) {
+      const IndexRange joint_buckets = joint_buckets_range_at_depth(total_depth, depth_i, joint_i);
+      const int2 sub_joints = int2(prev_joints_range.start()) + int2(joint_i * 2) + int2(0, 1);
+      func(buckets_offsets[joint_buckets], joints_range[joint_i], sub_joints, r_depth_i);
     }
   }
 }
 
-template<typename LeafFunc, typename JoinFunc>
-static void for_each_to_top(const OffsetIndices<int> base_offsets,
-                            const int total_nesting,
-                            const LeafFunc &leaf_func,
-                            const JoinFunc &join_func)
+template<typename LeafFunc>
+static void for_each_leaf(const OffsetIndices<int> buckets_offsets,
+                          const int total_depth,
+                          const LeafFunc &leaf_func)
 {
-  const IndexRange base_range = level_range(total_nesting);
-  for (const int base_i : base_offsets.index_range()) {
-    leaf_func(base_offsets[base_i], int(base_range[base_i]), total_nesting);
-  }
-
-  BLI_assert(base_offsets.size() == int(1 << total_nesting));
-  for (const int nesting_i : IndexRange(total_nesting)) {
-    const int total_segments = (1 << (total_nesting - nesting_i));
-
-    const IndexRange level_range_value = level_range(total_nesting - nesting_i - 1);
-    const IndexRange nested_level_range = level_range(total_nesting - nesting_i);
-    BLI_assert(level_range_value.size() * 2 == nested_level_range.size());
-
-    for (const int segment_i : IndexRange(total_segments)) {
-      const int2 sub_indices = int2(nested_level_range.start()) + int2(segment_i) * 2 + int2(0, 1);
-      join_func(level_range_value[segment_i], sub_indices, total_nesting - nesting_i - 1);
-    }
+  const IndexRange joints_range = joints_range_at_depth(total_depth);
+  for (const int joint_i : joints_range.index_range()) {
+    leaf_func(buckets_offsets[joint_i], int(joints_range[joint_i]), total_depth);
   }
 }
 
-static void akdt_from_positions(const Span<float3> positions,
-                                const OffsetIndices<int> offsets,
-                                const int total_nesting,
-                                MutableSpan<int> indices)
+static void from_positions(const Span<float3> positions,
+                           const OffsetIndices<int> buckets_offsets,
+                           const int total_depth,
+                           MutableSpan<int> indices)
 {
   array_utils::fill_index_range<int>(indices);
 
   for_each_to_bottom(
-      offsets,
-      total_nesting,
+      buckets_offsets,
+      total_depth,
       [&](const IndexRange data_range, const int /*data_index*/, const int nesting_i) {
         const int axis_index = math::mod_periodic(nesting_i, 3);
         MutableSpan<int> segment = indices.slice(data_range);
@@ -229,37 +216,42 @@ static void akdt_from_positions(const Span<float3> positions,
       });
 }
 
-static void akdt_mean_sums(const GroupedSpan<float3> data,
-                           const int total_nesting,
-                           MutableSpan<float3> dst_values)
+template<typename T>
+static void mean_sums(const OffsetIndices<int> buckets_offsets,
+                      const int total_depth,
+                      const Span<T> src_buckets_data,
+                      MutableSpan<T> dst_joints_data)
 {
+  for_each_leaf(buckets_offsets,
+                total_depth,
+                [&](const IndexRange bucket_range, const int joint_index, const int /*depth_i*/) {
+                  const Span<T> bucket = src_buckets_data.slice(bucket_range);
+                  dst_joints_data[joint_index] = std::accumulate(
+                      bucket.begin(), bucket.end(), T(0));
+                });
 
-  for_each_to_top(
-      data.offsets,
-      total_nesting,
-      [&](const IndexRange range, const int index, const int /*nesting_i*/) {
-        const Span<float3> src_base_segment = data.data.slice(range);
-        dst_values[index] = std::accumulate(
-            src_base_segment.begin(), src_base_segment.end(), float3(0.0f));
-      },
-      [&](const int index, const int2 sub_indices, const int /*nesting_i*/) {
-        dst_values[index] = dst_values[sub_indices[0]] + dst_values[sub_indices[1]];
-      });
+  for_each_to_top(buckets_offsets,
+                  total_depth,
+                  [&](const IndexRange /*buckets_range*/,
+                      const int joint_index,
+                      const int2 sub_joints,
+                      const int /*depth_i*/) {
+                    dst_joints_data[joint_index] = dst_joints_data[sub_joints[0]] +
+                                                   dst_joints_data[sub_joints[1]];
+                  });
 }
 
-static void akdt_normalize_for_size(const OffsetIndices<int> base_offsets,
-                                    const int total_nesting,
-                                    MutableSpan<float3> dst_values)
+template<typename T>
+static void normalize_for_size(const OffsetIndices<int> buckets_offsets,
+                               const int total_depth,
+                               MutableSpan<T> dst_joints_data)
 {
-  for (const int nesting_i : IndexRange(total_nesting + 1)) {
-    MutableSpan<float3> level_dst_values = dst_values.slice(level_range(nesting_i));
-    const int segment_size = (1 << (total_nesting - nesting_i));
-    for (const int i : level_dst_values.index_range()) {
-      const IndexRange data_range(segment_size * i, segment_size);
-      // std::cout << base_offsets[data_range].size() << ";\n";
-      level_dst_values[i] /= base_offsets[data_range].size();
-    }
-  }
+  for_each_to_bottom(
+      buckets_offsets,
+      total_depth,
+      [&](const IndexRange data_range, const int data_index, const int /*nesting_i*/) {
+        dst_joints_data[data_index] *= math::rcp(double(data_range.size()));
+      });
 }
 
 static float max_distance(const Span<float3> positions, const float3 centre)
@@ -271,60 +263,61 @@ static float max_distance(const Span<float3> positions, const float3 centre)
   return max_value;
 }
 
-static void akdt_radius(const OffsetIndices<int> base_offsets,
-                        const int total_nesting,
-                        const Span<float3> src_values,
-                        const Span<float3> src_data,
-                        MutableSpan<float> dst_radius)
+static void radius(const OffsetIndices<int> buckets_offsets,
+                   const int total_nesting,
+                   const Span<float3> src_buckets_data,
+                   const Span<float3> src_joints_data,
+                   MutableSpan<float> dst_joints_data)
 {
-  {
-    const Span<float3> level_src_data_values = src_data.slice(level_range(total_nesting));
-    MutableSpan<float> level_dst_radius = dst_radius.slice(level_range(total_nesting));
-    BLI_assert(level_dst_radius.size() == base_offsets.size());
-    BLI_assert(level_src_data_values.size() == base_offsets.size());
-    for (const int i : base_offsets.index_range()) {
-      level_dst_radius[i] = max_distance(src_values.slice(base_offsets[i]),
-                                         level_src_data_values[i]);
-    }
-  }
+  for_each_leaf(buckets_offsets,
+                total_nesting,
+                [&](const IndexRange bucket_range, const int joint_index, const int /*depth_i*/) {
+                  const Span<float3> src_bucket_data = src_buckets_data.slice(bucket_range);
+                  dst_joints_data[joint_index] = max_distance(src_bucket_data,
+                                                              src_joints_data[joint_index]);
+                });
 
-  for (const int r_nesting_i : IndexRange(total_nesting)) {
-    const int nesting_i = total_nesting - r_nesting_i - 1;
-    const int prev_nesting_i = nesting_i + 1;
-
-    const Span<float> prev_level_dst_radii = dst_radius.slice(level_range(prev_nesting_i));
-    const Span<float3> prev_level_dst_centre = src_data.slice(level_range(prev_nesting_i));
-
-    MutableSpan<float> level_dst_radii = dst_radius.slice(level_range(nesting_i));
-    const Span<float3> level_dst_centre = src_data.slice(level_range(nesting_i));
-
-    BLI_assert(prev_level_dst_radii.size() == level_dst_radii.size() * 2);
-
-    for (const int i : level_dst_radii.index_range()) {
-      level_dst_radii[i] = math::max(
-          math::distance(level_dst_centre[i], prev_level_dst_centre[i * 2 + 0]) +
-              prev_level_dst_radii[i * 2 + 0],
-          math::distance(level_dst_centre[i], prev_level_dst_centre[i * 2 + 1]) +
-              prev_level_dst_radii[i * 2 + 1]);
-    }
-  }
+  for_each_to_top(buckets_offsets,
+                  total_nesting,
+                  [&](const IndexRange /*buckets_range*/,
+                      const int joint_index,
+                      const int2 sub_joints,
+                      const int /*depth_i*/) {
+                    const float3 joint_position = src_joints_data[joint_index];
+                    const float left_sub_radius = math::distance(joint_position,
+                                                                 src_joints_data[sub_joints[0]]) +
+                                                  dst_joints_data[sub_joints[0]];
+                    const float right_sub_radius = math::distance(joint_position,
+                                                                  src_joints_data[sub_joints[1]]) +
+                                                   dst_joints_data[sub_joints[1]];
+                    dst_joints_data[joint_index] = math::max(left_sub_radius, right_sub_radius);
+                  });
 }
 
-static void akdt_radius_exact(const GroupedSpan<float3> data,
-                              const int total_nesting,
-                              const Span<float3> src_data,
-                              MutableSpan<float> dst_radius)
+static void radius_exact(const OffsetIndices<int> buckets_offsets,
+                         const int total_nesting,
+                         const Span<float3> src_buckets_data,
+                         const Span<float3> src_joints_data,
+                         MutableSpan<float> dst_joints_data)
 {
-  for (const int nesting_i : IndexRange(total_nesting + 1)) {
-    const Span<float3> level_src_data_values = src_data.slice(level_range(nesting_i));
-    MutableSpan<float> level_dst_radius = dst_radius.slice(level_range(nesting_i));
+  for_each_leaf(buckets_offsets,
+                total_nesting,
+                [&](const IndexRange bucket_range, const int joint_index, const int /*depth_i*/) {
+                  const Span<float3> src_bucket_data = src_buckets_data.slice(bucket_range);
+                  dst_joints_data[joint_index] = max_distance(src_bucket_data,
+                                                              src_joints_data[joint_index]);
+                });
 
-    const int segment_size = (1 << (total_nesting - nesting_i));
-    for (const int i : level_dst_radius.index_range()) {
-      const IndexRange data_range(segment_size * i, segment_size);
-      level_dst_radius[i] = max_distance(data[data_range], level_src_data_values[i]);
-    }
-  }
+  for_each_to_top(buckets_offsets,
+                  total_nesting,
+                  [&](const IndexRange buckets_range,
+                      const int joint_index,
+                      const int2 /*sub_joints*/,
+                      const int /*depth_i*/) {
+                    const Span<float3> src_bucket_data = src_buckets_data.slice(buckets_range);
+                    dst_joints_data[joint_index] = max_distance(src_bucket_data,
+                                                                src_joints_data[joint_index]);
+                  });
 }
 
 static float3 akdt_average()
@@ -400,33 +393,32 @@ class DifferenceSumFieldInput final : public bke::GeometryFieldInput {
     std::cout << total_joints << ";\n";
 
     Array<int> start_indices(total_joints);
-    const OffsetIndices<int> base_offsets = akdbt::fill_buckets_linear(positions.size(),
-                                                                       start_indices);
+    const OffsetIndices<int> base_offsets = akdbt::fill_buckets_linear(
+        positions.size(), total_depth, start_indices);
     std::cout << start_indices << ";\n";
 
     Array<int> indices(positions.size());
-    akdbt::from_positions(positions, base_offsets, total_nesting, indices);
+    akdbt::from_positions(positions, base_offsets, total_depth, indices);
 
-    Array<float3> akdt_positions(positions.size());
+    Array<float3> bucket_positions(positions.size());
     array_utils::gather(
-        Span<float3>(positions), indices.as_span(), akdt_positions.as_mutable_span());
-    const GroupedSpan<float3> adst_data(base_offsets, akdt_positions.as_span());
+        Span<float3>(positions), indices.as_span(), bucket_positions.as_mutable_span());
 
-    const int adst_data_size = n_levels_sum(total_nesting);
+    Array<float3> joints_positions(total_joints);
+    akdbt::mean_sums<float3>(base_offsets, total_depth, bucket_positions, joints_positions);
+    akdbt::normalize_for_size<float3>(base_offsets, total_depth, joints_positions);
 
-    Array<float3> centres(adst_data_size);
-    akdbt::mean_sums(adst_data, total_nesting, centres);
-    akdbt::normalize_for_size(base_offsets, total_nesting, centres);
+    Array<float> joints_radii(total_joints);
+    akdbt::radius_exact(
+        base_offsets, total_depth, bucket_positions, joints_positions, joints_radii);
 
-    Array<float> radii(adst_data_size);
-    akdbt::radius_exact(adst_data, total_nesting, centres, radii);
+    std::transform(
+        joints_radii.begin(), joints_radii.end(), joints_radii.begin(), [&](const float radius) {
+          return minimal_dinstance_to(radius, distance_power_, precision_);
+        });
 
-    std::transform(radii.begin(), radii.end(), radii.begin(), [&](const float radius) {
-      return minimal_dinstance_to(radius, distance_power_, precision_);
-    });
-
-    std::cout << centres << ";\n";
-    std::cout << radii << ";\n";
+    std::cout << joints_positions << ";\n";
+    std::cout << joints_radii << ";\n";
 
     Array<float3> dst_values(positions.size());
 
@@ -505,7 +497,7 @@ class BruteForceDifferenceSumFieldInput final : public bke::GeometryFieldInput {
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
-  test();
+  akdbt::test();
 
   Field<float3> position_field = params.extract_input<Field<float3>>("Position");
   Field<float3> value_field = params.extract_input<Field<float3>>("Value");
