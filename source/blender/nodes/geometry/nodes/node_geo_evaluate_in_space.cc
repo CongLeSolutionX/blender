@@ -71,68 +71,92 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_output<decl::Vector>("Brute Force Weighted Difference Sum").field_source_reference_all();
 }
 
-static constexpr int min_size = 10;
+namespace akdbt {
 
-static int akdt_nesting_for_size(const int total_elements)
+static constexpr int min_bucket_size = 10;
+
+static int total_depth_from_total(const int total_elements)
 {
-  int levels = 0;
-  for (int total_iter = total_elements; total_iter > min_size; total_iter = total_iter / 2) {
+  int levels = 1;
+  for (int total_iter = total_elements; total_iter > min_bucket_size; total_iter = total_iter / 2)
+  {
     levels++;
   }
   return levels;
 }
 
-static int akdt_total_for_base(const int total_nesting)
+static int total_joints_at_start(const int total_depth)
 {
-  return int((int64_t(1) << (total_nesting + 1)) - 1);
+  return int((int64_t(1) << (total_depth)) - 1);
 }
 
-static int n_levels_sum(const int total_nesting)
+static int total_joints_at_depth(const int depth_i)
 {
-  return int((int64_t(1) << (total_nesting + 1)) - 1);
+  return int(1 << depth_i);
 }
 
-static IndexRange level_range(const int nesting_i)
+static int joint_size_at_depth(const int total_depth, const int depth_i)
 {
-  const int start = n_levels_sum(nesting_i - 1);
-  const int size = 1 << nesting_i;
-  return IndexRange::from_begin_size(start, size);
+  return int(1 << (total_depth - depth_i));
 }
 
-static IndexRange level_data_range(const int nesting_i)
+static IndexRange joints_range_at_depth(const int depth_i)
 {
-  const IndexRange range = level_range(nesting_i);
-  return IndexRange::from_begin_size(range.start() + nesting_i * 2, range.size() + 2);
+  return IndexRange::from_begin_size(total_joints_at_start(depth_i),
+                                     total_joints_at_depth(depth_i));
 }
 
-static void akdt_base_offsets(const int total_elements,
-                              const int total_nesting,
-                              Array<int> &r_offsets)
+static void test()
 {
-  const int total_base = 1 << total_nesting;
-  r_offsets.reinitialize(total_base + 1);
+  BLI_assert(total_depth_from_total(100) == 6);
 
-  for (const int i : IndexRange(total_base)) {
-    r_offsets[i] = total_elements * i / total_base;
+  BLI_assert(total_joints_at_start(0) == 0);
+  BLI_assert(total_joints_at_start(1) == 1);
+  BLI_assert(total_joints_at_start(2) == 3);
+  BLI_assert(total_joints_at_start(3) == 7);
+
+  BLI_assert(total_joints_at_depth(0) == 1);
+  BLI_assert(total_joints_at_depth(1) == 2);
+  BLI_assert(total_joints_at_depth(2) == 4);
+  BLI_assert(total_joints_at_depth(3) == 8);
+
+  BLI_assert(joint_size_at_depth(1, 0), 2);
+
+  BLI_assert(joint_size_at_depth(2, 0), 4);
+  BLI_assert(joint_size_at_depth(2, 1), 2);
+
+  BLI_assert(joint_size_at_depth(3, 0), 8);
+  BLI_assert(joint_size_at_depth(3, 1), 4);
+  BLI_assert(joint_size_at_depth(3, 2), 2);
+
+  BLI_assert(joints_range_at_depth(0) == IndexRange(0, 1));
+  BLI_assert(joints_range_at_depth(1) == IndexRange(1, 2));
+  BLI_assert(joints_range_at_depth(2) == IndexRange(1 + 2, 4));
+  BLI_assert(joints_range_at_depth(2) == IndexRange(1 + 2 + 4, 8));
+}
+
+static OffsetIndices<int> fill_buckets_linear(const int total_elements, MutableSpan<int> r_offsets)
+{
+  for (const int i : r_offsets.index_range().drop_back(1)) {
+    r_offsets[i] = int64_t(total_elements) * i / total_base;
   }
   r_offsets.as_mutable_span().last() = total_elements;
+  return r_offsets.as_span();
 }
 
 template<typename FuncT>
-static void for_each_to_bottom(const OffsetIndices<int> base_offsets,
-                               const int total_nesting,
+static void for_each_to_bottom(const OffsetIndices<int> buckets_offsets,
+                               const int total_depth,
                                const FuncT &func)
 {
-  BLI_assert(base_offsets.size() == int(1 << total_nesting));
-  for (const int nesting_i : IndexRange(total_nesting + 1)) {
-    const int segment_size = (1 << (total_nesting - nesting_i));
-    const int total_segments = 1 << nesting_i;
-    const int data_start = n_levels_sum(nesting_i - 1);
-
-    for (const int segment_i : IndexRange(total_segments)) {
-      const IndexRange data_segment = IndexRange::from_begin_size(segment_size * segment_i,
-                                                                  segment_size);
-      const IndexRange data_range = base_offsets[data_segment];
+  const IndexRange depth_range(total_depth);
+  for (const int depth_i : depth_range) {
+    const int total_joints = total_joints_at_depth(depth_i);
+    const int joint_size = joint_size_at_depth(total_depth, depth_i);
+    for (const int joint_i : IndexRange(total_joints)) {
+      const IndexRange joints_range = IndexRange::from_begin_size(joint_size * joint_i,
+                                                                  joint_size);
+      const IndexRange data_range = buckets_offsets[data_segment];
       const int data_index = data_start + segment_i;
       func(data_range, data_index, nesting_i);
     }
@@ -303,6 +327,13 @@ static void akdt_radius_exact(const GroupedSpan<float3> data,
   }
 }
 
+static float3 akdt_average()
+{
+  return {};
+}
+
+}  // namespace akdbt
+
 static float minimal_dinstance_to(const float radius,
                                   const int distance_power,
                                   const float precision)
@@ -324,11 +355,6 @@ static float minimal_dinstance_to(const float radius,
    * (1 / distance) ^ distance_power >= precision * (1 / (distance - radius)) ^ distance_power.
    * */
   return radius / (math::pow<float>(precision, distance_power) - 1.0f);
-}
-
-static float3 akdt_average()
-{
-  return {};
 }
 
 class DifferenceSumFieldInput final : public bke::GeometryFieldInput {
@@ -365,19 +391,21 @@ class DifferenceSumFieldInput final : public bke::GeometryFieldInput {
     const VArraySpan<float3> positions = evaluator.get_evaluated<float3>(0);
     const VArraySpan<float3> src_values = evaluator.get_evaluated<float3>(1);
 
-    const int total_nesting = akdt_nesting_for_size(positions.size());
+    const int total_depth = akdbt::total_depth_from_total(positions.size());
+    const int total_joints = akdbt::total_joints_at_start(total_depth);
+    BLI_assert(count_bits_i(total_joints) == 1);
+    BLI_assert(total_joints == int(1 << (total_depth)));
 
-    Array<int> start_indices;
-    akdt_base_offsets(positions.size(), total_nesting, start_indices);
-    const OffsetIndices<int> base_offsets(start_indices);
-    BLI_assert(count_bits_i(base_offsets.size()) == 1);
-    BLI_assert(base_offsets.size() == int(1 << total_nesting));
+    std::cout << total_depth << ";\n";
+    std::cout << total_joints << ";\n";
 
-    std::cout << total_nesting << ";\n";
+    Array<int> start_indices(total_joints);
+    const OffsetIndices<int> base_offsets = akdbt::fill_buckets_linear(positions.size(),
+                                                                       start_indices);
     std::cout << start_indices << ";\n";
 
     Array<int> indices(positions.size());
-    akdt_from_positions(positions, base_offsets, total_nesting, indices);
+    akdbt::from_positions(positions, base_offsets, total_nesting, indices);
 
     Array<float3> akdt_positions(positions.size());
     array_utils::gather(
@@ -387,11 +415,11 @@ class DifferenceSumFieldInput final : public bke::GeometryFieldInput {
     const int adst_data_size = n_levels_sum(total_nesting);
 
     Array<float3> centres(adst_data_size);
-    akdt_mean_sums(adst_data, total_nesting, centres);
-    akdt_normalize_for_size(base_offsets, total_nesting, centres);
+    akdbt::mean_sums(adst_data, total_nesting, centres);
+    akdbt::normalize_for_size(base_offsets, total_nesting, centres);
 
     Array<float> radii(adst_data_size);
-    akdt_radius_exact(adst_data, total_nesting, centres, radii);
+    akdbt::radius_exact(adst_data, total_nesting, centres, radii);
 
     std::transform(radii.begin(), radii.end(), radii.begin(), [&](const float radius) {
       return minimal_dinstance_to(radius, distance_power_, precision_);
@@ -477,6 +505,8 @@ class BruteForceDifferenceSumFieldInput final : public bke::GeometryFieldInput {
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
+  test();
+
   Field<float3> position_field = params.extract_input<Field<float3>>("Position");
   Field<float3> value_field = params.extract_input<Field<float3>>("Value");
 
