@@ -941,17 +941,19 @@ class VIEW3D_HT_header(Header):
             if object_mode == 'PAINT_GREASE_PENCIL':
                 # FIXME: this is bad practice!
                 # Tool options are to be displayed in the top-bar.
-                tool = context.workspace.tools.from_space_view3d_mode(object_mode)
-                if tool and tool.idname == "builtin_brush.Draw":
-                    settings = tool_settings.gpencil_sculpt.guide
+                paint_settings = tool_settings.gpencil_paint
+                brush = paint_settings.brush
+                if brush.gpencil_tool == 'DRAW':
+                    guide_settings = tool_settings.gpencil_sculpt.guide
                     row = layout.row(align=True)
-                    row.prop(settings, "use_guide", text="", icon='GRID')
+                    row.prop(guide_settings, "use_guide", text="", icon='GRID')
                     sub = row.row(align=True)
-                    sub.active = settings.use_guide
+                    sub.active = guide_settings.use_guide
                     sub.popover(
                         panel="VIEW3D_PT_grease_pencil_guide",
                         text="Guides",
                     )
+
             if object_mode == 'SCULPT_GREASE_PENCIL':
                 layout.popover(
                     panel="VIEW3D_PT_grease_pencil_sculpt_automasking",
@@ -7700,15 +7702,7 @@ class VIEW3D_PT_grease_pencil_guide(Panel):
             col.prop(settings, "angle")
             row = col.row(align=True)
 
-        col.prop(settings, "use_snapping")
-        if settings.use_snapping:
-
-            if settings.type == 'RADIAL':
-                col.prop(settings, "angle_snap")
-            else:
-                col.prop(settings, "spacing")
-
-        if settings.type in {'CIRCULAR', 'RADIAL'} or settings.use_snapping:
+        if settings.type in {'CIRCULAR', 'RADIAL'}:
             col.label(text="Reference Point")
             row = col.row(align=True)
             row.prop(settings, "reference_point", expand=True)
