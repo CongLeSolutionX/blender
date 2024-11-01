@@ -243,6 +243,28 @@ static void normalize_curve_point_data(const IndexMaskSegment curve_selection,
   }
 }
 
+/**
+ * Buffer for temporary evaluated curve data, used for memory reuse between multiple attributes of
+ * different types.
+ */
+struct EvalDataBuffer {
+  using AllocatorType = GuardedAlignedAllocator<>;
+  /* Use a default alignment that works for all attribute types, and don't use the inline buffer
+   * because it doesn't necessarily have the correct alignment. */
+  Vector<std::byte, 0, AllocatorType> heap_allocated;
+  alignas(AllocatorType::min_alignment) std::array<std::byte, 1024> inline_buffer;
+
+  template<typename T> MutableSpan<T> get_size(const int64_t size)
+  {
+    const int64_t size_in_bytes = sizeof(T) * size;
+    if (size_in_bytes <= this->inline_buffer.size()) {
+      return MutableSpan<std::byte>(this->inline_buffer).slice(0, size_in_bytes).cast<T>();
+    }
+    this->heap_allocated.resize(size_in_bytes);
+    return this->heap_allocated.as_mutable_span().cast<T>();
+  }
+};
+
 static void resample_to_uniform(const CurvesGeometry &src_curves,
                                 const IndexMask &selection,
                                 const ResampleCurvesOutputAttributeIDs &output_ids,
@@ -282,8 +304,7 @@ static void resample_to_uniform(const CurvesGeometry &src_curves,
    * smaller sections of data that ideally fit into CPU cache better than simply one attribute at a
    * time or one curve at a time. */
   selection.foreach_segment(GrainSize(512), [&](const IndexMaskSegment selection_segment) {
-    /* Use a default alignment that works for all attribute types. */
-    Vector<std::byte, 512, GuardedAlignedAllocator<>> evaluated_buffer;
+    EvalDataBuffer evaluated_buffer;
 
     /* Gather uniform samples based on the accumulated lengths of the original curve. */
     for (const int i_curve : selection_segment) {
@@ -311,10 +332,6 @@ static void resample_to_uniform(const CurvesGeometry &src_curves,
         using T = decltype(dummy);
         Span<T> src = attributes.src[i_attribute].typed<T>();
         MutableSpan<T> dst = attributes.dst[i_attribute].typed<T>();
-#ifndef NDEBUG
-        using AllocatorType = std::decay_t<decltype(evaluated_buffer)>::allocator_type;
-        BLI_assert(alignof(T) <= AllocatorType::min_alignment);
-#endif
 
         for (const int i_curve : selection_segment) {
           const IndexRange src_points = src_points_by_curve[i_curve];
@@ -327,8 +344,8 @@ static void resample_to_uniform(const CurvesGeometry &src_curves,
                                              dst.slice(dst_points));
           }
           else {
-            evaluated_buffer.reinitialize(sizeof(T) * evaluated_points_by_curve[i_curve].size());
-            MutableSpan<T> evaluated = evaluated_buffer.as_mutable_span().cast<T>();
+            MutableSpan evaluated = evaluated_buffer.get_size<T>(
+                evaluated_points_by_curve[i_curve].size());
             src_curves.interpolate_to_evaluated(i_curve, src.slice(src_points), evaluated);
 
             length_parameterize::interpolate(evaluated.as_span(),
