@@ -193,6 +193,7 @@ static void stroke_update_step(bContext *C,
     std::unique_ptr<GreasePencilStrokeOperation> new_operation = get_stroke_operation(*C, op);
     BLI_assert(new_operation != nullptr);
     new_operation->on_stroke_begin(*C, sample);
+    new_operation->constrain_modifier_ = stroke->event_modifier & KM_ALT;
     paint_stroke_set_mode_data(stroke, std::move(new_operation));
   }
   else {

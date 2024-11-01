@@ -240,6 +240,9 @@ class PaintOperation : public GreasePencilStrokeOperation {
   /* Screen space coordinates after smoothing and jittering. */
   Vector<float2> screen_space_final_coords_;
 
+  /* Vector of deferred input samples. */
+  Vector<InputSample> deferred_input_samples_;
+
   /* The start index of the smoothing window. */
   int active_smooth_start_index_ = 0;
   blender::float4x2 texture_space_ = float4x2::identity();
@@ -249,6 +252,10 @@ class PaintOperation : public GreasePencilStrokeOperation {
 
   /* Direction the pen is moving in smoothed over time. */
   float2 smoothed_pen_direction_ = float2(0.0f);
+
+  /* Used to constrain drawing in straight lines. */
+  bool constrained_pen_stored_ = false;
+  float2 constrained_pen_coords_ = float2(0.0f);
 
   /* Accumulated distance along the stroke. */
   float accum_distance_ = 0.0f;
@@ -468,6 +475,38 @@ struct PaintOperationExecutor {
     hsv_to_rgb_v(hsv, random_color);
     random_color.a = color.a;
     return random_color;
+  }
+
+  /* Snaps to the closest diagonal, horizontal or vertical. (from gp_prim) */
+  static float2 snap_8_angles(float2 p)
+  {
+    using namespace math;
+    /* sin(pi/8) or sin of 22.5 degrees.*/
+    const float sin225 = 0.3826834323650897717284599840304f;
+    return sign(p) * length(p) * normalize(sign(normalize(abs(p)) - sin225) + 1.0f);
+  }
+
+  static void stroke_line_constrain_set_direction(PaintOperation &self, float2 &coords)
+  {
+    if (!self.constrained_pen_stored_) {
+      const float2 start_coords = self.screen_space_coords_orig_.first();
+      const float2 dir = snap_8_angles(coords - start_coords);
+      self.constrained_pen_coords_ = dir + start_coords;
+      self.constrained_pen_stored_ = true;
+    }
+  }
+
+  static void stroke_line_constrain(PaintOperation &self, float2 &coords)
+  {
+    if (!self.constrain_modifier_) {
+      return;
+    }
+
+    stroke_line_constrain_set_direction(self, coords);
+
+    closest_to_line_v2(
+        coords, coords, self.screen_space_coords_orig_.first(), self.constrained_pen_coords_);
+    return;
   }
 
   void process_start_sample(PaintOperation &self,
@@ -731,14 +770,46 @@ struct PaintOperationExecutor {
 
   void process_extension_sample(PaintOperation &self,
                                 const bContext &C,
-                                const InputSample &extension_sample)
+                                const InputSample &extension_sample,
+                                const bool is_deferred)
   {
     Scene *scene = CTX_data_scene(&C);
     const RegionView3D *rv3d = CTX_wm_region_view3d(&C);
     const ARegion *region = CTX_wm_region(&C);
     const bool on_back = (scene->toolsettings->gpencil_flags & GP_TOOL_FLAG_PAINT_ONBACK) != 0;
 
-    const float2 coords = extension_sample.mouse_position;
+    float2 coords = extension_sample.mouse_position;
+
+    if (self.constrain_modifier_) {
+      if (is_deferred == false) {
+        /* Defer stroke. */
+        constexpr float defer_distance = 32.0f;
+
+        /* Determine dominant stroke direction using distance metric. */
+        const float current_distance = math::distance(coords,
+                                                      self.screen_space_coords_orig_.first());
+
+        /* Defer until stroke direction is determined, 1 sample is too few. */
+        if (current_distance < defer_distance) {
+          self.deferred_input_samples_.append(extension_sample);
+          return;
+        }
+
+        /* Set direction. */
+        stroke_line_constrain_set_direction(self, coords);
+
+        /* Process deferred samples. */
+        if (self.deferred_input_samples_.size() > 0) {
+          for (InputSample deferred_sample : self.deferred_input_samples_) {
+            process_extension_sample(self, C, deferred_sample, false);
+          }
+          self.deferred_input_samples_.clear();
+        }
+      }
+    }
+
+    stroke_line_constrain(self, coords);
+
     float3 position = self.placement_.project(coords);
     float radius = ed::greasepencil::radius_from_input_sample(rv3d,
                                                               region,
@@ -769,9 +840,9 @@ struct PaintOperationExecutor {
 
     const bool is_first_sample = (curve_points.size() == 1);
 
-    /* Use the vector from the previous to the next point. Set the direction based on the first two
-     * samples. For subsequent samples, interpolate with the previous direction to get a smoothed
-     * value over time. */
+    /* Use the vector from the previous to the next point. Set the direction based on the first
+     * two samples. For subsequent samples, interpolate with the previous direction to get a
+     * smoothed value over time. */
     if (is_first_sample) {
       self.smoothed_pen_direction_ = self.screen_space_coords_orig_.last() - coords;
     }
@@ -794,8 +865,9 @@ struct PaintOperationExecutor {
       const float angle = settings_->draw_angle;
       const float2 angle_vec = float2(math::cos(angle), math::sin(angle));
 
-      /* The angle factor is 1.0f when the direction is aligned with the angle vector and 0.0f when
-       * it is orthogonal to the angle vector. This is consistent with the behavior from GPv2. */
+      /* The angle factor is 1.0f when the direction is aligned with the angle vector and 0.0f
+       * when it is orthogonal to the angle vector. This is consistent with the behavior from
+       * GPv2. */
       const float angle_factor = math::abs(
           math::dot(angle_vec, math::normalize(self.smoothed_pen_direction_)));
 
@@ -978,12 +1050,15 @@ struct PaintOperationExecutor {
     drawing_->set_texture_matrices({self.texture_space_}, IndexRange::from_single(active_curve));
   }
 
-  void execute(PaintOperation &self, const bContext &C, const InputSample &extension_sample)
+  void execute(PaintOperation &self,
+               const bContext &C,
+               const InputSample &extension_sample,
+               const bool deferred)
   {
     const Scene *scene = CTX_data_scene(&C);
     const bool on_back = (scene->toolsettings->gpencil_flags & GP_TOOL_FLAG_PAINT_ONBACK) != 0;
 
-    this->process_extension_sample(self, C, extension_sample);
+    this->process_extension_sample(self, C, extension_sample, deferred);
 
     const bke::CurvesGeometry &curves = drawing_->strokes();
     const int active_curve = on_back ? curves.curves_range().first() :
@@ -1076,7 +1151,7 @@ void PaintOperation::on_stroke_extended(const bContext &C, const InputSample &ex
   GreasePencil *grease_pencil = static_cast<GreasePencil *>(object->data);
 
   PaintOperationExecutor executor{C};
-  executor.execute(*this, C, extension_sample);
+  executor.execute(*this, C, extension_sample, false);
 
   DEG_id_tag_update(&grease_pencil->id, ID_RECALC_GEOMETRY);
   WM_event_add_notifier(&C, NC_GEOM | ND_DATA, grease_pencil);
@@ -1443,13 +1518,21 @@ static void process_stroke_weights(const Scene &scene,
 
 void PaintOperation::on_stroke_done(const bContext &C)
 {
+  /* Process deferred samples. */
+  if (this->deferred_input_samples_.size() > 0) {
+    PaintOperationExecutor executor(C);
+    for (InputSample deferred_sample : this->deferred_input_samples_) {
+      executor.process_extension_sample(*this, C, deferred_sample, true);
+    }
+    this->deferred_input_samples_.clear();
+  }
+
   using namespace blender::bke;
   Scene *scene = CTX_data_scene(&C);
   Object *object = CTX_data_active_object(&C);
   RegionView3D *rv3d = CTX_wm_region_view3d(&C);
   const ARegion *region = CTX_wm_region(&C);
   GreasePencil &grease_pencil = *static_cast<GreasePencil *>(object->data);
-
   Paint *paint = &scene->toolsettings->gp_paint->paint;
   Brush *brush = BKE_paint_brush(paint);
   BrushGpencilSettings *settings = brush->gpencil_settings;
