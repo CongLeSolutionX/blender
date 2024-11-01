@@ -265,7 +265,7 @@ bool MTLShader::finalize(const shader::ShaderCreateInfo *info)
       BLI_assert_msg(false, "Shader translation from GLSL to MSL has failed. \n");
 
       /* Create empty interface to allow shader to be silently used. */
-      MTLShaderInterface *mtl_interface = new MTLShaderInterface(this->name_get());
+      MTLShaderInterface *mtl_interface = new MTLShaderInterface(this->name_get().c_str());
       this->set_interface(mtl_interface);
 
       /* Release temporary compilation resources. */
@@ -373,15 +373,11 @@ bool MTLShader::finalize(const shader::ShaderCreateInfo *info)
             NSNotFound)
         {
           const char *errors_c_str = [[error localizedDescription] UTF8String];
-          const char *sources_c_str = (is_compute) ? shd_builder_->glsl_compute_source_.c_str() :
-                                                     shd_builder_->glsl_fragment_source_.c_str();
+          const StringRefNull source = (is_compute) ? shd_builder_->glsl_compute_source_ :
+                                                      shd_builder_->glsl_fragment_source_;
 
           MTLLogParser parser;
-          print_log(Span<const char *>(&sources_c_str, 1),
-                    errors_c_str,
-                    to_string(src_stage),
-                    true,
-                    &parser);
+          print_log({source}, errors_c_str, to_string(src_stage), true, &parser);
 
           /* Release temporary compilation resources. */
           delete shd_builder_;
@@ -1218,11 +1214,10 @@ MTLRenderPipelineStateInstance *MTLShader::bake_pipeline_state(
           NSNotFound);
 
       const char *errors_c_str = [[error localizedDescription] UTF8String];
-      const char *sources_c_str = shd_builder_->glsl_fragment_source_.c_str();
+      const StringRefNull source = shd_builder_->glsl_fragment_source_.c_str();
 
       MTLLogParser parser;
-      print_log(
-          Span<const char *>(&sources_c_str, 1), errors_c_str, "VertShader", has_error, &parser);
+      print_log({source}, errors_c_str, "VertShader", has_error, &parser);
 
       /* Only exit out if genuine error and not warning */
       if (has_error) {
@@ -1241,11 +1236,10 @@ MTLRenderPipelineStateInstance *MTLShader::bake_pipeline_state(
             NSNotFound);
 
         const char *errors_c_str = [[error localizedDescription] UTF8String];
-        const char *sources_c_str = shd_builder_->glsl_fragment_source_.c_str();
+        const StringRefNull source = shd_builder_->glsl_fragment_source_;
 
         MTLLogParser parser;
-        print_log(
-            Span<const char *>(&sources_c_str, 1), errors_c_str, "FragShader", has_error, &parser);
+        print_log({source}, errors_c_str, "FragShader", has_error, &parser);
 
         /* Only exit out if genuine error and not warning */
         if (has_error) {
