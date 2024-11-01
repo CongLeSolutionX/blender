@@ -10,6 +10,8 @@
 #include "BLI_task.hh"
 #include "BLI_virtual_array.hh"
 
+#include "BLI_map.hh"
+
 #include "node_geometry_util.hh"
 
 namespace blender {
@@ -67,13 +69,13 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Float>("Precision").subtype(PROP_FACTOR).min(1.0f).default_value(2.0f);
 
   b.add_output<decl::Vector>("Weighted Sum").field_source_reference_all();
-  b.add_output<decl::Vector>("Weighted Difference Sum").field_source_reference_all();
+  b.add_output<decl::Int>("Weighted Difference Sum").field_source_reference_all();
   b.add_output<decl::Vector>("Brute Force Weighted Difference Sum").field_source_reference_all();
 }
 
 namespace akdbt {
 
-static constexpr int min_bucket_size = 10;
+static constexpr int min_bucket_size = 16;
 
 static int total_depth_from_total(const int total_elements)
 {
@@ -85,9 +87,15 @@ static int total_depth_from_total(const int total_elements)
   return levels;
 }
 
-static int total_joints_at_start(const int total_depth)
+static int total_joints_at_start(const int depth_i)
 {
-  return int((int64_t(1) << (total_depth)) - 1);
+  return int((int64_t(1) << (depth_i)) - 1);
+}
+
+static int total_joints_for_depth(const int total_depth)
+{
+  BLI_assert(total_depth > 0);
+  return total_joints_at_start(total_depth);
 }
 
 static int total_joints_at_depth(const int depth_i)
@@ -97,7 +105,19 @@ static int total_joints_at_depth(const int depth_i)
 
 static int joint_size_at_depth(const int total_depth, const int depth_i)
 {
-  return int(1 << (total_depth - depth_i));
+  BLI_assert(total_depth > 0);
+  return int(1 << (total_depth - depth_i - 1));
+}
+
+static int total_buckets_at(const int depth_i)
+{
+  return int(1 << depth_i);
+}
+
+static int total_buckets_for(const int total_depth)
+{
+  BLI_assert(total_depth > 0);
+  return int(1 << (total_depth - 1));
 }
 
 static IndexRange joints_range_at_depth(const int depth_i)
@@ -110,13 +130,14 @@ static IndexRange joint_buckets_range_at_depth(const int total_depth,
                                                const int depth_i,
                                                const int joint_i)
 {
+  BLI_assert(total_depth > 0);
   const int joint_size = joint_size_at_depth(total_depth, depth_i);
   return IndexRange::from_begin_size(joint_size * joint_i, joint_size);
 }
 
 static void test()
 {
-  BLI_assert(total_depth_from_total(100) == 6);
+  BLI_assert(total_depth_from_total(100) == 4);
 
   BLI_assert(total_joints_at_start(0) == 0);
   BLI_assert(total_joints_at_start(1) == 1);
@@ -128,27 +149,44 @@ static void test()
   BLI_assert(total_joints_at_depth(2) == 4);
   BLI_assert(total_joints_at_depth(3) == 8);
 
-  BLI_assert(joint_size_at_depth(1, 0) == 2);
+  BLI_assert(joint_size_at_depth(1, 0) == 1);
 
-  BLI_assert(joint_size_at_depth(2, 0) == 4);
-  BLI_assert(joint_size_at_depth(2, 1) == 2);
+  BLI_assert(joint_size_at_depth(2, 0) == 2);
+  BLI_assert(joint_size_at_depth(2, 1) == 1);
 
-  BLI_assert(joint_size_at_depth(3, 0) == 8);
-  BLI_assert(joint_size_at_depth(3, 1) == 4);
-  BLI_assert(joint_size_at_depth(3, 2) == 2);
+  BLI_assert(joint_size_at_depth(3, 0) == 4);
+  BLI_assert(joint_size_at_depth(3, 1) == 2);
+  BLI_assert(joint_size_at_depth(3, 2) == 1);
 
-  BLI_assert(joints_range_at_depth(0) == IndexRange(0, 1));
-  BLI_assert(joints_range_at_depth(1) == IndexRange(1, 2));
-  BLI_assert(joints_range_at_depth(2) == IndexRange(1 + 2, 4));
-  BLI_assert(joints_range_at_depth(2) == IndexRange(1 + 2 + 4, 8));
+  BLI_assert(joints_range_at_depth(0) == IndexRange::from_begin_size(0, 1));
+  BLI_assert(joints_range_at_depth(1) == IndexRange::from_begin_size(1, 2));
+  BLI_assert(joints_range_at_depth(2) == IndexRange::from_begin_size(1 + 2, 4));
+  BLI_assert(joints_range_at_depth(3) == IndexRange::from_begin_size(1 + 2 + 4, 8));
+
+  BLI_assert(joint_buckets_range_at_depth(4, 0, 0) == IndexRange::from_begin_size(0, 8));
+
+  BLI_assert(joint_buckets_range_at_depth(4, 1, 0) == IndexRange::from_begin_size(0, 4));
+  BLI_assert(joint_buckets_range_at_depth(4, 1, 1) == IndexRange::from_begin_size(4, 4));
+
+  BLI_assert(joint_buckets_range_at_depth(4, 2, 0) == IndexRange::from_begin_size(0, 2));
+  BLI_assert(joint_buckets_range_at_depth(4, 2, 1) == IndexRange::from_begin_size(2, 2));
+  BLI_assert(joint_buckets_range_at_depth(4, 2, 2) == IndexRange::from_begin_size(4, 2));
+  BLI_assert(joint_buckets_range_at_depth(4, 2, 3) == IndexRange::from_begin_size(6, 2));
+
+  BLI_assert(joint_buckets_range_at_depth(4, 3, 0) == IndexRange::from_begin_size(0, 1));
+  BLI_assert(joint_buckets_range_at_depth(4, 3, 1) == IndexRange::from_begin_size(1, 1));
+  BLI_assert(joint_buckets_range_at_depth(4, 3, 2) == IndexRange::from_begin_size(2, 1));
+  BLI_assert(joint_buckets_range_at_depth(4, 3, 3) == IndexRange::from_begin_size(3, 1));
+  BLI_assert(joint_buckets_range_at_depth(4, 3, 4) == IndexRange::from_begin_size(4, 1));
+  BLI_assert(joint_buckets_range_at_depth(4, 3, 5) == IndexRange::from_begin_size(5, 1));
+  BLI_assert(joint_buckets_range_at_depth(4, 3, 6) == IndexRange::from_begin_size(6, 1));
+  BLI_assert(joint_buckets_range_at_depth(4, 3, 7) == IndexRange::from_begin_size(7, 1));
 }
 
-static OffsetIndices<int> fill_buckets_linear(const int total_elements,
-                                              const int total_depth,
-                                              MutableSpan<int> r_offsets)
+static OffsetIndices<int> fill_buckets_linear(const int total_elements, MutableSpan<int> r_offsets)
 {
-  for (const int i : r_offsets.index_range().drop_back(1)) {
-    r_offsets[i] = (int64_t(total_elements) * i) >> total_depth;
+  for (const int64_t i : r_offsets.index_range().drop_back(1)) {
+    r_offsets[i] = i * int64_t(total_elements) / (r_offsets.size() - 1);
   }
   r_offsets.last() = total_elements;
   return r_offsets.as_span();
@@ -159,7 +197,7 @@ static void for_each_to_bottom(const OffsetIndices<int> buckets_offsets,
                                const int total_depth,
                                const FuncT &func)
 {
-  for (const int depth_i : IndexRange(total_depth)) {
+  for (const int depth_i : IndexRange(total_depth).drop_back(1)) {
     const IndexRange joints_range = joints_range_at_depth(depth_i);
     for (const int joint_i : joints_range.index_range()) {
       const IndexRange joint_buckets = joint_buckets_range_at_depth(total_depth, depth_i, joint_i);
@@ -191,10 +229,63 @@ static void for_each_leaf(const OffsetIndices<int> buckets_offsets,
                           const int total_depth,
                           const LeafFunc &leaf_func)
 {
-  const IndexRange joints_range = joints_range_at_depth(total_depth);
+  const IndexRange joints_range = joints_range_at_depth(total_depth - 1);
   for (const int joint_i : joints_range.index_range()) {
-    leaf_func(buckets_offsets[joint_i], int(joints_range[joint_i]), total_depth);
+    leaf_func(buckets_offsets[joint_i], int(joints_range[joint_i]), total_depth - 1);
   }
+}
+
+static void test2()
+{
+  const int total_elements = 100;
+  const int total_depth = total_depth_from_total(total_elements);
+  const int total_buckets = total_buckets_for(total_depth);
+  const int total_joints = total_joints_for_depth(total_depth);
+
+  BLI_assert(total_depth == 4);
+  BLI_assert(total_buckets == 8);
+  BLI_assert(total_joints == (8 + 4 + 2 + 1));
+
+  Array<int> bucket_indices(total_buckets + 1);
+  const OffsetIndices<int> buckets_offsets = fill_buckets_linear(total_elements, bucket_indices);
+
+  const Array<int> test_indices({0, 12, 25, 37, 50, 62, 75, 87, 100});
+  BLI_assert(bucket_indices.as_span() == test_indices.as_span());
+
+  Map<int, IndexRange> leaf_joint_to_bucket;
+  for_each_leaf(buckets_offsets,
+                total_depth,
+                [&](const IndexRange bucket_range, const int joint_index, const int depth_i) {
+                  BLI_assert(total_depth - 1 == depth_i);
+                  BLI_assert(leaf_joint_to_bucket.add(joint_index, bucket_range));
+                });
+
+  Map<int, IndexRange> test_leaf_joint_to_bucket;
+  for (const int i : IndexRange(total_buckets)) {
+    test_leaf_joint_to_bucket.add(7 + i, buckets_offsets[i]);
+  }
+  BLI_assert(test_leaf_joint_to_bucket == leaf_joint_to_bucket);
+
+  Map<std::pair<int, int>, IndexRange> joints_to_bottom;
+  for_each_to_bottom(
+      buckets_offsets,
+      total_depth,
+      [&](const IndexRange bucket_range, int joint_index, int depth_i) {
+        BLI_assert(joints_to_bottom.add(std::pair<int, int>(joint_index, depth_i), bucket_range));
+      });
+
+  Map<std::pair<int, int>, IndexRange> test_joints_to_bottom;
+  test_joints_to_bottom.add(std::pair<int, int>(0, 0), buckets_offsets[IndexRange(0, 8)]);
+
+  test_joints_to_bottom.add(std::pair<int, int>(1, 1), buckets_offsets[IndexRange(0, 4)]);
+  test_joints_to_bottom.add(std::pair<int, int>(2, 1), buckets_offsets[IndexRange(4, 4)]);
+
+  test_joints_to_bottom.add(std::pair<int, int>(3, 2), buckets_offsets[IndexRange(0, 2)]);
+  test_joints_to_bottom.add(std::pair<int, int>(4, 2), buckets_offsets[IndexRange(2, 2)]);
+  test_joints_to_bottom.add(std::pair<int, int>(5, 2), buckets_offsets[IndexRange(4, 2)]);
+  test_joints_to_bottom.add(std::pair<int, int>(6, 2), buckets_offsets[IndexRange(6, 2)]);
+
+  BLI_assert(joints_to_bottom == test_joints_to_bottom);
 }
 
 static void from_positions(const Span<float3> positions,
@@ -207,13 +298,23 @@ static void from_positions(const Span<float3> positions,
   for_each_to_bottom(
       buckets_offsets,
       total_depth,
-      [&](const IndexRange data_range, const int /*data_index*/, const int nesting_i) {
-        const int axis_index = math::mod_periodic(nesting_i, 3);
-        MutableSpan<int> segment = indices.slice(data_range);
+      [&](const IndexRange bucket_range, const int /*joint_index*/, const int depth_i) {
+        const int axis_index = math::mod_periodic(depth_i, 3);
+        MutableSpan<int> segment = indices.slice(bucket_range);
         std::sort(segment.begin(), segment.end(), [&](const int a, const int b) {
           return positions[a][axis_index] < positions[b][axis_index];
         });
       });
+
+  for_each_leaf(buckets_offsets,
+                total_depth,
+                [&](const IndexRange bucket_range, const int /*joint_index*/, const int depth_i) {
+                  const int axis_index = math::mod_periodic(depth_i, 3);
+                  MutableSpan<int> segment = indices.slice(bucket_range);
+                  std::sort(segment.begin(), segment.end(), [&](const int a, const int b) {
+                    return positions[a][axis_index] < positions[b][axis_index];
+                  });
+                });
 }
 
 template<typename T>
@@ -249,8 +350,8 @@ static void normalize_for_size(const OffsetIndices<int> buckets_offsets,
   for_each_to_bottom(
       buckets_offsets,
       total_depth,
-      [&](const IndexRange data_range, const int data_index, const int /*nesting_i*/) {
-        dst_joints_data[data_index] *= math::rcp(double(data_range.size()));
+      [&](const IndexRange bucket_range, const int joint_index, const int /*nesting_i*/) {
+        dst_joints_data[joint_index] *= math::rcp(double(bucket_range.size()));
       });
 }
 
@@ -362,7 +463,7 @@ class DifferenceSumFieldInput final : public bke::GeometryFieldInput {
                           Field<float3> value_field,
                           const int distance_power,
                           const float precision)
-      : bke::GeometryFieldInput(CPPType::get<float3>(), "Weighed Difference Sum"),
+      : bke::GeometryFieldInput(CPPType::get<int>(), "Weighed Difference Sum"),
         positions_field_(std::move(positions_field)),
         value_field_(std::move(value_field)),
         distance_power_(distance_power),
@@ -385,17 +486,17 @@ class DifferenceSumFieldInput final : public bke::GeometryFieldInput {
     const VArraySpan<float3> src_values = evaluator.get_evaluated<float3>(1);
 
     const int total_depth = akdbt::total_depth_from_total(positions.size());
-    const int total_joints = akdbt::total_joints_at_start(total_depth);
-    BLI_assert(count_bits_i(total_joints) == 1);
-    BLI_assert(total_joints == int(1 << (total_depth)));
+    const int total_buckets = akdbt::total_buckets_for(total_depth);
+    const int total_joints = akdbt::total_joints_for_depth(total_depth);
 
-    std::cout << total_depth << ";\n";
-    std::cout << total_joints << ";\n";
+    // std::cout << total_depth << ";\n";
+    // std::cout << total_joints << ";\n";
 
-    Array<int> start_indices(total_joints);
-    const OffsetIndices<int> base_offsets = akdbt::fill_buckets_linear(
-        positions.size(), total_depth, start_indices);
-    std::cout << start_indices << ";\n";
+    Array<int> start_indices(total_buckets + 1);
+    const OffsetIndices<int> base_offsets = akdbt::fill_buckets_linear(positions.size(),
+                                                                       start_indices);
+
+    // std::cout << start_indices << ";\n";
 
     Array<int> indices(positions.size());
     akdbt::from_positions(positions, base_offsets, total_depth, indices);
@@ -417,13 +518,13 @@ class DifferenceSumFieldInput final : public bke::GeometryFieldInput {
           return minimal_dinstance_to(radius, distance_power_, precision_);
         });
 
-    std::cout << joints_positions << ";\n";
-    std::cout << joints_radii << ";\n";
+    // std::cout << joints_positions << ";\n";
+    // std::cout << joints_radii << ";\n";
 
     Array<float3> dst_values(positions.size());
 
-    // return VArray<int>::ForContainer(std::move(indices));
-    return VArray<float3>::ForContainer(std::move(dst_values));
+    return VArray<int>::ForContainer(std::move(indices));
+    // return VArray<float3>::ForContainer(std::move(dst_values));
   }
 
  public:
@@ -498,6 +599,7 @@ class BruteForceDifferenceSumFieldInput final : public bke::GeometryFieldInput {
 static void node_geo_exec(GeoNodeExecParams params)
 {
   akdbt::test();
+  akdbt::test2();
 
   Field<float3> position_field = params.extract_input<Field<float3>>("Position");
   Field<float3> value_field = params.extract_input<Field<float3>>("Value");
@@ -507,7 +609,7 @@ static void node_geo_exec(GeoNodeExecParams params)
 
   if (params.output_is_required("Weighted Difference Sum")) {
     params.set_output("Weighted Difference Sum",
-                      Field<float3>(std::make_shared<DifferenceSumFieldInput>(
+                      Field<int>(std::make_shared<DifferenceSumFieldInput>(
                           position_field, value_field, power_value, precision_value)));
   }
 
