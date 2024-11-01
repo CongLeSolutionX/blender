@@ -244,7 +244,7 @@ bool MTLShader::finalize(const shader::ShaderCreateInfo *info)
 {
   /* Check if Shader has already been finalized. */
   if (this->is_valid()) {
-    MTL_LOG_ERROR("Shader (%p) '%s' has already been finalized!", this, this->name_get());
+    MTL_LOG_ERROR("Shader (%p) '%s' has already been finalized!", this, this->name_get().c_str());
   }
 
   /* Compute shaders. */
@@ -506,7 +506,7 @@ void MTLShader::bind()
     MTL_LOG_WARNING(
         "MTLShader::bind - Shader '%s' has no valid implementation in Metal, draw calls will be "
         "skipped.",
-        this->name_get());
+        this->name_get().c_str());
   }
   ctx->pipeline_state.active_shader = this;
 }
@@ -525,7 +525,8 @@ void MTLShader::uniform_float(int location, int comp_len, int array_size, const 
   }
   MTLShaderInterface *mtl_interface = get_interface();
   if (location < 0 || location >= mtl_interface->get_total_uniforms()) {
-    MTL_LOG_WARNING("Uniform location %d is not valid in Shader %s", location, this->name_get());
+    MTL_LOG_WARNING(
+        "Uniform location %d is not valid in Shader %s", location, this->name_get().c_str());
     return;
   }
 
@@ -640,7 +641,8 @@ void MTLShader::uniform_int(int location, int comp_len, int array_size, const in
   }
 
   if (location < 0 || location >= mtl_interface->get_total_uniforms()) {
-    MTL_LOG_WARNING("Uniform is not valid at location %d - Shader %s", location, this->name_get());
+    MTL_LOG_WARNING(
+        "Uniform is not valid at location %d - Shader %s", location, this->name_get().c_str());
     return;
   }
 
@@ -1762,7 +1764,7 @@ void MTLShader::ssbo_vertex_fetch_bind_attributes_end(
         MTL_LOG_WARNING(
             "Unassigned Shader attribute: %s, Attr Name: %s -- Binding NULL BUFFER to "
             "slot %d",
-            this->name_get(),
+            this->name_get().c_str(),
             mtl_interface->get_name_at_offset(mtl_shader_attribute->name_offset),
             null_attr_buffer_slot);
       }
