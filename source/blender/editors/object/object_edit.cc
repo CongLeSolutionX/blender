@@ -389,7 +389,7 @@ void OBJECT_OT_hide_view_set(wmOperatorType *ot)
   RNA_def_property_flag(prop, PropertyFlag(PROP_SKIP_SAVE | PROP_HIDDEN));
 }
 
-static int object_hide_collection_exec(bContext *C, wmOperator *op)
+static int object_isolate_collection_exec(bContext *C, wmOperator *op)
 {
   View3D *v3d = CTX_wm_view3d(C);
 
@@ -461,13 +461,13 @@ void collection_hide_menu_draw(const bContext *C, uiLayout *layout)
     uiItemIntO(row,
                lc->collection->id.name + 2,
                icon,
-               "OBJECT_OT_hide_collection",
+               "OBJECT_OT_isolate_collection",
                "collection_index",
                index);
   }
 }
 
-static int object_hide_collection_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+static int object_isolate_collection_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
   /* Immediately execute if collection index was specified. */
   int index = RNA_int_get(op->ptr, "collection_index");
@@ -478,7 +478,7 @@ static int object_hide_collection_invoke(bContext *C, wmOperator *op, const wmEv
     if (!RNA_property_is_set(op->ptr, prop)) {
       RNA_property_boolean_set(op->ptr, prop, (event->modifier & KM_SHIFT) != 0);
     }
-    return object_hide_collection_exec(C, op);
+    return object_isolate_collection_exec(C, op);
   }
 
   /* Open popup menu. */
@@ -493,16 +493,16 @@ static int object_hide_collection_invoke(bContext *C, wmOperator *op, const wmEv
   return OPERATOR_INTERFACE;
 }
 
-void OBJECT_OT_hide_collection(wmOperatorType *ot)
+void OBJECT_OT_isolate_collection(wmOperatorType *ot)
 {
   /* identifiers */
-  ot->name = "Hide Collection";
+  ot->name = "Isolate Collection";
   ot->description = "Show only objects in collection (Shift to extend)";
-  ot->idname = "OBJECT_OT_hide_collection";
+  ot->idname = "OBJECT_OT_isolate_collection";
 
   /* api callbacks */
-  ot->exec = object_hide_collection_exec;
-  ot->invoke = object_hide_collection_invoke;
+  ot->exec = object_isolate_collection_exec;
+  ot->invoke = object_isolate_collection_invoke;
   ot->poll = ED_operator_view3d_active;
 
   /* flags */

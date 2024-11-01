@@ -264,7 +264,7 @@ void operatortypes_object()
 
   WM_operatortype_append(OBJECT_OT_hide_view_clear);
   WM_operatortype_append(OBJECT_OT_hide_view_set);
-  WM_operatortype_append(OBJECT_OT_hide_collection);
+  WM_operatortype_append(OBJECT_OT_isolate_collection);
 
   WM_operatortype_append(OBJECT_OT_voxel_remesh);
   WM_operatortype_append(OBJECT_OT_voxel_size_edit);

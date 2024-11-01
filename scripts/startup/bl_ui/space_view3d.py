@@ -6292,7 +6292,7 @@ class VIEW3D_PT_collections(Panel):
             subrow = sub.row()
             subrow.alignment = 'LEFT'
             subrow.operator(
-                "object.hide_collection", text=child.name, icon=icon, emboss=False,
+                "object.isolate_collection", text=child.name, icon=icon, emboss=False,
             ).collection_index = index
 
             sub = row.split()
@@ -6304,7 +6304,7 @@ class VIEW3D_PT_collections(Panel):
             else:
                 subrow.active = collection.visible_get()  # Parent collection runtime visibility
                 icon = 'HIDE_OFF' if child.visible_get() else 'HIDE_ON'
-                props = subrow.operator("object.hide_collection", text="", icon=icon, emboss=False)
+                props = subrow.operator("object.isolate_collection", text="", icon=icon, emboss=False)
                 props.collection_index = index
                 props.toggle = True
 
