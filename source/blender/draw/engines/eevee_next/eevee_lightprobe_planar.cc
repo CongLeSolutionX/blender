@@ -75,14 +75,14 @@ void PlanarProbeModule::set_view(const draw::View &main_view, int2 main_view_ext
   }
 
   eGPUTextureUsage usage = GPU_TEXTURE_USAGE_ATTACHMENT | GPU_TEXTURE_USAGE_SHADER_READ;
-  if (radiance_tx_.ensure_2d_array(GPU_R11F_G11F_B10F, extent, layer_count, usage)) {
+  if (radiance_tx_.ensure_2d_array(GPU_RGBA16F, extent, layer_count, usage)) {
     for (GPUTexture *view : radiance_views_) {
       GPU_TEXTURE_FREE_SAFE(view);
     }
     radiance_views_.clear();
     for (int i : IndexRange(layer_count)) {
       radiance_views_.append(GPU_texture_create_view(
-          "planar.radiance_tx.view", radiance_tx_, GPU_R11F_G11F_B10F, 0, 1, i, 0, false, false));
+          "planar.radiance_tx.view", radiance_tx_, GPU_RGBA16F, 0, 1, i, 0, false, false));
     }
   }
   radiance_tx_.clear(float4(0.0f, 0.0f, 0.0f, 1.0f));
