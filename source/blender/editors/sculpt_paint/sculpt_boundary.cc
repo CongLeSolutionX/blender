@@ -21,7 +21,7 @@
 #include "BKE_ccg.hh"
 #include "BKE_colortools.hh"
 #include "BKE_paint.hh"
-#include "BKE_pbvh_api.hh"
+#include "BKE_paint_bvh.hh"
 
 #include "brushes/types.hh"
 #include "mesh_brush_common.hh"
@@ -33,6 +33,8 @@
 
 #include "GPU_immediate.hh"
 #include "GPU_state.hh"
+
+#include "bmesh.hh"
 
 #include <cstdlib>
 

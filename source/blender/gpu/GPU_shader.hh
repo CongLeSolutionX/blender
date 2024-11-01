@@ -26,10 +26,10 @@ struct GPUShader;
 
 /* Hardware limit is 16. Position attribute is always needed so we reduce to 15.
  * This makes sure the GPUVertexFormat name buffer does not overflow. */
-#define GPU_MAX_ATTR 15
+constexpr static int GPU_MAX_ATTR = 15;
 
 /* Determined by the maximum uniform buffer size divided by chunk size. */
-#define GPU_MAX_UNIFORM_ATTR 8
+constexpr static int GPU_MAX_UNIFORM_ATTR = 8;
 
 /* -------------------------------------------------------------------- */
 /** \name Creation
@@ -75,7 +75,7 @@ using BatchHandle = int64_t;
  * Request the creation of multiple shaders at once, allowing the backend to use multithreaded
  * compilation. Returns a handle that can be used to poll if all shaders have been compiled, and to
  * retrieve the compiled shaders.
- * NOTE: This function is asynchronous on OpenGL, but it's blocking on Vulkan and Metal.
+ * NOTE: This function is asynchronous on OpenGL, but it's blocking on Vulkan.
  * WARNING: The GPUShaderCreateInfo pointers should be valid until `GPU_shader_batch_finalize` has
  * returned.
  */
