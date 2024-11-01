@@ -1660,10 +1660,28 @@ struct KernelBoundingBox {
     return max - min;
   }
 
-  ccl_device_inline_method bool contains(float3 p) const
+  ccl_device_inline_method bool contains(float3 p, float exp = 0.0f) const
   {
-    return p.x >= min.x && p.y >= min.y && p.z >= min.z && p.x <= max.x && p.y <= max.y &&
-           p.z <= max.z;
+    return all(p >= (min - exp)) && all(p <= (max + exp));
+  }
+
+  ccl_device_inline_method void print() const
+  {
+#ifdef __KERNEL_PRINTF__
+    const float3 center_ = center();
+    const float3 size_ = size() * 0.5f;
+    printf(
+        "bpy.ops.mesh.primitive_cube_add(location=(%.8f, %.8f, %.8f), scale=(%.8f, %.8f, %.8f))\n",
+        double(center_.x),
+        double(center_.y),
+        double(center_.z),
+        double(size_.x),
+        double(size_.y),
+        double(size_.z));
+    printf(
+        "bpy.ops.object.mode_set(mode='EDIT')\nbpy.ops.mesh.delete(type='ONLY_FACE')\nbpy.ops."
+        "object.mode_set(mode='OBJECT')\n\n");
+#endif
   }
 };
 
@@ -1726,8 +1744,15 @@ struct KernelOctreeNode {
   int first_child;
   Extrema<float> sigma;
 
-  /* TODO(weizhen): probably we just need center and level, the size is a global constant. */
   KernelBoundingBox bbox;
+};
+
+struct KernelOctreeTracing {
+  /* Precompute the inverse of the ray direction for finding the next voxel crossing. */
+  float3 inv_ray_D;
+
+  /* Current active interval. */
+  Interval<float> t;
 };
 
 typedef struct KernelLightTreeEmitter {

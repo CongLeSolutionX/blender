@@ -76,9 +76,6 @@ typedef struct EquiangularCoefficients {
 /* Volume Integration */
 
 typedef struct VolumeIntegrateState {
-  /* Current active segment. */
-  Interval<float> t;
-
   /* If volume is absorption-only up to this point, and no probabilistic
    * scattering or termination has been used yet. */
   /* TODO(weizhen): doesn't seem to be used. */
@@ -86,9 +83,6 @@ typedef struct VolumeIntegrateState {
 
   /* Steps taken while tracking. Should not exceed `max_steps`. */
   int step;
-
-  /* Precompute the inverse of the ray direction for finding the next voxel crossing. */
-  float3 inv_ray_D;
 
   /* Random numbers for scattering. */
   float rscatter;
@@ -104,49 +98,42 @@ typedef struct VolumeIntegrateState {
 } VolumeIntegrateState;
 
 /* Given a position P and a octree node bounding box, return the octant of P in the box. */
-ccl_device int volume_tree_get_octant(const KernelBoundingBox bbox,
-                                      const ccl_private Ray *ccl_restrict ray,
-                                      const float3 P)
+ccl_device int volume_tree_get_octant(const KernelBoundingBox bbox, const float3 P)
 {
   const float3 dist = P - bbox.center();
-  /* const bool x_plus = dist.x > 0.0f || (dist.x == 0.0f && ray->D.x > 0.0f); */
-  /* const bool y_plus = dist.y > 0.0f || (dist.y == 0.0f && ray->D.y > 0.0f); */
-  /* const bool z_plus = dist.z > 0.0f || (dist.z == 0.0f && ray->D.z > 0.0f); */
-  /* return x_plus + (y_plus << 1) + (z_plus << 2); */
   return (dist.x > 0.0f) + ((dist.y > 0.0f) << 1) + ((dist.z > 0.0f) << 2);
 }
 
 /* Given a position, find the voxel in the octree and retrieve its metadata. */
-/* TODO(weizhen): can return node directly? */
 /* TODO(weizhen): store a stack of parent nodes. The maximal level is 7, so the stack size is at
  * most 6. */
 ccl_device ccl_global const KernelOctreeNode *volume_voxel_get(
     KernelGlobals kg,
     const ccl_private Ray *ccl_restrict ray,
-    ccl_private VolumeIntegrateState &ccl_restrict vstate,
+    ccl_private KernelOctreeTracing &tracing,
     const float3 P)
 {
   const KernelBoundingBox root_bbox = kernel_data_fetch(volume_tree_nodes, 1).bbox;
   if (!root_bbox.contains(P)) {
     /* World volume or implicit volume. */
-    vstate.t.min = ray->tmin;
-    vstate.t.max = ray->tmax;
+    tracing.t.min = ray->tmin;
+    tracing.t.max = ray->tmax;
     return &kernel_data_fetch(volume_tree_nodes, 0);
   }
 
   int node_index = 1;
-  Interval<float> t_range = {vstate.t.min, ray->tmax};
+  Interval<float> t_range = {tracing.t.min, ray->tmax};
   while (true) {
     const ccl_global KernelOctreeNode *knode = &kernel_data_fetch(volume_tree_nodes, node_index);
     if (knode->is_leaf) {
       const bool has_intersection = ray_aabb_intersect(
-          knode->bbox.min, knode->bbox.max, ray->P, vstate.inv_ray_D, &t_range);
+          knode->bbox.min, knode->bbox.max, ray->P, tracing.inv_ray_D, &t_range);
       /* TODO(weizhen): fix this numerical issue. */
-      vstate.t.max = has_intersection ? t_range.max : vstate.t.min + 1e-4f;
-      vstate.t.max = fminf(vstate.t.max, ray->tmax);
+      tracing.t.max = has_intersection ? t_range.max : tracing.t.min + 1e-4f;
+      tracing.t.max = fminf(tracing.t.max, ray->tmax);
       return knode;
     }
-    node_index = knode->first_child + volume_tree_get_octant(knode->bbox, ray, P);
+    node_index = knode->first_child + volume_tree_get_octant(knode->bbox, P);
   }
 }
 
@@ -163,8 +150,33 @@ ccl_device_forceinline float3 volume_octree_offset(const float3 P,
     N = -N;
   }
   return ray_offset(P, N);
-  /* TODO(weizhen): maybe offsetting by a small constant is enough. */
-  // return P + 1e-4f * ray_D;
+}
+
+ccl_device_inline void volume_octree_tracing_init(ccl_private KernelOctreeTracing &tracing,
+                                                  const ccl_private Ray *ccl_restrict ray)
+{
+  tracing.inv_ray_D = rcp(ray->D);
+  tracing.t.min = ray->tmin;
+}
+
+/* Advance to the next adjacent voxel and update the active interval. */
+ccl_device_inline bool volume_octree_tracing_advance(ccl_private KernelOctreeTracing &tracing,
+                                                     ccl_private ShaderData *ccl_restrict sd,
+                                                     const KernelBoundingBox bbox,
+                                                     const ccl_private Ray *ccl_restrict ray)
+{
+  /* Advance to the end of the segment. */
+  sd->P = volume_octree_offset(ray->P + tracing.t.max * ray->D, bbox, ray->D);
+
+  /* The next segment starts at the end of the current segment. */
+  tracing.t.min = tracing.t.max;
+
+  if (tracing.t.max >= ray->tmax) {
+    /* Reached the last segment. */
+    return false;
+  }
+
+  return true;
 }
 
 /* Evaluate shader to get extinction coefficient at P. We can use the shadow path evaluation to
@@ -421,22 +433,21 @@ ccl_device void volume_shadow_heterogeneous(KernelGlobals kg,
 
   /* Initialize volume integration state. */
   VolumeIntegrateState vstate ccl_optional_struct_init;
-  vstate.inv_ray_D = rcp(ray->D);
-  vstate.t.min = ray->tmin;
   vstate.step = 0;
-  while (vstate.t.min < ray->tmax && vstate.step < kernel_data.integrator.volume_max_steps) {
-    const ccl_global KernelOctreeNode *knode = volume_voxel_get(kg, ray, vstate, sd->P);
+
+  KernelOctreeTracing tracing;
+  volume_octree_tracing_init(tracing, ray);
+  while (vstate.step < kernel_data.integrator.volume_max_steps) {
+    const ccl_global KernelOctreeNode *knode = volume_voxel_get(kg, ray, tracing, sd->P);
 
     *throughput *= volume_unbiased_ray_marching<true>(
-        kg, state, ray, sd, vstate.t.min, vstate.t.max, vstate.step, knode, rng_state);
+        kg, state, ray, sd, tracing.t.min, tracing.t.max, vstate.step, knode, rng_state);
 
     /* TODO(weizhen): early termination.  */
 
-    /* Advance to the end of the segment. */
-    sd->P = volume_octree_offset(ray->P + vstate.t.max * ray->D, knode->bbox, ray->D);
-
-    /* The next segment starts at the end of the current segment. */
-    vstate.t.min = vstate.t.max;
+    if (!volume_octree_tracing_advance(tracing, sd, knode->bbox, ray)) {
+      return;
+    }
   }
 }
 
@@ -538,7 +549,8 @@ ccl_device bool volume_sample_indirect_scatter(
     const IntegratorState state,
     const ccl_private Ray *ccl_restrict ray,
     ccl_private ShaderData *ccl_restrict sd,
-    float sigma_max,
+    const float sigma_max,
+    const Interval<float> interval,
     ccl_private uint &lcg_state,
     ccl_private VolumeIntegrateState &ccl_restrict vstate,
     ccl_private VolumeIntegrateResult &ccl_restrict result)
@@ -549,7 +561,7 @@ ccl_device bool volume_sample_indirect_scatter(
   }
 
   /* Initialization */
-  float t = vstate.t.min;
+  float t = interval.min;
   const float inv_maj = 1.0f / sigma_max;
   Spectrum transmittance = one_spectrum();
   while (vstate.step++ < kernel_data.integrator.volume_max_steps) {
@@ -565,7 +577,7 @@ ccl_device bool volume_sample_indirect_scatter(
     /* TODO(weizhen): make sure the sample lies in the valid segment? */
     /* Generate the next distance using random walk. */
     t += sample_exponential_distribution(lcg_step_float(&lcg_state), inv_maj);
-    if (t > vstate.t.max) {
+    if (t > interval.max) {
       break;
     }
 
@@ -654,13 +666,14 @@ ccl_device void volume_integrate_step_scattering(
     ccl_private uint &lcg_state,
     ccl_private RNGState &rng_state,
     ccl_private VolumeIntegrateState &ccl_restrict vstate,
+    ccl_private KernelOctreeTracing &tracing,
     ccl_private const EquiangularCoefficients &equiangular_coeffs,
     ccl_private VolumeIntegrateResult &ccl_restrict result)
 {
-  const ccl_global KernelOctreeNode *knode = volume_voxel_get(kg, ray, vstate, sd->P);
+  const ccl_global KernelOctreeNode *knode = volume_voxel_get(kg, ray, tracing, sd->P);
 
   if (volume_sample_indirect_scatter(
-          kg, state, ray, sd, knode->sigma.max, lcg_state, vstate, result))
+          kg, state, ray, sd, knode->sigma.max, tracing.t, lcg_state, vstate, result))
   {
     if (vstate.direct_sample_method == VOLUME_SAMPLE_DISTANCE) {
       /* If using distance sampling for direct light, just copy parameters of indirect light
@@ -672,7 +685,7 @@ ccl_device void volume_integrate_step_scattering(
 
       if (vstate.use_mis) {
         const float3 extinction = volume_unbiased_ray_marching<false>(
-            kg, state, ray, sd, vstate.t.min, result.direct_t, vstate.step, knode, rng_state);
+            kg, state, ray, sd, tracing.t.min, result.direct_t, vstate.step, knode, rng_state);
         const float equiangular_pdf = volume_equiangular_pdf(
             ray, equiangular_coeffs, result.direct_t);
         const float distance_pdf = dot(extinction, vstate.distance_pdf);
@@ -686,7 +699,7 @@ ccl_device void volume_integrate_step_scattering(
   /* Equiangular direct scatter position is inside the current segment, compute transmittance until
    * the direct scatter position. */
   if ((vstate.direct_sample_method == VOLUME_SAMPLE_EQUIANGULAR) && !result.direct_scatter &&
-      result.direct_t >= vstate.t.min && result.direct_t <= vstate.t.max)
+      tracing.t.contains(result.direct_t))
   {
     sd->P = ray->P + ray->D * result.direct_t;
     VolumeShaderCoefficients coeff ccl_optional_struct_init;
@@ -695,7 +708,7 @@ ccl_device void volume_integrate_step_scattering(
       result.direct_scatter = true;
 
       const float3 extinction = volume_unbiased_ray_marching<false>(
-          kg, state, ray, sd, vstate.t.min, result.direct_t, vstate.step, knode, rng_state);
+          kg, state, ray, sd, tracing.t.min, result.direct_t, vstate.step, knode, rng_state);
 
       result.direct_throughput *= coeff.sigma_s * extinction / vstate.equiangular_pdf;
 
@@ -717,7 +730,7 @@ ccl_device void volume_integrate_step_scattering(
       (vstate.use_mis || (vstate.direct_sample_method == VOLUME_SAMPLE_EQUIANGULAR)))
   {
     const float3 extinction = volume_unbiased_ray_marching<false>(
-        kg, state, ray, sd, vstate.t.min, vstate.t.max, vstate.step, knode, rng_state);
+        kg, state, ray, sd, tracing.t.min, tracing.t.max, vstate.step, knode, rng_state);
     if (vstate.use_mis) {
       /* TODO(weizhen): maybe use the old pdf. This one removes color. */
       vstate.distance_pdf *= extinction;
@@ -727,17 +740,9 @@ ccl_device void volume_integrate_step_scattering(
     }
   }
 
-  /* Advance to the end of the segment. */
-  sd->P = volume_octree_offset(ray->P + vstate.t.max * ray->D, knode->bbox, ray->D);
-
-  /* The next segment starts at the end of the current segment. */
-  vstate.t.min = vstate.t.max;
-
   /* Stop if this is the last segment, or exceeds maximal steps. */
-  vstate.stop = (vstate.t.max >= ray->tmax) ||
+  vstate.stop = !volume_octree_tracing_advance(tracing, sd, knode->bbox, ray) ||
                 (vstate.step >= kernel_data.integrator.volume_max_steps);
-
-  return;
 }
 
 ccl_device_inline void volume_integrate_state_init(KernelGlobals kg,
@@ -749,8 +754,6 @@ ccl_device_inline void volume_integrate_state_init(KernelGlobals kg,
   vstate.rscatter = path_state_rng_1D(kg, &rng_state, PRNG_VOLUME_SCATTER_DISTANCE);
   vstate.rchannel = path_state_rng_1D(kg, &rng_state, PRNG_VOLUME_COLOR_CHANNEL);
   vstate.step = 0;
-  vstate.inv_ray_D = rcp(ray->D);
-  vstate.t.min = ray->tmin;
   vstate.stop = false;
 
   /* Multiple importance sampling: pick between equiangular and distance sampling strategy. */
@@ -812,9 +815,11 @@ ccl_device_forceinline void volume_integrate_heterogeneous(
   /* TODO(weizhen): This doesn't seem to keep samples stratified. */
   path_state_rng_scramble(&rng_state, 0xe35fad82);
 
+  KernelOctreeTracing tracing;
+  volume_octree_tracing_init(tracing, ray);
   while (!(result.indirect_scatter && result.direct_scatter) && !vstate.stop) {
     volume_integrate_step_scattering(
-        kg, state, ray, sd, lcg_state, rng_state, vstate, equiangular_coeffs, result);
+        kg, state, ray, sd, lcg_state, rng_state, vstate, tracing, equiangular_coeffs, result);
   }
 
   /* TODO(weizhen): indirect transmission is computed use tracking, but maybe the variance is high?
