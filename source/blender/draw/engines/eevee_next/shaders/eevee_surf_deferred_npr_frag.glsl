@@ -248,9 +248,7 @@ void main()
 {
   init_globals();
 
-  vec4 result = nodetree_npr();
-  out_radiance = vec4(result.rgb * result.a, 0.0);
-  out_transmittance = vec4(1.0 - result.a);
+  out_radiance = swap_alpha(nodetree_npr());
 
   /* For AOVs */
   /* TODO(NPR): Move AOV codegen to nodetree_npr. */

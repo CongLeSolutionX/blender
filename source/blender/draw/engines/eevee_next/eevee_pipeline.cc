@@ -593,7 +593,7 @@ void DeferredLayer::begin_sync()
     npr_ps_.bind_resources(inst_.lights);
     npr_ps_.bind_resources(inst_.shadows);
 
-    DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_CUSTOM | DRW_STATE_DEPTH_EQUAL;
+    DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_DEPTH_EQUAL;
 
     npr_double_sided_ps_ = &npr_ps_.sub("DoubleSided");
     npr_double_sided_ps_->state_set(state);
@@ -1404,7 +1404,7 @@ void DeferredProbePipeline::begin_sync()
     npr_ps_.bind_resources(inst_.lights);
     npr_ps_.bind_resources(inst_.shadows);
 
-    DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_CUSTOM | DRW_STATE_DEPTH_EQUAL;
+    DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_DEPTH_EQUAL;
 
     opaque_layer_.npr_double_sided_ps_ = &npr_ps_.sub("DoubleSided");
     opaque_layer_.npr_double_sided_ps_->state_set(state);
@@ -1617,7 +1617,7 @@ void PlanarProbePipeline::begin_sync()
     npr_ps_.bind_resources(inst_.lights);
     npr_ps_.bind_resources(inst_.shadows);
 
-    DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_CUSTOM | DRW_STATE_DEPTH_EQUAL;
+    DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_DEPTH_EQUAL;
 
     npr_double_sided_ps_ = &npr_ps_.sub("DoubleSided");
     npr_double_sided_ps_->state_set(state);
