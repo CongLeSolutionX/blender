@@ -216,7 +216,7 @@ static GPUShader *get_patch_evaluation_shader(int shader_type)
   if (g_subdiv_shaders[shader_type] == nullptr) {
     const StringRefNull compute_code = get_shader_code(shader_type);
 
-    StringRefNull defines = nullptr;
+    std::optional<StringRefNull> defines;
     if (shader_type == SHADER_PATCH_EVALUATION) {
       defines =
           "#define OSD_PATCH_BASIS_GLSL\n"

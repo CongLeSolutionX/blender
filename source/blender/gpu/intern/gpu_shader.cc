@@ -130,9 +130,9 @@ GPUShader *GPU_shader_create_ex(const std::optional<StringRefNull> vertcode,
                                 const StringRefNull shname)
 {
   /* At least a vertex shader and a fragment shader are required, or only a compute shader. */
-  BLI_assert(((fragcode != nullptr) && (vertcode != nullptr) && (computecode == nullptr)) ||
-             ((fragcode == nullptr) && (vertcode == nullptr) && (geomcode == nullptr) &&
-              (computecode != nullptr)));
+  BLI_assert((fragcode.has_value() && vertcode.has_value() && !computecode.has_value()) ||
+             (!fragcode.has_value() && !vertcode.has_value() && !geomcode.has_value() &&
+              computecode.has_value()));
 
   Shader *shader = GPUBackend::get()->shader_alloc(shname.c_str());
 
