@@ -1010,13 +1010,13 @@ MTLRenderPipelineStateInstance *MTLShader::bake_pipeline_state(
          * https://developer.apple.com/documentation/metal/mtlvertexattributedescriptor/1516081-format?language=objc
          */
         if (attribute_desc.format == MTLVertexFormatInvalid) {
-          /* If attributes are non-contiguous, we can skip over gaps. */
+#if 0 /* Disable warning as it is too verbose and is supported. */
           MTL_LOG_WARNING(
               "MTLShader: baking pipeline state for '%s'- skipping input attribute at "
               "index '%d' but none was specified in the current vertex state",
               mtl_interface->get_name(),
               i);
-
+#endif
           /* Write out null conversion constant if attribute unused. */
           int MTL_attribute_conversion_mode = 0;
           [values setConstantValue:&MTL_attribute_conversion_mode
@@ -1846,13 +1846,36 @@ MTLParallelShaderCompiler::MTLParallelShaderCompiler()
 
 MTLParallelShaderCompiler::~MTLParallelShaderCompiler()
 {
-  BLI_assert(batches.is_empty());
+  /* Shutdown the compiler threads. */
   terminate_compile_threads = true;
   cond_var.notify_all();
 
   for (auto &thread : compile_threads) {
     thread.join();
   }
+
+  /* Mark any unprocessed work items as ready so we can move
+   * them into a batch for cleanup. */
+  if (!parallel_work_queue.empty()) {
+    std::unique_lock<std::mutex> lock(queue_mutex);
+    while (!parallel_work_queue.empty()) {
+      ParallelWork *work_item = parallel_work_queue.front();
+      work_item->is_ready = true;
+      parallel_work_queue.pop_front();
+    }
+  }
+
+  /* Clean up any outstanding batches. */
+  for (BatchHandle handle : batches.keys()) {
+    Vector<Shader *> shaders = batch_finalize(handle);
+    /* Delete any shaders in the batch. */
+    for (Shader *shader : shaders) {
+      if (shader) {
+        delete shader;
+      }
+    }
+  }
+  BLI_assert(batches.is_empty());
 }
 
 void MTLParallelShaderCompiler::create_compile_threads()

@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.3.0 Beta (b'89e3ab2a4533')\n"
+"Project-Id-Version: Blender 4.3.0 Beta (b'28a8486e2b3f')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-10-14 08:43+0000\n"
+"POT-Creation-Date: 2024-10-29 10:02+0000\n"
 "PO-Revision-Date: 2024-01-25 18:24+0000\n"
 "Last-Translator: Hoang Duy Tran <hoangduytran1960@googlemail.com>\n"
 "Language-Team: Vietnamese <https://translate.blender.org/projects/blender-ui/ui/vi/>\n"
@@ -2671,10 +2671,6 @@ msgid "Main Grease Pencils"
 msgstr "Bút Chì Dầu"
 
 
-msgid "Collection of grease pencils"
-msgstr "Bộ sưu tập các Bút Chì Dầu"
-
-
 msgid "Main Hair Curves"
 msgstr "Đường Cong Tóc Chính"
 
@@ -4337,10 +4333,6 @@ msgstr "Tăng lên hoặc thu nhỏ các đường cong bằng cách thay đổi
 
 msgid "Grease Pencil Brush Settings"
 msgstr "Cài Đặt về Đầu Bút Chì Dầu"
-
-
-msgid "Settings for grease pencil brush"
-msgstr "Cài đặt của đầu Bút Chì Dầu"
 
 
 msgid "Active Smooth"
@@ -12709,10 +12701,6 @@ msgid "Show Font data-blocks"
 msgstr "Hiển thị các khối dữ liệu về Phông Chữ"
 
 
-msgid "Show Grease pencil data-blocks"
-msgstr "Hiển thị các khối dữ liệu về Bút Chì Dầu"
-
-
 msgid "Show Image data-blocks"
 msgstr "Hiển thị các khối dữ liệu về Hình Ảnh"
 
@@ -16272,10 +16260,6 @@ msgid "Grease Pencil Mask Layers"
 msgstr "Các Tầng Chắn Lọc của Bút Chì Dầu"
 
 
-msgid "Collection of grease pencil masking layers"
-msgstr "Bộ sưu tập các tầng chắn lọc của bút chì dầu"
-
-
 msgid "Active Layer Mask Index"
 msgstr "Chỉ Số của Tầng Chắn Lọc đang Hoạt Động"
 
@@ -18540,10 +18524,6 @@ msgid "Use Paint"
 msgstr "Sử Dụng Sơn"
 
 
-msgid "Use this brush in grease pencil drawing mode"
-msgstr "Dùng bút này trong chế độ vẽ Bút Chì Dầu"
-
-
 msgid "Use this brush in texture paint mode"
 msgstr "Dùng đầu bút này trong chế độ sơn chất liệu"
 
@@ -18714,10 +18694,6 @@ msgstr "Điều Chỉnh Cường Độ cho Phân Khoảng"
 
 msgid "Automatically adjust strength to give consistent results for different spacings"
 msgstr "Tự động điều chỉnh cường độ để đạt được kết quả nhất quán đối với các phân khoảng bất đồng"
-
-
-msgid "Use this brush in grease pencil vertex color mode"
-msgstr "Sử dụng đầu bút này trong chế độ màu điểm đỉnh của bút chì dầu"
 
 
 msgid "Use Pressure for Wet Mix"
@@ -20795,10 +20771,6 @@ msgid "2D Layers"
 msgstr "Tầng Lớp 2D"
 
 
-msgid "Display strokes using grease pencil layers to define order"
-msgstr "Hiển thị nét vẽ dùng các tầng lớp của Bút Chì Dầu để xác định trật tự"
-
-
 msgid "3D Location"
 msgstr "Vị Trí 3D"
 
@@ -22095,16 +22067,8 @@ msgid "Grease Pencil Settings"
 msgstr "Sắp Đặt Bút Chì Dầu"
 
 
-msgid "Grease pencil color settings for material"
-msgstr "Sắp đặt màu sắc của Bút Chì Dầu cho nguyên vật liệu"
-
-
 msgid "Is Grease Pencil"
 msgstr "Là Bút Chì Dầu"
-
-
-msgid "True if this material has grease pencil data"
-msgstr "Đúng (True) nếu nguyên vật liệu này có dữ liệu Bút Chì Dầu"
 
 
 msgid "Line Color"
@@ -22741,10 +22705,6 @@ msgstr "Dịch chuyển của khung hình đầu tiên trong đoạn phim tươn
 
 msgid "Global scene frame number at which this movie starts playing (affects all data associated with a clip)"
 msgstr "Số khung hình nơi phim này sẽ bắt đầu chơi (ảnh hưởng toàn bộ các dữ liệu liên quan đến đoạn phim)"
-
-
-msgid "Grease pencil data for this movie clip"
-msgstr "Dữ liệu Bút Chì Dầu cho đoạn phim này"
 
 
 msgid "Width and height in pixels, zero when image data can't be loaded"
@@ -23801,10 +23761,6 @@ msgstr "Sử Dụng Alpha"
 
 msgid "Use alpha blending instead of alpha test (can produce sorting artifacts)"
 msgstr "Sử dụng pha trộn alpha thay vì thử nghiệm alpha (alpha test) (có thể gây ra giả tượng sắp xếp)"
-
-
-msgid "Lights affect grease pencil object"
-msgstr "Nguồn sáng tác động đối tượng bút chì dầu"
 
 
 msgid "Scale to Face Sizes"
@@ -27624,28 +27580,8 @@ msgid "Codec"
 msgstr "Bộ Hóa Giải Mã"
 
 
-msgid "Codec settings for OpenEXR"
-msgstr "Sắp đặt bộ hóa giải mã cho OpenEXR"
-
-
 msgid "Pxr24 (lossy)"
 msgstr "Pxr24 (mất mát)"
-
-
-msgid "ZIP (lossless)"
-msgstr "ZIP (không mất mát)"
-
-
-msgid "PIZ (lossless)"
-msgstr "PIZ (không mất mát)"
-
-
-msgid "RLE (lossless)"
-msgstr "RLE (không mất mát)"
-
-
-msgid "ZIPS (lossless)"
-msgstr "ZIPS (không mất mát)"
 
 
 msgid "B44 (lossy)"
@@ -31605,6 +31541,10 @@ msgid "Editor menu containing buttons"
 msgstr "Trình đơn của trình biên soạn có chứa các nút"
 
 
+msgid "Mirror"
+msgstr "Phản Chiếu Đối Xứng"
+
+
 msgid "Snap"
 msgstr "Bám Dính"
 
@@ -31811,10 +31751,6 @@ msgstr "Tự Động Chắn Lọc"
 
 msgid "Face Sets Edit"
 msgstr "Biên Soạn các Mặt Ấn Định"
-
-
-msgid "Mirror"
-msgstr "Phản Chiếu Đối Xứng"
 
 
 msgid "Basic"
@@ -35751,20 +35687,12 @@ msgid "Use Edge Mark"
 msgstr "Sử Dụng Dấu Cạnh"
 
 
-msgid "Generate strokes from freestyle marked edges"
-msgstr "Sinh tạo các nét vẽ từ các cạnh được đánh dấu phong cách tự do"
-
-
 msgid "Handle Overlapping Edges"
 msgstr "Xử Lý các cạnh Chồng Đè Lên Nhau"
 
 
 msgid "Filter Face Marks"
 msgstr "Thanh Lọc Dấu Chỉ Mặt"
-
-
-msgid "Filter feature lines using freestyle face marks"
-msgstr "Thanh lọc các đường viền hình thể dùng các dấu chỉ mặt phong cách tự do"
 
 
 msgid "Boundaries"
@@ -40045,10 +39973,6 @@ msgid "Use Mask"
 msgstr "Dùng Màn Chắn Lọc"
 
 
-msgid "Use a grease pencil data-block as a mask to use only specified areas of pattern when tracking"
-msgstr "Dùng khối dữ liệu Bút Chì Dầu như một màn chắn lọc để chỉ sử dụng những vùng nhất định của kiểu mẫu khi giám sát"
-
-
 msgid "Normalize"
 msgstr "Bình Thường Hóa"
 
@@ -40275,10 +40199,6 @@ msgstr "Màu của giám sát trong Trình Biên Soạn Đoạn Phim và cổng 
 
 msgid "Minimal value of correlation between matched pattern and reference that is still treated as successful tracking"
 msgstr "Giá trị tương quan tối thiểu giữa kiểu mẫu so sánh và nguồn tham chiếu mà vẫn được coi là giám sát thành công"
-
-
-msgid "Grease pencil data for this track"
-msgstr "Dữ liệu Bút Chì Dầu dành cho dấu giám sát này"
 
 
 msgid "Has Bundle"
@@ -44263,10 +44183,6 @@ msgstr "Thể loại dữ liệu sử dụng để đọc các giá trị thuộ
 
 msgid "Named Layer Selection"
 msgstr "Lựa Chọn Tầng Lớp có Tên"
-
-
-msgid "Output a selection of a grease pencil layer"
-msgstr "Xuất ra lựa chọn của một tầng lớp bút chì dầu"
 
 
 msgid "Retrieve a unit length vector indicating the direction pointing away from the geometry at each element"
@@ -49270,10 +49186,6 @@ msgstr "Thêm hoặc xóa sắp đặt sẵn về đầu bút cho Bút Chì Dầ
 msgctxt "Operator"
 msgid "Add Grease Pencil Brush Preset"
 msgstr "Thêm Sắp Đặt Sẵn về Đầu Bút Chì Dầu"
-
-
-msgid "Add or remove grease pencil material preset"
-msgstr "Thêm hoặc xóa sắp đặt trước về nguyên vật liệu của Bút Chì Dầu"
 
 
 msgctxt "Operator"
@@ -57705,10 +57617,6 @@ msgid "Remove"
 msgstr "Xóa/Loại Bỏ"
 
 
-msgid "The ratio of remaining keyframes after the operation"
-msgstr "Tỷ lệ của các khung khóa còn lại sau khi thao tác hoàn tất"
-
-
 msgid "Which mode to use for decimation"
 msgstr "Chế độ tiêu hao sử dụng"
 
@@ -58329,10 +58237,6 @@ msgid "Bake Object Transform to Grease Pencil"
 msgstr "Nướng Biến Hóa của Đối Tượng thành Bút Chì Dầu"
 
 
-msgid "Bake grease pencil object transform to grease pencil keyframes"
-msgstr "Nướng biến hóa đối tượng bút chì dầu thành các khung khóa Bút Chì Dầu"
-
-
 msgid "The end frame of animation"
 msgstr "Khung hình cuối cùng của hoạt họa"
 
@@ -58603,10 +58507,6 @@ msgid "Grease Pencil Interpolation"
 msgstr "Nội Suy Bút Chì Dầu"
 
 
-msgid "Interpolate grease pencil strokes between frames"
-msgstr "Nội suy nét Bút Chì Dầu giữa các khung hình"
-
-
 msgid "Exclude Breakdowns"
 msgstr "Loại Trừ các Khung Phân Tích"
 
@@ -58653,10 +58553,6 @@ msgid "Easing"
 msgstr "Chậm Rãi"
 
 
-msgid "Which ends of the segment between the preceding and following grease pencil frames easing interpolation is applied to"
-msgstr "Đầu nào của phân đoạn giữa khung hình Bút Chì Dầu trước và sau sẽ được nội suy chậm rãi"
-
-
 msgctxt "GPencil"
 msgid "Automatic Easing"
 msgstr "Chậm Rãi Tự Động"
@@ -58675,14 +58571,6 @@ msgstr "Chậm Rãi Ra"
 msgctxt "GPencil"
 msgid "Ease In and Out"
 msgstr "Chậm Rãi Vào và Ra"
-
-
-msgid "Only Selected"
-msgstr "Duy cái Được Chọn"
-
-
-msgid "Interpolate only selected strokes"
-msgstr "Duy nội suy các nét đã chọn mà thôi"
 
 
 msgid "Number of frames between generated interpolated frames"
@@ -59084,26 +58972,14 @@ msgid "Grease Pencil Curve Shape"
 msgstr "Bút Chì Dầu Hình Dạng Cong"
 
 
-msgid "Create predefined grease pencil stroke curve shapes"
-msgstr "Kiến Tạo một nét vẽ Bút Chì Dầu hình dạng cong, dùng công thức định trước"
-
-
 msgctxt "Operator"
 msgid "Grease Pencil Line Shape"
 msgstr "Bút Chì Dầu Hình Dạng Đường Thẳng"
 
 
-msgid "Create predefined grease pencil stroke lines"
-msgstr "Kiến Tạo một nét vẽ Bút Chì Dầu hình dạng đường thẳng, dùng công thức định trước"
-
-
 msgctxt "Operator"
 msgid "Grease Pencil Polyline Shape"
 msgstr "Bút Chì Dầu Hình Dạng Đa Giác với Cạnh Thẳng"
-
-
-msgid "Create predefined grease pencil stroke polylines"
-msgstr "Kiến Tạo một nét vẽ Bút Chì Dầu hình dạng đa giác với cạnh thẳng, dùng công thức định trước"
 
 
 msgid "Bring to Front"
@@ -59418,10 +59294,6 @@ msgstr "Can khung hình hiện tại của hình ảnh"
 
 msgid "Trace full sequence"
 msgstr "Can toàn bộ trình tự"
-
-
-msgid "Target grease pencil"
-msgstr "Bút chì dầu mục tiêu"
 
 
 msgid "New Object"
@@ -62076,6 +61948,10 @@ msgid "The angle snap increment used when in constrained angle mode"
 msgstr "Gia lượng góc độ bám dính, sử dụng khi đang ở trong chế độ ràng buộc vào góc độ"
 
 
+msgid "Only Selected"
+msgstr "Duy cái Được Chọn"
+
+
 msgid "Only cut selected geometry"
 msgstr "Chỉ cắt hình học được chọn mà thôi"
 
@@ -64334,21 +64210,6 @@ msgstr "Phóng to/thu nhỏ hình ảnh nền"
 
 
 msgctxt "Operator"
-msgid "Add Bake Item"
-msgstr "Thêm Chỉ Mục Nướng"
-
-
-msgctxt "Operator"
-msgid "Move Bake Item"
-msgstr "Di Chuyển Chỉ Mục Nướng"
-
-
-msgctxt "Operator"
-msgid "Remove Bake Item"
-msgstr "Xóa Chỉ Mục Nướng"
-
-
-msgctxt "Operator"
 msgid "Clear Viewer Region"
 msgstr "Xóa Địa Phận Vùng Quan Sát"
 
@@ -65637,10 +65498,6 @@ msgid "Add a Grease Pencil object to the scene"
 msgstr "Thêm một đối tượng Bút Chì Dầu vào cảnh"
 
 
-msgid "Create an empty grease pencil object"
-msgstr "Kiến Tạo một đối tượng Bút Chì Dầu trống rỗng"
-
-
 msgctxt "Operator"
 msgid "Stroke"
 msgstr "Nét Vẽ"
@@ -65655,16 +65512,8 @@ msgid "Monkey"
 msgstr "Đầu Khỉ"
 
 
-msgid "Construct a Suzanne grease pencil object"
-msgstr "Kiến tạo một đối tượng Bút Chì Dầu Suzanne (đầu khỉ)"
-
-
 msgid "Show In Front"
 msgstr "Hiển Thị Ở Đằng Trước"
-
-
-msgid "Use lights for this grease pencil object"
-msgstr "Sử dụng ánh sáng đối với đối tượng bút chì dầu này"
 
 
 msgctxt "Operator"
@@ -67349,10 +67198,6 @@ msgstr "Chuyển hiệu ứng lên trên trong ngăn xếp"
 msgctxt "Operator"
 msgid "Remove Grease Pencil Effect"
 msgstr "Xóa Hiệu Ứng Bút Chì Dầu"
-
-
-msgid "Remove a effect from the active grease pencil object"
-msgstr "Xóa một hiệu ứng khỏi đối tượng Bút Chì Dầu đang hoạt động"
 
 
 msgctxt "Operator"
@@ -73536,10 +73381,6 @@ msgid "Reassign the inputs for the effect strip"
 msgstr "Đổi nguồn của dãy hiệu ứng"
 
 
-msgid "Rebuild all selected proxies and timecode indices using the job system"
-msgstr "Tái dựng toàn bộ các đại diện và chỉ số mã thời gian dùng hệ thống công việc (job system)"
-
-
 msgctxt "Operator"
 msgid "Refresh Sequencer"
 msgstr "Vẽ Lại Trình Phối Hình"
@@ -78487,10 +78328,6 @@ msgid "Export to PDF"
 msgstr "Xuất Khẩu dưới dạng PDF"
 
 
-msgid "Export grease pencil to PDF"
-msgstr "Xuất Khẩu bút chì dầu ra PDF"
-
-
 msgid "Which frames to include in the export"
 msgstr "Khung nào để đưa kèm vào xuất khẩu"
 
@@ -78536,16 +78373,8 @@ msgid "Export to SVG"
 msgstr "Xuất Khẩu thành SVG"
 
 
-msgid "Export grease pencil to SVG"
-msgstr "Xuất Khẩu bút chì dầu ra SVG"
-
-
 msgid "Clip Camera"
 msgstr "Cắt Xén Máy Quay Phim"
-
-
-msgid "Import SVG into grease pencil"
-msgstr "Nhập khẩu SVG vào thành bút chì dầu"
 
 
 msgid "Resolution of the generated strokes"
@@ -80928,6 +80757,22 @@ msgid "Panel containing UI elements"
 msgstr "Bảng có chứa các phần tử Giao Diện Người Dùng (UI)"
 
 
+msgid "Motion Tracking"
+msgstr "Giám Sát Chuyển Động"
+
+
+msgid "Mesh Edit Mode"
+msgstr "Chế Độ Biên Soạn Khung Lưới"
+
+
+msgid "Measurement"
+msgstr "Đo Lường"
+
+
+msgid "Curve Edit Mode"
+msgstr "Chế Độ Biên Soạn Đường Cong"
+
+
 msgid "Snapping"
 msgstr "Bám Dính"
 
@@ -80984,10 +80829,6 @@ msgid "Viewport Debug"
 msgstr "Hiệu Chỉnh Lỗi Cổng Nhìn"
 
 
-msgid "Curve Edit Mode"
-msgstr "Chế Độ Biên Soạn Đường Cong"
-
-
 msgid "VR"
 msgstr "Virtual Reality: Thực Tế Ảo"
 
@@ -81030,18 +80871,6 @@ msgstr "Lớp Vẽ Lồng"
 
 msgid "Viewer Node"
 msgstr "Nút Quan Sát"
-
-
-msgid "Motion Tracking"
-msgstr "Giám Sát Chuyển Động"
-
-
-msgid "Mesh Edit Mode"
-msgstr "Chế Độ Biên Soạn Khung Lưới"
-
-
-msgid "Measurement"
-msgstr "Đo Lường"
 
 
 msgid "Chain Scaling"
@@ -90686,10 +90515,6 @@ msgid "Enable scene light interactions with volumetrics"
 msgstr "Cho phép ánh sáng của cảnh tương tác với các thể tích"
 
 
-msgid "Generate shadows from volumetric material (Very expensive)"
-msgstr "Sinh tạo bóng tối từ nguyên vật liệu thể tích (Rất đắt giá)"
-
-
 msgid "End distance of the volumetric effect"
 msgstr "Khoảng cách kết thúc của hiệu ứng thể tích"
 
@@ -91345,18 +91170,6 @@ msgstr "Dải trình tự tạo văn bản"
 
 msgid "Align X"
 msgstr "Căn Chỉnh X"
-
-
-msgid "Align the text along the X axis, relative to the text bounds"
-msgstr "Căn chỉnh văn bản dọc theo trục X, tương đối với biên giới của văn bản"
-
-
-msgid "Align Y"
-msgstr "Căn Chỉnh Y"
-
-
-msgid "Align the text along the Y axis, relative to the text bounds"
-msgstr "Căn chỉnh văn bản dọc theo trục X, tương đối với biên giới của văn bản"
 
 
 msgid "Box Color"
@@ -92434,10 +92247,6 @@ msgstr "Bám dính khung hình hiện tại vào điểm khởi đầu hoặc đ
 
 msgid "Collection of Sequences"
 msgstr "Bộ Sưu Tập các Trình Tự"
-
-
-msgid "Effect affecting the grease pencil object"
-msgstr "Hiệu ứng tác động đối tượng Bút Chì Dầu"
 
 
 msgid "Effect name"
@@ -93864,10 +93673,6 @@ msgid "Display Z-buffer associated with image (mapped from camera clip start to 
 msgstr "Hiển thị bộ đệm-Z liên quan đến hình ảnh (ánh xạ từ điểm đầu đến điểm cuối khoảng cắt xén (tầm nhìn) của máy quay phim)"
 
 
-msgid "Grease pencil data for this space"
-msgstr "Dữ liệu Bút Chì Dầu cho không gian này"
-
-
 msgid "View the image"
 msgstr "Xem hình ảnh"
 
@@ -94440,10 +94245,6 @@ msgstr "Hiển Thị Đối Tượng Rỗng"
 
 msgid "Show Grease Pencil"
 msgstr "Hiển Thị Bút Chì Dầu"
-
-
-msgid "Show grease pencil objects"
-msgstr "Hiển thị các đối tượng bút chì dầu"
 
 
 msgid "Show Lights"
@@ -95271,10 +95072,6 @@ msgstr "Cho phép lựa chọn vật thể trống rỗng"
 
 msgid "Allow selection of text objects"
 msgstr "Cho phép lựa chọn đối tượng văn bản"
-
-
-msgid "Allow selection of grease pencil objects"
-msgstr "Cho phép lựa chọn đối tượng bút chì dầu"
 
 
 msgid "Allow selection of lattices"
@@ -99866,10 +99663,6 @@ msgstr "Phai mờ dần toàn bộ các đối tượng trong cổng nhìn bằn
 
 msgid "Use Grid"
 msgstr "Sử Dụng Khung Lưới Đồ Thị"
-
-
-msgid "Display a grid over grease pencil paper"
-msgstr "Hiển thị một khung lưới đồ thị trên mặt giấy Bút Chì Dầu"
 
 
 msgid "Lines Only"
@@ -104776,66 +104569,6 @@ msgid "Action"
 msgstr "Hành Động"
 
 
-msgid "Save to PO File"
-msgstr "Lưu vào Tập Tin PO"
-
-
-msgid "Rebuild MO File"
-msgstr "Tái Dựng Tập Tin MO"
-
-
-msgid "Erase Local MO files"
-msgstr "Xóa các tập tin MO Cục Bộ"
-
-
-msgid "invoke() needs to be called before execute()"
-msgstr "invoke(), hay 'kích hoạt()', cần phải được gọi trước hàm execute(), hay 'thi hành()'"
-
-
-msgid "    RNA Path: bpy.types."
-msgstr "    Đường Dẫn RNA: bpy.types."
-
-
-msgid "    RNA Context: "
-msgstr "    Ngữ Cảnh RNA: "
-
-
-msgid "Labels:"
-msgstr "Nhãn Hiệu:"
-
-
-msgid "Tool Tips:"
-msgstr "Chú Giải Công Cụ:"
-
-
-msgid "Button Label:"
-msgstr "Nhãn Nút Bấm:"
-
-
-msgid "RNA Label:"
-msgstr "Nhãn RNA:"
-
-
-msgid "Enum Item Label:"
-msgstr "Nhãn Phần Tử Liệt Kê:"
-
-
-msgid "Button Tip:"
-msgstr "Chú Giải Nút Bấm:"
-
-
-msgid "RNA Tip:"
-msgstr "Chú Giải RNA:"
-
-
-msgid "Enum Item Tip:"
-msgstr "Chú Giải Phần Tử Liệt Kê:"
-
-
-msgid "Could not write to po file ({})"
-msgstr "Không thể ghi tập tin po ({})"
-
-
 msgid "WARNING: preferences are lost when add-on is disabled, be sure to use \"Save Persistent\" if you want to keep your settings!"
 msgstr "Cảnh Cáo: Cài Đặt Sở Thích sẽ bị mất đi khi trình bổ sung bị vô hiệu hóa (tắt đi). Nếu bạn muốn duy trì các sắp đặt của mình thì nên sử dụng \"Lưu Ổn Định\" (Save Persistent)!"
 
@@ -106018,18 +105751,6 @@ msgid "Only Axis Aligned"
 msgstr "Duy Thẳng Hàng theo Trục"
 
 
-msgid "View in Render"
-msgstr "Quan Sát trong Kết Xuất"
-
-
-msgid "Thickness Scale"
-msgstr "Tỷ Lệ Độ Dày"
-
-
-msgid "Edit Line Color"
-msgstr "Màu Nét Biên Soạn"
-
-
 msgid "Keyframes Before"
 msgstr "Số Khung Khóa Đứng Trước"
 
@@ -106336,6 +106057,16 @@ msgstr "Lựa Chọn đến Con Trỏ"
 msgctxt "Operator"
 msgid "Selection to Cursor (Keep Offset)"
 msgstr "Lựa Chọn đến Con Trỏ (Duy Trì Dịch Chuyển)"
+
+
+msgctxt "Operator"
+msgid "Delete Active Keyframe (Active Layer)"
+msgstr "Xóa Khung Khóa đang Hoạt Động (Tầng Lớp đang Hoạt Động)"
+
+
+msgctxt "Operator"
+msgid "Delete Active Keyframes (All Layers)"
+msgstr "Xóa các Khung Khóa đang Hoạt Động (Toàn Bộ các Tầng Lớp)"
 
 
 msgid "Show Fill Color While Drawing"
@@ -111564,16 +111295,6 @@ msgstr "Làm Sắc Cạnh Điểm Đỉnh"
 
 
 msgctxt "Operator"
-msgid "Delete Active Keyframe (Active Layer)"
-msgstr "Xóa Khung Khóa đang Hoạt Động (Tầng Lớp đang Hoạt Động)"
-
-
-msgctxt "Operator"
-msgid "Delete Active Keyframes (All Layers)"
-msgstr "Xóa các Khung Khóa đang Hoạt Động (Toàn Bộ các Tầng Lớp)"
-
-
-msgctxt "Operator"
 msgid "Delete Segment"
 msgstr "Xóa Phân Đoạn"
 
@@ -114523,16 +114244,8 @@ msgid "Active region not set"
 msgstr "Chưa chỉ định vùng hoạt động"
 
 
-msgid "Nowhere for grease pencil data to go"
-msgstr "Không có chỗ nào để dữ liệu Bút Chì Dầu di chuyển cả"
-
-
 msgid "Cannot delete locked layers"
 msgstr "Không thể xóa các tầng lớp đã bị khóa"
-
-
-msgid "No grease pencil data"
-msgstr "Không thấy có dữ liệu Bút Chì Dầu"
 
 
 msgid "No active frame to delete"
@@ -114573,10 +114286,6 @@ msgstr "Tầng đang hoạt động bị khóa lại hoặc bị ẩn giấu"
 
 msgid "No Grease Pencil frame to draw on"
 msgstr "Không có khung hình Bút Chì Dầu nào để vẽ lên cả"
-
-
-msgid "Active object is not a selected grease pencil"
-msgstr "Đối tượng đang hoạt động không phải là một phần tử Bút Chì Dầu đã chọn"
 
 
 msgid "Cannot add active layer as mask"
@@ -117859,10 +117568,6 @@ msgid "Trace"
 msgstr "Dò Tia"
 
 
-msgid "Target object not a grease pencil, ignoring!"
-msgstr "Đối tượng mục tiêu không phải là một đối tượng bút chì dầu, bỏ qua!"
-
-
 msgid "Target object library-data, ignoring!"
 msgstr "Đối tượng mục tiêu dữ liệu-thư viện, bỏ qua!"
 
@@ -118113,10 +117818,6 @@ msgstr "Không thể dán khung khóa trong chế độ màn chắn lọc"
 
 msgid "No data in the internal clipboard to paste"
 msgstr "Không có dữ liệu trong khay nhớ tạm nội bộ để dán"
-
-
-msgid "Keyframe pasting is not available for grease pencil or mask mode"
-msgstr "Không được phép dán khung khóa trong chế độ Bút Chì Dầu hay màn chắn lọc"
 
 
 msgid "No selected F-Curves to paste into"
@@ -119668,10 +119369,6 @@ msgid "Cannot unlink material '%s'. It's not clear which object or object-data i
 msgstr "Không thể ngắt kết nối nguyên vật liệu '%s' được. Không rõ đối tượng hoặc dữ liệu đối tượng nào là cái nên được ngắt liên kết cả, vì không có đối tượng hoặc dữ liệu đối tượng nào là phụ huynh trong cây Mục Lục (Outliner) cả"
 
 
-msgid "Cannot unlink texture '%s'. It's not clear which freestyle line style it should be unlinked from, there's no freestyle line style as parent in the Outliner tree"
-msgstr "Không thể ngắt kết nối chất liệu '%s'. Không rõ là nó nên ngắt liên kết khỏi kiểu đường nét tự do nào nữa, hiện nay không có kiểu đường nét tự do nào làm phụ huynh trong cây Mục Lục cả"
-
-
 msgid "Cannot unlink collection '%s'. It's not clear which scene, collection or instance empties it should be unlinked from, there's no scene, collection or instance empties as parent in the Outliner tree"
 msgstr "Không thể ngắt kết nối bộ sưu tập '%s' được. Không rõ là cảnh, bộ sưu tập hoặc thực thể trống rỗng nào nó cần phải ngắt liên kết khỏi nữa, hiện nay không có cảnh, bộ sưu tập hoặc thực thể trống rỗng nào với tư cách là phụ huynh trong cây Mục Lục cả"
 
@@ -121122,11 +120819,6 @@ msgid "Could not open Alembic archive for reading, see console for detail"
 msgstr "Không thể mở kho lưu trữ Alembic để đọc, xin xem cửa sổ bàn giao tiếp để biết chi tiết"
 
 
-msgctxt "Action"
-msgid "Group"
-msgstr "Nhóm"
-
-
 msgid "PLY Importer: failed importing, unknown error"
 msgstr "Trình Nhập Khẩu PLY: quá trình nhập khẩu bị thất bại, lỗi xảy ra không xác định được"
 
@@ -122080,10 +121772,6 @@ msgstr "Chỉ số điểm đỉnh âm trong bộ_chỉ số_điểm đỉnh (ve
 
 msgid "Duplicate index %d in vertex_indices_set"
 msgstr "Nhân đôi chỉ số %d trong bộ_chỉ số_điểm đỉnh (vertex_indices_set)"
-
-
-msgid "Cannot assign material '%s', it has to be used by the grease pencil object already"
-msgstr "Không thể chỉ định vật liệu '%s', nó cần bút sáp được sử dụng trước"
 
 
 msgid "Unable to create new strip"
