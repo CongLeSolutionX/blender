@@ -15,7 +15,7 @@
  */
 
 #include "BKE_paint.hh"
-#include "BKE_pbvh_api.hh"
+#include "BKE_paint_bvh.hh"
 
 #include "BLI_map.hh"
 #include "BLI_sys_types.h"
