@@ -710,7 +710,7 @@ static bool ed_preview_draw_rect(
 }
 
 void ED_preview_draw(
-    const bContext *C, void *idp, void *parentp, void *slotp, uiPreview *preview, rcti *rect)
+    const bContext *C, void *idp, void *parentp, void *slotp, uiPreview *ui_preview, rcti *rect)
 {
   if (idp) {
     Scene *scene = CTX_data_scene(C);
@@ -747,7 +747,7 @@ void ED_preview_draw(
     /* start a new preview render job if signaled through sbuts->preview,
      * if no render result was found and no preview render job is running,
      * or if the job is running and the size of preview changed */
-    if ((sbuts != nullptr && sbuts->preview) || (preview->tag & UI_PREVIEW_TAG_DIRTY) ||
+    if ((sbuts != nullptr && sbuts->preview) || (ui_preview->tag & UI_PREVIEW_TAG_DIRTY) ||
         (!ok && !WM_jobs_test(wm, area, WM_JOB_TYPE_RENDER_PREVIEW)) ||
         (sp && (abs(sp->sizex - newx) >= 2 || abs(sp->sizey - newy) > 2)))
     {
@@ -755,7 +755,7 @@ void ED_preview_draw(
         sbuts->preview = 0;
       }
       ED_preview_shader_job(C, area, id, parent, slot, newx, newy, PR_BUTS_RENDER);
-      preview->tag &= ~UI_PREVIEW_TAG_DIRTY;
+      ui_preview->tag &= ~UI_PREVIEW_TAG_DIRTY;
     }
   }
 }

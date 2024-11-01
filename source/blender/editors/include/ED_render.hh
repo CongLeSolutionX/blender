@@ -109,7 +109,7 @@ void ED_preview_restart_queue_work(const bContext *C);
 void ED_preview_kill_jobs(wmWindowManager *wm, Main *bmain);
 
 void ED_preview_draw(
-    const bContext *C, void *idp, void *parentp, void *slotp, uiPreview *preview, rcti *rect);
+    const bContext *C, void *idp, void *parentp, void *slotp, uiPreview *ui_preview, rcti *rect);
 
 /**
  * For UI previews (i.e. #uiPreview, not #PreviewImage): Tag all previews for \a id as dirty, so
