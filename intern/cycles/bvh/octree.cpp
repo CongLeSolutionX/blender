@@ -95,7 +95,7 @@ bool Octree::should_split(std::shared_ptr<OctreeNode> &node) const
 
   /* From "Volume Rendering for Pixar's Elemental". */
   if ((node->sigma.max - node->sigma.min) * len(node->bbox.size()) < 1.442f ||
-      node->level == max_level)
+      node->depth == VOLUME_OCTREE_MAX_DEPTH)
   {
     return false;
   }
@@ -113,7 +113,7 @@ shared_ptr<OctreeInternalNode> Octree::make_internal(shared_ptr<OctreeNode> &nod
   for (int i = 0; i < 8; i++) {
     const float3 t = make_float3(i & 1, (i >> 1) & 1, (i >> 2) & 1);
     const BoundBox bbox(mix(internal->bbox.min, center, t), mix(center, internal->bbox.max, t));
-    internal->children_[i] = std::make_shared<OctreeNode>(bbox, internal->level + 1);
+    internal->children_[i] = std::make_shared<OctreeNode>(bbox, internal->depth + 1);
   }
 
   return internal;
@@ -530,8 +530,8 @@ Octree::Octree(const Scene *scene)
     }
   }
 
-  /* 2^max_level. */
-  width = 1 << max_level;
+  /* 2^max_depth. */
+  width = 1 << VOLUME_OCTREE_MAX_DEPTH;
   /* Some large number if only world volume exists. */
   world_to_index_scale_ = float(width) /
                           (root_->bbox.valid() ? root_->bbox.size() : make_float3(10000.0f));

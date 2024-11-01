@@ -31,13 +31,13 @@ struct Node;
 struct OctreeNode {
   BoundBox bbox;
   vector<Node *> objects;
-  int level;
+  int depth;
 
   /* TODO(weizhen): we need visibility for shadow, camera, and indirect. */
   Extrema<float> sigma = {0.0f, 0.0f};
 
-  OctreeNode() : bbox(BoundBox::empty), level(0) {}
-  OctreeNode(BoundBox bbox_, int level_) : bbox(bbox_), level(level_) {}
+  OctreeNode() : bbox(BoundBox::empty), depth(0) {}
+  OctreeNode(BoundBox bbox_, int depth_) : bbox(bbox_), depth(depth_) {}
   virtual ~OctreeNode() = default;
 
   bool contains_homogeneous_volume() const;
@@ -47,7 +47,7 @@ struct OctreeInternalNode : public OctreeNode {
   OctreeInternalNode(OctreeNode &node) : children_(8)
   {
     bbox = node.bbox;
-    level = node.level;
+    depth = node.depth;
     objects = std::move(node.objects);
   }
 
@@ -106,9 +106,6 @@ class Octree {
   std::map<const Geometry *, openvdb::BoolGrid::ConstPtr> vdb_map;
 #endif
 
-  /* Set the maximal resolution to be 128 to reduce traversing overhead. */
-  /* TODO(weizhen): tweak this threshold. 128 is a reference from PBRT. */
-  const int max_level = 7;
   int width;
   float3 world_to_index_scale_;
   float3 index_to_world_scale_;

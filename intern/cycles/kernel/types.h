@@ -959,6 +959,9 @@ typedef struct AttributeMap {
 #endif
 
 #define MAX_VOLUME_CLOSURE 8
+/* Set the maximal resolution to be 128 (2^7) to reduce traversing overhead. */
+/* TODO(weizhen): tweak this threshold. 128 is a reference from PBRT. */
+#define VOLUME_OCTREE_MAX_DEPTH 7
 
 /* This struct is the base class for all closures. The common members are
  * duplicated in all derived classes since we don't have C++ in the kernel
