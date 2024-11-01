@@ -16,7 +16,6 @@
  *
  * Unsupported:
  * - Intersecting between different meshes.
- * - No support for holes (cutting a hole into a single face).
  */
 
 #include <algorithm>
@@ -101,9 +100,9 @@ struct IsectTriTriPrecalc {
     tri_[1].normal = math::normal_tri(UNPACK3(tri_[1].v));
 
     for (int t : IndexRange(2)) {
-      tri_[t].tangent[0] = math ::cross(tri_[t].e_dir[0], tri_[t].normal);
-      tri_[t].tangent[1] = math ::cross(tri_[t].e_dir[1], tri_[t].normal);
-      tri_[t].tangent[2] = math ::cross(tri_[t].e_dir[2], tri_[t].normal);
+      tri_[t].tangent[0] = math::cross(tri_[t].e_dir[0], tri_[t].normal);
+      tri_[t].tangent[1] = math::cross(tri_[t].e_dir[1], tri_[t].normal);
+      tri_[t].tangent[2] = math::cross(tri_[t].e_dir[2], tri_[t].normal);
 
       float3 &tri_other_normal = tri_[int(!t)].normal;
       for (int i : IndexRange(3)) {
