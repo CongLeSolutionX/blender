@@ -2,3 +2,4 @@ Referenced by commit c6885e00d3779e2f8526410c0424b78d623ebcc9, Fix: Missing brus
 Referenced by issue #124647, UV Editing Workspace, Console warnings, Current value '3' matches no enum in 'SpaceImageEditor'
 Referenced by pull request #124762, Fix #124647: UV editing console error due to missing enum
 Referenced by issue #127259, Regression: Sculpt: Hovering with pose brush on dense mesh freezes Blender
+Referenced by issue #129655, Brush settings reset after closing Blender
