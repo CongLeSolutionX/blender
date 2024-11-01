@@ -57,11 +57,9 @@ static Vector<SculptBatch> sculpt_batches_get_ex(const Object *ob,
     paint = BKE_paint_get_active_from_context(drwctx->evil_C);
   }
 
-  /* Frustum planes to show only visible pbvh::Tree nodes. */
-  std::array<float4, 6> draw_frustum_planes;
-
   /* TODO: take into account partial redraw for clipping planes. */
-  DRW_view_frustum_planes_get(DRW_view_default_get(), draw_frustum_planes);
+  /* Frustum planes to show only visible pbvh::Tree nodes. */
+  std::array<float4, 6> draw_frustum_planes = DRW_view_frustum_planes_get(DRW_view_default_get());
   /* Transform clipping planes to object space. Transforming a plane with a
    * 4x4 matrix is done by multiplying with the transpose inverse.
    * The inverse cancels out here since we transform by inverse(obmat). */

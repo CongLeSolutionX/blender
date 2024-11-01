@@ -1292,10 +1292,10 @@ void DRW_sculpt_debug_cb(blender::bke::pbvh::Node *node, void *user_data)
 #endif
 }
 
-static void drw_sculpt_get_frustum_planes(const Object *ob, std::array<float4, 6> &planes)
+static std::array<float4, 6> drw_sculpt_get_frustum_planes(const Object *ob)
 {
   /* TODO: take into account partial redraw for clipping planes. */
-  DRW_view_frustum_planes_get(DRW_view_default_get(), planes);
+  std::array<float4, 6> planes = DRW_view_frustum_planes_get(DRW_view_default_get());
 
   /* Transform clipping planes to object space. Transforming a plane with a
    * 4x4 matrix is done by multiplying with the transpose inverse.
@@ -1305,6 +1305,7 @@ static void drw_sculpt_get_frustum_planes(const Object *ob, std::array<float4, 6
   for (const int i : blender::IndexRange(planes.size())) {
     mul_m4_v4(tmat, planes[i]);
   }
+  return planes;
 }
 
 static void drw_sculpt_generate_calls(DRWSculptCallbackData *scd)
@@ -1328,9 +1329,7 @@ static void drw_sculpt_generate_calls(DRWSculptCallbackData *scd)
   }
 
   /* Frustum planes to show only visible pbvh::Tree nodes. */
-  std::array<float4, 6> draw_frustum_planes;
-
-  drw_sculpt_get_frustum_planes(scd->ob, draw_frustum_planes);
+  const std::array<float4, 6> draw_frustum_planes = drw_sculpt_get_frustum_planes(scd->ob);
 
   /* Fast mode to show low poly multires while navigating. */
   scd->fast_mode = false;
@@ -2319,11 +2318,13 @@ void DRW_view_frustum_corners_get(const DRWView *view, BoundBox *corners)
   memcpy(corners, &view->frustum_corners, sizeof(view->frustum_corners));
 }
 
-void DRW_view_frustum_planes_get(const DRWView *view, std::array<float4, 6> &r_planes)
+std::array<float4, 6> DRW_view_frustum_planes_get(const DRWView *view)
 {
+  std::array<float4, 6> planes;
   const blender::Span<float4> view_planes(reinterpret_cast<const float4 *>(&view->frustum_planes),
                                           6);
-  std::copy(view_planes.begin(), view_planes.end(), r_planes.begin());
+  std::copy(view_planes.begin(), view_planes.end(), planes.begin());
+  return planes;
 }
 
 bool DRW_view_is_persp_get(const DRWView *view)
