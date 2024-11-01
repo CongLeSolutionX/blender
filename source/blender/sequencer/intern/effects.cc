@@ -3039,7 +3039,7 @@ static rcti draw_text_outline(const SeqRenderData *context,
 }
 
 static inline void fill_ellipse_alpha_under(
-  const ImBuf *ibuf, const float col[4], int x1, int y1, int x2, int y2, float origin_x, float origin_y, float radius)
+    const ImBuf *ibuf, const float col[4], int x1, int y1, int x2, int y2, float origin_x, float origin_y, float radius)
 {
   float curve_pow = 2.1;
   float4 color;
@@ -3048,7 +3048,6 @@ static inline void fill_ellipse_alpha_under(
     uchar *dst = ibuf->byte_buffer.data + (size_t(ibuf->x) * y + x1) * 4;
     for (int x = x1; x < x2; x++) {
       color = col;
-      // color = float4{0.5, 0.5, 0.3, col[3]};
 
       float r = powf(powf(abs(x-origin_x), curve_pow) + powf(abs(y-origin_y), curve_pow), 1/curve_pow);
       color.w = std::clamp(radius - r, 0.0f, color.w);
@@ -3066,7 +3065,7 @@ static inline void fill_ellipse_alpha_under(
 /* Similar to #IMB_rectfill_area but blends the given color under the
  * existing image. Also only works on byte buffers. */
 static void fill_rect_alpha_under(
-  const ImBuf *ibuf, const float col[4], int x1, int y1, int x2, int y2, float corner_radius)
+    const ImBuf *ibuf, const float col[4], int x1, int y1, int x2, int y2, float corner_radius)
 {
   const int width = ibuf->x;
   const int height = ibuf->y;
