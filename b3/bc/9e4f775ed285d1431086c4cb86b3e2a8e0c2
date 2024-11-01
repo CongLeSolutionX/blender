@@ -1,2 +1,3 @@
 Referenced by issue #39057, VSE wipe (with transparent 2nd input ) broken in RC1 !
 Referenced by issue #38598, RGBA images don't blend well in VSE with Cross Effect Strip
+Referenced by issue #128954, Effect strip does not blend with its children
