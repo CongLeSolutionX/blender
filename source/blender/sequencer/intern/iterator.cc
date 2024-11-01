@@ -137,7 +137,7 @@ static void collection_filter_channel_up_to_incl(VectorSet<Sequence *> &strips, 
  * Order of applying these conditions is important. */
 static bool must_render_strip(const VectorSet<Sequence *> &strips, Sequence *strip)
 {
-  bool seq_have_effect_in_stack = false;
+  bool seq_have_multi_input_effect_in_stack = false;
   for (Sequence *strip_iter : strips) {
     /* Strips is below another strip with replace blending are not rendered. */
     if (strip_iter->blend_mode == SEQ_BLEND_REPLACE && strip->machine < strip_iter->machine) {
@@ -151,8 +151,10 @@ static bool must_render_strip(const VectorSet<Sequence *> &strips, Sequence *str
       if (strip->machine >= strip_iter->machine) {
         return true;
       }
-      /* Mark that this strip has effect in stack, that is above the strip. */
-      seq_have_effect_in_stack = true;
+
+      if (SEQ_effect_get_num_inputs(strip_iter->type) == 2) {
+        seq_have_multi_input_effect_in_stack = true;
+      }
     }
   }
 
@@ -161,8 +163,9 @@ static bool must_render_strip(const VectorSet<Sequence *> &strips, Sequence *str
     return true;
   }
 
-  /* If strip has effects in stack, and all effects are above this strip, it is not rendered. */
-  if (seq_have_effect_in_stack) {
+  /* If strip has cross effects in stack, and all effects are above this strip, it is not rendered,
+   * see #38598. */
+  if (seq_have_multi_input_effect_in_stack) {
     return false;
   }
 
