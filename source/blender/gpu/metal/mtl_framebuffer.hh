@@ -22,7 +22,7 @@ namespace blender::gpu {
 class MTLContext;
 
 struct MTLAttachment {
-  bool used;
+  bool used = false;
   gpu::MTLTexture *texture;
   union {
     float color[4];
@@ -30,11 +30,11 @@ struct MTLAttachment {
     uint stencil;
   } clear_value;
 
-  eGPULoadOp load_action;
-  eGPUStoreOp store_action;
-  uint mip;
-  uint slice;
-  uint depth_plane;
+  eGPULoadOp load_action = GPU_LOADACTION_CLEAR;
+  eGPUStoreOp store_action = GPU_STOREACTION_STORE;
+  uint mip = 0;
+  uint slice = 0;
+  uint depth_plane = 0;
 
   /* If Array Length is larger than zero, use multilayered rendering. */
   uint render_target_array_length;

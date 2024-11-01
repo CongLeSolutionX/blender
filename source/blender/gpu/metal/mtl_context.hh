@@ -672,6 +672,13 @@ class MTLCommandBufferManager {
     return num_active_cmd_bufs;
   }
 
+  void wait_until_active_command_buffers_complete()
+  {
+    while (get_active_command_buffer_count()) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+  }
+
  private:
   /* Begin new command buffer. */
   id<MTLCommandBuffer> ensure_begin();
