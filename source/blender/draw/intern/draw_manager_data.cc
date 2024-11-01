@@ -13,6 +13,7 @@
 
 #include "BKE_attribute.hh"
 #include "BKE_curve.hh"
+#include "BKE_customdata.hh"
 #include "BKE_duplilist.hh"
 #include "BKE_global.hh"
 #include "BKE_image.h"
@@ -1273,31 +1274,21 @@ static void draw_pbvh_nodes(const Object &object,
   });
 }
 
-void DRW_sculpt_debug_cb(blender::bke::pbvh::Node *node,
-                         void *user_data,
-                         const float bmin[3],
-                         const float bmax[3],
-                         PBVHNodeFlags flag)
+void DRW_sculpt_debug_cb(blender::bke::pbvh::Node *node, void *user_data)
 {
   int *debug_node_nr = (int *)user_data;
   BoundBox bb;
-  BKE_boundbox_init_from_minmax(&bb, bmin, bmax);
+  BKE_boundbox_init_from_minmax(&bb, node->bounds_.min, node->bounds_.max);
 
 #if 0 /* Nodes hierarchy. */
-  if (flag & PBVH_Leaf) {
     DRW_debug_bbox(&bb, blender::float4{0.0f, 1.0f, 0.0f, 1.0f});
-  }
-  else {
-    DRW_debug_bbox(&bb, blender::float4{0.5f, 0.5f, 0.5f, 0.6f});
-  }
-#else /* Color coded leaf bounds. */
-  if (flag & (PBVH_Leaf | PBVH_TexLeaf)) {
-    DRW_debug_bbox(&bb, SCULPT_DEBUG_COLOR((*debug_node_nr)++));
-    int color = (*debug_node_nr)++;
-    color += BKE_pbvh_debug_draw_gen_get(*node);
 
-    DRW_debug_bbox(&bb, SCULPT_DEBUG_COLOR(color));
-  }
+#else /* Color coded leaf bounds. */
+  DRW_debug_bbox(&bb, SCULPT_DEBUG_COLOR((*debug_node_nr)++));
+  int color = (*debug_node_nr)++;
+  color += BKE_pbvh_debug_draw_gen_get(*node);
+
+  DRW_debug_bbox(&bb, SCULPT_DEBUG_COLOR(color));
 #endif
 }
 
@@ -1330,7 +1321,6 @@ static void drw_sculpt_generate_calls(DRWSculptCallbackData *scd)
 
   const DRWContextState *drwctx = DRW_context_state_get();
   RegionView3D *rv3d = drwctx->rv3d;
-  const bool navigating = rv3d && (rv3d->rflag & RV3D_NAVIGATING);
 
   Paint *paint = nullptr;
   if (drwctx->evil_C != nullptr) {
@@ -1338,27 +1328,8 @@ static void drw_sculpt_generate_calls(DRWSculptCallbackData *scd)
   }
 
   /* Frustum planes to show only visible pbvh::Tree nodes. */
-  float update_planes[6][4];
   float draw_planes[6][4];
-  PBVHFrustumPlanes update_frustum;
   PBVHFrustumPlanes draw_frustum;
-
-  if (paint && (paint->flags & PAINT_SCULPT_DELAY_UPDATES)) {
-    update_frustum.planes = update_planes;
-    update_frustum.num_planes = 6;
-    bke::pbvh::get_frustum_planes(*pbvh, &update_frustum);
-    if (!navigating) {
-      drw_sculpt_get_frustum_planes(scd->ob, update_planes);
-      update_frustum.planes = update_planes;
-      update_frustum.num_planes = 6;
-      bke::pbvh::set_frustum_planes(*pbvh, &update_frustum);
-    }
-  }
-  else {
-    drw_sculpt_get_frustum_planes(scd->ob, update_planes);
-    update_frustum.planes = update_planes;
-    update_frustum.num_planes = 6;
-  }
 
   drw_sculpt_get_frustum_planes(scd->ob, draw_planes);
   draw_frustum.planes = draw_planes;
@@ -1414,12 +1385,7 @@ static void drw_sculpt_generate_calls(DRWSculptCallbackData *scd)
   if (SCULPT_DEBUG_BUFFERS) {
     int debug_node_nr = 0;
     DRW_debug_modelmat(object.object_to_world().ptr());
-    BKE_pbvh_draw_debug_cb(
-        *pbvh,
-        (void (*)(
-            bke::pbvh::Node *n, void *d, const float min[3], const float max[3], PBVHNodeFlags f))
-            DRW_sculpt_debug_cb,
-        &debug_node_nr);
+    BKE_pbvh_draw_debug_cb(*pbvh, DRW_sculpt_debug_cb, &debug_node_nr);
   }
 }
 
