@@ -240,10 +240,7 @@ static int hipewHipInit(void) {
 #else
   /* ROCm 6 changes paths from /opt/rocm/hip/lib to /opt/rocm/lib, so
    * search for libraries there. It still includes .so.5. */
-  const char *hip_paths[] = {"libamdhip64.so.5",
-                             "/opt/rocm/lib/libamdhip64.so.5",
-                             "/opt/rocm/hip/lib/libamdhip64.so.5",
-                             "libamdhip64.so",
+  const char *hip_paths[] = {"libamdhip64.so",
                              "/opt/rocm/lib/libamdhip64.so",
                              "/opt/rocm/hip/lib/libamdhip64.so", NULL};
 #endif
