@@ -85,6 +85,7 @@ void PlanarProbeModule::set_view(const draw::View &main_view, int2 main_view_ext
           "planar.radiance_tx.view", radiance_tx_, GPU_R11F_G11F_B10F, 0, 1, i, 0, false, false));
     }
   }
+  radiance_tx_.clear(float4(0.0f, 0.0f, 0.0f, 1.0f));
   depth_tx_.ensure_2d_array(GPU_DEPTH_COMPONENT32F, extent, layer_count, usage);
   depth_tx_.ensure_layer_views();
 
