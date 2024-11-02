@@ -1758,6 +1758,7 @@ static int rna_RenderSettings_engine_get(PointerRNA *ptr)
 static void rna_RenderSettings_engine_update(Main *bmain, Scene * /*unused*/, PointerRNA * /*ptr*/)
 {
   if (G.is_rendering || G.is_break) {
+    WM_report(RPT_ERROR, "Can't switch render engine during render.");
     return;
   }
   ED_render_engine_changed(bmain, true);
