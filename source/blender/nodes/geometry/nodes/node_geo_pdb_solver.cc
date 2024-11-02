@@ -32,6 +32,27 @@ static void solve_floor_collision(MutableSpan<float3> positions, const float flo
   }
 }
 
+static void solve_floor_collision_with_friction(MutableSpan<float3> positions,
+                                                const Span<float3> start_positions,
+                                                const float friction_factor,
+                                                const float floor_height = 0.0f)
+{
+  for (const int pos_i : positions.index_range()) {
+    const float3 unconstrained_pos = positions[pos_i];
+    if (unconstrained_pos.z >= floor_height) {
+      continue;
+    }
+
+    const float3 constrainted_pos{unconstrained_pos.x, unconstrained_pos.y, floor_height};
+    positions[pos_i] = constrainted_pos;
+
+    const float3 velocity = constrainted_pos - start_positions[pos_i];
+    const float3 contact_normal{0, 0, 1.0f};
+    const float3 friction_tangent = velocity - velocity * contact_normal;
+    positions[pos_i] -= friction_tangent * friction_factor;
+  }
+}
+
 static void solve_length_constrainted(float3 &pos_a,
                                       float3 &pos_b,
                                       const float inv_weight_a,
@@ -45,6 +66,7 @@ static void solve_length_constrainted(float3 &pos_a,
   if (math::is_zero(gradient_a)) {
     gradient_a = float3(0, 0, 1);
   }
+  gradient_a = math::normalize(gradient_a);
   const float3 gradient_b = -gradient_a;
   const float3 delta_a = gradient_a * error * inv_weight_a / inv_weight_sum;
   const float3 delta_b = gradient_b * error * inv_weight_b / inv_weight_sum;
@@ -89,10 +111,12 @@ static void solve_pinned(MutableSpan<float3> positions,
   }
 }
 
-static void solve_point_collisions(MutableSpan<float3> positions, const float radius)
+static void solve_point_collisions(MutableSpan<float3> positions,
+                                   const float radius,
+                                   const Span<float3> old_positions)
 {
-  const float cell_size = std::max(radius, 0.00001f);
-  const float inv_cell_size = 1.0f / radius;
+  const float cell_size = std::max(radius * 2, 0.00001f);
+  const float inv_cell_size = 1.0f / cell_size;
   const int hash_table_size = std::max(1, power_of_2_max_i(positions.size()));
   const uint64_t mask = hash_table_size - 1;
   Array<Vector<int>> hash_table(hash_table_size);
@@ -121,7 +145,7 @@ static void solve_point_collisions(MutableSpan<float3> positions, const float ra
     }
 
     for (const int other_i : possible_colliders) {
-      if (other_i == pos_i) {
+      if (other_i <= pos_i) {
         continue;
       }
       float3 &other_pos = positions[other_i];
@@ -175,13 +199,18 @@ static void node_geo_exec(GeoNodeExecParams params)
   }
   if (PointCloud *pointcloud = geometry.get_pointcloud_for_write()) {
     MutableSpan<float3> positions = pointcloud->positions_for_write();
+    VArraySpan<float3> start_positions = *pointcloud->attributes().lookup_or_default<float3>(
+        "start_position", AttrDomain::Point, float3(0, 0, 0));
     const VArraySpan<float> radii = *pointcloud->attributes().lookup_or_default<float>(
         "radius", AttrDomain::Point, 0.05f);
     const float uniform_radius = pointcloud->totpoint > 0 ? radii[0] : 0.0f;
 
+    const float floor_friction = 0.1;
+
     for ([[maybe_unused]] const int substep_i : IndexRange(substeps)) {
-      solve_floor_collision(positions, uniform_radius);
-      solve_point_collisions(positions, uniform_radius);
+      solve_floor_collision_with_friction(
+          positions, start_positions, floor_friction, uniform_radius);
+      solve_point_collisions(positions, uniform_radius, start_positions);
     }
 
     pointcloud->tag_positions_changed();
