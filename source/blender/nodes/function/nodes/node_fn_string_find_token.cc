@@ -5,7 +5,7 @@
 #include "BLI_string_utf8.h"
 
 #include "node_function_util.hh"
-#include <codecvt>
+#include <charconv>
 #include <iomanip>
 
 namespace blender::nodes::node_fn_string_find_token_cc {
@@ -18,7 +18,65 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Int>("Next Find").min(0).default_value(1);
   b.add_output<decl::Int>("Token Position");
 }
+std::u32string u32_from_utf8(const std::string_view &utf8)
+{
+  std::u32string u32;
+  u32.reserve(utf8.size());
 
+  const char *from = utf8.data();
+  const char *from_end = from + utf8.size();
+
+  while (from < from_end) {
+    unsigned char lead = static_cast<unsigned char>(*from);
+    char32_t code_point = 0;
+
+    if (lead <= 0x7F) {
+      code_point = lead;
+      from++;
+    }
+    else if (lead <= 0xDF && from + 1 < from_end) {
+      unsigned char second = static_cast<unsigned char>(from[1]);
+      if ((second & 0xC0) == 0x80) {
+        code_point = ((lead & 0x1F) << 6) | (second & 0x3F);
+        from += 2;
+      }
+      else {
+        throw std::invalid_argument("Invalid UTF-8 sequence");
+      }
+    }
+    else if (lead <= 0xEF && from + 2 < from_end) {
+      unsigned char second = static_cast<unsigned char>(from[1]);
+      unsigned char third = static_cast<unsigned char>(from[2]);
+      if ((second & 0xC0) == 0x80 && (third & 0xC0) == 0x80) {
+        code_point = ((lead & 0x0F) << 12) | ((second & 0x3F) << 6) | (third & 0x3F);
+        from += 3;
+      }
+      else {
+        throw std::invalid_argument("Invalid UTF-8 sequence");
+      }
+    }
+    else if (lead <= 0xF7 && from + 3 < from_end) {
+      unsigned char second = static_cast<unsigned char>(from[1]);
+      unsigned char third = static_cast<unsigned char>(from[2]);
+      unsigned char fourth = static_cast<unsigned char>(from[3]);
+      if ((second & 0xC0) == 0x80 && (third & 0xC0) == 0x80 && (fourth & 0xC0) == 0x80) {
+        code_point = ((lead & 0x07) << 18) | ((second & 0x3F) << 12) | ((third & 0x3F) << 6) |
+                     (fourth & 0x3F);
+        from += 4;
+      }
+      else {
+        throw std::invalid_argument("Invalid UTF-8 sequence");
+      }
+    }
+    else {
+      throw std::invalid_argument("Invalid UTF-8 sequence");
+    }
+
+    u32.push_back(code_point);
+  }
+
+  return u32;
+}
 static int string_find_token(const std::string_view a,
                              const std::string_view b,
                              const int *start,
@@ -30,9 +88,9 @@ static int string_find_token(const std::string_view a,
   if (*next == 0) {
     return 0;
   }
-  std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t> converter;
-  std::u32string a_u32 = converter.from_bytes(a.data(), a.data() + a.size());
-  std::u32string b_u32 = converter.from_bytes(b.data(), b.data() + b.size());
+
+  std::u32string a_u32 = u32_from_utf8(a);
+  std::u32string b_u32 = u32_from_utf8(b);
 
   size_t pos = *start;
   int count = 0;
