@@ -756,7 +756,7 @@ void VolumeManager::device_update(Device *device,
   Octree octree(scene);
 
   if (!octree.is_empty()) {
-    octree.build(device, progress);
+    octree.build(device, progress, scene);
 
     KernelOctreeNode *knodes = dscene->volume_tree_nodes.alloc(octree.get_num_nodes());
     octree.flatten(knodes);

@@ -39,7 +39,7 @@ class Background : public Node {
 
   void tag_update(Scene *scene);
 
-  Shader *get_shader(const Scene *scene);
+  Shader *get_shader(const Scene *scene) const;
 };
 
 CCL_NAMESPACE_END

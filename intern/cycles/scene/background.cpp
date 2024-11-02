@@ -130,14 +130,13 @@ void Background::tag_update(Scene *scene)
     /* Tag as modified to update the KernelBackground visibility information.
      * We only tag the use_shader socket as modified as it is related to the shader
      * and to avoid doing unnecessary updates anywhere else. */
-    /* TODO(weizhen): does this `shader` ever get assigned? Or is it always default? */
-    shader = bg_shader;
     tag_use_shader_modified();
   }
 }
 
-Shader *Background::get_shader(const Scene *scene)
+Shader *Background::get_shader(const Scene *scene) const
 {
+  /* TODO(weizhen): check if and why `shader` is always nullptr. */
   return (use_shader) ? ((shader) ? shader : scene->default_background) : scene->default_empty;
 }
 

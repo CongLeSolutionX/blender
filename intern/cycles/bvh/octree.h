@@ -40,7 +40,7 @@ struct OctreeNode {
   OctreeNode(BoundBox bbox_, int depth_) : bbox(bbox_), depth(depth_) {}
   virtual ~OctreeNode() = default;
 
-  bool contains_homogeneous_volume() const;
+  bool contains_homogeneous_volume(const Scene *scene) const;
 };
 
 struct OctreeInternalNode : public OctreeNode {
@@ -58,7 +58,7 @@ class Octree {
   friend struct OctreeNode;
 
  public:
-  void build(Device *device, Progress &progress);
+  void build(Device *device, Progress &progress, Scene *scene);
   Octree(const Scene *scene);
   ~Octree();
 
@@ -84,17 +84,17 @@ class Octree {
 
  private:
   std::shared_ptr<OctreeInternalNode> make_internal(std::shared_ptr<OctreeNode> &node);
-  void recursive_build_(std::shared_ptr<OctreeNode> &node);
+  void recursive_build_(const Scene *scene, std::shared_ptr<OctreeNode> &node);
   /* Breadth-first flatten, so that children are stored in consecutive indices. */
   void flatten_(KernelOctreeNode *knodes,
                 KernelOctreeNode &knode,
                 std::shared_ptr<OctreeNode> &node,
                 int &node_index);
-  void evaluate_volume_density_(Device *device, Progress &progress);
+  void evaluate_volume_density_(Device *device, Progress &progress, Scene *scene);
   Extrema<float> get_extrema(const vector<Extrema<float>> &values,
                              const int3 index_min,
                              const int3 index_max) const;
-  bool should_split(std::shared_ptr<OctreeNode> &node) const;
+  bool should_split(const Scene *scene, std::shared_ptr<OctreeNode> &node) const;
 
   /* Root node. */
   std::shared_ptr<OctreeNode> root_;

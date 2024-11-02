@@ -35,7 +35,7 @@ __forceinline int Octree::flatten_index(int x, int y, int z) const
   return x + width * (y + z * width);
 }
 
-bool OctreeNode::contains_homogeneous_volume() const
+bool OctreeNode::contains_homogeneous_volume(const Scene *scene) const
 {
   if (objects.size() > 1) {
     /* If node contains multiple objects, do not consider it as homogeneous. */
@@ -48,7 +48,7 @@ bool OctreeNode::contains_homogeneous_volume() const
   }
 
   const Background *background = dynamic_cast<const Background *>(objects[0]);
-  return !background->get_shader()->has_volume_spatial_varying;
+  return !background->get_shader(scene)->has_volume_spatial_varying;
 }
 
 Extrema<float> Octree::get_extrema(const vector<Extrema<float>> &values,
@@ -75,7 +75,7 @@ Extrema<float> Octree::get_extrema(const vector<Extrema<float>> &values,
   return parallel_reduce(range, identity, reduction_func, join_func);
 }
 
-bool Octree::should_split(std::shared_ptr<OctreeNode> &node) const
+bool Octree::should_split(const Scene *scene, std::shared_ptr<OctreeNode> &node) const
 {
   if (node->objects.empty() || !node->bbox.valid()) {
     /* If no local volume exists, do not split. */
@@ -88,7 +88,8 @@ bool Octree::should_split(std::shared_ptr<OctreeNode> &node) const
 
   /* Do not split homogeneous volume. Volume stack already skips the zero-density regions. */
   node->sigma.max = sigma_extrema.max;
-  node->sigma.min = node->contains_homogeneous_volume() ? sigma_extrema.max : sigma_extrema.min;
+  node->sigma.min = node->contains_homogeneous_volume(scene) ? sigma_extrema.max :
+                                                               sigma_extrema.min;
 
   /* TODO(weizhen): force subdivision of aggregate nodes that are larger than the volume contained,
    * regardless of the volume's majorant extinction. */
@@ -119,9 +120,9 @@ shared_ptr<OctreeInternalNode> Octree::make_internal(shared_ptr<OctreeNode> &nod
   return internal;
 }
 
-void Octree::recursive_build_(shared_ptr<OctreeNode> &octree_node)
+void Octree::recursive_build_(const Scene *scene, shared_ptr<OctreeNode> &octree_node)
 {
-  if (!should_split(octree_node)) {
+  if (!should_split(scene, octree_node)) {
     return;
   }
 
@@ -139,7 +140,7 @@ void Octree::recursive_build_(shared_ptr<OctreeNode> &octree_node)
       }
     }
     /* TODO(weizhen): check the performance. */
-    task_pool.push([&] { recursive_build_(child); });
+    task_pool.push([&] { recursive_build_(scene, child); });
   }
 
   octree_node = internal;
@@ -254,6 +255,7 @@ openvdb::BoolGrid::ConstPtr Octree::get_vdb(const Geometry *geom) const
 
 /* Fill in coordinates for shading the volume density. */
 static void fill_shader_input(device_vector<KernelShaderEvalInput> &d_input,
+                              const Scene *scene,
                               const Octree *octree,
                               const Node *node,
                               const int3 &index_min,
@@ -279,7 +281,7 @@ static void fill_shader_input(device_vector<KernelShaderEvalInput> &d_input,
   else {
     /* World volume. */
     const Background *background = dynamic_cast<const Background *>(node);
-    shader_id = background->get_shader()->id;
+    shader_id = background->get_shader(scene)->id;
   }
 
   /* Get object boundary VDB. */
@@ -375,7 +377,7 @@ static void read_shader_output(const device_vector<float> &d_output,
   });
 }
 
-void Octree::evaluate_volume_density_(Device *device, Progress &progress)
+void Octree::evaluate_volume_density_(Device *device, Progress &progress, Scene *scene)
 {
   /* Initialize density field. */
   const int size = width * width * width;
@@ -398,7 +400,7 @@ void Octree::evaluate_volume_density_(Device *device, Progress &progress)
         size * 2,
         num_channels,
         [&](device_vector<KernelShaderEvalInput> &d_input) {
-          fill_shader_input(d_input, this, object, index_min, index_range);
+          fill_shader_input(d_input, scene, this, object, index_min, index_range);
           return size;
         },
         [&](device_vector<float> &d_output) {
@@ -444,7 +446,7 @@ void Octree::evaluate_volume_density_(Device *device, Progress &progress)
       return;
     }
     const Background *background = static_cast<const Background *>(root_->objects[0]);
-    const Shader *shader = background->get_shader();
+    const Shader *shader = background->get_shader(scene);
     if (shader->has_volume_spatial_varying) {
       /* For spatial varying volume, the density inside the octree bound box are not representative
        * enough for the whole world, so we evaluate density again in a larger scale. */
@@ -473,7 +475,7 @@ void Octree::evaluate_volume_density_(Device *device, Progress &progress)
   }
 }
 
-void Octree::build(Device *device, Progress &progress)
+void Octree::build(Device *device, Progress &progress, Scene *scene)
 {
   // if (!root_) {
   //   return;
@@ -482,7 +484,7 @@ void Octree::build(Device *device, Progress &progress)
   progress.set_substatus("Evaluate volume density");
   double start_time = time_dt();
 
-  evaluate_volume_density_(device, progress);
+  evaluate_volume_density_(device, progress, scene);
 
   std::cout << "Volume density evaluated in " << time_dt() - start_time << " seconds."
             << std::endl;
@@ -491,7 +493,7 @@ void Octree::build(Device *device, Progress &progress)
   progress.set_substatus("Building Octree for volumes");
   start_time = time_dt();
 
-  recursive_build_(root_);
+  recursive_build_(scene, root_);
 
   task_pool.wait_work();
 
