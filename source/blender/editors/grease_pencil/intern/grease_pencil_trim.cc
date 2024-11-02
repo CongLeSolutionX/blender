@@ -88,10 +88,14 @@ static bool execute_trim_on_drawing(const int layer_index,
   /* Collect curves and curve points inside the lasso area. */
   Vector<int> selected_curves;
   Vector<Vector<int>> selected_points_in_curves;
-  for (const int src_curve : src.curves_range()) {
+
+  IndexMaskMemory memory;
+  IndexMask editable_strokes = blender::ed::greasepencil::retrieve_editable_strokes(
+      const_cast<Object &>(obact), drawing, layer_index, memory);
+  editable_strokes.foreach_index([&](const int src_curve) {
     /* To speed things up: do a bounding box check on the curve and the lasso area. */
     if (!BLI_rcti_isect(&bbox_lasso, &screen_space_bbox[src_curve], nullptr)) {
-      continue;
+      return;
     }
 
     /* Look for curve points inside the lasso area. */
@@ -113,9 +117,8 @@ static bool execute_trim_on_drawing(const int layer_index,
     if (!selected_points.is_empty()) {
       selected_points_in_curves.append(std::move(selected_points));
     }
-  }
+  });
 
-  IndexMaskMemory memory;
   const IndexMask curve_selection = IndexMask::from_indices(selected_curves.as_span(), memory);
   /* Abort when the lasso area is empty. */
   if (curve_selection.is_empty()) {
