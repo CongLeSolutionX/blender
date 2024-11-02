@@ -303,29 +303,6 @@ bool ED_gpencil_stroke_can_use_direct(const ScrArea *area, const bGPDstroke *gps
   return true;
 }
 
-bool ED_gpencil_stroke_can_use(const bContext *C, const bGPDstroke *gps)
-{
-  ScrArea *area = CTX_wm_area(C);
-  return ED_gpencil_stroke_can_use_direct(area, gps);
-}
-
-bool ED_gpencil_stroke_material_editable(Object *ob, const bGPDlayer *gpl, const bGPDstroke *gps)
-{
-  /* check if the color is editable */
-  MaterialGPencilStyle *gp_style = BKE_gpencil_material_settings(ob, gps->mat_nr + 1);
-
-  if (gp_style != nullptr) {
-    if (gp_style->flag & GP_MATERIAL_HIDE) {
-      return false;
-    }
-    if (((gpl->flag & GP_LAYER_UNLOCK_COLOR) == 0) && (gp_style->flag & GP_MATERIAL_LOCKED)) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
 /* ******************************************************** */
 /* Space Conversion */
 
