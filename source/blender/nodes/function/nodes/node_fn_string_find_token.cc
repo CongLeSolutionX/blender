@@ -4,6 +4,8 @@
 
 #include "BLI_string_utf8.h"
 
+#include<iomanip>
+
 #include "node_function_util.hh"
 
 namespace blender::nodes::node_fn_string_find_token_cc {
@@ -19,11 +21,11 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_output<decl::Int>("Token Position");
 }
 static int string_find_token(const StringRef s,
-                                const StringRef k,
+                                const StringRef t,
                                 const int *start,
                                 const int *next)
 {
-  if (s.is_empty() || k.is_empty() || *start < 0 || *start > s.size()) {
+  if (s.is_empty() || t.is_empty() || *start < 0 || *start > s.size()) {
     return -1;
   }
   if (*next == 0) {
@@ -31,21 +33,21 @@ static int string_find_token(const StringRef s,
   }
   int pos = *start;
   for (int i = 0; i < *next; ++i) {
-    pos = s.find(k, pos);
+    pos = s.find(t, pos);
     if (pos == std::string::npos) {
       return -1;
     }
-    pos += k.size();
+    pos += t.size();
   }
-  return pos - k.size();
+  return pos - t.size();
 }
 
 static void node_build_multi_function(NodeMultiFunctionBuilder &builder)
 {
   static auto find_fn = mf::build::SI4_SO<std::string, std::string, int, int, int>(
       "String Find Token",
-      [](const StringRef s, const StringRef k, const int &start, const int &next) {
-        return string_find_token(s, k, &start, &next);
+      [](const StringRef s, const StringRef t, const int &start, const int &next) {
+        return string_find_token(s, t, &start, &next);
       }); 
 
   builder.set_matching_fn(&find_fn);
