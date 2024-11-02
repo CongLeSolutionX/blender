@@ -1124,6 +1124,13 @@ template<typename T> struct Interval {
   {
     return value >= min && value <= max;
   }
+
+  void print(ccl_private const char *label)
+  {
+#ifdef __KERNEL_PRINTF__
+    printf("%s: [%.8f, %.8f]\n", label, double(min), double(max));
+#endif
+  }
 };
 
 /* Computes the intersection of two intervals. */

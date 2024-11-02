@@ -1668,19 +1668,13 @@ struct KernelBoundingBox {
   ccl_device_inline_method void print() const
   {
 #ifdef __KERNEL_PRINTF__
-    const float3 center_ = center();
-    const float3 size_ = size() * 0.5f;
-    printf(
-        "bpy.ops.mesh.primitive_cube_add(location=(%.8f, %.8f, %.8f), scale=(%.8f, %.8f, %.8f))\n",
-        double(center_.x),
-        double(center_.y),
-        double(center_.z),
-        double(size_.x),
-        double(size_.y),
-        double(size_.z));
-    printf(
-        "bpy.ops.object.mode_set(mode='EDIT')\nbpy.ops.mesh.delete(type='ONLY_FACE')\nbpy.ops."
-        "object.mode_set(mode='OBJECT')\n\n");
+    printf("bbox min = (%.8f, %.8f, %.8f) max (%.8f, %.8f, %.8f)\n",
+           double(min.x),
+           double(min.y),
+           double(min.z),
+           double(max.x),
+           double(max.y),
+           double(max.z));
 #endif
   }
 };
