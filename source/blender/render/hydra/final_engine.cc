@@ -7,6 +7,7 @@
 
 #include <pxr/imaging/hd/light.h>
 #include <pxr/imaging/hd/renderBuffer.h>
+#include <pxr/imaging/hd/tokens.h>
 
 #include "DNA_scene_types.h"
 
@@ -22,6 +23,13 @@
 #include "RE_engine.h"
 
 namespace blender::render::hydra {
+
+FinalEngine::FinalEngine(RenderEngine *bl_engine, const std::string &render_delegate_name)
+    : Engine(bl_engine, render_delegate_name)
+{
+  render_delegate_->SetRenderSetting(pxr::HdRenderSettingsTokens->enableInteractive,
+                                     pxr::VtValue(false));
+}
 
 void FinalEngine::render()
 {

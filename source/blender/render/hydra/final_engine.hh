@@ -15,6 +15,8 @@ class FinalEngine : public Engine {
  public:
   using Engine::Engine;
 
+  FinalEngine(RenderEngine *bl_engine, const std::string &render_delegate_name);
+
   void render() override;
   void set_render_setting(const std::string &key, const pxr::VtValue &val) override;
 
