@@ -43,6 +43,18 @@ void vector_print_stats(const char *name,
                         int64_t memorySize);
 }
 
+/**
+ * This is used in #Vector::from_raw and #Vector::release to transfer ownership of the underlying
+ * data-array into and out of the #Vector. Note that this struct does not do any memory management.
+ */
+template<typename T, typename Allocator> struct VectorData {
+  T *begin = nullptr;
+  T *end = nullptr;
+  T *capacity_end = nullptr;
+
+  BLI_NO_UNIQUE_ADDRESS Allocator allocator;
+};
+
 template<
     /**
      * Type of the values stored in this vector. It has to be movable.
@@ -258,6 +270,28 @@ class Vector {
     other.capacity_end_ = other.begin_ + OtherInlineBufferCapacity;
     UPDATE_VECTOR_SIZE(this);
     UPDATE_VECTOR_SIZE(&other);
+  }
+
+  /**
+   * Initializes the #Vector from an existing buffer. The #Vector takes ownership of the buffer.
+   * The caller is responsible to make sure that the buffer has been allocated with the same
+   * allocator that the #Vector will use to deallocate it.
+   */
+  Vector(const VectorData<T, Allocator> &data)
+  {
+    BLI_assert(data.begin <= data.end);
+    BLI_assert(data.end <= data.capacity_end);
+    Vector vec;
+    /* Don't use the passed in buffer if it is null. Use the inline-buffer instead which is already
+     * initialized by the constructor call above. */
+    if (data.begin != nullptr) {
+      /* Take ownership of the array. */
+      vec.begin_ = data.begin;
+      vec.end_ = data.end;
+      vec.capacity_end_ = data.capacity_end;
+      UPDATE_VECTOR_SIZE(&vec);
+    }
+    return vec;
   }
 
   ~Vector()
@@ -959,6 +993,54 @@ class Vector {
   }
 
   /**
+   * Release the underlying memory buffer from the #Vector. The caller is responsible for freeing
+   * the pointer if it is non-null.
+   *
+   * If the values were stored in the inline-buffer, the values are copied to a newly allocated
+   * array first. The caller does not have to any special handling in this case.
+   *
+   * The #Vector will be empty afterwards.
+   */
+  VectorData<T, Allocator> release()
+  {
+    if (this->is_inline()) {
+      if (this->is_empty()) {
+        /* No need to make an allocation that does not contain any data. */
+        return {};
+      }
+      /* Make an new allocation, because it's not possible to transfer ownership of the inline
+       * buffer to the caller. */
+      const int64_t size = this->size();
+      T *data = static_cast<T *>(
+          allocator_.allocate(size_t(size) * sizeof(T), alignof(T), __func__));
+      try {
+        uninitialized_relocate_n(begin_, size, data);
+      }
+      catch (...) {
+        allocator_.deallocate(data);
+        throw;
+      }
+      begin_ = data;
+      end_ = begin_ + size;
+      capacity_end_ = end_;
+    }
+
+    VectorData<T, Allocator> data;
+    data.begin = begin_;
+    data.end = end_;
+    data.capacity_end = capacity_end_;
+    data.allocator = allocator_;
+
+    /* Reset #Vector to use empty inline buffer again. */
+    begin_ = inline_buffer_;
+    end_ = begin_;
+    capacity_end_ = begin_ + InlineBufferCapacity;
+    UPDATE_VECTOR_SIZE(this);
+
+    return data;
+  }
+
+  /**
    * Print some debug information about the vector.
    */
   void print_stats(const char *name) const
@@ -967,12 +1049,12 @@ class Vector {
         name, this, this->size(), capacity_end_ - begin_, InlineBufferCapacity, sizeof(*this));
   }
 
- private:
   bool is_inline() const
   {
     return begin_ == inline_buffer_;
   }
 
+ private:
   void ensure_space_for_one()
   {
     if (UNLIKELY(end_ >= capacity_end_)) {
