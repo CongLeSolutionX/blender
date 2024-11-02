@@ -1890,6 +1890,21 @@ void BKE_grease_pencil_nomain_to_grease_pencil(GreasePencil *grease_pencil_src,
   BKE_id_free(nullptr, grease_pencil_src);
 }
 
+void BKE_grease_pencil_vgroup_name_update(Object *ob, const char *old_name, const char *new_name)
+{
+  using namespace blender::bke::greasepencil;
+  GreasePencil &grease_pencil = *static_cast<GreasePencil *>(ob->data);
+  for (GreasePencilDrawingBase *base : grease_pencil.drawings()) {
+    Drawing &drawing = reinterpret_cast<GreasePencilDrawing *>(base)->wrap();
+    CurvesGeometry &curves = drawing.strokes_for_write();
+    LISTBASE_FOREACH (bDeformGroup *, vgroup, &curves.vertex_group_names) {
+      if (strcmp(vgroup->name, old_name) == 0) {
+        STRNCPY(vgroup->name, new_name);
+      }
+    }
+  }
+}
+
 static void grease_pencil_evaluate_modifiers(Depsgraph *depsgraph,
                                              Scene *scene,
                                              Object *object,
@@ -3243,7 +3258,7 @@ blender::bke::greasepencil::Layer &GreasePencil::add_layer(const blender::String
   using namespace blender;
   std::string unique_name = check_name_is_unique ? unique_layer_name(*this, name) : name.c_str();
   const int numLayers = layers().size();
-  CustomData_realloc(&layers_data, numLayers, numLayers + 1);
+  CustomData_realloc(&layers_data, numLayers, numLayers + 1, CD_SET_DEFAULT);
   bke::greasepencil::Layer *new_layer = MEM_new<bke::greasepencil::Layer>(__func__, unique_name);
   /* Hide masks by default. */
   new_layer->base.flag |= GP_LAYER_TREE_NODE_HIDE_MASKS;
@@ -3288,8 +3303,20 @@ blender::bke::greasepencil::Layer &GreasePencil::duplicate_layer(
 {
   using namespace blender;
   std::string unique_name = unique_layer_name(*this, duplicate_layer.name());
+  std::optional<int> duplicate_layer_idx = get_layer_index(duplicate_layer);
   const int numLayers = layers().size();
   CustomData_realloc(&layers_data, numLayers, numLayers + 1);
+  if (duplicate_layer_idx.has_value()) {
+    for (const int layer_index : IndexRange(layers_data.totlayer)) {
+      CustomData_copy_data_layer(&layers_data,
+                                 &layers_data,
+                                 layer_index,
+                                 layer_index,
+                                 *duplicate_layer_idx,
+                                 numLayers,
+                                 1);
+    }
+  }
   bke::greasepencil::Layer *new_layer = MEM_new<bke::greasepencil::Layer>(__func__,
                                                                           duplicate_layer);
   root_group().add_node(new_layer->as_node());
