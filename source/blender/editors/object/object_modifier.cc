@@ -1275,7 +1275,7 @@ static bool apply_grease_pencil_for_modifier_all_keyframes(Depsgraph *depsgraph,
     GeometrySet eval_geometry_set = GeometrySet::from_grease_pencil(grease_pencil_temp,
                                                                     GeometryOwnershipType::Owned);
 
-    ModifierData* md_eval = BKE_modifier_get_evaluated(depsgraph, ob, md);
+    ModifierData *md_eval = BKE_modifier_get_evaluated(depsgraph, ob, md);
     ModifierEvalContext mectx = {depsgraph, ob_eval, MOD_APPLY_TO_ORIGINAL};
     mti->modify_geometry_set(md_eval, &mectx, &eval_geometry_set);
     if (!eval_geometry_set.has_grease_pencil()) {
@@ -1483,7 +1483,7 @@ static bool modifier_apply_obdata(ReportList *reports,
        * the evaluated modifier for each keyframe. The original modifier is passed
        * to ensure the evaluated modifier is not used, as it will be invalid when
        * the scene graph is updated for the next keyframe. */
-      ModifierData* md = BKE_modifier_get_original(ob, md_eval);
+      ModifierData *md = BKE_modifier_get_original(ob, md_eval);
       success = apply_grease_pencil_for_modifier_all_keyframes(
           depsgraph, scene, ob, grease_pencil_orig, md);
     }
