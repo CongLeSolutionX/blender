@@ -1226,18 +1226,13 @@ static bool apply_grease_pencil_for_modifier_all_keyframes(Depsgraph *depsgraph,
                                                            Scene *scene,
                                                            Object *ob,
                                                            GreasePencil &grease_pencil_orig,
-                                                           ModifierData *md_eval)
+                                                           ModifierData *md)
 {
   using namespace bke;
   using namespace bke::greasepencil;
   Main *bmain = DEG_get_bmain(depsgraph);
 
-  // The modifier data is copied because the original is invalidated in the
-  // call to BKE_scene_graph_update_for_newframe
-  ModifierData *md_copy = BKE_modifier_new(md_eval->type);
-  BKE_modifier_copydata(md_eval, md_copy);
-
-  const ModifierTypeInfo *mti = BKE_modifier_get_info(ModifierType(md_copy->type));
+  const ModifierTypeInfo *mti = BKE_modifier_get_info(ModifierType(md->type));
 
   WM_cursor_wait(true);
 
@@ -1280,8 +1275,9 @@ static bool apply_grease_pencil_for_modifier_all_keyframes(Depsgraph *depsgraph,
     GeometrySet eval_geometry_set = GeometrySet::from_grease_pencil(grease_pencil_temp,
                                                                     GeometryOwnershipType::Owned);
 
+    ModifierData* md_eval = BKE_modifier_get_evaluated(depsgraph, ob, md);
     ModifierEvalContext mectx = {depsgraph, ob_eval, MOD_APPLY_TO_ORIGINAL};
-    mti->modify_geometry_set(md_copy, &mectx, &eval_geometry_set);
+    mti->modify_geometry_set(md_eval, &mectx, &eval_geometry_set);
     if (!eval_geometry_set.has_grease_pencil()) {
       continue;
     }
@@ -1306,8 +1302,6 @@ static bool apply_grease_pencil_for_modifier_all_keyframes(Depsgraph *depsgraph,
       grease_pencil_orig.rename_node(*bmain, layer->as_node(), DATA_("Layer"));
     }
   }
-
-  BKE_modifier_free(md_copy);
 
   WM_cursor_wait(false);
   return changed;
@@ -1485,8 +1479,13 @@ static bool modifier_apply_obdata(ReportList *reports,
     GreasePencil &grease_pencil_orig = *static_cast<GreasePencil *>(ob->data);
     bool success = false;
     if (do_all_keyframes) {
+      // apply_grease_pencil_for_modifier_all_keyframes will retrieve
+      // the evaluated modifier for each keyframe. We pass the original modifier
+      // to ensure the evaluated modifier is not used, as it will be invalid when
+      // the scene graph is updated for the next keyframe.
+      ModifierData* md = BKE_modifier_get_original(ob, md_eval);
       success = apply_grease_pencil_for_modifier_all_keyframes(
-          depsgraph, scene, ob, grease_pencil_orig, md_eval);
+          depsgraph, scene, ob, grease_pencil_orig, md);
     }
     else {
       success = apply_grease_pencil_for_modifier(depsgraph, ob, grease_pencil_orig, md_eval);
