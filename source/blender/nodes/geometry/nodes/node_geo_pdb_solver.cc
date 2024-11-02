@@ -166,15 +166,19 @@ static void node_geo_exec(GeoNodeExecParams params)
   const int substeps = std::max(1, params.get_input<int>("Substeps"));
   const float substep_delta_time = delta_time / substeps;
 
+  const float floor_friction = 0.1;
+
   if (Mesh *mesh = geometry.get_mesh_for_write()) {
     MutableSpan<float3> positions = mesh->vert_positions_for_write();
     const Span<int2> edges = mesh->edges();
 
     const VArraySpan<float> goal_edge_lengths = *mesh->attributes().lookup_or_default<float>(
         "rest_edge_length", AttrDomain::Edge, 0.0f);
+    VArraySpan<float3> start_positions = *mesh->attributes().lookup_or_default<float3>(
+        "start_position", AttrDomain::Point, float3(0, 0, 0));
 
     for ([[maybe_unused]] const int substep_i : IndexRange(substeps)) {
-      solve_floor_collision(positions);
+      solve_floor_collision_with_friction(positions, start_positions, floor_friction);
       solve_edges(positions, edges, goal_edge_lengths);
     }
 
@@ -189,8 +193,11 @@ static void node_geo_exec(GeoNodeExecParams params)
         "rest_segment_length", AttrDomain::Point, 0.0f);
     const VArraySpan<float3> pin_positions = *curves.attributes().lookup_or_default<float3>(
         "pin_positions", AttrDomain::Curve, float3(0, 0, 0));
+    VArraySpan<float3> start_positions = *curves.attributes().lookup_or_default<float3>(
+        "start_position", AttrDomain::Point, float3(0, 0, 0));
+
     for ([[maybe_unused]] const int substep_i : IndexRange(substeps)) {
-      solve_floor_collision(positions);
+      solve_floor_collision_with_friction(positions, start_positions, floor_friction);
       solve_curve_segment_lengths(positions, offsets, goal_segment_lengths);
       solve_pinned(positions, offsets.data().drop_back(1), pin_positions);
     }
@@ -204,8 +211,6 @@ static void node_geo_exec(GeoNodeExecParams params)
     const VArraySpan<float> radii = *pointcloud->attributes().lookup_or_default<float>(
         "radius", AttrDomain::Point, 0.05f);
     const float uniform_radius = pointcloud->totpoint > 0 ? radii[0] : 0.0f;
-
-    const float floor_friction = 0.1;
 
     for ([[maybe_unused]] const int substep_i : IndexRange(substeps)) {
       solve_floor_collision_with_friction(
