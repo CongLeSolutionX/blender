@@ -1705,6 +1705,7 @@ static void rna_RenderSettings_views_format_set(PointerRNA *ptr, int value)
 static void rna_RenderSettings_engine_set(PointerRNA *ptr, int value)
 {
   if (G.is_rendering || G.is_break) {
+    WM_report(RPT_ERROR, "Can't switch render engine during render.");
     return;
   }
   RenderData *rd = (RenderData *)ptr->data;
