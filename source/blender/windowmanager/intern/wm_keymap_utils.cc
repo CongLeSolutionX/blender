@@ -81,7 +81,7 @@ wmKeyMap *WM_keymap_guess_from_context(const bContext *C)
   eRegion_Type region_type = RGN_TYPE_WINDOW;
   SpaceLink *sl = CTX_wm_space_data(C);
   const char *km_id = nullptr;
-  if (sl->spacetype == SPACE_VIEW3D) {
+  if (sl->spacetype == SPACE_VIEW3D || sl->spacetype == SPACE_PROPERTIES) {
     const enum eContextObjectMode mode = CTX_data_mode_enum(C);
     switch (mode) {
       case CTX_MODE_EDIT_MESH:
