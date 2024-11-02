@@ -15,7 +15,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::String>("String").hide_label();
   b.add_input<decl::String>("Break");
   b.add_input<decl::Int>("Line Index").min(0);
-  b.add_output<decl::String>("Count");
+  b.add_output<decl::String>("Out Line");
 }
 static std::string string_Select_Line(const StringRef a, const StringRef b, const int *i)
 {
@@ -24,6 +24,14 @@ static std::string string_Select_Line(const StringRef a, const StringRef b, cons
   }
   std::string out_line = "";
   size_t pos = 0;
+  if (*i==0){
+    size_t next_pos = a.find(b, pos);
+      if (next_pos == std::string::npos) {
+          out_line = a.substr(pos);
+      } else {
+          out_line = a.substr(pos , next_pos - pos);
+      }
+      return out_line;
   if (*i == 0) {
     size_t next_pos = a.find(b, pos);
     if (next_pos == std::string::npos) {
@@ -36,10 +44,16 @@ static std::string string_Select_Line(const StringRef a, const StringRef b, cons
   }
   int count = 0;
   while ((pos = a.find(b, pos)) != std::string::npos) {
+  while ((pos = a.find(b, pos)) != std::string::npos) {
     count++;
+    if(count == *i){
+      size_t next_pos = a.find(b, pos + b.size());
     if (count == *i) {
       size_t next_pos = a.find(b, pos + b.size());
       if (next_pos == std::string::npos) {
+          out_line = a.substr(pos + b.size());
+      } else {
+          out_line = a.substr(pos + b.size(), next_pos - (pos + b.size()));
         out_line = a.substr(pos + b.size());
       }
       else {
@@ -47,6 +61,7 @@ static std::string string_Select_Line(const StringRef a, const StringRef b, cons
       }
       break;
     }
+    pos += b.size();
     pos += b.size();
   }
   if (count < *i) {
@@ -57,6 +72,8 @@ static std::string string_Select_Line(const StringRef a, const StringRef b, cons
 static void node_build_multi_function(NodeMultiFunctionBuilder &builder)
 {
   static auto count = mf::build::SI3_SO<std::string, std::string, int, std::string>(
+    "String Select Line", [](const std::string &a , const std::string &b,const int &i) 
+  { return string_Select_Line(a,b,&i); });//static auto count
       "String Select Line", [](const StringRef a, const StringRef b, const int &i) {
         return string_Select_Line(a, b, &i);
       });  // static auto count
