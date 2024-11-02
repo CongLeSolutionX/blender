@@ -17,7 +17,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Int>("Line Index").min(0);
   b.add_output<decl::String>("Out Line");
 }
-static std::string string_select_line(const std::string_view,const std::string_view b, const int *i){
+static std::string string_select_line(const std::string_view a,const std::string_view b, const int *i){
   if (a.empty() || b.empty()) {return "";}
   std::string out_line = "";
   size_t pos = 0;
