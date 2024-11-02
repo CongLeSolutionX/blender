@@ -1479,10 +1479,10 @@ static bool modifier_apply_obdata(ReportList *reports,
     GreasePencil &grease_pencil_orig = *static_cast<GreasePencil *>(ob->data);
     bool success = false;
     if (do_all_keyframes) {
-      // apply_grease_pencil_for_modifier_all_keyframes will retrieve
-      // the evaluated modifier for each keyframe. We pass the original modifier
-      // to ensure the evaluated modifier is not used, as it will be invalid when
-      // the scene graph is updated for the next keyframe.
+      /* The function #apply_grease_pencil_for_modifier_all_keyframes will retrieve
+       * the evaluated modifier for each keyframe. The original modifier is passed
+       * to ensure the evaluated modifier is not used, as it will be invalid when
+       * the scene graph is updated for the next keyframe. */
       ModifierData* md = BKE_modifier_get_original(ob, md_eval);
       success = apply_grease_pencil_for_modifier_all_keyframes(
           depsgraph, scene, ob, grease_pencil_orig, md);
