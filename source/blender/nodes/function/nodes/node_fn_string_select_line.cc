@@ -17,11 +17,8 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Int>("Line Index").min(0);
   b.add_output<decl::String>("Out Line");
 }
-static std::string string_Select_Line(const StringRef a, const StringRef b, const int *i)
-{
-  if (a.is_empty() || b.is_empty()) {
-    return "";
-  }
+static std::string string_select_line(const StringRef a,const StringRef b, const int *i){
+  if (a.is_empty() || b.is_empty()) {return "";}
   std::string out_line = "";
   size_t pos = 0;
   if (*i==0){
@@ -72,11 +69,8 @@ static std::string string_Select_Line(const StringRef a, const StringRef b, cons
 static void node_build_multi_function(NodeMultiFunctionBuilder &builder)
 {
   static auto count = mf::build::SI3_SO<std::string, std::string, int, std::string>(
-    "String Select Line", [](const std::string &a , const std::string &b,const int &i) 
-  { return string_Select_Line(a,b,&i); });//static auto count
-      "String Select Line", [](const StringRef a, const StringRef b, const int &i) {
-        return string_Select_Line(a, b, &i);
-      });  // static auto count
+    "String Select Line", [](const StringRef &a , const StringRef &b,const int &i) 
+  { return string_select_line(a,b,&i); });
 
   builder.set_matching_fn(&count);
 }
