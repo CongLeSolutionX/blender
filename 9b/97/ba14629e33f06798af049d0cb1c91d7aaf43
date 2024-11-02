@@ -1,1 +1,2 @@
 Referenced by issue #129715, Crash: SubDiv with wireframe enabled
+Referenced by commit 65da82f67c9d845ee09481c16d8907d7e9a506f2, Fix #129715: Crash with GPU subdivision in wireframe mode
