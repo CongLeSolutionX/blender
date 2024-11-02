@@ -4,7 +4,7 @@
 
 #include "BLI_string_utf8.h"
 
-#include<iomanip>
+#include <iomanip>
 
 #include "node_function_util.hh"
 
@@ -18,26 +18,27 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Int>("Next Find").min(0).default_value(1);
   b.add_output<decl::Int>("Token Position");
 }
-static int string_find_token(const StringRef s,
-                                const StringRef t,
-                                const int *start,
-                                const int *next)
+static int string_find_token(const StringRef a,
+                             const StringRef b,
+                             const int *start,
+                             const int *next)
 {
-  if (s.is_empty() || t.is_empty() || *start < 0 || *start > s.size()) {
+  if (a.is_empty() || b.is_empty() || *start < 0 || *start > a.size()) {
     return -1;
   }
   if (*next == 0) {
     return 0;
   }
-  int pos = *start;
-  for (int i = 0; i < *next; ++i) {
-    pos = s.find(t, pos);
-    if (pos == std::string::npos) {
-      return -1;
+  size_t pos = *start;
+  int count = 0;
+  while ((pos = a.find(b, pos)) != std::string::npos) {
+    count++;
+    if (count == *next) {
+      return pos;
     }
-    pos += t.size();
+    pos += b.size();
   }
-  return pos - t.size();
+  return -1;
 }
 
 static void node_build_multi_function(NodeMultiFunctionBuilder &builder)
@@ -46,7 +47,7 @@ static void node_build_multi_function(NodeMultiFunctionBuilder &builder)
       "String Find Token",
       [](const StringRef s, const StringRef t, const int &start, const int &next) {
         return string_find_token(s, t, &start, &next);
-      }); 
+      });
 
   builder.set_matching_fn(&find_fn);
 }
