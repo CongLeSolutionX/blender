@@ -42,9 +42,6 @@ std::u32string u32_from_utf8(const std::string_view &utf8)
         code_point = ((lead & 0x1F) << 6) | (second & 0x3F);
         from += 2;
       }
-      else {
-        throw std::invalid_argument("Invalid UTF-8 sequence");
-      }
     }
     else if (lead <= 0xEF && from + 2 < from_end) {
       unsigned char second = static_cast<unsigned char>(from[1]);
@@ -52,9 +49,6 @@ std::u32string u32_from_utf8(const std::string_view &utf8)
       if ((second & 0xC0) == 0x80 && (third & 0xC0) == 0x80) {
         code_point = ((lead & 0x0F) << 12) | ((second & 0x3F) << 6) | (third & 0x3F);
         from += 3;
-      }
-      else {
-        throw std::invalid_argument("Invalid UTF-8 sequence");
       }
     }
     else if (lead <= 0xF7 && from + 3 < from_end) {
@@ -66,17 +60,12 @@ std::u32string u32_from_utf8(const std::string_view &utf8)
                      (fourth & 0x3F);
         from += 4;
       }
-      else {
-        throw std::invalid_argument("Invalid UTF-8 sequence");
-      }
     }
     else {
-      throw std::invalid_argument("Invalid UTF-8 sequence");
+      return std::u32string();
     }
-
     u32.push_back(code_point);
   }
-
   return u32;
 }
 static int string_find_token(const std::string_view a,
