@@ -1231,7 +1231,13 @@ static bool apply_grease_pencil_for_modifier_all_keyframes(Depsgraph *depsgraph,
   using namespace bke;
   using namespace bke::greasepencil;
   Main *bmain = DEG_get_bmain(depsgraph);
-  const ModifierTypeInfo *mti = BKE_modifier_get_info(ModifierType(md_eval->type));
+
+  // The modifier data is copied because the original is invalidated in the
+  // call to BKE_scene_graph_update_for_newframe
+  ModifierData *md_copy = BKE_modifier_new(md_eval->type);
+  BKE_modifier_copydata(md_eval, md_copy);
+
+  const ModifierTypeInfo *mti = BKE_modifier_get_info(ModifierType(md_copy->type));
 
   WM_cursor_wait(true);
 
@@ -1275,7 +1281,7 @@ static bool apply_grease_pencil_for_modifier_all_keyframes(Depsgraph *depsgraph,
                                                                     GeometryOwnershipType::Owned);
 
     ModifierEvalContext mectx = {depsgraph, ob_eval, MOD_APPLY_TO_ORIGINAL};
-    mti->modify_geometry_set(md_eval, &mectx, &eval_geometry_set);
+    mti->modify_geometry_set(md_copy, &mectx, &eval_geometry_set);
     if (!eval_geometry_set.has_grease_pencil()) {
       continue;
     }
@@ -1300,6 +1306,8 @@ static bool apply_grease_pencil_for_modifier_all_keyframes(Depsgraph *depsgraph,
       grease_pencil_orig.rename_node(*bmain, layer->as_node(), DATA_("Layer"));
     }
   }
+
+  BKE_modifier_free(md_copy);
 
   WM_cursor_wait(false);
   return changed;
