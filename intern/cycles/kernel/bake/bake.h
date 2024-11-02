@@ -125,6 +125,7 @@ ccl_device void kernel_volume_density_evaluate(KernelGlobals kg,
   Ray ray;
   ray.P = make_float3(__int_as_float(in.prim), in.u, in.v);
   ray.D = zero_float3();
+  ray.tmin = 0.0f;
   /* TODO(weizhen): What fields need to be written? */
   shader_setup_from_volume(kg, &sd, &ray, in.object);
   sd.flag = SD_IS_VOLUME_SHADER_EVAL;
