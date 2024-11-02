@@ -277,21 +277,19 @@ class Vector {
    * The caller is responsible to make sure that the buffer has been allocated with the same
    * allocator that the #Vector will use to deallocate it.
    */
-  Vector(const VectorData<T, Allocator> &data)
+  Vector(const VectorData<T, Allocator> &data) : Vector(data.allocator)
   {
     BLI_assert(data.begin <= data.end);
     BLI_assert(data.end <= data.capacity_end);
-    Vector vec;
     /* Don't use the passed in buffer if it is null. Use the inline-buffer instead which is already
      * initialized by the constructor call above. */
     if (data.begin != nullptr) {
       /* Take ownership of the array. */
-      vec.begin_ = data.begin;
-      vec.end_ = data.end;
-      vec.capacity_end_ = data.capacity_end;
-      UPDATE_VECTOR_SIZE(&vec);
+      begin_ = data.begin;
+      end_ = data.end;
+      capacity_end_ = data.capacity_end;
+      UPDATE_VECTOR_SIZE(this);
     }
-    return vec;
   }
 
   ~Vector()

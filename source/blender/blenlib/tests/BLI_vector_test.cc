@@ -893,6 +893,13 @@ TEST(vector, FromRaw)
   EXPECT_EQ(vec[0], 5);
 }
 
+TEST(vector, FromRawEmpty)
+{
+  VectorData<int, GuardedAllocator> data;
+  Vector<int> vec{data};
+  EXPECT_TRUE(vec.is_empty());
+}
+
 TEST(vector, ReleaseEmptyInline)
 {
   Vector<int> vec;
