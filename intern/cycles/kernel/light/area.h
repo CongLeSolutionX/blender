@@ -79,6 +79,11 @@ ccl_device_inline float area_light_rect_sample(float3 P,
     *light_p = P + xu * x + yv * y + z0 * z;
   }
 
+  if (is_zero(*light_p - P)) {
+    /* Degenerate ray. */
+    return 0.0f;
+  }
+
   /* return pdf */
   if (S < 1e-5f || reduce_min(sqr(nz)) > 0.99999f) {
     /* The solid angle is too small to be computed accurately in single precision.
