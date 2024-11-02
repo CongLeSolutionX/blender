@@ -17,8 +17,8 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Int>("Line Index").min(0);
   b.add_output<decl::String>("Out Line");
 }
-static std::string string_select_line(const std::string_view a,const std::string_view b, const int *i){
-  if (a.empty() || b.empty()) {return "";}
+static std::string string_select_line(const StringRef a,const StringRef b, const int *i){
+  if (a.is_empty() || b.is_empty()) {return "";}
   std::string out_line = "";
   size_t pos = 0;
   if (*i==0){
@@ -34,15 +34,15 @@ static std::string string_select_line(const std::string_view a,const std::string
   while ((pos = a.find(b, pos)) != std::string::npos) {
     count++;
     if(count == *i){
-      size_t next_pos = a.find(b, pos + b.length());
+      size_t next_pos = a.find(b, pos + b.size());
       if (next_pos == std::string::npos) {
-          out_line = a.substr(pos + b.length());
+          out_line = a.substr(pos + b.size());
       } else {
-          out_line = a.substr(pos + b.length(), next_pos - (pos + b.length()));
+          out_line = a.substr(pos + b.size(), next_pos - (pos + b.size()));
       }
       break;
     }
-    pos += b.length();
+    pos += b.size();
   }
   if(count < *i){
     return "";
