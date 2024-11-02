@@ -16,12 +16,12 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Int>("Next Find").min(0).default_value(1);
   b.add_output<decl::Int>("Token Position");
 }
-static size_t string_find_token(const StringRef s,
-                                const StringRef k,
+static size_t string_find_token(const std::string_view s,
+                                const std::string_view k,
                                 const int *start,
                                 const int *next)
 {
-  if (s.is_empty() || k.is_empty() || *start < 0 || *start > s.size()) {
+  if (s.empty() || k.empty() || *start < 0 || *start > s.length()) {
     return -1;
   }
   if (*next == 0) {
@@ -31,18 +31,18 @@ static size_t string_find_token(const StringRef s,
   for (int i = 0; i < *next; ++i) {
     pos = s.find(k, pos);
     if (pos == std::string::npos) {
-      return std::string::npos;
+      return -1;
     }
-    pos += k.size();
+    pos += k.length();
   }
-  return pos - k.size();
+  return pos - k.length();
 }
 
 static void node_build_multi_function(NodeMultiFunctionBuilder &builder)
 {
   static auto find_fn = mf::build::SI4_SO<std::string, std::string, int, int, int>(
       "String Find Token",
-      [](const StringRef string, const StringRef k, const int &start, const int &next) {
+      [](const std::string_view string, const std::string_view k, const int &start, const int &next) {
         return string_find_token(string, k, &start, &next);
       }); 
 
