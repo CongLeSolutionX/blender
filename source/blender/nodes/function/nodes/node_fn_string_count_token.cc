@@ -13,24 +13,27 @@ namespace blender::nodes::node_fn_string_keyword_count_cc {
 static void node_declare(NodeDeclarationBuilder &b)
 {
   b.add_input<decl::String>("String").hide_label();
-  b.add_input<decl::String>("Keyword");
+  b.add_input<decl::String>("Token");
   b.add_output<decl::Int>("Count");
 }
-static int string_keyword_count(const std::string *a,const std::string *b){
-  if (a == nullptr || b == nullptr || a->empty() || b->empty()) {return 0;}
+static int string_count_token(const StringRef a, const StringRef b)
+{
+  if (a.is_empty() || b.is_empty()) {
+    return 0;
+  }
   int count = 0;
-  size_t pos = 0;
-  while ((pos = a->find(*b, pos)) != std::string::npos) {
-      count++;
-      pos += b->length();
+  int pos = 0;
+  while ((pos = a.find(b, pos)) != std::string::npos) {
+    count++;
+    pos += b.size();
   }
   return count;
 }
 static void node_build_multi_function(NodeMultiFunctionBuilder &builder)
 {
-  static auto count = mf::build::SI2_SO<std::string,std::string, int>(
-    "Keyword Count", [](const std::string &a , const std::string &b) 
-  { return string_keyword_count(&a,&b); });//static auto count
+  static auto count = mf::build::SI2_SO<std::string, std::string, int>(
+      "String Count Token",
+      [](const StringRef &a, const StringRef &b) { return string_count_token(a, b); });
 
   builder.set_matching_fn(&count);
 }
@@ -39,11 +42,12 @@ static void node_register()
 {
   static blender::bke::bNodeType ntype;
 
-  fn_node_type_base(&ntype, FN_NODE_STRING_KEYWORD_COUNT, "String Keyword Count", NODE_CLASS_CONVERTER);
+  fn_node_type_base(
+      &ntype, FN_NODE_STRING_COUNT_TOKEN, "String Count Token", NODE_CLASS_CONVERTER);
   ntype.declare = node_declare;
   ntype.build_multi_function = node_build_multi_function;
   blender::bke::node_register_type(&ntype);
 }
 NOD_REGISTER_NODE(node_register)
 
-}  // namespace blender::nodes::node_fn_string_length_cc
+}  // namespace blender::nodes::node_fn_string_keyword_count_cc
