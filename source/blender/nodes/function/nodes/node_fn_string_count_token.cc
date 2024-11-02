@@ -32,9 +32,8 @@ static int string_count_token(const StringRef a, const StringRef b)
 static void node_build_multi_function(NodeMultiFunctionBuilder &builder)
 {
   static auto count = mf::build::SI2_SO<std::string, std::string, int>(
-      "String Count Token", [](const StringRef &a, const StringRef &b) {
-        return string_count_token(a, b);
-      });  // static auto count
+      "String Count Token",
+      [](const StringRef a, const StringRef b) { return string_count_token(a, b); });
 
   builder.set_matching_fn(&count);
 }
