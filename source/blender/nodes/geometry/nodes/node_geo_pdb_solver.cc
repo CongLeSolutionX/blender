@@ -6,6 +6,7 @@
 #include "DNA_meshdata_types.h"
 
 #include "BKE_curves.hh"
+#include "BKE_pointcloud.hh"
 
 #include "node_geometry_util.hh"
 
@@ -19,14 +20,14 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_output<decl::Geometry>("Geometry");
 }
 
-static void solve_floor_collision(MutableSpan<float3> positions)
+static void solve_floor_collision(MutableSpan<float3> positions, const float floor_height = 0.0f)
 {
   for (const int pos_i : positions.index_range()) {
     const float3 unconstrained_pos = positions[pos_i];
-    if (unconstrained_pos.z >= 0.0f) {
+    if (unconstrained_pos.z >= floor_height) {
       continue;
     }
-    const float3 constrainted_pos{unconstrained_pos.x, unconstrained_pos.y, 0.0f};
+    const float3 constrainted_pos{unconstrained_pos.x, unconstrained_pos.y, floor_height};
     positions[pos_i] = constrainted_pos;
   }
 }
@@ -88,6 +89,52 @@ static void solve_pinned(MutableSpan<float3> positions,
   }
 }
 
+static void solve_point_collisions(MutableSpan<float3> positions, const float radius)
+{
+  const float cell_size = std::max(radius, 0.00001f);
+  const float inv_cell_size = 1.0f / radius;
+  const int hash_table_size = std::max(1, power_of_2_max_i(positions.size()));
+  const uint64_t mask = hash_table_size - 1;
+  Array<Vector<int>> hash_table(hash_table_size);
+  for (const int pos_i : positions.index_range()) {
+    const float3 &pos = positions[pos_i];
+    const int3 cell = int3(pos * inv_cell_size);
+    const uint64_t hash = cell.hash() & mask;
+    hash_table[hash].append(pos_i);
+  }
+
+  Vector<int> possible_colliders;
+  for (const int pos_i : positions.index_range()) {
+    possible_colliders.clear();
+
+    float3 &pos = positions[pos_i];
+    const int3 cell = int3(pos * inv_cell_size);
+    for (int x = -1; x <= 1; x++) {
+      for (int y = -1; y <= 1; y++) {
+        for (int z = -1; z <= 1; z++) {
+          const int3 other_cell = cell + int3(x, y, z);
+          const uint64_t other_cell_hash = other_cell.hash() & mask;
+          const Span<int> indices = hash_table[other_cell_hash];
+          possible_colliders.extend(indices);
+        }
+      }
+    }
+
+    for (const int other_i : possible_colliders) {
+      if (other_i == pos_i) {
+        continue;
+      }
+      float3 &other_pos = positions[other_i];
+      const float distance = math::distance(pos, other_pos);
+      const float goal_distance = 2 * radius;
+      if (distance >= goal_distance) {
+        continue;
+      }
+      solve_length_constrainted(pos, other_pos, 1.0f, 1.0f, goal_distance);
+    }
+  }
+}
+
 static void node_geo_exec(GeoNodeExecParams params)
 {
   GeometrySet geometry = params.extract_input<GeometrySet>("Geometry");
@@ -123,6 +170,21 @@ static void node_geo_exec(GeoNodeExecParams params)
       solve_curve_segment_lengths(positions, offsets, goal_segment_lengths);
       solve_pinned(positions, offsets.data().drop_back(1), pin_positions);
     }
+
+    curves.tag_positions_changed();
+  }
+  if (PointCloud *pointcloud = geometry.get_pointcloud_for_write()) {
+    MutableSpan<float3> positions = pointcloud->positions_for_write();
+    const VArraySpan<float> radii = *pointcloud->attributes().lookup_or_default<float>(
+        "radius", AttrDomain::Point, 0.05f);
+    const float uniform_radius = pointcloud->totpoint > 0 ? radii[0] : 0.0f;
+
+    for ([[maybe_unused]] const int substep_i : IndexRange(substeps)) {
+      solve_floor_collision(positions, uniform_radius);
+      solve_point_collisions(positions, uniform_radius);
+    }
+
+    pointcloud->tag_positions_changed();
   }
 
   params.set_output("Geometry", geometry);
