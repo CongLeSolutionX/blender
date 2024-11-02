@@ -125,18 +125,41 @@ static void node_shader_update_tex_rounded_polygon(bNodeTree *ntree, bNode *node
 }
 
 /* Define macros for programming language translation. */
+#define atanf atan
+#define atan2f atan2
+#define cosf cos
+#define fabsf abs
+#define floorf floor
+#define fractf fract
+#define sinf sin
+#define sqrtf sqrt
+#define squaref square
+#define tanf tan
+
 #define make_float2 float2
 #define make_float4 float4
-#define RETURN_ARGUMENTS float4
+#define ccl_device
+
 using namespace math;
 
 /* The actual rounded polygon functions are in rounded_polygon_generic.h. */
 #include "../../../blenlib/intern/rounded_polygon_generic.h"
 
 /* Undefine macros used for programming language translation. */
+#undef atanf
+#undef atan2f
+#undef cosf
+#undef fabsf
+#undef floorf
+#undef fractf
+#undef sinf
+#undef sqrtf
+#undef squaref
+#undef tanf
+
 #undef make_float2
 #undef make_float4
-#undef RETURN_ARGUMENTS
+#undef ccl_device
 
 class RoundedPolygonFunction : public mf::MultiFunction {
  private:

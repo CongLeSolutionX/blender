@@ -17,32 +17,8 @@ struct RoundedPolygonStackOffsets {
   uint x_axis_A_angle_bisector;
 };
 
-/* Define macros for programming language translation. */
-#define abs fabsf
-#define atan atanf
-#define atan2 atan2f
-#define cos cosf
-#define floor floorf
-#define fract fractf
-#define RETURN_ARGUMENTS ccl_device float4
-#define sin sinf
-#define sqrt sqrtf
-#define square squaref
-
 /* The actual rounded polygon functions are in rounded_polygon_generic.h. */
 #include "../../../../source/blender/blenlib/intern/rounded_polygon_generic.h"
-
-/* Undefine macros used for programming language translation. */
-#undef abs
-#undef atan
-#undef atan2
-#undef cos
-#undef floor
-#undef fract
-#undef RETURN_ARGUMENTS
-#undef sin
-#undef sqrt
-#undef square
 
 template<uint node_feature_mask>
 ccl_device_noinline int svm_node_tex_rounded_polygon(
