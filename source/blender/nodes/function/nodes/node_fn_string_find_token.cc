@@ -9,12 +9,10 @@
 #include <iomanip>
 
 namespace blender::nodes::node_fn_string_find_token_cc {
-namespace blender::nodes::node_fn_string_find_token_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
   b.add_input<decl::String>("String").hide_label();
-  b.add_input<decl::String>("Token");
   b.add_input<decl::String>("Token");
   b.add_input<decl::Int>("Start Char").min(0);
   b.add_input<decl::Int>("Next Find").min(0).default_value(1);
@@ -111,12 +109,10 @@ static void node_register()
   static blender::bke::bNodeType ntype;
 
   fn_node_type_base(&ntype, FN_NODE_STRING_FIND_TOKEN, "String Find Token", NODE_CLASS_CONVERTER);
-  fn_node_type_base(&ntype, FN_NODE_STRING_FIND_TOKEN, "String Find Token", NODE_CLASS_CONVERTER);
   ntype.declare = node_declare;
   ntype.build_multi_function = node_build_multi_function;
   blender::bke::node_register_type(&ntype);
 }
 NOD_REGISTER_NODE(node_register)
 
-}  // namespace blender::nodes::node_fn_string_find_token_cc
 }  // namespace blender::nodes::node_fn_string_find_token_cc

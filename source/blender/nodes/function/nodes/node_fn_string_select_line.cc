@@ -32,7 +32,6 @@ static std::string string_select_line(const StringRef a,const StringRef b, const
   }
   int count = 0;
   while ((pos = a.find(b, pos)) != std::string::npos) {
-  while ((pos = a.find(b, pos)) != std::string::npos) {
     count++;
     if(count == *i){
       size_t next_pos = a.find(b, pos + b.size());
@@ -45,7 +44,7 @@ static std::string string_select_line(const StringRef a,const StringRef b, const
     }
     pos += b.size();
   }
-  if (count < *i) {
+  if(count < *i){
     return "";
   }
   return out_line;
@@ -63,8 +62,7 @@ static void node_register()
 {
   static blender::bke::bNodeType ntype;
 
-  fn_node_type_base(
-      &ntype, FN_NODE_STRING_SELECT_LINE, "String select line", NODE_CLASS_CONVERTER);
+  fn_node_type_base(&ntype, FN_NODE_STRING_SELECT_LINE, "String select line", NODE_CLASS_CONVERTER);
   ntype.declare = node_declare;
   ntype.build_multi_function = node_build_multi_function;
   blender::bke::node_register_type(&ntype);
