@@ -717,7 +717,7 @@ static BHeadN *get_bhead(FileData *fd)
 
       /* First read the bhead structure.
        * Depending on the platform the file was written on this can
-       * be a big or little endian BHead4 or SmallBHead8 structure.
+       * be a big or little endian BHead4, SmallBHead8 or LargeBHead8 structure.
        *
        * As usual 'ENDB' (the last *partial* bhead of the file)
        * needs some special handling. We don't want to EOF just yet.
@@ -964,7 +964,7 @@ static void decode_blender_header(FileData *fd)
   readsize = fd->file->read(fd->file, header, sizeof(header));
 
   if (readsize == sizeof(header) && STREQLEN(header, "BLENDER", 7) &&
-      ELEM(header[7], '_', '-', 'x') && ELEM(header[8], 'v', 'V') &&
+      ELEM(header[7], '_', '-', 'L') && ELEM(header[8], 'v', 'V') &&
       (isdigit(header[9]) && isdigit(header[10]) && isdigit(header[11])))
   {
     fd->flags |= FD_FLAGS_FILE_OK;
@@ -5001,26 +5001,6 @@ void BLO_read_string(BlendDataReader *reader, const char **ptr_p)
   BLO_read_string(reader, const_cast<char **>(ptr_p));
 }
 
-static void convert_pointer_array_64_to_32(BlendDataReader *reader,
-                                           uint array_size,
-                                           const uint64_t *src,
-                                           uint32_t *dst)
-{
-  /* Match pointer conversion rules from bh4_from_small_bh8 and cast_pointer. */
-  if (BLO_read_requires_endian_switch(reader)) {
-    for (int i = 0; i < array_size; i++) {
-      uint64_t ptr = src[i];
-      BLI_endian_switch_uint64(&ptr);
-      dst[i] = uint32_t(ptr >> 3);
-    }
-  }
-  else {
-    for (int i = 0; i < array_size; i++) {
-      dst[i] = uint32_t(src[i] >> 3);
-    }
-  }
-}
-
 static void convert_pointer_array_32_to_64(BlendDataReader * /*reader*/,
                                            uint array_size,
                                            const uint32_t *src,
@@ -5052,11 +5032,8 @@ void BLO_read_pointer_array(BlendDataReader *reader, const int array_size, void 
     final_array = orig_array;
   }
   else if (file_pointer_size == 8 && current_pointer_size == 4) {
-    /* Convert pointers from 64 to 32 bit. */
-    final_array = MEM_malloc_arrayN(array_size, 4, "new pointer array");
-    convert_pointer_array_64_to_32(
-        reader, array_size, (uint64_t *)orig_array, (uint32_t *)final_array);
-    MEM_freeN(orig_array);
+    /* Blender is not supported on 32 bit platforms. */
+    BLI_assert_unreachable();
   }
   else if (file_pointer_size == 4 && current_pointer_size == 8) {
     /* Convert pointers from 32 to 64 bit. */

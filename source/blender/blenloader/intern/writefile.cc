@@ -1381,7 +1381,7 @@ static bool write_file_handle(Main *mainvar,
     bhead_char = '_';
   }
   else if (USER_EXPERIMENTAL_TEST(&U, write_large_blend_file_blocks)) {
-    bhead_char = 'x';
+    bhead_char = 'L';
   }
   else {
     bhead_char = '-';
