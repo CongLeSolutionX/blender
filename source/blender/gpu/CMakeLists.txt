@@ -602,6 +602,7 @@ set(GLSL_SRC
   shaders/material/gpu_shader_material_refraction.glsl
   shaders/material/gpu_shader_material_rgb_to_bw.glsl
   shaders/material/gpu_shader_material_rounded_polygon.glsl
+  ../../../intern/cycles/kernel/svm/rounded_polygon_generic.h
   shaders/material/gpu_shader_material_separate_color.glsl
   shaders/material/gpu_shader_material_separate_hsv.glsl
   shaders/material/gpu_shader_material_separate_rgb.glsl
@@ -640,7 +641,6 @@ set(GLSL_SRC
   shaders/material/gpu_shader_material_voronoi.glsl
   shaders/material/gpu_shader_material_wireframe.glsl
   shaders/material/gpu_shader_material_world_normals.glsl
-  shaders/material/rounded_polygon_generic.glsl
 
   shaders/gpu_shader_gpencil_stroke_vert.glsl
   shaders/gpu_shader_gpencil_stroke_frag.glsl

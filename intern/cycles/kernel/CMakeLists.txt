@@ -213,6 +213,7 @@ set(SRC_KERNEL_SVM_HEADERS
   svm/ramp.h
   svm/ramp_util.h
   svm/rounded_polygon.h
+  svm/rounded_polygon_generic.h
   svm/sepcomb_color.h
   svm/sepcomb_hsv.h
   svm/sepcomb_vector.h

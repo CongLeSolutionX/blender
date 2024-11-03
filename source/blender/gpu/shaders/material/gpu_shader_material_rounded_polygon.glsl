@@ -7,8 +7,8 @@
 /* Define macro flags for code translation. */
 /* No macro flags necessary, as code is translated to GLSL by default. */
 
-/* The rounded polygon calculation functions are defined in rounded_polygon_generic.glsl. */
-#include "rounded_polygon_generic.glsl"
+/* The rounded polygon calculation functions are defined in rounded_polygon_generic.h. */
+#include "rounded_polygon_generic.h"
 
 /* Undefine macro flags used for code translation. */
 /* No macro flags necessary, as code is translated to GLSL by default. */

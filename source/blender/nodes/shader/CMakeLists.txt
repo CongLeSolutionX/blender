@@ -102,6 +102,7 @@ set(SRC
   nodes/node_shader_tex_noise.cc
   nodes/node_shader_tex_pointdensity.cc
   nodes/node_shader_tex_rounded_polygon.cc
+  ../../../../intern/cycles/kernel/svm/rounded_polygon_generic.h
   nodes/node_shader_tex_sky.cc
   nodes/node_shader_tex_voronoi.cc
   nodes/node_shader_tex_wave.cc
