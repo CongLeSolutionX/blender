@@ -944,45 +944,73 @@ AssetMetaData *blo_bhead_id_asset_data_address(const FileData *fd, const BHead *
              nullptr;
 }
 
+struct DecodedBlenderHeader {
+  /** 4 or 8. */
+  int pointer_size;
+  /** L_ENDIAN or B_ENDIAN. */
+  bool endian;
+  /** #BLENDER_FILE_VERSION. */
+  int file_version;
+};
+
+static std::optional<DecodedBlenderHeader> try_decode_blender_header(FileData *fd)
+{
+  char header_bytes[SIZEOFBLENDERHEADER];
+  const int64_t readsize = fd->file->read(fd->file, header_bytes, sizeof(header_bytes));
+  if (readsize != sizeof(header_bytes)) {
+    return std::nullopt;
+  }
+  if (!STREQLEN(header_bytes, "BLENDER", 7)) {
+    return std::nullopt;
+  }
+  DecodedBlenderHeader header;
+  switch (header_bytes[7]) {
+    case '_':
+      header.pointer_size = 4;
+      break;
+    case '-':
+      header.pointer_size = 8;
+      break;
+    default:
+      return std::nullopt;
+  }
+  switch (header_bytes[8]) {
+    case 'v':
+      header.endian = L_ENDIAN;
+      break;
+    case 'V':
+      header.endian = B_ENDIAN;
+      break;
+    default:
+      return std::nullopt;
+  }
+  if (!isdigit(header_bytes[9]) || !isdigit(header_bytes[10]) || !isdigit(header_bytes[11])) {
+    return std::nullopt;
+  }
+  char version_str[4];
+  memcpy(version_str, header_bytes + 9, 3);
+  version_str[3] = '\0';
+  header.file_version = atoi(version_str);
+  return header;
+}
+
 static void decode_blender_header(FileData *fd)
 {
-  char header[SIZEOFBLENDERHEADER], num[4];
-  int64_t readsize;
-
-  /* read in the header data */
-  readsize = fd->file->read(fd->file, header, sizeof(header));
-
-  if (readsize == sizeof(header) && STREQLEN(header, "BLENDER", 7) && ELEM(header[7], '_', '-') &&
-      ELEM(header[8], 'v', 'V') &&
-      (isdigit(header[9]) && isdigit(header[10]) && isdigit(header[11])))
-  {
-    fd->flags |= FD_FLAGS_FILE_OK;
-
-    /* what size are pointers in the file ? */
-    if (header[7] == '_') {
-      fd->flags |= FD_FLAGS_FILE_POINTSIZE_IS_4;
-      if (sizeof(void *) != 4) {
-        fd->flags |= FD_FLAGS_POINTSIZE_DIFFERS;
-      }
-    }
-    else {
-      if (sizeof(void *) != 8) {
-        fd->flags |= FD_FLAGS_POINTSIZE_DIFFERS;
-      }
-    }
-
-    /* is the file saved in a different endian
-     * than we need ?
-     */
-    if (((header[8] == 'v') ? L_ENDIAN : B_ENDIAN) != ENDIAN_ORDER) {
-      fd->flags |= FD_FLAGS_SWITCH_ENDIAN;
-    }
-
-    /* get the version number */
-    memcpy(num, header + 9, 3);
-    num[3] = 0;
-    fd->fileversion = atoi(num);
+  const std::optional<DecodedBlenderHeader> header = try_decode_blender_header(fd);
+  if (!header.has_value()) {
+    return;
   }
+  fd->flags |= FD_FLAGS_FILE_OK;
+  if (header->pointer_size == 4) {
+    fd->flags |= FD_FLAGS_FILE_POINTSIZE_IS_4;
+  }
+  if (header->pointer_size != sizeof(void *)) {
+    fd->flags |= FD_FLAGS_POINTSIZE_DIFFERS;
+  }
+  if (header->endian != ENDIAN_ORDER) {
+    fd->flags |= FD_FLAGS_SWITCH_ENDIAN;
+  }
+  fd->fileversion = header->file_version;
 }
 
 /**
