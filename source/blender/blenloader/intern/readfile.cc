@@ -638,7 +638,7 @@ static void switch_endian_bh4(BHead4 *bhead)
   }
 }
 
-static void switch_endian_bh8(SmallBHead8 *bhead)
+static void switch_endian_small_bh8(SmallBHead8 *bhead)
 {
   /* the ID_.. codes */
   if ((bhead->code & 0xFFFF) == 0) {
@@ -649,6 +649,20 @@ static void switch_endian_bh8(SmallBHead8 *bhead)
     BLI_endian_switch_int32(&bhead->len);
     BLI_endian_switch_int32(&bhead->SDNAnr);
     BLI_endian_switch_int32(&bhead->nr);
+  }
+}
+
+static void switch_endian_large_bh8(LargeBHead8 *bhead)
+{
+  /* the ID_.. codes */
+  if ((bhead->code & 0xFFFF) == 0) {
+    bhead->code >>= 16;
+  }
+
+  if (bhead->code != BLO_CODE_ENDB) {
+    BLI_endian_switch_int64(&bhead->len);
+    BLI_endian_switch_int32(&bhead->SDNAnr);
+    BLI_endian_switch_int64(&bhead->nr);
   }
 }
 
@@ -701,7 +715,7 @@ static BHeadN *get_bhead(FileData *fd)
     if (!fd->is_eof) {
       /* initializing to zero isn't strictly needed but shuts valgrind up
        * since uninitialized memory gets compared */
-      SmallBHead8 bhead8 = {0};
+      SmallBHead8 small_bhead8 = {0};
       BHead4 bhead4 = {0};
       BHead bhead = {0};
 
@@ -736,21 +750,21 @@ static BHeadN *get_bhead(FileData *fd)
         }
       }
       else {
-        bhead8.code = BLO_CODE_DATA;
-        readsize = fd->file->read(fd->file, &bhead8, sizeof(bhead8));
+        small_bhead8.code = BLO_CODE_DATA;
+        readsize = fd->file->read(fd->file, &small_bhead8, sizeof(small_bhead8));
 
-        if (readsize == sizeof(bhead8) || bhead8.code == BLO_CODE_ENDB) {
+        if (readsize == sizeof(small_bhead8) || small_bhead8.code == BLO_CODE_ENDB) {
           if (fd->flags & FD_FLAGS_SWITCH_ENDIAN) {
-            switch_endian_bh8(&bhead8);
+            switch_endian_small_bh8(&small_bhead8);
           }
 
           if (fd->flags & FD_FLAGS_POINTSIZE_DIFFERS) {
-            bh4_from_bh8(&bhead, &bhead8, (fd->flags & FD_FLAGS_SWITCH_ENDIAN) != 0);
+            bh4_from_bh8(&bhead, &small_bhead8, (fd->flags & FD_FLAGS_SWITCH_ENDIAN) != 0);
           }
           else {
             /* std::min is only to quiet `-Warray-bounds` compiler warning. */
-            BLI_assert(sizeof(bhead) == sizeof(bhead8));
-            memcpy(&bhead, &bhead8, std::min(sizeof(bhead), sizeof(bhead8)));
+            BLI_assert(sizeof(bhead) == sizeof(small_bhead8));
+            memcpy(&bhead, &small_bhead8, std::min(sizeof(bhead), sizeof(small_bhead8)));
           }
         }
         else {

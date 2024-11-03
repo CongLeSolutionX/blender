@@ -173,3 +173,12 @@ typedef struct SmallBHead8 {
   uint64_t old;
   int SDNAnr, nr;
 } SmallBHead8;
+#
+#
+typedef struct LargeBHead8 {
+  int code;
+  int SDNAnr;
+  uint64_t old;
+  int64_t len;
+  int64_t nr;
+} LargeBHead8;
