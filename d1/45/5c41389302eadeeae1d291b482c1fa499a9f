@@ -1,1 +1,2 @@
 Referenced by commit 4b884f737c44f09983373306639339bab9188433, Geometry Nodes: OBJ Import Node
+Referenced by pull request #129759, Fix: STL import crash when unable to open or read file
