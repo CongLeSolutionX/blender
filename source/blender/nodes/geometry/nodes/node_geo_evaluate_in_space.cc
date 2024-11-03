@@ -760,7 +760,7 @@ class DifferenceSumFieldInput final : public bke::GeometryFieldInput {
                           sampled_bucket_values);
 
     Array<float3> dst_values(domain_size);
-    array_utils::scatter(dst_values.as_span(), indices, sampled_bucket_values.as_mutable_span());
+    array_utils::scatter(dst_values.as_span(), indices.as_span(), sampled_bucket_values.as_mutable_span());
     return VArray<float3>::ForContainer(std::move(dst_values));
   }
 
