@@ -720,47 +720,82 @@ class DifferenceSumFieldInput final : public bke::GeometryFieldInput {
     const int total_joints = akdbt::total_joints_for_depth(total_depth);
 
     Array<int> start_indices(total_buckets + 1);
-    const OffsetIndices<int> base_offsets = akdbt::fill_buckets_linear(domain_size, start_indices);
+    {
+      SCOPED_TIMER_AVERAGED("akdbt::fill_buckets_linear");
+      akdbt::fill_buckets_linear(domain_size, start_indices);
+    }
+    const OffsetIndices<int> base_offsets(start_indices);
 
     Array<int> indices(domain_size);
-    akdbt::from_positions(positions, base_offsets, total_depth, indices);
+    {
+      SCOPED_TIMER_AVERAGED("akdbt::from_positions");
+      akdbt::from_positions(positions, base_offsets, total_depth, indices);
+    }
+    
 
     Array<float3> bucket_positions(domain_size);
     Array<float3> bucket_values(domain_size);
 
-    array_utils::gather(
-        Span<float3>(positions), indices.as_span(), bucket_positions.as_mutable_span());
-    array_utils::gather(
-        Span<float3>(src_values), indices.as_span(), bucket_values.as_mutable_span());
+    {
+      SCOPED_TIMER_AVERAGED("array_utils::gather bucket_positions and bucket_values");
+      array_utils::gather(
+          Span<float3>(positions), indices.as_span(), bucket_positions.as_mutable_span());
+      array_utils::gather(
+          Span<float3>(src_values), indices.as_span(), bucket_values.as_mutable_span());
+    }
 
     Array<float3> joints_positions(total_joints);
     Array<float3> joints_values(total_joints);
 
-    akdbt::mean_sums<float3>(base_offsets, total_depth, bucket_positions, joints_positions);
-    akdbt::normalize_for_size<float3>(base_offsets, total_depth, joints_positions);
+    {
+      SCOPED_TIMER_AVERAGED("akdbt::mean_sums joints_positions");
+      akdbt::mean_sums<float3>(base_offsets, total_depth, bucket_positions, joints_positions);
+    }
+    {
+      SCOPED_TIMER_AVERAGED("akdbt::normalize_for_size joints_positions");
+      akdbt::normalize_for_size<float3>(base_offsets, total_depth, joints_positions);
+    }
 
-    akdbt::mean_sums<float3>(base_offsets, total_depth, bucket_values, joints_values);
-    akdbt::normalize_for_size<float3>(base_offsets, total_depth, joints_values);
+    {
+      SCOPED_TIMER_AVERAGED("akdbt::mean_sums joints_values");
+      akdbt::mean_sums<float3>(base_offsets, total_depth, bucket_values, joints_values);
+    }
+    {
+      SCOPED_TIMER_AVERAGED("akdbt::normalize_for_size joints_values");
+      akdbt::normalize_for_size<float3>(base_offsets, total_depth, joints_values);
+    }
 
     Array<float> joints_radii(total_joints);
 
-    akdbt::radius_exact(
-        base_offsets, total_depth, bucket_positions, joints_positions, joints_radii);
-    cloud_radii_to_min_distance(joints_radii, distance_power_, precision_, joints_radii);
+    {
+      SCOPED_TIMER_AVERAGED("akdbt::radius_exact");
+      akdbt::radius_exact(
+          base_offsets, total_depth, bucket_positions, joints_positions, joints_radii);
+    }
+    {
+      SCOPED_TIMER_AVERAGED("cloud_radii_to_min_distance");
+      cloud_radii_to_min_distance(joints_radii, distance_power_, precision_, joints_radii);
+    }
 
     Array<float3> sampled_bucket_values(domain_size, float3(0));
-    akdbt::sample_average(base_offsets,
-                          total_depth,
-                          joints_positions,
-                          joints_radii,
-                          joints_values,
-                          bucket_positions,
-                          bucket_values,
-                          distance_power_,
-                          sampled_bucket_values);
+    {
+      SCOPED_TIMER_AVERAGED("akdbt::sample_average");
+      akdbt::sample_average(base_offsets,
+                            total_depth,
+                            joints_positions,
+                            joints_radii,
+                            joints_values,
+                            bucket_positions,
+                            bucket_values,
+                            distance_power_,
+                            sampled_bucket_values);
+    }
 
     Array<float3> dst_values(domain_size);
-    array_utils::scatter(dst_values.as_span(), indices.as_span(), sampled_bucket_values.as_mutable_span());
+    {
+      SCOPED_TIMER_AVERAGED("array_utils::scatter");
+      array_utils::scatter(sampled_bucket_values.as_span(), indices.as_span(), dst_values.as_mutable_span());
+    }
     return VArray<float3>::ForContainer(std::move(dst_values));
   }
 
