@@ -721,6 +721,12 @@ static bool write_at_address_validate(WriteData *wd, int filecode, const void *a
 
 static void write_bhead(WriteData *wd, const BHead &bhead)
 {
+  if (USER_EXPERIMENTAL_TEST(&U, write_large_blend_file_blocks)) {
+    static_assert(sizeof(BHead) == sizeof(LargeBHead8));
+    mywrite(wd, &bhead, sizeof(BHead));
+    return;
+  }
+  /* Write older #SmallBHead8 headers so that older Blender versions can read them. */
   SmallBHead8 bh;
   bh.code = bhead.code;
   bh.old = uint64_t(bhead.old);
@@ -1364,9 +1370,20 @@ static bool write_file_handle(Main *mainvar,
 
   blo_split_main(&mainlist, mainvar);
 
+  char bhead_char;
+  if (sizeof(void *) == 4) {
+    bhead_char = '_';
+  }
+  else if (USER_EXPERIMENTAL_TEST(&U, write_large_blend_file_blocks)) {
+    bhead_char = 'x';
+  }
+  else {
+    bhead_char = '-';
+  }
+
   SNPRINTF(buf,
            "BLENDER%c%c%.3d",
-           (sizeof(void *) == 8) ? '-' : '_',
+           bhead_char,
            (ENDIAN_ORDER == B_ENDIAN) ? 'V' : 'v',
            BLENDER_FILE_VERSION);
 

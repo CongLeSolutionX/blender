@@ -963,12 +963,11 @@ static void decode_blender_header(FileData *fd)
   /* read in the header data */
   readsize = fd->file->read(fd->file, header, sizeof(header));
 
-  if (readsize == sizeof(header) && STREQLEN(header, "BLENDER", 7) && ELEM(header[7], '_', '-') &&
-      ELEM(header[8], 'v', 'V') &&
+  if (readsize == sizeof(header) && STREQLEN(header, "BLENDER", 7) &&
+      ELEM(header[7], '_', '-', 'x') && ELEM(header[8], 'v', 'V') &&
       (isdigit(header[9]) && isdigit(header[10]) && isdigit(header[11])))
   {
     fd->flags |= FD_FLAGS_FILE_OK;
-    fd->flags |= FD_FLAGS_IS_SMALL_BHEAD8;
 
     /* what size are pointers in the file ? */
     if (header[7] == '_') {
@@ -980,6 +979,9 @@ static void decode_blender_header(FileData *fd)
     else {
       if (sizeof(void *) != 8) {
         fd->flags |= FD_FLAGS_POINTSIZE_DIFFERS;
+      }
+      if (header[7] == '-') {
+        fd->flags |= FD_FLAGS_IS_SMALL_BHEAD8;
       }
     }
 

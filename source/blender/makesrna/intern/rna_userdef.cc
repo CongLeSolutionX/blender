@@ -7571,6 +7571,13 @@ static void rna_def_userdef_experimental(BlenderRNA *brna)
   RNA_def_property_boolean_sdna(prop, nullptr, "enable_new_cpu_compositor", 1);
   RNA_def_property_ui_text(prop, "CPU Compositor", "Enable the new CPU compositor");
 
+  prop = RNA_def_property(srna, "write_large_blend_file_blocks", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "write_large_blend_file_blocks", 1);
+  RNA_def_property_ui_text(
+      prop,
+      "Write Large Blend File Blocks",
+      "Enables support for writing .blend files that contain buffers larger than 2 GB");
+
   prop = RNA_def_property(srna, "use_all_linked_data_direct", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_ui_text(
       prop,
