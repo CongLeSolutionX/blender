@@ -719,6 +719,18 @@ static bool write_at_address_validate(WriteData *wd, int filecode, const void *a
   return true;
 }
 
+static void write_bhead(WriteData *wd, const BHead &bhead)
+{
+  SmallBHead8 bh;
+  bh.code = bhead.code;
+  bh.old = uint64_t(bhead.old);
+  bh.nr = bhead.nr;
+  bh.SDNAnr = bhead.SDNAnr;
+  bh.len = bhead.len;
+  BLI_assert(bh.len == bhead.len);
+  mywrite(wd, &bh, sizeof(bh));
+}
+
 static void writestruct_at_address_nr(
     WriteData *wd, int filecode, const int struct_nr, int nr, const void *adr, const void *data)
 {
@@ -733,11 +745,10 @@ static void writestruct_at_address_nr(
   }
 
   /* Initialize #BHead. */
-  SmallBHead8 bh;
+  BHead bh;
   bh.code = filecode;
-  bh.old = uint64_t(adr);
+  bh.old = adr;
   bh.nr = nr;
-
   bh.SDNAnr = struct_nr;
   bh.len = nr * DNA_struct_size(wd->sdna, bh.SDNAnr);
 
@@ -745,7 +756,7 @@ static void writestruct_at_address_nr(
     return;
   }
 
-  mywrite(wd, &bh, sizeof(bh));
+  write_bhead(wd, bh);
   mywrite(wd, data, size_t(bh.len));
 }
 
@@ -777,15 +788,14 @@ static void writedata(WriteData *wd, int filecode, size_t len, const void *adr)
   }
 
   /* Initialize #BHead. */
-  SmallBHead8 bh;
+  BHead bh;
   bh.code = filecode;
-  bh.old = uint64_t(adr);
+  bh.old = adr;
   bh.nr = 1;
   BLI_STATIC_ASSERT(SDNA_RAW_DATA_STRUCT_INDEX == 0, "'raw data' SDNA struct index should be 0")
   bh.SDNAnr = SDNA_RAW_DATA_STRUCT_INDEX;
-  bh.len = int(len);
-
-  mywrite(wd, &bh, sizeof(bh));
+  bh.len = int64_t(len);
+  write_bhead(wd, bh);
   mywrite(wd, adr, len);
 }
 
@@ -1499,10 +1509,10 @@ static bool write_file_handle(Main *mainvar,
 
   /* End of file. */
   {
-    SmallBHead8 bhead;
+    BHead bhead;
     memset(&bhead, 0, sizeof(bhead));
     bhead.code = BLO_CODE_ENDB;
-    mywrite(wd, &bhead, sizeof(bhead));
+    write_bhead(wd, bhead);
   }
 
   blo_join_main(&mainlist);
