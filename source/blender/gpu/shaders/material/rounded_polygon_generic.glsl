@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0 */
 
 /* The SVM implementation is used as the base generic version because multiple math function
- * identifiers are already used as macros in the SVM code, making a code translation into an SVM implementation using macros impossible. */
+ * identifiers are already used as macros in the SVM code, making a code translation into an SVM
+ * implementation using macros impossible. */
 
 /* Define macros for code translation. */
 #ifdef TRANSLATE_TO_GEOMETRY_NODES

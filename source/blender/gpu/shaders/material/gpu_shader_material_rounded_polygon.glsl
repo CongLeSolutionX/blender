@@ -7,7 +7,7 @@
 /* Define macro flags for code translation. */
 /* No macro flags necessary, as code is translated to GLSL by default. */
 
-/* The actual rounded polygon functions are in rounded_polygon_generic.glsl. */
+/* The rounded polygon calculation functions are defined in rounded_polygon_generic.glsl. */
 #include "rounded_polygon_generic.glsl"
 
 /* Undefine macro flags used for code translation. */

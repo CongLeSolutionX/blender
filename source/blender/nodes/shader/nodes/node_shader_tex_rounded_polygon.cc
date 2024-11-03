@@ -127,7 +127,7 @@ static void node_shader_update_tex_rounded_polygon(bNodeTree *ntree, bNode *node
 /* Define macro flags for code translation. */
 #define TRANSLATE_TO_GEOMETRY_NODES
 
-/* The actual rounded polygon functions are in rounded_polygon_generic.glsl. */
+/* The rounded polygon calculation functions are defined in rounded_polygon_generic.glsl. */
 #include "../../../gpu/shaders/material/rounded_polygon_generic.glsl"
 
 /* Undefine macro flags used for code translation. */
