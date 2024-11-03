@@ -786,7 +786,7 @@ mark_as_advanced(WITH_ASSERT_ABORT)
 option(WITH_ASSERT_RELEASE "Build with asserts enabled even for non-debug configurations" OFF)
 mark_as_advanced(WITH_ASSERT_RELEASE)
 
-if((UNIX AND NOT APPLE) OR (CMAKE_GENERATOR MATCHES "^Visual Studio.+"))
+if(UNIX OR (CMAKE_GENERATOR MATCHES "^Visual Studio.+"))
   option(WITH_CLANG_TIDY "\
 Use Clang Tidy to analyze the source code \
 (only enable for development on Linux using Clang, or Windows using the Visual Studio IDE)"
