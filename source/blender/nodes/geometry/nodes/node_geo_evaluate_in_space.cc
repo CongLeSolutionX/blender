@@ -2,6 +2,9 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#include <limits>
+#include <type_traits>
+
 #include "BLI_array.hh"
 #include "BLI_array_utils.hh"
 #include "BLI_index_mask.hh"
@@ -59,6 +62,23 @@ template<typename T> std::ostream &operator<<(std::ostream &stream, Array<T> dat
 
 }  // namespace blender
 
+namespace blender {
+/*
+template<typename T> inline T safe_inf_divide(const T &a, const T &b)
+{
+  static_assert(std::is_floating_point_v<T>);
+  if constexpr (std::numeric_limits<T>::is_iec559) {
+    return a / b;
+  } else {
+    if (b == 0) {
+      return std::numeric_limits<T>::max() * (a > 0 ? 1 : -1);
+    }
+    return a / b;
+  }
+}
+*/
+}  // namespace blender
+
 namespace blender::nodes::node_geo_evaluate_in_space_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
@@ -92,7 +112,7 @@ static void parallel_transform(const Span<InT> src,
                                MutableSpan<OutT> dst,
                                const FuncT func)
 {
-  BLI_assert(src.size() = dst.size());
+  BLI_assert(src.size() == dst.size());
   threading::parallel_for(src.index_range(), grain_size, [&](const IndexRange range) {
     const Span<InT> src_slice = src.slice(range);
     MutableSpan<OutT> dst_slice = dst.slice(range);
@@ -628,23 +648,26 @@ static float minimal_dinstance_to(const float radius,
                                   const int distance_power,
                                   const float precision)
 {
+  BLI_assert(precision > 1.0f);
   /**
-   * Centre of the sphere with a points inside the centre and some virtual point which is the most
-   * near to the sempler:
+   * Centre of the sphere with a points inside the sphere and some of the points are the most near
+   * and far to the sampler:
    *
-   * 1 / distance <= 1 / (distance - radius).
+   * 1 / (#distance + #radius) <= 1 / (#distance - #radius).
    *
    * They are equal at ~infinite distance. But with error they can be treat as equal much near
-   * To approximate this use some factor (1 <= precision <= infinite) to say how large error is
+   * To approximate this use some factor (1 <= #precision <= infinite) to say how large error is
    * acceptable:
    *
-   * 1 / distance >= 1 / (distance - radius) * precision.
+   * 1 / (#distance + #radius) >= 1 / (#distance - #radius) * #precision.
    *
-   * Version in arbitrary degree:
+   * Version in arbitrary degree of the distance to each point:
    *
-   * (1 / distance) ^ distance_power >= precision * (1 / (distance - radius)) ^ distance_power.
+   * (1 / (#distance + #radius)) ^ #distance_power >= #precision * (1 / (#distance - #radius)) ^
+   * #distance_power.
    * */
-  return radius / (math::pow<float>(precision, distance_power) - 1.0f);
+  const float precision_root = math::pow<float>(precision, math::rcp<float>(distance_power));
+  return -(1.0f + precision_root) / (1.0f - precision_root) * radius;
 }
 
 class DifferenceSumFieldInput final : public bke::GeometryFieldInput {
