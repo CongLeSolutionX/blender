@@ -666,43 +666,42 @@ static void switch_endian_large_bh8(LargeBHead8 *bhead)
   }
 }
 
-static void bh4_from_bh8(BHead *bhead, SmallBHead8 *bhead8, bool do_endian_swap)
+static void bh4_from_small_bh8(BHead4 *bhead4,
+                               SmallBHead8 *small_bhead8,
+                               const bool do_endian_swap)
 {
-  BHead4 *bhead4 = (BHead4 *)bhead;
   int64_t old;
 
-  bhead4->code = bhead8->code;
-  bhead4->len = bhead8->len;
+  bhead4->code = small_bhead8->code;
+  bhead4->len = small_bhead8->len;
 
   if (bhead4->code != BLO_CODE_ENDB) {
     /* perform a endian swap on 64bit pointers, otherwise the pointer might map to zero
      * 0x0000000000000000000012345678 would become 0x12345678000000000000000000000000
      */
     if (do_endian_swap) {
-      BLI_endian_switch_uint64(&bhead8->old);
+      BLI_endian_switch_uint64(&small_bhead8->old);
     }
 
     /* this patch is to avoid `intptr_t` being read from not-eight aligned positions
      * is necessary on any modern 64bit architecture) */
-    memcpy(&old, &bhead8->old, 8);
+    memcpy(&old, &small_bhead8->old, 8);
     bhead4->old = int(old >> 3);
 
-    bhead4->SDNAnr = bhead8->SDNAnr;
-    bhead4->nr = bhead8->nr;
+    bhead4->SDNAnr = small_bhead8->SDNAnr;
+    bhead4->nr = small_bhead8->nr;
   }
 }
 
-static void bh8_from_bh4(BHead *bhead, BHead4 *bhead4)
+static void small_bh8_from_bh4(SmallBHead8 *small_bhead8, BHead4 *bhead4)
 {
-  SmallBHead8 *bhead8 = (SmallBHead8 *)bhead;
+  small_bhead8->code = bhead4->code;
+  small_bhead8->len = bhead4->len;
 
-  bhead8->code = bhead4->code;
-  bhead8->len = bhead4->len;
-
-  if (bhead8->code != BLO_CODE_ENDB) {
-    bhead8->old = bhead4->old;
-    bhead8->SDNAnr = bhead4->SDNAnr;
-    bhead8->nr = bhead4->nr;
+  if (small_bhead8->code != BLO_CODE_ENDB) {
+    small_bhead8->old = bhead4->old;
+    small_bhead8->SDNAnr = bhead4->SDNAnr;
+    small_bhead8->nr = bhead4->nr;
   }
 }
 
@@ -736,7 +735,7 @@ static BHeadN *get_bhead(FileData *fd)
           }
 
           if (fd->flags & FD_FLAGS_POINTSIZE_DIFFERS) {
-            bh8_from_bh4(&bhead, &bhead4);
+            small_bh8_from_bh4(reinterpret_cast<SmallBHead8 *>(&bhead), &bhead4);
           }
           else {
             /* std::min is only to quiet '-Warray-bounds' compiler warning. */
@@ -759,7 +758,9 @@ static BHeadN *get_bhead(FileData *fd)
           }
 
           if (fd->flags & FD_FLAGS_POINTSIZE_DIFFERS) {
-            bh4_from_bh8(&bhead, &small_bhead8, (fd->flags & FD_FLAGS_SWITCH_ENDIAN) != 0);
+            bh4_from_small_bh8(reinterpret_cast<BHead4 *>(&bhead),
+                               &small_bhead8,
+                               (fd->flags & FD_FLAGS_SWITCH_ENDIAN) != 0);
           }
           else {
             /* std::min is only to quiet `-Warray-bounds` compiler warning. */
@@ -5006,7 +5007,7 @@ static void convert_pointer_array_64_to_32(BlendDataReader *reader,
                                            const uint64_t *src,
                                            uint32_t *dst)
 {
-  /* Match pointer conversion rules from bh4_from_bh8 and cast_pointer. */
+  /* Match pointer conversion rules from bh4_from_small_bh8 and cast_pointer. */
   if (BLO_read_requires_endian_switch(reader)) {
     for (int i = 0; i < array_size; i++) {
       uint64_t ptr = src[i];
