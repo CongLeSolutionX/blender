@@ -9,50 +9,14 @@
 
 #define vector3 point
 
-/* Define macros for programming language translation. */
-#define atanf atan
-#define atan2f atan2
-#define cosf cos
-#define fabsf abs
-#define floorf floor
-#define fractf fract
-#define sinf sin
-#define sqrtf sqrt
-#define squaref square
-#define tanf tan
+/* Define macro flags for code translation. */
+#define TRANSLATE_TO_OSL
 
-#define bool int
-#define float2 vector2
-#define float4 vector4
-#define make_float2 vector2
-#define make_float4 vector4
-#define M_PI_F M_PI
-#define M_TAU_F M_TAU
-#define ccl_device
+/* The actual rounded polygon functions are in rounded_polygon_generic.glsl. */
+#include "../../../../../source/blender/gpu/shaders/material/rounded_polygon_generic.glsl"
 
-/* The actual rounded polygon functions are in rounded_polygon_generic.h. */
-#include "../../../../../source/blender/blenlib/intern/rounded_polygon_generic.h"
-
-/* Undefine macros used for programming language translation. */
-#undef atanf
-#undef atan2f
-#undef cosf
-#undef fabsf
-#undef floorf
-#undef fractf
-#undef sinf
-#undef sqrtf
-#undef squaref
-#undef tanf
-
-#undef bool
-#undef float2
-#undef float4
-#undef make_float2
-#undef make_float4
-#undef M_PI_F
-#undef M_TAU_F
-#undef ccl_device
+/* Undefine macro flags used for code translation. */
+#undef TRANSLATE_TO_OSL
 
 shader node_rounded_polygon_texture(
     int use_mapping = 0,

@@ -17,8 +17,14 @@ struct RoundedPolygonStackOffsets {
   uint x_axis_A_angle_bisector;
 };
 
-/* The actual rounded polygon functions are in rounded_polygon_generic.h. */
-#include "../../../../source/blender/blenlib/intern/rounded_polygon_generic.h"
+/* Define macro flags for code translation. */
+#define TRANSLATE_TO_SVM
+
+/* The actual rounded polygon functions are in rounded_polygon_generic.glsl. */
+#include "../../../../source/blender/gpu/shaders/material/rounded_polygon_generic.glsl"
+
+/* Undefine macro flags used for code translation. */
+#undef TRANSLATE_TO_SVM
 
 template<uint node_feature_mask>
 ccl_device_noinline int svm_node_tex_rounded_polygon(

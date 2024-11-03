@@ -173,7 +173,6 @@ set(SRC
   # Header as source (included in C files above).
   intern/kdtree_impl.h
   intern/list_sort_impl.h
-  intern/rounded_polygon_generic.h
 
 
   BLI_alloca.h

@@ -2,9 +2,74 @@
  *
  * SPDX-License-Identifier: Apache-2.0 */
 
-/* The SVM implementation is used as the default generic version because multiple math function
- * identifiers are already used as macros in the SVM code, making a programming language
- * translation into an SVM implementation using macros impossible. */
+/* The SVM implementation is used as the base generic version because multiple math function
+ * identifiers are already used as macros in the SVM code, making a code translation into an SVM implementation using macros impossible. */
+
+/* Define macros for code translation. */
+#ifdef TRANSLATE_TO_GEOMETRY_NODES
+#  define atanf atan
+#  define atan2f atan2
+#  define cosf cos
+#  define fabsf abs
+#  define floorf floor
+#  define fractf fract
+#  define sinf sin
+#  define sqrtf sqrt
+#  define squaref square
+#  define tanf tan
+
+#  define make_float2 float2
+#  define make_float4 float4
+#  define ccl_device
+
+using namespace math;
+#else
+#  ifdef TRANSLATE_TO_OSL
+#    define atanf atan
+#    define atan2f atan2
+#    define cosf cos
+#    define fabsf abs
+#    define floorf floor
+#    define fractf fract
+#    define sinf sin
+#    define sqrtf sqrt
+#    define squaref square
+#    define tanf tan
+
+#    define bool int
+#    define float2 vector2
+#    define float4 vector4
+#    define make_float2 vector2
+#    define make_float4 vector4
+#    define M_PI_F M_PI
+#    define M_TAU_F M_TAU
+#    define ccl_device
+#  else
+#    ifdef TRANSLATE_TO_SVM
+/* No code translation necessary for the SVM implementation as it is the base generic version. */
+#    else
+/* Translate code to GLSL by default. */
+#      define atanf atan
+#      define atan2f atan2
+#      define cosf cos
+#      define fabsf abs
+#      define floorf floor
+#      define fractf fract
+#      define sinf sin
+#      define sqrtf sqrt
+#      define squaref square
+#      define tanf tan
+
+#      define float2 vec2
+#      define float4 vec4
+#      define make_float2 vec2
+#      define make_float4 vec4
+#      define M_PI_F M_PI
+#      define M_TAU_F M_TAU
+#      define ccl_device
+#    endif
+#  endif
+#endif
 
 /* Naming convention for the Rounded Polygon Texture node code:
  * Let x and y be 2D vectors.
@@ -1400,3 +1465,69 @@ ccl_device float4 calculate_out_fields(bool calculate_r_gon_parameter_field,
     }
   }
 }
+
+/* Undefine macros used for code translation. */
+#ifdef TRANSLATE_TO_GEOMETRY_NODES
+#  undef atanf
+#  undef atan2f
+#  undef cosf
+#  undef fabsf
+#  undef floorf
+#  undef fractf
+#  undef sinf
+#  undef sqrtf
+#  undef squaref
+#  undef tanf
+
+#  undef make_float2
+#  undef make_float4
+#  undef ccl_device
+
+using namespace math;
+#else
+#  ifdef TRANSLATE_TO_OSL
+#    undef atanf
+#    undef atan2f
+#    undef cosf
+#    undef fabsf
+#    undef floorf
+#    undef fractf
+#    undef sinf
+#    undef sqrtf
+#    undef squaref
+#    undef tanf
+
+#    undef bool
+#    undef float2
+#    undef float4
+#    undef make_float2
+#    undef make_float4
+#    undef M_PI_F
+#    undef M_TAU_F
+#    undef ccl_device
+#  else
+#    ifdef TRANSLATE_TO_SVM
+/* No code translation necessary for the SVM implementation as it is the base generic version. */
+#    else
+/* Translate code to GLSL by default. */
+#      undef atanf
+#      undef atan2f
+#      undef cosf
+#      undef fabsf
+#      undef floorf
+#      undef fractf
+#      undef sinf
+#      undef sqrtf
+#      undef squaref
+#      undef tanf
+
+#      undef float2
+#      undef float4
+#      undef make_float2
+#      undef make_float4
+#      undef M_PI_F
+#      undef M_TAU_F
+#      undef ccl_device
+#    endif
+#  endif
+#endif
