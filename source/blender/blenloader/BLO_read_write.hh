@@ -122,11 +122,11 @@ void BLO_write_struct_at_address_by_id_with_filecode(
  */
 void BLO_write_struct_array_by_name(BlendWriter *writer,
                                     const char *struct_name,
-                                    int array_size,
+                                    int64_t array_size,
                                     const void *data_ptr);
 void BLO_write_struct_array_by_id(BlendWriter *writer,
                                   int struct_id,
-                                  int array_size,
+                                  int64_t array_size,
                                   const void *data_ptr);
 #define BLO_write_struct_array(writer, struct_name, array_size, data_ptr) \
   BLO_write_struct_array_by_id( \
@@ -135,8 +135,11 @@ void BLO_write_struct_array_by_id(BlendWriter *writer,
 /**
  * Write struct array at address.
  */
-void BLO_write_struct_array_at_address_by_id(
-    BlendWriter *writer, int struct_id, int array_size, const void *address, const void *data_ptr);
+void BLO_write_struct_array_at_address_by_id(BlendWriter *writer,
+                                             int struct_id,
+                                             int64_t array_size,
+                                             const void *address,
+                                             const void *data_ptr);
 #define BLO_write_struct_array_at_address(writer, struct_name, array_size, address, data_ptr) \
   BLO_write_struct_array_at_address_by_id( \
       writer, BLO_get_struct_id(writer, struct_name), array_size, address, data_ptr)

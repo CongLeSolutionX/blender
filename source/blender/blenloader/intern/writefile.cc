@@ -733,12 +733,18 @@ static void write_bhead(WriteData *wd, const BHead &bhead)
   bh.nr = bhead.nr;
   bh.SDNAnr = bhead.SDNAnr;
   bh.len = bhead.len;
-  BLI_assert(bh.len == bhead.len);
+  if (bh.len != bhead.len) {
+    BLI_assert_unreachable();
+  }
   mywrite(wd, &bh, sizeof(bh));
 }
 
-static void writestruct_at_address_nr(
-    WriteData *wd, int filecode, const int struct_nr, int nr, const void *adr, const void *data)
+static void writestruct_at_address_nr(WriteData *wd,
+                                      int filecode,
+                                      const int struct_nr,
+                                      int64_t nr,
+                                      const void *adr,
+                                      const void *data)
 {
   BLI_assert(struct_nr > 0 && struct_nr < SDNA_TYPE_MAX);
 
@@ -767,7 +773,7 @@ static void writestruct_at_address_nr(
 }
 
 static void writestruct_nr(
-    WriteData *wd, int filecode, const int struct_nr, int nr, const void *adr)
+    WriteData *wd, int filecode, const int struct_nr, int64_t nr, const void *adr)
 {
   writestruct_at_address_nr(wd, filecode, struct_nr, nr, adr, adr);
 }
@@ -1859,7 +1865,7 @@ void BLO_write_struct_by_name(BlendWriter *writer, const char *struct_name, cons
 
 void BLO_write_struct_array_by_name(BlendWriter *writer,
                                     const char *struct_name,
-                                    int array_size,
+                                    const int64_t array_size,
                                     const void *data_ptr)
 {
   int struct_id = BLO_get_struct_id_by_name(writer, struct_name);
@@ -1891,15 +1897,18 @@ void BLO_write_struct_at_address_by_id_with_filecode(
 }
 
 void BLO_write_struct_array_by_id(BlendWriter *writer,
-                                  int struct_id,
-                                  int array_size,
+                                  const int struct_id,
+                                  const int64_t array_size,
                                   const void *data_ptr)
 {
   writestruct_nr(writer->wd, BLO_CODE_DATA, struct_id, array_size, data_ptr);
 }
 
-void BLO_write_struct_array_at_address_by_id(
-    BlendWriter *writer, int struct_id, int array_size, const void *address, const void *data_ptr)
+void BLO_write_struct_array_at_address_by_id(BlendWriter *writer,
+                                             const int struct_id,
+                                             const int64_t array_size,
+                                             const void *address,
+                                             const void *data_ptr)
 {
   writestruct_at_address_nr(writer->wd, BLO_CODE_DATA, struct_id, array_size, address, data_ptr);
 }
