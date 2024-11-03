@@ -592,9 +592,9 @@ class VectorSet {
   VectorT extract_vector()
   {
     VectorData<Key, Allocator> data;
-    data.begin = keys_;
-    data.end = keys_ + this->size();
-    data.capacity_end = keys_ + usable_slots_;
+    data.data = keys_;
+    data.size = this->size();
+    data.capacity = usable_slots_;
 
     /* Reset some values so that the destructor does not free the data that is moved to the
      * #Vector.*/

@@ -48,10 +48,9 @@ void vector_print_stats(const char *name,
  * data-array into and out of the #Vector. Note that this struct does not do any memory management.
  */
 template<typename T, typename Allocator> struct VectorData {
-  T *begin = nullptr;
-  T *end = nullptr;
-  T *capacity_end = nullptr;
-
+  T *data = nullptr;
+  int64_t size = 0;
+  int64_t capacity = 0;
   BLI_NO_UNIQUE_ADDRESS Allocator allocator;
 };
 
@@ -279,15 +278,16 @@ class Vector {
    */
   Vector(const VectorData<T, Allocator> &data) : Vector(data.allocator)
   {
-    BLI_assert(data.begin <= data.end);
-    BLI_assert(data.end <= data.capacity_end);
+    BLI_assert(data.capacity == 0 || data.data != nullptr);
+    BLI_assert(data.size >= 0);
+    BLI_assert(data.size <= data.capacity);
     /* Don't use the passed in buffer if it is null. Use the inline-buffer instead which is already
      * initialized by the constructor call above. */
-    if (data.begin != nullptr) {
+    if (data.data != nullptr) {
       /* Take ownership of the array. */
-      begin_ = data.begin;
-      end_ = data.end;
-      capacity_end_ = data.capacity_end;
+      begin_ = data.data;
+      end_ = data.data + data.size;
+      capacity_end_ = data.data + data.capacity;
       UPDATE_VECTOR_SIZE(this);
     }
   }
@@ -1024,9 +1024,9 @@ class Vector {
     }
 
     VectorData<T, Allocator> data;
-    data.begin = begin_;
-    data.end = end_;
-    data.capacity_end = capacity_end_;
+    data.data = begin_;
+    data.size = end_ - begin_;
+    data.capacity = capacity_end_ - begin_;
     data.allocator = allocator_;
 
     /* Reset #Vector to use empty inline buffer again. */

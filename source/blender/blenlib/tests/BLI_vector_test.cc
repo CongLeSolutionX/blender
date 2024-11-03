@@ -881,11 +881,11 @@ TEST(vector, RecursiveStructure)
 TEST(vector, FromRaw)
 {
   VectorData<int, GuardedAllocator> data;
-  data.begin = MEM_cnew_array<int>(30, __func__);
-  data.end = data.begin + 10;
-  data.capacity_end = data.begin + 30;
+  data.data = MEM_cnew_array<int>(30, __func__);
+  data.size = 10;
+  data.capacity = 30;
 
-  data.begin[0] = 5;
+  data.data[0] = 5;
 
   Vector<int> vec{data};
   EXPECT_EQ(vec.size(), 10);
@@ -904,7 +904,7 @@ TEST(vector, ReleaseEmptyInline)
 {
   Vector<int> vec;
   VectorData<int, GuardedAllocator> data = vec.release();
-  EXPECT_EQ(data.begin, nullptr);
+  EXPECT_EQ(data.data, nullptr);
 }
 
 TEST(vector, ReleaseEmptyAllocated)
@@ -917,11 +917,11 @@ TEST(vector, ReleaseEmptyAllocated)
   VectorData<int, GuardedAllocator> data = vec.release();
   EXPECT_TRUE(vec.is_inline());
 
-  EXPECT_EQ(data.begin, data_ptr);
-  EXPECT_NE(data.begin, nullptr);
-  EXPECT_EQ(data.end - data.begin, 0);
-  EXPECT_EQ(data.capacity_end - data.begin, 100);
-  MEM_freeN(data.begin);
+  EXPECT_EQ(data.data, data_ptr);
+  EXPECT_NE(data.data, nullptr);
+  EXPECT_EQ(data.size, 0);
+  EXPECT_EQ(data.capacity, 100);
+  MEM_freeN(data.data);
 }
 
 TEST(vector, ReleaseNonEmptyInline)
@@ -935,9 +935,9 @@ TEST(vector, ReleaseNonEmptyInline)
   EXPECT_TRUE(vec.is_inline());
   EXPECT_TRUE(vec.is_empty());
 
-  EXPECT_NE(data.begin, inline_data_ptr);
-  EXPECT_EQ(data.end - data.begin, 2);
-  MEM_freeN(data.begin);
+  EXPECT_NE(data.data, inline_data_ptr);
+  EXPECT_EQ(data.size, 2);
+  MEM_freeN(data.data);
 }
 
 TEST(vector, ReleaseAllocated)
@@ -951,10 +951,10 @@ TEST(vector, ReleaseAllocated)
   EXPECT_TRUE(vec.is_inline());
   EXPECT_TRUE(vec.is_empty());
 
-  EXPECT_EQ(data.begin, data_ptr);
-  EXPECT_EQ(data.end - data.begin, 50);
-  EXPECT_EQ(data.begin[0], 3);
-  MEM_freeN(data.begin);
+  EXPECT_EQ(data.data, data_ptr);
+  EXPECT_EQ(data.size, 50);
+  EXPECT_EQ(data.data[0], 3);
+  MEM_freeN(data.data);
 }
 
 }  // namespace blender::tests
