@@ -143,9 +143,21 @@ typedef struct SDNA {
 #
 #
 typedef struct BHead {
-  int code, len;
+  /** Identifier for this #BHead. Can be any of BLO_CODE_* or an ID code like ID_OB.  */
+  int code;
+  /** Identifier of the struct type that is stored in this block. */
+  int SDNAnr;
+  /**
+   * Identifier the block had when it was written. This is used to remap memory blocks on load.
+   * Typically, this is the pointer the memory had when it was written. This should be unique
+   * within an ID.
+   */
+  // TODO: Use `uintptr_t`?
   const void *old;
-  int SDNAnr, nr;
+  /** Number of bytes in the block. */
+  int64_t len;
+  /** Number of structs in the array (1 for simple structs). */
+  int64_t nr;
 } BHead;
 #
 #
