@@ -666,56 +666,53 @@ static void switch_endian_large_bh8(LargeBHead8 *bhead)
   }
 }
 
-static void bh4_from_small_bh8(BHead4 *bhead4,
-                               SmallBHead8 *small_bhead8,
-                               const bool do_endian_swap)
+static BHead bhead_from_bhead4(const BHead4 &bhead4)
 {
-  int64_t old;
-
-  bhead4->code = small_bhead8->code;
-  bhead4->len = small_bhead8->len;
-
-  if (bhead4->code != BLO_CODE_ENDB) {
-    /* perform a endian swap on 64bit pointers, otherwise the pointer might map to zero
-     * 0x0000000000000000000012345678 would become 0x12345678000000000000000000000000
-     */
-    if (do_endian_swap) {
-      BLI_endian_switch_uint64(&small_bhead8->old);
-    }
-
-    /* this patch is to avoid `intptr_t` being read from not-eight aligned positions
-     * is necessary on any modern 64bit architecture) */
-    memcpy(&old, &small_bhead8->old, 8);
-    bhead4->old = int(old >> 3);
-
-    bhead4->SDNAnr = small_bhead8->SDNAnr;
-    bhead4->nr = small_bhead8->nr;
+  BHead bhead;
+  bhead.code = bhead4.code;
+  bhead.len = bhead4.len;
+  if (bhead.code != BLO_CODE_ENDB) {
+    bhead.old = reinterpret_cast<const void *>(bhead4.old);
+    bhead.SDNAnr = bhead4.SDNAnr;
+    bhead.nr = bhead4.nr;
   }
+  return bhead;
 }
 
-static void small_bh8_from_bh4(SmallBHead8 *small_bhead8, BHead4 *bhead4)
+static BHead bhead_from_small_bhead8(const SmallBHead8 &small_bhead8)
 {
-  small_bhead8->code = bhead4->code;
-  small_bhead8->len = bhead4->len;
-
-  if (small_bhead8->code != BLO_CODE_ENDB) {
-    small_bhead8->old = bhead4->old;
-    small_bhead8->SDNAnr = bhead4->SDNAnr;
-    small_bhead8->nr = bhead4->nr;
+  BHead bhead;
+  bhead.code = small_bhead8.code;
+  bhead.len = small_bhead8.len;
+  if (bhead.code != BLO_CODE_ENDB) {
+    bhead.old = reinterpret_cast<const void *>(small_bhead8.old);
+    bhead.SDNAnr = small_bhead8.SDNAnr;
+    bhead.nr = small_bhead8.nr;
   }
+  return bhead;
+}
+
+static BHead bhead_from_large_bhead8(const LargeBHead8 &large_bhead8)
+{
+  BHead bhead;
+  bhead.code = large_bhead8.code;
+  bhead.len = large_bhead8.len;
+  if (bhead.code != BLO_CODE_ENDB) {
+    bhead.old = reinterpret_cast<const void *>(large_bhead8.old);
+    bhead.SDNAnr = large_bhead8.SDNAnr;
+    bhead.nr = large_bhead8.nr;
+  }
+  return bhead;
 }
 
 static BHeadN *get_bhead(FileData *fd)
 {
   BHeadN *new_bhead = nullptr;
-  int64_t readsize;
 
   if (fd) {
     if (!fd->is_eof) {
       /* initializing to zero isn't strictly needed but shuts valgrind up
        * since uninitialized memory gets compared */
-      SmallBHead8 small_bhead8 = {0};
-      BHead4 bhead4 = {0};
       BHead bhead = {0};
 
       /* First read the bhead structure.
@@ -726,22 +723,31 @@ static BHeadN *get_bhead(FileData *fd)
        * needs some special handling. We don't want to EOF just yet.
        */
       if (fd->flags & FD_FLAGS_FILE_POINTSIZE_IS_4) {
+        BHead4 bhead4 = {0};
         bhead4.code = BLO_CODE_DATA;
-        readsize = fd->file->read(fd->file, &bhead4, sizeof(bhead4));
-
+        const int64_t readsize = fd->file->read(fd->file, &bhead4, sizeof(bhead4));
         if (readsize == sizeof(bhead4) || bhead4.code == BLO_CODE_ENDB) {
           if (fd->flags & FD_FLAGS_SWITCH_ENDIAN) {
             switch_endian_bh4(&bhead4);
           }
-
-          if (fd->flags & FD_FLAGS_POINTSIZE_DIFFERS) {
-            small_bh8_from_bh4(reinterpret_cast<SmallBHead8 *>(&bhead), &bhead4);
+          /* Blender is not supported on 32 bit platforms. */
+          BLI_assert(fd->flags & FD_FLAGS_POINTSIZE_DIFFERS);
+          bhead = bhead_from_bhead4(bhead4);
+        }
+        else {
+          fd->is_eof = true;
+          bhead.len = 0;
+        }
+      }
+      else if (fd->flags & FD_FLAGS_IS_SMALL_BHEAD8) {
+        SmallBHead8 small_bhead8 = {0};
+        small_bhead8.code = BLO_CODE_DATA;
+        const int64_t readsize = fd->file->read(fd->file, &small_bhead8, sizeof(small_bhead8));
+        if (readsize == sizeof(small_bhead8) || small_bhead8.code == BLO_CODE_ENDB) {
+          if (fd->flags & FD_FLAGS_SWITCH_ENDIAN) {
+            switch_endian_small_bh8(&small_bhead8);
           }
-          else {
-            /* std::min is only to quiet '-Warray-bounds' compiler warning. */
-            BLI_assert(sizeof(bhead) == sizeof(bhead4));
-            memcpy(&bhead, &bhead4, std::min(sizeof(bhead), sizeof(bhead4)));
-          }
+          bhead = bhead_from_small_bhead8(small_bhead8);
         }
         else {
           fd->is_eof = true;
@@ -749,24 +755,14 @@ static BHeadN *get_bhead(FileData *fd)
         }
       }
       else {
-        small_bhead8.code = BLO_CODE_DATA;
-        readsize = fd->file->read(fd->file, &small_bhead8, sizeof(small_bhead8));
-
-        if (readsize == sizeof(small_bhead8) || small_bhead8.code == BLO_CODE_ENDB) {
+        LargeBHead8 large_bhead8 = {0};
+        large_bhead8.code = BLO_CODE_DATA;
+        const int64_t readsize = fd->file->read(fd->file, &large_bhead8, sizeof(large_bhead8));
+        if (readsize == sizeof(large_bhead8) || large_bhead8.code == BLO_CODE_ENDB) {
           if (fd->flags & FD_FLAGS_SWITCH_ENDIAN) {
-            switch_endian_small_bh8(&small_bhead8);
+            switch_endian_large_bh8(&large_bhead8);
           }
-
-          if (fd->flags & FD_FLAGS_POINTSIZE_DIFFERS) {
-            bh4_from_small_bh8(reinterpret_cast<BHead4 *>(&bhead),
-                               &small_bhead8,
-                               (fd->flags & FD_FLAGS_SWITCH_ENDIAN) != 0);
-          }
-          else {
-            /* std::min is only to quiet `-Warray-bounds` compiler warning. */
-            BLI_assert(sizeof(bhead) == sizeof(small_bhead8));
-            memcpy(&bhead, &small_bhead8, std::min(sizeof(bhead), sizeof(small_bhead8)));
-          }
+          bhead = bhead_from_large_bhead8(large_bhead8);
         }
         else {
           fd->is_eof = true;
@@ -822,7 +818,7 @@ static BHeadN *get_bhead(FileData *fd)
           new_bhead->is_memchunk_identical = false;
           new_bhead->bhead = bhead;
 
-          readsize = fd->file->read(fd->file, new_bhead + 1, size_t(bhead.len));
+          const int64_t readsize = fd->file->read(fd->file, new_bhead + 1, size_t(bhead.len));
 
           if (readsize != bhead.len) {
             fd->is_eof = true;
@@ -972,6 +968,7 @@ static void decode_blender_header(FileData *fd)
       (isdigit(header[9]) && isdigit(header[10]) && isdigit(header[11])))
   {
     fd->flags |= FD_FLAGS_FILE_OK;
+    fd->flags |= FD_FLAGS_IS_SMALL_BHEAD8;
 
     /* what size are pointers in the file ? */
     if (header[7] == '_') {
