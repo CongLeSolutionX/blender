@@ -1037,9 +1037,9 @@ static void apply_eval_grease_pencil_data(const GreasePencil &src_grease_pencil,
       layer_orig.opacity = layer_eval->opacity;
       layer_orig.set_local_transform(layer_eval->local_transform());
 
-      /* Insert the updated node after the previous node. This keeps the layer order consistent. */
-      if (previous_node) {
-        BLI_assert(node_orig != nullptr);
+      /* Insert the updated node after the previous node, if they share the same parent.
+       * This keeps the layer order consistent. */
+      if (previous_node && previous_node->parent_group() == node_orig->parent_group()) {
         orig_grease_pencil.move_node_after(*node_orig, *previous_node);
       }
       previous_node = node_orig;
