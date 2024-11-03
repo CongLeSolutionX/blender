@@ -2,10 +2,24 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+// debug includes
+
 #include <limits>
 #include <type_traits>
 
+#include "DNA_pointcloud_types.h"
+
+#include "BKE_geometry_fields.hh"
+#include "BKE_geometry_set.hh"
+#include "BKE_instances.hh"
+
+#include "GEO_mesh_primitive_uv_sphere.hh"
+#include "GEO_transform.hh"
+
+#include "BLI_math_quaternion_types.hh"
 #include "BLI_timeit.hh"
+
+// debug includes
 
 #include "BLI_array.hh"
 #include "BLI_array_utils.hh"
@@ -88,12 +102,18 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Vector>("Position").implicit_field(implicit_field_inputs::position);
   b.add_input<decl::Vector>("Value").supports_field().hide_value();
 
-  b.add_input<decl::Int>("Power").default_value(2);
+  b.add_input<decl::Int>("Use New");
+
+  b.add_input<decl::Geometry>("Domain");
+
+  b.add_input<decl::Int>("Power").default_value(2).hide_value();
 
   b.add_input<decl::Float>("Precision").min(1.0f).default_value(2.0f);
 
   b.add_output<decl::Vector>("Weighted Sum").field_source_reference_all();
   b.add_output<decl::Vector>("Weighted Difference Sum").field_source_reference_all();
+
+  b.add_output<decl::Geometry>("Tree");
 }
 
 static Array<int> invert_permutation(const Span<int> permutation)
@@ -119,6 +139,39 @@ static void parallel_transform(const Span<InT> src,
     MutableSpan<OutT> dst_slice = dst.slice(range);
     std::transform(src_slice.begin(), src_slice.end(), dst_slice.begin(), func);
   });
+}
+
+static std::pair<float3, float> min_packing_sphere(const Span<float3> points)
+{
+  const auto search_other = [&](const float3 start_point) {
+    float distance = 0.0f;
+    float3 position = start_point;
+    for (const float3 point : points) {
+      const float new_distance = math::distance(start_point, point);
+      if (distance <= new_distance) {
+        position = point;
+        distance = new_distance;
+      }
+    }
+    return position;
+  };
+
+  const float3 start_b = search_other(points.first());
+  const float3 start_c = search_other(start_b);
+
+  float3 centre = math::midpoint(start_b, start_c);
+  float radius = math::distance(centre, start_c);
+  for (const float3 point : points) {
+    const float new_radius = math::distance(centre, point);
+    if (new_radius <= radius) {
+      continue;
+    }
+
+    centre = math::midpoint(centre + math::normalize(centre - point) * radius, point);
+    radius = (radius + new_radius) * 0.5f;
+  }
+
+  return std::pair<float3, float>(centre, radius);
 }
 
 namespace akdbt {
@@ -245,13 +298,14 @@ static OffsetIndices<int> fill_buckets_linear(const int total_elements, MutableS
 template<typename FuncT>
 static void for_each_to_bottom(const OffsetIndices<int> buckets_offsets,
                                const int total_depth,
+                               const GrainSize grain_size,
                                const FuncT &func)
 {
   for (const int depth_i : IndexRange(total_depth).drop_back(1)) {
     const IndexRange joints_range = joints_range_at_depth(depth_i);
     threading::parallel_for(
         joints_range.index_range(),
-        4096,
+        grain_size.value,
         [&](const IndexRange range) {
           for (const int joint_i : range) {
             const IndexRange joint_buckets = joint_buckets_range_at_depth(
@@ -296,14 +350,16 @@ static void for_each_to_top(const OffsetIndices<int> buckets_offsets,
 template<typename LeafFunc>
 static void for_each_leaf(const OffsetIndices<int> buckets_offsets,
                           const int total_depth,
+                          const GrainSize grain_size,
                           const LeafFunc &leaf_func)
 {
   const IndexRange joints_range = joints_range_at_depth(total_depth - 1);
-  threading::parallel_for(joints_range.index_range(), 4096, [&](const IndexRange range) {
-    for (const int joint_i : range) {
-      leaf_func(buckets_offsets[joint_i], int(joints_range[joint_i]), total_depth - 1);
-    }
-  });
+  threading::parallel_for(
+      joints_range.index_range(), grain_size.value, [&](const IndexRange range) {
+        for (const int joint_i : range) {
+          leaf_func(buckets_offsets[joint_i], int(joints_range[joint_i]), total_depth - 1);
+        }
+      });
 }
 
 #ifdef DEBUG
@@ -327,6 +383,7 @@ static void for_each_leaf(const OffsetIndices<int> buckets_offsets,
   Map<int, IndexRange> leaf_joint_to_bucket;
   for_each_leaf(buckets_offsets,
                 total_depth,
+                GrainSize(1'000'000'000),
                 [&](const IndexRange bucket_range, const int joint_index, const int depth_i) {
                   BLI_assert(total_depth - 1 == depth_i);
                   BLI_assert(leaf_joint_to_bucket.add(joint_index, bucket_range));
@@ -348,6 +405,7 @@ static void for_each_leaf(const OffsetIndices<int> buckets_offsets,
   for_each_to_bottom(
       buckets_offsets,
       total_depth,
+      GrainSize(1'000'000'000),
       [&](const IndexRange bucket_range, int joint_index, int depth_i) {
         BLI_assert(joints_to_bottom.add(std::pair<int, int>(joint_index, depth_i), bucket_range));
       });
@@ -413,6 +471,7 @@ static void from_positions(const Span<float3> positions,
   for_each_to_bottom(
       buckets_offsets,
       total_depth,
+      GrainSize(4096),
       [&](const IndexRange bucket_range, const int /*joint_index*/, const int depth_i) {
         const int axis_index = math::mod_periodic(depth_i, 3);
         MutableSpan<int> segment = indices.slice(bucket_range);
@@ -423,6 +482,7 @@ static void from_positions(const Span<float3> positions,
 
   for_each_leaf(buckets_offsets,
                 total_depth,
+                GrainSize(4096),
                 [&](const IndexRange bucket_range, const int /*joint_index*/, const int depth_i) {
                   const int axis_index = math::mod_periodic(depth_i, 3);
                   MutableSpan<int> segment = indices.slice(bucket_range);
@@ -440,6 +500,7 @@ static void mean_sums(const OffsetIndices<int> buckets_offsets,
 {
   for_each_leaf(buckets_offsets,
                 total_depth,
+                GrainSize(4096),
                 [&](const IndexRange bucket_range, const int joint_index, const int /*depth_i*/) {
                   const Span<T> bucket = src_buckets_data.slice(bucket_range);
                   dst_joints_data[joint_index] = std::accumulate(
@@ -462,9 +523,16 @@ static void normalize_for_size(const OffsetIndices<int> buckets_offsets,
                                const int total_depth,
                                MutableSpan<T> dst_joints_data)
 {
+  for_each_leaf(buckets_offsets,
+                total_depth,
+                GrainSize(4096),
+                [&](const IndexRange bucket_range, const int joint_index, const int /*depth_i*/) {
+                  dst_joints_data[joint_index] *= math::rcp(double(bucket_range.size()));
+                });
   for_each_to_bottom(
       buckets_offsets,
       total_depth,
+      GrainSize(4096),
       [&](const IndexRange bucket_range, const int joint_index, const int /*nesting_i*/) {
         dst_joints_data[joint_index] *= math::rcp(double(bucket_range.size()));
       });
@@ -487,6 +555,7 @@ static void radius(const OffsetIndices<int> buckets_offsets,
 {
   for_each_leaf(buckets_offsets,
                 total_nesting,
+                GrainSize(4096),
                 [&](const IndexRange bucket_range, const int joint_index, const int /*depth_i*/) {
                   const Span<float3> src_bucket_data = src_buckets_data.slice(bucket_range);
                   dst_joints_data[joint_index] = max_distance(src_bucket_data,
@@ -518,6 +587,7 @@ static void radius_exact(const OffsetIndices<int> buckets_offsets,
 {
   for_each_leaf(buckets_offsets,
                 total_nesting,
+                GrainSize(4096),
                 [&](const IndexRange bucket_range, const int joint_index, const int /*depth_i*/) {
                   const Span<float3> src_bucket_data = src_buckets_data.slice(bucket_range);
                   dst_joints_data[joint_index] = max_distance(src_bucket_data,
@@ -681,6 +751,44 @@ static void cloud_radii_to_min_distance(const Span<float> src_radii,
   });
 }
 
+static void packing_spheres(const OffsetIndices<int> buckets_offsets,
+                            const int total_depth,
+                            const Span<float3> src_bucket_points,
+                            MutableSpan<float3> dst_joints_centre,
+                            MutableSpan<float> dst_joints_radii)
+{
+  akdbt::for_each_leaf(
+      buckets_offsets,
+      total_depth,
+      GrainSize(4096),
+      [&](const IndexRange bucket_range, const int joint_index, const int /*depth_i*/) {
+        const auto [centre, radius] = min_packing_sphere(src_bucket_points.slice(bucket_range));
+        dst_joints_centre[joint_index] = centre;
+        dst_joints_radii[joint_index] = radius;
+      });
+
+  akdbt::for_each_to_top(buckets_offsets,
+                         total_depth,
+                         [&](const IndexRange buckets_range,
+                             const int joint_index,
+                             const int2 /*sub_joints*/,
+                             const int /*depth_i*/) {
+                           const auto [centre, radius] = min_packing_sphere(
+                               src_bucket_points.slice(buckets_range));
+                           dst_joints_centre[joint_index] = centre;
+                           dst_joints_radii[joint_index] = radius;
+                         });
+}
+
+static double total_volume_from_radii(const Span<float> src_radii)
+{
+  double total = 0.0f;
+  for (const float r : src_radii) {
+    total += r;  // * r * r;
+  }
+  return total;
+}
+
 class DifferenceSumFieldInput final : public bke::GeometryFieldInput {
  private:
   const Field<float3> positions_field_;
@@ -688,22 +796,27 @@ class DifferenceSumFieldInput final : public bke::GeometryFieldInput {
   const int distance_power_;
   const float precision_;
 
+  const bool use_new_;
+
  public:
   DifferenceSumFieldInput(Field<float3> positions_field,
                           Field<float3> value_field,
                           const int distance_power,
-                          const float precision)
+                          const float precision,
+                          const bool use_new)
       : bke::GeometryFieldInput(CPPType::get<float3>(), "Weighed Difference Sum"),
         positions_field_(std::move(positions_field)),
         value_field_(std::move(value_field)),
         distance_power_(distance_power),
-        precision_(precision)
+        precision_(precision),
+        use_new_(use_new)
   {
   }
 
   GVArray get_varray_for_context(const bke::GeometryFieldContext &context,
                                  const IndexMask & /*mask*/) const final
   {
+    std::cout << std::endl;
     if (!context.attributes()) {
       return {};
     }
@@ -731,7 +844,6 @@ class DifferenceSumFieldInput final : public bke::GeometryFieldInput {
       SCOPED_TIMER_AVERAGED("akdbt::from_positions");
       akdbt::from_positions(positions, base_offsets, total_depth, indices);
     }
-    
 
     Array<float3> bucket_positions(domain_size);
     Array<float3> bucket_values(domain_size);
@@ -747,13 +859,15 @@ class DifferenceSumFieldInput final : public bke::GeometryFieldInput {
     Array<float3> joints_positions(total_joints);
     Array<float3> joints_values(total_joints);
 
-    {
-      SCOPED_TIMER_AVERAGED("akdbt::mean_sums joints_positions");
-      akdbt::mean_sums<float3>(base_offsets, total_depth, bucket_positions, joints_positions);
-    }
-    {
-      SCOPED_TIMER_AVERAGED("akdbt::normalize_for_size joints_positions");
-      akdbt::normalize_for_size<float3>(base_offsets, total_depth, joints_positions);
+    if (use_new_ == 0) {
+      {
+        SCOPED_TIMER_AVERAGED("akdbt::mean_sums joints_positions");
+        akdbt::mean_sums<float3>(base_offsets, total_depth, bucket_positions, joints_positions);
+      }
+      {
+        SCOPED_TIMER_AVERAGED("akdbt::normalize_for_size joints_positions");
+        akdbt::normalize_for_size<float3>(base_offsets, total_depth, joints_positions);
+      }
     }
 
     {
@@ -767,11 +881,23 @@ class DifferenceSumFieldInput final : public bke::GeometryFieldInput {
 
     Array<float> joints_radii(total_joints);
 
-    {
+    if (use_new_ == 0) {
       SCOPED_TIMER_AVERAGED("akdbt::radius_exact");
       akdbt::radius_exact(
           base_offsets, total_depth, bucket_positions, joints_positions, joints_radii);
     }
+
+    if (use_new_ == 1) {
+      {
+        SCOPED_TIMER_AVERAGED("packing_spheres");
+        packing_spheres(
+            base_offsets, total_depth, bucket_positions, joints_positions, joints_radii);
+      }
+    }
+
+    const float mean_volume = total_volume_from_radii(joints_radii) *
+                              math::rcp(double(joints_radii.size()));
+
     {
       SCOPED_TIMER_AVERAGED("cloud_radii_to_min_distance");
       cloud_radii_to_min_distance(joints_radii, distance_power_, precision_, joints_radii);
@@ -794,8 +920,12 @@ class DifferenceSumFieldInput final : public bke::GeometryFieldInput {
     Array<float3> dst_values(domain_size);
     {
       SCOPED_TIMER_AVERAGED("array_utils::scatter");
-      array_utils::scatter(sampled_bucket_values.as_span(), indices.as_span(), dst_values.as_mutable_span());
+      array_utils::scatter(
+          sampled_bucket_values.as_span(), indices.as_span(), dst_values.as_mutable_span());
     }
+
+    std::cout << "Mean Volume: " << mean_volume << ";\n";
+
     return VArray<float3>::ForContainer(std::move(dst_values));
   }
 
@@ -806,6 +936,194 @@ class DifferenceSumFieldInput final : public bke::GeometryFieldInput {
     value_field_.node().for_each_field_input_recursive(fn);
   }
 };
+
+static bke::GeometrySet debug_tree(const bke::GeometrySet &domain,
+                                   const Field<float3> &position_field,
+                                   const Field<float3> &value_field,
+                                   const int power_value,
+                                   const float precision_value)
+{
+  const PointCloud *point_cloud = domain.get_pointcloud();
+  if (point_cloud == nullptr) {
+    return {};
+  }
+  const int domain_size = point_cloud->totpoint;
+
+  const bke::PointCloudFieldContext context(*point_cloud);
+  fn::FieldEvaluator evaluator{context, domain_size};
+  evaluator.add(position_field);
+  evaluator.add(value_field);
+  evaluator.evaluate();
+  const VArraySpan<float3> positions = evaluator.get_evaluated<float3>(0);
+  const VArraySpan<float3> src_values = evaluator.get_evaluated<float3>(1);
+
+  const int total_depth = akdbt::total_depth_from_total(domain_size);
+  const int total_buckets = akdbt::total_buckets_for(total_depth);
+  const int total_joints = akdbt::total_joints_for_depth(total_depth);
+
+  Array<int> start_indices(total_buckets + 1);
+  akdbt::fill_buckets_linear(domain_size, start_indices);
+
+  const OffsetIndices<int> base_offsets(start_indices);
+
+  Array<int> indices(domain_size);
+  akdbt::from_positions(positions, base_offsets, total_depth, indices);
+
+  Array<float3> bucket_positions(domain_size);
+  Array<float3> bucket_values(domain_size);
+
+  array_utils::gather(
+      Span<float3>(positions), indices.as_span(), bucket_positions.as_mutable_span());
+  array_utils::gather(
+      Span<float3>(src_values), indices.as_span(), bucket_values.as_mutable_span());
+
+  Array<float3> joints_positions(total_joints);
+  Array<float3> joints_values(total_joints);
+
+  akdbt::mean_sums<float3>(base_offsets, total_depth, bucket_positions, joints_positions);
+  akdbt::normalize_for_size<float3>(base_offsets, total_depth, joints_positions);
+
+  akdbt::mean_sums<float3>(base_offsets, total_depth, bucket_values, joints_values);
+  akdbt::normalize_for_size<float3>(base_offsets, total_depth, joints_values);
+
+  Array<float> joints_radii(total_joints);
+  akdbt::radius_exact(base_offsets, total_depth, bucket_positions, joints_positions, joints_radii);
+
+  Array<float> joints_radii_small(total_joints);
+  Array<float3> joints_centre(total_joints);
+  packing_spheres(base_offsets, total_depth, bucket_positions, joints_centre, joints_radii_small);
+
+  const float mean_old_volume = total_volume_from_radii(joints_radii);
+  const float mean_new_volume = total_volume_from_radii(joints_radii_small);
+
+  std::cout << "\n\n\nmean_old_volume: " << mean_old_volume
+            << ", mean_new_volume: " << mean_new_volume << ";\n";
+  std::cout << "\n";
+  std::cout << "State: " << ((mean_new_volume / mean_old_volume) * 100.0f) << "%;\n";
+
+  // std::cout << joints_radii.as_span() << std::endl;
+  // std::cout << joints_radii_small.as_span() << std::endl;
+
+  bke::Instances *data_to_out = new bke::Instances();
+
+  {
+    bke::Instances *tree = new bke::Instances();
+    const bke::InstanceReference mesh_reference = bke::InstanceReference(
+        std::move(bke::GeometrySet::from_mesh(
+            geometry::create_uv_sphere_mesh(1.0f, 128, 128, std::nullopt))));
+    const int mesh_ref_index = tree->add_reference(mesh_reference);
+
+    akdbt::for_each_to_bottom(
+        base_offsets,
+        total_depth,
+        GrainSize(10'000'000'000),
+        [&](const IndexRange bucket_range, const int joint_index, const int depth_i) {
+          PointCloud *pointcloud = BKE_pointcloud_new_nomain(bucket_range.size());
+          pointcloud->positions_for_write().copy_from(
+              bucket_positions.as_span().slice(bucket_range));
+
+          bke::GeometrySet geometry;
+          geometry.replace_pointcloud(pointcloud);
+
+          bke::Instances *sub_tree = new bke::Instances();
+          const float4x4 transformation = math::from_loc_rot_scale<float4x4>(
+              joints_positions[joint_index],
+              math::Quaternion::identity(),
+              float3(joints_radii[joint_index]));
+          sub_tree->add_instance(sub_tree->add_reference(mesh_reference), transformation);
+          sub_tree->add_instance(sub_tree->add_reference(geometry), float4x4::identity());
+
+          tree->add_instance(tree->add_reference(bke::GeometrySet::from_instances(sub_tree)),
+                             float4x4::identity());
+        });
+    akdbt::for_each_leaf(
+        base_offsets,
+        total_depth,
+        GrainSize(10'000'000'000),
+        [&](const IndexRange bucket_range, const int joint_index, const int /*depth_i*/) {
+          PointCloud *pointcloud = BKE_pointcloud_new_nomain(bucket_range.size());
+          pointcloud->positions_for_write().copy_from(
+              bucket_positions.as_span().slice(bucket_range));
+
+          bke::GeometrySet geometry;
+          geometry.replace_pointcloud(pointcloud);
+
+          bke::Instances *sub_tree = new bke::Instances();
+          const float4x4 transformation = math::from_loc_rot_scale<float4x4>(
+              joints_positions[joint_index],
+              math::Quaternion::identity(),
+              float3(joints_radii[joint_index]));
+          sub_tree->add_instance(sub_tree->add_reference(mesh_reference), transformation);
+          sub_tree->add_instance(sub_tree->add_reference(geometry), float4x4::identity());
+
+          tree->add_instance(tree->add_reference(bke::GeometrySet::from_instances(sub_tree)),
+                             float4x4::identity());
+        });
+    data_to_out->add_instance(data_to_out->add_reference(bke::GeometrySet::from_instances(tree)),
+                              float4x4::identity());
+  }
+
+  {
+    bke::Instances *tree = new bke::Instances();
+    const bke::InstanceReference mesh_reference = bke::InstanceReference(
+        std::move(bke::GeometrySet::from_mesh(
+            geometry::create_uv_sphere_mesh(1.0f, 128, 128, std::nullopt))));
+    const int mesh_ref_index = tree->add_reference(mesh_reference);
+
+    akdbt::for_each_to_bottom(
+        base_offsets,
+        total_depth,
+        GrainSize(10'000'000'000),
+        [&](const IndexRange bucket_range, const int joint_index, const int depth_i) {
+          PointCloud *pointcloud = BKE_pointcloud_new_nomain(bucket_range.size());
+          pointcloud->positions_for_write().copy_from(
+              bucket_positions.as_span().slice(bucket_range));
+
+          bke::GeometrySet geometry;
+          geometry.replace_pointcloud(pointcloud);
+
+          bke::Instances *sub_tree = new bke::Instances();
+          const float4x4 transformation = math::from_loc_rot_scale<float4x4>(
+              joints_centre[joint_index],
+              math::Quaternion::identity(),
+              float3(joints_radii_small[joint_index]));
+          sub_tree->add_instance(sub_tree->add_reference(mesh_reference), transformation);
+          sub_tree->add_instance(sub_tree->add_reference(geometry), float4x4::identity());
+
+          tree->add_instance(tree->add_reference(bke::GeometrySet::from_instances(sub_tree)),
+                             float4x4::identity());
+        });
+    akdbt::for_each_leaf(
+        base_offsets,
+        total_depth,
+        GrainSize(10'000'000'000),
+        [&](const IndexRange bucket_range, const int joint_index, const int /*depth_i*/) {
+          PointCloud *pointcloud = BKE_pointcloud_new_nomain(bucket_range.size());
+          pointcloud->positions_for_write().copy_from(
+              bucket_positions.as_span().slice(bucket_range));
+
+          bke::GeometrySet geometry;
+          geometry.replace_pointcloud(pointcloud);
+
+          bke::Instances *sub_tree = new bke::Instances();
+          const float4x4 transformation = math::from_loc_rot_scale<float4x4>(
+              joints_centre[joint_index],
+              math::Quaternion::identity(),
+              float3(joints_radii_small[joint_index]));
+          sub_tree->add_instance(sub_tree->add_reference(mesh_reference), transformation);
+          sub_tree->add_instance(sub_tree->add_reference(geometry), float4x4::identity());
+
+          tree->add_instance(tree->add_reference(bke::GeometrySet::from_instances(sub_tree)),
+                             float4x4::identity());
+        });
+    data_to_out->add_instance(data_to_out->add_reference(bke::GeometrySet::from_instances(tree)),
+                              float4x4::identity());
+  }
+
+  // cloud_radii_to_min_distance(joints_radii, distance_power_, precision_, joints_radii);
+
+  return bke::GeometrySet::from_instances(data_to_out);
+}
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
@@ -820,10 +1138,18 @@ static void node_geo_exec(GeoNodeExecParams params)
   const int power_value = params.extract_input<int>("Power");
   const float precision_value = params.extract_input<float>("Precision");
 
+  const int use_new = params.extract_input<int>("Use New");
+
+  if (params.output_is_required("Tree")) {
+    const bke::GeometrySet domain = params.extract_input<bke::GeometrySet>("Domain");
+    params.set_output(
+        "Tree", debug_tree(domain, position_field, value_field, power_value, precision_value));
+  }
+
   if (params.output_is_required("Weighted Difference Sum")) {
     params.set_output("Weighted Difference Sum",
                       Field<float3>(std::make_shared<DifferenceSumFieldInput>(
-                          position_field, value_field, power_value, precision_value)));
+                          position_field, value_field, power_value, precision_value, use_new)));
   }
 
   if (params.output_is_required("Weighted Sum")) {
