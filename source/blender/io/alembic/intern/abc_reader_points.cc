@@ -41,17 +41,17 @@ bool AbcPointsReader::valid() const
 bool AbcPointsReader::accepts_object_type(
     const Alembic::AbcCoreAbstract::ObjectHeader &alembic_header,
     const Object *const ob,
-    const char **err_str) const
+    const char **r_err_str) const
 {
   if (!Alembic::AbcGeom::IPoints::matches(alembic_header)) {
-    *err_str = RPT_(
+    *r_err_str = RPT_(
         "Object type mismatch, Alembic object path pointed to Points when importing, but not any "
         "more");
     return false;
   }
 
   if (ob->type != OB_POINTCLOUD) {
-    *err_str = RPT_("Object type mismatch, Alembic object path points to Points.");
+    *r_err_str = RPT_("Object type mismatch, Alembic object path points to Points.");
     return false;
   }
 
@@ -60,8 +60,7 @@ bool AbcPointsReader::accepts_object_type(
 
 void AbcPointsReader::readObjectData(Main *bmain, const Alembic::Abc::ISampleSelector &sample_sel)
 {
-  PointCloud *point_cloud = static_cast<PointCloud *>(
-      BKE_pointcloud_add_default(bmain, m_data_name.c_str()));
+  PointCloud *point_cloud = BKE_pointcloud_add_default(bmain, m_data_name.c_str());
 
   bke::GeometrySet geometry_set = bke::GeometrySet::from_pointcloud(
       point_cloud, bke::GeometryOwnershipType::Editable);
@@ -117,9 +116,9 @@ static N3fArraySamplePtr read_points_sample(const IPointsSchema &schema,
 void AbcPointsReader::read_geometry(bke::GeometrySet &geometry_set,
                                     const Alembic::Abc::ISampleSelector &sample_sel,
                                     int /*read_flag*/,
-                                    const char * /*velocity_name*/,
-                                    const float /*velocity_scale*/,
-                                    const char **err_str)
+                                    const char *velocity_name,
+                                    const float velocity_scale,
+                                    const char **r_err_str)
 {
   BLI_assert(geometry_set.has_pointcloud());
 
@@ -128,7 +127,7 @@ void AbcPointsReader::read_geometry(bke::GeometrySet &geometry_set,
     sample = m_schema.getValue(sample_sel);
   }
   catch (Alembic::Util::Exception &ex) {
-    *err_str = RPT_("Error reading points sample; more detail on the console");
+    *r_err_str = RPT_("Error reading points sample; more detail on the console");
     printf("Alembic: error reading points sample for '%s/%s' at time %f: %s\n",
            m_iobject.getFullName().c_str(),
            m_schema.getName().c_str(),
@@ -185,6 +184,22 @@ void AbcPointsReader::read_geometry(bke::GeometrySet &geometry_set,
       copy_zup_from_yup(point_normals[i], nor_in.getValue());
     }
     normals_writer.finish();
+  }
+
+  if (velocity_name != nullptr && velocity_scale != 0.0f) {
+    V3fArraySamplePtr velocities = get_velocity_prop(m_schema, sample_sel, velocity_name);
+    if (velocities && point_cloud->totpoint == int(velocities->size())) {
+      bke::SpanAttributeWriter<float3> velocity_writer =
+          attribute_accessor.lookup_or_add_for_write_span<float3>("velocity",
+                                                                  bke::AttrDomain::Point);
+      MutableSpan<float3> point_velocity = velocity_writer.span;
+      for (size_t i = 0; i < velocities->size(); i++) {
+        const Imath::V3f &vel_in = (*velocities)[i];
+        copy_zup_from_yup(point_velocity[i], vel_in.getValue());
+        point_velocity[i] *= velocity_scale;
+      }
+      velocity_writer.finish();
+    }
   }
 
   geometry_set.replace_pointcloud(point_cloud);

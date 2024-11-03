@@ -131,6 +131,11 @@ int GPU_max_samplers()
   return GCaps.max_samplers;
 }
 
+bool GPU_use_parallel_compilation()
+{
+  return GCaps.max_parallel_compilations > 0;
+}
+
 bool GPU_mip_render_workaround()
 {
   return GCaps.mip_render_workaround;
@@ -231,6 +236,18 @@ void GPU_mem_stats_get(int *r_totalmem, int *r_freemem)
 bool GPU_stereo_quadbuffer_support()
 {
   return Context::get()->front_right != nullptr;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Creator arguments overrides
+ * \{ */
+
+void GPU_compilation_subprocess_override_set(int count)
+{
+  BLI_assert(GCaps.max_parallel_compilations == -1);
+  GCaps.max_parallel_compilations = count;
 }
 
 /** \} */

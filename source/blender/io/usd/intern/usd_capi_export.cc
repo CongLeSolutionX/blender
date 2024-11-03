@@ -44,9 +44,12 @@
 #include "BLI_math_matrix.h"
 #include "BLI_math_rotation.h"
 #include "BLI_math_vector.h"
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 #include "BLI_string.h"
 #include "BLI_timeit.hh"
+
+#include <IMB_imbuf.hh>
+#include <IMB_imbuf_types.hh>
 
 #include "WM_api.hh"
 #include "WM_types.hh"
@@ -178,7 +181,7 @@ static void ensure_root_prim(pxr::UsdStageRefPtr stage, const USDExportParams &p
     xf_api.SetRotate(pxr::GfVec3f(eul[0], eul[1], eul[2]));
   }
 
-  for (auto path : pxr::SdfPath(params.root_prim_path).GetPrefixes()) {
+  for (const auto &path : pxr::SdfPath(params.root_prim_path).GetPrefixes()) {
     auto xform = pxr::UsdGeomXform::Define(stage, path);
     /* Tag generated prims to allow filtering on import */
     xform.GetPrim().SetCustomDataByKey(pxr::TfToken("Blender:generated"), pxr::VtValue(true));
@@ -201,17 +204,17 @@ static void process_usdz_textures(const ExportJobData *data, const char *path)
     return;
   }
 
-  int image_size = ((enum_value == USD_TEXTURE_SIZE_CUSTOM ?
-                         data->params.usdz_downscale_custom_size :
-                         enum_value));
+  const int image_size = (enum_value == USD_TEXTURE_SIZE_CUSTOM) ?
+                             data->params.usdz_downscale_custom_size :
+                             enum_value;
 
   char texture_path[FILE_MAX];
-  BLI_strncpy(texture_path, path, FILE_MAX);
+  STRNCPY(texture_path, path);
   BLI_path_append(texture_path, FILE_MAX, "textures");
   BLI_path_slash_ensure(texture_path, sizeof(texture_path));
 
-  struct direntry *entries;
-  unsigned int num_files = BLI_filelist_dir_contents(texture_path, &entries);
+  direntry *entries;
+  uint num_files = BLI_filelist_dir_contents(texture_path, &entries);
 
   for (int index = 0; index < num_files; index++) {
     /* We can skip checking extensions as this folder is only created
@@ -289,8 +292,8 @@ static bool perform_usdz_conversion(const ExportJobData *data)
   BLI_path_split_file_part(data->usdz_filepath, usdz_file, FILE_MAX);
 
   char original_working_dir_buff[FILE_MAX];
-  char *original_working_dir = BLI_current_working_dir(original_working_dir_buff,
-                                                       sizeof(original_working_dir_buff));
+  const char *original_working_dir = BLI_current_working_dir(original_working_dir_buff,
+                                                             sizeof(original_working_dir_buff));
   /* Buffer is expected to be returned by #BLI_current_working_dir, although in theory other
    * returns are possible on some platforms, this is not handled by this code. */
   BLI_assert(original_working_dir == original_working_dir_buff);
@@ -327,6 +330,54 @@ static bool perform_usdz_conversion(const ExportJobData *data)
   }
 
   return true;
+}
+
+std::string image_cache_file_path()
+{
+  char dir_path[FILE_MAX];
+  BLI_path_join(dir_path, sizeof(dir_path), BKE_tempdir_session(), "usd", "image_cache");
+  return dir_path;
+}
+
+std::string get_image_cache_file(const std::string &file_name, bool mkdir)
+{
+  std::string dir_path = image_cache_file_path();
+  if (mkdir) {
+    BLI_dir_create_recursive(dir_path.c_str());
+  }
+
+  char file_path[FILE_MAX];
+  BLI_path_join(file_path, sizeof(file_path), dir_path.c_str(), file_name.c_str());
+  return file_path;
+}
+
+std::string cache_image_color(const float color[4])
+{
+  char name[128];
+  SNPRINTF(name,
+           "color_%02d%02d%02d.hdr",
+           int(color[0] * 255),
+           int(color[1] * 255),
+           int(color[2] * 255));
+  std::string file_path = get_image_cache_file(name);
+  if (BLI_exists(file_path.c_str())) {
+    return file_path;
+  }
+
+  ImBuf *ibuf = IMB_allocImBuf(4, 4, 32, IB_rectfloat);
+  IMB_rectfill(ibuf, color);
+  ibuf->ftype = IMB_FTYPE_RADHDR;
+
+  if (IMB_saveiff(ibuf, file_path.c_str(), IB_rectfloat)) {
+    CLOG_INFO(&LOG, 1, "%s", file_path.c_str());
+  }
+  else {
+    CLOG_ERROR(&LOG, "Can't save %s", file_path.c_str());
+    file_path = "";
+  }
+  IMB_freeImBuf(ibuf);
+
+  return file_path;
 }
 
 pxr::UsdStageRefPtr export_to_stage(const USDExportParams &params,
@@ -428,7 +479,7 @@ pxr::UsdStageRefPtr export_to_stage(const USDExportParams &params,
   /* Creating dome lights should be called after writers have
    * completed, to avoid a name collision when creating the light
    * prim. */
-  if (!params.selected_objects_only && params.convert_world_material) {
+  if (params.convert_world_material) {
     world_material_to_dome_light(params, scene, usd_stage);
   }
 
@@ -589,7 +640,7 @@ static void set_job_filepath(blender::io::usd::ExportJobData *job, const char *f
   job->usdz_filepath[0] = '\0';
 }
 
-bool USD_export(bContext *C,
+bool USD_export(const bContext *C,
                 const char *filepath,
                 const USDExportParams *params,
                 bool as_background_job,
@@ -641,7 +692,7 @@ bool USD_export(bContext *C,
   bool export_ok = false;
   if (as_background_job) {
     wmJob *wm_job = WM_jobs_get(
-        job->wm, CTX_wm_window(C), scene, "USD Export", WM_JOB_PROGRESS, WM_JOB_TYPE_ALEMBIC);
+        job->wm, CTX_wm_window(C), scene, "USD Export", WM_JOB_PROGRESS, WM_JOB_TYPE_USD_EXPORT);
 
     /* setup job */
     WM_jobs_customdata_set(wm_job, job, MEM_freeN);

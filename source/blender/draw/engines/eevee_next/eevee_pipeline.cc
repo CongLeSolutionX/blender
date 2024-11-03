@@ -36,14 +36,14 @@ void BackgroundPipeline::sync(GPUMaterial *gpumat,
   RenderBuffers &rbufs = inst_.render_buffers;
 
   world_ps_.init();
-  world_ps_.state_set(DRW_STATE_WRITE_COLOR);
+  world_ps_.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_DEPTH_EQUAL);
   world_ps_.material_set(manager, gpumat);
   world_ps_.push_constant("world_opacity_fade", background_opacity);
   world_ps_.push_constant("world_background_blur", square_f(background_blur));
   SphereProbeData &world_data = *static_cast<SphereProbeData *>(&inst_.light_probes.world_sphere_);
   world_ps_.push_constant("world_coord_packed", reinterpret_cast<int4 *>(&world_data.atlas_coord));
   world_ps_.bind_texture("utility_tx", inst_.pipelines.utility_tx);
-  /* RenderPasses & AOVs. Cleared by background (even if bad practice). */
+  /* RenderPasses & AOVs. */
   world_ps_.bind_image("rp_color_img", &rbufs.rp_color_tx);
   world_ps_.bind_image("rp_value_img", &rbufs.rp_value_tx);
   world_ps_.bind_image("rp_cryptomatte_img", &rbufs.cryptomatte_tx);
@@ -56,6 +56,25 @@ void BackgroundPipeline::sync(GPUMaterial *gpumat,
   world_ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
   /* To allow opaque pass rendering over it. */
   world_ps_.barrier(GPU_BARRIER_SHADER_IMAGE_ACCESS);
+
+  clear_ps_.init();
+  clear_ps_.state_set(DRW_STATE_WRITE_COLOR);
+  clear_ps_.shader_set(inst_.shaders.static_shader_get(RENDERPASS_CLEAR));
+  /* RenderPasses & AOVs. Cleared by background (even if bad practice). */
+  clear_ps_.bind_image("rp_color_img", &rbufs.rp_color_tx);
+  clear_ps_.bind_image("rp_value_img", &rbufs.rp_value_tx);
+  clear_ps_.bind_image("rp_cryptomatte_img", &rbufs.cryptomatte_tx);
+  /* Required by validation layers. */
+  clear_ps_.bind_resources(inst_.cryptomatte);
+  clear_ps_.bind_resources(inst_.uniform_data);
+  clear_ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
+  /* To allow opaque pass rendering over it. */
+  clear_ps_.barrier(GPU_BARRIER_SHADER_IMAGE_ACCESS);
+}
+
+void BackgroundPipeline::clear(View &view)
+{
+  inst_.manager->submit(clear_ps_, view);
 }
 
 void BackgroundPipeline::render(View &view)
@@ -164,6 +183,7 @@ void WorldVolumePipeline::render(View &view)
     inst_.volume.prop_extinction_tx_.clear(float4(0.0f));
     inst_.volume.prop_emission_tx_.clear(float4(0.0f));
     inst_.volume.prop_phase_tx_.clear(float4(0.0f));
+    inst_.volume.prop_phase_weight_tx_.clear(float4(0.0f));
     return;
   }
 
@@ -188,7 +208,7 @@ void ShadowPipeline::sync()
   bool shadow_update_tbdr = (ShadowModule::shadow_technique == ShadowTechnique::TILE_COPY);
   if (shadow_update_tbdr) {
     draw::PassMain::Sub &pass = render_ps_.sub("Shadow.TilePageClear");
-    pass.subpass_transition(GPU_ATTACHEMENT_WRITE, {GPU_ATTACHEMENT_WRITE});
+    pass.subpass_transition(GPU_ATTACHMENT_WRITE, {GPU_ATTACHMENT_WRITE});
     pass.shader_set(inst_.shaders.static_shader_get(SHADOW_PAGE_TILE_CLEAR));
     /* Only manually clear depth of the updated tiles.
      * This is because the depth is initialized to near depth using attachments for fast clear and
@@ -232,7 +252,7 @@ void ShadowPipeline::sync()
     pass.state_set(DRW_STATE_DEPTH_ALWAYS);
     /* Metal have implicit sync with Raster Order Groups. Other backend need to have manual
      * sub-pass transition to allow reading the frame-buffer. This is a no-op on Metal. */
-    pass.subpass_transition(GPU_ATTACHEMENT_WRITE, {GPU_ATTACHEMENT_READ});
+    pass.subpass_transition(GPU_ATTACHMENT_WRITE, {GPU_ATTACHMENT_READ});
     pass.bind_image(SHADOW_ATLAS_IMG_SLOT, inst_.shadows.atlas_tx_);
     pass.bind_ssbo("dst_coord_buf", inst_.shadows.dst_coord_buf_);
     pass.bind_ssbo("src_coord_buf", inst_.shadows.src_coord_buf_);
@@ -450,12 +470,12 @@ void ForwardPipeline::render(View &view,
 void DeferredLayerBase::gbuffer_pass_sync(Instance &inst)
 {
   gbuffer_ps_.init();
-  gbuffer_ps_.subpass_transition(GPU_ATTACHEMENT_WRITE,
-                                 {GPU_ATTACHEMENT_WRITE,
-                                  GPU_ATTACHEMENT_WRITE,
-                                  GPU_ATTACHEMENT_WRITE,
-                                  GPU_ATTACHEMENT_WRITE,
-                                  GPU_ATTACHEMENT_WRITE});
+  gbuffer_ps_.subpass_transition(GPU_ATTACHMENT_WRITE,
+                                 {GPU_ATTACHMENT_WRITE,
+                                  GPU_ATTACHMENT_WRITE,
+                                  GPU_ATTACHMENT_WRITE,
+                                  GPU_ATTACHMENT_WRITE,
+                                  GPU_ATTACHMENT_WRITE});
   /* G-buffer. */
   gbuffer_ps_.bind_image(GBUF_NORMAL_SLOT, &inst.gbuffer.normal_img_tx);
   gbuffer_ps_.bind_image(GBUF_CLOSURE_SLOT, &inst.gbuffer.closure_img_tx);
@@ -535,9 +555,14 @@ void DeferredLayer::begin_sync()
   this->gbuffer_pass_sync(inst_);
 }
 
-void DeferredLayer::end_sync(bool is_first_pass, bool is_last_pass)
+void DeferredLayer::end_sync(bool is_first_pass,
+                             bool is_last_pass,
+                             bool next_layer_has_transmission)
 {
   const SceneEEVEE &sce_eevee = inst_.scene->eevee;
+  const bool has_any_closure = closure_bits_ != 0;
+  /* We need the feedback output in case of refraction in the next pass (see #126455). */
+  const bool is_layer_refracted = (next_layer_has_transmission && has_any_closure);
   const bool has_transmit_closure = (closure_bits_ & (CLOSURE_REFRACTION | CLOSURE_TRANSLUCENT));
   const bool has_reflect_closure = (closure_bits_ & (CLOSURE_REFLECTION | CLOSURE_DIFFUSE));
   use_raytracing_ = (has_transmit_closure || has_reflect_closure) &&
@@ -552,7 +577,8 @@ void DeferredLayer::end_sync(bool is_first_pass, bool is_last_pass)
   use_screen_reflection_ = use_raytracing_ && has_reflect_closure;
 
   use_split_radiance_ = use_raytracing_ || (use_clamp_direct_ || use_clamp_indirect_);
-  use_feedback_output_ = use_raytracing_ && (!is_last_pass || use_screen_reflection_);
+  use_feedback_output_ = (use_raytracing_ || is_layer_refracted) &&
+                         (!is_last_pass || use_screen_reflection_);
 
   {
     RenderBuffersInfoData &rbuf_data = inst_.render_buffers.data;
@@ -561,12 +587,12 @@ void DeferredLayer::end_sync(bool is_first_pass, bool is_last_pass)
     {
       GPUShader *sh = inst_.shaders.static_shader_get(DEFERRED_TILE_CLASSIFY);
       PassMain::Sub &sub = gbuffer_ps_.sub("StencilClassify");
-      sub.subpass_transition(GPU_ATTACHEMENT_WRITE, /* Needed for depth test. */
-                             {GPU_ATTACHEMENT_IGNORE,
-                              GPU_ATTACHEMENT_READ, /* Header. */
-                              GPU_ATTACHEMENT_IGNORE,
-                              GPU_ATTACHEMENT_IGNORE,
-                              GPU_ATTACHEMENT_IGNORE});
+      sub.subpass_transition(GPU_ATTACHMENT_WRITE, /* Needed for depth test. */
+                             {GPU_ATTACHMENT_IGNORE,
+                              GPU_ATTACHMENT_READ, /* Header. */
+                              GPU_ATTACHMENT_IGNORE,
+                              GPU_ATTACHMENT_IGNORE,
+                              GPU_ATTACHMENT_IGNORE});
       sub.shader_set(sh);
       sub.state_set(DRW_STATE_WRITE_STENCIL | DRW_STATE_STENCIL_ALWAYS);
       if (GPU_stencil_export_support()) {
@@ -730,6 +756,12 @@ PassMain::Sub *DeferredLayer::prepass_add(::Material *blender_mat,
 PassMain::Sub *DeferredLayer::material_add(::Material *blender_mat, GPUMaterial *gpumat)
 {
   eClosureBits closure_bits = shader_closure_bits_from_flag(gpumat);
+  if (closure_bits == eClosureBits(0)) {
+    /* Fix the case where there is no active closure in the shader.
+     * In this case we force the evaluation of emission to avoid disabling the entire layer by
+     * accident, see #126459. */
+    closure_bits |= CLOSURE_EMISSION;
+  }
   closure_bits_ |= closure_bits;
   closure_count_ = max_ii(closure_count_, count_bits_i(closure_bits));
 
@@ -864,8 +896,8 @@ void DeferredPipeline::begin_sync()
 
 void DeferredPipeline::end_sync()
 {
-  opaque_layer_.end_sync(true, refraction_layer_.is_empty());
-  refraction_layer_.end_sync(opaque_layer_.is_empty(), true);
+  opaque_layer_.end_sync(true, refraction_layer_.is_empty(), refraction_layer_.has_transmission());
+  refraction_layer_.end_sync(opaque_layer_.is_empty(), true, false);
 
   debug_pass_sync();
 }
@@ -901,10 +933,10 @@ void DeferredPipeline::debug_draw(draw::View &view, GPUFrameBuffer *combined_fb)
 
   switch (inst.debug_mode) {
     case eDebugMode::DEBUG_GBUFFER_EVALUATION:
-      inst.info = "Debug Mode: Deferred Lighting Cost";
+      inst.info_append("Debug Mode: Deferred Lighting Cost");
       break;
     case eDebugMode::DEBUG_GBUFFER_STORAGE:
-      inst.info = "Debug Mode: Gbuffer Storage Cost";
+      inst.info_append("Debug Mode: Gbuffer Storage Cost");
       break;
     default:
       /* Nothing to display. */
@@ -1018,7 +1050,7 @@ PassMain::Sub *VolumeLayer::occupancy_add(const Object *ob,
                                           const ::Material *blender_mat,
                                           GPUMaterial *gpumat)
 {
-  BLI_assert_msg(GPU_material_has_volume_output(gpumat) == true,
+  BLI_assert_msg((ob->type == OB_VOLUME) || GPU_material_has_volume_output(gpumat),
                  "Only volume material should be added here");
   bool use_fast_occupancy = (ob->type == OB_VOLUME) ||
                             (blender_mat->volume_intersection_method == MA_VOLUME_ISECT_FAST);
@@ -1031,12 +1063,14 @@ PassMain::Sub *VolumeLayer::occupancy_add(const Object *ob,
   return pass;
 }
 
-PassMain::Sub *VolumeLayer::material_add(const Object * /*ob*/,
+PassMain::Sub *VolumeLayer::material_add(const Object *ob,
                                          const ::Material * /*blender_mat*/,
                                          GPUMaterial *gpumat)
 {
-  BLI_assert_msg(GPU_material_has_volume_output(gpumat) == true,
+  BLI_assert_msg((ob->type == OB_VOLUME) || GPU_material_has_volume_output(gpumat),
                  "Only volume material should be added here");
+  UNUSED_VARS_NDEBUG(ob);
+
   PassMain::Sub *pass = &material_ps_->sub(GPU_material_get_name(gpumat));
   pass->material_set(*inst_.manager, gpumat);
   if (GPU_material_flag_get(gpumat, GPU_MATFLAG_VOLUME_SCATTER)) {
@@ -1097,7 +1131,6 @@ void VolumeLayer::render(View &view, Texture &occupancy_tx)
 void VolumePipeline::sync()
 {
   object_integration_range_ = std::nullopt;
-  enabled_ = false;
   has_scatter_ = false;
   has_absorption_ = false;
   for (auto &layer : layers_) {
@@ -1107,8 +1140,6 @@ void VolumePipeline::sync()
 
 void VolumePipeline::render(View &view, Texture &occupancy_tx)
 {
-  BLI_assert_msg(enabled_, "Trying to run the volume object pipeline with no actual volume calls");
-
   for (auto &layer : layers_) {
     layer->render(view, occupancy_tx);
   }
@@ -1151,10 +1182,10 @@ VolumeObjectBounds::VolumeObjectBounds(const Camera &camera, Object *ob)
 
 VolumeLayer *VolumePipeline::register_and_get_layer(Object *ob)
 {
+  /* TODO(fclem): This is against design. Sync shouldn't depend on view properties (camera). */
   VolumeObjectBounds object_bounds(inst_.camera, ob);
   object_integration_range_ = bounds::merge(object_integration_range_, object_bounds.z_range);
 
-  enabled_ = true;
   /* Do linear search in all layers in order. This can be optimized. */
   for (auto &layer : layers_) {
     if (!layer->bounds_overlaps(object_bounds)) {
@@ -1251,6 +1282,12 @@ PassMain::Sub *DeferredProbePipeline::prepass_add(::Material *blender_mat, GPUMa
 PassMain::Sub *DeferredProbePipeline::material_add(::Material *blender_mat, GPUMaterial *gpumat)
 {
   eClosureBits closure_bits = shader_closure_bits_from_flag(gpumat);
+  if (closure_bits == eClosureBits(0)) {
+    /* Fix the case where there is no active closure in the shader.
+     * In this case we force the evaluation of emission to avoid disabling the entire layer by
+     * accident, see #126459. */
+    closure_bits |= CLOSURE_EMISSION;
+  }
   opaque_layer_.closure_bits_ |= closure_bits;
   opaque_layer_.closure_count_ = max_ii(opaque_layer_.closure_count_, count_bits_i(closure_bits));
 
@@ -1362,6 +1399,12 @@ PassMain::Sub *PlanarProbePipeline::prepass_add(::Material *blender_mat, GPUMate
 PassMain::Sub *PlanarProbePipeline::material_add(::Material *blender_mat, GPUMaterial *gpumat)
 {
   eClosureBits closure_bits = shader_closure_bits_from_flag(gpumat);
+  if (closure_bits == eClosureBits(0)) {
+    /* Fix the case where there is no active closure in the shader.
+     * In this case we force the evaluation of emission to avoid disabling the entire layer by
+     * accident, see #126459. */
+    closure_bits |= CLOSURE_EMISSION;
+  }
   closure_bits_ |= closure_bits;
   closure_count_ = max_ii(closure_count_, count_bits_i(closure_bits));
 

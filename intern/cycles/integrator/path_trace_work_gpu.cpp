@@ -25,8 +25,21 @@ static size_t estimate_single_state_size(const uint kernel_features)
 
 #define KERNEL_STRUCT_BEGIN(name) \
   for (int array_index = 0;; array_index++) {
-#define KERNEL_STRUCT_MEMBER(parent_struct, type, name, feature) \
-  state_size += (kernel_features & (feature)) ? sizeof(type) : 0;
+
+#ifdef __INTEGRATOR_GPU_PACKED_STATE__
+#  define KERNEL_STRUCT_MEMBER(parent_struct, type, name, feature) \
+    state_size += (kernel_features & (feature)) ? sizeof(type) : 0;
+#  define KERNEL_STRUCT_MEMBER_PACKED(parent_struct, type, name, feature)
+#  define KERNEL_STRUCT_BEGIN_PACKED(parent_struct, feature) \
+    KERNEL_STRUCT_BEGIN(parent_struct) \
+    KERNEL_STRUCT_MEMBER(parent_struct, packed_##parent_struct, packed, feature)
+#else
+#  define KERNEL_STRUCT_MEMBER(parent_struct, type, name, feature) \
+    state_size += (kernel_features & (feature)) ? sizeof(type) : 0;
+#  define KERNEL_STRUCT_MEMBER_PACKED KERNEL_STRUCT_MEMBER
+#  define KERNEL_STRUCT_BEGIN_PACKED(parent_struct, feature) KERNEL_STRUCT_BEGIN(parent_struct)
+#endif
+
 #define KERNEL_STRUCT_ARRAY_MEMBER(parent_struct, type, name, feature) \
   state_size += (kernel_features & (feature)) ? sizeof(type) : 0;
 #define KERNEL_STRUCT_END(name) \
@@ -50,7 +63,9 @@ static size_t estimate_single_state_size(const uint kernel_features)
 #include "kernel/integrator/shadow_state_template.h"
 
 #undef KERNEL_STRUCT_BEGIN
+#undef KERNEL_STRUCT_BEGIN_PACKED
 #undef KERNEL_STRUCT_MEMBER
+#undef KERNEL_STRUCT_MEMBER_PACKED
 #undef KERNEL_STRUCT_ARRAY_MEMBER
 #undef KERNEL_STRUCT_END
 #undef KERNEL_STRUCT_END_ARRAY
@@ -128,12 +143,31 @@ void PathTraceWorkGPU::alloc_integrator_soa()
   for (int array_index = 0;; array_index++) {
 #define KERNEL_STRUCT_MEMBER(parent_struct, type, name, feature) \
   if ((kernel_features & (feature)) && (integrator_state_gpu_.parent_struct.name == nullptr)) { \
-    string name_str = string_printf("%sintegrator_state_" #name, shadow ? "shadow_" : ""); \
+    string name_str = string_printf("%sintegrator_state_" #parent_struct "_" #name, \
+                                    shadow ? "shadow_" : ""); \
     device_only_memory<type> *array = new device_only_memory<type>(device_, name_str.c_str()); \
     array->alloc_to_device(max_num_paths_); \
     integrator_state_soa_.emplace_back(array); \
-    integrator_state_gpu_.parent_struct.name = (type *)array->device_pointer; \
+    memcpy(&integrator_state_gpu_.parent_struct.name, \
+           &array->device_pointer, \
+           sizeof(array->device_pointer)); \
   }
+#ifdef __INTEGRATOR_GPU_PACKED_STATE__
+#  define KERNEL_STRUCT_MEMBER_PACKED(parent_struct, type, name, feature) \
+    if ((kernel_features & (feature))) { \
+      string name_str = string_printf("%sintegrator_state_" #parent_struct "_" #name, \
+                                      shadow ? "shadow_" : ""); \
+      VLOG_DEBUG << "Skipping " << name_str \
+                 << " -- data is packed inside integrator_state_" #parent_struct "_packed"; \
+    }
+#  define KERNEL_STRUCT_BEGIN_PACKED(parent_struct, feature) \
+    KERNEL_STRUCT_BEGIN(parent_struct) \
+    KERNEL_STRUCT_MEMBER(parent_struct, packed_##parent_struct, packed, feature)
+#else
+#  define KERNEL_STRUCT_MEMBER_PACKED KERNEL_STRUCT_MEMBER
+#  define KERNEL_STRUCT_BEGIN_PACKED(parent_struct, feature) KERNEL_STRUCT_BEGIN(parent_struct)
+#endif
+
 #define KERNEL_STRUCT_ARRAY_MEMBER(parent_struct, type, name, feature) \
   if ((kernel_features & (feature)) && \
       (integrator_state_gpu_.parent_struct[array_index].name == nullptr)) \
@@ -143,7 +177,9 @@ void PathTraceWorkGPU::alloc_integrator_soa()
     device_only_memory<type> *array = new device_only_memory<type>(device_, name_str.c_str()); \
     array->alloc_to_device(max_num_paths_); \
     integrator_state_soa_.emplace_back(array); \
-    integrator_state_gpu_.parent_struct[array_index].name = (type *)array->device_pointer; \
+    memcpy(&integrator_state_gpu_.parent_struct[array_index].name, \
+           &array->device_pointer, \
+           sizeof(array->device_pointer)); \
   }
 #define KERNEL_STRUCT_END(name) \
   (void)array_index; \
@@ -162,7 +198,9 @@ void PathTraceWorkGPU::alloc_integrator_soa()
 #include "kernel/integrator/shadow_state_template.h"
 
 #undef KERNEL_STRUCT_BEGIN
+#undef KERNEL_STRUCT_BEGIN_PACKED
 #undef KERNEL_STRUCT_MEMBER
+#undef KERNEL_STRUCT_MEMBER_PACKED
 #undef KERNEL_STRUCT_ARRAY_MEMBER
 #undef KERNEL_STRUCT_END
 #undef KERNEL_STRUCT_END_ARRAY
@@ -362,7 +400,12 @@ void PathTraceWorkGPU::render_samples(RenderStatistics &statistics,
     ++num_iterations;
   }
 
-  statistics.occupancy = static_cast<float>(num_busy_accum) / num_iterations / max_num_paths_;
+  if (num_iterations) {
+    statistics.occupancy = float(num_busy_accum) / num_iterations / max_num_paths_;
+  }
+  else {
+    statistics.occupancy = 0.0f;
+  }
 }
 
 DeviceKernel PathTraceWorkGPU::get_most_queued_kernel() const
@@ -660,17 +703,18 @@ void PathTraceWorkGPU::compact_shadow_paths()
 
   /* Compact if we can reduce the space used by half. Not always since
    * compaction has a cost. */
-  const float shadow_compact_ratio = 0.5f;
+  const float max_overhead_factor = 2.0f;
   const int min_compact_paths = 32;
-  if (integrator_next_shadow_path_index_.data()[0] < num_active_paths * shadow_compact_ratio ||
-      integrator_next_shadow_path_index_.data()[0] < min_compact_paths)
+  const int num_total_paths = integrator_next_shadow_path_index_.data()[0];
+  if (num_total_paths < num_active_paths * max_overhead_factor ||
+      num_total_paths < min_compact_paths)
   {
     return;
   }
 
   /* Compact. */
   compact_paths(num_active_paths,
-                integrator_next_shadow_path_index_.data()[0],
+                num_total_paths,
                 DEVICE_KERNEL_INTEGRATOR_TERMINATED_SHADOW_PATHS_ARRAY,
                 DEVICE_KERNEL_INTEGRATOR_COMPACT_SHADOW_PATHS_ARRAY,
                 DEVICE_KERNEL_INTEGRATOR_COMPACT_SHADOW_STATES);
@@ -1058,6 +1102,10 @@ int PathTraceWorkGPU::adaptive_sampling_convergence_check_count_active(float thr
   queue_->zero_to_device(num_active_pixels);
 
   const int work_size = effective_buffer_params_.width * effective_buffer_params_.height;
+  if (!work_size) {
+    return 0;
+  }
+
   const int reset_int = reset; /* No bool kernel arguments. */
 
   DeviceKernelArguments args(&buffers_->buffer.device_pointer,
@@ -1082,6 +1130,7 @@ int PathTraceWorkGPU::adaptive_sampling_convergence_check_count_active(float thr
 void PathTraceWorkGPU::enqueue_adaptive_sampling_filter_x()
 {
   const int work_size = effective_buffer_params_.height;
+  DCHECK_GT(work_size, 0);
 
   DeviceKernelArguments args(&buffers_->buffer.device_pointer,
                              &effective_buffer_params_.full_x,
@@ -1097,6 +1146,7 @@ void PathTraceWorkGPU::enqueue_adaptive_sampling_filter_x()
 void PathTraceWorkGPU::enqueue_adaptive_sampling_filter_y()
 {
   const int work_size = effective_buffer_params_.width;
+  DCHECK_GT(work_size, 0);
 
   DeviceKernelArguments args(&buffers_->buffer.device_pointer,
                              &effective_buffer_params_.full_x,
@@ -1112,6 +1162,9 @@ void PathTraceWorkGPU::enqueue_adaptive_sampling_filter_y()
 void PathTraceWorkGPU::cryptomatte_postproces()
 {
   const int work_size = effective_buffer_params_.width * effective_buffer_params_.height;
+  if (!work_size) {
+    return;
+  }
 
   DeviceKernelArguments args(&buffers_->buffer.device_pointer,
                              &work_size,

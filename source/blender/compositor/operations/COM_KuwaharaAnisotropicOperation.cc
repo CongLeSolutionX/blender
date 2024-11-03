@@ -73,6 +73,10 @@ void KuwaharaAnisotropicOperation::update_memory_buffer_partial(MemoryBuffer *ou
     float anisotropy = eigenvalue_sum > 0.0f ? eigenvalue_difference / eigenvalue_sum : 0.0f;
 
     float radius = max(0.0f, *inputs[1]->get_elem(it.x, it.y));
+    if (radius == 0) {
+      copy_v4_v4(it.out, inputs[0]->get_elem(it.x, it.y));
+      continue;
+    }
 
     /* Compute the width and height of an ellipse that is more width-elongated for high anisotropy
      * and more circular for low anisotropy, controlled using the eccentricity factor. Since the
@@ -262,7 +266,15 @@ void KuwaharaAnisotropicOperation::update_memory_buffer_partial(MemoryBuffer *ou
       sum_of_weights += weight;
       weighted_sum += color_mean * weight;
     }
-    weighted_sum /= sum_of_weights;
+
+    /* Fallback to the original color if all sector weights are zero due to very high standard
+     * deviation and sharpness. */
+    if (sum_of_weights == 0.0f) {
+      weighted_sum = center_color;
+    }
+    else {
+      weighted_sum /= sum_of_weights;
+    }
 
     copy_v4_v4(it.out, weighted_sum);
   }

@@ -31,15 +31,15 @@
 
 #include <Python.h>
 
-#include "../mathutils/mathutils.h"
+#include "../mathutils/mathutils.hh"
 
-#include "../generic/py_capi_utils.h"
-#include "../generic/python_utildefines.h"
+#include "../generic/py_capi_utils.hh"
+#include "../generic/python_utildefines.hh"
 
-#include "bmesh_py_types.h" /* own include */
-#include "bmesh_py_types_customdata.h"
-#include "bmesh_py_types_meshdata.h"
-#include "bmesh_py_types_select.h"
+#include "bmesh_py_types.hh" /* own include */
+#include "bmesh_py_types_customdata.hh"
+#include "bmesh_py_types_meshdata.hh"
+#include "bmesh_py_types_select.hh"
 
 static void bm_dealloc_editmode_warn(BPy_BMesh *self);
 
@@ -1221,7 +1221,7 @@ static PyObject *bpy_bmesh_to_mesh(BPy_BMesh *self, PyObject *args)
   Main *bmain = nullptr;
   BMeshToMeshParams params{};
   params.update_shapekey_indices = true;
-  if (mesh->id.tag & LIB_TAG_NO_MAIN) {
+  if (mesh->id.tag & ID_TAG_NO_MAIN) {
     /* Mesh might be coming from a self-contained source like object.to_mesh(). No need to remap
      * anything in this case. */
   }
@@ -1738,8 +1738,8 @@ PyDoc_STRVAR(
     "\n"
     "   Interpolate the customdata from a vert between 2 other verts.\n"
     "\n"
-    "   :arg vert_pair: The vert to interpolate data from.\n"
-    "   :type vert_pair: :class:`BMVert`\n"
+    "   :arg vert_pair: The verts between which to interpolate data from.\n"
+    "   :type vert_pair: pair of :class:`BMVert`\n"
     "   :type fac: float\n");
 static PyObject *bpy_bmvert_copy_from_vert_interp(BPy_BMVert *self, PyObject *args)
 {
@@ -2912,12 +2912,13 @@ PyDoc_STRVAR(
     ".. method:: sort(key=None, reverse=False)\n"
     "\n"
     "   Sort the elements of this sequence, using an optional custom sort key.\n"
-    "   Indices of elements are not changed, BMElemeSeq.index_update() can be used for that.\n"
+    "   Indices of elements are not changed, :class:`BMElemSeq.index_update` can be used for "
+    "that.\n"
     "\n"
     "   :arg key: The key that sets the ordering of the elements.\n"
     "   :type key: :function: returning a number\n"
     "   :arg reverse: Reverse the order of the elements\n"
-    "   :type reverse: :boolean:\n"
+    "   :type reverse: bool\n"
     "\n"
     "   .. note::\n"
     "\n"
@@ -3238,7 +3239,7 @@ static PyMethodDef bpy_bmface_methods[] = {
     {"copy_from", (PyCFunction)bpy_bm_elem_copy_from, METH_O, bpy_bm_elem_copy_from_doc},
     {"copy_from_face_interp",
      (PyCFunction)bpy_bmface_copy_from_face_interp,
-     METH_O,
+     METH_VARARGS,
      bpy_bmface_copy_from_face_interp_doc},
 
     {"copy", (PyCFunction)bpy_bmface_copy, METH_VARARGS | METH_KEYWORDS, bpy_bmface_copy_doc},
@@ -3290,7 +3291,7 @@ static PyMethodDef bpy_bmloop_methods[] = {
     {"copy_from", (PyCFunction)bpy_bm_elem_copy_from, METH_O, bpy_bm_elem_copy_from_doc},
     {"copy_from_face_interp",
      (PyCFunction)bpy_bmloop_copy_from_face_interp,
-     METH_O,
+     METH_VARARGS,
      bpy_bmloop_copy_from_face_interp_doc},
 
     {"calc_angle", (PyCFunction)bpy_bmloop_calc_angle, METH_NOARGS, bpy_bmloop_calc_angle_doc},

@@ -19,7 +19,7 @@
 
 #include "GPU_texture.hh"
 
-#include "../generic/py_capi_utils.h"
+#include "../generic/py_capi_utils.hh"
 
 #include "gpu_py.hh"
 
@@ -373,6 +373,8 @@ static int pygpu_buffer_ass_slice(BPyGPUBuffer *self,
 
 static PyObject *pygpu_buffer__tp_new(PyTypeObject * /*type*/, PyObject *args, PyObject *kwds)
 {
+  BPYGPU_IS_INIT_OR_ERROR_OBJ;
+
   PyObject *length_ob, *init = nullptr;
   BPyGPUBuffer *buffer = nullptr;
   Py_ssize_t shape[MAX_DIMENSIONS];

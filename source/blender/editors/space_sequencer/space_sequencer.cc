@@ -17,8 +17,9 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_blenlib.h"
-#include "BLI_ghash.h"
 #include "BLI_math_base.h"
+
+#include "BLF_api.hh"
 
 #include "BKE_global.hh"
 #include "BKE_lib_query.hh"
@@ -65,13 +66,7 @@ static void sequencer_scopes_tag_refresh(ScrArea *area)
   sseq->runtime->scopes.reference_ibuf = nullptr;
 }
 
-blender::ed::seq::SpaceSeq_Runtime::~SpaceSeq_Runtime()
-{
-  if (last_displayed_thumbnails != nullptr) {
-    BLI_ghash_free(last_displayed_thumbnails, nullptr, last_displayed_thumbnails_list_free);
-    last_displayed_thumbnails = nullptr;
-  }
-}
+blender::ed::seq::SpaceSeq_Runtime::~SpaceSeq_Runtime() {}
 
 /* ******************** manage regions ********************* */
 
@@ -103,8 +98,10 @@ static SpaceLink *sequencer_create(const ScrArea * /*area*/, const Scene *scene)
   sseq->timeline_overlay.flag = SEQ_TIMELINE_SHOW_STRIP_NAME | SEQ_TIMELINE_SHOW_STRIP_SOURCE |
                                 SEQ_TIMELINE_SHOW_STRIP_DURATION | SEQ_TIMELINE_SHOW_GRID |
                                 SEQ_TIMELINE_SHOW_FCURVES | SEQ_TIMELINE_SHOW_STRIP_COLOR_TAG |
-                                SEQ_TIMELINE_SHOW_STRIP_RETIMING | SEQ_TIMELINE_ALL_WAVEFORMS;
+                                SEQ_TIMELINE_SHOW_STRIP_RETIMING | SEQ_TIMELINE_WAVEFORMS_HALF |
+                                SEQ_TIMELINE_SHOW_THUMBNAILS;
   sseq->cache_overlay.flag = SEQ_CACHE_SHOW | SEQ_CACHE_SHOW_FINAL_OUT;
+  sseq->draw_flag |= SEQ_DRAW_TRANSFORM_PREVIEW;
 
   /* Header. */
   region = MEM_cnew<ARegion>("header for sequencer");
@@ -135,7 +132,6 @@ static SpaceLink *sequencer_create(const ScrArea * /*area*/, const Scene *scene)
   BLI_addtail(&sseq->regionbase, static_cast<void *>(region));
   region->regiontype = RGN_TYPE_TOOLS;
   region->alignment = RGN_ALIGN_LEFT;
-  region->flag = RGN_FLAG_HIDDEN;
 
   /* Channels. */
   region = MEM_cnew<ARegion>("channels for sequencer");
@@ -185,7 +181,7 @@ static SpaceLink *sequencer_create(const ScrArea * /*area*/, const Scene *scene)
   region->v2d.min[1] = 1.0f;
 
   region->v2d.max[0] = MAXFRAMEF;
-  region->v2d.max[1] = MAXSEQ;
+  region->v2d.max[1] = SEQ_MAX_CHANNELS;
 
   region->v2d.minzoom = 0.01f;
   region->v2d.maxzoom = 100.0f;
@@ -483,46 +479,42 @@ static void sequencer_main_clamp_view(const bContext *C, ARegion *region)
     return;
   }
 
-  /* Initialize default view with 7 channels, that are visible even if empty. */
   rctf strip_boundbox;
-  BLI_rctf_init(&strip_boundbox, 0.0f, 0.0f, 1.0f, 6.0f);
+  /* Initialize default view with 7 channels, that are visible even if empty. */
+  SEQ_timeline_init_boundbox(scene, &strip_boundbox);
   Editing *ed = SEQ_editing_get(scene);
   if (ed != nullptr) {
     SEQ_timeline_expand_boundbox(scene, ed->seqbasep, &strip_boundbox);
   }
-
-  /* Clamp Y max. Scrubbing area height must be added, so strips aren't occluded. */
-  rcti scrub_rect;
-  ED_time_scrub_region_rect_get(region, &scrub_rect);
+  /* We need to calculate how much the current view is padded and add this padding to our
+   * strip bounding box. Without this, the scrub-bar or other overlays would occlude the
+   * displayed strips in the timeline.
+   */
+  float pad_top, pad_bottom;
+  SEQ_get_timeline_region_padding(C, &pad_top, &pad_bottom);
   const float pixel_view_size_y = BLI_rctf_size_y(&v2d->cur) / BLI_rcti_size_y(&v2d->mask);
-  const float scrub_bar_height = BLI_rcti_size_y(&scrub_rect) * pixel_view_size_y;
-
-  /* Channel n has range of <n, n+1>, +1 for empty channel. */
-  strip_boundbox.ymax += 2.0f + scrub_bar_height;
-
-  /* Clamp Y min. Scroller and marker area height must be added, so strips aren't occluded. */
-  float scroll_bar_height = v2d->hor.ymax * pixel_view_size_y;
-
-  ListBase *markers = ED_context_get_markers(C);
-  if (markers != nullptr && !BLI_listbase_is_empty(markers)) {
-    float markers_size = UI_MARKER_MARGIN_Y * pixel_view_size_y;
-    strip_boundbox.ymin -= markers_size;
+  /* Add padding to be able to scroll the view so that the collapsed redo panel doesn't occlude any
+   * strips. */
+  float bottom_channel_padding = UI_MARKER_MARGIN_Y * pixel_view_size_y;
+  if (bottom_channel_padding < 1.0f) {
+    /* Make sure that we can always scroll off at least by one channel. */
+    bottom_channel_padding = 1.0f;
   }
-  else {
-    strip_boundbox.ymin -= scroll_bar_height;
-  }
+  /* Add the padding and make sure we have a margin of one channel in each direction.*/
+  strip_boundbox.ymax += 1.0f + pad_top * pixel_view_size_y;
+  strip_boundbox.ymin -= bottom_channel_padding;
 
-  /* If strip is deleted, don't move view automatically, keep current range until it is changed. */
+  /* If a strip has been deleted, don't move the view automatically, keep current range until it is
+   * changed. */
   strip_boundbox.ymax = max_ff(sseq->runtime->timeline_clamp_custom_range, strip_boundbox.ymax);
 
   rctf view_clamped = v2d->cur;
-
-  const float range_y = BLI_rctf_size_y(&view_clamped);
+  float range_y = BLI_rctf_size_y(&view_clamped);
   if (view_clamped.ymax > strip_boundbox.ymax) {
     view_clamped.ymax = strip_boundbox.ymax;
     view_clamped.ymin = max_ff(strip_boundbox.ymin, strip_boundbox.ymax - range_y);
   }
-  if (view_clamped.ymin < strip_boundbox.ymin) {
+  else if (view_clamped.ymin < strip_boundbox.ymin) {
     view_clamped.ymin = strip_boundbox.ymin;
     view_clamped.ymax = min_ff(strip_boundbox.ymax, strip_boundbox.ymin + range_y);
   }
@@ -655,7 +647,7 @@ static bool is_mouse_over_retiming_key(const Scene *scene,
 {
   const SpaceSeq *sseq = static_cast<SpaceSeq *>(area->spacedata.first);
 
-  if (!SEQ_retiming_data_is_editable(seq) || !retiming_keys_are_visible(sseq)) {
+  if (!SEQ_retiming_data_is_editable(seq) || !retiming_keys_can_be_displayed(sseq)) {
     return false;
   }
 
@@ -668,7 +660,7 @@ static void sequencer_main_cursor(wmWindow *win, ScrArea *area, ARegion *region)
   int wmcursor = WM_CURSOR_DEFAULT;
 
   const bToolRef *tref = area->runtime.tool;
-  if (!STREQ(tref->idname, "builtin.select")) {
+  if (!STRPREFIX(tref->idname, "builtin.select")) {
     WM_cursor_set(win, wmcursor);
     return;
   }
@@ -694,7 +686,7 @@ static void sequencer_main_cursor(wmWindow *win, ScrArea *area, ARegion *region)
   const Scene *scene = win->scene;
   const Editing *ed = SEQ_editing_get(scene);
 
-  if (ed == NULL) {
+  if (ed == nullptr) {
     WM_cursor_set(win, wmcursor);
     return;
   }
@@ -889,6 +881,17 @@ static void sequencer_preview_region_draw(const bContext *C, ARegion *region)
     const rcti *rect = ED_region_visible_rect(region);
     int xoffset = rect->xmin + U.widget_unit;
     int yoffset = rect->ymax;
+
+    /* #ED_scene_draw_fps does not set text/shadow colors, except when
+     * frame-rate is too low, then it sets text color to red.
+     * Make sure the "normal case" also has legible colors. */
+    const int font_id = BLF_default();
+    float text_color[4] = {1, 1, 1, 1}, shadow_color[4] = {0, 0, 0, 0.8f};
+    BLF_color4fv(font_id, text_color);
+    BLF_enable(font_id, BLF_SHADOW);
+    BLF_shadow_offset(font_id, 0, 0);
+    BLF_shadow(font_id, FontShadowType::Outline, shadow_color);
+
     ED_scene_draw_fps(scene, xoffset, &yoffset);
   }
 }

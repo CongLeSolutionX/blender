@@ -108,7 +108,7 @@ DeviceInfo blender_device_info(BL::Preferences &b_preferences,
   /* Default to CPU device. */
   DeviceInfo cpu_device = Device::available_devices(DEVICE_MASK_CPU).front();
 
-  /* Device, which is choosen in the Blender Preferences. Default to CPU device. */
+  /* Device, which is chosen in the Blender Preferences. Default to CPU device. */
   preferences_device = cpu_device;
 
   /* Test if we are using GPU devices. */
@@ -156,9 +156,7 @@ DeviceInfo blender_device_info(BL::Preferences &b_preferences,
     }
   }
 
-  if (preferences_device != cpu_device) {
-    adjust_device_info(preferences_device, cpreferences, preview);
-  }
+  adjust_device_info(preferences_device, cpreferences, preview);
   adjust_device_info(cpu_device, cpreferences, preview);
 
   /* Device, which will be used, according to Settings, Scene preferences and command line

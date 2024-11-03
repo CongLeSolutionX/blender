@@ -80,6 +80,7 @@ struct Light : public LightData, NonCopyable {
             float4x4 object_to_world,
             char visibility_flag,
             const ::Light *la,
+            const LightLinking *light_linking,
             float threshold);
 
   void shadow_ensure(ShadowModule &shadows);
@@ -157,6 +158,8 @@ class LightModule {
   PassSimple culling_ps_ = {"LightCulling"};
   /** Total number of words the tile buffer needs to contain for the render resolution. */
   uint total_word_count_ = 0;
+  /** Flipped state of the view being processed. True for planar probe views. */
+  bool view_is_flipped_ = false;
 
   /** Update light on the GPU after culling. Ran for each sample. */
   PassSimple update_ps_ = {"LightUpdate"};

@@ -22,10 +22,12 @@
 #include "BKE_lib_query.hh"
 #include "BKE_material.h"
 
+#include "BLT_translation.hh"
+
 #include "BLO_read_write.hh"
 
 #include "RNA_access.hh"
-#include "RNA_prototypes.h"
+#include "RNA_prototypes.hh"
 
 #include "UI_interface.hh"
 
@@ -99,7 +101,8 @@ void draw_layer_filter_settings(const bContext * /*C*/, uiLayout *layout, Pointe
   col = uiLayoutColumn(layout, true);
   row = uiLayoutRow(col, true);
   uiLayoutSetPropDecorate(row, false);
-  uiItemPointerR(row, ptr, "layer_filter", &obj_data_ptr, "layers", nullptr, ICON_GREASEPENCIL);
+  uiItemPointerR(
+      row, ptr, "layer_filter", &obj_data_ptr, "layers", nullptr, ICON_OUTLINER_DATA_GP_LAYER);
   sub = uiLayoutRow(row, true);
   uiItemR(sub, ptr, "invert_layer_filter", UI_ITEM_NONE, "", ICON_ARROW_LEFTRIGHT);
 
@@ -166,7 +169,7 @@ void draw_custom_curve_settings(const bContext * /*C*/, uiLayout *layout, Pointe
   uiLayoutSetPropSep(layout, true);
   row = uiLayoutRow(layout, true);
   uiLayoutSetPropDecorate(row, false);
-  uiItemR(row, ptr, "use_custom_curve", UI_ITEM_NONE, "Custom Curve", ICON_NONE);
+  uiItemR(row, ptr, "use_custom_curve", UI_ITEM_NONE, IFACE_("Custom Curve"), ICON_NONE);
   if (use_custom_curve) {
     uiTemplateCurveMapping(layout, ptr, "custom_curve", 0, false, false, false, false);
   }
@@ -323,7 +326,7 @@ Vector<bke::greasepencil::Drawing *> get_drawings_for_write(GreasePencil &grease
   using namespace blender::bke::greasepencil;
   VectorSet<Drawing *> drawings;
   layer_mask.foreach_index([&](const int64_t layer_i) {
-    const Layer &layer = *grease_pencil.layer(layer_i);
+    const Layer &layer = grease_pencil.layer(layer_i);
     /* Set of owned drawings, ignore drawing references to other data blocks. */
     if (Drawing *drawing = grease_pencil.get_drawing_at(layer, frame)) {
       drawings.add(drawing);
@@ -340,7 +343,7 @@ Vector<LayerDrawingInfo> get_drawing_infos_by_layer(GreasePencil &grease_pencil,
   Set<Drawing *> drawings;
   Vector<LayerDrawingInfo> drawing_infos;
   layer_mask.foreach_index([&](const int64_t layer_i) {
-    const Layer &layer = *grease_pencil.layer(layer_i);
+    const Layer &layer = grease_pencil.layer(layer_i);
     Drawing *drawing = grease_pencil.get_drawing_at(layer, frame);
     if (drawing == nullptr) {
       return;
@@ -362,7 +365,7 @@ Vector<FrameDrawingInfo> get_drawing_infos_by_frame(GreasePencil &grease_pencil,
   Set<Drawing *> drawings;
   Vector<FrameDrawingInfo> drawing_infos;
   layer_mask.foreach_index([&](const int64_t layer_i) {
-    const Layer &layer = *grease_pencil.layer(layer_i);
+    const Layer &layer = grease_pencil.layer(layer_i);
     const std::optional<int> start_frame = layer.start_frame_at(frame);
     if (!start_frame) {
       return;

@@ -14,7 +14,7 @@ if(WIN32)
 endif()
 add_definitions(-DBOOST_ALL_NO_LIB)
 
-# Precompiled Linux libs are made with GCC, and USD uses some extensions
+# Pre-compiled Linux libraries are made with GCC, and USD uses some extensions
 # which lead to an incompatible ABI for Clang. Using those extensions with
 # Clang as well works around the issue.
 if(UNIX AND NOT APPLE)
@@ -74,7 +74,7 @@ set(INC
   ../../python/intern
   ../../windowmanager
   ../../../../intern/utfconv
-  # RNA_prototypes.h
+  # RNA_prototypes.hh
   ${CMAKE_BINARY_DIR}/source/blender/makesrna
 )
 
@@ -97,6 +97,7 @@ set(SRC
   intern/usd_hook.cc
   intern/usd_light_convert.cc
   intern/usd_mesh_utils.cc
+  intern/usd_utils.cc
 
   intern/usd_writer_abstract.cc
   intern/usd_writer_armature.cc
@@ -107,6 +108,7 @@ set(SRC
   intern/usd_writer_material.cc
   intern/usd_writer_mesh.cc
   intern/usd_writer_metaball.cc
+  intern/usd_writer_points.cc
   intern/usd_writer_transform.cc
   intern/usd_writer_volume.cc
 
@@ -143,6 +145,7 @@ set(SRC
   intern/usd_hook.hh
   intern/usd_light_convert.hh
   intern/usd_mesh_utils.hh
+  intern/usd_utils.hh
 
   intern/usd_writer_abstract.hh
   intern/usd_writer_armature.hh
@@ -153,6 +156,7 @@ set(SRC
   intern/usd_writer_material.hh
   intern/usd_writer_mesh.hh
   intern/usd_writer_metaball.hh
+  intern/usd_writer_points.hh
   intern/usd_writer_transform.hh
   intern/usd_writer_volume.hh
 
@@ -250,7 +254,7 @@ endif()
 
 blender_add_lib(bf_io_usd "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 
-# RNA_prototypes.h
+# RNA_prototypes.hh
 add_dependencies(bf_io_usd bf_rna)
 
 if(COMMAND target_precompile_headers)

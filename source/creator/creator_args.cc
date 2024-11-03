@@ -24,7 +24,7 @@
 #  include "BLI_dynstr.h"
 #  include "BLI_fileops.h"
 #  include "BLI_listbase.h"
-#  include "BLI_path_util.h"
+#  include "BLI_path_utils.hh"
 #  include "BLI_string.h"
 #  include "BLI_string_utf8.h"
 #  include "BLI_system.h"
@@ -48,11 +48,12 @@
 #  include "BKE_scene.hh"
 #  include "BKE_sound.h"
 
+#  include "GPU_capabilities.hh"
 #  include "GPU_context.hh"
 
 #  ifdef WITH_PYTHON
-#    include "BPY_extern_python.h"
-#    include "BPY_extern_run.h"
+#    include "BPY_extern_python.hh"
+#    include "BPY_extern_run.hh"
 #  endif
 
 #  include "RE_engine.h"
@@ -753,6 +754,7 @@ static void print_help(bArgs *ba, bool all)
   BLI_args_print_arg_doc(ba, "--debug-gpu-force-workarounds");
   BLI_args_print_arg_doc(ba, "--debug-gpu-compile-shaders");
   if (defs.with_renderdoc) {
+    BLI_args_print_arg_doc(ba, "--debug-gpu-scope-capture");
     BLI_args_print_arg_doc(ba, "--debug-gpu-renderdoc");
   }
   BLI_args_print_arg_doc(ba, "--debug-wm");
@@ -773,10 +775,14 @@ static void print_help(bArgs *ba, bool all)
   BLI_args_print_arg_doc(ba, "--disable-abort-handler");
 
   BLI_args_print_arg_doc(ba, "--verbose");
+  BLI_args_print_arg_doc(ba, "--quiet");
 
   PRINT("\n");
   PRINT("GPU Options:\n");
   BLI_args_print_arg_doc(ba, "--gpu-backend");
+#  ifdef WITH_OPENGL_BACKEND
+  BLI_args_print_arg_doc(ba, "--gpu-compilation-subprocesses");
+#  endif
 
   PRINT("\n");
   PRINT("Misc Options:\n");
@@ -787,6 +793,7 @@ static void print_help(bArgs *ba, bool all)
   PRINT("\n");
   BLI_args_print_arg_doc(ba, "--env-system-datafiles");
   BLI_args_print_arg_doc(ba, "--env-system-scripts");
+  BLI_args_print_arg_doc(ba, "--env-system-extensions");
   BLI_args_print_arg_doc(ba, "--env-system-python");
   PRINT("\n");
   BLI_args_print_arg_doc(ba, "-noaudio");
@@ -844,18 +851,18 @@ static void print_help(bArgs *ba, bool all)
   PRINT("\n");
 
   PRINT("Environment Variables:\n");
-  PRINT("  $BLENDER_USER_RESOURCES  Top level directory for user files.\n");
-  PRINT("                           (other 'BLENDER_USER_*' variables override when set).\n");
+  PRINT("  $BLENDER_USER_RESOURCES  Replace default directory of all user files.\n");
+  PRINT("                           Other 'BLENDER_USER_*' variables override when set.\n");
   PRINT("  $BLENDER_USER_CONFIG     Directory for user configuration files.\n");
   PRINT("  $BLENDER_USER_SCRIPTS    Directory for user scripts.\n");
   PRINT("  $BLENDER_USER_EXTENSIONS Directory for user extensions.\n");
   PRINT("  $BLENDER_USER_DATAFILES  Directory for user data files (icons, translations, ..).\n");
   PRINT("\n");
-  PRINT("  $BLENDER_SYSTEM_RESOURCES  Top level directory for system files.\n");
-  PRINT("                             (other 'BLENDER_SYSTEM_*' variables override when set).\n");
-  PRINT("  $BLENDER_SYSTEM_SCRIPTS    Directory for system wide scripts.\n");
-  PRINT("  $BLENDER_SYSTEM_DATAFILES  Directory for system wide data files.\n");
-  PRINT("  $BLENDER_SYSTEM_PYTHON     Directory for system Python libraries.\n");
+  PRINT("  $BLENDER_SYSTEM_RESOURCES  Replace default directory of all bundled resource files.\n");
+  PRINT("  $BLENDER_SYSTEM_SCRIPTS    Directory to add more bundled scripts.\n");
+  PRINT("  $BLENDER_SYSTEM_EXTENSIONS Directory for system extensions repository.\n");
+  PRINT("  $BLENDER_SYSTEM_DATAFILES  Directory to replace bundled datafiles.\n");
+  PRINT("  $BLENDER_SYSTEM_PYTHON     Directory to replace bundled Python libraries.\n");
 
   if (defs.with_ocio) {
     PRINT("  $OCIO                      Path to override the OpenColorIO configuration file.\n");
@@ -1011,6 +1018,15 @@ static int arg_handle_debug_exit_on_error(int /*argc*/, const char ** /*argv*/, 
   return 0;
 }
 
+static const char arg_handle_quiet_set_doc[] =
+    "\n\t"
+    "Suppress status printing (warnings & errors are still printed).";
+static int arg_handle_quiet_set(int /*argc*/, const char ** /*argv*/, void * /*data*/)
+{
+  G.quiet = true;
+  return 0;
+}
+
 /** Shared by `--background` & `--command`. */
 static void background_mode_set()
 {
@@ -1042,7 +1058,9 @@ static const char arg_handle_background_mode_set_doc[] =
     "\tand can be re-enabled by passing in '-setaudo Default' afterwards.";
 static int arg_handle_background_mode_set(int /*argc*/, const char ** /*argv*/, void * /*data*/)
 {
-  print_version_short();
+  if (!G.quiet) {
+    print_version_short();
+  }
   background_mode_set();
   return 0;
 }
@@ -1403,9 +1421,22 @@ static int arg_handle_debug_gpu_compile_shaders_set(int /*argc*/,
   return 0;
 }
 
+static const char arg_handle_debug_gpu_scope_capture_set_doc[] =
+    "\n"
+    "\tCapture the GPU commands issued inside the give scope name.";
+static int arg_handle_debug_gpu_scope_capture_set(int argc, const char **argv, void * /*data*/)
+{
+  if (argc > 1) {
+    STRNCPY(G.gpu_debug_scope_name, argv[1]);
+    return 1;
+  }
+  fprintf(stderr, "\nError: you must specify a scope name to capture.\n");
+  return 0;
+}
+
 static const char arg_handle_debug_gpu_renderdoc_set_doc[] =
     "\n"
-    "\tEnable Renderdoc integration for GPU frame grabbing and debugging.";
+    "\tEnable RenderDoc integration for GPU frame grabbing and debugging.";
 static int arg_handle_debug_gpu_renderdoc_set(int /*argc*/,
                                               const char ** /*argv*/,
                                               void * /*data*/)
@@ -1483,6 +1514,42 @@ static int arg_handle_gpu_backend_set(int argc, const char **argv, void * /*data
   return 1;
 }
 
+#  ifdef WITH_OPENGL_BACKEND
+static const char arg_handle_gpu_compilation_subprocesses_set_doc[] =
+    "\n"
+    "\tOverride the Max Compilation Subprocesses setting (OpenGL only).";
+static int arg_handle_gpu_compilation_subprocesses_set(int argc,
+                                                       const char **argv,
+                                                       void * /*data*/)
+{
+  const char *arg_id = "--gpu-compilation-subprocesses";
+  const int min = 0, max = BLI_system_thread_count();
+  if (argc > 1) {
+    const char *err_msg = nullptr;
+    int subprocesses;
+    if (!parse_int_strict_range(argv[1], nullptr, min, max, &subprocesses, &err_msg)) {
+      fprintf(stderr,
+              "\nError: %s '%s %s', expected number in [%d..%d].\n",
+              err_msg,
+              arg_id,
+              argv[1],
+              min,
+              max);
+      return 0;
+    }
+
+    GPU_compilation_subprocess_override_set(subprocesses);
+    return 1;
+  }
+  fprintf(stderr,
+          "\nError: you must specify a number of subprocesses in [%d..%d] '%s'.\n",
+          min,
+          max,
+          arg_id);
+  return 0;
+}
+#  endif
+
 static const char arg_handle_debug_fpe_set_doc[] =
     "\n\t"
     "Enable floating-point exceptions.";
@@ -1534,6 +1601,9 @@ static const char arg_handle_env_system_set_doc_scripts[] =
 static const char arg_handle_env_system_set_doc_python[] =
     "\n\t"
     "Set the " STRINGIFY_ARG(BLENDER_SYSTEM_PYTHON) " environment variable.";
+static const char arg_handle_env_system_set_doc_extensions[] =
+    "\n\t"
+    "Set the " STRINGIFY_ARG(BLENDER_SYSTEM_EXTENSIONS) " environment variable.";
 
 static int arg_handle_env_system_set(int argc, const char **argv, void * /*data*/)
 {
@@ -2381,10 +2451,8 @@ static int arg_handle_addons_set(int argc, const char **argv, void *data)
   if (argc > 1) {
 #  ifdef WITH_PYTHON
     const char script_str[] =
-        "from addon_utils import check, enable\n"
-        "for m in '%s'.split(','):\n"
-        "    if check(m)[1] is False:\n"
-        "        enable(m, persistent=True)";
+        "from _bpy_internal.addons.cli import set_from_cli\n"
+        "set_from_cli('%s')";
     const int slen = strlen(argv[1]) + (sizeof(script_str) - 2);
     char *str = static_cast<char *>(malloc(slen));
     bContext *C = static_cast<bContext *>(data);
@@ -2543,6 +2611,11 @@ void main_args_setup(bContext *C, bArgs *ba, bool all)
       ba, nullptr, "--env-system-scripts", CB_EX(arg_handle_env_system_set, scripts), nullptr);
   BLI_args_add(
       ba, nullptr, "--env-system-python", CB_EX(arg_handle_env_system_set, python), nullptr);
+  BLI_args_add(ba,
+               nullptr,
+               "--env-system-extensions",
+               CB_EX(arg_handle_env_system_set, extensions),
+               nullptr);
 
   BLI_args_add(ba, "-t", "--threads", CB(arg_handle_threads_set), nullptr);
 
@@ -2558,6 +2631,13 @@ void main_args_setup(bContext *C, bArgs *ba, bool all)
   /* GPU backend selection should be part of #ARG_PASS_ENVIRONMENT for correct GPU context
    * selection for animation player. */
   BLI_args_add(ba, nullptr, "--gpu-backend", CB_ALL(arg_handle_gpu_backend_set), nullptr);
+#  ifdef WITH_OPENGL_BACKEND
+  BLI_args_add(ba,
+               nullptr,
+               "--gpu-compilation-subprocesses",
+               CB(arg_handle_gpu_compilation_subprocesses_set),
+               nullptr);
+#  endif
 
   /* Pass: Background Mode & Settings
    *
@@ -2583,6 +2663,7 @@ void main_args_setup(bContext *C, bArgs *ba, bool all)
   BLI_args_add(
       ba, nullptr, "--disable-abort-handler", CB(arg_handle_abort_handler_disable), nullptr);
 
+  BLI_args_add(ba, "-q", "--quiet", CB(arg_handle_quiet_set), nullptr);
   BLI_args_add(ba, "-b", "--background", CB(arg_handle_background_mode_set), nullptr);
   /* Command implies background mode (defers execution). */
   BLI_args_add(ba, "-c", "--command", CB(arg_handle_command_set), C);
@@ -2672,6 +2753,11 @@ void main_args_setup(bContext *C, bArgs *ba, bool all)
                CB(arg_handle_debug_gpu_compile_shaders_set),
                nullptr);
   if (defs.with_renderdoc) {
+    BLI_args_add(ba,
+                 nullptr,
+                 "--debug-gpu-scope-capture",
+                 CB(arg_handle_debug_gpu_scope_capture_set),
+                 nullptr);
     BLI_args_add(
         ba, nullptr, "--debug-gpu-renderdoc", CB(arg_handle_debug_gpu_renderdoc_set), nullptr);
   }

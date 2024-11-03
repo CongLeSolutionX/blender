@@ -21,6 +21,9 @@ struct Object;
 
 namespace blender::io::usd {
 
+/* Custom Blender Primvar name used for storing armature bone lengths. */
+inline const pxr::TfToken BlenderBoneLengths("blender:bone_lengths", pxr::TfToken::Immortal);
+
 /**
  * Recursively invoke the given function on the given armature object's bones.
  * This function is a no-op if the object isn't an armature.
@@ -46,9 +49,10 @@ void get_armature_bone_names(const Object *ob_arm, bool use_deform, Vector<std::
  * in the hierarchy.
  *
  * \param bone: The bone whose path will be queried.
+ * \param allow_unicode: Whether to allow unicode bone names to be used
  * \return The path to the joint.
  */
-pxr::TfToken build_usd_joint_path(const Bone *bone);
+pxr::TfToken build_usd_joint_path(const Bone *bone, bool allow_unicode);
 
 /**
  * Sets the USD joint paths as an attribute on the given USD animation,
@@ -61,10 +65,12 @@ pxr::TfToken build_usd_joint_path(const Bone *bone);
  *                    is not null, assume only deform bones are to be
  *                    exported and bones not found in this map will be
  *                    skipped
+ * \param allow_unicode: Whether to allow unicode bone names to be used
  */
 void create_pose_joints(pxr::UsdSkelAnimation &skel_anim,
                         const Object &obj,
-                        const Map<StringRef, const Bone *> *deform_map);
+                        const Map<StringRef, const Bone *> *deform_map,
+                        bool allow_unicode);
 
 /**
  * Return the modifier of the given type enabled for the given dependency graph's

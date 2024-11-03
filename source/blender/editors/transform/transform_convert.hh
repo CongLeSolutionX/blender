@@ -24,6 +24,7 @@ struct TransData;
 struct TransDataCurveHandleFlags;
 struct TransInfo;
 struct bContext;
+struct Sequence;
 
 struct TransConvertTypeInfo {
   int flags; /* #eTFlag. */
@@ -87,6 +88,9 @@ struct TransDataVertSlideVert {
 struct CurvesTransformData {
   blender::IndexMaskMemory memory;
   blender::Vector<blender::IndexMask> selection_by_layer;
+  /* TODO: add support for grease pencil layers. */
+  blender::IndexMask aligned_with_left;
+  blender::IndexMask aligned_with_right;
 
   /**
    * The offsets of every grease pencil layer into `positions` array.
@@ -365,6 +369,8 @@ extern TransConvertTypeInfo TransConvertType_Sculpt;
 /* `transform_convert_sequencer.cc` */
 
 extern TransConvertTypeInfo TransConvertType_Sequencer;
+
+bool seq_transform_check_overlap(blender::Span<Sequence *> transformed_strips);
 
 /* `transform_convert_sequencer_image.cc` */
 

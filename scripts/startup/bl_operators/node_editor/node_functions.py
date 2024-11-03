@@ -2,14 +2,12 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-import bpy
-
-viewer_socket_name = "tmp_viewer"
+from bpy.app.translations import pgettext_tip as tip_
 
 
 def node_editor_poll(cls, context):
     space = context.space_data
-    if space.type != 'NODE_EDITOR':
+    if space is None or (space.type != 'NODE_EDITOR'):
         cls.poll_message_set("Active editor is not a node editor.")
         return False
     if space.node_tree is None:
@@ -27,8 +25,9 @@ def node_editor_poll(cls, context):
 def node_space_type_poll(cls, context, types):
     if context.space_data.tree_type not in types:
         tree_types_str = ", ".join(t.split('NodeTree')[0].lower() for t in sorted(types))
-        cls.poll_message_set("Current node tree type not supported.\n"
-                             "Should be one of " + tree_types_str + ".")
+        poll_message = tip_("Current node tree type not supported.\n"
+                            "Should be one of {:s}.").format(tree_types_str)
+        cls.poll_message_set(poll_message)
         return False
     return True
 
@@ -76,17 +75,12 @@ def is_visible_socket(socket):
     return not socket.hide and socket.enabled and socket.type != 'CUSTOM'
 
 
-def is_viewer_socket(socket):
-    # checks if a internal socket is a valid viewer socket.
-    return socket.name == viewer_socket_name and socket.is_inspect_output
-
-
 def is_viewer_link(link, output_node):
     if link.to_node == output_node and link.to_socket == output_node.inputs[0]:
         return True
     if link.to_node.type == 'GROUP_OUTPUT':
         socket = get_internal_socket(link.to_socket)
-        if is_viewer_socket(socket):
+        if socket.is_inspect_output:
             return True
     return False
 

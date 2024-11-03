@@ -2,8 +2,8 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#pragma BLENDER_REQUIRE(gpu_shader_math_base_lib.glsl)
-#pragma BLENDER_REQUIRE(gpu_shader_compositor_texture_utilities.glsl)
+#include "gpu_shader_compositor_texture_utilities.glsl"
+#include "gpu_shader_math_base_lib.glsl"
 
 /* An implementation of the Anisotropic Kuwahara filter described in the paper:
  *
@@ -21,8 +21,8 @@
  *  filtering." 2011.
  */
 
-#pragma BLENDER_REQUIRE(gpu_shader_math_base_lib.glsl)
-#pragma BLENDER_REQUIRE(gpu_shader_compositor_texture_utilities.glsl)
+#include "gpu_shader_compositor_texture_utilities.glsl"
+#include "gpu_shader_math_base_lib.glsl"
 
 void main()
 {
@@ -61,6 +61,10 @@ void main()
 #elif defined(CONSTANT_SIZE)
   float radius = max(0.0, size);
 #endif
+  if (radius == 0) {
+    imageStore(output_img, texel, texture_load(input_tx, texel));
+    return;
+  }
 
   /* Compute the width and height of an ellipse that is more width-elongated for high anisotropy
    * and more circular for low anisotropy, controlled using the eccentricity factor. Since the
@@ -245,7 +249,15 @@ void main()
     sum_of_weights += weight;
     weighted_sum += color_mean * weight;
   }
-  weighted_sum /= sum_of_weights;
+
+  /* Fallback to the original color if all sector weights are zero due to very high standard
+   * deviation and sharpness. */
+  if (sum_of_weights == 0.0) {
+    weighted_sum = center_color;
+  }
+  else {
+    weighted_sum /= sum_of_weights;
+  }
 
   imageStore(output_img, texel, weighted_sum);
 }

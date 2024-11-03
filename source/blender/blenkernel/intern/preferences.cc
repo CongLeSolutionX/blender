@@ -14,7 +14,7 @@
 
 #include "BLI_fileops.h"
 #include "BLI_listbase.h"
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 #include "BLI_string.h"
 #include "BLI_string_utf8.h"
 #include "BLI_string_utils.hh"
@@ -197,7 +197,7 @@ void BKE_preferences_extension_repo_remove(UserDef *userdef, bUserExtensionRepo 
   BLI_freelinkN(&userdef->extension_repos, repo);
 }
 
-bUserExtensionRepo *BKE_preferences_extension_repo_add_default(UserDef *userdef)
+bUserExtensionRepo *BKE_preferences_extension_repo_add_default_remote(UserDef *userdef)
 {
   bUserExtensionRepo *repo = BKE_preferences_extension_repo_add(
       userdef, "extensions.blender.org", "blender_org", "");
@@ -214,6 +214,21 @@ bUserExtensionRepo *BKE_preferences_extension_repo_add_default_user(UserDef *use
   bUserExtensionRepo *repo = BKE_preferences_extension_repo_add(
       userdef, "User Default", "user_default", "");
   return repo;
+}
+
+bUserExtensionRepo *BKE_preferences_extension_repo_add_default_system(UserDef *userdef)
+{
+  bUserExtensionRepo *repo = BKE_preferences_extension_repo_add(userdef, "System", "system", "");
+  repo->source = USER_EXTENSION_REPO_SOURCE_SYSTEM;
+  return repo;
+}
+
+void BKE_preferences_extension_repo_add_defaults_all(UserDef *userdef)
+{
+  BLI_assert(BLI_listbase_is_empty(&userdef->extension_repos));
+  BKE_preferences_extension_repo_add_default_remote(userdef);
+  BKE_preferences_extension_repo_add_default_user(userdef);
+  BKE_preferences_extension_repo_add_default_system(userdef);
 }
 
 void BKE_preferences_extension_repo_name_set(UserDef *userdef,
@@ -249,6 +264,21 @@ void BKE_preferences_extension_repo_module_set(UserDef *userdef,
                  sizeof(repo->module));
 }
 
+bool BKE_preferences_extension_repo_module_is_valid(const bUserExtensionRepo *repo)
+{
+  /* NOTE: this should only ever return false in the case of corrupt file/memory
+   * and can be considered an exceptional situation. */
+  char module_test[sizeof(bUserExtensionRepo::module)];
+  const size_t module_len = strncpy_py_module(module_test, repo->module, sizeof(repo->module));
+  if (module_len == 0) {
+    return false;
+  }
+  if (module_len != BLI_strnlen(repo->module, sizeof(repo->module))) {
+    return false;
+  }
+  return true;
+}
+
 void BKE_preferences_extension_repo_custom_dirpath_set(bUserExtensionRepo *repo, const char *path)
 {
   STRNCPY(repo->custom_dirpath, path);
@@ -262,14 +292,42 @@ size_t BKE_preferences_extension_repo_dirpath_get(const bUserExtensionRepo *repo
     return BLI_strncpy_rlen(dirpath, repo->custom_dirpath, dirpath_maxncpy);
   }
 
-  std::optional<std::string> path = BKE_appdir_folder_id_user_notest(BLENDER_USER_EXTENSIONS,
-                                                                     nullptr);
+  std::optional<std::string> path = std::nullopt;
+
+  uint8_t source = repo->source;
+  if (repo->flag & USER_EXTENSION_REPO_FLAG_USE_REMOTE_URL) {
+    source = USER_EXTENSION_REPO_SOURCE_USER;
+  }
+
+  switch (source) {
+    case USER_EXTENSION_REPO_SOURCE_SYSTEM: {
+      path = BKE_appdir_folder_id(BLENDER_SYSTEM_EXTENSIONS, nullptr);
+      break;
+    }
+    default: { /* #USER_EXTENSION_REPO_SOURCE_USER. */
+      path = BKE_appdir_folder_id_user_notest(BLENDER_USER_EXTENSIONS, nullptr);
+      break;
+    }
+  }
+
   /* Highly unlikely to fail as the directory doesn't have to exist. */
   if (!path) {
     dirpath[0] = '\0';
     return 0;
   }
   return BLI_path_join(dirpath, dirpath_maxncpy, path.value().c_str(), repo->module);
+}
+
+size_t BKE_preferences_extension_repo_user_dirpath_get(const bUserExtensionRepo *repo,
+                                                       char *dirpath,
+                                                       const int dirpath_maxncpy)
+{
+  if (std::optional<std::string> path = BKE_appdir_folder_id_user_notest(BLENDER_USER_EXTENSIONS,
+                                                                         nullptr))
+  {
+    return BLI_path_join(dirpath, dirpath_maxncpy, path.value().c_str(), ".user", repo->module);
+  }
+  return 0;
 }
 
 bUserExtensionRepo *BKE_preferences_extension_repo_find_index(const UserDef *userdef, int index)
@@ -379,26 +437,65 @@ int BKE_preferences_extension_repo_remote_scheme_end(const char *url)
 void BKE_preferences_extension_remote_to_name(const char *remote_url,
                                               char name[sizeof(bUserExtensionRepo::name)])
 {
+#ifdef _WIN32
+  const bool is_win32 = true;
+#else
+  const bool is_win32 = false;
+#endif
+  const bool is_file = STRPREFIX(remote_url, "file://");
   name[0] = '\0';
   if (int offset = BKE_preferences_extension_repo_remote_scheme_end(remote_url)) {
+    /* Skip the `://`. */
     remote_url += (offset + 3);
+
+    if (is_win32) {
+      if (is_file) {
+        /* Skip the slash prefix for: `/C:/`,
+         * not *required* but seems like a bug if it's not done. */
+        if (remote_url[0] == '/' && isalpha(remote_url[1]) && (remote_url[2] == ':')) {
+          remote_url += 1;
+        }
+      }
+    }
   }
   if (UNLIKELY(remote_url[0] == '\0')) {
     return;
   }
 
   const char *c = remote_url;
-  /* Skip any delimiters (likely forward slashes for `file:///` on UNIX). */
-  while (*c && url_char_is_delimiter(*c)) {
-    c++;
+  if (is_file) {
+    /* TODO: decode the URL, see: #GHOST_URL_decode which is not a public function. */
+
+    /* Don't use domain name only logic for file paths as this causes
+     * `file:///path/to/repo/index.json` -> `/path`
+     * In this case `/path/to/repo` is preferred. */
+    c = BLI_path_basename(remote_url);
+    /* Remove trailing slash. */
+    while ((remote_url < c) && url_char_is_delimiter(*(c - 1))) {
+      c--;
+    }
   }
-  /* Skip the domain name. */
-  while (*c && !url_char_is_delimiter(*c)) {
-    c++;
+  else {
+    /* Skip any delimiters (likely forward slashes for `file:///` on UNIX).
+     * Although the `file://` case is handled already. So this is quite unlikely.
+     * Skip them anyway because failing to do so may cause the domain to be an empty string. */
+    while (*c && url_char_is_delimiter(*c)) {
+      c++;
+    }
+    /* Skip the domain name. */
+    while (*c && !url_char_is_delimiter(*c)) {
+      c++;
+    }
   }
 
   BLI_strncpy_utf8(
       name, remote_url, std::min(size_t(c - remote_url) + 1, sizeof(bUserExtensionRepo::name)));
+
+  if (is_win32) {
+    if (is_file) {
+      BLI_path_slash_native(name);
+    }
+  }
 }
 
 int BKE_preferences_extension_repo_get_index(const UserDef *userdef,

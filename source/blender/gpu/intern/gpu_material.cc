@@ -143,6 +143,8 @@ struct GPUMaterial {
 
   uint32_t refcount;
 
+  bool do_batch_compilation;
+
 #ifndef NDEBUG
   char name[64];
 #else
@@ -184,8 +186,8 @@ GPUTexture **gpu_material_sky_texture_layer_set(
 
 GPUTexture **gpu_material_ramp_texture_row_set(GPUMaterial *mat,
                                                int size,
-                                               float *pixels,
-                                               float *row)
+                                               const float *pixels,
+                                               float *r_row)
 {
   /* In order to put all the color-bands into one 1D array texture,
    * we need them to be the same size. */
@@ -199,9 +201,9 @@ GPUTexture **gpu_material_ramp_texture_row_set(GPUMaterial *mat,
   }
 
   int layer = mat->coba_builder->current_layer;
-  *row = float(layer);
+  *r_row = float(layer);
 
-  if (*row == MAX_COLOR_BAND) {
+  if (*r_row == MAX_COLOR_BAND) {
     printf("Too many color band in shader! Remove some Curve, Black Body or Color Ramp Node.\n");
   }
   else {
@@ -863,7 +865,7 @@ GPUMaterial *GPU_material_from_nodetree(Scene *scene,
   }
 
   /* Localize tree to create links for reroute and mute. */
-  bNodeTree *localtree = blender::bke::ntreeLocalize(ntree, nullptr);
+  bNodeTree *localtree = blender::bke::node_tree_localize(ntree, nullptr);
   ntreeGPUMaterialNodes(localtree, mat);
 
   gpu_material_ramp_texture_build(mat);
@@ -873,6 +875,12 @@ GPUMaterial *GPU_material_from_nodetree(Scene *scene,
   if (GPUPass *default_pass = pass_replacement_cb ? pass_replacement_cb(thunk, mat) : nullptr) {
     mat->pass = default_pass;
     GPU_pass_acquire(mat->pass);
+    /** WORKAROUND:
+     * The node tree code is never executed in default replaced passes,
+     * but the GPU validation will still complain if the node tree UBO is not bound.
+     * So we create a dummy UBO with (at least) the size of the default material one (192 bytes).
+     * We allocate 256 bytes to leave some room for future changes. */
+    mat->ubo = GPU_uniformbuf_create_ex(256, nullptr, "Dummy UBO");
   }
   else {
     /* Create source code and search pass cache for an already compiled version. */
@@ -927,7 +935,7 @@ GPUMaterial *GPU_material_from_nodetree(Scene *scene,
   }
 
   /* Only free after GPU_pass_shader_get where GPUUniformBuf read data from the local tree. */
-  blender::bke::ntreeFreeLocalTree(localtree);
+  blender::bke::node_tree_free_local_tree(localtree);
   BLI_assert(!localtree->id.py_instance); /* Or call #BKE_libblock_free_data_py. */
   MEM_freeN(localtree);
 
@@ -951,21 +959,8 @@ void GPU_material_release(GPUMaterial *mat)
   GPU_material_free_single(mat);
 }
 
-void GPU_material_compile(GPUMaterial *mat)
+static void gpu_material_finalize(GPUMaterial *mat, bool success)
 {
-  bool success;
-
-  BLI_assert(ELEM(mat->status, GPU_MAT_QUEUED, GPU_MAT_CREATED));
-  BLI_assert(mat->pass);
-
-/* NOTE: The shader may have already been compiled here since we are
- * sharing GPUShader across GPUMaterials. In this case it's a no-op. */
-#ifndef NDEBUG
-  success = GPU_pass_compile(mat->pass, mat->name);
-#else
-  success = GPU_pass_compile(mat->pass, __func__);
-#endif
-
   mat->flag |= GPU_MATFLAG_UPDATED;
 
   if (success) {
@@ -1015,6 +1010,45 @@ void GPU_material_compile(GPUMaterial *mat)
     mat->pass = nullptr;
     gpu_node_graph_free(&mat->graph);
   }
+}
+
+void GPU_material_compile(GPUMaterial *mat)
+{
+  bool success;
+  BLI_assert(ELEM(mat->status, GPU_MAT_QUEUED, GPU_MAT_CREATED));
+  BLI_assert(mat->pass);
+
+/* NOTE: The shader may have already been compiled here since we are
+ * sharing GPUShader across GPUMaterials. In this case it's a no-op. */
+#ifndef NDEBUG
+  success = GPU_pass_compile(mat->pass, mat->name);
+#else
+  success = GPU_pass_compile(mat->pass, __func__);
+#endif
+
+  gpu_material_finalize(mat, success);
+}
+
+void GPU_material_async_compile(GPUMaterial *mat)
+{
+  BLI_assert(ELEM(mat->status, GPU_MAT_QUEUED, GPU_MAT_CREATED));
+  BLI_assert(mat->pass);
+#ifndef NDEBUG
+  const char *name = mat->name;
+#else
+  const char *name = __func__;
+#endif
+  GPU_pass_begin_async_compilation(mat->pass, name);
+}
+
+bool GPU_material_async_try_finalize(GPUMaterial *mat)
+{
+  BLI_assert(ELEM(mat->status, GPU_MAT_QUEUED, GPU_MAT_CREATED));
+  if (GPU_pass_async_compilation_try_finalize(mat->pass)) {
+    gpu_material_finalize(mat, GPU_pass_shader_get(mat->pass) != nullptr);
+    return true;
+  }
+  return false;
 }
 
 void GPU_material_optimize(GPUMaterial *mat)

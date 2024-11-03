@@ -82,8 +82,7 @@ ccl_device_inline bool shadow_volume_shader_sample(KernelGlobals kg,
     return false;
   }
 
-  const float density = object_volume_density(kg, sd->object);
-  *extinction = sd->closure_transparent_extinction * density;
+  *extinction = sd->closure_transparent_extinction;
   return true;
 }
 
@@ -115,11 +114,6 @@ ccl_device_inline bool volume_shader_sample(KernelGlobals kg,
       }
     }
   }
-
-  const float density = object_volume_density(kg, sd->object);
-  coeff->sigma_s *= density;
-  coeff->sigma_t *= density;
-  coeff->emission *= density;
 
   return true;
 }
@@ -419,7 +413,7 @@ typedef struct VolumeIntegrateState {
 
   /* Random numbers for scattering. */
   float rscatter;
-  float rphase;
+  float rchannel;
 
   /* Multiple importance sampling. */
   VolumeSampleMethod direct_sample_method;
@@ -442,7 +436,7 @@ ccl_device_forceinline void volume_integrate_step_scattering(
   const Spectrum albedo = safe_divide_color(coeff.sigma_s, coeff.sigma_t);
   Spectrum channel_pdf;
   const int channel = volume_sample_channel(
-      albedo, result.indirect_throughput, vstate.rphase, &channel_pdf);
+      albedo, result.indirect_throughput, &vstate.rchannel, &channel_pdf);
 
   /* Equiangular sampling for direct lighting. */
   if (vstate.direct_sample_method == VOLUME_SAMPLE_EQUIANGULAR && !result.direct_scatter) {
@@ -562,7 +556,7 @@ ccl_device_forceinline void volume_integrate_heterogeneous(
   vstate.tmax = ray->tmin;
   vstate.absorption_only = true;
   vstate.rscatter = path_state_rng_1D(kg, rng_state, PRNG_VOLUME_SCATTER_DISTANCE);
-  vstate.rphase = path_state_rng_1D(kg, rng_state, PRNG_VOLUME_PHASE_CHANNEL);
+  vstate.rchannel = path_state_rng_1D(kg, rng_state, PRNG_VOLUME_COLOR_CHANNEL);
 
   /* Multiple importance sampling: pick between equiangular and distance sampling strategy. */
   vstate.direct_sample_method = direct_sample_method;
@@ -725,14 +719,18 @@ ccl_device_forceinline bool integrate_volume_equiangular_sample_light(
                                         path_flag,
                                         &ls))
   {
+    ls.emitter_id = EMITTER_NONE;
     return false;
   }
 
   if (ls.shader & SHADER_EXCLUDE_SCATTER) {
+    ls.emitter_id = EMITTER_NONE;
     return false;
   }
 
   if (ls.t == FLT_MAX) {
+    /* Sampled distant/background light is valid in volume segment, but we are going to sample the
+     * light position with distance sampling instead of equiangular. */
     return false;
   }
 
@@ -850,8 +848,8 @@ ccl_device_forceinline void integrate_volume_direct_light(
       state, path, render_pixel_index);
   INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, rng_offset) = INTEGRATOR_STATE(
       state, path, rng_offset);
-  INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, rng_hash) = INTEGRATOR_STATE(
-      state, path, rng_hash);
+  INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, rng_pixel) = INTEGRATOR_STATE(
+      state, path, rng_pixel);
   INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, sample) = INTEGRATOR_STATE(
       state, path, sample);
   INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, flag) = shadow_flag;
@@ -994,7 +992,9 @@ ccl_device VolumeIntegrateEvent volume_integrate(KernelGlobals kg,
                                                  ccl_global float *ccl_restrict render_buffer)
 {
   ShaderData sd;
-  shader_setup_from_volume(kg, &sd, ray);
+  /* FIXME: `object` is used for light linking. We read the bottom of the stack for simplicity, but
+   * this does not work for overlapping volumes. */
+  shader_setup_from_volume(kg, &sd, ray, INTEGRATOR_STATE_ARRAY(state, volume_stack, 0, object));
 
   /* Load random number state. */
   RNGState rng_state;
@@ -1003,7 +1003,6 @@ ccl_device VolumeIntegrateEvent volume_integrate(KernelGlobals kg,
   /* Sample light ahead of volume stepping, for equiangular sampling. */
   /* TODO: distant lights are ignored now, but could instead use even distribution. */
   LightSample ls ccl_optional_struct_init;
-  ls.emitter_id = EMITTER_NONE;
   const bool need_light_sample = !(INTEGRATOR_STATE(state, path, flag) & PATH_RAY_TERMINATE);
 
   EquiangularCoefficients equiangular_coeffs = {zero_float3(), make_float2(ray->tmin, ray->tmax)};

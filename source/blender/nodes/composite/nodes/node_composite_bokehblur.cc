@@ -67,6 +67,17 @@ class BokehBlurOperation : public NodeOperation {
 
   void execute() override
   {
+    /* Not yet supported on CPU. */
+    if (!context().use_gpu()) {
+      for (const bNodeSocket *output : this->node()->output_sockets()) {
+        Result &output_result = get_result(output->identifier);
+        if (output_result.should_compute()) {
+          output_result.allocate_invalid();
+        }
+      }
+      return;
+    }
+
     if (is_identity()) {
       get_input("Image").pass_through(get_result("Image"));
       return;
@@ -156,7 +167,7 @@ class BokehBlurOperation : public NodeOperation {
   int compute_variable_size_search_radius()
   {
     const Result &input_size = get_input("Size");
-    const float maximum_size = maximum_float(context(), input_size.texture());
+    const float maximum_size = maximum_float(context(), input_size);
 
     const float base_size = compute_blur_radius();
     return math::clamp(int(maximum_size * base_size), 0, get_max_size());
@@ -231,5 +242,5 @@ void register_node_type_cmp_bokehblur()
   ntype.initfunc = file_ns::node_composit_init_bokehblur;
   ntype.get_compositor_operation = file_ns::get_compositor_operation;
 
-  blender::bke::nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }

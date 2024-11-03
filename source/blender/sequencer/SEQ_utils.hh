@@ -19,7 +19,7 @@ struct StripElem;
 
 void SEQ_sequence_base_unique_name_recursive(Scene *scene, ListBase *seqbasep, Sequence *seq);
 const char *SEQ_sequence_give_name(const Sequence *seq);
-ListBase *SEQ_get_seqbase_from_sequence(Sequence *seq, ListBase **channels, int *r_offset);
+ListBase *SEQ_get_seqbase_from_sequence(Sequence *seq, ListBase **r_channels, int *r_offset);
 const Sequence *SEQ_get_topmost_sequence(const Scene *scene, int frame);
 /**
  * In cases where we don't know the sequence's listbase.
@@ -63,8 +63,8 @@ namespace blender::seq {
  * Results of the query for this strip will be cached into #MediaPresence cache. The cache
  * will be created on demand.
  *
- * \param scene Scene to query.
- * \param seq Sequencer strip.
+ * \param scene: Scene to query.
+ * \param seq: Sequencer strip.
  * \return True if media file is missing.
  */
 bool media_presence_is_missing(Scene *scene, const Sequence *seq);

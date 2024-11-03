@@ -87,11 +87,9 @@ typedef enum eFFMpegPreset {
 } eFFMpegPreset;
 
 /**
- * Mapping from easily-understandable descriptions to CRF values.
- * Assumes we output 8-bit video. Needs to be remapped if 10-bit
- * is output.
- * We use a slightly wider than "subjectively sane range" according
- * to https://trac.ffmpeg.org/wiki/Encode/H.264#a1.ChooseaCRFvalue
+ * Mapping from easily-understandable quality (Constant Rate Factor - CRF) descriptions
+ * to H.264 8-bit CRF values. https://trac.ffmpeg.org/wiki/Encode/H.264#a1.ChooseaCRFvalue
+ * For other video codecs these values might need to be remapped.
  */
 typedef enum eFFMpegCrf {
   FFM_CRF_NONE = -1,
@@ -414,7 +412,7 @@ typedef struct ImageFormatData {
 
   /* --- format specific --- */
 
-  /** OpenEXR. */
+  /** OpenEXR: R_IMF_EXR_CODEC_* values in low OPENEXR_CODEC_MASK bits. */
   char exr_codec;
 
   /** CINEON. */
@@ -831,6 +829,11 @@ typedef struct RenderData {
 
   /** Precision used by the GPU execution of the compositor tree. */
   int compositor_precision; /* eCompositorPrecision */
+
+  /* If false and the experimental enable_new_cpu_compositor is true, use the new experimental
+   * CPU compositor implementation, otherwise, use the old CPU compositor. */
+  char use_old_cpu_compositor;
+  char _pad10[7];
 } RenderData;
 
 /** #RenderData::quality_flag */
@@ -915,27 +918,63 @@ typedef struct TimeMarker {
 
 typedef struct Paint_Runtime {
   /** Avoid having to compare with scene pointer everywhere. */
-  unsigned int tool_offset;
+  unsigned int initialized;
   unsigned short ob_mode;
   char _pad[2];
 } Paint_Runtime;
 
-/** We might want to store other things here. */
-typedef struct PaintToolSlot {
-  struct Brush *brush;
-} PaintToolSlot;
+typedef struct NamedBrushAssetReference {
+  struct NamedBrushAssetReference *next, *prev;
+
+  const char *name;
+  struct AssetWeakReference *brush_asset_reference;
+} NamedBrushAssetReference;
+
+/**
+ * For the tool system: Storage to remember the last active brush for specific tools.
+ *
+ * This stores a "main" brush reference, which is used for any tool that uses brushes but isn't
+ * limited to a specific brush type, and a list of brush references identified by the brush type,
+ * for tools that are limited to a brush type.
+ *
+ * The tool system updates these fields as the active brush or active tool changes. It also
+ * determines the brush to remember/restore on tool changes and activates it.
+ */
+typedef struct ToolSystemBrushBindings {
+  struct AssetWeakReference *main_brush_asset_reference;
+
+  /**
+   * The tool system exposes tools for some brush types, like an eraser tool to access eraser
+   * brushes. Switching between tools should remember the last used brush for a brush type, e.g.
+   * which eraser was used last by the eraser tool.
+   *
+   * Note that multiple tools may use the same brush type, for example primitive draw tools (to
+   * draw rectangles, circles, lines, etc.) all use a "DRAW" brush, which will then be shared
+   * among them.
+   */
+  ListBase active_brush_per_brush_type; /* #NamedBrushAssetReference */
+} ToolSystemBrushBindings;
 
 /** Paint Tool Base. */
 typedef struct Paint {
+  /**
+   * The active brush. Possibly null. Possibly stored in a separate #Main data-base and not user-
+   * counted.
+   */
   struct Brush *brush;
 
   /**
-   * Each tool has its own active brush,
-   * The currently active tool is defined by the current 'brush'.
+   * A weak asset reference to the #brush, if not NULL.
+   * Used to attempt restoring the active brush from the AssetLibrary system, typically on
+   * file load.
    */
-  struct PaintToolSlot *tool_slots;
-  int tool_slots_len;
-  char _pad1[4];
+  struct AssetWeakReference *brush_asset_reference;
+
+  /** Default eraser brush and associated weak reference. */
+  struct Brush *eraser_brush;
+  struct AssetWeakReference *eraser_brush_asset_reference;
+
+  ToolSystemBrushBindings tool_brush_bindings;
 
   struct Palette *palette;
   /** Cavity curve. */
@@ -1551,6 +1590,8 @@ typedef struct ToolSettings {
   char selectmode;
 
   /* UV Calculation. */
+
+  /* Use `UVCALC_UNWRAP_METHOD_*` values. */
   char unwrapper;
   char uvcalc_flag;
   char uv_flag;
@@ -1558,6 +1599,20 @@ typedef struct ToolSettings {
   char uv_sticky;
 
   float uvcalc_margin;
+
+  int uvcalc_iterations;
+  float uvcalc_weight_factor;
+
+  /**
+   * Regarding having a single vertex group for all meshes.
+   * In most cases there is no expectation for the names used for vertex groups.
+   * UV weights is a fairly specific feature for unwrapping and in this case
+   * users are expected to use the name `uv_importance`.
+   * While we could support setting a different group per mesh (similar to the active group).
+   * This isn't all that useful in practice, so use a "default" name instead.
+   * This approach may be reworked after gathering feedback from users.
+   */
+  char uvcalc_weight_group[64]; /* MAX_VGROUP_NAME */
 
   /* Auto-IK. */
   /** Runtime only. */
@@ -2046,7 +2101,7 @@ typedef struct Scene {
    * only used by #BKE_object_handle_update()
    */
   struct CustomData_MeshMasks customdata_mask;
-  /** XXX: same as above but for temp operator use (viewport renders). */
+  /** XXX: same as `customdata_mask` but for temp operator use (viewport renders). */
   struct CustomData_MeshMasks customdata_mask_modal;
 
   /* Color Management. */
@@ -2351,7 +2406,7 @@ typedef enum eSnapFlag {
   // SCE_SNAP_PROJECT = (1 << 3), /* DEPRECATED, see #SCE_SNAP_INDIVIDUAL_PROJECT. */
   /** Was `SCE_SNAP_NO_SELF`, but self should be active. */
   SCE_SNAP_NOT_TO_ACTIVE = (1 << 4),
-  /* SCE_SNAP_ABS_GRID = (1 << 5), */ /* UNUSED */
+  SCE_SNAP_ABS_GRID = (1 << 5),
   /* Same value with different name to make it easier to understand in time based code. */
   SCE_SNAP_ABS_TIME_STEP = (1 << 5),
   SCE_SNAP_BACKFACE_CULLING = (1 << 6),
@@ -2436,6 +2491,11 @@ enum {
   SEQ_SNAP_TO_CURRENT_FRAME = 1 << 1,
   SEQ_SNAP_TO_STRIP_HOLD = 1 << 2,
   SEQ_SNAP_TO_MARKERS = 1 << 3,
+
+  /* Preview snapping. */
+  SEQ_SNAP_TO_PREVIEW_BORDERS = 1 << 4,
+  SEQ_SNAP_TO_PREVIEW_CENTER = 1 << 5,
+  SEQ_SNAP_TO_STRIPS_PREVIEW = 1 << 6,
 };
 
 /** #SequencerToolSettings::snap_flag */
@@ -2643,6 +2703,13 @@ enum {
   IMAGEPAINT_MISSING_STENCIL = 1 << 3,
 };
 
+/** #ToolSettings::unwrapper */
+enum {
+  UVCALC_UNWRAP_METHOD_ANGLE = 0,
+  UVCALC_UNWRAP_METHOD_CONFORMAL = 1,
+  UVCALC_UNWRAP_METHOD_MINIMUM_STRETCH = 2,
+};
+
 /** #ToolSettings::uvcalc_flag */
 enum {
   UVCALC_FILLHOLES = 1 << 0,
@@ -2656,6 +2723,10 @@ enum {
   UVCALC_TRANSFORM_CORRECT = 1 << 4,
   /** Keep equal values merged while correcting custom-data. */
   UVCALC_TRANSFORM_CORRECT_KEEP_CONNECTED = 1 << 5,
+  /** Prevent unwrap that flips. */
+  UVCALC_UNWRAP_NO_FLIP = 1 << 6,
+  /** Use importance weights. */
+  UVCALC_UNWRAP_USE_WEIGHTS = 1 << 7,
 };
 
 /** #ToolSettings::uv_flag */
@@ -2823,7 +2894,7 @@ enum {
   SCE_EEVEE_GTAO_BENT_NORMALS = (1 << 5),
   SCE_EEVEE_GTAO_BOUNCE = (1 << 6),
   // SCE_EEVEE_DOF_ENABLED = (1 << 7), /* Moved to camera->dof.flag */
-  SCE_EEVEE_BLOOM_ENABLED = (1 << 8),
+  // SCE_EEVEE_BLOOM_ENABLED = (1 << 8), /* Unused */
   SCE_EEVEE_MOTION_BLUR_ENABLED_DEPRECATED = (1 << 9), /* Moved to scene->r.mode */
   SCE_EEVEE_SHADOW_HIGH_BITDEPTH = (1 << 10),
   SCE_EEVEE_TAA_REPROJECTION = (1 << 11),
@@ -2843,6 +2914,7 @@ enum {
   SCE_EEVEE_RAYTRACE_OPTIONS_SPLIT = (1 << 25),
   SCE_EEVEE_SHADOW_JITTERED_VIEWPORT = (1 << 26),
   SCE_EEVEE_VOLUME_CUSTOM_RANGE = (1 << 27),
+  SCE_EEVEE_FAST_GI_ENABLED = (1 << 28),
 };
 
 typedef enum RaytraceEEVEE_Flag {

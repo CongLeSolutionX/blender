@@ -285,32 +285,23 @@ int MetalDeviceQueue::num_concurrent_states(const size_t state_size) const
     return result;
   }
 
-  result = 1048576;
-  if (metal_device_->device_vendor == METAL_GPU_APPLE) {
-    result *= 4;
+  result = 4194304;
 
-    /* Increasing the state count doesn't notably benefit M1-family systems. */
-    if (MetalInfo::get_apple_gpu_architecture(metal_device_->mtlDevice) != APPLE_M1) {
-      size_t system_ram = system_physical_ram();
-      size_t allocated_so_far = [metal_device_->mtlDevice currentAllocatedSize];
-      size_t max_recommended_working_set = [metal_device_->mtlDevice recommendedMaxWorkingSetSize];
+  /* Increasing the state count doesn't notably benefit M1-family systems. */
+  if (MetalInfo::get_apple_gpu_architecture(metal_device_->mtlDevice) != APPLE_M1) {
+    size_t system_ram = system_physical_ram();
+    size_t allocated_so_far = [metal_device_->mtlDevice currentAllocatedSize];
+    size_t max_recommended_working_set = [metal_device_->mtlDevice recommendedMaxWorkingSetSize];
 
-      /* Determine whether we can double the state count, and leave enough GPU-available memory
-       * (1/8 the system RAM or 1GB - whichever is largest). Enlarging the state size allows us to
-       * keep dispatch sizes high and minimize work submission overheads. */
-      size_t min_headroom = std::max(system_ram / 8, size_t(1024 * 1024 * 1024));
-      size_t total_state_size = result * state_size;
-      if (max_recommended_working_set - allocated_so_far - total_state_size * 2 >= min_headroom) {
-        result *= 2;
-        metal_printf("Doubling state count to exploit available RAM (new size = %d)\n", result);
-      }
+    /* Determine whether we can double the state count, and leave enough GPU-available memory
+     * (1/8 the system RAM or 1GB - whichever is largest). Enlarging the state size allows us to
+     * keep dispatch sizes high and minimize work submission overheads. */
+    size_t min_headroom = std::max(system_ram / 8, size_t(1024 * 1024 * 1024));
+    size_t total_state_size = result * state_size;
+    if (max_recommended_working_set - allocated_so_far - total_state_size * 2 >= min_headroom) {
+      result *= 2;
+      metal_printf("Doubling state count to exploit available RAM (new size = %d)\n", result);
     }
-  }
-  else if (metal_device_->device_vendor == METAL_GPU_AMD) {
-    /* METAL_WIP */
-    /* TODO: compute automatically. */
-    /* TODO: must have at least num_threads_per_block. */
-    result *= 2;
   }
   return result;
 }
@@ -323,7 +314,7 @@ int MetalDeviceQueue::num_concurrent_busy_states(const size_t state_size) const
 
 int MetalDeviceQueue::num_sort_partition_elements() const
 {
-  return MetalInfo::optimal_sort_partition_elements(metal_device_->mtlDevice);
+  return MetalInfo::optimal_sort_partition_elements();
 }
 
 bool MetalDeviceQueue::supports_local_atomic_sort() const
@@ -446,10 +437,10 @@ bool MetalDeviceQueue::enqueue(DeviceKernel kernel,
 
     if (label_command_encoders_) {
       /* Add human-readable labels if we're doing any form of debugging / profiling. */
-      mtlComputeCommandEncoder.label = [[NSString alloc]
-          initWithFormat:@"Metal queue launch %s, work_size %d",
-                         device_kernel_as_string(kernel),
-                         work_size];
+      mtlComputeCommandEncoder.label = [NSString
+          stringWithFormat:@"Metal queue launch %s, work_size %d",
+                           device_kernel_as_string(kernel),
+                           work_size];
     }
 
     /* this relies on IntegratorStateGPU layout being contiguous device_ptrs. */
@@ -474,13 +465,12 @@ bool MetalDeviceQueue::enqueue(DeviceKernel kernel,
     }
     bytes_written = globals_offsets + sizeof(KernelParamsMetal);
 
-    const MetalKernelPipeline *metal_kernel_pso = MetalDeviceKernels::get_best_pipeline(
-        metal_device_, kernel);
-    if (!metal_kernel_pso) {
+    if (!active_pipelines_[kernel].update(metal_device_, kernel)) {
       metal_device_->set_error(
-          string_printf("No MetalKernelPipeline for %s\n", device_kernel_as_string(kernel)));
+          string_printf("Could not activate pipeline for %s\n", device_kernel_as_string(kernel)));
       return false;
     }
+    MetalDispatchPipeline &active_pipeline = active_pipelines_[kernel];
 
     /* Encode ancillaries */
     [metal_device_->mtlAncillaryArgEncoder setArgumentBuffer:arg_buffer offset:metal_offsets];
@@ -496,8 +486,7 @@ bool MetalDeviceQueue::enqueue(DeviceKernel kernel,
 
     if (@available(macos 12.0, *)) {
       if (metal_device_->use_metalrt && device_kernel_has_intersection(kernel)) {
-        if (metal_device_->bvhMetalRT) {
-          id<MTLAccelerationStructure> accel_struct = metal_device_->bvhMetalRT->accel_struct;
+        if (id<MTLAccelerationStructure> accel_struct = metal_device_->accel_struct) {
           [metal_device_->mtlAncillaryArgEncoder setAccelerationStructure:accel_struct atIndex:3];
           [metal_device_->mtlAncillaryArgEncoder setBuffer:metal_device_->blas_buffer
                                                     offset:0
@@ -505,14 +494,14 @@ bool MetalDeviceQueue::enqueue(DeviceKernel kernel,
         }
 
         for (int table = 0; table < METALRT_TABLE_NUM; table++) {
-          if (metal_kernel_pso->intersection_func_table[table]) {
-            [metal_kernel_pso->intersection_func_table[table] setBuffer:arg_buffer
-                                                                 offset:globals_offsets
-                                                                atIndex:1];
+          if (active_pipeline.intersection_func_table[table]) {
+            [active_pipeline.intersection_func_table[table] setBuffer:arg_buffer
+                                                               offset:globals_offsets
+                                                              atIndex:1];
             [metal_device_->mtlAncillaryArgEncoder
-                setIntersectionFunctionTable:metal_kernel_pso->intersection_func_table[table]
+                setIntersectionFunctionTable:active_pipeline.intersection_func_table[table]
                                      atIndex:4 + table];
-            [mtlComputeCommandEncoder useResource:metal_kernel_pso->intersection_func_table[table]
+            [mtlComputeCommandEncoder useResource:active_pipeline.intersection_func_table[table]
                                             usage:MTLResourceUsageRead];
           }
           else {
@@ -535,24 +524,22 @@ bool MetalDeviceQueue::enqueue(DeviceKernel kernel,
     if (metal_device_->use_metalrt && device_kernel_has_intersection(kernel)) {
       if (@available(macos 12.0, *)) {
 
-        BVHMetal *bvhMetalRT = metal_device_->bvhMetalRT;
-        if (bvhMetalRT && bvhMetalRT->accel_struct) {
+        if (id<MTLAccelerationStructure> accel_struct = metal_device_->accel_struct) {
           /* Mark all Accelerations resources as used */
-          [mtlComputeCommandEncoder useResource:bvhMetalRT->accel_struct
-                                          usage:MTLResourceUsageRead];
+          [mtlComputeCommandEncoder useResource:accel_struct usage:MTLResourceUsageRead];
           [mtlComputeCommandEncoder useResource:metal_device_->blas_buffer
                                           usage:MTLResourceUsageRead];
-          [mtlComputeCommandEncoder useResources:bvhMetalRT->unique_blas_array.data()
-                                           count:bvhMetalRT->unique_blas_array.size()
+          [mtlComputeCommandEncoder useResources:metal_device_->unique_blas_array.data()
+                                           count:metal_device_->unique_blas_array.size()
                                            usage:MTLResourceUsageRead];
         }
       }
     }
 
-    [mtlComputeCommandEncoder setComputePipelineState:metal_kernel_pso->pipeline];
+    [mtlComputeCommandEncoder setComputePipelineState:active_pipeline.pipeline];
 
     /* Compute kernel launch parameters. */
-    const int num_threads_per_block = metal_kernel_pso->num_threads_per_block;
+    const int num_threads_per_block = active_pipeline.num_threads_per_block;
 
     int shared_mem_bytes = 0;
 
@@ -603,7 +590,7 @@ bool MetalDeviceQueue::enqueue(DeviceKernel kernel,
           const char *errCStr = [[NSString stringWithFormat:@"%@", command_buffer.error]
               UTF8String];
           str += string_printf("(%s.%s):\n%s\n",
-                               kernel_type_as_string(metal_kernel_pso->pso_type),
+                               kernel_type_as_string(active_pipeline.pso_type),
                                device_kernel_as_string(kernel),
                                errCStr);
         }

@@ -20,7 +20,7 @@
 
 #include "RNA_access.hh"
 
-#include "BKE_action.h"
+#include "BKE_action.hh"
 #include "BKE_colortools.hh"
 #include "BKE_curves.hh"
 #include "BKE_geometry_set.hh"
@@ -36,7 +36,7 @@
 #include "MOD_modifiertypes.hh"
 #include "MOD_ui_common.hh"
 
-#include "RNA_prototypes.h"
+#include "RNA_prototypes.hh"
 
 namespace blender {
 

@@ -479,20 +479,49 @@ static void rna_ParticleSystem_co_hair(
 }
 
 static const EnumPropertyItem *rna_Particle_Material_itemf(bContext *C,
-                                                           PointerRNA * /*ptr*/,
+                                                           PointerRNA *ptr,
                                                            PropertyRNA * /*prop*/,
                                                            bool *r_free)
 {
-  Object *ob = static_cast<Object *>(CTX_data_pointer_get(C, "object").data);
+
+  ParticleSettings *part = reinterpret_cast<ParticleSettings *>(ptr->owner_id);
+
+  /* The context object might not be what we want when doing this from python. */
+  Object *ob_found = nullptr;
+
+  if (Object *ob_context = static_cast<Object *>(CTX_data_pointer_get(C, "object").data)) {
+    LISTBASE_FOREACH (ParticleSystem *, psys, &ob_context->particlesystem) {
+      if (psys->part == part) {
+        ob_found = ob_context;
+        break;
+      }
+    }
+  }
+
+  if (ob_found == nullptr) {
+    /* Iterating over all object is slow, but no better solution exists at the moment. */
+    for (Object *ob = static_cast<Object *>(CTX_data_main(C)->objects.first);
+         ob && (ob_found == nullptr);
+         ob = static_cast<Object *>(ob->id.next))
+    {
+      LISTBASE_FOREACH (ParticleSystem *, psys, &ob->particlesystem) {
+        if (psys->part == part) {
+          ob_found = ob;
+          break;
+        }
+      }
+    }
+  }
+
   Material *ma;
   EnumPropertyItem *item = nullptr;
   EnumPropertyItem tmp = {0, "", 0, "", ""};
   int totitem = 0;
   int i;
 
-  if (ob && ob->totcol > 0) {
-    for (i = 1; i <= ob->totcol; i++) {
-      ma = BKE_object_material_get(ob, i);
+  if (ob_found && ob_found->totcol > 0) {
+    for (i = 1; i <= ob_found->totcol; i++) {
+      ma = BKE_object_material_get(ob_found, i);
       tmp.value = i;
       tmp.icon = ICON_MATERIAL_DATA;
       if (ma) {
@@ -2183,6 +2212,7 @@ static void rna_def_particle_settings_mtex(BlenderRNA *brna)
   prop = RNA_def_property(srna, "texture_coords", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, nullptr, "texco");
   RNA_def_property_enum_items(prop, texco_items);
+  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_TEXTURE);
   RNA_def_property_ui_text(prop,
                            "Texture Coordinates",
                            "Texture coordinates used to map the texture onto the background");

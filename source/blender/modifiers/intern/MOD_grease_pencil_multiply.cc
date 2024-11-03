@@ -40,7 +40,7 @@
 
 #include "RNA_access.hh"
 #include "RNA_enum_types.hh"
-#include "RNA_prototypes.h"
+#include "RNA_prototypes.hh"
 
 #include "MOD_grease_pencil_util.hh"
 #include "MOD_modifiertypes.hh"
@@ -120,7 +120,6 @@ static bke::CurvesGeometry duplicate_strokes(const bke::CurvesGeometry &curves,
   geometry::RealizeInstancesOptions options;
   options.keep_original_ids = true;
   options.realize_instance_attributes = true;
-  options.propagation_info = {};
   bke::GeometrySet result_geo = geometry::realize_instances(
       bke::GeometrySet::from_instances(instances.release()), options);
   return std::move(result_geo.get_curves_for_write()->geometry.wrap());

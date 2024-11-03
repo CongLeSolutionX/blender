@@ -29,6 +29,10 @@ void RayTraceModule::init()
   const SceneEEVEE &sce_eevee = inst_.scene->eevee;
 
   ray_tracing_options_ = sce_eevee.ray_tracing_options;
+  if ((sce_eevee.flag & SCE_EEVEE_FAST_GI_ENABLED) == 0) {
+    ray_tracing_options_.trace_max_roughness = 1.0f;
+  }
+
   tracing_method_ = RaytraceEEVEE_Method(sce_eevee.ray_tracing_method);
   fast_gi_ray_count_ = sce_eevee.fast_gi_ray_count;
   fast_gi_step_count_ = sce_eevee.fast_gi_step_count;
@@ -88,6 +92,7 @@ void RayTraceModule::sync()
     pass.bind_texture(RBUFS_UTILITY_TEX_SLOT, inst_.pipelines.utility_tx);
     pass.bind_image("out_ray_data_img", &ray_data_tx_);
     pass.bind_ssbo("tiles_coord_buf", &raytrace_tracing_tiles_buf_);
+    pass.bind_resources(inst_.uniform_data);
     pass.bind_resources(inst_.sampling);
     pass.bind_resources(inst_.gbuffer);
     pass.dispatch(raytrace_tracing_dispatch_buf_);
@@ -107,6 +112,7 @@ void RayTraceModule::sync()
     pass.bind_image("ray_radiance_img", &ray_radiance_tx_);
     pass.bind_texture("depth_tx", &depth_tx);
     pass.bind_resources(inst_.uniform_data);
+    pass.bind_resources(inst_.sampling);
     pass.bind_resources(inst_.planar_probes);
     pass.bind_resources(inst_.volume_probes);
     pass.bind_resources(inst_.sphere_probes);

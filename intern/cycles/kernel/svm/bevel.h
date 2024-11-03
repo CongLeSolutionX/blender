@@ -118,7 +118,7 @@ ccl_device float3 svm_bevel(
 
   /* Setup for multi intersection. */
   LocalIntersection isect;
-  uint lcg_state = lcg_state_init(INTEGRATOR_STATE(state, path, rng_hash),
+  uint lcg_state = lcg_state_init(INTEGRATOR_STATE(state, path, rng_pixel),
                                   INTEGRATOR_STATE(state, path, rng_offset),
                                   INTEGRATOR_STATE(state, path, sample),
                                   0x64c6a40e);
@@ -176,7 +176,7 @@ ccl_device float3 svm_bevel(
     /* Perhaps find something better than Cubic BSSRDF, but happens to work well. */
     svm_bevel_cubic_sample(radius, disk_r, &disk_r, &disk_height);
 
-    float3 disk_P = (disk_r * cosf(phi)) * disk_T + (disk_r * sinf(phi)) * disk_B;
+    float3 disk_P = to_global(polar_to_cartesian(disk_r, phi), disk_T, disk_B);
 
     /* Create ray. */
     Ray ray ccl_optional_struct_init;

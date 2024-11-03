@@ -19,6 +19,12 @@
 
 namespace blender::eevee {
 
+/* Convert by putting the least significant bits in the first component. */
+static uint2 uint64_to_uint2(uint64_t data)
+{
+  return {uint(data), uint(data >> uint64_t(32))};
+}
+
 /* -------------------------------------------------------------------- */
 /** \name LightData
  * \{ */
@@ -50,6 +56,7 @@ void Light::sync(ShadowModule &shadows,
                  float4x4 object_to_world,
                  char visibility_flag,
                  const ::Light *la,
+                 const LightLinking *light_linking /* = nullptr */,
                  float threshold)
 {
   using namespace blender::math;
@@ -97,6 +104,16 @@ void Light::sync(ShadowModule &shadows,
   }
   else {
     shadow_discard_safe(shadows);
+  }
+
+  if (light_linking) {
+    this->light_set_membership = uint64_to_uint2(light_linking->runtime.light_set_membership);
+    this->shadow_set_membership = uint64_to_uint2(light_linking->runtime.shadow_set_membership);
+  }
+  else {
+    /* Set all bits if light linking is not used. */
+    this->light_set_membership = uint64_to_uint2(~uint64_t(0));
+    this->shadow_set_membership = uint64_to_uint2(~uint64_t(0));
   }
 
   this->initialized = true;
@@ -179,6 +196,8 @@ void Light::shape_parameters_set(const ::Light *la,
     float sun_half_angle = min_ff(la->sun_angle, DEG2RADF(179.9f)) / 2.0f;
     /* Use non-clamped radius for soft shadows. Avoid having a minimum blur. */
     this->sun.shadow_angle = sun_half_angle * trace_scaling_fac;
+    /* Clamp to a minimum to distinguish between point lights and area light shadow. */
+    this->sun.shadow_angle = (sun_half_angle > 0.0f) ? max_ff(1e-8f, sun.shadow_angle) : 0.0f;
     /* Clamp to minimum value before float imprecision artifacts appear. */
     this->sun.shape_radius = clamp(tanf(sun_half_angle), 0.001f, 20.0f);
     /* Stable shading direction. */
@@ -223,10 +242,11 @@ void Light::shape_parameters_set(const ::Light *la,
     }
     /* Use unclamped radius for soft shadows. Avoid having a minimum blur. */
     this->local.shadow_radius = max(0.0f, la->radius) * trace_scaling_fac;
+    /* Clamp to a minimum to distinguish between point lights and area light shadow. */
+    this->local.shadow_radius = (la->radius > 0.0f) ? max_ff(1e-8f, local.shadow_radius) : 0.0f;
     /* Set to default position. */
     this->local.shadow_position = float3(0.0f);
-    /* Ensure a minimum radius/energy ratio to avoid harsh cut-offs. (See 114284) */
-    this->local.shape_radius = max(la->radius, la->energy * 2e-05f);
+    this->local.shape_radius = la->radius;
     /* Clamp to minimum value before float imprecision artifacts appear. */
     this->local.shape_radius = max(0.001f, this->local.shape_radius);
   }
@@ -343,7 +363,7 @@ void LightModule::begin_sync()
   sun_lights_len_ = 0;
   local_lights_len_ = 0;
 
-  if (use_sun_lights_ && inst_.world.sun_threshold() > 0.0) {
+  if (use_sun_lights_ && inst_.world.sun_threshold() > 0.0f) {
     /* Create a placeholder light to be fed by the GPU after sunlight extraction.
      * Sunlight is disabled if power is zero. */
     ::Light la = blender::dna::shallow_copy(
@@ -361,7 +381,7 @@ void LightModule::begin_sync()
 
     Light &light = light_map_.lookup_or_add_default(world_sunlight_key);
     light.used = true;
-    light.sync(inst_.shadows, float4x4::identity(), 0, &la, light_threshold_);
+    light.sync(inst_.shadows, float4x4::identity(), 0, &la, nullptr, light_threshold_);
 
     sun_lights_len_ += 1;
   }
@@ -384,7 +404,12 @@ void LightModule::sync_light(const Object *ob, ObjectHandle &handle)
   light.used = true;
   if (handle.recalc != 0 || !light.initialized) {
     light.initialized = true;
-    light.sync(inst_.shadows, ob->object_to_world(), ob->visibility_flag, la, light_threshold_);
+    light.sync(inst_.shadows,
+               ob->object_to_world(),
+               ob->visibility_flag,
+               la,
+               ob->light_linking,
+               light_threshold_);
   }
   sun_lights_len_ += int(is_sun_light(light.type));
   local_lights_len_ += int(!is_sun_light(light.type));
@@ -425,7 +450,7 @@ void LightModule::end_sync()
   if (sun_lights_len_ + local_lights_len_ > CULLING_MAX_ITEM) {
     sun_lights_len_ = min_ii(sun_lights_len_, CULLING_MAX_ITEM);
     local_lights_len_ = min_ii(local_lights_len_, CULLING_MAX_ITEM - sun_lights_len_);
-    inst_.info += "Error: Too many lights in the scene.\n";
+    inst_.info_append_i18n("Error: Too many lights in the scene.");
   }
   lights_len_ = sun_lights_len_ + local_lights_len_;
 
@@ -436,9 +461,12 @@ void LightModule::end_sync()
   culling_light_buf_.resize(lights_allocated);
 
   {
+
+    int2 render_extent = inst_.film.render_extent_get();
+    int2 probe_extent = int2(inst_.sphere_probes.probe_render_extent());
+    int2 max_extent = math::max(render_extent, probe_extent);
     /* Compute tile size and total word count. */
     uint word_per_tile = divide_ceil_u(max_ii(lights_len_, 1), 32);
-    int2 render_extent = inst_.film.render_extent_get();
     int2 tiles_extent;
     /* Default to 32 as this is likely to be the maximum
      * tile size used by hardware or compute shading. */
@@ -446,7 +474,7 @@ void LightModule::end_sync()
     bool tile_size_valid = false;
     do {
       tile_size *= 2;
-      tiles_extent = math::divide_ceil(render_extent, int2(tile_size));
+      tiles_extent = math::divide_ceil(max_extent, int2(tile_size));
       uint tile_count = tiles_extent.x * tiles_extent.y;
       if (tile_count > max_tile_count_threshold) {
         continue;
@@ -572,16 +600,17 @@ void LightModule::set_view(View &view, const int2 extent)
   culling_data_buf_.zbin_bias = -near_z * culling_data_buf_.zbin_scale;
   culling_data_buf_.tile_to_uv_fac = (culling_data_buf_.tile_size / float2(extent));
   culling_data_buf_.visible_count = 0;
+  culling_data_buf_.view_is_flipped = view.is_inverted();
   culling_data_buf_.push_update();
 
   inst_.manager->submit(culling_ps_, view);
-  inst_.manager->submit(update_ps_);
+  inst_.manager->submit(update_ps_, view);
 }
 
 void LightModule::debug_draw(View &view, GPUFrameBuffer *view_fb)
 {
   if (inst_.debug_mode == eDebugMode::DEBUG_LIGHT_CULLING) {
-    inst_.info += "Debug Mode: Light Culling Validation\n";
+    inst_.info_append("Debug Mode: Light Culling Validation");
     inst_.hiz_buffer.update();
     GPU_framebuffer_bind(view_fb);
     inst_.manager->submit(debug_draw_ps_, view);

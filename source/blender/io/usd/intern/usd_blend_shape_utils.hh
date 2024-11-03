@@ -16,8 +16,6 @@ namespace blender::io::usd {
  * to the bound skeleton. */
 extern pxr::TfToken TempBlendShapeWeightsPrimvarName;
 
-struct ImportSettings;
-
 /**
  * Return the shape key on the given mesh object.
  *
@@ -44,10 +42,12 @@ bool is_mesh_with_shape_keys(const Object *obj);
  * \param stage: The stage
  * \param obj: The mesh object whose shape keys will be converted to blend shapes
  * \param mesh_prim: The USD mesh that will be assigned the blend shape targets
+ * \param allow_unicode: Whether to allow unicode encoded characters in the blend shape name
  */
 void create_blend_shapes(pxr::UsdStageRefPtr stage,
                          const Object *obj,
-                         const pxr::UsdPrim &mesh_prim);
+                         const pxr::UsdPrim &mesh_prim,
+                         bool allow_unicode);
 
 /**
  * Return the current weight values of the given key.
@@ -73,31 +73,6 @@ pxr::VtFloatArray get_blendshape_weights(const Key *key);
  * \param mesh_prim: The USD mesh to which the skeleton will be bound
  */
 void ensure_blend_shape_skeleton(pxr::UsdStageRefPtr stage, pxr::UsdPrim &mesh_prim);
-
-/**
- * Query whether the object is a mesh with animated shape keys.
- *
- * \param obj: The mesh object
- * \return True if the object has animated keys, false otherwise.
- */
-bool has_animated_mesh_shape_key(const Object *obj);
-
-/**
- * Return the block names of the given shape key.
- *
- * \param key: The key to query
- * \return The list of key block names.
- */
-pxr::VtTokenArray get_blend_shape_names(const Key *key);
-
-/**
- * Return the list of blend shape names given by the mesh
- * prim's 'blendShapes' attribute value.
- *
- * \param mesh_prim: The prim to query
- * \return The list of blend shape names.
- */
-pxr::VtTokenArray get_blend_shapes_attr_value(const pxr::UsdPrim &mesh_prim);
 
 /**
  * When multiple meshes with blend shape animations are bound to one skeleton, USD implementations

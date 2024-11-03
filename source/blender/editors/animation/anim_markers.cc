@@ -257,12 +257,12 @@ static bool region_position_is_over_marker(View2D *v2d, ListBase *markers, float
 /* --------------------------------- */
 
 /* Adds a marker to list of cfra elems */
-static void add_marker_to_cfra_elem(ListBase *lb, TimeMarker *marker, short only_sel)
+static void add_marker_to_cfra_elem(ListBase *lb, TimeMarker *marker, const bool only_selected)
 {
   CfraElem *ce, *cen;
 
   /* should this one only be considered if it is selected? */
-  if ((only_sel) && ((marker->flag & SELECT) == 0)) {
+  if (only_selected && ((marker->flag & SELECT) == 0)) {
     return;
   }
 
@@ -292,7 +292,7 @@ static void add_marker_to_cfra_elem(ListBase *lb, TimeMarker *marker, short only
   cen->sel = marker->flag;
 }
 
-void ED_markers_make_cfra_list(ListBase *markers, ListBase *lb, short only_sel)
+void ED_markers_make_cfra_list(ListBase *markers, ListBase *lb, const bool only_selected)
 {
   if (lb) {
     /* Clear the list first, since callers have no way of knowing
@@ -310,7 +310,7 @@ void ED_markers_make_cfra_list(ListBase *markers, ListBase *lb, short only_sel)
   }
 
   LISTBASE_FOREACH (TimeMarker *, marker, markers) {
-    add_marker_to_cfra_elem(lb, marker, only_sel);
+    add_marker_to_cfra_elem(lb, marker, only_selected);
   }
 }
 
@@ -539,12 +539,12 @@ static bool marker_is_in_frame_range(TimeMarker *marker, const int frame_range[2
   return true;
 }
 
-static void get_marker_region_rect(View2D *v2d, rctf *rect)
+static void get_marker_region_rect(View2D *v2d, rctf *r_rect)
 {
-  rect->xmin = v2d->cur.xmin;
-  rect->xmax = v2d->cur.xmax;
-  rect->ymin = 0;
-  rect->ymax = UI_MARKER_MARGIN_Y;
+  r_rect->xmin = v2d->cur.xmin;
+  r_rect->xmax = v2d->cur.xmax;
+  r_rect->ymin = 0;
+  r_rect->ymax = UI_MARKER_MARGIN_Y;
 }
 
 static void get_marker_clip_frame_range(View2D *v2d, float xscale, int r_range[2])
@@ -757,7 +757,7 @@ static int ed_marker_add_exec(bContext *C, wmOperator * /*op*/)
   marker = static_cast<TimeMarker *>(MEM_callocN(sizeof(TimeMarker), "TimeMarker"));
   marker->flag = SELECT;
   marker->frame = frame;
-  SNPRINTF(marker->name, "F_%02d", frame); /* XXX: temp code only. */
+  SNPRINTF(marker->name, "F_%02d", frame);
   BLI_addtail(markers, marker);
 
   WM_event_add_notifier(C, NC_SCENE | ND_MARKERS, nullptr);
@@ -1871,6 +1871,9 @@ static int ed_marker_camera_bind_exec(bContext *C, wmOperator *op)
   marker = ED_markers_find_nearest_marker(markers, scene->r.cfra);
   if ((marker == nullptr) || (marker->frame != scene->r.cfra)) {
     marker = static_cast<TimeMarker *>(MEM_callocN(sizeof(TimeMarker), "Camera TimeMarker"));
+    /* This marker's name is only displayed in the viewport statistics, animation editors use the
+     * camera's name when bound to a marker. */
+    SNPRINTF(marker->name, "F_%02d", scene->r.cfra);
     marker->flag = SELECT;
     marker->frame = scene->r.cfra;
     BLI_addtail(markers, marker);

@@ -45,6 +45,17 @@ class FlipOperation : public NodeOperation {
 
   void execute() override
   {
+    /* Not yet supported on CPU. */
+    if (!context().use_gpu()) {
+      for (const bNodeSocket *output : this->node()->output_sockets()) {
+        Result &output_result = get_result(output->identifier);
+        if (output_result.should_compute()) {
+          output_result.allocate_invalid();
+        }
+      }
+      return;
+    }
+
     Result &input = get_input("Image");
     Result &result = get_result("Image");
 
@@ -100,5 +111,5 @@ void register_node_type_cmp_flip()
   ntype.draw_buttons = file_ns::node_composit_buts_flip;
   ntype.get_compositor_operation = file_ns::get_compositor_operation;
 
-  blender::bke::nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }

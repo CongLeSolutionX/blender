@@ -46,6 +46,16 @@ void BakeManager::set_use_camera(const bool use_camera)
   }
 }
 
+void BakeManager::set_use_seed(const bool use_seed)
+{
+  use_seed_ = use_seed;
+}
+
+bool BakeManager::get_use_seed() const
+{
+  return use_seed_;
+}
+
 void BakeManager::device_update(Device * /*device*/,
                                 DeviceScene *dscene,
                                 Scene *scene,
@@ -72,7 +82,7 @@ void BakeManager::device_update(Device * /*device*/,
     int object_index = 0;
     foreach (Object *object, scene->objects) {
       const Geometry *geom = object->get_geometry();
-      if (object->name == object_name && geom->geometry_type == Geometry::MESH) {
+      if (object->name == object_name && geom->is_mesh()) {
         kbake->object_index = object_index;
         kbake->tri_offset = geom->prim_offset;
         break;

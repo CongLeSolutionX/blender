@@ -164,6 +164,46 @@ static void do_versions_theme(const UserDef *userdef, bTheme *btheme)
     FROM_DEFAULT_V4_UCHAR(space_view3d.time_gp_keyframe);
   }
 
+  if (!USER_VERSION_ATLEAST(403, 1)) {
+    FROM_DEFAULT_V4_UCHAR(space_sequencer.keytype_generated);
+    FROM_DEFAULT_V4_UCHAR(space_sequencer.keytype_generated_select);
+  }
+
+  if (!USER_VERSION_ATLEAST(402, 62)) {
+    FROM_DEFAULT_V4_UCHAR(space_sequencer.audio);
+    FROM_DEFAULT_V4_UCHAR(space_sequencer.color_strip);
+    FROM_DEFAULT_V4_UCHAR(space_sequencer.effect);
+    FROM_DEFAULT_V4_UCHAR(space_sequencer.image);
+    FROM_DEFAULT_V4_UCHAR(space_sequencer.mask);
+    FROM_DEFAULT_V4_UCHAR(space_sequencer.meta);
+    FROM_DEFAULT_V4_UCHAR(space_sequencer.movie);
+    FROM_DEFAULT_V4_UCHAR(space_sequencer.movieclip);
+    FROM_DEFAULT_V4_UCHAR(space_sequencer.scene);
+    FROM_DEFAULT_V4_UCHAR(space_sequencer.text_strip);
+    FROM_DEFAULT_V4_UCHAR(space_sequencer.transition);
+  }
+
+  if (!USER_VERSION_ATLEAST(403, 5)) {
+    FROM_DEFAULT_V4_UCHAR(space_view3d.before_current_frame);
+    FROM_DEFAULT_V4_UCHAR(space_view3d.after_current_frame);
+    FROM_DEFAULT_V4_UCHAR(space_sequencer.before_current_frame);
+    FROM_DEFAULT_V4_UCHAR(space_sequencer.after_current_frame);
+  }
+
+  if (!USER_VERSION_ATLEAST(403, 18)) {
+    FROM_DEFAULT_V4_UCHAR(tui.icon_autokey);
+  }
+
+  if (!USER_VERSION_ATLEAST(403, 25)) {
+    FROM_DEFAULT_V4_UCHAR(space_node.node_zone_foreach_geometry_element);
+  }
+
+  if (!USER_VERSION_ATLEAST(403, 27)) {
+    FROM_DEFAULT_V4_UCHAR(tui.editor_border);
+    FROM_DEFAULT_V4_UCHAR(tui.editor_outline);
+    FROM_DEFAULT_V4_UCHAR(tui.editor_outline_active);
+  }
+
   /**
    * Always bump subversion in BKE_blender_version.h when adding versioning
    * code here, and wrap it inside a USER_VERSION_ATLEAST check.
@@ -906,7 +946,7 @@ void blo_do_versions_userdef(UserDef *userdef)
 
   if (!USER_VERSION_ATLEAST(400, 24)) {
     /* Clear deprecated USER_MENUFIXEDORDER user flag for reuse. */
-    userdef->uiflag &= ~USER_UIFLAG_UNUSED_4;
+    userdef->uiflag &= ~(1 << 23);
   }
 
   if (!USER_VERSION_ATLEAST(400, 26)) {
@@ -921,7 +961,6 @@ void blo_do_versions_userdef(UserDef *userdef)
     LISTBASE_FOREACH (uiStyle *, style, &userdef->uistyles) {
       style->paneltitle.character_weight = 400;
       style->grouplabel.character_weight = 400;
-      style->widgetlabel.character_weight = 400;
       style->widget.character_weight = 400;
     }
   }
@@ -954,7 +993,7 @@ void blo_do_versions_userdef(UserDef *userdef)
           userdef, static_cast<bUserExtensionRepo *>(userdef->extension_repos.first));
     }
 
-    BKE_preferences_extension_repo_add_default(userdef);
+    BKE_preferences_extension_repo_add_default_remote(userdef);
     BKE_preferences_extension_repo_add_default_user(userdef);
   }
 
@@ -965,12 +1004,82 @@ void blo_do_versions_userdef(UserDef *userdef)
     }
   }
 
-  if (!USER_VERSION_ATLEAST(402, 50)) {
+  if (!USER_VERSION_ATLEAST(402, 51)) {
+    userdef->sequencer_editor_flag |= USER_SEQ_ED_SIMPLE_TWEAKING;
+  }
+
+  if (!USER_VERSION_ATLEAST(402, 56)) {
+    BKE_preferences_extension_repo_add_default_system(userdef);
+  }
+
+  if (!USER_VERSION_ATLEAST(402, 58)) {
+    /* Remove add-ons which are no longer bundled by default
+     * and have no upgrade path to extensions in the UI. */
+    const char *addon_modules[] = {
+        "depsgraph_debug",
+        "io_coat3D",
+        "io_import_images_as_planes",
+        "io_mesh_stl",
+        "io_scene_x3d",
+    };
+    for (int i = 0; i < ARRAY_SIZE(addon_modules); i++) {
+      BKE_addon_remove_safe(&userdef->addons, addon_modules[i]);
+    }
+  }
+
+  if (!USER_VERSION_ATLEAST(402, 59)) {
+    userdef->network_timeout = 10;
+    userdef->network_connection_limit = 5;
+  }
+
+  if (!USER_VERSION_ATLEAST(402, 63)) {
     userdef->statusbar_flag |= STATUSBAR_SHOW_EXTENSIONS_UPDATES;
   }
 
-  if (!USER_VERSION_ATLEAST(402, 51)) {
-    userdef->sequencer_editor_flag |= USER_SEQ_ED_SIMPLE_TWEAKING;
+  if (!USER_VERSION_ATLEAST(402, 65)) {
+    /* Bone Selection Sets is no longer an add-on, but core functionality. */
+    BKE_addon_remove_safe(&userdef->addons, "bone_selection_sets");
+  }
+
+  if (!USER_VERSION_ATLEAST(403, 3)) {
+    BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
+        userdef, "VIEW3D_AST_brush_sculpt", "Brushes/Mesh Sculpt/Cloth");
+    BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
+        userdef, "VIEW3D_AST_brush_sculpt", "Brushes/Mesh Sculpt/General");
+    BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
+        userdef, "VIEW3D_AST_brush_sculpt", "Brushes/Mesh Sculpt/Paint");
+  }
+
+  if (!USER_VERSION_ATLEAST(403, 12)) {
+    LISTBASE_FOREACH (uiStyle *, style, &userdef->uistyles) {
+      style->tooltip.points = 11.0f; /* UI_DEFAULT_TOOLTIP_POINTS */
+      style->tooltip.character_weight = 400;
+      style->tooltip.shadow = 0;
+      style->tooltip.shady = -1;
+      style->tooltip.shadowalpha = 0.5f;
+      style->tooltip.shadowcolor = 0.0f;
+    }
+  }
+  if (!USER_VERSION_ATLEAST(403, 19)) {
+    userdef->sequencer_editor_flag |= USER_SEQ_ED_CONNECT_STRIPS_BY_DEFAULT;
+  }
+
+  if (!USER_VERSION_ATLEAST(404, 3)) {
+    userdef->uiflag &= ~USER_FILTER_BRUSHES_BY_TOOL;
+
+    BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
+        userdef, "VIEW3D_AST_brush_gpencil_paint", "Brushes/Grease Pencil Draw/Draw");
+    BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
+        userdef, "VIEW3D_AST_brush_gpencil_paint", "Brushes/Grease Pencil Draw/Erase");
+    BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
+        userdef, "VIEW3D_AST_brush_gpencil_paint", "Brushes/Grease Pencil Draw/Utilities");
+
+    BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
+        userdef, "VIEW3D_AST_brush_gpencil_sculpt", "Brushes/Grease Pencil Sculpt/Contrast");
+    BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
+        userdef, "VIEW3D_AST_brush_gpencil_sculpt", "Brushes/Grease Pencil Sculpt/Transform");
+    BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
+        userdef, "VIEW3D_AST_brush_gpencil_sculpt", "Brushes/Grease Pencil Sculpt/Utilities");
   }
 
   /**

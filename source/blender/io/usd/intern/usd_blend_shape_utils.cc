@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "usd_blend_shape_utils.hh"
+#include "usd_utils.hh"
 
 #include <pxr/usd/usdGeom/primvarsAPI.h>
 #include <pxr/usd/usdSkel/animMapper.h>
@@ -190,7 +191,8 @@ bool is_mesh_with_shape_keys(const Object *obj)
 
 void create_blend_shapes(pxr::UsdStageRefPtr stage,
                          const Object *obj,
-                         const pxr::UsdPrim &mesh_prim)
+                         const pxr::UsdPrim &mesh_prim,
+                         bool allow_unicode)
 {
   const Key *key = get_mesh_shape_key(obj);
 
@@ -229,7 +231,7 @@ void create_blend_shapes(pxr::UsdStageRefPtr stage,
       continue;
     }
 
-    pxr::TfToken name(pxr::TfMakeValidIdentifier(kb->name));
+    pxr::TfToken name(make_safe_name(kb->name, allow_unicode));
     blendshape_names.push_back(name);
 
     pxr::SdfPath path = mesh_prim.GetPath().AppendChild(name);
@@ -268,8 +270,7 @@ void create_blend_shapes(pxr::UsdStageRefPtr stage,
   skel_api.CreateBlendShapeTargetsRel().SetTargets(blendshape_paths);
 
   /* Some DCCs seem to require joint indices and weights to
-   * bind the skeleton for blend-shapes, so we we create these
-   * primvars, if needed. */
+   * bind the skeleton for blend-shapes, so we create these primvars, if needed. */
 
   if (!skel_api.GetJointIndicesAttr().HasAuthoredValue()) {
     pxr::VtArray<int> joint_indices(basis_totelem, 0);
@@ -297,63 +298,6 @@ pxr::VtFloatArray get_blendshape_weights(const Key *key)
   }
 
   return weights;
-}
-
-bool has_animated_mesh_shape_key(const Object *obj)
-{
-  const Key *key = get_mesh_shape_key(obj);
-
-  return key && key->totkey > 0 && key->adt != nullptr;
-}
-
-pxr::VtTokenArray get_blend_shape_names(const Key *key)
-{
-  KeyBlock *basis_key = static_cast<KeyBlock *>(key->block.first);
-
-  if (!basis_key) {
-    return pxr::VtTokenArray();
-  }
-
-  pxr::VtTokenArray blendshape_names;
-
-  LISTBASE_FOREACH (KeyBlock *, kb, &key->block) {
-
-    if (kb == basis_key) {
-      /* Skip the basis. */
-      continue;
-    }
-
-    pxr::TfToken name(pxr::TfMakeValidIdentifier(kb->name));
-    blendshape_names.push_back(name);
-  }
-
-  return blendshape_names;
-}
-
-pxr::VtTokenArray get_blend_shapes_attr_value(const pxr::UsdPrim &mesh_prim)
-{
-  pxr::UsdSkelBindingAPI skel_api = pxr::UsdSkelBindingAPI::Apply(mesh_prim);
-
-  if (!skel_api) {
-    CLOG_WARN(&LOG,
-              "Couldn't apply UsdSkelBindingAPI to blend shape prim %s",
-              mesh_prim.GetPath().GetAsString().c_str());
-    return pxr::VtTokenArray();
-  }
-
-  pxr::VtTokenArray blend_shape_names;
-
-  if (!skel_api.GetBlendShapesAttr().HasValue()) {
-    return blend_shape_names;
-  }
-
-  if (!skel_api.GetBlendShapesAttr().Get(&blend_shape_names)) {
-    CLOG_WARN(&LOG,
-              "Couldn't get blend shapes attribute value for prim %s",
-              mesh_prim.GetPath().GetAsString().c_str());
-  }
-
-  return blend_shape_names;
 }
 
 void remap_blend_shape_anim(pxr::UsdStageRefPtr stage,

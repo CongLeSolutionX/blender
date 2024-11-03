@@ -8,8 +8,8 @@
 
 #include <Python.h>
 
-#include "mathutils.h"
-#include "mathutils_geometry.h"
+#include "mathutils.hh"
+#include "mathutils_geometry.hh"
 
 /* Used for PolyFill */
 #ifndef MATH_STANDALONE /* define when building outside blender */
@@ -26,8 +26,8 @@
 #include "BLI_math_vector.h"
 #include "BLI_utildefines.h"
 
-#include "../generic/py_capi_utils.h"
-#include "../generic/python_utildefines.h"
+#include "../generic/py_capi_utils.hh"
+#include "../generic/python_utildefines.hh"
 
 /*-------------------------DOC STRINGS ---------------------------*/
 PyDoc_STRVAR(
@@ -164,6 +164,7 @@ PyDoc_STRVAR(
     "   :type v3: :class:`mathutils.Vector`\n"
     "   :arg v4: Second point of the second line\n"
     "   :type v4: :class:`mathutils.Vector`\n"
+    "   :return: The intersection on each line or None when the lines are co-linear.\n"
     "   :rtype: tuple of :class:`mathutils.Vector`'s\n");
 static PyObject *M_Geometry_intersect_line_line(PyObject * /*self*/, PyObject *args)
 {
@@ -242,6 +243,7 @@ PyDoc_STRVAR(
     "   :type p_b: :class:`mathutils.Vector`\n"
     "   :arg radius_b: Radius of the second circle\n"
     "   :type radius_b: float\n"
+    "   :return: 2 points on between intersecting circles or None when there is no intersection.\n"
     "   :rtype: tuple of :class:`mathutils.Vector`'s or None when there is no intersection\n");
 static PyObject *M_Geometry_intersect_sphere_sphere_2d(PyObject * /*self*/, PyObject *args)
 {
@@ -277,7 +279,7 @@ static PyObject *M_Geometry_intersect_sphere_sphere_2d(PyObject * /*self*/, PyOb
       (dist < FLT_EPSILON))
   {
     /* out of range */
-    PyTuple_SET_ITEMS(ret, Py_INCREF_RET(Py_None), Py_INCREF_RET(Py_None));
+    PyTuple_SET_ITEMS(ret, Py_NewRef(Py_None), Py_NewRef(Py_None));
   }
   else {
     const float dist_delta = ((rad_a * rad_a) - (rad_b * rad_b) + (dist * dist)) / (2.0f * dist);
@@ -616,8 +618,8 @@ static PyObject *M_Geometry_intersect_plane_plane(PyObject * /*self*/, PyObject 
     ret_no = Vector_CreatePyObject(isect_no, 3, nullptr);
   }
   else {
-    ret_co = Py_INCREF_RET(Py_None);
-    ret_no = Py_INCREF_RET(Py_None);
+    ret_co = Py_NewRef(Py_None);
+    ret_no = Py_NewRef(Py_None);
   }
 
   ret = PyTuple_New(2);
@@ -640,7 +642,7 @@ PyDoc_STRVAR(
     "   :arg sphere_co: The center of the sphere\n"
     "   :type sphere_co: :class:`mathutils.Vector`\n"
     "   :arg sphere_radius: Radius of the sphere\n"
-    "   :type sphere_radius: sphere_radius\n"
+    "   :type sphere_radius: float\n"
     "   :return: The intersection points as a pair of vectors or None when there is no "
     "intersection\n"
     "   :rtype: A tuple pair containing :class:`mathutils.Vector` or None\n");
@@ -709,8 +711,8 @@ static PyObject *M_Geometry_intersect_line_sphere(PyObject * /*self*/, PyObject 
   }
 
   PyTuple_SET_ITEMS(ret,
-                    use_a ? Vector_CreatePyObject(isect_a, 3, nullptr) : Py_INCREF_RET(Py_None),
-                    use_b ? Vector_CreatePyObject(isect_b, 3, nullptr) : Py_INCREF_RET(Py_None));
+                    use_a ? Vector_CreatePyObject(isect_a, 3, nullptr) : Py_NewRef(Py_None),
+                    use_b ? Vector_CreatePyObject(isect_b, 3, nullptr) : Py_NewRef(Py_None));
 
   return ret;
 }
@@ -731,7 +733,7 @@ PyDoc_STRVAR(
     "   :arg sphere_co: The center of the sphere\n"
     "   :type sphere_co: :class:`mathutils.Vector`\n"
     "   :arg sphere_radius: Radius of the sphere\n"
-    "   :type sphere_radius: sphere_radius\n"
+    "   :type sphere_radius: float\n"
     "   :return: The intersection points as a pair of vectors or None when there is no "
     "intersection\n"
     "   :rtype: A tuple pair containing :class:`mathutils.Vector` or None\n");
@@ -800,8 +802,8 @@ static PyObject *M_Geometry_intersect_line_sphere_2d(PyObject * /*self*/, PyObje
   }
 
   PyTuple_SET_ITEMS(ret,
-                    use_a ? Vector_CreatePyObject(isect_a, 2, nullptr) : Py_INCREF_RET(Py_None),
-                    use_b ? Vector_CreatePyObject(isect_b, 2, nullptr) : Py_INCREF_RET(Py_None));
+                    use_a ? Vector_CreatePyObject(isect_a, 2, nullptr) : Py_NewRef(Py_None),
+                    use_b ? Vector_CreatePyObject(isect_b, 2, nullptr) : Py_NewRef(Py_None));
 
   return ret;
 }
@@ -1448,8 +1450,8 @@ static void boxPack_ToPyObject(PyObject *value, const BoxPack *boxarray)
   for (i = 0; i < len; i++) {
     const BoxPack *box = &boxarray[i];
     list_item = PyList_GET_ITEM(value, box->index);
-    PyList_SET_ITEM(list_item, 0, PyFloat_FromDouble(box->x));
-    PyList_SET_ITEM(list_item, 1, PyFloat_FromDouble(box->y));
+    PyList_SetItem(list_item, 0, PyFloat_FromDouble(box->x));
+    PyList_SetItem(list_item, 1, PyFloat_FromDouble(box->y));
   }
 }
 
@@ -1616,7 +1618,7 @@ PyDoc_STRVAR(
     "   For edges, the orig indices start with the input edges and then continue\n"
     "   with the edges implied by each of the faces (n of them for an n-gon).\n"
     "   If the need_ids argument is supplied, and False, then the code skips the preparation\n"
-    "   of the orig arrays, which may save some time."
+    "   of the orig arrays, which may save some time.\n"
     "\n"
     "   :arg vert_coords: Vertex coordinates (2d)\n"
     "   :type vert_coords: list of :class:`mathutils.Vector`\n"
@@ -1630,7 +1632,7 @@ PyDoc_STRVAR(
     "3 => like 2 but detect holes and omit them from output. "
     "4 => like 2 but with extra edges to make valid BMesh faces. "
     "5 => like 4 but detect holes and omit them from output.\n"
-    "   :type output_type: int\\n"
+    "   :type output_type: int\n"
     "   :arg epsilon: For nearness tests; should not be zero\n"
     "   :type epsilon: float\n"
     "   :arg need_ids: are the orig output arrays needed?\n"

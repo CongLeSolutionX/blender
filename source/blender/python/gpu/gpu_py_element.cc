@@ -15,8 +15,8 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "../generic/py_capi_utils.h"
-#include "../generic/python_compat.h"
+#include "../generic/py_capi_utils.hh"
+#include "../generic/python_compat.hh"
 
 #include "gpu_py.hh"
 #include "gpu_py_element.hh" /* own include */
@@ -27,6 +27,8 @@
 
 static PyObject *pygpu_IndexBuf__tp_new(PyTypeObject * /*type*/, PyObject *args, PyObject *kwds)
 {
+  BPYGPU_IS_INIT_OR_ERROR_OBJ;
+
   const char *error_prefix = "IndexBuf.__new__";
   bool ok = true;
 

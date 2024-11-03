@@ -24,7 +24,7 @@
 #include "ED_asset_list.hh"
 
 #include "RNA_access.hh"
-#include "RNA_prototypes.h"
+#include "RNA_prototypes.hh"
 
 #include "UI_interface.hh"
 #include "UI_tree_view.hh"
@@ -75,10 +75,15 @@ class AssetCatalogSelectorTree : public ui::AbstractTreeView {
   {
     Item &view_item = parent_view_item.add_tree_item<Item>(catalog_item, shelf_);
 
-    catalog_item.foreach_child(
-        [&view_item, this](const asset_system::AssetCatalogTreeItem &child) {
-          build_catalog_items_recursive(view_item, child);
-        });
+    const int parent_count = view_item.count_parents() + 1;
+    catalog_item.foreach_child([&, this](const asset_system::AssetCatalogTreeItem &child) {
+      Item &child_item = build_catalog_items_recursive(view_item, child);
+
+      /* Uncollapse to some level (gives quick access, but don't let the tree get too big). */
+      if (parent_count < 2) {
+        child_item.uncollapse_by_default();
+      }
+    });
 
     return view_item;
   }
@@ -209,7 +214,7 @@ static void catalog_selector_panel_draw(const bContext *C, Panel *panel)
       *block,
       "asset catalog tree view",
       std::make_unique<AssetCatalogSelectorTree>(*library, *shelf));
-
+  tree_view->set_context_menu_title("Catalog");
   ui::TreeViewBuilder::build_tree_view(*tree_view, *layout);
 }
 

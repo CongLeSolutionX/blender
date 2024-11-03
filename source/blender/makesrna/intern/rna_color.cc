@@ -68,6 +68,7 @@ const EnumPropertyItem rna_enum_color_space_convert_default_items[] = {
 
 #  include "SEQ_iterator.hh"
 #  include "SEQ_relations.hh"
+#  include "SEQ_thumbnail_cache.hh"
 
 static int rna_CurveMapping_curves_length(PointerRNA *ptr)
 {
@@ -128,8 +129,16 @@ static void rna_CurveMapping_white_level_set(PointerRNA *ptr, const float *value
   BKE_curvemapping_set_black_white(cumap, nullptr, nullptr);
 }
 
-static void rna_CurveMapping_tone_update(Main * /*bmain*/, Scene * /*scene*/, PointerRNA * /*ptr*/)
+static void rna_CurveMapping_tone_update(Main * /*bmain*/, Scene * /*scene*/, PointerRNA *ptr)
 {
+  /* Film-like tone only works with the combined curve, which is the fourth curve, so if the user
+   * changed to film-like make the combined curve current, as we now hide the rest of the curves
+   * since they no longer have an effect. */
+  CurveMapping *curve_mapping = (CurveMapping *)ptr->data;
+  if (curve_mapping->tone == CURVE_TONE_FILMLIKE) {
+    curve_mapping->cur = 3;
+  }
+
   WM_main_add_notifier(NC_NODE | NA_EDITED, nullptr);
   WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, nullptr);
 }
@@ -550,6 +559,18 @@ static std::optional<std::string> rna_ColorManagedViewSettings_path(const Pointe
   return "view_settings";
 }
 
+static void rna_ColorManagedViewSettings_whitepoint_get(PointerRNA *ptr, float value[3])
+{
+  const ColorManagedViewSettings *view_settings = (ColorManagedViewSettings *)ptr->data;
+  IMB_colormanagement_get_whitepoint(view_settings->temperature, view_settings->tint, value);
+}
+
+static void rna_ColorManagedViewSettings_whitepoint_set(PointerRNA *ptr, const float value[3])
+{
+  ColorManagedViewSettings *view_settings = (ColorManagedViewSettings *)ptr->data;
+  IMB_colormanagement_set_whitepoint(value, view_settings->temperature, view_settings->tint);
+}
+
 static bool rna_ColorManagedColorspaceSettings_is_data_get(PointerRNA *ptr)
 {
   ColorManagedColorspaceSettings *colorspace = (ColorManagedColorspaceSettings *)ptr->data;
@@ -660,6 +681,7 @@ static void rna_ColorManagedColorspaceSettings_reload_update(Main *bmain,
       if (&scene->sequencer_colorspace_settings == colorspace_settings) {
         /* Scene colorspace was changed. */
         SEQ_cache_cleanup(scene);
+        blender::seq::thumbnail_cache_clear(scene);
       }
       else {
         /* Strip colorspace was likely changed. */
@@ -1301,6 +1323,41 @@ static void rna_def_colormanage(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Use Curves", "Use RGB curved for pre-display transformation");
   RNA_def_property_update(prop, NC_WINDOW, "rna_ColorManagement_update");
 
+  prop = RNA_def_property(srna, "use_white_balance", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "flag", COLORMANAGE_VIEW_USE_WHITE_BALANCE);
+  RNA_def_property_ui_text(
+      prop, "Use White Balance", "Perform chromatic adaption from a different white point");
+  RNA_def_property_update(prop, NC_WINDOW, "rna_ColorManagement_update");
+
+  prop = RNA_def_property(srna, "white_balance_temperature", PROP_FLOAT, PROP_COLOR_TEMPERATURE);
+  RNA_def_property_float_sdna(prop, nullptr, "temperature");
+  RNA_def_property_float_default(prop, 6500.0f);
+  RNA_def_property_range(prop, 1800.0f, 100000.0f);
+  RNA_def_property_ui_range(prop, 2000.0f, 11000.0f, 100, 0);
+  RNA_def_property_ui_text(prop, "Temperature", "Color temperature of the scene's white point");
+  RNA_def_property_update(prop, NC_WINDOW, "rna_ColorManagement_update");
+
+  prop = RNA_def_property(srna, "white_balance_tint", PROP_FLOAT, PROP_FACTOR);
+  RNA_def_property_float_sdna(prop, nullptr, "tint");
+  RNA_def_property_float_default(prop, 10.0f);
+  RNA_def_property_range(prop, -500.0f, 500.0f);
+  RNA_def_property_ui_range(prop, -150.0f, 150.0f, 1, 1);
+  RNA_def_property_ui_text(
+      prop, "Tint", "Color tint of the scene's white point (the default of 10 matches daylight)");
+  RNA_def_property_update(prop, NC_WINDOW, "rna_ColorManagement_update");
+
+  prop = RNA_def_property(srna, "white_balance_whitepoint", PROP_FLOAT, PROP_COLOR);
+  RNA_def_property_array(prop, 3);
+  RNA_def_property_float_funcs(prop,
+                               "rna_ColorManagedViewSettings_whitepoint_get",
+                               "rna_ColorManagedViewSettings_whitepoint_set",
+                               nullptr);
+  RNA_def_property_ui_text(prop,
+                           "White Point",
+                           "The color which gets mapped to white "
+                           "(automatically converted to/from temperature and tint)");
+  RNA_def_property_update(prop, NC_WINDOW, "rna_ColorManagement_update");
+
   prop = RNA_def_property(srna, "use_hdr_view", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", COLORMANAGE_VIEW_USE_HDR);
   RNA_def_property_ui_text(
@@ -1308,7 +1365,7 @@ static void rna_def_colormanage(BlenderRNA *brna)
       "High Dynamic Range",
       "Enable high dynamic range display in rendered viewport, uncapping display brightness. This "
       "requires a monitor with HDR support and a view transform designed for HDR. "
-      "'Filmic' and 'AgX' do not generate HDR colors");
+      "'Filmic' and 'AgX' do not generate HDR colors.");
   RNA_def_property_update(prop, NC_WINDOW, "rna_ColorManagedColorspaceSettings_reload_update");
 
   /* ** Color-space ** */

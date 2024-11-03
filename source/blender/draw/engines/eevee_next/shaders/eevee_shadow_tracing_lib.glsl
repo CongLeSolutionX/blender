@@ -2,19 +2,21 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#pragma once
+
 /**
  * Evaluate shadowing using shadow map ray-tracing.
  */
 
-#pragma BLENDER_REQUIRE(gpu_shader_math_base_lib.glsl)
-#pragma BLENDER_REQUIRE(gpu_shader_math_matrix_lib.glsl)
-#pragma BLENDER_REQUIRE(gpu_shader_math_fast_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_light_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_shadow_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_sampling_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_bxdf_sampling_lib.glsl)
-#pragma BLENDER_REQUIRE(draw_view_lib.glsl)
-#pragma BLENDER_REQUIRE(draw_math_geom_lib.glsl)
+#include "draw_math_geom_lib.glsl"
+#include "draw_view_lib.glsl"
+#include "eevee_bxdf_sampling_lib.glsl"
+#include "eevee_light_lib.glsl"
+#include "eevee_sampling_lib.glsl"
+#include "eevee_shadow_lib.glsl"
+#include "gpu_shader_math_base_lib.glsl"
+#include "gpu_shader_math_fast_lib.glsl"
+#include "gpu_shader_math_matrix_lib.glsl"
 
 /* ---------------------------------------------------------------------- */
 /** \name Shadow Map Tracing loop
@@ -73,7 +75,7 @@ struct ShadowTracingSample {
 \
       ShadowTracingSample samp = shadow_map_trace_sample(state, ray); \
 \
-      shadow_map_trace_hit_check(state, samp); \
+      shadow_map_trace_hit_check(state, samp, i == sample_count); \
     } \
     return state.hit; \
   }
@@ -84,25 +86,22 @@ struct ShadowTracingSample {
  * This reverse tracing allows to approximate the geometry behind occluders while minimizing
  * light-leaks.
  */
-void shadow_map_trace_hit_check(inout ShadowMapTracingState state, ShadowTracingSample samp)
+void shadow_map_trace_hit_check(inout ShadowMapTracingState state,
+                                ShadowTracingSample samp,
+                                bool is_last_sample)
 {
-  /* Skip empty tiles since they do not contain actual depth information.
-   * Not doing so would change the z gradient history. */
-  if (samp.skip_sample) {
-    return;
-  }
-  /* For the first sample, regular depth compare since we do not have history values. */
-  if (state.occluder_history.x == SHADOW_TRACING_INVALID_HISTORY) {
-    if (samp.occluder.x > state.ray_time) {
-      state.hit = true;
-      return;
-    }
-    state.occluder_history = samp.occluder;
-    return;
-  }
+  bool is_behind_occluder = samp.occluder.y > 1e-6;
 
-  bool is_behind_occluder = samp.occluder.y > 0.0;
-  if (is_behind_occluder && (state.occluder_slope != SHADOW_TRACING_INVALID_HISTORY)) {
+  if (samp.skip_sample) {
+    /* Skip empty tiles since they do not contain actual depth information.
+     * Not doing so would change the z gradient history. */
+  }
+  else if (state.occluder_history.x == SHADOW_TRACING_INVALID_HISTORY) {
+    /* First sample, regular depth compare since we do not have history values. */
+    state.hit = is_behind_occluder || (is_last_sample && (samp.occluder.x > state.ray_time));
+    state.occluder_history = samp.occluder;
+  }
+  else if (is_behind_occluder && (state.occluder_slope != SHADOW_TRACING_INVALID_HISTORY)) {
     /* Extrapolate last known valid occluder and check if it crossed the ray.
      * Note that we only want to check if the extrapolated occluder is above the ray at a certain
      * time value, we don't actually care about the correct value. So we replace the complex
@@ -111,6 +110,8 @@ void shadow_map_trace_hit_check(inout ShadowMapTracingState state, ShadowTracing
     float delta_time = state.ray_time - state.occluder_history.x;
     float extrapolated_occluder_y = abs(state.occluder_history.y) +
                                     state.occluder_slope * delta_time;
+    /* NOTE: We use the absolute of the function to account for all occluders configurations.
+     * The test just checks if it doesn't extrapolate in the other Y region. */
     state.hit = extrapolated_occluder_y < 0.0;
   }
   else {
@@ -122,7 +123,7 @@ void shadow_map_trace_hit_check(inout ShadowMapTracingState state, ShadowTracing
     state.occluder_slope = max(min_slope, abs(delta.y / delta.x));
     state.occluder_history = samp.occluder;
     /* Intersection test. Intersect if above the ray time. */
-    state.hit = samp.occluder.x > state.ray_time;
+    state.hit = is_behind_occluder || (is_last_sample && (samp.occluder.x > state.ray_time));
   }
 }
 
@@ -239,6 +240,9 @@ ShadowRayPunctual shadow_ray_generate_punctual(LightData light, vec2 random_2d, 
   float clip_far = intBitsToFloat(light.clip_far);
   float clip_near = intBitsToFloat(light.clip_near);
   float shape_radius = light_spot_data_get(light).shadow_radius;
+  /* Clamp to a minimum value to avoid `local_ray_up` being degenerate. Could be revisited as the
+   * issue might reappear at different zoom level. */
+  shape_radius = max(0.00002, shape_radius);
 
   vec3 direction;
   if (is_area_light(light.type)) {
@@ -266,12 +270,13 @@ ShadowRayPunctual shadow_ray_generate_punctual(LightData light, vec2 random_2d, 
     direction = point_on_light_shape - lP;
     direction = shadow_ray_above_horizon_ensure(direction, lNg, shape_radius);
   }
+  vec3 shadow_position = light_local_data_get(light).shadow_position;
   /* Clip the ray to not cross the near plane.
    * Avoid traces that starts on tiles that have not been queried, creating noise. */
-  float clip_distance = clip_near + shape_radius * 0.5;
-  direction *= saturate(1.0 - clip_distance * inversesqrt(length_squared(direction)));
+  float clip_distance = length(lP - shadow_position) - clip_near;
+  /* Still clamp to a minimal size to avoid issue with zero length vectors. */
+  direction *= saturate(1e-6 + clip_distance * inversesqrt(length_squared(direction)));
 
-  vec3 shadow_position = light_local_data_get(light).shadow_position;
   /* Compute the ray again. */
   ShadowRayPunctual ray;
   /* Transform to shadow local space. */
@@ -342,17 +347,21 @@ vec3 shadow_pcf_offset(vec3 L, vec3 Ng, vec2 random)
  */
 float shadow_texel_radius_at_position(LightData light, const bool is_directional, vec3 P)
 {
+  /* For direction, footprint of the sampled clipmap (or cascade) at the given position.
+   * For punctual, footprint of the tilemap at given position scaled by the LOD level.
+   * Each of these a smooth upper bound estimation (will transition smoothly to the next level). */
   float scale = 1.0;
   if (is_directional) {
-    vec3 lP = light_world_to_local_point(light, P);
+    vec3 lP = transform_direction_transposed(light.object_to_world, P);
     lP -= light_position_get(light);
     LightSunData sun = light_sun_data_get(light);
     if (light.type == LIGHT_SUN) {
-      /* Simplification of `coverage_get(shadow_directional_level_fractional)`. */
-      const float narrowing = float(SHADOW_TILEMAP_RES) / (float(SHADOW_TILEMAP_RES) - 1.0001);
-      scale = length(lP) * narrowing;
+      /* Simplification of `coverage_get(shadow_directional_level_fractional)`.
+       * Do not apply the narrowing since we want the size of the tilemap (not its application
+       * radius). */
+      scale = length(lP) * 2.0;
       scale = max(scale * exp2(light.lod_bias), exp2(light.lod_min));
-      scale = min(scale, exp2(float(sun.clipmap_lod_max)));
+      scale = clamp(scale, exp2(float(sun.clipmap_lod_min)), exp2(float(sun.clipmap_lod_max)));
     }
     else {
       /* Uniform distribution everywhere. No distance scaling.
@@ -371,14 +380,15 @@ float shadow_texel_radius_at_position(LightData light, const bool is_directional
                                         drw_view_z_distance(P),
                                         uniform_buf.shadow.film_pixel_radius);
     /* This gives the size of pixels at Z = 1. */
-    scale = 0.5 / scale;
-    scale = min(scale, float(1 << (SHADOW_TILEMAP_LOD - 1)));
+    scale = 1.0 / scale;
+    scale = min(scale, float(1 << SHADOW_TILEMAP_LOD));
     /* Now scale by distance to the light. */
     scale *= reduce_max(abs(lP));
   }
-  /* Footprint of a tilemap at unit distance from the camera. */
-  const float texel_footprint = 2.0 * M_SQRT2 / SHADOW_MAP_MAX_RES;
-  return texel_footprint * scale;
+  /* Pixel bounding radius inside a tilemap of unit scale.
+   * Take only half of it because we want the radius and not the diameter. */
+  const float texel_radius = M_SQRT2 / SHADOW_MAP_MAX_RES;
+  return texel_radius * scale;
 }
 
 /**
@@ -391,13 +401,8 @@ float shadow_texel_radius_at_position(LightData light, const bool is_directional
 float shadow_normal_offset(vec3 Ng, vec3 L)
 {
   /* Attenuate depending on light angle. */
-  /* TODO: Should we take the light shape into consideration? */
   float cos_theta = abs(dot(Ng, L));
-  float sin_theta = sqrt(saturate(1.0 - square(cos_theta)));
-  /* Note that we still bias by one pixel anyway to fight quantization artifacts.
-   * This helps with self intersection of slopped surfaces and gives softer soft shadow (?! why).
-   * FIXME: This is likely to hide some issue, and we need a user facing bias parameter anyway. */
-  return sin_theta + 3.0;
+  return sin_from_cos(cos_theta);
 }
 
 /**

@@ -13,11 +13,11 @@ CCL_NAMESPACE_BEGIN
 /* [0, uint_max] -> [0.0, 1.0) */
 ccl_device_forceinline float uint_to_float_excl(uint n)
 {
-  // Note: we divide by 4294967808 instead of 2^32 because the latter
-  // leads to a [0.0, 1.0] mapping instead of [0.0, 1.0) due to floating
-  // point rounding error. 4294967808 unfortunately leaves (precisely)
-  // one unused ulp between the max number this outputs and 1.0, but
-  // that's the best you can do with this construction.
+  /* NOTE: we divide by 4294967808 instead of 2^32 because the latter
+   * leads to a [0.0, 1.0] mapping instead of [0.0, 1.0) due to floating
+   * point rounding error. 4294967808 unfortunately leaves (precisely)
+   * one unused ULP between the max number this outputs and 1.0, but
+   * that's the best you can do with this construction. */
   return (float)n * (1.0f / 4294967808.0f);
 }
 
@@ -219,6 +219,25 @@ ccl_device_inline float3 hash_float4_to_float3(float4 k)
   return make_float3(hash_float4_to_float(k),
                      hash_float4_to_float(make_float4(k.z, k.x, k.w, k.y)),
                      hash_float4_to_float(make_float4(k.w, k.z, k.y, k.x)));
+}
+
+/* Hashing float or float[234] into float2 of components in range [0, 1]. */
+
+ccl_device_inline float2 hash_float_to_float2(float k)
+{
+  return make_float2(hash_float_to_float(k), hash_float2_to_float(make_float2(k, 1.0)));
+}
+
+ccl_device_inline float2 hash_float3_to_float2(float3 k)
+{
+  return make_float2(hash_float3_to_float(make_float3(k.x, k.y, k.z)),
+                     hash_float3_to_float(make_float3(k.z, k.x, k.y)));
+}
+
+ccl_device_inline float2 hash_float4_to_float2(float4 k)
+{
+  return make_float2(hash_float4_to_float(make_float4(k.x, k.y, k.z, k.w)),
+                     hash_float4_to_float(make_float4(k.z, k.x, k.w, k.y)));
 }
 
 /* SSE Versions Of Jenkins Lookup3 Hash Functions */

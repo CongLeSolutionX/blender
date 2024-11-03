@@ -91,8 +91,13 @@ typedef struct World {
   /** Light-group membership information. */
   struct LightgroupMembership *lightgroup;
 
+  void *_pad1;
+
   /** Runtime. */
   ListBase gpumaterial;
+  /* The Depsgraph::update_count when this World was last updated. */
+  uint64_t last_update;
+
 } World;
 
 /* **************** WORLD ********************* */
@@ -138,10 +143,10 @@ enum {
 
 /** #World::probe_resolution. */
 typedef enum eLightProbeResolution {
-  LIGHT_PROBE_RESOLUTION_64 = 6,
   LIGHT_PROBE_RESOLUTION_128 = 7,
   LIGHT_PROBE_RESOLUTION_256 = 8,
   LIGHT_PROBE_RESOLUTION_512 = 9,
   LIGHT_PROBE_RESOLUTION_1024 = 10,
   LIGHT_PROBE_RESOLUTION_2048 = 11,
+  LIGHT_PROBE_RESOLUTION_4096 = 12,
 } eLightProbeResolution;

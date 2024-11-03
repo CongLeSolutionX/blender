@@ -14,6 +14,7 @@ set(SRC
   opensubdiv_capi_type.hh
   opensubdiv_converter_capi.hh
   opensubdiv_evaluator_capi.hh
+  opensubdiv_evaluator.hh
   opensubdiv_topology_refiner_capi.hh
 )
 
@@ -53,7 +54,6 @@ if(WITH_OPENSUBDIV)
     internal/evaluator/evaluator_cache_impl.h
     internal/evaluator/evaluator_capi.cc
     internal/evaluator/evaluator_impl.cc
-    internal/evaluator/evaluator_impl.h
     internal/evaluator/gl_compute_evaluator.cc
     internal/evaluator/gl_compute_evaluator.h
     internal/evaluator/patch_map.cc
@@ -64,7 +64,6 @@ if(WITH_OPENSUBDIV)
     internal/topology/mesh_topology.cc
     internal/topology/mesh_topology_compare.cc
     internal/topology/mesh_topology.h
-    internal/topology/topology_refiner_capi.cc
     internal/topology/topology_refiner_factory.cc
     internal/topology/topology_refiner_impl.cc
     internal/topology/topology_refiner_impl_compare.cc
@@ -89,13 +88,11 @@ if(WITH_OPENSUBDIV)
   data_to_c_simple(
     internal/evaluator/shaders/glsl_compute_kernel.glsl
     SRC
-    STRIP_LEADING_C_COMMENTS
   )
 else()
   list(APPEND SRC
     stub/opensubdiv_stub.cc
     stub/opensubdiv_evaluator_stub.cc
-    stub/opensubdiv_topology_refiner_stub.cc
   )
 endif()
 

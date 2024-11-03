@@ -4,9 +4,9 @@
 
 /* Shader to convert cube-map to octahedral projection. */
 
-#pragma BLENDER_REQUIRE(eevee_lightprobe_sphere_mapping_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_colorspace_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_spherical_harmonics_lib.glsl)
+#include "eevee_colorspace_lib.glsl"
+#include "eevee_lightprobe_sphere_mapping_lib.glsl"
+#include "eevee_spherical_harmonics_lib.glsl"
 
 /* OpenGL/Intel drivers have known issues where it isn't able to compile barriers inside for loops.
  * Macros are needed as driver can decide to not unroll in shaders with more complexity. */
@@ -131,7 +131,8 @@ void main()
   /* Composite world into reflection probes. */
   bool is_world = all(equal(probe_coord_packed, world_coord_packed));
   if (!is_world && opacity != 1.0) {
-    vec2 world_uv = wrapped_uv * world_coord.scale + world_coord.offset;
+    vec2 biased_uv = sphere_probe_miplvl_scale_bias(0.0, world_coord, saturate(wrapped_uv));
+    vec2 world_uv = biased_uv * world_coord.scale + world_coord.offset;
     vec4 world_radiance = textureLod(atlas_tx, vec3(world_uv, world_coord.layer), 0.0);
     radiance.rgb = mix(world_radiance.rgb, radiance.rgb, opacity);
   }

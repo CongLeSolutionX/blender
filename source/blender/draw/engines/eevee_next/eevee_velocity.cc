@@ -153,7 +153,9 @@ bool VelocityModule::step_object_sync(Object *ob,
   VelocityObjectData &vel = velocity_map.lookup_or_add_default(object_key);
   vel.obj.ofs[step_] = object_steps_usage[step_]++;
   vel.obj.resource_id = resource_handle.resource_index();
-  vel.id = object_key.hash();
+  /* While VelocityObjectData is unique for each object/instance, multiple VelocityObjectDatas can
+   * point to the same offset in VelocityGeometryData, since geometry is stored local space. */
+  vel.id = particle_sys ? uint64_t(particle_sys) : uint64_t(ob->data);
   object_steps[step_]->get_or_resize(vel.obj.ofs[step_]) = ob->object_to_world();
   if (step_ == STEP_CURRENT) {
     /* Replace invalid steps. Can happen if object was hidden in one of those steps. */
@@ -301,10 +303,6 @@ void VelocityModule::geometry_steps_fill()
   geometry_map.clear();
 }
 
-/**
- * In Render, moves the next frame data to previous frame data. Nullify next frame data.
- * In Viewport, the current frame data will be used as previous frame data in the next frame.
- */
 void VelocityModule::step_swap()
 {
   auto swap_steps = [&](eVelocityStep step_a, eVelocityStep step_b) {
@@ -344,7 +342,6 @@ void VelocityModule::begin_sync()
   object_steps_usage[step_] = 0;
 }
 
-/* This is the end of the current frame sync. Not the step_sync. */
 void VelocityModule::end_sync()
 {
   Vector<ObjectKey, 0> deleted_obj;

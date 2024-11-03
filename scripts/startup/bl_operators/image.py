@@ -72,7 +72,7 @@ class EditExternally(Operator):
 
         try:
             subprocess.Popen(cmd)
-        except BaseException:
+        except Exception:
             import traceback
             traceback.print_exc()
             self.report(
@@ -233,7 +233,7 @@ class IMAGE_OT_open_images(Operator):
 
     @classmethod
     def poll(cls, context):
-        return context.area and context.area.ui_type == 'IMAGE_EDITOR'
+        return context.area and context.area.type == 'IMAGE_EDITOR'
 
     def execute(self, context):
         if not self.directory or len(self.files) == 0:
@@ -260,7 +260,7 @@ class IMAGE_OT_open_images(Operator):
                 "prefix": file.name[:len(file.name) - len(match.group(0))],
                 "ext": match.group(2),
                 "frame_size": len(match.group(1)),
-                "files": [file.name]
+                "files": [file.name],
             }
             for test_seq in sequences:
                 if (
@@ -307,7 +307,7 @@ class IMAGE_FH_drop_handler(FileHandler):
     def poll_drop(cls, context):
         return (
             (context.area is not None) and
-            (context.area.ui_type == 'IMAGE_EDITOR') and
+            (context.area.type == 'IMAGE_EDITOR') and
             (context.region is not None) and
             (context.region.type == 'WINDOW')
         )

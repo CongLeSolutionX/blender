@@ -65,7 +65,7 @@ const EnumPropertyItem rna_enum_color_sets_items[] = {
 #  include "BLI_string_utils.hh"
 
 #  include "BIK_api.h"
-#  include "BKE_action.h"
+#  include "BKE_action.hh"
 #  include "BKE_armature.hh"
 
 #  include "DNA_userdef_types.h"
@@ -1164,8 +1164,7 @@ static void rna_def_pose_channel(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "custom_shape_wire_width", PROP_FLOAT, PROP_NONE);
   RNA_def_property_float_sdna(prop, nullptr, "custom_shape_wire_width");
-  RNA_def_property_ui_text(
-      prop, "Custom Shape Wire Width", "Adjust the line thickness of custom shapes");
+  RNA_def_property_ui_text(prop, "Wire Width", "Adjust the line thickness of custom shapes");
   /* When changing the upper limit of the range, also adjust the WIRE_WIDTH_COMPRESSION in
    * overlay_shader_shared.h */
   RNA_def_property_range(prop, 1.0f, 16.0f);

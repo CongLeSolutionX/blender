@@ -18,10 +18,10 @@
 
 #include "BKE_text.h"
 
-#include "../generic/python_compat.h"
+#include "../generic/python_compat.hh"
 
-#include "bpy_rna.h"
-#include "bpy_rna_text.h" /* Declare #BPY_rna_region_as_string_method_def. */
+#include "bpy_rna.hh"
+#include "bpy_rna_text.hh" /* Declare #BPY_rna_region_as_string_method_def. */
 
 /* -------------------------------------------------------------------- */
 /** \name Data structures.
@@ -61,7 +61,7 @@ PyDoc_STRVAR(
 static PyObject *bpy_rna_region_as_string(PyObject *self, PyObject *args, PyObject *kwds)
 {
   BPy_StructRNA *pyrna = (BPy_StructRNA *)self;
-  Text *text = static_cast<Text *>(pyrna->ptr.data);
+  Text *text = static_cast<Text *>(pyrna->ptr->data);
   /* Parse the region range. */
   TextRegion region;
 
@@ -128,7 +128,7 @@ PyDoc_STRVAR(
 static PyObject *bpy_rna_region_from_string(PyObject *self, PyObject *args, PyObject *kwds)
 {
   BPy_StructRNA *pyrna = (BPy_StructRNA *)self;
-  Text *text = static_cast<Text *>(pyrna->ptr.data);
+  Text *text = static_cast<Text *>(pyrna->ptr->data);
 
   /* Parse the region range. */
   const char *buf;

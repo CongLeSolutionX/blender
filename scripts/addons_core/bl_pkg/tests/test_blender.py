@@ -26,8 +26,9 @@ import tempfile
 
 from typing import (
     Any,
+)
+from collections.abc import (
     Sequence,
-    Tuple,
 )
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
@@ -70,7 +71,7 @@ if TEMP_DIR_REMOTE and not os.path.isdir(TEMP_DIR_REMOTE):
 # -----------------------------------------------------------------------------
 # Generic Functions
 
-def command_output_from_json_0(args: Sequence[str]) -> Sequence[Tuple[str, Any]]:
+def command_output_from_json_0(args: Sequence[str]) -> Sequence[tuple[str, Any]]:
     result = []
     for json_bytes in subprocess.check_output(
         [*CMD, *args, "--output-type=JSON_0"],
@@ -109,7 +110,6 @@ def ensure_script_directory(script_directory_to_add: str) -> None:
 
 def blender_test_run(temp_dir_local: str) -> None:
     import bpy
-    import addon_utils  # type: ignore
 
     preferences = bpy.context.preferences
 
@@ -120,12 +120,13 @@ def blender_test_run(temp_dir_local: str) -> None:
     if VERBOSE:
         print("--- Begin ---")
 
-    addon_utils.enable("bl_pkg")
-
     # NOTE: it's assumed the URL will expand to JSON, example:
     # http://extensions.local:8111/add-ons/?format=json
     # This is not supported by the test server so the file name needs to be added.
     remote_url = "http://localhost:{:d}/{:s}".format(HTTP_PORT, PKG_REPO_LIST_FILENAME)
+
+    while preferences.extensions.repos:
+        preferences.extensions.repos.remove(preferences.extensions.repos[0])
 
     repo = preferences.extensions.repos.new(
         name="My Test",

@@ -35,6 +35,8 @@ class Context {
   StateManager *state_manager = nullptr;
   Immediate *imm = nullptr;
 
+  ShaderCompiler *compiler = nullptr;
+
   /**
    * All 4 window frame-buffers.
    * None of them are valid in an off-screen context.
@@ -57,6 +59,8 @@ class Context {
    * onto compiled sources ensures the source hashes are different. */
   static int context_counter;
   int context_id = 0;
+
+  GPUStorageBuf *printf_buf = nullptr;
 
  protected:
   /** Thread on which this context is active. */
@@ -83,7 +87,7 @@ class Context {
 
   virtual void memory_statistics_get(int *r_total_mem, int *r_free_mem) = 0;
 
-  virtual void debug_group_begin(const char *, int){};
+  virtual void debug_group_begin(const char * /*name*/, int /*index*/){};
   virtual void debug_group_end(){};
 
   /* Returns true if capture successfully started. */

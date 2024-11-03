@@ -37,7 +37,7 @@
 #include "MOD_ui_common.hh"
 
 #include "RNA_access.hh"
-#include "RNA_prototypes.h"
+#include "RNA_prototypes.hh"
 
 #include "GEO_reorder.hh"
 
@@ -74,6 +74,7 @@ static void foreach_ID_link(ModifierData *md, Object *ob, IDWalkFunc walk, void 
 {
   auto *omd = reinterpret_cast<GreasePencilBuildModifierData *>(md);
   modifier::greasepencil::foreach_influence_ID_link(&omd->influence, ob, walk, user_data);
+  walk(user_data, ob, (ID **)&omd->object, IDWALK_CB_NOP);
 }
 
 static void update_depsgraph(ModifierData *md, const ModifierUpdateDepsgraphContext *ctx)
@@ -111,11 +112,13 @@ static Array<int> point_counts_to_keep_concurrent(const bke::CurvesGeometry &cur
 {
   const int stroke_count = curves.curves_num();
   const OffsetIndices<int> points_by_curve = curves.points_by_curve();
+  const VArray<bool> cyclic = curves.cyclic();
 
   curves.ensure_evaluated_lengths();
   float max_length = 0;
   for (const int stroke : curves.curves_range()) {
-    const float len = curves.evaluated_length_total_for_curve(stroke, false);
+    const bool stroke_cyclic = cyclic[stroke];
+    const float len = curves.evaluated_length_total_for_curve(stroke, stroke_cyclic);
     max_length = math::max(max_length, len);
   }
 
@@ -127,7 +130,9 @@ static Array<int> point_counts_to_keep_concurrent(const bke::CurvesGeometry &cur
   }
 
   auto get_stroke_factor = [&](const float factor, const int index) {
-    const float max_factor = max_length / curves.evaluated_length_total_for_curve(index, false);
+    const bool stroke_cyclic = cyclic[index];
+    const float max_factor = max_length /
+                             curves.evaluated_length_total_for_curve(index, stroke_cyclic);
     if (time_alignment == MOD_GREASE_PENCIL_BUILD_TIMEALIGN_START) {
       if (clamp_points) {
         return std::clamp(factor * max_factor, 0.0f, 1.0f);
@@ -258,10 +263,18 @@ static bke::CurvesGeometry build_concurrent(bke::greasepencil::Drawing &drawing,
   const bke::AttributeAccessor src_attributes = curves.attributes();
   bke::MutableAttributeAccessor dst_attributes = dst_curves.attributes_for_write();
 
-  gather_attributes(
-      src_attributes, bke::AttrDomain::Point, {}, {}, dst_to_src_point, dst_attributes);
-  gather_attributes(
-      src_attributes, bke::AttrDomain::Curve, {}, {}, dst_to_src_curve, dst_attributes);
+  gather_attributes(src_attributes,
+                    bke::AttrDomain::Point,
+                    bke::AttrDomain::Point,
+                    {},
+                    dst_to_src_point,
+                    dst_attributes);
+  gather_attributes(src_attributes,
+                    bke::AttrDomain::Curve,
+                    bke::AttrDomain::Curve,
+                    {},
+                    dst_to_src_curve,
+                    dst_attributes);
 
   dst_curves.update_curve_types();
 
@@ -287,9 +300,7 @@ static void points_info_sequential(const bke::CurvesGeometry &curves,
 
   const bool is_vanishing = transition == MOD_GREASE_PENCIL_BUILD_TRANSITION_VANISH;
 
-  int effective_points_num = 0;
-  selection.foreach_index(
-      [&](const int index) { effective_points_num += points_by_curve[index].size(); });
+  int effective_points_num = offset_indices::sum_group_sizes(points_by_curve, selection);
 
   const int untouched_points_num = points_by_curve.total_size() - effective_points_num;
   effective_points_num *= factor_to_keep;
@@ -413,10 +424,18 @@ static bke::CurvesGeometry build_sequential(bke::greasepencil::Drawing &drawing,
   const bke::AttributeAccessor src_attributes = curves.attributes();
   bke::MutableAttributeAccessor dst_attributes = dst_curves.attributes_for_write();
 
-  gather_attributes(
-      src_attributes, bke::AttrDomain::Point, {}, {}, dst_to_src_point, dst_attributes);
-  gather_attributes(
-      src_attributes, bke::AttrDomain::Curve, {}, {}, dst_to_src_curve, dst_attributes);
+  gather_attributes(src_attributes,
+                    bke::AttrDomain::Point,
+                    bke::AttrDomain::Point,
+                    {},
+                    dst_to_src_point,
+                    dst_attributes);
+  gather_attributes(src_attributes,
+                    bke::AttrDomain::Curve,
+                    bke::AttrDomain::Curve,
+                    {},
+                    dst_to_src_curve,
+                    dst_attributes);
 
   dst_curves.update_curve_types();
 
@@ -472,24 +491,30 @@ static float get_factor_from_draw_speed(const bke::CurvesGeometry &curves,
   const VArray<float> delta_times = *attributes.lookup_or_default<float>(
       "delta_time", bke::AttrDomain::Point, 0.0f);
 
-  Array<float> times(curves.points_num());
-  /* For the first stroke, the start time is 0. */
-  for (const int point : points_by_curve[0]) {
-    times[point] = delta_times[point];
-  }
+  Array<float> start_times(curves.curves_num());
+  start_times[0] = 0;
+  float accumulated_shift_delta_time = init_times[0];
   for (const int curve : curves.curves_range().drop_front(1)) {
-    const float previous_init_time = init_times[curve - 1];
-    const float start_time = math::min(init_times[curve] - previous_init_time, max_gap);
+    const float previous_start_time = start_times[curve - 1];
+    const float previous_delta_time = delta_times[points_by_curve[curve - 1].last()];
+    const float previous_end_time = previous_start_time + previous_delta_time;
+
+    const float shifted_start_time = init_times[curve] - accumulated_shift_delta_time;
+    const float gap_delta_time = math::min(shifted_start_time - previous_end_time, max_gap);
+
+    start_times[curve] = previous_end_time + gap_delta_time;
+    accumulated_shift_delta_time += math::max(shifted_start_time - start_times[curve], 0.0f);
+  }
+  const float limit = time_elapsed * speed_fac;
+  for (const int curve : curves.curves_range()) {
+    const float start_time = start_times[curve];
     for (const int point : points_by_curve[curve]) {
-      times[point] = start_time + delta_times[point];
+      if (start_time + delta_times[point] >= limit) {
+        return math::clamp(float(point) / float(curves.points_num()), 0.0f, 1.0f);
+      }
     }
   }
-  for (const int point : curves.points_range()) {
-    const float limit = time_elapsed * speed_fac;
-    if (times[point] >= limit) {
-      return math::clamp(float(point) / float(curves.points_num()), 0.0f, 1.0f);
-    }
-  }
+
   return 1.0f;
 }
 

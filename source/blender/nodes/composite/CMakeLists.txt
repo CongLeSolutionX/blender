@@ -19,7 +19,7 @@ set(INC
   ../../compositor/realtime_compositor/algorithms
   ../../compositor/realtime_compositor/cached_resources
 
-  # RNA_prototypes.h
+  # RNA_prototypes.hh
   ${CMAKE_BINARY_DIR}/source/blender/makesrna
 )
 
@@ -129,9 +129,15 @@ set(LIB
   PRIVATE bf::blenlib
   PRIVATE bf::depsgraph
   PRIVATE bf::dna
+  bf_functions
   PRIVATE bf::intern::guardedalloc
+  PRIVATE bf::extern::fmtlib
   bf_realtime_compositor
 )
+
+if(WITH_OPENCOLORIO)
+  add_definitions(-DWITH_OCIO)
+endif()
 
 if(WITH_IMAGE_OPENEXR)
   add_definitions(-DWITH_OPENEXR)
@@ -172,5 +178,5 @@ blender_add_lib(bf_nodes_composite "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 
 blender_set_target_unity_build(bf_nodes_composite 10)
 
-# RNA_prototypes.h
+# RNA_prototypes.hh
 add_dependencies(bf_nodes_composite bf_rna)

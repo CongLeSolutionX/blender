@@ -860,7 +860,7 @@ int RenderScheduler::get_num_samples_to_path_trace() const
     /* Keep occupancy at about 0.5 (this is more of an empirical figure which seems to match scenes
      * with good performance without forcing occupancy to be higher). */
     int num_samples_to_occupy = state_.occupancy_num_samples;
-    if (state_.occupancy < 0.5f) {
+    if (state_.occupancy > 0 && state_.occupancy < 0.5f) {
       num_samples_to_occupy = lround(state_.occupancy_num_samples * 0.7f / state_.occupancy);
     }
 
@@ -946,12 +946,14 @@ int RenderScheduler::get_num_samples_during_navigation(int resolution_divider) c
     return 1;
   }
 
-  /* Schedule samples equal to the resolution divider up to a maximum of 4.
+  /* Schedule samples equal to the resolution divider up to a maximum of 4, limited by the maximum
+   * number of samples overall.
    * The idea is to have enough information on the screen by increasing the sample count as the
    * resolution is decreased. */
+  const int max_navigation_samples = min(num_samples_, 4);
   /* NOTE: Changing this formula will change the formula in
    * `RenderScheduler::calculate_resolution_divider_for_time()`. */
-  return min(max(1, resolution_divider / pixel_size_), 4);
+  return min(max(1, resolution_divider / pixel_size_), max_navigation_samples);
 }
 
 bool RenderScheduler::work_need_adaptive_filter() const

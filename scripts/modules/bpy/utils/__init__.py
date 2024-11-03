@@ -25,6 +25,8 @@ __all__ = (
     "unregister_cli_command",
     "register_manual_map",
     "unregister_manual_map",
+    "register_preset_path",
+    "unregister_preset_path",
     "register_classes_factory",
     "register_submodule_factory",
     "register_tool",
@@ -34,6 +36,7 @@ __all__ = (
     "previews",
     "resource_path",
     "script_path_user",
+    "extension_path_user",
     "script_paths",
     "smpte_from_frame",
     "smpte_from_seconds",
@@ -78,6 +81,9 @@ _script_module_dirs = "startup", "modules"
 # NOTE: in virtually all cases this should match `BLENDER_SYSTEM_SCRIPTS` as this script is itself a system script,
 # it must be in the `BLENDER_SYSTEM_SCRIPTS` by definition and there is no need for a look-up from `_bpy_script_paths`.
 _script_base_dir = _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.dirname(__file__))))
+
+# Paths managed by `register_preset_path` & `unregister_preset_path`.
+_preset_path_registry = set()
 
 
 def execfile(filepath, *, mod=None):
@@ -132,7 +138,7 @@ def _test_import(module_name, loaded_modules):
 
     try:
         mod = __import__(module_name)
-    except:
+    except Exception:
         import traceback
         traceback.print_exc()
         return None
@@ -188,8 +194,36 @@ def modules_from_path(path, loaded_modules):
     return modules
 
 
-_global_loaded_modules = []  # store loaded module names for reloading.
-import bpy_types as _bpy_types  # keep for comparisons, never ever reload this.
+# Store registered module names for reloading.
+# Currently used for "startup" modules.
+_registered_module_names = []
+# Keep for comparisons, never ever reload this.
+import bpy_types as _bpy_types
+
+
+def _register_module_call(mod):
+    register = getattr(mod, "register", None)
+    if register:
+        try:
+            register()
+        except Exception:
+            import traceback
+            traceback.print_exc()
+    else:
+        print(
+            "\nWarning! {!r} has no register function, "
+            "this is now a requirement for registerable scripts".format(mod.__file__)
+        )
+
+
+def _unregister_module_call(mod):
+    unregister = getattr(mod, "unregister", None)
+    if unregister:
+        try:
+            unregister()
+        except Exception:
+            import traceback
+            traceback.print_exc()
 
 
 def load_scripts(*, reload_scripts=False, refresh_scripts=False, extensions=True):
@@ -225,29 +259,6 @@ def load_scripts(*, reload_scripts=False, refresh_scripts=False, extensions=True
         for addon_module_name in [ext.module for ext in _preferences.addons]:
             _addon_utils.disable(addon_module_name)
 
-    def register_module_call(mod):
-        register = getattr(mod, "register", None)
-        if register:
-            try:
-                register()
-            except:
-                import traceback
-                traceback.print_exc()
-        else:
-            print(
-                "\nWarning! {!r} has no register function, "
-                "this is now a requirement for registerable scripts".format(mod.__file__)
-            )
-
-    def unregister_module_call(mod):
-        unregister = getattr(mod, "unregister", None)
-        if unregister:
-            try:
-                unregister()
-            except:
-                import traceback
-                traceback.print_exc()
-
     def test_reload(mod):
         import importlib
         # reloading this causes internal errors
@@ -258,7 +269,7 @@ def load_scripts(*, reload_scripts=False, refresh_scripts=False, extensions=True
 
         try:
             return importlib.reload(mod)
-        except:
+        except Exception:
             import traceback
             traceback.print_exc()
 
@@ -272,24 +283,34 @@ def load_scripts(*, reload_scripts=False, refresh_scripts=False, extensions=True
             mod = test_reload(mod)
 
         if mod:
-            register_module_call(mod)
-            _global_loaded_modules.append(mod.__name__)
+            _register_module_call(mod)
+            _registered_module_names.append(mod.__name__)
 
     if reload_scripts:
+        # Module names -> modules.
+        #
+        # Reverse the modules so they are unregistered in the reverse order they're registered.
+        # While this isn't essential for the most part, it ensures any inter-dependencies can be handled properly.
+        registered_modules = [
+            mod for mod in map(_sys.modules.get, reversed(_registered_module_names))
+            if mod is not None
+        ]
 
-        # module names -> modules
-        _global_loaded_modules[:] = [_sys.modules[mod_name]
-                                     for mod_name in _global_loaded_modules]
+        # This should never happen, only report this to notify developers that something unexpected happened.
+        if len(registered_modules) != len(_registered_module_names):
+            print(
+                "Warning: globally loaded modules not found in sys.modules:",
+                [mod_name for mod_name in _registered_module_names if mod_name not in _sys.modules]
+            )
+        _registered_module_names.clear()
 
-        # loop over and unload all scripts
-        _global_loaded_modules.reverse()
-        for mod in _global_loaded_modules:
-            unregister_module_call(mod)
+        # Loop over and unload all scripts.
+        for mod in registered_modules:
+            _unregister_module_call(mod)
 
-        for mod in _global_loaded_modules:
+        for mod in registered_modules:
             test_reload(mod)
-
-        del _global_loaded_modules[:]
+        del registered_modules
 
         # Update key-maps to account for operators no longer existing.
         # Typically unloading operators would refresh the event system (such as disabling an add-on)
@@ -337,6 +358,22 @@ def load_scripts(*, reload_scripts=False, refresh_scripts=False, extensions=True
                         print("Warning, unregistered class: {:s}({:s})".format(subcls.__name__, cls.__name__))
 
 
+# Internal only, called on exit by `WM_exit_ex`.
+def _on_exit():
+    # Disable all add-ons.
+    _addon_utils.disable_all()
+
+    # Call `unregister` function on internal startup module.
+    # Must only be used as part of Blender 'exit' process.
+    from bpy_restrict_state import RestrictBlend
+    with RestrictBlend():
+        for mod_name in reversed(_registered_module_names):
+            if (mod := _sys.modules.get(mod_name)) is None:
+                print("Warning: module", repr(mod_name), "not found in sys.modules")
+                continue
+            _unregister_module_call(mod)
+
+
 def load_scripts_extensions(*, reload_scripts=False):
     """
     Load extensions scripts (add-ons and app-templates)
@@ -378,7 +415,14 @@ def script_paths_pref():
     return paths
 
 
-def script_paths(*, subdir=None, user_pref=True, check_all=False, use_user=True):
+def script_paths_system_environment():
+    """Returns a list of system script directories from environment variables."""
+    if env_system_path := _os.environ.get("BLENDER_SYSTEM_SCRIPTS"):
+        return [_os.path.normpath(env_system_path)]
+    return []
+
+
+def script_paths(*, subdir=None, user_pref=True, check_all=False, use_user=True, use_system_environment=True):
     """
     Returns a list of valid script paths.
 
@@ -388,6 +432,10 @@ def script_paths(*, subdir=None, user_pref=True, check_all=False, use_user=True)
     :type user_pref: bool
     :arg check_all: Include local, user and system paths rather just the paths Blender uses.
     :type check_all: bool
+    :arg use_user: Include user paths
+    :type use_user: bool
+    :arg use_system_environment: Include BLENDER_SYSTEM_SCRIPTS variable path
+    :type use_system_environment: bool
     :return: script paths.
     :rtype: list
     """
@@ -418,6 +466,9 @@ def script_paths(*, subdir=None, user_pref=True, check_all=False, use_user=True)
 
     if user_pref:
         base_paths.extend(script_paths_pref())
+
+    if use_system_environment:
+        base_paths.extend(script_paths_system_environment())
 
     scripts = []
     for path in base_paths:
@@ -473,15 +524,21 @@ def app_template_paths(*, path=None):
     """
     subdir_args = (path,) if path is not None else ()
     # Note: keep in sync with: Blender's 'BKE_appdir_app_template_any'.
-    # Uses 'BLENDER_USER_SCRIPTS', 'BLENDER_SYSTEM_SCRIPTS'
-    # ... in this case 'system' accounts for 'local' too.
-    for resource_fn, module_name in (
-            (_user_resource, "bl_app_templates_user"),
-            (system_resource, "bl_app_templates_system"),
-    ):
-        path_test = resource_fn('SCRIPTS', path=_os.path.join("startup", module_name, *subdir_args))
-        if path_test and _os.path.isdir(path_test):
+    # Uses BLENDER_USER_SCRIPTS
+    path_test = _user_resource('SCRIPTS', path=_os.path.join("startup", "bl_app_templates_user", *subdir_args))
+    if path_test and _os.path.isdir(path_test):
+        yield path_test
+
+    # Uses BLENDER_SYSTTEM_SCRIPTS
+    for path in script_paths_system_environment():
+        path_test = _os.path.join(path, "startup", "bl_app_templates_system", *subdir_args)
+        if _os.path.isdir(path_test):
             yield path_test
+
+    # Uses default local or system location.
+    path_test = system_resource('SCRIPTS', path=_os.path.join("startup", "bl_app_templates_system", *subdir_args))
+    if path_test and _os.path.isdir(path_test):
+        yield path_test
 
 
 def preset_paths(subdir):
@@ -494,7 +551,7 @@ def preset_paths(subdir):
     :rtype: list
     """
     dirs = []
-    for path in script_paths(subdir="presets", check_all=True):
+    for path in script_paths(subdir="presets"):
         directory = _os.path.join(path, subdir)
         if not directory.startswith(path):
             raise Exception("invalid subdir given {!r}".format(subdir))
@@ -507,7 +564,80 @@ def preset_paths(subdir):
         if _os.path.isdir(directory):
             dirs.append(directory)
 
+    for path in _preset_path_registry:
+        directory = _os.path.join(path, "presets", subdir)
+        if _os.path.isdir(directory):
+            dirs.append(directory)
+
     return dirs
+
+
+def register_preset_path(path):
+    """
+    Register a preset search path.
+
+    :arg path: preset directory (must be an absolute path).
+
+       This path must contain a "presets" subdirectory which will typically contain presets for add-ons.
+
+       You may call ``bpy.utils.register_preset_path(os.path.dirname(__file__))`` from an add-ons ``__init__.py`` file.
+       When the ``__init__.py`` is in the same location as a ``presets`` directory.
+       For example an operators preset would be located under: ``presets/operator/{operator.id}/``
+       where ``operator.id`` is the ``bl_idname`` of the operator.
+    :type path: string
+    :return: success
+    :rtype: bool
+    """
+    set_len = len(_preset_path_registry)
+    _preset_path_registry.add(path)
+    if set_len == len(_preset_path_registry):
+        print("Warning: preset path already registered", path)
+        return False
+    return True
+
+
+def unregister_preset_path(path):
+    """
+    Unregister a preset search path.
+
+    :arg path: preset directory (must be an absolute path).
+
+       This must match the registered path exactly.
+    :type path: string
+    :return: success
+    :rtype: bool
+    """
+    set_len = len(_preset_path_registry)
+    _preset_path_registry.discard(path)
+    if set_len == len(_preset_path_registry):
+        print("Warning: preset path not registered", path)
+        return False
+    return True
+
+
+def _is_path_parent_of(parent_path, path):
+    try:
+        if _os.path.samefile(
+                _os.path.commonpath([parent_path]),
+                _os.path.commonpath([parent_path, path])
+        ):
+            return True
+
+    # NOTE: skipping in the case files can't be found isn't ideal because
+    # `/a/b` is logically *inside* `/a/` irrespective of the permissions or existence of either paths.
+    # Nevertheless, skip them as it's impractical to operate on paths that can't be accessed.
+    # In all likelihood the caller is also unable to properly handle the result.
+    except FileNotFoundError:
+        # The path we tried to look up doesn't exist.
+        pass
+    except ValueError:
+        # Happens on Windows when paths don't have the same drive.
+        pass
+    except PermissionError:
+        # When either of the paths don't have permissions to access.
+        pass
+
+    return False
 
 
 def is_path_builtin(path):
@@ -532,18 +662,27 @@ def is_path_builtin(path):
             # This can happen on portable installs.
             continue
 
-        try:
-            if _os.path.samefile(
-                    _os.path.commonpath([parent_path]),
-                    _os.path.commonpath([parent_path, path])
-            ):
-                return True
-        except FileNotFoundError:
-            # The path we tried to look up doesn't exist.
-            pass
-        except ValueError:
-            # Happens on Windows when paths don't have the same drive.
-            pass
+        if _is_path_parent_of(parent_path, path):
+            return True
+
+    return False
+
+
+def is_path_extension(path):
+    """
+    Returns True if the path is from an extensions repository.
+
+    :arg path: Path to check if it is within an extension repository.
+    :type path: str
+    :rtype: bool
+    """
+    for repo in _preferences.extensions.repos:
+        if not repo.enabled:
+            continue
+        # NOTE: since these paths are user defined, they can be anything.
+        # Empty or malformed paths will be skipped.
+        if _is_path_parent_of(repo.directory, path):
+            return True
 
     return False
 
@@ -564,7 +703,7 @@ def smpte_from_seconds(time, *, fps=None, fps_base=None):
     return smpte_from_frame(
         time_to_frame(time, fps=fps, fps_base=fps_base),
         fps=fps,
-        fps_base=fps_base
+        fps_base=fps_base,
     )
 
 
@@ -709,7 +848,7 @@ def keyconfig_set(filepath, *, report=None):
     try:
         error_msg = ""
         execfile(filepath)
-    except:
+    except Exception:
         import traceback
         error_msg = traceback.format_exc()
 
@@ -737,12 +876,11 @@ def user_resource(resource_type, *, path="", create=False):
     """
     Return a user resource path (normally from the users home directory).
 
-    :arg type: Resource type in ['DATAFILES', 'CONFIG', 'SCRIPTS', 'EXTENSIONS'].
-    :type type: string
+    :arg resource_type: Resource type in ['DATAFILES', 'CONFIG', 'SCRIPTS', 'EXTENSIONS'].
+    :type resource_type: string
     :arg path: Optional subdirectory.
     :type path: string
-    :arg create: Treat the path as a directory and create
-       it if its not existing.
+    :arg create: Treat the path as a directory and create it if its not existing.
     :type create: boolean
     :return: a path.
     :rtype: string
@@ -757,7 +895,56 @@ def user_resource(resource_type, *, path="", create=False):
             if not _os.path.exists(target_path):
                 try:
                     _os.makedirs(target_path)
-                except:
+                except Exception:
+                    import traceback
+                    traceback.print_exc()
+                    target_path = ""
+            elif not _os.path.isdir(target_path):
+                print("Path {!r} found but isn't a directory!".format(target_path))
+                target_path = ""
+
+    return target_path
+
+
+def extension_path_user(package, *, path="", create=False):
+    """
+    Return a user writable directory associated with an extension.
+
+    .. note::
+
+       This allows each extension to have it's own user directory to store files.
+
+       The location of the extension it self is not a suitable place to store files
+       because it is cleared each upgrade and the users may not have write permissions
+       to the repository (typically "System" repositories).
+
+    :arg package: The ``__package__`` of the extension.
+    :type package: string
+    :arg path: Optional subdirectory.
+    :type path: string
+    :arg create: Treat the path as a directory and create it if its not existing.
+    :type create: boolean
+    :return: a path.
+    :rtype: string
+    """
+    from addon_utils import _extension_module_name_decompose
+
+    # Handles own errors.
+    repo_module, pkg_idname = _extension_module_name_decompose(package)
+
+    target_path = _user_resource('EXTENSIONS')
+    # Should always be true.
+    if target_path:
+        if path:
+            target_path = _os.path.join(target_path, ".user", repo_module, pkg_idname, path)
+        else:
+            target_path = _os.path.join(target_path, ".user", repo_module, pkg_idname)
+        if create:
+            # create path if not existing.
+            if not _os.path.exists(target_path):
+                try:
+                    _os.makedirs(target_path)
+                except Exception:
                     import traceback
                     traceback.print_exc()
                     target_path = ""
@@ -809,17 +996,16 @@ def register_submodule_factory(module_name, submodule_names):
     def register():
         nonlocal module
         module = __import__(name=module_name, fromlist=submodule_names)
-        submodules[:] = [getattr(module, name) for name in submodule_names]
-        for mod in submodules:
+        submodules[:] = [(getattr(module, mod_name), mod_name) for mod_name in submodule_names]
+        for mod, _mod_name in submodules:
             mod.register()
 
     def unregister():
         from sys import modules
-        for mod in reversed(submodules):
+        for mod, mod_name in reversed(submodules):
             mod.unregister()
-            name = mod.__name__
-            delattr(module, name.partition(".")[2])
-            del modules[name]
+            delattr(module, mod_name)
+            del modules[mod.__name__]
         submodules.clear()
 
     return register, unregister
@@ -833,10 +1019,8 @@ def register_tool(tool_cls, *, after=None, separator=False, group=False):
     """
     Register a tool in the toolbar.
 
-    :arg tool: A tool subclass.
-    :type tool: :class:`bpy.types.WorkSpaceTool` subclass.
-    :arg space_type: Space type identifier.
-    :type space_type: string
+    :arg tool_cls: A tool subclass.
+    :type tool_cls: :class:`bpy.types.WorkSpaceTool` subclass.
     :arg after: Optional identifiers this tool will be added after.
     :type after: collection of strings or None.
     :arg separator: When true, add a separator before this tool.
@@ -1066,7 +1250,7 @@ def manual_map():
     for cb in reversed(_manual_map):
         try:
             prefix, url_manual_mapping = cb()
-        except:
+        except Exception:
             print("Error calling {!r}".format(cb))
             import traceback
             traceback.print_exc()

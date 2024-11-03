@@ -24,7 +24,7 @@ struct GPUShader;
 
 enum eGPUBuiltinShader {
   /** Glyph drawing shader used by the BLF module. */
-  GPU_SHADER_TEXT,
+  GPU_SHADER_TEXT = 0,
   /** Draws keyframe markers. All markers shapes are supported through a single shader. */
   GPU_SHADER_KEYFRAME_SHAPE,
   /** Draw solid mesh with a single distant light using a clamped simple dot product. */
@@ -78,6 +78,11 @@ enum eGPUBuiltinShader {
   GPU_SHADER_3D_CLIPPED_UNIFORM_COLOR,
   /** Draw wide lines with uniform color. Has an additional clip plane parameter. */
   GPU_SHADER_3D_POLYLINE_CLIPPED_UNIFORM_COLOR,
+
+  /** Draw strip widgets in sequencer timeline. */
+  GPU_SHADER_SEQUENCER_STRIPS,
+  /** Draw strip thumbnails in sequencer timeline. */
+  GPU_SHADER_SEQUENCER_THUMBS,
 
   /** Compute shaders to generate 2d index buffers (mainly for curve drawing). */
   GPU_SHADER_INDEXBUF_POINTS,

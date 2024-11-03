@@ -24,11 +24,11 @@
 
 #include "BKE_bvhutils.hh"
 
-#include "../generic/py_capi_utils.h"
-#include "../generic/python_utildefines.h"
+#include "../generic/py_capi_utils.hh"
+#include "../generic/python_utildefines.hh"
 
-#include "mathutils.h"
-#include "mathutils_bvhtree.h" /* own include */
+#include "mathutils.hh"
+#include "mathutils_bvhtree.hh" /* own include */
 
 #ifndef MATH_STANDALONE
 #  include "DNA_mesh_types.h"
@@ -44,7 +44,7 @@
 
 #  include "bmesh.hh"
 
-#  include "../bmesh/bmesh_py_types.h"
+#  include "../bmesh/bmesh_py_types.hh"
 #endif /* MATH_STANDALONE */
 
 #include "BLI_strict_flags.h" /* Keep last. */
@@ -643,7 +643,7 @@ PyDoc_STRVAR(
     "\n"
     "   :arg vertices: float triplets each representing ``(x, y, z)``\n"
     "   :type vertices: float triplet sequence\n"
-    "   :arg polygons: Sequence of polyugons, each containing indices to the vertices argument.\n"
+    "   :arg polygons: Sequence of polygons, each containing indices to the vertices argument.\n"
     "   :type polygons: Sequence of sequences containing ints\n"
     "   :arg all_triangles: Use when all **polygons** are triangles for more efficient "
     "conversion.\n"

@@ -43,7 +43,7 @@
 #include "BKE_layer.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_main.hh"
-#include "BKE_packedFile.h"
+#include "BKE_packedFile.hh"
 #include "BKE_report.hh"
 #include "BKE_scene.hh"
 
@@ -59,7 +59,7 @@
 #include "RNA_access.hh"
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
-#include "RNA_prototypes.h"
+#include "RNA_prototypes.hh"
 
 #include "ED_image.hh"
 #include "ED_mask.hh"
@@ -1253,8 +1253,7 @@ struct ImageOpenData {
 static void image_open_init(bContext *C, wmOperator *op)
 {
   ImageOpenData *iod;
-  op->customdata = iod = static_cast<ImageOpenData *>(
-      MEM_callocN(sizeof(ImageOpenData), __func__));
+  op->customdata = iod = MEM_new<ImageOpenData>(__func__);
   iod->iuser = static_cast<ImageUser *>(
       CTX_data_pointer_get_type(C, "image_user", &RNA_ImageUser).data);
   UI_context_active_but_prop_get_templateID(C, &iod->pprop.ptr, &iod->pprop.prop);
@@ -1262,8 +1261,9 @@ static void image_open_init(bContext *C, wmOperator *op)
 
 static void image_open_cancel(bContext * /*C*/, wmOperator *op)
 {
-  MEM_freeN(op->customdata);
+  ImageOpenData *iod = static_cast<ImageOpenData *>(op->customdata);
   op->customdata = nullptr;
+  MEM_delete(iod);
 }
 
 static Image *image_open_single(Main *bmain,
@@ -1285,7 +1285,7 @@ static Image *image_open_single(Main *bmain,
 
   if (!ima) {
     if (op->customdata) {
-      MEM_freeN(op->customdata);
+      MEM_delete(static_cast<ImageOpenData *>(op->customdata));
     }
     BKE_reportf(op->reports,
                 RPT_ERROR,
@@ -1442,7 +1442,8 @@ static int image_open_exec(bContext *C, wmOperator *op)
   BKE_image_signal(bmain, ima, iuser, IMA_SIGNAL_RELOAD);
   WM_event_add_notifier(C, NC_IMAGE | NA_EDITED, ima);
 
-  MEM_freeN(op->customdata);
+  op->customdata = nullptr;
+  MEM_delete(iod);
 
   return OPERATOR_FINISHED;
 }
@@ -3242,7 +3243,7 @@ static int image_scale_exec(bContext *C, wmOperator *op)
   ED_image_undo_push_begin_with_image(op->type->name, ima, ibuf, &iuser);
 
   ibuf->userflags |= IB_DISPLAY_BUFFER_INVALID;
-  IMB_scaleImBuf(ibuf, size[0], size[1]);
+  IMB_scale(ibuf, size[0], size[1], IMBScaleFilter::Box, false);
   BKE_image_mark_dirty(ima, ibuf);
   BKE_image_release_ibuf(ima, ibuf, nullptr);
 
@@ -4257,7 +4258,11 @@ static int tile_add_invoke(bContext *C, wmOperator *op, const wmEvent * /*event*
   RNA_int_set(op->ptr, "count", 1);
   RNA_string_set(op->ptr, "label", "");
 
-  return WM_operator_props_dialog_popup(C, op, 300, IFACE_("Add Tile to Image"), IFACE_("Add"));
+  return WM_operator_props_dialog_popup(C,
+                                        op,
+                                        300,
+                                        IFACE_("Add Tile to Image"),
+                                        CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Add"));
 }
 
 static void tile_add_draw(bContext * /*C*/, wmOperator *op)

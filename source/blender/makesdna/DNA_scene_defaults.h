@@ -184,6 +184,7 @@
     .gi_irradiance_smoothing = 0.1f, \
     .gi_filter_quality = 3.0f, \
     .gi_irradiance_pool_size = 16, \
+    .shadow_pool_size = 512, \
  \
     .taa_samples = 16, \
     .taa_render_samples = 64, \
@@ -319,7 +320,9 @@
     .unprojected_radius = 0.29, \
     .alpha = 0.5f, \
     .weight = 0.5f, \
-    .flag = UNIFIED_PAINT_SIZE | UNIFIED_PAINT_ALPHA, \
+    .rgb = {0.0f, 0.0f, 0.0f}, \
+    .secondary_rgb = {1.0f, 1.0f, 1.0f}, \
+    .flag = UNIFIED_PAINT_SIZE | UNIFIED_PAINT_ALPHA | UNIFIED_PAINT_COLOR, \
   }
 
 #define _DNA_DEFAULTS_ParticleEditSettings \
@@ -367,9 +370,15 @@
     .object_flag = SCE_OBJECT_MODE_LOCK, \
     .doublimit = 0.001, \
     .vgroup_weight = 1.0f, \
+ \
     .uvcalc_margin = 0.001f, \
     .uvcalc_flag = UVCALC_TRANSFORM_CORRECT_SLIDE, \
-    .unwrapper = 1, \
+    .unwrapper = UVCALC_UNWRAP_METHOD_CONFORMAL, \
+    .uvcalc_iterations = 10, \
+    /* See struct member doc-string regarding this name. */ \
+    .uvcalc_weight_group = "uv_importance", \
+    .uvcalc_weight_factor = 1.0, \
+ \
     .select_thresh = 0.01f, \
  \
     .selectmode = SCE_SELECT_VERTEX, \

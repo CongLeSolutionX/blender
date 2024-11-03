@@ -20,7 +20,8 @@ set(FFMPEG_CFLAGS "\
 -I${temp_LIBDIR}/vpx/include \
 -I${temp_LIBDIR}/x264/include \
 -I${temp_LIBDIR}/zlib/include \
--I${temp_LIBDIR}/aom/include"
+-I${temp_LIBDIR}/aom/include \
+-I${temp_LIBDIR}/x265/include"
 )
 set(FFMPEG_LDFLAGS "\
 ${LIBDIR_FLAG}${temp_LIBDIR}/lame/lib \
@@ -31,6 +32,7 @@ ${LIBDIR_FLAG}${temp_LIBDIR}/theora/lib \
 ${LIBDIR_FLAG}${temp_LIBDIR}/opus/lib \
 ${LIBDIR_FLAG}${temp_LIBDIR}/vpx/lib \
 ${LIBDIR_FLAG}${temp_LIBDIR}/x264/lib \
+${LIBDIR_FLAG}${temp_LIBDIR}/x265/lib \
 ${LIBDIR_FLAG}${temp_LIBDIR}/zlib/lib \
 ${LIBDIR_FLAG}${temp_LIBDIR}/aom/lib"
 )
@@ -81,7 +83,8 @@ ${temp_LIBDIR}/vpx/lib/pkgconfig:\
 ${temp_LIBDIR}/theora/lib/pkgconfig:\
 ${temp_LIBDIR}/openjpeg/lib/pkgconfig:\
 ${temp_LIBDIR}/opus/lib/pkgconfig:\
-${temp_LIBDIR}/aom/lib/pkgconfig:"
+${temp_LIBDIR}/aom/lib/pkgconfig:\
+${temp_LIBDIR}/x265/lib/pkgconfig:"
   )
 endif()
 
@@ -115,7 +118,7 @@ if(WIN32)
   else()
     set(FFMPEG_EXTRA_FLAGS
       ${FFMPEG_EXTRA_FLAGS}
-      --arch=x64
+      --arch=x86_64
       --target-os=win32
     )
   endif()
@@ -180,6 +183,7 @@ ExternalProject_Add(external_ffmpeg
       --enable-libmp3lame
       --disable-librtmp
       --enable-libx264
+      --enable-libx265
       --enable-libaom
       --disable-libopencore-amrnb
       --disable-libopencore-amrwb
@@ -230,6 +234,7 @@ add_dependencies(
   external_ffmpeg
   external_zlib
   external_x264
+  external_x265
   external_opus
   external_vpx
   external_theora
@@ -255,15 +260,20 @@ if(UNIX)
   )
 endif()
 
-if(BUILD_MODE STREQUAL Release AND WIN32)
-  ExternalProject_Add_Step(external_ffmpeg after_install
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-      ${LIBDIR}/ffmpeg/include
-      ${HARVEST_TARGET}/ffmpeg/include
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-      ${LIBDIR}/ffmpeg/bin
-      ${HARVEST_TARGET}/ffmpeg/lib
+if(WIN32)
+  if(BUILD_MODE STREQUAL Release)
+    ExternalProject_Add_Step(external_ffmpeg after_install
+      COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${LIBDIR}/ffmpeg/include
+        ${HARVEST_TARGET}/ffmpeg/include
+      COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${LIBDIR}/ffmpeg/bin
+        ${HARVEST_TARGET}/ffmpeg/lib
 
-    DEPENDEES install
-  )
+      DEPENDEES install
+    )
+  endif()
+else()
+  harvest(external_ffmpeg ffmpeg/include ffmpeg/include "*.h")
+  harvest(external_ffmpeg ffmpeg/lib ffmpeg/lib "*.a")
 endif()

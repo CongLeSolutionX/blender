@@ -2,8 +2,8 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#pragma BLENDER_REQUIRE(gpu_shader_math_vector_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_horizon_scan_eval_lib.glsl)
+#include "eevee_horizon_scan_eval_lib.glsl"
+#include "gpu_shader_math_vector_lib.glsl"
 
 void main()
 {
@@ -18,7 +18,7 @@ void main()
 
   if (depth == 1.0) {
     /* Do not trace for background */
-    imageStore(out_ao_img, ivec3(texel, out_ao_img_layer_index), vec4(0.0));
+    imageStoreFast(out_ao_img, ivec3(texel, out_ao_img_layer_index), vec4(0.0));
     return;
   }
 
@@ -26,10 +26,8 @@ void main()
   vec3 N = imageLoad(in_normal_img, ivec3(texel, in_normal_img_layer_index)).xyz;
   vec3 vN = drw_normal_world_to_view(N);
 
-  vec3 noise;
-  noise.x = interlieved_gradient_noise(vec2(texel), 3.0, 0.0);
-  noise.yz = utility_tx_fetch(utility_tx, vec2(texel), UTIL_BLUE_NOISE_LAYER).rg;
-  noise = fract(noise + sampling_rng_3D_get(SAMPLING_AO_U));
+  vec4 noise = utility_tx_fetch(utility_tx, vec2(texel), UTIL_BLUE_NOISE_LAYER);
+  noise = fract(noise + sampling_rng_3D_get(SAMPLING_AO_U).xyzx);
 
   HorizonScanResult scan = horizon_scan_eval(vP,
                                              vN,
@@ -39,10 +37,10 @@ void main()
                                              uniform_buf.ao.thickness_near,
                                              uniform_buf.ao.thickness_far,
                                              uniform_buf.ao.angle_bias,
-                                             2,
-                                             10,
+                                             ao_slice_count,
+                                             ao_step_count,
                                              false,
                                              true);
 
-  imageStore(out_ao_img, ivec3(texel, out_ao_img_layer_index), vec4(saturate(scan.result)));
+  imageStoreFast(out_ao_img, ivec3(texel, out_ao_img_layer_index), vec4(saturate(scan.result)));
 }

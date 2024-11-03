@@ -178,9 +178,11 @@ void BVHEmbree::build(Progress &progress,
   rtcCommitScene(scene);
 }
 
-string BVHEmbree::get_last_error_message()
+const char *BVHEmbree::get_error_string(RTCError error_code)
 {
-  const RTCError error_code = rtcGetDeviceError(rtc_device);
+#  if RTC_VERSION >= 40303
+  return rtcGetErrorString(error_code);
+#  else
   switch (error_code) {
     case RTC_ERROR_NONE:
       return "no error";
@@ -200,10 +202,13 @@ string BVHEmbree::get_last_error_message()
       /* We should never end here unless enum for RTC errors would change. */
       return "unknown error";
   }
+#  endif
 }
 
 #  if defined(WITH_EMBREE_GPU) && RTC_VERSION >= 40302
-bool BVHEmbree::offload_scenes_to_gpu(const vector<RTCScene> &scenes)
+/* offload_scenes_to_gpu() uses rtcGetDeviceError() which also resets Embree error status,
+ * we propagate its value so it doesn't get lost. */
+RTCError BVHEmbree::offload_scenes_to_gpu(const vector<RTCScene> &scenes)
 {
   /* Having BVH on GPU is more performance-critical than texture data.
    * In order to ensure good performance even when running out of GPU
@@ -216,10 +221,11 @@ bool BVHEmbree::offload_scenes_to_gpu(const vector<RTCScene> &scenes)
     rtcCommitScene(embree_scene);
     /* In case of any errors from Embree, we should stop
      * the execution and propagate the error. */
-    if (rtcGetDeviceError(rtc_device) != RTC_ERROR_NONE)
-      return false;
+    RTCError error_code = rtcGetDeviceError(rtc_device);
+    if (error_code != RTC_ERROR_NONE)
+      return error_code;
   }
-  return true;
+  return RTC_ERROR_NONE;
 }
 #  endif
 
@@ -227,19 +233,19 @@ void BVHEmbree::add_object(Object *ob, int i)
 {
   Geometry *geom = ob->get_geometry();
 
-  if (geom->geometry_type == Geometry::MESH || geom->geometry_type == Geometry::VOLUME) {
+  if (geom->is_mesh() || geom->is_volume()) {
     Mesh *mesh = static_cast<Mesh *>(geom);
     if (mesh->num_triangles() > 0) {
       add_triangles(ob, mesh, i);
     }
   }
-  else if (geom->geometry_type == Geometry::HAIR) {
+  else if (geom->is_hair()) {
     Hair *hair = static_cast<Hair *>(geom);
     if (hair->num_curves() > 0) {
       add_curves(ob, hair, i);
     }
   }
-  else if (geom->geometry_type == Geometry::POINTCLOUD) {
+  else if (geom->is_pointcloud()) {
     PointCloud *pointcloud = static_cast<PointCloud *>(geom);
     if (pointcloud->num_points() > 0) {
       add_points(ob, pointcloud, i);
@@ -690,7 +696,7 @@ void BVHEmbree::refit(Progress &progress)
     if (!params.top_level || (ob->is_traceable() && !ob->get_geometry()->is_instanced())) {
       Geometry *geom = ob->get_geometry();
 
-      if (geom->geometry_type == Geometry::MESH || geom->geometry_type == Geometry::VOLUME) {
+      if (geom->is_mesh() || geom->is_volume()) {
         Mesh *mesh = static_cast<Mesh *>(geom);
         if (mesh->num_triangles() > 0) {
           RTCGeometry geom = rtcGetGeometry(scene, geom_id);
@@ -699,7 +705,7 @@ void BVHEmbree::refit(Progress &progress)
           rtcCommitGeometry(geom);
         }
       }
-      else if (geom->geometry_type == Geometry::HAIR) {
+      else if (geom->is_hair()) {
         Hair *hair = static_cast<Hair *>(geom);
         if (hair->num_curves() > 0) {
           RTCGeometry geom = rtcGetGeometry(scene, geom_id + 1);
@@ -708,7 +714,7 @@ void BVHEmbree::refit(Progress &progress)
           rtcCommitGeometry(geom);
         }
       }
-      else if (geom->geometry_type == Geometry::POINTCLOUD) {
+      else if (geom->is_pointcloud()) {
         PointCloud *pointcloud = static_cast<PointCloud *>(geom);
         if (pointcloud->num_points() > 0) {
           RTCGeometry geom = rtcGetGeometry(scene, geom_id);

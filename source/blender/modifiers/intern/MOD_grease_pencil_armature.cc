@@ -39,7 +39,7 @@
 
 #include "RNA_access.hh"
 #include "RNA_enum_types.hh"
-#include "RNA_prototypes.h"
+#include "RNA_prototypes.hh"
 
 #include "MOD_grease_pencil_util.hh"
 #include "MOD_modifiertypes.hh"
@@ -134,6 +134,7 @@ static void modify_curves(ModifierData &md, const ModifierEvalContext &ctx, Draw
 
     BKE_armature_deform_coords_with_curves(*amd.object,
                                            *ctx.object,
+                                           &curves.vertex_group_names,
                                            positions.slice(points),
                                            std::nullopt,
                                            std::nullopt,

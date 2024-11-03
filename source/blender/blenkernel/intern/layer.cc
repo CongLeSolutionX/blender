@@ -9,6 +9,7 @@
 /* Allow using deprecated functionality for .blend file I/O. */
 #define DNA_DEPRECATED_ALLOW
 
+#include <atomic>
 #include <cstring>
 
 #include "CLG_log.h"
@@ -777,16 +778,24 @@ int BKE_layer_collection_findindex(ViewLayer *view_layer, const LayerCollection 
  *       See also #73411.
  * \{ */
 
-static bool no_resync = false;
+/* NOTE: This can also be modified from several threads (e.g. during depsgraph evaluation), leading
+ * to transitional big numbers. */
+static std::atomic<int32_t> no_resync = 0;
+/* Maximum allowed levels of re-entrant calls to #BKE_layer_collection_resync_forbid. */
+[[maybe_unused]] static constexpr int no_resync_recurse_max = 16 * 256;
 
 void BKE_layer_collection_resync_forbid()
 {
-  no_resync = true;
+  BLI_assert(no_resync >= 0);
+  BLI_assert(no_resync < no_resync_recurse_max - 1);
+  no_resync++;
 }
 
 void BKE_layer_collection_resync_allow()
 {
-  no_resync = false;
+  BLI_assert(no_resync > 0);
+  BLI_assert(no_resync < no_resync_recurse_max);
+  no_resync--;
 }
 
 struct LayerCollectionResync {
@@ -1220,7 +1229,9 @@ static void layer_collection_sync(ViewLayer *view_layer,
       child_layer->runtime_flag |= LAYER_COLLECTION_VISIBLE_VIEW_LAYER;
     }
 
-    if (!BLI_listbase_is_empty(&child_collection->exporters)) {
+    if (!BLI_listbase_is_empty(&child_collection->exporters) &&
+        !(ID_IS_LINKED(&child_collection->id) || ID_IS_OVERRIDE_LIBRARY(&child_collection->id)))
+    {
       view_layer->flag |= VIEW_LAYER_HAS_EXPORT_COLLECTIONS;
     }
   }
@@ -1307,7 +1318,7 @@ void BKE_layer_collection_doversion_2_80(const Scene *scene, ViewLayer *view_lay
 
 void BKE_layer_collection_sync(const Scene *scene, ViewLayer *view_layer)
 {
-  if (no_resync) {
+  if (no_resync > 0) {
     return;
   }
 
@@ -1418,7 +1429,7 @@ void BKE_layer_collection_sync(const Scene *scene, ViewLayer *view_layer)
 
 void BKE_scene_collection_sync(const Scene *scene)
 {
-  if (no_resync) {
+  if (no_resync > 0) {
     return;
   }
 
@@ -1429,7 +1440,7 @@ void BKE_scene_collection_sync(const Scene *scene)
 
 void BKE_main_collection_sync(const Main *bmain)
 {
-  if (no_resync) {
+  if (no_resync > 0) {
     return;
   }
 
@@ -1449,7 +1460,7 @@ void BKE_main_collection_sync(const Main *bmain)
 
 void BKE_main_collection_sync_remap(const Main *bmain)
 {
-  if (no_resync) {
+  if (no_resync > 0) {
     return;
   }
 
@@ -1778,7 +1789,7 @@ static void layer_collection_local_sync(const Scene *scene,
 
 void BKE_layer_collection_local_sync(const Scene *scene, ViewLayer *view_layer, const View3D *v3d)
 {
-  if (no_resync) {
+  if (no_resync > 0) {
     return;
   }
 
@@ -1797,7 +1808,7 @@ void BKE_layer_collection_local_sync(const Scene *scene, ViewLayer *view_layer, 
 
 void BKE_layer_collection_local_sync_all(const Main *bmain)
 {
-  if (no_resync) {
+  if (no_resync > 0) {
     return;
   }
 
