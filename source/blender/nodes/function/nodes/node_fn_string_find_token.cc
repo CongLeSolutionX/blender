@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "BLI_string_utf8.h"
-
 #include "node_function_util.hh"
 #include <charconv>
 #include <iomanip>
@@ -81,7 +80,7 @@ static int string_find_token(const std::string_view a,
   std::u32string a_u32 = u32_from_utf8(a);
   std::u32string b_u32 = u32_from_utf8(b);
 
-  size_t pos = *start;
+  int pos = *start;
   int count = 0;
   while ((pos = a_u32.find(b_u32, pos)) != std::u32string_view::npos) {
     count++;

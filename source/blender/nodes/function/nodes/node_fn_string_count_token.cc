@@ -2,8 +2,8 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#include "BLI_string_ref.hh"
 #include "BLI_string_utf8.h"
-
 #include <iomanip>
 
 #include "node_function_util.hh"
@@ -22,7 +22,7 @@ static int string_count_token(const StringRef a, const StringRef b)
     return 0;
   }
   int count = 0;
-  size_t pos = 0;
+  int pos = 0;
   while ((pos = a.find(b, pos)) != std::string::npos) {
     count++;
     pos += b.size();
