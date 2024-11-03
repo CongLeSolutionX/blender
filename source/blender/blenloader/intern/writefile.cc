@@ -722,8 +722,6 @@ static bool write_at_address_validate(WriteData *wd, int filecode, const void *a
 static void writestruct_at_address_nr(
     WriteData *wd, int filecode, const int struct_nr, int nr, const void *adr, const void *data)
 {
-  SmallBHead8 bh;
-
   BLI_assert(struct_nr > 0 && struct_nr < SDNA_TYPE_MAX);
 
   if (adr == nullptr || data == nullptr || nr == 0) {
@@ -735,6 +733,7 @@ static void writestruct_at_address_nr(
   }
 
   /* Initialize #BHead. */
+  SmallBHead8 bh;
   bh.code = filecode;
   bh.old = uint64_t(adr);
   bh.nr = nr;
@@ -761,8 +760,6 @@ static void writestruct_nr(
  */
 static void writedata(WriteData *wd, int filecode, size_t len, const void *adr)
 {
-  SmallBHead8 bh;
-
   if (adr == nullptr || len == 0) {
     return;
   }
@@ -780,6 +777,7 @@ static void writedata(WriteData *wd, int filecode, size_t len, const void *adr)
   }
 
   /* Initialize #BHead. */
+  SmallBHead8 bh;
   bh.code = filecode;
   bh.old = uint64_t(adr);
   bh.nr = 1;
