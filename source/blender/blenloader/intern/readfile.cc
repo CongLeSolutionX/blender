@@ -638,7 +638,7 @@ static void switch_endian_bh4(BHead4 *bhead)
   }
 }
 
-static void switch_endian_bh8(BHead8 *bhead)
+static void switch_endian_bh8(SmallBHead8 *bhead)
 {
   /* the ID_.. codes */
   if ((bhead->code & 0xFFFF) == 0) {
@@ -652,7 +652,7 @@ static void switch_endian_bh8(BHead8 *bhead)
   }
 }
 
-static void bh4_from_bh8(BHead *bhead, BHead8 *bhead8, bool do_endian_swap)
+static void bh4_from_bh8(BHead *bhead, SmallBHead8 *bhead8, bool do_endian_swap)
 {
   BHead4 *bhead4 = (BHead4 *)bhead;
   int64_t old;
@@ -680,7 +680,7 @@ static void bh4_from_bh8(BHead *bhead, BHead8 *bhead8, bool do_endian_swap)
 
 static void bh8_from_bh4(BHead *bhead, BHead4 *bhead4)
 {
-  BHead8 *bhead8 = (BHead8 *)bhead;
+  SmallBHead8 *bhead8 = (SmallBHead8 *)bhead;
 
   bhead8->code = bhead4->code;
   bhead8->len = bhead4->len;
@@ -701,13 +701,13 @@ static BHeadN *get_bhead(FileData *fd)
     if (!fd->is_eof) {
       /* initializing to zero isn't strictly needed but shuts valgrind up
        * since uninitialized memory gets compared */
-      BHead8 bhead8 = {0};
+      SmallBHead8 bhead8 = {0};
       BHead4 bhead4 = {0};
       BHead bhead = {0};
 
       /* First read the bhead structure.
        * Depending on the platform the file was written on this can
-       * be a big or little endian BHead4 or BHead8 structure.
+       * be a big or little endian BHead4 or SmallBHead8 structure.
        *
        * As usual 'ENDB' (the last *partial* bhead of the file)
        * needs some special handling. We don't want to EOF just yet.

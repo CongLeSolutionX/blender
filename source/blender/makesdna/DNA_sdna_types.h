@@ -168,8 +168,8 @@ typedef struct BHead4 {
 } BHead4;
 #
 #
-typedef struct BHead8 {
+typedef struct SmallBHead8 {
   int code, len;
   uint64_t old;
   int SDNAnr, nr;
-} BHead8;
+} SmallBHead8;
