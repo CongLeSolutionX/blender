@@ -5,6 +5,8 @@
 #include <limits>
 #include <type_traits>
 
+#include "BLI_timeit.hh"
+
 #include "BLI_array.hh"
 #include "BLI_array_utils.hh"
 #include "BLI_index_mask.hh"
@@ -88,11 +90,10 @@ static void node_declare(NodeDeclarationBuilder &b)
 
   b.add_input<decl::Int>("Power").default_value(2);
 
-  b.add_input<decl::Float>("Precision").subtype(PROP_FACTOR).min(1.0f).default_value(2.0f);
+  b.add_input<decl::Float>("Precision").min(1.0f).default_value(2.0f);
 
   b.add_output<decl::Vector>("Weighted Sum").field_source_reference_all();
   b.add_output<decl::Vector>("Weighted Difference Sum").field_source_reference_all();
-  b.add_output<decl::Vector>("Brute Force Weighted Difference Sum").field_source_reference_all();
 }
 
 static Array<int> invert_permutation(const Span<int> permutation)
@@ -586,15 +587,15 @@ static void for_each_to_bottom_skip(const OffsetIndices<int> buckets_offsets,
   }
 }
 
-static void average(const OffsetIndices<int> buckets_offsets,
-                    const int total_depth,
-                    const Span<float3> src_joints_centre,
-                    const Span<float> src_joints_min_distance,
-                    const Span<float3> src_joints_data,
-                    const Span<float3> src_bucket_position,
-                    const Span<float3> src_bucket_data,
-                    const int power_value,
-                    MutableSpan<float3> dst_buckets_data)
+static void sample_average(const OffsetIndices<int> buckets_offsets,
+                           const int total_depth,
+                           const Span<float3> src_joints_centre,
+                           const Span<float> src_joints_min_distance,
+                           const Span<float3> src_joints_data,
+                           const Span<float3> src_bucket_position,
+                           const Span<float3> src_bucket_data,
+                           const int power_value,
+                           MutableSpan<float3> dst_buckets_data)
 {
   BLI_assert(src_joints_centre.size() == src_joints_min_distance.size());
   BLI_assert(src_bucket_data.size() == dst_buckets_data.size());
@@ -667,7 +668,17 @@ static float minimal_dinstance_to(const float radius,
    * #distance_power.
    * */
   const float precision_root = math::pow<float>(precision, math::rcp<float>(distance_power));
-  return -(1.0f + precision_root) / (1.0f - precision_root) * radius;
+  return -((1.0f + precision_root) / (1.0f - precision_root) * radius);
+}
+
+static void cloud_radii_to_min_distance(const Span<float> src_radii,
+                                        const int distance_power,
+                                        const float precision,
+                                        MutableSpan<float> dst_radii)
+{
+  parallel_transform<float, float>(src_radii, 1024 * 8, dst_radii, [&](const float radius) {
+    return minimal_dinstance_to(radius, distance_power, precision);
+  });
 }
 
 class DifferenceSumFieldInput final : public bke::GeometryFieldInput {
@@ -708,126 +719,48 @@ class DifferenceSumFieldInput final : public bke::GeometryFieldInput {
     const int total_buckets = akdbt::total_buckets_for(total_depth);
     const int total_joints = akdbt::total_joints_for_depth(total_depth);
 
-    // std::cout << total_depth << ";\n";
-    // std::cout << total_joints << ";\n";
-
     Array<int> start_indices(total_buckets + 1);
-    const OffsetIndices<int> base_offsets = akdbt::fill_buckets_linear(positions.size(),
-                                                                       start_indices);
+    const OffsetIndices<int> base_offsets = akdbt::fill_buckets_linear(domain_size, start_indices);
 
-    // std::cout << start_indices << ";\n";
-
-    Array<int> indices(positions.size());
+    Array<int> indices(domain_size);
     akdbt::from_positions(positions, base_offsets, total_depth, indices);
 
-    Array<float3> bucket_positions(positions.size());
+    Array<float3> bucket_positions(domain_size);
+    Array<float3> bucket_values(domain_size);
+
     array_utils::gather(
         Span<float3>(positions), indices.as_span(), bucket_positions.as_mutable_span());
-
-    Array<float3> bucket_values(positions.size());
     array_utils::gather(
         Span<float3>(src_values), indices.as_span(), bucket_values.as_mutable_span());
 
     Array<float3> joints_positions(total_joints);
+    Array<float3> joints_values(total_joints);
+
     akdbt::mean_sums<float3>(base_offsets, total_depth, bucket_positions, joints_positions);
     akdbt::normalize_for_size<float3>(base_offsets, total_depth, joints_positions);
 
-    Array<float3> joints_values(total_joints);
     akdbt::mean_sums<float3>(base_offsets, total_depth, bucket_values, joints_values);
     akdbt::normalize_for_size<float3>(base_offsets, total_depth, joints_values);
 
     Array<float> joints_radii(total_joints);
+
     akdbt::radius_exact(
         base_offsets, total_depth, bucket_positions, joints_positions, joints_radii);
+    cloud_radii_to_min_distance(joints_radii, distance_power_, precision_, joints_radii);
 
-    parallel_transform<float, float>(
-        joints_radii, 1024 * 8, joints_radii, [&](const float radius) {
-          return minimal_dinstance_to(radius, distance_power_, precision_);
-        });
+    Array<float3> sampled_bucket_values(domain_size, float3(0));
+    akdbt::sample_average(base_offsets,
+                          total_depth,
+                          joints_positions,
+                          joints_radii,
+                          joints_values,
+                          bucket_positions,
+                          bucket_values,
+                          distance_power_,
+                          sampled_bucket_values);
 
-    // std::cout << joints_positions << ";\n";
-    // std::cout << joints_radii << ";\n";
-
-    Array<float3> dst_values(positions.size(), float3(0));
-
-    akdbt::average(base_offsets,
-                   total_depth,
-                   joints_positions,
-                   joints_radii,
-                   joints_values,
-                   bucket_positions,
-                   bucket_values,
-                   distance_power_,
-                   dst_values);
-
-    threading::parallel_for(dst_values.index_range(), 4096, [&](const IndexRange range) {
-      for (const int i : range) {
-        bucket_values[indices[i]] = dst_values[i];
-      }
-    });
-
-    // return VArray<int>::ForContainer(std::move(indices));
-    return VArray<float3>::ForContainer(std::move(bucket_values));
-  }
-
- public:
-  void for_each_field_input_recursive(FunctionRef<void(const FieldInput &)> fn) const
-  {
-    positions_field_.node().for_each_field_input_recursive(fn);
-    value_field_.node().for_each_field_input_recursive(fn);
-  }
-};
-
-class BruteForceDifferenceSumFieldInput final : public bke::GeometryFieldInput {
- private:
-  const Field<float3> positions_field_;
-  const Field<float3> value_field_;
-  const int distance_power_;
-
- public:
-  BruteForceDifferenceSumFieldInput(Field<float3> positions_field,
-                                    Field<float3> value_field,
-                                    const int distance_power)
-      : bke::GeometryFieldInput(CPPType::get<float3>(), "BF Weighed Difference Sum"),
-        positions_field_(std::move(positions_field)),
-        value_field_(std::move(value_field)),
-        distance_power_(distance_power)
-  {
-  }
-
-  GVArray get_varray_for_context(const bke::GeometryFieldContext &context,
-                                 const IndexMask & /*mask*/) const final
-  {
-    if (!context.attributes()) {
-      return {};
-    }
-    const int domain_size = context.attributes()->domain_size(context.domain());
-    fn::FieldEvaluator evaluator{context, domain_size};
-    evaluator.add(positions_field_);
-    evaluator.add(value_field_);
-    evaluator.evaluate();
-    const VArraySpan<float3> positions = evaluator.get_evaluated<float3>(0);
-    const VArraySpan<float3> src_values = evaluator.get_evaluated<float3>(1);
-
-    Array<float3> dst_values(positions.size(), float3(0));
-    threading::parallel_for(positions.index_range(), 4096, [&](const IndexRange range) {
-      for (const int index : range) {
-        const float3 point = positions[index];
-        for (const int i : positions.index_range().take_front(index)) {
-          const float3 vector = positions[i] - point;
-          const float distance = math::length(vector);
-          dst_values[index] += vector *
-                               math::safe_rcp(math::pow<float>(distance, distance_power_));
-        }
-        for (const int i : positions.index_range().drop_front(index + 1)) {
-          const float3 vector = positions[i] - point;
-          const float distance = math::length(vector);
-          dst_values[index] += vector *
-                               math::safe_rcp(math::pow<float>(distance, distance_power_));
-        }
-      }
-    });
-
+    Array<float3> dst_values(domain_size);
+    array_utils::scatter(dst_values.as_span(), indices, sampled_bucket_values.as_mutable_span());
     return VArray<float3>::ForContainer(std::move(dst_values));
   }
 
@@ -856,12 +789,6 @@ static void node_geo_exec(GeoNodeExecParams params)
     params.set_output("Weighted Difference Sum",
                       Field<float3>(std::make_shared<DifferenceSumFieldInput>(
                           position_field, value_field, power_value, precision_value)));
-  }
-
-  if (params.output_is_required("Brute Force Weighted Difference Sum")) {
-    params.set_output("Brute Force Weighted Difference Sum",
-                      Field<float3>(std::make_shared<BruteForceDifferenceSumFieldInput>(
-                          position_field, value_field, power_value)));
   }
 
   if (params.output_is_required("Weighted Sum")) {
