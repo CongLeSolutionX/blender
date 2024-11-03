@@ -1833,11 +1833,6 @@ static struct {
 static gpu::Batch *nodesocket_batch_init(void)
 {
   if (g_batch_nodesocket.batch == NULL) {
-    GPUVertFormat format = {0};
-    gpu::VertBuf *vbo = GPU_vertbuf_create_with_format_ex(&format, GPU_USAGE_STATIC);
-
-    GPU_vertbuf_data_alloc(vbo, 6);
-
     GPUIndexBufBuilder ibuf;
     GPU_indexbuf_init(&ibuf, GPU_PRIM_TRIS, 2, 4);
     /* Quad to draw the node socket in. */
@@ -1845,7 +1840,7 @@ static gpu::Batch *nodesocket_batch_init(void)
     GPU_indexbuf_add_tri_verts(&ibuf, 2, 1, 3);
 
     g_batch_nodesocket.batch = GPU_batch_create_ex(
-        GPU_PRIM_TRIS, vbo, GPU_indexbuf_build(&ibuf), GPU_BATCH_OWNS_INDEX | GPU_BATCH_OWNS_VBO);
+        GPU_PRIM_TRIS, nullptr, GPU_indexbuf_build(&ibuf), GPU_BATCH_OWNS_INDEX);
     gpu_batch_presets_register(g_batch_nodesocket.batch);
   }
   return g_batch_nodesocket.batch;
