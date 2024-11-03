@@ -103,10 +103,10 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Vector>("Value").supports_field().hide_value();
 
   b.add_input<decl::Int>("Power").default_value(2).hide_value();
-  b.add_input<decl::Float>("Precision").min(1.0f).default_value(2.0f);
+  b.add_input<decl::Float>("Error").min(1.0f).default_value(2.0f);
 
-  b.add_output<decl::Vector>("Weighted Sum").field_source_reference_all();
-  b.add_output<decl::Vector>("Weighted Difference Sum").field_source_reference_all();
+  b.add_output<decl::Vector>("Mean").field_source_reference_all();
+  b.add_output<decl::Vector>("Difference Mean").field_source_reference_all();
 }
 
 template<typename InT, typename OutT, typename FuncT>
@@ -846,8 +846,7 @@ class DifferenceSumFieldInput final : public bke::GeometryFieldInput {
     Array<float> joints_radii(total_joints);
     {
       SCOPED_TIMER_AVERAGED("packing_spheres");
-      packing_spheres(
-          base_offsets, total_depth, bucket_positions, joints_positions, joints_radii);
+      packing_spheres(base_offsets, total_depth, bucket_positions, joints_positions, joints_radii);
     }
 
     {
@@ -898,15 +897,15 @@ static void node_geo_exec(GeoNodeExecParams params)
   Field<float3> value_field = params.extract_input<Field<float3>>("Value");
 
   const int power_value = params.extract_input<int>("Power");
-  const float precision_value = params.extract_input<float>("Precision");
+  const float precision_value = params.extract_input<float>("Error");
 
-  if (params.output_is_required("Weighted Difference Sum")) {
-    params.set_output("Weighted Difference Sum",
+  if (params.output_is_required("Difference Mean")) {
+    params.set_output("Difference Mean",
                       Field<float3>(std::make_shared<DifferenceSumFieldInput>(
                           position_field, value_field, power_value, precision_value)));
   }
 
-  if (params.output_is_required("Weighted Sum")) {
+  if (params.output_is_required("Mean")) {
     params.set_default_remaining_outputs();
   }
 }
