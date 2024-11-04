@@ -216,6 +216,8 @@ typedef enum NodeVectorMathType {
   NODE_VECTOR_MATH_REFRACT,
   NODE_VECTOR_MATH_FACEFORWARD,
   NODE_VECTOR_MATH_MULTIPLY_ADD,
+  NODE_VECTOR_MATH_POWER,
+  NODE_VECTOR_MATH_SIGN,
 } NodeVectorMathType;
 
 typedef enum NodeClampType {

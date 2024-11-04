@@ -151,6 +151,11 @@ vec3 compatible_fmod(vec3 a, vec3 b)
   return vec3(compatible_fmod(a.x, b.x), compatible_fmod(a.y, b.y), compatible_fmod(a.z, b.z));
 }
 
+vec3 compatible_pow(vec3 a, vec3 b)
+{
+  return vec3(compatible_pow(a.x, b.x), compatible_pow(a.y, b.y), compatible_pow(a.z, b.z));
+}
+
 void invert_z(vec3 v, out vec3 outv)
 {
   v.z = -v.z;

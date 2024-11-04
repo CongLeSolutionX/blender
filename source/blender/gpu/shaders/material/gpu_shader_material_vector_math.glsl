@@ -123,6 +123,18 @@ void vector_math_absolute(
   outVector = abs(a);
 }
 
+void vector_math_power(
+    vec3 a, vec3 b, vec3 c, float scale, out vec3 outVector, out float outValue)
+{
+  outVector = compatible_pow(a, b);
+}
+
+void vector_math_sign(
+    vec3 a, vec3 b, vec3 c, float scale, out vec3 outVector, out float outValue)
+{
+  outVector = sign(a);
+}
+
 void vector_math_minimum(
     vec3 a, vec3 b, vec3 c, float scale, out vec3 outVector, out float outValue)
 {
