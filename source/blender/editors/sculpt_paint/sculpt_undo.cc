@@ -332,141 +332,97 @@ static bool restore_active_shape_key(bContext &C,
   return true;
 }
 
-static void update_shapekeys(const Object &ob, KeyBlock *kb, const Span<float3> new_positions)
+template<typename T>
+static void swap_indexed_data(MutableSpan<T> compressed,
+                              const Span<int> indices,
+                              MutableSpan<T> indexed)
 {
-  const Mesh &mesh = *static_cast<Mesh *>(ob.data);
-  const int kb_act_idx = ob.shapenr - 1;
-
-  /* For relative keys editing of base should update other keys. */
-  if (std::optional<Array<bool>> dependent = BKE_keyblock_get_dependent_keys(mesh.key, kb_act_idx))
-  {
-    float(*offsets)[3] = BKE_keyblock_convert_to_vertcos(&ob, kb);
-
-    /* Calculate key coord offsets (from previous location). */
-    for (int i = 0; i < mesh.verts_num; i++) {
-      sub_v3_v3v3(offsets[i], new_positions[i], offsets[i]);
-    }
-
-    int currkey_i;
-    /* Apply offsets on other keys. */
-    LISTBASE_FOREACH_INDEX (KeyBlock *, currkey, &mesh.key->block, currkey_i) {
-      if ((currkey != kb) && (*dependent)[currkey_i]) {
-        BKE_keyblock_update_from_offset(&ob, currkey, offsets);
-      }
-    }
-
-    MEM_freeN(offsets);
+  for (const int i : indices.index_range()) {
+    std::swap(compressed[i], indexed[indices[i]]);
   }
-
-  /* Apply new coords on active key block, no need to re-allocate kb->data here! */
-  BKE_keyblock_update_from_vertcos(
-      &ob, kb, reinterpret_cast<const float(*)[3]>(new_positions.data()));
 }
 
-static void restore_position_mesh(const Depsgraph &depsgraph,
-                                  Object &object,
+class OrigPositionDeformData {
+
+  MutableSpan<float3> orig_;
+
+  Key *keys_;
+  KeyBlock *active_key_;
+  bool basis_active_;
+  std::optional<Array<bool>> dependent_keys_;
+
+ public:
+  OrigPositionDeformData(Object &object_orig)
+  {
+    Mesh &mesh = *static_cast<Mesh *>(object_orig.data);
+
+    orig_ = mesh.vert_positions_for_write();
+
+    if (Key *keys = mesh.key) {
+      keys_ = keys;
+      const int active_index = object_orig.shapenr - 1;
+      active_key_ = BKE_keyblock_find_by_index(keys, active_index);
+      basis_active_ = active_key_ == keys->refkey;
+      dependent_keys_ = BKE_keyblock_get_dependent_keys(keys_, active_index);
+    }
+    else {
+      keys_ = nullptr;
+      active_key_ = nullptr;
+      basis_active_ = false;
+    }
+  }
+
+  void swap_positions(MutableSpan<float3> positions, const Span<int> verts)
+  {
+    if (KeyBlock *key = active_key_) {
+      const MutableSpan active_key_data(static_cast<float3 *>(key->data), key->totelem);
+
+      if (dependent_keys_) {
+        Array<float3, 1024> translations(verts.size());
+        translations_from_new_positions(positions, verts, orig_, translations);
+
+        int i;
+        LISTBASE_FOREACH_INDEX (KeyBlock *, other_key, &keys_->block, i) {
+          if ((other_key != key) && (*dependent_keys_)[i]) {
+            MutableSpan data(static_cast<float3 *>(other_key->data), other_key->totelem);
+            apply_translations(translations, verts, data);
+          }
+        }
+      }
+
+      if (basis_active_) {
+        /* The active shape key positions and the mesh positions are always kept in sync. */
+        scatter_data_mesh(positions.as_span(), verts, orig_);
+      }
+      swap_indexed_data(positions, verts, active_key_data);
+    }
+    else {
+      swap_indexed_data(positions, verts, orig_);
+    }
+  }
+};
+
+static void restore_position_mesh(Object &object,
                                   const Span<std::unique_ptr<Node>> unodes,
                                   const MutableSpan<bool> modified_verts)
 {
   Mesh &mesh = *static_cast<Mesh *>(object.data);
-  const SculptSession &ss = *object.sculpt;
 
-  /* Ideally, we would use the #PositionDeformData::deform method to perform the reverse
-   * deformation based on the evaluated positions, however this causes odd behavior.
-   * For now, this is a modified version of older code that depends on an extra `orig_position`
-   * array stored inside the #Node to perform swaps correctly.
-   *
-   * See #128859 for more detail.
-   */
-  if (ss.deform_modifiers_active) {
-    MutableSpan eval_mut = bke::pbvh::vert_positions_eval_for_write(depsgraph, object);
-    MutableSpan orig_positions = mesh.vert_positions_for_write();
-    if (ss.shapekey_active) {
-      threading::parallel_for(unodes.index_range(), 1, [&](const IndexRange range) {
-        for (const int node_i : range) {
-          Node &unode = *unodes[node_i];
-          const Span<int> verts = unode.vert_indices.as_span().take_front(unode.unique_verts_num);
-          for (const int i : verts.index_range()) {
-            std::swap(unode.position[i], eval_mut[verts[i]]);
-          }
-
-          modified_verts.fill_indices(verts, true);
-        }
-      });
-
-      float(*vertCos)[3] = BKE_keyblock_convert_to_vertcos(&object, ss.shapekey_active);
-      MutableSpan key_positions(reinterpret_cast<float3 *>(vertCos), ss.shapekey_active->totelem);
-
-      threading::parallel_for(unodes.index_range(), 1, [&](const IndexRange range) {
-        for (const int node_i : range) {
-          Node &unode = *unodes[node_i];
-          const Span<int> verts = unode.vert_indices.as_span().take_front(unode.unique_verts_num);
-          for (const int i : verts.index_range()) {
-            std::swap(unode.orig_position[i], key_positions[verts[i]]);
-          }
-        }
-      });
-
-      update_shapekeys(object, ss.shapekey_active, key_positions);
-
-      if (ss.shapekey_active == mesh.key->refkey) {
-        mesh.vert_positions_for_write().copy_from(key_positions);
+  OrigPositionDeformData position_data(object);
+  MutableSpan<float3> positions = mesh.vert_positions_for_write();
+  threading::parallel_for(unodes.index_range(), 1, [&](const IndexRange range) {
+    for (const int node_i : range) {
+      Node &unode = *unodes[node_i];
+      const Span<int> verts = unode.vert_indices.as_span().take_front(unode.unique_verts_num);
+      if (unode.orig_position.is_empty()) {
+        swap_indexed_data(unode.position.as_mutable_span(), verts, positions);
       }
-
-      MEM_freeN(vertCos);
+      else {
+        position_data.swap_positions(unode.orig_position, verts);
+      }
+      modified_verts.fill_indices(verts, true);
     }
-    else {
-      threading::parallel_for(unodes.index_range(), 1, [&](const IndexRange range) {
-        for (const int node_i : range) {
-          Node &unode = *unodes[node_i];
-          const Span<int> verts = unode.vert_indices.as_span().take_front(unode.unique_verts_num);
-          for (const int i : verts.index_range()) {
-            std::swap(unode.position[i], eval_mut[verts[i]]);
-          }
-
-          modified_verts.fill_indices(verts, true);
-        }
-      });
-
-      if (orig_positions.data() != eval_mut.data()) {
-        threading::parallel_for(unodes.index_range(), 1, [&](const IndexRange range) {
-          for (const int node_i : range) {
-            Node &unode = *unodes[node_i];
-            const Span<int> verts = unode.vert_indices.as_span().take_front(
-                unode.unique_verts_num);
-            for (const int i : verts.index_range()) {
-              std::swap(unode.orig_position[i], orig_positions[verts[i]]);
-            }
-          }
-        });
-      }
-    }
-  }
-  else {
-    PositionDeformData position_data(depsgraph, object);
-    threading::EnumerableThreadSpecific<Vector<float3>> all_tls;
-    threading::parallel_for(unodes.index_range(), 1, [&](const IndexRange range) {
-      Vector<float3> &translations = all_tls.local();
-      for (const int i : range) {
-        Node &unode = *unodes[i];
-        const Span<int> verts = unode.vert_indices.as_span().take_front(unode.unique_verts_num);
-        translations.resize(verts.size());
-        translations_from_new_positions(
-            unode.position.as_span().take_front(unode.unique_verts_num),
-            verts,
-            position_data.eval,
-            translations);
-
-        gather_data_mesh(position_data.eval,
-                         verts,
-                         unode.position.as_mutable_span().take_front(unode.unique_verts_num));
-
-        position_data.deform(translations, verts);
-
-        modified_verts.fill_indices(verts, true);
-      }
-    });
-  }
+  });
 }
 
 static void restore_position_grids(const MutableSpan<float3> positions,
@@ -945,7 +901,7 @@ static void restore_list(bContext *C, Depsgraph *depsgraph, StepData &step_data)
         }
         const Mesh &mesh = *static_cast<const Mesh *>(object.data);
         Array<bool> modified_verts(mesh.verts_num, false);
-        restore_position_mesh(*depsgraph, object, step_data.nodes, modified_verts);
+        restore_position_mesh(object, step_data.nodes, modified_verts);
 
         const IndexMask changed_nodes = IndexMask::from_predicate(
             node_mask, GrainSize(1), memory, [&](const int i) {

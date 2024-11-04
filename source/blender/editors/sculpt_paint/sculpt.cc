@@ -7150,21 +7150,9 @@ static void copy_indices(const Span<float3> src, const Span<int> indices, Mutabl
   }
 }
 
-void PositionDeformData::deform(MutableSpan<float3> translations, const Span<int> verts) const
+void PositionDeformData::deform_original(const Span<float3> translations,
+                                         const Span<int> verts) const
 {
-  if (eval_mut_) {
-    /* Apply translations to the evaluated mesh. This is necessary because multiple brush
-     * evaluations can happen in between object reevaluations (otherwise just deforming the
-     * original positions would be enough). */
-    apply_translations(translations, verts, *eval_mut_);
-  }
-
-  if (deform_imats_) {
-    /* Apply the reverse procedural deformation, since subsequent translation happens to the state
-     * from "before" deforming modifiers. */
-    apply_crazyspace_to_translations(*deform_imats_, verts, translations);
-  }
-
   if (KeyBlock *key = active_key_) {
     const MutableSpan active_key_data(static_cast<float3 *>(key->data), key->totelem);
     if (basis_active_) {
@@ -7189,6 +7177,24 @@ void PositionDeformData::deform(MutableSpan<float3> translations, const Span<int
   else {
     apply_translations(translations, verts, orig_);
   }
+}
+
+void PositionDeformData::deform(MutableSpan<float3> translations, const Span<int> verts) const
+{
+  if (eval_mut_) {
+    /* Apply translations to the evaluated mesh. This is necessary because multiple brush
+     * evaluations can happen in between object reevaluations (otherwise just deforming the
+     * original positions would be enough). */
+    apply_translations(translations, verts, *eval_mut_);
+  }
+
+  if (deform_imats_) {
+    /* Apply the reverse procedural deformation, since subsequent translation happens to the state
+     * from "before" deforming modifiers. */
+    apply_crazyspace_to_translations(*deform_imats_, verts, translations);
+  }
+
+  this->deform_original(translations, verts);
 }
 
 void update_shape_keys(Object &object,
