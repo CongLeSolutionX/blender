@@ -3,3 +3,4 @@ Referenced by issue #128414, Compositor: Crash on file reopen
 Referenced by issue #129366, 4.3 Regression: Blender crashes opening a file while preferences window is open
 Referenced by commit 98722773da2ef2a7c6ceab39ce451f46dd7ded6c, Revert "Fix: Blender crashes opening a file with compositor"
 Referenced by issue #129571, EEVEE Lights Disappear with Shadows on Apple Silicon M1
+Referenced by pull request #129793, Fix: Crash with a BadAccess X_GLXMakeCurrent error
