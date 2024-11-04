@@ -6,7 +6,7 @@
 
 #include "GHOST_NDOFManagerCocoa.hh"
 #include "GHOST_SystemCocoa.hh"
-#include <Cocoa/Cocoa.h>
+#import  <Cocoa/Cocoa.h>
 
 #include <dlfcn.h>
 #include <stdint.h>
