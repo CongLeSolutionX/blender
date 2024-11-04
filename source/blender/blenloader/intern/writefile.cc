@@ -721,6 +721,17 @@ static bool write_at_address_validate(WriteData *wd, int filecode, const void *a
 
 static void write_bhead(WriteData *wd, const BHead &bhead)
 {
+  if constexpr (sizeof(void *) == 4) {
+    /* Always write #BHead4 in 32 bit builds. */
+    BHead4 bh;
+    bh.code = bhead.code;
+    bh.old = uint32_t(uintptr_t(bhead.old));
+    bh.nr = bhead.nr;
+    bh.SDNAnr = bhead.SDNAnr;
+    bh.len = bhead.len;
+    mywrite(wd, &bh, sizeof(bh));
+    return;
+  }
   if (USER_EXPERIMENTAL_TEST(&U, write_large_blend_file_blocks)) {
     static_assert(sizeof(BHead) == sizeof(LargeBHead8));
     mywrite(wd, &bhead, sizeof(BHead));
