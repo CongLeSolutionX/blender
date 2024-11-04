@@ -40,7 +40,7 @@ static constexpr int BBOX_PADDING = 2;
 static bool execute_trim_on_drawing(const int layer_index,
                                     const int frame_number,
                                     const Object &ob_eval,
-                                    const Object &obact,
+                                    Object &obact,
                                     const ARegion &region,
                                     const float4x4 &projection,
                                     const Span<int2> mcoords,
@@ -90,8 +90,8 @@ static bool execute_trim_on_drawing(const int layer_index,
   Vector<Vector<int>> selected_points_in_curves;
 
   IndexMaskMemory memory;
-  IndexMask editable_strokes = blender::ed::greasepencil::retrieve_editable_strokes(
-      const_cast<Object &>(obact), drawing, layer_index, memory);
+  const IndexMask editable_strokes = blender::ed::greasepencil::retrieve_editable_strokes(
+      obact, drawing, layer_index, memory);
   editable_strokes.foreach_index([&](const int src_curve) {
     /* To speed things up: do a bounding box check on the curve and the lasso area. */
     if (!BLI_rcti_isect(&bbox_lasso, &screen_space_bbox[src_curve], nullptr)) {
