@@ -1742,11 +1742,54 @@ struct KernelOctreeNode {
 };
 
 struct KernelOctreeTracing {
+  /* Current active node. */
+  ccl_global const KernelOctreeNode *node;
+
   /* Precompute the inverse of the ray direction for finding the next voxel crossing. */
   float3 inv_ray_D;
 
   /* Current active interval. */
   Interval<float> t;
+
+  /* Offset ray to prevent numerical issue. */
+  /* TODO(weizhen): do we really need to store this offset? */
+  float3 ray_offset;
+
+  /* Whether world volume exists, if so the first element in the stack is always the world. */
+  bool has_world_volume;
+
+  /* Access the current active leaf node. */
+  ccl_device_inline_method ccl_global const KernelOctreeNode *get_voxel() const
+  {
+    return node;
+  }
+
+  /* See `ray_aabb_intersect()`. */
+  ccl_device_inline_method float ray_voxel_intersect(const float3 ray_P,
+                                                     const float ray_tmax,
+                                                     int depth)
+  {
+    const KernelBoundingBox bbox = get_voxel()->bbox;
+
+    /* TODO(weizhen): check when ray_D is zero in some directions. */
+    /* Absolute distances to lower and upper box coordinates; */
+    const float3 t_lower = (bbox.min - ray_P) * inv_ray_D;
+    const float3 t_upper = (bbox.max - ray_P) * inv_ray_D;
+
+    /* The four t-intervals (for x-/y-/z-slabs, and ray p(t)). */
+    const float3 tmaxes = max(t_lower, t_upper);
+    const float tmax = reduce_min(tmaxes);
+
+    /* Offset the ray along the direction of the face normal. The magnitude of the offset is half
+     * the size of the smallest bounding box. */
+    /* TODO(weizhen): offset to the next box center. */
+    ray_offset = bbox.size() / (2 << (VOLUME_OCTREE_MAX_DEPTH - depth)) *
+                 make_float3(copysignf(tmax == tmaxes.x, inv_ray_D.x),
+                             copysignf(tmax == tmaxes.y, inv_ray_D.y),
+                             copysignf(tmax == tmaxes.z, inv_ray_D.z));
+
+    return fminf(tmax, ray_tmax);
+  }
 };
 
 typedef struct KernelLightTreeEmitter {

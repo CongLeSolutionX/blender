@@ -206,7 +206,7 @@ void Octree::flatten(KernelOctreeNode *knodes)
   /* World volume. */
   /* TODO(weizhen): is there a better way than putting world volume in the octree array? */
   KernelOctreeNode &knode = knodes[node_index++];
-  knode.is_leaf = false;
+  knode.is_leaf = true;
   knode.sigma = background_density;
   knode.bbox.max = make_float3(FLT_MAX);
   knode.bbox.min = -make_float3(FLT_MAX);
@@ -596,7 +596,6 @@ void Octree::visualize(KernelOctreeNode *knodes, const char *filename) const
     file << "    obj.select_set(True)\n\n";
 
     file << "bpy.context.view_layer.objects.active = octree.objects[0]\n";
-    file << "bpy.ops.object.join()\n";
     file << "bpy.ops.object.mode_set(mode='EDIT')\n";
     file << "bpy.ops.mesh.delete(type='ONLY_FACE')\n";
     file << "bpy.ops.object.mode_set(mode='OBJECT')\n";
