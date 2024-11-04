@@ -2067,20 +2067,41 @@ static void step_free(UndoStep *us_p)
 
 void geometry_begin(const Scene &scene, Object &ob, const wmOperator *op)
 {
-  push_begin(scene, ob, op);
-  geometry_push(ob);
+  geometry_begin_ex(scene, ob, op->type->name);
 }
 
-void geometry_begin_ex(const Scene &scene, Object &ob, const char *name)
+void geometry_begin_ex(const Scene & /*scene*/, Object &ob, const char *name)
 {
-  push_begin_ex(scene, ob, name);
+  UndoStack *ustack = ED_undo_stack_get();
+
+  /* If possible, we need to tag the object and its geometry data as 'changed in the future' in
+   * the previous undo step if it's a memfile one. */
+  ED_undosys_stack_memfile_id_changed_tag(ustack, &ob.id);
+  ED_undosys_stack_memfile_id_changed_tag(ustack, static_cast<ID *>(ob.data));
+
+  /* Special case, we never read from this. */
+  bContext *C = nullptr;
+
+  SculptUndoStep *us = reinterpret_cast<SculptUndoStep *>(
+      BKE_undosys_step_push_init_with_type(ustack, C, name, BKE_UNDOSYS_TYPE_SCULPT));
+  us->data.object_name = ob.id.name;
   geometry_push(ob);
 }
 
 void geometry_end(Object &ob)
 {
   geometry_push(ob);
-  push_end(ob);
+
+  /* We could remove this and enforce all callers run in an operator using 'OPTYPE_UNDO'. */
+  wmWindowManager *wm = static_cast<wmWindowManager *>(G_MAIN->wm.first);
+  if (wm->op_undo_depth == 0) {
+    UndoStack *ustack = ED_undo_stack_get();
+    BKE_undosys_step_push(ustack, nullptr, nullptr);
+    if (wm->op_undo_depth == 0) {
+      BKE_undosys_stack_limit_steps_and_memory_defaults(ustack);
+    }
+    WM_file_tag_modified();
+  }
 }
 
 void register_type(UndoType *ut)
