@@ -4,6 +4,10 @@
 
 #pragma once
 
+#include "infos/gpu_index_load_info.hh"
+
+SHADER_LIBRARY_CREATE_INFO(gpu_index_load)
+
 /**
  * Library to read the index buffer of a `gpu::Batch` using a SSBO rather than using `gl_VertexID`.
  * This is required for primitive expansion without geometry shader.

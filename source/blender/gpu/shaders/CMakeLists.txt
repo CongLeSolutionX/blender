@@ -79,6 +79,10 @@ set(SRC_GLSL_COMP
   # gpu_shader_index_2d_array_tris.glsl
 )
 
+set(SRC_GLSL_LIB
+  common/gpu_shader_print_lib.glsl
+)
+
 add_definitions(-DGPU_SHADER)
 
 function(compile_sources_as_cpp
@@ -102,4 +106,5 @@ endfunction()
 if (WITH_GPU_SHADER_CPP_COMPILATION)
   compile_sources_as_cpp(gpu_cpp_shaders_vert ${SRC_GLSL_VERT} "GPU_VERTEX_SHADER")
   compile_sources_as_cpp(gpu_cpp_shaders_frag ${SRC_GLSL_FRAG} "GPU_FRAGMENT_SHADER")
+  compile_sources_as_cpp(gpu_cpp_shaders_lib ${SRC_GLSL_LIB} "GPU_FRAGMENT_SHADER")
 endif()
