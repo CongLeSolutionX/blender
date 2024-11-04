@@ -725,7 +725,7 @@ static int sample_color_modal(bContext *C, wmOperator *op, const wmEvent *event)
     }
 
     if (data->sample_palette) {
-      BKE_brush_color_set(scene, brush, data->initcolor);
+      BKE_brush_color_set(scene, paint, brush, data->initcolor);
       RNA_boolean_set(op->ptr, "palette", true);
     }
     WM_cursor_modal_restore(CTX_wm_window(C));

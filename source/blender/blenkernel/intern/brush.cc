@@ -1038,19 +1038,14 @@ const float *BKE_brush_secondary_color_get(const Scene *scene, const Brush *brus
   return (ups->flag & UNIFIED_PAINT_COLOR) ? ups->secondary_rgb : brush->secondary_rgb;
 }
 
-void BKE_brush_color_set(Scene *scene, Brush *brush, const float color[3])
+void BKE_brush_color_set(Scene *scene, const Paint *paint, Brush *brush, const float color[3])
 {
   UnifiedPaintSettings *ups = &scene->toolsettings->unified_paint_settings;
-  BKE_brush_color_set_ex(scene, brush, color, ups->flag & UNIFIED_PAINT_COLOR);
-}
+  /* Grease pencil draw mode does not use unified paint. */
+  const bool force_use_brush = (paint->runtime.ob_mode == OB_MODE_PAINT_GREASE_PENCIL);
+  const bool use_unified_paint = force_use_brush ? false : (ups->flag & UNIFIED_PAINT_COLOR);
 
-void BKE_brush_color_set_ex(Scene *scene,
-                            Brush *brush,
-                            const float color[3],
-                            const bool use_unified_paint)
-{
   if (use_unified_paint) {
-    UnifiedPaintSettings *ups = &scene->toolsettings->unified_paint_settings;
     copy_v3_v3(ups->rgb, color);
   }
   else {

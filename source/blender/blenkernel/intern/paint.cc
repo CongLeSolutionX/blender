@@ -602,15 +602,6 @@ PaintMode BKE_paintmode_get_from_tool(const bToolRef *tref)
   return PaintMode::Invalid;
 }
 
-bool BKE_paint_use_unified_settings(const bContext *C) {
-  const enum eContextObjectMode mode = CTX_data_mode_enum(C);
-  if (ELEM(mode, CTX_MODE_PAINT_GREASE_PENCIL)) {
-    return false;
-  }
-
-  return true;
-}
-
 /**
  * After changing #Paint.brush_asset_reference, call this to activate the matching brush, importing
  * it if necessary. Has no effect if #Paint.brush is set already.
