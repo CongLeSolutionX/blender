@@ -577,11 +577,12 @@ struct Item {
   int prefix_to_visit;
 };
 
-template<typename LeafFuncT, typename JointFuncT>
+template<typename LeafFuncT, typename JointPredicateT, typename JointFuncT>
 static void for_each_to_bottom_skip_new(const OffsetIndices<int> buckets_offsets,
                                         const int total_depth,
                                         const IndexRange range,
-                                        const JointFuncT &joint_predicate,
+                                        const JointPredicateT &joint_predicate,
+                                        const JointFuncT &joint_func,
                                         const LeafFuncT &leaf_func)
 {
   Array<int, 0> indices(range.size());
@@ -597,10 +598,16 @@ static void for_each_to_bottom_skip_new(const OffsetIndices<int> buckets_offsets
 
     const auto end_of_prefix = std::stable_partition(
         to_visit.begin(), to_visit.end(), [&](const int i) -> bool {
-          return joint_predicate(buckets_offsets[joint_buckets], int(joints_range[joint_i]), i);
+          return joint_predicate(int(joints_range[joint_i]), i);
         });
 
-    MutableSpan<int> next_indices = to_visit.take_front(
+    const Span<int> finished_indices = to_visit.drop_front(
+        std::distance(to_visit.begin(), end_of_prefix));
+    for (const int i : finished_indices) {
+      joint_func(buckets_offsets[joint_buckets], int(joints_range[joint_i]), i);
+    }
+
+    const Span<int> next_indices = to_visit.take_front(
         std::distance(to_visit.begin(), end_of_prefix));
     if (next_indices.is_empty()) {
       continue;
@@ -693,23 +700,29 @@ static void sample_average_new(const OffsetIndices<int> buckets_offsets,
         buckets_offsets,
         total_depth,
         range,
-        [&](const IndexRange buckets_range, const int joint_index, const int value_i) -> bool {
+        [&](const int joint_index, const int value_i) -> bool {
           const float3 self_value = src_bucket_value[value_i];
-          const float distance = math::distance(src_joints_centre[joint_index], src_bucket_position[value_i]);
-          if (distance <= src_joints_min_distance[joint_index]) {
-            return true;
-          }
+          const float distance = math::distance(src_joints_centre[joint_index],
+                                                src_bucket_position[value_i]);
+          return distance <= src_joints_min_distance[joint_index];
+        },
+        [&](const IndexRange buckets_range, const int joint_index, const int value_i) {
+          const float3 self_value = src_bucket_value[value_i];
+          const float distance = math::distance(src_joints_centre[joint_index],
+                                                src_bucket_position[value_i]);
           const float relation_factor = math::safe_rcp(math::pow<float>(distance, power_value));
-          dst_buckets_data[value_i] += (src_joints_value[joint_index] - self_value) * relation_factor * buckets_range.size();
-          return false;
+          dst_buckets_data[value_i] += (src_joints_value[joint_index] - self_value) *
+                                       relation_factor * buckets_range.size();
         },
         [&](const IndexRange bucket_range, const int value_i) {
           const float3 position = src_bucket_position[value_i];
           const float3 self_value = src_bucket_value[value_i];
           for (const int index : bucket_range) {
-            const float relation_factor = math::pow<float>(math::rcp(math::distance(src_bucket_position[index], position)), power_value);
+            const float relation_factor = math::pow<float>(
+                math::rcp(math::distance(src_bucket_position[index], position)), power_value);
             const float safe_relation_factor = index == value_i ? 0.0f : relation_factor;
-            dst_buckets_data[value_i] += (src_bucket_value[index] - self_value) * safe_relation_factor;
+            dst_buckets_data[value_i] += (src_bucket_value[index] - self_value) *
+                                         safe_relation_factor;
           }
         });
   });
@@ -903,7 +916,7 @@ class DifferenceSumFieldInput final : public bke::GeometryFieldInput {
     }
 
     Array<float3> sampled_bucket_values(domain_size, float3(0));
-    {
+    if constexpr (true) {
       SCOPED_TIMER_AVERAGED("akdbt::sample_average");
       akdbt::sample_average(base_offsets,
                             total_depth,
@@ -917,7 +930,7 @@ class DifferenceSumFieldInput final : public bke::GeometryFieldInput {
     }
 
     Array<float3> sampled_bucket_values_other(domain_size, float3(0));
-    {
+    if constexpr (true) {
       SCOPED_TIMER_AVERAGED("akdbt::sample_average_new");
       akdbt::sample_average_new(base_offsets,
                                 total_depth,
