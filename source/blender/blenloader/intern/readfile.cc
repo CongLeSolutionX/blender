@@ -640,7 +640,7 @@ static void switch_endian_bh4(BHead4 *bhead)
 
 static void switch_endian_small_bh8(SmallBHead8 *bhead)
 {
-  /* the ID_.. codes */
+  /* The ID_* codes. */
   if ((bhead->code & 0xFFFF) == 0) {
     bhead->code >>= 16;
   }
@@ -654,7 +654,7 @@ static void switch_endian_small_bh8(SmallBHead8 *bhead)
 
 static void switch_endian_large_bh8(LargeBHead8 *bhead)
 {
-  /* the ID_.. codes */
+  /* The ID_* codes. */
   if ((bhead->code & 0xFFFF) == 0) {
     bhead->code >>= 16;
   }

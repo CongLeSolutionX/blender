@@ -734,7 +734,7 @@ static void write_bhead(WriteData *wd, const BHead &bhead)
   }
   if (USER_EXPERIMENTAL_TEST(&U, write_large_blend_file_blocks)) {
     static_assert(sizeof(BHead) == sizeof(LargeBHead8));
-    mywrite(wd, &bhead, sizeof(BHead));
+    mywrite(wd, &bhead, sizeof(bhead));
     return;
   }
   /* Write older #SmallBHead8 headers so that older Blender versions can read them. */
@@ -745,7 +745,9 @@ static void write_bhead(WriteData *wd, const BHead &bhead)
   bh.SDNAnr = bhead.SDNAnr;
   bh.len = bhead.len;
   /* Check that the written buffer size is compatible with the limits of #SmallBHead8. */
-  BLI_assert(bhead.len > std::numeric_limits<decltype(bh.len)>::max());
+  if (bhead.len > std::numeric_limits<decltype(bh.len)>::max()) {
+    CLOG_ERROR(&LOG, "Written .blend file is corrupt, because a memory block is too large.");
+  }
   mywrite(wd, &bh, sizeof(bh));
 }
 
@@ -1542,8 +1544,7 @@ static bool write_file_handle(Main *mainvar,
 
   /* End of file. */
   {
-    BHead bhead;
-    memset(&bhead, 0, sizeof(bhead));
+    BHead bhead{};
     bhead.code = BLO_CODE_ENDB;
     write_bhead(wd, bhead);
   }
