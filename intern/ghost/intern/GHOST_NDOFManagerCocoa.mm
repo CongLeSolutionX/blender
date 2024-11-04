@@ -27,7 +27,6 @@ static bool driver_loaded = false;
  * It was firstly introduced in 3DxWare v10.8.4 r3716 and can process
  * (not yet documented in SDK manual) kConnexionCmdAppEvent events. */
 static NSString *new_driver_minimal_version = @"1.3.4.473";
-static bool has_new_driver = false;
 
 /* Replicate just enough of the 3Dx API for our uses, not everything the driver provides. */
 
@@ -131,14 +130,6 @@ static bool load_driver_functions()
       LOAD_FUNC(ConnexionClientControl);
     }
 
-    NSDictionary *dictInfos =
-        [NSBundle bundleWithPath:@"/Library/Frameworks/3DconnexionClient.framework"]
-            .infoDictionary;
-    NSString *strVersion = [dictInfos objectForKey:(NSString *)kCFBundleVersionKey];
-    auto compare = [strVersion compare:new_driver_minimal_version];
-    if (compare != NSOrderedAscending) {
-      has_new_driver = true;
-    }
   }
 #if DEBUG_NDOF_DRIVER
   else {
@@ -146,8 +137,6 @@ static bool load_driver_functions()
   }
 
   printf("loaded: %s\n", driver_loaded ? "YES" : "NO");
-  printf("old: %s\n", has_old_driver ? "YES" : "NO");
-  printf("new: %s\n", has_new_driver ? "YES" : "NO");
 #endif
 
   return driver_loaded;
@@ -167,8 +156,8 @@ static void DeviceAdded(uint32_t /*unused*/)
   /* Determine exactly which device is plugged in. */
   int32_t result;
   ConnexionClientControl(clientID, kConnexionCtlGetDeviceID, 0, &result);
-  int16_t vendorID = result >> 16;
-  int16_t productID = result & 0xffff;
+  const int16_t vendorID = result >> 16;
+  const int16_t productID = result & 0xffff;
 
   ndof_manager->setDevice(vendorID, productID);
 }
@@ -188,7 +177,7 @@ static void DeviceEvent(uint32_t /*unused*/, uint32_t msg_type, void *msg_arg)
     /* Device state is broadcast to all clients; only react if sent to us. */
     if (s->client == clientID) {
       /* TODO: is s->time compatible with GHOST timestamps? if so use that instead. */
-      uint64_t now = ghost_system->getMilliSeconds();
+      const uint64_t now = ghost_system->getMilliSeconds();
 
       switch (s->command) {
         case kConnexionCmdHandleAxis: {
@@ -203,7 +192,7 @@ static void DeviceEvent(uint32_t /*unused*/, uint32_t msg_type, void *msg_arg)
           break;
         }
         case kConnexionCmdHandleButtons: {
-          int button_bits = s->buttons;
+          const int button_bits = s->buttons;
 #ifdef DEBUG_NDOF_BUTTONS
           printf("button bits: 0x%08x\n", button_bits);
 #endif
@@ -212,8 +201,8 @@ static void DeviceEvent(uint32_t /*unused*/, uint32_t msg_type, void *msg_arg)
           break;
         }
         case kConnexionCmdAppEvent: {
-          int button_number = s->value;
-          bool pressed = s->appEventPressed;
+          const int button_number = s->value;
+          const bool pressed = s->appEventPressed;
 #ifdef DEBUG_NDOF_BUTTONS
           printf("button number: %d, pressed: %d\n", button_number, pressed);
 #endif
@@ -241,8 +230,7 @@ GHOST_NDOFManagerCocoa::GHOST_NDOFManagerCocoa(GHOST_System &sys) : GHOST_NDOFMa
     ghost_system = dynamic_cast<GHOST_SystemCocoa *>(&sys);
     ndof_manager = this;
 
-    uint16_t error;
-    error = SetConnexionHandlers(DeviceEvent, DeviceAdded, DeviceRemoved, true);
+    const uint16_t error = SetConnexionHandlers(DeviceEvent, DeviceAdded, DeviceRemoved, true);
 
     if (error) {
 #if DEBUG_NDOF_DRIVER
@@ -250,14 +238,21 @@ GHOST_NDOFManagerCocoa::GHOST_NDOFManagerCocoa(GHOST_System &sys) : GHOST_NDOFMa
 #endif
       return;
     }
+      
+    const NSDictionary *dictInfos =
+        [NSBundle bundleWithPath:@"/Library/Frameworks/3DconnexionClient.framework"]
+            .infoDictionary;
+    NSString *strVersion = [dictInfos objectForKey:(NSString *)kCFBundleVersionKey];
+    const auto compare = [strVersion compare:new_driver_minimal_version];
+    const bool has_new_driver = compare != NSOrderedAscending;
 
     /* New driver makes use of kConnexionCmdAppEvent events, which require to have all buttons
      * unmasked. Basically, this means that driver consumes all NDOF device input and then sends
      * appropriate app events based on its configuration instead of forwarding raw data to the
      * application. When using an older driver, the old solution with all buttons forwarded
      * (masked) is preferred. */
-    uint32_t client_mask = has_new_driver ? kConnexionMaskAxis : kConnexionMaskAll;
-    uint32_t button_mask = has_new_driver ? kConnexionMaskNoButtons : kConnexionMaskAllButtons;
+    const uint32_t client_mask = has_new_driver ? kConnexionMaskAxis : kConnexionMaskAll;
+    const uint32_t button_mask = has_new_driver ? kConnexionMaskNoButtons : kConnexionMaskAllButtons;
 
     /* Pascal string *and* a four-letter constant. How old-school. */
     clientID = RegisterConnexionClient(
