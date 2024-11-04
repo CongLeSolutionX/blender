@@ -1,3 +1,4 @@
 Referenced by issue #99129, Viewport/Eevee: hair_info_length regression test not working on AMD GPUs
 Referenced by issue #97536, Eevee do not respect the new curve object attribute
 Referenced by issue #96455, Render engine support for curves data-block
+Referenced by issue #126391, Blender Viewport Speed Regression
