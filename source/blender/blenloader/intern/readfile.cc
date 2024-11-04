@@ -694,7 +694,7 @@ static BHead bhead_from_small_bhead8(const SmallBHead8 &small_bhead8)
 
 static BHead bhead_from_large_bhead8(const LargeBHead8 &large_bhead8)
 {
-  BHead bhead;
+  BHead bhead{};
   bhead.code = large_bhead8.code;
   bhead.len = large_bhead8.len;
   if (bhead.code != BLO_CODE_ENDB) {
