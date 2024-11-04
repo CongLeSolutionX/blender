@@ -671,49 +671,71 @@ static BHead bhead_from_bhead4(const BHead4 &bhead4)
   BHead bhead;
   bhead.code = bhead4.code;
   bhead.len = bhead4.len;
-  if (bhead.code != BLO_CODE_ENDB) {
-    bhead.old = reinterpret_cast<const void *>(bhead4.old);
-    bhead.SDNAnr = bhead4.SDNAnr;
-    bhead.nr = bhead4.nr;
-  }
+  bhead.old = reinterpret_cast<const void *>(bhead4.old);
+  bhead.SDNAnr = bhead4.SDNAnr;
+  bhead.nr = bhead4.nr;
   return bhead;
 }
 
-static BHead bhead_from_small_bhead8(const SmallBHead8 &small_bhead8)
+/**
+ * Converts a BHead.old pointer from 64 to 32 bit. This can't work in the general case, but only
+ * when the lower 32 bits of all relevant 64 bit pointers are different. Otherwise two different
+ * pointers will map to the same, which will break things later on. There is no way to check for
+ * that here unfortunately.
+ */
+static uint32_t uint32_from_uint64_ptr(uint64_t ptr, const bool use_endian_swap)
+{
+  if (use_endian_swap) {
+    /* Do endian switch so that the resulting pointer is not all 0. */
+    BLI_endian_switch_uint64(&ptr);
+  }
+  /* Behavior has to match #cast_pointer_64_to_32. */
+  ptr >>= 3;
+  return uint32_t(ptr);
+}
+
+static const void *old_ptr_from_uint64_ptr(const uint64_t ptr, const bool use_endian_swap)
+{
+  if constexpr (sizeof(void *) == 8) {
+    return reinterpret_cast<const void *>(ptr);
+  }
+  else {
+    return reinterpret_cast<const void *>(uint32_from_uint64_ptr(ptr, use_endian_swap));
+  }
+}
+
+static BHead bhead_from_small_bhead8(const SmallBHead8 &small_bhead8, const bool use_endian_swap)
 {
   BHead bhead;
   bhead.code = small_bhead8.code;
   bhead.len = small_bhead8.len;
-  if (bhead.code != BLO_CODE_ENDB) {
-    bhead.old = reinterpret_cast<const void *>(small_bhead8.old);
-    bhead.SDNAnr = small_bhead8.SDNAnr;
-    bhead.nr = small_bhead8.nr;
-  }
+  bhead.old = old_ptr_from_uint64_ptr(small_bhead8.old, use_endian_swap);
+  bhead.SDNAnr = small_bhead8.SDNAnr;
+  bhead.nr = small_bhead8.nr;
   return bhead;
 }
 
-static BHead bhead_from_large_bhead8(const LargeBHead8 &large_bhead8)
+static BHead bhead_from_large_bhead8(const LargeBHead8 &large_bhead8, const bool use_endian_swap)
 {
-  BHead bhead{};
+  BHead bhead;
   bhead.code = large_bhead8.code;
   bhead.len = large_bhead8.len;
-  if (bhead.code != BLO_CODE_ENDB) {
-    bhead.old = reinterpret_cast<const void *>(large_bhead8.old);
-    bhead.SDNAnr = large_bhead8.SDNAnr;
-    bhead.nr = large_bhead8.nr;
-  }
+  bhead.old = old_ptr_from_uint64_ptr(large_bhead8.old, use_endian_swap);
+  bhead.SDNAnr = large_bhead8.SDNAnr;
+  bhead.nr = large_bhead8.nr;
   return bhead;
 }
 
 static BHeadN *get_bhead(FileData *fd)
 {
   BHeadN *new_bhead = nullptr;
+  const bool do_endian_swap = fd->flags & FD_FLAGS_SWITCH_ENDIAN;
 
   if (fd) {
     if (!fd->is_eof) {
       /* initializing to zero isn't strictly needed but shuts valgrind up
        * since uninitialized memory gets compared */
-      BHead bhead = {0};
+      BHead bhead{};
 
       /* First read the bhead structure.
        * Depending on the platform the file was written on this can
@@ -723,15 +745,13 @@ static BHeadN *get_bhead(FileData *fd)
        * needs some special handling. We don't want to EOF just yet.
        */
       if (fd->flags & FD_FLAGS_FILE_POINTSIZE_IS_4) {
-        BHead4 bhead4 = {0};
+        BHead4 bhead4{};
         bhead4.code = BLO_CODE_DATA;
         const int64_t readsize = fd->file->read(fd->file, &bhead4, sizeof(bhead4));
         if (readsize == sizeof(bhead4) || bhead4.code == BLO_CODE_ENDB) {
-          if (fd->flags & FD_FLAGS_SWITCH_ENDIAN) {
+          if (do_endian_swap) {
             switch_endian_bh4(&bhead4);
           }
-          /* Blender is not supported on 32 bit platforms. */
-          BLI_assert(fd->flags & FD_FLAGS_POINTSIZE_DIFFERS);
           bhead = bhead_from_bhead4(bhead4);
         }
         else {
@@ -740,14 +760,14 @@ static BHeadN *get_bhead(FileData *fd)
         }
       }
       else if (fd->flags & FD_FLAGS_IS_SMALL_BHEAD8) {
-        SmallBHead8 small_bhead8 = {0};
+        SmallBHead8 small_bhead8{};
         small_bhead8.code = BLO_CODE_DATA;
         const int64_t readsize = fd->file->read(fd->file, &small_bhead8, sizeof(small_bhead8));
         if (readsize == sizeof(small_bhead8) || small_bhead8.code == BLO_CODE_ENDB) {
-          if (fd->flags & FD_FLAGS_SWITCH_ENDIAN) {
+          if (do_endian_swap) {
             switch_endian_small_bh8(&small_bhead8);
           }
-          bhead = bhead_from_small_bhead8(small_bhead8);
+          bhead = bhead_from_small_bhead8(small_bhead8, do_endian_swap);
         }
         else {
           fd->is_eof = true;
@@ -755,14 +775,14 @@ static BHeadN *get_bhead(FileData *fd)
         }
       }
       else {
-        LargeBHead8 large_bhead8 = {0};
+        LargeBHead8 large_bhead8{};
         large_bhead8.code = BLO_CODE_DATA;
         const int64_t readsize = fd->file->read(fd->file, &large_bhead8, sizeof(large_bhead8));
         if (readsize == sizeof(large_bhead8) || large_bhead8.code == BLO_CODE_ENDB) {
-          if (fd->flags & FD_FLAGS_SWITCH_ENDIAN) {
+          if (do_endian_swap) {
             switch_endian_large_bh8(&large_bhead8);
           }
-          bhead = bhead_from_large_bhead8(large_bhead8);
+          bhead = bhead_from_large_bhead8(large_bhead8, do_endian_swap);
         }
         else {
           fd->is_eof = true;
@@ -5001,6 +5021,17 @@ void BLO_read_string(BlendDataReader *reader, const char **ptr_p)
   BLO_read_string(reader, const_cast<char **>(ptr_p));
 }
 
+static void convert_pointer_array_64_to_32(BlendDataReader *reader,
+                                           uint array_size,
+                                           const uint64_t *src,
+                                           uint32_t *dst)
+{
+  const bool use_endian_swap = BLO_read_requires_endian_switch(reader);
+  for (int i = 0; i < array_size; i++) {
+    dst[i] = uint32_from_uint64_ptr(src[i], use_endian_swap);
+  }
+}
+
 static void convert_pointer_array_32_to_64(BlendDataReader * /*reader*/,
                                            uint array_size,
                                            const uint32_t *src,
@@ -5032,8 +5063,11 @@ void BLO_read_pointer_array(BlendDataReader *reader, const int array_size, void 
     final_array = orig_array;
   }
   else if (file_pointer_size == 8 && current_pointer_size == 4) {
-    /* Blender is not supported on 32 bit platforms. */
-    BLI_assert_unreachable();
+    /* Convert pointers from 64 to 32 bit. */
+    final_array = MEM_malloc_arrayN(array_size, 4, "new pointer array");
+    convert_pointer_array_64_to_32(
+        reader, array_size, (uint64_t *)orig_array, (uint32_t *)final_array);
+    MEM_freeN(orig_array);
   }
   else if (file_pointer_size == 4 && current_pointer_size == 8) {
     /* Convert pointers from 32 to 64 bit. */
