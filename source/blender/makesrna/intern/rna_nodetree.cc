@@ -10554,7 +10554,7 @@ static void rna_def_sh_repeat_item(BlenderRNA *brna)
 {
   StructRNA *srna = RNA_def_struct(brna, "ShaderRepeatItem", nullptr);
   RNA_def_struct_ui_text(srna, "Repeat Item", "");
-  RNA_def_struct_sdna(srna, "NodeShaderZoneItem");
+  RNA_def_struct_sdna(srna, "NodeShaderRepeatItem");
 
   rna_def_node_item_array_socket_item_common(srna, "ShRepeatItemsAccessor", true);
 }
@@ -10616,7 +10616,7 @@ static void rna_def_sh_light_loop_item(BlenderRNA *brna)
 {
   StructRNA *srna = RNA_def_struct(brna, "ShaderLightLoopItem", nullptr);
   RNA_def_struct_ui_text(srna, "LightLoop Item", "");
-  RNA_def_struct_sdna(srna, "NodeShaderZoneItem");
+  RNA_def_struct_sdna(srna, "NodeShaderLightLoopItem");
 
   rna_def_node_item_array_socket_item_common(srna, "ShLightLoopItemsAccessor", true);
 }

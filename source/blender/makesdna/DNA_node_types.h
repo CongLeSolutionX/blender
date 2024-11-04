@@ -1981,7 +1981,7 @@ typedef struct NodeGeometryRepeatOutput {
 #endif
 } NodeGeometryRepeatOutput;
 
-typedef struct NodeShaderZoneItem {
+typedef struct NodeShaderRepeatItem {
   char *name;
   /** #eNodeSocketDatatype. */
   short socket_type;
@@ -1991,7 +1991,7 @@ typedef struct NodeShaderZoneItem {
    * names change.
    */
   int identifier;
-} NodeShaderZoneItem;
+} NodeShaderRepeatItem;
 
 typedef struct NodeShaderRepeatInput {
   /** bNode.identifier of the corresponding output node. */
@@ -1999,7 +1999,7 @@ typedef struct NodeShaderRepeatInput {
 } NodeShaderRepeatInput;
 
 typedef struct NodeShaderRepeatOutput {
-  NodeShaderZoneItem *items;
+  NodeShaderRepeatItem *items;
   int items_num;
   int active_index;
   /** Identifier to give to the next repeat item. */
@@ -2007,10 +2007,22 @@ typedef struct NodeShaderRepeatOutput {
   int _pad0;
 
 #ifdef __cplusplus
-  blender::Span<NodeShaderZoneItem> items_span() const;
-  blender::MutableSpan<NodeShaderZoneItem> items_span();
+  blender::Span<NodeShaderRepeatItem> items_span() const;
+  blender::MutableSpan<NodeShaderRepeatItem> items_span();
 #endif
 } NodeShaderRepeatOutput;
+
+typedef struct NodeShaderLightLoopItem {
+  char *name;
+  /** #eNodeSocketDatatype. */
+  short socket_type;
+  char _pad[2];
+  /**
+   * Generated unique identifier for sockets which stays the same even when the item order or
+   * names change.
+   */
+  int identifier;
+} NodeShaderLightLoopItem;
 
 typedef struct NodeShaderLightLoopInput {
   /** bNode.identifier of the corresponding output node. */
@@ -2018,7 +2030,7 @@ typedef struct NodeShaderLightLoopInput {
 } NodeShaderLightLoopInput;
 
 typedef struct NodeShaderLightLoopOutput {
-  NodeShaderZoneItem *items;
+  NodeShaderLightLoopItem *items;
   int items_num;
   int active_index;
   /** Identifier to give to the next LightLoop item. */
@@ -2026,8 +2038,8 @@ typedef struct NodeShaderLightLoopOutput {
   int _pad0;
 
 #ifdef __cplusplus
-  blender::Span<NodeShaderZoneItem> items_span() const;
-  blender::MutableSpan<NodeShaderZoneItem> items_span();
+  blender::Span<NodeShaderLightLoopItem> items_span() const;
+  blender::MutableSpan<NodeShaderLightLoopItem> items_span();
 #endif
 } NodeShaderLightLoopOutput;
 

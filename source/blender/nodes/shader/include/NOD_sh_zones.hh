@@ -74,7 +74,7 @@ template<typename NodeOutputT, typename NodeItemT> struct ShZoneItemsAccessorBas
  * repeat items.
  */
 struct ShRepeatItemsAccessor
-    : ShZoneItemsAccessorBase<NodeShaderRepeatOutput, NodeShaderZoneItem> {
+    : ShZoneItemsAccessorBase<NodeShaderRepeatOutput, NodeShaderRepeatItem> {
   static constexpr const char *node_idname = "ShaderNodeRepeatOutput";
   struct operator_idnames {
     static constexpr const char *add_item = "NODE_OT_sh_repeat_zone_item_add";
@@ -101,7 +101,7 @@ struct ShRepeatItemsAccessor
  * light loop items.
  */
 struct ShLightLoopItemsAccessor
-    : ShZoneItemsAccessorBase<NodeShaderLightLoopOutput, NodeShaderZoneItem> {
+    : ShZoneItemsAccessorBase<NodeShaderLightLoopOutput, NodeShaderLightLoopItem> {
   static constexpr const char *node_idname = "ShaderNodeLightLoopOutput";
   struct operator_idnames {
     static constexpr const char *add_item = "NODE_OT_sh_light_loop_zone_item_add";

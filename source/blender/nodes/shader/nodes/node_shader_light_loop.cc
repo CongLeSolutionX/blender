@@ -87,7 +87,7 @@ static void node_declare(NodeDeclarationBuilder &b)
       const auto &output_storage = *static_cast<const NodeShaderLightLoopOutput *>(
           output_node->storage);
       for (const int i : IndexRange(output_storage.items_num)) {
-        const NodeShaderZoneItem &item = output_storage.items[i];
+        const NodeShaderLightLoopItem &item = output_storage.items[i];
         const eNodeSocketDatatype socket_type = eNodeSocketDatatype(item.socket_type);
         const StringRef name = item.name ? item.name : "";
         const std::string identifier = ShLightLoopItemsAccessor::socket_identifier_for_item(item);
@@ -174,7 +174,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   if (node) {
     const NodeShaderLightLoopOutput &storage = node_storage(*node);
     for (const int i : IndexRange(storage.items_num)) {
-      const NodeShaderZoneItem &item = storage.items[i];
+      const NodeShaderLightLoopItem &item = storage.items[i];
       const eNodeSocketDatatype socket_type = eNodeSocketDatatype(item.socket_type);
       const StringRef name = item.name ? item.name : "";
       const std::string identifier = ShLightLoopItemsAccessor::socket_identifier_for_item(item);
@@ -194,7 +194,7 @@ static void node_init(bNodeTree * /*tree*/, bNode *node)
 
   data->next_identifier = 0;
 
-  data->items = MEM_cnew_array<NodeShaderZoneItem>(1, __func__);
+  data->items = MEM_cnew_array<NodeShaderLightLoopItem>(1, __func__);
   data->items[0].name = BLI_strdup(DATA_("Color"));
   data->items[0].socket_type = SOCK_RGBA;
   data->items[0].identifier = data->next_identifier++;
@@ -265,7 +265,7 @@ namespace blender::nodes {
 
 StructRNA *ShLightLoopItemsAccessor::item_srna = &RNA_ShaderLightLoopItem;
 int ShLightLoopItemsAccessor::node_type = SH_NODE_LIGHT_LOOP_OUTPUT;
-int ShLightLoopItemsAccessor::item_dna_type = SDNA_TYPE_FROM_STRUCT(NodeShaderZoneItem);
+int ShLightLoopItemsAccessor::item_dna_type = SDNA_TYPE_FROM_STRUCT(NodeShaderLightLoopItem);
 
 void ShLightLoopItemsAccessor::blend_write_item(BlendWriter *writer, const ItemT &item)
 {
@@ -278,6 +278,16 @@ void ShLightLoopItemsAccessor::blend_read_data_item(BlendDataReader *reader, Ite
 }
 
 }  // namespace blender::nodes
+
+blender::Span<NodeShaderLightLoopItem> NodeShaderLightLoopOutput::items_span() const
+{
+  return blender::Span<NodeShaderLightLoopItem>(items, items_num);
+}
+
+blender::MutableSpan<NodeShaderLightLoopItem> NodeShaderLightLoopOutput::items_span()
+{
+  return blender::MutableSpan<NodeShaderLightLoopItem>(items, items_num);
+}
 
 void register_node_type_sh_light_loop()
 {
