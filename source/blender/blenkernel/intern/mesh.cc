@@ -251,6 +251,15 @@ static void mesh_foreach_path(ID *id, BPathForeachPathData *bpath_data)
   }
 }
 
+static void rename_to_old_attribute_names(MutableSpan<CustomDataLayer> layers)
+{
+  for (CustomDataLayer &layer : layers) {
+    if (STREQ(layer.name, "uv_seam")) {
+      STRNCPY(layer.name, ".uv_seam");
+    }
+  }
+}
+
 static void mesh_blend_write(BlendWriter *writer, ID *id, const void *id_address)
 {
   using namespace blender;
@@ -289,6 +298,8 @@ static void mesh_blend_write(BlendWriter *writer, ID *id, const void *id_address
     CustomData_blend_write_prepare(mesh->corner_data, loop_layers, {});
     CustomData_blend_write_prepare(mesh->face_data, face_layers, {});
     if (!is_undo) {
+      /* Write forward compatible format. To be removed in 5.0. */
+      rename_to_old_attribute_names(edge_layers);
       mesh_sculpt_mask_to_legacy(vert_layers);
     }
   }
