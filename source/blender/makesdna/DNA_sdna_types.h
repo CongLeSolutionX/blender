@@ -152,7 +152,6 @@ typedef struct BHead {
    * Typically, this is the pointer the memory had when it was written. This should be unique
    * within an ID.
    */
-  // TODO: Use `uintptr_t`?
   const void *old;
   /** Number of bytes in the block. */
   int64_t len;
