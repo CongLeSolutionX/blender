@@ -733,9 +733,8 @@ static void write_bhead(WriteData *wd, const BHead &bhead)
   bh.nr = bhead.nr;
   bh.SDNAnr = bhead.SDNAnr;
   bh.len = bhead.len;
-  if (bh.len != bhead.len) {
-    BLI_assert_unreachable();
-  }
+  /* Check that the written buffer size is compatible with the limits of #SmallBHead8. */
+  BLI_assert(bhead.len > std::numeric_limits<decltype(bh.len)>::max());
   mywrite(wd, &bh, sizeof(bh));
 }
 
