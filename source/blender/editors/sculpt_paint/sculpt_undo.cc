@@ -342,68 +342,37 @@ static void swap_indexed_data(MutableSpan<T> compressed,
   }
 }
 
-class OrigPositionDeformData {
+struct ShapeKeyData {
+  MutableSpan<float3> active_key_data;
+  bool basis_key_active;
+  Vector<MutableSpan<float3>> dependent_keys;
 
-  MutableSpan<float3> orig_;
-
-  Key *keys_;
-  KeyBlock *active_key_;
-  bool basis_active_;
-  Vector<MutableSpan<float3>> dependent_keys_;
-
- public:
-  OrigPositionDeformData(Object &object_orig)
+  static std::optional<ShapeKeyData> from_object(Object &object)
   {
-    Mesh &mesh = *static_cast<Mesh *>(object_orig.data);
-
-    orig_ = mesh.vert_positions_for_write();
-
-    if (Key *keys = mesh.key) {
-      keys_ = keys;
-      const int active_index = object_orig.shapenr - 1;
-      active_key_ = BKE_keyblock_find_by_index(keys, active_index);
-      basis_active_ = active_key_ == keys->refkey;
-      if (const std::optional<Array<bool>> dependent = BKE_keyblock_get_dependent_keys(
-              keys_, active_index))
-      {
-        int i;
-        LISTBASE_FOREACH_INDEX (KeyBlock *, other_key, &keys_->block, i) {
-          if ((other_key != active_key_) && (*dependent)[i]) {
-            dependent_keys_.append({static_cast<float3 *>(other_key->data), other_key->totelem});
-          }
+    Mesh &mesh = *static_cast<Mesh *>(object.data);
+    Key *keys = mesh.key;
+    if (!keys) {
+      return std::nullopt;
+    }
+    const int active_index = object.shapenr - 1;
+    const KeyBlock *active_key = BKE_keyblock_find_by_index(keys, active_index);
+    if (!active_key) {
+      return std::nullopt;
+    }
+    ShapeKeyData data;
+    data.active_key_data = {static_cast<float3 *>(active_key->data), active_key->totelem};
+    data.basis_key_active = active_key == keys->refkey;
+    if (const std::optional<Array<bool>> dependent = BKE_keyblock_get_dependent_keys(keys,
+                                                                                     active_index))
+    {
+      int i;
+      LISTBASE_FOREACH_INDEX (KeyBlock *, other_key, &keys->block, i) {
+        if ((other_key != active_key) && (*dependent)[i]) {
+          data.dependent_keys.append({static_cast<float3 *>(other_key->data), other_key->totelem});
         }
       }
     }
-    else {
-      keys_ = nullptr;
-      active_key_ = nullptr;
-      basis_active_ = false;
-    }
-  }
-
-  void swap_positions(MutableSpan<float3> positions, const Span<int> verts)
-  {
-    if (KeyBlock *key = active_key_) {
-      const MutableSpan active_key_data(static_cast<float3 *>(key->data), key->totelem);
-
-      if (!dependent_keys_.is_empty()) {
-        Array<float3, 1024> translations(verts.size());
-        translations_from_new_positions(positions, verts, orig_, translations);
-
-        for (MutableSpan<float3> data : dependent_keys_) {
-          apply_translations(translations, verts, data);
-        }
-      }
-
-      if (basis_active_) {
-        /* The active shape key positions and the mesh positions are always kept in sync. */
-        scatter_data_mesh(positions.as_span(), verts, orig_);
-      }
-      swap_indexed_data(positions, verts, active_key_data);
-    }
-    else {
-      swap_indexed_data(positions, verts, orig_);
-    }
+    return data;
   }
 };
 
@@ -412,19 +381,48 @@ static void restore_position_mesh(Object &object,
                                   const MutableSpan<bool> modified_verts)
 {
   Mesh &mesh = *static_cast<Mesh *>(object.data);
-
-  OrigPositionDeformData position_data(object);
   MutableSpan<float3> positions = mesh.vert_positions_for_write();
+  std::optional<ShapeKeyData> shape_key_data = ShapeKeyData::from_object(object);
+
   threading::parallel_for(unodes.index_range(), 1, [&](const IndexRange range) {
     for (const int node_i : range) {
       Node &unode = *unodes[node_i];
       const Span<int> verts = unode.vert_indices.as_span().take_front(unode.unique_verts_num);
+
       if (unode.orig_position.is_empty()) {
+        /* When original positions aren't written separately in the the undo step, there are no
+         * deform modifiers. Therefore the original and evaluated deform positions will be the
+         * same, and modifying the positions from the original mesh is enough. */
         swap_indexed_data(unode.position.as_mutable_span(), verts, positions);
+        continue;
       }
-      else {
-        position_data.swap_positions(unode.orig_position, verts);
+
+      /* When original positions are stored in the undo step, undo/redo will cause a reevaluation
+       * of the object. The evaluation will recompute the evaluated positions, so dealing with them
+       * here is unnecessary. */
+      MutableSpan<float3> undo_positions = unode.orig_position;
+
+      if (!shape_key_data) {
+        /* There is a deform modifier, but no shape keys. */
+        swap_indexed_data(undo_positions, verts, positions);
+        continue;
       }
+
+      /* Apply translations to dependent shape keys. */
+      if (!shape_key_data->dependent_keys.is_empty()) {
+        Array<float3, 1024> translations(verts.size());
+        translations_from_new_positions(undo_positions, verts, positions, translations);
+        for (MutableSpan<float3> data : shape_key_data->dependent_keys) {
+          apply_translations(translations, verts, data);
+        }
+      }
+
+      if (shape_key_data->basis_key_active) {
+        /* The active shape key positions and the mesh positions are always kept in sync. */
+        scatter_data_mesh(undo_positions.as_span(), verts, positions);
+      }
+      swap_indexed_data(undo_positions, verts, shape_key_data->active_key_data);
+
       modified_verts.fill_indices(verts, true);
     }
   });
@@ -1783,6 +1781,10 @@ void push_end_ex(Object &ob, const bool use_nested_undo)
   for (std::unique_ptr<Node> &unode : step_data->nodes) {
     unode->normal = {};
   }
+  /* TODO: When #Node.orig_positions is stored, #Node.positions is unnecessary, don't keep it in
+   * the stored undo step. In the future the stored undo step should use a different format with
+   * just one positions array that has a different semantic meaning depending on whether there are
+   * deform modifiers. */
 
   step_data->undo_size = threading::parallel_reduce(
       step_data->nodes.index_range(),

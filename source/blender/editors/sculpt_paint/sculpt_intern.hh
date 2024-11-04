@@ -107,7 +107,6 @@ class PositionDeformData {
  public:
   PositionDeformData(const Depsgraph &depsgraph, Object &object_orig);
   void deform(MutableSpan<float3> translations, Span<int> verts) const;
-  void deform_original(Span<float3> translations, Span<int> verts) const;
 };
 
 enum class UpdateType {
