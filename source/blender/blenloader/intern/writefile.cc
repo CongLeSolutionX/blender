@@ -739,9 +739,9 @@ static void write_bhead(WriteData *wd, const BHead &bhead)
 }
 
 static void writestruct_at_address_nr(WriteData *wd,
-                                      int filecode,
+                                      const int filecode,
                                       const int struct_nr,
-                                      int64_t nr,
+                                      const int64_t nr,
                                       const void *adr,
                                       const void *data)
 {
@@ -772,7 +772,7 @@ static void writestruct_at_address_nr(WriteData *wd,
 }
 
 static void writestruct_nr(
-    WriteData *wd, int filecode, const int struct_nr, int64_t nr, const void *adr)
+    WriteData *wd, const int filecode, const int struct_nr, const int64_t nr, const void *adr)
 {
   writestruct_at_address_nr(wd, filecode, struct_nr, nr, adr, adr);
 }
