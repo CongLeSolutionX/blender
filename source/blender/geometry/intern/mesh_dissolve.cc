@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Authors
+/* SPDX-FileCopyrightText: 2024 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -18,6 +18,7 @@
 #include "BLI_task.hh"
 
 #include "BKE_attribute.hh"
+#include "BKE_attribute_filter.hh"
 #include "BKE_attribute_math.hh"
 #include "BKE_mesh.hh"
 #include "BKE_mesh_mapping.hh"
@@ -25,52 +26,6 @@
 #include "GEO_randomize.hh"
 
 namespace blender::geometry {
-
-template<typename T> std::ostream &operator<<(std::ostream &stream, Vector<T> data);
-
-template<typename T, int num>
-std::ostream &operator<<(std::ostream &stream, const std::array<T, num> &data)
-{
-  stream << "{";
-  for (const int64_t i : IndexRange(num)) {
-    stream << data[i] << (num - 1 == i ? "" : "\t");
-  }
-  stream << "}";
-  return stream;
-}
-
-template<typename T> std::ostream &operator<<(std::ostream &stream, const Span<T> span)
-{
-  for (const int64_t i : span.index_range()) {
-    stream << span[i] << (span.size() - 1 == i ? "" : "\t");
-  }
-  return stream;
-}
-
-template<typename T> std::ostream &operator<<(std::ostream &stream, MutableSpan<T> span)
-{
-  stream << span.as_span();
-  return stream;
-}
-
-template<typename T> std::ostream &operator<<(std::ostream &stream, Vector<T> data)
-{
-  stream << data.as_span();
-  return stream;
-}
-
-template<typename T> std::ostream &operator<<(std::ostream &stream, Array<T> data)
-{
-  stream << data.as_span();
-  return stream;
-}
-
-static void table_iota(const int num)
-{
-  for (const int i : IndexRange(num)) {
-    std::cout << i << (i == num - 1 ? "\n" : "\t");
-  }
-}
 
 static Array<int> create_reverse_offsets(const Span<int> indices, const int items_num)
 {
@@ -178,8 +133,7 @@ static GroupedSpan<int> gather_groups(const Span<int> group_indices,
 
 static void mix_attributes(const bke::AttributeAccessor src_attributes,
                            const bke::AttrDomain domain,
-                           const bke::AnonymousAttributePropagationInfo &propagation_info,
-                           const Set<std::string> &skip,
+                           const bke::AttributeFilter &attribute_filter,
                            const Span<int> src_to_dst_mapping,
                            bke::MutableAttributeAccessor dst_attributes)
 {
@@ -190,53 +144,43 @@ static void mix_attributes(const bke::AttributeAccessor src_attributes,
   const GroupedSpan<int> groups = gather_groups(
       src_to_dst_mapping, dst_domain_size, mix_groups_offsets, mix_groups_indices);
 
-  src_attributes.for_all(
-      [&](const bke::AttributeIDRef &id, const bke::AttributeMetaData meta_data) {
-        if (meta_data.domain != domain) {
-          return true;
-        }
-        if (meta_data.data_type == CD_PROP_STRING) {
-          return true;
-        }
-        if (id.is_anonymous() && !propagation_info.propagate(id.anonymous_id())) {
-          return true;
-        }
-        if (skip.contains(id.name())) {
-          return true;
-        }
-        const bke::GAttributeReader src = src_attributes.lookup(id, domain);
-        if (!src) {
-          return true;
-        }
-        bke::GSpanAttributeWriter dst = dst_attributes.lookup_or_add_for_write_only_span(
-            id, domain, meta_data.data_type);
-        if (!dst) {
-          return true;
-        }
+  src_attributes.foreach_attribute([&](const bke::AttributeIter &iter) {
+    if (attribute_filter.allow_skip(iter.name)) {
+      return;
+    }
+    if (iter.data_type == CD_PROP_STRING) {
+      return;
+    }
+    const bke::GAttributeReader src = iter.get();
 
-        bke::attribute_math::convert_to_static_type(meta_data.data_type, [&](auto dymmu) {
-          using T = decltype(dymmu);
-          blender::bke::attribute_math::DefaultMixer<T> values(dst.span.typed<T>(), IndexMask(0));
-          const VArraySpan<T> src_span(src.varray.typed<T>());
-          threading::parallel_for(
-              groups.index_range(),
-              4098,
-              [&](const IndexRange range) {
-                for (const int group_i : range) {
-                  const Span<int> indices_to_mix = groups[group_i];
-                  for (const int src_i : indices_to_mix) {
-                    values.mix_in(group_i, src_span[src_i], 1.0f);
-                  }
-                }
-              },
-              threading::accumulated_task_sizes(
-                  [&](const IndexRange range) { return groups.offsets[range].size(); }));
-          values.finalize();
-        });
+    bke::GSpanAttributeWriter dst = dst_attributes.lookup_or_add_for_write_only_span(
+        iter.name, domain, iter.data_type);
+    if (!dst) {
+      return;
+    }
 
-        dst.finish();
-        return true;
-      });
+    bke::attribute_math::convert_to_static_type(iter.data_type, [&](auto dymmu) {
+      using T = decltype(dymmu);
+      blender::bke::attribute_math::DefaultMixer<T> values(dst.span.typed<T>(), IndexMask(0));
+      const VArraySpan<T> src_span(src.varray.typed<T>());
+      threading::parallel_for(
+          groups.index_range(),
+          4098,
+          [&](const IndexRange range) {
+            for (const int group_i : range) {
+              const Span<int> indices_to_mix = groups[group_i];
+              for (const int src_i : indices_to_mix) {
+                values.mix_in(group_i, src_span[src_i], 1.0f);
+              }
+            }
+          },
+          threading::accumulated_task_sizes(
+              [&](const IndexRange range) { return groups.offsets[range].size(); }));
+      values.finalize();
+    });
+
+    dst.finish();
+  });
 }
 
 static void ensure_min_face_sizes(const GroupedSpan<int> corner_verts,
@@ -440,7 +384,7 @@ static Array<int> deduplicate_faces_for_verts(const GroupedSpan<int> dst_corner_
 
 Mesh *dissolve_boundary_verts(const Mesh &src_mesh,
                               const IndexMask &verts_mask,
-                              const bke::AnonymousAttributePropagationInfo &propagation_info)
+                              const bke::AttributeFilter &attribute_filter)
 {
   const Span<int2> src_edges = src_mesh.edges();
   const OffsetIndices<int> src_faces = src_mesh.faces();
@@ -547,8 +491,8 @@ Mesh *dissolve_boundary_verts(const Mesh &src_mesh,
 
   bke::gather_attributes(src_attributes,
                          bke::AttrDomain::Point,
-                         propagation_info,
-                         {},
+                         bke::AttrDomain::Point,
+                         attribute_filter,
                          keeped_verts_mask,
                          dst_attributes);
 
@@ -560,27 +504,26 @@ Mesh *dissolve_boundary_verts(const Mesh &src_mesh,
 
   mix_attributes(src_attributes,
                  bke::AttrDomain::Edge,
-                 propagation_info,
-                 {".edge_verts"},
+                 bke::attribute_filter_with_skip_ref(attribute_filter, {".edge_verts"}),
                  old_to_new_edges_map,
                  dst_attributes);
 
   array_utils::copy(unique_dst_faces.data(), dst_mesh->face_offsets_for_write());
-  mix_attributes(src_attributes,
-                 bke::AttrDomain::Face,
-                 propagation_info,
-                 {/*"ID", "material_index"*/},
-                 old_to_new_faces_map,
-                 dst_attributes);
-  // bke::gather_attributes(src_attributes, bke::AttrDomain::Face, propagation_info, {},
+  mix_attributes(
+      src_attributes,
+      bke::AttrDomain::Face,
+      bke::attribute_filter_with_skip_ref(attribute_filter, {/*"ID", "material_index"*/}),
+      old_to_new_faces_map,
+      dst_attributes);
+  // bke::gather_attributes(src_attributes, bke::AttrDomain::Face, attribute_filter,
   // unique_faces.as_span(), dst_attributes);
 
-  mix_attributes(src_attributes,
-                 bke::AttrDomain::Corner,
-                 propagation_info,
-                 {".corner_vert", ".corner_edge"},
-                 old_to_new_corners_map,
-                 dst_attributes);
+  mix_attributes(
+      src_attributes,
+      bke::AttrDomain::Corner,
+      bke::attribute_filter_with_skip_ref(attribute_filter, {".corner_vert", ".corner_edge"}),
+      old_to_new_corners_map,
+      dst_attributes);
 
   MutableSpan<int> dst_corner_verts = dst_mesh->corner_verts_for_write();
   threading::parallel_for(unique_faces.index_range(), 4096, [&](const IndexRange range) {
@@ -625,20 +568,6 @@ Mesh *dissolve_boundary_verts(const Mesh &src_mesh,
   debug_randomize_face_order(dst_mesh);
 
   return dst_mesh;
-}
-
-Mesh *dissolve_edges(const Mesh &src_mesh,
-                     const IndexMask &edges_mask,
-                     const bke::AnonymousAttributePropagationInfo &propagation_info)
-{
-  return nullptr;
-}
-
-Mesh *dissolve_faces(const Mesh &src_mesh,
-                     const IndexMask &faces_mask,
-                     const bke::AnonymousAttributePropagationInfo &propagation_info)
-{
-  return nullptr;
 }
 
 }  // namespace blender::geometry

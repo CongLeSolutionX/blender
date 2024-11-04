@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Authors
+/* SPDX-FileCopyrightText: 2024 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -6,7 +6,7 @@
 
 #include "BLI_index_mask.hh"
 
-#include "BKE_anonymous_attribute_id.hh"
+#include "BKE_attribute_filter.hh"
 
 struct Mesh;
 
@@ -14,14 +14,6 @@ namespace blender::geometry {
 
 Mesh *dissolve_boundary_verts(const Mesh &src_mesh,
                               const IndexMask &vers_mask,
-                              const bke::AnonymousAttributePropagationInfo &propagation_info);
-
-Mesh *dissolve_edges(const Mesh &src_mesh,
-                     const IndexMask &edges_mask,
-                     const bke::AnonymousAttributePropagationInfo &propagation_info);
-
-Mesh *dissolve_faces(const Mesh &src_mesh,
-                     const IndexMask &faces_mask,
-                     const bke::AnonymousAttributePropagationInfo &propagation_info);
+                              const bke::AttributeFilter &attribute_filter = {});
 
 }  // namespace blender::geometry

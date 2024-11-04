@@ -1,8 +1,8 @@
-/* SPDX-FileCopyrightText: 2023 Blender Authors
+/* SPDX-FileCopyrightText: 2024 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BKE_anonymous_attribute_id.hh"
+#include "BKE_attribute_filter.hh"
 
 #include "GEO_mesh_dissolve.hh"
 
@@ -13,7 +13,7 @@ namespace blender::nodes::node_geo_mesh_dissolve_boundary_vertices_cc {
 static void node_declare(NodeDeclarationBuilder &b)
 {
   b.add_input<decl::Geometry>("Mesh").supported_type({GeometryComponent::Type::Mesh});
-  b.add_input<decl::Bool>("Selection").default_value(true).hide_value().field_on_all();
+  b.add_input<decl::Bool>("Selection").hide_value().field_on_all();
 
   b.add_output<decl::Geometry>("Mesh").propagate_all();
 }
@@ -22,9 +22,6 @@ static void node_geo_exec(GeoNodeExecParams params)
 {
   GeometrySet geometry_set = params.extract_input<GeometrySet>("Mesh");
   const Field<bool> selection_field = params.extract_input<Field<bool>>("Selection");
-
-  const bke::AnonymousAttributePropagationInfo propagation_info =
-      params.get_output_propagation_info("Mesh");
 
   GeometryComponentEditData::remember_deformed_positions_if_necessary(geometry_set);
 
@@ -44,7 +41,7 @@ static void node_geo_exec(GeoNodeExecParams params)
     }
 
     geometry_set.replace_mesh(
-        geometry::dissolve_boundary_verts(*src_mesh, mask, propagation_info));
+        geometry::dissolve_boundary_verts(*src_mesh, mask, params.get_attribute_filter("Mesh")));
   });
 
   params.set_output("Mesh", std::move(geometry_set));

@@ -441,16 +441,13 @@ class NODE_MT_geometry_node_GEO_MESH_OPERATIONS(Menu):
         node_add_menu.add_node_type(layout, "GeometryNodeMeshToPoints")
         if context.preferences.experimental.use_new_volume_nodes:
             node_add_menu.add_node_type(layout, "GeometryNodeMeshToSDFGrid")
+        node_add_menu.add_node_type(layout, "GeometryNodeDissolveBoundaryVertices")
         node_add_menu.add_node_type(layout, "GeometryNodeMeshToVolume")
         node_add_menu.add_node_type(layout, "GeometryNodeScaleElements")
         node_add_menu.add_node_type(layout, "GeometryNodeSplitEdges")
         node_add_menu.add_node_type(layout, "GeometryNodeSubdivideMesh")
         node_add_menu.add_node_type(layout, "GeometryNodeSubdivisionSurface")
         node_add_menu.add_node_type(layout, "GeometryNodeTriangulate")
-        layout.separator()
-        node_add_menu.add_node_type(layout, "GeometryNodeDissolveBoundaryVertices")
-        node_add_menu.add_node_type(layout, "GeometryNodeDissolveEdges")
-        node_add_menu.add_node_type(layout, "GeometryNodeDissolveFaces")
         node_add_menu.draw_assets_for_catalog(layout, "Mesh/Operations")
 
 
