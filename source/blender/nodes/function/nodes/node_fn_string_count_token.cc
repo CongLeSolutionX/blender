@@ -16,24 +16,24 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::String>("Token");
   b.add_output<decl::Int>("Count");
 }
-static int string_count_token(const StringRef a, const StringRef b)
+static int string_count_token(const StringRef text, const StringRef token)
 {
   int count = 0;
   int pos = 0;
-  while ((pos = a.find(b, pos)) != std::string::npos) {
+  while ((pos = text.find(token, pos)) != std::string::npos) {
     count++;
-    pos += b.size();
+    pos += token.size();
   }
   return count;
 }
 static void node_build_multi_function(NodeMultiFunctionBuilder &builder)
 {
   static auto count = mf::build::SI2_SO<std::string, std::string, int>(
-      "String Count Token", [](const StringRef a, const StringRef b) {
-        if (a.is_empty()||b.is_empty()) {
+      "String Count Token", [](const StringRef text, const StringRef token) {
+        if (text.is_empty()||token.is_empty()) {
           return 0;
         }
-        return string_count_token(a, b);
+        return string_count_token(text, token);
       });
 
   builder.set_matching_fn(&count);

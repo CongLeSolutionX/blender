@@ -18,34 +18,34 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_output<decl::String>("Out Line");
 }
 
-static std::string string_select_line(const StringRef a, const StringRef b, const int *i)
+static std::string string_select_line(const StringRef text, const StringRef my_break, const int *i)
 {
   std::string out_line = "";
   int pos = 0;
   if (*i == 0) {
-    int next_pos = a.find(b, pos);
+    int next_pos = text.find(my_break, pos);
     if (next_pos == std::string::npos) {
-      out_line = a.substr(pos);
+      out_line = text.substr(pos);
     }
     else {
-      out_line = a.substr(pos, next_pos - pos);
+      out_line = text.substr(pos, next_pos - pos);
     }
     return out_line;
   }
   int count = 0;
-  while ((pos = a.find(b, pos)) != std::string::npos) {
+  while ((pos = text.find(my_break, pos)) != std::string::npos) {
     count++;
     if (count == *i) {
-      int next_pos = a.find(b, pos + b.size());
+      int next_pos = text.find(my_break, pos + my_break.size());
       if (next_pos == std::string::npos) {
-        out_line = a.substr(pos + b.size());
+        out_line = text.substr(pos + my_break.size());
       }
       else {
-        out_line = a.substr(pos + b.size(), next_pos - (pos + b.size()));
+        out_line = text.substr(pos + my_break.size(), next_pos - (pos + my_break.size()));
       }
       break;
     }
-    pos += b.size();
+    pos += my_break.size();
   }
   if (count < *i) {
     return "";
@@ -56,12 +56,12 @@ static std::string string_select_line(const StringRef a, const StringRef b, cons
 static void node_build_multi_function(NodeMultiFunctionBuilder &builder)
 {
   static auto count = mf::build::SI3_SO<std::string, std::string, int, std::string>(
-      "String Select Line", [](const StringRef a, const StringRef b, const int &i) {
-        if (a.is_empty() || b.is_empty()) {
+      "String Select Line", [](const StringRef text, const StringRef my_break, const int &i) {
+        if (text.is_empty() || my_break.is_empty()) {
           static std::string out_line = "";
           return out_line;
         }
-        return string_select_line(a, b, &i);
+        return string_select_line(text, my_break, &i);
       });
 
   builder.set_matching_fn(&count);
