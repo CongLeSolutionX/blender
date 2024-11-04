@@ -181,7 +181,7 @@ static float2 calc_circumcenter_2d(const float2 a, const float2 b, const float2 
   const float bc1 = ba[1] * dca - ca[1] * dba;
   const float bc2 = -ba[0] * dca + ca[0] * dba;
   const float cba = ba[1] * ca[0] - ca[1] * ba[0];
-  const float2 center = float2(a[0] + 0.5f * bc1 / cba, a[1] + 0.5f * bc2 / cba);
+  const float2 center = a + 0.5f * float2(bc1, bc2) / cba;
   return center;
 }
 
@@ -578,10 +578,10 @@ static void primitive_calulate_curve_positions(PrimitiveToolOperation &ptd,
           const float t = i / float(new_points_num);
           const float a = t * math::numbers::pi * 2.0f;
           const float2 uv = float2(math::sin(a), math::cos(a)) * 0.5f + 0.5f;
-          float2 pos = corners[0] * (1 - uv[0]) * (1 - uv[1]);
-          pos += corners[1] * uv[0] * (1 - uv[1]);
+          float2 pos = corners[0] * (1.0f - uv[0]) * (1.0f - uv[1]);
+          pos += corners[1] * uv[0] * (1.0f - uv[1]);
           pos += corners[2] * uv[0] * uv[1];
-          pos += corners[3] * (1 - uv[0]) * uv[1];
+          pos += corners[3] * (1.0f - uv[0]) * uv[1];
           new_positions[i] = pos;
         }
       }
@@ -1366,9 +1366,9 @@ static void grease_pencil_primitive_drag_update(PrimitiveToolOperation &ptd, con
     if (ptd.type == PrimitiveType::Semicircle) {
       const float2 start = point_2d_from_temp_index(ptd, ptd.active_control_point_index + 1);
       const float2 end = point_2d_from_temp_index(ptd, ptd.active_control_point_index - 1);
-      float2 mp = math::midpoint(start, end);
-      float2 cp = rotate_point(end, math::numbers::pi * 0.5f, mp);
-      float2 cp2 = rotate_point(end, -math::numbers::pi * 0.5f, mp);
+      const float2 mp = math::midpoint(start, end);
+      const float2 cp = rotate_point(end, math::numbers::pi * 0.5f, mp);
+      const float2 cp2 = rotate_point(end, -math::numbers::pi * 0.5f, mp);
       const float lambda = closest_to_line_v2(active_pos, active_pos, cp, cp2);
 
       active_pos = math::interpolate(cp, cp2, math::clamp(lambda, 0.0f, 1.0f));
