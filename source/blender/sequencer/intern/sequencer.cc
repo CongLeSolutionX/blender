@@ -1025,8 +1025,7 @@ static void seq_update_scene_strip_sound(const Scene *scene, Sequence *seq)
    * then it is no longer needed to do such manual forced updates. */
   BKE_sound_set_scene_volume(seq->scene, seq->scene->audio.volume);
 
-  /* Mute nested strips of particular scene when no other scene strip is using sequencer as
-   * input.*/
+  /* Mute sound when all scene strips using particular scene are not rendering sequencer strips. */
   bool scene_sequencer_is_used = false;
   LISTBASE_FOREACH (Sequence *, seq_iter, &scene->ed->seqbase) {
     if (seq_iter->scene == seq->scene && (seq_iter->flag & SEQ_SCENE_STRIPS) != 0) {
