@@ -964,7 +964,7 @@ static void decode_blender_header(FileData *fd)
   readsize = fd->file->read(fd->file, header, sizeof(header));
 
   if (readsize == sizeof(header) && STREQLEN(header, "BLENDER", 7) &&
-      ELEM(header[7], '_', '-', 'L') && ELEM(header[8], 'v', 'V') &&
+      ELEM(header[7], '_', '-', '>') && ELEM(header[8], 'v', 'V') &&
       (isdigit(header[9]) && isdigit(header[10]) && isdigit(header[11])))
   {
     fd->flags |= FD_FLAGS_FILE_OK;
