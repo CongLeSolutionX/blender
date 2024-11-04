@@ -144,6 +144,7 @@ ImBuf *BKE_brush_gen_radial_control_imbuf(Brush *br, bool secondary, bool displa
 const float *BKE_brush_color_get(const Scene *scene, const Brush *brush);
 const float *BKE_brush_secondary_color_get(const Scene *scene, const Brush *brush);
 void BKE_brush_color_set(Scene *scene, Brush *brush, const float color[3]);
+void BKE_brush_color_set_ex(Scene *scene, Brush *brush, const float color[3], bool use_unified_paint);
 
 int BKE_brush_size_get(const Scene *scene, const Brush *brush);
 void BKE_brush_size_set(Scene *scene, Brush *brush, int size);

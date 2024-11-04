@@ -6502,6 +6502,7 @@ static int ui_do_but_COLOR(bContext *C, uiBut *but, uiHandleButtonData *data, co
           Paint *paint = BKE_paint_get_active_from_context(C);
           if (paint != nullptr) {
             Brush *brush = BKE_paint_brush(paint);
+            const bool use_unified_paint = BKE_paint_use_unified_settings(C);
 
             if (brush->flag & BRUSH_USE_GRADIENT) {
               float *target = &brush->gradient->data[brush->gradient->cur].r;
@@ -6521,13 +6522,13 @@ static int ui_do_but_COLOR(bContext *C, uiBut *but, uiHandleButtonData *data, co
 
               if (but->rnaprop && RNA_property_subtype(but->rnaprop) == PROP_COLOR_GAMMA) {
                 RNA_property_float_get_array(&but->rnapoin, but->rnaprop, color);
-                BKE_brush_color_set(scene, brush, color);
+                BKE_brush_color_set_ex(scene, brush, color, use_unified_paint);
                 updated = true;
               }
               else if (but->rnaprop && RNA_property_subtype(but->rnaprop) == PROP_COLOR) {
                 RNA_property_float_get_array(&but->rnapoin, but->rnaprop, color);
                 IMB_colormanagement_scene_linear_to_srgb_v3(color, color);
-                BKE_brush_color_set(scene, brush, color);
+                BKE_brush_color_set_ex(scene, brush, color, use_unified_paint);
                 updated = true;
               }
 

@@ -1041,8 +1041,16 @@ const float *BKE_brush_secondary_color_get(const Scene *scene, const Brush *brus
 void BKE_brush_color_set(Scene *scene, Brush *brush, const float color[3])
 {
   UnifiedPaintSettings *ups = &scene->toolsettings->unified_paint_settings;
+  BKE_brush_color_set_ex(scene, brush, color, ups->flag & UNIFIED_PAINT_COLOR);
+}
 
-  if (ups->flag & UNIFIED_PAINT_COLOR) {
+void BKE_brush_color_set_ex(Scene *scene,
+                            Brush *brush,
+                            const float color[3],
+                            const bool use_unified_paint)
+{
+  if (use_unified_paint) {
+    UnifiedPaintSettings *ups = &scene->toolsettings->unified_paint_settings;
     copy_v3_v3(ups->rgb, color);
   }
   else {
