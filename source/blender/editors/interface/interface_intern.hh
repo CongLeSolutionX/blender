@@ -333,6 +333,8 @@ struct uiBut {
   uiBut(const uiBut &other) = default;
   /** Mostly shallow copy, just like copy constructor above. */
   uiBut &operator=(const uiBut &other) = default;
+
+  virtual ~uiBut() = default;
 };
 
 /** Derived struct for #UI_BTYPE_NUM */
