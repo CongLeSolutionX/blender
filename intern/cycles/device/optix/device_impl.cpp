@@ -733,7 +733,7 @@ bool OptiXDevice::load_osl_kernels()
       return OSLKernel{};
     }
     string osl_ptx, fused_name;
-        osl_globals.ss->getattribute(group.get(), "group_fused_name", fused_name);
+    osl_globals.ss->getattribute(group.get(), "group_fused_name", fused_name);
     osl_globals.ss->getattribute(
         group.get(), "ptx_compiled_version", OSL::TypeDesc::PTR, &osl_ptx);
 

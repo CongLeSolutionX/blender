@@ -129,6 +129,16 @@ class DATA_PT_lens(CameraButtonsPanel, Panel):
                     sub.prop(cam, "central_cylindrical_range_u_max", text="Max")
                     sub = col.column(align=True)
                     sub.prop(cam, "central_cylindrical_radius", text="Cylinder radius")
+                elif cam.panorama_type == 'SCRIPT':
+                    ccam = cam.cycles
+                    sub = col.row()
+                    sub.prop(ccam, "script_mode", text=" ", expand=True)
+
+                    sub = col.row(align=True)
+                    if ccam.script_mode == 'EXTERNAL':
+                        sub.prop(ccam, "script_path", text=" ")
+                    else:
+                        sub.prop(ccam, "script", text=" ")
 
             elif engine in {'BLENDER_RENDER', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH'}:
                 if cam.lens_unit == 'MILLIMETERS':
