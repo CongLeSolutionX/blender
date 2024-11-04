@@ -24,6 +24,7 @@
 #include "DNA_scene_types.h"
 
 #include "BLI_blenlib.h"
+#include "BLI_endian_switch.h"
 #include "BLI_ghash.h"
 #include "BLI_math_color.h"
 #include "BLI_math_matrix.h"
@@ -34,6 +35,8 @@
 #include "BLI_utildefines.h"
 
 #include "BLT_translation.hh"
+
+#include "BLO_read_write.hh"
 
 #include "BKE_action.hh"
 #include "BKE_anim_data.hh"
@@ -674,6 +677,13 @@ static void read_slots(BlendDataReader *reader, animrig::Action &action)
 static void action_blend_read_data(BlendDataReader *reader, ID *id)
 {
   animrig::Action &action = reinterpret_cast<bAction *>(id)->wrap();
+
+  /* Undo generic endian switching (careful, only the two least significant bytes of the int32 must
+   * be swapped back here, since this value is actually an int16). */
+  if (BLO_read_requires_endian_switch(reader)) {
+    bAction *act = reinterpret_cast<bAction *>(id);
+    BLI_endian_switch_int16(reinterpret_cast<short *>(&act->idroot));
+  }
 
 #ifdef WITH_ANIM_BAKLAVA
   read_strip_keyframe_data_array(reader, action);
@@ -1668,6 +1678,12 @@ void BKE_pose_channel_copy_data(bPoseChannel *pchan, const bPoseChannel *pchan_f
   copy_v3_v3(pchan->custom_translation, pchan_from->custom_translation);
   copy_v3_v3(pchan->custom_rotation_euler, pchan_from->custom_rotation_euler);
   pchan->custom_shape_wire_width = pchan_from->custom_shape_wire_width;
+
+  pchan->color.palette_index = pchan_from->color.palette_index;
+  copy_v4_v4_uchar(pchan->color.custom.active, pchan_from->color.custom.active);
+  copy_v4_v4_uchar(pchan->color.custom.select, pchan_from->color.custom.select);
+  copy_v4_v4_uchar(pchan->color.custom.solid, pchan_from->color.custom.solid);
+  pchan->color.custom.flag = pchan_from->color.custom.flag;
 
   pchan->drawflag = pchan_from->drawflag;
 }
