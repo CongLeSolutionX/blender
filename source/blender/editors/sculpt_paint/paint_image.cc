@@ -363,6 +363,7 @@ bool paint_use_opacity_masking(Brush *brush)
 }
 
 void paint_brush_color_get(Scene *scene,
+                           const Paint *paint,
                            Brush *br,
                            bool color_correction,
                            bool invert,
@@ -396,7 +397,7 @@ void paint_brush_color_get(Scene *scene,
       IMB_colormanagement_scene_linear_to_srgb_v3(r_color, color_gr);
     }
     else {
-      copy_v3_v3(r_color, BKE_brush_color_get(scene, nullptr, br));
+      copy_v3_v3(r_color, BKE_brush_color_get(scene, paint, br));
     }
   }
   if (color_correction) {
@@ -685,7 +686,7 @@ static int sample_color_invoke(bContext *C, wmOperator *op, const wmEvent *event
 
   data->launch_event = WM_userdef_event_type_from_keymap_type(event->type);
   data->show_cursor = ((paint->flags & PAINT_SHOW_BRUSH) != 0);
-  copy_v3_v3(data->initcolor, BKE_brush_color_get(scene, nullptr, brush));
+  copy_v3_v3(data->initcolor, BKE_brush_color_get(scene, paint, brush));
   data->sample_palette = false;
   op->customdata = data;
   paint->flags &= ~PAINT_SHOW_BRUSH;
