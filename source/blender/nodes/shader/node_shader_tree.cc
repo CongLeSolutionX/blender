@@ -470,17 +470,26 @@ static void ntree_shader_groups_remove_muted_links(bNodeTree *ntree)
 
 static bool is_zone_input_node(bNode *node)
 {
-  return ELEM(node->type, SH_NODE_REPEAT_INPUT, SH_NODE_LIGHT_LOOP_INPUT);
+  using namespace blender::bke;
+  if (const bNodeZoneType *zone_type = zone_type_by_node_type(node->type)) {
+    return node->type == zone_type->input_type;
+  }
+  return false;
 }
 
 static bool is_zone_output_node(bNode *node)
 {
-  return ELEM(node->type, SH_NODE_REPEAT_OUTPUT, SH_NODE_LIGHT_LOOP_OUTPUT);
+  using namespace blender::bke;
+  if (const bNodeZoneType *zone_type = zone_type_by_node_type(node->type)) {
+    return node->type == zone_type->output_type;
+  }
+  return false;
 }
 
 static bool is_zone_node(bNode *node)
 {
-  return is_zone_input_node(node) || is_zone_output_node(node);
+  using namespace blender::bke;
+  return zone_type_by_node_type(node->type) != nullptr;
 }
 
 static int &node_zone_id(bNode *node)
