@@ -460,14 +460,19 @@ struct IsectMap {
 
   IsectPair *lookup_or_add_vert_vert(BMVert *va, BMVert *vb)
   {
-    ISECT_ASSERT(va != vb);
     OrderedEdge key_vert_vert = OrderedEdge(BM_elem_index_get(va), BM_elem_index_get(vb));
     return this->vert_vert.lookup_or_add_cb(key_vert_vert, [&]() {
       IsectPair *pair = (IsectPair *)BLI_memarena_alloc(this->mem_arena, sizeof(*pair));
       pair->elem_a.v = va;
-      pair->elem_b.v = vb;
       pair->type_a = VERT;
-      pair->type_b = VERT;
+      if (va != vb) {
+        pair->elem_b.v = vb;
+        pair->type_b = VERT;
+      }
+      else {
+        pair->elem_b.v = nullptr;
+        pair->type_b = NONE;
+      }
       return pair;
     });
   }
@@ -699,19 +704,15 @@ static LinkNode *isectmap_node_new(struct IsectMap *s)
  * `IsectMap` object.
  * \{ */
 
-enum eIsectTriTriMode {
-  NO_ISECT = 0,
-  ISECT,
-  COPLANAR,
-  DEGENERATED,
-};
-#define PAIRS_LEN_MAX 3
+enum eIsectTriTriMode { NO_ISECT = 0, ISECT, COPLANAR };
+#define PAIRS_LEN_MAX 3 * 2
 static eIsectTriTriMode intersect_tri_tri_impl(IsectMap *s,
                                                BMVert *fv_a[3],
                                                BMVert *fv_b[3],
                                                int a_index,
                                                int b_index,
-                                               IsectPair *r_pairs[PAIRS_LEN_MAX])
+                                               IsectPair *r_pairs[PAIRS_LEN_MAX][2],
+                                               int *r_edge_size)
 {
 
   float3 tri_a[3] = {UNPACK3_EX(, fv_a, ->co)};
@@ -745,7 +746,7 @@ static eIsectTriTriMode intersect_tri_tri_impl(IsectMap *s,
   int ea_isect_len[3] = {0, 0, 0};
   int eb_isect_len[3] = {0, 0, 0};
 
-  float dist_sq_3rd_minor = s->eps_sq;
+  float dist_sq_min = s->eps_sq;
   float dist_sq_test = 0.0f;
 
   auto update_distance = [&](float dist_sq) {
@@ -753,11 +754,12 @@ static eIsectTriTriMode intersect_tri_tri_impl(IsectMap *s,
       dist_sq_test = std::max(dist_sq_test, dist_sq);
     }
     else {
-      dist_sq_3rd_minor = std::min(dist_sq_3rd_minor, dist_sq);
+      dist_sq_min = std::min(dist_sq_min, dist_sq);
     }
   };
   auto remove_vert_edge_pairs = [&](uint v, bool is_b) {
-    for (int i : pairs.index_range()) {
+    /* `pairs.size()` can change in the loop. */
+    for (int i = 0; i < pairs.size(); i++) {
       IsectResult::Elem *elem = pairs[i].elem;
       if (elem[is_b].type == VERT && elem[is_b].index == v && elem[!is_b].type == EDGE) {
         if (is_b) {
@@ -781,7 +783,7 @@ static eIsectTriTriMode intersect_tri_tri_impl(IsectMap *s,
   for (uint ia_prev = 2, ia = 0; ia < 3; ia_prev = ia++) {
     for (uint ib_prev = 2, ib = 0; ib < 3; ib_prev = ib++) {
       float dist_sq;
-      if ((dist_sq = tri_precalc.dist_sq_vert0_vert1(ia, ib)) <= dist_sq_3rd_minor) {
+      if ((dist_sq = tri_precalc.dist_sq_vert0_vert1(ia, ib)) <= dist_sq_min) {
         is_va_on_tri[ia] = true;
         is_vb_on_tri[ib] = true;
         is_va_on_vb[ia][ib] = true;
@@ -801,8 +803,7 @@ static eIsectTriTriMode intersect_tri_tri_impl(IsectMap *s,
     }
     for (uint ib = 2, ib_next = 0; ib_next < 3; ib = ib_next++) {
       float dist_sq, lambda;
-      if (tri_precalc.dist_sq_vert0_edge1(ia, ib, dist_sq, lambda) && dist_sq <= dist_sq_3rd_minor)
-      {
+      if (tri_precalc.dist_sq_vert0_edge1(ia, ib, dist_sq, lambda) && dist_sq <= dist_sq_min) {
         update_distance(dist_sq);
         is_va_on_tri[ia] = true;
         int vb = tri_precalc.snap_isect_edge_on_vert(1, ib, ib_next, lambda, s->eps_sq);
@@ -833,8 +834,7 @@ static eIsectTriTriMode intersect_tri_tri_impl(IsectMap *s,
     }
     for (uint ia = 2, ia_next = 0; ia_next < 3; ia = ia_next++) {
       float dist_sq, lambda;
-      if (tri_precalc.dist_sq_vert1_edge0(ib, ia, dist_sq, lambda) && dist_sq <= dist_sq_3rd_minor)
-      {
+      if (tri_precalc.dist_sq_vert1_edge0(ib, ia, dist_sq, lambda) && dist_sq <= dist_sq_min) {
         update_distance(dist_sq);
         is_vb_on_tri[ib] = true;
         int va = tri_precalc.snap_isect_edge_on_vert(0, ia, ia_next, lambda, s->eps_sq);
@@ -887,7 +887,7 @@ static eIsectTriTriMode intersect_tri_tri_impl(IsectMap *s,
       }
       float dist_sq, lambda_a, lambda_b;
       if (tri_precalc.dist_sq_edge0_edge1(ia, ib, dist_sq, lambda_a, lambda_b) &&
-          dist_sq <= dist_sq_3rd_minor)
+          dist_sq <= dist_sq_min)
       {
         update_distance(dist_sq);
         int va = tri_precalc.snap_isect_edge_on_vert(0, ia, ia_next, lambda_a, s->eps_sq);
@@ -937,7 +937,7 @@ static eIsectTriTriMode intersect_tri_tri_impl(IsectMap *s,
       continue;
     }
     float dist_sq;
-    if (tri_precalc.dist_sq_vert0_tri1(ia, dist_sq) && dist_sq <= dist_sq_3rd_minor) {
+    if (tri_precalc.dist_sq_vert0_tri1(ia, dist_sq) && dist_sq <= dist_sq_min) {
       is_va_on_tri[ia] = true;
       pairs.append(IsectResult({VERT, ia}, {NONE, uint(b_index)}, dist_sq));
       update_distance(dist_sq);
@@ -948,7 +948,7 @@ static eIsectTriTriMode intersect_tri_tri_impl(IsectMap *s,
       continue;
     }
     float dist_sq;
-    if (tri_precalc.dist_sq_vert1_tri0(ib, dist_sq) && dist_sq <= dist_sq_3rd_minor) {
+    if (tri_precalc.dist_sq_vert1_tri0(ib, dist_sq) && dist_sq <= dist_sq_min) {
       is_vb_on_tri[ib] = true;
       pairs.append(IsectResult({NONE, uint(a_index)}, {VERT, ib}, dist_sq));
       update_distance(dist_sq);
@@ -986,34 +986,99 @@ static eIsectTriTriMode intersect_tri_tri_impl(IsectMap *s,
 return_best:
   ISECT_ASSERT(pairs.size() <= 9);
   Vector<IsectResult, PAIRS_LEN_MAX> best_pairs;
-  /* Pick the pairs with the best distance. */
-  for (const IsectResult &pair : pairs) {
-    if (pair.dist_sq <= dist_sq_3rd_minor) {
+
+  /* Take the best pairs with the best distances. Also, if the same vertex intersects more than
+   * once, choose only the pair with the shortest distance. */
+  for (int i = 0; i < pairs.size(); i++) {
+    const IsectResult &pair = pairs[i];
+    if (pair.dist_sq > dist_sq_min) {
+      continue;
+    }
+    if (!ELEM(VERT, pair.elem[0].type, pair.elem[1].type)) {
       best_pairs.append(pair);
-      if (best_pairs.size() == PAIRS_LEN_MAX) {
-        break;
+      continue;
+    }
+
+    int i_best = i;
+    for (int i_test = i + 1; i_test < pairs.size(); i_test++) {
+      /* Find pairs with the same vertex. */
+      const IsectResult &pair_best = pairs[i_best];
+      const IsectResult &pair_test = pairs[i_test];
+      if (pair_test.dist_sq > dist_sq_min) {
+        continue;
       }
+      if (!ELEM(VERT, pair_test.elem[0].type, pair_test.elem[1].type)) {
+        continue;
+      }
+      if ((pair_test.elem[0].type == VERT && pair_best.elem[0].type == VERT &&
+           pair_test.elem[0].index == pair_best.elem[0].index) ||
+          (pair_test.elem[1].type == VERT && pair_best.elem[1].type == VERT &&
+           pair_test.elem[1].index == pair_best.elem[1].index))
+      {
+        if (pair_test.dist_sq < pair_best.dist_sq) {
+          i_best = i_test;
+        }
+        else {
+          /* Remove `pair_test` so we won't test it again. */
+          pairs.remove_and_reorder(i_test);
+          i_test--;
+        }
+      }
+    }
+    best_pairs.append(pairs[i_best]);
+    if (i != i_best) {
+      /* No need to test this pair again. */
+      pairs.remove_and_reorder(i_best);
     }
   }
   if (best_pairs.size() < 2) {
     return NO_ISECT;
   }
-  uint isect_len = 0;
-  for (IsectResult &pair : best_pairs) {
+
+  /* Sort to keep pairs with the same edge in the same isect edge. */
+  std::sort(
+      best_pairs.begin(), best_pairs.end(), [](const IsectResult &pa, const IsectResult &pb) {
+        if (pa.elem[0].type == EDGE && pb.elem[0].type == EDGE) {
+          return pa.elem[0].index < pb.elem[0].index;
+        }
+        if (pa.elem[1].type == EDGE && pb.elem[1].type == EDGE) {
+          return pa.elem[1].index < pb.elem[1].index;
+        }
+        if (pa.elem[0].type == EDGE) {
+          return true;
+        }
+        if (pb.elem[0].type == EDGE) {
+          return false;
+        }
+        if (pa.elem[1].type == EDGE) {
+          return true;
+        }
+        if (pb.elem[1].type == EDGE) {
+          return false;
+        }
+        return false;
+      });
+
+  int edge, edge_prev = 0;
+  for (edge = 0; edge < best_pairs.size(); edge_prev = edge++) {
+    const IsectResult &pair = best_pairs[edge];
+    if (edge != 0) {
+      r_pairs[edge][0] = r_pairs[edge_prev][1];
+    }
     if (pair.elem[0].type == VERT && pair.elem[1].type == VERT) {
-      r_pairs[isect_len++] = s->lookup_or_add_vert_vert(fv_a[pair.elem[0].index],
-                                                        fv_b[pair.elem[1].index]);
+      r_pairs[edge][1] = s->lookup_or_add_vert_vert(fv_a[pair.elem[0].index],
+                                                    fv_b[pair.elem[1].index]);
     }
     else if (pair.elem[0].type == VERT && pair.elem[1].type == EDGE) {
       uint e = pair.elem[1].index;
       uint e_next = e == 2 ? 0 : e + 1;
-      r_pairs[isect_len++] = s->lookup_or_add_vert_edge(
+      r_pairs[edge][1] = s->lookup_or_add_vert_edge(
           fv_a[pair.elem[0].index], fv_b[e], fv_b[e_next], pair.elem[1].lambda);
     }
     else if (pair.elem[0].type == EDGE && pair.elem[1].type == VERT) {
       uint e = pair.elem[0].index;
       uint e_next = e == 2 ? 0 : e + 1;
-      r_pairs[isect_len++] = s->lookup_or_add_vert_edge(
+      r_pairs[edge][1] = s->lookup_or_add_vert_edge(
           fv_b[pair.elem[1].index], fv_a[e], fv_a[e_next], pair.elem[0].lambda);
     }
     else if (pair.elem[0].type == EDGE && pair.elem[1].type == EDGE) {
@@ -1021,40 +1086,42 @@ return_best:
       uint ea_next = ea == 2 ? 0 : ea + 1;
       uint eb = pair.elem[1].index;
       uint eb_next = eb == 2 ? 0 : eb + 1;
-      r_pairs[isect_len++] = s->lookup_or_add_edge_edge(fv_a[ea],
-                                                        fv_a[ea_next],
-                                                        fv_b[eb],
-                                                        fv_b[eb_next],
-                                                        pair.elem[0].lambda,
-                                                        pair.elem[1].lambda);
+      r_pairs[edge][1] = s->lookup_or_add_edge_edge(fv_a[ea],
+                                                    fv_a[ea_next],
+                                                    fv_b[eb],
+                                                    fv_b[eb_next],
+                                                    pair.elem[0].lambda,
+                                                    pair.elem[1].lambda);
     }
     else if (pair.elem[0].type == VERT) {
-      r_pairs[isect_len++] = s->lookup_or_add_vert_tri(fv_a[pair.elem[0].index],
-                                                       pair.elem[1].index);
+      r_pairs[edge][1] = s->lookup_or_add_vert_tri(fv_a[pair.elem[0].index], pair.elem[1].index);
     }
     else if (pair.elem[1].type == VERT) {
-      r_pairs[isect_len++] = s->lookup_or_add_vert_tri(fv_b[pair.elem[1].index],
-                                                       pair.elem[0].index);
+      r_pairs[edge][1] = s->lookup_or_add_vert_tri(fv_b[pair.elem[1].index], pair.elem[0].index);
     }
     else if (pair.elem[0].type == EDGE) {
       uint e = pair.elem[0].index;
       uint e_next = e == 2 ? 0 : e + 1;
-      r_pairs[isect_len++] = s->lookup_or_add_edge_tri(
+      r_pairs[edge][1] = s->lookup_or_add_edge_tri(
           fv_a[e], fv_a[e_next], pair.elem[1].index, pair.elem[0].lambda);
     }
     else {
       BLI_assert(pair.elem[1].type == EDGE);
       uint e = pair.elem[1].index;
       uint e_next = e == 2 ? 0 : e + 1;
-      r_pairs[isect_len++] = s->lookup_or_add_edge_tri(
+      r_pairs[edge][1] = s->lookup_or_add_edge_tri(
           fv_b[e], fv_b[e_next], pair.elem[0].index, pair.elem[1].lambda);
     }
   }
-  if (isect_len == 2) {
+
+  r_pairs[0][0] = r_pairs[edge_prev][1];
+  if (best_pairs.size() == 2) {
+    *r_edge_size = 1;
     return ISECT;
   }
+  *r_edge_size = edge;
   if (tri_precalc.tri_[0].is_degenerate || tri_precalc.tri_[1].is_degenerate) {
-    return COPLANAR;
+    return ISECT;
   }
   return COPLANAR;
 }
@@ -1074,10 +1141,12 @@ static void intersect_tri_tri(struct IsectMap *s,
   BMVert *fv_a[3] = {UNPACK3_EX(, a, ->v)};
   BMVert *fv_b[3] = {UNPACK3_EX(, b, ->v)};
 
-  IsectPair *pairs[PAIRS_LEN_MAX] = {nullptr};
-  eIsectTriTriMode isect = intersect_tri_tri_impl(s, fv_a, fv_b, a_index, b_index, pairs);
+  IsectPair *pairs[PAIRS_LEN_MAX][2] = {nullptr};
+  int edge_size;
+  eIsectTriTriMode isect = intersect_tri_tri_impl(
+      s, fv_a, fv_b, a_index, b_index, pairs, &edge_size);
 
-  if (ELEM(isect, NO_ISECT, DEGENERATED)) {
+  if (isect == NO_ISECT) {
     return;
   }
 
@@ -1091,10 +1160,11 @@ static void intersect_tri_tri(struct IsectMap *s,
     ISECT_ASSERT(f_a_data->is_face_a != f_b_data->is_face_a);
   }
   else {
-    ISECT_ASSERT(isect == ISECT);
-    BMEdge **edge_ptr = s->lookup_or_add_isect_edge(UNPACK2(pairs));
-    f_a_data->add_edge_ptr(s, edge_ptr);
-    f_b_data->add_edge_ptr(s, edge_ptr);
+    for (int edge = 0; edge < edge_size; edge++) {
+      BMEdge **edge_ptr = s->lookup_or_add_isect_edge(UNPACK2(pairs[edge]));
+      f_a_data->add_edge_ptr(s, edge_ptr);
+      f_b_data->add_edge_ptr(s, edge_ptr);
+    }
   }
 }
 
@@ -1444,11 +1514,13 @@ static void merge_vert_vert_cases(IsectMap *s)
 
   uint vert_pair_table_len = 0;
   for (IsectPair *pair : s->vert_vert.values()) {
-    ISECT_ASSERT((pair->type_a == VERT) && (pair->type_b == VERT));
+    ISECT_ASSERT((pair->type_a == VERT) && (ELEM(pair->type_b, VERT, NONE)));
     vert_pair_table[vert_pair_table_len++] = pair;
 #ifdef DEBUG_ISECT
     /* Make sure no element in elem_a is in elem_b. */
-    BM_elem_index_set(pair->elem_b.v, -2);
+    if (pair->type_b == VERT) {
+      BM_elem_index_set(pair->elem_b.v, -2);
+    }
     ISECT_ASSERT(BM_elem_index_get(pair->elem_a.v) == -1);
 #endif
   }
@@ -1456,7 +1528,7 @@ static void merge_vert_vert_cases(IsectMap *s)
 
 #ifdef DEBUG_ISECT
   for (IsectPair *pair : s->edge_edge.values()) {
-    ISECT_ASSERT(!pair || pair->type_b != VERT);
+    ISECT_ASSERT(pair->type_b != VERT);
   }
 #endif
 
@@ -1467,6 +1539,9 @@ static void merge_vert_vert_cases(IsectMap *s)
    */
   for (uint i = 0; i < vert_pair_table_len; i++) {
     IsectPair *pair = vert_pair_table[i];
+    if (pair->type_b == NONE) {
+      continue;
+    }
     BMVert *v_a = pair->elem_a.v;
     BMVert *v_b = pair->elem_b.v;
     int v_a_index = BM_elem_index_get(v_a);
@@ -1520,6 +1595,112 @@ static void merge_vert_vert_cases(IsectMap *s)
 
 /*** Split Faces. ***/
 
+static bool prepare_edgenet_for_face(BMesh *bm,
+                                     BMFace *f,
+                                     BMEdge **edge_net_init,
+                                     uint edge_net_init_len,
+                                     bool fix_intersections,
+                                     bool use_island_connect,
+                                     bool use_partial_connect,
+                                     MemArena *mem_arena,
+                                     BMEdge ***r_edge_net_new,
+                                     uint *r_edge_net_new_len)
+{
+  bool ok = false;
+
+  if (fix_intersections) {
+    /* This is a rare case, but faces from the same operand mesh can intersect and create edgenets
+     * with edges that also intersect. To improve the result, split the edges that intersect. */
+    struct IsectEdge {
+      struct Pair {
+        int e;
+        float lambda;
+      } pair[2];
+    };
+    Vector<IsectEdge> edges_pair;
+
+    const float3 &f_no = f->no;
+    for (int ia : IndexRange(edge_net_init_len - 1)) {
+      BMEdge *ea = edge_net_init[ia];
+      const float3 &ea_v1 = ea->v1->co;
+      const float3 &ea_v2 = ea->v2->co;
+      float3 ea_tangent = math::cross(ea_v2 - ea_v1, f_no);
+      if (math::is_zero(ea_tangent)) {
+        continue;
+      }
+
+      int ia_next = ia + 1;
+      for (int ib : IndexRange(ia_next, edge_net_init_len - ia_next)) {
+        BMEdge *eb = edge_net_init[ib];
+        if (BM_edge_share_vert(ea, eb)) {
+          continue;
+        }
+        const float3 &eb_v1 = eb->v1->co;
+        const float3 &eb_v2 = eb->v2->co;
+        float dist_eb1 = math::dot(eb_v1 - ea_v1, ea_tangent);
+        float dist_eb2 = math::dot(eb_v2 - ea_v1, ea_tangent);
+        if ((dist_eb1 >= 0.0f) == (dist_eb2 >= 0.0f)) {
+          continue;
+        }
+        float3 eb_tangent = math::cross(eb_v2 - eb_v1, f_no);
+        float dist_ea1 = math::dot(ea_v1 - eb_v1, eb_tangent);
+        float dist_ea2 = math::dot(ea_v2 - eb_v1, eb_tangent);
+        if ((dist_ea1 >= 0.0f) == (dist_ea2 >= 0.0f)) {
+          continue;
+        }
+        float lambda_a = dist_ea1 / (dist_ea1 - dist_ea2);
+        float lambda_b = dist_eb1 / (dist_eb1 - dist_eb2);
+        edges_pair.append({IsectEdge::Pair{ia, lambda_a}, {ib, lambda_b}});
+      }
+    }
+    if (edges_pair.size()) {
+      uint edge_net_new_len = edge_net_init_len + edges_pair.size();
+      BMEdge **edge_net_new = static_cast<BMEdge **>(
+          BLI_memarena_alloc(mem_arena, sizeof(*edge_net_new) * edge_net_new_len));
+      BMEdge **edge_net_new_iter = edge_net_new;
+      IsectEdge::Pair *edges_flat_iter = reinterpret_cast<IsectEdge::Pair *>(edges_pair.data());
+      for (int i : IndexRange(edge_net_init_len)) {
+        if (i == edges_flat_iter->e) {
+          edges_flat_iter++;
+          continue;
+        }
+        *edge_net_new_iter++ = edge_net_init[i];
+      }
+
+      for (IsectEdge &edge_pair : edges_pair) {
+        BMEdge *ea = edge_net_init[edge_pair.pair[0].e];
+        BMEdge *eb = edge_net_init[edge_pair.pair[1].e];
+        float3 co = math::interpolate(
+            float3(ea->v1->co), float3(ea->v2->co), edge_pair.pair[0].lambda);
+        BMVert *v_new = BM_vert_create(bm, co, nullptr, BM_CREATE_NOP);
+        *edge_net_new_iter++ = BM_edge_create(bm, ea->v1, v_new, ea, BM_CREATE_NOP);
+        *edge_net_new_iter++ = BM_edge_create(bm, v_new, ea->v2, ea, BM_CREATE_NOP);
+        *edge_net_new_iter++ = BM_edge_create(bm, eb->v1, v_new, eb, BM_CREATE_NOP);
+        *edge_net_new_iter++ = BM_edge_create(bm, v_new, eb->v2, eb, BM_CREATE_NOP);
+      }
+      *r_edge_net_new = edge_net_init = edge_net_new;
+      *r_edge_net_new_len = edge_net_init_len = edge_net_new_len;
+      ok = true;
+    }
+  }
+
+  if (use_island_connect) {
+    if (BM_face_split_edgenet_connect_islands(bm,
+                                              f,
+                                              edge_net_init,
+                                              edge_net_init_len,
+                                              use_partial_connect,
+                                              mem_arena,
+                                              r_edge_net_new,
+                                              r_edge_net_new_len))
+    {
+      ok = true;
+    }
+  }
+
+  return ok;
+}
+
 /* Splits a face into multiple sub-faces using a list of edges in `f_data`.
  * The split faces are returned in `r_face_arr`. */
 static bool split_face_with_edgenet(BMesh *bm,
@@ -1541,24 +1722,25 @@ static bool split_face_with_edgenet(BMesh *bm,
   }
   ISECT_ASSERT(i == f_data->edge_list_len);
 
-  if (use_island_connect) {
-    uint edge_arr_holes_len;
-    BMEdge **edge_arr_holes;
-    if (BM_face_split_edgenet_connect_islands(bm,
-                                              f,
-                                              edge_arr,
-                                              edge_arr_len,
-                                              use_partial_connect,
-                                              mem_arena_edgenet,
-                                              &edge_arr_holes,
-                                              &edge_arr_holes_len))
-    {
-      edge_arr_len = edge_arr_holes_len;
-      edge_arr = edge_arr_holes; /* owned by the arena */
-    }
+  uint edge_arr_holes_len;
+  BMEdge **edge_arr_holes;
+  BM_face_calc_normal(f, f->no);
+  if (prepare_edgenet_for_face(bm,
+                               f,
+                               edge_arr,
+                               edge_arr_len,
+                               true,
+                               use_island_connect,
+                               use_partial_connect,
+                               mem_arena_edgenet,
+                               &edge_arr_holes,
+                               &edge_arr_holes_len))
+  {
+    /* Owned by the arena. */
+    edge_arr_len = edge_arr_holes_len;
+    edge_arr = edge_arr_holes;
   }
 
-  BM_face_calc_normal(f, f->no);
   return BM_face_split_edgenet(bm, f, edge_arr, (int)edge_arr_len, r_face_arr) &&
          !r_face_arr->is_empty();
 }
