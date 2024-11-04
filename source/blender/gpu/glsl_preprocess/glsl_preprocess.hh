@@ -350,7 +350,7 @@ class Preprocessor {
   std::string assert_processing(const std::string &str, const std::string &filepath)
   {
     std::string filename = std::regex_replace(filepath, std::regex(R"((?:.*)\/(.*))"), "$1");
-    /* Example: `assert(i < 0)` > `if (i < 0) { printf(...); }` */
+    /* Example: `assert(i < 0)` > `if (!(i < 0)) { printf(...); }` */
     std::regex regex(R"(\bassert\(([^;]*)\))");
     std::string replacement;
 #ifdef WITH_GPU_SHADER_ASSERT
