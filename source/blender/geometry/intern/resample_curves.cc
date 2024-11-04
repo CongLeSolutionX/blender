@@ -254,7 +254,7 @@ struct EvalDataBuffer {
   Vector<std::byte, 0, AllocatorType> heap_allocated;
   alignas(AllocatorType::min_alignment) std::array<std::byte, 1024> inline_buffer;
 
-  template<typename T> MutableSpan<T> get_size(const int64_t size)
+  template<typename T> MutableSpan<T> resize(const int64_t size)
   {
     const int64_t size_in_bytes = sizeof(T) * size;
     if (size_in_bytes <= this->inline_buffer.size()) {
@@ -344,7 +344,7 @@ static void resample_to_uniform(const CurvesGeometry &src_curves,
                                              dst.slice(dst_points));
           }
           else {
-            MutableSpan evaluated = evaluated_buffer.get_size<T>(
+            MutableSpan evaluated = evaluated_buffer.resize<T>(
                 evaluated_points_by_curve[i_curve].size());
             src_curves.interpolate_to_evaluated(i_curve, src.slice(src_points), evaluated);
 
