@@ -20,9 +20,6 @@ static void node_declare(NodeDeclarationBuilder &b)
 
 static std::string string_select_line(const StringRef a, const StringRef b, const int *i)
 {
-  if (a.is_empty() || b.is_empty()) {
-    return "";
-  }
   std::string out_line = "";
   int pos = 0;
   if (*i == 0) {
@@ -59,8 +56,11 @@ static std::string string_select_line(const StringRef a, const StringRef b, cons
 static void node_build_multi_function(NodeMultiFunctionBuilder &builder)
 {
   static auto count = mf::build::SI3_SO<std::string, std::string, int, std::string>(
-      "String Select Line", [](const StringRef &a, const StringRef &b, const int &i) {
-        
+      "String Select Line", [](const StringRef a, const StringRef b, const int &i) {
+        if (a.is_empty() || b.is_empty()) {
+          static std::string out_line = "";
+          return out_line;
+        }
         return string_select_line(a, b, &i);
       });
 

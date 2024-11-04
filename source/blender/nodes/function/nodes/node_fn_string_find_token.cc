@@ -70,15 +70,12 @@ static int string_find_token(const std::string_view a,
                              const int *start,
                              const int *next)
 {
-  if (a.empty() || b.empty() || *start < 0 || *start > a.size()) {
-    return -1;
-  }
-  if (*next == 0) {
-    return 0;
-  }
-
   std::u32string a_u32 = u32_from_utf8(a);
   std::u32string b_u32 = u32_from_utf8(b);
+
+  if (*start < 0 || *start > a_u32.size()) {
+    return -1;
+  }
 
   int pos = *start;
   int count = 0;
@@ -97,6 +94,12 @@ static void node_build_multi_function(NodeMultiFunctionBuilder &builder)
   static auto find_fn = mf::build::SI4_SO<std::string, std::string, int, int, int>(
       "String Find Token",
       [](const std::string_view s, const std::string_view t, const int &start, const int &next) {
+        if (s.empty() || t.empty()) {
+          return -1;
+        }
+        else if (next == 0) {
+          return 0;
+        }
         return string_find_token(s, t, &start, &next);
       });
 
