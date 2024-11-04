@@ -1717,6 +1717,9 @@ void PlanarProbePipeline::render(View &view,
   inst_.pipelines.data.is_sphere_probe = false;
   inst_.uniform_data.push_update();
 
+  /* TODO(NPR): Could this be optimized out? */
+  inst_.pipelines.background.render(view);
+
   float4 data(0.0f);
   dummy_black_.ensure_2d(RAYTRACE_RADIANCE_FORMAT, int2(1), GPU_TEXTURE_USAGE_SHADER_READ, data);
 
