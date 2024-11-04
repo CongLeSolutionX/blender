@@ -138,9 +138,13 @@ ccl_device void kernel_volume_density_evaluate(KernelGlobals kg,
   const float3 voxel_size = make_float3(__int_as_float(in.prim), in.u, in.v);
 
   Extrema<float> extrema = {FLT_MAX, 0.0f};
-  for (int sample = 0; sample < 10; sample++) {
+  const int num_samples = 16;
+  for (int sample = 0; sample < num_samples; sample++) {
     /* TODO(weizhen): fix the blue noise sample number problem. */
-    const float3 rand_p = path_rng_3D(kg, offset, 0, sample);
+    const uint3 index = make_uint3(sample + offset * num_samples, 0, 0xffffffff);
+    /* TODO(weizhen): add dimension for this? */
+    const float3 rand_p = sobol_burley_sample_3D(index.x, 0, index.y, index.z);
+
     sd.P = ray.P + rand_p * voxel_size;
     sd.closure_transparent_extinction = zero_float3();
 
