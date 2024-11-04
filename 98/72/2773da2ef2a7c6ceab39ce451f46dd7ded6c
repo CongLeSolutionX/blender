@@ -1,1 +1,2 @@
 Referenced by pull request #129793, Fix: Crash with a BadAccess X_GLXMakeCurrent error
+Referenced by commit b9dbf2959d37a33eac4e4ddceb21e23ba9e41038, Fix: Crash with a BadAccess X_GLXMakeCurrent error
