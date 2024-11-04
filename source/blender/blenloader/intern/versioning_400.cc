@@ -4975,11 +4975,38 @@ void blo_do_versions_400(FileData *fd, Library * /*lib*/, Main *bmain)
     }
   }
 
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 403, 31)) {
+    LISTBASE_FOREACH (WorkSpace *, workspace, &bmain->workspaces) {
+      LISTBASE_FOREACH (bToolRef *, tref, &workspace->tools) {
+        if (tref->space_type != SPACE_SEQ) {
+          continue;
+        }
+        STRNCPY(tref->idname, "builtin.select_box");
+      }
+    }
+  }
+
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 404, 1)) {
     LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
       Editing *ed = SEQ_editing_get(scene);
       if (ed != nullptr) {
         SEQ_for_each_callback(&ed->seqbase, versioning_convert_seq_text_anchor, nullptr);
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 404, 4)) {
+    LISTBASE_FOREACH (bScreen *, screen, &bmain->screens) {
+      LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
+        LISTBASE_FOREACH (SpaceLink *, sl, &area->spacedata) {
+          if (sl->spacetype != SPACE_FILE) {
+            continue;
+          }
+          SpaceFile *sfile = reinterpret_cast<SpaceFile *>(sl);
+          if (sfile->asset_params) {
+            sfile->asset_params->base_params.sort = FILE_SORT_ASSET_CATALOG;
+          }
+        }
       }
     }
   }
