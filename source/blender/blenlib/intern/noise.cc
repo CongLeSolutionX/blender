@@ -10,6 +10,7 @@
 
 #include "BLI_math_base.hh"
 #include "BLI_math_base_safe.h"
+#include "BLI_math_matrix.hh"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_math_numbers.hh"
 #include "BLI_math_vector.hh"
@@ -2267,27 +2268,38 @@ static float3 compute_3d_orientation(const float3 orientation,
                                      const float4 seed)
 {
   /* Return the base orientation in case we are completely anisotropic. */
-  if (isotropy == 0.0) {
+  if (isotropy == 0.0f) {
     return orientation;
   }
 
-  /* Compute the orientation in spherical coordinates. */
-  float inclination = math::acos(orientation.z);
-  float azimuth = math::sign(orientation.y) *
-                  math::acos(orientation.x / math::length(float2(orientation.x, orientation.y)));
+  /* Compute uniform random spherical coordinates that cover the upper spherical cap of a unit
+   * sphere. Those coordinates represent random orientations away from the (0, 0, 1) vector. For
+   * isotropic noise, the entire hemisphere is considered, while for anisotropic noise, only a
+   * subset of the hemisphere is considered. Linearly interpolate between the two cases using the
+   * isotropy factor. Note that we only consider the upper hemisphere because the Gabor kernel is
+   * symmetric for the other hemisphere.
+   *
+   * The angles are generated to be uniformly distributed on the spherical cap, using standard
+   * sphere point picking parametrizations, see for instance:
+   *
+   *   https://mathworld.wolfram.com/SpherePointPicking.html
+   *
+   * Notice that inclination is inverted since it needs to spread from the (0, 0, 1) vector to the
+   * equator as parametrized by the isotropy factor. */
+  float2 random_values = noise::hash_float_to_float2(seed);
+  const float inclination = math::acos(1.0f - (random_values.x * isotropy));
+  const float azimuth = (random_values.y * 2.0f - 1.0f) * math::numbers::pi;
 
-  /* For isotropic noise, add a random orientation amount, while for anisotropic noise, use the
-   * base orientation. Linearly interpolate between the two cases using the isotropy factor. Note
-   * that the random orientation range is to pi as opposed to two pi, that's because the Gabor
-   * kernel is symmetric around pi. */
-  const float2 random_angles = noise::hash_float_to_float2(seed) * math::numbers::pi;
-  inclination += random_angles.x * isotropy;
-  azimuth += random_angles.y * isotropy;
+  /* Convert the random orientations from Polar to Cartesian coordinates. */
+  const float sin_inclination = math::sin(inclination);
+  const float3 random_orientation = float3(sin_inclination * math::cos(azimuth),
+                                           sin_inclination * math::sin(azimuth),
+                                           math::cos(inclination));
 
-  /* Convert back to Cartesian coordinates, */
-  return float3(math::sin(inclination) * math::cos(azimuth),
-                math::sin(inclination) * math::sin(azimuth),
-                math::cos(inclination));
+  /* Construct a rotation matrix from the base orientation relative to the Z axis. Then orient the
+   * random orientation along the base rotation by rotating them by the matrix. */
+  const float3x3 orientation_matrix = math::from_up_axis<float3x3>(orientation);
+  return orientation_matrix * random_orientation;
 }
 
 static float2 compute_3d_gabor_noise_cell(const float3 cell,

@@ -20,6 +20,7 @@
 
 #include "gpu_shader_common_hash.glsl"
 #include "gpu_shader_math_base_lib.glsl"
+#include "gpu_shader_math_matrix_lib.glsl"
 #include "gpu_shader_math_vector_lib.glsl"
 
 #define SHD_GABOR_TYPE_2D 0.0
@@ -211,20 +212,33 @@ vec3 compute_3d_orientation(vec3 orientation, float isotropy, vec4 seed)
     return orientation;
   }
 
-  /* Compute the orientation in spherical coordinates. */
-  float inclination = acos(orientation.z);
-  float azimuth = sign(orientation.y) * acos(orientation.x / length(orientation.xy));
+  /* Compute uniform random spherical coordinates that cover the upper spherical cap of a unit
+   * sphere. Those coordinates represent random orientations away from the (0, 0, 1) vector. For
+   * isotropic noise, the entire hemisphere is considered, while for anisotropic noise, only a
+   * subset of the hemisphere is considered. Linearly interpolate between the two cases using the
+   * isotropy factor. Note that we only consider the upper hemisphere because the Gabor kernel is
+   * symmetric for the other hemisphere.
+   *
+   * The angles are generated to be uniformly distributed on the spherical cap, using standard
+   * sphere point picking parametrizations, see for instance:
+   *
+   *   https://mathworld.wolfram.com/SpherePointPicking.html
+   *
+   * Notice that inclination is inverted since it needs to spread from the (0, 0, 1) vector to the
+   * equator as parametrized by the isotropy factor. */
+  vec2 random_values = hash_vec4_to_vec2(seed);
+  float inclination = acos(1.0 - (random_values.x * isotropy));
+  float azimuth = (random_values.y * 2.0 - 1.0) * M_PI;
 
-  /* For isotropic noise, add a random orientation amount, while for anisotropic noise, use the
-   * base orientation. Linearly interpolate between the two cases using the isotropy factor. Note
-   * that the random orientation range is to pi as opposed to two pi, that's because the Gabor
-   * kernel is symmetric around pi. */
-  vec2 random_angles = hash_vec4_to_vec2(seed) * M_PI;
-  inclination += random_angles.x * isotropy;
-  azimuth += random_angles.y * isotropy;
+  /* Convert the random orientations from Polar to Cartesian coordinates. */
+  float sin_inclination = sin(inclination);
+  vec3 random_orientation = vec3(
+      sin_inclination * cos(azimuth), sin_inclination * sin(azimuth), cos(inclination));
 
-  /* Convert back to Cartesian coordinates, */
-  return vec3(sin(inclination) * cos(azimuth), sin(inclination) * sin(azimuth), cos(inclination));
+  /* Construct a rotation matrix from the base orientation relative to the Z axis. Then orient the
+   * random orientation along the base rotation by rotating them by the matrix. */
+  mat3 orientation_matrix = from_up_axis(orientation);
+  return orientation_matrix * random_orientation;
 }
 
 vec2 compute_3d_gabor_noise_cell(
