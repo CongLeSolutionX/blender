@@ -409,8 +409,9 @@ static void do_paint_brush_task(const Scene &scene,
     }
   }
 
-  const float3 brush_color_rgb = ss.cache->invert ? BKE_brush_secondary_color_get(&scene, &brush) :
-                                                    BKE_brush_color_get(&scene, &brush);
+  const float3 brush_color_rgb = ss.cache->invert ?
+                                     BKE_brush_secondary_color_get(&scene, nullptr, &brush) :
+                                     BKE_brush_color_get(&scene, nullptr, &brush);
   float4 brush_color(brush_color_rgb, 1.0f);
   IMB_colormanagement_srgb_to_scene_linear_v3(brush_color, brush_color);
 
