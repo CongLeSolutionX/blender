@@ -60,8 +60,14 @@ ccl_device void svm_vector_math(ccl_private float *value,
     case NODE_VECTOR_MATH_NORMALIZE:
       *vector = safe_normalize(a);
       break;
+    case NODE_VECTOR_MATH_POWER:
+      *vector = make_float3( powf(a.x,b.x), powf(a.y,b.y), powf(a.z,b.z) );
+      break;
     case NODE_VECTOR_MATH_SNAP:
       *vector = floor(safe_divide(a, b)) * b;
+      break;
+    case NODE_VECTOR_MATH_SIGN:
+      *vector = make_float3( signf(a.x), signf(a.y), signf(a.z) );
       break;
     case NODE_VECTOR_MATH_FLOOR:
       *vector = floor(a);

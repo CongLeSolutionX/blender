@@ -6761,6 +6761,7 @@ NODE_DEFINE(VectorMathNode)
   type_enum.insert("refract", NODE_VECTOR_MATH_REFRACT);
   type_enum.insert("faceforward", NODE_VECTOR_MATH_FACEFORWARD);
   type_enum.insert("multiply_add", NODE_VECTOR_MATH_MULTIPLY_ADD);
+  type_enum.insert("power", NODE_VECTOR_MATH_POWER);
 
   type_enum.insert("dot_product", NODE_VECTOR_MATH_DOT_PRODUCT);
 
@@ -6768,6 +6769,7 @@ NODE_DEFINE(VectorMathNode)
   type_enum.insert("length", NODE_VECTOR_MATH_LENGTH);
   type_enum.insert("scale", NODE_VECTOR_MATH_SCALE);
   type_enum.insert("normalize", NODE_VECTOR_MATH_NORMALIZE);
+  type_enum.insert("sign", NODE_VECTOR_MATH_SIGN);
 
   type_enum.insert("snap", NODE_VECTOR_MATH_SNAP);
   type_enum.insert("floor", NODE_VECTOR_MATH_FLOOR);

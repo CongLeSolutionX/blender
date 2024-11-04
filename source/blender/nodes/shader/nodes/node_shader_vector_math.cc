@@ -142,6 +142,11 @@ static const char *gpu_shader_get_name(int mode)
       return "vector_math_faceforward";
     case NODE_VECTOR_MATH_MULTIPLY_ADD:
       return "vector_math_multiply_add";
+
+    case NODE_VECTOR_MATH_SIGN:
+      return "vector_math_sign";
+    case NODE_VECTOR_MATH_POWER:
+      return "vector_math_power";
   }
 
   return nullptr;
@@ -182,7 +187,8 @@ static void node_shader_update_vector_math(bNodeTree *ntree, bNode *node)
                                           NODE_VECTOR_MATH_LENGTH,
                                           NODE_VECTOR_MATH_ABSOLUTE,
                                           NODE_VECTOR_MATH_FRACTION,
-                                          NODE_VECTOR_MATH_NORMALIZE));
+                                          NODE_VECTOR_MATH_NORMALIZE,
+                                          NODE_VECTOR_MATH_SIGN));
   bke::node_set_socket_availability(ntree,
                                     sockC,
                                     ELEM(node->custom1,
@@ -447,6 +453,9 @@ NODE_SHADER_MATERIALX_BEGIN
       res = length.if_else(NodeItem::CompareOp::Eq, val(0.0f), null_vec, x / length);
       break;
     }
+    case NODE_VECTOR_MATH_SIGN:
+      res = x.sign();
+      break;
 
     default: {
       /* 2-operand operations */
@@ -462,6 +471,9 @@ NODE_SHADER_MATERIALX_BEGIN
           break;
         case NODE_VECTOR_MATH_MULTIPLY:
           res = x * y;
+          break;
+        case NODE_VECTOR_MATH_POWER:
+          res = x ^ y;
           break;
         case NODE_VECTOR_MATH_DIVIDE:
           res = x / y;

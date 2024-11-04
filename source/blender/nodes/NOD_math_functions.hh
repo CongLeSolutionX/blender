@@ -253,6 +253,8 @@ inline bool try_dispatch_float_math_fl3_fl3_to_fl3(const NodeVectorMathOperation
                       [](float3 a, float3 b) { return floor(safe_divide(a, b)) * b; });
     case NODE_VECTOR_MATH_MODULO:
       return dispatch(exec_preset_slow, [](float3 a, float3 b) { return mod(a, b); });
+    case NODE_VECTOR_MATH_POWER:
+      return dispatch(exec_preset_slow, [](float3 a, float3 b) { return pow(a, b); });
     case NODE_VECTOR_MATH_MINIMUM:
       return dispatch(exec_preset_fast, [](float3 a, float3 b) { return min(a, b); });
     case NODE_VECTOR_MATH_MAXIMUM:
@@ -451,6 +453,9 @@ inline bool try_dispatch_float_math_fl3_to_fl3(const NodeVectorMathOperation ope
   };
 
   switch (operation) {
+    case NODE_VECTOR_MATH_SIGN:
+      /* Should be safe. */
+      return dispatch(exec_preset_fast, [](float3 in) { return sign(in); });
     case NODE_VECTOR_MATH_NORMALIZE:
       /* Should be safe. */
       return dispatch(exec_preset_fast, [](float3 in) { return normalize(in); });

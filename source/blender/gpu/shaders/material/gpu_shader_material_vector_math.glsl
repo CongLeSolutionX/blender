@@ -28,6 +28,18 @@ void vector_math_multiply(
   outVector = a * b;
 }
 
+void vector_math_power(
+    vec3 a, vec3 b, vec3 c, float scale, out vec3 outVector, out float outValue)
+{
+  outVector = pow( a, b );
+}
+
+void vector_math_sign(
+    vec3 a, vec3 b, vec3 c, float scale, out vec3 outVector, out float outValue)
+{
+  outVector = sign( a );
+}
+
 void vector_math_divide(
     vec3 a, vec3 b, vec3 c, float scale, out vec3 outVector, out float outValue)
 {
