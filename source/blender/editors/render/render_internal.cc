@@ -18,6 +18,7 @@
 #include "BLI_string_utils.hh"
 #include "BLI_threads.h"
 #include "BLI_time.h"
+#include "BLI_time.hh"
 #include "BLI_timecode.h"
 #include "BLI_utildefines.h"
 
@@ -501,32 +502,6 @@ static void make_renderinfo_string(const RenderJob *rj,
     }
   }
 
-  /* Remaining time estimate */
-  {
-    // only for sequence render for now.
-    if (rj->sequencer) {
-      char elapsed_str[32];
-      char remaining_str[32] = "Unknown";
-      const double elapsed = BLI_time_now_seconds() - rj->start_time;
-      BLI_timecode_string_from_time_simple(elapsed_str, sizeof(elapsed_str), elapsed);
-
-      if (rj->progress) {
-        const double remaining_sec = (elapsed / double(*rj->progress)) - elapsed;
-        BLI_timecode_string_from_time_simple(remaining_str, sizeof(elapsed_str), remaining_sec);
-      }
-
-      SNPRINTF(
-        info_buffers.seq_time_elapsed, IFACE_("Elapsed:%s"), elapsed_str);
-      SNPRINTF(
-        info_buffers.seq_time_remaining, IFACE_("Remaining:%s"), remaining_str);
-      ret_array[i++] = info_sep;
-      ret_array[i++] = info_buffers.seq_time_elapsed;
-      ret_array[i++] = info_space;
-      ret_array[i++] = info_buffers.seq_time_remaining;
-      ret_array[i++] = info_space;
-    }
-  }
-
   /* Extra info. */
   {
     const char *info_extra = nullptr;
@@ -543,6 +518,35 @@ static void make_renderinfo_string(const RenderJob *rj,
       ret_array[i++] = info_space;
     }
   }
+
+  /* Remaining time estimate */
+  {
+    if (G.is_rendering && rj->sequencer) {
+      char elapsed_str[32] = "Unknown";
+      char remaining_str[32] = "Unknown";
+
+      if (rj->start_time) {
+        const double elapsed_sec = BLI_time_now_seconds() - rj->start_time;
+        BLI_timecode_string_from_time_simple(elapsed_str, sizeof(elapsed_str), elapsed_sec);
+
+        if (*rj->progress) {
+          const double remaining_sec = (elapsed_sec / double(*rj->progress)) - elapsed_sec;
+          BLI_time_approx_duration_string_from_seconds(remaining_str, sizeof(remaining_str), remaining_sec);
+        }
+      }
+
+      SNPRINTF(
+        info_buffers.seq_time_elapsed, IFACE_("Elapsed: %s"), elapsed_str);
+      SNPRINTF(
+        info_buffers.seq_time_remaining, IFACE_("Remaining: %s"), remaining_str);
+      ret_array[i++] = " (";
+      ret_array[i++] = info_buffers.seq_time_elapsed;
+      ret_array[i++] = " ";
+      ret_array[i++] = info_buffers.seq_time_remaining;
+      ret_array[i++] = ")";
+    }
+  }
+
 
   if (G.debug & G_DEBUG) {
     if (BLI_string_len_array(ret_array, i) >= IMA_MAX_RENDER_TEXT_SIZE) {
@@ -871,6 +875,10 @@ static void render_endjob(void *rjv)
 
     BKE_image_release_ibuf(ima, ibuf, lock);
   }
+
+  // // /* redraw */
+  // rj->re.stats_draw(&re->i);
+
 
   /* Finally unlock the user interface (if it was locked). */
   if (rj->interface_locked) {

@@ -2615,6 +2615,12 @@ void RE_RenderAnim(Render *re,
     BKE_report(re->reports, RPT_INFO, "No frames rendered, skipped to not overwrite");
   }
 
+  /* UGLY WARNING */
+  G.is_rendering = false;
+
+  /* redraw stats to clear animation-related info */
+  re->stats_draw(&re->i);
+
   scene->r.cfra = cfra_old;
   scene->r.subframe = subframe_old;
 
@@ -2625,9 +2631,6 @@ void RE_RenderAnim(Render *re,
   BKE_sound_reset_scene_specs(re->pipeline_scene_eval);
 
   render_pipeline_free(re);
-
-  /* UGLY WARNING */
-  G.is_rendering = false;
 }
 
 void RE_PreviewRender(Render *re, Main *bmain, Scene *sce)

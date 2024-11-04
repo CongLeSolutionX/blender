@@ -156,6 +156,7 @@ set(SRC
   intern/tempfile.cc
   intern/threads.cc
   intern/time.c
+  intern/time.cc
   intern/timecode.c
   intern/timeit.cc
   intern/uuid.cc
@@ -386,6 +387,7 @@ set(SRC
   BLI_tempfile.h
   BLI_threads.h
   BLI_time.h
+  BLI_time.hh
   BLI_time_utildefines.h
   BLI_timecode.h
   BLI_timeit.hh
