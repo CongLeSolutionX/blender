@@ -58,14 +58,17 @@ struct MDeformVert *BKE_object_defgroup_data_create(struct ID *id);
  * \param use_selection: Only operate on selection.
  * \return True if any vertex was removed, false otherwise.
  */
-bool BKE_object_defgroup_clear(struct Object *ob, struct bDeformGroup *dg, bool use_selection);
+bool BKE_object_defgroup_clear(Scene *scene,
+                               struct Object *ob,
+                               struct bDeformGroup *dg,
+                               bool use_selection);
 /**
  * Remove all verts (or only selected ones) from all vgroups. Work in Object and Edit modes.
  *
  * \param use_selection: Only operate on selection.
  * \return True if any vertex was removed, false otherwise.
  */
-bool BKE_object_defgroup_clear_all(struct Object *ob, bool use_selection);
+bool BKE_object_defgroup_clear_all(Scene *scene, struct Object *ob, bool use_selection);
 
 /**
  * Remove given vgroup from object. Work in Object and Edit modes.
