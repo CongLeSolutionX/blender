@@ -42,7 +42,7 @@
 #include "BKE_object.hh"
 #include "BKE_object_deform.h"
 #include "BKE_paint.hh"
-#include "BKE_pbvh_api.hh"
+#include "BKE_paint_bvh.hh"
 #include "BKE_subdiv_modifier.hh"
 
 #include "atomic_ops.h"
@@ -1495,9 +1495,9 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
    * Normal updates should be part of the brush loop and only run during the stroke when the
    * brush needs to sample the surface. The drawing code should only update the normals
    * per redraw when smooth shading is enabled. */
-  const bool do_update_sculpt_normals = ob.sculpt && ob.sculpt->pbvh;
+  const bool do_update_sculpt_normals = ob.sculpt && bke::object::pbvh_get(ob);
   if (do_update_sculpt_normals) {
-    bke::pbvh::update_normals_from_eval(ob, *ob.sculpt->pbvh);
+    bke::pbvh::update_normals_from_eval(ob, *bke::object::pbvh_get(ob));
   }
 
   cache.batch_ready |= batch_requested;

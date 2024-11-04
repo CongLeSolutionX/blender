@@ -121,7 +121,7 @@ static void fileselect_ensure_updated_asset_params(SpaceFile *sfile)
   base_params->filter |= FILE_TYPE_BLENDERLIB;
   base_params->filter_id = FILTER_ID_ALL;
   base_params->display = FILE_IMGDISPLAY;
-  base_params->sort = FILE_SORT_ALPHA;
+  base_params->sort = FILE_SORT_ASSET_CATALOG;
   /* Asset libraries include all sub-directories, so enable maximal recursion. */
   base_params->recursion_level = FILE_SELECT_MAX_RECURSIONS;
   /* 'SMALL' size by default. More reasonable since this is typically used as regular editor,
@@ -632,8 +632,9 @@ void ED_fileselect_window_params_get(const wmWindow *win, int r_win_size[2], boo
   /* Get DPI/pixel-size independent size to be stored in preferences. */
   WM_window_set_dpi(win); /* Ensure the DPI is taken from the right window. */
 
-  r_win_size[0] = WM_window_native_pixel_x(win) / UI_SCALE_FAC;
-  r_win_size[1] = WM_window_native_pixel_y(win) / UI_SCALE_FAC;
+  const blender::int2 win_size = WM_window_native_pixel_size(win);
+  r_win_size[0] = win_size[0] / UI_SCALE_FAC;
+  r_win_size[1] = win_size[1] / UI_SCALE_FAC;
 
   *r_is_maximized = WM_window_is_maximized(win);
 }

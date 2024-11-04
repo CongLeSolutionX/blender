@@ -19,6 +19,7 @@
 #include "RNA_access.hh"
 #include "RNA_prototypes.hh"
 
+#include "ED_grease_pencil.hh"
 #include "ED_undo.hh"
 
 #include "WM_api.hh"
@@ -51,9 +52,13 @@ class LayerNodeDropTarget : public TreeViewItemDropTarget {
 
   bool can_drop(const wmDrag &drag, const char ** /*r_disabled_hint*/) const override
   {
+    if (!ELEM(drag.type, WM_DRAG_GREASE_PENCIL_LAYER, WM_DRAG_GREASE_PENCIL_GROUP)) {
+      return false;
+    }
+
     wmDragGreasePencilLayer *active_drag_node = static_cast<wmDragGreasePencilLayer *>(drag.poin);
     if (active_drag_node->node->wrap().is_layer()) {
-      return drag.type == WM_DRAG_GREASE_PENCIL_LAYER;
+      return true;
     }
 
     LayerGroup &group = active_drag_node->node->wrap().as_group();
@@ -382,9 +387,7 @@ class LayerGroupViewItem : public AbstractTreeViewItem {
 
   void build_layer_group_name(uiLayout &row)
   {
-    uiItemS_ex(&row, 0.8f);
-
-    short icon = ICON_FILE_FOLDER;
+    short icon = ICON_GREASEPENCIL_LAYER_GROUP;
     if (group_.color_tag != LAYERGROUP_COLOR_NONE) {
       icon = ICON_LAYERGROUP_COLOR_01 + group_.color_tag;
     }
@@ -462,20 +465,20 @@ void uiTemplateGreasePencilLayerTree(uiLayout *layout, bContext *C)
 {
   using namespace blender;
 
-  Object *object = CTX_data_active_object(C);
-  if (!object || object->type != OB_GREASE_PENCIL) {
+  GreasePencil *grease_pencil = blender::ed::greasepencil::from_context(*C);
+
+  if (grease_pencil == nullptr) {
     return;
   }
-  GreasePencil &grease_pencil = *static_cast<GreasePencil *>(object->data);
 
   uiBlock *block = uiLayoutGetBlock(layout);
 
   ui::AbstractTreeView *tree_view = UI_block_add_view(
       *block,
       "Grease Pencil Layer Tree View",
-      std::make_unique<blender::ui::greasepencil::LayerTreeView>(grease_pencil));
+      std::make_unique<blender::ui::greasepencil::LayerTreeView>(*grease_pencil));
   tree_view->set_context_menu_title("Grease Pencil Layer");
-  tree_view->set_min_rows(3);
+  tree_view->set_default_rows(6);
 
   ui::TreeViewBuilder::build_tree_view(*tree_view, *layout);
 }

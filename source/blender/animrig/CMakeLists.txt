@@ -34,6 +34,8 @@ set(SRC
   intern/fcurve.cc
   intern/keyframing.cc
   intern/keyframing_auto.cc
+  intern/nla.cc
+  intern/pose.cc
   intern/visualkey.cc
 
   ANIM_action.hh
@@ -48,6 +50,8 @@ set(SRC
   ANIM_fcurve.hh
   ANIM_keyframing.hh
   ANIM_keyingsets.hh
+  ANIM_nla.hh
+  ANIM_pose.hh
   ANIM_rna.hh
   ANIM_visualkey.hh
   intern/action_runtime.hh
@@ -66,10 +70,6 @@ set(LIB
   PRIVATE bf::intern::clog
 )
 
-if(WITH_EXPERIMENTAL_FEATURES)
-  add_definitions(-DWITH_ANIM_BAKLAVA)
-endif()
-
 blender_add_lib(bf_animrig "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 add_library(bf::animrig ALIAS bf_animrig)
 
@@ -78,10 +78,12 @@ if(WITH_GTESTS)
   )
   set(TEST_SRC
     intern/action_iterators_test.cc
+    intern/action_legacy_test.cc
     intern/action_test.cc
     intern/bone_collections_test.cc
     intern/evaluation_test.cc
     intern/keyframing_test.cc
+    intern/nla_test.cc
   )
   set(TEST_LIB
     PRIVATE bf::animrig

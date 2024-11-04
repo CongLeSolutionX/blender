@@ -74,6 +74,7 @@ static void foreach_ID_link(ModifierData *md, Object *ob, IDWalkFunc walk, void 
 {
   auto *omd = reinterpret_cast<GreasePencilBuildModifierData *>(md);
   modifier::greasepencil::foreach_influence_ID_link(&omd->influence, ob, walk, user_data);
+  walk(user_data, ob, (ID **)&omd->object, IDWALK_CB_NOP);
 }
 
 static void update_depsgraph(ModifierData *md, const ModifierUpdateDepsgraphContext *ctx)
@@ -111,11 +112,13 @@ static Array<int> point_counts_to_keep_concurrent(const bke::CurvesGeometry &cur
 {
   const int stroke_count = curves.curves_num();
   const OffsetIndices<int> points_by_curve = curves.points_by_curve();
+  const VArray<bool> cyclic = curves.cyclic();
 
   curves.ensure_evaluated_lengths();
   float max_length = 0;
   for (const int stroke : curves.curves_range()) {
-    const float len = curves.evaluated_length_total_for_curve(stroke, false);
+    const bool stroke_cyclic = cyclic[stroke];
+    const float len = curves.evaluated_length_total_for_curve(stroke, stroke_cyclic);
     max_length = math::max(max_length, len);
   }
 
@@ -127,7 +130,9 @@ static Array<int> point_counts_to_keep_concurrent(const bke::CurvesGeometry &cur
   }
 
   auto get_stroke_factor = [&](const float factor, const int index) {
-    const float max_factor = max_length / curves.evaluated_length_total_for_curve(index, false);
+    const bool stroke_cyclic = cyclic[index];
+    const float max_factor = max_length /
+                             curves.evaluated_length_total_for_curve(index, stroke_cyclic);
     if (time_alignment == MOD_GREASE_PENCIL_BUILD_TIMEALIGN_START) {
       if (clamp_points) {
         return std::clamp(factor * max_factor, 0.0f, 1.0f);
@@ -258,10 +263,18 @@ static bke::CurvesGeometry build_concurrent(bke::greasepencil::Drawing &drawing,
   const bke::AttributeAccessor src_attributes = curves.attributes();
   bke::MutableAttributeAccessor dst_attributes = dst_curves.attributes_for_write();
 
-  gather_attributes(
-      src_attributes, bke::AttrDomain::Point, {}, {}, dst_to_src_point, dst_attributes);
-  gather_attributes(
-      src_attributes, bke::AttrDomain::Curve, {}, {}, dst_to_src_curve, dst_attributes);
+  gather_attributes(src_attributes,
+                    bke::AttrDomain::Point,
+                    bke::AttrDomain::Point,
+                    {},
+                    dst_to_src_point,
+                    dst_attributes);
+  gather_attributes(src_attributes,
+                    bke::AttrDomain::Curve,
+                    bke::AttrDomain::Curve,
+                    {},
+                    dst_to_src_curve,
+                    dst_attributes);
 
   dst_curves.update_curve_types();
 
@@ -287,9 +300,7 @@ static void points_info_sequential(const bke::CurvesGeometry &curves,
 
   const bool is_vanishing = transition == MOD_GREASE_PENCIL_BUILD_TRANSITION_VANISH;
 
-  int effective_points_num = 0;
-  selection.foreach_index(
-      [&](const int index) { effective_points_num += points_by_curve[index].size(); });
+  int effective_points_num = offset_indices::sum_group_sizes(points_by_curve, selection);
 
   const int untouched_points_num = points_by_curve.total_size() - effective_points_num;
   effective_points_num *= factor_to_keep;
@@ -413,10 +424,18 @@ static bke::CurvesGeometry build_sequential(bke::greasepencil::Drawing &drawing,
   const bke::AttributeAccessor src_attributes = curves.attributes();
   bke::MutableAttributeAccessor dst_attributes = dst_curves.attributes_for_write();
 
-  gather_attributes(
-      src_attributes, bke::AttrDomain::Point, {}, {}, dst_to_src_point, dst_attributes);
-  gather_attributes(
-      src_attributes, bke::AttrDomain::Curve, {}, {}, dst_to_src_curve, dst_attributes);
+  gather_attributes(src_attributes,
+                    bke::AttrDomain::Point,
+                    bke::AttrDomain::Point,
+                    {},
+                    dst_to_src_point,
+                    dst_attributes);
+  gather_attributes(src_attributes,
+                    bke::AttrDomain::Curve,
+                    bke::AttrDomain::Curve,
+                    {},
+                    dst_to_src_curve,
+                    dst_attributes);
 
   dst_curves.update_curve_types();
 
@@ -716,7 +735,7 @@ static void panel_draw(const bContext *C, Panel *panel)
   uiItemR(layout, ptr, "object", UI_ITEM_NONE, nullptr, ICON_NONE);
 
   if (uiLayout *panel = uiLayoutPanelProp(
-          C, layout, ptr, "open_frame_range_panel", "Effective Range"))
+          C, layout, ptr, "open_frame_range_panel", IFACE_("Effective Range")))
   {
     uiLayoutSetPropSep(panel, true);
     uiItemR(
@@ -729,7 +748,7 @@ static void panel_draw(const bContext *C, Panel *panel)
     uiItemR(col, ptr, "frame_end", UI_ITEM_NONE, IFACE_("End"), ICON_NONE);
   }
 
-  if (uiLayout *panel = uiLayoutPanelProp(C, layout, ptr, "open_fading_panel", "Fading")) {
+  if (uiLayout *panel = uiLayoutPanelProp(C, layout, ptr, "open_fading_panel", IFACE_("Fading"))) {
     uiLayoutSetPropSep(panel, true);
     uiItemR(panel, ptr, "use_fading", UI_ITEM_NONE, IFACE_("Fade"), ICON_NONE);
 
@@ -753,7 +772,7 @@ static void panel_draw(const bContext *C, Panel *panel)
   }
 
   if (uiLayout *influence_panel = uiLayoutPanelProp(
-          C, layout, ptr, "open_influence_panel", "Influence"))
+          C, layout, ptr, "open_influence_panel", IFACE_("Influence")))
   {
     modifier::greasepencil::draw_layer_filter_settings(C, influence_panel, ptr);
     modifier::greasepencil::draw_material_filter_settings(C, influence_panel, ptr);

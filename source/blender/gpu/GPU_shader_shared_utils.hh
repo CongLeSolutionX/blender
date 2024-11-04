@@ -28,7 +28,33 @@
  * NOTE: You can use bool type using bool32_t a int boolean type matching the GLSL type.
  */
 
-#ifdef GPU_SHADER
+#ifdef GLSL_CPP_STUBS
+#  pragma once
+using bool32_t = bool;
+/** Packed types are needed for MSL which have different alignment rules for float3. */
+using packed_float3 = float3;
+using packed_int3 = int3;
+using packed_uint3 = uint3;
+
+/* Silence macros when compiling for shaders. */
+#  define BLI_STATIC_ASSERT(cond, msg)
+#  define BLI_STATIC_ASSERT_ALIGN(type_, align_)
+#  define BLI_STATIC_ASSERT_SIZE(type_, size_)
+#  define ENUM_OPERATORS(a, b)
+#  define UNUSED_VARS(a) (void)a
+/* Math function renaming. */
+#  define cosf cos
+#  define sinf sin
+#  define tanf tan
+#  define acosf acos
+#  define asinf asin
+#  define atanf atan
+#  define floorf floor
+#  define ceilf ceil
+#  define sqrtf sqrt
+#  define expf exp
+
+#elif defined(GPU_SHADER)
 /* Silence macros when compiling for shaders. */
 #  define BLI_STATIC_ASSERT(cond, msg)
 #  define BLI_STATIC_ASSERT_ALIGN(type_, align_)

@@ -81,6 +81,17 @@ class LensDistortionOperation : public NodeOperation {
 
   void execute() override
   {
+    /* Not yet supported on CPU. */
+    if (!context().use_gpu()) {
+      for (const bNodeSocket *output : this->node()->output_sockets()) {
+        Result &output_result = get_result(output->identifier);
+        if (output_result.should_compute()) {
+          output_result.allocate_invalid();
+        }
+      }
+      return;
+    }
+
     if (is_identity()) {
       get_input("Image").pass_through(get_result("Image"));
       return;
@@ -224,8 +235,9 @@ class LensDistortionOperation : public NodeOperation {
       return true;
     }
 
-    /* Both distortion and dispersion are zero and the operation does nothing. */
-    if (get_distortion() == 0.0f && get_dispersion() == 0.0f) {
+    /* Both distortion and dispersion are zero and the operation does nothing. Jittering has an
+     * effect regardless, so its gets an exemption. */
+    if (!get_is_jitter() && get_distortion() == 0.0f && get_dispersion() == 0.0f) {
       return true;
     }
 

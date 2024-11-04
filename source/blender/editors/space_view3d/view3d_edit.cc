@@ -20,7 +20,7 @@
 #include "BLI_math_rotation.h"
 #include "BLI_math_vector.h"
 
-#include "BKE_action.h"
+#include "BKE_action.hh"
 #include "BKE_armature.hh"
 #include "BKE_camera.h"
 #include "BKE_lib_id.hh"
@@ -271,8 +271,8 @@ static int render_border_exec(bContext *C, wmOperator *op)
   /* calculate range */
 
   if (rv3d->persp == RV3D_CAMOB) {
-    Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
-    ED_view3d_calc_camera_border(scene, depsgraph, region, v3d, rv3d, &vb, false);
+    const Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
+    ED_view3d_calc_camera_border(scene, depsgraph, region, v3d, rv3d, false, &vb);
   }
   else {
     vb.xmin = 0;

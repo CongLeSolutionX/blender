@@ -25,7 +25,7 @@
 #include "BLI_set.hh"
 #include "BLI_utildefines.h"
 
-#include "BKE_action.h"
+#include "BKE_action.hh"
 #include "BKE_anim_data.hh"
 #include "BKE_context.hh"
 #include "BKE_fcurve.hh"
@@ -499,18 +499,8 @@ void ANIM_deselect_keys_in_animation_editors(bContext *C)
         continue;
       }
       ListBase anim_data = {nullptr, nullptr};
-      int filter = 0;
-      if (ac.spacetype == SPACE_GRAPH) {
-        SpaceGraph *graph_editor = (SpaceGraph *)ac.sl;
-        filter = graph_editor->ads->filterflag;
-      }
-      else {
-        BLI_assert(ac.spacetype == SPACE_ACTION);
-        SpaceAction *action_editor = (SpaceAction *)ac.sl;
-        filter = action_editor->ads.filterflag;
-      }
-      ANIM_animdata_filter(
-          &ac, &anim_data, eAnimFilter_Flags(filter), ac.data, eAnimCont_Types(ac.datatype));
+      eAnimFilter_Flags filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_FCURVESONLY);
+      ANIM_animdata_filter(&ac, &anim_data, filter, ac.data, eAnimCont_Types(ac.datatype));
       LISTBASE_FOREACH (bAnimListElem *, ale, &anim_data) {
         if (!ale->adt || !ale->adt->action) {
           continue;

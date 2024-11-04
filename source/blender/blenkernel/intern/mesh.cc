@@ -176,17 +176,20 @@ static void mesh_copy_data(Main *bmain,
   mesh_dst->default_color_attribute = static_cast<char *>(
       MEM_dupallocN(mesh_src->default_color_attribute));
 
-  CustomData_copy(&mesh_src->vert_data, &mesh_dst->vert_data, mask.vmask, mesh_dst->verts_num);
-  CustomData_copy(&mesh_src->edge_data, &mesh_dst->edge_data, mask.emask, mesh_dst->edges_num);
-  CustomData_copy(
+  CustomData_init_from(
+      &mesh_src->vert_data, &mesh_dst->vert_data, mask.vmask, mesh_dst->verts_num);
+  CustomData_init_from(
+      &mesh_src->edge_data, &mesh_dst->edge_data, mask.emask, mesh_dst->edges_num);
+  CustomData_init_from(
       &mesh_src->corner_data, &mesh_dst->corner_data, mask.lmask, mesh_dst->corners_num);
-  CustomData_copy(&mesh_src->face_data, &mesh_dst->face_data, mask.pmask, mesh_dst->faces_num);
+  CustomData_init_from(
+      &mesh_src->face_data, &mesh_dst->face_data, mask.pmask, mesh_dst->faces_num);
   blender::implicit_sharing::copy_shared_pointer(mesh_src->face_offset_indices,
                                                  mesh_src->runtime->face_offsets_sharing_info,
                                                  &mesh_dst->face_offset_indices,
                                                  &mesh_dst->runtime->face_offsets_sharing_info);
   if (do_tessface) {
-    CustomData_copy(
+    CustomData_init_from(
         &mesh_src->fdata_legacy, &mesh_dst->fdata_legacy, mask.fmask, mesh_dst->totface_legacy);
   }
   else {
@@ -465,11 +468,11 @@ bool BKE_mesh_has_custom_loop_normals(Mesh *mesh)
 namespace blender::bke {
 
 void mesh_ensure_default_color_attribute_on_add(Mesh &mesh,
-                                                const AttributeIDRef &id,
+                                                const StringRef id,
                                                 AttrDomain domain,
                                                 eCustomDataType data_type)
 {
-  if (id.is_anonymous()) {
+  if (bke::attribute_name_is_anonymous(id)) {
     return;
   }
   if (!(CD_TYPE_AS_MASK(data_type) & CD_MASK_COLOR_ALL) ||
@@ -480,7 +483,7 @@ void mesh_ensure_default_color_attribute_on_add(Mesh &mesh,
   if (mesh.default_color_attribute) {
     return;
   }
-  mesh.default_color_attribute = BLI_strdupn(id.name().data(), id.name().size());
+  mesh.default_color_attribute = BLI_strdupn(id.data(), id.size());
 }
 
 void mesh_ensure_required_data_layers(Mesh &mesh)
@@ -816,16 +819,16 @@ Mesh *BKE_mesh_new_nomain_from_template_ex(const Mesh *me_src,
 
   BKE_mesh_copy_parameters_for_eval(me_dst, me_src);
 
-  CustomData_copy_layout(
+  CustomData_init_layout_from(
       &me_src->vert_data, &me_dst->vert_data, mask.vmask, CD_SET_DEFAULT, verts_num);
-  CustomData_copy_layout(
+  CustomData_init_layout_from(
       &me_src->edge_data, &me_dst->edge_data, mask.emask, CD_SET_DEFAULT, edges_num);
-  CustomData_copy_layout(
+  CustomData_init_layout_from(
       &me_src->face_data, &me_dst->face_data, mask.pmask, CD_SET_DEFAULT, faces_num);
-  CustomData_copy_layout(
+  CustomData_init_layout_from(
       &me_src->corner_data, &me_dst->corner_data, mask.lmask, CD_SET_DEFAULT, corners_num);
   if (do_tessface) {
-    CustomData_copy_layout(
+    CustomData_init_layout_from(
         &me_src->fdata_legacy, &me_dst->fdata_legacy, mask.fmask, CD_SET_DEFAULT, tessface_num);
   }
   else {

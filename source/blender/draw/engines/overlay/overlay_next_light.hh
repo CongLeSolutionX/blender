@@ -36,11 +36,18 @@ class Lights {
     LightInstanceBuf area_square_buf = {selection_type_, "area_square_buf"};
   } call_buffers_{selection_type_};
 
+  bool enabled_ = false;
+
  public:
   Lights(const SelectionType selection_type) : selection_type_(selection_type){};
 
-  void begin_sync()
+  void begin_sync(const State &state)
   {
+    enabled_ = state.space_type == SPACE_VIEW3D;
+    if (!enabled_) {
+      return;
+    }
+
     call_buffers_.ground_line_buf.clear();
     call_buffers_.icon_inner_buf.clear();
     call_buffers_.icon_outer_buf.clear();
@@ -56,6 +63,10 @@ class Lights {
 
   void object_sync(const ObjectRef &ob_ref, Resources &res, const State &state)
   {
+    if (!enabled_) {
+      return;
+    }
+
     ExtraInstanceData data(ob_ref.object->object_to_world(),
                            float4(res.object_wire_color(ob_ref, state).xyz(), 1.0f),
                            1.0f);
@@ -143,15 +154,19 @@ class Lights {
 
   void end_sync(Resources &res, ShapeCache &shapes, const State &state)
   {
+    if (!enabled_) {
+      return;
+    }
+
     const DRWState pass_state = DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH |
-                                DRW_STATE_DEPTH_LESS_EQUAL | state.clipping_state;
+                                DRW_STATE_DEPTH_LESS_EQUAL;
     ps_.init();
     res.select_bind(ps_);
 
     {
       PassSimple::Sub &sub_pass = ps_.sub("spot_cone_front");
-      sub_pass.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ALPHA | DRW_STATE_CULL_FRONT |
-                         state.clipping_state);
+      sub_pass.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ALPHA | DRW_STATE_CULL_FRONT,
+                         state.clipping_plane_count);
       sub_pass.shader_set(res.shaders.extra_shape.get());
       sub_pass.bind_ubo("globalsBlock", &res.globals_buf);
       call_buffers_.spot_cone_front_buf.end_sync(sub_pass, shapes.light_spot_volume.get());
@@ -159,14 +174,15 @@ class Lights {
     {
       PassSimple::Sub &sub_pass = ps_.sub("spot_cone_back");
       sub_pass.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ALPHA |
-                         DRW_STATE_DEPTH_LESS_EQUAL | DRW_STATE_CULL_BACK | state.clipping_state);
+                             DRW_STATE_DEPTH_LESS_EQUAL | DRW_STATE_CULL_BACK,
+                         state.clipping_plane_count);
       sub_pass.shader_set(res.shaders.extra_shape.get());
       sub_pass.bind_ubo("globalsBlock", &res.globals_buf);
       call_buffers_.spot_cone_back_buf.end_sync(sub_pass, shapes.light_spot_volume.get());
     }
     {
       PassSimple::Sub &sub_pass = ps_.sub("light_shapes");
-      sub_pass.state_set(pass_state);
+      sub_pass.state_set(pass_state, state.clipping_plane_count);
       sub_pass.shader_set(res.shaders.extra_shape.get());
       sub_pass.bind_ubo("globalsBlock", &res.globals_buf);
       call_buffers_.icon_inner_buf.end_sync(sub_pass, shapes.light_icon_outer_lines.get());
@@ -180,7 +196,7 @@ class Lights {
     }
     {
       PassSimple::Sub &sub_pass = ps_.sub("ground_line");
-      sub_pass.state_set(pass_state | DRW_STATE_BLEND_ALPHA);
+      sub_pass.state_set(pass_state | DRW_STATE_BLEND_ALPHA, state.clipping_plane_count);
       sub_pass.shader_set(res.shaders.extra_ground_line.get());
       sub_pass.bind_ubo("globalsBlock", &res.globals_buf);
       call_buffers_.ground_line_buf.end_sync(sub_pass, shapes.ground_line.get());
@@ -189,6 +205,10 @@ class Lights {
 
   void draw(Framebuffer &framebuffer, Manager &manager, View &view)
   {
+    if (!enabled_) {
+      return;
+    }
+
     GPU_framebuffer_bind(framebuffer);
     manager.submit(ps_, view);
   }

@@ -158,7 +158,7 @@ struct EraseOperationExecutor {
   }
 
   /**
-   * Computes the intersection between the eraser tool and a 2D segment, using integer values.
+   * Computes the intersection between the eraser brush and a 2D segment, using integer values.
    * Also computes if the endpoints of the segment lie inside/outside, or in the boundary of the
    * eraser.
    *
@@ -739,7 +739,6 @@ struct EraseOperationExecutor {
 
     /* Set opacity. */
     bke::MutableAttributeAccessor dst_attributes = dst.attributes_for_write();
-    const bke::AnonymousAttributePropagationInfo propagation_info{};
 
     bke::SpanAttributeWriter<float> dst_opacity =
         dst_attributes.lookup_or_add_for_write_span<float>(opacity_attr, bke::AttrDomain::Point);
@@ -840,11 +839,11 @@ struct EraseOperationExecutor {
     Paint *paint = &scene->toolsettings->gp_paint->paint;
     Brush *brush = BKE_paint_brush(paint);
 
-    if (brush->gpencil_tool == GPAINT_TOOL_DRAW) {
+    if (brush->gpencil_brush_type == GPAINT_BRUSH_TYPE_DRAW) {
       brush = BKE_paint_eraser_brush(paint);
     }
 
-    /* Get the tool's data. */
+    /* Get the brush data. */
     this->mouse_position = extension_sample.mouse_position;
     this->eraser_radius = self.radius_;
     this->eraser_strength = self.strength_;
@@ -868,52 +867,58 @@ struct EraseOperationExecutor {
     GreasePencil &grease_pencil = *static_cast<GreasePencil *>(obact->data);
 
     bool changed = false;
-    const auto execute_eraser_on_drawing = [&](const int layer_index,
-                                               const int frame_number,
-                                               Drawing &drawing) {
-      const Layer &layer = *grease_pencil.layer(layer_index);
-      const bke::CurvesGeometry &src = drawing.strokes();
+    const auto execute_eraser_on_drawing =
+        [&](const int layer_index, const int frame_number, Drawing &drawing) {
+          const Layer &layer = grease_pencil.layer(layer_index);
+          const bke::CurvesGeometry &src = drawing.strokes();
 
-      /* Evaluated geometry. */
-      bke::crazyspace::GeometryDeformation deformation =
-          bke::crazyspace::get_evaluated_grease_pencil_drawing_deformation(
-              ob_eval, *obact, layer_index, frame_number);
+          /* Evaluated geometry. */
+          bke::crazyspace::GeometryDeformation deformation =
+              bke::crazyspace::get_evaluated_grease_pencil_drawing_deformation(
+                  ob_eval, *obact, layer_index, frame_number);
 
-      /* Compute screen space positions. */
-      Array<float2> screen_space_positions(src.points_num());
-      threading::parallel_for(src.points_range(), 4096, [&](const IndexRange src_points) {
-        for (const int src_point : src_points) {
-          ED_view3d_project_float_global(region,
-                                         math::transform_point(layer.to_world_space(*ob_eval),
-                                                               deformation.positions[src_point]),
-                                         screen_space_positions[src_point],
-                                         V3D_PROJ_TEST_NOP);
-        }
-      });
+          /* Compute screen space positions. */
+          Array<float2> screen_space_positions(src.points_num());
+          threading::parallel_for(src.points_range(), 4096, [&](const IndexRange src_points) {
+            for (const int src_point : src_points) {
+              const int result = ED_view3d_project_float_global(
+                  region,
+                  math::transform_point(layer.to_world_space(*ob_eval),
+                                        deformation.positions[src_point]),
+                  screen_space_positions[src_point],
+                  V3D_PROJ_TEST_CLIP_NEAR | V3D_PROJ_TEST_CLIP_FAR);
+              if (result != V3D_PROJ_RET_OK) {
+                /* Set the screen space position to a impossibly far coordinate for all the points
+                 * that are outside near/far clipping planes, this is to prevent accidental
+                 * intersections with strokes not visibly present in the camera. */
+                screen_space_positions[src_point] = float2(1e20);
+              }
+            }
+          });
 
-      /* Erasing operator. */
-      bke::CurvesGeometry dst;
-      bool erased = false;
-      switch (self.eraser_mode_) {
-        case GP_BRUSH_ERASER_STROKE:
-          erased = stroke_eraser(src, screen_space_positions, dst);
-          break;
-        case GP_BRUSH_ERASER_HARD:
-          erased = hard_eraser(src, screen_space_positions, dst, self.keep_caps_);
-          break;
-        case GP_BRUSH_ERASER_SOFT:
-          erased = soft_eraser(src, screen_space_positions, dst, self.keep_caps_);
-          break;
-      }
+          /* Erasing operator. */
+          bke::CurvesGeometry dst;
+          bool erased = false;
+          switch (self.eraser_mode_) {
+            case GP_BRUSH_ERASER_STROKE:
+              erased = stroke_eraser(src, screen_space_positions, dst);
+              break;
+            case GP_BRUSH_ERASER_HARD:
+              erased = hard_eraser(src, screen_space_positions, dst, self.keep_caps_);
+              break;
+            case GP_BRUSH_ERASER_SOFT:
+              erased = soft_eraser(src, screen_space_positions, dst, self.keep_caps_);
+              break;
+          }
 
-      if (erased) {
-        /* Set the new geometry. */
-        drawing.geometry.wrap() = std::move(dst);
-        drawing.tag_topology_changed();
-        changed = true;
-        self.affected_drawings_.add(&drawing);
-      }
-    };
+          if (erased) {
+            /* Set the new geometry. */
+            drawing.geometry.wrap() = std::move(dst);
+            drawing.tag_topology_changed();
+            changed = true;
+            self.affected_drawings_.add(&drawing);
+          }
+        };
 
     if (self.active_layer_only_) {
       /* Erase only on the drawing at the current frame of the active layer. */

@@ -33,10 +33,11 @@
 
 #include "DNA_customdata_types.h"
 
+#include "BKE_attribute_filter.hh"
+
 struct Object;
 struct Collection;
 namespace blender::bke {
-class AnonymousAttributePropagationInfo;
 class AttributeAccessor;
 class MutableAttributeAccessor;
 }  // namespace blender::bke
@@ -104,6 +105,8 @@ class InstanceReference {
   void count_memory(MemoryCounter &memory) const;
 
   friend bool operator==(const InstanceReference &a, const InstanceReference &b);
+
+  uint64_t hash() const;
 };
 
 class Instances {
@@ -192,7 +195,7 @@ class Instances {
    * Remove the indices that are not contained in the mask input, and remove unused instance
    * references afterwards.
    */
-  void remove(const IndexMask &mask, const AnonymousAttributePropagationInfo &propagation_info);
+  void remove(const IndexMask &mask, const AttributeFilter &attribute_filter);
   /**
    * Get an id for every instance. These can be used for e.g. motion blur.
    */

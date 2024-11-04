@@ -49,6 +49,7 @@
 #include "RNA_access.hh"
 #include "RNA_prototypes.hh"
 
+#include "ED_asset.hh"
 #include "ED_fileselect.hh"
 #include "ED_screen.hh"
 
@@ -178,7 +179,7 @@ static void file_draw_tooltip_custom_func(bContext & /*C*/, uiTooltipData &tip, 
     }
 
     if (file->typeflag & (FILE_TYPE_BLENDER | FILE_TYPE_BLENDER_BACKUP)) {
-      char version_st[128] = {0};
+      char version_str[128] = {0};
       if (!thumb) {
         /* Load the thumbnail from cache if existing, but don't create if not. */
         thumb = IMB_thumb_read(full_path, THB_LARGE);
@@ -186,20 +187,23 @@ static void file_draw_tooltip_custom_func(bContext & /*C*/, uiTooltipData &tip, 
       if (thumb) {
         /* Look for version in existing thumbnail if available. */
         IMB_metadata_get_field(
-            thumb->metadata, "Thumb::Blender::Version", version_st, sizeof(version_st));
+            thumb->metadata, "Thumb::Blender::Version", version_str, sizeof(version_str));
       }
 
-      if (!version_st[0] && !(file->attributes & FILE_ATTR_OFFLINE)) {
+      if (!version_str[0] && !(file->attributes & FILE_ATTR_OFFLINE)) {
         /* Load Blender version directly from the file. */
         short version = BLO_version_from_file(full_path);
         if (version != 0) {
-          SNPRINTF(version_st, "%d.%01d", version / 100, version % 100);
+          SNPRINTF(version_str, "%d.%01d", version / 100, version % 100);
         }
       }
 
-      if (version_st[0]) {
-        UI_tooltip_text_field_add(
-            tip, fmt::format("Blender {}", version_st), {}, UI_TIP_STYLE_NORMAL, UI_TIP_LC_NORMAL);
+      if (version_str[0]) {
+        UI_tooltip_text_field_add(tip,
+                                  fmt::format("Blender {}", version_str),
+                                  {},
+                                  UI_TIP_STYLE_NORMAL,
+                                  UI_TIP_LC_NORMAL);
         UI_tooltip_text_field_add(tip, {}, {}, UI_TIP_STYLE_SPACER, UI_TIP_LC_NORMAL);
       }
     }
@@ -267,11 +271,11 @@ static void file_draw_tooltip_custom_func(bContext & /*C*/, uiTooltipData &tip, 
       }
     }
 
-    char date_st[FILELIST_DIRENTRY_DATE_LEN], time_st[FILELIST_DIRENTRY_TIME_LEN];
+    char date_str[FILELIST_DIRENTRY_DATE_LEN], time_str[FILELIST_DIRENTRY_TIME_LEN];
     bool is_today, is_yesterday;
     std::string day_string = ("");
     BLI_filelist_entry_datetime_to_string(
-        nullptr, file->time, false, time_st, date_st, &is_today, &is_yesterday);
+        nullptr, file->time, false, time_str, date_str, &is_today, &is_yesterday);
     if (is_today || is_yesterday) {
       day_string = (is_today ? N_("Today") : N_("Yesterday")) + std::string(" ");
     }
@@ -279,8 +283,8 @@ static void file_draw_tooltip_custom_func(bContext & /*C*/, uiTooltipData &tip, 
                               fmt::format("{}: {}{}{}",
                                           N_("Modified"),
                                           day_string,
-                                          (is_today || is_yesterday) ? "" : date_st,
-                                          (is_today || is_yesterday) ? time_st : ""),
+                                          (is_today || is_yesterday) ? "" : date_str,
+                                          (is_today || is_yesterday) ? time_str : ""),
                               {},
                               UI_TIP_STYLE_NORMAL,
                               UI_TIP_LC_NORMAL);
@@ -331,13 +335,7 @@ static void file_draw_tooltip_custom_func(bContext & /*C*/, uiTooltipData &tip, 
 static std::string file_draw_asset_tooltip_func(bContext * /*C*/, void *argN, const char * /*tip*/)
 {
   const auto *asset = static_cast<blender::asset_system::AssetRepresentation *>(argN);
-  std::string complete_string = asset->get_name();
-  const AssetMetaData &meta_data = asset->get_metadata();
-  if (meta_data.description) {
-    complete_string += '\n';
-    complete_string += meta_data.description;
-  }
-  return complete_string;
+  return blender::ed::asset::asset_tooltip(*asset);
 }
 
 static void draw_tile_background(const rcti *draw_rect, int colorid, int shade)
@@ -694,7 +692,7 @@ static void file_draw_preview(const FileList *files,
     }
 
     icon_x = xco + (file->typeflag & FILE_TYPE_DIR ? ex * 0.31f : ex * 0.178f);
-    icon_y = yco + (file->typeflag & FILE_TYPE_DIR ? ex * 0.11f : ex * 0.15f);
+    icon_y = yco + (file->typeflag & FILE_TYPE_DIR ? ex * 0.19f : ex * 0.15f);
     UI_icon_draw_ex(icon_x,
                     icon_y,
                     is_loading ? ICON_TEMP : icon,

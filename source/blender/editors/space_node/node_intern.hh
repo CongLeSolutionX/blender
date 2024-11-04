@@ -308,6 +308,7 @@ void NODE_OT_default_group_width_set(wmOperatorType *ot);
 
 void update_multi_input_indices_for_removed_links(bNode &node);
 bool all_links_muted(const bNodeSocket &socket);
+/** Get the "main" socket based on the node declaration or an heuristic. */
 bNodeSocket *get_main_socket(bNodeTree &ntree, bNode &node, eNodeSocketInOut in_out);
 
 void NODE_OT_link(wmOperatorType *ot);
@@ -400,7 +401,8 @@ void NODE_GGT_backdrop_corner_pin(wmGizmoGroupType *gzgt);
 void node_geometry_add_attribute_search_button(const bContext &C,
                                                const bNode &node,
                                                PointerRNA &socket_ptr,
-                                               uiLayout &layout);
+                                               uiLayout &layout,
+                                               StringRefNull placeholder = "");
 
 /* `node_context_path.cc` */
 

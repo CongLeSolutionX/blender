@@ -238,7 +238,7 @@ std::ostream &operator<<(std::ostream &stream, const GeometrySet &geometry_set)
     parts.append(std::to_string(curves->geometry.curve_num) + " curves");
   }
   if (const GreasePencil *grease_pencil = geometry_set.get_grease_pencil()) {
-    parts.append(std::to_string(grease_pencil->layers().size()) + " grease pencil layers");
+    parts.append(std::to_string(grease_pencil->layers().size()) + " Grease Pencil layers");
   }
   if (const PointCloud *point_cloud = geometry_set.get_pointcloud()) {
     parts.append(std::to_string(point_cloud->totpoint) + " points");
@@ -614,11 +614,9 @@ void GeometrySet::attribute_foreach(const Span<GeometryComponent::Type> componen
     const GeometryComponent &component = *this->get_component(component_type);
     const std::optional<AttributeAccessor> attributes = component.attributes();
     if (attributes.has_value()) {
-      attributes->for_all(
-          [&](const AttributeIDRef &attribute_id, const AttributeMetaData &meta_data) {
-            callback(attribute_id, meta_data, component);
-            return true;
-          });
+      attributes->foreach_attribute([&](const AttributeIter &iter) {
+        callback(iter.name, {iter.domain, iter.data_type}, component);
+      });
     }
   }
   if (include_instances && this->has_instances()) {
@@ -632,48 +630,80 @@ void GeometrySet::attribute_foreach(const Span<GeometryComponent::Type> componen
 void GeometrySet::propagate_attributes_from_layer_to_instances(
     const AttributeAccessor src_attributes,
     MutableAttributeAccessor dst_attributes,
-    const AnonymousAttributePropagationInfo &propagation_info)
+    const AttributeFilter &attribute_filter)
 {
-  src_attributes.for_all([&](const AttributeIDRef &id, const AttributeMetaData meta_data) {
-    if (id.is_anonymous() && !propagation_info.propagate(id.anonymous_id())) {
-      return true;
+  src_attributes.foreach_attribute([&](const AttributeIter &iter) {
+    if (attribute_filter.allow_skip(iter.name)) {
+      return;
     }
-    const GAttributeReader src = src_attributes.lookup(id, AttrDomain::Layer);
+    const GAttributeReader src = iter.get(AttrDomain::Layer);
     if (src.sharing_info && src.varray.is_span()) {
       const AttributeInitShared init(src.varray.get_internal_span().data(), *src.sharing_info);
-      if (dst_attributes.add(id, AttrDomain::Instance, meta_data.data_type, init)) {
-        return true;
+      if (dst_attributes.add(iter.name, AttrDomain::Instance, iter.data_type, init)) {
+        return;
       }
     }
     GSpanAttributeWriter dst = dst_attributes.lookup_or_add_for_write_only_span(
-        id, AttrDomain::Instance, meta_data.data_type);
+        iter.name, AttrDomain::Instance, iter.data_type);
     if (!dst) {
-      return true;
+      return;
     }
     array_utils::copy(src.varray, dst.span);
     dst.finish();
-    return true;
   });
+}
+
+bool attribute_is_builtin_on_component_type(const GeometryComponent::Type type,
+                                            const StringRef name)
+{
+  switch (type) {
+    case GeometryComponent::Type::Mesh: {
+      static auto component = GeometryComponent::create(type);
+      return component->attributes()->is_builtin(name);
+    }
+    case GeometryComponent::Type::PointCloud: {
+      static auto component = GeometryComponent::create(type);
+      return component->attributes()->is_builtin(name);
+    }
+    case GeometryComponent::Type::Instance: {
+      static auto component = GeometryComponent::create(type);
+      return component->attributes()->is_builtin(name);
+    }
+    case GeometryComponent::Type::Curve: {
+      static auto component = GeometryComponent::create(type);
+      return component->attributes()->is_builtin(name);
+    }
+    case GeometryComponent::Type::GreasePencil: {
+      static auto grease_pencil_component = GeometryComponent::create(
+          GeometryComponent::Type::GreasePencil);
+      static auto curves_component = GeometryComponent::create(GeometryComponent::Type::Curve);
+      return grease_pencil_component->attributes()->is_builtin(name) ||
+             curves_component->attributes()->is_builtin(name);
+    }
+    case GeometryComponent::Type::Volume:
+    case GeometryComponent::Type::Edit: {
+      return false;
+    }
+  }
+  BLI_assert_unreachable();
+  return false;
 }
 
 void GeometrySet::gather_attributes_for_propagation(
     const Span<GeometryComponent::Type> component_types,
     const GeometryComponent::Type dst_component_type,
     bool include_instances,
-    const AnonymousAttributePropagationInfo &propagation_info,
-    Map<AttributeIDRef, AttributeKind> &r_attributes) const
+    const AttributeFilter &attribute_filter,
+    Map<StringRef, AttributeKind> &r_attributes) const
 {
-  /* Only needed right now to check if an attribute is built-in on this component type.
-   * TODO: Get rid of the dummy component. */
-  const GeometryComponentPtr dummy_component = GeometryComponent::create(dst_component_type);
   this->attribute_foreach(
       component_types,
       include_instances,
-      [&](const AttributeIDRef &attribute_id,
+      [&](const StringRef attribute_id,
           const AttributeMetaData &meta_data,
           const GeometryComponent &component) {
         if (component.attributes()->is_builtin(attribute_id)) {
-          if (!dummy_component->attributes()->is_builtin(attribute_id)) {
+          if (!attribute_is_builtin_on_component_type(dst_component_type, attribute_id)) {
             /* Don't propagate built-in attributes that are not built-in on the destination
              * component. */
             return;
@@ -683,8 +713,7 @@ void GeometrySet::gather_attributes_for_propagation(
           /* Propagating string attributes is not supported yet. */
           return;
         }
-        if (attribute_id.is_anonymous() &&
-            !propagation_info.propagate(attribute_id.anonymous_id())) {
+        if (attribute_filter.allow_skip(attribute_id)) {
           return;
         }
 

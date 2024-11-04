@@ -61,7 +61,7 @@
 
 #undef DNA_GENFILE_VERSIONING_MACROS
 
-#include "BKE_animsys.h"
+#include "BKE_anim_data.hh"
 #include "BKE_blender.hh"
 #include "BKE_collection.hh"
 #include "BKE_colortools.hh"
@@ -579,13 +579,6 @@ static void do_version_bbone_scale_fcurve_fix(ListBase *curves, FCurve *fcu)
   }
 }
 
-static void do_version_bbone_scale_animdata_cb(ID * /*id*/, AnimData *adt, void * /*wrapper_data*/)
-{
-  LISTBASE_FOREACH_MUTABLE (FCurve *, fcu, &adt->drivers) {
-    do_version_bbone_scale_fcurve_fix(&adt->drivers, fcu);
-  }
-}
-
 static void do_version_constraints_maintain_volume_mode_uniform(ListBase *lb)
 {
   LISTBASE_FOREACH (bConstraint *, con, lb) {
@@ -999,16 +992,6 @@ static void do_version_curvemapping_walker(Main *bmain, void (*callback)(CurveMa
       }
     }
   }
-}
-
-static void do_version_fcurve_hide_viewport_fix(ID * /*id*/, FCurve *fcu, void * /*user_data*/)
-{
-  if (fcu->rna_path == nullptr || !STREQ(fcu->rna_path, "hide")) {
-    return;
-  }
-
-  MEM_freeN(fcu->rna_path);
-  fcu->rna_path = BLI_strdupn("hide_viewport", 13);
 }
 
 static void displacement_node_insert(bNodeTree *ntree)
@@ -1688,15 +1671,6 @@ static void update_noise_node_dimensions(bNodeTree *ntree)
   }
 }
 
-/* This structure is only used to pass data to
- * update_mapping_node_fcurve_rna_path_callback.
- */
-struct MappingNodeFCurveCallbackData {
-  char *nodePath;
-  bNode *minimumNode;
-  bNode *maximumNode;
-};
-
 /* This callback function is used by update_mapping_node_inputs_and_properties.
  * It is executed on every fcurve in the nodetree id updating its RNA paths. The
  * paths needs to be updated because the node properties became inputs.
@@ -1711,10 +1685,12 @@ struct MappingNodeFCurveCallbackData {
  * update if the rna path starts with the rna path of the mapping node and
  * doesn't end with "default_value", that is, not the Vector input.
  */
-static void update_mapping_node_fcurve_rna_path_callback(ID * /*id*/, FCurve *fcurve, void *_data)
+static void update_mapping_node_fcurve_rna_path_callback(FCurve *fcurve,
+                                                         const char *nodePath,
+                                                         const bNode *minimumNode,
+                                                         const bNode *maximumNode)
 {
-  MappingNodeFCurveCallbackData *data = (MappingNodeFCurveCallbackData *)_data;
-  if (!STRPREFIX(fcurve->rna_path, data->nodePath) ||
+  if (!STRPREFIX(fcurve->rna_path, nodePath) ||
       BLI_str_endswith(fcurve->rna_path, "default_value"))
   {
     return;
@@ -1722,22 +1698,22 @@ static void update_mapping_node_fcurve_rna_path_callback(ID * /*id*/, FCurve *fc
   char *old_fcurve_rna_path = fcurve->rna_path;
 
   if (BLI_str_endswith(old_fcurve_rna_path, "translation")) {
-    fcurve->rna_path = BLI_sprintfN("%s.%s", data->nodePath, "inputs[1].default_value");
+    fcurve->rna_path = BLI_sprintfN("%s.%s", nodePath, "inputs[1].default_value");
   }
   else if (BLI_str_endswith(old_fcurve_rna_path, "rotation")) {
-    fcurve->rna_path = BLI_sprintfN("%s.%s", data->nodePath, "inputs[2].default_value");
+    fcurve->rna_path = BLI_sprintfN("%s.%s", nodePath, "inputs[2].default_value");
   }
   else if (BLI_str_endswith(old_fcurve_rna_path, "scale")) {
-    fcurve->rna_path = BLI_sprintfN("%s.%s", data->nodePath, "inputs[3].default_value");
+    fcurve->rna_path = BLI_sprintfN("%s.%s", nodePath, "inputs[3].default_value");
   }
-  else if (data->minimumNode && BLI_str_endswith(old_fcurve_rna_path, "max")) {
-    char node_name_esc[sizeof(data->minimumNode->name) * 2];
-    BLI_str_escape(node_name_esc, data->minimumNode->name, sizeof(node_name_esc));
+  else if (minimumNode && BLI_str_endswith(old_fcurve_rna_path, "max")) {
+    char node_name_esc[sizeof(minimumNode->name) * 2];
+    BLI_str_escape(node_name_esc, minimumNode->name, sizeof(node_name_esc));
     fcurve->rna_path = BLI_sprintfN("nodes[\"%s\"].%s", node_name_esc, "inputs[1].default_value");
   }
-  else if (data->maximumNode && BLI_str_endswith(old_fcurve_rna_path, "min")) {
-    char node_name_esc[sizeof(data->maximumNode->name) * 2];
-    BLI_str_escape(node_name_esc, data->maximumNode->name, sizeof(node_name_esc));
+  else if (maximumNode && BLI_str_endswith(old_fcurve_rna_path, "min")) {
+    char node_name_esc[sizeof(maximumNode->name) * 2];
+    BLI_str_escape(node_name_esc, maximumNode->name, sizeof(node_name_esc));
     fcurve->rna_path = BLI_sprintfN("nodes[\"%s\"].%s", node_name_esc, "inputs[1].default_value");
   }
 
@@ -1861,8 +1837,9 @@ static void update_mapping_node_inputs_and_properties(bNodeTree *ntree)
       BLI_str_escape(node_name_esc, node->name, sizeof(node_name_esc));
 
       char *nodePath = BLI_sprintfN("nodes[\"%s\"]", node_name_esc);
-      MappingNodeFCurveCallbackData data = {nodePath, minimumNode, maximumNode};
-      BKE_fcurves_id_cb(&ntree->id, update_mapping_node_fcurve_rna_path_callback, &data);
+      BKE_fcurves_id_cb(&ntree->id, [&](ID * /*id*/, FCurve *fcu) {
+        update_mapping_node_fcurve_rna_path_callback(fcu, nodePath, minimumNode, maximumNode);
+      });
       MEM_freeN(nodePath);
     }
   }
@@ -2594,7 +2571,7 @@ void do_versions_after_linking_280(FileData *fd, Main *bmain)
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 280, 30)) {
     LISTBASE_FOREACH (Brush *, brush, &bmain->brushes) {
       if (brush->gpencil_settings != nullptr) {
-        brush->gpencil_tool = brush->gpencil_settings->brush_type;
+        brush->gpencil_brush_type = brush->gpencil_settings->brush_type;
       }
     }
   }
@@ -2909,10 +2886,10 @@ void do_versions_after_linking_280(FileData *fd, Main *bmain)
       ToolSettings *ts = scene->toolsettings;
 
       /* Ensure new Paint modes. */
-      BKE_paint_ensure_from_paintmode(bmain, scene, PaintMode::GPencil);
-      BKE_paint_ensure_from_paintmode(bmain, scene, PaintMode::VertexGPencil);
-      BKE_paint_ensure_from_paintmode(bmain, scene, PaintMode::SculptGPencil);
-      BKE_paint_ensure_from_paintmode(bmain, scene, PaintMode::WeightGPencil);
+      BKE_paint_ensure_from_paintmode(scene, PaintMode::GPencil);
+      BKE_paint_ensure_from_paintmode(scene, PaintMode::VertexGPencil);
+      BKE_paint_ensure_from_paintmode(scene, PaintMode::SculptGPencil);
+      BKE_paint_ensure_from_paintmode(scene, PaintMode::WeightGPencil);
 
       /* Enable cursor by default. */
       Paint *paint = &ts->gp_paint->paint;
@@ -2943,15 +2920,22 @@ void do_versions_after_linking_280(FileData *fd, Main *bmain)
     /* During development of Blender 2.80 the "Object.hide" property was
      * removed, and reintroduced in 5e968a996a53 as "Object.hide_viewport". */
     LISTBASE_FOREACH (Object *, ob, &bmain->objects) {
-      BKE_fcurves_id_cb(&ob->id, do_version_fcurve_hide_viewport_fix, nullptr);
+      BKE_fcurves_id_cb(&ob->id, [&](ID * /*id*/, FCurve *fcu) {
+        if (fcu->rna_path == nullptr || !STREQ(fcu->rna_path, "hide")) {
+          return;
+        }
+
+        MEM_freeN(fcu->rna_path);
+        fcu->rna_path = BLI_strdupn("hide_viewport", 13);
+      });
     }
 
     /* Reset all grease pencil brushes. */
     LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
       /* Ensure new Paint modes. */
-      BKE_paint_ensure_from_paintmode(bmain, scene, PaintMode::VertexGPencil);
-      BKE_paint_ensure_from_paintmode(bmain, scene, PaintMode::SculptGPencil);
-      BKE_paint_ensure_from_paintmode(bmain, scene, PaintMode::WeightGPencil);
+      BKE_paint_ensure_from_paintmode(scene, PaintMode::VertexGPencil);
+      BKE_paint_ensure_from_paintmode(scene, PaintMode::SculptGPencil);
+      BKE_paint_ensure_from_paintmode(scene, PaintMode::WeightGPencil);
     }
   }
 
@@ -2960,7 +2944,7 @@ void do_versions_after_linking_280(FileData *fd, Main *bmain)
     /* Paint Brush. This ensure that the brush paints by default. Used during the development and
      * patch review of the initial Sculpt Vertex Colors implementation (D5975) */
     LISTBASE_FOREACH (Brush *, brush, &bmain->brushes) {
-      if (brush->ob_mode & OB_MODE_SCULPT && brush->sculpt_tool == SCULPT_TOOL_PAINT) {
+      if (brush->ob_mode & OB_MODE_SCULPT && brush->sculpt_brush_type == SCULPT_BRUSH_TYPE_PAINT) {
         brush->tip_roundness = 1.0f;
         brush->flow = 1.0f;
         brush->density = 1.0f;
@@ -2970,7 +2954,9 @@ void do_versions_after_linking_280(FileData *fd, Main *bmain)
 
     /* Pose Brush with support for loose parts. */
     LISTBASE_FOREACH (Brush *, brush, &bmain->brushes) {
-      if (brush->sculpt_tool == SCULPT_TOOL_POSE && brush->disconnected_distance_max == 0.0f) {
+      if (brush->sculpt_brush_type == SCULPT_BRUSH_TYPE_POSE &&
+          brush->disconnected_distance_max == 0.0f)
+      {
         brush->flag2 |= BRUSH_USE_CONNECTED_ONLY;
         brush->disconnected_distance_max = 0.1f;
       }
@@ -4123,7 +4109,7 @@ void blo_do_versions_280(FileData *fd, Library * /*lib*/, Main *bmain)
       LISTBASE_FOREACH (Brush *, brush, &bmain->brushes) {
         if (brush->gpencil_settings != nullptr) {
           BrushGpencilSettings *gp = brush->gpencil_settings;
-          if (gp->brush_type == GPAINT_TOOL_ERASE) {
+          if (gp->brush_type == GPAINT_BRUSH_TYPE_ERASE) {
             gp->era_strength_f = 100.0f;
             gp->era_thickness_f = 10.0f;
           }
@@ -4378,7 +4364,7 @@ void blo_do_versions_280(FileData *fd, Library * /*lib*/, Main *bmain)
       }
     }
 
-    if (!DNA_struct_member_exists(fd->filesdna, "Brush", "char", "weightpaint_tool")) {
+    if (!DNA_struct_member_exists(fd->filesdna, "Brush", "char", "weight_brush_type")) {
       /* Magic defines from old files (2.7x) */
 
 #define PAINT_BLEND_MIX 0
@@ -4405,30 +4391,30 @@ void blo_do_versions_280(FileData *fd, Library * /*lib*/, Main *bmain)
 
       LISTBASE_FOREACH (Brush *, brush, &bmain->brushes) {
         if (brush->ob_mode & (OB_MODE_VERTEX_PAINT | OB_MODE_WEIGHT_PAINT)) {
-          const char tool_init = brush->vertexpaint_tool;
+          const char tool_init = brush->vertex_brush_type;
           bool is_blend = false;
 
           {
             char tool;
             switch (tool_init) {
               case PAINT_BLEND_MIX:
-                tool = VPAINT_TOOL_DRAW;
+                tool = VPAINT_BRUSH_TYPE_DRAW;
                 break;
               case PAINT_BLEND_BLUR:
-                tool = VPAINT_TOOL_BLUR;
+                tool = VPAINT_BRUSH_TYPE_BLUR;
                 break;
               case PAINT_BLEND_AVERAGE:
-                tool = VPAINT_TOOL_AVERAGE;
+                tool = VPAINT_BRUSH_TYPE_AVERAGE;
                 break;
               case PAINT_BLEND_SMEAR:
-                tool = VPAINT_TOOL_SMEAR;
+                tool = VPAINT_BRUSH_TYPE_SMEAR;
                 break;
               default:
-                tool = VPAINT_TOOL_DRAW;
+                tool = VPAINT_BRUSH_TYPE_DRAW;
                 is_blend = true;
                 break;
             }
-            brush->vertexpaint_tool = tool;
+            brush->vertex_brush_type = tool;
           }
 
           if (is_blend == false) {
@@ -4493,7 +4479,7 @@ void blo_do_versions_280(FileData *fd, Library * /*lib*/, Main *bmain)
           }
         }
         /* For now these match, in the future new items may not. */
-        brush->weightpaint_tool = brush->vertexpaint_tool;
+        brush->weight_brush_type = brush->vertex_brush_type;
       }
 
 #undef PAINT_BLEND_MIX
@@ -5219,7 +5205,11 @@ void blo_do_versions_280(FileData *fd, Library * /*lib*/, Main *bmain)
         }
       }
 
-      BKE_animdata_main_cb(bmain, do_version_bbone_scale_animdata_cb, nullptr);
+      BKE_animdata_main_cb(bmain, [](ID * /*id*/, AnimData *adt) {
+        LISTBASE_FOREACH_MUTABLE (FCurve *, fcu, &adt->drivers) {
+          do_version_bbone_scale_fcurve_fix(&adt->drivers, fcu);
+        }
+      });
     }
 
     LISTBASE_FOREACH (Scene *, sce, &bmain->scenes) {
@@ -5853,7 +5843,7 @@ void blo_do_versions_280(FileData *fd, Library * /*lib*/, Main *bmain)
 
     /* Pose brush keep anchor point. */
     LISTBASE_FOREACH (Brush *, br, &bmain->brushes) {
-      if (br->sculpt_tool == SCULPT_TOOL_POSE) {
+      if (br->sculpt_brush_type == SCULPT_BRUSH_TYPE_POSE) {
         br->flag2 |= BRUSH_POSE_IK_ANCHORED;
       }
     }
@@ -5861,7 +5851,8 @@ void blo_do_versions_280(FileData *fd, Library * /*lib*/, Main *bmain)
     /* Tip Roundness. */
     if (!DNA_struct_member_exists(fd->filesdna, "Brush", "float", "tip_roundness")) {
       LISTBASE_FOREACH (Brush *, br, &bmain->brushes) {
-        if (br->ob_mode & OB_MODE_SCULPT && br->sculpt_tool == SCULPT_TOOL_CLAY_STRIPS) {
+        if (br->ob_mode & OB_MODE_SCULPT && br->sculpt_brush_type == SCULPT_BRUSH_TYPE_CLAY_STRIPS)
+        {
           br->tip_roundness = 0.18f;
         }
       }
@@ -5939,9 +5930,9 @@ void blo_do_versions_280(FileData *fd, Library * /*lib*/, Main *bmain)
       {
         LISTBASE_FOREACH (Brush *, brush, &bmain->brushes) {
           if (brush->gpencil_settings != nullptr) {
-            brush->gpencil_vertex_tool = brush->gpencil_settings->brush_type;
-            brush->gpencil_sculpt_tool = brush->gpencil_settings->brush_type;
-            brush->gpencil_weight_tool = brush->gpencil_settings->brush_type;
+            brush->gpencil_vertex_brush_type = brush->gpencil_settings->brush_type;
+            brush->gpencil_sculpt_brush_type = brush->gpencil_settings->brush_type;
+            brush->gpencil_weight_brush_type = brush->gpencil_settings->brush_type;
           }
         }
       }
@@ -6363,7 +6354,7 @@ void blo_do_versions_280(FileData *fd, Library * /*lib*/, Main *bmain)
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 283, 17)) {
     /* Reset the cloth mass to 1.0 in brushes with an invalid value. */
     LISTBASE_FOREACH (Brush *, br, &bmain->brushes) {
-      if (br->sculpt_tool == SCULPT_TOOL_CLOTH) {
+      if (br->sculpt_brush_type == SCULPT_BRUSH_TYPE_CLOTH) {
         if (br->cloth_mass == 0.0f) {
           br->cloth_mass = 1.0f;
         }

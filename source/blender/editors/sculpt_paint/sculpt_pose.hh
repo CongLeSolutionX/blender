@@ -53,7 +53,7 @@ struct IKChain {
 void do_pose_brush(const Depsgraph &depsgraph,
                    const Sculpt &sd,
                    Object &ob,
-                   Span<bke::pbvh::Node *> nodes);
+                   const IndexMask &node_mask);
 /**
  * Calculate the pose origin and (Optionally the pose factor)
  * that is used when using the pose brush.
@@ -61,14 +61,6 @@ void do_pose_brush(const Depsgraph &depsgraph,
  * \param r_pose_origin: Must be a valid pointer.
  * \param r_pose_factor: Optional, when set to NULL it won't be calculated.
  */
-void calc_pose_data(const Depsgraph &depsgraph,
-                    Object &ob,
-                    SculptSession &ss,
-                    const float3 &initial_location,
-                    float radius,
-                    float pose_offset,
-                    float3 &r_pose_origin,
-                    MutableSpan<float> r_pose_factor);
 void pose_brush_init(const Depsgraph &depsgraph,
                      Object &ob,
                      SculptSession &ss,

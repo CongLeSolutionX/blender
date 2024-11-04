@@ -10,6 +10,7 @@
 
 #include "BLI_array.hh"
 #include "BLI_bit_vector.hh"
+#include "BLI_index_mask.hh"
 #include "BLI_math_matrix.hh"
 #include "BLI_vector.hh"
 
@@ -52,13 +53,13 @@ struct LassoData {
 
 struct LineData {
   /* Plane aligned to the gesture line. */
-  float true_plane[4];
-  float plane[4];
+  float4 true_plane;
+  float4 plane;
 
   /* Planes to limit the action to the length of the gesture segment at both sides of the affected
    * area. */
-  float side_plane[2][4];
-  float true_side_plane[2][4];
+  std::array<float4, 2> side_plane;
+  std::array<float4, 2> true_side_plane;
   bool use_side_planes;
 
   bool flip;
@@ -111,7 +112,8 @@ struct GestureData {
   LineData line;
 
   /* Task Callback Data. */
-  Vector<bke::pbvh::Node *> nodes;
+  IndexMaskMemory node_mask_memory;
+  IndexMask node_mask;
 
   ~GestureData();
 };
@@ -140,7 +142,7 @@ void filter_factors(const GestureData &gesture_data,
 std::unique_ptr<GestureData> init_from_box(bContext *C, wmOperator *op);
 std::unique_ptr<GestureData> init_from_lasso(bContext *C, wmOperator *op);
 std::unique_ptr<GestureData> init_from_polyline(bContext *C, wmOperator *op);
-std::unique_ptr<GestureData> init_from_line(bContext *C, wmOperator *op);
+std::unique_ptr<GestureData> init_from_line(bContext *C, const wmOperator *op);
 
 /* Common gesture operator properties. */
 void operator_properties(wmOperatorType *ot, ShapeType shapeType);

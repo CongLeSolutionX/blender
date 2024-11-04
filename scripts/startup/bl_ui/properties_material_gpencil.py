@@ -6,6 +6,7 @@ import bpy
 from bpy.types import Menu, Panel, UIList
 from rna_prop_ui import PropertyPanel
 from bl_ui.utils import PresetPanel
+from .space_properties import PropertiesAnimationMixin
 
 from bl_ui.properties_grease_pencil_common import (
     GreasePencilMaterialsPanel,
@@ -214,19 +215,12 @@ class MATERIAL_PT_gpencil_fillcolor(GPMaterialButtonsPanel, Panel):
             col.prop(gpcolor, "texture_clamp", text="Clip Image")
 
 
-class MATERIAL_PT_gpencil_preview(GPMaterialButtonsPanel, Panel):
-    bl_label = "Preview"
-    COMPAT_ENGINES = {'BLENDER_EEVEE'}
-    bl_options = {'DEFAULT_CLOSED'}
-
-    def draw(self, context):
-        ma = context.material
-        self.layout.label(text=ma.name)
-        self.layout.template_preview(ma)
+class MATERIAL_PT_gpencil_animation(GPMaterialButtonsPanel, PropertiesAnimationMixin, PropertyPanel, Panel):
+    _animated_id_context_property = "material"
 
 
 class MATERIAL_PT_gpencil_custom_props(GPMaterialButtonsPanel, PropertyPanel, Panel):
-    COMPAT_ENGINES = {'BLENDER_EEVEE', 'BLENDER_WORKBENCH'}
+    COMPAT_ENGINES = {'BLENDER_WORKBENCH'}
     _context_path = "object.active_material"
     _property_type = bpy.types.Material
 
@@ -256,12 +250,12 @@ classes = (
     GPENCIL_UL_matslots,
     GPENCIL_MT_material_context_menu,
     MATERIAL_PT_gpencil_slots,
-    MATERIAL_PT_gpencil_preview,
     MATERIAL_PT_gpencil_material_presets,
     MATERIAL_PT_gpencil_surface,
     MATERIAL_PT_gpencil_strokecolor,
     MATERIAL_PT_gpencil_fillcolor,
     MATERIAL_PT_gpencil_settings,
+    MATERIAL_PT_gpencil_animation,
     MATERIAL_PT_gpencil_custom_props,
 )
 

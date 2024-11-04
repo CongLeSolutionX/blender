@@ -39,11 +39,18 @@ class LightProbes {
 
   } call_buffers_{selection_type_};
 
+  bool enabled_ = false;
+
  public:
   LightProbes(const SelectionType selection_type) : selection_type_(selection_type){};
 
   void begin_sync(Resources &res, const State &state)
   {
+    enabled_ = state.space_type == SPACE_VIEW3D;
+    if (!enabled_) {
+      return;
+    }
+
     call_buffers_.ground_line_buf.clear();
     call_buffers_.probe_cube_buf.clear();
     call_buffers_.probe_planar_buf.clear();
@@ -54,7 +61,7 @@ class LightProbes {
     call_buffers_.single_arrow_buf.clear();
 
     ps_dots_.init();
-    ps_dots_.state_set(DRW_STATE_WRITE_COLOR | state.clipping_state);
+    ps_dots_.state_set(DRW_STATE_WRITE_COLOR, state.clipping_plane_count);
     ps_dots_.shader_set(res.shaders.extra_grid.get());
     ps_dots_.bind_ubo("globalsBlock", &res.globals_buf);
     ps_dots_.bind_texture("depthBuffer", &res.depth_tx);
@@ -64,6 +71,10 @@ class LightProbes {
 
   void object_sync(const ObjectRef &ob_ref, Resources &res, const State &state)
   {
+    if (!enabled_) {
+      return;
+    }
+
     const Object *ob = ob_ref.object;
     const LightProbe *prb = static_cast<LightProbe *>(ob_ref.object->data);
     const bool show_clipping = (prb->flag & LIGHTPROBE_FLAG_SHOW_CLIP_DIST) != 0;
@@ -164,7 +175,7 @@ class LightProbes {
         matrix.z_axis() = float3(0);
         call_buffers_.cube_buf.append(data, select_id);
 
-        matrix.view<3, 3>() = math::normalize(float4x4(ob->object_to_world().ptr()).view<3, 3>());
+        matrix.view<3, 3>() = math::normalize(float3x3(ob->object_to_world().view<3, 3>()));
         draw_size = ob->empty_drawsize;
         call_buffers_.single_arrow_buf.append(data, select_id);
         break;
@@ -173,14 +184,18 @@ class LightProbes {
 
   void end_sync(Resources &res, ShapeCache &shapes, const State &state)
   {
+    if (!enabled_) {
+      return;
+    }
+
     ps_.init();
     res.select_bind(ps_);
 
     DRWState pass_state = DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH |
-                          DRW_STATE_DEPTH_LESS_EQUAL | state.clipping_state;
+                          DRW_STATE_DEPTH_LESS_EQUAL;
     {
       PassSimple::Sub &sub_pass = ps_.sub("empties");
-      sub_pass.state_set(pass_state);
+      sub_pass.state_set(pass_state, state.clipping_plane_count);
       sub_pass.shader_set(res.shaders.extra_shape.get());
       sub_pass.bind_ubo("globalsBlock", &res.globals_buf);
       call_buffers_.probe_cube_buf.end_sync(sub_pass, shapes.lightprobe_cube.get());
@@ -193,7 +208,7 @@ class LightProbes {
     }
     {
       PassSimple::Sub &sub_pass = ps_.sub("ground_line");
-      sub_pass.state_set(pass_state | DRW_STATE_BLEND_ALPHA);
+      sub_pass.state_set(pass_state | DRW_STATE_BLEND_ALPHA, state.clipping_plane_count);
       sub_pass.shader_set(res.shaders.extra_ground_line.get());
       sub_pass.bind_ubo("globalsBlock", &res.globals_buf);
       call_buffers_.ground_line_buf.end_sync(sub_pass, shapes.ground_line.get());
@@ -202,12 +217,20 @@ class LightProbes {
 
   void draw(Framebuffer &framebuffer, Manager &manager, View &view)
   {
+    if (!enabled_) {
+      return;
+    }
+
     GPU_framebuffer_bind(framebuffer);
     manager.submit(ps_, view);
   }
 
   void draw_color_only(Framebuffer &framebuffer, Manager &manager, View &view)
   {
+    if (!enabled_) {
+      return;
+    }
+
     GPU_framebuffer_bind(framebuffer);
     manager.submit(ps_dots_, view);
   }

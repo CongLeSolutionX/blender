@@ -25,7 +25,7 @@
 #include "BLI_math_matrix.h"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 #include "BLI_string.h"
 #include "BLI_string_ref.hh"
 #include "BLI_task.hh"
@@ -321,7 +321,7 @@ void BKE_volume_init_grids(Volume *volume)
 #endif
 }
 
-void *BKE_volume_add(Main *bmain, const char *name)
+Volume *BKE_volume_add(Main *bmain, const char *name)
 {
   Volume *volume = (Volume *)BKE_id_new(bmain, ID_VO, name);
 
@@ -503,9 +503,7 @@ bool BKE_volume_load(const Volume *volume, const Main *bmain)
 
   /* Test if file exists. */
   if (!BLI_exists(filepath)) {
-    char filename[FILE_MAX];
-    BLI_path_split_file_part(filepath, filename, sizeof(filename));
-    grids.error_msg = filename + std::string(" not found");
+    grids.error_msg = BLI_path_basename(filepath) + std::string(" not found");
     CLOG_INFO(&LOG, 1, "Volume %s: %s", volume_name, grids.error_msg.c_str());
     return false;
   }

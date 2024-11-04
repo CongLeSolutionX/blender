@@ -34,7 +34,7 @@
 #include "BKE_global.hh"
 #include "BKE_gpencil_legacy.h"
 #include "BKE_grease_pencil.hh"
-#include "BKE_nla.h"
+#include "BKE_nla.hh"
 #include "BKE_report.hh"
 
 #include "UI_interface_icons.hh"
@@ -274,10 +274,11 @@ static int actkeys_previewrange_exec(bContext *C, wmOperator * /*op*/)
     return OPERATOR_CANCELLED;
   }
 
-  scene = ac.scene;
-
   /* set the range directly */
-  get_keyframe_extents(&ac, &min, &max, true);
+  if (!get_keyframe_extents(&ac, &min, &max, true)) {
+    return OPERATOR_CANCELLED;
+  }
+  scene = ac.scene;
   scene->r.flag |= SCER_PRV_RANGE;
   scene->r.psfra = floorf(min);
   scene->r.pefra = ceilf(max);
@@ -669,7 +670,7 @@ static int actkeys_paste_exec(bContext *C, wmOperator *op)
     /* FIXME: support this case. */
     BKE_report(op->reports,
                RPT_ERROR,
-               "Keyframe pasting is not available for grease pencil or mask mode");
+               "Keyframe pasting is not available for Grease Pencil or mask mode");
     return OPERATOR_CANCELLED;
   }
   else {

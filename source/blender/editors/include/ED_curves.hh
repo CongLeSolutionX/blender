@@ -15,12 +15,13 @@
 #include "BLI_vector.hh"
 #include "BLI_vector_set.hh"
 
+#include "DNA_view3d_types.h"
+
 #include "ED_select_utils.hh"
 
 struct bContext;
 struct Curves;
 struct UndoType;
-struct SelectPick_Params;
 struct ViewContext;
 struct rcti;
 struct TransVertStore;
@@ -89,6 +90,7 @@ using SelectionRangeFn = FunctionRef<void(
  */
 void foreach_selectable_point_range(const bke::CurvesGeometry &curves,
                                     const bke::crazyspace::GeometryDeformation &deformation,
+                                    eHandleDisplay handle_display,
                                     SelectionRangeFn range_consumer);
 
 /**
@@ -98,6 +100,7 @@ void foreach_selectable_point_range(const bke::CurvesGeometry &curves,
  */
 void foreach_selectable_curve_range(const bke::CurvesGeometry &curves,
                                     const bke::crazyspace::GeometryDeformation &deformation,
+                                    eHandleDisplay handle_display,
                                     SelectionRangeFn range_consumer);
 
 bool object_has_editable_curves(const Main &bmain, const Object &object);

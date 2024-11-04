@@ -21,6 +21,7 @@
 #include "DNA_genfile.h"
 #include "DNA_sdna_types.h"
 
+#include "BLI_asan.h"
 #include "BLI_ghash.h"
 #include "BLI_listbase.h"
 
@@ -788,13 +789,19 @@ void RNA_struct_free(BlenderRNA *brna, StructRNA *srna)
   PropertyRNA *prop, *nextprop;
   PropertyRNA *parm, *nextparm;
 
-#  if 0
   if (srna->flag & STRUCT_RUNTIME) {
     if (RNA_struct_py_type_get(srna)) {
-      fprintf(stderr, "%s '%s' freed while holding a Python reference.", srna->identifier);
+      /* NOTE: Since this is called after finalizing python/BPY in WM_exit process, it may end
+       * up accessing freed memory in `srna->identifier`, which will trigger an ASAN crash. */
+      const char *srna_identifier = "UNKNOWN";
+#  ifndef WITH_ASAN
+      srna_identifier = srna->identifier;
+#  endif
+      fprintf(stderr,
+              "RNA Struct definition '%s' freed while holding a Python reference.\n",
+              srna_identifier);
     }
   }
-#  endif
 
   for (prop = static_cast<PropertyRNA *>(srna->cont.properties.first); prop; prop = nextprop) {
     nextprop = prop->next;
@@ -2326,7 +2333,7 @@ void RNA_def_property_boolean_sdna(PropertyRNA *prop,
   if ((dp = rna_def_property_sdna(prop, structname, propname))) {
 
     if (!DefRNA.silent) {
-      /* error check to ensure floats are not wrapped as ints/bools */
+      /* Error check to ensure floats are not wrapped as integers/booleans. */
       if (dp->dnatype && *dp->dnatype && IS_DNATYPE_BOOLEAN_COMPAT(dp->dnatype) == 0) {
         CLOG_ERROR(&LOG,
                    "%s.%s is a '%s' but wrapped as type '%s'.",
@@ -2429,7 +2436,7 @@ void RNA_def_property_int_sdna(PropertyRNA *prop, const char *structname, const 
 
   if ((dp = rna_def_property_sdna(prop, structname, propname))) {
 
-    /* error check to ensure floats are not wrapped as ints/bools */
+    /* Error check to ensure floats are not wrapped as integers/booleans. */
     if (!DefRNA.silent) {
       if (dp->dnatype && *dp->dnatype && IS_DNATYPE_INT_COMPAT(dp->dnatype) == 0) {
         CLOG_ERROR(&LOG,

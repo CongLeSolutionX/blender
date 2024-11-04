@@ -4,20 +4,34 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 """
-Utility functions for make update and make tests.
+Utility functions for make update and make tests
+
+WARNING:
+Python 3.9 is used on the built-bot.
+Take care *not* to use features from the Python version used by Blender!
+
+NOTE:
+Some type annotations are quoted to avoid errors in Python 3.9.
+These can be unquoted eventually.
 """
 
 import re
 import os
 import shutil
+import stat
 import subprocess
 import sys
 from pathlib import Path
 
+from types import (
+    TracebackType,
+)
 from typing import (
-    Dict,
+    Any,
+)
+from collections.abc import (
+    Callable,
     Sequence,
-    Optional,
 )
 
 
@@ -25,7 +39,7 @@ def call(
         cmd: Sequence[str],
         exit_on_error: bool = True,
         silent: bool = False,
-        env: Optional[Dict[str, str]] = None,
+        env: "dict[str, str] | None" = None,
 ) -> int:
     if not silent:
         cmd_str = ""
@@ -123,14 +137,14 @@ def git_branch(git_command: str) -> str:
     return branch.strip().decode('utf8')
 
 
-def git_get_config(git_command: str, key: str, file: Optional[str] = None) -> str:
+def git_get_config(git_command: str, key: str, file: "str | None" = None) -> str:
     if file:
         return check_output([git_command, "config", "--file", file, "--get", key])
 
     return check_output([git_command, "config", "--get", key])
 
 
-def git_set_config(git_command: str, key: str, value: str, file: Optional[str] = None) -> str:
+def git_set_config(git_command: str, key: str, value: str, file: "str | None" = None) -> str:
     if file:
         return check_output([git_command, "config", "--file", file, key, value])
 
@@ -269,3 +283,22 @@ def parse_blender_version() -> BlenderVersion:
         int(version_info["BLENDER_VERSION_PATCH"]),
         version_info["BLENDER_VERSION_CYCLE"],
     )
+
+
+def remove_directory(directory: Path) -> None:
+    """
+    Recursively remove the given directory
+
+    Takes care of clearing read-only attributes which might prevent deletion on
+    Windows.
+    """
+    def remove_readonly(
+            func: Callable[..., Any],
+            path: str,
+            _: tuple[type[BaseException], BaseException, TracebackType],
+    ) -> None:
+        "Clear the read-only bit and reattempt the removal."
+        os.chmod(path, stat.S_IWRITE)
+        func(path)
+
+    shutil.rmtree(directory, onerror=remove_readonly)

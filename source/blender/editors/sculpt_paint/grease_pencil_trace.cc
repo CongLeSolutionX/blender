@@ -191,7 +191,7 @@ static bool grease_pencil_trace_image(TraceJob &trace_job,
   image_trace::free_bitmap(bm);
 
   /* Attribute ID for which curves are "holes" with a negative trace sign. */
-  const bke::AttributeIDRef hole_attribute_id = "is_hole";
+  const StringRef hole_attribute_id = "is_hole";
 
   /* Transform from bitmap index space to local image object space. */
   const float4x4 transform = pixel_to_object_transform(*trace_job.ob_active, ibuf);
@@ -366,7 +366,7 @@ static int grease_pencil_trace_image_exec(bContext *C, wmOperator *op)
 
   if (job->ob_grease_pencil != nullptr) {
     if (job->ob_grease_pencil->type != OB_GREASE_PENCIL) {
-      BKE_report(op->reports, RPT_WARNING, "Target object not a grease pencil, ignoring!");
+      BKE_report(op->reports, RPT_WARNING, "Target object not a Grease Pencil, ignoring!");
       job->ob_grease_pencil = nullptr;
     }
     else if (BKE_object_obdata_is_libdata(job->ob_grease_pencil)) {
@@ -483,7 +483,7 @@ static void GREASE_PENCIL_OT_trace_image(wmOperatorType *ot)
                           target_object_modes,
                           int(TargetObjectMode::New),
                           "Target Object",
-                          "Target grease pencil");
+                          "Target Grease Pencil");
   RNA_def_property_flag(ot->prop, PROP_SKIP_SAVE);
 
   RNA_def_float(ot->srna, "radius", 0.01f, 0.001f, 1.0f, "Radius", "", 0.001, 1.0f);

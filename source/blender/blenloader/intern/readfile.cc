@@ -108,6 +108,7 @@
 #include "SEQ_utils.hh"
 
 #include "readfile.hh"
+#include "versioning_common.hh"
 
 /* Make preferences read-only. */
 #define U (*((const UserDef *)&U))
@@ -184,7 +185,6 @@ static CLG_LogRef LOG_UNDO = {"blo.readfile.undo"};
 static void read_libraries(FileData *basefd, ListBase *mainlist);
 static void *read_struct(FileData *fd, BHead *bh, const char *blockname, const int id_type_index);
 static BHead *find_bhead_from_code_name(FileData *fd, const short idcode, const char *name);
-static BHead *find_bhead_from_idname(FileData *fd, const char *idname);
 
 struct BHeadN {
   BHeadN *next, *prev;
@@ -1712,7 +1712,7 @@ static void switch_endian_structs(const SDNA *filesdna, BHead *bhead)
  * Generate the final allocation string reference for read blocks of data. If \a blockname is
  * given, use it as 'owner block' info, otherwise use the id type index to get that info.
  *
- * \note: These strings are stored until Blender exits
+ * \note These strings are stored until Blender exits
  */
 static const char *get_alloc_name(FileData *fd,
                                   BHead *bh,
@@ -2088,10 +2088,6 @@ static void direct_link_id_common(
     id->session_uid = MAIN_ID_SESSION_UID_UNSET;
   }
 
-  if ((id_tag & ID_TAG_TEMP_MAIN) == 0) {
-    BKE_lib_libblock_session_uid_ensure(id);
-  }
-
   id->lib = current_library;
   if (id->lib) {
     /* Always fully clear fake user flag for linked data. */
@@ -2109,6 +2105,10 @@ static void direct_link_id_common(
   }
   else {
     id->tag = id_tag;
+  }
+
+  if ((id_tag & ID_TAG_TEMP_MAIN) == 0) {
+    BKE_lib_libblock_session_uid_ensure(id);
   }
 
   if (ID_IS_LINKED(id)) {
@@ -2272,8 +2272,6 @@ static void lib_link_scenes_check_set(Main *bmain)
 
 static void direct_link_library(FileData *fd, Library *lib, Main *main)
 {
-  Main *newmain;
-
   /* Make sure we have full path in lib->runtime.filepath_abs */
   /* NOTE: Since existing libraries are searched by their absolute path, this has to be generated
    * before the lookup below. Otherwise, in case the stored absolute filepath is not 'correct' (may
@@ -2321,7 +2319,7 @@ static void direct_link_library(FileData *fd, Library *lib, Main *main)
   BKE_packedfile_blend_read(&reader, &lib->packedfile, lib->filepath);
 
   /* new main */
-  newmain = BKE_main_new();
+  Main *newmain = BKE_main_new();
   BLI_addtail(fd->mainlist, newmain);
   newmain->curlib = lib;
 
@@ -2524,7 +2522,7 @@ static void read_undo_reuse_noundo_local_ids(FileData *fd)
   ListBase *lbarray[INDEX_ID_MAX];
 
   BLI_assert(old_bmain->curlib == nullptr);
-  BLI_assert(BLI_listbase_count_at_most(fd->mainlist, 2) == 1);
+  BLI_assert(BLI_listbase_is_single(fd->mainlist));
 
   int i = set_listbasepointers(old_bmain, lbarray);
   while (i--) {
@@ -3935,9 +3933,27 @@ static BHead *find_bhead_from_code_name(FileData *fd, const short idcode, const 
 static BHead *find_bhead_from_idname(FileData *fd, const char *idname)
 {
 #ifdef USE_GHASH_BHEAD
-  return static_cast<BHead *>(BLI_ghash_lookup(fd->bhead_idname_hash, idname));
+  BHead *bhead = static_cast<BHead *>(BLI_ghash_lookup(fd->bhead_idname_hash, idname));
 #else
-  return find_bhead_from_code_name(fd, GS(idname), idname + 2);
+  BHead *bhead = find_bhead_from_code_name(fd, GS(idname), idname + 2);
+#endif
+  if (LIKELY(bhead)) {
+    return bhead;
+  }
+
+  /* Expected ID was not found, attempt to load the same name, but for an older, deprecated and
+   * converted ID type. */
+  const short id_code_old = do_versions_new_to_old_idcode_get(GS(idname));
+  if (id_code_old == ID_LINK_PLACEHOLDER) {
+    return bhead;
+  }
+#ifdef USE_GHASH_BHEAD
+  char id_name_old[MAX_ID_NAME];
+  BLI_strncpy(id_name_old, idname, sizeof(id_name_old));
+  *reinterpret_cast<short *>(id_name_old) = id_code_old;
+  return static_cast<BHead *>(BLI_ghash_lookup(fd->bhead_idname_hash, id_name_old));
+#else
+  return find_bhead_from_code_name(fd, id_code_old, idname + 2);
 #endif
 }
 

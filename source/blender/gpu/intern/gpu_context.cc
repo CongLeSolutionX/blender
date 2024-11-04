@@ -13,8 +13,13 @@
  * - free can be called from any thread
  */
 
+#include "GHOST_C-api.h"
+
+#include "BKE_global.hh"
+
 #include "BLI_assert.h"
 #include "BLI_utildefines.h"
+#include "BLI_vector_set.hh"
 
 #include "GPU_context.hh"
 #include "GPU_framebuffer.hh"
@@ -202,8 +207,8 @@ void GPU_render_begin()
   /* WORKAROUND: Currently a band-aid for the heist production. Has no side effect for GL backend
    * but should be fixed for Metal. */
   if (backend) {
-    printf_end(active_ctx);
     backend->render_begin();
+    printf_end(active_ctx);
     printf_begin(active_ctx);
   }
 }
@@ -213,8 +218,8 @@ void GPU_render_end()
   BLI_assert(backend);
   if (backend) {
     printf_end(active_ctx);
-    backend->render_end();
     printf_begin(active_ctx);
+    backend->render_end();
   }
 }
 void GPU_render_step()
@@ -238,6 +243,17 @@ static eGPUBackendType g_backend_type = GPU_BACKEND_OPENGL;
 static std::optional<eGPUBackendType> g_backend_type_override = std::nullopt;
 static std::optional<bool> g_backend_type_supported = std::nullopt;
 static GPUBackend *g_backend = nullptr;
+static GHOST_SystemHandle g_ghost_system = nullptr;
+
+void GPU_backend_ghost_system_set(void *ghost_system_handle)
+{
+  g_ghost_system = reinterpret_cast<GHOST_SystemHandle>(ghost_system_handle);
+}
+
+void *GPU_backend_ghost_system_get()
+{
+  return g_ghost_system;
+}
 
 void GPU_backend_type_selection_set(const eGPUBackendType backend)
 {
@@ -262,23 +278,22 @@ bool GPU_backend_type_selection_is_overridden()
 
 bool GPU_backend_type_selection_detect()
 {
-  blender::Vector<eGPUBackendType> backends_to_check;
-  if (GPU_backend_type_selection_is_overridden()) {
-    backends_to_check.append(*g_backend_type_override);
+  blender::VectorSet<eGPUBackendType> backends_to_check;
+  if (g_backend_type_override.has_value()) {
+    backends_to_check.add(*g_backend_type_override);
   }
-  else {
 #if defined(WITH_OPENGL_BACKEND)
-    backends_to_check.append(GPU_BACKEND_OPENGL);
+  backends_to_check.add(GPU_BACKEND_OPENGL);
 #elif defined(WITH_METAL_BACKEND)
-    backends_to_check.append(GPU_BACKEND_METAL);
+  backends_to_check.add(GPU_BACKEND_METAL);
 #endif
-  }
 
   for (const eGPUBackendType backend_type : backends_to_check) {
     GPU_backend_type_selection_set(backend_type);
     if (GPU_backend_supported()) {
       return true;
     }
+    G.f |= G_FLAG_GPU_BACKEND_FALLBACK;
   }
 
   GPU_backend_type_selection_set(GPU_BACKEND_NONE);
@@ -296,7 +311,7 @@ static bool gpu_backend_supported()
 #endif
     case GPU_BACKEND_VULKAN:
 #ifdef WITH_VULKAN_BACKEND
-      return true;
+      return VKBackend::is_supported();
 #else
       return false;
 #endif

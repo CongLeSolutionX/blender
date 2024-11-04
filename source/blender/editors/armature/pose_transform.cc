@@ -20,7 +20,7 @@
 #include "BLI_math_vector.h"
 #include "BLI_string_utils.hh"
 
-#include "BKE_action.h"
+#include "BKE_action.hh"
 #include "BKE_animsys.h"
 #include "BKE_appdir.hh"
 #include "BKE_armature.hh"
@@ -792,13 +792,16 @@ static int pose_copy_exec(bContext *C, wmOperator *op)
   copybuffer.id_add(
       &ob->id,
       PartialWriteContext::IDAddOptions{PartialWriteContext::IDAddOperations(
+          PartialWriteContext::IDAddOperations::MAKE_LOCAL |
           PartialWriteContext::IDAddOperations::SET_FAKE_USER |
           PartialWriteContext::IDAddOperations::SET_CLIPBOARD_MARK)},
       [ob](LibraryIDLinkCallbackData *cb_data,
            PartialWriteContext::IDAddOptions /*options*/) -> PartialWriteContext::IDAddOperations {
         /* Only include `ob->data` (i.e. the Armature) dependency. */
         if (*(cb_data->id_pointer) == ob->data) {
-          return PartialWriteContext::IDAddOperations::ADD_DEPENDENCIES;
+          return PartialWriteContext::IDAddOperations(
+              PartialWriteContext::IDAddOperations::MAKE_LOCAL |
+              PartialWriteContext::IDAddOperations::ADD_DEPENDENCIES);
         }
         return PartialWriteContext::IDAddOperations::CLEAR_DEPENDENCIES;
       });

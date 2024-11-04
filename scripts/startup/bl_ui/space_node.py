@@ -20,7 +20,6 @@ from bl_ui.space_toolsystem_common import (
     ToolActivePanelHelper,
 )
 from bl_ui.properties_material import (
-    EEVEE_MATERIAL_PT_settings,
     EEVEE_NEXT_MATERIAL_PT_settings,
     EEVEE_NEXT_MATERIAL_PT_settings_surface,
     EEVEE_NEXT_MATERIAL_PT_settings_volume,
@@ -64,8 +63,7 @@ class NODE_HT_header(Header):
 
                 NODE_MT_editor_menus.draw_collapsible(context, layout)
 
-                # No shader nodes for EEVEE lights.
-                if snode_id and not (context.engine == 'BLENDER_EEVEE' and ob_type == 'LIGHT'):
+                if snode_id:
                     row = layout.row()
                     row.prop(snode_id, "use_nodes")
 
@@ -197,7 +195,8 @@ class NODE_HT_header(Header):
         if is_compositor:
             layout.prop(snode, "pin", text="", emboss=False)
 
-        layout.operator("node.tree_path_parent", text="", icon='FILE_PARENT')
+        if len(snode.path) > 1:
+            layout.operator("node.tree_path_parent", text="", icon='FILE_PARENT')
 
         # Backdrop
         if is_compositor:
@@ -205,7 +204,7 @@ class NODE_HT_header(Header):
             row.prop(snode, "show_backdrop", toggle=True)
             sub = row.row(align=True)
             sub.active = snode.show_backdrop
-            sub.prop(snode, "backdrop_channels", icon_only=True, text="", expand=True)
+            sub.prop(snode, "backdrop_channels", icon_only=True, text="")
 
         # Snap
         row = layout.row(align=True)
@@ -689,9 +688,16 @@ class NODE_PT_active_node_generic(Panel):
     def draw(self, context):
         layout = self.layout
         node = context.active_node
+        tree = node.id_data
+
+        layout.use_property_split = True
+        layout.use_property_decorate = False
 
         layout.prop(node, "name", icon='NODE')
         layout.prop(node, "label", icon='NODE')
+
+        if tree.type == "GEOMETRY":
+            layout.prop(node, "warning_propagation")
 
 
 class NODE_PT_active_node_color(Panel):
@@ -751,7 +757,10 @@ class NODE_PT_texture_mapping(Panel):
     bl_category = "Node"
     bl_label = "Texture Mapping"
     bl_options = {'DEFAULT_CLOSED'}
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_WORKBENCH'}
+    COMPAT_ENGINES = {
+        'BLENDER_RENDER',
+        'BLENDER_WORKBENCH',
+    }
 
     @classmethod
     def poll(cls, context):
@@ -1102,7 +1111,6 @@ classes = (
     NODE_PT_overlay,
     NODE_PT_active_node_properties,
 
-    node_panel(EEVEE_MATERIAL_PT_settings),
     node_panel(EEVEE_NEXT_MATERIAL_PT_settings),
     node_panel(EEVEE_NEXT_MATERIAL_PT_settings_surface),
     node_panel(EEVEE_NEXT_MATERIAL_PT_settings_volume),

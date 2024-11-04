@@ -9,7 +9,9 @@
  */
 
 #include "BLI_math_vector_types.hh"
+#include "BLI_span.hh"
 #include "BLI_string_ref.hh"
+
 #include "DNA_curve_types.h"
 
 struct ChannelDriver;
@@ -251,6 +253,12 @@ void BKE_fcurve_foreach_id(FCurve *fcu, LibraryForeachIDData *data);
 /**
  * Find the F-Curve affecting the given RNA-access path + index,
  * in the list of F-Curves provided.
+ *
+ * \note ONLY use this on a list of F-Curves that is NOT from an Action. Example
+ * of a good use would be on `adt->drivers`, or `nlastrip->fcurves`.
+ *
+ * \see #blender::animrig::fcurve_find_in_action
+ * \see #blender::animrig::fcurve_find_in_action_slot
  */
 FCurve *BKE_fcurve_find(ListBase *list, const char rna_path[], int array_index);
 
@@ -276,21 +284,6 @@ FCurve *BKE_fcurve_iter_step(FCurve *fcu_iter, const char rna_path[]);
  */
 FCurve *id_data_find_fcurve(
     ID *id, void *data, StructRNA *type, const char *prop_name, int index, bool *r_driven);
-
-/**
- * Get list of LinkData's containing pointers to the F-Curves
- * which control the types of data indicated.
- * e.g. `numMatches = BKE_fcurves_filter(matches, &act->curves, "pose.bones[", "MyFancyBone");`
- *
- * Lists:
- * \param dst: list of LinkData's matching the criteria returned.
- * List must be freed after use, and is assumed to be empty when passed.
- * \param src: list of F-Curves to search through
- * Filters:
- * \param dataPrefix: i.e. `pose.bones[` or `nodes[`.
- * \param dataName: name of entity within "" immediately following the prefix.
- */
-int BKE_fcurves_filter(ListBase *dst, ListBase *src, const char *dataPrefix, const char *dataName);
 
 /**
  * Find an F-Curve from its rna path and index.
@@ -357,7 +350,7 @@ int BKE_fcurve_bezt_binarysearch_index(const BezTriple array[],
 /**
  * Cached f-curve look-ups, use when this needs to be done many times.
  */
-FCurvePathCache *BKE_fcurve_pathcache_create(ListBase *list);
+FCurvePathCache *BKE_fcurve_pathcache_create(blender::Span<FCurve *> fcurves);
 void BKE_fcurve_pathcache_destroy(FCurvePathCache *fcache);
 FCurve *BKE_fcurve_pathcache_find(FCurvePathCache *fcache, const char rna_path[], int array_index);
 /**

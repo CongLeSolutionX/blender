@@ -1205,8 +1205,6 @@ context_type_map = {
     "edit_object": [("Object", False)],
     "edit_text": [("Text", False)],
     "editable_bones": [("EditBone", True)],
-    "editable_gpencil_layers": [("GPencilLayer", True)],
-    "editable_gpencil_strokes": [("GPencilStroke", True)],
     "editable_objects": [("Object", True)],
     "editable_fcurves": [("FCurve", True)],
     "fluid": [("FluidSimulationModifier", False)],
@@ -1894,7 +1892,8 @@ def pyrna2sphinx(basepath):
 
             for op in ops_mod:
                 args_str = ", ".join(prop.get_arg_default(force=True) for prop in op.args)
-                fw(".. function:: {:s}({:s})\n\n".format(op.func_name, args_str))
+                # All operator arguments are keyword only (denoted by the leading `*`).
+                fw(".. function:: {:s}(*, {:s})\n\n".format(op.func_name, args_str))
 
                 # If the description isn't valid, we output the standard warning
                 # with a link to the wiki so that people can help.
@@ -2539,7 +2538,7 @@ def main():
 
     try:
         os.mkdir(SPHINX_IN_TMP)
-    except:
+    except Exception:
         pass
 
     # Copy extra files needed for theme.

@@ -2,9 +2,9 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#pragma BLENDER_REQUIRE(gpu_shader_utildefines_lib.glsl)
-#pragma BLENDER_REQUIRE(common_view_lib.glsl)
-#pragma BLENDER_REQUIRE(select_lib.glsl)
+#include "common_view_lib.glsl"
+#include "gpu_shader_utildefines_lib.glsl"
+#include "select_lib.glsl"
 
 void main()
 {
@@ -38,10 +38,10 @@ void main()
 
 #  ifndef CUSTOM_DEPTH_BIAS_CONST
 /* TODO(fclem): Cleanup after overlay next. */
-#    ifdef CUSTOM_DEPTH_BIAS
-  const bool use_custom_depth_bias = true;
-#    else
+#    ifndef CUSTOM_DEPTH_BIAS
   const bool use_custom_depth_bias = false;
+#    else
+  const bool use_custom_depth_bias = true;
 #    endif
 #  endif
 
@@ -53,16 +53,16 @@ void main()
     vec2 uv = gl_FragCoord.xy * sizeViewportInv;
     float depth_occluder = texture(depthTex, uv).r;
     float depth_min = depth_occluder;
-    vec2 texel_uv_size = sizeViewportInv;
-
+    vec2 uv_offset = sizeViewportInv;
     if (dir_horiz) {
-      depth_min = min(depth_min, texture(depthTex, uv + vec2(-texel_uv_size.x, 0.0)).r);
-      depth_min = min(depth_min, texture(depthTex, uv + vec2(texel_uv_size.x, 0.0)).r);
+      uv_offset.y = 0.0;
     }
     else {
-      depth_min = min(depth_min, texture(depthTex, uv + vec2(0, -texel_uv_size.y)).r);
-      depth_min = min(depth_min, texture(depthTex, uv + vec2(0, texel_uv_size.y)).r);
+      uv_offset.x = 0.0;
     }
+
+    depth_min = min(depth_min, texture(depthTex, uv - uv_offset).r);
+    depth_min = min(depth_min, texture(depthTex, uv + uv_offset).r);
 
     float delta = abs(depth_occluder - depth_min);
 
