@@ -349,7 +349,7 @@ class OrigPositionDeformData {
   Key *keys_;
   KeyBlock *active_key_;
   bool basis_active_;
-  std::optional<Array<bool>> dependent_keys_;
+  Vector<MutableSpan<float3>> dependent_keys_;
 
  public:
   OrigPositionDeformData(Object &object_orig)
@@ -363,7 +363,16 @@ class OrigPositionDeformData {
       const int active_index = object_orig.shapenr - 1;
       active_key_ = BKE_keyblock_find_by_index(keys, active_index);
       basis_active_ = active_key_ == keys->refkey;
-      dependent_keys_ = BKE_keyblock_get_dependent_keys(keys_, active_index);
+      if (const std::optional<Array<bool>> dependent = BKE_keyblock_get_dependent_keys(
+              keys_, active_index))
+      {
+        int i;
+        LISTBASE_FOREACH_INDEX (KeyBlock *, other_key, &keys_->block, i) {
+          if ((other_key != active_key_) && (*dependent)[i]) {
+            dependent_keys_.append({static_cast<float3 *>(other_key->data), other_key->totelem});
+          }
+        }
+      }
     }
     else {
       keys_ = nullptr;
@@ -377,16 +386,12 @@ class OrigPositionDeformData {
     if (KeyBlock *key = active_key_) {
       const MutableSpan active_key_data(static_cast<float3 *>(key->data), key->totelem);
 
-      if (dependent_keys_) {
+      if (!dependent_keys_.is_empty()) {
         Array<float3, 1024> translations(verts.size());
         translations_from_new_positions(positions, verts, orig_, translations);
 
-        int i;
-        LISTBASE_FOREACH_INDEX (KeyBlock *, other_key, &keys_->block, i) {
-          if ((other_key != key) && (*dependent_keys_)[i]) {
-            MutableSpan data(static_cast<float3 *>(other_key->data), other_key->totelem);
-            apply_translations(translations, verts, data);
-          }
+        for (MutableSpan<float3> data : dependent_keys_) {
+          apply_translations(translations, verts, data);
         }
       }
 
