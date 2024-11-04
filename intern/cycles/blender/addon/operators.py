@@ -10,6 +10,8 @@ from bpy.props import StringProperty
 
 from bpy.app.translations import pgettext_tip as tip_
 
+from . import engine
+
 
 class CYCLES_OT_use_shading_nodes(Operator):
     """Enable nodes on a material, world or light"""
@@ -153,10 +155,35 @@ class CYCLES_OT_merge_images(Operator):
         return {'FINISHED'}
 
 
+class CYCLES_OT_camera_script_update(Operator):
+    """Update the parameters of a Camera's OSL Script"""
+    bl_idname = "cycles.camera_script_update"
+    bl_label = "Update Camera Script"
+
+    @classmethod
+    def poll(cls, context):
+        if not engine.with_osl():
+            return False
+
+        cam = getattr(context, "camera", False)
+        if not cam:
+            return False
+        if cam.type != 'PANO' or cam.panorama_type != 'SCRIPT':
+            return False
+        ccam = cam.cycles
+        return bool(ccam.script_path if ccam.script_mode == 'EXTERNAL' else ccam.script)
+
+    def execute(self, context):
+        from . import osl
+        osl.update_camera_script(context.camera, self.report)
+        return {'FINISHED'}
+
+
 classes = (
     CYCLES_OT_use_shading_nodes,
     CYCLES_OT_denoise_animation,
-    CYCLES_OT_merge_images
+    CYCLES_OT_merge_images,
+    CYCLES_OT_camera_script_update,
 )
 
 

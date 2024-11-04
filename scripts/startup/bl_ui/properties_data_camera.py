@@ -139,6 +139,7 @@ class DATA_PT_lens(CameraButtonsPanel, Panel):
                         sub.prop(ccam, "script_path", text=" ")
                     else:
                         sub.prop(ccam, "script", text=" ")
+                    sub.operator("cycles.camera_script_update", icon='FILE_REFRESH', text="")
 
             elif engine in {'BLENDER_RENDER', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH'}:
                 if cam.lens_unit == 'MILLIMETERS':

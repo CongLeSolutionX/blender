@@ -372,6 +372,17 @@ def update_pause(self, context):
     context.area.tag_redraw()
 
 
+def update_camera_script(self, context):
+    # TODO: Where to get report here?
+    def report(*_, **__): pass
+
+    if engine.with_osl():
+        from . import osl
+        osl.update_camera_script(context.camera, report)
+    else:
+        report({'ERROR'}, "OSL support disabled in this build")
+
+
 class CyclesRenderSettings(bpy.types.PropertyGroup):
 
     device: EnumProperty(
@@ -1087,6 +1098,7 @@ class CyclesCameraSettings(bpy.types.PropertyGroup):
         name="OSL Script",
         description="OSL script to use for generating camera rays",
         type=bpy.types.Text,
+        update=update_camera_script,
     )
 
     script_path: StringProperty(
@@ -1094,12 +1106,14 @@ class CyclesCameraSettings(bpy.types.PropertyGroup):
         description="Path to the OSL script to use for generating camera rays",
         subtype='FILE_PATH',
         default='',
+        update=update_camera_script,
     )
 
     script_mode: EnumProperty(
         name="OSL Script Source",
         items=enum_script_modes,
         default='INTERNAL',
+        update=update_camera_script,
     )
 
     @classmethod

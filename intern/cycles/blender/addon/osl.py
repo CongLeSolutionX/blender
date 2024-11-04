@@ -25,77 +25,96 @@ def osl_compile(input_path, report):
     return ok, output_path
 
 
+def update_external_script(report, filepath, library):
+    """compile and update OSL script"""
+    import os
+    import shutil
+
+    oso_file_remove = False
+
+    script_path = bpy.path.abspath(filepath, library=library)
+    script_path_noext, script_ext = os.path.splitext(script_path)
+
+    if script_ext == ".oso":
+        # it's a .oso file, no need to compile
+        ok, oso_path = True, script_path
+    elif script_ext == ".osl":
+        # compile .osl file
+        ok, oso_path = osl_compile(script_path, report)
+        oso_file_remove = True
+
+        if ok:
+            # copy .oso from temporary path to .osl directory
+            dst_path = script_path_noext + ".oso"
+            try:
+                shutil.copy2(oso_path, dst_path)
+            except:
+                report({'ERROR'}, "Failed to write .oso file next to external .osl file at " + dst_path)
+    elif os.path.dirname(filepath) == "":
+        # module in search path
+        oso_path = filepath
+        ok = True
+    else:
+        # unknown
+        report({'ERROR'}, "External shader script must have .osl or .oso extension, or be a module name")
+        ok = False
+
+    return ok, oso_path, oso_file_remove
+
+
+def update_internal_script(report, script):
+    """compile and update shader script node"""
+    import os
+    import tempfile
+
+    bytecode = None
+
+    osl_path = bpy.path.abspath(script.filepath, library=script.library)
+
+    if script.is_in_memory or script.is_dirty or script.is_modified or not os.path.exists(osl_path):
+        # write text datablock contents to temporary file
+        osl_file = tempfile.NamedTemporaryFile(mode='w', suffix=".osl", delete=False)
+        osl_file.write(script.as_string())
+        osl_file.write("\n")
+        osl_file.close()
+
+        ok, oso_path = osl_compile(osl_file.name, report)
+        os.remove(osl_file.name)
+    else:
+        # compile text datablock from disk directly
+        ok, oso_path = osl_compile(osl_path, report)
+
+    if ok:
+        # read bytecode
+        try:
+            oso = open(oso_path, 'r')
+            bytecode = oso.read()
+            oso.close()
+        except:
+            import traceback
+            traceback.print_exc()
+
+            report({'ERROR'}, "Can't read OSO bytecode to store in node at %r" % oso_path)
+            ok = False
+
+    return ok, oso_path, bytecode
+
+
 def update_script_node(node, report):
     """compile and update shader script node"""
     import os
-    import shutil
-    import tempfile
 
     oso_file_remove = False
 
     if node.mode == 'EXTERNAL':
         # compile external script file
-        script_path = bpy.path.abspath(node.filepath, library=node.id_data.library)
-        script_path_noext, script_ext = os.path.splitext(script_path)
-
-        if script_ext == ".oso":
-            # it's a .oso file, no need to compile
-            ok, oso_path = True, script_path
-        elif script_ext == ".osl":
-            # compile .osl file
-            ok, oso_path = osl_compile(script_path, report)
-            oso_file_remove = True
-
-            if ok:
-                # copy .oso from temporary path to .osl directory
-                dst_path = script_path_noext + ".oso"
-                try:
-                    shutil.copy2(oso_path, dst_path)
-                except:
-                    report({'ERROR'}, "Failed to write .oso file next to external .osl file at " + dst_path)
-        elif os.path.dirname(node.filepath) == "":
-            # module in search path
-            oso_path = node.filepath
-            ok = True
-        else:
-            # unknown
-            report({'ERROR'}, "External shader script must have .osl or .oso extension, or be a module name")
-            ok = False
-
-        if ok:
-            node.bytecode = ""
-            node.bytecode_hash = ""
+        ok, oso_path, oso_file_remove = update_external_script(report, node.filepath, node.id_data.library)
 
     elif node.mode == 'INTERNAL' and node.script:
         # internal script, we will store bytecode in the node
-        script = node.script
-        osl_path = bpy.path.abspath(script.filepath, library=script.library)
-
-        if script.is_in_memory or script.is_dirty or script.is_modified or not os.path.exists(osl_path):
-            # write text datablock contents to temporary file
-            osl_file = tempfile.NamedTemporaryFile(mode='w', suffix=".osl", delete=False)
-            osl_file.write(script.as_string())
-            osl_file.write("\n")
-            osl_file.close()
-
-            ok, oso_path = osl_compile(osl_file.name, report)
-            os.remove(osl_file.name)
-        else:
-            # compile text datablock from disk directly
-            ok, oso_path = osl_compile(osl_path, report)
-
-        if ok:
-            # read bytecode
-            try:
-                oso = open(oso_path, 'r')
-                node.bytecode = oso.read()
-                oso.close()
-            except:
-                import traceback
-                traceback.print_exc()
-
-                report({'ERROR'}, "Can't read OSO bytecode to store in node at %r" % oso_path)
-                ok = False
+        ok, oso_path, bytecode = update_internal_script(report, node.script)
+        if bytecode:
+            node.bytecode = bytecode
 
     else:
         report({'WARNING'}, "No text or file specified in node, nothing to compile")
@@ -119,3 +138,8 @@ def update_script_node(node, report):
             pass
 
     return ok
+
+
+def update_camera_script(cam, report):
+    report({'ERROR'}, "Foo")
+    return False
