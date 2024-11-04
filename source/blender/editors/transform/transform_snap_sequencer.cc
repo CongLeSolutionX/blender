@@ -11,13 +11,12 @@
 
 #include "BLI_assert.h"
 #include "BLI_map.hh"
-#include "BLI_vector.hh"
 #include "DNA_scene_types.h"
 #include "MEM_guardedalloc.h"
 
+#include "DNA_screen_types.h"
 #include "DNA_sequence_types.h"
 
-#include "ED_screen.hh"
 #include "ED_transform.hh"
 
 #include "SEQ_retiming.hh"
@@ -51,13 +50,14 @@ struct TransSeqSnapData {
  * \{ */
 
 static blender::VectorSet<Sequence *> query_snap_sources_timeline(
-    const Scene *scene, blender::Map<SeqRetimingKey *, Sequence *> retiming_selection)
+    const Scene *scene, blender::Map<SeqRetimingKey *, Sequence *> &retiming_selection)
 {
   blender::VectorSet<Sequence *> snap_sources;
 
   ListBase *seqbase = SEQ_active_seqbase_get(SEQ_editing_get(scene));
   snap_sources = SEQ_query_selected_strips(seqbase);
 
+  /* Add strips owned by retiming keys to exclude these from targets */
   for (Sequence *seq : retiming_selection.values()) {
     snap_sources.add(seq);
   }
@@ -134,7 +134,7 @@ static void seq_snap_source_points_build_timeline_strips(
 static void seq_snap_source_points_build_timeline_retiming(
     const Scene *scene,
     TransSeqSnapData *snap_data,
-    const blender::Map<SeqRetimingKey *, Sequence *> retiming_selection)
+    const blender::Map<SeqRetimingKey *, Sequence *> &retiming_selection)
 {
 
   const size_t point_count_source = retiming_selection.size();
@@ -293,7 +293,7 @@ static int seq_get_snap_target_points_count_timeline(
     const Scene *scene,
     const short snap_mode,
     const blender::Span<Sequence *> snap_strip_targets,
-    const blender::Map<SeqRetimingKey *, Sequence *> retiming_targets)
+    const blender::Map<SeqRetimingKey *, Sequence *> &retiming_targets)
 {
   int count = 0;
 
