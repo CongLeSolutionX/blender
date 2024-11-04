@@ -1798,17 +1798,44 @@ void ACTION_OT_keyframe_type(wmOperatorType *ot)
 /** \name Select Keys by Keyframe Type
  * \{ */
 
+static bool any_fcurve_key_selected(bAnimContext &ac)
+{
+  bool any_key_selected = false;
+  const eAnimFilter_Flags fcurves_filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_CURVE_VISIBLE |
+                                            ANIMFILTER_FCURVESONLY | ANIMFILTER_NODUPLIS);
+  ListBase anim_data = {nullptr, nullptr};
+  ANIM_animdata_filter(&ac, &anim_data, fcurves_filter, ac.data, ac.datatype);
+
+  LISTBASE_FOREACH (bAnimListElem *, ale, &anim_data) {
+    BLI_assert(ale->datatype == ALE_FCURVE);
+    FCurve *fcurve = static_cast<FCurve *>(ale->key_data);
+
+    blender::animrig::foreach_fcurve_key(fcurve, [&](FCurve &, const int, BezTriple &bezt) {
+      if (BEZT_ISSEL_ANY(&bezt)) {
+        any_key_selected = true;
+        return false;
+      }
+      return true;
+    });
+    if (any_key_selected) {
+      break;
+    }
+  }
+
+  ANIM_animdata_freelist(&anim_data);
+  return any_key_selected;
+}
+
 static int action_keys_select_by_keytype_exec(bContext *C, wmOperator *op)
 {
   bAnimContext ac;
-
-  /* get editor data */
   if (ANIM_animdata_get_context(C, &ac) == 0) {
     return OPERATOR_CANCELLED;
   }
 
   const eBezTriple_KeyframeType typeToSelect = static_cast<eBezTriple_KeyframeType>(
       RNA_enum_get(op->ptr, "type"));
+  const bool any_key_selected = any_fcurve_key_selected(ac);
 
   ListBase anim_data = {nullptr, nullptr};
   const eAnimFilter_Flags filter = ANIMFILTER_DATA_VISIBLE | ANIMFILTER_LIST_VISIBLE |
@@ -1826,17 +1853,29 @@ static int action_keys_select_by_keytype_exec(bContext *C, wmOperator *op)
 
     blender::animrig::foreach_fcurve_key(fcurve, [&](FCurve &, const int, BezTriple &bezt) {
       const eBezTriple_KeyframeType beztType = static_cast<eBezTriple_KeyframeType>(bezt.hide);
-      if (beztType != typeToSelect) {
-        return true;
+
+      if (any_key_selected) {
+        if (beztType != typeToSelect) {
+          /* Deselect those keys of different types, including their handles. */
+          bezt.f1 &= ~SELECT;
+          bezt.f2 &= ~SELECT;
+          bezt.f3 &= ~SELECT;
+        }
+      }
+      else {
+        if (beztType == typeToSelect) {
+          /* Select keys of the chosen type. */
+          bezt.f2 |= SELECT;
+        }
       }
 
-      bezt.f2 |= SELECT;
       return true;
     });
 
     ale->update |= ANIM_UPDATE_DEPS | ANIM_UPDATE_HANDLES;
   }
 
+  ANIM_animdata_update(&ac, &anim_data);
   ANIM_animdata_freelist(&anim_data);
 
   /* set notifier that keyframe properties have changed */

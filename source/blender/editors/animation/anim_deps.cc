@@ -460,7 +460,7 @@ void ANIM_animdata_freelist(ListBase *anim_data)
   bAnimListElem *ale, *ale_next;
   for (ale = static_cast<bAnimListElem *>(anim_data->first); ale; ale = ale_next) {
     ale_next = ale->next;
-    BLI_assert(ale->update == 0);
+    BLI_assert_msg(ale->update == 0, "call ANIM_animdata_update() first, before freeing the list");
     MEM_freeN(ale);
   }
   BLI_listbase_clear(anim_data);
