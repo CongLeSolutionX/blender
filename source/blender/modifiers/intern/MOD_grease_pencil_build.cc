@@ -676,8 +676,18 @@ static void modify_geometry_set(ModifierData *md,
       drawing_infos, [&](modifier::greasepencil::LayerDrawingInfo drawing_info) {
         const bke::greasepencil::Drawing *prev_drawing = grease_pencil.get_drawing_at(
             *layers[drawing_info.layer_index], eval_frame - 1);
+
+        const std::optional<int> drawing_start_frame =
+            layers[drawing_info.layer_index]->start_frame_at(eval_frame);
+        const int start_frame = eval_frame - (drawing_start_frame.has_value() ?
+                                                  drawing_start_frame.value() :
+                                                  0);
+        if (start_frame < 0) {
+          return;
+        }
+
         build_drawing(
-            *mmd, *ctx->object, *drawing_info.drawing, prev_drawing, eval_frame, scene_fps);
+            *mmd, *ctx->object, *drawing_info.drawing, prev_drawing, start_frame, scene_fps);
       });
 }
 
