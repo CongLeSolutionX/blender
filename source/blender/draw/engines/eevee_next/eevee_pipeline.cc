@@ -626,6 +626,9 @@ void DeferredLayer::end_sync(bool is_first_pass,
   use_split_radiance_ = use_raytracing_ || (use_clamp_direct_ || use_clamp_indirect_);
   use_feedback_output_ = (use_raytracing_ || is_layer_refracted) &&
                          (!is_last_pass || use_screen_reflection_);
+  /* TODO(NPR): Required for multi-layer refraction,
+   * since radiance_behind_tx is the previous layer radiance_feedback_tx. */
+  use_feedback_output_ = use_feedback_output_ || !is_first_pass;
 
   {
     RenderBuffersInfoData &rbuf_data = inst_.render_buffers.data;
