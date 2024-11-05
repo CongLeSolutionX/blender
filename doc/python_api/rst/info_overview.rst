@@ -184,7 +184,7 @@ Construction & Destruction
 In the examples above, the classes don't define an ``__init__(self)`` function.
 In general, defining custom constructors or destructors should not be needed, and is not recommended.
 
-The class instances lifetime is usually very short (see also the
+The class instances' lifetime is usually very short (also see the
 :ref:`dedicated section <_blender_py_objects_life_time>`), a panel for example will
 have a new instance for every redraw.
 Some other types, like :class:`bpy.types.Operator`, have an even more complex internal handling,
@@ -192,7 +192,7 @@ which can lead to several instantiations for a single operator execution.
 
 There are a few cases where defining ``__init__()`` and ``__del__()`` does make sense,
 e.g. when sub-classing a :class:`bpy.types.RenderEngine`. When doing so, the parent matching function
-must always be called, otherwise Blender internal initialization won't happen properly:
+must always be called, otherwise Blender's internal initialization won't happen properly:
 
 
 .. code-block:: python
