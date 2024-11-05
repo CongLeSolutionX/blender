@@ -1006,10 +1006,7 @@ void vgroup_select_by_name(Object *ob, const char *name)
  * \{ */
 
 /* only in editmode */
-static void vgroup_select_verts(const ToolSettings &tool_settings,
-                                Object *ob,
-                                Scene *scene,
-                                int select)
+static void vgroup_select_verts(const ToolSettings &tool_settings, Object *ob, int select)
 {
   const int def_nr = BKE_object_defgroup_active_index_get(ob) - 1;
 
@@ -1102,7 +1099,7 @@ static void vgroup_select_verts(const ToolSettings &tool_settings,
         &tool_settings);
     GreasePencil *grease_pencil = static_cast<GreasePencil *>(ob->data);
     bke::greasepencil::select_from_group(
-        *grease_pencil, scene, selection_domain, def_group->name, bool(select));
+        *grease_pencil, selection_domain, def_group->name, bool(select));
     DEG_id_tag_update(&grease_pencil->id, ID_RECALC_GEOMETRY);
   }
 }
@@ -2208,7 +2205,7 @@ cleanup:
 #undef VGROUP_MIRR_OP
 }
 
-static void vgroup_delete_active(Object *ob, Scene *scene)
+static void vgroup_delete_active(Object *ob)
 {
   const ListBase *defbase = BKE_object_defgroup_list(ob);
   bDeformGroup *dg = static_cast<bDeformGroup *>(
@@ -2217,11 +2214,11 @@ static void vgroup_delete_active(Object *ob, Scene *scene)
     return;
   }
 
-  BKE_object_defgroup_remove(ob, dg, scene);
+  BKE_object_defgroup_remove(ob, dg);
 }
 
 /* only in editmode */
-static void vgroup_assign_verts(Object *ob, Scene *scene, const float weight)
+static void vgroup_assign_verts(Object *ob, const float weight)
 {
   const int def_nr = BKE_object_defgroup_active_index_get(ob) - 1;
 
@@ -2306,7 +2303,7 @@ static void vgroup_assign_verts(Object *ob, Scene *scene, const float weight)
     GreasePencil *grease_pencil = static_cast<GreasePencil *>(ob->data);
     const bDeformGroup *defgroup = static_cast<const bDeformGroup *>(
         BLI_findlink(BKE_object_defgroup_list(ob), def_nr));
-    bke::greasepencil::assign_to_vertex_group(*grease_pencil, scene, defgroup->name, weight);
+    bke::greasepencil::assign_to_vertex_group(*grease_pencil, defgroup->name, weight);
   }
 }
 
@@ -2515,16 +2512,15 @@ void OBJECT_OT_vertex_group_add(wmOperatorType *ot)
 static int vertex_group_remove_exec(bContext *C, wmOperator *op)
 {
   Object *ob = context_object(C);
-  Scene *scene = CTX_data_scene(C);
 
   if (RNA_boolean_get(op->ptr, "all")) {
-    BKE_object_defgroup_remove_all(ob, scene);
+    BKE_object_defgroup_remove_all(ob);
   }
   else if (RNA_boolean_get(op->ptr, "all_unlocked")) {
-    BKE_object_defgroup_remove_all_ex(ob, true, scene);
+    BKE_object_defgroup_remove_all_ex(ob, true);
   }
   else {
-    vgroup_delete_active(ob, scene);
+    vgroup_delete_active(ob);
   }
 
   DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
@@ -2570,9 +2566,8 @@ static int vertex_group_assign_exec(bContext *C, wmOperator * /*op*/)
 {
   ToolSettings *ts = CTX_data_tool_settings(C);
   Object *ob = context_object(C);
-  Scene *scene = CTX_data_scene(C);
 
-  vgroup_assign_verts(ob, scene, ts->vgroup_weight);
+  vgroup_assign_verts(ob, ts->vgroup_weight);
   DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
   WM_event_add_notifier(C, NC_GEOM | ND_DATA, ob->data);
 
@@ -2644,10 +2639,9 @@ static int vertex_group_remove_from_exec(bContext *C, wmOperator *op)
   const bool use_all_verts = RNA_boolean_get(op->ptr, "use_all_verts");
 
   Object *ob = context_object(C);
-  Scene *scene = CTX_data_scene(C);
 
   if (use_all_groups) {
-    if (BKE_object_defgroup_clear_all(ob, scene, true) == false) {
+    if (BKE_object_defgroup_clear_all(ob, true) == false) {
       return OPERATOR_CANCELLED;
     }
   }
@@ -2655,7 +2649,7 @@ static int vertex_group_remove_from_exec(bContext *C, wmOperator *op)
     const ListBase *defbase = BKE_object_defgroup_list(ob);
     bDeformGroup *dg = static_cast<bDeformGroup *>(
         BLI_findlink(defbase, BKE_object_defgroup_active_index_get(ob) - 1));
-    if ((dg == nullptr) || (BKE_object_defgroup_clear(ob, dg, scene, !use_all_verts) == false)) {
+    if ((dg == nullptr) || (BKE_object_defgroup_clear(ob, dg, !use_all_verts) == false)) {
       return OPERATOR_CANCELLED;
     }
   }
@@ -2703,12 +2697,12 @@ static int vertex_group_select_exec(bContext *C, wmOperator * /*op*/)
 {
   const ToolSettings &tool_settings = *CTX_data_scene(C)->toolsettings;
   Object *ob = context_object(C);
-  Scene *scene = CTX_data_scene(C);
+
   if (!ob || !ID_IS_EDITABLE(ob) || ID_IS_OVERRIDE_LIBRARY(ob)) {
     return OPERATOR_CANCELLED;
   }
 
-  vgroup_select_verts(tool_settings, ob, scene, 1);
+  vgroup_select_verts(tool_settings, ob, 1);
   DEG_id_tag_update(static_cast<ID *>(ob->data), ID_RECALC_SYNC_TO_EVAL | ID_RECALC_SELECT);
   WM_event_add_notifier(C, NC_GEOM | ND_SELECT, ob->data);
 
@@ -2740,9 +2734,8 @@ static int vertex_group_deselect_exec(bContext *C, wmOperator * /*op*/)
 {
   const ToolSettings &tool_settings = *CTX_data_scene(C)->toolsettings;
   Object *ob = context_object(C);
-  Scene *scene = CTX_data_scene(C);
 
-  vgroup_select_verts(tool_settings, ob, scene, 0);
+  vgroup_select_verts(tool_settings, ob, 0);
   DEG_id_tag_update(static_cast<ID *>(ob->data), ID_RECALC_SYNC_TO_EVAL | ID_RECALC_SELECT);
   WM_event_add_notifier(C, NC_GEOM | ND_SELECT, ob->data);
 
