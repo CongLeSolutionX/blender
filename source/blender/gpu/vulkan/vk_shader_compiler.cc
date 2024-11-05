@@ -212,6 +212,10 @@ static bool compile_ex(shaderc::Compiler &compiler,
   if (GPU_type_matches(GPU_DEVICE_QUALCOMM, GPU_OS_ANY, GPU_DRIVER_ANY)) {
     options.SetOptimizationLevel(shaderc_optimization_level_zero);
   }
+  /* WORKAROUND: AMD Pro driver depth test precision are not stable. */
+  if (GPU_type_matches(GPU_DEVICE_ATI, GPU_OS_ANY, GPU_DRIVER_OFFICIAL)) {
+    options.SetOptimizationLevel(shaderc_optimization_level_zero);
+  }
 
   std::string full_name = std::string(shader.name_get()) + "_" + to_stage_name(stage);
   shader_module.compilation_result = compiler.CompileGlslToSpv(
