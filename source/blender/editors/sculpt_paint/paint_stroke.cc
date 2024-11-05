@@ -285,7 +285,6 @@ static bool image_paint_brush_type_require_inbetween_mouse_events(const Brush &b
   return true;
 }
 
-/* Initialize the stroke cache variants from operator properties */
 bool paint_brush_update(bContext *C,
                         const Brush &brush,
                         const PaintMode mode,
@@ -620,7 +619,6 @@ static void paint_brush_stroke_add_step(
     RNA_float_set_array(&itemptr, "mouse", mouse_out);
     /* Original mouse coordinates. */
     RNA_float_set_array(&itemptr, "mouse_event", mval);
-    RNA_boolean_set(&itemptr, "pen_flip", stroke->pen_flip);
     RNA_float_set(&itemptr, "pressure", pressure);
     RNA_float_set(&itemptr, "x_tilt", stroke->x_tilt);
     RNA_float_set(&itemptr, "y_tilt", stroke->y_tilt);
@@ -1505,6 +1503,8 @@ int paint_stroke_modal(bContext *C, wmOperator *op, const wmEvent *event, PaintS
 
   /* one time stroke initialization */
   if (!stroke->stroke_started) {
+    RNA_boolean_set(op->ptr, "pen_flip", stroke->pen_flip);
+
     stroke->last_pressure = sample_average.pressure;
     stroke->last_mouse_position = sample_average.mouse;
     if (paint_stroke_use_scene_spacing(*br, mode)) {
