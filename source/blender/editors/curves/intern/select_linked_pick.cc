@@ -34,9 +34,6 @@ static bool select_linked_pick(bContext &C, const int2 &mval, const SelectPick_P
   const Vector<Base *> bases = BKE_view_layer_array_from_bases_in_edit_mode_unique_data(
       vc.scene, vc.view_layer, vc.v3d);
 
-  Curves &active_curves_id = *static_cast<Curves *>(vc.obedit->data);
-  const bke::AttrDomain selection_domain = bke::AttrDomain(active_curves_id.selection_domain);
-
   const ClosestCurveDataBlock closest = threading::parallel_reduce(
       bases.index_range(),
       1L,
@@ -82,11 +79,14 @@ static bool select_linked_pick(bContext &C, const int2 &mval, const SelectPick_P
     return false;
   }
 
-  if (bke::AttrDomain(closest.curves_id->selection_domain) == bke::AttrDomain::Point) {
-    const bke::CurvesGeometry &curves = closest.curves_id->geometry.wrap();
+  const bke::AttrDomain selection_domain = bke::AttrDomain(closest.curves_id->selection_domain);
+  bke::CurvesGeometry &closest_curves = closest.curves_id->geometry.wrap();
+
+  if (selection_domain == bke::AttrDomain::Point) {
+    const bke::CurvesGeometry &curves = closest_curves.wrap();
     const OffsetIndices points_by_curve = curves.points_by_curve();
     bke::GSpanAttributeWriter selection = ed::curves::ensure_selection_attribute(
-        closest.curves_id->geometry.wrap(),
+        closest_curves.wrap(),
         bke::AttrDomain::Point,
         CD_PROP_BOOL,
         closest.selection_attribute_name);
@@ -97,9 +97,7 @@ static bool select_linked_pick(bContext &C, const int2 &mval, const SelectPick_P
   }
   else if (selection_domain == bke::AttrDomain::Curve) {
     ed::curves::foreach_selection_attribute_writer(
-        closest.curves_id->geometry.wrap(),
-        bke::AttrDomain::Curve,
-        [&](bke::GSpanAttributeWriter &selection) {
+        closest_curves.wrap(), bke::AttrDomain::Curve, [&](bke::GSpanAttributeWriter &selection) {
           ed::curves::apply_selection_operation_at_index(
               selection.span, closest.elem.index, params.sel_op);
         });
