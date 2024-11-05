@@ -6,8 +6,13 @@
  * \ingroup edgreasepencil
  */
 
+#include "BLI_math_matrix.h"
+#include "BLI_math_matrix.hh"
+#include "BLI_string.h"
+
 #include "BKE_context.hh"
 #include "BKE_grease_pencil.hh"
+#include "BKE_object.hh"
 #include "BKE_report.hh"
 
 #include "BLT_translation.hh"
@@ -18,6 +23,7 @@
 
 #include "RNA_access.hh"
 #include "RNA_define.hh"
+
 #include "UI_interface.hh"
 
 #include "DNA_scene_types.h"
@@ -25,6 +31,43 @@
 #include "WM_api.hh"
 
 namespace blender::ed::greasepencil {
+
+bool grease_pencil_layer_parent_set(bke::greasepencil::Layer &layer,
+                                    Object *parent,
+                                    StringRefNull bone,
+                                    const bool keep_transform)
+{
+  if (keep_transform) {
+    /* TODO apply current transform to geometry. */
+  }
+
+  layer.parent = parent;
+  BLI_strncpy(layer.parsubstr, bone.c_str(), sizeof(layer.parsubstr));
+  /* Calculate inverse parent matrix. */
+  if (parent) {
+    copy_m4_m4(layer.parentinv, parent->world_to_object().ptr());
+  }
+  else {
+    unit_m4(layer.parentinv);
+  }
+
+  return true;
+}
+
+void grease_pencil_layer_parent_clear(bke::greasepencil::Layer &layer, const bool keep_transform)
+{
+  if (layer.parent == nullptr) {
+    return;
+  }
+  if (keep_transform) {
+    /* TODO apply current transform to geometry. */
+  }
+
+  layer.parent = nullptr;
+  layer.parsubstr[0] = 0;
+
+  copy_m4_m4(layer.parentinv, float4x4::identity().ptr());
+}
 
 void select_layer_channel(GreasePencil &grease_pencil, bke::greasepencil::Layer *layer)
 {
@@ -336,6 +379,7 @@ static int grease_pencil_layer_group_add_exec(bContext *C, wmOperator *op)
   }
 
   MEM_SAFE_FREE(new_layer_group_name);
+  grease_pencil.set_active_node(&new_group.as_node());
 
   DEG_id_tag_update(&grease_pencil.id, ID_RECALC_GEOMETRY);
   WM_event_add_notifier(C, NC_GEOM | ND_DATA, &grease_pencil);

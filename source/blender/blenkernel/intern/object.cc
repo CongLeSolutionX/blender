@@ -1996,7 +1996,7 @@ static void object_init(Object *ob, const short ob_type)
     ob->upflag = OB_POSY;
   }
 
-  if (ob->type == OB_GPENCIL_LEGACY) {
+  if (ob->type == OB_GREASE_PENCIL) {
     ob->dtx |= OB_USE_GPENCIL_LIGHTS;
   }
 
@@ -3015,7 +3015,8 @@ static bool ob_parcurve(const Object *ob, Object *par, float r_mat[4][4])
           par, ctime, vec, nullptr, (cu->flag & CU_FOLLOW) ? quat : nullptr, &radius, nullptr))
   {
     if (cu->flag & CU_FOLLOW) {
-      quat_apply_track(quat, ob->trackflag, ob->upflag);
+      quat_apply_track(
+          quat, std::clamp<short>(ob->trackflag, 0, 5), std::clamp<short>(ob->upflag, 0, 2));
       normalize_qt(quat);
       quat_to_mat4(r_mat, quat);
     }
@@ -3869,7 +3870,7 @@ void BKE_object_foreach_display_point(Object *ob,
   float3 co;
 
   if (mesh_eval != nullptr) {
-    const Span<float3> positions = mesh_eval->vert_positions();
+    const Span<float3> positions = BKE_mesh_wrapper_vert_coords(mesh_eval);
     for (const int i : positions.index_range()) {
       mul_v3_m4v3(co, obmat, positions[i]);
       func_cb(co, user_data);
@@ -4253,12 +4254,13 @@ static int pc_cmp(const void *a, const void *b)
   return 0;
 }
 
-/* TODO: Review the usages of this function, currently with copy-on-eval it will be called for orig
- * object and then again for evaluated copies of it, think this is bad since there is no guarantee
- * that we get the same stack index in both cases? Order is important since this index is used for
- * filenames on disk. */
 int BKE_object_insert_ptcache(Object *ob)
 {
+  /* TODO: Review the usages of this function, currently with copy-on-eval it will be called for
+   * orig object and then again for evaluated copies of it, think this is bad since there is no
+   * guarantee that we get the same stack index in both cases? Order is important since this index
+   * is used for filenames on disk. */
+
   LinkData *link = nullptr;
   int i = 0;
 
