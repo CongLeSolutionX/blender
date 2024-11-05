@@ -179,16 +179,15 @@ static void modify_drawing(const GreasePencilOutlineModifierData &omd,
                            const float4x4 &viewmat)
 {
   modifier::greasepencil::ensure_no_bezier_curves(drawing);
-  bke::CurvesGeometry &curves = drawing.strokes_for_write();
 
-  if (curves.curve_num == 0) {
+  if (drawing.strokes().curve_num == 0) {
     return;
   }
 
   /* Selected source curves. */
   IndexMaskMemory curve_mask_memory;
   const IndexMask curves_mask = modifier::greasepencil::get_filtered_stroke_mask(
-      ctx.object, curves, omd.influence, curve_mask_memory);
+      ctx.object, drawing.strokes(), omd.influence, curve_mask_memory);
 
   /* Unit object scale is applied to the stroke radius. */
   const float object_scale = math::length(
@@ -203,7 +202,7 @@ static void modify_drawing(const GreasePencilOutlineModifierData &omd,
                           BKE_object_material_index_get(ctx.object, omd.outline_material) :
                           -1);
 
-  curves = ed::greasepencil::create_curves_outline(
+  bke::CurvesGeometry curves = ed::greasepencil::create_curves_outline(
       drawing, curves_mask, viewmat, omd.subdiv, radius, outline_offset, mat_nr);
 
   /* Cyclic curve reordering feature. */
