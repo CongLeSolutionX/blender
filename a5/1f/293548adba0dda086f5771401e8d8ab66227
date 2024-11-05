@@ -18,3 +18,4 @@ Referenced by issue #126818, The --cycles-device command line option does nothin
 Referenced by issue #128767, Regression: Batch Rename failed to rename bones
 Referenced by issue #128797, Custom property Data-Block Type only has Object ID Type
 Referenced by issue #129506, Extra Geometry is adding by duplicate element in Geometry Node
+Referenced by issue #124292, Crash: Display wireframe in object mode on subdivided mesh with a lone edge
