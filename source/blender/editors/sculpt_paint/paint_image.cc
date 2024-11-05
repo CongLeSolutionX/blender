@@ -1035,7 +1035,7 @@ static int brush_colors_flip_exec(bContext *C, wmOperator * /*op*/)
   Paint *paint = BKE_paint_get_active_from_context(C);
   Brush *br = BKE_paint_brush(paint);
 
-  if (BKE_paint_use_unified_settings(scene.toolsettings, paint)) {
+  if (BKE_paint_use_unified_color(scene.toolsettings, paint)) {
     UnifiedPaintSettings &ups = scene.toolsettings->unified_paint_settings;
     swap_v3_v3(ups.rgb, ups.secondary_rgb);
   }

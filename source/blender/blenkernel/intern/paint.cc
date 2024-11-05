@@ -602,7 +602,7 @@ PaintMode BKE_paintmode_get_from_tool(const bToolRef *tref)
   return PaintMode::Invalid;
 }
 
-bool BKE_paint_use_unified_settings(const ToolSettings *tool_settings, const Paint *paint)
+bool BKE_paint_use_unified_color(const ToolSettings *tool_settings, const Paint *paint)
 {
   /* Grease pencil draw mode never uses unified paint. */
   if (paint->runtime.ob_mode == OB_MODE_PAINT_GREASE_PENCIL) {

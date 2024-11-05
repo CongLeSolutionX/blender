@@ -1028,7 +1028,7 @@ float BKE_brush_sample_masktex(
 
 const float *BKE_brush_color_get(const Scene *scene, const Paint *paint, const Brush *brush)
 {
-  if (BKE_paint_use_unified_settings(scene->toolsettings, paint)) {
+  if (BKE_paint_use_unified_color(scene->toolsettings, paint)) {
     return scene->toolsettings->unified_paint_settings.rgb;
   }
   return brush->rgb;
@@ -1038,7 +1038,7 @@ const float *BKE_brush_secondary_color_get(const Scene *scene,
                                            const Paint *paint,
                                            const Brush *brush)
 {
-  if (BKE_paint_use_unified_settings(scene->toolsettings, paint)) {
+  if (BKE_paint_use_unified_color(scene->toolsettings, paint)) {
     return scene->toolsettings->unified_paint_settings.secondary_rgb;
   }
   return brush->secondary_rgb;
@@ -1046,7 +1046,7 @@ const float *BKE_brush_secondary_color_get(const Scene *scene,
 
 void BKE_brush_color_set(Scene *scene, const Paint *paint, Brush *brush, const float color[3])
 {
-  if (BKE_paint_use_unified_settings(scene->toolsettings, paint)) {
+  if (BKE_paint_use_unified_color(scene->toolsettings, paint)) {
     UnifiedPaintSettings *ups = &scene->toolsettings->unified_paint_settings;
     copy_v3_v3(ups->rgb, color);
   }
