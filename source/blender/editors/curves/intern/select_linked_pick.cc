@@ -2,24 +2,22 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-
-#include "BKE_curves.hh"
 #include "BKE_context.hh"
+#include "BKE_curves.hh"
 #include "BKE_layer.hh"
 
-#include "RNA_define.hh"
 #include "RNA_access.hh"
+#include "RNA_define.hh"
 
 #include "DEG_depsgraph.hh"
 
-#include "WM_types.hh"
 #include "WM_api.hh"
+#include "WM_types.hh"
 
 #include "ED_curves.hh"
 #include "ED_view3d.hh"
 
 namespace blender::ed::curves {
-
 
 struct ClosestCurveDataBlock {
   blender::StringRef selection_attribute_name;
@@ -27,9 +25,9 @@ struct ClosestCurveDataBlock {
   blender::ed::curves::FindClosestData elem = {};
 };
 
-static bool select_linked_pick(bContext &C,const int2 &mval, const SelectPick_Params &params)
+static bool select_linked_pick(bContext &C, const int2 &mval, const SelectPick_Params &params)
 {
-      Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(&C);
+  Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(&C);
   /* Setup view context for argument to callbacks. */
   const ViewContext vc = ED_view3d_viewcontext_init(&C, depsgraph);
 
@@ -71,11 +69,8 @@ static bool select_linked_pick(bContext &C,const int2 &mval, const SelectPick_Pa
                 }
               };
 
-            ed::curves::foreach_selectable_curve_range(
-                curves,
-                deformation,
-                eHandleDisplay(vc.v3d->overlay.handle_display),
-                range_consumer);
+          ed::curves::foreach_selectable_curve_range(
+              curves, deformation, eHandleDisplay(vc.v3d->overlay.handle_display), range_consumer);
         }
         return new_closest;
       },
@@ -87,7 +82,6 @@ static bool select_linked_pick(bContext &C,const int2 &mval, const SelectPick_Pa
     return false;
   }
 
-// TODO: Use curve indices to write to attributes on either domain
   if (bke::AttrDomain(closest.curves_id->selection_domain) == bke::AttrDomain::Point) {
     const bke::CurvesGeometry &curves = closest.curves_id->geometry.wrap();
     const OffsetIndices points_by_curve = curves.points_by_curve();
@@ -96,11 +90,9 @@ static bool select_linked_pick(bContext &C,const int2 &mval, const SelectPick_Pa
         bke::AttrDomain::Point,
         CD_PROP_BOOL,
         closest.selection_attribute_name);
-        for (const int point :points_by_curve[closest.elem.index] ) {
-    ed::curves::apply_selection_operation_at_index(
-        selection.span, point, params.sel_op);
-
-        }
+    for (const int point : points_by_curve[closest.elem.index]) {
+      ed::curves::apply_selection_operation_at_index(selection.span, point, params.sel_op);
+    }
     selection.finish();
   }
   else if (selection_domain == bke::AttrDomain::Curve) {
@@ -119,26 +111,18 @@ static bool select_linked_pick(bContext &C,const int2 &mval, const SelectPick_Pa
   WM_event_add_notifier(&C, NC_GEOM | ND_DATA, closest.curves_id);
 
   return true;
-
 }
 
 static int select_linked_pick_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
-  Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
-  Nurb *nu;
-  BezTriple *bezt;
-  BPoint *bp;
-  int a;
-  const bool select = !RNA_boolean_get(op->ptr, "deselect");
-  Base *basact = nullptr;
+  SelectPick_Params params{};
+  params.sel_op = RNA_boolean_get(op->ptr, "deselect") ? SEL_OP_SUB : SEL_OP_ADD;
+  params.deselect_all = false;
+  params.select_passthrough = false;
 
-  view3d_operator_needs_opengl(C);
-  ViewContext vc = ED_view3d_viewcontext_init(C, depsgraph);
-
-  if (!select_linked_pick(*C, event->mval,SelectPick_Params())) {
+  if (!select_linked_pick(*C, event->mval, params)) {
     return OPERATOR_CANCELLED;
   }
-
 
   return OPERATOR_FINISHED;
 }
@@ -146,7 +130,7 @@ static int select_linked_pick_invoke(bContext *C, wmOperator *op, const wmEvent 
 void CURVES_OT_select_linked_pick(wmOperatorType *ot)
 {
   ot->name = "Select Linked";
-  ot->idname = "CURVE_OT_select_linked_pick";
+  ot->idname = "CURVES_OT_select_linked_pick";
   ot->description = "Select all points in the curve under the cursor";
 
   ot->invoke = select_linked_pick_invoke;
