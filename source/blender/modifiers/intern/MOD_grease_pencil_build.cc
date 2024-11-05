@@ -40,7 +40,6 @@
 #include "RNA_prototypes.hh"
 
 #include "GEO_reorder.hh"
-#include "GEO_resample_curves.hh"
 
 namespace blender {
 

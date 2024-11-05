@@ -38,8 +38,6 @@
 #include "MOD_modifiertypes.hh"
 #include "MOD_ui_common.hh"
 
-#include "GEO_resample_curves.hh"
-
 namespace blender {
 
 static void init_data(ModifierData *md)

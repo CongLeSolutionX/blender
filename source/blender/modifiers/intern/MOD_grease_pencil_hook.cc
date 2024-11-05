@@ -38,8 +38,6 @@
 
 #include "RNA_prototypes.hh"
 
-#include "GEO_resample_curves.hh"
-
 namespace blender {
 
 static void init_data(ModifierData *md)
