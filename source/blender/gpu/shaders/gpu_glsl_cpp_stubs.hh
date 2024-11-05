@@ -637,9 +637,8 @@ template<typename T> T abs(T) RET;
 template<typename T> T max(T, T) RET;
 template<typename T> T min(T, T) RET;
 template<typename T> T sign(T) RET;
-template<typename T> T clamp(T, T, T) RET;
-template<typename T> T clamp(T, double, double) RET;
 template<typename T, typename U> T clamp(T, U, U) RET;
+template<typename T> T clamp(T, double, double) RET;
 template<typename T, typename U> T max(T, U) RET;
 template<typename T, typename U> T min(T, U) RET;
 /* TODO(fclem): These should be restricted to floats. */
