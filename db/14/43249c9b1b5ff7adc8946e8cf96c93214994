@@ -1,1 +1,2 @@
 Referenced by issue #129798, Grease Pencil - Using "Selection to Cursor"-operator on non-poly type strokes doesn't immediately update geometry
+Referenced by pull request #129848, Fix #129798: GPv3: Selection to Cursor/Grid missing immediate update
