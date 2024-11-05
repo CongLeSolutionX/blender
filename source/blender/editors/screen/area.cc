@@ -1842,7 +1842,10 @@ static void region_evaulate_visibility(ARegion *region)
   region->visible = !hidden;
 }
 
-static bool event_in_markers_region(const ARegion *region, const wmEvent *event)
+static bool event_in_markers_region(const wmWindow * /*win*/,
+                                    const ScrArea * /*area*/,
+                                    const ARegion *region,
+                                    const wmEvent *event)
 {
   rcti rect = region->winrct;
   rect.ymax = rect.ymin + UI_MARKER_MARGIN_Y;
@@ -1899,7 +1902,7 @@ static void ed_default_handlers(
 
     /* time-scrub */
     keymap = WM_keymap_ensure(wm->defaultconf, "Time Scrub", SPACE_EMPTY, RGN_TYPE_WINDOW);
-    WM_event_add_keymap_handler_poll(handlers, keymap, ED_time_scrub_event_in_region);
+    WM_event_add_keymap_handler_poll(handlers, keymap, ED_time_scrub_event_in_region_poll);
 
     /* frame changing and timeline operators (for time spaces) */
     keymap = WM_keymap_ensure(wm->defaultconf, "Animation", SPACE_EMPTY, RGN_TYPE_WINDOW);

@@ -9,6 +9,7 @@
 #pragma once
 
 struct Scene;
+struct ScrArea;
 struct TimeMarker;
 struct bAnimContext;
 struct bContext;
@@ -33,6 +34,11 @@ void ED_markers_draw(const bContext *C, int flag);
 /* -------------------------------------------------------------------- */
 /** \name Backend API
  * \{ */
+
+/**
+ * Public API for getting markers from the scene & area.
+ */
+ListBase *ED_scene_markers_get(Scene *scene, ScrArea *area);
 
 /**
  * Public API for getting markers from context.

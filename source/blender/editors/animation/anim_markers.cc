@@ -61,7 +61,7 @@
  * \{ */
 
 /* helper function for getting the list of markers to work on */
-static ListBase *context_get_markers(Scene *scene, ScrArea *area)
+ListBase *ED_scene_markers_get(Scene *scene, ScrArea *area)
 {
   /* local marker sets... */
   if (area) {
@@ -87,13 +87,13 @@ static ListBase *context_get_markers(Scene *scene, ScrArea *area)
 
 ListBase *ED_context_get_markers(const bContext *C)
 {
-  return context_get_markers(CTX_data_scene(C), CTX_wm_area(C));
+  return ED_scene_markers_get(CTX_data_scene(C), CTX_wm_area(C));
 }
 
 ListBase *ED_animcontext_get_markers(const bAnimContext *ac)
 {
   if (ac) {
-    return context_get_markers(ac->scene, ac->area);
+    return ED_scene_markers_get(ac->scene, ac->area);
   }
   return nullptr;
 }
@@ -240,10 +240,10 @@ static bool ED_operator_markers_region_active(bContext *C)
   return false;
 }
 
-static bool region_position_is_over_marker(View2D *v2d, ListBase *markers, float region_x)
+static TimeMarker *region_position_is_over_marker(View2D *v2d, ListBase *markers, float region_x)
 {
   if (markers == nullptr || BLI_listbase_is_empty(markers)) {
-    return false;
+    return nullptr;
   }
 
   float frame_at_position = UI_view2d_region_to_view_x(v2d, region_x);
@@ -251,7 +251,10 @@ static bool region_position_is_over_marker(View2D *v2d, ListBase *markers, float
   float pixel_distance = UI_view2d_scale_get_x(v2d) *
                          fabsf(nearest_marker->frame - frame_at_position);
 
-  return pixel_distance <= UI_ICON_SIZE;
+  if (pixel_distance <= UI_ICON_SIZE) {
+    return nearest_marker;
+  }
+  return nullptr;
 }
 
 /* --------------------------------- */
@@ -1256,51 +1259,6 @@ static void deselect_markers(ListBase *markers)
   }
 }
 
-static int select_timeline_marker_frame(ListBase *markers,
-                                        int frame,
-                                        bool extend,
-                                        bool wait_to_deselect_others)
-{
-  TimeMarker *marker, *marker_cycle_selected = nullptr;
-  int ret_val = OPERATOR_FINISHED;
-
-  if (extend) {
-    wait_to_deselect_others = false;
-  }
-
-  /* support for selection cycling */
-  LISTBASE_FOREACH (TimeMarker *, marker, markers) {
-    if (marker->frame == frame) {
-      if (marker->flag & SELECT) {
-        marker_cycle_selected = static_cast<TimeMarker *>(marker->next ? marker->next :
-                                                                         markers->first);
-        break;
-      }
-    }
-  }
-
-  if (wait_to_deselect_others && marker_cycle_selected) {
-    ret_val = OPERATOR_RUNNING_MODAL;
-  }
-  /* if extend is not set, then deselect markers */
-  else {
-    if (extend == false) {
-      deselect_markers(markers);
-    }
-
-    LISTBASE_CIRCULAR_FORWARD_BEGIN (TimeMarker *, markers, marker, marker_cycle_selected) {
-      /* this way a not-extend select will always give 1 selected marker */
-      if (marker->frame == frame) {
-        marker->flag ^= SELECT;
-        break;
-      }
-    }
-    LISTBASE_CIRCULAR_FORWARD_END(TimeMarker *, markers, marker, marker_cycle_selected);
-  }
-
-  return ret_val;
-}
-
 static void select_marker_camera_switch(
     bContext *C, bool camera, bool extend, ListBase *markers, int cfra)
 {
@@ -1347,29 +1305,81 @@ static void select_marker_camera_switch(
 #endif
 }
 
-static int ed_marker_select(
-    bContext *C, const int mval[2], bool extend, bool camera, bool wait_to_deselect_others)
+static int ed_marker_select(bContext *C,
+                            const int mval[2],
+                            bool extend,
+                            bool deselect_all,
+                            bool camera,
+                            bool wait_to_deselect_others)
 {
   ListBase *markers = ED_context_get_markers(C);
   View2D *v2d = UI_view2d_fromcontext(C);
   int ret_val = OPERATOR_FINISHED;
+  TimeMarker *nearest_marker = region_position_is_over_marker(v2d, markers, mval[0]);
+  bool found = (nearest_marker != nullptr);
+  bool is_selected = (nearest_marker && nearest_marker->flag & SELECT);
 
-  if (region_position_is_over_marker(v2d, markers, mval[0])) {
-    float frame_at_mouse_position = UI_view2d_region_to_view_x(v2d, mval[0]);
-    int cfra = ED_markers_find_nearest_marker_time(markers, frame_at_mouse_position);
-    ret_val = select_timeline_marker_frame(markers, cfra, extend, wait_to_deselect_others);
+  float frame_at_mouse_position = UI_view2d_region_to_view_x(v2d, mval[0]);
+  int cfra = ED_markers_find_nearest_marker_time(markers, frame_at_mouse_position);
 
-    select_marker_camera_switch(C, camera, extend, markers, cfra);
+  eSelectOp sel_op = (extend) ? (is_selected ? SEL_OP_SUB : SEL_OP_ADD) : SEL_OP_SET;
+
+  if ((sel_op == SEL_OP_SET && found) || (!found && deselect_all)) {
+    sel_op = SEL_OP_ADD;
+
+    /* Rather than deselecting others, users may want to drag to box-select (drag from empty space)
+     * or tweak-translate an already selected item. If these cases may apply, delay deselection. */
+    if (wait_to_deselect_others && (!found || is_selected)) {
+      ret_val = OPERATOR_RUNNING_MODAL;
+    }
+    else {
+      /* Deselect all markers. */
+      deselect_markers(markers);
+
+      select_marker_camera_switch(C, camera, extend, markers, cfra);
+    }
   }
-  else {
-    deselect_markers(markers);
+
+  if (found) {
+    TimeMarker *marker, *marker_cycle_selected = nullptr;
+    TimeMarker *marker_found = nullptr;
+
+    /* support for selection cycling */
+    LISTBASE_FOREACH (TimeMarker *, marker, markers) {
+      if (marker->frame == cfra) {
+        if (marker->flag & SELECT) {
+          marker_cycle_selected = static_cast<TimeMarker *>(marker->next ? marker->next :
+                                                                           markers->first);
+          break;
+        }
+      }
+    }
+
+    /* if extend is not set, then deselect markers */
+    LISTBASE_CIRCULAR_FORWARD_BEGIN (TimeMarker *, markers, marker, marker_cycle_selected) {
+      /* this way a not-extend select will always give 1 selected marker */
+      if (marker->frame == cfra) {
+        marker_found = marker;
+        break;
+      }
+    }
+    LISTBASE_CIRCULAR_FORWARD_END(TimeMarker *, markers, marker, marker_cycle_selected);
+
+    if (marker_found) {
+      if (sel_op == SEL_OP_SUB) {
+        marker_found->flag &= ~SELECT;
+      }
+      else {
+        marker_found->flag |= SELECT;
+      }
+    }
   }
 
   WM_event_add_notifier(C, NC_SCENE | ND_MARKERS, nullptr);
   WM_event_add_notifier(C, NC_ANIMATION | ND_MARKERS, nullptr);
 
   /* allowing tweaks, but needs OPERATOR_FINISHED, otherwise renaming fails, see #25987. */
-  return ret_val | OPERATOR_PASS_THROUGH;
+  return ret_val;
 }
 
 static int ed_marker_select_exec(bContext *C, wmOperator *op)
@@ -1392,8 +1402,11 @@ static int ed_marker_select_exec(bContext *C, wmOperator *op)
   int mval[2];
   mval[0] = RNA_int_get(op->ptr, "mouse_x");
   mval[1] = RNA_int_get(op->ptr, "mouse_y");
+  bool deselect_all = true;
 
-  return ed_marker_select(C, mval, extend, camera, wait_to_deselect_others);
+  int ret_value = ed_marker_select(C, mval, extend, deselect_all, camera, wait_to_deselect_others);
+
+  return ret_value | OPERATOR_PASS_THROUGH;
 }
 
 static void MARKER_OT_select(wmOperatorType *ot)
@@ -1455,7 +1468,7 @@ static int ed_marker_box_select_invoke(bContext *C, wmOperator *op, const wmEven
 
   ListBase *markers = ED_context_get_markers(C);
   bool over_marker = region_position_is_over_marker(
-      v2d, markers, event->xy[0] - region->winrct.xmin);
+                         v2d, markers, event->xy[0] - region->winrct.xmin) != nullptr;
 
   bool tweak = RNA_boolean_get(op->ptr, "tweak");
   if (tweak && over_marker) {
