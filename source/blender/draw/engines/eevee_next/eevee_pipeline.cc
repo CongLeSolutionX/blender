@@ -616,6 +616,8 @@ void DeferredLayer::end_sync(bool is_first_pass,
                     (sce_eevee.flag & SCE_EEVEE_SSR_ENABLED) != 0;
 
   use_clamp_direct_ = sce_eevee.clamp_surface_direct != 0.0f;
+  /* TODO(NPR): Clamp Direct doesn't work with NPR */
+  use_clamp_direct_ = false;
   use_clamp_indirect_ = sce_eevee.clamp_surface_indirect != 0.0f;
 
   /* The first pass will never have any surfaces behind it. Nothing is refracted except the
