@@ -531,9 +531,6 @@ CurvesGeometry resample_to_evaluated(const CurvesGeometry &src_curves,
   if (src_curves.curves_range().is_empty()) {
     return {};
   }
-  if (selection.is_empty()) {
-    return src_curves;
-  }
   const OffsetIndices src_points_by_curve = src_curves.points_by_curve();
   const OffsetIndices src_evaluated_points_by_curve = src_curves.evaluated_points_by_curve();
   const Span<float3> evaluated_positions = src_curves.evaluated_positions();
