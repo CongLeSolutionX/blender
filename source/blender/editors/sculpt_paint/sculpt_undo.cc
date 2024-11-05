@@ -401,20 +401,21 @@ static void restore_position_mesh(Object &object,
         MutableSpan<float3> undo_positions = unode.orig_position;
 
         if (shape_key_data) {
-          /* Apply translations to dependent shape keys. */
+          MutableSpan<float3> active_data = shape_key_data->active_key_data;
+
           if (!shape_key_data->dependent_keys.is_empty()) {
             Array<float3, 1024> translations(verts.size());
-            translations_from_new_positions(undo_positions, verts, positions, translations);
+            translations_from_new_positions(undo_positions, verts, active_data, translations);
             for (MutableSpan<float3> data : shape_key_data->dependent_keys) {
               apply_translations(translations, verts, data);
             }
           }
 
           if (shape_key_data->basis_key_active) {
-            /* The active shape key positions and the mesh positions are always kept in sync. */
+            /* The basis key positions and the mesh positions are always kept in sync. */
             scatter_data_mesh(undo_positions.as_span(), verts, positions);
           }
-          swap_indexed_data(undo_positions, verts, shape_key_data->active_key_data);
+          swap_indexed_data(undo_positions, verts, active_data);
         }
         else {
           /* There is a deform modifier, but no shape keys. */
