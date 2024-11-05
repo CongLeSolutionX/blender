@@ -160,7 +160,6 @@ static void deform_drawing(const ModifierData &md,
   if (curves.points_num() == 0) {
     return;
   }
-
   IndexMaskMemory memory;
   const IndexMask strokes = modifier::greasepencil::get_filtered_stroke_mask(
       &ob, curves, mmd.influence, memory);

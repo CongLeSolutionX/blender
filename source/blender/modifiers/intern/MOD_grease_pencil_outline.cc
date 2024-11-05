@@ -35,6 +35,8 @@
 
 #include "ED_grease_pencil.hh"
 
+#include "GEO_resample_curves.hh"
+
 #include "UI_interface.hh"
 #include "UI_resources.hh"
 
@@ -48,8 +50,6 @@
 
 #include "MOD_grease_pencil_util.hh"
 #include "MOD_ui_common.hh"
-
-#include "GEO_resample_curves.hh"
 
 namespace blender {
 

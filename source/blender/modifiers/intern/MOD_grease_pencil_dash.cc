@@ -334,7 +334,6 @@ static void modify_drawing(const GreasePencilDashModifierData &dmd,
   if (src_curves.curve_num == 0) {
     return;
   }
-
   /* Selected source curves. */
   IndexMaskMemory curve_mask_memory;
   const IndexMask curves_mask = modifier::greasepencil::get_filtered_stroke_mask(
