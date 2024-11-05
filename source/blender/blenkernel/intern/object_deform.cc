@@ -139,7 +139,10 @@ MDeformVert *BKE_object_defgroup_data_create(ID *id)
 /** \name Group clearing
  * \{ */
 
-bool BKE_object_defgroup_clear(Object *ob, bDeformGroup *dg, const bool use_selection)
+bool BKE_object_defgroup_clear(Object *ob,
+                               bDeformGroup *dg,
+                               Scene *scene,
+                               const bool use_selection)
 {
   MDeformVert *dv;
   const ListBase *defbase = BKE_object_defgroup_list(ob);
@@ -208,20 +211,20 @@ bool BKE_object_defgroup_clear(Object *ob, bDeformGroup *dg, const bool use_sele
   else if (ob->type == OB_GREASE_PENCIL) {
     GreasePencil *grease_pencil = static_cast<GreasePencil *>(ob->data);
     changed = blender::bke::greasepencil::remove_from_vertex_group(
-        *grease_pencil, dg->name, use_selection);
+        *grease_pencil, scene, dg->name, use_selection);
   }
 
   return changed;
 }
 
-bool BKE_object_defgroup_clear_all(Object *ob, const bool use_selection)
+bool BKE_object_defgroup_clear_all(Object *ob, Scene *scene, const bool use_selection)
 {
   bool changed = false;
 
   const ListBase *defbase = BKE_object_defgroup_list(ob);
 
   LISTBASE_FOREACH (bDeformGroup *, dg, defbase) {
-    if (BKE_object_defgroup_clear(ob, dg, use_selection)) {
+    if (BKE_object_defgroup_clear(ob, dg, scene, use_selection)) {
       changed = true;
     }
   }
@@ -288,7 +291,7 @@ static void object_defgroup_remove_common(Object *ob, bDeformGroup *dg, const in
   }
 }
 
-static void object_defgroup_remove_object_mode(Object *ob, bDeformGroup *dg)
+static void object_defgroup_remove_object_mode(Object *ob, bDeformGroup *dg, Scene *scene)
 {
   MDeformVert *dvert_array = nullptr;
   int dvert_tot = 0;
@@ -300,7 +303,7 @@ static void object_defgroup_remove_object_mode(Object *ob, bDeformGroup *dg)
 
   if (ob->type == OB_GREASE_PENCIL) {
     GreasePencil *grease_pencil = static_cast<GreasePencil *>(ob->data);
-    blender::bke::greasepencil::remove_from_vertex_group(*grease_pencil, dg->name, false);
+    blender::bke::greasepencil::remove_from_vertex_group(*grease_pencil, scene, dg->name, false);
   }
   else {
     BKE_object_defgroup_array_get(static_cast<ID *>(ob->data), &dvert_array, &dvert_tot);
@@ -328,7 +331,7 @@ static void object_defgroup_remove_object_mode(Object *ob, bDeformGroup *dg)
   object_defgroup_remove_common(ob, dg, def_nr);
 }
 
-static void object_defgroup_remove_edit_mode(Object *ob, bDeformGroup *dg)
+static void object_defgroup_remove_edit_mode(Object *ob, bDeformGroup *dg, Scene *scene)
 {
   int i;
   const ListBase *defbase = BKE_object_defgroup_list(ob);
@@ -338,7 +341,7 @@ static void object_defgroup_remove_edit_mode(Object *ob, bDeformGroup *dg)
 
   /* Make sure that no verts are using this group - if none were removed,
    * we can skip next per-vert update. */
-  if (!BKE_object_defgroup_clear(ob, dg, false)) {
+  if (!BKE_object_defgroup_clear(ob, dg, scene, false)) {
     /* Nothing to do. */
   }
   /* Else, make sure that any groups with higher indices are adjusted accordingly */
@@ -382,19 +385,19 @@ static void object_defgroup_remove_edit_mode(Object *ob, bDeformGroup *dg)
   }
   else if (ob->type == OB_GREASE_PENCIL) {
     GreasePencil *grease_pencil = static_cast<GreasePencil *>(ob->data);
-    blender::bke::greasepencil::remove_from_vertex_group(*grease_pencil, dg->name, false);
+    blender::bke::greasepencil::remove_from_vertex_group(*grease_pencil, scene, dg->name, false);
   }
 
   object_defgroup_remove_common(ob, dg, def_nr);
 }
 
-void BKE_object_defgroup_remove(Object *ob, bDeformGroup *defgroup)
+void BKE_object_defgroup_remove(Object *ob, bDeformGroup *defgroup, Scene *scene)
 {
   if (BKE_object_is_in_editmode_vgroup(ob)) {
-    object_defgroup_remove_edit_mode(ob, defgroup);
+    object_defgroup_remove_edit_mode(ob, defgroup, scene);
   }
   else {
-    object_defgroup_remove_object_mode(ob, defgroup);
+    object_defgroup_remove_object_mode(ob, defgroup, scene);
   }
 
   if (ob->type == OB_GREASE_PENCIL) {
@@ -405,7 +408,7 @@ void BKE_object_defgroup_remove(Object *ob, bDeformGroup *defgroup)
   BKE_object_batch_cache_dirty_tag(ob);
 }
 
-void BKE_object_defgroup_remove_all_ex(Object *ob, bool only_unlocked)
+void BKE_object_defgroup_remove_all_ex(Object *ob, bool only_unlocked, Scene *scene)
 {
   ListBase *defbase = BKE_object_defgroup_list_mutable(ob);
 
@@ -418,10 +421,10 @@ void BKE_object_defgroup_remove_all_ex(Object *ob, bool only_unlocked)
 
       if (!only_unlocked || (dg->flag & DG_LOCK_WEIGHT) == 0) {
         if (edit_mode) {
-          object_defgroup_remove_edit_mode(ob, dg);
+          object_defgroup_remove_edit_mode(ob, dg, scene);
         }
         else {
-          object_defgroup_remove_object_mode(ob, dg);
+          object_defgroup_remove_object_mode(ob, dg, scene);
         }
       }
 
@@ -447,9 +450,9 @@ void BKE_object_defgroup_remove_all_ex(Object *ob, bool only_unlocked)
   }
 }
 
-void BKE_object_defgroup_remove_all(Object *ob)
+void BKE_object_defgroup_remove_all(Object *ob, Scene *scene)
 {
-  BKE_object_defgroup_remove_all_ex(ob, false);
+  BKE_object_defgroup_remove_all_ex(ob, false, scene);
 }
 
 int *BKE_object_defgroup_index_map_create(Object *ob_src, Object *ob_dst, int *r_map_len)

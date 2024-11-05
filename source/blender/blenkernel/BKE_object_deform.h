@@ -58,28 +58,35 @@ struct MDeformVert *BKE_object_defgroup_data_create(struct ID *id);
  * \param use_selection: Only operate on selection.
  * \return True if any vertex was removed, false otherwise.
  */
-bool BKE_object_defgroup_clear(struct Object *ob, struct bDeformGroup *dg, bool use_selection);
+bool BKE_object_defgroup_clear(struct Object *ob,
+                               struct bDeformGroup *dg,
+                               Scene *scene,
+                               bool use_selection);
 /**
  * Remove all verts (or only selected ones) from all vgroups. Work in Object and Edit modes.
  *
  * \param use_selection: Only operate on selection.
  * \return True if any vertex was removed, false otherwise.
  */
-bool BKE_object_defgroup_clear_all(struct Object *ob, bool use_selection);
+bool BKE_object_defgroup_clear_all(struct Object *ob, Scene *scene, bool use_selection);
 
 /**
  * Remove given vgroup from object. Work in Object and Edit modes.
  */
-void BKE_object_defgroup_remove(struct Object *ob, struct bDeformGroup *defgroup);
+void BKE_object_defgroup_remove(struct Object *ob,
+                                struct bDeformGroup *defgroup,
+                                Scene *scene = nullptr);
 /**
  * Remove all vgroups from object. Work in Object and Edit modes.
  * When only_unlocked=true, locked vertex groups are not removed.
  */
-void BKE_object_defgroup_remove_all_ex(struct Object *ob, bool only_unlocked);
+void BKE_object_defgroup_remove_all_ex(struct Object *ob,
+                                       bool only_unlocked,
+                                       Scene *scene = nullptr);
 /**
  * Remove all vgroups from object. Work in Object and Edit modes.
  */
-void BKE_object_defgroup_remove_all(struct Object *ob);
+void BKE_object_defgroup_remove_all(struct Object *ob, Scene *scene = nullptr);
 
 /**
  * Compute mapping for vertex groups with matching name, -1 is used for no remapping.

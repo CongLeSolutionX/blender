@@ -7,6 +7,7 @@
  */
 
 #include "DNA_meshdata_types.h"
+#include "DNA_scene_types.h"
 
 #include "BLI_listbase.h"
 #include "BLI_set.hh"
@@ -95,14 +96,18 @@ void assign_to_vertex_group_from_mask(bke::CurvesGeometry &curves,
   });
 }
 
-void assign_to_vertex_group(GreasePencil &grease_pencil, const StringRef name, const float weight)
+void assign_to_vertex_group(GreasePencil &grease_pencil, Scene *scene, const StringRef name, const float weight)
 {
-  for (GreasePencilDrawingBase *base : grease_pencil.drawings()) {
-    if (base->type != GP_DRAWING) {
+  using namespace bke::greasepencil;
+  const int current_frame = scene->r.cfra;
+
+  for (const Layer * layer : grease_pencil.layers()) {
+    Drawing *drawing = grease_pencil.get_editable_drawing_at(*layer, current_frame);
+    if (drawing == nullptr) {
       continue;
     }
-    Drawing &drawing = reinterpret_cast<GreasePencilDrawing *>(base)->wrap();
-    bke::CurvesGeometry &curves = drawing.strokes_for_write();
+
+    bke::CurvesGeometry &curves = drawing->strokes_for_write();
     ListBase &vertex_group_names = curves.vertex_group_names;
 
     const bke::AttributeAccessor attributes = curves.attributes();
@@ -135,16 +140,21 @@ void assign_to_vertex_group(GreasePencil &grease_pencil, const StringRef name, c
 }
 
 bool remove_from_vertex_group(GreasePencil &grease_pencil,
+                              Scene *scene,
                               const StringRef name,
                               const bool use_selection)
 {
   bool changed = false;
-  for (GreasePencilDrawingBase *base : grease_pencil.drawings()) {
-    if (base->type != GP_DRAWING) {
+  using namespace bke::greasepencil;
+  const int current_frame = scene->r.cfra;
+
+  for (const Layer *layer : grease_pencil.layers()) {
+    Drawing *drawing = grease_pencil.get_editable_drawing_at(*layer, current_frame);
+    if (drawing == nullptr) {
       continue;
     }
-    Drawing &drawing = reinterpret_cast<GreasePencilDrawing *>(base)->wrap();
-    bke::CurvesGeometry &curves = drawing.strokes_for_write();
+
+    bke::CurvesGeometry &curves = drawing->strokes_for_write();
     ListBase &vertex_group_names = curves.vertex_group_names;
 
     const int def_nr = BKE_defgroup_name_index(&vertex_group_names, name);
@@ -193,16 +203,20 @@ void clear_vertex_groups(GreasePencil &grease_pencil)
 }
 
 void select_from_group(GreasePencil &grease_pencil,
+                       Scene *scene,
                        const AttrDomain selection_domain,
                        const StringRef name,
                        const bool select)
 {
-  for (GreasePencilDrawingBase *base : grease_pencil.drawings()) {
-    if (base->type != GP_DRAWING) {
+  using namespace bke::greasepencil;
+  const int current_frame = scene->r.cfra;
+
+  for (const Layer *layer : grease_pencil.layers()) {
+    Drawing *drawing = grease_pencil.get_editable_drawing_at(*layer, current_frame);
+    if (drawing == nullptr) {
       continue;
     }
-    Drawing &drawing = reinterpret_cast<GreasePencilDrawing *>(base)->wrap();
-    bke::CurvesGeometry &curves = drawing.strokes_for_write();
+    bke::CurvesGeometry &curves = drawing->strokes_for_write();
     ListBase &vertex_group_names = curves.vertex_group_names;
 
     const int def_nr = BKE_defgroup_name_index(&vertex_group_names, name);
