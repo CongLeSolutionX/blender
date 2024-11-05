@@ -304,6 +304,7 @@ static void detect_workarounds()
     printf("    version: %s\n\n", version);
     GCaps.depth_blitting_workaround = true;
     GCaps.mip_render_workaround = true;
+    GCaps.stencil_clasify_buffer_workaround = true;
     GLContext::debug_layer_workaround = true;
     /* Turn off Blender features. */
     GCaps.hdr_viewport_support = false;
@@ -473,6 +474,11 @@ static void detect_workarounds()
       if (ver0 == 31) {
         GCaps.shader_draw_parameters_support = false;
         GLContext::shader_draw_parameters_support = false;
+      }
+
+      /* This driver has issue with the stencil classification shader. */
+      if (ver0 == 31) {
+        GCaps.stencil_clasify_buffer_workaround = true;
       }
     }
   }
