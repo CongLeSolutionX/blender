@@ -335,6 +335,7 @@ static bool restore_active_shape_key(bContext &C,
 template<typename T>
 static void swap_indexed_data(MutableSpan<T> full, const Span<int> indices, MutableSpan<T> indexed)
 {
+  BLI_assert(full.size() == indices.size());
   for (const int i : indices.index_range()) {
     std::swap(full[i], indexed[indices[i]]);
   }
