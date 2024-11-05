@@ -1393,8 +1393,8 @@ void DeferredProbePipeline::begin_sync()
     npr_ps_.bind_texture(BACK_HIZ_TX_SLOT, &dummy_black_);
 
     /* Images. */
-    npr_ps_.bind_image(RBUFS_COLOR_SLOT, &dummy_black_);
-    npr_ps_.bind_image(RBUFS_VALUE_SLOT, &dummy_black_);
+    npr_ps_.bind_image(RBUFS_COLOR_SLOT, &inst_.render_buffers.rp_color_tx);
+    npr_ps_.bind_image(RBUFS_VALUE_SLOT, &inst_.render_buffers.rp_value_tx);
 
     npr_ps_.bind_resources(inst_.uniform_data);
     npr_ps_.bind_resources(inst_.sampling);
@@ -1606,8 +1606,8 @@ void PlanarProbePipeline::begin_sync()
     npr_ps_.bind_texture(BACK_HIZ_TX_SLOT, &dummy_black_);
 
     /* Images. */
-    npr_ps_.bind_image(RBUFS_COLOR_SLOT, &dummy_black_);
-    npr_ps_.bind_image(RBUFS_VALUE_SLOT, &dummy_black_);
+    npr_ps_.bind_image(RBUFS_COLOR_SLOT, &inst_.render_buffers.rp_color_tx);
+    npr_ps_.bind_image(RBUFS_VALUE_SLOT, &inst_.render_buffers.rp_value_tx);
 
     npr_ps_.bind_resources(inst_.uniform_data);
     npr_ps_.bind_resources(inst_.sampling);
