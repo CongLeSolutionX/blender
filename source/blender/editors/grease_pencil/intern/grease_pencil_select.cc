@@ -265,19 +265,17 @@ bool selection_update(const ViewContext *vc,
 
         /* Modes that un-set all elements not in the mask. */
         if (ELEM(sel_op, SEL_OP_SET, SEL_OP_AND)) {
-          ed::curves::foreach_selection_attribute_writer(
-              curves, selection_domain, [&](bke::GSpanAttributeWriter &writer) {
-                for (const int element_i : IndexRange(writer.span.size())) {
-                  ed::curves::apply_selection_operation_at_index(
-                      writer.span, element_i, SEL_OP_SUB);
-                }
-              });
+          if (bke::GSpanAttributeWriter selection =
+                  curves.attributes_for_write().lookup_for_write_span(attribute_name))
+          {
+            ed::curves::fill_selection_false(selection.span);
+            selection.finish();
+          }
         }
 
         if (use_segment_selection) {
           /* Range of points in tree data matching this curve, for re-using screen space
-           * positions.
-           */
+           * positions. */
           const IndexRange tree_data_range = tree_data_by_drawing[i_drawing];
           changed |= ed::greasepencil::apply_mask_as_segment_selection(curves,
                                                                        changed_element_mask,
@@ -327,6 +325,12 @@ static int select_all_exec(bContext *C, wmOperator *op)
         *object, info, selection_domain, memory);
     if (selectable_elements.is_empty()) {
       return;
+    }
+    if (action == SEL_TOGGLE) {
+      action = blender::ed::curves::has_anything_selected(info.drawing.strokes(),
+                                                          selection_domain) ?
+                   SEL_DESELECT :
+                   SEL_SELECT;
     }
     blender::ed::curves::select_all(
         info.drawing.strokes_for_write(), selectable_elements, selection_domain, action);
@@ -575,7 +579,7 @@ static const EnumPropertyItem select_similar_mode_items[] = {
     {int(SelectSimilarMode::VERTEX_COLOR), "VERTEX_COLOR", 0, "Vertex Color", ""},
     {int(SelectSimilarMode::RADIUS), "RADIUS", 0, "Radius", ""},
     {int(SelectSimilarMode::OPACITY), "OPACITY", 0, "Opacity", ""},
-    {0, NULL, 0, NULL, NULL},
+    {0, nullptr, 0, nullptr, nullptr},
 };
 
 template<typename T>
@@ -1041,10 +1045,10 @@ blender::bke::AttrDomain ED_grease_pencil_selection_domain_get(const ToolSetting
   if (object->mode & OB_MODE_EDIT) {
     return ED_grease_pencil_edit_selection_domain_get(tool_settings);
   }
-  if (object->mode & OB_MODE_SCULPT_GPENCIL_LEGACY) {
+  if (object->mode & OB_MODE_SCULPT_GREASE_PENCIL) {
     return ED_grease_pencil_sculpt_selection_domain_get(tool_settings);
   }
-  if (object->mode & OB_MODE_VERTEX_GPENCIL_LEGACY) {
+  if (object->mode & OB_MODE_VERTEX_GREASE_PENCIL) {
     return ED_grease_pencil_vertex_selection_domain_get(tool_settings);
   }
   return blender::bke::AttrDomain::Point;
@@ -1071,10 +1075,10 @@ bool ED_grease_pencil_segment_selection_enabled(const ToolSettings *tool_setting
   if (object->mode & OB_MODE_EDIT) {
     return ED_grease_pencil_edit_segment_selection_enabled(tool_settings);
   }
-  if (object->mode & OB_MODE_SCULPT_GPENCIL_LEGACY) {
+  if (object->mode & OB_MODE_SCULPT_GREASE_PENCIL) {
     return ED_grease_pencil_sculpt_segment_selection_enabled(tool_settings);
   }
-  if (object->mode & OB_MODE_VERTEX_GPENCIL_LEGACY) {
+  if (object->mode & OB_MODE_VERTEX_GREASE_PENCIL) {
     return ED_grease_pencil_vertex_segment_selection_enabled(tool_settings);
   }
   return false;

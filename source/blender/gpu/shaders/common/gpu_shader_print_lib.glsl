@@ -2,6 +2,8 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#pragma once
+
 uint print_data(uint offset, uint data)
 {
   if (offset < GPU_SHADER_PRINTF_MAX_CAPACITY) {
@@ -20,7 +22,7 @@ uint print_data(uint offset, float data)
   return print_data(offset, floatBitsToUint(data));
 }
 
-uint print_header(uint format_hash, const uint data_len)
+uint print_header(const uint data_len, uint format_hash)
 {
   uint offset = atomicAdd(gpu_print_buf[0], 1u + data_len) + 1u;
   return print_data(offset, format_hash);

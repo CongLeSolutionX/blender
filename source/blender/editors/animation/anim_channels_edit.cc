@@ -1722,7 +1722,7 @@ static void rearrange_layered_action_channel_groups(bAnimContext *ac,
           continue;
         }
         blender::animrig::ChannelBag &bag = group->channel_bag->wrap();
-        const int group_index = bag.channel_groups().as_span().first_index_try(group);
+        const int group_index = bag.channel_groups().first_index_try(group);
         const int to_index = group_index - 1;
         BLI_assert(group_index >= 0);
 
@@ -1760,7 +1760,7 @@ static void rearrange_layered_action_channel_groups(bAnimContext *ac,
           continue;
         }
         blender::animrig::ChannelBag &bag = group->channel_bag->wrap();
-        const int group_index = bag.channel_groups().as_span().first_index_try(group);
+        const int group_index = bag.channel_groups().first_index_try(group);
         const int to_index = group_index + 1;
         BLI_assert(group_index >= 0);
 
@@ -1874,7 +1874,7 @@ static void rearrange_layered_action_fcurves(bAnimContext *ac,
         }
 
         blender::animrig::ChannelBag &bag = group.channel_bag->wrap();
-        const int fcurve_index = bag.fcurves().as_span().first_index_try(fcurve);
+        const int fcurve_index = bag.fcurves().first_index_try(fcurve);
         const int to_index = fcurve_index - 1;
 
         /* We skip moving when the destination is also selected because that
@@ -1917,7 +1917,7 @@ static void rearrange_layered_action_fcurves(bAnimContext *ac,
         }
 
         blender::animrig::ChannelBag &bag = group.channel_bag->wrap();
-        const int fcurve_index = bag.fcurves().as_span().first_index_try(fcurve);
+        const int fcurve_index = bag.fcurves().first_index_try(fcurve);
         const int to_index = fcurve_index + 1;
 
         /* We skip moving when the destination is also selected because that
@@ -5187,8 +5187,6 @@ static void ANIM_OT_channels_bake(wmOperatorType *ot)
                   "Bake Modifiers into keyframes and delete them after");
 }
 
-#ifdef WITH_ANIM_BAKLAVA
-
 static int slot_channels_move_to_new_action_exec(bContext *C, wmOperator * /* op */)
 {
   using namespace blender::animrig;
@@ -5347,8 +5345,6 @@ static void ANIM_OT_separate_slots(wmOperatorType *ot)
 
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
-
-#endif /* WITH_ANIM_BAKLAVA */
 
 /**
  *  Find a Graph Editor area and set the context arguments accordingly.
@@ -5732,10 +5728,8 @@ void ED_operatortypes_animchannels()
 
   WM_operatortype_append(ANIM_OT_channels_bake);
 
-#ifdef WITH_ANIM_BAKLAVA
   WM_operatortype_append(ANIM_OT_slot_channels_move_to_new_action);
   WM_operatortype_append(ANIM_OT_separate_slots);
-#endif
 }
 
 void ED_keymap_animchannels(wmKeyConfig *keyconf)

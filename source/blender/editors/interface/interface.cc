@@ -1723,6 +1723,9 @@ static bool ui_but_icon_extra_is_visible_bone_eyedropper(uiBut *but)
     return false;
   }
   uiButSearch *search_but = (uiButSearch *)but;
+  if (!search_but->rnasearchprop) {
+    return false;
+  }
   const StructRNA *type = RNA_property_pointer_type(&search_but->rnasearchpoin,
                                                     search_but->rnasearchprop);
   return type == &RNA_Bone || type == &RNA_EditBone;
@@ -3397,8 +3400,8 @@ void ui_but_range_set_soft(uiBut *but)
       int imin, imax, istep;
 
       RNA_property_int_ui_range(&but->rnapoin, but->rnaprop, &imin, &imax, &istep);
-      softmin = (imin == INT_MIN) ? -1e4 : imin;
-      softmax = (imin == INT_MAX) ? 1e4 : imax;
+      softmin = std::max(imin, INT_MIN);
+      softmax = std::min(imax, INT_MAX);
       // step = istep;  /* UNUSED */
       // precision = 1; /* UNUSED */
 
@@ -4134,7 +4137,7 @@ void ui_block_cm_to_display_space_v3(uiBlock *block, float pixel[3])
 /**
  * Factory function: Allocate button and set #uiBut.type.
  *
- * \note: #ui_but_mem_delete is the matching 'destructor' function.
+ * \note #ui_but_mem_delete is the matching 'destructor' function.
  */
 static uiBut *ui_but_new(const eButType type)
 {
@@ -4505,6 +4508,19 @@ static void ui_def_but_rna__menu(bContext *C, uiLayout *layout, void *but_p)
   const bool prior_label = but->prev && but->prev->type == UI_BTYPE_LABEL && but->prev->str[0] &&
                            but->prev->alignnr == but->alignnr;
 
+  /* When true, store a copy of the description and use the tool-tip callback to return that copy.
+   * This way, further calls to #EnumPropertyRNA::item_fn which occur when evaluating shortcuts
+   * don't cause strings to be freed. See #ui_but_event_property_operator_string, see: #129151.
+   *
+   * - This is *not* a generic fix for #126541,
+   *   references to strings still need to be held by Python.
+   *
+   * - Duplicating descriptions in most UI logic should be avoided.
+   *   Make an exception for menus as they aren't typically refreshed during animation
+   *   playback or other situations where the overhead would be noticeable.
+   */
+  bool use_enum_copy_description = free && (RNA_property_py_data_get(but->rnaprop) != nullptr);
+
   if (title && title[0] && (categories == 0) && (!but->str[0] || !prior_label)) {
     /* Show title when no categories and calling button has no text or prior label. */
     uiDefBut(
@@ -4574,6 +4590,8 @@ static void ui_def_but_rna__menu(bContext *C, uiLayout *layout, void *but_p)
     }
     else {
       int icon = item->icon;
+      const char *description_static = use_enum_copy_description ? nullptr : item->description;
+
       /* Use blank icon if there is none for this item (but for some other one) to make sure labels
        * align. */
       if (icon == ICON_NONE && has_item_with_icon) {
@@ -4594,7 +4612,7 @@ static void ui_def_but_rna__menu(bContext *C, uiLayout *layout, void *but_p)
                                      &handle->retvalue,
                                      item->value,
                                      0.0,
-                                     item->description);
+                                     description_static);
       }
       else {
         item_but = uiDefButI(block,
@@ -4608,10 +4626,23 @@ static void ui_def_but_rna__menu(bContext *C, uiLayout *layout, void *but_p)
                              &handle->retvalue,
                              item->value,
                              0.0,
-                             item->description);
+                             description_static);
       }
       if (item->value == current_value) {
         item_but->flag |= UI_SELECT_DRAW;
+      }
+
+      if (use_enum_copy_description) {
+        if (item->description && item->description[0]) {
+          char *description_copy = BLI_strdup(item->description);
+          UI_but_func_tooltip_set(
+              item_but,
+              [](bContext * /*C*/, void *argN, const char * /*tip*/) -> std::string {
+                return static_cast<const char *>(argN);
+              },
+              description_copy,
+              MEM_freeN);
+        }
       }
     }
   }
@@ -5106,7 +5137,7 @@ int UI_autocomplete_end(AutoComplete *autocpl, char *autoname)
   return match;
 }
 
-#define PREVIEW_TILE_PAD (0.15f * UI_UNIT_X)
+#define PREVIEW_TILE_PAD (0.225f * UI_UNIT_X)
 
 int UI_preview_tile_size_x(const int size_px)
 {
@@ -6068,15 +6099,10 @@ void UI_but_func_rename_full_set(uiBut *but,
   but->rename_full_func = rename_full_func;
 }
 
-void UI_but_func_drawextra_set(
-    uiBlock *block,
-    void (*func)(const bContext *C, void *idv, void *arg1, void *arg2, rcti *rect),
-    void *arg1,
-    void *arg2)
+void UI_but_func_drawextra_set(uiBlock *block,
+                               std::function<void(const bContext *C, rcti *rect)> func)
 {
   block->drawextra = func;
-  block->drawextra_arg1 = arg1;
-  block->drawextra_arg2 = arg2;
 }
 
 void UI_but_func_set(uiBut *but, uiButHandleFunc func, void *arg1, void *arg2)
@@ -6583,6 +6609,16 @@ void UI_but_search_preview_grid_size_set(uiBut *but, int rows, int cols)
   uiButSearch *but_search = reinterpret_cast<uiButSearch *>(but);
   but_search->preview_rows = rows;
   but_search->preview_cols = cols;
+}
+
+void UI_but_view_item_draw_size_set(uiBut *but,
+                                    const std::optional<int> draw_width,
+                                    const std::optional<int> draw_height)
+{
+  BLI_assert(but->type == UI_BTYPE_VIEW_ITEM);
+  uiButViewItem *but_view_item = reinterpret_cast<uiButViewItem *>(but);
+  but_view_item->draw_width = draw_width.value_or(0);
+  but_view_item->draw_height = draw_height.value_or(0);
 }
 
 void UI_but_focus_on_enter_event(wmWindow *win, uiBut *but)

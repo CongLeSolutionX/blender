@@ -54,10 +54,10 @@ void validate_drawing_vertex_groups(GreasePencil &grease_pencil)
 
 int ensure_vertex_group(const StringRef name, ListBase &vertex_group_names)
 {
-  int def_nr = BLI_findstringindex(&vertex_group_names, name.data(), offsetof(bDeformGroup, name));
+  int def_nr = BKE_defgroup_name_index(&vertex_group_names, name);
   if (def_nr < 0) {
     bDeformGroup *defgroup = MEM_cnew<bDeformGroup>(__func__);
-    STRNCPY(defgroup->name, name.data());
+    name.copy(defgroup->name);
     BLI_addtail(&vertex_group_names, defgroup);
     def_nr = BLI_listbase_count(&vertex_group_names) - 1;
     BLI_assert(def_nr >= 0);
@@ -76,12 +76,12 @@ void assign_to_vertex_group_from_mask(bke::CurvesGeometry &curves,
 
   ListBase &vertex_group_names = curves.vertex_group_names;
   /* Look for existing group, otherwise lazy-initialize if any vertex is selected. */
-  int def_nr = BLI_findstringindex(&vertex_group_names, name.data(), offsetof(bDeformGroup, name));
+  int def_nr = BKE_defgroup_name_index(&vertex_group_names, name);
 
   /* Lazily add the vertex group if any vertex is selected. */
   if (def_nr < 0) {
     bDeformGroup *defgroup = MEM_cnew<bDeformGroup>(__func__);
-    STRNCPY(defgroup->name, name.data());
+    name.copy(defgroup->name);
     BLI_addtail(&vertex_group_names, defgroup);
     def_nr = BLI_listbase_count(&vertex_group_names) - 1;
     BLI_assert(def_nr >= 0);
@@ -110,8 +110,7 @@ void assign_to_vertex_group(GreasePencil &grease_pencil, const StringRef name, c
         ".selection", bke::AttrDomain::Point, true);
 
     /* Look for existing group, otherwise lazy-initialize if any vertex is selected. */
-    int def_nr = BLI_findstringindex(
-        &vertex_group_names, name.data(), offsetof(bDeformGroup, name));
+    int def_nr = BKE_defgroup_name_index(&vertex_group_names, name);
 
     const MutableSpan<MDeformVert> dverts = curves.deform_verts_for_write();
     for (const int i : dverts.index_range()) {
@@ -119,7 +118,7 @@ void assign_to_vertex_group(GreasePencil &grease_pencil, const StringRef name, c
         /* Lazily add the vertex group if any vertex is selected. */
         if (def_nr < 0) {
           bDeformGroup *defgroup = MEM_cnew<bDeformGroup>(__func__);
-          STRNCPY(defgroup->name, name.data());
+          name.copy(defgroup->name);
 
           BLI_addtail(&vertex_group_names, defgroup);
           def_nr = BLI_listbase_count(&vertex_group_names) - 1;
@@ -135,7 +134,6 @@ void assign_to_vertex_group(GreasePencil &grease_pencil, const StringRef name, c
   }
 }
 
-/** Remove selected vertices from the vertex group. */
 bool remove_from_vertex_group(GreasePencil &grease_pencil,
                               const StringRef name,
                               const bool use_selection)
@@ -149,8 +147,7 @@ bool remove_from_vertex_group(GreasePencil &grease_pencil,
     bke::CurvesGeometry &curves = drawing.strokes_for_write();
     ListBase &vertex_group_names = curves.vertex_group_names;
 
-    const int def_nr = BLI_findstringindex(
-        &vertex_group_names, name.data(), offsetof(bDeformGroup, name));
+    const int def_nr = BKE_defgroup_name_index(&vertex_group_names, name);
     if (def_nr < 0) {
       /* No vertices assigned to the group in this drawing. */
       continue;
@@ -208,8 +205,7 @@ void select_from_group(GreasePencil &grease_pencil,
     bke::CurvesGeometry &curves = drawing.strokes_for_write();
     ListBase &vertex_group_names = curves.vertex_group_names;
 
-    const int def_nr = BLI_findstringindex(
-        &vertex_group_names, name.data(), offsetof(bDeformGroup, name));
+    const int def_nr = BKE_defgroup_name_index(&vertex_group_names, name);
     if (def_nr < 0) {
       /* No vertices assigned to the group in this drawing. */
       continue;
@@ -242,14 +238,16 @@ void select_from_group(GreasePencil &grease_pencil,
         threading::parallel_for(curves.curves_range(), 1024, [&](const IndexRange range) {
           for (const int curve_i : range) {
             const IndexRange points = points_by_curve[curve_i];
-            bool any_point_selected = false;
+            bool any_point_in_group = false;
             for (const int point_i : points) {
               if (BKE_defvert_find_index(&dverts[point_i], def_nr)) {
-                any_point_selected = true;
+                any_point_in_group = true;
                 break;
               }
             }
-            selection.span[curve_i] = any_point_selected;
+            if (any_point_in_group) {
+              selection.span[curve_i] = select;
+            }
           }
         });
         break;

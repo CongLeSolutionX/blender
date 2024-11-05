@@ -272,9 +272,47 @@ class OperatorNonBlockingSyncHelper:
 # Internal Utilities
 #
 
+def _extensions_repo_temp_files_make_stale(
+        repo_directory,  # `str`
+):  # `-> None`
+
+    # NOTE: this function should run after any operation
+    # which may have attempted to remove a directory but only successfully renamed it.
+    # The extension sub-process could communicate this back to this process but it's
+    # reasonably involved and only avoids a repository file-system scan after each operation.
+    # Scan repository directories and clear files with a specific prefix & suffix.
+    import addon_utils
+    from .bl_extension_utils import (
+        scandir_with_demoted_errors,
+        PKG_TEMP_PREFIX_AND_SUFFIX,
+    )
+
+    paths_stale = []
+
+    prefix, suffix = PKG_TEMP_PREFIX_AND_SUFFIX
+    for entry in scandir_with_demoted_errors(repo_directory):
+        filename = entry.name
+        if not filename.startswith(prefix):
+            continue
+        # Check the `filename` ends with `suffix` or suffix & digits `suffix123`.
+        i = filename.rfind(suffix)
+        if i == -1:
+            continue
+        ext_end = filename[i + len(suffix):]
+        if ext_end and (not ext_end.isdigit()):
+            continue
+
+        paths_stale.append(os.path.join(repo_directory, filename))
+
+    if not paths_stale:
+        return
+
+    addon_utils.stale_pending_stage_paths(repo_directory, paths_stale)
+
+
 def _extensions_repo_uninstall_stale_package_fallback(
         repo_directory,  # `str`
-        pkg_id_sequence,  # `List[str]`
+        pkg_id_sequence,  # `list[str]`
 ):  # `-> None`
     # If uninstall failed, make the package stale (by renaming it & queue to remove later).
     import addon_utils
@@ -290,6 +328,30 @@ def _extensions_repo_uninstall_stale_package_fallback(
         return
 
     addon_utils.stale_pending_stage_paths(repo_directory, paths_stale)
+
+
+def _extensions_repo_install_stale_package_clear(
+        repo_directory,  # `str`
+        pkg_id_sequence,  # `list[str]`
+):  # `-> None`
+    # If install succeeds, ensure the package is not stale.
+    #
+    # This can happen when a package fails to remove (if one of it's files are locked),
+    # it is queued for removal. Then the user successfully removes it & re-installs in.
+    # In this case the package will be tagged for later removal, so ensure it's removed.
+    import addon_utils
+
+    paths_not_stale = []
+    for pkg_id in pkg_id_sequence:
+        path_abs = os.path.join(repo_directory, pkg_id)
+        if not os.path.exists(path_abs):
+            continue
+        paths_not_stale.append(path_abs)
+
+    if not paths_not_stale:
+        return
+
+    addon_utils.stale_pending_remove_paths(repo_directory, paths_not_stale)
 
 
 def _sequence_split_with_job_limit(items, job_limit):
@@ -483,8 +545,8 @@ def pkg_manifest_params_compatible_or_error_for_this_system(
     *,
     blender_version_min,  # `str`
     blender_version_max,  # `str`
-    platforms,  # `List[str]`
-):  # `Optional[str]`
+    platforms,  # `list[str]`
+):  # `str | None`
     # Return true if the parameters are compatible with this system.
     from .bl_extension_utils import (
         pkg_manifest_params_compatible_or_error,
@@ -547,8 +609,8 @@ def repo_cache_store_refresh_from_prefs(repo_cache_store, include_disabled=False
 
 def _preferences_pkg_id_sequence_filter_enabled(
         repo_item,  # `RepoItem`
-        pkg_id_sequence,  # `List[str]`
-):  # `-> List[str]`
+        pkg_id_sequence,  # `list[str]`
+):  # `-> list[str]`
     import addon_utils
     result = []
 
@@ -570,10 +632,10 @@ def _preferences_pkg_id_sequence_filter_enabled(
 def _preferences_ensure_disabled(
         *,
         repo_item,  # `RepoItem`
-        pkg_id_sequence,  # `List[str]`
+        pkg_id_sequence,  # `list[str]`
         default_set,  # `bool`
         error_fn,  # `Callable[[Exception], None]`
-):  # `-> Dict[str, Tuple[boo, bool]]`
+):  # `-> dict[str, tuple[boo, bool]]`
     import sys
     import addon_utils
 
@@ -889,7 +951,8 @@ def _extensions_wheel_filter_for_platform(wheels):
                 # FIXME: `macosx_11.00` should be `macosx_11_0`.
                 platform_tag.startswith("macosx_") and
                 # Ignore the MACOSX version, ensure `arm64` suffix.
-                platform_tag.endswith("_" + platform_tag_current.rpartition("_")[2])
+                (platform_tag.endswith("_" + platform_tag_current.rpartition("_")[2]) or
+                 platform_tag.endswith("_universal2"))
         ):
             pass
         elif platform_tag_current.startswith("linux_") and (
@@ -918,8 +981,8 @@ def pkg_wheel_filter(
         repo_module,  # `str`
         pkg_id,  # `str`
         repo_directory,  # `str`
-        wheels_rel,  # `List[str]`
-):  # `-> Tuple[str, List[str]]`
+        wheels_rel,  # `list[str]`
+):  # `-> tuple[str, list[str]]`
     # Filter only the wheels for this platform.
     wheels_rel = _extensions_wheel_filter_for_platform(wheels_rel)
     if not wheels_rel:
@@ -1020,13 +1083,20 @@ def _extensions_repo_refresh_on_change(repo_cache_store, *, extensions_enabled, 
 
     if compat_calc:
         # NOTE: `extensions_enabled` may contain add-ons which are not yet enabled (these are pending).
-        # These will *not* have their compatibility information refreshed here.
-        # This is acceptable because:
-        # - Installing & enabling an extension relies on the extension being compatible,
-        #   so it can be assumed to already be the compatible.
-        # - If the add-on existed and was incompatible it *will* have it's compatibility recalculated.
-        # - Any missing cache entries will cause cache to be re-generated on next start or from an explicit refresh.
-        addon_utils.extensions_refresh(ensure_wheels=False)
+        # They *must* have their compatibility information refreshed here,
+        # even though compatibility is guaranteed based on the code-path that calls this function.
+        #
+        # Without updating compatibility information, un-installing the extensions won't detect the
+        # add-on as having been removed and won't remove any wheels the extension may use, see #125958.
+        addon_modules_pending = None if extensions_enabled is None else ([
+            "{:s}{:s}.{:s}".format(_ext_base_pkg_idname_with_dot, repo_module, pkg_id)
+            for repo_module, pkg_id in extensions_enabled
+        ])
+
+        addon_utils.extensions_refresh(
+            ensure_wheels=False,
+            addon_modules_pending=addon_modules_pending,
+        )
 
     if stats_calc:
         repo_stats_calc()
@@ -1632,6 +1702,7 @@ class EXTENSIONS_OT_repo_enable_from_drop(Operator):
     bl_label = "Enable Repository from Drop"
     bl_options = {'INTERNAL'}
 
+    # pylint: disable-next=declare-non-slot
     repo_index: rna_prop_repo_index
 
     __slots__ = (
@@ -2115,6 +2186,8 @@ class EXTENSIONS_OT_package_install_marked(Operator, _ExtCmdMixIn):
                     pkg_id_sequence_upgrade=[],
                     handle_error=handle_error,
                 )
+            _extensions_repo_temp_files_make_stale(directory)
+            _extensions_repo_install_stale_package_clear(directory, pkg_id_sequence)
 
         if self.enable_on_install:
             if (extensions_enabled_test := _extensions_enabled()) != extensions_enabled:
@@ -2229,6 +2302,7 @@ class EXTENSIONS_OT_package_uninstall_marked(Operator, _ExtCmdMixIn):
         del self.repo_lock
 
         for directory, pkg_id_sequence in self._pkg_id_sequence_from_directory.items():
+            _extensions_repo_temp_files_make_stale(repo_directory=directory)
             _extensions_repo_uninstall_stale_package_fallback(
                 repo_directory=directory,
                 pkg_id_sequence=pkg_id_sequence,
@@ -2504,6 +2578,9 @@ class EXTENSIONS_OT_package_install_files(Operator, _ExtCmdMixIn):
                     compat_calc=False,
                     stats_calc=False,
                 )
+
+        _extensions_repo_temp_files_make_stale(self.repo_directory)
+        _extensions_repo_install_stale_package_clear(self.repo_directory, self.pkg_id_sequence)
 
         _preferences_ui_redraw()
         _preferences_ui_refresh_addons()
@@ -2878,6 +2955,9 @@ class EXTENSIONS_OT_package_install(Operator, _ExtCmdMixIn):
                     stats_calc=False,
                 )
 
+        _extensions_repo_temp_files_make_stale(self.repo_directory)
+        _extensions_repo_install_stale_package_clear(self.repo_directory, (self.pkg_id,))
+
         _preferences_ui_redraw()
         _preferences_ui_refresh_addons()
 
@@ -3033,7 +3113,7 @@ class EXTENSIONS_OT_package_install(Operator, _ExtCmdMixIn):
             *,
             context,  # `bpy.types.Context`
             op_notify,  # `OperatorNonBlockingSyncHelper`
-            remote_url,  # `Optional[str]`
+            remote_url,  # `str | None`
             repo_from_url_name,  # `str`
             url,  # `str`
     ):
@@ -3059,7 +3139,7 @@ class EXTENSIONS_OT_package_install(Operator, _ExtCmdMixIn):
             self,
             *,
             context,  # `bpy.types.Context`
-            remote_url,   # `Optional[str]`
+            remote_url,   # `str | None`
             repo_from_url_name,  # `str`
             url,  # `str`
     ):
@@ -3272,6 +3352,7 @@ class EXTENSIONS_OT_package_uninstall(Operator, _ExtCmdMixIn):
 
     def exec_command_finish(self, canceled):
 
+        _extensions_repo_temp_files_make_stale(repo_directory=self.repo_directory)
         _extensions_repo_uninstall_stale_package_fallback(
             repo_directory=self.repo_directory,
             pkg_id_sequence=[self.pkg_id],
@@ -3303,7 +3384,7 @@ class EXTENSIONS_OT_package_uninstall(Operator, _ExtCmdMixIn):
 
         _extensions_repo_refresh_on_change(
             repo_cache_store,
-            extensions_enabled=None,
+            extensions_enabled=_extensions_enabled(),
             compat_calc=True,
             stats_calc=True,
         )

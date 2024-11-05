@@ -36,7 +36,7 @@
 #include "BKE_multires.hh"
 #include "BKE_object.hh"
 #include "BKE_paint.hh"
-#include "BKE_pbvh_api.hh"
+#include "BKE_paint_bvh.hh"
 #include "BKE_report.hh"
 #include "BKE_scene.hh"
 #include "BKE_subdiv_ccg.hh"
@@ -234,7 +234,7 @@ static int symmetrize_exec(bContext *C, wmOperator *op)
        * are logged as added (as opposed to attempting to store just the
        * parts that symmetrize modifies). */
       undo::push_begin(scene, ob, op);
-      undo::push_node(depsgraph, ob, nullptr, undo::Type::DyntopoSymmetrize);
+      undo::push_node(depsgraph, ob, nullptr, undo::Type::Geometry);
       BM_log_before_all_removed(ss.bm, ss.bm_log);
 
       BM_mesh_toolflags_set(ss.bm, true);
@@ -274,8 +274,6 @@ static int symmetrize_exec(bContext *C, wmOperator *op)
     case bke::pbvh::Type::Grids:
       return OPERATOR_CANCELLED;
   }
-
-  islands::invalidate(ss);
 
   BKE_sculptsession_free_pbvh(ob);
   DEG_id_tag_update(&ob.id, ID_RECALC_GEOMETRY);
@@ -958,6 +956,7 @@ static void calc_new_masks(const ApplyMaskMode mode,
 
 static void apply_mask_mesh(const Depsgraph &depsgraph,
                             const Object &object,
+                            const Span<bool> hide_vert,
                             const auto_mask::Cache &automasking,
                             const ApplyMaskMode mode,
                             const float factor,
@@ -966,12 +965,11 @@ static void apply_mask_mesh(const Depsgraph &depsgraph,
                             LocalData &tls,
                             const MutableSpan<float> mask)
 {
-  const Mesh &mesh = *static_cast<const Mesh *>(object.data);
   const Span<int> verts = node.verts();
 
   tls.factors.resize(verts.size());
   const MutableSpan<float> factors = tls.factors;
-  fill_factor_from_hide(mesh, verts, factors);
+  fill_factor_from_hide(hide_vert, verts, factors);
   scale_factors(factors, factor);
 
   tls.new_mask.resize(verts.size());
@@ -1085,11 +1083,13 @@ static void apply_mask_from_settings(const Depsgraph &depsgraph,
       bke::MutableAttributeAccessor attributes = mesh.attributes_for_write();
       bke::SpanAttributeWriter mask = attributes.lookup_or_add_for_write_span<float>(
           ".sculpt_mask", bke::AttrDomain::Point);
+      const VArraySpan hide_vert = *attributes.lookup<bool>(".hide_vert", bke::AttrDomain::Point);
       MutableSpan<bke::pbvh::MeshNode> nodes = pbvh.nodes<bke::pbvh::MeshNode>();
       node_mask.foreach_index(GrainSize(1), [&](const int i) {
         LocalData &tls = all_tls.local();
         apply_mask_mesh(depsgraph,
                         object,
+                        hide_vert,
                         automasking,
                         mode,
                         factor,
