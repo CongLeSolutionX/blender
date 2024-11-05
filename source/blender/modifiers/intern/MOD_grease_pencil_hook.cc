@@ -154,8 +154,8 @@ static void deform_drawing(const ModifierData &md,
                            bke::greasepencil::Drawing &drawing)
 {
   const auto &mmd = reinterpret_cast<const GreasePencilHookModifierData &>(md);
-  bke::CurvesGeometry curves = modifier::greasepencil::convert_to_poly_curves(drawing.strokes());
-  drawing.strokes_for_write() = std::move(curves);
+  modifier::greasepencil::ensure_no_bezier_curves(drawing);
+  bke::CurvesGeometry &curves = drawing.strokes_for_write();
 
   if (curves.points_num() == 0) {
     return;

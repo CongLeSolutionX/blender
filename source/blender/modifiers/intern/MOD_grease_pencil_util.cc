@@ -385,18 +385,16 @@ Vector<FrameDrawingInfo> get_drawing_infos_by_frame(GreasePencil &grease_pencil,
   return drawing_infos;
 }
 
-bke::CurvesGeometry convert_to_poly_curves(const bke::CurvesGeometry &src_curves)
+void ensure_no_bezier_curves(Drawing &drawing)
 {
-  if (src_curves.is_single_type(CURVE_TYPE_POLY)) {
-    return src_curves;
-  }
+  const bke::CurvesGeometry &curves = drawing.strokes();
   IndexMaskMemory memory;
-  const IndexMask poly_selection = src_curves.indices_for_curve_type(CURVE_TYPE_POLY, memory);
-  const IndexMask non_poly_selection = poly_selection.complement(src_curves.curves_range(),
-                                                                 memory);
-  /* Write converted result back to source then return the same reference, so the conversion stays
-   * opaque just like `.strokes_for_write()`, and existing modifier logic is not affected. */
-  return geometry::resample_to_evaluated(src_curves, non_poly_selection);
+  const IndexMask bezier_selection = curves.indices_for_curve_type(CURVE_TYPE_BEZIER, memory);
+  if (bezier_selection.is_empty()) {
+    return;
+  }
+  drawing.strokes_for_write() = geometry::resample_to_evaluated(curves, bezier_selection);
+  drawing.tag_topology_changed();
 }
 
 }  // namespace blender::modifier::greasepencil

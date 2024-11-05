@@ -630,11 +630,11 @@ static void modify_drawing(const GreasePencilEnvelopeModifierData &emd,
 {
   const EnvelopeInfo info = get_envelope_info(emd, ctx);
 
-  bke::CurvesGeometry curves = modifier::greasepencil::convert_to_poly_curves(drawing.strokes());
+  modifier::greasepencil::ensure_no_bezier_curves(drawing);
 
   IndexMaskMemory mask_memory;
   const IndexMask curves_mask = modifier::greasepencil::get_filtered_stroke_mask(
-      ctx.object, curves, emd.influence, mask_memory);
+      ctx.object, drawing.strokes(), emd.influence, mask_memory);
 
   const auto mode = GreasePencilEnvelopeModifierMode(emd.mode);
   switch (mode) {

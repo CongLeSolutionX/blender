@@ -178,8 +178,8 @@ static void modify_drawing(const GreasePencilOutlineModifierData &omd,
                            bke::greasepencil::Drawing &drawing,
                            const float4x4 &viewmat)
 {
-  bke::CurvesGeometry curves = modifier::greasepencil::convert_to_poly_curves(drawing.strokes());
-  drawing.strokes_for_write() = std::move(curves);
+  modifier::greasepencil::ensure_no_bezier_curves(drawing);
+  bke::CurvesGeometry &curves = drawing.strokes_for_write();
 
   if (curves.curve_num == 0) {
     return;

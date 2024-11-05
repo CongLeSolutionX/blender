@@ -86,8 +86,8 @@ static void subdivide_drawing(ModifierData &md, Object &ob, bke::greasepencil::D
       &ob, drawing.strokes_for_write(), mmd.influence, memory);
 
   if (use_catmull_clark) {
-    bke::CurvesGeometry subdivided_curves = modifier::greasepencil::convert_to_poly_curves(
-        drawing.strokes());
+    modifier::greasepencil::ensure_no_bezier_curves(drawing);
+    bke::CurvesGeometry subdivided_curves = drawing.strokes();
     for ([[maybe_unused]] const int level_i : IndexRange(mmd.level)) {
       VArray<int> one_cut = VArray<int>::ForSingle(1, subdivided_curves.points_num());
       subdivided_curves = geometry::subdivide_curves(

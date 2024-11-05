@@ -328,8 +328,8 @@ static void modify_drawing(const GreasePencilDashModifierData &dmd,
                            const PatternInfo &pattern_info,
                            bke::greasepencil::Drawing &drawing)
 {
-  bke::CurvesGeometry src_curves = modifier::greasepencil::convert_to_poly_curves(
-      drawing.strokes_for_write());
+  modifier::greasepencil::ensure_no_bezier_curves(drawing);
+  const bke::CurvesGeometry &src_curves = drawing.strokes();
 
   if (src_curves.curve_num == 0) {
     return;

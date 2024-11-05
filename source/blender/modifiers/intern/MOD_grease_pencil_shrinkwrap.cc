@@ -141,8 +141,8 @@ static void modify_drawing(const GreasePencilShrinkwrapModifierData &smd,
                            const ModifierEvalContext &ctx,
                            bke::greasepencil::Drawing &drawing)
 {
-  bke::CurvesGeometry curves = modifier::greasepencil::convert_to_poly_curves(drawing.strokes());
-  drawing.strokes_for_write() = std::move(curves);
+  modifier::greasepencil::ensure_no_bezier_curves(drawing);
+  bke::CurvesGeometry &curves = drawing.strokes_for_write();
 
   const OffsetIndices<int> points_by_curve = curves.points_by_curve();
   const Span<MDeformVert> dverts = curves.deform_verts();
@@ -190,6 +190,7 @@ static void modify_drawing(const GreasePencilShrinkwrapModifierData &smd,
                                    keep_shape,
                                    positions);
 
+  drawing.strokes_for_write() = std::move(curves);
   drawing.tag_positions_changed();
 }
 

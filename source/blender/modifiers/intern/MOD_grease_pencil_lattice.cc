@@ -101,8 +101,8 @@ static void modify_curves(ModifierData *md,
                           Drawing &drawing)
 {
   const auto *lmd = reinterpret_cast<GreasePencilLatticeModifierData *>(md);
-  bke::CurvesGeometry curves = modifier::greasepencil::convert_to_poly_curves(drawing.strokes());
-  drawing.strokes_for_write() = std::move(curves);
+  modifier::greasepencil::ensure_no_bezier_curves(drawing);
+  bke::CurvesGeometry &curves = drawing.strokes_for_write();
 
   IndexMaskMemory mask_memory;
   const IndexMask curves_mask = modifier::greasepencil::get_filtered_stroke_mask(

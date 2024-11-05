@@ -82,6 +82,6 @@ Vector<FrameDrawingInfo> get_drawing_infos_by_frame(GreasePencil &grease_pencil,
                                                     const IndexMask &layer_mask,
                                                     int frame);
 
-bke::CurvesGeometry convert_to_poly_curves(const bke::CurvesGeometry &src_curves_for_write);
+void ensure_no_bezier_curves(bke::greasepencil::Drawing &drawing);
 
 }  // namespace blender::modifier::greasepencil
