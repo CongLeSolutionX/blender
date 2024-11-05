@@ -109,7 +109,7 @@ void enable_ex(Main &bmain, Depsgraph &depsgraph, Object &ob)
  * before the BMesh is deleted so that it can be restored from.
  */
 static void disable(
-    Main &bmain, Depsgraph &depsgraph, Scene &scene, Object &ob, undo::StepData *undo_step)
+    Main &bmain, Depsgraph &depsgraph, Scene &scene, Object &ob, undo::NodeStepData *undo_step)
 {
   SculptSession &ss = *ob.sculpt;
   Mesh *mesh = static_cast<Mesh *>(ob.data);
@@ -157,7 +157,7 @@ static void disable(
   BKE_scene_graph_update_tagged(&depsgraph, &bmain);
 }
 
-void disable(bContext *C, undo::StepData *undo_step)
+void disable(bContext *C, undo::NodeStepData *undo_step)
 {
   Main *bmain = CTX_data_main(C);
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);

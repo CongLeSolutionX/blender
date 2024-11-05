@@ -18,7 +18,7 @@ struct Main;
 struct Object;
 struct Scene;
 namespace blender::ed::sculpt_paint::undo {
-struct StepData;
+struct NodeStepData;
 }
 
 namespace blender::ed::sculpt_paint::dyntopo {
@@ -33,7 +33,7 @@ ENUM_OPERATORS(WarnFlag, MODIFIER);
 
 /** Enable dynamic topology; mesh will be triangulated */
 void enable_ex(Main &bmain, Depsgraph &depsgraph, Object &ob);
-void disable(bContext *C, undo::StepData *undo_step);
+void disable(bContext *C, undo::NodeStepData *undo_step);
 void disable_with_undo(Main &bmain, Depsgraph &depsgraph, Scene &scene, Object &ob);
 
 /**

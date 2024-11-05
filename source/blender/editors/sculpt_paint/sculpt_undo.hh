@@ -38,7 +38,7 @@ enum class Type : int8_t {
   Color,
 };
 
-struct StepData;
+struct NodeStepData;
 
 /**
  * Store undo data of the given type for a pbvh::Tree node. This function can be called by multiple
@@ -70,7 +70,7 @@ void push_begin_ex(const Scene &scene, Object &ob, const char *name);
 void push_end(Object &ob);
 void push_end_ex(Object &ob, bool use_nested_undo);
 
-void restore_from_bmesh_enter_geometry(const StepData &step_data, Mesh &mesh);
+void restore_from_bmesh_enter_geometry(const NodeStepData &step_data, Mesh &mesh);
 BMLogEntry *get_bmesh_log_entry();
 
 void restore_position_from_undo_step(const Depsgraph &depsgraph, Object &object);

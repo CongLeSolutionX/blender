@@ -164,9 +164,9 @@ struct SculptAttrRef {
   bool was_set;
 };
 
-/* Storage of geometry for the undo node.
+/* Storage of geometry for an undo step.
  * Is used as a storage for either original or modified geometry. */
-struct NodeGeometry {
+struct UndoGeometry {
   /* Is used for sanity check, helping with ensuring that two and only two
    * geometry pushes happened in the undo stack. */
   bool is_initialized;
@@ -195,6 +195,10 @@ struct StepData {
   /** Name of the object associated with this undo data (`object.id.name`). */
   std::string object_name;
 
+  bool applied;
+};
+
+struct NodeStepData : StepData {
   /** Name of the object's active shape key when the undo step was created. */
   std::string active_shape_key_name;
 
@@ -218,7 +222,7 @@ struct StepData {
     BMLogEntry *bm_entry;
 
     /* Geometry at the bmesh enter moment. */
-    NodeGeometry geometry_enter;
+    UndoGeometry geometry_enter;
   } bmesh;
 
   float3 pivot_pos;
@@ -231,10 +235,8 @@ struct StepData {
    *
    * Modified geometry is stored after the modification and is used to redo the modification. */
   bool geometry_clear_pbvh;
-  NodeGeometry geometry_original;
-  NodeGeometry geometry_modified;
-
-  bool applied;
+  UndoGeometry geometry_original;
+  UndoGeometry geometry_modified;
 
   std::mutex nodes_mutex;
 
@@ -258,7 +260,7 @@ struct StepData {
 struct SculptUndoStep {
   UndoStep step;
   /* NOTE: will split out into list for multi-object-sculpt-mode. */
-  StepData data;
+  NodeStepData data;
 
   /* Active color attribute at the start of this undo step. */
   SculptAttrRef active_color_start;
@@ -274,7 +276,7 @@ static SculptUndoStep *get_active_step()
   return reinterpret_cast<SculptUndoStep *>(us);
 }
 
-static StepData *get_step_data()
+static NodeStepData *get_step_data()
 {
   if (SculptUndoStep *us = get_active_step()) {
     return &us->data;
@@ -282,12 +284,12 @@ static StepData *get_step_data()
   return nullptr;
 }
 
-static bool use_multires_undo(const StepData &step_data, const SculptSession &ss)
+static bool use_multires_undo(const NodeStepData &step_data, const SculptSession &ss)
 {
   return step_data.grids.grids_num != 0 && ss.subdiv_ccg != nullptr;
 }
 
-static bool topology_matches(const StepData &step_data, const Object &object)
+static bool topology_matches(const NodeStepData &step_data, const Object &object)
 {
   const SculptSession &ss = *object.sculpt;
   if (use_multires_undo(step_data, ss)) {
@@ -306,7 +308,7 @@ static bool indices_contain_true(const Span<bool> data, const Span<int> indices)
 
 static bool restore_active_shape_key(bContext &C,
                                      Depsgraph &depsgraph,
-                                     const StepData &step_data,
+                                     const NodeStepData &step_data,
                                      Object &object)
 {
   const SculptSession &ss = *object.sculpt;
@@ -556,7 +558,7 @@ static void restore_hidden_face(Object &object,
 }
 
 static void restore_color(Object &object,
-                          StepData &step_data,
+                          NodeStepData &step_data,
                           const MutableSpan<bool> modified_verts)
 {
   Mesh &mesh = *static_cast<Mesh *>(object.data);
@@ -644,7 +646,7 @@ static bool restore_face_sets(Object &object,
   return modified;
 }
 
-static void bmesh_restore_generic(StepData &step_data, Object &object, const SculptSession &ss)
+static void bmesh_restore_generic(NodeStepData &step_data, Object &object, const SculptSession &ss)
 {
   if (step_data.applied) {
     BM_log_undo(ss.bm, ss.bm_log);
@@ -669,7 +671,7 @@ static void bmesh_restore_generic(StepData &step_data, Object &object, const Scu
 }
 
 /* Create empty sculpt BMesh and enable logging. */
-static void bmesh_enable(Object &object, const StepData &step_data)
+static void bmesh_enable(Object &object, const NodeStepData &step_data)
 {
   SculptSession &ss = *object.sculpt;
   Mesh *mesh = static_cast<Mesh *>(object.data);
@@ -691,7 +693,7 @@ static void bmesh_enable(Object &object, const StepData &step_data)
 }
 
 static void bmesh_restore_begin(bContext *C,
-                                StepData &step_data,
+                                NodeStepData &step_data,
                                 Object &object,
                                 const SculptSession &ss)
 {
@@ -710,7 +712,7 @@ static void bmesh_restore_begin(bContext *C,
 }
 
 static void bmesh_restore_end(bContext *C,
-                              StepData &step_data,
+                              NodeStepData &step_data,
                               Object &object,
                               const SculptSession &ss)
 {
@@ -729,7 +731,7 @@ static void bmesh_restore_end(bContext *C,
   }
 }
 
-static void store_geometry_data(NodeGeometry *geometry, const Object &object)
+static void store_geometry_data(UndoGeometry *geometry, const Object &object)
 {
   const Mesh *mesh = static_cast<const Mesh *>(object.data);
 
@@ -755,7 +757,7 @@ static void store_geometry_data(NodeGeometry *geometry, const Object &object)
   geometry->faces_num = mesh->faces_num;
 }
 
-static void restore_geometry_data(const NodeGeometry *geometry, Mesh *mesh)
+static void restore_geometry_data(const UndoGeometry *geometry, Mesh *mesh)
 {
   BLI_assert(geometry->is_initialized);
 
@@ -781,7 +783,7 @@ static void restore_geometry_data(const NodeGeometry *geometry, Mesh *mesh)
                                         &mesh->runtime->face_offsets_sharing_info);
 }
 
-static void geometry_free_data(NodeGeometry *geometry)
+static void geometry_free_data(UndoGeometry *geometry)
 {
   CustomData_free(&geometry->vert_data, geometry->totvert);
   CustomData_free(&geometry->edge_data, geometry->totedge);
@@ -791,7 +793,7 @@ static void geometry_free_data(NodeGeometry *geometry)
                                      &geometry->face_offsets_sharing_info);
 }
 
-static void restore_geometry(StepData &step_data, Object &object)
+static void restore_geometry(NodeStepData &step_data, Object &object)
 {
   if (step_data.geometry_clear_pbvh) {
     BKE_sculptsession_free_pbvh(object);
@@ -816,7 +818,7 @@ static void restore_geometry(StepData &step_data, Object &object)
  * returns false to indicate the non-dyntopo code should run. */
 static int bmesh_restore(bContext *C,
                          Depsgraph &depsgraph,
-                         StepData &step_data,
+                         NodeStepData &step_data,
                          Object &object,
                          const SculptSession &ss)
 {
@@ -842,7 +844,7 @@ static int bmesh_restore(bContext *C,
   return false;
 }
 
-void restore_from_bmesh_enter_geometry(const StepData &step_data, Mesh &mesh)
+void restore_from_bmesh_enter_geometry(const NodeStepData &step_data, Mesh &mesh)
 {
   restore_geometry_data(&step_data.bmesh.geometry_enter, &mesh);
 }
@@ -877,7 +879,7 @@ static void refine_subdiv(Depsgraph *depsgraph,
       subdiv, static_cast<const Mesh *>(object.data), deformed_verts);
 }
 
-static void restore_list(bContext *C, Depsgraph *depsgraph, StepData &step_data)
+static void restore_list(bContext *C, Depsgraph *depsgraph, NodeStepData &step_data)
 {
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
@@ -1164,7 +1166,7 @@ static void restore_list(bContext *C, Depsgraph *depsgraph, StepData &step_data)
   }
 }
 
-static void free_step_data(StepData &step_data)
+static void free_step_data(NodeStepData &step_data)
 {
   geometry_free_data(&step_data.geometry_original);
   geometry_free_data(&step_data.geometry_modified);
@@ -1172,7 +1174,7 @@ static void free_step_data(StepData &step_data)
   if (step_data.bmesh.bm_entry) {
     BM_log_entry_drop(step_data.bmesh.bm_entry);
   }
-  step_data.~StepData();
+  step_data.~NodeStepData();
 }
 
 /**
@@ -1183,7 +1185,7 @@ static void free_step_data(StepData &step_data)
  */
 static const Node *get_node(const bke::pbvh::Node *node, const Type type)
 {
-  StepData *step_data = get_step_data();
+  NodeStepData *step_data = get_step_data();
   if (!step_data) {
     return nullptr;
   }
@@ -1324,7 +1326,7 @@ static void store_color(const Mesh &mesh, const bke::pbvh::MeshNode &node, Node 
   }
 }
 
-static NodeGeometry *geometry_get(StepData &step_data)
+static UndoGeometry *geometry_get(NodeStepData &step_data)
 {
   if (!step_data.geometry_original.is_initialized) {
     return &step_data.geometry_original;
@@ -1337,14 +1339,14 @@ static NodeGeometry *geometry_get(StepData &step_data)
 
 static void geometry_push(const Object &object)
 {
-  StepData *step_data = get_step_data();
+  NodeStepData *step_data = get_step_data();
 
   step_data->type = Type::Geometry;
 
   step_data->applied = false;
   step_data->geometry_clear_pbvh = true;
 
-  NodeGeometry *geometry = geometry_get(*step_data);
+  UndoGeometry *geometry = geometry_get(*step_data);
   store_geometry_data(geometry, object);
 }
 
@@ -1500,7 +1502,7 @@ BLI_NOINLINE static void bmesh_push(const Object &object,
                                     const bke::pbvh::BMeshNode *node,
                                     Type type)
 {
-  StepData *step_data = get_step_data();
+  NodeStepData *step_data = get_step_data();
   const SculptSession &ss = *object.sculpt;
 
   std::scoped_lock lock(step_data->nodes_mutex);
@@ -1524,7 +1526,7 @@ BLI_NOINLINE static void bmesh_push(const Object &object,
        * dynamic-topology immediately does topological edits
        * (converting faces to triangles) that the BMLog can't
        * fully restore from. */
-      NodeGeometry *geometry = &step_data->bmesh.geometry_enter;
+      UndoGeometry *geometry = &step_data->bmesh.geometry_enter;
       store_geometry_data(geometry, object);
 
       step_data->bmesh.bm_entry = BM_log_entry_add(ss.bm_log);
@@ -1587,7 +1589,7 @@ BLI_NOINLINE static void bmesh_push(const Object &object,
  * Add an undo node for the bke::pbvh::Tree node to the step's storage. If the node was
  * newly created and needs to be filled with data, set \a r_new to true.
  */
-static Node *ensure_node(StepData &step_data, const bke::pbvh::Node &node, bool &r_new)
+static Node *ensure_node(NodeStepData &step_data, const bke::pbvh::Node &node, bool &r_new)
 {
   std::scoped_lock lock(step_data.nodes_mutex);
   r_new = false;
@@ -1611,7 +1613,7 @@ void push_node(const Depsgraph &depsgraph,
     return;
   }
 
-  StepData *step_data = get_step_data();
+  NodeStepData *step_data = get_step_data();
   BLI_assert(ELEM(step_data->type, Type::None, type));
   step_data->type = type;
 
@@ -1654,7 +1656,7 @@ void push_nodes(const Depsgraph &depsgraph,
     return;
   }
 
-  StepData *step_data = get_step_data();
+  NodeStepData *step_data = get_step_data();
   BLI_assert(ELEM(step_data->type, Type::None, type));
   step_data->type = type;
 
@@ -1809,7 +1811,7 @@ static size_t node_size_in_bytes(const Node &node)
 
 void push_end_ex(Object &ob, const bool use_nested_undo)
 {
-  StepData *step_data = get_step_data();
+  NodeStepData *step_data = get_step_data();
 
   /* Move undo node storage from map to vector. */
   step_data->nodes.reserve(step_data->undo_nodes_by_pbvh_node.size());
@@ -1913,7 +1915,7 @@ static void set_active_layer(bContext *C, const SculptAttrRef *attr)
 static void step_encode_init(bContext * /*C*/, UndoStep *us_p)
 {
   SculptUndoStep *us = reinterpret_cast<SculptUndoStep *>(us_p);
-  new (&us->data) StepData();
+  new (&us->data) NodeStepData();
 }
 
 static bool step_encode(bContext * /*C*/, Main *bmain, UndoStep *us_p)
