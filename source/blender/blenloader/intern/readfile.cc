@@ -983,6 +983,12 @@ static void decode_blender_header(FileData *fd)
     num[3] = 0;
     fd->fileversion = atoi(num);
   }
+  else if (STREQLEN(header, "BLENDER", 7)) {
+    /* If the first 7 bytes are BLENDER, it is very likely that this is a newer version of the
+     * blendfile format. Unreadable currently, but avoid telling the user that this is not a blend
+     * file. */
+    fd->flags |= FD_FLAGS_FILE_FUTURE;
+  }
 }
 
 /**
@@ -1173,6 +1179,14 @@ static FileData *blo_decode_and_check(FileData *fd, ReportList *reports)
       blo_filedata_free(fd);
       fd = nullptr;
     }
+  }
+  else if (fd->flags & FD_FLAGS_FILE_FUTURE) {
+    BKE_reportf(reports,
+                RPT_ERROR,
+                "Cannot read blend file '%s', probably written by a future version of Blender",
+                fd->relabase);
+    blo_filedata_free(fd);
+    fd = nullptr;
   }
   else {
     BKE_reportf(
