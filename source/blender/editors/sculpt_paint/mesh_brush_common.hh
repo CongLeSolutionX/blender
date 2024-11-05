@@ -74,10 +74,10 @@ void translations_from_new_positions(Span<float3> new_positions,
                                      Span<int> verts,
                                      Span<float3> old_positions,
                                      MutableSpan<float3> translations);
-void translations_from_new_positions(const Span<float3> new_positions,
-                                     const IndexMask &verts,
-                                     const Span<float3> old_positions,
-                                     const MutableSpan<float3> translations);
+void translations_from_new_positions(Span<float3> new_positions,
+                                     const IndexMask &mask,
+                                     Span<float3> old_positions,
+                                     MutableSpan<float3> translations);
 void translations_from_new_positions(Span<float3> new_positions,
                                      Span<float3> old_positions,
                                      MutableSpan<float3> translations);
@@ -123,6 +123,8 @@ MutableSpan<T> gather_data_bmesh(const Span<T> src, const Set<BMVert *, 0> &vert
 
 /** Scatter data from an array of the node's data to the referenced geometry vertices. */
 template<typename T> void scatter_data_mesh(Span<T> src, Span<int> indices, MutableSpan<T> dst);
+template<typename T>
+void scatter_data_mesh(Span<T> src, const IndexMask &mask, MutableSpan<T> dst);
 template<typename T>
 void scatter_data_grids(const SubdivCCG &subdiv_ccg,
                         Span<T> node_data,
@@ -371,6 +373,9 @@ void calc_brush_texture_factors(const SculptSession &ss,
  * simply add them to the final vertex positions.
  */
 void apply_translations(Span<float3> translations, Span<int> verts, MutableSpan<float3> positions);
+void apply_translations(Span<float3> translations,
+                        const IndexMask &mask,
+                        MutableSpan<float3> positions);
 void apply_translations(Span<float3> translations, Span<int> grids, SubdivCCG &subdiv_ccg);
 void apply_translations(Span<float3> translations, const Set<BMVert *, 0> &verts);
 

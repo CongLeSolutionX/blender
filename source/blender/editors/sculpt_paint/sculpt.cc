@@ -6143,6 +6143,14 @@ void scatter_data_mesh(const Span<T> src, const Span<int> indices, const Mutable
 }
 
 template<typename T>
+void scatter_data_mesh(const Span<T> src, const IndexMask &mask, const MutableSpan<T> dst)
+{
+  BLI_assert(mask.size() == src.size());
+
+  mask.foreach_index_optimized<int>([&](const int i, const int pos) { dst[i] = src[pos]; });
+}
+
+template<typename T>
 void scatter_data_grids(const SubdivCCG &subdiv_ccg,
                         const Span<T> node_data,
                         const Span<int> grids,
@@ -6196,6 +6204,7 @@ template void scatter_data_mesh<bool>(Span<bool>, Span<int>, MutableSpan<bool>);
 template void scatter_data_mesh<int>(Span<int>, Span<int>, MutableSpan<int>);
 template void scatter_data_mesh<float>(Span<float>, Span<int>, MutableSpan<float>);
 template void scatter_data_mesh<float3>(Span<float3>, Span<int>, MutableSpan<float3>);
+template void scatter_data_mesh<float3>(Span<float3>, const IndexMask &, MutableSpan<float3>);
 template void scatter_data_mesh<float4>(Span<float4>, Span<int>, MutableSpan<float4>);
 template void scatter_data_grids<float>(const SubdivCCG &,
                                         Span<float>,
@@ -6981,12 +6990,13 @@ void apply_translations(const Span<float3> translations,
   }
 }
 
-static void apply_translations(const Span<float3> translations,
-                               const IndexMask &verts,
-                               const MutableSpan<float3> positions)
+void apply_translations(const Span<float3> translations,
+                        const IndexMask &mask,
+                        const MutableSpan<float3> positions)
 {
-  BLI_assert(verts.size() == translations.size());
-  verts.foreach_index_optimized<int>(
+  BLI_assert(mask.size() == translations.size());
+
+  mask.foreach_index_optimized<int>(
       [&](const int i, const int pos) { positions[i] += translations[pos]; });
 }
 
@@ -7040,17 +7050,6 @@ void apply_crazyspace_to_translations(const Span<float3x3> deform_imats,
   for (const int i : verts.index_range()) {
     translations[i] = math::transform_point(deform_imats[verts[i]], translations[i]);
   }
-}
-
-static void apply_crazyspace_to_translations(const Span<float3x3> deform_imats,
-                                             const IndexMask &verts,
-                                             const MutableSpan<float3> translations)
-{
-  BLI_assert(verts.size() == translations.size());
-
-  verts.foreach_index_optimized<int>([&](const int i, const int pos) {
-    translations[pos] = math::transform_point(deform_imats[i], translations[pos]);
-  });
 }
 
 void clip_and_lock_translations(const Sculpt &sd,
@@ -7170,53 +7169,7 @@ static void copy_indices(const Span<float3> src, const Span<int> indices, Mutabl
   }
 }
 
-static void copy_indices(const Span<float3> src, const IndexMask &mask, MutableSpan<float3> dst)
-{
-  mask.foreach_index_optimized<int>([&](const int i) { dst[i] = src[i]; });
-}
-
 void PositionDeformData::deform(MutableSpan<float3> translations, const Span<int> verts) const
-{
-  if (eval_mut_) {
-    /* Apply translations to the evaluated mesh. This is necessary because multiple brush
-     * evaluations can happen in between object reevaluations (otherwise just deforming the
-     * original positions would be enough). */
-    apply_translations(translations, verts, *eval_mut_);
-  }
-
-  if (deform_imats_) {
-    /* Apply the reverse procedural deformation, since subsequent translation happens to the state
-     * from "before" deforming modifiers. */
-    apply_crazyspace_to_translations(*deform_imats_, verts, translations);
-  }
-
-  if (KeyBlock *key = active_key_) {
-    const MutableSpan active_key_data(static_cast<float3 *>(key->data), key->totelem);
-    if (basis_active_) {
-      /* The active shape key positions and the mesh positions are always kept in sync. */
-      apply_translations(translations, verts, orig_);
-      copy_indices(orig_, verts, active_key_data);
-    }
-    else {
-      apply_translations(translations, verts, active_key_data);
-    }
-
-    if (dependent_keys_) {
-      int i;
-      LISTBASE_FOREACH_INDEX (KeyBlock *, other_key, &keys_->block, i) {
-        if ((other_key != key) && (*dependent_keys_)[i]) {
-          MutableSpan data(static_cast<float3 *>(other_key->data), other_key->totelem);
-          apply_translations(translations, verts, data);
-        }
-      }
-    }
-  }
-  else {
-    apply_translations(translations, verts, orig_);
-  }
-}
-
-void PositionDeformData::deform(MutableSpan<float3> translations, const IndexMask &verts) const
 {
   if (eval_mut_) {
     /* Apply translations to the evaluated mesh. This is necessary because multiple brush
@@ -7346,12 +7299,12 @@ void translations_from_new_positions(const Span<float3> new_positions,
 }
 
 void translations_from_new_positions(const Span<float3> new_positions,
-                                     const IndexMask &verts,
+                                     const IndexMask &mask,
                                      const Span<float3> old_positions,
                                      const MutableSpan<float3> translations)
 {
-  BLI_assert(new_positions.size() == verts.size());
-  verts.foreach_index_optimized<int>([&](const int i, const int pos) {
+  BLI_assert(new_positions.size() == mask.size());
+  mask.foreach_index_optimized<int>([&](const int i, const int pos) {
     translations[pos] = new_positions[pos] - old_positions[i];
   });
 }
