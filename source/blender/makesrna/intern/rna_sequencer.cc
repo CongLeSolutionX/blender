@@ -204,7 +204,7 @@ static void rna_Sequence_scene_switch_update(Main *bmain, Scene *scene, PointerR
 
 static void rna_Sequence_use_sequence(Main *bmain, Scene * /*scene*/, PointerRNA *ptr)
 {
-  Scene *scene = static_cast<Scene *>(ptr->owner_id);
+  Scene *scene = reinterpret_cast<Scene *>(ptr->owner_id);
 
   /* General update callback. */
   rna_Sequence_invalidate_raw_update(bmain, scene, ptr);
