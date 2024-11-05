@@ -139,10 +139,7 @@ MDeformVert *BKE_object_defgroup_data_create(ID *id)
 /** \name Group clearing
  * \{ */
 
-bool BKE_object_defgroup_clear(Scene *scene,
-                               Object *ob,
-                               bDeformGroup *dg,
-                               const bool use_selection)
+bool BKE_object_defgroup_clear(Object *ob, bDeformGroup *dg, const bool use_selection)
 {
   MDeformVert *dv;
   const ListBase *defbase = BKE_object_defgroup_list(ob);
@@ -211,20 +208,20 @@ bool BKE_object_defgroup_clear(Scene *scene,
   else if (ob->type == OB_GREASE_PENCIL) {
     GreasePencil *grease_pencil = static_cast<GreasePencil *>(ob->data);
     changed = blender::bke::greasepencil::remove_from_vertex_group(
-        *grease_pencil, dg->name, use_selection, scene);
+        *grease_pencil, dg->name, use_selection);
   }
 
   return changed;
 }
 
-bool BKE_object_defgroup_clear_all(Scene *scene, Object *ob, const bool use_selection)
+bool BKE_object_defgroup_clear_all(Object *ob, const bool use_selection)
 {
   bool changed = false;
 
   const ListBase *defbase = BKE_object_defgroup_list(ob);
 
   LISTBASE_FOREACH (bDeformGroup *, dg, defbase) {
-    if (BKE_object_defgroup_clear(scene, ob, dg, use_selection)) {
+    if (BKE_object_defgroup_clear(ob, dg, use_selection)) {
       changed = true;
     }
   }
@@ -341,7 +338,7 @@ static void object_defgroup_remove_edit_mode(Object *ob, bDeformGroup *dg)
 
   /* Make sure that no verts are using this group - if none were removed,
    * we can skip next per-vert update. */
-  if (!BKE_object_defgroup_clear(nullptr, ob, dg, false)) {
+  if (!BKE_object_defgroup_clear(ob, dg, false)) {
     /* Nothing to do. */
   }
   /* Else, make sure that any groups with higher indices are adjusted accordingly */

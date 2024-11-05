@@ -4,8 +4,6 @@
 
 set(INC
   .
-  ../windowmanager
-  ../editors/include
   ../asset_system
   ../blenloader
   ../blentranslation
