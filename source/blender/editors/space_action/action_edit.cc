@@ -1892,6 +1892,7 @@ void ACTION_OT_select_by_keyframe_type(wmOperatorType *ot)
   ot->description = "Select keys by their type";
 
   /* api callbacks */
+  ot->invoke = WM_menu_invoke;
   ot->exec = action_keys_select_by_keytype_exec;
   ot->poll = ED_operator_action_active;
 
