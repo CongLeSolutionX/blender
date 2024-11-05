@@ -275,7 +275,7 @@ Material &MaterialModule::material_sync(Object *ob,
 
   if (geometry_type == MAT_GEOM_VOLUME) {
     MaterialKey material_key(
-        blender_mat, geometry_type, MAT_PIPE_VOLUME_MATERIAL, ob->visibility_flag);
+        blender_mat, geometry_type, MAT_PIPE_VOLUME_MATERIAL, ob->visibility_flag, 0);
     Material &mat = material_map_.lookup_or_add_cb(material_key, [&]() {
       Material mat = {};
       mat.volume_occupancy = material_pass_get(
@@ -314,7 +314,8 @@ Material &MaterialModule::material_sync(Object *ob,
     prepass_pipe = has_motion ? MAT_PIPE_PREPASS_DEFERRED_VELOCITY : MAT_PIPE_PREPASS_DEFERRED;
   }
 
-  MaterialKey material_key(blender_mat, geometry_type, surface_pipe, ob->visibility_flag);
+  MaterialKey material_key(
+      blender_mat, geometry_type, surface_pipe, ob->visibility_flag, ob->refraction_layer_index);
 
   Material &mat = material_map_.lookup_or_add_cb(material_key, [&]() {
     Material mat;

@@ -208,7 +208,8 @@ struct MaterialKey {
   MaterialKey(::Material *mat_,
               eMaterialGeometry geometry,
               eMaterialPipeline pipeline,
-              short visibility_flags)
+              short visibility_flags,
+              uint16_t refraction_layer)
       : mat(mat_)
   {
     options = shader_uuid_from_material_type(pipeline,
@@ -220,6 +221,7 @@ struct MaterialKey {
     options = (options << 1) | (visibility_flags & OB_HIDE_SHADOW ? 0 : 1);
     options = (options << 1) | (visibility_flags & OB_HIDE_PROBE_CUBEMAP ? 0 : 1);
     options = (options << 1) | (visibility_flags & OB_HIDE_PROBE_PLANAR ? 0 : 1);
+    options = (options << 16) | refraction_layer;
   }
 
   uint64_t hash() const
