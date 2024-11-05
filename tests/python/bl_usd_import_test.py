@@ -36,8 +36,8 @@ class USDImportTest(AbstractUSDTest):
     # Utility function to round each component of a vector to a few digits. The "+ 0" is to
     # ensure that any negative zeros (-0.0) are converted to positive zeros (0.0).
     @staticmethod
-    def round_vector(vector):
-        return [round(c, 5) + 0 for c in vector]
+    def round_vector(vector, digits=5):
+        return [round(c, digits) + 0 for c in vector]
 
     def test_import_operator(self):
         """Test running the import operator on valid and invalid files."""
@@ -838,6 +838,58 @@ class USDImportTest(AbstractUSDTest):
         horizontal_points = len(bpy.data.pointclouds['horizontalpoints'].attributes["position"].data)
         self.assertEqual(3, vertical_points)
         self.assertEqual(2, horizontal_points)
+
+    def test_import_point_instancer_animation(self):
+        """Test importing an animated point instancer setup."""
+
+        infile = str(self.testdir / "usd_point_instancer_anim.usda")
+        res = bpy.ops.wm.usd_import(filepath=infile)
+        self.assertEqual({'FINISHED'}, res, f"Unable to import USD file {infile}")
+
+        prev_inst_positions = set()
+        prev_inst_scales = set()
+        prev_inst_quats = set()
+
+        # Check all frames to ensure instances are moving correctly
+        for frame in range(1, 5):
+            bpy.context.scene.frame_set(frame)
+            depsgraph = bpy.context.evaluated_depsgraph_get()
+
+            # Gather the instance data in a set so we can detect unique values
+            inst_positions = set()
+            inst_scales = set()
+            inst_quats = set()
+            mesh_count = 0
+            for inst in depsgraph.object_instances:
+                if inst.is_instance and inst.object.type == 'MESH':
+                    mesh_count += 1
+                    inst_positions.add(tuple(self.round_vector(inst.matrix_world.to_translation(), 5)))
+                    inst_scales.add(tuple(self.round_vector(inst.matrix_world.to_scale(), 1)))
+                    inst_quats.add(tuple(self.round_vector(inst.matrix_world.to_quaternion(), 5)))
+
+            # There should be 6 total mesh instances
+            self.assertEqual(mesh_count, 6)
+
+            # Positions: All positions should be unique during each frame.
+            # Scale and Orientation: One unique value on frame 1. Subsequent frames have different
+            # combinations of unique values.
+            self.assertEqual(len(inst_positions), 6, f"Frame {frame}: positions do not match")
+            if frame == 1:
+                self.assertEqual(len(inst_scales), 1, f"Frame {frame}: scales do not match")
+                self.assertEqual(len(inst_quats), 1, f"Frame {frame}: orientations do not match")
+            else:
+                self.assertEqual(len(inst_scales), 2, f"Frame {frame}: scales do not match")
+                self.assertEqual(len(inst_quats), 3, f"Frame {frame}: orientations do not match")
+
+            # Every frame is different. Ensure that the current frame's values do NOT match the
+            # previous frame's data.
+            self.assertNotEqual(inst_positions, prev_inst_positions)
+            self.assertNotEqual(inst_scales, prev_inst_scales)
+            self.assertNotEqual(inst_quats, prev_inst_quats)
+
+            prev_inst_positions = inst_positions
+            prev_inst_scales = inst_scales
+            prev_inst_quats = inst_quats
 
     def test_import_light_types(self):
         """Test importing light types and attributes."""
