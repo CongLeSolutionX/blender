@@ -3642,11 +3642,14 @@ static int uv_box_select_exec(bContext *C, wmOperator *op)
             }
           }
         }
-        if (has_selected && use_select_linked) {
+        /* For island _de_selection, we need to provide the hit/face which is slow, for island
+         * selection, we can rely on the overall resulting selection which is way faster (see
+         * below). */
+        if (has_selected && use_select_linked && !select) {
           UvNearestHit hit = {};
           hit.ob = obedit;
           hit.efa = efa;
-          uv_select_linked_multi(scene, objects, &hit, true, !select, false, false);
+          uv_select_linked_multi(scene, objects, &hit, true, true, false, false);
         }
       }
 
@@ -3665,6 +3668,11 @@ static int uv_box_select_exec(bContext *C, wmOperator *op)
       }
       uv_select_tag_update_for_object(depsgraph, ts, obedit);
     }
+  }
+
+  /* For island _de_selection, we need to use a slower method (see above). */
+  if (changed_multi && use_select_linked && select) {
+    uv_select_linked_multi(scene, objects, nullptr, true, false, false, false);
   }
 
   return changed_multi ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
@@ -3854,11 +3862,14 @@ static int uv_circle_select_exec(bContext *C, wmOperator *op)
             }
           }
         }
-        if (has_selected && use_select_linked) {
+        /* For island _de_selection, we need to provide the hit/face which is slow, for island
+         * selection, we can rely on the overall resulting selection which is way faster (see
+         * below). */
+        if (has_selected && use_select_linked && !select) {
           UvNearestHit hit = {};
           hit.ob = obedit;
           hit.efa = efa;
-          uv_select_linked_multi(scene, objects, &hit, true, !select, false, false);
+          uv_select_linked_multi(scene, objects, &hit, true, true, false, false);
         }
       }
 
@@ -3877,6 +3888,11 @@ static int uv_circle_select_exec(bContext *C, wmOperator *op)
       }
       uv_select_tag_update_for_object(depsgraph, ts, obedit);
     }
+  }
+
+  /* For island _de_selection, we need to use a slower method (see above). */
+  if (changed_multi && use_select_linked && select) {
+    uv_select_linked_multi(scene, objects, nullptr, true, false, false, false);
   }
 
   return changed_multi ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
@@ -4075,11 +4091,14 @@ static bool do_lasso_select_mesh_uv(bContext *C, const Span<int2> mcoords, const
             }
           }
         }
-        if (has_selected && use_select_linked) {
+        /* For island _de_selection, we need to provide the hit/face which is slow, for island
+         * selection, we can rely on the overall resulting selection which is way faster (see
+         * below). */
+        if (has_selected && use_select_linked && !select) {
           UvNearestHit hit = {};
           hit.ob = obedit;
           hit.efa = efa;
-          uv_select_linked_multi(scene, objects, &hit, true, !select, false, false);
+          uv_select_linked_multi(scene, objects, &hit, true, true, false, false);
         }
       }
 
@@ -4097,6 +4116,11 @@ static bool do_lasso_select_mesh_uv(bContext *C, const Span<int2> mcoords, const
         ED_uvedit_selectmode_flush(scene, em);
       }
       uv_select_tag_update_for_object(depsgraph, ts, obedit);
+    }
+
+    /* For island _de_selection, we need to use a slower method (see above). */
+    if (changed_multi && use_select_linked && select) {
+      uv_select_linked_multi(scene, objects, nullptr, true, false, false, false);
     }
   }
 
