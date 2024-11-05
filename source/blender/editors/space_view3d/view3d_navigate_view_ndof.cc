@@ -187,8 +187,15 @@ static void view3d_ndof_orbit(const wmNDOFMotionData *ndof,
     axis_angle_to_quat(quat, xvec, angle);
     mul_qt_qtqt(rv3d->viewquat, rv3d->viewquat, quat);
 
-    /* Perform the orbital rotation */
-    angle = ndof->dt * rot[1];
+    /* Perform the orbital rotation.
+       Invert the rotation around Z axis when view moves "over the top" of the scene. */
+    float zvec_unit[3] = {0,0,1};
+    float zvec[3] = {0,0,1};
+    mul_qt_v3(view_inv, zvec);
+    normalize_v3(zvec);
+
+    float z_angle = angle_signed_on_axis_v3v3_v3(zvec_unit, zvec, xvec);
+    angle = ndof->dt * rot[1] * ((z_angle - M_PI < 0) ? -1.0f : 1.0f);
 
     /* Update the onscreen axis-angle indicator. */
     rv3d->rot_angle = angle;
