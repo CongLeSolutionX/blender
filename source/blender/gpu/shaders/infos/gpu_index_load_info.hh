@@ -19,7 +19,7 @@
 
 #include "gpu_shader_create_info.hh"
 
-GPU_SHADER_CREATE_INFO(gpu_index_load)
+GPU_SHADER_CREATE_INFO(gpu_index_buffer_load)
 PUSH_CONSTANT(BOOL, gpu_index_no_buffer)
 PUSH_CONSTANT(BOOL, gpu_index_16bit)
 PUSH_CONSTANT(INT, gpu_index_base_index)
