@@ -615,10 +615,6 @@ CurvesGeometry resample_to_evaluated(const CurvesGeometry &src_curves,
   if (src_curves.curves_range().is_empty()) {
     return {};
   }
-  if (src_curves.curve_types().is_single() && src_curves.curve_types().first() == CURVE_TYPE_POLY)
-  {
-    return src_curves;
-  }
   fn::FieldEvaluator evaluator{field_context, src_curves.curves_num()};
   evaluator.set_selection(selection_field);
   evaluator.evaluate();
