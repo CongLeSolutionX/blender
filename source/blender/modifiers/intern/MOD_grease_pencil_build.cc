@@ -550,8 +550,8 @@ static void build_drawing(const GreasePencilBuildModifierData &mmd,
                           const int current_time,
                           const float scene_fps)
 {
-  bke::CurvesGeometry &curves = modifier::greasepencil::convert_to_poly_curves(
-      drawing.strokes_for_write());
+  bke::CurvesGeometry curves = modifier::greasepencil::convert_to_poly_curves(drawing.strokes());
+  drawing.strokes_for_write() = std::move(curves);
 
   if (curves.points_num() == 0) {
     return;

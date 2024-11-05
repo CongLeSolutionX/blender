@@ -110,8 +110,8 @@ static void deform_drawing(const ModifierData &md,
 {
   const GreasePencilLengthModifierData &mmd =
       reinterpret_cast<const GreasePencilLengthModifierData &>(md);
-  bke::CurvesGeometry &curves = modifier::greasepencil::convert_to_poly_curves(
-      drawing.strokes_for_write());
+  bke::CurvesGeometry curves = modifier::greasepencil::convert_to_poly_curves(drawing.strokes());
+  drawing.strokes_for_write() = std::move(curves);
 
   if (curves.points_num() == 0) {
     return;

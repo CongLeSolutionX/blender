@@ -49,6 +49,8 @@
 #include "MOD_grease_pencil_util.hh"
 #include "MOD_ui_common.hh"
 
+#include "GEO_resample_curves.hh"
+
 namespace blender {
 
 static void init_data(ModifierData *md)
@@ -176,8 +178,8 @@ static void modify_drawing(const GreasePencilOutlineModifierData &omd,
                            bke::greasepencil::Drawing &drawing,
                            const float4x4 &viewmat)
 {
-  bke::CurvesGeometry &curves = modifier::greasepencil::convert_to_poly_curves(
-      drawing.strokes_for_write());
+  bke::CurvesGeometry curves = modifier::greasepencil::convert_to_poly_curves(drawing.strokes());
+  drawing.strokes_for_write() = std::move(curves);
 
   if (curves.curve_num == 0) {
     return;
