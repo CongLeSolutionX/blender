@@ -45,6 +45,8 @@
 #include "MOD_modifiertypes.hh"
 #include "MOD_ui_common.hh"
 
+#include "GEO_resample_curves.hh"
+
 namespace blender {
 
 using bke::greasepencil::Drawing;
@@ -107,7 +109,8 @@ static void update_depsgraph(ModifierData *md, const ModifierUpdateDepsgraphCont
 static void modify_curves(ModifierData &md, const ModifierEvalContext &ctx, Drawing &drawing)
 {
   auto &amd = reinterpret_cast<GreasePencilArmatureModifierData &>(md);
-  bke::CurvesGeometry &curves = drawing.strokes_for_write();
+  bke::CurvesGeometry &curves = modifier::greasepencil::convert_to_poly_curves(
+      drawing.strokes_for_write());
 
   /* The influence flag is where the "invert" flag is stored,
    * but armature functions expect `deformflag` to have the flag set as well.

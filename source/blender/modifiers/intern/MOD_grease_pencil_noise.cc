@@ -98,7 +98,8 @@ static void deform_drawing(const GreasePencilNoiseModifierData &mmd,
                            const int start_frame_number,
                            bke::greasepencil::Drawing &drawing)
 {
-  bke::CurvesGeometry &strokes = drawing.strokes_for_write();
+  bke::CurvesGeometry &strokes = modifier::greasepencil::convert_to_poly_curves(
+      drawing.strokes_for_write());
   bke::MutableAttributeAccessor attributes = strokes.attributes_for_write();
   if (strokes.points_num() == 0) {
     return;

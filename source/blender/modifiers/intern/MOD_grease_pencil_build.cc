@@ -40,6 +40,7 @@
 #include "RNA_prototypes.hh"
 
 #include "GEO_reorder.hh"
+#include "GEO_resample_curves.hh"
 
 namespace blender {
 
@@ -550,7 +551,8 @@ static void build_drawing(const GreasePencilBuildModifierData &mmd,
                           const int current_time,
                           const float scene_fps)
 {
-  bke::CurvesGeometry &curves = drawing.strokes_for_write();
+  bke::CurvesGeometry &curves = modifier::greasepencil::convert_to_poly_curves(
+      drawing.strokes_for_write());
 
   if (curves.points_num() == 0) {
     return;

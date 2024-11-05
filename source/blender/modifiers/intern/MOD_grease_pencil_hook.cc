@@ -38,6 +38,8 @@
 
 #include "RNA_prototypes.hh"
 
+#include "GEO_resample_curves.hh"
+
 namespace blender {
 
 static void init_data(ModifierData *md)
@@ -154,10 +156,13 @@ static void deform_drawing(const ModifierData &md,
                            bke::greasepencil::Drawing &drawing)
 {
   const auto &mmd = reinterpret_cast<const GreasePencilHookModifierData &>(md);
-  bke::CurvesGeometry &curves = drawing.strokes_for_write();
+  bke::CurvesGeometry &curves = modifier::greasepencil::convert_to_poly_curves(
+      drawing.strokes_for_write());
+
   if (curves.points_num() == 0) {
     return;
   }
+
   IndexMaskMemory memory;
   const IndexMask strokes = modifier::greasepencil::get_filtered_stroke_mask(
       &ob, curves, mmd.influence, memory);

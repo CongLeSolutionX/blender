@@ -101,7 +101,10 @@ static void simplify_drawing(const GreasePencilSimplifyModifierData &mmd,
                              bke::greasepencil::Drawing &drawing)
 {
   IndexMaskMemory memory;
-  const bke::CurvesGeometry &curves = drawing.strokes();
+
+  bke::CurvesGeometry &curves = modifier::greasepencil::convert_to_poly_curves(
+      drawing.strokes_for_write());
+
   const IndexMask strokes = modifier::greasepencil::get_filtered_stroke_mask(
       &ob, curves, mmd.influence, memory);
   if (strokes.is_empty()) {

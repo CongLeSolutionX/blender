@@ -37,6 +37,8 @@
 #include "MOD_grease_pencil_util.hh"
 #include "MOD_ui_common.hh"
 
+#include "GEO_resample_curves.hh"
+
 namespace blender {
 
 static void init_data(ModifierData *md)
@@ -328,10 +330,13 @@ static void modify_drawing(const GreasePencilDashModifierData &dmd,
                            const PatternInfo &pattern_info,
                            bke::greasepencil::Drawing &drawing)
 {
-  const bke::CurvesGeometry &src_curves = drawing.strokes();
+  bke::CurvesGeometry &src_curves = modifier::greasepencil::convert_to_poly_curves(
+      drawing.strokes_for_write());
+
   if (src_curves.curve_num == 0) {
     return;
   }
+
   /* Selected source curves. */
   IndexMaskMemory curve_mask_memory;
   const IndexMask curves_mask = modifier::greasepencil::get_filtered_stroke_mask(

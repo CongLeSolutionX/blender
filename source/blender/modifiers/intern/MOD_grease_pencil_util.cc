@@ -31,6 +31,8 @@
 
 #include "UI_interface.hh"
 
+#include "GEO_resample_curves.hh"
+
 namespace blender::modifier::greasepencil {
 
 using bke::greasepencil::Drawing;
@@ -381,6 +383,21 @@ Vector<FrameDrawingInfo> get_drawing_infos_by_frame(GreasePencil &grease_pencil,
     }
   });
   return drawing_infos;
+}
+
+bke::CurvesGeometry &convert_to_poly_curves(bke::CurvesGeometry &src_curves_for_write)
+{
+  IndexMaskMemory non_poly_memory;
+  const IndexMask non_poly_selection =
+      src_curves_for_write.indices_for_curve_type(CURVE_TYPE_POLY, non_poly_memory)
+          .complement(src_curves_for_write.curves_range(), non_poly_memory);
+  if (non_poly_selection.is_empty()) {
+    return src_curves_for_write;
+  }
+  /* Write converted result back to source then return the same reference, so the conversion stays
+   * opaque just like `.strokes_for_write()`, and existing modifier logic is not affected. */
+  src_curves_for_write = geometry::resample_to_evaluated(src_curves_for_write, non_poly_selection);
+  return src_curves_for_write;
 }
 
 }  // namespace blender::modifier::greasepencil

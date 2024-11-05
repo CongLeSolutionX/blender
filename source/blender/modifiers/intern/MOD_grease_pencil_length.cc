@@ -35,6 +35,7 @@
 #include "RNA_access.hh"
 #include "RNA_prototypes.hh"
 
+#include "GEO_resample_curves.hh"
 #include "GEO_extend_curves.hh"
 #include "GEO_trim_curves.hh"
 
@@ -110,7 +111,8 @@ static void deform_drawing(const ModifierData &md,
 {
   const GreasePencilLengthModifierData &mmd =
       reinterpret_cast<const GreasePencilLengthModifierData &>(md);
-  bke::CurvesGeometry &curves = drawing.strokes_for_write();
+  bke::CurvesGeometry &curves = modifier::greasepencil::convert_to_poly_curves(
+      drawing.strokes_for_write());
 
   if (curves.points_num() == 0) {
     return;
