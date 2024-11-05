@@ -253,15 +253,15 @@ struct GreasePencilDrawGuide {
   float2 origin;
   /* Distance from start to origin. */
   float radius;
-  /* Ref unit vector from start postion. */
-  float2 unit_vector;
+  /* Ref vector from start postion. */
+  float2 ref_vector;
   /* Line direction. */
   float2 direction;
   /* Flag to enable/disable resampling. */
   bool resample;
   /* Angle from guide settings. */
   float user_angle;
-  /* Reference angled vector. */
+  /* Reference iso vectors. */
   float2 iso_vector_a;
   float2 iso_vector_b;
 
@@ -584,12 +584,14 @@ struct PaintOperationExecutor {
       }
       case GP_GUIDE_ISO: {
         /* Constrain to defined angles. */
-        closest_to_line_v2(r_coords, coords, guide.start_coords, guide.direction);
+        closest_to_line_v2(
+            r_coords, coords, guide.start_coords, guide.start_coords + guide.direction);
         return r_coords;
       }
       case GP_GUIDE_PARALLEL: {
         /* Constrain to parallel angles. */
-        closest_to_line_v2(r_coords, coords, guide.start_coords, guide.direction);
+        closest_to_line_v2(
+            r_coords, coords, guide.start_coords, guide.start_coords + guide.direction);
         return r_coords;
       }
     }
@@ -616,9 +618,9 @@ struct PaintOperationExecutor {
     }
     else if (ELEM(guide.type, GP_GUIDE_ISO)) {
       const float2 dir = coords - guide.start_coords;
-      float vert_angle = angle_signed_v2v2(dir, guide.unit_vector - guide.start_coords);
-      float rel_angle_a = angle_signed_v2v2(dir, guide.iso_vector_a - guide.start_coords);
-      float rel_angle_b = angle_signed_v2v2(dir, guide.iso_vector_b - guide.start_coords);
+      float vert_angle = angle_signed_v2v2(dir, guide.ref_vector);
+      float rel_angle_a = angle_signed_v2v2(dir, guide.iso_vector_a);
+      float rel_angle_b = angle_signed_v2v2(dir, guide.iso_vector_b);
 
       /* Determine ISO angle, choose best match. */
       vert_angle = math::abs(math::abs(vert_angle) - pi_2);
@@ -631,9 +633,10 @@ struct PaintOperationExecutor {
         angle = (rel_angle_a >= rel_angle_b) ? guide.user_angle : -guide.user_angle;
       }
     }
-    rotate_v2_v2v2fl(guide.direction, guide.unit_vector, guide.start_coords, angle);
+    rotate_v2_v2v2fl(guide.direction, guide.ref_vector, float2(0.0f), angle);
   }
 
+  /* Initialize guide settings. */
   void guide_init(PaintOperation &self,
                   const bContext &C,
                   const GP_Sculpt_Guide &guide_settings,
@@ -650,14 +653,15 @@ struct PaintOperationExecutor {
     self.guide_.resample = true;
     self.guide_.type = eGPencil_GuideTypes(guide_settings.type);
     self.guide_.user_angle = guide_settings.angle;
-    self.guide_.unit_vector = start_coords;
-    self.guide_.unit_vector.x += 1.0f;
-    float2 iso_vector_a;
-    rotate_v2_v2v2fl(iso_vector_a, self.guide_.unit_vector, start_coords, guide_settings.angle);
-    self.guide_.iso_vector_a = iso_vector_a;
-    float2 iso_vector_b;
-    rotate_v2_v2v2fl(iso_vector_b, self.guide_.unit_vector, start_coords, -guide_settings.angle);
-    self.guide_.iso_vector_b = iso_vector_b;
+    self.guide_.ref_vector = float2(1.0f, 0.0f);
+    if (self.guide_.type == GP_GUIDE_ISO) {
+      float2 iso_vector_a;
+      rotate_v2_v2v2fl(iso_vector_a, self.guide_.ref_vector, float2(0.0f), guide_settings.angle);
+      self.guide_.iso_vector_a = iso_vector_a;
+      float2 iso_vector_b;
+      rotate_v2_v2v2fl(iso_vector_b, self.guide_.ref_vector, float2(0.0f), -guide_settings.angle);
+      self.guide_.iso_vector_b = iso_vector_b;
+    }
   }
 
   void process_start_sample(PaintOperation &self,
@@ -929,49 +933,47 @@ struct PaintOperationExecutor {
 
   static void guide_draw(const bContext * /*C*/, ARegion *region, void *arg)
   {
-    ColorGeometry4f color_gizmo_primary;
-    ColorGeometry4f color_gizmo_secondary;
-    ColorGeometry4f color_gizmo_a;
-    ColorGeometry4f color_gizmo_b;
-    UI_GetThemeColor4fv(TH_GIZMO_PRIMARY, color_gizmo_primary);
-    UI_GetThemeColor4fv(TH_GIZMO_SECONDARY, color_gizmo_secondary);
-    UI_GetThemeColor4fv(TH_GIZMO_A, color_gizmo_a);
-    UI_GetThemeColor4fv(TH_GIZMO_B, color_gizmo_b);
-
     PaintOperation *pto = reinterpret_cast<PaintOperation *>(arg);
     GreasePencilDrawGuide &guide = pto->guide_;
 
-    const float3 location = pto->placement_.project(guide.origin);
-    const float3 start = pto->placement_.project(guide.start_coords);
+    ColorGeometry4f color_gizmo_b;
+    UI_GetThemeColor4fv(TH_GIZMO_B, color_gizmo_b);
+    color_gizmo_b.a = 0.5f;
 
-    static constexpr float ui_primary_point_draw_size_px = 12.0f;
+    static constexpr float ui_primary_point_draw_size_px = 16.0f;
     static constexpr float ui_guide_line_length = 200.0f;
 
     /* Draw reference point. */
-    GPUVertFormat *format3d = immVertexFormat();
-    const uint pos3d = GPU_vertformat_attr_add(format3d, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
-    const uint col3d = GPU_vertformat_attr_add(
-        format3d, "color", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
-    const uint siz3d = GPU_vertformat_attr_add(format3d, "size", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
-    immBindBuiltinProgram(GPU_SHADER_3D_POINT_VARYING_SIZE_VARYING_COLOR);
+    if (ELEM(guide.type, GP_GUIDE_RADIAL, GP_GUIDE_CIRCULAR)) {
+      ColorGeometry4f color_gizmo_primary;
+      UI_GetThemeColor4fv(TH_GIZMO_PRIMARY, color_gizmo_primary);
 
-    GPU_program_point_size(true);
-    immBegin(GPU_PRIM_POINTS, 1);
+      const float3 origin = pto->placement_.project(guide.origin);
 
-    immAttr4fv(col3d, color_gizmo_b);
-    immAttr1f(siz3d, ui_primary_point_draw_size_px);
-    immVertex3fv(pos3d, location);
+      GPUVertFormat *format3d = immVertexFormat();
+      const uint pos3d = GPU_vertformat_attr_add(
+          format3d, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+      const uint col3d = GPU_vertformat_attr_add(
+          format3d, "color", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
+      const uint siz3d = GPU_vertformat_attr_add(
+          format3d, "size", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
+      immBindBuiltinProgram(GPU_SHADER_3D_POINT_VARYING_SIZE_VARYING_COLOR);
 
-    immEnd();
-    immUnbindProgram();
-    GPU_program_point_size(false);
+      GPU_program_point_size(true);
+      immBegin(GPU_PRIM_POINTS, 1);
+
+      immAttr4fv(col3d, color_gizmo_primary);
+      immAttr1f(siz3d, ui_primary_point_draw_size_px);
+      immVertex3fv(pos3d, origin);
+
+      immEnd();
+      immUnbindProgram();
+      GPU_program_point_size(false);
+    }
 
     /* Guide lines. */
     const uint pos = GPU_vertformat_attr_add(
         immVertexFormat(), "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
-
-    const float3 p1 = pto->placement_.project(guide.start_coords);
-    const float3 p2 = pto->placement_.project(guide.origin);
 
     GPU_matrix_push_projection();
     GPU_matrix_push();
@@ -983,56 +985,64 @@ struct PaintOperationExecutor {
     GPU_blend(GPU_BLEND_ALPHA);
     GPU_line_smooth(true);
     GPU_line_width(2.0f);
-    color_gizmo_b.a = 0.5f;
     immUniformColor4fv(color_gizmo_b);
 
-    if (guide.type == GP_GUIDE_CIRCULAR) {
-      const int nsegments = math::clamp(int(guide.radius / 2), 8, 96);
-      imm_draw_circle_wire_2d(pos, guide.origin.x, guide.origin.y, guide.radius, nsegments);
+    switch (guide.type) {
+      case GP_GUIDE_CIRCULAR: {
+        const int nsegments = math::clamp(int(guide.radius / 2), 8, 96);
+        imm_draw_circle_wire_2d(pos, guide.origin.x, guide.origin.y, guide.radius, nsegments);
+        break;
+      }
+      case GP_GUIDE_RADIAL: {
+        float2 opposite = math::normalize(guide.start_coords - guide.origin) *
+                          ui_guide_line_length;
+        immBegin(GPU_PRIM_LINES, 2);
+        immVertex2fv(pos, guide.start_coords + opposite);
+        immVertex2fv(pos, guide.start_coords - opposite);
+        immEnd();
+        break;
+      }
+      case GP_GUIDE_ISO: {
+        float2 up = float2(0.0f, ui_guide_line_length);
+        float2 right = float2(ui_guide_line_length, 0.0f);
+        float2 cw;
+        float2 ccw;
+        rotate_v2_v2v2fl(cw, right, float2(0.0f), guide.user_angle);
+        rotate_v2_v2v2fl(ccw, right, float2(0.0f), -guide.user_angle);
+        immBegin(GPU_PRIM_LINES, 6);
+        immVertex2fv(pos, guide.start_coords + cw);
+        immVertex2fv(pos, guide.start_coords - cw);
+        immVertex2fv(pos, guide.start_coords + ccw);
+        immVertex2fv(pos, guide.start_coords - ccw);
+        immVertex2fv(pos, guide.start_coords + up);
+        immVertex2fv(pos, guide.start_coords - up);
+        immEnd();
+        break;
+      }
+      case GP_GUIDE_GRID: {
+        const float2 line = float2(ui_guide_line_length, 0.0f);
+        float2 cw;
+        rotate_v2_v2v2fl(cw, line, float2(0.0f), math::numbers::pi * 0.5f);
+        immBegin(GPU_PRIM_LINES, 4);
+        immVertex2fv(pos, guide.start_coords + line);
+        immVertex2fv(pos, guide.start_coords - line);
+        immVertex2fv(pos, guide.start_coords + cw);
+        immVertex2fv(pos, guide.start_coords - cw);
+        immEnd();
+        break;
+      }
+      case GP_GUIDE_PARALLEL: {
+        const float2 line = float2(ui_guide_line_length, 0.0f);
+        float2 cw;
+        rotate_v2_v2v2fl(cw, line, float2(0.0f), guide.user_angle);
+        immBegin(GPU_PRIM_LINES, 2);
+        immVertex2fv(pos, guide.start_coords + cw);
+        immVertex2fv(pos, guide.start_coords - cw);
+        immEnd();
+        break;
+      }
     }
-    else if (guide.type == GP_GUIDE_RADIAL) {
-      float2 opposite = math::normalize(guide.start_coords - guide.origin) * ui_guide_line_length;
-      immBegin(GPU_PRIM_LINES, 2);
-      immVertex2fv(pos, guide.start_coords + opposite);
-      immVertex2fv(pos, guide.start_coords - opposite);
-      immEnd();
-    }
-    else if (guide.type == GP_GUIDE_ISO) {
-      float2 up = float2(0.0f, ui_guide_line_length);
-      float2 right = float2(ui_guide_line_length, 0.0f);
-      float2 cw;
-      float2 ccw;
-      rotate_v2_v2v2fl(cw, right, float2(0.0f), guide.user_angle);
-      rotate_v2_v2v2fl(ccw, right, float2(0.0f), -guide.user_angle);
-      immBegin(GPU_PRIM_LINES, 6);
-      immVertex2fv(pos, guide.start_coords + cw);
-      immVertex2fv(pos, guide.start_coords - cw);
-      immVertex2fv(pos, guide.start_coords + ccw);
-      immVertex2fv(pos, guide.start_coords - ccw);
-      immVertex2fv(pos, guide.start_coords + up);
-      immVertex2fv(pos, guide.start_coords - up);
-      immEnd();
-    }
-    else if (guide.type == GP_GUIDE_GRID) {
-      const float2 line = float2(ui_guide_line_length, 0.0f);
-      float2 cw;
-      rotate_v2_v2v2fl(cw, line, float2(0.0f), math::numbers::pi * 0.5f);
-      immBegin(GPU_PRIM_LINES, 4);
-      immVertex2fv(pos, guide.start_coords + line);
-      immVertex2fv(pos, guide.start_coords - line);
-      immVertex2fv(pos, guide.start_coords + cw);
-      immVertex2fv(pos, guide.start_coords - cw);
-      immEnd();
-    }
-    else {
-      const float2 line = float2(ui_guide_line_length, 0.0f);
-      float2 cw;
-      rotate_v2_v2v2fl(cw, line, float2(0.0f), guide.user_angle);
-      immBegin(GPU_PRIM_LINES, 2);
-      immVertex2fv(pos, guide.start_coords + cw);
-      immVertex2fv(pos, guide.start_coords - cw);
-      immEnd();
-    }
+
     immUnbindProgram();
 
     GPU_blend(GPU_BLEND_NONE);
@@ -1079,8 +1089,7 @@ struct PaintOperationExecutor {
           guide_set_direction(guide, coords);
         }
         else {
-          rotate_v2_v2v2fl(
-              guide.direction, guide.unit_vector, guide.start_coords, guide.user_angle);
+          rotate_v2_v2v2fl(guide.direction, guide.ref_vector, float2(0.0f), guide.user_angle);
         }
 
         /* Process deferred samples. */
