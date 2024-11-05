@@ -4,3 +4,4 @@ Referenced by issue #119534, Pink channels region in Action Editor
 Referenced by pull request #119647, Fix #119612: Markers bar in NLA blocks view of final track in list
 Referenced by commit 43e968dc7854cb775c292889f91f200c1b6b738b, Fix #119612: Markers bar in NLA blocks view of final track in list
 Referenced by commit 4a7c5d3d3d2cd0b29bc753235f954bca3759ca3d, Fix #119534: Action Editor empty channels region without active action
+Referenced by pull request #129864, Fix #127949: able to pan keys out of view if channels are not shown
