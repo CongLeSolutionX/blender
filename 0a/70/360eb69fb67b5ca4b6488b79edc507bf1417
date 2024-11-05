@@ -5,3 +5,4 @@ Referenced by commit 98722773da2ef2a7c6ceab39ce451f46dd7ded6c, Revert "Fix: Blen
 Referenced by issue #129571, EEVEE Lights Disappear with Shadows on Apple Silicon M1
 Referenced by pull request #129793, Fix: Crash with a BadAccess X_GLXMakeCurrent error
 Referenced by commit b9dbf2959d37a33eac4e4ddceb21e23ba9e41038, Fix: Crash with a BadAccess X_GLXMakeCurrent error
+Referenced by commit b3a603ff1e3775b650b54bd59d8aa72f49ced78d, Revert "Fix: Blender crashes opening a file with compositor"
