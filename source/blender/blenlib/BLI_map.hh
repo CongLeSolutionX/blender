@@ -834,37 +834,48 @@ class Map {
    * Allows writing a range-for loop that iterates over all keys. The iterator is invalidated, when
    * the map is changed.
    */
-  KeyIterator keys() const
+  KeyIterator keys() const &
   {
     return KeyIterator(slots_.data(), slots_.size(), 0);
   }
 
   /**
+   * Compiler cannot extend lifetime of the map, so r-value overloads are deleted.
+   */
+  KeyIterator keys() const && = delete;
+
+  /**
    * Returns an iterator over all values in the map. The iterator is invalidated, when the map is
    * changed.
    */
-  ValueIterator values() const
+  ValueIterator values() const &
   {
     return ValueIterator(slots_.data(), slots_.size(), 0);
   }
+
+  ValueIterator values() const && = delete;
 
   /**
    * Returns an iterator over all values in the map and allows you to change the values. The
    * iterator is invalidated, when the map is changed.
    */
-  MutableValueIterator values()
+  MutableValueIterator values() &
   {
     return MutableValueIterator(slots_.data(), slots_.size(), 0);
   }
+
+  MutableValueIterator values() && = delete;
 
   /**
    * Returns an iterator over all key-value-pairs in the map. The key-value-pairs are stored in a
    * #MapItem. The iterator is invalidated, when the map is changed.
    */
-  ItemIterator items() const
+  ItemIterator items() const &
   {
     return ItemIterator(slots_.data(), slots_.size(), 0);
   }
+
+  ItemIterator items() const && = delete;
 
   /**
    * Returns an iterator over all key-value-pairs in the map. The key-value-pairs are stored in a
@@ -872,10 +883,12 @@ class Map {
    *
    * This iterator also allows you to modify the value (but not the key).
    */
-  MutableItemIterator items()
+  MutableItemIterator items() &
   {
     return MutableItemIterator(slots_.data(), slots_.size(), 0);
   }
+
+  MutableItemIterator items() && = delete;
 
   /**
    * Remove the key-value-pair that the iterator is currently pointing at.
