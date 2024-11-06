@@ -2551,7 +2551,7 @@ static void grease_pencil_clear_from_all_vgroup(Scene &scene,
   while (dg) {
     bDeformGroup *next_group = dg->next;
     if (!only_unlocked || (dg->flag & DG_LOCK_WEIGHT) == 0) {
-      grease_pencil_clear_from_vgroup(scene, ob, dg, true, all_drawing);
+      grease_pencil_clear_from_vgroup(scene, ob, dg, use_selection, all_drawing);
     }
     dg = next_group;
   }
@@ -2572,6 +2572,7 @@ static int vertex_group_remove_exec(bContext *C, wmOperator *op)
       const ListBase *defbase = BKE_object_defgroup_list(ob);
       bDeformGroup *dg = static_cast<bDeformGroup *>(
           BLI_findlink(defbase, BKE_object_defgroup_active_index_get(ob) - 1));
+
       if (!dg) {
         return OPERATOR_CANCELLED;
       }
