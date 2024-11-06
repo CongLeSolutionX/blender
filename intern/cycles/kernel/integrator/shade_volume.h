@@ -102,6 +102,57 @@ typedef struct VolumeIntegrateState {
   float equiangular_pdf;
 } VolumeIntegrateState;
 
+struct OctreeTracing {
+  /* Current active node. */
+  ccl_global const KernelOctreeNode *node;
+
+  /* Current active interval. */
+  Interval<float> t;
+
+  /* Offset ray to prevent numerical issue. */
+  /* TODO(weizhen): do we really need to store this offset? */
+  packed_float3 ray_offset;
+
+  /* Whether world volume exists, if so the first element in the stack is always the world. */
+  bool has_world_volume;
+
+  /* Precompute the inverse of the ray direction for finding the next voxel crossing. */
+  float3 inv_ray_D;
+
+  /* Access the current active leaf node. */
+  ccl_device_inline_method ccl_global const KernelOctreeNode *get_voxel() const
+  {
+    return node;
+  }
+
+  /* See `ray_aabb_intersect()`. */
+  ccl_device_inline_method float ray_voxel_intersect(const float3 ray_P,
+                                                     const float ray_tmax,
+                                                     int depth)
+  {
+    const KernelBoundingBox bbox = get_voxel()->bbox;
+
+    /* TODO(weizhen): check when ray_D is zero in some directions. */
+    /* Absolute distances to lower and upper box coordinates; */
+    const float3 t_lower = (bbox.min - ray_P) * inv_ray_D;
+    const float3 t_upper = (bbox.max - ray_P) * inv_ray_D;
+
+    /* The four t-intervals (for x-/y-/z-slabs, and ray p(t)). */
+    const float3 tmaxes = max(t_lower, t_upper);
+    const float tmax = reduce_min(tmaxes);
+
+    /* Offset the ray along the direction of the face normal. The magnitude of the offset is half
+     * the size of the smallest bounding box. */
+    /* TODO(weizhen): offset to the next box center. */
+    ray_offset = bbox.size() / (2 << (VOLUME_OCTREE_MAX_DEPTH - depth)) *
+                 make_float3(copysignf(tmax == tmaxes.x, inv_ray_D.x),
+                             copysignf(tmax == tmaxes.y, inv_ray_D.y),
+                             copysignf(tmax == tmaxes.z, inv_ray_D.z));
+
+    return fminf(tmax, ray_tmax);
+  }
+};
+
 /* Given a position P and a octree node bounding box, return the octant of P in the box. */
 ccl_device int volume_tree_get_octant(const KernelBoundingBox bbox, const float3 P)
 {
@@ -114,7 +165,7 @@ ccl_device int volume_tree_get_octant(const KernelBoundingBox bbox, const float3
  * most 6. */
 ccl_device void volume_voxel_get(KernelGlobals kg,
                                  const ccl_private Ray *ccl_restrict ray,
-                                 ccl_private KernelOctreeTracing &tracing,
+                                 ccl_private OctreeTracing &tracing,
                                  const float3 P)
 {
   /* Offset ray to avoid self-intersection. */
@@ -140,7 +191,7 @@ ccl_device void volume_voxel_get(KernelGlobals kg,
 }
 
 ccl_device_inline bool volume_octree_tracing_init(KernelGlobals kg,
-                                                  ccl_private KernelOctreeTracing &tracing,
+                                                  ccl_private OctreeTracing &tracing,
                                                   const ccl_private Ray *ccl_restrict ray,
                                                   const float3 P)
 {
@@ -154,7 +205,7 @@ ccl_device_inline bool volume_octree_tracing_init(KernelGlobals kg,
 
 /* Advance to the next adjacent voxel and update the active interval. */
 ccl_device_inline bool volume_octree_tracing_advance(KernelGlobals kg,
-                                                     ccl_private KernelOctreeTracing &tracing,
+                                                     ccl_private OctreeTracing &tracing,
                                                      const ccl_private Ray *ccl_restrict ray)
 {
   if (tracing.t.max >= ray->tmax) {
@@ -427,7 +478,7 @@ ccl_device void volume_shadow_heterogeneous(KernelGlobals kg,
   VolumeIntegrateState vstate ccl_optional_struct_init;
   vstate.step = 0;
 
-  KernelOctreeTracing tracing;
+  OctreeTracing tracing;
   if (!volume_octree_tracing_init(kg, tracing, ray, sd->P)) {
     return;
   }
@@ -661,7 +712,7 @@ ccl_device void volume_integrate_step_scattering(
     ccl_private uint &lcg_state,
     ccl_private RNGState &rng_state,
     ccl_private VolumeIntegrateState &ccl_restrict vstate,
-    ccl_private KernelOctreeTracing &tracing,
+    ccl_private OctreeTracing &tracing,
     ccl_private const EquiangularCoefficients &equiangular_coeffs,
     ccl_private VolumeIntegrateResult &ccl_restrict result)
 {
@@ -811,7 +862,7 @@ ccl_device_forceinline void volume_integrate_heterogeneous(
   /* TODO(weizhen): This doesn't seem to keep samples stratified. */
   path_state_rng_scramble(&rng_state, 0xe35fad82);
 
-  KernelOctreeTracing tracing;
+  OctreeTracing tracing;
   if (!volume_octree_tracing_init(kg, tracing, ray, sd->P)) {
     return;
   }
