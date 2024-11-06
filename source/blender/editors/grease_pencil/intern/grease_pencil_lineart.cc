@@ -106,6 +106,8 @@ void tag_lineart_updates(const Scene *scene, ViewLayer *view_layer)
     LISTBASE_FOREACH (ModifierData *, md, &ob->modifiers) {
       if (md->type == eModifierType_GreasePencilLineart && (md->flag & eModifierMode_Realtime)) {
         DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
+        /* Tagging once per object is enough. */
+        break;
       }
     }
   }
