@@ -1181,16 +1181,16 @@ static FileData *blo_decode_and_check(FileData *fd, ReportList *reports)
     }
   }
   else if (fd->flags & FD_FLAGS_FILE_FUTURE) {
-    BKE_reportf(reports,
-                RPT_ERROR,
-                "Cannot read blend file '%s', probably written by a future version of Blender",
-                fd->relabase);
+    BKE_reportf(
+        reports,
+        RPT_ERROR,
+        "Cannot read blend file '%s', incomplete header, may be from a newer version of Blender",
+        fd->relabase);
     blo_filedata_free(fd);
     fd = nullptr;
   }
   else {
-    BKE_reportf(
-        reports, RPT_ERROR, "Failed to read blend file '%s', not a blend file", fd->relabase);
+    BKE_reportf(reports, RPT_ERROR, "Failed to read file '%s', not a blend file", fd->relabase);
     blo_filedata_free(fd);
     fd = nullptr;
   }
