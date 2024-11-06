@@ -655,25 +655,6 @@ static void sample_average(const OffsetIndices<int> buckets_offsets,
   });
 }
 
-class SkipListBuilder {
-  MutableSpan<int> indices;
-  int begin_index = 0;
-  bool is_skiped = true;
-
-  SkipListBuilder(MutableSpan<int> data, const int first_index) : indices(data)
-  {
-    this->indices[0] = first_index;
-  }
-
-  inline void add_index(const int index, const bool skip_state)
-  {
-    const bool shift_to_next = skip_state != this->is_skiped;
-    begin_index += int(shift_to_next);
-    this->indices[begin_index] = index;
-    this->is_skiped = skip_state;
-  }
-};
-
 template<typename LeafFuncT, typename JointPredicateT, typename JointFuncT>
 static void for_each_to_bottom_skip_new(const OffsetIndices<int> buckets_offsets,
                                         const int total_depth,
@@ -682,21 +663,25 @@ static void for_each_to_bottom_skip_new(const OffsetIndices<int> buckets_offsets
                                         const JointFuncT &joint_func,
                                         const LeafFuncT &leaf_func)
 {
-  Array<Array<int, 0>> parent_joint_indices(1);
-
   Array<int, 0> begin_indices(range.size());
   array_utils::fill_index_range<int>(begin_indices, range.start());
-  parent_joint_indices[0] = std::move(begin_indices);
+
+  Vector<std::pair<int, Array<int, 0>>> parent_joint_indices = {{0, std::move(begin_indices)}};
 
   for (const int depth_i : IndexRange(total_depth).drop_back(1)) {
     const IndexRange joints_range = joints_range_at_depth(depth_i);
-    Array<Array<int, 0>> new_joint_indices(joints_range.size() * 2, Array<int, 0>{});
-    bool any_next = false;
-    for (const int joint_i : joints_range.index_range()) {
+
+    Vector<std::pair<int, Array<int, 0>>> new_joint_indices;
+    new_joint_indices.reserve(new_joint_indices.size());
+
+    for (const int joint_data_i : parent_joint_indices.index_range()) {
+      const int joint_i = parent_joint_indices[joint_data_i].first;
+
       const int joint_index = joints_range[joint_i];
       const IndexRange joint_buckets = joint_buckets_range_at_depth(total_depth, depth_i, joint_i);
 
-      MutableSpan<int> parent_indices = parent_joint_indices[joint_i].as_mutable_span();
+      MutableSpan<int> parent_indices =
+          parent_joint_indices[joint_data_i].second.as_mutable_span();
       if (parent_indices.is_empty()) {
         continue;
       }
@@ -722,22 +707,21 @@ static void for_each_to_bottom_skip_new(const OffsetIndices<int> buckets_offsets
         continue;
       }
 
-      any_next = true;
-
       const IndexRange next_joints_range = joints_range_at_depth(depth_i + 1);
       const int next_joint_a = joint_i * 2 + 0;
       const int next_joint_b = joint_i * 2 + 1;
 
-      new_joint_indices[next_joint_a] = Array<int, 0>(next_indices);
+      new_joint_indices.append({next_joint_a, Array<int, 0>(next_indices)});
       if (next_indices.size() == parent_indices.size()) {
-        new_joint_indices[next_joint_b] = std::move(parent_joint_indices[joint_i]);
+        new_joint_indices.append(
+            {next_joint_b, std::move(parent_joint_indices[joint_data_i].second)});
       }
       else {
-        new_joint_indices[next_joint_b] = Array<int, 0>(next_indices);
+        new_joint_indices.append({next_joint_b, Array<int, 0>(next_indices)});
       }
     }
 
-    if (!any_next) {
+    if (new_joint_indices.is_empty()) {
       break;
     }
 
