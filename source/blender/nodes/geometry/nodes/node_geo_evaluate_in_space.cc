@@ -542,118 +542,6 @@ static void for_each_to_bottom_skip(const OffsetIndices<int> buckets_offsets,
   }
 }
 
-static FunctionRef<void(int, MutableSpan<float>)> powered_rcp(const int power_value)
-{
-  switch (power_value) {
-    case 0:
-      return [](const int /*power_value*/, MutableSpan<float> values) { values.fill(1.0f); };
-    case 1:
-      return [](const int /*power_value*/, MutableSpan<float> values) {
-        std::transform(values.begin(), values.end(), values.begin(), [&](const float value) {
-          return math::safe_rcp(value);
-        });
-      };
-    case 2:
-      return [](const int /*power_value*/, MutableSpan<float> values) {
-        std::transform(values.begin(), values.end(), values.begin(), [&](const float value) {
-          return math::safe_rcp(math::square(value));
-        });
-      };
-    case 3:
-      return [](const int /*power_value*/, MutableSpan<float> values) {
-        std::transform(values.begin(), values.end(), values.begin(), [&](const float value) {
-          return math::safe_rcp(value * value * value);
-        });
-      };
-    case 4:
-      return [](const int /*power_value*/, MutableSpan<float> values) {
-        std::transform(values.begin(), values.end(), values.begin(), [&](const float value) {
-          const float suared_value = value * value;
-          return math::safe_rcp(suared_value * suared_value);
-        });
-      };
-    default:
-      return [](const int power_value, MutableSpan<float> values) {
-        std::transform(values.begin(), values.end(), values.begin(), [&](const float value) {
-          return math::safe_rcp(math::pow(value, float(power_value)));
-        });
-      };
-  }
-}
-
-static void sample_average(const OffsetIndices<int> buckets_offsets,
-                           const int total_depth,
-                           const Span<float3> src_joints_centre,
-                           const Span<float> src_joints_min_distance,
-                           const Span<float3> src_joints_value,
-                           const Span<float3> src_bucket_position,
-                           const Span<float3> src_bucket_value,
-                           const int power_value,
-                           MutableSpan<float3> dst_buckets_data)
-{
-  BLI_assert(src_joints_centre.size() == src_joints_min_distance.size());
-  BLI_assert(src_bucket_value.size() == dst_buckets_data.size());
-  BLI_assert(src_bucket_value.size() == src_bucket_position.size());
-
-  const FunctionRef<void(int, MutableSpan<float>)> distance_invertion = powered_rcp(power_value);
-
-  threading::parallel_for(src_bucket_value.index_range(), 1024, [&](const IndexRange range) {
-    Vector<float> buffer;
-    buffer.reserve(range.size());
-
-    for_each_to_bottom_skip(
-        buckets_offsets,
-        total_depth,
-        range,
-        [&](const int joint_index, const int value_i) -> bool {
-          return math::distance_squared(src_joints_centre[joint_index],
-                                        src_bucket_position[value_i]) <=
-                 math::square(src_joints_min_distance[joint_index]);
-        },
-        [&](const IndexRange buckets_range, const int joint_index, const Span<int> value_indices) {
-          buffer.resize(value_indices.size());
-          const float total_factor = buckets_range.size();
-          for (const int value_i : value_indices.index_range()) {
-            const int value_index = value_indices[value_i];
-            buffer[value_i] = math::distance(src_joints_centre[joint_index],
-                                             src_bucket_position[value_index]);
-          }
-
-          distance_invertion(power_value, buffer.as_mutable_span());
-
-          for (const int value_i : value_indices.index_range()) {
-            const int value_index = value_indices[value_i];
-            dst_buckets_data[value_index] += (src_joints_value[joint_index] -
-                                              src_bucket_value[value_index]) *
-                                             buffer[value_i] * total_factor;
-          }
-        },
-        [&](const IndexRange bucket_range, const Span<int> value_indices) {
-          buffer.resize(bucket_range.size());
-          for (const int value_i : value_indices) {
-            const float3 position = src_bucket_position[value_i];
-
-            for (const int index : bucket_range.index_range()) {
-              buffer[index] = math::distance(src_bucket_position[bucket_range[index]], position);
-            }
-
-            distance_invertion(power_value, buffer.as_mutable_span());
-
-            const float3 self_value = src_bucket_value[value_i];
-            for (const int i : bucket_range.index_range()) {
-              const int index = bucket_range[i];
-              const float relation_factor = buffer[i];
-              const float self_ignore_relation_factor = UNLIKELY(index == value_i) ?
-                                                            0.0f :
-                                                            relation_factor;
-              dst_buckets_data[value_i] += (src_bucket_value[index] - self_value) *
-                                           self_ignore_relation_factor;
-            }
-          }
-        });
-  });
-}
-
 static FunctionRef<void(int, MutableSpan<float>)> powered_rcp_for_squared(const int power_value)
 {
   switch (power_value) {
@@ -692,15 +580,15 @@ static FunctionRef<void(int, MutableSpan<float>)> powered_rcp_for_squared(const 
   }
 }
 
-static void sample_average_new(const OffsetIndices<int> buckets_offsets,
-                               const int total_depth,
-                               const Span<float3> src_joints_centre,
-                               const Span<float> src_joints_min_distance,
-                               const Span<float3> src_joints_value,
-                               const Span<float3> src_bucket_position,
-                               const Span<float3> src_bucket_value,
-                               const int power_value,
-                               MutableSpan<float3> dst_buckets_data)
+static void sample_average(const OffsetIndices<int> buckets_offsets,
+                           const int total_depth,
+                           const Span<float3> src_joints_centre,
+                           const Span<float> src_joints_min_distance,
+                           const Span<float3> src_joints_value,
+                           const Span<float3> src_bucket_position,
+                           const Span<float3> src_bucket_value,
+                           const int power_value,
+                           MutableSpan<float3> dst_buckets_data)
 {
   BLI_assert(src_joints_centre.size() == src_joints_min_distance.size());
   BLI_assert(src_bucket_value.size() == dst_buckets_data.size());
@@ -724,7 +612,6 @@ static void sample_average_new(const OffsetIndices<int> buckets_offsets,
         },
         [&](const IndexRange buckets_range, const int joint_index, const Span<int> value_indices) {
           buffer.resize(value_indices.size());
-          const float total_factor = buckets_range.size();
           for (const int value_i : value_indices.index_range()) {
             const int value_index = value_indices[value_i];
             buffer[value_i] = math::distance_squared(src_joints_centre[joint_index],
@@ -733,6 +620,7 @@ static void sample_average_new(const OffsetIndices<int> buckets_offsets,
 
           squared_distance_invertion(power_value, buffer.as_mutable_span());
 
+          const float total_factor = buckets_range.size();
           for (const int value_i : value_indices.index_range()) {
             const int value_index = value_indices[value_i];
             dst_buckets_data[value_index] += (src_joints_value[joint_index] -
@@ -966,21 +854,6 @@ class DifferenceSumFieldInput final : public bke::GeometryFieldInput {
                             bucket_values,
                             distance_power_,
                             sampled_bucket_values);
-    }
-
-    Array<float3> sampled_bucket_values_new(domain_size, float3(0));
-    if constexpr (true) {
-      SCOPED_TIMER_AVERAGED("akdbt::sample_average_new");
-      akdbt::sample_average_new(base_offsets,
-                                total_depth,
-                                joints_positions,
-                                joints_radii,
-                                joints_values,
-                                bucket_positions,
-                                bucket_values,
-                                distance_power_,
-                                sampled_bucket_values_new);
-      sampled_bucket_values = std::move(sampled_bucket_values_new);
     }
 
     Array<float3> dst_values(domain_size);
