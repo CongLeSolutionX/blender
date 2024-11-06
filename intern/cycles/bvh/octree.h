@@ -81,6 +81,7 @@ class Octree {
 #ifdef WITH_OPENVDB
   openvdb::BoolGrid::ConstPtr get_vdb(const Geometry *geom) const;
 #endif
+  int get_width() const;
 
  private:
   std::shared_ptr<OctreeInternalNode> make_internal(std::shared_ptr<OctreeNode> &node);

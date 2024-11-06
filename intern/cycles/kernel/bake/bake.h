@@ -118,8 +118,12 @@ ccl_device void kernel_volume_density_evaluate(KernelGlobals kg,
                                                const int offset)
 {
 #ifdef __VOLUME__
+  if (input[offset * 2 + 2].object == SHADER_NONE) {
+    return;
+  }
+
   /* Setup shader data. */
-  KernelShaderEvalInput in = input[offset * 2 + 0];
+  KernelShaderEvalInput in = input[offset * 2 + 1];
 
   ShaderData sd;
   Ray ray;
@@ -132,13 +136,13 @@ ccl_device void kernel_volume_density_evaluate(KernelGlobals kg,
   /* No need for closure when evaluating extinction. */
   sd.num_closure_left = 0;
 
-  in = input[offset * 2 + 1];
+  in = input[offset * 2 + 2];
   const int shader = in.object;
   const VolumeStack entry = {sd.object, shader};
   const float3 voxel_size = make_float3(__int_as_float(in.prim), in.u, in.v);
 
   Extrema<float> extrema = {FLT_MAX, 0.0f};
-  const int num_samples = 16;
+  const int num_samples = input[0].object;
   for (int sample = 0; sample < num_samples; sample++) {
     /* TODO(weizhen): fix the blue noise sample number problem. */
     const uint3 index = make_uint3(sample + offset * num_samples, 0, 0xffffffff);

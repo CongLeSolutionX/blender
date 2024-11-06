@@ -246,6 +246,11 @@ __forceinline float3 Octree::voxel_size() const
   return index_to_world_scale_;
 }
 
+__forceinline int Octree::get_width() const
+{
+  return width;
+}
+
 openvdb::BoolGrid::ConstPtr Octree::get_vdb(const Geometry *geom) const
 {
   if (vdb_map.count(geom) > 0) {
@@ -340,10 +345,16 @@ static void fill_shader_input(device_vector<KernelShaderEvalInput> &d_input,
   }
 
   const float3 voxel_size = octree->voxel_size();
+  const int width = octree->get_width();
+  /* Use roughly the same amount of samples per object, but not more than 256 per voxel. */
+  const int num_samples = min(
+      width * width * width / (index_range.x * index_range.y * index_range.z) * 16, 256);
 
   KernelShaderEvalInput *d_input_data = d_input.data();
   const blocked_range3d<int> range(
       0, index_range.x, 32, 0, index_range.y, 32, 0, index_range.z, 32);
+
+  d_input_data[0].object = num_samples;
 
   parallel_for(range, [&](const blocked_range3d<int> &r) {
     /* One accessor per thread is importance for cached access. */
@@ -359,8 +370,8 @@ static void fill_shader_input(device_vector<KernelShaderEvalInput> &d_input,
 #ifdef WITH_OPENVDB
           /* Zero density for cells outside of the mesh. */
           if (!vdb_voxel_intersect(p, p + voxel_size, itfm, transform_applied, grid, acc)) {
-            d_input_data[offset * 2 + 0].object = OBJECT_NONE;
-            d_input_data[offset * 2 + 1].object = SHADER_NONE;
+            d_input_data[offset * 2 + 1].object = OBJECT_NONE;
+            d_input_data[offset * 2 + 2].object = SHADER_NONE;
             continue;
           }
 #endif
@@ -370,13 +381,13 @@ static void fill_shader_input(device_vector<KernelShaderEvalInput> &d_input,
           in.prim = __float_as_int(p.x);
           in.u = p.y;
           in.v = p.z;
-          d_input_data[offset * 2 + 0] = in;
+          d_input_data[offset * 2 + 1] = in;
 
           in.object = shader_id;
           in.prim = __float_as_int(voxel_size.x);
           in.u = voxel_size.y;
           in.v = voxel_size.z;
-          d_input_data[offset * 2 + 1] = in;
+          d_input_data[offset * 2 + 2] = in;
         }
       }
     }
@@ -430,7 +441,7 @@ void Octree::evaluate_volume_density_(Device *device, Progress &progress, Scene 
     ShaderEval shader_eval(device, progress);
     shader_eval.eval(
         SHADER_EVAL_VOLUME_DENSITY,
-        size * 2,
+        size * 2 + 1,
         num_channels,
         [&](device_vector<KernelShaderEvalInput> &d_input) {
           fill_shader_input(d_input, scene, this, object, index_min, index_range);
