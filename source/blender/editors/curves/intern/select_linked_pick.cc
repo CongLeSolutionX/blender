@@ -21,11 +21,10 @@ namespace blender::ed::curves {
 
 struct ClosestCurveDataBlock {
   Curves *curves_id = nullptr;
-  blender::ed::curves::FindClosestData elem = {};
+  FindClosestData elem = {};
 };
 static ClosestCurveDataBlock find_closest_curve(const Depsgraph &depsgraph,
-                                                const View3D &v3d,
-                                                const RegionView3D &rv3d,
+                                                const ViewContext &vc,
                                                 const Span<Base *> bases,
                                                 const int2 &mval)
 {
@@ -41,22 +40,22 @@ static ClosestCurveDataBlock find_closest_curve(const Depsgraph &depsgraph,
           bke::crazyspace::GeometryDeformation deformation =
               bke::crazyspace::get_evaluated_curves_deformation(depsgraph, curves_ob);
           const bke::CurvesGeometry &curves = curves_id.geometry.wrap();
-          const float4x4 projection = ED_view3d_ob_project_mat_get(&rv3d, &curves_ob);
-          ed::curves::foreach_selectable_curve_range(
+          const float4x4 projection = ED_view3d_ob_project_mat_get(vc.rv3d, &curves_ob);
+          foreach_selectable_curve_range(
               curves,
               deformation,
-              eHandleDisplay(v3d.overlay.handle_display),
-              [&](IndexRange range, Span<float3> positions, StringRef selection_attribute_name) {
-                std::optional<ed::curves::FindClosestData> new_closest_elem =
-                    ed::curves::closest_elem_find_screen_space(vc,
-                                                               curves.points_by_curve(),
-                                                               positions,
-                                                               curves.cyclic(),
-                                                               projection,
-                                                               range,
-                                                               bke::AttrDomain::Curve,
-                                                               mval,
-                                                               new_closest.elem);
+              eHandleDisplay(vc.v3d->overlay.handle_display),
+              [&](IndexRange range, Span<float3> positions, StringRef /*selection_name*/) {
+                std::optional<FindClosestData> new_closest_elem = closest_elem_find_screen_space(
+                    vc,
+                    curves.points_by_curve(),
+                    positions,
+                    curves.cyclic(),
+                    projection,
+                    range,
+                    bke::AttrDomain::Curve,
+                    mval,
+                    new_closest.elem);
                 if (new_closest_elem) {
                   new_closest.elem = *new_closest_elem;
                   new_closest.curves_id = &curves_id;
@@ -73,74 +72,31 @@ static ClosestCurveDataBlock find_closest_curve(const Depsgraph &depsgraph,
 static bool select_linked_pick(bContext &C, const int2 &mval, const SelectPick_Params &params)
 {
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(&C);
-  /* Setup view context for argument to callbacks. */
   const ViewContext vc = ED_view3d_viewcontext_init(&C, depsgraph);
-
   const Vector<Base *> bases = BKE_view_layer_array_from_bases_in_edit_mode_unique_data(
       vc.scene, vc.view_layer, vc.v3d);
 
-  const ClosestCurveDataBlock closest = threading::parallel_reduce(
-      bases.index_range(),
-      1L,
-      ClosestCurveDataBlock(),
-      [&](const IndexRange range, const ClosestCurveDataBlock &init) {
-        ClosestCurveDataBlock new_closest = init;
-        for (Base *base : bases.as_span().slice(range)) {
-          Object &curves_ob = *base->object;
-          Curves &curves_id = *static_cast<Curves *>(curves_ob.data);
-          bke::crazyspace::GeometryDeformation deformation =
-              bke::crazyspace::get_evaluated_curves_deformation(*vc.depsgraph, curves_ob);
-          const bke::CurvesGeometry &curves = curves_id.geometry.wrap();
-          const float4x4 projection = ED_view3d_ob_project_mat_get(vc.rv3d, &curves_ob);
-          ed::curves::foreach_selectable_curve_range(
-              curves,
-              deformation,
-              eHandleDisplay(vc.v3d->overlay.handle_display),
-              [&](IndexRange range, Span<float3> positions, StringRef selection_attribute_name) {
-                std::optional<ed::curves::FindClosestData> new_closest_elem =
-                    ed::curves::closest_elem_find_screen_space(vc,
-                                                               curves.points_by_curve(),
-                                                               positions,
-                                                               curves.cyclic(),
-                                                               projection,
-                                                               range,
-                                                               bke::AttrDomain::Curve,
-                                                               mval,
-                                                               new_closest.elem);
-                if (new_closest_elem) {
-                  new_closest.elem = *new_closest_elem;
-                  new_closest.curves_id = &curves_id;
-                }
-              });
-        }
-        return new_closest;
-      },
-      [](const ClosestCurveDataBlock &a, const ClosestCurveDataBlock &b) {
-        return (a.elem.distance < b.elem.distance) ? a : b;
-      });
-
+  const ClosestCurveDataBlock closest = find_closest_curve(*depsgraph, vc, bases, mval);
   if (!closest.curves_id) {
     return false;
   }
 
-  const bke::AttrDomain selection_domain = bke::AttrDomain(closest.curves_id->selection_domain);
   bke::CurvesGeometry &closest_curves = closest.curves_id->geometry.wrap();
+  const bke::AttrDomain selection_domain = bke::AttrDomain(closest.curves_id->selection_domain);
 
   if (selection_domain == bke::AttrDomain::Point) {
-    const bke::CurvesGeometry &curves = closest_curves.wrap();
-    const OffsetIndices points_by_curve = curves.points_by_curve();
-    ed::curves::foreach_selection_attribute_writer(
-        closest_curves, bke::AttrDomain::Curve, [&](bke::GSpanAttributeWriter &selection) {
+    const OffsetIndices points_by_curve = closest_curves.points_by_curve();
+    foreach_selection_attribute_writer(
+        closest_curves, bke::AttrDomain::Point, [&](bke::GSpanAttributeWriter &selection) {
           for (const int point : points_by_curve[closest.elem.index]) {
-            ed::curves::apply_selection_operation_at_index(selection.span, point, params.sel_op);
+            apply_selection_operation_at_index(selection.span, point, params.sel_op);
           }
         });
   }
   else if (selection_domain == bke::AttrDomain::Curve) {
-    bke::GSpanAttributeWriter selection = ed::curves::ensure_selection_attribute(
-        closest_curves, bke::AttrDomain::Point, CD_PROP_BOOL);
-    ed::curves::apply_selection_operation_at_index(
-        selection.span, closest.elem.index, params.sel_op);
+    bke::GSpanAttributeWriter selection = ensure_selection_attribute(
+        closest_curves, bke::AttrDomain::Curve, CD_PROP_BOOL);
+    apply_selection_operation_at_index(selection.span, closest.elem.index, params.sel_op);
     selection.finish();
   }
 
