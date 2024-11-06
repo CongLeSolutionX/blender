@@ -2519,6 +2519,7 @@ static void grease_pencil_clear_from_vgroup(Scene &scene,
   GreasePencil &grease_pencil = *static_cast<GreasePencil *>(ob.data);
 
   if (all_drawing) {
+    /* When removing vgroup, iterate over all the drawing. */
     for (GreasePencilDrawingBase *base : grease_pencil.drawings()) {
       if (base->type != GP_DRAWING) {
         continue;
@@ -2526,6 +2527,8 @@ static void grease_pencil_clear_from_vgroup(Scene &scene,
       bke::greasepencil::Drawing &drawing = reinterpret_cast<GreasePencilDrawing *>(base)->wrap();
       bke::greasepencil::remove_from_vertex_group(grease_pencil, drawing, dg->name, use_selection);
     }
+    /* Remove vgroup from the list. */
+    BKE_object_defgroup_remove(&ob, dg);
   }
   else {
     Vector<MutableDrawingInfo> drawings = retrieve_editable_drawings(scene, grease_pencil);
@@ -2544,10 +2547,13 @@ static void grease_pencil_clear_from_all_vgroup(Scene &scene,
 {
   const ListBase *defbase = BKE_object_defgroup_list(&ob);
 
-  LISTBASE_FOREACH (bDeformGroup *, dg, defbase) {
+  bDeformGroup *dg = static_cast<bDeformGroup *>(defbase->first);
+  while (dg) {
+    bDeformGroup *next_group = dg->next;
     if (!only_unlocked || (dg->flag & DG_LOCK_WEIGHT) == 0) {
       grease_pencil_clear_from_vgroup(scene, ob, dg, true, all_drawing);
     }
+    dg = next_group;
   }
 }
 
