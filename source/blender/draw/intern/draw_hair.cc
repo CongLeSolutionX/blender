@@ -56,10 +56,10 @@ static void drw_hair_ensure_vbo()
   uint dummy_id = GPU_vertformat_attr_add(&format, "dummy", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
 
   g_dummy_vbo = GPU_vertbuf_create_with_format_ex(
-      &format, GPU_USAGE_STATIC | GPU_USAGE_FLAG_BUFFER_TEXTURE_ONLY);
+      format, GPU_USAGE_STATIC | GPU_USAGE_FLAG_BUFFER_TEXTURE_ONLY);
 
   const float vert[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-  GPU_vertbuf_data_alloc(g_dummy_vbo, 1);
+  GPU_vertbuf_data_alloc(*g_dummy_vbo, 1);
   GPU_vertbuf_attr_fill(g_dummy_vbo, dummy_id, vert);
   /* Create VBO immediately to bind to texture buffer. */
   GPU_vertbuf_use(g_dummy_vbo);
@@ -207,6 +207,7 @@ DRWShadingGroup *DRW_shgroup_hair_create_sub(Object *object,
   if (hair_cache->num_uv_layers == 0) {
     DRW_shgroup_buffer_texture(shgrp, "u", g_dummy_vbo);
     DRW_shgroup_buffer_texture(shgrp, "au", g_dummy_vbo);
+    DRW_shgroup_buffer_texture(shgrp, "a", g_dummy_vbo);
   }
   if (hair_cache->num_col_layers == 0) {
     DRW_shgroup_buffer_texture(shgrp, "c", g_dummy_vbo);
@@ -378,6 +379,7 @@ blender::gpu::Batch *hair_sub_pass_setup_implementation(PassT &sub_ps,
   if (hair_cache->num_uv_layers == 0) {
     sub_ps.bind_texture("u", g_dummy_vbo);
     sub_ps.bind_texture("au", g_dummy_vbo);
+    sub_ps.bind_texture("a", g_dummy_vbo);
   }
   if (hair_cache->num_col_layers == 0) {
     sub_ps.bind_texture("c", g_dummy_vbo);

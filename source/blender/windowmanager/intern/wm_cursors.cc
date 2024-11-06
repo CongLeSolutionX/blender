@@ -49,6 +49,8 @@ static GHOST_TStandardCursor convert_to_ghost_standard_cursor(WMCursorType curs)
     case WM_CURSOR_EDIT:
     case WM_CURSOR_CROSS:
       return GHOST_kStandardCursorCrosshair;
+    case WM_CURSOR_MOVE:
+      return GHOST_kStandardCursorMove;
     case WM_CURSOR_X_MOVE:
       return GHOST_kStandardCursorLeftRight;
     case WM_CURSOR_Y_MOVE:
@@ -56,7 +58,11 @@ static GHOST_TStandardCursor convert_to_ghost_standard_cursor(WMCursorType curs)
     case WM_CURSOR_COPY:
       return GHOST_kStandardCursorCopy;
     case WM_CURSOR_HAND:
-      return GHOST_kStandardCursorMove;
+      return GHOST_kStandardCursorHandOpen;
+    case WM_CURSOR_HAND_CLOSED:
+      return GHOST_kStandardCursorHandClosed;
+    case WM_CURSOR_HAND_POINT:
+      return GHOST_kStandardCursorHandPoint;
     case WM_CURSOR_H_SPLIT:
       return GHOST_kStandardCursorHorizontalSplit;
     case WM_CURSOR_V_SPLIT:
@@ -97,6 +103,12 @@ static GHOST_TStandardCursor convert_to_ghost_standard_cursor(WMCursorType curs)
       return GHOST_kStandardCursorRightArrow;
     case WM_CURSOR_W_ARROW:
       return GHOST_kStandardCursorLeftArrow;
+    case WM_CURSOR_LEFT_HANDLE:
+      return GHOST_kStandardCursorLeftHandle;
+    case WM_CURSOR_RIGHT_HANDLE:
+      return GHOST_kStandardCursorRightHandle;
+    case WM_CURSOR_BOTH_HANDLES:
+      return GHOST_kStandardCursorBothHandles;
     default:
       return GHOST_kStandardCursorCustom;
   }
@@ -1179,6 +1191,84 @@ void wm_init_cursor_data()
   };
 
   BlenderCursor[WM_CURSOR_PICK_AREA] = &PickAreaCursor;
+  END_CURSOR_BLOCK;
+
+  /********************** Right handle cursor ***********************/
+  BEGIN_CURSOR_BLOCK;
+
+  static char right_handle_bitmap[] = {
+      0x00, 0x00, 0x7e, 0x00, 0x7e, 0x00, 0x70, 0x00, 0x70, 0x08, 0x70,
+      0x18, 0x70, 0x38, 0x70, 0x78, 0x70, 0x78, 0x70, 0x38, 0x70, 0x18,
+      0x70, 0x08, 0x70, 0x00, 0x7e, 0x00, 0x7e, 0x00, 0x00, 0x00,
+  };
+
+  static char right_handle_mask[] = {
+      0xff, 0x00, 0xff, 0x00, 0xff, 0x04, 0xff, 0x0c, 0xf8, 0x1c, 0xf8,
+      0x3c, 0xf8, 0x7c, 0xf8, 0xfc, 0xf8, 0xfc, 0xf8, 0x7c, 0xf8, 0x3c,
+      0xf8, 0x1c, 0xff, 0x0c, 0xff, 0x04, 0xff, 0x00, 0xff, 0x00,
+  };
+
+  static BCursor RightHandleCursor = {
+      right_handle_bitmap,
+      right_handle_mask,
+      7,
+      7,
+      false,
+  };
+
+  BlenderCursor[WM_CURSOR_RIGHT_HANDLE] = &RightHandleCursor;
+  END_CURSOR_BLOCK;
+
+  /********************** Left handle cursor ***********************/
+  BEGIN_CURSOR_BLOCK;
+
+  static char left_handle_bitmap[] = {
+      0x00, 0x00, 0x00, 0x7e, 0x00, 0x7e, 0x00, 0x0e, 0x10, 0x0e, 0x18,
+      0x0e, 0x1c, 0x0e, 0x1e, 0x0e, 0x1e, 0x0e, 0x1c, 0x0e, 0x18, 0x0e,
+      0x10, 0x0e, 0x00, 0x0e, 0x00, 0x7e, 0x00, 0x7e, 0x00, 0x00,
+  };
+
+  static char left_handle_mask[] = {
+      0x00, 0xff, 0x00, 0xff, 0x20, 0xff, 0x30, 0xff, 0x38, 0x1f, 0x3c,
+      0x1f, 0x3e, 0x1f, 0x3f, 0x1f, 0x3f, 0x1f, 0x3e, 0x1f, 0x3c, 0x1f,
+      0x38, 0x1f, 0x30, 0xff, 0x20, 0xff, 0x00, 0xff, 0x00, 0xff,
+  };
+
+  static BCursor LeftHandleCursor = {
+      left_handle_bitmap,
+      left_handle_mask,
+      7,
+      7,
+      false,
+  };
+
+  BlenderCursor[WM_CURSOR_LEFT_HANDLE] = &LeftHandleCursor;
+  END_CURSOR_BLOCK;
+
+  /********************** both handles cursor ***********************/
+  BEGIN_CURSOR_BLOCK;
+
+  static char both_handles_bitmap[] = {
+      0x00, 0x00, 0x7e, 0x7e, 0x7e, 0x7e, 0x60, 0x06, 0x60, 0x06, 0x64,
+      0x26, 0x66, 0x66, 0x67, 0xe6, 0x67, 0xe6, 0x66, 0x66, 0x64, 0x26,
+      0x60, 0x06, 0x60, 0x06, 0x7e, 0x7e, 0x7e, 0x7e, 0x00, 0x00,
+  };
+
+  static char both_handles_mask[] = {
+      0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc, 0x3f, 0xfe,
+      0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe, 0x7f,
+      0xfc, 0x3f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+  };
+
+  static BCursor BothHandlesCursor = {
+      both_handles_bitmap,
+      both_handles_mask,
+      7,
+      7,
+      false,
+  };
+
+  BlenderCursor[WM_CURSOR_BOTH_HANDLES] = &BothHandlesCursor;
   END_CURSOR_BLOCK;
 
   /********************** Put the cursors in the array ***********************/

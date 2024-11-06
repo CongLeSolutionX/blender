@@ -7,6 +7,8 @@
 #include "BKE_volume.hh"
 #include "BKE_volume_grid.hh"
 
+#include "BLT_translation.hh"
+
 #include "RNA_enum_types.hh"
 
 #include "NOD_rna_define.hh"
@@ -19,8 +21,9 @@ namespace blender::nodes::node_geo_get_named_grid_cc {
 static void node_declare(NodeDeclarationBuilder &b)
 {
   b.add_input<decl::Geometry>("Volume");
-  b.add_input<decl::String>("Name");
-  b.add_input<decl::Bool>("Remove").default_value(true);
+  b.add_input<decl::String>("Name").hide_label();
+  b.add_input<decl::Bool>("Remove").default_value(true).translation_context(
+      BLT_I18NCONTEXT_OPERATOR_DEFAULT);
 
   b.add_output<decl::Geometry>("Volume");
 
@@ -99,7 +102,7 @@ static void node_register()
   ntype.draw_buttons = node_layout;
   ntype.initfunc = node_init;
   ntype.geometry_node_execute = node_geo_exec;
-  blender::bke::nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 
   node_rna(ntype.rna_ext.srna);
 }

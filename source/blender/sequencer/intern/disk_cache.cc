@@ -25,7 +25,7 @@
 #include "BLI_fileops.h"
 #include "BLI_fileops_types.h"
 #include "BLI_listbase.h"
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 #include "BLI_threads.h"
 
 #include "BKE_main.hh"
@@ -284,12 +284,9 @@ static void seq_disk_cache_get_project_dir(SeqDiskCache *disk_cache,
                                            size_t dirpath_maxncpy)
 {
   char cache_dir[FILE_MAX];
-  BLI_path_split_file_part(
-      BKE_main_blendfile_path(disk_cache->bmain), cache_dir, sizeof(cache_dir));
+  const char *blendfile_path = BKE_main_blendfile_path(disk_cache->bmain);
   /* Use suffix, so that the cache directory name does not conflict with the bmain's blend file. */
-  const char *suffix = "_seq_cache";
-  strncat(cache_dir, suffix, sizeof(cache_dir) - strlen(cache_dir) - 1);
-
+  SNPRINTF(cache_dir, "%s_seq_cache", BLI_path_basename(blendfile_path));
   BLI_path_join(dirpath, dirpath_maxncpy, seq_disk_cache_base_dir(), cache_dir);
 }
 
@@ -481,7 +478,9 @@ static size_t seq_disk_cache_write_header(FILE *file, const DiskCacheHeader *hea
   return fwrite(header, sizeof(*header), 1, file);
 }
 
-static int seq_disk_cache_add_header_entry(SeqCacheKey *key, ImBuf *ibuf, DiskCacheHeader *header)
+static int seq_disk_cache_add_header_entry(const SeqCacheKey *key,
+                                           ImBuf *ibuf,
+                                           DiskCacheHeader *header)
 {
   int i;
   uint64_t offset = sizeof(*header);
@@ -531,7 +530,7 @@ static int seq_disk_cache_add_header_entry(SeqCacheKey *key, ImBuf *ibuf, DiskCa
   return i;
 }
 
-static int seq_disk_cache_get_header_entry(SeqCacheKey *key, const DiskCacheHeader *header)
+static int seq_disk_cache_get_header_entry(const SeqCacheKey *key, const DiskCacheHeader *header)
 {
   for (int i = 0; i < DCACHE_IMAGES_PER_FILE; i++) {
     if (header->entry[i].frameno == key->frame_index) {

@@ -28,9 +28,15 @@ namespace blender::eevee {
 enum eShaderType {
   AMBIENT_OCCLUSION_PASS = 0,
 
-  FILM_FRAG,
+  FILM_COPY,
   FILM_COMP,
   FILM_CRYPTOMATTE_POST,
+  FILM_FRAG,
+  FILM_PASS_CONVERT_COMBINED,
+  FILM_PASS_CONVERT_DEPTH,
+  FILM_PASS_CONVERT_VALUE,
+  FILM_PASS_CONVERT_COLOR,
+  FILM_PASS_CONVERT_CRYPTOMATTE,
 
   DEFERRED_CAPTURE_EVAL,
   DEFERRED_COMBINE,
@@ -106,6 +112,8 @@ enum eShaderType {
   RAY_TRACE_PLANAR,
   RAY_TRACE_SCREEN,
 
+  RENDERPASS_CLEAR,
+
   SPHERE_PROBE_CONVOLVE,
   SPHERE_PROBE_IRRADIANCE,
   SPHERE_PROBE_REMAP,
@@ -124,12 +132,14 @@ enum eShaderType {
   SHADOW_TILEMAP_AMEND,
   SHADOW_TILEMAP_BOUNDS,
   SHADOW_TILEMAP_FINALIZE,
+  SHADOW_TILEMAP_RENDERMAP,
   SHADOW_TILEMAP_INIT,
   SHADOW_TILEMAP_TAG_UPDATE,
   SHADOW_TILEMAP_TAG_USAGE_OPAQUE,
   SHADOW_TILEMAP_TAG_USAGE_SURFELS,
   SHADOW_TILEMAP_TAG_USAGE_TRANSPARENT,
   SHADOW_TILEMAP_TAG_USAGE_VOLUME,
+  SHADOW_VIEW_VISIBILITY,
 
   SUBSURFACE_CONVOLVE,
   SUBSURFACE_SETUP,
@@ -157,6 +167,8 @@ enum eShaderType {
 class ShaderModule {
  private:
   std::array<GPUShader *, MAX_SHADER_TYPE> shaders_;
+  BatchHandle compilation_handle_ = 0;
+  SpecializationBatchHandle specialization_handle_ = 0;
 
   /** Shared shader module across all engine instances. */
   static ShaderModule *g_shader_module;
@@ -164,6 +176,12 @@ class ShaderModule {
  public:
   ShaderModule();
   ~ShaderModule();
+
+  bool is_ready(bool block = false);
+
+  void precompile_specializations(int render_buffers_shadow_id,
+                                  int shadow_ray_count,
+                                  int shadow_ray_step_count);
 
   GPUShader *static_shader_get(eShaderType shader_type);
   GPUMaterial *material_default_shader_get(eMaterialPipeline pipeline_type,
@@ -176,13 +194,18 @@ class ShaderModule {
   GPUMaterial *world_shader_get(::World *blender_world,
                                 bNodeTree *nodetree,
                                 eMaterialPipeline pipeline_type);
+
+  /**
+   * Variation to compile a material only with a `nodetree`. Caller needs to maintain the list of
+   * materials and call GPU_material_free on it to update the material.
+   */
   GPUMaterial *material_shader_get(const char *name,
                                    ListBase &materials,
                                    bNodeTree *nodetree,
                                    eMaterialPipeline pipeline_type,
                                    eMaterialGeometry geometry_type);
 
-  void material_create_info_ammend(GPUMaterial *mat, GPUCodegenOutput *codegen);
+  void material_create_info_amend(GPUMaterial *mat, GPUCodegenOutput *codegen);
 
   /** Only to be used by Instance constructor. */
   static ShaderModule *module_get();

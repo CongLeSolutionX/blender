@@ -17,7 +17,7 @@
 #  include "BLI_winstuff.h"
 #endif
 #include "BLI_fileops.h"
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 #include "BLI_string.h"
 #include "BLI_string_utf8.h"
 
@@ -33,7 +33,7 @@
 
 #include "RNA_access.hh"
 #include "RNA_define.hh"
-#include "RNA_prototypes.h"
+#include "RNA_prototypes.hh"
 #include "RNA_types.hh"
 
 #include "UI_interface.hh"
@@ -41,6 +41,7 @@
 #include "WM_api.hh"
 #include "WM_types.hh"
 
+#include "ED_asset.hh"
 #include "ED_userpref.hh"
 
 #include "MEM_guardedalloc.h"
@@ -136,7 +137,7 @@ static void PREFERENCES_OT_autoexec_path_remove(wmOperatorType *ot)
 /** \name Add Asset Library Operator
  * \{ */
 
-static int preferences_asset_library_add_exec(bContext * /*C*/, wmOperator *op)
+static int preferences_asset_library_add_exec(bContext *C, wmOperator *op)
 {
   char *path = RNA_string_get_alloc(op->ptr, "directory", nullptr, 0, nullptr);
   char dirname[FILE_MAXFILE];
@@ -152,6 +153,7 @@ static int preferences_asset_library_add_exec(bContext * /*C*/, wmOperator *op)
 
   /* There's no dedicated notifier for the Preferences. */
   WM_main_add_notifier(NC_WINDOW, nullptr);
+  blender::ed::asset::list::clear_all_library(C);
 
   MEM_freeN(path);
   return OPERATOR_FINISHED;
@@ -204,7 +206,7 @@ static bool preferences_asset_library_remove_poll(bContext *C)
   return true;
 }
 
-static int preferences_asset_library_remove_exec(bContext * /*C*/, wmOperator *op)
+static int preferences_asset_library_remove_exec(bContext *C, wmOperator *op)
 {
   const int index = RNA_int_get(op->ptr, "index");
   bUserAssetLibrary *library = static_cast<bUserAssetLibrary *>(
@@ -219,6 +221,7 @@ static int preferences_asset_library_remove_exec(bContext * /*C*/, wmOperator *o
   CLAMP(U.active_asset_library, 0, count_remaining - 1);
   U.runtime.is_dirty = true;
 
+  blender::ed::asset::list::clear_all_library(C);
   /* Trigger refresh for the Asset Browser. */
   WM_main_add_notifier(NC_SPACE | ND_SPACE_ASSET_PARAMS, nullptr);
 
@@ -375,12 +378,24 @@ static int preferences_extension_repo_add_exec(bContext *C, wmOperator *op)
   U.active_extension_repo = BLI_findindex(&U.extension_repos, new_repo);
   U.runtime.is_dirty = true;
 
-  BKE_callback_exec_null(bmain, BKE_CB_EVT_EXTENSION_REPOS_UPDATE_POST);
+  {
+    PointerRNA new_repo_ptr = RNA_pointer_create(nullptr, &RNA_UserExtensionRepo, new_repo);
+    PointerRNA *pointers[] = {&new_repo_ptr};
 
-  BKE_callback_exec_null(bmain, BKE_CB_EVT_EXTENSION_REPOS_SYNC);
+    BKE_callback_exec_null(bmain, BKE_CB_EVT_EXTENSION_REPOS_UPDATE_POST);
+    BKE_callback_exec(bmain, pointers, ARRAY_SIZE(pointers), BKE_CB_EVT_EXTENSION_REPOS_SYNC);
+  }
 
   /* There's no dedicated notifier for the Preferences. */
   WM_event_add_notifier(C, NC_WINDOW, nullptr);
+
+  /* Mainly useful when adding a repository from a popup since it's not as obvious
+   * the repository was added compared to the repository popover.  */
+  BKE_reportf(op->reports,
+              RPT_INFO,
+              "Added %s \"%s\"",
+              preferences_extension_repo_default_name_from_type(repo_type),
+              new_repo->name);
 
   return OPERATOR_FINISHED;
 }
@@ -465,7 +480,7 @@ static void PREFERENCES_OT_extension_repo_add(wmOperatorType *ot)
        "REMOTE",
        ICON_INTERNET,
        "Add Remote Repository",
-       "Add a repository referencing an remote repository "
+       "Add a repository referencing a remote repository "
        "with support for listing and updating extensions"},
       {int(bUserExtensionRepoAddType::Local),
        "LOCAL",
@@ -578,93 +593,8 @@ static void PREFERENCES_OT_extension_repo_add(wmOperatorType *ot)
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name Generic Extension Repository Utilities
- * \{ */
-
-static bool preferences_extension_check_for_updates_enabled_poll(bContext *C)
-{
-  const bUserExtensionRepo *repo = BKE_preferences_extension_repo_find_index(
-      &U, U.active_extension_repo);
-
-  if ((G.f & G_FLAG_INTERNET_ALLOW) == 0) {
-    if ((G.f & G_FLAG_INTERNET_OVERRIDE_PREF_OFFLINE) != 0) {
-      CTX_wm_operator_poll_msg_set(
-          C, "Online access required to check for updates. Launch Blender without --offline-mode");
-    }
-    else {
-      CTX_wm_operator_poll_msg_set(C,
-                                   "Online access required to check for updates. Enable online "
-                                   "access in System preferences");
-    }
-    return false;
-  }
-
-  if (repo == nullptr) {
-    CTX_wm_operator_poll_msg_set(C, "No repositories available");
-    return false;
-  }
-
-  if ((repo->flag & USER_EXTENSION_REPO_FLAG_USE_REMOTE_URL) == 0) {
-    CTX_wm_operator_poll_msg_set(C, "Local repositories do not require refreshing");
-    return false;
-  }
-
-  if ((repo->flag & USER_EXTENSION_REPO_FLAG_DISABLED) != 0) {
-    CTX_wm_operator_poll_msg_set(C, "Active repository is disabled");
-    return false;
-  }
-
-  return true;
-}
-
-static bool preferences_extension_install_updates_enabled_poll(bContext *C)
-{
-  const bUserExtensionRepo *repo = BKE_preferences_extension_repo_find_index(
-      &U, U.active_extension_repo);
-
-  if ((G.f & G_FLAG_INTERNET_ALLOW) == 0) {
-    if ((G.f & G_FLAG_INTERNET_OVERRIDE_PREF_OFFLINE) != 0) {
-      CTX_wm_operator_poll_msg_set(
-          C, "Online access required to install updates. Launch Blender without --offline-mode");
-    }
-    else {
-      CTX_wm_operator_poll_msg_set(C,
-                                   "Online access required to install updates. Enable online "
-                                   "access in System preferences");
-    }
-    return false;
-  }
-
-  if (repo == nullptr) {
-    CTX_wm_operator_poll_msg_set(C, "No repositories available");
-    return false;
-  }
-
-  if ((repo->flag & USER_EXTENSION_REPO_FLAG_USE_REMOTE_URL) == 0) {
-    CTX_wm_operator_poll_msg_set(C,
-                                 "Local repositories do not require manual update. Reload scripts "
-                                 "or restart Blender to see any updates");
-    return false;
-  }
-
-  if ((repo->flag & USER_EXTENSION_REPO_FLAG_DISABLED) != 0) {
-    CTX_wm_operator_poll_msg_set(C, "Active repository is disabled");
-    return false;
-  }
-
-  return true;
-}
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
 /** \name Remove Extension Repository Operator
  * \{ */
-
-enum class bUserExtensionRepoRemoveType {
-  RepoOnly = 0,
-  RepoWithDirectory = 1,
-};
 
 static bool preferences_extension_repo_remove_poll(bContext *C)
 {
@@ -680,34 +610,50 @@ static int preferences_extension_repo_remove_invoke(bContext *C,
                                                     const wmEvent * /*event*/)
 {
   const int index = RNA_int_get(op->ptr, "index");
-  bUserExtensionRepoRemoveType repo_type = bUserExtensionRepoRemoveType(
-      RNA_enum_get(op->ptr, "type"));
+  bool remove_files = RNA_boolean_get(op->ptr, "remove_files");
   const bUserExtensionRepo *repo = static_cast<bUserExtensionRepo *>(
       BLI_findlink(&U.extension_repos, index));
 
   if (!repo) {
     return OPERATOR_CANCELLED;
   }
-  std::string message;
-  if (repo_type == bUserExtensionRepoRemoveType::RepoWithDirectory) {
-    char dirpath[FILE_MAX];
-    BKE_preferences_extension_repo_dirpath_get(repo, dirpath, sizeof(dirpath));
 
-    if (dirpath[0]) {
-      message = fmt::format(IFACE_("Remove all files in \"{}\"."), dirpath);
+  if (remove_files) {
+    if ((repo->flag & USER_EXTENSION_REPO_FLAG_USE_REMOTE_URL) == 0) {
+      if (repo->source == USER_EXTENSION_REPO_SOURCE_SYSTEM) {
+        remove_files = false;
+      }
+    }
+  }
+
+  std::string message;
+  if (remove_files) {
+    char dirpath[FILE_MAX];
+    char user_dirpath[FILE_MAX];
+    BKE_preferences_extension_repo_dirpath_get(repo, dirpath, sizeof(dirpath));
+    BKE_preferences_extension_repo_user_dirpath_get(repo, user_dirpath, sizeof(user_dirpath));
+
+    if (dirpath[0] || user_dirpath[0]) {
+      message = IFACE_("Remove all files in:");
+      const char *paths[] = {dirpath, user_dirpath};
+      for (int i = 0; i < ARRAY_SIZE(paths); i++) {
+        if (paths[i][0] == '\0') {
+          continue;
+        }
+        message.append(fmt::format("\n\"{}\"", paths[i]));
+      }
     }
     else {
       message = IFACE_("Remove, local files not found.");
-      repo_type = bUserExtensionRepoRemoveType::RepoOnly;
+      remove_files = false;
     }
   }
   else {
     message = IFACE_("Remove, keeping local files.");
   }
 
-  const char *confirm_text = (repo_type == bUserExtensionRepoRemoveType::RepoWithDirectory) ?
-                                 IFACE_("Remove Repository & Files") :
-                                 IFACE_("Remove Repository");
+  const char *confirm_text = remove_files ? IFACE_("Remove Repository & Files") :
+                                            IFACE_("Remove Repository");
 
   return WM_operator_confirm_ex(
       C, op, nullptr, message.c_str(), confirm_text, ALERT_ICON_WARNING, true);
@@ -716,8 +662,7 @@ static int preferences_extension_repo_remove_invoke(bContext *C,
 static int preferences_extension_repo_remove_exec(bContext *C, wmOperator *op)
 {
   const int index = RNA_int_get(op->ptr, "index");
-  const bUserExtensionRepoRemoveType repo_type = bUserExtensionRepoRemoveType(
-      RNA_enum_get(op->ptr, "type"));
+  bool remove_files = RNA_boolean_get(op->ptr, "remove_files");
   bUserExtensionRepo *repo = static_cast<bUserExtensionRepo *>(
       BLI_findlink(&U.extension_repos, index));
   if (!repo) {
@@ -727,7 +672,30 @@ static int preferences_extension_repo_remove_exec(bContext *C, wmOperator *op)
   Main *bmain = CTX_data_main(C);
   BKE_callback_exec_null(bmain, BKE_CB_EVT_EXTENSION_REPOS_UPDATE_PRE);
 
-  if (repo_type == bUserExtensionRepoRemoveType::RepoWithDirectory) {
+  if (remove_files) {
+    if ((repo->flag & USER_EXTENSION_REPO_FLAG_USE_REMOTE_URL) == 0) {
+      if (repo->source == USER_EXTENSION_REPO_SOURCE_SYSTEM) {
+        /* The UI doesn't show this option, if it's accessed disallow it. */
+        BKE_report(op->reports, RPT_WARNING, "Unable to remove files for \"System\" repositories");
+        remove_files = false;
+      }
+    }
+  }
+
+  if (remove_files) {
+    if (!BKE_preferences_extension_repo_module_is_valid(repo)) {
+      BKE_reportf(op->reports,
+                  RPT_WARNING,
+                  /* Account for it not being null terminated. */
+                  "Unable to remove files, the module name \"%.*s\" is invalid and "
+                  "could remove non-repository files",
+                  int(sizeof(repo->module)),
+                  repo->module);
+      remove_files = false;
+    }
+  }
+
+  if (remove_files) {
     char dirpath[FILE_MAX];
     BKE_preferences_extension_repo_dirpath_get(repo, dirpath, sizeof(dirpath));
     if (dirpath[0] && BLI_is_dir(dirpath)) {
@@ -748,6 +716,16 @@ static int preferences_extension_repo_remove_exec(bContext *C, wmOperator *op)
       BKE_callback_exec_string(bmain, BKE_CB_EVT_EXTENSION_REPOS_FILES_CLEAR, dirpath);
 
       if (BLI_delete(dirpath, true, recursive) != 0) {
+        BKE_reportf(op->reports,
+                    RPT_WARNING,
+                    "Unable to remove directory: %s",
+                    errno ? strerror(errno) : "unknown");
+      }
+    }
+
+    BKE_preferences_extension_repo_user_dirpath_get(repo, dirpath, sizeof(dirpath));
+    if (dirpath[0] && BLI_is_dir(dirpath)) {
+      if (BLI_delete(dirpath, true, true) != 0) {
         BKE_reportf(op->reports,
                     RPT_WARNING,
                     "Unable to remove directory: %s",
@@ -782,72 +760,15 @@ static void PREFERENCES_OT_extension_repo_remove(wmOperatorType *ot)
 
   ot->flag = OPTYPE_INTERNAL;
 
-  static const EnumPropertyItem repo_type_items[] = {
-      {int(bUserExtensionRepoRemoveType::RepoOnly), "REPO_ONLY", 0, "Remove Repository"},
-      {int(bUserExtensionRepoRemoveType::RepoWithDirectory),
-       "REPO_AND_DIRECTORY",
-       0,
-       "Remove Repository & Files",
-       "Delete all associated local files when removing"},
-      {0, nullptr, 0, nullptr, nullptr},
-  };
-
-  RNA_def_int(ot->srna, "index", 0, 0, INT_MAX, "Index", "", 0, 1000);
-
-  ot->prop = RNA_def_enum(
-      ot->srna, "type", repo_type_items, 0, "Type", "Method for removing the repository");
-  RNA_def_property_flag(ot->prop, PROP_SKIP_SAVE | PROP_HIDDEN);
-}
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
-/** \name Check for Extension Repository Updates Operator
- * \{ */
-
-static int preferences_extension_repo_sync_exec(bContext *C, wmOperator * /*op*/)
-{
-  Main *bmain = CTX_data_main(C);
-  BKE_callback_exec_null(bmain, BKE_CB_EVT_EXTENSION_REPOS_SYNC);
-  WM_event_add_notifier(C, NC_WINDOW, nullptr);
-  return OPERATOR_FINISHED;
-}
-
-static void PREFERENCES_OT_extension_repo_sync(wmOperatorType *ot)
-{
-  ot->name = "Check for Updates";
-  ot->idname = "PREFERENCES_OT_extension_repo_sync";
-  ot->description = "Refresh the list of extensions for the active repository";
-
-  ot->exec = preferences_extension_repo_sync_exec;
-  ot->poll = preferences_extension_check_for_updates_enabled_poll;
-
-  ot->flag = OPTYPE_INTERNAL;
-}
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
-/** \name Update Extension Repository Operator
- * \{ */
-
-static int preferences_extension_repo_upgrade_exec(bContext *C, wmOperator * /*op*/)
-{
-  Main *bmain = CTX_data_main(C);
-  BKE_callback_exec_null(bmain, BKE_CB_EVT_EXTENSION_REPOS_UPGRADE);
-  WM_event_add_notifier(C, NC_WINDOW, nullptr);
-  return OPERATOR_FINISHED;
-}
-
-static void PREFERENCES_OT_extension_repo_upgrade(wmOperatorType *ot)
-{
-  ot->name = "Install Available Updates for Repository";
-  ot->idname = "PREFERENCES_OT_extension_repo_upgrade";
-  ot->description = "Upgrade all the extensions to their latest version for the active repository";
-  ot->exec = preferences_extension_repo_upgrade_exec;
-  ot->poll = preferences_extension_install_updates_enabled_poll;
-
-  ot->flag = OPTYPE_INTERNAL;
+  PropertyRNA *prop;
+  prop = RNA_def_int(ot->srna, "index", 0, 0, INT_MAX, "Index", "", 0, 1000);
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+  prop = RNA_def_boolean(ot->srna,
+                         "remove_files",
+                         false,
+                         "Remove Files",
+                         "Remove extension files when removing the repository");
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
 
 /** \} */
@@ -870,7 +791,7 @@ static int preferences_extension_url_drop_invoke(bContext *C, wmOperator *op, co
   bool use_url = true;
 
   if (url_is_online && (G.f & G_FLAG_INTERNET_ALLOW) == 0) {
-    idname_external = "extensions.userpref_show_online_popup";
+    idname_external = "extensions.userpref_allow_online_popup";
     use_url = false;
   }
 
@@ -931,9 +852,9 @@ static bool associate_blend_poll(bContext *C)
 }
 
 #if !defined(__APPLE__)
-static bool associate_blend(bool do_register, bool all_users, char **error_msg)
+static bool associate_blend(bool do_register, bool all_users, char **r_error_msg)
 {
-  const bool result = WM_platform_associate_set(do_register, all_users, error_msg);
+  const bool result = WM_platform_associate_set(do_register, all_users, r_error_msg);
 #  ifdef WIN32
   if ((result == false) &&
       /* For some reason the message box isn't shown in this case. */
@@ -1171,8 +1092,6 @@ void ED_operatortypes_userpref()
 
   WM_operatortype_append(PREFERENCES_OT_extension_repo_add);
   WM_operatortype_append(PREFERENCES_OT_extension_repo_remove);
-  WM_operatortype_append(PREFERENCES_OT_extension_repo_sync);
-  WM_operatortype_append(PREFERENCES_OT_extension_repo_upgrade);
   WM_operatortype_append(PREFERENCES_OT_extension_url_drop);
 
   WM_operatortype_append(PREFERENCES_OT_associate_blend);

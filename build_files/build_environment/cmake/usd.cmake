@@ -119,9 +119,12 @@ ExternalProject_Add(external_usd
     ${PATCH_CMD} -p 1 -d
       ${BUILD_DIR}/usd/src/external_usd <
       ${PATCH_DIR}/usd.diff &&
-  ${PATCH_CMD} -p 1 -d
-    ${BUILD_DIR}/usd/src/external_usd <
-    ${PATCH_DIR}/usd_core_profile.diff
+    ${PATCH_CMD} -p 1 -d
+      ${BUILD_DIR}/usd/src/external_usd <
+      ${PATCH_DIR}/usd_core_profile.diff &&
+    ${PATCH_CMD} -p 1 -d
+      ${BUILD_DIR}/usd/src/external_usd <
+      ${PATCH_DIR}/usd_metal_edf.diff
 
   CMAKE_ARGS
     -DCMAKE_INSTALL_PREFIX=${LIBDIR}/usd
@@ -178,4 +181,16 @@ if(WIN32)
       DEPENDEES install
     )
   endif()
+else()
+  harvest(external_usd usd/include usd/include "*.h")
+  harvest(external_usd usd/include usd/include "*.hpp")
+  harvest_rpath_lib(external_usd usd/lib usd/lib "libusd_ms${SHAREDLIBEXT}")
+  harvest(external_usd usd/lib/usd usd/lib/usd "*")
+  harvest_rpath_python(
+    external_usd
+    usd/lib/python/pxr
+    python/lib/python${PYTHON_SHORT_VERSION}/site-packages/pxr
+    "*"
+  )
+  harvest(external_usd usd/plugin usd/plugin "*")
 endif()

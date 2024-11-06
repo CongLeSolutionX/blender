@@ -93,7 +93,11 @@ static void node_geo_exec(GeoNodeExecParams params)
   bke::VolumeGrid<float> grid = points_to_grid(params.extract_input<GeometrySet>("Points"),
                                                params.extract_input<Field<float>>("Radius"),
                                                params.extract_input<float>("Voxel Size"));
-  params.set_output("SDF Grid", std::move(grid));
+  if (grid) {
+    params.set_output("SDF Grid", std::move(grid));
+  }
+
+  params.set_default_remaining_outputs();
 #else
   node_geo_exec_with_missing_openvdb(params);
 #endif
@@ -107,7 +111,8 @@ static void node_register()
       &ntype, GEO_NODE_POINTS_TO_SDF_GRID, "Points to SDF Grid", NODE_CLASS_GEOMETRY);
   ntype.declare = node_declare;
   ntype.geometry_node_execute = node_geo_exec;
-  blender::bke::nodeRegisterType(&ntype);
+  ntype.gather_link_search_ops = search_link_ops_for_volume_grid_node;
+  blender::bke::node_register_type(&ntype);
 }
 NOD_REGISTER_NODE(node_register)
 

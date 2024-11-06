@@ -18,9 +18,8 @@ if(UNIX)
   endif()
   set(PATCH_MAYBE_DOS2UNIX_CMD
     ${_dos2unix}
-    ${PATCH_DIR}/opencollada.diff
     ${BUILD_DIR}/opencollada/src/external_opencollada/CMakeLists.txt
-    ${BUILD_DIR}/opencollada/src/external_opencollada/Externals/LibXML/CMakeLists.txt &&
+    ${BUILD_DIR}/opencollada/src/external_opencollada/Externals/LibXML/CMakeLists.txt
   )
 else()
   set(OPENCOLLADA_EXTRA_ARGS
@@ -43,9 +42,6 @@ ExternalProject_Add(external_opencollada
 
   PATCH_COMMAND
     ${PATCH_MAYBE_DOS2UNIX_CMD}
-    ${PATCH_CMD} -p 1 -N -d
-      ${BUILD_DIR}/opencollada/src/external_opencollada <
-      ${PATCH_DIR}/opencollada.diff
 
   CMAKE_ARGS
     -DCMAKE_INSTALL_PREFIX=${LIBDIR}/opencollada
@@ -81,4 +77,7 @@ if(WIN32)
       DEPENDEES install
     )
   endif()
+else()
+  harvest(external_opencollada opencollada/include/opencollada opencollada/include "*.h")
+  harvest(external_opencollada opencollada/lib/opencollada opencollada/lib "*.a")
 endif()

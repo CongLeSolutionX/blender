@@ -17,8 +17,9 @@
 #include "UI_tree_view.hh"
 
 #include "RNA_access.hh"
-#include "RNA_prototypes.h"
+#include "RNA_prototypes.hh"
 
+#include "ED_grease_pencil.hh"
 #include "ED_undo.hh"
 
 #include "WM_api.hh"
@@ -51,9 +52,13 @@ class LayerNodeDropTarget : public TreeViewItemDropTarget {
 
   bool can_drop(const wmDrag &drag, const char ** /*r_disabled_hint*/) const override
   {
+    if (!ELEM(drag.type, WM_DRAG_GREASE_PENCIL_LAYER, WM_DRAG_GREASE_PENCIL_GROUP)) {
+      return false;
+    }
+
     wmDragGreasePencilLayer *active_drag_node = static_cast<wmDragGreasePencilLayer *>(drag.poin);
     if (active_drag_node->node->wrap().is_layer()) {
-      return drag.type == WM_DRAG_GREASE_PENCIL_LAYER;
+      return true;
     }
 
     LayerGroup &group = active_drag_node->node->wrap().as_group();
@@ -162,7 +167,7 @@ class LayerViewItemDragController : public AbstractViewItemDragController {
 
   void *create_drag_data() const override
   {
-    wmDragGreasePencilLayer *drag_data = MEM_new<wmDragGreasePencilLayer>(__func__);
+    wmDragGreasePencilLayer *drag_data = MEM_cnew<wmDragGreasePencilLayer>(__func__);
     drag_data->node = &dragged_node_;
     drag_data->grease_pencil = &grease_pencil_;
     return drag_data;
@@ -210,14 +215,14 @@ class LayerViewItem : public AbstractTreeViewItem {
 
   void on_activate(bContext &C) override
   {
-    PointerRNA grease_pencil_ptr = RNA_pointer_create(
+    PointerRNA layers_ptr = RNA_pointer_create(
         &grease_pencil_.id, &RNA_GreasePencilv3Layers, nullptr);
     PointerRNA value_ptr = RNA_pointer_create(&grease_pencil_.id, &RNA_GreasePencilLayer, &layer_);
 
-    PropertyRNA *prop = RNA_struct_find_property(&grease_pencil_ptr, "active_layer");
+    PropertyRNA *prop = RNA_struct_find_property(&layers_ptr, "active");
 
-    RNA_property_pointer_set(&grease_pencil_ptr, prop, value_ptr, nullptr);
-    RNA_property_update(&C, &grease_pencil_ptr, prop);
+    RNA_property_pointer_set(&layers_ptr, prop, value_ptr, nullptr);
+    RNA_property_update(&C, &layers_ptr, prop);
 
     ED_undo_push(&C, "Active Grease Pencil Layer");
   }
@@ -333,7 +338,7 @@ class LayerGroupViewItem : public AbstractTreeViewItem {
     PointerRNA value_ptr = RNA_pointer_create(
         &grease_pencil_.id, &RNA_GreasePencilLayerGroup, &group_);
 
-    PropertyRNA *prop = RNA_struct_find_property(&grease_pencil_ptr, "active_group");
+    PropertyRNA *prop = RNA_struct_find_property(&grease_pencil_ptr, "active");
 
     RNA_property_pointer_set(&grease_pencil_ptr, prop, value_ptr, nullptr);
     RNA_property_update(&C, &grease_pencil_ptr, prop);
@@ -382,8 +387,12 @@ class LayerGroupViewItem : public AbstractTreeViewItem {
 
   void build_layer_group_name(uiLayout &row)
   {
-    uiItemS_ex(&row, 0.8f);
-    uiBut *but = uiItemL_ex(&row, group_.name().c_str(), ICON_FILE_FOLDER, false, false);
+    short icon = ICON_GREASEPENCIL_LAYER_GROUP;
+    if (group_.color_tag != LAYERGROUP_COLOR_NONE) {
+      icon = ICON_LAYERGROUP_COLOR_01 + group_.color_tag;
+    }
+
+    uiBut *but = uiItemL_ex(&row, group_.name().c_str(), icon, false, false);
     if (!group_.is_editable()) {
       UI_but_disable(but, "Layer Group is locked or not visible");
     }
@@ -456,19 +465,20 @@ void uiTemplateGreasePencilLayerTree(uiLayout *layout, bContext *C)
 {
   using namespace blender;
 
-  Object *object = CTX_data_active_object(C);
-  if (!object || object->type != OB_GREASE_PENCIL) {
+  GreasePencil *grease_pencil = blender::ed::greasepencil::from_context(*C);
+
+  if (grease_pencil == nullptr) {
     return;
   }
-  GreasePencil &grease_pencil = *static_cast<GreasePencil *>(object->data);
 
   uiBlock *block = uiLayoutGetBlock(layout);
 
   ui::AbstractTreeView *tree_view = UI_block_add_view(
       *block,
       "Grease Pencil Layer Tree View",
-      std::make_unique<blender::ui::greasepencil::LayerTreeView>(grease_pencil));
-  tree_view->set_min_rows(3);
+      std::make_unique<blender::ui::greasepencil::LayerTreeView>(*grease_pencil));
+  tree_view->set_context_menu_title("Grease Pencil Layer");
+  tree_view->set_default_rows(6);
 
   ui::TreeViewBuilder::build_tree_view(*tree_view, *layout);
 }

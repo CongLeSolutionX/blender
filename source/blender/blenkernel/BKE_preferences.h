@@ -16,7 +16,6 @@ extern "C" {
 #include "BLI_sys_types.h"
 
 struct BlendWriter;
-struct BlendReader;
 struct UserDef;
 struct bUserExtensionRepo;
 struct bUserAssetLibrary;
@@ -88,8 +87,11 @@ bUserExtensionRepo *BKE_preferences_extension_repo_add(UserDef *userdef,
                                                        const char *module,
                                                        const char *custom_dirpath);
 void BKE_preferences_extension_repo_remove(UserDef *userdef, bUserExtensionRepo *repo);
-bUserExtensionRepo *BKE_preferences_extension_repo_add_default(UserDef *userdef);
+bUserExtensionRepo *BKE_preferences_extension_repo_add_default_remote(UserDef *userdef);
 bUserExtensionRepo *BKE_preferences_extension_repo_add_default_user(UserDef *userdef);
+bUserExtensionRepo *BKE_preferences_extension_repo_add_default_system(UserDef *userdef);
+/** Create all default repositories, only use when repositories are empty. */
+void BKE_preferences_extension_repo_add_defaults_all(UserDef *userdef);
 
 void BKE_preferences_extension_repo_name_set(UserDef *userdef,
                                              bUserExtensionRepo *repo,
@@ -102,6 +104,21 @@ void BKE_preferences_extension_repo_custom_dirpath_set(bUserExtensionRepo *repo,
 size_t BKE_preferences_extension_repo_dirpath_get(const bUserExtensionRepo *repo,
                                                   char *dirpath,
                                                   int dirpath_maxncpy);
+
+/**
+ * Returns a user editable directory associated with this repository.
+ * Needed so extensions may have local data.
+ */
+size_t BKE_preferences_extension_repo_user_dirpath_get(const bUserExtensionRepo *repo,
+                                                       char *dirpath,
+                                                       const int dirpath_maxncpy);
+
+/**
+ * Check the module name is valid, while this should always be the case,
+ * use this as an additional safely check before performing destructive operations
+ * such as recursive file removal to prevent file/memory corruption causing user data loss.
+ */
+bool BKE_preferences_extension_repo_module_is_valid(const bUserExtensionRepo *repo);
 
 bUserExtensionRepo *BKE_preferences_extension_repo_find_index(const UserDef *userdef, int index);
 bUserExtensionRepo *BKE_preferences_extension_repo_find_by_module(const UserDef *userdef,
@@ -142,8 +159,7 @@ bool BKE_preferences_asset_shelf_settings_is_catalog_path_enabled(const UserDef 
 /**
  * Enable a catalog path for a asset shelf identified by \a shelf_idname. Will create the shelf
  * settings in the Preferences if necessary.
- * \return Return true if the catalog was newly enabled. The Preferences should be tagged as dirty
- * then.
+ * \return true if the catalog was newly enabled. The Preferences should be tagged as dirty then.
  */
 bool BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(UserDef *userdef,
                                                                       const char *shelf_idname,

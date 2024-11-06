@@ -8,6 +8,7 @@
 #include "usd_hierarchy_iterator.hh"
 #include "usd_skel_convert.hh"
 #include "usd_skel_root_utils.hh"
+#include "usd_utils.hh"
 #include "usd_writer_abstract.hh"
 #include "usd_writer_armature.hh"
 #include "usd_writer_camera.hh"
@@ -16,12 +17,11 @@
 #include "usd_writer_light.hh"
 #include "usd_writer_mesh.hh"
 #include "usd_writer_metaball.hh"
+#include "usd_writer_points.hh"
 #include "usd_writer_transform.hh"
 #include "usd_writer_volume.hh"
 
 #include <string>
-
-#include <pxr/base/tf/stringUtils.h>
 
 #include "BKE_main.hh"
 
@@ -64,6 +64,8 @@ bool USDHierarchyIterator::mark_as_weak_export(const Object *object) const
       return !params_.export_volumes;
     case OB_ARMATURE:
       return !params_.export_armatures;
+    case OB_POINTCLOUD:
+      return !params_.export_points;
 
     default:
       /* Assume weak for all other types. */
@@ -78,7 +80,7 @@ void USDHierarchyIterator::release_writer(AbstractHierarchyWriter *writer)
 
 std::string USDHierarchyIterator::make_valid_name(const std::string &name) const
 {
-  return pxr::TfMakeValidIdentifier(name);
+  return make_safe_name(name, params_.allow_unicode);
 }
 
 void USDHierarchyIterator::process_usd_skel() const
@@ -182,6 +184,15 @@ AbstractHierarchyWriter *USDHierarchyIterator::create_data_writer(const Hierarch
         return nullptr;
       }
       break;
+    case OB_POINTCLOUD:
+      if (usd_export_context.export_params.export_points) {
+        data_writer = new USDPointsWriter(usd_export_context);
+      }
+      else {
+        return nullptr;
+      }
+      break;
+
     case OB_EMPTY:
     case OB_SURF:
     case OB_FONT:
@@ -190,8 +201,8 @@ AbstractHierarchyWriter *USDHierarchyIterator::create_data_writer(const Hierarch
     case OB_LATTICE:
     case OB_GPENCIL_LEGACY:
     case OB_GREASE_PENCIL:
-    case OB_POINTCLOUD:
       return nullptr;
+
     case OB_TYPE_MAX:
       BLI_assert_msg(0, "OB_TYPE_MAX should not be used");
       return nullptr;

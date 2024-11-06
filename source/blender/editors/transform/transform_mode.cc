@@ -24,8 +24,6 @@
 
 #include "BLT_translation.hh"
 
-#include "ED_sequencer.hh"
-
 #include "transform.hh"
 #include "transform_convert.hh"
 #include "transform_gizmo.hh"
@@ -54,13 +52,12 @@ eTfmMode transform_mode_really_used(bContext *C, eTfmMode mode)
 
 bool transdata_check_local_center(const TransInfo *t, short around)
 {
-  return (
-      (around == V3D_AROUND_LOCAL_ORIGINS) &&
-      ((t->options & (CTX_OBJECT | CTX_POSE_BONE)) ||
-       /* Implicit: `(t->flag & T_EDIT)`. */
-       ELEM(t->obedit_type, OB_MESH, OB_CURVES_LEGACY, OB_MBALL, OB_ARMATURE, OB_GPENCIL_LEGACY) ||
-       (t->spacetype == SPACE_GRAPH) ||
-       (t->options & (CTX_MOVIECLIP | CTX_MASK | CTX_PAINT_CURVE | CTX_SEQUENCER_IMAGE))));
+  return ((around == V3D_AROUND_LOCAL_ORIGINS) &&
+          ((t->options & (CTX_OBJECT | CTX_POSE_BONE)) ||
+           /* Implicit: `(t->flag & T_EDIT)`. */
+           ELEM(t->obedit_type, OB_MESH, OB_CURVES_LEGACY, OB_MBALL, OB_ARMATURE) ||
+           (t->spacetype == SPACE_GRAPH) ||
+           (t->options & (CTX_MOVIECLIP | CTX_MASK | CTX_PAINT_CURVE | CTX_SEQUENCER_IMAGE))));
 }
 
 bool transform_mode_is_changeable(const int mode)
@@ -426,7 +423,7 @@ static void constraintRotLim(const TransInfo * /*t*/, TransData *td)
   }
 }
 
-void constraintSizeLim(const TransInfo *t, TransData *td)
+void constraintSizeLim(const TransInfo *t, const TransDataContainer *tc, TransData *td)
 {
   if (td->con && td->ext) {
     const bConstraintTypeInfo *cti = BKE_constraint_typeinfo_from_type(CONSTRAINT_TYPE_SIZELIMIT);
@@ -481,6 +478,11 @@ void constraintSizeLim(const TransInfo *t, TransData *td)
           /* Just multiply by `td->mtx` (this should be ok). */
           mul_m4_m3m4(cob.matrix, td->mtx, cob.matrix);
         }
+        else if (con->ownspace == CONSTRAINT_SPACE_POSE) {
+          /* Bone space without considering object transformations. */
+          mul_m4_m3m4(cob.matrix, td->mtx, cob.matrix);
+          mul_m4_m3m4(cob.matrix, tc->imat3, cob.matrix);
+        }
         else if (con->ownspace != CONSTRAINT_SPACE_LOCAL) {
           /* Skip... incompatible `spacetype`. */
           continue;
@@ -492,6 +494,10 @@ void constraintSizeLim(const TransInfo *t, TransData *td)
         /* Convert spaces again. */
         if (con->ownspace == CONSTRAINT_SPACE_WORLD) {
           /* Just multiply by `td->smtx` (this should be ok). */
+          mul_m4_m3m4(cob.matrix, td->smtx, cob.matrix);
+        }
+        else if (con->ownspace == CONSTRAINT_SPACE_POSE) {
+          mul_m4_m3m4(cob.matrix, tc->mat3, cob.matrix);
           mul_m4_m3m4(cob.matrix, td->smtx, cob.matrix);
         }
       }
@@ -562,18 +568,7 @@ void ElementRotation_ex(const TransInfo *t,
 
     /* Apply gpencil falloff. */
     if (t->options & CTX_GPENCIL_STROKES) {
-      if (t->obedit_type == OB_GPENCIL_LEGACY) {
-
-        bGPDstroke *gps = (bGPDstroke *)td->extra;
-        if (gps->runtime.multi_frame_falloff != 1.0f) {
-          float ident_mat[3][3];
-          unit_m3(ident_mat);
-          interp_m3_m3m3(smat, ident_mat, smat, gps->runtime.multi_frame_falloff);
-        }
-      }
-      else if (t->obedit_type == OB_GREASE_PENCIL) {
-        /* Pass. */
-      }
+      /* Pass. */
     }
 
     sub_v3_v3v3(vec, td->iloc, center);
@@ -1002,7 +997,7 @@ void ElementResize(const TransInfo *t,
       }
     }
 
-    constraintSizeLim(t, td);
+    constraintSizeLim(t, tc, td);
   }
 
   /* For individual element center, Editmode need to use iloc. */
@@ -1036,26 +1031,19 @@ void ElementResize(const TransInfo *t,
    *   Operating on copies as a temporary solution.
    */
   if (t->options & CTX_GPENCIL_STROKES) {
-    if (t->obedit_type == OB_GPENCIL_LEGACY) {
-      bGPDstroke *gps = (bGPDstroke *)td->extra;
-      mul_v3_fl(vec, td->factor * gps->runtime.multi_frame_falloff);
+    mul_v3_fl(vec, td->factor);
 
-      /* Scale stroke thickness. */
-      if (td->val) {
-        NumInput num_evil = t->num;
-        float values_final_evil[4];
-        copy_v4_v4(values_final_evil, t->values_final);
-        transform_snap_increment(t, values_final_evil);
-        applyNumInput(&num_evil, values_final_evil);
+    /* Scale stroke thickness. */
+    if (td->val) {
+      NumInput num_evil = t->num;
+      float values_final_evil[4];
+      copy_v4_v4(values_final_evil, t->values_final);
+      transform_snap_increment(t, values_final_evil);
+      applyNumInput(&num_evil, values_final_evil);
 
-        float ratio = values_final_evil[0];
-        float transformed_value = td->ival * fabs(ratio);
-        *td->val = max_ff(interpf(transformed_value, td->ival, gps->runtime.multi_frame_falloff),
-                          0.001f);
-      }
-    }
-    else if (t->obedit_type == OB_GREASE_PENCIL) {
-      mul_v3_fl(vec, td->factor);
+      float ratio = values_final_evil[0];
+      float transformed_value = td->ival * fabs(ratio);
+      *td->val = transformed_value;
     }
   }
   else {
@@ -1167,10 +1155,6 @@ void transform_mode_init(TransInfo *t, wmOperator *op, const int mode)
 {
   t->mode = eTfmMode(mode);
   t->mode_info = mode_info_get(t, mode);
-
-  if (t->spacetype == SPACE_SEQ && sequencer_retiming_mode_is_active(t->context)) {
-    t->mode_info = &TransMode_translate;
-  }
 
   if (t->mode_info) {
     t->flag |= eTFlag(t->mode_info->flags);

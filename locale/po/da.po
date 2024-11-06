@@ -1,10 +1,10 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.2.0 Alpha (b'a367cf664e0d')\n"
+"Project-Id-Version: Blender 4.3.0 Beta (b'28a8486e2b3f')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-05-27 12:52+0000\n"
-"PO-Revision-Date: 2024-05-23 14:56+0000\n"
+"POT-Creation-Date: 2024-10-29 10:02+0000\n"
+"PO-Revision-Date: 2024-10-14 08:42+0000\n"
 "Last-Translator: leif larsen <linuxdk1978@gmail.com>\n"
 "Language-Team: Danish <https://translate.blender.org/projects/blender-ui/ui/da/>\n"
 "Language: da\n"
@@ -12,7 +12,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=n != 1;\n"
-"X-Generator: Weblate 5.5.2"
+"X-Generator: Weblate 5.7.2"
 
 
 msgid "Valid"
@@ -53,50 +53,6 @@ msgstr "Liste over AOVs"
 
 msgid "Collection of AOVs"
 msgstr "Samling af AOVs"
-
-
-msgid "Binding Handle"
-msgstr "bindings håndtag"
-
-
-msgid "Number specific to this Binding, unique within the Animation data-blockThis is used, for example, on a KeyframeActionStrip to look up the ActionChannelBag for this Binding"
-msgstr "Nummer specifikt for denne binding, unikt i animationsdatablokken. Dette bruges for eksempel på en KeyframeActionStrip til at slå ActionChannelBag op for denne binding"
-
-
-msgid "Action Bindings"
-msgstr "Handlings bindinger"
-
-
-msgid "Collection of animation bindings"
-msgstr "Samling af animation bindinger"
-
-
-msgid "Animation Channel Bag"
-msgstr "Animation kanal pose"
-
-
-msgid "Collection of animation channels, typically associated with an animation binding"
-msgstr "Samling af animationskanaler, typisk forbundet med en animationsbinding"
-
-
-msgid "F-Curves"
-msgstr "F-curves"
-
-
-msgid "The individual F-Curves that animate the binding"
-msgstr "De individuelle F-kurver, der animerer bindingen"
-
-
-msgid "Collection of F-Curves for a specific animation binding"
-msgstr "Samling af F-kurver til en specifik animationsbinding"
-
-
-msgid "Animation Channels for Bindings"
-msgstr "Animationskanaler til bindinger"
-
-
-msgid "For each animation binding, a list of animation channels that are meant for that binding"
-msgstr "For hver animationsbinding en liste over animationskanaler, der er beregnet til denne binding"
 
 
 msgid "Action F-Curves"
@@ -283,78 +239,6 @@ msgid "Collection of action groups"
 msgstr "Samling af handlingsgrupper"
 
 
-msgid "Action Layer"
-msgstr "Handlingslag"
-
-
-msgid "Influence"
-msgstr "Indflydelse"
-
-
-msgid "How much of this layer is used when blending into the lower layers"
-msgstr "Hvor meget af dette lag bruges, når det blandes ind i de nederste lag"
-
-
-msgid "Mix Mode"
-msgstr "Blandingstilstand"
-
-
-msgid "How animation of this layer is blended into the lower layers"
-msgstr "Hvordan animation af dette lag blandes ind i de nederste lag"
-
-
-msgid "Replace"
-msgstr "Udskift"
-
-
-msgid "Channels in this layer override the same channels from underlying layers"
-msgstr "Kanaler i dette lag tilsidesætter de samme kanaler fra underliggende lag"
-
-
-msgid "Channels in this layer are added to underlying layers as sequential operations"
-msgstr "Kanaler i dette lag føjes til underliggende lag som sekventielle operationer"
-
-
-msgid "Add"
-msgstr "Tilføj"
-
-
-msgid "Channels in this layer are added to underlying layers on a per-channel basis"
-msgstr "Kanaler i dette lag føjes til underliggende lag pr. kanal"
-
-
-msgid "Subtract"
-msgstr "Fratrække"
-
-
-msgid "Channels in this layer are subtracted to underlying layers on a per-channel basis"
-msgstr "Kanaler i dette lag trækkes fra underliggende lag pr. kanal"
-
-
-msgid "Multiply"
-msgstr "Gange"
-
-
-msgid "Channels in this layer are multiplied with underlying layers on a per-channel basis"
-msgstr "Kanaler i dette lag multipliceres med underliggende lag pr. kanal"
-
-
-msgid "Strips"
-msgstr "stimmel"
-
-
-msgid "The list of strips that are on this animation layer"
-msgstr "Listen over strimler, der er på dette animationslag"
-
-
-msgid "Action Layers"
-msgstr "Handlingslag"
-
-
-msgid "Collection of animation layers"
-msgstr "Samling af animationslag"
-
-
 msgid "Action Pose Markers"
 msgstr "Handling poserings markøre"
 
@@ -379,26 +263,6 @@ msgid "Index of active pose marker"
 msgstr "Indeks for aktive poséringsmarkører"
 
 
-msgid "Action Strip"
-msgstr "Handlings strimel"
-
-
-msgid "Keyframe"
-msgstr "Nøglebillede"
-
-
-msgid "Strip with a set of F-Curves for each animation binding"
-msgstr "Strip med et sæt F-kurver for hver animationsbinding"
-
-
-msgid "Keyframe Animation Strip"
-msgstr "Keyframe Animation Strimel"
-
-
-msgid "Collection of animation strips"
-msgstr "Samling af animationsstrimler"
-
-
 msgid "Add-on"
 msgstr "Tilføjelse"
 
@@ -417,18 +281,6 @@ msgstr "modul navn"
 
 msgid "Add-on Preferences"
 msgstr "tilføjelses præference"
-
-
-msgid "Show Development Reports"
-msgstr "Vis udviklingsrapporter"
-
-
-msgid "Show the result of running commands in the main interface this has the advantage that multiple processes that run at once have their errors properly grouped which is not the case for reports which are mixed together"
-msgstr "Vis resultatet af at køre kommandoer i hovedgrænsefladen, dette har den fordel, at flere processer, der kører på én gang, har deres fejl korrekt grupperet, hvilket ikke er tilfældet for rapporter, der er blandet sammen"
-
-
-msgid "Time Out"
-msgstr "Tiden er gået"
 
 
 msgid "Compute Device Type"
@@ -547,6 +399,70 @@ msgid "Displays glTF Material Output node in Shader Editor (Menu Add > Output)"
 msgstr "Viser glTF Material Output node i Shader Editor (Menu Tilføj > Output)"
 
 
+msgid "        Filter by Name"
+msgstr "        Filtrer efter navn"
+
+
+msgid "Show only hotkeys that have this text in their name"
+msgstr "Vis kun genvejstaster, der har denne tekst i deres navn"
+
+
+msgid "Hide Mix nodes"
+msgstr "Skjul Mix-noder"
+
+
+msgid "When merging nodes with the Ctrl+Numpad0 hotkey (and similar) specify whether to collapse them or show the full node with options expanded"
+msgstr "Når du slår noder sammen med genvejstasten Ctrl+Numpad0 (og lignende), skal du angive, om de skal skjules eller vise hele noden med udvidede muligheder"
+
+
+msgid "Always collapse the new merge nodes"
+msgstr "Skjul altid de nye sammenfletningsknuder sammen"
+
+
+msgid "Collapse in all cases except for shaders"
+msgstr "Fold sammen i alle tilfælde undtagen shaders"
+
+
+msgid "Never"
+msgstr "Aldrig"
+
+
+msgid "Never collapse the new merge nodes"
+msgstr "Skjul aldrig de nye fletningsnoder sammen"
+
+
+msgid "When merging nodes with the Ctrl+Numpad0 hotkey (and similar) specify the position of the new nodes"
+msgstr "Når du slår noder sammen med genvejstasten Ctrl+Numpad0 (og lignende), skal du angive placeringen af de nye noder"
+
+
+msgid "Center"
+msgstr "Centrum"
+
+
+msgid "Place the Mix node between the two nodes"
+msgstr "Placer Mix-noden mellem de to noder"
+
+
+msgid "Bottom"
+msgstr "Bund"
+
+
+msgid "Place the Mix node at the same height as the lowest node"
+msgstr "Placer Mix-noden mellem de to noder"
+
+
+msgid "Show Hotkey List"
+msgstr "Vis genvejsliste"
+
+
+msgid "Expand this box into a list of all the hotkeys for functions in this addon"
+msgstr "Udvid denne boks til en liste over alle genvejstaster til funktioner i denne tilføjelse"
+
+
+msgid "Expand this box into a list of all naming tags for principled texture setup"
+msgstr "Udvid denne boks til en liste over alle navngivningsmærker til principiel teksturopsætning"
+
+
 msgid "Fribidi Library"
 msgstr "Fribidi bibliotek"
 
@@ -623,48 +539,16 @@ msgid "Active Action for this data-block"
 msgstr "Aktiv handling for denne datablok"
 
 
-msgid "Action Binding"
-msgstr "Handlingsbinding"
-
-
-msgid "The binding identifies which sub-set of the Action is considered to be for this data-block, and its name is used to find the right binding when assigning an Action"
-msgstr "Bindingen identificerer, hvilken delmængde af handlingen der anses for at være en del af denne datablok, og dens navn bruges til at finde den rigtige binding, når der tildeles en handling"
-
-
-msgid "New"
-msgstr "ny"
-
-
-msgid "Create a new animation binding for this data-block"
-msgstr "Opret en ny animationsbinding til denne datablok"
-
-
-msgid "(none/legacy)"
-msgstr "(ingen/legacy)"
-
-
-msgid "Action Binding Handle"
-msgstr "Action Binding Håndtag"
-
-
-msgid "A number that identifies which sub-set of the Action is considered to be for this data-block"
-msgstr "Et tal, der identificerer, hvilket undersæt af handlingen, der anses for at være en del af denne datablok"
-
-
-msgid "Action Binding Name"
-msgstr "Handling Bindende navn"
-
-
-msgid "The name of the action binding. The binding identifies which sub-set of the Action is considered to be for this data-block, and its name is used to find the right binding when assigning an Action"
-msgstr "Navnet på handlingen bindende. Bindingen identificerer, hvilken delmængde af handlingen der anses for at være en del af denne datablok, og dens navn bruges til at finde den rigtige binding, når der tildeles en handling"
-
-
 msgid "Action Blending"
 msgstr "Action blanding"
 
 
 msgid "Method used for combining Active Action's result with result of NLA stack"
 msgstr "Metode brugt til at kombinere Active Actions resultat med resultat af NLA stak"
+
+
+msgid "Replace"
+msgstr "Udskift"
 
 
 msgid "The strip values replace the accumulated results by amount specified by influence"
@@ -679,12 +563,24 @@ msgid "The strip values are combined with accumulated results by appropriately u
 msgstr "Stripværdierne kombineres med akkumulerede resultater ved passende at bruge addition, multiplikation eller quaternion matematik baseret på kanaltype"
 
 
+msgid "Add"
+msgstr "Tilføj"
+
+
 msgid "Weighted result of strip is added to the accumulated results"
 msgstr "Det vægtede resultat af strimlen føjes til de akkumulerede resultater"
 
 
+msgid "Subtract"
+msgstr "Fratrække"
+
+
 msgid "Weighted result of strip is removed from the accumulated results"
 msgstr "Det vægtede resultat af strimlen fjernes fra de akkumulerede resultater"
+
+
+msgid "Multiply"
+msgstr "Gange"
 
 
 msgid "Weighted result of strip is multiplied with the accumulated results"
@@ -961,10 +857,6 @@ msgstr "Vis stier til stillinger inden for det specificerede område"
 
 msgid "Bake to active Camera"
 msgstr "Bag til aktivt kamera"
-
-
-msgid "Motion path points will be baked into the camera space of the active camera. This means they will only look right when looking through that camera. Switching cameras using markers is not supported"
-msgstr "Bevægelsesstipunkter vil blive indbygget i kamerarummet på det aktive kamera. Det betyder, at de kun ser rigtigt ud, når de ser gennem det kamera. Skift kamera ved hjælp af markører er ikke understøttet"
 
 
 msgid "Any Type"
@@ -1271,10 +1163,6 @@ msgid "Catalog UUID"
 msgstr "Katalog UUID"
 
 
-msgid "Identifier for the asset's catalog, used by Blender to look up the asset's catalog path. Must be a UUID according to RFC4122"
-msgstr "Identifikator for aktivets katalog, brugt af Blender til at slå aktivets katalogsti op. Skal være et UUID i henhold til RFC4122"
-
-
 msgid "Catalog Simple Name"
 msgstr "Katalog enkelt navn"
 
@@ -1287,10 +1175,6 @@ msgid "Copyright"
 msgstr "ophavsret"
 
 
-msgid "Copyright notice for this asset. An empty copyright notice does not necessarily indicate that this is copyright-free. Contact the author if any clarification is needed"
-msgstr "Ophavsretsmeddelelse for dette aktiv. En tom ophavsretsmeddelelse betyder ikke nødvendigvis, at dette er ophavsretsfrit. Kontakt forfatteren, hvis der er behov for nogen afklaring"
-
-
 msgid "Description"
 msgstr "Beskrivelse"
 
@@ -1301,10 +1185,6 @@ msgstr "En beskrivelse af det aktiv, der skal vises for brugeren"
 
 msgid "License"
 msgstr "Licens"
-
-
-msgid "The type of license this asset is distributed under. An empty license name does not necessarily indicate that this is free of licensing terms. Contact the author if any clarification is needed"
-msgstr "Den type licens, som dette aktiv er distribueret under. Et tomt licensnavn betyder ikke nødvendigvis, at dette er fri for licensvilkår. Kontakt forfatteren, hvis der er behov for en afklaring"
 
 
 msgid "Tags"
@@ -1486,10 +1366,6 @@ msgid "Choose the asset library to display assets from"
 msgstr "Vælg det aktivbibliotek, du vil vise aktiver fra"
 
 
-msgid "All"
-msgstr "alle"
-
-
 msgid "Show assets from all of the listed asset libraries"
 msgstr "Vis aktiver fra alle de listede aktivbiblioteker"
 
@@ -1554,10 +1430,6 @@ msgid "No Asset Dragging"
 msgstr "Ingen aktiv træk"
 
 
-msgid "Disable the default asset dragging on drag events. Useful for implementing custom dragging via custom key-map items"
-msgstr "Deaktiver standardaktivets træk ved trækhændelser. Nyttigt til at implementere tilpasset træk via brugerdefinerede nøglekortelementer"
-
-
 msgid "Visible by Default"
 msgstr "Synlig som standard"
 
@@ -1600,10 +1472,6 @@ msgstr "Filtrer aktiver efter navn"
 
 msgid "Show Names"
 msgstr "Vis Navne"
-
-
-msgid "Show the asset name together with the preview. Otherwise only the preview will be visible"
-msgstr "Vis aktivnavnet sammen med forhåndsvisningen. Ellers vil kun forhåndsvisningen være synlig"
 
 
 msgid "Asset Tag"
@@ -1830,6 +1698,10 @@ msgid "Active attribute"
 msgstr "Arktive atributer"
 
 
+msgid "Active Attribute Index"
+msgstr "Aktivt attributindeks"
+
+
 msgid "Active Color"
 msgstr "Aktiv farve"
 
@@ -1854,14 +1726,6 @@ msgid "The name of the active color attribute for display and editing"
 msgstr "Navnet på den aktive farveattribut til visning og redigering"
 
 
-msgid "Active Attribute Index"
-msgstr "Aktivt attributindeks"
-
-
-msgid "Active attribute index"
-msgstr "Aktivt attributindeks"
-
-
 msgid "Default Color Attribute"
 msgstr "Standardfarveattribut"
 
@@ -1884,10 +1748,6 @@ msgstr "Bag data til en Scene-datablok"
 
 msgid "Cage Extrusion"
 msgstr "Bur ekstrudering"
-
-
-msgid "Inflate the active object by the specified distance for baking. This helps matching to points nearer to the outside of the selected object meshes"
-msgstr "Pust den aktive genstand op med den angivne afstand til bagning. Dette hjælper med at matche til punkter tættere på ydersiden af de valgte objektmasker"
 
 
 msgid "Cage Object"
@@ -1932,10 +1792,6 @@ msgstr "Forlæng"
 
 msgid "Extend border pixels outwards"
 msgstr "Forlæng kantpixel udad"
-
-
-msgid "The maximum ray distance for matching points between the active and selected objects. If zero, there is no limit"
-msgstr "Den maksimale stråleafstand for at matche punkter mellem de aktive og valgte objekter. Hvis nul, er der ingen grænse"
 
 
 msgid "Normal Space"
@@ -2142,6 +1998,46 @@ msgid "Weight"
 msgstr "Vægt"
 
 
+msgid "Armature"
+msgstr "Armatur"
+
+
+msgid "Camera"
+msgstr "Kamera"
+
+
+msgid "Image"
+msgstr "Billede"
+
+
+msgid "Key"
+msgstr "Nøgle"
+
+
+msgid "Material"
+msgstr "Materiale"
+
+
+msgid "Mesh"
+msgstr "Maske"
+
+
+msgid "Movie Clip"
+msgstr "Film klip"
+
+
+msgid "Scene"
+msgstr "Scene"
+
+
+msgid "Sound"
+msgstr "Lyd"
+
+
+msgid "Text"
+msgstr "Tekst"
+
+
 msgid "Level"
 msgstr "Niveau"
 
@@ -2198,20 +2094,16 @@ msgid "Active"
 msgstr "Aktiv"
 
 
-msgid "Material"
-msgstr "Materiale"
-
-
 msgid "Direction"
 msgstr "Retning"
 
 
+msgid "All"
+msgstr "alle"
+
+
 msgid "Threshold"
 msgstr "Tærskel"
-
-
-msgid "Blur"
-msgstr "Sløring"
 
 
 msgid "Object Path"
@@ -2286,10 +2178,6 @@ msgid "Crop"
 msgstr "Beskær"
 
 
-msgid "Image"
-msgstr "Billede"
-
-
 msgid "Image displayed and edited in this space"
 msgstr "Billedet vises og redigeres i dette rum"
 
@@ -2336,10 +2224,6 @@ msgstr "Baggrunds kilde"
 
 msgid "Data source used for background"
 msgstr "Datakilde brugt til baggrund"
-
-
-msgid "Movie Clip"
-msgstr "Film klip"
 
 
 msgid "Camera Clip"
@@ -2394,10 +2278,6 @@ msgid "Right"
 msgstr "Højre"
 
 
-msgid "Center"
-msgstr "Centrum"
-
-
 msgid "Angular"
 msgstr "angular"
 
@@ -2408,6 +2288,14 @@ msgstr "Dæmpning"
 
 msgid "Look"
 msgstr "udseende"
+
+
+msgid "Temperature"
+msgstr "Temperatur"
+
+
+msgid "Influence"
+msgstr "Indflydelse"
 
 
 msgid "Disable"
@@ -2454,8 +2342,8 @@ msgid "Locked Track"
 msgstr "Låst spor"
 
 
-msgid "Armature"
-msgstr "Armatur"
+msgid "Mix Mode"
+msgstr "Blandingstilstand"
 
 
 msgid "Target object"
@@ -2482,10 +2370,6 @@ msgid "Up Axis"
 msgstr "Op akse"
 
 
-msgid "Camera"
-msgstr "Kamera"
-
-
 msgid "Bone"
 msgstr "Knogle"
 
@@ -2504,10 +2388,6 @@ msgstr "Lokation"
 
 msgid "Depth"
 msgstr "Dybte"
-
-
-msgid "Scene"
-msgstr "Scene"
 
 
 msgid "Invert"
@@ -2551,10 +2431,6 @@ msgid "Compression"
 msgstr "Kompression"
 
 
-msgid "Bottom"
-msgstr "Bund"
-
-
 msgid "Top"
 msgstr "Top"
 
@@ -2563,36 +2439,20 @@ msgid "Visibility"
 msgstr "Synlighed"
 
 
+msgid "Keyframe"
+msgstr "Nøglebillede"
+
+
 msgid "Blend Mode"
 msgstr "Blandings måde"
-
-
-msgid "Camera Object"
-msgstr "Kamera objekt"
-
-
-msgid "Target Object"
-msgstr "Mål objekt"
 
 
 msgid "Ping Pong"
 msgstr "Ping pong"
 
 
-msgid "Key"
-msgstr "Nøgle"
-
-
-msgid "Mesh"
-msgstr "Maske"
-
-
-msgid "Sound"
-msgstr "Lyd"
-
-
-msgid "Text"
-msgstr "Tekst"
+msgid "F-Curves"
+msgstr "F-curves"
 
 
 msgid "B-Bone"
@@ -2601,6 +2461,10 @@ msgstr "B-Knogle"
 
 msgid "Local"
 msgstr "Lokal"
+
+
+msgid "Blur"
+msgstr "Sløring"
 
 
 msgid "Occlusion"
@@ -2668,22 +2532,6 @@ msgid "Pxr24 (lossy)"
 msgstr "Pxr24 (ej tabsfri)"
 
 
-msgid "ZIP (lossless)"
-msgstr "ZIP (tabsfri)"
-
-
-msgid "PIZ (lossless)"
-msgstr "PIZ (tabsfri)"
-
-
-msgid "RLE (lossless)"
-msgstr "RLE (tabsfri)"
-
-
-msgid "ZIPS (lossless)"
-msgstr "ZIPS (tabsfri)"
-
-
 msgid "B44 (lossy)"
 msgstr "B44 (ej tabsfri)"
 
@@ -2722,6 +2570,18 @@ msgstr "Minimum vinkel"
 
 msgid "File"
 msgstr "Fil"
+
+
+msgid "New"
+msgstr "ny"
+
+
+msgid "Camera Object"
+msgstr "Kamera objekt"
+
+
+msgid "Target Object"
+msgstr "Mål objekt"
 
 
 msgid "Play Mode"
@@ -2868,6 +2728,14 @@ msgid "Limit"
 msgstr "Grænse"
 
 
+msgid "Inflate the active object by the specified distance for baking. This helps matching to points nearer to the outside of the selected object meshes"
+msgstr "Pust den aktive genstand op med den angivne afstand til bagning. Dette hjælper med at matche til punkter tættere på ydersiden af de valgte objektmasker"
+
+
+msgid "The maximum ray distance for matching points between the active and selected objects. If zero, there is no limit"
+msgstr "Den maksimale stråleafstand for at matche punkter mellem de aktive og valgte objekter. Hvis nul, er der ingen grænse"
+
+
 msgid "Child"
 msgstr "Barn"
 
@@ -2876,8 +2744,8 @@ msgid "Reset"
 msgstr "Nulstil"
 
 
-msgid "Sharpen"
-msgstr "Skarpere"
+msgid "Property Name"
+msgstr "Egenskabens navn"
 
 
 msgid "Property"
@@ -2892,16 +2760,16 @@ msgid "State"
 msgstr "Tilstand"
 
 
-msgid "Property Name"
-msgstr "Egenskabens navn"
-
-
 msgid "Sensitivity"
 msgstr "Følsomhed"
 
 
 msgid "Dynamics"
 msgstr "dynamik"
+
+
+msgid "Strips"
+msgstr "stimmel"
 
 
 msgid "Timeline"
@@ -2934,10 +2802,6 @@ msgstr "Forældere beregningstyrper"
 
 msgid "Password"
 msgstr "Kodeord"
-
-
-msgid "Temperature"
-msgstr "Temperatur"
 
 
 msgid "Gray Scale"
@@ -3006,6 +2870,22 @@ msgstr "Detaljer"
 
 msgid "Priority"
 msgstr "Prioritet"
+
+
+msgid "Time Out"
+msgstr "Tiden er gået"
+
+
+msgid "Sharpen"
+msgstr "Skarpere"
+
+
+msgid "ON"
+msgstr "Til"
+
+
+msgid "OFF"
+msgstr "Fra"
 
 
 msgid "Keyframe not in F-Curve"
@@ -3110,14 +2990,6 @@ msgstr "W3"
 
 msgid "W4"
 msgstr "W4"
-
-
-msgid "ON"
-msgstr "Til"
-
-
-msgid "OFF"
-msgstr "Fra"
 
 
 msgid "unsupported format"

@@ -115,8 +115,9 @@ struct KnifeVert {
    * -1 represents the absence of an object. */
   int ob_index;
 
-  float co[3], cageco[3];
-  bool is_cut; /* Along a cut created by user input (will draw too). */
+  float co[3];     /* Vertex position in the original mesh. Equivalent to #BMVert::co[3]. */
+  float cageco[3]; /* Vertex position in the Cage mesh and in World Space. */
+  bool is_cut;     /* Along a cut created by user input (will draw too). */
   bool is_invalid;
   bool is_splitting; /* Created when an edge was split. */
 };
@@ -1028,8 +1029,8 @@ static void knifetool_draw(const bContext * /*C*/, ARegion * /*region*/, void *a
   if (total_hits > 0) {
     GPU_blend(GPU_BLEND_ALPHA);
 
-    blender::gpu::VertBuf *vert = GPU_vertbuf_create_with_format(format);
-    GPU_vertbuf_data_alloc(vert, total_hits);
+    blender::gpu::VertBuf *vert = GPU_vertbuf_create_with_format(*format);
+    GPU_vertbuf_data_alloc(*vert, total_hits);
 
     int other_verts_count = 0;
     int snapped_verts_count = 0;
@@ -2184,14 +2185,7 @@ static void knife_make_face_cuts(KnifeTool_OpData *kcd, BMesh *bm, BMFace *f, Li
 #endif
 
     {
-      BMFace **face_arr = nullptr;
-      int face_arr_len;
-
-      BM_face_split_edgenet(bm, f, edge_array, edge_array_len, &face_arr, &face_arr_len);
-
-      if (face_arr) {
-        MEM_freeN(face_arr);
-      }
+      BM_face_split_edgenet(bm, f, edge_array, edge_array_len, nullptr);
     }
 
     /* Remove dangling edges, not essential - but nice for users. */
@@ -3095,19 +3089,18 @@ static void knife_pos_data_clear(KnifePosData *kpd)
 /** \name Snapping (#knife_snap_update_from_mval)
  * \{ */
 
-static bool knife_find_closest_face(KnifeTool_OpData *kcd, const float2 &mval, KnifePosData *r_kpd)
+static bool knife_find_closest_face(KnifeTool_OpData *kcd,
+                                    const float3 &ray_origin,
+                                    const float3 &ray_normal,
+                                    const float2 &mval,
+                                    KnifePosData *r_kpd)
 {
   float3 cage;
   int ob_index;
   BMFace *f;
   float dist = KMAXDIST;
-  float3 origin;
-  float3 ray_normal;
 
-  ED_view3d_win_to_ray_clipped(
-      kcd->vc.depsgraph, kcd->region, kcd->vc.v3d, mval, origin, ray_normal, false);
-
-  f = knife_bvh_raycast(kcd, origin, ray_normal, 0.0f, nullptr, cage, &ob_index);
+  f = knife_bvh_raycast(kcd, ray_origin, ray_normal, 0.0f, nullptr, cage, &ob_index);
 
   if (f && kcd->only_select && BM_elem_flag_test(f, BM_ELEM_SELECT) == 0) {
     f = nullptr;
@@ -3132,7 +3125,7 @@ static bool knife_find_closest_face(KnifeTool_OpData *kcd, const float2 &mval, K
         /* Cheat for now; just put in the origin instead
          * of a true coordinate on the face.
          * This just puts a point 1.0f in front of the view. */
-        cage = origin + ray_normal;
+        cage = ray_origin + ray_normal;
 
         ob_index = 0;
         BLI_assert(ob_index == kcd->objects.first_index_of_try(vc.obact));
@@ -3223,55 +3216,40 @@ static float knife_snap_size(KnifeTool_OpData *kcd, float maxsize)
   return density ? min_ff(maxsize / (float(density) * 0.5f), maxsize) : maxsize;
 }
 
-/* Snap to edge when in a constrained mode.
- * Returns 'lambda' calculated (in screen-space). */
-static bool knife_snap_edge_constrained(KnifeTool_OpData *kcd,
-                                        const float sco[3],
-                                        const float kfv1_sco[2],
-                                        const float kfv2_sco[2],
-                                        float *r_dist_sq,
-                                        float *r_lambda,
-                                        float2 &r_sco)
+/**
+ * Find a point on an edge that is closest to the axis of a constrained mode.
+ *
+ * \return true if the point is between the edge limits.
+ */
+static bool knife_closest_constrain_to_edge(KnifeTool_OpData *kcd,
+                                            const float3 &kfv1_cageco,
+                                            const float3 &kfv2_cageco,
+                                            float r_close[3])
 {
   /* If snapping, check we're in bounds. */
-  isect_line_line_v2_point(kfv1_sco, kfv2_sco, kcd->prev.mval, kcd->curr.mval, r_sco);
-  float lambda = line_point_factor_v2(r_sco, kfv1_sco, kfv2_sco);
+  float lambda;
+  float3 dir = kcd->curr.cage - kcd->prev.cage;
+  if (!isect_ray_line_v3(kcd->prev.cage, dir, kfv1_cageco, kfv2_cageco, &lambda)) {
+    return false;
+  }
 
   /* Be strict when constrained within edge. */
   if ((lambda < 0.0f - KNIFE_FLT_EPSBIG) || (lambda > 1.0f + KNIFE_FLT_EPSBIG)) {
     return false;
   }
 
-  float dis_sq = len_squared_v2v2(sco, r_sco);
-  if (dis_sq < *r_dist_sq) {
-    *r_dist_sq = dis_sq;
-    *r_lambda = lambda;
-    return true;
-  }
-  return false;
+  interp_v3_v3v3(r_close, kfv1_cageco, kfv2_cageco, lambda);
+  return true;
 }
 
-/* Use when lambda is in screen-space. */
-static void knife_interp_v3_v3v3(const KnifeTool_OpData *kcd,
-                                 float r_co[3],
-                                 const float v1[3],
-                                 const float v2[3],
-                                 const float lambda_ss)
-{
-  float lambda = lambda_ss;
-  if (!kcd->is_ortho) {
-    /* Adjust the lambda according to the perspective. */
-    float w1 = mul_project_m4_v3_zfac(kcd->vc.rv3d->persmat, v1);
-    float w2 = mul_project_m4_v3_zfac(kcd->vc.rv3d->persmat, v2);
-    lambda = (lambda_ss * w1) / (w2 + (lambda_ss * (w1 - w2)));
-  }
-
-  interp_v3_v3v3(r_co, v1, v2, lambda);
-}
-
-/* p is closest point on edge to the mouse cursor. */
-static bool knife_find_closest_edge_of_face(
-    KnifeTool_OpData *kcd, int ob_index, BMFace *f, const float2 &cage_ss, KnifePosData *r_kpd)
+/* `r_kpd->cage` is closest point on edge to the knife point. */
+static bool knife_find_closest_edge_of_face(KnifeTool_OpData *kcd,
+                                            int ob_index,
+                                            BMFace *f,
+                                            const float3 &ray_origin,
+                                            const float3 &ray_normal,
+                                            const float2 &curr_cage_ss,
+                                            KnifePosData *r_kpd)
 {
   float maxdist;
 
@@ -3294,44 +3272,33 @@ static bool knife_find_closest_edge_of_face(
   ListBase *list = knife_get_face_kedges(kcd, ob_index, f);
   LISTBASE_FOREACH (LinkData *, ref, list) {
     KnifeEdge *kfe = static_cast<KnifeEdge *>(ref->data);
-    float kfv1_sco[2], kfv2_sco[2], test_cagep[3];
-    float lambda;
+    float test_cagep[3];
 
     if (kfe->is_invalid) {
       continue;
     }
 
-    /* Project edge vertices into screen space. */
-    knife_project_v2(kcd, kfe->v1->cageco, kfv1_sco);
-    knife_project_v2(kcd, kfe->v2->cageco, kfv2_sco);
-
-    /* Check if we're close enough and calculate 'lambda'. */
-    /* In constrained mode calculate lambda differently, unless constrained along kcd->prev.edge */
-    float2 closest_ss;
-    float dis_sq;
+    /* Get the closest point on the edge. */
     if ((kcd->is_angle_snapping || kcd->axis_constrained) && (kfe != kcd->prev.edge) &&
         (kcd->mode == MODE_DRAGGING))
     {
-      dis_sq = cur_dist_sq;
-      if (!knife_snap_edge_constrained(
-              kcd, cage_ss, kfv1_sco, kfv2_sco, &dis_sq, &lambda, closest_ss))
-      {
+      /* Check if it is within the edges' bounds. */
+      if (!knife_closest_constrain_to_edge(kcd, kfe->v1->cageco, kfe->v2->cageco, test_cagep)) {
         continue;
       }
     }
     else {
-      closest_to_line_segment_v2(closest_ss, cage_ss, kfv1_sco, kfv2_sco);
-      dis_sq = len_squared_v2v2(closest_ss, cage_ss);
-      if (dis_sq < cur_dist_sq) {
-        lambda = line_point_factor_v2(cage_ss, kfv1_sco, kfv2_sco);
-      }
-      else {
-        continue;
-      }
+      closest_ray_to_segment_v3(
+          ray_origin, ray_normal, kfe->v1->cageco, kfe->v2->cageco, test_cagep);
     }
 
-    /* Now we have 'lambda' calculated (in screen-space). */
-    knife_interp_v3_v3v3(kcd, test_cagep, kfe->v1->cageco, kfe->v2->cageco, lambda);
+    /* Check if we're close enough. */
+    float2 closest_ss;
+    knife_project_v2(kcd, test_cagep, closest_ss);
+    float dis_sq = len_squared_v2v2(closest_ss, curr_cage_ss);
+    if (dis_sq >= cur_dist_sq) {
+      continue;
+    }
 
     if (RV3D_CLIPPING_ENABLED(kcd->vc.v3d, kcd->vc.rv3d)) {
       /* Check we're in the view */
@@ -3345,7 +3312,7 @@ static bool knife_find_closest_edge_of_face(
     r_kpd->edge = kfe;
     if (kcd->snap_midpoints) {
       mid_v3_v3v3(r_kpd->cage, kfe->v1->cageco, kfe->v2->cageco);
-      mid_v2_v2v2(r_kpd->mval, kfv1_sco, kfv2_sco);
+      knife_project_v2(kcd, r_kpd->cage, r_kpd->mval);
     }
     else {
       copy_v3_v3(r_kpd->cage, test_cagep);
@@ -3744,11 +3711,16 @@ static void knife_snap_curr(KnifeTool_OpData *kcd, const float2 &mval)
 {
   knife_pos_data_clear(&kcd->curr);
 
-  if (knife_find_closest_face(kcd, mval, &kcd->curr)) {
+  float3 ray_origin;
+  float3 ray_normal;
+  ED_view3d_win_to_ray_clipped(
+      kcd->vc.depsgraph, kcd->region, kcd->vc.v3d, mval, ray_origin, ray_normal, false);
+
+  if (knife_find_closest_face(kcd, ray_origin, ray_normal, mval, &kcd->curr)) {
     if (!kcd->ignore_edge_snapping || !kcd->ignore_vert_snapping) {
       KnifePosData kpos_tmp = kcd->curr;
       if (knife_find_closest_edge_of_face(
-              kcd, kpos_tmp.ob_index, kpos_tmp.bmface, kpos_tmp.mval, &kpos_tmp))
+              kcd, kpos_tmp.ob_index, kpos_tmp.bmface, ray_origin, ray_normal, mval, &kpos_tmp))
       {
         if (!kcd->ignore_edge_snapping) {
           kcd->curr = kpos_tmp;
@@ -3820,7 +3792,9 @@ static void knife_snap_update_from_mval(KnifeTool_OpData *kcd, const float mval[
     }
   }
 
-  knife_snap_curr(kcd, mval);
+  /* Use `kcd->mval` as this is the value of the snap point in screen space that can change in
+   * angle snapping or axis constrained modes. */
+  knife_snap_curr(kcd, kcd->mval);
 }
 
 /**

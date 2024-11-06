@@ -57,7 +57,7 @@ ccl_device_inline bool subsurface_entry_bounce(KernelGlobals kg,
   /* Sample microfacet normal by transforming to/from local coordinates. */
   const float3 local_I = make_float3(dot(X, sd->wi), dot(Y, sd->wi), cos_NI);
   const float3 local_H = microfacet_ggx_sample_vndf(local_I, alpha, alpha, rand_bsdf);
-  const float3 H = X * local_H.x + Y * local_H.y + Z * local_H.z;
+  const float3 H = to_global(local_H, X, Y, Z);
 
   const float cos_HI = dot(H, sd->wi);
   const float arg = 1.0f - (sqr(neta) * (1.0f - sqr(cos_HI)));
@@ -68,9 +68,9 @@ ccl_device_inline bool subsurface_entry_bounce(KernelGlobals kg,
   const float nK = (neta * cos_HI) - dnp;
   *wo = -(neta * sd->wi) + (nK * H);
   return true;
-  /* Note: For a proper refractive GGX interface, we should be computing lambdaI and lambdaO
+  /* NOTE: For a proper refractive GGX interface, we should be computing lambdaI and lambdaO
    * and multiplying the throughput by BSDF/pdf, which for VNDF sampling works out to
-   * (1 + lambdaI) / (1 + lambdaI + lambdaO).
+   * `(1 + lambdaI) / (1 + lambdaI + lambdaO)`.
    * However, this causes darkening due to the single-scattering approximation, which we'd
    * then have to correct with a lookup table.
    * Since we only really care about the directional distribution here, it's much easier to

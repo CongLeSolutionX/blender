@@ -26,8 +26,8 @@ pxr::UsdGeomXformable USDTransformWriter::create_xformable() const
 {
   pxr::UsdGeomXform xform;
 
-  // If prim exists, cast to UsdGeomXform (Solves merge transform and shape issue for animated
-  // exports)
+  /* If prim exists, cast to #UsdGeomXform
+   * (Solves merge transform and shape issue for animated exports). */
   pxr::UsdPrim existing_prim = usd_export_context_.stage->GetPrimAtPath(
       usd_export_context_.usd_path);
   if (existing_prim.IsValid() && existing_prim.IsA<pxr::UsdGeomXform>()) {
@@ -37,7 +37,7 @@ pxr::UsdGeomXformable USDTransformWriter::create_xformable() const
     xform = pxr::UsdGeomXform::Define(usd_export_context_.stage, usd_export_context_.usd_path);
   }
 
-  return xform;
+  return pxr::UsdGeomXformable(xform.GetPrim());
 }
 
 bool USDTransformWriter::should_apply_root_xform(const HierarchyContext &context) const
@@ -73,7 +73,7 @@ void USDTransformWriter::do_write(HierarchyContext &context)
     return;
   }
 
-  float parent_relative_matrix[4][4];  // The object matrix relative to the parent.
+  float parent_relative_matrix[4][4]; /* The object matrix relative to the parent. */
 
   if (should_apply_root_xform(context)) {
     float matrix_world[4][4];
@@ -98,8 +98,8 @@ void USDTransformWriter::do_write(HierarchyContext &context)
     mul_m4_m4m4(parent_relative_matrix, context.parent_matrix_inv_world, context.matrix_world);
   }
 
-  /* USD Xforms are by default set with an identity transform; only write if necessary. */
-  if (!compare_m4m4(parent_relative_matrix, UNIT_M4, 0.000000001f)) {
+  /* USD Xforms are by default the identity transform; only write if necessary when static. */
+  if (is_animated_ || !compare_m4m4(parent_relative_matrix, UNIT_M4, 0.000000001f)) {
     set_xform_ops(parent_relative_matrix, xform);
   }
 
@@ -123,48 +123,48 @@ bool USDTransformWriter::check_is_animated(const HierarchyContext &context) cons
   return BKE_object_moves_in_time(context.object, context.animation_check_include_parent);
 }
 
-void USDTransformWriter::set_xform_ops(float xf_matrix[4][4], pxr::UsdGeomXformable &xf)
+void USDTransformWriter::set_xform_ops(float xf_matrix[4][4], const pxr::UsdGeomXformable &xf)
 {
   if (!xf) {
     return;
   }
 
   eUSDXformOpMode xfOpMode = usd_export_context_.export_params.xform_op_mode;
-  blender::Vector<pxr::UsdGeomXformOp> xformOps;
 
-  switch (xfOpMode) {
-    case USD_XFORM_OP_TRS:
-      xformOps.append(xf.AddTranslateOp());
-      xformOps.append(xf.AddRotateXYZOp());
-      xformOps.append(xf.AddScaleOp());
-
-      break;
-    case USD_XFORM_OP_TOS:
-      xformOps.append(xf.AddTranslateOp());
-      xformOps.append(xf.AddOrientOp());
-      xformOps.append(xf.AddScaleOp());
-      break;
-    case USD_XFORM_OP_MAT:
-      xformOps.append(xf.AddTransformOp());
-      break;
-    default:
-      CLOG_WARN(&LOG, "Unknown XformOp type");
-      xformOps.append(xf.AddTransformOp());
-      break;
+  if (xformOps_.is_empty()) {
+    switch (xfOpMode) {
+      case USD_XFORM_OP_TRS:
+        xformOps_.append(xf.AddTranslateOp());
+        xformOps_.append(xf.AddRotateXYZOp());
+        xformOps_.append(xf.AddScaleOp());
+        break;
+      case USD_XFORM_OP_TOS:
+        xformOps_.append(xf.AddTranslateOp());
+        xformOps_.append(xf.AddOrientOp());
+        xformOps_.append(xf.AddScaleOp());
+        break;
+      case USD_XFORM_OP_MAT:
+        xformOps_.append(xf.AddTransformOp());
+        break;
+      default:
+        CLOG_WARN(&LOG, "Unknown XformOp type");
+        xformOps_.append(xf.AddTransformOp());
+        break;
+    }
   }
 
-  if (xformOps.is_empty()) {
+  if (xformOps_.is_empty()) {
     /* Shouldn't happen. */
     return;
   }
 
   pxr::UsdTimeCode time_code = get_export_time_code();
 
-  if (xformOps.size() == 1) {
+  if (xformOps_.size() == 1) {
     pxr::GfMatrix4d mat_val(xf_matrix);
-    usd_value_writer_.SetAttribute(xformOps[0].GetAttr(), mat_val, time_code);
+    usd_value_writer_.SetAttribute(xformOps_[0].GetAttr(), mat_val, time_code);
   }
-  else if (xformOps.size() == 3) {
+  else if (xformOps_.size() == 3) {
 
     float loc[3];
     float quat[4];
@@ -180,23 +180,23 @@ void USDTransformWriter::set_xform_ops(float xf_matrix[4][4], pxr::UsdGeomXforma
       rot[2] *= 180.0 / M_PI;
 
       pxr::GfVec3d loc_val(loc);
-      usd_value_writer_.SetAttribute(xformOps[0].GetAttr(), loc_val, time_code);
+      usd_value_writer_.SetAttribute(xformOps_[0].GetAttr(), loc_val, time_code);
 
       pxr::GfVec3f rot_val(rot);
-      usd_value_writer_.SetAttribute(xformOps[1].GetAttr(), rot_val, time_code);
+      usd_value_writer_.SetAttribute(xformOps_[1].GetAttr(), rot_val, time_code);
 
       pxr::GfVec3f scale_val(scale);
-      usd_value_writer_.SetAttribute(xformOps[2].GetAttr(), scale_val, time_code);
+      usd_value_writer_.SetAttribute(xformOps_[2].GetAttr(), scale_val, time_code);
     }
     else if (xfOpMode == USD_XFORM_OP_TOS) {
       pxr::GfVec3d loc_val(loc);
-      usd_value_writer_.SetAttribute(xformOps[0].GetAttr(), loc_val, time_code);
+      usd_value_writer_.SetAttribute(xformOps_[0].GetAttr(), loc_val, time_code);
 
       pxr::GfQuatf quat_val(quat[0], quat[1], quat[2], quat[3]);
-      usd_value_writer_.SetAttribute(xformOps[1].GetAttr(), quat_val, time_code);
+      usd_value_writer_.SetAttribute(xformOps_[1].GetAttr(), quat_val, time_code);
 
       pxr::GfVec3f scale_val(scale);
-      usd_value_writer_.SetAttribute(xformOps[2].GetAttr(), scale_val, time_code);
+      usd_value_writer_.SetAttribute(xformOps_[2].GetAttr(), scale_val, time_code);
     }
   }
 }

@@ -36,12 +36,12 @@ enum {
 };
 
 struct AVFrame;
+struct ImageFormatData;
+struct ImBuf;
 struct RenderData;
 struct ReportList;
 struct Scene;
 struct SwsContext;
-
-struct ImBuf;
 
 bool BKE_ffmpeg_start(void *context_v,
                       const Scene *scene,
@@ -67,6 +67,12 @@ void BKE_ffmpeg_filepath_get(char filepath[/*FILE_MAX*/ 1024],
 void BKE_ffmpeg_preset_set(RenderData *rd, int preset);
 void BKE_ffmpeg_image_type_verify(RenderData *rd, const ImageFormatData *imf);
 bool BKE_ffmpeg_alpha_channel_is_supported(const RenderData *rd);
+bool BKE_ffmpeg_codec_supports_crf(int av_codec_id);
+/**
+ * Which pixel bit depths are supported by a given video codec.
+ * Returns bitmask of `R_IMF_CHAN_DEPTH_` flags.
+ */
+int BKE_ffmpeg_valid_bit_depths(int av_codec_id);
 
 void *BKE_ffmpeg_context_create();
 void BKE_ffmpeg_context_free(void *context_v);
@@ -79,8 +85,13 @@ void BKE_ffmpeg_exit();
  * to release it. Internally the contexts are coming from the context
  * pool/cache.
  */
-SwsContext *BKE_ffmpeg_sws_get_context(
-    int width, int height, int av_src_format, int av_dst_format, int sws_flags);
+SwsContext *BKE_ffmpeg_sws_get_context(int src_width,
+                                       int src_height,
+                                       int av_src_format,
+                                       int dst_width,
+                                       int dst_height,
+                                       int av_dst_format,
+                                       int sws_flags);
 void BKE_ffmpeg_sws_release_context(SwsContext *ctx);
 
 void BKE_ffmpeg_sws_scale_frame(SwsContext *ctx, AVFrame *dst, const AVFrame *src);

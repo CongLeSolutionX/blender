@@ -632,14 +632,13 @@ static bke::CurvesGeometry boundary_to_curves(const Scene &scene,
     constexpr const float pressure = 1.0f;
     radii.span[point_i] = ed::greasepencil::radius_from_input_sample(view_context.rv3d,
                                                                      view_context.region,
-                                                                     &scene,
                                                                      &brush,
                                                                      pressure,
                                                                      position,
                                                                      placement.to_world_space(),
                                                                      brush.gpencil_settings);
     opacities.span[point_i] = ed::greasepencil::opacity_from_input_sample(
-        pressure, &brush, &scene, brush.gpencil_settings);
+        pressure, &brush, brush.gpencil_settings);
   }
 
   if (scene.toolsettings->gp_paint->mode == GPPAINT_FLAG_USE_VERTEXCOLOR) {
@@ -669,10 +668,14 @@ static bke::CurvesGeometry boundary_to_curves(const Scene &scene,
   opacities.finish();
 
   /* Initialize the rest of the attributes with default values. */
-  bke::fill_attribute_range_default(
-      attributes, bke::AttrDomain::Curve, skip_curve_attributes, curves.curves_range());
-  bke::fill_attribute_range_default(
-      attributes, bke::AttrDomain::Point, skip_point_attributes, curves.points_range());
+  bke::fill_attribute_range_default(attributes,
+                                    bke::AttrDomain::Curve,
+                                    bke::attribute_filter_from_skip_ref(skip_curve_attributes),
+                                    curves.curves_range());
+  bke::fill_attribute_range_default(attributes,
+                                    bke::AttrDomain::Point,
+                                    bke::attribute_filter_from_skip_ref(skip_point_attributes),
+                                    curves.points_range());
 
   return curves;
 }
@@ -799,15 +802,14 @@ static IndexMask get_visible_boundary_strokes(const Object &object,
       strokes.curves_range(), GrainSize(512), memory, is_visible_curve);
 }
 
-static VArray<ColorGeometry4f> stroke_colors(const Object &object,
-                                             const bke::CurvesGeometry &curves,
-                                             const VArray<float> &opacities,
-                                             const VArray<int> materials,
-                                             const ColorGeometry4f &tint_color,
-                                             const float alpha_threshold,
-                                             const bool brush_fill_hide)
+static VArray<ColorGeometry4f> get_stroke_colors(const Object &object,
+                                                 const bke::CurvesGeometry &curves,
+                                                 const VArray<float> &opacities,
+                                                 const VArray<int> materials,
+                                                 const ColorGeometry4f &tint_color,
+                                                 const std::optional<float> alpha_threshold)
 {
-  if (brush_fill_hide) {
+  if (!alpha_threshold) {
     return VArray<ColorGeometry4f>::ForSingle(tint_color, curves.points_num());
   }
 
@@ -821,7 +823,7 @@ static VArray<ColorGeometry4f> stroke_colors(const Object &object,
                                        1.0f;
       const IndexRange points = curves.points_by_curve()[curve_i];
       for (const int point_i : points) {
-        const float alpha = (material_alpha * opacities[point_i] > alpha_threshold ? 1.0f : 0.0f);
+        const float alpha = (material_alpha * opacities[point_i] > *alpha_threshold ? 1.0f : 0.0f);
         colors[point_i] = ColorGeometry4f(tint_color.r, tint_color.g, tint_color.b, alpha);
       }
     }
@@ -886,7 +888,7 @@ static rctf get_boundary_bounds(const ARegion &region,
       /* Check if the color is visible. */
       const int material_index = materials[curve_i];
       Material *mat = BKE_object_material_get(const_cast<Object *>(&object), material_index + 1);
-      if (mat == 0 || (mat->gp_style->flag & GP_MATERIAL_HIDE)) {
+      if (mat == nullptr || (mat->gp_style->flag & GP_MATERIAL_HIDE)) {
         return;
       }
 
@@ -988,7 +990,9 @@ bke::CurvesGeometry fill_strokes(const ViewContext &view_context,
                                  const VArray<bool> &boundary_layers,
                                  const Span<DrawingInfo> src_drawings,
                                  const bool invert,
+                                 const std::optional<float> alpha_threshold,
                                  const float2 &fill_point,
+                                 const ExtensionData &extensions,
                                  const FillToolFitMethod fit_method,
                                  const int stroke_material_index,
                                  const bool keep_images)
@@ -1043,22 +1047,22 @@ bke::CurvesGeometry fill_strokes(const ViewContext &view_context,
     return {};
   }
 
-  GPU_blend(GPU_BLEND_ALPHA);
-  GPU_depth_mask(true);
-  image_render::set_viewmat(view_context, scene, image_size, zoom, offset);
-
-  const float alpha_threshold = 0.2f;
-  const bool brush_fill_hide = false;
   const bool use_xray = false;
 
   const float4x4 layer_to_world = layer.to_world_space(object);
-  ed::greasepencil::DrawingPlacement placement(scene, region, view3d, object_eval, &layer);
-  const float3 fill_point_world = math::transform_point(layer_to_world,
-                                                        placement.project(fill_point_image));
+  const float4x4 world_to_view = float4x4(rv3d.viewmat);
+  const float4x4 layer_to_view = world_to_view * layer_to_world;
+  const ed::greasepencil::DrawingPlacement placement(scene, region, view3d, object_eval, &layer);
+
+  GPU_blend(GPU_BLEND_ALPHA);
+  GPU_depth_mask(true);
+  image_render::compute_view_matrices(view_context, scene, image_size, zoom, offset);
+  ed::greasepencil::image_render::set_projection_matrix(rv3d);
 
   /* Draw blue point where click with mouse. */
   const float mouse_dot_size = 4.0f;
-  image_render::draw_dot(fill_point_world, mouse_dot_size, draw_seed_color);
+  const float3 fill_point_layer = placement.project(fill_point_image);
+  image_render::draw_dot(layer_to_view, fill_point_layer, mouse_dot_size, draw_seed_color);
 
   for (const DrawingInfo &info : src_drawings) {
     const Layer &layer = *grease_pencil.layers()[info.layer_index];
@@ -1077,34 +1081,50 @@ bke::CurvesGeometry fill_strokes(const ViewContext &view_context,
     const IndexMask curve_mask = get_visible_boundary_strokes(
         object, info, is_boundary_layer, curve_mask_memory);
 
-    const VArray<ColorGeometry4f> colors = stroke_colors(object,
-                                                         info.drawing.strokes(),
-                                                         opacities,
-                                                         materials,
-                                                         draw_boundary_color,
-                                                         alpha_threshold,
-                                                         brush_fill_hide);
+    const VArray<ColorGeometry4f> stroke_colors = get_stroke_colors(object,
+                                                                    info.drawing.strokes(),
+                                                                    opacities,
+                                                                    materials,
+                                                                    draw_boundary_color,
+                                                                    alpha_threshold);
 
     image_render::draw_grease_pencil_strokes(rv3d,
                                              image_size,
                                              object,
                                              info.drawing,
-                                             curve_mask,
-                                             colors,
                                              layer_to_world,
+                                             curve_mask,
+                                             stroke_colors,
                                              use_xray,
                                              radius_scale);
+
+    /* Note: extension data is already in world space, only apply world-to-view transform here. */
+
+    const IndexRange lines_range = extensions.lines.starts.index_range();
+    if (!lines_range.is_empty()) {
+      const VArray<ColorGeometry4f> line_colors = VArray<ColorGeometry4f>::ForSingle(
+          draw_boundary_color, lines_range.size());
+      const float line_width = 1.0f;
+
+      image_render::draw_lines(world_to_view,
+                               lines_range,
+                               extensions.lines.starts,
+                               extensions.lines.ends,
+                               line_colors,
+                               line_width);
+    }
   }
 
-  image_render::clear_viewmat();
+  ed::greasepencil::image_render::clear_projection_matrix();
   GPU_depth_mask(false);
   GPU_blend(GPU_BLEND_NONE);
+
   Image *ima = image_render::image_render_end(*view_context.bmain, offscreen_buffer);
   if (!ima) {
     return {};
   }
 
-  /* TODO should use the same hardness as the paint tool. */
+  /* TODO should use the same hardness as the paint brush. */
   const float stroke_hardness = 1.0f;
 
   bke::CurvesGeometry fill_curves = process_image(*ima,

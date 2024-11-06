@@ -30,7 +30,11 @@
 #include "RNA_access.hh"
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
-#include "RNA_prototypes.h"
+#include "RNA_prototypes.hh"
+
+#ifdef WITH_PYTHON
+#  include "BPY_extern.hh"
+#endif
 
 #include "WM_api.hh"
 #include "WM_types.hh"
@@ -153,6 +157,14 @@ void WM_operatortype_append_ptr(void (*opfunc)(wmOperatorType *, void *), void *
 void WM_operatortype_remove_ptr(wmOperatorType *ot)
 {
   BLI_assert(ot == WM_operatortype_find(ot->idname, false));
+
+#ifdef WITH_PYTHON
+  /* The 'unexposed' type (inherited from #RNA_OperatorProperties) created for this operator type's
+   * properties may have had a python type representation created. This needs to be dereferenced
+   * manually here, as other #bpy_class_free (which is part of the unregistering code for runtime
+   * operators) will not be able to handle it. */
+  BPY_free_srna_pytype(ot->srna);
+#endif
 
   RNA_struct_free(&BLENDER_RNA, ot->srna);
 
@@ -318,24 +330,23 @@ static int wm_macro_exec(bContext *C, wmOperator *op)
   wm_macro_start(op);
 
   LISTBASE_FOREACH (wmOperator *, opm, &op->macro) {
-    if (opm->type->exec) {
+    if (opm->type->exec == nullptr) {
+      CLOG_WARN(WM_LOG_OPERATORS, "'%s' can't exec macro", opm->type->idname);
+      continue;
+    }
 
-      opm->flag |= op_inherited_flag;
-      retval = opm->type->exec(C, opm);
-      opm->flag &= ~op_inherited_flag;
+    opm->flag |= op_inherited_flag;
+    retval = opm->type->exec(C, opm);
+    opm->flag &= ~op_inherited_flag;
 
-      OPERATOR_RETVAL_CHECK(retval);
+    OPERATOR_RETVAL_CHECK(retval);
 
-      if (retval & OPERATOR_FINISHED) {
-        MacroData *md = static_cast<MacroData *>(op->customdata);
-        md->retval = OPERATOR_FINISHED; /* Keep in mind that at least one operator finished. */
-      }
-      else {
-        break; /* Operator didn't finish, end macro. */
-      }
+    if (retval & OPERATOR_FINISHED) {
+      MacroData *md = static_cast<MacroData *>(op->customdata);
+      md->retval = OPERATOR_FINISHED; /* Keep in mind that at least one operator finished. */
     }
     else {
-      CLOG_WARN(WM_LOG_OPERATORS, "'%s' can't exec macro", opm->type->idname);
+      break; /* Operator didn't finish, end macro. */
     }
   }
 
@@ -554,13 +565,9 @@ wmOperatorTypeMacro *WM_operatortype_macro_define(wmOperatorType *ot, const char
 
   BLI_addtail(&ot->macro, otmacro);
 
-  {
-    /* Operator should always be found but in the event its not. don't segfault. */
-    wmOperatorType *otsub = WM_operatortype_find(idname, false);
-    if (otsub) {
-      RNA_def_pointer_runtime(
-          ot->srna, otsub->idname, otsub->srna, otsub->name, otsub->description);
-    }
+  /* Operator should always be found but in the event its not. don't segfault. */
+  if (wmOperatorType *otsub = WM_operatortype_find(idname, false)) {
+    RNA_def_pointer_runtime(ot->srna, otsub->idname, otsub->srna, otsub->name, otsub->description);
   }
 
   return otmacro;
@@ -571,7 +578,7 @@ static void wm_operatortype_free_macro(wmOperatorType *ot)
   LISTBASE_FOREACH (wmOperatorTypeMacro *, otmacro, &ot->macro) {
     if (otmacro->ptr) {
       WM_operator_properties_free(otmacro->ptr);
-      MEM_freeN(otmacro->ptr);
+      MEM_delete(otmacro->ptr);
     }
   }
   BLI_freelistN(&ot->macro);

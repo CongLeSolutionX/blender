@@ -433,6 +433,10 @@ static void file_main_region_init(wmWindowManager *wm, ARegion *region)
 
   UI_view2d_region_reinit(&region->v2d, V2D_COMMONVIEW_LIST, region->winx, region->winy);
 
+  /* Truncate, otherwise these can be on ".5" and give fuzzy text. #77696. */
+  region->v2d.cur.ymin = trunc(region->v2d.cur.ymin);
+  region->v2d.cur.ymax = trunc(region->v2d.cur.ymax);
+
   /* own keymaps */
   keymap = WM_keymap_ensure(wm->defaultconf, "File Browser", SPACE_FILE, RGN_TYPE_WINDOW);
   WM_event_add_keymap_handler_v2d_mask(&region->handlers, keymap);
@@ -827,6 +831,22 @@ static void file_space_subtype_item_extend(bContext * /*C*/, EnumPropertyItem **
   RNA_enum_items_add(item, totitem, rna_enum_space_file_browse_mode_items);
 }
 
+static blender::StringRefNull file_space_name_get(const ScrArea *area)
+{
+  SpaceFile *sfile = static_cast<SpaceFile *>(area->spacedata.first);
+  const int index = RNA_enum_from_value(rna_enum_space_file_browse_mode_items, sfile->browse_mode);
+  const EnumPropertyItem item = rna_enum_space_file_browse_mode_items[index];
+  return item.name;
+}
+
+static int file_space_icon_get(const ScrArea *area)
+{
+  SpaceFile *sfile = static_cast<SpaceFile *>(area->spacedata.first);
+  const int index = RNA_enum_from_value(rna_enum_space_file_browse_mode_items, sfile->browse_mode);
+  const EnumPropertyItem item = rna_enum_space_file_browse_mode_items[index];
+  return item.icon;
+}
+
 static void file_id_remap(ScrArea *area,
                           SpaceLink *sl,
                           const blender::bke::id::IDRemapper & /*mappings*/)
@@ -922,6 +942,8 @@ void ED_spacetype_file()
   st->space_subtype_item_extend = file_space_subtype_item_extend;
   st->space_subtype_get = file_space_subtype_get;
   st->space_subtype_set = file_space_subtype_set;
+  st->space_name_get = file_space_name_get;
+  st->space_icon_get = file_space_icon_get;
   st->context = file_context;
   st->id_remap = file_id_remap;
   st->foreach_id = file_foreach_id;
@@ -1003,11 +1025,6 @@ void ED_spacetype_file()
 void ED_file_init()
 {
   ED_file_read_bookmarks();
-
-  if (G.background == false) {
-    filelist_init_icons();
-  }
-
   IMB_thumb_makedirs();
 }
 

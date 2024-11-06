@@ -174,6 +174,11 @@ struct Render *RE_GetSceneRender(const struct Scene *scene);
 struct RenderEngineType;
 struct ViewRender *RE_NewViewRender(struct RenderEngineType *engine_type);
 
+/* Creates a new render for interactive compositing of the given scene. If an existing render
+ * exists for the given scene, it is returned instead. See interactive_compositor_renders in
+ * RenderGlobal for more information. */
+struct Render *RE_NewInteractiveCompositorRender(const struct Scene *scene);
+
 /* Assign default dummy callbacks. */
 
 /**
@@ -309,7 +314,7 @@ void RE_InitState(struct Render *re,
                   struct ViewLayer *single_layer,
                   int winx,
                   int winy,
-                  rcti *disprect);
+                  const rcti *disprect);
 
 /**
  * Set up the view-plane/perspective matrix, three choices.
@@ -475,7 +480,7 @@ struct GPUTexture *RE_pass_ensure_gpu_texture_cache(struct Render *re, struct Re
 #define RE_BAKE_DISPLACEMENT 1
 #define RE_BAKE_AO 2
 
-void RE_GetCameraWindow(struct Render *re, const struct Object *camera, float mat[4][4]);
+void RE_GetCameraWindow(struct Render *re, const struct Object *camera, float r_winmat[4][4]);
 /**
  * Must be called after #RE_GetCameraWindow(), does not change `re->winmat`.
  */

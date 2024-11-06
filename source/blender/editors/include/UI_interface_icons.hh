@@ -16,17 +16,10 @@
 struct Collection;
 struct ID;
 struct ImBuf;
-struct ListBase;
 struct PointerRNA;
 struct PreviewImage;
 struct Scene;
 struct bContext;
-
-struct IconFile {
-  IconFile *next, *prev;
-  char filename[256]; /* FILE_MAXFILE size */
-  int index;
-};
 
 struct IconTextOverlay {
   char text[5];
@@ -54,23 +47,13 @@ enum eAlertIcon {
   ALERT_ICON_MAX,
 };
 
-ImBuf *UI_icon_alert_imbuf_get(eAlertIcon icon);
+ImBuf *UI_icon_alert_imbuf_get(eAlertIcon icon, float size);
 
 /**
  * Resizable Icons for Blender
  */
 void UI_icons_init();
-/**
- * Reload the textures for internal icons.
- * This function will release the previous textures.
- */
-void UI_icons_reload_internal_textures();
 
-/**
- * NOTE: returns unscaled by DPI.
- */
-int UI_icon_get_width(int icon_id);
-int UI_icon_get_height(int icon_id);
 bool UI_icon_get_theme_color(int icon_id, unsigned char color[4]);
 
 /**
@@ -114,22 +97,10 @@ void UI_icon_draw_ex(float x,
                      const IconTextOverlay *text_overlay,
                      const bool inverted = false);
 
-/**
- * Draw an monochrome icon into a given coordinate rectangle. The rectangle is used as-is,
- * and the icon image fills it. Icon is tinted with indicated color. If icon
- * is not found or the icon type is not monochrome, the function does nothing.
- */
-void UI_icon_draw_mono_rect(
-    float x, float y, float width, float height, int icon_id, const uchar color[4]);
+ImBuf *UI_svg_icon_bitmap(uint icon_id, float size, bool multicolor = false);
 
 void UI_icons_free();
 void UI_icons_free_drawinfo(void *drawinfo);
-
-void UI_icon_draw_cache_begin();
-void UI_icon_draw_cache_end();
-
-ListBase *UI_iconfile_list();
-int UI_iconfile_get_index(const char *filename);
 
 PreviewImage *UI_icon_to_preview(int icon_id);
 

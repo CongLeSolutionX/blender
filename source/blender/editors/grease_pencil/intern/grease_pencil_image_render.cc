@@ -12,6 +12,7 @@
 #include "BKE_image.h"
 #include "BKE_material.h"
 
+#include "BLI_math_vector.hh"
 #include "DNA_gpencil_legacy_types.h"
 #include "DNA_material_types.h"
 #include "DNA_object_types.h"
@@ -21,6 +22,8 @@
 #include "ED_grease_pencil.hh"
 #include "ED_view3d.hh"
 
+#include "GPU_primitive.hh"
+#include "GPU_shader_builtin.hh"
 #include "IMB_imbuf.hh"
 #include "IMB_imbuf_types.hh"
 
@@ -88,6 +91,9 @@ GPUOffScreen *image_render_begin(const int2 &win_size)
 
 Image *image_render_end(Main &bmain, GPUOffScreen *buffer)
 {
+  GPU_matrix_pop_projection();
+  GPU_matrix_pop();
+
   const int2 win_size = {GPU_offscreen_width(buffer), GPU_offscreen_height(buffer)};
   const uint imb_flag = IB_rect;
   ImBuf *ibuf = IMB_allocImBuf(win_size.x, win_size.y, 32, imb_flag);
@@ -102,7 +108,7 @@ Image *image_render_end(Main &bmain, GPUOffScreen *buffer)
   }
 
   Image *ima = BKE_image_add_from_imbuf(&bmain, ibuf, "Grease Pencil Fill");
-  ima->id.tag |= LIB_TAG_DOIT;
+  ima->id.tag |= ID_TAG_DOIT;
 
   BKE_image_release_ibuf(ima, ibuf, nullptr);
 
@@ -117,11 +123,11 @@ Image *image_render_end(Main &bmain, GPUOffScreen *buffer)
   return ima;
 }
 
-void set_viewmat(const ViewContext &view_context,
-                 const Scene &scene,
-                 const int2 &win_size,
-                 const float2 &zoom,
-                 const float2 &offset)
+void compute_view_matrices(const ViewContext &view_context,
+                           const Scene &scene,
+                           const int2 &win_size,
+                           const float2 &zoom,
+                           const float2 &offset)
 {
   rctf viewplane;
   float clip_start, clip_end;
@@ -176,17 +182,32 @@ void set_viewmat(const ViewContext &view_context,
                            winmat.ptr(),
                            nullptr,
                            true);
-  GPU_matrix_set(view_context.rv3d->viewmat);
-  GPU_matrix_projection_set(view_context.rv3d->winmat);
 }
 
-void clear_viewmat()
+void set_view_matrix(const RegionView3D &rv3d)
 {
-  GPU_matrix_pop_projection();
-  GPU_matrix_pop();
+  GPU_matrix_set(rv3d.viewmat);
 }
 
-void draw_dot(const float3 &position, const float point_size, const ColorGeometry4f &color)
+void clear_view_matrix()
+{
+  GPU_matrix_identity_set();
+}
+
+void set_projection_matrix(const RegionView3D &rv3d)
+{
+  GPU_matrix_projection_set(rv3d.winmat);
+}
+
+void clear_projection_matrix()
+{
+  GPU_matrix_identity_projection_set();
+}
+
+void draw_dot(const float4x4 &transform,
+              const float3 &position,
+              const float point_size,
+              const ColorGeometry4f &color)
 {
   GPUVertFormat *format = immVertexFormat();
   uint attr_pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
@@ -198,16 +219,16 @@ void draw_dot(const float3 &position, const float point_size, const ColorGeometr
   immBegin(GPU_PRIM_POINTS, 1);
   immAttr1f(attr_size, point_size * M_SQRT2);
   immAttr4fv(attr_color, color);
-  immVertex3fv(attr_pos, position);
+  immVertex3fv(attr_pos, math::transform_point(transform, position));
   immEnd();
   immUnbindProgram();
   GPU_program_point_size(false);
 }
 
-void draw_polyline(const IndexRange indices,
+void draw_polyline(const float4x4 &transform,
+                   const IndexRange indices,
                    Span<float3> positions,
                    const VArray<ColorGeometry4f> &colors,
-                   const float4x4 &layer_to_world,
                    const bool cyclic,
                    const float line_width)
 {
@@ -224,13 +245,13 @@ void draw_polyline(const IndexRange indices,
 
   for (const int point_i : indices) {
     immAttr4fv(attr_color, colors[point_i]);
-    immVertex3fv(attr_pos, math::transform_point(layer_to_world, positions[point_i]));
+    immVertex3fv(attr_pos, math::transform_point(transform, positions[point_i]));
   }
 
   if (cyclic && indices.size() > 2) {
     const int point_i = indices[0];
     immAttr4fv(attr_color, colors[point_i]);
-    immVertex3fv(attr_pos, math::transform_point(layer_to_world, positions[point_i]));
+    immVertex3fv(attr_pos, math::transform_point(transform, positions[point_i]));
   }
 
   immEnd();
@@ -262,30 +283,33 @@ static GPUUniformBuf *create_shader_ubo(const RegionView3D &rv3d,
 
 constexpr const float min_stroke_thickness = 0.05f;
 
-void draw_grease_pencil_stroke(const RegionView3D &rv3d,
-                               const int2 &win_size,
-                               const Object &object,
-                               const IndexRange indices,
-                               Span<float3> positions,
-                               const VArray<float> &radii,
-                               const VArray<ColorGeometry4f> &colors,
-                               const float4x4 &layer_to_world,
-                               const bool cyclic,
-                               const eGPDstroke_Caps cap_start,
-                               const eGPDstroke_Caps cap_end,
-                               const bool fill_stroke,
-                               const float radius_scale)
+static void draw_grease_pencil_stroke(const float4x4 &transform,
+                                      const RegionView3D &rv3d,
+                                      const int2 &win_size,
+                                      const Object &object,
+                                      const IndexRange indices,
+                                      Span<float3> positions,
+                                      const VArray<float> &radii,
+                                      const VArray<ColorGeometry4f> &colors,
+                                      const bool cyclic,
+                                      const eGPDstroke_Caps cap_start,
+                                      const eGPDstroke_Caps cap_end,
+                                      const bool fill_stroke,
+                                      const float radius_scale)
 {
   if (indices.is_empty()) {
     return;
   }
 
   GPUVertFormat *format = immVertexFormat();
-  const uint attr_pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
-  const uint attr_color = GPU_vertformat_attr_add(
-      format, "color", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
+  /* Format is matching shader manual load. Keep in sync with #GreasePencilStrokeData.
+   * Only the name of the first attribute is important. */
+  const uint attr_pos = GPU_vertformat_attr_add(
+      format, "gp_vert_data", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
   const uint attr_thickness = GPU_vertformat_attr_add(
       format, "thickness", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
+  const uint attr_color = GPU_vertformat_attr_add(
+      format, "color", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
 
   immBindBuiltinProgram(GPU_SHADER_GPENCIL_STROKE);
   GPUUniformBuf *ubo = create_shader_ubo(rv3d, win_size, object, cap_start, cap_end, fill_stroke);
@@ -294,7 +318,8 @@ void draw_grease_pencil_stroke(const RegionView3D &rv3d,
   /* If cyclic the curve needs one more vertex. */
   const int cyclic_add = (cyclic && indices.size() > 2) ? 1 : 0;
 
-  immBeginAtMost(GPU_PRIM_LINE_STRIP_ADJ, indices.size() + cyclic_add + 2);
+  blender::gpu::Batch *batch = immBeginBatchAtMost(GPU_PRIM_LINE_STRIP_ADJ,
+                                                   indices.size() + cyclic_add + 2);
 
   auto draw_point = [&](const int point_i) {
     constexpr const float radius_to_pixel_factor =
@@ -303,7 +328,7 @@ void draw_grease_pencil_stroke(const RegionView3D &rv3d,
 
     immAttr4fv(attr_color, colors[point_i]);
     immAttr1f(attr_thickness, std::max(thickness, min_stroke_thickness));
-    immVertex3fv(attr_pos, math::transform_point(layer_to_world, positions[point_i]));
+    immVertex3fv(attr_pos, math::transform_point(transform, positions[point_i]));
   };
 
   /* First point for adjacency (not drawn). */
@@ -328,17 +353,44 @@ void draw_grease_pencil_stroke(const RegionView3D &rv3d,
   }
 
   immEnd();
+
+  /* Expanded drawcall. */
+  GPUPrimType expand_prim_type = GPUPrimType::GPU_PRIM_TRIS;
+  /* Hardcoded in shader. */
+  const uint expand_prim_len = 12;
+  /* Do not count adjacency info for start and end primitives. */
+  const uint final_vert_len = ((batch->vertex_count_get() - 2) * expand_prim_len) * 3;
+
+  if (final_vert_len > 0) {
+    GPU_batch_bind_as_resources(batch, batch->shader);
+
+    /* TODO(fclem): get rid of this dummy VBO. */
+    GPUVertFormat format = {0};
+    GPU_vertformat_attr_add(&format, "dummy", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
+    blender::gpu::VertBuf *vbo = GPU_vertbuf_create_with_format(format);
+    GPU_vertbuf_data_alloc(*vbo, 1);
+
+    gpu::Batch *gpu_batch = GPU_batch_create_ex(
+        expand_prim_type, vbo, nullptr, GPU_BATCH_OWNS_VBO);
+
+    GPU_batch_set_shader(gpu_batch, batch->shader);
+    GPU_batch_draw_advanced(gpu_batch, 0, final_vert_len, 0, 1);
+
+    GPU_batch_discard(gpu_batch);
+  }
+  GPU_batch_discard(batch);
+
   immUnbindProgram();
 
   GPU_uniformbuf_free(ubo);
 }
 
-void draw_dots(const IndexRange indices,
-               Span<float3> positions,
-               const VArray<float> &radii,
-               const VArray<ColorGeometry4f> &colors,
-               const float4x4 &layer_to_world,
-               const float radius_scale)
+static void draw_dots(const float4x4 &transform,
+                      const IndexRange indices,
+                      Span<float3> positions,
+                      const VArray<float> &radii,
+                      const VArray<ColorGeometry4f> &colors,
+                      const float radius_scale)
 {
   if (indices.is_empty()) {
     return;
@@ -361,9 +413,9 @@ void draw_dots(const IndexRange indices,
     const float thickness = radii[point_i] * radius_scale * radius_to_pixel_factor;
 
     immAttr4fv(attr_color, colors[point_i]);
-    /* Note: extra factor 0.5 for point size to match rendering. */
+    /* NOTE: extra factor 0.5 for point size to match rendering. */
     immAttr1f(attr_size, std::max(thickness, min_stroke_thickness) * 0.5f);
-    immVertex3fv(attr_pos, math::transform_point(layer_to_world, positions[point_i]));
+    immVertex3fv(attr_pos, math::transform_point(transform, positions[point_i]));
   }
 
   immEnd();
@@ -371,21 +423,140 @@ void draw_dots(const IndexRange indices,
   GPU_program_point_size(false);
 }
 
+void draw_circles(const float4x4 &transform,
+                  const IndexRange indices,
+                  Span<float3> centers,
+                  const VArray<float> &radii,
+                  const VArray<ColorGeometry4f> &colors,
+                  const float2 &viewport_size,
+                  const float line_width,
+                  const bool fill)
+{
+  if (indices.is_empty()) {
+    return;
+  }
+
+  constexpr const int segments_num = 32;
+  static const float2 coords[] = {
+      {1.0000f, 0.0000f},   {0.9808f, 0.1951f},   {0.9239f, 0.3827f},   {0.8315f, 0.5556f},
+      {0.7071f, 0.7071f},   {0.5556f, 0.8315f},   {0.3827f, 0.9239f},   {0.1951f, 0.9808f},
+      {0.0000f, 1.0000f},   {-0.1951f, 0.9808f},  {-0.3827f, 0.9239f},  {-0.5556f, 0.8315f},
+      {-0.7071f, 0.7071f},  {-0.8315f, 0.5556f},  {-0.9239f, 0.3827f},  {-0.9808f, 0.1951f},
+      {-1.0000f, 0.0000f},  {-0.9808f, -0.1951f}, {-0.9239f, -0.3827f}, {-0.8315f, -0.5556f},
+      {-0.7071f, -0.7071f}, {-0.5556f, -0.8315f}, {-0.3827f, -0.9239f}, {-0.1951f, -0.9808f},
+      {-0.0000f, -1.0000f}, {0.1951f, -0.9808f},  {0.3827f, -0.9239f},  {0.5556f, -0.8315f},
+      {0.7071f, -0.7071f},  {0.8315f, -0.5556f},  {0.9239f, -0.3827f},  {0.9808f, -0.1951f},
+  };
+
+  GPUVertFormat *format = immVertexFormat();
+  const uint attr_pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+  const uint attr_color = GPU_vertformat_attr_add(
+      format, "color", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
+
+  const float scale = math::average(math::to_scale(transform));
+
+  if (fill) {
+    immBindBuiltinProgram(GPU_SHADER_3D_FLAT_COLOR);
+
+    for (const int point_i : indices) {
+      const float radius = radii[point_i];
+      const ColorGeometry4f color = colors[point_i];
+      const float3 center = math::transform_point(transform, centers[point_i]);
+
+      immBegin(GPU_PRIM_TRI_STRIP, segments_num);
+
+      for (const int i : IndexRange(segments_num / 2)) {
+        immAttr4fv(attr_color, color);
+        immVertex3fv(attr_pos, center + float3(radius * scale * coords[i], 0.0f));
+        if (segments_num - 1 - i > i) {
+          immAttr4fv(attr_color, color);
+          immVertex3fv(attr_pos,
+                       center + float3(radius * scale * coords[segments_num - 1 - i], 0.0f));
+        }
+      }
+
+      immEnd();
+    }
+
+    immUnbindProgram();
+  }
+  else {
+    immBindBuiltinProgram(GPU_SHADER_3D_POLYLINE_FLAT_COLOR);
+
+    immUniform2fv("viewportSize", viewport_size);
+    immUniform1f("lineWidth", line_width * U.pixelsize);
+
+    for (const int point_i : indices) {
+      const float radius = radii[point_i];
+      const ColorGeometry4f color = colors[point_i];
+      const float3 center = math::transform_point(transform, centers[point_i]);
+
+      immBegin(GPU_PRIM_LINE_STRIP, segments_num + 1);
+
+      for (const int i : IndexRange(segments_num)) {
+        immAttr4fv(attr_color, color);
+        immVertex3fv(attr_pos, center + float3(radius * scale * coords[i], 0.0f));
+      }
+      immAttr4fv(attr_color, color);
+      immVertex3fv(attr_pos, center + float3(radius * scale * coords[0], 0.0f));
+
+      immEnd();
+    }
+
+    immUnbindProgram();
+  }
+}
+
+void draw_lines(const float4x4 &transform,
+                IndexRange indices,
+                Span<float3> start_positions,
+                Span<float3> end_positions,
+                const VArray<ColorGeometry4f> &colors,
+                float line_width)
+{
+  GPUVertFormat *format = immVertexFormat();
+  const uint attr_pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+  const uint attr_color = GPU_vertformat_attr_add(
+      format, "color", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
+  immBindBuiltinProgram(GPU_SHADER_3D_FLAT_COLOR);
+
+  GPU_line_width(line_width);
+  immBeginAtMost(GPU_PRIM_LINES, 2 * indices.size());
+
+  for (const int point_i : indices) {
+    immAttr4fv(attr_color, colors[point_i]);
+    immVertex3fv(attr_pos, math::transform_point(transform, start_positions[point_i]));
+
+    immAttr4fv(attr_color, colors[point_i]);
+    immVertex3fv(attr_pos, math::transform_point(transform, end_positions[point_i]));
+  }
+
+  immEnd();
+  immUnbindProgram();
+}
+
 void draw_grease_pencil_strokes(const RegionView3D &rv3d,
                                 const int2 &win_size,
                                 const Object &object,
                                 const bke::greasepencil::Drawing &drawing,
+                                const float4x4 &transform,
                                 const IndexMask &strokes_mask,
                                 const VArray<ColorGeometry4f> &colors,
-                                const float4x4 &layer_to_world,
                                 const bool use_xray,
                                 const float radius_scale)
 {
-  GPU_program_point_size(true);
+  set_view_matrix(rv3d);
 
+  GPU_program_point_size(true);
   /* Do not write to depth (avoid self-occlusion). */
   const bool prev_depth_mask = GPU_depth_mask_get();
   GPU_depth_mask(false);
+  if (!use_xray) {
+    GPU_depth_test(GPU_DEPTH_LESS_EQUAL);
+    /* First arg is normally rv3d->dist, but this isn't
+     * available here and seems to work quite well without. */
+    GPU_polygon_offset(1.0f, 1.0f);
+  }
 
   const bke::CurvesGeometry &curves = drawing.strokes();
   const OffsetIndices points_by_curve = curves.points_by_curve();
@@ -411,28 +582,20 @@ void draw_grease_pencil_strokes(const RegionView3D &rv3d,
                                                            mat->gp_style->mode) :
                                                        GP_MATERIAL_MODE_LINE;
 
-    if (mat == 0 || (mat->gp_style->flag & GP_MATERIAL_HIDE)) {
+    if (mat == nullptr || (mat->gp_style->flag & GP_MATERIAL_HIDE)) {
       return;
-    }
-
-    if (!use_xray) {
-      GPU_depth_test(GPU_DEPTH_LESS_EQUAL);
-
-      /* First arg is normally rv3d->dist, but this isn't
-       * available here and seems to work quite well without. */
-      GPU_polygon_offset(1.0f, 1.0f);
     }
 
     switch (eMaterialGPencilStyle_Mode(stroke_mode)) {
       case GP_MATERIAL_MODE_LINE:
-        draw_grease_pencil_stroke(rv3d,
+        draw_grease_pencil_stroke(transform,
+                                  rv3d,
                                   win_size,
                                   object,
                                   points_by_curve[stroke_i],
                                   positions,
                                   radii,
                                   colors,
-                                  layer_to_world,
                                   cyclic[stroke_i],
                                   eGPDstroke_Caps(stroke_start_caps[stroke_i]),
                                   eGPDstroke_Caps(stroke_end_caps[stroke_i]),
@@ -441,21 +604,20 @@ void draw_grease_pencil_strokes(const RegionView3D &rv3d,
         break;
       case GP_MATERIAL_MODE_DOT:
       case GP_MATERIAL_MODE_SQUARE:
-        /* Note: Squares don't have their own shader, render as dots too. */
-        draw_dots(
-            points_by_curve[stroke_i], positions, radii, colors, layer_to_world, radius_scale);
+        /* NOTE: Squares don't have their own shader, render as dots too. */
+        draw_dots(transform, points_by_curve[stroke_i], positions, radii, colors, radius_scale);
         break;
-    }
-
-    if (!use_xray) {
-      GPU_depth_test(GPU_DEPTH_NONE);
-
-      GPU_polygon_offset(0.0f, 0.0f);
     }
   });
 
+  if (!use_xray) {
+    GPU_depth_test(GPU_DEPTH_NONE);
+
+    GPU_polygon_offset(0.0f, 0.0f);
+  }
   GPU_depth_mask(prev_depth_mask);
   GPU_program_point_size(false);
+  clear_view_matrix();
 }
 
 }  // namespace blender::ed::greasepencil::image_render

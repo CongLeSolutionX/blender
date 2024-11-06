@@ -13,7 +13,7 @@ namespace blender::nodes::node_shader_tex_coord_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_output<decl::Vector>("Generated");
+  b.add_output<decl::Vector>("Generated").translation_context(BLT_I18NCONTEXT_ID_TEXTURE);
   b.add_output<decl::Vector>("Normal");
   b.add_output<decl::Vector>("UV");
   b.add_output<decl::Vector>("Object");
@@ -85,7 +85,8 @@ NODE_SHADER_MATERIALX_BEGIN
     res = create_node("normal", NodeItem::Type::Vector3, {{"space", val(std::string("world"))}});
   }
   else if (name == "Object") {
-    res = create_node("position", NodeItem::Type::Vector3, {{"space", val(std::string("world"))}});
+    res = create_node(
+        "position", NodeItem::Type::Vector3, {{"space", val(std::string("object"))}});
   }
   else {
     res = get_output_default(name, NodeItem::Type::Any);
@@ -111,5 +112,5 @@ void register_node_type_sh_tex_coord()
   ntype.gpu_fn = file_ns::node_shader_gpu_tex_coord;
   ntype.materialx_fn = file_ns::node_shader_materialx;
 
-  blender::bke::nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }

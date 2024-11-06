@@ -60,11 +60,9 @@ ccl_device_forceinline float3 integrate_surface_ray_offset(KernelGlobals kg,
    * - Instead of ray offset, can we tweak P to lie within the triangle?
    */
 
-#ifndef __METALRT__
-  /* MetalRT and Cycles triangle tests aren't numerically identical, meaning this method
-   * isn't robust for MetalRT. In this case, just applying the ray offset uniformly gives
-   * identical looking results.
-   */
+  /* TODO: Investigate if there are better ray offsetting algorithms for each BVH.
+   * Cycles and Custom BVH triangle tests aren't numerically identical, meaning
+   * this method isn't ideal for them. */
 
   float3 verts[3];
   if (sd->type == PRIMITIVE_TRIANGLE) {
@@ -87,11 +85,7 @@ ccl_device_forceinline float3 integrate_surface_ray_offset(KernelGlobals kg,
   if (ray_triangle_intersect_self(local_ray_P, local_ray_D, verts)) {
     return ray_P;
   }
-  else
-#endif
-  {
-    return ray_offset(ray_P, sd->Ng);
-  }
+  return ray_offset(ray_P, sd->Ng);
 }
 
 ccl_device_forceinline bool integrate_surface_holdout(KernelGlobals kg,
@@ -232,8 +226,8 @@ integrate_direct_light_shadow_init_common(KernelGlobals kg,
       state, path, render_pixel_index);
   INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, rng_offset) = INTEGRATOR_STATE(
       state, path, rng_offset);
-  INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, rng_hash) = INTEGRATOR_STATE(
-      state, path, rng_hash);
+  INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, rng_pixel) = INTEGRATOR_STATE(
+      state, path, rng_pixel);
   INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, sample) = INTEGRATOR_STATE(
       state, path, sample);
 
@@ -675,8 +669,8 @@ ccl_device_forceinline void integrate_surface_ao(KernelGlobals kg,
       state, path, render_pixel_index);
   INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, rng_offset) = INTEGRATOR_STATE(
       state, path, rng_offset);
-  INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, rng_hash) = INTEGRATOR_STATE(
-      state, path, rng_hash);
+  INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, rng_pixel) = INTEGRATOR_STATE(
+      state, path, rng_pixel);
   INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, sample) = INTEGRATOR_STATE(
       state, path, sample);
   INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, flag) = shadow_flag;
@@ -724,7 +718,7 @@ ccl_device int integrate_surface(KernelGlobals kg,
 
       /* Initialize additional RNG for BSDFs. */
       if (sd.flag & SD_BSDF_NEEDS_LCG) {
-        sd.lcg_state = lcg_state_init(INTEGRATOR_STATE(state, path, rng_hash),
+        sd.lcg_state = lcg_state_init(INTEGRATOR_STATE(state, path, rng_pixel),
                                       INTEGRATOR_STATE(state, path, rng_offset),
                                       INTEGRATOR_STATE(state, path, sample),
                                       0xb4bc3953);
@@ -865,9 +859,11 @@ ccl_device_forceinline void integrator_shade_surface_raytrace(
 ccl_device_forceinline void integrator_shade_surface_mnee(
     KernelGlobals kg, IntegratorState state, ccl_global float *ccl_restrict render_buffer)
 {
+#ifdef __MNEE__
   integrator_shade_surface<(KERNEL_FEATURE_NODE_MASK_SURFACE & ~KERNEL_FEATURE_NODE_RAYTRACE) |
                                KERNEL_FEATURE_MNEE,
                            DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_MNEE>(kg, state, render_buffer);
+#endif
 }
 
 CCL_NAMESPACE_END

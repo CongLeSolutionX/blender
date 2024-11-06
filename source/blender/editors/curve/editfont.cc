@@ -29,6 +29,7 @@
 
 #include "BKE_context.hh"
 #include "BKE_curve.hh"
+#include "BKE_global.hh"
 #include "BKE_layer.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_main.hh"
@@ -458,6 +459,10 @@ static int kill_selection(Object *obedit, int ins) /* ins == new character len *
 
 static void font_select_update_primary_clipboard(Object *obedit)
 {
+  if (G.background) {
+    return;
+  }
+
   if ((WM_capabilities_flag() & WM_CAPABILITY_PRIMARY_CLIPBOARD) == 0) {
     return;
   }
@@ -693,8 +698,8 @@ static uiBlock *wm_block_insert_unicode_create(bContext *C, ARegion *region, voi
   uiLayout *layout = UI_block_layout(
       block, UI_LAYOUT_VERTICAL, UI_LAYOUT_PANEL, 0, 0, 200 * UI_SCALE_FAC, UI_UNIT_Y, 0, style);
 
-  uiItemL_ex(layout, "Insert Unicode Character", ICON_NONE, true, false);
-  uiItemL(layout, "Enter a Unicode codepoint hex value", ICON_NONE);
+  uiItemL_ex(layout, IFACE_("Insert Unicode Character"), ICON_NONE, true, false);
+  uiItemL(layout, RPT_("Enter a Unicode codepoint hex value"), ICON_NONE);
 
   uiBut *text_but = uiDefBut(block,
                              UI_BTYPE_TEXT,
@@ -761,7 +766,7 @@ static int text_insert_unicode_invoke(bContext *C, wmOperator * /*op*/, const wm
 {
   char *edit_string = static_cast<char *>(MEM_mallocN(24, __func__));
   edit_string[0] = 0;
-  UI_popup_block_invoke(C, wm_block_insert_unicode_create, edit_string, MEM_freeN);
+  UI_popup_block_invoke_ex(C, wm_block_insert_unicode_create, edit_string, MEM_freeN, false);
   return OPERATOR_FINISHED;
 }
 
@@ -998,7 +1003,7 @@ static int toggle_style_exec(bContext *C, wmOperator *op)
     clear = (cu->curinfo.flag & style) == 0;
     return set_style(C, style, clear);
   }
-  return true;
+  return OPERATOR_CANCELLED;
 }
 
 void FONT_OT_style_toggle(wmOperatorType *ot)
@@ -2203,7 +2208,10 @@ void ED_curve_editfont_make(Object *obedit)
   ef->len = len_char32;
   BLI_assert(ef->len >= 0);
 
-  memcpy(ef->textbufinfo, cu->strinfo, ef->len * sizeof(CharInfo));
+  /* Old files may not have this initialized (v2.34). Leaving zeroed is OK. */
+  if (cu->strinfo) {
+    memcpy(ef->textbufinfo, cu->strinfo, ef->len * sizeof(CharInfo));
+  }
 
   ef->pos = cu->pos;
   if (ef->pos > ef->len) {

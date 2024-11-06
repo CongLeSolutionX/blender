@@ -53,19 +53,27 @@ ShaderModule::ShaderModule()
     shader = nullptr;
   }
 
-#ifndef NDEBUG
-  /* Ensure all shader are described. */
+  Vector<const GPUShaderCreateInfo *> infos;
+  infos.reserve(MAX_SHADER_TYPE);
+
   for (auto i : IndexRange(MAX_SHADER_TYPE)) {
     const char *name = static_shader_create_info_name_get(eShaderType(i));
+    const GPUShaderCreateInfo *create_info = GPU_shader_create_info_get(name);
+    infos.append(create_info);
+
+#ifndef NDEBUG
     if (name == nullptr) {
       std::cerr << "EEVEE: Missing case for eShaderType(" << i
                 << ") in static_shader_create_info_name_get().";
       BLI_assert(0);
     }
-    const GPUShaderCreateInfo *create_info = GPU_shader_create_info_get(name);
     BLI_assert_msg(create_info != nullptr, "EEVEE: Missing create info for static shader.");
-  }
 #endif
+  }
+
+  if (GPU_use_parallel_compilation()) {
+    compilation_handle_ = GPU_shader_batch_create_from_infos(infos);
+  }
 }
 
 ShaderModule::~ShaderModule()
@@ -82,17 +90,80 @@ ShaderModule::~ShaderModule()
  *
  * \{ */
 
+void ShaderModule::precompile_specializations(int render_buffers_shadow_id,
+                                              int shadow_ray_count,
+                                              int shadow_ray_step_count)
+{
+  BLI_assert(specialization_handle_ == 0);
+
+  if (!GPU_use_parallel_compilation()) {
+    return;
+  }
+
+  Vector<ShaderSpecialization> specializations;
+  for (int i = 0; i < 3; i++) {
+    GPUShader *sh = static_shader_get(eShaderType(DEFERRED_LIGHT_SINGLE + i));
+    for (bool use_split_indirect : {false, true}) {
+      for (bool use_lightprobe_eval : {false, true}) {
+        for (bool use_transmission : {false, true}) {
+          specializations.append({sh,
+                                  {{"render_pass_shadow_id", render_buffers_shadow_id},
+                                   {"use_split_indirect", use_split_indirect},
+                                   {"use_lightprobe_eval", use_lightprobe_eval},
+                                   {"use_transmission", use_transmission},
+                                   {"shadow_ray_count", shadow_ray_count},
+                                   {"shadow_ray_step_count", shadow_ray_step_count}}});
+        }
+      }
+    }
+  }
+
+  specialization_handle_ = GPU_shader_batch_specializations(specializations);
+}
+
+bool ShaderModule::is_ready(bool block)
+{
+  if (compilation_handle_) {
+    if (GPU_shader_batch_is_ready(compilation_handle_) || block) {
+      Vector<GPUShader *> shaders = GPU_shader_batch_finalize(compilation_handle_);
+      for (int i : IndexRange(MAX_SHADER_TYPE)) {
+        shaders_[i] = shaders[i];
+      }
+    }
+  }
+
+  if (specialization_handle_) {
+    while (!GPU_shader_batch_specializations_is_ready(specialization_handle_) && block) {
+      /* Block until ready. */
+    }
+  }
+
+  return compilation_handle_ == 0 && specialization_handle_ == 0;
+}
+
 const char *ShaderModule::static_shader_create_info_name_get(eShaderType shader_type)
 {
   switch (shader_type) {
     case AMBIENT_OCCLUSION_PASS:
       return "eevee_ambient_occlusion_pass";
-    case FILM_FRAG:
-      return "eevee_film_frag";
+    case FILM_COPY:
+      return "eevee_film_copy_frag";
     case FILM_COMP:
       return "eevee_film_comp";
     case FILM_CRYPTOMATTE_POST:
       return "eevee_film_cryptomatte_post";
+    case FILM_FRAG:
+      return "eevee_film_frag";
+    case FILM_PASS_CONVERT_COMBINED:
+      return "eevee_film_pass_convert_combined";
+    case FILM_PASS_CONVERT_DEPTH:
+      return "eevee_film_pass_convert_depth";
+    case FILM_PASS_CONVERT_VALUE:
+      return "eevee_film_pass_convert_value";
+    case FILM_PASS_CONVERT_COLOR:
+      return "eevee_film_pass_convert_color";
+    case FILM_PASS_CONVERT_CRYPTOMATTE:
+      return "eevee_film_pass_convert_cryptomatte";
     case DEFERRED_COMBINE:
       return "eevee_deferred_combine";
     case DEFERRED_LIGHT_SINGLE:
@@ -209,6 +280,8 @@ const char *ShaderModule::static_shader_create_info_name_get(eShaderType shader_
       return "eevee_ray_tile_classify";
     case RAY_TILE_COMPACT:
       return "eevee_ray_tile_compact";
+    case RENDERPASS_CLEAR:
+      return "eevee_renderpass_clear";
     case LIGHTPROBE_IRRADIANCE_BOUNDS:
       return "eevee_lightprobe_volume_bounds";
     case LIGHTPROBE_IRRADIANCE_OFFSET:
@@ -249,6 +322,8 @@ const char *ShaderModule::static_shader_create_info_name_get(eShaderType shader_
       return "eevee_shadow_tilemap_bounds";
     case SHADOW_TILEMAP_FINALIZE:
       return "eevee_shadow_tilemap_finalize";
+    case SHADOW_TILEMAP_RENDERMAP:
+      return "eevee_shadow_tilemap_rendermap";
     case SHADOW_TILEMAP_INIT:
       return "eevee_shadow_tilemap_init";
     case SHADOW_TILEMAP_TAG_UPDATE:
@@ -265,6 +340,8 @@ const char *ShaderModule::static_shader_create_info_name_get(eShaderType shader_
       return "eevee_shadow_page_tile_store";
     case SHADOW_TILEMAP_TAG_USAGE_VOLUME:
       return "eevee_shadow_tag_usage_volume";
+    case SHADOW_VIEW_VISIBILITY:
+      return "eevee_shadow_view_visibility";
     case SUBSURFACE_CONVOLVE:
       return "eevee_subsurface_convolve";
     case SUBSURFACE_SETUP:
@@ -300,15 +377,16 @@ const char *ShaderModule::static_shader_create_info_name_get(eShaderType shader_
 
 GPUShader *ShaderModule::static_shader_get(eShaderType shader_type)
 {
+  BLI_assert(is_ready());
   if (shaders_[shader_type] == nullptr) {
     const char *shader_name = static_shader_create_info_name_get(shader_type);
-
-    shaders_[shader_type] = GPU_shader_create_from_info_name(shader_name);
-
-    if (shaders_[shader_type] == nullptr) {
+    if (GPU_use_parallel_compilation()) {
       fprintf(stderr, "EEVEE: error: Could not compile static shader \"%s\"\n", shader_name);
+      BLI_assert(0);
     }
-    BLI_assert(shaders_[shader_type] != nullptr);
+    else {
+      shaders_[shader_type] = GPU_shader_create_from_info_name(shader_name);
+    }
   }
   return shaders_[shader_type];
 }
@@ -320,7 +398,48 @@ GPUShader *ShaderModule::static_shader_get(eShaderType shader_type)
  *
  * \{ */
 
-void ShaderModule::material_create_info_ammend(GPUMaterial *gpumat, GPUCodegenOutput *codegen_)
+/* Helper class to get free sampler slots for materials. */
+class SamplerSlots {
+  int first_reserved_;
+  int last_reserved_;
+  int index_;
+
+ public:
+  SamplerSlots(eMaterialPipeline pipeline_type,
+               eMaterialGeometry geometry_type,
+               bool has_shader_to_rgba)
+  {
+    index_ = 0;
+    if (ELEM(geometry_type, MAT_GEOM_POINT_CLOUD, MAT_GEOM_CURVES)) {
+      index_ = 1;
+    }
+    else if (geometry_type == MAT_GEOM_GPENCIL) {
+      index_ = 2;
+    }
+
+    first_reserved_ = MATERIAL_TEXTURE_RESERVED_SLOT_FIRST;
+    last_reserved_ = MATERIAL_TEXTURE_RESERVED_SLOT_LAST_NO_EVAL;
+    if (geometry_type == MAT_GEOM_WORLD) {
+      last_reserved_ = MATERIAL_TEXTURE_RESERVED_SLOT_LAST_WORLD;
+    }
+    else if (pipeline_type == MAT_PIPE_DEFERRED && has_shader_to_rgba) {
+      last_reserved_ = MATERIAL_TEXTURE_RESERVED_SLOT_LAST_HYBRID;
+    }
+    else if (pipeline_type == MAT_PIPE_FORWARD) {
+      last_reserved_ = MATERIAL_TEXTURE_RESERVED_SLOT_LAST_FORWARD;
+    }
+  }
+
+  int get()
+  {
+    if (index_ == first_reserved_) {
+      index_ = last_reserved_ + 1;
+    }
+    return index_++;
+  }
+};
+
+void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOutput *codegen_)
 {
   using namespace blender::gpu::shader;
 
@@ -341,12 +460,6 @@ void ShaderModule::material_create_info_ammend(GPUMaterial *gpumat, GPUCodegenOu
   GPUCodegenOutput &codegen = *codegen_;
   ShaderCreateInfo &info = *reinterpret_cast<ShaderCreateInfo *>(codegen.create_info);
 
-  /* WORKAROUND: Replace by new ob info. */
-  int64_t ob_info_index = info.additional_infos_.first_index_of_try("draw_object_infos");
-  if (ob_info_index != -1) {
-    info.additional_infos_[ob_info_index] = "draw_object_infos_new";
-  }
-
   /* WORKAROUND: Add new ob attr buffer. */
   if (GPU_material_uniform_attributes(gpumat) != nullptr) {
     info.additional_info("draw_object_attribute_new");
@@ -364,12 +477,12 @@ void ShaderModule::material_create_info_ammend(GPUMaterial *gpumat, GPUCodegenOu
     info.define("UNI_ATTR(a)", "vec4(0.0)");
   }
 
-  /* First indices are reserved by the engine.
-   * Put material samplers in reverse order, starting from the last slot. */
-  int sampler_slot = GPU_max_textures_frag() - 1;
+  SamplerSlots sampler_slots(
+      pipeline_type, geometry_type, GPU_material_flag_get(gpumat, GPU_MATFLAG_SHADER_TO_RGBA));
+
   for (auto &resource : info.batch_resources_) {
     if (resource.bind_type == ShaderCreateInfo::Resource::BindType::SAMPLER) {
-      resource.slot = sampler_slot--;
+      resource.slot = sampler_slots.get();
     }
   }
 
@@ -518,14 +631,11 @@ void ShaderModule::material_create_info_ammend(GPUMaterial *gpumat, GPUCodegenOu
         /* TODO(fclem): Eventually, we could add support for loading both. For now, remove the
          * vertex inputs after conversion (avoid name collision). */
         for (auto &input : info.vertex_inputs_) {
-          info.sampler(sampler_slot--, ImageType::FLOAT_3D, input.name, Frequency::BATCH);
+          info.sampler(sampler_slots.get(), ImageType::FLOAT_3D, input.name, Frequency::BATCH);
         }
         info.vertex_inputs_.clear();
         /* Volume materials require these for loading the grid attributes from smoke sims. */
         info.additional_info("draw_volume_infos");
-        if (ob_info_index == -1) {
-          info.additional_info("draw_object_infos_new");
-        }
       }
       break;
     case MAT_GEOM_POINT_CLOUD:
@@ -537,7 +647,7 @@ void ShaderModule::material_create_info_ammend(GPUMaterial *gpumat, GPUCodegenOu
           global_vars << input.type << " " << input.name << ";\n";
         }
         else {
-          info.sampler(sampler_slot--, ImageType::FLOAT_BUFFER, input.name, Frequency::BATCH);
+          info.sampler(sampler_slots.get(), ImageType::FLOAT_BUFFER, input.name, Frequency::BATCH);
         }
       }
       info.vertex_inputs_.clear();
@@ -547,7 +657,7 @@ void ShaderModule::material_create_info_ammend(GPUMaterial *gpumat, GPUCodegenOu
         /* Even if world do not have grid attributes, we use dummy texture binds to pass correct
          * defaults. So we have to replace all attributes as samplers. */
         for (auto &input : info.vertex_inputs_) {
-          info.sampler(sampler_slot--, ImageType::FLOAT_3D, input.name, Frequency::BATCH);
+          info.sampler(sampler_slots.get(), ImageType::FLOAT_3D, input.name, Frequency::BATCH);
         }
         info.vertex_inputs_.clear();
       }
@@ -570,7 +680,7 @@ void ShaderModule::material_create_info_ammend(GPUMaterial *gpumat, GPUCodegenOu
     case MAT_GEOM_VOLUME:
       /** Volume grid attributes come from 3D textures. Transfer attributes to samplers. */
       for (auto &input : info.vertex_inputs_) {
-        info.sampler(sampler_slot--, ImageType::FLOAT_3D, input.name, Frequency::BATCH);
+        info.sampler(sampler_slots.get(), ImageType::FLOAT_3D, input.name, Frequency::BATCH);
       }
       info.vertex_inputs_.clear();
       break;
@@ -658,8 +768,14 @@ void ShaderModule::material_create_info_ammend(GPUMaterial *gpumat, GPUCodegenOu
         if (info.additional_infos_.first_index_of_try("draw_object_infos_new") == -1) {
           info.additional_info("draw_object_infos_new");
         }
+        /* TODO(fclem): Should use `to_scale` but the gpu_shader_math_matrix_lib.glsl isn't
+         * included everywhere yet. */
+        frag_gen << "vec3 ob_scale;\n";
+        frag_gen << "ob_scale.x = length(ModelMatrix[0].xyz);\n";
+        frag_gen << "ob_scale.y = length(ModelMatrix[1].xyz);\n";
+        frag_gen << "ob_scale.z = length(ModelMatrix[2].xyz);\n";
         frag_gen << "vec3 ls_dimensions = safe_rcp(abs(OrcoTexCoFactors[1].xyz));\n";
-        frag_gen << "vec3 ws_dimensions = mat3x3(ModelMatrix) * ls_dimensions;\n";
+        frag_gen << "vec3 ws_dimensions = ob_scale * ls_dimensions;\n";
         /* Choose the minimum axis so that cuboids are better represented. */
         frag_gen << "return reduce_min(ws_dimensions);\n";
       }
@@ -771,7 +887,7 @@ void ShaderModule::material_create_info_ammend(GPUMaterial *gpumat, GPUCodegenOu
  * thread unsafe manner. */
 static void codegen_callback(void *thunk, GPUMaterial *mat, GPUCodegenOutput *codegen)
 {
-  reinterpret_cast<ShaderModule *>(thunk)->material_create_info_ammend(mat, codegen);
+  reinterpret_cast<ShaderModule *>(thunk)->material_create_info_amend(mat, codegen);
 }
 
 static GPUPass *pass_replacement_cb(void *thunk, GPUMaterial *mat)
@@ -882,8 +998,6 @@ GPUMaterial *ShaderModule::world_shader_get(::World *blender_world,
                                this);
 }
 
-/* Variation to compile a material only with a nodetree. Caller needs to maintain the list of
- * materials and call GPU_material_free on it to update the material. */
 GPUMaterial *ShaderModule::material_shader_get(const char *name,
                                                ListBase &materials,
                                                bNodeTree *nodetree,

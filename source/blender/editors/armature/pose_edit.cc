@@ -32,7 +32,7 @@
 #include "RNA_access.hh"
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
-#include "RNA_prototypes.h"
+#include "RNA_prototypes.hh"
 
 #include "WM_api.hh"
 #include "WM_types.hh"
@@ -672,9 +672,6 @@ static int hide_pose_bone_fn(Object *ob, Bone *bone, void *ptr)
       bone->flag |= BONE_HIDDEN_P;
       /* only needed when 'hide_select' is true, but harmless. */
       bone->flag &= ~BONE_SELECTED;
-      if (arm->act_bone == bone) {
-        arm->act_bone = nullptr;
-      }
       count += 1;
     }
   }

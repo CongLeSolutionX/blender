@@ -5,8 +5,8 @@
 bl_info = {
     'name': 'glTF 2.0 format',
     'author': 'Julien Duroure, Scurest, Norbert Nopper, Urs Hanselmann, Moritz Becher, Benjamin Schmithüsen, Jim Eckerlein, and many external contributors',
-    "version": (4, 2, 47),
-    'blender': (4, 2, 0),
+    "version": (4, 4, 12),
+    'blender': (4, 3, 0),
     'location': 'File > Import-Export',
     'description': 'Import-Export as glTF 2.0',
     'warning': '',
@@ -86,6 +86,14 @@ def ensure_filepath_matches_export_format(filepath, export_format):
 
 
 def on_export_format_changed(self, context):
+
+    # Update the filename in collection export settings when the format (.glb/.gltf) changes
+    if isinstance(self.id_data, bpy.types.Collection):
+        self.filepath = ensure_filepath_matches_export_format(
+            self.filepath,
+            self.export_format,
+        )
+
     # Update the filename in the file browser when the format (.glb/.gltf)
     # changes
     sfile = context.space_data
@@ -149,10 +157,24 @@ def get_format_items(scene, context):
 def is_draco_available():
     # Initialize on first use
     if not hasattr(is_draco_available, "draco_exists"):
-        from .io.com import gltf2_io_draco_compression_extension
+        from .io.com import draco as gltf2_io_draco_compression_extension
         is_draco_available.draco_exists = gltf2_io_draco_compression_extension.dll_exists()
 
     return is_draco_available.draco_exists
+
+
+def set_debug_log():
+    import logging
+    if bpy.app.debug_value == 0:      # Default values => Display all messages except debug ones
+        return logging.INFO
+    elif bpy.app.debug_value == 1:
+        return logging.WARNING
+    elif bpy.app.debug_value == 2:
+        return logging.ERROR
+    elif bpy.app.debug_value == 3:
+        return logging.CRITICAL
+    elif bpy.app.debug_value == 4:
+        return logging.DEBUG
 
 
 class ConvertGLTF2_Base:
@@ -583,6 +605,13 @@ class ExportGLTF2_Base(ConvertGLTF2_Base):
         default="",
     )
 
+    # Not starting with "export_", as this is a collection only option
+    at_collection_center: BoolProperty(
+        name="Export at Collection Center",
+        description="Export at Collection center of mass of root objects of the collection",
+        default=False,
+    )
+
     export_extras: BoolProperty(
         name='Custom Properties',
         description='Export custom properties as glTF extras',
@@ -636,7 +665,8 @@ class ExportGLTF2_Base(ConvertGLTF2_Base):
 
     export_pointer_animation: BoolProperty(
         name='Export Animation Pointer (Experimental)',
-        description='Export material, Light & Camera animation as Animation Pointer',
+        description='Export material, Light & Camera animation as Animation Pointer. '
+                    'Available only for baked animation mode \'NLA Tracks\' and \'Scene\'',
         default=False
     )
 
@@ -945,10 +975,16 @@ class ExportGLTF2_Base(ConvertGLTF2_Base):
     export_extra_animations: BoolProperty(
         name='Prepare extra animations',
         description=(
-            'Export additional animations'
+            'Export additional animations.\n'
             'This feature is not standard and needs an external extension to be included in the glTF file'
         ),
         default=False
+    )
+
+    export_loglevel: IntProperty(
+        name='Log Level',
+        description="Log Level",
+        default=-1,
     )
 
     # Custom scene property for saving settings
@@ -991,7 +1027,8 @@ class ExportGLTF2_Base(ConvertGLTF2_Base):
                         'glTF2ExportUserExtension') or hasattr(
                         sys.modules[addon_name],
                         'glTF2ExportUserExtensions'):
-                    exporter_extension_layout_draw[addon_name] = sys.modules[addon_name].draw
+                    exporter_extension_layout_draw[addon_name] = sys.modules[addon_name].draw_export if hasattr(
+                        sys.modules[addon_name], 'draw_export') else sys.modules[addon_name].draw
             except Exception:
                 pass
 
@@ -1023,9 +1060,9 @@ class ExportGLTF2_Base(ConvertGLTF2_Base):
         import os
         import datetime
         import logging
-        from .io.com.gltf2_io_debug import Log
-        from .blender.exp import gltf2_blender_export
-        from .io.com.gltf2_io_path import path_to_uri
+        from .io.com.debug import Log
+        from .blender.exp import export as gltf2_blender_export
+        from .io.com.path import path_to_uri
 
         if self.will_save_settings:
             self.save_settings(context)
@@ -1035,7 +1072,11 @@ class ExportGLTF2_Base(ConvertGLTF2_Base):
         # All custom export settings are stored in this container.
         export_settings = {}
 
-        export_settings['loglevel'] = logging.INFO
+        # Get log level from parameters
+        # If not set, get it from Blender app debug value
+        export_settings['gltf_loglevel'] = self.export_loglevel
+        if export_settings['gltf_loglevel'] < 0:
+            export_settings['loglevel'] = set_debug_log()
 
         export_settings['exported_images'] = {}
         export_settings['exported_texture_nodes'] = []
@@ -1102,6 +1143,7 @@ class ExportGLTF2_Base(ConvertGLTF2_Base):
             export_settings['gltf_active_collection_with_nested'] = False
         export_settings['gltf_active_scene'] = self.use_active_scene
         export_settings['gltf_collection'] = self.collection
+        export_settings['gltf_at_collection_center'] = self.at_collection_center
 
         export_settings['gltf_selected'] = self.use_selection
         export_settings['gltf_layers'] = True  # self.export_layers
@@ -1288,6 +1330,7 @@ class ExportGLTF2_Base(ConvertGLTF2_Base):
         is_file_browser = context.space_data.type == 'FILE_BROWSER'
 
         export_main(layout, operator, is_file_browser)
+        export_panel_collection(layout, operator, is_file_browser)
         export_panel_include(layout, operator, is_file_browser)
         export_panel_transform(layout, operator)
         export_panel_data(layout, operator)
@@ -1315,6 +1358,16 @@ def export_main(layout, operator, is_file_browser):
     layout.prop(operator, 'export_copyright')
     if is_file_browser:
         layout.prop(operator, 'will_save_settings')
+
+
+def export_panel_collection(layout, operator, is_file_browser):
+    if is_file_browser:
+        return
+
+    header, body = layout.panel("GLTF_export_collection", default_closed=True)
+    header.label(text="Collection")
+    if body:
+        body.prop(operator, 'at_collection_center')
 
 
 def export_panel_include(layout, operator, is_file_browser):
@@ -1477,6 +1530,8 @@ def export_panel_data_armature(layout, operator):
         row.prop(operator, 'export_armature_object_remove')
         row = body.row()
         row.prop(operator, 'export_hierarchy_flatten_bones')
+        row = body.row()
+        row.prop(operator, 'export_leaf_bone')
 
 
 def export_panel_data_skinning(layout, operator):
@@ -1623,9 +1678,8 @@ def export_panel_animation_pointer(layout, operator):
     header.prop(operator, "export_pointer_animation", text="")
     header.label(text="Animation Pointer (Experimental)")
     if body:
-
         row = body.row()
-        row.active = operator.export_pointer_animation
+        row.active = header.active and operator.export_pointer_animation
         row.prop(operator, 'export_convert_animation_pointer')
 
 
@@ -1677,8 +1731,8 @@ def export_panel_gltfpack(layout, operator):
         col.prop(operator, 'export_gltfpack_vc')
         col = body.column(heading="Vertex positions", align=True)
         col.prop(operator, 'export_gltfpack_vpi')
-        #col = body.column(heading = "Animations", align = True)
-        #col = body.column(heading = "Scene", align = True)
+        # col = body.column(heading = "Animations", align = True)
+        # col = body.column(heading = "Scene", align = True)
         col = body.column(heading="Miscellaneous", align=True)
         col.prop(operator, 'export_gltfpack_noq')
 
@@ -1765,6 +1819,18 @@ class ImportGLTF2(Operator, ConvertGLTF2_Base, ImportHelper):
         default="BLENDER",
     )
 
+    disable_bone_shape: BoolProperty(
+        name='Disable Bone Shape',
+        description='Do not create bone shapes',
+        default=False,
+    )
+
+    bone_shape_scale_factor: FloatProperty(
+        name='Bone Shape Scale',
+        description='Scale factor for bone shapes',
+        default=1.0,
+    )
+
     guess_original_bind_pose: BoolProperty(
         name='Guess Original Bind Pose',
         description=(
@@ -1785,6 +1851,7 @@ class ImportGLTF2(Operator, ConvertGLTF2_Base, ImportHelper):
     )
 
     def draw(self, context):
+        operator = self
         layout = self.layout
 
         layout.use_property_split = True
@@ -1794,9 +1861,9 @@ class ImportGLTF2(Operator, ConvertGLTF2_Base, ImportHelper):
         layout.prop(self, 'merge_vertices')
         layout.prop(self, 'import_shading')
         layout.prop(self, 'guess_original_bind_pose')
-        layout.prop(self, 'bone_heuristic')
         layout.prop(self, 'export_import_convert_lighting_mode')
         layout.prop(self, 'import_webp_texture')
+        import_bone_panel(layout, operator)
 
         import_panel_user_extension(context, layout)
 
@@ -1810,7 +1877,8 @@ class ImportGLTF2(Operator, ConvertGLTF2_Base, ImportHelper):
                         'glTF2ImportUserExtension') or hasattr(
                         sys.modules[addon_name],
                         'glTF2ImportUserExtensions'):
-                    importer_extension_layout_draw[addon_name] = sys.modules[addon_name].draw
+                    importer_extension_layout_draw[addon_name] = sys.modules[addon_name].draw_import if hasattr(
+                        sys.modules[addon_name], 'draw_import') else sys.modules[addon_name].draw
             except Exception:
                 pass
 
@@ -1823,7 +1891,7 @@ class ImportGLTF2(Operator, ConvertGLTF2_Base, ImportHelper):
     def import_gltf2(self, context):
         import os
 
-        self.set_debug_log()
+        self.loglevel = set_debug_log()
         import_settings = self.as_keywords()
 
         user_extensions = []
@@ -1856,7 +1924,7 @@ class ImportGLTF2(Operator, ConvertGLTF2_Base, ImportHelper):
     def unit_import(self, filename, import_settings):
         import time
         from .io.imp.gltf2_io_gltf import glTFImporter, ImportError
-        from .blender.imp.gltf2_blender_gltf import BlenderGlTF
+        from .blender.imp.blender_gltf import BlenderGlTF
 
         try:
             gltf_importer = glTFImporter(filename, import_settings)
@@ -1882,18 +1950,15 @@ class ImportGLTF2(Operator, ConvertGLTF2_Base, ImportHelper):
             self.report({'ERROR'}, e.args[0])
             return {'CANCELLED'}
 
-    def set_debug_log(self):
-        import logging
-        if bpy.app.debug_value == 0:      # Default values => Display all messages except debug ones
-            self.loglevel = logging.INFO
-        elif bpy.app.debug_value == 1:
-            self.loglevel = logging.WARNING
-        elif bpy.app.debug_value == 2:
-            self.loglevel = logging.ERROR
-        elif bpy.app.debug_value == 3:
-            self.loglevel = logging.CRITICAL
-        elif bpy.app.debug_value == 4:
-            self.loglevel = logging.DEBUG
+
+def import_bone_panel(layout, operator):
+    header, body = layout.panel("GLTF_import_bone", default_closed=False)
+    header.label(text="Bones")
+    if body:
+        body.prop(operator, 'bone_heuristic')
+        if operator.bone_heuristic == 'BLENDER':
+            body.prop(operator, 'disable_bone_shape')
+            body.prop(operator, 'bone_shape_scale_factor')
 
 
 def import_panel_user_extension(context, layout):

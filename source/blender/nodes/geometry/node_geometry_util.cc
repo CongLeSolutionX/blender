@@ -13,6 +13,7 @@
 #include "NOD_socket.hh"
 #include "NOD_socket_search_link.hh"
 
+#include "RNA_access.hh"
 #include "RNA_enum_types.hh"
 
 namespace blender::nodes {
@@ -37,6 +38,13 @@ void search_link_ops_for_tool_node(GatherLinkSearchOpParams &params)
 void search_link_ops_for_volume_grid_node(GatherLinkSearchOpParams &params)
 {
   if (U.experimental.use_new_volume_nodes) {
+    nodes::search_link_ops_for_basic_node(params);
+  }
+}
+
+void search_link_ops_for_import_node(GatherLinkSearchOpParams &params)
+{
+  if (U.experimental.use_new_file_import_nodes) {
     nodes::search_link_ops_for_basic_node(params);
   }
 }
@@ -69,32 +77,6 @@ bool generic_attribute_type_supported(const EnumPropertyItem &item)
               CD_PROP_BYTE_COLOR,
               CD_PROP_QUATERNION,
               CD_PROP_FLOAT4X4);
-}
-
-const EnumPropertyItem *domain_experimental_grease_pencil_version3_fn(bContext * /*C*/,
-                                                                      PointerRNA * /*ptr*/,
-                                                                      PropertyRNA * /*prop*/,
-                                                                      bool *r_free)
-{
-  *r_free = true;
-  return enum_items_filter(rna_enum_attribute_domain_items,
-                           [](const EnumPropertyItem &item) -> bool {
-                             return (bke::AttrDomain(item.value) == bke::AttrDomain::Layer) ?
-                                        U.experimental.use_grease_pencil_version3 :
-                                        true;
-                           });
-}
-
-const EnumPropertyItem *domain_without_corner_experimental_grease_pencil_version3_fn(
-    bContext * /*C*/, PointerRNA * /*ptr*/, PropertyRNA * /*prop*/, bool *r_free)
-{
-  *r_free = true;
-  return enum_items_filter(rna_enum_attribute_domain_without_corner_items,
-                           [](const EnumPropertyItem &item) -> bool {
-                             return (bke::AttrDomain(item.value) == bke::AttrDomain::Layer) ?
-                                        U.experimental.use_grease_pencil_version3 :
-                                        true;
-                           });
 }
 
 }  // namespace enums

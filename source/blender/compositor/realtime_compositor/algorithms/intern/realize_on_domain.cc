@@ -2,6 +2,8 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#include <limits>
+
 #include "BLI_math_angle_types.hh"
 #include "BLI_math_matrix.hh"
 #include "BLI_math_matrix_types.hh"
@@ -59,6 +61,72 @@ static const char *get_realization_shader(Result &input,
   return nullptr;
 }
 
+static void realize_on_domain_gpu(Context &context,
+                                  Result &input,
+                                  Result &output,
+                                  const Domain &domain,
+                                  const float3x3 &inverse_transformation,
+                                  const RealizationOptions &realization_options)
+{
+  GPUShader *shader = context.get_shader(get_realization_shader(input, realization_options));
+  GPU_shader_bind(shader);
+
+  GPU_shader_uniform_mat3_as_mat4(shader, "inverse_transformation", inverse_transformation.ptr());
+
+  /* The texture sampler should use bilinear interpolation for both the bilinear and bicubic
+   * cases, as the logic used by the bicubic realization shader expects textures to use bilinear
+   * interpolation. */
+  const bool use_bilinear = ELEM(
+      realization_options.interpolation, Interpolation::Bilinear, Interpolation::Bicubic);
+  GPU_texture_filter_mode(input, use_bilinear);
+
+  /* If the input wraps, set a repeating wrap mode for out-of-bound texture access. Otherwise,
+   * make out-of-bound texture access return zero by setting a clamp to border extend mode. */
+  GPU_texture_extend_mode_x(input,
+                            realization_options.wrap_x ? GPU_SAMPLER_EXTEND_MODE_REPEAT :
+                                                         GPU_SAMPLER_EXTEND_MODE_CLAMP_TO_BORDER);
+  GPU_texture_extend_mode_y(input,
+                            realization_options.wrap_y ? GPU_SAMPLER_EXTEND_MODE_REPEAT :
+                                                         GPU_SAMPLER_EXTEND_MODE_CLAMP_TO_BORDER);
+
+  input.bind_as_texture(shader, "input_tx");
+
+  output.allocate_texture(domain);
+  output.bind_as_image(shader, "domain_img");
+
+  compute_dispatch_threads_at_least(shader, domain.size);
+
+  input.unbind_as_texture();
+  output.unbind_as_image();
+  GPU_shader_unbind();
+}
+
+static void realize_on_domain_cpu(Result &input,
+                                  Result &output,
+                                  const Domain &domain,
+                                  const float3x3 &inverse_transformation)
+{
+  output.allocate_texture(domain);
+
+  parallel_for(domain.size, [&](const int2 texel) {
+    /* Add 0.5 to evaluate the input sampler at the center of the pixel. */
+    float2 coordinates = float2(texel) + float2(0.5f);
+
+    /* Transform the input image by transforming the domain coordinates with the inverse of input
+     * image's transformation. The inverse transformation is an affine matrix and thus the
+     * coordinates should be in homogeneous coordinates. */
+    coordinates = (inverse_transformation * float3(coordinates, 1.0f)).xy();
+
+    /* Subtract the offset and divide by the input image size to get the relevant coordinates into
+     * the sampler's expected [0, 1] range. */
+    const int2 input_size = input.domain().size;
+    float2 normalized_coordinates = coordinates / float2(input_size);
+
+    /* TODO: Support other interpolations and wrapping modes. */
+    output.store_pixel(texel, input.sample_nearest_zero(normalized_coordinates));
+  });
+}
+
 void realize_on_domain(Context &context,
                        Result &input,
                        Result &output,
@@ -73,48 +141,32 @@ void realize_on_domain(Context &context,
     return;
   }
 
-  GPUShader *shader = context.get_shader(get_realization_shader(input, realization_options));
-  GPU_shader_bind(shader);
+  /* Translation from lower-left corner to center of input space. */
+  float2 input_translate(-float2(input_domain.size) / 2.0f);
 
-  /* Transform the input space into the domain space. */
-  const float3x3 local_transformation = math::invert(domain.transformation) * input_transformation;
+  /* Bias translations in case of nearest interpolation to avoids the round-to-even behavior of
+   * some GPUs at pixel boundaries. */
+  if (realization_options.interpolation == Interpolation::Nearest) {
+    input_translate += std::numeric_limits<float>::epsilon() * 10e3f;
+  }
 
-  /* Set the origin of the transformation to be the center of the domain. */
-  const float3x3 transformation = math::from_origin_transform<float3x3>(
-      local_transformation, float2(domain.size) / 2.0f);
+  /* Transformation from input domain with 0,0 in lower-left to virtual compositing space. */
+  const float3x3 in_transformation = math::translate(input_transformation, input_translate);
 
-  /* Invert the transformation because the shader transforms the domain coordinates instead of the
-   * input image itself and thus expect the inverse. */
-  const float3x3 inverse_transformation = math::invert(transformation);
+  /* Transformation from output domain with 0,0 in lower-left to virtual compositing space. */
+  const float3x3 out_transformation = math::translate(domain.transformation,
+                                                      -float2(domain.size) / 2.0f);
 
-  GPU_shader_uniform_mat3_as_mat4(shader, "inverse_transformation", inverse_transformation.ptr());
+  /* Concatenate to get full transform from output space to input space */
+  const float3x3 inverse_transformation = math::invert(in_transformation) * out_transformation;
 
-  /* The texture sampler should use bilinear interpolation for both the bilinear and bicubic
-   * cases, as the logic used by the bicubic realization shader expects textures to use bilinear
-   * interpolation. */
-  const bool use_bilinear = ELEM(
-      realization_options.interpolation, Interpolation::Bilinear, Interpolation::Bicubic);
-  GPU_texture_filter_mode(input.texture(), use_bilinear);
-
-  /* If the input wraps, set a repeating wrap mode for out-of-bound texture access. Otherwise,
-   * make out-of-bound texture access return zero by setting a clamp to border extend mode. */
-  GPU_texture_extend_mode_x(input.texture(),
-                            realization_options.wrap_x ? GPU_SAMPLER_EXTEND_MODE_REPEAT :
-                                                         GPU_SAMPLER_EXTEND_MODE_CLAMP_TO_BORDER);
-  GPU_texture_extend_mode_y(input.texture(),
-                            realization_options.wrap_y ? GPU_SAMPLER_EXTEND_MODE_REPEAT :
-                                                         GPU_SAMPLER_EXTEND_MODE_CLAMP_TO_BORDER);
-
-  input.bind_as_texture(shader, "input_tx");
-
-  output.allocate_texture(domain);
-  output.bind_as_image(shader, "domain_img");
-
-  compute_dispatch_threads_at_least(shader, domain.size);
-
-  input.unbind_as_texture();
-  output.unbind_as_image();
-  GPU_shader_unbind();
+  if (context.use_gpu()) {
+    realize_on_domain_gpu(
+        context, input, output, domain, inverse_transformation, realization_options);
+  }
+  else {
+    realize_on_domain_cpu(input, output, domain, inverse_transformation);
+  }
 }
 
 }  // namespace blender::realtime_compositor

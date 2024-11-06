@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.2.0 Alpha (b'a367cf664e0d')\n"
+"Project-Id-Version: Blender 4.3.0 Beta (b'28a8486e2b3f')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-05-27 12:52+0000\n"
+"POT-Creation-Date: 2024-10-29 10:02+0000\n"
 "PO-Revision-Date: 2024-04-29 13:31+0000\n"
 "Last-Translator: Gilberto Rodrigues <gilbertorodrigues@outlook.com>\n"
 "Language-Team: Bulgarian <https://translate.blender.org/projects/blender-ui/ui/bg/>\n"
@@ -36,6 +36,30 @@ msgid "Select"
 msgstr "Избор"
 
 
+msgid "Module"
+msgstr "Модул"
+
+
+msgid "On"
+msgstr "Върху"
+
+
+msgid "Always"
+msgstr "Винаги"
+
+
+msgid "Center"
+msgstr "Център"
+
+
+msgid "Bottom"
+msgstr "Дъно"
+
+
+msgid "Action"
+msgstr "Действие"
+
+
 msgid "Replace"
 msgstr "Замени"
 
@@ -50,22 +74,6 @@ msgstr "Основа"
 
 msgid "Multiply"
 msgstr "Умножение"
-
-
-msgid "Module"
-msgstr "Модул"
-
-
-msgid "On"
-msgstr "Върху"
-
-
-msgid "Action"
-msgstr "Действие"
-
-
-msgid "New"
-msgstr "Нов"
 
 
 msgid "Nothing"
@@ -90,10 +98,6 @@ msgstr "Информация"
 
 msgid "Author"
 msgstr "Автор"
-
-
-msgid "All"
-msgstr "Всички"
 
 
 msgid "Custom"
@@ -136,6 +140,42 @@ msgid "Tilt"
 msgstr "Наклон"
 
 
+msgid "Armature"
+msgstr "Арматура"
+
+
+msgid "Brush"
+msgstr "Четка"
+
+
+msgid "Camera"
+msgstr "Камера"
+
+
+msgid "Key"
+msgstr "Клавиш"
+
+
+msgid "Lattice"
+msgstr "Решетка"
+
+
+msgid "Mesh"
+msgstr "Меш"
+
+
+msgid "Sound"
+msgstr "Звук"
+
+
+msgid "Text"
+msgstr "Текст"
+
+
+msgid "World"
+msgstr "Свят"
+
+
 msgid "Speed"
 msgstr "Скорст"
 
@@ -152,20 +192,8 @@ msgid "Index"
 msgstr "Индекс"
 
 
-msgid "Remove"
-msgstr "Премахване"
-
-
-msgid "Fill"
-msgstr "Запълни"
-
-
-msgid "Draw"
-msgstr "Изчертаване"
-
-
-msgid "Smear"
-msgstr "Мажа"
+msgid "All"
+msgstr "Всички"
 
 
 msgid "Thickness"
@@ -176,16 +204,16 @@ msgid "Active Layer"
 msgstr "Активен Слой"
 
 
+msgid "Fill"
+msgstr "Запълни"
+
+
 msgid "Crop"
 msgstr "Отрязване"
 
 
 msgid "Left"
 msgstr "Ляво"
-
-
-msgid "Center"
-msgstr "Център"
 
 
 msgid "Default Goal (vertex target position) value, when no Vertex Group used"
@@ -264,24 +292,12 @@ msgid "Input"
 msgstr "Вход"
 
 
-msgid "Armature"
-msgstr "Арматура"
-
-
 msgid "Floor"
 msgstr "Под"
 
 
 msgid "Additive"
 msgstr "Натрупващо се"
-
-
-msgid "Camera"
-msgstr "Камера"
-
-
-msgid "Always"
-msgstr "Винаги"
 
 
 msgid "Front"
@@ -432,10 +448,6 @@ msgid "Delete"
 msgstr "Изтриване"
 
 
-msgid "Bottom"
-msgstr "Дъно"
-
-
 msgid "Collision"
 msgstr "Противоречия"
 
@@ -460,60 +472,8 @@ msgid "Grid"
 msgstr "Мрежа"
 
 
-msgid "Triangle"
-msgstr "Триъгълник"
-
-
 msgid "Region Type"
 msgstr "Тип на Региона"
-
-
-msgid "Subdivide"
-msgstr "Подразделяне"
-
-
-msgid "Hook"
-msgstr "Кука"
-
-
-msgid "Lattice"
-msgstr "Решетка"
-
-
-msgid "Shaded"
-msgstr "Светлосенки"
-
-
-msgid "Merge"
-msgstr "Слей"
-
-
-msgid "Brush"
-msgstr "Четка"
-
-
-msgid "Key"
-msgstr "Клавиш"
-
-
-msgid "Mesh"
-msgstr "Меш"
-
-
-msgid "Sound"
-msgstr "Звук"
-
-
-msgid "Text"
-msgstr "Текст"
-
-
-msgid "World"
-msgstr "Свят"
-
-
-msgid "Layers"
-msgstr "Слоеве"
 
 
 msgid "Wire"
@@ -526,6 +486,14 @@ msgstr "Кутия"
 
 msgid "Dynamic"
 msgstr "Динамика"
+
+
+msgid "Draw"
+msgstr "Изчертаване"
+
+
+msgid "Smear"
+msgstr "Мажа"
 
 
 msgid "Perspective"
@@ -556,8 +524,8 @@ msgid "Max"
 msgstr "Макс"
 
 
-msgid "Movie"
-msgstr "Преместване"
+msgid "Layers"
+msgstr "Слоеве"
 
 
 msgid "Render polygon transparent, depending on alpha channel of the texture"
@@ -732,12 +700,40 @@ msgid "Click"
 msgstr "Клик"
 
 
-msgid "Languages..."
-msgstr "Езици..."
+msgid "UV Mapping"
+msgstr "UV Картиране"
+
+
+msgid "Rigid Body"
+msgstr "Твърдо тяло"
 
 
 msgid "Apply"
 msgstr "Прилагане"
+
+
+msgid "Make Single User"
+msgstr "Направи с Единствен Потребител"
+
+
+msgid "Hooks"
+msgstr "Куки"
+
+
+msgid "In-Betweens"
+msgstr "Междинни Кадри"
+
+
+msgid "Merge"
+msgstr "Слей"
+
+
+msgid "Languages..."
+msgstr "Езици..."
+
+
+msgid "Import"
+msgstr "Внеси"
 
 
 msgid "Cache"
@@ -756,32 +752,8 @@ msgid "External Data"
 msgstr "Външни Данни"
 
 
-msgid "Import"
-msgstr "Внеси"
-
-
 msgid "Help"
 msgstr "Помощ"
-
-
-msgid "Hooks"
-msgstr "Куки"
-
-
-msgid "Make Single User"
-msgstr "Направи с Единствен Потребител"
-
-
-msgid "Rigid Body"
-msgstr "Твърдо тяло"
-
-
-msgid "In-Betweens"
-msgstr "Междинни Кадри"
-
-
-msgid "UV Mapping"
-msgstr "UV Картиране"
 
 
 msgid "Ball"
@@ -792,8 +764,20 @@ msgid "Screw"
 msgstr "Извиване"
 
 
+msgid "Subdivide"
+msgstr "Подразделяне"
+
+
+msgid "Hook"
+msgstr "Кука"
+
+
 msgid "Warp"
 msgstr "Изкр"
+
+
+msgid "New"
+msgstr "Нов"
 
 
 msgid "Randomize"
@@ -802,6 +786,10 @@ msgstr "Произволно"
 
 msgid "Protect"
 msgstr "Предпази"
+
+
+msgid "Shaded"
+msgstr "Светлосенки"
 
 
 msgid "Overwrite"
@@ -862,6 +850,30 @@ msgstr "Подповърхностно Разпръскване"
 
 msgid "Turbidity"
 msgstr "Мътност"
+
+
+msgid "Triangle"
+msgstr "Триъгълник"
+
+
+msgctxt "Operator"
+msgid "Export Key Configuration..."
+msgstr "Изнеси Клавишна Настройка..."
+
+
+msgctxt "Operator"
+msgid "Import Key Configuration..."
+msgstr "Внеси Клавишна Настройка..."
+
+
+msgctxt "Operator"
+msgid "Test Key Configuration for Conflicts"
+msgstr "Провери Клавишната Настройка за Конфликти"
+
+
+msgctxt "Operator"
+msgid "Operator Cheat Sheet"
+msgstr "Списък с Оператори"
 
 
 msgid "Mouse X"
@@ -947,10 +959,6 @@ msgstr "Филтрирай .blend файловете"
 
 msgid "Filter text files"
 msgstr "Филтрирай текстовите файлове"
-
-
-msgid "Add brush by mode type"
-msgstr "Добави честка според вид на режима"
 
 
 msgid "Set brush shape"
@@ -1091,12 +1099,12 @@ msgid "Unlink"
 msgstr "Развържи"
 
 
+msgid "Remove"
+msgstr "Премахване"
+
+
 msgid "Both"
 msgstr "Двете"
-
-
-msgid "Join"
-msgstr "Събери"
 
 
 msgid "Next Keyframe"
@@ -1105,6 +1113,15 @@ msgstr "Следващ Ключов Кадър"
 
 msgid "Flat"
 msgstr "Дъска"
+
+
+msgid "Join"
+msgstr "Събери"
+
+
+msgctxt "Operator"
+msgid "Merge"
+msgstr "Слей"
 
 
 msgid "Mouse cursor style to use during the modal operator"
@@ -1156,11 +1173,6 @@ msgstr "Прстн"
 msgctxt "Operator"
 msgid "Loop Cut and Slide"
 msgstr "Режи Примка и Плъзгай"
-
-
-msgctxt "Operator"
-msgid "Merge"
-msgstr "Слей"
 
 
 msgid "Merge selected vertices"
@@ -1219,6 +1231,10 @@ msgid "Hide"
 msgstr "Скриване"
 
 
+msgid "Wrap"
+msgstr "Обвив"
+
+
 msgctxt "Operator"
 msgid "Bake"
 msgstr "Изпечи"
@@ -1227,10 +1243,6 @@ msgstr "Изпечи"
 msgctxt "Operator"
 msgid "Add Constraint"
 msgstr "Добавяне на ограничител"
-
-
-msgid "Monkey"
-msgstr "Маймуна"
 
 
 msgctxt "Operator"
@@ -1352,27 +1364,12 @@ msgid "Select all visible bones grouped by similar properties"
 msgstr "Избери всички видими кости според общи свойства"
 
 
-msgctxt "Operator"
-msgid "Export Key Configuration..."
-msgstr "Изнеси Клавишна Настройка..."
-
-
-msgctxt "Operator"
-msgid "Import Key Configuration..."
-msgstr "Внеси Клавишна Настройка..."
-
-
 msgid "Keep Original"
 msgstr "Запазване на оригинала"
 
 
 msgid "Keep original file after copying to configuration folder"
 msgstr "Запази оригиналния файл след копиране в папката с настройката"
-
-
-msgctxt "Operator"
-msgid "Test Key Configuration for Conflicts"
-msgstr "Провери Клавишната Настройка за Конфликти"
 
 
 msgctxt "Operator"
@@ -1534,10 +1531,6 @@ msgid "Zoom Camera 1:1"
 msgstr "Увеличи Камера 1:1"
 
 
-msgid "Wrap"
-msgstr "Обвив"
-
-
 msgid "Doc ID"
 msgstr "Doc ID"
 
@@ -1557,11 +1550,6 @@ msgstr "Отваряне на Blender файл"
 
 msgid "Trusted Source"
 msgstr "Надежден Източник"
-
-
-msgctxt "Operator"
-msgid "Operator Cheat Sheet"
-msgstr "Списък с Оператори"
 
 
 msgctxt "Operator"
@@ -1671,10 +1659,6 @@ msgid "Timeline"
 msgstr "Времева линия"
 
 
-msgid "Pose Library"
-msgstr "Библиотека с Пози"
-
-
 msgid "Sub"
 msgstr "Изв"
 
@@ -1767,10 +1751,6 @@ msgid "Animated"
 msgstr "Анимирани"
 
 
-msgid "Missing script files"
-msgstr "Липсват скриптови файлове"
-
-
 msgid "Author:"
 msgstr "Автор"
 
@@ -1820,24 +1800,28 @@ msgid "Invert Wheel Zoom Direction"
 msgstr "Обърни посоката на увеличение"
 
 
-msgid "Layer:"
-msgstr "Слой"
+msgid "Missing script files"
+msgstr "Липсват скриптови файлове"
 
 
 msgid "%d items"
 msgstr "%d артикули"
 
 
-msgid "Stop this job"
-msgstr "Спри тази задача"
+msgid "OK"
+msgstr "ОК"
 
 
 msgid "Cancel"
 msgstr "Отказ"
 
 
-msgid "OK"
-msgstr "ОК"
+msgid "Movie"
+msgstr "Преместване"
+
+
+msgid "Stop this job"
+msgstr "Спри тази задача"
 
 
 msgid "Fields"
@@ -1850,6 +1834,14 @@ msgstr "{} (String)"
 
 msgid "{} (Integer)"
 msgstr "{} (Integer)"
+
+
+msgid "Layer:"
+msgstr "Слой"
+
+
+msgid "Pose Library"
+msgstr "Библиотека с Пози"
 
 
 msgid "English (English)"

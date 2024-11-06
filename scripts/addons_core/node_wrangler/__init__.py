@@ -5,18 +5,18 @@
 bl_info = {
     "name": "Node Wrangler",
     "author": "Bartek Skorupa, Greg Zaal, Sebastian Koenig, Christian Brinkmann, Florian Meyer",
-    "version": (3, 54),
+    "version": (3, 55),
     "blender": (4, 2, 0),
     "location": "Node Editor Toolbar or Shift-W",
     "description": "Various tools to enhance and speed up node-based workflow",
     "warning": "",
     "doc_url": "{BLENDER_MANUAL_URL}/addons/node/node_wrangler.html",
+    "support": 'OFFICIAL',
     "category": "Node",
 }
 
 import bpy
 from bpy.props import (
-    BoolProperty,
     IntProperty,
     StringProperty,
 )

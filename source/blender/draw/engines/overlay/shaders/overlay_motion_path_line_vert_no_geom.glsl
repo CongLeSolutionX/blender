@@ -4,8 +4,8 @@
 
 #pragma USE_SSBO_VERTEX_FETCH(TriangleList, 6)
 
-#pragma BLENDER_REQUIRE(common_view_clipping_lib.glsl)
-#pragma BLENDER_REQUIRE(common_view_lib.glsl)
+#include "common_view_clipping_lib.glsl"
+#include "common_view_lib.glsl"
 
 #define frameCurrent mpathLineSettings.x
 #define frameStart mpathLineSettings.y
@@ -99,7 +99,7 @@ void main()
    *  - IF PrimType == LineList:  base_vertex_id = quad_id*2
    *  - IF PrimType == LineStrip: base_vertex_id = quad_id
    *
-   *  Note: Primitive is LineStrip for this shader. */
+   * NOTE: Primitive is LineStrip for this shader. */
   int base_vertex_id = quad_id;
 
   /* Fetch attributes for self and neighboring vertex. */

@@ -287,6 +287,10 @@ void LightManager::device_update_distribution(Device *,
                                               Progress &progress)
 {
   KernelIntegrator *kintegrator = &dscene->data.integrator;
+  if (kintegrator->use_light_tree) {
+    dscene->light_distribution.free();
+    return;
+  }
 
   /* Update CDF over lights. */
   progress.set_status("Updating Lights", "Computing distribution");
@@ -294,6 +298,8 @@ void LightManager::device_update_distribution(Device *,
   /* Counts emissive triangles in the scene. */
   size_t num_triangles = 0;
 
+  const int num_lights = kintegrator->num_lights;
+  const size_t max_num_triangles = std::numeric_limits<int>::max() - 1 - kintegrator->num_lights;
   foreach (Object *object, scene->objects) {
     if (progress.get_cancel()) {
       return;
@@ -317,18 +323,18 @@ void LightManager::device_update_distribution(Device *,
         num_triangles++;
       }
     }
+
+    if (num_triangles > max_num_triangles) {
+      progress.set_error(
+          "Number of emissive triangles exceeds the limit, consider using Light Tree or disabling "
+          "Emission Sampling on some emissive materials");
+    }
   }
 
-  const size_t num_lights = kintegrator->num_lights;
   const size_t num_distribution = num_triangles + num_lights;
 
   /* Distribution size. */
   kintegrator->num_distribution = num_distribution;
-
-  if (kintegrator->use_light_tree) {
-    dscene->light_distribution.free();
-    return;
-  }
 
   VLOG_INFO << "Use light distribution with " << num_distribution << " emitters.";
 
@@ -1113,7 +1119,7 @@ void LightManager::device_update_background(Device *device,
   dscene->light_background_conditional_cdf.copy_to_device();
 }
 
-void LightManager::device_update_lights(Device *device, DeviceScene *dscene, Scene *scene)
+void LightManager::device_update_lights(DeviceScene *dscene, Scene *scene)
 {
   /* Counts lights in the scene. */
   size_t num_lights = 0;
@@ -1147,8 +1153,7 @@ void LightManager::device_update_lights(Device *device, DeviceScene *dscene, Sce
 
   /* Update integrator settings. */
   KernelIntegrator *kintegrator = &dscene->data.integrator;
-  kintegrator->use_light_tree = scene->integrator->get_use_light_tree() &&
-                                device->info.has_light_tree;
+  kintegrator->use_light_tree = scene->integrator->get_use_light_tree();
   kintegrator->num_lights = num_lights;
   kintegrator->num_distant_lights = num_distant_lights;
   kintegrator->num_background_lights = num_background_lights;
@@ -1423,7 +1428,7 @@ void LightManager::device_update(Device *device,
 
   device_free(device, dscene, need_update_background);
 
-  device_update_lights(device, dscene, scene);
+  device_update_lights(dscene, scene);
   if (progress.get_cancel()) {
     return;
   }

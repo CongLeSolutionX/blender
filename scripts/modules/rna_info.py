@@ -78,19 +78,19 @@ def get_py_class_from_rna(rna_type):
     def subclasses_recurse(cls):
         for c in cls.__subclasses__():
             # is_registered
-            if "bl_rna" in cls.__dict__:
+            if "bl_rna" in c.__dict__:
                 yield c
             yield from subclasses_recurse(c)
 
-    while py_class is None:
-        base = rna_type.base
-        if base is None:
-            raise Exception("can't find type")
+    base = rna_type.base
+    while base is not None:
         py_class_base = getattr(bpy.types, base.identifier, None)
         if py_class_base is not None:
             for cls in subclasses_recurse(py_class_base):
                 if cls.bl_rna.identifier == identifier:
                     return cls
+        base = base.base
+    raise Exception("can't find type")
 
 
 class InfoStructRNA:
@@ -381,7 +381,7 @@ class InfoPropertyRNA:
         """
         :arg enum_descr_override: Optionally override items for enum.
            Otherwise expand the literal items.
-        :type enum_descr_override: string or None when unset.
+        :type enum_descr_override: str | None
         """
         type_str = ""
         if self.fixed_type is None:
@@ -645,7 +645,7 @@ def BuildRNAInfo():
     def base_id(rna_struct):
         try:
             return rna_struct.base.identifier
-        except:
+        except AttributeError:
             return ""  # invalid id
 
     # structs = [(base_id(rna_struct), rna_struct.identifier, rna_struct) for rna_struct in bpy.doc.structs.values()]

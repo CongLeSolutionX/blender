@@ -10,7 +10,6 @@
 #include "vk_backend.hh"
 #include "vk_debug.hh"
 #include "vk_device.hh"
-#include "vk_memory.hh"
 #include "vk_texture.hh"
 
 namespace blender::gpu {
@@ -43,11 +42,10 @@ VKImageView::VKImageView(VKTexture &texture, const VKImageViewInfo &info, String
     vk_format_ = to_non_srgb_format(vk_format_);
   }
 
-  VK_ALLOCATION_CALLBACKS
   VkImageViewCreateInfo image_view_info = {};
   image_view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
   image_view_info.image = texture.vk_image_handle();
-  image_view_info.viewType = to_vk_image_view_type(texture.type_get(), info.usage);
+  image_view_info.viewType = to_vk_image_view_type(texture.type_get(), info.usage, info.arrayed);
   image_view_info.format = vk_format_;
   image_view_info.components.r = to_vk_component_swizzle(info.swizzle[0]);
   image_view_info.components.g = to_vk_component_swizzle(info.swizzle[1]);
@@ -59,9 +57,8 @@ VKImageView::VKImageView(VKTexture &texture, const VKImageViewInfo &info, String
   image_view_info.subresourceRange.baseArrayLayer = info.layer_range.first();
   image_view_info.subresourceRange.layerCount = info.layer_range.size();
 
-  const VKDevice &device = VKBackend::get().device_get();
-  vkCreateImageView(
-      device.device_get(), &image_view_info, vk_allocation_callbacks, &vk_image_view_);
+  const VKDevice &device = VKBackend::get().device;
+  vkCreateImageView(device.vk_handle(), &image_view_info, nullptr, &vk_image_view_);
   debug::object_label(vk_image_view_, name.c_str());
 }
 
@@ -76,8 +73,8 @@ VKImageView::VKImageView(VKImageView &&other) : info(other.info)
 VKImageView::~VKImageView()
 {
   if (vk_image_view_ != VK_NULL_HANDLE) {
-    VKDevice &device = VKBackend::get().device_get();
-    device.discard_image_view(vk_image_view_);
+    VKDevice &device = VKBackend::get().device;
+    device.discard_pool_for_current_thread().discard_image_view(vk_image_view_);
     vk_image_view_ = VK_NULL_HANDLE;
   }
   vk_format_ = VK_FORMAT_UNDEFINED;

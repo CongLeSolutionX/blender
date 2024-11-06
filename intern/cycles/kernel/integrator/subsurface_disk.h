@@ -6,6 +6,8 @@
 
 CCL_NAMESPACE_BEGIN
 
+#ifdef __SUBSURFACE__
+
 /* BSSRDF using disk based importance sampling.
  *
  * BSSRDF Importance Sampling, SIGGRAPH 2013
@@ -79,7 +81,7 @@ ccl_device_inline bool subsurface_disk(KernelGlobals kg,
 
   bssrdf_sample(radius, rand_disk.x, &disk_r, &disk_height);
 
-  float3 disk_P = (disk_r * cosf(phi)) * disk_T + (disk_r * sinf(phi)) * disk_B;
+  float3 disk_P = to_global(polar_to_cartesian(disk_r, phi), disk_T, disk_B);
 
   /* Create ray. */
   ray.P = P + disk_N * disk_height + disk_P;
@@ -98,7 +100,7 @@ ccl_device_inline bool subsurface_disk(KernelGlobals kg,
   /* Intersect with the same object. if multiple intersections are found it
    * will use at most BSSRDF_MAX_HITS hits, a random subset of all hits. */
   uint lcg_state = lcg_state_init(
-      rng_state.rng_hash, rng_state.rng_offset, rng_state.sample, 0x68bc21eb);
+      rng_state.rng_pixel, rng_state.rng_offset, rng_state.sample, 0x68bc21eb);
   const int max_hits = BSSRDF_MAX_HITS;
 
   scene_intersect_local(kg, &ray, &ss_isect, object, &lcg_state, max_hits);
@@ -197,5 +199,7 @@ ccl_device_inline bool subsurface_disk(KernelGlobals kg,
 
   return false;
 }
+
+#endif /* __SUBSURFACE__ */
 
 CCL_NAMESPACE_END

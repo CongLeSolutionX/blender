@@ -24,7 +24,7 @@
 #include "DNA_scene_types.h"
 
 #include "BKE_fcurve.hh"
-#include "BKE_nla.h"
+#include "BKE_nla.hh"
 
 #include "ED_anim_api.hh"
 #include "ED_keyframes_edit.hh"
@@ -154,34 +154,45 @@ static short agrp_keyframes_loop(KeyframeEditData *ked,
     return 0;
   }
 
-  /* only iterate over the F-Curves that are in this group */
-  LISTBASE_FOREACH (FCurve *, fcu, &agrp->channels) {
-    if (fcu->grp == agrp) {
-      if (ANIM_fcurve_keyframes_loop(ked, fcu, key_ok, key_cb, fcu_cb)) {
-        return 1;
+  /* Legacy actions. */
+  if (agrp->wrap().is_legacy()) {
+    LISTBASE_FOREACH (FCurve *, fcu, &agrp->channels) {
+      if (fcu->grp == agrp) {
+        if (ANIM_fcurve_keyframes_loop(ked, fcu, key_ok, key_cb, fcu_cb)) {
+          return 1;
+        }
       }
+    }
+    return 0;
+  }
+
+  /* Layered actions. */
+  animrig::ChannelBag &channel_bag = agrp->channel_bag->wrap();
+  Span<FCurve *> fcurves = channel_bag.fcurves().slice(agrp->fcurve_range_start,
+                                                       agrp->fcurve_range_length);
+  for (FCurve *fcurve : fcurves) {
+    if (ANIM_fcurve_keyframes_loop(ked, fcurve, key_ok, key_cb, fcu_cb)) {
+      return 1;
     }
   }
 
   return 0;
 }
 
-#ifdef WITH_ANIM_BAKLAVA
-
-/* Loop over all keyframes in the Animation. */
-static short anim_keyframes_loop(KeyframeEditData *ked,
-                                 animrig::Action &anim,
-                                 animrig::Binding *binding,
-                                 KeyframeEditFunc key_ok,
-                                 KeyframeEditFunc key_cb,
-                                 FcuEditFunc fcu_cb)
+/* Loop over all keyframes in the layered Action. */
+static short action_layered_keyframes_loop(KeyframeEditData *ked,
+                                           animrig::Action &action,
+                                           animrig::Slot *slot,
+                                           KeyframeEditFunc key_ok,
+                                           KeyframeEditFunc key_cb,
+                                           FcuEditFunc fcu_cb)
 {
-  if (!binding) {
+  if (!slot) {
     /* Valid situation, and will not have any FCurves. */
     return 0;
   }
 
-  Span<FCurve *> fcurves = animrig::fcurves_for_animation(anim, binding->handle);
+  Span<FCurve *> fcurves = animrig::fcurves_for_action_slot(action, slot->handle);
   for (FCurve *fcurve : fcurves) {
     if (ANIM_fcurve_keyframes_loop(ked, fcurve, key_ok, key_cb, fcu_cb)) {
       return 1;
@@ -190,14 +201,12 @@ static short anim_keyframes_loop(KeyframeEditData *ked,
   return 0;
 }
 
-#endif
-
 /* This function is used to loop over the keyframe data in an Action */
-static short act_keyframes_loop(KeyframeEditData *ked,
-                                bAction *act,
-                                KeyframeEditFunc key_ok,
-                                KeyframeEditFunc key_cb,
-                                FcuEditFunc fcu_cb)
+static short action_legacy_keyframes_loop(KeyframeEditData *ked,
+                                          bAction *act,
+                                          KeyframeEditFunc key_ok,
+                                          KeyframeEditFunc key_cb,
+                                          FcuEditFunc fcu_cb)
 {
   /* sanity check */
   if (act == nullptr) {
@@ -416,26 +425,38 @@ short ANIM_animchannel_keyframes_loop(KeyframeEditData *ked,
      */
     case ALE_GROUP: /* action group */
       return agrp_keyframes_loop(ked, (bActionGroup *)ale->data, key_ok, key_cb, fcu_cb);
-    case ALE_ACTION_LAYERED: { /* Animation data-block. */
-#ifdef WITH_ANIM_BAKLAVA
+    case ALE_ACTION_LAYERED: { /* Layered Action. */
       /* This assumes that the ALE_ACTION_LAYERED channel is shown in the dopesheet context,
        * underneath the data-block that owns `ale->adt`. So that means that the loop is limited to
-       * the keys that belong to that binding. */
-      animrig::Action &anim = static_cast<bAction *>(ale->key_data)->wrap();
-      animrig::Binding *binding = anim.binding_for_handle(ale->adt->binding_handle);
-      return anim_keyframes_loop(ked, anim, binding, key_ok, key_cb, fcu_cb);
-#else
-      return 0;
-#endif
+       * the keys that belong to that slot. */
+      animrig::Action &action = static_cast<bAction *>(ale->key_data)->wrap();
+      animrig::Slot *slot = action.slot_for_handle(ale->adt->slot_handle);
+      return action_layered_keyframes_loop(ked, action, slot, key_ok, key_cb, fcu_cb);
     }
-    case ALE_ACT: /* action */
-      return act_keyframes_loop(ked, (bAction *)ale->key_data, key_ok, key_cb, fcu_cb);
+    case ALE_ACTION_SLOT: {
+      animrig::Action *action = static_cast<animrig::Action *>(ale->key_data);
+      BLI_assert(action);
+      animrig::Slot *slot = static_cast<animrig::Slot *>(ale->data);
+      return action_layered_keyframes_loop(ked, *action, slot, key_ok, key_cb, fcu_cb);
+    }
+
+    case ALE_ACT: /* Legacy Action. */
+      return action_legacy_keyframes_loop(ked, (bAction *)ale->key_data, key_ok, key_cb, fcu_cb);
     case ALE_OB: /* object */
       return ob_keyframes_loop(ked, ads, (Object *)ale->key_data, key_ok, key_cb, fcu_cb);
     case ALE_SCE: /* scene */
       return scene_keyframes_loop(ked, ads, (Scene *)ale->data, key_ok, key_cb, fcu_cb);
     case ALE_ALL: /* 'all' (DopeSheet summary) */
       return summary_keyframes_loop(ked, (bAnimContext *)ale->data, key_ok, key_cb, fcu_cb);
+
+    case ALE_NONE:
+    case ALE_GPFRAME:
+    case ALE_MASKLAY:
+    case ALE_NLASTRIP:
+    case ALE_GREASE_PENCIL_CEL:
+    case ALE_GREASE_PENCIL_DATA:
+    case ALE_GREASE_PENCIL_GROUP:
+      break;
   }
 
   return 0;
@@ -466,11 +487,12 @@ short ANIM_animchanneldata_keyframes_loop(KeyframeEditData *ked,
     case ALE_GROUP: /* action group */
       return agrp_keyframes_loop(ked, (bActionGroup *)data, key_ok, key_cb, fcu_cb);
     case ALE_ACTION_LAYERED:
+    case ALE_ACTION_SLOT:
       /* This function is only used in nlaedit_apply_scale_exec(). Since the NLA has no support for
-       * Animation data-blocks in strips, there is no need to implement this here. */
+       * layered Actions in strips, there is no need to implement this here. */
       return 0;
     case ALE_ACT: /* action */
-      return act_keyframes_loop(ked, (bAction *)data, key_ok, key_cb, fcu_cb);
+      return action_legacy_keyframes_loop(ked, (bAction *)data, key_ok, key_cb, fcu_cb);
     case ALE_OB: /* object */
       return ob_keyframes_loop(ked, ads, (Object *)data, key_ok, key_cb, fcu_cb);
     case ALE_SCE: /* scene */
@@ -846,7 +868,7 @@ void bezt_remap_times(KeyframeEditData *ked, BezTriple *bezt)
 static short snap_bezier_nearest(KeyframeEditData * /*ked*/, BezTriple *bezt)
 {
   if (bezt->f2 & SELECT) {
-    bezt->vec[1][0] = float(floorf(bezt->vec[1][0] + 0.5f));
+    BKE_fcurve_keyframe_move_time_with_handles(bezt, floorf(bezt->vec[1][0] + 0.5f));
   }
   return 0;
 }
@@ -858,7 +880,7 @@ static short snap_bezier_nearestsec(KeyframeEditData *ked, BezTriple *bezt)
   const float secf = float(FPS);
 
   if (bezt->f2 & SELECT) {
-    bezt->vec[1][0] = float(floorf(bezt->vec[1][0] / secf + 0.5f)) * secf;
+    BKE_fcurve_keyframe_move_time_with_handles(bezt, floorf(bezt->vec[1][0] / secf + 0.5f) * secf);
   }
   return 0;
 }
@@ -868,7 +890,7 @@ static short snap_bezier_cframe(KeyframeEditData *ked, BezTriple *bezt)
 {
   const Scene *scene = ked->scene;
   if (bezt->f2 & SELECT) {
-    bezt->vec[1][0] = float(scene->r.cfra);
+    BKE_fcurve_keyframe_move_time_with_handles(bezt, float(scene->r.cfra));
   }
   return 0;
 }
@@ -877,7 +899,8 @@ static short snap_bezier_cframe(KeyframeEditData *ked, BezTriple *bezt)
 static short snap_bezier_nearmarker(KeyframeEditData *ked, BezTriple *bezt)
 {
   if (bezt->f2 & SELECT) {
-    bezt->vec[1][0] = float(ED_markers_find_nearest_marker_time(&ked->list, bezt->vec[1][0]));
+    BKE_fcurve_keyframe_move_time_with_handles(
+        bezt, float(ED_markers_find_nearest_marker_time(&ked->list, bezt->vec[1][0])));
   }
   return 0;
 }
@@ -902,7 +925,7 @@ static short snap_bezier_horizontal(KeyframeEditData * /*ked*/, BezTriple *bezt)
 static short snap_bezier_time(KeyframeEditData *ked, BezTriple *bezt)
 {
   if (bezt->f2 & SELECT) {
-    bezt->vec[1][0] = ked->f1;
+    BKE_fcurve_keyframe_move_time_with_handles(bezt, ked->f1);
   }
   return 0;
 }
@@ -911,7 +934,7 @@ static short snap_bezier_time(KeyframeEditData *ked, BezTriple *bezt)
 static short snap_bezier_value(KeyframeEditData *ked, BezTriple *bezt)
 {
   if (bezt->f2 & SELECT) {
-    bezt->vec[1][1] = ked->f1;
+    BKE_fcurve_keyframe_move_value_with_handles(bezt, ked->f1);
   }
   return 0;
 }
@@ -1608,7 +1631,7 @@ static short select_bezier_invert(KeyframeEditData * /*ked*/, BezTriple *bezt)
   return 0;
 }
 
-KeyframeEditFunc ANIM_editkeyframes_select(short selectmode)
+KeyframeEditFunc ANIM_editkeyframes_select(const eEditKeyframes_Select selectmode)
 {
   switch (selectmode) {
     case SELECT_ADD: /* add */

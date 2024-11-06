@@ -36,6 +36,7 @@ class DefaultWorldNodeTree {
   DefaultWorldNodeTree();
   ~DefaultWorldNodeTree();
 
+  /** Configure a default node-tree with the given world. */
   bNodeTree *nodetree_get(::World *world);
 };
 
@@ -127,7 +128,7 @@ class World {
   }
 
  private:
-  void sync_volume();
+  void sync_volume(const WorldHandle &world_handle);
 
   /* Returns a dummy black world for when a valid world isn't present or when we want to suppress
    * any light coming from the world. */

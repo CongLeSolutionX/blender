@@ -12,6 +12,8 @@ __all__ = (
     "disable_all",
     "reset_all",
     "module_bl_info",
+    "extensions_refresh",
+    "stale_pending_stage_paths",
 )
 
 import bpy as _bpy
@@ -22,11 +24,23 @@ error_encoding = False
 error_duplicates = []
 addons_fake_modules = {}
 
+# Global cached extensions, set before loading extensions on startup.
+# `{addon_module_name: "Reason for incompatibility", ...}`
+_extensions_incompatible = {}
+# Global extension warnings, lazily calculated when displaying extensions.
+# `{addon_module_name: "Warning", ...}`
+_extensions_warnings = {}
+
+# Filename used for stale files (which we can't delete).
+_stale_filename = ".~stale~"
+
 
 # called only once at startup, avoids calling 'reset_all', correct but slower.
 def _initialize_once():
     for path in paths():
         _bpy.utils._sys_path_ensure_append(path)
+
+    _stale_pending_check_and_remove_once()
 
     _initialize_extensions_repos_once()
 
@@ -100,22 +114,22 @@ def _fake_module(mod_name, mod_path, speedy=True):
         if speedy:
             lines = []
             line_iter = iter(file_mod)
-            l = ""
-            while not l.startswith("bl_info"):
+            line = ""
+            while not line.startswith("bl_info"):
                 try:
-                    l = line_iter.readline()
+                    line = line_iter.readline()
                 except UnicodeDecodeError as ex:
                     if not error_encoding:
                         error_encoding = True
                         print("Error reading file as UTF-8:", mod_path, ex)
                     return None
 
-                if len(l) == 0:
+                if len(line) == 0:
                     break
-            while l.rstrip():
-                lines.append(l)
+            while line.rstrip():
+                lines.append(line)
                 try:
-                    l = line_iter.readline()
+                    line = line_iter.readline()
                 except UnicodeDecodeError as ex:
                     if not error_encoding:
                         error_encoding = True
@@ -130,7 +144,7 @@ def _fake_module(mod_name, mod_path, speedy=True):
 
     try:
         ast_data = ast.parse(data, filename=mod_path)
-    except BaseException:
+    except Exception:
         print("Syntax error 'ast.parse' can't read:", repr(mod_path))
         import traceback
         traceback.print_exc()
@@ -152,7 +166,7 @@ def _fake_module(mod_name, mod_path, speedy=True):
             mod.bl_info = ast.literal_eval(body.value)
             mod.__file__ = mod_path
             mod.__time__ = os.path.getmtime(mod_path)
-        except:
+        except Exception:
             print("AST error parsing bl_info for:", repr(mod_path))
             import traceback
             traceback.print_exc()
@@ -214,14 +228,16 @@ def modules(*, module_cache=addons_fake_modules, refresh=True):
         modules_refresh(module_cache=module_cache)
         modules._is_first = False
 
-    mod_list = list(module_cache.values())
-    mod_list.sort(
-        key=lambda mod: (
-            mod.bl_info.get("category", ""),
-            mod.bl_info.get("name", ""),
-        )
-    )
-    return mod_list
+        # Dictionaries are ordered in more recent versions of Python,
+        # re-create the dictionary from sorted items.
+        # This avoids having to sort on every call to this function.
+        module_cache_items = list(module_cache.items())
+        # Sort by name with the module name as a tie breaker.
+        module_cache_items.sort(key=lambda item: ((item[1].bl_info.get("name") or item[0]).casefold(), item[0]))
+        module_cache.clear()
+        module_cache.update((key, value) for key, value in module_cache_items)
+
+    return module_cache.values()
 
 
 modules._is_first = True
@@ -232,9 +248,9 @@ def check(module_name):
     Returns the loaded state of the addon.
 
     :arg module_name: The name of the addon and module.
-    :type module_name: string
+    :type module_name: str
     :return: (loaded_default, loaded_state)
-    :rtype: tuple of booleans
+    :rtype: tuple[bool, bool]
     """
     import sys
     loaded_default = module_name in _preferences.addons
@@ -293,23 +309,21 @@ def enable(module_name, *, default_set=False, persistent=False, handle_error=Non
     Enables an addon by name.
 
     :arg module_name: the name of the addon and module.
-    :type module_name: string
+    :type module_name: str
     :arg default_set: Set the user-preference.
     :type default_set: bool
     :arg persistent: Ensure the addon is enabled for the entire session (after loading new files).
     :type persistent: bool
     :arg handle_error: Called in the case of an error, taking an exception argument.
-    :type handle_error: function
+    :type handle_error: Callable[[Exception], None] | None
     :return: the loaded module or None on failure.
-    :rtype: module
+    :rtype: ModuleType
     """
 
     import os
     import sys
     import importlib
     from bpy_restrict_state import RestrictBlend
-
-    is_extension = module_name.startswith(_ext_base_pkg_idname_with_dot)
 
     if handle_error is None:
         def handle_error(ex):
@@ -322,6 +336,18 @@ def enable(module_name, *, default_set=False, persistent=False, handle_error=Non
                     return
             import traceback
             traceback.print_exc()
+
+    if (is_extension := module_name.startswith(_ext_base_pkg_idname_with_dot)):
+        # Ensure the extensions are compatible.
+        if _extensions_incompatible:
+            if (error := _extensions_incompatible.get(
+                    module_name[len(_ext_base_pkg_idname_with_dot):].partition(".")[0::2],
+            )):
+                try:
+                    raise RuntimeError("Extension {:s} is incompatible ({:s})".format(module_name, error))
+                except RuntimeError as ex:
+                    handle_error(ex)
+                    return None
 
     # reload if the mtime changes
     mod = sys.modules.get(module_name)
@@ -343,7 +369,7 @@ def enable(module_name, *, default_set=False, persistent=False, handle_error=Non
             # in most cases the caller should 'check()' first.
             try:
                 mod.unregister()
-            except BaseException as ex:
+            except Exception as ex:
                 print("Exception in module unregister():", (mod_file or module_name))
                 handle_error(ex)
                 return None
@@ -356,7 +382,7 @@ def enable(module_name, *, default_set=False, persistent=False, handle_error=Non
 
             try:
                 importlib.reload(mod)
-            except BaseException as ex:
+            except Exception as ex:
                 handle_error(ex)
                 del sys.modules[module_name]
                 return None
@@ -390,11 +416,11 @@ def enable(module_name, *, default_set=False, persistent=False, handle_error=Non
                     "module loaded with no associated file, __path__={!r}, aborting!".format(
                         getattr(mod, "__path__", None)
                     ),
-                    name=module_name
+                    name=module_name,
                 )
             mod.__time__ = os.path.getmtime(mod_file)
             mod.__addon_enabled__ = False
-        except BaseException as ex:
+        except Exception as ex:
             # If the add-on doesn't exist, don't print full trace-back because the back-trace is in this case
             # is verbose without any useful details. A missing path is better communicated in a short message.
             # Account for `ImportError` & `ModuleNotFoundError`.
@@ -460,7 +486,7 @@ def enable(module_name, *, default_set=False, persistent=False, handle_error=Non
         # 3) Try run the modules register function.
         try:
             mod.register()
-        except BaseException as ex:
+        except Exception as ex:
             print("Exception in module register():", (mod_file or module_name))
             handle_error(ex)
             del sys.modules[module_name]
@@ -485,11 +511,11 @@ def disable(module_name, *, default_set=False, handle_error=None):
     Disables an addon by name.
 
     :arg module_name: The name of the addon and module.
-    :type module_name: string
+    :type module_name: str
     :arg default_set: Set the user-preference.
     :type default_set: bool
     :arg handle_error: Called in the case of an error, taking an exception argument.
-    :type handle_error: function
+    :type handle_error: Callable[[Exception], None] | None
     """
     import sys
 
@@ -509,7 +535,7 @@ def disable(module_name, *, default_set=False, handle_error=None):
 
         try:
             mod.unregister()
-        except BaseException as ex:
+        except Exception as ex:
             mod_path = getattr(mod, "__file__", module_name)
             print("Exception in module unregister():", repr(mod_path))
             del mod_path
@@ -536,8 +562,18 @@ def reset_all(*, reload_scripts=False):
     """
     import sys
 
-    # initializes addons_fake_modules
-    modules_refresh()
+    # Ensures stale `addons_fake_modules` isn't used.
+    modules._is_first = True
+    addons_fake_modules.clear()
+
+    # Update extensions compatibility (after reloading preferences).
+    # Potentially refreshing wheels too.
+    _initialize_extensions_compat_data(
+        _bpy.utils.user_resource('EXTENSIONS'),
+        ensure_wheels=True,
+        addon_modules_pending=None,
+        use_startup_fastpath=False,
+    )
 
     for path, pkg_id in _paths_with_extension_repos():
         if not pkg_id:
@@ -654,7 +690,520 @@ def module_bl_info(mod, *, info_basis=None):
 
 
 # -----------------------------------------------------------------------------
+# Stale File Handling
+#
+# Notes:
+# - On startup, a file exists that indicates cleanup is needed.
+#   In the common case the file doesn't exist.
+#   Otherwise module paths are scanned for files to remove.
+# - Since errors resolving paths to remove could result in user data loss,
+#   ensure the paths are always within the (extension/add-on/app-template) directory.
+# - File locking isn't used, if multiple Blender instances start at the
+#   same time and try to remove the same files, this won't cause errors.
+#   Even so, remove the checking file immediately avoid unnecessary
+#   file-system access overhead for other Blender instances.
+#
+# For more implementation details see `_bpy_internal.extensions.stale_file_manager`.
+# This mainly impacts WIN32 which can't remove open file handles, see: #77837 & #125049.
+#
+# Use for all systems as the problem can impact any system if file removal fails
+# for any reason (typically permissions or file-system error).
+
+def _stale_pending_filepath():
+    # When this file exists, stale file removal is pending.
+    # Try to remove stale files next launch.
+    import os
+    return os.path.join(_bpy.utils.user_resource('CONFIG'), "stale-pending")
+
+
+def _stale_pending_stage(debug):
+    import os
+
+    stale_pending_filepath = _stale_pending_filepath()
+    dirpath = os.path.dirname(stale_pending_filepath)
+
+    if os.path.exists(stale_pending_filepath):
+        return
+
+    try:
+        os.makedirs(dirpath, exist_ok=True)
+        with open(stale_pending_filepath, "wb") as _:
+            pass
+    except Exception as ex:
+        print("Unable to set stale files pending:", str(ex))
+
+
+def _stale_file_directory_iter():
+    import os
+
+    for repo in _preferences.extensions.repos:
+        if not repo.enabled:
+            continue
+        if repo.source == 'SYSTEM':
+            continue
+        yield repo.directory
+
+    # Skip `addons_core` because add-ons because these will never be uninstalled by the user.
+    yield from paths()[1:]
+
+    # The `local_dir`, for wheels.
+    yield os.path.join(_bpy.utils.user_resource('EXTENSIONS'), ".local")
+
+    # The `path_app_templates`, for user app-templates.
+    yield _bpy.utils.user_resource(
+        'SCRIPTS',
+        path=os.path.join("startup", "bl_app_templates_user"),
+        create=False,
+    )
+
+
+def _stale_pending_check_and_remove_once():
+    # This runs on every startup, early exit if no stale data removal is staged.
+    import os
+    stale_pending_filepath = _stale_pending_filepath()
+    if not os.path.exists(stale_pending_filepath):
+        return
+
+    # Some stale data needs to be removed, this is an exceptional case.
+    # Allow for slower logic than is typically accepted on startup.
+    from _bpy_internal.extensions.stale_file_manager import StaleFiles
+    debug = _bpy.app.debug_python
+
+    # Remove the pending file if all are removed.
+    is_empty = True
+
+    for dirpath in _stale_file_directory_iter():
+        if not os.path.exists(os.path.join(dirpath, _stale_filename)):
+            continue
+
+        try:
+            stale_handle = StaleFiles(
+                base_directory=dirpath,
+                stale_filename=_stale_filename,
+                debug=debug,
+            )
+            stale_handle.state_load(check_exists=True)
+            if not stale_handle.is_empty():
+                stale_handle.state_remove_all()
+                if not stale_handle.is_empty():
+                    is_empty = False
+            if stale_handle.is_modified():
+                stale_handle.state_store(check_exists=False)
+        except Exception as ex:
+            print("Unexpected error clearing stale data, this is is a bug!", str(ex))
+
+    if is_empty:
+        try:
+            os.remove(stale_pending_filepath)
+        except Exception as ex:
+            if debug:
+                print("Failed to remove stale-pending file:", str(ex))
+
+
+def stale_pending_stage_paths(path_base, paths):
+    # - `path_base` must a directory iterated over by `_stale_file_directory_iter`.
+    #   Otherwise the stale files will never be removed.
+    # - `paths` must be absolute paths which could not be removed.
+    #   They must be located within `base_path` otherwise they cannot be removed.
+    from _bpy_internal.extensions.stale_file_manager import StaleFiles
+
+    debug = _bpy.app.debug_python
+
+    stale_handle = StaleFiles(
+        base_directory=path_base,
+        stale_filename=_stale_filename,
+        debug=debug,
+    )
+    # Already checked.
+    if stale_handle.state_load_add_and_store(paths=paths):
+        # Force clearing stale files on next restart.
+        _stale_pending_stage(debug)
+
+
+def stale_pending_remove_paths(path_base, paths):
+    # The reverse of: `stale_pending_stage_paths`.
+    from _bpy_internal.extensions.stale_file_manager import StaleFiles
+
+    debug = _bpy.app.debug_python
+
+    stale_handle = StaleFiles(
+        base_directory=path_base,
+        stale_filename=_stale_filename,
+        debug=debug,
+    )
+    # Already checked.
+    if stale_handle.state_load_remove_and_store(paths=paths):
+        # Don't attempt to reverse the `_stale_pending_stage` call.
+        # This is not trivial since other repositories may need to be cleared.
+        # There will be a minor performance hit on restart but this is enough
+        # of a corner case that it's not worth attempting to calculate if
+        # removal of pending files is needed or not.
+        pass
+
+
+# -----------------------------------------------------------------------------
+# Extension Pre-Flight Compatibility Check
+#
+# Check extension compatibility on startup so any extensions which are incompatible with Blender are marked as
+# incompatible and wont be loaded. This cache avoids having to scan all extensions on startup on *every* startup.
+#
+# Implementation:
+#
+# The emphasis for this cache is to have minimum overhead for the common case where:
+# - The simple case where there are no extensions enabled (running tests, background tasks etc).
+# - The more involved case where extensions are enabled and have not changed since last time Blender started.
+#   In this case do as little as possible since it runs on every startup, the following steps are unavoidable.
+# - When reading compatibility cache, then run the following tests, regenerating when changes are detected.
+#   - Compare with previous blender version/platform.
+#   - Stat the manifests of all enabled extensions, testing that their modification-time and size are unchanged.
+# - When any changes are detected,
+#   regenerate compatibility information which does more expensive operations
+#   (loading manifests, check version ranges etc).
+#
+# Other notes:
+#
+# - This internal format may change at any point, regenerating the cache should be reasonably fast
+#   but may introduce a small but noticeable pause on startup for user configurations that contain many extensions.
+# - Failure to load will simply ignore the file and regenerate the file as needed.
+#
+# Format:
+#
+# - The cache is ZLIB compressed pickled Python dictionary.
+# - The dictionary keys are as follows:
+#   `"blender": (bpy.app.version, platform.system(), platform.machine(), python_version, magic_number)`
+#   `"filesystem": [(repo_module, pkg_id, manifest_time, manifest_size), ...]`
+#   `"incompatible": {(repo_module, pkg_id): "Reason for being incompatible", ...}`
+#
+
+
+def _pickle_zlib_file_read(filepath):
+    import pickle
+    import gzip
+
+    with gzip.GzipFile(filepath, "rb") as fh:
+        data = pickle.load(fh)
+    return data
+
+
+def _pickle_zlib_file_write(filepath, data) -> None:
+    import pickle
+    import gzip
+
+    with gzip.GzipFile(filepath, "wb", compresslevel=9) as fh:
+        pickle.dump(data, fh)
+
+
+def _extension_repos_module_to_directory_map():
+    return {repo.module: repo.directory for repo in _preferences.extensions.repos if repo.enabled}
+
+
+def _extension_compat_cache_update_needed(
+        cache_data,  # `dict[str, Any]`
+        blender_id,  # `tuple[Any, ...]`
+        extensions_enabled,  # `set[tuple[str, str]]`
+        print_debug,  # `Callable[[Any], None] | None`
+):  # `-> bool`
+
+    # Detect when Blender itself changes.
+    if cache_data.get("blender") != blender_id:
+        if print_debug is not None:
+            print_debug("blender changed")
+        return True
+
+    # Detect when any of the extensions paths change.
+    cache_filesystem = cache_data.get("filesystem", [])
+
+    # Avoid touching the file-system if at all possible.
+    # When the length is the same and all cached ID's are in this set, we can be sure they are a 1:1 patch.
+    if len(cache_filesystem) != len(extensions_enabled):
+        if print_debug is not None:
+            print_debug("length changes ({:d} -> {:d}).".format(len(cache_filesystem), len(extensions_enabled)))
+        return True
+
+    from os import stat
+    from os.path import join
+    repos_module_to_directory_map = _extension_repos_module_to_directory_map()
+
+    for repo_module, pkg_id, cache_stat_time, cache_stat_size in cache_filesystem:
+        if (repo_module, pkg_id) not in extensions_enabled:
+            if print_debug is not None:
+                print_debug("\"{:s}.{:s}\" no longer enabled.".format(repo_module, pkg_id))
+            return True
+
+        if repo_directory := repos_module_to_directory_map.get(repo_module, ""):
+            pkg_manifest_filepath = join(repo_directory, pkg_id, _ext_manifest_filename_toml)
+        else:
+            pkg_manifest_filepath = ""
+
+        # It's possible an extension has been set as an add-on but cannot find the repository it came from.
+        # In this case behave as if the file can't be found (because it can't) instead of ignoring it.
+        # This is done because it's important to match.
+        if pkg_manifest_filepath:
+            try:
+                statinfo = stat(pkg_manifest_filepath)
+            except Exception:
+                statinfo = None
+        else:
+            statinfo = None
+
+        if statinfo is None:
+            test_time = 0
+            test_size = 0
+        else:
+            test_time = statinfo.st_mtime
+            test_size = statinfo.st_size
+
+        # Detect changes to any files manifest.
+        if cache_stat_time != test_time:
+            if print_debug is not None:
+                print_debug("\"{:s}.{:s}\" time changed ({:g} -> {:g}).".format(
+                    repo_module, pkg_id, cache_stat_time, test_time,
+                ))
+            return True
+        if cache_stat_size != test_size:
+            if print_debug is not None:
+                print_debug("\"{:s}.{:s}\" size changed ({:d} -> {:d}).".format(
+                    repo_module, pkg_id, cache_stat_size, test_size,
+                ))
+            return True
+
+    return False
+
+
+# This function should not run every startup, so it can afford to be slower,
+# although users should not have to wait for it either.
+def _extension_compat_cache_create(
+        blender_id,  # `tuple[Any, ...]`
+        extensions_enabled,  # `set[tuple[str, str]]`
+        wheel_list,  # `list[tuple[str, list[str]]]`
+        print_debug,  # `Callable[[Any], None] | None`
+):  # `-> dict[str, Any]`
+    import os
+    from os.path import join
+
+    filesystem = []
+    incompatible = {}
+
+    cache_data = {
+        "blender": blender_id,
+        "filesystem": filesystem,
+        "incompatible": incompatible,
+    }
+
+    repos_module_to_directory_map = _extension_repos_module_to_directory_map()
+
+    # Only import this module once (if at all).
+    bl_pkg = None
+
+    for repo_module, pkg_id in extensions_enabled:
+        if repo_directory := repos_module_to_directory_map.get(repo_module, ""):
+            pkg_manifest_filepath = join(repo_directory, pkg_id, _ext_manifest_filename_toml)
+        else:
+            pkg_manifest_filepath = ""
+            if print_debug is not None:
+                print_debug("directory for module \"{:s}\" not found!".format(repo_module))
+
+        if pkg_manifest_filepath:
+            try:
+                statinfo = os.stat(pkg_manifest_filepath)
+            except Exception:
+                statinfo = None
+                if print_debug is not None:
+                    print_debug("unable to find \"{:s}\"".format(pkg_manifest_filepath))
+        else:
+            statinfo = None
+
+        if statinfo is None:
+            test_time = 0.0
+            test_size = 0
+        else:
+            test_time = statinfo.st_mtime
+            test_size = statinfo.st_size
+            # Store the reason for failure, to print when attempting to load.
+
+            # Only load the module once.
+            if bl_pkg is None:
+                # Without `bl_pkg.__time__` this will detect as having been changed and
+                # reload the module when loading the add-on.
+                import bl_pkg
+                if getattr(bl_pkg, "__time__", 0) == 0:
+                    try:
+                        bl_pkg.__time__ = os.path.getmtime(bl_pkg.__file__)
+                    except Exception as ex:
+                        if print_debug is not None:
+                            print_debug(str(ex))
+
+            if (error := bl_pkg.manifest_compatible_with_wheel_data_or_error(
+                    pkg_manifest_filepath,
+                    repo_module,
+                    pkg_id,
+                    repo_directory,
+                    wheel_list,
+            )) is not None:
+                incompatible[(repo_module, pkg_id)] = error
+
+        filesystem.append((repo_module, pkg_id, test_time, test_size))
+
+    return cache_data
+
+
+def _initialize_extensions_compat_ensure_up_to_date(extensions_directory, extensions_enabled, print_debug):
+    import os
+    import platform
+    import sys
+
+    global _extensions_incompatible
+
+    updated = False
+    wheel_list = []
+
+    # Number to bump to change this format and force re-generation.
+    magic_number = 0
+
+    blender_id = (_bpy.app.version, platform.system(), platform.machine(), sys.version_info[0:2], magic_number)
+
+    filepath_compat = os.path.join(extensions_directory, ".cache", "compat.dat")
+
+    # Cache data contains a dict of:
+    # {
+    #   "blender": (...)
+    #   "paths": [path data to detect changes]
+    #   "incompatible": {set of incompatible extensions}
+    # }
+    if os.path.exists(filepath_compat):
+        try:
+            cache_data = _pickle_zlib_file_read(filepath_compat)
+        except Exception as ex:
+            cache_data = None
+            # While this should not happen continuously (that would point to writing invalid cache),
+            # it is not a problem if there is some corruption with the cache and it needs to be re-generated.
+            # Show a message since this should be a rare occurrence - if it happens often it's likely to be a bug.
+            print("Extensions: reading cache failed ({:s}), creating...".format(str(ex)))
+    else:
+        cache_data = None
+        if print_debug is not None:
+            print_debug("doesn't exist, creating...")
+
+    if cache_data is not None:
+        # NOTE: the exception handling here is fairly paranoid and accounts for invalid values in the loaded cache.
+        # An example would be values expected to be lists/dictionaries being other types (None or strings for e.g.).
+        # While this should not happen, some bad value should not prevent Blender from loading properly,
+        # so report the error and regenerate cache.
+        try:
+            if _extension_compat_cache_update_needed(cache_data, blender_id, extensions_enabled, print_debug):
+                cache_data = None
+        except Exception:
+            print("Extension: unexpected error reading cache, this is is a bug! (regenerating)")
+            import traceback
+            traceback.print_exc()
+            cache_data = None
+
+    if cache_data is None:
+        cache_data = _extension_compat_cache_create(blender_id, extensions_enabled, wheel_list, print_debug)
+        try:
+            os.makedirs(os.path.dirname(filepath_compat), exist_ok=True)
+            _pickle_zlib_file_write(filepath_compat, cache_data)
+            if print_debug is not None:
+                print_debug("update written to disk.")
+        except Exception as ex:
+            # Should be rare but should not cause this function to fail.
+            print("Extensions: writing cache failed ({:s}).".format(str(ex)))
+
+        # Set to true even when not written to disk as the run-time data *has* been updated,
+        # cache will attempt to be generated next time this is called.
+        updated = True
+    else:
+        if print_debug is not None:
+            print_debug("up to date.")
+
+    _extensions_incompatible = cache_data["incompatible"]
+
+    return updated, wheel_list
+
+
+def _initialize_extensions_compat_ensure_up_to_date_wheels(extensions_directory, wheel_list, debug):
+    import os
+    _extension_sync_wheels(
+        local_dir=os.path.join(extensions_directory, ".local"),
+        wheel_list=wheel_list,
+        debug=debug,
+    )
+
+
+def _initialize_extensions_compat_data(
+        extensions_directory,  # `str`
+        *,
+        ensure_wheels,  # `bool`
+        addon_modules_pending,  # `Sequence[str] | None`
+        use_startup_fastpath,  # `bool`
+):
+    # WARNING: this function must *never* raise an exception because it would interfere with low level initialization.
+    # As the function deals with file IO, use what are typically over zealous exception checks so as to rule out
+    # interfering with Blender loading properly in unexpected cases such as disk-full, read-only file-system
+    # or any other rare but possible scenarios.
+
+    _extensions_incompatible.clear()
+
+    # Create a set of all extension ID's.
+    extensions_enabled = set()
+    extensions_prefix_len = len(_ext_base_pkg_idname_with_dot)
+    for addon in _preferences.addons:
+        module_name = addon.module
+        if check_extension(module_name):
+            extensions_enabled.add(module_name[extensions_prefix_len:].partition(".")[0::2])
+
+    if addon_modules_pending is not None:
+        for module_name in addon_modules_pending:
+            if check_extension(module_name):
+                extensions_enabled.add(module_name[extensions_prefix_len:].partition(".")[0::2])
+
+    debug = _bpy.app.debug_python
+    print_debug = (lambda *args, **kwargs: print("Extension version cache:", *args, **kwargs)) if debug else None
+
+    # Early exit, use for automated tests.
+    # Avoid (relatively) expensive file-system scanning if at all possible.
+    #
+    # - On startup when there are no extensions enabled, scanning and synchronizing wheels
+    #   adds unnecessary overhead. Especially considering this will run for automated tasks.
+    # - When disabling an add-on from the UI, there may be no extensions enabled afterwards,
+    #   however the extension that was disabled may have had wheels installed which must be removed,
+    #   so in this case it's important not to skip synchronizing wheels, see: #125958.
+    if use_startup_fastpath and (not extensions_enabled):
+        if print_debug is not None:
+            print_debug("no extensions, skipping cache data.")
+        return
+
+    # While this isn't expected to fail, any failure here is a bug
+    # but it should not cause Blender's startup to fail.
+    try:
+        updated, wheel_list = _initialize_extensions_compat_ensure_up_to_date(
+            extensions_directory,
+            extensions_enabled,
+            print_debug,
+        )
+    except Exception:
+        print("Extension: unexpected error detecting cache, this is is a bug!")
+        import traceback
+        traceback.print_exc()
+        updated = False
+
+    if ensure_wheels:
+        if updated:
+            try:
+                _initialize_extensions_compat_ensure_up_to_date_wheels(extensions_directory, wheel_list, debug)
+            except Exception:
+                print("Extension: unexpected error updating wheels, this is is a bug!")
+                import traceback
+                traceback.print_exc()
+
+
+# -----------------------------------------------------------------------------
 # Extension Utilities
+
+def _version_int_left_digits(x):
+    # Parse as integer until the first non-digit.
+    return int(x[:next((i for i, c in enumerate(x) if not c.isdigit()), len(x))] or "0")
+
 
 def _bl_info_from_extension(mod_name, mod_path):
     # Extract the `bl_info` from an extensions manifest.
@@ -673,7 +1222,7 @@ def _bl_info_from_extension(mod_name, mod_path):
     except FileNotFoundError:
         print("Warning: add-on missing manifest, this can cause poor performance!:", repr(filepath_toml))
         return None, filepath_toml
-    except BaseException as ex:
+    except Exception as ex:
         print("Error:", str(ex), "in", filepath_toml)
         return None, filepath_toml
 
@@ -692,6 +1241,14 @@ def _bl_info_from_extension(mod_name, mod_path):
     if type(value) is not str:
         print("Error: \"version\" is not a string in", filepath_toml)
         return None, filepath_toml
+    try:
+        value = tuple(
+            (int if i < 2 else _version_int_left_digits)(x)
+            for i, x in enumerate(value.split(".", 2))
+        )
+    except Exception as ex:
+        print("Error: \"version\" is not a semantic version (X.Y.Z) in ", filepath_toml, str(ex))
+        return None, filepath_toml
     bl_info["version"] = value
 
     if (value := data.get("blender_version_min", None)) is None:
@@ -702,7 +1259,7 @@ def _bl_info_from_extension(mod_name, mod_path):
         return None, filepath_toml
     try:
         value = tuple(int(x) for x in value.split("."))
-    except BaseException as ex:
+    except Exception as ex:
         print("Error:", str(ex), "in \"blender_version_min\"", filepath_toml)
         return None, filepath_toml
     bl_info["blender"] = value
@@ -751,6 +1308,44 @@ def _fake_module_from_extension(mod_name, mod_path):
     return mod
 
 
+def _extension_sync_wheels(
+        *,
+        local_dir,  # `str`
+        wheel_list,  # `list[WheelSource]`
+        debug,           # `bool`
+):  # `-> None`
+    import os
+    import sys
+    from _bpy_internal.extensions.wheel_manager import apply_action
+
+    local_dir_site_packages = os.path.join(
+        local_dir,
+        "lib",
+        "python{:d}.{:d}".format(*sys.version_info[0:2]),
+        "site-packages",
+    )
+
+    paths_stale = []
+
+    def remove_error_fn(filepath: str, _ex: Exception) -> None:
+        paths_stale.append(filepath)
+
+    apply_action(
+        local_dir=local_dir,
+        local_dir_site_packages=local_dir_site_packages,
+        wheel_list=wheel_list,
+        remove_error_fn=remove_error_fn,
+        debug=debug,
+    )
+
+    if paths_stale:
+        stale_pending_stage_paths(local_dir, paths_stale)
+
+    if os.path.exists(local_dir_site_packages):
+        if local_dir_site_packages not in sys.path:
+            sys.path.append(local_dir_site_packages)
+
+
 # -----------------------------------------------------------------------------
 # Extensions
 
@@ -781,6 +1376,33 @@ _ext_base_pkg_idname_with_dot = _ext_base_pkg_idname + "."
 _ext_manifest_filename_toml = "blender_manifest.toml"
 
 
+def _extension_module_name_decompose(package):
+    # Returns the repository module name and the extensions ID from an extensions module name (``__package__``).
+    #
+    # :arg module_name: The extensions module name.
+    # :type module_name: str
+    # :return: (repo_module_name, extension_id)
+    # :rtype: tuple[str, str]
+
+    if not package.startswith(_ext_base_pkg_idname_with_dot):
+        raise ValueError("The \"package\" does not name an extension")
+
+    repo_module, pkg_idname = package[len(_ext_base_pkg_idname_with_dot):].partition(".")[0::2]
+    if not (repo_module and pkg_idname):
+        raise ValueError("The \"package\" is expected to be a module name containing 3 components")
+
+    if "." in pkg_idname:
+        raise ValueError("The \"package\" is expected to be a module name containing 3 components, found {:d}".format(
+            pkg_idname.count(".") + 3
+        ))
+
+    # Unlikely but possible.
+    if not (repo_module.isidentifier() and pkg_idname.isidentifier()):
+        raise ValueError("The \"package\" contains non-identifier characters")
+
+    return repo_module, pkg_idname
+
+
 def _extension_preferences_idmap():
     repos_idmap = {}
     repos_idmap_disabled = {}
@@ -808,7 +1430,7 @@ def _extension_dirpath_from_handle():
         # meddle with the modules.
         try:
             dirpath = module.__path__[0]
-        except BaseException:
+        except Exception:
             dirpath = ""
         repos_info[module_id] = dirpath
     return repos_info
@@ -944,7 +1566,7 @@ def _initialize_extension_repos_post_addons_restore(addons_to_enable):
             addon.module = module_name_next
         enable(module_name_next, default_set=default_set, persistent=persistent)
     # Needed for module rename.
-    modules._is_first = True
+    _is_first_reset()
 
 
 # Use `bpy.app.handlers.extension_repos_update_{pre/post}` to track changes to extension repositories
@@ -1078,10 +1700,10 @@ def _initialize_extension_repos_post(*_, is_first=False):
 
     # Force refreshing if directory paths change.
     if submodules_del or submodules_add or submodules_rename_dirpath:
-        modules._is_first = True
+        _is_first_reset()
 
 
-def _initialize_extensions_site_packages(*, create=False):
+def _initialize_extensions_site_packages(*, extensions_directory, create=False):
     # Add extension site-packages to `sys.path` (if it exists).
     # Use for wheels.
     import os
@@ -1093,7 +1715,7 @@ def _initialize_extensions_site_packages(*, create=False):
     # so this can't simply be treated as a module directory unless those files would be excluded
     # which may interfere with the wheels functionality.
     site_packages = os.path.join(
-        _bpy.utils.user_resource('EXTENSIONS'),
+        extensions_directory,
         ".local",
         "lib",
         "python{:d}.{:d}".format(sys.version_info.major, sys.version_info.minor),
@@ -1132,13 +1754,23 @@ def _initialize_extensions_site_packages(*, create=False):
 
 
 def _initialize_extensions_repos_once():
-    from bpy_extras.extensions.junction_module import JunctionModuleHandle
+    from _bpy_internal.extensions.junction_module import JunctionModuleHandle
     module_handle = JunctionModuleHandle(_ext_base_pkg_idname)
     module_handle.register_module()
     _ext_global.module_handle = module_handle
 
+    extensions_directory = _bpy.utils.user_resource('EXTENSIONS')
+
     # Ensure extensions wheels can be loaded (when found).
-    _initialize_extensions_site_packages()
+    _initialize_extensions_site_packages(extensions_directory=extensions_directory)
+
+    # Ensure extension compatibility data has been loaded and matches the manifests.
+    _initialize_extensions_compat_data(
+        extensions_directory,
+        ensure_wheels=True,
+        addon_modules_pending=None,
+        use_startup_fastpath=True,
+    )
 
     # Setup repositories for the first time.
     # Intentionally don't call `_initialize_extension_repos_pre` as this is the first time,
@@ -1148,3 +1780,138 @@ def _initialize_extensions_repos_once():
     # Internal handlers intended for Blender's own handling of repositories.
     _bpy.app.handlers._extension_repos_update_pre.append(_initialize_extension_repos_pre)
     _bpy.app.handlers._extension_repos_update_post.append(_initialize_extension_repos_post)
+
+
+# -----------------------------------------------------------------------------
+# Extension Public API
+
+def extensions_refresh(ensure_wheels=True, addon_modules_pending=None):
+
+    # Ensure any changes to extensions refresh `_extensions_incompatible`.
+    _initialize_extensions_compat_data(
+        _bpy.utils.user_resource('EXTENSIONS'),
+        ensure_wheels=ensure_wheels,
+        addon_modules_pending=addon_modules_pending,
+        use_startup_fastpath=False,
+    )
+
+
+def _extensions_warnings_get():
+    if _extensions_warnings_get._is_first is False:
+        return _extensions_warnings
+
+    # Calculate warnings which are shown in the UI but not calculated at load time
+    # because this incurs some overhead.
+    #
+    # Currently this checks for scripts violating policies:
+    # - Adding their directories or sub-directories to `sys.path`.
+    # - Loading any bundled scripts as modules directly into `sys.modules`.
+    #
+    # These warnings are shown:
+    # - In the add-on UI.
+    # - In the extension UI.
+    # - When listing extensions via `blender -c extension list`.
+
+    import sys
+    import os
+
+    _extensions_warnings_get._is_first = False
+    _extensions_warnings.clear()
+
+    # This could be empty, it just avoid a lot of redundant lookups to skip known module paths.
+    dirs_skip_expected = (
+        os.path.normpath(os.path.join(os.path.dirname(_bpy.__file__), "..")) + os.sep,
+        os.path.normpath(os.path.join(os.path.dirname(__import__("bl_ui").__file__), "..")) + os.sep,
+        os.path.normpath(os.path.dirname(os.__file__)) + os.sep,
+        # Legacy add add-on paths.
+        *(os.path.normpath(path) + os.sep for path in paths()),
+    )
+
+    extensions_directory_map = {}
+    modules_other = []
+
+    for module_name, module in sys.modules.items():
+
+        if module_name == "__main__":
+            continue
+
+        module_file = getattr(module, "__file__", None) or ""
+        if not module_file:
+            # In most cases these are PY-CAPI modules.
+            continue
+
+        module_file = os.path.normpath(module_file)
+
+        if module_file.startswith(dirs_skip_expected):
+            continue
+
+        if module_name.startswith(_ext_base_pkg_idname_with_dot):
+            # Check this is a sub-module (an extension).
+            if module_name.find(".", len(_ext_base_pkg_idname_with_dot)) != -1:
+                # Ignore extension sub-modules because there is no need to handle their directories.
+                # The extensions directory accounts for any paths which may be found in the sub-modules path.
+                if module_name.count(".") > 2:
+                    continue
+                extensions_directory_map[module_name] = os.path.dirname(module_file) + os.sep
+        else:
+            # Any non extension module.
+            modules_other.append((module_name, module_file))
+
+    dirs_extensions = tuple(path for path in extensions_directory_map.values())
+    dirs_extensions_noslash = set(path.rstrip(os.sep) for path in dirs_extensions)
+    if dirs_extensions:
+        for module_other_name, module_other_file in modules_other:
+            if not module_other_file.startswith(dirs_extensions):
+                continue
+
+            # Need 2x lookups, not ideal but `str.startswith` doesn't let us know which argument matched.
+            found = False
+            for module_name, module_dirpath in extensions_directory_map.items():
+                if not module_other_file.startswith(module_dirpath):
+                    continue
+                try:
+                    warning_list = _extensions_warnings[module_name]
+                except KeyError:
+                    warning_list = _extensions_warnings[module_name] = []
+                warning_list.append("Policy violation with top level module: {:s}".format(module_other_name))
+                found = True
+                break
+            assert found
+
+        for path in sys.path:
+            path = os.path.normpath(path)
+            if path.startswith(dirs_skip_expected):
+                continue
+
+            if not (path in dirs_extensions_noslash or path.startswith(dirs_extensions)):
+                continue
+
+            found = False
+            for module_name, module_dirpath in extensions_directory_map.items():
+                if not (path == module_dirpath.rstrip(os.sep) or path.startswith(module_dirpath)):
+                    continue
+                try:
+                    warning_list = _extensions_warnings[module_name]
+                except KeyError:
+                    warning_list = _extensions_warnings[module_name] = []
+                # Use an extension relative path as an absolute path may be too verbose for the UI.
+                warning_list.append(
+                    "Policy violation with sys.path: {:s}".format(
+                        ".{:s}{:s}".format(os.sep, os.path.relpath(path, module_dirpath))
+                    )
+                )
+                found = True
+                break
+            assert found
+
+    return _extensions_warnings
+
+
+_extensions_warnings_get._is_first = True
+
+
+def _is_first_reset():
+    # Reset all values which are lazily initialized,
+    # use this to force re-creating extension warnings and cached modules.
+    _extensions_warnings_get._is_first = True
+    modules._is_first = True

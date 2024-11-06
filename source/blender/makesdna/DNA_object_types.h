@@ -44,9 +44,7 @@ struct Curve;
 struct FluidsimSettings;
 struct Ipo;
 struct LightgroupMembership;
-struct LightProbeGridCacheFrame;
 struct Material;
-struct Mesh;
 struct Object;
 struct PartDeflect;
 struct Path;
@@ -437,7 +435,7 @@ typedef struct ObHook {
 /**
  * This is used as a flag for many kinds of data that use selections, examples include:
  * - #BezTriple.f1, #BezTriple.f2, #BezTriple.f3
- * - #bNote.flag
+ * - #bNode.flag
  * - #MovieTrackingTrack.flag
  * And more, ideally this would have a generic location.
  */

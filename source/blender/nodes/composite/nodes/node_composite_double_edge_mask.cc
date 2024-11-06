@@ -56,6 +56,17 @@ class DoubleEdgeMaskOperation : public NodeOperation {
 
   void execute() override
   {
+    /* Not yet supported on CPU. */
+    if (!context().use_gpu()) {
+      for (const bNodeSocket *output : this->node()->output_sockets()) {
+        Result &output_result = get_result(output->identifier);
+        if (output_result.should_compute()) {
+          output_result.allocate_invalid();
+        }
+      }
+      return;
+    }
+
     Result &inner_mask = get_input("Inner Mask");
     Result &outer_mask = get_input("Outer Mask");
     Result &output = get_result("Mask");
@@ -66,18 +77,16 @@ class DoubleEdgeMaskOperation : public NodeOperation {
 
     /* Compute an image that marks the boundary pixels of the masks as seed pixels in the format
      * expected by the jump flooding algorithm. */
-    Result inner_boundary = context().create_temporary_result(ResultType::Int2,
-                                                              ResultPrecision::Half);
-    Result outer_boundary = context().create_temporary_result(ResultType::Int2,
-                                                              ResultPrecision::Half);
+    Result inner_boundary = context().create_result(ResultType::Int2, ResultPrecision::Half);
+    Result outer_boundary = context().create_result(ResultType::Int2, ResultPrecision::Half);
     compute_boundary(inner_boundary, outer_boundary);
 
     /* Compute a jump flooding table for each mask boundary to get a distance transform to each of
      * the boundaries. */
-    Result flooded_inner_boundary = context().create_temporary_result(ResultType::Int2,
-                                                                      ResultPrecision::Half);
-    Result flooded_outer_boundary = context().create_temporary_result(ResultType::Int2,
-                                                                      ResultPrecision::Half);
+    Result flooded_inner_boundary = context().create_result(ResultType::Int2,
+                                                            ResultPrecision::Half);
+    Result flooded_outer_boundary = context().create_result(ResultType::Int2,
+                                                            ResultPrecision::Half);
     jump_flooding(context(), inner_boundary, flooded_inner_boundary);
     jump_flooding(context(), outer_boundary, flooded_outer_boundary);
     inner_boundary.release();
@@ -181,5 +190,5 @@ void register_node_type_cmp_doubleedgemask()
   ntype.draw_buttons = file_ns::node_composit_buts_double_edge_mask;
   ntype.get_compositor_operation = file_ns::get_compositor_operation;
 
-  blender::bke::nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }

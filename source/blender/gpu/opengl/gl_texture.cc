@@ -758,9 +758,10 @@ void GLTexture::check_feedback_loop()
   }
 }
 
-/* TODO(fclem): Legacy. Should be removed at some point. */
 uint GLTexture::gl_bindcode_get() const
 {
+  /* TODO(fclem): Legacy. Should be removed at some point. */
+
   return tex_id_;
 }
 
@@ -768,7 +769,7 @@ uint GLTexture::gl_bindcode_get() const
 /** \name Pixel Buffer
  * \{ */
 
-GLPixelBuffer::GLPixelBuffer(uint size) : PixelBuffer(size)
+GLPixelBuffer::GLPixelBuffer(size_t size) : PixelBuffer(size)
 {
   glGenBuffers(1, &gl_id_);
   BLI_assert(gl_id_);

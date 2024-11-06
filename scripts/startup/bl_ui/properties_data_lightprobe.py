@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 from bpy.types import Panel
+from .space_properties import PropertiesAnimationMixin
 
 
 class DataButtonsPanel:
@@ -19,7 +20,10 @@ class DataButtonsPanel:
 class DATA_PT_context_lightprobe(DataButtonsPanel, Panel):
     bl_label = ""
     bl_options = {'HIDE_HEADER'}
-    COMPAT_ENGINES = {'BLENDER_EEVEE', 'BLENDER_RENDER', 'BLENDER_EEVEE_NEXT'}
+    COMPAT_ENGINES = {
+        'BLENDER_RENDER',
+        'BLENDER_EEVEE_NEXT'
+    }
 
     def draw(self, context):
         layout = self.layout
@@ -36,7 +40,7 @@ class DATA_PT_context_lightprobe(DataButtonsPanel, Panel):
 
 class DATA_PT_lightprobe(DataButtonsPanel, Panel):
     bl_label = "Probe"
-    COMPAT_ENGINES = {'BLENDER_EEVEE', 'BLENDER_RENDER'}
+    COMPAT_ENGINES = {'BLENDER_RENDER'}
 
     def draw(self, context):
         layout = self.layout
@@ -53,9 +57,9 @@ class DATA_PT_lightprobe(DataButtonsPanel, Panel):
             col.prop(probe, "intensity")
 
             sub = col.column(align=True)
-            sub.prop(probe, "grid_resolution_x", text="Resolution X")
-            sub.prop(probe, "grid_resolution_y", text="Y")
-            sub.prop(probe, "grid_resolution_z", text="Z")
+            sub.prop(probe, "resolution_x", text="Resolution X")
+            sub.prop(probe, "resolution_y", text="Y")
+            sub.prop(probe, "resolution_z", text="Z")
 
         elif probe.type == 'PLANE':
             col = layout.column()
@@ -101,16 +105,16 @@ class DATA_PT_lightprobe_eevee_next(DataButtonsPanel, Panel):
             col.separator()
 
             sub = col.column(align=True)
-            sub.prop(probe, "grid_normal_bias")
-            sub.prop(probe, "grid_view_bias")
-            sub.prop(probe, "grid_facing_bias")
+            sub.prop(probe, "normal_bias")
+            sub.prop(probe, "view_bias")
+            sub.prop(probe, "facing_bias")
 
             col.separator()
 
-            col.prop(probe, "grid_validity_threshold")
+            col.prop(probe, "validity_threshold")
             sub = col.column(align=True)
-            sub.prop(probe, "grid_dilation_threshold")
-            sub.prop(probe, "grid_dilation_radius", text="Radius")
+            sub.prop(probe, "dilation_threshold")
+            sub.prop(probe, "dilation_radius", text="Radius")
 
             col.separator()
 
@@ -138,7 +142,7 @@ class DATA_PT_lightprobe_eevee_next(DataButtonsPanel, Panel):
 class DATA_PT_lightprobe_visibility(DataButtonsPanel, Panel):
     bl_label = "Visibility"
     bl_parent_id = "DATA_PT_lightprobe"
-    COMPAT_ENGINES = {'BLENDER_EEVEE', 'BLENDER_RENDER'}
+    COMPAT_ENGINES = {'BLENDER_RENDER'}
 
     def draw(self, context):
         layout = self.layout
@@ -197,8 +201,6 @@ class DATA_PT_lightprobe_bake(DataButtonsPanel, Panel):
         layout.use_property_split = True
         layout.use_property_decorate = False
 
-        probe = context.lightprobe
-
         col = layout.column()
         row = col.row(align=True)
         row.operator("object.lightprobe_cache_bake").subset = 'ACTIVE'
@@ -220,12 +222,12 @@ class DATA_PT_lightprobe_bake_resolution(DataButtonsPanel, Panel):
         col = layout.column()
 
         sub = col.column(align=True)
-        sub.prop(probe, "grid_resolution_x", text="Resolution X")
-        sub.prop(probe, "grid_resolution_y", text="Y")
-        sub.prop(probe, "grid_resolution_z", text="Z")
+        sub.prop(probe, "resolution_x", text="Resolution X")
+        sub.prop(probe, "resolution_y", text="Y")
+        sub.prop(probe, "resolution_z", text="Z")
 
-        col.prop(probe, "grid_bake_samples")
-        col.prop(probe, "grid_surfel_density")
+        col.prop(probe, "bake_samples")
+        col.prop(probe, "surfel_density")
 
 
 class DATA_PT_lightprobe_bake_capture(DataButtonsPanel, Panel):
@@ -242,12 +244,12 @@ class DATA_PT_lightprobe_bake_capture(DataButtonsPanel, Panel):
 
         col = layout.column()
 
-        col.prop(probe, "grid_capture_distance", text="Distance")
+        col.prop(probe, "capture_distance", text="Distance")
 
         col = layout.column(heading="Contributions", align=True)
-        col.prop(probe, "grid_capture_world", text="World")
-        col.prop(probe, "grid_capture_indirect", text="Indirect Light")
-        col.prop(probe, "grid_capture_emission", text="Emission")
+        col.prop(probe, "capture_world", text="World")
+        col.prop(probe, "capture_indirect", text="Indirect Light")
+        col.prop(probe, "capture_emission", text="Emission")
 
 
 class DATA_PT_lightprobe_bake_offset(DataButtonsPanel, Panel):
@@ -264,8 +266,8 @@ class DATA_PT_lightprobe_bake_offset(DataButtonsPanel, Panel):
         probe = context.lightprobe
 
         col = layout.column(align=True)
-        col.prop(probe, "grid_surface_bias")
-        col.prop(probe, "grid_escape_bias")
+        col.prop(probe, "surface_bias")
+        col.prop(probe, "escape_bias")
 
 
 class DATA_PT_lightprobe_bake_clamping(DataButtonsPanel, Panel):
@@ -282,14 +284,17 @@ class DATA_PT_lightprobe_bake_clamping(DataButtonsPanel, Panel):
         probe = context.lightprobe
 
         col = layout.column(align=True)
-        col.prop(probe, "grid_clamp_direct", text="Direct Light")
-        col.prop(probe, "grid_clamp_indirect", text="Indirect Light")
+        col.prop(probe, "clamp_direct", text="Direct Light")
+        col.prop(probe, "clamp_indirect", text="Indirect Light")
 
 
 class DATA_PT_lightprobe_parallax(DataButtonsPanel, Panel):
     bl_label = "Custom Parallax"
     bl_options = {'DEFAULT_CLOSED'}
-    COMPAT_ENGINES = {'BLENDER_EEVEE', 'BLENDER_RENDER', 'BLENDER_EEVEE_NEXT'}
+    COMPAT_ENGINES = {
+        'BLENDER_RENDER',
+        'BLENDER_EEVEE_NEXT',
+    }
 
     @classmethod
     def poll(cls, context):
@@ -320,7 +325,7 @@ class DATA_PT_lightprobe_parallax(DataButtonsPanel, Panel):
 class DATA_PT_lightprobe_display(DataButtonsPanel, Panel):
     bl_label = "Viewport Display"
     bl_options = {'DEFAULT_CLOSED'}
-    COMPAT_ENGINES = {'BLENDER_EEVEE', 'BLENDER_RENDER'}
+    COMPAT_ENGINES = {'BLENDER_RENDER'}
 
     def draw(self, context):
         layout = self.layout
@@ -381,6 +386,11 @@ class DATA_PT_lightprobe_display_eevee_next(DataButtonsPanel, Panel):
             col.prop(probe, "show_influence")
 
 
+class DATA_PT_lightprobe_animation(DataButtonsPanel, PropertiesAnimationMixin, Panel):
+    COMPAT_ENGINES = {'BLENDER_EEVEE_NEXT'}
+    _animated_id_context_property = "lightprobe"
+
+
 classes = (
     DATA_PT_context_lightprobe,
     DATA_PT_lightprobe,
@@ -395,6 +405,7 @@ classes = (
     DATA_PT_lightprobe_parallax,
     DATA_PT_lightprobe_display,
     DATA_PT_lightprobe_display_eevee_next,
+    DATA_PT_lightprobe_animation,
 )
 
 if __name__ == "__main__":  # only for live edit.

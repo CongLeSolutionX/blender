@@ -17,12 +17,16 @@
 
 #include "ED_screen.hh"
 
+#include "RNA_access.hh"
+
 #include "WM_api.hh"
 #include "WM_types.hh"
 
 #include "UI_interface.hh"
 
 #include "BLT_translation.hh"
+
+#include "ED_sequencer.hh"
 
 #include "transform.hh"
 #include "transform_convert.hh"
@@ -83,7 +87,9 @@ static void applySeqSlide(TransInfo *t)
   else {
     copy_v2_v2(values_final, t->values);
     transform_snap_mixed_apply(t, values_final);
-    transform_convert_sequencer_channel_clamp(t, values_final);
+    if (!sequencer_retiming_mode_is_active(t->context)) {
+      transform_convert_sequencer_channel_clamp(t, values_final);
+    }
 
     if (t->con.mode & CON_APPLY) {
       t->con.applyVec(t, nullptr, nullptr, values_final, values_final);
@@ -102,8 +108,20 @@ static void applySeqSlide(TransInfo *t)
   ED_area_status_text(t->area, str);
 }
 
-static void initSeqSlide(TransInfo *t, wmOperator * /*op*/)
+struct SeqSlideParams {
+  bool use_restore_handle_selection;
+};
+
+static void initSeqSlide(TransInfo *t, wmOperator *op)
 {
+  SeqSlideParams *ssp = MEM_cnew<SeqSlideParams>(__func__);
+  t->custom.mode.data = ssp;
+  t->custom.mode.use_free = true;
+  PropertyRNA *prop = RNA_struct_find_property(op->ptr, "use_restore_handle_selection");
+  if (op != nullptr && prop != nullptr) {
+    ssp->use_restore_handle_selection = RNA_property_boolean_get(op->ptr, prop);
+  }
+
   initMouseInputMode(t, &t->mouse, INPUT_VECTOR);
 
   t->idx_max = 1;
@@ -119,11 +137,18 @@ static void initSeqSlide(TransInfo *t, wmOperator * /*op*/)
    * (supporting frames in addition to "natural" time...). */
   t->num.unit_type[0] = B_UNIT_NONE;
   t->num.unit_type[1] = B_UNIT_NONE;
+}
 
-  if (t->keymap) {
-    /* Workaround to use the same key as the modal keymap. */
-    t->custom.mode.data = (void *)WM_modalkeymap_find_propvalue(t->keymap, TFM_MODAL_TRANSLATE);
+bool transform_mode_edge_seq_slide_use_restore_handle_selection(const TransInfo *t)
+{
+  if ((U.sequencer_editor_flag & USER_SEQ_ED_SIMPLE_TWEAKING) == 0) {
+    return false;
   }
+  SeqSlideParams *ssp = static_cast<SeqSlideParams *>(t->custom.mode.data);
+  if (ssp == nullptr) {
+    return false;
+  }
+  return ssp->use_restore_handle_selection;
 }
 
 /** \} */
@@ -135,6 +160,6 @@ TransModeInfo TransMode_seqslide = {
     /*transform_matrix_fn*/ nullptr,
     /*handle_event_fn*/ nullptr,
     /*snap_distance_fn*/ nullptr,
-    /*snap_apply_fn*/ transform_snap_sequencer_apply_translate,
+    /*snap_apply_fn*/ transform_snap_sequencer_apply_seqslide,
     /*draw_fn*/ nullptr,
 };

@@ -19,7 +19,7 @@ endfunction()
 #
 # \param envvars_list: A list of extra environment variables to define for that test.
 #                      Note that this does no check for (re-)definition of a same variable.
-function(blender_test_set_envvars testname envvars_list)
+function(blender_test_set_envvars testname envvar_list)
   if(PLATFORM_ENV_INSTALL)
     list(APPEND envvar_list "${PLATFORM_ENV_INSTALL}")
   endif()
@@ -69,7 +69,7 @@ macro(blender_src_gtest_ex)
       ${CMAKE_SOURCE_DIR}/extern/gmock/include
     )
     unset(_current_include_directories)
-    if(WIN32)
+    if(WIN32 AND NOT WITH_WINDOWS_EXTERNAL_MANIFEST)
       set(MANIFEST "${CMAKE_BINARY_DIR}/tests.exe.manifest")
     else()
       set(MANIFEST "")
@@ -124,6 +124,13 @@ macro(blender_src_gtest_ex)
                           RUNTIME_OUTPUT_DIRECTORY_DEBUG   "${TESTS_OUTPUT_DIR}")
     if(WIN32)
       set_target_properties(${TARGET_NAME} PROPERTIES VS_GLOBAL_VcpkgEnabled "false")
+
+      if(WITH_WINDOWS_EXTERNAL_MANIFEST)
+        add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+          COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/tests.exe.manifest ${TESTS_OUTPUT_DIR}/${TARGET_NAME}.exe.manifest
+          DEPENDS ${CMAKE_BINARY_DIR}/tests.exe.manifest
+        )
+      endif()
     endif()
     unset(MANIFEST)
     unset(TEST_INC)
@@ -346,19 +353,23 @@ function(blender_add_test_suite_executable
           DISCOVER_TESTS FALSE
          )
 
-         # Work-around run-time dynamic loader error
-         #   symbol not found in flat namespace '_PyBaseObject_Type'
-         #
-         # Some tests are testing modules which are linked against Python, while some of unit
-         # tests might not use code path which uses Python functionality. In this case linker
-         # will optimize out all symbols from Python since it decides they are not used. This
-         # somehow conflicts with other libraries which are linked against the test binary and
-         # perform search of _PyBaseObject_Type on startup.
-         #
-         # Work-around by telling the linker that the python libraries should not be stripped.
-         if(APPLE)
-           target_link_libraries("${_test_name}_test" PRIVATE "-Wl,-force_load,${PYTHON_LIBRARIES}")
-         endif()
+        # Work-around run-time dynamic loader error
+        #   symbol not found in flat namespace '_PyBaseObject_Type'
+        #
+        # Some tests are testing modules which are linked against Python, while some of unit
+        # tests might not use code path which uses Python functionality. In this case linker
+        # will optimize out all symbols from Python since it decides they are not used. This
+        # somehow conflicts with other libraries which are linked against the test binary and
+        # perform search of _PyBaseObject_Type on startup.
+        #
+        # Work-around by telling the linker that the python libraries should not be stripped.
+        if(APPLE)
+          target_link_libraries("${_test_name}_test" PRIVATE "-Wl,-force_load,${PYTHON_LIBRARIES}")
+        endif()
+
+        if(WITH_BUILDINFO)
+          target_link_libraries("${_test_name}_test" PRIVATE buildinfoobj)
+        endif()
       endif()
     endforeach()
   endif()

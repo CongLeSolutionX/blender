@@ -36,7 +36,11 @@ ExternalProject_Add(external_tbb
 
   ${PATCH_CMD} -p 1 -d
     ${BUILD_DIR}/tbb/src/external_tbb <
-    ${PATCH_DIR}/tbb.diff
+    ${PATCH_DIR}/tbb.diff &&
+
+  ${PATCH_CMD} -p 1 -d
+    ${BUILD_DIR}/tbb/src/external_tbb <
+    ${PATCH_DIR}/tbb_1478.diff
 
   CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${LIBDIR}/tbb ${DEFAULT_CMAKE_FLAGS} ${TBB_EXTRA_ARGS}
   INSTALL_DIR ${LIBDIR}/tbb
@@ -114,4 +118,7 @@ if(WIN32)
       DEPENDEES install
     )
   endif()
+else()
+  harvest(external_tbb tbb/include tbb/include "*.h")
+  harvest_rpath_lib(external_tbb tbb/lib tbb/lib "libtbb${SHAREDLIBEXT}*")
 endif()

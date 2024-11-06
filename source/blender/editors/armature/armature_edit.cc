@@ -22,7 +22,7 @@
 #include "BLI_math_rotation.h"
 #include "BLI_math_vector.h"
 
-#include "BKE_action.h"
+#include "BKE_action.hh"
 #include "BKE_armature.hh"
 #include "BKE_constraint.h"
 #include "BKE_context.hh"
@@ -35,7 +35,7 @@
 
 #include "RNA_access.hh"
 #include "RNA_define.hh"
-#include "RNA_prototypes.h"
+#include "RNA_prototypes.hh"
 
 #include "UI_interface_icons.hh"
 
@@ -1523,7 +1523,6 @@ static int armature_hide_exec(bContext *C, wmOperator *op)
     if (!changed) {
       continue;
     }
-    ED_armature_edit_validate_active(arm);
     ED_armature_edit_sync_selection(arm->edbo);
 
     WM_event_add_notifier(C, NC_OBJECT | ND_BONE_SELECT, obedit);
@@ -1581,7 +1580,6 @@ static int armature_reveal_exec(bContext *C, wmOperator *op)
     }
 
     if (changed) {
-      ED_armature_edit_validate_active(arm);
       ED_armature_edit_sync_selection(arm->edbo);
 
       WM_event_add_notifier(C, NC_OBJECT | ND_BONE_SELECT, obedit);

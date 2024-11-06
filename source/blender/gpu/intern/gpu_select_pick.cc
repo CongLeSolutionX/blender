@@ -27,7 +27,7 @@
 
 #include "BLI_strict_flags.h" /* Keep last. */
 
-/* #define DEBUG_PRINT */
+// #define DEBUG_PRINT
 
 /* Alloc number for depths */
 #define ALLOC_DEPTHS 200
@@ -52,7 +52,7 @@ struct SubRectStride {
 };
 
 /** We may want to change back to float if `uint` isn't well supported. */
-typedef uint depth_t;
+using depth_t = uint;
 
 /**
  * Calculate values needed for looping over a sub-region (smaller buffer within a larger buffer).
@@ -163,7 +163,7 @@ static bool depth_buf_subrect_depth_any_filled(const DepthBufCache *rect_src,
                                                const DepthBufCache *rect_dst,
                                                const SubRectStride *sub_rect)
 {
-  /* Same as above but different rectangle sizes. */
+  /* Same as #depth_buf_rect_depth_any_filled but different rectangle sizes. */
   const depth_t *prev = rect_src->buf + sub_rect->start;
   const depth_t *curr = rect_dst->buf + sub_rect->start;
   for (uint i = 0; i < sub_rect->span_len; i++) {

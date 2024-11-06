@@ -22,7 +22,7 @@
 
 #include "BKE_context.hh"
 #include "BKE_fcurve.hh"
-#include "BKE_nla.h"
+#include "BKE_nla.hh"
 
 #include "UI_view2d.hh"
 
@@ -260,7 +260,8 @@ static int graphkeys_viewall(bContext *C,
                              include_handles);
 
   /* Give some more space at the borders. */
-  BLI_rctf_scale(&cur_new, 1.1f);
+  cur_new = ANIM_frame_range_view2d_add_xmargin(ac.region->v2d, cur_new);
+  BLI_rctf_resize_y(&cur_new, 1.1f * BLI_rctf_size_y(&cur_new));
 
   /* Take regions into account, that could block the view.
    * Marker region is supposed to be larger than the scroll-bar, so prioritize it. */

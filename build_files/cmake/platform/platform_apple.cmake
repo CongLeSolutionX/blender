@@ -174,6 +174,9 @@ if(WITH_CODEC_FFMPEG)
   if(EXISTS ${LIBDIR}/ffmpeg/lib/libaom.a)
     list(APPEND FFMPEG_FIND_COMPONENTS aom)
   endif()
+  if(EXISTS ${LIBDIR}/ffmpeg/lib/libx265.a)
+    list(APPEND FFMPEG_FIND_COMPONENTS x265)
+  endif()
   if(EXISTS ${LIBDIR}/ffmpeg/lib/libxvidcore.a)
     list(APPEND FFMPEG_FIND_COMPONENTS xvidcore)
   endif()
@@ -530,8 +533,9 @@ if(PLATFORM_BUNDLED_LIBRARIES)
 
   # Environment variables to run precompiled executables that needed libraries.
   list(JOIN PLATFORM_BUNDLED_LIBRARY_DIRS ":" _library_paths)
-  set(PLATFORM_ENV_BUILD "DYLD_LIBRARY_PATH=\"${_library_paths};$DYLD_LIBRARY_PATH\"")
-  set(PLATFORM_ENV_INSTALL "DYLD_LIBRARY_PATH=${CMAKE_INSTALL_PREFIX_WITH_CONFIG}/Blender.app/Contents/Resources/lib/;$DYLD_LIBRARY_PATH")
+  # Intentionally double "$$" which expands into "$" when instantiated.
+  set(PLATFORM_ENV_BUILD "DYLD_LIBRARY_PATH=\"${_library_paths};$$DYLD_LIBRARY_PATH\"")
+  set(PLATFORM_ENV_INSTALL "DYLD_LIBRARY_PATH=${CMAKE_INSTALL_PREFIX_WITH_CONFIG}/Blender.app/Contents/Resources/lib/;$$DYLD_LIBRARY_PATH")
   unset(_library_paths)
 endif()
 

@@ -31,6 +31,7 @@
 
 #include "transform.hh"
 #include "transform_convert.hh"
+#include "transform_mode.hh"
 
 #define SEQ_EDGE_PAN_INSIDE_PAD 3.5
 #define SEQ_EDGE_PAN_OUTSIDE_PAD 0 /* Disable clamping for panning, use whole screen. */
@@ -285,7 +286,7 @@ static ListBase *seqbase_active_get(const TransInfo *t)
   return SEQ_active_seqbase_get(ed);
 }
 
-static bool seq_transform_check_overlap(blender::Span<Sequence *> transformed_strips)
+bool seq_transform_check_overlap(blender::Span<Sequence *> transformed_strips)
 {
   for (Sequence *seq : transformed_strips) {
     if (seq->flag & SEQ_OVERLAP) {
@@ -500,13 +501,13 @@ static void createTransSeqData(bContext * /*C*/, TransInfo *t)
                           SEQ_EDGE_PAN_MAX_SPEED,
                           SEQ_EDGE_PAN_DELAY,
                           SEQ_EDGE_PAN_ZOOM_INFLUENCE);
-  UI_view2d_edge_pan_set_limits(&ts->edge_pan, -FLT_MAX, FLT_MAX, 1, MAXSEQ + 1);
+  UI_view2d_edge_pan_set_limits(&ts->edge_pan, -FLT_MAX, FLT_MAX, 1, SEQ_MAX_CHANNELS + 1);
   ts->initial_v2d_cur = t->region->v2d.cur;
 
   /* Loop 2: build transdata array. */
   SeqToTransData_build(t, ed->seqbasep, td, td2d, tdsq);
 
-  ts->selection_channel_range_min = MAXSEQ + 1;
+  ts->selection_channel_range_min = SEQ_MAX_CHANNELS + 1;
   LISTBASE_FOREACH (Sequence *, seq, SEQ_active_seqbase_get(ed)) {
     if ((seq->flag & SELECT) != 0) {
       ts->selection_channel_range_min = min_ii(ts->selection_channel_range_min, seq->machine);
@@ -523,13 +524,11 @@ static void createTransSeqData(bContext * /*C*/, TransInfo *t)
 /** \name UVs Transform Flush
  * \{ */
 
-static void view2d_edge_pan_loc_compensate(TransInfo *t, float loc_in[2], float r_loc[2])
+static void view2d_edge_pan_loc_compensate(TransInfo *t, float offset[2])
 {
   TransSeq *ts = (TransSeq *)TRANS_DATA_CONTAINER_FIRST_SINGLE(t)->custom.type.data;
 
-  /* Initial and current view2D rects for additional transform due to view panning and zooming. */
-  const rctf *rect_src = &ts->initial_v2d_cur;
-  const rctf *rect_dst = &t->region->v2d.cur;
+  const rctf rect_prev = t->region->v2d.cur;
 
   if (t->options & CTX_VIEW2D_EDGE_PAN) {
     if (t->state == TRANS_CANCEL) {
@@ -545,9 +544,13 @@ static void view2d_edge_pan_loc_compensate(TransInfo *t, float loc_in[2], float 
     }
   }
 
-  copy_v2_v2(r_loc, loc_in);
-  /* Additional offset due to change in view2D rect. */
-  BLI_rctf_transform_pt_v(rect_dst, rect_src, r_loc, r_loc);
+  if (t->state != TRANS_CANCEL) {
+    if (!BLI_rctf_compare(&rect_prev, &t->region->v2d.cur, FLT_EPSILON)) {
+      /* Additional offset due to change in view2D rect. */
+      BLI_rctf_transform_pt_v(&t->region->v2d.cur, &rect_prev, offset, offset);
+      transformViewUpdate(t);
+    }
+  }
 }
 
 static void flushTransSeq(TransInfo *t)
@@ -575,13 +578,15 @@ static void flushTransSeq(TransInfo *t)
    * recalculation, hierarchy is not taken into account. */
   int max_offset = 0;
 
+  float edge_pan_offset[2] = {0.0f, 0.0f};
+  view2d_edge_pan_loc_compensate(t, edge_pan_offset);
+
   /* Flush to 2D vector from internally used 3D vector. */
   for (a = 0, td = tc->data, td2d = tc->data_2d; a < tc->data_len; a++, td++, td2d++) {
     tdsq = (TransDataSeq *)td->extra;
     seq = tdsq->seq;
-    float loc[2];
-    view2d_edge_pan_loc_compensate(t, td->loc, loc);
-    new_frame = round_fl_to_int(loc[0]);
+
+    new_frame = round_fl_to_int(td->loc[0] + edge_pan_offset[0]);
 
     switch (tdsq->sel_flag) {
       case SELECT: {
@@ -592,11 +597,20 @@ static void flushTransSeq(TransInfo *t)
             max_offset = offset;
           }
         }
-        seq->machine = round_fl_to_int(loc[1]);
-        CLAMP(seq->machine, 1, MAXSEQ);
+        seq->machine = round_fl_to_int(td->loc[1] + edge_pan_offset[1]);
+        CLAMP(seq->machine, 1, SEQ_MAX_CHANNELS);
         break;
       }
       case SEQ_LEFTSEL: { /* No vertical transform. */
+        /* Update right handle first if both handles are selected and the new_frame is right of
+         * the old one to avoid unexpected left handle clamping when canceling. See #126191. */
+        bool both_handles_selected = (tdsq->flag & (SEQ_LEFTSEL | SEQ_RIGHTSEL)) ==
+                                     (SEQ_LEFTSEL | SEQ_RIGHTSEL);
+        if (both_handles_selected && new_frame > SEQ_time_left_handle_frame_get(scene, seq)) {
+          a++, td++, td2d++;
+          int new_right_frame = round_fl_to_int(td->loc[0] + edge_pan_offset[0]);
+          SEQ_time_right_handle_frame_set(scene, seq, new_right_frame);
+        }
         int old_startdisp = SEQ_time_left_handle_frame_get(scene, seq);
         SEQ_time_left_handle_frame_set(t->scene, seq, new_frame);
 
@@ -671,13 +685,24 @@ static void recalcData_sequencer(TransInfo *t)
 
 static void special_aftertrans_update__sequencer(bContext * /*C*/, TransInfo *t)
 {
+  SpaceSeq *sseq = (SpaceSeq *)t->area->spacedata.first;
+  if ((sseq->flag & SPACE_SEQ_DESELECT_STRIP_HANDLE) != 0 &&
+      transform_mode_edge_seq_slide_use_restore_handle_selection(t))
+  {
+    TransDataContainer *tc = TRANS_DATA_CONTAINER_FIRST_SINGLE(t);
+    blender::VectorSet<Sequence *> strips = seq_transform_collection_from_transdata(tc);
+    for (Sequence *seq : strips) {
+      seq->flag &= ~(SEQ_LEFTSEL | SEQ_RIGHTSEL);
+    }
+  }
+
+  sseq->flag &= ~SPACE_SEQ_DESELECT_STRIP_HANDLE;
+
+  /* #freeSeqData in `transform_conversions.cc` does this
+   * keep here so the else at the end won't run. */
   if (t->state == TRANS_CANCEL) {
     return;
   }
-  /* #freeSeqData in `transform_conversions.cc` does this
-   * keep here so the else at the end won't run. */
-
-  SpaceSeq *sseq = (SpaceSeq *)t->area->spacedata.first;
 
   /* Marker transform, not especially nice but we may want to move markers
    * at the same time as strips in the Video Sequencer. */
@@ -705,8 +730,8 @@ void transform_convert_sequencer_channel_clamp(TransInfo *t, float r_val[2])
   const int min_channel_after_transform = ts->selection_channel_range_min + channel_offset;
   const int max_channel_after_transform = ts->selection_channel_range_max + channel_offset;
 
-  if (max_channel_after_transform > MAXSEQ) {
-    r_val[1] -= max_channel_after_transform - MAXSEQ;
+  if (max_channel_after_transform > SEQ_MAX_CHANNELS) {
+    r_val[1] -= max_channel_after_transform - SEQ_MAX_CHANNELS;
   }
   if (min_channel_after_transform < 1) {
     r_val[1] -= min_channel_after_transform - 1;
