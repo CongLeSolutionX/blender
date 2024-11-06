@@ -172,7 +172,7 @@ static void rna_Area_type_update(bContext *C, PointerRNA *ptr)
       if (area->spacetype == SPACE_VIEW3D) {
         DEG_tag_on_visible_update(CTX_data_main(C), false);
       }
-      if (area->spacetype == SPACE_NODE) {
+      else if (area->spacetype == SPACE_NODE) {
         blender::ed::space_node::snode_set_context(*C);
       }
 
