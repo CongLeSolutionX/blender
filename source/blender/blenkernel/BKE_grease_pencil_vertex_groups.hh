@@ -22,9 +22,7 @@ void validate_drawing_vertex_groups(GreasePencil &grease_pencil);
 int ensure_vertex_group(const StringRef name, ListBase &vertex_group_names);
 
 /** Assign selected vertices to the vertex group. */
-void assign_to_vertex_group(Drawing &drawing,
-                            StringRef name,
-                            float weight);
+void assign_to_vertex_group(Drawing &drawing, StringRef name, float weight);
 
 void assign_to_vertex_group_from_mask(CurvesGeometry &curves,
                                       const IndexMask &mask,

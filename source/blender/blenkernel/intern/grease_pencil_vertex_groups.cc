@@ -95,9 +95,7 @@ void assign_to_vertex_group_from_mask(bke::CurvesGeometry &curves,
   });
 }
 
-void assign_to_vertex_group(Drawing &drawing,
-                            const StringRef name,
-                            const float weight)
+void assign_to_vertex_group(Drawing &drawing, const StringRef name, const float weight)
 {
 
   bke::CurvesGeometry &curves = drawing.strokes_for_write();

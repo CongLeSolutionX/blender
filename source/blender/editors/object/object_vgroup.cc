@@ -1105,7 +1105,8 @@ static void vgroup_select_verts(const ToolSettings &tool_settings,
       using namespace ed::greasepencil;
       Vector<MutableDrawingInfo> drawings = retrieve_editable_drawings(scene, *grease_pencil);
       for (MutableDrawingInfo info : drawings) {
-        bke::greasepencil::select_from_group(info.drawing, selection_domain, def_group->name, bool(select));
+        bke::greasepencil::select_from_group(
+            info.drawing, selection_domain, def_group->name, bool(select));
       }
     }
     DEG_id_tag_update(&grease_pencil->id, ID_RECALC_GEOMETRY);
