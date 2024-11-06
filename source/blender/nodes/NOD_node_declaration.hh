@@ -572,7 +572,7 @@ class NodeDeclaration {
 
 class NodeDeclarationBuilder : public DeclarationListBuilder {
  private:
-  /* unused in release builds, but used for BLI_assert() in debug builds. */
+  /* Unused in release builds, but used for BLI_assert() in debug builds. */
   [[maybe_unused]] const bke::bNodeType &typeinfo_;
   NodeDeclaration &declaration_;
   const bNodeTree *ntree_ = nullptr;
