@@ -655,6 +655,171 @@ static void sample_average(const OffsetIndices<int> buckets_offsets,
   });
 }
 
+class SkipListBuilder {
+  MutableSpan<int> indices;
+  int begin_index = 0;
+  bool is_skiped = true;
+
+  SkipListBuilder(MutableSpan<int> data, const int first_index) : indices(data)
+  {
+    this->indices[0] = first_index;
+  }
+
+  inline void add_index(const int index, const bool skip_state)
+  {
+    const bool shift_to_next = skip_state != this->is_skiped;
+    begin_index += int(shift_to_next);
+    this->indices[begin_index] = index;
+    this->is_skiped = skip_state;
+  }
+};
+
+template<typename LeafFuncT, typename JointPredicateT, typename JointFuncT>
+static void for_each_to_bottom_skip_new(const OffsetIndices<int> buckets_offsets,
+                                        const int total_depth,
+                                        const IndexRange range,
+                                        const JointPredicateT &joint_predicate,
+                                        const JointFuncT &joint_func,
+                                        const LeafFuncT &leaf_func)
+{
+  Array<Array<int, 0>> parent_joint_indices(1);
+
+  Array<int, 0> begin_indices(range.size());
+  array_utils::fill_index_range<int>(begin_indices, range.start());
+  parent_joint_indices[0] = std::move(begin_indices);
+
+  for (const int depth_i : IndexRange(total_depth).drop_back(1)) {
+    const IndexRange joints_range = joints_range_at_depth(depth_i);
+    Array<Array<int, 0>> new_joint_indices(joints_range.size() * 2, Array<int, 0>{});
+    bool any_next = false;
+    for (const int joint_i : joints_range.index_range()) {
+      const int joint_index = joints_range[joint_i];
+      const IndexRange joint_buckets = joint_buckets_range_at_depth(total_depth, depth_i, joint_i);
+
+      MutableSpan<int> parent_indices = parent_joint_indices[joint_i].as_mutable_span();
+      if (parent_indices.is_empty()) {
+        continue;
+      }
+
+      const auto end_of_prefix = std::stable_partition(
+          parent_indices.begin(), parent_indices.end(), [&](const int i) -> bool {
+            return joint_predicate(int(joints_range[joint_i]), i);
+          });
+
+      const Span<int> finished_indices = parent_indices.drop_front(
+          std::distance(parent_indices.begin(), end_of_prefix));
+      const Span<int> next_indices = parent_indices.take_front(
+          std::distance(parent_indices.begin(), end_of_prefix));
+
+      joint_func(buckets_offsets[joint_buckets], int(joints_range[joint_i]), finished_indices);
+
+      if (next_indices.is_empty()) {
+        continue;
+      }
+
+      if (depth_i == total_depth - 1) {
+        leaf_func(buckets_offsets[joint_i], next_indices);
+        continue;
+      }
+
+      any_next = true;
+
+      const IndexRange next_joints_range = joints_range_at_depth(depth_i + 1);
+      const int next_joint_a = joint_i * 2 + 0;
+      const int next_joint_b = joint_i * 2 + 1;
+
+      new_joint_indices[next_joint_a] = Array<int, 0>(next_indices);
+      if (next_indices.size() == parent_indices.size()) {
+        new_joint_indices[next_joint_b] = std::move(parent_joint_indices[joint_i]);
+      }
+      else {
+        new_joint_indices[next_joint_b] = Array<int, 0>(next_indices);
+      }
+    }
+
+    if (!any_next) {
+      break;
+    }
+
+    parent_joint_indices = std::move(new_joint_indices);
+  }
+}
+
+static void sample_average_new(const OffsetIndices<int> buckets_offsets,
+                               const int total_depth,
+                               const Span<float3> src_joints_centre,
+                               const Span<float> src_joints_min_distance,
+                               const Span<float3> src_joints_value,
+                               const Span<float3> src_bucket_position,
+                               const Span<float3> src_bucket_value,
+                               const int power_value,
+                               MutableSpan<float3> dst_buckets_data)
+{
+  BLI_assert(src_joints_centre.size() == src_joints_min_distance.size());
+  BLI_assert(src_bucket_value.size() == dst_buckets_data.size());
+  BLI_assert(src_bucket_value.size() == src_bucket_position.size());
+
+  const FunctionRef<void(int, MutableSpan<float>)> squared_distance_invertion =
+      powered_rcp_for_squared(power_value);
+
+  threading::parallel_for(src_bucket_value.index_range(), 1024 * 16, [&](const IndexRange range) {
+    Vector<float> buffer;
+    buffer.reserve(range.size());
+
+    for_each_to_bottom_skip_new(
+        buckets_offsets,
+        total_depth,
+        range,
+        [&](const int joint_index, const int value_i) -> bool {
+          return math::distance_squared(src_joints_centre[joint_index],
+                                        src_bucket_position[value_i]) <=
+                 math::square(src_joints_min_distance[joint_index]);
+        },
+        [&](const IndexRange buckets_range, const int joint_index, const Span<int> value_indices) {
+          buffer.resize(value_indices.size());
+          for (const int value_i : value_indices.index_range()) {
+            const int value_index = value_indices[value_i];
+            buffer[value_i] = math::distance_squared(src_joints_centre[joint_index],
+                                                     src_bucket_position[value_index]);
+          }
+
+          squared_distance_invertion(power_value, buffer.as_mutable_span());
+
+          const float total_factor = buckets_range.size();
+          for (const int value_i : value_indices.index_range()) {
+            const int value_index = value_indices[value_i];
+            dst_buckets_data[value_index] += (src_joints_value[joint_index] -
+                                              src_bucket_value[value_index]) *
+                                             buffer[value_i] * total_factor;
+          }
+        },
+        [&](const IndexRange bucket_range, const Span<int> value_indices) {
+          buffer.resize(bucket_range.size());
+          for (const int value_i : value_indices) {
+            const float3 position = src_bucket_position[value_i];
+
+            for (const int index : bucket_range.index_range()) {
+              buffer[index] = math::distance_squared(src_bucket_position[bucket_range[index]],
+                                                     position);
+            }
+
+            squared_distance_invertion(power_value, buffer.as_mutable_span());
+
+            const float3 self_value = src_bucket_value[value_i];
+            for (const int i : bucket_range.index_range()) {
+              const int index = bucket_range[i];
+              const float relation_factor = buffer[i];
+              const float self_ignore_relation_factor = UNLIKELY(index == value_i) ?
+                                                            0.0f :
+                                                            relation_factor;
+              dst_buckets_data[value_i] += (src_bucket_value[index] - self_value) *
+                                           self_ignore_relation_factor;
+            }
+          }
+        });
+  });
+}
+
 }  // namespace akdbt
 
 static float minimal_dinstance_to(const float radius,
@@ -844,7 +1009,7 @@ class DifferenceSumFieldInput final : public bke::GeometryFieldInput {
 
     Array<float3> sampled_bucket_values(domain_size, float3(0));
     if constexpr (true) {
-      SCOPED_TIMER_AVERAGED("akdbt::sample_average_new");
+      SCOPED_TIMER_AVERAGED("akdbt::sample_average");
       akdbt::sample_average(base_offsets,
                             total_depth,
                             joints_positions,
@@ -854,6 +1019,21 @@ class DifferenceSumFieldInput final : public bke::GeometryFieldInput {
                             bucket_values,
                             distance_power_,
                             sampled_bucket_values);
+    }
+
+    Array<float3> sampled_bucket_values_new(domain_size, float3(0));
+    if constexpr (true) {
+      SCOPED_TIMER_AVERAGED("akdbt::sample_average_new");
+      akdbt::sample_average_new(base_offsets,
+                                total_depth,
+                                joints_positions,
+                                joints_radii,
+                                joints_values,
+                                bucket_positions,
+                                bucket_values,
+                                distance_power_,
+                                sampled_bucket_values_new);
+      sampled_bucket_values = std::move(sampled_bucket_values_new);
     }
 
     Array<float3> dst_values(domain_size);
