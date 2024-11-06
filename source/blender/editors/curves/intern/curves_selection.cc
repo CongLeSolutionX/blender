@@ -23,6 +23,8 @@
 #include "ED_select_utils.hh"
 #include "ED_view3d.hh"
 
+#include <iostream>
+
 namespace blender::ed::curves {
 
 IndexMask retrieve_selected_curves(const bke::CurvesGeometry &curves, IndexMaskMemory &memory)
@@ -863,6 +865,7 @@ static std::optional<FindClosestData> find_closest_curve_to_screen_co(
 
             const float distance_proj_sq = dist_squared_to_line_segment_v2(
                 mouse_pos, pos1_proj, pos2_proj);
+            std::cout << "  " << distance_proj_sq << '\n';
             if (distance_proj_sq > radius_sq ||
                 distance_proj_sq > best_match.distance * best_match.distance)
             {
