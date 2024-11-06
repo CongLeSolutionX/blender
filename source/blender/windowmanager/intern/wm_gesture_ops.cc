@@ -54,10 +54,43 @@ using blender::int2;
  *
  * \{ */
 
+static void toggle_xray_if_disabled(bContext *C, wmOperator *op, bool start)
+{
+  static bool g_initial_xray_state = false;
+  static bool g_xray_state_set = false;
+
+  View3D *v3d = CTX_wm_view3d(C);
+
+  if (start) {
+    if (!g_xray_state_set) {
+      g_initial_xray_state = (v3d && (v3d->shading.flag & V3D_SHADING_XRAY)) != 0;
+      g_xray_state_set = true;
+    }
+
+    if (RNA_boolean_get(op->ptr, "toggle_xray") && !g_initial_xray_state) {
+      WM_operator_name_call(C, "VIEW3D_OT_toggle_xray", WM_OP_EXEC_DEFAULT, NULL, NULL);
+    }
+  }
+  else {
+    if (RNA_boolean_get(op->ptr, "toggle_xray") && !g_initial_xray_state) {
+      WM_operator_name_call(C, "VIEW3D_OT_toggle_xray", WM_OP_EXEC_DEFAULT, NULL, NULL);
+    }
+
+    g_xray_state_set = false;
+  }
+}
+
 static void gesture_modal_end(bContext *C, wmOperator *op)
 {
   wmWindow *win = CTX_wm_window(C);
   wmGesture *gesture = static_cast<wmGesture *>(op->customdata);
+
+  // Check operator type and toggle X-Ray off only if it's box, circle, or lasso.
+  if (op->type && (STREQ(op->type->idname, "VIEW3D_OT_select_box") ||
+                   STREQ(op->type->idname, "VIEW3D_OT_select_circle") ||
+                   STREQ(op->type->idname, "VIEW3D_OT_select_lasso"))){
+    toggle_xray_if_disabled(C, op, false);
+  }
 
   WM_gesture_end(win, gesture); /* Frees gesture itself, and unregisters from window. */
   op->customdata = nullptr;
@@ -170,6 +203,8 @@ static bool gesture_box_apply(bContext *C, wmOperator *op)
 
 int WM_gesture_box_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
+  toggle_xray_if_disabled(C, op, true);
+
   wmWindow *win = CTX_wm_window(C);
   const ARegion *region = CTX_wm_region(C);
   const bool wait_for_input = !WM_event_is_mouse_drag_or_press(event) &&
@@ -293,6 +328,8 @@ static void gesture_circle_apply(bContext *C, wmOperator *op);
 
 int WM_gesture_circle_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
+  toggle_xray_if_disabled(C, op, true);
+
   wmWindow *win = CTX_wm_window(C);
   const bool wait_for_input = !WM_event_is_mouse_drag_or_press(event) &&
                               RNA_boolean_get(op->ptr, "wait_for_input");
@@ -489,6 +526,8 @@ void WM_OT_circle_gesture(wmOperatorType *ot)
 
 int WM_gesture_lasso_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
+  toggle_xray_if_disabled(C, op, true);
+
   wmWindow *win = CTX_wm_window(C);
   PropertyRNA *prop;
 

@@ -1510,6 +1510,7 @@ void VIEW3D_OT_select_lasso(wmOperatorType *ot)
 
   /* properties */
   WM_operator_properties_gesture_lasso(ot);
+  WM_operator_properties_select_3dview(ot);
   WM_operator_properties_select_operation(ot);
 }
 
@@ -4480,6 +4481,7 @@ void VIEW3D_OT_select_box(wmOperatorType *ot)
 
   /* rna */
   WM_operator_properties_gesture_box(ot);
+  WM_operator_properties_select_3dview(ot);
   WM_operator_properties_select_operation(ot);
 }
 
@@ -5468,6 +5470,7 @@ void VIEW3D_OT_select_circle(wmOperatorType *ot)
 
   /* properties */
   WM_operator_properties_gesture_circle(ot);
+  WM_operator_properties_select_3dview(ot);
   WM_operator_properties_select_operation_simple(ot);
 }
 

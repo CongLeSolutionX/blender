@@ -478,6 +478,15 @@ void WM_operator_properties_select_operation_simple(wmOperatorType *ot)
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
 
+void WM_operator_properties_select_3dview(wmOperatorType *ot)
+{
+  RNA_def_boolean(ot->srna,
+                  "toggle_xray",
+                  false,
+                  "Toggle X-Ray",
+                  "Automatically toggle X-Ray mode during selection.");
+}
+
 void WM_operator_properties_select_walk_direction(wmOperatorType *ot)
 {
   static const EnumPropertyItem direction_items[] = {

@@ -1045,6 +1045,7 @@ void WM_operator_properties_select_operation(wmOperatorType *ot);
  * \note Some tools don't support XOR/AND.
  */
 void WM_operator_properties_select_operation_simple(wmOperatorType *ot);
+void WM_operator_properties_select_3dview(wmOperatorType *ot);
 void WM_operator_properties_select_walk_direction(wmOperatorType *ot);
 /**
  * Selecting and tweaking items are overlapping operations. Getting both to work without conflicts
