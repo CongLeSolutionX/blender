@@ -167,6 +167,11 @@ bool GPU_clear_viewport_workaround()
   return GCaps.clear_viewport_workaround;
 }
 
+bool GPU_stencil_clasify_buffer_workaround()
+{
+  return GCaps.stencil_clasify_buffer_workaround;
+}
+
 bool GPU_geometry_shader_support()
 {
   return GCaps.geometry_shader_support;
@@ -236,6 +241,18 @@ void GPU_mem_stats_get(int *r_totalmem, int *r_freemem)
 bool GPU_stereo_quadbuffer_support()
 {
   return Context::get()->front_right != nullptr;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Creator arguments overrides
+ * \{ */
+
+void GPU_compilation_subprocess_override_set(int count)
+{
+  BLI_assert(GCaps.max_parallel_compilations == -1);
+  GCaps.max_parallel_compilations = count;
 }
 
 /** \} */

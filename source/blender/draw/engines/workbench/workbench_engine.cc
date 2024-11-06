@@ -6,8 +6,8 @@
 #include "BKE_modifier.hh"
 #include "BKE_object.hh"
 #include "BKE_paint.hh"
+#include "BKE_paint_bvh.hh"
 #include "BKE_particle.h"
-#include "BKE_pbvh_api.hh"
 #include "BKE_report.hh"
 #include "DEG_depsgraph_query.hh"
 #include "DNA_fluid_types.h"
@@ -121,16 +121,7 @@ class Instance {
       return;
     }
 
-    const ObjectState object_state = ObjectState(scene_state, ob);
-
-    /* Needed for mesh cache validation, to prevent two copies of
-     * of vertex color arrays from being sent to the GPU (e.g.
-     * when switching from eevee to workbench).
-     */
-    if (ob_ref.object->sculpt && ob_ref.object->sculpt->pbvh) {
-      /* TODO(Miguel Pozo): Could this me moved to sculpt_batches_get()? */
-      BKE_pbvh_is_drawing_set(*ob_ref.object->sculpt->pbvh, object_state.sculpt_pbvh);
-    }
+    const ObjectState object_state = ObjectState(scene_state, resources, ob);
 
     bool is_object_data_visible = (DRW_object_visibility_in_active_context(ob) &
                                    OB_VISIBLE_SELF) &&
@@ -155,7 +146,8 @@ class Instance {
 
     if (is_object_data_visible) {
       if (object_state.sculpt_pbvh) {
-        const Bounds<float3> bounds = bke::pbvh::bounds_get(*ob_ref.object->sculpt->pbvh);
+        const Bounds<float3> bounds = bke::pbvh::bounds_get(
+            *bke::object::pbvh_get(*ob_ref.object));
         const float3 center = math::midpoint(bounds.min, bounds.max);
         const float3 half_extent = bounds.max - center;
         ResourceHandle handle = manager.resource_handle(ob_ref, nullptr, &center, &half_extent);
@@ -232,16 +224,18 @@ class Instance {
                  Material &material,
                  gpu::Batch *batch,
                  ResourceHandle handle,
-                 ::Image *image = nullptr,
-                 GPUSamplerState sampler_state = GPUSamplerState::default_sampler(),
-                 ImageUser *iuser = nullptr)
+                 const MaterialTexture *texture = nullptr,
+                 bool show_missing_texture = false)
   {
     resources.material_buf.append(material);
     int material_index = resources.material_buf.size() - 1;
 
+    if (show_missing_texture && (!texture || !texture->gpu.texture)) {
+      texture = &resources.missing_texture;
+    }
+
     draw_to_mesh_pass(ob_ref, material.is_transparent(), [&](MeshPass &mesh_pass) {
-      mesh_pass.get_subpass(eGeometryType::MESH, image, sampler_state, iuser)
-          .draw(batch, handle, material_index);
+      mesh_pass.get_subpass(eGeometryType::MESH, texture).draw(batch, handle, material_index);
     });
   }
 
@@ -271,14 +265,12 @@ class Instance {
           Material mat = get_material(ob_ref, object_state.color_type, material_slot);
           has_transparent_material = has_transparent_material || mat.is_transparent();
 
-          ::Image *image = nullptr;
-          ImageUser *iuser = nullptr;
-          GPUSamplerState sampler_state = GPUSamplerState::default_sampler();
+          MaterialTexture texture;
           if (object_state.color_type == V3D_SHADING_TEXTURE_COLOR) {
-            get_material_image(ob_ref.object, material_slot, image, iuser, sampler_state);
+            texture = MaterialTexture(ob_ref.object, material_slot);
           }
 
-          draw_mesh(ob_ref, mat, batches[i], handle, image, sampler_state, iuser);
+          draw_mesh(ob_ref, mat, batches[i], handle, &texture, object_state.show_missing_texture);
         }
       }
     }
@@ -303,12 +295,7 @@ class Instance {
         Material mat = get_material(ob_ref, object_state.color_type);
         has_transparent_material = has_transparent_material || mat.is_transparent();
 
-        draw_mesh(ob_ref,
-                  mat,
-                  batch,
-                  handle,
-                  object_state.image_paint_override,
-                  object_state.override_sampler_state);
+        draw_mesh(ob_ref, mat, batch, handle, &object_state.image_paint_override);
       }
     }
 
@@ -334,14 +321,12 @@ class Instance {
           mat.base_color = batch.debug_color();
         }
 
-        ::Image *image = nullptr;
-        ImageUser *iuser = nullptr;
-        GPUSamplerState sampler_state = GPUSamplerState::default_sampler();
+        MaterialTexture texture;
         if (object_state.color_type == V3D_SHADING_TEXTURE_COLOR) {
-          get_material_image(ob_ref.object, batch.material_slot, image, iuser, sampler_state);
+          texture = MaterialTexture(ob_ref.object, batch.material_slot);
         }
 
-        draw_mesh(ob_ref, mat, batch.batch, handle, image, sampler_state);
+        draw_mesh(ob_ref, mat, batch.batch, handle, &texture, object_state.show_missing_texture);
       }
     }
     else {
@@ -351,12 +336,7 @@ class Instance {
           mat.base_color = batch.debug_color();
         }
 
-        draw_mesh(ob_ref,
-                  mat,
-                  batch.batch,
-                  handle,
-                  object_state.image_paint_override,
-                  object_state.override_sampler_state);
+        draw_mesh(ob_ref, mat, batch.batch, handle, &object_state.image_paint_override);
       }
     }
   }
@@ -388,19 +368,16 @@ class Instance {
     ResourceHandle handle = manager.resource_handle(ob_ref.object->object_to_world());
 
     Material mat = get_material(ob_ref, object_state.color_type, psys->part->omat - 1);
-    ::Image *image = nullptr;
-    ImageUser *iuser = nullptr;
-    GPUSamplerState sampler_state = GPUSamplerState::default_sampler();
+    MaterialTexture texture;
     if (object_state.color_type == V3D_SHADING_TEXTURE_COLOR) {
-      get_material_image(ob_ref.object, psys->part->omat - 1, image, iuser, sampler_state);
+      texture = MaterialTexture(ob_ref.object, psys->part->omat - 1);
     }
     resources.material_buf.append(mat);
     int material_index = resources.material_buf.size() - 1;
 
     draw_to_mesh_pass(ob_ref, mat.is_transparent(), [&](MeshPass &mesh_pass) {
-      PassMain::Sub &pass = mesh_pass
-                                .get_subpass(eGeometryType::CURVES, image, sampler_state, iuser)
-                                .sub("Hair SubPass");
+      PassMain::Sub &pass =
+          mesh_pass.get_subpass(eGeometryType::CURVES, &texture).sub("Hair SubPass");
       pass.push_constant("emitter_object_id", int(emitter_handle.raw));
       gpu::Batch *batch = hair_sub_pass_setup(pass, scene_state.scene, ob_ref.object, psys, md);
       pass.draw(batch, handle, material_index);
@@ -436,11 +413,9 @@ class Instance {
      * re-sync (See #113580). */
     bool needs_depth_in_front = !transparent_ps.accumulation_in_front_ps_.is_empty() ||
                                 (!opaque_ps.gbuffer_in_front_ps_.is_empty() &&
-                                 scene_state.overlays_enabled && scene_state.sample == 0);
+                                 scene_state.sample == 0);
     resources.depth_in_front_tx.wrap(needs_depth_in_front ? depth_in_front_tx : nullptr);
-    if ((!needs_depth_in_front && scene_state.overlays_enabled) ||
-        (needs_depth_in_front && opaque_ps.gbuffer_in_front_ps_.is_empty()))
-    {
+    if (!needs_depth_in_front || opaque_ps.gbuffer_in_front_ps_.is_empty()) {
       resources.clear_in_front_fb.ensure(GPU_ATTACHMENT_TEXTURE(depth_in_front_tx));
       resources.clear_in_front_fb.bind();
       GPU_framebuffer_clear_depth_stencil(resources.clear_in_front_fb, 1.0f, 0x00);
@@ -566,6 +541,7 @@ static void workbench_cache_populate(void *vedata, Object *object)
   ref.object = object;
   ref.dupli_object = DRW_object_get_dupli(object);
   ref.dupli_parent = DRW_object_get_dupli_parent(object);
+  ref.handle.raw = 0;
 
   reinterpret_cast<WORKBENCH_Data *>(vedata)->instance->object_sync(*manager, ref);
 }

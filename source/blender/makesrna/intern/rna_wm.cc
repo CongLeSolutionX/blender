@@ -36,27 +36,35 @@
 #  include "wm_event_system.hh"
 
 static const EnumPropertyItem event_mouse_type_items[] = {
-    {LEFTMOUSE, "LEFTMOUSE", 0, "Left", ""},
-    {MIDDLEMOUSE, "MIDDLEMOUSE", 0, "Middle", ""},
-    {RIGHTMOUSE, "RIGHTMOUSE", 0, "Right", ""},
-    {BUTTON4MOUSE, "BUTTON4MOUSE", 0, "Button4", ""},
-    {BUTTON5MOUSE, "BUTTON5MOUSE", 0, "Button5", ""},
-    {BUTTON6MOUSE, "BUTTON6MOUSE", 0, "Button6", ""},
-    {BUTTON7MOUSE, "BUTTON7MOUSE", 0, "Button7", ""},
+    {LEFTMOUSE, "LEFTMOUSE", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Left"), ""},
+    {MIDDLEMOUSE, "MIDDLEMOUSE", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Middle"), ""},
+    {RIGHTMOUSE, "RIGHTMOUSE", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Right"), ""},
+    {BUTTON4MOUSE, "BUTTON4MOUSE", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Button4"), ""},
+    {BUTTON5MOUSE, "BUTTON5MOUSE", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Button5"), ""},
+    {BUTTON6MOUSE, "BUTTON6MOUSE", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Button6"), ""},
+    {BUTTON7MOUSE, "BUTTON7MOUSE", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Button7"), ""},
     RNA_ENUM_ITEM_SEPR,
-    {TABLET_STYLUS, "PEN", 0, "Pen", ""},
-    {TABLET_ERASER, "ERASER", 0, "Eraser", ""},
+    {TABLET_STYLUS, "PEN", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Pen"), ""},
+    {TABLET_ERASER, "ERASER", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Eraser"), ""},
     RNA_ENUM_ITEM_SEPR,
-    {MOUSEMOVE, "MOUSEMOVE", 0, "Move", ""},
-    {MOUSEPAN, "TRACKPADPAN", 0, "Mouse/Trackpad Pan", ""},
-    {MOUSEZOOM, "TRACKPADZOOM", 0, "Mouse/Trackpad Zoom", ""},
-    {MOUSEROTATE, "MOUSEROTATE", 0, "Mouse/Trackpad Rotate", ""},
-    {MOUSESMARTZOOM, "MOUSESMARTZOOM", 0, "Mouse/Trackpad Smart Zoom", ""},
+    {MOUSEMOVE, "MOUSEMOVE", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Move"), ""},
+    {MOUSEPAN, "TRACKPADPAN", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Mouse/Trackpad Pan"), ""},
+    {MOUSEZOOM, "TRACKPADZOOM", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Mouse/Trackpad Zoom"), ""},
+    {MOUSEROTATE,
+     "MOUSEROTATE",
+     0,
+     CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Mouse/Trackpad Rotate"),
+     ""},
+    {MOUSESMARTZOOM,
+     "MOUSESMARTZOOM",
+     0,
+     CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Mouse/Trackpad Smart Zoom"),
+     ""},
     RNA_ENUM_ITEM_SEPR,
-    {WHEELUPMOUSE, "WHEELUPMOUSE", 0, "Wheel Up", ""},
-    {WHEELDOWNMOUSE, "WHEELDOWNMOUSE", 0, "Wheel Down", ""},
-    {WHEELINMOUSE, "WHEELINMOUSE", 0, "Wheel In", ""},
-    {WHEELOUTMOUSE, "WHEELOUTMOUSE", 0, "Wheel Out", ""},
+    {WHEELUPMOUSE, "WHEELUPMOUSE", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Wheel Up"), ""},
+    {WHEELDOWNMOUSE, "WHEELDOWNMOUSE", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Wheel Down"), ""},
+    {WHEELINMOUSE, "WHEELINMOUSE", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Wheel In"), ""},
+    {WHEELOUTMOUSE, "WHEELOUTMOUSE", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Wheel Out"), ""},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
@@ -78,61 +86,100 @@ static const EnumPropertyItem event_textinput_type_items[] = {
 };
 
 static const EnumPropertyItem event_ndof_type_items[] = {
-    {NDOF_MOTION, "NDOF_MOTION", 0, "Motion", ""},
+    {NDOF_MOTION, "NDOF_MOTION", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Motion"), ""},
     /* buttons on all 3dconnexion devices */
-    {NDOF_BUTTON_MENU, "NDOF_BUTTON_MENU", 0, "Menu", ""},
-    {NDOF_BUTTON_FIT, "NDOF_BUTTON_FIT", 0, "Fit", ""},
+    {NDOF_BUTTON_MENU, "NDOF_BUTTON_MENU", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Menu"), ""},
+    {NDOF_BUTTON_FIT, "NDOF_BUTTON_FIT", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Fit"), ""},
     /* view buttons */
-    {NDOF_BUTTON_TOP, "NDOF_BUTTON_TOP", 0, "Top", ""},
-    {NDOF_BUTTON_BOTTOM, "NDOF_BUTTON_BOTTOM", 0, "Bottom", ""},
-    {NDOF_BUTTON_LEFT, "NDOF_BUTTON_LEFT", 0, "Left", ""},
-    {NDOF_BUTTON_RIGHT, "NDOF_BUTTON_RIGHT", 0, "Right", ""},
-    {NDOF_BUTTON_FRONT, "NDOF_BUTTON_FRONT", 0, "Front", ""},
-    {NDOF_BUTTON_BACK, "NDOF_BUTTON_BACK", 0, "Back", ""},
+    {NDOF_BUTTON_TOP, "NDOF_BUTTON_TOP", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Top"), ""},
+    {NDOF_BUTTON_BOTTOM, "NDOF_BUTTON_BOTTOM", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Bottom"), ""},
+    {NDOF_BUTTON_LEFT, "NDOF_BUTTON_LEFT", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Left"), ""},
+    {NDOF_BUTTON_RIGHT, "NDOF_BUTTON_RIGHT", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Right"), ""},
+    {NDOF_BUTTON_FRONT, "NDOF_BUTTON_FRONT", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Front"), ""},
+    {NDOF_BUTTON_BACK, "NDOF_BUTTON_BACK", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Back"), ""},
     /* more views */
-    {NDOF_BUTTON_ISO1, "NDOF_BUTTON_ISO1", 0, "Isometric 1", ""},
-    {NDOF_BUTTON_ISO2, "NDOF_BUTTON_ISO2", 0, "Isometric 2", ""},
+    {NDOF_BUTTON_ISO1,
+     "NDOF_BUTTON_ISO1",
+     0,
+     CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Isometric 1"),
+     ""},
+    {NDOF_BUTTON_ISO2,
+     "NDOF_BUTTON_ISO2",
+     0,
+     CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Isometric 2"),
+     ""},
     /* 90 degree rotations */
-    {NDOF_BUTTON_ROLL_CW, "NDOF_BUTTON_ROLL_CW", 0, "Roll CW", ""},
-    {NDOF_BUTTON_ROLL_CCW, "NDOF_BUTTON_ROLL_CCW", 0, "Roll CCW", ""},
-    {NDOF_BUTTON_SPIN_CW, "NDOF_BUTTON_SPIN_CW", 0, "Spin CW", ""},
-    {NDOF_BUTTON_SPIN_CCW, "NDOF_BUTTON_SPIN_CCW", 0, "Spin CCW", ""},
-    {NDOF_BUTTON_TILT_CW, "NDOF_BUTTON_TILT_CW", 0, "Tilt CW", ""},
-    {NDOF_BUTTON_TILT_CCW, "NDOF_BUTTON_TILT_CCW", 0, "Tilt CCW", ""},
+    {NDOF_BUTTON_ROLL_CW,
+     "NDOF_BUTTON_ROLL_CW",
+     0,
+     CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Roll CW"),
+     ""},
+    {NDOF_BUTTON_ROLL_CCW,
+     "NDOF_BUTTON_ROLL_CCW",
+     0,
+     CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Roll CCW"),
+     ""},
+    {NDOF_BUTTON_SPIN_CW,
+     "NDOF_BUTTON_SPIN_CW",
+     0,
+     CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Spin CW"),
+     ""},
+    {NDOF_BUTTON_SPIN_CCW,
+     "NDOF_BUTTON_SPIN_CCW",
+     0,
+     CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Spin CCW"),
+     ""},
+    {NDOF_BUTTON_TILT_CW,
+     "NDOF_BUTTON_TILT_CW",
+     0,
+     CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Tilt CW"),
+     ""},
+    {NDOF_BUTTON_TILT_CCW,
+     "NDOF_BUTTON_TILT_CCW",
+     0,
+     CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Tilt CCW"),
+     ""},
     /* device control */
-    {NDOF_BUTTON_ROTATE, "NDOF_BUTTON_ROTATE", 0, "Rotate", ""},
-    {NDOF_BUTTON_PANZOOM, "NDOF_BUTTON_PANZOOM", 0, "Pan/Zoom", ""},
-    {NDOF_BUTTON_DOMINANT, "NDOF_BUTTON_DOMINANT", 0, "Dominant", ""},
-    {NDOF_BUTTON_PLUS, "NDOF_BUTTON_PLUS", 0, "Plus", ""},
-    {NDOF_BUTTON_MINUS, "NDOF_BUTTON_MINUS", 0, "Minus", ""},
+    {NDOF_BUTTON_ROTATE, "NDOF_BUTTON_ROTATE", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Rotate"), ""},
+    {NDOF_BUTTON_PANZOOM,
+     "NDOF_BUTTON_PANZOOM",
+     0,
+     CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Pan/Zoom"),
+     ""},
+    {NDOF_BUTTON_DOMINANT,
+     "NDOF_BUTTON_DOMINANT",
+     0,
+     CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Dominant"),
+     ""},
+    {NDOF_BUTTON_PLUS, "NDOF_BUTTON_PLUS", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Plus"), ""},
+    {NDOF_BUTTON_MINUS, "NDOF_BUTTON_MINUS", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Minus"), ""},
     /* View buttons. */
-    {NDOF_BUTTON_V1, "NDOF_BUTTON_V1", 0, "View 1", ""},
-    {NDOF_BUTTON_V2, "NDOF_BUTTON_V2", 0, "View 2", ""},
-    {NDOF_BUTTON_V3, "NDOF_BUTTON_V3", 0, "View 3", ""},
+    {NDOF_BUTTON_V1, "NDOF_BUTTON_V1", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "View 1"), ""},
+    {NDOF_BUTTON_V2, "NDOF_BUTTON_V2", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "View 2"), ""},
+    {NDOF_BUTTON_V3, "NDOF_BUTTON_V3", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "View 3"), ""},
     /* general-purpose buttons */
-    {NDOF_BUTTON_1, "NDOF_BUTTON_1", 0, "Button 1", ""},
-    {NDOF_BUTTON_2, "NDOF_BUTTON_2", 0, "Button 2", ""},
-    {NDOF_BUTTON_3, "NDOF_BUTTON_3", 0, "Button 3", ""},
-    {NDOF_BUTTON_4, "NDOF_BUTTON_4", 0, "Button 4", ""},
-    {NDOF_BUTTON_5, "NDOF_BUTTON_5", 0, "Button 5", ""},
-    {NDOF_BUTTON_6, "NDOF_BUTTON_6", 0, "Button 6", ""},
-    {NDOF_BUTTON_7, "NDOF_BUTTON_7", 0, "Button 7", ""},
-    {NDOF_BUTTON_8, "NDOF_BUTTON_8", 0, "Button 8", ""},
-    {NDOF_BUTTON_9, "NDOF_BUTTON_9", 0, "Button 9", ""},
-    {NDOF_BUTTON_10, "NDOF_BUTTON_10", 0, "Button 10", ""},
-    {NDOF_BUTTON_A, "NDOF_BUTTON_A", 0, "Button A", ""},
-    {NDOF_BUTTON_B, "NDOF_BUTTON_B", 0, "Button B", ""},
-    {NDOF_BUTTON_C, "NDOF_BUTTON_C", 0, "Button C", ""},
+    {NDOF_BUTTON_1, "NDOF_BUTTON_1", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Button 1"), ""},
+    {NDOF_BUTTON_2, "NDOF_BUTTON_2", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Button 2"), ""},
+    {NDOF_BUTTON_3, "NDOF_BUTTON_3", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Button 3"), ""},
+    {NDOF_BUTTON_4, "NDOF_BUTTON_4", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Button 4"), ""},
+    {NDOF_BUTTON_5, "NDOF_BUTTON_5", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Button 5"), ""},
+    {NDOF_BUTTON_6, "NDOF_BUTTON_6", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Button 6"), ""},
+    {NDOF_BUTTON_7, "NDOF_BUTTON_7", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Button 7"), ""},
+    {NDOF_BUTTON_8, "NDOF_BUTTON_8", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Button 8"), ""},
+    {NDOF_BUTTON_9, "NDOF_BUTTON_9", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Button 9"), ""},
+    {NDOF_BUTTON_10, "NDOF_BUTTON_10", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Button 10"), ""},
+    {NDOF_BUTTON_11, "NDOF_BUTTON_11", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Button 11"), ""},
+    {NDOF_BUTTON_12, "NDOF_BUTTON_12", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Button 12"), ""},
 #  if 0 /* Never used (converted to keyboard events by GHOST). */
     /* keyboard emulation */
-    {NDOF_BUTTON_ESC, "NDOF_BUTTON_ESC", 0, "Esc"},
-    {NDOF_BUTTON_ENTER, "NDOF_BUTTON_ENTER", 0, "Enter"},
-    {NDOF_BUTTON_DELETE, "NDOF_BUTTON_DELETE", 0, "Delete"},
-    {NDOF_BUTTON_TAB, "NDOF_BUTTON_TAB", 0, "Tab"},
-    {NDOF_BUTTON_SPACE, "NDOF_BUTTON_SPACE", 0, "Space"},
-    {NDOF_BUTTON_ALT, "NDOF_BUTTON_ALT", 0, "Alt"},
-    {NDOF_BUTTON_SHIFT, "NDOF_BUTTON_SHIFT", 0, "Shift"},
-    {NDOF_BUTTON_CTRL, "NDOF_BUTTON_CTRL", 0, "Ctrl"},
+    {NDOF_BUTTON_ESC, "NDOF_BUTTON_ESC", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Esc")},
+    {NDOF_BUTTON_ENTER, "NDOF_BUTTON_ENTER", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Enter")},
+    {NDOF_BUTTON_DELETE, "NDOF_BUTTON_DELETE", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Delete")},
+    {NDOF_BUTTON_TAB, "NDOF_BUTTON_TAB", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Tab")},
+    {NDOF_BUTTON_SPACE, "NDOF_BUTTON_SPACE", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Space")},
+    {NDOF_BUTTON_ALT, "NDOF_BUTTON_ALT", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Alt")},
+    {NDOF_BUTTON_SHIFT, "NDOF_BUTTON_SHIFT", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Shift")},
+    {NDOF_BUTTON_CTRL, "NDOF_BUTTON_CTRL", 0, CTX_N_(BLT_I18NCONTEXT_UI_EVENTS, "Ctrl")},
 #  endif
     {0, nullptr, 0, nullptr, nullptr},
 };
@@ -374,9 +421,12 @@ const EnumPropertyItem rna_enum_event_type_items[] = {
     {NDOF_BUTTON_CTRL, "NDOF_BUTTON_CTRL", 0, "NDOF Ctrl", "NdofCtrl"},
 #endif
     /* View buttons. */
-    {NDOF_BUTTON_V1, "NDOF_BUTTON_V1", 0, "NDOF View 1", ""},
-    {NDOF_BUTTON_V2, "NDOF_BUTTON_V2", 0, "NDOF View 2", ""},
-    {NDOF_BUTTON_V3, "NDOF_BUTTON_V3", 0, "NDOF View 3", ""},
+    {NDOF_BUTTON_V1, "NDOF_BUTTON_V1", 0, "NDOF View 1", "NdofView1"},
+    {NDOF_BUTTON_V2, "NDOF_BUTTON_V2", 0, "NDOF View 2", "NdofView2"},
+    {NDOF_BUTTON_V3, "NDOF_BUTTON_V3", 0, "NDOF View 3", "NdofView3"},
+    {NDOF_BUTTON_SAVE_V1, "NDOF_BUTTON_SAVE_V1", 0, "NDOF Save View 1", "NdofSaveView1"},
+    {NDOF_BUTTON_SAVE_V2, "NDOF_BUTTON_SAVE_V2", 0, "NDOF Save View 2", "NdofSaveView2"},
+    {NDOF_BUTTON_SAVE_V3, "NDOF_BUTTON_SAVE_V3", 0, "NDOF Save View 3", "NdofSaveView3"},
     /* general-purpose buttons */
     {NDOF_BUTTON_1, "NDOF_BUTTON_1", 0, "NDOF Button 1", "NdofB1"},
     {NDOF_BUTTON_2, "NDOF_BUTTON_2", 0, "NDOF Button 2", "NdofB2"},
@@ -388,9 +438,9 @@ const EnumPropertyItem rna_enum_event_type_items[] = {
     {NDOF_BUTTON_8, "NDOF_BUTTON_8", 0, "NDOF Button 8", "NdofB8"},
     {NDOF_BUTTON_9, "NDOF_BUTTON_9", 0, "NDOF Button 9", "NdofB9"},
     {NDOF_BUTTON_10, "NDOF_BUTTON_10", 0, "NDOF Button 10", "NdofB10"},
-    {NDOF_BUTTON_A, "NDOF_BUTTON_A", 0, "NDOF Button A", "NdofBA"},
-    {NDOF_BUTTON_B, "NDOF_BUTTON_B", 0, "NDOF Button B", "NdofBB"},
-    {NDOF_BUTTON_C, "NDOF_BUTTON_C", 0, "NDOF Button C", "NdofBC"},
+    {NDOF_BUTTON_11, "NDOF_BUTTON_11", 0, "NDOF Button 11", "NdofB11"},
+    {NDOF_BUTTON_12, "NDOF_BUTTON_12", 0, "NDOF Button 12", "NdofB12"},
+
     /* Action Zones. */
     {EVT_ACTIONZONE_AREA, "ACTIONZONE_AREA", 0, "ActionZone Area", "AZone Area"},
     {EVT_ACTIONZONE_REGION, "ACTIONZONE_REGION", 0, "ActionZone Region", "AZone Region"},
@@ -500,7 +550,7 @@ const EnumPropertyItem rna_enum_operator_type_flag_items[] = {
      0,
      "Modal Priority",
      "Handle events before other modal operators without this option. Use with caution, do not "
-     "modify data that other modal operators assume is unchanged during their operation"},
+     "modify data that other modal operators assume is unchanged during their operation."},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
@@ -568,7 +618,7 @@ const EnumPropertyItem rna_enum_wm_report_items[] = {
 #  include "MEM_guardedalloc.h"
 
 #  ifdef WITH_PYTHON
-#    include "BPY_extern.h"
+#    include "BPY_extern.hh"
 #  endif
 
 static wmOperator *rna_OperatorProperties_find_operator(PointerRNA *ptr)
@@ -1147,9 +1197,9 @@ static void rna_WindowManager_active_keyconfig_set(PointerRNA *ptr,
   }
 }
 
-static void rna_WindowManager_extensions_update(Main * /*bmain*/,
-                                                Scene * /*scene*/,
-                                                PointerRNA *ptr)
+static void rna_WindowManager_extensions_statusbar_update(Main * /*bmain*/,
+                                                          Scene * /*scene*/,
+                                                          PointerRNA *ptr)
 {
   if ((U.statusbar_flag & STATUSBAR_SHOW_EXTENSIONS_UPDATES) == 0) {
     return;
@@ -1560,8 +1610,8 @@ static bool rna_Operator_unregister(Main *bmain, StructRNA *type);
 
 /* `bpy_operator_wrap.cc` */
 
-extern "C" void BPY_RNA_operator_wrapper(wmOperatorType *ot, void *userdata);
-extern "C" void BPY_RNA_operator_macro_wrapper(wmOperatorType *ot, void *userdata);
+extern void BPY_RNA_operator_wrapper(wmOperatorType *ot, void *userdata);
+extern void BPY_RNA_operator_macro_wrapper(wmOperatorType *ot, void *userdata);
 
 static StructRNA *rna_Operator_register(Main *bmain,
                                         ReportList *reports,
@@ -1880,7 +1930,10 @@ static void rna_Operator_bl_idname_set(PointerRNA *ptr, const char *value)
   wmOperator *data = (wmOperator *)(ptr->data);
   char *str = (char *)data->type->idname;
   if (!str[0]) {
-    BLI_strncpy(str, value, OP_MAX_TYPENAME); /* utf8 already ensured */
+    /* Calling UTF8 copy is disputable since registering ensures the value isn't truncated.
+     * Use a UTF8 copy to ensure truncating never causes an incomplete UTF8 sequence,
+     * even before registration. */
+    BLI_strncpy_utf8(str, value, OP_MAX_TYPENAME);
   }
   else {
     BLI_assert_msg(0, "setting the bl_idname on a non-builtin operator");
@@ -1892,7 +1945,7 @@ static void rna_Operator_bl_label_set(PointerRNA *ptr, const char *value)
   wmOperator *data = (wmOperator *)(ptr->data);
   char *str = (char *)data->type->name;
   if (!str[0]) {
-    BLI_strncpy(str, value, OP_MAX_TYPENAME); /* utf8 already ensured */
+    BLI_strncpy_utf8(str, value, OP_MAX_TYPENAME);
   }
   else {
     BLI_assert_msg(0, "setting the bl_label on a non-builtin operator");
@@ -1910,12 +1963,10 @@ static void rna_Operator_bl_label_set(PointerRNA *ptr, const char *value)
       wmOperator *data = (wmOperator *)(ptr->data); \
       char *str = (char *)data->type->attr; \
       if (str && !str[0]) { \
-        BLI_strncpy(str, value, attr_maxncpy); /* utf8 already ensured */ \
+        BLI_strncpy_utf8(str, value, attr_maxncpy); \
       } \
       else { \
-        BLI_assert_msg( \
-            false, \
-            "setting the bl_" STRINGIFY(translation_context) " on a non-builtin operator"); \
+        BLI_assert_msg(false, "setting the bl_" #attr " on a non-builtin operator"); \
       } \
     } \
     static void rna_Operator_bl_##attr##_get(PointerRNA *ptr, char *value) \
@@ -2656,7 +2707,12 @@ static void rna_def_windowmanager(BlenderRNA *brna)
   prop = RNA_def_property(srna, "extensions_updates", PROP_INT, PROP_NONE);
   RNA_def_property_ui_text(
       prop, "Extensions Updates", "Number of extensions with available update");
-  RNA_def_property_update(prop, 0, "rna_WindowManager_extensions_update");
+  RNA_def_property_update(prop, 0, "rna_WindowManager_extensions_statusbar_update");
+
+  prop = RNA_def_property(srna, "extensions_blocked", PROP_INT, PROP_NONE);
+  RNA_def_property_ui_text(
+      prop, "Extensions Blocked", "Number of installed extensions which are blocked");
+  RNA_def_property_update(prop, 0, "rna_WindowManager_extensions_statusbar_update");
 
   RNA_api_wm(srna);
 }

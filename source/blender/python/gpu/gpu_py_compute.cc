@@ -17,7 +17,7 @@
 #include "GPU_compute.hh"
 #include "GPU_state.hh"
 
-#include "../generic/python_compat.h"
+#include "../generic/python_compat.hh"
 
 #include "gpu_py.hh"
 #include "gpu_py_compute.hh" /* own include */
@@ -39,9 +39,11 @@ PyDoc_STRVAR(
     "   :arg groups_z_len: Int for group z length:\n"
     "   :type groups_z_len: int\n"
     "   :return: Shader object.\n"
-    "   :rtype: :class:`bpy.types.GPUShader`\n");
+    "   :rtype: :class:`gpu.types.GPUShader`\n");
 static PyObject *pygpu_compute_dispatch(PyObject * /*self*/, PyObject *args, PyObject *kwds)
 {
+  BPYGPU_IS_INIT_OR_ERROR_OBJ;
+
   BPyGPUShader *py_shader;
   int groups_x_len;
   int groups_y_len;
@@ -138,7 +140,7 @@ PyObject *bpygpu_compute_init()
 {
   PyObject *submodule;
 
-  submodule = bpygpu_create_module(&pygpu_compute_module_def);
+  submodule = PyModule_Create(&pygpu_compute_module_def);
 
   return submodule;
 }

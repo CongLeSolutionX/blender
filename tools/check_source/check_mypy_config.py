@@ -5,15 +5,21 @@
 import os
 from typing import (
     Any,
-    Tuple,
-    Dict,
 )
 
-PATHS: Tuple[Tuple[str, Tuple[Any, ...], Dict[str, str]], ...] = (
+# Notes:
+# - Most tests in `tests/python` use `bpy` enough that it's simpler to list the scripts that *are* type checked.
+PATHS: tuple[tuple[str, tuple[Any, ...], dict[str, str]], ...] = (
     ("build_files/cmake/", (), {'MYPYPATH': "modules"}),
     ("build_files/utils/", (), {'MYPYPATH': "modules"}),
     ("doc/manpage/blender.1.py", (), {}),
     ("release/datafiles/", (), {}),
+    ("scripts/modules/_bpy_internal/extensions/junction_module.py", (), {}),
+    ("scripts/modules/_bpy_internal/extensions/wheel_manager.py", (), {}),
+    ("scripts/modules/_bpy_internal/freedesktop.py", (), {}),
+    ("source/blender/nodes/intern/discover_nodes.py", (), {}),
+    ("tests/python/bl_keymap_validate.py", (), {}),
+    ("tests/utils/blender_headless.py", (), {}),
     ("tools/check_blender_release/", (), {}),
     ("tools/check_docs/", (), {}),
     ("tools/check_source/", (), {'MYPYPATH': "modules"}),
@@ -55,12 +61,10 @@ PATHS_EXCLUDE = set(
         "tools/utils/blender_keyconfig_export_permutations.py",
         "tools/utils/blender_merge_format_changes.py",
         "tools/utils/blender_theme_as_c.py",
-        "tools/utils/cycles_commits_sync.py",
         "tools/utils/cycles_timeit.py",
         "tools/utils/gdb_struct_repr_c99.py",
         "tools/utils/git_log_review_commits.py",
         "tools/utils/git_log_review_commits_advanced.py",
-        "tools/utils/gitea_inactive_developers.py",
         "tools/utils/make_cursor_gui.py",
         "tools/utils/make_gl_stipple_from_xpm.py",
         "tools/utils/make_shape_2d_from_blend.py",

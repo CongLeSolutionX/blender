@@ -69,7 +69,7 @@ static void eevee_engine_init(void *vedata)
       if (!is_default_border && use_border) {
         rctf viewborder;
         /* TODO(fclem) Might be better to get it from DRW. */
-        ED_view3d_calc_camera_border(scene, depsgraph, region, v3d, rv3d, &viewborder, false);
+        ED_view3d_calc_camera_border(scene, depsgraph, region, v3d, rv3d, false, &viewborder);
         float viewborder_sizex = BLI_rctf_size_x(&viewborder);
         float viewborder_sizey = BLI_rctf_size_y(&viewborder);
         rect.xmin = floorf(viewborder.xmin + (scene->r.border.xmin * viewborder_sizex));
@@ -109,7 +109,7 @@ static void eevee_draw_scene(void *vedata)
   else {
     ved->instance->draw_viewport();
   }
-  STRNCPY(ved->info, ved->instance->info.c_str());
+  STRNCPY(ved->info, ved->instance->info_get());
   /* Reset view for other following engines. */
   DRW_view_set_active(nullptr);
   DefaultFramebufferList *dfbl = DRW_viewport_framebuffer_list_get();
@@ -167,7 +167,7 @@ static void eevee_render_to_image(void *vedata,
   rcti visible_rect = rect;
 
   instance->init(size, &rect, &visible_rect, engine, depsgraph, camera_original_ob, layer);
-  instance->render_frame(layer, viewname);
+  instance->render_frame(engine, layer, viewname);
 
   EEVEE_Data *ved = static_cast<EEVEE_Data *>(vedata);
   delete ved->instance;

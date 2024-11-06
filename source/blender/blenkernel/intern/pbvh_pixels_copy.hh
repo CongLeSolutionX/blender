@@ -9,14 +9,14 @@
 #include "IMB_imbuf_types.hh"
 
 #include "BKE_image_wrappers.hh"
-#include "BKE_pbvh.hh"
-#include "BKE_pbvh_pixels.hh"
+#include "BKE_paint_bvh.hh"
+#include "BKE_paint_bvh_pixels.hh"
 
 #include "pbvh_uv_islands.hh"
 
 namespace blender::bke::pbvh::pixels {
 
-void copy_update(PBVH &pbvh,
+void copy_update(Tree &pbvh,
                  Image &image,
                  ImageUser &image_user,
                  const uv_islands::MeshData &mesh_data);

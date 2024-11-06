@@ -11,6 +11,7 @@
 #include "BLI_math_vector_types.hh"
 #include "BLI_multi_value_map.hh"
 #include "BLI_resource_scope.hh"
+#include "BLI_set.hh"
 #include "BLI_utility_mixins.hh"
 #include "BLI_vector.hh"
 #include "BLI_vector_set.hh"
@@ -31,14 +32,18 @@ struct GeometryNodesLazyFunctionGraphInfo;
 namespace anonymous_attribute_lifetime {
 }
 namespace aal = anonymous_attribute_lifetime;
+namespace gizmos {
+struct TreeGizmoPropagation;
+}
 }  // namespace blender::nodes
 namespace blender::bke {
 struct bNodeType;
 class bNodeTreeZones;
 }  // namespace blender::bke
-namespace blender::bke::anonymous_attribute_inferencing {
-struct AnonymousAttributeInferencingResult;
-};
+
+namespace blender::bke::node_tree_reference_lifetimes {
+struct ReferenceLifetimesInfo;
+}
 
 namespace blender {
 
@@ -78,6 +83,16 @@ struct NodeLinkError {
   std::string tooltip;
 };
 
+struct LoggedZoneGraphs {
+  std::mutex mutex;
+  /**
+   * Technically there can be more than one graph per zone because the zone can be invoked in
+   * different contexts. However, for the purpose of logging here, we only need one at a time
+   * anyway.
+   */
+  Map<int, std::string> graph_by_zone_id;
+};
+
 /**
  * Runtime data for #bNodeTree from the perspective of execution instructions (rather than runtime
  * data from evaluation of the node tree). Evaluation data is not the responsibility of the node
@@ -110,6 +125,9 @@ class bNodeTreeRuntime : NonCopyable, NonMovable {
    */
   uint32_t previews_refresh_state = 0;
 
+  /** Allows logging zone graphs purely for debugging purposes. */
+  std::unique_ptr<LoggedZoneGraphs> logged_zone_graphs;
+
   /**
    * Storage of nodes based on their identifier. Also used as a contiguous array of nodes to
    * allow simpler and more cache friendly iteration. Supports lookup by integer or by node.
@@ -136,8 +154,8 @@ class bNodeTreeRuntime : NonCopyable, NonMovable {
   /** Information about how inputs and outputs of the node group interact with fields. */
   std::unique_ptr<nodes::FieldInferencingInterface> field_inferencing_interface;
   /** Information about usage of anonymous attributes within the group. */
-  std::unique_ptr<anonymous_attribute_inferencing::AnonymousAttributeInferencingResult>
-      anonymous_attribute_inferencing;
+  std::unique_ptr<node_tree_reference_lifetimes::ReferenceLifetimesInfo> reference_lifetimes_info;
+  std::unique_ptr<nodes::gizmos::TreeGizmoPropagation> gizmo_propagation;
 
   /**
    * For geometry nodes, a lazy function graph with some additional info is cached. This is used to
@@ -170,6 +188,12 @@ class bNodeTreeRuntime : NonCopyable, NonMovable {
   CacheMutex tree_zones_cache_mutex;
   std::unique_ptr<bNodeTreeZones> tree_zones;
 
+  /**
+   * The stored sockets are drawn using a special link to indicate that there is a gizmo. This is
+   * only valid during node editor drawing.
+   */
+  Set<const bNodeSocket *> sockets_on_active_gizmo_paths;
+
   /** Only valid when #topology_cache_is_dirty is false. */
   Vector<bNodeLink *> links;
   Vector<bNodeSocket *> sockets;
@@ -183,6 +207,12 @@ class bNodeTreeRuntime : NonCopyable, NonMovable {
   bool has_undefined_nodes_or_sockets = false;
   bNode *group_output_node = nullptr;
   Vector<bNode *> root_frames;
+};
+
+enum class FieldSocketState {
+  RequiresSingle,
+  CanBeField,
+  IsField,
 };
 
 /**
@@ -215,6 +245,11 @@ class bNodeSocketRuntime : NonCopyable, NonMovable {
    */
   float2 location;
 
+  /**
+   * This is computed during field inferencing and influences the socket shape in geometry nodes.
+   */
+  std::optional<FieldSocketState> field_state;
+
   /** Only valid when #topology_cache_is_dirty is false. */
   Vector<bNodeLink *> directly_linked_links;
   Vector<bNodeSocket *> directly_linked_sockets;
@@ -227,16 +262,19 @@ class bNodeSocketRuntime : NonCopyable, NonMovable {
   int index_in_inout_sockets = -1;
 };
 
+struct bNodePanelExtent {
+  float min_y;
+  float max_y;
+  bool fill_node_end = false;
+};
+
 class bNodePanelRuntime : NonCopyable, NonMovable {
  public:
   /* The vertical location of the panel in the tree, calculated while drawing the nodes and invalid
    * if the node tree hasn't been drawn yet. In the node tree's "world space" (the same as
    * #bNode::runtime::totr). */
-  float location_y;
-  /* Vertical start location of the panel content. */
-  float min_content_y;
-  /* Vertical end location of the panel content. */
-  float max_content_y;
+  std::optional<float> header_center_y;
+  std::optional<bNodePanelExtent> content_extent;
 };
 
 /**
@@ -258,7 +296,7 @@ class bNodeRuntime : NonCopyable, NonMovable {
    *
    * The declaration of a node can be recreated at any time when it is used. Caching it here is
    * just a bit more efficient when it is used a lot. To make sure that the cache is up-to-date,
-   * call #nodeDeclarationEnsure before using it.
+   * call #node_declaration_ensure before using it.
    *
    * Currently, the declaration is the same for every node of the same type. Going forward, that is
    * intended to change though. Especially when nodes become more dynamic with respect to how many
@@ -425,14 +463,14 @@ inline const bNode *bNodeTree::node_by_id(const int32_t identifier) const
 inline blender::Span<bNode *> bNodeTree::nodes_by_type(const blender::StringRefNull type_idname)
 {
   BLI_assert(blender::bke::node_tree_runtime::topology_cache_is_available(*this));
-  return this->runtime->nodes_by_type.lookup(blender::bke::nodeTypeFind(type_idname.c_str()));
+  return this->runtime->nodes_by_type.lookup(blender::bke::node_type_find(type_idname.c_str()));
 }
 
 inline blender::Span<const bNode *> bNodeTree::nodes_by_type(
     const blender::StringRefNull type_idname) const
 {
   BLI_assert(blender::bke::node_tree_runtime::topology_cache_is_available(*this));
-  return this->runtime->nodes_by_type.lookup(blender::bke::nodeTypeFind(type_idname.c_str()));
+  return this->runtime->nodes_by_type.lookup(blender::bke::node_type_find(type_idname.c_str()));
 }
 
 inline blender::Span<const bNode *> bNodeTree::toposort_left_to_right() const
@@ -703,6 +741,12 @@ inline const bNodeTree &bNode::owner_tree() const
   return *this->runtime->owner_tree;
 }
 
+inline bNodeTree &bNode::owner_tree()
+{
+  BLI_assert(blender::bke::node_tree_runtime::topology_cache_is_available(*this));
+  return *this->runtime->owner_tree;
+}
+
 inline blender::StringRefNull bNode::label_or_name() const
 {
   if (this->label[0] == '\0') {
@@ -864,6 +908,12 @@ inline bNode &bNodeSocket::owner_node()
 }
 
 inline const bNodeTree &bNodeSocket::owner_tree() const
+{
+  BLI_assert(blender::bke::node_tree_runtime::topology_cache_is_available(*this));
+  return *this->runtime->owner_node->runtime->owner_tree;
+}
+
+inline bNodeTree &bNodeSocket::owner_tree()
 {
   BLI_assert(blender::bke::node_tree_runtime::topology_cache_is_available(*this));
   return *this->runtime->owner_node->runtime->owner_tree;

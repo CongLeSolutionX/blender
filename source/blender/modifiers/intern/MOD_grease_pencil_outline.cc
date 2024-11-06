@@ -46,7 +46,7 @@
 #include "WM_types.hh"
 
 #include "RNA_access.hh"
-#include "RNA_prototypes.h"
+#include "RNA_prototypes.hh"
 
 #include "MOD_grease_pencil_util.hh"
 #include "MOD_ui_common.hh"
@@ -149,7 +149,8 @@ static bke::CurvesGeometry reorder_cyclic_curve_points(const bke::CurvesGeometry
    * source indices are not ordered. */
   bke::CurvesGeometry dst_curves(src_curves);
   bke::MutableAttributeAccessor dst_attributes = dst_curves.attributes_for_write();
-  bke::gather_attributes(src_attributes, bke::AttrDomain::Point, {}, {}, indices, dst_attributes);
+  bke::gather_attributes(
+      src_attributes, bke::AttrDomain::Point, bke::AttrDomain::Point, {}, indices, dst_attributes);
 
   return dst_curves;
 }
@@ -177,6 +178,8 @@ static void modify_drawing(const GreasePencilOutlineModifierData &omd,
                            bke::greasepencil::Drawing &drawing,
                            const float4x4 &viewmat)
 {
+  modifier::greasepencil::ensure_no_bezier_curves(drawing);
+
   if (drawing.strokes().curve_num == 0) {
     return;
   }
@@ -190,7 +193,7 @@ static void modify_drawing(const GreasePencilOutlineModifierData &omd,
   const float object_scale = math::length(
       math::transform_direction(ctx.object->object_to_world(), float3(M_SQRT1_3)));
   /* Legacy thickness setting is diameter in pixels, divide by 2000 to get radius. */
-  const float radius = math::max(omd.thickness * object_scale, 1.0f) /
+  const float radius = math::max(omd.thickness * object_scale, 1.0f) *
                        bke::greasepencil::LEGACY_RADIUS_CONVERSION_FACTOR;
   /* Offset the strokes by the radius so the outside aligns with the input stroke. */
   const float outline_offset = (omd.flag & MOD_GREASE_PENCIL_OUTLINE_KEEP_SHAPE) != 0 ? -radius :
@@ -257,7 +260,7 @@ static void modify_geometry_set(ModifierData *md,
   const Vector<LayerDrawingInfo> drawings = modifier::greasepencil::get_drawing_infos_by_layer(
       grease_pencil, layer_mask, frame);
   threading::parallel_for_each(drawings, [&](const LayerDrawingInfo &info) {
-    const Layer &layer = *grease_pencil.layer(info.layer_index);
+    const Layer &layer = grease_pencil.layer(info.layer_index);
     const float4x4 viewmat = viewinv * layer.to_world_space(*ctx->object);
     modify_drawing(omd, *ctx, *info.drawing, viewmat);
   });
@@ -285,7 +288,7 @@ static void panel_draw(const bContext *C, Panel *panel)
   }
 
   if (uiLayout *influence_panel = uiLayoutPanelProp(
-          C, layout, ptr, "open_influence_panel", "Influence"))
+          C, layout, ptr, "open_influence_panel", IFACE_("Influence")))
   {
     modifier::greasepencil::draw_layer_filter_settings(C, influence_panel, ptr);
     modifier::greasepencil::draw_material_filter_settings(C, influence_panel, ptr);

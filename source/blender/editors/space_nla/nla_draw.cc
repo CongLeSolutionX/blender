@@ -21,9 +21,11 @@
 #include "BLI_range.h"
 #include "BLI_utildefines.h"
 
-#include "BKE_action.h"
+#include "BLT_translation.hh"
+
+#include "BKE_action.hh"
 #include "BKE_fcurve.hh"
-#include "BKE_nla.h"
+#include "BKE_nla.hh"
 
 #include "ED_anim_api.hh"
 #include "ED_keyframes_draw.hh"
@@ -41,6 +43,8 @@
 
 #include "nla_intern.hh" /* own include */
 #include "nla_private.h"
+
+using namespace blender;
 
 /* *********************************************** */
 /* Strips */
@@ -113,7 +117,6 @@ static void nla_action_draw_keyframes(
   immUnbindProgram();
 
   /* Count keys before drawing. */
-  /* NOTE: It's safe to cast #DLRBT_Tree, as it's designed to degrade down to a #ListBase. */
   const ListBase *keys = ED_keylist_listbase(keylist);
   uint key_len = BLI_listbase_count(keys);
 
@@ -629,7 +632,7 @@ static void nla_draw_strip_text(AnimData *adt,
 
   /* just print the name and the range */
   if (strip->flag & NLASTRIP_FLAG_TEMP_META) {
-    str_len = BLI_snprintf_rlen(str, sizeof(str), "Temp-Meta");
+    str_len = STRNCPY_RLEN(str, DATA_("Temp-Meta"));
   }
   else {
     str_len = STRNCPY_RLEN(str, strip->name);
@@ -879,12 +882,17 @@ void draw_nla_main_data(bAnimContext *ac, SpaceNla *snla, ARegion *region)
               break;
             }
             case NLASTRIP_EXTEND_HOLD_FORWARD: {
-              float r_start;
-              float r_end;
-              BKE_action_frame_range_get(static_cast<bAction *>(ale->data), &r_start, &r_end);
-              BKE_nla_clip_length_ensure_nonzero(&r_start, &r_end);
+              if (ale->data == nullptr) {
+                /* This can happen if the object itself has no action attached anymore (e.g. after
+                 * using "push down"). */
+                break;
+              }
+              const animrig::Action &action = static_cast<bAction *>(ale->data)->wrap();
+              float2 frame_range = action.get_frame_range();
+              BKE_nla_clip_length_ensure_nonzero(&frame_range[0], &frame_range[1]);
 
-              immRectf(pos, r_end, ymin + NLATRACK_SKIP, v2d->cur.xmax, ymax - NLATRACK_SKIP);
+              immRectf(
+                  pos, frame_range[1], ymin + NLATRACK_SKIP, v2d->cur.xmax, ymax - NLATRACK_SKIP);
               break;
             }
             case NLASTRIP_EXTEND_NOTHING:
@@ -915,6 +923,7 @@ void draw_nla_main_data(bAnimContext *ac, SpaceNla *snla, ARegion *region)
         case ANIMTYPE_NLACONTROLS:
         case ANIMTYPE_NLACURVE:
         case ANIMTYPE_FILLACT_LAYERED:
+        case ANIMTYPE_ACTION_SLOT:
         case ANIMTYPE_FILLACTD:
         case ANIMTYPE_FILLDRIVERS:
         case ANIMTYPE_DSMAT:
@@ -963,7 +972,7 @@ void draw_nla_main_data(bAnimContext *ac, SpaceNla *snla, ARegion *region)
 void draw_nla_track_list(const bContext *C,
                          bAnimContext *ac,
                          ARegion *region,
-                         const ListBase /* bAnimListElem */ &anim_data)
+                         const ListBase /*bAnimListElem*/ &anim_data)
 {
 
   SpaceNla *snla = reinterpret_cast<SpaceNla *>(ac->sl);

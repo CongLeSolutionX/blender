@@ -2,13 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/* Signed distance to rounded box, centered at origin.
- * Reference: https://iquilezles.org/articles/distfunctions2d/ */
-float sdf_rounded_box(vec2 pos, vec2 size, float radius)
-{
-  vec2 q = abs(pos) - size + radius;
-  return min(max(q.x, q.y), 0.0) + length(max(q, 0.0)) - radius;
-}
+#include "gpu_shader_sequencer_lib.glsl"
 
 vec3 color_shade(vec3 rgb, float shade)
 {
@@ -44,25 +38,19 @@ void main()
 
   SeqStripDrawData strip = strip_data[strip_id];
 
-  /* Transform strip rectangle into pixel coordinates, so that
-   * rounded corners have proper aspect ratio and can be expressed in pixels.
-   * Make sure strip right side does not include the last pixel.
-   * Also snap to pixel grid coordinates, so that outline/border is clear
-   * non-fractional pixel sizes. */
-  vec2 view_to_pixel = vec2(context_data.inv_pixelx, context_data.inv_pixely);
-  vec2 pos1 = round(vec2(strip.left_handle, strip.bottom) * view_to_pixel);
-  vec2 pos2 = round(vec2(strip.right_handle, strip.top) * view_to_pixel);
-  pos2.x -= 1.0;
-  /* Make sure strip is at least 1px wide. */
-  pos2.x = max(pos2.x, pos1.x + 1.0);
-  vec2 size = (pos2 - pos1) * 0.5;
-  vec2 center = (pos1 + pos2) * 0.5;
-  vec2 pos = round(co * view_to_pixel);
-
-  float radius = context_data.round_radius;
-  if (radius > size.x) {
-    radius = 0.0;
-  }
+  vec2 pos1, pos2, size, center, pos;
+  float radius;
+  strip_box(strip.left_handle,
+            strip.right_handle,
+            strip.bottom,
+            strip.top,
+            co,
+            pos1,
+            pos2,
+            size,
+            center,
+            pos,
+            radius);
 
   bool border = (strip.flags & GPU_SEQ_FLAG_BORDER) != 0;
   bool selected = (strip.flags & GPU_SEQ_FLAG_SELECTED) != 0;
@@ -74,7 +62,7 @@ void main()
   /* Distance to inner part when handles are taken into account. */
   float sdf_inner = sdf;
   if ((strip.flags & GPU_SEQ_FLAG_ANY_HANDLE) != 0) {
-    float handle_width = strip.handle_width * view_to_pixel.x;
+    float handle_width = strip.handle_width;
     /* Take left/right handle from horizontal sides. */
     if ((strip.flags & GPU_SEQ_FLAG_DRAW_LH) != 0) {
       pos1.x += handle_width;
@@ -109,7 +97,7 @@ void main()
     if (co.y < strip.strip_content_top) {
       col.rgb = unpackUnorm4x8(strip.col_color_band).rgb;
       /* Darker line to better separate the color band. */
-      if (co.y > strip.strip_content_top - context_data.pixely) {
+      if (co.y > strip.strip_content_top - 1.0) {
         col.rgb = color_shade(col.rgb, -20.0);
       }
     }
@@ -177,13 +165,6 @@ void main()
     }
   }
 
-  /* Inset 1px line with background color. */
-  if (border && selected) {
-    /* Inset line should be inside regular border or inside the handles. */
-    float d = max(sdf_inner - 2.0 * context_data.pixelsize, sdf);
-    col = add_outline(d, 2.0, 3.0, col, unpackUnorm4x8(context_data.col_back));
-  }
-
   /* Outside of strip rounded rectangle? */
   if (sdf > 0.0) {
     col = vec4(0.0);
@@ -191,7 +172,29 @@ void main()
 
   /* Outline / border. */
   if (border) {
-    col = add_outline(sdf, 0.0, outline_width, col, col_outline);
+
+    if (selected) {
+      /* Selection highlight + darker inset line. */
+      col = add_outline(sdf, 1.0, 3.0, col, col_outline);
+      /* Inset line should be inside regular border or inside the handles. */
+      float d = max(sdf_inner - 3.0 * context_data.pixelsize, sdf);
+      col = add_outline(d, 3.0, 4.0, col, vec4(0, 0, 0, 0.33));
+    }
+
+    /* Active, but not selected strips get a thin inner line. */
+    bool active_strip = (strip.flags & GPU_SEQ_FLAG_ACTIVE) != 0;
+    if (active_strip && !selected) {
+      col = add_outline(sdf, 1.0, 2.0, col, col_outline);
+    }
+
+    /* 2px outline for all overlapping strips. */
+    bool overlaps = (strip.flags & GPU_SEQ_FLAG_OVERLAP) != 0;
+    if (overlaps) {
+      col = add_outline(sdf, 1.0, 3.0, col, col_outline);
+    }
+
+    /* Outer 1px outline for all strips. */
+    col = add_outline(sdf, 0.0, 1.0, col, unpackUnorm4x8(context_data.col_back));
   }
 
   fragColor = col;

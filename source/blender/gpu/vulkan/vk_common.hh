@@ -19,6 +19,7 @@
 #include "vk_mem_alloc.h"
 
 #include "GPU_index_buffer.hh"
+#include "gpu_query.hh"
 #include "gpu_shader_create_info.hh"
 #include "gpu_texture_private.hh"
 
@@ -38,6 +39,12 @@ enum class eImageViewUsage {
   Attachment,
 };
 
+enum class VKImageViewArrayed {
+  DONT_CARE,
+  NOT_ARRAYED,
+  ARRAYED,
+};
+
 VkImageAspectFlags to_vk_image_aspect_flag_bits(const eGPUTextureFormat format);
 VkImageAspectFlags to_vk_image_aspect_flag_bits(const eGPUFrameBufferBits buffers);
 VkFormat to_vk_format(const eGPUTextureFormat format);
@@ -46,9 +53,12 @@ VkFormat to_vk_format(const GPUVertCompType type,
                       const uint32_t size,
                       const GPUVertFetchMode fetch_mode);
 VkFormat to_vk_format(const shader::Type type);
+VkQueryType to_vk_query_type(const GPUQueryType query_type);
 
 VkComponentSwizzle to_vk_component_swizzle(const char swizzle);
-VkImageViewType to_vk_image_view_type(const eGPUTextureType type, eImageViewUsage view_type);
+VkImageViewType to_vk_image_view_type(const eGPUTextureType type,
+                                      eImageViewUsage view_type,
+                                      VKImageViewArrayed arrayed);
 VkImageType to_vk_image_type(const eGPUTextureType type);
 VkClearColorValue to_vk_clear_color_value(const eGPUDataFormat format, const void *data);
 VkIndexType to_vk_index_type(const GPUIndexBufType index_type);

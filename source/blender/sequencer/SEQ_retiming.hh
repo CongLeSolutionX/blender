@@ -22,6 +22,7 @@ int SEQ_retiming_keys_count(const Sequence *seq);
 bool SEQ_retiming_is_active(const Sequence *seq);
 void SEQ_retiming_data_ensure(Sequence *seq);
 void SEQ_retiming_data_clear(Sequence *seq);
+void SEQ_retiming_reset(Scene *scene, Sequence *seq);
 bool SEQ_retiming_is_allowed(const Sequence *seq);
 /**
  * Add new retiming key.
@@ -29,17 +30,14 @@ bool SEQ_retiming_is_allowed(const Sequence *seq);
  * become invalid.
  */
 SeqRetimingKey *SEQ_retiming_add_key(const Scene *scene, Sequence *seq, int timeline_frame);
-SeqRetimingKey *SEQ_retiming_add_transition(const Scene *scene,
-                                            Sequence *seq,
-                                            SeqRetimingKey *key,
-                                            const int offset);
+SeqRetimingKey *SEQ_retiming_add_transition(Sequence *seq, SeqRetimingKey *key, float offset);
 SeqRetimingKey *SEQ_retiming_add_freeze_frame(const Scene *scene,
                                               Sequence *seq,
                                               SeqRetimingKey *key,
                                               const int offset);
 bool SEQ_retiming_is_last_key(const Sequence *seq, const SeqRetimingKey *key);
 SeqRetimingKey *SEQ_retiming_last_key_get(const Sequence *seq);
-void SEQ_retiming_remove_key(const Scene *scene, Sequence *seq, SeqRetimingKey *key);
+void SEQ_retiming_remove_key(Sequence *seq, SeqRetimingKey *key);
 void SEQ_retiming_transition_key_frame_set(const Scene *scene,
                                            const Sequence *seq,
                                            SeqRetimingKey *key,
@@ -59,7 +57,7 @@ void SEQ_retiming_key_timeline_frame_set(const Scene *scene,
                                          Sequence *seq,
                                          SeqRetimingKey *key,
                                          int timeline_frame);
-SeqRetimingKey *SEQ_retiming_find_segment_start_key(const Sequence *seq, int frame_index);
+SeqRetimingKey *SEQ_retiming_find_segment_start_key(const Sequence *seq, float frame_index);
 bool SEQ_retiming_key_is_transition_type(const SeqRetimingKey *key);
 bool SEQ_retiming_key_is_transition_start(const SeqRetimingKey *key);
 SeqRetimingKey *SEQ_retiming_transition_start_get(SeqRetimingKey *key);
@@ -67,7 +65,9 @@ bool SEQ_retiming_key_is_freeze_frame(const SeqRetimingKey *key);
 bool SEQ_retiming_selection_clear(const Editing *ed);
 void SEQ_retiming_selection_append(SeqRetimingKey *key);
 void SEQ_retiming_selection_remove(SeqRetimingKey *key);
-void SEQ_retiming_remove_multiple_keys(Sequence *seq, blender::Vector<SeqRetimingKey *> &keys);
+void SEQ_retiming_selection_copy(SeqRetimingKey *dst, const SeqRetimingKey *src);
+void SEQ_retiming_remove_multiple_keys(Sequence *seq,
+                                       blender::Vector<SeqRetimingKey *> &keys_to_remove);
 bool SEQ_retiming_selection_contains(const Editing *ed, const SeqRetimingKey *key);
 bool SEQ_retiming_selection_has_whole_transition(const Editing *ed, SeqRetimingKey *key);
 bool SEQ_retiming_data_is_editable(const Sequence *seq);

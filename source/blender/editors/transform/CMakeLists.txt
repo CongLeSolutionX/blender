@@ -13,7 +13,7 @@ set(INC
   ../../render
   ../../sequencer
   ../../windowmanager
-  # RNA_prototypes.h
+  # RNA_prototypes.hh
   ${CMAKE_BINARY_DIR}/source/blender/makesrna
 )
 set(INC_SYS
@@ -28,7 +28,6 @@ set(SRC
   transform_convert_cursor.cc
   transform_convert_curve.cc
   transform_convert_curves.cc
-  transform_convert_gpencil_legacy.cc
   transform_convert_graph.cc
   transform_convert_grease_pencil.cc
   transform_convert_lattice.cc
@@ -128,8 +127,7 @@ set(LIB
   PRIVATE bf::intern::guardedalloc
 )
 
-
 blender_add_lib(bf_editor_transform "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 
-# RNA_prototypes.h
+# RNA_prototypes.hh
 add_dependencies(bf_editor_transform bf_rna)

@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#pragma BLENDER_REQUIRE(common_hair_lib.glsl)
+#include "common_hair_lib.glsl"
 
 #ifndef USE_GPU_SHADER_CREATE_INFO
 /*
@@ -17,7 +17,7 @@ layout(std430, binding = 0) writeonly buffer hairPointOutputBuffer
 out_vertbuf;
 #endif
 
-void main(void)
+void main()
 {
   float interp_time;
   vec4 data0, data1, data2, data3;

@@ -90,20 +90,55 @@ ShaderModule::~ShaderModule()
  *
  * \{ */
 
-bool ShaderModule::is_ready(bool block)
+void ShaderModule::precompile_specializations(int render_buffers_shadow_id,
+                                              int shadow_ray_count,
+                                              int shadow_ray_step_count)
 {
-  if (compilation_handle_ == 0) {
-    return true;
+  BLI_assert(specialization_handle_ == 0);
+
+  if (!GPU_use_parallel_compilation()) {
+    return;
   }
 
-  if (block || GPU_shader_batch_is_ready(compilation_handle_)) {
-    Vector<GPUShader *> shaders = GPU_shader_batch_finalize(compilation_handle_);
-    for (int i : IndexRange(MAX_SHADER_TYPE)) {
-      shaders_[i] = shaders[i];
+  Vector<ShaderSpecialization> specializations;
+  for (int i = 0; i < 3; i++) {
+    GPUShader *sh = static_shader_get(eShaderType(DEFERRED_LIGHT_SINGLE + i));
+    for (bool use_split_indirect : {false, true}) {
+      for (bool use_lightprobe_eval : {false, true}) {
+        for (bool use_transmission : {false, true}) {
+          specializations.append({sh,
+                                  {{"render_pass_shadow_id", render_buffers_shadow_id},
+                                   {"use_split_indirect", use_split_indirect},
+                                   {"use_lightprobe_eval", use_lightprobe_eval},
+                                   {"use_transmission", use_transmission},
+                                   {"shadow_ray_count", shadow_ray_count},
+                                   {"shadow_ray_step_count", shadow_ray_step_count}}});
+        }
+      }
     }
   }
 
-  return compilation_handle_ == 0;
+  specialization_handle_ = GPU_shader_batch_specializations(specializations);
+}
+
+bool ShaderModule::is_ready(bool block)
+{
+  if (compilation_handle_) {
+    if (GPU_shader_batch_is_ready(compilation_handle_) || block) {
+      Vector<GPUShader *> shaders = GPU_shader_batch_finalize(compilation_handle_);
+      for (int i : IndexRange(MAX_SHADER_TYPE)) {
+        shaders_[i] = shaders[i];
+      }
+    }
+  }
+
+  if (specialization_handle_) {
+    while (!GPU_shader_batch_specializations_is_ready(specialization_handle_) && block) {
+      /* Block until ready. */
+    }
+  }
+
+  return compilation_handle_ == 0 && specialization_handle_ == 0;
 }
 
 const char *ShaderModule::static_shader_create_info_name_get(eShaderType shader_type)
@@ -119,6 +154,16 @@ const char *ShaderModule::static_shader_create_info_name_get(eShaderType shader_
       return "eevee_film_cryptomatte_post";
     case FILM_FRAG:
       return "eevee_film_frag";
+    case FILM_PASS_CONVERT_COMBINED:
+      return "eevee_film_pass_convert_combined";
+    case FILM_PASS_CONVERT_DEPTH:
+      return "eevee_film_pass_convert_depth";
+    case FILM_PASS_CONVERT_VALUE:
+      return "eevee_film_pass_convert_value";
+    case FILM_PASS_CONVERT_COLOR:
+      return "eevee_film_pass_convert_color";
+    case FILM_PASS_CONVERT_CRYPTOMATTE:
+      return "eevee_film_pass_convert_cryptomatte";
     case DEFERRED_COMBINE:
       return "eevee_deferred_combine";
     case DEFERRED_LIGHT_SINGLE:
@@ -235,6 +280,8 @@ const char *ShaderModule::static_shader_create_info_name_get(eShaderType shader_
       return "eevee_ray_tile_classify";
     case RAY_TILE_COMPACT:
       return "eevee_ray_tile_compact";
+    case RENDERPASS_CLEAR:
+      return "eevee_renderpass_clear";
     case LIGHTPROBE_IRRADIANCE_BOUNDS:
       return "eevee_lightprobe_volume_bounds";
     case LIGHTPROBE_IRRADIANCE_OFFSET:
@@ -275,6 +322,8 @@ const char *ShaderModule::static_shader_create_info_name_get(eShaderType shader_
       return "eevee_shadow_tilemap_bounds";
     case SHADOW_TILEMAP_FINALIZE:
       return "eevee_shadow_tilemap_finalize";
+    case SHADOW_TILEMAP_RENDERMAP:
+      return "eevee_shadow_tilemap_rendermap";
     case SHADOW_TILEMAP_INIT:
       return "eevee_shadow_tilemap_init";
     case SHADOW_TILEMAP_TAG_UPDATE:
@@ -291,6 +340,8 @@ const char *ShaderModule::static_shader_create_info_name_get(eShaderType shader_
       return "eevee_shadow_page_tile_store";
     case SHADOW_TILEMAP_TAG_USAGE_VOLUME:
       return "eevee_shadow_tag_usage_volume";
+    case SHADOW_VIEW_VISIBILITY:
+      return "eevee_shadow_view_visibility";
     case SUBSURFACE_CONVOLVE:
       return "eevee_subsurface_convolve";
     case SUBSURFACE_SETUP:
@@ -368,7 +419,10 @@ class SamplerSlots {
 
     first_reserved_ = MATERIAL_TEXTURE_RESERVED_SLOT_FIRST;
     last_reserved_ = MATERIAL_TEXTURE_RESERVED_SLOT_LAST_NO_EVAL;
-    if (pipeline_type == MAT_PIPE_DEFERRED && has_shader_to_rgba) {
+    if (geometry_type == MAT_GEOM_WORLD) {
+      last_reserved_ = MATERIAL_TEXTURE_RESERVED_SLOT_LAST_WORLD;
+    }
+    else if (pipeline_type == MAT_PIPE_DEFERRED && has_shader_to_rgba) {
       last_reserved_ = MATERIAL_TEXTURE_RESERVED_SLOT_LAST_HYBRID;
     }
     else if (pipeline_type == MAT_PIPE_FORWARD) {
@@ -944,8 +998,6 @@ GPUMaterial *ShaderModule::world_shader_get(::World *blender_world,
                                this);
 }
 
-/* Variation to compile a material only with a nodetree. Caller needs to maintain the list of
- * materials and call GPU_material_free on it to update the material. */
 GPUMaterial *ShaderModule::material_shader_get(const char *name,
                                                ListBase &materials,
                                                bNodeTree *nodetree,

@@ -30,6 +30,14 @@ static void node_geo_exec(GeoNodeExecParams params)
   GeometrySet volumes;
   GeometrySet instances;
 
+  const std::string &name = geometry_set.name;
+  meshes.name = name;
+  curves.name = name;
+  grease_pencil.name = name;
+  point_clouds.name = name;
+  volumes.name = name;
+  instances.name = name;
+
   if (geometry_set.has<MeshComponent>()) {
     meshes.add(*geometry_set.get_component<MeshComponent>());
   }
@@ -65,7 +73,7 @@ static void node_register()
       &ntype, GEO_NODE_SEPARATE_COMPONENTS, "Separate Components", NODE_CLASS_GEOMETRY);
   ntype.declare = node_declare;
   ntype.geometry_node_execute = node_geo_exec;
-  blender::bke::nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }
 NOD_REGISTER_NODE(node_register)
 

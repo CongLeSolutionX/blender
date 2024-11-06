@@ -819,8 +819,8 @@ static bool v3d_cursor_snap_poll_fn(bContext *C)
       return false;
     }
     /* Sometimes the cursor may be on an invisible part of an overlapping region. */
-    const wmWindowManager *wm = CTX_wm_manager(C);
-    const wmEvent *event = wm->winactive->eventstate;
+    wmWindow *win = CTX_wm_window(C);
+    const wmEvent *event = win->eventstate;
     if (ED_region_overlap_isect_xy(region, event->xy)) {
       return false;
     }
@@ -867,7 +867,7 @@ static void v3d_cursor_snap_draw_fn(bContext *C, int x, int y, void * /*customda
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   Scene *scene = DEG_get_input_scene(depsgraph);
 
-  wmWindow *win = CTX_wm_window(C);
+  const wmWindow *win = CTX_wm_window(C);
   const wmEvent *event = win->eventstate;
   if (event && v3d_cursor_eventstate_has_changed(data_intern, state, UNPACK2(xy), event->modifier))
   {

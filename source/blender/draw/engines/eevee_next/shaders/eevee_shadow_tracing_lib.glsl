@@ -2,19 +2,21 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#pragma once
+
 /**
  * Evaluate shadowing using shadow map ray-tracing.
  */
 
-#pragma BLENDER_REQUIRE(gpu_shader_math_base_lib.glsl)
-#pragma BLENDER_REQUIRE(gpu_shader_math_matrix_lib.glsl)
-#pragma BLENDER_REQUIRE(gpu_shader_math_fast_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_light_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_shadow_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_sampling_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_bxdf_sampling_lib.glsl)
-#pragma BLENDER_REQUIRE(draw_view_lib.glsl)
-#pragma BLENDER_REQUIRE(draw_math_geom_lib.glsl)
+#include "draw_math_geom_lib.glsl"
+#include "draw_view_lib.glsl"
+#include "eevee_bxdf_sampling_lib.glsl"
+#include "eevee_light_lib.glsl"
+#include "eevee_sampling_lib.glsl"
+#include "eevee_shadow_lib.glsl"
+#include "gpu_shader_math_base_lib.glsl"
+#include "gpu_shader_math_fast_lib.glsl"
+#include "gpu_shader_math_matrix_lib.glsl"
 
 /* ---------------------------------------------------------------------- */
 /** \name Shadow Map Tracing loop
@@ -73,7 +75,7 @@ struct ShadowTracingSample {
 \
       ShadowTracingSample samp = shadow_map_trace_sample(state, ray); \
 \
-      shadow_map_trace_hit_check(state, samp); \
+      shadow_map_trace_hit_check(state, samp, i == sample_count); \
     } \
     return state.hit; \
   }
@@ -84,25 +86,22 @@ struct ShadowTracingSample {
  * This reverse tracing allows to approximate the geometry behind occluders while minimizing
  * light-leaks.
  */
-void shadow_map_trace_hit_check(inout ShadowMapTracingState state, ShadowTracingSample samp)
+void shadow_map_trace_hit_check(inout ShadowMapTracingState state,
+                                ShadowTracingSample samp,
+                                bool is_last_sample)
 {
-  /* Skip empty tiles since they do not contain actual depth information.
-   * Not doing so would change the z gradient history. */
-  if (samp.skip_sample) {
-    return;
-  }
-  /* For the first sample, regular depth compare since we do not have history values. */
-  if (state.occluder_history.x == SHADOW_TRACING_INVALID_HISTORY) {
-    if (samp.occluder.x > state.ray_time) {
-      state.hit = true;
-      return;
-    }
-    state.occluder_history = samp.occluder;
-    return;
-  }
+  bool is_behind_occluder = samp.occluder.y > 1e-6;
 
-  bool is_behind_occluder = samp.occluder.y > 0.0;
-  if (is_behind_occluder && (state.occluder_slope != SHADOW_TRACING_INVALID_HISTORY)) {
+  if (samp.skip_sample) {
+    /* Skip empty tiles since they do not contain actual depth information.
+     * Not doing so would change the z gradient history. */
+  }
+  else if (state.occluder_history.x == SHADOW_TRACING_INVALID_HISTORY) {
+    /* First sample, regular depth compare since we do not have history values. */
+    state.hit = is_behind_occluder || (is_last_sample && (samp.occluder.x > state.ray_time));
+    state.occluder_history = samp.occluder;
+  }
+  else if (is_behind_occluder && (state.occluder_slope != SHADOW_TRACING_INVALID_HISTORY)) {
     /* Extrapolate last known valid occluder and check if it crossed the ray.
      * Note that we only want to check if the extrapolated occluder is above the ray at a certain
      * time value, we don't actually care about the correct value. So we replace the complex
@@ -111,6 +110,8 @@ void shadow_map_trace_hit_check(inout ShadowMapTracingState state, ShadowTracing
     float delta_time = state.ray_time - state.occluder_history.x;
     float extrapolated_occluder_y = abs(state.occluder_history.y) +
                                     state.occluder_slope * delta_time;
+    /* NOTE: We use the absolute of the function to account for all occluders configurations.
+     * The test just checks if it doesn't extrapolate in the other Y region. */
     state.hit = extrapolated_occluder_y < 0.0;
   }
   else {
@@ -122,7 +123,7 @@ void shadow_map_trace_hit_check(inout ShadowMapTracingState state, ShadowTracing
     state.occluder_slope = max(min_slope, abs(delta.y / delta.x));
     state.occluder_history = samp.occluder;
     /* Intersection test. Intersect if above the ray time. */
-    state.hit = samp.occluder.x > state.ray_time;
+    state.hit = is_behind_occluder || (is_last_sample && (samp.occluder.x > state.ray_time));
   }
 }
 
@@ -239,6 +240,9 @@ ShadowRayPunctual shadow_ray_generate_punctual(LightData light, vec2 random_2d, 
   float clip_far = intBitsToFloat(light.clip_far);
   float clip_near = intBitsToFloat(light.clip_near);
   float shape_radius = light_spot_data_get(light).shadow_radius;
+  /* Clamp to a minimum value to avoid `local_ray_up` being degenerate. Could be revisited as the
+   * issue might reappear at different zoom level. */
+  shape_radius = max(0.00002, shape_radius);
 
   vec3 direction;
   if (is_area_light(light.type)) {
@@ -266,12 +270,13 @@ ShadowRayPunctual shadow_ray_generate_punctual(LightData light, vec2 random_2d, 
     direction = point_on_light_shape - lP;
     direction = shadow_ray_above_horizon_ensure(direction, lNg, shape_radius);
   }
+  vec3 shadow_position = light_local_data_get(light).shadow_position;
   /* Clip the ray to not cross the near plane.
    * Avoid traces that starts on tiles that have not been queried, creating noise. */
-  float clip_distance = clip_near + shape_radius * 0.5;
-  direction *= saturate(1.0 - clip_distance * inversesqrt(length_squared(direction)));
+  float clip_distance = length(lP - shadow_position) - clip_near;
+  /* Still clamp to a minimal size to avoid issue with zero length vectors. */
+  direction *= saturate(1e-6 + clip_distance * inversesqrt(length_squared(direction)));
 
-  vec3 shadow_position = light_local_data_get(light).shadow_position;
   /* Compute the ray again. */
   ShadowRayPunctual ray;
   /* Transform to shadow local space. */

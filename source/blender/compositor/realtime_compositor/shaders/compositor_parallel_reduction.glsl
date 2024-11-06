@@ -47,7 +47,7 @@
  * expected to define the TYPE macro to be a float or a vec4, depending on the type of data being
  * reduced. */
 
-#pragma BLENDER_REQUIRE(gpu_shader_compositor_texture_utilities.glsl)
+#include "gpu_shader_compositor_texture_utilities.glsl"
 
 #define reduction_size (gl_WorkGroupSize.x * gl_WorkGroupSize.y)
 shared TYPE reduction_data[reduction_size];
@@ -56,9 +56,9 @@ void main()
 {
   ivec2 texel = ivec2(gl_GlobalInvocationID.xy);
 
-  /* Initialize the shared array for out of bound invocations using the IDENTITY value. The
-   * developer is expected to define the IDENTITY macro to be a value of type TYPE that does not
-   * affect the output of the reduction. For instance, sum reductions have an identity of 0.0,
+  /* Initialize the shared array for out of bound invocations using the `IDENTITY` value. The
+   * developer is expected to define the `IDENTITY` macro to be a value of type `TYPE` that does
+   * not affect the output of the reduction. For instance, sum reductions have an identity of 0.0,
    * while max value reductions have an identity of FLT_MIN */
   if (any(lessThan(texel, ivec2(0))) || any(greaterThanEqual(texel, texture_size(input_tx)))) {
     reduction_data[gl_LocalInvocationIndex] = IDENTITY;

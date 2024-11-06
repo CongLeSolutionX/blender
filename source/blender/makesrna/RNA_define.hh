@@ -56,6 +56,7 @@ void RNA_define_fallback_property_update(int noteflag, const char *updatefunc);
 void RNA_define_lib_overridable(bool make_overridable);
 
 void RNA_init();
+void RNA_bpy_exit();
 void RNA_exit();
 
 /* Struct */
@@ -195,7 +196,7 @@ PropertyRNA *RNA_def_enum(StructOrFunctionRNA *cont,
                           const char *ui_name,
                           const char *ui_description);
 /**
- * Same as above but sets #PROP_ENUM_FLAG before setting the default value.
+ * Same as #RNA_def_enum but sets #PROP_ENUM_FLAG before setting the default value.
  */
 PropertyRNA *RNA_def_enum_flag(StructOrFunctionRNA *cont,
                                const char *identifier,

@@ -14,7 +14,7 @@
 #include "NOD_socket_search_link.hh"
 
 #include "RNA_enum_types.hh"
-#include "RNA_prototypes.h"
+#include "RNA_prototypes.hh"
 
 #include "BLO_read_write.hh"
 
@@ -71,7 +71,7 @@ static void node_layout_ex(uiLayout *layout, bContext *C, PointerRNA *ptr)
   bNode &node = *static_cast<bNode *>(ptr->data);
   NodeIndexSwitch &storage = node_storage(node);
   if (uiLayout *panel = uiLayoutPanel(C, layout, "index_switch_items", false, TIP_("Items"))) {
-    uiItemO(panel, "Add Item", ICON_ADD, "node.index_switch_item_add");
+    uiItemO(panel, IFACE_("Add Item"), ICON_ADD, "node.index_switch_item_add");
     uiLayout *col = uiLayoutColumn(panel, false);
     for (const int i : IndexRange(storage.items_num)) {
       uiLayout *row = uiLayoutRow(col, false);
@@ -354,7 +354,7 @@ static void node_free_storage(bNode *node)
 static void node_copy_storage(bNodeTree * /*dst_tree*/, bNode *dst_node, const bNode *src_node)
 {
   const NodeIndexSwitch &src_storage = node_storage(*src_node);
-  auto *dst_storage = MEM_new<NodeIndexSwitch>(__func__, src_storage);
+  auto *dst_storage = MEM_cnew<NodeIndexSwitch>(__func__, src_storage);
   dst_node->storage = dst_storage;
 
   socket_items::copy_array<IndexSwitchItemsAccessor>(*src_node, *dst_node);
@@ -379,7 +379,7 @@ static void register_node()
   ntype.draw_buttons = node_layout;
   ntype.draw_buttons_ex = node_layout_ex;
   ntype.register_operators = node_operators;
-  blender::bke::nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 
   node_rna(ntype.rna_ext.srna);
 }
@@ -399,17 +399,14 @@ std::unique_ptr<LazyFunction> get_index_switch_node_lazy_function(
 
 StructRNA *IndexSwitchItemsAccessor::item_srna = &RNA_IndexSwitchItem;
 int IndexSwitchItemsAccessor::node_type = GEO_NODE_INDEX_SWITCH;
+int IndexSwitchItemsAccessor::item_dna_type = SDNA_TYPE_FROM_STRUCT(IndexSwitchItem);
 
-void IndexSwitchItemsAccessor::blend_write(BlendWriter *writer, const bNode &node)
+void IndexSwitchItemsAccessor::blend_write_item(BlendWriter * /*writer*/, const ItemT & /*item*/)
 {
-  const auto &storage = *static_cast<const NodeIndexSwitch *>(node.storage);
-  BLO_write_struct_array(writer, IndexSwitchItem, storage.items_num, storage.items);
 }
 
-void IndexSwitchItemsAccessor::blend_read_data(BlendDataReader *reader, bNode &node)
+void IndexSwitchItemsAccessor::blend_read_data_item(BlendDataReader * /*reader*/, ItemT & /*item*/)
 {
-  auto &storage = *static_cast<NodeIndexSwitch *>(node.storage);
-  BLO_read_struct_array(reader, IndexSwitchItem, storage.items_num, &storage.items);
 }
 
 }  // namespace blender::nodes

@@ -18,10 +18,6 @@ import sys
 
 from typing import (
     Any,
-    List,
-    Optional,
-    Tuple,
-    Union,
 )
 
 from .bl_extension_utils import PkgManifest_Normalized
@@ -105,10 +101,10 @@ class subcmd_utils:
 
     @staticmethod
     def _expand_package_ids(
-            packages: List[str],
+            packages: list[str],
             *,
             use_local: bool,
-    ) -> Union[List[Tuple[int, str]], str]:
+    ) -> list[tuple[int, str]] | str:
         # Takes a terse lists of package names and expands to repo index and name list,
         # returning an error string if any can't be resolved.
         from . import repo_cache_store_ensure
@@ -130,7 +126,8 @@ class subcmd_utils:
             # Show any exceptions created while accessing the JSON,
             repo = repos_all[repo_index]
             if pkg_manifest is None:
-                errors.append("Repository \"{:s}\" has no data, sync may be needed!".format(repo.module))
+                if use_local and not repo.remote_url:
+                    errors.append("Repository \"{:s}\" has no data, sync may be needed!".format(repo.module))
                 repo_packages = set()
             else:
                 repo_packages = set(pkg_manifest.keys())
@@ -171,11 +168,11 @@ class subcmd_utils:
         return repos_and_packages
 
     @staticmethod
-    def expand_package_ids_from_remote(packages: List[str]) -> Union[List[Tuple[int, str]], str]:
+    def expand_package_ids_from_remote(packages: list[str]) -> list[tuple[int, str]] | str:
         return subcmd_utils._expand_package_ids(packages, use_local=False)
 
     @staticmethod
-    def expand_package_ids_from_local(packages: List[str]) -> Union[List[Tuple[int, str]], str]:
+    def expand_package_ids_from_local(packages: list[str]) -> list[tuple[int, str]] | str:
         return subcmd_utils._expand_package_ids(packages, use_local=True)
 
 
@@ -195,8 +192,10 @@ class subcmd_query:
 
         def list_item(
                 pkg_id: str,
-                item_remote: Optional[PkgManifest_Normalized],
-                item_local: Optional[PkgManifest_Normalized],
+                item_local: PkgManifest_Normalized | None,
+                item_remote: PkgManifest_Normalized | None,
+                has_remote: bool,
+                item_warnings: list[str],
         ) -> None:
             # Both can't be None.
             assert item_remote is not None or item_local is not None
@@ -222,8 +221,12 @@ class subcmd_query:
                     status_info = ""
                 item = item_remote
             else:
-                # All local-only packages are installed.
-                status_info = " [{:s}]".format(colorize("installed", "green"))
+                # All local-only packages are installed,
+                # if they're in a repository with a remote but no remote info - they're "orphan".
+                status_info = " [{:s}]".format(
+                    colorize("orphan", "yellow") if has_remote else
+                    colorize("installed", "green")
+                )
                 assert isinstance(item_local, PkgManifest_Normalized)
                 item = item_local
 
@@ -234,6 +237,15 @@ class subcmd_query:
                     item.name,
                     colorize(item.tagline or "<no tagline>", "faint"),
                 ))
+
+            if item_remote and item_remote.block:
+                print("    Blocked:", colorize(item_remote.block.reason, "red"))
+
+            if item_warnings:
+                # Including all text on one line doesn't work well here,
+                # add warnings below the package.
+                for warning in item_warnings:
+                    print("    " + colorize(warning, "red"))
 
         if sync:
             if not subcmd_utils.sync():
@@ -247,27 +259,49 @@ class subcmd_query:
         repos_all = extension_repos_read()
         repo_cache_store = repo_cache_store_ensure()
 
+        import addon_utils  # type: ignore
+
+        # pylint: disable-next=protected-access
+        extensions_warnings: dict[str, list[str]] = addon_utils._extensions_warnings_get()
+        assert isinstance(extensions_warnings, dict)
+
+        # Blocked and installed.
+        blocked_and_installed_count = 0
+
         for repo_index, (
-                pkg_manifest_remote,
                 pkg_manifest_local,
+                pkg_manifest_remote,
         ) in enumerate(zip(
-            repo_cache_store.pkg_manifest_from_remote_ensure(error_fn=print),
             repo_cache_store.pkg_manifest_from_local_ensure(error_fn=print),
+            repo_cache_store.pkg_manifest_from_remote_ensure(error_fn=print),
+            strict=True,
         )):
             # Show any exceptions created while accessing the JSON,
             repo = repos_all[repo_index]
 
             print("Repository: \"{:s}\" (id={:s})".format(repo.name, repo.module))
-            if pkg_manifest_remote is not None:
-                for pkg_id, item_remote in pkg_manifest_remote.items():
-                    if pkg_manifest_local is not None:
-                        item_local = pkg_manifest_local.get(pkg_id)
-                    else:
-                        item_local = None
-                    list_item(pkg_id, item_remote, item_local)
-            else:
-                for pkg_id, item_local in pkg_manifest_local.items():
-                    list_item(pkg_id, None, item_local)
+            has_remote = repo.remote_url and (pkg_manifest_remote is not None)
+            pkg_id_set = set((pkg_manifest_local or {}).keys()) | set((pkg_manifest_remote or {}).keys())
+            for pkg_id in sorted(pkg_id_set):
+                item_local = pkg_manifest_local.get(pkg_id) if (pkg_manifest_local is not None) else None
+                item_remote = pkg_manifest_remote.get(pkg_id) if (pkg_manifest_remote is not None) else None
+                item_warnings = extensions_warnings.get("bl_ext.{:s}.{:s}".format(repo.module, pkg_id), [])
+                list_item(pkg_id, item_local, item_remote, has_remote, item_warnings)
+                if item_local and item_remote and item_remote.block:
+                    blocked_and_installed_count += 1
+        sys.stdout.flush()
+
+        if blocked_and_installed_count:
+            sys.stderr.write("\n")
+            sys.stderr.write(
+                "  Warning: " +
+                colorize("{:d} installed extension(s) are blocked!\n".format(blocked_and_installed_count), "red")
+            )
+            sys.stderr.write(
+                "           " +
+                colorize("Uninstall them to remove this message!\n", "red")
+            )
+            sys.stderr.write("\n")
 
         return True
 
@@ -300,7 +334,7 @@ class subcmd_pkg:
     def install(
             *,
             sync: bool,
-            packages: List[str],
+            packages: list[str],
             enable_on_install: bool,
             no_prefs: bool,
     ) -> bool:
@@ -336,7 +370,7 @@ class subcmd_pkg:
     @staticmethod
     def remove(
             *,
-            packages: List[str],
+            packages: list[str],
             no_prefs: bool,
     ) -> bool:
         # Expand all package ID's.
@@ -410,6 +444,14 @@ class subcmd_repo:
             print("    directory: \"{:s}\"".format(repo.directory))
             if url := repo.remote_url:
                 print("    url: \"{:s}\"".format(url))
+                # As with the UI the access-token is replaced by `*`,
+                # this is done to show which repositories use an access token.
+                print("    access_token: {:s}".format(
+                    "\"{:s}\"".format("*" * len(repo.access_token)) if repo.access_token else
+                    "None"
+                ))
+            else:
+                print("    source: \"{:s}\"".format(repo.source))
 
         return True
 
@@ -420,11 +462,24 @@ class subcmd_repo:
             repo_id: str,
             directory: str,
             url: str,
+            access_token: str,
+            source: str,
             cache: bool,
             clear_all: bool,
             no_prefs: bool,
     ) -> bool:
         from bpy import context
+
+        # This could be allowed the Python API doesn't prevent it.
+        # However this is not going to do what the user would expect so disallow it.
+        if url:
+            if source == 'SYSTEM':
+                sys.stderr.write("Cannot use \"--url\" and \"--source=SYSTEM\" together.\n")
+                return False
+        else:
+            if access_token:
+                sys.stderr.write("Cannot use \"--access-token\" without a \"--url\".\n")
+                return False
 
         extension_repos = context.preferences.extensions.repos
         if clear_all:
@@ -436,8 +491,13 @@ class subcmd_repo:
             module=repo_id,
             custom_directory=directory,
             remote_url=url,
+            source=source,
         )
         repo.use_cache = cache
+
+        if access_token:
+            repo.use_access_token = True
+            repo.access_token = access_token
 
         if not no_prefs:
             blender_preferences_write()
@@ -648,7 +708,7 @@ def cli_extension_args_install_file(subparsers: "argparse._SubParsersAction[argp
         "install-file",
         help="Install package from file.",
         description=(
-            "Install a package file into a local repository."
+            "Install a package file into a user repository."
         ),
         formatter_class=argparse.RawTextHelpFormatter,
     )
@@ -757,6 +817,29 @@ def cli_extension_args_repo_add(subparsers: "argparse._SubParsersAction[argparse
     )
 
     subparse.add_argument(
+        "--access-token",
+        dest="access_token",
+        type=str,
+        default="",
+        metavar="ACCESS_TOKEN",
+        help=(
+            "The access token to use for remote repositories which require a token."
+        ),
+    )
+
+    subparse.add_argument(
+        "--source",
+        dest="source",
+        choices=('USER', 'SYSTEM'),
+        default='USER',
+        metavar="SOURCE",
+        help=(
+            "The type of source in ('USER', 'SYSTEM').\n"
+            "System repositories are managed outside of Blender and are considered read-only."
+        ),
+    )
+
+    subparse.add_argument(
         "--cache",
         dest="cache",
         metavar="BOOLEAN",
@@ -784,6 +867,8 @@ def cli_extension_args_repo_add(subparsers: "argparse._SubParsersAction[argparse
             name=args.name,
             directory=args.directory,
             url=args.url,
+            access_token=args.access_token,
+            source=args.source,
             cache=args.cache,
             clear_all=args.clear_all,
             no_prefs=args.no_prefs,
@@ -830,8 +915,14 @@ def cli_extension_args_extra(subparsers: "argparse._SubParsersAction[argparse.Ar
     cli_extension_args_repo_remove(subparsers)
 
 
-def cli_extension_handler(args: List[str]) -> int:
+def cli_extension_handler(args: list[str]) -> int:
     from .cli import blender_ext
+
+    # Override the default valid tags with a file which Blender includes.
+    blender_ext.ARG_DEFAULTS_OVERRIDE.build_valid_tags = os.path.join(
+        os.path.dirname(__file__), "..", "..", "modules", "_bpy_internal", "extensions", "tags.py",
+    )
+
     result = blender_ext.main(
         args,
         args_internal=False,

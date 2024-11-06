@@ -73,7 +73,7 @@ struct SphereProbeAtlasCoord {
   {
     SphereProbePixelArea coord;
     coord.extent = area_extent(mip_lvl);
-    coord.offset = area_offset();
+    coord.offset = area_offset(mip_lvl);
     coord.layer = atlas_layer;
     return coord;
   }
@@ -133,7 +133,7 @@ struct VolumeProbe : public LightProbe, VolumeProbeData {
   const LightProbeObjectCache *cache = nullptr;
   /** List of associated atlas bricks that are used by this grid. */
   Vector<IrradianceBrickPacked> bricks;
-  /** True if the grid needs to be reuploaded & re-composited with other light-grids. */
+  /** True if the grid needs to be re-uploaded & re-composited with other light-grids. */
   bool do_update;
   /** Index of the grid inside the grid UBO. */
   int grid_index;
@@ -220,7 +220,7 @@ class LightProbeModule {
   /** True if the auto bake feature is enabled & available in this context. */
   bool auto_bake_enabled_;
 
-  eLightProbeResolution sphere_object_resolution_ = LIGHT_PROBE_RESOLUTION_64;
+  eLightProbeResolution sphere_object_resolution_ = LIGHT_PROBE_RESOLUTION_128;
 
  public:
   LightProbeModule(Instance &inst);

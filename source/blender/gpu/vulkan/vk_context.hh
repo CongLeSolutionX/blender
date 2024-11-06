@@ -13,10 +13,10 @@
 #include "GHOST_Types.h"
 
 #include "render_graph/vk_render_graph.hh"
-#include "vk_command_buffers.hh"
 #include "vk_common.hh"
 #include "vk_debug.hh"
 #include "vk_descriptor_pools.hh"
+#include "vk_resource_pool.hh"
 
 namespace blender::gpu {
 class VKFrameBuffer;
@@ -24,13 +24,10 @@ class VKVertexAttributeObject;
 class VKBatch;
 class VKStateManager;
 class VKShader;
+class VKThreadData;
 
 class VKContext : public Context, NonCopyable {
  private:
-  VKCommandBuffers command_buffers_;
-  VKDescriptorPools descriptor_pools_;
-  VKDescriptorSetTracker descriptor_set_;
-
   VkExtent2D vk_extent_ = {};
   VkFormat swap_chain_format_ = {};
   GPUTexture *surface_texture_ = nullptr;
@@ -38,6 +35,8 @@ class VKContext : public Context, NonCopyable {
 
   /* Reusable data. Stored inside context to limit reallocations. */
   render_graph::VKResourceAccessInfo access_info_ = {};
+
+  std::optional<std::reference_wrapper<VKThreadData>> thread_data_;
 
  public:
   render_graph::VKRenderGraph render_graph;
@@ -83,8 +82,7 @@ class VKContext : public Context, NonCopyable {
    */
   void rendering_end();
 
-  void bind_compute_pipeline();
-  render_graph::VKResourceAccessInfo &update_and_get_access_info();
+  render_graph::VKResourceAccessInfo &reset_and_get_access_info();
 
   /**
    * Update the give shader data with the current state of the context.
@@ -94,8 +92,6 @@ class VKContext : public Context, NonCopyable {
                             VKVertexAttributeObject &vao,
                             render_graph::VKPipelineData &r_pipeline_data);
 
-  void bind_graphics_pipeline(const GPUPrimType prim_type,
-                              const VKVertexAttributeObject &vertex_attribute_object);
   void sync_backbuffer();
 
   static VKContext *get()
@@ -103,21 +99,8 @@ class VKContext : public Context, NonCopyable {
     return static_cast<VKContext *>(Context::get());
   }
 
-  VKCommandBuffers &command_buffers_get()
-  {
-    return command_buffers_;
-  }
-
-  VKDescriptorPools &descriptor_pools_get()
-  {
-    return descriptor_pools_;
-  }
-
-  VKDescriptorSetTracker &descriptor_set_get()
-  {
-    return descriptor_set_;
-  }
-
+  VKDescriptorPools &descriptor_pools_get();
+  VKDescriptorSetTracker &descriptor_set_get();
   VKStateManager &state_manager_get() const;
 
   static void swap_buffers_pre_callback(const GHOST_VulkanSwapChainData *data);

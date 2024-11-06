@@ -5,6 +5,7 @@
 #include "usd_utils.hh"
 #include "usd_writer_material.hh"
 
+#include <pxr/base/tf/stringUtils.h>
 #include <pxr/usd/usdGeom/bboxCache.h>
 #include <pxr/usd/usdGeom/scope.h>
 
@@ -208,7 +209,7 @@ pxr::SdfPath USDAbstractWriter::get_material_library_path() const
 }
 
 pxr::UsdShadeMaterial USDAbstractWriter::ensure_usd_material(const HierarchyContext &context,
-                                                             Material *material)
+                                                             Material *material) const
 {
   pxr::UsdStageRefPtr stage = usd_export_context_.stage;
 
@@ -236,7 +237,7 @@ pxr::UsdShadeMaterial USDAbstractWriter::ensure_usd_material(const HierarchyCont
 
 void USDAbstractWriter::write_visibility(const HierarchyContext &context,
                                          const pxr::UsdTimeCode timecode,
-                                         pxr::UsdGeomImageable &usd_geometry)
+                                         const pxr::UsdGeomImageable &usd_geometry)
 {
   pxr::UsdAttribute attr_visibility = usd_geometry.CreateVisibilityAttr(pxr::VtValue(), true);
 
@@ -260,7 +261,17 @@ bool USDAbstractWriter::mark_as_instance(const HierarchyContext &context, const 
     return false;
   }
 
-  pxr::SdfPath ref_path(context.original_export_path);
+  BLI_assert(!context.original_export_path.empty());
+  BLI_assert(context.original_export_path.front() == '/');
+
+  std::string ref_path_str(usd_export_context_.export_params.root_prim_path);
+  ref_path_str += context.original_export_path;
+
+  pxr::SdfPath ref_path(ref_path_str);
+
+  /* To avoid USD errors, make sure the referenced path exists. */
+  usd_export_context_.stage->DefinePrim(ref_path);
+
   if (!prim.GetReferences().AddInternalReference(ref_path)) {
     /* See this URL for a description for why referencing may fail"
      * https://graphics.pixar.com/usd/docs/api/class_usd_references.html#Usd_Failing_References
@@ -318,6 +329,9 @@ void USDAbstractWriter::write_user_properties(const pxr::UsdPrim &prim,
 
   const StringRef displayName_identifier = "displayName";
 
+  const std::string default_namespace(
+      usd_export_context_.export_params.custom_properties_namespace);
+
   for (IDProperty *prop = (IDProperty *)properties->data.group.first; prop; prop = prop->next) {
     if (displayName_identifier == prop->name) {
       if (prop->type == IDP_STRING && prop->data.pointer) {
@@ -326,10 +340,20 @@ void USDAbstractWriter::write_user_properties(const pxr::UsdPrim &prim,
       continue;
     }
 
-    std::string prop_name = make_safe_name(prop->name,
-                                           usd_export_context_.export_params.allow_unicode);
-    std::string full_prop_name = "userProperties:" + prop_name;
+    std::vector<std::string> path_names = pxr::TfStringTokenize(prop->name, ":");
 
+    /* If the path does not already have a namespace prefix, prepend the default namespace
+     * specified by the user, if any. */
+    if (!default_namespace.empty() && path_names.size() < 2) {
+      path_names.insert(path_names.begin(), default_namespace);
+    }
+
+    std::vector<std::string> safe_names;
+    for (const std::string &name : path_names) {
+      safe_names.push_back(make_safe_name(name, usd_export_context_.export_params.allow_unicode));
+    }
+
+    std::string full_prop_name = pxr::SdfPath::JoinIdentifier(safe_names);
     pxr::TfToken prop_token = pxr::TfToken(full_prop_name);
 
     if (prim.HasAttribute(prop_token)) {

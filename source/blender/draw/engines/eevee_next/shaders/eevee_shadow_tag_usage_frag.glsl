@@ -10,8 +10,8 @@
  * tiles.
  */
 
-#pragma BLENDER_REQUIRE(draw_model_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_shadow_tag_usage_lib.glsl)
+#include "draw_model_lib.glsl"
+#include "eevee_shadow_tag_usage_lib.glsl"
 
 float ray_aabb(vec3 ray_origin, vec3 ray_direction, vec3 aabb_min, vec3 aabb_max)
 {
@@ -98,6 +98,12 @@ void main()
    * The inflated bounds can cause unnecessary extra steps. */
   float ls_near_box_t = ray_aabb(
       ls_near_plane, ls_view_direction, interp_flat.ls_aabb_min, interp_flat.ls_aabb_max);
+
+  if (ls_near_box_t < 0.0) {
+    /* The ray cast can fail in ortho mode due to numerical precision. (See #121629) */
+    return;
+  }
+
   vec3 ls_near_box = ls_near_plane + ls_view_direction * ls_near_box_t;
   vec3 ws_near_box = drw_point_object_to_world(ls_near_box);
 

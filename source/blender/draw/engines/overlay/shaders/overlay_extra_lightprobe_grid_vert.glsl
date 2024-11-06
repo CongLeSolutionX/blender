@@ -2,8 +2,9 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#pragma BLENDER_REQUIRE(common_view_clipping_lib.glsl)
-#pragma BLENDER_REQUIRE(common_view_lib.glsl)
+#include "common_view_clipping_lib.glsl"
+#include "common_view_lib.glsl"
+#include "select_lib.glsl"
 
 vec4 color_from_id(float color_id)
 {
@@ -27,6 +28,7 @@ vec4 color_from_id(float color_id)
 
 void main()
 {
+  select_id_set(drw_CustomID);
   mat4 model_mat = gridModelMatrix;
   model_mat[0][3] = model_mat[1][3] = model_mat[2][3] = 0.0;
   model_mat[3][3] = 1.0;

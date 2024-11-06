@@ -17,7 +17,7 @@
 #  include "BLI_winstuff.h"
 #endif
 #include "BLI_fileops.h"
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 #include "BLI_string.h"
 #include "BLI_string_utf8.h"
 
@@ -33,7 +33,7 @@
 
 #include "RNA_access.hh"
 #include "RNA_define.hh"
-#include "RNA_prototypes.h"
+#include "RNA_prototypes.hh"
 #include "RNA_types.hh"
 
 #include "UI_interface.hh"
@@ -41,6 +41,7 @@
 #include "WM_api.hh"
 #include "WM_types.hh"
 
+#include "ED_asset.hh"
 #include "ED_userpref.hh"
 
 #include "MEM_guardedalloc.h"
@@ -136,7 +137,7 @@ static void PREFERENCES_OT_autoexec_path_remove(wmOperatorType *ot)
 /** \name Add Asset Library Operator
  * \{ */
 
-static int preferences_asset_library_add_exec(bContext * /*C*/, wmOperator *op)
+static int preferences_asset_library_add_exec(bContext *C, wmOperator *op)
 {
   char *path = RNA_string_get_alloc(op->ptr, "directory", nullptr, 0, nullptr);
   char dirname[FILE_MAXFILE];
@@ -152,6 +153,7 @@ static int preferences_asset_library_add_exec(bContext * /*C*/, wmOperator *op)
 
   /* There's no dedicated notifier for the Preferences. */
   WM_main_add_notifier(NC_WINDOW, nullptr);
+  blender::ed::asset::list::clear_all_library(C);
 
   MEM_freeN(path);
   return OPERATOR_FINISHED;
@@ -204,7 +206,7 @@ static bool preferences_asset_library_remove_poll(bContext *C)
   return true;
 }
 
-static int preferences_asset_library_remove_exec(bContext * /*C*/, wmOperator *op)
+static int preferences_asset_library_remove_exec(bContext *C, wmOperator *op)
 {
   const int index = RNA_int_get(op->ptr, "index");
   bUserAssetLibrary *library = static_cast<bUserAssetLibrary *>(
@@ -219,6 +221,7 @@ static int preferences_asset_library_remove_exec(bContext * /*C*/, wmOperator *o
   CLAMP(U.active_asset_library, 0, count_remaining - 1);
   U.runtime.is_dirty = true;
 
+  blender::ed::asset::list::clear_all_library(C);
   /* Trigger refresh for the Asset Browser. */
   WM_main_add_notifier(NC_SPACE | ND_SPACE_ASSET_PARAMS, nullptr);
 
@@ -375,12 +378,24 @@ static int preferences_extension_repo_add_exec(bContext *C, wmOperator *op)
   U.active_extension_repo = BLI_findindex(&U.extension_repos, new_repo);
   U.runtime.is_dirty = true;
 
-  BKE_callback_exec_null(bmain, BKE_CB_EVT_EXTENSION_REPOS_UPDATE_POST);
+  {
+    PointerRNA new_repo_ptr = RNA_pointer_create(nullptr, &RNA_UserExtensionRepo, new_repo);
+    PointerRNA *pointers[] = {&new_repo_ptr};
 
-  BKE_callback_exec_null(bmain, BKE_CB_EVT_EXTENSION_REPOS_SYNC);
+    BKE_callback_exec_null(bmain, BKE_CB_EVT_EXTENSION_REPOS_UPDATE_POST);
+    BKE_callback_exec(bmain, pointers, ARRAY_SIZE(pointers), BKE_CB_EVT_EXTENSION_REPOS_SYNC);
+  }
 
   /* There's no dedicated notifier for the Preferences. */
   WM_event_add_notifier(C, NC_WINDOW, nullptr);
+
+  /* Mainly useful when adding a repository from a popup since it's not as obvious
+   * the repository was added compared to the repository popover.  */
+  BKE_reportf(op->reports,
+              RPT_INFO,
+              "Added %s \"%s\"",
+              preferences_extension_repo_default_name_from_type(repo_type),
+              new_repo->name);
 
   return OPERATOR_FINISHED;
 }
@@ -465,7 +480,7 @@ static void PREFERENCES_OT_extension_repo_add(wmOperatorType *ot)
        "REMOTE",
        ICON_INTERNET,
        "Add Remote Repository",
-       "Add a repository referencing an remote repository "
+       "Add a repository referencing a remote repository "
        "with support for listing and updating extensions"},
       {int(bUserExtensionRepoAddType::Local),
        "LOCAL",
@@ -614,10 +629,19 @@ static int preferences_extension_repo_remove_invoke(bContext *C,
   std::string message;
   if (remove_files) {
     char dirpath[FILE_MAX];
+    char user_dirpath[FILE_MAX];
     BKE_preferences_extension_repo_dirpath_get(repo, dirpath, sizeof(dirpath));
+    BKE_preferences_extension_repo_user_dirpath_get(repo, user_dirpath, sizeof(user_dirpath));
 
-    if (dirpath[0]) {
-      message = fmt::format(IFACE_("Remove all files in \"{}\"."), dirpath);
+    if (dirpath[0] || user_dirpath[0]) {
+      message = IFACE_("Remove all files in:");
+      const char *paths[] = {dirpath, user_dirpath};
+      for (int i = 0; i < ARRAY_SIZE(paths); i++) {
+        if (paths[i][0] == '\0') {
+          continue;
+        }
+        message.append(fmt::format("\n\"{}\"", paths[i]));
+      }
     }
     else {
       message = IFACE_("Remove, local files not found.");
@@ -659,6 +683,19 @@ static int preferences_extension_repo_remove_exec(bContext *C, wmOperator *op)
   }
 
   if (remove_files) {
+    if (!BKE_preferences_extension_repo_module_is_valid(repo)) {
+      BKE_reportf(op->reports,
+                  RPT_WARNING,
+                  /* Account for it not being null terminated. */
+                  "Unable to remove files, the module name \"%.*s\" is invalid and "
+                  "could remove non-repository files",
+                  int(sizeof(repo->module)),
+                  repo->module);
+      remove_files = false;
+    }
+  }
+
+  if (remove_files) {
     char dirpath[FILE_MAX];
     BKE_preferences_extension_repo_dirpath_get(repo, dirpath, sizeof(dirpath));
     if (dirpath[0] && BLI_is_dir(dirpath)) {
@@ -679,6 +716,16 @@ static int preferences_extension_repo_remove_exec(bContext *C, wmOperator *op)
       BKE_callback_exec_string(bmain, BKE_CB_EVT_EXTENSION_REPOS_FILES_CLEAR, dirpath);
 
       if (BLI_delete(dirpath, true, recursive) != 0) {
+        BKE_reportf(op->reports,
+                    RPT_WARNING,
+                    "Unable to remove directory: %s",
+                    errno ? strerror(errno) : "unknown");
+      }
+    }
+
+    BKE_preferences_extension_repo_user_dirpath_get(repo, dirpath, sizeof(dirpath));
+    if (dirpath[0] && BLI_is_dir(dirpath)) {
+      if (BLI_delete(dirpath, true, true) != 0) {
         BKE_reportf(op->reports,
                     RPT_WARNING,
                     "Unable to remove directory: %s",
@@ -805,9 +852,9 @@ static bool associate_blend_poll(bContext *C)
 }
 
 #if !defined(__APPLE__)
-static bool associate_blend(bool do_register, bool all_users, char **error_msg)
+static bool associate_blend(bool do_register, bool all_users, char **r_error_msg)
 {
-  const bool result = WM_platform_associate_set(do_register, all_users, error_msg);
+  const bool result = WM_platform_associate_set(do_register, all_users, r_error_msg);
 #  ifdef WIN32
   if ((result == false) &&
       /* For some reason the message box isn't shown in this case. */

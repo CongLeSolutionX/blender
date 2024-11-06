@@ -90,23 +90,23 @@ void BKE_image_stamp_buf(struct Scene *scene,
                          int width,
                          int height);
 bool BKE_imbuf_alpha_test(struct ImBuf *ibuf);
-int BKE_imbuf_write_stamp(const struct Scene *scene,
-                          const struct RenderResult *rr,
-                          struct ImBuf *ibuf,
-                          const char *filepath,
-                          const struct ImageFormatData *imf);
+bool BKE_imbuf_write_stamp(const struct Scene *scene,
+                           const struct RenderResult *rr,
+                           struct ImBuf *ibuf,
+                           const char *filepath,
+                           const struct ImageFormatData *imf);
 /**
  * \note imf->planes is ignored here, its assumed the image channels are already set.
  */
-int BKE_imbuf_write(struct ImBuf *ibuf, const char *filepath, const struct ImageFormatData *imf);
+bool BKE_imbuf_write(struct ImBuf *ibuf, const char *filepath, const struct ImageFormatData *imf);
 /**
  * Same as #BKE_imbuf_write() but crappy workaround not to permanently modify _some_,
  * values in the imbuf.
  */
-int BKE_imbuf_write_as(struct ImBuf *ibuf,
-                       const char *filepath,
-                       const struct ImageFormatData *imf,
-                       bool save_copy);
+bool BKE_imbuf_write_as(struct ImBuf *ibuf,
+                        const char *filepath,
+                        const struct ImageFormatData *imf,
+                        bool save_copy);
 
 /**
  * Used by sequencer too.
@@ -350,7 +350,7 @@ void BKE_image_all_free_anim_ibufs(struct Main *bmain, int cfra);
 
 void BKE_image_free_all_gputextures(struct Main *bmain);
 /**
- * Same as above but only free animated images.
+ * Same as #BKE_image_free_all_gputextures but only free animated images.
  */
 void BKE_image_free_anim_gputextures(struct Main *bmain);
 void BKE_image_free_old_gputextures(struct Main *bmain);

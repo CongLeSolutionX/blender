@@ -120,13 +120,16 @@ void importer_main(Main *bmain,
   BLI_path_extension_strip(ob_name);
 
   Mesh *mesh = read_stl_file(import_params);
+  if (!mesh) {
+    return;
+  }
 
   Mesh *mesh_in_main = BKE_mesh_add(bmain, ob_name);
   BKE_mesh_nomain_to_mesh(mesh, mesh_in_main, nullptr);
   BKE_view_layer_base_deselect_all(scene, view_layer);
   LayerCollection *lc = BKE_layer_collection_get_active(view_layer);
   Object *obj = BKE_object_add_only_object(bmain, OB_MESH, ob_name);
-  BKE_mesh_assign_object(bmain, obj, mesh_in_main);
+  obj->data = mesh_in_main;
   BKE_collection_object_add(bmain, lc->collection, obj);
   BKE_view_layer_synced_ensure(scene, view_layer);
   Base *base = BKE_view_layer_base_find(view_layer, obj);
@@ -134,7 +137,7 @@ void importer_main(Main *bmain,
 
   float global_scale = import_params.global_scale;
   if ((scene->unit.system != USER_UNIT_NONE) && import_params.use_scene_unit) {
-    global_scale *= scene->unit.scale_length;
+    global_scale /= scene->unit.scale_length;
   }
   float scale_vec[3] = {global_scale, global_scale, global_scale};
   float obmat3x3[3][3];

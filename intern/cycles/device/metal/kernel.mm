@@ -38,52 +38,50 @@ struct ShaderCache {
     // TODO: Look into tuning for DEVICE_KERNEL_INTEGRATOR_INTERSECT_DEDICATED_LIGHT and
     // DEVICE_KERNEL_INTEGRATOR_SHADE_DEDICATED_LIGHT.
 
-    if (MetalInfo::get_device_vendor(mtlDevice) == METAL_GPU_APPLE) {
-      switch (MetalInfo::get_apple_gpu_architecture(mtlDevice)) {
-        default:
-        case APPLE_M3:
-          /* Peak occupancy is achieved through Dynamic Caching on M3 GPUs. */
-          for (size_t i = 0; i < DEVICE_KERNEL_NUM; i++) {
-            occupancy_tuning[i] = {64, 64};
-          }
-          break;
-        case APPLE_M2_BIG:
-          occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_COMPACT_SHADOW_STATES] = {384, 128};
-          occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_INIT_FROM_CAMERA] = {640, 128};
-          occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_INTERSECT_CLOSEST] = {1024, 64};
-          occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_INTERSECT_SHADOW] = {704, 704};
-          occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_INTERSECT_SUBSURFACE] = {640, 32};
-          occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_QUEUED_PATHS_ARRAY] = {896, 768};
-          occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_SHADE_BACKGROUND] = {512, 128};
-          occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW] = {32, 32};
-          occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE] = {768, 576};
-          occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_SORTED_PATHS_ARRAY] = {896, 768};
-          break;
-        case APPLE_M2:
-          occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_COMPACT_SHADOW_STATES] = {32, 32};
-          occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_INIT_FROM_CAMERA] = {832, 32};
-          occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_INTERSECT_CLOSEST] = {64, 64};
-          occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_INTERSECT_SHADOW] = {64, 64};
-          occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_INTERSECT_SUBSURFACE] = {704, 32};
-          occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_QUEUED_PATHS_ARRAY] = {1024, 256};
-          occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_SHADE_BACKGROUND] = {64, 32};
-          occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW] = {256, 256};
-          occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE] = {448, 384};
-          occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_SORTED_PATHS_ARRAY] = {1024, 1024};
-          break;
-        case APPLE_M1:
-          occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_COMPACT_SHADOW_STATES] = {256, 128};
-          occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_INIT_FROM_CAMERA] = {768, 32};
-          occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_INTERSECT_CLOSEST] = {512, 128};
-          occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_INTERSECT_SHADOW] = {384, 128};
-          occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_INTERSECT_SUBSURFACE] = {512, 64};
-          occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_QUEUED_PATHS_ARRAY] = {512, 256};
-          occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_SHADE_BACKGROUND] = {512, 128};
-          occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW] = {384, 32};
-          occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE] = {576, 384};
-          occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_SORTED_PATHS_ARRAY] = {832, 832};
-          break;
-      }
+    switch (MetalInfo::get_apple_gpu_architecture(mtlDevice)) {
+      default:
+      case APPLE_M3:
+        /* Peak occupancy is achieved through Dynamic Caching on M3 GPUs. */
+        for (size_t i = 0; i < DEVICE_KERNEL_NUM; i++) {
+          occupancy_tuning[i] = {64, 64};
+        }
+        break;
+      case APPLE_M2_BIG:
+        occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_COMPACT_SHADOW_STATES] = {384, 128};
+        occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_INIT_FROM_CAMERA] = {640, 128};
+        occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_INTERSECT_CLOSEST] = {1024, 64};
+        occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_INTERSECT_SHADOW] = {704, 704};
+        occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_INTERSECT_SUBSURFACE] = {640, 32};
+        occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_QUEUED_PATHS_ARRAY] = {896, 768};
+        occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_SHADE_BACKGROUND] = {512, 128};
+        occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW] = {32, 32};
+        occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE] = {768, 576};
+        occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_SORTED_PATHS_ARRAY] = {896, 768};
+        break;
+      case APPLE_M2:
+        occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_COMPACT_SHADOW_STATES] = {32, 32};
+        occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_INIT_FROM_CAMERA] = {832, 32};
+        occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_INTERSECT_CLOSEST] = {64, 64};
+        occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_INTERSECT_SHADOW] = {64, 64};
+        occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_INTERSECT_SUBSURFACE] = {704, 32};
+        occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_QUEUED_PATHS_ARRAY] = {1024, 256};
+        occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_SHADE_BACKGROUND] = {64, 32};
+        occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW] = {256, 256};
+        occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE] = {448, 384};
+        occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_SORTED_PATHS_ARRAY] = {1024, 1024};
+        break;
+      case APPLE_M1:
+        occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_COMPACT_SHADOW_STATES] = {256, 128};
+        occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_INIT_FROM_CAMERA] = {768, 32};
+        occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_INTERSECT_CLOSEST] = {512, 128};
+        occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_INTERSECT_SHADOW] = {384, 128};
+        occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_INTERSECT_SUBSURFACE] = {512, 64};
+        occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_QUEUED_PATHS_ARRAY] = {512, 256};
+        occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_SHADE_BACKGROUND] = {512, 128};
+        occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW] = {384, 32};
+        occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE] = {576, 384};
+        occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_SORTED_PATHS_ARRAY] = {832, 832};
+        break;
     }
 
     occupancy_tuning[DEVICE_KERNEL_INTEGRATOR_SORT_BUCKET_PASS] = {1024, 1024};
@@ -134,6 +132,9 @@ const int MAX_POSSIBLE_GPUS_ON_SYSTEM = 8;
 using DeviceShaderCache = std::pair<id<MTLDevice>, unique_ptr<ShaderCache>>;
 int g_shaderCacheCount = 0;
 DeviceShaderCache g_shaderCache[MAX_POSSIBLE_GPUS_ON_SYSTEM];
+
+/* Next UID for associating a MetalDispatchPipeline with an originating MetalKernelPipeline. */
+static std::atomic_int g_next_pipeline_id = 0;
 
 ShaderCache *get_shader_cache(id<MTLDevice> mtlDevice)
 {
@@ -327,6 +328,7 @@ void ShaderCache::load_kernel(DeviceKernel device_kernel,
 
   /* Keep track of the originating device's ID so that we can cancel requests if the device ceases
    * to be active. */
+  pipeline->pipeline_id = g_next_pipeline_id.fetch_add(1);
   pipeline->originating_device_id = device->device_id;
   memcpy(&pipeline->kernel_data_, &device->launch_params.data, sizeof(pipeline->kernel_data_));
   pipeline->pso_type = pso_type;
@@ -397,13 +399,6 @@ bool MetalKernelPipeline::should_use_binary_archive() const
         return false;
       }
     }
-    else {
-      /* Workaround for issues using Binary Archives on non-Apple Silicon systems. */
-      MetalGPUVendor gpu_vendor = MetalInfo::get_device_vendor(mtlDevice);
-      if (gpu_vendor != METAL_GPU_APPLE) {
-        return false;
-      }
-    }
 
     if (use_metalrt && device_kernel_has_intersection(device_kernel)) {
       /* Binary linked functions aren't supported in binary archives. */
@@ -457,6 +452,64 @@ static MTLFunctionConstantValues *GetConstantValues(KernelData const *data = nul
 #  include "kernel/data_template.h"
 
   return constant_values;
+}
+
+void MetalDispatchPipeline::free_intersection_function_tables()
+{
+  for (int table = 0; table < METALRT_TABLE_NUM; table++) {
+    if (intersection_func_table[table]) {
+      [intersection_func_table[table] release];
+      intersection_func_table[table] = nil;
+    }
+  }
+}
+
+MetalDispatchPipeline::~MetalDispatchPipeline()
+{
+  free_intersection_function_tables();
+}
+
+bool MetalDispatchPipeline::update(MetalDevice *metal_device, DeviceKernel kernel)
+{
+  const MetalKernelPipeline *best_pipeline = MetalDeviceKernels::get_best_pipeline(metal_device,
+                                                                                   kernel);
+  if (!best_pipeline) {
+    return false;
+  }
+
+  if (pipeline_id == best_pipeline->pipeline_id) {
+    /* The best pipeline is already active - nothing to do. */
+    return true;
+  }
+  pipeline_id = best_pipeline->pipeline_id;
+  pipeline = best_pipeline->pipeline;
+  pso_type = best_pipeline->pso_type;
+  num_threads_per_block = best_pipeline->num_threads_per_block;
+
+  /* Create the MTLIntersectionFunctionTables if needed. */
+  if (best_pipeline->use_metalrt && device_kernel_has_intersection(best_pipeline->device_kernel)) {
+    free_intersection_function_tables();
+
+    for (int table = 0; table < METALRT_TABLE_NUM; table++) {
+      @autoreleasepool {
+        MTLIntersectionFunctionTableDescriptor *ift_desc =
+            [[MTLIntersectionFunctionTableDescriptor alloc] init];
+        ift_desc.functionCount = best_pipeline->table_functions[table].count;
+        intersection_func_table[table] = [this->pipeline
+            newIntersectionFunctionTableWithDescriptor:ift_desc];
+
+        /* Finally write the function handles into this pipeline's table */
+        int size = int([best_pipeline->table_functions[table] count]);
+        for (int i = 0; i < size; i++) {
+          id<MTLFunctionHandle> handle = [pipeline
+              functionHandleWithFunction:best_pipeline->table_functions[table][i]];
+          [intersection_func_table[table] setFunction:handle atIndex:i];
+        }
+      }
+    }
+  }
+
+  return true;
 }
 
 id<MTLFunction> MetalKernelPipeline::make_intersection_function(const char *function_name)
@@ -516,7 +569,6 @@ void MetalKernelPipeline::compile()
 
   function.label = [@(function_name.c_str()) copy];
 
-  NSArray *table_functions[METALRT_TABLE_NUM] = {nil};
   NSArray *linked_functions = nil;
 
   if (use_metalrt && device_kernel_has_intersection(device_kernel)) {
@@ -763,24 +815,6 @@ void MetalKernelPipeline::compile()
   [computePipelineStateDescriptor release];
   computePipelineStateDescriptor = nil;
 
-  if (use_metalrt && linked_functions) {
-    for (int table = 0; table < METALRT_TABLE_NUM; table++) {
-      MTLIntersectionFunctionTableDescriptor *ift_desc =
-          [[MTLIntersectionFunctionTableDescriptor alloc] init];
-      ift_desc.functionCount = table_functions[table].count;
-      intersection_func_table[table] = [this->pipeline
-          newIntersectionFunctionTableWithDescriptor:ift_desc];
-
-      /* Finally write the function handles into this pipeline's table */
-      int size = (int)[table_functions[table] count];
-      for (int i = 0; i < size; i++) {
-        id<MTLFunctionHandle> handle = [pipeline
-            functionHandleWithFunction:table_functions[table][i]];
-        [intersection_func_table[table] setFunction:handle atIndex:i];
-      }
-    }
-  }
-
   if (!use_binary_archive) {
     metal_printf("%16s | %2d | %-55s | %7.2fs\n",
                  kernel_type_as_string(pso_type),
@@ -861,6 +895,13 @@ bool MetalDeviceKernels::is_benchmark_warmup()
     }
   }
   return false;
+}
+
+void MetalDeviceKernels::static_deinitialize()
+{
+  for (int i = 0; i < g_shaderCacheCount; i++) {
+    g_shaderCache[i] = DeviceShaderCache();
+  }
 }
 
 CCL_NAMESPACE_END

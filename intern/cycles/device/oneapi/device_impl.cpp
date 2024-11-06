@@ -190,10 +190,11 @@ void OneapiDevice::build_bvh(BVH *bvh, Progress &progress, bool refit)
     if (bvh->params.top_level) {
       embree_scene = bvh_embree->scene;
 #    if RTC_VERSION >= 40302
-      if (bvh_embree->offload_scenes_to_gpu(all_embree_scenes) == false) {
+      RTCError error_code = bvh_embree->offload_scenes_to_gpu(all_embree_scenes);
+      if (error_code != RTC_ERROR_NONE) {
         set_error(
-            string_printf("BVH failed to to migrate to the GPU due to Embree library error (%s)",
-                          bvh_embree->get_last_error_message()));
+            string_printf("BVH failed to migrate to the GPU due to Embree library error (%s)",
+                          bvh_embree->get_error_string(error_code)));
       }
       all_embree_scenes.clear();
 #    endif
@@ -229,7 +230,13 @@ bool OneapiDevice::load_kernels(const uint requested_features)
 {
   assert(device_queue_);
 
-  kernel_features = requested_features;
+  /* Kernel loading is expected to be a cumulative operation; for example, if
+   * a device is asked to load kernel A and then kernel B, then after these
+   * operations, both A and B should be available for use. So we need to store
+   * and use a cumulative mask of the requested kernel features, and not just
+   * the latest requested features.
+   */
+  kernel_features |= requested_features;
 
   bool is_finished_ok = oneapi_run_test_kernel(device_queue_);
   if (is_finished_ok == false) {
@@ -670,7 +677,14 @@ bool OneapiDevice::create_queue(SyclQueue *&external_queue,
     external_queue = reinterpret_cast<SyclQueue *>(created_queue);
 #  ifdef WITH_EMBREE_GPU
     if (embree_device_pointer) {
-      *((RTCDevice *)embree_device_pointer) = rtcNewSYCLDevice(created_queue->get_context(), "");
+      RTCDevice *device_object_ptr = reinterpret_cast<RTCDevice *>(embree_device_pointer);
+      *device_object_ptr = rtcNewSYCLDevice(created_queue->get_context(), "");
+      if (*device_object_ptr == nullptr) {
+        finished_correct = false;
+        oneapi_error_string_ =
+            "Hardware Raytracing is not available; please install "
+            "\"intel-level-zero-gpu-raytracing\" to enable it or disable Embree on GPU.";
+      }
     }
 #  else
     (void)embree_device_pointer;
@@ -978,13 +992,13 @@ void OneapiDevice::get_adjusted_global_and_local_sizes(SyclQueue *queue,
 
 /* Compute-runtime (ie. NEO) version is what gets returned by sycl/L0 on Windows
  * since Windows driver 101.3268. */
-static const int lowest_supported_driver_version_win = 1015518;
+static const int lowest_supported_driver_version_win = 1015730;
 #  ifdef _WIN32
-/* For Windows driver 101.5518, compute-runtime version is 28044.
+/* For Windows driver 101.5730, compute-runtime version is 29550.
  * This information is returned by `ocloc query OCL_DRIVER_VERSION`.*/
-static const int lowest_supported_driver_version_neo = 29283;
+static const int lowest_supported_driver_version_neo = 29550;
 #  else
-static const int lowest_supported_driver_version_neo = 27642;
+static const int lowest_supported_driver_version_neo = 29735;
 #  endif
 
 int parse_driver_build_version(const sycl::device &device)
@@ -1072,7 +1086,27 @@ std::vector<sycl::device> available_sycl_devices()
             filter_out = true;
           }
           /* if not already filtered out, check driver version. */
-          if (!filter_out) {
+          bool check_driver_version = !filter_out;
+          /* We don't know how to check driver version strings for non-Intel GPUs. */
+          if (check_driver_version &&
+              device.get_info<sycl::info::device::vendor>().find("Intel") == std::string::npos)
+          {
+            check_driver_version = false;
+          }
+          /* Because of https://github.com/oneapi-src/unified-runtime/issues/1777, future drivers
+           * may break parsing done by a SYCL runtime from before the fix we expect in major
+           * version 8. Parsed driver version would start with something different than current
+           * "1.3.". To avoid blocking a device by mistake in the case of new driver / old SYCL
+           * runtime, we disable driver version check in case LIBSYCL_MAJOR_VERSION is below 8 and
+           * actual driver version doesn't start with 1.3. */
+#  if __LIBSYCL_MAJOR_VERSION < 8
+          if (check_driver_version &&
+              !string_startswith(device.get_info<sycl::info::device::driver_version>(), "1.3."))
+          {
+            check_driver_version = false;
+          }
+#  endif
+          if (check_driver_version) {
             int driver_build_version = parse_driver_build_version(device);
             if ((driver_build_version > 100000 &&
                  driver_build_version < lowest_supported_driver_version_win) ||

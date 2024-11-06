@@ -19,8 +19,10 @@
 
 #include "BKE_compute_contexts.hh"
 #include "BKE_geometry_fields.hh"
+#include "BKE_geometry_nodes_reference_set.hh"
 #include "BKE_geometry_set.hh"
 #include "BKE_idprop.hh"
+#include "BKE_lib_id.hh"
 #include "BKE_node_enum.hh"
 #include "BKE_node_runtime.hh"
 #include "BKE_node_socket_value.hh"
@@ -325,6 +327,7 @@ std::unique_ptr<IDProperty, bke::idprop::IDPropertyDeleter> id_property_create_f
       IDPropertyUIDataString *ui_data = (IDPropertyUIDataString *)IDP_ui_data_ensure(
           property.get());
       ui_data->default_value = BLI_strdup(value->value);
+      ui_data->base.rna_subtype = value->subtype;
       return property;
     }
     case SOCK_MENU: {
@@ -526,7 +529,9 @@ static bool old_id_property_type_matches_socket_convert_to_new(
       }
       if (new_property) {
         BLI_assert(new_property->type == IDP_ID);
-        new_property->data.pointer = IDP_Id(&old_property);
+        ID *id = IDP_Id(&old_property);
+        new_property->data.pointer = id;
+        id_us_plus(id);
       }
       return true;
     case SOCK_CUSTOM:
@@ -987,10 +992,10 @@ bke::GeometrySet execute_geometry_nodes_on_geometry(const bNodeTree &btree,
   }
 
   /* No anonymous attributes have to be propagated. */
-  Array<bke::AnonymousAttributeSet> attributes_to_propagate(
-      function.inputs.attributes_to_propagate.geometry_outputs.size());
-  for (const int i : attributes_to_propagate.index_range()) {
-    param_inputs[function.inputs.attributes_to_propagate.range[i]] = &attributes_to_propagate[i];
+  Array<bke::GeometryNodesReferenceSet> references_to_propagate(
+      function.inputs.references_to_propagate.geometry_outputs.size());
+  for (const int i : references_to_propagate.index_range()) {
+    param_inputs[function.inputs.references_to_propagate.range[i]] = &references_to_propagate[i];
   }
 
   /* Prepare memory for output values. */
@@ -1010,7 +1015,10 @@ bke::GeometrySet execute_geometry_nodes_on_geometry(const bNodeTree &btree,
                             param_input_usages,
                             param_output_usages,
                             param_set_outputs};
-  lazy_function.execute(lf_params, lf_context);
+  {
+    ScopedComputeContextTimer timer{lf_context};
+    lazy_function.execute(lf_params, lf_context);
+  }
   lazy_function.destruct_storage(lf_context.storage);
 
   for (GMutablePointer &ptr : inputs_to_destruct) {

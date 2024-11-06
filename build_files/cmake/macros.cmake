@@ -974,7 +974,6 @@ function(delayed_do_install
 endfunction()
 
 # Same as above but generates the var name and output automatic.
-# Takes optional: `STRIP_LEADING_C_COMMENTS` argument.
 function(data_to_c
   file_from file_to
   list_to_add
@@ -985,19 +984,10 @@ function(data_to_c
 
   get_filename_component(_file_to_path ${file_to} PATH)
 
-  set(optional_args "")
-  foreach(f ${ARGN})
-    if(f STREQUAL "STRIP_LEADING_C_COMMENTS")
-      set(optional_args "--options=strip_leading_c_comments")
-    else()
-      message(FATAL_ERROR "Unknown optional argument ${f} to \"data_to_c\"")
-    endif()
-  endforeach()
-
   add_custom_command(
     OUTPUT ${file_to}
     COMMAND ${CMAKE_COMMAND} -E make_directory ${_file_to_path}
-    COMMAND "$<TARGET_FILE:datatoc>" ${file_from} ${file_to} ${optional_args}
+    COMMAND "$<TARGET_FILE:datatoc>" ${file_from} ${file_to}
     DEPENDS ${file_from} datatoc)
 
   set_source_files_properties(${file_to} PROPERTIES GENERATED TRUE)
@@ -1005,7 +995,6 @@ endfunction()
 
 
 # Same as above but generates the var name and output automatic.
-# Takes optional: `STRIP_LEADING_C_COMMENTS` argument.
 function(data_to_c_simple
   file_from
   list_to_add
@@ -1022,108 +1011,45 @@ function(data_to_c_simple
 
   get_filename_component(_file_to_path ${_file_to} PATH)
 
-  set(optional_args "")
-  foreach(f ${ARGN})
-    if(f STREQUAL "STRIP_LEADING_C_COMMENTS")
-      set(optional_args "--options=strip_leading_c_comments")
-    else()
-      message(FATAL_ERROR "Unknown optional argument ${f} to \"data_to_c_simple\"")
-    endif()
-  endforeach()
-
   add_custom_command(
     OUTPUT  ${_file_to}
     COMMAND ${CMAKE_COMMAND} -E make_directory ${_file_to_path}
-    COMMAND "$<TARGET_FILE:datatoc>" ${_file_from} ${_file_to} ${optional_args}
+    COMMAND "$<TARGET_FILE:datatoc>" ${_file_from} ${_file_to}
     DEPENDS ${_file_from} datatoc)
 
   set_source_files_properties(${_file_to} PROPERTIES GENERATED TRUE)
 endfunction()
 
-# Function for converting pixmap directory to a '.png' and then a '.c' file.
-function(data_to_c_simple_icons
-  path_from icon_prefix icon_names
+
+# Process glsl file and convert it to c
+function(glsl_to_c
+  file_from
   list_to_add
   )
 
-  # Conversion steps
-  #  path_from  ->  _file_from  ->  _file_to
-  #  foo/*.dat  ->  foo.png     ->  foo.png.c
-
-  get_filename_component(_path_from_abs ${path_from} ABSOLUTE)
   # remove ../'s
-  get_filename_component(_file_from ${CMAKE_CURRENT_BINARY_DIR}/${path_from}.png   REALPATH)
-  get_filename_component(_file_to   ${CMAKE_CURRENT_BINARY_DIR}/${path_from}.png.c REALPATH)
+  get_filename_component(_file_from ${CMAKE_CURRENT_SOURCE_DIR}/${file_from}   REALPATH)
+  get_filename_component(_file_tmp  ${CMAKE_CURRENT_BINARY_DIR}/${file_from}   REALPATH)
+  get_filename_component(_file_to   ${CMAKE_CURRENT_BINARY_DIR}/${file_from}.c REALPATH)
 
   list(APPEND ${list_to_add} ${_file_to})
+  source_group(Generated FILES ${_file_to})
+  list(APPEND ${list_to_add} ${file_from})
   set(${list_to_add} ${${list_to_add}} PARENT_SCOPE)
 
   get_filename_component(_file_to_path ${_file_to} PATH)
 
-  # Construct a list of absolute paths from input
-  set(_icon_files)
-  foreach(_var ${icon_names})
-    list(APPEND _icon_files "${_path_from_abs}/${icon_prefix}${_var}.dat")
-  endforeach()
-
   add_custom_command(
-    OUTPUT  ${_file_from} ${_file_to}
+    OUTPUT  ${_file_to}
     COMMAND ${CMAKE_COMMAND} -E make_directory ${_file_to_path}
-    # COMMAND python3 ${CMAKE_SOURCE_DIR}/source/blender/datatoc/datatoc_icon.py
-    #         ${_path_from_abs} ${_file_from}
-    COMMAND "$<TARGET_FILE:datatoc_icon>" ${_path_from_abs} ${_file_from}
-    COMMAND "$<TARGET_FILE:datatoc>" ${_file_from} ${_file_to}
-    DEPENDS
-      ${_icon_files}
-      datatoc_icon
-      datatoc
-      # could be an arg but for now we only create icons depending on UI_icons.hh
-      ${CMAKE_SOURCE_DIR}/source/blender/editors/include/UI_icons.hh
-    )
+    COMMAND "$<TARGET_FILE:glsl_preprocess>" ${_file_from} ${_file_tmp}
+    COMMAND "$<TARGET_FILE:datatoc>" ${_file_tmp} ${_file_to}
+    DEPENDS ${_file_from} datatoc glsl_preprocess)
 
-  set_source_files_properties(${_file_from} ${_file_to} PROPERTIES GENERATED TRUE)
+  set_source_files_properties(${_file_tmp} PROPERTIES GENERATED TRUE)
+  set_source_files_properties(${_file_to}  PROPERTIES GENERATED TRUE)
 endfunction()
 
-# XXX Not used for now...
-function(svg_to_png
-  file_from
-  file_to
-  dpi
-  list_to_add
-  )
-
-  # remove ../'s
-  get_filename_component(_file_from ${CMAKE_CURRENT_SOURCE_DIR}/${file_from} REALPATH)
-  get_filename_component(_file_to   ${CMAKE_CURRENT_SOURCE_DIR}/${file_to}   REALPATH)
-
-  list(APPEND ${list_to_add} ${_file_to})
-  set(${list_to_add} ${${list_to_add}} PARENT_SCOPE)
-
-  find_program(INKSCAPE_EXE inkscape)
-  mark_as_advanced(INKSCAPE_EXE)
-
-  if(INKSCAPE_EXE)
-    if(APPLE)
-      # in OS X app bundle, the binary is a shim that doesn't take any
-      # command line arguments, replace it with the actual binary
-      string(REPLACE "MacOS/Inkscape" "Resources/bin/inkscape" INKSCAPE_REAL_EXE ${INKSCAPE_EXE})
-      if(EXISTS "${INKSCAPE_REAL_EXE}")
-        set(INKSCAPE_EXE ${INKSCAPE_REAL_EXE})
-      endif()
-    endif()
-
-    add_custom_command(
-      OUTPUT  ${_file_to}
-
-      COMMAND ${INKSCAPE_EXE}
-      ${_file_from} --export-dpi=${dpi}  --without-gui --export-png=${_file_to}
-
-      DEPENDS ${_file_from} ${INKSCAPE_EXE}
-    )
-  else()
-    message(WARNING "Inkscape not found, could not re-generate ${_file_to} from ${_file_from}!")
-  endif()
-endfunction()
 
 function(msgfmt_simple
   file_from

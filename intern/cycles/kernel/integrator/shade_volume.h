@@ -82,8 +82,7 @@ ccl_device_inline bool shadow_volume_shader_sample(KernelGlobals kg,
     return false;
   }
 
-  const float density = object_volume_density(kg, sd->object);
-  *extinction = sd->closure_transparent_extinction * density;
+  *extinction = sd->closure_transparent_extinction;
   return true;
 }
 
@@ -115,11 +114,6 @@ ccl_device_inline bool volume_shader_sample(KernelGlobals kg,
       }
     }
   }
-
-  const float density = object_volume_density(kg, sd->object);
-  coeff->sigma_s *= density;
-  coeff->sigma_t *= density;
-  coeff->emission *= density;
 
   return true;
 }
@@ -419,7 +413,7 @@ typedef struct VolumeIntegrateState {
 
   /* Random numbers for scattering. */
   float rscatter;
-  float rphase;
+  float rchannel;
 
   /* Multiple importance sampling. */
   VolumeSampleMethod direct_sample_method;
@@ -442,7 +436,7 @@ ccl_device_forceinline void volume_integrate_step_scattering(
   const Spectrum albedo = safe_divide_color(coeff.sigma_s, coeff.sigma_t);
   Spectrum channel_pdf;
   const int channel = volume_sample_channel(
-      albedo, result.indirect_throughput, vstate.rphase, &channel_pdf);
+      albedo, result.indirect_throughput, &vstate.rchannel, &channel_pdf);
 
   /* Equiangular sampling for direct lighting. */
   if (vstate.direct_sample_method == VOLUME_SAMPLE_EQUIANGULAR && !result.direct_scatter) {
@@ -562,7 +556,7 @@ ccl_device_forceinline void volume_integrate_heterogeneous(
   vstate.tmax = ray->tmin;
   vstate.absorption_only = true;
   vstate.rscatter = path_state_rng_1D(kg, rng_state, PRNG_VOLUME_SCATTER_DISTANCE);
-  vstate.rphase = path_state_rng_1D(kg, rng_state, PRNG_VOLUME_PHASE_CHANNEL);
+  vstate.rchannel = path_state_rng_1D(kg, rng_state, PRNG_VOLUME_COLOR_CHANNEL);
 
   /* Multiple importance sampling: pick between equiangular and distance sampling strategy. */
   vstate.direct_sample_method = direct_sample_method;
@@ -995,11 +989,12 @@ ccl_device_forceinline bool integrate_volume_phase_scatter(
 ccl_device VolumeIntegrateEvent volume_integrate(KernelGlobals kg,
                                                  IntegratorState state,
                                                  ccl_private Ray *ccl_restrict ray,
-                                                 const int object,
                                                  ccl_global float *ccl_restrict render_buffer)
 {
   ShaderData sd;
-  shader_setup_from_volume(kg, &sd, ray, object);
+  /* FIXME: `object` is used for light linking. We read the bottom of the stack for simplicity, but
+   * this does not work for overlapping volumes. */
+  shader_setup_from_volume(kg, &sd, ray, INTEGRATOR_STATE_ARRAY(state, volume_stack, 0, object));
 
   /* Load random number state. */
   RNGState rng_state;
@@ -1192,8 +1187,7 @@ ccl_device void integrator_shade_volume(KernelGlobals kg,
     volume_stack_clean(kg, state);
   }
 
-  const VolumeIntegrateEvent event = volume_integrate(
-      kg, state, &ray, isect.object, render_buffer);
+  const VolumeIntegrateEvent event = volume_integrate(kg, state, &ray, render_buffer);
   if (event == VOLUME_PATH_MISSED) {
     /* End path. */
     integrator_path_terminate(kg, state, DEVICE_KERNEL_INTEGRATOR_SHADE_VOLUME);

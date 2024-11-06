@@ -606,6 +606,8 @@ class ASSETBROWSER_PT_display(asset_utils.AssetBrowserPanel, Panel):
             col.prop(params, "show_details_size", text="Size")
             col.prop(params, "show_details_datetime", text="Date")
 
+        layout.column().prop(params, "sort_method", text="Sort By", expand=True)
+
 
 class ASSETBROWSER_PT_filter(asset_utils.AssetBrowserPanel, Panel):
     bl_region_type = 'HEADER'
@@ -793,12 +795,12 @@ class ASSETBROWSER_PT_metadata_tags(asset_utils.AssetMetaDataPanel, Panel):
     def draw(self, context):
         layout = self.layout
         active_asset = context.asset
-        asset_data = active_asset.asset_data
+        asset_metadata = active_asset.metadata
 
         row = layout.row()
         row.template_list(
-            "ASSETBROWSER_UL_metadata_tags", "asset_tags", asset_data, "tags",
-            asset_data, "active_tag", rows=4,
+            "ASSETBROWSER_UL_metadata_tags", "asset_tags", asset_metadata, "tags",
+            asset_metadata, "active_tag", rows=4,
         )
 
         col = row.column(align=True)
@@ -843,6 +845,7 @@ class ASSETBROWSER_MT_context_menu(AssetBrowserMenu, Menu):
 
         if params.display_type == 'THUMBNAIL':
             layout.prop_menu_enum(params, "display_size_discrete")
+        layout.prop_menu_enum(params, "sort_method")
 
 
 classes = (

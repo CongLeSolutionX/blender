@@ -17,7 +17,7 @@
  * downsample to max level.
  */
 
-#pragma BLENDER_REQUIRE(gpu_shader_math_vector_lib.glsl)
+#include "gpu_shader_math_vector_lib.glsl"
 
 shared float local_depths[gl_WorkGroupSize.y][gl_WorkGroupSize.x];
 
@@ -45,10 +45,10 @@ void main()
   /* Copy level 0. */
   ivec2 src_px = ivec2(kernel_origin + local_px) * 2;
 #ifdef HIZ_LAYER
-  vec2 samp_co = (vec2(src_px) + 0.5) / vec2(textureSize(depth_layered_tx, 0).xy);
+  vec2 samp_co = vec2(src_px + 1) / vec2(textureSize(depth_layered_tx, 0).xy);
   vec4 samp = textureGather(depth_layered_tx, vec3(samp_co, float(layer_id)));
 #else
-  vec2 samp_co = (vec2(src_px) + 0.5) / vec2(textureSize(depth_tx, 0));
+  vec2 samp_co = vec2(src_px + 1) / vec2(textureSize(depth_tx, 0));
   vec4 samp = textureGather(depth_tx, samp_co);
 #endif
 

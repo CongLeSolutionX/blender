@@ -16,8 +16,9 @@
 
 #include "DNA_scene_types.h"
 
+#include "RNA_access.hh"
 #include "RNA_path.hh"
-#include "RNA_prototypes.h"
+#include "RNA_prototypes.hh"
 
 #include "ED_keyframing.hh"
 
@@ -337,8 +338,9 @@ bool autokeyframe_property(bContext *C,
        * all elements" or "not an array property". */
       const std::optional<int> array_index = rnaindex < 0 ? std::nullopt : std::optional(rnaindex);
 
+      PointerRNA id_pointer = RNA_id_pointer_create(ptr->owner_id);
       CombinedKeyingResult result = insert_keyframes(bmain,
-                                                     ptr,
+                                                     &id_pointer,
                                                      group,
                                                      {{path, {}, array_index}},
                                                      std::nullopt,

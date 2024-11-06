@@ -2,12 +2,15 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#pragma BLENDER_REQUIRE(draw_view_lib.glsl)
-#pragma BLENDER_REQUIRE(draw_model_lib.glsl)
-#pragma BLENDER_REQUIRE(gpu_shader_utildefines_lib.glsl)
-#pragma BLENDER_REQUIRE(gpu_shader_math_base_lib.glsl)
-#pragma BLENDER_REQUIRE(gpu_shader_codegen_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_renderpass_lib.glsl)
+#pragma once
+
+#include "draw_model_lib.glsl"
+#include "draw_view_lib.glsl"
+#include "eevee_renderpass_lib.glsl"
+#include "gpu_shader_codegen_lib.glsl"
+#include "gpu_shader_math_base_lib.glsl"
+#include "gpu_shader_math_vector_lib.glsl"
+#include "gpu_shader_utildefines_lib.glsl"
 
 vec3 g_emission;
 vec3 g_transmittance;
@@ -33,7 +36,6 @@ float g_closure_rand[CLOSURE_BIN_COUNT];
 ClosureUndetermined g_closure_get(int i)
 {
   switch (i) {
-    default:
     case 0:
       return g_closure_bins[0];
 #if CLOSURE_BIN_COUNT > 1
@@ -45,6 +47,9 @@ ClosureUndetermined g_closure_get(int i)
       return g_closure_bins[2];
 #endif
   }
+  /* TODO: this should be unreachable, better to have an assert. */
+  ClosureUndetermined cl_empty;
+  return cl_empty;
 }
 
 ClosureUndetermined g_closure_get_resolved(int i, float weight_fac)
@@ -103,10 +108,13 @@ void closure_select(inout ClosureUndetermined destination,
                     inout float random,
                     ClosureUndetermined candidate)
 {
-  if (closure_select_check(candidate.weight, destination.weight, random)) {
-    float tmp = destination.weight;
+  float candidate_color_weight = average(abs(candidate.color));
+  if (closure_select_check(candidate.weight * candidate_color_weight, destination.weight, random))
+  {
+    float total_weight = destination.weight;
     destination = candidate;
-    destination.weight = tmp;
+    destination.color /= candidate_color_weight;
+    destination.weight = total_weight;
   }
 }
 
