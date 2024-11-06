@@ -21,6 +21,8 @@
 
 // debug includes
 
+#include "BLI_function_ref.hh"
+
 #include "BLI_array.hh"
 #include "BLI_array_utils.hh"
 #include "BLI_index_mask.hh"
@@ -589,6 +591,238 @@ static void sample_average(const OffsetIndices<int> buckets_offsets,
   });
 }
 
+template<typename LeafFuncT, typename JointPredicateT, typename JointFuncT>
+static void for_each_to_bottom_skip_new(const OffsetIndices<int> buckets_offsets,
+                                        const int total_depth,
+                                        const IndexRange range,
+                                        const JointPredicateT &joint_predicate,
+                                        const JointFuncT &joint_func,
+                                        const LeafFuncT &leaf_func)
+{
+  Array<int, 0> indices(range.size());
+  array_utils::fill_index_range<int>(indices, range.start());
+  Vector<Item, 32> stack = {Item{0, 0, int(indices.size())}};
+  while (!stack.is_empty()) {
+    const Item item = stack.pop_last();
+    const int depth_i = item.depth_i;
+    const int joint_i = item.joint_i;
+    const MutableSpan<int> to_visit = indices.as_mutable_span().take_front(item.prefix_to_visit);
+    const IndexRange joints_range = joints_range_at_depth(depth_i);
+    const IndexRange joint_buckets = joint_buckets_range_at_depth(total_depth, depth_i, joint_i);
+
+    const auto end_of_prefix = std::stable_partition(
+        to_visit.begin(), to_visit.end(), [&](const int i) -> bool {
+          return joint_predicate(int(joints_range[joint_i]), i);
+        });
+
+    const Span<int> finished_indices = to_visit.drop_front(
+        std::distance(to_visit.begin(), end_of_prefix));
+    joint_func(buckets_offsets[joint_buckets], int(joints_range[joint_i]), finished_indices);
+
+    const Span<int> next_indices = to_visit.take_front(
+        std::distance(to_visit.begin(), end_of_prefix));
+    if (next_indices.is_empty()) {
+      continue;
+    }
+
+    if (depth_i == total_depth - 1) {
+      leaf_func(buckets_offsets[joint_i], next_indices);
+      continue;
+    }
+
+    stack.append({depth_i + 1, joint_i * 2 + 0, int(next_indices.size())});
+    stack.append({depth_i + 1, joint_i * 2 + 1, int(next_indices.size())});
+  }
+}
+
+using SequentialAccumulator = FunctionRef<void(float total_factor,
+                                               int joint_index,
+                                               Span<int> value_indices,
+                                               Span<float3> src_joints_centre,
+                                               Span<float3> src_joints_value,
+                                               Span<float3> src_bucket_position,
+                                               Span<float3> src_bucket_value,
+                                               float3 *__restrict dst_buckets_data)>;
+
+static SequentialAccumulator accumulate_with_inverse_distance(const int power_value)
+{
+  if (power_value == 2) {
+    return [](const float total_factor,
+              const int joint_index,
+              const Span<int> value_indices,
+              const Span<float3> src_joints_centre,
+              const Span<float3> src_joints_value,
+              const Span<float3> src_bucket_position,
+              const Span<float3> src_bucket_value,
+              float3 *__restrict dst_buckets_data) {
+      for (const int value_i : value_indices) {
+        const float distance = math::distance_squared(src_joints_centre[joint_index],
+                                                      src_bucket_position[value_i]);
+        const float relation_factor = math::safe_rcp(distance);
+        const float3 self_value = src_bucket_value[value_i];
+        dst_buckets_data[value_i] += (src_joints_value[joint_index] - self_value) *
+                                     relation_factor * total_factor;
+      }
+    };
+  }
+  if (power_value == 3) {
+    return [](const float total_factor,
+              const int joint_index,
+              const Span<int> value_indices,
+              const Span<float3> src_joints_centre,
+              const Span<float3> src_joints_value,
+              const Span<float3> src_bucket_position,
+              const Span<float3> src_bucket_value,
+              float3 *__restrict dst_buckets_data) {
+      for (const int value_i : value_indices) {
+        const float distance = math::distance_squared(src_joints_centre[joint_index],
+                                                      src_bucket_position[value_i]);
+        const float relation_factor = math::safe_rcp(math::pow<float>(distance, 1.5f));
+        const float3 self_value = src_bucket_value[value_i];
+        dst_buckets_data[value_i] += (src_joints_value[joint_index] - self_value) *
+                                     relation_factor * total_factor;
+      }
+    };
+  }
+}
+
+using TableAccumulator = FunctionRef<void(Span<int> value_indices,
+                                          IndexRange bucket_range,
+                                          Span<float3> src_joints_centre,
+                                          Span<float3> src_joints_value,
+                                          Span<float3> src_bucket_position,
+                                          Span<float3> src_bucket_value,
+                                          float3 *__restrict dst_buckets_data)>;
+
+static TableAccumulator accumulate_tb_with_inverse_distance(const int power_value)
+{
+  if (power_value == 2) {
+    return [](const Span<int> value_indices,
+              const IndexRange bucket_range,
+              const Span<float3> src_joints_centre,
+              const Span<float3> src_joints_value,
+              const Span<float3> src_bucket_position,
+              const Span<float3> src_bucket_value,
+              float3 *__restrict dst_buckets_data) {
+      for (const int value_i : value_indices) {
+        const float3 position = src_bucket_position[value_i];
+        const float3 self_value = src_bucket_value[value_i];
+        for (const int index : bucket_range) {
+          const float relation_factor = math::rcp(
+              math::distance_squared(src_bucket_position[index], position));
+          const float self_ignore_relation_factor = index == value_i ? 0.0f : relation_factor;
+          dst_buckets_data[value_i] += (src_bucket_value[index] - self_value) *
+                                       self_ignore_relation_factor;
+        }
+      }
+    };
+  }
+  if (power_value == 3) {
+    return [](const Span<int> value_indices,
+              const IndexRange bucket_range,
+              const Span<float3> src_joints_centre,
+              const Span<float3> src_joints_value,
+              const Span<float3> src_bucket_position,
+              const Span<float3> src_bucket_value,
+              float3 *__restrict dst_buckets_data) {
+      for (const int value_i : value_indices) {
+        const float3 position = src_bucket_position[value_i];
+        const float3 self_value = src_bucket_value[value_i];
+        for (const int index : bucket_range) {
+          const float relation_factor = math::rcp(math::pow<float>(
+              math::distance_squared(src_bucket_position[index], position), 1.5f));
+          const float self_ignore_relation_factor = index == value_i ? 0.0f : relation_factor;
+          dst_buckets_data[value_i] += (src_bucket_value[index] - self_value) *
+                                       self_ignore_relation_factor;
+        }
+      }
+    };
+  }
+}
+
+static void sample_average_new(const OffsetIndices<int> buckets_offsets,
+                               const int total_depth,
+                               const Span<float3> src_joints_centre,
+                               const Span<float> src_joints_min_distance,
+                               const Span<float3> src_joints_value,
+                               const Span<float3> src_bucket_position,
+                               const Span<float3> src_bucket_value,
+                               const int power_value,
+                               float3 *__restrict dst_buckets_data)
+{
+  BLI_assert(src_joints_centre.size() == src_joints_min_distance.size());
+  // BLI_assert(src_bucket_value.size() == dst_buckets_data.size());
+  BLI_assert(src_bucket_value.size() == src_bucket_position.size());
+
+  const SequentialAccumulator linear_accum = accumulate_with_inverse_distance(power_value);
+
+  const TableAccumulator table_accum = accumulate_tb_with_inverse_distance(power_value);
+
+  threading::parallel_for(src_bucket_value.index_range(), 1024, [&](const IndexRange range) {
+    Vector<float> buffer;
+    buffer.reserve(range.size());
+
+    for_each_to_bottom_skip_new(
+        buckets_offsets,
+        total_depth,
+        range,
+        [&](const int joint_index, const int value_i) -> bool {
+          return math::distance_squared(src_joints_centre[joint_index],
+                                        src_bucket_position[value_i]) <=
+                 math::square(src_joints_min_distance[joint_index]);
+        },
+        [&](const IndexRange buckets_range, const int joint_index, const Span<int> value_indices) {
+          buffer.resize(value_indices.size());
+          const float total_factor = buckets_range.size();
+          // linear_accum(total_factor, joint_index, value_indices, src_joints_centre,
+          // src_joints_value, src_bucket_position, src_bucket_value, dst_buckets_data);
+          for (const int value_i : value_indices.index_range()) {
+            const int value_index = value_indices[value_i];
+            buffer[value_i] = math::distance(src_joints_centre[joint_index],
+                                             src_bucket_position[value_index]);
+          }
+
+          for (const int value_i : value_indices.index_range()) {
+            buffer[value_i] = math::safe_rcp(math::pow(buffer[value_i], float(power_value)));
+          }
+
+          for (const int value_i : value_indices.index_range()) {
+            const int value_index = value_indices[value_i];
+            dst_buckets_data[value_index] += (src_joints_value[joint_index] -
+                                              src_bucket_value[value_index]) *
+                                             buffer[value_i] * total_factor;
+          }
+        },
+        [&](const IndexRange bucket_range, const Span<int> value_indices) {
+          buffer.resize(bucket_range.size());
+          // table_accum(value_indices, bucket_range, src_joints_centre, src_joints_value,
+          // src_bucket_position, src_bucket_value, dst_buckets_data);
+          for (const int value_i : value_indices) {
+            const float3 position = src_bucket_position[value_i];
+
+            for (const int index : bucket_range.index_range()) {
+              buffer[index] = math::distance(src_bucket_position[bucket_range[index]], position);
+            }
+
+            for (const int index : bucket_range.index_range()) {
+              buffer[index] = math::rcp(math::pow(buffer[index], float(power_value)));
+            }
+
+            const float3 self_value = src_bucket_value[value_i];
+            for (const int i : bucket_range.index_range()) {
+              const int index = bucket_range[i];
+              const float relation_factor = buffer[i];
+              const float self_ignore_relation_factor = UNLIKELY(index == value_i) ?
+                                                            0.0f :
+                                                            relation_factor;
+              dst_buckets_data[value_i] += (src_bucket_value[index] - self_value) *
+                                           self_ignore_relation_factor;
+            }
+          }
+        });
+  });
+}
+
 }  // namespace akdbt
 
 static float minimal_dinstance_to(const float radius,
@@ -777,7 +1011,7 @@ class DifferenceSumFieldInput final : public bke::GeometryFieldInput {
     }
 
     Array<float3> sampled_bucket_values(domain_size, float3(0));
-    {
+    if constexpr (true) {
       SCOPED_TIMER_AVERAGED("akdbt::sample_average");
       akdbt::sample_average(base_offsets,
                             total_depth,
@@ -788,6 +1022,21 @@ class DifferenceSumFieldInput final : public bke::GeometryFieldInput {
                             bucket_values,
                             distance_power_,
                             sampled_bucket_values);
+    }
+
+    Array<float3> sampled_bucket_values_new(domain_size, float3(0));
+    if constexpr (true) {
+      SCOPED_TIMER_AVERAGED("akdbt::sample_average_new");
+      akdbt::sample_average_new(base_offsets,
+                                total_depth,
+                                joints_positions,
+                                joints_radii,
+                                joints_values,
+                                bucket_positions,
+                                bucket_values,
+                                distance_power_,
+                                sampled_bucket_values_new.data());
+      sampled_bucket_values = std::move(sampled_bucket_values_new);
     }
 
     Array<float3> dst_values(domain_size);
