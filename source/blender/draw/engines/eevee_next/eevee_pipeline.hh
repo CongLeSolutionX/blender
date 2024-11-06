@@ -245,6 +245,7 @@ struct DeferredLayerBase {
   }
 
   void gbuffer_pass_sync(Instance &inst);
+  template<typename F> void npr_pass_sync(Instance &inst, F callback);
 };
 
 class DeferredPipeline;

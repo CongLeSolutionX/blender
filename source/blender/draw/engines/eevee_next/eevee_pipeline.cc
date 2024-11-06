@@ -521,6 +521,44 @@ void DeferredLayerBase::gbuffer_pass_sync(Instance &inst)
   closure_count_ = 0;
 }
 
+template<typename F> void DeferredLayerBase::npr_pass_sync(Instance &inst, F callback)
+{
+  npr_ps_.init();
+  /* Textures. */
+  npr_ps_.bind_texture(RBUFS_UTILITY_TEX_SLOT, inst.pipelines.utility_tx);
+  npr_ps_.bind_texture(INDEX_NPR_TX_SLOT, &inst.render_buffers.npr_index_tx);
+#if 0
+  npr_ps_.bind_resources(inst.gbuffer);
+#else
+  /* Bind manually to pre-defined slots. */
+  npr_ps_.bind_texture(GBUF_NORMAL_NPR_TX_SLOT, &inst.gbuffer.normal_tx);
+  npr_ps_.bind_texture(GBUF_HEADER_NPR_TX_SLOT, &inst.gbuffer.header_tx);
+  npr_ps_.bind_texture(GBUF_CLOSURE_NPR_TX_SLOT, &inst.gbuffer.closure_tx);
+#endif
+
+  /* Images. */
+  npr_ps_.bind_image(RBUFS_COLOR_SLOT, &inst.render_buffers.rp_color_tx);
+  npr_ps_.bind_image(RBUFS_VALUE_SLOT, &inst.render_buffers.rp_value_tx);
+
+  npr_ps_.bind_resources(inst.uniform_data);
+  npr_ps_.bind_resources(inst.sampling);
+
+  npr_ps_.bind_resources(inst.hiz_buffer.front);
+
+  npr_ps_.bind_resources(inst.lights);
+  npr_ps_.bind_resources(inst.shadows);
+
+  callback();
+
+  DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_DEPTH_EQUAL;
+
+  npr_double_sided_ps_ = &npr_ps_.sub("DoubleSided");
+  npr_double_sided_ps_->state_set(state);
+
+  npr_single_sided_ps_ = &npr_ps_.sub("SingleSided");
+  npr_single_sided_ps_->state_set(state | DRW_STATE_CULL_BACK);
+}
+
 void DeferredLayer::begin_sync()
 {
   {
@@ -557,49 +595,19 @@ void DeferredLayer::begin_sync()
   this->gbuffer_pass_sync(inst_);
 
   {
-    npr_ps_.init();
-    /* Textures. */
-    npr_ps_.bind_texture(RBUFS_UTILITY_TEX_SLOT, inst_.pipelines.utility_tx);
-    npr_ps_.bind_texture(INDEX_NPR_TX_SLOT, &inst_.render_buffers.npr_index_tx);
-#if 0
-  npr_ps_.bind_resources(inst_.gbuffer);
-#else
-    /* Bind manually to pre-defined slots. */
-    npr_ps_.bind_texture(GBUF_NORMAL_NPR_TX_SLOT, &inst_.gbuffer.normal_tx);
-    npr_ps_.bind_texture(GBUF_HEADER_NPR_TX_SLOT, &inst_.gbuffer.header_tx);
-    npr_ps_.bind_texture(GBUF_CLOSURE_NPR_TX_SLOT, &inst_.gbuffer.closure_tx);
-#endif
-    npr_ps_.bind_texture(RADIANCE_TX_SLOT, &npr_radiance_input_tx_);
-    for (int i : IndexRange(3)) {
-      npr_ps_.bind_texture(DIRECT_RADIANCE_NPR_TX_SLOT_1 + i, &direct_radiance_txs_[i]);
-      npr_ps_.bind_texture(INDIRECT_RADIANCE_NPR_TX_SLOT_1 + i, &indirect_result_.closures[i]);
-    };
+    this->npr_pass_sync(inst_, [&]() {
+      npr_ps_.bind_texture(RADIANCE_TX_SLOT, &npr_radiance_input_tx_);
+      for (int i : IndexRange(3)) {
+        npr_ps_.bind_texture(DIRECT_RADIANCE_NPR_TX_SLOT_1 + i, &direct_radiance_txs_[i]);
+        npr_ps_.bind_texture(INDIRECT_RADIANCE_NPR_TX_SLOT_1 + i, &indirect_result_.closures[i]);
+      };
 
-    /* TODO(NPR): Use separate opaque/refraction passes. */
-    if (bool is_refraction = true) {
-      npr_ps_.bind_texture(BACK_RADIANCE_TX_SLOT, &radiance_back_tx_);
-      npr_ps_.bind_texture(BACK_HIZ_TX_SLOT, &inst_.hiz_buffer.back.ref_tx_);
-    }
-
-    /* Images. */
-    npr_ps_.bind_image(RBUFS_COLOR_SLOT, &inst_.render_buffers.rp_color_tx);
-    npr_ps_.bind_image(RBUFS_VALUE_SLOT, &inst_.render_buffers.rp_value_tx);
-
-    npr_ps_.bind_resources(inst_.uniform_data);
-    npr_ps_.bind_resources(inst_.sampling);
-
-    npr_ps_.bind_resources(inst_.hiz_buffer.front);
-
-    npr_ps_.bind_resources(inst_.lights);
-    npr_ps_.bind_resources(inst_.shadows);
-
-    DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_DEPTH_EQUAL;
-
-    npr_double_sided_ps_ = &npr_ps_.sub("DoubleSided");
-    npr_double_sided_ps_->state_set(state);
-
-    npr_single_sided_ps_ = &npr_ps_.sub("SingleSided");
-    npr_single_sided_ps_->state_set(state | DRW_STATE_CULL_BACK);
+      /* TODO(NPR): Use separate opaque/refraction passes. */
+      if (bool is_refraction = true) {
+        npr_ps_.bind_texture(BACK_RADIANCE_TX_SLOT, &radiance_back_tx_);
+        npr_ps_.bind_texture(BACK_HIZ_TX_SLOT, &inst_.hiz_buffer.back.ref_tx_);
+      }
+    });
   }
 }
 
@@ -1371,46 +1379,16 @@ void DeferredProbePipeline::begin_sync()
   opaque_layer_.gbuffer_pass_sync(inst_);
 
   {
-    PassMain &npr_ps_ = opaque_layer_.npr_ps_;
-    npr_ps_.init();
-    /* Textures. */
-    npr_ps_.bind_texture(RBUFS_UTILITY_TEX_SLOT, inst_.pipelines.utility_tx);
-    npr_ps_.bind_texture(INDEX_NPR_TX_SLOT, &inst_.render_buffers.npr_index_tx);
-#if 0
-  npr_ps_.bind_resources(inst_.gbuffer);
-#else
-    /* Bind manually to pre-defined slots. */
-    npr_ps_.bind_texture(GBUF_NORMAL_NPR_TX_SLOT, &inst_.gbuffer.normal_tx);
-    npr_ps_.bind_texture(GBUF_HEADER_NPR_TX_SLOT, &inst_.gbuffer.header_tx);
-    npr_ps_.bind_texture(GBUF_CLOSURE_NPR_TX_SLOT, &inst_.gbuffer.closure_tx);
-#endif
-    npr_ps_.bind_texture(RADIANCE_TX_SLOT, &npr_radiance_input_tx_);
-    for (int i : IndexRange(3)) {
-      npr_ps_.bind_texture(DIRECT_RADIANCE_NPR_TX_SLOT_1 + i, &dummy_black_);
-      npr_ps_.bind_texture(INDIRECT_RADIANCE_NPR_TX_SLOT_1 + i, &dummy_black_);
-    };
-    npr_ps_.bind_texture(BACK_RADIANCE_TX_SLOT, &dummy_black_);
-    npr_ps_.bind_texture(BACK_HIZ_TX_SLOT, &dummy_black_);
-
-    /* Images. */
-    npr_ps_.bind_image(RBUFS_COLOR_SLOT, &inst_.render_buffers.rp_color_tx);
-    npr_ps_.bind_image(RBUFS_VALUE_SLOT, &inst_.render_buffers.rp_value_tx);
-
-    npr_ps_.bind_resources(inst_.uniform_data);
-    npr_ps_.bind_resources(inst_.sampling);
-
-    npr_ps_.bind_resources(inst_.hiz_buffer.front);
-
-    npr_ps_.bind_resources(inst_.lights);
-    npr_ps_.bind_resources(inst_.shadows);
-
-    DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_DEPTH_EQUAL;
-
-    opaque_layer_.npr_double_sided_ps_ = &npr_ps_.sub("DoubleSided");
-    opaque_layer_.npr_double_sided_ps_->state_set(state);
-
-    opaque_layer_.npr_single_sided_ps_ = &npr_ps_.sub("SingleSided");
-    opaque_layer_.npr_single_sided_ps_->state_set(state | DRW_STATE_CULL_BACK);
+    opaque_layer_.npr_pass_sync(inst_, [&]() {
+      PassMain &npr_ps = opaque_layer_.npr_ps_;
+      npr_ps.bind_texture(RADIANCE_TX_SLOT, &npr_radiance_input_tx_);
+      for (int i : IndexRange(3)) {
+        npr_ps.bind_texture(DIRECT_RADIANCE_NPR_TX_SLOT_1 + i, &dummy_black_);
+        npr_ps.bind_texture(INDIRECT_RADIANCE_NPR_TX_SLOT_1 + i, &dummy_black_);
+      };
+      npr_ps.bind_texture(BACK_RADIANCE_TX_SLOT, &dummy_black_);
+      npr_ps.bind_texture(BACK_HIZ_TX_SLOT, &dummy_black_);
+    });
   }
 }
 
@@ -1585,45 +1563,15 @@ void PlanarProbePipeline::begin_sync()
   closure_count_ = 0;
 
   {
-    npr_ps_.init();
-    /* Textures. */
-    npr_ps_.bind_texture(RBUFS_UTILITY_TEX_SLOT, inst_.pipelines.utility_tx);
-    npr_ps_.bind_texture(INDEX_NPR_TX_SLOT, &inst_.render_buffers.npr_index_tx);
-#if 0
-  npr_ps_.bind_resources(inst_.gbuffer);
-#else
-    /* Bind manually to pre-defined slots. */
-    npr_ps_.bind_texture(GBUF_NORMAL_NPR_TX_SLOT, &inst_.gbuffer.normal_tx);
-    npr_ps_.bind_texture(GBUF_HEADER_NPR_TX_SLOT, &inst_.gbuffer.header_tx);
-    npr_ps_.bind_texture(GBUF_CLOSURE_NPR_TX_SLOT, &inst_.gbuffer.closure_tx);
-#endif
-    npr_ps_.bind_texture(RADIANCE_TX_SLOT, &npr_radiance_input_tx_);
-    for (int i : IndexRange(3)) {
-      npr_ps_.bind_texture(DIRECT_RADIANCE_NPR_TX_SLOT_1 + i, &dummy_black_);
-      npr_ps_.bind_texture(INDIRECT_RADIANCE_NPR_TX_SLOT_1 + i, &dummy_black_);
-    };
-    npr_ps_.bind_texture(BACK_RADIANCE_TX_SLOT, &dummy_black_);
-    npr_ps_.bind_texture(BACK_HIZ_TX_SLOT, &dummy_black_);
-
-    /* Images. */
-    npr_ps_.bind_image(RBUFS_COLOR_SLOT, &inst_.render_buffers.rp_color_tx);
-    npr_ps_.bind_image(RBUFS_VALUE_SLOT, &inst_.render_buffers.rp_value_tx);
-
-    npr_ps_.bind_resources(inst_.uniform_data);
-    npr_ps_.bind_resources(inst_.sampling);
-
-    npr_ps_.bind_resources(inst_.hiz_buffer.front);
-
-    npr_ps_.bind_resources(inst_.lights);
-    npr_ps_.bind_resources(inst_.shadows);
-
-    DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_DEPTH_EQUAL;
-
-    npr_double_sided_ps_ = &npr_ps_.sub("DoubleSided");
-    npr_double_sided_ps_->state_set(state);
-
-    npr_single_sided_ps_ = &npr_ps_.sub("SingleSided");
-    npr_single_sided_ps_->state_set(state | DRW_STATE_CULL_BACK);
+    this->npr_pass_sync(inst_, [&]() {
+      npr_ps_.bind_texture(RADIANCE_TX_SLOT, &npr_radiance_input_tx_);
+      for (int i : IndexRange(3)) {
+        npr_ps_.bind_texture(DIRECT_RADIANCE_NPR_TX_SLOT_1 + i, &dummy_black_);
+        npr_ps_.bind_texture(INDIRECT_RADIANCE_NPR_TX_SLOT_1 + i, &dummy_black_);
+      };
+      npr_ps_.bind_texture(BACK_RADIANCE_TX_SLOT, &dummy_black_);
+      npr_ps_.bind_texture(BACK_HIZ_TX_SLOT, &dummy_black_);
+    });
   }
 }
 
