@@ -270,7 +270,8 @@ template<typename T> static Array<std::byte> compress_data(const Span<T> src)
   Array<std::byte> dst(ZSTD_compressBound(src.size_in_bytes()), NoInitialization());
   const size_t dst_size = ZSTD_compress(
       dst.data(), dst.size(), src.data(), src.size_in_bytes(), ZSTD_fast);
-  std::cout << "Compressed undo data: " << src.size_in_bytes() << " -> " << dst_size << '\n';
+  std::cout << "Compressed undo data: " << src.size_in_bytes() << " -> " << dst_size << " ("
+            << float(src.size_in_bytes()) / dst_size << ")\n";
   return dst.as_span().take_front(dst_size);
 }
 
