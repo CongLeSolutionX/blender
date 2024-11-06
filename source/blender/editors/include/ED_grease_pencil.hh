@@ -36,6 +36,7 @@ struct View3D;
 struct ViewContext;
 struct BVHTree;
 struct GreasePencilLineartModifierData;
+struct ViewLayer;
 namespace blender {
 namespace bke {
 enum class AttrDomain : int8_t;
@@ -894,6 +895,8 @@ void set_lineart_modifier_limits(GreasePencilLineartModifierData &lmd,
                                  const bool is_first_lineart);
 
 GreasePencilLineartModifierData *get_first_lineart_modifier(const Object &ob);
+
+void tag_lineart_updates(const Scene *scene, ViewLayer *view_layer);
 
 GreasePencil *from_context(bContext &C);
 }  // namespace blender::ed::greasepencil

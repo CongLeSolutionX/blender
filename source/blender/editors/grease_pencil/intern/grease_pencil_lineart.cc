@@ -23,6 +23,7 @@
 #include "BKE_curves.hh"
 #include "BKE_global.hh"
 #include "BKE_grease_pencil.hh"
+#include "BKE_layer.hh"
 #include "BKE_material.h"
 #include "BKE_modifier.hh"
 #include "BKE_report.hh"
@@ -93,6 +94,22 @@ GreasePencilLineartModifierData *get_first_lineart_modifier(const Object &ob)
     }
   }
   return nullptr;
+}
+
+void tag_lineart_updates(const Scene *scene, ViewLayer *view_layer)
+{
+  BLI_assert(scene && view_layer);
+  FOREACH_OBJECT_BEGIN (scene, view_layer, ob) {
+    if (ob->type != OB_GREASE_PENCIL) {
+      continue;
+    }
+    LISTBASE_FOREACH (ModifierData *, md, &ob->modifiers) {
+      if (md->type == eModifierType_GreasePencilLineart && (md->flag & eModifierMode_Realtime)) {
+        DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
+      }
+    }
+  }
+  FOREACH_OBJECT_END;
 }
 
 }  // namespace blender::ed::greasepencil

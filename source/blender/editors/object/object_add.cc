@@ -672,6 +672,8 @@ Object *add_type_with_obdata(bContext *C,
 
   WM_event_add_notifier(C, NC_SCENE | ND_LAYER_CONTENT, scene);
 
+  ed::greasepencil::tag_lineart_updates(scene, view_layer);
+
   DEG_id_tag_update(&scene->id, ID_RECALC_BASE_FLAGS);
 
   ED_outliner_select_sync_from_object_tag(C);
@@ -2272,6 +2274,10 @@ static int object_delete_exec(bContext *C, wmOperator *op)
   LISTBASE_FOREACH (wmWindow *, win, &wm->windows) {
     scene = WM_window_get_active_scene(win);
 
+    /* Need to notify lineart of object deletion. */
+    ViewLayer *view_layer = WM_window_get_active_view_layer(win);
+    ed::greasepencil::tag_lineart_updates(scene, view_layer);
+
     if (scene->id.tag & ID_TAG_DOIT) {
       scene->id.tag &= ~ID_TAG_DOIT;
 
@@ -2688,6 +2694,9 @@ static int object_duplicates_make_real_exec(bContext *C, wmOperator *op)
   WM_event_add_notifier(C, NC_SCENE, scene);
   WM_main_add_notifier(NC_OBJECT | ND_DRAW, nullptr);
   ED_outliner_select_sync_from_object_tag(C);
+
+  ViewLayer *view_layer = CTX_data_view_layer(C);
+  ed::greasepencil::tag_lineart_updates(scene, view_layer);
 
   return OPERATOR_FINISHED;
 }
@@ -3679,6 +3688,8 @@ static int object_convert_exec(bContext *C, wmOperator *op)
   WM_event_add_notifier(C, NC_SCENE | ND_OB_SELECT, scene);
   WM_event_add_notifier(C, NC_SCENE | ND_LAYER_CONTENT, scene);
 
+  ed::greasepencil::tag_lineart_updates(scene, view_layer);
+
   return OPERATOR_FINISHED;
 }
 
@@ -3983,6 +3994,7 @@ static int duplicate_exec(bContext *C, wmOperator *op)
 
   WM_event_add_notifier(C, NC_SCENE | ND_OB_SELECT, scene);
   WM_event_add_notifier(C, NC_SCENE | ND_LAYER_CONTENT, scene);
+  ed::greasepencil::tag_lineart_updates(scene, view_layer);
 
   return OPERATOR_FINISHED;
 }
@@ -4082,6 +4094,8 @@ static int object_add_named_exec(bContext *C, wmOperator *op)
   WM_event_add_notifier(C, NC_SCENE | ND_OB_ACTIVE, scene);
   WM_event_add_notifier(C, NC_SCENE | ND_LAYER_CONTENT, scene);
   ED_outliner_select_sync_from_object_tag(C);
+
+  ed::greasepencil::tag_lineart_updates(scene, view_layer);
 
   PropertyRNA *prop_matrix = RNA_struct_find_property(op->ptr, "matrix");
   if (RNA_property_is_set(op->ptr, prop_matrix)) {
