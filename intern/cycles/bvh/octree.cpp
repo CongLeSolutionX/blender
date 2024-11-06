@@ -352,15 +352,15 @@ static void fill_shader_input(device_vector<KernelShaderEvalInput> &d_input,
     for (int z = r.cols().begin(); z < r.cols().end(); ++z) {
       for (int y = r.rows().begin(); y < r.rows().end(); ++y) {
         for (int x = r.pages().begin(); x < r.pages().end(); ++x) {
-          const int local_index = flatten_index(x, y, z, index_range);
+          const int offset = flatten_index(x, y, z, index_range);
           const float3 p = octree->index_to_world(
               x + index_min.x, y + index_min.y, z + index_min.z);
 
 #ifdef WITH_OPENVDB
           /* Zero density for cells outside of the mesh. */
           if (!vdb_voxel_intersect(p, p + voxel_size, itfm, transform_applied, grid, acc)) {
-            d_input_data[local_index * 2 + 0].object = OBJECT_NONE;
-            d_input_data[local_index * 2 + 1].object = SHADER_NONE;
+            d_input_data[offset * 2 + 0].object = OBJECT_NONE;
+            d_input_data[offset * 2 + 1].object = SHADER_NONE;
             continue;
           }
 #endif
@@ -370,13 +370,13 @@ static void fill_shader_input(device_vector<KernelShaderEvalInput> &d_input,
           in.prim = __float_as_int(p.x);
           in.u = p.y;
           in.v = p.z;
-          d_input_data[local_index * 2 + 0] = in;
+          d_input_data[offset * 2 + 0] = in;
 
           in.object = shader_id;
           in.prim = __float_as_int(voxel_size.x);
           in.u = voxel_size.y;
           in.v = voxel_size.z;
-          d_input_data[local_index * 2 + 1] = in;
+          d_input_data[offset * 2 + 1] = in;
         }
       }
     }
