@@ -20,10 +20,55 @@
 namespace blender::ed::curves {
 
 struct ClosestCurveDataBlock {
-  blender::StringRef selection_attribute_name;
   Curves *curves_id = nullptr;
   blender::ed::curves::FindClosestData elem = {};
 };
+static ClosestCurveDataBlock find_closest_curve(const Depsgraph &depsgraph,
+                                                const View3D &v3d,
+                                                const RegionView3D &rv3d,
+                                                const Span<Base *> bases,
+                                                const int2 &mval)
+{
+  return threading::parallel_reduce(
+      bases.index_range(),
+      1L,
+      ClosestCurveDataBlock(),
+      [&](const IndexRange range, const ClosestCurveDataBlock &init) {
+        ClosestCurveDataBlock new_closest = init;
+        for (Base *base : bases.slice(range)) {
+          Object &curves_ob = *base->object;
+          Curves &curves_id = *static_cast<Curves *>(curves_ob.data);
+          bke::crazyspace::GeometryDeformation deformation =
+              bke::crazyspace::get_evaluated_curves_deformation(depsgraph, curves_ob);
+          const bke::CurvesGeometry &curves = curves_id.geometry.wrap();
+          const float4x4 projection = ED_view3d_ob_project_mat_get(&rv3d, &curves_ob);
+          ed::curves::foreach_selectable_curve_range(
+              curves,
+              deformation,
+              eHandleDisplay(v3d.overlay.handle_display),
+              [&](IndexRange range, Span<float3> positions, StringRef selection_attribute_name) {
+                std::optional<ed::curves::FindClosestData> new_closest_elem =
+                    ed::curves::closest_elem_find_screen_space(vc,
+                                                               curves.points_by_curve(),
+                                                               positions,
+                                                               curves.cyclic(),
+                                                               projection,
+                                                               range,
+                                                               bke::AttrDomain::Curve,
+                                                               mval,
+                                                               new_closest.elem);
+                if (new_closest_elem) {
+                  new_closest.elem = *new_closest_elem;
+                  new_closest.curves_id = &curves_id;
+                }
+              });
+        }
+        return new_closest;
+      },
+      [](const ClosestCurveDataBlock &a, const ClosestCurveDataBlock &b) {
+        return (a.elem.distance < b.elem.distance) ? a : b;
+      });
+}
 
 static bool select_linked_pick(bContext &C, const int2 &mval, const SelectPick_Params &params)
 {
@@ -47,7 +92,10 @@ static bool select_linked_pick(bContext &C, const int2 &mval, const SelectPick_P
               bke::crazyspace::get_evaluated_curves_deformation(*vc.depsgraph, curves_ob);
           const bke::CurvesGeometry &curves = curves_id.geometry.wrap();
           const float4x4 projection = ED_view3d_ob_project_mat_get(vc.rv3d, &curves_ob);
-          const auto range_consumer =
+          ed::curves::foreach_selectable_curve_range(
+              curves,
+              deformation,
+              eHandleDisplay(vc.v3d->overlay.handle_display),
               [&](IndexRange range, Span<float3> positions, StringRef selection_attribute_name) {
                 std::optional<ed::curves::FindClosestData> new_closest_elem =
                     ed::curves::closest_elem_find_screen_space(vc,
@@ -60,14 +108,10 @@ static bool select_linked_pick(bContext &C, const int2 &mval, const SelectPick_P
                                                                mval,
                                                                new_closest.elem);
                 if (new_closest_elem) {
-                  new_closest.selection_attribute_name = selection_attribute_name;
                   new_closest.elem = *new_closest_elem;
                   new_closest.curves_id = &curves_id;
                 }
-              };
-
-          ed::curves::foreach_selectable_curve_range(
-              curves, deformation, eHandleDisplay(vc.v3d->overlay.handle_display), range_consumer);
+              });
         }
         return new_closest;
       },
@@ -85,22 +129,19 @@ static bool select_linked_pick(bContext &C, const int2 &mval, const SelectPick_P
   if (selection_domain == bke::AttrDomain::Point) {
     const bke::CurvesGeometry &curves = closest_curves.wrap();
     const OffsetIndices points_by_curve = curves.points_by_curve();
-    bke::GSpanAttributeWriter selection = ed::curves::ensure_selection_attribute(
-        closest_curves.wrap(),
-        bke::AttrDomain::Point,
-        CD_PROP_BOOL,
-        closest.selection_attribute_name);
-    for (const int point : points_by_curve[closest.elem.index]) {
-      ed::curves::apply_selection_operation_at_index(selection.span, point, params.sel_op);
-    }
-    selection.finish();
+    ed::curves::foreach_selection_attribute_writer(
+        closest_curves, bke::AttrDomain::Curve, [&](bke::GSpanAttributeWriter &selection) {
+          for (const int point : points_by_curve[closest.elem.index]) {
+            ed::curves::apply_selection_operation_at_index(selection.span, point, params.sel_op);
+          }
+        });
   }
   else if (selection_domain == bke::AttrDomain::Curve) {
-    ed::curves::foreach_selection_attribute_writer(
-        closest_curves.wrap(), bke::AttrDomain::Curve, [&](bke::GSpanAttributeWriter &selection) {
-          ed::curves::apply_selection_operation_at_index(
-              selection.span, closest.elem.index, params.sel_op);
-        });
+    bke::GSpanAttributeWriter selection = ed::curves::ensure_selection_attribute(
+        closest_curves, bke::AttrDomain::Point, CD_PROP_BOOL);
+    ed::curves::apply_selection_operation_at_index(
+        selection.span, closest.elem.index, params.sel_op);
+    selection.finish();
   }
 
   /* Use #ID_RECALC_GEOMETRY instead of #ID_RECALC_SELECT because it is handled as a
