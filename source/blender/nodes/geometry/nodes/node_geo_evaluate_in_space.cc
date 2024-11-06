@@ -21,10 +21,9 @@
 
 // debug includes
 
-#include "BLI_function_ref.hh"
-
 #include "BLI_array.hh"
 #include "BLI_array_utils.hh"
+#include "BLI_function_ref.hh"
 #include "BLI_index_mask.hh"
 #include "BLI_math_base.hh"
 #include "BLI_math_bits.h"
@@ -668,7 +667,25 @@ static void for_each_to_bottom_skip_new(const OffsetIndices<int> buckets_offsets
 
   Vector<std::pair<int, Array<int, 0>>> parent_joint_indices = {{0, std::move(begin_indices)}};
 
-  for (const int depth_i : IndexRange(total_depth).drop_back(1)) {
+  for (const int depth_i : IndexRange(total_depth)) {
+    if (parent_joint_indices.is_empty()) {
+      break;
+    }
+
+    if (IndexRange(total_depth).last() == depth_i) {
+      for (const int joint_data_i : parent_joint_indices.index_range()) {
+        const int joint_i = parent_joint_indices[joint_data_i].first;
+
+        const IndexRange joint_buckets = joint_buckets_range_at_depth(
+            total_depth, depth_i, joint_i);
+        const Span<int> parent_indices =
+            parent_joint_indices[joint_data_i].second.as_mutable_span();
+
+        leaf_func(buckets_offsets[joint_i], parent_indices);
+      }
+      break;
+    }
+
     const IndexRange joints_range = joints_range_at_depth(depth_i);
 
     Vector<std::pair<int, Array<int, 0>>> new_joint_indices;
@@ -677,14 +694,10 @@ static void for_each_to_bottom_skip_new(const OffsetIndices<int> buckets_offsets
     for (const int joint_data_i : parent_joint_indices.index_range()) {
       const int joint_i = parent_joint_indices[joint_data_i].first;
 
-      const int joint_index = joints_range[joint_i];
       const IndexRange joint_buckets = joint_buckets_range_at_depth(total_depth, depth_i, joint_i);
 
       MutableSpan<int> parent_indices =
           parent_joint_indices[joint_data_i].second.as_mutable_span();
-      if (parent_indices.is_empty()) {
-        continue;
-      }
 
       const auto end_of_prefix = std::stable_partition(
           parent_indices.begin(), parent_indices.end(), [&](const int i) -> bool {
@@ -702,11 +715,6 @@ static void for_each_to_bottom_skip_new(const OffsetIndices<int> buckets_offsets
         continue;
       }
 
-      if (depth_i == total_depth - 1) {
-        leaf_func(buckets_offsets[joint_i], next_indices);
-        continue;
-      }
-
       const IndexRange next_joints_range = joints_range_at_depth(depth_i + 1);
       const int next_joint_a = joint_i * 2 + 0;
       const int next_joint_b = joint_i * 2 + 1;
@@ -719,10 +727,6 @@ static void for_each_to_bottom_skip_new(const OffsetIndices<int> buckets_offsets
       else {
         new_joint_indices.append({next_joint_b, Array<int, 0>(next_indices)});
       }
-    }
-
-    if (new_joint_indices.is_empty()) {
-      break;
     }
 
     parent_joint_indices = std::move(new_joint_indices);
