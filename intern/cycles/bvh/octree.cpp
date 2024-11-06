@@ -150,10 +150,10 @@ void Octree::recursive_build_(const Scene *scene, shared_ptr<OctreeNode> &octree
 openvdb::BoolGrid::ConstPtr Octree::mesh_to_sdf_grid(const Mesh *mesh, const float half_width)
 {
   const int num_verts = mesh->get_verts().size();
-  std::vector<openvdb::Vec3s> points(num_verts);
+  std::vector<openvdb::Vec3f> points(num_verts);
   parallel_for(0, num_verts, [&](int i) {
     const float3 &vert = mesh->get_verts()[i];
-    points[i] = openvdb::Vec3s(vert.x, vert.y, vert.z);
+    points[i] = openvdb::Vec3f(vert.x, vert.y, vert.z);
   });
 
   const int num_triangles = mesh->num_triangles();
@@ -164,15 +164,17 @@ openvdb::BoolGrid::ConstPtr Octree::mesh_to_sdf_grid(const Mesh *mesh, const flo
                                   mesh->get_triangles()[i * 3 + 2]);
   });
 
-  /* TODO(weizhen): add hard limit on voxel size in case object has extreme proportions. Also
-   * should consider object instead of mesh size. */
-  const float voxel_size_ = reduce_min(voxel_size());
-  auto xform = openvdb::math::Transform::createLinearTransform(voxel_size_);
+  /* TODO(weizhen): Should consider object instead of mesh size. */
+  const float3 mesh_size = mesh->bounds.size();
+  const auto vdb_voxel_size = openvdb::Vec3f(mesh_size.x, mesh_size.y, mesh_size.z) / float(width);
+
+  auto xform = openvdb::math::Transform::createLinearTransform(1.0);
+  xform->postScale(vdb_voxel_size);
 
   auto sdf_grid = openvdb::tools::meshToLevelSet<openvdb::FloatGrid>(
       *xform, points, triangles, half_width);
 
-  return openvdb::tools::sdfInteriorMask(*sdf_grid, 1.0f);
+  return openvdb::tools::sdfInteriorMask(*sdf_grid, vdb_voxel_size.length());
 }
 #endif
 
@@ -253,6 +255,45 @@ openvdb::BoolGrid::ConstPtr Octree::get_vdb(const Geometry *geom) const
   return openvdb::BoolGrid::create();
 }
 
+#ifdef WITH_OPENVDB
+static bool vdb_voxel_intersect(const float3 p_min,
+                                const float3 p_max,
+                                const Transform itfm,
+                                const bool transform_applied,
+                                openvdb::BoolGrid::ConstPtr &grid,
+                                openvdb::BoolGrid::ConstAccessor &acc)
+{
+  if (grid->empty()) {
+    /* Non-mesh volume. */
+    return true;
+  }
+
+  /* Transform bounding box from world space to vdb space. */
+  openvdb::math::BBox<openvdb::Vec3f> vdb_bbox;
+  for (int i = 0; i < 8; i++) {
+    const float3 t = make_float3(i & 1, (i >> 1) & 1, (i >> 2) & 1);
+    float3 v = mix(p_min, p_max, t);
+    if (!transform_applied) {
+      v = transform_point(&itfm, v);
+    }
+    vdb_bbox.expand(openvdb::Vec3f(v.x, v.y, v.z));
+  }
+
+  const openvdb::math::CoordBBox coord_bbox(
+      openvdb::Coord::floor(grid->worldToIndex(vdb_bbox.min())),
+      openvdb::Coord::ceil(grid->worldToIndex(vdb_bbox.max())));
+
+  /* Check if any point in the bounding box lies inside the mesh. */
+  for (auto coord = coord_bbox.begin(); coord != coord_bbox.end(); ++coord) {
+    if (acc.getValue(*coord)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+#endif
+
 /* Fill in coordinates for shading the volume density. */
 static void fill_shader_input(device_vector<KernelShaderEvalInput> &d_input,
                               const Scene *scene,
@@ -317,18 +358,10 @@ static void fill_shader_input(device_vector<KernelShaderEvalInput> &d_input,
 
 #ifdef WITH_OPENVDB
           /* Zero density for cells outside of the mesh. */
-          if (!grid->empty()) {
-            float3 cell_center = p + 0.5f * voxel_size;
-            if (!transform_applied) {
-              cell_center = transform_point(&itfm, cell_center);
-            }
-            openvdb::Coord coord = openvdb::Coord::round(
-                grid->worldToIndex(openvdb::Vec3s(cell_center.x, cell_center.y, cell_center.z)));
-            if (!acc.getValue(coord)) {
-              d_input_data[local_index * 2 + 0].object = OBJECT_NONE;
-              d_input_data[local_index * 2 + 1].object = SHADER_NONE;
-              continue;
-            }
+          if (!vdb_voxel_intersect(p, p + voxel_size, itfm, transform_applied, grid, acc)) {
+            d_input_data[local_index * 2 + 0].object = OBJECT_NONE;
+            d_input_data[local_index * 2 + 1].object = SHADER_NONE;
+            continue;
           }
 #endif
 
