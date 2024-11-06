@@ -1741,6 +1741,42 @@ struct KernelOctreeNode {
   KernelBoundingBox bbox;
 };
 
+/* TODO(weizhen): make it a class. */
+template<typename type, int MAX_SIZE> struct KernelStack {
+  type array[MAX_SIZE];
+  /* Index of the top element. */
+  int index = -1;
+
+  ccl_device_inline_method bool is_empty() const
+  {
+    return index < 0;
+  }
+
+  ccl_device_inline_method void pop()
+  {
+    assert(!is_empty());
+    index--;
+  }
+
+  ccl_device_inline_method void push(type elem)
+  {
+    assert(index < MAX_SIZE - 1);
+    array[++index] = elem;
+  }
+
+  /* Access the top element. */
+  ccl_device_inline_method type top() const
+  {
+    assert(!is_empty());
+    return array[index];
+  }
+
+  ccl_device_inline_method int size() const
+  {
+    return index + 1;
+  }
+};
+
 typedef struct KernelLightTreeEmitter {
   /* Bounding cone. */
   float theta_o;
