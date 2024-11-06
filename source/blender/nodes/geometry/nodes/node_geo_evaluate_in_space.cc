@@ -654,6 +654,46 @@ static void sample_average(const OffsetIndices<int> buckets_offsets,
   });
 }
 
+class Timer {
+  blender::timeit::Nanoseconds &dst_;
+  blender::timeit::TimePoint start_;
+
+ public:
+  Timer(blender::timeit::Nanoseconds &dst) : dst_(dst), start_(blender::timeit::Clock::now()) {}
+
+  ~Timer()
+  {
+    const blender::timeit::TimePoint end = blender::timeit::Clock::now();
+    const blender::timeit::Nanoseconds duration = end - start_;
+    dst_ += duration;
+  }
+};
+
+class TimerGroup {
+  std::string name_;
+  blender::timeit::Nanoseconds total_;
+  int64_t count_;
+ 
+ public:
+  TimerGroup(const std::string name) : name_(name), total_(0), count_(0) {}
+
+  ~TimerGroup()
+  {
+    std::cout << name_ << ": ";
+    blender::timeit::print_duration(total_);
+    std::cout << ": " << count_;
+    std::cout << ";\n";
+  }
+
+  Timer start()
+  {
+    count_++;
+    return Timer(total_);
+  }
+};
+
+
+
 template<typename LeafFuncT, typename JointPredicateT, typename JointFuncT>
 static void for_each_to_bottom_skip_new(const OffsetIndices<int> buckets_offsets,
                                         const int total_depth,
@@ -662,6 +702,13 @@ static void for_each_to_bottom_skip_new(const OffsetIndices<int> buckets_offsets
                                         const JointFuncT &joint_func,
                                         const LeafFuncT &leaf_func)
 {
+  TimerGroup joint_predicate_g("joint_predicate");
+  TimerGroup joint_func_g("joint_func");
+  TimerGroup leaf_func_g("leaf_func");
+  TimerGroup new_joint_indices_g("new_joint_indices");
+  TimerGroup move_g("move");
+  
+  
   Array<int, 0> begin_indices(range.size());
   array_utils::fill_index_range<int>(begin_indices, range.start());
 
@@ -681,24 +728,35 @@ static void for_each_to_bottom_skip_new(const OffsetIndices<int> buckets_offsets
       MutableSpan<int> parent_indices =
           parent_joint_indices[joint_data_i].second.as_mutable_span();
 
-      const auto end_of_prefix = std::stable_partition(
+      decltype(parent_indices.begin()) end_of_prefix;
+      {
+        auto a = joint_predicate_g.start();
+        end_of_prefix = std::stable_partition(
           parent_indices.begin(), parent_indices.end(), [&](const int i) -> bool {
             return joint_predicate(int(joints_range[joint_i]), i);
           });
+      
+      
+      }
 
       const Span<int> finished_indices = parent_indices.drop_front(
           std::distance(parent_indices.begin(), end_of_prefix));
       const Span<int> next_indices = parent_indices.take_front(
           std::distance(parent_indices.begin(), end_of_prefix));
 
-      joint_func(buckets_offsets[joint_buckets], int(joints_range[joint_i]), finished_indices);
-
-      if (IndexRange(total_depth).last() == depth_i) {
-        leaf_func(buckets_offsets[joint_i], next_indices);
-        continue;
+      {
+        auto aaa = joint_func_g.start();
+        joint_func(buckets_offsets[joint_buckets], int(joints_range[joint_i]), finished_indices);
       }
 
       if (next_indices.is_empty()) {
+        continue;
+      }
+
+      if (IndexRange(total_depth).last() == depth_i) {
+        // printf(">> %d;\n", int(next_indices.size()));
+        auto aaa = leaf_func_g.start();
+        leaf_func(buckets_offsets[joint_i], next_indices);
         continue;
       }
 
@@ -706,16 +764,20 @@ static void for_each_to_bottom_skip_new(const OffsetIndices<int> buckets_offsets
       const int next_joint_a = joint_i * 2 + 0;
       const int next_joint_b = joint_i * 2 + 1;
 
-      new_joint_indices.append({next_joint_a, Array<int, 0>(next_indices)});
-      if (next_indices.size() == parent_indices.size()) {
-        new_joint_indices.append(
-            {next_joint_b, std::move(parent_joint_indices[joint_data_i].second)});
-      }
-      else {
-        new_joint_indices.append({next_joint_b, Array<int, 0>(next_indices)});
+      {
+        auto aaa = new_joint_indices_g.start();
+        new_joint_indices.append({next_joint_a, Array<int, 0>(next_indices)});
+        if (next_indices.size() == parent_indices.size()) {
+          new_joint_indices.append(
+              {next_joint_b, std::move(parent_joint_indices[joint_data_i].second)});
+        }
+        else {
+          new_joint_indices.append({next_joint_b, Array<int, 0>(next_indices)});
+        }
       }
     }
 
+    auto aaa = move_g.start();
     parent_joint_indices = std::move(new_joint_indices);
 
     if (parent_joint_indices.is_empty()) {
@@ -741,7 +803,7 @@ static void sample_average_new(const OffsetIndices<int> buckets_offsets,
   const FunctionRef<void(int, MutableSpan<float>)> squared_distance_invertion =
       powered_rcp_for_squared(power_value);
 
-  threading::parallel_for(src_bucket_value.index_range(), 1024 * 16, [&](const IndexRange range) {
+  threading::parallel_for(src_bucket_value.index_range(), 1024 * 16'0000, [&](const IndexRange range) {
     Vector<float> buffer;
     buffer.reserve(range.size());
 
