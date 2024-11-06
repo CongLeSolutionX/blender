@@ -876,7 +876,7 @@ static ImBuf *seq_render_effect_strip_impl(const SeqRenderData *context,
           float target_frame = seq_speed_effect_target_frame_get(scene, seq, timeline_frame, i);
 
           /* Only convert to int when interpolation is not used. */
-          SpeedControlVars *s = (SpeedControlVars *)seq->effectdata;
+          SpeedControlVars *s = reinterpret_cast<SpeedControlVars *>(seq->effectdata);
           if ((s->flags & SEQ_SPEED_USE_INTERPOLATION) != 0) {
             target_frame = std::floor(target_frame);
           }
