@@ -846,9 +846,9 @@ class USDImportTest(AbstractUSDTest):
         res = bpy.ops.wm.usd_import(filepath=infile)
         self.assertEqual({'FINISHED'}, res, f"Unable to import USD file {infile}")
 
-        prev_inst_positions = set()
-        prev_inst_scales = set()
-        prev_inst_quats = set()
+        prev_unique_positions = set()
+        prev_unique_scales = set()
+        prev_unique_quats = set()
 
         # Check all frames to ensure instances are moving correctly
         for frame in range(1, 5):
@@ -856,16 +856,16 @@ class USDImportTest(AbstractUSDTest):
             depsgraph = bpy.context.evaluated_depsgraph_get()
 
             # Gather the instance data in a set so we can detect unique values
-            inst_positions = set()
-            inst_scales = set()
-            inst_quats = set()
+            unique_positions = set()
+            unique_scales = set()
+            unique_quats = set()
             mesh_count = 0
             for inst in depsgraph.object_instances:
                 if inst.is_instance and inst.object.type == 'MESH':
                     mesh_count += 1
-                    inst_positions.add(tuple(self.round_vector(inst.matrix_world.to_translation(), 5)))
-                    inst_scales.add(tuple(self.round_vector(inst.matrix_world.to_scale(), 1)))
-                    inst_quats.add(tuple(self.round_vector(inst.matrix_world.to_quaternion(), 5)))
+                    unique_positions.add(tuple(self.round_vector(inst.matrix_world.to_translation())))
+                    unique_scales.add(tuple(self.round_vector(inst.matrix_world.to_scale(), 1)))
+                    unique_quats.add(tuple(self.round_vector(inst.matrix_world.to_quaternion())))
 
             # There should be 6 total mesh instances
             self.assertEqual(mesh_count, 6)
@@ -873,23 +873,23 @@ class USDImportTest(AbstractUSDTest):
             # Positions: All positions should be unique during each frame.
             # Scale and Orientation: One unique value on frame 1. Subsequent frames have different
             # combinations of unique values.
-            self.assertEqual(len(inst_positions), 6, f"Frame {frame}: positions do not match")
+            self.assertEqual(len(unique_positions), 6, f"Frame {frame}: positions are unexpected")
             if frame == 1:
-                self.assertEqual(len(inst_scales), 1, f"Frame {frame}: scales do not match")
-                self.assertEqual(len(inst_quats), 1, f"Frame {frame}: orientations do not match")
+                self.assertEqual(len(unique_scales), 1, f"Frame {frame}: scales are unexpected")
+                self.assertEqual(len(unique_quats), 1, f"Frame {frame}: orientations are unexpected")
             else:
-                self.assertEqual(len(inst_scales), 2, f"Frame {frame}: scales do not match")
-                self.assertEqual(len(inst_quats), 3, f"Frame {frame}: orientations do not match")
+                self.assertEqual(len(unique_scales), 2, f"Frame {frame}: scales are unexpected")
+                self.assertEqual(len(unique_quats), 3, f"Frame {frame}: orientations are unexpected")
 
             # Every frame is different. Ensure that the current frame's values do NOT match the
             # previous frame's data.
-            self.assertNotEqual(inst_positions, prev_inst_positions)
-            self.assertNotEqual(inst_scales, prev_inst_scales)
-            self.assertNotEqual(inst_quats, prev_inst_quats)
+            self.assertNotEqual(unique_positions, prev_unique_positions)
+            self.assertNotEqual(unique_scales, prev_unique_scales)
+            self.assertNotEqual(unique_quats, prev_unique_quats)
 
-            prev_inst_positions = inst_positions
-            prev_inst_scales = inst_scales
-            prev_inst_quats = inst_quats
+            prev_unique_positions = unique_positions
+            prev_unique_scales = unique_scales
+            prev_unique_quats = unique_quats
 
     def test_import_light_types(self):
         """Test importing light types and attributes."""

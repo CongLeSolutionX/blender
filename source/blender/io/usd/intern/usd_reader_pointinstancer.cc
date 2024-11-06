@@ -151,8 +151,7 @@ void USDPointInstancerReader::read_object_data(Main *bmain, const double motionS
   }
 
   if (is_animated()) {
-    /* If the point cloud has animated positions or attributes, we add the cache
-     * modifier. */
+    /* If the point cloud has time-varying data, we add the cache modifier. */
     add_cache_modifier();
   }
 
