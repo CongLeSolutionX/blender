@@ -595,7 +595,7 @@ static void sample_average(const OffsetIndices<int> buckets_offsets,
   BLI_assert(src_bucket_value.size() == dst_buckets_data.size());
   BLI_assert(src_bucket_value.size() == src_bucket_position.size());
 
-  const FunctionRef<void(int, MutableSpan<float>)> distance_inverter = powered_rcp(power_value);
+  const FunctionRef<void(int, MutableSpan<float>)> distance_invertion = powered_rcp(power_value);
 
   threading::parallel_for(src_bucket_value.index_range(), 1024, [&](const IndexRange range) {
     Vector<float> buffer;
@@ -619,7 +619,7 @@ static void sample_average(const OffsetIndices<int> buckets_offsets,
                                              src_bucket_position[value_index]);
           }
 
-          distance_inverter(power_value, buffer.as_mutable_span());
+          distance_invertion(power_value, buffer.as_mutable_span());
 
           for (const int value_i : value_indices.index_range()) {
             const int value_index = value_indices[value_i];
@@ -637,7 +637,7 @@ static void sample_average(const OffsetIndices<int> buckets_offsets,
               buffer[index] = math::distance(src_bucket_position[bucket_range[index]], position);
             }
 
-            distance_inverter(power_value, buffer.as_mutable_span());
+            distance_invertion(power_value, buffer.as_mutable_span());
 
             const float3 self_value = src_bucket_value[value_i];
             for (const int i : bucket_range.index_range()) {
