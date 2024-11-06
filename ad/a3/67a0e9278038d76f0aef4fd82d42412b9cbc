@@ -7,3 +7,4 @@ Referenced by issue #126880, SurfaceDeform does not work as expected in 4.2.1
 Referenced by issue #126949, Regression: Geometry nodes - instances and boolean operation bug
 Referenced by pull request #127143, Fix #126949: Regression: Geometry nodes - instances and boolean operation bug
 Referenced by commit 40ae2d7df6e2b6d132a58f8402de647535b97bf3, Fix #126949: Regression: Geometry nodes - instances and boolean operation bug
+Referenced by issue #129871, Convert a text object sharing data with another one into mesh give empty mesh
