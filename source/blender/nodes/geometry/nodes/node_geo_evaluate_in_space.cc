@@ -635,108 +635,42 @@ static void for_each_to_bottom_skip_new(const OffsetIndices<int> buckets_offsets
   }
 }
 
-using SequentialAccumulator = FunctionRef<void(float total_factor,
-                                               int joint_index,
-                                               Span<int> value_indices,
-                                               Span<float3> src_joints_centre,
-                                               Span<float3> src_joints_value,
-                                               Span<float3> src_bucket_position,
-                                               Span<float3> src_bucket_value,
-                                               float3 *__restrict dst_buckets_data)>;
-
-static SequentialAccumulator accumulate_with_inverse_distance(const int power_value)
+static FunctionRef<void(int, MutableSpan<float>)> powered_rcp(const int power_value)
 {
-  if (power_value == 2) {
-    return [](const float total_factor,
-              const int joint_index,
-              const Span<int> value_indices,
-              const Span<float3> src_joints_centre,
-              const Span<float3> src_joints_value,
-              const Span<float3> src_bucket_position,
-              const Span<float3> src_bucket_value,
-              float3 *__restrict dst_buckets_data) {
-      for (const int value_i : value_indices) {
-        const float distance = math::distance_squared(src_joints_centre[joint_index],
-                                                      src_bucket_position[value_i]);
-        const float relation_factor = math::safe_rcp(distance);
-        const float3 self_value = src_bucket_value[value_i];
-        dst_buckets_data[value_i] += (src_joints_value[joint_index] - self_value) *
-                                     relation_factor * total_factor;
-      }
-    };
-  }
-  if (power_value == 3) {
-    return [](const float total_factor,
-              const int joint_index,
-              const Span<int> value_indices,
-              const Span<float3> src_joints_centre,
-              const Span<float3> src_joints_value,
-              const Span<float3> src_bucket_position,
-              const Span<float3> src_bucket_value,
-              float3 *__restrict dst_buckets_data) {
-      for (const int value_i : value_indices) {
-        const float distance = math::distance_squared(src_joints_centre[joint_index],
-                                                      src_bucket_position[value_i]);
-        const float relation_factor = math::safe_rcp(math::pow<float>(distance, 1.5f));
-        const float3 self_value = src_bucket_value[value_i];
-        dst_buckets_data[value_i] += (src_joints_value[joint_index] - self_value) *
-                                     relation_factor * total_factor;
-      }
-    };
-  }
-}
-
-using TableAccumulator = FunctionRef<void(Span<int> value_indices,
-                                          IndexRange bucket_range,
-                                          Span<float3> src_joints_centre,
-                                          Span<float3> src_joints_value,
-                                          Span<float3> src_bucket_position,
-                                          Span<float3> src_bucket_value,
-                                          float3 *__restrict dst_buckets_data)>;
-
-static TableAccumulator accumulate_tb_with_inverse_distance(const int power_value)
-{
-  if (power_value == 2) {
-    return [](const Span<int> value_indices,
-              const IndexRange bucket_range,
-              const Span<float3> src_joints_centre,
-              const Span<float3> src_joints_value,
-              const Span<float3> src_bucket_position,
-              const Span<float3> src_bucket_value,
-              float3 *__restrict dst_buckets_data) {
-      for (const int value_i : value_indices) {
-        const float3 position = src_bucket_position[value_i];
-        const float3 self_value = src_bucket_value[value_i];
-        for (const int index : bucket_range) {
-          const float relation_factor = math::rcp(
-              math::distance_squared(src_bucket_position[index], position));
-          const float self_ignore_relation_factor = index == value_i ? 0.0f : relation_factor;
-          dst_buckets_data[value_i] += (src_bucket_value[index] - self_value) *
-                                       self_ignore_relation_factor;
-        }
-      }
-    };
-  }
-  if (power_value == 3) {
-    return [](const Span<int> value_indices,
-              const IndexRange bucket_range,
-              const Span<float3> src_joints_centre,
-              const Span<float3> src_joints_value,
-              const Span<float3> src_bucket_position,
-              const Span<float3> src_bucket_value,
-              float3 *__restrict dst_buckets_data) {
-      for (const int value_i : value_indices) {
-        const float3 position = src_bucket_position[value_i];
-        const float3 self_value = src_bucket_value[value_i];
-        for (const int index : bucket_range) {
-          const float relation_factor = math::rcp(math::pow<float>(
-              math::distance_squared(src_bucket_position[index], position), 1.5f));
-          const float self_ignore_relation_factor = index == value_i ? 0.0f : relation_factor;
-          dst_buckets_data[value_i] += (src_bucket_value[index] - self_value) *
-                                       self_ignore_relation_factor;
-        }
-      }
-    };
+  switch (power_value) {
+    case 0:
+      return [](const int /*power_value*/, MutableSpan<float> values) { values.fill(1.0f); };
+    case 1:
+      return [](const int /*power_value*/, MutableSpan<float> values) {
+        std::transform(values.begin(), values.end(), values.begin(), [&](const float value) {
+          return math::safe_rcp(value);
+        });
+      };
+    case 2:
+      return [](const int /*power_value*/, MutableSpan<float> values) {
+        std::transform(values.begin(), values.end(), values.begin(), [&](const float value) {
+          return math::safe_rcp(math::square(value));
+        });
+      };
+    case 3:
+      return [](const int /*power_value*/, MutableSpan<float> values) {
+        std::transform(values.begin(), values.end(), values.begin(), [&](const float value) {
+          return math::safe_rcp(value * value * value);
+        });
+      };
+    case 4:
+      return [](const int /*power_value*/, MutableSpan<float> values) {
+        std::transform(values.begin(), values.end(), values.begin(), [&](const float value) {
+          const float suared_value = value * value;
+          return math::safe_rcp(suared_value * suared_value);
+        });
+      };
+    default:
+      return [](const int power_value, MutableSpan<float> values) {
+        std::transform(values.begin(), values.end(), values.begin(), [&](const float value) {
+          return math::safe_rcp(math::pow(value, float(power_value)));
+        });
+      };
   }
 }
 
@@ -754,9 +688,7 @@ static void sample_average_new(const OffsetIndices<int> buckets_offsets,
   // BLI_assert(src_bucket_value.size() == dst_buckets_data.size());
   BLI_assert(src_bucket_value.size() == src_bucket_position.size());
 
-  const SequentialAccumulator linear_accum = accumulate_with_inverse_distance(power_value);
-
-  const TableAccumulator table_accum = accumulate_tb_with_inverse_distance(power_value);
+  const FunctionRef<void(int, MutableSpan<float>)> distance_inverter = powered_rcp(power_value);
 
   threading::parallel_for(src_bucket_value.index_range(), 1024, [&](const IndexRange range) {
     Vector<float> buffer;
@@ -774,17 +706,13 @@ static void sample_average_new(const OffsetIndices<int> buckets_offsets,
         [&](const IndexRange buckets_range, const int joint_index, const Span<int> value_indices) {
           buffer.resize(value_indices.size());
           const float total_factor = buckets_range.size();
-          // linear_accum(total_factor, joint_index, value_indices, src_joints_centre,
-          // src_joints_value, src_bucket_position, src_bucket_value, dst_buckets_data);
           for (const int value_i : value_indices.index_range()) {
             const int value_index = value_indices[value_i];
             buffer[value_i] = math::distance(src_joints_centre[joint_index],
                                              src_bucket_position[value_index]);
           }
 
-          for (const int value_i : value_indices.index_range()) {
-            buffer[value_i] = math::safe_rcp(math::pow(buffer[value_i], float(power_value)));
-          }
+          distance_inverter(power_value, buffer.as_mutable_span());
 
           for (const int value_i : value_indices.index_range()) {
             const int value_index = value_indices[value_i];
@@ -795,8 +723,6 @@ static void sample_average_new(const OffsetIndices<int> buckets_offsets,
         },
         [&](const IndexRange bucket_range, const Span<int> value_indices) {
           buffer.resize(bucket_range.size());
-          // table_accum(value_indices, bucket_range, src_joints_centre, src_joints_value,
-          // src_bucket_position, src_bucket_value, dst_buckets_data);
           for (const int value_i : value_indices) {
             const float3 position = src_bucket_position[value_i];
 
@@ -804,9 +730,7 @@ static void sample_average_new(const OffsetIndices<int> buckets_offsets,
               buffer[index] = math::distance(src_bucket_position[bucket_range[index]], position);
             }
 
-            for (const int index : bucket_range.index_range()) {
-              buffer[index] = math::rcp(math::pow(buffer[index], float(power_value)));
-            }
+            distance_inverter(power_value, buffer.as_mutable_span());
 
             const float3 self_value = src_bucket_value[value_i];
             for (const int i : bucket_range.index_range()) {
