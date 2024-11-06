@@ -3416,7 +3416,7 @@ static void rna_def_object(BlenderRNA *brna)
       prop, "Pass Index", "Index number for the \"Object Index\" render pass");
   RNA_def_property_update(prop, NC_OBJECT, "rna_Object_internal_update_draw");
 
-  prop = RNA_def_property(srna, "refraction_layer_index", PROP_INT, PROP_UNSIGNED);
+  prop = RNA_def_property(srna, "refraction_layer_index", PROP_INT, PROP_NONE);
   RNA_def_property_int_sdna(prop, nullptr, "refraction_layer_index");
   RNA_def_property_ui_text(prop,
                            "Refraction Layer",

@@ -346,7 +346,7 @@ class DeferredPipeline {
   /* Gbuffer filling passes. We could have an arbitrary number of them but for now we just have
    * a hardcoded number of them. */
   DeferredLayer opaque_layer_;
-  std::map<uint16_t, std::unique_ptr<DeferredLayer>> refraction_layers_;
+  std::map<short, std::unique_ptr<DeferredLayer>> refraction_layers_;
   DeferredLayer volumetric_layer_;
 
   PassSimple debug_draw_ps_ = {"debug_gbuffer"};
@@ -362,11 +362,9 @@ class DeferredPipeline {
   PassMain::Sub *prepass_add(::Material *material,
                              GPUMaterial *gpumat,
                              bool has_motion,
-                             uint16_t refraction_layer);
-  PassMain::Sub *material_add(::Material *material,
-                              GPUMaterial *gpumat,
-                              uint16_t refraction_layer);
-  PassMain::Sub *npr_add(::Material *blender_mat, GPUMaterial *gpumat, uint16_t refraction_layer);
+                             short refraction_layer);
+  PassMain::Sub *material_add(::Material *material, GPUMaterial *gpumat, short refraction_layer);
+  PassMain::Sub *npr_add(::Material *blender_mat, GPUMaterial *gpumat, short refraction_layer);
 
   void render(View &main_view,
               View &render_view,
@@ -406,7 +404,7 @@ class DeferredPipeline {
 
  private:
   void debug_pass_sync();
-  DeferredLayer &get_refraction_layer(uint16_t index);
+  DeferredLayer &get_refraction_layer(short index);
 };
 
 /** \} */
@@ -751,7 +749,7 @@ class PipelineModule {
                               GPUMaterial *gpumat,
                               eMaterialPipeline pipeline_type,
                               eMaterialProbe probe_capture,
-                              uint16_t refraction_layer)
+                              short refraction_layer)
   {
     if (probe_capture == MAT_PROBE_REFLECTION) {
       switch (pipeline_type) {

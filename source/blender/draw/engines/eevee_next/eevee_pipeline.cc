@@ -986,7 +986,7 @@ void DeferredPipeline::end_sync()
   opaque_layer_.end_sync(true, refraction_layers_.empty(), !refraction_layers_.empty());
 
   if (!refraction_layers_.empty()) {
-    const uint16_t last_index = refraction_layers_.rbegin()->first;
+    const short last_index = refraction_layers_.rbegin()->first;
     for (auto &[index, layer] : refraction_layers_) {
       layer->end_sync(opaque_layer_.is_empty(), index == last_index, index != last_index);
     }
@@ -1043,7 +1043,7 @@ void DeferredPipeline::debug_draw(draw::View &view, GPUFrameBuffer *combined_fb)
 PassMain::Sub *DeferredPipeline::prepass_add(::Material *blender_mat,
                                              GPUMaterial *gpumat,
                                              bool has_motion,
-                                             uint16_t refraction_layer)
+                                             short refraction_layer)
 {
   if (!use_combined_lightprobe_eval && (blender_mat->blend_flag & MA_BL_SS_REFRACTION)) {
     return get_refraction_layer(refraction_layer).prepass_add(blender_mat, gpumat, has_motion);
@@ -1055,7 +1055,7 @@ PassMain::Sub *DeferredPipeline::prepass_add(::Material *blender_mat,
 
 PassMain::Sub *DeferredPipeline::material_add(::Material *blender_mat,
                                               GPUMaterial *gpumat,
-                                              uint16_t refraction_layer)
+                                              short refraction_layer)
 {
   if (!use_combined_lightprobe_eval && (blender_mat->blend_flag & MA_BL_SS_REFRACTION)) {
     return get_refraction_layer(refraction_layer).material_add(blender_mat, gpumat);
@@ -1067,7 +1067,7 @@ PassMain::Sub *DeferredPipeline::material_add(::Material *blender_mat,
 
 PassMain::Sub *DeferredPipeline::npr_add(::Material *blender_mat,
                                          GPUMaterial *gpumat,
-                                         uint16_t refraction_layer)
+                                         short refraction_layer)
 {
   if (!use_combined_lightprobe_eval && (blender_mat->blend_flag & MA_BL_SS_REFRACTION)) {
     return get_refraction_layer(refraction_layer).npr_add(blender_mat, gpumat);
@@ -1113,7 +1113,7 @@ void DeferredPipeline::render(View &main_view,
   DRW_stats_group_end();
 }
 
-DeferredLayer &DeferredPipeline::get_refraction_layer(uint16_t index)
+DeferredLayer &DeferredPipeline::get_refraction_layer(short index)
 {
   if (refraction_layers_.find(index) == refraction_layers_.end()) {
     refraction_layers_[index] = std::make_unique<DeferredLayer>(inst_);

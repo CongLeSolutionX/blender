@@ -209,7 +209,7 @@ struct MaterialKey {
               eMaterialGeometry geometry,
               eMaterialPipeline pipeline,
               short visibility_flags,
-              uint16_t refraction_layer)
+              short refraction_layer)
       : mat(mat_)
   {
     options = shader_uuid_from_material_type(pipeline,
@@ -263,7 +263,7 @@ struct ShaderKey {
   ShaderKey(GPUMaterial *gpumat,
             ::Material *blender_mat,
             eMaterialProbe probe_capture,
-            uint16_t refraction_layer)
+            short refraction_layer)
   {
     shader = GPU_material_get_shader(gpumat);
     options = uint64_t(shader_closure_bits_from_flag(gpumat));
