@@ -491,6 +491,44 @@ static void normalize_for_size(const OffsetIndices<int> buckets_offsets,
       });
 }
 
+static FunctionRef<void(int, MutableSpan<float>)> powered_rcp_for_squared(const int power_value)
+{
+  switch (power_value) {
+    case 0:
+      return [](const int /*power_value*/, MutableSpan<float> values) { values.fill(1.0f); };
+    case 1:
+      return [](const int /*power_value*/, MutableSpan<float> values) {
+        std::transform(values.begin(), values.end(), values.begin(), [&](const float value) {
+          return math::safe_rcp(math::sqrt(value));
+        });
+      };
+    case 2:
+      return [](const int /*power_value*/, MutableSpan<float> values) {
+        std::transform(values.begin(), values.end(), values.begin(), [&](const float value) {
+          return math::safe_rcp(value);
+        });
+      };
+    case 3:
+      return [](const int /*power_value*/, MutableSpan<float> values) {
+        std::transform(values.begin(), values.end(), values.begin(), [&](const float value) {
+          return math::safe_rcp(value * math::sqrt(value));
+        });
+      };
+    case 4:
+      return [](const int /*power_value*/, MutableSpan<float> values) {
+        std::transform(values.begin(), values.end(), values.begin(), [&](const float value) {
+          return math::safe_rcp(value * value);
+        });
+      };
+    default:
+      return [](const int power_value, MutableSpan<float> values) {
+        std::transform(values.begin(), values.end(), values.begin(), [&](const float value) {
+          return math::safe_rcp(math::pow(value, float(power_value) * 0.5f));
+        });
+      };
+  }
+}
+
 struct Item {
   int depth_i;
   int joint_i;
@@ -538,44 +576,6 @@ static void for_each_to_bottom_skip(const OffsetIndices<int> buckets_offsets,
 
     stack.append({depth_i + 1, joint_i * 2 + 0, int(next_indices.size())});
     stack.append({depth_i + 1, joint_i * 2 + 1, int(next_indices.size())});
-  }
-}
-
-static FunctionRef<void(int, MutableSpan<float>)> powered_rcp_for_squared(const int power_value)
-{
-  switch (power_value) {
-    case 0:
-      return [](const int /*power_value*/, MutableSpan<float> values) { values.fill(1.0f); };
-    case 1:
-      return [](const int /*power_value*/, MutableSpan<float> values) {
-        std::transform(values.begin(), values.end(), values.begin(), [&](const float value) {
-          return math::safe_rcp(math::sqrt(value));
-        });
-      };
-    case 2:
-      return [](const int /*power_value*/, MutableSpan<float> values) {
-        std::transform(values.begin(), values.end(), values.begin(), [&](const float value) {
-          return math::safe_rcp(value);
-        });
-      };
-    case 3:
-      return [](const int /*power_value*/, MutableSpan<float> values) {
-        std::transform(values.begin(), values.end(), values.begin(), [&](const float value) {
-          return math::safe_rcp(value * math::sqrt(value));
-        });
-      };
-    case 4:
-      return [](const int /*power_value*/, MutableSpan<float> values) {
-        std::transform(values.begin(), values.end(), values.begin(), [&](const float value) {
-          return math::safe_rcp(value * value);
-        });
-      };
-    default:
-      return [](const int power_value, MutableSpan<float> values) {
-        std::transform(values.begin(), values.end(), values.begin(), [&](const float value) {
-          return math::safe_rcp(math::pow(value, float(power_value) * 0.5f));
-        });
-      };
   }
 }
 
@@ -668,28 +668,10 @@ static void for_each_to_bottom_skip_new(const OffsetIndices<int> buckets_offsets
   Vector<std::pair<int, Array<int, 0>>> parent_joint_indices = {{0, std::move(begin_indices)}};
 
   for (const int depth_i : IndexRange(total_depth)) {
-    if (parent_joint_indices.is_empty()) {
-      break;
-    }
-
-    if (IndexRange(total_depth).last() == depth_i) {
-      for (const int joint_data_i : parent_joint_indices.index_range()) {
-        const int joint_i = parent_joint_indices[joint_data_i].first;
-
-        const IndexRange joint_buckets = joint_buckets_range_at_depth(
-            total_depth, depth_i, joint_i);
-        const Span<int> parent_indices =
-            parent_joint_indices[joint_data_i].second.as_mutable_span();
-
-        leaf_func(buckets_offsets[joint_i], parent_indices);
-      }
-      break;
-    }
-
     const IndexRange joints_range = joints_range_at_depth(depth_i);
 
     Vector<std::pair<int, Array<int, 0>>> new_joint_indices;
-    new_joint_indices.reserve(new_joint_indices.size());
+    new_joint_indices.reserve(new_joint_indices.size() * 2);
 
     for (const int joint_data_i : parent_joint_indices.index_range()) {
       const int joint_i = parent_joint_indices[joint_data_i].first;
@@ -711,6 +693,11 @@ static void for_each_to_bottom_skip_new(const OffsetIndices<int> buckets_offsets
 
       joint_func(buckets_offsets[joint_buckets], int(joints_range[joint_i]), finished_indices);
 
+      if (IndexRange(total_depth).last() == depth_i) {
+        leaf_func(buckets_offsets[joint_i], next_indices);
+        continue;
+      }
+
       if (next_indices.is_empty()) {
         continue;
       }
@@ -730,6 +717,10 @@ static void for_each_to_bottom_skip_new(const OffsetIndices<int> buckets_offsets
     }
 
     parent_joint_indices = std::move(new_joint_indices);
+
+    if (parent_joint_indices.is_empty()) {
+      break;
+    }
   }
 }
 
