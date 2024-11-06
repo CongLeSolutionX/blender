@@ -373,7 +373,7 @@ void paint_brush_color_get(Scene *scene,
                            float r_color[3])
 {
   if (invert) {
-    copy_v3_v3(r_color, BKE_brush_secondary_color_get(scene, nullptr, br));
+    copy_v3_v3(r_color, BKE_brush_secondary_color_get(scene, paint, br));
   }
   else {
     if (br->flag & BRUSH_USE_GRADIENT) {

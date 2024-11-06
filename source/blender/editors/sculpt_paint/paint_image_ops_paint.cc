@@ -130,7 +130,7 @@ class ImagePaintMode : public AbstractPaintMode {
   {
     float color[3];
     if (paint_stroke_inverted(stroke)) {
-      srgb_to_linearrgb_v3_v3(color, BKE_brush_secondary_color_get(scene, nullptr, brush));
+      srgb_to_linearrgb_v3_v3(color, BKE_brush_secondary_color_get(scene, paint, brush));
     }
     else {
       srgb_to_linearrgb_v3_v3(color, BKE_brush_color_get(scene, paint, brush));
