@@ -158,6 +158,7 @@ void Instance::begin_sync()
 
 void Instance::object_sync(ObjectRef &ob_ref, Manager &manager)
 {
+  // TODO: Call editmode_mapping_available as a shared function in BKE
   const bool in_edit_mode = object_is_edit_mode(ob_ref.object);
   const bool in_paint_mode = object_is_paint_mode(ob_ref.object);
   const bool in_sculpt_mode = object_is_sculpt_mode(ob_ref);

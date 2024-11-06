@@ -1371,7 +1371,12 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
     BLI_assert(BKE_object_get_editmesh_eval_final(&ob) != nullptr);
   }
 
-  const bool is_editmode = [&]() {
+  /** Controls
+   *  - object outline
+   *  -
+   */
+  const bool is_editmode = ob.mode == OB_MODE_EDIT;
+  const bool editmode_mapping_available = is_editmode && [&]() {
     if (!mesh.runtime->edit_mesh) {
       return false;
     }
@@ -1384,7 +1389,8 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
     if (object_orig->type != OB_MESH) {
       return false;
     }
-    /* In order to properly extract edit mode data, the edit mode data of the evaluated mesh has to
+    /* In order to properly extract edit mode data, the edit mode data of the evaluated mesh has
+    to
      * match the edit mode data from the original object. */
     const Mesh &mesh_orig = *static_cast<const Mesh *>(object_orig->data);
     if (mesh_orig.runtime->edit_mesh.get() != mesh.runtime->edit_mesh.get()) {
@@ -1523,7 +1529,7 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
     const Mesh *editmesh_eval_final = BKE_object_get_editmesh_eval_final(&ob);
     const Mesh *editmesh_eval_cage = BKE_object_get_editmesh_eval_cage(&ob);
 
-    do_cage = editmesh_eval_final != editmesh_eval_cage;
+    do_cage = editmesh_eval_final != editmesh_eval_cage && editmode_mapping_available;
     do_uvcage = !(editmesh_eval_final->runtime->is_original_bmesh &&
                   editmesh_eval_final->runtime->wrapper_type == ME_WRAPPER_TYPE_BMESH);
   }
@@ -1911,6 +1917,10 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
                                        scene,
                                        ts,
                                        true);
+  }
+  else {
+    // create empty batches for cache.cage
+    // or just try leaving it as is because theoretically it's already empty
   }
 
   if (do_subdivision) {

@@ -244,6 +244,9 @@ static void overlay_edit_mesh_add_ob_to_pass(OVERLAY_PrivateData *pd, Object *ob
     has_skin_roots = CustomData_get_offset(&em->bm->vdata, CD_MVERT_SKIN) != -1;
   }
 
+  // todo
+  // has_edit_mesh_cage &= editmode_mapping_available
+
   vert_shgrp = pd->edit_mesh_verts_grp[in_front];
   edge_shgrp = pd->edit_mesh_edges_grp[in_front];
   fdot_shgrp = pd->edit_mesh_facedots_grp[in_front];
