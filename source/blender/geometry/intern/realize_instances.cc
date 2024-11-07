@@ -2163,7 +2163,7 @@ static void execute_realize_grease_pencil_tasks(
 
   /* Allocate new grease pencil. */
   GreasePencil *dst_grease_pencil = BKE_grease_pencil_new_nomain();
-  BKE_grease_pencil_copy_parameters(*last_task.grease_pencil_info->grease_pencil,
+  BKE_grease_pencil_copy_parameters(*tasks.first().grease_pencil_info->grease_pencil,
                                     *dst_grease_pencil);
   r_realized_geometry.replace_grease_pencil(dst_grease_pencil);
 
