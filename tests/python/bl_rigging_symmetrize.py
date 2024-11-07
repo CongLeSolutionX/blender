@@ -258,6 +258,7 @@ class ArmatureSymmetrizeTargetsTest(unittest.TestCase):
         ebone.tail = (1, 0, 0)
 
     def test_symmetrize_selection(self):
+        # Only selected things are symmetrized.
         set_edit_bone_selected(self.arm.edit_bones["test.l"], False)
         bpy.ops.armature.symmetrize()
         self.assertEqual(len(self.arm.edit_bones), 1, "If nothing is selected, no bone is symmetrized")
@@ -301,7 +302,7 @@ class ArmatureSymmetrizeTargetsTest(unittest.TestCase):
     def test_symmetrize_invalid_subtarget(self):
         # Blender shouldn't crash when there is an invalid subtarget specified.
         bpy.ops.object.mode_set(mode='OBJECT')
-        target_ob = bpy.data.objects.new("target")
+        target_ob = bpy.data.objects.new("target", None)
         bpy.context.scene.collection.objects.link(target_ob)
 
         bpy.context.view_layer.objects.active = self.arm_ob
