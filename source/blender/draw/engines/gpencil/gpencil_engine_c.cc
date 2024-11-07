@@ -432,7 +432,7 @@ static GPENCIL_tObject *grease_pencil_object_cache_populate(GPENCIL_PrivateData 
   int t_offset = 0;
   /* Note that we loop over all the drawings (including the onion skinned ones) to make sure we
    * match the offsets of the batch cache. */
-  const Vector<DrawingInfo> drawings = retrieve_visible_drawings(*pd->scene, grease_pencil, true);
+  const Vector<DrawingInfo> drawings = retrieve_visible_drawings(*pd->scene, grease_pencil, do_onion);
   const Span<const Layer *> layers = grease_pencil.layers();
   for (const DrawingInfo info : drawings) {
     const Layer &layer = *layers[info.layer_index];
@@ -523,10 +523,11 @@ static GPENCIL_tObject *grease_pencil_object_cache_populate(GPENCIL_PrivateData 
       const bool show_fill = (points.size() >= 3) &&
                              ((gp_style->flag & GP_MATERIAL_FILL_SHOW) != 0) &&
                              (!pd->simplify_fill);
-      const bool hide_onion = is_onion && ((gp_style->flag & GP_MATERIAL_HIDE_ONIONSKIN) != 0 ||
-                                           (!do_onion && !do_multi_frame));
+
+      const bool hide_onion = is_onion && (((gp_style->flag & GP_MATERIAL_HIDE_ONIONSKIN) != 0) ||
+                                           !do_onion || !do_multi_frame);
       const bool skip_stroke = hide_material || (!show_stroke && !show_fill) ||
-                               (only_lines && !is_onion) || hide_onion;
+                               (only_lines && do_multi_frame) || (hide_onion && do_onion);
 
       if (skip_stroke) {
         t_offset += num_triangles_per_stroke[pos];
