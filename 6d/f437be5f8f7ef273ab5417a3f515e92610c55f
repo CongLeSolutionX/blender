@@ -1,2 +1,3 @@
 Referenced by issue #129896, Console warning in texture paint mode, RNA_boolean_get: OperatorStrokeElement.pen_flip not found
 Referenced by pull request #129929, Fix #129896: Console warning in texture, weight, vertex paint modes
+Referenced by commit 6b302eeac43d23d10ee9f8e561e953c8b77fb082, Fix #129896: Console warning in texture, weight, vertex paint modes
