@@ -2,3 +2,4 @@ Referenced by issue #101642, Regression: Geometry Nodes: Crash when deleting Gro
 Referenced by issue #101599, Node group timings aren't displayed for node groups
 Referenced by issue #101410, Regression: Missing update and false input of reroute node when connected to boolean socket
 Referenced by issue #98492, Geometry Nodes Evaluator 3.0
+Referenced by issue #97349, Performance bottleneck with many nested nodes
