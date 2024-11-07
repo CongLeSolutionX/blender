@@ -134,6 +134,10 @@ find_package_wrapper(ZLIB REQUIRED)
 find_package_wrapper(Zstd REQUIRED)
 find_package_wrapper(Epoxy REQUIRED)
 
+# Protobuf is precompiled as linked library, and thus should not be using find_package_wrapper().
+find_package(Protobuf REQUIRED MODULE)
+add_bundled_libraries(protobuf/lib)
+
 # XXX Linking errors with debian static tiff :/
 # find_package_wrapper(TIFF REQUIRED)
 find_package(TIFF)

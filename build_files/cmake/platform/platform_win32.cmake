@@ -422,6 +422,9 @@ set(BROTLI_LIBRARIES
 
 windows_find_package(Freetype REQUIRED)
 
+windows_find_package(Protobuf REQUIRED MODULE)
+add_bundled_libraries(protobuf/lib)
+
 if(WITH_HARFBUZZ)
   windows_find_package(Harfbuzz)
   if(NOT Harfbuzz_FOUND)

@@ -237,6 +237,10 @@ endif()
 set(EPOXY_ROOT_DIR ${LIBDIR}/epoxy)
 find_package(Epoxy REQUIRED)
 
+set(Protobuf_ROOT ${LIBDIR}/protobuf)
+find_package(Protobuf REQUIRED MODULE)
+add_bundled_libraries(protobuf/lib)
+
 set(PNG_ROOT ${LIBDIR}/png)
 find_package(PNG REQUIRED)
 
