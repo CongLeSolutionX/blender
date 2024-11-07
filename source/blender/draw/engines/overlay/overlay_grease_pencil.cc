@@ -95,14 +95,11 @@ static void OVERLAY_grease_pencil_material_names(Object *ob)
 
   const DRWContextState *draw_ctx = DRW_context_state_get();
 
-  bool show_points, show_lines;
+  bool show_points = false;
+  bool show_lines = false;
   is_selection_visible(show_points, show_lines);
 
   GreasePencil &grease_pencil = *static_cast<GreasePencil *>(ob->data);
-
-  /* TODO: In legacy GPv2 it used a `BKE_gpencil_visible_stroke_advanced_iter` wrapping call, such
-   * utility function has not been implemented for v3 yet, so iterate manually here. Note: this
-   * does not handle multi-frame editing or onion-skin. */
 
   Vector<ed::greasepencil::DrawingInfo> drawings = ed::greasepencil::retrieve_visible_drawings(
       *draw_ctx->scene, grease_pencil, false);
