@@ -684,18 +684,15 @@ static void modify_geometry_set(ModifierData *md,
         const int start_frame = *layer.start_frame_at(eval_frame);
         BLI_assert(start_frame <= eval_frame);
 
-        const int duration = layer.get_frame_duration_at(eval_frame, true);
         const int relative_start_frame = eval_frame - start_frame;
+        const int frame_duration = layer.get_frame_duration_at(eval_frame, true);
+        const float duration = frame_duration <= 0 ? mmd->length :
+                                                     math::min(float(frame_duration), mmd->length);
 
-        const int use_time = math::round(float(relative_start_frame) /
-                                         math::min(float(duration), mmd->length) * mmd->length);
+        const int use_time = math::round(float(relative_start_frame) / duration * mmd->length);
 
-        build_drawing(*mmd,
-                      *ctx->object,
-                      *drawing_info.drawing,
-                      prev_drawing,
-                      use_time,
-                      scene_fps);
+        build_drawing(
+            *mmd, *ctx->object, *drawing_info.drawing, prev_drawing, use_time, scene_fps);
       });
 }
 
