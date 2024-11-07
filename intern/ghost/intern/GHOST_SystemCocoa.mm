@@ -2113,8 +2113,13 @@ uint *GHOST_SystemCocoa::getClipboardImage(int *r_width, int *r_height) const
     const NSSize clipboardImageSize = getNSImagePixelSize(clipboardImage);
 
     if (ibuf) {
-      const uint64_t byteCount = clipboardImageSize.width * clipboardImageSize.height * 4;
+      const size_t byteCount = clipboardImageSize.width * clipboardImageSize.height * 4;
       uint *rgba = (uint *)malloc(byteCount);
+
+      if (!rgba) {
+        IMB_freeImBuf(ibuf);
+        return nullptr;
+      }
 
       memcpy(rgba, ibuf->byte_buffer.data, byteCount);
       IMB_freeImBuf(ibuf);
@@ -2132,8 +2137,25 @@ uint *GHOST_SystemCocoa::getClipboardImage(int *r_width, int *r_height) const
 GHOST_TSuccess GHOST_SystemCocoa::putClipboardImage(uint *rgba, int width, int height) const
 {
   @autoreleasepool {
+    const size_t rowByteCount = width * 4;
+    const size_t bufferSize = rowByteCount * height;
+
+    uint8_t *srcBuffer = (uint8_t *)rgba;
+    uint8_t *flipBuffer = (uint8_t *)malloc(bufferSize);
+
+    if (!flipBuffer) {
+      return GHOST_kFailure;
+    }
+
+    /* Vertical flip. */
+    for (int y = 0; y < height; y++) {
+      const int dst_off = (height - y - 1) * rowByteCount;
+      const int src_off = y * rowByteCount;
+      memcpy(flipBuffer + dst_off, srcBuffer + src_off, rowByteCount);
+    }
+
     NSBitmapImageRep *imageRep = [[NSBitmapImageRep alloc]
-        initWithBitmapDataPlanes:reinterpret_cast<unsigned char **>(&rgba)
+        initWithBitmapDataPlanes:reinterpret_cast<unsigned char **>(&flipBuffer)
                       pixelsWide:width
                       pixelsHigh:height
                    bitsPerSample:8
@@ -2141,7 +2163,7 @@ GHOST_TSuccess GHOST_SystemCocoa::putClipboardImage(uint *rgba, int width, int h
                         hasAlpha:YES
                         isPlanar:NO
                   colorSpaceName:NSDeviceRGBColorSpace
-                     bytesPerRow:width * 4
+                     bytesPerRow:rowByteCount
                     bitsPerPixel:32];
 
     NSImage *image = [[[NSImage alloc] initWithSize:NSMakeSize(width, height)] autorelease];
