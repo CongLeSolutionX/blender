@@ -158,6 +158,11 @@ static void sig_handle_crash(int signum, const void *os_data)
 #  endif
 }
 
+static void sig_handle_crash_fn(int signum)
+{
+  sig_handle_crash(signum, nullptr);
+}
+
 #  ifdef WIN32
 extern LONG WINAPI windows_exception_handler(EXCEPTION_POINTERS *ExceptionInfo)
 {
@@ -197,7 +202,7 @@ void main_signal_setup()
     SetUnhandledExceptionFilter(windows_exception_handler);
 #  else
     /* After parsing arguments. */
-    signal(SIGSEGV, sig_handle_crash);
+    signal(SIGSEGV, sig_handle_crash_fn);
 #  endif
   }
 
