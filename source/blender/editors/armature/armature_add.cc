@@ -97,7 +97,9 @@ EditBone *ED_armature_ebone_add(bArmature *arm, const char *name)
   return bone;
 }
 
-EditBone *ED_armature_ebone_add_primitive(Object *obedit_arm, float length, bool view_aligned)
+EditBone *ED_armature_ebone_add_primitive(Object *obedit_arm,
+                                          const float length,
+                                          const bool view_aligned)
 {
   bArmature *arm = static_cast<bArmature *>(obedit_arm->data);
   EditBone *bone;
@@ -387,7 +389,7 @@ static void pose_edit_bone_duplicate(ListBase *editbones, Object *ob)
 static void update_duplicate_subtarget(EditBone *dup_bone,
                                        ListBase *editbones,
                                        Object *ob,
-                                       bool lookup_mirror_subtarget)
+                                       const bool lookup_mirror_subtarget)
 {
   /* If an edit bone has been duplicated, lets update its constraints if the
    * subtarget they point to has also been duplicated.
