@@ -196,9 +196,11 @@ static bool compile_ex(shaderc::Compiler &compiler,
                        shaderc_shader_kind stage,
                        VKShaderModule &shader_module)
 {
+#if 0
   if (read_spirv_from_disk(shader_module)) {
     return true;
   }
+#endif
 
   shaderc::CompileOptions options;
   options.SetOptimizationLevel(shaderc_optimization_level_performance);
@@ -218,9 +220,11 @@ static bool compile_ex(shaderc::Compiler &compiler,
       shader_module.combined_sources, stage, full_name.c_str(), options);
   bool compilation_succeeded = shader_module.compilation_result.GetCompilationStatus() ==
                                shaderc_compilation_status_success;
+#if 0
   if (compilation_succeeded) {
     write_spirv_to_disk(shader_module);
   }
+#endif
   return compilation_succeeded;
 }
 
