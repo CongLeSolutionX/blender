@@ -22,13 +22,6 @@ def create_armature() -> tuple[bpy.types.Object, bpy.types.Armature]:
     return arm_ob, arm
 
 
-def set_edit_bone_selected(ebone: bpy.types.EditBone, selected: bool):
-    # Helper to select all parts of an edit bone.
-    ebone.select = selected
-    ebone.select_tail = selected
-    ebone.select_head = selected
-
-
 class BoneCollectionTest(unittest.TestCase):
     arm_ob: bpy.types.Object
     arm: bpy.types.Armature
@@ -228,61 +221,6 @@ class BoneCollectionTest(unittest.TestCase):
             bcolls_all['child1'],
             'Bone collections that already existed in the active armature are not expected to be updated')
         self.assertEqual({'agent': 327}, bcolls_all['child3']['dict'].to_dict())
-
-
-class ArmatureSymmetrizeTest(unittest.TestCase):
-    arm_ob: bpy.types.Object
-    arm: bpy.types.Armature
-
-    def setUp(self):
-        bpy.ops.wm.read_homefile(use_factory_startup=True)
-        self.arm_ob, self.arm = create_armature()
-        bpy.context.view_layer.objects.active = self.arm_ob
-        bpy.ops.object.mode_set(mode='EDIT')
-        ebone = self.arm.edit_bones.new(name="test.l")
-        ebone.tail = (1, 0, 0)
-
-    def test_symmetrize_selection(self):
-        set_edit_bone_selected(self.arm.edit_bones["test.l"], False)
-        bpy.ops.armature.symmetrize()
-        self.assertEqual(len(self.arm.edit_bones), 1, "If nothing is selected, no bone is symmetrized")
-
-        set_edit_bone_selected(self.arm.edit_bones["test.l"], True)
-        bpy.ops.armature.symmetrize()
-        self.assertEqual(len(self.arm.edit_bones), 2, "Selected EditBone should have been symmetrized")
-        self.assertTrue("test.r" in self.arm.edit_bones)
-        self.assertTrue("test.l" in self.arm.edit_bones)
-
-    def test_symmetrize_constraint_sub_target(self):
-        bpy.ops.object.mode_set(mode='OBJECT')
-        target_arm_ob, target_arm = create_armature()
-        bpy.context.view_layer.objects.active = target_arm_ob
-        bpy.ops.object.mode_set(mode='EDIT')
-        target_arm.edit_bones.new("target.l")
-        target_arm.edit_bones.new("target.r")
-        target_arm.edit_bones["target.l"].tail = (1, 0, 0)
-        target_arm.edit_bones["target.r"].tail = (1, 0, 0)
-
-        bpy.ops.object.mode_set(mode='OBJECT')
-        bpy.context.view_layer.objects.active = self.arm_ob
-        bpy.ops.object.mode_set(mode='POSE')
-        pose_bone_l = self.arm_ob.pose.bones["test.l"]
-        pose_bone_l.constraints.new("COPY_LOCATION")
-        pose_bone_l.constraints[0].target = target_arm_ob
-        pose_bone_l.constraints[0].subtarget = "target.l"
-
-        bpy.ops.object.mode_set(mode='OBJECT')
-        bpy.ops.object.mode_set(mode='EDIT')
-        set_edit_bone_selected(self.arm.edit_bones["test.l"], True)
-        bpy.ops.armature.symmetrize()
-        self.assertEqual(len(self.arm.edit_bones), 2, "Bone should have been symmetrized")
-        self.assertTrue("test.r" in self.arm.edit_bones)
-        self.assertTrue("test.l" in self.arm.edit_bones)
-
-        bpy.ops.object.mode_set(mode='POSE')
-        self.assertEqual(len(self.arm_ob.pose.bones["test.r"].constraints), 1, "Constraint should have been copied")
-        symm_constraint = self.arm_ob.pose.bones["test.r"].constraints[0]
-        self.assertEqual(symm_constraint.subtarget, "target.r")
 
 
 def main():

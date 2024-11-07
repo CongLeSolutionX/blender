@@ -387,37 +387,41 @@ static void updateDuplicateSubtarget(EditBone *dup_bone, ListBase *editbones, Ob
   /* If an edit bone has been duplicated, lets update its constraints if the
    * subtarget they point to has also been duplicated.
    */
+  bPoseChannel *pchan = BKE_pose_channel_ensure(ob->pose, dup_bone->name);
+
+  if (!pchan) {
+    return;
+  }
+
   EditBone *oldtarget, *newtarget;
-  bPoseChannel *pchan;
+  ListBase *conlist = &pchan->constraints;
+  LISTBASE_FOREACH (bConstraint *, curcon, conlist) {
+    /* does this constraint have a subtarget in
+     * this armature?
+     */
+    ListBase targets = {nullptr, nullptr};
 
-  if ((pchan = BKE_pose_channel_ensure(ob->pose, dup_bone->name))) {
-    ListBase *conlist = &pchan->constraints;
-    LISTBASE_FOREACH (bConstraint *, curcon, conlist) {
-      /* does this constraint have a subtarget in
-       * this armature?
-       */
-      ListBase targets = {nullptr, nullptr};
+    if (!BKE_constraint_targets_get(curcon, &targets)) {
+      continue;
+    }
 
-      if (BKE_constraint_targets_get(curcon, &targets)) {
-        LISTBASE_FOREACH (bConstraintTarget *, ct, &targets) {
-          if ((ct->tar == ob) && (ct->subtarget[0])) {
-            oldtarget = get_named_editbone(editbones, ct->subtarget);
-            if (oldtarget) {
-              /* was the subtarget bone duplicated too? If
-               * so, update the constraint to point at the
-               * duplicate of the old subtarget.
-               */
-              if (oldtarget->temp.ebone) {
-                newtarget = oldtarget->temp.ebone;
-                STRNCPY(ct->subtarget, newtarget->name);
-              }
-            }
+    LISTBASE_FOREACH (bConstraintTarget *, ct, &targets) {
+      if ((ct->tar == ob) && (ct->subtarget[0])) {
+        oldtarget = get_named_editbone(editbones, ct->subtarget);
+        if (oldtarget) {
+          /* was the subtarget bone duplicated too? If
+           * so, update the constraint to point at the
+           * duplicate of the old subtarget.
+           */
+          if (oldtarget->temp.ebone) {
+            newtarget = oldtarget->temp.ebone;
+            STRNCPY(ct->subtarget, newtarget->name);
           }
         }
-
-        BKE_constraint_targets_flush(curcon, &targets, false);
       }
     }
+
+    BKE_constraint_targets_flush(curcon, &targets, false);
   }
 }
 
