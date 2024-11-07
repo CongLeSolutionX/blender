@@ -55,12 +55,15 @@ typedef struct DrawDataList {
 } DrawDataList;
 
 typedef struct IDPropertyUIData {
+  /** Property name pointer. Owned by the #IDProperty. */
+  char *name;
+  void *_pad1;
   /** Tool-tip / property description pointer. Owned by the #IDProperty. */
   char *description;
   /** RNA `subtype`, used for every type except string properties (#PropertySubType). */
   int rna_subtype;
 
-  char _pad[4];
+  char _pad2[4];
 } IDPropertyUIData;
 
 /* DNA version of #EnumPropertyItem. */

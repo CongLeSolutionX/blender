@@ -627,16 +627,19 @@ static const char *rna_ensure_property_description(const PropertyRNA *prop)
 
 static const char *rna_ensure_property_name(const PropertyRNA *prop)
 {
-  const char *name;
-
   if (prop->magic == RNA_MAGIC) {
-    name = prop->name;
-  }
-  else {
-    name = ((const IDProperty *)prop)->name;
+    return prop->name;
   }
 
-  return name;
+  const IDProperty *idprop = (const IDProperty *)prop;
+  if (idprop->ui_data) {
+    const IDPropertyUIData *ui_data = idprop->ui_data;
+    if (ui_data->name != nullptr) {
+      return ui_data->name;
+    }
+  }
+
+  return idprop->name;
 }
 
 /* Structs */

@@ -47,6 +47,7 @@ static bool args_contain_key(PyObject *kwargs, const char *name)
  */
 static bool idprop_ui_data_update_base(IDPropertyUIData *ui_data,
                                        const char *rna_subtype,
+                                       const char *name,
                                        const char *description)
 {
   if (rna_subtype != nullptr) {
@@ -57,6 +58,10 @@ static bool idprop_ui_data_update_base(IDPropertyUIData *ui_data,
     {
       return false;
     }
+  }
+
+  if (name != nullptr) {
+    ui_data->name = BLI_strdup(name);
   }
 
   if (description != nullptr) {
@@ -215,6 +220,7 @@ static bool idprop_ui_data_update_int_default(IDProperty *idprop,
 static bool idprop_ui_data_update_int(IDProperty *idprop, PyObject *args, PyObject *kwargs)
 {
   const char *rna_subtype = nullptr;
+  const char *name = nullptr;
   const char *description = nullptr;
   int min, max, soft_min, soft_max, step;
   PyObject *default_value = nullptr;
@@ -228,12 +234,13 @@ static bool idprop_ui_data_update_int(IDProperty *idprop, PyObject *args, PyObje
       "default",
       "items",
       "subtype",
+      "name",
       "description",
       nullptr,
   };
   if (!PyArg_ParseTupleAndKeywords(args,
                                    kwargs,
-                                   "|$iiiiiOOzz:update",
+                                   "|$iiiiiOOzzz:update",
                                    (char **)kwlist,
                                    &min,
                                    &max,
@@ -243,6 +250,7 @@ static bool idprop_ui_data_update_int(IDProperty *idprop, PyObject *args, PyObje
                                    &default_value,
                                    &items,
                                    &rna_subtype,
+                                   &name,
                                    &description))
   {
     return false;
@@ -252,7 +260,7 @@ static bool idprop_ui_data_update_int(IDProperty *idprop, PyObject *args, PyObje
   IDPropertyUIDataInt *ui_data_orig = (IDPropertyUIDataInt *)idprop->ui_data;
   IDPropertyUIDataInt ui_data = *ui_data_orig;
 
-  if (!idprop_ui_data_update_base(&ui_data.base, rna_subtype, description)) {
+  if (!idprop_ui_data_update_base(&ui_data.base, rna_subtype, name, description)) {
     IDP_ui_data_free_unique_contents(&ui_data.base, IDP_ui_data_type(idprop), &ui_data_orig->base);
     return false;
   }
@@ -378,15 +386,17 @@ static bool idprop_ui_data_update_bool_default(IDProperty *idprop,
 static bool idprop_ui_data_update_bool(IDProperty *idprop, PyObject *args, PyObject *kwargs)
 {
   const char *rna_subtype = nullptr;
+  const char *name = nullptr;
   const char *description = nullptr;
   PyObject *default_value = nullptr;
-  const char *kwlist[] = {"default", "subtype", "description", nullptr};
+  const char *kwlist[] = {"default", "subtype", "name", "description", nullptr};
   if (!PyArg_ParseTupleAndKeywords(args,
                                    kwargs,
-                                   "|$Ozz:update",
+                                   "|$Ozzz:update",
                                    (char **)kwlist,
                                    &default_value,
                                    &rna_subtype,
+                                   &name,
                                    &description))
   {
     return false;
@@ -396,7 +406,7 @@ static bool idprop_ui_data_update_bool(IDProperty *idprop, PyObject *args, PyObj
   IDPropertyUIDataBool *ui_data_orig = (IDPropertyUIDataBool *)idprop->ui_data;
   IDPropertyUIDataBool ui_data = *ui_data_orig;
 
-  if (!idprop_ui_data_update_base(&ui_data.base, rna_subtype, description)) {
+  if (!idprop_ui_data_update_base(&ui_data.base, rna_subtype, name, description)) {
     IDP_ui_data_free_unique_contents(&ui_data.base, IDP_ui_data_type(idprop), &ui_data_orig->base);
     return false;
   }
@@ -468,6 +478,7 @@ static bool idprop_ui_data_update_float_default(IDProperty *idprop,
 static bool idprop_ui_data_update_float(IDProperty *idprop, PyObject *args, PyObject *kwargs)
 {
   const char *rna_subtype = nullptr;
+  const char *name = nullptr;
   const char *description = nullptr;
   int precision;
   double min, max, soft_min, soft_max, step;
@@ -480,11 +491,12 @@ static bool idprop_ui_data_update_float(IDProperty *idprop, PyObject *args, PyOb
                           "precision",
                           "default",
                           "subtype",
+                          "name",
                           "description",
                           nullptr};
   if (!PyArg_ParseTupleAndKeywords(args,
                                    kwargs,
-                                   "|$dddddiOzz:update",
+                                   "|$dddddiOzzz:update",
                                    (char **)kwlist,
                                    &min,
                                    &max,
@@ -494,6 +506,7 @@ static bool idprop_ui_data_update_float(IDProperty *idprop, PyObject *args, PyOb
                                    &precision,
                                    &default_value,
                                    &rna_subtype,
+                                   &name,
                                    &description))
   {
     return false;
@@ -503,7 +516,7 @@ static bool idprop_ui_data_update_float(IDProperty *idprop, PyObject *args, PyOb
   IDPropertyUIDataFloat *ui_data_orig = (IDPropertyUIDataFloat *)idprop->ui_data;
   IDPropertyUIDataFloat ui_data = *ui_data_orig;
 
-  if (!idprop_ui_data_update_base(&ui_data.base, rna_subtype, description)) {
+  if (!idprop_ui_data_update_base(&ui_data.base, rna_subtype, name, description)) {
     IDP_ui_data_free_unique_contents(&ui_data.base, IDP_ui_data_type(idprop), &ui_data_orig->base);
     return false;
   }
@@ -555,15 +568,17 @@ static bool idprop_ui_data_update_float(IDProperty *idprop, PyObject *args, PyOb
 static bool idprop_ui_data_update_string(IDProperty *idprop, PyObject *args, PyObject *kwargs)
 {
   const char *rna_subtype = nullptr;
+  const char *name = nullptr;
   const char *description = nullptr;
   const char *default_value = nullptr;
-  const char *kwlist[] = {"default", "subtype", "description", nullptr};
+  const char *kwlist[] = {"default", "subtype", "name", "description", nullptr};
   if (!PyArg_ParseTupleAndKeywords(args,
                                    kwargs,
-                                   "|$zzz:update",
+                                   "|$zzzz:update",
                                    (char **)kwlist,
                                    &default_value,
                                    &rna_subtype,
+                                   &name,
                                    &description))
   {
     return false;
@@ -573,7 +588,7 @@ static bool idprop_ui_data_update_string(IDProperty *idprop, PyObject *args, PyO
   IDPropertyUIDataString *ui_data_orig = (IDPropertyUIDataString *)idprop->ui_data;
   IDPropertyUIDataString ui_data = *ui_data_orig;
 
-  if (!idprop_ui_data_update_base(&ui_data.base, rna_subtype, description)) {
+  if (!idprop_ui_data_update_base(&ui_data.base, rna_subtype, name, description)) {
     IDP_ui_data_free_unique_contents(&ui_data.base, IDP_ui_data_type(idprop), &ui_data_orig->base);
     return false;
   }
@@ -594,11 +609,18 @@ static bool idprop_ui_data_update_string(IDProperty *idprop, PyObject *args, PyO
 static bool idprop_ui_data_update_id(IDProperty *idprop, PyObject *args, PyObject *kwargs)
 {
   const char *rna_subtype = nullptr;
+  const char *name = nullptr;
   const char *description = nullptr;
   const char *id_type = nullptr;
-  const char *kwlist[] = {"subtype", "description", "id_type", nullptr};
-  if (!PyArg_ParseTupleAndKeywords(
-          args, kwargs, "|$zzz:update", (char **)kwlist, &rna_subtype, &description, &id_type))
+  const char *kwlist[] = {"subtype", "name", "description", "id_type", nullptr};
+  if (!PyArg_ParseTupleAndKeywords(args,
+                                   kwargs,
+                                   "|$zzzz:update",
+                                   (char **)kwlist,
+                                   &rna_subtype,
+                                   &name,
+                                   &description,
+                                   &id_type))
   {
     return false;
   }
@@ -607,7 +629,7 @@ static bool idprop_ui_data_update_id(IDProperty *idprop, PyObject *args, PyObjec
   IDPropertyUIDataID *ui_data_orig = (IDPropertyUIDataID *)idprop->ui_data;
   IDPropertyUIDataID ui_data = *ui_data_orig;
 
-  if (!idprop_ui_data_update_base(&ui_data.base, rna_subtype, description)) {
+  if (!idprop_ui_data_update_base(&ui_data.base, rna_subtype, name, description)) {
     IDP_ui_data_free_unique_contents(&ui_data.base, IDP_ui_data_type(idprop), &ui_data_orig->base);
     return false;
   }
@@ -858,6 +880,13 @@ static PyObject *BPy_IDIDPropertyUIManager_as_dict(BPy_IDPropertyUIManager *self
     RNA_enum_identifier(rna_enum_property_subtype_items, ui_data->rna_subtype, &subtype_id);
     PyObject *item = PyUnicode_FromString(subtype_id);
     PyDict_SetItemString(dict, "subtype", item);
+    Py_DECREF(item);
+  }
+
+  /* Description. */
+  if (ui_data->name != nullptr) {
+    PyObject *item = PyUnicode_FromString(ui_data->name);
+    PyDict_SetItemString(dict, "name", item);
     Py_DECREF(item);
   }
 

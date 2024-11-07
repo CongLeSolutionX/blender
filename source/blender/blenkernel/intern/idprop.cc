@@ -303,6 +303,7 @@ IDPropertyUIData *IDP_ui_data_copy(const IDProperty *prop)
     }
   }
 
+  dst_ui_data->name = static_cast<char *>(MEM_dupallocN(prop->ui_data->name));
   dst_ui_data->description = static_cast<char *>(MEM_dupallocN(prop->ui_data->description));
 
   return dst_ui_data;
@@ -1098,6 +1099,9 @@ void IDP_ui_data_free_unique_contents(IDPropertyUIData *ui_data,
                                       const eIDPropertyUIDataType type,
                                       const IDPropertyUIData *other)
 {
+  if (ui_data->name != other->name) {
+    MEM_SAFE_FREE(ui_data->name);
+  }
   if (ui_data->description != other->description) {
     MEM_SAFE_FREE(ui_data->description);
   }
@@ -1179,6 +1183,7 @@ static void ui_data_free(IDPropertyUIData *ui_data, const eIDPropertyUIDataType 
     }
   }
 
+  MEM_SAFE_FREE(ui_data->name);
   MEM_SAFE_FREE(ui_data->description);
 
   MEM_freeN(ui_data);
@@ -1290,6 +1295,7 @@ static void write_ui_data(const IDProperty *prop, BlendWriter *writer)
 {
   IDPropertyUIData *ui_data = prop->ui_data;
 
+  BLO_write_string(writer, ui_data->name);
   BLO_write_string(writer, ui_data->description);
 
   switch (IDP_ui_data_type(prop)) {
@@ -1522,6 +1528,7 @@ static void read_ui_data(IDProperty *prop, BlendDataReader *reader)
   }
 
   if (prop->ui_data) {
+    BLO_read_string(reader, &prop->ui_data->name);
     BLO_read_string(reader, &prop->ui_data->description);
   }
 }
@@ -1754,6 +1761,7 @@ static IDPropertyUIData *convert_base_ui_data(IDPropertyUIData *src,
 {
   IDPropertyUIData *dst = ui_data_alloc(dst_type);
   *dst = *src;
+  src->name = nullptr;
   src->description = nullptr;
   return dst;
 }
