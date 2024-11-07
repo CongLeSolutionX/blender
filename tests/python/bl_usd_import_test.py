@@ -84,10 +84,17 @@ class USDImportTest(AbstractUSDTest):
         self.assertEqual(10, len(objects), f"Test scene {infile} should have ten objects; found {len(objects)}")
 
         # Test the hierarchy.
-        self.assertEqual(objects['degenerate'], objects['m_degenerate'].parent, "m_degenerate should be child of /degenerate")
-        self.assertEqual(objects['triangles'], objects['m_triangles'].parent, "m_triangles should be a child of /triangles")
+        self.assertEqual(
+            objects['degenerate'],
+            objects['m_degenerate'].parent,
+            "m_degenerate should be child of /degenerate")
+        self.assertEqual(
+            objects['triangles'],
+            objects['m_triangles'].parent,
+            "m_triangles should be a child of /triangles")
         self.assertEqual(objects['quad'], objects['m_quad'].parent, "m_quad should be a child of /quad")
-        self.assertEqual(objects['ngon_concave'], objects['m_ngon_concave'].parent, "m_ngon_concave should be a child of /ngon_concave")
+        self.assertEqual(objects['ngon_concave'], objects['m_ngon_concave'].parent,
+                         "m_ngon_concave should be a child of /ngon_concave")
 
     def test_import_mesh_topology(self):
         """Test importing meshes with different polygon types."""
