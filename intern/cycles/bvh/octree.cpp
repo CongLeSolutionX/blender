@@ -20,6 +20,7 @@
 #include <memory>
 
 #ifdef WITH_OPENVDB
+#  include <openvdb/tools/FindActiveValues.h>
 #  include <openvdb/tools/LevelSetUtil.h>
 #endif
 
@@ -274,7 +275,7 @@ static bool vdb_voxel_intersect(const float3 p_min,
                                 const Transform itfm,
                                 const bool transform_applied,
                                 openvdb::BoolGrid::ConstPtr &grid,
-                                openvdb::BoolGrid::ConstAccessor &acc)
+                                const openvdb::tools::FindActiveValues<openvdb::BoolTree> &find)
 {
   if (grid->empty()) {
     /* Non-mesh volume. */
@@ -296,14 +297,9 @@ static bool vdb_voxel_intersect(const float3 p_min,
       openvdb::Coord::floor(grid->worldToIndex(vdb_bbox.min())),
       openvdb::Coord::ceil(grid->worldToIndex(vdb_bbox.max())));
 
-  /* Check if any point in the bounding box lies inside the mesh. */
-  for (auto coord = coord_bbox.begin(); coord != coord_bbox.end(); ++coord) {
-    if (acc.getValue(*coord)) {
-      return true;
-    }
-  }
-
-  return false;
+  /* Check if the bounding box lies inside or partially overlaps the mesh.
+   * For interior mask grids, all the interior voxels are active. */
+  return find.anyActiveValues(coord_bbox, true);
 }
 #endif
 
@@ -350,8 +346,8 @@ static void fill_shader_input(device_vector<KernelShaderEvalInput> &d_input,
   d_input_data[0].object = num_samples;
 
   parallel_for(range, [&](const blocked_range3d<int> &r) {
-    /* One accessor per thread is importance for cached access. */
-    openvdb::BoolGrid::ConstAccessor acc = grid->getConstAccessor();
+    /* One accessor per thread is important for cached access. */
+    const auto find = openvdb::tools::FindActiveValues(grid->tree());
 
     for (int z = r.cols().begin(); z < r.cols().end(); ++z) {
       for (int y = r.rows().begin(); y < r.rows().end(); ++y) {
@@ -362,7 +358,7 @@ static void fill_shader_input(device_vector<KernelShaderEvalInput> &d_input,
 
 #ifdef WITH_OPENVDB
           /* Zero density for cells outside of the mesh. */
-          if (!vdb_voxel_intersect(p, p + voxel_size, itfm, transform_applied, grid, acc)) {
+          if (!vdb_voxel_intersect(p, p + voxel_size, itfm, transform_applied, grid, find)) {
             d_input_data[offset * 2 + 1].object = OBJECT_NONE;
             d_input_data[offset * 2 + 2].object = SHADER_NONE;
             continue;
