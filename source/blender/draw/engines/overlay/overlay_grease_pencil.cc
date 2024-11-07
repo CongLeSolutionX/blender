@@ -75,8 +75,7 @@ static void overlay_grease_pencil_draw_stroke_color_name(Object &object,
   uchar color[4];
   UI_GetThemeColor4ubv(theme_id, color);
 
-  float fpt[3];
-  mul_v3_m4v3(fpt, object.object_to_world().ptr(), position);
+  const float3 fpt = blender::math::transform_point(object.object_to_world(), position);
 
   DRWTextStore *dt = DRW_text_cache_ensure();
   DRW_text_cache_add(dt,
@@ -112,20 +111,17 @@ static void OVERLAY_grease_pencil_material_names(Object *ob)
 
     const bke::CurvesGeometry strokes = drawing.strokes();
     const OffsetIndices<int> points_by_curve = strokes.points_by_curve();
-    const bke::AttributeReader<bool> selection_reader =
-        strokes.attributes().lookup_or_default<bool>(
-            ".selection", show_points ? bke::AttrDomain::Point : bke::AttrDomain::Curve, true);
-    const bke::AttributeReader<int> material_reader = strokes.attributes().lookup_or_default<int>(
+    const bke::AttrDomain domain = show_points ? bke::AttrDomain::Point : bke::AttrDomain::Curve;
+    const VArray<bool> selections = *strokes.attributes().lookup_or_default<bool>(
+        ".selection", domain, true);
+    const VArray<int> materials = *strokes.attributes().lookup_or_default<int>(
         "material_index", bke::AttrDomain::Curve, 0);
-    const VArray<bool> selections = selection_reader.varray;
-    const VArray<int> materials = material_reader.varray;
     const Span<float3> positions = strokes.positions();
 
     auto show_stroke_name = [&](const int stroke_i) {
       if (show_points) {
-        const int point_offset = points_by_curve[stroke_i].first();
-        for (const int point_i : points_by_curve[stroke_i].index_range()) {
-          if (selections[point_i + point_offset]) {
+        for (const int point_i : points_by_curve[stroke_i]) {
+          if (selections[point_i]) {
             return true;
           }
         }
@@ -311,7 +307,7 @@ void OVERLAY_edit_grease_pencil_cache_populate(OVERLAY_Data *vedata, Object *ob)
   }
 
   View3D *v3d = draw_ctx->v3d;
-  /* don't show object extras in set's */
+  /* Don't show object extras in set's. */
   if ((ob->base_flag & (BASE_FROM_SET | BASE_FROM_DUPLI)) == 0) {
     if ((v3d->gp_flag & V3D_GP_SHOW_MATERIAL_NAME) && DRW_state_show_text()) {
       OVERLAY_grease_pencil_material_names(ob);
