@@ -453,6 +453,10 @@ void Octree::evaluate_volume_density_(Device *device, Progress &progress, Scene 
   };
 
   for (const Node *node : root_->objects) {
+    if (progress.get_cancel()) {
+      return;
+    }
+
     const Object *object = dynamic_cast<const Object *>(node);
 
     /* Evaluate density inside object bounds. */
@@ -529,6 +533,9 @@ void Octree::build(Device *device, Progress &progress, Scene *scene)
   double start_time = time_dt();
 
   evaluate_volume_density_(device, progress, scene);
+  if (progress.get_cancel()) {
+    return;
+  }
 
   std::cout << "Volume density evaluated in " << time_dt() - start_time << " seconds."
             << std::endl;
