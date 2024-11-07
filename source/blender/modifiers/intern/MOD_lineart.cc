@@ -782,8 +782,8 @@ static void generate_strokes(ModifierData &md,
     return;
   }
 
-  bool is_first_lineart = (&first_lineart == &lmd);
-  bool use_cache = (lmd.flags & MOD_LINEART_USE_CACHE);
+  const bool is_first_lineart = (&first_lineart == &lmd);
+  const bool use_cache = (lmd.flags & MOD_LINEART_USE_CACHE);
   LineartCache *local_lc = (is_first_lineart || use_cache) ? first_lineart.shared_cache : nullptr;
 
   if (is_first_lineart || (!use_cache)) {
