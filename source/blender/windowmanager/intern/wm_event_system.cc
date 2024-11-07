@@ -4836,7 +4836,7 @@ static bool event_or_prev_in_rect(const wmEvent *event, const rcti *rect)
   return false;
 }
 
-bool WM_event_handler_region_v2d_mask_test(const wmWindow * /*win*/,
+bool WM_event_handler_region_v2d_mask_poll(const wmWindow * /*win*/,
                                            const ScrArea * /*area*/,
                                            const ARegion *region,
                                            const wmEvent *event)
@@ -4846,18 +4846,19 @@ bool WM_event_handler_region_v2d_mask_test(const wmWindow * /*win*/,
   return event_or_prev_in_rect(event, &rect);
 }
 
-bool WM_event_handler_region_v2d_mask_no_marker_test(const wmWindow *win,
+bool WM_event_handler_region_v2d_mask_no_marker_poll(const wmWindow *win,
                                                      const ScrArea *area,
                                                      const ARegion *region,
                                                      const wmEvent *event)
 {
-  if (!WM_event_handler_region_v2d_mask_test(win, area, region, event)) {
+  if (!WM_event_handler_region_v2d_mask_poll(win, area, region, event)) {
     return false;
   }
   /* Casting away `const` is only needed for a non-constant return value. */
   const ListBase *markers = ED_scene_markers_get(WM_window_get_active_scene(win),
                                                  const_cast<ScrArea *>(area));
   if (markers && !BLI_listbase_is_empty(markers)) {
+    /* Closely tied to UI drawing, check functions which use #UI_MARKER_MARGIN_Y. */
     rcti rect = region->winrct;
     rect.ymax = rect.ymin + UI_MARKER_MARGIN_Y;
     return !BLI_rcti_isect_pt_v(&rect, event->xy);
@@ -4880,7 +4881,7 @@ wmEventHandler_Keymap *WM_event_add_keymap_handler_poll(ListBase *handlers,
 
 wmEventHandler_Keymap *WM_event_add_keymap_handler_v2d_mask(ListBase *handlers, wmKeyMap *keymap)
 {
-  return WM_event_add_keymap_handler_poll(handlers, keymap, WM_event_handler_region_v2d_mask_test);
+  return WM_event_add_keymap_handler_poll(handlers, keymap, WM_event_handler_region_v2d_mask_poll);
 }
 
 void WM_event_remove_keymap_handler(ListBase *handlers, wmKeyMap *keymap)

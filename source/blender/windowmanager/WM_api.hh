@@ -480,11 +480,23 @@ wmEventHandler_Keymap *WM_event_add_keymap_handler_poll(ListBase *handlers,
                                                         wmKeyMap *keymap,
                                                         EventHandlerPoll poll);
 
-bool WM_event_handler_region_v2d_mask_test(const wmWindow *win,
+/**
+ * \return true when the `event` should be handled by the 2D views masked region.
+ *
+ * \note uses the #EventHandlerPoll signature.
+ */
+bool WM_event_handler_region_v2d_mask_poll(const wmWindow *win,
                                            const ScrArea *area,
                                            const ARegion *region,
                                            const wmEvent *event);
-bool WM_event_handler_region_v2d_mask_no_marker_test(const wmWindow *win,
+
+/**
+ * A version of #WM_event_handler_region_v2d_mask_poll which excludes events
+ * (returning false) in the marker region.
+ *
+ * \note uses the #EventHandlerPoll signature.
+ */
+bool WM_event_handler_region_v2d_mask_no_marker_poll(const wmWindow *win,
                                                      const ScrArea *area,
                                                      const ARegion *region,
                                                      const wmEvent *event);

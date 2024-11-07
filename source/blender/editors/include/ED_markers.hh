@@ -37,6 +37,8 @@ void ED_markers_draw(const bContext *C, int flag);
 
 /**
  * Public API for getting markers from the scene & area.
+ *
+ * \return A list of #TimeMarker.
  */
 ListBase *ED_scene_markers_get(Scene *scene, ScrArea *area);
 

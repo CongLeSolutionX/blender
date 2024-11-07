@@ -60,7 +60,6 @@
 /** \name Marker API
  * \{ */
 
-/* helper function for getting the list of markers to work on */
 ListBase *ED_scene_markers_get(Scene *scene, ScrArea *area)
 {
   /* local marker sets... */
@@ -240,7 +239,9 @@ static bool ED_operator_markers_region_active(bContext *C)
   return false;
 }
 
-static TimeMarker *region_position_is_over_marker(View2D *v2d, ListBase *markers, float region_x)
+static TimeMarker *region_position_is_over_marker(const View2D *v2d,
+                                                  ListBase *markers,
+                                                  float region_x)
 {
   if (markers == nullptr || BLI_listbase_is_empty(markers)) {
     return nullptr;
@@ -1312,15 +1313,22 @@ static int ed_marker_select(bContext *C,
                             bool camera,
                             bool wait_to_deselect_others)
 {
+  /* NOTE: keep this functionality in sync with #ACTION_OT_clickselect.
+   * The logic here closely matches its internals.
+   * From a user perspective the functions should also behave in much the same way.
+   * The main difference with marker selection is support for selecting the camera.
+   *
+   * The variables (`sel_op` & `deselect_all`) have been included so marker
+   * selection can use identical checks to dope-sheet selection. */
+
   ListBase *markers = ED_context_get_markers(C);
-  View2D *v2d = UI_view2d_fromcontext(C);
+  const View2D *v2d = UI_view2d_fromcontext(C);
   int ret_val = OPERATOR_FINISHED;
   TimeMarker *nearest_marker = region_position_is_over_marker(v2d, markers, mval[0]);
-  bool found = (nearest_marker != nullptr);
-  bool is_selected = (nearest_marker && nearest_marker->flag & SELECT);
-
-  float frame_at_mouse_position = UI_view2d_region_to_view_x(v2d, mval[0]);
-  int cfra = ED_markers_find_nearest_marker_time(markers, frame_at_mouse_position);
+  const float frame_at_mouse_position = UI_view2d_region_to_view_x(v2d, mval[0]);
+  const int cfra = ED_markers_find_nearest_marker_time(markers, frame_at_mouse_position);
+  const bool found = (nearest_marker != nullptr);
+  const bool is_selected = (nearest_marker && nearest_marker->flag & SELECT);
 
   eSelectOp sel_op = (extend) ? (is_selected ? SEL_OP_SUB : SEL_OP_ADD) : SEL_OP_SET;
 

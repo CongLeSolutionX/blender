@@ -32,6 +32,7 @@ void ED_time_scrub_draw(const ARegion *region,
 rcti ED_time_scrub_clamp_scroller_mask(const rcti &scroller_mask);
 
 bool ED_time_scrub_event_in_region(const ARegion *region, const wmEvent *event);
+/** Follow the #EventHandlerPoll function signature. */
 bool ED_time_scrub_event_in_region_poll(const wmWindow *win,
                                         const ScrArea *area,
                                         const ARegion *region,
