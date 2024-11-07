@@ -161,6 +161,33 @@ class DATA_PT_lens(CameraButtonsPanel, Panel):
         sub.prop(cam, "clip_end", text="End")
 
 
+class DATA_PT_lens_script_parameters(CameraButtonsPanel, Panel):
+    bl_label = "Script parameters"
+    bl_parent_id = "DATA_PT_lens"
+    COMPAT_ENGINES = {'BLENDER_RENDER'}
+
+    @classmethod
+    def poll(cls, context):
+        cam = context.camera
+        return (super().poll(context) and
+                cam.type == 'PANO' and
+                context.engine == 'CYCLES' and
+                cam.panorama_type == 'SCRIPT' and
+                any(key.startswith('script_param_') for key in cam.cycles.keys()))
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+
+        cam = context.camera
+        ccam = cam.cycles
+
+        col = layout.column()
+        for key in ccam.keys():
+            if key.startswith('script_param_'):
+                col.prop(ccam, f'["{key}"]')
+
+
 class DATA_PT_camera_stereoscopy(CameraButtonsPanel, Panel):
     bl_label = "Stereoscopy"
     COMPAT_ENGINES = {
@@ -601,6 +628,7 @@ classes = (
     CAMERA_PT_safe_areas_presets,
     DATA_PT_context_camera,
     DATA_PT_lens,
+    DATA_PT_lens_script_parameters,
     DATA_PT_camera_dof,
     DATA_PT_camera_dof_aperture,
     DATA_PT_camera,

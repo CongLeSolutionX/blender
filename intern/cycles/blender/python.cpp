@@ -682,6 +682,99 @@ static PyObject *osl_update_node_func(PyObject * /*self*/, PyObject *args)
   Py_RETURN_TRUE;
 }
 
+static PyObject *osl_param_to_tuple(const OSL::OSLQuery::Parameter *param, bool is_meta)
+{
+  const char *type = "";
+  if (param->type.basetype == TypeDesc::STRING) {
+    type = "string";
+  }
+  else if (param->type.basetype == TypeDesc::INT) {
+    type = "int";
+  }
+  else if (param->type.basetype == TypeDesc::FLOAT) {
+    type = "float";
+  }
+
+  PyObject *pydefault;
+  if (is_meta || param->validdefault) {
+    pydefault = PyList_New(param->type.aggregate);
+    for (int i = 0; i < param->type.aggregate; i++) {
+      if (param->type.basetype == TypeDesc::STRING) {
+        PyList_SET_ITEM(pydefault, i, PyUnicode_FromString(param->sdefault[i].c_str()));
+      }
+      else if (param->type.basetype == TypeDesc::INT) {
+        PyList_SET_ITEM(pydefault, i, PyLong_FromLong(param->idefault[i]));
+      }
+      else if (param->type.basetype == TypeDesc::FLOAT) {
+        PyList_SET_ITEM(pydefault, i, PyFloat_FromDouble(param->fdefault[i]));
+      }
+      else {
+        PyList_SET_ITEM(pydefault, i, Py_NewRef(Py_None));
+      }
+    }
+  }
+  else {
+    pydefault = Py_NewRef(Py_None);
+  }
+
+  PyObject *pymeta = PyList_New(param->metadata.size());
+  for (int i = 0; i < param->metadata.size(); i++) {
+    PyList_SET_ITEM(pymeta, i, osl_param_to_tuple(&param->metadata[i], true));
+  }
+
+  const char *vecsemantics = "";
+  if (param->type.vecsemantics == TypeDesc::COLOR) {
+    vecsemantics = "color";
+  }
+  else if (param->type.vecsemantics == TypeDesc::VECTOR) {
+    vecsemantics = "vector";
+  }
+  else if (param->type.vecsemantics == TypeDesc::NORMAL) {
+    vecsemantics = "normal";
+  }
+  else if (param->type.vecsemantics == TypeDesc::POINT) {
+    vecsemantics = "point";
+  }
+
+  return Py_BuildValue("(sssOONN)",
+                       type,
+                       vecsemantics,
+                       param->name.c_str(),
+                       param->isoutput ? Py_True : Py_False,
+                       param->isclosure ? Py_True : Py_False,
+                       pydefault,
+                       pymeta);
+}
+
+static PyObject *osl_get_params_func(PyObject * /*self*/, PyObject *args)
+{
+  const char *filepath = NULL;
+
+  if (!PyArg_ParseTuple(args, "s", &filepath))
+    return NULL;
+
+  /* query from file path */
+  OSL::OSLQuery query;
+
+  if (!OSLShaderManager::osl_query(query, filepath))
+    Py_RETURN_NONE;
+
+  PyObject *params = PyList_New(query.nparams());
+  for (int i = 0; i < query.nparams(); i++) {
+    const OSL::OSLQuery::Parameter *param = query.getparam(i);
+
+    /* skip unsupported types */
+    if (param->varlenarray || param->isstruct || param->type.arraylen > 1) {
+      PyList_SET_ITEM(params, i, Py_NewRef(Py_None));
+      continue;
+    }
+
+    PyList_SET_ITEM(params, i, osl_param_to_tuple(param, false));
+  }
+
+  return params;
+}
+
 static PyObject *osl_compile_func(PyObject * /*self*/, PyObject *args)
 {
   const char *inputfile = NULL, *outputfile = NULL;
@@ -966,6 +1059,7 @@ static PyMethodDef methods[] = {
 #ifdef WITH_OSL
     {"osl_update_node", osl_update_node_func, METH_VARARGS, ""},
     {"osl_compile", osl_compile_func, METH_VARARGS, ""},
+    {"osl_get_params", osl_get_params_func, METH_VARARGS, ""},
 #endif
     {"available_devices", available_devices_func, METH_VARARGS, ""},
     {"system_info", system_info_func, METH_NOARGS, ""},
