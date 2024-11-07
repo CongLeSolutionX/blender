@@ -1491,7 +1491,7 @@ def Material "Material"
         )
         for path, suffix, value in expected:
             self.assertEqual(stage.GetPrimAtPath(path).GetAttribute(f"userProperties:blender:{suffix}").Get(), value)
-        
+
         bpy.utils.unregister_class(SaveStageUsdImportHook)
         SaveStageUsdImportHook.path = old
 
@@ -1505,7 +1505,6 @@ class SaveStageUsdImportHook(bpy.types.USDHook):
     @staticmethod
     def on_import(context):
         context.get_stage().Export(SaveStageUsdImportHook.path)
-
 
 
 def main():

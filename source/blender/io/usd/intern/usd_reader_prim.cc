@@ -27,7 +27,9 @@ void USDPrimReader::set_props(const bool merge_with_parent,
     return;
   }
 
-  pxr::UsdPrim object_prim = (merge_with_parent && prim_.GetParent().IsValid()) ? prim_.GetParent() : prim_;
+  pxr::UsdPrim object_prim = (merge_with_parent && prim_.GetParent().IsValid()) ?
+                                 prim_.GetParent() :
+                                 prim_;
   set_id_name_to_prim(&object_->id, usdtokens::blender_ns_object_name, object_prim);
 
   if (object_->data) {

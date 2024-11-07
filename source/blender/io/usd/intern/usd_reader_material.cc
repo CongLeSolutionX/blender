@@ -4,9 +4,9 @@
 
 #include "usd_reader_material.hh"
 
-#include "usd_usdtokens.hh"
 #include "usd_asset_utils.hh"
 #include "usd_reader_utils.hh"
+#include "usd_usdtokens.hh"
 #include "usd_utils.hh"
 
 #include "BKE_appdir.hh"

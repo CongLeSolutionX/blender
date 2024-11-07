@@ -2,9 +2,9 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 #include "usd_writer_abstract.hh"
+#include "usd_usdtokens.hh"
 #include "usd_utils.hh"
 #include "usd_writer_material.hh"
-#include "usd_usdtokens.hh"
 
 #include <pxr/base/tf/stringUtils.h>
 #include <pxr/usd/usdGeom/bboxCache.h>
