@@ -314,14 +314,14 @@ static void bli_windows_system_backtrace_threads(FILE *fp)
   CloseHandle(hThreadSnap);
 }
 
-static bool BLI_windows_system_backtrace_stack(FILE *fp)
+static bool bli_windows_system_backtrace_stack(FILE *fp, EXCEPTION_POINTERS *exception)
 {
   fprintf(fp, "Stack trace:\n");
   /* If we are handling an exception use the context record from that. */
-  if (current_exception && current_exception->ExceptionRecord->ExceptionAddress) {
+  if (exception && exception->ExceptionRecord->ExceptionAddress) {
     /* The back trace code will write to the context record, to protect the original record from
      * modifications give the backtrace a copy to work on. */
-    CONTEXT TempContext = *current_exception->ContextRecord;
+    CONTEXT TempContext = *exception->ContextRecord;
     return BLI_windows_system_backtrace_run_trace(fp, GetCurrentThread(), &TempContext);
   }
   else {
@@ -395,7 +395,7 @@ void BLI_system_backtrace(FILE *fp)
     /* `BLI_windows_exception_log_start` should have been called before. */
     bli_windows_system_backtrace_exception_record(fp, current_exception->ExceptionRecord);
   }
-  if (BLI_windows_system_backtrace_stack(fp)) {
+  if (bli_windows_system_backtrace_stack(fp, current_exception)) {
     /* When the blender symbols are missing the stack traces will be unreliable
      * so only run if the previous step completed successfully. */
     bli_windows_system_backtrace_threads(fp);
@@ -408,17 +408,17 @@ void BLI_windows_exception_capture(void *exception)
   current_exception = static_cast<EXCEPTION_POINTERS *>(exception);
 }
 
-void bli_windows_exception_message_get(char r_message[512])
+static void bli_windows_exception_message_get(const EXCEPTION_POINTERS *exception,
+                                              char r_message[512])
 {
-  if (!current_exception) {
-    /* `BLI_windows_exception_capture` should have been called before. */
+  if (!exception) {
     r_message[0] = '\0';
     return;
   }
 
   const char *exception_name = bli_windows_get_exception_description(
-      current_exception->ExceptionRecord->ExceptionCode);
-  LPVOID address = current_exception->ExceptionRecord->ExceptionAddress;
+      exception->ExceptionRecord->ExceptionCode);
+  LPVOID address = exception->ExceptionRecord->ExceptionAddress;
   CHAR modulename[MAX_PATH];
   bli_windows_get_module_name(address, modulename, sizeof(modulename));
   DWORD threadId = GetCurrentThreadId();
@@ -579,12 +579,13 @@ static void showMessageBox(const char *message,
   TaskDialogIndirect(&config, nullptr, nullptr, nullptr);
 }
 
-void BLI_windows_exception_show_dialog(const char *filepath,
+void BLI_windows_exception_show_dialog(const void *exception,
+                                       const char *filepath,
                                        const char *gpu_name,
                                        const char *build_version)
 {
   char message[512];
-  bli_windows_exception_message_get(message);
+  bli_windows_exception_message_get(static_cast<const EXCEPTION_POINTERS *>(exception), message);
   showMessageBox(message, filepath, gpu_name, build_version);
   fprintf(stderr, message);
   fflush(stderr);
