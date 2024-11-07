@@ -519,9 +519,7 @@ GPENCIL_tLayer *grease_pencil_layer_cache_get(GPENCIL_tObject *tgp_ob,
                                               int layer_id,
                                               const bool skip_onion)
 {
-  if (layer_id < 0) {
-    return nullptr;
-  }
+  BLI_assert(layer_id >= 0);
   for (GPENCIL_tLayer *layer = tgp_ob->layers.first; layer != nullptr; layer = layer->next) {
     if (skip_onion && layer->is_onion) {
       continue;
