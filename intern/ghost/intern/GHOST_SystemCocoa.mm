@@ -2140,8 +2140,8 @@ GHOST_TSuccess GHOST_SystemCocoa::putClipboardImage(uint *rgba, int width, int h
     const size_t rowByteCount = width * 4;
     const size_t bufferSize = rowByteCount * height;
 
-    uint8_t *srcBuffer = (uint8_t *)rgba;
-    uint8_t *flipBuffer = (uint8_t *)malloc(bufferSize);
+    uint8_t *srcBuffer = reinterpret_cast<uint8_t *>(rgba);
+    uint8_t *flipBuffer = static_cast<uint8_t *>(malloc(bufferSize));
 
     if (!flipBuffer) {
       return GHOST_kFailure;
