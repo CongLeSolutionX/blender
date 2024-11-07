@@ -1841,7 +1841,9 @@ static bool wm_main_playanim_intern(int argc, const char **argv, PlayArgs *args_
   {
     ghost_event_consumer = GHOST_CreateEventConsumer(ghost_event_proc, &ps);
 
-    GHOST_SetBacktraceHandler((GHOST_TBacktraceFn)BLI_system_backtrace);
+    GHOST_SetBacktraceHandler([](void *file_handle) {
+      BLI_system_backtrace(static_cast<FILE *>(file_handle), nullptr);
+    });
 
     ps.ghost_data.system = GHOST_CreateSystem();
     GPU_backend_ghost_system_set(ps.ghost_data.system);

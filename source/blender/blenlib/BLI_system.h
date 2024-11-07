@@ -16,7 +16,7 @@ extern "C" {
 
 int BLI_cpu_support_sse2(void);
 int BLI_cpu_support_sse42(void);
-void BLI_system_backtrace(FILE *fp);
+void BLI_system_backtrace(FILE *fp, const void *os_data);
 
 /** Get CPU brand, result is to be MEM_freeN()-ed. */
 char *BLI_cpu_brand_string(void);
@@ -46,7 +46,7 @@ int BLI_system_memory_max_in_megabytes_int(void);
  * \note Use `void *` for `exception` since we really do not want to drag Windows.h
  * in to get the proper `typedef`.
  */
-void BLI_windows_handle_exception(void *exception);
+void BLI_windows_handle_exception(const void *exception);
 
 #else
 #  define BLI_SYSTEM_PID_H <unistd.h>

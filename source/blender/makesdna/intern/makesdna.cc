@@ -116,10 +116,7 @@ static int additional_slen_offset;
 
 /* stub for BLI_abort() */
 #ifndef NDEBUG
-void BLI_system_backtrace(FILE *fp)
-{
-  (void)fp;
-}
+void BLI_system_backtrace(FILE * /*fp*/, const void * /*os_data*/) {}
 #endif
 
 /** \} */

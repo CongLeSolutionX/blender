@@ -60,7 +60,7 @@ int BLI_cpu_support_sse2(void)
 
 /* Windows stack-walk lives in system_win32.cc */
 #if !defined(_MSC_VER)
-void BLI_system_backtrace(FILE *fp)
+void BLI_system_backtrace(FILE *fp, const void * /*os_data*/)
 {
   /* ----------------------- */
   /* If system as execinfo.h */

@@ -186,7 +186,7 @@ static void callback_main_atexit(void *user_data)
 
 static void callback_clg_fatal(void *fp)
 {
-  BLI_system_backtrace(static_cast<FILE *>(fp));
+  BLI_system_backtrace(static_cast<FILE *>(fp), nullptr);
 }
 
 /** \} */
