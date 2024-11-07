@@ -386,6 +386,9 @@ static void wm_file_read_setup_wm_use_new(bContext *C,
   wm->init_flag = 0;
   wm->winactive = nullptr;
 
+  /* Clearing drawable of old WM before deleting any context to avoid clearing the wrong wm. */
+  wm_window_clear_drawable(old_wm);
+
   bool has_match = false;
   LISTBASE_FOREACH (wmWindow *, win, &wm->windows) {
     LISTBASE_FOREACH (wmWindow *, old_win, &old_wm->windows) {
@@ -403,9 +406,6 @@ static void wm_file_read_setup_wm_use_new(bContext *C,
                                                 static_cast<wmWindow *>(old_wm->windows.first),
                                                 static_cast<wmWindow *>(wm->windows.first));
   }
-
-  /* Clearing drawable of old WM before deleting any context to avoid clearing the wrong wm. */
-  wm_window_clear_drawable(old_wm);
 
   wm_setup_data->old_wm = nullptr;
   wm_close_and_free(C, old_wm);
@@ -990,20 +990,17 @@ static void file_read_reports_finalize(BlendFileReadReport *bf_reports)
   if (bf_reports->count.missing_libraries != 0 || bf_reports->count.missing_linked_id != 0) {
     BKE_reportf(bf_reports->reports,
                 RPT_WARNING,
-                "%d libraries and %d linked data-blocks are missing (including %d ObjectData and "
-                "%d Proxies), please check the Info and Outliner editors for details",
+                "%d libraries and %d linked data-blocks are missing (including %d ObjectData), "
+                "please check the Info and Outliner editors for details",
                 bf_reports->count.missing_libraries,
                 bf_reports->count.missing_linked_id,
-                bf_reports->count.missing_obdata,
-                bf_reports->count.missing_obproxies);
+                bf_reports->count.missing_obdata);
   }
   else {
-    if (bf_reports->count.missing_obdata != 0 || bf_reports->count.missing_obproxies != 0) {
-      CLOG_ERROR(&LOG,
-                 "%d local ObjectData and %d local Object proxies are reported to be missing, "
-                 "this should never happen",
-                 bf_reports->count.missing_obdata,
-                 bf_reports->count.missing_obproxies);
+    if (bf_reports->count.missing_obdata != 0) {
+      CLOG_WARN(&LOG,
+                "%d local ObjectData are reported to be missing, this should never happen",
+                bf_reports->count.missing_obdata);
     }
   }
 
@@ -1152,6 +1149,10 @@ bool WM_file_read(bContext *C, const char *filepath, ReportList *reports)
     BKE_reportf(reports, RPT_ERROR, "Unknown error loading \"%s\"", filepath);
     BLI_assert_msg(0, "invalid 'retval'");
   }
+
+  /* NOTE: even if the file fails to load, keep the file in the "Recent Files" list.
+   * This is done because failure to load could be caused by the file-system being
+   * temporarily offline, see: #127825. */
 
   WM_cursor_wait(false);
 

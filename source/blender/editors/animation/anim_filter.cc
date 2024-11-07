@@ -445,12 +445,8 @@ bool ANIM_animdata_can_have_greasepencil(const eAnimCont_Types type)
 #define ANIMDATA_HAS_ACTION_LEGACY(id) \
   ((id)->adt && (id)->adt->action && (id)->adt->action->wrap().is_action_legacy())
 
-#ifdef WITH_ANIM_BAKLAVA
-#  define ANIMDATA_HAS_ACTION_LAYERED(id) \
-    ((id)->adt && (id)->adt->action && (id)->adt->action->wrap().is_action_layered())
-#else
-#  define ANIMDATA_HAS_ACTION_LAYERED(id) false
-#endif
+#define ANIMDATA_HAS_ACTION_LAYERED(id) \
+  ((id)->adt && (id)->adt->action && (id)->adt->action->wrap().is_action_layered())
 
 /* quick macro to test if AnimData is usable for drivers */
 #define ANIMDATA_HAS_DRIVERS(id) ((id)->adt && (id)->adt->drivers.first)
@@ -1721,8 +1717,8 @@ static size_t animfilter_action(bAnimContext *ac,
    * underneath their animated ID anyway. */
   const bool is_action_mode = (ac->spacetype == SPACE_ACTION &&
                                ac->dopesheet_mode == SACTCONT_ACTION);
-  const bool show_all_slots = (ac->ads->filterflag & ADS_FILTER_ALL_SLOTS);
-  if (is_action_mode && show_all_slots) {
+  const bool show_active_only = (ac->ads->filterflag & ADS_FILTER_ONLY_SLOTS_OF_ACTIVE);
+  if (is_action_mode && !show_active_only) {
     return animfilter_action_slots(ac, anim_data, action, filter_mode, owner_id);
   }
 

@@ -1033,7 +1033,7 @@ class _GenericUI:
                     # the entire menu from drawing
                     try:
                         func(self, context)
-                    except:
+                    except Exception:
                         import traceback
                         traceback.print_exc()
 
@@ -1342,7 +1342,8 @@ class HydraRenderEngine(RenderEngine):
     bl_use_shading_nodes_custom = False
     bl_delegate_id = 'HdStormRendererPlugin'
 
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.engine_ptr = None
 
     def __del__(self):

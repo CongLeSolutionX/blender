@@ -609,9 +609,10 @@ static void grease_pencil_primitive_status_indicators(bContext *C,
     return WM_modalkeymap_operator_items_to_string(op->type, int(id), true).value_or("");
   };
 
-  header += fmt::format(IFACE_("{}: confirm, {}: cancel, Shift: align"),
+  header += fmt::format(IFACE_("{}: confirm, {}: cancel, {}: panning, Shift: align"),
                         get_modal_key_str(ModalKeyMode::Confirm),
-                        get_modal_key_str(ModalKeyMode::Cancel));
+                        get_modal_key_str(ModalKeyMode::Cancel),
+                        get_modal_key_str(ModalKeyMode::Panning));
 
   header += fmt::format(IFACE_(", {}/{}: adjust subdivisions: {}"),
                         get_modal_key_str(ModalKeyMode::IncreaseSubdivision),
@@ -1273,6 +1274,27 @@ static int grease_pencil_primitive_modal(bContext *C, wmOperator *op, const wmEv
 {
   PrimitiveToolOperation &ptd = *reinterpret_cast<PrimitiveToolOperation *>(op->customdata);
 
+  /* Check for confirm before navigation. */
+  if (event->type == EVT_MODAL_MAP) {
+    if (event->val == int(ModalKeyMode::Confirm)) {
+      grease_pencil_primitive_exit(C, op);
+
+      return OPERATOR_FINISHED;
+    }
+  }
+
+  const float3 pos = ptd.control_points.first();
+  if (ED_view3d_navigation_do(C, ptd.vod, event, pos)) {
+    if (ptd.vc.rv3d->rflag & RV3D_NAVIGATING) {
+      ptd.projection = ED_view3d_ob_project_mat_get(ptd.vc.rv3d, ptd.vc.obact);
+
+      grease_pencil_primitive_update_curves(ptd);
+      grease_pencil_primitive_update_view(C, ptd);
+
+      return OPERATOR_RUNNING_MODAL;
+    }
+  }
+
   ptd.projection = ED_view3d_ob_project_mat_get(ptd.vc.rv3d, ptd.vc.obact);
   grease_pencil_primitive_cursor_update(C, ptd, event);
 
@@ -1367,7 +1389,7 @@ static void GREASE_PENCIL_OT_primitive_line(wmOperatorType *ot)
   /* Identifiers. */
   ot->name = "Grease Pencil Line Shape";
   ot->idname = "GREASE_PENCIL_OT_primitive_line";
-  ot->description = "Create predefined grease pencil stroke lines";
+  ot->description = "Create predefined Grease Pencil stroke lines";
 
   /* Callbacks. */
   ot->invoke = grease_pencil_primitive_invoke;
@@ -1386,7 +1408,7 @@ static void GREASE_PENCIL_OT_primitive_polyline(wmOperatorType *ot)
   /* Identifiers. */
   ot->name = "Grease Pencil Polyline Shape";
   ot->idname = "GREASE_PENCIL_OT_primitive_polyline";
-  ot->description = "Create predefined grease pencil stroke polylines";
+  ot->description = "Create predefined Grease Pencil stroke polylines";
 
   /* Callbacks. */
   ot->invoke = grease_pencil_primitive_invoke;
@@ -1405,7 +1427,7 @@ static void GREASE_PENCIL_OT_primitive_arc(wmOperatorType *ot)
   /* Identifiers. */
   ot->name = "Grease Pencil Arc Shape";
   ot->idname = "GREASE_PENCIL_OT_primitive_arc";
-  ot->description = "Create predefined grease pencil stroke arcs";
+  ot->description = "Create predefined Grease Pencil stroke arcs";
 
   /* Callbacks. */
   ot->invoke = grease_pencil_primitive_invoke;
@@ -1424,7 +1446,7 @@ static void GREASE_PENCIL_OT_primitive_curve(wmOperatorType *ot)
   /* Identifiers. */
   ot->name = "Grease Pencil Curve Shape";
   ot->idname = "GREASE_PENCIL_OT_primitive_curve";
-  ot->description = "Create predefined grease pencil stroke curve shapes";
+  ot->description = "Create predefined Grease Pencil stroke curve shapes";
 
   /* Callbacks. */
   ot->invoke = grease_pencil_primitive_invoke;
@@ -1443,7 +1465,7 @@ static void GREASE_PENCIL_OT_primitive_box(wmOperatorType *ot)
   /* Identifiers. */
   ot->name = "Grease Pencil Box Shape";
   ot->idname = "GREASE_PENCIL_OT_primitive_box";
-  ot->description = "Create predefined grease pencil stroke boxes";
+  ot->description = "Create predefined Grease Pencil stroke boxes";
 
   /* Callbacks. */
   ot->invoke = grease_pencil_primitive_invoke;
@@ -1462,7 +1484,7 @@ static void GREASE_PENCIL_OT_primitive_circle(wmOperatorType *ot)
   /* Identifiers. */
   ot->name = "Grease Pencil Circle Shape";
   ot->idname = "GREASE_PENCIL_OT_primitive_circle";
-  ot->description = "Create predefined grease pencil stroke circles";
+  ot->description = "Create predefined Grease Pencil stroke circles";
 
   /* Callbacks. */
   ot->invoke = grease_pencil_primitive_invoke;

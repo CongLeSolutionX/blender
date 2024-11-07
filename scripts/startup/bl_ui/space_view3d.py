@@ -20,7 +20,6 @@ from bl_ui.properties_grease_pencil_common import (
     AnnotationDataPanel,
     AnnotationOnionSkin,
     GreasePencilMaterialsPanel,
-    GreasePencilVertexcolorPanel,
 )
 from bl_ui.space_toolsystem_common import (
     ToolActivePanelHelper,
@@ -1065,6 +1064,8 @@ class VIEW3D_HT_header(Header):
             sub.popover(panel="VIEW3D_PT_overlay_edit_mesh", text="", icon='EDITMODE_HLT')
         if mode_string == 'EDIT_CURVE':
             sub.popover(panel="VIEW3D_PT_overlay_edit_curve", text="", icon='EDITMODE_HLT')
+        elif mode_string == 'EDIT_CURVES':
+            sub.popover(panel="VIEW3D_PT_overlay_edit_curves", text="", icon='EDITMODE_HLT')
         elif mode_string == 'SCULPT':
             sub.popover(panel="VIEW3D_PT_overlay_sculpt", text="", icon='SCULPTMODE_HLT')
         elif mode_string == 'SCULPT_CURVES':
@@ -1834,13 +1835,14 @@ class VIEW3D_MT_edit_mesh_select_by_trait(Menu):
 
     def draw(self, context):
         layout = self.layout
-        tool_settings = context.tool_settings
+        _is_vert_mode, _is_edge_mode, is_face_mode = context.tool_settings.mesh_select_mode
 
-        if tool_settings.mesh_select_mode[2] is False:
+        if is_face_mode is False:
             layout.operator("mesh.select_non_manifold", text="Non Manifold")
         layout.operator("mesh.select_loose", text="Loose Geometry")
         layout.operator("mesh.select_interior_faces", text="Interior Faces")
         layout.operator("mesh.select_face_by_sides", text="Faces by Sides")
+        layout.operator("mesh.select_by_pole_count", text="Poles by Count")
 
         layout.separator()
 
@@ -5630,11 +5632,11 @@ class VIEW3D_MT_edit_greasepencil_animation(Menu):
 
         layout.separator()
         layout.operator("grease_pencil.frame_duplicate", text="Duplicate Active Keyframe (Active Layer)").all = False
-        layout.operator("grease_pencil.frame_duplicate", text="Duplicate Active Keyframe (All Layer)").all = True
+        layout.operator("grease_pencil.frame_duplicate", text="Duplicate Active Keyframe (All Layers)").all = True
 
         layout.separator()
         layout.operator("grease_pencil.active_frame_delete", text="Delete Active Keyframe (Active Layer)").all = False
-        layout.operator("grease_pencil.active_frame_delete", text="Delete Active Keyframe (All Layer)").all = True
+        layout.operator("grease_pencil.active_frame_delete", text="Delete Active Keyframe (All Layers)").all = True
 
 
 class VIEW3D_MT_edit_greasepencil_showhide(Menu):
@@ -5836,6 +5838,10 @@ class VIEW3D_MT_edit_curves_context_menu(Menu):
 
         layout.operator("curves.subdivide")
         layout.operator("curves.extrude_move")
+
+        layout.separator()
+
+        layout.operator_menu_enum("curves.handle_type_set", "type")
 
 
 class VIEW3D_MT_edit_pointcloud(Menu):
@@ -6236,6 +6242,7 @@ class VIEW3D_PT_view3d_lock(Panel):
         if not lock_object:
             col.prop(view, "lock_cursor", text="To 3D Cursor")
         col.prop(view, "lock_camera", text="Camera to View")
+        col.prop(view.region_3d, "lock_rotation", text="Rotation")
 
 
 class VIEW3D_PT_view3d_cursor(Panel):
@@ -7273,6 +7280,30 @@ class VIEW3D_PT_overlay_edit_curve(Panel):
         sub.prop(overlay, "normals_length", text="Normals")
 
 
+class VIEW3D_PT_overlay_edit_curves(Panel):
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'HEADER'
+    bl_label = "Curves Edit Mode"
+
+    @classmethod
+    def poll(cls, context):
+        return context.mode == 'EDIT_CURVES'
+
+    def draw(self, context):
+        layout = self.layout
+        view = context.space_data
+        overlay = view.overlay
+        display_all = overlay.show_overlays
+
+        layout.label(text="Curves Edit Mode Overlays")
+
+        col = layout.column()
+        col.active = display_all
+
+        row = col.row()
+        row.prop(overlay, "display_handle", text="Handles")
+
+
 class VIEW3D_PT_overlay_sculpt(Panel):
     bl_space_type = 'VIEW_3D'
     bl_context = ".sculpt_mode"
@@ -8012,57 +8043,11 @@ class VIEW3D_MT_greasepencil_edit_context_menu(Menu):
         layout = self.layout
         tool_settings = context.tool_settings
 
-        is_point_mode = tool_settings.gpencil_selectmode_edit == 'POINT'
         is_stroke_mode = tool_settings.gpencil_selectmode_edit == 'STROKE'
 
         layout.operator_context = 'INVOKE_REGION_WIN'
 
         row = layout.row()
-
-        if is_point_mode:
-            col = row.column(align=True)
-            col.label(text="Point", icon='GP_SELECT_POINTS')
-
-            col.separator()
-
-            # Main Strokes Operators
-            col.operator("grease_pencil.stroke_subdivide", text="Subdivide")
-            col.operator("grease_pencil.stroke_subdivide_smooth", text="Subdivide and Smooth")
-            col.operator("grease_pencil.stroke_simplify", text="Simplify")
-
-            col.separator()
-
-            # Deform Operators
-            col.operator("transform.tosphere", text="To Sphere")
-            col.operator("transform.shear", text="Shear")
-            col.operator("transform.bend", text="Bend")
-            col.operator("transform.push_pull", text="Push/Pull")
-            col.operator("transform.transform", text="Shrink/Fatten").mode = 'CURVE_SHRINKFATTEN'
-            col.operator("grease_pencil.stroke_smooth", text="Smooth Points")
-
-            col.separator()
-
-            col.menu("VIEW3D_MT_mirror", text="Mirror")
-
-            col.separator()
-
-            # Copy/paste
-            col.operator("grease_pencil.copy", text="Copy", icon='COPYDOWN')
-            col.operator("grease_pencil.paste", text="Paste", icon='PASTEDOWN')
-            col.operator("grease_pencil.duplicate_move", text="Duplicate")
-
-            col.separator()
-
-            col.operator("grease_pencil.extrude_move", text="Extrude")
-
-            col.separator()
-
-            col.operator("grease_pencil.separate", text="Separate").mode = 'SELECTED'
-
-            # Removal Operators
-            col.separator()
-
-            col.operator_enum("grease_pencil.dissolve", "type")
 
         if is_stroke_mode:
             col = row.column(align=True)
@@ -8106,6 +8091,50 @@ class VIEW3D_MT_greasepencil_edit_context_menu(Menu):
             col.separator()
 
             col.operator("grease_pencil.separate", text="Separate").mode = 'SELECTED'
+        else:
+            col = row.column(align=True)
+            col.label(text="Point", icon='GP_SELECT_POINTS')
+
+            col.separator()
+
+            # Main Strokes Operators
+            col.operator("grease_pencil.stroke_subdivide", text="Subdivide")
+            col.operator("grease_pencil.stroke_subdivide_smooth", text="Subdivide and Smooth")
+            col.operator("grease_pencil.stroke_simplify", text="Simplify")
+
+            col.separator()
+
+            # Deform Operators
+            col.operator("transform.tosphere", text="To Sphere")
+            col.operator("transform.shear", text="Shear")
+            col.operator("transform.bend", text="Bend")
+            col.operator("transform.push_pull", text="Push/Pull")
+            col.operator("transform.transform", text="Shrink/Fatten").mode = 'CURVE_SHRINKFATTEN'
+            col.operator("grease_pencil.stroke_smooth", text="Smooth Points")
+
+            col.separator()
+
+            col.menu("VIEW3D_MT_mirror", text="Mirror")
+
+            col.separator()
+
+            # Copy/paste
+            col.operator("grease_pencil.copy", text="Copy", icon='COPYDOWN')
+            col.operator("grease_pencil.paste", text="Paste", icon='PASTEDOWN')
+            col.operator("grease_pencil.duplicate_move", text="Duplicate")
+
+            col.separator()
+
+            col.operator("grease_pencil.extrude_move", text="Extrude")
+
+            col.separator()
+
+            col.operator("grease_pencil.separate", text="Separate").mode = 'SELECTED'
+
+            # Removal Operators
+            col.separator()
+
+            col.operator_enum("grease_pencil.dissolve", "type")
 
 
 class GREASE_PENCIL_MT_Layers(Menu):
@@ -9009,6 +9038,7 @@ classes = (
     VIEW3D_PT_overlay_edit_mesh_normals,
     VIEW3D_PT_overlay_edit_mesh_freestyle,
     VIEW3D_PT_overlay_edit_curve,
+    VIEW3D_PT_overlay_edit_curves,
     VIEW3D_PT_overlay_texture_paint,
     VIEW3D_PT_overlay_vertex_paint,
     VIEW3D_PT_overlay_weight_paint,

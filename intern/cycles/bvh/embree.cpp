@@ -180,6 +180,9 @@ void BVHEmbree::build(Progress &progress,
 
 const char *BVHEmbree::get_error_string(RTCError error_code)
 {
+#  if RTC_VERSION >= 40303
+  return rtcGetErrorString(error_code);
+#  else
   switch (error_code) {
     case RTC_ERROR_NONE:
       return "no error";
@@ -199,6 +202,7 @@ const char *BVHEmbree::get_error_string(RTCError error_code)
       /* We should never end here unless enum for RTC errors would change. */
       return "unknown error";
   }
+#  endif
 }
 
 #  if defined(WITH_EMBREE_GPU) && RTC_VERSION >= 40302
@@ -229,19 +233,19 @@ void BVHEmbree::add_object(Object *ob, int i)
 {
   Geometry *geom = ob->get_geometry();
 
-  if (geom->geometry_type == Geometry::MESH || geom->geometry_type == Geometry::VOLUME) {
+  if (geom->is_mesh() || geom->is_volume()) {
     Mesh *mesh = static_cast<Mesh *>(geom);
     if (mesh->num_triangles() > 0) {
       add_triangles(ob, mesh, i);
     }
   }
-  else if (geom->geometry_type == Geometry::HAIR) {
+  else if (geom->is_hair()) {
     Hair *hair = static_cast<Hair *>(geom);
     if (hair->num_curves() > 0) {
       add_curves(ob, hair, i);
     }
   }
-  else if (geom->geometry_type == Geometry::POINTCLOUD) {
+  else if (geom->is_pointcloud()) {
     PointCloud *pointcloud = static_cast<PointCloud *>(geom);
     if (pointcloud->num_points() > 0) {
       add_points(ob, pointcloud, i);
@@ -690,7 +694,7 @@ void BVHEmbree::refit(Progress &progress)
     if (!params.top_level || (ob->is_traceable() && !ob->get_geometry()->is_instanced())) {
       Geometry *geom = ob->get_geometry();
 
-      if (geom->geometry_type == Geometry::MESH || geom->geometry_type == Geometry::VOLUME) {
+      if (geom->is_mesh() || geom->is_volume()) {
         Mesh *mesh = static_cast<Mesh *>(geom);
         if (mesh->num_triangles() > 0) {
           RTCGeometry geom = rtcGetGeometry(scene, geom_id);
@@ -699,7 +703,7 @@ void BVHEmbree::refit(Progress &progress)
           rtcCommitGeometry(geom);
         }
       }
-      else if (geom->geometry_type == Geometry::HAIR) {
+      else if (geom->is_hair()) {
         Hair *hair = static_cast<Hair *>(geom);
         if (hair->num_curves() > 0) {
           RTCGeometry geom = rtcGetGeometry(scene, geom_id + 1);
@@ -708,7 +712,7 @@ void BVHEmbree::refit(Progress &progress)
           rtcCommitGeometry(geom);
         }
       }
-      else if (geom->geometry_type == Geometry::POINTCLOUD) {
+      else if (geom->is_pointcloud()) {
         PointCloud *pointcloud = static_cast<PointCloud *>(geom);
         if (pointcloud->num_points() > 0) {
           RTCGeometry geom = rtcGetGeometry(scene, geom_id);

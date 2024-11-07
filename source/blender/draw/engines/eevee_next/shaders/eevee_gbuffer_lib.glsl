@@ -2,6 +2,8 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#pragma once
+
 /**
  * G-buffer: Packing and unpacking of G-buffer data.
  *
@@ -18,9 +20,9 @@
  * without dealing with none-closures.
  */
 
-#pragma BLENDER_REQUIRE(gpu_shader_math_vector_lib.glsl)
-#pragma BLENDER_REQUIRE(gpu_shader_utildefines_lib.glsl)
-#pragma BLENDER_REQUIRE(gpu_shader_codegen_lib.glsl)
+#include "gpu_shader_codegen_lib.glsl"
+#include "gpu_shader_math_vector_lib.glsl"
+#include "gpu_shader_utildefines_lib.glsl"
 
 /* -------------------------------------------------------------------- */
 /** \name Types
@@ -113,7 +115,7 @@ ClosureType gbuffer_mode_to_closure_type(uint mode)
  * This allows for writing unit tests that read and write during the same shader invocation.
  * \{ */
 
-#ifdef GBUFFER_LOAD
+#if defined(GBUFFER_LOAD) || defined(GLSL_CPP_STUBS)
 /* Read only shader. Use correct types and functions. */
 #  define samplerGBufferHeader usampler2D
 #  define samplerGBufferClosure sampler2DArray

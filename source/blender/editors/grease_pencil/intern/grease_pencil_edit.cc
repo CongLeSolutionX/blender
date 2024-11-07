@@ -2171,7 +2171,7 @@ static void GREASE_PENCIL_OT_separate(wmOperatorType *ot)
 {
   ot->name = "Separate";
   ot->idname = "GREASE_PENCIL_OT_separate";
-  ot->description = "Separate the selected geometry into a new grease pencil object";
+  ot->description = "Separate the selected geometry into a new Grease Pencil object";
 
   ot->invoke = WM_menu_invoke;
   ot->exec = grease_pencil_separate_exec;
@@ -2996,9 +2996,11 @@ static int grease_pencil_snap_to_grid_exec(bContext *C, wmOperator * /*op*/)
       positions[point_i] = math::transform_point(world_to_layer, pos_snapped);
     });
 
+    drawing_info.drawing.tag_positions_changed();
     DEG_id_tag_update(&grease_pencil.id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
     DEG_id_tag_update(&object.id, ID_RECALC_SYNC_TO_EVAL);
     WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | NA_EDITED, nullptr);
+    WM_event_add_notifier(C, NC_OBJECT | ND_DRAW, &grease_pencil);
   }
 
   return OPERATOR_FINISHED;
@@ -3072,9 +3074,11 @@ static int grease_pencil_snap_to_cursor_exec(bContext *C, wmOperator *op)
       index_mask::masked_fill(positions, cursor_layer, selected_points);
     }
 
+    drawing_info.drawing.tag_positions_changed();
     DEG_id_tag_update(&grease_pencil.id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
     DEG_id_tag_update(&object.id, ID_RECALC_SYNC_TO_EVAL);
     WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | NA_EDITED, nullptr);
+    WM_event_add_notifier(C, NC_OBJECT | ND_DRAW, &grease_pencil);
   }
 
   return OPERATOR_FINISHED;
@@ -4064,7 +4068,7 @@ int ED_grease_pencil_join_objects_exec(bContext *C, wmOperator *op)
   CTX_DATA_END;
   /* Active object must always selected. */
   if (ok == false) {
-    BKE_report(op->reports, RPT_WARNING, "Active object is not a selected grease pencil");
+    BKE_report(op->reports, RPT_WARNING, "Active object is not a selected Grease Pencil");
     return OPERATOR_CANCELLED;
   }
 

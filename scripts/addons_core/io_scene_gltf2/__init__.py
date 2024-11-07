@@ -5,7 +5,7 @@
 bl_info = {
     'name': 'glTF 2.0 format',
     'author': 'Julien Duroure, Scurest, Norbert Nopper, Urs Hanselmann, Moritz Becher, Benjamin Schmithüsen, Jim Eckerlein, and many external contributors',
-    "version": (4, 3, 47),
+    "version": (4, 4, 12),
     'blender': (4, 3, 0),
     'location': 'File > Import-Export',
     'description': 'Import-Export as glTF 2.0',
@@ -975,7 +975,7 @@ class ExportGLTF2_Base(ConvertGLTF2_Base):
     export_extra_animations: BoolProperty(
         name='Prepare extra animations',
         description=(
-            'Export additional animations'
+            'Export additional animations.\n'
             'This feature is not standard and needs an external extension to be included in the glTF file'
         ),
         default=False
