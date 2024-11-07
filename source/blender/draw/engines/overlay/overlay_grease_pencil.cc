@@ -8,14 +8,19 @@
 
 #include "DRW_render.hh"
 
+#include "draw_manager_text.hh"
+
 #include "ED_grease_pencil.hh"
 
 #include "BKE_attribute.hh"
+#include "BKE_curves.hh"
 #include "BKE_grease_pencil.hh"
 
 #include "DNA_grease_pencil_types.h"
 
 #include "overlay_private.hh"
+
+#include "DEG_depsgraph_query.hh"
 
 static void is_selection_visible(bool &r_show_points, bool &r_show_lines)
 {
@@ -56,6 +61,91 @@ static void is_selection_visible(bool &r_show_points, bool &r_show_lines)
   /* Edit selection modes are exclusive. */
   r_show_points = ELEM(ts->gpencil_selectmode_edit, GP_SELECTMODE_POINT, GP_SELECTMODE_SEGMENT);
   r_show_lines = flag_show_lines;
+}
+
+static void overlay_grease_pencil_draw_stroke_color_name(Object &object,
+                                                         const int mat_nr,
+                                                         const blender::float3 position)
+{
+  Material *ma = BKE_object_material_get_eval(&object, mat_nr + 1);
+  const DRWContextState *draw_ctx = DRW_context_state_get();
+  ViewLayer *view_layer = draw_ctx->view_layer;
+
+  int theme_id = DRW_object_wire_theme_get(&object, view_layer, nullptr);
+  uchar color[4];
+  UI_GetThemeColor4ubv(theme_id, color);
+
+  float fpt[3];
+  mul_v3_m4v3(fpt, object.object_to_world().ptr(), position);
+
+  DRWTextStore *dt = DRW_text_cache_ensure();
+  DRW_text_cache_add(dt,
+                     fpt,
+                     ma->id.name + 2,
+                     strlen(ma->id.name + 2),
+                     10,
+                     0,
+                     DRW_TEXT_CACHE_GLOBALSPACE | DRW_TEXT_CACHE_STRING_PTR,
+                     color);
+}
+
+static void OVERLAY_grease_pencil_material_names(Object *ob)
+{
+  using namespace blender;
+
+  const DRWContextState *draw_ctx = DRW_context_state_get();
+  int cfra = DEG_get_ctime(draw_ctx->depsgraph);
+
+  GreasePencil &grease_pencil = *static_cast<GreasePencil *>(ob->data);
+
+  bke::greasepencil::Layer *layer = grease_pencil.get_active_layer();
+  if (!layer) {
+    return;
+  }
+
+  /* TODO: In legacy GPv2 it used a `BKE_gpencil_visible_stroke_advanced_iter` wrapping call, such
+   * utility function has not been implemented for v3 yet, so iterate manually here. Note: this
+   * does not handle multi-frame editing or onion-skin. */
+
+  bke::greasepencil::Drawing *drawing = grease_pencil.get_editable_drawing_at(*layer, cfra);
+  if (!drawing) {
+    return;
+  }
+
+  bool show_points, show_lines;
+  is_selection_visible(show_points, show_lines);
+
+  const bke::CurvesGeometry strokes = drawing->strokes();
+  const OffsetIndices<int> points_by_curve = strokes.points_by_curve();
+  const bke::AttributeReader<bool> selection_reader = strokes.attributes().lookup_or_default<bool>(
+      ".selection", show_points ? bke::AttrDomain::Point : bke::AttrDomain::Curve, true);
+  const bke::AttributeReader<int> material_reader = strokes.attributes().lookup_or_default<int>(
+      "material_index", bke::AttrDomain::Curve, 0);
+  const VArray<bool> selections = selection_reader.varray;
+  const VArray<int> materials = material_reader.varray;
+  const Span<float3> positions = strokes.positions();
+
+  auto show_stroke_name = [&](const int stroke_i) {
+    if (show_points) {
+      const int point_offset = points_by_curve[stroke_i].first();
+      for (const int point_i : points_by_curve[stroke_i].index_range()) {
+        if (selections[point_i + point_offset]) {
+          return true;
+        }
+      }
+    }
+    else {
+      return selections[stroke_i];
+    }
+    return false;
+  };
+
+  for (const int stroke_i : strokes.curves_range()) {
+    const int point_i = points_by_curve[stroke_i].first();
+    if (show_stroke_name(stroke_i)) {
+      overlay_grease_pencil_draw_stroke_color_name(*ob, materials[stroke_i], positions[point_i]);
+    }
+  }
 }
 
 void OVERLAY_edit_grease_pencil_cache_init(OVERLAY_Data *vedata)
@@ -137,7 +227,7 @@ void OVERLAY_grease_pencil_cache_init(OVERLAY_Data *vedata)
 
   const GreasePencil &grease_pencil = *static_cast<GreasePencil *>(ob->data);
   if (ts->gp_sculpt.lock_axis != GP_LOCKAXIS_CURSOR && grease_pencil.has_active_layer()) {
-    const blender::bke::greasepencil::Layer &layer = *grease_pencil.get_active_layer();
+    const bke::greasepencil::Layer &layer = *grease_pencil.get_active_layer();
     mat = layer.to_world_space(*ob);
   }
   const View3DCursor *cursor = &scene->cursor;
@@ -170,7 +260,7 @@ void OVERLAY_grease_pencil_cache_init(OVERLAY_Data *vedata)
     mat.location() = cursor->location;
   }
   else if (grease_pencil.has_active_layer()) {
-    const blender::bke::greasepencil::Layer &layer = *grease_pencil.get_active_layer();
+    const bke::greasepencil::Layer &layer = *grease_pencil.get_active_layer();
     mat.location() = layer.to_world_space(*ob).location();
   }
   /* Local transform of the grid from the overlay settings. */
@@ -220,6 +310,14 @@ void OVERLAY_edit_grease_pencil_cache_populate(OVERLAY_Data *vedata, Object *ob)
                                                                                ob);
     if (geom_points) {
       DRW_shgroup_call_no_cull(points_grp, geom_points, ob);
+    }
+  }
+
+  View3D *v3d = draw_ctx->v3d;
+  /* don't show object extras in set's */
+  if ((ob->base_flag & (BASE_FROM_SET | BASE_FROM_DUPLI)) == 0) {
+    if ((v3d->gp_flag & V3D_GP_SHOW_MATERIAL_NAME) && DRW_state_show_text()) {
+      OVERLAY_grease_pencil_material_names(ob);
     }
   }
 }
