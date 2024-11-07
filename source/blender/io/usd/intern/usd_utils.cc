@@ -11,6 +11,8 @@
 #  include <pxr/base/tf/unicodeUtils.h>
 #endif
 
+#include "DNA_ID.h"
+
 namespace blender::io::usd {
 
 std::string make_safe_name(const std::string &name, [[maybe_unused]] bool allow_unicode)
@@ -49,6 +51,15 @@ std::string make_safe_name(const std::string &name, [[maybe_unused]] bool allow_
 #else
   return pxr::TfMakeValidIdentifier(name);
 #endif
+}
+
+void set_id_name_to_prim(const ID *id, const pxr::TfToken &token, const pxr::UsdPrim &prim)
+{
+  if (!id || !prim.IsValid()) {
+    return;
+  }
+
+  prim.CreateAttribute(token, pxr::SdfValueTypeNames->String).Set(id->name + 2);
 }
 
 }  // namespace blender::io::usd

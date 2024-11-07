@@ -18,12 +18,15 @@ class AbstractUSDTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.testdir = args.testdir
-        cls._tempdir = tempfile.TemporaryDirectory()
-        cls.tempdir = pathlib.Path(cls._tempdir.name)
 
     def setUp(self):
+        self._tempdir = tempfile.TemporaryDirectory()
+        self.tempdir = pathlib.Path(self._tempdir.name)
+
         self.assertTrue(self.testdir.exists(),
                         'Test dir {0} should exist'.format(self.testdir))
+        self.assertTrue(self.tempdir.exists(),
+                        'Temp dir {0} should exist'.format(self.tempdir))
 
         # Make sure we always start with a known-empty file.
         bpy.ops.wm.open_mainfile(filepath=str(self.testdir / "empty.blend"))
@@ -1410,6 +1413,99 @@ class USDImportTest(AbstractUSDTest):
         check_image("test_normal_invertY.exr", 1, 128, False)
         check_image("color_121212.hdr", 1, 4, False)
         check_materials()
+
+    def test_import_object_and_data_name_properties(self):
+        src = """#usda 1.0
+
+def Xform "XformThenCube"
+{
+  def Cube "Cube"
+  {
+  }
+}
+
+def Xform "XformThenXformCube"
+{
+  def Xform "XformIntermediate"
+  {
+    def Mesh "Cube" (
+      prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+      int[] faceVertexCounts = [4, 4, 4, 4, 4, 4]
+      int[] faceVertexIndices = [0, 4, 6, 2, 3, 2, 6, 7, 7, 6, 4, 5, 5, 1, 3, 7, 1, 0, 2, 3, 5, 4, 0, 1]
+      point3f[] points = [(1, 1, 1), (1, 1, -1), (1, -1, 1), (1, -1, -1), (-1, 1, 1), (-1, 1, -1), (-1, -1, 1), (-1, -1, -1)]
+
+      rel material:binding = </Material>
+    }
+  }
+}
+
+def Cube "Cube"
+{
+}
+
+def Material "Material"
+{
+  token outputs:surface.connect = </_materials/Material/Principled_BSDF.outputs:surface>
+
+  def Shader "Principled_BSDF"
+  {
+    uniform token info:id = "UsdPreviewSurface"
+  }
+}
+"""
+        src_path = self.tempdir / "src.usda"
+        src_path.write_text(src)
+
+        tmp_path = str(self.tempdir / "tmp.usda")
+
+        old = SaveStageUsdImportHook.path
+        SaveStageUsdImportHook.path = tmp_path
+        bpy.utils.register_class(SaveStageUsdImportHook)
+
+        bpy.ops.wm.usd_import(filepath=str(src_path))
+
+        stage = Usd.Stage.Open(tmp_path)
+
+        expected = (
+            ("/XformThenCube", "object_name", "Cube"),
+            ("/XformThenCube", "data_name", None),
+            ("/XformThenCube/Cube", "object_name", None),
+            ("/XformThenCube/Cube", "data_name", "Cube"),
+
+            ("/XformThenXformCube", "object_name", "XformThenXformCube"),
+            ("/XformThenXformCube", "data_name", None),
+            ("/XformThenXformCube/XformIntermediate", "object_name", "Cube.001"),
+            ("/XformThenXformCube/XformIntermediate", "data_name", None),
+            ("/XformThenXformCube/XformIntermediate/Cube", "object_name", None),
+            ("/XformThenXformCube/XformIntermediate/Cube", "data_name", "Cube.001"),
+
+            ("/Cube", "object_name", "Cube.002"),
+            ("/Cube", "data_name", "Cube.002"),
+
+            ("/Material", "object_name", None),
+            ("/Material", "data_name", "Material"),
+            ("/Material/Principled_BSDF", "object_name", None),
+            ("/Material/Principled_BSDF", "data_name", None),
+        )
+        for path, suffix, value in expected:
+            self.assertEqual(stage.GetPrimAtPath(path).GetAttribute(f"userProperties:blender:{suffix}").Get(), value)
+        
+        bpy.utils.unregister_class(SaveStageUsdImportHook)
+        SaveStageUsdImportHook.path = old
+
+
+class SaveStageUsdImportHook(bpy.types.USDHook):
+    bl_idname = "usd_import_hook"
+    bl_label = "Import Hook"
+
+    path = ""
+
+    @staticmethod
+    def on_import(context):
+        context.get_stage().Export(SaveStageUsdImportHook.path)
+
 
 
 def main():

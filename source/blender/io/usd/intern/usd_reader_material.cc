@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "usd_reader_material.hh"
+
+#include "usd_usdtokens.hh"
 #include "usd_asset_utils.hh"
 #include "usd_reader_utils.hh"
 #include "usd_utils.hh"
@@ -465,6 +467,8 @@ Material *USDMaterialReader::add_material(const pxr::UsdShadeMaterial &usd_mater
   /* Create the material. */
   Material *mtl = BKE_material_add(bmain_, mtl_name.c_str());
   id_us_min(&mtl->id);
+
+  set_id_name_to_prim(&mtl->id, usdtokens::blender_ns_data_name, usd_material.GetPrim());
 
   /* Get the UsdPreviewSurface shader source for the material,
    * if there is one. */

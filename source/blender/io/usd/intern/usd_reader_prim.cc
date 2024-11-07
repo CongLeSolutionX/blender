@@ -7,6 +7,8 @@
 
 #include "usd_reader_prim.hh"
 #include "usd_reader_utils.hh"
+#include "usd_usdtokens.hh"
+#include "usd_utils.hh"
 
 #include "usd.hh"
 
@@ -23,6 +25,13 @@ void USDPrimReader::set_props(const bool merge_with_parent,
 {
   if (!prim_ || !object_) {
     return;
+  }
+
+  pxr::UsdPrim object_prim = (merge_with_parent && prim_.GetParent().IsValid()) ? prim_.GetParent() : prim_;
+  set_id_name_to_prim(&object_->id, usdtokens::blender_ns_object_name, object_prim);
+
+  if (object_->data) {
+    set_id_name_to_prim(static_cast<ID *>(object_->data), usdtokens::blender_ns_data_name, prim_);
   }
 
   eUSDAttrImportMode attr_import_mode = this->import_params_.attr_import_mode;
