@@ -281,10 +281,7 @@ bool USDStageReader::include_by_purpose(const pxr::UsdGeomImageable &imageable) 
   return true;
 }
 
-/* Determine if the given reader can use the parent of the encapsulated USD prim
- * to compute the Blender object's transform. If so, the reader is appropriately
- * flagged and the function returns true. Otherwise, the function returns false. */
-static bool merge_with_parent(USDPrimReader *reader)
+bool USDStageReader::merge_with_parent(USDPrimReader *reader) const
 {
   USDXformReader *xform_reader = dynamic_cast<USDXformReader *>(reader);
 
@@ -311,6 +308,11 @@ static bool merge_with_parent(USDPrimReader *reader)
 
   /* Don't merge if the prim has authored transform ops. */
   if (xform_reader->prim_has_xform_ops()) {
+    return false;
+  }
+
+  /* Don't merge if the param is set to false */
+  if (!params_.merge_transform_and_shape) {
     return false;
   }
 
