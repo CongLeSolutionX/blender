@@ -513,8 +513,8 @@ static void reuse_editable_asset_bmain_data_for_blendfile(ReuseOldBMainData *reu
 }
 
 /**
- * Grease pencil brushes may have a material pinned that is from the current file. In that case,
- * unpin the material.
+ * Grease pencil brushes may have a material pinned that is from the current file. Moving local
+ * scene data to a different #Main is tricky, so in that case, unpin the material.
  */
 static void unpin_file_local_grease_pencil_brush_materials(const ReuseOldBMainData *reuse_data)
 {
@@ -523,7 +523,7 @@ static void unpin_file_local_grease_pencil_brush_materials(const ReuseOldBMainDa
     const Brush *brush = reinterpret_cast<Brush *>(old_id_iter);
     if (brush->gpencil_settings && brush->gpencil_settings->material &&
         /* Don't unpin if this material is linked, then it can be preserved for the new file. */
-        !brush->gpencil_settings->material->id.lib)
+        !ID_IS_LINKED(&brush->gpencil_settings->material))
     {
       /* Unpin material and clear pointer. */
       brush->gpencil_settings->flag &= ~GP_BRUSH_MATERIAL_PINNED;
