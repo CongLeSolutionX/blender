@@ -55,7 +55,7 @@ static bool is_first_lineart(const GreasePencilLineartModifierData &md)
   return true;
 }
 
-static bool is_last_line_art(const GreasePencilLineartModifierData &md, bool use_render)
+static bool is_last_line_art(const GreasePencilLineartModifierData &md, const bool use_render)
 {
   if (md.modifier.type != eModifierType_GreasePencilLineart) {
     return false;
