@@ -81,11 +81,11 @@ struct GBufferReader {
   /* Additional object information if any closure needs it. */
   float thickness;
   /* Number of valid closure encoded in the gbuffer. */
-  int closure_count;
+  uchar closure_count;
   /* Only used for book-keeping when reading. */
-  int data_len;
+  uchar data_len;
   /* Only used for debugging and testing. */
-  int normal_len;
+  uchar normal_len;
 };
 
 ClosureType gbuffer_mode_to_closure_type(uint mode)
@@ -126,7 +126,7 @@ uint fetchGBuffer(usampler2D tx, ivec2 texel)
 {
   return texelFetch(tx, texel, 0).r;
 }
-vec4 fetchGBuffer(sampler2DArray tx, ivec2 texel, int layer)
+vec4 fetchGBuffer(sampler2DArray tx, ivec2 texel, uchar layer)
 {
   return texelFetch(tx, ivec3(texel, layer), 0);
 }
@@ -142,11 +142,11 @@ uint fetchGBuffer(samplerGBufferHeader tx, ivec2 texel)
 {
   return uint(0);
 }
-vec4 fetchGBuffer(samplerGBufferClosure tx, ivec2 texel, int layer)
+vec4 fetchGBuffer(samplerGBufferClosure tx, ivec2 texel, uchar layer)
 {
   return vec4(0.0);
 }
-vec4 fetchGBuffer(samplerGBufferNormal tx, ivec2 texel, int layer)
+vec4 fetchGBuffer(samplerGBufferNormal tx, ivec2 texel, uchar layer)
 {
   return vec4(0.0);
 }
@@ -159,11 +159,11 @@ uint fetchGBuffer(samplerGBufferHeader tx, ivec2 texel)
 {
   return g_data_packed.header;
 }
-vec4 fetchGBuffer(samplerGBufferClosure tx, ivec2 texel, int layer)
+vec4 fetchGBuffer(samplerGBufferClosure tx, ivec2 texel, uchar layer)
 {
   return g_data_packed.data[layer];
 }
-vec4 fetchGBuffer(samplerGBufferNormal tx, ivec2 texel, int layer)
+vec4 fetchGBuffer(samplerGBufferNormal tx, ivec2 texel, uchar layer)
 {
   return g_data_packed.N[layer].xyyy;
 }
@@ -340,7 +340,7 @@ void gbuffer_append_closure(inout GBufferWriter gbuf, GBufferMode closure_type)
   gbuf.header |= gbuffer_header_pack(closure_type, gbuf.bins_len);
   gbuf.bins_len++;
 }
-void gbuffer_register_closure(inout GBufferReader gbuf, ClosureUndetermined cl, int slot)
+void gbuffer_register_closure(inout GBufferReader gbuf, ClosureUndetermined cl, uchar slot)
 {
   switch (slot) {
 #if GBUFFER_LAYER_MAX > 0
@@ -557,8 +557,8 @@ void gbuffer_closure_diffuse_skip(inout GBufferReader gbuf)
   gbuffer_skip_normal(gbuf);
 }
 void gbuffer_closure_diffuse_load(inout GBufferReader gbuf,
-                                  int layer,
-                                  int bin_index,
+                                  uchar layer,
+                                  uchar bin_index,
                                   samplerGBufferClosure closure_tx,
                                   samplerGBufferNormal normal_tx)
 {
@@ -584,8 +584,8 @@ void gbuffer_closure_translucent_skip(inout GBufferReader gbuf)
   gbuffer_skip_normal(gbuf);
 }
 void gbuffer_closure_translucent_load(inout GBufferReader gbuf,
-                                      int layer,
-                                      int bin_index,
+                                      uchar layer,
+                                      uchar bin_index,
                                       samplerGBufferClosure closure_tx,
                                       samplerGBufferNormal normal_tx)
 {
@@ -613,8 +613,8 @@ void gbuffer_closure_subsurface_skip(inout GBufferReader gbuf)
   gbuffer_skip_normal(gbuf);
 }
 void gbuffer_closure_subsurface_load(inout GBufferReader gbuf,
-                                     int layer,
-                                     int bin_index,
+                                     uchar layer,
+                                     uchar bin_index,
                                      samplerGBufferClosure closure_tx,
                                      samplerGBufferNormal normal_tx)
 {
@@ -644,8 +644,8 @@ void gbuffer_closure_reflection_skip(inout GBufferReader gbuf)
   gbuffer_skip_normal(gbuf);
 }
 void gbuffer_closure_reflection_load(inout GBufferReader gbuf,
-                                     int layer,
-                                     int bin_index,
+                                     uchar layer,
+                                     uchar bin_index,
                                      samplerGBufferClosure closure_tx,
                                      samplerGBufferNormal normal_tx)
 {
@@ -675,8 +675,8 @@ void gbuffer_closure_refraction_skip(inout GBufferReader gbuf)
   gbuffer_skip_normal(gbuf);
 }
 void gbuffer_closure_refraction_load(inout GBufferReader gbuf,
-                                     int layer,
-                                     int bin_index,
+                                     uchar layer,
+                                     uchar bin_index,
                                      samplerGBufferClosure closure_tx,
                                      samplerGBufferNormal normal_tx)
 {
@@ -714,8 +714,8 @@ void gbuffer_closure_reflection_colorless_skip(inout GBufferReader gbuf)
   gbuffer_skip_normal(gbuf);
 }
 void gbuffer_closure_reflection_colorless_load(inout GBufferReader gbuf,
-                                               int layer,
-                                               int bin_index,
+                                               uchar layer,
+                                               uchar bin_index,
                                                samplerGBufferClosure closure_tx,
                                                samplerGBufferNormal normal_tx)
 {
@@ -744,8 +744,8 @@ void gbuffer_closure_refraction_colorless_skip(inout GBufferReader gbuf)
   gbuffer_skip_normal(gbuf);
 }
 void gbuffer_closure_refraction_colorless_load(inout GBufferReader gbuf,
-                                               int layer,
-                                               int bin_index,
+                                               uchar layer,
+                                               uchar bin_index,
                                                samplerGBufferClosure closure_tx,
                                                samplerGBufferNormal normal_tx)
 {
@@ -918,7 +918,7 @@ int gbuffer_normal_count(uint header)
 }
 
 /* Return the type of a closure using its bin index. */
-ClosureType gbuffer_closure_type_get_by_bin(uint header, int bin_index)
+ClosureType gbuffer_closure_type_get_by_bin(uint header, uchar bin_index)
 {
   /* TODO(fclem): Doesn't take GBUF_METAL_CLEARCOAT into account or other mode that could merge two
    * bins into one layer. */
@@ -931,7 +931,7 @@ ClosureType gbuffer_closure_type_get_by_bin(uint header, int bin_index)
 int gbuffer_closure_get_bin_index(GBufferReader gbuf, int layer_index)
 {
   int layer = 0;
-  for (int bin = 0; bin < GBUFFER_LAYER_MAX; bin++) {
+  for (uchar bin = 0; bin < GBUFFER_LAYER_MAX; bin++) {
     GBufferMode mode = gbuffer_header_unpack(gbuf.header, bin);
     /* Gbuffer header can have holes. Skip GBUF_NONE. */
     if (mode != GBUF_NONE) {
@@ -945,10 +945,10 @@ int gbuffer_closure_get_bin_index(GBufferReader gbuf, int layer_index)
   return 0;
 }
 
-ClosureUndetermined gbuffer_closure_get_by_bin(GBufferReader gbuf, int bin_index)
+ClosureUndetermined gbuffer_closure_get_by_bin(GBufferReader gbuf, uchar bin_index)
 {
   int layer_index = 0;
-  for (int bin = 0; bin < GBUFFER_LAYER_MAX; bin++) {
+  for (uchar bin = 0; bin < GBUFFER_LAYER_MAX; bin++) {
     GBufferMode mode = gbuffer_header_unpack(gbuf.header, bin);
     if (bin == bin_index) {
       return gbuffer_closure_get(gbuf, layer_index);
@@ -977,7 +977,7 @@ GBufferReader gbuffer_read(samplerGBufferHeader header_tx,
   gbuf.data_len = 0;
   gbuf.normal_len = 0;
   gbuf.surface_N = vec3(0.0);
-  for (int bin = 0; bin < GBUFFER_LAYER_MAX; bin++) {
+  for (uchar bin = 0; bin < GBUFFER_LAYER_MAX; bin++) {
     gbuffer_register_closure(gbuf, closure_new(CLOSURE_NONE_ID), bin);
   }
 
@@ -991,7 +991,7 @@ GBufferReader gbuffer_read(samplerGBufferHeader header_tx,
   gbuf.surface_N = gbuffer_normal_unpack(fetchGBuffer(normal_tx, texel, 0).xy);
 
   bool has_additional_data = false;
-  for (int bin = 0; bin < GBUFFER_LAYER_MAX; bin++) {
+  for (uchar bin = 0; bin < GBUFFER_LAYER_MAX; bin++) {
     GBufferMode mode = gbuffer_header_unpack(gbuf.header, bin);
     switch (mode) {
       default:
@@ -1046,7 +1046,7 @@ ClosureUndetermined gbuffer_read_bin(uint header,
                                      samplerGBufferClosure closure_tx,
                                      samplerGBufferNormal normal_tx,
                                      ivec2 texel,
-                                     int bin_index)
+                                     uchar bin_index)
 {
   GBufferReader gbuf;
   gbuf.texel = texel;
@@ -1060,7 +1060,7 @@ ClosureUndetermined gbuffer_read_bin(uint header,
   }
 
   GBufferMode mode;
-  for (int bin = 0; bin < GBUFFER_LAYER_MAX; bin++) {
+  for (uchar bin = 0; bin < GBUFFER_LAYER_MAX; bin++) {
     mode = gbuffer_header_unpack(gbuf.header, bin);
 
     if (bin >= bin_index) {
@@ -1131,7 +1131,7 @@ ClosureUndetermined gbuffer_read_bin(samplerGBufferHeader header_tx,
                                      samplerGBufferClosure closure_tx,
                                      samplerGBufferNormal normal_tx,
                                      ivec2 texel,
-                                     int bin_index)
+                                     uchar bin_index)
 {
   return gbuffer_read_bin(fetchGBuffer(header_tx, texel), closure_tx, normal_tx, texel, bin_index);
 }
