@@ -529,6 +529,14 @@ static FunctionRef<void(int, MutableSpan<float>)> powered_rcp_for_squared(const 
   }
 }
 
+static void zero_if_index_in_range(MutableSpan<float> r_values, const IndexRange bucket_range, const int index)
+{
+  float dymmu;
+  float *values_dst = r_values.data() + (index - bucket_range.start());
+  float *dst_to_clear = bucket_range.contains(index) ? values_dst : &dymmu;
+  *dst_to_clear = 0.0f;
+}
+
 struct Item {
   int depth_i;
   int joint_i;
@@ -574,8 +582,8 @@ static void for_each_to_bottom_skip(const OffsetIndices<int> buckets_offsets,
       continue;
     }
 
-    stack.append({depth_i + 1, joint_i * 2 + 0, int(next_indices.size())});
     stack.append({depth_i + 1, joint_i * 2 + 1, int(next_indices.size())});
+    stack.append({depth_i + 1, joint_i * 2 + 0, int(next_indices.size())});
   }
 }
 
@@ -638,6 +646,124 @@ static void sample_average(const OffsetIndices<int> buckets_offsets,
             }
 
             squared_distance_invertion(power_value, buffer.as_mutable_span());
+            zero_if_index_in_range(buffer, bucket_range, value_i);
+
+            const float3 self_value = src_bucket_value[value_i];
+            for (const int i : bucket_range.index_range()) {
+              const int index = bucket_range[i];
+              const float relation_factor = buffer[i];
+              dst_buckets_data[value_i] += (src_bucket_value[index] - self_value) * relation_factor;
+            }
+          }
+        });
+  });
+}
+
+
+
+template<typename LeafFuncT, typename JointPredicateT, typename JointFuncT>
+static void for_each_to_bottom_skip_old(const OffsetIndices<int> buckets_offsets,
+                                    const int total_depth,
+                                    const IndexRange range,
+                                    const JointPredicateT &joint_predicate,
+                                    const JointFuncT &joint_func,
+                                    const LeafFuncT &leaf_func)
+{
+  Array<int, 0> indices(range.size());
+  array_utils::fill_index_range<int>(indices, range.start());
+  Vector<Item, 32> stack = {Item{0, 0, int(indices.size())}};
+  while (!stack.is_empty()) {
+    const Item item = stack.pop_last();
+    const int depth_i = item.depth_i;
+    const int joint_i = item.joint_i;
+    const MutableSpan<int> to_visit = indices.as_mutable_span().take_front(item.prefix_to_visit);
+    const IndexRange joints_range = joints_range_at_depth(depth_i);
+    const IndexRange joint_buckets = joint_buckets_range_at_depth(total_depth, depth_i, joint_i);
+
+    const auto end_of_prefix = std::stable_partition(
+        to_visit.begin(), to_visit.end(), [&](const int i) -> bool {
+          return joint_predicate(int(joints_range[joint_i]), i);
+        });
+
+    const Span<int> finished_indices = to_visit.drop_front(
+        std::distance(to_visit.begin(), end_of_prefix));
+    joint_func(buckets_offsets[joint_buckets], int(joints_range[joint_i]), finished_indices);
+
+    const Span<int> next_indices = to_visit.take_front(
+        std::distance(to_visit.begin(), end_of_prefix));
+    if (next_indices.is_empty()) {
+      continue;
+    }
+
+    if (depth_i == total_depth - 1) {
+      leaf_func(buckets_offsets[joint_i], next_indices);
+      continue;
+    }
+
+    stack.append({depth_i + 1, joint_i * 2 + 0, int(next_indices.size())});
+    stack.append({depth_i + 1, joint_i * 2 + 1, int(next_indices.size())});
+  }
+}
+
+static void sample_average_old(const OffsetIndices<int> buckets_offsets,
+                           const int total_depth,
+                           const Span<float3> src_joints_centre,
+                           const Span<float> src_joints_min_distance,
+                           const Span<float3> src_joints_value,
+                           const Span<float3> src_bucket_position,
+                           const Span<float3> src_bucket_value,
+                           const int power_value,
+                           MutableSpan<float3> dst_buckets_data)
+{
+  BLI_assert(src_joints_centre.size() == src_joints_min_distance.size());
+  BLI_assert(src_bucket_value.size() == dst_buckets_data.size());
+  BLI_assert(src_bucket_value.size() == src_bucket_position.size());
+
+  const FunctionRef<void(int, MutableSpan<float>)> squared_distance_invertion =
+      powered_rcp_for_squared(power_value);
+
+  threading::parallel_for(src_bucket_value.index_range(), 1024, [&](const IndexRange range) {
+    Vector<float> buffer;
+    buffer.reserve(range.size());
+
+    for_each_to_bottom_skip_old(
+        buckets_offsets,
+        total_depth,
+        range,
+        [&](const int joint_index, const int value_i) -> bool {
+          return math::distance_squared(src_joints_centre[joint_index],
+                                        src_bucket_position[value_i]) <=
+                 math::square(src_joints_min_distance[joint_index]);
+        },
+        [&](const IndexRange buckets_range, const int joint_index, const Span<int> value_indices) {
+          buffer.resize(value_indices.size());
+          for (const int value_i : value_indices.index_range()) {
+            const int value_index = value_indices[value_i];
+            buffer[value_i] = math::distance_squared(src_joints_centre[joint_index],
+                                                     src_bucket_position[value_index]);
+          }
+
+          squared_distance_invertion(power_value, buffer.as_mutable_span());
+
+          const float total_factor = buckets_range.size();
+          for (const int value_i : value_indices.index_range()) {
+            const int value_index = value_indices[value_i];
+            dst_buckets_data[value_index] += (src_joints_value[joint_index] -
+                                              src_bucket_value[value_index]) *
+                                             buffer[value_i] * total_factor;
+          }
+        },
+        [&](const IndexRange bucket_range, const Span<int> value_indices) {
+          buffer.resize(bucket_range.size());
+          for (const int value_i : value_indices) {
+            const float3 position = src_bucket_position[value_i];
+
+            for (const int index : bucket_range.index_range()) {
+              buffer[index] = math::distance_squared(src_bucket_position[bucket_range[index]],
+                                                     position);
+            }
+
+            squared_distance_invertion(power_value, buffer.as_mutable_span());
 
             const float3 self_value = src_bucket_value[value_i];
             for (const int i : bucket_range.index_range()) {
@@ -653,6 +779,9 @@ static void sample_average(const OffsetIndices<int> buckets_offsets,
         });
   });
 }
+
+
+
 
 template<typename LeafFuncT, typename JointPredicateT, typename JointFuncT>
 static void for_each_to_bottom_skip_new(const OffsetIndices<int> buckets_offsets,
@@ -693,11 +822,11 @@ static void for_each_to_bottom_skip_new(const OffsetIndices<int> buckets_offsets
 
       joint_func(buckets_offsets[joint_buckets], int(joints_range[joint_i]), finished_indices);
 
-      if (UNLIKELY(next_indices.is_empty())) {
+      if (next_indices.is_empty()) {
         continue;
       }
 
-      if (UNLIKELY(IndexRange(total_depth).last() == depth_i)) {
+      if (IndexRange(total_depth).last() == depth_i) {
         leaf_func(buckets_offsets[joint_i], next_indices);
         continue;
       }
@@ -1001,8 +1130,8 @@ class DifferenceSumFieldInput final : public bke::GeometryFieldInput {
 
     Array<float3> sampled_bucket_values_new(domain_size, float3(0));
     if constexpr (true) {
-      SCOPED_TIMER_AVERAGED("akdbt::sample_average_new");
-      akdbt::sample_average_new(base_offsets,
+      SCOPED_TIMER_AVERAGED("akdbt::sample_average_old");
+      akdbt::sample_average_old(base_offsets,
                                 total_depth,
                                 joints_positions,
                                 joints_radii,
