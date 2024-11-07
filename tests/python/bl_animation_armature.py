@@ -11,24 +11,23 @@ import unittest
 import bpy
 
 
-def create_armature() -> tuple[bpy.types.Object, bpy.types.Armature]:
-    arm = bpy.data.armatures.new('Armature')
-    arm_ob = bpy.data.objects.new('ArmObject', arm)
-
-    # Link to the scene just for giggles. And ease of debugging when things
-    # go bad.
-    bpy.context.scene.collection.objects.link(arm_ob)
-
-    return arm_ob, arm
-
-
 class BoneCollectionTest(unittest.TestCase):
     arm_ob: bpy.types.Object
     arm: bpy.types.Armature
 
     def setUp(self):
         bpy.ops.wm.read_homefile(use_factory_startup=True)
-        self.arm_ob, self.arm = create_armature()
+        self.arm_ob, self.arm = self.create_armature()
+
+    def create_armature(self) -> tuple[bpy.types.Object, bpy.types.Armature]:
+        arm = bpy.data.armatures.new('Armature')
+        arm_ob = bpy.data.objects.new('ArmObject', arm)
+
+        # Link to the scene just for giggles. And ease of debugging when things
+        # go bad.
+        bpy.context.scene.collection.objects.link(arm_ob)
+
+        return arm_ob, arm
 
     def add_bones(self, arm_ob: bpy.types.Object) -> dict[str, bpy.types.Bone]:
         """Add some test bones to the armature."""
@@ -181,7 +180,7 @@ class BoneCollectionTest(unittest.TestCase):
         self.assertEqual(bcoll_child2_bone_names, {b.name for b in bcoll_child2.bones_recursive})
 
     def test_bone_collection_armature_join(self):
-        other_arm_ob, other_arm = create_armature()
+        other_arm_ob, other_arm = self.create_armature()
 
         # Build a hierarchy on the main armature.
         main_bcolls = self.arm.collections
