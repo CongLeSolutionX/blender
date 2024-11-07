@@ -2138,24 +2138,9 @@ GHOST_TSuccess GHOST_SystemCocoa::putClipboardImage(uint *rgba, int width, int h
 {
   @autoreleasepool {
     const size_t rowByteCount = width * 4;
-    const size_t bufferSize = rowByteCount * height;
-
-    uint8_t *srcBuffer = reinterpret_cast<uint8_t *>(rgba);
-    uint8_t *flipBuffer = static_cast<uint8_t *>(malloc(bufferSize));
-
-    if (!flipBuffer) {
-      return GHOST_kFailure;
-    }
-
-    /* Vertical flip. */
-    for (int y = 0; y < height; y++) {
-      const int dst_off = (height - y - 1) * rowByteCount;
-      const int src_off = y * rowByteCount;
-      memcpy(flipBuffer + dst_off, srcBuffer + src_off, rowByteCount);
-    }
 
     NSBitmapImageRep *imageRep = [[NSBitmapImageRep alloc]
-        initWithBitmapDataPlanes:reinterpret_cast<unsigned char **>(&flipBuffer)
+        initWithBitmapDataPlanes:nil
                       pixelsWide:width
                       pixelsHigh:height
                    bitsPerSample:8
@@ -2165,6 +2150,17 @@ GHOST_TSuccess GHOST_SystemCocoa::putClipboardImage(uint *rgba, int width, int h
                   colorSpaceName:NSDeviceRGBColorSpace
                      bytesPerRow:rowByteCount
                     bitsPerPixel:32];
+
+    /* Copy the source image data to imageRep, flipping it vertically. */
+    uint8_t *srcBuffer = reinterpret_cast<uint8_t *>(rgba);
+    uint8_t *dstBuffer = static_cast<uint8_t *>([imageRep bitmapData]);
+
+    for (int y = 0; y < height; y++) {
+      const int dstOff = (height - y - 1) * rowByteCount;
+      const int srcOff = y * rowByteCount;
+      memcpy(dstBuffer + dstOff, srcBuffer + srcOff, rowByteCount);
+    }
+
 
     NSImage *image = [[[NSImage alloc] initWithSize:NSMakeSize(width, height)] autorelease];
     [image addRepresentation:imageRep];
