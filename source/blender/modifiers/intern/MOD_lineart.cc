@@ -55,7 +55,7 @@ static bool is_first_lineart(const GreasePencilLineartModifierData &md)
   return true;
 }
 
-static bool is_last_line_art(const GreasePencilLineartModifierData &md)
+static bool is_last_line_art(const GreasePencilLineartModifierData &md, bool use_render)
 {
   if (md.modifier.type != eModifierType_GreasePencilLineart) {
     return false;
@@ -63,7 +63,12 @@ static bool is_last_line_art(const GreasePencilLineartModifierData &md)
   ModifierData *imd = md.modifier.next;
   while (imd != nullptr) {
     if (imd->type == eModifierType_GreasePencilLineart) {
-      return false;
+      if (use_render && (imd->mode & eModifierMode_Render)) {
+        return false;
+      }
+      if ((!use_render) && (imd->mode & eModifierMode_Realtime)) {
+        return false;
+      }
     }
     imd = imd->next;
   }
@@ -777,9 +782,11 @@ static void generate_strokes(ModifierData &md,
     return;
   }
 
-  LineartCache *local_lc = first_lineart.shared_cache;
+  bool is_first_lineart = (&first_lineart == &lmd);
+  bool use_cache = (lmd.flags & MOD_LINEART_USE_CACHE);
+  LineartCache *local_lc = (is_first_lineart || use_cache) ? first_lineart.shared_cache : nullptr;
 
-  if (!(lmd.flags & MOD_LINEART_USE_CACHE)) {
+  if (is_first_lineart || (!use_cache)) {
     MOD_lineart_compute_feature_lines_v3(
         ctx.depsgraph, lmd, &local_lc, !(ctx.object->dtx & OB_DRAW_IN_FRONT));
     MOD_lineart_destroy_render_data_v3(&lmd);
@@ -825,11 +832,10 @@ static void generate_strokes(ModifierData &md,
       lmd.flags,
       lmd.calculation_flags);
 
-  if (!(lmd.flags & MOD_LINEART_USE_CACHE) && (&first_lineart != &lmd)) {
-    /* Clear local cache. */
-    if (local_lc != first_lineart.shared_cache) {
-      MOD_lineart_clear_cache(&local_lc);
-    }
+  if ((!is_first_lineart) && (!use_cache)) {
+    /* We only clear local cache, not global cache from the first line art modifier. */
+    BLI_assert(local_lc != first_lineart.shared_cache);
+    MOD_lineart_clear_cache(&local_lc);
     /* Restore the original cache pointer so the modifiers below still have access to the "global"
      * cache. */
     lmd.cache = first_lineart.shared_cache;
@@ -861,7 +867,8 @@ static void modify_geometry_set(ModifierData *md,
 
   generate_strokes(*md, *ctx, grease_pencil, *first_lineart);
 
-  if (is_last_line_art(*mmd)) {
+  const bool use_render_params = (ctx->flag & MOD_APPLY_RENDER);
+  if (is_last_line_art(*mmd, use_render_params)) {
     MOD_lineart_clear_cache(&first_lineart->shared_cache);
   }
 
