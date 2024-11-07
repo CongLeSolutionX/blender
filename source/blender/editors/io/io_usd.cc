@@ -301,7 +301,6 @@ static int wm_usd_export_exec(bContext *C, wmOperator *op)
 
   const bool merge_transform_and_shape = RNA_boolean_get(op->ptr, "merge_transform_and_shape");
 
-
 #  if PXR_VERSION >= 2403
   const bool allow_unicode = RNA_boolean_get(op->ptr, "allow_unicode");
 #  else

@@ -72,7 +72,7 @@ class AbstractUSDTest(unittest.TestCase):
 
     def export_without_validating(self, **kwargs):
         """Export without validating"""
-        
+
         export_path = kwargs["filepath"]
 
         # Do the actual export
@@ -896,11 +896,11 @@ class USDExportTest(AbstractUSDTest):
 
     def test_merge_transform_and_shape_false(self):
         bpy.ops.wm.open_mainfile(filepath=str(self.testdir / "usd_hierarchy_export_test.blend"))
-        
+
         test_path = self.tempdir / "test_merge_transform_and_shape_false.usda"
-        
+
         self.export_and_validate(filepath=str(test_path), merge_transform_and_shape=False)
-        
+
         expected = (
             ("/root", "Xform"),
             ("/root/Dupli1", "Xform"),
@@ -944,10 +944,10 @@ class USDExportTest(AbstractUSDTest):
             ("/root/Camera/Camera", "Camera"),
             ("/root/env_light", "DomeLight")
         )
-        
+
         def key(el):
             return el[0]
-        
+
         expected = tuple(sorted(expected, key=key))
 
         stage = Usd.Stage.Open(str(test_path))
@@ -958,9 +958,9 @@ class USDExportTest(AbstractUSDTest):
 
     def test_merge_transform_and_shape_true(self):
         bpy.ops.wm.open_mainfile(filepath=str(self.testdir / "usd_hierarchy_export_test.blend"))
-        
+
         test_path = self.tempdir / "test_merge_transform_and_shape_true.usda"
-        
+
         self.export_without_validating(filepath=str(test_path), merge_transform_and_shape=True)
 
         expected = (
@@ -991,17 +991,18 @@ class USDExportTest(AbstractUSDTest):
             ('/root/Ground_plane/OutsideDupliGrandParent/OutsideDupliParent/GEO_Head/GEO_Ear_L', 'Mesh'),
             ('/root/env_light', 'DomeLight')
         )
-        
+
         def key(el):
             return el[0]
-        
+
         expected = tuple(sorted(expected, key=key))
-        
+
         stage = Usd.Stage.Open(str(test_path))
         actual = ((str(p.GetPath()), p.GetTypeName()) for p in stage.Traverse())
         actual = tuple(sorted(actual, key=key))
-        
+
         self.assertTupleEqual(expected, actual)
+
 
 class USDHookBase():
     instructions = {}
