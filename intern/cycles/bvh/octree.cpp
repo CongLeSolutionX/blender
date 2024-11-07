@@ -147,7 +147,9 @@ void Octree::recursive_build_(const Scene *scene, shared_ptr<OctreeNode> &octree
 }
 
 #ifdef WITH_OPENVDB
-openvdb::BoolGrid::ConstPtr Octree::mesh_to_sdf_grid(const Mesh *mesh, const float half_width)
+openvdb::BoolGrid::ConstPtr Octree::mesh_to_sdf_grid(const Mesh *mesh,
+                                                     const Shader *shader,
+                                                     const float half_width)
 {
   const int num_verts = mesh->get_verts().size();
   std::vector<openvdb::Vec3f> points(num_verts);
@@ -156,13 +158,18 @@ openvdb::BoolGrid::ConstPtr Octree::mesh_to_sdf_grid(const Mesh *mesh, const flo
     points[i] = openvdb::Vec3f(vert.x, vert.y, vert.z);
   });
 
-  const int num_triangles = mesh->num_triangles();
-  std::vector<openvdb::Vec3I> triangles(num_triangles);
-  parallel_for(0, num_triangles, [&](int i) {
-    triangles[i] = openvdb::Vec3I(mesh->get_triangles()[i * 3],
-                                  mesh->get_triangles()[i * 3 + 1],
-                                  mesh->get_triangles()[i * 3 + 2]);
-  });
+  const int max_num_triangles = mesh->num_triangles();
+  std::vector<openvdb::Vec3I> triangles;
+  triangles.reserve(max_num_triangles);
+  for (int i = 0; i < max_num_triangles; i++) {
+    /* Only push triangles with matching shader. */
+    const int shader_index = mesh->get_shader()[i];
+    if (static_cast<const Shader *>(mesh->get_used_shaders()[shader_index]) == shader) {
+      triangles.emplace_back(mesh->get_triangles()[i * 3],
+                             mesh->get_triangles()[i * 3 + 1],
+                             mesh->get_triangles()[i * 3 + 2]);
+    }
+  }
 
   /* TODO(weizhen): Should consider object instead of mesh size. */
   const float3 mesh_size = mesh->bounds.size();
@@ -251,16 +258,17 @@ __forceinline int Octree::get_width() const
   return width;
 }
 
-openvdb::BoolGrid::ConstPtr Octree::get_vdb(const Geometry *geom) const
+#ifdef WITH_OPENVDB
+openvdb::BoolGrid::ConstPtr Octree::get_vdb(
+    const std::pair<const Geometry *, const Shader *> &geom_shader) const
 {
-  if (vdb_map.count(geom) > 0) {
-    return vdb_map.at(geom);
+  if (vdb_map.count(geom_shader) > 0) {
+    return vdb_map.at(geom_shader);
   }
   /* Create empty grid. */
   return openvdb::BoolGrid::create();
 }
 
-#ifdef WITH_OPENVDB
 static bool vdb_voxel_intersect(const float3 p_min,
                                 const float3 p_max,
                                 const Transform itfm,
@@ -301,37 +309,22 @@ static bool vdb_voxel_intersect(const float3 p_min,
 
 /* Fill in coordinates for shading the volume density. */
 static void fill_shader_input(device_vector<KernelShaderEvalInput> &d_input,
-                              const Scene *scene,
                               const Octree *octree,
                               const Node *node,
+                              const Shader *shader,
                               const int3 &index_min,
                               const int3 &index_range)
 {
   /* Get object id. */
   const Object *object = dynamic_cast<const Object *>(node);
   const int object_id = object ? object->get_device_index() : OBJECT_NONE;
+  const Geometry *geom = object ? object->get_geometry() : nullptr;
 
   /* Get shader id. */
-  uint shader_id;
-  const Geometry *geom = object ? object->get_geometry() : nullptr;
-  if (object) {
-    for (Node *node : geom->get_used_shaders()) {
-      Shader *shader = static_cast<Shader *>(node);
-      if (shader->has_volume) {
-        /* TODO(weizhen): support multiple shaders. */
-        shader_id = shader->id;
-        break;
-      }
-    }
-  }
-  else {
-    /* World volume. */
-    const Background *background = dynamic_cast<const Background *>(node);
-    shader_id = background->get_shader(scene)->id;
-  }
+  const uint shader_id = shader->id;
 
   /* Get object boundary VDB. */
-  openvdb::BoolGrid::ConstPtr grid = octree->get_vdb(geom);
+  openvdb::BoolGrid::ConstPtr grid = octree->get_vdb({geom, shader});
 
   /* Get object transform. */
   Transform itfm;
@@ -432,6 +425,7 @@ void Octree::evaluate_volume_density_(Device *device, Progress &progress, Scene 
   const int num_channels = 2;
 
   auto eval_density = [&](const Node *object,
+                          const Shader *shader,
                           vector<Extrema<float>> &dest,
                           const int3 index_min,
                           const int3 index_range) {
@@ -444,7 +438,7 @@ void Octree::evaluate_volume_density_(Device *device, Progress &progress, Scene 
         size * 2 + 1,
         num_channels,
         [&](device_vector<KernelShaderEvalInput> &d_input) {
-          fill_shader_input(d_input, scene, this, object, index_min, index_range);
+          fill_shader_input(d_input, this, object, shader, index_min, index_range);
           return size;
         },
         [&](device_vector<float> &d_output) {
@@ -457,30 +451,45 @@ void Octree::evaluate_volume_density_(Device *device, Progress &progress, Scene 
       return;
     }
 
-    const Object *object = dynamic_cast<const Object *>(node);
+    if (const Object *object = dynamic_cast<const Object *>(node)) {
+      /* Evaluate density inside object bounds. */
+      const int3 index_min = world_to_floor_index(object->bounds.min);
+      const int3 index_max = world_to_ceil_index(object->bounds.max);
+      const int3 index_range = index_max - index_min;
 
-    /* Evaluate density inside object bounds. */
-    const int3 index_min = object ? world_to_floor_index(object->bounds.min) : make_int3(0);
-    const int3 index_max = object ? world_to_ceil_index(object->bounds.max) : make_int3(width);
-
-    const int3 index_range = index_max - index_min;
+      const Geometry *geom = object->get_geometry();
+      for (const Node *shader_node : geom->get_used_shaders()) {
+        const Shader *shader = static_cast<const Shader *>(shader_node);
+        if (!shader->has_volume) {
+          continue;
+        }
 
 #ifdef WITH_OPENVDB
-    /* Create SDF grid for mesh volumes, to determine whether a certain point is in the
-     * interior of the mesh. */
-    const Geometry *geom = object ? object->get_geometry() : nullptr;
-    if (geom && geom->is_mesh() && !vdb_map.count(geom)) {
-      const Mesh *mesh = static_cast<const Mesh *>(geom);
-      vdb_map[geom] = mesh_to_sdf_grid(mesh, 2.0f);
-    }
+        /* Create SDF grid for mesh volumes, to determine whether a certain point is in the
+         * interior of the mesh. */
+        std::pair<const Geometry *, const Shader *> geom_shader = {geom, shader};
+        if (geom->is_mesh() && !vdb_map.count(geom_shader)) {
+          const Mesh *mesh = static_cast<const Mesh *>(geom);
+          vdb_map[geom_shader] = mesh_to_sdf_grid(mesh, shader, 2.0f);
+        }
 #endif
 
-    /* TODO(weizhen): specialize homogeneous volume and evaluate less points? */
+        /* TODO(weizhen): specialize homogeneous volume and evaluate less points? */
 
-    /* Evaluate shader on device. */
-    eval_density(node, sigmas, index_min, index_range);
+        /* Evaluate shader on device. */
+        eval_density(object, shader, sigmas, index_min, index_range);
+      }
+    }
+    else {
+      const int3 index_min = make_int3(0);
+      const int3 index_max = make_int3(width);
+      const int3 index_range = index_max - index_min;
 
-    if (!object) {
+      const Background *background = static_cast<const Background *>(node);
+
+      /* Evaluate shader on device. */
+      eval_density(background, background->get_shader(scene), sigmas, index_min, index_range);
+
       /* NOTE: world volume is the first in the list, so until now `sigma_s` only contains density
        * evaluation of the world. */
       background_density = get_extrema(sigmas, index_min, index_max);
@@ -512,7 +521,8 @@ void Octree::evaluate_volume_density_(Device *device, Progress &progress, Scene 
       const int3 index_max = make_int3(width);
       const int3 index_range = index_max;
 
-      eval_density(background, world_density, index_min, index_range);
+      eval_density(
+          background, background->get_shader(scene), world_density, index_min, index_range);
 
       background_density = join(background_density,
                                 get_extrema(world_density, index_min, index_max));

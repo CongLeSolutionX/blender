@@ -6,13 +6,12 @@
 #define __OCTREE_H__
 
 #include "util/boundbox.h"
+#include "util/map.h"
 #include "util/task.h"
 
 #ifdef WITH_OPENVDB
 #  include <openvdb/openvdb.h>
 #endif
-
-#include <map>
 
 #include <atomic>
 
@@ -79,7 +78,7 @@ class Octree {
   void visualize(KernelOctreeNode *knodes, const char *filename) const;
   void visualize_fast(KernelOctreeNode *knodes, const char *filename) const;
 #ifdef WITH_OPENVDB
-  openvdb::BoolGrid::ConstPtr get_vdb(const Geometry *geom) const;
+  openvdb::BoolGrid::ConstPtr get_vdb(const std::pair<const Geometry *, const Shader *> &) const;
 #endif
   int get_width() const;
 
@@ -103,8 +102,10 @@ class Octree {
 
   TaskPool task_pool;
 #ifdef WITH_OPENVDB
-  openvdb::BoolGrid::ConstPtr mesh_to_sdf_grid(const Mesh *mesh, const float half_width);
-  std::map<const Geometry *, openvdb::BoolGrid::ConstPtr> vdb_map;
+  openvdb::BoolGrid::ConstPtr mesh_to_sdf_grid(const Mesh *mesh,
+                                               const Shader *shader,
+                                               const float half_width);
+  std::map<std::pair<const Geometry *, const Shader *>, openvdb::BoolGrid::ConstPtr> vdb_map;
 #endif
 
   int width;
