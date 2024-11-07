@@ -23,25 +23,10 @@ set(SRC_GLSL_FRAG
 set(SRC_GLSL_COMP
   common_hair_refine_comp.glsl
   draw_command_generate_comp.glsl
-  draw_resource_finalize_comp.glsl
+  # Failed because of mixed definition of ObjectInfos
+  # draw_resource_finalize_comp.glsl
   draw_view_finalize_comp.glsl
   draw_visibility_comp.glsl
-)
-
-set(SRC_GLSL_LIB
-#   draw_command_generate_comp.glsl
-#   draw_debug_info.hh
-#   draw_fullscreen_info.hh
-#   draw_hair_refine_info.hh
-#   draw_intersect_lib.glsl
-#   draw_math_geom_lib.glsl
-#   draw_model_lib.glsl
-#   draw_object_infos_info.hh
-#   draw_resource_finalize_comp.glsl
-#   draw_view_finalize_comp.glsl
-#   draw_view_info.hh
-#   draw_view_lib.glsl
-#   draw_view_reconstruction_lib.glsl
 )
 
 add_definitions(-DGPU_SHADER)
@@ -67,8 +52,7 @@ endfunction()
 
 # Compile shaders with shader code.
 if (WITH_GPU_SHADER_CPP_COMPILATION)
-  compile_sources_as_cpp(draw_cpp_shaders_vert ${SRC_GLSL_VERT} "GPU_VERTEX_SHADER")
-  compile_sources_as_cpp(draw_cpp_shaders_frag ${SRC_GLSL_FRAG} "GPU_FRAGMENT_SHADER")
-  compile_sources_as_cpp(draw_cpp_shaders_comp ${SRC_GLSL_COMP} "GPU_COMPUTE_SHADER")
-#   compile_sources_as_cpp(draw_cpp_shaders_lib ${SRC_GLSL_LIB} "GPU_FRAGMENT_SHADER")
+  compile_sources_as_cpp(draw_cpp_shaders_vert "${SRC_GLSL_VERT}" "GPU_VERTEX_SHADER")
+  compile_sources_as_cpp(draw_cpp_shaders_frag "${SRC_GLSL_FRAG}" "GPU_FRAGMENT_SHADER")
+  compile_sources_as_cpp(draw_cpp_shaders_comp "${SRC_GLSL_COMP}" "GPU_COMPUTE_SHADER")
 endif()
