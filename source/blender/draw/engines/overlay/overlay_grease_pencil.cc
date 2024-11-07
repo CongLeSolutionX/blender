@@ -94,56 +94,56 @@ static void OVERLAY_grease_pencil_material_names(Object *ob)
   using namespace blender;
 
   const DRWContextState *draw_ctx = DRW_context_state_get();
-  int cfra = DEG_get_ctime(draw_ctx->depsgraph);
+
+  bool show_points, show_lines;
+  is_selection_visible(show_points, show_lines);
 
   GreasePencil &grease_pencil = *static_cast<GreasePencil *>(ob->data);
-
-  bke::greasepencil::Layer *layer = grease_pencil.get_active_layer();
-  if (!layer) {
-    return;
-  }
 
   /* TODO: In legacy GPv2 it used a `BKE_gpencil_visible_stroke_advanced_iter` wrapping call, such
    * utility function has not been implemented for v3 yet, so iterate manually here. Note: this
    * does not handle multi-frame editing or onion-skin. */
 
-  bke::greasepencil::Drawing *drawing = grease_pencil.get_editable_drawing_at(*layer, cfra);
-  if (!drawing) {
+  Vector<ed::greasepencil::DrawingInfo> drawings = ed::greasepencil::retrieve_visible_drawings(
+      *draw_ctx->scene, grease_pencil, false);
+  if (drawings.is_empty()) {
     return;
   }
 
-  bool show_points, show_lines;
-  is_selection_visible(show_points, show_lines);
+  for (const ed::greasepencil::DrawingInfo &info : drawings) {
+    const bke::greasepencil::Drawing &drawing = info.drawing;
 
-  const bke::CurvesGeometry strokes = drawing->strokes();
-  const OffsetIndices<int> points_by_curve = strokes.points_by_curve();
-  const bke::AttributeReader<bool> selection_reader = strokes.attributes().lookup_or_default<bool>(
-      ".selection", show_points ? bke::AttrDomain::Point : bke::AttrDomain::Curve, true);
-  const bke::AttributeReader<int> material_reader = strokes.attributes().lookup_or_default<int>(
-      "material_index", bke::AttrDomain::Curve, 0);
-  const VArray<bool> selections = selection_reader.varray;
-  const VArray<int> materials = material_reader.varray;
-  const Span<float3> positions = strokes.positions();
+    const bke::CurvesGeometry strokes = drawing.strokes();
+    const OffsetIndices<int> points_by_curve = strokes.points_by_curve();
+    const bke::AttributeReader<bool> selection_reader =
+        strokes.attributes().lookup_or_default<bool>(
+            ".selection", show_points ? bke::AttrDomain::Point : bke::AttrDomain::Curve, true);
+    const bke::AttributeReader<int> material_reader = strokes.attributes().lookup_or_default<int>(
+        "material_index", bke::AttrDomain::Curve, 0);
+    const VArray<bool> selections = selection_reader.varray;
+    const VArray<int> materials = material_reader.varray;
+    const Span<float3> positions = strokes.positions();
 
-  auto show_stroke_name = [&](const int stroke_i) {
-    if (show_points) {
-      const int point_offset = points_by_curve[stroke_i].first();
-      for (const int point_i : points_by_curve[stroke_i].index_range()) {
-        if (selections[point_i + point_offset]) {
-          return true;
+    auto show_stroke_name = [&](const int stroke_i) {
+      if (show_points) {
+        const int point_offset = points_by_curve[stroke_i].first();
+        for (const int point_i : points_by_curve[stroke_i].index_range()) {
+          if (selections[point_i + point_offset]) {
+            return true;
+          }
         }
       }
-    }
-    else {
-      return selections[stroke_i];
-    }
-    return false;
-  };
+      else {
+        return selections[stroke_i];
+      }
+      return false;
+    };
 
-  for (const int stroke_i : strokes.curves_range()) {
-    const int point_i = points_by_curve[stroke_i].first();
-    if (show_stroke_name(stroke_i)) {
-      overlay_grease_pencil_draw_stroke_color_name(*ob, materials[stroke_i], positions[point_i]);
+    for (const int stroke_i : strokes.curves_range()) {
+      const int point_i = points_by_curve[stroke_i].first();
+      if (show_stroke_name(stroke_i)) {
+        overlay_grease_pencil_draw_stroke_color_name(*ob, materials[stroke_i], positions[point_i]);
+      }
     }
   }
 }
