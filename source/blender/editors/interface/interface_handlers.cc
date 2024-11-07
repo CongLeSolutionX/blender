@@ -3131,7 +3131,10 @@ static void ui_textedit_set_cursor_pos(uiBut *but, const ARegion *region, const 
       startx += UI_ICON_SIZE / aspect;
     }
   }
-  startx += (UI_TEXT_MARGIN_X * U.widget_unit - U.pixelsize) / aspect;
+  startx -= U.pixelsize / aspect;
+  if (!(but->drawflag & UI_BUT_NO_TEXT_PADDING)) {
+    startx += UI_TEXT_MARGIN_X * U.widget_unit / aspect;
+  }
 
   /* mouse dragged outside the widget to the left */
   if (x < startx) {
@@ -4958,6 +4961,8 @@ static void force_activate_view_item_but(bContext *C,
 {
   if (but->active) {
     ui_apply_but(C, but->block, but, but->active, true);
+    ED_region_tag_redraw_no_rebuild(region);
+    ED_region_tag_refresh_ui(region);
   }
   else {
     UI_but_execute(C, region, but);

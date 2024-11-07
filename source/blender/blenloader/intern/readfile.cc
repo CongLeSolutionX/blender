@@ -983,6 +983,12 @@ static void decode_blender_header(FileData *fd)
     num[3] = 0;
     fd->fileversion = atoi(num);
   }
+  else if (STREQLEN(header, "BLENDER", 7)) {
+    /* If the first 7 bytes are BLENDER, it is very likely that this is a newer version of the
+     * blendfile format. Unreadable currently, but avoid telling the user that this is not a blend
+     * file. */
+    fd->flags |= FD_FLAGS_FILE_FUTURE;
+  }
 }
 
 /**
@@ -1174,9 +1180,17 @@ static FileData *blo_decode_and_check(FileData *fd, ReportList *reports)
       fd = nullptr;
     }
   }
-  else {
+  else if (fd->flags & FD_FLAGS_FILE_FUTURE) {
     BKE_reportf(
-        reports, RPT_ERROR, "Failed to read blend file '%s', not a blend file", fd->relabase);
+        reports,
+        RPT_ERROR,
+        "Cannot read blend file '%s', incomplete header, may be from a newer version of Blender",
+        fd->relabase);
+    blo_filedata_free(fd);
+    fd = nullptr;
+  }
+  else {
+    BKE_reportf(reports, RPT_ERROR, "Failed to read file '%s', not a blend file", fd->relabase);
     blo_filedata_free(fd);
     fd = nullptr;
   }
@@ -3986,6 +4000,13 @@ static void expand_doit_library(void *fdhandle, Main *mainvar, void *old)
   if (bhead == nullptr) {
     return;
   }
+  /* In 2.50+ file identifier for screens is patched, forward compatibility. */
+  if (bhead->code == ID_SCRN) {
+    bhead->code = ID_SCR;
+  }
+  if (!blo_bhead_is_id_valid_type(bhead)) {
+    return;
+  }
 
   if (bhead->code == ID_LINK_PLACEHOLDER) {
     /* Placeholder link to data-block in another library. */
@@ -4056,11 +4077,6 @@ static void expand_doit_library(void *fdhandle, Main *mainvar, void *old)
   }
   else {
     /* Data-block in same library. */
-    /* In 2.50+ file identifier for screens is patched, forward compatibility. */
-    if (bhead->code == ID_SCRN) {
-      bhead->code = ID_SCR;
-    }
-
     ID *id = library_id_is_yet_read(fd, mainvar, bhead);
     if (id == nullptr) {
       read_libblock(
@@ -4166,7 +4182,7 @@ static ID *link_named_part(
 
   BLI_assert(BKE_idtype_idcode_is_linkable(idcode) && BKE_idtype_idcode_is_valid(idcode));
 
-  if (bhead) {
+  if (bhead && blo_bhead_is_id_valid_type(bhead)) {
     id = library_id_is_yet_read(fd, mainl, bhead);
     if (id == nullptr) {
       /* not read yet */
@@ -4199,8 +4215,7 @@ static ID *link_named_part(
     id = nullptr;
   }
 
-  /* if we found the id but the id is nullptr, this is really bad */
-  BLI_assert(!((bhead != nullptr) && (id == nullptr)));
+  /* NOTE: `id` may be `nullptr` even if a BHead was found, in case e.g. it is an invalid BHead. */
 
   return id;
 }
