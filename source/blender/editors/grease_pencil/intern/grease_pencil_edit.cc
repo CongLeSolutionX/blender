@@ -2996,9 +2996,11 @@ static int grease_pencil_snap_to_grid_exec(bContext *C, wmOperator * /*op*/)
       positions[point_i] = math::transform_point(world_to_layer, pos_snapped);
     });
 
+    drawing_info.drawing.tag_positions_changed();
     DEG_id_tag_update(&grease_pencil.id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
     DEG_id_tag_update(&object.id, ID_RECALC_SYNC_TO_EVAL);
     WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | NA_EDITED, nullptr);
+    WM_event_add_notifier(C, NC_OBJECT | ND_DRAW, &grease_pencil);
   }
 
   return OPERATOR_FINISHED;
@@ -3072,9 +3074,11 @@ static int grease_pencil_snap_to_cursor_exec(bContext *C, wmOperator *op)
       index_mask::masked_fill(positions, cursor_layer, selected_points);
     }
 
+    drawing_info.drawing.tag_positions_changed();
     DEG_id_tag_update(&grease_pencil.id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
     DEG_id_tag_update(&object.id, ID_RECALC_SYNC_TO_EVAL);
     WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | NA_EDITED, nullptr);
+    WM_event_add_notifier(C, NC_OBJECT | ND_DRAW, &grease_pencil);
   }
 
   return OPERATOR_FINISHED;
@@ -3124,6 +3128,10 @@ static bool grease_pencil_snap_compute_centroid(const Scene &scene,
 
   const Vector<DrawingInfo> drawings = retrieve_visible_drawings(scene, grease_pencil, false);
   for (const DrawingInfo &drawing_info : drawings) {
+    const Layer &layer = grease_pencil.layer(drawing_info.layer_index);
+    if (layer.is_locked()) {
+      continue;
+    }
     const bke::CurvesGeometry &curves = drawing_info.drawing.strokes();
     if (curves.curves_num() == 0) {
       continue;
@@ -3135,8 +3143,6 @@ static bool grease_pencil_snap_compute_centroid(const Scene &scene,
     IndexMaskMemory selected_points_memory;
     const IndexMask selected_points = ed::curves::retrieve_selected_points(curves,
                                                                            selected_points_memory);
-
-    const Layer &layer = grease_pencil.layer(drawing_info.layer_index);
     const float4x4 layer_to_world = layer.to_world_space(object);
 
     Span<float3> positions = curves.positions();
