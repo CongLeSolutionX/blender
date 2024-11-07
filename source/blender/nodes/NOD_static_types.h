@@ -306,7 +306,6 @@ DefNode(FunctionNode, FN_NODE_SLICE_STRING, 0, "SLICE_STRING", SliceString, "Sli
 DefNode(FunctionNode, FN_NODE_STRING_LENGTH, 0, "STRING_LENGTH", StringLength, "String Length", "")
 DefNode(FunctionNode, FN_NODE_STRING_COUNT_TOKEN, 0, "STRING_COUNT_TOKEN",StringCountToken,"String Count Token","")
 DefNode(FunctionNode, FN_NODE_STRING_FIND_TOKEN,0,"STRING_FIND_TOKEN",StringFindToken,"String Find Token","")
-DefNode(FunctionNode, FN_NODE_STRING_SELECT_LINE, 0, "STRING_SELECT_LINE",StringSelectLine,"String Select Line","")
 DefNode(FunctionNode, FN_NODE_TRANSFORM_DIRECTION, 0, "TRANSFORM_DIRECTION", TransformDirection, "Transform Direction", "")
 DefNode(FunctionNode, FN_NODE_TRANSFORM_POINT, 0, "TRANSFORM_POINT", TransformPoint, "Transform Point", "")
 DefNode(FunctionNode, FN_NODE_TRANSPOSE_MATRIX, 0, "TRANSPOSE_MATRIX", TransposeMatrix, "Transpose Matrix", "")

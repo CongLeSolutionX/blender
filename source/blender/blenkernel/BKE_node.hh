@@ -1432,7 +1432,6 @@ void node_tree_remove_layer_n(bNodeTree *ntree, Scene *scene, int layer_index);
 #define FN_NODE_MATRIX_DETERMINANT 1247
 #define FN_NODE_STRING_COUNT_TOKEN 1248
 #define FN_NODE_STRING_FIND_TOKEN 1249
-#define FN_NODE_STRING_SELECT_LINE 1250
 
 /** \} */
 

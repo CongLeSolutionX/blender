@@ -549,7 +549,6 @@ class NODE_MT_category_GEO_TEXT(Menu):
         node_add_menu.add_node_type(layout, "GeometryNodeStringJoin")
         node_add_menu.add_node_type(layout, "FunctionNodeReplaceString")
         node_add_menu.add_node_type(layout, "FunctionNodeSliceString")
-        node_add_menu.add_node_type(layout, "FunctionNodeStringSelectLine")
         layout.separator()
         node_add_menu.add_node_type(layout, "FunctionNodeStringLength")
         node_add_menu.add_node_type(layout, "FunctionNodeStringCountToken")
