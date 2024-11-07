@@ -110,6 +110,18 @@ USDExporterContext USDHierarchyIterator::create_usd_export_context(const Hierarc
     path = pxr::SdfPath(context->export_path);
   }
 
+  if (params_.merge_transform_and_shape && context->is_object_data_context)
+  {
+    bool can_merge_with_xform = true;
+    if (params_.export_shapekeys && is_mesh_with_shape_keys(context->object)) {
+      can_merge_with_xform = false;
+    }
+
+    if (can_merge_with_xform) {
+      path = path.GetParentPath();
+    }
+  }
+
   /* Returns the same path that was passed to `stage_` object during it's creation (via
    * `pxr::UsdStage::CreateNew` function). */
   const pxr::SdfLayerHandle root_layer = stage_->GetRootLayer();

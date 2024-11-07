@@ -299,6 +299,9 @@ static int wm_usd_export_exec(bContext *C, wmOperator *op)
 
   const int usdz_downscale_custom_size = RNA_int_get(op->ptr, "usdz_downscale_custom_size");
 
+  const bool merge_transform_and_shape = RNA_boolean_get(op->ptr, "merge_transform_and_shape");
+
+
 #  if PXR_VERSION >= 2403
   const bool allow_unicode = RNA_boolean_get(op->ptr, "allow_unicode");
 #  else
@@ -387,6 +390,8 @@ static int wm_usd_export_exec(bContext *C, wmOperator *op)
   params.usdz_downscale_size = usdz_downscale_size;
   params.usdz_downscale_custom_size = usdz_downscale_custom_size;
 
+  params.merge_transform_and_shape = merge_transform_and_shape;
+
   STRNCPY(params.root_prim_path, root_prim_path);
   STRNCPY(params.custom_properties_namespace, custom_properties_namespace);
   RNA_string_get(op->ptr, "collection", params.collection);
@@ -434,6 +439,7 @@ static void wm_usd_export_draw(bContext *C, wmOperator *op)
       uiItemR(col, ptr, "export_global_forward_selection", UI_ITEM_NONE, nullptr, ICON_NONE);
       uiItemR(col, ptr, "export_global_up_selection", UI_ITEM_NONE, nullptr, ICON_NONE);
     }
+    uiItemR(col, ptr, "merge_transform_and_shape", UI_ITEM_NONE, nullptr, ICON_NONE);
     uiItemR(col, ptr, "xform_op_mode", UI_ITEM_NONE, nullptr, ICON_NONE);
 
     col = uiLayoutColumn(panel, false);
@@ -844,6 +850,12 @@ void WM_OT_usd_export(wmOperatorType *ot)
               "Custom size for downscaling exported textures",
               128,
               8192);
+
+  RNA_def_boolean(ot->srna,
+                  "merge_transform_and_shape",
+                  false,
+                  "Merge Transform and Shape",
+                  "When checked, transforms and shapes will be merged into the one prim path");
 }
 
 /* ====== USD Import ====== */

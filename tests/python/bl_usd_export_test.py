@@ -70,6 +70,15 @@ class AbstractUSDTest(unittest.TestCase):
 
         self.assertFalse(failed_checks, pprint.pformat(failed_checks))
 
+    def export_without_validating(self, **kwargs):
+        """Export without validating"""
+        
+        export_path = kwargs["filepath"]
+
+        # Do the actual export
+        res = bpy.ops.wm.usd_export(**kwargs)
+        self.assertEqual({'FINISHED'}, res, f"Unable to export to {export_path}")
+
 
 class USDExportTest(AbstractUSDTest):
     # Utility function to round each component of a vector to a few digits. The "+ 0" is to
@@ -885,6 +894,114 @@ class USDExportTest(AbstractUSDTest):
         self.assertEqual(USDHookBase.responses["on_export"], [])
         self.assertEqual(USDHookBase.responses["on_import"], [])
 
+    def test_merge_transform_and_shape_false(self):
+        bpy.ops.wm.open_mainfile(filepath=str(self.testdir / "usd_hierarchy_export_test.blend"))
+        
+        test_path = self.tempdir / "test_merge_transform_and_shape_false.usda"
+        
+        self.export_and_validate(filepath=str(test_path), merge_transform_and_shape=False)
+        
+        expected = (
+            ("/root", "Xform"),
+            ("/root/Dupli1", "Xform"),
+            ("/root/Dupli1/GEO_Head_0", "Xform"),
+            ("/root/Dupli1/GEO_Head_0/Face", "Mesh"),
+            ("/root/Dupli1/GEO_Head_0/GEO_Ear_R_2", "Xform"),
+            ("/root/Dupli1/GEO_Head_0/GEO_Ear_R_2/Ear", "Mesh"),
+            ("/root/Dupli1/GEO_Head_0/GEO_Ear_L_1", "Xform"),
+            ("/root/Dupli1/GEO_Head_0/GEO_Ear_L_1/Ear", "Mesh"),
+            ("/root/Dupli1/GEO_Head_0/GEO_Nose_3", "Xform"),
+            ("/root/Dupli1/GEO_Head_0/GEO_Nose_3/Nose", "Mesh"),
+            ("/root/_materials", "Scope"),
+            ("/root/_materials/Head", "Material"),
+            ("/root/_materials/Head/Principled_BSDF", "Shader"),
+            ("/root/_materials/Nose", "Material"),
+            ("/root/_materials/Nose/Principled_BSDF", "Shader"),
+            ("/root/ParentOfDupli2", "Xform"),
+            ("/root/ParentOfDupli2/Icosphere", "Mesh"),
+            ("/root/ParentOfDupli2/Dupli2", "Xform"),
+            ("/root/ParentOfDupli2/Dupli2/GEO_Head_0", "Xform"),
+            ("/root/ParentOfDupli2/Dupli2/GEO_Head_0/Face", "Mesh"),
+            ("/root/ParentOfDupli2/Dupli2/GEO_Head_0/GEO_Ear_L_1", "Xform"),
+            ("/root/ParentOfDupli2/Dupli2/GEO_Head_0/GEO_Ear_L_1/Ear", "Mesh"),
+            ("/root/ParentOfDupli2/Dupli2/GEO_Head_0/GEO_Ear_R_2", "Xform"),
+            ("/root/ParentOfDupli2/Dupli2/GEO_Head_0/GEO_Ear_R_2/Ear", "Mesh"),
+            ("/root/ParentOfDupli2/Dupli2/GEO_Head_0/GEO_Nose_3", "Xform"),
+            ("/root/ParentOfDupli2/Dupli2/GEO_Head_0/GEO_Nose_3/Nose", "Mesh"),
+            ("/root/Ground_plane", "Xform"),
+            ("/root/Ground_plane/Plane", "Mesh"),
+            ("/root/Ground_plane/OutsideDupliGrandParent", "Xform"),
+            ("/root/Ground_plane/OutsideDupliGrandParent/OutsideDupliParent", "Xform"),
+            ("/root/Ground_plane/OutsideDupliGrandParent/OutsideDupliParent/GEO_Head", "Xform"),
+            ("/root/Ground_plane/OutsideDupliGrandParent/OutsideDupliParent/GEO_Head/Face", "Mesh"),
+            ("/root/Ground_plane/OutsideDupliGrandParent/OutsideDupliParent/GEO_Head/GEO_Ear_R", "Xform"),
+            ("/root/Ground_plane/OutsideDupliGrandParent/OutsideDupliParent/GEO_Head/GEO_Ear_R/Ear", "Mesh"),
+            ("/root/Ground_plane/OutsideDupliGrandParent/OutsideDupliParent/GEO_Head/GEO_Nose", "Xform"),
+            ("/root/Ground_plane/OutsideDupliGrandParent/OutsideDupliParent/GEO_Head/GEO_Nose/Nose", "Mesh"),
+            ("/root/Ground_plane/OutsideDupliGrandParent/OutsideDupliParent/GEO_Head/GEO_Ear_L", "Xform"),
+            ("/root/Ground_plane/OutsideDupliGrandParent/OutsideDupliParent/GEO_Head/GEO_Ear_L/Ear", "Mesh"),
+            ("/root/Camera", "Xform"),
+            ("/root/Camera/Camera", "Camera"),
+            ("/root/env_light", "DomeLight")
+        )
+        
+        def key(el):
+            return el[0]
+        
+        expected = tuple(sorted(expected, key=key))
+
+        stage = Usd.Stage.Open(str(test_path))
+        actual = ((str(p.GetPath()), p.GetTypeName()) for p in stage.Traverse())
+        actual = tuple(sorted(actual, key=key))
+
+        self.assertTupleEqual(expected, actual)
+
+    def test_merge_transform_and_shape_true(self):
+        bpy.ops.wm.open_mainfile(filepath=str(self.testdir / "usd_hierarchy_export_test.blend"))
+        
+        test_path = self.tempdir / "test_merge_transform_and_shape_true.usda"
+        
+        self.export_without_validating(filepath=str(test_path), merge_transform_and_shape=True)
+
+        expected = (
+            ('/root', 'Xform'),
+            ('/root/Camera', 'Camera'),
+            ('/root/ParentOfDupli2', 'Mesh'),
+            ('/root/ParentOfDupli2/Dupli2', 'Xform'),
+            ('/root/ParentOfDupli2/Dupli2/GEO_Head_0', 'Mesh'),
+            ('/root/ParentOfDupli2/Dupli2/GEO_Head_0/GEO_Ear_R_2', 'Mesh'),
+            ('/root/ParentOfDupli2/Dupli2/GEO_Head_0/GEO_Ear_L_1', 'Mesh'),
+            ('/root/ParentOfDupli2/Dupli2/GEO_Head_0/GEO_Nose_3', 'Mesh'),
+            ('/root/_materials', 'Scope'),
+            ('/root/_materials/Head', 'Material'),
+            ('/root/_materials/Head/Principled_BSDF', 'Shader'),
+            ('/root/_materials/Nose', 'Material'),
+            ('/root/_materials/Nose/Principled_BSDF', 'Shader'),
+            ('/root/Dupli1', 'Xform'),
+            ('/root/Dupli1/GEO_Head_0', 'Mesh'),
+            ('/root/Dupli1/GEO_Head_0/GEO_Nose_3', 'Mesh'),
+            ('/root/Dupli1/GEO_Head_0/GEO_Ear_R_2', 'Mesh'),
+            ('/root/Dupli1/GEO_Head_0/GEO_Ear_L_1', 'Mesh'),
+            ('/root/Ground_plane', 'Mesh'),
+            ('/root/Ground_plane/OutsideDupliGrandParent', 'Xform'),
+            ('/root/Ground_plane/OutsideDupliGrandParent/OutsideDupliParent', 'Xform'),
+            ('/root/Ground_plane/OutsideDupliGrandParent/OutsideDupliParent/GEO_Head', 'Mesh'),
+            ('/root/Ground_plane/OutsideDupliGrandParent/OutsideDupliParent/GEO_Head/GEO_Nose', 'Mesh'),
+            ('/root/Ground_plane/OutsideDupliGrandParent/OutsideDupliParent/GEO_Head/GEO_Ear_R', 'Mesh'),
+            ('/root/Ground_plane/OutsideDupliGrandParent/OutsideDupliParent/GEO_Head/GEO_Ear_L', 'Mesh'),
+            ('/root/env_light', 'DomeLight')
+        )
+        
+        def key(el):
+            return el[0]
+        
+        expected = tuple(sorted(expected, key=key))
+        
+        stage = Usd.Stage.Open(str(test_path))
+        actual = ((str(p.GetPath()), p.GetTypeName()) for p in stage.Traverse())
+        actual = tuple(sorted(actual, key=key))
+        
+        self.assertTupleEqual(expected, actual)
 
 class USDHookBase():
     instructions = {}

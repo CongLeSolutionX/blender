@@ -45,6 +45,7 @@ class DupliParentFinder;
 struct HierarchyContext {
   /*********** Determined during hierarchy iteration: ***************/
   Object *object; /* Evaluated object. */
+  bool is_object_data_context;
   Object *export_parent;
   Object *duplicator;
   PersistentID persistent_id;
