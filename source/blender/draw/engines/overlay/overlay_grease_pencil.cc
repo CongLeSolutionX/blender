@@ -125,11 +125,9 @@ static void OVERLAY_grease_pencil_material_names(Object *ob)
             return true;
           }
         }
+        return false;
       }
-      else {
-        return selections[stroke_i];
-      }
-      return false;
+      return selections[stroke_i];
     };
 
     for (const int stroke_i : strokes.curves_range()) {
