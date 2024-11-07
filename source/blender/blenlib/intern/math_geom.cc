@@ -3081,12 +3081,20 @@ bool isect_aabb_aabb_v3(const float min1[3],
           min2[1] < max1[1] && min2[2] < max1[2]);
 }
 
+__attribute__((no_sanitize("float-divide-by-zero")))
 void isect_ray_aabb_v3_precalc(IsectRayAABB_Precalc *data,
                                const float ray_origin[3],
                                const float ray_direction[3])
 {
   copy_v3_v3(data->ray_origin, ray_origin);
 
+  /*
+   * This precalc (used later in isect_ray_aabb_v3) implicitly relies on the IEEE 754 properties
+   * for floating point numbers (i.e. that 1 / 0 => positive infinity), hence we disable the UBSAN
+   * warning for this method.
+   *
+   * TODO: How do we handle this function on platforms where this isn't guaranteed?
+   */
   data->ray_inv_dir[0] = 1.0f / ray_direction[0];
   data->ray_inv_dir[1] = 1.0f / ray_direction[1];
   data->ray_inv_dir[2] = 1.0f / ray_direction[2];
