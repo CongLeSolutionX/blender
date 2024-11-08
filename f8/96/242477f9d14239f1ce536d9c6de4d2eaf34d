@@ -1,2 +1,3 @@
 Referenced by issue #127223, Movement confinement lines are invisible with the Vulkan backend.
 Referenced by issue #127619, Vulkan: Artefact on view point
+Referenced by issue #130001, Viewport glitches with Vulkan
