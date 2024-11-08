@@ -1529,7 +1529,13 @@ static void region_rect_recursive(
                 (region->sizey > 1 ? region->sizey + 0.5f : region->type->prefsizey);
   }
 
-  if (region->flag & (RGN_FLAG_POLL_FAILED | RGN_FLAG_HIDDEN)) {
+  ARegion *region_header = BKE_area_find_region_type(area, RGN_TYPE_HEADER);
+  if (region->regiontype == RGN_TYPE_TOOL_HEADER && region_header &&
+      (region_header->flag & RGN_FLAG_HIDDEN))
+  {
+    /* Special case, never show the tool properties when the header is invisible. */
+  }
+  else if (region->flag & (RGN_FLAG_POLL_FAILED | RGN_FLAG_HIDDEN)) {
     /* hidden is user flag */
   }
   else if (alignment == RGN_ALIGN_FLOAT) {
@@ -1830,10 +1836,17 @@ static void area_calc_totrct(ScrArea *area, const rcti *window_rect)
 /**
  * Update the `ARegion::visible` flag.
  */
-static void region_evaulate_visibility(ARegion *region)
+static void region_evaulate_visibility(ARegion *region, ARegion *region_header)
 {
   bool hidden = (region->flag & (RGN_FLAG_POLL_FAILED | RGN_FLAG_HIDDEN | RGN_FLAG_TOO_SMALL)) !=
                 0;
+
+  /* Special case, never show the tool properties when the header is invisible. */
+  if (region->regiontype == RGN_TYPE_TOOL_HEADER && region_header &&
+      (region_header->flag & RGN_FLAG_HIDDEN))
+  {
+    hidden = 1;
+  }
 
   if ((region->alignment & (RGN_SPLIT_PREV | RGN_ALIGN_HIDE_WITH_PREV)) && region->prev) {
     hidden = hidden || (region->prev->flag & (RGN_FLAG_HIDDEN | RGN_FLAG_TOO_SMALL));
@@ -1976,11 +1989,15 @@ void ED_area_update_region_sizes(wmWindowManager *wm, wmWindow *win, ScrArea *ar
   /* Dynamically sized regions may have changed region sizes, so we have to force azone update. */
   area_azone_init(win, screen, area);
 
+  /* Needed to check if a RGN_TYPE_TOOL_HEADER should be visible (it should not in case the
+   * RGN_TYPE_HEADER itself is hidden). */
+  ARegion *header_region = BKE_area_find_region_type(area, RGN_TYPE_HEADER);
+
   LISTBASE_FOREACH (ARegion *, region, &area->regionbase) {
     if (region->flag & RGN_FLAG_POLL_FAILED) {
       continue;
     }
-    region_evaulate_visibility(region);
+    region_evaulate_visibility(region, header_region);
 
     /* region size may have changed, init does necessary adjustments */
     if (region->type->init) {
@@ -2082,9 +2099,13 @@ void ED_area_init(wmWindowManager *wm, wmWindow *win, ScrArea *area)
   /* clear all azones, add the area triangle widgets */
   area_azone_init(win, screen, area);
 
+  /* Needed to check if a RGN_TYPE_TOOL_HEADER should be visible (it should not in case the
+   * RGN_TYPE_HEADER itself is hidden). */
+  ARegion *header_region = BKE_area_find_region_type(area, RGN_TYPE_HEADER);
+
   /* region windows, default and own handlers */
   LISTBASE_FOREACH (ARegion *, region, &area->regionbase) {
-    region_evaulate_visibility(region);
+    region_evaulate_visibility(region, header_region);
 
     if (region->visible) {
       /* default region handlers */
@@ -2208,7 +2229,7 @@ void ED_region_floating_init(ARegion *region)
   BLI_assert(region->alignment == RGN_ALIGN_FLOAT);
 
   /* refresh can be called before window opened */
-  region_evaulate_visibility(region);
+  region_evaulate_visibility(region, nullptr);
 
   region_update_rect(region);
 }
