@@ -943,7 +943,10 @@ std::string VKShader::fragment_interface_declare(const shader::ShaderCreateInfo 
   if (info.early_fragment_test_) {
     ss << "layout(early_fragment_tests) in;\n";
   }
-  if (info.depth_write_ != DepthWrite::UNCHANGED) {
+  const bool use_gl_frag_depth = info.depth_write_ != DepthWrite::UNCHANGED &&
+                                 info.fragment_source_.find("gl_FragDepth") !=
+                                     std::string::npos;
+  if (use_gl_frag_depth) {
     ss << "layout(" << to_string(info.depth_write_) << ") out float gl_FragDepth;\n";
   }
 
