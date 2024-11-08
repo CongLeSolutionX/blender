@@ -489,6 +489,15 @@ bool WM_event_handler_region_v2d_mask_poll(const wmWindow *win,
                                            const ScrArea *area,
                                            const ARegion *region,
                                            const wmEvent *event);
+/**
+ * \return true when the `event` is inside the marker region.
+ *
+ * \note There are no checks that markers are displayed.
+ */
+bool WM_event_handler_region_marker_poll(const wmWindow *win,
+                                         const ScrArea *area,
+                                         const ARegion *region,
+                                         const wmEvent *event);
 
 /**
  * A version of #WM_event_handler_region_v2d_mask_poll which excludes events
