@@ -520,7 +520,6 @@ static StructRNA *rna_KeyingSetInfo_register(Main *bmain,
                                              StructCallbackFunc call,
                                              StructFreeFunc free)
 {
-  using namespace blender::animrig;
   const char *error_prefix = "Registering keying set info class:";
   KeyingSetInfo dummy_ksi = {nullptr};
   KeyingSetInfo *ksi;
@@ -547,7 +546,7 @@ static StructRNA *rna_KeyingSetInfo_register(Main *bmain,
   }
 
   /* check if we have registered this info before, and remove it */
-  ksi = keyingset_info_find_name(dummy_ksi.idname);
+  ksi = blender::animrig::keyingset_info_find_name(dummy_ksi.idname);
   if (ksi) {
     BKE_reportf(reports,
                 RPT_INFO,
@@ -587,7 +586,7 @@ static StructRNA *rna_KeyingSetInfo_register(Main *bmain,
   ksi->generate = (have_function[2]) ? RKS_GEN_rna_internal : nullptr;
 
   /* add and register with other info as needed */
-  keyingset_info_register(ksi);
+  blender::animrig::keyingset_info_register(ksi);
 
   WM_main_add_notifier(NC_WINDOW, nullptr);
 
