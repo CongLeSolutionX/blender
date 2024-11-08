@@ -1,1 +1,2 @@
 Referenced by issue #128750, Extensions: Specify (optional) Python version on the server listing
+Referenced by commit ec22e967ad68b0fe06a28d785585b91404f4d96c, Fix error installing extensions with wheels
