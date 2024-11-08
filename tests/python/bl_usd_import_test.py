@@ -77,7 +77,7 @@ class USDImportTest(AbstractUSDTest):
 
         infile = str(self.testdir / "usd_mesh_polygon_types.usda")
 
-        res = bpy.ops.wm.usd_import(filepath=infile, merge_transform_and_shape=False)
+        res = bpy.ops.wm.usd_import(filepath=infile, merge_parent_xform=False)
         self.assertEqual({'FINISHED'}, res, f"Unable to import USD file {infile}")
 
         objects = bpy.context.scene.collection.objects
