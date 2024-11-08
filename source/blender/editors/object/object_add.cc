@@ -64,7 +64,6 @@
 #include "BKE_effect.h"
 #include "BKE_geometry_set.hh"
 #include "BKE_geometry_set_instances.hh"
-#include "BKE_gpencil_curve_legacy.h"
 #include "BKE_gpencil_geom_legacy.h"
 #include "BKE_gpencil_legacy.h"
 #include "BKE_gpencil_modifier_legacy.h"
@@ -3360,7 +3359,7 @@ static int object_convert_exec(bContext *C, wmOperator *op)
           for (ob1 = static_cast<Object *>(bmain->objects.first); ob1;
                ob1 = static_cast<Object *>(ob1->id.next))
           {
-            if (ob1->data == ob->data) {
+            if (ob1->data == ob->data && ob1 != ob) {
               ob1->type = OB_CURVES_LEGACY;
               DEG_id_tag_update(&ob1->id,
                                 ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY | ID_RECALC_ANIMATION);
