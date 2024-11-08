@@ -97,6 +97,8 @@ if(HIP_HIPCC_EXECUTABLE)
     unset(_hip_version_parts)
   endif()
 
+  set(HIP_VERSION_MAJOR ${HIP_VERSION_MAJOR} CACHE INTERNAL "")
+
   # Construct full semantic version.
   set(HIP_VERSION "${HIP_VERSION_MAJOR}.${HIP_VERSION_MINOR}.${HIP_VERSION_PATCH}")
   set(HIP_VERSION_SHORT "${HIP_VERSION_MAJOR}.${HIP_VERSION_MINOR}")

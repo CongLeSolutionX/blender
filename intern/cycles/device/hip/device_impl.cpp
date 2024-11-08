@@ -741,9 +741,9 @@ void HIPDevice::tex_alloc(device_texture &mem)
 
     HIP_MEMCPY3D param;
     memset(&param, 0, sizeof(HIP_MEMCPY3D));
-    param.dstMemoryType = get_memory_type(hipMemoryTypeArray);
+    param.dstMemoryType = hipMemoryTypeArray;
     param.dstArray = array_3d;
-    param.srcMemoryType = get_memory_type(hipMemoryTypeHost);
+    param.srcMemoryType = hipMemoryTypeHost;
     param.srcHost = mem.host_pointer;
     param.srcPitch = src_pitch;
     param.WidthInBytes = param.srcPitch;
@@ -773,10 +773,10 @@ void HIPDevice::tex_alloc(device_texture &mem)
 
     hip_Memcpy2D param;
     memset(&param, 0, sizeof(param));
-    param.dstMemoryType = get_memory_type(hipMemoryTypeDevice);
+    param.dstMemoryType = hipMemoryTypeDevice;
     param.dstDevice = mem.device_pointer;
     param.dstPitch = dst_pitch;
-    param.srcMemoryType = get_memory_type(hipMemoryTypeHost);
+    param.srcMemoryType = hipMemoryTypeHost;
     param.srcHost = mem.host_pointer;
     param.srcPitch = src_pitch;
     param.WidthInBytes = param.srcPitch;
@@ -962,11 +962,6 @@ int HIPDevice::get_device_default_attribute(hipDeviceAttribute_t attribute, int 
     return default_value;
   }
   return value;
-}
-
-hipMemoryType HIPDevice::get_memory_type(hipMemoryType mem_type)
-{
-  return get_hip_memory_type(mem_type, hipRuntimeVersion);
 }
 
 CCL_NAMESPACE_END
