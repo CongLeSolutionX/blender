@@ -38,16 +38,20 @@ void ED_markers_draw(const bContext *C, int flag);
 /**
  * Public API for getting markers from the scene & area.
  *
- * \return A list of #TimeMarker.
+ * \return A #TimeMarker list.
  */
 ListBase *ED_scene_markers_get(Scene *scene, ScrArea *area);
 
 /**
  * Public API for getting markers from context.
+ *
+ * \return A #TimeMarker list.
  */
 ListBase *ED_context_get_markers(const bContext *C);
 /**
  * Public API for getting markers from "animation" context.
+ *
+ * \return A #TimeMarker list.
  */
 ListBase *ED_animcontext_get_markers(const bAnimContext *ac);
 
