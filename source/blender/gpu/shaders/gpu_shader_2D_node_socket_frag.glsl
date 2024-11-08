@@ -5,9 +5,25 @@
 #define COS45 (0.70710678118)
 #define SIN45 (0.70710678118)
 
-float square_sdf(vec2 absCo, float half_width)
+/* Values in `eNodeSocketDisplayShape` in DNA_node_types.h. Keep in sync. */
+#define SOCK_DISPLAY_SHAPE_CIRCLE 0
+#define SOCK_DISPLAY_SHAPE_SQUARE 1
+#define SOCK_DISPLAY_SHAPE_DIAMOND 2
+#define SOCK_DISPLAY_SHAPE_CIRCLE_DOT 3
+#define SOCK_DISPLAY_SHAPE_SQUARE_DOT 4
+#define SOCK_DISPLAY_SHAPE_DIAMOND_DOT 5
+
+#define CIRCLE_RADIUS 0.5
+#define SQUARE_RADIUS 0.5
+#define DIAMOND_RADIUS 0.42
+
+/* Round the sharp corners of the square and diamond a little bit. */
+#define CORNER_ROUNDING 0.15
+
+/* Calculates a squared distance fiels of a square. */
+float square_sdf(vec2 absCo, float half_width_x, float half_width_y)
 {
-  vec2 extruded = vec2(max(0.0, absCo.x - half_width), max(0.0, absCo.y - half_width));
+  vec2 extruded = vec2(max(0.0, absCo.x - half_width_x), max(0.0, absCo.y - half_width_y));
   return dot(extruded, extruded);
 }
 
@@ -16,28 +32,73 @@ vec2 rotate_45(vec2 co)
   return vec2(COS45 * co.x - SIN45 * co.y, SIN45 * co.x + COS45 * co.y);
 }
 
+/* Calculates an upper and lower limit for an antialiased cutoff of the squared distance. */
+vec2 calculate_thresholds(float threshold)
+{
+  float inner_threshold = (threshold - AAsize) * (threshold - AAsize);
+  float outer_threshold = threshold * threshold;
+  return vec2(inner_threshold, outer_threshold);
+}
+
 void main()
 {
   vec2 absUV = abs(uv);
   vec2 co = vec2(max(absUV.x - extrusion.x, 0.0), max(absUV.y - extrusion.y, 0.0));
 
-  co = (is_diamond == 1) ? abs(rotate_45(co)) : co;
-  float distSquared = square_sdf(co, sdf_shape_radius);
+  float distance_squared = 0.0;
+  float alpha_threshold = 0.0;
+  float dot_threshold = -1.0;
 
-  /* Needed to draw two dots for the wide reroute nodes. */
-  vec2 biCenteredUV = abs(absUV - extrusion);
+  switch (finalShape) {
+    default:
+    case SOCK_DISPLAY_SHAPE_CIRCLE: {
+      distance_squared = dot(co, co);
+      alpha_threshold = CIRCLE_RADIUS;
+      break;
+    }
+    case SOCK_DISPLAY_SHAPE_CIRCLE_DOT: {
+      distance_squared = dot(co, co);
+      alpha_threshold = CIRCLE_RADIUS;
+      dot_threshold = finalDotRadius;
+      break;
+    }
+    case SOCK_DISPLAY_SHAPE_SQUARE: {
+      float square_radius = SQUARE_RADIUS - CORNER_ROUNDING;
+      distance_squared = square_sdf(co, square_radius, square_radius);
+      alpha_threshold = CORNER_ROUNDING;
+      break;
+    }
+    case SOCK_DISPLAY_SHAPE_SQUARE_DOT: {
+      float square_radius = SQUARE_RADIUS - CORNER_ROUNDING;
+      distance_squared = square_sdf(co, square_radius, square_radius);
+      alpha_threshold = CORNER_ROUNDING;
+      dot_threshold = finalDotRadius;
+      break;
+    }
+    case SOCK_DISPLAY_SHAPE_DIAMOND: {
+      float diamond_radius = DIAMOND_RADIUS - CORNER_ROUNDING;
+      distance_squared = square_sdf(abs(rotate_45(co)), diamond_radius, diamond_radius);
+      alpha_threshold = CORNER_ROUNDING;
+      break;
+    }
+    case SOCK_DISPLAY_SHAPE_DIAMOND_DOT: {
+      float diamond_radius = DIAMOND_RADIUS - CORNER_ROUNDING;
+      distance_squared = square_sdf(abs(rotate_45(co)), diamond_radius, diamond_radius);
+      alpha_threshold = CORNER_ROUNDING;
+      dot_threshold = finalDotRadius;
+      break;
+    }
+  }
 
-  /* Black mask with a white dot */
-  float mask_dot = smoothstep(dotThresholds[1], dotThresholds[0], dot(biCenteredUV, biCenteredUV));
+  vec2 alpha_thresholds = calculate_thresholds(alpha_threshold);
+  vec2 outline_thresholds = calculate_thresholds(alpha_threshold - finalOutlineThickness);
+  vec2 dot_thresholds = calculate_thresholds(dot_threshold);
 
-  /* Alpha for the socket: White where the socket is, black outside of it. */
-  float mask_all = smoothstep(thresholds[3], thresholds[2], distSquared);
+  float alpha_mask = smoothstep(alpha_thresholds[1], alpha_thresholds[0], distance_squared);
+  float dot_mask = smoothstep(dot_thresholds[1], dot_thresholds[0], dot(co, co));
+  float outline_mask = smoothstep(outline_thresholds[0], outline_thresholds[1], distance_squared) +
+                       dot_mask;
 
-  /* Mask for the outline. The inner part of the socket is masked with black. */
-  bool noOutline = thresholds[2] - thresholds[0] < 0.0001;
-  float mask_outline = noOutline ? 0.0 : smoothstep(thresholds[0], thresholds[1], distSquared);
-  mask_outline += mask_dot;
-
-  fragColor = mix(finalColor, finalOutlineColor, mask_outline);
-  fragColor.a *= mask_all;
+  fragColor = mix(finalColor, finalOutlineColor, outline_mask);
+  fragColor.a *= alpha_mask;
 }

@@ -9,13 +9,13 @@
 #include "gpu_interface_info.hh"
 #include "gpu_shader_create_info.hh"
 GPU_SHADER_INTERFACE_INFO(gpu_node_socket_iface, "")
-    .flat(Type::FLOAT, "sdf_shape_radius")
     .flat(Type::VEC4, "finalColor")
     .flat(Type::VEC4, "finalOutlineColor")
-    .flat(Type::VEC4, "thresholds")
-    .flat(Type::VEC2, "dotThresholds")
+    .flat(Type::FLOAT, "finalDotRadius")
+    .flat(Type::FLOAT, "finalOutlineThickness")
+    .flat(Type::FLOAT, "AAsize")
     .flat(Type::VEC2, "extrusion")
-    .flat(Type::INT, "is_diamond")
+    .flat(Type::INT, "finalShape")
     .smooth(Type::VEC2, "uv");
 
 /* TODO(Leon): Share with C code. */
