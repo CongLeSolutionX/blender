@@ -133,7 +133,9 @@ ccl_device void kernel_volume_density_evaluate(KernelGlobals kg,
   /* TODO(weizhen): What fields need to be written? */
   shader_setup_from_volume(kg, &sd, &ray, in.object);
   sd.flag = SD_IS_VOLUME_SHADER_EVAL;
-  /* No need for closure when evaluating extinction. */
+
+  /* Evaluate emission without allocating closures. */
+  const uint32_t path_flag = PATH_RAY_EMISSION;
   sd.num_closure_left = 0;
 
   in = input[offset * 2 + 2];
@@ -152,17 +154,17 @@ ccl_device void kernel_volume_density_evaluate(KernelGlobals kg,
     sd.P = ray.P + rand_p * voxel_size;
     sd.closure_transparent_extinction = zero_float3();
 
-    /* Evaluate volume extinction coefficients. */
-    /* TODO(weizhen): PATH_RAY_SHADOW is used for other purposes such as visibility, we need
-     * another flag to evaluate extinction. */
+    /* Evaluate volume coefficients. */
     volume_shader_eval_entry<false,
                              KERNEL_FEATURE_NODE_MASK_VOLUME & ~KERNEL_FEATURE_NODE_LIGHT_PATH>(
-        kg, INTEGRATOR_STATE_NULL, &sd, entry, PATH_RAY_SHADOW);
+        kg, INTEGRATOR_STATE_NULL, &sd, entry, path_flag);
 
     const float sigma = (sd.flag & SD_EXTINCTION) ? reduce_max(sd.closure_transparent_extinction) :
                                                     0.0f;
+    const float emission = (sd.flag & SD_EMISSION) ? reduce_max(sd.closure_emission_background) :
+                                                     0.0f;
 
-    extrema = join(extrema, sigma);
+    extrema = join(extrema, fmaxf(sigma, emission));
   }
 
   /* Write output. */
