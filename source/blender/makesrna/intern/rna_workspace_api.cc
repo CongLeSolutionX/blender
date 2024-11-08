@@ -38,6 +38,7 @@ static void rna_WorkSpaceTool_setup(ID *id,
                                     const char *keymap,
                                     const char *gizmo_group,
                                     int brush_type,
+                                    CollectionVector brush_types,
                                     const char *data_block,
                                     const char *op_idname,
                                     int index,
@@ -55,6 +56,14 @@ static void rna_WorkSpaceTool_setup(ID *id,
   tref_rt.brush_type = brush_type;
   tref_rt.index = index;
   tref_rt.flag = options;
+
+  int i = 0;
+  for(PointerRNA ptr : brush_types.items) {
+    int enum_val = RNA_enum_get(&ptr, "brush_type");
+    printf("%d: %d\n", i, enum_val);
+    i++;
+  }
+
 
   /* While it's logical to assign both these values from setup,
    * it's useful to stored this in DNA for re-use, exceptional case: write to the 'tref'. */
@@ -146,11 +155,15 @@ void RNA_api_workspace_tool(StructRNA *srna)
   RNA_def_property_enum_items(parm, rna_enum_window_cursor_items);
   RNA_def_string(func, "keymap", nullptr, KMAP_MAX_NAME, "Key Map", "");
   RNA_def_string(func, "gizmo_group", nullptr, MAX_NAME, "Gizmo Group", "");
+
   parm = RNA_def_property(func, "brush_type", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_items(parm, rna_enum_dummy_NULL_items);
   RNA_def_property_enum_funcs(parm, nullptr, nullptr, "rna_WorkSpaceTool_brush_type_itemf");
   RNA_def_property_enum_default(parm, -1);
   RNA_def_property_ui_text(parm, "Brush Type", "Limit this tool to a specific type of brush");
+
+  RNA_def_collection(func, "brush_types", "BrushType", "Brush Types", "Brush Types");
+
   RNA_def_string(func, "data_block", nullptr, MAX_NAME, "Data Block", "");
   RNA_def_string(func, "operator", nullptr, MAX_NAME, "Operator", "");
   RNA_def_int(func, "index", 0, INT_MIN, INT_MAX, "Index", "", INT_MIN, INT_MAX);

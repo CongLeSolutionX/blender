@@ -63,6 +63,10 @@ typedef struct bToolRef_Runtime {
   int flag;
 } bToolRef_Runtime;
 
+typedef struct bToolRefBrushType {
+  int brush_type;
+} bToolRefBrushType;
+
 /**
  * \note Stored per mode.
  */

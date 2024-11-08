@@ -1037,6 +1037,7 @@ def _activate_by_item(context, space_type, item, index, *, as_fallback=False):
         options=item.options or set(),
         gizmo_group=gizmo_group,
         brush_type=item.brush_type or 'ANY',
+        brush_types=[{'brush_type':'ANY'}, {'brush_type': 'ANY'}],
         data_block=item.data_block or "",
         operator=item.operator or "",
         index=index,

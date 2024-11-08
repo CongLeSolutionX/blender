@@ -304,6 +304,24 @@ static void rna_def_workspace_tool(BlenderRNA *brna)
   StructRNA *srna;
   PropertyRNA *prop;
 
+  srna = RNA_def_struct(brna, "BrushType", nullptr);
+  RNA_def_struct_sdna(srna, "bToolRefBrushType");
+  RNA_def_struct_ui_text(srna, "Workspace Tool Brush Type Container", "");
+
+  RNA_define_verify_sdna(false);
+
+  prop = RNA_def_property(srna, "brush_type", PROP_ENUM, PROP_NONE);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop,
+                           "Brush Type",
+                           "If the tool uses brushes and is limited to a specific brush type, the "
+                           "identifier of the brush type");
+  RNA_def_property_enum_items(prop, rna_enum_dummy_DEFAULT_items);
+  RNA_def_property_enum_funcs(
+      prop, "rna_WorkSpaceTool_brush_type_get", nullptr, "rna_WorkSpaceTool_brush_type_itemf");
+
+  RNA_define_verify_sdna(true);
+
   srna = RNA_def_struct(brna, "WorkSpaceTool", nullptr);
   RNA_def_struct_sdna(srna, "bToolRef");
   RNA_def_struct_ui_text(srna, "Work Space Tool", "");
