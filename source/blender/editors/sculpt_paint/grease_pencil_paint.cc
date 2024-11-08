@@ -254,7 +254,7 @@ class PaintOperation : public GreasePencilStrokeOperation {
   float2 smoothed_pen_direction_ = float2(0.0f);
 
   /* Used to constrain drawing in straight lines. */
-  bool constrained_pen_stored_ = false;
+  std::optional<bool> constrained_pen_stored_ = false;
   float2 constrained_pen_coords_ = float2(0.0f);
 
   /* Accumulated distance along the stroke. */
@@ -488,7 +488,7 @@ struct PaintOperationExecutor {
 
   static void stroke_line_constrain_set_direction(PaintOperation &self, float2 &coords)
   {
-    if (!self.constrained_pen_stored_) {
+    if (self.constrained_pen_stored_ == false) {
       const float2 start_coords = self.screen_space_coords_orig_.first();
       const float2 dir = snap_8_angles(coords - start_coords);
       self.constrained_pen_coords_ = dir + start_coords;
@@ -840,9 +840,9 @@ struct PaintOperationExecutor {
 
     const bool is_first_sample = (curve_points.size() == 1);
 
-    /* Use the vector from the previous to the next point. Set the direction based on the first
-     * two samples. For subsequent samples, interpolate with the previous direction to get a
-     * smoothed value over time. */
+    /* Use the vector from the previous to the next point. Set the direction based on the first two
+     * samples. For subsequent samples, interpolate with the previous direction to get a smoothed
+     * value over time. */
     if (is_first_sample) {
       self.smoothed_pen_direction_ = self.screen_space_coords_orig_.last() - coords;
     }
@@ -865,9 +865,8 @@ struct PaintOperationExecutor {
       const float angle = settings_->draw_angle;
       const float2 angle_vec = float2(math::cos(angle), math::sin(angle));
 
-      /* The angle factor is 1.0f when the direction is aligned with the angle vector and 0.0f
-       * when it is orthogonal to the angle vector. This is consistent with the behavior from
-       * GPv2. */
+      /* The angle factor is 1.0f when the direction is aligned with the angle vector and 0.0f when
+       * it is orthogonal to the angle vector. This is consistent with the behavior from GPv2. */
       const float angle_factor = math::abs(
           math::dot(angle_vec, math::normalize(self.smoothed_pen_direction_)));
 
