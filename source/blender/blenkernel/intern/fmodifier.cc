@@ -809,8 +809,8 @@ static void fcm_noise_new_data(void *mdata)
   data->offset = 0.0f;
   data->depth = 0;
   data->modification = FCM_NOISE_MODIF_REPLACE;
-  data->lacunarity = 20.0f;
-  data->roughness = 0.1f;
+  data->lacunarity = 3.0f;
+  data->roughness = 5.0f;
   data->legacy_noise = 0;
 }
 

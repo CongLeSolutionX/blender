@@ -302,8 +302,8 @@ static void version_fcurve_noise_modifier(FCurve &fcurve)
       continue;
     }
     FMod_Noise *data = static_cast<FMod_Noise *>(fcurve_modifier->data);
-    data->lacunarity = 20.0;
-    data->roughness = 0.1;
+    data->lacunarity = 3.0f;
+    data->roughness = 5.0f;
     data->legacy_noise = true;
   }
 }
