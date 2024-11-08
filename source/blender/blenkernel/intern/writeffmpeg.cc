@@ -1198,6 +1198,12 @@ static AVStream *alloc_video_stream(FFMpegContext *context,
     c->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
   }
 
+  /* Set colorspace metadata. */
+  c->color_range = AVCOL_RANGE_MPEG;
+  c->color_primaries = AVCOL_PRI_BT709;
+  c->color_trc = AVCOL_TRC_BT709;
+  c->colorspace = AVCOL_SPC_BT709;
+
   /* xasp & yasp got float lately... */
 
   st->sample_aspect_ratio = c->sample_aspect_ratio = av_d2q((double(rd->xasp) / double(rd->yasp)),
