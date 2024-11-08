@@ -98,7 +98,7 @@ static void crashlog_filepath_get(char filepath[FILE_MAX])
   }
 }
 
-static void crashlog_file_generate(const char *filepath)
+static void crashlog_file_generate(const char *filepath, const void *os_info)
 {
   /* Might be called after WM/Main exit, so needs to be careful about nullptr-checking before
    * de-referencing. */
@@ -137,7 +137,7 @@ static void crashlog_file_generate(const char *filepath)
     }
 
     fputs("\n# backtrace\n", fp);
-    BLI_system_backtrace(fp);
+    BLI_system_backtrace_with_os_info(fp, os_info);
 
 #  ifdef WITH_PYTHON
     /* Generate python back-trace if Python is currently active. */
@@ -162,11 +162,11 @@ static void signal_cleanup_and_terminate(int signum)
 #  endif
 }
 
-static void sig_handle_crash(int signum)
+static void sig_handle_crash_fn(int signum)
 {
   char filepath[FILE_MAX];
   crashlog_filepath_get(filepath);
-  crashlog_file_generate(filepath);
+  crashlog_file_generate(filepath, nullptr);
   signal_cleanup_and_terminate(signum);
 }
 
@@ -191,18 +191,15 @@ extern LONG WINAPI windows_exception_handler(EXCEPTION_POINTERS *ExceptionInfo)
     std::string version;
 #    ifndef BUILD_DATE
     const char *build_hash = G_MAIN ? G_MAIN->build_hash : "unknown";
-    version = std::string("version: ") + BKE_blender_version_string() + ", hash: `" + build_hash +
-              "`";
+    version = std::string(BKE_blender_version_string()) + ", hash: `" + build_hash + "`";
 #    else
-    version = std::string("version: ") + BKE_blender_version_string() +
-              ", Commit date: " + build_commit_date + " " + build_commit_time + ", hash: `" +
-              build_hash + "`";
+    version = std::string(BKE_blender_version_string()) + ", Commit date: " + build_commit_date +
+              " " + build_commit_time + ", hash: `" + build_hash + "`";
 #    endif
-    BLI_windows_exception_capture(ExceptionInfo);
 
     char filepath[FILE_MAX];
     crashlog_filepath_get(filepath);
-    crashlog_file_generate(filepath);
+    crashlog_file_generate(filepath, ExceptionInfo);
     BLI_windows_exception_show_dialog(
         ExceptionInfo, filepath, GPU_platform_gpu_name(), version.c_str());
     signal_cleanup_and_terminate(SIGSEGV);
@@ -225,7 +222,7 @@ void main_signal_setup()
     SetUnhandledExceptionFilter(windows_exception_handler);
 #  else
     /* After parsing arguments. */
-    signal(SIGSEGV, sig_handle_crash);
+    signal(SIGSEGV, sig_handle_crash_fn);
 #  endif
   }
 
