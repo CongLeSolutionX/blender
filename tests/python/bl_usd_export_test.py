@@ -894,12 +894,12 @@ class USDExportTest(AbstractUSDTest):
         self.assertEqual(USDHookBase.responses["on_export"], [])
         self.assertEqual(USDHookBase.responses["on_import"], [])
 
-    def test_merge_transform_and_shape_false(self):
+    def test_merge_parent_xform_false(self):
         bpy.ops.wm.open_mainfile(filepath=str(self.testdir / "usd_hierarchy_export_test.blend"))
 
-        test_path = self.tempdir / "test_merge_transform_and_shape_false.usda"
+        test_path = self.tempdir / "test_merge_parent_xform_false.usda"
 
-        self.export_and_validate(filepath=str(test_path), merge_transform_and_shape=False)
+        self.export_and_validate(filepath=str(test_path), merge_parent_xform=False)
 
         expected = (
             ("/root", "Xform"),
@@ -956,12 +956,12 @@ class USDExportTest(AbstractUSDTest):
 
         self.assertTupleEqual(expected, actual)
 
-    def test_merge_transform_and_shape_true(self):
+    def test_merge_parent_xform_true(self):
         bpy.ops.wm.open_mainfile(filepath=str(self.testdir / "usd_hierarchy_export_test.blend"))
 
-        test_path = self.tempdir / "test_merge_transform_and_shape_true.usda"
+        test_path = self.tempdir / "test_merge_parent_xform_true.usda"
 
-        self.export_without_validating(filepath=str(test_path), merge_transform_and_shape=True)
+        self.export_without_validating(filepath=str(test_path), merge_parent_xform=True)
 
         expected = (
             ('/root', 'Xform'),

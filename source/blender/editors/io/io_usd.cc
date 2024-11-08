@@ -853,8 +853,8 @@ void WM_OT_usd_export(wmOperatorType *ot)
   RNA_def_boolean(ot->srna,
                   "merge_parent_xform",
                   false,
-                  "Merge Transform and Shape",
-                  "When checked, transforms and shapes will be merged into the one prim path");
+                  "Merge parent Xform",
+                  "Merge USD primitives with their Xform parent");
 }
 
 /* ====== USD Import ====== */
