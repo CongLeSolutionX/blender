@@ -212,6 +212,7 @@ struct USDImportParams {
   bool set_material_blend;
 
   bool validate_meshes;
+  bool merge_transform_and_shape;
 
   eUSDMtlPurpose mtl_purpose;
   eUSDMtlNameCollisionMode mtl_name_collision_mode;
@@ -220,7 +221,6 @@ struct USDImportParams {
   char import_textures_dir[768]; /* FILE_MAXDIR */
   eUSDTexNameCollisionMode tex_name_collision_mode;
   eUSDAttrImportMode attr_import_mode;
-  bool merge_transform_and_shape;
 
   /**
    * Communication structure between the wmJob management code and the worker code. Currently used
