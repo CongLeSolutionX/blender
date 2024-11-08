@@ -33,7 +33,14 @@ void SceneState::init(Object *camera_ob /*=nullptr*/)
   scene = DEG_get_evaluated_scene(context->depsgraph);
 
   GPUTexture *viewport_tx = DRW_viewport_texture_list_get()->color;
-  resolution = int2(GPU_texture_width(viewport_tx), GPU_texture_height(viewport_tx));
+  int2 viewport_resolution(GPU_texture_width(viewport_tx), GPU_texture_height(viewport_tx));
+
+  /* In some cases, the viewport can change resolution without a call to `workbench_view_update`
+   * This is the case when dragging a window between two screen with different DPI settings.
+   * (See #128712) */
+  if (assign_if_different(resolution, viewport_resolution)) {
+    reset_taa = true;
+  }
 
   camera_object = camera_ob;
   if (camera_object == nullptr && v3d && rv3d) {
