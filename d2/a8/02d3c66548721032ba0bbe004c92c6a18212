@@ -1,2 +1,3 @@
 Referenced by issue #129947, VSE: Box select not working when cursor hovering a strip
 Referenced by pull request #130015, Fix #129947: VSE: B to box-select on strips
+Referenced by commit 8bbe0bc838ae7a394ea924a05bbb982d987a31db, Fix #129947: VSE: B to box-select on strips
