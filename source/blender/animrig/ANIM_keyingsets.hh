@@ -14,6 +14,8 @@
 
 struct KeyingSet;
 struct ExtensionRNA;
+/* Forward declaration for this struct which is declared a bit later. */
+struct KeyingSetInfo;
 
 /* Names for builtin keying sets so we don't confuse these with labels/text,
  * defined in python script: `keyingsets_builtins.py`. */
@@ -26,9 +28,6 @@ struct ExtensionRNA;
 #define ANIM_KS_AVAILABLE_ID "Available"
 #define ANIM_KS_WHOLE_CHARACTER_ID "WholeCharacter"
 #define ANIM_KS_WHOLE_CHARACTER_SELECTED_ID "WholeCharacterSelected"
-
-/* Forward declaration. For this struct which is declared a bit later. */
-struct KeyingSetInfo;
 
 /** Polling Callback for KeyingSets. */
 using cbKeyingSet_Poll = bool (*)(KeyingSetInfo *ksi, bContext *C);
@@ -75,10 +74,7 @@ struct KeyingSetInfo {
 namespace blender::animrig {
 
 /** Mode for modify_keyframes. */
-enum class ModifyKeyMode {
-  INSERT = 0,
-  DELETE,
-};
+enum class ModifyKeyMode { INSERT = 0, DELETE };
 
 /** Return codes for errors (with Relative KeyingSets). */
 enum class ModifyKeyReturn {
@@ -86,7 +82,7 @@ enum class ModifyKeyReturn {
   /** Context info was invalid for using the Keying Set. */
   INVALID_CONTEXT = -1,
   /** There isn't any type-info for generating paths from context. */
-  MISSING_TYPEINFO = -2,
+  MISSING_TYPEINFO = -2
 };
 
 /* -------------------------------------------------------------------- */
