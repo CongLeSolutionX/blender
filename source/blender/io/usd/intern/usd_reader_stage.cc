@@ -283,6 +283,11 @@ bool USDStageReader::include_by_purpose(const pxr::UsdGeomImageable &imageable) 
 
 bool USDStageReader::merge_with_parent(USDPrimReader *reader) const
 {
+  /* Don't merge if the param is set to false */
+  if (!params_.merge_transform_and_shape) {
+    return false;
+  }
+
   USDXformReader *xform_reader = dynamic_cast<USDXformReader *>(reader);
 
   if (!xform_reader) {
@@ -308,11 +313,6 @@ bool USDStageReader::merge_with_parent(USDPrimReader *reader) const
 
   /* Don't merge if the prim has authored transform ops. */
   if (xform_reader->prim_has_xform_ops()) {
-    return false;
-  }
-
-  /* Don't merge if the param is set to false */
-  if (!params_.merge_transform_and_shape) {
     return false;
   }
 
