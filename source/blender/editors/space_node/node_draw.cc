@@ -2118,7 +2118,6 @@ void node_socket_draw(bNodeSocket *sock, const rcti *rect, const float color[4],
                        color,
                        outline_color,
                        NODE_SOCKET_OUTLINE * scale,
-                       0.0f,
                        NODE_SOCKET_DOT * scale,
                        sock->display_shape);
 }
@@ -2252,7 +2251,6 @@ static void node_draw_socket(const bContext &C,
                              PointerRNA &node_ptr,
                              const bNodeSocket &sock,
                              const float outline_thickness,
-                             const float outline_offset,
                              const float dot_radius,
                              const bool selected)
 {
@@ -2275,13 +2273,8 @@ static void node_draw_socket(const bContext &C,
       socket_location.y + half_height,
   };
 
-  node_draw_nodesocket(&rect,
-                       socket_color,
-                       outline_color,
-                       outline_thickness,
-                       outline_offset,
-                       dot_radius,
-                       sock.display_shape);
+  node_draw_nodesocket(
+      &rect, socket_color, outline_color, outline_thickness, dot_radius, sock.display_shape);
 }
 
 void node_draw_sockets(const SpaceNode &snode,
@@ -2301,7 +2294,6 @@ void node_draw_sockets(const SpaceNode &snode,
       const_cast<ID *>(&ntree.id), &RNA_Node, const_cast<bNode *>(&node));
 
   const float outline_thickness = NODE_SOCKET_OUTLINE;
-  const float border_offset = 0.0f;
   const float dot_radius = NODE_SOCKET_DOT;
 
   nodesocket_batch_start();
@@ -2311,8 +2303,7 @@ void node_draw_sockets(const SpaceNode &snode,
       continue;
     }
     const bool selected = (sock->flag & SELECT);
-    node_draw_socket(
-        C, ntree, node, nodeptr, *sock, outline_thickness, border_offset, dot_radius, selected);
+    node_draw_socket(C, ntree, node, nodeptr, *sock, outline_thickness, dot_radius, selected);
   }
 
   /* Output sockets. */
@@ -2321,8 +2312,7 @@ void node_draw_sockets(const SpaceNode &snode,
       continue;
     }
     const bool selected = (sock->flag & SELECT);
-    node_draw_socket(
-        C, ntree, node, nodeptr, *sock, outline_thickness, border_offset, dot_radius, selected);
+    node_draw_socket(C, ntree, node, nodeptr, *sock, outline_thickness, dot_radius, selected);
   }
   nodesocket_batch_end();
 }
@@ -4193,7 +4183,6 @@ void reroute_node_draw_body(const bContext &C,
                        socket_color,
                        outline_color,
                        NODE_SOCKET_OUTLINE,
-                       0.0f,
                        NODE_SOCKET_DOT,
                        sock.display_shape);
 }

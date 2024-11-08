@@ -1910,7 +1910,6 @@ void node_draw_nodesocket(const rctf *rect,
                           const float color_inner[4],
                           const float color_outline[4],
                           const float outline_thickness,
-                          const float outline_offset,
                           const float dot_radius,
                           int shape)
 {
@@ -1930,7 +1929,7 @@ void node_draw_nodesocket(const rctf *rect,
   socket_params.color_outline[3] = color_outline[3];
   socket_params.outline_thickness = outline_thickness;
   socket_params.dot_radius = dot_radius;
-  socket_params.outline_offset = outline_offset;
+  socket_params.outline_offset = 0.4 * outline_thickness;
   socket_params.shape = float(shape) + 0.1f;
 
   GPU_blend(GPU_BLEND_ALPHA);
