@@ -212,7 +212,7 @@ struct USDImportParams {
   bool set_material_blend;
 
   bool validate_meshes;
-  bool merge_transform_and_shape;
+  bool merge_parent_xform;
 
   eUSDMtlPurpose mtl_purpose;
   eUSDMtlNameCollisionMode mtl_name_collision_mode;

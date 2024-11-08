@@ -284,7 +284,7 @@ bool USDStageReader::include_by_purpose(const pxr::UsdGeomImageable &imageable) 
 bool USDStageReader::merge_with_parent(USDPrimReader *reader) const
 {
   /* Don't merge if the param is set to false */
-  if (!params_.merge_transform_and_shape) {
+  if (!params_.merge_parent_xform) {
     return false;
   }
 

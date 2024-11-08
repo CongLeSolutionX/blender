@@ -984,7 +984,7 @@ static int wm_usd_import_exec(bContext *C, wmOperator *op)
   params.import_blendshapes = import_blendshapes;
 
   params.validate_meshes = validate_meshes;
-  params.merge_transform_and_shape = merge_transform_and_shape;
+  params.merge_parent_xform = merge_transform_and_shape;
 
   params.import_guide = import_guide;
   params.import_proxy = import_proxy;
