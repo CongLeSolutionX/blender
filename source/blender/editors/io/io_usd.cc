@@ -1330,7 +1330,7 @@ void WM_OT_usd_import(wmOperatorType *ot)
   RNA_def_boolean(ot->srna,
                   "merge_parent_xform",
                   true,
-                  "Merge parent xform",
+                  "Merge parent Xform",
                   "Allow USD primitives to merge with their Xform parent "
                   "if they are the only child in the hierarchy");
 }
