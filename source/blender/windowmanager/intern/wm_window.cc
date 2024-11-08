@@ -1873,11 +1873,6 @@ void wm_window_events_process(const bContext *C)
 /** \name Ghost Init/Exit
  * \{ */
 
-static void wm_backtrace_fn(void *file_handle)
-{
-  BLI_system_backtrace(static_cast<FILE *>(file_handle), nullptr);
-}
-
 void wm_ghost_init(bContext *C)
 {
   if (g_system) {
@@ -1891,7 +1886,7 @@ void wm_ghost_init(bContext *C)
 
   consumer = GHOST_CreateEventConsumer(ghost_event_proc, C);
 
-  GHOST_SetBacktraceHandler(wm_backtrace_fn);
+  GHOST_SetBacktraceHandler((GHOST_TBacktraceFn)BLI_system_backtrace);
 
   g_system = GHOST_CreateSystem();
   GPU_backend_ghost_system_set(g_system);
@@ -1932,7 +1927,7 @@ void wm_ghost_init_background()
     return;
   }
 
-  GHOST_SetBacktraceHandler(wm_backtrace_fn);
+  GHOST_SetBacktraceHandler((GHOST_TBacktraceFn)BLI_system_backtrace);
 
   g_system = GHOST_CreateSystemBackground();
   GPU_backend_ghost_system_set(g_system);

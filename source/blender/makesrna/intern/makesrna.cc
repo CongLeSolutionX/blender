@@ -44,7 +44,10 @@ static int debugSRNA = 0;
 
 /* stub for BLI_abort() */
 #ifndef NDEBUG
-void BLI_system_backtrace(FILE * /*fp*/, const void * /*os_data*/) {}
+void BLI_system_backtrace(FILE *fp)
+{
+  (void)fp;
+}
 #endif /* !NDEBUG */
 
 /* Replace if different */

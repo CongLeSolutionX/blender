@@ -81,13 +81,7 @@ static void sig_handle_blender_esc(int sig)
   }
 }
 
-static void sig_handle_crash_backtrace(FILE *fp, const void *os_data)
-{
-  fputs("\n# backtrace\n", fp);
-  BLI_system_backtrace(fp, os_data);
-}
-
-static void sig_handle_crash(int signum, const void *os_data)
+static void sig_handle_crash_backtrace(int signum, const void *os_info)
 {
   /* Might be called after WM/Main exit, so needs to be careful about nullptr-checking before
    * de-referencing. */
@@ -136,7 +130,8 @@ static void sig_handle_crash(int signum, const void *os_data)
       BKE_report_write_file_fp(fp, &wm->runtime->reports, header);
     }
 
-    sig_handle_crash_backtrace(fp, os_data);
+    fputs("\n# backtrace\n", fp);
+    BLI_system_backtrace_with_os_info(fp, os_info);
 
 #  ifdef WITH_PYTHON
     /* Generate python back-trace if Python is currently active. */
@@ -160,7 +155,7 @@ static void sig_handle_crash(int signum, const void *os_data)
 
 static void sig_handle_crash_fn(int signum)
 {
-  sig_handle_crash(signum, nullptr);
+  sig_handle_crash_backtrace(signum, nullptr);
 }
 
 #  ifdef WIN32
@@ -182,7 +177,7 @@ extern LONG WINAPI windows_exception_handler(EXCEPTION_POINTERS *ExceptionInfo)
   }
   else {
     BLI_windows_handle_exception(ExceptionInfo);
-    sig_handle_crash(SIGSEGV, ExceptionInfo);
+    sig_handle_crash_backtrace(SIGSEGV, ExceptionInfo);
   }
 
   return EXCEPTION_EXECUTE_HANDLER;

@@ -35,7 +35,7 @@ void mtl_debug_init();
   { \
     if (G.debug & G_DEBUG_GPU) { \
       CLOG_ERROR(&debug::LOG, info EXPAND_ARGS(__VA_ARGS__)); \
-      BLI_system_backtrace(stderr, nullptr); \
+      BLI_system_backtrace(stderr); \
     } \
   }
 

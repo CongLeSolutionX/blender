@@ -1003,7 +1003,7 @@ static int arg_handle_abort_handler_disable(int /*argc*/, const char ** /*argv*/
 
 static void clog_abort_on_error_callback(void *fp)
 {
-  BLI_system_backtrace(static_cast<FILE *>(fp), nullptr);
+  BLI_system_backtrace(static_cast<FILE *>(fp));
   fflush(static_cast<FILE *>(fp));
   abort();
 }
@@ -1143,8 +1143,9 @@ static const char arg_handle_log_show_backtrace_set_doc[] =
     "Show a back trace for each log message (debug builds only).";
 static int arg_handle_log_show_backtrace_set(int /*argc*/, const char ** /*argv*/, void * /*data*/)
 {
-  CLG_backtrace_fn_set(
-      [](void *file_handle) { BLI_system_backtrace(static_cast<FILE *>(file_handle), nullptr); });
+  /* Ensure types don't become incompatible. */
+  void (*fn)(FILE *fp) = BLI_system_backtrace;
+  CLG_backtrace_fn_set((void (*)(void *))fn);
   return 0;
 }
 
