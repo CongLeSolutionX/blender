@@ -174,7 +174,8 @@ openvdb::BoolGrid::ConstPtr Octree::mesh_to_sdf_grid(const Mesh *mesh,
 
   /* TODO(weizhen): Should consider object instead of mesh size. */
   const float3 mesh_size = mesh->bounds.size();
-  const auto vdb_voxel_size = openvdb::Vec3f(mesh_size.x, mesh_size.y, mesh_size.z) / float(width);
+  const auto vdb_voxel_size = openvdb::Vec3d(mesh_size.x, mesh_size.y, mesh_size.z) /
+                              double(width);
 
   auto xform = openvdb::math::Transform::createLinearTransform(1.0);
   xform->postScale(vdb_voxel_size);
@@ -182,7 +183,7 @@ openvdb::BoolGrid::ConstPtr Octree::mesh_to_sdf_grid(const Mesh *mesh,
   auto sdf_grid = openvdb::tools::meshToLevelSet<openvdb::FloatGrid>(
       *xform, points, triangles, half_width);
 
-  return openvdb::tools::sdfInteriorMask(*sdf_grid, vdb_voxel_size.length());
+  return openvdb::tools::sdfInteriorMask(*sdf_grid, 0.5 * vdb_voxel_size.length());
 }
 #endif
 
@@ -333,18 +334,23 @@ static void fill_shader_input(device_vector<KernelShaderEvalInput> &d_input,
     }
   }
 
-  const float3 voxel_size = octree->voxel_size();
-  const int width = octree->get_width();
-  /* Use roughly the same amount of samples per object, but not more than 256 per voxel. */
-  const int num_samples = min(
-      width * width * width / (index_range.x * index_range.y * index_range.z) * 16, 256);
+  int num_samples;
+  if (object && object->is_homogeneous_volume()) {
+    num_samples = 1;
+  }
+  else {
+    /* Use roughly the same amount of samples per object, but not more than 256 per voxel. */
+    const int width = octree->get_width();
+    const int global_grids = width * width * width;
+    const int local_grids = index_range.x * index_range.y * index_range.z;
+    num_samples = min(global_grids / local_grids * 16, 256);
+  }
 
   KernelShaderEvalInput *d_input_data = d_input.data();
-  const blocked_range3d<int> range(
-      0, index_range.x, 32, 0, index_range.y, 32, 0, index_range.z, 32);
-
   d_input_data[0].object = num_samples;
 
+  const float3 voxel_size = octree->voxel_size();
+  const blocked_range3d<int> range(0, index_range.x, 8, 0, index_range.y, 8, 0, index_range.z, 8);
   parallel_for(range, [&](const blocked_range3d<int> &r) {
     /* One accessor per thread is important for cached access. */
     const auto find = openvdb::tools::FindActiveValues(grid->tree());
@@ -466,11 +472,9 @@ void Octree::evaluate_volume_density_(Device *device, Progress &progress, Scene 
         std::pair<const Geometry *, const Shader *> geom_shader = {geom, shader};
         if (geom->is_mesh() && !vdb_map.count(geom_shader)) {
           const Mesh *mesh = static_cast<const Mesh *>(geom);
-          vdb_map[geom_shader] = mesh_to_sdf_grid(mesh, shader, 2.0f);
+          vdb_map[geom_shader] = mesh_to_sdf_grid(mesh, shader, 1.0f);
         }
 #endif
-
-        /* TODO(weizhen): specialize homogeneous volume and evaluate less points? */
 
         /* Evaluate shader on device. */
         eval_density(object, shader, sigmas, index_min, index_range);

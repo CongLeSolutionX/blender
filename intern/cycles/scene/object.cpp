@@ -365,7 +365,9 @@ bool Object::is_homogeneous_volume() const
   for (Node *node : geometry->get_used_shaders()) {
     const Shader *shader = static_cast<const Shader *>(node);
     if (shader->has_volume) {
-      num_volume_shader++;
+      if (++num_volume_shader > 1) {
+        return false;
+      }
 
       if (shader->has_volume_spatial_varying) {
         return false;
@@ -377,7 +379,7 @@ bool Object::is_homogeneous_volume() const
     }
   }
 
-  return num_volume_shader == 1;
+  return true;
 }
 
 /* Object Manager */
