@@ -6,9 +6,9 @@
  * \ingroup spseq
  */
 
+#include "BLI_map.hh"
 #include "MEM_guardedalloc.h"
 
-#include "BLI_map.hh"
 #include "BLI_set.hh"
 
 #include "DNA_scene_types.h"
@@ -47,8 +47,7 @@ bool sequencer_retiming_mode_is_active(const bContext *C)
   if (ed == nullptr) {
     return false;
   }
-  const blender::Map<SeqRetimingKey *, Sequence *> selection = SEQ_retiming_selection_get(ed);
-  return selection.size() > 0;
+  return SEQ_retiming_selection_get(ed).size() > 0;
 }
 
 /*-------------------------------------------------------------------- */
@@ -234,7 +233,7 @@ static int retiming_key_add_to_editable_strips(bContext *C,
   Editing *ed = SEQ_editing_get(scene);
   bool inserted = false;
 
-  blender::Map<SeqRetimingKey *, Sequence *> selection = SEQ_retiming_selection_get(ed);
+  blender::Map selection = SEQ_retiming_selection_get(ed);
   if (selection.is_empty()) {
     return OPERATOR_CANCELLED;
   }
@@ -361,8 +360,8 @@ static bool freeze_frame_add_from_retiming_selection(const bContext *C,
   Scene *scene = CTX_data_scene(C);
   bool success = false;
 
-  const blender::Map<SeqRetimingKey *, Sequence *> selection = SEQ_retiming_selection_get(
-      SEQ_editing_get(scene));
+  blender::Map selection = SEQ_retiming_selection_get(SEQ_editing_get(scene));
+
   for (auto item : selection.items()) {
     const int timeline_frame = SEQ_retiming_key_timeline_frame_get(scene, item.value, item.key);
     success |= freeze_frame_add_new_for_seq(C, op, item.value, timeline_frame, duration);
@@ -446,7 +445,7 @@ static bool transition_add_new_for_seq(const bContext *C,
     return false;
   }
 
-  SeqRetimingKey *transition = SEQ_retiming_add_transition(scene, seq, key, duration);
+  SeqRetimingKey *transition = SEQ_retiming_add_transition(seq, key, duration);
 
   if (transition == nullptr) {
     BKE_report(op->reports, RPT_WARNING, "Cannot create transition");
@@ -467,8 +466,8 @@ static bool transition_add_from_retiming_selection(const bContext *C,
   Scene *scene = CTX_data_scene(C);
   bool success = false;
 
-  const blender::Map<SeqRetimingKey *, Sequence *> selection = SEQ_retiming_selection_get(
-      SEQ_editing_get(scene));
+  blender::Map selection = SEQ_retiming_selection_get(SEQ_editing_get(scene));
+
   for (auto item : selection.items()) {
     const int timeline_frame = SEQ_retiming_key_timeline_frame_get(scene, item.value, item.key);
     success |= transition_add_new_for_seq(C, op, item.value, timeline_frame, duration);
@@ -536,8 +535,7 @@ static int sequencer_retiming_key_delete_exec(bContext *C, wmOperator * /*op*/)
 {
   Scene *scene = CTX_data_scene(C);
 
-  blender::Map<SeqRetimingKey *, Sequence *> selection = SEQ_retiming_selection_get(
-      SEQ_editing_get(scene));
+  blender::Map selection = SEQ_retiming_selection_get(SEQ_editing_get(scene));
   blender::Vector<Sequence *> strips_to_handle;
 
   if (!sequencer_retiming_mode_is_active(C) || selection.size() == 0) {
@@ -632,8 +630,7 @@ static float strip_speed_get(bContext *C, const wmOperator * /*op*/)
   }
 
   Scene *scene = CTX_data_scene(C);
-  blender::Map<SeqRetimingKey *, Sequence *> selection = SEQ_retiming_selection_get(
-      SEQ_editing_get(scene));
+  blender::Map selection = SEQ_retiming_selection_get(SEQ_editing_get(scene));
   /* Retiming mode. */
   if (selection.size() == 1) {
     for (auto item : selection.items()) {
@@ -705,8 +702,7 @@ static int sequencer_retiming_segment_speed_set_exec(bContext *C, wmOperator *op
     return strip_speed_set_exec(C, op);
   }
 
-  blender::Map<SeqRetimingKey *, Sequence *> selection = SEQ_retiming_selection_get(
-      SEQ_editing_get(scene));
+  blender::Map selection = SEQ_retiming_selection_get(SEQ_editing_get(scene));
 
   /* Retiming mode. */
   if (selection.size() > 0) {
@@ -842,9 +838,10 @@ int sequencer_retiming_key_select_exec(bContext *C,
   Scene *scene = CTX_data_scene(C);
   Editing *ed = SEQ_editing_get(scene);
 
-  const bool deselect_all = RNA_boolean_get(op->ptr, "deselect_all");
   const bool wait_to_deselect_others = RNA_boolean_get(op->ptr, "wait_to_deselect_others");
   const bool toggle = RNA_boolean_get(op->ptr, "toggle");
+  bool deselect_all = RNA_boolean_get(op->ptr, "deselect_all");
+  deselect_all |= !toggle;
 
   /* Clicked on an unselected key. */
   if (!SEQ_retiming_selection_contains(ed, key) && !toggle) {
