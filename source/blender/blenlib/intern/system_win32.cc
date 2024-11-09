@@ -436,7 +436,7 @@ static std::string url_encode(const char *str)
 {
   std::ostringstream encoded;
   while (char c = *str++) {
-    if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') {
+    if (isalnum(c) || ELEM(c, '-', '_', '.', '~')) {
       encoded << c;
     }
     else if (c == ' ') {
@@ -444,7 +444,7 @@ static std::string url_encode(const char *str)
     }
     else {
       encoded << '%' << std::setw(2) << std::setfill('0') << std::hex << std::uppercase
-              << int((unsigned char)c);
+              << int(uchar(c));
     }
   }
   return encoded.str();
