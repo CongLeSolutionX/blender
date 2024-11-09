@@ -1,10 +1,10 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.3.0 Beta (b'6039cb17e63e')\n"
+"Project-Id-Version: Blender 4.3.0 Beta (b'28a8486e2b3f')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-10-07 09:15+0000\n"
-"PO-Revision-Date: 2024-10-05 09:56+0000\n"
+"POT-Creation-Date: 2024-10-29 10:02+0000\n"
+"PO-Revision-Date: 2024-10-24 08:56+0000\n"
 "Last-Translator: Satoshi Yamasaki <yamyam@yo.rim.or.jp>\n"
 "Language-Team: Japanese <https://translate.blender.org/projects/blender-ui/ui/ja/>\n"
 "Language: ja\n"
@@ -2873,10 +2873,6 @@ msgid "Main Grease Pencils"
 msgstr "メイングリースペンシル"
 
 
-msgid "Collection of grease pencils"
-msgstr "グリースペンシルの集合"
-
-
 msgid "Main Hair Curves"
 msgstr "メインヘアーカーブ"
 
@@ -3101,8 +3097,92 @@ msgid "Collection of worlds"
 msgstr "ワールドの集合"
 
 
+msgid "Blendfile Import Context"
+msgstr "Blendファイルインポートコンテクスト"
+
+
+msgid "Options for this blendfile import operation"
+msgstr "この blend ファイルのインポート操作オプション"
+
+
+msgid "Only link data, instead of appending it"
+msgstr "アペンドせず，データのリンクのみ行います"
+
+
+msgid "Generate a placeholder (empty ID) if not found in any library files"
+msgstr "なんのライブラリファイルも見つからない場合に場所取り（空の ID）を生成します"
+
+
+msgid "Set fake user on appended IDs"
+msgstr "フェイクユーザーをアペンドした ID に設定します"
+
+
+msgid "Try to re-use previously appended matching IDs when appending them again, instead of creating local duplicates"
+msgstr "再びアペンドする時，ローカルに複製を作成するのではなく，以前アペンドした物とマッチする ID を再利用しようとします"
+
+
+msgid "Automatically select imported objects"
+msgstr "自動的にインポートしたオブジェクトを選択します"
+
+
+msgid "Use the active Collection of the current View Layer to instantiate imported collections and objects"
+msgstr "インポートしたコレクションとオブジェクトのインスタンス化に，現在のビューレイヤーのアクティブコレクションを使用します"
+
+
+msgid "Instantiate object data IDs (i.e. create objects for them if needed)"
+msgstr "オブジェクトデータ ID をインスタンス化（必要に応じてオブジェクトを生成）します"
+
+
+msgid "Instantiate collections as empties, instead of linking them into the current view layer"
+msgstr "コレクションを現在のビューレイヤーにリンクするのではなく，エンプティとしてインスタンス化します"
+
+
+msgid "Current stage of the import process"
+msgstr "現在のインポートプロセス段階"
+
+
+msgid "Blendfile import context has been initialized and filled with a list of items to import, no data has been linked or appended yet"
+msgstr "Blend ファイルインポートコンテクストを初期化し，インポートするアイテムのリストを埋めます．まだ何もリンクやアペンドしていません"
+
+
+msgid "Blendfile Import Context Item"
+msgstr "Blendファイルインポートコンテクストアイテム"
+
+
+msgid "Append Action"
+msgstr "アペンドアクション"
+
+
+msgid "How this item has been handled by the append operation. Only set if the data has been appended"
+msgstr "このアイテムをアペンド操作で処理する方法．データがアペンドされた時のみセットしてください"
+
+
+msgid "Not yet defined"
+msgstr "未設定"
+
+
+msgid "An existing matching local ID has been re-used"
+msgstr "マッチする既存のローカル ID を再利用します"
+
+
+msgid "The newly linked ID has been made local"
+msgstr "新しいリンク ID をローカルに作成します"
+
+
+msgid "Imported ID"
+msgstr "インポート済ID"
+
+
+msgid "The imported ID. None until it has been linked or appended. May be the same as `reusable_local_id` when appended"
+msgstr "インポートした ID．リンクまたはアペンドされるまで None．アペンド時は `reusable_local_id` と同じになるでしょう"
+
+
 msgid "ID Type"
 msgstr "IDタイプ"
+
+
+msgid "ID type of the item"
+msgstr "アイテムの ID のタイプ"
 
 
 msgid "Armature"
@@ -3243,6 +3323,54 @@ msgstr "ワークスペース"
 
 msgid "World"
 msgstr "ワールド"
+
+
+msgid "Import Info"
+msgstr "インポート情報"
+
+
+msgid "Various status info about an item after it has been imported"
+msgstr "インポート後のアイテムについての様々な状況の情報"
+
+
+msgid "That item was added for an indirectly imported ID, as a dependency of another data-block"
+msgstr "他のデータブロックの依存として間接的にインポートした ID のために追加されたアイテム"
+
+
+msgid "ID name of the item"
+msgstr "アイテムの ID 名"
+
+
+msgid "Reusable Local ID"
+msgstr "再利用可能なローカルID"
+
+
+msgid "The already existing local ID that may be reused in append & reuse case. None until it has been found"
+msgstr "アペンド＆再利用の場合に再利用される既存のローカル ID．見つかるまで None"
+
+
+msgid "Source Libraries"
+msgstr "ソースライブラリリスト"
+
+
+msgid "Source Library"
+msgstr "ソースライブラリ"
+
+
+msgid "Blendfile Import Context Items"
+msgstr "Blendファイルインポートコンテクストアイテム"
+
+
+msgid "Blendfile Import Context Libraries"
+msgstr "Blendファイルインポートコンテクストライブラリ"
+
+
+msgid "Collection of source libraries, i.e. blendfile paths"
+msgstr "ソースライブラリの集合，つまり blend ファイルのパス"
+
+
+msgid "Blendfile Import Context Library"
+msgstr "Blendファイルインポートコンテクストライブラリ"
 
 
 msgid "Blender RNA"
@@ -4061,10 +4189,6 @@ msgid "4×4 bone matrix relative to armature"
 msgstr "アーマチュアと相対的な4×4ボーン行列"
 
 
-msgid "Parent"
-msgstr "ペアレント"
-
-
 msgid "Parent bone (in same Armature)"
 msgstr "親ボーン(同じアーマチュア内)"
 
@@ -4636,10 +4760,6 @@ msgid "Grease Pencil Brush Settings"
 msgstr "グリースペンシルブラシ設定"
 
 
-msgid "Settings for grease pencil brush"
-msgstr "グリースペンシルブラシ用の設定"
-
-
 msgid "Active Smooth"
 msgstr "アクティブスムーズ"
 
@@ -4998,6 +5118,10 @@ msgid "Jitter"
 msgstr "ジッター"
 
 
+msgid "Jitter factor of brush radius for new strokes"
+msgstr "新規ストロークのブラシ半径のジッター係数"
+
+
 msgctxt "Amount"
 msgid "Smooth"
 msgstr "スムーズ"
@@ -5173,6 +5297,10 @@ msgstr "ジッターに筆圧を使用"
 
 msgid "Use tablet pressure for jitter"
 msgstr "ジッターにタブレットの筆圧を使用します"
+
+
+msgid "Keep Caps"
+msgstr "端を維持"
 
 
 msgid "Keep the caps as they are and don't flatten them when erasing"
@@ -10225,14 +10353,6 @@ msgid "Live filtering string"
 msgstr "ライブ絞り込み文字列"
 
 
-msgid "Show All Slots"
-msgstr "全スロットを表示"
-
-
-msgid "Show all the Action's Slots"
-msgstr "アクションのスロットをすべて表示します"
-
-
 msgid "Display Armature"
 msgstr "アーマチュアを表示"
 
@@ -13275,10 +13395,6 @@ msgid "Show Font data-blocks"
 msgstr "フォントデータブロックを表示します"
 
 
-msgid "Show Grease pencil data-blocks"
-msgstr "グリースペンシルデータブロックを表示します"
-
-
 msgid "Show Image data-blocks"
 msgstr "画像データブロックを表示します"
 
@@ -14089,6 +14205,12 @@ msgid "End"
 msgstr "終了"
 
 
+msgid "Frame on which the simulation stops (last frame baked)"
+msgstr ""
+"シミュレーションが停止するフレーム．\n"
+"（ベイクの最終フレーム）"
+
+
 msgid "Start"
 msgstr "開始"
 
@@ -14307,6 +14429,12 @@ msgid "FLIP Ratio"
 msgstr "FLIPの比率"
 
 
+msgid "PIC/FLIP Ratio. A value of 1.0 will result in a completely FLIP based simulation. Use a lower value for simulations which should produce smaller splashes."
+msgstr ""
+"PIC と FLIP の比率．1.0で完全に FLIP ベースのシミュレーションになります．\n"
+"少ない値で小さな飛沫が生成されます．"
+
+
 msgid "Fluid Collection"
 msgstr "流体のコレクション"
 
@@ -14459,6 +14587,13 @@ msgid "Choose where to get guiding velocities from"
 msgstr "速度をガイドする元を選択します"
 
 
+msgid "Use a fluid domain for guiding (domain needs to be baked already so that velocities can be extracted). Guiding domain can be of any type (i.e. gas or liquid)."
+msgstr ""
+"流体ドメインをガイドに使用します (速度を抽出可能にするため，\n"
+"ドメインはベイク済である必要があります)．\n"
+"ガイド用のドメインのタイプ（気体・液体）は問いません．"
+
+
 msgid "Effector"
 msgstr "エフェクター"
 
@@ -14543,8 +14678,20 @@ msgid "Use union particle level set (faster but lower quality)"
 msgstr "融合パーティクルレベルセットを使用します（高速だが低品質）"
 
 
+msgid "Particle radius factor (higher value results in larger (meshed) particles). Needs to be adjusted after changing the mesh scale."
+msgstr ""
+"パーティクル半径係数 (大きな値で大きな（メッシュ化）パーティクルになります)．\n"
+"メッシュスケール変更後は調整が必要です．"
+
+
 msgid "Mesh scale"
 msgstr "メッシュスケール"
+
+
+msgid "The mesh simulation is scaled up by this factor (compared to the base resolution of the domain). For best meshing, it is recommended to adjust the mesh particle radius alongside this value."
+msgstr ""
+"この係数でメッシュのシミュレーションを（ドメインのベース解像度に対し）スケールアップします．\n"
+"最適なメッシュにするには，メッシュパーティクル半径をこの値と並行して調整することをお勧めします．"
 
 
 msgid "Smoothen Neg"
@@ -14670,6 +14817,12 @@ msgstr ""
 
 msgid "Maximum Resolution"
 msgstr "最大解像度"
+
+
+msgid "Resolution used for the fluid domain. Value corresponds to the longest domain side (resolution for other domain sides is calculated automatically)."
+msgstr ""
+"流体ドメインが使用する解像度．値はドメインの一番長い辺に対応します\n"
+" (ドメインの他の辺の解像度は自動的に計算されます)."
 
 
 msgid "Gridlines"
@@ -15082,10 +15235,6 @@ msgid "Create foam particle system"
 msgstr "泡沫のパーティクルシステムを生成します"
 
 
-msgid "Fractional Obstacles"
-msgstr "分割障害物"
-
-
 msgid "Fractional obstacles improve and smoothen the fluid-obstacle boundary"
 msgstr "分割障害物は流体と障害物の境界を改善し，スムーズにします"
 
@@ -15124,6 +15273,12 @@ msgstr "ドメインオブジェクトのスライスを一度だけ実行しま
 
 msgid "Speed Vectors"
 msgstr "速度ベクトル"
+
+
+msgid "Caches velocities of mesh vertices. These will be used (automatically) when rendering with motion blur enabled."
+msgstr ""
+"メッシュ頂点の速度をキャッシュします．\n"
+"モーションブラーと共にレンダリングする時に（自動的に）使用されます．"
 
 
 msgid "Spray"
@@ -15559,6 +15714,13 @@ msgid "Set particle size in simulation cells or use nearest cell"
 msgstr "シミュレーションセル内のパーティクルサイズを設定，または最も近いセルを使用します"
 
 
+msgid "Treat this object as a planar and unclosed mesh. Fluid will only be emitted from the mesh surface and based on the surface emission value."
+msgstr ""
+"このオブジェクトを平面かつ開いたメッシュとして処理します．\n"
+"流体は「表面からの発生距離」（Surface Emission）値を元に，\n"
+"メッシュ表面からのみ発生します．"
+
+
 msgid "Use Texture"
 msgstr "テクスチャで使用"
 
@@ -15601,6 +15763,10 @@ msgstr ""
 
 msgid "Color of the corresponding socket type in the node editor"
 msgstr "ノードエディター内でソケットタイプに対応する色"
+
+
+msgid "Domain that the field is evaluated on"
+msgstr "フィールドが評価されるドメイン"
 
 
 msgid "Socket Type"
@@ -16099,6 +16265,14 @@ msgstr "フレームがドープシート上で編集用に選択されていま
 
 msgid "Freehand curves defining the sketch on this frame"
 msgstr "フリーハンド曲線がこのフレーム上のスケッチを定義します"
+
+
+msgid "Annotation Frames"
+msgstr "アノテーションフレーム"
+
+
+msgid "Collection of annotation frames"
+msgstr "アノテーションフレームの集合"
 
 
 msgid "Grease Pencil Interpolate Settings"
@@ -16821,6 +16995,12 @@ msgid "Material Index"
 msgstr "マテリアルインデックス"
 
 
+msgid "Use this index on generated segment. -1 means using the existing material."
+msgstr ""
+"生成されたセグメントにこのインデックスを使用します\n"
+"-1で既存のマテリアルを使用します．"
+
+
 msgid "Name of the dash segment"
 msgstr "点線セグメントの名前"
 
@@ -16861,12 +17041,20 @@ msgid "Curve Offsets"
 msgstr "カーブオフセット"
 
 
+msgid "Offset indices of the first point of each curve"
+msgstr "各カーブの最初のポイントのインデックスのオフセット"
+
+
 msgid "Drawing"
 msgstr "ドローイング"
 
 
 msgid "Reference"
 msgstr "参照"
+
+
+msgid "User Count"
+msgstr "ユーザー数"
 
 
 msgid "The number of keyframes this drawing is used by"
@@ -16879,6 +17067,10 @@ msgstr "グリースペンシルフレーム"
 
 msgid "A Grease Pencil keyframe"
 msgstr "グリースペンシルのキーフレーム"
+
+
+msgid "The frame number in the scene"
+msgstr "シーンでのフレーム番号"
 
 
 msgid "Keyframe Type"
@@ -16965,8 +17157,16 @@ msgid "Hard Light"
 msgstr "ハードライト"
 
 
+msgid "Set layer visibility"
+msgstr "レイヤーの可視性を設定します"
+
+
 msgid "Ignore Material Locking"
 msgstr "マテリアルのロックを無視"
+
+
+msgid "Allow editing strokes even if they use locked materials"
+msgstr "ストロークがロック中のマテリアルを使用していても編集できるようにします"
 
 
 msgid "List of Masking Layers"
@@ -17017,12 +17217,24 @@ msgid "Index number for the \"Layer Index\" pass"
 msgstr "「レイヤーインデックス」パスのインデックス番号"
 
 
+msgid "Radius Offset"
+msgstr "半径のオフセット"
+
+
 msgid "Euler rotation of the layer"
 msgstr "このレイヤーのオイラー回転"
 
 
 msgid "Scale of the layer"
 msgstr "このレイヤーのスケール"
+
+
+msgid "Tint Color"
+msgstr "チントカラー"
+
+
+msgid "Tint Factor"
+msgstr "チント係数"
 
 
 msgid "Translation"
@@ -17093,6 +17305,14 @@ msgid "Group name"
 msgstr "グループ名"
 
 
+msgid "Parent Group"
+msgstr "親グループ"
+
+
+msgid "The parent group this group is part of"
+msgstr "このグループがその一部となる親グループ"
+
+
 msgid "Grease Pencil Masking Layers"
 msgstr "グリースペンシルマスキングレイヤー"
 
@@ -17115,10 +17335,6 @@ msgstr "マスクレイヤー名"
 
 msgid "Grease Pencil Mask Layers"
 msgstr "グリースペンシルマスクレイヤー"
-
-
-msgid "Collection of grease pencil masking layers"
-msgstr "グリースペンシルマスクレイヤーの集合"
 
 
 msgid "Active Layer Mask Index"
@@ -17487,6 +17703,11 @@ msgid "Type of ID block that action can be used on - DO NOT CHANGE UNLESS YOU KN
 msgstr ""
 "アクションで使用可能なIDブロックタイプ\n"
 "（よくわからない場合は変更しないでください）"
+
+
+msgctxt "ID"
+msgid "Unspecified"
+msgstr "未指定"
 
 
 msgid "Pose Markers"
@@ -18828,6 +19049,12 @@ msgid "Invert to Scrape or Fill"
 msgstr "反転を削り取り・フィルに"
 
 
+msgid "Use Scrape or Fill brush when inverting this brush instead of inverting its displacement direction"
+msgstr ""
+"このブラシの反転時，変形方向を逆にするのではなく\n"
+"「削り取り」や「フィル」ブラシを使用します"
+
+
 msgid "Invert Pressure for Wet Mix"
 msgstr "ウェットミックスの筆圧を反転"
 
@@ -19680,10 +19907,6 @@ msgid "Use Paint"
 msgstr "ペイントを使用"
 
 
-msgid "Use this brush in grease pencil drawing mode"
-msgstr "このブラシをグリースペンシルドローモードで使用します"
-
-
 msgid "Use this brush in texture paint mode"
 msgstr "テクスチャペイントモードでこのブラシを使用します"
 
@@ -19854,10 +20077,6 @@ msgstr "間隔毎の強さを調整"
 
 msgid "Automatically adjust strength to give consistent results for different spacings"
 msgstr "自動的に強さを調整し，違う間隔でも同じ結果にします"
-
-
-msgid "Use this brush in grease pencil vertex color mode"
-msgstr "このブラシをグリースペンシル頂点カラーモードで使用します"
 
 
 msgid "Use Pressure for Wet Mix"
@@ -22023,10 +22242,6 @@ msgid "2D Layers"
 msgstr "2Dレイヤー"
 
 
-msgid "Display strokes using grease pencil layers to define order"
-msgstr "グリースペンシルレイヤーを使用して順序を決め，ストロークを表示します"
-
-
 msgid "3D Location"
 msgstr "3D位置"
 
@@ -23488,16 +23703,8 @@ msgid "Grease Pencil Settings"
 msgstr "グリースペンシル設定"
 
 
-msgid "Grease pencil color settings for material"
-msgstr "マテリアル用グリースペンシルカラー設定"
-
-
 msgid "Is Grease Pencil"
 msgstr "グリースペンシル"
-
-
-msgid "True if this material has grease pencil data"
-msgstr "このマテリアルにグリースペンシルデータがある場合はTrue"
 
 
 msgid "Line Color"
@@ -24201,10 +24408,6 @@ msgid "Global scene frame number at which this movie starts playing (affects all
 msgstr ""
 "この動画の再生を開始するシーン全体のフレーム番号\n"
 "（クリップに関連するすべてのデータに影響）"
-
-
-msgid "Grease pencil data for this movie clip"
-msgstr "この動画クリップのグリースペンシルデータ"
 
 
 msgid "Width and height in pixels, zero when image data can't be loaded"
@@ -25331,10 +25534,6 @@ msgid "Use alpha blending instead of alpha test (can produce sorting artifacts)"
 msgstr ""
 "アルファテストではなくアルファブレンディングを使用します\n"
 "（ソートによりアーティファクトが生じることがあります）"
-
-
-msgid "Lights affect grease pencil object"
-msgstr "グリースペンシルオブジェクトに影響するライト"
 
 
 msgid "Scale to Face Sizes"
@@ -29378,28 +29577,8 @@ msgid "Codec"
 msgstr "コーデック"
 
 
-msgid "Codec settings for OpenEXR"
-msgstr "OpenEXR のコーデック設定"
-
-
 msgid "Pxr24 (lossy)"
 msgstr "Pxr24 (不可逆)"
-
-
-msgid "ZIP (lossless)"
-msgstr "ZIP (可逆)"
-
-
-msgid "PIZ (lossless)"
-msgstr "PIZ (可逆)"
-
-
-msgid "RLE (lossless)"
-msgstr "RLE (可逆)"
-
-
-msgid "ZIPS (lossless)"
-msgstr "ZIPS (可逆)"
 
 
 msgid "B44 (lossy)"
@@ -33436,32 +33615,12 @@ msgid "Editor menu containing buttons"
 msgstr "ボタンを含むエディターメニュー"
 
 
-msgid "Snap"
-msgstr "スナップ"
-
-
-msgid "Proportional Editing Falloff"
-msgstr "プロポーショナル編集の減衰タイプ"
-
-
-msgid "Mask Edit"
-msgstr "マスク編集"
-
-
-msgid "Automasking"
-msgstr "自動マスク"
-
-
-msgid "Face Sets Edit"
-msgstr "面セット編集"
-
-
-msgid "Vertex Group Locks"
-msgstr "頂点グループのロック"
-
-
 msgid "Mirror"
 msgstr "ミラー"
+
+
+msgid "Snap"
+msgstr "スナップ"
 
 
 msgid "UV Mapping"
@@ -33568,6 +33727,10 @@ msgid "Hooks"
 msgstr "フック"
 
 
+msgid "Vertex Group Locks"
+msgstr "頂点グループのロック"
+
+
 msgid "Trim/Add"
 msgstr "トリム/追加"
 
@@ -33650,6 +33813,22 @@ msgstr "ボーンロール"
 
 msgid "Pivot Point"
 msgstr "ピボットポイント"
+
+
+msgid "Proportional Editing Falloff"
+msgstr "プロポーショナル編集の減衰タイプ"
+
+
+msgid "Mask Edit"
+msgstr "マスク編集"
+
+
+msgid "Automasking"
+msgstr "自動マスク"
+
+
+msgid "Face Sets Edit"
+msgstr "面セット編集"
 
 
 msgid "Keyframe Insert Pie"
@@ -34241,7 +34420,7 @@ msgstr "ブラシスペシャル"
 
 msgctxt "Operator"
 msgid "Parent"
-msgstr "親"
+msgstr "ペアレント"
 
 
 msgctxt "Constraint"
@@ -35363,16 +35542,8 @@ msgid "Deform stroke points using objects"
 msgstr "オブジェクトを使用しストロークポイントを変形します"
 
 
-msgid "Generate noise wobble in grease pencil strokes"
-msgstr "グリースペンシルストロークにノイズによる揺れを生成します"
-
-
 msgid "Change stroke location, rotation, or scale"
 msgstr "ストロークの位置・回転・スケールを変更します"
-
-
-msgid "Smooth grease pencil strokes"
-msgstr "グリースペンシルストロークをスムーズにします"
 
 
 msgid "Change stroke thickness"
@@ -35693,6 +35864,10 @@ msgstr "これ以下の角度の辺は面取りされます"
 
 msgid "The path for the custom profile"
 msgstr "カスタム断面用パス"
+
+
+msgid "Edge Weight"
+msgstr "辺ウェイト"
 
 
 msgid "Attribute name for edge weight"
@@ -38024,20 +38199,12 @@ msgid "Use Edge Mark"
 msgstr "辺マークを使用"
 
 
-msgid "Generate strokes from freestyle marked edges"
-msgstr "FreeStyle の辺マークからストロークを生成します"
-
-
 msgid "Handle Overlapping Edges"
 msgstr "重複する辺を処理"
 
 
 msgid "Filter Face Marks"
 msgstr "面マークをフィルタリング"
-
-
-msgid "Filter feature lines using freestyle face marks"
-msgstr "FreeStyle の面マークを使用し，特徴ラインをフィルタリングします"
 
 
 msgid "Boundaries"
@@ -38276,6 +38443,10 @@ msgid "Fade influence of stroke's thickness"
 msgstr "ストロークの幅にフェードが影響します"
 
 
+msgid "Offset of duplicates, -1 to 1 (inner to outer)"
+msgstr "複製のオフセット．-1（内部）から 1（外部）"
+
+
 msgid "Fade the stroke thickness for each generated stroke"
 msgstr "生成された各ストロークの幅をフェードします"
 
@@ -38286,6 +38457,10 @@ msgstr "グリースペンシルノイズモディファイアー"
 
 msgid "Noise effect modifier"
 msgstr "ノイズエフェクトのモディファイアー"
+
+
+msgid "Position Factor"
+msgstr "位置係数"
 
 
 msgid "Amount of noise to apply"
@@ -39512,6 +39687,14 @@ msgid "Location on disk where the bake data is stored"
 msgstr "ベイクデータを格納するディスク上の位置"
 
 
+msgid "Bake Target"
+msgstr "ベイクターゲット"
+
+
+msgid "Where to store the baked data"
+msgstr "ベイクデータを格納する場所"
+
+
 msgid "Packed"
 msgstr "パック"
 
@@ -40610,6 +40793,20 @@ msgstr "三角面化モディファイアー"
 
 msgid "Triangulate Mesh"
 msgstr "メッシュの三角形化"
+
+
+msgid "Keep Normals"
+msgstr "法線を維持"
+
+
+msgid ""
+"Try to preserve custom normals.\n"
+"Warning: Depending on chosen triangulation method, shading may not be fully preserved, \"Fixed\" method usually gives the best result here"
+msgstr ""
+"カスタム法線を維持しようとします．\n"
+"警告：選択した三角面化方法によっては，シェーディングが\n"
+"完全に維持されません．通常この場合は「固定」分割方法が\n"
+"一番いい結果になります"
 
 
 msgid "Minimum Vertices"
@@ -42482,12 +42679,6 @@ msgid "Use Mask"
 msgstr "マスクを使用"
 
 
-msgid "Use a grease pencil data-block as a mask to use only specified areas of pattern when tracking"
-msgstr ""
-"トラッキング時に指定した範囲のパターンのみを使用するよう\n"
-"マスクとしてグリースペンシルのデータブロックを使用します"
-
-
 msgid "Normalize"
 msgstr "正規化"
 
@@ -42720,10 +42911,6 @@ msgstr "解析後の動画クリップエディターや3Dビューポートの�
 
 msgid "Minimal value of correlation between matched pattern and reference that is still treated as successful tracking"
 msgstr "マッチしたパターンと，まだトラッキング成功として処理される参照との相関の最小値"
-
-
-msgid "Grease pencil data for this track"
-msgstr "このトラックのグリースペンシルのデータ"
 
 
 msgid "Has Bundle"
@@ -43628,6 +43815,10 @@ msgstr "ベース"
 
 msgid "Support negative color by using this as the RGB basis"
 msgstr "これを RGB の基本値として使用することで，負の色に対応します"
+
+
+msgid "Output Temperature"
+msgstr "出力温度"
 
 
 msgid "Color temperature of the output's white point"
@@ -45507,12 +45698,6 @@ msgid "Plane Track Deform"
 msgstr "平面トラック変形"
 
 
-msgid "Replace flat planes in footage by another image, dectected by plane tracks from motion tracking"
-msgstr ""
-"映像内のフラットな平面をモーショントラッキングの平面トラックで\n"
-"探知し，他の画像で置き換えます"
-
-
 msgid "Posterize"
 msgstr "ポスタライズ"
 
@@ -46285,6 +46470,10 @@ msgid "Round the float to the closest integer in the direction of zero (floor if
 msgstr "0の方向に一番近い整数に丸めます（正の場合は床，負の場合は天井）"
 
 
+msgid "Hash Value"
+msgstr "ハッシュ値"
+
+
 msgid "Input value used for unconnected socket"
 msgstr "ソケット未接続時に使用される値"
 
@@ -46325,6 +46514,10 @@ msgid "Return the sign of A, sign(A)"
 msgstr "A の符号を返します．sign(A)"
 
 
+msgid "Divide Round"
+msgstr "除算（丸め）"
+
+
 msgid "Divide and round result toward zero"
 msgstr "除算し結果を０方向に丸めます"
 
@@ -46333,8 +46526,20 @@ msgid "Divide Floor"
 msgstr "除算（床）"
 
 
+msgid "Divide and floor result, the largest integer smaller than or equal A"
+msgstr "除算後に結果を床関数（A 以下の最大の整数を返す）処理"
+
+
 msgid "Divide Ceiling"
 msgstr "除算（天井）"
+
+
+msgid "Divide and ceil result, the smallest integer greater than or equal A"
+msgstr "除算後に結果を天井関数（A 以上の最小の整数を返す）処理"
+
+
+msgid "Floored Modulo"
+msgstr "剰余（床）"
 
 
 msgid "Modulo"
@@ -46347,6 +46552,10 @@ msgstr "A ÷ B の余り"
 
 msgid "Greatest Common Divisor"
 msgstr "最大公約数（GCD）"
+
+
+msgid "The largest positive integer that divides into each of the values A and B, e.g. GCD(8,12) = 4"
+msgstr "A と B のそれぞれを割り切ることのできる最大の正の整数．例：GCD(8,12) = 4"
 
 
 msgid "Least Common Multiple"
@@ -46363,6 +46572,10 @@ msgstr "逆行列"
 
 msgid "Invert Rotation"
 msgstr "回転反転"
+
+
+msgid "Matrix Determinant"
+msgstr "行列式"
 
 
 msgid "Multiply Matrices"
@@ -46535,8 +46748,16 @@ msgid "Point cloud component containing only point data"
 msgstr "ポイントデータのみ含むポイントクラウド成分"
 
 
+msgid "Curve component containing spline and control point data"
+msgstr "スプラインと制御点データを含むカーブ成分"
+
+
 msgid "Instances of objects or collections"
 msgstr "オブジェクトまたはコレクションのインスタンス"
+
+
+msgid "Grease Pencil component containing layers and curves data"
+msgstr "レイヤーとカーブデータを含むグリースペンシル成分"
 
 
 msgid "Attribute Statistic"
@@ -47290,6 +47511,10 @@ msgid "Grease Pencil to Curves"
 msgstr "グリースペンシルのカーブ化"
 
 
+msgid "Convert Grease Pencil layers into curve instances"
+msgstr "グリースペンシルレイヤーをカーブインスタンスに変換します"
+
+
 msgid "Grid to Mesh"
 msgstr "グリッドのメッシュ化"
 
@@ -47511,10 +47736,6 @@ msgid "Named Layer Selection"
 msgstr "名前付きレイヤー選択"
 
 
-msgid "Output a selection of a grease pencil layer"
-msgstr "グリースペンシルレイヤーの選択を出力します"
-
-
 msgid "Retrieve a unit length vector indicating the direction pointing away from the geometry at each element"
 msgstr "各要素の形状から離れる方向を示す単位ベクトルを取得します"
 
@@ -47671,8 +47892,8 @@ msgid "Only merge mesh vertices along existing edges. This method can be much fa
 msgstr "既存の辺の間のメッシュ頂点のみマージします．非常に高速な方法です"
 
 
-msgid "Join groups of grease pencil layers into one"
-msgstr "グリースペンシルレイヤーのグループを一つに統合します"
+msgid "Merge Layers"
+msgstr "レイヤーを統合"
 
 
 msgid "Determines how to choose which layers are merged"
@@ -47681,6 +47902,10 @@ msgstr "統合するレイヤーを選択する方法を決めます"
 
 msgid "Combine all layers which have the same name"
 msgstr "同じ名前のレイヤーをすべて統合します"
+
+
+msgid "By Group ID"
+msgstr "グループID"
 
 
 msgid "Provide a custom group ID for each layer and all layers with the same ID will be merged into one"
@@ -48244,6 +48469,10 @@ msgstr "オブジェクト自身"
 
 msgid "Retrieve the object that contains the geometry nodes modifier currently being executed"
 msgstr "現在実行中のジオメトリノードモディファイアーのあるオブジェクトを取得します"
+
+
+msgid "Separate Components"
+msgstr "成分分離"
 
 
 msgid "Split a geometry into a separate output for each type of data in the geometry"
@@ -49075,8 +49304,20 @@ msgid "Fresnel method used to tint the metal"
 msgstr "メタルのチントに使用するフレネル方法"
 
 
+msgid "Physical Conductor"
+msgstr "物理的導体"
+
+
+msgid "Fresnel conductor based on the complex refractive index per color channel"
+msgstr "カラーチャンネル毎の複雑な屈折率を元にしたフレネル導体"
+
+
 msgid "F82 Tint"
 msgstr "F82チント"
+
+
+msgid "An approximation of the Fresnel conductor curve based on the colors at perpendicular and near-grazing (roughly 82°) angles"
+msgstr "直交と，かする角度（約82°）での色を元にしたフレネル導体カーブの近似"
 
 
 msgid "Principled BSDF"
@@ -50774,6 +51015,46 @@ msgid "Scatter light as it passes through the volume, often used to add fog to a
 msgstr "ボリュームを通り抜ける光の散乱．よくシーンに霧を追加するのに使用されます"
 
 
+msgid "Henyey-Greenstein"
+msgstr "Henyey-Greenstein"
+
+
+msgid "Henyey-Greenstein, default phase function for the scattering of light"
+msgstr "Henyey-Greenstein．光の散乱のデフォルトの位相関数"
+
+
+msgid "Fournier-Forand"
+msgstr "Fournier-Forand"
+
+
+msgid "Fournier-Forand phase function, used for the scattering of light in underwater environments"
+msgstr "Fournier-Forand 位相関数．水面下での光の散乱に使用されます"
+
+
+msgid "Draine"
+msgstr "Draine"
+
+
+msgid "Draine phase functions, mostly used for the scattering of light in interstellar dust"
+msgstr "Draine 位相関数．大抵は宇宙塵の光の散乱に使用されます"
+
+
+msgid "Rayleigh"
+msgstr "Rayleigh"
+
+
+msgid "Rayleigh phase function, mostly used for particles smaller than the wavelength of light, such as scattering of sunlight in earth's atmosphere"
+msgstr "Rayleigh 位相関数．大抵は地球の大気での日光の散乱のような，光の波長より小さな粒子に使用されます"
+
+
+msgid "Mie"
+msgstr "Mie"
+
+
+msgid "Approximation of Mie scattering in water droplets, used for scattering in clouds and fog"
+msgstr "水滴内の Mie 散乱の近似．雲と霧中の散乱に使用されます"
+
+
 msgid "Convert a wavelength value to an RGB value"
 msgstr "波長を RGB 値に変換します"
 
@@ -50870,6 +51151,22 @@ msgstr "属性キャプチャアイテム"
 
 msgid "Collection of capture attribute items"
 msgstr "属性キャプチャアイテムの集合"
+
+
+msgid "Input Items"
+msgstr "入力アイテム"
+
+
+msgid "Collection of input items"
+msgstr "入力アイテムの集合"
+
+
+msgid "Main Items"
+msgstr "メニューアイテム"
+
+
+msgid "Collection of main items"
+msgstr "メニューアイテムの集合"
 
 
 msgid "Collection of repeat items"
@@ -53833,10 +54130,6 @@ msgid "Add Grease Pencil Brush Preset"
 msgstr "グリースペンシルブラシプリセットを追加"
 
 
-msgid "Add or remove grease pencil material preset"
-msgstr "グリースペンシルマテリアルプリセットを追加・削除します"
-
-
 msgctxt "Operator"
 msgid "Add Grease Pencil Material Preset"
 msgstr "グリースペンシルマテリアルプリセットを追加"
@@ -55919,8 +56212,20 @@ msgstr ""
 "プレビュー範囲有効時はそれも考慮します"
 
 
+msgid "Create a new action slot for this data-block, to hold its animation"
+msgstr "このデータブロック用の新規アクションスロットを作成し，アニメーションを保持します"
+
+
 msgid "Un-assign the action slot from this constraint"
-msgstr "このコンストレイントからアクションスロットの割り当て解除します"
+msgstr "このコンストレイントからアクションスロットの割り当てを解除します"
+
+
+msgid "Un-assign the action slot, effectively making this data-block non-animated"
+msgstr "アクションスロットの割り当てを解除し，事実上このデータブロックを非アニメーション化します"
+
+
+msgid "Un-assign the action slot from this NLA strip, effectively making it non-animated"
+msgstr "この NLA ストリップからアクションスロットの割り当てを解除し，事実上非アニメーション化します"
 
 
 msgctxt "Operator"
@@ -57020,6 +57325,10 @@ msgid "Revert the active brush settings to the default values from the asset lib
 msgstr "アクティブブラシ設定を，アセットライブラリのデフォルト値に戻します"
 
 
+msgid "Update the active brush asset in the asset library with current settings"
+msgstr "アセットライブラリ内のアクティブブラシアセットを現在の設定で更新します"
+
+
 msgctxt "Operator"
 msgid "Save as Brush Asset"
 msgstr "ブラシアセットとして保存"
@@ -57039,15 +57348,6 @@ msgstr "新規アセットに使用するカタログ"
 
 msgid "Name for the new brush asset"
 msgstr "新規ブラシアセットの名前"
-
-
-msgctxt "Operator"
-msgid "Update Brush Asset"
-msgstr "ブラシアセットを更新"
-
-
-msgid "Update the active brush asset in the asset library with current settings"
-msgstr "アセットライブラリ内のアクティブブラシアセットを現在の設定で更新します"
 
 
 msgctxt "Operator"
@@ -60747,13 +61047,6 @@ msgid "Prepare extra animations"
 msgstr "追加アニメーションを用意"
 
 
-msgid "Export additional animationsThis feature is not standard and needs an external extension to be included in the glTF file"
-msgstr ""
-"追加のアニメーションをエクスポートします．\n"
-"これは標準機能ではないため，glTF ファイルに\n"
-"外部エクステンションを入れる必要があります"
-
-
 msgid "Export custom properties as glTF extras"
 msgstr "glTF extras としてカスタムプロパティをエクスポートします"
 
@@ -62532,8 +62825,24 @@ msgid "Name of the data-block to use by the operator"
 msgstr "オペレーターが使用するデータブロックの名前"
 
 
+msgid "Region Size"
+msgstr "領域サイズ"
+
+
 msgid "Session UID of the data-block to use by the operator"
 msgstr "そのオペレーターが使用するデータブロックのセッション UUID"
+
+
+msgid "Viewport Is Perspective"
+msgstr "ビューポートが透視変換"
+
+
+msgid "Viewport Projection Transform"
+msgstr "ビューポート投影変換"
+
+
+msgid "Viewport View Transform"
+msgstr "ビューポートビュー変換"
 
 
 msgctxt "Operator"
@@ -62692,19 +63001,6 @@ msgstr "アノテーションを新規追加"
 
 msgid "Add new Annotation data-block"
 msgstr "新規アノテーションデータブロックを追加します"
-
-
-msgctxt "Operator"
-msgid "Insert Blank Frame"
-msgstr "空フレームを挿入"
-
-
-msgid "Insert a blank frame on the current frame (all subsequently existing frames, if any, are shifted right by one frame)"
-msgstr "ブランクのフレームを現在のフレームに挿入します（次以降に存在する全フレームは1フレーム後ろにずれます）"
-
-
-msgid "Create blank frame in all layers, not only active"
-msgstr "空フレームをアクティブだけでなく，全レイヤーに作成します"
 
 
 msgctxt "Operator"
@@ -62898,10 +63194,6 @@ msgstr "カーブ形状への影響が最小のキーフレームを削除し，
 
 msgid "Remove"
 msgstr "削除"
-
-
-msgid "The ratio of remaining keyframes after the operation"
-msgstr "処理後に残すキーフレームの比率"
 
 
 msgid "Which mode to use for decimation"
@@ -63543,13 +63835,13 @@ msgid "Reset viewable area to show selected keyframe range"
 msgstr "選択したキーフレームの範囲が収まるように 表示領域をリセットします"
 
 
+msgid "Delete all"
+msgstr "すべて削除"
+
+
 msgctxt "Operator"
 msgid "Bake Object Transform to Grease Pencil"
 msgstr "トランスフォームをグリースペンシルにベイク"
-
-
-msgid "Bake grease pencil object transform to grease pencil keyframes"
-msgstr "グリースペンシルオブジェクトのトランスフォームをグリースペンシルキーフレームにベイクします"
 
 
 msgid "The end frame of animation"
@@ -63840,17 +64132,17 @@ msgid "Only delete selected keyframes"
 msgstr "選択キーフレームのみ削除"
 
 
-msgctxt "Operator"
-msgid "Duplicate active Frame(s)"
-msgstr "アクティブフレームを複製"
-
-
 msgid "Make a copy of the active Grease Pencil frame(s)"
 msgstr "アクティブグリースペンシルフレームのコピーを作成します"
 
 
 msgid "Duplicate all"
 msgstr "すべて複製"
+
+
+msgctxt "Operator"
+msgid "Insert Blank Frame"
+msgstr "空フレームを挿入"
 
 
 msgid "Insert a blank frame on the current scene frame"
@@ -63864,10 +64156,6 @@ msgstr "ブランクフレームを編集可能な全レイヤーに挿入しま
 msgctxt "Operator"
 msgid "Grease Pencil Interpolation"
 msgstr "グリースペンシルを補間"
-
-
-msgid "Interpolate grease pencil strokes between frames"
-msgstr "フレーム間のグリースペンシルのストロークを補間します"
 
 
 msgid "Exclude Breakdowns"
@@ -63904,6 +64192,14 @@ msgstr ""
 "補間ストロークに適用されるスムージングの量"
 
 
+msgid "Use Selection"
+msgstr "選択を使用"
+
+
+msgid "Use only selected strokes for interpolating"
+msgstr "補間に選択中のストロークのみ使用します"
+
+
 msgctxt "Operator"
 msgid "Interpolate Sequence"
 msgstr "シーケンスを補間"
@@ -63916,10 +64212,6 @@ msgstr "複数の「中割」を生成し，グリースペンシルフレーム
 msgctxt "GPencil"
 msgid "Easing"
 msgstr "イージング"
-
-
-msgid "Which ends of the segment between the preceding and following grease pencil frames easing interpolation is applied to"
-msgstr "グリースペンシルフレームの前後のどちら側の区間終端にイージング補間を適用するか"
 
 
 msgctxt "GPencil"
@@ -63940,14 +64232,6 @@ msgstr "イーズアウト"
 msgctxt "GPencil"
 msgid "Ease In and Out"
 msgstr "イーズイン・アウト"
-
-
-msgid "Only Selected"
-msgstr "選択物のみ"
-
-
-msgid "Interpolate only selected strokes"
-msgstr "選択ストロークのみ補間します"
 
 
 msgid "Number of frames between generated interpolated frames"
@@ -64022,12 +64306,24 @@ msgid "Elastic"
 msgstr "ゴム状"
 
 
+msgid "New stroke from selected points/strokes"
+msgstr "選択中のポイントやストロークから新規ストロークを生成します"
+
+
 msgid "Join and Copy"
 msgstr "統合とコピー"
 
 
+msgid "Copy the selection in the new stroke"
+msgstr "選択物を新規ストロークにコピーします"
+
+
 msgid "Join"
 msgstr "統合"
+
+
+msgid "Move the selection to the new stroke"
+msgstr "選択物を新規ストロークに移動します"
 
 
 msgctxt "Operator"
@@ -64099,17 +64395,12 @@ msgid "Name of the new layer group"
 msgstr "新規レイヤーグループの名前"
 
 
-msgctxt "Operator"
-msgid "Grease Pencil group color tag"
-msgstr "グリースペンシルグループカラータグ"
-
-
 msgid "Change layer group icon"
 msgstr "レイヤーグループアイコンを変更します"
 
 
-msgid "color tag"
-msgstr "カラータグ"
+msgid "Set Default icon"
+msgstr "デフォルトアイコンを設定"
 
 
 msgid "Color tag 1"
@@ -64244,9 +64535,25 @@ msgid "Merge"
 msgstr "マージ"
 
 
+msgid "Combine layers based on the mode into one layer"
+msgstr "モードを元に複数のレイヤーを一つにまとめます"
+
+
+msgid "Combine layers in the active group into a single layer"
+msgstr "アクティブグループ内のレイヤーを一つのレイヤーにまとめます"
+
+
+msgid "Combine all layers into a single layer"
+msgstr "全レイヤーを一つのレイヤーにまとめます"
+
+
 msgctxt "Operator"
 msgid "Reorder Layer"
 msgstr "レイヤーを並べ替え"
+
+
+msgid "Move the active Grease Pencil layer or Group"
+msgstr "アクティブグリースペンシルレイヤーまたはグループを移動します"
 
 
 msgctxt "Operator"
@@ -64448,10 +64755,6 @@ msgid "Grease Pencil Arc Shape"
 msgstr "グリースペンシル弧シェイプ"
 
 
-msgid "Create predefined grease pencil stroke arcs"
-msgstr "定義済みグリースペンシルストローク弧シェイプを作成します"
-
-
 msgid "Number of subdivisions per segment"
 msgstr "セグメント毎の細分化数"
 
@@ -64469,17 +64772,9 @@ msgid "Grease Pencil Box Shape"
 msgstr "グリースペンシルボックスシェイプ"
 
 
-msgid "Create predefined grease pencil stroke boxes"
-msgstr "定義済みグリースペンシルストロークボックスシェイプを作成します"
-
-
 msgctxt "Operator"
 msgid "Grease Pencil Circle Shape"
 msgstr "グリースペンシルサークルシェイプ"
-
-
-msgid "Create predefined grease pencil stroke circles"
-msgstr "定義済みグリースペンシルストロークサークルシェイプを作成します"
 
 
 msgctxt "Operator"
@@ -64487,26 +64782,14 @@ msgid "Grease Pencil Curve Shape"
 msgstr "グリースペンシルカーブシェイプ"
 
 
-msgid "Create predefined grease pencil stroke curve shapes"
-msgstr "定義済みグリースペンシルストロークカーブシェイプを作成します"
-
-
 msgctxt "Operator"
 msgid "Grease Pencil Line Shape"
 msgstr "グリースペンシルラインシェイプ"
 
 
-msgid "Create predefined grease pencil stroke lines"
-msgstr "定義済みグリースペンシルストロークラインを作成します"
-
-
 msgctxt "Operator"
 msgid "Grease Pencil Polyline Shape"
 msgstr "グリースペンシルポリラインシェイプ"
-
-
-msgid "Create predefined grease pencil stroke polylines"
-msgstr "定義済みグリースペンシルストロークポリラインを作成します"
 
 
 msgctxt "Operator"
@@ -64614,10 +64897,6 @@ msgstr "現在のストロークの選択からランダムにポイントを選
 
 msgid "Select all strokes with similar characteristics"
 msgstr "同じ特性を持つストロークをすべて選択します"
-
-
-msgid "Separate the selected geometry into a new grease pencil object"
-msgstr "選択中のジオメトリを新しいグリースペンシルオブジェクトに分離します"
 
 
 msgid "Separate selected geometry"
@@ -64892,10 +65171,6 @@ msgstr "現在のフレームの画像をトレースします"
 
 msgid "Trace full sequence"
 msgstr "連番画像をすべてトレースします"
-
-
-msgid "Target grease pencil"
-msgstr "ターゲットグリーペンシル"
 
 
 msgid "New Object"
@@ -65179,10 +65454,6 @@ msgstr "オブジェクトソースの後に接尾辞を付けた名前"
 
 msgid "Source Image"
 msgstr "元画像"
-
-
-msgid "name from laoded image"
-msgstr "読み込んだ画像の名前"
 
 
 msgid "Overwrite Material"
@@ -67935,6 +68206,10 @@ msgid "The angle snap increment used when in constrained angle mode"
 msgstr "角度の制約モードで使用される，角度のスナップの増分"
 
 
+msgid "Only Selected"
+msgstr "選択物のみ"
+
+
 msgid "Only cut selected geometry"
 msgstr "選択中の形状のみカット"
 
@@ -70235,62 +70510,12 @@ msgid "Zoom in/out the background image"
 msgstr "背景画像をズームイン/アウト"
 
 
-msgctxt "Operator"
-msgid "Add Bake Item"
-msgstr "ベイクアイテムを追加"
-
-
 msgid "Add bake item"
 msgstr "ベイクアイテムを追加します"
 
 
-msgctxt "Operator"
-msgid "Move Bake Item"
-msgstr "ベイクアイテムを移動"
-
-
-msgid "Move active bake item"
-msgstr "アクティブベイクアイテムを移動します"
-
-
 msgid "Move direction"
 msgstr "移動方向"
-
-
-msgctxt "Operator"
-msgid "Remove Bake Item"
-msgstr "ベイクアイテムを削除"
-
-
-msgid "Remove active bake item"
-msgstr "アクティブベイクアイテムを削除します"
-
-
-msgctxt "Operator"
-msgid "Add Capture Attribute Item"
-msgstr "属性キャプチャアイテムを追加"
-
-
-msgid "Add capture attribute item"
-msgstr "属性キャプチャアイテムを追加します"
-
-
-msgctxt "Operator"
-msgid "Move Capture Attribute Item"
-msgstr "属性キャプチャアイテムを移動"
-
-
-msgid "Move active capture attribute item"
-msgstr "属性キャプチャアイテムを移動します"
-
-
-msgctxt "Operator"
-msgid "Remove Capture Attribute Item"
-msgstr "属性キャプチャアイテムを削除"
-
-
-msgid "Remove active capture attribute item"
-msgstr "属性キャプチャアイテムを削除します"
 
 
 msgctxt "Operator"
@@ -70443,105 +70668,12 @@ msgstr "選択中のノードを複製（ノードグループは複製せずリ
 
 
 msgctxt "Operator"
-msgid "Add Menu Item"
-msgstr "メニューアイテムを追加"
-
-
-msgid "Add menu item"
-msgstr "メニューアイテムを追加します"
-
-
-msgctxt "Operator"
-msgid "Move Menu Item"
-msgstr "メニューアイテムを移動"
-
-
-msgid "Move active menu item"
-msgstr "アクティブメニューアイテムを移動します"
-
-
-msgctxt "Operator"
-msgid "Remove Menu Item"
-msgstr "メニューアイテムを削除"
-
-
-msgid "Remove active menu item"
-msgstr "アクティブメニューアイテムを削除します"
-
-
-msgctxt "Operator"
 msgid "Find Node"
 msgstr "ノードを検索"
 
 
 msgid "Search for a node by name and focus and select it"
 msgstr "名前でノードを選択し，フォーカス・選択します"
-
-
-msgid "Add for-each generation item"
-msgstr "For-Each 生成アイテムを追加します"
-
-
-msgid "Move active for-each generation item"
-msgstr "アクティブ For-Each 生成アイテムを移動します"
-
-
-msgid "Remove active for-each generation item"
-msgstr "アクティブ For-Each 生成アイテムを削除します"
-
-
-msgctxt "Operator"
-msgid "Add For Each Input Item"
-msgstr "For Each入力アイテムを追加"
-
-
-msgid "Add for-each input item"
-msgstr "For-Each 入力アイテムを追加します"
-
-
-msgctxt "Operator"
-msgid "Move For Each Input Item"
-msgstr "For Each入力アイテムを移動"
-
-
-msgid "Move active for-each input item"
-msgstr "アクティブ For-Each 入力アイテムを移動します"
-
-
-msgctxt "Operator"
-msgid "Remove For Each Input Item"
-msgstr "For Each入力アイテムを削除"
-
-
-msgid "Remove active for-each input item"
-msgstr "アクティブ For-Each 入力アイテムを削除します"
-
-
-msgctxt "Operator"
-msgid "Add For Each Main Item"
-msgstr "For Eachメインアイテムを追加"
-
-
-msgid "Add for-each main item"
-msgstr "For-Each メインアイテムを追加します"
-
-
-msgctxt "Operator"
-msgid "Move For Each Main Item"
-msgstr "For Eachメインアイテムを移動"
-
-
-msgid "Move active for-each main item"
-msgstr "アクティブ For-Each メインアイテムを移動します"
-
-
-msgctxt "Operator"
-msgid "Remove For Each Main Item"
-msgstr "For Eachメインアイテムを削除"
-
-
-msgid "Remove active for-each main item"
-msgstr "アクティブ For-Each メインアイテムを削除します"
 
 
 msgid "Add a node to the active tree for glTF export"
@@ -71440,33 +71572,6 @@ msgstr "入力ノードのレイヤーが変更された時，カレントシー
 
 
 msgctxt "Operator"
-msgid "Add Repeat Zone Item"
-msgstr "リピートゾーンアイテムを追加"
-
-
-msgid "Add repeat zone item"
-msgstr "リピートゾーンアイテムを追加します"
-
-
-msgctxt "Operator"
-msgid "Move Repeat Zone Item"
-msgstr "リピートゾーンアイテムを移動"
-
-
-msgid "Move active repeat zone item"
-msgstr "アクティブリピートゾーンアイテムを移動します"
-
-
-msgctxt "Operator"
-msgid "Remove Repeat Zone Item"
-msgstr "リピートゾーンアイテムを削除"
-
-
-msgid "Remove active repeat zone item"
-msgstr "アクティブリピートゾーンアイテムを削除します"
-
-
-msgctxt "Operator"
 msgid "Resize Node"
 msgstr "ノードをサイズ変更"
 
@@ -71566,33 +71671,6 @@ msgstr "スクリプトノード更新"
 
 msgid "Update shader script node with new sockets and options from the script"
 msgstr "シェーダースクリプトノードをスクリプトから新規ソケットやオプションで更新します"
-
-
-msgctxt "Operator"
-msgid "Add Simulation Zone Item"
-msgstr "シミュレーションゾーンアイテムを追加"
-
-
-msgid "Add simulation zone item"
-msgstr "シミュレーションゾーンアイテムを追加します"
-
-
-msgctxt "Operator"
-msgid "Move Simulation Zone Item"
-msgstr "シミュレーションゾーンアイテムを移動"
-
-
-msgid "Move active simulation zone item"
-msgstr "アクティブシミュレーションゾーンアイテムを移動します"
-
-
-msgctxt "Operator"
-msgid "Remove Simulation Zone Item"
-msgstr "シミュレーションゾーンアイテムを削除"
-
-
-msgid "Remove active simulation zone item"
-msgstr "アクティブシミュレーションゾーンアイテムを削除します"
 
 
 msgctxt "Operator"
@@ -72406,10 +72484,6 @@ msgid "Blank"
 msgstr "ブランク"
 
 
-msgid "Create an empty grease pencil object"
-msgstr "空のグリースペンシルオブジェクトを作成します"
-
-
 msgctxt "Operator"
 msgid "Stroke"
 msgstr "ストローク"
@@ -72422,10 +72496,6 @@ msgstr "基本カラーのシンプルなストロークを作成します"
 msgctxt "Operator"
 msgid "Monkey"
 msgstr "モンキー"
-
-
-msgid "Construct a Suzanne grease pencil object"
-msgstr "グリースペンシルオブジェクトにスザンヌを作図します"
 
 
 msgctxt "Operator"
@@ -72457,14 +72527,6 @@ msgstr "アクティブオブジェクト用のラインアートをすばやく
 
 msgid "Show In Front"
 msgstr "最前面に表示"
-
-
-msgid "Show Line Art grease pencil in front of everything"
-msgstr "すべての前にグリースペンシルラインアートを表示します"
-
-
-msgid "Use lights for this grease pencil object"
-msgstr "グリースペンシルオブジェクトにライトを使用します"
 
 
 msgctxt "Operator"
@@ -72838,10 +72900,6 @@ msgid "Bake All"
 msgstr "すべてベイク"
 
 
-msgid "Bake all line art modifiers"
-msgstr "全ラインアートモディファイアーをベイクします"
-
-
 msgctxt "Operator"
 msgid "Clear Baked Line Art"
 msgstr "ベイク済ラインアートをクリア"
@@ -72849,10 +72907,6 @@ msgstr "ベイク済ラインアートをクリア"
 
 msgid "Clear all strokes in current Grease Pencil object"
 msgstr "現在のグリースペンシルオブジェクト内の全ストロークをクリアします"
-
-
-msgid "Clear all line art modifier bakes"
-msgstr "ラインアートモディファイアーのベイクをすべてクリアします"
 
 
 msgid "Link objects to a collection"
@@ -73167,6 +73221,14 @@ msgstr "モディファイアーを適用"
 
 msgid "Apply modifier and remove from the stack"
 msgstr "モディファイアーを適用し，スタックから削除します"
+
+
+msgid "Apply to all keyframes"
+msgstr "全キーフレームに適用"
+
+
+msgid "For Grease Pencil objects, apply the modifier to all the keyframes"
+msgstr "グリースペンシルオブジェクトにて，モディファイアーをすべてのキーフレームに適用します"
 
 
 msgid "For mesh objects, merge UV coordinates that share a vertex to account for imprecision in some modifiers"
@@ -74256,10 +74318,6 @@ msgstr "スタック内のエフェクトを上位に移動します"
 msgctxt "Operator"
 msgid "Remove Grease Pencil Effect"
 msgstr "グリースペンシルエフェクトを削除"
-
-
-msgid "Remove a effect from the active grease pencil object"
-msgstr "アクティブグリースペンシルオブジェクトからエフェクトを削除します"
 
 
 msgctxt "Operator"
@@ -77854,10 +77912,6 @@ msgid "Add Remote Repository"
 msgstr "リモートリポジトリを追加"
 
 
-msgid "Add a repository referencing an remote repository with support for listing and updating extensions"
-msgstr "エクステンションのリストアップと更新に対応するリモートリポジトリを参照するリポジトリを追加します"
-
-
 msgid "Add Local Repository"
 msgstr "ローカルリポジトリを追加"
 
@@ -80998,10 +81052,6 @@ msgid "Reassign the inputs for the effect strip"
 msgstr "エフェクトストリップに入力を再割り当てします"
 
 
-msgid "Rebuild all selected proxies and timecode indices using the job system"
-msgstr "すべての選択中のプロキシとタイムコードインデックスをジョブシステムを使用し再構築します"
-
-
 msgctxt "Operator"
 msgid "Refresh Sequencer"
 msgstr "シーケンサーを更新"
@@ -81201,6 +81251,10 @@ msgid "Use the object center when selecting, in edit mode used to extend object 
 msgstr ""
 "選択にオブジェクト原点を使用します．\n"
 "編集モード中はオブジェクト選択の拡大に使用します"
+
+
+msgid "Ignore Connections"
+msgstr "つながりを無視"
 
 
 msgid "Linked Handle"
@@ -81667,6 +81721,10 @@ msgid "Swap Inputs"
 msgstr "入力を交換"
 
 
+msgid "Swap the two inputs of the effect strip"
+msgstr "エフェクトストリップの二つの入力を交換します"
+
+
 msgctxt "Operator"
 msgid "Unlock Strips"
 msgstr "ストリップをロック解除"
@@ -81843,10 +81901,6 @@ msgstr "32ビット浮動小数点数"
 
 msgid "64-bit floating-point"
 msgstr "64ビット浮動小数点数"
-
-
-msgid "Samplerate in samples/s"
-msgstr "サンプルレート（サンプル数/秒）"
 
 
 msgid "Split channels"
@@ -83023,6 +83077,15 @@ msgstr "アクティブボタンのUIのソースコードを編集"
 
 
 msgctxt "Operator"
+msgid "Eyedropper Bone"
+msgstr "ボーンスポイト"
+
+
+msgid "Sample a bone from the 3D View or the Outliner to store in a property"
+msgstr "3Dビューやアウトライナーからボーンを取得し，プロパティに格納します"
+
+
+msgctxt "Operator"
 msgid "Eyedropper"
 msgstr "スポイト"
 
@@ -83312,6 +83375,11 @@ msgstr "ビューアイテムをリネーム"
 
 msgid "Rename the active item in the data-set view"
 msgstr "データセットビュー内のアクティブアイテムの名前を変更します"
+
+
+msgctxt "Operator"
+msgid "View Scroll"
+msgstr "ビュースクロール"
 
 
 msgctxt "Operator"
@@ -83977,6 +84045,10 @@ msgstr "統合する頂点間の最大距離"
 
 msgid "Shared Vertex"
 msgstr "共有する頂点"
+
+
+msgid "Weld UVs based on shared vertices"
+msgstr "共有する頂点を元に UV を溶解します"
 
 
 msgctxt "Operator"
@@ -85694,6 +85766,14 @@ msgid "Clear the recent files list"
 msgstr "最近使用したファイルのリストをクリアします"
 
 
+msgid "All Items"
+msgstr "全アイテム"
+
+
+msgid "Items Not Found"
+msgstr "行方不明のアイテム"
+
+
 msgctxt "Operator"
 msgid "Export COLLADA (Legacy)"
 msgstr "COLLADAをエクスポート（旧）"
@@ -86203,10 +86283,6 @@ msgid "Export to PDF"
 msgstr "PDFにエクスポート"
 
 
-msgid "Export grease pencil to PDF"
-msgstr "グリースペンシルを PDF にエクスポートします"
-
-
 msgid "Which frames to include in the export"
 msgstr "エクスポートするフレーム"
 
@@ -86249,8 +86325,12 @@ msgid "Export strokes with fill enabled"
 msgstr "フィルを有効にしてストロークをエクスポートします"
 
 
-msgid "Export strokes with constant thickness"
-msgstr "幅を均一にしてストロークをエクスポートします"
+msgid "Uniform Width"
+msgstr "均一な幅"
+
+
+msgid "Export strokes with uniform width"
+msgstr "均一な幅でストロークをエクスポートします"
 
 
 msgctxt "Operator"
@@ -86258,25 +86338,17 @@ msgid "Export to SVG"
 msgstr "SVGにエクスポート"
 
 
-msgid "Export grease pencil to SVG"
-msgstr "グリースペンシルを SVG にエクスポートします"
-
-
 msgid "Clip Camera"
 msgstr "カメラでクリップ"
 
 
-msgid "Clip drawings to camera size when export in camera view"
+msgid "Clip drawings to camera size when exporting in camera view"
 msgstr "カメラビューでのエクスポート時，ドローをカメラサイズでクリッピングします"
 
 
 msgctxt "Operator"
 msgid "Import SVG as Grease Pencil"
 msgstr "SVGをグリースペンシルにインポート"
-
-
-msgid "Import SVG into grease pencil"
-msgstr "SVG をグリースペンシルにインポートします"
 
 
 msgid "Resolution of the generated strokes"
@@ -87616,6 +87688,10 @@ msgid "Include normals of exported meshes in the export"
 msgstr "エクスポートに対象のメッシュ法線を含めます"
 
 
+msgid "Export all point clouds"
+msgstr "すべてのポイントクラウドをエクスポートします"
+
+
 msgid "Export shape keys as USD blend shapes"
 msgstr "シェイプキーを USD ブレンドシェイプとしてエクスポートします"
 
@@ -87663,12 +87739,16 @@ msgid "Texture export method"
 msgstr "テクスチャのエクスポート方法"
 
 
+msgid "Use original location of textures"
+msgstr "テクスチャのオリジナルの位置を使用します"
+
+
 msgid "Preserve"
 msgstr "保護"
 
 
-msgid "Preserve file paths of textures from already imported USD files.Export remaining textures to a 'textures' folder next to the USD file"
-msgstr "インポート済みの USD ファイルのファイルパスを維持します．"
+msgid "New Path"
+msgstr "新規パス"
 
 
 msgid "Export textures to a 'textures' folder next to the USD file"
@@ -88016,6 +88096,22 @@ msgstr "既存を参照"
 
 msgid "If a material with the same name already exists, reference that instead of importing"
 msgstr "同名のマテリアルがすでにあった場合，インポートする代わりに参照にします"
+
+
+msgid "Material Purpose"
+msgstr "マテリアル用途"
+
+
+msgid "All Purpose"
+msgstr "全用途"
+
+
+msgid "Attempt to import 'allPurpose' materials."
+msgstr "'allPurpose' マテリアルのインポートを試みます"
+
+
+msgid "Attempt to import 'preview' materials. Load 'allPurpose' materials as a fallback"
+msgstr "'preview' マテリアルのインポートを試みます．フォールバックには 'allPurpose' マテリアルを読み込みます"
 
 
 msgid "Path Mask"
@@ -88478,12 +88574,20 @@ msgid "Active brush"
 msgstr "アクティブブラシ"
 
 
+msgid "A weak reference to the matching brush asset, used e.g. to restore the last used brush on file load"
+msgstr "適合するブラシアセットへの弱い参照．ファイル読み込み時に最後に使用したブラシを格納する時などに使用します"
+
+
 msgid "Editable cavity curve"
 msgstr "編集可能なキャビティカーブ"
 
 
 msgid "Default Eraser Brush"
 msgstr "デフォルト消しゴムブラシ"
+
+
+msgid "Default eraser brush for quickly alternating with the main brush"
+msgstr "メインブラシと素早く交換可能なデフォルトの消しゴムブラシ"
 
 
 msgid "Active Palette"
@@ -88986,6 +89090,98 @@ msgid "Panel containing UI elements"
 msgstr "UIの要素を含むパネル"
 
 
+msgid "Motion Tracking"
+msgstr "モーショントラッキング"
+
+
+msgid "Mesh Edit Mode"
+msgstr "メッシュ編集モード"
+
+
+msgid "Measurement"
+msgstr "計測"
+
+
+msgid "Curve Edit Mode"
+msgstr "カーブ編集モード"
+
+
+msgid "Snapping"
+msgstr "スナップ"
+
+
+msgid "Transform Orientations"
+msgstr "トランスフォーム座標系"
+
+
+msgid "Stroke Placement"
+msgstr "ストロークの基準"
+
+
+msgid "Drawing Plane"
+msgstr "ドロー平面"
+
+
+msgid "Guides"
+msgstr "ガイド"
+
+
+msgid "Grease Pencil Options"
+msgstr "グリースペンシルオプション"
+
+
+msgid "Quad View"
+msgstr "四分割表示"
+
+
+msgid "Onion Skin"
+msgstr "オニオンスキン"
+
+
+msgid "Stereoscopy"
+msgstr "立体視"
+
+
+msgid "Multi Frame"
+msgstr "マルチフレーム"
+
+
+msgid "Auto-Masking"
+msgstr "自動マスク"
+
+
+msgid "glTF Material Variants"
+msgstr "glTFマテリアルバリアント"
+
+
+msgid "Curves Sculpt Add Curve Options"
+msgstr "カーブスカルプトカーブ追加オプション"
+
+
+msgid "Curves Sculpt Parameter Falloff"
+msgstr "カーブスカルプトパラメーター減衰"
+
+
+msgid "Curves Grow/Shrink Scaling"
+msgstr "カーブスケールを拡大/収縮"
+
+
+msgid "Viewport Debug"
+msgstr "ビューポートデバッグ"
+
+
+msgid "glTF"
+msgstr "glTF"
+
+
+msgid "VR"
+msgstr "VR"
+
+
+msgid "VR Info"
+msgstr "VR情報"
+
+
 msgid "Active Tool"
 msgstr "アクティブツール"
 
@@ -89022,96 +89218,8 @@ msgid "Overlays"
 msgstr "オーバーレイ"
 
 
-msgid "Guides"
-msgstr "ガイド"
-
-
 msgid "Viewer Node"
 msgstr "ビューアーノード"
-
-
-msgid "Motion Tracking"
-msgstr "モーショントラッキング"
-
-
-msgid "Mesh Edit Mode"
-msgstr "メッシュ編集モード"
-
-
-msgid "Measurement"
-msgstr "計測"
-
-
-msgid "Curve Edit Mode"
-msgstr "カーブ編集モード"
-
-
-msgid "Snapping"
-msgstr "スナップ"
-
-
-msgid "Transform Orientations"
-msgstr "トランスフォーム座標系"
-
-
-msgid "Stroke Placement"
-msgstr "ストロークの基準"
-
-
-msgid "Drawing Plane"
-msgstr "ドロー平面"
-
-
-msgid "Quad View"
-msgstr "四分割表示"
-
-
-msgid "glTF Material Variants"
-msgstr "glTFマテリアルバリアント"
-
-
-msgid "Onion Skin"
-msgstr "オニオンスキン"
-
-
-msgid "Stereoscopy"
-msgstr "立体視"
-
-
-msgid "Multi Frame"
-msgstr "マルチフレーム"
-
-
-msgid "Auto-Masking"
-msgstr "自動マスク"
-
-
-msgid "glTF"
-msgstr "glTF"
-
-
-msgid "Curves Sculpt Add Curve Options"
-msgstr "カーブスカルプトカーブ追加オプション"
-
-
-msgid "Curves Sculpt Parameter Falloff"
-msgstr "カーブスカルプトパラメーター減衰"
-
-
-msgid "Curves Grow/Shrink Scaling"
-msgstr "カーブスケールを拡大/収縮"
-
-
-msgid "Viewport Debug"
-msgstr "ビューポートデバッグ"
-
-
-msgid "VR"
-msgstr "VR"
-
-
-msgid "VR Info"
-msgstr "VR情報"
 
 
 msgid "Chain Scaling"
@@ -89455,11 +89563,6 @@ msgid "Filters"
 msgstr "フィルター"
 
 
-msgctxt "Material"
-msgid "Thickness"
-msgstr "厚さ"
-
-
 msgid "Sun"
 msgstr "太陽"
 
@@ -89503,6 +89606,10 @@ msgstr "画像/UVマップからクローン"
 
 msgid "Color Picker"
 msgstr "カラーピッカー"
+
+
+msgid "Brush Asset"
+msgstr "ブラシアセット"
 
 
 msgid "Color Palette"
@@ -89886,6 +89993,10 @@ msgid "White Balance"
 msgstr "ホワイトバランス"
 
 
+msgid "White Balance Presets"
+msgstr "ホワイトバランスプリセット"
+
+
 msgid "Indirect Lighting"
 msgstr "間接照明"
 
@@ -90214,6 +90325,10 @@ msgid "Cycles Render Devices"
 msgstr "Cyclesレンダーデバイス"
 
 
+msgid "Display Graphics"
+msgstr "グラフィックス表示"
+
+
 msgid "Memory & Limits"
 msgstr "メモリーと制限"
 
@@ -90324,6 +90439,10 @@ msgstr "タブ"
 
 msgid "Toolbar Item"
 msgstr "ツールバーアイテム"
+
+
+msgid "Strip Color Tags"
+msgstr "ストリップカラータグ"
 
 
 msgid "Text Style"
@@ -90716,6 +90835,10 @@ msgstr "VRセッション"
 
 msgid "Viewport Feedback"
 msgstr "ビューポートフィードバック"
+
+
+msgid "Freestyle Animation"
+msgstr "Freestyleアニメーション"
 
 
 msgid "Edge Detection"
@@ -92071,6 +92194,10 @@ msgstr ""
 "エンプティの表示サイズ"
 
 
+msgid "Connect Movie Strips by Default"
+msgstr "デフォルトで動画ストリップに接続"
+
+
 msgid "Connect newly added movie strips by default if they have multiple channels"
 msgstr "新しく追加した動画ストリップに複数のチャンネルがある時，デフォルトでつなぎます"
 
@@ -92546,10 +92673,6 @@ msgstr ""
 "現在の BAT（Blender Stuidio のパイプラインツール）の問題・制限への一時的な処置です"
 
 
-msgid "Multi-Slot Actions"
-msgstr "マルチスロットアクション"
-
-
 msgid "No Asset Indexing"
 msgstr "アセットインデクシングなし"
 
@@ -92602,8 +92725,8 @@ msgid "Enable additional features for the new curves data block"
 msgstr "新しいカーブデータブロック用の追加の機能を有効にします"
 
 
-msgid "Enables visibility of the new File Import nodes in the UI"
-msgstr "UI 内で新しいファイルインポートノードの表示設定を有効にします"
+msgid "New File Import Nodes"
+msgstr "新規ファイルインポートノード"
 
 
 msgid "New Point Cloud Type"
@@ -93885,6 +94008,14 @@ msgid "Allow Online Access"
 msgstr "オンラインアクセスを許可"
 
 
+msgid "Allow Blender to access the internet. Add-ons that follow this setting will only connect to the internet if enabled. However, Blender cannot prevent third-party add-ons from violating this rule."
+msgstr ""
+"Blender がインターネットにアクセスすることを許可します．\n"
+"この設定に従うアドオンは有効時のみインターネットに接続しますが，\n"
+"Blender はサードパーティのアドオンがこのルールに違反することを\n"
+"防ぐことができません"
+
+
 msgid "Overlay Smooth Wires"
 msgstr "オーバーレイスムーズワイヤ"
 
@@ -94527,6 +94658,10 @@ msgid "Changes the size of the fonts and widgets in the interface"
 msgstr "インターフェイスのフォントとウィジェットのサイズを変更します"
 
 
+msgid "Filter Brushes by Tool"
+msgstr "ツールでブラシを絞り込み"
+
+
 msgid ""
 "Enable a fresnel effect on edit mesh overlays.\n"
 "It improves shape readability of very dense meshes, but increases eye fatigue when modeling lower poly"
@@ -94887,6 +95022,10 @@ msgstr "二点の間の距離"
 
 msgid "Camera Distance"
 msgstr "カメラ距離"
+
+
+msgid "Color Temperature"
+msgstr "色温度"
 
 
 msgid "Linear Color"
@@ -100494,10 +100633,6 @@ msgid "Enable scene light interactions with volumetrics"
 msgstr "シーンライトとボリューメトリクスとの相互作用を有効にします"
 
 
-msgid "Generate shadows from volumetric material (Very expensive)"
-msgstr "ボリューメトリックマテリアルからの影を生成します（非常にリソースを消費します）"
-
-
 msgid "End distance of the volumetric effect"
 msgstr "ボリューメトリック効果の終端距離"
 
@@ -101175,18 +101310,6 @@ msgstr "テキストを作成するシーケンスストリップ"
 
 msgid "Align X"
 msgstr "X軸揃え"
-
-
-msgid "Align the text along the X axis, relative to the text bounds"
-msgstr "テキストの境界を基準にした，X 軸方向の揃え"
-
-
-msgid "Align Y"
-msgstr "Y軸揃え"
-
-
-msgid "Align the text along the Y axis, relative to the text bounds"
-msgstr "テキストの境界を基準にした，Y 軸方向の揃え"
 
 
 msgid "Box Color"
@@ -102341,6 +102464,14 @@ msgid "Snap to markers"
 msgstr "マーカーにスナップします"
 
 
+msgid "Other Strips"
+msgstr "他のストリップ"
+
+
+msgid "Snap to borders and origins of deselected, visible strips"
+msgstr "非選択で可視のストリップの境界と原点にスナップします"
+
+
 msgid "Snap Current Frame to Strips"
 msgstr "現在のフレーム → ストリップ"
 
@@ -102351,10 +102482,6 @@ msgstr "現在のフレームをストリップ開始または終了位置にス
 
 msgid "Collection of Sequences"
 msgstr "シーケンスの集合"
-
-
-msgid "Effect affecting the grease pencil object"
-msgstr "グリースペンシルオブジェクトに影響するエフェクト"
 
 
 msgid "Effect name"
@@ -103413,6 +103540,15 @@ msgid "Show graph view for active element"
 msgstr "アクティブ要素のグラフ表示を表示します"
 
 
+msgctxt "MovieClip"
+msgid "Dope Sheet"
+msgstr "ドープシート"
+
+
+msgid "Dope Sheet view for tracking data"
+msgstr "トラッキングデータ用ドープシートビュー"
+
+
 msgid "Zoom percentage"
 msgstr "ズームのパーセンテージ"
 
@@ -103827,10 +103963,6 @@ msgstr "Zバッファー"
 
 msgid "Display Z-buffer associated with image (mapped from camera clip start to end)"
 msgstr "画像に関連するZバッファーを表示（カメラの範囲の始点と終点に対応）"
-
-
-msgid "Grease pencil data for this space"
-msgstr "このスペースデータのグリースペンシルデータ"
 
 
 msgid "View the image"
@@ -104421,10 +104553,6 @@ msgstr "エンプティオブジェクトを表示します"
 
 msgid "Show Grease Pencil"
 msgstr "グリースペンシルを表示"
-
-
-msgid "Show grease pencil objects"
-msgstr "グリースペンシルオブジェクトを表示します"
 
 
 msgid "Show Lights"
@@ -105264,10 +105392,6 @@ msgstr "エンプティの選択を可能にします"
 
 msgid "Allow selection of text objects"
 msgstr "テキストオブジェクトの選択を可能にします"
-
-
-msgid "Allow selection of grease pencil objects"
-msgstr "グリースペンシルオブジェクトの選択を可能にします"
 
 
 msgid "Allow selection of lattices"
@@ -107819,12 +107943,20 @@ msgid "Editor Border"
 msgstr "エディターの境界"
 
 
+msgid "Color of the border between editors"
+msgstr "エディター間の境界の色"
+
+
 msgid "Editor Outline"
 msgstr "エディターの輪郭"
 
 
 msgid "Color of the outline of each editor, except the active one"
 msgstr "アクティブ以外の各エディターの輪郭の色"
+
+
+msgid "Active Editor Outline"
+msgstr "アクティブエディターの枠線"
 
 
 msgid "Color of the outline of the active editor"
@@ -107851,16 +107983,16 @@ msgid "Gizmo Secondary"
 msgstr "ギズモ・セカンダリ"
 
 
-msgid "Gizmo View Align"
-msgstr "ギズモ・ビュー整列"
-
-
 msgid "Icon Alpha"
 msgstr "アイコンの不透明度"
 
 
 msgid "Transparency of icons in the interface, to reduce contrast"
 msgstr "インターフェイスのアイコンの透過度，コントラストが低くなります"
+
+
+msgid "Auto Keying Indicator"
+msgstr "自動キーイングインジケータ"
 
 
 msgid "Color of Auto Keying indicator when enabled"
@@ -108384,10 +108516,6 @@ msgid "Grease Pencil Interpolate"
 msgstr "グリースペンシル補間"
 
 
-msgid "Settings for grease pencil interpolation tools"
-msgstr "グリースペンシル補間ツールの設定"
-
-
 msgid "Grease Pencil Sculpt"
 msgstr "グリースペンシルスカルプト"
 
@@ -108548,19 +108676,19 @@ msgstr "現在表示中の画像に対応している面のみ表示します"
 
 
 msgid "Rotation Increment"
-msgstr "回転を増減"
+msgstr "回転の差分"
 
 
 msgid "Angle used for rotation increments in 2D editors"
-msgstr "2Dエディターで回転を増減するのに使用する角度"
+msgstr "2Dエディターで回転を増減する角度"
 
 
 msgid "Rotation Precision Increment"
-msgstr "回転を増減（高精度）"
+msgstr "回転の差分（高精度）"
 
 
 msgid "Precision angle used for rotation increments in 2D editors"
-msgstr "2Dエディターで回転を増減するのに使用する高精度の角度"
+msgstr "2Dエディターで高精度回転を増減する角度"
 
 
 msgid "Angle used for rotation increments in 3D editors"
@@ -108917,6 +109045,10 @@ msgstr "編集中にスナップ"
 
 msgid "Snap onto non-active objects in edit mode (edit mode only)"
 msgstr "編集モード中に非アクティブオブジェクトにスナップします（編集モードのみ）"
+
+
+msgid "Absolute Increment Snap"
+msgstr "絶対増分スナップ"
 
 
 msgid "Snap Node during transform"
@@ -109685,6 +109817,10 @@ msgid "Fade factor"
 msgstr "フェード係数"
 
 
+msgid "Grid Color"
+msgstr "グリッドカラー"
+
+
 msgid "Canvas grid color"
 msgstr "キャンバスグリッドカラー"
 
@@ -110205,10 +110341,6 @@ msgstr "視認性を上げるため，フルカラーレイヤーとビューポ
 
 msgid "Use Grid"
 msgstr "グリッドを使用"
-
-
-msgid "Display a grid over grease pencil paper"
-msgstr "グリースペンシルペーパーの上にグリッドを表示します"
 
 
 msgid "Lines Only"
@@ -114209,16 +114341,6 @@ msgstr "シーケンサー"
 
 
 msgctxt "WindowManager"
-msgid "Sequencer Timeline Tool: Tweak"
-msgstr "シーケンサータイムラインツール：長押し"
-
-
-msgctxt "WindowManager"
-msgid "Sequencer Timeline Tool: Tweak (fallback)"
-msgstr "シーケンサータイムラインツール：長押し（予備）"
-
-
-msgctxt "WindowManager"
 msgid "Sequencer Tool: Blade"
 msgstr "シーケンサーツール：ブレード"
 
@@ -115046,6 +115168,10 @@ msgstr "Blender のエクステンションリポジトリがありません！"
 
 msgid ":"
 msgstr ":"
+
+
+msgid "Repository Alert:"
+msgstr "リポジトリ警告:"
 
 
 msgid "Internet access is required to install and update online extensions. "
@@ -116773,66 +116899,6 @@ msgid "Bone {:s} has a broken reference to {:s} collection '{:s}'"
 msgstr "ボーン「{:s}」の「{:s}」(コレクション「{:s}」)への参照が壊れています"
 
 
-msgid "Save to PO File"
-msgstr "POファイルに保存"
-
-
-msgid "Rebuild MO File"
-msgstr "MOファイルを再構築"
-
-
-msgid "Erase Local MO files"
-msgstr "ローカルMOファイルを削除"
-
-
-msgid "invoke() needs to be called before execute()"
-msgstr "invoke() は execute() の前に呼ぶ必要があります"
-
-
-msgid "    RNA Path: bpy.types."
-msgstr "    RNAパス: bpy.types."
-
-
-msgid "    RNA Context: "
-msgstr "    RNAコンテクスト: "
-
-
-msgid "Labels:"
-msgstr "ラベル:"
-
-
-msgid "Tool Tips:"
-msgstr "ツールチップ:"
-
-
-msgid "Button Label:"
-msgstr "ボタンラベル:"
-
-
-msgid "RNA Label:"
-msgstr "RNAラベル:"
-
-
-msgid "Enum Item Label:"
-msgstr "列挙アイテムラベル:"
-
-
-msgid "Button Tip:"
-msgstr "ボタンチップ:"
-
-
-msgid "RNA Tip:"
-msgstr "RNAチップ:"
-
-
-msgid "Enum Item Tip:"
-msgstr "列挙アイテムチップ:"
-
-
-msgid "Could not write to po file ({})"
-msgstr "poファイルを保存できませんでした({})"
-
-
 msgid "WARNING: preferences are lost when add-on is disabled, be sure to use \"Save Persistent\" if you want to keep your settings!"
 msgstr "警告：アドオンを無効にすると設定が消えます．設定を保存したい時は「保存（設定引き継ぎ）」を使用してください！"
 
@@ -117072,6 +117138,10 @@ msgid "Alt Middle Mouse Drag Action"
 msgstr "[Alt]中マウスドラッグアクション"
 
 
+msgid "Activate Gizmo Event"
+msgstr "ギズモイベントを有効化"
+
+
 msgid "Torus"
 msgstr "トーラス"
 
@@ -117110,10 +117180,6 @@ msgstr "「ソロ」がマークされているボーンコレクションがあ
 
 msgid "All bone collections are in use"
 msgstr "すべてのボーンコレクションが使用中です"
-
-
-msgid "An action slot can only be created when an action was assigned"
-msgstr "アクションスロットはアクションが割り当てられた時のみ作成可能です"
 
 
 msgid "Action slots are only supported by layered Actions. Upgrade this Action first"
@@ -118466,18 +118532,6 @@ msgid "Only Axis Aligned"
 msgstr "軸に平行な時のみ"
 
 
-msgid "View in Render"
-msgstr "レンダーにも表示"
-
-
-msgid "Thickness Scale"
-msgstr "幅のスケール"
-
-
-msgid "Edit Line Color"
-msgstr "ライン編集カラー"
-
-
 msgid "Keyframes Before"
 msgstr "前のキーフレーム数"
 
@@ -118804,6 +118858,16 @@ msgid "Selection to Cursor (Keep Offset)"
 msgstr "選択物 → カーソル（オフセット維持）"
 
 
+msgctxt "Operator"
+msgid "Delete Active Keyframe (Active Layer)"
+msgstr "アクティブキーフレームを削除（アクティブレイヤー）"
+
+
+msgctxt "Operator"
+msgid "Delete Active Keyframes (All Layers)"
+msgstr "アクティブキーフレームを削除（全レイヤー）"
+
+
 msgid "Show Fill Color While Drawing"
 msgstr "ドロー中にフィルカラーを表示"
 
@@ -119036,6 +119100,10 @@ msgstr "マスクマッピング"
 
 msgid "Pressure Masking"
 msgstr "筆圧マスキング"
+
+
+msgid "By Active Tool"
+msgstr "アクティブツール"
 
 
 msgid "Falloff Opacity"
@@ -121309,6 +121377,11 @@ msgstr "スペースに背景を合わせる"
 
 
 msgctxt "Operator"
+msgid "Activate Same Type Previous"
+msgstr "前の同タイプをアクティブ化"
+
+
+msgctxt "Operator"
 msgid "Activate Same Type Next"
 msgstr "次の同タイプをアクティブ化"
 
@@ -121857,6 +121930,10 @@ msgstr "モディファイアーを選択にコピー"
 
 msgid "Default Fade"
 msgstr "デフォルトフェード"
+
+
+msgid "2D Stabilized Clip"
+msgstr "スタビライゼーション2Dクリップ"
 
 
 msgid "Strip Offset Start"
@@ -124515,16 +124592,6 @@ msgstr "頂点をシャープに"
 
 
 msgctxt "Operator"
-msgid "Delete Active Keyframe (Active Layer)"
-msgstr "アクティブキーフレームを削除（アクティブレイヤー）"
-
-
-msgctxt "Operator"
-msgid "Delete Active Keyframes (All Layers)"
-msgstr "アクティブキーフレームを削除（全レイヤー）"
-
-
-msgctxt "Operator"
 msgid "Delete Segment"
 msgstr "セグメントを削除"
 
@@ -124692,16 +124759,6 @@ msgstr "ブランクキーフレームを挿入（全レイヤー）"
 msgctxt "Operator"
 msgid "Duplicate Active Keyframe (Active Layer)"
 msgstr "アクティブキーフレームを複製（アクティブレイヤー）"
-
-
-msgctxt "Operator"
-msgid "Duplicate Active Keyframe (All Layer)"
-msgstr "アクティブキーフレームを複製（全レイヤー）"
-
-
-msgctxt "Operator"
-msgid "Delete Active Keyframe (All Layer)"
-msgstr "アクティブキーフレームを削除（全レイヤー）"
 
 
 msgctxt "Operator"
@@ -125232,8 +125289,13 @@ msgstr "プレビュー画像を編集..."
 
 
 msgctxt "Operator"
-msgid "Update Asset"
-msgstr "アセットを更新"
+msgid "Save Changes to Asset"
+msgstr "アセットに変更を保存"
+
+
+msgctxt "Operator"
+msgid "Revert to Asset"
+msgstr "アセットを再読み込み"
 
 
 msgctxt "Operator"
@@ -125279,24 +125341,16 @@ msgid "Ignore Transparent"
 msgstr "透過を無視"
 
 
-msgid "handle"
-msgstr "ハンドル"
-
-
-msgid "ADT Slot Name: -"
-msgstr "ADT スロット名: -"
-
-
-msgid "Internal Name"
-msgstr "内部名"
-
-
 msgid "Cannot change action, as it is still being edited in NLA"
 msgstr "NLAでまだ編集中のアクションは変更できません"
 
 
 msgid "%sAction"
 msgstr "%sアクション"
+
+
+msgid "There were {:d} keying failures for unknown reasons."
+msgstr "{:d} 個のキー挿入が未知の理由で失敗しました．"
 
 
 msgid "Could not create {:d} F-Curve(s). This can happen when only inserting to available F-Curves."
@@ -125325,6 +125379,14 @@ msgstr "{:d} 個のデータブロックでキー挿入をスキップ．これ�
 
 msgid "Inserting keys on {:d} data-block(s) has been skipped because the RNA path wasn't valid for them."
 msgstr "{:d} 個のデータブロックでキー挿入をスキップ．これらの RNA パスが有効ではありませんでした．"
+
+
+msgid "Inserting keys on {:d} data-block(s) has been skipped because there were no layers that could accept the keys."
+msgstr "{:d} 個のデータブロックでキー挿入をスキップ．キーを受け入れられるレイヤーがありませんでした．"
+
+
+msgid "Inserting keys on {:d} data-block(s) has been skipped because there were no strips that could accept the keys."
+msgstr "{:d} 個のデータブロックでキー挿入をスキップ．キーを受け入れられるストリップがありませんでした．"
 
 
 msgid "Inserting keys on {:d} data-block(s) has been skipped because of missing action slots."
@@ -125401,6 +125463,10 @@ msgstr "ユーザーライブラリ"
 
 msgid "No AnimData to set tmpact on"
 msgstr "一時アクションを設定するアニメデータがありません"
+
+
+msgid "Attempt to set action on non-animatable ID"
+msgstr "アニメーション不可の ID にアクションを設定しようとしています"
 
 
 msgid "Could not set action '%s' onto ID '%s', as it does not have suitably rooted paths for this purpose"
@@ -125483,12 +125549,8 @@ msgid "This attribute cannot be accessed in a procedural context"
 msgstr "プロシージャルコンテクスト内でこの属性はアクセスできません"
 
 
-msgid "%s is no directory"
-msgstr "「%s」はディレクトリではありません"
-
-
-msgid "Can't write file : %s"
-msgstr "ファイルが書き込みできません：%s"
+msgid "Can only unpack bake if the current .blend file is saved"
+msgstr "現在の .blend ファイルの保存後のみ，ベイクをパック解除できます"
 
 
 msgid "LIB: %s: '%s' missing from '%s', parent '%s'"
@@ -126627,6 +126689,10 @@ msgid "Could not write volume: Unknown error writing VDB file"
 msgstr "ボリュームが書き込みできません．VDBファイル書き込みで未知のエラー"
 
 
+msgid "OpenVDB error: {}"
+msgstr "OpenVDB エラー：{}"
+
+
 msgid "workspaces"
 msgstr "ワークスペース"
 
@@ -126867,6 +126933,10 @@ msgid "Cannot change old file (file saved with @)"
 msgstr "旧ファイルを変更できません (@をつけて保存済)"
 
 
+msgid "Cannot save normal file (%s) as asset system file"
+msgstr "通常のファイル（%s）はアセットシステムファイルとして保存できません"
+
+
 msgid "Cannot open file %s for writing: %s"
 msgstr "ファイル %s を %s の保存用に開けませんでした"
 
@@ -126947,6 +127017,10 @@ msgid "Error: Too many AOVs"
 msgstr "エラー：AOV が多すぎです"
 
 
+msgid "Errors during render. See the System Console for more info."
+msgstr "レンダリング中にエラー発生．詳細はシステムコンソールを参照してください"
+
+
 msgid "Compiling EEVEE engine shaders"
 msgstr "EEVEE エンジンのシェーダーをコンパイル中"
 
@@ -126955,12 +127029,20 @@ msgid "Compiling shaders ({} remaining)"
 msgstr "シェーダーコンパイル中（残り {}個）"
 
 
+msgid "Increasing Preferences > System > Max Shader Compilation Subprocesses may improve compilation time."
+msgstr "プリファレンス→システム→最大シェーダコンパイルサブプロセス数を増やすことで，コンパイル時間を改善できるかもしれません．"
+
+
 msgid "Optimizing shaders ({} remaining)"
 msgstr "シェーダー最適化（残り {}個）"
 
 
 msgid "Error: Too many lights in the scene."
 msgstr "エラー：シーン内のライトが多すぎです"
+
+
+msgid "Warning: Light probes volume pool could not be allocated. Now using a pool of {} MB."
+msgstr "警告：ライトプローブボリュームプールが確保できませんでした．現在 {} MB のプールを使用しています．"
 
 
 msgid "Irradiance Atlas texture could not be created"
@@ -127011,8 +127093,12 @@ msgid "Error: Shadow buffer full, may result in missing shadows and lower perfor
 msgstr "エラー：シャドウバッファーが満杯で，影が欠けたりパフォーマンスが低下する可能性があります．({} / {})"
 
 
-msgid "Error: Too many shadow updates, some shadow might be incorrect."
+msgid "Error: Too many shadow updates, some shadows might be incorrect."
 msgstr "エラー：影の更新が多すぎです．一部の影は不正確になるでしょう．"
+
+
+msgid "Error: Reached max shadow updates."
+msgstr "エラー：影の最大更新数に到達しました．"
 
 
 msgid "GpencilMode"
@@ -127109,8 +127195,16 @@ msgid "No active action to operate on"
 msgstr "操作するアクティブアクションがありません"
 
 
+msgid "Active action is not layered"
+msgstr "アクティブアクションはレイヤー化されていません"
+
+
 msgid "No active object"
 msgstr "アクティブオブジェクトなし"
+
+
+msgid "Active object isn't animated"
+msgstr "アクティブオブジェクトはアニメーションしていません"
 
 
 msgid "No channels to operate on"
@@ -127119,6 +127213,10 @@ msgstr "操作するチャンネルがありません"
 
 msgid "No keyframes to focus on"
 msgstr "フォーカスするキーフレームがありません"
+
+
+msgid "None of the selected channels is an Action Slot"
+msgstr "アクションスロットに選択中のチャンネルがありません"
 
 
 msgid "No open Graph Editor window found"
@@ -127211,6 +127309,10 @@ msgstr "アニメーション領域をアクティブにしてください"
 
 msgid "Action is already layered"
 msgstr "アクションはすでにレイヤー化されています"
+
+
+msgid "Active object has no action"
+msgstr "アクティブオブジェクトにアクションがありません"
 
 
 msgid "Paste driver: no driver to paste"
@@ -127507,6 +127609,10 @@ msgid "No object found to operate on"
 msgstr "操作するオブジェクトがありません"
 
 
+msgid "Cannot update a linked Armature with a system override; explicitly create an override on the Armature Data"
+msgstr "システムオーバーライドのあるリンク中アーマチュアは更新できません．アーマチュアデータにオーバーライドを明示的に作成してください"
+
+
 msgid "Armature has no active bone collection, select one first"
 msgstr "アーマチュアにアクティブボーンコレクションがないので先に選択してください"
 
@@ -127521,6 +127627,10 @@ msgstr "ボーンコレクションはアーマチュアでのみ編集できま
 
 msgid "Cannot edit bone collections on linked Armatures without override"
 msgstr "オーバーライドのない，リンク中のアーマチュアのボーンコレクションは編集できません"
+
+
+msgid "Cannot edit bone collections on a linked Armature with a system override; explicitly create an override on the Armature Data"
+msgstr "システムオーバーライドのあるリンク中のアーマチュアではボーンコレクションを編集できません．アーマチュアデータにオーバーライドを明示的に作成してください"
 
 
 msgid "Linked bone collections are not editable"
@@ -128158,52 +128268,16 @@ msgid "Active region not set"
 msgstr "アクティブ領域が未設定です"
 
 
-msgid "Skin_Light"
-msgstr "スキン（明部）"
-
-
-msgid "Skin_Shadow"
-msgstr "スキン（陰）"
-
-
-msgid "Eyes"
-msgstr "目"
-
-
-msgid "Pupils"
-msgstr "瞳孔"
-
-
-msgid "Grey"
-msgstr "グレー"
-
-
-msgid "Nowhere for grease pencil data to go"
-msgstr "グリースペンシルデータの移動先がありません"
-
-
 msgid "Cannot delete locked layers"
 msgstr "ロックレイヤーは削除できません"
-
-
-msgid "Apply all rotations before join objects"
-msgstr "オブジェクトの統合前にすべての回転を適用してください"
-
-
-msgid "Active object is not a selected grease pencil"
-msgstr "アクティブオブジェクトは選択したグリースペンシルではありません"
-
-
-msgid "No grease pencil data"
-msgstr "グリースペンシルデータなし"
 
 
 msgid "No active frame to delete"
 msgstr "削除するアクティブフレームがありません"
 
 
-msgid "Add New Layer"
-msgstr "新規レイヤーを追加"
+msgid "Grey"
+msgstr "グレー"
 
 
 msgid "Skin_light"
@@ -128212,6 +128286,14 @@ msgstr "肌（明部）"
 
 msgid "Skin_shadow"
 msgstr "肌（影）"
+
+
+msgid "Eyes"
+msgstr "目"
+
+
+msgid "Pupils"
+msgstr "瞳孔"
 
 
 msgid "Bake Object Transform to Grease Pencil"
@@ -128274,6 +128356,14 @@ msgid "Add New Grease Pencil Layer"
 msgstr "新規グリースペンシルレイヤーを追加"
 
 
+msgid "No active layer"
+msgstr "アクティブカメラがありません"
+
+
+msgid "No active group"
+msgstr "アクティブグループがありません"
+
+
 msgid "Cannot add active layer as mask"
 msgstr "アクティブレイヤーをマスクとして追加できません"
 
@@ -128288,6 +128378,10 @@ msgstr "追加するレイヤーがありません"
 
 msgid "No active layer to duplicate"
 msgstr "複製するアクティブレイヤーがありません"
+
+
+msgid "All Line Art objects are now cleared of bakes"
+msgstr "全ラインアートオブジェクトのベイクをクリアしました"
 
 
 msgid "Baked strokes are cleared"
@@ -128342,6 +128436,22 @@ msgid "Curve: "
 msgstr "カーブ: "
 
 
+msgid "Active Vertex Group is locked"
+msgstr "アクティブ頂点グループはロック中です"
+
+
+msgid "Active vertex group is locked"
+msgstr "アクティブ頂点グループはロック中です"
+
+
+msgid "Data-block renamed to '%s', try again to force renaming it to '%s'"
+msgstr "データブロックを「%s」にリネーム，「%s」への強制リネームを再実行します"
+
+
+msgid "Name in use. The other data-block was renamed to ‘%s’"
+msgstr "使用中の名前です．他のデータブロックは「%s」にリネームされました"
+
+
 msgid "Picking a bone failed"
 msgstr "ボーンの取得に失敗しました"
 
@@ -128374,8 +128484,8 @@ msgid "Property from path '%s' is not a float"
 msgstr "パス「%s」のプロパティはfloatではありません"
 
 
-msgid "LMB: Stroke - Shift: Fill - Shift+Ctrl: Stroke + Fill"
-msgstr "LMB: ストローク，[Shift]:フィル，[Shift]+[Ctrl]:ストローク＋フィル"
+msgid "Current: "
+msgstr "現在： "
 
 
 msgid ", Ctrl: Stroke, Shift: Fill, Shift+Ctrl: Both"
@@ -129923,6 +130033,10 @@ msgid "This operator requires an active vertex (last selected)"
 msgstr "このオペレーターにはアクティブ頂点(最後の選択)が必要です"
 
 
+msgid "An edit-mesh with vertex or edge selection mode is required"
+msgstr "頂点または辺選択モードの編集メッシュが必要です"
+
+
 msgid "Must be in vertex selection mode"
 msgstr "頂点選択モードでないといけません"
 
@@ -130260,10 +130374,6 @@ msgid "Converting some non-editable object/object data, enforcing 'Keep Original
 msgstr "強制的に「オリジナルを保持」オプションを有効にし，一部の編集不可のオブジェクトやオブジェクトデータを変換します"
 
 
-msgid "Convert Surfaces to Grease Pencil is not supported"
-msgstr "サーフェスからグリースペンシルへの変換は未対応です"
-
-
 msgid "Object not found"
 msgstr "オブジェクトがありません"
 
@@ -130304,20 +130414,12 @@ msgid "Deleted %u object(s)"
 msgstr "%u個のオブジェクトを削除しました"
 
 
-msgid "Object '%s' has no evaluated grease pencil data"
-msgstr "オブジェクト「%s」に評価済みグリースペンシルデータがありません"
-
-
 msgid "Object '%s' has no evaluated curves data"
 msgstr "オブジェクト「%s」に評価済みカーブデータがありません"
 
 
 msgid "Object '%s' has no evaluated mesh or curves data"
 msgstr "オブジェクト「%s」に評価済みメッシュやカーブデータがありません"
-
-
-msgid "Object '%s' has no evaluated grease pencil or curves data"
-msgstr "オブジェクト「%s」に評価済みグリースペンシルやカーブデータがありません"
 
 
 msgid "Cannot edit object '%s' as it is used by override collections"
@@ -130870,10 +130972,6 @@ msgid "Evaluated geometry from modifier does not contain a point cloud"
 msgstr "モディファイアーの評価済みジオメトリにポイントクラウドがありません"
 
 
-msgid "Evaluated geometry from modifier does not contain grease pencil geometry"
-msgstr "モディファイアーの評価済みジオメトリにグリースペンシルジオメトリがありません"
-
-
 msgid "Modifiers cannot be applied in edit mode"
 msgstr "モディファイアーは編集モードでは適用できません"
 
@@ -131098,6 +131196,10 @@ msgid "Too many potential root collections (%d) for the override hierarchy, plea
 msgstr "オーバーライド階層のルートコレクション候補が多すぎです（%d）．階層のオーバーライドにはアウトライナーを使用してください"
 
 
+msgid "Change Size"
+msgstr "サイズを変更"
+
+
 msgid "Precision Mode"
 msgstr "高精度モード"
 
@@ -131240,6 +131342,10 @@ msgstr "グリースペンシルオブジェクトはこの原点設定オプシ
 
 msgid "Curves Object does not support this set origin operation"
 msgstr "ヘアーカーブオブジェクトはこの原点設定操作に未対応です"
+
+
+msgid "Grease Pencil Object does not support this set origin operation"
+msgstr "グリースペンシルオブジェクトはこの原点設定オプションに未対応です"
 
 
 msgid "Point cloud object does not support this set origin operation"
@@ -132079,7 +132185,11 @@ msgid "Delete Brush Asset"
 msgstr "ブラシアセットを削除"
 
 
-msgid "Premanently delete brush. This can't be undo."
+msgid "Permanently delete brush asset blend file. This cannot be undone."
+msgstr "ブラシアセット blend ファイルを完全に削除します．取り消しできません．"
+
+
+msgid "Permanently delete brush. This cannot be undone."
 msgstr "ブラシを完全に削除します．取り消しできません．"
 
 
@@ -132097,6 +132207,10 @@ msgstr "ファイルがありません「%s」"
 
 msgid "No asset library available to save to"
 msgstr "保存先に利用可能なアセットライブラリがありません"
+
+
+msgid "Asset library is not editable"
+msgstr "編集できないアセットライブラリです"
 
 
 msgid "Asset file is not editable"
@@ -132200,10 +132314,6 @@ msgstr "ダイナミックエフェクト"
 
 msgid "Trace"
 msgstr "トレース"
-
-
-msgid "Target object not a grease pencil, ignoring!"
-msgstr "ターゲットオブジェクトがグリースペンシルではないので無視します"
 
 
 msgid "Target object library-data, ignoring!"
@@ -132346,6 +132456,10 @@ msgid "Click on the mesh to set the detail"
 msgstr "メッシュ上クリックでディテールをセット"
 
 
+msgid "Sample Mode"
+msgstr "スポイトモード"
+
+
 msgid "Move the mouse to change the dyntopo detail size. LMB: confirm size, ESC/RMB: cancel, SHIFT: precision mode, CTRL: sample detail size"
 msgstr "マウス移動で Dyntopo ディテールサイズ変更，LMB: サイズ確定，[Esc]/RMB: キャンセル，[Shift]: 高精度モード，[Ctrl]: ディテールサイズ取得"
 
@@ -132472,10 +132586,6 @@ msgstr "マスクモードではキーフレームの貼り付けはできませ
 
 msgid "No data in the internal clipboard to paste"
 msgstr "内部クリップボード内に貼り付けるデータがありませんでした"
-
-
-msgid "Keyframe pasting is not available for grease pencil or mask mode"
-msgstr "グリースペンシルやマスクモードではキーフレームの貼り付けはできません"
 
 
 msgid "No selected F-Curves to paste into"
@@ -132868,6 +132978,10 @@ msgstr "バイト"
 
 msgid "Could not rename: %s"
 msgstr "「%s」がリネームできません"
+
+
+msgid "Create new directory?"
+msgstr "新しいディレクトリを作成しますか？"
 
 
 msgid "Delete selected files?"
@@ -133493,6 +133607,10 @@ msgid "Warning: Some images are modified and these changes will be lost."
 msgstr "警告：同じ画像が変更されたため，これらの変更は失われます"
 
 
+msgid "Unpack - Files: {}, Bakes: {}"
+msgstr "パック解除 - ファイル数: {}，ベイク数: {}"
+
+
 msgid "No packed files to unpack"
 msgstr "解除するパック済ファイルがありません"
 
@@ -133982,7 +134100,7 @@ msgstr "ぶら下げリルートは無視され，ターゲットソケットの
 
 
 msgid "Connect a link to create a new socket"
-msgstr "リンクをつなぎ新規ソケットを作成します"
+msgstr "リンクをつなぐと新しいソケットが作成されます"
 
 
 msgid "Unknown socket value. Either the socket was not used or its value was not logged during the last evaluation"
@@ -134063,6 +134181,10 @@ msgstr "ゾーン出力ノード「%s」は，ペアの入力「%s」がない�
 
 msgid "Cannot insert group '%s' in '%s'"
 msgstr "グループ「%s」を「%s」に挿入できません"
+
+
+msgid "There is no parent group node in this context"
+msgstr "このコンテクストに親グループノードがありません"
 
 
 msgid "Disconnect"
@@ -134345,6 +134467,14 @@ msgid "Remove from the current mode"
 msgstr "現在のモードから除去します"
 
 
+msgid ""
+"Change the object in the current mode\n"
+" • Ctrl to add to the current mode"
+msgstr ""
+"オブジェクトを現在のモードに変更\n"
+" • [Ctrl]で現在のモードに追加"
+
+
 msgid "Library path '%s' does not exist, correct this before saving"
 msgstr "ライブラリパス「%s」がありません．保存前に修正してください"
 
@@ -134475,10 +134605,6 @@ msgstr "マテリアル「%s」をリンク解除できません．アウトラ�
 
 msgid "Cannot unlink the material '%s' from linked object data"
 msgstr "リンク中のオブジェクトデータのマテリアル「%s」がリンク解除できません"
-
-
-msgid "Cannot unlink texture '%s'. It's not clear which freestyle line style it should be unlinked from, there's no freestyle line style as parent in the Outliner tree"
-msgstr "テクスチャ「%s」をリンク解除できません．アウトライナーのツリーには親の Freestyle ラインスタイルがなく，どの Freestyle ラインスタイルから解除すべきかが不明です"
 
 
 msgid "Cannot unlink collection '%s'. It's not clear which scene, collection or instance empties it should be unlinked from, there's no scene, collection or instance empties as parent in the Outliner tree"
@@ -135999,6 +136125,10 @@ msgid "Smart UV Project"
 msgstr "スマートUV投影"
 
 
+msgid "Built without SLIM, falling back to conformal method"
+msgstr "SLIM なしでビルド，代わりに等角になります"
+
+
 msgid "Object has non-uniform scale, unwrap will operate on a non-scaled version of the mesh"
 msgstr "オブジェクトのスケールが均一でないため，非スケーリングバージョンのメッシュで展開します"
 
@@ -136113,11 +136243,6 @@ msgstr "無効なオブジェクト：オブジェクトパスを見直してく
 
 msgid "Could not open Alembic archive for reading, see console for detail"
 msgstr "Alembic アーカイブを開いて読み込みできません！（コンソールに詳細）"
-
-
-msgctxt "Action"
-msgid "Group"
-msgstr "グループ"
 
 
 msgid "Could not open SVG"
@@ -136242,6 +136367,14 @@ msgstr "%s: テクスチャインポートディレクトリ「%s」が作成で
 
 msgid "Can't resolve path %s for writing"
 msgstr "書き込み用のパス「%s」が解決できません"
+
+
+msgid "Can't write to asset %s:  %s"
+msgstr "アセット「%s」に書き込みできません: %s"
+
+
+msgid "Can't open destination asset %s for writing"
+msgstr "書き込み対象のアセット「%s」が開けません"
 
 
 msgid "Error writing to destination asset %s"
@@ -136624,8 +136757,16 @@ msgid "Property named '%s' not found"
 msgstr "プロパティ名「%s」がありません"
 
 
+msgid "Array length mismatch (got %d, expected more)"
+msgstr "配列長が合いません（想定より短い %d を取得）"
+
+
 msgid "This slot does not belong to this Action"
 msgstr "このスロットはこのアクションに属していません"
+
+
+msgid "An Action may not have more than one layer"
+msgstr "一つのアクションは複数のレイヤーを持てません"
 
 
 msgid "This layer does not belong to this Action"
@@ -136638,6 +136779,10 @@ msgstr "一つのレイヤーは複数のストリップを持てません"
 
 msgid "This strip does not belong to this layer"
 msgstr "このストリップはこのレイヤーに属していません"
+
+
+msgid "A channelbag for this slot already exists"
+msgstr "すでにこのスロット用のチャンネルバッグがあります"
 
 
 msgid "This channelbag does not belong to this strip"
@@ -136662,6 +136807,10 @@ msgstr "スロットは旧アクション「%s」に追加できません．先�
 
 msgid "Cannot add layers to a legacy Action '%s'. Convert it to a layered Action first."
 msgstr "レイヤーは旧アクション「%s」に追加できません．先にレイヤーアクションへ変換してください"
+
+
+msgid "F-Curve '%s[%d]' already exists in this channelbag"
+msgstr "F カーブ「%s[%d]」はすでにこのチャンネルバッグにあります"
 
 
 msgid "F-Curve not found"
@@ -136700,6 +136849,10 @@ msgid "Only armature objects are supported"
 msgstr "アーマチュアオブジェクトのみ対応しています"
 
 
+msgid "Could not change action"
+msgstr "アクションを変更できませんでした"
+
+
 msgid "Keying set path could not be added"
 msgstr "キーイングセットパスが追加できませんでした"
 
@@ -136720,6 +136873,14 @@ msgid "Driver not found in this animation data"
 msgstr "このアニメーションデータにドライバーがありません"
 
 
+msgid "This slot (%s) does not belong to the assigned Action"
+msgstr "このスロット（%s）は割り当てたアクションに属していません"
+
+
+msgid "This slot (%s) is not suitable for this data-block type (%c%c)"
+msgstr "このスロット（%s）はそのデータブロックタイプに適合しません（%c%c）"
+
+
 msgid "%s '%s' is too long, maximum length is %d"
 msgstr "%s「%s」は長すぎです（最大長：%d）"
 
@@ -136738,6 +136899,10 @@ msgstr "NLAトラック「%s」が削除できません"
 
 msgid "Driver '%s[%d]' already exists"
 msgstr "ドライバー「%s[%d]」はすでにあります "
+
+
+msgid "This slot is not suitable for this data-block type (%c%c)"
+msgstr "このスロットはそのデータブロックタイプに適合しません（%c%c）"
 
 
 msgid "Invalid context for keying set"
@@ -137327,10 +137492,6 @@ msgid "Duplicate index %d in vertex_indices_set"
 msgstr "vertex_indices_set 内にインデックス「%d」が重複しています"
 
 
-msgid "Cannot assign material '%s', it has to be used by the grease pencil object already"
-msgstr "マテリアル「%s」を割り当てできません．グリースペンシルオブジェクトで使用されている必要があります"
-
-
 msgid "Unable to create new strip"
 msgstr "新規ストリップが作成できません"
 
@@ -137676,10 +137837,6 @@ msgid "Object '%s' could not create internal data for finding nearest point"
 msgstr "オブジェクト「%s」は最近点を見つけるための内部データを作成できません"
 
 
-msgid "Object '%s' is not valid for this operation! Only curves are supported"
-msgstr "この操作はオブジェクト「%s」には無効です！　カーブのみ対応しています"
-
-
 msgid "Palette '%s' does not contain color given"
 msgstr "パレット「%s」に対象の色がありません"
 
@@ -137814,6 +137971,10 @@ msgstr "SequenceElements.pop: 最後の要素はpopできません"
 
 msgid "SequenceElements.pop: index out of range"
 msgstr "SequenceElements.pop: インデックス外です"
+
+
+msgid "Sequences.new_effect: effect expects more than 2 inputs (%d, should never happen!)"
+msgstr "Sequences.new_effect: エフェクトには３つ以上の入力が必要です（%d 個ではできません！）"
 
 
 msgid "Sequence '%s' not in scene '%s'"
@@ -138452,6 +138613,10 @@ msgid "Stroke Fit Method"
 msgstr "ストロークフィット方法"
 
 
+msgid "TextureMapping"
+msgstr "テクスチャマッピング"
+
+
 msgid "TimeOffset"
 msgstr "タイムオフセット"
 
@@ -138586,10 +138751,6 @@ msgstr "モディファイアーにベイク済データがあります"
 
 msgid "Object is shown in front"
 msgstr "オブジェクトは最前面に表示されています"
-
-
-msgid "Cached from the first line art modifier."
-msgstr "最初のラインアートモディファイアーからキャッシュしました"
 
 
 msgid "Lineart"
@@ -138772,6 +138933,10 @@ msgstr "無効，OpenSubdiv なしでビルドされています"
 
 msgid "Bake Path"
 msgstr "ベイクパス"
+
+
+msgid "Warnings ({})"
+msgstr "警告 ({})"
 
 
 msgid "Output Attributes"
@@ -139009,8 +139174,17 @@ msgid "Target vertices changed from %u to %u"
 msgstr "ターゲットの頂点数が %u から %u になりました"
 
 
+msgid "Apply (All Keyframes)"
+msgstr "適用（全キーフレーム）"
+
+
 msgid "External library data"
 msgstr "外部ライブラリデータ"
+
+
+msgctxt "Operator"
+msgid "Apply (Active Keyframe)"
+msgstr "適用（アクティブキーフレーム）"
 
 
 msgctxt "Operator"
@@ -139491,6 +139665,10 @@ msgid "Unknown"
 msgstr "不明"
 
 
+msgid "Hash"
+msgstr "ハッシュ"
+
+
 msgid "Line Break"
 msgstr "改行"
 
@@ -139514,6 +139692,10 @@ msgstr "逆行列，もし入力した行列の逆行列がなければ同じ行
 
 msgid "True if the input matrix is invertible"
 msgstr "入力行列が可逆（正則）なら True"
+
+
+msgid "Determinant"
+msgstr "行列式"
 
 
 msgid "The string to find in the input string"
@@ -139624,6 +139806,10 @@ msgid "Bake to Disk"
 msgstr "ディスクにベイク"
 
 
+msgid "Bake Packed"
+msgstr "パックにベイク"
+
+
 msgid "Bake Items"
 msgstr "ベイクアイテム"
 
@@ -139642,6 +139828,10 @@ msgstr "{} - {} をベイク済"
 
 msgid "{} ({} packed)"
 msgstr "{} ({} パック済み)"
+
+
+msgid "{} ({} on disk)"
+msgstr "{} (ディスク内：{})"
 
 
 msgid "Frames {} - {}"
@@ -140119,6 +140309,14 @@ msgid "Instances are ignored"
 msgstr "インスタンスを無視します"
 
 
+msgid "Instances as Layers"
+msgstr "インスタンスをレイヤー化"
+
+
+msgid "Either plain curves or curve instances"
+msgstr "プレーンカーブまたはカーブインスタンスのどちらか"
+
+
 msgid "Either a curve or instance selection"
 msgstr "カーブまたはインスタンス選択のどちらか"
 
@@ -140248,16 +140446,74 @@ msgid "Top"
 msgstr "上"
 
 
+msgid "Input Fields"
+msgstr "入力フィールド"
+
+
 msgid "Main Geometry"
 msgstr "メインジオメトリ"
 
 
-msgid "If true, true gizmo is displayed in screen space. Otherwise it's in object space"
-msgstr "true 時、ギズモがスクリーン空間で表示されます．違えばオブジェクト空間で表示されます"
+msgid "Generated Geometry"
+msgstr "生成済みジオメトリ"
+
+
+msgid "Each output field has to correspond to a geometry that is above it"
+msgstr "各出力フィールドは上記ジオメトリに一致している必要があります"
+
+
+msgid "Element"
+msgstr "要素"
+
+
+msgid "Geometry whose elements are iterated over"
+msgstr "要素の繰り返しを行うジオメトリ"
+
+
+msgid "Selection on the iteration domain"
+msgstr "繰り返しドメイン内の選択"
+
+
+msgid "Field that is evaluated on the iteration domain"
+msgstr "繰り返しドメイン内で評価されるフィールド"
+
+
+msgid "Evaluated field value for the current element"
+msgstr "現在の要素用に評価されたフィールド値"
+
+
+msgid "The original input geometry with potentially new attributes that are output by the zone"
+msgstr ""
+"ゾーンによって新しい属性が出力された可能性のある\n"
+"オリジナルの入力ジオメトリ"
+
+
+msgid "Attribute value that will be stored for the current element on the main geometry"
+msgstr "メインジオメトリへ現在の要素用に格納される属性値"
+
+
+msgid "Attribute on the geometry above"
+msgstr "上記ジオメトリの属性"
+
+
+msgid "Geometry generated in the current iteration. Will be joined with geometries from all other iterations"
+msgstr "現在の繰り返しで生成されたジオメトリ．他の繰り返しのジオメトリと統合されます"
+
+
+msgid "Result of joining generated geometries from each iteration"
+msgstr "各繰り返しの生成ジオメトリを統合した結果"
 
 
 msgid "Local rotation of the gizmo. Only used if the local transforms are used in the 3D view"
 msgstr "ギズモのローカル回転．3Dビューポートでローカルトランスフォーム利用時のみ使用されます"
+
+
+msgid "Layers as Instances"
+msgstr "レイヤーをインスタンス化"
+
+
+msgid "Select the layers to convert"
+msgstr "変換するレイヤーの選択"
 
 
 msgid "Create a separate curve instance for every layer"
@@ -141373,6 +141629,10 @@ msgid "The selection of each element as a true or false value"
 msgstr "True または False 値で各要素の選択を行います"
 
 
+msgid "The selection of each element as a floating point value"
+msgstr "Float 値で各要素の選択を行います"
+
+
 msgid "Volume scale is lower than permitted by OpenVDB"
 msgstr "ボリュームスケールが OpenVDB の許容範囲より小さいです"
 
@@ -141681,6 +141941,10 @@ msgstr ""
 "物理的に正しいのは1.0の時のみです"
 
 
+msgid "Edge Tint"
+msgstr "端のチント"
+
+
 msgid "Extinction"
 msgstr "消衰"
 
@@ -141715,6 +141979,10 @@ msgstr ""
 
 msgid "Rotates the direction of anisotropy, with 1.0 going full circle"
 msgstr "異方性の方向の回転．1.0で完全な円になります"
+
+
+msgid "Diffuse Roughness"
+msgstr "ディフューズの粗さ"
 
 
 msgid "Subsurface Weight"
@@ -142055,6 +142323,10 @@ msgstr "明度のシフト．０でカラーが黒に，１で同じ明度を維
 
 msgid "Color input on which HSV color transformation will be applied"
 msgstr "カラー入力に HSV 色変換が適用されます"
+
+
+msgid "Strength of the light source"
+msgstr "光源の強さ"
 
 
 msgid "Facing"
@@ -142404,6 +142676,26 @@ msgstr "黒体のチント"
 
 msgid "Temperature Attribute"
 msgstr "温度特性"
+
+
+msgid "Backscatter"
+msgstr "後方の散乱"
+
+
+msgid "Diameter"
+msgstr "直径"
+
+
+msgid "Directionality of the scattering. Zero is isotropic, negative is backward, positive is forward"
+msgstr "散乱の方向性．０で異方性，負の値で後方，正の値で前方"
+
+
+msgid "Index Of Refraction of the scattering particles"
+msgstr "散乱する粒子の屈折率"
+
+
+msgid "Diameter of the water droplets, in micrometers"
+msgstr "水滴の直径（μm）"
 
 
 msgid "Patterns"
@@ -142780,6 +143072,10 @@ msgid "Revert"
 msgstr "開き直す"
 
 
+msgid "Clear Recent Files List"
+msgstr "最近使用したファイルのリストをクリア"
+
+
 msgid "Allow Execution"
 msgstr "実行可能にする"
 
@@ -142830,6 +143126,18 @@ msgstr "このファイルは新しいバージョンの Blender（%s）で保�
 
 msgid "Saving it with this Blender (%s) may cause loss of data"
 msgstr "このバージョンの Blender（%s）で保存するとデータが消える可能性があります"
+
+
+msgid "This file is managed by the Blender asset system. It can only be"
+msgstr "このファイルは Blender アセットシステムで管理されています．"
+
+
+msgid "saved as a new, regular file."
+msgstr "新規の通常ファイルとしてのみ保存可能です．"
+
+
+msgid "Overwrite file with an older Blender version?"
+msgstr "古いバージョンの Blender で上書きしますか？"
 
 
 msgid "Cannot overwrite asset system files. Save as new file?"
@@ -143118,6 +143426,10 @@ msgid "The program will now close."
 msgstr "このプログラムを閉じます"
 
 
+msgid "Intel binary detected. Expect reduced performance."
+msgstr "Intel バイナリを探知．パフォーマンスの低下が予想されます．"
+
+
 msgctxt "Operator"
 msgid "Learn More"
 msgstr "詳細"
@@ -143173,6 +143485,10 @@ msgstr "アドオンの開発者に 'gpu' モジュールに移行すること�
 
 msgid "See system tab in preferences to switch to OpenGL backend"
 msgstr "プリファレンスのシステムタブで OpenGL バックエンドを切り替えてください"
+
+
+msgid "Failed to load using Vulkan, using OpenGL instead."
+msgstr "Vulkan 使用の読み込みに失敗．OpenGL を使用してください．"
 
 
 msgid "Updating GPU drivers may solve this issue."
@@ -144264,6 +144580,10 @@ msgstr "スロバキア語（Slovenčina）"
 
 msgid "Urdu (وُدرُا)"
 msgstr "ウルドゥー語 (وُدرُا)"
+
+
+msgid "Lithuanian (Lietuviškai)"
+msgstr "リトアニア (Lietuviškai)"
 
 
 msgid "Complete"

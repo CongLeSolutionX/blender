@@ -1,10 +1,10 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.3.0 Beta (b'6039cb17e63e')\n"
+"Project-Id-Version: Blender 4.3.0 Beta (b'28a8486e2b3f')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-10-07 09:15+0000\n"
-"PO-Revision-Date: 2024-09-18 23:56+0000\n"
+"POT-Creation-Date: 2024-10-29 10:02+0000\n"
+"PO-Revision-Date: 2024-10-26 01:56+0000\n"
 "Last-Translator: \"Adriel Y.\" <mixnblend@users.noreply.translate.blender.org>\n"
 "Language-Team: Indonesian <https://translate.blender.org/projects/blender-ui/ui/id/>\n"
 "Language: id\n"
@@ -12,7 +12,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n!=1);\n"
-"X-Generator: Weblate 5.5.2\n"
+"X-Generator: Weblate 5.7.2\n"
 "X-Poedit-SourceCharset: utf-8\n"
 "X-Poedit-Bookmarks: -1,-1,-1,-1,-1,-1,-1,-1,-1,4"
 
@@ -471,6 +471,18 @@ msgstr "Bawah"
 
 msgid "Place the Mix node at the same height as the lowest node"
 msgstr "Menaruh simpul Campur di ketinggian yang sama dengan simpul terendah"
+
+
+msgid "Show Hotkey List"
+msgstr "Tampilkan Daftar Tombol Pintas"
+
+
+msgid "Expand this box into a list of all the hotkeys for functions in this addon"
+msgstr "Ekspansi kotak ini menjadi daftar semua tombol pintas untuk fungsi-fungsi dalam addon ini"
+
+
+msgid "Show Principled naming tags"
+msgstr "Tampilkan Tag penamaan berprinsip"
 
 
 msgid "Fribidi Library"
@@ -2825,10 +2837,6 @@ msgid "Main Grease Pencils"
 msgstr "Pensil Grease Utama"
 
 
-msgid "Collection of grease pencils"
-msgstr "Koleksi pensil grease"
-
-
 msgid "Main Hair Curves"
 msgstr "Kurva Rambut Utama"
 
@@ -4561,10 +4569,6 @@ msgstr "Membesarkan atau mengecilkan kurva dengan mengubah ukurannya secara sera
 
 msgid "Grease Pencil Brush Settings"
 msgstr "Pengaturan Kuas Pensil Grease"
-
-
-msgid "Settings for grease pencil brush"
-msgstr "Pengaturan untuk kuas pensil grease"
 
 
 msgid "Active Smooth"
@@ -9672,10 +9676,6 @@ msgid "Show Font data-blocks"
 msgstr "Tampilkan Font data-blok"
 
 
-msgid "Show Grease pencil data-blocks"
-msgstr "Tampilkan Pensil grease data-blok"
-
-
 msgid "Show Image data-blocks"
 msgstr "Tampilkan Gambar data-blok"
 
@@ -11246,6 +11246,15 @@ msgstr "Kelompok-kelompok"
 msgctxt "ID"
 msgid "ID Root Type"
 msgstr "Tipe Akar ID"
+
+
+msgctxt "ID"
+msgid "Unspecified"
+msgstr "Tidak ditentukan"
+
+
+msgid "Not yet specified. When this slot is first assigned to a data-block, this will be set to the type of that data-block"
+msgstr "Belum ditentukan. Saat slot ini ditetapkan untuk pertama kalinya ke data-blok, ini akan diset ke tipe data-blok tersebut"
 
 
 msgid "Feature Set"
@@ -13344,28 +13353,8 @@ msgid "Codec"
 msgstr "Codec"
 
 
-msgid "Codec settings for OpenEXR"
-msgstr "Pengaturan codec untuk OpenEXR"
-
-
 msgid "Pxr24 (lossy)"
 msgstr "Pxr24 (kehilangan kualitas)"
-
-
-msgid "ZIP (lossless)"
-msgstr "ZIP (tanpa kehilangan)"
-
-
-msgid "PIZ (lossless)"
-msgstr "PIZ (tanpa kehilangan kualitas)"
-
-
-msgid "RLE (lossless)"
-msgstr "RLE (tanpa kehilangan kualitas)"
-
-
-msgid "ZIPS (lossless)"
-msgstr "ZIPS (tanpa kehilangan kualitas)"
 
 
 msgid "B44 (lossy)"
@@ -15012,12 +15001,12 @@ msgid "Use Material Mask"
 msgstr "Gunakan Masker Bahan"
 
 
-msgid "Snap"
-msgstr "Jepret"
-
-
 msgid "Mirror"
 msgstr "Cermin"
+
+
+msgid "Snap"
+msgstr "Jepret"
 
 
 msgid "Navigation"
@@ -24963,10 +24952,6 @@ msgid "Export to PDF"
 msgstr "Ekspor ke PDF"
 
 
-msgid "Export grease pencil to PDF"
-msgstr "Ekspor pensil grease ke PDF"
-
-
 msgid "Clip Camera"
 msgstr "Kamera Klip"
 
@@ -25301,12 +25286,12 @@ msgid "Restrict painting to vertices in the group"
 msgstr "Membatasi lukisan ke simpul di kelompok"
 
 
-msgid "Wire Color"
-msgstr "Warna Kabel"
-
-
 msgid "Snapping"
 msgstr "Gertakan"
+
+
+msgid "Wire Color"
+msgstr "Warna Kabel"
 
 
 msgid "Custom Shape"
@@ -27612,26 +27597,6 @@ msgid "Options:"
 msgstr "Opsi:"
 
 
-msgid "    RNA Context: "
-msgstr "    Konteks RNA: "
-
-
-msgid "Labels:"
-msgstr "Label:"
-
-
-msgid "Tool Tips:"
-msgstr "Tips Peralatan:"
-
-
-msgid "Button Label:"
-msgstr "Label Tombol:"
-
-
-msgid "RNA Label:"
-msgstr "Label RNA:"
-
-
 msgctxt "Operator"
 msgid "Load"
 msgstr "Muat"
@@ -27943,18 +27908,6 @@ msgid "Only Axis Aligned"
 msgstr "Hanya Sumbu yang Disejajarkan"
 
 
-msgid "View in Render"
-msgstr "Tampilkan di Render"
-
-
-msgid "Thickness Scale"
-msgstr "Skala Ketebalan"
-
-
-msgid "Edit Line Color"
-msgstr "Edit Warna Garis"
-
-
 msgid "Keyframes Before"
 msgstr "Keyframe Sebelum"
 
@@ -28156,6 +28109,16 @@ msgstr "Seleksi ke Kursor"
 msgctxt "Operator"
 msgid "Selection to Cursor (Keep Offset)"
 msgstr "Seleksi ke Kursor (Tetapkan Offset)"
+
+
+msgctxt "Operator"
+msgid "Delete Active Keyframe (Active Layer)"
+msgstr "Hapus Keyframe Aktif (Layre Aktif)"
+
+
+msgctxt "Operator"
+msgid "Delete Active Keyframes (All Layers)"
+msgstr "Hapus Keyframe Aktif (Semua Layer)"
 
 
 msgid "Cursor Color"
@@ -30011,16 +29974,6 @@ msgstr "Menajamkan Simpul"
 
 
 msgctxt "Operator"
-msgid "Delete Active Keyframe (Active Layer)"
-msgstr "Hapus Keyframe Aktif (Layre Aktif)"
-
-
-msgctxt "Operator"
-msgid "Delete Active Keyframes (All Layers)"
-msgstr "Hapus Keyframe Aktif (Semua Layer)"
-
-
-msgctxt "Operator"
 msgid "Set Roll"
 msgstr "Adegan"
 
@@ -30315,10 +30268,6 @@ msgstr "Clipboard terlalu panjang"
 
 msgid "File too long %s"
 msgstr "Dokumen telalu panjang %s"
-
-
-msgid "No grease pencil data"
-msgstr "Tidak ada data pencil grease"
 
 
 msgid "No active frame to delete"

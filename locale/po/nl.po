@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.3.0 Beta (b'6039cb17e63e')\n"
+"Project-Id-Version: Blender 4.3.0 Beta (b'28a8486e2b3f')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-10-07 09:15+0000\n"
+"POT-Creation-Date: 2024-10-29 10:02+0000\n"
 "PO-Revision-Date: 2023-12-21 01:55+0000\n"
 "Last-Translator: Lisa <blendergirl@tutanota.com>\n"
 "Language-Team: Dutch <https://translate.blender.org/projects/blender-ui/ui/nl/>\n"
@@ -6156,10 +6156,6 @@ msgid "Debug Menu"
 msgstr "Debug Menu"
 
 
-msgid "Export grease pencil to PDF"
-msgstr "Exporteer vetkrijt naar PDF"
-
-
 msgctxt "Operator"
 msgid "Reload Library"
 msgstr "Herlaad Bibliotheek"
@@ -9119,11 +9115,6 @@ msgstr "Ruimte"
 
 msgid "Unpack File"
 msgstr "Pak Bestand Uit"
-
-
-msgctxt "Action"
-msgid "Group"
-msgstr "Groep"
 
 
 msgid "Flame"

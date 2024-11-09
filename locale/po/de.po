@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.3.0 Beta (b'6039cb17e63e')\n"
+"Project-Id-Version: Blender 4.3.0 Beta (b'28a8486e2b3f')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-10-07 09:15+0000\n"
+"POT-Creation-Date: 2024-10-29 10:02+0000\n"
 "PO-Revision-Date: 2024-04-29 13:41+0000\n"
 "Last-Translator: Anonymous <noreply@weblate.org>\n"
 "Language-Team: German <https://translate.blender.org/projects/blender-ui/ui/de/>\n"
@@ -2192,10 +2192,6 @@ msgid "Main Grease Pencils"
 msgstr "Hauptwachsstift"
 
 
-msgid "Collection of grease pencils"
-msgstr "Sammlung von Wachsstiften"
-
-
 msgid "Main Images"
 msgstr "Hauptbilder"
 
@@ -3608,10 +3604,6 @@ msgstr "Interpolationsform"
 
 msgid "Grease Pencil Brush Settings"
 msgstr "Wachsstift Pinseleinstellung"
-
-
-msgid "Settings for grease pencil brush"
-msgstr "Einstellungen für Wachsstiftpinsel"
 
 
 msgid "Active Smooth"
@@ -9531,10 +9523,6 @@ msgid "Show Font data-blocks"
 msgstr "Schrift-Datenblöcke anzeigen"
 
 
-msgid "Show Grease pencil data-blocks"
-msgstr "Wachsstift-Datenblöcke anzeigen"
-
-
 msgid "Show Image data-blocks"
 msgstr "Bild-Datenblöcke anzeigen"
 
@@ -11369,10 +11357,6 @@ msgid "Grease Pencil Mask Layers"
 msgstr "Wachsstift maskiert Ebenen"
 
 
-msgid "Collection of grease pencil masking layers"
-msgstr "Sammlung von Wachsstift maskierenden Ebenen"
-
-
 msgid "Active Layer Mask Index"
 msgstr "Aktiver Ebenenmaskierungsindex"
 
@@ -12254,10 +12238,6 @@ msgid "Use Paint"
 msgstr "Farbe verwenden"
 
 
-msgid "Use this brush in grease pencil drawing mode"
-msgstr "Diesen Pinsel im Wachsstift-Malereimodus verwenden"
-
-
 msgid "Use this brush in texture paint mode"
 msgstr "Diesen Pinsel im Texturmalen-Modus verwenden"
 
@@ -12324,10 +12304,6 @@ msgstr "Zwischenraumdistanz"
 
 msgid "Smooth Stroke"
 msgstr "Weicher Strich"
-
-
-msgid "Use this brush in grease pencil vertex color mode"
-msgstr "Diesen Wachsstift im Eckpunktfarbmodus verwenden"
 
 
 msgid "Wet Mix"
@@ -14215,10 +14191,6 @@ msgstr "Dateiname der Film- oder Sequenzdatei"
 
 msgid "Frame Rate"
 msgstr "Bildrate"
-
-
-msgid "Grease pencil data for this movie clip"
-msgstr "Wachsstift-Daten für diesen Filmclip"
 
 
 msgid "Movie File"
@@ -16782,28 +16754,8 @@ msgid "Codec"
 msgstr "Codec"
 
 
-msgid "Codec settings for OpenEXR"
-msgstr "Codec-Einstellungen für OpenEXR"
-
-
 msgid "Pxr24 (lossy)"
 msgstr "Pxr24 (verlustbehaftet)"
-
-
-msgid "ZIP (lossless)"
-msgstr "ZIP (verlustfrei)"
-
-
-msgid "PIZ (lossless)"
-msgstr "PIZ (verlustfrei)"
-
-
-msgid "RLE (lossless)"
-msgstr "RLE (verlustfrei)"
-
-
-msgid "ZIPS (lossless)"
-msgstr "ZIPS (verlustfrei)"
 
 
 msgid "B44 (lossy)"
@@ -19075,24 +19027,12 @@ msgid "Material slot name"
 msgstr "Materialsteckplatzname"
 
 
-msgid "Snap"
-msgstr "Einrasten"
-
-
-msgid "Proportional Editing Falloff"
-msgstr "Proportionaler Bearbeitungsabfall"
-
-
-msgid "Mask Edit"
-msgstr "Maskenbearbeitung"
-
-
-msgid "Vertex Group Locks"
-msgstr "Punktgruppen sperren"
-
-
 msgid "Mirror"
 msgstr "Spiegeln"
+
+
+msgid "Snap"
+msgstr "Einrasten"
 
 
 msgid "Local View"
@@ -19191,6 +19131,10 @@ msgid "Hooks"
 msgstr "Haken"
 
 
+msgid "Vertex Group Locks"
+msgstr "Punktgruppen sperren"
+
+
 msgid "Random Mask"
 msgstr "Zufällige Maske"
 
@@ -19241,6 +19185,14 @@ msgstr "Kerning"
 
 msgid "Pivot Point"
 msgstr "Drehpunkt"
+
+
+msgid "Proportional Editing Falloff"
+msgstr "Proportionaler Bearbeitungsabfall"
+
+
+msgid "Mask Edit"
+msgstr "Maskenbearbeitung"
 
 
 msgid "Assets"
@@ -22968,10 +22920,6 @@ msgid "Use Mask"
 msgstr "Maske benutzen"
 
 
-msgid "Use a grease pencil data-block as a mask to use only specified areas of pattern when tracking"
-msgstr "Verwenden Sie einen Wachsstift-Datenblock als Maske, um nur bestimmte Musterbereiche beim Tracking zu verwenden"
-
-
 msgid "Normalize"
 msgstr "Normalisieren"
 
@@ -23094,10 +23042,6 @@ msgstr "Durchschnittsfehler der Vorrausberechnung"
 
 msgid "Minimal value of correlation between matched pattern and reference that is still treated as successful tracking"
 msgstr "Minimaler Wert der Übereinstimmung zwischen verglichenem Muster und Referenz, die noch als erfolgreiches Verfolgen behandelt wird"
-
-
-msgid "Grease pencil data for this track"
-msgstr "Wachsstift-Daten für diese Spur"
 
 
 msgid "True if track has a valid bundle"
@@ -30864,14 +30808,6 @@ msgid "Ease In and Out"
 msgstr "Leichtes Ein- und Aussteigen"
 
 
-msgid "Only Selected"
-msgstr "Nur Ausgewähltes"
-
-
-msgid "Interpolate only selected strokes"
-msgstr "Nur ausgewählte Striche interpolieren"
-
-
 msgid "Number of frames between generated interpolated frames"
 msgstr "Anzahl der Frames zwischen generierten interpolierten Frames"
 
@@ -32496,6 +32432,10 @@ msgstr "Topologie Messerwerkzeug"
 
 msgid "Cut new topology"
 msgstr "Neue Topologie schneiden"
+
+
+msgid "Only Selected"
+msgstr "Nur Ausgewähltes"
 
 
 msgid "Only cut selected geometry"
@@ -40446,6 +40386,58 @@ msgid "Active Palette Color"
 msgstr "Aktive Farbpalette"
 
 
+msgid "Motion Tracking"
+msgstr "Bewegungsverfolgung"
+
+
+msgid "Mesh Edit Mode"
+msgstr "Maschenbearbeitungsmodus"
+
+
+msgid "Measurement"
+msgstr "Messung"
+
+
+msgid "Curve Edit Mode"
+msgstr "Kurven-Bearbeitungsmodus"
+
+
+msgid "Snapping"
+msgstr "Einrasten"
+
+
+msgid "Transform Orientations"
+msgstr "Transformationsausrichtung"
+
+
+msgid "Drawing Plane"
+msgstr "Malfläche"
+
+
+msgid "Guides"
+msgstr "Hilfslinien"
+
+
+msgid "Quad View"
+msgstr "Vierfenster-Ansicht"
+
+
+msgid "Onion Skin"
+msgstr "Zwiebelhaut"
+
+
+msgid "Stereoscopy"
+msgstr "Stereoskopie"
+
+
+msgid "Auto-Masking"
+msgstr "Automatisches Maskieren"
+
+
+msgid "VR"
+msgstr "VR"
+
+
 msgid "Active Tool"
 msgstr "Aktives Werkzeug"
 
@@ -40476,58 +40468,6 @@ msgstr "Setzer"
 
 msgid "Overlays"
 msgstr "Überlagerungen"
-
-
-msgid "Guides"
-msgstr "Hilfslinien"
-
-
-msgid "Motion Tracking"
-msgstr "Bewegungsverfolgung"
-
-
-msgid "Mesh Edit Mode"
-msgstr "Maschenbearbeitungsmodus"
-
-
-msgid "Measurement"
-msgstr "Messung"
-
-
-msgid "Curve Edit Mode"
-msgstr "Kurven-Bearbeitungsmodus"
-
-
-msgid "Snapping"
-msgstr "Einrasten"
-
-
-msgid "Transform Orientations"
-msgstr "Transformationsausrichtung"
-
-
-msgid "Drawing Plane"
-msgstr "Malfläche"
-
-
-msgid "Quad View"
-msgstr "Vierfenster-Ansicht"
-
-
-msgid "Onion Skin"
-msgstr "Zwiebelhaut"
-
-
-msgid "Stereoscopy"
-msgstr "Stereoskopie"
-
-
-msgid "Auto-Masking"
-msgstr "Automatisches Maskieren"
-
-
-msgid "VR"
-msgstr "VR"
 
 
 msgid "Chain Scaling"
@@ -46172,10 +46112,6 @@ msgid "Collection of Sequences"
 msgstr "Sammlung von Sequenzen"
 
 
-msgid "Effect affecting the grease pencil object"
-msgstr "Effekt beeinflusst das Wasstiftobjekt"
-
-
 msgid "Effect name"
 msgstr "Effektname"
 
@@ -46895,10 +46831,6 @@ msgstr "Alpha-Transparenzkanal anzeigen"
 
 msgid "Z-Buffer"
 msgstr "Z-Buffer"
-
-
-msgid "Grease pencil data for this space"
-msgstr "Wachsstift-Daten für diesen Raum"
 
 
 msgid "View the image"
@@ -50830,42 +50762,6 @@ msgid "Options:"
 msgstr "Optionen:"
 
 
-msgid "Save to PO File"
-msgstr "Speichere nach PO Datei"
-
-
-msgid "Rebuild MO File"
-msgstr "MO Datei neu bauen"
-
-
-msgid "Erase Local MO files"
-msgstr "Lösche lokale MO Dateien"
-
-
-msgid "invoke() needs to be called before execute()"
-msgstr "invoke() muss vor dem execute() aufgerufen werden"
-
-
-msgid "Labels:"
-msgstr "Beschriftung:"
-
-
-msgid "Tool Tips:"
-msgstr "Tooltipps:"
-
-
-msgid "Button Label:"
-msgstr "Button Beschriftung:"
-
-
-msgid "Button Tip:"
-msgstr "Button Tipp:"
-
-
-msgid "Could not write to po file ({})"
-msgstr "Es konnte nicht auf die po Datei geschrieben werden {{}}"
-
-
 msgid "WARNING: preferences are lost when add-on is disabled, be sure to use \"Save Persistent\" if you want to keep your settings!"
 msgstr "WARNUNG: Einstellungen gehen verloren wenn das Add-On deaktiviert wird, stelle sicher das \"Speichere beständig\" verwendet wird um die Einstellungen zu behalten!"
 
@@ -51526,18 +51422,6 @@ msgstr "Benutzerdefiniert..."
 
 msgid "Only Axis Aligned"
 msgstr "Nur Achsen ausgerichtet"
-
-
-msgid "View in Render"
-msgstr "Ansicht im Renderer"
-
-
-msgid "Thickness Scale"
-msgstr "Dickenskalierung"
-
-
-msgid "Edit Line Color"
-msgstr "Linienfarbe bearbeiten"
 
 
 msgid "Keyframes Before"
@@ -56435,18 +56319,6 @@ msgid "Nothing to erase"
 msgstr "Nichts zum löschen"
 
 
-msgid "Nowhere for grease pencil data to go"
-msgstr "Keine Wasstift Daten zum fortfahren"
-
-
-msgid "Active object is not a selected grease pencil"
-msgstr "Aktives Objekt ist ausgewählter Wachsstift"
-
-
-msgid "No grease pencil data"
-msgstr "Keine Wachsstift-Daten"
-
-
 msgid "No active frame to delete"
 msgstr "Kein aktives Einzelbild zum Löschen"
 
@@ -59306,11 +59178,6 @@ msgstr "Überschreibe %s"
 
 msgid "UV Vertex"
 msgstr "UV Knoten"
-
-
-msgctxt "Action"
-msgid "Group"
-msgstr "Gruppieren"
 
 
 msgid "Keying set path could not be added"

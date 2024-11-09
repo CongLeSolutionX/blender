@@ -851,6 +851,8 @@ static SingleKeyingResult insert_key_layer(
   assert_baklava_phase_1_invariants(layer);
   BLI_assert(layer.strips().size() == 1);
 
+  const bool do_cyclic = (insert_key_flags & INSERTKEY_CYCLE_AWARE) && action.is_cyclic();
+
   Strip *strip = layer.strip(0);
   return strip->data<StripKeyframeData>(action).keyframe_insert(
       bmain,
@@ -858,7 +860,8 @@ static SingleKeyingResult insert_key_layer(
       {rna_path, key_data.array_index, prop_subtype, channel_group},
       key_data.position,
       key_settings,
-      insert_key_flags);
+      insert_key_flags,
+      do_cyclic ? std::optional(action.get_frame_range()) : std::nullopt);
 }
 
 static std::pair<Layer *, Slot *> prep_action_layer_for_keying(Action &action, ID &animated_id)
@@ -871,7 +874,7 @@ static std::pair<Layer *, Slot *> prep_action_layer_for_keying(Action &action, I
   Slot *slot = assign_action_ensure_slot_for_keying(action, animated_id);
   BLI_assert_msg(
       slot,
-      "The conditions that would cause this Slot assigment to fail (such as the ID not being "
+      "The conditions that would cause this Slot assignment to fail (such as the ID not being "
       "animatible) should have been caught and handled by higher-level functions.");
 
   action.layer_keystrip_ensure();

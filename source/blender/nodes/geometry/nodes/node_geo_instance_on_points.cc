@@ -227,7 +227,6 @@ static void node_geo_exec(GeoNodeExecParams params)
     if (geometry_set.has_grease_pencil()) {
       using namespace bke::greasepencil;
       const GreasePencil &grease_pencil = *geometry_set.get_grease_pencil();
-
       bke::Instances *instances = new bke::Instances();
       for (const int layer_index : grease_pencil.layers().index_range()) {
         const Drawing *drawing = grease_pencil.get_eval_drawing(grease_pencil.layer(layer_index));
@@ -235,7 +234,6 @@ static void node_geo_exec(GeoNodeExecParams params)
           continue;
         }
         const bke::CurvesGeometry &src_curves = drawing->strokes();
-
         if (src_curves.curves_num() == 0) {
           /* Add an empty reference so the number of layers and instances match.
            * This makes it easy to reconstruct the layers afterwards and keep their attributes.
@@ -245,28 +243,23 @@ static void node_geo_exec(GeoNodeExecParams params)
           continue;
         }
         /* TODO: Attributes are not propagating from the curves or the points. */
-
+        bke::Instances *layer_instances = new bke::Instances();
         const bke::GreasePencilLayerFieldContext field_context(
             grease_pencil, AttrDomain::Point, layer_index);
-        bke::Instances *layer_instances = new bke::Instances();
         add_instances_from_component(*layer_instances,
                                      src_curves.attributes(),
                                      instance,
                                      field_context,
                                      params,
                                      attributes_to_propagate);
-
         GeometrySet temp_set = GeometrySet::from_instances(layer_instances);
         const int handle = instances->add_reference(bke::InstanceReference{temp_set});
         instances->add_instance(handle, float4x4::identity());
       }
-
-      bke::copy_attributes(grease_pencil.attributes(),
-                           bke::AttrDomain::Layer,
-                           bke::AttrDomain::Instance,
-                           attribute_filter,
-                           instances->attributes_for_write());
-
+      GeometrySet::propagate_attributes_from_layer_to_instances(
+          geometry_set.get_grease_pencil()->attributes(),
+          instances->attributes_for_write(),
+          attribute_filter);
       GeometrySet new_instances = geometry::join_geometries(
           {GeometrySet::from_instances(dst_instances, bke::GeometryOwnershipType::Editable),
            GeometrySet::from_instances(instances)},

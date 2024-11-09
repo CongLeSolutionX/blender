@@ -39,7 +39,6 @@
 #include "BKE_context.hh"
 #include "BKE_deform.hh"
 #include "BKE_global.hh"
-#include "BKE_gpencil_curve_legacy.h"
 #include "BKE_gpencil_geom_legacy.h"
 #include "BKE_gpencil_legacy.h"
 #include "BKE_lib_id.hh"
@@ -160,7 +159,7 @@ static int gpencil_actframe_delete_exec(bContext *C, wmOperator *op)
 
   /* if there's no existing Grease-Pencil data there, add some */
   if (gpd == nullptr) {
-    BKE_report(op->reports, RPT_ERROR, "No grease pencil data");
+    BKE_report(op->reports, RPT_ERROR, "No Grease Pencil data");
     return OPERATOR_CANCELLED;
   }
   if (ELEM(nullptr, gpl, gpf)) {
