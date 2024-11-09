@@ -228,10 +228,7 @@ static VectorSet<OrderedEdge> dissolved_edges_for_verts(const Span<int2> src_edg
   const int total_edges = edges_sets.calc_reduced_ids(old_to_new_edges_map);
 
   r_new_edges.reinitialize(total_edges);
-
-#ifdef DEBUG
   r_new_edges.as_mutable_span().fill(int2(-1));
-#endif
 
   /* TODO: Parallel version? */
   keeped_verts_mask.foreach_index([&](const int vert_i) {
