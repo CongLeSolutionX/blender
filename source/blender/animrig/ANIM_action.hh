@@ -15,6 +15,8 @@
 #include "DNA_action_types.h"
 #include "DNA_anim_types.h"
 
+#include "BKE_anim_data.hh"
+
 #include "BLI_math_vector.hh"
 #include "BLI_span.hh"
 #include "BLI_string_ref.hh"
@@ -60,8 +62,8 @@ using slot_handle_t = decltype(::ActionSlot::handle);
  * `Action::is_action_layered()`. Note that an empty Action is considered valid
  * for both.
  *
- * \see AnimData::action
- * \see AnimData::slot_handle
+ * \see #AnimData::action
+ * \see #AnimData::slot_handle
  */
 class Action : public ::bAction {
  public:
@@ -103,11 +105,11 @@ class Action : public ::bAction {
 
   /* Action Layers access. */
   blender::Span<const Layer *> layers() const;
-  blender::MutableSpan<Layer *> layers();
+  blender::Span<Layer *> layers();
   const Layer *layer(int64_t index) const;
   Layer *layer(int64_t index);
 
-  Layer &layer_add(StringRefNull name);
+  Layer &layer_add(std::optional<StringRefNull> name);
 
   /**
    * Remove the layer from this Action.
@@ -129,7 +131,7 @@ class Action : public ::bAction {
 
   /* Action Slot access. */
   blender::Span<const Slot *> slots() const;
-  blender::MutableSpan<Slot *> slots();
+  blender::Span<Slot *> slots();
   const Slot *slot(int64_t index) const;
   Slot *slot(int64_t index);
 
@@ -154,8 +156,8 @@ class Action : public ::bAction {
    * \note This does NOT ensure the first two characters match the ID type of
    * this slot. This is the caller's responsibility.
    *
-   * \see Action::slot_name_define
-   * \see Action::slot_name_propagate
+   * \see #Action::slot_name_define
+   * \see #Action::slot_name_propagate
    */
   void slot_name_set(Main &bmain, Slot &slot, StringRefNull new_name);
 
@@ -165,8 +167,8 @@ class Action : public ::bAction {
    * \note This does NOT ensure the first two characters match the ID type of
    * this slot. This is the caller's responsibility.
    *
-   * \see Action::slot_name_set
-   * \see Action::slot_name_propagate
+   * \see #Action::slot_name_set
+   * \see #Action::slot_name_propagate
    */
   void slot_name_define(Slot &slot, StringRefNull new_name);
 
@@ -203,6 +205,10 @@ class Action : public ::bAction {
    *
    * After this call, the reference is no longer valid as the slot will have been freed.
    *
+   * Note that this does NOT unassign this slot from all its users. When the Action is linked into
+   * another file, that other file cannot be updated, and so missing slots are something that has
+   * to be handled anyway. Also any new slot on this Action will NOT reuse this slot's handle.
+   *
    * \return true when the layer was found & removed, false if it wasn't found.
    */
   bool slot_remove(Slot &slot_to_remove);
@@ -210,7 +216,7 @@ class Action : public ::bAction {
   /**
    * Set the active Slot, ensuring only one Slot is flagged as the Active one.
    *
-   * \param slot_handle if Slot::unassigned, there will not be any active slot.
+   * \param slot_handle if #Slot::unassigned, there will not be any active slot.
    * Passing an unknown/invalid slot handle will result in no slot being active.
    */
   void slot_active_set(slot_handle_t slot_handle);
@@ -229,28 +235,10 @@ class Action : public ::bAction {
   Slot *slot_active_get();
 
   /**
-   * Assign this Action + Slot to the ID.
-   *
-   * If another Action is already assigned to this ID, the caller should unassign the ID from its
-   * existing Action first, or use the top-level function `assign_action(action, ID)` to do things
-   * all in one go.
-   *
-   * \param slot: The slot this ID should be animated by, may be nullptr if it is to be
-   * assigned later. In that case, the ID will not actually receive any animation.
-   * \param animated_id: The ID that should be animated by this Action.
-   *
-   * \return whether the assignment was successful.
+   * Strip data array access.
    */
-  bool assign_id(Slot *slot, ID &animated_id);
-
-  /**
-   * Unassign this Action from the animated ID.
-   *
-   * \param animated_id: ID that is animated by this Action. Calling this
-   * function when this ID is _not_ animated by this Action is not allowed,
-   * and considered a bug.
-   */
-  void unassign_id(ID &animated_id);
+  Span<const StripKeyframeData *> strip_keyframe_data() const;
+  Span<StripKeyframeData *> strip_keyframe_data();
 
   /**
    * Find the slot that best matches the animated ID.
@@ -336,12 +324,57 @@ class Action : public ::bAction {
    */
   float2 get_frame_range_of_keys(bool include_modifiers) const ATTR_WARN_UNUSED_RESULT;
 
+  /**
+   * Set the slot's ID type to that of the animated ID, ensure the name
+   * prefix is set accordingly, and that the name is unique within the
+   * Action.
+   *
+   * This is a low-level function, and shouldn't be called directly outside of
+   * the generic slot-assignment functions.
+   *
+   * \note This assumes that the slot has no ID type set yet. If it does, it
+   * is considered a bug to call this function.
+   */
+  void slot_setup_for_id(Slot &slot, const ID &animated_id);
+
  protected:
+  /* Friends for the purpose of adding/removing strip data on the action's strip
+   * data arrays. This is needed for the strip creation and removal code in
+   * `Strip` and `Layer`'s methods. */
+  friend Strip;
+  friend Layer;
+
   /** Return the layer's index, or -1 if not found in this Action. */
   int64_t find_layer_index(const Layer &layer) const;
 
   /** Return the slot's index, or -1 if not found in this Action. */
   int64_t find_slot_index(const Slot &slot) const;
+
+  /**
+   * Append the given `StripKeyframeData` item to the action's keyframe data
+   * array.
+   *
+   * Note: this takes ownership of `strip_data`.
+   *
+   * \return The index of the appended item in the array.
+   */
+  int strip_keyframe_data_append(StripKeyframeData *strip_data);
+
+  /**
+   * Remove the keyframe strip data at `index` if it is no longer used anywhere
+   * in the action.
+   *
+   * If the strip data is unused, it is both removed from the array *and* freed.
+   * Otherwise no changes are made and the action remains as-is.
+   *
+   * Note: this may alter the indices of some strip data items, due to items
+   * shifting around to fill the gap left by the removed item. This method
+   * ensures that all indices stored within the action (e.g. in the strips
+   * themselves) are properly updated to the new values so that everything is
+   * still referencing the same data. However, if any indices are stored
+   * *outside* the action, they will no longer be valid.
+   */
+  void strip_keyframe_data_remove_if_unused(int index);
 
  private:
   Slot &slot_allocate();
@@ -352,76 +385,80 @@ class Action : public ::bAction {
    * This ensures that the first two characters match the ID type of
    * this slot.
    *
-   * \see Action::slot_name_propagate
+   * \see #Action::slot_name_propagate
    */
   void slot_name_ensure_prefix(Slot &slot);
-
-  /**
-   * Set the slot's ID type to that of the animated ID, ensure the name
-   * prefix is set accordingly, and that the name is unique within the
-   * Action.
-   *
-   * \note This assumes that the slot has no ID type set yet. If it does, it
-   * is considered a bug to call this function.
-   */
-  void slot_setup_for_id(Slot &slot, const ID &animated_id);
 };
 static_assert(sizeof(Action) == sizeof(::bAction),
               "DNA struct and its C++ wrapper must have the same size");
 
 /**
- * Strips contain the actual animation data.
+ * Strips define how the actual animation data is mapped onto the layers.
  *
- * Although the data model allows for different strip types, currently only a
- * single type is implemented: keyframe strips.
+ * Strips do not technically own their own data, but instead refer to data
+ * that's stored in arrays directly on the action itself, and specify how that
+ * data is mapped onto a layer.
+ *
+ * Different strips can refer to different types of data, although at the moment
+ * only one type of strip data is implemented: keyframe animation data.
  */
 class Strip : public ::ActionStrip {
  public:
   /**
-   * Strip instances should not be created via this constructor. Create a sub-class like
-   * #KeyframeStrip instead.
+   * The possible types of strip data.
    *
-   * The reason is that various functions will assume that the `Strip` is actually a down-cast
-   * instance of another strip class, and that `Strip::type()` will say which type. To avoid having
-   * to explicitly deal with an 'invalid' type everywhere, creating a `Strip` directly is simply
-   * not allowed.
+   * Each enum value here corresponds to one data type. It is used to record
+   * which type of data a strip refers to in the strip's `data_type` field (also
+   * returned by `Strip::type()`). Each data type also knows which enum value it
+   * corresponds to, stored in the type's static `TYPE` field.
    */
+  enum class Type : int8_t { Keyframe = 0 };
+
+  /* Strips typically shouldn't be directly constructed or copied, because their
+   * data is actually stored in arrays on the action, and that data also needs
+   * to be created and managed along with the strips. */
   Strip() = delete;
 
   /**
-   * Strip cannot be duplicated via the copy constructor. Either use a concrete
-   * strip type's copy constructor, or use Strip::duplicate().
+   * Make a shallow copy, effectively creating an *instance* of a strip.
    *
-   * The reason why the copy constructor won't work is due to the double nature
-   * of the inheritance at play here:
-   *
-   * C-style inheritance: `KeyframeActionStrip` "inherits" `ActionStrip"
-   *   by embedding the latter. This means that any `KeyframeActionStrip *`
-   *   can be reinterpreted as `ActionStrip *`.
-   *
-   * C++-style inheritance: the C++ wrappers inherit the DNA structs, so
-   *   `animrig::Strip` inherits `::ActionStrip`, and
-   *   `animrig::KeyframeStrip` inherits `::KeyframeActionStrip`.
-   */
-  Strip(const Strip &other) = delete;
-  ~Strip();
-
-  Strip *duplicate(StringRefNull allocation_name) const;
-
-  enum class Type : int8_t { Keyframe = 0 };
+   * Does *not* make a copy of the strip's data, which is stored in an array on
+   * the owning action. */
+  explicit Strip(const Strip &other)
+  {
+    memcpy(this, &other, sizeof(*this));
+  }
 
   /**
-   * Strip type, so it's known which subclass this can be wrapped in without
-   * having to rely on C++ RTTI.
+   * Creates a new strip of type `type` for `owning_action`, with the strip's
+   * data created on the relevant data array on `owning_action`.
+   *
+   * NOTE: strongly prefer using `Layer::strip_add()`, which creates a strip
+   * directly on a layer and sidesteps any ambiguities about ownership.
+   *
+   * This method does *not* add the strip to a layer. That is the responsibility
+   * of the caller.
+   *
+   * The strip is heap-allocated, and the caller is responsible for ensuring
+   * that it gets freed or is given an owner (such as a layer) that will later
+   * free it.
+   *
+   * The new strip is initialized to have infinite extent and zero time offset.
+   *
+   * \see `Layer::strip_add()`
+   */
+  static Strip &create(Action &owning_action, const Strip::Type type);
+
+  /**
+   * Strip type.
+   *
+   * Convenience wrapper to avoid having to do the cast from `int` to
+   * `Strip::Type` everywhere.
    */
   Type type() const
   {
     return Type(this->strip_type);
   }
-
-  template<typename T> bool is() const;
-  template<typename T> T &as();
-  template<typename T> const T &as() const;
 
   bool is_infinite() const;
   bool contains_frame(float frame_time) const;
@@ -437,11 +474,20 @@ class Strip : public ::ActionStrip {
   void resize(float frame_start, float frame_end);
 
   /**
+   * Fetch the strip's data from its owning action.
+   *
+   * `T` *must* correspond to the strip's data type. In other words, this must
+   * hold true: `T::TYPE == strip.type()`.
+   */
+  template<typename T> const T &data(const Action &owning_action) const;
+  template<typename T> T &data(Action &owning_action);
+
+  /**
    * Remove all data belonging to the given slot.
    *
-   * This is typically only called from Layer::slot_data_remove().
+   * This is typically only called from #Layer::slot_data_remove().
    */
-  void slot_data_remove(slot_handle_t slot_handle);
+  void slot_data_remove(Action &owning_action, slot_handle_t slot_handle);
 };
 static_assert(sizeof(Strip) == sizeof(::ActionStrip),
               "DNA struct and its C++ wrapper must have the same size");
@@ -460,8 +506,23 @@ static_assert(sizeof(Strip) == sizeof(::ActionStrip),
 class Layer : public ::ActionLayer {
  public:
   Layer() = default;
-  Layer(const Layer &other);
+  Layer(const Layer &other) = delete;
   ~Layer();
+
+  /**
+   * Duplicate the `Layer` and its `Strip`s, but only make shallow copies of the
+   * strips.
+   *
+   * Specifically, this doesn't duplicate the strip data that's stored in e.g.
+   * `Action::strip_keyframe_data_array`, and it leaves the fields of the strips
+   * themselves exactly as-is.
+   *
+   * WARNING: this method is primarily used in the code that makes full
+   * duplicates of actions, where the arrays of strip data are copied separately
+   * for efficiency. This method's applications are narrow and you probably
+   * shouldn't use it unless you really know what you're doing.
+   */
+  Layer *duplicate_with_shallow_strip_copies(StringRefNull allocation_name) const;
 
   enum class Flags : uint8_t {
     /* Set by default, cleared to mute. */
@@ -494,30 +555,14 @@ class Layer : public ::ActionLayer {
 
   /* Strip access. */
   blender::Span<const Strip *> strips() const;
-  blender::MutableSpan<Strip *> strips();
+  blender::Span<Strip *> strips();
   const Strip *strip(int64_t index) const;
   Strip *strip(int64_t index);
 
   /**
    * Add a new Strip of the given type.
-   *
-   * \see strip_add<T>() for a templated version that returns the strip as its
-   * concrete C++ type.
    */
-  Strip &strip_add(Strip::Type strip_type);
-
-  /**
-   * Add a new strip of the type of T.
-   *
-   * T must be a concrete subclass of animrig::Strip.
-   *
-   * \see KeyframeStrip
-   */
-  template<typename T> T &strip_add()
-  {
-    Strip &strip = this->strip_add(T::TYPE);
-    return strip.as<T>();
-  }
+  Strip &strip_add(Action &owning_action, Strip::Type strip_type);
 
   /**
    * Remove the strip from this layer.
@@ -527,14 +572,14 @@ class Layer : public ::ActionLayer {
    *
    * \return true when the strip was found & removed, false if it wasn't found.
    */
-  bool strip_remove(Strip &strip);
+  bool strip_remove(Action &owning_action, Strip &strip);
 
   /**
    * Remove all data belonging to the given slot.
    *
-   * This is typically only called from Action::slot_remove().
+   * This is typically only called from #Action::slot_remove().
    */
-  void slot_data_remove(slot_handle_t slot_handle);
+  void slot_data_remove(Action &owning_action, slot_handle_t slot_handle);
 
  protected:
   /** Return the strip's index, or -1 if not found in this layer. */
@@ -555,12 +600,12 @@ ENUM_OPERATORS(Layer::Flags, Layer::Flags::Enabled);
  * This is called a 'slot' because it binds the animatable ID to the sub-set
  * of animation data that should animate it.
  *
- * \see AnimData::slot_handle
+ * \see #AnimData::slot_handle
  */
 class Slot : public ::ActionSlot {
  public:
   Slot();
-  Slot(const Slot &other);
+  explicit Slot(const Slot &other);
   ~Slot();
 
   /**
@@ -581,6 +626,10 @@ class Slot : public ::ActionSlot {
    * This means that the minimum length of a valid name is 3 characters.
    */
   constexpr static int name_length_min = 3;
+
+  constexpr static int name_length_max = MAX_ID_NAME;
+  static_assert(sizeof(AnimData::slot_name) == name_length_max);
+  static_assert(sizeof(NlaStrip::action_slot_name) == name_length_max);
 
   /**
    * Return the name prefix for the Slot's type.
@@ -631,7 +680,7 @@ class Slot : public ::ActionSlot {
    * This is a low-level function, and should only be used when calling `users(bmain)` is not
    * appropriate.
    *
-   * \see Slot::users(Main &bmain)
+   * \see #Slot::users(Main &bmain)
    */
   Vector<ID *> runtime_users();
 
@@ -658,20 +707,28 @@ class Slot : public ::ActionSlot {
    *
    * \note This static method invalidates all user caches of all Action Slots.
    *
-   * \see blender::animrig::internal::rebuild_slot_user_cache()
+   * \see #blender::animrig::internal::rebuild_slot_user_cache()
    */
   static void users_invalidate(Main &bmain);
-
- protected:
-  friend Action;
 
   /**
    * Ensure the first two characters of the name match the ID type.
    *
-   * \note This does NOT ensure name uniqueness within the Action. That is
-   * the responsibility of the caller.
+   * This typically should not be called directly. Prefer assigning to an ID to
+   * get the idtype and name prefix properly set. Prefer calling
+   * `Action::slot_name_set()` if you want to set the slot name. Both of those
+   * approaches take care of ensuring uniqueness and other invariants.
+   *
+   * \note This does NOT ensure name uniqueness within the Action. That is the
+   * responsibility of the caller.
+   *
+   * \see #assign_action_slot
+   * \see #Action::slot_name_set
    */
   void name_ensure_prefix();
+
+ protected:
+  friend Action;
 
   /**
    * Set the 'Active' flag. Only allowed to be called by Action.
@@ -683,29 +740,20 @@ static_assert(sizeof(Slot) == sizeof(::ActionSlot),
 ENUM_OPERATORS(Slot::Flags, Slot::Flags::Active);
 
 /**
- * KeyframeStrips effectively contain a bag of F-Curves for each Slot.
+ * Keyframe strips effectively contain a bag of F-Curves for each Slot.
  */
-class KeyframeStrip : public ::KeyframeActionStrip {
+class StripKeyframeData : public ::ActionStripKeyframeData {
  public:
-  /**
-   * Low-level strip type.
-   *
-   * Do not use this in comparisons directly, use Strip::as<KeyframeStrip>() or
-   * Strip::is<KeyframeStrip>() instead. This value is here only to make
-   * functions like those easier to write.
-   */
+  /* Value of `Strip::type()` that corresponds to this type. */
   static constexpr Strip::Type TYPE = Strip::Type::Keyframe;
 
-  KeyframeStrip() = default;
-  KeyframeStrip(const KeyframeStrip &other);
-  ~KeyframeStrip();
-
-  /** Implicitly convert a KeyframeStrip& to a Strip&. */
-  operator Strip &();
+  StripKeyframeData() = default;
+  explicit StripKeyframeData(const StripKeyframeData &other);
+  ~StripKeyframeData();
 
   /* ChannelBag array access. */
   blender::Span<const ChannelBag *> channelbags() const;
-  blender::MutableSpan<ChannelBag *> channelbags();
+  blender::Span<ChannelBag *> channelbags();
   const ChannelBag *channelbag(int64_t index) const;
   ChannelBag *channelbag(int64_t index);
 
@@ -743,7 +791,7 @@ class KeyframeStrip : public ::KeyframeActionStrip {
   /**
    * Remove all strip data for the given slot.
    *
-   * Typically only called from Strip::slot_data_remove().
+   * Typically only called from #Strip::slot_data_remove().
    */
   void slot_data_remove(slot_handle_t slot_handle);
 
@@ -755,13 +803,11 @@ class KeyframeStrip : public ::KeyframeActionStrip {
                                      FCurveDescriptor fcurve_descriptor,
                                      float2 time_value,
                                      const KeyframeSettings &settings,
-                                     eInsertKeyFlags insert_key_flags = INSERTKEY_NOFLAGS);
+                                     eInsertKeyFlags insert_key_flags = INSERTKEY_NOFLAGS,
+                                     std::optional<float2> cycle_range = std::nullopt);
 };
-static_assert(sizeof(KeyframeStrip) == sizeof(::KeyframeActionStrip),
+static_assert(sizeof(StripKeyframeData) == sizeof(::ActionStripKeyframeData),
               "DNA struct and its C++ wrapper must have the same size");
-
-template<> KeyframeStrip &Strip::as<KeyframeStrip>();
-template<> const KeyframeStrip &Strip::as<KeyframeStrip>() const;
 
 /**
  * Collection of F-Curves, intended for a specific Slot handle.
@@ -769,12 +815,12 @@ template<> const KeyframeStrip &Strip::as<KeyframeStrip>() const;
 class ChannelBag : public ::ActionChannelBag {
  public:
   ChannelBag() = default;
-  ChannelBag(const ChannelBag &other);
+  explicit ChannelBag(const ChannelBag &other);
   ~ChannelBag();
 
   /* FCurves access. */
   blender::Span<const FCurve *> fcurves() const;
-  blender::MutableSpan<FCurve *> fcurves();
+  blender::Span<FCurve *> fcurves();
   const FCurve *fcurve(int64_t index) const;
   FCurve *fcurve(int64_t index);
 
@@ -832,8 +878,45 @@ class ChannelBag : public ::ActionChannelBag {
    * valid, as the curve will have been freed.
    *
    * \return true when the F-Curve was found & removed, false if it wasn't found.
+   *
+   * \see fcurve_detach
    */
   bool fcurve_remove(FCurve &fcurve_to_remove);
+
+  /**
+   * Remove an F-Curve from the ChannelBag, identified by its index in the array.
+   *
+   * Acts the same as fcurve_remove() except it's a bit more efficient as it
+   * doesn't need to find the F-Curve in the array first.
+   *
+   * \see fcurve_remove
+   */
+  void fcurve_remove_by_index(int64_t fcurve_array_index);
+
+  /**
+   * Detach an F-Curve from the ChannelBag.
+   *
+   * Additionally, if the fcurve was the last fcurve in a channel group, that
+   * channel group is deleted.
+   *
+   * The F-Curve is not freed. After the call returns `true`, its ownership has
+   * transferred to the caller.
+   *
+   * \return true when the F-Curve was found & detached, false if it wasn't found.
+   *
+   * \see fcurve_remove
+   */
+  bool fcurve_detach(FCurve &fcurve_to_detach);
+
+  /**
+   * Detach an F-Curve from the ChannelBag, identified by its index in the array.
+   *
+   * Acts the same as fcurve_detach() except it's a bit more efficient as it
+   * doesn't need to find the F-Curve in the array first.
+   *
+   * \see fcurve_detach
+   */
+  void fcurve_detach_by_index(int64_t fcurve_array_index);
 
   /**
    * Move the given fcurve to position `to_fcurve_index` in the fcurve array.
@@ -853,7 +936,7 @@ class ChannelBag : public ::ActionChannelBag {
 
   /* Channel group access. */
   blender::Span<const bActionGroup *> channel_groups() const;
-  blender::MutableSpan<bActionGroup *> channel_groups();
+  blender::Span<bActionGroup *> channel_groups();
   const bActionGroup *channel_group(int64_t index) const;
   bActionGroup *channel_group(int64_t index);
 
@@ -931,7 +1014,7 @@ class ChannelBag : public ::ActionChannelBag {
    *
    * \return True on success, false on failure.
    */
-  bool fcurve_assign_to_channel_group(FCurve &fcurve, bActionGroup &group);
+  bool fcurve_assign_to_channel_group(FCurve &fcurve, bActionGroup &to_group);
 
   /**
    * Removes the the given FCurve from the channel group it's in, if any.
@@ -979,7 +1062,7 @@ class ChannelBag : public ::ActionChannelBag {
    *
    * \see `restore_channel_group_invariants()`
    */
-  void channel_group_remove_raw(int channel_group_index);
+  void channel_group_remove_raw(int group_index);
 
   /**
    * Restore invariants related to channel groups.
@@ -1004,17 +1087,17 @@ class ChannelBag : public ::ActionChannelBag {
    * the groups, dots indicate ungrouped areas, and f* are the fcurves, so e.g.
    * group g0 currently contains f1 and f2, but ought to contain f0 and f1):
    *
-   * ```
+   * \code{.unparsed}
    * |..| g0  |..|g1|.....| g2  |..|
    * |f0|f1|f2|f3|f4|f5|f6|f7|f8|f9|
-   * ```
+   * \endcode
    *
    * Then after calling this function they will look like this:
    *
-   * ```
+   * \code{.unparsed}
    * | g0  |g1| g2  |..............|
    * |f0|f1|f2|f3|f4|f5|f6|f7|f8|f9|
-   * ```
+   * \endcode
    *
    * Note that this specifically does *not* move the fcurves, but rather moves
    * the groups *over* the fcurves, changing membership.
@@ -1059,6 +1142,33 @@ static_assert(sizeof(ChannelGroup) == sizeof(::bActionGroup),
               "DNA struct and its C++ wrapper must have the same size");
 
 /**
+ * Create a new Action with zero users.
+ *
+ * This is basically the same as `BKE_action_add`, except that the Action has
+ * zero users and it's already wrapped with its C++ wrapper.
+ *
+ * \see #BKE_action_add
+ */
+Action &action_add(Main &bmain, StringRefNull name);
+
+/* ---------- Action & Slot Assignment --------------- */
+
+enum class ActionSlotAssignmentResult : int8_t {
+  OK = 0,
+  SlotNotFromAction = 1, /* Slot does not belong to the assigned Action. */
+  SlotNotSuitable = 2,   /* Slot is not suitable for the given ID type.*/
+  MissingAction = 3,     /* No Action assigned yet, so cannot assign slot. */
+};
+
+/**
+ * Return whether the given Action can be assigned to the ID.
+ *
+ * This always returns `true` for layered Actions. For legacy Actions it
+ * returns `true` if the Action's `idroot` matches the ID.
+ */
+[[nodiscard]] bool is_action_assignable_to(const bAction *dna_action, ID_Type id_code);
+
+/**
  * Assign the Action to the ID.
  *
  * This will make a best-effort guess as to which slot to use, in this
@@ -1075,7 +1185,32 @@ static_assert(sizeof(ChannelGroup) == sizeof(::bActionGroup),
  * be animated). If the above fall-through case of "no slot found" is reached, this function
  * will still return `true` as the Action was successfully assigned.
  */
-bool assign_action(Action &action, ID &animated_id);
+[[nodiscard]] bool assign_action(bAction *action, ID &animated_id);
+
+/**
+ * Same as assign_action(action, id) above.
+ *
+ * Use this function when you already have the AnimData struct of this ID.
+ *
+ * \return true when successful, false otherwise. This can fail when the NLA is in tweak mode (no
+ * action changes allowed) or when a legacy Action is assigned and it doesn't match the animated
+ * ID's type.
+ */
+[[nodiscard]] bool assign_action(bAction *action, OwnedAnimData owned_adt);
+
+ActionSlotAssignmentResult assign_action_slot(Slot *slot_to_assign, ID &animated_id);
+
+/**
+ * Utility function that assigns both an Action and a slot of that Action.
+ *
+ * Returns the result of the underlying assign_action_slot() call.
+ *
+ * \see assign_action
+ * \see assign_action_slot
+ */
+ActionSlotAssignmentResult assign_action_and_slot(Action *action,
+                                                  Slot *slot_to_assign,
+                                                  ID &animated_id);
 
 /**
  * Assign the Action, ensuring that a Slot is also assigned.
@@ -1083,8 +1218,10 @@ bool assign_action(Action &action, ID &animated_id);
  * If this Action happens to already be assigned, and a Slot is assigned too, that Slot is
  * returned. Otherwise a new Slot is created + assigned.
  *
- * \returns the assigned slot if the assignment was successful, or `nullptr` otherwise.
- * The only reason the assignment can fail is when the given ID is of an animatable type.
+ * \returns the assigned slot if the assignment was successful, or `nullptr` otherwise. Reasons the
+ * assignment can fail is when the given ID is of an animatable type, when the ID is in NLA Tweak
+ * mode (in which case no Action assignments can happen), or when the legacy Action ID type doesn't
+ * match the animated ID.
  *
  * \note Contrary to `assign_action()` this skips the search by slot name when the Action is
  * already assigned. It should be possible for an animator to un-assign a slot, then create a new
@@ -1093,33 +1230,73 @@ bool assign_action(Action &action, ID &animated_id);
  *
  * \see assign_action()
  */
-Slot *assign_action_ensure_slot_for_keying(Action &action, ID &animated_id);
+[[nodiscard]] Slot *assign_action_ensure_slot_for_keying(Action &action, ID &animated_id);
 
 /**
- * Return whether the given Action can be assigned to the ID.
- *
- * This always returns `true` for layered Actions. For legacy Actions it
- * returns `true` if the Action's `idroot` matches the ID.
+ * Same as assign_action, except it assigns to #AnimData::tmpact and #AnimData::tmp_slot_handle.
  */
-bool is_action_assignable_to(const bAction *dna_action, ID_Type id_code);
+[[nodiscard]] bool assign_tmpaction(bAction *action, OwnedAnimData owned_adt);
+
+[[nodiscard]] ActionSlotAssignmentResult assign_tmpaction_and_slot_handle(
+    bAction *action, slot_handle_t slot_handle, OwnedAnimData owned_adt);
 
 /**
- * Ensure that this ID is no longer animated.
+ * Un-assign the Action assigned to this ID.
+ *
+ * Same as calling `assign_action(nullptr, animated_id)`.
+ *
+ * \see #blender::animrig::assign_action(ID &animated_id)
  */
-void unassign_action(ID &animated_id);
+[[nodiscard]] bool unassign_action(ID &animated_id);
 
 /**
- * Clear the Action slot of this ID.
+ * Un-assign the Action assigned to this ID.
  *
- * `adt.slot_handle_name` is updated to reflect the current name of the
- * slot, before un-assigning. This is to ensure that the stored name reflects
- * the actual slot that was used, making re-slot trivial.
+ * Same as calling `assign_action(nullptr, owned_adt)`.
  *
- * \param animated_id: the animated ID.
- *
- * \note this does not clear the Action pointer, just the slot handle.
+ * \see #blender::animrig::assign_action(OwnedAnimData owned_adt)
  */
-void unassign_slot(ID &animated_id);
+[[nodiscard]] bool unassign_action(OwnedAnimData owned_adt);
+
+/**
+ * Generic function to build Action-assignment logic.
+ *
+ * This is a low-level function, intended as a building block for higher-level Action assignment
+ * functions.
+ *
+ */
+[[nodiscard]] bool generic_assign_action(ID &animated_id,
+                                         bAction *action_to_assign,
+                                         bAction *&action_ptr_ref,
+                                         slot_handle_t &slot_handle_ref,
+                                         char *slot_name);
+
+/**
+ * Generic function to build Slot-assignment logic.
+ *
+ * This is a low-level function, intended as a building block for higher-level slot assignment
+ * functions.
+ */
+[[nodiscard]] ActionSlotAssignmentResult generic_assign_action_slot(Slot *slot_to_assign,
+                                                                    ID &animated_id,
+                                                                    bAction *&action_ptr_ref,
+                                                                    slot_handle_t &slot_handle_ref,
+                                                                    char *slot_name);
+
+/**
+ * Generic function to build Slot Handle-assignment logic.
+ *
+ * This is a low-level function, intended as a building block for higher-level slot handle
+ * assignment functions.
+ */
+[[nodiscard]] ActionSlotAssignmentResult generic_assign_action_slot_handle(
+    slot_handle_t slot_handle_to_assign,
+    ID &animated_id,
+    bAction *&action_ptr_ref,
+    slot_handle_t &slot_handle_ref,
+    char *slot_name);
+
+/* --------------- Accessors --------------------- */
 
 /**
  * Return the Action of this ID, or nullptr if it has none.
@@ -1150,23 +1327,14 @@ animrig::ChannelBag *channelbag_for_action_slot(Action &action, slot_handle_t sl
  *
  * The use of this function is also an indicator for code that will have to be altered when
  * multi-layered Actions are getting implemented.
+ *
+ * \note This function requires a layered Action. To transparently handle legacy Actions, see the
+ * `animrig::legacy` namespace.
+ *
+ * \see #blender::animrig::legacy::fcurves_for_action_slot
  */
 Span<FCurve *> fcurves_for_action_slot(Action &action, slot_handle_t slot_handle);
 Span<const FCurve *> fcurves_for_action_slot(const Action &action, slot_handle_t slot_handle);
-
-/**
- * Return all F-Curves in the Action.
- *
- * This works for both legacy and layered Actions.
- *
- * This is a utility function whose purpose is unclear after multi-layer Actions are introduced.
- * It might still be useful, it might not be.
- *
- * The use of this function is an indicator for code that might have to be altered when
- * multi-layered Actions are getting implemented.
- */
-Vector<const FCurve *> fcurves_all(const Action &action);
-Vector<FCurve *> fcurves_all(Action &action);
 
 /**
  * Find or create an F-Curve on the given action that matches the given fcurve
@@ -1183,10 +1351,8 @@ Vector<FCurve *> fcurves_all(Action &action);
  * previously-unanimated depsgraph component may become animated now.
  *
  * \param ptr: RNA pointer for the struct the fcurve is being looked up/created
- * for. For legacy actions this is optional and may be null, but if provided is
- * used to do things like set the fcurve color properly. For layered actions
- * this parameter is required, and is used to create and assign an appropriate
- * slot if needed when creating the fcurve.
+ * for. It is used to create and assign an appropriate slot if needed when
+ * creating the fcurve, and set the fcurve color properly
  *
  * \param fcurve_descriptor: description of the fcurve to lookup/create. Note
  * that this is *not* relative to `ptr` (e.g. if `ptr` is not an ID). It should
@@ -1199,17 +1365,163 @@ FCurve *action_fcurve_ensure(Main *bmain,
                              FCurveDescriptor fcurve_descriptor);
 
 /**
- * Find the F-Curve from the given Action. This assumes that all the destinations are valid.
+ * Same as above, but creates a legacy Action.
+ *
+ * \note this function should ONLY be used in unit tests, in order to create
+ * legacy Actions for testing. Or in the very rare cases where handling of
+ * legacy Actions is still necessary AND you have no PointerRNA. In all other
+ * cases, just call #action_fcurve_ensure, it'll do the right thing
+ * transparently on whatever Action you give it.
  */
-FCurve *action_fcurve_find(bAction *act, FCurveDescriptor fcurve_descriptor);
+FCurve *action_fcurve_ensure_legacy(Main *bmain,
+                                    bAction *act,
+                                    const char group[],
+                                    PointerRNA *ptr,
+                                    FCurveDescriptor fcurve_descriptor);
+
+/**
+ * Find the F-Curve in the given Action.
+ *
+ * All the Action slots are searched for this F-Curve. To limit to a single
+ * slot, use fcurve_find_in_action_slot().
+ *
+ * \see #blender::animrig::fcurve_find_in_action_slot
+ */
+FCurve *fcurve_find_in_action(bAction *act, FCurveDescriptor fcurve_descriptor);
+
+/**
+ * Find the F-Curve in the given Action Slot.
+ *
+ * \see #blender::animrig::fcurve_find_in_action
+ */
+FCurve *fcurve_find_in_action_slot(bAction *act,
+                                   slot_handle_t slot_handle,
+                                   FCurveDescriptor fcurve_descriptor);
+
+/**
+ * Find the F-Curve in the Action Slot assigned to this ADT.
+ *
+ * \see #blender::animrig::fcurve_find_in_action
+ */
+FCurve *fcurve_find_in_assigned_slot(AnimData &adt, FCurveDescriptor fcurve_descriptor);
+
+/**
+ * Return whether `fcurve` targets the given collection path + data name.
+ *
+ * For example, to match F-Curves for the pose bone named `"botje"`, you'd pass
+ * `collection_rna_path = "pose.bones["` and `data_name="botje"`.
+ *
+ * \return True if `fcurve` matches, false if it doesn't.
+ */
+bool fcurve_matches_collection_path(const FCurve &fcurve,
+                                    StringRefNull collection_rna_path,
+                                    StringRefNull data_name);
+
+/**
+ * Return the F-Curves in the given action+slot for which `predicate` returns
+ * true.
+ *
+ * This works for both layered and legacy actions. For legacy actions the slot
+ * handle is ignored.
+ */
+Vector<FCurve *> fcurves_in_action_slot_filtered(
+    bAction *act, slot_handle_t slot_handle, FunctionRef<bool(const FCurve &fcurve)> predicate);
+
+/**
+ * Return the F-Curves in the given span for which `predicate` returns true.
+ */
+Vector<FCurve *> fcurves_in_span_filtered(Span<FCurve *> fcurves,
+                                          FunctionRef<bool(const FCurve &fcurve)> predicate);
+
+/**
+ * Return the F-Curves in the given listbase for which `predicate` returns
+ * true.
+ */
+Vector<FCurve *> fcurves_in_listbase_filtered(ListBase /* FCurve * */ fcurves,
+                                              FunctionRef<bool(const FCurve &fcurve)> predicate);
 
 /**
  * Remove the given FCurve from the action by searching for it in all channelbags.
  * This assumes that an FCurve can only exist in an action once.
  *
+ * Compatible with both legacy and layered Actions.
+ *
  *  \returns true if the given FCurve was removed.
+ *
+ * \see action_fcurve_detach
  */
 bool action_fcurve_remove(Action &action, FCurve &fcu);
+
+/**
+ * Detach the F-Curve from the Action, searching for it in all channelbags.
+ *
+ * Compatible with both legacy and layered Actions. The slot handles are ignored
+ * for legacy Actions.
+ *
+ * The F-Curve is not freed, and ownership is transferred to the caller.
+ *
+ * \see action_fcurve_remove
+ * \see action_fcurve_attach
+ * \see action_fcurve_move
+ *
+ * \return true when the F-Curve was found and detached, false if not found.
+ */
+bool action_fcurve_detach(Action &action, FCurve &fcurve_to_detach);
+
+/**
+ * Attach the F-Curve to the Action Slot.
+ *
+ * Compatible with both legacy and layered Actions. The slot handle is ignored
+ * for legacy Actions.
+ *
+ * On layered Actions, this assumes the 'Baklava Phase 1' invariants (one layer,
+ * one keyframe strip).
+ *
+ * \see action_fcurve_detach
+ * \see action_fcurve_move
+ */
+void action_fcurve_attach(Action &action,
+                          slot_handle_t action_slot,
+                          FCurve &fcurve_to_attach,
+                          std::optional<StringRefNull> group_name);
+
+/**
+ * Move an F-Curve from one Action to the other.
+ *
+ * If the F-Curve was part of a channel group, the group membership also carries
+ * over to the destination Action. If no group with the same name exists, it is
+ * created. This only happens for layered Actions, though.
+ *
+ * Compatible with both legacy and layered Actions. The slot handle and group
+ * membership are ignored for legacy Actions.
+ *
+ * The F-Curve must exist on the source Action. All channelbags for all slots
+ * are searched for the F-Curve.
+ *
+ * \param action_slot_dst may not be #Slot::unassigned on layered Actions.
+ *
+ * \see #blender::animrig::action_fcurve_detach
+ */
+void action_fcurve_move(Action &action_dst,
+                        slot_handle_t action_slot_dst,
+                        Action &action_src,
+                        FCurve &fcurve);
+
+/**
+ * Moves all F-Curves from one ChannelBag to the other.
+ *
+ * The ChannelBags do not need to be part of the same action, or even belong to
+ * an action at all.
+ *
+ * If the F-Curves belonged to channel groups, the group membership also carries
+ * over to the destination ChannelBag. If groups with the same names don't
+ * exist, they are created. \see blender::animrig::action_fcurve_detach
+ *
+ * The order of existing channel groups in the destination ChannelBag are not
+ * changed, and any new groups are placed after those in the order they appeared
+ * in the src group.
+ */
+void channelbag_fcurves_move(ChannelBag &channelbag_dst, ChannelBag &channelbag_src);
 
 /**
  * Find an appropriate user of the given Action + Slot for keyframing purposes.
@@ -1268,7 +1580,7 @@ ID *action_slot_get_id_best_guess(Main &bmain, Slot &slot, ID *primary_id);
  * TODO: Maybe at some point this function should get extended with an ID type parameter, to return
  * the first slot that is suitable for that ID type.
  *
- * \return The handle of the first slot, or Slot::unassigned if there is no slot (which includes
+ * \return The handle of the first slot, or #Slot::unassigned if there is no slot (which includes
  * legacy Actions).
  */
 slot_handle_t first_slot_handle(const ::bAction &dna_action);
@@ -1309,6 +1621,17 @@ void assert_baklava_phase_1_invariants(const Strip &strip);
  * Returns a nullptr if the action is empty or already layered.
  */
 Action *convert_to_layered_action(Main &bmain, const Action &legacy_action);
+
+/**
+ * Move the given slot from `from_action` to `to_action`.
+ * The slot name might not be exactly the same if the name already exists in the slots of
+ * `to_action`. Also the slot handle is likely going to be different on `to_action`.
+ * All users of the slot will be reassigned to the moved slot on `to_action`.
+ *
+ * \note The `from_action` will not be deleted by this function. But it might leave it without
+ * users which means it will not be saved (unless it has a fake user).
+ */
+void move_slot(Main &bmain, Slot &slot, Action &from_action, Action &to_action);
 
 /**
  * Deselect the keys of all actions in the Span. Duplicate entries are only visited once.
@@ -1369,13 +1692,13 @@ inline const blender::animrig::Strip &ActionStrip::wrap() const
   return *reinterpret_cast<const blender::animrig::Strip *>(this);
 }
 
-inline blender::animrig::KeyframeStrip &KeyframeActionStrip::wrap()
+inline blender::animrig::StripKeyframeData &ActionStripKeyframeData::wrap()
 {
-  return *reinterpret_cast<blender::animrig::KeyframeStrip *>(this);
+  return *reinterpret_cast<blender::animrig::StripKeyframeData *>(this);
 }
-inline const blender::animrig::KeyframeStrip &KeyframeActionStrip::wrap() const
+inline const blender::animrig::StripKeyframeData &ActionStripKeyframeData::wrap() const
 {
-  return *reinterpret_cast<const blender::animrig::KeyframeStrip *>(this);
+  return *reinterpret_cast<const blender::animrig::StripKeyframeData *>(this);
 }
 
 inline blender::animrig::ChannelBag &ActionChannelBag::wrap()

@@ -82,7 +82,7 @@
 #include "CLG_log.h"
 
 #ifdef WITH_PYTHON
-#  include "BPY_extern.h"
+#  include "BPY_extern.hh"
 #endif
 
 #ifdef WITH_ALEMBIC
@@ -1310,8 +1310,12 @@ static void trackto_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *tar
     /* NOTE(@joshualung): `targetmat[2]` instead of `ownermat[2]` is passed to #vectomat
      * for backwards compatibility it seems. */
     sub_v3_v3v3(vec, cob->matrix[3], ct->matrix[3]);
-    vectomat(
-        vec, ct->matrix[2], short(data->reserved1), short(data->reserved2), data->flags, totmat);
+    vectomat(vec,
+             ct->matrix[2],
+             std::clamp<short>(data->reserved1, 0, 5),
+             std::clamp<short>(data->reserved2, 0, 2),
+             data->flags,
+             totmat);
 
     mul_m4_m3m4(cob->matrix, totmat, cob->matrix);
   }
@@ -1540,7 +1544,9 @@ static void followpath_get_tarmat(Depsgraph * /*depsgraph*/,
         unit_m4(totmat);
 
         if (data->followflag & FOLLOWPATH_FOLLOW) {
-          quat_apply_track(quat, data->trackflag, data->upflag);
+          quat_apply_track(quat,
+                           std::clamp<short>(data->trackflag, 0, 5),
+                           std::clamp<short>(data->upflag, 0, 2));
           quat_to_mat4(totmat, quat);
         }
 
@@ -2904,6 +2910,11 @@ static void actcon_get_tarmat(Depsgraph *depsgraph,
 {
   bActionConstraint *data = static_cast<bActionConstraint *>(con->data);
 
+  if (!data->act) {
+    /* Without an Action, this constraint cannot do anything. */
+    return;
+  }
+
   if (VALID_CONS_TARGET(ct) || data->flag & ACTCON_USE_EVAL_TIME) {
     float tempmat[4][4], vec[3];
     float s, t;
@@ -2952,8 +2963,17 @@ static void actcon_get_tarmat(Depsgraph *depsgraph,
 
       BLI_assert(uint(axis) < 3);
 
-      /* Target defines the animation */
-      s = (vec[axis] - data->min) / (data->max - data->min);
+      /* Convert the target's value into a [0, 1] value that's later used to find the Action frame
+       * to apply. This compares to the min/max boundary values first, before doing the
+       * normalization by the (max-min) range, to get predictable, valid values when that range is
+       * zero. */
+      const float range = data->max - data->min;
+      if ((range == 0.0f) || (ushort(axis) > 2)) {
+        s = 0.0f;
+      }
+      else {
+        s = (vec[axis] - data->min) / range;
+      }
     }
 
     CLAMP(s, 0, 1);
@@ -2968,19 +2988,19 @@ static void actcon_get_tarmat(Depsgraph *depsgraph,
              (cob->pchan) ? cob->pchan->name : nullptr);
     }
 
-    /* TODO: add an action slot selector to the constraint settings. */
-    BLI_assert(data->act);
-    const blender::animrig::slot_handle_t slot_handle = blender::animrig::first_slot_handle(
-        *data->act);
-
     /* Get the appropriate information from the action */
     if (cob->type == CONSTRAINT_OBTYPE_OBJECT || (data->flag & ACTCON_BONE_USE_OBJECT_ACTION)) {
       Object workob;
 
       /* evaluate using workob */
       /* FIXME: we don't have any consistent standards on limiting effects on object... */
-      what_does_obaction(
-          cob->ob, &workob, nullptr, data->act, slot_handle, nullptr, &anim_eval_context);
+      what_does_obaction(cob->ob,
+                         &workob,
+                         nullptr,
+                         data->act,
+                         data->action_slot_handle,
+                         nullptr,
+                         &anim_eval_context);
       BKE_object_to_mat4(&workob, ct->matrix);
     }
     else if (cob->type == CONSTRAINT_OBTYPE_BONE) {
@@ -2997,8 +3017,13 @@ static void actcon_get_tarmat(Depsgraph *depsgraph,
       tchan->rotmode = pchan->rotmode;
 
       /* evaluate action using workob (it will only set the PoseChannel in question) */
-      what_does_obaction(
-          cob->ob, &workob, &pose, data->act, slot_handle, pchan->name, &anim_eval_context);
+      what_does_obaction(cob->ob,
+                         &workob,
+                         &pose,
+                         data->act,
+                         data->action_slot_handle,
+                         pchan->name,
+                         &anim_eval_context);
 
       /* convert animation to matrices for use here */
       BKE_pchan_calc_mat(tchan);
@@ -4800,23 +4825,27 @@ static void pivotcon_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *ta
   /* pivot correction */
   float axis[3], angle;
 
+  const int rot_axis = std::clamp(
+      int(data->rotAxis), int(PIVOTCON_AXIS_NONE), int(PIVOTCON_AXIS_Z));
+
   /* firstly, check if pivoting should take place based on the current rotation */
-  if (data->rotAxis != PIVOTCON_AXIS_NONE) {
+  if (rot_axis != PIVOTCON_AXIS_NONE) {
+
     float rot[3];
 
     /* extract euler-rotation of target */
     mat4_to_eulO(rot, cob->rotOrder, cob->matrix);
 
     /* check which range might be violated */
-    if (data->rotAxis < PIVOTCON_AXIS_X) {
-      /* negative rotations (data->rotAxis = 0 -> 2) */
-      if (rot[data->rotAxis] > 0.0f) {
+    if (rot_axis < PIVOTCON_AXIS_X) {
+      /* Negative rotations (`rot_axis = 0 -> 2`). */
+      if (rot[rot_axis] > 0.0f) {
         return;
       }
     }
     else {
-      /* positive rotations (data->rotAxis = 3 -> 5 */
-      if (rot[data->rotAxis - PIVOTCON_AXIS_X] < 0.0f) {
+      /* Positive rotations (`rot_axis = 3 -> 5`). */
+      if (rot[rot_axis - PIVOTCON_AXIS_X] < 0.0f) {
         return;
       }
     }
@@ -6660,3 +6689,11 @@ void BKE_constraint_blend_read_data(BlendDataReader *reader, ID *id_owner, ListB
     }
   }
 }
+
+/* Some static asserts to ensure that the bActionConstraint data is using the expected types for
+ * some of the fields. This check is done here instead of in DNA_constraint_types.h to avoid the
+ * inclusion of an DNA_anim_types.h in DNA_constraint_types.h just for this assert. */
+static_assert(
+    std::is_same_v<decltype(ActionSlot::handle), decltype(bActionConstraint::action_slot_handle)>);
+static_assert(
+    std::is_same_v<decltype(ActionSlot::name), decltype(bActionConstraint::action_slot_name)>);

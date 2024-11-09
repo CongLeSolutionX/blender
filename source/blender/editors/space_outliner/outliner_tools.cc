@@ -262,6 +262,14 @@ static void unlink_material_fn(bContext * /*C*/,
     return;
   }
 
+  if (!ID_IS_EDITABLE(tsep->id) || ID_IS_OVERRIDE_LIBRARY(tsep->id)) {
+    BKE_reportf(reports,
+                RPT_WARNING,
+                "Cannot unlink the material '%s' from linked object data",
+                tselem->id->name + 2);
+    return;
+  }
+
   Material **matar = nullptr;
   int a, totcol = 0;
 
@@ -334,8 +342,8 @@ static void unlink_texture_fn(bContext * /*C*/,
      * for example) so there's no data to unlink from. */
     BKE_reportf(reports,
                 RPT_WARNING,
-                "Cannot unlink texture '%s'. It's not clear which freestyle line style it should "
-                "be unlinked from, there's no freestyle line style as parent in the Outliner tree",
+                "Cannot unlink texture '%s'. It's not clear which Freestyle line style it should "
+                "be unlinked from, there's no Freestyle line style as parent in the Outliner tree",
                 tselem->id->name + 2);
     return;
   }
@@ -2302,7 +2310,7 @@ static void modifier_fn(int event, TreeElement *te, TreeStoreElem * /*tselem*/, 
   }
   else if (event == OL_MODIFIER_OP_APPLY) {
     object::modifier_apply(
-        bmain, data->reports, depsgraph, scene, ob, md, object::MODIFIER_APPLY_DATA, false);
+        bmain, data->reports, depsgraph, scene, ob, md, object::MODIFIER_APPLY_DATA, false, false);
     DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
     DEG_relations_tag_update(bmain);
     WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER, ob);

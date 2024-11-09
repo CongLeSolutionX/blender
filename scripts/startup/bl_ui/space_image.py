@@ -215,7 +215,7 @@ class IMAGE_MT_image(Menu):
         layout.separator()
 
         has_image_clipboard = False
-        if sys.platform[:3] == "win":
+        if (sys.platform[:3] == "win") or (sys.platform == "darwin"):
             has_image_clipboard = True
         else:
             from _bpy import _ghost_backend
@@ -257,7 +257,6 @@ class IMAGE_MT_image(Menu):
         if ima and context.area.ui_type == 'IMAGE_EDITOR':
             layout.separator()
             layout.operator("palette.extract_from_image", text="Extract Palette")
-            layout.operator("gpencil.image_to_grease_pencil", text="Generate Grease Pencil")
 
 
 class IMAGE_MT_image_transform(Menu):
@@ -402,7 +401,7 @@ class IMAGE_MT_uvs_unwrap(Menu):
     def draw(self, _context):
         layout = self.layout
 
-        layout.operator("uv.unwrap")
+        layout.operator_enum("uv.unwrap", "method")
 
         layout.separator()
 
@@ -710,7 +709,7 @@ class IMAGE_HT_tool_header(Header):
             draw_fn(context, layout, tool)
 
         if tool_mode == 'PAINT':
-            if (tool is not None) and tool.has_datablock:
+            if (tool is not None) and tool.use_brushes:
                 layout.popover("IMAGE_PT_paint_settings_advanced")
                 layout.popover("IMAGE_PT_paint_stroke")
                 layout.popover("IMAGE_PT_paint_curve")
@@ -734,7 +733,7 @@ class IMAGE_HT_tool_header(Header):
 class _draw_tool_settings_context_mode:
     @staticmethod
     def UV(context, layout, tool):
-        if tool and tool.has_datablock:
+        if tool and tool.use_brushes:
             if context.mode == 'EDIT_MESH':
                 tool_settings = context.tool_settings
                 uv_sculpt = tool_settings.uv_sculpt
@@ -763,7 +762,7 @@ class _draw_tool_settings_context_mode:
 
     @staticmethod
     def PAINT(context, layout, tool):
-        if (tool is None) or (not tool.has_datablock):
+        if (tool is None) or (not tool.use_brushes):
             return
 
         paint = context.tool_settings.image_paint
@@ -1718,6 +1717,8 @@ class ImageAssetShelf(BrushAssetShelf):
 
 class IMAGE_AST_brush_paint(ImageAssetShelf, AssetShelf):
     mode_prop = "use_paint_image"
+    brush_type_prop = "image_brush_type"
+    tool_prop = "image_tool"
 
     @classmethod
     def poll(cls, context):

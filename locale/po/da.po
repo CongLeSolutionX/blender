@@ -1,10 +1,10 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.3.0 Alpha (b'b5ea3beaf93b')\n"
+"Project-Id-Version: Blender 4.3.0 Beta (b'28a8486e2b3f')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-09-02 14:03+0000\n"
-"PO-Revision-Date: 2024-05-23 14:56+0000\n"
+"POT-Creation-Date: 2024-10-29 10:02+0000\n"
+"PO-Revision-Date: 2024-10-14 08:42+0000\n"
 "Last-Translator: leif larsen <linuxdk1978@gmail.com>\n"
 "Language-Team: Danish <https://translate.blender.org/projects/blender-ui/ui/da/>\n"
 "Language: da\n"
@@ -12,7 +12,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=n != 1;\n"
-"X-Generator: Weblate 5.5.2"
+"X-Generator: Weblate 5.7.2"
 
 
 msgid "Valid"
@@ -53,10 +53,6 @@ msgstr "Liste over AOVs"
 
 msgid "Collection of AOVs"
 msgstr "Samling af AOVs"
-
-
-msgid "F-Curves"
-msgstr "F-curves"
 
 
 msgid "Action F-Curves"
@@ -243,34 +239,6 @@ msgid "Collection of action groups"
 msgstr "Samling af handlingsgrupper"
 
 
-msgid "Influence"
-msgstr "Indflydelse"
-
-
-msgid "Mix Mode"
-msgstr "Blandingstilstand"
-
-
-msgid "Replace"
-msgstr "Udskift"
-
-
-msgid "Add"
-msgstr "Tilføj"
-
-
-msgid "Subtract"
-msgstr "Fratrække"
-
-
-msgid "Multiply"
-msgstr "Gange"
-
-
-msgid "Strips"
-msgstr "stimmel"
-
-
 msgid "Action Pose Markers"
 msgstr "Handling poserings markøre"
 
@@ -293,18 +261,6 @@ msgstr "Aktiv poséringsmarkør indeks"
 
 msgid "Index of active pose marker"
 msgstr "Indeks for aktive poséringsmarkører"
-
-
-msgid "Active"
-msgstr "Aktiv"
-
-
-msgid "Show Expanded"
-msgstr "Vis udvidet"
-
-
-msgid "Keyframe"
-msgstr "Nøglebillede"
 
 
 msgid "Add-on"
@@ -443,12 +399,68 @@ msgid "Displays glTF Material Output node in Shader Editor (Menu Add > Output)"
 msgstr "Viser glTF Material Output node i Shader Editor (Menu Tilføj > Output)"
 
 
+msgid "        Filter by Name"
+msgstr "        Filtrer efter navn"
+
+
+msgid "Show only hotkeys that have this text in their name"
+msgstr "Vis kun genvejstaster, der har denne tekst i deres navn"
+
+
+msgid "Hide Mix nodes"
+msgstr "Skjul Mix-noder"
+
+
+msgid "When merging nodes with the Ctrl+Numpad0 hotkey (and similar) specify whether to collapse them or show the full node with options expanded"
+msgstr "Når du slår noder sammen med genvejstasten Ctrl+Numpad0 (og lignende), skal du angive, om de skal skjules eller vise hele noden med udvidede muligheder"
+
+
+msgid "Always collapse the new merge nodes"
+msgstr "Skjul altid de nye sammenfletningsknuder sammen"
+
+
+msgid "Collapse in all cases except for shaders"
+msgstr "Fold sammen i alle tilfælde undtagen shaders"
+
+
+msgid "Never"
+msgstr "Aldrig"
+
+
+msgid "Never collapse the new merge nodes"
+msgstr "Skjul aldrig de nye fletningsnoder sammen"
+
+
+msgid "When merging nodes with the Ctrl+Numpad0 hotkey (and similar) specify the position of the new nodes"
+msgstr "Når du slår noder sammen med genvejstasten Ctrl+Numpad0 (og lignende), skal du angive placeringen af de nye noder"
+
+
 msgid "Center"
 msgstr "Centrum"
 
 
+msgid "Place the Mix node between the two nodes"
+msgstr "Placer Mix-noden mellem de to noder"
+
+
 msgid "Bottom"
 msgstr "Bund"
+
+
+msgid "Place the Mix node at the same height as the lowest node"
+msgstr "Placer Mix-noden mellem de to noder"
+
+
+msgid "Show Hotkey List"
+msgstr "Vis genvejsliste"
+
+
+msgid "Expand this box into a list of all the hotkeys for functions in this addon"
+msgstr "Udvid denne boks til en liste over alle genvejstaster til funktioner i denne tilføjelse"
+
+
+msgid "Expand this box into a list of all naming tags for principled texture setup"
+msgstr "Udvid denne boks til en liste over alle navngivningsmærker til principiel teksturopsætning"
 
 
 msgid "Fribidi Library"
@@ -535,6 +547,10 @@ msgid "Method used for combining Active Action's result with result of NLA stack
 msgstr "Metode brugt til at kombinere Active Actions resultat med resultat af NLA stak"
 
 
+msgid "Replace"
+msgstr "Udskift"
+
+
 msgid "The strip values replace the accumulated results by amount specified by influence"
 msgstr "Stripværdierne erstatter de akkumulerede resultater med mængde specificeret ved indflydelse"
 
@@ -547,12 +563,24 @@ msgid "The strip values are combined with accumulated results by appropriately u
 msgstr "Stripværdierne kombineres med akkumulerede resultater ved passende at bruge addition, multiplikation eller quaternion matematik baseret på kanaltype"
 
 
+msgid "Add"
+msgstr "Tilføj"
+
+
 msgid "Weighted result of strip is added to the accumulated results"
 msgstr "Det vægtede resultat af strimlen føjes til de akkumulerede resultater"
 
 
+msgid "Subtract"
+msgstr "Fratrække"
+
+
 msgid "Weighted result of strip is removed from the accumulated results"
 msgstr "Det vægtede resultat af strimlen fjernes fra de akkumulerede resultater"
+
+
+msgid "Multiply"
+msgstr "Gange"
 
 
 msgid "Weighted result of strip is multiplied with the accumulated results"
@@ -1674,10 +1702,6 @@ msgid "Active Attribute Index"
 msgstr "Aktivt attributindeks"
 
 
-msgid "Active attribute index"
-msgstr "Aktivt attributindeks"
-
-
 msgid "Active Color"
 msgstr "Aktiv farve"
 
@@ -1974,6 +1998,46 @@ msgid "Weight"
 msgstr "Vægt"
 
 
+msgid "Armature"
+msgstr "Armatur"
+
+
+msgid "Camera"
+msgstr "Kamera"
+
+
+msgid "Image"
+msgstr "Billede"
+
+
+msgid "Key"
+msgstr "Nøgle"
+
+
+msgid "Material"
+msgstr "Materiale"
+
+
+msgid "Mesh"
+msgstr "Maske"
+
+
+msgid "Movie Clip"
+msgstr "Film klip"
+
+
+msgid "Scene"
+msgstr "Scene"
+
+
+msgid "Sound"
+msgstr "Lyd"
+
+
+msgid "Text"
+msgstr "Tekst"
+
+
 msgid "Level"
 msgstr "Niveau"
 
@@ -2026,8 +2090,8 @@ msgid "Mode"
 msgstr "tilstand"
 
 
-msgid "Material"
-msgstr "Materiale"
+msgid "Active"
+msgstr "Aktiv"
 
 
 msgid "Direction"
@@ -2114,10 +2178,6 @@ msgid "Crop"
 msgstr "Beskær"
 
 
-msgid "Image"
-msgstr "Billede"
-
-
 msgid "Image displayed and edited in this space"
 msgstr "Billedet vises og redigeres i dette rum"
 
@@ -2146,6 +2206,10 @@ msgid "Show this image as background"
 msgstr "Vis dette billede som baggrund"
 
 
+msgid "Show Expanded"
+msgstr "Vis udvidet"
+
+
 msgid "Show On Foreground"
 msgstr "Vis på forgrunden"
 
@@ -2160,10 +2224,6 @@ msgstr "Baggrunds kilde"
 
 msgid "Data source used for background"
 msgstr "Datakilde brugt til baggrund"
-
-
-msgid "Movie Clip"
-msgstr "Film klip"
 
 
 msgid "Camera Clip"
@@ -2234,6 +2294,10 @@ msgid "Temperature"
 msgstr "Temperatur"
 
 
+msgid "Influence"
+msgstr "Indflydelse"
+
+
 msgid "Disable"
 msgstr "Deaktivere"
 
@@ -2278,8 +2342,8 @@ msgid "Locked Track"
 msgstr "Låst spor"
 
 
-msgid "Armature"
-msgstr "Armatur"
+msgid "Mix Mode"
+msgstr "Blandingstilstand"
 
 
 msgid "Target object"
@@ -2306,10 +2370,6 @@ msgid "Up Axis"
 msgstr "Op akse"
 
 
-msgid "Camera"
-msgstr "Kamera"
-
-
 msgid "Bone"
 msgstr "Knogle"
 
@@ -2328,10 +2388,6 @@ msgstr "Lokation"
 
 msgid "Depth"
 msgstr "Dybte"
-
-
-msgid "Scene"
-msgstr "Scene"
 
 
 msgid "Invert"
@@ -2383,6 +2439,10 @@ msgid "Visibility"
 msgstr "Synlighed"
 
 
+msgid "Keyframe"
+msgstr "Nøglebillede"
+
+
 msgid "Blend Mode"
 msgstr "Blandings måde"
 
@@ -2391,20 +2451,8 @@ msgid "Ping Pong"
 msgstr "Ping pong"
 
 
-msgid "Key"
-msgstr "Nøgle"
-
-
-msgid "Mesh"
-msgstr "Maske"
-
-
-msgid "Sound"
-msgstr "Lyd"
-
-
-msgid "Text"
-msgstr "Tekst"
+msgid "F-Curves"
+msgstr "F-curves"
 
 
 msgid "B-Bone"
@@ -2482,22 +2530,6 @@ msgstr "Bit dybde pr kanal"
 
 msgid "Pxr24 (lossy)"
 msgstr "Pxr24 (ej tabsfri)"
-
-
-msgid "ZIP (lossless)"
-msgstr "ZIP (tabsfri)"
-
-
-msgid "PIZ (lossless)"
-msgstr "PIZ (tabsfri)"
-
-
-msgid "RLE (lossless)"
-msgstr "RLE (tabsfri)"
-
-
-msgid "ZIPS (lossless)"
-msgstr "ZIPS (tabsfri)"
 
 
 msgid "B44 (lossy)"
@@ -2734,6 +2766,10 @@ msgstr "Følsomhed"
 
 msgid "Dynamics"
 msgstr "dynamik"
+
+
+msgid "Strips"
+msgstr "stimmel"
 
 
 msgid "Timeline"

@@ -21,7 +21,7 @@
 #include "BKE_layer.hh"
 #include "BKE_mesh.hh"
 #include "BKE_paint.hh"
-#include "BKE_pbvh_api.hh"
+#include "BKE_paint_bvh.hh"
 
 #include "IMB_colormanagement.hh"
 
@@ -100,6 +100,7 @@ static void color_filter_task(const Depsgraph &depsgraph,
                               const OffsetIndices<int> faces,
                               const Span<int> corner_verts,
                               const GroupedSpan<int> vert_to_face_map,
+                              const MeshAttributeData &attribute_data,
                               const FilterType mode,
                               const float filter_strength,
                               const float *filter_fill_color,
@@ -107,7 +108,6 @@ static void color_filter_task(const Depsgraph &depsgraph,
                               LocalData &tls,
                               bke::GSpanAttributeWriter &color_attribute)
 {
-  const Mesh &mesh = *static_cast<const Mesh *>(ob.data);
   SculptSession &ss = *ob.sculpt;
 
   const Span<float4> orig_colors = orig_color_data_get_mesh(ob, node);
@@ -116,7 +116,7 @@ static void color_filter_task(const Depsgraph &depsgraph,
 
   tls.factors.resize(verts.size());
   const MutableSpan<float> factors = tls.factors;
-  fill_factor_from_hide_and_mask(mesh, verts, factors);
+  fill_factor_from_hide_and_mask(attribute_data.hide_vert, attribute_data.mask, verts, factors);
   auto_mask::calc_vert_factors(
       depsgraph, ob, ss.filter_cache->automasking.get(), node, verts, factors);
   scale_factors(factors, filter_strength);
@@ -339,25 +339,23 @@ static void sculpt_color_presmooth_init(const Mesh &mesh, Object &object)
   };
   threading::EnumerableThreadSpecific<LocalData> all_tls;
   for ([[maybe_unused]] const int iteration : IndexRange(2)) {
-    threading::parallel_for(node_mask.index_range(), 1, [&](const IndexRange range) {
+    node_mask.foreach_index(GrainSize(1), [&](const int i) {
       LocalData &tls = all_tls.local();
-      node_mask.slice(range).foreach_index([&](const int i) {
-        const Span<int> verts = nodes[i].verts();
+      const Span<int> verts = nodes[i].verts();
 
-        tls.vert_neighbors.resize(verts.size());
-        calc_vert_neighbors(faces, corner_verts, vert_to_face_map, {}, verts, tls.vert_neighbors);
-        const Span<Vector<int>> vert_neighbors = tls.vert_neighbors;
+      tls.vert_neighbors.resize(verts.size());
+      calc_vert_neighbors(faces, corner_verts, vert_to_face_map, {}, verts, tls.vert_neighbors);
+      const Span<Vector<int>> vert_neighbors = tls.vert_neighbors;
 
-        tls.averaged_colors.resize(verts.size());
-        const MutableSpan<float4> averaged_colors = tls.averaged_colors;
-        smooth::neighbor_data_average_mesh(
-            pre_smoothed_color.as_span(), vert_neighbors, averaged_colors);
+      tls.averaged_colors.resize(verts.size());
+      const MutableSpan<float4> averaged_colors = tls.averaged_colors;
+      smooth::neighbor_data_average_mesh(
+          pre_smoothed_color.as_span(), vert_neighbors, averaged_colors);
 
-        for (const int i : verts.index_range()) {
-          pre_smoothed_color[verts[i]] = math::interpolate(
-              pre_smoothed_color[verts[i]], averaged_colors[i], 0.5f);
-        }
-      });
+      for (const int i : verts.index_range()) {
+        pre_smoothed_color[verts[i]] = math::interpolate(
+            pre_smoothed_color[verts[i]], averaged_colors[i], 0.5f);
+      }
     });
   }
 }
@@ -387,25 +385,25 @@ static void sculpt_color_filter_apply(bContext *C, wmOperator *op, Object &ob)
   const Span<int> corner_verts = mesh.corner_verts();
   const GroupedSpan<int> vert_to_face_map = mesh.vert_to_face_map();
   bke::GSpanAttributeWriter color_attribute = active_color_attribute_for_write(mesh);
+  const MeshAttributeData attribute_data(mesh.attributes());
 
   threading::EnumerableThreadSpecific<LocalData> all_tls;
-  threading::parallel_for(node_mask.index_range(), 1, [&](const IndexRange range) {
+  node_mask.foreach_index(GrainSize(1), [&](const int i) {
     LocalData &tls = all_tls.local();
-    node_mask.slice(range).foreach_index([&](const int i) {
-      color_filter_task(depsgraph,
-                        ob,
-                        faces,
-                        corner_verts,
-                        vert_to_face_map,
-                        mode,
-                        filter_strength,
-                        fill_color,
-                        nodes[i],
-                        tls,
-                        color_attribute);
-      BKE_pbvh_node_mark_update_color(nodes[i]);
-    });
+    color_filter_task(depsgraph,
+                      ob,
+                      faces,
+                      corner_verts,
+                      vert_to_face_map,
+                      attribute_data,
+                      mode,
+                      filter_strength,
+                      fill_color,
+                      nodes[i],
+                      tls,
+                      color_attribute);
   });
+  pbvh.tag_attribute_changed(node_mask, mesh.active_color_attribute);
   color_attribute.finish();
   flush_update_step(C, UpdateType::Color);
 }
@@ -445,6 +443,7 @@ static int sculpt_color_filter_modal(bContext *C, wmOperator *op, const wmEvent 
 
 static int sculpt_color_filter_init(bContext *C, wmOperator *op)
 {
+  const Scene &scene = *CTX_data_scene(C);
   Object &ob = *CTX_data_active_object(C);
   const Sculpt &sd = *CTX_data_tool_settings(C)->sculpt;
   SculptSession &ss = *ob.sculpt;
@@ -474,7 +473,7 @@ static int sculpt_color_filter_init(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  undo::push_begin(ob, op);
+  undo::push_begin(scene, ob, op);
   BKE_sculpt_color_layer_create_if_needed(&ob);
 
   /* CTX_data_ensure_evaluated_depsgraph should be used at the end to include the updates of

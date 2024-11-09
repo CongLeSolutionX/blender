@@ -33,7 +33,7 @@
 #include "BLI_fileops.h"
 #include "BLI_listbase.h"
 #include "BLI_math_vector_types.hh"
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 #include "BLI_rect.h"
 #include "BLI_string.h"
 #include "BLI_system.h"
@@ -1583,6 +1583,9 @@ static GHOST_WindowHandle playanim_window_open(
   GHOST_GPUSettings gpusettings = {0};
   const eGPUBackendType gpu_backend = GPU_backend_type_selection_get();
   gpusettings.context_type = wm_ghost_drawing_context_type(gpu_backend);
+  gpusettings.preferred_device.index = U.gpu_preferred_index;
+  gpusettings.preferred_device.vendor_id = U.gpu_preferred_vendor_id;
+  gpusettings.preferred_device.device_id = U.gpu_preferred_device_id;
 
   {
     bool screen_size_valid = false;
@@ -1665,7 +1668,7 @@ static bool playanim_window_font_scale_from_dpi(PlayState &ps)
 {
   const float scale = (GHOST_GetDPIHint(ps.ghost_data.window) / 96.0f);
   const float font_size_base = 11.0f; /* Font size un-scaled. */
-  const int font_size = int(font_size_base * scale) + 0.5f;
+  const int font_size = int((font_size_base * scale) + 0.5f);
   bool changed = false;
   if (ps.font_size != font_size) {
     BLF_size(ps.font_id, font_size);
@@ -1841,6 +1844,7 @@ static bool wm_main_playanim_intern(int argc, const char **argv, PlayArgs *args_
     GHOST_SetBacktraceHandler((GHOST_TBacktraceFn)BLI_system_backtrace);
 
     ps.ghost_data.system = GHOST_CreateSystem();
+    GPU_backend_ghost_system_set(ps.ghost_data.system);
 
     if (UNLIKELY(ps.ghost_data.system == nullptr)) {
       /* GHOST will have reported the back-ends that failed to load. */
@@ -1919,7 +1923,7 @@ static bool wm_main_playanim_intern(int argc, const char **argv, PlayArgs *args_
 #ifdef WITH_AUDASPACE
   g_audaspace.source = AUD_Sound_file(filepath);
   if (!BLI_listbase_is_empty(&ps.picsbase)) {
-    ImBufAnim *anim_movie = static_cast<PlayAnimPict *>(ps.picsbase.first)->anim;
+    const ImBufAnim *anim_movie = static_cast<PlayAnimPict *>(ps.picsbase.first)->anim;
     if (anim_movie) {
       short frs_sec = 25;
       float frs_sec_base = 1.0;

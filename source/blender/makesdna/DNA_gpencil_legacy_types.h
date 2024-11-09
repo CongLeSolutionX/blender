@@ -15,7 +15,6 @@
 struct AnimData;
 struct Curve;
 struct Curve;
-struct GPencilUpdateCache;
 struct MDeformVert;
 #ifdef __cplusplus
 namespace blender::gpu {
@@ -53,16 +52,6 @@ typedef struct bGPDcontrolpoint {
   int size;
 } bGPDcontrolpoint;
 
-typedef struct bGPDspoint_Runtime {
-  DNA_DEFINE_CXX_METHODS(bGPDspoint_Runtime)
-
-  /** Original point (used to dereference evaluated data) */
-  struct bGPDspoint *pt_orig;
-  /** Original index array position */
-  int idx_orig;
-  char _pad0[4];
-} bGPDspoint_Runtime;
-
 /**
  * Grease-Pencil Annotations - 'Stroke Point'
  * -> Coordinates may either be 2d or 3d depending on settings at the time
@@ -95,8 +84,6 @@ typedef struct bGPDspoint {
 
   /** Runtime data */
   char _pad2[4];
-
-  bGPDspoint_Runtime runtime;
 } bGPDspoint;
 
 /** #bGPDspoint.flag */
@@ -308,11 +295,6 @@ typedef struct bGPDstroke {
   /** Factor of opacity for Fill color (used by opacity modifier). */
   float fill_opacity_fac;
 
-  /** Min of the bound box used to speedup painting operators. */
-  float boundbox_min[3];
-  /** Max of the bound box used to speedup painting operators. */
-  float boundbox_max[3];
-
   /** UV rotation */
   float uv_rotation;
   /** UV translation (X and Y axis) */
@@ -332,9 +314,6 @@ typedef struct bGPDstroke {
 
   /** Curve used to edit the stroke using Bezier handlers. */
   struct bGPDcurve *editcurve;
-
-  /* NOTE: When adding new members, make sure to add them to BKE_gpencil_stroke_copy_settings as
-   * well! */
 
   bGPDstroke_Runtime runtime;
   void *_pad5;
@@ -404,9 +383,6 @@ typedef struct bGPDframe_Runtime {
   int frameid;
   /** Onion offset from active frame. 0 if not onion. INT_MAX to bypass frame. */
   int onion_id;
-
-  /** Original frame (used to dereference evaluated data) */
-  struct bGPDframe *gpf_orig;
 } bGPDframe_Runtime;
 
 /**
@@ -428,9 +404,6 @@ typedef struct bGPDframe {
   short flag;
   /** Keyframe type (eBezTriple_KeyframeType). */
   short key_type;
-
-  /* NOTE: When adding new members, make sure to add them to BKE_gpencil_frame_copy_settings as
-   * well! */
 
   bGPDframe_Runtime runtime;
 } bGPDframe;
@@ -475,8 +448,6 @@ typedef struct bGPDlayer_Runtime {
   /** Id for dynamic icon used to show annotation color preview for layer. */
   int icon_id;
   char _pad[4];
-  /** Original layer (used to dereference evaluated data) */
-  struct bGPDlayer *gpl_orig;
 } bGPDlayer_Runtime;
 
 /** Grease-Pencil Annotations - 'Layer'. */
@@ -560,9 +531,6 @@ typedef struct bGPDlayer {
   float location[3], rotation[3], scale[3];
   float layer_mat[4][4], layer_invmat[4][4];
   char _pad3[4];
-
-  /* NOTE: When adding new members, make sure to add them to BKE_gpencil_layer_copy_settings as
-   * well! */
 
   bGPDlayer_Runtime runtime;
 } bGPDlayer;
@@ -671,8 +639,6 @@ typedef struct bGPdata_Runtime {
   Brush *sbuffer_brush;
   struct GpencilBatchCache *gpencil_cache;
   struct LineartCache *lineart_cache;
-
-  struct GPencilUpdateCache *update_cache;
 } bGPdata_Runtime;
 
 /* grid configuration */
@@ -768,9 +734,6 @@ typedef struct bGPdata {
   int vertex_group_active_index;
 
   bGPgrid grid;
-
-  /* NOTE: When adding new members, make sure to add them to BKE_gpencil_data_copy_settings as
-   * well! */
 
   bGPdata_Runtime runtime;
 } bGPdata;

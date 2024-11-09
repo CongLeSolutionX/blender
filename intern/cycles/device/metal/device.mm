@@ -31,6 +31,11 @@ bool device_metal_init()
   return true;
 }
 
+void device_metal_exit()
+{
+  MetalDeviceKernels::static_deinitialize();
+}
+
 void device_metal_info(vector<DeviceInfo> &devices)
 {
   auto usable_devices = MetalInfo::get_usable_devices();
@@ -87,7 +92,8 @@ void device_metal_info(vector<DeviceInfo> &devices)
       info.use_hardware_raytracing = device.supportsRaytracing;
 
       /* Use hardware raytracing for faster rendering on architectures that support it. */
-      info.use_metalrt_by_default = (MetalInfo::get_apple_gpu_architecture(device) >= APPLE_M3);
+      info.use_metalrt_by_default = device.supportsRaytracing &&
+                                    (MetalInfo::get_apple_gpu_architecture(device) >= APPLE_M3);
     }
 #  endif
 

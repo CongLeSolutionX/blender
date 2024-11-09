@@ -12,6 +12,7 @@
 
 #include "overlay_next_antialiasing.hh"
 #include "overlay_next_armature.hh"
+#include "overlay_next_attribute_viewer.hh"
 #include "overlay_next_background.hh"
 #include "overlay_next_bounds.hh"
 #include "overlay_next_camera.hh"
@@ -30,6 +31,7 @@
 #include "overlay_next_mesh.hh"
 #include "overlay_next_metaball.hh"
 #include "overlay_next_mode_transfer.hh"
+#include "overlay_next_motion_path.hh"
 #include "overlay_next_origin.hh"
 #include "overlay_next_outline.hh"
 #include "overlay_next_paint.hh"
@@ -66,11 +68,13 @@ class Instance {
   Background background;
   Origins origins;
   Outline outline;
+  MotionPath motion_paths;
 
   struct OverlayLayer {
     const SelectionType selection_type_;
 
     Armatures armatures = {selection_type_};
+    AttributeViewer attribute_viewer;
     Bounds bounds = {selection_type_};
     Cameras cameras = {selection_type_};
     Curves curves;

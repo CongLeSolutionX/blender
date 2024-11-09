@@ -21,14 +21,14 @@
 #include "WM_api.hh"
 #include "WM_types.hh"
 
-#include "bpy_rna_context.h"
+#include "bpy_rna_context.hh"
 
-#include "../generic/python_compat.h"
+#include "../generic/python_compat.hh"
 
 #include "RNA_access.hh"
 #include "RNA_prototypes.hh"
 
-#include "bpy_rna.h"
+#include "bpy_rna.hh"
 
 /* -------------------------------------------------------------------- */
 /** \name Private Utility Functions
@@ -567,6 +567,8 @@ static PyObject *bpy_context_temp_override_extract_known_args(const char *const 
   return kwds_parse;
 }
 
+/* NOTE(@ideasman42): `ContextTempOverride` isn't accessible from (without creating an instance),
+ * it should be exposed although it doesn't seem especially important either. */
 PyDoc_STRVAR(
     /* Wrap. */
     bpy_context_temp_override_doc,
@@ -593,7 +595,7 @@ PyDoc_STRVAR(
     "   :type region: :class:`bpy.types.Region`\n"
     "   :arg keywords: Additional keywords override context members.\n"
     "   :return: The context manager .\n"
-    "   :rtype: context manager\n");
+    "   :rtype: ContextTempOverride\n");
 static PyObject *bpy_context_temp_override(PyObject *self, PyObject *args, PyObject *kwds)
 {
   const PointerRNA *context_ptr = pyrna_struct_as_ptr(self, &RNA_Context);

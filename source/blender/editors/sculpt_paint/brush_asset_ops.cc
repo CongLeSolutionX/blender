@@ -3,12 +3,13 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "BLI_fileops.h"
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 #include "BLI_string.h"
 
 #include "DNA_brush_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_space_types.h"
+#include "DNA_workspace_types.h"
 
 #include "BKE_asset.hh"
 #include "BKE_asset_edit.hh"
@@ -65,7 +66,10 @@ static int brush_asset_activate_exec(bContext *C, wmOperator *op)
 
   Paint *paint = BKE_paint_get_active_from_context(C);
 
-  if (!BKE_paint_brush_set(paint, brush)) {
+  /* Activate brush through tool system rather than calling #BKE_paint_brush_set() directly, to let
+   * the tool system switch tools if necessary, and update which brush was the last recently used
+   * one for the current tool. */
+  if (!WM_toolsystem_activate_brush_and_tool(C, paint, brush)) {
     /* Note brush datablock was still added, so was not a no-op. */
     BKE_report(op->reports, RPT_WARNING, "Unable to activate brush, wrong object mode");
     return OPERATOR_FINISHED;
@@ -73,7 +77,6 @@ static int brush_asset_activate_exec(bContext *C, wmOperator *op)
 
   WM_main_add_notifier(NC_ASSET | NA_ACTIVATED, nullptr);
   WM_main_add_notifier(NC_SCENE | ND_TOOLSETTINGS, nullptr);
-  WM_toolsystem_ref_set_by_id(C, "builtin.brush");
 
   return OPERATOR_FINISHED;
 }
@@ -171,6 +174,13 @@ static asset_system::AssetCatalog &asset_library_ensure_catalog(
   return *library.catalog_service().create_catalog(path);
 }
 
+/* Suppress warning for GCC-14.2. This isn't a dangling reference
+ * because the #asset_system::AssetLibrary owns the returned value. */
+#if defined(__GNUC__) && !defined(__clang__)
+#  pragma GCC diagnostic push
+#  pragma GCC diagnostic ignored "-Wdangling-reference"
+#endif
+
 static asset_system::AssetCatalog &asset_library_ensure_catalogs_in_path(
     asset_system::AssetLibrary &library, const asset_system::AssetCatalogPath &path)
 {
@@ -183,6 +193,9 @@ static asset_system::AssetCatalog &asset_library_ensure_catalogs_in_path(
   });
   return *library.catalog_service().find_catalog_by_path(path);
 }
+#if defined(__GNUC__) && !defined(__clang__)
+#  pragma GCC diagnostic pop
+#endif
 
 static void show_catalog_in_asset_shelf(const bContext &C, const StringRefNull catalog_path)
 {
@@ -259,8 +272,9 @@ static int brush_asset_save_as_exec(bContext *C, wmOperator *op)
 
   brush = reinterpret_cast<Brush *>(
       bke::asset_edit_id_from_weak_reference(*bmain, ID_BR, brush_asset_reference));
+  brush->has_unsaved_changes = false;
 
-  if (!BKE_paint_brush_set(paint, brush)) {
+  if (!WM_toolsystem_activate_brush_and_tool(C, paint, brush)) {
     /* Note brush asset was still saved in editable asset library, so was not a no-op. */
     BKE_report(op->reports, RPT_WARNING, "Unable to activate just-saved brush asset");
   }
@@ -680,8 +694,8 @@ static int brush_asset_delete_invoke(bContext *C, wmOperator *op, const wmEvent 
       op,
       IFACE_("Delete Brush Asset"),
       ID_IS_LINKED(brush) ?
-          IFACE_("Permanently delete brush asset blend file. This can't be undone.") :
-          IFACE_("Premanently delete brush. This can't be undo."),
+          IFACE_("Permanently delete brush asset blend file. This cannot be undone.") :
+          IFACE_("Permanently delete brush. This cannot be undone."),
       IFACE_("Delete"),
       ALERT_ICON_WARNING,
       false);
@@ -698,7 +712,7 @@ void BRUSH_OT_asset_delete(wmOperatorType *ot)
   ot->poll = brush_asset_delete_poll;
 }
 
-static bool brush_asset_update_poll(bContext *C)
+static bool brush_asset_save_poll(bContext *C)
 {
   Paint *paint = BKE_paint_get_active_from_context(C);
   Brush *brush = (paint) ? BKE_paint_brush(paint) : nullptr;
@@ -722,7 +736,7 @@ static bool brush_asset_update_poll(bContext *C)
   return true;
 }
 
-static int brush_asset_update_exec(bContext *C, wmOperator *op)
+static int brush_asset_save_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
   Paint *paint = BKE_paint_get_active_from_context(C);
@@ -738,6 +752,7 @@ static int brush_asset_update_exec(bContext *C, wmOperator *op)
   BLI_assert(ID_IS_ASSET(brush));
 
   bke::asset_edit_id_save(*bmain, brush->id, *op->reports);
+  brush->has_unsaved_changes = false;
 
   refresh_asset_library(C, *user_library);
   WM_main_add_notifier(NC_ASSET | ND_ASSET_LIST | NA_EDITED, nullptr);
@@ -746,14 +761,14 @@ static int brush_asset_update_exec(bContext *C, wmOperator *op)
   return OPERATOR_FINISHED;
 }
 
-void BRUSH_OT_asset_update(wmOperatorType *ot)
+void BRUSH_OT_asset_save(wmOperatorType *ot)
 {
-  ot->name = "Update Brush Asset";
+  ot->name = "Save Brush Asset";
   ot->description = "Update the active brush asset in the asset library with current settings";
-  ot->idname = "BRUSH_OT_asset_update";
+  ot->idname = "BRUSH_OT_asset_save";
 
-  ot->exec = brush_asset_update_exec;
-  ot->poll = brush_asset_update_poll;
+  ot->exec = brush_asset_save_exec;
+  ot->poll = brush_asset_save_poll;
 }
 
 static bool brush_asset_revert_poll(bContext *C)
@@ -773,7 +788,15 @@ static int brush_asset_revert_exec(bContext *C, wmOperator *op)
   Paint *paint = BKE_paint_get_active_from_context(C);
   Brush *brush = BKE_paint_brush(paint);
 
-  bke::asset_edit_id_revert(*bmain, brush->id, *op->reports);
+  if (ID *reverted_id = bke::asset_edit_id_revert(*bmain, brush->id, *op->reports)) {
+    BLI_assert(GS(reverted_id->name) == ID_BR);
+    BKE_paint_brush_set(paint, reinterpret_cast<Brush *>(reverted_id));
+  }
+  else {
+    /* bke::asset_edit_id_revert() deleted the brush for sure, even on failure. Fallback to the
+     * default. */
+    BKE_paint_brush_set_default(bmain, paint);
+  }
 
   WM_main_add_notifier(NC_BRUSH | NA_EDITED, nullptr);
   WM_main_add_notifier(NC_TEXTURE | ND_NODES, nullptr);

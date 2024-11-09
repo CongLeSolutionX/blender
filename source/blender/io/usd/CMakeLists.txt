@@ -14,7 +14,7 @@ if(WIN32)
 endif()
 add_definitions(-DBOOST_ALL_NO_LIB)
 
-# Precompiled Linux libs are made with GCC, and USD uses some extensions
+# Pre-compiled Linux libraries are made with GCC, and USD uses some extensions
 # which lead to an incompatible ABI for Clang. Using those extensions with
 # Clang as well works around the issue.
 if(UNIX AND NOT APPLE)
@@ -27,25 +27,6 @@ endif()
 
 # USD headers use deprecated TBB headers, silence warning.
 add_definitions(-DTBB_SUPPRESS_DEPRECATED_MESSAGES=1)
-
-# Check if USD has the imaging headers available, if they are
-# add a USD_HAS_IMAGING define so code can dynamically detect this.
-# Cleanup of this variable is done at the end of the file since
-# test code further down uses it to add imaging tests.
-find_file(
-  USD_IMAGING_HEADERS
-  NAMES
-    capsuleAdapter.h
-  PATHS
-    ${USD_INCLUDE_DIRS}
-  PATH_SUFFIXES
-    pxr/usdImaging/usdImaging/
-  NO_DEFAULT_PATH
-)
-
-if(USD_IMAGING_HEADERS)
-  add_definitions(-DUSD_HAS_IMAGING)
-endif()
 
 if(WIN32)
   # Some USD library headers trigger the "unreferenced formal parameter"
@@ -108,6 +89,7 @@ set(SRC
   intern/usd_writer_material.cc
   intern/usd_writer_mesh.cc
   intern/usd_writer_metaball.cc
+  intern/usd_writer_points.cc
   intern/usd_writer_transform.cc
   intern/usd_writer_volume.cc
 
@@ -155,6 +137,7 @@ set(SRC
   intern/usd_writer_material.hh
   intern/usd_writer_mesh.hh
   intern/usd_writer_metaball.hh
+  intern/usd_writer_points.hh
   intern/usd_writer_transform.hh
   intern/usd_writer_volume.hh
 
@@ -267,9 +250,6 @@ if(WITH_GTESTS)
     tests/usd_usdz_export_test.cc
     intern/usd_writer_material.hh
   )
-  if(USD_IMAGING_HEADERS)
-    list(APPEND TEST_SRC tests/usd_imaging_test.cc)
-  endif()
 
   include_directories(intern)
 
@@ -280,7 +260,3 @@ if(WITH_GTESTS)
   )
   blender_add_test_suite_lib(io_usd "${TEST_SRC}" "${INC};${TEST_INC}" "${INC_SYS}" "${LIB};${TEST_LIB}")
 endif()
-
-# In CMAKE version 3.21 and up, we can instead use the `NO_CACHE` option for
-# `find_file` so we don't need to clear it from the cache here.
-unset(USD_IMAGING_HEADERS CACHE)

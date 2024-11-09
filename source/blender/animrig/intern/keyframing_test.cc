@@ -72,20 +72,11 @@ class KeyframingTest : public testing::Test {
 
   static void TearDownTestSuite()
   {
-    /* Ensure experimental baklava flag is turned off after all tests are run. */
-    U.flag &= ~USER_DEVELOPER_UI;
-    U.experimental.use_animation_baklava = 0;
-
     CLG_exit();
   }
 
   void SetUp() override
   {
-    /* Ensure experimental baklava flag is turned off first (to be enabled
-     * selectively in the layered action tests. */
-    U.flag &= ~USER_DEVELOPER_UI;
-    U.experimental.use_animation_baklava = 0;
-
     bmain = BKE_main_new();
 
     object = BKE_object_add_only_object(bmain, OB_EMPTY, "Empty");
@@ -106,6 +97,7 @@ class KeyframingTest : public testing::Test {
     object_with_nla = BKE_object_add_only_object(bmain, OB_EMPTY, "EmptyWithNLA");
     object_with_nla_rna_pointer = RNA_id_pointer_create(&object_with_nla->id);
     nla_action = static_cast<bAction *>(BKE_id_new(bmain, ID_AC, "NLAAction"));
+    this->ensure_action_is_legacy(*nla_action);
 
     cube = BKE_object_add_only_object(bmain, OB_MESH, "cube");
     cube_rna_pointer = RNA_id_pointer_create(&cube->id);
@@ -125,7 +117,8 @@ class KeyframingTest : public testing::Test {
      * NLA strip, and make that strip active and in tweak mode. */
     AnimData *adt = BKE_animdata_ensure_id(&object_with_nla->id);
     NlaTrack *track = BKE_nlatrack_new_head(&adt->nla_tracks, false);
-    NlaStrip *strip = BKE_nlastack_add_strip({object_with_nla->id, *adt}, nla_action, false);
+    ASSERT_TRUE(animrig::assign_action(nla_action, object_with_nla->id));
+    NlaStrip *strip = BKE_nlastack_add_strip({object_with_nla->id, *adt}, false);
     track->flag |= NLATRACK_ACTIVE;
     strip->flag |= NLASTRIP_FLAG_ACTIVE;
     strip->start = -10.0;
@@ -141,6 +134,40 @@ class KeyframingTest : public testing::Test {
   {
     BKE_main_free(bmain);
   }
+
+  /**
+   * Create a legacy Action and assign it to the ID.
+   *
+   * Use of this function indicates that the unit test should be converted to
+   * use layered Actions.
+   */
+  void ensure_legacy_action_assigned(ID &id)
+  {
+    AnimData *adt = BKE_animdata_from_id(&id);
+    BLI_assert(!adt || !adt->action);
+    UNUSED_VARS_NDEBUG(adt);
+
+    bAction &action = animrig::action_add(*bmain, "LegacyAction");
+    this->ensure_action_is_legacy(action);
+
+    const bool ok = assign_action(&action, id);
+    BLI_assert(ok);
+    UNUSED_VARS_NDEBUG(ok);
+  }
+
+  /**
+   * Add an F-Curve Group. This marks the Action as legacy. Since most tests are on F-Curves,
+   * adding a Group here is the less invasive way to make this a Legacy Action.
+   *
+   * Use of this function indicates the test should be converted to layered Actions.
+   */
+  void ensure_action_is_legacy(bAction &action)
+  {
+    bActionGroup *new_group = static_cast<bActionGroup *>(
+        MEM_callocN(sizeof(bActionGroup), __func__));
+    STRNCPY(new_group->name, "Legacy Forcer");
+    BLI_addtail(&action.groups, new_group);
+  }
 };
 
 /* ------------------------------------------------------------
@@ -150,10 +177,6 @@ class KeyframingTest : public testing::Test {
 /* Keying a non-array property. */
 TEST_F(KeyframingTest, insert_keyframes__layered_action__non_array_property)
 {
-  /* Turn on Baklava experimental flag. */
-  U.flag |= USER_DEVELOPER_UI;
-  U.experimental.use_animation_baklava = 1;
-
   AnimationEvalContext anim_eval_context = {nullptr, 1.0};
 
   /* First time should create:
@@ -194,10 +217,10 @@ TEST_F(KeyframingTest, insert_keyframes__layered_action__non_array_property)
   Strip *strip = action.layer(0)->strip(0);
   ASSERT_TRUE(strip->is_infinite());
   ASSERT_EQ(Strip::Type::Keyframe, strip->type());
-  KeyframeStrip *keyframe_strip = &strip->as<KeyframeStrip>();
+  StripKeyframeData *strip_data = &strip->data<StripKeyframeData>(action);
 
   /* We have a channel bag for the slot. */
-  ChannelBag *channel_bag = keyframe_strip->channelbag_for_slot(*slot);
+  ChannelBag *channel_bag = strip_data->channelbag_for_slot(*slot);
   ASSERT_NE(nullptr, channel_bag);
 
   /* The fcurves in the channel bag are what we expect. */
@@ -245,10 +268,6 @@ TEST_F(KeyframingTest, insert_keyframes__layered_action__non_array_property)
 
 TEST_F(KeyframingTest, insert_keyframes__layered_action__action_reuse)
 {
-  /* Turn on Baklava experimental flag. */
-  U.flag |= USER_DEVELOPER_UI;
-  U.experimental.use_animation_baklava = 1;
-
   AnimationEvalContext anim_eval_context = {nullptr, 1.0};
   CombinedKeyingResult result_ob;
   result_ob = insert_keyframes(bmain,
@@ -287,16 +306,10 @@ TEST_F(KeyframingTest, insert_keyframes__layered_action__action_reuse)
   for (Slot *slot : action.slots()) {
     ASSERT_TRUE(slot->idtype == ID_AR || slot->idtype == ID_OB);
   }
-
-  U.experimental.use_animation_baklava = 0;
-  U.flag &= ~USER_DEVELOPER_UI;
 }
 
 TEST_F(KeyframingTest, insert_keyframes__layered_action__action_reuse_material)
 {
-  U.flag |= USER_DEVELOPER_UI;
-  U.experimental.use_animation_baklava = 1;
-
   AnimationEvalContext anim_eval_context = {nullptr, 1.0};
   CombinedKeyingResult result_ob;
 
@@ -358,16 +371,10 @@ TEST_F(KeyframingTest, insert_keyframes__layered_action__action_reuse_material)
     ASSERT_TRUE(slot->idtype == ID_ME || slot->idtype == ID_OB);
     ASSERT_NE(slot->idtype, ID_MA);
   }
-
-  U.experimental.use_animation_baklava = 0;
-  U.flag &= ~USER_DEVELOPER_UI;
 }
 
 TEST_F(KeyframingTest, insert_keyframes__layered_action__action_reuse_multiuser)
 {
-  U.flag |= USER_DEVELOPER_UI;
-  U.experimental.use_animation_baklava = 1;
-
   Object *another_object = BKE_object_add_only_object(bmain, OB_MESH, "another_object");
   PointerRNA another_object_rna_pointer = RNA_id_pointer_create(&another_object->id);
   BKE_mesh_assign_object(bmain, another_object, cube_mesh);
@@ -422,18 +429,11 @@ TEST_F(KeyframingTest, insert_keyframes__layered_action__action_reuse_multiuser)
   /* Given that those two objects are connected by a mesh (which due to this has two users) the
    * action shouldn't be reused between them. */
   ASSERT_NE(cube->adt->action, another_object->adt->action);
-
-  U.experimental.use_animation_baklava = 0;
-  U.flag &= ~USER_DEVELOPER_UI;
 }
 
 /* Keying a single element of an array property. */
 TEST_F(KeyframingTest, insert_keyframes__layered_action__single_element)
 {
-  /* Turn on Baklava experimental flag. */
-  U.flag |= USER_DEVELOPER_UI;
-  U.experimental.use_animation_baklava = 1;
-
   AnimationEvalContext anim_eval_context = {nullptr, 1.0};
 
   const CombinedKeyingResult result = insert_keyframes(bmain,
@@ -452,9 +452,9 @@ TEST_F(KeyframingTest, insert_keyframes__layered_action__single_element)
   ASSERT_EQ(1, action.slots().size());
   ASSERT_EQ(1, action.layers().size());
   ASSERT_EQ(1, action.layer(0)->strips().size());
-  KeyframeStrip *strip = &action.layer(0)->strip(0)->as<KeyframeStrip>();
-  ASSERT_EQ(1, strip->channelbags().size());
-  ChannelBag *channel_bag = strip->channelbag(0);
+  StripKeyframeData *strip_data = &action.layer(0)->strip(0)->data<StripKeyframeData>(action);
+  ASSERT_EQ(1, strip_data->channelbags().size());
+  ChannelBag *channel_bag = strip_data->channelbag(0);
 
   EXPECT_EQ(1, channel_bag->fcurves().size());
   EXPECT_NE(nullptr, channel_bag->fcurve_find({"rotation_euler", 0}));
@@ -463,10 +463,6 @@ TEST_F(KeyframingTest, insert_keyframes__layered_action__single_element)
 /* Keying all elements of an array property. */
 TEST_F(KeyframingTest, insert_keyframes__layered_action__all_elements)
 {
-  /* Turn on Baklava experimental flag. */
-  U.flag |= USER_DEVELOPER_UI;
-  U.experimental.use_animation_baklava = 1;
-
   AnimationEvalContext anim_eval_context = {nullptr, 1.0};
 
   const CombinedKeyingResult result = insert_keyframes(bmain,
@@ -485,9 +481,9 @@ TEST_F(KeyframingTest, insert_keyframes__layered_action__all_elements)
   ASSERT_EQ(1, action.slots().size());
   ASSERT_EQ(1, action.layers().size());
   ASSERT_EQ(1, action.layer(0)->strips().size());
-  KeyframeStrip *strip = &action.layer(0)->strip(0)->as<KeyframeStrip>();
-  ASSERT_EQ(1, strip->channelbags().size());
-  ChannelBag *channel_bag = strip->channelbag(0);
+  StripKeyframeData *strip_data = &action.layer(0)->strip(0)->data<StripKeyframeData>(action);
+  ASSERT_EQ(1, strip_data->channelbags().size());
+  ChannelBag *channel_bag = strip_data->channelbag(0);
 
   EXPECT_EQ(3, channel_bag->fcurves().size());
   EXPECT_NE(nullptr, channel_bag->fcurve_find({"rotation_euler", 0}));
@@ -498,10 +494,6 @@ TEST_F(KeyframingTest, insert_keyframes__layered_action__all_elements)
 /* Keying a pose bone from its own RNA pointer. */
 TEST_F(KeyframingTest, insert_keyframes__layered_action__pose_bone_rna_pointer)
 {
-  /* Turn on Baklava experimental flag. */
-  U.flag |= USER_DEVELOPER_UI;
-  U.experimental.use_animation_baklava = 1;
-
   AnimationEvalContext anim_eval_context = {nullptr, 1.0};
   bPoseChannel *pchan = BKE_pose_channel_find_name(armature_object->pose, "Bone");
   PointerRNA pose_bone_rna_pointer = RNA_pointer_create(
@@ -523,9 +515,9 @@ TEST_F(KeyframingTest, insert_keyframes__layered_action__pose_bone_rna_pointer)
   ASSERT_EQ(1, action.slots().size());
   ASSERT_EQ(1, action.layers().size());
   ASSERT_EQ(1, action.layer(0)->strips().size());
-  KeyframeStrip *strip = &action.layer(0)->strip(0)->as<KeyframeStrip>();
-  ASSERT_EQ(1, strip->channelbags().size());
-  ChannelBag *channel_bag = strip->channelbag(0);
+  StripKeyframeData *strip_data = &action.layer(0)->strip(0)->data<StripKeyframeData>(action);
+  ASSERT_EQ(1, strip_data->channelbags().size());
+  ChannelBag *channel_bag = strip_data->channelbag(0);
 
   EXPECT_EQ(1, channel_bag->fcurves().size());
   EXPECT_NE(nullptr, channel_bag->fcurve_find({"pose.bones[\"Bone\"].rotation_euler", 0}));
@@ -534,10 +526,6 @@ TEST_F(KeyframingTest, insert_keyframes__layered_action__pose_bone_rna_pointer)
 /* Keying a pose bone from its owning ID's RNA pointer. */
 TEST_F(KeyframingTest, insert_keyframes__pose_bone_owner_id_pointer)
 {
-  /* Turn on Baklava experimental flag. */
-  U.flag |= USER_DEVELOPER_UI;
-  U.experimental.use_animation_baklava = 1;
-
   AnimationEvalContext anim_eval_context = {nullptr, 1.0};
 
   const CombinedKeyingResult result = insert_keyframes(
@@ -557,9 +545,9 @@ TEST_F(KeyframingTest, insert_keyframes__pose_bone_owner_id_pointer)
   ASSERT_EQ(1, action.slots().size());
   ASSERT_EQ(1, action.layers().size());
   ASSERT_EQ(1, action.layer(0)->strips().size());
-  KeyframeStrip *strip = &action.layer(0)->strip(0)->as<KeyframeStrip>();
-  ASSERT_EQ(1, strip->channelbags().size());
-  ChannelBag *channel_bag = strip->channelbag(0);
+  StripKeyframeData *strip_data = &action.layer(0)->strip(0)->data<StripKeyframeData>(action);
+  ASSERT_EQ(1, strip_data->channelbags().size());
+  ChannelBag *channel_bag = strip_data->channelbag(0);
 
   EXPECT_EQ(1, channel_bag->fcurves().size());
   EXPECT_NE(nullptr, channel_bag->fcurve_find({"pose.bones[\"Bone\"].rotation_euler", 0}));
@@ -568,10 +556,6 @@ TEST_F(KeyframingTest, insert_keyframes__pose_bone_owner_id_pointer)
 /* Keying multiple elements of multiple properties at once. */
 TEST_F(KeyframingTest, insert_keyframes__layered_action__multiple_properties)
 {
-  /* Turn on Baklava experimental flag. */
-  U.flag |= USER_DEVELOPER_UI;
-  U.experimental.use_animation_baklava = 1;
-
   AnimationEvalContext anim_eval_context = {nullptr, 1.0};
 
   const CombinedKeyingResult result = insert_keyframes(bmain,
@@ -595,9 +579,9 @@ TEST_F(KeyframingTest, insert_keyframes__layered_action__multiple_properties)
   ASSERT_EQ(1, action.slots().size());
   ASSERT_EQ(1, action.layers().size());
   ASSERT_EQ(1, action.layer(0)->strips().size());
-  KeyframeStrip *strip = &action.layer(0)->strip(0)->as<KeyframeStrip>();
-  ASSERT_EQ(1, strip->channelbags().size());
-  ChannelBag *channel_bag = strip->channelbag(0);
+  StripKeyframeData *strip_data = &action.layer(0)->strip(0)->data<StripKeyframeData>(action);
+  ASSERT_EQ(1, strip_data->channelbags().size());
+  ChannelBag *channel_bag = strip_data->channelbag(0);
 
   EXPECT_EQ(6, channel_bag->fcurves().size());
   EXPECT_NE(nullptr, channel_bag->fcurve_find({"empty_display_size", 0}));
@@ -611,10 +595,6 @@ TEST_F(KeyframingTest, insert_keyframes__layered_action__multiple_properties)
 /* Keying more than one ID on the same action. */
 TEST_F(KeyframingTest, insert_keyframes__layered_action__multiple_ids)
 {
-  /* Turn on Baklava experimental flag. */
-  U.flag |= USER_DEVELOPER_UI;
-  U.experimental.use_animation_baklava = 1;
-
   AnimationEvalContext anim_eval_context = {nullptr, 1.0};
 
   /* First object should crate the action and get a slot and channel bag. */
@@ -642,15 +622,16 @@ TEST_F(KeyframingTest, insert_keyframes__layered_action__multiple_ids)
   ASSERT_TRUE(action.is_action_layered());
   ASSERT_EQ(1, action.layers().size());
   ASSERT_EQ(1, action.layer(0)->strips().size());
-  KeyframeStrip *strip = &action.layer(0)->strip(0)->as<KeyframeStrip>();
+  StripKeyframeData *strip_data = &action.layer(0)->strip(0)->data<StripKeyframeData>(action);
 
   /* We have a single channel bag, and it's for the first object's slot. */
-  ASSERT_EQ(1, strip->channelbags().size());
-  ChannelBag *channel_bag_1 = strip->channelbag_for_slot(*slot_1);
+  ASSERT_EQ(1, strip_data->channelbags().size());
+  ChannelBag *channel_bag_1 = strip_data->channelbag_for_slot(*slot_1);
   ASSERT_NE(nullptr, channel_bag_1);
 
   /* Assign the action to the second object, with no slot. */
-  action.assign_id(nullptr, armature_object->id);
+  ASSERT_TRUE(assign_action(&action, armature_object->id));
+  ASSERT_EQ(assign_action_slot(nullptr, armature_object->id), ActionSlotAssignmentResult::OK);
 
   /* Keying the second object should go into the same action, creating a new
    * slot and channel bag. */
@@ -670,8 +651,8 @@ TEST_F(KeyframingTest, insert_keyframes__layered_action__multiple_ids)
   EXPECT_STREQ(armature_object->id.name, slot_2->name);
   EXPECT_STREQ(armature_object->adt->slot_name, slot_2->name);
 
-  ASSERT_EQ(2, strip->channelbags().size());
-  ChannelBag *channel_bag_2 = strip->channelbag_for_slot(*slot_2);
+  ASSERT_EQ(2, strip_data->channelbags().size());
+  ChannelBag *channel_bag_2 = strip_data->channelbag_for_slot(*slot_2);
   ASSERT_NE(nullptr, channel_bag_2);
 }
 
@@ -681,25 +662,17 @@ TEST_F(KeyframingTest, insert_keyframes__baklava_legacy_action)
 {
   AnimationEvalContext anim_eval_context = {nullptr, 1.0};
 
-  /* Insert a key with the experimental flag off to create a legacy action. */
-  const CombinedKeyingResult result_1 = insert_keyframes(bmain,
-                                                         &object_rna_pointer,
-                                                         std::nullopt,
-                                                         {{"empty_display_size"}},
-                                                         1.0,
-                                                         anim_eval_context,
-                                                         BEZT_KEYTYPE_KEYFRAME,
-                                                         INSERTKEY_NOFLAGS);
-  EXPECT_EQ(1, result_1.get_count(SingleKeyingResult::SUCCESS));
+  /* Create a legacy Action and assign it the legacy way. */
+  {
+    bAction *action = reinterpret_cast<bAction *>(BKE_id_new(bmain, ID_AC, "LegacyAction"));
+    action_fcurve_ensure_legacy(bmain, action, nullptr, nullptr, {"testprop", 47});
+    BKE_animdata_ensure_id(&object->id)->action = action;
+  }
 
   bAction *action = object->adt->action;
   EXPECT_TRUE(action->wrap().is_action_legacy());
   EXPECT_FALSE(action->wrap().is_action_layered());
   EXPECT_EQ(1, BLI_listbase_count(&action->curves));
-
-  /* Turn on Baklava experimental flag. */
-  U.flag |= USER_DEVELOPER_UI;
-  U.experimental.use_animation_baklava = 1;
 
   /* Insert more keys, which should also get inserted as part of the same legacy
    * action, not a layered action. */
@@ -722,10 +695,6 @@ TEST_F(KeyframingTest, insert_keyframes__baklava_legacy_action)
 /* Keying with the "Only Insert Available" flag. */
 TEST_F(KeyframingTest, insert_keyframes__layered_action__only_available)
 {
-  /* Turn on Baklava experimental flag. */
-  U.flag |= USER_DEVELOPER_UI;
-  U.experimental.use_animation_baklava = 1;
-
   AnimationEvalContext anim_eval_context = {nullptr, 1.0};
 
   /* First attempt should fail, because there are no fcurves yet. */
@@ -769,11 +738,11 @@ TEST_F(KeyframingTest, insert_keyframes__layered_action__only_available)
   ASSERT_EQ(1, action.layers().size());
   ASSERT_EQ(1, action.layer(0)->strips().size());
   EXPECT_EQ(object->adt->slot_handle, action.slot(0)->handle);
-  KeyframeStrip *strip = &action.layer(0)->strip(0)->as<KeyframeStrip>();
+  StripKeyframeData *strip_data = &action.layer(0)->strip(0)->data<StripKeyframeData>(action);
 
   EXPECT_EQ(2, result_2.get_count(SingleKeyingResult::SUCCESS));
-  ASSERT_EQ(1, strip->channelbags().size());
-  ChannelBag *channel_bag = strip->channelbag(0);
+  ASSERT_EQ(1, strip_data->channelbags().size());
+  ChannelBag *channel_bag = strip_data->channelbag(0);
 
   /* Second attempt should succeed with two keys, because two of the elements
    * now have fcurves. */
@@ -795,10 +764,6 @@ TEST_F(KeyframingTest, insert_keyframes__layered_action__only_available)
 /* Keying with the "Only Replace" flag. */
 TEST_F(KeyframingTest, insert_keyframes__layered_action__only_replace)
 {
-  /* Turn on Baklava experimental flag. */
-  U.flag |= USER_DEVELOPER_UI;
-  U.experimental.use_animation_baklava = 1;
-
   AnimationEvalContext anim_eval_context = {nullptr, 1.0};
 
   /* First attempt should fail, because there are no fcurves yet. */
@@ -835,9 +800,9 @@ TEST_F(KeyframingTest, insert_keyframes__layered_action__only_replace)
   ASSERT_EQ(1, action.slots().size());
   ASSERT_EQ(1, action.layers().size());
   ASSERT_EQ(1, action.layer(0)->strips().size());
-  KeyframeStrip *strip = &action.layer(0)->strip(0)->as<KeyframeStrip>();
-  ASSERT_EQ(1, strip->channelbags().size());
-  ChannelBag *channel_bag = strip->channelbag(0);
+  StripKeyframeData *strip_data = &action.layer(0)->strip(0)->data<StripKeyframeData>(action);
+  ASSERT_EQ(1, strip_data->channelbags().size());
+  ChannelBag *channel_bag = strip_data->channelbag(0);
 
   ASSERT_EQ(2, channel_bag->fcurves().size());
   const FCurve *fcurve_x = channel_bag->fcurve_find({"rotation_euler", 0});
@@ -894,10 +859,6 @@ TEST_F(KeyframingTest, insert_keyframes__layered_action__only_replace)
 /* Keying with the "Only Insert Needed" flag. */
 TEST_F(KeyframingTest, insert_keyframes__layered_action__only_needed)
 {
-  /* Turn on Baklava experimental flag. */
-  U.flag |= USER_DEVELOPER_UI;
-  U.experimental.use_animation_baklava = 1;
-
   AnimationEvalContext anim_eval_context = {nullptr, 1.0};
 
   /* First attempt should succeed, because there are no fcurves yet. */
@@ -916,9 +877,9 @@ TEST_F(KeyframingTest, insert_keyframes__layered_action__only_needed)
   ASSERT_EQ(1, action.slots().size());
   ASSERT_EQ(1, action.layers().size());
   ASSERT_EQ(1, action.layer(0)->strips().size());
-  KeyframeStrip *strip = &action.layer(0)->strip(0)->as<KeyframeStrip>();
-  ASSERT_EQ(1, strip->channelbags().size());
-  ChannelBag *channel_bag = strip->channelbag(0);
+  StripKeyframeData *strip_data = &action.layer(0)->strip(0)->data<StripKeyframeData>(action);
+  ASSERT_EQ(1, strip_data->channelbags().size());
+  ChannelBag *channel_bag = strip_data->channelbag(0);
 
   ASSERT_EQ(3, channel_bag->fcurves().size());
   const FCurve *fcurve_x = channel_bag->fcurve_find({"rotation_euler", 0});
@@ -976,6 +937,7 @@ TEST_F(KeyframingTest, insert_keyframes__legacy_action__non_array_property)
   /* First time should create the AnimData, Action, and FCurve with a single
    * key. */
   object->empty_drawsize = 42.0;
+  ensure_legacy_action_assigned(object->id);
   const CombinedKeyingResult result_1 = insert_keyframes(bmain,
                                                          &object_rna_pointer,
                                                          std::nullopt,
@@ -1037,6 +999,7 @@ TEST_F(KeyframingTest, insert_keyframes__legacy_action__optional_frame)
   AnimationEvalContext anim_eval_context = {nullptr, 5.0};
 
   object->rotmode = ROT_MODE_XYZ;
+  ensure_legacy_action_assigned(object->id);
   const CombinedKeyingResult result_1 = insert_keyframes(bmain,
                                                          &object_rna_pointer,
                                                          std::nullopt,
@@ -1073,6 +1036,7 @@ TEST_F(KeyframingTest, insert_keyframes__legacy_action__optional_channel_group)
   AnimationEvalContext anim_eval_context = {nullptr, 1.0};
 
   /* If the channel group is not explicitly passed, the default should be used. */
+  ensure_legacy_action_assigned(object->id);
   const CombinedKeyingResult result_1 = insert_keyframes(
       bmain,
       &object_rna_pointer,
@@ -1120,6 +1084,7 @@ TEST_F(KeyframingTest, insert_keyframes__single_element)
 {
   AnimationEvalContext anim_eval_context = {nullptr, 1.0};
 
+  ensure_legacy_action_assigned(object->id);
   const CombinedKeyingResult result = insert_keyframes(bmain,
                                                        &object_rna_pointer,
                                                        std::nullopt,
@@ -1141,6 +1106,7 @@ TEST_F(KeyframingTest, insert_keyframes__legacy_action__all_elements)
 {
   AnimationEvalContext anim_eval_context = {nullptr, 1.0};
 
+  ensure_legacy_action_assigned(object->id);
   const CombinedKeyingResult result = insert_keyframes(bmain,
                                                        &object_rna_pointer,
                                                        std::nullopt,
@@ -1167,6 +1133,7 @@ TEST_F(KeyframingTest, insert_keyframes__legacy_action__pose_bone_rna_pointer)
   PointerRNA pose_bone_rna_pointer = RNA_pointer_create(
       &armature_object->id, &RNA_PoseBone, pchan);
 
+  ensure_legacy_action_assigned(armature_object->id);
   const CombinedKeyingResult result = insert_keyframes(bmain,
                                                        &pose_bone_rna_pointer,
                                                        std::nullopt,
@@ -1190,6 +1157,7 @@ TEST_F(KeyframingTest, insert_keyframes__legacy_action__pose_bone_owner_id_point
 {
   AnimationEvalContext anim_eval_context = {nullptr, 1.0};
 
+  ensure_legacy_action_assigned(armature_object->id);
   const CombinedKeyingResult result = insert_keyframes(
       bmain,
       &armature_object_rna_pointer,
@@ -1214,6 +1182,7 @@ TEST_F(KeyframingTest, insert_keyframes__legacy_action__multiple_properties)
 {
   AnimationEvalContext anim_eval_context = {nullptr, 1.0};
 
+  ensure_legacy_action_assigned(object->id);
   const CombinedKeyingResult result =
 
       insert_keyframes(bmain,
@@ -1267,6 +1236,10 @@ TEST_F(KeyframingTest, insert_keyframes__legacy_action__only_available)
    * object without an action. */
   ASSERT_EQ(nullptr, object->adt->action);
 
+  /* This will create & assign an Action, which is necessary for the
+   * insert_keyframes() function to take the 'legacy Action' code path. */
+  ensure_legacy_action_assigned(object->id);
+
   /* Insert a key on two of the elements without using the flag so that there
    * will be two fcurves. */
   insert_keyframes(bmain,
@@ -1307,6 +1280,7 @@ TEST_F(KeyframingTest, insert_keyframes__legacy_action__only_replace)
   object->rot[0] = 42.0;
   object->rot[1] = 42.0;
   object->rot[2] = 42.0;
+  ensure_legacy_action_assigned(object->id);
   const CombinedKeyingResult result_1 = insert_keyframes(bmain,
                                                          &object_rna_pointer,
                                                          std::nullopt,
@@ -1395,6 +1369,7 @@ TEST_F(KeyframingTest, insert_keyframes__legacy_action__only_needed)
   AnimationEvalContext anim_eval_context = {nullptr, 1.0};
 
   /* First attempt should succeed, because there are no fcurves yet. */
+  ensure_legacy_action_assigned(object->id);
   const CombinedKeyingResult result_1 = insert_keyframes(bmain,
                                                          &object_rna_pointer,
                                                          std::nullopt,
@@ -1526,7 +1501,7 @@ TEST_F(KeyframingTest, insert_keyframes__legacy_action__quaternion_on_nla__only_
 
   /* Create an fcurve and key for a single quaternion channel. */
   PointerRNA id_rna_ptr = RNA_id_pointer_create(&object_with_nla->id);
-  FCurve *fcu = action_fcurve_ensure(
+  FCurve *fcu = action_fcurve_ensure_legacy(
       bmain, nla_action, nullptr, &id_rna_ptr, {"rotation_quaternion", 0});
   const KeyframeSettings keyframe_settings = {BEZT_KEYTYPE_KEYFRAME, HD_AUTO_ANIM, BEZT_IPO_BEZ};
   insert_vert_fcurve(fcu, {1.0, 1.0}, keyframe_settings, INSERTKEY_NOFLAGS);
@@ -1566,7 +1541,7 @@ TEST_F(KeyframingTest, insert_keyframes__legacy_action__quaternion_on_nla__only_
 
   /* Directly create an fcurve and key for a single quaternion channel. */
   PointerRNA id_rna_ptr = RNA_id_pointer_create(&object_with_nla->id);
-  FCurve *fcu = action_fcurve_ensure(
+  FCurve *fcu = action_fcurve_ensure_legacy(
       bmain, nla_action, nullptr, &id_rna_ptr, {"rotation_quaternion", 0});
   const KeyframeSettings keyframe_settings = {BEZT_KEYTYPE_KEYFRAME, HD_AUTO_ANIM, BEZT_IPO_BEZ};
   insert_vert_fcurve(fcu, {11.0, 1.0}, keyframe_settings, INSERTKEY_NOFLAGS);

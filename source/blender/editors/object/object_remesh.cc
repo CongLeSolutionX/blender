@@ -105,6 +105,7 @@ static bool object_remesh_poll(bContext *C)
 
 static int voxel_remesh_exec(bContext *C, wmOperator *op)
 {
+  const Scene &scene = *CTX_data_scene(C);
   Object *ob = CTX_data_active_object(C);
 
   Mesh *mesh = static_cast<Mesh *>(ob->data);
@@ -132,7 +133,9 @@ static int voxel_remesh_exec(bContext *C, wmOperator *op)
   }
 
   if (ob->mode == OB_MODE_SCULPT) {
-    sculpt_paint::undo::geometry_begin(*ob, op);
+    Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
+    BKE_sculpt_update_object_for_edit(depsgraph, ob, false);
+    sculpt_paint::undo::geometry_begin(scene, *ob, op);
   }
 
   if (mesh->flag & ME_REMESH_FIX_POLES && mesh->remesh_voxel_adaptivity <= 0.0f) {
@@ -158,6 +161,7 @@ static int voxel_remesh_exec(bContext *C, wmOperator *op)
 
   if (ob->mode == OB_MODE_SCULPT) {
     sculpt_paint::undo::geometry_end(*ob);
+    BKE_sculptsession_free_pbvh(*ob);
   }
 
   BKE_mesh_batch_cache_dirty_tag(static_cast<Mesh *>(ob->data), BKE_MESH_BATCH_DIRTY_ALL);
@@ -842,6 +846,7 @@ static void quadriflow_start_job(void *customdata, wmJobWorkerStatus *worker_sta
 
   Object *ob = qj->owner;
   Mesh *mesh = static_cast<Mesh *>(ob->data);
+  Scene &scene = *qj->scene;
   Mesh *new_mesh;
   Mesh *bisect_mesh;
 
@@ -887,7 +892,7 @@ static void quadriflow_start_job(void *customdata, wmJobWorkerStatus *worker_sta
   new_mesh = remesh_symmetry_mirror(qj->owner, new_mesh, qj->symmetry_axes);
 
   if (ob->mode == OB_MODE_SCULPT) {
-    sculpt_paint::undo::geometry_begin(*ob, qj->op);
+    sculpt_paint::undo::geometry_begin(scene, *ob, qj->op);
   }
 
   if (qj->preserve_attributes) {
@@ -900,6 +905,7 @@ static void quadriflow_start_job(void *customdata, wmJobWorkerStatus *worker_sta
 
   if (ob->mode == OB_MODE_SCULPT) {
     sculpt_paint::undo::geometry_end(*ob);
+    BKE_sculptsession_free_pbvh(*ob);
   }
 
   BKE_mesh_batch_cache_dirty_tag(static_cast<Mesh *>(ob->data), BKE_MESH_BATCH_DIRTY_ALL);

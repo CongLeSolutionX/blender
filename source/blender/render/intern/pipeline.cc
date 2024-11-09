@@ -779,7 +779,8 @@ void RE_FreePersistentData(const Scene *scene)
 /** \name Initialize State
  * \{ */
 
-static void re_init_resolution(Render *re, Render *source, int winx, int winy, rcti *disprect)
+static void re_init_resolution(
+    Render *re, Render *source, int winx, int winy, const rcti *disprect)
 {
   re->winx = winx;
   re->winy = winy;
@@ -831,7 +832,7 @@ void RE_InitState(Render *re,
                   ViewLayer *single_layer,
                   int winx,
                   int winy,
-                  rcti *disprect)
+                  const rcti *disprect)
 {
   bool had_freestyle = (re->r.mode & R_EDGE_FRS) != 0;
 
@@ -996,7 +997,11 @@ void RE_system_gpu_context_ensure(Render *re)
   if (re->system_gpu_context == nullptr) {
     /* Needs to be created in the main thread. */
     re->system_gpu_context = WM_system_gpu_context_create();
-    /* So we activate the window's one afterwards. */
+    /* The context is activated during creation, so release it here since the function should not
+     * have context activation as a side effect. Then activate the drawable's context below. */
+    if (re->system_gpu_context) {
+      WM_system_gpu_context_release(re->system_gpu_context);
+    }
     wm_window_reset_drawable();
   }
 }
@@ -1444,7 +1449,7 @@ bool RE_seq_render_active(Scene *scene, RenderData *rd)
   }
 
   LISTBASE_FOREACH (Sequence *, seq, &ed->seqbase) {
-    if (seq->type != SEQ_TYPE_SOUND_RAM) {
+    if (seq->type != SEQ_TYPE_SOUND_RAM && !SEQ_render_is_muted(&ed->channels, seq)) {
       return true;
     }
   }
@@ -2186,7 +2191,9 @@ bool RE_WriteRenderViewsMovie(ReportList *reports,
       /* imbuf knows which rects are not part of ibuf */
       IMB_freeImBuf(ibuf);
     }
-    printf("Append frame %d\n", scene->r.cfra);
+    if (!G.quiet) {
+      printf("Append frame %d\n", scene->r.cfra);
+    }
   }
   else { /* R_IMF_VIEWS_STEREO_3D */
     const char *names[2] = {STEREO_LEFT_NAME, STEREO_RIGHT_NAME};
@@ -2480,7 +2487,9 @@ void RE_RenderAnim(Render *re,
       if (rd.mode & R_NO_OVERWRITE) {
         if (!is_multiview_name) {
           if (BLI_exists(filepath)) {
-            printf("skipping existing frame \"%s\"\n", filepath);
+            if (!G.quiet) {
+              printf("skipping existing frame \"%s\"\n", filepath);
+            }
             totskipped++;
             continue;
           }
@@ -2497,7 +2506,10 @@ void RE_RenderAnim(Render *re,
             BKE_scene_multiview_filepath_get(srv, filepath, filepath_view);
             if (BLI_exists(filepath_view)) {
               is_skip = true;
-              printf("skipping existing frame \"%s\" for view \"%s\"\n", filepath_view, srv->name);
+              if (!G.quiet) {
+                printf(
+                    "skipping existing frame \"%s\" for view \"%s\"\n", filepath_view, srv->name);
+              }
             }
           }
 

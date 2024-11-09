@@ -16,9 +16,9 @@
 
 #include "GHOST_ContextCGL.hh"
 
-#include <Cocoa/Cocoa.h>
-#include <Metal/Metal.h>
-#include <QuartzCore/QuartzCore.h>
+#import <Cocoa/Cocoa.h>
+#import <Metal/Metal.h>
+#import <QuartzCore/QuartzCore.h>
 
 #include <cassert>
 #include <vector>
@@ -123,6 +123,13 @@ GHOST_ContextCGL::~GHOST_ContextCGL()
       [m_metalLayer release];
       m_metalLayer = nil;
     }
+  }
+  assert(s_sharedCount);
+
+  s_sharedCount--;
+  [s_sharedMetalCommandQueue release];
+  if (s_sharedCount == 0) {
+    s_sharedMetalCommandQueue = nil;
   }
 }
 
@@ -230,6 +237,7 @@ void GHOST_ContextCGL::metalInit()
     }
     /* Ensure active GHOSTContext retains a reference to the shared context. */
     [s_sharedMetalCommandQueue retain];
+    s_sharedCount++;
 
     /* Create shaders for blit operation. */
     NSString *source = @R"msl(
@@ -308,6 +316,9 @@ void GHOST_ContextCGL::metalInit()
           "GHOST_ContextCGL::metalInit: newRenderPipelineStateWithDescriptor:error: failed (when "
           "creating the Metal overlay pipeline)!");
     }
+
+    [desc.fragmentFunction release];
+    [desc.vertexFunction release];
   }
 }
 
@@ -315,11 +326,13 @@ void GHOST_ContextCGL::metalFree()
 {
   if (m_metalRenderPipeline) {
     [m_metalRenderPipeline release];
+    m_metalRenderPipeline = nil;
   }
 
   for (int i = 0; i < METAL_SWAPCHAIN_SIZE; i++) {
     if (m_defaultFramebufferMetalTexture[i].texture) {
       [m_defaultFramebufferMetalTexture[i].texture release];
+      m_defaultFramebufferMetalTexture[i].texture = nil;
     }
   }
 }
@@ -332,10 +345,10 @@ void GHOST_ContextCGL::metalInitFramebuffer()
 void GHOST_ContextCGL::metalUpdateFramebuffer()
 {
   @autoreleasepool {
-    NSRect bounds = [m_metalView bounds];
-    NSSize backingSize = [m_metalView convertSizeToBacking:bounds.size];
-    size_t width = (size_t)backingSize.width;
-    size_t height = (size_t)backingSize.height;
+    const NSRect bounds = [m_metalView bounds];
+    const NSSize backingSize = [m_metalView convertSizeToBacking:bounds.size];
+    const size_t width = size_t(backingSize.width);
+    const size_t height = size_t(backingSize.height);
 
     if (m_defaultFramebufferMetalTexture[current_swapchain_index].texture &&
         m_defaultFramebufferMetalTexture[current_swapchain_index].texture.width == width &&
@@ -385,7 +398,7 @@ void GHOST_ContextCGL::metalUpdateFramebuffer()
     }
     [cmdBuffer commit];
 
-    m_metalLayer.drawableSize = CGSizeMake((CGFloat)width, (CGFloat)height);
+    m_metalLayer.drawableSize = CGSizeMake(CGFloat(width), CGFloat(height));
   }
 }
 

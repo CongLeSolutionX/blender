@@ -658,6 +658,8 @@ class InstancesComponent : public GeometryComponent {
 
   bool is_empty() const final;
 
+  Instances *release();
+
   bool owns_direct_data() const override;
   void ensure_owns_direct_data() override;
 
@@ -801,5 +803,7 @@ class GreasePencilComponent : public GeometryComponent {
   std::optional<AttributeAccessor> attributes() const final;
   std::optional<MutableAttributeAccessor> attributes_for_write() final;
 };
+
+bool attribute_is_builtin_on_component_type(const GeometryComponent::Type type, StringRef name);
 
 }  // namespace blender::bke

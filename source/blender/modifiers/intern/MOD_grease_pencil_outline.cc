@@ -178,6 +178,8 @@ static void modify_drawing(const GreasePencilOutlineModifierData &omd,
                            bke::greasepencil::Drawing &drawing,
                            const float4x4 &viewmat)
 {
+  modifier::greasepencil::ensure_no_bezier_curves(drawing);
+
   if (drawing.strokes().curve_num == 0) {
     return;
   }
@@ -258,7 +260,7 @@ static void modify_geometry_set(ModifierData *md,
   const Vector<LayerDrawingInfo> drawings = modifier::greasepencil::get_drawing_infos_by_layer(
       grease_pencil, layer_mask, frame);
   threading::parallel_for_each(drawings, [&](const LayerDrawingInfo &info) {
-    const Layer &layer = *grease_pencil.layer(info.layer_index);
+    const Layer &layer = grease_pencil.layer(info.layer_index);
     const float4x4 viewmat = viewinv * layer.to_world_space(*ctx->object);
     modify_drawing(omd, *ctx, *info.drawing, viewmat);
   });
@@ -286,7 +288,7 @@ static void panel_draw(const bContext *C, Panel *panel)
   }
 
   if (uiLayout *influence_panel = uiLayoutPanelProp(
-          C, layout, ptr, "open_influence_panel", "Influence"))
+          C, layout, ptr, "open_influence_panel", IFACE_("Influence")))
   {
     modifier::greasepencil::draw_layer_filter_settings(C, influence_panel, ptr);
     modifier::greasepencil::draw_material_filter_settings(C, influence_panel, ptr);

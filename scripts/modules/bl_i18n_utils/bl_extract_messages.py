@@ -29,7 +29,7 @@ def init_spell_check(settings, lang="en_US"):
     try:
         from bl_i18n_utils import utils_spell_check
         return utils_spell_check.SpellChecker(settings, lang)
-    except BaseException as ex:
+    except Exception as ex:
         print("Failed to import utils_spell_check ({})".format(str(ex)))
         return None
 
@@ -344,7 +344,7 @@ def dump_rna_messages(msgs, reports, settings, verbose=False):
         msgctxt = bl_rna.translation_context or default_context
 
         if bl_rna.name and (bl_rna.name != bl_rna.identifier or
-                            (msgctxt != default_context and not hasattr(bl_rna, "bl_label"))):
+                            (msgctxt != default_context and not hasattr(cls, "bl_label"))):
             process_msg(msgs, msgctxt, bl_rna.name, msgsrc, reports, check_ctxt_rna, settings)
 
         if bl_rna.description:
@@ -574,7 +574,7 @@ def dump_py_messages_from_files(msgs, reports, files, settings):
             op = getattr(op, n)
         try:
             return op.get_rna_type().translation_context
-        except BaseException as ex:
+        except Exception as ex:
             default_op_context = i18n_contexts.operator_default
             print("ERROR: ", str(ex))
             print("       Assuming default operator context '{}'".format(default_op_context))
@@ -867,11 +867,11 @@ def dump_src_messages(msgs, reports, settings):
     forced = set()
     if os.path.isfile(settings.SRC_POTFILES):
         with open(settings.SRC_POTFILES, encoding="utf8") as src:
-            for l in src:
-                if l[0] == '-':
-                    forbidden.add(l[1:].rstrip('\n'))
-                elif l[0] != '#':
-                    forced.add(l.rstrip('\n'))
+            for line in src:
+                if line[0] == '-':
+                    forbidden.add(line[1:].rstrip('\n'))
+                elif line[0] != '#':
+                    forced.add(line.rstrip('\n'))
     for root, dirs, files in os.walk(settings.POTFILES_SOURCE_DIR):
         if "/.git" in root:
             continue

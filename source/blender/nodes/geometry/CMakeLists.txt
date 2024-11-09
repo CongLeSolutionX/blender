@@ -85,6 +85,7 @@ set(SRC
   nodes/node_geo_evaluate_on_domain.cc
   nodes/node_geo_extrude_mesh.cc
   nodes/node_geo_flip_faces.cc
+  nodes/node_geo_foreach_geometry_element.cc
   nodes/node_geo_geometry_to_instance.cc
   nodes/node_geo_get_named_grid.cc
   nodes/node_geo_gizmo_dial.cc
@@ -140,6 +141,7 @@ set(SRC
   nodes/node_geo_material_selection.cc
   nodes/node_geo_menu_switch.cc
   nodes/node_geo_merge_by_distance.cc
+  nodes/node_geo_merge_layers.cc
   nodes/node_geo_mesh_face_group_boundaries.cc
   nodes/node_geo_mesh_primitive_circle.cc
   nodes/node_geo_mesh_primitive_cone.cc
@@ -231,6 +233,7 @@ set(SRC
 
   include/NOD_geo_bake.hh
   include/NOD_geo_capture_attribute.hh
+  include/NOD_geo_foreach_geometry_element.hh
   include/NOD_geo_index_switch.hh
   include/NOD_geo_menu_switch.hh
   include/NOD_geo_repeat.hh
@@ -294,7 +297,7 @@ endif()
 if(WITH_TBB)
   if(WIN32)
     # TBB includes Windows.h which will define min/max macros
-    # that will collide with the stl versions.
+    # that will collide with the STL versions.
     add_definitions(-DNOMINMAX)
   endif()
 endif()
@@ -340,8 +343,8 @@ list(APPEND LIB
   bf_nodes_geometry_generated
 )
 
-# If compiling with msvc clang we need to add the D_LIBCPP_VERSION define
-# so we don't run into tbb errors when compiling with lib
+# If compiling with MSVC clang we need to add the `D_LIBCPP_VERSION` define
+# so we don't run into TBB errors when compiling with lib.
 if(WITH_TBB AND MSVC_CLANG)
   string(APPEND CMAKE_CXX_FLAGS " /D_LIBCPP_VERSION")
 endif()

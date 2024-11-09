@@ -104,8 +104,6 @@ float brush_point_influence(const Scene &scene,
   return influence_base * brush_falloff;
 }
 
-/* Compute the closest distance to the "surface". When the point is outside the polygon, compute
- * the closest distance to the polygon points. When the point is inside the polygon return 0.*/
 float closest_distance_to_surface_2d(const float2 pt, const Span<float2> verts)
 {
   int j = verts.size() - 1;
@@ -194,10 +192,80 @@ bool is_brush_inverted(const Brush &brush, const BrushStrokeMode stroke_mode)
   return bool(brush.flag & BRUSH_DIR_IN) ^ (stroke_mode == BrushStrokeMode::BRUSH_STROKE_INVERT);
 }
 
+DeltaProjectionFunc get_screen_projection_fn(const GreasePencilStrokeParams &params,
+                                             const Object &object,
+                                             const bke::greasepencil::Layer &layer)
+{
+  const float4x4 view_to_world = float4x4(params.rv3d.viewinv);
+  const float4x4 layer_to_world = layer.to_world_space(object);
+  const float4x4 world_to_layer = math::invert(layer_to_world);
+
+  auto screen_to_world = [=](const float3 &world_pos, const float2 &screen_delta) {
+    const float zfac = ED_view3d_calc_zfac(&params.rv3d, world_pos);
+    float3 world_delta;
+    ED_view3d_win_to_delta(&params.region, screen_delta, zfac, world_delta);
+    return world_delta;
+  };
+
+  switch (params.toolsettings.gp_sculpt.lock_axis) {
+    case GP_LOCKAXIS_VIEW: {
+      const float3 world_normal = view_to_world.z_axis();
+      return [=](const float3 &position, const float2 &screen_delta) {
+        const float3 world_pos = math::transform_point(layer_to_world, position);
+        const float3 world_delta = screen_to_world(world_pos, screen_delta);
+        const float3 layer_delta = math::transform_direction(
+            world_to_layer, world_delta - world_normal * math::dot(world_delta, world_normal));
+        return position + layer_delta;
+      };
+    }
+    case GP_LOCKAXIS_X: {
+      return [=](const float3 &position, const float2 &screen_delta) {
+        const float3 world_pos = math::transform_point(layer_to_world, position);
+        const float3 world_delta = screen_to_world(world_pos, screen_delta);
+        const float3 layer_delta = math::transform_direction(
+            world_to_layer, float3(0.0f, world_delta.y, world_delta.z));
+        return position + layer_delta;
+      };
+    }
+    case GP_LOCKAXIS_Y: {
+      return [=](const float3 &position, const float2 &screen_delta) {
+        const float3 world_pos = math::transform_point(layer_to_world, position);
+        const float3 world_delta = screen_to_world(world_pos, screen_delta);
+        const float3 layer_delta = math::transform_direction(
+            world_to_layer, float3(world_delta.x, 0.0f, world_delta.z));
+        return position + layer_delta;
+      };
+    }
+    case GP_LOCKAXIS_Z: {
+      return [=](const float3 &position, const float2 &screen_delta) {
+        const float3 world_pos = math::transform_point(layer_to_world, position);
+        const float3 world_delta = screen_to_world(world_pos, screen_delta);
+        const float3 layer_delta = math::transform_direction(
+            world_to_layer, float3(world_delta.x, world_delta.y, 0.0f));
+        return position + layer_delta;
+      };
+    }
+    case GP_LOCKAXIS_CURSOR: {
+      const float3 world_normal = params.scene.cursor.matrix<float3x3>().z_axis();
+      return [=](const float3 &position, const float2 &screen_delta) {
+        const float3 world_pos = math::transform_point(layer_to_world, position);
+        const float3 world_delta = screen_to_world(world_pos, screen_delta);
+        const float3 layer_delta = math::transform_direction(
+            world_to_layer, world_delta - world_normal * math::dot(world_delta, world_normal));
+        return position + layer_delta;
+      };
+    }
+  }
+
+  BLI_assert_unreachable();
+  return [](const float3 &, const float2 &) { return float3(); };
+}
+
 GreasePencilStrokeParams GreasePencilStrokeParams::from_context(
     const Scene &scene,
     Depsgraph &depsgraph,
     ARegion &region,
+    RegionView3D &rv3d,
     Object &object,
     const int layer_index,
     const int frame_number,
@@ -207,9 +275,11 @@ GreasePencilStrokeParams GreasePencilStrokeParams::from_context(
   Object &ob_eval = *DEG_get_evaluated_object(&depsgraph, &object);
   GreasePencil &grease_pencil = *static_cast<GreasePencil *>(object.data);
 
-  const bke::greasepencil::Layer &layer = *grease_pencil.layer(layer_index);
+  const bke::greasepencil::Layer &layer = grease_pencil.layer(layer_index);
   return {*scene.toolsettings,
           region,
+          rv3d,
+          scene,
           object,
           ob_eval,
           layer,
@@ -225,7 +295,7 @@ IndexMask point_selection_mask(const GreasePencilStrokeParams &params,
 {
 
   return (use_masking ? ed::greasepencil::retrieve_editable_and_selected_points(
-                            params.ob_eval, params.drawing, params.layer_index, memory) :
+                            params.ob_orig, params.drawing, params.layer_index, memory) :
                         params.drawing.strokes().points_range());
 }
 
@@ -235,7 +305,7 @@ IndexMask stroke_selection_mask(const GreasePencilStrokeParams &params,
 {
 
   return (use_masking ? ed::greasepencil::retrieve_editable_and_selected_strokes(
-                            params.ob_eval, params.drawing, params.layer_index, memory) :
+                            params.ob_orig, params.drawing, params.layer_index, memory) :
                         params.drawing.strokes().curves_range());
 }
 
@@ -244,7 +314,7 @@ IndexMask fill_selection_mask(const GreasePencilStrokeParams &params,
                               IndexMaskMemory &memory)
 {
   return (use_masking ? ed::greasepencil::retrieve_editable_and_selected_fill_strokes(
-                            params.ob_eval, params.drawing, params.layer_index, memory) :
+                            params.ob_orig, params.drawing, params.layer_index, memory) :
                         params.drawing.strokes().curves_range());
 }
 
@@ -300,15 +370,13 @@ Array<float> calculate_view_radii(const GreasePencilStrokeParams &params,
 bool do_vertex_color_points(const Brush &brush)
 {
   return brush.gpencil_settings != nullptr &&
-         ((brush.gpencil_settings->vertex_mode == GPPAINT_MODE_STROKE) ||
-          (brush.gpencil_settings->vertex_mode == GPPAINT_MODE_BOTH));
+         ELEM(brush.gpencil_settings->vertex_mode, GPPAINT_MODE_STROKE, GPPAINT_MODE_BOTH);
 }
 
 bool do_vertex_color_fill(const Brush &brush)
 {
   return brush.gpencil_settings != nullptr &&
-         ((brush.gpencil_settings->vertex_mode == GPPAINT_MODE_FILL) ||
-          (brush.gpencil_settings->vertex_mode == GPPAINT_MODE_BOTH));
+         ELEM(brush.gpencil_settings->vertex_mode, GPPAINT_MODE_FILL, GPPAINT_MODE_BOTH);
 }
 
 bool GreasePencilStrokeOperationCommon::is_inverted(const Brush &brush) const
@@ -329,6 +397,7 @@ void GreasePencilStrokeOperationCommon::foreach_editable_drawing(
   const Scene &scene = *CTX_data_scene(&C);
   Depsgraph &depsgraph = *CTX_data_depsgraph_pointer(&C);
   ARegion &region = *CTX_wm_region(&C);
+  RegionView3D &rv3d = *CTX_wm_region_view3d(&C);
   Object &object = *CTX_data_active_object(&C);
   GreasePencil &grease_pencil = *static_cast<GreasePencil *>(object.data);
 
@@ -340,6 +409,7 @@ void GreasePencilStrokeOperationCommon::foreach_editable_drawing(
         scene,
         depsgraph,
         region,
+        rv3d,
         object,
         info.layer_index,
         info.frame_number,
@@ -366,6 +436,7 @@ void GreasePencilStrokeOperationCommon::foreach_editable_drawing(
   const Scene &scene = *CTX_data_scene(&C);
   Depsgraph &depsgraph = *CTX_data_depsgraph_pointer(&C);
   ARegion &region = *CTX_wm_region(&C);
+  RegionView3D &rv3d = *CTX_wm_region_view3d(&C);
   Object &object = *CTX_data_active_object(&C);
   GreasePencil &grease_pencil = *static_cast<GreasePencil *>(object.data);
 
@@ -378,6 +449,7 @@ void GreasePencilStrokeOperationCommon::foreach_editable_drawing(
           scene,
           depsgraph,
           region,
+          rv3d,
           object,
           info.layer_index,
           info.frame_number,
@@ -397,15 +469,15 @@ void GreasePencilStrokeOperationCommon::foreach_editable_drawing(
 
 void GreasePencilStrokeOperationCommon::foreach_editable_drawing(
     const bContext &C,
-    FunctionRef<bool(const GreasePencilStrokeParams &params, const DrawingPlacement &placement)>
-        fn) const
+    FunctionRef<bool(const GreasePencilStrokeParams &params,
+                     const DeltaProjectionFunc &projection_fn)> fn) const
 {
   using namespace blender::bke::greasepencil;
 
   const Scene &scene = *CTX_data_scene(&C);
   Depsgraph &depsgraph = *CTX_data_depsgraph_pointer(&C);
-  View3D &view3d = *CTX_wm_view3d(&C);
   ARegion &region = *CTX_wm_region(&C);
+  RegionView3D &rv3d = *CTX_wm_region_view3d(&C);
   Object &object = *CTX_data_active_object(&C);
   Object &object_eval = *DEG_get_evaluated_object(&depsgraph, &object);
   GreasePencil &grease_pencil = *static_cast<GreasePencil *>(object.data);
@@ -413,27 +485,20 @@ void GreasePencilStrokeOperationCommon::foreach_editable_drawing(
   std::atomic<bool> changed = false;
   const Vector<MutableDrawingInfo> drawings = get_drawings_for_painting(C);
   threading::parallel_for_each(drawings, [&](const MutableDrawingInfo &info) {
-    const Layer &layer = *grease_pencil.layer(info.layer_index);
+    const Layer &layer = grease_pencil.layer(info.layer_index);
 
-    DrawingPlacement placement(scene, region, view3d, object_eval, &layer);
-    if (placement.use_project_to_surface()) {
-      placement.cache_viewport_depths(&depsgraph, &region, &view3d);
-    }
-    else if (placement.use_project_to_nearest_stroke()) {
-      placement.cache_viewport_depths(&depsgraph, &region, &view3d);
-      placement.set_origin_to_nearest_stroke(this->start_mouse_position);
-    }
-
-    GreasePencilStrokeParams params = GreasePencilStrokeParams::from_context(
+    const GreasePencilStrokeParams params = GreasePencilStrokeParams::from_context(
         scene,
         depsgraph,
         region,
+        rv3d,
         object,
         info.layer_index,
         info.frame_number,
         info.multi_frame_falloff,
         info.drawing);
-    if (fn(params, placement)) {
+    const DeltaProjectionFunc projection_fn = get_screen_projection_fn(params, object_eval, layer);
+    if (fn(params, projection_fn)) {
       changed = true;
     }
   });

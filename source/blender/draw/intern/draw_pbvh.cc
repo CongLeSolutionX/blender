@@ -21,7 +21,7 @@
 #include "BKE_customdata.hh"
 #include "BKE_mesh.hh"
 #include "BKE_paint.hh"
-#include "BKE_pbvh_api.hh"
+#include "BKE_paint_bvh.hh"
 #include "BKE_subdiv_ccg.hh"
 
 #include "DEG_depsgraph_query.hh"
@@ -135,10 +135,25 @@ class DrawCacheImpl : public DrawCache {
    */
   Map<ViewportRequest, Vector<gpu::Batch *>> tris_batches_;
 
+  /**
+   * Which nodes (might) have a different number of visible faces.
+   *
+   * \note Theoretically the dirty tag is redundant with checking for a different number of visible
+   * triangles in the PBVH node on every redraw. We could do that too, but it's simpler overall to
+   * just tag the node whenever there is such a topology change, and for now there is no real
+   * downside.
+   */
+  BitVector<> dirty_topology_;
+
  public:
   virtual ~DrawCacheImpl() override;
 
-  void tag_all_attributes_dirty(const IndexMask &node_mask) override;
+  void tag_positions_changed(const IndexMask &node_mask) override;
+  void tag_visibility_changed(const IndexMask &node_mask) override;
+  void tag_topology_changed(const IndexMask &node_mask) override;
+  void tag_face_sets_changed(const IndexMask &node_mask) override;
+  void tag_masks_changed(const IndexMask &node_mask) override;
+  void tag_attribute_changed(const IndexMask &node_mask, StringRef attribute_name) override;
 
   Span<gpu::Batch *> ensure_tris_batches(const Object &object,
                                          const ViewportRequest &request,
@@ -155,7 +170,7 @@ class DrawCacheImpl : public DrawCache {
    * Free all GPU data for nodes with a changed visible triangle count. The next time the data is
    * requested it will be rebuilt.
    */
-  void free_nodes_with_changed_topology(const bke::pbvh::Tree &pbvh, const IndexMask &node_mask);
+  void free_nodes_with_changed_topology(const bke::pbvh::Tree &pbvh);
 
   BitSpan ensure_use_flat_layout(const Object &object, const OrigMeshData &orig_mesh_data);
 
@@ -177,19 +192,55 @@ class DrawCacheImpl : public DrawCache {
 
 void DrawCacheImpl::AttributeData::tag_dirty(const IndexMask &node_mask)
 {
-  const int mask_size = node_mask.min_array_size();
-  if (this->dirty_nodes.size() < mask_size) {
-    this->dirty_nodes.resize(mask_size);
-  }
-  /* TODO: Somehow use IndexMask::from_bits with the `reset_all` at the beginning disabled. */
-  node_mask.foreach_index_optimized<int>(GrainSize(4096),
-                                         [&](const int i) { this->dirty_nodes[i].set(); });
+  this->dirty_nodes.resize(std::max(this->dirty_nodes.size(), node_mask.min_array_size()), false);
+  node_mask.set_bits(this->dirty_nodes);
 }
 
-void DrawCacheImpl::tag_all_attributes_dirty(const IndexMask &node_mask)
+void DrawCacheImpl::tag_positions_changed(const IndexMask &node_mask)
 {
-  for (DrawCacheImpl::AttributeData &data : attribute_vbos_.values()) {
-    data.tag_dirty(node_mask);
+  if (DrawCacheImpl::AttributeData *data = attribute_vbos_.lookup_ptr(CustomRequest::Position)) {
+    data->tag_dirty(node_mask);
+  }
+  if (DrawCacheImpl::AttributeData *data = attribute_vbos_.lookup_ptr(CustomRequest::Normal)) {
+    data->tag_dirty(node_mask);
+  }
+}
+
+void DrawCacheImpl::tag_visibility_changed(const IndexMask &node_mask)
+{
+  dirty_topology_.resize(std::max(dirty_topology_.size(), node_mask.min_array_size()), false);
+  node_mask.set_bits(dirty_topology_);
+}
+
+void DrawCacheImpl::tag_topology_changed(const IndexMask &node_mask)
+{
+  /** Currently the only times where topology changes are for BMesh dynamic topology, where tagging
+   * a visibility update deletes all the GPU data anyway. */
+  this->tag_visibility_changed(node_mask);
+}
+
+void DrawCacheImpl::tag_face_sets_changed(const IndexMask &node_mask)
+{
+  if (DrawCacheImpl::AttributeData *data = attribute_vbos_.lookup_ptr(CustomRequest::FaceSet)) {
+    data->tag_dirty(node_mask);
+  }
+}
+
+void DrawCacheImpl::tag_masks_changed(const IndexMask &node_mask)
+{
+  if (DrawCacheImpl::AttributeData *data = attribute_vbos_.lookup_ptr(CustomRequest::Mask)) {
+    data->tag_dirty(node_mask);
+  }
+}
+
+void DrawCacheImpl::tag_attribute_changed(const IndexMask &node_mask, StringRef attribute_name)
+{
+  for (const auto &[data_request, data] : attribute_vbos_.items()) {
+    if (const GenericRequest *request = std::get_if<GenericRequest>(&data_request)) {
+      if (request->name == attribute_name) {
+        data.tag_dirty(node_mask);
+      }
+    }
   }
 }
 
@@ -501,42 +552,6 @@ static int count_visible_tris_bmesh(const Set<BMFace *, 0> &faces)
   });
 }
 
-/**
- * Find nodes which (might) have a different number of visible faces.
- *
- * \note Theoretically the #PBVH_RebuildDrawBuffers flag is redundant with checking for a different
- * number of visible triangles in the PBVH node on every redraw. We could do that too, but it's
- * simpler overall to just tag the node whenever there is such a topology change, and for now there
- * is no real downside.
- */
-static IndexMask calc_topology_changed_nodes(const bke::pbvh::Tree &pbvh,
-                                             const IndexMask &node_mask,
-                                             IndexMaskMemory &memory)
-{
-  switch (pbvh.type()) {
-    case bke::pbvh::Type::Mesh: {
-      const Span<bke::pbvh::MeshNode> nodes = pbvh.nodes<bke::pbvh::MeshNode>();
-      return IndexMask::from_predicate(node_mask, GrainSize(1024), memory, [&](const int i) {
-        return nodes[i].flag_ & PBVH_RebuildDrawBuffers;
-      });
-    }
-    case bke::pbvh::Type::Grids: {
-      const Span<bke::pbvh::GridsNode> nodes = pbvh.nodes<bke::pbvh::GridsNode>();
-      return IndexMask::from_predicate(node_mask, GrainSize(1024), memory, [&](const int i) {
-        return nodes[i].flag_ & PBVH_RebuildDrawBuffers;
-      });
-    }
-    case bke::pbvh::Type::BMesh: {
-      const Span<bke::pbvh::BMeshNode> nodes = pbvh.nodes<bke::pbvh::BMeshNode>();
-      return IndexMask::from_predicate(node_mask, GrainSize(1024), memory, [&](const int i) {
-        return nodes[i].flag_ & PBVH_RebuildDrawBuffers;
-      });
-    }
-  }
-  BLI_assert_unreachable();
-  return {};
-}
-
 DrawCacheImpl::~DrawCacheImpl()
 {
   /* This destructor should support inconsistent vector lengths between attributes and index
@@ -557,14 +572,18 @@ DrawCacheImpl::~DrawCacheImpl()
   }
 }
 
-void DrawCacheImpl::free_nodes_with_changed_topology(const bke::pbvh::Tree &pbvh,
-                                                     const IndexMask &node_mask)
+void DrawCacheImpl::free_nodes_with_changed_topology(const bke::pbvh::Tree &pbvh)
 {
   /* NOTE: Theoretically we shouldn't need to free batches with a changed triangle count, but
    * currently it's the simplest way to reallocate all the GPU data while keeping everything in a
    * consistent state. */
   IndexMaskMemory memory;
-  const IndexMask nodes_to_free = calc_topology_changed_nodes(pbvh, node_mask, memory);
+  const IndexMask nodes_to_free = IndexMask::from_bits(dirty_topology_, memory);
+  if (nodes_to_free.is_empty()) {
+    return;
+  }
+
+  dirty_topology_.clear_and_shrink();
 
   free_ibos(lines_ibos_, nodes_to_free);
   free_ibos(lines_ibos_coarse_, nodes_to_free);
@@ -1446,7 +1465,7 @@ static void create_lines_index_grids_flat_layout(const Span<int> grid_indices,
   }
 }
 
-static Array<int> calc_material_indices(const Object &object)
+static Array<int> calc_material_indices(const Object &object, const OrigMeshData &orig_mesh_data)
 {
   const SculptSession &ss = *object.sculpt;
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
@@ -1474,8 +1493,8 @@ static Array<int> calc_material_indices(const Object &object)
     }
     case bke::pbvh::Type::Grids: {
       const Span<bke::pbvh::GridsNode> nodes = pbvh.nodes<bke::pbvh::GridsNode>();
-      const Mesh &mesh = *static_cast<const Mesh *>(object.data);
-      const bke::AttributeAccessor attributes = mesh.attributes();
+      /* Use original mesh data because evaluated mesh is empty. */
+      const bke::AttributeAccessor attributes = orig_mesh_data.attributes;
       const VArray material_indices = *attributes.lookup<int>("material_index",
                                                               bke::AttrDomain::Face);
       if (!material_indices) {
@@ -1546,14 +1565,20 @@ static BitVector<> calc_use_flat_layout(const Object &object, const OrigMeshData
 static gpu::IndexBuf *create_tri_index_mesh(const OffsetIndices<int> faces,
                                             const Span<int3> corner_tris,
                                             const Span<bool> hide_poly,
-                                            const Span<int> face_indices)
+                                            const bke::pbvh::MeshNode &node)
 {
+  const Span<int> face_indices = node.faces();
   int tris_num = 0;
-  for (const int face : face_indices) {
-    if (!hide_poly.is_empty() && hide_poly[face]) {
-      continue;
+  if (hide_poly.is_empty()) {
+    tris_num = poly_to_tri_count(face_indices.size(), node.corners_num());
+  }
+  else {
+    for (const int face : face_indices) {
+      if (hide_poly[face]) {
+        continue;
+      }
+      tris_num += bke::mesh::face_triangles_num(faces[face].size());
     }
-    tris_num += bke::mesh::face_triangles_num(faces[face].size());
   }
 
   GPUIndexBufBuilder builder;
@@ -1568,9 +1593,9 @@ static gpu::IndexBuf *create_tri_index_mesh(const OffsetIndices<int> faces,
       node_corner_offset += face.size();
       continue;
     }
-    for (const int tri : bke::mesh::face_triangles_range(faces, face_index)) {
+    for (const int3 &tri : corner_tris.slice(bke::mesh::face_triangles_range(faces, face_index))) {
       for (int i : IndexRange(3)) {
-        const int corner = corner_tris[tri][i];
+        const int corner = tri[i];
         const int index_in_face = corner - face.first();
         data[tri_index][i] = node_corner_offset + index_in_face;
       }
@@ -1720,14 +1745,11 @@ BLI_NOINLINE static void ensure_vbos_allocated_mesh(const Object &object,
 {
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
   const Span<bke::pbvh::MeshNode> nodes = pbvh.nodes<bke::pbvh::MeshNode>();
-  const Mesh &mesh = *static_cast<Mesh *>(object.data);
-  const OffsetIndices<int> faces = mesh.faces();
   node_mask.foreach_index(GrainSize(64), [&](const int i) {
     if (!vbos[i]) {
       vbos[i] = GPU_vertbuf_create_with_format(format);
     }
-    const int verts_num = offset_indices::sum_group_sizes(faces, nodes[i].faces());
-    GPU_vertbuf_data_alloc(*vbos[i], verts_num);
+    GPU_vertbuf_data_alloc(*vbos[i], nodes[i].corners_num());
   });
 }
 
@@ -1824,7 +1846,9 @@ Span<gpu::VertBuf *> DrawCacheImpl::ensure_attribute_data(const Object &object,
     }
   }
 
-  data.dirty_nodes.clear_and_shrink();
+  /* TODO: It would be good to deallocate the bit vector if all of the bits have been reset to
+   * avoid unnecessary processing in subsequent redraws. */
+  dirty_mask.foreach_index_optimized<int>([&](const int i) { data.dirty_nodes[i].reset(); });
 
   flush_vbo_data(vbos, mask);
 
@@ -1857,7 +1881,7 @@ Span<gpu::IndexBuf *> DrawCacheImpl::ensure_tri_indices(const Object &object,
       const bke::AttributeAccessor attributes = orig_mesh_data.attributes;
       const VArraySpan hide_poly = *attributes.lookup<bool>(".hide_poly", bke::AttrDomain::Face);
       nodes_to_calculate.foreach_index(GrainSize(1), [&](const int i) {
-        ibos[i] = create_tri_index_mesh(faces, corner_tris, hide_poly, nodes[i].faces());
+        ibos[i] = create_tri_index_mesh(faces, corner_tris, hide_poly, nodes[i]);
       });
       return ibos;
     }
@@ -1906,7 +1930,7 @@ Span<gpu::Batch *> DrawCacheImpl::ensure_tris_batches(const Object &object,
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
 
   this->ensure_use_flat_layout(object, orig_mesh_data);
-  this->free_nodes_with_changed_topology(pbvh, nodes_to_update);
+  this->free_nodes_with_changed_topology(pbvh);
 
   const Span<gpu::IndexBuf *> ibos = this->ensure_tri_indices(
       object, orig_mesh_data, nodes_to_update, request.use_coarse_grids);
@@ -1950,7 +1974,7 @@ Span<gpu::Batch *> DrawCacheImpl::ensure_lines_batches(const Object &object,
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
 
   this->ensure_use_flat_layout(object, orig_mesh_data);
-  this->free_nodes_with_changed_topology(pbvh, nodes_to_update);
+  this->free_nodes_with_changed_topology(pbvh);
 
   const Span<gpu::VertBuf *> position = this->ensure_attribute_data(
       object, orig_mesh_data, CustomRequest::Position, nodes_to_update);
@@ -1976,7 +2000,9 @@ Span<int> DrawCacheImpl::ensure_material_indices(const Object &object)
 {
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
   if (material_indices_.size() != pbvh.nodes_num()) {
-    material_indices_ = calc_material_indices(object);
+    const Object &object_orig = *DEG_get_original_object(&const_cast<Object &>(object));
+    const OrigMeshData orig_mesh_data(*static_cast<const Mesh *>(object_orig.data));
+    material_indices_ = calc_material_indices(object, orig_mesh_data);
   }
   return material_indices_;
 }

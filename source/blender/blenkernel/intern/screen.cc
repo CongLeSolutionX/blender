@@ -51,7 +51,7 @@
 #include "../editors/asset/ED_asset_shelf.hh"
 
 #ifdef WITH_PYTHON
-#  include "BPY_extern.h"
+#  include "BPY_extern.hh"
 #endif
 
 using blender::Span;
@@ -170,7 +170,7 @@ IDTypeInfo IDType_ID_SCR = {
     /*name_plural*/ N_("screens"),
     /*translation_context*/ BLT_I18NCONTEXT_ID_SCREEN,
     /*flags*/ IDTYPE_FLAGS_NO_COPY | IDTYPE_FLAGS_ONLY_APPEND | IDTYPE_FLAGS_NO_ANIMDATA |
-        IDTYPE_FLAGS_NO_MEMFILE_UNDO | IDTYPE_FLAGS_NEVER_UNUSED,
+        IDTYPE_FLAGS_NO_MEMFILE_UNDO,
     /*asset_type_info*/ nullptr,
 
     /*init_data*/ nullptr,
@@ -478,6 +478,14 @@ void BKE_screen_gizmo_tag_refresh(bScreen *screen)
         region_refresh_tag_gizmomap_callback(region->gizmo_map);
       }
     }
+  }
+}
+
+void BKE_screen_runtime_refresh_for_blendfile(bScreen *screen)
+{
+  LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
+    area->runtime.tool = nullptr;
+    area->runtime.is_tool_set = false;
   }
 }
 
@@ -879,11 +887,11 @@ std::optional<std::string> BKE_screen_path_from_screen_to_space(const PointerRNA
     return std::nullopt;
   }
 
-  bScreen *screen = reinterpret_cast<bScreen *>(ptr->owner_id);
-  SpaceLink *link = static_cast<SpaceLink *>(ptr->data);
+  const bScreen *screen = reinterpret_cast<const bScreen *>(ptr->owner_id);
+  const SpaceLink *link = static_cast<const SpaceLink *>(ptr->data);
 
   int area_index;
-  LISTBASE_FOREACH_INDEX (ScrArea *, area, &screen->areabase, area_index) {
+  LISTBASE_FOREACH_INDEX (const ScrArea *, area, &screen->areabase, area_index) {
     const int space_index = BLI_findindex(&area->spacedata, link);
     if (space_index != -1) {
       return fmt::format("areas[{}].spaces[{}]", area_index, space_index);
@@ -1198,6 +1206,10 @@ static void direct_link_region(BlendDataReader *reader, ARegion *region, int spa
   }
 
   BLO_read_struct_list(reader, uiPreview, &region->ui_previews);
+  LISTBASE_FOREACH (uiPreview *, ui_preview, &region->ui_previews) {
+    ui_preview->id_session_uid = MAIN_ID_SESSION_UID_UNSET;
+    ui_preview->tag = 0;
+  }
 
   if (spacetype == SPACE_EMPTY) {
     /* unknown space type, don't leak regiondata */

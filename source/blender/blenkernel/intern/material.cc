@@ -511,8 +511,6 @@ bool BKE_object_material_slot_used(Object *object, short actcol)
     case ID_MB:
       /* Meta-elements don't support materials at the moment. */
       return false;
-    case ID_GD_LEGACY:
-      return BKE_gpencil_material_index_used((bGPdata *)ob_data, actcol - 1);
     case ID_GP:
       return BKE_grease_pencil_material_index_used(reinterpret_cast<GreasePencil *>(ob_data),
                                                    actcol - 1);
@@ -727,6 +725,14 @@ Material **BKE_object_material_get_p(Object *ob, short act)
 Material *BKE_object_material_get(Object *ob, short act)
 {
   Material **ma_p = BKE_object_material_get_p(ob, act);
+  /* Grease Pencil objects currently make the assumption that the returned material has Grease
+   * Pencil settings. Ensure that this is the case otherwise return `nullptr`. */
+  if (ob->type == OB_GREASE_PENCIL && ma_p != nullptr) {
+    Material *ma = *ma_p;
+    if (ma != nullptr) {
+      return ma->gp_style != nullptr ? ma : nullptr;
+    }
+  }
   return ma_p ? *ma_p : nullptr;
 }
 
@@ -1164,9 +1170,6 @@ void BKE_object_material_remap(Object *ob, const uint *remap)
   else if (ELEM(ob->type, OB_CURVES_LEGACY, OB_SURF, OB_FONT)) {
     BKE_curve_material_remap(static_cast<Curve *>(ob->data), remap, ob->totcol);
   }
-  else if (ob->type == OB_GPENCIL_LEGACY) {
-    BKE_gpencil_material_remap(static_cast<bGPdata *>(ob->data), remap, ob->totcol);
-  }
   else if (ob->type == OB_GREASE_PENCIL) {
     BKE_grease_pencil_material_remap(static_cast<GreasePencil *>(ob->data), remap, ob->totcol);
   }
@@ -1418,10 +1421,6 @@ bool BKE_object_material_slot_remove(Main *bmain, Object *ob)
     if (ob->runtime->curve_cache) {
       BKE_displist_free(&ob->runtime->curve_cache->disp);
     }
-  }
-  /* check indices from gpencil legacy. */
-  else if (ob->type == OB_GPENCIL_LEGACY) {
-    BKE_gpencil_material_index_reassign((bGPdata *)ob->data, ob->totcol, actcol - 1);
   }
 
   return true;

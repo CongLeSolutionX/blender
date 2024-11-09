@@ -625,7 +625,7 @@ static int compare_asset_catalog(void *user_data, const void *a1, const void *a2
     order = -1;
   }
   else if (catalog1 && catalog2) {
-    order = BLI_strcasecmp_natural(catalog1->path.name().c_str(), catalog2->path.name().c_str());
+    order = BLI_strcasecmp_natural(catalog1->path.c_str(), catalog2->path.c_str());
   }
 
   if (!order) {
@@ -1349,24 +1349,31 @@ static bool filelist_intern_entry_is_main_file(const FileListInternEntry *intern
 
 static void parent_dir_until_exists_or_default_root(char *dir)
 {
-  if (!BLI_path_parent_dir_until_exists(dir)) {
-#ifdef WIN32
-    BLI_windows_get_default_root_dir(dir);
-#else
-    ARRAY_SET_ITEMS(dir, '/', '\0');
-#endif
+  /* Only allow absolute paths as CWD relative doesn't make sense from the UI. */
+  if (BLI_path_is_abs_from_cwd(dir) && BLI_path_parent_dir_until_exists(dir)) {
+    return;
   }
+
+#ifdef WIN32
+  BLI_windows_get_default_root_dir(dir);
+#else
+  ARRAY_SET_ITEMS(dir, '/', '\0');
+#endif
 }
 
 static bool filelist_checkdir_dir(const FileList * /*filelist*/,
                                   char dirpath[FILE_MAX_LIBEXTRA],
                                   const bool do_change)
 {
+  bool is_valid;
   if (do_change) {
     parent_dir_until_exists_or_default_root(dirpath);
-    return true;
+    is_valid = true;
   }
-  return BLI_is_dir(dirpath);
+  else {
+    is_valid = BLI_path_is_abs_from_cwd(dirpath) && BLI_is_dir(dirpath);
+  }
+  return is_valid;
 }
 
 static bool filelist_checkdir_lib(const FileList * /*filelist*/,
@@ -3701,7 +3708,7 @@ static void filelist_readjob_recursive_dir_add_items(const bool do_lib,
 
     BLI_stack_discard(todo_dirs);
 
-    /* ARRRG! We have to be very careful *not to use* common BLI_path_util helpers over
+    /* ARRRG! We have to be very careful *not to use* common `BLI_path_utils.hh` helpers over
      * entry->relpath itself (nor any path containing it), since it may actually be a datablock
      * name inside .blend file, which can have slashes and backslashes! See #46827.
      * Note that in the end, this means we 'cache' valid relative subdir once here,

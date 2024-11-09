@@ -332,7 +332,7 @@ unset(_option_default)
 option(WITH_GMP "Enable features depending on GMP (Exact Boolean)" ON)
 
 # Compositor
-option(WITH_COMPOSITOR_CPU "Enable the tile based CPU nodal compositor" ON)
+option(WITH_COMPOSITOR_CPU "Enable the Full-Frame CPU nodal compositor" ON)
 option(WITH_OPENIMAGEDENOISE "Enable the OpenImageDenoise compositing node" ON)
 
 option(WITH_OPENSUBDIV "Enable OpenSubdiv for surface subdivision" ON)
@@ -448,6 +448,9 @@ endif()
 option(WITH_MOD_FLUID "Enable Mantaflow Fluid Simulation Framework" ON)
 option(WITH_MOD_REMESH "Enable Remesh Modifier" ON)
 option(WITH_MOD_OCEANSIM "Enable Ocean Modifier" ON)
+
+# UV solvers.
+option(WITH_UV_SLIM "SLIM UV unwrapping solver" ON)
 
 # Image format support
 option(WITH_IMAGE_OPENEXR "Enable OpenEXR Support (http://www.openexr.com)" ON)
@@ -705,9 +708,8 @@ endif()
 if(NOT APPLE AND NOT (WIN32 AND CMAKE_SYSTEM_PROCESSOR STREQUAL "ARM64"))
   option(WITH_CYCLES_DEVICE_HIP "Enable Cycles AMD HIP support" ON)
   option(WITH_CYCLES_HIP_BINARIES "Build Cycles AMD HIP binaries" OFF)
-  # Radeon VII (gfx906) not currently working with HIP SDK, so left out of the list.
+  # We only support RDNA1 (gfx101X) and newer. Vega and older generations have rendering artifacts and crashing issues.
   set(CYCLES_HIP_BINARIES_ARCH
-    gfx900 gfx90c gfx902
     gfx1010 gfx1011 gfx1012
     gfx1030 gfx1031 gfx1032 gfx1034 gfx1035 gfx1036
     gfx1100 gfx1101 gfx1102 gfx1103 gfx1150 gfx1151
@@ -716,11 +718,8 @@ if(NOT APPLE AND NOT (WIN32 AND CMAKE_SYSTEM_PROCESSOR STREQUAL "ARM64"))
   mark_as_advanced(WITH_CYCLES_DEVICE_HIP)
   mark_as_advanced(CYCLES_HIP_BINARIES_ARCH)
 
-  # HIPRT is only available on Windows for now.
-  if(WIN32)
-    option(WITH_CYCLES_DEVICE_HIPRT "Enable Cycles AMD HIPRT support" OFF)
-    mark_as_advanced(WITH_CYCLES_DEVICE_HIPRT)
-  endif()
+  option(WITH_CYCLES_DEVICE_HIPRT "Enable Cycles AMD HIPRT support" OFF)
+  mark_as_advanced(WITH_CYCLES_DEVICE_HIPRT)
 endif()
 
 # Apple Metal
@@ -744,7 +743,7 @@ This option is only for debugging purposes."
   # https://www.intel.com/content/www/us/en/develop/documentation/oneapi-dpcpp-cpp-compiler-dev-guide-and-reference/top/compilation/ahead-of-time-compilation.html
   # The supported devices can be retrieved from `ocloc` output when running
   # `ocloc compile --help`.
-  set(CYCLES_ONEAPI_INTEL_BINARIES_ARCH dg2 mtl CACHE STRING "\
+  set(CYCLES_ONEAPI_INTEL_BINARIES_ARCH dg2 mtl lnl CACHE STRING "\
 oneAPI Intel GPU architectures to build binaries for"
   )
   set(CYCLES_ONEAPI_SYCL_TARGETS spir64 spir64_gen CACHE STRING "\
@@ -871,15 +870,17 @@ endif()
 
 
 # GPU Module
-option(WITH_GPU_BUILDTIME_SHADER_BUILDER "\
-Shader builder is a developer option enabling linting on GLSL during compilation"
-  OFF
-)
 option(WITH_RENDERDOC "Use Renderdoc API to capture frames" OFF)
 
+option(WITH_GPU_SHADER_ASSERT "\
+Globally enable in-shader asserts.
+(Requires a debug build or setting GPU_FORCE_ENABLE_SHADER_PRINTF to 1)"
+  OFF
+)
+
 mark_as_advanced(
-  WITH_GPU_BUILDTIME_SHADER_BUILDER
   WITH_RENDERDOC
+  WITH_GPU_SHADER_ASSERT
 )
 
 # OpenGL
@@ -892,19 +893,10 @@ endif()
 
 # Vulkan
 option(WITH_VULKAN_BACKEND "Enable Vulkan as graphics backend (experimental)" ON)
-option(WITH_VULKAN_GUARDEDALLOC "\
-Use guardedalloc for host allocations done inside Vulkan (development option)"
-  OFF
-)
-mark_as_advanced(
-  WITH_VULKAN_BACKEND
-  WITH_VULKAN_GUARDEDALLOC
-)
+mark_as_advanced(WITH_VULKAN_BACKEND)
 if(APPLE)
   option(WITH_VULKAN_MOLTENVK "Enable Vulkan over MoltenVK (development option)" OFF)
-  mark_as_advanced(
-    WITH_VULKAN_MOLTENVK
-  )
+  mark_as_advanced(WITH_VULKAN_MOLTENVK)
 endif()
 
 if(APPLE AND NOT WITH_VULKAN_MOLTENVK)
@@ -913,8 +905,8 @@ endif()
 if(NOT WITH_EXPERIMENTAL_FEATURES)
   if(APPLE)
     set(WITH_VULKAN_MOLTENVK OFF)
+    set(WITH_VULKAN_BACKEND OFF)
   endif()
-  set(WITH_VULKAN_BACKEND OFF)
 endif()
 
 # Metal
@@ -1228,6 +1220,13 @@ set_and_warn_dependency(WITH_PYTHON WITH_CYCLES        OFF)
 set_and_warn_dependency(WITH_PYTHON WITH_DRACO         OFF)
 set_and_warn_dependency(WITH_PYTHON WITH_MOD_FLUID     OFF)
 
+if(NOT WITH_PYTHON_MODULE)
+  if(WITH_DRACO AND NOT WITH_PYTHON_INSTALL)
+    message(STATUS "WITH_DRACO requires WITH_PYTHON_INSTALL to be ON, disabling WITH_DRACO for now")
+    set(WITH_DRACO OFF)
+  endif()
+endif()
+
 # enable boost for cycles, audaspace or i18n
 # otherwise if the user disabled
 
@@ -1327,7 +1326,7 @@ endif()
 # Check if Sub-modules are Cloned
 
 if(WITH_PYTHON)
-  # While we have this as an '#error' in 'bpy_capi_utils.h',
+  # While we have this as an '#error' in 'bpy_capi_utils.hh',
   # upgrading Python tends to cause confusion for users who build.
   # Give the error message early to make this more obvious.
   #
@@ -2815,8 +2814,6 @@ if(FIRST_RUN)
       info_cfg_option(WITH_CYCLES_ONEAPI_BINARIES)
       info_cfg_option(WITH_CYCLES_DEVICE_HIP)
       info_cfg_option(WITH_CYCLES_HIP_BINARIES)
-    endif()
-    if(WIN32)
       info_cfg_option(WITH_CYCLES_DEVICE_HIPRT)
     endif()
   endif()
