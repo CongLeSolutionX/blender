@@ -219,7 +219,7 @@ add_blender_test(
 # This test can be extremely long, especially in debug builds.
 # Generate BLENDFILE_VERSIONING_SPLIT_RANGE instances of the test,
 # each processing their own subset of the whole set of blendfiles.
-set(BLENDFILE_VERSIONING_SPLIT_RANGE 8)
+set(BLENDFILE_VERSIONING_SPLIT_RANGE 32)
 math(EXPR BLENDFILE_VERSIONING_SPLIT_RANGE_CMAKE "${BLENDFILE_VERSIONING_SPLIT_RANGE} - 1")
 foreach(idx RANGE ${BLENDFILE_VERSIONING_SPLIT_RANGE_CMAKE})
   add_blender_test(
@@ -400,15 +400,12 @@ add_blender_test(
   --testdir "${TEST_SRC_DIR}/animation"
 )
 
-if(WITH_EXPERIMENTAL_FEATURES)
-  # Only run with Project Baklava enabled.
-  add_blender_test(
-    bl_animation_action
-    --python ${CMAKE_CURRENT_LIST_DIR}/bl_animation_action.py
-    --
-    --testdir "${TEST_SRC_DIR}/animation"
-  )
-endif()
+add_blender_test(
+  bl_animation_action
+  --python ${CMAKE_CURRENT_LIST_DIR}/bl_animation_action.py
+  --
+  --testdir "${TEST_SRC_DIR}/animation"
+)
 
 add_blender_test(
   bl_animation_keyframing

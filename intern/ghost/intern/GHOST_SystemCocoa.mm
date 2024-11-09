@@ -2040,7 +2040,7 @@ void GHOST_SystemCocoa::putClipboard(const char *buffer, bool selection) const
 
 static NSURL *NSPasteboardGetImageFile()
 {
-  NSURL *pasteboardImageFile = Nil;
+  NSURL *pasteboardImageFile = nil;
 
   @autoreleasepool {
     NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
@@ -2053,7 +2053,7 @@ static NSURL *NSPasteboardGetImageFile()
                                                            options:pasteboardFilteringOptions];
 
     if (!pasteboardMatches || !pasteboardMatches.count) {
-      return Nil;
+      return nil;
     }
 
     pasteboardImageFile = [[pasteboardMatches firstObject] copy];
@@ -2077,7 +2077,7 @@ GHOST_TSuccess GHOST_SystemCocoa::hasClipboardImage() const
 
     /* If we got a file, ensure it's an image file. */
     if ([pasteboard availableTypeFromArray:@[ NSPasteboardTypeFileURL ]] &&
-        NSPasteboardGetImageFile() == Nil)
+        NSPasteboardGetImageFile() == nil)
     {
       return GHOST_kFailure;
     }
@@ -2095,8 +2095,8 @@ uint *GHOST_SystemCocoa::getClipboardImage(int *r_width, int *r_height) const
   @autoreleasepool {
     NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
 
-    NSImage *clipboardImage = Nil;
-    if (NSURL *pasteboardImageFile = NSPasteboardGetImageFile(); pasteboardImageFile != Nil) {
+    NSImage *clipboardImage = nil;
+    if (NSURL *pasteboardImageFile = NSPasteboardGetImageFile(); pasteboardImageFile != nil) {
       /* Image file. */
       clipboardImage = [[[NSImage alloc] initWithContentsOfURL:pasteboardImageFile] autorelease];
     }
@@ -2113,8 +2113,13 @@ uint *GHOST_SystemCocoa::getClipboardImage(int *r_width, int *r_height) const
     const NSSize clipboardImageSize = getNSImagePixelSize(clipboardImage);
 
     if (ibuf) {
-      const uint64_t byteCount = clipboardImageSize.width * clipboardImageSize.height * 4;
+      const size_t byteCount = clipboardImageSize.width * clipboardImageSize.height * 4;
       uint *rgba = (uint *)malloc(byteCount);
+
+      if (!rgba) {
+        IMB_freeImBuf(ibuf);
+        return nullptr;
+      }
 
       memcpy(rgba, ibuf->byte_buffer.data, byteCount);
       IMB_freeImBuf(ibuf);
@@ -2132,8 +2137,10 @@ uint *GHOST_SystemCocoa::getClipboardImage(int *r_width, int *r_height) const
 GHOST_TSuccess GHOST_SystemCocoa::putClipboardImage(uint *rgba, int width, int height) const
 {
   @autoreleasepool {
+    const size_t rowByteCount = width * 4;
+
     NSBitmapImageRep *imageRep = [[NSBitmapImageRep alloc]
-        initWithBitmapDataPlanes:reinterpret_cast<unsigned char **>(&rgba)
+        initWithBitmapDataPlanes:nil
                       pixelsWide:width
                       pixelsHigh:height
                    bitsPerSample:8
@@ -2141,8 +2148,18 @@ GHOST_TSuccess GHOST_SystemCocoa::putClipboardImage(uint *rgba, int width, int h
                         hasAlpha:YES
                         isPlanar:NO
                   colorSpaceName:NSDeviceRGBColorSpace
-                     bytesPerRow:width * 4
+                     bytesPerRow:rowByteCount
                     bitsPerPixel:32];
+
+    /* Copy the source image data to imageRep, flipping it vertically. */
+    uint8_t *srcBuffer = reinterpret_cast<uint8_t *>(rgba);
+    uint8_t *dstBuffer = static_cast<uint8_t *>([imageRep bitmapData]);
+
+    for (int y = 0; y < height; y++) {
+      const int dstOff = (height - y - 1) * rowByteCount;
+      const int srcOff = y * rowByteCount;
+      memcpy(dstBuffer + dstOff, srcBuffer + srcOff, rowByteCount);
+    }
 
     NSImage *image = [[[NSImage alloc] initWithSize:NSMakeSize(width, height)] autorelease];
     [image addRepresentation:imageRep];

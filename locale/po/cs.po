@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.3.0 Beta (b'6039cb17e63e')\n"
+"Project-Id-Version: Blender 4.3.0 Beta (b'28a8486e2b3f')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-10-07 09:15+0000\n"
+"POT-Creation-Date: 2024-10-29 10:02+0000\n"
 "PO-Revision-Date: 2024-04-29 13:36+0000\n"
 "Last-Translator: Zdeněk Doležal <Griperis@outlook.cz>\n"
 "Language-Team: Czech <https://translate.blender.org/projects/blender-ui/ui/cs/>\n"
@@ -2033,10 +2033,6 @@ msgstr "Kolekce písem"
 
 msgid "Main Grease Pencils"
 msgstr "Hlavní skicovací tužky"
-
-
-msgid "Collection of grease pencils"
-msgstr "Kolekce skicovacích tužek"
 
 
 msgid "Main Images"
@@ -10126,10 +10122,6 @@ msgid "Frame Rate"
 msgstr "Snímková frekvence"
 
 
-msgid "Grease pencil data for this movie clip"
-msgstr "Údaje o grease tužce pro tento filmový klip"
-
-
 msgid "Movie File"
 msgstr "Přidat action strip"
 
@@ -12363,28 +12355,8 @@ msgid "Codec"
 msgstr "Kodek"
 
 
-msgid "Codec settings for OpenEXR"
-msgstr "Nastavení OpenEXR kodeku"
-
-
 msgid "Pxr24 (lossy)"
 msgstr "Pxr24(ztrátový)"
-
-
-msgid "ZIP (lossless)"
-msgstr "ZIP (bezeztrátový)"
-
-
-msgid "PIZ (lossless)"
-msgstr "PIZ (bezeztrátový)"
-
-
-msgid "RLE (lossless)"
-msgstr "RLE (bezeztrátový)"
-
-
-msgid "ZIPS (lossless)"
-msgstr "ZIPS (bezeztrátový)"
 
 
 msgid "B44 (lossy)"
@@ -13809,16 +13781,12 @@ msgid "Material slot name"
 msgstr "Název okénka materiálu"
 
 
-msgid "Snap"
-msgstr "Přichytit"
-
-
-msgid "Proportional Editing Falloff"
-msgstr "Způsob útlumu"
-
-
 msgid "Mirror"
 msgstr "Zrcadlit"
+
+
+msgid "Snap"
+msgstr "Přichytit"
 
 
 msgid "UV Mapping"
@@ -13915,6 +13883,10 @@ msgstr "Kost"
 
 msgid "Pivot Point"
 msgstr "Bod pro pivot"
+
+
+msgid "Proportional Editing Falloff"
+msgstr "Způsob útlumu"
 
 
 msgid "Basic"
@@ -22828,10 +22800,6 @@ msgid "Delete Duplicate Frames"
 msgstr "Odstranit Duplicitní Snímky"
 
 
-msgid "Only Selected"
-msgstr "Pouze vybrané"
-
-
 msgid "Number of frames between generated interpolated frames"
 msgstr "Počet snímků mezi generovanými interpolovanými snímky"
 
@@ -24078,6 +24046,10 @@ msgstr "Zarovnat"
 
 msgid "Cut new topology"
 msgstr "Vříznout novou topologii"
+
+
+msgid "Only Selected"
+msgstr "Pouze vybrané"
 
 
 msgid "Only cut selected geometry"
@@ -31436,30 +31408,6 @@ msgid "Restrict"
 msgstr "Omezit"
 
 
-msgid "Active Tool"
-msgstr "Aktivní nástroj"
-
-
-msgid "View Lock"
-msgstr "Zámek zobrazení"
-
-
-msgid "Shadow Settings"
-msgstr "Nastavení Stínů"
-
-
-msgid "SSAO Settings"
-msgstr "Nastavení SSAO"
-
-
-msgid "Overlays"
-msgstr "Překrytí"
-
-
-msgid "Guides"
-msgstr "Vodítka"
-
-
 msgid "Motion Tracking"
 msgstr "Sledování Pohybu"
 
@@ -31484,12 +31432,36 @@ msgid "Transform Orientations"
 msgstr "Orientace transformací"
 
 
+msgid "Guides"
+msgstr "Vodítka"
+
+
 msgid "Stereoscopy"
 msgstr "Stereoskopie"
 
 
 msgid "Auto-Masking"
 msgstr "Auto-Maska"
+
+
+msgid "Active Tool"
+msgstr "Aktivní nástroj"
+
+
+msgid "View Lock"
+msgstr "Zámek zobrazení"
+
+
+msgid "Shadow Settings"
+msgstr "Nastavení Stínů"
+
+
+msgid "SSAO Settings"
+msgstr "Nastavení SSAO"
+
+
+msgid "Overlays"
+msgstr "Překrytí"
 
 
 msgid "Chain Scaling"
@@ -35146,10 +35118,6 @@ msgid "Enable scene light interactions with volumetrics"
 msgstr "Povolit interakci osvětlení scény s volumetrií"
 
 
-msgid "Generate shadows from volumetric material (Very expensive)"
-msgstr "Generovat stíny z volumetrických materiálů (velmi drahé)"
-
-
 msgid "End distance of the volumetric effect"
 msgstr "Konečná vzdálenost volumetrického efektu"
 
@@ -35414,10 +35382,6 @@ msgstr "Sekvence "
 
 msgid "Align X"
 msgstr "Zarovnat X"
-
-
-msgid "Align Y"
-msgstr "Zarovnat Y"
 
 
 msgid "Text color"
@@ -36253,10 +36217,6 @@ msgstr "UV/obrázkový editor"
 
 msgid "Z-Buffer"
 msgstr "Z-Buffer"
-
-
-msgid "Grease pencil data for this space"
-msgstr "Ostrost W:"
 
 
 msgid "View the image"
@@ -38842,14 +38802,6 @@ msgid "Options:"
 msgstr "Nastavení:"
 
 
-msgid "Labels:"
-msgstr "Štítky:"
-
-
-msgid "Tool Tips:"
-msgstr "Tipy pro Nástroj:"
-
-
 msgctxt "Operator"
 msgid "Save Persistent To..."
 msgstr "Uložit trvalé na..."
@@ -39133,10 +39085,6 @@ msgid "Custom..."
 msgstr "Vlastní..."
 
 
-msgid "View in Render"
-msgstr "Zobrazit ve Vykreslení"
-
-
 msgctxt "Operator"
 msgid "Duplicate Empty Keyframes"
 msgstr "Duplikovat Prázdné Klíčové Snímky"
@@ -39256,6 +39204,16 @@ msgstr "Přehrát"
 msgctxt "Operator"
 msgid "Selection to Cursor"
 msgstr "Výběr ke kurzoru"
+
+
+msgctxt "Operator"
+msgid "Delete Active Keyframe (Active Layer)"
+msgstr "Odstranit Aktivní Klíčové Snímky (Aktivní Vrstvy)"
+
+
+msgctxt "Operator"
+msgid "Delete Active Keyframes (All Layers)"
+msgstr "Odstranit Aktivní Klíčové Snímky (Všechny Vrstvy)"
 
 
 msgid "Cursor Color"
@@ -41811,16 +41769,6 @@ msgstr "Vyhladit hrany"
 
 
 msgctxt "Operator"
-msgid "Delete Active Keyframe (Active Layer)"
-msgstr "Odstranit Aktivní Klíčové Snímky (Aktivní Vrstvy)"
-
-
-msgctxt "Operator"
-msgid "Delete Active Keyframes (All Layers)"
-msgstr "Odstranit Aktivní Klíčové Snímky (Všechny Vrstvy)"
-
-
-msgctxt "Operator"
 msgid "Delete Segment"
 msgstr "Odstranit segmenth"
 
@@ -42411,16 +42359,8 @@ msgid "Nothing to erase"
 msgstr "Není co vymazat"
 
 
-msgid "Nowhere for grease pencil data to go"
-msgstr "Prochází připojená data skicovací tužky"
-
-
 msgid "Cannot delete locked layers"
 msgstr "Zamknuté vrstvy nelze odstranit"
-
-
-msgid "No grease pencil data"
-msgstr "Žádná data skicovací tužky"
 
 
 msgid "No active frame to delete"
@@ -44442,11 +44382,6 @@ msgstr "vlastní"
 
 msgid "UV Vertex"
 msgstr "Vrchol"
-
-
-msgctxt "Action"
-msgid "Group"
-msgstr "Skupina"
 
 
 msgid "Keying set path could not be added"

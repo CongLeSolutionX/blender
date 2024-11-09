@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.3.0 Beta (b'6039cb17e63e')\n"
+"Project-Id-Version: Blender 4.3.0 Beta (b'28a8486e2b3f')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-10-07 09:15+0000\n"
+"POT-Creation-Date: 2024-10-29 10:02+0000\n"
 "PO-Revision-Date: 2024-03-05 22:56+0000\n"
 "Last-Translator: 居樂行 <oscilloscope9705@gmail.com>\n"
 "Language-Team: Chinese (Traditional) <https://translate.blender.org/projects/blender-ui/ui/zh_Hant/>\n"
@@ -2469,10 +2469,6 @@ msgstr "字型的集盒"
 
 msgid "Main Grease Pencils"
 msgstr "主要蠟筆"
-
-
-msgid "Collection of grease pencils"
-msgstr "蠟筆的集盒"
 
 
 msgid "Main Hair Curves"
@@ -15326,10 +15322,6 @@ msgid "Global scene frame number at which this movie starts playing (affects all
 msgstr "此影片開始播放的全域場景幀號 (影響所有與此剪輯相關的資料)"
 
 
-msgid "Grease pencil data for this movie clip"
-msgstr "此影片剪輯的蠟筆資料"
-
-
 msgid "Where the clip comes from"
 msgstr "剪輯來自何處"
 
@@ -18732,28 +18724,8 @@ msgid "Codec"
 msgstr "編解碼器"
 
 
-msgid "Codec settings for OpenEXR"
-msgstr "OpenEXR 的編解碼設定"
-
-
 msgid "Pxr24 (lossy)"
 msgstr "Pxr24 (有損)"
-
-
-msgid "ZIP (lossless)"
-msgstr "ZIP (無損)"
-
-
-msgid "PIZ (lossless)"
-msgstr "PIZ (無損)"
-
-
-msgid "RLE (lossless)"
-msgstr "RLE (無損)"
-
-
-msgid "ZIPS (lossless)"
-msgstr "ZIPS (無損)"
 
 
 msgid "B44 (lossy)"
@@ -20941,24 +20913,12 @@ msgid "Material slot name"
 msgstr "材質槽名稱"
 
 
-msgid "Snap"
-msgstr "吸附"
-
-
-msgid "Proportional Editing Falloff"
-msgstr "比例化編輯衰落"
-
-
-msgid "Automasking"
-msgstr "自動遮罩"
-
-
-msgid "Face Sets Edit"
-msgstr "面集編輯"
-
-
 msgid "Mirror"
 msgstr "鏡像"
+
+
+msgid "Snap"
+msgstr "吸附"
 
 
 msgid "UV Mapping"
@@ -21091,6 +21051,18 @@ msgstr "骨骼滾動"
 
 msgid "Pivot Point"
 msgstr "樞紐點"
+
+
+msgid "Proportional Editing Falloff"
+msgstr "比例化編輯衰落"
+
+
+msgid "Automasking"
+msgstr "自動遮罩"
+
+
+msgid "Face Sets Edit"
+msgstr "面集編輯"
 
 
 msgid "Basic"
@@ -25333,10 +25305,6 @@ msgstr "影片剪輯編輯器中的軌道與解算之後 3D 視接口中的色�
 
 msgid "Minimal value of correlation between matched pattern and reference that is still treated as successful tracking"
 msgstr "在符合的樣式與仍被視為成功追蹤的參照之間校正的最小值"
-
-
-msgid "Grease pencil data for this track"
-msgstr "此軌道的蠟筆資料"
 
 
 msgid "Has Bundle"
@@ -33673,11 +33641,6 @@ msgstr "刪除作用中框幀"
 
 
 msgctxt "Operator"
-msgid "Insert Blank Frame"
-msgstr "插入空白框幀"
-
-
-msgctxt "Operator"
 msgid "Annotation Unlink"
 msgstr "註記取消連結"
 
@@ -33934,12 +33897,13 @@ msgstr "消融"
 
 
 msgctxt "Operator"
+msgid "Insert Blank Frame"
+msgstr "插入空白框幀"
+
+
+msgctxt "Operator"
 msgid "Grease Pencil Interpolation"
 msgstr "蠟筆插補"
-
-
-msgid "Only Selected"
-msgstr "僅所選項目"
 
 
 msgctxt "Operator"
@@ -35497,6 +35461,10 @@ msgstr "割刀拓樸工具"
 
 msgid "Cut new topology"
 msgstr "切割出新拓樸"
+
+
+msgid "Only Selected"
+msgstr "僅所選項目"
 
 
 msgid "Only cut selected geometry"
@@ -41553,10 +41521,6 @@ msgid "Reassign the inputs for the effect strip"
 msgstr "為效果片段重新指派輸入"
 
 
-msgid "Rebuild all selected proxies and timecode indices using the job system"
-msgstr "重建所有選取的代理與使用工作系統的時間碼索引"
-
-
 msgctxt "Operator"
 msgid "Refresh Sequencer"
 msgstr "重新整理序段編輯器"
@@ -44652,26 +44616,6 @@ msgid "Palette Color"
 msgstr "色版色彩"
 
 
-msgid "Active Tool"
-msgstr "作用中工具"
-
-
-msgid "Wire Color"
-msgstr "線色"
-
-
-msgid "Render Pass"
-msgstr "算繪通遞"
-
-
-msgid "Compositor"
-msgstr "合成器"
-
-
-msgid "Overlays"
-msgstr "疊層"
-
-
 msgid "Motion Tracking"
 msgstr "運動跟蹤"
 
@@ -44694,6 +44638,26 @@ msgstr "自動遮罩"
 
 msgid "VR"
 msgstr "VR"
+
+
+msgid "Active Tool"
+msgstr "作用中工具"
+
+
+msgid "Wire Color"
+msgstr "線色"
+
+
+msgid "Render Pass"
+msgstr "算繪通遞"
+
+
+msgid "Compositor"
+msgstr "合成器"
+
+
+msgid "Overlays"
+msgstr "疊層"
 
 
 msgid "Chain Scaling"
@@ -49654,10 +49618,6 @@ msgid "Align X"
 msgstr "對齊 X"
 
 
-msgid "Align Y"
-msgstr "對齊 Y"
-
-
 msgctxt "Sequence"
 msgid "Box"
 msgstr "方框"
@@ -50983,10 +50943,6 @@ msgstr "影像與 UV 編輯器的空間資料"
 
 msgid "Z-Buffer"
 msgstr "Z 緩衝"
-
-
-msgid "Grease pencil data for this space"
-msgstr "此空間的蠟筆資料"
 
 
 msgid "UV Editor"
@@ -55063,62 +55019,6 @@ msgid "Options:"
 msgstr "選項："
 
 
-msgid "Save to PO File"
-msgstr "儲存至 PO 檔"
-
-
-msgid "Rebuild MO File"
-msgstr "重建 MO 檔"
-
-
-msgid "Erase Local MO files"
-msgstr "抹除本地端 MO 檔"
-
-
-msgid "    RNA Path: bpy.types."
-msgstr "    RNA 路徑：bpy.types。"
-
-
-msgid "    RNA Context: "
-msgstr "    RNA 情境："
-
-
-msgid "Labels:"
-msgstr "標籤："
-
-
-msgid "Tool Tips:"
-msgstr "提示框："
-
-
-msgid "Button Label:"
-msgstr "按鈕標籤："
-
-
-msgid "RNA Label:"
-msgstr "RNA 標籤："
-
-
-msgid "Enum Item Label:"
-msgstr "枚舉項目標籤："
-
-
-msgid "Button Tip:"
-msgstr "按鈕提示："
-
-
-msgid "RNA Tip:"
-msgstr "RNA 提示："
-
-
-msgid "Enum Item Tip:"
-msgstr "枚舉項目提示："
-
-
-msgid "Could not write to po file ({})"
-msgstr "無法寫入 po 檔 ({})"
-
-
 msgctxt "Operator"
 msgid "Save Persistent To..."
 msgstr "儲存永恆設定至..."
@@ -58117,16 +58017,8 @@ msgid "Active region not set"
 msgstr "未設定作用中區塊"
 
 
-msgid "Nowhere for grease pencil data to go"
-msgstr "蠟筆資料無處可去"
-
-
 msgid "Cannot delete locked layers"
 msgstr "無法刪除鎖定的層"
-
-
-msgid "No grease pencil data"
-msgstr "無蠟筆資料"
 
 
 msgid "No active frame to delete"
@@ -60732,11 +60624,6 @@ msgstr "Freestyle：製作視圖映射"
 
 msgid "Freestyle: Stroke rendering"
 msgstr "Freestyle：算繪筆觸"
-
-
-msgctxt "Action"
-msgid "Group"
-msgstr "群組"
 
 
 msgid "Index out of range"
