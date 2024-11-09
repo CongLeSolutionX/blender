@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.3.0 Beta (b'6039cb17e63e')\n"
+"Project-Id-Version: Blender 4.3.0 Beta (b'28a8486e2b3f')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-10-07 09:15+0000\n"
+"POT-Creation-Date: 2024-10-29 10:02+0000\n"
 "PO-Revision-Date: 2024-04-29 13:28+0000\n"
 "Last-Translator: Anonymous <noreply@weblate.org>\n"
 "Language-Team: Arabic <https://translate.blender.org/projects/blender-ui/ui/ar/>\n"
@@ -11353,10 +11353,6 @@ msgid "Global scene frame number at which this movie starts playing (affects all
 msgstr "(ﺔﺻﺎﺼﻘﻟﺎﺑ ﺔﻘﻠّﻌﺘﻤﻟﺍ ﺕﺎﻧﺎﻴﺒﻟﺍ ﻞﻛ ﻰﻠﻋ ﺮﺛﺆﻳ) ﺽﺮﻌﻟﺎﺑ ﻢﻠﻔﻟﺍ ﺍﺬﻫ ﺃﺪﺒﻳ ﻩﺪﻨﻋ ﻱﺬﻟﺍ ﻭ ﻲﻤﻟﺎﻌﻟﺍ ﺪﻬﺸﻤﻟﺍ ﺭﺎﻃﺇ ﻢﻗﺭ"
 
 
-msgid "Grease pencil data for this movie clip"
-msgstr " ﻩﺬﻫ ﻢﻠﻔﻟﺍ ﺔﺻﺎﺼﻘﻟ ﺕﺎﻈﺣﻼ﻿ﻤﻟﺍ ﻢﻠﻗ ﺕﺎﻧﺎﻴﺑ"
-
-
 msgid "Where the clip comes from"
 msgstr "ﺔﺻﺎﺼﻘﻟﺍ ﻲﺗﺄﺗ ﻦﻳﺃ ﻦﻣ"
 
@@ -14467,28 +14463,8 @@ msgid "Codec"
 msgstr "ﺓﺮﻔﻴﺷ"
 
 
-msgid "Codec settings for OpenEXR"
-msgstr "OpenEXRﻝ ﺓﺮﻔﻴﺸﻟﺍ ﺕﺍﺩﺍﺪﻋﺇ"
-
-
 msgid "Pxr24 (lossy)"
 msgstr "Pxr24 (ﺓﺭﺎﺴﺨﻟﺎﺑ)"
-
-
-msgid "ZIP (lossless)"
-msgstr "ZIP (ﺓﺭﺎﺴﺧ ﻼ﻿ﺑ)"
-
-
-msgid "PIZ (lossless)"
-msgstr "PIZ (ﺓﺭﺎﺴﺧ ﻼ﻿ﺑ)"
-
-
-msgid "RLE (lossless)"
-msgstr "RLE (ﺓﺭﺎﺴﺧ ﻼ﻿ﺑ)"
-
-
-msgid "ZIPS (lossless)"
-msgstr "ZIPS (ﺓﺭﺎﺴﺧ ﻼ﻿ﺑ)"
 
 
 msgid "B44 (lossy)"
@@ -16055,16 +16031,12 @@ msgid "Material slot name"
 msgstr "ﺔﻣﺎﺨﻟﺍ ﺔﺤﺘﻓ ﻢﺳﺇ"
 
 
-msgid "Snap"
-msgstr "ﻱﺫﺎﺣ"
-
-
-msgid "Proportional Editing Falloff"
-msgstr "ﻲﺒﺴﻨﻟﺍ ﺮﻳﺮﺤﺘﻟﺍ ﻲﺷﻼ﻿ﺗ"
-
-
 msgid "Mirror"
 msgstr "ﻞﺛﺎﻣ"
+
+
+msgid "Snap"
+msgstr "ﻱﺫﺎﺣ"
 
 
 msgid "UV Mapping"
@@ -16153,6 +16125,10 @@ msgstr "ﺔﺻﺎﺧ ﻑﺮﺣﺃ"
 
 msgid "Bone Roll"
 msgstr "ﺔﻤﻈﻌﻟﺍ ءﺍﻮﺘﻟﺍ"
+
+
+msgid "Proportional Editing Falloff"
+msgstr "ﻲﺒﺴﻨﻟﺍ ﺮﻳﺮﺤﺘﻟﺍ ﻲﺷﻼ﻿ﺗ"
 
 
 msgctxt "MovieClip"
@@ -18719,10 +18695,6 @@ msgstr "ﺔﺠﻟﺎﻌﻤﻟﺍ ﺪﻌﺑ ﺬﻔﻨﻤﻟﺍ ﻭ ﻢﻠﻔﻟ�
 
 msgid "Minimal value of correlation between matched pattern and reference that is still treated as successful tracking"
 msgstr "ﺔﺤﺟﺎﻧ ﺔﻘﺣﻼ﻿ﻣ ﻪﻧﺍ ﻰﻠﻋ ﻞﻣﺎﻌﻤﻟﺍ ﻊﺟﺮﻤﻟﺍ ﻭ ﻥﺭﺎﻘﻤﻟﺍ ﻂﻤﻨﻟﺍ ﻦﻴﺑ ﻂﺑﺍﺮﺗ ﺔﻤﻴﻗ ﻞﻗﺍ"
-
-
-msgid "Grease pencil data for this track"
-msgstr "ﺭﺎﺴﻤﻟﺍ ﺍﺬﻬﻟ ﺕﺎﻈﺣﻼ﻿ﻤﻟﺍ ﻢﻠﻗ ﺕﺎﻧﺎﻴﺑ"
 
 
 msgid "Has Bundle"
@@ -23494,10 +23466,6 @@ msgid "Duplicate Strokes"
 msgstr "ﺕﺎﺒﻄﺸﻟﺍ ﺭﺮّﻛ"
 
 
-msgid "Only Selected"
-msgstr "ﺭﺎﻴﺘﺧﻻ﻿ﺍ ﻂﻘﻓ"
-
-
 msgctxt "Operator"
 msgid "Add New Layer"
 msgstr "ﺓﺪﻳﺪﺟ ﺔﻘﺒﻃ ﻒﺿﺍ"
@@ -24476,6 +24444,10 @@ msgstr "ﻲﺗﺍﺫ ﻊﻃﺎﻘﺗ"
 
 msgid "Cut"
 msgstr "ﻊﻄّﻗ"
+
+
+msgid "Only Selected"
+msgstr "ﺭﺎﻴﺘﺧﻻ﻿ﺍ ﻂﻘﻓ"
 
 
 msgid "Only cut selected geometry"
@@ -29053,20 +29025,20 @@ msgid "Palette Color"
 msgstr "ﻥﻮﻠﻟﺍ ﺔﺣﻮﻟ"
 
 
-msgid "Wire Color"
-msgstr "ﻂﺑﺍﺮﻟﺍ ﻥﻮﻟ"
-
-
-msgid "Render Pass"
-msgstr "ﺮﻴﻴﺼﺗ ﺮﻤﻣ"
-
-
 msgid "Motion Tracking"
 msgstr "ﺔﻛﺮﺤﻟﺍ ﺔﻘﺣﻼ﻿ﻣ"
 
 
 msgid "Transform Orientations"
 msgstr "ﻝﻮﺤﺘﻟﺍ ﺕﺎﻫﺎﺠﺗﺍ"
+
+
+msgid "Wire Color"
+msgstr "ﻂﺑﺍﺮﻟﺍ ﻥﻮﻟ"
+
+
+msgid "Render Pass"
+msgstr "ﺮﻴﻴﺼﺗ ﺮﻤﻣ"
 
 
 msgid "Bone Constraints"
@@ -35163,14 +35135,6 @@ msgid "Options:"
 msgstr ":ﺕﺍﺭﺎﻴﺨﻟﺍ"
 
 
-msgid "Labels:"
-msgstr "ﻖﺼﻠﻣ"
-
-
-msgid "Tool Tips:"
-msgstr ":ﺓﺍﺩﻷ﻿ﺍ ﺡﺮﺷ"
-
-
 msgctxt "Operator"
 msgid "Reset Settings"
 msgstr "ﻡﺪﺨﺘﺴﻤﻟﺍ ﺕﺍﺩﺍﺪﻋﺍ ﻆﻔﺣﺍ"
@@ -37058,14 +37022,6 @@ msgid "Cannot paint stroke"
 msgstr "ﺔﺒﻄﺷ ﻢﺳﺭﺍ"
 
 
-msgid "Nowhere for grease pencil data to go"
-msgstr " ﺔﻄﺒﺗﺮﻣ ﻥﻮﻜﺘﻟ ﺕﺎﻈﺣﻼ﻿ﻤﻟﺍ ﻢﻠﻗ ﺕﺎﻧﺎﻴﺑ ﺢﻔﺼﺗ"
-
-
-msgid "No grease pencil data"
-msgstr "ﺕﺎﻈﺣﻼ﻿ﻣ ﻢﻠﻗ ﺕﺎﻧﺎﻴﺑ"
-
-
 msgid "No active frame to delete"
 msgstr "ﻲﻧﺎﻴﺒﻟﺍ ﻰﻨﺤﻨﻤﻟﺍ ﻰﻠﻋ ﻝﺎﻌﻓ ﺭﺎﻃﺇ ﺪﺟﻮﻳ ﻻ﻿"
 
@@ -38331,11 +38287,6 @@ msgstr "‬%s‪ ﻝﺪﺒﺘﺳﺇ"
 
 msgid "UV Vertex"
 msgstr "ﺔﻄﻘﻨﻟﺍ ﻡﺪﺨﺘﺳﺍ"
-
-
-msgctxt "Action"
-msgid "Group"
-msgstr "ﺔﻋﻮﻤﺠﻣ"
 
 
 msgid "Keying set path could not be added"

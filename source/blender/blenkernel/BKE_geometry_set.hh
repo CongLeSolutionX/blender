@@ -653,6 +653,8 @@ class InstancesComponent : public GeometryComponent {
 
   bool is_empty() const final;
 
+  Instances *release();
+
   bool owns_direct_data() const override;
   void ensure_owns_direct_data() override;
 
