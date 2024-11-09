@@ -2407,9 +2407,7 @@ static void rna_NodeCrop_min_x_set(PointerRNA *ptr, int value)
   bNode *node = static_cast<bNode *>(ptr->data);
   NodeTwoXYs *data = static_cast<NodeTwoXYs *>(node->storage);
   data->x1 = value;
-  if (value > data->x2) {
-    data->x1 = data->x2;
-  }
+  CLAMP_MAX(data->x1, data->x2);
 }
 
 static void rna_NodeCrop_max_x_set(PointerRNA *ptr, int value)
@@ -2433,9 +2431,7 @@ static void rna_NodeCrop_max_y_set(PointerRNA *ptr, int value)
   bNode *node = static_cast<bNode *>(ptr->data);
   NodeTwoXYs *data = static_cast<NodeTwoXYs *>(node->storage);
   data->y2 = value;
-  if (data->y2 > data->y1) {
-    data->y2 = data->y1;
-  }
+  CLAMP_MAX(data->y2, data->y1);
 }
 
 static void rna_NodeCrop_rel_min_x_set(PointerRNA *ptr, float value)
@@ -2443,9 +2439,7 @@ static void rna_NodeCrop_rel_min_x_set(PointerRNA *ptr, float value)
   bNode *node = static_cast<bNode *>(ptr->data);
   NodeTwoXYs *data = static_cast<NodeTwoXYs *>(node->storage);
   data->fac_x1 = value;
-  if (data->fac_x1 > data->fac_x2) {
-    data->fac_x1 = data->fac_x2;
-  }
+  CLAMP_MAX(data->fac_x1, data->fac_x2);
 }
 
 static void rna_NodeCrop_rel_max_x_set(PointerRNA *ptr, float value)
@@ -2469,9 +2463,7 @@ static void rna_NodeCrop_rel_max_y_set(PointerRNA *ptr, float value)
   bNode *node = static_cast<bNode *>(ptr->data);
   NodeTwoXYs *data = static_cast<NodeTwoXYs *>(node->storage);
   data->fac_y2 = value;
-  if (data->fac_y2 > data->fac_y1) {
-    data->fac_y2 = data->fac_y1;
-  }
+  CLAMP_MAX(data->fac_y2, data->fac_y1);
 }
 
 void rna_Node_update_relations(Main *bmain, Scene *scene, PointerRNA *ptr)
