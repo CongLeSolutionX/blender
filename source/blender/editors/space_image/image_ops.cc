@@ -1269,6 +1269,7 @@ static void image_open_cancel(bContext * /*C*/, wmOperator *op)
 static Image *image_open_single(Main *bmain,
                                 wmOperator *op,
                                 const ImageFrameRange *range,
+                                const char *library_path,
                                 const bool use_multiview,
                                 const bool check_exists)
 {
@@ -1280,7 +1281,8 @@ static Image *image_open_single(Main *bmain,
     ima = BKE_image_load_exists_ex(bmain, range->filepath, &exists);
   }
   else {
-    ima = BKE_image_load(bmain, range->filepath);
+    BLI_assert(library_path);
+    ima = BKE_image_load_ex(bmain, library_path, range->filepath);
   }
 
   if (!ima) {
@@ -1358,9 +1360,18 @@ static int image_open_exec(bContext *C, wmOperator *op)
                               ID_IS_LINKED(iod->pprop.ptr.owner_id) &&
                               ID_IS_EDITABLE(iod->pprop.ptr.owner_id));
 
-  ListBase ranges = ED_image_filesel_detect_sequences(bmain, op, use_udim);
+  ListBase ranges;
+  char *library_path = nullptr;
+  if (check_exists) {
+    ranges = ED_image_filesel_detect_sequences(bmain, op, use_udim);
+  }
+  else {
+    library_path = iod->pprop.ptr.owner_id->lib->filepath;
+    ranges = ED_image_filesel_detect_sequences(op, use_udim, library_path);
+  }
   LISTBASE_FOREACH (ImageFrameRange *, range, &ranges) {
-    Image *ima_range = image_open_single(bmain, op, range, use_multiview, check_exists);
+    Image *ima_range = image_open_single(
+        bmain, op, range, library_path, use_multiview, check_exists);
 
     /* take the first image */
     if ((ima == nullptr) && ima_range) {

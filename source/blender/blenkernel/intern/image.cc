@@ -1034,12 +1034,17 @@ void BKE_image_alpha_mode_from_extension(Image *image)
 
 Image *BKE_image_load(Main *bmain, const char *filepath)
 {
+  return BKE_image_load_ex(bmain, BKE_main_blendfile_path(bmain), filepath);
+}
+
+Image *BKE_image_load_ex(Main *bmain, const char *base_path, const char *filepath)
+{
   Image *ima;
   int file;
   char filepath_abs[FILE_MAX];
 
   STRNCPY(filepath_abs, filepath);
-  BLI_path_abs(filepath_abs, BKE_main_blendfile_path(bmain));
+  BLI_path_abs(filepath_abs, base_path);
 
   /* exists? */
   file = BLI_open(filepath_abs, O_BINARY | O_RDONLY, 0);
