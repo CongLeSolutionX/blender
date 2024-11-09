@@ -6,9 +6,8 @@
 
 #include "atomic_ops.h"
 
-#include "DNA_mesh_types.h"
-
 #include "BKE_attribute.hh"
+#include "BKE_customdata.hh"
 #include "BLI_array_utils.hh"
 #include "BLI_atomic_disjoint_set.hh"
 #include "BLI_offset_indices.hh"
@@ -22,6 +21,9 @@
 #include "BKE_attribute_math.hh"
 #include "BKE_mesh.hh"
 #include "BKE_mesh_mapping.hh"
+
+#include "DNA_mesh_types.h"
+#include "DNA_meshdata_types.h"
 
 #include "GEO_randomize.hh"
 
@@ -134,25 +136,21 @@ static GroupedSpan<int> gather_groups(const Span<int> group_indices,
 static void mix_attributes(const bke::AttributeAccessor src_attributes,
                            const bke::AttrDomain domain,
                            const bke::AttributeFilter &attribute_filter,
-                           const Span<int> src_to_dst_mapping,
+                           const GroupedSpan<int> dst_to_src_map,
                            bke::MutableAttributeAccessor dst_attributes)
 {
-  const int dst_domain_size = src_attributes.domain_size(domain);
-
-  Array<int> mix_groups_offsets;
-  Array<int> mix_groups_indices;
-  const GroupedSpan<int> groups = gather_groups(
-      src_to_dst_mapping, dst_domain_size, mix_groups_offsets, mix_groups_indices);
-
   src_attributes.foreach_attribute([&](const bke::AttributeIter &iter) {
-    if (attribute_filter.allow_skip(iter.name)) {
+    if (iter.domain != domain) {
       return;
     }
     if (iter.data_type == CD_PROP_STRING) {
       return;
     }
-    const bke::GAttributeReader src = iter.get();
+    if (attribute_filter.allow_skip(iter.name)) {
+      return;
+    }
 
+    const bke::GAttributeReader src = iter.get();
     bke::GSpanAttributeWriter dst = dst_attributes.lookup_or_add_for_write_only_span(
         iter.name, domain, iter.data_type);
     if (!dst) {
@@ -164,18 +162,18 @@ static void mix_attributes(const bke::AttributeAccessor src_attributes,
       blender::bke::attribute_math::DefaultMixer<T> values(dst.span.typed<T>(), IndexMask(0));
       const VArraySpan<T> src_span(src.varray.typed<T>());
       threading::parallel_for(
-          groups.index_range(),
+          dst_to_src_map.index_range(),
           4098,
           [&](const IndexRange range) {
-            for (const int group_i : range) {
-              const Span<int> indices_to_mix = groups[group_i];
+            for (const int dst_i : range) {
+              const Span<int> indices_to_mix = dst_to_src_map[dst_i];
               for (const int src_i : indices_to_mix) {
-                values.mix_in(group_i, src_span[src_i], 1.0f);
+                values.mix_in(dst_i, src_span[src_i], 1.0f);
               }
             }
           },
           threading::accumulated_task_sizes(
-              [&](const IndexRange range) { return groups.offsets[range].size(); }));
+              [&](const IndexRange range) { return dst_to_src_map.offsets[range].size(); }));
       values.finalize();
     });
 
@@ -382,6 +380,46 @@ static Array<int> deduplicate_faces_for_verts(const GroupedSpan<int> dst_corner_
   return unique_faces;
 }
 
+static CustomData &mesh_custom_data_for_domain(Mesh &mesh, const bke::AttrDomain domain)
+{
+  switch (domain) {
+    case bke::AttrDomain::Point:
+      return mesh.vert_data;
+    case bke::AttrDomain::Edge:
+      return mesh.edge_data;
+    case bke::AttrDomain::Face:
+      return mesh.face_data;
+    case bke::AttrDomain::Corner:
+      return mesh.corner_data;
+    default:
+      BLI_assert_unreachable();
+      return mesh.vert_data;
+  }
+}
+
+static std::optional<MutableSpan<int>> get_orig_index_layer(Mesh &mesh,
+                                                            const bke::AttrDomain domain)
+{
+  const bke::AttributeAccessor attributes = mesh.attributes();
+  CustomData &custom_data = mesh_custom_data_for_domain(mesh, domain);
+
+  if (int *orig_indices = static_cast<int *>(CustomData_add_layer(
+          &custom_data, CD_ORIGINDEX, CD_CONSTRUCT, attributes.domain_size(domain))))
+  {
+    return MutableSpan<int>(orig_indices, attributes.domain_size(domain));
+  }
+  return std::nullopt;
+}
+
+static void group_copy_first(const GroupedSpan<int> src_groups, MutableSpan<int> dst_values)
+{
+  threading::parallel_for(src_groups.index_range(), 8192, [&](const IndexRange range) {
+    for (const int i : range) {
+      dst_values[i] = src_groups[i].first();
+    }
+  });
+}
+
 Mesh *dissolve_boundary_verts(const Mesh &src_mesh,
                               const IndexMask &verts_mask,
                               const bke::AttributeFilter &attribute_filter)
@@ -480,10 +518,10 @@ Mesh *dissolve_boundary_verts(const Mesh &src_mesh,
   const OffsetIndices<int> unique_dst_faces = offset_indices::accumulate_counts_to_offsets(
       unique_face_sizes);
 
-  Mesh *dst_mesh = BKE_mesh_new_nomain(keeped_verts_mask.size(),
-                                       total_unique_edges,
-                                       total_unique_faces,
-                                       unique_dst_faces.total_size());
+  const int total_corners = unique_dst_faces.total_size();
+
+  Mesh *dst_mesh = BKE_mesh_new_nomain(
+      keeped_verts_mask.size(), total_unique_edges, total_unique_faces, total_corners);
   BKE_mesh_copy_parameters_for_eval(dst_mesh, &src_mesh);
 
   const bke::AttributeAccessor src_attributes = src_mesh.attributes();
@@ -502,10 +540,25 @@ Mesh *dissolve_boundary_verts(const Mesh &src_mesh,
       new_verts_remap.as_span(), dst_edges.as_span().cast<int>(), dst_edges.cast<int>());
   BLI_assert(!dst_edges.cast<int>().as_span().contains(-1));
 
+  Array<int> new_to_old_edge_offsets;
+  Array<int> new_to_old_edge_indices;
+  const GroupedSpan<int> new_to_old_edge_map = gather_groups(
+      old_to_new_edges_map, total_unique_edges, new_to_old_edge_offsets, new_to_old_edge_indices);
+
+  Array<int> new_to_old_face_offsets;
+  Array<int> new_to_old_face_indices;
+  const GroupedSpan<int> new_to_old_face_map = gather_groups(
+      old_to_new_faces_map, total_unique_faces, new_to_old_face_offsets, new_to_old_face_indices);
+
+  Array<int> new_to_old_corner_offsets;
+  Array<int> new_to_old_corner_indices;
+  const GroupedSpan<int> new_to_old_corner_map = gather_groups(
+      old_to_new_corners_map, total_corners, new_to_old_corner_offsets, new_to_old_corner_indices);
+
   mix_attributes(src_attributes,
                  bke::AttrDomain::Edge,
                  bke::attribute_filter_with_skip_ref(attribute_filter, {".edge_verts"}),
-                 old_to_new_edges_map,
+                 new_to_old_edge_map,
                  dst_attributes);
 
   array_utils::copy(unique_dst_faces.data(), dst_mesh->face_offsets_for_write());
@@ -513,7 +566,7 @@ Mesh *dissolve_boundary_verts(const Mesh &src_mesh,
       src_attributes,
       bke::AttrDomain::Face,
       bke::attribute_filter_with_skip_ref(attribute_filter, {/*"ID", "material_index"*/}),
-      old_to_new_faces_map,
+      new_to_old_face_map,
       dst_attributes);
   // bke::gather_attributes(src_attributes, bke::AttrDomain::Face, attribute_filter,
   // unique_faces.as_span(), dst_attributes);
@@ -522,7 +575,7 @@ Mesh *dissolve_boundary_verts(const Mesh &src_mesh,
       src_attributes,
       bke::AttrDomain::Corner,
       bke::attribute_filter_with_skip_ref(attribute_filter, {".corner_vert", ".corner_edge"}),
-      old_to_new_corners_map,
+      new_to_old_corner_map,
       dst_attributes);
 
   MutableSpan<int> dst_corner_verts = dst_mesh->corner_verts_for_write();
@@ -554,6 +607,24 @@ Mesh *dissolve_boundary_verts(const Mesh &src_mesh,
       },
       threading::accumulated_task_sizes(
           [&](const IndexRange range) { return dst_faces[range].size(); }));
+
+  if (std::optional<MutableSpan<int>> indices = get_orig_index_layer(*dst_mesh,
+                                                                     bke::AttrDomain::Point))
+  {
+    keeped_verts_mask.to_indices(*indices);
+  }
+
+  if (std::optional<MutableSpan<int>> indices = get_orig_index_layer(*dst_mesh,
+                                                                     bke::AttrDomain::Edge))
+  {
+    group_copy_first(new_to_old_edge_map, *indices);
+  }
+
+  if (std::optional<MutableSpan<int>> indices = get_orig_index_layer(*dst_mesh,
+                                                                     bke::AttrDomain::Face))
+  {
+    group_copy_first(new_to_old_face_map, *indices);
+  }
 
   array_utils::gather(new_verts_remap.as_span(), dst_corner_verts.as_span(), dst_corner_verts);
   BLI_assert(!dst_corner_verts.as_span().contains(-1));
