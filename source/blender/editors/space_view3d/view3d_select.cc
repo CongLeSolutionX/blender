@@ -95,6 +95,7 @@
 #include "UI_resources.hh"
 
 #include "GPU_matrix.hh"
+#include "GPU_platform.hh"
 #include "GPU_select.hh"
 
 #include "DEG_depsgraph.hh"
@@ -2096,6 +2097,12 @@ static int mixed_bones_object_selectbuffer(const ViewContext *vc,
       select_mode = VIEW3D_SELECT_PICK_ALL;
     }
   }
+  /* WORKAROUND: GPU depth picking is not working on AMD/NVIDIA official Vulkan drivers. */
+  if (GPU_type_matches_ex(
+          GPU_DEVICE_ATI | GPU_DEVICE_NVIDIA, GPU_OS_ANY, GPU_DRIVER_OFFICIAL, GPU_BACKEND_VULKAN))
+  {
+    select_mode = VIEW3D_SELECT_PICK_ALL;
+  }
 
   /* we _must_ end cache before return, use 'goto finally' */
   view3d_opengl_select_cache_begin();
@@ -3103,7 +3110,7 @@ static bool ed_curves_select_pick(bContext &C, const int mval[2], const SelectPi
           Object &curves_ob = *base->object;
           Curves &curves_id = *static_cast<Curves *>(curves_ob.data);
           bke::crazyspace::GeometryDeformation deformation =
-              bke::crazyspace::get_evaluated_curves_deformation(*vc.depsgraph, *vc.obedit);
+              bke::crazyspace::get_evaluated_curves_deformation(*vc.depsgraph, curves_ob);
           const bke::CurvesGeometry &curves = curves_id.geometry.wrap();
           const float4x4 projection = ED_view3d_ob_project_mat_get(vc.rv3d, &curves_ob);
           const IndexMask elements(curves.attributes().domain_size(selection_domain));

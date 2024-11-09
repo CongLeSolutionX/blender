@@ -283,7 +283,6 @@ static bool image_paint_brush_type_require_inbetween_mouse_events(const Brush &b
   return true;
 }
 
-/* Initialize the stroke cache variants from operator properties */
 bool paint_brush_update(bContext *C,
                         const Brush &brush,
                         PaintMode mode,
@@ -716,7 +715,9 @@ static float paint_space_stroke_spacing(bContext *C,
   spacing *= stroke->zoom_2d;
 
   if (paint_stroke_use_scene_spacing(brush, mode)) {
-    return size_clamp * spacing / 50.0f;
+    /* Low pressure on size (with tablets) can cause infinite recursion in paint_space_stroke(),
+     * see #129853. */
+    return max_ff(FLT_EPSILON, size_clamp * spacing / 50.0f);
   }
   return max_ff(stroke->zoom_2d, size_clamp * spacing / 50.0f);
 }
@@ -851,6 +852,8 @@ static int paint_space_stroke(bContext *C,
   while (length > 0.0f) {
     float spacing = paint_space_stroke_spacing_variable(
         C, scene, stroke, pressure, dpressure, length);
+    BLI_assert(spacing >= 0.0f);
+
     float mouse[2];
 
     if (length >= spacing) {
@@ -1463,7 +1466,6 @@ int paint_stroke_modal(bContext *C, wmOperator *op, const wmEvent *event, PaintS
   bool first_dab = false;
   bool first_modal = false;
   bool redraw = false;
-  float pressure;
 
   if (event->type == INBETWEEN_MOUSEMOVE &&
       !image_paint_brush_type_require_inbetween_mouse_events(*br, mode))
@@ -1472,9 +1474,9 @@ int paint_stroke_modal(bContext *C, wmOperator *op, const wmEvent *event, PaintS
   }
 
   /* see if tablet affects event. Line, anchored and drag dot strokes do not support pressure */
-  pressure = ((br->flag & (BRUSH_LINE | BRUSH_ANCHORED | BRUSH_DRAG_DOT)) ?
-                  1.0f :
-                  WM_event_tablet_data(event, &stroke->pen_flip, nullptr));
+  const float tablet_pressure = WM_event_tablet_data(event, &stroke->pen_flip, nullptr);
+  float pressure = ((br->flag & (BRUSH_LINE | BRUSH_ANCHORED | BRUSH_DRAG_DOT)) ? 1.0f :
+                                                                                  tablet_pressure);
 
   /* When processing a timer event the pressure from the event is 0, so use the last valid
    * pressure. */
