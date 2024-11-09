@@ -59,7 +59,7 @@
 #include "BKE_object.hh"
 #include "BKE_object_types.hh"
 #include "BKE_paint.hh"
-#include "BKE_pbvh_api.hh"
+#include "BKE_paint_bvh.hh"
 #include "BKE_report.hh"
 #include "BKE_subdiv_ccg.hh"
 #include "BKE_subsurf.hh"
@@ -4421,7 +4421,7 @@ static void sculpt_raycast_cb(blender::bke::pbvh::Node &node, SculptRaycastData 
     }
   }
 
-  if (node.flag_ & PBVH_FullyHidden) {
+  if (node.flag_ & bke::pbvh::Node::FullyHidden) {
     return;
   }
 
@@ -4461,7 +4461,8 @@ static void sculpt_raycast_cb(blender::bke::pbvh::Node &node, SculptRaycastData 
                                           srd.active_face_grid_index,
                                           srd.face_normal);
       if (hit) {
-        srd.active_vertex = grids_active_vert;
+        srd.active_vertex = grids_active_vert.to_index(
+            BKE_subdiv_ccg_key_top_level(*srd.subdiv_ccg));
       }
       break;
     }

@@ -13,7 +13,7 @@
 
 #include "BKE_attribute.hh"
 #include "BKE_paint.hh"
-#include "BKE_pbvh_api.hh"
+#include "BKE_paint_bvh.hh"
 #include "BKE_subdiv_ccg.hh"
 
 #include "BLI_array.hh"
@@ -698,13 +698,18 @@ void SCULPT_tilt_effective_normal_get(const SculptSession &ss, const Brush &brus
 /** \} */
 
 namespace blender::ed::sculpt_paint {
-
+/**
+ * The brush uses translations calculated at the beginning of the stroke. They can't be calculated
+ * dynamically because changing positions will influence neighboring translations. However we can
+ * reduce the cost in some cases by skipping initializing values for vertices in hidden or masked
+ * nodes.
+ */
 void calc_smooth_translations(const Depsgraph &depsgraph,
                               const Object &object,
                               const IndexMask &node_mask,
                               MutableSpan<float3> translations);
 
-}
+}  // namespace blender::ed::sculpt_paint
 
 /**
  * Flip all the edit-data across the axis/axes specified by \a symm.

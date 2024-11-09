@@ -12,6 +12,7 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "BLI_ghash.h"
 #include "BLI_listbase.h"
 #include "BLI_math_vector.h"
 #include "BLI_string.h"
@@ -185,9 +186,10 @@ static int palette_color_add_exec(bContext *C, wmOperator * /*op*/)
              PaintMode::Texture2D,
              PaintMode::Vertex,
              PaintMode::Sculpt,
-             PaintMode::GPencil))
+             PaintMode::GPencil,
+             PaintMode::VertexGPencil))
     {
-      copy_v3_v3(color->rgb, BKE_brush_color_get(scene, brush));
+      copy_v3_v3(color->rgb, BKE_brush_color_get(scene, paint, brush));
       color->value = 0.0;
     }
     else if (mode == PaintMode::Weight) {
