@@ -3558,6 +3558,7 @@ BlendFileData *blo_read_file_internal(FileData *fd, const char *filepath)
     BLI_addtail(&mainlist, bfd->main);
     fd->mainlist = &mainlist;
     STRNCPY(bfd->main->filepath, filepath);
+    STRNCPY(G.filepath_last_blend, filepath);
   }
 
   if (G.background) {

@@ -498,10 +498,7 @@ static std::string get_os_info()
  * Displays a crash popup with options to open the crash log and report a bug.
  * This is based on the `showMessageBox` function in `GHOST_SystemWin32.cc`.
  */
-static void showMessageBox(const char *message,
-                           const char *filepath,
-                           const char *gpu_name,
-                           const char *build_version)
+static void showMessageBox(const char *filepath, const char *gpu_name, const char *build_version)
 {
   /* InitCommonControls is called during GHOST System initialization, so this is redundant. */
   // InitCommonControls();
@@ -510,8 +507,7 @@ static void showMessageBox(const char *message,
       L"The application encountered a fatal error and will close.\n\n"
       L"If you know the steps to reproduce this crash, please file a bug report.\n\n"
       L"The crash log can be found at:\n" +
-      std::wstring(filepath, filepath + strlen(filepath)) + L"\n\n" +
-      std::wstring(message, message + strlen(message));
+      std::wstring(filepath, filepath + strlen(filepath));
 
   TASKDIALOGCONFIG config = {0};
   const TASKDIALOG_BUTTON buttons[] = {
@@ -577,9 +573,10 @@ void BLI_windows_exception_show_dialog(const void *exception,
                                        const char *gpu_name,
                                        const char *build_version)
 {
+  showMessageBox(filepath, gpu_name, build_version);
+
   char message[512];
   bli_windows_exception_message_get(static_cast<const EXCEPTION_POINTERS *>(exception), message);
-  showMessageBox(message, filepath, gpu_name, build_version);
   fprintf(stderr, message);
   fflush(stderr);
 }

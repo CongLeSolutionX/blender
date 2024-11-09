@@ -1161,6 +1161,7 @@ static void setup_app_data(bContext *C,
   /* `startup.blend` or recovered startup. */
   if (params->is_startup) {
     bmain->filepath[0] = '\0';
+    G.filepath_last_blend[0] = '\0';
   }
   else if (recover) {
     /* In case of auto-save or `quit.blend`, use original file-path instead

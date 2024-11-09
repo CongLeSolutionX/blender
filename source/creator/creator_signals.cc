@@ -202,6 +202,9 @@ extern LONG WINAPI windows_exception_handler(EXCEPTION_POINTERS *ExceptionInfo)
     crashlog_file_generate(filepath, ExceptionInfo);
     BLI_windows_exception_show_dialog(
         ExceptionInfo, filepath, GPU_platform_gpu_name(), version.c_str());
+    if (G.filepath_last_blend[0]) {
+      ShellExecute(nullptr, "open", G.filepath_last_blend, nullptr, nullptr, SW_SHOWNORMAL);
+    }
     signal_cleanup_and_terminate(SIGSEGV);
   }
 
