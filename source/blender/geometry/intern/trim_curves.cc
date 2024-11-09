@@ -17,8 +17,8 @@
 #include "BKE_curves.hh"
 #include "BKE_curves_utils.hh"
 
-#include "GEO_trim_curves.hh"
 #include "GEO_mesh_bisect.hh"
+#include "GEO_trim_curves.hh"
 
 namespace blender::geometry {
 
@@ -1587,7 +1587,7 @@ static int bisect_spline(const Span<float3> src_positions,
 bke::CurvesGeometry bisect_curves(const bke::CurvesGeometry &src_curves,
                                   IndexMask selection,
                                   const BisectArgs &args,
-                                  const bke::AnonymousAttributePropagationInfo &propagation_info)
+                                  const bke::AttributeFilter &attribute_filter)
 {
   BLI_assert(selection.size() > 0);
   BLI_assert(selection.last() <= src_curves.curves_num());
@@ -1786,7 +1786,7 @@ bke::CurvesGeometry bisect_curves(const bke::CurvesGeometry &src_curves,
   Vector<int64_t> selection_indices;
   Vector<int64_t> inverse_selection_indices;
   Vector<int64_t> copy_curve_offsets; /* Tracks the offset to copied curves. */
-  Vector<int64_t> curve_domain_gather_indices;
+  Vector<int> curve_domain_gather_indices;
 
   /* Recompute selection and it's inverse (the inverse may not be the exact inverse) */
   selection_indices.reserve(selection.size());
@@ -1803,7 +1803,7 @@ bke::CurvesGeometry bisect_curves(const bke::CurvesGeometry &src_curves,
 
       inverse_selection_indices.append(curve_i);
       copy_curve_offsets.append(curve_counter);
-      curve_domain_gather_indices.append(curve_i);
+      curve_domain_gather_indices.append(int(curve_i));
       ++curve_counter;
     }
     else if (bisect_sequences[curve_i].size() == 0) {
@@ -1815,7 +1815,7 @@ bke::CurvesGeometry bisect_curves(const bke::CurvesGeometry &src_curves,
         dst_curve_offsets[curve_counter] = size;
         dst_curve_types_span[curve_counter] = dst_curve_types[curve_i];
         dst_cyclic[curve_counter] = src_cyclic[curve_i] && !(args.clear_inner || args.clear_outer);
-        curve_domain_gather_indices.append(curve_i);
+        curve_domain_gather_indices.append(int(curve_i));
         ++curve_counter;
       }
     }
@@ -1849,30 +1849,32 @@ bke::CurvesGeometry bisect_curves(const bke::CurvesGeometry &src_curves,
   /* Gather (copy) attribute domain */
   const bke::AttributeAccessor src_attributes = src_curves.attributes();
   bke::MutableAttributeAccessor dst_attributes = dst_curves.attributes_for_write();
+
   Set<std::string> transfer_curve_skip = {"cyclic", "curve_type", "nurbs_order", "knots_mode"};
   if (dst_curves.has_curve_with_type(CURVE_TYPE_NURBS)) {
     transfer_curve_skip.remove("nurbs_order");
     transfer_curve_skip.remove("knots_mode");
   }
-  bke::gather_attribute_domain(src_attributes,
-                               dst_attributes,
-                               curve_domain_gather_indices.as_span(),
-                               bke::AttrDomain::Curve,
-                               propagation_info,
-                               transfer_curve_skip);
+  bke::gather_attributes(
+      src_attributes,
+      bke::AttrDomain::Curve,
+      bke::AttrDomain::Curve,
+      bke::attribute_filter_with_skip_ref(attribute_filter, transfer_curve_skip),
+      curve_domain_gather_indices.as_span(),
+      dst_attributes);
 
   /* Fetch custom point domain attributes for transfer (copy). */
   Vector<bke::AttributeTransferData> transfer_attributes = bke::retrieve_attributes_for_transfer(
       src_attributes,
       dst_attributes,
       ATTR_DOMAIN_MASK_POINT,
-      propagation_info,
-      {"position",
-       "handle_left",
-       "handle_right",
-       "handle_type_left",
-       "handle_type_right",
-       "nurbs_weight"});
+      bke::attribute_filter_with_skip_ref(attribute_filter,
+                                          {"position",
+                                           "handle_left",
+                                           "handle_right",
+                                           "handle_type_left",
+                                           "handle_type_right",
+                                           "nurbs_weight"}));
 
   /* Sample POINT domain functions. */
   auto sample_poly_curves = [&](const IndexMask selection) {
@@ -1922,13 +1924,12 @@ bke::CurvesGeometry bisect_curves(const bke::CurvesGeometry &src_curves,
     }
 
     /* Copy point domain. */
-    for (auto &attribute : bke::retrieve_attributes_for_transfer(src_attributes,
-                                                                 dst_attributes,
-                                                                 ATTR_DOMAIN_MASK_POINT,
-                                                                 propagation_info,
-                                                                 copy_point_skip))
+    for (auto &attribute : bke::retrieve_attributes_for_transfer(
+             src_attributes,
+             dst_attributes,
+             ATTR_DOMAIN_MASK_POINT,
+             bke::attribute_filter_with_skip_ref(attribute_filter, copy_point_skip)))
     {
-
       /* Gather the copied curves only */
       IndexMaskMemory copy_memory;
       IndexMask copy_curve_selection = IndexMask::from_indices(copy_curve_offsets.as_span(),

@@ -851,42 +851,6 @@ Vector<AttributeTransferData> retrieve_attributes_for_transfer(
   });
   return attributes;
 }
-void gather_attribute_domain(const AttributeAccessor src_attributes,
-                           MutableAttributeAccessor dst_attributes,
-                          const Span<int64_t> gather_indices,
-                           const AttrDomain domain,
-                           const AnonymousAttributePropagationInfo &propagation_info,
-                           const Set<std::string> &skip)
-{
-  src_attributes.for_all(
-      [&](const bke::AttributeIDRef &id, const bke::AttributeMetaData &meta_data) {
-        if (meta_data.domain != domain) {
-          return true;
-        }
-        if (id.is_anonymous() && !propagation_info.propagate(id.anonymous_id())) {
-          return true;
-        }
-        if (skip.contains(id.name())) {
-          return true;
-        }
-
-        const GAttributeReader src = src_attributes.lookup(id, meta_data.domain);
-        BLI_assert(src);
-
-        /* Copy attribute. */
-        GSpanAttributeWriter dst = dst_attributes.lookup_or_add_for_write_only_span(
-            id, domain, meta_data.data_type);
-
-        attribute_math::convert_to_static_type(
-            src.varray.type(), [&](auto dummy) {
-            using T = decltype(dummy);
-          array_utils::gather<T, int64_t>(src.varray.typed<T>(), gather_indices, dst.span.typed<T>());
-         });
-        dst.finish();
-
-        return true;
-      });
-}
 
 /** \} */
 

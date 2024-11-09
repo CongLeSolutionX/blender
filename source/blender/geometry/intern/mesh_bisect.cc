@@ -6,8 +6,10 @@
 
 #include "BLI_array_utils.hh"
 #include "BLI_bit_vector.hh"
+#include "BLI_enumerable_thread_specific.hh"
 #include "BLI_math_base.hh"
 #include "BLI_math_geom.h"
+#include "BLI_memarena.h"
 
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
@@ -24,6 +26,7 @@
 namespace blender::geometry {
 
 enum EdgeIntersectType { Discarded = 0, Kept = 1, Intersect = 2, TypeCount = 3 };
+enum PolygonIntersectType { Outside = 0, Intersect = 1, Inside = 2, TypeCount = 3 };
 
 /*
  * Vertex generated from linear interpolation between two
@@ -79,6 +82,17 @@ struct MeshPolygonGroup {
   Span<Vector<int, 4>> edge_indices;
   Span<Vector<int2, 4>> src_corners;
   Span<Vector<float, 4>> src_weights;
+};
+
+struct LocalData {
+  MemArena *pf_arena = nullptr;
+
+  ~LocalData()
+  {
+    if (pf_arena) {
+      BLI_memarena_free(pf_arena);
+    }
+  }
 };
 
 /*
@@ -196,7 +210,7 @@ int2 count_num_polygons(const Span<VariantPolygonGroup> poly_groups)
 void transfer_vertex_data(const Mesh &src_mesh,
                           Mesh &dst_mesh,
                           const Span<VariantVertexGroup> vertex_groups,
-                          const bke::AnonymousAttributePropagationInfo &propagation_info)
+                          const bke::AttributeFilter &attribute_filter)
 {
   const bke::AttributeAccessor src_attributes = src_mesh.attributes();
   bke::MutableAttributeAccessor dst_attributes = dst_mesh.attributes_for_write();
@@ -205,12 +219,11 @@ void transfer_vertex_data(const Mesh &src_mesh,
   // copy_point_skip.add("nurbs_weight");
 
   /* Copy point domain. */
-  for (bke::AttributeTransferData &attribute :
-       bke::retrieve_attributes_for_transfer(src_attributes,
-                                             dst_attributes,
-                                             ATTR_DOMAIN_MASK_POINT,
-                                             propagation_info,
-                                             copy_point_skip))
+  for (bke::AttributeTransferData &attribute : bke::retrieve_attributes_for_transfer(
+           src_attributes,
+           dst_attributes,
+           ATTR_DOMAIN_MASK_POINT,
+           bke::attribute_filter_with_skip_ref(attribute_filter, copy_point_skip)))
   {
     bke::attribute_math::convert_to_static_type(attribute.meta_data.data_type, [&](auto dummy) {
       using T = decltype(dummy);
@@ -254,7 +267,7 @@ void transfer_vertex_data(const Mesh &src_mesh,
 void transfer_edge_data(const Mesh &src_mesh,
                         Mesh &dst_mesh,
                         const Span<VariantEdgeGroup> edge_groups,
-                        const bke::AnonymousAttributePropagationInfo &propagation_info)
+                        const bke::AttributeFilter &attribute_filter)
 {
   const bke::AttributeAccessor src_attributes = src_mesh.attributes();
   bke::MutableAttributeAccessor dst_attributes = dst_mesh.attributes_for_write();
@@ -293,12 +306,11 @@ void transfer_edge_data(const Mesh &src_mesh,
   }
 
   /* Copy edge domain. */
-  for (bke::AttributeTransferData &attribute :
-       bke::retrieve_attributes_for_transfer(src_attributes,
-                                             dst_attributes,
-                                             ATTR_DOMAIN_MASK_EDGE,
-                                             propagation_info,
-                                             copy_edge_skip))
+  for (bke::AttributeTransferData &attribute : bke::retrieve_attributes_for_transfer(
+           src_attributes,
+           dst_attributes,
+           ATTR_DOMAIN_MASK_EDGE,
+           bke::attribute_filter_with_skip_ref(attribute_filter, copy_edge_skip)))
   {
     const CPPType &cpp_type = *bke::custom_data_type_to_cpp_type(attribute.meta_data.data_type);
     bke::attribute_math::convert_to_static_type(cpp_type, [&](auto dummy) {
@@ -371,7 +383,7 @@ int shared_edge_vert(Span<int2> edge_indices, int a, int b)
 void transfer_polygon_data(const Mesh &src_mesh,
                            Mesh &dst_mesh,
                            const Span<VariantPolygonGroup> poly_groups,
-                           const bke::AnonymousAttributePropagationInfo &propagation_info)
+                           const bke::AttributeFilter &attribute_filter)
 {
   if (dst_mesh.faces_num == 0) {
     return;
@@ -438,12 +450,11 @@ void transfer_polygon_data(const Mesh &src_mesh,
   }
 
   /* Copy face domain. */
-  for (bke::AttributeTransferData &attribute :
-       bke::retrieve_attributes_for_transfer(src_attributes,
-                                             dst_attributes,
-                                             ATTR_DOMAIN_MASK_FACE,
-                                             propagation_info,
-                                             copy_poly_skip))
+  for (bke::AttributeTransferData &attribute : bke::retrieve_attributes_for_transfer(
+           src_attributes,
+           dst_attributes,
+           ATTR_DOMAIN_MASK_FACE,
+           bke::attribute_filter_with_skip_ref(attribute_filter, copy_poly_skip)))
   {
     const CPPType &cpp_type = *bke::custom_data_type_to_cpp_type(attribute.meta_data.data_type);
     bke::attribute_math::convert_to_static_type(cpp_type, [&](auto dummy) {
@@ -468,12 +479,11 @@ void transfer_polygon_data(const Mesh &src_mesh,
   }
 
   /* Copy face corner domain. */
-  for (bke::AttributeTransferData &attribute :
-       bke::retrieve_attributes_for_transfer(src_attributes,
-                                             dst_attributes,
-                                             ATTR_DOMAIN_MASK_CORNER,
-                                             propagation_info,
-                                             copy_poly_skip))
+  for (bke::AttributeTransferData &attribute : bke::retrieve_attributes_for_transfer(
+           src_attributes,
+           dst_attributes,
+           ATTR_DOMAIN_MASK_CORNER,
+           bke::attribute_filter_with_skip_ref(attribute_filter, copy_poly_skip)))
   {
     const CPPType &cpp_type = *bke::custom_data_type_to_cpp_type(attribute.meta_data.data_type);
     bke::attribute_math::convert_to_static_type(cpp_type, [&](auto dummy) {
@@ -531,10 +541,9 @@ Mesh *new_mesh_from_groups(const Mesh &src_mesh,
       &src_mesh, num_vertices, num_edges, num_poly_corner.x, num_poly_corner.y);
   return result;
 }
-std::pair<Mesh *, BisectResult> bisect_mesh(
-    const Mesh &mesh,
-    const BisectArgs &args,
-    const bke::AnonymousAttributePropagationInfo &propagation_info)
+std::pair<Mesh *, BisectResult> bisect_mesh(const Mesh &mesh,
+                                            const BisectArgs &args,
+                                            const bke::AttributeFilter &attribute_filter)
 {
   const int src_num_vert = mesh.verts_num;
   const int src_num_edges = mesh.edges_num;
@@ -554,38 +563,82 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
 
   /* Bit flag property for how vertices relate to the plane.
    *
-   * 0: Not kept
-   * 1 (2^0): Kept
-   * 2 (2^1): Outside
-   * 4 (2^2): Inside
+   * 0: Outside
+   * 1 (2^0): Inside
+   * 2 (2^2): Intersect
    */
-  const int8_t MASK_KEPT = 0x1;
-  const int8_t MASK_OUTSIDE = 0x2;
-  const int8_t MASK_INSIDE = 0x4;
+  const int8_t MASK_OUTSIDE = 0x0;
+  const int8_t MASK_INSIDE = 0x1;
+
+  // TODO: REMOVE
+  const int8_t MASK_KEPT = 0x4;
   const int8_t MASK_IN_PLANE = 0x8;
-  Array<int8_t> is_kept_vertex(src_num_vert);
+  Array<int8_t> vertex_flags(src_num_vert);
   Array<float, 12> dist_buffer(src_num_vert);
 
   auto fn_is_outside = [](float signed_distance) { return signed_distance > 0.0f; };
-  auto fn_intersect_mode = [&](float signed_distance) {
-    return fn_is_outside(signed_distance) ? MASK_OUTSIDE : MASK_INSIDE;
-  };
-  auto fn_is_keep = [](const BisectArgs &args, int8_t is_intersect) {
-    return ((is_intersect & MASK_OUTSIDE) && !args.clear_outer) ||
-           ((is_intersect & MASK_INSIDE) && !args.clear_inner);
-  };
 
   IndexMaskMemory kept_memory;
   IndexMask kept_vertices = IndexMask::from_predicate(
       IndexMask(src_vert_range), GrainSize(512), kept_memory, [&](const int64_t i) {
-        dist_buffer[i] = dist_signed_to_plane_v3(src_positions[i], args.plane);
+        const float dist_to_plane = dist_signed_to_plane_v3(src_positions[i], args.plane);
 
-        /* Flag for: Keep, Outside, Inside */
-        const int8_t is_intersect = fn_intersect_mode(dist_buffer[i]);
-        const int8_t is_kept = fn_is_keep(args, is_intersect);
-        const int8_t kept_mode = is_kept | is_intersect;
-        is_kept_vertex[i] = kept_mode;
-        return is_kept;
+        const int8_t is_inside = fn_is_outside(dist_to_plane) ? MASK_OUTSIDE : MASK_INSIDE;
+        vertex_flags[i] = is_inside;
+        dist_buffer[i] = dist_to_plane;
+        return is_inside;
+      });
+
+  const OffsetIndices src_polys = mesh.faces();
+  const Span<int> src_corner_verts = mesh.corner_verts();
+  const Span<int> src_corner_edges = mesh.corner_edges();
+
+  /* Group polygons by intersection classification */
+  auto fn_polygon_group = [&](int64_t index_poly) {
+    const IndexRange src_corner_range = src_polys[index_poly];
+    const Span<int> corners = src_corner_verts.slice(src_corner_range);
+
+    const int8_t initial = vertex_flags[corners.first()];
+    for (const int64_t index : corners.index_range().drop_front(1)) {
+      if (initial != vertex_flags[corners[index]]) {
+        return PolygonIntersectType::Intersect;
+      }
+    }
+    return initial >= MASK_INSIDE ? PolygonIntersectType::Inside : PolygonIntersectType::Outside;
+  };
+  IndexMaskMemory polygon_sort_memory;
+  std::array<IndexMask, PolygonIntersectType::TypeCount> poly_type_selections;
+  IndexMask::from_groups<int64_t>(IndexMask(src_polys.index_range()),
+                                  polygon_sort_memory,
+                                  fn_polygon_group,
+                                  MutableSpan<IndexMask>(poly_type_selections));
+
+  /* Compute corner offsets for intersected polygons */
+  const int64_t num_intersected_polygons =
+      poly_type_selections[EdgeIntersectType::Intersect].size();
+  std::vector<int> tesselation_offsets(num_intersected_polygons + 1);
+  int tot_tri_count = 0;
+  tesselation_offsets[0] = tot_tri_count;
+  poly_type_selections[EdgeIntersectType::Intersect].foreach_index([&](const int64_t index_poly) {
+    tot_tri_count += bke::mesh::face_triangles_num(src_polys[index_poly].size());
+    tesselation_offsets[index_poly + 1] = tot_tri_count;
+  });
+
+  /* Compute triangulation */
+  threading::EnumerableThreadSpecific<LocalData> all_local_data;
+
+  std::vector<int3> tesselation(tesselation_offsets.back());
+  poly_type_selections[EdgeIntersectType::Intersect].foreach_index(
+      GrainSize(512), [&](const int64_t index_poly) {
+        LocalData &local_data = all_local_data.local();
+
+        const IndexRange src_corner_range = src_polys[index_poly];
+        bke::mesh::mesh_calc_tessellation_for_face(src_corner_verts,
+                                                   src_positions,
+                                                   src_corner_range.first(),
+                                                   src_corner_range.size(),
+                                                   &tesselation[tesselation_offsets[index_poly]],
+                                                   &local_data.pf_arena);
       });
 
   /* Classify IF edge is intersected
@@ -657,12 +710,12 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
    */
 
   const int side_keep_count = !args.clear_inner + !args.clear_outer;
-  const int side_keep_both = side_keep_count == 2;
+  // const int side_keep_both = side_keep_count == 2;
   /* Args for vertices formed during edge splits. */
   Array<float, 12> ie_lerp_weights(num_inter_edges);
   Array<int2, 12> sie_index_pairs(num_inter_edges);
   /* Constructs for forming edges from (s)plitting (i)ntersected (e)dges */
-  Array<int2, 12> sie_vert_map(num_inter_edges * side_keep_count);
+  Array<int2, 12> sie_vert_map(num_inter_edges);
   Array<int2, 12> sie_edge_map(sie_vert_map.size());
 
   /* Map from index of intersected edge -> Index of the 'in plane' vertex created in the new mesh
@@ -688,36 +741,17 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
         ie_vert_map[index_pos] = new_vert_index;
         old_to_new_edge_map[src_index] = index_pos;
 
-        /* Generate new edges for the split IFF any side is kept */
-        if (side_keep_count > 0) {
-          const int new_edge_index = split_edge_index * side_keep_count;
-          const bool is_ouside_x = fn_is_outside(signed_dist_x);
-          const bool is_outside_y = fn_is_outside(signed_dist_y);
-
-          /* Ordered vertex indices: x = outer, y = inner
-           * Ordering is done to make the edge direction known (kept side is pointing away from
-           * the plane).
-           */
-          int2 order = is_ouside_x ? vert_indices : int2{vert_indices.y, vert_indices.x};
-          int2 insert_index = {new_edge_index, new_edge_index + side_keep_both};
-
-          if (!args.clear_outer) {
-            /* Keep outside */
-            sie_vert_map[insert_index.x] = int2(old_to_new_vertex_map[order.x], new_vert_index);
-            sie_edge_map[insert_index.x] = {int(src_index), -1};
-          }
-          if (!args.clear_inner) {
-            /* Keep inside */
-            sie_vert_map[insert_index.y] = int2(old_to_new_vertex_map[order.y], new_vert_index);
-            sie_edge_map[insert_index.y] = {int(src_index), -1};
-          }
-        }
+        /* Generate new edge for the split.
+         * Edge direction is known (edge points away from the plane).
+         */
+        int other_vertex = fn_is_outside(signed_dist_x) ? vert_indices.y : vert_indices.x;
+        sie_vert_map[split_edge_index] = int2(old_to_new_vertex_map[other_vertex], new_vert_index);
+        sie_edge_map[split_edge_index] = {int(src_index), -1};
       });
 
   /* Slice of the buffers for split edges that are valid. */
-  const int64_t initial_split_edge_count = num_inter_edges * side_keep_count;
   const IndexRange split_edge_vert_slice(0, num_inter_edges);
-  const IndexRange split_edge_slice(0, initial_split_edge_count);
+  const IndexRange split_edge_slice(0, num_inter_edges);
 
   /* Maps index of kept edges from the original mesh to their index in the new mesh */
   edge_type_selections[EdgeIntersectType::Kept].foreach_index(
@@ -756,7 +790,7 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
     if (initial == identical) {
       return (initial & MASK_KEPT) ? EdgeIntersectType::Kept : EdgeIntersectType::Discarded;
     }
-    return EdgeIntersectType::Intersect;
+    return EdgeIntersectType::Copy;
   };
 
   /* Compute polygon masks */
@@ -796,7 +830,7 @@ std::pair<Mesh *, BisectResult> bisect_mesh(
   /* Counts the number of edges formed by poly-plane intersection. */
   std::atomic<int> new_inter_edge_index = 0;
   /* Index offset to the first poly-plane 'intersect' edge in the final mesh. */
-  const int new_inter_edge_index_offset = num_kept_edges + initial_split_edge_count;
+  const int new_inter_edge_index_offset = num_kept_edges + num_inter_edges;
   const Span<float3> positions = mesh.vert_positions();
   const int new_total_face_count = threading::parallel_reduce<int>(
       src_polys.index_range(),

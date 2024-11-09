@@ -32,6 +32,6 @@ bke::CurvesGeometry trim_curves(const bke::CurvesGeometry &src_curves,
 bke::CurvesGeometry bisect_curves(const bke::CurvesGeometry &src_curves,
                                   IndexMask selection,
                                   const BisectArgs &args,
-                                  const bke::AnonymousAttributePropagationInfo &propagation_info);
+                                  const bke::AttributeFilter &attribute_filter);
 
 }  // namespace blender::geometry

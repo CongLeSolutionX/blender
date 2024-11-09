@@ -864,23 +864,6 @@ Vector<AttributeTransferData> retrieve_attributes_for_transfer(
     AttrDomainMask domain_mask,
     const AttributeFilter &attribute_filter = {});
 
-/**
- * Gather attributes for the given domain based on the gather indices.
- *
- * \param src_attributes Source buffer to gather data from.
- * \param dst_attributes Data buffer to fill/gather from the source buffer.
- * \param gather_indices Indexed elements in the src_attributes to copy to the destionation domain.
- * \param domain Attribute domain to transfer.
- * \param propagation_info 
- * \param skip Named attributes to ignore.
-*/
-void gather_attribute_domain(AttributeAccessor src_attributes,
-                             MutableAttributeAccessor dst_attributes,
-                             Span<int64_t> gather_indices,
-                             AttrDomain domain,
-                             const AnonymousAttributePropagationInfo &propagation_info,
-                             const Set<std::string> &skip = {});
-
 bool allow_procedural_attribute_access(StringRef attribute_name);
 extern const char *no_procedural_access_message;
 

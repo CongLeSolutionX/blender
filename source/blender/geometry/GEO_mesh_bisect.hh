@@ -33,9 +33,8 @@ enum BisectResult {
   Bisect
 };
 
-std::pair<Mesh *, BisectResult> bisect_mesh(
-    const Mesh &mesh,
-    const BisectArgs &args,
-    const bke::AnonymousAttributePropagationInfo &propagation_info);
+std::pair<Mesh *, BisectResult> bisect_mesh(const Mesh &mesh,
+                                            const BisectArgs &args,
+                                            const bke::AttributeFilter &attribute_filter);
 
 }  // namespace blender::geometry
