@@ -228,8 +228,12 @@ static VectorSet<OrderedEdge> dissolved_edges_for_verts(const Span<int2> src_edg
   const int total_edges = edges_sets.calc_reduced_ids(old_to_new_edges_map);
 
   r_new_edges.reinitialize(total_edges);
-  r_new_edges.as_mutable_span().fill(int2(-1));
 
+#ifdef DEBUG
+  r_new_edges.as_mutable_span().fill(int2(-1));
+#endif
+
+  /* TODO: Parallel version? */
   keeped_verts_mask.foreach_index([&](const int vert_i) {
     for (const int edge_i : vert_to_edge_map[vert_i]) {
       const int edge_index = old_to_new_edges_map[edge_i];
@@ -439,6 +443,8 @@ Mesh *dissolve_boundary_verts(const Mesh &src_mesh,
         return vert_to_edge_map[vert_i].size() == 2;
       });
 
+  /* Double pass vertex selection processing. First one is input selection and boundary filtr.
+   * Second one is to satisfy face size constraint. */
   Array<bool> verts_to_dissolve_selection(src_mesh.verts_num);
   boundary_verts_to_dissolve_mask.to_bools(verts_to_dissolve_selection);
 
@@ -562,14 +568,35 @@ Mesh *dissolve_boundary_verts(const Mesh &src_mesh,
                  dst_attributes);
 
   array_utils::copy(unique_dst_faces.data(), dst_mesh->face_offsets_for_write());
-  mix_attributes(
-      src_attributes,
-      bke::AttrDomain::Face,
-      bke::attribute_filter_with_skip_ref(attribute_filter, {/*"ID", "material_index"*/}),
-      new_to_old_face_map,
-      dst_attributes);
-  // bke::gather_attributes(src_attributes, bke::AttrDomain::Face, attribute_filter,
-  // unique_faces.as_span(), dst_attributes);
+  mix_attributes(src_attributes,
+                 bke::AttrDomain::Face,
+                 bke::attribute_filter_with_skip_ref(attribute_filter, {"material_index", "ID"}),
+                 new_to_old_face_map,
+                 dst_attributes);
+
+  if (const bke::AttributeReader<int> src_material_attribute = src_attributes.lookup<int>(
+          "material_index", bke::AttrDomain::Face))
+  {
+    bke::SpanAttributeWriter<int> dst_material_attribute =
+        dst_attributes.lookup_or_add_for_write_span<int>("material_index", bke::AttrDomain::Face);
+    group_copy_first(new_to_old_face_map, dst_material_attribute.span);
+    array_utils::gather(src_material_attribute.varray,
+                        dst_material_attribute.span.as_span(),
+                        dst_material_attribute.span);
+    dst_material_attribute.finish();
+  }
+
+  if (const bke::AttributeReader<int> src_material_attribute = src_attributes.lookup<int>(
+          "ID", bke::AttrDomain::Face))
+  {
+    bke::SpanAttributeWriter<int> dst_material_attribute =
+        dst_attributes.lookup_or_add_for_write_span<int>("ID", bke::AttrDomain::Face);
+    group_copy_first(new_to_old_face_map, dst_material_attribute.span);
+    array_utils::gather(src_material_attribute.varray,
+                        dst_material_attribute.span.as_span(),
+                        dst_material_attribute.span);
+    dst_material_attribute.finish();
+  }
 
   mix_attributes(
       src_attributes,
