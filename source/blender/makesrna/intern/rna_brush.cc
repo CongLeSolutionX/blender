@@ -1501,7 +1501,7 @@ static void rna_def_gpencil_options(BlenderRNA *brna)
   RNA_def_property_ui_text(
       prop,
       "Simplify",
-      "Threashold in screen space used for the simplify algorithm. Points within this threashold "
+      "Threshold in screen space used for the simplify algorithm. Points within this threshold "
       "are treated as if they were in a straight line.");
   RNA_def_parameter_clear_flags(prop, PROP_ANIMATABLE, ParameterFlag(0));
   RNA_def_property_update(prop, 0, "rna_BrushGpencilSettings_update");
@@ -3394,7 +3394,7 @@ static void rna_def_brush(BlenderRNA *brna)
   RNA_def_property_ui_text(
       prop,
       "Occlusion",
-      "Only affect vertices that are not occluded by other faces (Slower performance)");
+      "Only affect vertices that are not occluded by other faces (slower performance)");
   RNA_def_property_update(prop, 0, "rna_Brush_update");
 
   prop = RNA_def_property(srna, "automasking_view_normal_limit", PROP_FLOAT, PROP_ANGLE);
@@ -3894,7 +3894,6 @@ static void rna_def_brush(BlenderRNA *brna)
  * - 3D location of the brush
  * - 2D mouse location
  * - Tablet pressure
- * - Direction flip
  * - Brush type switch
  * - Time
  */
@@ -3930,10 +3929,6 @@ static void rna_def_operator_stroke_element(BlenderRNA *brna)
   RNA_def_property_flag(prop, PROP_IDPROPERTY);
   RNA_def_property_range(prop, 0.0f, FLT_MAX);
   RNA_def_property_ui_text(prop, "Brush Size", "Brush size in screen space");
-
-  prop = RNA_def_property(srna, "pen_flip", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_flag(prop, PROP_IDPROPERTY);
-  RNA_def_property_ui_text(prop, "Flip", "");
 
   prop = RNA_def_property(srna, "x_tilt", PROP_FLOAT, PROP_FACTOR);
   RNA_def_property_flag(prop, PROP_IDPROPERTY);

@@ -133,7 +133,7 @@ void Instance::begin_sync()
     layer.fluids.begin_sync(resources, state);
     layer.grease_pencil.begin_sync(resources, state, view);
     layer.lattices.begin_sync(resources, state);
-    layer.lights.begin_sync();
+    layer.lights.begin_sync(state);
     layer.light_probes.begin_sync(resources, state);
     layer.metaballs.begin_sync();
     layer.meshes.begin_sync(resources, state, view);
@@ -467,7 +467,7 @@ void Instance::draw(Manager &manager)
 
   auto draw_layer = [&](OverlayLayer &layer, Framebuffer &framebuffer) {
     layer.bounds.draw(framebuffer, manager, view);
-    layer.wireframe.draw(framebuffer, manager, view);
+    layer.wireframe.draw(framebuffer, resources, manager, view);
     layer.cameras.draw(framebuffer, manager, view);
     layer.empties.draw(framebuffer, manager, view);
     layer.force_fields.draw(framebuffer, manager, view);

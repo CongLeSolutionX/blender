@@ -59,6 +59,10 @@ if(WITH_RENDERDOC)
   add_definitions(-DWITH_RENDERDOC)
 endif()
 
+if(WITH_GPU_SHADER_ASSERT)
+  add_definitions(-DWITH_GPU_SHADER_ASSERT)
+endif()
+
 set(INC_SYS
 )
 
@@ -391,6 +395,7 @@ set(LIB
   PRIVATE bf::intern::atomic
   PRIVATE bf::intern::clog
   PRIVATE bf::intern::guardedalloc
+  PRIVATE bf::extern::fmtlib
 )
 
 # Select Backend source based on availability
@@ -470,8 +475,6 @@ set(GLSL_SRC
   shaders/gpu_shader_diag_stripes_frag.glsl
   shaders/gpu_shader_simple_lighting_frag.glsl
   shaders/gpu_shader_flat_color_frag.glsl
-  shaders/gpu_shader_flat_color_alpha_test_0_frag.glsl
-  shaders/gpu_shader_flat_id_frag.glsl
   shaders/gpu_shader_2D_vert.glsl
   shaders/gpu_shader_2D_area_borders_vert.glsl
   shaders/gpu_shader_2D_area_borders_frag.glsl
@@ -504,14 +507,10 @@ set(GLSL_SRC
   shaders/gpu_shader_3D_polyline_vert_no_geom.glsl
   shaders/gpu_shader_3D_smooth_color_vert.glsl
   shaders/gpu_shader_3D_smooth_color_frag.glsl
-  shaders/gpu_shader_3D_passthrough_vert.glsl
   shaders/gpu_shader_3D_clipped_uniform_color_vert.glsl
-
-  shaders/gpu_shader_instance_variying_size_variying_color_vert.glsl
 
   shaders/gpu_shader_point_uniform_color_aa_frag.glsl
   shaders/gpu_shader_point_uniform_color_outline_aa_frag.glsl
-  shaders/gpu_shader_point_varying_color_varying_outline_aa_frag.glsl
   shaders/gpu_shader_point_varying_color_frag.glsl
   shaders/gpu_shader_3D_point_varying_size_varying_color_vert.glsl
   shaders/gpu_shader_3D_point_uniform_size_aa_vert.glsl
@@ -646,9 +645,7 @@ set(GLSL_SRC
   shaders/material/gpu_shader_material_world_normals.glsl
 
   shaders/gpu_shader_gpencil_stroke_vert.glsl
-  shaders/gpu_shader_gpencil_stroke_vert_no_geom.glsl
   shaders/gpu_shader_gpencil_stroke_frag.glsl
-  shaders/gpu_shader_gpencil_stroke_geom.glsl
 
   shaders/gpu_shader_display_fallback_vert.glsl
   shaders/gpu_shader_display_fallback_frag.glsl
@@ -770,61 +767,6 @@ endif()
 
 if(CXX_WARN_NO_SUGGEST_OVERRIDE)
   target_compile_options(bf_gpu PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wsuggest-override>)
-endif()
-
-
-
-if(WITH_GPU_BUILDTIME_SHADER_BUILDER)
-  set(_manifest)
-  if(WIN32)
-    # We can re-use the manifest from `tests.exe` here since it's
-    # rather generic and just selects the appropriate common
-    # controls version.
-    set(_manifest "${CMAKE_BINARY_DIR}/tests.exe.manifest")
-  endif()
-  add_executable(shader_builder
-    intern/gpu_shader_builder.cc
-    intern/gpu_shader_builder_stubs.cc
-    ${_manifest}
-  )
-  unset(_manifest)
-  setup_platform_linker_flags(shader_builder)
-
-  if(WITH_BUILD_INFO)
-    target_link_libraries(shader_builder PRIVATE buildinfoobj)
-    add_definitions(-DWITH_BUILD_INFO)
-  endif()
-  target_link_libraries(shader_builder PRIVATE
-    bf_gpu
-    bf_intern_clog
-    bf_blenlib
-    bf_intern_ghost
-    ${PLATFORM_LINKLIBS}
-    PRIVATE bf::intern::guardedalloc
-  )
-  target_include_directories(shader_builder SYSTEM PRIVATE ${INC_SYS})
-  target_include_directories(shader_builder PRIVATE ${INC} ${CMAKE_CURRENT_BINARY_DIR})
-
-  set(SRC_BAKED_CREATE_INFOS_FILE ${CMAKE_CURRENT_BINARY_DIR}/shader_baked.hh)
-
-  add_custom_command(
-    OUTPUT
-    ${SRC_BAKED_CREATE_INFOS_FILE}
-    COMMAND
-      ${CMAKE_COMMAND} -E env ${PLATFORM_ENV_BUILD}
-      $<TARGET_FILE:shader_builder> ${SRC_BAKED_CREATE_INFOS_FILE}
-    DEPENDS shader_builder
-  )
-  set(GPU_SHADER_INFO_SRC
-    intern/gpu_shader_info_baked.cc
-    ${SRC_BAKED_CREATE_INFOS_FILE}
-
-    # For project files to be aware of these headers.
-    ${SRC_SHADER_CREATE_INFOS}
-    shaders/infos/gpu_interface_info.hh
-  )
-
-  blender_add_lib(bf_gpu_shader_infos "${GPU_SHADER_INFO_SRC}" "" "" "")
 endif()
 
 

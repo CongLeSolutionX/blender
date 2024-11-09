@@ -25,21 +25,25 @@ class AttributeGetterSetter:
                 raise Exception("Unknown type {!r}".format(type))
         return default
 
-    def _set_attribute_value(self, attribute, type, value):
+    def _set_attribute_value(self, attribute, index, type, value):
         if type in {'FLOAT', 'INT', 'STRING', 'BOOLEAN', 'INT8', 'INT32_2D', 'QUATERNION', 'FLOAT4X4'}:
-            attribute.data[self._index].value = value
+            attribute.data[index].value = value
         elif type == 'FLOAT_VECTOR':
-            attribute.data[self._index].vector = value
+            attribute.data[index].vector = value
         elif type in {'FLOAT_COLOR', 'BYTE_COLOR'}:
-            attribute.data[self._index].color = value
+            attribute.data[index].color = value
         else:
             raise Exception("Unknown type {!r}".format(type))
 
-    def _set_attribute(self, name, type, value):
+    def _set_attribute(self, name, type, value, default):
         if attribute := self._attributes.get(name):
-            self._set_attribute_value(attribute, type, value)
+            self._set_attribute_value(attribute, self._index, type, value)
         elif attribute := self._attributes.new(name, type, self._domain):
-            self._set_attribute_value(attribute, type, value)
+            # Fill attribute with default value
+            num = self._attributes.domain_size(self._domain)
+            for i in range(num):
+                self._set_attribute_value(attribute, i, type, default)
+            self._set_attribute_value(attribute, self._index, type, value)
         else:
             raise Exception(
                 "Could not create attribute {:s} of type {!r}".format(name, type))
@@ -101,7 +105,7 @@ def def_prop_for_attribute(attr_name, type, default, doc):
 
     def fset(self, value):
         # Define `setter` callback for property.
-        self._set_attribute(attr_name, type, value)
+        self._set_attribute(attr_name, type, value, default)
 
     prop = property(fget=fget, fset=fset, doc=doc)
     return prop
@@ -110,7 +114,7 @@ def def_prop_for_attribute(attr_name, type, default, doc):
 def DefAttributeGetterSetters(attributes_list):
     """
     A class decorator that reads a list of attribute information &
-    creates properties on the class with `getters` & `setters`.
+    creates properties on the class with ``getters`` & ``setters``.
     """
     def wrapper(cls):
         for prop_name, attr_name, type, default, doc in attributes_list:
@@ -123,8 +127,6 @@ def DefAttributeGetterSetters(attributes_list):
 # Define the list of attributes that should be exposed as read/write properties on the class.
 @DefAttributeGetterSetters([
     # Property Name, Attribute Name, Type, Default Value, Doc-string.
-    ("position", "position", 'FLOAT_VECTOR', (0.0, 0.0, 0.0),
-     "The position of the point (in local space)."),
     ("radius", "radius", 'FLOAT', 0.01, "The radius of the point."),
     ("opacity", "opacity", 'FLOAT', 0.0, "The opacity of the point."),
     ("vertex_color", "vertex_color", 'FLOAT_COLOR', (0.0, 0.0, 0.0, 0.0),
@@ -138,12 +140,31 @@ class GreasePencilStrokePoint(AttributeGetterSetter):
     """
     A helper class to get access to stroke point data.
     """
-    __slots__ = ("_curve_index", "_point_index")
+    __slots__ = ("_drawing", "_curve_index", "_point_index")
 
     def __init__(self, drawing, curve_index, point_index):
         super().__init__(drawing.attributes, point_index, 'POINT')
+        self._drawing = drawing
         self._curve_index = curve_index
         self._point_index = point_index
+
+    @property
+    def position(self):
+        """
+        The position of the point (in local space).
+        """
+        if attribute := self._attributes.get("position"):
+            return attribute.data[self._point_index].vector
+        # Position attribute should always exist, but return default just in case.
+        return (0.0, 0.0, 0.0)
+
+    @position.setter
+    def position(self, value):
+        # Position attribute should always exist
+        if attribute := self._attributes.get("position"):
+            attribute.data[self._point_index].vector = value
+            # Tag the positions of the drawing.
+            self._drawing.tag_positions_changed()
 
     @property
     def select(self):
@@ -243,7 +264,7 @@ class GreasePencilStroke(AttributeGetterSetter):
         self._drawing.resize_strokes(
             sizes=[new_size], indices=[self._curve_index])
         self._points_end_index = self._points_start_index + new_size
-        return GreasePencilStrokePointSlice(self._drawing, previous_end, self._points_end_index)
+        return GreasePencilStrokePointSlice(self._drawing, self._curve_index, previous_end, self._points_end_index)
 
     def remove_points(self, count: int):
         """
