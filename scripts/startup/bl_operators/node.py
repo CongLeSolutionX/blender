@@ -418,7 +418,6 @@ class NODE_OT_viewer_shortcut_set(Operator):
     viewer_index: IntProperty(
         name="Viewer index",
         description="Index corresponding to the shortcut, e.g. number key 1 corresponds to index 1 etc..")
-    NODE_SHORTCUT_NONE = 0
 
     def get_node_with_shortcut(self, context, shortcut):
         nodes = context.space_data.edit_tree.nodes
@@ -455,11 +454,6 @@ class NODE_OT_viewer_shortcut_set(Operator):
             self.report({'ERROR'}, "No previews to set. Reason: No nodes selected.")
             return {'CANCELLED'}
 
-        # Reset node with exisiting shortcut.
-        old_fav_node = self.get_node_with_shortcut(context, self.viewer_index)
-        if old_fav_node:
-            old_fav_node.ui_shortcut = self.NODE_SHORTCUT_NONE
-
         fav_node = selected_nodes[0]
 
         # Only viewer nodes can be set to favorites. However, the user can
@@ -491,7 +485,6 @@ class NODE_OT_viewer_shortcut_get(Operator):
     viewer_index: IntProperty(
         name="Viewer index",
         description="Index corresponding to the shortcut, e.g. number key 1 corresponds to index 1 etc..")
-    NODE_SHORTCUT_NONE = 0
 
     @classmethod
     def poll(self, context):

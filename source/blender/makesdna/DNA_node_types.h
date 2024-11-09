@@ -350,7 +350,7 @@ typedef struct bNodePanelState {
 typedef enum bNodeShortcut {
   NODE_SHORTCUT_NONE = 0,
   /* Users can set custom keys to shortcuts,
-   * but shorctus should always be referred to as enums. */
+   * but shortcuts should always be referred to as enums. */
   NODE_SHORCTUT_SLOT_1,
   NODE_SHORCTUT_SLOT_2,
   NODE_SHORCTUT_SLOT_3,

@@ -1307,6 +1307,21 @@ static void rna_NodeTree_active_node_set(PointerRNA *ptr,
   }
 }
 
+static void rna_NodeTree_shortcut_node_set(PointerRNA *ptr, int value)
+{
+  bNode *curr_node = static_cast<bNode *>(ptr->data);
+  bNodeTree ntree = curr_node->owner_tree();
+
+  /* Avoid having two nodes with the same shortcut. */
+  int old_shortcut = value;
+  for (bNode *node : ntree.all_nodes()) {
+    if (node->shortcut == old_shortcut) {
+      node->shortcut = NODE_SHORTCUT_NONE;
+    }
+  }
+  curr_node->shortcut = value;
+}
+
 static bNodeLink *rna_NodeTree_link_new(bNodeTree *ntree,
                                         Main *bmain,
                                         ReportList *reports,
@@ -10822,7 +10837,7 @@ static void rna_def_node(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "ui_shortcut", PROP_INT, PROP_NONE);
   RNA_def_property_int_sdna(prop, nullptr, "shortcut");
-  RNA_def_property_range(prop, 0, 9);
+  RNA_def_property_int_funcs(prop, nullptr, "rna_NodeTree_shortcut_node_set", nullptr);
   RNA_def_property_int_default(prop, NODE_SHORTCUT_NONE);
   RNA_def_property_update(prop, NC_NODE | ND_DISPLAY, nullptr);
 
