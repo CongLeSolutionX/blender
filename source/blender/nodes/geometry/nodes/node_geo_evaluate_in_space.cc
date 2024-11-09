@@ -428,20 +428,12 @@ static void from_positions(const Span<float3> positions,
         const int axis_index = math::mod_periodic(depth_i, 3);
         MutableSpan<int> segment = indices.slice(bucket_range);
         std::sort(segment.begin(), segment.end(), [&](const int a, const int b) {
+          if (UNLIKELY(positions[a][axis_index] == positions[b][axis_index])) {
+            return a < b;
+          }
           return positions[a][axis_index] < positions[b][axis_index];
         });
       });
-
-  for_each_leaf(buckets_offsets,
-                total_depth,
-                GrainSize(4096),
-                [&](const IndexRange bucket_range, const int /*joint_index*/, const int depth_i) {
-                  const int axis_index = math::mod_periodic(depth_i, 3);
-                  MutableSpan<int> segment = indices.slice(bucket_range);
-                  parallel_sort(segment.begin(), segment.end(), [&](const int a, const int b) {
-                    return positions[a][axis_index] < positions[b][axis_index];
-                  });
-                });
 }
 
 template<typename T>
@@ -512,7 +504,6 @@ static void accumulate_size(const OffsetIndices<int> buckets_offsets,
       });
 }
 
-
 static FunctionRef<void(int, MutableSpan<float>)> powered_rcp_for_squared(const int power_value)
 {
   switch (power_value) {
@@ -549,6 +540,33 @@ static FunctionRef<void(int, MutableSpan<float>)> powered_rcp_for_squared(const 
         });
       };
   }
+}
+
+template<typename T>
+static void gather(const Span<T> src, const Span<int> indices, MutableSpan<T> dst)
+{
+  BLI_assert(indices.size() == dst.size());
+  for (const int64_t i : dst.index_range()) {
+    dst[i] = src[indices[i]];
+  }
+}
+
+static void squared_distance(const float3 centre, const Span<float3> positions, MutableSpan<float> dst)
+{
+  BLI_assert(positions.size() == dst.size());
+  std::transform(positions.begin(), positions.end(), dst.begin(), [&](const float3 &position) {
+    return math::distance_squared(position, centre);
+  });
+}
+
+static float3 accumulate_difference(const float3 value, const Span<float3> values, const Span<float> weight)
+{
+  BLI_assert(values.size() == weight.size());
+  float3 accumulate_from_zero(0);
+  for (const int index : weight.index_range()) {
+    accumulate_from_zero += (values[index] - value) * weight[index];
+  }
+  return accumulate_from_zero;
 }
 
 struct Item {
@@ -956,15 +974,15 @@ static void for_each_to_bottom_skip_fast(const int total_depth,
                                          const JointFuncT &joint_func,
                                          const LeafFuncT &leaf_func)
 {
-  Vector<Array<int, 0>, 32> all_around_parent_stack = {{}};
+  Vector<Array<int, 0>, 32> all_around_stack = {{}};
   Vector<int, 32> depth_stack = {0};
   Vector<int, 32> joint_i_stack = {0};
 
-  while (!all_around_parent_stack.is_empty()) {
-    BLI_assert(all_around_parent_stack.size() == depth_stack.size());
-    BLI_assert(all_around_parent_stack.size() == joint_i_stack.size());
+  while (!all_around_stack.is_empty()) {
+    BLI_assert(all_around_stack.size() == depth_stack.size());
+    BLI_assert(all_around_stack.size() == joint_i_stack.size());
     
-    Array<int, 0> all_around_parent = all_around_parent_stack.pop_last();
+    Array<int, 0> all_around_parent = all_around_stack.pop_last();
     const int depth_i = depth_stack.pop_last();
     const int joint_i = joint_i_stack.pop_last();
 
@@ -1009,13 +1027,13 @@ static void for_each_to_bottom_skip_fast(const int total_depth,
     parents_to_childs(all_near_parent.as_span(), joints_range, child_joints_range, left_child_near.as_mutable_span().drop_back(int(parent_has_other)));
     right_child_near.as_mutable_span().copy_from(left_child_near.as_span());
     
-    if (parent_has_other) {
-      left_child_near.last() = 
-      right_child_near.last() = 
-    }
+   //  if (parent_has_other) {
+   //    left_child_near.last() = 
+   //    right_child_near.last() = 
+   //  }
     
-    // left_child_near.last() = child_joints_range[right_child_i];
-    // right_child_near.last() = child_joints_range[left_child_i];
+    left_child_near.last() = child_joints_range[right_child_i];
+    right_child_near.last() = child_joints_range[left_child_i];
 
     all_around_stack.append(std::move(right_child_near));
     depth_stack.append(depth_i + 1);
@@ -1025,33 +1043,6 @@ static void for_each_to_bottom_skip_fast(const int total_depth,
     depth_stack.append(depth_i + 1);
     joint_i_stack.append(left_child_i);
   }
-}
-
-template<typename T>
-static void gather(const Span<T> src, const Span<int> indices, MutableSpan<T> dst)
-{
-  BLI_assert(indices.size() == dst.size());
-  for (const int64_t i : dst.index_range()) {
-    dst[i] = src[indices[i]];
-  }
-}
-
-static void squared_distance(const float3 centre, const Span<float3> positions, MutableSpan<float> dst)
-{
-  BLI_assert(positions.size() == dst.size());
-  std::transform(positions.begin(), positions.end(), dst.begin(), [&](const float3 &position) {
-    return math::distance_squared(position, centre);
-  });
-}
-
-static float3 accumulate_difference(const float3 value, const Span<float3> values, const Span<float> weight)
-{
-  BLI_assert(values.size() == weight.size());
-  float3 accumulate_from_zero(0);
-  for (const int index : weight.index_range()) {
-    accumulate_from_zero += (values[index] - value) * weight[index];
-  }
-  return accumulate_from_zero;
 }
 
 static void sample_average_fast(const OffsetIndices<int> buckets_offsets,
@@ -1423,7 +1414,7 @@ class DifferenceSumFieldInput final : public bke::GeometryFieldInput {
     }
 
     Array<float3> sampled_bucket_values_new(domain_size, float3(0));
-    if constexpr (true) {
+    if constexpr (!true) {
       SCOPED_TIMER_AVERAGED("akdbt::sample_average_fast");
       akdbt::sample_average_fast(base_offsets,
                                 total_depth,
