@@ -148,7 +148,7 @@ static void crashlog_file_generate(const char *filepath, const void *os_info)
   }
 }
 
-static void signal_cleanup_and_terminate(int signum)
+static void sig_cleanup_and_terminate(int signum)
 {
   /* Delete content of temp directory. */
   BKE_tempdir_session_purge();
@@ -167,7 +167,7 @@ static void sig_handle_crash_fn(int signum)
   char filepath[FILE_MAX];
   crashlog_filepath_get(filepath);
   crashlog_file_generate(filepath, nullptr);
-  signal_cleanup_and_terminate(signum);
+  sig_cleanup_and_terminate(signum);
 }
 
 #  ifdef WIN32
@@ -205,7 +205,7 @@ extern LONG WINAPI windows_exception_handler(EXCEPTION_POINTERS *ExceptionInfo)
     if (G.filepath_last_blend[0]) {
       ShellExecute(nullptr, "open", G.filepath_last_blend, nullptr, nullptr, SW_SHOWNORMAL);
     }
-    signal_cleanup_and_terminate(SIGSEGV);
+    sig_cleanup_and_terminate(SIGSEGV);
   }
 
   return EXCEPTION_EXECUTE_HANDLER;

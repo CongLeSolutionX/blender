@@ -429,7 +429,7 @@ static void bli_windows_exception_message_get(const EXCEPTION_POINTERS *exceptio
 }
 
 /* -------------------------------------------------------------------- */
-/** \name showMessageBox
+/** \name bli_show_message_box
  * \{ */
 
 static std::string url_encode(const char *str)
@@ -498,7 +498,9 @@ static std::string get_os_info()
  * Displays a crash popup with options to open the crash log and report a bug.
  * This is based on the `showMessageBox` function in `GHOST_SystemWin32.cc`.
  */
-static void showMessageBox(const char *filepath, const char *gpu_name, const char *build_version)
+static void bli_show_message_box(const char *filepath,
+                                 const char *gpu_name,
+                                 const char *build_version)
 {
   /* InitCommonControls is called during GHOST System initialization, so this is redundant. */
   // InitCommonControls();
@@ -573,7 +575,7 @@ void BLI_windows_exception_show_dialog(const void *exception,
                                        const char *gpu_name,
                                        const char *build_version)
 {
-  showMessageBox(filepath, gpu_name, build_version);
+  bli_show_message_box(filepath, gpu_name, build_version);
 
   char message[512];
   bli_windows_exception_message_get(static_cast<const EXCEPTION_POINTERS *>(exception), message);
