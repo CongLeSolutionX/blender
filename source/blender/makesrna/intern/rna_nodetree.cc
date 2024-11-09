@@ -2412,6 +2412,22 @@ static void rna_NodeCrop_min_x_set(PointerRNA *ptr, int value)
   }
 }
 
+static void rna_NodeCrop_max_x_set(PointerRNA *ptr, int value)
+{
+  bNode *node = static_cast<bNode *>(ptr->data);
+  NodeTwoXYs *data = static_cast<NodeTwoXYs *>(node->storage);
+  data->x2 = value;
+  CLAMP_MIN(data->x2, data->x1);
+}
+
+static void rna_NodeCrop_min_y_set(PointerRNA *ptr, int value)
+{
+  bNode *node = static_cast<bNode *>(ptr->data);
+  NodeTwoXYs *data = static_cast<NodeTwoXYs *>(node->storage);
+  data->y1 = value;
+  CLAMP_MIN(data->y1, data->y2);
+}
+
 static void rna_NodeCrop_max_y_set(PointerRNA *ptr, int value)
 {
   bNode *node = static_cast<bNode *>(ptr->data);
@@ -2430,6 +2446,22 @@ static void rna_NodeCrop_rel_min_x_set(PointerRNA *ptr, float value)
   if (data->fac_x1 > data->fac_x2) {
     data->fac_x1 = data->fac_x2;
   }
+}
+
+static void rna_NodeCrop_rel_max_x_set(PointerRNA *ptr, float value)
+{
+  bNode *node = static_cast<bNode *>(ptr->data);
+  NodeTwoXYs *data = static_cast<NodeTwoXYs *>(node->storage);
+  data->fac_x2 = value;
+  CLAMP_MIN(data->fac_x2, data->fac_x1);
+}
+
+static void rna_NodeCrop_rel_min_y_set(PointerRNA *ptr, float value)
+{
+  bNode *node = static_cast<bNode *>(ptr->data);
+  NodeTwoXYs *data = static_cast<NodeTwoXYs *>(node->storage);
+  data->fac_y1 = value;
+  CLAMP_MIN(data->fac_y1, data->fac_y2);
 }
 
 static void rna_NodeCrop_rel_max_y_set(PointerRNA *ptr, float value)
@@ -7666,12 +7698,14 @@ static void def_cmp_crop(StructRNA *srna)
 
   prop = RNA_def_property(srna, "max_x", PROP_INT, PROP_NONE);
   RNA_def_property_int_sdna(prop, nullptr, "x2");
+  RNA_def_property_int_funcs(prop, nullptr, "rna_NodeCrop_max_x_set", nullptr);
   RNA_def_property_range(prop, 0, 10000);
   RNA_def_property_ui_text(prop, "X2", "");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
 
   prop = RNA_def_property(srna, "min_y", PROP_INT, PROP_NONE);
   RNA_def_property_int_sdna(prop, nullptr, "y1");
+  RNA_def_property_int_funcs(prop, nullptr, "rna_NodeCrop_min_y_set", nullptr);
   RNA_def_property_range(prop, 0, 10000);
   RNA_def_property_ui_text(prop, "Y1", "");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
@@ -7692,12 +7726,14 @@ static void def_cmp_crop(StructRNA *srna)
 
   prop = RNA_def_property(srna, "rel_max_x", PROP_FLOAT, PROP_NONE);
   RNA_def_property_float_sdna(prop, nullptr, "fac_x2");
+  RNA_def_property_float_funcs(prop, nullptr, "rna_NodeCrop_rel_max_x_set", nullptr);
   RNA_def_property_range(prop, 0.0, 1.0);
   RNA_def_property_ui_text(prop, "X2", "");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
 
   prop = RNA_def_property(srna, "rel_min_y", PROP_FLOAT, PROP_NONE);
   RNA_def_property_float_sdna(prop, nullptr, "fac_y1");
+  RNA_def_property_float_funcs(prop, nullptr, "rna_NodeCrop_rel_min_y_set", nullptr);
   RNA_def_property_range(prop, 0.0, 1.0);
   RNA_def_property_ui_text(prop, "Y1", "");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
