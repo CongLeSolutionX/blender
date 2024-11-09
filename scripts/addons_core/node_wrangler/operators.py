@@ -528,27 +528,24 @@ class NWFrameSelected(Operator, NWBase):
 
     def execute(self, context):
         nodes, links = get_nodes_links(context)
-        parents = set()
-        selected = []
-        '''
-        There are a few cases here:
-        1. All nodes are in the same parent - in which case it's straightforward: if a node has a parent, then don't reparent.
-        2. Nodes are in different parent - in which case, make a new parent and reparent all nodes to new frame
-        3. One node doesn't haven a parent - in which case, make a new parent and reparent all nodes to new frame
-        
-        Also, take care to not break resizing and Ctrl+Z when fixing
-        '''
+        selected = set()
+        # Only reparent the top level frame that surrounds everything
+        # A frame is considered higher level if every item that the frame contains is selected
         for node in nodes:
-            parents.add(node.parent)
-
-        if (len(parents) <= 1):
-            for node in nodes:
-                if node.select and node.parent is None:
-                    selected.append(node)
-        else:
-            for node in nodes:
-                if node.select:
-                    selected.append(node)
+            if node.select and node.type == 'FRAME':
+                for child in nodes:
+                    if child.parent == node:
+                        child.select = True
+        for node in nodes:
+            if node.select:
+                top_level = node
+                while top_level.parent is not None:
+                    children = [node for node in nodes if node.parent == top_level.parent]
+                    all_children_selected = all(child.select for child in children)
+                    if not all_children_selected:
+                        break
+                    top_level = top_level.parent
+                selected.add(top_level)
 
         bpy.ops.node.add_node(type='NodeFrame')
         frm = nodes.active
