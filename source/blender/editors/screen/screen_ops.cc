@@ -3646,11 +3646,20 @@ static bool area_join_init(bContext *C, wmOperator *op, ScrArea *sa1, ScrArea *s
 {
   if (sa1 == nullptr && sa2 == nullptr) {
     /* Get areas from cursor location if not specified. */
+    PropertyRNA *prop;
     int cursor[2];
-    RNA_int_get_array(op->ptr, "source_xy", cursor);
-    sa1 = BKE_screen_find_area_xy(CTX_wm_screen(C), SPACE_TYPE_ANY, cursor);
-    RNA_int_get_array(op->ptr, "target_xy", cursor);
-    sa2 = BKE_screen_find_area_xy(CTX_wm_screen(C), SPACE_TYPE_ANY, cursor);
+
+    prop = RNA_struct_find_property(op->ptr, "source_xy");
+    if (RNA_property_is_set(op->ptr, prop)) {
+      RNA_property_int_get_array(op->ptr, prop, cursor);
+      sa1 = BKE_screen_find_area_xy(CTX_wm_screen(C), SPACE_TYPE_ANY, cursor);
+    }
+
+    prop = RNA_struct_find_property(op->ptr, "target_xy");
+    if (RNA_property_is_set(op->ptr, prop)) {
+      RNA_property_int_get_array(op->ptr, prop, cursor);
+      sa2 = BKE_screen_find_area_xy(CTX_wm_screen(C), SPACE_TYPE_ANY, cursor);
+    }
   }
   if (sa1 == nullptr) {
     return false;
@@ -4126,6 +4135,7 @@ static int area_join_modal(bContext *C, wmOperator *op, const wmEvent *event)
 {
   if (event->type == WINDEACTIVATE) {
     /* This operator can close windows, which can cause it to be re-run. */
+    area_join_exit(C, op);
     return OPERATOR_FINISHED;
   }
 
@@ -4946,9 +4956,6 @@ static void screen_area_menu_items(ScrArea *area, uiLayout *layout)
 
   PointerRNA ptr;
 
-  /* Mouse position as if in middle of area. */
-  const int loc[2] = {BLI_rcti_cent_x(&area->totrct), BLI_rcti_cent_y(&area->totrct)};
-
   uiItemFullO(layout,
               "SCREEN_OT_area_join",
               IFACE_("Move/Split Area"),
@@ -4957,7 +4964,6 @@ static void screen_area_menu_items(ScrArea *area, uiLayout *layout)
               WM_OP_INVOKE_DEFAULT,
               UI_ITEM_NONE,
               &ptr);
-  RNA_int_set_array(&ptr, "source_xy", loc);
 
   uiItemS(layout);
 

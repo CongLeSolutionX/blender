@@ -520,7 +520,7 @@ static int weight_sample_invoke(bContext *C, wmOperator * /*op*/, const wmEvent 
         return new_closest;
       },
       [](const ClosestGreasePencilDrawing &a, const ClosestGreasePencilDrawing &b) {
-        return (a.elem.distance < b.elem.distance) ? a : b;
+        return (a.elem.distance_sq < b.elem.distance_sq) ? a : b;
       });
 
   if (!closest.drawing) {
@@ -567,6 +567,7 @@ static int toggle_weight_tool_direction(bContext *C, wmOperator * /*op*/)
   /* Toggle direction flag. */
   brush->flag ^= BRUSH_DIR_IN;
 
+  BKE_brush_tag_unsaved_changes(brush);
   /* Update brush settings in UI. */
   WM_main_add_notifier(NC_BRUSH | NA_EDITED, nullptr);
 

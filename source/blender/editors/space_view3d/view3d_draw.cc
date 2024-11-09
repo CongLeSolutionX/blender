@@ -1396,15 +1396,6 @@ static void draw_selected_name(
     if (id_frame_has_keyframe((ID *)ob, /* BKE_scene_ctime_get(scene) */ float(cfra))) {
       UI_FontThemeColor(font_id, TH_TIME_KEYFRAME);
     }
-    else if (ED_gpencil_has_keyframe_v3d(scene, ob, cfra)) {
-      UI_FontThemeColor(font_id, TH_TIME_GP_KEYFRAME);
-    }
-  }
-  else {
-    /* no object */
-    if (ED_gpencil_has_keyframe_v3d(scene, nullptr, cfra)) {
-      UI_FontThemeColor(font_id, TH_TIME_GP_KEYFRAME);
-    }
   }
 
   if (markern) {
@@ -1861,6 +1852,11 @@ void ED_view3d_draw_offscreen_simple(Depsgraph *depsgraph,
   /* Actually not used since we pass in the projection matrix. */
   v3d.lens = 0;
 
+  /* WORKAROUND: Disable overscan because it is not supported for arbitrary input matrices.
+   * The proper fix to this would be to support arbitrary matrices in `eevee::Camera::sync()`. */
+  float overscan = scene->eevee.overscan;
+  scene->eevee.overscan = 0.0f;
+
   ED_view3d_draw_offscreen(depsgraph,
                            scene,
                            drawtype,
@@ -1877,6 +1873,9 @@ void ED_view3d_draw_offscreen_simple(Depsgraph *depsgraph,
                            true,
                            ofs,
                            viewport);
+
+  /* Restore overscan. */
+  scene->eevee.overscan = overscan;
 }
 
 ImBuf *ED_view3d_draw_offscreen_imbuf(Depsgraph *depsgraph,

@@ -1004,6 +1004,9 @@ static void acf_fcurve_name(bAnimListElem *ale, char *name)
 
   FCurve *fcurve = static_cast<FCurve *>(ale->data);
 
+  /* Clear the error flag. It'll be set again when an error situation is detected. */
+  fcurve->flag &= ~FCURVE_DISABLED;
+
   if (ale->fcurve_owner_id && GS(ale->fcurve_owner_id->name) == ID_AC &&
       ale->slot_handle != Slot::unassigned)
   {
@@ -1018,6 +1021,20 @@ static void acf_fcurve_name(bAnimListElem *ale, char *name)
        * pointer, as it's likely to be wrong anyway. */
       getname_anim_fcurve(name, nullptr, fcurve);
       return;
+    }
+
+    /* If the animated ID this ALE is for is a user of the slot, try to resolve the path on that.
+     * If this fails, mark the F-Curve as problematic. This code is here so that
+     * getname_anim_fcurve_for_slot() can do its best to find a label of the animated property,
+     * independently of the "error line" shown in the dope sheet, at the cost of one extra call to
+     * RNA_path_resolve_property(). See #129490. */
+    if (slot->users(*ale->bmain).contains(ale->id)) {
+      PointerRNA id_ptr = RNA_id_pointer_create(ale->id);
+      PointerRNA ptr;
+      PropertyRNA *prop;
+      if (!RNA_path_resolve_property(&id_ptr, fcurve->rna_path, &ptr, &prop)) {
+        fcurve->flag |= FCURVE_DISABLED;
+      }
     }
 
     BLI_assert(ale->bmain);
@@ -1303,8 +1320,6 @@ static bAnimChannelType ACF_NLACURVE = {
 
 /* Object Animation Expander  ------------------------------------------- */
 
-#ifdef WITH_ANIM_BAKLAVA
-
 /* TODO: just get this from RNA? */
 static int acf_fillanim_icon(bAnimListElem * /*ale*/)
 {
@@ -1492,8 +1507,6 @@ static bAnimChannelType ACF_ACTION_SLOT = {
     /*setting_flag*/ acf_action_slot_setting_flag,
     /*setting_ptr*/ acf_action_slot_setting_ptr,
 };
-
-#endif  // WITH_ANIM_BAKLAVA
 
 /* Object Action Expander  ------------------------------------------- */
 
@@ -3576,7 +3589,7 @@ static void acf_gpd_color(bAnimContext * /*ac*/, bAnimListElem * /*ale*/, float 
 /* TODO: just get this from RNA? */
 static int acf_gpd_icon(bAnimListElem * /*ale*/)
 {
-  return ICON_OUTLINER_OB_GREASEPENCIL;
+  return ICON_OUTLINER_DATA_GREASEPENCIL;
 }
 
 /* check if some setting exists for this channel */
@@ -4542,13 +4555,8 @@ static void ANIM_init_channel_typeinfo_data()
     animchannelTypeInfo[type++] = &ACF_NLACONTROLS; /* NLA Control FCurve Expander */
     animchannelTypeInfo[type++] = &ACF_NLACURVE;    /* NLA Control FCurve Channel */
 
-#ifdef WITH_ANIM_BAKLAVA
     animchannelTypeInfo[type++] = &ACF_FILLANIM;    /* Object's Layered Action Expander */
     animchannelTypeInfo[type++] = &ACF_ACTION_SLOT; /* Action Slot Expander */
-#else
-    animchannelTypeInfo[type++] = nullptr;
-    animchannelTypeInfo[type++] = nullptr;
-#endif
     animchannelTypeInfo[type++] = &ACF_FILLACTD;    /* Object Action Expander */
     animchannelTypeInfo[type++] = &ACF_FILLDRIVERS; /* Drivers Expander */
 
@@ -4589,12 +4597,10 @@ static void ANIM_init_channel_typeinfo_data()
     animchannelTypeInfo[type++] = &ACF_NLATRACK;  /* NLA Track */
     animchannelTypeInfo[type++] = &ACF_NLAACTION; /* NLA Action */
 
-#ifdef WITH_ANIM_BAKLAVA
     BLI_assert_msg(animchannelTypeInfo[ANIMTYPE_FILLACT_LAYERED] == &ACF_FILLANIM,
                    "ANIMTYPE_FILLACT_LAYERED does not match ACF_FILLANIM");
     BLI_assert_msg(animchannelTypeInfo[ANIMTYPE_ACTION_SLOT] == &ACF_ACTION_SLOT,
                    "ANIMTYPE_ACTION_SLOT does not match ACF_ACTION_SLOT");
-#endif
   }
 }
 
@@ -6069,13 +6075,11 @@ void ANIM_channel_draw_widgets(const bContext *C,
         UI_block_emboss_set(block, UI_EMBOSS_NONE);
       }
 
-#ifdef WITH_ANIM_BAKLAVA
       /* Slot ID type indicator. */
       if (ale->type == ANIMTYPE_ACTION_SLOT) {
         offset -= ICON_WIDTH;
         UI_icon_draw(offset, ymid, acf_action_slot_idtype_icon(ale));
       }
-#endif /* WITH_ANIM_BAKLAVA */
     }
 
     /* Draw slider:

@@ -845,12 +845,13 @@ static eSnapMode snap_edge_points(SnapObjectContext *sctx, const float dist_px_s
       sctx, sctx->ret.ob, sctx->ret.data, sctx->ret.obmat, dist_px_sq_orig, sctx->ret.index);
 }
 
-/* May extend later (for now just snaps to empty or camera center). */
 eSnapMode snap_object_center(SnapObjectContext *sctx,
                              const Object *ob_eval,
                              const float4x4 &obmat,
                              eSnapMode snap_to_flag)
 {
+  /* May extend later (for now just snaps to empty or camera center). */
+
   if (ob_eval->transflag & OB_DUPLI) {
     return SCE_SNAP_TO_NONE;
   }
@@ -923,7 +924,6 @@ static eSnapMode snap_obj_fn(SnapObjectContext *sctx,
       break;
     case OB_FONT:
     case OB_EMPTY:
-    case OB_GPENCIL_LEGACY:
     case OB_LAMP:
       retval = snap_object_center(sctx, ob_eval, obmat, sctx->runtime.snap_to_flag);
       break;
@@ -1130,10 +1130,15 @@ static bool snap_object_context_runtime_init(SnapObjectContext *sctx,
 
     if (sctx->runtime.snap_to_flag & SCE_SNAP_TO_GRID) {
       sctx->grid.use_init_co = init_co != nullptr;
+      if (params->grid_size) {
+        sctx->grid.size = params->grid_size;
+      }
       if (!compare_m4m4(sctx->grid.persmat.ptr(), rv3d->persmat, FLT_EPSILON)) {
         sctx->grid.persmat = float4x4(rv3d->persmat);
-        sctx->grid.size = ED_view3d_grid_view_scale(
-            sctx->scene, sctx->runtime.v3d, region, nullptr);
+        if (params->grid_size == 0.0f) {
+          sctx->grid.size = ED_view3d_grid_view_scale(
+              sctx->scene, sctx->runtime.v3d, region, nullptr);
+        }
 
         if (!sctx->grid.use_init_co) {
           memset(sctx->grid.planes, 0, sizeof(sctx->grid.planes));

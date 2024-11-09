@@ -42,6 +42,7 @@ namespace blender::nodes {
 
 using lf::LazyFunction;
 using mf::MultiFunction;
+using ReferenceSetIndex = int;
 
 /** The structs in here describe the different possible behaviors of a simulation input node. */
 namespace sim_input {
@@ -350,7 +351,7 @@ struct GeometryNodeLazyFunctionGraphMapping {
   /* Indexed by #bNodeSocket::index_in_all_outputs. */
   Array<int> lf_input_index_for_output_bsocket_usage;
   /* Indexed by #bNodeSocket::index_in_all_outputs. */
-  Array<int> lf_input_index_for_attribute_propagation_to_output;
+  Array<int> lf_input_index_for_reference_set_for_output;
   /* Indexed by #bNodeSocket::index_in_tree. */
   Array<int> lf_index_by_bsocket;
 };
@@ -384,7 +385,7 @@ struct GeometryNodesGroupFunction {
     struct {
       IndexRange range;
       Vector<int> geometry_outputs;
-    } attributes_to_propagate;
+    } references_to_propagate;
   } inputs;
 
   struct {
@@ -501,6 +502,34 @@ class ScopedComputeContextTimer {
   }
 };
 
+/**
+ * Utility to measure the time that is spend in a specific node during geometry nodes evaluation.
+ */
+class ScopedNodeTimer {
+ private:
+  const lf::Context &context_;
+  const bNode &node_;
+  geo_eval_log::TimePoint start_;
+
+ public:
+  ScopedNodeTimer(const lf::Context &context, const bNode &node) : context_(context), node_(node)
+  {
+    start_ = geo_eval_log::Clock::now();
+  }
+
+  ~ScopedNodeTimer()
+  {
+    const geo_eval_log::TimePoint end = geo_eval_log::Clock::now();
+    auto &user_data = static_cast<GeoNodesLFUserData &>(*context_.user_data);
+    auto &local_user_data = static_cast<GeoNodesLFLocalUserData &>(*context_.local_user_data);
+    if (geo_eval_log::GeoTreeLogger *tree_logger = local_user_data.try_get_tree_logger(user_data))
+    {
+      tree_logger->node_execution_times.append(*tree_logger->allocator,
+                                               {node_.identifier, start_, end});
+    }
+  }
+};
+
 bool should_log_socket_values_for_context(const GeoNodesLFUserData &user_data,
                                           const ComputeContextHash hash);
 
@@ -520,13 +549,7 @@ struct ZoneFunctionIndices {
     Vector<int> main;
     Vector<int> border_links;
     Vector<int> output_usages;
-    /**
-     * Some attribute sets are input into the body of a zone from the outside. These two
-     * maps indicate which zone function inputs corresponds to attribute set. Attribute sets are
-     * identified by either a "field source index" or "caller propagation index".
-     */
-    Map<int, int> attributes_by_field_source_index;
-    Map<int, int> attributes_by_caller_propagation_index;
+    Map<ReferenceSetIndex, int> reference_sets;
   } inputs;
   struct {
     Vector<int> main;

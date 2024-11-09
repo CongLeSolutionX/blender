@@ -324,6 +324,8 @@ class LazyFunctionForForeachGeometryElementZone : public LazyFunction {
 
   void execute_impl(lf::Params &params, const lf::Context &context) const override
   {
+    const ScopedNodeTimer node_timer{context, output_bnode_};
+
     auto &user_data = *static_cast<GeoNodesLFUserData *>(context.user_data);
     auto &local_user_data = *static_cast<GeoNodesLFLocalUserData *>(context.local_user_data);
 
@@ -331,16 +333,6 @@ class LazyFunctionForForeachGeometryElementZone : public LazyFunction {
         output_bnode_.storage);
     auto &eval_storage = *static_cast<ForeachGeometryElementEvalStorage *>(context.storage);
     geo_eval_log::GeoTreeLogger *tree_logger = local_user_data.try_get_tree_logger(user_data);
-
-    /* Measure execution time of the entire zone. */
-    const geo_eval_log::TimePoint start_time = geo_eval_log::Clock::now();
-    BLI_SCOPED_DEFER([&]() {
-      if (tree_logger) {
-        const geo_eval_log::TimePoint end_time = geo_eval_log::Clock::now();
-        tree_logger->node_execution_times.append(*tree_logger->allocator,
-                                                 {output_bnode_.identifier, start_time, end_time});
-      }
-    });
 
     if (!eval_storage.graph_executor) {
       /* Create the execution graph in the first evaluation. */
@@ -698,19 +690,10 @@ class LazyFunctionForForeachGeometryElementZone : public LazyFunction {
               *graph_inputs[zone_info_.indices.inputs.border_links[border_link_i]],
               lf_body_node.input(body_fn_.indices.inputs.border_links[border_link_i]));
         }
-        /* Link up attribute propagation information. */
-        for (const auto item : body_fn_.indices.inputs.attributes_by_field_source_index.items()) {
+        /* Link up reference sets. */
+        for (const auto &item : body_fn_.indices.inputs.reference_sets.items()) {
           lf_graph.add_link(
-              *graph_inputs[zone_info_.indices.inputs.attributes_by_field_source_index.lookup(
-                  item.key)],
-              lf_body_node.input(item.value));
-        }
-        for (const auto item :
-             body_fn_.indices.inputs.attributes_by_caller_propagation_index.items())
-        {
-          lf_graph.add_link(
-              *graph_inputs[zone_info_.indices.inputs.attributes_by_caller_propagation_index
-                                .lookup(item.key)],
+              *graph_inputs[zone_info_.indices.inputs.reference_sets.lookup(item.key)],
               lf_body_node.input(item.value));
         }
       }

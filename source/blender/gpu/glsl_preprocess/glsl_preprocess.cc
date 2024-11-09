@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2001-2002 NaN Holding BV. All rights reserved.
+/* SPDX-FileCopyrightText: 2024 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -6,11 +6,12 @@
  * \ingroup glsl_preprocess
  */
 
-#include <algorithm>
 #include <fstream>
 #include <iostream>
+#include <regex>
 #include <string>
-#include <vector>
+
+#include "glsl_preprocess.hh"
 
 int main(int argc, char **argv)
 {
@@ -30,42 +31,75 @@ int main(int argc, char **argv)
   }
 
   /* Open the output file for writing */
-  std::ofstream output_file(output_file_name);
+  std::ofstream output_file(output_file_name, std::ofstream::out | std::ofstream::binary);
   if (!output_file) {
     std::cerr << "Error: Could not open output file " << output_file_name << std::endl;
     input_file.close();
     exit(1);
   }
 
-  bool first_comment = true;
-  bool inside_comment = false;
+  std::stringstream buffer;
+  buffer << input_file.rdbuf();
 
-  std::string line;
-  while (std::getline(input_file, line)) {
-    /* Remove licence headers (first comment). */
-    if (line.rfind("/*", 0) == 0 && first_comment) {
-      first_comment = false;
-      inside_comment = true;
+  int error = 0;
+
+  auto count_lines = [](const std::string &str) {
+    size_t lines = 0;
+    for (char c : str) {
+      if (c == '\n') {
+        lines++;
+      }
     }
+    return lines;
+  };
 
-    const bool skip_line = inside_comment;
-
-    if (inside_comment && (line.find("*/") != std::string::npos)) {
-      inside_comment = false;
+  auto get_line = [&](size_t line) {
+    std::string src = buffer.str();
+    size_t start = 0, end;
+    for (; line > 1; line--) {
+      start = src.find('\n', start + 1);
     }
+    end = src.find('\n', start + 1);
+    return src.substr(start + 1, end - (start + 1));
+  };
 
-    if (skip_line) {
-      line = "";
-    }
-    else if (line.rfind("#include ", 0) == 0 || line.rfind("#pragma once", 0) == 0) {
-      line[0] = line[1] = '/';
-    }
+  auto report_error = [&](const std::smatch &match, const char *err_msg) {
+    size_t remaining_lines = count_lines(match.suffix());
+    size_t total_lines = count_lines(buffer.str());
 
-    output_file << line << "\n";
+    size_t err_line = 1 + total_lines - remaining_lines;
+    size_t err_char = (match.prefix().str().size() - 1) - match.prefix().str().rfind('\n');
+
+    std::cerr << input_file_name;
+    std::cerr << ':' << std::to_string(err_line) << ':' << std::to_string(err_char);
+    std::cerr << ": error: " << err_msg << std::endl;
+    std::cerr << get_line(err_line) << std::endl;
+    std::cerr << std::string(err_char, ' ') << '^' << std::endl;
+
+    error++;
+  };
+  std::string filename(output_file_name);
+  const bool is_info = filename.find("info.hh") != std::string::npos;
+  const bool is_glsl = filename.find(".glsl") != std::string::npos;
+  const bool is_shared = filename.find("shared.h") != std::string::npos;
+  const bool is_library = is_glsl &&
+                          (filename.find("gpu_shader_material_") != std::string::npos ||
+                           filename.find("gpu_shader_common_") != std::string::npos ||
+                           filename.find("gpu_shader_compositor_") != std::string::npos);
+
+  if (is_info) {
+    std::cerr << "File " << output_file_name
+              << " is a create info file and should not be processed as glsl" << std::endl;
+    return 1;
   }
+
+  blender::gpu::shader::Preprocessor processor;
+
+  output_file << processor.process(
+      buffer.str(), input_file_name, true, is_library, is_glsl, is_glsl, is_shared, report_error);
 
   input_file.close();
   output_file.close();
 
-  return 0;
+  return error;
 }

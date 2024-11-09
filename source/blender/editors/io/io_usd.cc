@@ -162,7 +162,7 @@ const EnumPropertyItem rna_enum_usd_tex_export_mode_items[] = {
      "PRESERVE",
      0,
      "Preserve",
-     "Preserve file paths of textures from already imported USD files."
+     "Preserve file paths of textures from already imported USD files.\n"
      "Export remaining textures to a 'textures' folder next to the USD file"},
     {USD_TEX_EXPORT_NEW_PATH,
      "NEW",
@@ -189,7 +189,7 @@ const EnumPropertyItem rna_enum_usd_mtl_purpose_items[] = {
      "Full",
      "Attempt to import 'full' materials. "
      "Load 'allPurpose' or 'preview' materials, in that order, as a fallback"},
-    {0, NULL, 0, NULL, NULL},
+    {0, nullptr, 0, nullptr, nullptr},
 };
 
 /* Stored in the wmOperator's customdata field to indicate it should run as a background job.

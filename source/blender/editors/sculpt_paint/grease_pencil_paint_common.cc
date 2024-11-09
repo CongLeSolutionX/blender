@@ -104,8 +104,6 @@ float brush_point_influence(const Scene &scene,
   return influence_base * brush_falloff;
 }
 
-/* Compute the closest distance to the "surface". When the point is outside the polygon, compute
- * the closest distance to the polygon points. When the point is inside the polygon return 0.*/
 float closest_distance_to_surface_2d(const float2 pt, const Span<float2> verts)
 {
   int j = verts.size() - 1;
@@ -297,7 +295,7 @@ IndexMask point_selection_mask(const GreasePencilStrokeParams &params,
 {
 
   return (use_masking ? ed::greasepencil::retrieve_editable_and_selected_points(
-                            params.ob_eval, params.drawing, params.layer_index, memory) :
+                            params.ob_orig, params.drawing, params.layer_index, memory) :
                         params.drawing.strokes().points_range());
 }
 
@@ -307,7 +305,7 @@ IndexMask stroke_selection_mask(const GreasePencilStrokeParams &params,
 {
 
   return (use_masking ? ed::greasepencil::retrieve_editable_and_selected_strokes(
-                            params.ob_eval, params.drawing, params.layer_index, memory) :
+                            params.ob_orig, params.drawing, params.layer_index, memory) :
                         params.drawing.strokes().curves_range());
 }
 
@@ -316,7 +314,7 @@ IndexMask fill_selection_mask(const GreasePencilStrokeParams &params,
                               IndexMaskMemory &memory)
 {
   return (use_masking ? ed::greasepencil::retrieve_editable_and_selected_fill_strokes(
-                            params.ob_eval, params.drawing, params.layer_index, memory) :
+                            params.ob_orig, params.drawing, params.layer_index, memory) :
                         params.drawing.strokes().curves_range());
 }
 
