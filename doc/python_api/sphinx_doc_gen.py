@@ -1176,8 +1176,6 @@ context_type_map = {
     "active_annotation_layer": [("GPencilLayer", False)],
     "active_bone": [("EditBone", False), ("Bone", False)],
     "active_file": [("FileSelectEntry", False)],
-    "active_gpencil_frame": [("GreasePencilLayer", True)],
-    "active_gpencil_layer": [("GPencilLayer", True)],
     "active_node": [("Node", False)],
     "active_object": [("Object", False)],
     "active_operator": [("Operator", False)],
@@ -1209,9 +1207,7 @@ context_type_map = {
     "editable_fcurves": [("FCurve", True)],
     "fluid": [("FluidSimulationModifier", False)],
     "gpencil": [("GreasePencil", False)],
-    "gpencil_data": [("GreasePencil", False)],
     "grease_pencil": [("GreasePencilv3", False)],
-    "gpencil_data_owner": [("ID", False)],
     "curves": [("Hair Curves", False)],
     "id": [("ID", False)],
     "image_paint_object": [("Object", False)],
@@ -1268,7 +1264,6 @@ context_type_map = {
     "vertex_paint_object": [("Object", False)],
     "view_layer": [("ViewLayer", False)],
     "visible_bones": [("EditBone", True)],
-    "visible_gpencil_layers": [("GPencilLayer", True)],
     "visible_objects": [("Object", True)],
     "visible_pose_bones": [("PoseBone", True)],
     "visible_fcurves": [("FCurve", True)],
@@ -1658,7 +1653,7 @@ def pyrna2sphinx(basepath):
         del key, descr
 
         for func in struct.functions:
-            args_kw_only_index = next((i for i in i, prop in enumerate(func.args) if not prop.is_required), -1)
+            args_kw_only_index = next((i for i, prop in enumerate(func.args) if not prop.is_required), -1)
             if args_kw_only_index == -1:
                 args_str = ", ".join(prop.get_arg_default(force=False) for prop in func.args)
             else:
