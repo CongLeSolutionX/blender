@@ -5,3 +5,4 @@ Referenced by commit 115a925ffed0a2a4fec7e6780f05382cbbbb02eb, Fix: Incremental 
 Referenced by issue #69342, Snapping: Make 'Absolute Grid Snapping' a new Snap Mode
 Referenced by issue #126665, New Snap To Grid snaps to "floor"/"visible" 2-dimensional grid only (4.1 was a 3-dimensional grid)
 Referenced by pull request #128135, Fix #126665: Restore 'Absolute Grid Snap' option
+Referenced by issue #130078, Add cube tool grid snapping will not work on top of other objects
