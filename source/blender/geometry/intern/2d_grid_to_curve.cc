@@ -21,7 +21,7 @@
 #  include "BLI_offset_indices.hh"
 #  include "BLI_task.hh"
 
-#  include "GEO_curve_plane.hh"
+#  include "GEO_2d_grid_to_curve.hh"
 
 namespace blender::geometry {
 

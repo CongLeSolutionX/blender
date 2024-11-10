@@ -135,11 +135,11 @@ class NODE_MT_geometry_node_GEO_PRIMITIVES_CURVE(Menu):
 
     def draw(self, _context):
         layout = self.layout
+        node_add_menu.add_node_type(layout, "GeometryNode2DGridToCurve")
         node_add_menu.add_node_type(layout, "GeometryNodeCurveArc")
         node_add_menu.add_node_type(layout, "GeometryNodeCurvePrimitiveBezierSegment")
         node_add_menu.add_node_type(layout, "GeometryNodeCurvePrimitiveCircle")
         node_add_menu.add_node_type(layout, "GeometryNodeCurvePrimitiveLine")
-        node_add_menu.add_node_type(layout, "GeometryNodeCurvePlane")
         node_add_menu.add_node_type(layout, "GeometryNodeCurveSpiral")
         node_add_menu.add_node_type(layout, "GeometryNodeCurveQuadraticBezier")
         node_add_menu.add_node_type(layout, "GeometryNodeCurvePrimitiveQuadrilateral")

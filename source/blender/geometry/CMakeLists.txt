@@ -16,9 +16,9 @@ set(INC_SYS
 )
 
 set(SRC
+  intern/2d_grid_to_curve.cc
   intern/add_curves_on_mesh.cc
   intern/curve_constraints.cc
-  intern/curve_plane.cc
   intern/extend_curves.cc
   intern/extract_elements.cc
   intern/fillet_curves.cc
@@ -57,9 +57,9 @@ set(SRC
   intern/uv_parametrizer.cc
   intern/volume_grid_resample.cc
 
+  GEO_2d_grid_to_curve.hh
   GEO_add_curves_on_mesh.hh
   GEO_curve_constraints.hh
-  GEO_curve_plane.hh
   GEO_extend_curves.hh
   GEO_extract_elements.hh
   GEO_fillet_curves.hh

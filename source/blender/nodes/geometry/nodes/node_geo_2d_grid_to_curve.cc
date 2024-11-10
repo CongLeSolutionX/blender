@@ -8,11 +8,11 @@
 #include "BLI_index_mask.hh"
 #include "BLI_task.hh"
 
-#include "GEO_curve_plane.hh"
+#include "GEO_2d_grid_to_curve.hh"
 
 #include "node_geometry_util.hh"
 
-namespace blender::nodes::node_geo_curve_plane_cc {
+namespace blender::nodes::node_geo_2d_grid_to_curve_cc {
 
 #ifdef WITH_POTRACE
 static constexpr const float smooth_max = geometry::potrace::Params::max_smooth_threshold;
@@ -24,10 +24,10 @@ static void node_declare(NodeDeclarationBuilder &b)
 {
   b.add_input<decl::Vector>("Min")
       .default_value(float3(float2(-1.0f), 0.0f))
-      .description("Minimum boundary of volume");
+      .description("Minimum boundary of grid");
   b.add_input<decl::Vector>("Max")
       .default_value(float3(float2(1.0f), 0.0f))
-      .description("Maximum boundary of volume");
+      .description("Maximum boundary of grid");
 
   b.add_input<decl::Int>("Resolution X").default_value(32).min(2);
   b.add_input<decl::Int>("Resolution Y").default_value(32).min(2);
@@ -35,7 +35,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Float>("Smooth Threshold").default_value(1.0f).min(0.0f).max(smooth_max);
   b.add_input<decl::Float>("Simplify").default_value(0.2f).min(0.0f);
 
-  b.add_input<decl::Bool>("Pixel Value").supports_field().hide_value();
+  b.add_input<decl::Bool>("Grid Value").supports_field().hide_value();
 
   b.add_output<decl::Geometry>("Curve");
   b.add_output<decl::Int>("Parent Curve").description("Index of curve around").field_on_all();
@@ -134,7 +134,7 @@ static void node_geo_exec(GeoNodeExecParams params)
 
   FieldEvaluator evaluator(context, context.points_num());
 
-  Field<bool> input_field = params.extract_input<Field<bool>>("Pixel Value");
+  Field<bool> input_field = params.extract_input<Field<bool>>("Grid Value");
   evaluator.set_selection(std::move(input_field));
   evaluator.evaluate();
 
@@ -183,11 +183,11 @@ static void node_geo_exec(GeoNodeExecParams params)
 static void node_register()
 {
   static blender::bke::bNodeType ntype;
-  geo_node_type_base(&ntype, GEO_NODE_CURVE_PLANE, "Curve Plane", NODE_CLASS_GEOMETRY);
+  geo_node_type_base(&ntype, GEO_NODE_2D_GRID_TO_CURVE, "2D Grid to Curve", NODE_CLASS_GEOMETRY);
   ntype.declare = node_declare;
   ntype.geometry_node_execute = node_geo_exec;
   blender::bke::node_register_type(&ntype);
 }
 NOD_REGISTER_NODE(node_register)
 
-}  // namespace blender::nodes::node_geo_curve_plane_cc
+}  // namespace blender::nodes::node_geo_2d_grid_to_curve_cc

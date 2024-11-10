@@ -32,6 +32,7 @@ set(INC_SYS
 )
 
 set(SRC
+  nodes/node_geo_2d_grid_to_curve.cc
   nodes/node_geo_accumulate_field.cc
   nodes/node_geo_attribute_capture.cc
   nodes/node_geo_attribute_domain_size.cc
@@ -48,7 +49,6 @@ set(SRC
   nodes/node_geo_curve_fillet.cc
   nodes/node_geo_curve_handle_type_selection.cc
   nodes/node_geo_curve_length.cc
-  nodes/node_geo_curve_plane.cc
   nodes/node_geo_curve_primitive_arc.cc
   nodes/node_geo_curve_primitive_bezier_segment.cc
   nodes/node_geo_curve_primitive_circle.cc
