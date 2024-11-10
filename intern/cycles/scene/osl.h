@@ -51,16 +51,65 @@ struct OSLShaderInfo {
   bool has_surface_bssrdf;
 };
 
+class OSLManager {
+ public:
+  OSLManager(Device *device);
+  ~OSLManager();
+
+  static void free_memory();
+
+  void reset(Scene *scene);
+
+  void device_update_pre(Device *device, DeviceScene *dscene, Scene *scene, Progress &progress);
+  void device_update_post(Device *device, DeviceScene *dscene, Scene *scene, Progress &progress);
+  void device_free(Device *device, DeviceScene *dscene, Scene *scene);
+
+  /* osl compile and query */
+  static bool osl_compile(const string &inputfile, const string &outputfile);
+  static bool osl_query(OSL::OSLQuery &query, const string &filepath);
+
+  /* shader file loading, all functions return pointer to hash string if found */
+  const char *shader_test_loaded(const string &hash);
+  const char *shader_load_bytecode(const string &hash, const string &bytecode);
+  const char *shader_load_filepath(string filepath);
+  OSLShaderInfo *shader_loaded_info(const string &hash);
+
+  OSL::ShadingSystem *get_shading_system(Device *sub_device);
+
+  void tag_update();
+  bool need_update() const;
+
+ private:
+  void texture_system_init();
+  void texture_system_free();
+
+  void shading_system_init();
+  void shading_system_free();
+
+  Device *device_;
+  map<string, OSLShaderInfo> loaded_shaders;
+
+  bool has_shading_system;
+  bool has_texture_system;
+
+  static OSL::TextureSystem *ts_shared;
+  static thread_mutex ts_shared_mutex;
+  static int ts_shared_users;
+
+  static OSL::ErrorHandler errhandler;
+  static map<int, OSL::ShadingSystem *> ss_shared;
+  static thread_mutex ss_shared_mutex;
+  static int ss_shared_users;
+
+  bool need_update_;
+};
+
 /* Shader Manage */
 
 class OSLShaderManager : public ShaderManager {
  public:
-  OSLShaderManager(Device *device);
+  OSLShaderManager();
   ~OSLShaderManager();
-
-  static void free_memory();
-
-  void reset(Scene *scene) override;
 
   bool use_osl() override
   {
@@ -76,45 +125,15 @@ class OSLShaderManager : public ShaderManager {
                               Progress &progress) override;
   void device_free(Device *device, DeviceScene *dscene, Scene *scene) override;
 
-  /* osl compile and query */
-  static bool osl_compile(const string &inputfile, const string &outputfile);
-  static bool osl_query(OSL::OSLQuery &query, const string &filepath);
-
-  /* shader file loading, all functions return pointer to hash string if found */
-  const char *shader_test_loaded(const string &hash);
-  const char *shader_load_bytecode(const string &hash, const string &bytecode);
-  const char *shader_load_filepath(string filepath);
-  OSLShaderInfo *shader_loaded_info(const string &hash);
-
   /* create OSL node using OSLQuery */
   static OSLNode *osl_node(ShaderGraph *graph,
-                           ShaderManager *manager,
+                           Scene *scene,
                            const std::string &filepath,
                            const std::string &bytecode_hash = "",
                            const std::string &bytecode = "");
 
   /* Get image slots used by OSL services on device. */
   static void osl_image_slots(Device *device, ImageManager *image_manager, set<int> &image_slots);
-
- private:
-  void texture_system_init();
-  void texture_system_free();
-
-  void shading_system_init();
-  void shading_system_free();
-
-  Device *device_;
-  map<string, OSLShaderInfo> loaded_shaders;
-
-  static OSL::TextureSystem *ts_shared;
-  static thread_mutex ts_shared_mutex;
-  static int ts_shared_users;
-
-  static OSL::ErrorHandler errhandler;
-  static map<int, OSL::ShadingSystem *> ss_shared;
-  static thread_mutex ss_shared_mutex;
-  static thread_mutex ss_mutex;
-  static int ss_shared_users;
 };
 
 #endif

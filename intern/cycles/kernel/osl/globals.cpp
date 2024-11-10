@@ -17,7 +17,7 @@ CCL_NAMESPACE_BEGIN
 void OSLGlobals::thread_init(KernelGlobalsCPU *kg, OSLGlobals *osl_globals, const int thread_index)
 {
   /* no osl used? */
-  if (!osl_globals->use) {
+  if (!(osl_globals->use_shading || osl_globals->use_camera)) {
     kg->osl = NULL;
     return;
   }

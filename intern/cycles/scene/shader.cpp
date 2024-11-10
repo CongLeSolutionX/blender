@@ -435,16 +435,15 @@ ShaderManager::ShaderManager()
 
 ShaderManager::~ShaderManager() {}
 
-ShaderManager *ShaderManager::create(int shadingsystem, Device *device)
+ShaderManager *ShaderManager::create(int shadingsystem)
 {
   ShaderManager *manager;
 
   (void)shadingsystem; /* Ignored when built without OSL. */
-  (void)device;
 
 #ifdef WITH_OSL
   if (shadingsystem == SHADINGSYSTEM_OSL) {
-    manager = new OSLShaderManager(device);
+    manager = new OSLShaderManager();
   }
   else
 #endif
@@ -789,21 +788,11 @@ uint ShaderManager::get_kernel_features(Scene *scene)
     }
   }
 
-  if (use_osl()) {
-    kernel_features |= KERNEL_FEATURE_OSL;  // TODO Camera
+  if (use_osl() || false) {  // TODO Camera
+    kernel_features |= KERNEL_FEATURE_OSL;
   }
 
   return kernel_features;
-}
-
-void ShaderManager::free_memory()
-{
-
-#ifdef WITH_OSL
-  OSLShaderManager::free_memory();
-#endif
-
-  ColorSpaceManager::free_memory();
 }
 
 float ShaderManager::linear_rgb_to_gray(float3 c)

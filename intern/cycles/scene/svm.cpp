@@ -27,8 +27,6 @@ SVMShaderManager::SVMShaderManager() {}
 
 SVMShaderManager::~SVMShaderManager() {}
 
-void SVMShaderManager::reset(Scene * /*scene*/) {}
-
 void SVMShaderManager::device_update_shader(Scene *scene,
                                             Shader *shader,
                                             Progress *progress,

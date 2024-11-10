@@ -308,9 +308,7 @@ static void xml_read_shader_graph(XMLReadState &state, Shader *shader, xml_node 
 
 #ifdef WITH_OSL
     if (node_name == "osl_shader") {
-      ShaderManager *manager = state.scene->shader_manager;
-
-      if (manager->use_osl()) {
+      if (state.scene->shader_manager->use_osl()) {
         std::string filepath;
 
         if (xml_read_string(&filepath, node, "src")) {
@@ -318,7 +316,7 @@ static void xml_read_shader_graph(XMLReadState &state, Shader *shader, xml_node 
             filepath = path_join(state.base, filepath);
           }
 
-          snode = OSLShaderManager::osl_node(graph, manager, filepath, "");
+          snode = OSLShaderManager::osl_node(graph, state.scene, filepath, "");
 
           if (!snode) {
             fprintf(stderr, "Failed to create OSL node from \"%s\".\n", filepath.c_str());

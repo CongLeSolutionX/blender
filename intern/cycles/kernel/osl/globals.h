@@ -41,7 +41,8 @@ struct OSLGlobals {
     ss = NULL;
     ts = NULL;
     services = NULL;
-    use = false;
+    use_shading = false;
+    use_camera = false;
   }
 
   /* per thread data */
@@ -50,7 +51,8 @@ struct OSLGlobals {
                           const int thread_init);
   static void thread_free(struct KernelGlobalsCPU *kg);
 
-  bool use;
+  bool use_shading;
+  bool use_camera;
 
   /* shading system */
   OSL::ShadingSystem *ss;
