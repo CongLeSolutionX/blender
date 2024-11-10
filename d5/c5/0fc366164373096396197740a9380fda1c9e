@@ -1,0 +1,1 @@
+Referenced by issue #129699, Python: declaring __init__ for an operator causes RuntimeError
