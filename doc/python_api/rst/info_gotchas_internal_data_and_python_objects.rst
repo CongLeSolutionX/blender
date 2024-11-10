@@ -26,7 +26,7 @@ Relying on this behavior from Python code side for any purpose is not recommende
 Further more, Blender may free its internal data, in which case it will try to invalidate a known
 Python object wrapping it. But this is not always possible, which can lead to invalid memory access and
 is another good reason to never store these in Python code in any persistent way.
-See also the :ref:`troubleshooting crashes <_troubleshooting_crashes>` documentation.
+See also the :ref:`troubleshooting crashes <troubleshooting_crashes>` documentation.
 
 
 Data Names
