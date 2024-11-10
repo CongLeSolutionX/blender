@@ -3901,6 +3901,16 @@ void GreasePencil::remove_layer(blender::bke::greasepencil::Layer &layer)
   MEM_delete(&layer);
 }
 
+static void remove_layer_from_group(GreasePencil *grease_pencil,
+                                    blender::bke::greasepencil::LayerGroup &group)
+{
+  using namespace blender::bke::greasepencil;
+  /* Remove all the layers. */
+  for (Layer *layer : group.layers_for_write()) {
+    grease_pencil->remove_layer(*layer);
+  }
+}
+
 void GreasePencil::remove_group(blender::bke::greasepencil::LayerGroup &group,
                                 const bool keep_children)
 {
@@ -3909,20 +3919,24 @@ void GreasePencil::remove_group(blender::bke::greasepencil::LayerGroup &group,
   update_active_node(*this, group.as_node());
 
   if (!keep_children) {
-    /* Recursively remove sub groups. */
-    for (LayerGroup *sub_group : group.groups_for_write()) {
-      this->remove_group(*sub_group, false);
-    }
+    /* Iterate in reverse order. */
+    Span<LayerGroup *> groups = group.groups_for_write();
 
-    /* Remove all the layers. */
-    for (Layer *layer : group.layers_for_write()) {
-      this->remove_layer(*layer);
+    for (int index = groups.size() - 1; index >= 0; index--) {
+      LayerGroup &sub_group = *groups[index];
+
+      remove_layer_from_group(this, sub_group);
+
+      /* Unlink then delete group node. */
+      sub_group.as_node().parent_group()->unlink_node(sub_group.as_node(), false);
+      MEM_delete(&sub_group);
     }
+    /* Remove layers of active group. */
+    remove_layer_from_group(this, group);
   }
-  /* Unlink the group. Keep the children if we want to keep them. */
-  group.as_node().parent_group()->unlink_node(group.as_node(), keep_children);
 
-  /* Delete the group. */
+  /* Unlink then delete active group node. */
+  group.as_node().parent_group()->unlink_node(group.as_node(), true);
   MEM_delete(&group);
 }
 
