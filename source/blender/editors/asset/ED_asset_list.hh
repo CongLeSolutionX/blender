@@ -99,6 +99,8 @@ asset_system::AssetRepresentation *asset_get_by_index(
 
 bool asset_image_is_loading(const AssetLibraryReference *library_reference,
                             const AssetHandle *asset_handle);
+void asset_preview_ensure_requested(const AssetLibraryReference *library_reference,
+                                    AssetHandle *asset_handle);
 ImBuf *asset_image_get(const AssetHandle *asset_handle);
 
 /**

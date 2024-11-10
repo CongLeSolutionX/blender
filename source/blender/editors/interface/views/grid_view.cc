@@ -472,7 +472,8 @@ PreviewGridItem::PreviewGridItem(StringRef identifier, StringRef label, int prev
 {
 }
 
-void PreviewGridItem::build_grid_tile_button(uiLayout &layout) const
+void PreviewGridItem::build_grid_tile_button(uiLayout &layout,
+                                             BIFIconID override_preview_icon_id) const
 {
   const GridViewStyle &style = this->get_view().get_style();
   uiBlock *block = uiLayoutGetBlock(&layout);
@@ -493,14 +494,15 @@ void PreviewGridItem::build_grid_tile_button(uiLayout &layout) const
                         0,
                         "");
 
+  const BIFIconID icon_id = override_preview_icon_id ? override_preview_icon_id : preview_icon_id;
+
   /* Draw icons that are not previews or images as normal icons with a fixed icon size. Otherwise
    * they will be upscaled to the button size. Should probably be done by the widget code. */
-  const int is_preview_flag = (BKE_icon_is_preview(preview_icon_id) ||
-                               BKE_icon_is_image(preview_icon_id)) ?
+  const int is_preview_flag = (BKE_icon_is_preview(icon_id) || BKE_icon_is_image(icon_id)) ?
                                   int(UI_BUT_ICON_PREVIEW) :
                                   0;
   ui_def_but_icon(but,
-                  preview_icon_id,
+                  icon_id,
                   /* NOLINTNEXTLINE: bugprone-suspicious-enum-usage */
                   UI_HAS_ICON | is_preview_flag);
   but->emboss = UI_EMBOSS_NONE;

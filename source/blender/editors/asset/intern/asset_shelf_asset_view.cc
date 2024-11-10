@@ -121,12 +121,7 @@ void AssetView::build_items()
     const bool show_names = (shelf_.settings.display_flag & ASSETSHELF_SHOW_NAMES);
 
     const StringRef identifier = asset->library_relative_identifier();
-    const int preview_id = [&]() -> int {
-      if (list::asset_image_is_loading(&library_ref_, &asset_handle)) {
-        return ICON_TEMP;
-      }
-      return handle_get_preview_or_type_icon_id(&asset_handle);
-    }();
+    const int preview_id = handle_get_preview_or_type_icon_id(&asset_handle);
 
     AssetViewItem &item = this->add_item<AssetViewItem>(
         asset_handle, identifier, asset->get_name(), preview_id);
@@ -259,7 +254,20 @@ void AssetViewItem::build_grid_tile(uiLayout &layout) const
       const_cast<asset_system::AssetRepresentation *>(asset),
       nullptr);
 
-  ui::PreviewGridItem::build_grid_tile_button(layout);
+  /* Request preview when drawing. Grid views have an optimization to only draw items that are
+   * actually visible, so only previews scrolled into view will be loaded this way. This reduces
+   * total loading time and memory footprint. */
+  list::asset_preview_ensure_requested(&asset_view.library_ref_,
+                                       const_cast<AssetHandle *>(&asset_));
+
+  const int preview_id = [&]() -> int {
+    if (list::asset_image_is_loading(&asset_view.library_ref_, &asset_)) {
+      return ICON_TEMP;
+    }
+    return handle_get_preview_or_type_icon_id(&asset_);
+  }();
+
+  ui::PreviewGridItem::build_grid_tile_button(layout, preview_id);
 }
 
 void AssetViewItem::build_context_menu(bContext &C, uiLayout &column) const

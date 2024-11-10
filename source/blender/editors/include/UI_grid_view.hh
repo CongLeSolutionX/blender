@@ -208,7 +208,8 @@ class PreviewGridItem : public AbstractGridViewItem {
 
   void build_grid_tile(uiLayout &layout) const override;
 
-  void build_grid_tile_button(uiLayout &layout) const;
+  void build_grid_tile_button(uiLayout &layout,
+                              BIFIconID override_preview_icon_id = ICON_NONE) const;
 
   /**
    * Set a custom callback to execute when activating this view item. This way users don't have to

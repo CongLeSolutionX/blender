@@ -122,6 +122,7 @@ class AssetList : NonCopyable {
   bool needs_refetch() const;
   bool is_loaded() const;
   bool is_asset_preview_loading(const AssetHandle &asset) const;
+  void ensure_asset_preview_fetched(AssetHandle &asset);
   asset_system::AssetLibrary *asset_library() const;
   void iterate(AssetListHandleIterFn fn) const;
   void iterate(AssetListIterFn fn) const;
@@ -155,6 +156,7 @@ void AssetList::setup()
       true,
       "",
       "");
+  filelist_set_no_preview_auto_cache(files);
 
   const bool use_asset_indexer = !USER_EXPERIMENTAL_TEST(&U, no_asset_indexing);
   filelist_setindexer(files, use_asset_indexer ? &index::file_indexer_asset : &file_indexer_noop);
@@ -192,6 +194,11 @@ bool AssetList::needs_refetch() const
 bool AssetList::is_loaded() const
 {
   return filelist_is_ready(filelist_);
+}
+
+void AssetList::ensure_asset_preview_fetched(AssetHandle &asset)
+{
+  filelist_file_ensure_preview_fetched(filelist_, const_cast<FileDirEntry *>(asset.file_data));
 }
 
 bool AssetList::is_asset_preview_loading(const AssetHandle &asset) const
@@ -243,14 +250,10 @@ void AssetList::iterate(AssetListIterFn fn) const
 void AssetList::ensure_previews_job(const bContext *C)
 {
   FileList *files = filelist_;
-  int numfiles = filelist_files_ensure(files);
 
-  filelist_cache_previews_set(files, true);
-  /* TODO fetch all previews for now. */
-  /* Add one extra entry to ensure nothing is lost because of integer division. */
-  filelist_file_cache_slidingwindow_set(files, numfiles / 2 + 1);
-  filelist_file_cache_block(files, 0);
+  filelist_cache_previews_set(filelist_, true);
   filelist_cache_previews_update(files);
+  filelist_cache_previews_ensure_running(files);
 
   {
     const bool previews_running = filelist_cache_previews_running(files) &&
@@ -540,6 +543,13 @@ bool asset_image_is_loading(const AssetLibraryReference *library_reference,
 {
   const AssetList *list = lookup_list(*library_reference);
   return list->is_asset_preview_loading(*asset_handle);
+}
+
+void asset_preview_ensure_requested(const AssetLibraryReference *library_reference,
+                                    AssetHandle *asset_handle)
+{
+  AssetList *list = lookup_list(*library_reference);
+  list->ensure_asset_preview_fetched(*asset_handle);
 }
 
 ImBuf *asset_image_get(const AssetHandle *asset_handle)
