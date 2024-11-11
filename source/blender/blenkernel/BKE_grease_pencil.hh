@@ -537,7 +537,7 @@ class Layer : public ::GreasePencilLayer {
    * If there is no keyframe at \a frame_number \returns -1.
    * If the keyframe is an implicit hold, \returns 0.
    */
-  int get_frame_duration_at(const int frame_number, bool count_implicit_hold = false) const;
+  int get_frame_duration_at(const int frame_number) const;
 
   void tag_frames_map_changed();
 

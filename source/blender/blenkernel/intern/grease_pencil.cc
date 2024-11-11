@@ -1360,7 +1360,7 @@ bool Layer::has_drawing_at(const int frame_number) const
   return frame_at(frame_number) != nullptr;
 }
 
-int Layer::get_frame_duration_at(const int frame_number, bool count_implicit_hold) const
+int Layer::get_frame_duration_at(const int frame_number) const
 {
   SortedKeysIterator it = this->sorted_keys_iterator_at(frame_number);
   if (it == nullptr) {
@@ -1369,7 +1369,7 @@ int Layer::get_frame_duration_at(const int frame_number, bool count_implicit_hol
   const FramesMapKeyT key = *it;
   const GreasePencilFrame *frame = this->frames().lookup_ptr(key);
   /* For frames that are implicitly held, we return a duration of 0. */
-  if ((!count_implicit_hold) && frame->is_implicit_hold()) {
+  if (frame->is_implicit_hold()) {
     return 0;
   }
   /* Frame is an end frame, so there is no keyframe at `frame_number`. */

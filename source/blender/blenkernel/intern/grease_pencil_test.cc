@@ -300,8 +300,6 @@ TEST(greasepencil, get_frame_duration_at)
   /* Implicit hold. */
   EXPECT_EQ(ex.layer.get_frame_duration_at(0), 0);
   EXPECT_EQ(ex.layer.get_frame_duration_at(4), 0);
-  EXPECT_EQ(ex.layer.get_frame_duration_at(0, true), 5);
-  EXPECT_EQ(ex.layer.get_frame_duration_at(4, true), 5);
 
   EXPECT_EQ(ex.layer.get_frame_duration_at(5), 5);
   EXPECT_EQ(ex.layer.get_frame_duration_at(9), 5);
