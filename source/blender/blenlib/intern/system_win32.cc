@@ -434,10 +434,12 @@ static void bli_windows_exception_message_get(const EXCEPTION_POINTERS *exceptio
 /** \name bli_show_message_box
  * \{ */
 
-static std::string url_encode(const char *str)
+static std::string url_encode(const std::string &str)
 {
   std::ostringstream encoded;
-  while (char c = *str++) {
+  encoded << std::hex << std::uppercase;
+
+  for (const char c : str) {
     if (isalnum(c) || ELEM(c, '-', '_', '.', '~')) {
       encoded << c;
     }
@@ -445,8 +447,7 @@ static std::string url_encode(const char *str)
       encoded << '+';
     }
     else {
-      encoded << '%' << std::setw(2) << std::setfill('0') << std::hex << std::uppercase
-              << int(uchar(c));
+      encoded << '%' << std::setw(2) << std::setfill('0') << int(uchar(c));
     }
   }
   return encoded.str();
@@ -560,7 +561,7 @@ static void bli_show_message_box(const char *filepath,
             "https://redirect.blender.org/"
             "?type=bug_report"
             "&project=blender"
-            "&os=" + url_encode(get_os_info().c_str()) +
+            "&os=" + url_encode(get_os_info()) +
             "&gpu=" + url_encode(data_gpu_name) +
             "&broken_version=" + url_encode(data_build_version);
         /* clang-format on */
