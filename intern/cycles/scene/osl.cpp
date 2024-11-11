@@ -43,7 +43,6 @@ OSL::ErrorHandler OSLShaderManager::errhandler;
 map<int, OSL::ShadingSystem *> OSLShaderManager::ss_shared;
 int OSLShaderManager::ss_shared_users = 0;
 thread_mutex OSLShaderManager::ss_shared_mutex;
-thread_mutex OSLShaderManager::ss_mutex;
 
 int OSLCompiler::texture_shared_unique_id = 0;
 
@@ -122,11 +121,6 @@ void OSLShaderManager::device_update_specific(Device *device,
 
     if (progress.get_cancel())
       return;
-
-    /* we can only compile one shader at the time as the OSL ShadingSytem
-     * has a single state, but we put the lock here so different renders can
-     * compile shaders alternating */
-    thread_scoped_lock lock(ss_mutex);
 
     device->foreach_device(
         [this, scene, shader, background = (shader == background_shader)](Device *sub_device) {
@@ -840,13 +834,13 @@ void OSLCompiler::add(ShaderNode *node, const char *name, bool isfilepath)
   /* Create shader of the appropriate type. OSL only distinguishes between "surface"
    * and "displacement" at the moment. */
   if (current_type == SHADER_TYPE_SURFACE)
-    ss->Shader("surface", name, id(node).c_str());
+    ss->Shader(*current_group, "surface", name, id(node).c_str());
   else if (current_type == SHADER_TYPE_VOLUME)
-    ss->Shader("surface", name, id(node).c_str());
+    ss->Shader(*current_group, "surface", name, id(node).c_str());
   else if (current_type == SHADER_TYPE_DISPLACEMENT)
-    ss->Shader("displacement", name, id(node).c_str());
+    ss->Shader(*current_group, "displacement", name, id(node).c_str());
   else if (current_type == SHADER_TYPE_BUMP)
-    ss->Shader("displacement", name, id(node).c_str());
+    ss->Shader(*current_group, "displacement", name, id(node).c_str());
   else
     assert(0);
 
@@ -862,7 +856,8 @@ void OSLCompiler::add(ShaderNode *node, const char *name, bool isfilepath)
       string param_from = compatible_name(input->link->parent, input->link);
       string param_to = compatible_name(node, input);
 
-      ss->ConnectShaders(id_from.c_str(), param_from.c_str(), id_to.c_str(), param_to.c_str());
+      ss->ConnectShaders(
+          *current_group, id_from.c_str(), param_from.c_str(), id_to.c_str(), param_to.c_str());
     }
   }
 
@@ -914,59 +909,62 @@ void OSLCompiler::parameter(ShaderNode *node, const char *name)
   switch (socket.type) {
     case SocketType::BOOLEAN: {
       int value = node->get_bool(socket);
-      ss->Parameter(name, TypeInt, &value);
+      ss->Parameter(*current_group, name, TypeInt, &value);
       break;
     }
     case SocketType::FLOAT: {
       float value = node->get_float(socket);
-      ss->Parameter(uname, TypeFloat, &value);
+      ss->Parameter(*current_group, uname, TypeFloat, &value);
       break;
     }
     case SocketType::INT: {
       int value = node->get_int(socket);
-      ss->Parameter(uname, TypeInt, &value);
+      ss->Parameter(*current_group, uname, TypeInt, &value);
       break;
     }
     case SocketType::COLOR: {
       float3 value = node->get_float3(socket);
-      ss->Parameter(uname, TypeColor, &value);
+      ss->Parameter(*current_group, uname, TypeColor, &value);
       break;
     }
     case SocketType::VECTOR: {
       float3 value = node->get_float3(socket);
-      ss->Parameter(uname, TypeVector, &value);
+      ss->Parameter(*current_group, uname, TypeVector, &value);
       break;
     }
     case SocketType::POINT: {
       float3 value = node->get_float3(socket);
-      ss->Parameter(uname, TypePoint, &value);
+      ss->Parameter(*current_group, uname, TypePoint, &value);
       break;
     }
     case SocketType::NORMAL: {
       float3 value = node->get_float3(socket);
-      ss->Parameter(uname, TypeNormal, &value);
+      ss->Parameter(*current_group, uname, TypeNormal, &value);
       break;
     }
     case SocketType::POINT2: {
       float2 value = node->get_float2(socket);
-      ss->Parameter(uname, TypeDesc(TypeDesc::FLOAT, TypeDesc::VEC2, TypeDesc::POINT), &value);
+      ss->Parameter(*current_group,
+                    uname,
+                    TypeDesc(TypeDesc::FLOAT, TypeDesc::VEC2, TypeDesc::POINT),
+                    &value);
       break;
     }
     case SocketType::STRING: {
       ustring value = node->get_string(socket);
-      ss->Parameter(uname, TypeString, &value);
+      ss->Parameter(*current_group, uname, TypeString, &value);
       break;
     }
     case SocketType::ENUM: {
       ustring value = node->get_string(socket);
-      ss->Parameter(uname, TypeString, &value);
+      ss->Parameter(*current_group, uname, TypeString, &value);
       break;
     }
     case SocketType::TRANSFORM: {
       Transform value = node->get_transform(socket);
       ProjectionTransform projection(value);
       projection = projection_transpose(projection);
-      ss->Parameter(uname, TypeMatrix, &projection);
+      ss->Parameter(*current_group, uname, TypeMatrix, &projection);
       break;
     }
     case SocketType::BOOLEAN_ARRAY: {
@@ -975,17 +973,17 @@ void OSLCompiler::parameter(ShaderNode *node, const char *name)
       array<int> intvalue(value.size());
       for (size_t i = 0; i < value.size(); i++)
         intvalue[i] = value[i];
-      ss->Parameter(uname, array_typedesc(TypeInt, value.size()), intvalue.data());
+      ss->Parameter(*current_group, uname, array_typedesc(TypeInt, value.size()), intvalue.data());
       break;
     }
     case SocketType::FLOAT_ARRAY: {
       const array<float> &value = node->get_float_array(socket);
-      ss->Parameter(uname, array_typedesc(TypeFloat, value.size()), value.data());
+      ss->Parameter(*current_group, uname, array_typedesc(TypeFloat, value.size()), value.data());
       break;
     }
     case SocketType::INT_ARRAY: {
       const array<int> &value = node->get_int_array(socket);
-      ss->Parameter(uname, array_typedesc(TypeInt, value.size()), value.data());
+      ss->Parameter(*current_group, uname, array_typedesc(TypeInt, value.size()), value.data());
       break;
     }
     case SocketType::COLOR_ARRAY:
@@ -1021,12 +1019,13 @@ void OSLCompiler::parameter(ShaderNode *node, const char *name)
         fvalue[j++] = value[i].z;
       }
 
-      ss->Parameter(uname, array_typedesc(typedesc, value.size()), fvalue.data());
+      ss->Parameter(*current_group, uname, array_typedesc(typedesc, value.size()), fvalue.data());
       break;
     }
     case SocketType::POINT2_ARRAY: {
       const array<float2> &value = node->get_float2_array(socket);
       ss->Parameter(
+          *current_group,
           uname,
           array_typedesc(TypeDesc(TypeDesc::FLOAT, TypeDesc::VEC2, TypeDesc::POINT), value.size()),
           value.data());
@@ -1034,7 +1033,7 @@ void OSLCompiler::parameter(ShaderNode *node, const char *name)
     }
     case SocketType::STRING_ARRAY: {
       const array<ustring> &value = node->get_string_array(socket);
-      ss->Parameter(uname, array_typedesc(TypeString, value.size()), value.data());
+      ss->Parameter(*current_group, uname, array_typedesc(TypeString, value.size()), value.data());
       break;
     }
     case SocketType::TRANSFORM_ARRAY: {
@@ -1043,7 +1042,8 @@ void OSLCompiler::parameter(ShaderNode *node, const char *name)
       for (size_t i = 0; i < value.size(); i++) {
         fvalue[i] = projection_transpose(ProjectionTransform(value[i]));
       }
-      ss->Parameter(uname, array_typedesc(TypeMatrix, fvalue.size()), fvalue.data());
+      ss->Parameter(
+          *current_group, uname, array_typedesc(TypeMatrix, fvalue.size()), fvalue.data());
       break;
     }
     case SocketType::CLOSURE:
@@ -1061,57 +1061,57 @@ void OSLCompiler::parameter(ShaderNode *node, const char *name)
 
 void OSLCompiler::parameter(const char *name, float f)
 {
-  ss->Parameter(name, TypeFloat, &f);
+  ss->Parameter(*current_group, name, TypeFloat, &f);
 }
 
 void OSLCompiler::parameter_color(const char *name, float3 f)
 {
-  ss->Parameter(name, TypeColor, &f);
+  ss->Parameter(*current_group, name, TypeColor, &f);
 }
 
 void OSLCompiler::parameter_point(const char *name, float3 f)
 {
-  ss->Parameter(name, TypePoint, &f);
+  ss->Parameter(*current_group, name, TypePoint, &f);
 }
 
 void OSLCompiler::parameter_normal(const char *name, float3 f)
 {
-  ss->Parameter(name, TypeNormal, &f);
+  ss->Parameter(*current_group, name, TypeNormal, &f);
 }
 
 void OSLCompiler::parameter_vector(const char *name, float3 f)
 {
-  ss->Parameter(name, TypeVector, &f);
+  ss->Parameter(*current_group, name, TypeVector, &f);
 }
 
 void OSLCompiler::parameter(const char *name, int f)
 {
-  ss->Parameter(name, TypeInt, &f);
+  ss->Parameter(*current_group, name, TypeInt, &f);
 }
 
 void OSLCompiler::parameter(const char *name, const char *s)
 {
-  ss->Parameter(name, TypeString, &s);
+  ss->Parameter(*current_group, name, TypeString, &s);
 }
 
 void OSLCompiler::parameter(const char *name, ustring s)
 {
   const char *str = s.c_str();
-  ss->Parameter(name, TypeString, &str);
+  ss->Parameter(*current_group, name, TypeString, &str);
 }
 
 void OSLCompiler::parameter(const char *name, const Transform &tfm)
 {
   ProjectionTransform projection(tfm);
   projection = projection_transpose(projection);
-  ss->Parameter(name, TypeMatrix, (float *)&projection);
+  ss->Parameter(*current_group, name, TypeMatrix, (float *)&projection);
 }
 
 void OSLCompiler::parameter_array(const char *name, const float f[], int arraylen)
 {
   TypeDesc type = TypeFloat;
   type.arraylen = arraylen;
-  ss->Parameter(name, type, f);
+  ss->Parameter(*current_group, name, type, f);
 }
 
 void OSLCompiler::parameter_color_array(const char *name, const array<float3> &f)
@@ -1127,7 +1127,7 @@ void OSLCompiler::parameter_color_array(const char *name, const array<float3> &f
 
   TypeDesc type = TypeColor;
   type.arraylen = table.size();
-  ss->Parameter(name, type, table.data());
+  ss->Parameter(*current_group, name, type, table.data());
 }
 
 void OSLCompiler::parameter_attribute(const char *name, ustring s)
@@ -1209,7 +1209,7 @@ OSL::ShaderGroupRef OSLCompiler::compile_type(Shader *shader, ShaderGraph *graph
   name.imbue(std::locale("C"));
   name << "shader_" << shader->name.hash();
 
-  OSL::ShaderGroupRef group = ss->ShaderGroupBegin(name.str());
+  current_group = ss->ShaderGroupBegin(name.str());
 
   ShaderNode *output = graph->output();
   ShaderNodeSet dependencies;
@@ -1241,9 +1241,9 @@ OSL::ShaderGroupRef OSLCompiler::compile_type(Shader *shader, ShaderGraph *graph
   else
     assert(0);
 
-  ss->ShaderGroupEnd();
+  ss->ShaderGroupEnd(*current_group);
 
-  return group;
+  return std::move(current_group);
 }
 
 void OSLCompiler::compile(OSLGlobals *og, Shader *shader)

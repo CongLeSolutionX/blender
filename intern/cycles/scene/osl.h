@@ -177,6 +177,7 @@ class OSLCompiler {
 
   ShaderType current_type;
   Shader *current_shader;
+  OSL::ShaderGroupRef current_group;
 
   static int texture_shared_unique_id;
 };
