@@ -3925,6 +3925,7 @@ void GreasePencil::remove_group(blender::bke::greasepencil::LayerGroup &group,
           BLI_assert_unreachable();
       }
     }
+    BLI_assert(BLI_listbase_is_empty(&group.children));
   }
 
   /* Unlink then delete active group node. */
