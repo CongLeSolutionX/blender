@@ -122,36 +122,41 @@ ccl_device void kernel_volume_density_evaluate(KernelGlobals kg,
     return;
   }
 
-  /* Setup shader data. */
   KernelShaderEvalInput in = input[offset * 2 + 1];
 
-  ShaderData sd;
+  /* Setup ray. */
   Ray ray;
   ray.P = make_float3(__int_as_float(in.prim), in.u, in.v);
   ray.D = zero_float3();
   ray.tmin = 0.0f;
-  /* TODO(weizhen): What fields need to be written? */
+  ray.time = 0.5f;
+
+  /* Setup shader data. */
+  ShaderData sd;
   shader_setup_from_volume(kg, &sd, &ray, in.object);
   sd.flag = SD_IS_VOLUME_SHADER_EVAL;
 
-  /* Evaluate emission without allocating closures. */
+  /* Evaluate extinction and emission without allocating closures. */
   const uint32_t path_flag = PATH_RAY_EMISSION;
   sd.num_closure_left = 0;
 
+  /* Setup volume stack entry. */
   in = input[offset * 2 + 2];
   const int shader = in.object;
   const VolumeStack entry = {sd.object, shader};
-  const float3 voxel_size = make_float3(__int_as_float(in.prim), in.u, in.v);
 
+  const float3 voxel_size = make_float3(__int_as_float(in.prim), in.u, in.v);
   Extrema<float> extrema = {FLT_MAX, 0.0f};
   const int num_samples = input[0].object;
   for (int sample = 0; sample < num_samples; sample++) {
     /* Blue noise indexing. The sequence length is the number of samples. */
     const uint3 index = make_uint3(sample + offset * num_samples, 0, 0xffffffff);
+
+    /* Sample a random position inside the voxel. */
     const float3 rand_p = sobol_burley_sample_3D(
         index.x, PRNG_VOLUME_DENSITY_EVAL, index.y, index.z);
-
     sd.P = ray.P + rand_p * voxel_size;
+
     sd.closure_transparent_extinction = zero_float3();
 
     /* Evaluate volume coefficients. */
