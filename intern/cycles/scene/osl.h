@@ -126,7 +126,7 @@ class OSLCompiler {
 #ifdef WITH_OSL
   OSLCompiler(OSLShaderManager *manager, OSL::ShadingSystem *shadingsys, Scene *scene);
 #endif
-  void compile(OSLGlobals *og, Shader *shader);
+  void compile(Shader *shader);
 
   void add(ShaderNode *node, const char *name, bool isfilepath = false);
 

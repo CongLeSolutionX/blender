@@ -26,6 +26,7 @@
 #  include "util/path.h"
 #  include "util/progress.h"
 #  include "util/projection.h"
+#  include "util/task.h"
 
 #endif
 
@@ -116,30 +117,49 @@ void OSLShaderManager::device_update_specific(Device *device,
   /* create shaders */
   Shader *background_shader = scene->background->get_shader(scene);
 
+  /* compile each shader to OSL shader groups */
+  TaskPool task_pool;
   foreach (Shader *shader, scene->shaders) {
     assert(shader->graph);
 
-    if (progress.get_cancel())
-      return;
+    auto compile = [this, scene, shader, background_shader](Device *sub_device) {
+      OSL::ShadingSystem *ss = ss_shared[sub_device->info.type];
 
-    device->foreach_device(
-        [this, scene, shader, background = (shader == background_shader)](Device *sub_device) {
-          OSLGlobals *og = (OSLGlobals *)sub_device->get_cpu_osl_memory();
-          OSL::ShadingSystem *ss = ss_shared[sub_device->info.type];
+      OSLCompiler compiler(this, ss, scene);
+      compiler.background = (shader == background_shader);
+      compiler.compile(shader);
+    };
 
-          OSLCompiler compiler(this, ss, scene);
-          compiler.background = background;
-          compiler.compile(og, shader);
-        });
+    task_pool.push(function_bind(&Device::foreach_device, device, compile));
+  }
+  task_pool.wait_work();
+
+  if (progress.get_cancel()) {
+    return;
+  }
+
+  /* collect shader groups from all shaders */
+  foreach (Shader *shader, scene->shaders) {
+    device->foreach_device([shader, background_shader](Device *sub_device) {
+      OSLGlobals *og = (OSLGlobals *)sub_device->get_cpu_osl_memory();
+
+      /* push state to array for lookup */
+      og->surface_state.push_back(shader->osl_surface_ref);
+      og->volume_state.push_back(shader->osl_volume_ref);
+      og->displacement_state.push_back(shader->osl_displacement_ref);
+      og->bump_state.push_back(shader->osl_surface_bump_ref);
+
+      if (shader == background_shader) {
+        og->background_state = shader->osl_surface_ref;
+      }
+    });
 
     if (shader->emission_sampling != EMISSION_SAMPLING_NONE)
       scene->light_manager->tag_update(scene, LightManager::SHADER_COMPILED);
   }
 
   /* setup shader engine */
-  int background_id = scene->shader_manager->get_shader_id(background_shader);
-
-  device->foreach_device([background_id](Device *sub_device) {
+  device->foreach_device([](Device *sub_device) {
     OSLGlobals *og = (OSLGlobals *)sub_device->get_cpu_osl_memory();
     OSL::ShadingSystem *ss = ss_shared[sub_device->info.type];
 
@@ -147,7 +167,6 @@ void OSLShaderManager::device_update_specific(Device *device,
     og->ts = ts_shared;
     og->services = static_cast<OSLRenderServices *>(ss->renderer());
 
-    og->background_state = og->surface_state[background_id & SHADER_MASK];
     og->use = true;
   });
 
@@ -1246,7 +1265,7 @@ OSL::ShaderGroupRef OSLCompiler::compile_type(Shader *shader, ShaderGraph *graph
   return std::move(current_group);
 }
 
-void OSLCompiler::compile(OSLGlobals *og, Shader *shader)
+void OSLCompiler::compile(Shader *shader)
 {
   if (shader->is_modified()) {
     ShaderGraph *graph = shader->graph;
@@ -1307,12 +1326,6 @@ void OSLCompiler::compile(OSLGlobals *og, Shader *shader)
     /* Estimate emission for MIS. */
     shader->estimate_emission();
   }
-
-  /* push state to array for lookup */
-  og->surface_state.push_back(shader->osl_surface_ref);
-  og->volume_state.push_back(shader->osl_volume_ref);
-  og->displacement_state.push_back(shader->osl_displacement_ref);
-  og->bump_state.push_back(shader->osl_surface_bump_ref);
 }
 
 void OSLCompiler::parameter_texture(const char *name, ustring filename, ustring colorspace)
