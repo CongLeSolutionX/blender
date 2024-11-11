@@ -25,6 +25,7 @@
 #include "DNA_workspace_types.h"
 
 #include "BLI_listbase.h"
+#include "BLI_map.hh"
 #include "BLI_utildefines.h"
 
 #include "BKE_action.hh"
