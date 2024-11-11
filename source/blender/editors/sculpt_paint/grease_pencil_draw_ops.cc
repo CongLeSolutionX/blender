@@ -239,6 +239,7 @@ static int grease_pencil_brush_stroke_invoke(bContext *C, wmOperator *op, const 
   if (event->tablet.active == EVT_TABLET_ERASER) {
     RNA_enum_set(op->ptr, "mode", BRUSH_STROKE_ERASE);
   }
+
   const bool use_duplicate_previous_key = [&]() -> bool {
     const Paint *paint = BKE_paint_get_active_from_context(C);
     const Brush &brush = *BKE_paint_brush_for_read(paint);
@@ -282,6 +283,7 @@ static int grease_pencil_brush_stroke_invoke(bContext *C, wmOperator *op, const 
   if (return_value == OPERATOR_FINISHED) {
     return OPERATOR_FINISHED;
   }
+
   WM_event_add_modal_handler(C, op);
   return OPERATOR_RUNNING_MODAL;
 }
@@ -346,6 +348,7 @@ static int grease_pencil_sculpt_paint_invoke(bContext *C, wmOperator *op, const 
   }
 
   GreasePencil &grease_pencil = *static_cast<GreasePencil *>(object->data);
+
   if (!grease_pencil.has_active_layer()) {
     BKE_report(op->reports, RPT_ERROR, "No active Grease Pencil layer");
     return OPERATOR_CANCELLED;
