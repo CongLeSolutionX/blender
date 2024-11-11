@@ -3901,16 +3901,6 @@ void GreasePencil::remove_layer(blender::bke::greasepencil::Layer &layer)
   MEM_delete(&layer);
 }
 
-static void remove_layer_from_group(GreasePencil *grease_pencil,
-                                    blender::bke::greasepencil::LayerGroup &group)
-{
-  using namespace blender::bke::greasepencil;
-  /* Remove all the layers. */
-  for (Layer *layer : group.layers_for_write()) {
-    grease_pencil->remove_layer(*layer);
-  }
-}
-
 void GreasePencil::remove_group(blender::bke::greasepencil::LayerGroup &group,
                                 const bool keep_children)
 {
@@ -3919,20 +3909,20 @@ void GreasePencil::remove_group(blender::bke::greasepencil::LayerGroup &group,
   update_active_node(*this, group.as_node());
 
   if (!keep_children) {
-    /* Iterate in reverse order. */
-    Span<LayerGroup *> groups = group.groups_for_write();
-
-    for (int index = groups.size() - 1; index >= 0; index--) {
-      LayerGroup &sub_group = *groups[index];
-
-      remove_layer_from_group(this, sub_group);
-
-      /* Unlink then delete group node. */
-      sub_group.as_node().parent_group()->unlink_node(sub_group.as_node(), false);
-      MEM_delete(&sub_group);
+    LISTBASE_FOREACH_MUTABLE (GreasePencilLayerTreeNode *, child, &group.children) {
+      switch (child->type) {
+        case GP_LAYER_TREE_LEAF: {
+          this->remove_layer(reinterpret_cast<GreasePencilLayer *>(child)->wrap());
+          break;
+        }
+        case GP_LAYER_TREE_GROUP: {
+          this->remove_group(reinterpret_cast<GreasePencilLayerTreeGroup *>(child)->wrap(), false);
+          break;
+        }
+        default:
+          BLI_assert_unreachable();
+      }
     }
-    /* Remove layers of active group. */
-    remove_layer_from_group(this, group);
   }
 
   /* Unlink then delete active group node. */
