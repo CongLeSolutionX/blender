@@ -183,7 +183,6 @@ class ObjectManager {
 
   string get_cryptomatte_objects(Scene *scene);
   string get_cryptomatte_assets(Scene *scene);
-  static float object_volume_density(const Transform &tfm, Geometry *geom);
 
  protected:
   void device_update_object_transform(UpdateObjectTransformState *state,
