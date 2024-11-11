@@ -1,3 +1,4 @@
 Referenced by commit b2d201cbeaf2a42426dea1e56cc9efaaf065da64, Cleanup: Remove outdated SubdivCCG masks assert
 Referenced by issue #130100, Sculpt Mode: Boundary brush breaks mesh on Multires
 Referenced by issue #130102, Sculpt Mode: Boundary brushes ignore masking with Multires
+Referenced by commit 7f756901273832678956666cb9905d195d96c03d, Fix #130102: Boundary brushes ignore masking with Multires
