@@ -146,10 +146,10 @@ ccl_device void kernel_volume_density_evaluate(KernelGlobals kg,
   Extrema<float> extrema = {FLT_MAX, 0.0f};
   const int num_samples = input[0].object;
   for (int sample = 0; sample < num_samples; sample++) {
-    /* TODO(weizhen): fix the blue noise sample number problem. */
+    /* Blue noise indexing. The sequence length is the number of samples. */
     const uint3 index = make_uint3(sample + offset * num_samples, 0, 0xffffffff);
-    /* TODO(weizhen): add dimension for this? */
-    const float3 rand_p = sobol_burley_sample_3D(index.x, 0, index.y, index.z);
+    const float3 rand_p = sobol_burley_sample_3D(
+        index.x, PRNG_VOLUME_DENSITY_EVAL, index.y, index.z);
 
     sd.P = ray.P + rand_p * voxel_size;
     sd.closure_transparent_extinction = zero_float3();
