@@ -4257,10 +4257,8 @@ static void rna_NodeShaderNPR_node_tree_set(PointerRNA *ptr,
 static bool rna_NodeShaderNPR_node_tree_poll(PointerRNA * /*ptr*/, PointerRNA value)
 {
   bNodeTree *ntree = static_cast<bNodeTree *>(value.data);
-  if (ntree->type != NTREE_SHADER) {
-    return false;
-  }
-  return true;
+  return ntree->type == NTREE_SHADER && (ntree->shader_node_traits->type & SH_TREE_TYPE_NPR) &&
+         !(ntree->shader_node_traits->type & SH_TREE_TYPE_GROUP);
 }
 
 static void rna_NodeShaderNPR_node_tree_update(Main *bmain, Scene *scene, PointerRNA *ptr)
