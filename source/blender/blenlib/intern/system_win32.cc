@@ -15,6 +15,8 @@
 #include <shlwapi.h>
 #include <tlhelp32.h>
 
+#include "utfconv.hh"
+
 #include "MEM_guardedalloc.h"
 
 #include "BLI_string.h"
@@ -505,11 +507,14 @@ static void bli_show_message_box(const char *filepath,
   /* InitCommonControls is called during GHOST System initialization, so this is redundant. */
   // InitCommonControls();
 
+  /* Convert `filepath` to UTF-16 to handle non-ASCII characters. */
+  wchar_t *filepath_utf16 = alloc_utf16_from_8(filepath, 0);
   std::wstring full_message_16 =
       L"The application encountered a fatal error and will close.\n\n"
       L"If you know the steps to reproduce this crash, please file a bug report.\n\n"
       L"The crash log can be found at:\n" +
-      std::wstring(filepath, filepath + strlen(filepath));
+      std::wstring(filepath_utf16);
+  free((void *)filepath_utf16);
 
   TASKDIALOGCONFIG config = {0};
   const TASKDIALOG_BUTTON buttons[] = {
