@@ -1171,6 +1171,10 @@ bool filelist_file_ensure_preview_requested(FileList *filelist, FileDirEntry *fi
     /* Already loaded. */
     return false;
   }
+  /* Wait with requests until file list reading is done, and previews may be loaded. */
+  if (!filelist_cache_previews_enabled(filelist)) {
+    return false;
+  }
   if (!filelist_file_may_have_preview(file)) {
     return false;
   }
