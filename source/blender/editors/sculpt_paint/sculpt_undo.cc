@@ -1725,20 +1725,8 @@ static void save_active_attribute(Object &object, SculptAttrRef *attr)
   attr->type = meta_data->data_type;
 }
 
-void push_begin_ex(const Scene & /*scene*/, Object &ob, const char *name)
+static void save_attribute_data(Object &ob, SculptUndoStep *us)
 {
-  UndoStack *ustack = ED_undo_stack_get();
-
-  /* If possible, we need to tag the object and its geometry data as 'changed in the future' in
-   * the previous undo step if it's a memfile one. */
-  ED_undosys_stack_memfile_id_changed_tag(ustack, &ob.id);
-  ED_undosys_stack_memfile_id_changed_tag(ustack, static_cast<ID *>(ob.data));
-
-  /* Special case, we never read from this. */
-  bContext *C = nullptr;
-
-  SculptUndoStep *us = reinterpret_cast<SculptUndoStep *>(
-      BKE_undosys_step_push_init_with_type(ustack, C, name, BKE_UNDOSYS_TYPE_SCULPT));
   us->data.object_name = ob.id.name;
 
   if (!us->active_color_start.was_set) {
@@ -1754,7 +1742,34 @@ void push_begin_ex(const Scene & /*scene*/, Object &ob, const char *name)
   }
 
   const SculptSession &ss = *ob.sculpt;
+
+  us->data.pivot_pos = ss.pivot_pos;
+  us->data.pivot_rot = ss.pivot_rot;
+
+  if (const KeyBlock *key = BKE_keyblock_from_object(&ob)) {
+    us->data.active_shape_key_name = key->name;
+  }
+}
+
+void push_begin_ex(const Scene & /*scene*/, Object &ob, const char *name)
+{
+  UndoStack *ustack = ED_undo_stack_get();
+
+  /* If possible, we need to tag the object and its geometry data as 'changed in the future' in
+   * the previous undo step if it's a memfile one. */
+  ED_undosys_stack_memfile_id_changed_tag(ustack, &ob.id);
+  ED_undosys_stack_memfile_id_changed_tag(ustack, static_cast<ID *>(ob.data));
+
+  /* Special case, we never read from this. */
+  bContext *C = nullptr;
+
+  SculptUndoStep *us = reinterpret_cast<SculptUndoStep *>(
+      BKE_undosys_step_push_init_with_type(ustack, C, name, BKE_UNDOSYS_TYPE_SCULPT));
+
+  const SculptSession &ss = *ob.sculpt;
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(ob);
+
+  save_attribute_data(ob, us);
 
   switch (pbvh.type()) {
     case bke::pbvh::Type::Mesh: {
@@ -1771,14 +1786,6 @@ void push_begin_ex(const Scene & /*scene*/, Object &ob, const char *name)
     case bke::pbvh::Type::BMesh: {
       break;
     }
-  }
-
-  /* Store sculpt pivot. */
-  us->data.pivot_pos = ss.pivot_pos;
-  us->data.pivot_rot = ss.pivot_rot;
-
-  if (const KeyBlock *key = BKE_keyblock_from_object(&ob)) {
-    us->data.active_shape_key_name = key->name;
   }
 }
 
@@ -2084,7 +2091,7 @@ void geometry_begin_ex(const Scene & /*scene*/, Object &ob, const char *name)
 
   SculptUndoStep *us = reinterpret_cast<SculptUndoStep *>(
       BKE_undosys_step_push_init_with_type(ustack, C, name, BKE_UNDOSYS_TYPE_SCULPT));
-  us->data.object_name = ob.id.name;
+  save_attribute_data(ob, us);
   geometry_push(ob);
 }
 
