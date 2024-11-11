@@ -217,8 +217,8 @@ bke::CurvesGeometry extend_curves(bke::CurvesGeometry &src_curves,
   }
 
   const int src_curves_num = src_curves.curves_num();
-  Array<int> start_points(src_curves_num);
-  Array<int> end_points(src_curves_num);
+  Array<int> start_points(src_curves_num, 0);
+  Array<int> end_points(src_curves_num, 0);
   Array<float> use_start_lengths(src_curves_num);
   Array<float> use_end_lengths(src_curves_num);
 
@@ -253,6 +253,8 @@ bke::CurvesGeometry extend_curves(bke::CurvesGeometry &src_curves,
       dst_points_by_curve[curve] = point_count;
       /* Curve not suitable for stretching... */
       if (point_count <= 2) {
+        start_points[curve] = 0;
+        end_points[curve] = 0;
         return;
       }
 
@@ -278,12 +280,18 @@ bke::CurvesGeometry extend_curves(bke::CurvesGeometry &src_curves,
       int local_front = 0;
       MutableSpan<int> new_points_by_curve = dst_to_src_point.as_mutable_span().slice(
           dst_indices[curve]);
-      if (start_points[curve]) {
+      if (point_count <= 2) {
+        for (const int point_i : new_points_by_curve.index_range()) {
+          new_points_by_curve[point_i] = points_by_curve[curve][point_i];
+        }
+        continue;
+      }
+      if (start_points[curve] > 0) {
         MutableSpan<int> starts = new_points_by_curve.slice(0, start_points[curve]);
         starts.fill(points_by_curve[curve].first());
         local_front = start_points[curve];
       }
-      if (end_points[curve]) {
+      if (end_points[curve] > 0) {
         MutableSpan<int> ends = new_points_by_curve.slice(
             new_points_by_curve.size() - end_points[curve], end_points[curve]);
         ends.fill(points_by_curve[curve].last());
