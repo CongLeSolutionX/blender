@@ -132,6 +132,9 @@ struct GreasePencilHelper : public ::GreasePencil {
 
     CustomData_reset(&this->layers_data);
 
+    this->drawing_array = nullptr;
+    this->drawing_array_num = 0;
+
     this->runtime = MEM_new<GreasePencilRuntime>(__func__);
   }
 
@@ -218,6 +221,41 @@ TEST(greasepencil, layer_tree_node_types)
     EXPECT_EQ(child.is_layer(), ex.is_layer[i]);
     EXPECT_EQ(child.is_group(), !ex.is_layer[i]);
   }
+}
+
+TEST(greasepencil, layer_tree_remove_active_node)
+{
+  GreasePencilLayerTreeExample ex;
+  TreeNode *node = ex.grease_pencil.find_node_by_name("Layer2");
+  ex.grease_pencil.set_active_node(node);
+
+  ex.grease_pencil.remove_layer(node->as_layer());
+  node = ex.grease_pencil.get_active_node();
+  EXPECT_TRUE(node != nullptr);
+  EXPECT_TRUE(node->is_layer());
+  EXPECT_TRUE(node->as_layer().name() == "Layer1");
+
+  ex.grease_pencil.remove_layer(node->as_layer());
+  node = ex.grease_pencil.get_active_node();
+  EXPECT_TRUE(node != nullptr);
+  EXPECT_TRUE(node->is_group());
+  EXPECT_TRUE(node->as_group().name() == "Group2");
+
+  ex.grease_pencil.remove_group(node->as_group());
+  node = ex.grease_pencil.get_active_node();
+  EXPECT_TRUE(node != nullptr);
+  EXPECT_TRUE(node->is_group());
+  EXPECT_TRUE(node->as_group().name() == "Group1");
+
+  ex.grease_pencil.remove_group(node->as_group());
+  node = ex.grease_pencil.get_active_node();
+  EXPECT_TRUE(node != nullptr);
+  EXPECT_TRUE(node->is_layer());
+  EXPECT_TRUE(node->as_layer().name() == "Layer5");
+
+  ex.grease_pencil.remove_layer(node->as_layer());
+  node = ex.grease_pencil.get_active_node();
+  EXPECT_TRUE(node == nullptr);
 }
 
 TEST(greasepencil, layer_tree_is_child_of)
