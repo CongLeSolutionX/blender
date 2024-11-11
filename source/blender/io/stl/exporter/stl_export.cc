@@ -51,7 +51,7 @@ void export_frame(Depsgraph *depsgraph,
       writer = std::make_unique<FileWriter>(export_params.filepath, export_params.ascii_format);
     }
     catch (const std::runtime_error &ex) {
-      CLOG_ERROR(&LOG, "[%s] %s", ex.code().category().name(), ex.what());
+      CLOG_ERROR(&LOG, "Error: %s", ex.what());
       BKE_reportf(export_params.reports,
                   RPT_ERROR,
                   "STL Export: Cannot open file '%s'",
@@ -105,7 +105,7 @@ void export_frame(Depsgraph *depsgraph,
         writer = std::make_unique<FileWriter>(filepath, export_params.ascii_format);
       }
       catch (const std::runtime_error &ex) {
-        CLOG_ERROR(&LOG, "Error: %s.\n", ex.what());
+        CLOG_ERROR(&LOG, "Error: %s", ex.what());
         BKE_reportf(
             export_params.reports, RPT_ERROR, "STL Export: Cannot open file '%s'", filepath);
         return;
