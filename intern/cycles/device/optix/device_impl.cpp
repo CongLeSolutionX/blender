@@ -903,13 +903,13 @@ bool OptiXDevice::load_osl_kernels()
       return false;
     }
 
-    OptixProgramGroupDesc group_descs[1] = {};
-    group_descs[0].kind = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
-    group_descs[0].callables.entryFunctionNameDC = osl_kernels[i].fused_entry.c_str();
-    group_descs[0].callables.moduleDC = osl_modules[i];
+    OptixProgramGroupDesc group_desc = {};
+    group_desc.kind = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
+    group_desc.callables.entryFunctionNameDC = osl_kernels[i].fused_entry.c_str();
+    group_desc.callables.moduleDC = osl_modules[i];
 
     optix_assert(optixProgramGroupCreate(
-        context, group_descs, 1, &group_options, nullptr, 0, &osl_groups[i]));
+        context, &group_desc, 1, &group_options, nullptr, 0, &osl_groups[i]));
   }
 
   /* Update SBT with new entries. */
