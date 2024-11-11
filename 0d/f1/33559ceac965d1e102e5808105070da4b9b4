@@ -1,2 +1,3 @@
 Referenced by issue #127357, Sculpt Mode: Using Expand operators outside of geometry crashes Blender
 Referenced by issue #128508, Camera shifts large distance when `orbiting around selected` after unhiding a face set
+Referenced by issue #130098, Blender crashes in sculpt mode while using the sample detail tool on another object
