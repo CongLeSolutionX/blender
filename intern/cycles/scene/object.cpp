@@ -53,7 +53,6 @@ struct UpdateObjectTransformState {
   KernelObject *objects;
   Transform *object_motion_pass;
   DecomposedTransform *object_motion;
-  float *object_volume_step;
 
   /* Flags which will be synchronized to Integrator. */
   bool have_motion;
@@ -557,7 +556,6 @@ void ObjectManager::device_update_object_transform(UpdateObjectTransformState *s
     flag |= SD_OBJECT_HOLDOUT_MASK;
   }
   state->object_flag[ob->index] = flag;
-  state->object_volume_step[ob->index] = FLT_MAX;
 
   /* Have curves. */
   if (geom->is_hair()) {
@@ -626,7 +624,6 @@ void ObjectManager::device_update_transforms(DeviceScene *dscene, Scene *scene, 
 
   state.objects = dscene->objects.alloc(scene->objects.size());
   state.object_flag = dscene->object_flag.alloc(scene->objects.size());
-  state.object_volume_step = dscene->object_volume_step.alloc(scene->objects.size());
   state.object_motion = NULL;
   state.object_motion_pass = NULL;
 
@@ -710,7 +707,6 @@ void ObjectManager::device_update(Device *device,
     dscene->object_motion_pass.tag_realloc();
     dscene->object_motion.tag_realloc();
     dscene->object_flag.tag_realloc();
-    dscene->object_volume_step.tag_realloc();
   }
 
   if (update_flags & HOLDOUT_MODIFIED) {
@@ -748,7 +744,6 @@ void ObjectManager::device_update(Device *device,
         dscene->object_motion_pass.tag_modified();
         dscene->object_motion.tag_modified();
         dscene->object_flag.tag_modified();
-        dscene->object_volume_step.tag_modified();
       }
     }
   }
@@ -876,10 +871,8 @@ void ObjectManager::device_update_flags(
 
   /* Copy object flag. */
   dscene->object_flag.copy_to_device();
-  dscene->object_volume_step.copy_to_device();
 
   dscene->object_flag.clear_modified();
-  dscene->object_volume_step.clear_modified();
 }
 
 void ObjectManager::device_update_geom_offsets(Device *, DeviceScene *dscene, Scene *scene)
@@ -933,7 +926,6 @@ void ObjectManager::device_free(Device *, DeviceScene *dscene, bool force_free)
   dscene->object_motion_pass.free_if_need_realloc(force_free);
   dscene->object_motion.free_if_need_realloc(force_free);
   dscene->object_flag.free_if_need_realloc(force_free);
-  dscene->object_volume_step.free_if_need_realloc(force_free);
   dscene->object_prim_offset.free_if_need_realloc(force_free);
 }
 
