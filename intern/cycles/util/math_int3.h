@@ -30,11 +30,6 @@ ccl_device_inline int3 max(int3 a, int3 b)
 #  endif
 }
 
-ccl_device_inline int reduce_max(int3 a)
-{
-  return max(max(a.x, a.y), a.z);
-}
-
 ccl_device_inline int3 clamp(const int3 a, int mn, int mx)
 {
 #  ifdef __KERNEL_SSE__
