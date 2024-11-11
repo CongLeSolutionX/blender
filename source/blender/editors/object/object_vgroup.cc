@@ -2513,12 +2513,12 @@ static void grease_pencil_clear_from_vgroup(Scene &scene,
                                             Object &ob,
                                             bDeformGroup *dg,
                                             const bool use_selection,
-                                            const bool all_drawing = false)
+                                            const bool all_drawings = false)
 {
   using namespace ed::greasepencil;
   GreasePencil &grease_pencil = *static_cast<GreasePencil *>(ob.data);
 
-  if (all_drawing) {
+  if (all_drawings) {
     /* When removing vgroup, iterate over all the drawing. */
     for (GreasePencilDrawingBase *base : grease_pencil.drawings()) {
       if (base->type != GP_DRAWING) {
@@ -2532,7 +2532,7 @@ static void grease_pencil_clear_from_vgroup(Scene &scene,
   }
   else {
     Vector<MutableDrawingInfo> drawings = retrieve_editable_drawings(scene, grease_pencil);
-    for (MutableDrawingInfo info : drawings) {
+    for (const MutableDrawingInfo &info : drawings) {
       bke::greasepencil::remove_from_vertex_group(
           grease_pencil, info.drawing, dg->name, use_selection);
     }
@@ -2542,7 +2542,7 @@ static void grease_pencil_clear_from_vgroup(Scene &scene,
 static void grease_pencil_clear_from_all_vgroup(Scene &scene,
                                                 Object &ob,
                                                 const bool use_selection,
-                                                const bool all_drawing = false,
+                                                const bool all_drawings = false,
                                                 const bool only_unlocked = false)
 {
   const ListBase *defbase = BKE_object_defgroup_list(&ob);
@@ -2551,7 +2551,7 @@ static void grease_pencil_clear_from_all_vgroup(Scene &scene,
   while (dg) {
     bDeformGroup *next_group = dg->next;
     if (!only_unlocked || (dg->flag & DG_LOCK_WEIGHT) == 0) {
-      grease_pencil_clear_from_vgroup(scene, ob, dg, use_selection, all_drawing);
+      grease_pencil_clear_from_vgroup(scene, ob, dg, use_selection, all_drawings);
     }
     dg = next_group;
   }
