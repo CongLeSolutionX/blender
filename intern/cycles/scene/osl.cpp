@@ -302,8 +302,14 @@ void OSLShaderManager::shading_system_init()
       ss->attribute("commonspace", "world");
       ss->attribute("searchpath:shader", shader_path);
       ss->attribute("greedyjit", 1);
-      /* TODO: tweak this for performance / memory usage trade-off. */
-      ss->attribute("max_optix_groupdata_alloc", 2048);
+
+      const char *groupdata_alloc_str = getenv("CYCLES_OSL_GROUPDATA_ALLOC");
+      if (groupdata_alloc_str) {
+        ss->attribute("max_optix_groupdata_alloc", atoi(groupdata_alloc_str));
+      }
+      else {
+        ss->attribute("max_optix_groupdata_alloc", 2048);
+      }
 
       VLOG_INFO << "Using shader search path: " << shader_path;
 
