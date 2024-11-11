@@ -66,7 +66,7 @@ void compact_knots(const int points_num,
                    MutableSpan<float> knots)
 {
   Array<float> all_knots(curves::nurbs::knots_num(points_num, order, is_cyclic));
-  calculate_knots(points_num, mode, order, is_cyclic, all_knots, );
+  calculate_knots(points_num, mode, order, is_cyclic, all_knots);
   compact_knots(all_knots, knots);
 }
 
