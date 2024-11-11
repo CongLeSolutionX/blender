@@ -83,7 +83,6 @@
 using namespace blender;
 
 #define FILEDIR_NBR_ENTRIES_UNSET -1
-#define FILELIST_CACHE_PREVIEW_TODO_UNSET -1
 
 /* ------------------FILELIST------------------------ */
 
@@ -1596,7 +1595,7 @@ static void filelist_cache_preview_ensure_running(FileListEntryCache *cache)
   if (!cache->previews_pool) {
     cache->previews_pool = BLI_task_pool_create_background(cache, TASK_PRIORITY_LOW);
     cache->previews_done = BLI_thread_queue_init();
-    cache->previews_todo_count = FILELIST_CACHE_PREVIEW_TODO_UNSET;
+    cache->previews_todo_count = 0;
 
     IMB_thumb_locks_acquire();
   }
@@ -1622,7 +1621,7 @@ static void filelist_cache_previews_clear(FileListEntryCache *cache)
       }
       MEM_freeN(preview);
     }
-    cache->previews_todo_count = FILELIST_CACHE_PREVIEW_TODO_UNSET;
+    cache->previews_todo_count = 0;
   }
 }
 
@@ -1637,7 +1636,7 @@ static void filelist_cache_previews_free(FileListEntryCache *cache)
     BLI_task_pool_free(cache->previews_pool);
     cache->previews_pool = nullptr;
     cache->previews_done = nullptr;
-    cache->previews_todo_count = FILELIST_CACHE_PREVIEW_TODO_UNSET;
+    cache->previews_todo_count = 0;
 
     IMB_thumb_locks_release();
   }
@@ -1738,9 +1737,6 @@ static bool filelist_cache_previews_push(FileList *filelist, FileDirEntry *entry
                        true,
                        filelist_cache_preview_freef);
   }
-  if (cache->previews_todo_count < 0) {
-    cache->previews_todo_count = 0;
-  }
   cache->previews_todo_count++;
 
   return true;
@@ -1767,7 +1763,7 @@ static void filelist_cache_init(FileListEntryCache *cache, size_t cache_size)
   cache->size = cache_size;
   cache->flags = FLC_IS_INIT;
 
-  cache->previews_todo_count = FILELIST_CACHE_PREVIEW_TODO_UNSET;
+  cache->previews_todo_count = 0;
 }
 
 static void filelist_cache_free(FileListEntryCache *cache)
@@ -2643,7 +2639,7 @@ void filelist_cache_previews_set(FileList *filelist, const bool use_previews)
     cache->flags |= FLC_PREVIEWS_ACTIVE;
 
     BLI_assert((cache->previews_pool == nullptr) && (cache->previews_done == nullptr) &&
-               (cache->previews_todo_count == FILELIST_CACHE_PREVIEW_TODO_UNSET));
+               (cache->previews_todo_count == 0));
 
     //      printf("%s: Init Previews...\n", __func__);
 
