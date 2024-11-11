@@ -938,6 +938,15 @@ static bool rna_NodeTree_poll_group(bNodeTree *ntree, bNodeTree *group)
   return group->shader_node_traits->type & SH_TREE_TYPE_GROUP;
 }
 
+static bool rna_NodeTree_is_group(bNodeTree *ntree)
+{
+  if (ntree->type == NTREE_SHADER) {
+    return ntree->shader_node_traits->type & SH_TREE_TYPE_GROUP;
+  }
+
+  return ntree->owner_id;
+}
+
 static void rna_NodeTree_update_reg(bNodeTree *ntree)
 {
   ParameterList list;
@@ -11570,6 +11579,10 @@ static void rna_def_nodetree(BlenderRNA *brna)
   RNA_def_function_ui_description(func, "Check if the node tree can be added as a group");
   parm = RNA_def_pointer(func, "ntree", "NodeTree", "", "The node group to be polled");
   RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
+  RNA_def_function_return(func, RNA_def_boolean(func, "valid", false, "", ""));
+
+  func = RNA_def_function(srna, "is_group", "rna_NodeTree_is_group");
+  RNA_def_function_ui_description(func, "Check if the node tree is as a group");
   RNA_def_function_return(func, RNA_def_boolean(func, "valid", false, "", ""));
 
   /* update */

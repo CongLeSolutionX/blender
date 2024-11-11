@@ -31,7 +31,7 @@ def draw_node_group_add_menu(context, layout):
     node_tree = space_node.edit_tree
     all_node_groups = context.blend_data.node_groups
 
-    if node_tree in all_node_groups.values():
+    if node_tree in all_node_groups.values() and node_tree.is_group():
         layout.separator()
         add_node_type(layout, "NodeGroupInput")
         add_node_type(layout, "NodeGroupOutput")
