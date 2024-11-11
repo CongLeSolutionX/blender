@@ -40,10 +40,10 @@ class VKFrameBuffer : public FrameBuffer {
   Array<GPUAttachmentState, GPU_FB_MAX_ATTACHMENT> attachment_states_;
 
   /* Render pass workaround when dynamic rendering isn't supported. */
-  VkRenderPass vk_render_pass = VK_NULL_HANDLE;
   VkFramebuffer vk_framebuffer = VK_NULL_HANDLE;
 
  public:
+  VkRenderPass vk_render_pass = VK_NULL_HANDLE;
   /**
    * Create a conventional frame-buffer to attach texture to.
    */
@@ -140,9 +140,12 @@ class VKFrameBuffer : public FrameBuffer {
   int color_attachments_resource_size() const;
 
  private:
-  void update_attachments();
+  /**
+   * Discard both the render pass and framebuffer
+   *
+   * TODO: render pass could be reusable.
+   */
   void render_pass_free();
-  void render_pass_create();
 
   /* Clearing attachments */
   void build_clear_attachments_depth_stencil(

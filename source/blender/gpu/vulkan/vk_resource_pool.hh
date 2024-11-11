@@ -35,6 +35,8 @@ class VKDiscardPool {
   Vector<VkImageView> image_views_;
   Vector<VkShaderModule> shader_modules_;
   Vector<VkPipelineLayout> pipeline_layouts_;
+  Vector<VkRenderPass> render_passes_;
+  Vector<VkFramebuffer> framebuffers_;
   std::mutex mutex_;
 
  public:
@@ -45,12 +47,15 @@ class VKDiscardPool {
   void discard_buffer(VkBuffer vk_buffer, VmaAllocation vma_allocation);
   void discard_shader_module(VkShaderModule vk_shader_module);
   void discard_pipeline_layout(VkPipelineLayout vk_pipeline_layout);
+  void discard_framebuffer(VkFramebuffer vk_framebuffer);
+  void discard_render_pass(VkRenderPass vk_render_pass);
+
   /**
    * Move discarded resources from src_pool into this.
    *
-   * GPU resources that are discarded from the dependency graph are stored in the device orphaned
-   * data. When a swap chain context list is made active the orphaned data can be merged into a
-   * swap chain discard pool.
+   * GPU resources that are discarded from the dependency graph are stored in the device
+   * orphaned data. When a swap chain context list is made active the orphaned data can be
+   * merged into a swap chain discard pool.
    */
   void move_data(VKDiscardPool &src_pool);
   void destroy_discarded_resources(VKDevice &device);

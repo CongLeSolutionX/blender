@@ -144,6 +144,7 @@ struct VKGraphicsInfo {
     VkFormat depth_attachment_format;
     VkFormat stencil_attachment_format;
     Vector<VkFormat> color_attachment_formats;
+    VkRenderPass vk_render_pass;
 
     bool operator==(const FragmentOut &other) const
     {
@@ -152,7 +153,7 @@ struct VKGraphicsInfo {
 
     uint64_t hash() const
     {
-      uint64_t hash = 0;
+      uint64_t hash = uint64_t(vk_render_pass);
       hash = hash * 33 ^ uint64_t(depth_attachment_format);
       hash = hash * 33 ^ uint64_t(stencil_attachment_format);
       for (VkFormat color_attachment_format : color_attachment_formats) {

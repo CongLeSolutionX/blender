@@ -42,15 +42,18 @@ VKFrameBuffer::~VKFrameBuffer()
   if (context.active_framebuffer_get() == this) {
     context.deactivate_framebuffer();
   }
+  render_pass_free();
+}
 
-  // TODO: use discard pool.
+void VKFrameBuffer::render_pass_free()
+{
   VKDevice &device = VKBackend::get().device;
   if (vk_framebuffer != VK_NULL_HANDLE) {
-    vkDestroyFramebuffer(device.vk_handle(), vk_framebuffer, nullptr);
+    device.discard_pool_for_current_thread().discard_framebuffer(vk_framebuffer);
     vk_framebuffer = VK_NULL_HANDLE;
   }
   if (vk_render_pass != VK_NULL_HANDLE) {
-    vkDestroyRenderPass(device.vk_handle(), vk_render_pass, nullptr);
+    device.discard_pool_for_current_thread().discard_render_pass(vk_render_pass);
     vk_render_pass = VK_NULL_HANDLE;
   }
 }
@@ -575,16 +578,7 @@ void VKFrameBuffer::rendering_reset()
 
 void VKFrameBuffer::rendering_ensure_render_pass(VKContext &context)
 {
-  // TODO: use discard pool.
-  VKDevice &device = VKBackend::get().device;
-  if (vk_framebuffer != VK_NULL_HANDLE) {
-    vkDestroyFramebuffer(device.vk_handle(), vk_framebuffer, nullptr);
-    vk_framebuffer = VK_NULL_HANDLE;
-  }
-  if (vk_render_pass != VK_NULL_HANDLE) {
-    vkDestroyRenderPass(device.vk_handle(), vk_render_pass, nullptr);
-    vk_render_pass = VK_NULL_HANDLE;
-  }
+  render_pass_free();
 
   render_graph::VKResourceAccessInfo access_info;
   Vector<VkAttachmentDescription> vk_attachment_descriptions;
@@ -650,6 +644,7 @@ void VKFrameBuffer::rendering_ensure_render_pass(VKContext &context)
     vk_subpass_description.pDepthStencilAttachment = &depth_attachment_reference;
   }
 
+  VKDevice &device = VKBackend::get().device;
   /* Renderpass create info */
   VkRenderPassCreateInfo vk_render_pass_create_info = {};
   vk_render_pass_create_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
@@ -871,7 +866,11 @@ void VKFrameBuffer::rendering_end(VKContext &context)
   if (is_rendering_) {
     const VKWorkarounds &workarounds = VKBackend::get().device.workarounds_get();
     render_graph::VKEndRenderingNode::CreateInfo end_rendering = {};
-    end_rendering.vk_render_pass = workarounds.dynamic_rendering ? vk_render_pass : VK_NULL_HANDLE;
+    end_rendering.vk_render_pass = VK_NULL_HANDLE;
+    if (workarounds.dynamic_rendering) {
+      BLI_assert(vk_render_pass);
+      end_rendering.vk_render_pass = vk_render_pass;
+    }
     context.render_graph.add_node(end_rendering);
     is_rendering_ = false;
   }
