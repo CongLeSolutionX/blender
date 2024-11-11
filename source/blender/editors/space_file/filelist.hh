@@ -78,7 +78,11 @@ void filelist_file_get_full_path(const FileList *filelist,
                                  const FileDirEntry *file,
                                  char r_filepath[/*FILE_MAX_LIBEXTRA*/]);
 bool filelist_file_is_preview_pending(const FileList *filelist, const FileDirEntry *file);
-void filelist_file_ensure_preview_fetched(FileList *filelist, FileDirEntry *file);
+/**
+ * \return True if a new preview request was pushed, false otherwise (e.g. because the preview is
+ * already loaded, invalid or not supported).
+ */
+bool filelist_file_ensure_preview_requested(FileList *filelist, FileDirEntry *file);
 ImBuf *filelist_getimage(FileList *filelist, int index);
 ImBuf *filelist_file_getimage(const FileDirEntry *file);
 ImBuf *filelist_geticon_image_ex(const FileDirEntry *file);
@@ -226,6 +230,7 @@ int filelist_readjob_running(FileList *filelist, wmWindowManager *wm);
 
 void filelist_cache_previews_ensure_running(FileList *filelist);
 bool filelist_cache_previews_update(FileList *filelist);
+bool filelist_cache_previews_enabled(const FileList *filelist);
 void filelist_cache_previews_set(FileList *filelist, bool use_previews);
 bool filelist_cache_previews_running(FileList *filelist);
 bool filelist_cache_previews_done(FileList *filelist);

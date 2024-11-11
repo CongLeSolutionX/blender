@@ -360,7 +360,7 @@ static int groupname_to_code(const char *group);
 
 static void filelist_cache_clear(FileListEntryCache *cache, size_t new_size);
 static bool filelist_intern_entry_is_main_file(const FileListInternEntry *intern_entry);
-static void filelist_cache_previews_push(FileList *filelist, FileDirEntry *entry, const int index);
+static bool filelist_cache_previews_push(FileList *filelist, FileDirEntry *entry, const int index);
 static bool filelist_file_may_have_preview(const FileDirEntry *entry);
 
 /* ********** Sort helpers ********** */
@@ -1166,23 +1166,27 @@ bool filelist_file_is_preview_pending(const FileList *filelist, const FileDirEnt
   return !filelist_ready || file->flags & FILE_ENTRY_PREVIEW_LOADING;
 }
 
-void filelist_file_ensure_preview_fetched(FileList *filelist, FileDirEntry *file)
+bool filelist_file_ensure_preview_requested(FileList *filelist, FileDirEntry *file)
 {
   if (file->preview_icon_id) {
     /* Already loaded. */
-    return;
+    return false;
   }
   if (!filelist_file_may_have_preview(file)) {
-    return;
+    return false;
   }
 
-  const int numfiles = filelist_files_num_entries(filelist);
+  const int numfiles = filelist_files_ensure(filelist);
   for (int i = 0; i < numfiles; i++) {
     if (filelist->filelist_intern.filtered[i]->uid == file->uid) {
-      filelist_cache_previews_push(filelist, file, i);
+      if (filelist_cache_previews_push(filelist, file, i)) {
+        return true;
+      }
       break;
     }
   }
+
+  return false;
 }
 
 static FileDirEntry *filelist_geticon_get_file(FileList *filelist, const int index)
@@ -1673,25 +1677,29 @@ static bool filelist_file_may_have_preview(const FileDirEntry *entry)
   return true;
 }
 
-static void filelist_cache_previews_push(FileList *filelist, FileDirEntry *entry, const int index)
+/**
+ * \return True if a new preview request was pushed, false otherwise (e.g. because the preview is
+ * already loaded, invalid or not supported).
+ */
+static bool filelist_cache_previews_push(FileList *filelist, FileDirEntry *entry, const int index)
 {
   FileListEntryCache *cache = &filelist->filelist_cache;
 
   BLI_assert(cache->flags & FLC_PREVIEWS_ACTIVE);
 
   if (entry->preview_icon_id) {
-    return;
+    return false;
   }
 
   if (!filelist_file_may_have_preview(entry)) {
-    return;
+    return false;
   }
 
   FileListInternEntry *intern_entry = filelist->filelist_intern.filtered[index];
   PreviewImage *preview_in_memory = intern_entry->local_data.preview_image;
   if (preview_in_memory && !BKE_previewimg_is_finished(preview_in_memory, ICON_SIZE_PREVIEW)) {
     /* Nothing to set yet. Wait for next call. */
-    return;
+    return false;
   }
 
   filelist_cache_preview_ensure_running(cache);
@@ -1734,6 +1742,8 @@ static void filelist_cache_previews_push(FileList *filelist, FileDirEntry *entry
     cache->previews_todo_count = 0;
   }
   cache->previews_todo_count++;
+
+  return true;
 }
 
 static void filelist_cache_init(FileListEntryCache *cache, size_t cache_size)
@@ -2614,6 +2624,11 @@ bool filelist_file_cache_block(FileList *filelist, const int index)
   //  printf("%s Finished!\n", __func__);
 
   return true;
+}
+
+bool filelist_cache_previews_enabled(const FileList *filelist)
+{
+  return (filelist->filelist_cache.flags & FLC_PREVIEWS_ACTIVE) != 0;
 }
 
 void filelist_cache_previews_set(FileList *filelist, const bool use_previews)
