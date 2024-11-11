@@ -226,6 +226,8 @@ static void extend_curve(bke::CurvesGeometry &curves, const bool on_back, const 
 
 class PaintOperation : public GreasePencilStrokeOperation {
  private:
+  int curve_start_point_index_;
+
   /* Screen space coordinates from input samples. */
   Vector<float2> screen_space_coords_orig_;
 
@@ -240,9 +242,6 @@ class PaintOperation : public GreasePencilStrokeOperation {
   /* Screen space coordinates after smoothing and jittering. */
   Vector<float2> screen_space_final_coords_;
 
-  /* Vector of deferred input samples. */
-  Vector<InputSample> deferred_input_samples_;
-
   /* The start index of the smoothing window. */
   int active_smooth_start_index_ = 0;
   blender::float4x2 texture_space_ = float4x2::identity();
@@ -252,10 +251,6 @@ class PaintOperation : public GreasePencilStrokeOperation {
 
   /* Direction the pen is moving in smoothed over time. */
   float2 smoothed_pen_direction_ = float2(0.0f);
-
-  /* Used to constrain drawing in straight lines. */
-  std::optional<bool> constrained_pen_stored_ = false;
-  float2 constrained_pen_coords_ = float2(0.0f);
 
   /* Accumulated distance along the stroke. */
   float accum_distance_ = 0.0f;
@@ -274,6 +269,9 @@ class PaintOperation : public GreasePencilStrokeOperation {
   double start_time_;
   /* Current delta time from #start_time_, updated after each extension sample. */
   double delta_time_;
+
+  /* Straight line settings. */
+  bool mat_line_mode_;
 
   friend struct PaintOperationExecutor;
 
@@ -486,29 +484,6 @@ struct PaintOperationExecutor {
     return sign(p) * length(p) * normalize(sign(normalize(abs(p)) - sin225) + 1.0f);
   }
 
-  static void stroke_line_constrain_set_direction(PaintOperation &self, float2 &coords)
-  {
-    if (self.constrained_pen_stored_ == false) {
-      const float2 start_coords = self.screen_space_coords_orig_.first();
-      const float2 dir = snap_8_angles(coords - start_coords);
-      self.constrained_pen_coords_ = dir + start_coords;
-      self.constrained_pen_stored_ = true;
-    }
-  }
-
-  static void stroke_line_constrain(PaintOperation &self, float2 &coords)
-  {
-    if (!self.constrain_modifier_) {
-      return;
-    }
-
-    stroke_line_constrain_set_direction(self, coords);
-
-    closest_to_line_v2(
-        coords, coords, self.screen_space_coords_orig_.first(), self.constrained_pen_coords_);
-    return;
-  }
-
   void process_start_sample(PaintOperation &self,
                             const bContext &C,
                             const InputSample &start_sample,
@@ -556,6 +531,8 @@ struct PaintOperationExecutor {
                                        curves.curves_range().last();
     const IndexRange curve_points = curves.points_by_curve()[active_curve];
     const int last_active_point = curve_points.last();
+
+    self.curve_start_point_index_ = last_active_point;
 
     Set<std::string> point_attributes_to_skip;
     Set<std::string> curve_attributes_to_skip;
@@ -770,8 +747,7 @@ struct PaintOperationExecutor {
 
   void process_extension_sample(PaintOperation &self,
                                 const bContext &C,
-                                const InputSample &extension_sample,
-                                const bool is_deferred)
+                                const InputSample &extension_sample)
   {
     Scene *scene = CTX_data_scene(&C);
     const RegionView3D *rv3d = CTX_wm_region_view3d(&C);
@@ -780,35 +756,44 @@ struct PaintOperationExecutor {
 
     float2 coords = extension_sample.mouse_position;
 
-    if (self.constrain_modifier_) {
-      if (is_deferred == false) {
-        /* Defer stroke. */
-        constexpr float defer_distance = 32.0f;
+    bke::CurvesGeometry &curves = drawing_->strokes_for_write();
+    OffsetIndices<int> points_by_curve = curves.points_by_curve();
+    bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
 
-        /* Determine dominant stroke direction using distance metric. */
-        const float current_distance = math::distance(coords,
-                                                      self.screen_space_coords_orig_.first());
+    const int active_curve = on_back ? curves.curves_range().first() :
+                                       curves.curves_range().last();
+    const IndexRange curve_points = points_by_curve[active_curve];
+    const int last_active_point = curve_points.last();
 
-        /* Defer until stroke direction is determined, 1 sample is too few. */
-        if (current_distance < defer_distance) {
-          self.deferred_input_samples_.append(extension_sample);
-          return;
-        }
+    /* Set sample higher if we are not in line mode or randomise is set. */
+    const int line_max_samples = (!self.mat_line_mode_ || use_settings_random_) ? 63 : 7;
 
-        /* Set direction. */
-        stroke_line_constrain_set_direction(self, coords);
+    if (self.straight_line_mode_) {
+      const int num_points = curve_points.size();
+      const bool is_first_sample = (curve_points.size() == 1);
+      const float2 start = self.screen_space_coords_orig_.first();
+      coords = (self.constrain_line_ == true) ? snap_8_angles(coords - start) + start : coords;
 
-        /* Process deferred samples. */
-        if (self.deferred_input_samples_.size() > 0) {
-          for (InputSample deferred_sample : self.deferred_input_samples_) {
-            process_extension_sample(self, C, deferred_sample, false);
+      /* Resample line positions. */
+      if (!is_first_sample) {
+        MutableSpan<float3> positions = curves.positions_for_write();
+        const bool use_jitter = self.screen_space_jitter_offsets_.size() >=
+                                self.screen_space_coords_orig_.size();
+
+        for (int i : self.screen_space_coords_orig_.index_range().drop_front(1)) {
+          const float t = float(i) / float(line_max_samples);
+          float2 new_position = math::interpolate(start, coords, t);
+          self.screen_space_coords_orig_[i] = new_position;
+          if (use_jitter) {
+            new_position += self.screen_space_jitter_offsets_[i];
           }
-          self.deferred_input_samples_.clear();
+          positions[self.curve_start_point_index_ + i] = self.placement_.project(new_position);
         }
       }
+      if (num_points >= line_max_samples) {
+        return;
+      }
     }
-
-    stroke_line_constrain(self, coords);
 
     float3 position = self.placement_.project(coords);
     float radius = ed::greasepencil::radius_from_input_sample(rv3d,
@@ -824,15 +809,6 @@ struct PaintOperationExecutor {
     const float brush_radius_px = brush_radius_to_pixel_radius(
         rv3d, brush_, math::transform_point(self.placement_.to_world_space(), position));
 
-    bke::CurvesGeometry &curves = drawing_->strokes_for_write();
-    OffsetIndices<int> points_by_curve = curves.points_by_curve();
-    bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
-
-    const int active_curve = on_back ? curves.curves_range().first() :
-                                       curves.curves_range().last();
-    const IndexRange curve_points = points_by_curve[active_curve];
-    const int last_active_point = curve_points.last();
-
     const float2 prev_coords = self.screen_space_coords_orig_.last();
     float prev_radius = drawing_->radii()[last_active_point];
     const float prev_opacity = drawing_->opacities()[last_active_point];
@@ -843,7 +819,7 @@ struct PaintOperationExecutor {
     /* Use the vector from the previous to the next point. Set the direction based on the first two
      * samples. For subsequent samples, interpolate with the previous direction to get a smoothed
      * value over time. */
-    if (is_first_sample) {
+    if (is_first_sample || self.straight_line_mode_) {
       self.smoothed_pen_direction_ = self.screen_space_coords_orig_.last() - coords;
     }
     else {
@@ -909,9 +885,14 @@ struct PaintOperationExecutor {
                                                float(brush_radius_px),
                                            1.0f / float(max_points_per_pixel));
     /* If the next sample is far away, we subdivide the segment to add more points. */
-    const int new_points_num = (distance_px > max_spacing_px) ?
-                                   int(math::floor(distance_px / max_spacing_px)) :
-                                   1;
+    int new_points_num = (distance_px > max_spacing_px && !self.straight_line_mode_) ?
+                             int(math::floor(distance_px / max_spacing_px)) :
+                             1;
+
+    if (is_first_sample && self.straight_line_mode_) {
+      new_points_num = line_max_samples;
+    }
+
     /* Resize the curves geometry. */
     extend_curve(curves, on_back, new_points_num);
 
@@ -1009,7 +990,7 @@ struct PaintOperationExecutor {
     constexpr int64_t min_active_smoothing_points_num = 8;
     const IndexRange smooth_window = self.screen_space_coords_orig_.index_range().drop_front(
         self.active_smooth_start_index_);
-    if (smooth_window.size() < min_active_smoothing_points_num) {
+    if (smooth_window.size() < min_active_smoothing_points_num || self.straight_line_mode_) {
       self.placement_.project(new_screen_space_coords, new_positions);
     }
     else {
@@ -1049,15 +1030,12 @@ struct PaintOperationExecutor {
     drawing_->set_texture_matrices({self.texture_space_}, IndexRange::from_single(active_curve));
   }
 
-  void execute(PaintOperation &self,
-               const bContext &C,
-               const InputSample &extension_sample,
-               const bool deferred)
+  void execute(PaintOperation &self, const bContext &C, const InputSample &extension_sample)
   {
     const Scene *scene = CTX_data_scene(&C);
     const bool on_back = (scene->toolsettings->gpencil_flags & GP_TOOL_FLAG_PAINT_ONBACK) != 0;
 
-    this->process_extension_sample(self, C, extension_sample, deferred);
+    this->process_extension_sample(self, C, extension_sample);
 
     const bke::CurvesGeometry &curves = drawing_->strokes();
     const int active_curve = on_back ? curves.curves_range().first() :
@@ -1129,6 +1107,9 @@ void PaintOperation::on_stroke_begin(const bContext &C, const InputSample &start
   const int material_index = BKE_object_material_index_get(object, material);
   const bool use_fill = (material->gp_style->flag & GP_MATERIAL_FILL_SHOW) != 0;
 
+  /* Straight line. */
+  mat_line_mode_ = material->gp_style->mode == eMaterialGPencilStyle_Mode(GP_MATERIAL_MODE_LINE);
+
   /* We're now starting to draw. */
   grease_pencil->runtime->is_drawing_stroke = true;
 
@@ -1150,7 +1131,7 @@ void PaintOperation::on_stroke_extended(const bContext &C, const InputSample &ex
   GreasePencil *grease_pencil = static_cast<GreasePencil *>(object->data);
 
   PaintOperationExecutor executor{C};
-  executor.execute(*this, C, extension_sample, false);
+  executor.execute(*this, C, extension_sample);
 
   DEG_id_tag_update(&grease_pencil->id, ID_RECALC_GEOMETRY);
   WM_event_add_notifier(&C, NC_GEOM | ND_DATA, grease_pencil);
@@ -1517,15 +1498,6 @@ static void process_stroke_weights(const Scene &scene,
 
 void PaintOperation::on_stroke_done(const bContext &C)
 {
-  /* Process deferred samples. */
-  if (this->deferred_input_samples_.size() > 0) {
-    PaintOperationExecutor executor(C);
-    for (InputSample deferred_sample : this->deferred_input_samples_) {
-      executor.process_extension_sample(*this, C, deferred_sample, true);
-    }
-    this->deferred_input_samples_.clear();
-  }
-
   using namespace blender::bke;
   Scene *scene = CTX_data_scene(&C);
   Object *object = CTX_data_active_object(&C);
