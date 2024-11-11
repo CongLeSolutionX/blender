@@ -1,2 +1,3 @@
 Referenced by issue #130101, Sculpt Mode: Boundary brush radius broken on mesh without Multires
 Referenced by pull request #130154, Fix #130101: Boundary brush radius uses incorrect initial value
+Referenced by commit 009fb327eedb1bfd30c1aeb1c1330f3fc4f76811, Fix #130101: Boundary brush radius uses incorrect initial value
