@@ -279,6 +279,7 @@ static void populate_curve_props_for_nurbs(const bke::CurvesGeometry &curves,
   orders.resize(num_curves);
 
   const Span<float3> positions = curves.positions();
+  const Span<float> knots_attr = curves.knots();
 
   VArray<int8_t> geom_orders = curves.nurbs_orders();
   VArray<int8_t> knots_modes = curves.nurbs_knots_modes();
@@ -301,7 +302,13 @@ static void populate_curve_props_for_nurbs(const bke::CurvesGeometry &curves,
 
     const int knots_num = bke::curves::nurbs::knots_num(tot_points, order, is_cyclic);
     Array<float> temp_knots(knots_num);
-    bke::curves::nurbs::calculate_knots(tot_points, mode, order, is_cyclic, temp_knots);
+
+    if (mode == NURBS_KNOT_MODE_FREE) {
+      bke::curves::nurbs::expand_knots(knots_attr.slice(points), temp_knots);
+    }
+    else {
+      bke::curves::nurbs::calculate_knots(tot_points, mode, order, is_cyclic, temp_knots);
+    }
 
     /* Knots should be the concatenation of all batched curves.
      * https://graphics.pixar.com/usd/dev/api/class_usd_geom_nurbs_curves.html#details */

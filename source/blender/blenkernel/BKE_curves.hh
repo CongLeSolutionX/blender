@@ -280,6 +280,9 @@ class CurvesGeometry : public ::CurvesGeometry {
   Span<float2> surface_uv_coords() const;
   MutableSpan<float2> surface_uv_coords_for_write();
 
+  Span<float> knots() const;
+  MutableSpan<float> knots_for_write();
+
   /**
    * Vertex group data, encoded as an array of indices and weights for every vertex.
    * \warning: May be empty.
@@ -808,6 +811,8 @@ int knots_num(int points_num, int8_t order, bool cyclic);
  */
 void calculate_knots(
     int points_num, KnotsMode mode, int8_t order, bool cyclic, MutableSpan<float> knots);
+
+void expand_knots(Span<float> src_knots, MutableSpan<float> knots);
 
 /**
  * Based on the knots, the order, and other properties of a NURBS curve, calculate a cache that can

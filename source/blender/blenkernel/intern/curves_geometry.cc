@@ -50,6 +50,7 @@ static const std::string ATTR_NURBS_ORDER = "nurbs_order";
 static const std::string ATTR_NURBS_WEIGHT = "nurbs_weight";
 static const std::string ATTR_NURBS_KNOTS_MODE = "knots_mode";
 static const std::string ATTR_SURFACE_UV_COORDINATE = "surface_uv_coordinate";
+static const std::string ATTR_KNOT = "knot";
 
 /* -------------------------------------------------------------------- */
 /** \name Constructors/Destructor
@@ -485,6 +486,16 @@ MutableSpan<float2> CurvesGeometry::surface_uv_coords_for_write()
   return get_mutable_attribute<float2>(*this, AttrDomain::Curve, ATTR_SURFACE_UV_COORDINATE);
 }
 
+Span<float> CurvesGeometry::knots() const
+{
+  return get_span_attribute<float>(*this, AttrDomain::Point, ATTR_KNOT);
+}
+
+MutableSpan<float> CurvesGeometry::knots_for_write()
+{
+  return get_mutable_attribute<float>(*this, AttrDomain::Point, ATTR_KNOT);
+}
+
 Span<MDeformVert> CurvesGeometry::deform_verts() const
 {
   const MDeformVert *dverts = static_cast<const MDeformVert *>(
@@ -639,6 +650,7 @@ void CurvesGeometry::ensure_nurbs_basis_cache() const
     const VArray<bool> cyclic = this->cyclic();
     const VArray<int8_t> orders = this->nurbs_orders();
     const VArray<int8_t> knots_modes = this->nurbs_knots_modes();
+    const Span<float> knots_attr = this->knots();
 
     nurbs_mask.foreach_segment(GrainSize(64), [&](const IndexMaskSegment segment) {
       Vector<float, 32> knots;
@@ -656,7 +668,12 @@ void CurvesGeometry::ensure_nurbs_basis_cache() const
         }
 
         knots.reinitialize(curves::nurbs::knots_num(points.size(), order, is_cyclic));
-        curves::nurbs::calculate_knots(points.size(), mode, order, is_cyclic, knots);
+        if (mode == NURBS_KNOT_MODE_FREE) {
+          curves::nurbs::expand_knots(knots_attr.slice(points), knots);
+        }
+        else {
+          curves::nurbs::calculate_knots(points.size(), mode, order, is_cyclic, knots);
+        }
         curves::nurbs::calculate_basis_cache(
             points.size(), evaluated_points.size(), order, is_cyclic, knots, r_data[curve_index]);
       }

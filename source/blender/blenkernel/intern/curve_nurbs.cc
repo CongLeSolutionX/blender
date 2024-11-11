@@ -52,6 +52,37 @@ int knots_num(const int points_num, const int8_t order, const bool cyclic)
   return points_num + order;
 }
 
+static void compact_knots(const Span<float> src_knots, MutableSpan<float> knots)
+{
+  for (const int i : IndexRange(knots.size())) {
+    knots[i] = src_knots[i + 1] - src_knots[i];
+  }
+}
+
+void compact_knots(const int points_num,
+                   const KnotsMode mode,
+                   const int8_t order,
+                   const bool is_cyclic,
+                   MutableSpan<float> knots)
+{
+  Array<float> all_knots(curves::nurbs::knots_num(points_num, order, is_cyclic));
+  calculate_knots(points_num, mode, order, is_cyclic, all_knots, );
+  compact_knots(all_knots, knots);
+}
+
+void expand_knots(const Span<float> src_knots, MutableSpan<float> knots)
+{
+  knots[0] = 0;
+  for (const int i : IndexRange(src_knots.size())) {
+    knots[i + 1] = knots[i] + src_knots[i];
+  }
+
+  const int dst_i = src_knots.size();
+  for (const int i : IndexRange::from_begin_end(1, knots.size() - src_knots.size())) {
+    knots[dst_i + i] = knots[dst_i] + knots[i];
+  }
+}
+
 void calculate_knots(const int points_num,
                      const KnotsMode mode,
                      const int8_t order,

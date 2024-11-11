@@ -75,6 +75,7 @@ typedef enum KnotsMode {
   NURBS_KNOT_MODE_ENDPOINT = 1,
   NURBS_KNOT_MODE_BEZIER = 2,
   NURBS_KNOT_MODE_ENDPOINT_BEZIER = 3,
+  NURBS_KNOT_MODE_FREE = 4,
 } KnotsMode;
 
 /** Method used to calculate the normals of a curve's evaluated points. */
