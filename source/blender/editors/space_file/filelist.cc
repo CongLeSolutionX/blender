@@ -1587,7 +1587,7 @@ static void filelist_cache_preview_freef(TaskPool *__restrict /*pool*/, void *ta
   MEM_freeN(preview_taskdata);
 }
 
-void filelist_cache_preview_ensure_running(FileListEntryCache *cache)
+static void filelist_cache_preview_ensure_running(FileListEntryCache *cache)
 {
   if (!cache->previews_pool) {
     cache->previews_pool = BLI_task_pool_create_background(cache, TASK_PRIORITY_LOW);
