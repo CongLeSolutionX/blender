@@ -360,7 +360,7 @@ static int groupname_to_code(const char *group);
 static void filelist_cache_clear(FileListEntryCache *cache, size_t new_size);
 static bool filelist_intern_entry_is_main_file(const FileListInternEntry *intern_entry);
 static bool filelist_cache_previews_push(FileList *filelist, FileDirEntry *entry, const int index);
-static bool filelist_file_may_have_preview(const FileDirEntry *entry);
+static bool filelist_file_preview_load_poll(const FileDirEntry *entry);
 
 /* ********** Sort helpers ********** */
 
@@ -1171,11 +1171,13 @@ bool filelist_file_ensure_preview_requested(FileList *filelist, FileDirEntry *fi
     /* Already loaded. */
     return false;
   }
+
   /* Wait with requests until file list reading is done, and previews may be loaded. */
   if (!filelist_cache_previews_enabled(filelist)) {
     return false;
   }
-  if (!filelist_file_may_have_preview(file)) {
+  /* #filelist_cache_previews_push() will repeat this, do here already to avoid lookup below. */
+  if (!filelist_file_preview_load_poll(file)) {
     return false;
   }
 
@@ -1648,7 +1650,12 @@ static void filelist_cache_previews_free(FileListEntryCache *cache)
   cache->flags &= ~FLC_PREVIEWS_ACTIVE;
 }
 
-static bool filelist_file_may_have_preview(const FileDirEntry *entry)
+/**
+ * Check if a preview for \a entry may be requested. Further conditions may apply, this just helps
+ * to skip plenty of entries where it's easy to tell that no valid preview will be available or is
+ * being loaded already.
+ */
+static bool filelist_file_preview_load_poll(const FileDirEntry *entry)
 {
   if (entry->flags & (FILE_ENTRY_INVALID_PREVIEW | FILE_ENTRY_PREVIEW_LOADING)) {
     return false;
@@ -1694,7 +1701,7 @@ static bool filelist_cache_previews_push(FileList *filelist, FileDirEntry *entry
     return false;
   }
 
-  if (!filelist_file_may_have_preview(entry)) {
+  if (!filelist_file_preview_load_poll(entry)) {
     return false;
   }
 
