@@ -784,7 +784,7 @@ static int grease_pencil_merge_layer_exec(bContext *C, wmOperator *op)
       else if (layer_i == prev_layer_index) {
         /* Previous layer merges itself and the active layer. */
         src_layer_indices_by_dst_layer.append({prev_layer_index, active_layer_index});
-      }      
+      }
       else {
         /* Other layers remain unchanged. */
         src_layer_indices_by_dst_layer.append({layer_i});
