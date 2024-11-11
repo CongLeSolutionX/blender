@@ -8,6 +8,7 @@
  * \ingroup bke
  */
 
+#include "DNA_listBase.h"
 #define DNA_DEPRECATED_ALLOW
 
 #include "MEM_guardedalloc.h"
@@ -1011,6 +1012,21 @@ static void seq_update_sound_strips(Scene *scene, Sequence *seq)
   seq_update_sound_modifiers(seq);
 }
 
+static bool scene_sequencer_is_used(const Scene *scene, ListBase *seqbase)
+{
+  bool sequencer_is_used = false;
+  LISTBASE_FOREACH (Sequence *, seq_iter, seqbase) {
+    if (seq_iter->scene == scene && (seq_iter->flag & SEQ_SCENE_STRIPS) != 0) {
+      sequencer_is_used = true;
+    }
+    if (seq_iter->type == SEQ_TYPE_META) {
+      sequencer_is_used |= scene_sequencer_is_used(scene, &seq_iter->seqbase);
+    }
+  }
+
+  return sequencer_is_used;
+}
+
 static void seq_update_scene_strip_sound(const Scene *scene, Sequence *seq)
 {
   if (seq->type != SEQ_TYPE_SCENE || seq->scene == nullptr) {
@@ -1026,15 +1042,9 @@ static void seq_update_scene_strip_sound(const Scene *scene, Sequence *seq)
   BKE_sound_set_scene_volume(seq->scene, seq->scene->audio.volume);
 
   /* Mute sound when all scene strips using particular scene are not rendering sequencer strips. */
-  bool scene_sequencer_is_used = false;
-  LISTBASE_FOREACH (Sequence *, seq_iter, &scene->ed->seqbase) {
-    if (seq_iter->scene == seq->scene && (seq_iter->flag & SEQ_SCENE_STRIPS) != 0) {
-      scene_sequencer_is_used = true;
-    }
-  }
+  bool sequencer_is_used = scene_sequencer_is_used(seq->scene, &scene->ed->seqbase);
 
-  if (!scene_sequencer_is_used && seq->scene->sound_scene != nullptr && seq->scene->ed != nullptr)
-  {
+  if (!sequencer_is_used && seq->scene->sound_scene != nullptr && seq->scene->ed != nullptr) {
     SEQ_for_each_callback(&seq->scene->ed->seqbase, seq_mute_sound_strips_cb, seq->scene);
   }
 }
