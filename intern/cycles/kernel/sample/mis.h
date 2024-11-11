@@ -26,16 +26,6 @@ ccl_device float power_heuristic(float a, float b)
   return (a * a) / (a * a + b * b);
 }
 
-ccl_device Spectrum power_heuristic(Spectrum a, float b)
-{
-  return (a * a) / (a * a + b * b);
-}
-
-ccl_device Spectrum power_heuristic(float a, Spectrum b)
-{
-  return (a * a) / (b * b + a * a);
-}
-
 ccl_device float power_heuristic_3(float a, float b, float c)
 {
   return (a * a) / (a * a + b * b + c * c);
