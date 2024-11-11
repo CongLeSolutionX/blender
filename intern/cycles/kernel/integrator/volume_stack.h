@@ -125,6 +125,8 @@ ccl_device_inline void volume_stack_clean(KernelGlobals kg, IntegratorState stat
   }
 }
 
+/* TODO(weizhen): this function is not used, but kept for now as a reference when I implement the
+ * function for world later. */
 /* Check if the volume is homogeneous by checking if the shader flag is set or if volume attributes
  * are needed. */
 ccl_device_inline bool volume_is_homogeneous(KernelGlobals kg,
