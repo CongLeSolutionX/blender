@@ -1,1 +1,2 @@
 Referenced by issue #130066, Grease Pencil history evaluation crash with a record of joined GP objects
+Referenced by issue #130113, Blender 4.3 bpy.data.libraries.write() is not saving the object previews for assets.
