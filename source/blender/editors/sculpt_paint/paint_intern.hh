@@ -13,20 +13,13 @@
 #include "BLI_function_ref.hh"
 #include "BLI_index_mask_fwd.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_rand.hh"
 #include "BLI_set.hh"
 #include "BLI_span.hh"
 #include "BLI_vector.hh"
 
-#include "DNA_scene_types.h"
-
-#include "ED_view3d.hh"
-
 #include "DNA_object_enums.h"
 #include "DNA_scene_enums.h"
 #include "DNA_vec_types.h"
-
-#include "WM_types.hh"
 
 enum class PaintMode : int8_t;
 
@@ -86,86 +79,6 @@ using StrokeUpdateStep = void (*)(bContext *C,
 using StrokeRedraw = void (*)(const bContext *C, PaintStroke *stroke, bool final);
 using StrokeDone = void (*)(const bContext *C, PaintStroke *stroke);
 
-class PaintModeData {
- public:
-  virtual ~PaintModeData() = default;
-};
-
-struct PaintSample {
-  float2 mouse;
-  float pressure;
-};
-
-struct PaintStroke {
-  std::unique_ptr<PaintModeData> mode_data;
-  void *stroke_cursor;
-  wmTimer *timer;
-  std::optional<RandomNumberGenerator> rng;
-
-  /* Cached values */
-  ViewContext vc;
-  Brush *brush;
-  UnifiedPaintSettings *ups;
-
-  /* Paint stroke can use up to PAINT_MAX_INPUT_SAMPLES prior inputs
-   * to smooth the stroke */
-  PaintSample samples[PAINT_MAX_INPUT_SAMPLES];
-  int num_samples;
-  int cur_sample;
-  int tot_samples;
-
-  float2 last_mouse_position;
-  float3 last_world_space_position;
-  float3 last_scene_spacing_delta;
-
-  bool stroke_over_mesh;
-  /* space distance covered so far */
-  float stroke_distance;
-
-  /* Set whether any stroke step has yet occurred
-   * e.g. in sculpt mode, stroke doesn't start until cursor
-   * passes over the mesh */
-  bool stroke_started;
-  /* Set when enough motion was found for rake rotation */
-  bool rake_started;
-  /* event that started stroke, for modal() return */
-  int event_type;
-  /* check if stroke variables have been initialized */
-  bool stroke_init;
-  /* check if various brush mapping variables have been initialized */
-  bool brush_init;
-  float2 initial_mouse;
-  /* cached_pressure stores initial pressure for size pressure influence mainly */
-  float cached_size_pressure;
-  /* last pressure will store last pressure value for use in interpolation for space strokes */
-  float last_pressure;
-  int stroke_mode;
-
-  float last_tablet_event_pressure;
-
-  float zoom_2d;
-  bool pen_flip;
-
-  /* Tilt, as read from the event. */
-  float x_tilt;
-  float y_tilt;
-
-  /* line constraint */
-  bool constrain_line;
-  float2 constrained_pos;
-
-  /* modifier */
-  uint8_t event_modifier;
-
-  StrokeGetLocation get_location;
-  StrokeTestStart test_start;
-  StrokeUpdateStep update_step;
-  StrokeRedraw redraw;
-  StrokeDone done;
-
-  bool original; /* Ray-cast original mesh at start of stroke. */
-};
-
 PaintStroke *paint_stroke_new(bContext *C,
                               wmOperator *op,
                               StrokeGetLocation get_location,
@@ -204,6 +117,10 @@ ViewContext *paint_stroke_view_context(PaintStroke *stroke);
 void *paint_stroke_mode_data(PaintStroke *stroke);
 float paint_stroke_distance_get(PaintStroke *stroke);
 
+class PaintModeData {
+ public:
+  virtual ~PaintModeData() = default;
+};
 void paint_stroke_set_mode_data(PaintStroke *stroke, std::unique_ptr<PaintModeData> mode_data);
 
 bool paint_stroke_started(PaintStroke *stroke);

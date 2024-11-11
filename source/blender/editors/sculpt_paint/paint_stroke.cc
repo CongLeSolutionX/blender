@@ -14,6 +14,7 @@
 
 #include "BLI_math_matrix.h"
 #include "BLI_math_matrix.hh"
+#include "BLI_rand.hh"
 #include "BLI_utildefines.h"
 
 #include "DNA_brush_types.h"
@@ -52,6 +53,78 @@
 #endif
 
 namespace blender::ed::sculpt_paint {
+
+struct PaintSample {
+  float2 mouse;
+  float pressure;
+};
+
+struct PaintStroke {
+  std::unique_ptr<PaintModeData> mode_data;
+  void *stroke_cursor;
+  wmTimer *timer;
+  std::optional<RandomNumberGenerator> rng;
+
+  /* Cached values */
+  ViewContext vc;
+  Brush *brush;
+  UnifiedPaintSettings *ups;
+
+  /* Paint stroke can use up to PAINT_MAX_INPUT_SAMPLES prior inputs
+   * to smooth the stroke */
+  PaintSample samples[PAINT_MAX_INPUT_SAMPLES];
+  int num_samples;
+  int cur_sample;
+  int tot_samples;
+
+  float2 last_mouse_position;
+  float3 last_world_space_position;
+  float3 last_scene_spacing_delta;
+
+  bool stroke_over_mesh;
+  /* space distance covered so far */
+  float stroke_distance;
+
+  /* Set whether any stroke step has yet occurred
+   * e.g. in sculpt mode, stroke doesn't start until cursor
+   * passes over the mesh */
+  bool stroke_started;
+  /* Set when enough motion was found for rake rotation */
+  bool rake_started;
+  /* event that started stroke, for modal() return */
+  int event_type;
+  /* check if stroke variables have been initialized */
+  bool stroke_init;
+  /* check if various brush mapping variables have been initialized */
+  bool brush_init;
+  float2 initial_mouse;
+  /* cached_pressure stores initial pressure for size pressure influence mainly */
+  float cached_size_pressure;
+  /* last pressure will store last pressure value for use in interpolation for space strokes */
+  float last_pressure;
+  int stroke_mode;
+
+  float last_tablet_event_pressure;
+
+  float zoom_2d;
+  bool pen_flip;
+
+  /* Tilt, as read from the event. */
+  float x_tilt;
+  float y_tilt;
+
+  /* line constraint */
+  bool constrain_line;
+  float2 constrained_pos;
+
+  StrokeGetLocation get_location;
+  StrokeTestStart test_start;
+  StrokeUpdateStep update_step;
+  StrokeRedraw redraw;
+  StrokeDone done;
+
+  bool original; /* Ray-cast original mesh at start of stroke. */
+};
 
 /*** Cursors ***/
 static void paint_draw_smooth_cursor(bContext *C, const int x, const int y, void *customdata)
@@ -1374,8 +1447,6 @@ int paint_stroke_modal(bContext *C, wmOperator *op, const wmEvent *event, PaintS
   bool first_dab = false;
   bool first_modal = false;
   bool redraw = false;
-
-  stroke->event_modifier = event->modifier;
 
   if (event->type == INBETWEEN_MOUSEMOVE &&
       !image_paint_brush_type_require_inbetween_mouse_events(*br, mode))

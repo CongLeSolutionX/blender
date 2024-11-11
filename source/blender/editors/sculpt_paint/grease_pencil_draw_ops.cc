@@ -192,11 +192,13 @@ static void stroke_update_step(bContext *C,
   if (!operation) {
     std::unique_ptr<GreasePencilStrokeOperation> new_operation = get_stroke_operation(*C, op);
     BLI_assert(new_operation != nullptr);
+    new_operation->straight_line_mode_ = RNA_boolean_get(op->ptr, "straight_line_mode");
+    new_operation->constrain_line_ = RNA_boolean_get(op->ptr, "constrain_line");
     new_operation->on_stroke_begin(*C, sample);
-    new_operation->constrain_modifier_ = stroke->event_modifier & KM_ALT;
     paint_stroke_set_mode_data(stroke, std::move(new_operation));
   }
   else {
+    operation->constrain_line_ = RNA_boolean_get(op->ptr, "constrain_line");
     operation->on_stroke_extended(*C, sample);
   }
 }
@@ -237,7 +239,6 @@ static int grease_pencil_brush_stroke_invoke(bContext *C, wmOperator *op, const 
   if (event->tablet.active == EVT_TABLET_ERASER) {
     RNA_enum_set(op->ptr, "mode", BRUSH_STROKE_ERASE);
   }
-
   const bool use_duplicate_previous_key = [&]() -> bool {
     const Paint *paint = BKE_paint_get_active_from_context(C);
     const Brush &brush = *BKE_paint_brush_for_read(paint);
@@ -281,13 +282,14 @@ static int grease_pencil_brush_stroke_invoke(bContext *C, wmOperator *op, const 
   if (return_value == OPERATOR_FINISHED) {
     return OPERATOR_FINISHED;
   }
-
   WM_event_add_modal_handler(C, op);
   return OPERATOR_RUNNING_MODAL;
 }
 
 static int grease_pencil_brush_stroke_modal(bContext *C, wmOperator *op, const wmEvent *event)
 {
+  RNA_boolean_set(op->ptr, "straight_line_mode", (event->modifier & KM_ALT));
+  RNA_boolean_set(op->ptr, "constrain_line", (event->modifier & KM_SHIFT));
   return paint_stroke_modal(C, op, event, reinterpret_cast<PaintStroke **>(&op->customdata));
 }
 
@@ -310,6 +312,12 @@ static void GREASE_PENCIL_OT_brush_stroke(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
   paint_stroke_operator_properties(ot);
+
+  PropertyRNA *prop;
+  prop = RNA_def_boolean(ot->srna, "straight_line_mode", false, "Straight Line Mode", "");
+  RNA_def_property_flag(prop, PropertyFlag(PROP_HIDDEN | PROP_SKIP_SAVE));
+  prop = RNA_def_boolean(ot->srna, "constrain_line", false, "Constrain Line", "");
+  RNA_def_property_flag(prop, PropertyFlag(PROP_HIDDEN | PROP_SKIP_SAVE));
 }
 
 /** \} */

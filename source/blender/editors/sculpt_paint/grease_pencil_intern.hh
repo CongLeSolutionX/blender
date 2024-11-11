@@ -46,7 +46,9 @@ struct InputSample {
 
 class GreasePencilStrokeOperation : public PaintModeData {
  public:
-  bool constrain_modifier_;
+  bool straight_line_mode_;
+  bool constrain_line_;
+
   virtual void on_stroke_begin(const bContext &C, const InputSample &start_sample) = 0;
   virtual void on_stroke_extended(const bContext &C, const InputSample &extension_sample) = 0;
   virtual void on_stroke_done(const bContext &C) = 0;
