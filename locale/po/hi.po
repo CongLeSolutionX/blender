@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.3.0 Beta (b'6039cb17e63e')\n"
+"Project-Id-Version: Blender 4.3.0 Beta (b'28a8486e2b3f')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-10-07 09:15+0000\n"
+"POT-Creation-Date: 2024-10-29 10:02+0000\n"
 "PO-Revision-Date: 2015-03-03 16:21+0530\n"
 "Last-Translator: Roshan Lal Gumasta <roshan@anisecrets.com>\n"
 "Language-Team: Hindi <www.anisecrets.com>\n"
@@ -2672,12 +2672,12 @@ msgid "Flip"
 msgstr "पलटें"
 
 
-msgid "Snap"
-msgstr "स्नैप"
-
-
 msgid "Mirror"
 msgstr "दर्पण"
+
+
+msgid "Snap"
+msgstr "स्नैप"
 
 
 msgid "Rigid Body"
@@ -3806,10 +3806,6 @@ msgid "Limit"
 msgstr "सीमा"
 
 
-msgid "Only Selected"
-msgstr "केवल चयनित"
-
-
 msgctxt "Operator"
 msgid "Merge"
 msgstr "विलय करें"
@@ -3926,6 +3922,10 @@ msgstr "अदला-बदली"
 msgctxt "Operator"
 msgid "Knife Project"
 msgstr "चाकू प्रक्षेपण"
+
+
+msgid "Only Selected"
+msgstr "केवल चयनित"
 
 
 msgid "X-Ray"
@@ -5259,54 +5259,6 @@ msgstr "लागू करें"
 
 msgid "Options:"
 msgstr "विकल्प:"
-
-
-msgid "Save to PO File"
-msgstr "PO फाइल को बचाने के लिए"
-
-
-msgid "Rebuild MO File"
-msgstr "एमओ संचिका के पुनर्निर्माण"
-
-
-msgid "Erase Local MO files"
-msgstr "स्थानीय MO संचिकाें मिटाएँ"
-
-
-msgid "    RNA Path: bpy.types."
-msgstr "    आर एन ए पथ: bpy.types."
-
-
-msgid "    RNA Context: "
-msgstr "    आर एन ए संदर्भ: "
-
-
-msgid "Button Label:"
-msgstr "बटन सूचक पत्र:"
-
-
-msgid "RNA Label:"
-msgstr "आर एन ए सूचक पत्र:"
-
-
-msgid "Enum Item Label:"
-msgstr "Enum आइटम सूचक पत्र:"
-
-
-msgid "Button Tip:"
-msgstr "बटन युक्ति:"
-
-
-msgid "RNA Tip:"
-msgstr "आर एन ए टिप:"
-
-
-msgid "Enum Item Tip:"
-msgstr "Enum आइटम टिप:"
-
-
-msgid "Could not write to po file ({})"
-msgstr "पो संचिका (()) करने के लिए नहीं लिख सकता है"
 
 
 msgctxt "Operator"
@@ -6707,11 +6659,6 @@ msgstr "रिक्त स्थान"
 
 msgid "Overwrite %s"
 msgstr "अधिलेखित करें %s"
-
-
-msgctxt "Action"
-msgid "Group"
-msgstr "समूह"
 
 
 msgid "Flame"

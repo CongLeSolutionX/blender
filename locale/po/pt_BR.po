@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.3.0 Beta (b'6039cb17e63e')\n"
+"Project-Id-Version: Blender 4.3.0 Beta (b'28a8486e2b3f')\n"
 "Report-Msgid-Bugs-To: Leandro Paganelli <leandrobp@fastmail.com>\n"
-"POT-Creation-Date: 2024-10-07 09:15+0000\n"
+"POT-Creation-Date: 2024-10-29 10:02+0000\n"
 "PO-Revision-Date: 2024-04-15 06:56+0000\n"
 "Last-Translator: Ruan da Silva Andrade <ruanandrade818@gmail.com>\n"
 "Language-Team: Portuguese (Brazil) <https://translate.blender.org/projects/blender-ui/ui/pt_BR/>\n"
@@ -2523,10 +2523,6 @@ msgstr "Coleção de fontes"
 
 msgid "Main Grease Pencils"
 msgstr "Lápis de cera principais"
-
-
-msgid "Collection of grease pencils"
-msgstr "Coleção de lápis de cera"
 
 
 msgid "Main Images"
@@ -14793,10 +14789,6 @@ msgid "Global scene frame number at which this movie starts playing (affects all
 msgstr "Número de quadro da cena global no qual este filme começar a reproduzir (afeta todos os dados associados com um clipe)."
 
 
-msgid "Grease pencil data for this movie clip"
-msgstr "Dados de lápis de cera para este clipe de filme."
-
-
 msgid "Where the clip comes from"
 msgstr "De onde o clipe veio."
 
@@ -18207,28 +18199,8 @@ msgid "Codec"
 msgstr "Codificador"
 
 
-msgid "Codec settings for OpenEXR"
-msgstr "Configurações de codificação para OpenEXR"
-
-
 msgid "Pxr24 (lossy)"
 msgstr "Pxr24 (com perdas)"
-
-
-msgid "ZIP (lossless)"
-msgstr "ZIP (sem perdas)"
-
-
-msgid "PIZ (lossless)"
-msgstr "PIZ (sem perdas)"
-
-
-msgid "RLE (lossless)"
-msgstr "RLE (sem perdas)"
-
-
-msgid "ZIPS (lossless)"
-msgstr "ZIPS (sem perdas)"
 
 
 msgid "B44 (lossy)"
@@ -21515,16 +21487,12 @@ msgid "Material slot name"
 msgstr "Nome do compartimento do material."
 
 
-msgid "Snap"
-msgstr "Atrair"
-
-
-msgid "Proportional Editing Falloff"
-msgstr "Tipo de decaimento para edição proporcional"
-
-
 msgid "Mirror"
 msgstr "Espelhar"
+
+
+msgid "Snap"
+msgstr "Atrair"
 
 
 msgid "UV Mapping"
@@ -21673,6 +21641,10 @@ msgstr "Rolagem dos ossos"
 
 msgid "Pivot Point"
 msgstr "Pontos de pivô"
+
+
+msgid "Proportional Editing Falloff"
+msgstr "Tipo de decaimento para edição proporcional"
 
 
 msgid "Basic"
@@ -26528,10 +26500,6 @@ msgid "Use Mask"
 msgstr "Usar máscara"
 
 
-msgid "Use a grease pencil data-block as a mask to use only specified areas of pattern when tracking"
-msgstr "Usa um bloco de dados de lápis de cera como máscara para usar somente áreas especificadas como padrão durante os rastreamentos."
-
-
 msgid "Normalize"
 msgstr "Normalizar"
 
@@ -26754,10 +26722,6 @@ msgstr "Cor da trilha dentro do editor de clipes de filme e na janela de exibiç
 
 msgid "Minimal value of correlation between matched pattern and reference that is still treated as successful tracking"
 msgstr "Valor mínimo de correlação entre os padrões similares e referências que estão sendo ainda tratadas como um rastreamento de sucesso."
-
-
-msgid "Grease pencil data for this track"
-msgstr "Dados de lápis de cera para esta trilha."
 
 
 msgid "Has Bundle"
@@ -36186,19 +36150,6 @@ msgstr "Anotação - Adicinar Nova"
 
 
 msgctxt "Operator"
-msgid "Insert Blank Frame"
-msgstr "Inserir quadro em branco"
-
-
-msgid "Insert a blank frame on the current frame (all subsequently existing frames, if any, are shifted right by one frame)"
-msgstr "Insere um quadro em branco no quadro atual (todos os quadros subsequenciais existentes, caso existam, serão deslocados à direita em um quadro)."
-
-
-msgid "Create blank frame in all layers, not only active"
-msgstr "Cria um quadro em branco em todas as camadas, e não somente na ativa."
-
-
-msgctxt "Operator"
 msgid "Annotation Unlink"
 msgstr "Desvincular Anotação"
 
@@ -36621,12 +36572,13 @@ msgstr "Preenchimento do Lápis de Cera"
 
 
 msgctxt "Operator"
+msgid "Insert Blank Frame"
+msgstr "Inserir quadro em branco"
+
+
+msgctxt "Operator"
 msgid "Grease Pencil Interpolation"
 msgstr "Interpolação de lápis de cera"
-
-
-msgid "Interpolate grease pencil strokes between frames"
-msgstr "Interpola os traços de lápis de cera entre os quadros."
 
 
 msgid "No Flip"
@@ -36651,10 +36603,6 @@ msgid "Easing"
 msgstr "Afrouxamento"
 
 
-msgid "Which ends of the segment between the preceding and following grease pencil frames easing interpolation is applied to"
-msgstr "Quais terminações do segmento entre os quadros de lápis de cera anteriores e o posteriores a facilitação de interpolação será aplicada."
-
-
 msgctxt "GPencil"
 msgid "Automatic Easing"
 msgstr "Afrouxamento Automático"
@@ -36673,10 +36621,6 @@ msgstr "Afrouxar Saída"
 msgctxt "GPencil"
 msgid "Ease In and Out"
 msgstr "Afrouxar Entrada e Saída"
-
-
-msgid "Only Selected"
-msgstr "Somente selecionados"
 
 
 msgid "Interpolation method to use the next time 'Interpolate Sequence' is run"
@@ -38908,6 +38852,10 @@ msgstr "Ferramenta de faca para topologia"
 
 msgid "Cut new topology"
 msgstr "Permite cortar uma nova topologia."
+
+
+msgid "Only Selected"
+msgstr "Somente selecionados"
 
 
 msgid "Only cut selected geometry"
@@ -46266,10 +46214,6 @@ msgid "Reassign the inputs for the effect strip"
 msgstr "Reatribui as entradas para a faixa de efeito."
 
 
-msgid "Rebuild all selected proxies and timecode indices using the job system"
-msgstr "Reconstrói todas as aproximações selecionadas e os índices de código de tempo usando o sistema de tarefas."
-
-
 msgctxt "Operator"
 msgid "Refresh Sequencer"
 msgstr "Atualizar editor de sequências"
@@ -50368,14 +50312,6 @@ msgid "Active Palette Color"
 msgstr "Cor ativa da paleta"
 
 
-msgid "Wire Color"
-msgstr "Cor dos cabos"
-
-
-msgid "Render Pass"
-msgstr "Passo de renderização"
-
-
 msgid "Motion Tracking"
 msgstr "Captura de movimentos"
 
@@ -50390,6 +50326,14 @@ msgstr "Exibição Quadrante"
 
 msgid "Stereoscopy"
 msgstr "Estereoscopia"
+
+
+msgid "Wire Color"
+msgstr "Cor dos cabos"
+
+
+msgid "Render Pass"
+msgstr "Passo de renderização"
 
 
 msgid "Bone Constraints"
@@ -56658,10 +56602,6 @@ msgid "Align X"
 msgstr "Alinhar em X"
 
 
-msgid "Align Y"
-msgstr "Alinhar em Y"
-
-
 msgid "Text color"
 msgstr "Cor de texto"
 
@@ -58260,10 +58200,6 @@ msgstr "Espaço de dados do editor de imagens e UVs."
 
 msgid "Z-Buffer"
 msgstr "Buffer Z"
-
-
-msgid "Grease pencil data for this space"
-msgstr "Dados do lápis de cera para este espaço."
 
 
 msgid "UV Editor"
@@ -62258,62 +62194,6 @@ msgid "Options:"
 msgstr "Opções:"
 
 
-msgid "Save to PO File"
-msgstr "Salvar para arquivo PO"
-
-
-msgid "Rebuild MO File"
-msgstr "Reconstruir arquivo MO"
-
-
-msgid "Erase Local MO files"
-msgstr "Apaga os arquivos MO locais"
-
-
-msgid "    RNA Path: bpy.types."
-msgstr "    Caminho RNA: bpy.types."
-
-
-msgid "    RNA Context: "
-msgstr "    Contexto RNA: "
-
-
-msgid "Labels:"
-msgstr "Rótulo"
-
-
-msgid "Tool Tips:"
-msgstr "Dicas de ferramenta:"
-
-
-msgid "Button Label:"
-msgstr "Rótulo do botão:"
-
-
-msgid "RNA Label:"
-msgstr "Rótulo RNA:"
-
-
-msgid "Enum Item Label:"
-msgstr "Rótulo de item de enumeração:"
-
-
-msgid "Button Tip:"
-msgstr "Dica de botão:"
-
-
-msgid "RNA Tip:"
-msgstr "Dica RNA:"
-
-
-msgid "Enum Item Tip:"
-msgstr "Dica de item de enumeração:"
-
-
-msgid "Could not write to po file ({})"
-msgstr "Não é possível escrever para arquivo po ({})"
-
-
 msgid "WARNING: preferences are lost when add-on is disabled, be sure to use \"Save Persistent\" if you want to keep your settings!"
 msgstr "AVISO: preferências são perdidas quando o complemento é desabilitado, tenha certeza de usar a opção \"Salvar persistente para...\" caso queira manter suas configurações!"
 
@@ -62620,10 +62500,6 @@ msgstr "Inclinar Interpolação"
 msgctxt "Operator"
 msgid "Custom..."
 msgstr "Personalizar..."
-
-
-msgid "Thickness Scale"
-msgstr "Escala da Espessura"
 
 
 msgctxt "Operator"
@@ -66561,16 +66437,8 @@ msgid "Active region not set"
 msgstr "Região ativa não configurada."
 
 
-msgid "Nowhere for grease pencil data to go"
-msgstr "Sem local de destinação para o qual transportar os dados de lápis de cera."
-
-
 msgid "Cannot delete locked layers"
 msgstr "Não é possível apagar camadas bloqueadas."
-
-
-msgid "No grease pencil data"
-msgstr "Sem dados de lápis de cera."
 
 
 msgid "No active frame to delete"
@@ -68508,10 +68376,6 @@ msgid "Keyframe pasting is not available for mask mode"
 msgstr "A operação de colar quadros-chave não está disponível para o modo de máscara."
 
 
-msgid "Keyframe pasting is not available for grease pencil or mask mode"
-msgstr "A operação de colar quadros-chave não está disponível para o modo de lápis de cera ou máscara."
-
-
 msgid "No selected F-Curves to paste into"
 msgstr "Sem curvas-f selecionadas para as quais colar."
 
@@ -69984,11 +69848,6 @@ msgstr "Freestyle: Criação do mapa de visualização..."
 
 msgid "Freestyle: Stroke rendering"
 msgstr "Freestyle: Renderização de traços..."
-
-
-msgctxt "Action"
-msgid "Group"
-msgstr "Grupo"
 
 
 msgid "Index out of range"

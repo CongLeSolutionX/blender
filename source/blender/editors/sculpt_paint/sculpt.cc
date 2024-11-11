@@ -59,7 +59,7 @@
 #include "BKE_object.hh"
 #include "BKE_object_types.hh"
 #include "BKE_paint.hh"
-#include "BKE_pbvh_api.hh"
+#include "BKE_paint_bvh.hh"
 #include "BKE_report.hh"
 #include "BKE_subdiv_ccg.hh"
 #include "BKE_subsurf.hh"
@@ -872,7 +872,7 @@ static void restore_mask_from_undo_step(Object &object)
                                                                                     nodes[i]))
         {
           const Span<int> verts = nodes[i].verts();
-          array_utils::scatter(*orig_data, verts, mask.span);
+          scatter_data_mesh(*orig_data, verts, mask.span);
           bke::pbvh::node_update_mask_mesh(mask.span, nodes[i]);
           node_changed[i] = true;
         }
@@ -1038,40 +1038,43 @@ void restore_position_from_undo_step(const Depsgraph &depsgraph, Object &object)
 
       threading::EnumerableThreadSpecific<LocalData> all_tls;
       node_mask.foreach_index(GrainSize(1), [&](const int i) {
-        LocalData &tls = all_tls.local();
-        const OrigPositionData orig_data = *orig_position_data_lookup_mesh(object, nodes[i]);
+        threading::isolate_task([&] {
+          LocalData &tls = all_tls.local();
+          const OrigPositionData orig_data = *orig_position_data_lookup_mesh(object, nodes[i]);
 
-        const Span<int> verts = nodes[i].verts();
-        const Span<float3> undo_positions = orig_data.positions;
-        if (need_translations) {
-          tls.translations.resize(verts.size());
-          translations_from_new_positions(undo_positions, verts, positions_eval, tls.translations);
-        }
-
-        array_utils::scatter(undo_positions, verts, positions_eval);
-
-        if (positions_eval.data() != positions_orig.data()) {
-          /* When the evaluated positions and original mesh positions don't point to the same
-           * array, they must both be updated. */
-          if (ss.deform_imats.is_empty()) {
-            array_utils::scatter(undo_positions, verts, positions_orig);
+          const Span<int> verts = nodes[i].verts();
+          const Span<float3> undo_positions = orig_data.positions;
+          if (need_translations) {
+            tls.translations.resize(verts.size());
+            translations_from_new_positions(
+                undo_positions, verts, positions_eval, tls.translations);
           }
-          else {
-            /* Because brush deformation is calculated for the evaluated deformed positions,
-             * the translations have to be transformed to the original space. */
-            apply_crazyspace_to_translations(ss.deform_imats, verts, tls.translations);
-            if (ELEM(active_key, nullptr, mesh.key->refkey)) {
-              /* We only ever want to propagate changes back to the base mesh if we either have
-               * no shape key active, or we are working on the basis shape key.
-               * See #126199 for more information. */
-              apply_translations(tls.translations, verts, positions_orig);
+
+          scatter_data_mesh(undo_positions, verts, positions_eval);
+
+          if (positions_eval.data() != positions_orig.data()) {
+            /* When the evaluated positions and original mesh positions don't point to the same
+             * array, they must both be updated. */
+            if (ss.deform_imats.is_empty()) {
+              scatter_data_mesh(undo_positions, verts, positions_orig);
+            }
+            else {
+              /* Because brush deformation is calculated for the evaluated deformed positions,
+               * the translations have to be transformed to the original space. */
+              apply_crazyspace_to_translations(ss.deform_imats, verts, tls.translations);
+              if (ELEM(active_key, nullptr, mesh.key->refkey)) {
+                /* We only ever want to propagate changes back to the base mesh if we either have
+                 * no shape key active, or we are working on the basis shape key.
+                 * See #126199 for more information. */
+                apply_translations(tls.translations, verts, positions_orig);
+              }
             }
           }
-        }
 
-        if (active_key) {
-          update_shape_keys(object, mesh, *active_key, verts, tls.translations, positions_orig);
-        }
+          if (active_key) {
+            update_shape_keys(object, mesh, *active_key, verts, tls.translations, positions_orig);
+          }
+        });
       });
       pbvh.tag_positions_changed(node_mask);
       break;
@@ -2057,6 +2060,23 @@ void calc_area_normal_and_center(const Depsgraph &depsgraph,
  * \{ */
 
 /**
+ * Calculates the sign of the direction of the brush stroke, typically indicates whether the stroke
+ * will deform a surface inwards or outwards along the brush normal.
+ */
+static float brush_flip(const Brush &brush, const blender::ed::sculpt_paint::StrokeCache &cache)
+{
+  if (brush.flag & BRUSH_INVERT_TO_SCRAPE_FILL) {
+    return 1.0f;
+  }
+
+  const float dir = (brush.flag & BRUSH_DIR_IN) ? -1.0f : 1.0f;
+  const float pen_flip = cache.pen_flip ? -1.0f : 1.0f;
+  const float invert = cache.invert ? -1.0f : 1.0f;
+
+  return dir * pen_flip * invert;
+}
+
+/**
  * Return modified brush strength. Includes the direction of the brush, positive
  * values pull vertices, negative values push. Uses tablet pressure and a
  * special multiplier found experimentally to scale the strength factor.
@@ -2073,18 +2093,12 @@ static float brush_strength(const Sculpt &sd,
   /* Primary strength input; square it to make lower values more sensitive. */
   const float root_alpha = BKE_brush_alpha_get(scene, &brush);
   const float alpha = root_alpha * root_alpha;
-  const float dir = (brush.flag & BRUSH_DIR_IN) ? -1.0f : 1.0f;
   const float pressure = BKE_brush_use_alpha_pressure(&brush) ? cache.pressure : 1.0f;
-  const float pen_flip = cache.pen_flip ? -1.0f : 1.0f;
-  const float invert = cache.invert ? -1.0f : 1.0f;
   float overlap = ups.overlap_factor;
   /* Spacing is integer percentage of radius, divide by 50 to get
    * normalized diameter. */
 
-  float flip = dir * invert * pen_flip;
-  if (brush.flag & BRUSH_INVERT_TO_SCRAPE_FILL) {
-    flip = 1.0f;
-  }
+  const float flip = brush_flip(brush, cache);
 
   /* Pressure final value after being tweaked depending on the brush. */
   float final_pressure;
@@ -2204,6 +2218,10 @@ static float brush_strength(const Sculpt &sd,
     case SCULPT_BRUSH_TYPE_POSE:
     case SCULPT_BRUSH_TYPE_BOUNDARY:
       return root_alpha * feather;
+    case SCULPT_BRUSH_TYPE_SIMPLIFY:
+      /* The Dyntopo Density brush does not use a normal brush workflow to calculate the effect,
+       * and this strength value is unused. */
+      return 0.0f;
   }
   BLI_assert_unreachable();
   return 0.0f;
@@ -3162,7 +3180,7 @@ static void do_brush_action(const Depsgraph &depsgraph,
          * stroke strength can become 0 during the stroke, but it can not change sign (the sign is
          * determined in the beginning of the stroke. So here it is important to not switch to
          * enhance brush in the middle of the stroke. */
-        if (ss.cache->bstrength < 0.0f) {
+        if (ss.cache->initial_direction_flipped) {
           /* Invert mode, intensify details. */
           do_enhance_details_brush(depsgraph, sd, ob, node_mask);
         }
@@ -3860,6 +3878,7 @@ static void sculpt_update_cache_invariants(
   copy_v3_v3(cache->initial_normal, ss.cursor_normal);
 
   mode = RNA_enum_get(op->ptr, "mode");
+  cache->pen_flip = RNA_boolean_get(op->ptr, "pen_flip");
   cache->invert = mode == BRUSH_STROKE_INVERT;
   cache->alt_smooth = mode == BRUSH_STROKE_SMOOTH;
   cache->normal_weight = brush->normal_weight;
@@ -3891,6 +3910,8 @@ static void sculpt_update_cache_invariants(
   copy_v2_v2(cache->mouse, cache->initial_mouse);
   copy_v2_v2(cache->mouse_event, cache->initial_mouse);
   copy_v2_v2(ups->tex_mouse, cache->initial_mouse);
+
+  cache->initial_direction_flipped = brush_flip(*brush, *cache) < 0.0f;
 
   /* Truly temporary data that isn't stored in properties. */
   cache->vc = vc;
@@ -4238,7 +4259,6 @@ static void sculpt_update_cache_variants(bContext *C, Sculpt &sd, Object &ob, Po
     RNA_float_get_array(ptr, "location", cache.location);
   }
 
-  cache.pen_flip = RNA_boolean_get(ptr, "pen_flip");
   RNA_float_get_array(ptr, "mouse", cache.mouse);
   RNA_float_get_array(ptr, "mouse_event", cache.mouse_event);
 
@@ -4401,7 +4421,7 @@ static void sculpt_raycast_cb(blender::bke::pbvh::Node &node, SculptRaycastData 
     }
   }
 
-  if (node.flag_ & PBVH_FullyHidden) {
+  if (node.flag_ & bke::pbvh::Node::FullyHidden) {
     return;
   }
 
@@ -4441,7 +4461,8 @@ static void sculpt_raycast_cb(blender::bke::pbvh::Node &node, SculptRaycastData 
                                           srd.active_face_grid_index,
                                           srd.face_normal);
       if (hit) {
-        srd.active_vertex = grids_active_vert;
+        srd.active_vertex = grids_active_vert.to_index(
+            BKE_subdiv_ccg_key_top_level(*srd.subdiv_ccg));
       }
       break;
     }
@@ -4939,7 +4960,11 @@ static void restore_from_undo_step_if_necessary(const Depsgraph &depsgraph,
     undo::restore_from_undo_step(depsgraph, sd, ob);
 
     if (ss.cache) {
+      /* Temporary data within the StrokeCache that is usually cleared at the end of the stroke
+       * needs to be invalidated here so that the brushes do not accumulate and apply extra data.
+       * See #129069. */
       ss.cache->layer_displacement_factor = {};
+      ss.cache->paint_brush.mix_colors = {};
     }
   }
 }
@@ -6168,6 +6193,7 @@ template void gather_data_bmesh<float3>(Span<float3>,
                                         MutableSpan<float3>);
 
 template void scatter_data_mesh<bool>(Span<bool>, Span<int>, MutableSpan<bool>);
+template void scatter_data_mesh<int>(Span<int>, Span<int>, MutableSpan<int>);
 template void scatter_data_mesh<float>(Span<float>, Span<int>, MutableSpan<float>);
 template void scatter_data_mesh<float3>(Span<float3>, Span<int>, MutableSpan<float3>);
 template void scatter_data_mesh<float4>(Span<float4>, Span<int>, MutableSpan<float4>);

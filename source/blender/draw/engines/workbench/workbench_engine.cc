@@ -6,8 +6,8 @@
 #include "BKE_modifier.hh"
 #include "BKE_object.hh"
 #include "BKE_paint.hh"
+#include "BKE_paint_bvh.hh"
 #include "BKE_particle.h"
-#include "BKE_pbvh_api.hh"
 #include "BKE_report.hh"
 #include "DEG_depsgraph_query.hh"
 #include "DNA_fluid_types.h"
@@ -541,6 +541,7 @@ static void workbench_cache_populate(void *vedata, Object *object)
   ref.object = object;
   ref.dupli_object = DRW_object_get_dupli(object);
   ref.dupli_parent = DRW_object_get_dupli_parent(object);
+  ref.handle.raw = 0;
 
   reinterpret_cast<WORKBENCH_Data *>(vedata)->instance->object_sync(*manager, ref);
 }

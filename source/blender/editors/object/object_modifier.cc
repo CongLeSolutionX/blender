@@ -1010,58 +1010,66 @@ static void apply_eval_grease_pencil_data(const GreasePencil &src_grease_pencil,
 
   Map<const Layer *, const Layer *> eval_to_orig_layer_map;
   {
-    Set<Layer *> mapped_original_layers;
-    TreeNode *previous_node = nullptr;
-    const Span<const Layer *> result_layers = merged_layers_grease_pencil.layers();
-    for (const Layer *layer_eval : result_layers) {
+    /* Keep track of the last layer in each group to ensure layers get added to the same groups in
+     * the same order as the original. This is better than using the layer cache since it avoids
+     * updating the cache every time a new layer is added. */
+    Map<const LayerGroup *, TreeNode *> last_node_by_group;
+    /* Set of newly added layers that require a new drawing after layer setup. */
+    Set<Layer *> new_layers;
+    for (const TreeNode *node_eval : merged_layers_grease_pencil.nodes()) {
       /* Check if the original geometry has a layer with the same name. */
-      TreeNode *node_orig = orig_grease_pencil.find_node_by_name(layer_eval->name());
-      if (!node_orig || node_orig->is_group()) {
-        /* No layer with the same name found. Create a new layer.
-         * Note: This name might be empty! This has to be resolved at a later stage! */
-        Layer &layer_orig = orig_grease_pencil.add_layer(layer_eval->name(), false);
-        /* Make sure to add a new keyframe with a new drawing. */
-        orig_grease_pencil.insert_frame(layer_orig, eval_frame);
-        node_orig = &layer_orig.as_node();
-      }
-      else if (node_orig->is_layer()) {
-        const int orig_layer_index = *orig_grease_pencil.get_layer_index(node_orig->as_layer());
-        if (!orig_layers_to_apply.contains(orig_layer_index)) {
-          /* Mark as mapped so it won't be removed. */
-          mapped_original_layers.add_new(&node_orig->as_layer());
-          continue;
+      TreeNode *node_orig = orig_grease_pencil.find_node_by_name(node_eval->name());
+
+      if (node_eval->is_layer()) {
+        /* If the orig layer isn't valid then a new layer with a unique name will be generated. */
+        const bool has_valid_orig_layer = (node_orig != nullptr && node_orig->is_layer());
+        if (!has_valid_orig_layer) {
+          /* Note: This name might be empty! This has to be resolved at a later stage! */
+          Layer &layer_orig = orig_grease_pencil.add_layer(node_eval->name(), true);
+          new_layers.add_new(&layer_orig);
+          /* Make sure to add a new keyframe with a new drawing. */
+          orig_grease_pencil.insert_frame(layer_orig, eval_frame);
+          node_orig = &layer_orig.as_node();
         }
-      }
-      BLI_assert(node_orig != nullptr);
-      Layer &layer_orig = node_orig->as_layer();
-      layer_orig.opacity = layer_eval->opacity;
-      layer_orig.set_local_transform(layer_eval->local_transform());
 
-      /* Insert the updated node after the previous node. This keeps the layer order consistent. */
-      if (previous_node) {
+        /* Copy layer properties to original geometry. */
         BLI_assert(node_orig != nullptr);
-        orig_grease_pencil.move_node_after(*node_orig, *previous_node);
-      }
-      previous_node = node_orig;
+        const Layer &layer_eval = node_eval->as_layer();
+        Layer &layer_orig = node_orig->as_layer();
+        layer_orig.opacity = layer_eval.opacity;
+        layer_orig.set_local_transform(layer_eval.local_transform());
 
-      /* Add new mapping for layer_eval -> layer_orig*/
-      eval_to_orig_layer_map.add_new(layer_eval, &layer_orig);
-      mapped_original_layers.add_new(&layer_orig);
+        /* Add new mapping for layer_eval -> layer_orig*/
+        eval_to_orig_layer_map.add_new(&layer_eval, &layer_orig);
+      }
+
+      /* Insert the updated node after the last node in the same group.
+       * This keeps the layer order consistent. */
+      if (node_orig && node_orig->parent_group()) {
+        last_node_by_group.add_or_modify(
+            node_orig->parent_group(),
+            [&](TreeNode **node_ptr) {
+              /* First layer in the group, set the last-layer pointer. */
+              *node_ptr = node_orig;
+            },
+            [&](TreeNode **node_ptr) {
+              orig_grease_pencil.move_node_after(*node_orig, **node_ptr);
+              *node_ptr = node_orig;
+            });
+      }
     }
 
-    /* Clear keyframes of unmapped layers. */
-    for (Layer *layer_orig : orig_grease_pencil.layers_for_write()) {
-      if (!mapped_original_layers.contains(layer_orig)) {
-        /* Try inserting a frame. */
-        Drawing *drawing_orig = orig_grease_pencil.insert_frame(*layer_orig, eval_frame);
-        if (drawing_orig == nullptr) {
-          /* If that fails, get the drawing for this frame. */
-          drawing_orig = orig_grease_pencil.get_drawing_at(*layer_orig, eval_frame);
-        }
-        /* Clear the existing drawing. */
-        drawing_orig->strokes_for_write() = {};
-        drawing_orig->tag_topology_changed();
+    /* Insert a keyframe in new layers. */
+    for (Layer *layer_orig : new_layers) {
+      /* Try inserting a frame. */
+      Drawing *drawing_orig = orig_grease_pencil.insert_frame(*layer_orig, eval_frame);
+      if (drawing_orig == nullptr) {
+        /* If that fails, get the drawing for this frame. */
+        drawing_orig = orig_grease_pencil.get_drawing_at(*layer_orig, eval_frame);
       }
+      /* Clear the existing drawing. */
+      drawing_orig->strokes_for_write() = {};
+      drawing_orig->tag_topology_changed();
     }
   }
 
@@ -1226,12 +1234,13 @@ static bool apply_grease_pencil_for_modifier_all_keyframes(Depsgraph *depsgraph,
                                                            Scene *scene,
                                                            Object *ob,
                                                            GreasePencil &grease_pencil_orig,
-                                                           ModifierData *md_eval)
+                                                           ModifierData *md)
 {
   using namespace bke;
   using namespace bke::greasepencil;
   Main *bmain = DEG_get_bmain(depsgraph);
-  const ModifierTypeInfo *mti = BKE_modifier_get_info(ModifierType(md_eval->type));
+
+  const ModifierTypeInfo *mti = BKE_modifier_get_info(ModifierType(md->type));
 
   WM_cursor_wait(true);
 
@@ -1274,6 +1283,7 @@ static bool apply_grease_pencil_for_modifier_all_keyframes(Depsgraph *depsgraph,
     GeometrySet eval_geometry_set = GeometrySet::from_grease_pencil(grease_pencil_temp,
                                                                     GeometryOwnershipType::Owned);
 
+    ModifierData *md_eval = BKE_modifier_get_evaluated(depsgraph, ob, md);
     ModifierEvalContext mectx = {depsgraph, ob_eval, MOD_APPLY_TO_ORIGINAL};
     mti->modify_geometry_set(md_eval, &mectx, &eval_geometry_set);
     if (!eval_geometry_set.has_grease_pencil()) {
@@ -1471,14 +1481,19 @@ static bool modifier_apply_obdata(ReportList *reports,
   }
   else if (ob->type == OB_GREASE_PENCIL) {
     if (mti->modify_geometry_set == nullptr) {
-      BKE_report(reports, RPT_ERROR, "Cannot apply this modifier to grease pencil geometry");
+      BKE_report(reports, RPT_ERROR, "Cannot apply this modifier to Grease Pencil geometry");
       return false;
     }
     GreasePencil &grease_pencil_orig = *static_cast<GreasePencil *>(ob->data);
     bool success = false;
     if (do_all_keyframes) {
+      /* The function #apply_grease_pencil_for_modifier_all_keyframes will retrieve
+       * the evaluated modifier for each keyframe. The original modifier is passed
+       * to ensure the evaluated modifier is not used, as it will be invalid when
+       * the scene graph is updated for the next keyframe. */
+      ModifierData *md = BKE_modifier_get_original(ob, md_eval);
       success = apply_grease_pencil_for_modifier_all_keyframes(
-          depsgraph, scene, ob, grease_pencil_orig, md_eval);
+          depsgraph, scene, ob, grease_pencil_orig, md);
     }
     else {
       success = apply_grease_pencil_for_modifier(depsgraph, ob, grease_pencil_orig, md_eval);
@@ -1486,7 +1501,7 @@ static bool modifier_apply_obdata(ReportList *reports,
     if (!success) {
       BKE_report(reports,
                  RPT_ERROR,
-                 "Evaluated geometry from modifier does not contain grease pencil geometry");
+                 "Evaluated geometry from modifier does not contain Grease Pencil geometry");
       return false;
     }
   }
@@ -2431,6 +2446,7 @@ void OBJECT_OT_modifier_apply_as_shapekey(wmOperatorType *ot)
       ot->srna, "keep_modifier", false, "Keep Modifier", "Do not remove the modifier from stack");
   edit_modifier_properties(ot);
   edit_modifier_report_property(ot);
+  modifier_register_use_selected_objects_prop(ot);
 }
 
 /** \} */

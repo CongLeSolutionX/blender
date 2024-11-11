@@ -9,7 +9,6 @@
 #include "vk_framebuffer.hh"
 #include "vk_backend.hh"
 #include "vk_context.hh"
-#include "vk_memory.hh"
 #include "vk_state_manager.hh"
 #include "vk_texture.hh"
 
@@ -186,7 +185,12 @@ void VKFrameBuffer::clear(const eGPUFrameBufferBits buffers,
 
     /* Clearing depth via vkCmdClearAttachments requires a render pass with write depth or stencil
      * enabled. When not enabled, clearing should be done via texture directly. */
-    if ((context.state_manager_get().state.write_mask & needed_mask) == needed_mask) {
+    /* WORKAROUND: Clearing depth attachment when using dynamic rendering are not working on AMD
+     * official drivers.
+     * See #129265 */
+    if ((context.state_manager_get().state.write_mask & needed_mask) == needed_mask &&
+        !GPU_type_matches(GPU_DEVICE_ATI, GPU_OS_ANY, GPU_DRIVER_OFFICIAL))
+    {
       build_clear_attachments_depth_stencil(
           buffers, clear_depth, clear_stencil, clear_attachments);
     }
@@ -527,6 +531,7 @@ void VKFrameBuffer::rendering_ensure(VKContext &context)
   if (is_rendering_) {
     return;
   }
+  const VKWorkarounds &workarounds = VKBackend::get().device.workarounds_get();
   is_rendering_ = true;
   dirty_attachments_ = false;
   dirty_state_ = false;
@@ -586,7 +591,10 @@ void VKFrameBuffer::rendering_ensure(VKContext &context)
          VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
          VK_IMAGE_ASPECT_COLOR_BIT,
          layer_base});
-    color_attachment_formats_.append(to_vk_format(color_texture.device_format_get()));
+    color_attachment_formats_.append(
+        (workarounds.dynamic_rendering_unused_attachments && vk_image_view == VK_NULL_HANDLE) ?
+            VK_FORMAT_UNDEFINED :
+            to_vk_format(color_texture.device_format_get()));
 
     begin_rendering.node_data.vk_rendering_info.pColorAttachments =
         begin_rendering.node_data.color_attachments;
@@ -606,7 +614,6 @@ void VKFrameBuffer::rendering_ensure(VKContext &context)
     VkImageLayout vk_image_layout = is_depth_stencil_attachment ?
                                         VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL :
                                         VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-    VkFormat vk_format = to_vk_format(depth_texture.device_format_get());
     GPUAttachmentState attachment_state = attachment_states_[GPU_FB_DEPTH_ATTACHMENT];
     VkImageView depth_image_view = VK_NULL_HANDLE;
     if (attachment_state == GPU_ATTACHMENT_WRITE) {
@@ -619,6 +626,10 @@ void VKFrameBuffer::rendering_ensure(VKContext &context)
                                          VKImageViewArrayed::DONT_CARE};
       depth_image_view = depth_texture.image_view_get(image_view_info).vk_handle();
     }
+    VkFormat vk_format = (workarounds.dynamic_rendering_unused_attachments &&
+                          depth_image_view == VK_NULL_HANDLE) ?
+                             VK_FORMAT_UNDEFINED :
+                             to_vk_format(depth_texture.device_format_get());
 
     /* TODO: we should be able to use a single attachment info and only set the
      * #pDepthAttachment/#pStencilAttachment to the same struct.

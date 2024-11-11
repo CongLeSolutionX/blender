@@ -62,6 +62,8 @@
 #include "sculpt_intern.hh"
 #include "sculpt_pose.hh"
 
+#include "bmesh.hh"
+
 /* TODOs:
  *
  * Some of the cursor drawing code is doing non-draw stuff
@@ -1567,6 +1569,7 @@ static void grease_pencil_brush_cursor_draw(PaintCursorContext *pcontext)
         const float3 location = placement.project(float2(pcontext->x, pcontext->y));
         pcontext->pixel_radius = project_brush_radius(
             &pcontext->vc, brush->unprojected_radius, location);
+        brush->size = std::max(pcontext->pixel_radius, 1);
       }
       else {
         pcontext->pixel_radius = brush->size;
@@ -1602,7 +1605,7 @@ static void grease_pencil_brush_cursor_draw(PaintCursorContext *pcontext)
   }
   else if (pcontext->mode == PaintMode::VertexGPencil) {
     pcontext->pixel_radius = BKE_brush_size_get(pcontext->vc.scene, brush);
-    color = BKE_brush_color_get(pcontext->vc.scene, brush);
+    color = BKE_brush_color_get(pcontext->vc.scene, paint, brush);
   }
 
   GPU_line_width(1.0f);
