@@ -953,7 +953,6 @@ class VIEW3D_HT_header(Header):
                         text="Guides",
                     )
 
-
         elif object_mode == 'SCULPT':
             # If the active tool supports it, show the canvas selector popover.
             from bl_ui.space_toolsystem_common import ToolSelectPanelHelper
