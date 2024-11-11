@@ -43,14 +43,14 @@ static Span<int> compress_intervals(const Span<IndexRange> curve_interval_ranges
  */
 static bool handle_range(const int curve_index,
                          const int interval_offset,
-                         const Span<int> offsets,
+                         const OffsetIndices<int> points_by_curve,
                          int &current_interval,
                          IndexRange &range,
                          MutableSpan<int> curve_intervals,
                          MutableSpan<bool> is_first_selected)
 {
-  const int first_elem = offsets[curve_index];
-  const int last_elem = offsets[curve_index + 1] - 1;
+  const int first_elem = points_by_curve[curve_index].start();
+  const int last_elem = points_by_curve[curve_index].last();
 
   if (current_interval == 0) {
     is_first_selected[curve_index] = range.first() == first_elem && range.size() == 1;
@@ -79,11 +79,11 @@ static bool handle_range(const int curve_index,
  */
 static void calc_curve_offset(const int curve_index,
                               int &interval_offset,
-                              const Span<int> offsets,
+                              const OffsetIndices<int> points_by_curve,
                               MutableSpan<int> new_offsets,
                               MutableSpan<IndexRange> curve_interval_ranges)
 {
-  const int points_in_curve = (offsets[curve_index + 1] - offsets[curve_index] +
+  const int points_in_curve = (points_by_curve[curve_index].size() +
                                curve_interval_ranges[curve_index].size() - 1);
   new_offsets[curve_index + 1] = new_offsets[curve_index] + points_in_curve;
   interval_offset += curve_interval_ranges[curve_index].size() + 1;
@@ -92,13 +92,13 @@ static void calc_curve_offset(const int curve_index,
 static void finish_curve(int &curve_index,
                          int &interval_offset,
                          int last_interval,
-                         int last_elem,
-                         const Span<int> offsets,
+                         const OffsetIndices<int> points_by_curve,
                          MutableSpan<int> new_offsets,
                          MutableSpan<int> curve_intervals,
                          MutableSpan<IndexRange> curve_interval_ranges,
                          MutableSpan<bool> is_first_selected)
 {
+  const int last_elem = points_by_curve[curve_index].last();
   if (curve_intervals[interval_offset + last_interval] != last_elem ||
       curve_intervals[interval_offset + last_interval - 1] !=
           curve_intervals[interval_offset + last_interval])
@@ -116,7 +116,8 @@ static void finish_curve(int &curve_index,
     last_interval++;
   }
   curve_interval_ranges[curve_index] = IndexRange(interval_offset, last_interval);
-  calc_curve_offset(curve_index, interval_offset, offsets, new_offsets, curve_interval_ranges);
+  calc_curve_offset(
+      curve_index, interval_offset, points_by_curve, new_offsets, curve_interval_ranges);
   curve_index++;
 }
 
@@ -124,20 +125,18 @@ static void finish_curve_or_full_copy(int &curve_index,
                                       int &interval_offset,
                                       int current_interval,
                                       const std::optional<IndexRange> prev_range,
-                                      const Span<int> offsets,
+                                      const OffsetIndices<int> points_by_curve,
                                       MutableSpan<int> new_offsets,
                                       MutableSpan<int> curve_intervals,
                                       MutableSpan<IndexRange> curve_interval_ranges,
                                       MutableSpan<bool> is_first_selected)
 {
-  const int last = offsets[curve_index + 1] - 1;
-
-  if (prev_range.has_value() && prev_range.value().last() >= offsets[curve_index]) {
+  if (prev_range.has_value() && prev_range.value().last() >= points_by_curve[curve_index].start())
+  {
     finish_curve(curve_index,
                  interval_offset,
                  current_interval - 1,
-                 last,
-                 offsets,
+                 points_by_curve,
                  new_offsets,
                  curve_intervals,
                  curve_interval_ranges,
@@ -145,18 +144,20 @@ static void finish_curve_or_full_copy(int &curve_index,
   }
   else {
     /* Copy full curve if previous selected point was not on this curve. */
-    const int first = offsets[curve_index];
+    const int first = points_by_curve[curve_index].start();
+    const int last = points_by_curve[curve_index].last();
     curve_interval_ranges[curve_index] = IndexRange(interval_offset, 1);
     is_first_selected[curve_index] = false;
     curve_intervals[interval_offset] = first;
     curve_intervals[interval_offset + 1] = last;
-    calc_curve_offset(curve_index, interval_offset, offsets, new_offsets, curve_interval_ranges);
+    calc_curve_offset(
+        curve_index, interval_offset, points_by_curve, new_offsets, curve_interval_ranges);
     curve_index++;
   }
 }
 
 static void calc_curves_extrusion(const IndexMask &selection,
-                                  const Span<int> offsets,
+                                  const OffsetIndices<int> points_by_curve,
                                   MutableSpan<int> new_offsets,
                                   MutableSpan<int> curve_intervals,
                                   MutableSpan<IndexRange> curve_interval_ranges,
@@ -167,31 +168,31 @@ static void calc_curves_extrusion(const IndexMask &selection,
 
   int curve_index = 0;
   int interval_offset = 0;
-  curve_intervals[interval_offset] = offsets[0];
-  new_offsets[0] = offsets[0];
+  curve_intervals[interval_offset] = points_by_curve[0].start();
+  new_offsets[0] = points_by_curve[0].start();
 
   selection.foreach_range([&](const IndexRange range) {
     /* Beginning of the range outside current curve. */
-    if (range.first() > offsets[curve_index + 1] - 1) {
+    if (range.first() > points_by_curve[curve_index].last()) {
       do {
         finish_curve_or_full_copy(curve_index,
                                   interval_offset,
                                   current_interval,
                                   prev_range,
-                                  offsets,
+                                  points_by_curve,
                                   new_offsets,
                                   curve_intervals,
                                   curve_interval_ranges,
                                   is_first_selected);
-      } while (range.first() > offsets[curve_index + 1] - 1);
+      } while (range.first() > points_by_curve[curve_index].last());
       current_interval = 0;
-      curve_intervals[interval_offset] = offsets[curve_index];
+      curve_intervals[interval_offset] = points_by_curve[curve_index].start();
     }
 
     IndexRange range_to_handle = range;
     while (!handle_range(curve_index,
                          interval_offset,
-                         offsets,
+                         points_by_curve,
                          current_interval,
                          range_to_handle,
                          curve_intervals,
@@ -200,14 +201,13 @@ static void calc_curves_extrusion(const IndexMask &selection,
       finish_curve(curve_index,
                    interval_offset,
                    current_interval - 1,
-                   offsets[curve_index + 1] - 1,
-                   offsets,
+                   points_by_curve,
                    new_offsets,
                    curve_intervals,
                    curve_interval_ranges,
                    is_first_selected);
       current_interval = 0;
-      curve_intervals[interval_offset] = offsets[curve_index];
+      curve_intervals[interval_offset] = points_by_curve[curve_index].start();
     }
     prev_range = range;
   });
@@ -217,13 +217,13 @@ static void calc_curves_extrusion(const IndexMask &selection,
                               interval_offset,
                               current_interval,
                               prev_range,
-                              offsets,
+                              points_by_curve,
                               new_offsets,
                               curve_intervals,
                               curve_interval_ranges,
                               is_first_selected);
     prev_range.reset();
-  } while (curve_index < offsets.size() - 1);
+  } while (curve_index < points_by_curve.size());
 }
 
 static void extrude_curves(Curves &curves_id)
@@ -240,7 +240,7 @@ static void extrude_curves(Curves &curves_id)
   }
 
   const bke::CurvesGeometry &curves = curves_id.geometry.wrap();
-  const Span<int> old_offsets = curves.offsets();
+  const OffsetIndices<int> points_by_curve = curves.points_by_curve();
 
   bke::CurvesGeometry new_curves = bke::curves::copy_only_curve_domain(curves);
 
@@ -266,7 +266,7 @@ static void extrude_curves(Curves &curves_id)
   Array<bool> is_first_selected(curves_num);
 
   calc_curves_extrusion(extruded_points,
-                        old_offsets,
+                        points_by_curve,
                         new_offsets,
                         curve_intervals,
                         curve_interval_ranges,
