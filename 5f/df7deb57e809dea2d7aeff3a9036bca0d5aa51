@@ -1,2 +1,3 @@
 Referenced by issue #126808, Crash when remeshing object with mirror modifier
 Referenced by pull request #126840, Fix #126808: Crash in sculpt normals update after topology change
+Referenced by issue #130086, Weight Paint bug
