@@ -146,7 +146,7 @@ ccl_device void kernel_volume_density_evaluate(KernelGlobals kg,
   const VolumeStack entry = {sd.object, shader};
 
   const float3 voxel_size = make_float3(__int_as_float(in.prim), in.u, in.v);
-  Extrema<float> extrema = {FLT_MAX, 0.0f};
+  Extrema<float> extrema;
   const int num_samples = input[0].object;
   for (int sample = 0; sample < num_samples; sample++) {
     /* Blue noise indexing. The sequence length is the number of samples. */

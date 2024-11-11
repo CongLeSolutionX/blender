@@ -1098,6 +1098,13 @@ template<typename T> struct Extrema {
   T max;
 };
 
+template<> struct Extrema<float> {
+  float min;
+  float max;
+  Extrema<float>() : min(FLT_MAX), max(-FLT_MAX) {}
+  Extrema<float>(float min_, float max_) : min(min_), max(max_) {}
+};
+
 template<typename T>
 ccl_device_inline Extrema<T> join(const ccl_private Extrema<T> &a, const ccl_private Extrema<T> &b)
 {

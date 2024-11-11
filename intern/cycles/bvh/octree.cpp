@@ -58,7 +58,7 @@ Extrema<float> Octree::get_extrema(const vector<Extrema<float>> &values,
 {
   const blocked_range3d<int> range(
       index_min.x, index_max.x, 32, index_min.y, index_max.y, 32, index_min.z, index_max.z, 32);
-  const Extrema<float> identity = {FLT_MAX, 0.0f};
+  const Extrema<float> identity;
 
   auto reduction_func = [&](const blocked_range3d<int> &r, Extrema<float> init) -> Extrema<float> {
     for (int z = r.cols().begin(); z < r.cols().end(); ++z) {
