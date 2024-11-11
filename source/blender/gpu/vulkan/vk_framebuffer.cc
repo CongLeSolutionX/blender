@@ -634,6 +634,7 @@ void VKFrameBuffer::rendering_ensure_render_pass(VKContext &context)
            layer_base});
     }
   }
+  color_attachment_size = vk_attachment_descriptions.size();
 
   /* Subpass description */
   VkSubpassDescription vk_subpass_description = {};
@@ -745,6 +746,7 @@ void VKFrameBuffer::rendering_ensure_dynamic_rendering(VKContext &context)
     begin_rendering.node_data.vk_rendering_info.pColorAttachments =
         begin_rendering.node_data.color_attachments;
   }
+  color_attachment_size = color_attachment_formats_.size();
 
   for (int depth_attachment_index : IndexRange(GPU_FB_DEPTH_ATTACHMENT, 2)) {
     const GPUAttachment &attachment = attachments_[depth_attachment_index];

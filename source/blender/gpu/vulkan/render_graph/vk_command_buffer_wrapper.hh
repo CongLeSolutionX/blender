@@ -10,9 +10,15 @@
 
 #include "vk_common.hh"
 
+namespace blender::gpu {
+class VKWorkarounds;
+}
+
 namespace blender::gpu::render_graph {
 class VKCommandBufferInterface {
  public:
+  bool use_dynamic_rendering = true;
+
   VKCommandBufferInterface() {}
   virtual ~VKCommandBufferInterface() = default;
 
@@ -149,7 +155,7 @@ class VKCommandBufferWrapper : public VKCommandBufferInterface {
   VkFence vk_fence_ = VK_NULL_HANDLE;
 
  public:
-  VKCommandBufferWrapper();
+  VKCommandBufferWrapper(const VKWorkarounds &workarounds);
   virtual ~VKCommandBufferWrapper();
 
   void begin_recording() override;

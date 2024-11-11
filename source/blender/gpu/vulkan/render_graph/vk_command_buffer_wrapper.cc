@@ -8,9 +8,10 @@
 
 #include "vk_command_buffer_wrapper.hh"
 #include "vk_backend.hh"
+#include "vk_device.hh"
 
 namespace blender::gpu::render_graph {
-VKCommandBufferWrapper::VKCommandBufferWrapper()
+VKCommandBufferWrapper::VKCommandBufferWrapper(const VKWorkarounds &workarounds)
 {
   vk_command_pool_create_info_ = {};
   vk_command_pool_create_info_.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -39,6 +40,8 @@ VKCommandBufferWrapper::VKCommandBufferWrapper()
   vk_submit_info_.pCommandBuffers = &vk_command_buffer_;
   vk_submit_info_.signalSemaphoreCount = 0;
   vk_submit_info_.pSignalSemaphores = nullptr;
+
+  use_dynamic_rendering = !workarounds.dynamic_rendering;
 }
 
 VKCommandBufferWrapper::~VKCommandBufferWrapper()

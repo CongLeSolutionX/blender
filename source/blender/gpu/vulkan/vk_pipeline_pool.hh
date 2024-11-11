@@ -141,9 +141,13 @@ struct VKGraphicsInfo {
     }
   };
   struct FragmentOut {
+    uint32_t color_attachment_size;
+
+    /* Dynamic rendering */
     VkFormat depth_attachment_format;
     VkFormat stencil_attachment_format;
     Vector<VkFormat> color_attachment_formats;
+    /* Render pass rendering */
     VkRenderPass vk_render_pass;
 
     bool operator==(const FragmentOut &other) const

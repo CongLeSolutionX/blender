@@ -44,6 +44,8 @@ class VKFrameBuffer : public FrameBuffer {
 
  public:
   VkRenderPass vk_render_pass = VK_NULL_HANDLE;
+  uint32_t color_attachment_size = 0u;
+
   /**
    * Create a conventional frame-buffer to attach texture to.
    */

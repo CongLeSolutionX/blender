@@ -411,7 +411,7 @@ VkPipeline VKPipelinePool::get_or_create_graphics_pipeline(VKGraphicsInfo &graph
     vk_pipeline_color_blend_attachment_states_.clear();
     vk_pipeline_color_blend_attachment_states_.append_n_times(
         vk_pipeline_color_blend_attachment_state_template_,
-        graphics_info.fragment_out.color_attachment_formats.size());
+        graphics_info.fragment_out.color_attachment_size);
     vk_pipeline_color_blend_state_create_info_.attachmentCount =
         vk_pipeline_color_blend_attachment_states_.size();
     vk_pipeline_color_blend_state_create_info_.pAttachments =
