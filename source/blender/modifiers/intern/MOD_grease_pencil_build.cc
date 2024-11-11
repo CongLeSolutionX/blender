@@ -697,8 +697,7 @@ static void modify_geometry_set(ModifierData *md,
                              math::min(float(frame_duration), mmd->length) * mmd->length);
         }
 
-        build_drawing(
-            *mmd, *ctx->object, *drawing_info.drawing, prev_drawing, time, scene_fps);
+        build_drawing(*mmd, *ctx->object, *drawing_info.drawing, prev_drawing, time, scene_fps);
       });
 }
 
