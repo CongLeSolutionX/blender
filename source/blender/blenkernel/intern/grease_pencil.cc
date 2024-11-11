@@ -3911,6 +3911,7 @@ void GreasePencil::remove_group(blender::bke::greasepencil::LayerGroup &group,
   update_active_node(*this, group.as_node());
 
   if (!keep_children) {
+    /* Recursively remove groups and layers. */
     LISTBASE_FOREACH_MUTABLE (GreasePencilLayerTreeNode *, child, &group.children) {
       switch (child->type) {
         case GP_LAYER_TREE_LEAF: {
