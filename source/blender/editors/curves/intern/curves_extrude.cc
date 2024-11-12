@@ -37,16 +37,16 @@ static Span<int> compress_intervals(const OffsetIndices<int> intervals_by_curve,
 }
 
 /**
- * Creates copy intervals for selection #range in the context of #curve_index.
- * If part of the #range is outside given curve, slices it and returns false indicating remaining
- * still needs to be handled. If whole #range was handled returns true.
+ * Creates copy intervals for selection #range in the context of #curve_points.
+ * Slices the current curve points from the #range and returns size of the new range.
+ * If whole #range was handled returns 0, otherwise leftover has to be handled with the next curve.
  */
-static bool handle_range(const int interval_offset,
-                         const IndexRange curve_points,
-                         int &current_interval,
-                         IndexRange &range,
-                         MutableSpan<int> curves_intervals,
-                         bool &is_first_selected)
+static int handle_range(const int interval_offset,
+                        const IndexRange curve_points,
+                        int &current_interval,
+                        IndexRange &range,
+                        MutableSpan<int> curves_intervals,
+                        bool &is_first_selected)
 {
   if (current_interval == 0) {
     is_first_selected = range.first() == curve_points.start() && range.size() == 1;
@@ -54,19 +54,15 @@ static bool handle_range(const int interval_offset,
       current_interval++;
     }
   }
-  curves_intervals[interval_offset + current_interval] = range.first();
-  current_interval++;
+  const int current_interval_index = interval_offset + current_interval;
+  const int left_endpoint = math::min(curve_points.last(), range.last());
 
-  const bool inside_curve = curve_points.last() >= range.last();
-  if (inside_curve) {
-    curves_intervals[interval_offset + current_interval] = range.last();
-  }
-  else {
-    curves_intervals[interval_offset + current_interval] = curve_points.last();
-    range = IndexRange(curve_points.last() + 1, range.last() - curve_points.last());
-  }
-  current_interval++;
-  return inside_curve;
+  curves_intervals[current_interval_index] = range.first();
+  curves_intervals[current_interval_index + 1] = left_endpoint;
+
+  range = range.take_back(range.last() - left_endpoint);
+  current_interval += 2;
+  return range.size();
 }
 
 /**
@@ -93,23 +89,23 @@ static void finish_curve(const int curve_index,
                          int &interval_offset,
                          bool &is_first_selected)
 {
-  const int last_interval_endpoint = interval_offset + last_interval;
+  const int last_interval_index = interval_offset + last_interval;
   int appended_points = 0;
-  if (curves_intervals[last_interval_endpoint] != curve_points.last() ||
-      curves_intervals[last_interval_endpoint - 1] != curves_intervals[last_interval_endpoint])
+  if (curves_intervals[last_interval_index] != curve_points.last() ||
+      curves_intervals[last_interval_index - 1] != curves_intervals[last_interval_index])
   {
     /* Append last element of the current curve if it is not extruded or extruded together with
      * preceding points. */
-    curves_intervals[last_interval_endpoint + 1] = curve_points.last();
+    curves_intervals[last_interval_index + 1] = curve_points.last();
     appended_points++;
   }
   else if (is_first_selected && last_interval == 1) {
     /* Extrusion from one point. */
-    curves_intervals[last_interval_endpoint + 1] = curves_intervals[last_interval_endpoint];
+    curves_intervals[last_interval_index + 1] = curves_intervals[last_interval_index];
     is_first_selected = false;
     appended_points++;
   }
-  curves_intervals_offsets[curve_index + 1] = last_interval_endpoint + appended_points + 1;
+  curves_intervals_offsets[curve_index + 1] = last_interval_index + appended_points + 1;
   calc_curve_offset(
       curve_index, last_interval + appended_points, curve_points, interval_offset, new_offsets);
 }
@@ -182,12 +178,12 @@ static void calc_curves_extrusion(const IndexMask &selection,
     }
 
     IndexRange range_to_handle = range;
-    while (!handle_range(interval_offset,
-                         curve_points,
-                         current_interval,
-                         range_to_handle,
-                         curves_intervals,
-                         is_first_selected[curve_index]))
+    while (handle_range(interval_offset,
+                        curve_points,
+                        current_interval,
+                        range_to_handle,
+                        curves_intervals,
+                        is_first_selected[curve_index]))
     {
       finish_curve(curve_index,
                    current_interval - 1,
