@@ -92,6 +92,7 @@ struct GPUSource {
 #else
         return BuiltinBits::NONE;
 #endif
+      case Builtin::assert:
       case Builtin::printf:
 #if GPU_SHADER_PRINTF_ENABLE
         return BuiltinBits::USE_PRINTF;
@@ -399,12 +400,12 @@ struct GPUSource {
   }
 
   /* Returns the final string with all includes done. */
-  void build(Vector<const char *> &result) const
+  void build(Vector<StringRefNull> &result) const
   {
     for (auto *dep : dependencies) {
-      result.append(dep->source.c_str());
+      result.append(dep->source);
     }
-    result.append(source.c_str());
+    result.append(source);
   }
 
   shader::BuiltinBits builtins_get() const
@@ -462,7 +463,7 @@ void gpu_shader_dependency_init()
     /* Detect if there is any printf in node lib files.
      * See gpu_shader_dependency_force_gpu_print_injection(). */
     for (auto *value : g_sources->values()) {
-      if ((value->builtins & shader::BuiltinBits::USE_PRINTF) != shader::BuiltinBits::USE_PRINTF) {
+      if (bool(value->builtins & shader::BuiltinBits::USE_PRINTF)) {
         if (value->filename.startswith("gpu_shader_material_")) {
           force_printf_injection = true;
           break;
@@ -532,10 +533,10 @@ BuiltinBits gpu_shader_dependency_get_builtins(const StringRefNull shader_source
   return source->builtins_get();
 }
 
-Vector<const char *> gpu_shader_dependency_get_resolved_source(
+Vector<StringRefNull> gpu_shader_dependency_get_resolved_source(
     const StringRefNull shader_source_name)
 {
-  Vector<const char *> result;
+  Vector<StringRefNull> result;
   GPUSource *src = g_sources->lookup_default(shader_source_name, nullptr);
   if (src == nullptr) {
     std::cerr << "Error source not found : " << shader_source_name << std::endl;
@@ -553,11 +554,10 @@ StringRefNull gpu_shader_dependency_get_source(const StringRefNull shader_source
   return src->source;
 }
 
-StringRefNull gpu_shader_dependency_get_filename_from_source_string(
-    const StringRefNull source_string)
+StringRefNull gpu_shader_dependency_get_filename_from_source_string(const StringRef source_string)
 {
   for (auto &source : g_sources->values()) {
-    if (source->source.c_str() == source_string.c_str()) {
+    if (source->source == source_string) {
       return source->filename;
     }
   }

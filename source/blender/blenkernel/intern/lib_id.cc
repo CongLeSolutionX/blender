@@ -477,9 +477,6 @@ void BKE_lib_id_expand_local(Main *bmain, ID *id, const int flags)
       bmain, id, lib_id_expand_local_cb, POINTER_FROM_INT(flags), IDWALK_READONLY);
 }
 
-/**
- * Ensure new (copied) ID is fully made local.
- */
 void lib_id_copy_ensure_local(Main *bmain, const ID *old_id, ID *new_id, const int flags)
 {
   if (ID_IS_LINKED(old_id)) {
@@ -1048,14 +1045,6 @@ bool id_single_user(bContext *C, ID *id, PointerRNA *ptr, PropertyRNA *prop)
         PointerRNA idptr = RNA_id_pointer_create(newid);
         RNA_property_pointer_set(ptr, prop, idptr, nullptr);
         RNA_property_update(C, ptr, prop);
-
-        /* tag grease pencil data-block and disable onion */
-        if (GS(id->name) == ID_GD_LEGACY) {
-          DEG_id_tag_update(id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
-          DEG_id_tag_update(newid, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
-          bGPdata *gpd = (bGPdata *)newid;
-          gpd->flag &= ~GP_DATA_SHOW_ONIONSKINS;
-        }
 
         return true;
       }

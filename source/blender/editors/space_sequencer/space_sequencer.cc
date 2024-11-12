@@ -442,7 +442,8 @@ static void sequencer_main_region_init(wmWindowManager *wm, ARegion *region)
 
   /* Own keymap. */
   keymap = WM_keymap_ensure(wm->defaultconf, "Sequencer", SPACE_SEQ, RGN_TYPE_WINDOW);
-  WM_event_add_keymap_handler_v2d_mask(&region->handlers, keymap);
+  WM_event_add_keymap_handler_poll(
+      &region->handlers, keymap, WM_event_handler_region_v2d_mask_no_marker_poll);
 
   /* Add drop boxes. */
   lb = WM_dropboxmap_find("Sequencer", SPACE_SEQ, RGN_TYPE_WINDOW);
@@ -893,6 +894,8 @@ static void sequencer_preview_region_draw(const bContext *C, ARegion *region)
     BLF_shadow(font_id, FontShadowType::Outline, shadow_color);
 
     ED_scene_draw_fps(scene, xoffset, &yoffset);
+
+    BLF_disable(font_id, BLF_SHADOW);
   }
 }
 

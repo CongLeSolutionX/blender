@@ -2996,9 +2996,11 @@ static int grease_pencil_snap_to_grid_exec(bContext *C, wmOperator * /*op*/)
       positions[point_i] = math::transform_point(world_to_layer, pos_snapped);
     });
 
+    drawing_info.drawing.tag_positions_changed();
     DEG_id_tag_update(&grease_pencil.id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
     DEG_id_tag_update(&object.id, ID_RECALC_SYNC_TO_EVAL);
     WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | NA_EDITED, nullptr);
+    WM_event_add_notifier(C, NC_OBJECT | ND_DRAW, &grease_pencil);
   }
 
   return OPERATOR_FINISHED;
@@ -3072,9 +3074,11 @@ static int grease_pencil_snap_to_cursor_exec(bContext *C, wmOperator *op)
       index_mask::masked_fill(positions, cursor_layer, selected_points);
     }
 
+    drawing_info.drawing.tag_positions_changed();
     DEG_id_tag_update(&grease_pencil.id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
     DEG_id_tag_update(&object.id, ID_RECALC_SYNC_TO_EVAL);
     WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | NA_EDITED, nullptr);
+    WM_event_add_notifier(C, NC_OBJECT | ND_DRAW, &grease_pencil);
   }
 
   return OPERATOR_FINISHED;
@@ -3890,10 +3894,11 @@ static void join_object_with_active(Main &bmain,
   const IndexRange new_drawings_src = IndexRange::from_begin_size(
       grease_pencil_dst.drawing_array_num, grease_pencil_src.drawing_array_num);
 
-  new_drawings.slice(new_drawings_dst).copy_from(grease_pencil_dst.drawings());
-  new_drawings.slice(new_drawings_src).copy_from(grease_pencil_src.drawings());
+  copy_drawing_array(grease_pencil_dst.drawings(), new_drawings.slice(new_drawings_dst));
+  copy_drawing_array(grease_pencil_src.drawings(), new_drawings.slice(new_drawings_src));
 
-  MEM_SAFE_FREE(grease_pencil_dst.drawing_array);
+  /* Free existing drawings array. */
+  grease_pencil_dst.resize_drawings(0);
   grease_pencil_dst.drawing_array = new_drawing_array;
   grease_pencil_dst.drawing_array_num = new_drawing_array_num;
 
