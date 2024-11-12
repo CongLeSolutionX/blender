@@ -20,6 +20,8 @@
 #include "draw_cache_impl.hh"
 #include "draw_manager_text.hh"
 
+#include "DEG_depsgraph_query.hh"
+
 #include "overlay_private.hh"
 
 #define OVERLAY_EDIT_TEXT \
@@ -244,8 +246,8 @@ static void overlay_edit_mesh_add_ob_to_pass(OVERLAY_PrivateData *pd, Object *ob
     has_skin_roots = CustomData_get_offset(&em->bm->vdata, CD_MVERT_SKIN) != -1;
   }
 
-  // todo
-  // has_edit_mesh_cage &= editmode_mapping_available
+  has_edit_mesh_cage &= BKE_object_editmesh_eval_to_orig_mapping_valid(
+      *ob, DEG_get_original_object(ob));
 
   vert_shgrp = pd->edit_mesh_verts_grp[in_front];
   edge_shgrp = pd->edit_mesh_edges_grp[in_front];

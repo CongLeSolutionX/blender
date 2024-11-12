@@ -166,6 +166,9 @@ static void mesh_copy_data(Main *bmain,
   if (mesh_src->id.tag & ID_TAG_NO_MAIN) {
     /* For copies in depsgraph, keep data like #CD_ORIGINDEX and #CD_ORCO. */
     CustomData_MeshMasks_update(&mask, &CD_MASK_DERIVEDMESH);
+
+    /* Meshes copied during evaluation pass the edit mesh pointer to determine whether a mapping
+     * from the evaluated to the original state is possible. */
     mesh_dst->runtime->edit_mesh = mesh_src->runtime->edit_mesh;
     if (const blender::bke::EditMeshData *edit_data = mesh_src->runtime->edit_data.get()) {
       mesh_dst->runtime->edit_data = std::make_unique<blender::bke::EditMeshData>(*edit_data);

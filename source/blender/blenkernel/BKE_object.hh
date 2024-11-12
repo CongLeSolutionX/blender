@@ -525,6 +525,9 @@ const Mesh *BKE_object_get_editmesh_eval_final(const Object *object);
 const Mesh *BKE_object_get_editmesh_eval_cage(const Object *object);
 const Mesh *BKE_object_get_mesh_deform_eval(const Object *object);
 
+bool BKE_object_editmesh_eval_to_orig_mapping_valid(const Object &object_eval,
+                                                    const Object *object_orig);
+
 /* Lattice accessors.
  * These functions return either the regular lattice, or the edit-mode lattice,
  * whichever is currently in use. */

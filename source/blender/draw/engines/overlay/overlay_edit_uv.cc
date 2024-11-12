@@ -441,7 +441,7 @@ static void overlay_edit_uv_cache_populate(OVERLAY_Data *vedata, Object &ob)
   blender::gpu::Batch *geom;
 
   const DRWContextState *draw_ctx = DRW_context_state_get();
-  const bool is_edit_object = DRW_object_is_in_edit_mode(&ob);
+  const bool is_edit_object = ob.mode == OB_MODE_EDIT;
   Mesh &mesh = *(Mesh *)ob.data;
   const bool has_active_object_uvmap = CustomData_get_active_layer(&mesh.corner_data,
                                                                    CD_PROP_FLOAT2) != -1;

@@ -4185,14 +4185,35 @@ const Mesh *BKE_object_get_editmesh_eval_final(const Object *object)
   return reinterpret_cast<Mesh *>(object->runtime->data_eval);
 }
 
+bool BKE_object_editmesh_eval_to_orig_mapping_valid(const Object &object_eval,
+                                                    const Object *object_orig)
+{
+  BLI_assert(DEG_is_evaluated_id(&object_eval.id));
+  BLI_assert(object_eval.type == OB_MESH);
+  const Mesh &mesh_eval = *static_cast<const Mesh *>(object_eval.data);
+  if (!mesh_eval.runtime->edit_mesh) {
+    return false;
+  }
+  if (!object_orig) {
+    return false;
+  }
+  BLI_assert(DEG_is_original_id(&object_orig->id));
+  if (object_orig->type != OB_MESH) {
+    return false;
+  }
+  /* In order to properly extract edit mode data, the edit mode data of the evaluated mesh has to
+   * match the edit mode data from the original object. */
+  const Mesh &mesh_orig = *static_cast<const Mesh *>(object_orig->data);
+  if (mesh_orig.runtime->edit_mesh.get() != mesh_eval.runtime->edit_mesh.get()) {
+    return false;
+  }
+  return true;
+}
+
 const Mesh *BKE_object_get_editmesh_eval_cage(const Object *object)
 {
   BLI_assert(!DEG_is_original_id(&object->id));
   BLI_assert(object->type == OB_MESH);
-
-  const Mesh *mesh = static_cast<const Mesh *>(object->data);
-  BLI_assert(mesh->runtime->edit_mesh != nullptr);
-  UNUSED_VARS_NDEBUG(mesh);
 
   return object->runtime->editmesh_eval_cage;
 }
