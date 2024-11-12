@@ -37,7 +37,7 @@
 #define GBUFFER_DATA_MAX (GBUFFER_LAYER_MAX * 2)
 #define GBUFFER_HEADER_BITS_PER_LAYER 4
 /* NOTE: Reserve the last 4 bits for the normal layers ids. */
-#define GBUFFER_NORMAL_BITS_SHIFT 12
+#define GBUFFER_NORMAL_BITS_SHIFT 12u
 
 struct GBufferData {
   ClosureUndetermined closure[GBUFFER_LAYER_MAX];
@@ -365,7 +365,7 @@ void gbuffer_skip_closure(inout GBufferReader gbuf)
   gbuf.closure_count++;
 }
 
-ClosureUndetermined gbuffer_closure_get(GBufferReader gbuf, int i)
+ClosureUndetermined gbuffer_closure_get(GBufferReader gbuf, uchar i)
 {
   switch (i) {
 #if GBUFFER_LAYER_MAX > 0
@@ -437,30 +437,30 @@ void gbuffer_skip_data(inout GBufferReader gbuf)
  * Expects `bin_id` to be in [0..2].
  * Expects `normal_id` to be in [0..3].
  */
-void gbuffer_header_normal_layer_id_set(inout uint header, int bin_id, uint normal_id)
+void gbuffer_header_normal_layer_id_set(inout uint header, uint bin_id, uint normal_id)
 {
   /* Layer 0 will always have normal id 0. It doesn't have to be encoded. Skip it. */
-  if (bin_id == 0) {
+  if (bin_id == 0u) {
     return;
   }
   /* -2 is to skip the bin_id 0 and start encoding for bin_id 1. This keeps the FMA. */
-  header |= normal_id << ((GBUFFER_NORMAL_BITS_SHIFT - 2) + bin_id * 2);
+  header |= normal_id << ((GBUFFER_NORMAL_BITS_SHIFT - 2u) + bin_id * 2u);
 }
-int gbuffer_header_normal_layer_id_get(uint header, int bin_id)
+uint gbuffer_header_normal_layer_id_get(uint header, uint bin_id)
 {
   /* Layer 0 will always have normal id 0. */
-  if (bin_id == 0) {
-    return 0;
+  if (bin_id == 0u) {
+    return 0u;
   }
   /* -2 is to skip the bin_id 0 and start encoding for bin_id 1. This keeps the FMA. */
-  return int(3u & (header >> ((GBUFFER_NORMAL_BITS_SHIFT - 2) + bin_id * 2)));
+  return (3u & (header >> ((GBUFFER_NORMAL_BITS_SHIFT - 2u) + bin_id * 2u)));
 }
 
 void gbuffer_append_normal(inout GBufferWriter gbuf, vec3 normal)
 {
   vec2 packed_N = gbuffer_normal_pack(normal);
   /* Assumes this function is called after gbuffer_append_closure. */
-  int layer_id = gbuf.bins_len - 1;
+  uint layer_id = gbuf.bins_len - 1u;
   /* Try to reuse previous normals. */
 #if GBUFFER_NORMAL_MAX > 1
   if (gbuf.normal_len > 0 && all(equal(gbuf.N[0], packed_N))) {
@@ -502,11 +502,11 @@ void gbuffer_append_normal(inout GBufferWriter gbuf, vec3 normal)
   }
   gbuf.normal_len++;
 }
-vec3 gbuffer_normal_get(inout GBufferReader gbuf, int bin_id, samplerGBufferNormal normal_tx)
+vec3 gbuffer_normal_get(inout GBufferReader gbuf, uint bin_id, samplerGBufferNormal normal_tx)
 {
-  int normal_layer_id = gbuffer_header_normal_layer_id_get(gbuf.header, bin_id);
-  vec2 normal_packed = fetchGBuffer(normal_tx, gbuf.texel, normal_layer_id).rg;
-  gbuf.normal_len = max(gbuf.normal_len, uchar(normal_layer_id + 1));
+  uint normal_layer_id = gbuffer_header_normal_layer_id_get(gbuf.header, bin_id);
+  vec2 normal_packed = fetchGBuffer(normal_tx, gbuf.texel, int(normal_layer_id)).rg;
+  gbuf.normal_len = max(gbuf.normal_len, uchar(normal_layer_id + 1u));
   return gbuffer_normal_unpack(normal_packed);
 }
 void gbuffer_skip_normal(inout GBufferReader gbuf)
@@ -523,7 +523,7 @@ void gbuffer_additional_info_pack(inout GBufferWriter gbuf, float thickness, uin
 }
 void gbuffer_additional_info_load(inout GBufferReader gbuf, samplerGBufferNormal normal_tx)
 {
-  vec2 data_packed = fetchGBuffer(normal_tx, gbuf.texel, gbuf.normal_len).rg;
+  vec2 data_packed = fetchGBuffer(normal_tx, gbuf.texel, int(gbuf.normal_len)).rg;
   gbuf.normal_len++;
   gbuf.thickness = gbuffer_thickness_unpack(data_packed.x);
   gbuf.object_id = gbuffer_object_id_unorm16_unpack(data_packed.y);
@@ -799,7 +799,7 @@ void gbuffer_closure_metal_clear_coat_load(inout GBufferReader gbuf,
   coat.color = vec3(gbuffer_closure_intensity_unpack(data1.zw));
   coat.data.x = data1.y;
 
-  coat.N = bottom.N = gbuffer_normal_get(gbuf, 0, normal_tx);
+  coat.N = bottom.N = gbuffer_normal_get(gbuf, 0u, normal_tx);
 
   gbuffer_register_closure(gbuf, bottom, 0);
   gbuffer_register_closure(gbuf, coat, 1);
@@ -928,10 +928,10 @@ ClosureType gbuffer_closure_type_get_by_bin(uint header, uchar bin_index)
 }
 
 /* Return the bin index of a closure using its layer index. */
-int gbuffer_closure_get_bin_index(GBufferReader gbuf, int layer_index)
+uchar gbuffer_closure_get_bin_index(GBufferReader gbuf, uchar layer_index)
 {
-  int layer = 0;
-  for (uchar bin = 0; bin < GBUFFER_LAYER_MAX; bin++) {
+  uchar layer = 0u;
+  for (uchar bin = 0u; bin < GBUFFER_LAYER_MAX; bin++) {
     GBufferMode mode = gbuffer_header_unpack(gbuf.header, bin);
     /* Gbuffer header can have holes. Skip GBUF_NONE. */
     if (mode != GBUF_NONE) {
@@ -942,7 +942,7 @@ int gbuffer_closure_get_bin_index(GBufferReader gbuf, int layer_index)
     }
   }
   /* Should never happen. But avoid out of bound access. */
-  return 0;
+  return 0u;
 }
 
 ClosureUndetermined gbuffer_closure_get_by_bin(GBufferReader gbuf, uchar bin_index)
