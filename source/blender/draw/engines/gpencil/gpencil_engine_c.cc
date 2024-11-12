@@ -507,7 +507,8 @@ static GPENCIL_tObject *grease_pencil_object_cache_populate(GPENCIL_PrivateData 
                                   OB_MODE_PAINT_GREASE_PENCIL,
                                   OB_MODE_WEIGHT_GREASE_PENCIL,
                                   OB_MODE_VERTEX_GREASE_PENCIL) &&
-                            info.frame_number != pd->cfra && pd->use_multiedit_lines_only;
+                            info.frame_number != pd->cfra && pd->use_multiedit_lines_only &&
+                            do_multi_frame;
     const bool is_onion = info.onion_id != 0;
 
     visible_strokes.foreach_index([&](const int stroke_i, const int pos) {
@@ -526,7 +527,7 @@ static GPENCIL_tObject *grease_pencil_object_cache_populate(GPENCIL_PrivateData 
       const bool hide_onion = is_onion && ((gp_style->flag & GP_MATERIAL_HIDE_ONIONSKIN) != 0 ||
                                            (!do_onion && !do_multi_frame));
       const bool skip_stroke = hide_material || (!show_stroke && !show_fill) ||
-                               (only_lines && !is_onion) || hide_onion;
+                               (only_lines && !do_onion && is_onion) || hide_onion;
 
       if (skip_stroke) {
         t_offset += num_triangles_per_stroke[pos];
@@ -775,7 +776,7 @@ static void gpencil_draw_mask(GPENCIL_Data *vedata, GPENCIL_tObject *ob, GPENCIL
       GPU_framebuffer_clear_color_depth(fbl->mask_fb, clear_col, clear_depth);
     }
 
-    GPENCIL_tLayer *mask_layer = gpencil_layer_cache_get(ob, i);
+    GPENCIL_tLayer *mask_layer = grease_pencil_layer_cache_get(ob, i, true);
     /* When filtering by view-layer, the mask could be null and must be ignored. */
     if (mask_layer == nullptr) {
       continue;
