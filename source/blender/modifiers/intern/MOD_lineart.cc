@@ -787,6 +787,11 @@ static void generate_strokes(ModifierData &md,
   const bool use_cache = (lmd.flags & MOD_LINEART_USE_CACHE);
   LineartCache *local_lc = (is_first_lineart || use_cache) ? first_lineart.shared_cache : nullptr;
 
+  /* Only calculate strokes in these three conditions:
+   * 1. It's the very first line art modifier in the stack.
+   * 2. This line art modifier doesn't want to use globally cached data.
+   * 3. This modifier is not the first line art in stack, but it's the first that's visible (so we
+   *    need to do a `force_compute`). */
   if (is_first_lineart || (!use_cache) || force_compute) {
     MOD_lineart_compute_feature_lines_v3(
         ctx.depsgraph, lmd, &local_lc, !(ctx.object->dtx & OB_DRAW_IN_FRONT));
@@ -857,8 +862,10 @@ static void modify_geometry_set(ModifierData *md,
       blender::ed::greasepencil::get_first_lineart_modifier(*ctx->object);
   BLI_assert(first_lineart);
 
+  /* Since settings for line art cached data are always in the first line art modifier, we need to
+   * get and set overall calculation limits on the first modifier regardless of its visibility
+   * state. If line art cache doesn't exist, it means line art hasn't done any calculation. */
   const bool cache_ready = (first_lineart->shared_cache != nullptr);
-
   if (!cache_ready) {
     first_lineart->shared_cache = MOD_lineart_init_cache();
     ed::greasepencil::get_lineart_modifier_limits(*ctx->object,
