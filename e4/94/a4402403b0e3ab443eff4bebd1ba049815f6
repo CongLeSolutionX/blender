@@ -2,3 +2,4 @@ Referenced by issue #128056, Crash when Ctrl Left Click on Outliner toggles
 Referenced by pull request #128058, Fix #128056: Crash when Ctrl Click on Outliner collection toggles
 Referenced by commit c08a71d5a25f06af468abcc87ff4b4e45a5110d8, Fix #128056: Crash when ctrl click on Outliner collection toggles
 Referenced by pull request #129250, Fix #128099: Outliner isolate collection tweaks linked data
+Referenced by commit 4e907829d3d2cf7876d5e03d59831d9238951895, Fix #128099: Outliner isolate collection tweaks linked data
