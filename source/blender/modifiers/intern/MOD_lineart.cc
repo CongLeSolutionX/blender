@@ -772,7 +772,8 @@ static void panel_register(ARegionType *region_type)
 static void generate_strokes(ModifierData &md,
                              const ModifierEvalContext &ctx,
                              GreasePencil &grease_pencil,
-                             GreasePencilLineartModifierData &first_lineart)
+                             GreasePencilLineartModifierData &first_lineart,
+                             const bool force_compute)
 {
   using namespace bke::greasepencil;
   auto &lmd = reinterpret_cast<GreasePencilLineartModifierData &>(md);
@@ -786,7 +787,7 @@ static void generate_strokes(ModifierData &md,
   const bool use_cache = (lmd.flags & MOD_LINEART_USE_CACHE);
   LineartCache *local_lc = (is_first_lineart || use_cache) ? first_lineart.shared_cache : nullptr;
 
-  if (is_first_lineart || (!use_cache)) {
+  if (is_first_lineart || (!use_cache) || force_compute) {
     MOD_lineart_compute_feature_lines_v3(
         ctx.depsgraph, lmd, &local_lc, !(ctx.object->dtx & OB_DRAW_IN_FRONT));
     MOD_lineart_destroy_render_data_v3(&lmd);
@@ -856,16 +857,17 @@ static void modify_geometry_set(ModifierData *md,
       blender::ed::greasepencil::get_first_lineart_modifier(*ctx->object);
   BLI_assert(first_lineart);
 
-  bool is_first_lineart = (mmd == first_lineart);
+  const bool cache_ready = (first_lineart->shared_cache != nullptr);
 
-  if (is_first_lineart) {
-    mmd->shared_cache = MOD_lineart_init_cache();
-    ed::greasepencil::get_lineart_modifier_limits(*ctx->object, mmd->shared_cache->LimitInfo);
+  if (!cache_ready) {
+    first_lineart->shared_cache = MOD_lineart_init_cache();
+    ed::greasepencil::get_lineart_modifier_limits(*ctx->object,
+                                                  first_lineart->shared_cache->LimitInfo);
   }
   ed::greasepencil::set_lineart_modifier_limits(
-      *mmd, first_lineart->shared_cache->LimitInfo, is_first_lineart);
+      *mmd, first_lineart->shared_cache->LimitInfo, cache_ready);
 
-  generate_strokes(*md, *ctx, grease_pencil, *first_lineart);
+  generate_strokes(*md, *ctx, grease_pencil, *first_lineart, (!cache_ready));
 
   const bool use_render_params = (ctx->flag & MOD_APPLY_RENDER);
   if (is_last_line_art(*mmd, use_render_params)) {
