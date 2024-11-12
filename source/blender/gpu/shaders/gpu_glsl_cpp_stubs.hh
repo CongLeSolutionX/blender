@@ -657,7 +657,9 @@ template<typename T> T exp(T) RET;
 template<typename T> T exp2(T) RET;
 template<typename T> T floor(T) RET;
 template<typename T> T fma(T, T, T) RET;
+#ifndef _MSC_VER /* Avoid redifinition that create compiler error. */
 double fma(double, double, double) RET;
+#endif
 template<typename T> T fract(T) RET;
 template<typename T> T frexp(T, T) RET;
 template<typename T> T inversesqrt(T) RET;
