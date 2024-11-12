@@ -675,7 +675,8 @@ void VKFrameBuffer::rendering_ensure_render_pass(VKContext &context)
     VkAttachmentDescription vk_attachment_description = {};
     vk_attachment_description.format = to_vk_format(depth_texture.device_format_get());
     vk_attachment_description.samples = VK_SAMPLE_COUNT_1_BIT;
-    // TODO: add clear values to internal array, it needs to be passed along with VKBeginRenderingNode.
+    // TODO: add clear values to internal array, it needs to be passed along with
+    // VKBeginRenderingNode.
     set_load_store(vk_attachment_description, load_stores[depth_attachment_index]);
     vk_attachment_description.initialLayout = vk_image_layout;
     vk_attachment_description.finalLayout = vk_image_layout;
