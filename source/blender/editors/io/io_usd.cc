@@ -854,7 +854,9 @@ void WM_OT_usd_export(wmOperatorType *ot)
                   "merge_parent_xform",
                   false,
                   "Merge parent Xform",
-                  "Merge USD primitives with their Xform parent");
+                  "Merge USD primitives with their Xform parent. "
+                  "This can result in invalid USD files with nested UsdGeomGprim "
+                  "when non-Empty Blender objects have children.");
 }
 
 /* ====== USD Import ====== */
