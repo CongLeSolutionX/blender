@@ -580,15 +580,17 @@ void VKFrameBuffer::rendering_ensure_render_pass(VKContext &context)
 {
   render_pass_free();
 
+  depth_attachment_format_ = VK_FORMAT_UNDEFINED;
+  stencil_attachment_format_ = VK_FORMAT_UNDEFINED;
+
   render_graph::VKResourceAccessInfo access_info;
   Vector<VkAttachmentDescription> vk_attachment_descriptions;
   Vector<VkAttachmentReference> vk_attachment_references;
   Vector<VkImageView> vk_image_views;
-  VkAttachmentReference depth_attachment_reference = {};
-  bool has_depth_attachment = false;
   uint32_t layer_count = 1;
 
-  /* Initialize color attachments */
+  /* Color attachments */
+  VkAttachmentReference depth_attachment_reference = {0u};
   for (int color_attachment_index :
        IndexRange(GPU_FB_COLOR_ATTACHMENT0, GPU_FB_MAX_COLOR_ATTACHMENT))
   {
@@ -600,7 +602,7 @@ void VKFrameBuffer::rendering_ensure_render_pass(VKContext &context)
     GPUAttachmentState attachment_state = attachment_states_[color_attachment_index];
     VkImageView vk_image_view = VK_NULL_HANDLE;
     VkImageLayout vk_image_layout = VK_IMAGE_LAYOUT_UNDEFINED;
-    uint32_t attachment_renference = VK_ATTACHMENT_UNUSED;
+    uint32_t attachment_reference = VK_ATTACHMENT_UNUSED;
     uint32_t layer_base = max_ii(attachment.layer, 0);
     if (attachment_state == GPU_ATTACHMENT_WRITE) {
       VKImageViewInfo image_view_info = {
@@ -614,7 +616,9 @@ void VKFrameBuffer::rendering_ensure_render_pass(VKContext &context)
           VKImageViewArrayed::DONT_CARE};
       vk_image_view = color_texture.image_view_get(image_view_info).vk_handle();
       vk_image_layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-      attachment_renference = color_attachment_index - GPU_FB_COLOR_ATTACHMENT0;
+      attachment_reference = color_attachment_index - GPU_FB_COLOR_ATTACHMENT0;
+      /* Depth attachment should always be right after the last color attachment. */
+      depth_attachment_reference.attachment = attachment_reference + 1;
     }
 
     VkAttachmentDescription vk_attachment_description = {};
@@ -624,7 +628,7 @@ void VKFrameBuffer::rendering_ensure_render_pass(VKContext &context)
     vk_attachment_description.initialLayout = vk_image_layout;
     vk_attachment_description.finalLayout = vk_image_layout;
     vk_attachment_descriptions.append(std::move(vk_attachment_description));
-    vk_attachment_references.append({attachment_renference, vk_image_layout});
+    vk_attachment_references.append({attachment_reference, vk_image_layout});
     vk_image_views.append(vk_image_view);
     if (attachment_state == GPU_ATTACHMENT_WRITE) {
       access_info.images.append(
@@ -635,6 +639,63 @@ void VKFrameBuffer::rendering_ensure_render_pass(VKContext &context)
     }
   }
   color_attachment_size = vk_attachment_descriptions.size();
+
+  /* Depth attachment */
+  bool has_depth_attachment = false;
+  for (int depth_attachment_index : IndexRange(GPU_FB_DEPTH_ATTACHMENT, 2)) {
+    const GPUAttachment &attachment = attachments_[depth_attachment_index];
+
+    if (attachment.tex == nullptr) {
+      continue;
+    }
+    has_depth_attachment = true;
+    bool is_stencil_attachment = depth_attachment_index == GPU_FB_DEPTH_STENCIL_ATTACHMENT;
+    VKTexture &depth_texture = *unwrap(unwrap(attachment.tex));
+    VkImageAspectFlags depth_texture_aspect = to_vk_image_aspect_flag_bits(
+        depth_texture.device_format_get());
+    bool is_depth_stencil_attachment = depth_texture_aspect & VK_IMAGE_ASPECT_STENCIL_BIT;
+    VkImageLayout vk_image_layout = is_depth_stencil_attachment ?
+                                        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL :
+                                        VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+    GPUAttachmentState attachment_state = attachment_states_[GPU_FB_DEPTH_ATTACHMENT];
+    VkImageView depth_image_view = VK_NULL_HANDLE;
+    uint32_t layer_base = max_ii(attachment.layer, 0);
+    if (attachment_state == GPU_ATTACHMENT_WRITE) {
+      VKImageViewInfo image_view_info = {eImageViewUsage::Attachment,
+                                         IndexRange(layer_base, 1),
+                                         IndexRange(attachment.mip, 1),
+                                         {{'r', 'g', 'b', 'a'}},
+                                         is_stencil_attachment,
+                                         false,
+                                         VKImageViewArrayed::DONT_CARE};
+      depth_image_view = depth_texture.image_view_get(image_view_info).vk_handle();
+    }
+    VkAttachmentDescription vk_attachment_description = {};
+    vk_attachment_description.format = to_vk_format(depth_texture.device_format_get());
+    vk_attachment_description.samples = VK_SAMPLE_COUNT_1_BIT;
+    set_load_store(vk_attachment_description, load_stores[depth_attachment_index]);
+    vk_attachment_description.initialLayout = vk_image_layout;
+    vk_attachment_description.finalLayout = vk_image_layout;
+    vk_attachment_descriptions.append(std::move(vk_attachment_description));
+    depth_attachment_reference.layout = vk_image_layout;
+    vk_image_views.append(depth_image_view);
+    if (attachment_state == GPU_ATTACHMENT_WRITE) {
+      access_info.images.append({depth_texture.vk_image_handle(),
+                                 VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+                                     VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                                 is_stencil_attachment ?
+                                     static_cast<VkImageAspectFlags>(VK_IMAGE_ASPECT_DEPTH_BIT |
+                                                                     VK_IMAGE_ASPECT_STENCIL_BIT) :
+                                     static_cast<VkImageAspectFlags>(VK_IMAGE_ASPECT_DEPTH_BIT),
+                                 0});
+    }
+
+    VkFormat vk_format = to_vk_format(depth_texture.device_format_get());
+    depth_attachment_format_ = vk_format;
+    if (is_stencil_attachment) {
+      stencil_attachment_format_ = vk_format;
+    }
+  }
 
   /* Subpass description */
   VkSubpassDescription vk_subpass_description = {};
@@ -654,6 +715,7 @@ void VKFrameBuffer::rendering_ensure_render_pass(VKContext &context)
   vk_render_pass_create_info.attachmentCount = vk_attachment_descriptions.size();
   vk_render_pass_create_info.pAttachments = vk_attachment_descriptions.data();
   vkCreateRenderPass(device.vk_handle(), &vk_render_pass_create_info, nullptr, &vk_render_pass);
+  debug::object_label(vk_render_pass, name_);
 
   /* Frame buffer create info */
   VkFramebufferCreateInfo vk_framebuffer_create_info = {};
@@ -665,6 +727,7 @@ void VKFrameBuffer::rendering_ensure_render_pass(VKContext &context)
   vk_framebuffer_create_info.height = height_;
   vk_framebuffer_create_info.layers = layer_count;
   vkCreateFramebuffer(device.vk_handle(), &vk_framebuffer_create_info, nullptr, &vk_framebuffer);
+  debug::object_label(vk_framebuffer, name_);
 
   /* Begin rendering */
   render_graph::VKBeginRenderingNode::CreateInfo begin_rendering(access_info);
@@ -673,14 +736,14 @@ void VKFrameBuffer::rendering_ensure_render_pass(VKContext &context)
   begin_info.renderPass = vk_render_pass;
   begin_info.framebuffer = vk_framebuffer;
   render_area_update(begin_info.renderArea);
-  /* TODO: Add support for clear operations. */
+  /* TODO: Add suppVK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMALort for clear operations. */
 
   context.render_graph.add_node(begin_rendering);
 }
 
-void VKFrameBuffer::rendering_ensure_dynamic_rendering(VKContext &context)
+void VKFrameBuffer::rendering_ensure_dynamic_rendering(VKContext &context,
+                                                       const VKWorkarounds &workarounds)
 {
-  const VKWorkarounds &workarounds = VKBackend::get().device.workarounds_get();
   depth_attachment_format_ = VK_FORMAT_UNDEFINED;
   stencil_attachment_format_ = VK_FORMAT_UNDEFINED;
 
@@ -840,7 +903,7 @@ void VKFrameBuffer::rendering_ensure(VKContext &context)
     rendering_ensure_render_pass(context);
   }
   else {
-    rendering_ensure_dynamic_rendering(context);
+    rendering_ensure_dynamic_rendering(context, workarounds);
   }
   dirty_attachments_ = false;
   dirty_state_ = false;
