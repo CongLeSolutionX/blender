@@ -120,7 +120,7 @@ static SpaceLink *image_create(const ScrArea * /*area*/, const Scene * /*scene*/
   simage->mask_info = *DNA_struct_default_get(MaskSpaceInfo);
 
   /* header */
-  region = static_cast<ARegion *>(MEM_callocN(sizeof(ARegion), "header for image"));
+  region = BKE_area_region_new();
 
   BLI_addtail(&simage->regionbase, region);
   region->regiontype = RGN_TYPE_HEADER;
@@ -140,7 +140,7 @@ static SpaceLink *image_create(const ScrArea * /*area*/, const Scene * /*scene*/
   region->alignment = RGN_ALIGN_BOTTOM | RGN_ALIGN_HIDE_WITH_PREV;
 
   /* tool header */
-  region = static_cast<ARegion *>(MEM_callocN(sizeof(ARegion), "tool header for image"));
+  region = BKE_area_region_new();
 
   BLI_addtail(&simage->regionbase, region);
   region->regiontype = RGN_TYPE_TOOL_HEADER;
@@ -148,7 +148,7 @@ static SpaceLink *image_create(const ScrArea * /*area*/, const Scene * /*scene*/
   region->flag = RGN_FLAG_HIDDEN | RGN_FLAG_HIDDEN_BY_USER;
 
   /* buttons/list view */
-  region = static_cast<ARegion *>(MEM_callocN(sizeof(ARegion), "buttons for image"));
+  region = BKE_area_region_new();
 
   BLI_addtail(&simage->regionbase, region);
   region->regiontype = RGN_TYPE_UI;
@@ -156,7 +156,7 @@ static SpaceLink *image_create(const ScrArea * /*area*/, const Scene * /*scene*/
   region->flag = RGN_FLAG_HIDDEN;
 
   /* scopes/uv sculpt/paint */
-  region = static_cast<ARegion *>(MEM_callocN(sizeof(ARegion), "buttons for image"));
+  region = BKE_area_region_new();
 
   BLI_addtail(&simage->regionbase, region);
   region->regiontype = RGN_TYPE_TOOLS;
@@ -164,7 +164,7 @@ static SpaceLink *image_create(const ScrArea * /*area*/, const Scene * /*scene*/
   region->flag = RGN_FLAG_HIDDEN;
 
   /* main area */
-  region = static_cast<ARegion *>(MEM_callocN(sizeof(ARegion), "main area for image"));
+  region = BKE_area_region_new();
 
   BLI_addtail(&simage->regionbase, region);
   region->regiontype = RGN_TYPE_WINDOW;

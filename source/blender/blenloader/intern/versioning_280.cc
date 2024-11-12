@@ -4240,8 +4240,7 @@ void blo_do_versions_280(FileData *fd, Library * /*lib*/, Main *bmain)
           if (sl->spacetype == SPACE_PROPERTIES) {
             ListBase *regionbase = (sl == area->spacedata.first) ? &area->regionbase :
                                                                    &sl->regionbase;
-            ARegion *region = static_cast<ARegion *>(
-                MEM_callocN(sizeof(ARegion), "navigation bar for properties"));
+            ARegion *region = BKE_area_region_new();
             ARegion *region_header = nullptr;
 
             for (region_header = static_cast<ARegion *>(regionbase->first);
@@ -4470,8 +4469,7 @@ void blo_do_versions_280(FileData *fd, Library * /*lib*/, Main *bmain)
               ListBase *regionbase = (slink == area->spacedata.first) ? &area->regionbase :
                                                                         &slink->regionbase;
 
-              navigation_region = static_cast<ARegion *>(
-                  MEM_callocN(sizeof(ARegion), "userpref navigation-region do_versions"));
+              navigation_region = BKE_area_region_new();
 
               /* Order matters, addhead not addtail! */
               BLI_insertlinkbefore(regionbase, main_region, navigation_region);
@@ -4742,8 +4740,7 @@ void blo_do_versions_280(FileData *fd, Library * /*lib*/, Main *bmain)
                                                                      &sl->regionbase;
               ARegion *region_navbar = BKE_spacedata_find_region_type(sl, area, RGN_TYPE_NAV_BAR);
 
-              execute_region = static_cast<ARegion *>(
-                  MEM_callocN(sizeof(ARegion), "execute region for properties"));
+              execute_region = BKE_area_region_new();
 
               BLI_assert(region_navbar);
 
