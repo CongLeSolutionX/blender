@@ -321,10 +321,6 @@ bke::CurvesGeometry extend_curves(bke::CurvesGeometry &src_curves,
   const OffsetIndices<int> new_points_by_curve = dst_curves.points_by_curve();
   threading::parallel_for(dst_curves.curves_range(), 512, [&](const IndexRange curves_range) {
     for (const int curve : curves_range) {
-      if (!start_points[curve] && !end_points[curve]) {
-        /* Curves should not be touched if they didn't generate extra points before. */
-        return;
-      }
       const IndexRange new_curve = new_points_by_curve[curve];
       int new_size = new_curve.size();
 
@@ -332,18 +328,18 @@ bke::CurvesGeometry extend_curves(bke::CurvesGeometry &src_curves,
       const float used_percent_length = math::clamp(
           isfinite(overshoot_fac) ? overshoot_fac : 0.1f, 1e-4f, 1.0f);
 
-      if (!follow_curvature) {
+      if (!follow_curvature || new_size == 2) {
         extend_curves_straight(used_percent_length,
                                new_size,
-                               start_points.as_span(),
-                               end_points.as_span(),
+                               {1},
+                               {1},
                                curve,
                                new_curve,
                                use_start_lengths.as_span(),
                                use_end_lengths.as_span(),
                                positions);
       }
-      else {
+      else if (start_points[curve] > 0 || end_points[curve] > 0) {
         extend_curves_curved(used_percent_length,
                              start_points.as_span(),
                              end_points.as_span(),
