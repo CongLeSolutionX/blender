@@ -210,6 +210,8 @@ void Instance::object_sync(ObjectRef &ob_ref, Manager &manager)
   if (in_edit_mode && !state.hide_overlays) {
     switch (ob_ref.object->type) {
       case OB_MESH:
+        // TODO: Don't draw edit overlays for evaluated mesh if the edit mesh pointer doesn't match
+        // the original edit mesh pointer.
         layer.meshes.edit_object_sync(manager, ob_ref, state, resources);
         /* TODO(fclem): Find a better place / condition. */
         layer.mesh_uvs.edit_object_sync(manager, ob_ref, state);
