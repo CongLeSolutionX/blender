@@ -6,6 +6,7 @@
  * \ingroup spseq
  */
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 
@@ -1156,13 +1157,22 @@ static void text_edit_draw_cursor(const bContext *C, Sequence *seq, uint pos)
   SEQ_image_transform_matrix_get(scene, seq, transform_mat.ptr());
   const blender::int2 cursor_position = seq_text_cursor_offset_to_position(text,
                                                                            data->cursor_offset);
-  const blender::seq::CharInfo character =
-      text->lines[cursor_position.y].characters[cursor_position.x];
+  const int cursor_width = 10;
+  blender::float2 cursor_coords =
+      text->lines[cursor_position.y].characters[cursor_position.x].position;
+  /* Clamp cursor coords to be inside of text boundbox. Compensate for cursor width, but also line
+   * width hardcoded in shader. */
+  rcti text_boundbox = text->text_boundbox;
+  text_boundbox.xmax -= cursor_width + U.pixelsize;
+  text_boundbox.xmin += U.pixelsize;
+
+  CLAMP(cursor_coords.x, text_boundbox.xmin, text_boundbox.xmax);
+
   blender::float4x3 cursor_quad{
-      {character.position.x, character.position.y, 0.0f},
-      {character.position.x, character.position.y + text->line_height, 0.0f},
-      {character.position.x + 10, character.position.y + text->line_height, 0.0f},
-      {character.position.x + 10, character.position.y, 0.0f},
+      {cursor_coords.x, cursor_coords.y, 0.0f},
+      {cursor_coords.x, cursor_coords.y + text->line_height, 0.0f},
+      {cursor_coords.x + cursor_width, cursor_coords.y + text->line_height, 0.0f},
+      {cursor_coords.x + cursor_width, cursor_coords.y, 0.0f},
   };
   const blender::float3 descender_offs{0.0f, float(text->font_descender), 0.0f};
 
@@ -1198,10 +1208,10 @@ static void text_edit_draw_box(const bContext *C, Sequence *seq, uint pos)
   blender::float4x4 transform_mat;
   SEQ_image_transform_matrix_get(CTX_data_scene(C), seq, transform_mat.ptr());
   blender::float4x3 box_quad{
-      {float(text->edit_boundbox.xmin), float(text->edit_boundbox.ymin), 0.0f},
-      {float(text->edit_boundbox.xmin), float(text->edit_boundbox.ymax), 0.0f},
-      {float(text->edit_boundbox.xmax), float(text->edit_boundbox.ymax), 0.0f},
-      {float(text->edit_boundbox.xmax), float(text->edit_boundbox.ymin), 0.0f},
+      {float(text->text_boundbox.xmin), float(text->text_boundbox.ymin), 0.0f},
+      {float(text->text_boundbox.xmin), float(text->text_boundbox.ymax), 0.0f},
+      {float(text->text_boundbox.xmax), float(text->text_boundbox.ymax), 0.0f},
+      {float(text->text_boundbox.xmax), float(text->text_boundbox.ymin), 0.0f},
   };
 
   for (int i : blender::IndexRange(0, 4)) {
@@ -1231,9 +1241,9 @@ static void text_edit_draw(const bContext *C)
   GPU_line_width(2);
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
-  text_edit_draw_cursor(C, seq, pos);
   text_selection_draw(C, seq, pos);
   text_edit_draw_box(C, seq, pos);
+  text_edit_draw_cursor(C, seq, pos);
 
   immUnbindProgram();
   GPU_line_width(1);
