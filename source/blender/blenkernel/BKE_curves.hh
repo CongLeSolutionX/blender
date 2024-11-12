@@ -887,8 +887,7 @@ inline int CurvesGeometry::curves_num() const
 }
 inline bool CurvesGeometry::is_empty() const
 {
-  /* Each curve must have at least one point. If there are zero curves, there must be zero points.
-   * If there are more than zero curves, there must be at least one point. */
+  /* Each curve must have at least one point. */
   BLI_assert((this->curve_num == 0) == (this->point_num == 0));
   return this->curve_num == 0;
 }
