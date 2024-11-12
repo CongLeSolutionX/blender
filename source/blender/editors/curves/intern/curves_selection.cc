@@ -92,6 +92,17 @@ Span<StringRef> get_curves_selection_attribute_names(const bke::CurvesGeometry &
              selection_attribute_names;
 }
 
+Vector<MutableSpan<float3>> get_curves_positions_for_write(bke::CurvesGeometry &curves)
+{
+  Vector<MutableSpan<float3>> positions_per_attribute;
+  positions_per_attribute.append(curves.positions_for_write());
+  if (curves.has_curve_with_type(CURVE_TYPE_BEZIER)) {
+    positions_per_attribute.append(curves.handle_positions_left_for_write());
+    positions_per_attribute.append(curves.handle_positions_right_for_write());
+  }
+  return positions_per_attribute;
+}
+
 Span<StringRef> get_curves_all_selection_attribute_names()
 {
   static const std::array<StringRef, 3> selection_attribute_names{
