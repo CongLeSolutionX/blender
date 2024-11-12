@@ -45,7 +45,6 @@ class DupliParentFinder;
 struct HierarchyContext {
   /*********** Determined during hierarchy iteration: ***************/
   Object *object; /* Evaluated object. */
-  bool is_object_data_context;
   Object *export_parent;
   Object *duplicator;
   PersistentID persistent_id;
@@ -68,6 +67,11 @@ struct HierarchyContext {
   /* When true, this object should check its parents for animation data when determining whether
    * it's animated. This is necessary when a parent object in Blender is not part of the export. */
   bool animation_check_include_parent;
+
+  /* The flag makes unambiguous the fact that the current context targets object or data. This is
+   * notably used in USDHierarchyIterator::create_usd_export_context: options like
+   * merge_transform_and_shape option is meaningless for object, it only makes sense for data. */
+  bool is_object_data_context;
 
   /*********** Determined during writer creation: ***************/
   float parent_matrix_inv_world[4][4]; /* Inverse of the parent's world matrix. */
