@@ -326,8 +326,10 @@ static void set_load_store(VkAttachmentDescription &r_attachment_description,
                            const GPULoadStore &ls)
 {
   // TODO: copy_v4_v4(r_attachment_description.clearValue.color.float32, ls.clear_value);
-  r_attachment_description.loadOp = to_vk_attachment_load_op(ls.load_action);
-  r_attachment_description.storeOp = to_vk_attachment_store_op(ls.store_action);
+  r_attachment_description.stencilLoadOp = r_attachment_description.loadOp =
+      to_vk_attachment_load_op(ls.load_action);
+  r_attachment_description.stencilStoreOp = r_attachment_description.storeOp =
+      to_vk_attachment_store_op(ls.store_action);
 }
 
 /** \} */
@@ -673,6 +675,7 @@ void VKFrameBuffer::rendering_ensure_render_pass(VKContext &context)
     VkAttachmentDescription vk_attachment_description = {};
     vk_attachment_description.format = to_vk_format(depth_texture.device_format_get());
     vk_attachment_description.samples = VK_SAMPLE_COUNT_1_BIT;
+    // TODO: add clear values to internal array, it needs to be passed along with VKBeginRenderingNode.
     set_load_store(vk_attachment_description, load_stores[depth_attachment_index]);
     vk_attachment_description.initialLayout = vk_image_layout;
     vk_attachment_description.finalLayout = vk_image_layout;
