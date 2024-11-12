@@ -722,8 +722,7 @@ class PipelineModule {
     deferred.end_sync();
   }
 
-  PassMain::Sub *material_add(Object * /*ob*/ /* TODO remove. */,
-                              ::Material *blender_mat,
+  PassMain::Sub *material_add(::Material *blender_mat,
                               GPUMaterial *gpumat,
                               eMaterialPipeline pipeline_type,
                               eMaterialProbe probe_capture)
