@@ -20,9 +20,7 @@
 #include "../system/FreestyleConfig.h"
 #include "../system/StringUtils.h"
 
-#ifdef WITH_CXX_GUARDEDALLOC
-#  include "MEM_guardedalloc.h"
-#endif
+#include "MEM_guardedalloc.h"
 
 extern "C" {
 struct MTex;

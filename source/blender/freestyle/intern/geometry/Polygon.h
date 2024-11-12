@@ -14,9 +14,7 @@
 #include "Geom.h"
 #include "GeomUtils.h"
 
-#ifdef WITH_CXX_GUARDEDALLOC
-#  include "MEM_guardedalloc.h"
-#endif
+#include "MEM_guardedalloc.h"
 
 using namespace std;
 
