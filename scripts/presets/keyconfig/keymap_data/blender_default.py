@@ -1127,6 +1127,10 @@ def km_markers(params):
          {"properties": [("extend", True), ("camera", True)]}),
         ("marker.select_box", {"type": params.select_mouse, "value": 'CLICK_DRAG'},
          {"properties": [("tweak", True)]}),
+        ("marker.select_box", {"type": params.select_mouse, "value": 'CLICK_DRAG', "shift": True},
+         {"properties": [("tweak", True), ("mode", 'ADD')]}),
+        ("marker.select_box", {"type": params.select_mouse, "value": 'CLICK_DRAG', "ctrl": True},
+         {"properties": [("tweak", True), ("mode", 'SUB')]}),
         ("marker.select_box", {"type": 'B', "value": 'PRESS'}, None),
         *_template_items_select_actions(params, "marker.select_all"),
         ("marker.delete", {"type": 'X', "value": 'PRESS'}, None),
@@ -2956,13 +2960,13 @@ def km_sequencer(params):
          {"properties": [("extend", True)]}),
         ("sequencer.select_linked", {"type": 'L', "value": 'PRESS', "ctrl": True}, None),
         ("sequencer.select_box", {"type": params.select_mouse, "value": 'CLICK_DRAG'},
-         {"properties": [("mode", 'SET')]}),
+         {"properties": [("tweak", True), ("mode", 'SET')]}),
         ("sequencer.select_box", {"type": params.select_mouse, "value": 'CLICK_DRAG', "shift": True},
-         {"properties": [("mode", 'ADD')]}),
+         {"properties": [("tweak", True), ("mode", 'ADD')]}),
         ("sequencer.select_box", {"type": params.select_mouse, "value": 'CLICK_DRAG', "ctrl": True},
-         {"properties": [("mode", 'SUB')]}),
+         {"properties": [("tweak", True), ("mode", 'SUB')]}),
         ("sequencer.select_box", {"type": params.select_mouse, "value": 'CLICK_DRAG', "alt": True},
-         {"properties": [("ignore_connections", True), ("mode", 'SET')]}),
+         {"properties": [("tweak", True), ("ignore_connections", True), ("mode", 'SET')]}),
         ("sequencer.select_box", {"type": 'B', "value": 'PRESS'}, None),
         ("sequencer.select_box", {"type": 'B', "value": 'PRESS', "ctrl": True},
          {"properties": [("include_handles", True)]}),
@@ -4011,10 +4015,6 @@ def km_grease_pencil_sculpt_mode(params):
 
         # Active layer
         op_menu("GREASE_PENCIL_MT_layer_active", {"type": 'Y', "value": 'PRESS'}),
-
-        # Auto-masking menu.
-        op_menu_pie("VIEW3D_MT_grease_pencil_sculpt_automasking_pie", {
-                    "type": 'A', "value": 'PRESS', "shift": True, "alt": True}),
 
         *_template_paint_radial_control("gpencil_sculpt_paint"),
         op_asset_shelf_popup(
@@ -5707,6 +5707,9 @@ def km_edit_curves(params):
         *_template_items_select_actions(params, "curves.select_all"),
         ("curves.extrude_move", {"type": 'E', "value": 'PRESS'}, None),
         ("curves.select_linked", {"type": 'L', "value": 'PRESS', "ctrl": True}, None),
+        ("curves.select_linked_pick", {"type": 'L', "value": 'PRESS'}, {"properties": [("deselect", False)]}),
+        ("curves.select_linked_pick", {"type": 'L', "value": 'PRESS',
+         "shift": True}, {"properties": [("deselect", True)]}),
         ("curves.delete", {"type": 'X', "value": 'PRESS'}, None),
         ("curves.delete", {"type": 'DEL', "value": 'PRESS'}, None),
         ("curves.select_more", {"type": 'NUMPAD_PLUS', "value": 'PRESS', "ctrl": True, "repeat": True}, None),
@@ -7820,6 +7823,7 @@ def km_grease_pencil_primitive_tool_modal_map(params):
         ("PANNING", {"type": 'MIDDLEMOUSE', "value": 'ANY', "any": True}, None),
         ("CONFIRM", {"type": 'RET', "value": 'PRESS', "any": True}, None),
         ("CONFIRM", {"type": 'NUMPAD_ENTER', "value": 'PRESS', "any": True}, None),
+        ("CONFIRM", {"type": 'MIDDLEMOUSE', "value": 'PRESS'}, None),
         ("EXTRUDE", {"type": 'E', "value": 'PRESS'}, None),
         ("GRAB", {"type": 'G', "value": 'PRESS'}, None),
         ("ROTATE", {"type": 'R', "value": 'PRESS'}, None),
@@ -8024,7 +8028,8 @@ def km_sequencer_editor_tool_generic_select_box_timeline(params, *, fallback):
             *([] if (fallback and not params.use_fallback_tool) else _template_items_tool_select_actions_simple(
                 "sequencer.select_box",
                 **(params.select_tweak_event if (fallback and params.use_fallback_tool_select_mouse) else
-                    params.tool_tweak_event))),
+                    params.tool_tweak_event),
+                properties=[("tweak", params.select_mouse == 'LEFTMOUSE')])),
         ]},
     )
 
