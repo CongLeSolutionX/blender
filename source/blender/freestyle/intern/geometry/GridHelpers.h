@@ -106,9 +106,7 @@ class Transform {
   virtual ~Transform() = 0;
   virtual Vec3r operator()(const Vec3r &point) const = 0;
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:GridHelpers:Transform")
-#endif
 };
 
 inline bool insideProscenium(const real proscenium[4], const Polygon3r &polygon)

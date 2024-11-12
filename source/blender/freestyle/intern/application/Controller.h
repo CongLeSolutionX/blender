@@ -261,9 +261,7 @@ class Controller {
   SceneHash sceneHashFunc;
   real prevSceneHash;
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:Controller")
-#endif
 };
 
 extern Controller *g_pController;

@@ -37,9 +37,7 @@ class Chronometer {
  private:
   clock_t _start;
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:Chronometer")
-#endif
 };
 
 } /* namespace Freestyle */

@@ -104,9 +104,7 @@ class OWXFaceLayer {
     return !(*this == b);
   }
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:OWXFaceLayer")
-#endif
 };
 
 class WXEdge;
@@ -146,9 +144,7 @@ class OWXEdge {
     return !(*this == b);
   }
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:OWXEdge")
-#endif
 };
 
 class WOEdge;
@@ -271,9 +267,7 @@ class ViewEdgeXBuilder {
   SShape *_pCurrentSShape;
   ViewShape *_pCurrentVShape;
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:ViewEdgeXBuilder")
-#endif
 };
 
 } /* namespace Freestyle */

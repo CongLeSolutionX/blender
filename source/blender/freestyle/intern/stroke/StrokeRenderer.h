@@ -92,9 +92,7 @@ class TextureManager {
   static string _brushes_path;
   uint _defaultTextureId;
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:TextureManager")
-#endif
 };
 
 /**********************************/
@@ -122,9 +120,7 @@ class StrokeRenderer {
   // static uint getTextureIndex(uint index);
   static TextureManager *_textureManager;
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:StrokeRenderer")
-#endif
 };
 
 } /* namespace Freestyle */

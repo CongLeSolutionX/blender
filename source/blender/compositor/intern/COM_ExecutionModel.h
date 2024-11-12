@@ -51,9 +51,7 @@ class ExecutionModel {
 
   virtual void execute(ExecutionSystem &exec_system) = 0;
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("COM:BaseExecutionModel")
-#endif
 };
 
 }  // namespace blender::compositor

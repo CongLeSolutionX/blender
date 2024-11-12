@@ -91,9 +91,7 @@ template<class T> class UnaryFunction0D {
     return Director_BPy_UnaryFunction0D___call__(this, py_uf0D, iter);
   }
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:UnaryFunction0D")
-#endif
 };
 
 #ifdef SWIG

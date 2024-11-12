@@ -27,9 +27,7 @@ struct WorkPackage {
    */
   std::function<void()> executed_fn;
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("COM:WorkPackage")
-#endif
 };
 
 }  // namespace blender::compositor

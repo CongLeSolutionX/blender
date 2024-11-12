@@ -142,9 +142,7 @@ class BlenderFileLoader {
 
   RenderMonitor *_pRenderMonitor;
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:BlenderFileLoader")
-#endif
 };
 
 } /* namespace Freestyle */

@@ -40,9 +40,7 @@ class Interpreter {
  protected:
   string _language;
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:Interpreter")
-#endif
 };
 
 } /* namespace Freestyle */

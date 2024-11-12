@@ -162,9 +162,7 @@ class StyleModule {
  protected:
   Interpreter *_inter;
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:StyleModule")
-#endif
 };
 
 } /* namespace Freestyle */

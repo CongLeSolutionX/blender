@@ -253,9 +253,7 @@ class AppView {
   NodeGroup _p2DNode;
   NodeDrawingStyle *_p2DSelectionNode;
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:AppView")
-#endif
 };
 
 } /* namespace Freestyle */

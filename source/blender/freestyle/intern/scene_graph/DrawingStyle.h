@@ -85,9 +85,7 @@ class DrawingStyle {
   float PointSize;
   bool LightingEnabled;
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:DrawingStyle")
-#endif
 };
 
 DrawingStyle::DrawingStyle(const DrawingStyle &iBrother)

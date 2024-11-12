@@ -264,9 +264,7 @@ class ViewMapBuilder {
                     Vec3r &edgeDir,
                     vector<WVertex *> &faceVertices);
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:ViewMapBuilder")
-#endif
 };
 
 } /* namespace Freestyle */

@@ -63,9 +63,7 @@ class ImagePyramid {
     return _levels.size();
   }
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:ImagePyramid")
-#endif
 };
 
 class GaussianPyramid : public ImagePyramid {

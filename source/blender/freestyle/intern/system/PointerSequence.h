@@ -76,9 +76,7 @@ template<typename C, typename T> class PointerSequence : public C {
     for_each(this->begin(), this->end(), destroyer);
   }
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:PointerSequence")
-#endif
 };
 
 } /* namespace Freestyle */

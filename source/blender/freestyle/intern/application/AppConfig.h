@@ -74,9 +74,7 @@ class Path {
 
   static string getEnvVar(const string &iEnvVarName);
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:Config:Path")
-#endif
 };
 
 //

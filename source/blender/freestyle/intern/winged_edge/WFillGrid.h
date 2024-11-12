@@ -64,9 +64,7 @@ class WFillGrid {
   WingedEdge *_winged_edge;
   uint _polygon_id;
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:WFillGrid")
-#endif
 };
 
 } /* namespace Freestyle */

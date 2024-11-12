@@ -51,9 +51,7 @@ class TimeStamp {
   static TimeStamp _instance;
   uint _time_stamp;
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:TimeStamp")
-#endif
 };
 
 } /* namespace Freestyle */

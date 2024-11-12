@@ -269,9 +269,7 @@ class Operators {
   static I1DContainer *_current_set;
   static StrokesContainer _current_strokes_set;
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:Operators")
-#endif
 };
 
 } /* namespace Freestyle */

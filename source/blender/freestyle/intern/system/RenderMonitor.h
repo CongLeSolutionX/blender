@@ -50,9 +50,7 @@ class RenderMonitor {
  protected:
   Render *_re;
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:RenderMonitor")
-#endif
 };
 
 } /* namespace Freestyle */

@@ -137,9 +137,7 @@ class SteerableViewMap {
   void Clear();
   void Build();
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:SteerableViewMap")
-#endif
 };
 
 } /* namespace Freestyle */

@@ -50,9 +50,7 @@ class SphericalGrid {
     // temptation to save 4 or 8 bytes.
     WFace *face;
 
-#ifdef WITH_CXX_GUARDEDALLOC
     MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:SphericalGrid:OccluderData")
-#endif
   };
 
  private:
@@ -115,9 +113,7 @@ class SphericalGrid {
     // deque<OccluderData*>::iterator _current, _occludeeCandidate;
     vector<OccluderData *>::iterator _current, _occludeeCandidate;
 
-#ifdef WITH_CXX_GUARDEDALLOC
     MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:SphericalGrid:Iterator")
-#endif
   };
 
   class Transform : public GridHelpers::Transform {
@@ -171,9 +167,7 @@ class SphericalGrid {
   Vec3r _viewpoint;
   bool _enableQI;
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:SphericalGrid")
-#endif
 };
 
 inline void SphericalGrid::Iterator::initBeforeTarget()

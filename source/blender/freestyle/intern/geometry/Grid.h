@@ -69,9 +69,7 @@ class Cell {
   Vec3r _orig;
   OccludersSet _occluders;
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:Cell")
-#endif
 };
 
 class GridVisitor {
@@ -89,9 +87,7 @@ class GridVisitor {
     return false;
   }
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:GridVisitor")
-#endif
 };
 
 /** Gathers all the occluders belonging to the cells traversed by the ray */
@@ -378,9 +374,7 @@ class Grid {
   // a ray
   OccludersSet _occluders;  // List of all occluders inserted in the grid
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:Grid")
-#endif
 };
 
 //
@@ -400,9 +394,7 @@ class VirtualOccludersSet {
   Grid &grid;
   OccludersSet::iterator it, end;
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:VirtualOccludersSet")
-#endif
 };
 
 } /* namespace Freestyle */

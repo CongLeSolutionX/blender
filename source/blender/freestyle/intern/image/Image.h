@@ -159,9 +159,7 @@ class FrsImage {
   uint _Ox;  // origin of the stored part
   uint _Oy;  // origin of the stored part
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:FrsImage")
-#endif
 };
 
 //

@@ -113,9 +113,7 @@ class StrokeVertexRep {
   Vec3r _color;
   float _alpha;
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:StrokeVertexRep")
-#endif
 };
 
 class Strip {
@@ -156,9 +154,7 @@ class Strip {
     return _vertices;
   }
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:Strip")
-#endif
 };
 
 class StrokeRep {
@@ -255,9 +251,7 @@ class StrokeRep {
   }
 #endif
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:StrokeRep")
-#endif
 };
 
 } /* namespace Freestyle */

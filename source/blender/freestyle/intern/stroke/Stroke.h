@@ -300,9 +300,7 @@ class StrokeAttribute {
   Vec2fMap *_userAttributesVec2f;
   Vec3fMap *_userAttributesVec3f;
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:StrokeAttribute")
-#endif
 };
 
 //
@@ -458,9 +456,7 @@ class StrokeVertex : public CurvePoint {
   /* interface definition */
   /* inherited */
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:StrokeVertex")
-#endif
 };
 
 //
@@ -857,9 +853,7 @@ class Stroke : public Interface1D {
   virtual Interface0DIterator pointsBegin(float t = 0.0f);
   virtual Interface0DIterator pointsEnd(float t = 0.0f);
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:Stroke")
-#endif
 };
 
 //

@@ -27,9 +27,7 @@ class RandGen {
  private:
   static void next();
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:RandGen")
-#endif
 };
 
 } /* namespace Freestyle */

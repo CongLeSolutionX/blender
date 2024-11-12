@@ -199,9 +199,7 @@ class Interface1D {
  protected:
   uint _timeStamp;
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:Interface1D")
-#endif
 };
 
 } /* namespace Freestyle */
