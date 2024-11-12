@@ -31,6 +31,7 @@
 #include "BKE_node.hh"
 #include "BKE_node_runtime.hh"
 #include "BKE_node_tree_update.hh"
+#include "BKE_screen.hh"
 
 #include "NOD_socket.hh"
 
@@ -81,7 +82,7 @@ ARegion *do_versions_add_region_if_not_found(ListBase *regionbase,
 
 ARegion *do_versions_ensure_region(ListBase *regionbase,
                                    int region_type,
-                                   const char *allocname,
+                                   const char * /*allocname*/,
                                    int link_after_region_type)
 {
   ARegion *link_after_region = nullptr;
@@ -94,7 +95,7 @@ ARegion *do_versions_ensure_region(ListBase *regionbase,
     }
   }
 
-  ARegion *new_region = MEM_cnew<ARegion>(allocname);
+  ARegion *new_region = BKE_area_region_new();
   new_region->regiontype = region_type;
   BLI_insertlinkafter(regionbase, link_after_region, new_region);
   return new_region;

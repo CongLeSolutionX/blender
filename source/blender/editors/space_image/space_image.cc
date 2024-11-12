@@ -127,14 +127,14 @@ static SpaceLink *image_create(const ScrArea * /*area*/, const Scene * /*scene*/
   region->alignment = (U.uiflag & USER_HEADER_BOTTOM) ? RGN_ALIGN_BOTTOM : RGN_ALIGN_TOP;
 
   /* asset shelf */
-  region = MEM_cnew<ARegion>("asset shelf for view3d");
+  region = BKE_area_region_new();
   BLI_addtail(&simage->regionbase, region);
   region->regiontype = RGN_TYPE_ASSET_SHELF;
   region->alignment = RGN_ALIGN_BOTTOM;
   region->flag |= RGN_FLAG_HIDDEN;
 
   /* asset shelf header */
-  region = MEM_cnew<ARegion>("asset shelf header for view3d");
+  region = BKE_area_region_new();
   BLI_addtail(&simage->regionbase, region);
   region->regiontype = RGN_TYPE_ASSET_SHELF_HEADER;
   region->alignment = RGN_ALIGN_BOTTOM | RGN_ALIGN_HIDE_WITH_PREV;
