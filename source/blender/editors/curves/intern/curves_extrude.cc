@@ -65,21 +65,6 @@ static int handle_range(const int interval_offset,
   return range.size();
 }
 
-/**
- * Calculates number of points in resulting curve denoted by #curve_index and sets its
- * #curve_offsets value.
- */
-static void calc_curve_offset(const int curve_index,
-                              const int curve_intervals_num,
-                              const IndexRange curve_points,
-                              int &interval_offset,
-                              MutableSpan<int> new_offsets)
-{
-  const int points_in_curve = curve_points.size() + curve_intervals_num - 1;
-  new_offsets[curve_index + 1] = new_offsets[curve_index] + points_in_curve;
-  interval_offset += curve_intervals_num + 1;
-}
-
 static void finish_curve(const int curve_index,
                          const int last_interval,
                          const IndexRange curve_points,
@@ -90,24 +75,25 @@ static void finish_curve(const int curve_index,
                          bool &is_first_selected)
 {
   const int last_interval_index = interval_offset + last_interval;
-  int appended_points = 0;
+  int appended_point = 0;
   if (curves_intervals[last_interval_index] != curve_points.last() ||
       curves_intervals[last_interval_index - 1] != curves_intervals[last_interval_index])
   {
     /* Append last element of the current curve if it is not extruded or extruded together with
      * preceding points. */
     curves_intervals[last_interval_index + 1] = curve_points.last();
-    appended_points++;
+    appended_point++;
   }
   else if (is_first_selected && last_interval == 1) {
     /* Extrusion from one point. */
     curves_intervals[last_interval_index + 1] = curves_intervals[last_interval_index];
     is_first_selected = false;
-    appended_points++;
+    appended_point++;
   }
-  curves_intervals_offsets[curve_index + 1] = last_interval_index + appended_points + 1;
-  calc_curve_offset(
-      curve_index, last_interval + appended_points, curve_points, interval_offset, new_offsets);
+  curves_intervals_offsets[curve_index + 1] = last_interval_index + appended_point + 1;
+  new_offsets[curve_index + 1] = new_offsets[curve_index] + curve_points.size() + last_interval +
+                                 appended_point - 1;
+  interval_offset += last_interval + appended_point + 1;
 }
 
 static void finish_curve_or_full_copy(const int curve_index,
@@ -132,12 +118,12 @@ static void finish_curve_or_full_copy(const int curve_index,
   }
   else {
     /* Copy full curve if previous selected point was not on this curve. */
-    const int intervals_num = 1;
-    curves_intervals_offsets[curve_index + 1] = interval_offset + intervals_num + 1;
     is_first_selected = false;
     curves_intervals[interval_offset] = curve_points.first();
     curves_intervals[interval_offset + 1] = curve_points.last();
-    calc_curve_offset(curve_index, intervals_num, curve_points, interval_offset, new_offsets);
+    curves_intervals_offsets[curve_index + 1] = interval_offset + 2;
+    new_offsets[curve_index + 1] = new_offsets[curve_index] + curve_points.size();
+    interval_offset += 2;
   }
 }
 
@@ -150,7 +136,6 @@ static void calc_curves_extrusion(const IndexMask &selection,
 {
   std::optional<IndexRange> prev_range;
   int current_interval = 0;
-
   int curve_index = 0;
   int interval_offset = 0;
   curves_intervals[interval_offset] = points_by_curve[0].start();
