@@ -974,7 +974,7 @@ class USDExportTest(AbstractUSDTest):
         # This isn't the case yet, hence the call to `self.export_without_validating`, which does
         # not call `UsdUtils.ComplianceChecker.CheckCompliance`.
         # This would fail on `PrimEncapsulationChecker`
-        
+
         self.export_without_validating(filepath=str(test_path), merge_parent_xform=True)
 
         expected = (
