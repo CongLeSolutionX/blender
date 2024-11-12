@@ -229,7 +229,8 @@ void LookdevModule::sync_pass(PassSimple &pass,
 
   const DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_CULL_BACK;
 
-  GPUMaterial *gpumat = inst_.materials.lookdev_hdri_pass_get(mat).gpumat;
+  GPUMaterial *gpumat = inst_.shaders.material_shader_get(
+      mat, mat->nodetree, MAT_PIPE_FORWARD, MAT_GEOM_MESH, MAT_PROBE_NONE);
   pass.state_set(state);
   pass.material_set(*inst_.manager, gpumat);
   pass.bind_texture(RBUFS_UTILITY_TEX_SLOT, inst_.pipelines.utility_tx);

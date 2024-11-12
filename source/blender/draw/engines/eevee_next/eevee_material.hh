@@ -379,11 +379,6 @@ class MaterialModule {
    */
   Material &material_get(Object *ob, bool has_motion, int mat_nr, eMaterialGeometry geometry_type);
 
-  MaterialPass lookdev_hdri_pass_get(::Material *blender_mat)
-  {
-    return material_pass_get(blender_mat, MAT_PIPE_FORWARD, MAT_GEOM_MESH);
-  }
-
  private:
   Material &material_sync(Object *ob,
                           ::Material *blender_mat,
@@ -392,7 +387,8 @@ class MaterialModule {
 
   /** Return correct material or empty default material if slot is empty. */
   ::Material *material_from_slot(Object *ob, int slot);
-  MaterialPass material_pass_get(::Material *blender_mat,
+  MaterialPass material_pass_get(Object *ob,
+                                 ::Material *blender_mat,
                                  eMaterialPipeline pipeline_type,
                                  eMaterialGeometry geometry_type,
                                  eMaterialProbe probe_capture = MAT_PROBE_NONE);
