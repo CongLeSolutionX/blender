@@ -176,6 +176,14 @@ class IndexRange {
   }
 
   /**
+   * Creates a new index range with the same beginning but a shifted end.
+   */
+  constexpr IndexRange extend(const int64_t n) const
+  {
+    return IndexRange::from_begin_size(start_, size_ + n);
+  }
+
+  /**
    * Create a new range starting at the end of the current one.
    */
   constexpr IndexRange after(int64_t n) const

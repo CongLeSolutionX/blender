@@ -330,7 +330,7 @@ static void extrude_curves(Curves &curves_id)
     dst_selections[selection_i].finish();
   }
 
-  const Span<int> intervals = compress_intervals(curve_interval_ranges, curve_intervals);
+  const OffsetIndices<int> intervals = compress_intervals(curve_interval_ranges, curve_intervals);
 
   bke::MutableAttributeAccessor dst_attributes = new_curves.attributes_for_write();
 
@@ -342,14 +342,12 @@ static void extrude_curves(Curves &curves_id)
                {".selection", ".selection_handle_left", ".selection_handle_right"})))
   {
     const CPPType &type = attribute.src.type();
-    threading::parallel_for(IndexRange(intervals.size() - 1), 512, [&](IndexRange range) {
+    threading::parallel_for(intervals.index_range(), 512, [&](IndexRange range) {
       for (const int i : range) {
-        const int first = intervals[i];
-        const int size = intervals[i + 1] - first + 1;
-        const int dest_index = intervals[i] + i;
-        type.copy_assign_n(attribute.src.slice(IndexRange(first, size)).data(),
-                           attribute.dst.span.slice(IndexRange(dest_index, size)).data(),
-                           size);
+        const IndexRange src = intervals[i].extend(1);
+        const IndexRange dst = src.shift(i);
+        type.copy_assign_n(
+            attribute.src.slice(src).data(), attribute.dst.span.slice(dst).data(), src.size());
       }
     });
     attribute.dst.finish();
