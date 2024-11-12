@@ -947,6 +947,10 @@ static void id_swap(Main *bmain,
                      remapper_id_a,
                      remapper_id_b);
   }
+  if ((id_type->flags & IDTYPE_FLAGS_NO_ANIMDATA) == 0) {
+    /* Animatable types need to ensure that their action slot user tracking is correct. */
+    post_idswap_update_action_slot_users(id_a, id_b);
+  }
 
   if (remapper_id_a != nullptr) {
     remapper_id_a->add(id_b, id_a);

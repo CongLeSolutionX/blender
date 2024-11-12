@@ -62,6 +62,17 @@ AnimData *BKE_animdata_from_id(const ID *id);
 AnimData *BKE_animdata_ensure_id(ID *id);
 
 /**
+ * After id_a and id_b have been swapped, update their Action Slots to ensure the list of slot
+ * users is correct.
+ *
+ * This is a low-level function, that's basically only called from BKE_lib_id_swap() and
+ * BKE_lib_id_swap_full() to ensure the bookkeeping is accurate.
+ *
+ * Note that calling this without actually swapping the IDs will introduce a bug.
+ */
+void post_idswap_update_action_slot_users(ID *id_a, ID *id_b);
+
+/**
  * Set active action used by AnimData from the given ID-block.
  *
  * Called when user tries to change the active action of an #AnimData block

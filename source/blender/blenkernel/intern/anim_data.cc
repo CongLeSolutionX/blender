@@ -123,6 +123,38 @@ AnimData *BKE_animdata_ensure_id(ID *id)
   return nullptr;
 }
 
+void post_idswap_update_action_slot_users(ID *id_a, ID *id_b)
+{
+  BLI_assert(id_a);
+  BLI_assert(id_b);
+  BLI_assert(GS(id_a->name) == GS(id_b->name));
+
+  /* Keep track of the visited slots, so that they don't get swapped twice. */
+  Set<animrig::Slot *> swapped_slots;
+
+  const auto visit_action_slot = [&](animrig::Action &action,
+                                     animrig::slot_handle_t slot_handle) -> bool {
+    animrig::Slot *slot = action.slot_for_handle(slot_handle);
+    if (!swapped_slots.add(slot)) {
+      return true;
+    }
+
+    /* Swap id_a and id_b pointers in the slot's user list. */
+    for (ID *&slot_user : slot->runtime_users()) {
+      if (slot_user == id_a) {
+        slot_user = id_b;
+      }
+      else if (slot_user == id_b) {
+        slot_user = id_a;
+      }
+    }
+    return true;
+  };
+
+  animrig::foreach_action_slot_use(*id_a, visit_action_slot);
+  animrig::foreach_action_slot_use(*id_b, visit_action_slot);
+}
+
 /* Action / `tmpact` Setter shared code -------------------------
  *
  * Both the action and `tmpact` setter functions have essentially

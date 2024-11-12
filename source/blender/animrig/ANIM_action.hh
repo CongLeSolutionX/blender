@@ -675,14 +675,15 @@ class Slot : public ::ActionSlot {
   /**
    * Directly return the runtime users vector.
    *
-   * This function does not refresh the users cache, so it may be out of date.
+   * \note This function does not refresh the users cache, so it may be out of date. Also there may
+   * be nullptr entries in the returned vector.
    *
    * This is a low-level function, and should only be used when calling `users(bmain)` is not
    * appropriate.
    *
    * \see #Slot::users(Main &bmain)
    */
-  Vector<ID *> runtime_users();
+  MutableSpan<ID *> runtime_users();
 
   /**
    * Register this ID as animated by this Slot.

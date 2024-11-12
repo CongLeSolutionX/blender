@@ -64,6 +64,12 @@ bool foreach_action_slot_use(
     FunctionRef<bool(const Action &action, slot_handle_t slot_handle)> callback);
 
 /**
+ * Same as above, except non-const.
+ */
+bool foreach_action_slot_use(
+    ID &animated_id, FunctionRef<bool(Action &action, slot_handle_t slot_handle)> callback);
+
+/**
  * Essentially the same as foreach_action_slot_use(), except that it provides
  * the ID as well as pointers via which the callback can modify which
  * Action/slot is assigned.

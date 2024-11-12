@@ -1084,10 +1084,10 @@ Span<ID *> Slot::users(Main &bmain) const
   return this->runtime->users.as_span();
 }
 
-Vector<ID *> Slot::runtime_users()
+MutableSpan<ID *> Slot::runtime_users()
 {
   BLI_assert_msg(this->runtime, "Slot::runtime should always be allocated");
-  return this->runtime->users;
+  return this->runtime->users.as_mutable_span();
 }
 
 void Slot::users_add(ID &animated_id)
@@ -1101,12 +1101,17 @@ void Slot::users_remove(ID &animated_id)
   BLI_assert(this->runtime);
   Vector<ID *> &users = this->runtime->users;
 
-  const int64_t vector_index = users.first_index_of_try(&animated_id);
-  if (vector_index < 0) {
-    return;
-  }
-
-  users.remove_and_reorder(vector_index);
+  /* Even though users_add() ensures that there are no duplicates, there's still things like
+   * pointer swapping etc. that can happen via the foreach-id looping code. That means that the
+   * entries in the user map are not 100% under control of the user_add() and user_remove()
+   * function, and thus we cannot assume that there are no duplicates. */
+  while (true) {
+    const int64_t vector_index = users.first_index_of_try(&animated_id);
+    if (vector_index < 0) {
+      break;
+    }
+    users.remove_and_reorder(vector_index);
+  };
 }
 
 void Slot::users_invalidate(Main &bmain)

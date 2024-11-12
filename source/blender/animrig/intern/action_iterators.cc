@@ -89,6 +89,19 @@ bool foreach_action_slot_use(
                                                  forward_to_callback);
 }
 
+bool foreach_action_slot_use(ID &animated_id,
+                             FunctionRef<bool(Action &action, slot_handle_t slot_handle)> callback)
+{
+  const auto forward_to_nonconst_callback = [&](const Action &const_action,
+                                                const slot_handle_t slot_handle) -> bool {
+    Action &action = const_cast<Action &>(const_action);
+    return callback(action, slot_handle);
+  };
+
+  return foreach_action_slot_use(const_cast<const ID &>(animated_id),
+                                 forward_to_nonconst_callback);
+}
+
 bool foreach_action_slot_use_with_references(ID &animated_id,
                                              FunctionRef<bool(ID &animated_id,
                                                               bAction *&action_ptr_ref,
