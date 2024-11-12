@@ -438,7 +438,6 @@ static void wm_usd_export_draw(bContext *C, wmOperator *op)
       uiItemR(col, ptr, "export_global_forward_selection", UI_ITEM_NONE, nullptr, ICON_NONE);
       uiItemR(col, ptr, "export_global_up_selection", UI_ITEM_NONE, nullptr, ICON_NONE);
     }
-    uiItemR(col, ptr, "merge_parent_xform", UI_ITEM_NONE, nullptr, ICON_NONE);
     uiItemR(col, ptr, "xform_op_mode", UI_ITEM_NONE, nullptr, ICON_NONE);
 
     col = uiLayoutColumn(panel, false);
@@ -465,6 +464,7 @@ static void wm_usd_export_draw(bContext *C, wmOperator *op)
     uiItemR(col, ptr, "rename_uvmaps", UI_ITEM_NONE, nullptr, ICON_NONE);
     uiItemR(col, ptr, "export_normals", UI_ITEM_NONE, nullptr, ICON_NONE);
 
+    uiItemR(col, ptr, "merge_parent_xform", UI_ITEM_NONE, nullptr, ICON_NONE);
     uiItemR(col, ptr, "triangulate_meshes", UI_ITEM_NONE, nullptr, ICON_NONE);
     if (RNA_boolean_get(ptr, "triangulate_meshes")) {
       uiItemR(col, ptr, "quad_method", UI_ITEM_NONE, IFACE_("Method Quads"), ICON_NONE);
