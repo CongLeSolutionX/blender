@@ -961,6 +961,20 @@ class USDExportTest(AbstractUSDTest):
 
         test_path = self.tempdir / "test_merge_parent_xform_true.usda"
 
+        # The current implementation of merge_parent_xform allows exported nested UsdGeomGprim,
+        # which makes an USD stage invalid. This happens when Blender non-Empty objects are nested.
+        # In this scene, the mesh `GEO_Head_0` has another mesh `GEO_Ear_R_2` in its children. This is
+        # valid in Blender, but invalid in USD. In this case, we shouldn't try to `merge_parent_xform`
+        # and the USD hierarchy would be:
+        # ...
+        # ('/root/ParentOfDupli2/Dupli2/GEO_Head_0', 'Xform'),             # <- xform not merged
+        # ('/root/ParentOfDupli2/Dupli2/GEO_Head_0/GEO_Head_0', 'Mesh'),   # <- gprim not merged
+        # ('/root/ParentOfDupli2/Dupli2/GEO_Head_0/GEO_Ear_R_2', 'Mesh'),
+        # ...
+        # This isn't the case yet, hence the call to `self.export_without_validating`, which does
+        # not call `UsdUtils.ComplianceChecker.CheckCompliance`.
+        # This would fail on `PrimEncapsulationChecker`
+        
         self.export_without_validating(filepath=str(test_path), merge_parent_xform=True)
 
         expected = (
