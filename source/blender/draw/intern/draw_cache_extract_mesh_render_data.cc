@@ -548,7 +548,6 @@ std::unique_ptr<MeshRenderData> mesh_render_data_create(Object &object,
     const Mesh *editmesh_eval_final = BKE_object_get_editmesh_eval_final(&object);
     const Mesh *editmesh_eval_cage = BKE_object_get_editmesh_eval_cage(&object);
 
-    BLI_assert(editmesh_eval_cage && editmesh_eval_final);
     mr->bm = mesh.runtime->edit_mesh->bm;
     mr->edit_bmesh = mesh.runtime->edit_mesh.get();
     mr->mesh = (do_final) ? editmesh_eval_final : editmesh_eval_cage;

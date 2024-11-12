@@ -1501,11 +1501,21 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
   cache.batch_ready |= batch_requested;
 
   bool do_cage = false, do_uvcage = false;
+  Mesh *cage_mesh = &mesh;
   if (is_editmode) {
     const Mesh *editmesh_eval_final = BKE_object_get_editmesh_eval_final(&ob);
     const Mesh *editmesh_eval_cage = BKE_object_get_editmesh_eval_cage(&ob);
 
-    do_cage = editmesh_eval_final != editmesh_eval_cage && edit_mapping_valid;
+    do_cage = editmesh_eval_final != editmesh_eval_cage;
+    if (do_cage) {
+      if (!edit_mapping_valid) {
+        if (object_orig) {
+          if (object_orig->type == OB_MESH) {
+            cage_mesh = static_cast<Mesh *>(object_orig->data);
+          }
+        }
+      }
+    }
     do_uvcage = editmesh_eval_final &&
                 !(editmesh_eval_final->runtime->is_original_bmesh &&
                   editmesh_eval_final->runtime->wrapper_type == ME_WRAPPER_TYPE_BMESH);
@@ -1885,7 +1895,7 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
                                        cache,
                                        cache.cage,
                                        ob,
-                                       mesh,
+                                       *cage_mesh,
                                        is_editmode,
                                        is_paint_mode,
                                        ob.object_to_world(),
@@ -1894,10 +1904,6 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
                                        scene,
                                        ts,
                                        true);
-  }
-  else {
-    // create empty batches for cache.cage
-    // or just try leaving it as is because theoretically it's already empty
   }
 
   if (do_subdivision) {
