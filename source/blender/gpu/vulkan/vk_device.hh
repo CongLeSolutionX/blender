@@ -25,6 +25,8 @@
 namespace blender::gpu {
 class VKBackend;
 
+/* TODO: Split into VKWorkarounds and VKExtensions to remove the negating when an extension isn't
+ * supported. */
 struct VKWorkarounds {
   /**
    * Some devices don't support pixel formats that are aligned to 24 and 48 bits.
