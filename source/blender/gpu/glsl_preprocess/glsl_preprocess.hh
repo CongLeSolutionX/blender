@@ -190,7 +190,7 @@ class Preprocessor {
         /* Skip GLSL-C++ stubs. They are only for IDE linting. */
         return;
       }
-      if (dependency_name.find("info.hh")) {
+      if (dependency_name.find("info.hh") != std::string::npos) {
         /* Skip info files. They are only for IDE linting. */
         return;
       }
