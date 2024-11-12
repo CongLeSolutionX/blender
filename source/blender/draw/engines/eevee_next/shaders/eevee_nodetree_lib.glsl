@@ -33,7 +33,7 @@ ClosureUndetermined g_closure_bins[CLOSURE_BIN_COUNT];
 /* Random number per sampled closure type. */
 float g_closure_rand[CLOSURE_BIN_COUNT];
 
-ClosureUndetermined g_closure_get(int i)
+ClosureUndetermined g_closure_get(uchar i)
 {
   switch (i) {
     case 0:
@@ -52,7 +52,7 @@ ClosureUndetermined g_closure_get(int i)
   return cl_empty;
 }
 
-ClosureUndetermined g_closure_get_resolved(int i, float weight_fac)
+ClosureUndetermined g_closure_get_resolved(uchar i, float weight_fac)
 {
   ClosureUndetermined cl = g_closure_get(i);
   cl.color *= cl.weight * weight_fac;
