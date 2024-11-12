@@ -681,7 +681,10 @@ class USERPREF_PT_system_display_graphics(SystemPanel, CenterAlignMixIn, Panel):
     bl_label = "Display Graphics"
 
     @classmethod
-    def poll(cls, _context):
+    def poll(cls, context):
+        if not context.preferences.view.show_developer_ui:
+            return False
+
         import platform
         return platform.system() != 'Darwin'
 
@@ -2432,8 +2435,8 @@ class USERPREF_PT_addons(AddOnPanel, Panel):
         sub = box.row()
         sub.label(text=lines[0])
         sub.label(icon='ERROR')
-        for l in lines[1:]:
-            box.label(text=l)
+        for line in lines[1:]:
+            box.label(text=line)
 
     @staticmethod
     def _draw_addon_header(layout, prefs, wm):

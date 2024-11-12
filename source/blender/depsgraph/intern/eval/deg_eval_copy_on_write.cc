@@ -28,7 +28,6 @@
 #include "BKE_curve.hh"
 #include "BKE_global.hh"
 #include "BKE_gpencil_legacy.h"
-#include "BKE_gpencil_update_cache_legacy.h"
 #include "BKE_idprop.hh"
 #include "BKE_layer.hh"
 #include "BKE_lib_id.hh"
@@ -728,16 +727,6 @@ void update_id_after_copy(const Depsgraph *depsgraph,
       scene_setup_view_layers_after_remap(depsgraph, id_node, reinterpret_cast<Scene *>(id_cow));
       break;
     }
-    /* FIXME: This is a temporary fix to update the runtime pointers properly, see #96216. Should
-     * be removed at some point. */
-    case ID_GD_LEGACY: {
-      bGPdata *gpd_cow = (bGPdata *)id_cow;
-      bGPDlayer *gpl = (bGPDlayer *)(gpd_cow->layers.first);
-      if (gpl != nullptr && gpl->runtime.gpl_orig == nullptr) {
-        BKE_gpencil_data_update_orig_pointers((bGPdata *)id_orig, gpd_cow);
-      }
-      break;
-    }
     default:
       break;
   }
@@ -898,11 +887,10 @@ ID *deg_update_eval_copy_datablock(const Depsgraph *depsgraph, const IDNode *id_
   return id_cow;
 }
 
-/**
- * \note Depsgraph is supposed to have ID node already.
- */
 ID *deg_update_eval_copy_datablock(const Depsgraph *depsgraph, ID *id_orig)
 {
+  /* NOTE: Depsgraph is supposed to have ID node already. */
+
   IDNode *id_node = depsgraph->find_id_node(id_orig);
   BLI_assert(id_node != nullptr);
   return deg_update_eval_copy_datablock(depsgraph, id_node);
