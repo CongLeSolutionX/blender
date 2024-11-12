@@ -382,9 +382,7 @@ class DialGizmo : public NodeGizmos {
     if (!screen_space) {
       /* We can't scale the dial gizmo non-uniformly, so just take the average of the scale in each
        * axis for now. */
-      transform_scale = math::length(params.parent_transform.x_axis()) +
-                        math::length(params.parent_transform.y_axis()) +
-                        math::length(params.parent_transform.z_axis()) / 3.0f;
+      transform_scale = math::average(math::to_scale(params.parent_transform));
     }
     copy_m4_m4(gizmo_->matrix_offset,
                math::from_scale<float4x4>(float3(radius * transform_scale)).ptr());
