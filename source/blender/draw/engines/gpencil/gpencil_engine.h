@@ -109,6 +109,8 @@ typedef struct GPENCIL_tLayer {
   BLI_bitmap *mask_invert_bits;
   /** Index in the layer list. Used as id for masking. */
   int layer_id;
+  /** True if this pass is part of the onion skinning. */
+  bool is_onion;
 } GPENCIL_tLayer;
 
 typedef struct GPENCIL_tObject {
@@ -266,12 +268,6 @@ typedef struct GPENCIL_PrivateData {
 
   /* Active object. */
   Object *obact;
-  /* Object being in draw mode. */
-  struct bGPdata *sbuffer_gpd;
-  /* Layer to append the temp stroke to. */
-  struct bGPDlayer *sbuffer_layer;
-  /* Temporary stroke currently being drawn. */
-  struct bGPDstroke *sbuffer_stroke;
   /* List of temp objects containing the stroke. */
   struct {
     GPENCIL_tObject *first, *last;
@@ -333,7 +329,9 @@ GPENCIL_tLayer *gpencil_layer_cache_add(GPENCIL_PrivateData *pd,
                                         const bGPDlayer *gpl,
                                         const bGPDframe *gpf,
                                         GPENCIL_tObject *tgp_ob);
-GPENCIL_tLayer *gpencil_layer_cache_get(GPENCIL_tObject *tgp_ob, int number);
+GPENCIL_tLayer *grease_pencil_layer_cache_get(GPENCIL_tObject *tgp_ob,
+                                              int layer_id,
+                                              bool skip_onion);
 
 GPENCIL_tLayer *grease_pencil_layer_cache_add(GPENCIL_PrivateData *pd,
                                               const Object *ob,

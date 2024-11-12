@@ -95,6 +95,10 @@ if(POLICY CMP0087)
   cmake_policy(SET CMP0087 NEW)
 endif()
 
+# Allow to specify language per file.
+if(POLICY CMP0119)
+  cmake_policy(SET CMP0119 NEW)
+endif()
 
 # -----------------------------------------------------------------------------
 # Load Blender's Local Macros
@@ -332,7 +336,7 @@ unset(_option_default)
 option(WITH_GMP "Enable features depending on GMP (Exact Boolean)" ON)
 
 # Compositor
-option(WITH_COMPOSITOR_CPU "Enable the tile based CPU nodal compositor" ON)
+option(WITH_COMPOSITOR_CPU "Enable the Full-Frame CPU nodal compositor" ON)
 option(WITH_OPENIMAGEDENOISE "Enable the OpenImageDenoise compositing node" ON)
 
 option(WITH_OPENSUBDIV "Enable OpenSubdiv for surface subdivision" ON)
@@ -872,9 +876,28 @@ endif()
 # GPU Module
 option(WITH_RENDERDOC "Use Renderdoc API to capture frames" OFF)
 
+option(WITH_GPU_SHADER_ASSERT "\
+Globally enable in-shader asserts.
+(Requires a debug build or setting GPU_FORCE_ENABLE_SHADER_PRINTF to 1)"
+  OFF
+)
+
 mark_as_advanced(
   WITH_RENDERDOC
+  WITH_GPU_SHADER_ASSERT
 )
+
+if(POLICY CMP0119)
+  option(WITH_GPU_SHADER_CPP_COMPILATION "\
+  Compiler shaders using C++. \
+  Allows testing Metal compilation on other platform and enable C++ IDE support for shader code"
+  OFF
+  )
+  mark_as_advanced(WITH_GPU_SHADER_CPP_COMPILATION)
+else()
+  set(WITH_GPU_SHADER_CPP_COMPILATION OFF)
+endif()
+
 
 # OpenGL
 if(NOT APPLE)

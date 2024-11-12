@@ -38,8 +38,8 @@
 #include "BKE_context.hh"
 #include "BKE_global.hh"
 #include "BKE_icons.h"
-#include "BKE_image.h"
-#include "BKE_image_save.h"
+#include "BKE_image.hh"
+#include "BKE_image_save.hh"
 #include "BKE_layer.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_main.hh"
@@ -1781,6 +1781,7 @@ static int image_replace_exec(bContext *C, wmOperator *op)
 
   BKE_icon_changed(BKE_icon_id_ensure(&sima->image->id));
   BKE_image_signal(bmain, sima->image, &sima->iuser, IMA_SIGNAL_RELOAD);
+  DEG_id_tag_update(&sima->image->id, 0);
   WM_event_add_notifier(C, NC_IMAGE | NA_EDITED, sima->image);
 
   return OPERATOR_FINISHED;
