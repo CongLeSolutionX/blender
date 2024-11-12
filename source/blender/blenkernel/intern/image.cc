@@ -1032,11 +1032,6 @@ void BKE_image_alpha_mode_from_extension(Image *image)
   image->alpha_mode = BKE_image_alpha_mode_from_extension_ex(image->filepath);
 }
 
-Image *BKE_image_load(Main *bmain, const char *filepath)
-{
-  return BKE_image_load_ex(bmain, BKE_main_blendfile_path(bmain), filepath);
-}
-
 Image *BKE_image_load_ex(Main *bmain, const char *base_path, const char *filepath)
 {
   Image *ima;
@@ -1067,6 +1062,11 @@ Image *BKE_image_load_ex(Main *bmain, const char *base_path, const char *filepat
   image_init_color_management(ima);
 
   return ima;
+}
+
+Image *BKE_image_load(Main *bmain, const char *filepath)
+{
+  return BKE_image_load_ex(bmain, BKE_main_blendfile_path(bmain), filepath);
 }
 
 Image *BKE_image_load_exists_ex(Main *bmain, const char *filepath, bool *r_exists)

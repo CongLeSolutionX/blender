@@ -205,10 +205,10 @@ struct ImageFrameRange {
 /**
  * Used for both images and volume file loading.
  */
-ListBase ED_image_filesel_detect_sequences(Main *bmain, wmOperator *op, bool detect_udim);
 ListBase ED_image_filesel_detect_sequences(wmOperator *op,
                                            bool detect_udim,
                                            const char *library_path);
+ListBase ED_image_filesel_detect_sequences(Main *bmain, wmOperator *op, bool detect_udim);
 
 bool ED_image_tools_paint_poll(bContext *C);
 void ED_paint_cursor_start(Paint *paint, bool (*poll)(bContext *C));
