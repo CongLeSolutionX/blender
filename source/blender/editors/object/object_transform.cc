@@ -1735,10 +1735,9 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
       pointcloud.id.tag |= ID_TAG_DOIT;
       do_inverse_offset = true;
     }
-    .is_empty()
-        /* offset other selected objects */
-        if (do_inverse_offset && (centermode != GEOMETRY_TO_ORIGIN))
-    {
+
+    /* offset other selected objects */
+    if (do_inverse_offset && (centermode != GEOMETRY_TO_ORIGIN)) {
       float obmat[4][4];
 
       /* was the object data modified
