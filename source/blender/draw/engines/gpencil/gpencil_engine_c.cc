@@ -523,11 +523,10 @@ static GPENCIL_tObject *grease_pencil_object_cache_populate(GPENCIL_PrivateData 
       const bool show_fill = (points.size() >= 3) &&
                              ((gp_style->flag & GP_MATERIAL_FILL_SHOW) != 0) &&
                              (!pd->simplify_fill);
-
-      const bool hide_onion = is_onion && (((gp_style->flag & GP_MATERIAL_HIDE_ONIONSKIN) != 0) ||
-                                           !do_onion || !do_multi_frame);
+      const bool hide_onion = is_onion && ((gp_style->flag & GP_MATERIAL_HIDE_ONIONSKIN) != 0 ||
+                                           (!do_onion && !do_multi_frame));
       const bool skip_stroke = hide_material || (!show_stroke && !show_fill) ||
-                               (only_lines && do_multi_frame) || (hide_onion && do_onion);
+                               (only_lines && !is_onion) || hide_onion;
 
       if (skip_stroke) {
         t_offset += num_triangles_per_stroke[pos];
