@@ -187,6 +187,10 @@ static void calc_new_offsets(const Span<int> old_offsets,
   const IndexRange range = old_offsets.index_range().drop_back(1).shift(1);
   threading::parallel_for(range, 256, [&](IndexRange index_range) {
     for (const int i : index_range) {
+      /* -1 subtracts last interval endpoint and gives number of intervals.
+       * Another -1 from number of intervals gives number of new points created for curve.
+       * Multiplied by i because -2 are accumulated for each curve.
+       */
       new_offsets[i] = old_offsets[i] + curves_intervals_offsets[i] - 2 * i;
     }
   });
@@ -262,7 +266,7 @@ static void extrude_curves(Curves &curves_id)
 
   const OffsetIndices<int> intervals_by_curve = curves_intervals_offsets.as_span();
   const OffsetIndices<int> copy_intervals = copy_interval_offsets.as_span().slice(
-      0, curves_intervals_offsets.as_span().last());
+      0, curves_intervals_offsets.last());
 
   threading::parallel_for(curves.curves_range(), 256, [&](IndexRange curves_range) {
     for (const int curve : curves_range) {
