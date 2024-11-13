@@ -1374,6 +1374,44 @@ static void node_draw_mute_line(const bContext &C,
   GPU_blend(GPU_BLEND_NONE);
 }
 
+static void node_socket_tooltip_set(uiBlock &block,
+                                    const int socket_index_in_tree,
+                                    const float2 location,
+                                    const float2 size)
+{
+  /* Ideally sockets themselves should be buttons, but they aren't currently. So add an invisible
+   * button on top of them for the tooltip. */
+  const eUIEmbossType old_emboss = UI_block_emboss_get(&block);
+  UI_block_emboss_set(&block, UI_EMBOSS_NONE);
+  uiBut *but = uiDefIconBut(&block,
+                            UI_BTYPE_BUT,
+                            0,
+                            ICON_NONE,
+                            location.x - size.x / 2.0f,
+                            location.y - size.y / 2.0f,
+                            size.x,
+                            size.y,
+                            nullptr,
+                            0,
+                            0,
+                            nullptr);
+
+  UI_but_func_tooltip_set(
+      but,
+      [](bContext *C, void *argN, const char * /*tip*/) {
+        const SpaceNode &snode = *CTX_wm_space_node(C);
+        const bNodeTree &ntree = *snode.edittree;
+        const int index_in_tree = POINTER_AS_INT(argN);
+        ntree.ensure_topology_cache();
+        return node_socket_get_tooltip(&snode, ntree, *ntree.all_sockets()[index_in_tree]);
+      },
+      POINTER_FROM_INT(socket_index_in_tree),
+      nullptr);
+  /* Disable the button so that clicks on it are ignored the link operator still works. */
+  UI_but_flag_enable(but, UI_BUT_DISABLED);
+  UI_block_emboss_set(&block, old_emboss);
+}
+
 static const float virtual_node_socket_outline_color[4] = {0.5, 0.5, 0.5, 1.0};
 
 static void node_socket_outline_color_get(const bool selected,
@@ -2249,6 +2287,7 @@ static void node_draw_socket(const bContext &C,
                              const bNodeTree &ntree,
                              const bNode &node,
                              PointerRNA &node_ptr,
+                             uiBlock &block,
                              const bNodeSocket &sock,
                              const float outline_thickness,
                              const float dot_radius,
@@ -2275,12 +2314,13 @@ static void node_draw_socket(const bContext &C,
 
   node_draw_nodesocket(
       &rect, socket_color, outline_color, outline_thickness, dot_radius, sock.display_shape);
+
+  node_socket_tooltip_set(
+      block, sock.index_in_tree(), socket_location, float2(2.0f * half_width, 2.0f * half_height));
 }
 
-void node_draw_sockets(const SpaceNode &snode,
-                       const bContext &C,
-                       bNodeTree &ntree,
-                       const bNode &node)
+static void node_draw_sockets(
+    const bContext &C, uiBlock &block, const SpaceNode &snode, bNodeTree &ntree, const bNode &node)
 {
   if (!draw_node_details(snode)) {
     return;
@@ -2303,7 +2343,8 @@ void node_draw_sockets(const SpaceNode &snode,
       continue;
     }
     const bool selected = (sock->flag & SELECT);
-    node_draw_socket(C, ntree, node, nodeptr, *sock, outline_thickness, dot_radius, selected);
+    node_draw_socket(
+        C, ntree, node, nodeptr, block, *sock, outline_thickness, dot_radius, selected);
   }
 
   /* Output sockets. */
@@ -2312,7 +2353,8 @@ void node_draw_sockets(const SpaceNode &snode,
       continue;
     }
     const bool selected = (sock->flag & SELECT);
-    node_draw_socket(C, ntree, node, nodeptr, *sock, outline_thickness, dot_radius, selected);
+    node_draw_socket(
+        C, ntree, node, nodeptr, block, *sock, outline_thickness, dot_radius, selected);
   }
   nodesocket_batch_end();
 }
@@ -3513,7 +3555,7 @@ static void node_draw_basis(const bContext &C,
 
   /* Skip slow socket drawing if zoom is small. */
   if (draw_node_details(snode)) {
-    node_draw_sockets(snode, C, ntree, node);
+    node_draw_sockets(C, block, snode, ntree, node);
   }
 
   if (is_node_panels_supported(node)) {
@@ -3703,7 +3745,7 @@ static void node_draw_hidden(const bContext &C,
   immUnbindProgram();
   GPU_blend(GPU_BLEND_NONE);
 
-  node_draw_sockets(snode, C, ntree, node);
+  node_draw_sockets(C, block, snode, ntree, node);
 
   UI_block_end(&C, &block);
   UI_block_draw(&C, &block);
@@ -4161,10 +4203,10 @@ static StringRefNull reroute_node_get_auto_label(TreeDrawContext &tree_draw_ctx,
   return label;
 }
 
-void reroute_node_draw_body(const bContext &C,
-                            const bNodeTree &ntree,
-                            const bNode &node,
-                            const bool selected)
+static void reroute_node_draw_body(const bContext &C,
+                                   const bNodeTree &ntree,
+                                   const bNode &node,
+                                   const bool selected)
 {
   BLI_assert(node.is_reroute());
 
