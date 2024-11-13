@@ -117,9 +117,9 @@ void GPENCIL_engine_init(void *ved)
     use_scene_world = V3D_USES_SCENE_WORLD(v3d);
 
     stl->pd->v3d_color_type = (v3d->shading.type == OB_SOLID) ? v3d->shading.color_type : -1;
-    /* Special case: If we're in Draw or Vertex Paint mode, show vertex colors. */
+    /* Special case: If we're in Vertex Paint mode, enforce V3D_SHADING_VERTEX_COLOR setting.*/
     if (v3d->shading.type == OB_SOLID && ctx->obact &&
-        ELEM(ctx->obact->mode, OB_MODE_PAINT_GREASE_PENCIL, OB_MODE_VERTEX_GREASE_PENCIL))
+        (ctx->obact->mode & OB_MODE_VERTEX_GREASE_PENCIL) != 0)
     {
       stl->pd->v3d_color_type = V3D_SHADING_VERTEX_COLOR;
     }
@@ -236,9 +236,6 @@ void GPENCIL_cache_init(void *ved)
   }
 
   {
-    pd->sbuffer_stroke = nullptr;
-    pd->sbuffer_gpd = nullptr;
-    pd->sbuffer_layer = nullptr;
     pd->stroke_batch = nullptr;
     pd->fill_batch = nullptr;
     pd->do_fast_drawing = false;
@@ -507,7 +504,8 @@ static GPENCIL_tObject *grease_pencil_object_cache_populate(GPENCIL_PrivateData 
                                   OB_MODE_PAINT_GREASE_PENCIL,
                                   OB_MODE_WEIGHT_GREASE_PENCIL,
                                   OB_MODE_VERTEX_GREASE_PENCIL) &&
-                            info.frame_number != pd->cfra && pd->use_multiedit_lines_only;
+                            info.frame_number != pd->cfra && pd->use_multiedit_lines_only &&
+                            do_multi_frame;
     const bool is_onion = info.onion_id != 0;
 
     visible_strokes.foreach_index([&](const int stroke_i, const int pos) {
@@ -526,7 +524,7 @@ static GPENCIL_tObject *grease_pencil_object_cache_populate(GPENCIL_PrivateData 
       const bool hide_onion = is_onion && ((gp_style->flag & GP_MATERIAL_HIDE_ONIONSKIN) != 0 ||
                                            (!do_onion && !do_multi_frame));
       const bool skip_stroke = hide_material || (!show_stroke && !show_fill) ||
-                               (only_lines && !is_onion) || hide_onion;
+                               (only_lines && !do_onion && is_onion) || hide_onion;
 
       if (skip_stroke) {
         t_offset += num_triangles_per_stroke[pos];
@@ -736,11 +734,6 @@ static void GPENCIL_draw_scene_depth_only(void *ved)
   }
 
   pd->gp_object_pool = pd->gp_layer_pool = pd->gp_vfx_pool = pd->gp_maskbit_pool = nullptr;
-
-  /* Free temp stroke buffers. */
-  if (pd->sbuffer_gpd) {
-    DRW_cache_gpencil_sbuffer_clear(pd->obact);
-  }
 }
 
 static void gpencil_draw_mask(GPENCIL_Data *vedata, GPENCIL_tObject *ob, GPENCIL_tLayer *layer)
@@ -775,7 +768,7 @@ static void gpencil_draw_mask(GPENCIL_Data *vedata, GPENCIL_tObject *ob, GPENCIL
       GPU_framebuffer_clear_color_depth(fbl->mask_fb, clear_col, clear_depth);
     }
 
-    GPENCIL_tLayer *mask_layer = gpencil_layer_cache_get(ob, i);
+    GPENCIL_tLayer *mask_layer = grease_pencil_layer_cache_get(ob, i, true);
     /* When filtering by view-layer, the mask could be null and must be ignored. */
     if (mask_layer == nullptr) {
       continue;
@@ -933,11 +926,6 @@ void GPENCIL_draw_scene(void *ved)
   }
 
   pd->gp_object_pool = pd->gp_layer_pool = pd->gp_vfx_pool = pd->gp_maskbit_pool = nullptr;
-
-  /* Free temp stroke buffers. */
-  if (pd->sbuffer_gpd) {
-    DRW_cache_gpencil_sbuffer_clear(pd->obact);
-  }
 }
 
 static void GPENCIL_engine_free()

@@ -7,7 +7,7 @@
 #include "BKE_curves.hh"
 #include "BKE_global.hh"
 #include "BKE_grease_pencil.hh"
-#include "BKE_image.h"
+#include "BKE_image.hh"
 #include "BKE_layer.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_material.h"
@@ -366,7 +366,7 @@ static int grease_pencil_trace_image_exec(bContext *C, wmOperator *op)
 
   if (job->ob_grease_pencil != nullptr) {
     if (job->ob_grease_pencil->type != OB_GREASE_PENCIL) {
-      BKE_report(op->reports, RPT_WARNING, "Target object not a grease pencil, ignoring!");
+      BKE_report(op->reports, RPT_WARNING, "Target object not a Grease Pencil, ignoring!");
       job->ob_grease_pencil = nullptr;
     }
     else if (BKE_object_obdata_is_libdata(job->ob_grease_pencil)) {
@@ -483,7 +483,7 @@ static void GREASE_PENCIL_OT_trace_image(wmOperatorType *ot)
                           target_object_modes,
                           int(TargetObjectMode::New),
                           "Target Object",
-                          "Target grease pencil");
+                          "Target Grease Pencil");
   RNA_def_property_flag(ot->prop, PROP_SKIP_SAVE);
 
   RNA_def_float(ot->srna, "radius", 0.01f, 0.001f, 1.0f, "Radius", "", 0.001, 1.0f);

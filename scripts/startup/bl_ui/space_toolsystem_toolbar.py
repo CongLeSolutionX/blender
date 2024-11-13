@@ -1975,7 +1975,6 @@ class _defs_texture_paint:
             idname="builtin.brush",
             label="Paint",
             icon="brush.sculpt.paint",
-            cursor='PAINT_CROSS',
             options={'USE_BRUSHES'},
         )
 
@@ -3008,16 +3007,6 @@ class _defs_sequencer_generic:
 
 class _defs_sequencer_select:
     @ToolDef.from_fn
-    def select_timeline():
-        return dict(
-            idname="builtin.select",
-            label="Tweak",
-            icon="ops.generic.select",
-            widget=None,
-            keymap="Sequencer Timeline Tool: Tweak",
-        )
-
-    @ToolDef.from_fn
     def select_preview():
         return dict(
             idname="builtin.select",
@@ -3025,6 +3014,22 @@ class _defs_sequencer_select:
             icon="ops.generic.select",
             widget=None,
             keymap="Sequencer Preview Tool: Tweak",
+        )
+
+    @ToolDef.from_fn
+    def box_timeline():
+        def draw_settings(_context, layout, tool):
+            props = tool.operator_properties("sequencer.select_box")
+            row = layout.row()
+            row.use_property_split = False
+            row.prop(props, "mode", text="", expand=True, icon_only=True)
+        return dict(
+            idname="builtin.select_box",
+            label="Select Box",
+            icon="ops.generic.select_box",
+            widget=None,
+            keymap="Sequencer Timeline Tool: Select Box",
+            draw_settings=draw_settings,
         )
 
     @ToolDef.from_fn
@@ -3073,6 +3078,15 @@ class IMAGE_PT_tools_active(ToolSelectPanelHelper, Panel):
     @classmethod
     def tools_all(cls):
         yield from cls._tools.items()
+
+    _brush_tool = ToolDef.from_dict(
+        dict(
+            idname="builtin.brush",
+            label="Brush",
+            icon="brush.generic",
+            options={'USE_BRUSHES'},
+        )
+    )
 
     # Private tool lists for convenient reuse in `_tools`.
 
@@ -3130,7 +3144,7 @@ class IMAGE_PT_tools_active(ToolSelectPanelHelper, Panel):
             None,
         ],
         'PAINT': [
-            _defs_texture_paint.brush,
+            _brush_tool,
             _defs_texture_paint.blur,
             _defs_texture_paint.smear,
             _defs_texture_paint.fill,
@@ -3238,7 +3252,7 @@ class VIEW3D_PT_tools_active(ToolSelectPanelHelper, Panel):
         dict(
             idname="builtin.brush",
             label="Brush",
-            icon="brush.sculpt.paint",
+            icon="brush.generic",
             options={'USE_BRUSHES'},
         )
     )
@@ -3528,7 +3542,7 @@ class VIEW3D_PT_tools_active(ToolSelectPanelHelper, Panel):
             ),
         ],
         'PAINT_TEXTURE': [
-            _defs_texture_paint.brush,
+            _brush_tool,
             _defs_texture_paint.blur,
             _defs_texture_paint.smear,
             _defs_texture_paint.clone,
@@ -3689,11 +3703,11 @@ class SEQUENCER_PT_tools_active(ToolSelectPanelHelper, Panel):
             *_tools_annotate,
         ],
         'SEQUENCER': [
-            _defs_sequencer_select.select_timeline,
+            _defs_sequencer_select.box_timeline,
             _defs_sequencer_generic.blade,
         ],
         'SEQUENCER_PREVIEW': [
-            _defs_sequencer_select.select_timeline,
+            _defs_sequencer_select.box_timeline,
             *_tools_annotate,
             None,
             _defs_sequencer_generic.blade,

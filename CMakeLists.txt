@@ -332,7 +332,7 @@ unset(_option_default)
 option(WITH_GMP "Enable features depending on GMP (Exact Boolean)" ON)
 
 # Compositor
-option(WITH_COMPOSITOR_CPU "Enable the tile based CPU nodal compositor" ON)
+option(WITH_COMPOSITOR_CPU "Enable the Full-Frame CPU nodal compositor" ON)
 option(WITH_OPENIMAGEDENOISE "Enable the OpenImageDenoise compositing node" ON)
 
 option(WITH_OPENSUBDIV "Enable OpenSubdiv for surface subdivision" ON)
@@ -708,9 +708,8 @@ endif()
 if(NOT APPLE AND NOT (WIN32 AND CMAKE_SYSTEM_PROCESSOR STREQUAL "ARM64"))
   option(WITH_CYCLES_DEVICE_HIP "Enable Cycles AMD HIP support" ON)
   option(WITH_CYCLES_HIP_BINARIES "Build Cycles AMD HIP binaries" OFF)
-  # Radeon VII (gfx906) not currently working with HIP SDK, so left out of the list.
+  # We only support RDNA1 (gfx101X) and newer. Vega and older generations have rendering artifacts and crashing issues.
   set(CYCLES_HIP_BINARIES_ARCH
-    gfx900 gfx90c gfx902
     gfx1010 gfx1011 gfx1012
     gfx1030 gfx1031 gfx1032 gfx1034 gfx1035 gfx1036
     gfx1100 gfx1101 gfx1102 gfx1103 gfx1150 gfx1151
@@ -871,15 +870,17 @@ endif()
 
 
 # GPU Module
-option(WITH_GPU_BUILDTIME_SHADER_BUILDER "\
-Shader builder is a developer option enabling linting on GLSL during compilation"
-  OFF
-)
 option(WITH_RENDERDOC "Use Renderdoc API to capture frames" OFF)
 
+option(WITH_GPU_SHADER_ASSERT "\
+Globally enable in-shader asserts.
+(Requires a debug build or setting GPU_FORCE_ENABLE_SHADER_PRINTF to 1)"
+  OFF
+)
+
 mark_as_advanced(
-  WITH_GPU_BUILDTIME_SHADER_BUILDER
   WITH_RENDERDOC
+  WITH_GPU_SHADER_ASSERT
 )
 
 # OpenGL
@@ -892,19 +893,10 @@ endif()
 
 # Vulkan
 option(WITH_VULKAN_BACKEND "Enable Vulkan as graphics backend (experimental)" ON)
-option(WITH_VULKAN_GUARDEDALLOC "\
-Use guardedalloc for host allocations done inside Vulkan (development option)"
-  OFF
-)
-mark_as_advanced(
-  WITH_VULKAN_BACKEND
-  WITH_VULKAN_GUARDEDALLOC
-)
+mark_as_advanced(WITH_VULKAN_BACKEND)
 if(APPLE)
   option(WITH_VULKAN_MOLTENVK "Enable Vulkan over MoltenVK (development option)" OFF)
-  mark_as_advanced(
-    WITH_VULKAN_MOLTENVK
-  )
+  mark_as_advanced(WITH_VULKAN_MOLTENVK)
 endif()
 
 if(APPLE AND NOT WITH_VULKAN_MOLTENVK)

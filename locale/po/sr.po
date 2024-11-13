@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.3.0 Beta (b'6039cb17e63e')\n"
+"Project-Id-Version: Blender 4.3.0 Beta (b'1c8669f8c9c1')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-10-07 09:15+0000\n"
+"POT-Creation-Date: 2024-11-11 09:42+0000\n"
 "PO-Revision-Date: 2012-09-07 22:32+0100\n"
 "Last-Translator: Nikola Radovanovic <cobisimo@gmail.com>\n"
 "Language-Team: Nikola Radovanovic\n"
@@ -6248,10 +6248,6 @@ msgid "Roughness"
 msgstr "Храпавост"
 
 
-msgid "Opaque"
-msgstr "Непровидно"
-
-
 msgid "Texture Slot Images"
 msgstr "Слике слота текстура"
 
@@ -6366,10 +6362,6 @@ msgstr "Освежи"
 
 msgid "Filename of the movie or sequence file"
 msgstr "Назив филма или низа слика"
-
-
-msgid "Grease pencil data for this movie clip"
-msgstr "Податак скицирања овог филмског исечка"
 
 
 msgid "Movie File"
@@ -8086,28 +8078,8 @@ msgid "Codec"
 msgstr "Кодек"
 
 
-msgid "Codec settings for OpenEXR"
-msgstr "Подешавање кодека OpenEXR"
-
-
 msgid "Pxr24 (lossy)"
 msgstr "Pxr24 (са губитком)"
-
-
-msgid "ZIP (lossless)"
-msgstr "ZIP (без губитка)"
-
-
-msgid "PIZ (lossless)"
-msgstr "PIZ (без губитка)"
-
-
-msgid "RLE (lossless)"
-msgstr "RLE (без губитка)"
-
-
-msgid "ZIPS (lossless)"
-msgstr "ZIPS (без губитка)"
 
 
 msgid "B44 (lossy)"
@@ -8748,30 +8720,6 @@ msgid "Material slot name"
 msgstr "Назив слота материјала"
 
 
-msgid "Snap"
-msgstr "Лепљење"
-
-
-msgid "Mirror"
-msgstr "Огледало"
-
-
-msgid "UV Mapping"
-msgstr "UV Мапирање"
-
-
-msgid "Local View"
-msgstr "Локални поглед"
-
-
-msgid "Navigation"
-msgstr "Навигација"
-
-
-msgid "Align View"
-msgstr "Поравнај поглед"
-
-
 msgid "Select Linked"
 msgstr "Изабери повезано"
 
@@ -8846,6 +8794,30 @@ msgstr "Специјални знаци"
 
 msgid "Bone Roll"
 msgstr "Ролна костију"
+
+
+msgid "Snap"
+msgstr "Лепљење"
+
+
+msgid "Mirror"
+msgstr "Огледало"
+
+
+msgid "UV Mapping"
+msgstr "UV Мапирање"
+
+
+msgid "Local View"
+msgstr "Локални поглед"
+
+
+msgid "Navigation"
+msgstr "Навигација"
+
+
+msgid "Align View"
+msgstr "Поравнај поглед"
 
 
 msgid "Basic"
@@ -14673,10 +14645,6 @@ msgid "Make copies of the selected Grease Pencil strokes and move them"
 msgstr "Прави копију изабраних потеза скице и помера их"
 
 
-msgid "Only Selected"
-msgstr "Само изабрано"
-
-
 msgctxt "Operator"
 msgid "Add New Layer"
 msgstr "Додај нови слој"
@@ -15525,6 +15493,10 @@ msgid "Swap"
 msgstr "Замени"
 
 
+msgid "Only Selected"
+msgstr "Само изабрано"
+
+
 msgid "Only cut selected geometry"
 msgstr "Јачина издизања геометрије"
 
@@ -16067,10 +16039,6 @@ msgstr "Без трансформација"
 
 msgid "Bake object transformations"
 msgstr "Без трансформација"
-
-
-msgid "Remove all constraints from keyed object/bones, and do 'visual' keying"
-msgstr "Уклони сва IK ограничења са изабраних костију"
 
 
 msgid "Clear Parents"
@@ -20198,10 +20166,6 @@ msgid "Self Collision"
 msgstr "Самоодбијање"
 
 
-msgid "Indirect Lighting"
-msgstr "Индиректно осветљење"
-
-
 msgid "Shadows"
 msgstr "Сенке"
 
@@ -22395,10 +22359,6 @@ msgid "Z-Buffer"
 msgstr "Z-бафер"
 
 
-msgid "Grease pencil data for this space"
-msgstr "Подаци скице за овај простор"
-
-
 msgid "UV Editor"
 msgstr "UV уређивач"
 
@@ -23720,11 +23680,6 @@ msgstr "Почетни NLA"
 
 
 msgctxt "WindowManager"
-msgid "Timeline"
-msgstr "Временска линија"
-
-
-msgctxt "WindowManager"
 msgid "Image"
 msgstr "Слика"
 
@@ -23873,38 +23828,6 @@ msgstr "Примени"
 
 msgid "Options:"
 msgstr "Опције:"
-
-
-msgid "    RNA Path: bpy.types."
-msgstr "    РНК путања: bpy.types."
-
-
-msgid "    RNA Context: "
-msgstr "    РНК контекст: "
-
-
-msgid "Labels:"
-msgstr "Натписи:"
-
-
-msgid "Tool Tips:"
-msgstr "Савети алатки:"
-
-
-msgid "Button Label:"
-msgstr "Натписи дугмета:"
-
-
-msgid "RNA Label:"
-msgstr "РНК натпис:"
-
-
-msgid "Button Tip:"
-msgstr "Савет дугмета:"
-
-
-msgid "RNA Tip:"
-msgstr "РНК савет:"
 
 
 msgctxt "Operator"
@@ -26396,11 +26319,6 @@ msgstr "Препиши %s"
 
 msgid "UV Vertex"
 msgstr "UV теме"
-
-
-msgctxt "Action"
-msgid "Group"
-msgstr "Група"
 
 
 msgid "Index out of range"

@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.3.0 Beta (b'6039cb17e63e')\n"
+"Project-Id-Version: Blender 4.3.0 Beta (b'1c8669f8c9c1')\n"
 "Report-Msgid-Bugs-To: Leandro Paganelli <leandrobp@fastmail.com>\n"
-"POT-Creation-Date: 2024-10-07 09:15+0000\n"
+"POT-Creation-Date: 2024-11-11 09:42+0000\n"
 "PO-Revision-Date: 2024-04-15 06:56+0000\n"
 "Last-Translator: Ruan da Silva Andrade <ruanandrade818@gmail.com>\n"
 "Language-Team: Portuguese (Brazil) <https://translate.blender.org/projects/blender-ui/ui/pt_BR/>\n"
@@ -2523,10 +2523,6 @@ msgstr "Coleção de fontes"
 
 msgid "Main Grease Pencils"
 msgstr "Lápis de cera principais"
-
-
-msgid "Collection of grease pencils"
-msgstr "Coleção de lápis de cera"
 
 
 msgid "Main Images"
@@ -14253,20 +14249,12 @@ msgid "Directional area light source"
 msgstr "Fonte de luz com área direcional."
 
 
-msgid "Shadow Buffer Bias"
-msgstr "Ajuste fino para sombras contingenciadas"
-
-
 msgid "Shadow Buffer Clip Start"
 msgstr "Limite inicial das sombras contingenciadas"
 
 
 msgid "Shadow map clip start, below which objects will not generate shadows"
 msgstr "O limite inicial do mapa de sombras (distância), abaixo do qual os objetos não irão gerar sombras."
-
-
-msgid "Shadow Color"
-msgstr "Cor de sombras"
 
 
 msgid "Shadow Soft Size"
@@ -14511,18 +14499,6 @@ msgstr "Rugosidade"
 
 msgid "Roughness of the material"
 msgstr "Rugosidade do material"
-
-
-msgid "Shadow Mode"
-msgstr "Modo de Sombra"
-
-
-msgid "Opaque"
-msgstr "Opaco"
-
-
-msgid "Alpha Clip"
-msgstr "Limite de corte de alfa"
 
 
 msgid "Specular Color"
@@ -14791,10 +14767,6 @@ msgstr "Duração detectada do clipe de filme em quadros."
 
 msgid "Global scene frame number at which this movie starts playing (affects all data associated with a clip)"
 msgstr "Número de quadro da cena global no qual este filme começar a reproduzir (afeta todos os dados associados com um clipe)."
-
-
-msgid "Grease pencil data for this movie clip"
-msgstr "Dados de lápis de cera para este clipe de filme."
 
 
 msgid "Where the clip comes from"
@@ -18207,28 +18179,8 @@ msgid "Codec"
 msgstr "Codificador"
 
 
-msgid "Codec settings for OpenEXR"
-msgstr "Configurações de codificação para OpenEXR"
-
-
 msgid "Pxr24 (lossy)"
 msgstr "Pxr24 (com perdas)"
-
-
-msgid "ZIP (lossless)"
-msgstr "ZIP (sem perdas)"
-
-
-msgid "PIZ (lossless)"
-msgstr "PIZ (sem perdas)"
-
-
-msgid "RLE (lossless)"
-msgstr "RLE (sem perdas)"
-
-
-msgid "ZIPS (lossless)"
-msgstr "ZIPS (sem perdas)"
 
 
 msgid "B44 (lossy)"
@@ -21515,56 +21467,16 @@ msgid "Material slot name"
 msgstr "Nome do compartimento do material."
 
 
-msgid "Snap"
-msgstr "Atrair"
-
-
-msgid "Proportional Editing Falloff"
-msgstr "Tipo de decaimento para edição proporcional"
-
-
-msgid "Mirror"
-msgstr "Espelhar"
-
-
-msgid "UV Mapping"
-msgstr "Mapeamento UV"
-
-
-msgid "Local View"
-msgstr "Visão local"
-
-
-msgid "Viewpoint"
-msgstr "Ponto de visualização"
-
-
-msgid "Navigation"
-msgstr "Navegação"
-
-
-msgid "Align View"
-msgstr "Alinhar visualização"
-
-
-msgid "Align View to Active"
-msgstr "Alinhar vista para o ativo"
-
-
-msgid "View Regions"
-msgstr "Visualizar Regiões"
-
-
-msgid "Select More/Less"
-msgstr "Selecionar mais ou menos"
-
-
 msgid "Select Similar"
 msgstr "Selecionar por similaridades"
 
 
 msgid "Select All by Trait"
 msgstr "Selecionar todos por características..."
+
+
+msgid "Select More/Less"
+msgstr "Selecionar mais ou menos"
 
 
 msgid "Select Linked"
@@ -21673,6 +21585,46 @@ msgstr "Rolagem dos ossos"
 
 msgid "Pivot Point"
 msgstr "Pontos de pivô"
+
+
+msgid "Snap"
+msgstr "Atrair"
+
+
+msgid "Proportional Editing Falloff"
+msgstr "Tipo de decaimento para edição proporcional"
+
+
+msgid "Mirror"
+msgstr "Espelhar"
+
+
+msgid "UV Mapping"
+msgstr "Mapeamento UV"
+
+
+msgid "Local View"
+msgstr "Visão local"
+
+
+msgid "Viewpoint"
+msgstr "Ponto de visualização"
+
+
+msgid "Navigation"
+msgstr "Navegação"
+
+
+msgid "Align View"
+msgstr "Alinhar visualização"
+
+
+msgid "Align View to Active"
+msgstr "Alinhar vista para o ativo"
+
+
+msgid "View Regions"
+msgstr "Visualizar Regiões"
 
 
 msgid "Basic"
@@ -26528,10 +26480,6 @@ msgid "Use Mask"
 msgstr "Usar máscara"
 
 
-msgid "Use a grease pencil data-block as a mask to use only specified areas of pattern when tracking"
-msgstr "Usa um bloco de dados de lápis de cera como máscara para usar somente áreas especificadas como padrão durante os rastreamentos."
-
-
 msgid "Normalize"
 msgstr "Normalizar"
 
@@ -26754,10 +26702,6 @@ msgstr "Cor da trilha dentro do editor de clipes de filme e na janela de exibiç
 
 msgid "Minimal value of correlation between matched pattern and reference that is still treated as successful tracking"
 msgstr "Valor mínimo de correlação entre os padrões similares e referências que estão sendo ainda tratadas como um rastreamento de sucesso."
-
-
-msgid "Grease pencil data for this track"
-msgstr "Dados de lápis de cera para esta trilha."
 
 
 msgid "Has Bundle"
@@ -30623,6 +30567,16 @@ msgid "Create Pose Asset"
 msgstr "Criar Recurso de Pose"
 
 
+msgctxt "Operator"
+msgid "Disable Add-on"
+msgstr "Desabilitar complemento"
+
+
+msgctxt "Operator"
+msgid "Enable Add-on"
+msgstr "Habilitar complemento"
+
+
 msgid "Display information and preferences for this add-on"
 msgstr "Exibe as informações e preferências para este complemento."
 
@@ -31174,16 +31128,6 @@ msgstr "Permite adicionar ou remover uma predefinição de operador."
 msgctxt "Operator"
 msgid "Operator Preset"
 msgstr "Predefinições para operador"
-
-
-msgctxt "Operator"
-msgid "Disable Add-on"
-msgstr "Desabilitar complemento"
-
-
-msgctxt "Operator"
-msgid "Enable Add-on"
-msgstr "Habilitar complemento"
 
 
 msgid "Open a path in a file browser"
@@ -36186,19 +36130,6 @@ msgstr "Anotação - Adicinar Nova"
 
 
 msgctxt "Operator"
-msgid "Insert Blank Frame"
-msgstr "Inserir quadro em branco"
-
-
-msgid "Insert a blank frame on the current frame (all subsequently existing frames, if any, are shifted right by one frame)"
-msgstr "Insere um quadro em branco no quadro atual (todos os quadros subsequenciais existentes, caso existam, serão deslocados à direita em um quadro)."
-
-
-msgid "Create blank frame in all layers, not only active"
-msgstr "Cria um quadro em branco em todas as camadas, e não somente na ativa."
-
-
-msgctxt "Operator"
 msgid "Annotation Unlink"
 msgstr "Desvincular Anotação"
 
@@ -36621,12 +36552,13 @@ msgstr "Preenchimento do Lápis de Cera"
 
 
 msgctxt "Operator"
+msgid "Insert Blank Frame"
+msgstr "Inserir quadro em branco"
+
+
+msgctxt "Operator"
 msgid "Grease Pencil Interpolation"
 msgstr "Interpolação de lápis de cera"
-
-
-msgid "Interpolate grease pencil strokes between frames"
-msgstr "Interpola os traços de lápis de cera entre os quadros."
 
 
 msgid "No Flip"
@@ -36651,10 +36583,6 @@ msgid "Easing"
 msgstr "Afrouxamento"
 
 
-msgid "Which ends of the segment between the preceding and following grease pencil frames easing interpolation is applied to"
-msgstr "Quais terminações do segmento entre os quadros de lápis de cera anteriores e o posteriores a facilitação de interpolação será aplicada."
-
-
 msgctxt "GPencil"
 msgid "Automatic Easing"
 msgstr "Afrouxamento Automático"
@@ -36673,10 +36601,6 @@ msgstr "Afrouxar Saída"
 msgctxt "GPencil"
 msgid "Ease In and Out"
 msgstr "Afrouxar Entrada e Saída"
-
-
-msgid "Only Selected"
-msgstr "Somente selecionados"
 
 
 msgid "Interpolation method to use the next time 'Interpolate Sequence' is run"
@@ -38910,6 +38834,10 @@ msgid "Cut new topology"
 msgstr "Permite cortar uma nova topologia."
 
 
+msgid "Only Selected"
+msgstr "Somente selecionados"
+
+
 msgid "Only cut selected geometry"
 msgstr "Corta somente a geometria selecionada."
 
@@ -40091,10 +40019,6 @@ msgstr "Gera e grava as transformações dos objetos."
 
 msgid "Clear Constraints"
 msgstr "Limpar restrições"
-
-
-msgid "Remove all constraints from keyed object/bones, and do 'visual' keying"
-msgstr "Remove todas as restrições dos objetos ou ossos com chaves de interpolação, e executa a inserção de chaves \"visuais\"."
 
 
 msgid "Clear Parents"
@@ -46266,10 +46190,6 @@ msgid "Reassign the inputs for the effect strip"
 msgstr "Reatribui as entradas para a faixa de efeito."
 
 
-msgid "Rebuild all selected proxies and timecode indices using the job system"
-msgstr "Reconstrói todas as aproximações selecionadas e os índices de código de tempo usando o sistema de tarefas."
-
-
 msgctxt "Operator"
 msgid "Refresh Sequencer"
 msgstr "Atualizar editor de sequências"
@@ -50368,6 +50288,14 @@ msgid "Active Palette Color"
 msgstr "Cor ativa da paleta"
 
 
+msgid "Quad View"
+msgstr "Exibição Quadrante"
+
+
+msgid "Stereoscopy"
+msgstr "Estereoscopia"
+
+
 msgid "Wire Color"
 msgstr "Cor dos cabos"
 
@@ -50382,14 +50310,6 @@ msgstr "Captura de movimentos"
 
 msgid "Transform Orientations"
 msgstr "Orientações de transformação"
-
-
-msgid "Quad View"
-msgstr "Exibição Quadrante"
-
-
-msgid "Stereoscopy"
-msgstr "Estereoscopia"
 
 
 msgid "Bone Constraints"
@@ -50808,24 +50728,12 @@ msgid "White Balance"
 msgstr "Balanço dos tons brancos"
 
 
-msgid "Indirect Lighting"
-msgstr "Iluminação indireta"
-
-
 msgid "Denoising"
 msgstr "Redução de ruídos"
 
 
 msgid "Shadows"
 msgstr "Sombras"
-
-
-msgid "Volumetrics"
-msgstr "Volumétricas"
-
-
-msgid "Volumetric Shadows"
-msgstr "Sombras Volumétricas"
 
 
 msgid "Encoding"
@@ -56105,14 +56013,6 @@ msgid "Method of anti-aliasing when rendering 3d viewport"
 msgstr "Método de anti serrilhado quando renderizar na janela de exibição 3D"
 
 
-msgid "Knee"
-msgstr "Joelho"
-
-
-msgid "Denoise Amount"
-msgstr "Quantidade da Redução de Ruído"
-
-
 msgid "Max Size"
 msgstr "Tamanho Máximo"
 
@@ -56149,14 +56049,6 @@ msgid "4096 px"
 msgstr "4096 px"
 
 
-msgid "Filter Quality"
-msgstr "Qualidade do Filtro"
-
-
-msgid "Irradiance Smoothing"
-msgstr "Suavização da Irradiação"
-
-
 msgid "8 px"
 msgstr "8 px"
 
@@ -56173,28 +56065,16 @@ msgid "64 px"
 msgstr "64 px"
 
 
-msgid "Factor for ambient occlusion blending"
-msgstr "Fator para a mesclagem de oclusão ambiente."
-
-
 msgid "Precision of the horizon search"
 msgstr "Precisão da busca do horizonte"
 
 
-msgid "Bent Normals"
-msgstr "Normais Dobradas"
-
-
-msgid "Compute main non occluded direction to sample the environment"
-msgstr "Calcular a direção principal não obstruída para amostrar o ambiente"
-
-
-msgid "Bounces Approximation"
-msgstr "Aproximação de Rebatidas"
-
-
 msgid "Viewport Denoising"
 msgstr "Redução de Ruídos na Janela de Exibição"
+
+
+msgid "Volumetric Shadows"
+msgstr "Sombras Volumétricas"
 
 
 msgid "Scene Objects"
@@ -56658,10 +56538,6 @@ msgid "Align X"
 msgstr "Alinhar em X"
 
 
-msgid "Align Y"
-msgstr "Alinhar em Y"
-
-
 msgid "Text color"
 msgstr "Cor de texto"
 
@@ -56676,6 +56552,10 @@ msgstr "Localização do texto."
 
 msgid "Outline Width"
 msgstr "Largura dos contornos"
+
+
+msgid "Shadow Color"
+msgstr "Cor de sombras"
 
 
 msgid "Text that will be displayed"
@@ -58260,10 +58140,6 @@ msgstr "Espaço de dados do editor de imagens e UVs."
 
 msgid "Z-Buffer"
 msgstr "Buffer Z"
-
-
-msgid "Grease pencil data for this space"
-msgstr "Dados do lápis de cera para este espaço."
 
 
 msgid "UV Editor"
@@ -61552,6 +61428,10 @@ msgid "Lighting for a World data-block"
 msgstr "Iluminação para um bloco de dados de ambiente (mundo)"
 
 
+msgid "Factor for ambient occlusion blending"
+msgstr "Fator para a mesclagem de oclusão ambiente."
+
+
 msgid "Length of rays, defines how far away other faces give occlusion effect"
 msgstr "Comprimento dos raios, define com que distância as outras faces causam o efeito de oclusão."
 
@@ -61886,11 +61766,6 @@ msgstr "Editor de animação não linear"
 msgctxt "WindowManager"
 msgid "NLA Generic"
 msgstr "Animação não linear em geral"
-
-
-msgctxt "WindowManager"
-msgid "Timeline"
-msgstr "Linha do tempo"
 
 
 msgctxt "WindowManager"
@@ -62258,62 +62133,6 @@ msgid "Options:"
 msgstr "Opções:"
 
 
-msgid "Save to PO File"
-msgstr "Salvar para arquivo PO"
-
-
-msgid "Rebuild MO File"
-msgstr "Reconstruir arquivo MO"
-
-
-msgid "Erase Local MO files"
-msgstr "Apaga os arquivos MO locais"
-
-
-msgid "    RNA Path: bpy.types."
-msgstr "    Caminho RNA: bpy.types."
-
-
-msgid "    RNA Context: "
-msgstr "    Contexto RNA: "
-
-
-msgid "Labels:"
-msgstr "Rótulo"
-
-
-msgid "Tool Tips:"
-msgstr "Dicas de ferramenta:"
-
-
-msgid "Button Label:"
-msgstr "Rótulo do botão:"
-
-
-msgid "RNA Label:"
-msgstr "Rótulo RNA:"
-
-
-msgid "Enum Item Label:"
-msgstr "Rótulo de item de enumeração:"
-
-
-msgid "Button Tip:"
-msgstr "Dica de botão:"
-
-
-msgid "RNA Tip:"
-msgstr "Dica RNA:"
-
-
-msgid "Enum Item Tip:"
-msgstr "Dica de item de enumeração:"
-
-
-msgid "Could not write to po file ({})"
-msgstr "Não é possível escrever para arquivo po ({})"
-
-
 msgid "WARNING: preferences are lost when add-on is disabled, be sure to use \"Save Persistent\" if you want to keep your settings!"
 msgstr "AVISO: preferências são perdidas quando o complemento é desabilitado, tenha certeza de usar a opção \"Salvar persistente para...\" caso queira manter suas configurações!"
 
@@ -62620,10 +62439,6 @@ msgstr "Inclinar Interpolação"
 msgctxt "Operator"
 msgid "Custom..."
 msgstr "Personalizar..."
-
-
-msgid "Thickness Scale"
-msgstr "Escala da Espessura"
 
 
 msgctxt "Operator"
@@ -63067,10 +62882,6 @@ msgstr "Superior"
 
 msgid "Auto-Step"
 msgstr "Passos automáticos"
-
-
-msgid "Refraction"
-msgstr "Refração"
 
 
 msgid "Render Engine"
@@ -65668,10 +65479,6 @@ msgid "Total files %d | Changed %d | Failed %d"
 msgstr "Arquivos totais %d | Alterados %d | Falhos %d"
 
 
-msgid "Path '%s' not found"
-msgstr "Caminho '%s' não encontrado"
-
-
 msgid "Could not find '%s' in '%s'"
 msgstr "Não é possível encontrar '%s' dentro de '%s'"
 
@@ -66045,10 +65852,6 @@ msgstr "Não foi possível abrir o arquivo blend <memória>"
 
 msgid "Failed to read blend file '%s': %s"
 msgstr "Falha ao ler arquivo blend '%s', %s"
-
-
-msgid "Failed to read blend file '%s', not a blend file"
-msgstr "Falha ao ler arquivo .blend: '%s', não é um arquivo blend"
 
 
 msgid "Unable to open '%s': %s"
@@ -66561,16 +66364,8 @@ msgid "Active region not set"
 msgstr "Região ativa não configurada."
 
 
-msgid "Nowhere for grease pencil data to go"
-msgstr "Sem local de destinação para o qual transportar os dados de lápis de cera."
-
-
 msgid "Cannot delete locked layers"
 msgstr "Não é possível apagar camadas bloqueadas."
-
-
-msgid "No grease pencil data"
-msgstr "Sem dados de lápis de cera."
 
 
 msgid "No active frame to delete"
@@ -68508,10 +68303,6 @@ msgid "Keyframe pasting is not available for mask mode"
 msgstr "A operação de colar quadros-chave não está disponível para o modo de máscara."
 
 
-msgid "Keyframe pasting is not available for grease pencil or mask mode"
-msgstr "A operação de colar quadros-chave não está disponível para o modo de lápis de cera ou máscara."
-
-
 msgid "No selected F-Curves to paste into"
 msgstr "Sem curvas-f selecionadas para as quais colar."
 
@@ -69984,11 +69775,6 @@ msgstr "Freestyle: Criação do mapa de visualização..."
 
 msgid "Freestyle: Stroke rendering"
 msgstr "Freestyle: Renderização de traços..."
-
-
-msgctxt "Action"
-msgid "Group"
-msgstr "Grupo"
 
 
 msgid "Index out of range"

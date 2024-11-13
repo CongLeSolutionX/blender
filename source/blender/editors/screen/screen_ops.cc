@@ -2075,6 +2075,10 @@ static int area_move_modal(bContext *C, wmOperator *op, const wmEvent *event)
       area_move_apply(C, op);
       break;
     }
+    case RIGHTMOUSE: {
+      area_move_cancel(C, op);
+      return OPERATOR_CANCELLED;
+    }
     case EVT_MODAL_MAP: {
       switch (event->val) {
         case KM_MODAL_APPLY:
@@ -3646,11 +3650,20 @@ static bool area_join_init(bContext *C, wmOperator *op, ScrArea *sa1, ScrArea *s
 {
   if (sa1 == nullptr && sa2 == nullptr) {
     /* Get areas from cursor location if not specified. */
+    PropertyRNA *prop;
     int cursor[2];
-    RNA_int_get_array(op->ptr, "source_xy", cursor);
-    sa1 = BKE_screen_find_area_xy(CTX_wm_screen(C), SPACE_TYPE_ANY, cursor);
-    RNA_int_get_array(op->ptr, "target_xy", cursor);
-    sa2 = BKE_screen_find_area_xy(CTX_wm_screen(C), SPACE_TYPE_ANY, cursor);
+
+    prop = RNA_struct_find_property(op->ptr, "source_xy");
+    if (RNA_property_is_set(op->ptr, prop)) {
+      RNA_property_int_get_array(op->ptr, prop, cursor);
+      sa1 = BKE_screen_find_area_xy(CTX_wm_screen(C), SPACE_TYPE_ANY, cursor);
+    }
+
+    prop = RNA_struct_find_property(op->ptr, "target_xy");
+    if (RNA_property_is_set(op->ptr, prop)) {
+      RNA_property_int_get_array(op->ptr, prop, cursor);
+      sa2 = BKE_screen_find_area_xy(CTX_wm_screen(C), SPACE_TYPE_ANY, cursor);
+    }
   }
   if (sa1 == nullptr) {
     return false;

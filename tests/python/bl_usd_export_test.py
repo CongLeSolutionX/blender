@@ -8,7 +8,7 @@ import pprint
 import sys
 import tempfile
 import unittest
-from pxr import Gf, Sdf, Usd, UsdGeom, UsdShade, UsdSkel, UsdUtils
+from pxr import Gf, Sdf, Usd, UsdGeom, UsdShade, UsdSkel, UsdUtils, UsdVol
 
 import bpy
 
@@ -251,6 +251,53 @@ class USDExportTest(AbstractUSDTest):
         geom_subsets = UsdGeom.Subset.GetGeomSubsets(dynamic_mesh_prim)
         self.assertEqual(len(geom_subsets), 0)
 
+    def test_export_material_displacement(self):
+        """Validate correct export of Displacement information for the UsdPreviewSurface"""
+
+        # Use the common materials .blend file
+        bpy.ops.wm.open_mainfile(filepath=str(self.testdir / "usd_materials_displace.blend"))
+        export_path = self.tempdir / "material_displace.usda"
+        self.export_and_validate(filepath=str(export_path), export_materials=True)
+
+        stage = Usd.Stage.Open(str(export_path))
+
+        # Verify "constant" displacement
+        shader_surface = UsdShade.Shader(stage.GetPrimAtPath("/root/_materials/constant/Principled_BSDF"))
+        self.assertEqual(shader_surface.GetIdAttr().Get(), "UsdPreviewSurface")
+        input_displacement = shader_surface.GetInput('displacement')
+        self.assertEqual(input_displacement.HasConnectedSource(), False, "Displacement input should not be connected")
+        self.assertAlmostEqual(input_displacement.Get(), 0.45, 5)
+
+        # Validate various Midlevel and Scale scenarios
+        def validate_displacement(mat_name, expected_scale, expected_bias):
+            shader_surface = UsdShade.Shader(stage.GetPrimAtPath(f"/root/_materials/{mat_name}/Principled_BSDF"))
+            shader_image = UsdShade.Shader(stage.GetPrimAtPath(f"/root/_materials/{mat_name}/Image_Texture"))
+            self.assertEqual(shader_surface.GetIdAttr().Get(), "UsdPreviewSurface")
+            self.assertEqual(shader_image.GetIdAttr().Get(), "UsdUVTexture")
+            input_displacement = shader_surface.GetInput('displacement')
+            input_colorspace = shader_image.GetInput('sourceColorSpace')
+            input_scale = shader_image.GetInput('scale')
+            input_bias = shader_image.GetInput('bias')
+            self.assertEqual(input_displacement.HasConnectedSource(), True, "Displacement input should be connected")
+            self.assertEqual(input_colorspace.Get(), 'raw')
+            self.assertEqual(self.round_vector(input_scale.Get()), expected_scale)
+            self.assertEqual(self.round_vector(input_bias.Get()), expected_bias)
+
+        validate_displacement("mid_0_0", [1.0, 1.0, 1.0, 1.0], [0, 0, 0, 0])
+        validate_displacement("mid_0_5", [1.0, 1.0, 1.0, 1.0], [-0.5, -0.5, -0.5, 0])
+        validate_displacement("mid_1_0", [1.0, 1.0, 1.0, 1.0], [-1, -1, -1, 0])
+        validate_displacement("mid_0_0_scale_0_3", [0.3, 0.3, 0.3, 1.0], [0, 0, 0, 0])
+        validate_displacement("mid_0_5_scale_0_3", [0.3, 0.3, 0.3, 1.0], [-0.15, -0.15, -0.15, 0])
+        validate_displacement("mid_1_0_scale_0_3", [0.3, 0.3, 0.3, 1.0], [-0.3, -0.3, -0.3, 0])
+
+        # Validate that no displacement occurs for scenarios USD doesn't support
+        shader_surface = UsdShade.Shader(stage.GetPrimAtPath(f"/root/_materials/bad_wrong_space/Principled_BSDF"))
+        input_displacement = shader_surface.GetInput('displacement')
+        self.assertTrue(input_displacement.Get() is None)
+        shader_surface = UsdShade.Shader(stage.GetPrimAtPath(f"/root/_materials/bad_non_const/Principled_BSDF"))
+        input_displacement = shader_surface.GetInput('displacement')
+        self.assertTrue(input_displacement.Get() is None)
+
     def check_primvar(self, prim, pv_name, pv_typeName, pv_interp, elements_len):
         pv = UsdGeom.PrimvarsAPI(prim).GetPrimvar(pv_name)
         self.assertTrue(pv.HasValue())
@@ -301,6 +348,7 @@ class USDExportTest(AbstractUSDTest):
         self.check_primvar(prim, "f_float", "VtArray<float>", "uniform", 1)
         self.check_primvar(prim, "f_color", "VtArray<GfVec4f>", "uniform", 1)
         self.check_primvar(prim, "f_byte_color", "VtArray<GfVec4f>", "uniform", 1)
+        self.check_primvar(prim, "displayColor", "VtArray<GfVec3f>", "uniform", 1)
         self.check_primvar(prim, "f_vec2", "VtArray<GfVec2f>", "uniform", 1)
         self.check_primvar(prim, "f_vec3", "VtArray<GfVec3f>", "uniform", 1)
         self.check_primvar(prim, "f_quat", "VtArray<GfQuatf>", "uniform", 1)
@@ -603,6 +651,61 @@ class USDExportTest(AbstractUSDTest):
         anim = UsdSkel.Animation(prim_skel.GetAnimationSource())
         weight_samples = anim.GetBlendShapeWeightsAttr().GetTimeSamples()
         self.assertEqual(weight_samples, [1.0, 2.0, 3.0, 4.0, 5.0])
+
+    def test_export_volumes(self):
+        """Test various combinations of volume export including with all supported volume modifiers."""
+
+        bpy.ops.wm.open_mainfile(filepath=str(self.testdir / "usd_volumes.blend"))
+        # Ensure the simulation zone data is baked for all relevant frames...
+        for frame in range(4, 15):
+            bpy.context.scene.frame_set(frame)
+        bpy.context.scene.frame_set(4)
+
+        export_path = self.tempdir / "usd_volumes.usda"
+        self.export_and_validate(filepath=str(export_path), export_animation=True, evaluation_mode="RENDER")
+
+        stage = Usd.Stage.Open(str(export_path))
+
+        # Validate that we see some form of time varyability across the Volume prim's extents and
+        # file paths. The data should be sparse so it should only be written on the frames which
+        # change.
+
+        # File sequence
+        vol_fileseq = UsdVol.Volume(stage.GetPrimAtPath("/root/vol_filesequence/vol_filesequence"))
+        density = UsdVol.OpenVDBAsset(stage.GetPrimAtPath("/root/vol_filesequence/vol_filesequence/density_noise"))
+        flame = UsdVol.OpenVDBAsset(stage.GetPrimAtPath("/root/vol_filesequence/vol_filesequence/flame_noise"))
+        self.assertEqual(vol_fileseq.GetExtentAttr().GetTimeSamples(), [10.0, 11.0])
+        self.assertEqual(density.GetFieldNameAttr().GetTimeSamples(), [])
+        self.assertEqual(density.GetFilePathAttr().GetTimeSamples(), [8.0, 9.0, 10.0, 11.0, 12.0, 13.0])
+        self.assertEqual(flame.GetFieldNameAttr().GetTimeSamples(), [])
+        self.assertEqual(flame.GetFilePathAttr().GetTimeSamples(), [8.0, 9.0, 10.0, 11.0, 12.0, 13.0])
+
+        # Mesh To Volume
+        vol_mesh2vol = UsdVol.Volume(stage.GetPrimAtPath("/root/vol_mesh2vol/vol_mesh2vol"))
+        density = UsdVol.OpenVDBAsset(stage.GetPrimAtPath("/root/vol_mesh2vol/vol_mesh2vol/density"))
+        self.assertEqual(vol_mesh2vol.GetExtentAttr().GetTimeSamples(),
+                         [6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0])
+        self.assertEqual(density.GetFieldNameAttr().GetTimeSamples(), [])
+        self.assertEqual(density.GetFilePathAttr().GetTimeSamples(),
+                         [4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0])
+
+        # Volume Displace
+        vol_displace = UsdVol.Volume(stage.GetPrimAtPath("/root/vol_displace/vol_displace"))
+        unnamed = UsdVol.OpenVDBAsset(stage.GetPrimAtPath("/root/vol_displace/vol_displace/_"))
+        self.assertEqual(vol_displace.GetExtentAttr().GetTimeSamples(),
+                         [5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0])
+        self.assertEqual(unnamed.GetFieldNameAttr().GetTimeSamples(), [])
+        self.assertEqual(unnamed.GetFilePathAttr().GetTimeSamples(),
+                         [4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0])
+
+        # Geometry Node simulation
+        vol_sim = UsdVol.Volume(stage.GetPrimAtPath("/root/vol_sim/Volume"))
+        density = UsdVol.OpenVDBAsset(stage.GetPrimAtPath("/root/vol_sim/Volume/density"))
+        self.assertEqual(vol_sim.GetExtentAttr().GetTimeSamples(),
+                         [4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0])
+        self.assertEqual(density.GetFieldNameAttr().GetTimeSamples(), [])
+        self.assertEqual(density.GetFilePathAttr().GetTimeSamples(),
+                         [4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0])
 
     def test_export_xform_ops(self):
         """Test exporting different xform operation modes."""
