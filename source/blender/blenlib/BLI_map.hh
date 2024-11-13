@@ -840,11 +840,6 @@ class Map {
   }
 
   /**
-   * Compiler cannot extend lifetime of the map, so r-value overloads are deleted.
-   */
-  KeyIterator keys() const && = delete;
-
-  /**
    * Returns an iterator over all values in the map. The iterator is invalidated, when the map is
    * changed.
    */
@@ -852,8 +847,6 @@ class Map {
   {
     return ValueIterator(slots_.data(), slots_.size(), 0);
   }
-
-  ValueIterator values() const && = delete;
 
   /**
    * Returns an iterator over all values in the map and allows you to change the values. The
@@ -864,8 +857,6 @@ class Map {
     return MutableValueIterator(slots_.data(), slots_.size(), 0);
   }
 
-  MutableValueIterator values() && = delete;
-
   /**
    * Returns an iterator over all key-value-pairs in the map. The key-value-pairs are stored in a
    * #MapItem. The iterator is invalidated, when the map is changed.
@@ -874,8 +865,6 @@ class Map {
   {
     return ItemIterator(slots_.data(), slots_.size(), 0);
   }
-
-  ItemIterator items() const && = delete;
 
   /**
    * Returns an iterator over all key-value-pairs in the map. The key-value-pairs are stored in a
@@ -888,6 +877,15 @@ class Map {
     return MutableItemIterator(slots_.data(), slots_.size(), 0);
   }
 
+  /**
+   * Avoid common bug when trying to do something like this: `for (auto key : get_map().keys())`.
+   * This does not work, because the compiler does not extend the lifetime of the map for the
+   * duration of the loop.
+   */
+  KeyIterator keys() const && = delete;
+  MutableValueIterator values() && = delete;
+  ValueIterator values() const && = delete;
+  ItemIterator items() const && = delete;
   MutableItemIterator items() && = delete;
 
   /**
