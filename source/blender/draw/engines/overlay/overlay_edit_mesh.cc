@@ -244,7 +244,7 @@ static void overlay_edit_mesh_add_ob_to_pass(OVERLAY_PrivateData *pd, Object *ob
     const Mesh *editmesh_eval_cage = BKE_object_get_editmesh_eval_cage(ob);
 
     const bool mapping_valid = BKE_object_editmesh_eval_to_orig_mapping_valid(*ob, object_orig);
-    if (!mapping_valid && editmesh_eval_cage != BKE_object_get_pre_modified_mesh(ob)) {
+    if (!mapping_valid && !editmesh_eval_cage->runtime->is_original_bmesh) {
       return;
     }
 
