@@ -1,3 +1,4 @@
 Referenced by issue #128982, Regression: Icons don't display on custom nodes anymore
 Referenced by issue #124452, Blender LTS: Maintenance Task 4.2
 Referenced by pull request #130204, Fix: Nodes: group edit button unintentionally drawn on NodeCustomGroup
+Referenced by commit 8f200d96b2e966c4acd1ffad2cd02b1fbc805ba1, Fix: Nodes: group edit button unintentionally drawn on NodeCustomGroup
