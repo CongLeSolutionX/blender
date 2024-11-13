@@ -3,3 +3,4 @@ Referenced by issue #127253, Compositor crop gizmo can produce invalid crop conf
 Referenced by issue #127254, Compositor crop gizmo suggests there is a valid crop when there isn't one
 Referenced by pull request #127656, Fix #127253: Compositor crop gizmo can produce invalid crop configurations
 Referenced by commit a53765934135bbbca93b69d58a1d3bff79c1aaa0, Fix #127253: Compositor crop gizmo can produce invalid crop configurations
+Referenced by issue #130207, the compositing's corp node is not work
