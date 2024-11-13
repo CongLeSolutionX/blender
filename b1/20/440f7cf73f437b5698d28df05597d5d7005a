@@ -1,3 +1,4 @@
 Referenced by issue #126983, Regression: Custom nodes icon missing
 Referenced by pull request #127263, Fix #126983: Custom nodes and groups icon missing
 Referenced by commit 6d8d21812b59db6084ca2fbb1835713141c5d530, Fix #126983: custom nodes and groups icon missing
+Referenced by pull request #130204, Fix: Nodes: group edit button unintentionally drawn on NodeCustomGroup
