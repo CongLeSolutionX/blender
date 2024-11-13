@@ -62,11 +62,12 @@ inline bool TopologyRefinerFactory<TopologyRefinerData>::resizeComponentTopology
   }
 
   // Faces and face-vertices.
-  const int num_faces = converter->faces.size();
+  const blender::OffsetIndices<int> src_faces = converter->faces;
+  const int num_faces = src_faces.size();
   base_mesh_topology->setNumFaces(num_faces);
   setNumBaseFaces(refiner, num_faces);
   for (int face_index = 0; face_index < num_faces; ++face_index) {
-    const int num_face_vertices = converter->faces[face_index].size();
+    const int num_face_vertices = src_faces[face_index].size();
     base_mesh_topology->setNumFaceVertices(face_index, num_face_vertices);
     setNumBaseFaceVertices(refiner, face_index, num_face_vertices);
   }
@@ -112,8 +113,10 @@ inline bool TopologyRefinerFactory<TopologyRefinerData>::assignComponentTopology
 
   const bool full_topology_specified = converter->specifiesFullTopology(converter);
 
+  const blender::OffsetIndices<int> src_faces = converter->faces;
+
   // Vertices of face.
-  for (const int face_index : converter->faces.index_range()) {
+  for (const int face_index : src_faces.index_range()) {
     IndexArray dst_face_verts = getBaseFaceVertices(refiner, face_index);
     converter->getFaceVertices(converter, face_index, &dst_face_verts[0]);
 
@@ -161,7 +164,7 @@ inline bool TopologyRefinerFactory<TopologyRefinerData>::assignComponentTopology
   }
 
   // Face relations.
-  for (const int face_index : converter->faces.index_range()) {
+  for (const int face_index : src_faces.index_range()) {
     IndexArray dst_face_edges = getBaseFaceEdges(refiner, face_index);
     converter->getFaceEdges(converter, face_index, &dst_face_edges[0]);
   }
