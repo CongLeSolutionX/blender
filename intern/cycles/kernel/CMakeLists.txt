@@ -402,6 +402,7 @@ set(SRC_UTIL_HEADERS
   ../util/math_int8.h
   ../util/math_matrix.h
   ../util/projection.h
+  ../util/projection_inverse.h
   ../util/rect.h
   ../util/static_assert.h
   ../util/transform.h
@@ -1408,6 +1409,7 @@ endmacro()
 cycles_add_gpu_kernel_dependencies(cycles_kernel_cuda)
 cycles_add_gpu_kernel_dependencies(cycles_kernel_optix)
 cycles_add_gpu_kernel_dependencies(cycles_kernel_hip)
+cycles_add_gpu_kernel_dependencies(cycles_kernel_hiprt)
 cycles_add_gpu_kernel_dependencies(cycles_kernel_oneapi)
 
 # Install kernel source for runtime compilation
