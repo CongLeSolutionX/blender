@@ -3101,6 +3101,7 @@ def _seq_preview_text_edit_cursor_move():
                  {"properties": [prop, ('select_text', True)]}))
     return items
 
+
 def km_sequencerpreview(params):
     items = []
     keymap = (

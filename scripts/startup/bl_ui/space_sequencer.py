@@ -1011,7 +1011,7 @@ class SEQUENCER_MT_strip(Menu):
         has_sequencer, has_preview = _space_view_types(st)
 
         layout.menu("SEQUENCER_MT_strip_transform")
-        
+
         strip = context.active_sequence_strip
         if has_preview and strip and strip.type == 'TEXT':
             layout.menu("SEQUENCER_MT_strip_text")
