@@ -184,6 +184,7 @@ static void calc_new_offsets(const Span<int> old_offsets,
                              const Span<int> curves_intervals_offsets,
                              MutableSpan<int> new_offsets)
 {
+  new_offsets[0] = 0;
   const IndexRange range = old_offsets.index_range().drop_back(1).shift(1);
   threading::parallel_for(range, 256, [&](IndexRange index_range) {
     for (const int i : index_range) {
