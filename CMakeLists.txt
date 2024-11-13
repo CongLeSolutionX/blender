@@ -289,10 +289,10 @@ Use pre-compiled headers to speed up compilation."
   )
   mark_as_advanced(WITH_COMPILER_PRECOMPILED_HEADERS)
 
-  if(WITH_CLANG_TIDY AND CMAKE_COMPILER_IS_GNUCC)
+  if(WITH_CLANG_TIDY AND (CMAKE_COMPILER_IS_GNUCC OR APPLE))
     if(WITH_COMPILER_PRECOMPILED_HEADERS)
       message(STATUS
-        "Clang-Tidy and GCC precompiled headers are incompatible, disabling precompiled headers"
+        "Clang-Tidy and the current compiler's precompiled headers are incompatible, disabling precompiled headers."
       )
       set(WITH_COMPILER_PRECOMPILED_HEADERS OFF)
     endif()
@@ -777,20 +777,13 @@ mark_as_advanced(WITH_MEM_JEMALLOC)
 option(WITH_MEM_VALGRIND "Enable extended valgrind support for better reporting" OFF)
 mark_as_advanced(WITH_MEM_VALGRIND)
 
-# Debug
-option(WITH_CXX_GUARDEDALLOC "\
-Enable GuardedAlloc for C++ memory allocation tracking (only enable for development)"
-  OFF
-)
-mark_as_advanced(WITH_CXX_GUARDEDALLOC)
-
 option(WITH_ASSERT_ABORT "Call abort() when raising an assertion through BLI_assert()" ON)
 mark_as_advanced(WITH_ASSERT_ABORT)
 
 option(WITH_ASSERT_RELEASE "Build with asserts enabled even for non-debug configurations" OFF)
 mark_as_advanced(WITH_ASSERT_RELEASE)
 
-if((UNIX AND NOT APPLE) OR (CMAKE_GENERATOR MATCHES "^Visual Studio.+"))
+if(UNIX OR (CMAKE_GENERATOR MATCHES "^Visual Studio.+"))
   option(WITH_CLANG_TIDY "\
 Use Clang Tidy to analyze the source code \
 (only enable for development on Linux using Clang, or Windows using the Visual Studio IDE)"
@@ -2597,12 +2590,6 @@ mark_as_advanced(
 
 # -------------------------------------------------------------------------------
 # Global Defines
-
-# better not set includes here but this debugging option is off by default.
-if(WITH_CXX_GUARDEDALLOC)
-  include_directories(${CMAKE_SOURCE_DIR}/intern/guardedalloc)
-  add_definitions(-DWITH_CXX_GUARDEDALLOC)
-endif()
 
 if(WITH_ASSERT_ABORT)
   add_definitions(-DWITH_ASSERT_ABORT)
