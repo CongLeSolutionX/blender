@@ -47,12 +47,42 @@ void VKDiscardPool::move_data(VKDiscardPool &src_pool)
   src_pool.images_.clear();
   src_pool.shader_modules_.clear();
   src_pool.pipeline_layouts_.clear();
+  for (VkCommandPool vk_command_pool : src_pool.command_buffers_.keys()) {
+    Vector<VkCommandBuffer> &buffers = src_pool.command_buffers_.lookup(vk_command_pool);
+    if (!command_buffers_.contains(vk_command_pool)) {
+      command_buffers_.add(vk_command_pool, buffers);
+      continue;
+    }
+    command_buffers_.lookup(vk_command_pool).extend(buffers);
+  }
+  src_pool.command_buffers_.clear();
 }
 
 void VKDiscardPool::discard_image(VkImage vk_image, VmaAllocation vma_allocation)
 {
   std::scoped_lock mutex(mutex_);
   images_.append(std::pair(vk_image, vma_allocation));
+}
+
+void VKDiscardPool::discard_command_buffer(VkCommandBuffer vk_command_buffer,
+                                           VkCommandPool vk_command_pool)
+{
+  std::scoped_lock mutex(mutex_);
+  if (!command_buffers_.contains(vk_command_pool)) {
+    command_buffers_.add(vk_command_pool, {vk_command_buffer});
+    return;
+  }
+  command_buffers_.lookup(vk_command_pool).append(vk_command_buffer);
+}
+
+void VKDiscardPool::free_command_pool_buffers(VkCommandPool vk_command_pool, VKDevice &device)
+{
+  std::scoped_lock mutex(mutex_);
+  if (!command_buffers_.contains(vk_command_pool)) {
+    return;
+  }
+  Vector<VkCommandBuffer> buffers = command_buffers_.pop(vk_command_pool);
+  vkFreeCommandBuffers(device.vk_handle(), vk_command_pool, buffers.size(), buffers.begin());
 }
 
 void VKDiscardPool::discard_image_view(VkImageView vk_image_view)
@@ -109,6 +139,12 @@ void VKDiscardPool::destroy_discarded_resources(VKDevice &device)
     VkShaderModule vk_shader_module = shader_modules_.pop_last();
     vkDestroyShaderModule(device.vk_handle(), vk_shader_module, nullptr);
   }
+
+  for (VkCommandPool vk_command_pool : command_buffers_.keys()) {
+    Vector<VkCommandBuffer> &buffers = command_buffers_.lookup(vk_command_pool);
+    vkFreeCommandBuffers(device.vk_handle(), vk_command_pool, buffers.size(), buffers.begin());
+  }
+  command_buffers_.clear_and_shrink();
 }
 
 }  // namespace blender::gpu
