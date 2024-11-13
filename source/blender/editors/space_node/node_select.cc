@@ -150,6 +150,13 @@ static bool node_under_mouse_tweak(const SpaceNode &snode, const float2 &mouse)
 {
   for (bNode *node : tree_draw_order_calc_nodes_reversed(*snode.edittree)) {
     switch (node->type) {
+      case NODE_REROUTE: {
+        const float2 location = node_to_view(*node, {node->locx, node->locy});
+        if (math::distance_squared(mouse, location) < square_f(24.0f)) {
+          return true;
+        }
+        break;
+      }
       case NODE_FRAME: {
         if (node_frame_select_isect_mouse(snode, *node, mouse)) {
           return true;
