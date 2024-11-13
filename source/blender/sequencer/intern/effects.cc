@@ -3252,15 +3252,20 @@ static float2 anchor_offset_get(const TextVars *data, int width_max, int text_he
 
 static void calc_boundbox(const TextVars *data, TextVarsRuntime *runtime, const int2 image_size)
 {
-  const int width_max = text_box_width_get(runtime->lines);
   const int text_height = runtime->lines.size() * runtime->line_height;
+
+  int width_max = text_box_width_get(runtime->lines);
+
+  /* Add width to empty text, so there is something to draw or select. */
+  if (width_max == 0) {
+    width_max = text_height * 2;
+  }
+
   const float2 image_center{data->loc[0] * image_size.x, data->loc[1] * image_size.y};
   const float2 anchor = anchor_offset_get(data, width_max, text_height);
 
-  // const int box_x_margin = runtime->font_descender / 2;
-  const int box_x_margin = 0;
-  runtime->text_boundbox.xmin = anchor.x + image_center.x + box_x_margin;
-  runtime->text_boundbox.xmax = anchor.x + image_center.x + width_max - box_x_margin;
+  runtime->text_boundbox.xmin = anchor.x + image_center.x;
+  runtime->text_boundbox.xmax = anchor.x + image_center.x + width_max;
   runtime->text_boundbox.ymin = anchor.y + image_center.y - text_height;
   runtime->text_boundbox.ymax = runtime->text_boundbox.ymin + text_height;
 }
