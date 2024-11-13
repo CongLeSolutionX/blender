@@ -1725,7 +1725,10 @@ static void save_active_attribute(Object &object, SculptAttrRef *attr)
   attr->type = meta_data->data_type;
 }
 
-static void save_attribute_data(Object &ob, SculptUndoStep *us)
+/**
+ * Does not save topology counts, as that data is unneded for full geometry pushes and
+ * requires the PBVH to exist. */
+static void save_common_data(Object &ob, SculptUndoStep *us)
 {
   us->data.object_name = ob.id.name;
 
@@ -1769,7 +1772,7 @@ void push_begin_ex(const Scene & /*scene*/, Object &ob, const char *name)
   const SculptSession &ss = *ob.sculpt;
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(ob);
 
-  save_attribute_data(ob, us);
+  save_common_data(ob, us);
 
   switch (pbvh.type()) {
     case bke::pbvh::Type::Mesh: {
@@ -2091,7 +2094,7 @@ void geometry_begin_ex(const Scene & /*scene*/, Object &ob, const char *name)
 
   SculptUndoStep *us = reinterpret_cast<SculptUndoStep *>(
       BKE_undosys_step_push_init_with_type(ustack, C, name, BKE_UNDOSYS_TYPE_SCULPT));
-  save_attribute_data(ob, us);
+  save_common_data(ob, us);
   geometry_push(ob);
 }
 
