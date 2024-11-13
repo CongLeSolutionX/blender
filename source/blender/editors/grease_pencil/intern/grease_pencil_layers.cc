@@ -43,7 +43,7 @@ bool grease_pencil_layer_parent_set(bke::greasepencil::Layer &layer,
   }
 
   layer.parent = parent;
-  BLI_strncpy(layer.parsubstr, bone.c_str(), sizeof(layer.parsubstr));
+  layer.set_parent_bone_name(bone.c_str());
   /* Calculate inverse parent matrix. */
   if (parent) {
     copy_m4_m4(layer.parentinv, parent->world_to_object().ptr());
