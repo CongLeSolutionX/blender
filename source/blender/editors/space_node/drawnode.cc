@@ -1837,8 +1837,8 @@ struct GBatchNodesocket {
 
 static GBatchNodesocket &g_batch_nodesocket()
 {
-  static GBatchNodesocket *nodesocket_batch = new GBatchNodesocket();
-  return *nodesocket_batch;
+  static GBatchNodesocket nodesocket_batch;
+  return nodesocket_batch;
 }
 
 static gpu::Batch *nodesocket_batch_init()
