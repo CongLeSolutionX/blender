@@ -1,2 +1,3 @@
 Referenced by pull request #128791, Fix #128789: GPv3: Context property missing nullptr check
 Referenced by commit 12b4ac87ea1da596b685c8d25fde408b3f499b25, Fix #128789: GPv3: Context property missing nullptr check
+Referenced by issue #128789, GPv3: Crash when deleting stroke
