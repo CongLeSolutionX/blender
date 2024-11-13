@@ -1,1 +1,2 @@
 Referenced by issue #129159, Nodes: Memory leak when node assets have sockets with the same name
+Referenced by issue #128420, Assert creating a new empty file
