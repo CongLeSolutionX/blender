@@ -132,7 +132,9 @@ class DenoiseOperation : public NodeOperation {
     filter.setImage("color", color, oidn::Format::Float3, width, height, 0, pixel_stride);
     filter.setImage("output", color, oidn::Format::Float3, width, height, 0, pixel_stride);
     filter.set("hdr", use_hdr());
+#  if OIDN_VERSION_MAJOR >= 2
     filter.set("cleanAux", auxiliary_passes_are_clean());
+#  endif
     filter.set("quality", get_quality());
     filter.setProgressMonitorFunction(oidn_progress_monitor_function, &context());
 
@@ -227,15 +229,19 @@ class DenoiseOperation : public NodeOperation {
 #ifdef WITH_OPENIMAGEDENOISE
   OIDNQuality get_quality()
   {
+#  if OIDN_VERSION_MAJOR >= 2
     switch (static_cast<CMPNodeDenoiseQuality>(node_storage(bnode()).quality)) {
+#    if OIDN_VERSION >= 20300
       case CMP_NODE_DENOISE_QUALITY_FAST:
         return OIDN_QUALITY_FAST;
+#    endif
       case CMP_NODE_DENOISE_QUALITY_BALANCED:
         return OIDN_QUALITY_BALANCED;
       case CMP_NODE_DENOISE_QUALITY_HIGH:
       default:
         return OIDN_QUALITY_HIGH;
     }
+#  endif
   }
 #endif
 
