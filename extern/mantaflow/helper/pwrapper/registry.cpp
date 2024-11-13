@@ -576,8 +576,9 @@ void WrapperRegistry::construct(const string &scriptname, const vector<string> &
   registerDummyTypes();
 
   // work around for certain gcc versions, cast to char*
-  if (!Py_IsInitialized())
+  if (!Py_IsInitialized()) {
     PyImport_AppendInittab((char *)gDefaultModuleName.c_str(), PyInit_manta_main);
+  }
 }
 
 inline PyObject *castPy(PyTypeObject *p)
