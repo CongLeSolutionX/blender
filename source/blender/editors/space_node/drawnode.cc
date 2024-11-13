@@ -1835,9 +1835,10 @@ static struct {
   bool enabled;
 } g_batch_nodesocket;
 
-static gpu::Batch *nodesocket_batch_init(void)
+static gpu::Batch *nodesocket_batch_init()
 {
-  if (g_batch_nodesocket.batch == NULL) {
+
+  if (g_batch_nodesocket.batch == nullptr) {
     GPUIndexBufBuilder ibuf;
     GPU_indexbuf_init(&ibuf, GPU_PRIM_TRIS, 2, 4);
     /* Quad to draw the node socket in. */
