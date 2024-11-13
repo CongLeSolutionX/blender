@@ -11,6 +11,12 @@
 #include "opensubdiv_capi_type.hh"
 
 struct OpenSubdiv_Converter {
+  /**
+   * The face topology of the base mesh to be subdivided. See #Mesh::faces() documentation for the
+   * details.
+   *
+   * Other topology information is currently encoded with callbacks rather than arrays directly.
+   */
   blender::OffsetIndices<int> faces;
 
   OpenSubdiv_SchemeType (*getSchemeType)(const OpenSubdiv_Converter *converter);
