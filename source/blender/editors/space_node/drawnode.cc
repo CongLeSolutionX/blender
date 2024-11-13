@@ -1817,8 +1817,8 @@ void node_link_bezier_points_evaluated(const bNodeLink &link,
 /* Node Socket shader parameters, must match the shader layout. */
 struct NodeSocketShaderParameters {
   rctf rect;
-  float color_inner[4];
-  float color_outline[4];
+  float4 color_inner;
+  float4 color_outline;
   float outline_thickness;
   float outline_offset;
   float dot_radius;
