@@ -3379,10 +3379,9 @@ static std::string unique_node_name(const GreasePencil &grease_pencil,
   return unique_name;
 }
 
-static std::string unique_layer_name(const GreasePencil &grease_pencil,
-                                     blender::StringRefNull name)
+std::string GreasePencil::unique_layer_name(blender::StringRefNull name)
 {
-  return unique_node_name(grease_pencil, DATA_("Layer"), name);
+  return unique_node_name(*this, DATA_("Layer"), name);
 }
 
 static std::string unique_layer_group_name(const GreasePencil &grease_pencil,
@@ -3395,7 +3394,7 @@ blender::bke::greasepencil::Layer &GreasePencil::add_layer(const blender::String
                                                            const bool check_name_is_unique)
 {
   using namespace blender;
-  std::string unique_name = check_name_is_unique ? unique_layer_name(*this, name) : name.c_str();
+  std::string unique_name = check_name_is_unique ? unique_layer_name(name) : name.c_str();
   const int numLayers = layers().size();
   CustomData_realloc(&layers_data, numLayers, numLayers + 1, CD_SET_DEFAULT);
   bke::greasepencil::Layer *new_layer = MEM_new<bke::greasepencil::Layer>(__func__, unique_name);
@@ -3441,7 +3440,7 @@ blender::bke::greasepencil::Layer &GreasePencil::duplicate_layer(
     const blender::bke::greasepencil::Layer &duplicate_layer)
 {
   using namespace blender;
-  std::string unique_name = unique_layer_name(*this, duplicate_layer.name());
+  std::string unique_name = unique_layer_name(duplicate_layer.name());
   std::optional<int> duplicate_layer_idx = get_layer_index(duplicate_layer);
   const int numLayers = layers().size();
   CustomData_realloc(&layers_data, numLayers, numLayers + 1);
@@ -3774,7 +3773,7 @@ void GreasePencil::rename_node(Main &bmain,
   /* Rename the node. */
   std::string old_name = node.name();
   if (node.is_layer()) {
-    node.set_name(unique_layer_name(*this, new_name));
+    node.set_name(unique_layer_name(new_name));
   }
   else if (node.is_group()) {
     node.set_name(unique_layer_group_name(*this, new_name));
