@@ -53,6 +53,7 @@ static void node_composit_init_denonise(bNodeTree * /*ntree*/, bNode *node)
   NodeDenoise *ndg = MEM_cnew<NodeDenoise>(__func__);
   ndg->hdr = true;
   ndg->prefilter = CMP_NODE_DENOISE_PREFILTER_ACCURATE;
+  ndg->quality = CMP_NODE_DENOISE_QUALITY_HIGH;
   node->storage = ndg;
 }
 
@@ -71,6 +72,8 @@ static void node_composit_buts_denoise(uiLayout *layout, bContext * /*C*/, Point
 
   uiItemL(layout, IFACE_("Prefilter:"), ICON_NONE);
   uiItemR(layout, ptr, "prefilter", UI_ITEM_R_SPLIT_EMPTY_NAME, nullptr, ICON_NONE);
+  uiItemL(layout, IFACE_("Quality:"), ICON_NONE);
+  uiItemR(layout, ptr, "quality", UI_ITEM_R_SPLIT_EMPTY_NAME, nullptr, ICON_NONE);
   uiItemR(layout, ptr, "use_hdr", UI_ITEM_R_SPLIT_EMPTY_NAME, nullptr, ICON_NONE);
 }
 
@@ -130,6 +133,7 @@ class DenoiseOperation : public NodeOperation {
     filter.setImage("output", color, oidn::Format::Float3, width, height, 0, pixel_stride);
     filter.set("hdr", use_hdr());
     filter.set("cleanAux", auxiliary_passes_are_clean());
+    filter.set("quality", get_quality());
     filter.setProgressMonitorFunction(oidn_progress_monitor_function, &context());
 
     /* If the albedo input is not a single value input, download the albedo texture, denoise it
@@ -218,6 +222,19 @@ class DenoiseOperation : public NodeOperation {
   CMPNodeDenoisePrefilter get_prefilter_mode()
   {
     return static_cast<CMPNodeDenoisePrefilter>(node_storage(bnode()).prefilter);
+  }
+
+  OIDNQuality get_quality()
+  {
+    switch (static_cast<CMPNodeDenoiseQuality>(node_storage(bnode()).quality)) {
+      case CMP_NODE_DENOISE_QUALITY_FAST:
+        return OIDN_QUALITY_FAST;
+      case CMP_NODE_DENOISE_QUALITY_BALANCED:
+        return OIDN_QUALITY_BALANCED;
+      case CMP_NODE_DENOISE_QUALITY_HIGH:
+      default:
+        return OIDN_QUALITY_HIGH;
+    }
   }
 
   /* OIDN can be disabled as a build option, so check WITH_OPENIMAGEDENOISE. Additionally, it is

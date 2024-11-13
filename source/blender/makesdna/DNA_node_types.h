@@ -1564,6 +1564,8 @@ typedef struct NodeCryptomatte {
 typedef struct NodeDenoise {
   char hdr;
   char prefilter;
+  char quality;
+  char _pad[1];
 } NodeDenoise;
 
 typedef struct NodeMapRange {
@@ -2794,6 +2796,13 @@ typedef enum CMPNodeDenoisePrefilter {
   CMP_NODE_DENOISE_PREFILTER_NONE = 1,
   CMP_NODE_DENOISE_PREFILTER_ACCURATE = 2
 } CMPNodeDenoisePrefilter;
+
+/** #NodeDenoise.quality */
+typedef enum CMPNodeDenoiseQuality {
+  CMP_NODE_DENOISE_QUALITY_FAST = 0,
+  CMP_NODE_DENOISE_QUALITY_BALANCED = 1,
+  CMP_NODE_DENOISE_QUALITY_HIGH = 2
+} CMPNodeDenoiseQuality;
 
 /* Color combine/separate modes */
 
