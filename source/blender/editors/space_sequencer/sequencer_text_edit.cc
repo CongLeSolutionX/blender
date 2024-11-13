@@ -824,12 +824,12 @@ static int sequencer_text_edit_paste_exec(bContext *C, wmOperator * /*op*/)
 
   seq::CharInfo cur_char = character_at_cursor_offset_get(text, data->cursor_offset);
   char *cursor_addr = const_cast<char *>(cur_char.str_ptr);
-  size_t move_len = BLI_strnlen(cursor_addr, sizeof(data->text));
+  size_t move_len = strlen_include_null_terminator(cursor_addr, sizeof(data->text));
 
   std::memmove(cursor_addr + clipboard_len, cursor_addr, move_len);
   std::memcpy(cursor_addr, clipboard_buf, clipboard_len);
 
-  data->cursor_offset += move_len;
+  data->cursor_offset += clipboard_len;
 
   text_editing_update(C);
   return OPERATOR_FINISHED;
@@ -862,6 +862,7 @@ static int sequencer_text_edit_cut_exec(bContext *C, wmOperator * /*op*/)
   text_edit_copy(data);
   delete_selected_text(data);
 
+  text_editing_update(C);
   return OPERATOR_FINISHED;
 }
 
