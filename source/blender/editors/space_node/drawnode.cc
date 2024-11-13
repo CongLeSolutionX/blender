@@ -1868,15 +1868,19 @@ static void nodesocket_cache_flush()
     /* draw single */
     GPU_batch_program_set_builtin(batch, GPU_SHADER_2D_NODE_SOCKET);
     GPU_batch_uniform_4fv_array(
-        batch, "parameters", 4, (const float(*)[4])g_batch_nodesocket().params.data());
+        batch,
+        "parameters",
+        4,
+        reinterpret_cast<const float(*)[4]>(g_batch_nodesocket().params.data()));
     GPU_batch_draw(batch);
   }
   else {
     GPU_batch_program_set_builtin(batch, GPU_SHADER_2D_NODE_SOCKET_INST);
-    GPU_batch_uniform_4fv_array(batch,
-                                "parameters",
-                                MAX_SOCKET_PARAMETERS * MAX_SOCKET_INSTANCE,
-                                (float(*)[4])g_batch_nodesocket().params.data());
+    GPU_batch_uniform_4fv_array(
+        batch,
+        "parameters",
+        MAX_SOCKET_PARAMETERS * MAX_SOCKET_INSTANCE,
+        reinterpret_cast<const float(*)[4]>(g_batch_nodesocket().params.data()));
     GPU_batch_draw_instance_range(batch, 0, g_batch_nodesocket().params.size());
   }
   g_batch_nodesocket().params.clear();
