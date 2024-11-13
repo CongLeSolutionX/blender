@@ -1829,41 +1829,46 @@ struct NodeSocketShaderParameters {
 #define MAX_SOCKET_PARAMETERS 4
 #define MAX_SOCKET_INSTANCE 32
 
-static struct {
+struct GBatchNodesocket {
   gpu::Batch *batch;
   Vector<NodeSocketShaderParameters, MAX_SOCKET_INSTANCE> params;
   bool enabled;
-} g_batch_nodesocket;
+};
+
+static GBatchNodesocket &g_batch_nodesocket()
+{
+  static GBatchNodesocket *nodesocket_batch = new GBatchNodesocket();
+  return *nodesocket_batch;
+}
 
 static gpu::Batch *nodesocket_batch_init()
 {
-
-  if (g_batch_nodesocket.batch == nullptr) {
+  if (g_batch_nodesocket().batch == nullptr) {
     GPUIndexBufBuilder ibuf;
     GPU_indexbuf_init(&ibuf, GPU_PRIM_TRIS, 2, 4);
     /* Quad to draw the node socket in. */
     GPU_indexbuf_add_tri_verts(&ibuf, 0, 1, 2);
     GPU_indexbuf_add_tri_verts(&ibuf, 2, 1, 3);
 
-    g_batch_nodesocket.batch = GPU_batch_create_ex(
+    g_batch_nodesocket().batch = GPU_batch_create_ex(
         GPU_PRIM_TRIS, nullptr, GPU_indexbuf_build(&ibuf), GPU_BATCH_OWNS_INDEX);
-    gpu_batch_presets_register(g_batch_nodesocket.batch);
+    gpu_batch_presets_register(g_batch_nodesocket().batch);
   }
-  return g_batch_nodesocket.batch;
+  return g_batch_nodesocket().batch;
 }
 
 static void nodesocket_cache_flush()
 {
-  if (g_batch_nodesocket.params.is_empty()) {
+  if (g_batch_nodesocket().params.is_empty()) {
     return;
   }
 
   gpu::Batch *batch = nodesocket_batch_init();
-  if (g_batch_nodesocket.params.size() == 1) {
+  if (g_batch_nodesocket().params.size() == 1) {
     /* draw single */
     GPU_batch_program_set_builtin(batch, GPU_SHADER_2D_NODE_SOCKET);
     GPU_batch_uniform_4fv_array(
-        batch, "parameters", 4, (const float(*)[4])g_batch_nodesocket.params.data());
+        batch, "parameters", 4, (const float(*)[4])g_batch_nodesocket().params.data());
     GPU_batch_draw(batch);
   }
   else {
@@ -1871,22 +1876,22 @@ static void nodesocket_cache_flush()
     GPU_batch_uniform_4fv_array(batch,
                                 "parameters",
                                 MAX_SOCKET_PARAMETERS * MAX_SOCKET_INSTANCE,
-                                (float(*)[4])g_batch_nodesocket.params.data());
-    GPU_batch_draw_instance_range(batch, 0, g_batch_nodesocket.params.size());
+                                (float(*)[4])g_batch_nodesocket().params.data());
+    GPU_batch_draw_instance_range(batch, 0, g_batch_nodesocket().params.size());
   }
-  g_batch_nodesocket.params.clear();
+  g_batch_nodesocket().params.clear();
 }
 
 void nodesocket_batch_start()
 {
-  BLI_assert(g_batch_nodesocket.enabled == false);
-  g_batch_nodesocket.enabled = true;
+  BLI_assert(g_batch_nodesocket().enabled == false);
+  g_batch_nodesocket().enabled = true;
 }
 
 void nodesocket_batch_end()
 {
-  BLI_assert(g_batch_nodesocket.enabled == true);
-  g_batch_nodesocket.enabled = false;
+  BLI_assert(g_batch_nodesocket().enabled == true);
+  g_batch_nodesocket().enabled = false;
 
   GPU_blend(GPU_BLEND_ALPHA);
   nodesocket_cache_flush();
@@ -1895,10 +1900,10 @@ void nodesocket_batch_end()
 
 static void draw_node_socket_batch(const NodeSocketShaderParameters &socket_params)
 {
-  if (g_batch_nodesocket.enabled) {
-    g_batch_nodesocket.params.append(socket_params);
+  if (g_batch_nodesocket().enabled) {
+    g_batch_nodesocket().params.append(socket_params);
 
-    if (g_batch_nodesocket.params.size() >= MAX_SOCKET_INSTANCE) {
+    if (g_batch_nodesocket().params.size() >= MAX_SOCKET_INSTANCE) {
       nodesocket_cache_flush();
     }
   }
