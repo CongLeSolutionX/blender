@@ -1,1 +1,1 @@
-Referenced by issue #130169, Grease Pencil Tint modifier render result inconsistent with a viewport and the previous versions (GPv3 vs GPv2)
+Referenced by issue #130169, Color Management: Different result between Viewport and Final Render (worse with Intel UHD Graphics)
