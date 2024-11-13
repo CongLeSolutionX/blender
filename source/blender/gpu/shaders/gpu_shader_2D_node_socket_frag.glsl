@@ -20,7 +20,7 @@
 /* Round the sharp corners of the square and diamond a little bit. */
 #define CORNER_ROUNDING 0.15
 
-/* Calculates a squared distance fiels of a square. */
+/* Calculates a squared distance field of a square. */
 float square_sdf(vec2 absCo, float half_width_x, float half_width_y)
 {
   vec2 extruded = vec2(max(0.0, absCo.x - half_width_x), max(0.0, absCo.y - half_width_y));
