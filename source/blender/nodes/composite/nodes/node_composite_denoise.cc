@@ -224,6 +224,7 @@ class DenoiseOperation : public NodeOperation {
     return static_cast<CMPNodeDenoisePrefilter>(node_storage(bnode()).prefilter);
   }
 
+#ifdef WITH_OPENIMAGEDENOISE
   OIDNQuality get_quality()
   {
     switch (static_cast<CMPNodeDenoiseQuality>(node_storage(bnode()).quality)) {
@@ -236,6 +237,7 @@ class DenoiseOperation : public NodeOperation {
         return OIDN_QUALITY_HIGH;
     }
   }
+#endif
 
   /* OIDN can be disabled as a build option, so check WITH_OPENIMAGEDENOISE. Additionally, it is
    * only supported at runtime for CPUs that supports SSE4.1, except for MacOS where it is always
