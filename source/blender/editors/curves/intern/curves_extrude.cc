@@ -183,6 +183,18 @@ static void calc_curves_extrusion(const IndexMask &selection,
   } while (curve_index < points_by_curve.size());
 }
 
+static void calc_new_offsets(const Span<int> old_offsets,
+                             const Span<int> curves_intervals_offsets,
+                             MutableSpan<int> new_offsets)
+{
+  const IndexRange range = old_offsets.index_range().drop_back(1).shift(1);
+  threading::parallel_for(range, 256, [&](IndexRange index_range) {
+    for (const int i : index_range) {
+      new_offsets[i] = old_offsets[i] + curves_intervals_offsets[i] - 2 * i;
+    }
+  });
+}
+
 static void extrude_curves(Curves &curves_id)
 {
   const bke::AttrDomain selection_domain = bke::AttrDomain(curves_id.selection_domain);
@@ -225,14 +237,8 @@ static void extrude_curves(Curves &curves_id)
                         curves_intervals_offsets,
                         is_first_selected);
 
-  const Span<int> old_offsets = curves.offsets();
   MutableSpan<int> new_offsets = new_curves.offsets_for_write();
-  threading::parallel_for(curves.curves_range().shift(1), 256, [&](IndexRange index_range) {
-    for (const int i : index_range) {
-      new_offsets[i] = old_offsets[i] + curves_intervals_offsets[i] - 2 * i;
-    }
-  });
-
+  calc_new_offsets(curves.offsets(), curves_intervals_offsets, new_offsets);
   new_curves.resize(new_offsets.last(), new_curves.curves_num());
 
   const bke::AttributeAccessor src_attributes = curves.attributes();
