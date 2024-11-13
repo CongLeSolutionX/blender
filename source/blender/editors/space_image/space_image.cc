@@ -20,7 +20,7 @@
 
 #include "BKE_colortools.hh"
 #include "BKE_context.hh"
-#include "BKE_image.h"
+#include "BKE_image.hh"
 #include "BKE_layer.hh"
 #include "BKE_lib_query.hh"
 #include "BKE_lib_remap.hh"
@@ -1080,7 +1080,10 @@ static void image_space_subtype_item_extend(bContext * /*C*/,
 static blender::StringRefNull image_space_name_get(const ScrArea *area)
 {
   SpaceImage *sima = static_cast<SpaceImage *>(area->spacedata.first);
-  const int index = RNA_enum_from_value(rna_enum_space_image_mode_items, sima->mode);
+  int index = RNA_enum_from_value(rna_enum_space_image_mode_items, sima->mode);
+  if (index < 0) {
+    index = SI_MODE_VIEW;
+  }
   const EnumPropertyItem item = rna_enum_space_image_mode_items[index];
   return item.name;
 }
@@ -1088,7 +1091,10 @@ static blender::StringRefNull image_space_name_get(const ScrArea *area)
 static int image_space_icon_get(const ScrArea *area)
 {
   SpaceImage *sima = static_cast<SpaceImage *>(area->spacedata.first);
-  const int index = RNA_enum_from_value(rna_enum_space_image_mode_items, sima->mode);
+  int index = RNA_enum_from_value(rna_enum_space_image_mode_items, sima->mode);
+  if (index < 0) {
+    index = SI_MODE_VIEW;
+  }
   const EnumPropertyItem item = rna_enum_space_image_mode_items[index];
   return item.icon;
 }

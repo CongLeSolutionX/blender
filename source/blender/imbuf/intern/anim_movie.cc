@@ -18,7 +18,8 @@
 #  include <io.h>
 #endif
 
-#include "BLI_path_util.h"
+#include "BLI_math_base.hh"
+#include "BLI_path_utils.hh"
 #include "BLI_string.h"
 #include "BLI_threads.h"
 #include "BLI_utildefines.h"
@@ -161,15 +162,98 @@ void IMB_suffix_anim(ImBufAnim *anim, const char *suffix)
 
 #ifdef WITH_FFMPEG
 
+static double ffmpeg_stream_start_time_get(AVStream *stream)
+{
+  if (stream->start_time == AV_NOPTS_VALUE) {
+    return 0.0;
+  }
+
+  return stream->start_time * av_q2d(stream->time_base);
+}
+
+static int ffmpeg_container_frame_count_get(AVFormatContext *pFormatCtx, AVStream *video_stream)
+{
+  /* Find audio stream to guess the duration of the video.
+   * Sometimes the audio AND the video stream have a start offset.
+   * The difference between these is the offset we want to use to
+   * calculate the video duration.
+   */
+  const double video_start = ffmpeg_stream_start_time_get(video_stream);
+  double audio_start = 0;
+
+  for (int i = 0; i < pFormatCtx->nb_streams; i++) {
+    if (pFormatCtx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
+      AVStream *audio_stream = pFormatCtx->streams[i];
+      audio_start = ffmpeg_stream_start_time_get(audio_stream);
+      break;
+    }
+  }
+
+  const AVRational frame_rate = av_guess_frame_rate(pFormatCtx, video_stream, nullptr);
+  double stream_dur;
+
+  if (video_start > audio_start) {
+    stream_dur = double(pFormatCtx->duration) / AV_TIME_BASE - (video_start - audio_start);
+  }
+  else {
+    /* The video stream starts before or at the same time as the audio stream!
+     * We have to assume that the video stream is as long as the full pFormatCtx->duration.
+     */
+    stream_dur = double(pFormatCtx->duration) / AV_TIME_BASE;
+  }
+
+  return lround(stream_dur * av_q2d(frame_rate));
+}
+
+static int ffmpeg_frame_count_get(AVFormatContext *pFormatCtx, AVStream *video_stream)
+{
+  /* Use stream duration to determine frame count. */
+  if (video_stream->duration != AV_NOPTS_VALUE) {
+    const AVRational frame_rate = av_guess_frame_rate(pFormatCtx, video_stream, nullptr);
+    const double stream_dur = video_stream->duration * av_q2d(video_stream->time_base);
+    return lround(stream_dur * av_q2d(frame_rate));
+  }
+
+  /* Fall back to manually estimating the video stream duration.
+   * This is because the video stream duration can be shorter than the `pFormatCtx->duration`.
+   */
+  if (pFormatCtx->duration != AV_NOPTS_VALUE) {
+    return ffmpeg_container_frame_count_get(pFormatCtx, video_stream);
+  }
+
+  /* Read frame count from the stream if we can. Note, that this value can not be trusted. */
+  if (video_stream->nb_frames != 0) {
+    return video_stream->nb_frames;
+  }
+
+  /* The duration has not been set, happens for single JPEG2000 images.
+   * NOTE: Leave the duration zeroed, although it could set to 1 so the file is recognized
+   * as a movie with 1 frame, leave as-is since image loading code-paths are preferred
+   * in this case. The following assertion should be valid in this case. */
+  BLI_assert(pFormatCtx->duration == AV_NOPTS_VALUE);
+  return 0;
+}
+
+static int calc_pix_fmt_max_component_bits(AVPixelFormat fmt)
+{
+  const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(fmt);
+  if (desc == nullptr) {
+    return 0;
+  }
+  int bits = 0;
+  for (int i = 0; i < desc->nb_components; i++) {
+    bits = max_ii(bits, desc->comp[i].depth);
+  }
+  return bits;
+}
+
 static int startffmpeg(ImBufAnim *anim)
 {
-  int i, video_stream_index;
-
   const AVCodec *pCodec;
   AVFormatContext *pFormatCtx = nullptr;
   AVCodecContext *pCodecCtx;
-  AVRational frame_rate;
   AVStream *video_stream;
+  int video_stream_index;
   int frs_num;
   double frs_den;
   int streamcount;
@@ -199,7 +283,7 @@ static int startffmpeg(ImBufAnim *anim)
   /* Find the video stream */
   video_stream_index = -1;
 
-  for (i = 0; i < pFormatCtx->nb_streams; i++) {
+  for (int i = 0; i < pFormatCtx->nb_streams; i++) {
     if (pFormatCtx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
       if (streamcount > 0) {
         streamcount--;
@@ -252,82 +336,7 @@ static int startffmpeg(ImBufAnim *anim)
     return -1;
   }
 
-  double video_start = 0;
-  double pts_time_base = av_q2d(video_stream->time_base);
-
-  if (video_stream->start_time != AV_NOPTS_VALUE) {
-    video_start = video_stream->start_time * pts_time_base;
-  }
-
-  frame_rate = av_guess_frame_rate(pFormatCtx, video_stream, nullptr);
-  anim->duration_in_frames = 0;
-
-  /* Take from the stream if we can. */
-  if (video_stream->nb_frames != 0) {
-    anim->duration_in_frames = video_stream->nb_frames;
-
-    /* Sanity check on the detected duration. This is to work around corruption like reported in
-     * #68091. */
-    if (frame_rate.den != 0 && pFormatCtx->duration > 0) {
-      double stream_sec = anim->duration_in_frames * av_q2d(frame_rate);
-      double container_sec = pFormatCtx->duration / double(AV_TIME_BASE);
-      if (stream_sec > 4.0 * container_sec) {
-        /* The stream is significantly longer than the container duration, which is
-         * suspicious. */
-        anim->duration_in_frames = 0;
-      }
-    }
-  }
-
-  if (anim->duration_in_frames != 0) {
-    /* Pass (already valid). */
-  }
-  else if (pFormatCtx->duration == AV_NOPTS_VALUE) {
-    /* The duration has not been set, happens for single JPEG2000 images.
-     * NOTE: Leave the duration zeroed, although it could set to 1 so the file is recognized
-     * as a movie with 1 frame, leave as-is since image loading code-paths are preferred
-     * in this case. */
-  }
-  else {
-    /* Fall back to manually estimating the video stream duration.
-     * This is because the video stream duration can be shorter than the `pFormatCtx->duration`. */
-    BLI_assert(anim->duration_in_frames == 0);
-    double stream_dur;
-
-    if (video_stream->duration != AV_NOPTS_VALUE) {
-      stream_dur = video_stream->duration * pts_time_base;
-    }
-    else {
-      double audio_start = 0;
-
-      /* Find audio stream to guess the duration of the video.
-       * Sometimes the audio AND the video stream have a start offset.
-       * The difference between these is the offset we want to use to
-       * calculate the video duration.
-       */
-      for (i = 0; i < pFormatCtx->nb_streams; i++) {
-        if (pFormatCtx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
-          AVStream *audio_stream = pFormatCtx->streams[i];
-          if (audio_stream->start_time != AV_NOPTS_VALUE) {
-            audio_start = audio_stream->start_time * av_q2d(audio_stream->time_base);
-          }
-          break;
-        }
-      }
-
-      if (video_start > audio_start) {
-        stream_dur = double(pFormatCtx->duration) / AV_TIME_BASE - (video_start - audio_start);
-      }
-      else {
-        /* The video stream starts before or at the same time as the audio stream!
-         * We have to assume that the video stream is as long as the full pFormatCtx->duration.
-         */
-        stream_dur = double(pFormatCtx->duration) / AV_TIME_BASE;
-      }
-    }
-    anim->duration_in_frames = int(stream_dur * av_q2d(frame_rate) + 0.5f);
-  }
-
+  const AVRational frame_rate = av_guess_frame_rate(pFormatCtx, video_stream, nullptr);
   frs_num = frame_rate.num;
   frs_den = frame_rate.den;
 
@@ -342,10 +351,13 @@ static int startffmpeg(ImBufAnim *anim)
   anim->frs_sec_base = frs_den;
   /* Save the relative start time for the video. IE the start time in relation to where playback
    * starts. */
-  anim->start_offset = video_start;
+  anim->start_offset = ffmpeg_stream_start_time_get(video_stream);
+  anim->duration_in_frames = ffmpeg_frame_count_get(pFormatCtx, video_stream);
 
   anim->x = pCodecCtx->width;
   anim->y = pCodecCtx->height;
+  /* Decode >8bit videos into floating point image. */
+  anim->is_float = calc_pix_fmt_max_component_bits(pCodecCtx->pix_fmt) > 8;
 
   anim->pFormatCtx = pFormatCtx;
   anim->pCodecCtx = pCodecCtx;
@@ -364,11 +376,15 @@ static int startffmpeg(ImBufAnim *anim)
   anim->pFrame_complete = false;
   anim->pFrameDeinterlaced = av_frame_alloc();
   anim->pFrameRGB = av_frame_alloc();
-  anim->pFrameRGB->format = AV_PIX_FMT_RGBA;
+  /* Ideally we'd use AV_PIX_FMT_RGBAF32LE for floats, but currently (ffmpeg 6.1)
+   * swscale does not support that as destination. So using AV_PIX_FMT_GBRAPF32LE
+   * with manual interleaving to RGBA floats. */
+  anim->pFrameRGB->format = anim->is_float ? AV_PIX_FMT_GBRAPF32LE : AV_PIX_FMT_RGBA;
   anim->pFrameRGB->width = anim->x;
   anim->pFrameRGB->height = anim->y;
 
-  if (av_frame_get_buffer(anim->pFrameRGB, 0) < 0) {
+  const size_t align = ffmpeg_get_buffer_alignment();
+  if (av_frame_get_buffer(anim->pFrameRGB, align) < 0) {
     fprintf(stderr, "Could not allocate frame data.\n");
     avcodec_free_context(&anim->pCodecCtx);
     avformat_close_input(&anim->pFormatCtx);
@@ -381,20 +397,10 @@ static int startffmpeg(ImBufAnim *anim)
     return -1;
   }
 
-  if (av_image_get_buffer_size(AV_PIX_FMT_RGBA, anim->x, anim->y, 1) != anim->x * anim->y * 4) {
-    fprintf(stderr, "ffmpeg has changed alloc scheme ... ARGHHH!\n");
-    avcodec_free_context(&anim->pCodecCtx);
-    avformat_close_input(&anim->pFormatCtx);
-    av_packet_free(&anim->cur_packet);
-    av_frame_free(&anim->pFrameRGB);
-    av_frame_free(&anim->pFrameDeinterlaced);
-    av_frame_free(&anim->pFrame);
-    av_frame_free(&anim->pFrame_backup);
-    anim->pCodecCtx = nullptr;
-    return -1;
-  }
-
   if (anim->ib_flags & IB_animdeinterlace) {
+    anim->pFrameDeinterlaced->format = anim->pCodecCtx->pix_fmt;
+    anim->pFrameDeinterlaced->width = anim->pCodecCtx->width;
+    anim->pFrameDeinterlaced->height = anim->pCodecCtx->height;
     av_image_fill_arrays(
         anim->pFrameDeinterlaced->data,
         anim->pFrameDeinterlaced->linesize,
@@ -411,12 +417,18 @@ static int startffmpeg(ImBufAnim *anim)
   anim->img_convert_ctx = BKE_ffmpeg_sws_get_context(anim->x,
                                                      anim->y,
                                                      anim->pCodecCtx->pix_fmt,
-                                                     AV_PIX_FMT_RGBA,
+                                                     anim->x,
+                                                     anim->y,
+                                                     anim->pFrameRGB->format,
                                                      SWS_BILINEAR | SWS_PRINT_INFO |
                                                          SWS_FULL_CHR_H_INT);
 
   if (!anim->img_convert_ctx) {
-    fprintf(stderr, "Can't transform color space??? Bailing out...\n");
+    fprintf(stderr,
+            "ffmpeg: swscale can't transform from pixel format %s to %s (%s)\n",
+            av_get_pix_fmt_name(anim->pCodecCtx->pix_fmt),
+            av_get_pix_fmt_name((AVPixelFormat)anim->pFrameRGB->format),
+            anim->filepath);
     avcodec_free_context(&anim->pCodecCtx);
     avformat_close_input(&anim->pFormatCtx);
     av_packet_free(&anim->cur_packet);
@@ -556,46 +568,81 @@ static void ffmpeg_postprocess(ImBufAnim *anim, AVFrame *input, ImBuf *ibuf)
     }
   }
 
-  /* If final destination image layout matches that of decoded RGB frame (including
-   * any line padding done by ffmpeg for SIMD alignment), we can directly
-   * decode into that, doing the vertical flip in the same step. Otherwise have
-   * to do a separate flip. */
-  const int ibuf_linesize = ibuf->x * 4;
-  const int rgb_linesize = anim->pFrameRGB->linesize[0];
-  bool scale_to_ibuf = (rgb_linesize == ibuf_linesize);
-  /* swscale on arm64 before ffmpeg 6.0 (libswscale major version 7)
-   * could not handle negative line sizes. That has been fixed in all major
-   * ffmpeg releases in early 2023, but easier to just check for "below 7". */
-#  if (defined(__aarch64__) || defined(_M_ARM64)) && (LIBSWSCALE_VERSION_MAJOR < 7)
-  scale_to_ibuf = false;
-#  endif
-  uint8_t *rgb_data = anim->pFrameRGB->data[0];
-
-  if (scale_to_ibuf) {
-    /* Decode RGB and do vertical flip directly into destination image, by using negative
-     * line size. */
-    anim->pFrameRGB->linesize[0] = -ibuf_linesize;
-    anim->pFrameRGB->data[0] = ibuf->byte_buffer.data + (ibuf->y - 1) * ibuf_linesize;
-
-    BKE_ffmpeg_sws_scale_frame(anim->img_convert_ctx, anim->pFrameRGB, input);
-
-    anim->pFrameRGB->linesize[0] = rgb_linesize;
-    anim->pFrameRGB->data[0] = rgb_data;
-  }
-  else {
+  if (anim->is_float) {
+    /* Float images are converted into planar BGRA layout by swscale (since
+     * it does not support direct YUV->RGBA float interleaved conversion).
+     * Do vertical flip and interleave into RGBA manually. */
     /* Decode, then do vertical flip into destination. */
     BKE_ffmpeg_sws_scale_frame(anim->img_convert_ctx, anim->pFrameRGB, input);
 
-    /* Use negative line size to do vertical image flip. */
-    const int src_linesize[4] = {-rgb_linesize, 0, 0, 0};
-    const uint8_t *const src[4] = {
-        rgb_data + (anim->y - 1) * rgb_linesize, nullptr, nullptr, nullptr};
-    int dst_size = av_image_get_buffer_size(AVPixelFormat(anim->pFrameRGB->format),
-                                            anim->pFrameRGB->width,
-                                            anim->pFrameRGB->height,
-                                            1);
-    av_image_copy_to_buffer(
-        ibuf->byte_buffer.data, dst_size, src, src_linesize, AV_PIX_FMT_RGBA, anim->x, anim->y, 1);
+    const size_t src_linesize = anim->pFrameRGB->linesize[0];
+    BLI_assert_msg(anim->pFrameRGB->linesize[1] == src_linesize &&
+                       anim->pFrameRGB->linesize[2] == src_linesize &&
+                       anim->pFrameRGB->linesize[3] == src_linesize,
+                   "ffmpeg frame should be 4 same size planes for a floating point image case");
+    for (int y = 0; y < ibuf->y; y++) {
+      size_t src_offset = src_linesize * (ibuf->y - y - 1);
+      const float *src_g = reinterpret_cast<const float *>(anim->pFrameRGB->data[0] + src_offset);
+      const float *src_b = reinterpret_cast<const float *>(anim->pFrameRGB->data[1] + src_offset);
+      const float *src_r = reinterpret_cast<const float *>(anim->pFrameRGB->data[2] + src_offset);
+      const float *src_a = reinterpret_cast<const float *>(anim->pFrameRGB->data[3] + src_offset);
+      float *dst = ibuf->float_buffer.data + ibuf->x * y * 4;
+      for (int x = 0; x < ibuf->x; x++) {
+        *dst++ = *src_r++;
+        *dst++ = *src_g++;
+        *dst++ = *src_b++;
+        *dst++ = *src_a++;
+      }
+    }
+  }
+  else {
+    /* If final destination image layout matches that of decoded RGB frame (including
+     * any line padding done by ffmpeg for SIMD alignment), we can directly
+     * decode into that, doing the vertical flip in the same step. Otherwise have
+     * to do a separate flip. */
+    const int ibuf_linesize = ibuf->x * 4;
+    const int rgb_linesize = anim->pFrameRGB->linesize[0];
+    bool scale_to_ibuf = (rgb_linesize == ibuf_linesize);
+    /* swscale on arm64 before ffmpeg 6.0 (libswscale major version 7)
+     * could not handle negative line sizes. That has been fixed in all major
+     * ffmpeg releases in early 2023, but easier to just check for "below 7". */
+#  if (defined(__aarch64__) || defined(_M_ARM64)) && (LIBSWSCALE_VERSION_MAJOR < 7)
+    scale_to_ibuf = false;
+#  endif
+    uint8_t *rgb_data = anim->pFrameRGB->data[0];
+
+    if (scale_to_ibuf) {
+      /* Decode RGB and do vertical flip directly into destination image, by using negative
+       * line size. */
+      anim->pFrameRGB->linesize[0] = -ibuf_linesize;
+      anim->pFrameRGB->data[0] = ibuf->byte_buffer.data + (ibuf->y - 1) * ibuf_linesize;
+
+      BKE_ffmpeg_sws_scale_frame(anim->img_convert_ctx, anim->pFrameRGB, input);
+
+      anim->pFrameRGB->linesize[0] = rgb_linesize;
+      anim->pFrameRGB->data[0] = rgb_data;
+    }
+    else {
+      /* Decode, then do vertical flip into destination. */
+      BKE_ffmpeg_sws_scale_frame(anim->img_convert_ctx, anim->pFrameRGB, input);
+
+      /* Use negative line size to do vertical image flip. */
+      const int src_linesize[4] = {-rgb_linesize, 0, 0, 0};
+      const uint8_t *const src[4] = {
+          rgb_data + (anim->y - 1) * rgb_linesize, nullptr, nullptr, nullptr};
+      int dst_size = av_image_get_buffer_size(AVPixelFormat(anim->pFrameRGB->format),
+                                              anim->pFrameRGB->width,
+                                              anim->pFrameRGB->height,
+                                              1);
+      av_image_copy_to_buffer(ibuf->byte_buffer.data,
+                              dst_size,
+                              src,
+                              src_linesize,
+                              AVPixelFormat(anim->pFrameRGB->format),
+                              anim->x,
+                              anim->y,
+                              1);
+    }
   }
 
   if (filter_y) {
@@ -1074,6 +1121,11 @@ static int ffmpeg_seek_to_key_frame(ImBufAnim *anim,
   return ret;
 }
 
+static bool ffmpeg_must_decode(ImBufAnim *anim, int position)
+{
+  return !anim->pFrame_complete || anim->cur_position != position;
+}
+
 static bool ffmpeg_must_seek(ImBufAnim *anim, int position)
 {
   bool must_seek = position != anim->cur_position + 1 || ffmpeg_is_first_frame_decode(anim);
@@ -1105,34 +1157,17 @@ static ImBuf *ffmpeg_fetchibuf(ImBufAnim *anim, int position, IMB_Timecode_Type 
          frame_rate,
          start_pts);
 
-  if (ffmpeg_must_seek(anim, position)) {
-    ffmpeg_seek_to_key_frame(anim, position, tc_index, pts_to_search);
-  }
+  if (ffmpeg_must_decode(anim, position)) {
+    if (ffmpeg_must_seek(anim, position)) {
+      ffmpeg_seek_to_key_frame(anim, position, tc_index, pts_to_search);
+    }
 
-  ffmpeg_decode_video_frame_scan(anim, pts_to_search);
+    ffmpeg_decode_video_frame_scan(anim, pts_to_search);
+  }
 
   /* Update resolution as it can change per-frame with WebM. See #100741 & #100081. */
   anim->x = anim->pCodecCtx->width;
   anim->y = anim->pCodecCtx->height;
-
-  /* Certain versions of FFmpeg have a bug in libswscale which ends up in crash
-   * when destination buffer is not properly aligned. For example, this happens
-   * in FFmpeg 4.3.1. It got fixed later on, but for compatibility reasons is
-   * still best to avoid crash.
-   *
-   * This is achieved by using a separate allocation call rather than relying on
-   * IMB_allocImBuf() to do so since the IMB_allocImBuf() is not guaranteed
-   * to perform aligned allocation.
-   *
-   * In theory this could give better performance, since SIMD operations on
-   * aligned data are usually faster.
-   *
-   * Note that even though sometimes vertical flip is required it does not
-   * affect on alignment of data passed to sws_scale because if the X dimension
-   * is not 32 byte aligned special intermediate buffer is allocated.
-   *
-   * The issue was reported to FFmpeg under ticket #8747 in the FFmpeg tracker
-   * and is fixed in the newer versions than 4.3.1. */
 
   const AVPixFmtDescriptor *pix_fmt_descriptor = av_pix_fmt_desc_get(anim->pCodecCtx->pix_fmt);
 
@@ -1144,11 +1179,18 @@ static ImBuf *ffmpeg_fetchibuf(ImBufAnim *anim, int position, IMB_Timecode_Type 
   ImBuf *cur_frame_final = IMB_allocImBuf(anim->x, anim->y, planes, 0);
 
   /* Allocate the storage explicitly to ensure the memory is aligned. */
+  const size_t align = ffmpeg_get_buffer_alignment();
+  const size_t pixel_size = anim->is_float ? 16 : 4;
   uint8_t *buffer_data = static_cast<uint8_t *>(
-      MEM_mallocN_aligned(size_t(4) * anim->x * anim->y, 32, "ffmpeg ibuf"));
-  IMB_assign_byte_buffer(cur_frame_final, buffer_data, IB_TAKE_OWNERSHIP);
-
-  cur_frame_final->byte_buffer.colorspace = colormanage_colorspace_get_named(anim->colorspace);
+      MEM_mallocN_aligned(pixel_size * anim->x * anim->y, align, "ffmpeg ibuf"));
+  if (anim->is_float) {
+    IMB_assign_float_buffer(cur_frame_final, (float *)buffer_data, IB_TAKE_OWNERSHIP);
+    cur_frame_final->float_buffer.colorspace = colormanage_colorspace_get_named(anim->colorspace);
+  }
+  else {
+    IMB_assign_byte_buffer(cur_frame_final, buffer_data, IB_TAKE_OWNERSHIP);
+    cur_frame_final->byte_buffer.colorspace = colormanage_colorspace_get_named(anim->colorspace);
+  }
 
   AVFrame *final_frame = ffmpeg_frame_by_pts_get(anim, pts_to_search);
   if (final_frame == nullptr) {
@@ -1182,6 +1224,9 @@ static void free_anim_ffmpeg(ImBufAnim *anim)
     av_frame_free(&anim->pFrame);
     av_frame_free(&anim->pFrame_backup);
     av_frame_free(&anim->pFrameRGB);
+    if (anim->pFrameDeinterlaced->data[0] != nullptr) {
+      MEM_freeN(anim->pFrameDeinterlaced->data[0]);
+    }
     av_frame_free(&anim->pFrameDeinterlaced);
     BKE_ffmpeg_sws_release_context(anim->img_convert_ctx);
   }

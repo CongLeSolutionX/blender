@@ -119,6 +119,8 @@ static void WIDGETGROUP_tool_generic_setup(const bContext *C, wmGizmoGroup *gzgr
       MEM_mallocN(sizeof(wmGizmoWrapper), __func__));
   wwrapper->gizmo = tool_generic_create_gizmo(C, gzgroup);
   gzgroup->customdata = wwrapper;
+
+  /* The tool handles undo, no need to set #WM_GIZMO_NEEDS_UNDO. */
 }
 
 static void WIDGETGROUP_tool_generic_refresh(const bContext *C, wmGizmoGroup *gzgroup)
@@ -174,7 +176,7 @@ static void WIDGETGROUP_gizmo_message_subscribe(const bContext *C,
 
   {
     const PropertyRNA *props[] = {
-        rna_ToolSettings_workspace_tool_type,
+        &rna_ToolSettings_workspace_tool_type,
     };
 
     Scene *scene = CTX_data_scene(C);

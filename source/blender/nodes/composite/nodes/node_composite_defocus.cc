@@ -80,16 +80,7 @@ static void node_composit_buts_defocus(uiLayout *layout, bContext *C, PointerRNA
   col = uiLayoutColumn(layout, false);
   uiItemR(col, ptr, "use_preview", UI_ITEM_R_SPLIT_EMPTY_NAME, nullptr, ICON_NONE);
 
-  uiTemplateID(layout,
-               C,
-               ptr,
-               "scene",
-               nullptr,
-               nullptr,
-               nullptr,
-               UI_TEMPLATE_ID_FILTER_ALL,
-               false,
-               nullptr);
+  uiTemplateID(layout, C, ptr, "scene", nullptr, nullptr, nullptr);
 
   col = uiLayoutColumn(layout, false);
   uiItemR(col, ptr, "use_zbuffer", UI_ITEM_R_SPLIT_EMPTY_NAME, nullptr, ICON_NONE);
@@ -106,6 +97,17 @@ class DefocusOperation : public NodeOperation {
 
   void execute() override
   {
+    /* Not yet supported on CPU. */
+    if (!context().use_gpu()) {
+      for (const bNodeSocket *output : this->node()->output_sockets()) {
+        Result &output_result = get_result(output->identifier);
+        if (output_result.should_compute()) {
+          output_result.allocate_invalid();
+        }
+      }
+      return;
+    }
+
     Result &input = get_input("Image");
     Result &output = get_result("Image");
     if (input.is_single_value() || node_storage(bnode()).maxblur < 1.0f) {
@@ -124,7 +126,7 @@ class DefocusOperation : public NodeOperation {
     const int sides = is_circle ? 3 : node_storage(bnode()).bktype;
     const float rotation = node_storage(bnode()).rotation;
     const float roundness = is_circle ? 1.0f : 0.0f;
-    const BokehKernel &bokeh_kernel = context().cache_manager().bokeh_kernels.get(
+    const Result &bokeh_kernel = context().cache_manager().bokeh_kernels.get(
         context(), kernel_size, sides, rotation, roundness, 0.0f, 0.0f);
 
     GPUShader *shader = context().get_shader("compositor_defocus_blur");
@@ -137,7 +139,7 @@ class DefocusOperation : public NodeOperation {
 
     radius.bind_as_texture(shader, "radius_tx");
 
-    GPU_texture_filter_mode(bokeh_kernel.texture(), true);
+    GPU_texture_filter_mode(bokeh_kernel, true);
     bokeh_kernel.bind_as_texture(shader, "weights_tx");
 
     const Domain domain = compute_domain();
@@ -176,7 +178,7 @@ class DefocusOperation : public NodeOperation {
     Result &input_radius = get_input("Z");
     input_radius.bind_as_texture(shader, "radius_tx");
 
-    Result output_radius = context().create_temporary_result(ResultType::Float);
+    Result output_radius = context().create_result(ResultType::Float);
     const Domain domain = input_radius.domain();
     output_radius.allocate_texture(domain);
     output_radius.bind_as_image(shader, "radius_img");
@@ -205,7 +207,7 @@ class DefocusOperation : public NodeOperation {
     Result &input_depth = get_input("Z");
     input_depth.bind_as_texture(shader, "depth_tx");
 
-    Result output_radius = context().create_temporary_result(ResultType::Float);
+    Result output_radius = context().create_result(ResultType::Float);
     const Domain domain = input_depth.domain();
     output_radius.allocate_texture(domain);
     output_radius.bind_as_image(shader, "radius_img");
@@ -221,7 +223,7 @@ class DefocusOperation : public NodeOperation {
      * focus---that is, objects whose defocus radius is small---are not affected by nearby out of
      * focus objects, hence the use of dilation. */
     const float morphological_radius = compute_maximum_defocus_radius();
-    Result eroded_radius = context().create_temporary_result(ResultType::Float);
+    Result eroded_radius = context().create_result(ResultType::Float);
     morphological_blur(context(), output_radius, eroded_radius, float2(morphological_radius));
     output_radius.release();
 
@@ -366,5 +368,5 @@ void register_node_type_cmp_defocus()
       &ntype, "NodeDefocus", node_free_standard_storage, node_copy_standard_storage);
   ntype.get_compositor_operation = file_ns::get_compositor_operation;
 
-  blender::bke::nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }

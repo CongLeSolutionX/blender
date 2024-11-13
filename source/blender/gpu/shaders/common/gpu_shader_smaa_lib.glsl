@@ -7,6 +7,10 @@
  *
  * SPDX-License-Identifier: MIT AND GPL-2.0-or-later */
 
+#pragma once
+
+#include "gpu_glsl_cpp_stubs.hh"
+
 /**
  *                  _______  ___  ___       ___           ___
  *                 /       ||   \/   |     /   \         /   \

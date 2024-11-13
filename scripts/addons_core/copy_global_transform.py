@@ -20,7 +20,6 @@ bl_info = {
     "category": "Animation",
     "support": 'OFFICIAL',
     "doc_url": "{BLENDER_MANUAL_URL}/addons/animation/copy_global_transform.html",
-    "tracker_url": "https://projects.blender.org/blender/blender-addons/issues",
 }
 
 import ast
@@ -29,7 +28,7 @@ import contextlib
 from typing import Iterable, Optional, Union, Any, TypeAlias, Iterator
 
 import bpy
-from bpy.types import Context, Object, Operator, Panel, PoseBone, UILayout, FCurve, Camera, FModifierStepped
+from bpy.types import Context, Object, Operator, Panel, PoseBone, UILayout, Camera
 from mathutils import Matrix
 
 
@@ -241,7 +240,7 @@ def _selected_keyframes_for_bone(object: Object, bone: PoseBone) -> list[float]:
     Only keys on the given pose bone are considered.
     """
     name = bpy.utils.escape_identifier(bone.name)
-    return _selected_keyframes_in_action(object, f'pose.bones["{name}"].')
+    return _selected_keyframes_in_action(object, "pose.bones[\"{:s}\"].".format(name))
 
 
 def _selected_keyframes_for_object(object: Object) -> list[float]:

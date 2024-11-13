@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#pragma BLENDER_REQUIRE(eevee_film_lib.glsl)
+#include "eevee_film_lib.glsl"
 
 void main()
 {
@@ -10,6 +10,10 @@ void main()
   /* Not used. */
   vec4 out_color;
   float out_depth;
+
+  if (any(greaterThanEqual(texel_film, uniform_buf.film.extent))) {
+    return;
+  }
 
   film_process_data(texel_film, out_color, out_depth);
 }

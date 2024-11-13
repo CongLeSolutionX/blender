@@ -129,10 +129,15 @@ set(LIB
   PRIVATE bf::blenlib
   PRIVATE bf::depsgraph
   PRIVATE bf::dna
+  bf_functions
   PRIVATE bf::intern::guardedalloc
   PRIVATE bf::extern::fmtlib
   bf_realtime_compositor
 )
+
+if(WITH_OPENCOLORIO)
+  add_definitions(-DWITH_OCIO)
+endif()
 
 if(WITH_IMAGE_OPENEXR)
   add_definitions(-DWITH_OPENEXR)

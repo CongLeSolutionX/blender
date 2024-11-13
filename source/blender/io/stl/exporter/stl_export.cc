@@ -6,7 +6,6 @@
  * \ingroup stl
  */
 
-#include <cstdio>
 #include <memory>
 
 #include "BKE_context.hh"
@@ -35,6 +34,9 @@
 #include "stl_export.hh"
 #include "stl_export_writer.hh"
 
+#include "CLG_log.h"
+static CLG_LogRef LOG = {"io.stl"};
+
 namespace blender::io::stl {
 
 void export_frame(Depsgraph *depsgraph,
@@ -49,7 +51,7 @@ void export_frame(Depsgraph *depsgraph,
       writer = std::make_unique<FileWriter>(export_params.filepath, export_params.ascii_format);
     }
     catch (const std::runtime_error &ex) {
-      fprintf(stderr, "%s\n", ex.what());
+      CLOG_ERROR(&LOG, "Error: %s", ex.what());
       BKE_reportf(export_params.reports,
                   RPT_ERROR,
                   "STL Export: Cannot open file '%s'",
@@ -85,6 +87,14 @@ void export_frame(Depsgraph *depsgraph,
       /* Include object name in the exported file name. */
       char filepath[FILE_MAX];
       STRNCPY(filepath, export_params.filepath);
+      /* When basename is just ".stl", regular path functions would
+       * treat it as a hidden file called ".stl". Remove the extension
+       * before trying to add a suffix. */
+      const char *basename = BLI_path_basename(filepath);
+      if (basename != nullptr && BLI_strcasecmp(basename, ".stl") == 0) {
+        *const_cast<char *>(basename) = '\0';
+      }
+
       BLI_path_suffix(filepath, FILE_MAX, object_name, "");
       /* Make sure we have `.stl` extension (case insensitive). */
       if (!BLI_path_extension_check(filepath, ".stl")) {
@@ -95,7 +105,7 @@ void export_frame(Depsgraph *depsgraph,
         writer = std::make_unique<FileWriter>(filepath, export_params.ascii_format);
       }
       catch (const std::runtime_error &ex) {
-        fprintf(stderr, "%s\n", ex.what());
+        CLOG_ERROR(&LOG, "Error: %s", ex.what());
         BKE_reportf(
             export_params.reports, RPT_ERROR, "STL Export: Cannot open file '%s'", filepath);
         return;

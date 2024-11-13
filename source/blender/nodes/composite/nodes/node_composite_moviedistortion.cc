@@ -77,16 +77,7 @@ static void node_composit_buts_moviedistortion(uiLayout *layout, bContext *C, Po
 {
   bNode *node = (bNode *)ptr->data;
 
-  uiTemplateID(layout,
-               C,
-               ptr,
-               "clip",
-               nullptr,
-               "CLIP_OT_open",
-               nullptr,
-               UI_TEMPLATE_ID_FILTER_ALL,
-               false,
-               nullptr);
+  uiTemplateID(layout, C, ptr, "clip", nullptr, "CLIP_OT_open", nullptr);
 
   if (!node->id) {
     return;
@@ -103,6 +94,17 @@ class MovieDistortionOperation : public NodeOperation {
 
   void execute() override
   {
+    /* Not yet supported on CPU. */
+    if (!context().use_gpu()) {
+      for (const bNodeSocket *output : this->node()->output_sockets()) {
+        Result &output_result = get_result(output->identifier);
+        if (output_result.should_compute()) {
+          output_result.allocate_invalid();
+        }
+      }
+      return;
+    }
+
     Result &input_image = get_input("Image");
     Result &output_image = get_result("Image");
     if (input_image.is_single_value() || !get_movie_clip()) {
@@ -121,8 +123,8 @@ class MovieDistortionOperation : public NodeOperation {
     GPUShader *shader = context().get_shader("compositor_movie_distortion");
     GPU_shader_bind(shader);
 
-    GPU_texture_extend_mode(input_image.texture(), GPU_SAMPLER_EXTEND_MODE_CLAMP_TO_BORDER);
-    GPU_texture_filter_mode(input_image.texture(), true);
+    GPU_texture_extend_mode(input_image, GPU_SAMPLER_EXTEND_MODE_CLAMP_TO_BORDER);
+    GPU_texture_filter_mode(input_image, true);
     input_image.bind_as_texture(shader, "input_tx");
 
     distortion_grid.bind_as_texture(shader, "distortion_grid_tx");
@@ -170,5 +172,5 @@ void register_node_type_cmp_moviedistortion()
   blender::bke::node_type_storage(&ntype, nullptr, file_ns::storage_free, file_ns::storage_copy);
   ntype.get_compositor_operation = file_ns::get_compositor_operation;
 
-  blender::bke::nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }

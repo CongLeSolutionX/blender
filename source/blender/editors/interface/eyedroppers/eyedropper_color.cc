@@ -25,7 +25,7 @@
 
 #include "BKE_context.hh"
 #include "BKE_cryptomatte.h"
-#include "BKE_image.h"
+#include "BKE_image.hh"
 #include "BKE_material.h"
 #include "BKE_report.hh"
 #include "BKE_screen.hh"
@@ -79,6 +79,7 @@ struct Eyedropper {
 
   bNode *crypto_node;
   CryptomatteSession *cryptomatte_session;
+  ViewportColorSampleSession *viewport_session;
 };
 
 static void eyedropper_draw_cb(const wmWindow * /*window*/, void *arg)
@@ -89,7 +90,7 @@ static void eyedropper_draw_cb(const wmWindow * /*window*/, void *arg)
 
 static bool eyedropper_init(bContext *C, wmOperator *op)
 {
-  Eyedropper *eye = MEM_cnew<Eyedropper>(__func__);
+  Eyedropper *eye = MEM_new<Eyedropper>(__func__);
 
   PropertyRNA *prop;
   if ((prop = RNA_struct_find_property(op->ptr, "prop_data_path")) &&
@@ -125,7 +126,7 @@ static bool eyedropper_init(bContext *C, wmOperator *op)
       (RNA_property_type(eye->prop) != PROP_FLOAT) ||
       (ELEM(prop_subtype, PROP_COLOR, PROP_COLOR_GAMMA) == 0))
   {
-    MEM_freeN(eye);
+    MEM_delete(eye);
     return false;
   }
   op->customdata = eye;
@@ -134,8 +135,7 @@ static bool eyedropper_init(bContext *C, wmOperator *op)
   RNA_property_float_get_array(&eye->ptr, eye->prop, col);
   if (eye->ptr.type == &RNA_CompositorNodeCryptomatteV2) {
     eye->crypto_node = (bNode *)eye->ptr.data;
-    eye->cryptomatte_session = ntreeCompositCryptomatteSession(CTX_data_scene(C),
-                                                               eye->crypto_node);
+    eye->cryptomatte_session = ntreeCompositCryptomatteSession(eye->crypto_node);
     eye->cb_win = CTX_wm_window(C);
     eye->draw_handle_sample_text = WM_draw_cb_activate(eye->cb_win, eyedropper_draw_cb, eye);
   }
@@ -173,7 +173,13 @@ static void eyedropper_exit(bContext *C, wmOperator *op)
     eye->cryptomatte_session = nullptr;
   }
 
-  MEM_SAFE_FREE(op->customdata);
+  if (eye->viewport_session) {
+    MEM_delete(eye->viewport_session);
+    eye->viewport_session = nullptr;
+  }
+
+  op->customdata = nullptr;
+  MEM_delete(eye);
 }
 
 /* *** eyedropper_color_ helper functions *** */
@@ -241,6 +247,12 @@ static bool eyedropper_cryptomatte_sample_renderlayer_fl(RenderLayer *render_lay
         !STREQLEN(render_pass->name, render_pass_name_prefix, sizeof(render_pass->name)))
     {
       BLI_assert(render_pass->channels == 4);
+
+      /* Pass was allocated but not rendered yet. */
+      if (!render_pass->ibuf) {
+        return false;
+      }
+
       const int x = int(fpos[0] * render_pass->rectx);
       const int y = int(fpos[1] * render_pass->recty);
       const int offset = 4 * (y * render_pass->rectx + x);
@@ -389,8 +401,7 @@ static bool eyedropper_cryptomatte_sample_fl(bContext *C,
 
   /* TODO(jbakker): Migrate this file to cc and use std::string as return param. */
   char prefix[MAX_NAME + 1];
-  const Scene *scene = CTX_data_scene(C);
-  ntreeCompositCryptomatteLayerPrefix(scene, node, prefix, sizeof(prefix) - 1);
+  ntreeCompositCryptomatteLayerPrefix(node, prefix, sizeof(prefix) - 1);
   prefix[MAX_NAME] = '\0';
 
   if (area->spacetype == SPACE_VIEW3D) {
@@ -419,7 +430,10 @@ static bool eyedropper_cryptomatte_sample_fl(bContext *C,
   return false;
 }
 
-void eyedropper_color_sample_fl(bContext *C, const int event_xy[2], float r_col[3])
+void eyedropper_color_sample_fl(bContext *C,
+                                Eyedropper *eye,
+                                const int event_xy[2],
+                                float r_col[3])
 {
   ScrArea *area = nullptr;
 
@@ -456,8 +470,15 @@ void eyedropper_color_sample_fl(bContext *C, const int event_xy[2], float r_col[
           return;
         }
       }
-      else if (area->spacetype == SPACE_VIEW3D) {
-        if (ED_view3d_viewport_color_sample(region, mval, r_col)) {
+      else if (eye != nullptr && area->spacetype == SPACE_VIEW3D) {
+        /* Viewport color picking involves a fairly expensive operation to copy the GPU viewport
+         * back to the CPU, so to support smooth dragging with the eyedropper, we keep the copy
+         * around for the entire operation. */
+        if (eye->viewport_session == nullptr) {
+          eye->viewport_session = MEM_new<ViewportColorSampleSession>("viewport_session");
+          eye->viewport_session->init(region);
+        }
+        if (eye->viewport_session->sample(mval, r_col)) {
           return;
         }
       }
@@ -517,7 +538,7 @@ static void eyedropper_color_sample(bContext *C, Eyedropper *eye, const int even
     }
   }
   else {
-    eyedropper_color_sample_fl(C, event_xy, col);
+    eyedropper_color_sample_fl(C, eye, event_xy, col);
   }
 
   if (!eye->crypto_node) {

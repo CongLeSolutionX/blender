@@ -54,7 +54,7 @@ const EnumPropertyItem rna_enum_color_space_convert_default_items[] = {
 
 #  include "BKE_colorband.hh"
 #  include "BKE_colortools.hh"
-#  include "BKE_image.h"
+#  include "BKE_image.hh"
 #  include "BKE_linestyle.h"
 #  include "BKE_movieclip.h"
 #  include "BKE_node.hh"
@@ -68,6 +68,7 @@ const EnumPropertyItem rna_enum_color_space_convert_default_items[] = {
 
 #  include "SEQ_iterator.hh"
 #  include "SEQ_relations.hh"
+#  include "SEQ_thumbnail_cache.hh"
 
 static int rna_CurveMapping_curves_length(PointerRNA *ptr)
 {
@@ -680,6 +681,7 @@ static void rna_ColorManagedColorspaceSettings_reload_update(Main *bmain,
       if (&scene->sequencer_colorspace_settings == colorspace_settings) {
         /* Scene colorspace was changed. */
         SEQ_cache_cleanup(scene);
+        blender::seq::thumbnail_cache_clear(scene);
       }
       else {
         /* Strip colorspace was likely changed. */
@@ -1363,7 +1365,7 @@ static void rna_def_colormanage(BlenderRNA *brna)
       "High Dynamic Range",
       "Enable high dynamic range display in rendered viewport, uncapping display brightness. This "
       "requires a monitor with HDR support and a view transform designed for HDR. "
-      "'Filmic' and 'AgX' do not generate HDR colors");
+      "'Filmic' and 'AgX' do not generate HDR colors.");
   RNA_def_property_update(prop, NC_WINDOW, "rna_ColorManagedColorspaceSettings_reload_update");
 
   /* ** Color-space ** */

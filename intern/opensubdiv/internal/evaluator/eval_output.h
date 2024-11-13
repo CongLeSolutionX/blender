@@ -12,8 +12,7 @@
 #include <opensubdiv/osd/mesh.h>
 #include <opensubdiv/osd/types.h>
 
-#include "internal/evaluator/evaluator_impl.h"
-
+#include "opensubdiv_evaluator.hh"
 #include "opensubdiv_evaluator_capi.hh"
 
 using OpenSubdiv::Far::PatchTable;
@@ -161,8 +160,8 @@ class ConstPatchCoordWrapperBuffer : public RawDataWrapperVertexBuffer<const Pat
 
 // Discriminators used in FaceVaryingVolatileEval in order to detect whether we are using adaptive
 // patches as the CPU and OpenGL PatchTable have different APIs.
-bool is_adaptive(CpuPatchTable *patch_table);
-bool is_adaptive(GLPatchTable *patch_table);
+bool is_adaptive(const CpuPatchTable *patch_table);
+bool is_adaptive(const GLPatchTable *patch_table);
 
 template<typename EVAL_VERTEX_BUFFER,
          typename STENCIL_TABLE,

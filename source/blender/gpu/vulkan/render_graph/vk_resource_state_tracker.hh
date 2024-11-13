@@ -40,6 +40,7 @@ namespace blender::gpu::render_graph {
 
 class VKCommandBuilder;
 struct VKRenderGraphLink;
+class VKScheduler;
 
 using ResourceHandle = uint64_t;
 
@@ -100,6 +101,14 @@ struct VKResourceBarrierState {
   VkPipelineStageFlags vk_pipeline_stages = VK_PIPELINE_STAGE_NONE;
   /** Last known image layout of an image resource. */
   VkImageLayout image_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+  bool is_new_stamp() const
+  {
+    return bool(vk_access &
+                (VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+                 VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT |
+                 VK_ACCESS_HOST_WRITE_BIT | VK_ACCESS_MEMORY_WRITE_BIT));
+  }
 };
 
 /**
@@ -114,6 +123,7 @@ class VKResourceStateTracker {
    * During the syncing the command builder attributes are resized to reduce reallocations. */
   friend class VKCommandBuilder;
   friend struct VKRenderGraphLink;
+  friend class VKScheduler;
 
   /**
    * A render resource can be a buffer or an image that needs to be tracked during rendering.
@@ -134,6 +144,8 @@ class VKResourceStateTracker {
       struct {
         /** VkImage handle of the resource being tracked. */
         VkImage vk_image = VK_NULL_HANDLE;
+        /** Number of layers that the resource has. */
+        uint32_t layer_count = 0;
 
         /**
          * Original image layout when the resource was added to the state tracker.
@@ -173,6 +185,25 @@ class VKResourceStateTracker {
       BLI_assert(type == VKResourceType::IMAGE);
       barrier_state.image_layout = image.vk_image_layout;
     }
+
+    /**
+     * Check if the given resource handle has multiple layers.
+     *
+     * Returns true when
+     * - handle is a layered image with more than one layer.
+     *
+     * Returns false when
+     * - handle isn't an image resource or
+     * - handle isn't a layered image or
+     * - handle has only a single layer.
+     */
+    bool has_multiple_layers()
+    {
+      if (type == VKResourceType::BUFFER) {
+        return false;
+      }
+      return image.layer_count > 1;
+    }
   };
 
   Map<ResourceHandle, Resource> resources_;
@@ -206,6 +237,7 @@ class VKResourceStateTracker {
    * the resource state can be tracked during its lifetime.
    */
   void add_image(VkImage vk_image,
+                 uint32_t layer_count,
                  VkImageLayout vk_image_layout,
                  ResourceOwner owner,
                  const char *name = nullptr);
@@ -280,6 +312,12 @@ class VKResourceStateTracker {
    * rendering).
    */
   void reset_image_layouts();
+
+  /** Get the resource type for the given handle. */
+  VKResourceType resource_type_get(ResourceHandle resource_handle) const
+  {
+    return resources_.lookup(resource_handle).type;
+  }
 
  private:
   /**

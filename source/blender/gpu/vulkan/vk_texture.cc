@@ -6,13 +6,14 @@
  * \ingroup gpu
  */
 
+#include "GPU_capabilities.hh"
+
 #include "vk_texture.hh"
 
 #include "vk_buffer.hh"
 #include "vk_context.hh"
 #include "vk_data_conversion.hh"
 #include "vk_framebuffer.hh"
-#include "vk_memory.hh"
 #include "vk_pixel_buffer.hh"
 #include "vk_shader.hh"
 #include "vk_shader_interface.hh"
@@ -41,8 +42,7 @@ VKTexture::~VKTexture()
 {
   if (vk_image_ != VK_NULL_HANDLE && allocation_ != VK_NULL_HANDLE) {
     VKDevice &device = VKBackend::get().device;
-    device.discard_image(vk_image_, allocation_);
-
+    device.discard_pool_for_current_thread().discard_image(vk_image_, allocation_);
     vk_image_ = VK_NULL_HANDLE;
     allocation_ = VK_NULL_HANDLE;
   }
@@ -180,13 +180,12 @@ void VKTexture::mip_range_set(int min, int max)
 void VKTexture::read_sub(
     int mip, eGPUDataFormat format, const int region[6], const IndexRange layers, void *r_data)
 {
+  const int3 extent = int3(region[3] - region[0], region[4] - region[1], region[5] - region[2]);
+  size_t sample_len = extent.x * extent.y * extent.z * layers.size();
+
   /* Vulkan images cannot be directly mapped to host memory and requires a staging buffer. */
   VKBuffer staging_buffer;
-
-  size_t sample_len = (region[5] - region[2]) * (region[3] - region[0]) * (region[4] - region[1]) *
-                      layers.size();
   size_t device_memory_size = sample_len * to_bytesize(device_format_);
-
   staging_buffer.create(device_memory_size, GPU_USAGE_DYNAMIC, VK_BUFFER_USAGE_TRANSFER_DST_BIT);
 
   render_graph::VKCopyImageToBufferNode::CreateInfo copy_image_to_buffer = {};
@@ -195,9 +194,9 @@ void VKTexture::read_sub(
   copy_image_to_buffer.region.imageOffset.x = region[0];
   copy_image_to_buffer.region.imageOffset.y = region[1];
   copy_image_to_buffer.region.imageOffset.z = region[2];
-  copy_image_to_buffer.region.imageExtent.width = region[3];
-  copy_image_to_buffer.region.imageExtent.height = region[4];
-  copy_image_to_buffer.region.imageExtent.depth = region[5];
+  copy_image_to_buffer.region.imageExtent.width = extent.x;
+  copy_image_to_buffer.region.imageExtent.height = extent.y;
+  copy_image_to_buffer.region.imageExtent.depth = extent.z;
   copy_image_to_buffer.region.imageSubresource.aspectMask = to_vk_image_aspect_single_bit(
       to_vk_image_aspect_flag_bits(device_format_), false);
   copy_image_to_buffer.region.imageSubresource.mipLevel = mip;
@@ -207,6 +206,7 @@ void VKTexture::read_sub(
   VKContext &context = *VKContext::get();
   context.rendering_end();
   context.render_graph.add_node(copy_image_to_buffer);
+  context.descriptor_set_get().upload_descriptor_sets();
   context.render_graph.submit_buffer_for_read(staging_buffer.vk_handle());
 
   convert_device_to_host(
@@ -322,9 +322,10 @@ void VKTexture::update_sub(int offset_[3],
   update_sub(0, offset_, extent_, format, pixel_buffer.map());
 }
 
-/* TODO(fclem): Legacy. Should be removed at some point. */
 uint VKTexture::gl_bindcode_get() const
 {
+  /* TODO(fclem): Legacy. Should be removed at some point. */
+
   return 0;
 }
 
@@ -358,26 +359,9 @@ bool VKTexture::init_internal()
 
 bool VKTexture::init_internal(VertBuf *vbo)
 {
+  BLI_assert(source_buffer_ == nullptr);
   device_format_ = format_;
-  if (!allocate()) {
-    return false;
-  }
-  VKVertexBuffer *vertex_buffer = unwrap(vbo);
-
-  render_graph::VKCopyBufferToImageNode::CreateInfo copy_buffer_to_image = {};
-  copy_buffer_to_image.src_buffer = vertex_buffer->vk_handle();
-  copy_buffer_to_image.dst_image = vk_image_handle();
-  copy_buffer_to_image.region.imageExtent.width = w_;
-  copy_buffer_to_image.region.imageExtent.height = 1;
-  copy_buffer_to_image.region.imageExtent.depth = 1;
-  copy_buffer_to_image.region.imageSubresource.aspectMask = to_vk_image_aspect_single_bit(
-      to_vk_image_aspect_flag_bits(device_format_), false);
-  copy_buffer_to_image.region.imageSubresource.mipLevel = 0;
-  copy_buffer_to_image.region.imageSubresource.layerCount = 1;
-
-  VKContext &context = *VKContext::get();
-  context.render_graph.add_node(copy_buffer_to_image);
-
+  source_buffer_ = unwrap(vbo);
   return true;
 }
 
@@ -467,12 +451,19 @@ bool VKTexture::allocate()
   BLI_assert(vk_image_ == VK_NULL_HANDLE);
   BLI_assert(!is_texture_view());
 
+  VkExtent3D vk_extent = vk_extent_3d(0);
+  const uint32_t limit = (type_ == GPU_TEXTURE_3D) ? GPU_max_texture_3d_size() :
+                                                     GPU_max_texture_size();
+  if (vk_extent.depth > limit || vk_extent.height > limit || vk_extent.depth > limit) {
+    return false;
+  }
+
   VKDevice &device = VKBackend::get().device;
   VkImageCreateInfo image_info = {};
   image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
   image_info.flags = to_vk_image_create(type_, format_flag_, usage_get());
   image_info.imageType = to_vk_image_type(type_);
-  image_info.extent = vk_extent_3d(0);
+  image_info.extent = vk_extent;
   image_info.mipLevels = max_ii(mipmaps_, 1);
   image_info.arrayLayers = vk_layer_count(1);
   image_info.format = to_vk_format(device_format_);
@@ -516,33 +507,13 @@ bool VKTexture::allocate()
   }
   debug::object_label(vk_image_, name_);
 
-  device.resources.add_image(
-      vk_image_, VK_IMAGE_LAYOUT_UNDEFINED, render_graph::ResourceOwner::APPLICATION, name_);
+  device.resources.add_image(vk_image_,
+                             image_info.arrayLayers,
+                             VK_IMAGE_LAYOUT_UNDEFINED,
+                             render_graph::ResourceOwner::APPLICATION,
+                             name_);
 
   return result == VK_SUCCESS;
-}
-
-void VKTexture::add_to_descriptor_set(AddToDescriptorSetContext &data,
-                                      int binding,
-                                      shader::ShaderCreateInfo::Resource::BindType bind_type,
-                                      const GPUSamplerState sampler_state)
-{
-  const std::optional<VKDescriptorSet::Location> location =
-      data.shader_interface.descriptor_set_location(bind_type, binding);
-  if (location) {
-    const VKImageViewArrayed arrayed = data.shader_interface.arrayed(bind_type, binding);
-    if (bind_type == shader::ShaderCreateInfo::Resource::BindType::IMAGE) {
-      data.descriptor_set.image_bind(*this, *location, arrayed);
-    }
-    else {
-      VKDevice &device = VKBackend::get().device;
-      const VKSampler &sampler = device.samplers().get(sampler_state);
-      data.descriptor_set.bind(*this, *location, sampler, arrayed);
-    }
-    data.resource_access_info.images.append({vk_image_handle(),
-                                             data.shader_interface.access_mask(bind_type, binding),
-                                             to_vk_image_aspect_flag_bits(device_format_)});
-  }
 }
 
 /* -------------------------------------------------------------------- */
@@ -594,8 +565,8 @@ VkExtent3D VKTexture::vk_extent_3d(int mip_level) const
 const VKImageView &VKTexture::image_view_get(const VKImageViewInfo &info)
 {
   if (is_texture_view()) {
-    // TODO: API should be improved as we don't support image view specialization.
-    // In the current API this is still possible to setup when using attachments.
+    /* TODO: API should be improved as we don't support image view specialization.
+     * In the current API this is still possible to setup when using attachments. */
     return image_view_get(info.arrayed);
   }
   for (const VKImageView &image_view : image_views_) {

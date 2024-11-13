@@ -10,7 +10,6 @@
 
 #include <cstdlib>
 
-#include "BLI_dlrbTree.h"
 #include "BLI_listbase.h"
 #include "BLI_math_matrix.h"
 #include "BLI_math_matrix.hh"
@@ -19,7 +18,7 @@
 #include "DNA_armature_types.h"
 #include "DNA_scene_types.h"
 
-#include "BKE_action.h"
+#include "BKE_action.hh"
 #include "BKE_anim_data.hh"
 #include "BKE_main.hh"
 #include "BKE_scene.hh"
@@ -34,6 +33,7 @@
 #include "ED_anim_api.hh"
 #include "ED_keyframes_keylist.hh"
 
+#include "ANIM_action_legacy.hh"
 #include "ANIM_bone_collections.hh"
 
 #include "CLG_log.h"
@@ -370,7 +370,7 @@ void animviz_motionpath_compute_range(Object *ob, Scene *scene)
   }
 
   AnimKeylist *keylist = ED_keylist_create();
-  LISTBASE_FOREACH (FCurve *, fcu, &ob->adt->action->curves) {
+  for (FCurve *fcu : blender::animrig::legacy::fcurves_for_assigned_action(ob->adt)) {
     fcurve_to_keylist(ob->adt, fcu, keylist, 0, {-FLT_MAX, FLT_MAX});
   }
 

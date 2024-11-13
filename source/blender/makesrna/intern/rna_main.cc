@@ -9,7 +9,7 @@
 #include <cstdlib>
 #include <cstring>
 
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 #include "BLI_utildefines.h"
 
 #include "RNA_access.hh"
@@ -332,9 +332,9 @@ void RNA_def_main(BlenderRNA *brna)
       {"grease_pencils",
        "GreasePencil",
        "rna_Main_gpencils_begin",
-       "Grease Pencil",
-       "Grease Pencil data-blocks",
-       RNA_def_main_gpencil_legacy},
+       "Annotation",
+       "Annotation data-blocks (legacy Grease Pencil)",
+       RNA_def_main_annotations},
       {"grease_pencils_v3",
        "GreasePencilv3",
        "rna_Main_grease_pencils_begin",

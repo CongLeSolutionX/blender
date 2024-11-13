@@ -39,13 +39,17 @@ struct uiBlock;
 struct uiButViewItem;
 struct uiLayout;
 struct ViewLink;
-struct wmDrag;
 struct wmNotifier;
 
 namespace blender::ui {
 
 class AbstractViewItem;
 class AbstractViewItemDragController;
+
+enum class ViewScrollDirection {
+  UP,
+  DOWN,
+};
 
 class AbstractView {
   friend class AbstractViewItem;
@@ -93,9 +97,12 @@ class AbstractView {
    */
   virtual bool begin_filtering(const bContext &C) const;
 
-  virtual void draw_overlays(const ARegion &region) const;
+  virtual void draw_overlays(const ARegion &region, const uiBlock &block) const;
 
   virtual void foreach_view_item(FunctionRef<void(AbstractViewItem &)> iter_fn) const = 0;
+
+  virtual bool supports_scrolling() const;
+  virtual void scroll(ViewScrollDirection direction);
 
   /**
    * Makes \a item valid for display in this view. Behavior is undefined for items not registered
@@ -152,7 +159,7 @@ class AbstractView {
    */
   bool is_reconstructed() const;
 
-  void filter(std::optional<StringRef> str);
+  void filter(std::optional<StringRef> filter_str);
   const AbstractViewItem *search_highlight_item() const;
 };
 

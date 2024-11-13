@@ -9,7 +9,7 @@ def set_view3d_context_override(context_override):
     """
     Set context override to become the first viewport in the active workspace
 
-    The `context_override` is expected to be a copy of an actual current context
+    The ``context_override`` is expected to be a copy of an actual current context
     obtained by `context.copy()`
     """
 
@@ -28,7 +28,6 @@ def set_view3d_context_override(context_override):
 
 def prepare_sculpt_scene(context):
     import bpy
-    from mathutils import Vector
     """
     Prepare a clean state of the scene suitable for benchmarking
 
@@ -84,7 +83,6 @@ def generate_stroke(context):
         "name": "stroke",
         "mouse": (0.0, 0.0),
         "mouse_event": (0, 0),
-        "pen_flip": False,
         "is_start": True,
         "location": (0, 0, 0),
         "pressure": 1.0,

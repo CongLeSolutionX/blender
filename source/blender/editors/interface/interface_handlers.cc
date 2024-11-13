@@ -182,7 +182,7 @@ static bool ui_mouse_motion_keynav_test(uiKeyNavLock *keynav, const wmEvent *eve
 
 static void with_but_active_as_semi_modal(bContext *C,
                                           ARegion *region,
-                                          uiBut *semi_modal_but,
+                                          uiBut *but,
                                           blender::FunctionRef<void()> fn);
 static int ui_handle_region_semi_modal_buttons(bContext *C, const wmEvent *event, ARegion *region);
 
@@ -500,6 +500,9 @@ struct uiAfterFunc {
   uiButHandleRenameFunc rename_func;
   void *rename_arg1;
   void *rename_orig;
+
+  std::function<void(std::string &new_name)> rename_full_func = nullptr;
+  std::string rename_full_new;
 
   uiBlockHandleFunc handle_func;
   void *handle_func_arg;
@@ -831,8 +834,9 @@ static void popup_check(bContext *C, wmOperator *op)
  */
 static bool ui_afterfunc_check(const uiBlock *block, const uiBut *but)
 {
-  return (but->func || but->apply_func || but->funcN || but->rename_func || but->optype ||
-          but->rnaprop || block->handle_func || (block->handle && block->handle->popup_op));
+  return (but->func || but->apply_func || but->funcN || but->rename_func ||
+          but->rename_full_func || but->optype || but->rnaprop || block->handle_func ||
+          (block->handle && block->handle->popup_op));
 }
 
 /**
@@ -870,6 +874,10 @@ static void ui_apply_but_func(bContext *C, uiBut *but)
   after->rename_func = but->rename_func;
   after->rename_arg1 = but->rename_arg1;
   after->rename_orig = but->rename_orig; /* needs free! */
+
+  after->rename_full_func = but->rename_full_func;
+  after->rename_full_new = std::move(but->rename_full_new);
+  but->rename_full_new = "";
 
   after->handle_func = block->handle_func;
   after->handle_func_arg = block->handle_func_arg;
@@ -965,7 +973,7 @@ static void ui_apply_but_undo(uiBut *but)
      * because undo systems track data by their ID, see: #67002. */
     /* Exception for active shape-key, since changing this in edit-mode updates
      * the shape key from object mode data. */
-    if (ELEM(but->rnaprop, rna_ID_name, rna_Object_active_shape_key_index)) {
+    if (ELEM(but->rnaprop, &rna_ID_name, &rna_Object_active_shape_key_index)) {
       /* pass */
     }
     else {
@@ -1045,7 +1053,7 @@ static void ui_apply_but_funcs_after(bContext *C)
     if (after.opptr) {
       /* free in advance to avoid leak on exit */
       opptr = *after.opptr;
-      MEM_freeN(after.opptr);
+      MEM_delete(after.opptr);
     }
 
     if (after.optype) {
@@ -1067,6 +1075,11 @@ static void ui_apply_but_funcs_after(bContext *C)
 
     if (after.context) {
       CTX_store_set(C, nullptr);
+    }
+
+    if (after.rename_full_func) {
+      BLI_assert(!after.rename_func);
+      after.rename_full_func(after.rename_full_new);
     }
 
     if (after.func) {
@@ -2767,10 +2780,11 @@ static bool ui_but_copy_popover(uiBut *but, char *output, int output_maxncpy)
   return false;
 }
 
-static void ui_but_copy(bContext *C, uiBut *but, const bool copy_array)
+/** Returns true if any data was copied. */
+static bool ui_but_copy(bContext *C, uiBut *but, const bool copy_array)
 {
   if (ui_but_contains_password(but)) {
-    return;
+    return false;
   }
 
   /* Arbitrary large value (allow for paths: 'PATH_MAX') */
@@ -2861,6 +2875,7 @@ static void ui_but_copy(bContext *C, uiBut *but, const bool copy_array)
   if (is_buf_set) {
     WM_clipboard_text_set(buf, false);
   }
+  return is_buf_set;
 }
 
 static void ui_but_paste(bContext *C, uiBut *but, uiHandleButtonData *data, const bool paste_array)
@@ -3116,7 +3131,10 @@ static void ui_textedit_set_cursor_pos(uiBut *but, const ARegion *region, const 
       startx += UI_ICON_SIZE / aspect;
     }
   }
-  startx += (UI_TEXT_MARGIN_X * U.widget_unit - U.pixelsize) / aspect;
+  startx -= U.pixelsize / aspect;
+  if (!(but->drawflag & UI_BUT_NO_TEXT_PADDING)) {
+    startx += UI_TEXT_MARGIN_X * U.widget_unit / aspect;
+  }
 
   /* mouse dragged outside the widget to the left */
   if (x < startx) {
@@ -3442,6 +3460,10 @@ static void ui_textedit_begin(bContext *C, uiBut *but, uiHandleButtonData *data)
 
   MEM_SAFE_FREE(text_edit.edit_string);
 
+  /* Clear the status bar. */
+  WorkspaceStatus status(C);
+  status.item(" ", ICON_NONE);
+
 #ifdef USE_DRAG_MULTINUM
   /* this can happen from multi-drag */
   if (data->applied_interactive) {
@@ -3561,6 +3583,8 @@ static void ui_textedit_end(bContext *C, uiBut *but, uiHandleButtonData *data)
 {
   uiTextEdit &text_edit = data->text_edit;
   wmWindow *win = data->window;
+
+  ED_workspace_status_text(C, nullptr);
 
   if (but) {
     if (UI_but_is_utf8(but)) {
@@ -4337,6 +4361,12 @@ static void ui_block_open_begin(bContext *C, uiBut *but, uiHandleButtonData *dat
   PanelType *popover_panel_type = nullptr;
   void *arg = nullptr;
 
+  if (but->type != UI_BTYPE_PULLDOWN) {
+    /* Clear the status bar. */
+    WorkspaceStatus status(C);
+    status.item(" ", ICON_NONE);
+  }
+
   switch (but->type) {
     case UI_BTYPE_BLOCK:
     case UI_BTYPE_PULLDOWN:
@@ -4436,6 +4466,8 @@ static void ui_block_open_end(bContext *C, uiBut *but, uiHandleButtonData *data)
 
     but->block->auto_open_last = BLI_time_now_seconds();
   }
+
+  ED_workspace_status_text(C, nullptr);
 
   if (data->menu) {
     ui_popup_block_free(C, data->menu);
@@ -4799,7 +4831,7 @@ static int ui_do_but_TEX(
         /* Pass, allow file-selector, enter to execute. */
       }
       else if (ELEM(but->emboss, UI_EMBOSS_NONE, UI_EMBOSS_NONE_OR_STATUS) &&
-               ((event->modifier & (KM_CTRL | KM_SHIFT | KM_ALT)) != KM_CTRL))
+               ((event->modifier & (KM_SHIFT | KM_CTRL | KM_ALT | KM_OSKEY)) != KM_CTRL))
       {
         /* Pass. */
       }
@@ -4915,17 +4947,28 @@ static int ui_do_but_TOG(bContext *C, uiBut *but, uiHandleButtonData *data, cons
   return WM_UI_HANDLER_CONTINUE;
 }
 
-static void force_activate_view_item_but(bContext *C, ARegion *region, uiButViewItem *but)
+/**
+ * \param close_popup: In most cases activating the view item should close the popup it is in
+ *                     (unless #AbstractView::keep_open() was called when building the view), if
+ *                     any. But this should only be done when activating the view item directly,
+ *                     things like clicking nested buttons or calling the context menu should keep
+ *                     the popup open for further interaction.
+ */
+static void force_activate_view_item_but(bContext *C,
+                                         ARegion *region,
+                                         uiButViewItem *but,
+                                         const bool close_popup = true)
 {
   if (but->active) {
     ui_apply_but(C, but->block, but, but->active, true);
+    ED_region_tag_redraw_no_rebuild(region);
+    ED_region_tag_refresh_ui(region);
   }
   else {
     UI_but_execute(C, region, but);
   }
 
-  /* By default, activating a view item closes the popup (only when clicking the item itself). */
-  if (but->active && !UI_view_item_popup_keep_open(*but->view_item)) {
+  if (close_popup && !UI_view_item_popup_keep_open(*but->view_item)) {
     UI_popup_menu_close_from_but(but);
   }
 }
@@ -4961,10 +5004,13 @@ static int ui_do_but_VIEW_ITEM(bContext *C,
            * example). */
           return WM_UI_HANDLER_CONTINUE;
         case KM_DBL_CLICK:
-          data->cancel = true;
-          UI_view_item_begin_rename(*view_item_but->view_item);
-          ED_region_tag_redraw(CTX_wm_region(C));
-          return WM_UI_HANDLER_BREAK;
+          if (UI_view_item_can_rename(*view_item_but->view_item)) {
+            data->cancel = true;
+            UI_view_item_begin_rename(*view_item_but->view_item);
+            ED_region_tag_redraw(CTX_wm_region(C));
+            return WM_UI_HANDLER_BREAK;
+          }
+          return WM_UI_HANDLER_CONTINUE;
       }
     }
   }
@@ -6467,6 +6513,7 @@ static int ui_do_but_COLOR(bContext *C, uiBut *but, uiHandleButtonData *data, co
               else if (but->rnaprop && RNA_property_subtype(but->rnaprop) == PROP_COLOR) {
                 RNA_property_float_get_array(&but->rnapoin, but->rnaprop, target);
               }
+              BKE_brush_tag_unsaved_changes(brush);
             }
             else {
               Scene *scene = CTX_data_scene(C);
@@ -6474,13 +6521,13 @@ static int ui_do_but_COLOR(bContext *C, uiBut *but, uiHandleButtonData *data, co
 
               if (but->rnaprop && RNA_property_subtype(but->rnaprop) == PROP_COLOR_GAMMA) {
                 RNA_property_float_get_array(&but->rnapoin, but->rnaprop, color);
-                BKE_brush_color_set(scene, brush, color);
+                BKE_brush_color_set(scene, paint, brush, color);
                 updated = true;
               }
               else if (but->rnaprop && RNA_property_subtype(but->rnaprop) == PROP_COLOR) {
                 RNA_property_float_get_array(&but->rnapoin, but->rnaprop, color);
                 IMB_colormanagement_scene_linear_to_srgb_v3(color, color);
-                BKE_brush_color_set(scene, brush, color);
+                BKE_brush_color_set(scene, paint, brush, color);
                 updated = true;
               }
 
@@ -8119,8 +8166,9 @@ static int ui_do_button(bContext *C, uiBlock *block, uiBut *but, const wmEvent *
 
     /* do copy first, because it is the only allowed operator when disabled */
     if (do_copy) {
-      ui_but_copy(C, but, event->modifier & KM_ALT);
-      return WM_UI_HANDLER_BREAK;
+      if (ui_but_copy(C, but, event->modifier & KM_ALT)) {
+        return WM_UI_HANDLER_BREAK;
+      }
     }
 
     /* handle menu */
@@ -8549,11 +8597,18 @@ static void button_activate_state(bContext *C, uiBut *but, uiHandleButtonState s
       else {
         WM_cursor_grab_enable(CTX_wm_window(C), WM_CURSOR_WRAP_XY, nullptr, true);
       }
+      /* Clear the status bar. */
+      WorkspaceStatus status(C);
+      status.item(" ", ICON_NONE);
     }
     ui_numedit_begin(but, data);
   }
   else if (data->state == BUTTON_STATE_NUM_EDITING) {
     ui_numedit_end(but, data);
+
+    if (state != BUTTON_STATE_TEXT_EDITING) {
+      ED_workspace_status_text(C, nullptr);
+    }
 
     if (but->flag & UI_BUT_DRIVEN) {
       /* Only warn when editing stepping/dragging the value.
@@ -9031,7 +9086,7 @@ uiBut *UI_region_active_but_prop_get(const ARegion *region,
     *r_index = activebut->rnaindex;
   }
   else {
-    memset(r_ptr, 0, sizeof(*r_ptr));
+    *r_ptr = {};
     *r_prop = nullptr;
     *r_index = 0;
   }
@@ -10061,7 +10116,9 @@ static int ui_handle_view_item_event(bContext *C,
                 ui_view_item_find_mouse_over(region, event->xy));
         /* Will free active button if there already is one. */
         if (view_but) {
-          force_activate_view_item_but(C, region, view_but);
+          /* Close the popup when clicking on the view item directly, not any overlapped button. */
+          const bool close_popup = view_but == active_but;
+          force_activate_view_item_but(C, region, view_but, close_popup);
         }
       }
       break;
@@ -10537,7 +10594,7 @@ static int ui_handle_menu_letter_press_search(uiPopupBlockHandle *menu, const wm
     wmOperatorType *ot = WM_operatortype_find("WM_OT_search_single_menu", false);
     after->optype = ot;
     after->opcontext = WM_OP_INVOKE_DEFAULT;
-    after->opptr = MEM_cnew<PointerRNA>(__func__);
+    after->opptr = MEM_new<PointerRNA>(__func__);
     WM_operator_properties_create_ptr(after->opptr, ot);
     RNA_string_set(after->opptr, "menu_idname", menu->menu_idname);
     if (event->type != EVT_SPACEKEY) {
@@ -10577,19 +10634,48 @@ static int ui_handle_menu_event(bContext *C,
   /* check if mouse is inside block */
   const bool inside = BLI_rctf_isect_pt(&block->rect, mx, my);
   /* check for title dragging */
-  const bool inside_title = inside && ((my + (UI_UNIT_Y * 1.5f)) > block->rect.ymax);
+  const bool inside_title = inside && ((my + (UI_UNIT_Y * 1.4f)) > block->rect.ymax);
 
   /* if there's an active modal button, don't check events or outside, except for search menu */
   but = ui_region_find_active_but(region);
 
 #ifdef USE_DRAG_POPUP
+
+#  if defined(__APPLE__)
+  constexpr int PopupTitleHoverCursor = WM_CURSOR_HAND;
+  constexpr int PopupTitleDragCursor = WM_CURSOR_HAND_CLOSED;
+#  else
+  constexpr int PopupTitleHoverCursor = WM_CURSOR_MOVE;
+  constexpr int PopupTitleDragCursor = WM_CURSOR_MOVE;
+#  endif
+
+  wmWindow *win = CTX_wm_window(C);
+
+  if (!menu->is_grab && is_floating) {
+    if (inside_title && (!but || but->type == UI_BTYPE_IMAGE)) {
+      if (event->type == LEFTMOUSE && event->val == KM_PRESS) {
+        /* Initial press before starting to drag. */
+        WM_cursor_set(win, PopupTitleDragCursor);
+      }
+      else if (event->type == MOUSEMOVE && !win->modalcursor) {
+        /* Hover over draggable area. */
+        WM_cursor_set(win, PopupTitleHoverCursor);
+      }
+    }
+    else if (win->cursor == PopupTitleHoverCursor) {
+      WM_cursor_set(win, WM_CURSOR_DEFAULT);
+    }
+  }
+
   if (menu->is_grab) {
     if (event->type == LEFTMOUSE) {
       menu->is_grab = false;
+      WM_cursor_set(win, WM_CURSOR_DEFAULT);
       retval = WM_UI_HANDLER_BREAK;
     }
     else {
       if (event->type == MOUSEMOVE) {
+        WM_cursor_set(win, PopupTitleDragCursor);
         int mdiff[2];
 
         sub_v2_v2v2_int(mdiff, event->xy, menu->grab_xy_prev);
@@ -11105,6 +11191,7 @@ static int ui_handle_menu_event(bContext *C,
         if ((but_default != nullptr) && (but_default->active == nullptr)) {
           if (but_default->type == UI_BTYPE_BUT) {
             UI_but_execute(C, region, but_default);
+            retval = WM_UI_HANDLER_BREAK;
           }
           else {
             ui_handle_button_activate_by_type(C, region, but_default);
@@ -11124,7 +11211,9 @@ static int ui_handle_menu_event(bContext *C,
       else if ((event->type == LEFTMOUSE) && (event->val == KM_PRESS) &&
                (inside && is_floating && inside_title))
       {
-        if (!but || !ui_but_contains_point_px(but, region, event->xy)) {
+        if (!but || but->type == UI_BTYPE_IMAGE ||
+            !ui_but_contains_point_px(but, region, event->xy))
+        {
           if (but) {
             UI_but_tooltip_timer_remove(C, but);
           }

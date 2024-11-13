@@ -14,6 +14,7 @@
 #include "GPU_texture.hh"
 
 #include "COM_cached_resource.hh"
+#include "COM_result.hh"
 
 namespace blender::realtime_compositor {
 
@@ -42,11 +43,11 @@ bool operator==(const BokehKernelKey &a, const BokehKernelKey &b);
 /* -------------------------------------------------------------------------------------------------
  * Bokeh Kernel.
  *
- * A cached resource that computes and caches a GPU texture containing the unnormalized convolution
+ * A cached resource that computes and caches a result containing the unnormalized convolution
  * kernel, which when convolved with an image emulates a bokeh lens with the given parameters. */
 class BokehKernel : public CachedResource {
- private:
-  GPUTexture *texture_ = nullptr;
+ public:
+  Result result;
 
  public:
   BokehKernel(Context &context,
@@ -59,11 +60,19 @@ class BokehKernel : public CachedResource {
 
   ~BokehKernel();
 
-  void bind_as_texture(GPUShader *shader, const char *texture_name) const;
+ private:
+  void compute_gpu(Context &context,
+                   const int sides,
+                   const float rotation,
+                   const float roundness,
+                   const float catadioptric,
+                   const float lens_shift);
 
-  void unbind_as_texture() const;
-
-  GPUTexture *texture() const;
+  void compute_cpu(const int sides,
+                   const float rotation,
+                   const float roundness,
+                   const float catadioptric,
+                   const float lens_shift);
 };
 
 /* ------------------------------------------------------------------------------------------------
@@ -80,13 +89,13 @@ class BokehKernelContainer : CachedResourceContainer {
    * container, if one exists, return it, otherwise, return a newly created one and add it to the
    * container. In both cases, tag the cached resource as needed to keep it cached for the next
    * evaluation. */
-  BokehKernel &get(Context &context,
-                   int2 size,
-                   int sides,
-                   float rotation,
-                   float roundness,
-                   float catadioptric,
-                   float lens_shift);
+  Result &get(Context &context,
+              int2 size,
+              int sides,
+              float rotation,
+              float roundness,
+              float catadioptric,
+              float lens_shift);
 };
 
 }  // namespace blender::realtime_compositor

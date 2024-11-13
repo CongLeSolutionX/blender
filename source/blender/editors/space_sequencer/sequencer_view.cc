@@ -319,7 +319,7 @@ static void seq_view_collection_rect_timeline(const bContext *C,
   const Scene *scene = CTX_data_scene(C);
   int xmin = MAXFRAME * 2;
   int xmax = -MAXFRAME * 2;
-  int ymin = MAXSEQ + 1;
+  int ymin = SEQ_MAX_CHANNELS + 1;
   int ymax = 0;
   int xmargin = FPS;
 
@@ -357,8 +357,10 @@ static void seq_view_collection_rect_timeline(const bContext *C,
     float timeline_ymax = box.ymax;
 
     if (orig_height > timeline_ymax - timeline_ymin) {
-      /* Do nothing, we can't align the viewport any better if we
-       * are zoomed out further than the current timeline bounds. */
+      /* Only apply the x axis movement, we can't align the viewport any better
+       * on the y-axis if we are zoomed out further than the current timeline bounds. */
+      rect->xmin = new_viewport.xmin;
+      rect->xmax = new_viewport.xmax;
       return;
     }
 

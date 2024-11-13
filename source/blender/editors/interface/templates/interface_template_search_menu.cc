@@ -343,7 +343,8 @@ static void menu_types_add_from_keymap_items(bContext *C,
         continue;
       }
 
-      if (handler_base->poll == nullptr || handler_base->poll(region, win->eventstate)) {
+      if (handler_base->poll == nullptr || handler_base->poll(win, area, region, win->eventstate))
+      {
         wmEventHandler_Keymap *handler = (wmEventHandler_Keymap *)handler_base;
         wmEventHandler_KeymapResult km_result;
         WM_event_get_keymaps_from_handler(wm, win, handler, &km_result);
@@ -916,7 +917,7 @@ static void menu_search_arg_free_fn(void *data_v)
       case MenuSearch_Item::Type::Operator: {
         if (item->op.opptr != nullptr) {
           WM_operator_properties_free(item->op.opptr);
-          MEM_freeN(item->op.opptr);
+          MEM_delete(item->op.opptr);
         }
         MEM_delete(item->op.context);
         break;

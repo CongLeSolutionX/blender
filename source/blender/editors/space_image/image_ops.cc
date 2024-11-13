@@ -38,12 +38,12 @@
 #include "BKE_context.hh"
 #include "BKE_global.hh"
 #include "BKE_icons.h"
-#include "BKE_image.h"
-#include "BKE_image_save.h"
+#include "BKE_image.hh"
+#include "BKE_image_save.hh"
 #include "BKE_layer.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_main.hh"
-#include "BKE_packedFile.h"
+#include "BKE_packedFile.hh"
 #include "BKE_report.hh"
 #include "BKE_scene.hh"
 
@@ -1253,8 +1253,7 @@ struct ImageOpenData {
 static void image_open_init(bContext *C, wmOperator *op)
 {
   ImageOpenData *iod;
-  op->customdata = iod = static_cast<ImageOpenData *>(
-      MEM_callocN(sizeof(ImageOpenData), __func__));
+  op->customdata = iod = MEM_new<ImageOpenData>(__func__);
   iod->iuser = static_cast<ImageUser *>(
       CTX_data_pointer_get_type(C, "image_user", &RNA_ImageUser).data);
   UI_context_active_but_prop_get_templateID(C, &iod->pprop.ptr, &iod->pprop.prop);
@@ -1262,8 +1261,9 @@ static void image_open_init(bContext *C, wmOperator *op)
 
 static void image_open_cancel(bContext * /*C*/, wmOperator *op)
 {
-  MEM_freeN(op->customdata);
+  ImageOpenData *iod = static_cast<ImageOpenData *>(op->customdata);
   op->customdata = nullptr;
+  MEM_delete(iod);
 }
 
 static Image *image_open_single(Main *bmain,
@@ -1285,7 +1285,7 @@ static Image *image_open_single(Main *bmain,
 
   if (!ima) {
     if (op->customdata) {
-      MEM_freeN(op->customdata);
+      MEM_delete(static_cast<ImageOpenData *>(op->customdata));
     }
     BKE_reportf(op->reports,
                 RPT_ERROR,
@@ -1442,7 +1442,8 @@ static int image_open_exec(bContext *C, wmOperator *op)
   BKE_image_signal(bmain, ima, iuser, IMA_SIGNAL_RELOAD);
   WM_event_add_notifier(C, NC_IMAGE | NA_EDITED, ima);
 
-  MEM_freeN(op->customdata);
+  op->customdata = nullptr;
+  MEM_delete(iod);
 
   return OPERATOR_FINISHED;
 }
@@ -1780,6 +1781,7 @@ static int image_replace_exec(bContext *C, wmOperator *op)
 
   BKE_icon_changed(BKE_icon_id_ensure(&sima->image->id));
   BKE_image_signal(bmain, sima->image, &sima->iuser, IMA_SIGNAL_RELOAD);
+  DEG_id_tag_update(&sima->image->id, 0);
   WM_event_add_notifier(C, NC_IMAGE | NA_EDITED, sima->image);
 
   return OPERATOR_FINISHED;
@@ -3242,7 +3244,7 @@ static int image_scale_exec(bContext *C, wmOperator *op)
   ED_image_undo_push_begin_with_image(op->type->name, ima, ibuf, &iuser);
 
   ibuf->userflags |= IB_DISPLAY_BUFFER_INVALID;
-  IMB_scaleImBuf(ibuf, size[0], size[1]);
+  IMB_scale(ibuf, size[0], size[1], IMBScaleFilter::Box, false);
   BKE_image_mark_dirty(ima, ibuf);
   BKE_image_release_ibuf(ima, ibuf, nullptr);
 

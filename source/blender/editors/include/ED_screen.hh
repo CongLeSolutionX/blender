@@ -153,15 +153,17 @@ void ED_region_visibility_change_update_animated(bContext *C, ScrArea *area, ARe
 
 void ED_region_clear(const bContext *C, const ARegion *region, int /*ThemeColorID*/ colorid);
 
-void ED_region_info_draw(ARegion *region, const char *text, float fill_color[4], bool full_redraw);
+void ED_region_info_draw(ARegion *region,
+                         const char *text,
+                         const float fill_color[4],
+                         bool full_redraw);
 void ED_region_info_draw_multiline(ARegion *region,
                                    const char *text_array[],
-                                   float fill_color[4],
+                                   const float fill_color[4],
                                    bool full_redraw);
 void ED_region_image_metadata_panel_draw(ImBuf *ibuf, uiLayout *layout);
 void ED_region_grid_draw(ARegion *region, float zoomx, float zoomy, float x0, float y0);
 float ED_region_blend_alpha(ARegion *region);
-void ED_region_visible_rect_calc(ARegion *region, rcti *rect);
 const rcti *ED_region_visible_rect(ARegion *region);
 /**
  * Overlapping regions only in the following restricted cases.
@@ -219,7 +221,7 @@ void ED_screen_global_areas_sync(wmWindow *win);
 void ED_area_do_listen(wmSpaceTypeListenerParams *params);
 void ED_area_tag_redraw(ScrArea *area);
 void ED_area_tag_redraw_no_rebuild(ScrArea *area);
-void ED_area_tag_redraw_regiontype(ScrArea *area, int type);
+void ED_area_tag_redraw_regiontype(ScrArea *area, int regiontype);
 void ED_area_tag_refresh(ScrArea *area);
 /**
  * For regions that change the region size in their #ARegionType.layout() callback: Mark the area
@@ -267,7 +269,7 @@ void ED_area_offscreen_free(wmWindowManager *wm, wmWindow *win, ScrArea *area);
  * Search all screens, even non-active or overlapping (multiple windows), return the most-likely
  * area of interest. xy is relative to active window, like all similar functions.
  */
-ScrArea *ED_area_find_under_cursor(const bContext *C, int spacetype, const int xy[2]);
+ScrArea *ED_area_find_under_cursor(const bContext *C, int spacetype, const int event_xy[2]);
 
 ScrArea *ED_screen_areas_iter_first(const wmWindow *win, const bScreen *screen);
 ScrArea *ED_screen_areas_iter_next(const bScreen *screen, const ScrArea *area);
@@ -293,7 +295,7 @@ ScrArea *ED_screen_areas_iter_next(const bScreen *screen, const ScrArea *area);
 /**
  * File read, set all screens, ....
  */
-void ED_screens_init(Main *bmain, wmWindowManager *wm);
+void ED_screens_init(bContext *C, Main *bmain, wmWindowManager *wm);
 /**
  * Only for edge lines between areas.
  */
@@ -303,8 +305,8 @@ void ED_screen_draw_edges(wmWindow *win);
  * Make this screen usable.
  * for file read and first use, for scaling window, area moves.
  */
-void ED_screen_refresh(wmWindowManager *wm, wmWindow *win);
-void ED_screen_ensure_updated(bContext *C, wmWindowManager *wm, wmWindow *win, bScreen *screen);
+void ED_screen_refresh(bContext *C, wmWindowManager *wm, wmWindow *win);
+void ED_screen_ensure_updated(bContext *C, wmWindowManager *wm, wmWindow *win);
 void ED_screen_do_listen(bContext *C, const wmNotifier *note);
 /**
  * \brief Change the active screen.

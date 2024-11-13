@@ -58,6 +58,17 @@ class SunBeamsOperation : public NodeOperation {
 
   void execute() override
   {
+    /* Not yet supported on CPU. */
+    if (!context().use_gpu()) {
+      for (const bNodeSocket *output : this->node()->output_sockets()) {
+        Result &output_result = get_result(output->identifier);
+        if (output_result.should_compute()) {
+          output_result.allocate_invalid();
+        }
+      }
+      return;
+    }
+
     Result &input_image = get_input("Image");
     Result &output_image = get_result("Image");
 
@@ -74,8 +85,8 @@ class SunBeamsOperation : public NodeOperation {
     GPU_shader_uniform_2fv(shader, "source", node_storage(bnode()).source);
     GPU_shader_uniform_1i(shader, "max_steps", max_steps);
 
-    GPU_texture_filter_mode(input_image.texture(), true);
-    GPU_texture_extend_mode(input_image.texture(), GPU_SAMPLER_EXTEND_MODE_CLAMP_TO_BORDER);
+    GPU_texture_filter_mode(input_image, true);
+    GPU_texture_extend_mode(input_image, GPU_SAMPLER_EXTEND_MODE_CLAMP_TO_BORDER);
     input_image.bind_as_texture(shader, "input_tx");
 
     const Domain domain = compute_domain();
@@ -111,5 +122,5 @@ void register_node_type_cmp_sunbeams()
       &ntype, "NodeSunBeams", node_free_standard_storage, node_copy_standard_storage);
   ntype.get_compositor_operation = file_ns::get_compositor_operation;
 
-  blender::bke::nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }

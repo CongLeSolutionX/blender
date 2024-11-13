@@ -88,7 +88,7 @@ struct PuffOperationExecutor {
     object_ = CTX_data_active_object(&C);
     curves_id_ = static_cast<Curves *>(object_->data);
     curves_ = &curves_id_->geometry.wrap();
-    if (curves_->curves_num() == 0) {
+    if (curves_->is_empty()) {
       return;
     }
     if (curves_id_->surface == nullptr || curves_id_->surface->type != OB_MESH) {
@@ -301,7 +301,7 @@ struct PuffOperationExecutor {
         const float3 normal_cu = math::normalize(
             math::transform_direction(transforms_.surface_to_curves_normal, normal_su));
 
-        accumulated_lengths_cu.reinitialize(points.size() - 1);
+        accumulated_lengths_cu.resize(points.size() - 1);
         length_parameterize::accumulate_lengths<float3>(
             positions_cu.slice(points), false, accumulated_lengths_cu);
 

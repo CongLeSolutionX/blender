@@ -15,6 +15,7 @@
 #include "BKE_object.hh"
 #include "BKE_object_types.hh"
 #include "BKE_paint.hh"
+#include "BKE_paint_bvh.hh"
 #include "BKE_particle.h"
 
 #include "BLI_alloca.h"
@@ -231,10 +232,11 @@ static void basic_cache_populate(void *vedata, Object *ob)
       }
     }
 
-    if (G.debug_value == 889 && ob->sculpt && BKE_object_sculpt_pbvh_get(ob)) {
+    if (G.debug_value == 889 && ob->sculpt && blender::bke::object::pbvh_get(*ob)) {
       int debug_node_nr = 0;
       DRW_debug_modelmat(ob->object_to_world().ptr());
-      BKE_pbvh_draw_debug_cb(*BKE_object_sculpt_pbvh_get(ob), DRW_sculpt_debug_cb, &debug_node_nr);
+      BKE_pbvh_draw_debug_cb(
+          *blender::bke::object::pbvh_get(*ob), DRW_sculpt_debug_cb, &debug_node_nr);
     }
   }
 }

@@ -105,6 +105,7 @@ static bool object_remesh_poll(bContext *C)
 
 static int voxel_remesh_exec(bContext *C, wmOperator *op)
 {
+  const Scene &scene = *CTX_data_scene(C);
   Object *ob = CTX_data_active_object(C);
 
   Mesh *mesh = static_cast<Mesh *>(ob->data);
@@ -132,7 +133,9 @@ static int voxel_remesh_exec(bContext *C, wmOperator *op)
   }
 
   if (ob->mode == OB_MODE_SCULPT) {
-    sculpt_paint::undo::geometry_begin(*ob, op);
+    Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
+    BKE_sculpt_update_object_for_edit(depsgraph, ob, false);
+    sculpt_paint::undo::geometry_begin(scene, *ob, op);
   }
 
   if (mesh->flag & ME_REMESH_FIX_POLES && mesh->remesh_voxel_adaptivity <= 0.0f) {
@@ -158,6 +161,7 @@ static int voxel_remesh_exec(bContext *C, wmOperator *op)
 
   if (ob->mode == OB_MODE_SCULPT) {
     sculpt_paint::undo::geometry_end(*ob);
+    BKE_sculptsession_free_pbvh(*ob);
   }
 
   BKE_mesh_batch_cache_dirty_tag(static_cast<Mesh *>(ob->data), BKE_MESH_BATCH_DIRTY_ALL);
@@ -199,12 +203,13 @@ struct VoxelSizeEditCustomData {
   float init_mval[2];
   float slow_mval[2];
 
-  bool relative_mode;
   bool slow_mode;
 
   float init_voxel_size;
   float slow_voxel_size;
   float voxel_size;
+  float voxel_size_min;
+  float voxel_size_max;
 
   float preview_plane[4][3];
 
@@ -361,7 +366,6 @@ static void voxel_size_edit_update_header(wmOperator *op, bContext *C)
   status.item(IFACE_("Confirm"), ICON_EVENT_RETURN, ICON_MOUSE_LMB);
   status.item(IFACE_("Cancel"), ICON_EVENT_ESC, ICON_MOUSE_RMB);
   status.item(IFACE_("Change Size"), ICON_MOUSE_MOVE);
-  status.item_bool(IFACE_("Relative Mode"), cd->relative_mode, ICON_EVENT_CTRL);
   status.item_bool(IFACE_("Precision Mode"), cd->slow_mode, ICON_EVENT_SHIFT);
 }
 
@@ -403,18 +407,8 @@ static int voxel_size_edit_modal(bContext *C, wmOperator *op, const wmEvent *eve
     d = cd->slow_mval[0] - mval[0];
   }
 
-  if (event->modifier & KM_CTRL) {
-    /* Multiply d by the initial voxel size to prevent uncontrollable speeds when using low voxel
-     * sizes. */
-    /* When the voxel size is slower, it needs more precision. */
-    d = d * min_ff(pow2f(cd->init_voxel_size), 0.1f) * 0.05f;
-    cd->relative_mode = true;
-  }
-  else {
-    /* Linear mode, enables jumping to any voxel size. */
-    d = d * 0.0005f;
-    cd->relative_mode = false;
-  }
+  d *= cd->voxel_size_min * 0.25f;
+
   if (cd->slow_mode) {
     cd->voxel_size = cd->slow_voxel_size + d * 0.05f;
   }
@@ -432,7 +426,8 @@ static int voxel_size_edit_modal(bContext *C, wmOperator *op, const wmEvent *eve
     cd->slow_voxel_size = 0.0f;
   }
 
-  cd->voxel_size = clamp_f(cd->voxel_size, 0.0001f, 1.0f);
+  cd->voxel_size = clamp_f(
+      cd->voxel_size, max_ff(cd->voxel_size_min, 0.0001f), cd->voxel_size_max);
 
   ED_region_tag_redraw(region);
 
@@ -457,7 +452,6 @@ static int voxel_size_edit_invoke(bContext *C, wmOperator *op, const wmEvent *ev
   cd->init_mval[1] = event->mval[1];
   cd->init_voxel_size = mesh->remesh_voxel_size;
   cd->voxel_size = mesh->remesh_voxel_size;
-  cd->relative_mode = false;
   cd->slow_mode = false;
   op->customdata = cd;
 
@@ -515,6 +509,13 @@ static int voxel_size_edit_invoke(bContext *C, wmOperator *op, const wmEvent *ev
       copy_v3_v3(cd->preview_plane[3], bb.vec[BB_faces[i][3]]);
     }
   }
+
+  /* Cap the max/min voxel size based on the point where we cant visually display any more info
+   * with grid lines. */
+  cd->voxel_size_max = max_ff(len_v3v3(cd->preview_plane[1], cd->preview_plane[0]),
+                              len_v3v3(cd->preview_plane[3], cd->preview_plane[0])) *
+                       0.5f;
+  cd->voxel_size_min = cd->voxel_size_max / VOXEL_SIZE_EDIT_MAX_GRIDS_LINES;
 
   /* Matrix calculation to position the text in 3D space. */
   float text_pos[3];
@@ -845,6 +846,7 @@ static void quadriflow_start_job(void *customdata, wmJobWorkerStatus *worker_sta
 
   Object *ob = qj->owner;
   Mesh *mesh = static_cast<Mesh *>(ob->data);
+  Scene &scene = *qj->scene;
   Mesh *new_mesh;
   Mesh *bisect_mesh;
 
@@ -890,7 +892,7 @@ static void quadriflow_start_job(void *customdata, wmJobWorkerStatus *worker_sta
   new_mesh = remesh_symmetry_mirror(qj->owner, new_mesh, qj->symmetry_axes);
 
   if (ob->mode == OB_MODE_SCULPT) {
-    sculpt_paint::undo::geometry_begin(*ob, qj->op);
+    sculpt_paint::undo::geometry_begin(scene, *ob, qj->op);
   }
 
   if (qj->preserve_attributes) {
@@ -903,6 +905,7 @@ static void quadriflow_start_job(void *customdata, wmJobWorkerStatus *worker_sta
 
   if (ob->mode == OB_MODE_SCULPT) {
     sculpt_paint::undo::geometry_end(*ob);
+    BKE_sculptsession_free_pbvh(*ob);
   }
 
   BKE_mesh_batch_cache_dirty_tag(static_cast<Mesh *>(ob->data), BKE_MESH_BATCH_DIRTY_ALL);
@@ -1021,22 +1024,22 @@ static bool quadriflow_check(bContext *C, wmOperator *op)
       area = BKE_mesh_calc_area(static_cast<const Mesh *>(ob->data));
       RNA_float_set(op->ptr, "mesh_area", area);
     }
-    int num_faces;
+    int faces_num;
     float edge_len = RNA_float_get(op->ptr, "target_edge_length");
 
-    num_faces = area / (edge_len * edge_len);
-    RNA_int_set(op->ptr, "target_faces", num_faces);
+    faces_num = area / (edge_len * edge_len);
+    RNA_int_set(op->ptr, "target_faces", faces_num);
   }
   else if (mode == QUADRIFLOW_REMESH_RATIO) {
     Object *ob = CTX_data_active_object(C);
     Mesh *mesh = static_cast<Mesh *>(ob->data);
 
-    int num_faces;
+    int faces_num;
     float ratio = RNA_float_get(op->ptr, "target_ratio");
 
-    num_faces = mesh->faces_num * ratio;
+    faces_num = mesh->faces_num * ratio;
 
-    RNA_int_set(op->ptr, "target_faces", num_faces);
+    RNA_int_set(op->ptr, "target_faces", faces_num);
   }
 
   return true;

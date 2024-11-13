@@ -206,12 +206,25 @@ template<typename MatT, typename RotationT>
                                 const RotationT &rotation);
 
 /**
+ * Create a transform matrix with translation and scale applied in this order.
+ */
+template<typename MatT, int ScaleDim>
+[[nodiscard]] MatT from_loc_scale(const typename MatT::loc_type &location,
+                                  const VecBase<typename MatT::base_type, ScaleDim> &scale);
+
+/**
  * Create a transform matrix with translation, rotation and scale applied in this order.
  */
 template<typename MatT, typename RotationT, int ScaleDim>
 [[nodiscard]] MatT from_loc_rot_scale(const typename MatT::loc_type &location,
                                       const RotationT &rotation,
                                       const VecBase<typename MatT::base_type, ScaleDim> &scale);
+
+/**
+ * Create a rotation matrix with the angle that the given direction makes with the x axis. Assumes
+ * the direction vector is normalized.
+ */
+template<typename T> [[nodiscard]] MatBase<T, 2, 2> from_direction(const VecBase<T, 2> &direction);
 
 /**
  * Create a rotation matrix from 2 basis vectors.
@@ -1407,6 +1420,22 @@ template<typename MatT, typename RotationT>
   MatT mat = MatT(from_rotation<MatRotT>(rotation));
   mat.location() = location;
   return mat;
+}
+
+template<typename MatT, int ScaleDim>
+[[nodiscard]] MatT from_loc_scale(const typename MatT::loc_type &location,
+                                  const VecBase<typename MatT::base_type, ScaleDim> &scale)
+{
+  MatT mat = MatT(from_scale<MatT>(scale));
+  mat.location() = location;
+  return mat;
+}
+
+template<typename T> MatBase<T, 2, 2> from_direction(const VecBase<T, 2> &direction)
+{
+  BLI_assert(is_unit_scale(direction));
+  return MatBase<T, 2, 2>(direction,
+                          VecBase<T, 2>(direction.y, direction.x) * VecBase<T, 2>(-1, 1));
 }
 
 template<typename MatT, typename VectorT>

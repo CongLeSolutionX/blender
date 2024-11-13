@@ -12,7 +12,8 @@ if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
   if(NOT DEFINED WITH_IN_SOURCE_BUILD)
     message(FATAL_ERROR
       "CMake generation for blender is not allowed within the source directory!"
-      "\n Remove \"${CMAKE_SOURCE_DIR}/CMakeCache.txt\" and try again from another folder, e.g.:"
+      "\n Remove \"${CMAKE_SOURCE_DIR}/CMakeCache.txt\""
+      "\n then try again from another directory, e.g.:"
       "\n "
       "\n rm -rf CMakeCache.txt CMakeFiles"
       "\n cd .."
@@ -94,6 +95,10 @@ if(POLICY CMP0087)
   cmake_policy(SET CMP0087 NEW)
 endif()
 
+# Allow to specify language per file.
+if(POLICY CMP0119)
+  cmake_policy(SET CMP0119 NEW)
+endif()
 
 # -----------------------------------------------------------------------------
 # Load Blender's Local Macros
@@ -331,7 +336,7 @@ unset(_option_default)
 option(WITH_GMP "Enable features depending on GMP (Exact Boolean)" ON)
 
 # Compositor
-option(WITH_COMPOSITOR_CPU "Enable the tile based CPU nodal compositor" ON)
+option(WITH_COMPOSITOR_CPU "Enable the Full-Frame CPU nodal compositor" ON)
 option(WITH_OPENIMAGEDENOISE "Enable the OpenImageDenoise compositing node" ON)
 
 option(WITH_OPENSUBDIV "Enable OpenSubdiv for surface subdivision" ON)
@@ -410,6 +415,10 @@ option(WITH_OPENMP "Enable OpenMP (has to be supported by the compiler)" ON)
 if(UNIX AND NOT APPLE)
   option(WITH_OPENMP_STATIC "Link OpenMP statically (only used by the release environment)" OFF)
   mark_as_advanced(WITH_OPENMP_STATIC)
+elseif(WIN32 AND CMAKE_C_COMPILER_ID MATCHES "Clang" AND CMAKE_SYSTEM_PROCESSOR STREQUAL "ARM64")
+  # At time of testing (LLVM 18.1.6) OMP is not included in public LLVM builds for Windows ARM64
+  set(WITH_OPENMP OFF)
+  set(WITH_OPENMP_STATIC OFF)
 endif()
 
 if(WITH_GHOST_X11)
@@ -444,6 +453,9 @@ option(WITH_MOD_FLUID "Enable Mantaflow Fluid Simulation Framework" ON)
 option(WITH_MOD_REMESH "Enable Remesh Modifier" ON)
 option(WITH_MOD_OCEANSIM "Enable Ocean Modifier" ON)
 
+# UV solvers.
+option(WITH_UV_SLIM "SLIM UV unwrapping solver" ON)
+
 # Image format support
 option(WITH_IMAGE_OPENEXR "Enable OpenEXR Support (http://www.openexr.com)" ON)
 option(WITH_IMAGE_OPENJPEG "Enable OpenJpeg Support (http://www.openjpeg.org)" ON)
@@ -476,10 +488,10 @@ option(WITH_OPENCOLLADA "Enable OpenCollada Support (http://www.opencollada.org)
 option(WITH_IO_WAVEFRONT_OBJ "Enable Wavefront-OBJ 3D file format support (*.obj)" ON)
 option(WITH_IO_PLY "Enable PLY 3D file format support (*.ply)" ON)
 option(WITH_IO_STL "Enable STL 3D file format support (*.stl)" ON)
-option(WITH_IO_GPENCIL "Enable grease-pencil file format IO (*.svg, *.pdf)" ON)
+option(WITH_IO_GREASE_PENCIL "Enable grease-pencil file format IO (*.svg, *.pdf)" ON)
 
 # Sound output
-option(WITH_SDL "Enable SDL for sound" ON)
+option(WITH_SDL "Enable SDL for sound" OFF)
 option(WITH_OPENAL "Enable OpenAL Support (http://www.openal.org)" ON)
 if(APPLE)
   option(WITH_COREAUDIO "Enable CoreAudio for audio support on macOS" ON)
@@ -496,9 +508,6 @@ if(NOT WIN32)
   option(WITH_JACK_DYNLOAD "Enable runtime dynamic JACK libraries loading" OFF)
 else()
   set(WITH_JACK OFF)
-endif()
-if(UNIX AND NOT APPLE)
-  option(WITH_SDL_DYNLOAD "Enable runtime dynamic SDL libraries loading" OFF)
 endif()
 if(UNIX AND NOT APPLE)
   option(WITH_PULSEAUDIO "Enable PulseAudio for audio support on Linux" ON)
@@ -577,10 +586,10 @@ Install redistributable runtime, otherwise install into CMAKE_INSTALL_PREFIX"
   )
 endif()
 
-option(WITH_PYTHON_INSTALL "Copy system python into the blender install folder" ON)
+option(WITH_PYTHON_INSTALL "Copy system python into the blender install directory" ON)
 
 option(WITH_INSTALL_COPYRIGHT "\
-Copy the official Blender Authors's copyright.txt into the Blender install folder"
+Copy the official Blender Authors's copyright.txt into the Blender install directory"
   OFF
 )
 mark_as_advanced(WITH_INSTALL_COPYRIGHT)
@@ -600,17 +609,20 @@ Path to python site-packages or dist-packages containing 'numpy' module"
   mark_as_advanced(PYTHON_NUMPY_INCLUDE_DIRS)
 endif()
 if(WITH_PYTHON_INSTALL)
-  option(WITH_PYTHON_INSTALL_NUMPY "Copy system NumPy into the blender install folder" ON)
+  option(WITH_PYTHON_INSTALL_NUMPY "Copy system NumPy into the blender install directory" ON)
 
   if(UNIX AND NOT APPLE)
-    option(WITH_PYTHON_INSTALL_REQUESTS "Copy system requests into the blender install folder" ON)
+    option(WITH_PYTHON_INSTALL_REQUESTS "\
+Copy system requests into the blender install directory"
+      ON
+    )
     set(PYTHON_REQUESTS_PATH "" CACHE PATH "\
 Path to python site-packages or dist-packages containing 'requests' module"
     )
     mark_as_advanced(PYTHON_REQUESTS_PATH)
   endif()
 
-  option(WITH_PYTHON_INSTALL_ZSTANDARD "Copy zstandard into the blender install folder" ON)
+  option(WITH_PYTHON_INSTALL_ZSTANDARD "Copy zstandard into the blender install directory" ON)
   set(PYTHON_ZSTANDARD_PATH "" CACHE PATH "\
 Path to python site-packages or dist-packages containing 'zstandard' module"
   )
@@ -649,12 +661,17 @@ Build Cycles kernels with address sanitizer when WITH_COMPILER_ASAN is on, even 
 set(CYCLES_TEST_DEVICES CPU CACHE STRING "\
 Run regression tests on the specified device types (CPU CUDA OPTIX HIP)"
 )
+option(WITH_CYCLES_TEST_OSL "\
+Run additional Cycles test with OSL enabled"
+  OFF
+)
 mark_as_advanced(WITH_CYCLES_KERNEL_ASAN)
 mark_as_advanced(WITH_CYCLES_LOGGING)
 mark_as_advanced(WITH_CYCLES_DEBUG_NAN)
 mark_as_advanced(WITH_CYCLES_NATIVE_ONLY)
 mark_as_advanced(WITH_CYCLES_PRECOMPUTE)
 mark_as_advanced(CYCLES_TEST_DEVICES)
+mark_as_advanced(WITH_CYCLES_TEST_OSL)
 
 # NVIDIA CUDA & OptiX
 if(NOT APPLE AND NOT (WIN32 AND CMAKE_SYSTEM_PROCESSOR STREQUAL "ARM64"))
@@ -695,9 +712,8 @@ endif()
 if(NOT APPLE AND NOT (WIN32 AND CMAKE_SYSTEM_PROCESSOR STREQUAL "ARM64"))
   option(WITH_CYCLES_DEVICE_HIP "Enable Cycles AMD HIP support" ON)
   option(WITH_CYCLES_HIP_BINARIES "Build Cycles AMD HIP binaries" OFF)
-  # Radeon VII (gfx906) not currently working with HIP SDK, so left out of the list.
+  # We only support RDNA1 (gfx101X) and newer. Vega and older generations have rendering artifacts and crashing issues.
   set(CYCLES_HIP_BINARIES_ARCH
-    gfx900 gfx90c gfx902
     gfx1010 gfx1011 gfx1012
     gfx1030 gfx1031 gfx1032 gfx1034 gfx1035 gfx1036
     gfx1100 gfx1101 gfx1102 gfx1103 gfx1150 gfx1151
@@ -706,11 +722,8 @@ if(NOT APPLE AND NOT (WIN32 AND CMAKE_SYSTEM_PROCESSOR STREQUAL "ARM64"))
   mark_as_advanced(WITH_CYCLES_DEVICE_HIP)
   mark_as_advanced(CYCLES_HIP_BINARIES_ARCH)
 
-  # HIPRT is only available on Windows for now.
-  if(WIN32)
-    option(WITH_CYCLES_DEVICE_HIPRT "Enable Cycles AMD HIPRT support" OFF)
-    mark_as_advanced(WITH_CYCLES_DEVICE_HIPRT)
-  endif()
+  option(WITH_CYCLES_DEVICE_HIPRT "Enable Cycles AMD HIPRT support" OFF)
+  mark_as_advanced(WITH_CYCLES_DEVICE_HIPRT)
 endif()
 
 # Apple Metal
@@ -732,10 +745,9 @@ This option is only for debugging purposes."
   )
 
   # https://www.intel.com/content/www/us/en/develop/documentation/oneapi-dpcpp-cpp-compiler-dev-guide-and-reference/top/compilation/ahead-of-time-compilation.html
-  # The target architectures levels can be retrieved from `ocloc` output when running
-  # `ocloc compile -device {device_id} test.c` for given GPUs PCI device IDs.
-  # 12.55.8 is for Arc Alchemist GPUs. 12.70.4 for Meteor Lake iGPUs.
-  set(CYCLES_ONEAPI_INTEL_BINARIES_ARCH 12.55.8 12.70.4 CACHE STRING "\
+  # The supported devices can be retrieved from `ocloc` output when running
+  # `ocloc compile --help`.
+  set(CYCLES_ONEAPI_INTEL_BINARIES_ARCH dg2 mtl lnl bmg CACHE STRING "\
 oneAPI Intel GPU architectures to build binaries for"
   )
   set(CYCLES_ONEAPI_SYCL_TARGETS spir64 spir64_gen CACHE STRING "\
@@ -862,16 +874,30 @@ endif()
 
 
 # GPU Module
-option(WITH_GPU_BUILDTIME_SHADER_BUILDER "\
-Shader builder is a developer option enabling linting on GLSL during compilation"
-  OFF
-)
 option(WITH_RENDERDOC "Use Renderdoc API to capture frames" OFF)
 
-mark_as_advanced(
-  WITH_GPU_BUILDTIME_SHADER_BUILDER
-  WITH_RENDERDOC
+option(WITH_GPU_SHADER_ASSERT "\
+Globally enable in-shader asserts.
+(Requires a debug build or setting GPU_FORCE_ENABLE_SHADER_PRINTF to 1)"
+  OFF
 )
+
+mark_as_advanced(
+  WITH_RENDERDOC
+  WITH_GPU_SHADER_ASSERT
+)
+
+if(POLICY CMP0119)
+  option(WITH_GPU_SHADER_CPP_COMPILATION "\
+  Compiler shaders using C++. \
+  Allows testing Metal compilation on other platform and enable C++ IDE support for shader code"
+  OFF
+  )
+  mark_as_advanced(WITH_GPU_SHADER_CPP_COMPILATION)
+else()
+  set(WITH_GPU_SHADER_CPP_COMPILATION OFF)
+endif()
+
 
 # OpenGL
 if(NOT APPLE)
@@ -883,19 +909,10 @@ endif()
 
 # Vulkan
 option(WITH_VULKAN_BACKEND "Enable Vulkan as graphics backend (experimental)" ON)
-option(WITH_VULKAN_GUARDEDALLOC "\
-Use guardedalloc for host allocations done inside Vulkan (development option)"
-  OFF
-)
-mark_as_advanced(
-  WITH_VULKAN_BACKEND
-  WITH_VULKAN_GUARDEDALLOC
-)
+mark_as_advanced(WITH_VULKAN_BACKEND)
 if(APPLE)
   option(WITH_VULKAN_MOLTENVK "Enable Vulkan over MoltenVK (development option)" OFF)
-  mark_as_advanced(
-    WITH_VULKAN_MOLTENVK
-  )
+  mark_as_advanced(WITH_VULKAN_MOLTENVK)
 endif()
 
 if(APPLE AND NOT WITH_VULKAN_MOLTENVK)
@@ -904,8 +921,8 @@ endif()
 if(NOT WITH_EXPERIMENTAL_FEATURES)
   if(APPLE)
     set(WITH_VULKAN_MOLTENVK OFF)
+    set(WITH_VULKAN_BACKEND OFF)
   endif()
-  set(WITH_VULKAN_BACKEND OFF)
 endif()
 
 # Metal
@@ -955,6 +972,28 @@ Can cause linking issues due to too large binary size."
   OFF
 )
 mark_as_advanced(WITH_COMPILER_ASAN_EXTERN)
+
+option(WITH_COMPILER_CODE_COVERAGE "\
+Build and link with code coverage support (only for Debug targets)."
+OFF
+)
+mark_as_advanced(WITH_COMPILER_CODE_COVERAGE)
+
+if(WITH_COMPILER_CODE_COVERAGE)
+  if(NOT CMAKE_COMPILER_IS_GNUCC)
+    message("WITH_COMPILER_CODE_COVERAGE only works with GCC currently.")
+    set(WITH_COMPILER_CODE_COVERAGE OFF)
+  endif()
+endif()
+
+if(WITH_COMPILER_CODE_COVERAGE)
+  set(_code_coverage_defaults "--coverage")
+  set(COMPILER_CODE_COVERAGE_CFLAGS ${_code_coverage_defaults} CACHE STRING "C flags for code coverage")
+  mark_as_advanced(COMPILER_CODE_COVERAGE_CFLAGS)
+  set(COMPILER_CODE_COVERAGE_CXXFLAGS ${_code_coverage_defaults} CACHE STRING "C++ flags for code coverage")
+  mark_as_advanced(COMPILER_CODE_COVERAGE_CXXFLAGS)
+  unset(_code_coverage_defaults)
+endif()
 
 if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_C_COMPILER_ID MATCHES "Clang")
   if(WITH_COMPILER_ASAN)
@@ -1072,13 +1111,13 @@ endif()
 
 if(WIN32 OR XCODE)
   option(IDE_GROUP_SOURCES_IN_FOLDERS "\
-Organize the source files in filters matching the source folders."
+Organize the source files in filters matching the source directory."
     ON
   )
   mark_as_advanced(IDE_GROUP_SOURCES_IN_FOLDERS)
 
   option(IDE_GROUP_PROJECTS_IN_FOLDERS "\
-Organize the projects according to source folder structure."
+Organize the projects according to source directory structure."
     ON
   )
   mark_as_advanced(IDE_GROUP_PROJECTS_IN_FOLDERS)
@@ -1140,7 +1179,7 @@ default install path"
   endif()
 endif()
 
-# Effective install path including config folder, as a generator expression.
+# Effective install path including config directory, as a generator expression.
 get_property(GENERATOR_IS_MULTI_CONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
 if(GENERATOR_IS_MULTI_CONFIG)
   string(
@@ -1197,9 +1236,11 @@ set_and_warn_dependency(WITH_PYTHON WITH_CYCLES        OFF)
 set_and_warn_dependency(WITH_PYTHON WITH_DRACO         OFF)
 set_and_warn_dependency(WITH_PYTHON WITH_MOD_FLUID     OFF)
 
-if(WITH_DRACO AND NOT WITH_PYTHON_INSTALL)
-  message(STATUS "WITH_DRACO requires WITH_PYTHON_INSTALL to be ON, disabling WITH_DRACO for now")
-  set(WITH_DRACO OFF)
+if(NOT WITH_PYTHON_MODULE)
+  if(WITH_DRACO AND NOT WITH_PYTHON_INSTALL)
+    message(STATUS "WITH_DRACO requires WITH_PYTHON_INSTALL to be ON, disabling WITH_DRACO for now")
+    set(WITH_DRACO OFF)
+  endif()
 endif()
 
 # enable boost for cycles, audaspace or i18n
@@ -1212,6 +1253,7 @@ set_and_warn_dependency(WITH_BOOST WITH_USD            OFF)
 if(WITH_CYCLES)
   set_and_warn_dependency(WITH_BOOST   WITH_CYCLES_OSL   OFF)
   set_and_warn_dependency(WITH_PUGIXML WITH_CYCLES_OSL   OFF)
+  set_and_warn_dependency(WITH_CYCLES_OSL WITH_CYCLES_TEST_OSL   OFF)
 endif()
 
 set_and_warn_dependency(WITH_TBB WITH_CYCLES            OFF)
@@ -1300,7 +1342,7 @@ endif()
 # Check if Sub-modules are Cloned
 
 if(WITH_PYTHON)
-  # While we have this as an '#error' in 'bpy_capi_utils.h',
+  # While we have this as an '#error' in 'bpy_capi_utils.hh',
   # upgrading Python tends to cause confusion for users who build.
   # Give the error message early to make this more obvious.
   #
@@ -1349,6 +1391,11 @@ set(PLATFORM_LINKFLAGS "")
 set(PLATFORM_LINKFLAGS_DEBUG "")
 set(PLATFORM_LINKFLAGS_RELEASE "")
 set(PLATFORM_LINKFLAGS_EXECUTABLE "")
+
+if(WITH_COMPILER_CODE_COVERAGE)
+  string(APPEND CMAKE_C_FLAGS_DEBUG " ${COMPILER_CODE_COVERAGE_CFLAGS}")
+  string(APPEND CMAKE_CXX_FLAGS_DEBUG " ${COMPILER_CODE_COVERAGE_CXXFLAGS}")
+endif()
 
 if(NOT CMAKE_BUILD_TYPE MATCHES "Release")
   if(WITH_COMPILER_ASAN)
@@ -1679,6 +1726,10 @@ if(WITH_LIBMV OR WITH_GTESTS OR (WITH_CYCLES AND WITH_CYCLES_LOGGING))
   endif()
 endif()
 
+# -----------------------------------------------------------------------------
+# Common dependency targets
+
+include(dependency_targets)
 
 # -----------------------------------------------------------------------------
 # Ninja Job Limiting
@@ -2163,6 +2214,9 @@ elseif(CMAKE_C_COMPILER_ID MATCHES "Clang")
       C_WARN_CLANG_CL_BITFIELD_ENUM_CONVERSION -Wno-bitfield-enum-conversion # 1
       C_WARN_CLANG_CL_UNUSED_LAMBDA_CAPTURE -Wno-unused-lambda-capture # 1
       C_WARN_CLANG_CL_SHADOW_FIELD_IN_CONSTRUCTOR_MODIFIED -Wno-shadow-field-in-constructor-modified # 1
+      # And some additional ones that came up when using LLVM 18.1.8 on Windows ARM64
+      C_WARN_CLANG_CL_SWITCH_DEFAULT -Wno-switch-default
+      C_WARN_CLANG_CL_NAN_INFINITY_DISABLED -Wno-nan-infinity-disabled
     )
 
   add_check_cxx_compiler_flags(
@@ -2294,6 +2348,9 @@ elseif(CMAKE_C_COMPILER_ID MATCHES "Clang")
       CXX_WARN_CLANG_CL_BITFIELD_ENUM_CONVERSION -Wno-bitfield-enum-conversion # 1
       CXX_WARN_CLANG_CL_UNUSED_LAMBDA_CAPTURE -Wno-unused-lambda-capture # 1
       CXX_WARN_CLANG_CL_SHADOW_FIELD_IN_CONSTRUCTOR_MODIFIED -Wno-shadow-field-in-constructor-modified # 1
+      # And some additional ones that came up when using LLVM 18.1.8 on Windows ARM64
+      CXX_WARN_CLANG_CL_SWITCH_DEFAULT -Wno-switch-default
+      CXX_WARN_CLANG_CL_NAN_INFINITY_DISABLED -Wno-nan-infinity-disabled
     )
   endif()
 
@@ -2737,7 +2794,6 @@ if(FIRST_RUN)
   info_cfg_option(WITH_PULSEAUDIO)
   info_cfg_option(WITH_PULSEAUDIO_DYNLOAD)
   info_cfg_option(WITH_SDL)
-  info_cfg_option(WITH_SDL_DYNLOAD)
   info_cfg_option(WITH_WASAPI)
 
   info_cfg_text("Compression:")
@@ -2774,8 +2830,6 @@ if(FIRST_RUN)
       info_cfg_option(WITH_CYCLES_ONEAPI_BINARIES)
       info_cfg_option(WITH_CYCLES_DEVICE_HIP)
       info_cfg_option(WITH_CYCLES_HIP_BINARIES)
-    endif()
-    if(WIN32)
       info_cfg_option(WITH_CYCLES_DEVICE_HIPRT)
     endif()
   endif()

@@ -191,7 +191,7 @@ static void shapekey_blend_read_after_liblink(BlendLibReader * /*reader*/, ID *i
 {
   /* ShapeKeys should always only be linked indirectly through their user ID (mesh, Curve etc.), or
    * be fully local data. */
-  BLI_assert((id->tag & LIB_TAG_EXTERN) == 0);
+  BLI_assert((id->tag & ID_TAG_EXTERN) == 0);
   UNUSED_VARS_NDEBUG(id);
 }
 
@@ -2294,190 +2294,6 @@ void BKE_keyblock_mesh_calc_normals(const KeyBlock *kb,
 
 /************************* raw coords ************************/
 
-void BKE_keyblock_update_from_vertcos(const Object *ob, KeyBlock *kb, const float (*vertCos)[3])
-{
-  const float(*co)[3] = vertCos;
-  float *fp = static_cast<float *>(kb->data);
-  int tot, a;
-
-#ifndef NDEBUG
-  if (ob->type == OB_LATTICE) {
-    Lattice *lt = static_cast<Lattice *>(ob->data);
-    BLI_assert((lt->pntsu * lt->pntsv * lt->pntsw) == kb->totelem);
-  }
-  else if (ELEM(ob->type, OB_CURVES_LEGACY, OB_SURF)) {
-    Curve *cu = static_cast<Curve *>(ob->data);
-    BLI_assert(BKE_keyblock_curve_element_count(&cu->nurb) == kb->totelem);
-  }
-  else if (ob->type == OB_MESH) {
-    Mesh *mesh = static_cast<Mesh *>(ob->data);
-    BLI_assert(mesh->verts_num == kb->totelem);
-  }
-  else {
-    BLI_assert(0 == kb->totelem);
-  }
-#endif
-
-  tot = kb->totelem;
-  if (tot == 0) {
-    return;
-  }
-
-  /* Copy coords to key-block. */
-  if (ELEM(ob->type, OB_MESH, OB_LATTICE)) {
-    for (a = 0; a < tot; a++, fp += 3, co++) {
-      copy_v3_v3(fp, *co);
-    }
-  }
-  else if (ELEM(ob->type, OB_CURVES_LEGACY, OB_SURF)) {
-    const Curve *cu = (const Curve *)ob->data;
-    const BezTriple *bezt;
-    const BPoint *bp;
-
-    LISTBASE_FOREACH (const Nurb *, nu, &cu->nurb) {
-      if (nu->bezt) {
-        for (a = nu->pntsu, bezt = nu->bezt; a; a--, bezt++) {
-          for (int i = 0; i < 3; i++, co++) {
-            copy_v3_v3(&fp[i * 3], *co);
-          }
-          fp += KEYELEM_FLOAT_LEN_BEZTRIPLE;
-        }
-      }
-      else {
-        for (a = nu->pntsu * nu->pntsv, bp = nu->bp; a; a--, bp++, co++) {
-          copy_v3_v3(fp, *co);
-          fp += KEYELEM_FLOAT_LEN_BPOINT;
-        }
-      }
-    }
-  }
-}
-
-void BKE_keyblock_convert_from_vertcos(const Object *ob, KeyBlock *kb, const float (*vertCos)[3])
-{
-  int tot = 0, elemsize;
-
-  MEM_SAFE_FREE(kb->data);
-
-  /* Count of vertex coords in array */
-  if (ob->type == OB_MESH) {
-    const Mesh *mesh = (const Mesh *)ob->data;
-    tot = mesh->verts_num;
-    elemsize = mesh->key->elemsize;
-  }
-  else if (ob->type == OB_LATTICE) {
-    const Lattice *lt = (const Lattice *)ob->data;
-    tot = lt->pntsu * lt->pntsv * lt->pntsw;
-    elemsize = lt->key->elemsize;
-  }
-  else if (ELEM(ob->type, OB_CURVES_LEGACY, OB_SURF)) {
-    const Curve *cu = (const Curve *)ob->data;
-    elemsize = cu->key->elemsize;
-    tot = BKE_keyblock_curve_element_count(&cu->nurb);
-  }
-
-  if (tot == 0) {
-    return;
-  }
-
-  kb->data = MEM_mallocN(tot * elemsize, __func__);
-
-  /* Copy coords to key-block. */
-  BKE_keyblock_update_from_vertcos(ob, kb, vertCos);
-}
-
-float (*BKE_keyblock_convert_to_vertcos(const Object *ob, const KeyBlock *kb))[3]
-{
-  float(*vertCos)[3], (*co)[3];
-  const float *fp = static_cast<const float *>(kb->data);
-  int tot = 0, a;
-
-  /* Count of vertex coords in array */
-  if (ob->type == OB_MESH) {
-    const Mesh *mesh = (const Mesh *)ob->data;
-    tot = mesh->verts_num;
-  }
-  else if (ob->type == OB_LATTICE) {
-    const Lattice *lt = (const Lattice *)ob->data;
-    tot = lt->pntsu * lt->pntsv * lt->pntsw;
-  }
-  else if (ELEM(ob->type, OB_CURVES_LEGACY, OB_SURF)) {
-    const Curve *cu = (const Curve *)ob->data;
-    tot = BKE_nurbList_verts_count(&cu->nurb);
-  }
-
-  if (tot == 0) {
-    return nullptr;
-  }
-
-  co = vertCos = static_cast<float(*)[3]>(MEM_mallocN(tot * sizeof(*vertCos), __func__));
-
-  /* Copy coords to array */
-  if (ELEM(ob->type, OB_MESH, OB_LATTICE)) {
-    for (a = 0; a < tot; a++, fp += 3, co++) {
-      copy_v3_v3(*co, fp);
-    }
-  }
-  else if (ELEM(ob->type, OB_CURVES_LEGACY, OB_SURF)) {
-    const Curve *cu = (const Curve *)ob->data;
-    const BezTriple *bezt;
-    const BPoint *bp;
-
-    LISTBASE_FOREACH (Nurb *, nu, &cu->nurb) {
-      if (nu->bezt) {
-        for (a = nu->pntsu, bezt = nu->bezt; a; a--, bezt++) {
-          for (int i = 0; i < 3; i++, co++) {
-            copy_v3_v3(*co, &fp[i * 3]);
-          }
-          fp += KEYELEM_FLOAT_LEN_BEZTRIPLE;
-        }
-      }
-      else {
-        for (a = nu->pntsu * nu->pntsv, bp = nu->bp; a; a--, bp++, co++) {
-          copy_v3_v3(*co, fp);
-          fp += KEYELEM_FLOAT_LEN_BPOINT;
-        }
-      }
-    }
-  }
-
-  return vertCos;
-}
-
-void BKE_keyblock_update_from_offset(const Object *ob, KeyBlock *kb, const float (*ofs)[3])
-{
-  int a;
-  float *fp = static_cast<float *>(kb->data);
-
-  if (ELEM(ob->type, OB_MESH, OB_LATTICE)) {
-    for (a = 0; a < kb->totelem; a++, fp += 3, ofs++) {
-      add_v3_v3(fp, *ofs);
-    }
-  }
-  else if (ELEM(ob->type, OB_CURVES_LEGACY, OB_SURF)) {
-    const Curve *cu = (const Curve *)ob->data;
-    const BezTriple *bezt;
-    const BPoint *bp;
-
-    LISTBASE_FOREACH (const Nurb *, nu, &cu->nurb) {
-      if (nu->bezt) {
-        for (a = nu->pntsu, bezt = nu->bezt; a; a--, bezt++) {
-          for (int i = 0; i < 3; i++, ofs++) {
-            add_v3_v3(&fp[i * 3], *ofs);
-          }
-          fp += KEYELEM_FLOAT_LEN_BEZTRIPLE;
-        }
-      }
-      else {
-        for (a = nu->pntsu * nu->pntsv, bp = nu->bp; a; a--, bp++, ofs++) {
-          add_v3_v3(fp, *ofs);
-          fp += KEYELEM_FLOAT_LEN_BPOINT;
-        }
-      }
-    }
-  }
-}
-
 bool BKE_keyblock_move(Object *ob, int org_index, int new_index)
 {
   Key *key = BKE_key_from_object(ob);
@@ -2575,20 +2391,21 @@ bool BKE_keyblock_is_basis(const Key *key, const int index)
   return false;
 }
 
-bool *BKE_keyblock_get_dependent_keys(const Key *key, const int index)
+std::optional<blender::Array<bool>> BKE_keyblock_get_dependent_keys(const Key *key,
+                                                                    const int index)
 {
   if (key->type != KEY_RELATIVE) {
-    return nullptr;
+    return std::nullopt;
   }
 
   const int count = BLI_listbase_count(&key->block);
 
   if (index < 0 || index >= count) {
-    return nullptr;
+    return std::nullopt;
   }
 
   /* Seed the table with the specified key. */
-  bool *marked = static_cast<bool *>(MEM_callocN(sizeof(bool) * count, __func__));
+  blender::Array<bool> marked(count, false);
 
   marked[index] = true;
 
@@ -2609,8 +2426,7 @@ bool *BKE_keyblock_get_dependent_keys(const Key *key, const int index)
   } while (updated);
 
   if (!found) {
-    MEM_freeN(marked);
-    return nullptr;
+    return std::nullopt;
   }
 
   /* After the search is complete, exclude the original key. */

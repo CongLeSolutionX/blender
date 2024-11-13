@@ -10,9 +10,10 @@
 
 #include <fmt/format.h>
 
-#include "BKE_action.h"
+#include "BKE_action.hh"
 #include "BKE_anim_data.hh"
 #include "BKE_attribute.hh"
+#include "BKE_blendfile_link_append.hh"
 #include "BKE_colorband.hh"
 #include "BKE_colortools.hh"
 #include "BKE_curves.hh"
@@ -58,6 +59,10 @@
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_build.hh"
 
+#include "ANIM_action.hh"
+#include "ANIM_action_iterators.hh"
+#include "ANIM_action_legacy.hh"
+
 namespace blender::bke::greasepencil::convert {
 
 /**
@@ -65,12 +70,16 @@ namespace blender::bke::greasepencil::convert {
  */
 struct ConversionData {
   Main &bmain;
+  BlendfileLinkAppendContext *lapp_context;
   /** A mapping between a library and a generated 'offset radius' node group. */
   Map<Library *, bNodeTree *> offset_radius_ntree_by_library = {};
   /** A mapping between a legacy GPv2 ID and its converted GPv3 ID. */
   Map<bGPdata *, GreasePencil *> legacy_to_greasepencil_data = {};
 
-  ConversionData(Main &bmain) : bmain(bmain) {}
+  ConversionData(Main &bmain, BlendfileLinkAppendContext *lapp_context)
+      : bmain(bmain), lapp_context(lapp_context)
+  {
+  }
 };
 
 /* -------------------------------------------------------------------- */
@@ -208,6 +217,7 @@ class AnimDataConvertor {
 
  private:
   using FCurveCallback = bool(bAction *owner_action, FCurve &fcurve);
+  using ActionCallback = bool(bAction &action);
 
   /** \return True if this AnimDataConvertor is valid, i.e. can be used to process animation data
    * from source ID. */
@@ -253,13 +263,24 @@ class AnimDataConvertor {
 
   /* Iterator over all FCurves in a given animation data. */
 
-  bool fcurve_foreach(bAction *owner_action,
-                      ListBase &fcurves,
-                      blender::FunctionRef<FCurveCallback> callback) const
+  bool fcurve_foreach_in_action(bAction *owner_action,
+                                blender::FunctionRef<FCurveCallback> callback) const
+  {
+    bool is_changed = false;
+    animrig::foreach_fcurve_in_action(owner_action->wrap(), [&](FCurve &fcurve) {
+      const bool local_is_changed = callback(owner_action, fcurve);
+      is_changed = is_changed || local_is_changed;
+    });
+
+    return is_changed;
+  }
+
+  bool fcurve_foreach_in_listbase(ListBase &fcurves,
+                                  blender::FunctionRef<FCurveCallback> callback) const
   {
     bool is_changed = false;
     LISTBASE_FOREACH (FCurve *, fcurve, &fcurves) {
-      const bool local_is_changed = callback(owner_action, *fcurve);
+      const bool local_is_changed = callback(nullptr, *fcurve);
       is_changed = is_changed || local_is_changed;
     }
     return is_changed;
@@ -270,7 +291,7 @@ class AnimDataConvertor {
   {
     bool is_changed = false;
     if (nla_strip.act) {
-      if (this->fcurve_foreach(nla_strip.act, nla_strip.act->curves, callback)) {
+      if (this->fcurve_foreach_in_action(nla_strip.act, callback)) {
         DEG_id_tag_update(&nla_strip.act->id, ID_RECALC_ANIMATION);
         is_changed = true;
       }
@@ -287,22 +308,25 @@ class AnimDataConvertor {
   {
     bool is_changed = false;
     if (anim_data.action) {
-      if (this->fcurve_foreach(anim_data.action, anim_data.action->curves, callback)) {
+      if (this->fcurve_foreach_in_action(anim_data.action, callback)) {
         DEG_id_tag_update(&anim_data.action->id, ID_RECALC_ANIMATION);
         is_changed = true;
       }
     }
     if (anim_data.tmpact) {
-      if (this->fcurve_foreach(anim_data.tmpact, anim_data.tmpact->curves, callback)) {
+      if (this->fcurve_foreach_in_action(anim_data.tmpact, callback)) {
         DEG_id_tag_update(&anim_data.tmpact->id, ID_RECALC_ANIMATION);
         is_changed = true;
       }
     }
 
     {
-      const bool local_is_changed = this->fcurve_foreach(nullptr, anim_data.drivers, callback);
+      const bool local_is_changed = this->fcurve_foreach_in_listbase(anim_data.drivers, callback);
       is_changed = is_changed || local_is_changed;
     }
+
+    /* NOTE: New layered actions system can be ignored here, it did not exist together with GPv2.
+     */
 
     if (this->skip_nla) {
       return is_changed;
@@ -317,6 +341,55 @@ class AnimDataConvertor {
     return is_changed;
   }
 
+  bool action_process(bAction &action, blender::FunctionRef<ActionCallback> callback) const
+  {
+    if (callback(action)) {
+      DEG_id_tag_update(&action.id, ID_RECALC_ANIMATION);
+      return true;
+    }
+    return false;
+  }
+
+  bool nla_strip_action_foreach(NlaStrip &nla_strip,
+                                blender::FunctionRef<ActionCallback> callback) const
+  {
+    bool is_changed = false;
+    if (nla_strip.act) {
+      is_changed = action_process(*nla_strip.act, callback);
+    }
+    LISTBASE_FOREACH (NlaStrip *, nla_strip_children, &nla_strip.strips) {
+      is_changed = is_changed || this->nla_strip_action_foreach(*nla_strip_children, callback);
+    }
+    return is_changed;
+  }
+
+  bool animdata_action_foreach(AnimData &anim_data,
+                               blender::FunctionRef<ActionCallback> callback) const
+  {
+    bool is_changed = false;
+
+    if (anim_data.action) {
+      is_changed = is_changed || action_process(*anim_data.action, callback);
+    }
+    if (anim_data.tmpact) {
+      is_changed = is_changed || action_process(*anim_data.tmpact, callback);
+    }
+
+    /* NOTE: New layered actions system can be ignored here, it did not exist together with GPv2.
+     */
+
+    if (this->skip_nla) {
+      return is_changed;
+    }
+
+    LISTBASE_FOREACH (NlaTrack *, nla_track, &anim_data.nla_tracks) {
+      LISTBASE_FOREACH (NlaStrip *, nla_strip, &nla_track->strips) {
+        is_changed = is_changed || this->nla_strip_action_foreach(*nla_strip, callback);
+      }
+    }
+    return is_changed;
+  }
+
  public:
   /**
    * Check whether the source animation data contains FCurves that need to be converted/moved to
@@ -326,6 +399,10 @@ class AnimDataConvertor {
   {
     if (!this->is_valid()) {
       return false;
+    }
+
+    if (GS(id_src.name) != GS(id_dst.name)) {
+      return true;
     }
 
     bool has_animation = false;
@@ -452,6 +529,19 @@ class AnimDataConvertor {
       return;
     }
 
+    /* Ensure existing actions moved to a different ID type keep a 'valid' `idroot` value. Not
+     * essential, but 'nice to have'. */
+    if (GS(this->id_src.name) != GS(this->id_dst.name)) {
+      if (!this->animdata_dst) {
+        this->animdata_dst = BKE_animdata_ensure_id(&this->id_dst);
+      }
+      auto actions_idroot_ensure = [&](bAction &action) -> bool {
+        action.idroot = GS(this->id_dst.name);
+        return true;
+      };
+      this->animdata_action_foreach(*this->animdata_dst, actions_idroot_ensure);
+    }
+
     if (&id_src == &id_dst) {
       if (this->has_changes) {
         DEG_id_tag_update(&this->id_src, ID_RECALC_ANIMATION);
@@ -459,6 +549,7 @@ class AnimDataConvertor {
       }
       return;
     }
+
     if (this->fcurves_from_src_main_action.is_empty() &&
         this->fcurves_from_src_tmp_action.is_empty() && this->fcurves_from_src_drivers.is_empty())
     {
@@ -468,7 +559,17 @@ class AnimDataConvertor {
       this->animdata_dst = BKE_animdata_ensure_id(&this->id_dst);
     }
 
-    auto fcurves_move =
+    auto fcurves_move = [&](bAction *action_dst,
+                            const animrig::slot_handle_t slot_handle_dst,
+                            bAction *action_src,
+                            const Span<FCurve *> fcurves) {
+      for (FCurve *fcurve : fcurves) {
+        animrig::action_fcurve_move(
+            action_dst->wrap(), slot_handle_dst, action_src->wrap(), *fcurve);
+      }
+    };
+
+    auto fcurves_move_between_listbases =
         [&](ListBase &fcurves_dst, ListBase &fcurves_src, const Span<FCurve *> fcurves) {
           for (FCurve *fcurve : fcurves) {
             BLI_assert(BLI_findindex(&fcurves_src, fcurve) >= 0);
@@ -479,30 +580,44 @@ class AnimDataConvertor {
 
     if (!this->fcurves_from_src_main_action.is_empty()) {
       if (!this->animdata_dst->action) {
-        this->animdata_dst->action = BKE_action_add(
-            &this->conversion_data.bmain,
+        /* Create a new action. */
+        animrig::Action &action = animrig::action_add(
+            this->conversion_data.bmain,
             this->animdata_src->action ? this->animdata_src->action->id.name + 2 : nullptr);
+        action.slot_add_for_id(this->id_dst);
+
+        const bool ok = animrig::assign_action(&action, {this->id_dst, *this->animdata_dst});
+        BLI_assert_msg(ok, "Expecting action assignment to work when converting Grease Pencil");
+        UNUSED_VARS_NDEBUG(ok);
       }
-      fcurves_move(this->animdata_dst->action->curves,
-                   this->animdata_src->action->curves,
+      fcurves_move(this->animdata_dst->action,
+                   this->animdata_dst->slot_handle,
+                   this->animdata_src->action,
                    this->fcurves_from_src_main_action);
       this->fcurves_from_src_main_action.clear();
     }
     if (!this->fcurves_from_src_tmp_action.is_empty()) {
       if (!this->animdata_dst->tmpact) {
-        this->animdata_dst->tmpact = BKE_action_add(
-            &this->conversion_data.bmain,
+        /* Create a new tmpact. */
+        animrig::Action &tmpact = animrig::action_add(
+            this->conversion_data.bmain,
             this->animdata_src->tmpact ? this->animdata_src->tmpact->id.name + 2 : nullptr);
+        tmpact.slot_add_for_id(this->id_dst);
+
+        const bool ok = animrig::assign_tmpaction(&tmpact, {this->id_dst, *this->animdata_dst});
+        BLI_assert_msg(ok, "Expecting tmpact assignment to work when converting Grease Pencil");
+        UNUSED_VARS_NDEBUG(ok);
       }
-      fcurves_move(this->animdata_dst->tmpact->curves,
-                   this->animdata_src->tmpact->curves,
+      fcurves_move(this->animdata_dst->tmpact,
+                   this->animdata_dst->tmp_slot_handle,
+                   this->animdata_src->tmpact,
                    this->fcurves_from_src_tmp_action);
       this->fcurves_from_src_tmp_action.clear();
     }
     if (!this->fcurves_from_src_drivers.is_empty()) {
-      fcurves_move(this->animdata_dst->drivers,
-                   this->animdata_src->drivers,
-                   this->fcurves_from_src_drivers);
+      fcurves_move_between_listbases(this->animdata_dst->drivers,
+                                     this->animdata_src->drivers,
+                                     this->fcurves_from_src_drivers);
       this->fcurves_from_src_drivers.clear();
     }
 
@@ -582,7 +697,7 @@ static float3x2 get_legacy_stroke_to_texture_matrix(const float2 uv_translation,
 
   float3x2 texture_matrix = float3x2::identity();
 
-  /* Apply bounding box rescaling. */
+  /* Apply bounding box re-scaling. */
   texture_matrix[2] -= minv;
   texture_matrix = math::from_scale<float2x2>(1.0f / diagonal) * texture_matrix;
 
@@ -769,7 +884,6 @@ static Drawing legacy_gpencil_frame_to_grease_pencil_drawing(const bGPDframe &gp
   /* Curve Attributes. */
   SpanAttributeWriter<bool> stroke_cyclic = attributes.lookup_or_add_for_write_span<bool>(
       "cyclic", AttrDomain::Curve);
-  /* TODO: This should be a `double` attribute. */
   SpanAttributeWriter<float> stroke_init_times = attributes.lookup_or_add_for_write_span<float>(
       "init_time", AttrDomain::Curve);
   SpanAttributeWriter<int8_t> stroke_start_caps = attributes.lookup_or_add_for_write_span<int8_t>(
@@ -798,8 +912,8 @@ static Drawing legacy_gpencil_frame_to_grease_pencil_drawing(const bGPDframe &gp
     }
 
     stroke_cyclic.span[stroke_i] = (gps->flag & GP_STROKE_CYCLIC) != 0;
-    /* TODO: This should be a `double` attribute. */
-    stroke_init_times.span[stroke_i] = float(gps->inittime);
+    /* Truncating time in ms to uint32 then we don't lose precision in lower bits. */
+    stroke_init_times.span[stroke_i] = float(uint32_t(gps->inittime * double(1e3))) / float(1e3);
     stroke_start_caps.span[stroke_i] = int8_t(gps->caps[0]);
     stroke_end_caps.span[stroke_i] = int8_t(gps->caps[1]);
     stroke_softness.span[stroke_i] = 1.0f - gps->hardness;
@@ -905,7 +1019,7 @@ static void legacy_gpencil_to_grease_pencil(ConversionData &conversion_data,
 {
   using namespace blender::bke::greasepencil;
 
-  if (gpd.flag & LIB_FAKEUSER) {
+  if (gpd.flag & ID_FLAG_FAKEUSER) {
     id_fake_user_set(&grease_pencil.id);
   }
 
@@ -948,7 +1062,10 @@ static void legacy_gpencil_to_grease_pencil(ConversionData &conversion_data,
 
     new_layer.parent = gpl->parent;
     new_layer.set_parent_bone_name(gpl->parsubstr);
-    copy_m4_m4(new_layer.parentinv, gpl->inverse);
+    /* GPv2 parent inverse matrix is only valid when parent is set. */
+    if (gpl->parent) {
+      copy_m4_m4(new_layer.parentinv, gpl->inverse);
+    }
 
     copy_v3_v3(new_layer.translation, gpl->location);
     copy_v3_v3(new_layer.rotation, gpl->rotation);
@@ -991,6 +1108,9 @@ static void legacy_gpencil_to_grease_pencil(ConversionData &conversion_data,
 
   /* Second loop, to write to layer attributes after all layers were created. */
   MutableAttributeAccessor layer_attributes = grease_pencil.attributes_for_write();
+  /* NOTE: Layer Adjustments like the tint and the radius offsets are deliberately ignored here!
+   * These are converted to modifiers at the bottom of the stack to keep visual compatibility with
+   * GPv2. */
   SpanAttributeWriter<int> layer_passes = layer_attributes.lookup_or_add_for_write_span<int>(
       "pass_index", bke::AttrDomain::Layer);
 
@@ -1038,6 +1158,20 @@ static void legacy_gpencil_to_grease_pencil(ConversionData &conversion_data,
   if (AnimData *gpd_animdata = BKE_animdata_from_id(&gpd.id)) {
     grease_pencil.adt = BKE_animdata_copy_in_lib(
         &conversion_data.bmain, gpd.id.lib, gpd_animdata, LIB_ID_COPY_DEFAULT);
+
+    /* Some property was renamed between legacy GP layers and new GreasePencil ones. */
+    AnimDataConvertor animdata_gpdata_transfer(
+        conversion_data, grease_pencil.id, gpd.id, {{".location", ".translation"}});
+    for (const Layer *layer_iter : grease_pencil.layers()) {
+      /* Data comes from versioned GPv2 layers, which have a fixed max length. */
+      char layer_name_esc[sizeof((bGPDlayer{}).info) * 2];
+      BLI_str_escape(layer_name_esc, layer_iter->name().c_str(), sizeof(layer_name_esc));
+      std::string layer_root_path = fmt::format("layers[\"{}\"]", layer_name_esc);
+      animdata_gpdata_transfer.root_path_dst = layer_root_path;
+      animdata_gpdata_transfer.root_path_src = layer_root_path;
+      animdata_gpdata_transfer.fcurves_convert();
+    }
+    animdata_gpdata_transfer.fcurves_convert_finalize();
   }
 }
 
@@ -1047,7 +1181,7 @@ static bNodeTree *offset_radius_node_tree_add(ConversionData &conversion_data, L
   using namespace blender;
   /* NOTE: DO NOT translate this ID name, it is used to find a potentially already existing
    * node-tree. */
-  bNodeTree *group = bke::BKE_node_tree_add_in_lib(
+  bNodeTree *group = bke::node_tree_add_in_lib(
       &conversion_data.bmain, library, OFFSET_RADIUS_NODETREE_NAME, "GeometryNodeTree");
 
   if (!group->geometry_node_asset_traits) {
@@ -1070,80 +1204,80 @@ static bNodeTree *offset_radius_node_tree_add(ConversionData &conversion_data, L
   group->tree_interface.add_socket(
       DATA_("Layer"), "", "NodeSocketString", NODE_INTERFACE_SOCKET_INPUT, nullptr);
 
-  bNode *group_output = bke::nodeAddNode(nullptr, group, "NodeGroupOutput");
+  bNode *group_output = bke::node_add_node(nullptr, group, "NodeGroupOutput");
   group_output->locx = 800;
   group_output->locy = 160;
-  bNode *group_input = bke::nodeAddNode(nullptr, group, "NodeGroupInput");
+  bNode *group_input = bke::node_add_node(nullptr, group, "NodeGroupInput");
   group_input->locx = 0;
   group_input->locy = 160;
 
-  bNode *set_curve_radius = bke::nodeAddNode(nullptr, group, "GeometryNodeSetCurveRadius");
+  bNode *set_curve_radius = bke::node_add_node(nullptr, group, "GeometryNodeSetCurveRadius");
   set_curve_radius->locx = 600;
   set_curve_radius->locy = 160;
-  bNode *named_layer_selection = bke::nodeAddNode(
+  bNode *named_layer_selection = bke::node_add_node(
       nullptr, group, "GeometryNodeInputNamedLayerSelection");
   named_layer_selection->locx = 200;
   named_layer_selection->locy = 100;
-  bNode *input_radius = bke::nodeAddNode(nullptr, group, "GeometryNodeInputRadius");
+  bNode *input_radius = bke::node_add_node(nullptr, group, "GeometryNodeInputRadius");
   input_radius->locx = 0;
   input_radius->locy = 0;
 
-  bNode *add = bke::nodeAddNode(nullptr, group, "ShaderNodeMath");
+  bNode *add = bke::node_add_node(nullptr, group, "ShaderNodeMath");
   add->custom1 = NODE_MATH_ADD;
   add->locx = 200;
   add->locy = 0;
 
-  bNode *clamp_radius = bke::nodeAddNode(nullptr, group, "ShaderNodeClamp");
+  bNode *clamp_radius = bke::node_add_node(nullptr, group, "ShaderNodeClamp");
   clamp_radius->locx = 400;
   clamp_radius->locy = 0;
-  bNodeSocket *sock_max = bke::nodeFindSocket(clamp_radius, SOCK_IN, "Max");
+  bNodeSocket *sock_max = bke::node_find_socket(clamp_radius, SOCK_IN, "Max");
   static_cast<bNodeSocketValueFloat *>(sock_max->default_value)->value = FLT_MAX;
 
-  bke::nodeAddLink(group,
-                   group_input,
-                   bke::nodeFindSocket(group_input, SOCK_OUT, "Socket_0"),
-                   set_curve_radius,
-                   bke::nodeFindSocket(set_curve_radius, SOCK_IN, "Curve"));
-  bke::nodeAddLink(group,
-                   set_curve_radius,
-                   bke::nodeFindSocket(set_curve_radius, SOCK_OUT, "Curve"),
-                   group_output,
-                   bke::nodeFindSocket(group_output, SOCK_IN, "Socket_1"));
+  bke::node_add_link(group,
+                     group_input,
+                     bke::node_find_socket(group_input, SOCK_OUT, "Socket_0"),
+                     set_curve_radius,
+                     bke::node_find_socket(set_curve_radius, SOCK_IN, "Curve"));
+  bke::node_add_link(group,
+                     set_curve_radius,
+                     bke::node_find_socket(set_curve_radius, SOCK_OUT, "Curve"),
+                     group_output,
+                     bke::node_find_socket(group_output, SOCK_IN, "Socket_1"));
 
-  bke::nodeAddLink(group,
-                   group_input,
-                   bke::nodeFindSocket(group_input, SOCK_OUT, "Socket_3"),
-                   named_layer_selection,
-                   bke::nodeFindSocket(named_layer_selection, SOCK_IN, "Name"));
-  bke::nodeAddLink(group,
-                   named_layer_selection,
-                   bke::nodeFindSocket(named_layer_selection, SOCK_OUT, "Selection"),
-                   set_curve_radius,
-                   bke::nodeFindSocket(set_curve_radius, SOCK_IN, "Selection"));
+  bke::node_add_link(group,
+                     group_input,
+                     bke::node_find_socket(group_input, SOCK_OUT, "Socket_3"),
+                     named_layer_selection,
+                     bke::node_find_socket(named_layer_selection, SOCK_IN, "Name"));
+  bke::node_add_link(group,
+                     named_layer_selection,
+                     bke::node_find_socket(named_layer_selection, SOCK_OUT, "Selection"),
+                     set_curve_radius,
+                     bke::node_find_socket(set_curve_radius, SOCK_IN, "Selection"));
 
-  bke::nodeAddLink(group,
-                   group_input,
-                   bke::nodeFindSocket(group_input, SOCK_OUT, "Socket_2"),
-                   add,
-                   bke::nodeFindSocket(add, SOCK_IN, "Value"));
-  bke::nodeAddLink(group,
-                   input_radius,
-                   bke::nodeFindSocket(input_radius, SOCK_OUT, "Radius"),
-                   add,
-                   bke::nodeFindSocket(add, SOCK_IN, "Value_001"));
-  bke::nodeAddLink(group,
-                   add,
-                   bke::nodeFindSocket(add, SOCK_OUT, "Value"),
-                   clamp_radius,
-                   bke::nodeFindSocket(clamp_radius, SOCK_IN, "Value"));
-  bke::nodeAddLink(group,
-                   clamp_radius,
-                   bke::nodeFindSocket(clamp_radius, SOCK_OUT, "Result"),
-                   set_curve_radius,
-                   bke::nodeFindSocket(set_curve_radius, SOCK_IN, "Radius"));
+  bke::node_add_link(group,
+                     group_input,
+                     bke::node_find_socket(group_input, SOCK_OUT, "Socket_2"),
+                     add,
+                     bke::node_find_socket(add, SOCK_IN, "Value"));
+  bke::node_add_link(group,
+                     input_radius,
+                     bke::node_find_socket(input_radius, SOCK_OUT, "Radius"),
+                     add,
+                     bke::node_find_socket(add, SOCK_IN, "Value_001"));
+  bke::node_add_link(group,
+                     add,
+                     bke::node_find_socket(add, SOCK_OUT, "Value"),
+                     clamp_radius,
+                     bke::node_find_socket(clamp_radius, SOCK_IN, "Value"));
+  bke::node_add_link(group,
+                     clamp_radius,
+                     bke::node_find_socket(clamp_radius, SOCK_OUT, "Result"),
+                     set_curve_radius,
+                     bke::node_find_socket(set_curve_radius, SOCK_IN, "Radius"));
 
   LISTBASE_FOREACH (bNode *, node, &group->nodes) {
-    bke::nodeSetSelected(node, false);
+    bke::node_set_selected(node, false);
   }
 
   return group;
@@ -2498,9 +2632,9 @@ static void legacy_object_modifier_weight_proximity(ConversionData &conversion_d
                                    false);
 }
 
-static void legacy_object_modifier_weight_lineart(ConversionData &conversion_data,
-                                                  Object &object,
-                                                  GpencilModifierData &legacy_md)
+static void legacy_object_modifier_lineart(ConversionData &conversion_data,
+                                           Object &object,
+                                           GpencilModifierData &legacy_md)
 {
   ModifierData &md = legacy_object_modifier_common(
       conversion_data, object, eModifierType_GreasePencilLineart, legacy_md);
@@ -2586,6 +2720,7 @@ static void legacy_object_modifier_build(ConversionData &conversion_data,
   md_build.percentage_fac = legacy_md_build.percentage_fac;
   md_build.speed_fac = legacy_md_build.speed_fac;
   md_build.speed_maxgap = legacy_md_build.speed_maxgap;
+  md_build.object = legacy_md_build.object;
   STRNCPY(md_build.target_vgname, legacy_md_build.target_vgname);
 
   legacy_object_modifier_influence(md_build.influence,
@@ -2729,7 +2864,7 @@ static void legacy_object_modifiers(ConversionData &conversion_data, Object &obj
         legacy_object_modifier_weight_proximity(conversion_data, object, *gpd_md);
         break;
       case eGpencilModifierType_Lineart:
-        legacy_object_modifier_weight_lineart(conversion_data, object, *gpd_md);
+        legacy_object_modifier_lineart(conversion_data, object, *gpd_md);
         break;
       case eGpencilModifierType_Build:
         legacy_object_modifier_build(conversion_data, object, *gpd_md);
@@ -2828,7 +2963,7 @@ static void legacy_gpencil_sanitize_annotations(Main &bmain)
 
   ID *id_iter;
   FOREACH_MAIN_ID_BEGIN (&bmain, id_iter) {
-    if (bNodeTree *node_tree = bke::ntreeFromID(id_iter)) {
+    if (bNodeTree *node_tree = bke::node_tree_from_id(id_iter)) {
       sanitize_gpv2_annotation(&node_tree->gpd);
     }
   }
@@ -2898,7 +3033,7 @@ static void legacy_gpencil_sanitize_annotations(Main &bmain)
   }
 }
 
-static void legacy_gpencil_object_ex(ConversionData &conversion_data, Object &object)
+static void legacy_gpencil_object(ConversionData &conversion_data, Object &object)
 {
   BLI_assert((GS(static_cast<ID *>(object.data)->name) == ID_GD_LEGACY));
 
@@ -2938,16 +3073,11 @@ static void legacy_gpencil_object_ex(ConversionData &conversion_data, Object &ob
   BKE_object_free_derived_caches(&object);
 }
 
-void legacy_gpencil_object(Main &bmain, Object &object)
+void legacy_main(Main &bmain,
+                 BlendfileLinkAppendContext *lapp_context,
+                 BlendFileReadReport & /*reports*/)
 {
-  ConversionData conversion_data(bmain);
-
-  legacy_gpencil_object_ex(conversion_data, object);
-}
-
-void legacy_main(Main &bmain, BlendFileReadReport & /*reports*/)
-{
-  ConversionData conversion_data(bmain);
+  ConversionData conversion_data(bmain, lapp_context);
 
   /* Ensure that annotations are fully separated from object usages of legacy GPv2 data. */
   legacy_gpencil_sanitize_annotations(bmain);
@@ -2956,7 +3086,7 @@ void legacy_main(Main &bmain, BlendFileReadReport & /*reports*/)
     if (object->type != OB_GPENCIL_LEGACY) {
       continue;
     }
-    legacy_gpencil_object_ex(conversion_data, *object);
+    legacy_gpencil_object(conversion_data, *object);
   }
 
   /* Potential other usages of legacy bGPdata IDs also need to be remapped to their matching new
@@ -2985,6 +3115,29 @@ void legacy_main(Main &bmain, BlendFileReadReport & /*reports*/)
   }
 
   BKE_libblock_remap_multiple(&bmain, gpd_remapper, ID_REMAP_ALLOW_IDTYPE_MISMATCH);
+
+  if (conversion_data.lapp_context) {
+    BKE_blendfile_link_append_context_item_foreach(
+        conversion_data.lapp_context,
+        [&conversion_data](BlendfileLinkAppendContext *lapp_context,
+                           BlendfileLinkAppendContextItem *item) -> bool {
+          ID *item_new_id = BKE_blendfile_link_append_context_item_newid_get(lapp_context, item);
+          if (!item_new_id || GS(item_new_id->name) != ID_GD_LEGACY) {
+            return true;
+          }
+          GreasePencil **item_grease_pencil =
+              conversion_data.legacy_to_greasepencil_data.lookup_ptr(
+                  reinterpret_cast<bGPdata *>(item_new_id));
+          if (item_grease_pencil && *item_grease_pencil) {
+            BKE_blendfile_link_append_context_item_newid_set(
+                lapp_context, item, &(*item_grease_pencil)->id);
+          }
+          return true;
+        },
+        eBlendfileLinkAppendForeachItemFlag(
+            BKE_BLENDFILE_LINK_APPEND_FOREACH_ITEM_FLAG_DO_DIRECT |
+            BKE_BLENDFILE_LINK_APPEND_FOREACH_ITEM_FLAG_DO_INDIRECT));
+  }
 }
 
 void lineart_wrap_v3(const LineartGpencilModifierData *lmd_legacy,
@@ -3000,6 +3153,7 @@ void lineart_wrap_v3(const LineartGpencilModifierData *lmd_legacy,
   lmd->source_object = lmd_legacy->source_object;
   lmd->source_collection = lmd_legacy->source_collection;
   lmd->target_material = lmd_legacy->target_material;
+  STRNCPY(lmd->target_layer, lmd_legacy->target_layer);
   STRNCPY(lmd->source_vertex_group, lmd_legacy->source_vertex_group);
   STRNCPY(lmd->vgname, lmd_legacy->vgname);
   lmd->overscan = lmd_legacy->overscan;
@@ -3008,7 +3162,7 @@ void lineart_wrap_v3(const LineartGpencilModifierData *lmd_legacy,
   lmd->shadow_camera_near = lmd_legacy->shadow_camera_near;
   lmd->shadow_camera_far = lmd_legacy->shadow_camera_far;
   lmd->opacity = lmd_legacy->opacity;
-  lmd->thickness = lmd_legacy->thickness / 2;
+  lmd->thickness = lmd_legacy->thickness;
   lmd->mask_switches = lmd_legacy->mask_switches;
   lmd->material_mask_bits = lmd_legacy->material_mask_bits;
   lmd->intersection_mask = lmd_legacy->intersection_mask;
@@ -3051,7 +3205,7 @@ void lineart_unwrap_v3(LineartGpencilModifierData *lmd_legacy,
   lmd_legacy->shadow_camera_near = lmd->shadow_camera_near;
   lmd_legacy->shadow_camera_far = lmd->shadow_camera_far;
   lmd_legacy->opacity = lmd->opacity;
-  lmd_legacy->thickness = lmd->thickness * 2;
+  lmd_legacy->thickness = lmd->thickness;
   lmd_legacy->mask_switches = lmd->mask_switches;
   lmd_legacy->material_mask_bits = lmd->material_mask_bits;
   lmd_legacy->intersection_mask = lmd->intersection_mask;

@@ -28,7 +28,6 @@ set(SRC
   transform_convert_cursor.cc
   transform_convert_curve.cc
   transform_convert_curves.cc
-  transform_convert_gpencil_legacy.cc
   transform_convert_graph.cc
   transform_convert_grease_pencil.cc
   transform_convert_lattice.cc
@@ -127,18 +126,6 @@ set(LIB
   bf_gpu
   PRIVATE bf::intern::guardedalloc
 )
-
-if(WITH_TBB)
-  add_definitions(-DWITH_TBB)
-
-  list(APPEND INC_SYS
-    ${TBB_INCLUDE_DIRS}
-  )
-
-  list(APPEND LIB
-    ${TBB_LIBRARIES}
-  )
-endif()
 
 blender_add_lib(bf_editor_transform "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 

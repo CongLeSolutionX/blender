@@ -18,7 +18,7 @@
 #include "BKE_crazyspace.hh"
 #include "BKE_curves.hh"
 #include "BKE_grease_pencil.hh"
-#include "BKE_image.h"
+#include "BKE_image.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_material.h"
 #include "BKE_paint.hh"
@@ -590,7 +590,8 @@ static bke::CurvesGeometry boundary_to_curves(const Scene &scene,
   MutableSpan<float3> positions = curves.positions_for_write();
   bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
   /* Attributes that are defined explicitly and should not be set to default values. */
-  Set<std::string> skip_curve_attributes = {"curve_type", "material_index", "cyclic", "hardness"};
+  Set<std::string> skip_curve_attributes = {
+      "curve_type", "material_index", "cyclic", "hardness", "fill_opacity"};
   Set<std::string> skip_point_attributes = {"position", "radius", "opacity"};
 
   curves.curve_types_for_write().fill(CURVE_TYPE_POLY);
@@ -602,6 +603,10 @@ static bke::CurvesGeometry boundary_to_curves(const Scene &scene,
       "cyclic", bke::AttrDomain::Curve);
   bke::SpanAttributeWriter<float> hardnesses = attributes.lookup_or_add_for_write_span<float>(
       "hardness",
+      bke::AttrDomain::Curve,
+      bke::AttributeInitVArray(VArray<float>::ForSingle(1.0f, curves.curves_num())));
+  bke::SpanAttributeWriter<float> fill_opacities = attributes.lookup_or_add_for_write_span<float>(
+      "fill_opacity",
       bke::AttrDomain::Curve,
       bke::AttributeInitVArray(VArray<float>::ForSingle(1.0f, curves.curves_num())));
   bke::SpanAttributeWriter<float> radii = attributes.lookup_or_add_for_write_span<float>(
@@ -616,10 +621,13 @@ static bke::CurvesGeometry boundary_to_curves(const Scene &scene,
   cyclic.span.fill(true);
   materials.span.fill(material_index);
   hardnesses.span.fill(hardness);
+  /* TODO: `fill_opacities` are currently always 1.0f for the new strokes. Maybe this should be a
+   * parameter. */
 
   cyclic.finish();
   materials.finish();
   hardnesses.finish();
+  fill_opacities.finish();
 
   for (const int point_i : curves.points_range()) {
     const int pixel_index = boundary.pixels[point_i];
@@ -668,10 +676,14 @@ static bke::CurvesGeometry boundary_to_curves(const Scene &scene,
   opacities.finish();
 
   /* Initialize the rest of the attributes with default values. */
-  bke::fill_attribute_range_default(
-      attributes, bke::AttrDomain::Curve, skip_curve_attributes, curves.curves_range());
-  bke::fill_attribute_range_default(
-      attributes, bke::AttrDomain::Point, skip_point_attributes, curves.points_range());
+  bke::fill_attribute_range_default(attributes,
+                                    bke::AttrDomain::Curve,
+                                    bke::attribute_filter_from_skip_ref(skip_curve_attributes),
+                                    curves.curves_range());
+  bke::fill_attribute_range_default(attributes,
+                                    bke::AttrDomain::Point,
+                                    bke::attribute_filter_from_skip_ref(skip_point_attributes),
+                                    curves.points_range());
 
   return curves;
 }
@@ -884,7 +896,7 @@ static rctf get_boundary_bounds(const ARegion &region,
       /* Check if the color is visible. */
       const int material_index = materials[curve_i];
       Material *mat = BKE_object_material_get(const_cast<Object *>(&object), material_index + 1);
-      if (mat == 0 || (mat->gp_style->flag & GP_MATERIAL_HIDE)) {
+      if (mat == nullptr || (mat->gp_style->flag & GP_MATERIAL_HIDE)) {
         return;
       }
 
@@ -1109,20 +1121,6 @@ bke::CurvesGeometry fill_strokes(const ViewContext &view_context,
                                line_colors,
                                line_width);
     }
-    const IndexRange circles_range = extensions.circles.centers.index_range();
-    if (!circles_range.is_empty()) {
-      const VArray<ColorGeometry4f> circle_colors = VArray<ColorGeometry4f>::ForSingle(
-          draw_boundary_color, circles_range.size());
-
-      image_render::draw_circles(world_to_view,
-                                 circles_range,
-                                 extensions.circles.centers,
-                                 VArray<float>::ForSpan(extensions.circles.radii),
-                                 circle_colors,
-                                 float2(image_size),
-                                 1.0f,
-                                 true);
-    }
   }
 
   ed::greasepencil::image_render::clear_projection_matrix();
@@ -1134,7 +1132,7 @@ bke::CurvesGeometry fill_strokes(const ViewContext &view_context,
     return {};
   }
 
-  /* TODO should use the same hardness as the paint tool. */
+  /* TODO should use the same hardness as the paint brush. */
   const float stroke_hardness = 1.0f;
 
   bke::CurvesGeometry fill_curves = process_image(*ima,

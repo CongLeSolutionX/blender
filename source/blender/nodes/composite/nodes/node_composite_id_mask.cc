@@ -47,6 +47,17 @@ class IDMaskOperation : public NodeOperation {
 
   void execute() override
   {
+    /* Not yet supported on CPU. */
+    if (!context().use_gpu()) {
+      for (const bNodeSocket *output : this->node()->output_sockets()) {
+        Result &output_result = get_result(output->identifier);
+        if (output_result.should_compute()) {
+          output_result.allocate_invalid();
+        }
+      }
+      return;
+    }
+
     const Result &input_mask = get_input("ID value");
     if (input_mask.is_single_value()) {
       execute_single_value();
@@ -62,7 +73,7 @@ class IDMaskOperation : public NodeOperation {
 
     /* If anti-aliasing is disabled, write to the output directly, otherwise, write to a temporary
      * result to later perform anti-aliasing. */
-    Result non_anti_aliased_mask = context().create_temporary_result(ResultType::Float);
+    Result non_anti_aliased_mask = context().create_result(ResultType::Float);
     Result &output_mask = use_anti_aliasing() ? non_anti_aliased_mask : get_result("Alpha");
 
     const Domain domain = compute_domain();
@@ -118,5 +129,5 @@ void register_node_type_cmp_idmask()
   ntype.draw_buttons = file_ns::node_composit_buts_id_mask;
   ntype.get_compositor_operation = file_ns::get_compositor_operation;
 
-  blender::bke::nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }

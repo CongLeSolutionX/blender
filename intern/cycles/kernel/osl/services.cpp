@@ -19,10 +19,6 @@
 #include "scene/pointcloud.h"
 #include "scene/scene.h"
 
-#include "kernel/osl/globals.h"
-#include "kernel/osl/services.h"
-#include "kernel/osl/types.h"
-
 #include "util/foreach.h"
 #include "util/log.h"
 #include "util/string.h"
@@ -30,6 +26,10 @@
 #include "kernel/device/cpu/compat.h"
 #include "kernel/device/cpu/globals.h"
 #include "kernel/device/cpu/image.h"
+
+#include "kernel/osl/globals.h"
+#include "kernel/osl/services.h"
+#include "kernel/osl/types.h"
 
 #include "kernel/integrator/state.h"
 #include "kernel/integrator/state_flow.h"
@@ -75,6 +75,7 @@ ustring OSLRenderServices::u_object_location("object:location");
 ustring OSLRenderServices::u_object_color("object:color");
 ustring OSLRenderServices::u_object_alpha("object:alpha");
 ustring OSLRenderServices::u_object_index("object:index");
+ustring OSLRenderServices::u_object_is_light("object:is_light");
 ustring OSLRenderServices::u_geom_dupli_generated("geom:dupli_generated");
 ustring OSLRenderServices::u_geom_dupli_uv("geom:dupli_uv");
 ustring OSLRenderServices::u_material_index("material:index");
@@ -433,9 +434,7 @@ static bool set_attribute_float2(float2 f[3], TypeDesc type, bool derivatives, v
     }
     return true;
   }
-  else if (type == TypeDesc::TypePoint || type == TypeDesc::TypeVector ||
-           type == TypeDesc::TypeNormal || type == TypeDesc::TypeColor)
-  {
+  else if (type == TypePoint || type == TypeVector || type == TypeNormal || type == TypeColor) {
     float *fval = (float *)val;
 
     fval[0] = f[0].x;
@@ -454,7 +453,7 @@ static bool set_attribute_float2(float2 f[3], TypeDesc type, bool derivatives, v
 
     return true;
   }
-  else if (type == TypeDesc::TypeFloat) {
+  else if (type == TypeFloat) {
     float *fval = (float *)val;
     fval[0] = average(f[0]);
 
@@ -504,9 +503,7 @@ static bool set_attribute_float3(float3 f[3], TypeDesc type, bool derivatives, v
     }
     return true;
   }
-  else if (type == TypeDesc::TypePoint || type == TypeDesc::TypeVector ||
-           type == TypeDesc::TypeNormal || type == TypeDesc::TypeColor)
-  {
+  else if (type == TypePoint || type == TypeVector || type == TypeNormal || type == TypeColor) {
     float *fval = (float *)val;
 
     fval[0] = f[0].x;
@@ -525,7 +522,7 @@ static bool set_attribute_float3(float3 f[3], TypeDesc type, bool derivatives, v
 
     return true;
   }
-  else if (type == TypeDesc::TypeFloat) {
+  else if (type == TypeFloat) {
     float *fval = (float *)val;
     fval[0] = average(f[0]);
 
@@ -581,9 +578,7 @@ static bool set_attribute_float4(float4 f[3], TypeDesc type, bool derivatives, v
     }
     return true;
   }
-  else if (type == TypeDesc::TypePoint || type == TypeDesc::TypeVector ||
-           type == TypeDesc::TypeNormal || type == TypeDesc::TypeColor)
-  {
+  else if (type == TypePoint || type == TypeVector || type == TypeNormal || type == TypeColor) {
     fval[0] = f[0].x;
     fval[1] = f[0].y;
     fval[2] = f[0].z;
@@ -599,7 +594,7 @@ static bool set_attribute_float4(float4 f[3], TypeDesc type, bool derivatives, v
     }
     return true;
   }
-  else if (type == TypeDesc::TypeFloat) {
+  else if (type == TypeFloat) {
     fval[0] = average(float4_to_float3(f[0]));
 
     if (derivatives) {
@@ -646,9 +641,7 @@ static bool set_attribute_float(float f[3], TypeDesc type, bool derivatives, voi
     }
     return true;
   }
-  else if (type == TypeDesc::TypePoint || type == TypeDesc::TypeVector ||
-           type == TypeDesc::TypeNormal || type == TypeDesc::TypeColor)
-  {
+  else if (type == TypePoint || type == TypeVector || type == TypeNormal || type == TypeColor) {
     float *fval = (float *)val;
     fval[0] = f[0];
     fval[1] = f[0];
@@ -666,7 +659,7 @@ static bool set_attribute_float(float f[3], TypeDesc type, bool derivatives, voi
 
     return true;
   }
-  else if (type == TypeDesc::TypeFloat) {
+  else if (type == TypeFloat) {
     float *fval = (float *)val;
     fval[0] = f[0];
 
@@ -760,7 +753,7 @@ static bool set_attribute_float3_3(float3 P[3], TypeDesc type, bool derivatives,
 
 static bool set_attribute_matrix(const Transform &tfm, TypeDesc type, void *val)
 {
-  if (type == TypeDesc::TypeMatrix) {
+  if (type == TypeMatrix) {
     copy_matrix(*(OSL::Matrix44 *)val, tfm);
     return true;
   }
@@ -868,6 +861,10 @@ bool OSLRenderServices::get_object_standard_attribute(const KernelGlobalsCPU *kg
   }
   else if (name == u_object_index) {
     float f = object_pass_id(kg, sd->object);
+    return set_attribute_float(f, type, derivatives, val);
+  }
+  else if (name == u_object_is_light) {
+    float f = (sd->type & PRIMITIVE_LAMP) != 0;
     return set_attribute_float(f, type, derivatives, val);
   }
   else if (name == u_geom_dupli_generated) {

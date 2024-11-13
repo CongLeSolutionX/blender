@@ -67,16 +67,7 @@ static void node_composit_buts_keyingscreen(uiLayout *layout, bContext *C, Point
 {
   bNode *node = (bNode *)ptr->data;
 
-  uiTemplateID(layout,
-               C,
-               ptr,
-               "clip",
-               nullptr,
-               nullptr,
-               nullptr,
-               UI_TEMPLATE_ID_FILTER_ALL,
-               false,
-               nullptr);
+  uiTemplateID(layout, C, ptr, "clip", nullptr, nullptr, nullptr);
 
   if (node->id) {
     MovieClip *clip = (MovieClip *)node->id;
@@ -105,10 +96,15 @@ class KeyingScreenOperation : public NodeOperation {
       return;
     }
 
-    KeyingScreen &cached_keying_screen = context().cache_manager().keying_screens.get(
+    Result &cached_keying_screen = context().cache_manager().keying_screens.get(
         context(), get_movie_clip(), movie_tracking_object, get_smoothness());
 
-    keying_screen.wrap_external(cached_keying_screen.texture());
+    if (!cached_keying_screen.is_allocated()) {
+      keying_screen.allocate_invalid();
+      return;
+    }
+
+    keying_screen.wrap_external(cached_keying_screen);
   }
 
   Domain compute_domain() override
@@ -181,5 +177,5 @@ void register_node_type_cmp_keyingscreen()
       &ntype, "NodeKeyingScreenData", node_free_standard_storage, node_copy_standard_storage);
   ntype.get_compositor_operation = file_ns::get_compositor_operation;
 
-  blender::bke::nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }

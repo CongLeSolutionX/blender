@@ -146,10 +146,7 @@ static void gizmo_mesh_extrude_setup(const bContext *C, wmGizmoGroup *gzgroup)
     /* Grease pencil does not use `obedit`. */
     /* GPXX: Remove if #OB_MODE_EDIT_GPENCIL_LEGACY is merged with #OB_MODE_EDIT. */
     const Object *obact = CTX_data_active_object(C);
-    if (obact->type == OB_GPENCIL_LEGACY) {
-      op_idname = "GPENCIL_OT_extrude_move";
-    }
-    else if (obact->type == OB_MESH) {
+    if (obact->type == OB_MESH) {
       op_idname = "MESH_OT_extrude_context_move";
       ggd->normal_axis = 2;
     }
@@ -480,7 +477,7 @@ static void gizmo_mesh_extrude_message_subscribe(const bContext *C,
     PointerRNA toolsettings_ptr = RNA_pointer_create(
         &scene->id, &RNA_ToolSettings, scene->toolsettings);
     const PropertyRNA *props[] = {
-        rna_ToolSettings_workspace_tool_type,
+        &rna_ToolSettings_workspace_tool_type,
     };
     for (int i = 0; i < ARRAY_SIZE(props); i++) {
       WM_msg_subscribe_rna(

@@ -213,7 +213,7 @@ static float grease_pencil_layer_final_opacity_get(const GPENCIL_PrivateData *pd
 {
   const bool is_obact = ((pd->obact) && (pd->obact == ob));
   const bool is_fade = (pd->fade_layer_opacity > -1.0f) && (is_obact) &&
-                       grease_pencil.is_layer_active(&layer);
+                       !grease_pencil.is_layer_active(&layer);
 
   /* Defines layer opacity. For active object depends of layer opacity factor, and
    * for no active object, depends if the fade grease pencil objects option is enabled. */
@@ -277,7 +277,7 @@ static float4 grease_pencil_layer_final_tint_and_alpha_get(const GPENCIL_Private
                                                            float *r_alpha)
 {
   const bool use_onion = (onion_id != 0);
-  if (use_onion) {
+  if (use_onion && pd->do_onion) {
     const bool use_onion_custom_col = (grease_pencil.onion_skinning_settings.flag &
                                        GP_ONION_SKINNING_USE_CUSTOM_COLORS) != 0;
     const bool use_onion_fade = (grease_pencil.onion_skinning_settings.flag &
@@ -515,15 +515,17 @@ GPENCIL_tLayer *gpencil_layer_cache_add(GPENCIL_PrivateData *pd,
   return tgp_layer;
 }
 
-GPENCIL_tLayer *gpencil_layer_cache_get(GPENCIL_tObject *tgp_ob, int number)
+GPENCIL_tLayer *grease_pencil_layer_cache_get(GPENCIL_tObject *tgp_ob,
+                                              int layer_id,
+                                              const bool skip_onion)
 {
-  if (number >= 0) {
-    GPENCIL_tLayer *layer = tgp_ob->layers.first;
-    while (layer != nullptr) {
-      if (layer->layer_id == number) {
-        return layer;
-      }
-      layer = layer->next;
+  BLI_assert(layer_id >= 0);
+  for (GPENCIL_tLayer *layer = tgp_ob->layers.first; layer != nullptr; layer = layer->next) {
+    if (skip_onion && layer->is_onion) {
+      continue;
+    }
+    if (layer->layer_id == layer_id) {
+      return layer;
     }
   }
   return nullptr;
@@ -543,8 +545,11 @@ GPENCIL_tLayer *grease_pencil_layer_cache_add(GPENCIL_PrivateData *pd,
   const bool is_in_front = (ob->dtx & OB_DRAW_IN_FRONT);
 
   const bool override_vertcol = (pd->v3d_color_type != -1);
+  /* In draw mode and vertex paint mode it's possible to draw vertex colors so we want to make sure
+   * to render them. Otherwise this can lead to unexpected behavior. */
   const bool is_vert_col_mode = (pd->v3d_color_type == V3D_SHADING_VERTEX_COLOR) ||
-                                (ob->mode == OB_MODE_VERTEX_PAINT) || pd->is_render;
+                                (ob->mode & OB_MODE_VERTEX_PAINT) != 0 ||
+                                (ob->mode & OB_MODE_PAINT_GREASE_PENCIL) != 0 || pd->is_render;
   const bool is_viewlayer_render = pd->is_render && !layer.view_layer_name().is_empty() &&
                                    STREQ(pd->view_layer->name, layer.view_layer_name().c_str());
   const bool disable_masks_render = is_viewlayer_render &&
@@ -573,6 +578,7 @@ GPENCIL_tLayer *grease_pencil_layer_cache_add(GPENCIL_PrivateData *pd,
   GPENCIL_tLayer *tgp_layer = static_cast<GPENCIL_tLayer *>(BLI_memblock_alloc(pd->gp_layer_pool));
   BLI_LINKS_APPEND(&tgp_ob->layers, tgp_layer);
   tgp_layer->layer_id = *grease_pencil.get_layer_index(layer);
+  tgp_layer->is_onion = onion_id != 0;
   tgp_layer->mask_bits = nullptr;
   tgp_layer->mask_invert_bits = nullptr;
   tgp_layer->blend_ps = nullptr;

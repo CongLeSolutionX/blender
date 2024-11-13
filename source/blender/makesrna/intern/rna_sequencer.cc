@@ -36,6 +36,7 @@
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
 
+#include "UI_resources.hh"
 #include "rna_internal.hh"
 
 #include "SEQ_add.hh"
@@ -50,6 +51,7 @@
 #include "SEQ_select.hh"
 #include "SEQ_sequencer.hh"
 #include "SEQ_sound.hh"
+#include "SEQ_thumbnail_cache.hh"
 #include "SEQ_time.hh"
 #include "SEQ_transform.hh"
 #include "SEQ_utils.hh"
@@ -201,8 +203,10 @@ static void rna_Sequence_scene_switch_update(Main *bmain, Scene *scene, PointerR
   DEG_relations_tag_update(bmain);
 }
 
-static void rna_Sequence_use_sequence(Main *bmain, Scene *scene, PointerRNA *ptr)
+static void rna_Sequence_use_sequence(Main *bmain, Scene * /*scene*/, PointerRNA *ptr)
 {
+  Scene *scene = reinterpret_cast<Scene *>(ptr->owner_id);
+
   /* General update callback. */
   rna_Sequence_invalidate_raw_update(bmain, scene, ptr);
   /* Changing recursion changes set of IDs which needs to be remapped by the copy-on-evaluation.
@@ -235,6 +239,11 @@ struct SequencesAllIterator {
   blender::Vector<Sequence *> strips;
   int index;
 };
+
+static std::optional<std::string> rna_SequenceEditor_path(const PointerRNA * /*ptr*/)
+{
+  return "sequence_editor";
+}
 
 static void rna_SequenceEditor_sequences_all_begin(CollectionPropertyIterator *iter,
                                                    PointerRNA *ptr)
@@ -374,7 +383,7 @@ static void rna_Sequence_retiming_key_remove(ID *id, SeqRetimingKey *key)
     return;
   }
 
-  SEQ_retiming_remove_key(scene, seq, key);
+  SEQ_retiming_remove_key(seq, key);
 
   SEQ_relations_invalidate_cache_raw(scene, seq);
   WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, nullptr);
@@ -571,6 +580,13 @@ static int rna_Sequence_frame_length_get(PointerRNA *ptr)
   Sequence *seq = (Sequence *)ptr->data;
   Scene *scene = (Scene *)ptr->owner_id;
   return SEQ_time_right_handle_frame_get(scene, seq) - SEQ_time_left_handle_frame_get(scene, seq);
+}
+
+static int rna_Sequence_frame_duration_get(PointerRNA *ptr)
+{
+  Sequence *seq = static_cast<Sequence *>(ptr->data);
+  Scene *scene = reinterpret_cast<Scene *>(ptr->owner_id);
+  return SEQ_time_strip_length_get(scene, seq);
 }
 
 static int rna_Sequence_frame_editable(const PointerRNA *ptr, const char ** /*r_info*/)
@@ -1506,30 +1522,13 @@ static void rna_Sequence_separate(ID *id, Sequence *seqm, Main *bmain)
   WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, scene);
 }
 
-/* Find channel owner. If nullptr, owner is `Editing`, otherwise it's `Sequence`. */
-static Sequence *rna_SeqTimelineChannel_owner_get(const Editing *ed,
-                                                  const SeqTimelineChannel *channel)
-{
-  blender::VectorSet strips = SEQ_query_all_meta_strips_recursive(&ed->seqbase);
-
-  Sequence *channel_owner = nullptr;
-  for (Sequence *seq : strips) {
-    if (BLI_findindex(&seq->channels, channel) != -1) {
-      channel_owner = seq;
-      break;
-    }
-  }
-
-  return channel_owner;
-}
-
 static void rna_SequenceTimelineChannel_name_set(PointerRNA *ptr, const char *value)
 {
   SeqTimelineChannel *channel = (SeqTimelineChannel *)ptr->data;
   Scene *scene = (Scene *)ptr->owner_id;
   Editing *ed = SEQ_editing_get(scene);
 
-  Sequence *channel_owner = rna_SeqTimelineChannel_owner_get(ed, channel);
+  Sequence *channel_owner = SEQ_sequence_lookup_owner_by_channel(scene, channel);
   ListBase *channels_base = &ed->channels;
 
   if (channel_owner != nullptr) {
@@ -1553,7 +1552,7 @@ static void rna_SequenceTimelineChannel_mute_update(Main *bmain,
   Editing *ed = SEQ_editing_get(scene);
   SeqTimelineChannel *channel = (SeqTimelineChannel *)ptr;
 
-  Sequence *channel_owner = rna_SeqTimelineChannel_owner_get(ed, channel);
+  Sequence *channel_owner = SEQ_sequence_lookup_owner_by_channel(scene, channel);
   ListBase *seqbase;
   if (channel_owner == nullptr) {
     seqbase = &ed->seqbase;
@@ -1572,10 +1571,9 @@ static void rna_SequenceTimelineChannel_mute_update(Main *bmain,
 static std::optional<std::string> rna_SeqTimelineChannel_path(const PointerRNA *ptr)
 {
   Scene *scene = (Scene *)ptr->owner_id;
-  Editing *ed = SEQ_editing_get(scene);
   SeqTimelineChannel *channel = (SeqTimelineChannel *)ptr->data;
 
-  Sequence *channel_owner = rna_SeqTimelineChannel_owner_get(ed, channel);
+  Sequence *channel_owner = SEQ_sequence_lookup_owner_by_channel(scene, channel);
 
   char channel_name_esc[(sizeof(channel->name)) * 2];
   BLI_str_escape(channel_name_esc, channel->name, sizeof(channel_name_esc));
@@ -2176,7 +2174,7 @@ static void rna_def_sequence(BlenderRNA *brna)
       prop, NC_SCENE | ND_SEQUENCER, "rna_Sequence_invalidate_preprocessed_update");
 
   prop = RNA_def_property(srna, "frame_duration", PROP_INT, PROP_TIME);
-  RNA_def_property_int_sdna(prop, nullptr, "len");
+  RNA_def_property_int_funcs(prop, "rna_Sequence_frame_duration_get", nullptr, nullptr);
   RNA_def_property_clear_flag(prop, PROP_EDITABLE | PROP_ANIMATABLE);
   RNA_def_property_range(prop, 1, MAXFRAME);
   RNA_def_property_ui_text(
@@ -2245,7 +2243,7 @@ static void rna_def_sequence(BlenderRNA *brna)
   prop = RNA_def_property(srna, "channel", PROP_INT, PROP_UNSIGNED);
   RNA_def_property_int_sdna(prop, nullptr, "machine");
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
-  RNA_def_property_range(prop, 1, MAXSEQ);
+  RNA_def_property_range(prop, 1, SEQ_MAX_CHANNELS);
   RNA_def_property_ui_text(prop, "Channel", "Y position of the sequence strip");
   RNA_def_property_int_funcs(
       prop, nullptr, "rna_Sequence_channel_set", nullptr); /* overlap test */
@@ -2390,6 +2388,7 @@ static void rna_def_editor(BlenderRNA *brna)
   };
   srna = RNA_def_struct(brna, "SequenceEditor", nullptr);
   RNA_def_struct_ui_text(srna, "Sequence Editor", "Sequence editing data for a Scene data-block");
+  RNA_def_struct_path_func(srna, "rna_SequenceEditor_path");
   RNA_def_struct_ui_icon(srna, ICON_SEQUENCE);
   RNA_def_struct_sdna(srna, "Editing");
 
@@ -2682,16 +2681,6 @@ static void rna_def_effect_inputs(StructRNA *srna, int count)
     RNA_def_property_pointer_funcs(prop, nullptr, "rna_Sequence_input_2_set", nullptr, nullptr);
     RNA_def_property_ui_text(prop, "Input 2", "Second input for the effect strip");
   }
-
-#  if 0
-  if (count == 3) {
-    /* Not used by any effects (perhaps one day plugins?). */
-    prop = RNA_def_property(srna, "input_3", PROP_POINTER, PROP_NONE);
-    RNA_def_property_pointer_sdna(prop, nullptr, "seq3");
-    RNA_def_property_flag(prop, PROP_EDITABLE | PROP_NEVER_NULL);
-    RNA_def_property_ui_text(prop, "Input 3", "Third input for the effect strip");
-  }
-#  endif
 }
 
 static void rna_def_color_management(StructRNA *srna)
@@ -3079,7 +3068,7 @@ static void rna_def_multicam(StructRNA *srna)
 
   prop = RNA_def_property(srna, "multicam_source", PROP_INT, PROP_UNSIGNED);
   RNA_def_property_int_sdna(prop, nullptr, "multicam_source");
-  RNA_def_property_range(prop, 0, MAXSEQ - 1);
+  RNA_def_property_range(prop, 0, SEQ_MAX_CHANNELS - 1);
   RNA_def_property_ui_text(prop, "Multicam Source Channel", "");
   RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_Sequence_invalidate_raw_update");
 
@@ -3334,14 +3323,21 @@ static void rna_def_gaussian_blur(StructRNA *srna)
 
 static void rna_def_text(StructRNA *srna)
 {
-  /* Avoid text icons because they imply this aligns within a frame, see: #71082 */
-  static const EnumPropertyItem text_align_x_items[] = {
+  static const EnumPropertyItem text_alignment_x_items[] = {
+      {SEQ_TEXT_ALIGN_X_LEFT, "LEFT", ICON_ALIGN_LEFT, "Left", ""},
+      {SEQ_TEXT_ALIGN_X_CENTER, "CENTER", ICON_ALIGN_CENTER, "Center", ""},
+      {SEQ_TEXT_ALIGN_X_RIGHT, "RIGHT", ICON_ALIGN_RIGHT, "Right", ""},
+      {0, nullptr, 0, nullptr, nullptr},
+  };
+
+  static const EnumPropertyItem text_anchor_x_items[] = {
       {SEQ_TEXT_ALIGN_X_LEFT, "LEFT", ICON_ANCHOR_LEFT, "Left", ""},
       {SEQ_TEXT_ALIGN_X_CENTER, "CENTER", ICON_ANCHOR_CENTER, "Center", ""},
       {SEQ_TEXT_ALIGN_X_RIGHT, "RIGHT", ICON_ANCHOR_RIGHT, "Right", ""},
       {0, nullptr, 0, nullptr, nullptr},
   };
-  static const EnumPropertyItem text_align_y_items[] = {
+
+  static const EnumPropertyItem text_anchor_y_items[] = {
       {SEQ_TEXT_ALIGN_Y_TOP, "TOP", ICON_ANCHOR_TOP, "Top", ""},
       {SEQ_TEXT_ALIGN_Y_CENTER, "CENTER", ICON_ANCHOR_CENTER, "Center", ""},
       {SEQ_TEXT_ALIGN_Y_BOTTOM, "BOTTOM", ICON_ANCHOR_BOTTOM, "Bottom", ""},
@@ -3355,7 +3351,8 @@ static void rna_def_text(StructRNA *srna)
   prop = RNA_def_property(srna, "font", PROP_POINTER, PROP_NONE);
   RNA_def_property_pointer_sdna(prop, nullptr, "text_font");
   RNA_def_property_ui_icon(prop, ICON_FILE_FONT, false);
-  RNA_def_property_ui_text(prop, "Font", "Font of the text. Falls back to the UI font by default");
+  RNA_def_property_ui_text(
+      prop, "Font", "Font of the text. Falls back to the UI font by default.");
   RNA_def_property_flag(prop, PROP_EDITABLE);
   RNA_def_property_pointer_funcs(prop, nullptr, "rna_Sequence_text_font_set", nullptr, nullptr);
   RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_Sequence_invalidate_raw_update");
@@ -3440,18 +3437,24 @@ static void rna_def_text(StructRNA *srna)
   RNA_def_property_float_default(prop, 0.01f);
   RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_Sequence_invalidate_raw_update");
 
-  prop = RNA_def_property(srna, "align_x", PROP_ENUM, PROP_NONE);
+  prop = RNA_def_property(srna, "alignment_x", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, nullptr, "align");
-  RNA_def_property_enum_items(prop, text_align_x_items);
-  RNA_def_property_ui_text(
-      prop, "Align X", "Align the text along the X axis, relative to the text bounds");
+  RNA_def_property_enum_items(prop, text_alignment_x_items);
+  RNA_def_property_ui_text(prop, "Align X", "Horizontal text alignment");
   RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_Sequence_invalidate_raw_update");
 
-  prop = RNA_def_property(srna, "align_y", PROP_ENUM, PROP_NONE);
-  RNA_def_property_enum_sdna(prop, nullptr, "align_y");
-  RNA_def_property_enum_items(prop, text_align_y_items);
+  prop = RNA_def_property(srna, "anchor_x", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "anchor_x");
+  RNA_def_property_enum_items(prop, text_anchor_x_items);
   RNA_def_property_ui_text(
-      prop, "Align Y", "Align the text along the Y axis, relative to the text bounds");
+      prop, "Anchor X", "Horizontal position of the text box relative to Location");
+  RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_Sequence_invalidate_raw_update");
+
+  prop = RNA_def_property(srna, "anchor_y", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "anchor_y");
+  RNA_def_property_enum_items(prop, text_anchor_y_items);
+  RNA_def_property_ui_text(
+      prop, "Anchor Y", "Vertical position of the text box relative to Location");
   RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_Sequence_invalidate_raw_update");
 
   prop = RNA_def_property(srna, "text", PROP_STRING, PROP_NONE);

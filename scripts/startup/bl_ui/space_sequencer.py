@@ -10,7 +10,6 @@ from bpy.types import (
 )
 from bpy.app.translations import (
     contexts as i18n_contexts,
-    pgettext_iface as iface_,
     pgettext_rpt as rpt_,
 )
 from bl_ui.properties_grease_pencil_common import (
@@ -42,9 +41,8 @@ def draw_color_balance(layout, color_balance):
 
     layout.prop(color_balance, "correction_method")
 
-    layout.use_property_split = False
-
     flow = layout.grid_flow(row_major=True, columns=0, even_columns=True, even_rows=False, align=False)
+    flow.use_property_split = False
 
     if color_balance.correction_method == 'LIFT_GAMMA_GAIN':
         col = flow.column()
@@ -52,7 +50,7 @@ def draw_color_balance(layout, color_balance):
         box = col.box()
         split = box.split(factor=0.35)
         col = split.column(align=True)
-        col.label(text="Lift:")
+        col.label(text="Lift")
         col.separator()
         col.separator()
         col.prop(color_balance, "lift", text="")
@@ -64,7 +62,7 @@ def draw_color_balance(layout, color_balance):
         box = col.box()
         split = box.split(factor=0.35)
         col = split.column(align=True)
-        col.label(text="Gamma:")
+        col.label(text="Gamma")
         col.separator()
         col.separator()
         col.prop(color_balance, "gamma", text="")
@@ -76,7 +74,7 @@ def draw_color_balance(layout, color_balance):
         box = col.box()
         split = box.split(factor=0.35)
         col = split.column(align=True)
-        col.label(text="Gain:")
+        col.label(text="Gain")
         col.separator()
         col.separator()
         col.prop(color_balance, "gain", text="")
@@ -89,7 +87,7 @@ def draw_color_balance(layout, color_balance):
         box = col.box()
         split = box.split(factor=0.35)
         col = split.column(align=True)
-        col.label(text="Offset:")
+        col.label(text="Offset")
         col.separator()
         col.separator()
         col.prop(color_balance, "offset", text="")
@@ -101,7 +99,7 @@ def draw_color_balance(layout, color_balance):
         box = col.box()
         split = box.split(factor=0.35)
         col = split.column(align=True)
-        col.label(text="Power:")
+        col.label(text="Power")
         col.separator()
         col.separator()
         col.prop(color_balance, "power", text="")
@@ -113,7 +111,7 @@ def draw_color_balance(layout, color_balance):
         box = col.box()
         split = box.split(factor=0.35)
         col = split.column(align=True)
-        col.label(text="Slope:")
+        col.label(text="Slope")
         col.separator()
         col.separator()
         col.prop(color_balance, "slope", text="")
@@ -573,8 +571,9 @@ class SEQUENCER_MT_select(Menu):
         st = context.space_data
         has_sequencer, has_preview = _space_view_types(st)
         is_retiming = context.scene.sequence_editor is not None and \
-            context.scene.sequence_editor.selected_retiming_keys is not None
+            context.scene.sequence_editor.selected_retiming_keys
 
+        layout.operator("sequencer.select_all", text="All").action = 'SELECT'
         layout.operator("sequencer.select_all", text="None").action = 'DESELECT'
         layout.operator("sequencer.select_all", text="Invert").action = 'INVERT'
 
@@ -954,7 +953,8 @@ class SEQUENCER_MT_strip_retiming(Menu):
 
     def draw(self, context):
         is_retiming = context.scene.sequence_editor is not None and \
-            context.scene.sequence_editor.selected_retiming_keys is not None
+            context.scene.sequence_editor.selected_retiming_keys
+        strip = context.active_sequence_strip
         layout = self.layout
 
         layout.operator("sequencer.retiming_key_add")
@@ -1059,6 +1059,10 @@ class SEQUENCER_MT_strip(Menu):
 
             layout.separator()
             layout.menu("SEQUENCER_MT_strip_lock_mute")
+
+            layout.separator()
+            layout.operator("sequencer.connect", icon="LINKED").toggle = True
+            layout.operator("sequencer.disconnect")
 
             layout.separator()
             layout.menu("SEQUENCER_MT_strip_input")
@@ -1226,8 +1230,11 @@ class SEQUENCER_MT_context_menu(Menu):
         layout.menu("SEQUENCER_MT_color_tag_picker")
 
         layout.separator()
-
         layout.menu("SEQUENCER_MT_strip_lock_mute")
+
+        layout.separator()
+        layout.operator("sequencer.connect", icon="LINKED").toggle = True
+        layout.operator("sequencer.disconnect")
 
     def draw_retime(self, context):
         layout = self.layout
@@ -1645,8 +1652,9 @@ class SEQUENCER_PT_effect_text_layout(SequencerButtonsPanel, Panel):
         layout.use_property_split = True
         col = layout.column()
         col.prop(strip, "location", text="Location")
-        col.prop(strip, "align_x", text="Anchor X")
-        col.prop(strip, "align_y", text="Y")
+        col.prop(strip, "alignment_x", text="Alignment X")
+        col.prop(strip, "anchor_x", text="Anchor X")
+        col.prop(strip, "anchor_y", text="Y")
 
 
 class SEQUENCER_PT_effect_text_style(SequencerButtonsPanel, Panel):
@@ -2726,7 +2734,7 @@ class SEQUENCER_PT_modifiers(SequencerButtonsPanel, Panel):
             sound = None
 
         if sound is None:
-            layout.prop(strip, "use_linear_modifiers")
+            layout.prop(strip, "use_linear_modifiers", text="Linear Modifiers")
 
         layout.operator_menu_enum("sequencer.strip_modifier_add", "type")
         layout.operator("sequencer.strip_modifier_copy")
@@ -2754,19 +2762,6 @@ class SEQUENCER_PT_modifiers(SequencerButtonsPanel, Panel):
 
             if mod.show_expanded:
                 if sound is None:
-                    row = box.row()
-                    row.prop(mod, "input_mask_type", expand=True)
-
-                    if mod.input_mask_type == 'STRIP':
-                        sequences_object = ed
-                        if ed.meta_stack:
-                            sequences_object = ed.meta_stack[-1]
-                        box.prop_search(mod, "input_mask_strip", sequences_object, "sequences", text="Mask")
-                    else:
-                        box.prop(mod, "input_mask_id")
-                        row = box.row()
-                        row.prop(mod, "mask_time", expand=True)
-
                     if mod.type == 'COLOR_BALANCE':
                         box.prop(mod, "color_multiply")
                         draw_color_balance(box, mod.color_balance)
@@ -2793,6 +2788,22 @@ class SEQUENCER_PT_modifiers(SequencerButtonsPanel, Panel):
                             col.prop(mod, "key")
                             col.prop(mod, "offset")
                             col.prop(mod, "gamma")
+
+                    box.separator(type='LINE')
+
+                    col = box.column()
+                    row = col.row()
+                    row.prop(mod, "input_mask_type", expand=True)
+
+                    if mod.input_mask_type == 'STRIP':
+                        sequences_object = ed
+                        if ed.meta_stack:
+                            sequences_object = ed.meta_stack[-1]
+                        col.prop_search(mod, "input_mask_strip", sequences_object, "sequences", text="Mask")
+                    else:
+                        col.prop(mod, "input_mask_id")
+                        row = col.row()
+                        row.prop(mod, "mask_time", expand=True)
                 else:
                     if mod.type == 'SOUND_EQUALIZER':
                         # eq_row = box.row()
@@ -2875,7 +2886,10 @@ class SEQUENCER_PT_annotation_onion(AnnotationOnionSkin, SequencerButtonsPanel_O
 
 
 class SEQUENCER_PT_custom_props(SequencerButtonsPanel, PropertyPanel, Panel):
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_WORKBENCH'}
+    COMPAT_ENGINES = {
+        'BLENDER_RENDER',
+        'BLENDER_WORKBENCH',
+    }
     _context_path = "active_sequence_strip"
     _property_type = (bpy.types.Sequence,)
     bl_category = "Strip"
@@ -2938,6 +2952,7 @@ class SEQUENCER_PT_sequencer_snapping(Panel):
         col.prop(sequencer_tool_settings, "snap_to_current_frame")
         col.prop(sequencer_tool_settings, "snap_to_hold_offset")
         col.prop(sequencer_tool_settings, "snap_to_markers")
+        col.prop(sequencer_tool_settings, "snap_to_retiming_keys")
 
         col = layout.column(heading="Ignore", align=True)
         col.prop(sequencer_tool_settings, "snap_ignore_muted", text="Muted Strips")

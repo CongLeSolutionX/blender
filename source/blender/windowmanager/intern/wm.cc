@@ -54,8 +54,8 @@
 #include "ED_screen.hh"
 
 #ifdef WITH_PYTHON
-#  include "BPY_extern.h"
-#  include "BPY_extern_run.h"
+#  include "BPY_extern.hh"
+#  include "BPY_extern_run.hh"
 #endif
 
 #include "BLO_read_write.hh"
@@ -210,6 +210,7 @@ static void window_manager_blend_read_data(BlendDataReader *reader, ID *id)
   BLI_listbase_clear(&wm->paintcursors);
   BLI_listbase_clear(&wm->notifier_queue);
   wm->notifier_queue_set = nullptr;
+  wm->notifier_current = nullptr;
 
   BLI_listbase_clear(&wm->keyconfigs);
   wm->defaultconf = nullptr;
@@ -229,6 +230,7 @@ static void window_manager_blend_read_data(BlendDataReader *reader, ID *id)
   wm->init_flag = 0;
   wm->op_undo_depth = 0;
   wm->extensions_updates = WM_EXTENSIONS_UPDATE_UNSET;
+  wm->extensions_blocked = 0;
 
   BLI_assert(wm->runtime == nullptr);
   wm->runtime = MEM_new<blender::bke::WindowManagerRuntime>(__func__);
@@ -290,7 +292,7 @@ void WM_operator_free(wmOperator *op)
 
   if (op->ptr) {
     op->properties = static_cast<IDProperty *>(op->ptr->data);
-    MEM_freeN(op->ptr);
+    MEM_delete(op->ptr);
   }
 
   if (op->properties) {
@@ -508,7 +510,7 @@ void WM_check(bContext *C)
   /* Case: file-read. */
   /* NOTE: this runs in background mode to set the screen context cb. */
   if ((wm->init_flag & WM_INIT_FLAG_WINDOW) == 0) {
-    ED_screens_init(bmain, wm);
+    ED_screens_init(C, bmain, wm);
     wm->init_flag |= WM_INIT_FLAG_WINDOW;
   }
 }
@@ -590,6 +592,8 @@ void wm_close_and_free(bContext *C, wmWindowManager *wm)
     BLI_gset_free(wm->notifier_queue_set, nullptr);
     wm->notifier_queue_set = nullptr;
   }
+  BLI_assert(wm->notifier_current == nullptr);
+  wm->notifier_current = nullptr;
 
   if (wm->message_bus != nullptr) {
     WM_msgbus_destroy(wm->message_bus);

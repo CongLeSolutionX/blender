@@ -8,8 +8,8 @@
  * Converted and adapted from HLSL to GLSL by Clément Foucault
  */
 
-#pragma BLENDER_REQUIRE(common_view_lib.glsl)
-#pragma BLENDER_REQUIRE(common_math_lib.glsl)
+#include "common_math_lib.glsl"
+#include "common_view_lib.glsl"
 
 #define dof_aperturesize dofParams.x
 #define dof_distance dofParams.y
@@ -24,7 +24,7 @@
        (nearFar.x * nearFar.y) / (z * (nearFar.x - nearFar.y) + nearFar.y) : \
        (z * 2.0 - 1.0) * nearFar.y)
 
-const float MAX_COC_SIZE = 100.0;
+#define MAX_COC_SIZE 100.0
 vec2 encode_coc(float near, float far)
 {
   return vec2(near, far) / MAX_COC_SIZE;

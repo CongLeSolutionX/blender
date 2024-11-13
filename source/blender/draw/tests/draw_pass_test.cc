@@ -390,9 +390,13 @@ static void test_draw_visibility()
   drw.resource_handle(obmat_2, float3(0), float3(1)); /* Inside view. */
   drw.end_sync();
 
+  Texture tex;
+  tex.ensure_2d(GPU_RGBA16F, int2(1));
+
   PassMain pass = {"test.visibility"};
   pass.init();
   pass.shader_set(GPU_shader_get_builtin_shader(GPU_SHADER_3D_IMAGE_COLOR));
+  pass.bind_texture("image", tex);
   pass.draw_procedural(GPU_PRIM_TRIS, 1, -1);
 
   Manager::SubmitDebugOutput debug = drw.submit_debug(pass, view);
@@ -502,5 +506,134 @@ static void test_draw_manager_sync()
   DRW_shaders_free();
 }
 DRAW_TEST(draw_manager_sync)
+
+static void test_draw_submit_only()
+{
+  float4x4 projmat = math::projection::orthographic(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f);
+  float4x4 viewmat = float4x4::identity();
+
+  Manager manager;
+  View view = {"Test"};
+  View view_other = {"Test"};
+  PassSimple pass = {"Test"};
+  PassMain pass_main = {"Test"};
+  PassMain pass_manual = {"Test"};
+
+  manager.begin_sync();
+  manager.end_sync();
+  view.sync(viewmat, projmat);
+  view_other.sync(viewmat, projmat);
+  pass.init();
+  pass_main.init();
+  pass_manual.init();
+
+  /* Auto command and visibility computation. */
+  manager.submit(pass);
+  manager.submit(pass_main, view);
+
+  /* Update manager. */
+  manager.begin_sync();
+  manager.end_sync();
+
+  /* Auto command and visibility computation. */
+  manager.submit(pass);
+  manager.submit(pass_main, view);
+
+  /* Update view. */
+  view.sync(viewmat, projmat);
+
+  /* Auto command and visibility computation. */
+  manager.submit(pass);
+  manager.submit(pass_main, view);
+
+  /* Update both. */
+  manager.begin_sync();
+  manager.end_sync();
+  view.sync(viewmat, projmat);
+
+  /* Auto command and visibility computation. */
+  manager.submit(pass);
+  manager.submit(pass_main, view);
+
+  /* Update both. */
+  manager.begin_sync();
+  manager.end_sync();
+  view.sync(viewmat, projmat);
+
+  {
+    /* Manual command and visibility computation. */
+    manager.compute_visibility(view);
+    manager.generate_commands(pass_manual, view);
+    manager.submit_only(pass_manual, view);
+
+    /* Redundant updates. */
+    EXPECT_BLI_ASSERT(manager.compute_visibility(view),
+                      "Resources did not changed, no need to update");
+    EXPECT_BLI_ASSERT(manager.generate_commands(pass_manual, view),
+                      "Resources and view did not changed no need to update");
+  }
+  {
+    /* Update view. */
+    view.sync(viewmat, projmat);
+
+    /* Submit before visibility. */
+    EXPECT_BLI_ASSERT(manager.submit_only(pass_manual, view),
+                      "compute_visibility was not called on this view");
+    /* Update commands before visibility. */
+    EXPECT_BLI_ASSERT(manager.generate_commands(pass_manual, view),
+                      "Resources or view changed, but compute_visibility was not called");
+
+    manager.compute_visibility(view);
+
+    /* Submit before command generation. */
+    EXPECT_BLI_ASSERT(manager.submit_only(pass_manual, view),
+                      "View have changed since last generate_commands");
+
+    manager.generate_commands(pass_manual, view);
+    manager.submit_only(pass_manual, view);
+  }
+  {
+    /* Update manager. */
+    manager.begin_sync();
+    manager.end_sync();
+
+    /* Update commands before visibility. */
+    EXPECT_BLI_ASSERT(manager.generate_commands(pass_manual, view),
+                      "Resources or view changed, but compute_visibility was not called");
+    /* Submit before visibility. */
+    EXPECT_BLI_ASSERT(manager.submit_only(pass_manual, view),
+                      "Resources changed since last compute_visibility");
+
+    manager.compute_visibility(view);
+
+    /* Submit with stale commands. */
+    EXPECT_BLI_ASSERT(manager.submit_only(pass_manual, view),
+                      "Resources changed since last generate_command");
+
+    manager.generate_commands(pass_manual, view);
+    manager.submit_only(pass_manual, view);
+  }
+  {
+    pass_manual.init();
+
+    /* Submit before command generation. */
+    EXPECT_BLI_ASSERT(manager.submit_only(pass_manual, view),
+                      "generate_command was not called on this pass");
+    manager.generate_commands(pass_manual, view);
+    manager.submit_only(pass_manual, view);
+  }
+  {
+    manager.compute_visibility(view_other);
+
+    /* Submit with a different view before command generation. */
+    EXPECT_BLI_ASSERT(manager.submit_only(pass_manual, view_other),
+                      "submitting with a different view");
+    manager.generate_commands(pass_manual, view_other);
+    manager.submit_only(pass_manual, view_other);
+  }
+
+  DRW_shaders_free();
+}
+DRAW_TEST(draw_submit_only)
 
 }  // namespace blender::draw

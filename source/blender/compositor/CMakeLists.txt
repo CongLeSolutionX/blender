@@ -576,13 +576,9 @@ if(WITH_COMPOSITOR_CPU)
   )
 
   if(WITH_TBB)
-    list(APPEND INC_SYS
-      ${TBB_INCLUDE_DIRS}
-    )
-    add_definitions(-DWITH_TBB)
     if(WIN32)
       # TBB includes Windows.h which will define min/max macros
-      # that will collide with the stl versions.
+      # that will collide with the STL versions.
       add_definitions(-DNOMINMAX)
     endif()
   endif()

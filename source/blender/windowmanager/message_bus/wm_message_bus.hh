@@ -101,7 +101,7 @@ void WM_msgbus_destroy(wmMsgBus *mbus);
 
 void WM_msgbus_clear_by_owner(wmMsgBus *mbus, void *owner);
 
-void WM_msg_dump(wmMsgBus *mbus, const char *info);
+void WM_msg_dump(wmMsgBus *mbus, const char *info_str);
 void WM_msgbus_handle(wmMsgBus *mbus, bContext *C);
 
 void WM_msg_publish_with_key(wmMsgBus *mbus, wmMsgSubscribeKey *msg_key);
@@ -218,7 +218,7 @@ void WM_msg_publish_ID(wmMsgBus *mbus, ID *id);
   { \
     wmMsgParams_RNA msg_key_params_ = {{0}}; \
     msg_key_params_.ptr = RNA_pointer_create(id_, &RNA_##type_, data_); \
-    msg_key_params_.prop = rna_##type_##_##prop_; \
+    msg_key_params_.prop = &rna_##type_##_##prop_; \
     WM_msg_publish_rna_params(mbus, &msg_key_params_); \
   } \
   ((void)0)
@@ -226,7 +226,7 @@ void WM_msg_publish_ID(wmMsgBus *mbus, ID *id);
   { \
     wmMsgParams_RNA msg_key_params_ = {{0}}; \
     msg_key_params_.ptr = RNA_pointer_create(id_, &RNA_##type_, data_); \
-    msg_key_params_.prop = rna_##type_##_##prop_; \
+    msg_key_params_.prop = &rna_##type_##_##prop_; \
     WM_msg_subscribe_rna_params(mbus, &msg_key_params_, value, __func__); \
   } \
   ((void)0)
@@ -246,7 +246,7 @@ void WM_msg_publish_ID(wmMsgBus *mbus, ID *id);
     PointerRNA msg_ptr_ = {0, &RNA_##type_}; \
     wmMsgParams_RNA msg_key_params_ = {{0}}; \
     msg_key_params_.ptr = msg_ptr_; \
-    msg_key_params_.prop = rna_##type_##_##prop_; \
+    msg_key_params_.prop = &rna_##type_##_##prop_; \
 \
     WM_msg_subscribe_rna_params(mbus, &msg_key_params_, value, __func__); \
   } \

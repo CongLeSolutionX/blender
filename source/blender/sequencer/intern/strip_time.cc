@@ -57,7 +57,7 @@ int seq_time_strip_original_content_length_get(const Scene *scene, const Sequenc
   return seq->len / SEQ_time_media_playback_rate_factor_get(scene, seq);
 }
 
-float SEQ_give_frame_index(const Scene *scene, Sequence *seq, float timeline_frame)
+float SEQ_give_frame_index(const Scene *scene, const Sequence *seq, float timeline_frame)
 {
   float frame_index;
   float sta = SEQ_time_start_frame_get(seq);
@@ -94,10 +94,6 @@ float SEQ_give_frame_index(const Scene *scene, Sequence *seq, float timeline_fra
   }
   /* Clamp frame index to strip content frame range. */
   frame_index = clamp_f(frame_index, 0, frame_index_max);
-
-  if (seq->strobe < 1.0f) {
-    seq->strobe = 1.0f;
-  }
 
   if (seq->strobe > 1.0f) {
     frame_index -= fmodf(double(frame_index), double(seq->strobe));
@@ -357,12 +353,12 @@ float SEQ_time_sequence_get_fps(Scene *scene, Sequence *seq)
   return 0.0f;
 }
 
-void SEQ_timeline_init_boundbox(const Scene *scene, rctf *rect)
+void SEQ_timeline_init_boundbox(const Scene *scene, rctf *r_rect)
 {
-  rect->xmin = scene->r.sfra;
-  rect->xmax = scene->r.efra + 1;
-  rect->ymin = 1.0f; /* The first strip is drawn at y == 1.0f */
-  rect->ymax = 8.0f;
+  r_rect->xmin = scene->r.sfra;
+  r_rect->xmax = scene->r.efra + 1;
+  r_rect->ymin = 1.0f; /* The first strip is drawn at y == 1.0f */
+  r_rect->ymax = 8.0f;
 }
 
 void SEQ_timeline_expand_boundbox(const Scene *scene, const ListBase *seqbase, rctf *rect)
@@ -385,10 +381,10 @@ void SEQ_timeline_expand_boundbox(const Scene *scene, const ListBase *seqbase, r
   }
 }
 
-void SEQ_timeline_boundbox(const Scene *scene, const ListBase *seqbase, rctf *rect)
+void SEQ_timeline_boundbox(const Scene *scene, const ListBase *seqbase, rctf *r_rect)
 {
-  SEQ_timeline_init_boundbox(scene, rect);
-  SEQ_timeline_expand_boundbox(scene, seqbase, rect);
+  SEQ_timeline_init_boundbox(scene, r_rect);
+  SEQ_timeline_expand_boundbox(scene, seqbase, r_rect);
 }
 
 static bool strip_exists_at_frame(const Scene *scene,

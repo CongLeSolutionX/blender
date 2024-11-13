@@ -55,8 +55,8 @@
 #include "BKE_context.hh"
 #include "BKE_global.hh"
 #include "BKE_idprop.hh"
-#include "BKE_image.h"
-#include "BKE_image_format.h"
+#include "BKE_image.hh"
+#include "BKE_image_format.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_lib_query.hh"
 #include "BKE_main.hh"
@@ -610,6 +610,15 @@ static const char *wm_context_member_from_ptr(const bContext *C,
               TEST_PTR_DATA_TYPE("space_data.overlay", RNA_SpaceNodeOverlay, ptr, snode);
               break;
             }
+            case SPACE_SEQ: {
+              const SpaceSeq *sseq = (SpaceSeq *)space_data;
+              TEST_PTR_DATA_TYPE(
+                  "space_data.preview_overlay", RNA_SequencerPreviewOverlay, ptr, sseq);
+              TEST_PTR_DATA_TYPE(
+                  "space_data.timeline_overlay", RNA_SequencerTimelineOverlay, ptr, sseq);
+              TEST_PTR_DATA_TYPE("space_data.cache_overlay", RNA_SequencerCacheOverlay, ptr, sseq);
+              break;
+            }
           }
         }
 
@@ -750,7 +759,7 @@ void WM_operator_properties_alloc(PointerRNA **ptr, IDProperty **properties, con
   }
 
   if (*ptr == nullptr) {
-    *ptr = static_cast<PointerRNA *>(MEM_callocN(sizeof(PointerRNA), "wmOpItemPtr"));
+    *ptr = MEM_new<PointerRNA>("wmOpItemPtr");
     WM_operator_properties_create(*ptr, opstring);
   }
 
@@ -1729,7 +1738,7 @@ int WM_operator_confirm_ex(bContext *C,
 
   /* Larger dialog needs a wider minimum width to balance with the big icon. */
   const float min_width = (message == nullptr) ? 180.0f : 230.0f;
-  data->width = int(min_width * UI_SCALE_FAC * UI_style_get()->widgetlabel.points /
+  data->width = int(min_width * UI_SCALE_FAC * UI_style_get()->widget.points /
                     UI_DEFAULT_TEXT_POINTS);
 
   data->free_op = true;
@@ -1839,7 +1848,7 @@ int WM_operator_props_dialog_popup(bContext *C,
 {
   wmOpPopUp *data = MEM_new<wmOpPopUp>(__func__);
   data->op = op;
-  data->width = int(float(width) * UI_SCALE_FAC * UI_style_get()->widgetlabel.points /
+  data->width = int(float(width) * UI_SCALE_FAC * UI_style_get()->widget.points /
                     UI_DEFAULT_TEXT_POINTS);
   data->free_op = true; /* If this runs and gets registered we may want not to free it. */
   data->title = title ? std::move(*title) : WM_operatortype_name(op->type, op->ptr);
@@ -1874,9 +1883,9 @@ int WM_operator_redo_popup(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  /* Refreshing not supported, because operator might get freed. */
-  const bool can_refresh = false;
-  UI_popup_block_invoke_ex(C, wm_block_create_redo, op, nullptr, can_refresh);
+  /* Operator is stored and kept alive in the window manager. So passing a pointer to the UI is
+   * fine, it will remain valid. */
+  UI_popup_block_invoke(C, wm_block_create_redo, op, nullptr);
 
   return OPERATOR_CANCELLED;
 }
@@ -1892,7 +1901,7 @@ int WM_operator_redo_popup(bContext *C, wmOperator *op)
 static int wm_debug_menu_exec(bContext *C, wmOperator *op)
 {
   G.debug_value = RNA_int_get(op->ptr, "debug_value");
-  ED_screen_refresh(CTX_wm_manager(C), CTX_wm_window(C));
+  ED_screen_refresh(C, CTX_wm_manager(C), CTX_wm_window(C));
   WM_event_add_notifier(C, NC_WINDOW, nullptr);
 
   return OPERATOR_FINISHED;
@@ -2516,7 +2525,6 @@ struct RadialControl {
   int initial_co[2];
   int slow_mouse[2];
   bool slow_mode;
-  float scale_fac;
   Dial *dial;
   GPUTexture *texture;
   ListBase orig_paintcursors;
@@ -2566,32 +2574,7 @@ static void radial_control_update_header(wmOperator *op, bContext *C)
   ED_area_status_text(area, msg);
 }
 
-/* Helper: Compute the brush radius in pixels at the mouse position. */
-static float grease_pencil_unprojected_brush_radius_pixel_size(const bContext *C,
-                                                               const Brush *brush,
-                                                               const blender::float2 mval)
-{
-  using namespace blender;
-  Scene *scene = CTX_data_scene(C);
-  ARegion *region = CTX_wm_region(C);
-  View3D *view3d = CTX_wm_view3d(C);
-  RegionView3D *rv3d = CTX_wm_region_view3d(C);
-  Object *object = CTX_data_active_object(C);
-  Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
-  Object *eval_object = DEG_get_evaluated_object(depsgraph, object);
-
-  BLI_assert(object->type == OB_GREASE_PENCIL);
-  GreasePencil *grease_pencil = static_cast<GreasePencil *>(eval_object->data);
-
-  ed::greasepencil::DrawingPlacement placement(
-      *scene, *region, *view3d, *eval_object, grease_pencil->get_active_layer());
-  const float3 position = placement.project(mval);
-  const float pixel_size = ED_view3d_pixel_size(
-      rv3d, math::transform_point(placement.to_world_space(), position));
-  return brush->unprojected_radius / pixel_size;
-}
-
-static void radial_control_set_initial_mouse(bContext *C, RadialControl *rc, const wmEvent *event)
+static void radial_control_set_initial_mouse(RadialControl *rc, const wmEvent *event)
 {
   float d[2] = {0, 0};
   float zoom[2] = {1, 1};
@@ -2625,17 +2608,6 @@ static void radial_control_set_initial_mouse(bContext *C, RadialControl *rc, con
     RNA_property_float_get_array(&rc->zoom_ptr, rc->zoom_prop, zoom);
     d[0] *= zoom[0];
     d[1] *= zoom[1];
-  }
-  rc->scale_fac = 1.0f;
-  if (rc->ptr.owner_id && GS(rc->ptr.owner_id->name) == ID_BR && rc->prop == rna_Brush_size) {
-    Brush *brush = reinterpret_cast<Brush *>(rc->ptr.owner_id);
-    if ((brush && brush->gpencil_settings) && (brush->ob_mode == OB_MODE_PAINT_GPENCIL_LEGACY) &&
-        (brush->gpencil_tool == GPAINT_TOOL_DRAW) && (brush->flag & BRUSH_LOCK_SIZE) != 0)
-    {
-      const float radius_px = grease_pencil_unprojected_brush_radius_pixel_size(
-          C, brush, blender::float2(event->mval));
-      rc->scale_fac = max_ff(radius_px, 1.0f) / max_ff(rc->initial_value, 1.0f);
-    }
   }
 
   rc->initial_mouse[0] -= d[0];
@@ -2841,9 +2813,6 @@ static void radial_control_paint_cursor(bContext * /*C*/, int x, int y, void *cu
     RNA_property_float_get_array(&rc->zoom_ptr, rc->zoom_prop, zoom);
     GPU_matrix_scale_2fv(zoom);
   }
-
-  /* Apply scale correction (used by grease pencil brushes). */
-  GPU_matrix_scale_2f(rc->scale_fac, rc->scale_fac);
 
   /* Draw rotated texture. */
   radial_control_paint_tex(rc, tex_radius, alpha);
@@ -3189,7 +3158,7 @@ static int radial_control_invoke(bContext *C, wmOperator *op, const wmEvent *eve
   }
 
   rc->current_value = rc->initial_value;
-  radial_control_set_initial_mouse(C, rc, event);
+  radial_control_set_initial_mouse(rc, event);
   radial_control_set_tex(rc);
 
   rc->init_event = WM_userdef_event_type_from_keymap_type(event->type);
@@ -3834,10 +3803,10 @@ static int previews_id_ensure_callback(LibraryIDLinkCallbackData *cb_data)
   PreviewsIDEnsureData *data = static_cast<PreviewsIDEnsureData *>(cb_data->user_data);
   ID *id = *cb_data->id_pointer;
 
-  if (id && (id->tag & LIB_TAG_DOIT)) {
+  if (id && (id->tag & ID_TAG_DOIT)) {
     BLI_assert(ELEM(GS(id->name), ID_MA, ID_TE, ID_IM, ID_WO, ID_LA));
     previews_id_ensure(data->C, data->scene, id);
-    id->tag &= ~LIB_TAG_DOIT;
+    id->tag &= ~ID_TAG_DOIT;
   }
 
   return IDWALK_RET_NOP;
@@ -3854,10 +3823,10 @@ static int previews_ensure_exec(bContext *C, wmOperator * /*op*/)
                     nullptr};
   PreviewsIDEnsureData preview_id_data;
 
-  /* We use LIB_TAG_DOIT to check whether we have already handled a given ID or not. */
-  BKE_main_id_tag_all(bmain, LIB_TAG_DOIT, false);
+  /* We use ID_TAG_DOIT to check whether we have already handled a given ID or not. */
+  BKE_main_id_tag_all(bmain, ID_TAG_DOIT, false);
   for (int i = 0; lb[i]; i++) {
-    BKE_main_id_tag_listbase(lb[i], LIB_TAG_DOIT, true);
+    BKE_main_id_tag_listbase(lb[i], ID_TAG_DOIT, true);
   }
 
   preview_id_data.C = C;
@@ -3873,9 +3842,9 @@ static int previews_ensure_exec(bContext *C, wmOperator * /*op*/)
    * do our best for those, using current scene... */
   for (int i = 0; lb[i]; i++) {
     LISTBASE_FOREACH (ID *, id, lb[i]) {
-      if (id->tag & LIB_TAG_DOIT) {
+      if (id->tag & ID_TAG_DOIT) {
         previews_id_ensure(C, nullptr, id);
-        id->tag &= ~LIB_TAG_DOIT;
+        id->tag &= ~ID_TAG_DOIT;
       }
     }
   }
@@ -4228,7 +4197,6 @@ static void gesture_circle_modal_keymap(wmKeyConfig *keyconf)
   WM_modalkeymap_assign(keymap, "CLIP_OT_select_circle");
   WM_modalkeymap_assign(keymap, "MASK_OT_select_circle");
   WM_modalkeymap_assign(keymap, "NODE_OT_select_circle");
-  WM_modalkeymap_assign(keymap, "GPENCIL_OT_select_circle");
   WM_modalkeymap_assign(keymap, "GRAPH_OT_select_circle");
   WM_modalkeymap_assign(keymap, "ACTION_OT_select_circle");
 }
@@ -4320,7 +4288,6 @@ static void gesture_box_modal_keymap(wmKeyConfig *keyconf)
   WM_modalkeymap_assign(keymap, "VIEW3D_OT_zoom_border");
   WM_modalkeymap_assign(keymap, "IMAGE_OT_render_border");
   WM_modalkeymap_assign(keymap, "IMAGE_OT_view_zoom_border");
-  WM_modalkeymap_assign(keymap, "GPENCIL_OT_select_box");
 }
 
 /* Lasso modal operators. */
@@ -4342,8 +4309,6 @@ static void gesture_lasso_modal_keymap(wmKeyConfig *keyconf)
 
   /* Assign map to operators. */
   WM_modalkeymap_assign(keymap, "VIEW3D_OT_select_lasso");
-  WM_modalkeymap_assign(keymap, "GPENCIL_OT_stroke_cutter");
-  WM_modalkeymap_assign(keymap, "GPENCIL_OT_select_lasso");
   WM_modalkeymap_assign(keymap, "MASK_OT_select_lasso");
   WM_modalkeymap_assign(keymap, "PAINT_OT_mask_lasso_gesture");
   WM_modalkeymap_assign(keymap, "SCULPT_OT_face_set_lasso_gesture");

@@ -211,30 +211,24 @@ static bool rna_Panel_unregister(Main *bmain, StructRNA *type)
     child_pt->parent = nullptr;
   }
 
-  const char space_type = pt->space_type;
-  BLI_freelistN(&pt->children);
-  BLI_freelinkN(&art->paneltypes, pt);
-
   LISTBASE_FOREACH (bScreen *, screen, &bmain->screens) {
     LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
       LISTBASE_FOREACH (SpaceLink *, sl, &area->spacedata) {
-        if (sl->spacetype == space_type) {
-          ListBase *regionbase = (sl == area->spacedata.first) ? &area->regionbase :
-                                                                 &sl->regionbase;
-          LISTBASE_FOREACH (ARegion *, region, regionbase) {
-            if (region->type == art) {
-              LISTBASE_FOREACH (Panel *, panel, &region->panels) {
-                panel_type_clear_recursive(panel, pt);
-              }
-            }
-            /* The unregistered panel might have had a template that added instanced panels,
-             * so remove them just in case. They can be re-added on redraw anyway. */
-            UI_panels_free_instanced(nullptr, region);
+        ListBase *regionbase = (sl == area->spacedata.first) ? &area->regionbase : &sl->regionbase;
+        LISTBASE_FOREACH (ARegion *, region, regionbase) {
+          LISTBASE_FOREACH (Panel *, panel, &region->panels) {
+            panel_type_clear_recursive(panel, pt);
           }
+          /* The unregistered panel might have had a template that added instanced panels,
+           * so remove them just in case. They can be re-added on redraw anyway. */
+          UI_panels_free_instanced(nullptr, region);
         }
       }
     }
   }
+
+  BLI_freelistN(&pt->children);
+  BLI_freelinkN(&art->paneltypes, pt);
 
   /* update while blender is running */
   WM_main_add_notifier(NC_WINDOW, nullptr);
@@ -1337,7 +1331,7 @@ static void rna_Panel_bl_description_set(PointerRNA *ptr, const char *value)
   Panel *data = (Panel *)(ptr->data);
   char *str = (char *)data->type->description;
   if (!str[0]) {
-    BLI_strncpy(str, value, RNA_DYN_DESCR_MAX); /* utf8 already ensured */
+    BLI_strncpy_utf8(str, value, RNA_DYN_DESCR_MAX);
   }
   else {
     BLI_assert_msg(0, "setting the bl_description on a non-builtin panel");
@@ -1349,7 +1343,7 @@ static void rna_Menu_bl_description_set(PointerRNA *ptr, const char *value)
   Menu *data = (Menu *)(ptr->data);
   char *str = (char *)data->type->description;
   if (!str[0]) {
-    BLI_strncpy(str, value, RNA_DYN_DESCR_MAX); /* utf8 already ensured */
+    BLI_strncpy_utf8(str, value, RNA_DYN_DESCR_MAX);
   }
   else {
     BLI_assert_msg(0, "setting the bl_description on a non-builtin menu");
@@ -1794,7 +1788,7 @@ static void rna_def_panel(BlenderRNA *brna)
        0,
        "Instanced Panel",
        "Multiple panels with this type can be used as part of a list depending on data external "
-       "to the UI. Used to create panels for the modifiers and other stacks"},
+       "to the UI. Used to create panels for the modifiers and other stacks."},
       {PANEL_TYPE_HEADER_EXPAND,
        "HEADER_LAYOUT_EXPAND",
        0,
@@ -1816,7 +1810,7 @@ static void rna_def_panel(BlenderRNA *brna)
   RNA_def_function_ui_description(
       func, "If this method returns a non-null output, then the panel can be drawn");
   RNA_def_function_flag(func, FUNC_NO_SELF | FUNC_REGISTER_OPTIONAL);
-  RNA_def_function_return(func, RNA_def_boolean(func, "visible", true, "", ""));
+  RNA_def_function_return(func, RNA_def_boolean(func, "visible", false, "", ""));
   parm = RNA_def_pointer(func, "context", "Context", "", "");
   RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
 
@@ -1864,7 +1858,7 @@ static void rna_def_panel(BlenderRNA *brna)
                            "If this is set, the panel gets a custom ID, otherwise it takes the "
                            "name of the class used to define the panel. For example, if the "
                            "class name is \"OBJECT_PT_hello\", and bl_idname is not set by the "
-                           "script, then bl_idname = \"OBJECT_PT_hello\"");
+                           "script, then bl_idname = \"OBJECT_PT_hello\".");
 
   prop = RNA_def_property(srna, "bl_label", PROP_STRING, PROP_NONE);
   RNA_def_property_string_sdna(prop, nullptr, "type->label");
@@ -2222,7 +2216,7 @@ static void rna_def_menu(BlenderRNA *brna)
   RNA_def_function_ui_description(
       func, "If this method returns a non-null output, then the menu can be drawn");
   RNA_def_function_flag(func, FUNC_NO_SELF | FUNC_REGISTER_OPTIONAL);
-  RNA_def_function_return(func, RNA_def_boolean(func, "visible", true, "", ""));
+  RNA_def_function_return(func, RNA_def_boolean(func, "visible", false, "", ""));
   parm = RNA_def_pointer(func, "context", "Context", "", "");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
 
@@ -2293,7 +2287,7 @@ static void rna_def_asset_shelf(BlenderRNA *brna)
        0,
        "No Asset Dragging",
        "Disable the default asset dragging on drag events. Useful for implementing custom "
-       "dragging via custom key-map items"},
+       "dragging via custom key-map items."},
       {ASSET_SHELF_TYPE_FLAG_DEFAULT_VISIBLE,
        "DEFAULT_VISIBLE",
        0,
@@ -2367,7 +2361,7 @@ static void rna_def_asset_shelf(BlenderRNA *brna)
   RNA_def_function_ui_description(
       func, "If this method returns a non-null output, the asset shelf will be visible");
   RNA_def_function_flag(func, FUNC_NO_SELF | FUNC_REGISTER_OPTIONAL);
-  RNA_def_function_return(func, RNA_def_boolean(func, "visible", true, "", ""));
+  RNA_def_function_return(func, RNA_def_boolean(func, "visible", false, "", ""));
   parm = RNA_def_pointer(func, "context", "Context", "", "");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
 
@@ -2375,9 +2369,9 @@ static void rna_def_asset_shelf(BlenderRNA *brna)
   RNA_def_function_ui_description(
       func,
       "Determine if an asset should be visible in the asset shelf. If this method returns a "
-      "non-null output, the asset will be visible");
+      "non-null output, the asset will be visible.");
   RNA_def_function_flag(func, FUNC_NO_SELF | FUNC_REGISTER_OPTIONAL);
-  RNA_def_function_return(func, RNA_def_boolean(func, "visible", true, "", ""));
+  RNA_def_function_return(func, RNA_def_boolean(func, "visible", false, "", ""));
   parm = RNA_def_pointer(func, "asset", "AssetRepresentation", "", "");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
 
@@ -2413,10 +2407,10 @@ static void rna_def_asset_shelf(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "show_names", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "settings.display_flag", ASSETSHELF_SHOW_NAMES);
-  RNA_def_property_ui_text(
-      prop,
-      "Show Names",
-      "Show the asset name together with the preview. Otherwise only the preview will be visible");
+  RNA_def_property_ui_text(prop,
+                           "Show Names",
+                           "Show the asset name together with the preview. Otherwise only the "
+                           "preview will be visible.");
   RNA_def_property_update(prop, NC_SPACE | ND_REGIONS_ASSET_SHELF, nullptr);
 
   prop = RNA_def_property(srna, "preview_size", PROP_INT, PROP_UNSIGNED);
@@ -2501,7 +2495,7 @@ static void rna_def_file_handler(BlenderRNA *brna)
       func,
       "If this method returns True, can be used to handle the drop of a drag-and-drop action");
   RNA_def_function_flag(func, FUNC_NO_SELF | FUNC_REGISTER_OPTIONAL);
-  RNA_def_function_return(func, RNA_def_boolean(func, "is_usable", true, "", ""));
+  RNA_def_function_return(func, RNA_def_boolean(func, "is_usable", false, "", ""));
   parm = RNA_def_pointer(func, "context", "Context", "", "");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
 }

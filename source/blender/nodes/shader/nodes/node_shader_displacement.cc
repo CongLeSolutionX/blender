@@ -49,6 +49,10 @@ static int gpu_shader_displacement(GPUMaterial *mat,
 NODE_SHADER_MATERIALX_BEGIN
 #ifdef WITH_MATERIALX
 {
+  if (to_type_ != NodeItem::Type::DisplacementShader) {
+    return empty();
+  }
+
   /* NOTE: Normal input and Space feature don't have an implementation in MaterialX. */
   NodeItem midlevel = get_input_value("Midlevel", NodeItem::Type::Float);
   NodeItem height = get_input_value("Height", NodeItem::Type::Float) - midlevel;
@@ -76,5 +80,5 @@ void register_node_type_sh_displacement()
   ntype.gpu_fn = file_ns::gpu_shader_displacement;
   ntype.materialx_fn = file_ns::node_shader_materialx;
 
-  blender::bke::nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }

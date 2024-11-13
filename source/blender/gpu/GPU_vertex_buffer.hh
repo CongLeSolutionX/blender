@@ -168,7 +168,7 @@ blender::gpu::VertBuf *GPU_vertbuf_create_with_format_ex(const GPUVertFormat &fo
  * (Download and) fill data with the data from the vertex buffer.
  * NOTE: caller is responsible to reserve enough memory of the data parameter.
  */
-void GPU_vertbuf_read(blender::gpu::VertBuf *verts, void *data);
+void GPU_vertbuf_read(const blender::gpu::VertBuf *verts, void *data);
 /** Same as discard but does not free. */
 void GPU_vertbuf_clear(blender::gpu::VertBuf *verts);
 void GPU_vertbuf_discard(blender::gpu::VertBuf *);
@@ -254,7 +254,7 @@ GPU_INLINE void *GPU_vertbuf_raw_step(GPUVertBufRaw *a)
   return (void *)data;
 }
 
-GPU_INLINE uint GPU_vertbuf_raw_used(GPUVertBufRaw *a)
+GPU_INLINE uint GPU_vertbuf_raw_used(const GPUVertBufRaw *a)
 {
   return ((a->data - a->data_init) / a->stride);
 }

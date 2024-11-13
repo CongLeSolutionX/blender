@@ -195,6 +195,10 @@ struct uiBut {
   char *poin = nullptr;
   float hardmin = 0, hardmax = 0, softmin = 0, softmax = 0;
 
+  /**
+   * Optional color for monochrome icon. Also used as text
+   * color for labels without icons. Set with #UI_but_color_set().
+   */
   uchar col[4] = {0};
 
   /** See \ref UI_but_func_identity_compare_set(). */
@@ -222,6 +226,11 @@ struct uiBut {
   uiButHandleRenameFunc rename_func = nullptr;
   void *rename_arg1 = nullptr;
   void *rename_orig = nullptr;
+
+  /* When defined, and the button edits a string RNA property, the new name is _not_ set at all,
+   * instead this function is called with the new name. */
+  std::function<void(std::string &new_name)> rename_full_func = nullptr;
+  std::string rename_full_new = "";
 
   /** Run an action when holding the button down. */
   uiButHandleHoldFunc hold_func = nullptr;
@@ -385,8 +394,8 @@ struct uiButSearch : public uiBut {
  * Decorators have their own RNA data, using the normal #uiBut RNA members has many side-effects.
  */
 struct uiButDecorator : public uiBut {
-  struct PointerRNA decorated_rnapoin = {};
-  struct PropertyRNA *decorated_rnaprop = nullptr;
+  PointerRNA decorated_rnapoin = {};
+  PropertyRNA *decorated_rnaprop = nullptr;
   int decorated_rnaindex = -1;
 };
 
@@ -483,6 +492,9 @@ struct ColorPicker {
   bool use_color_lock;
   bool use_luminosity_lock;
   float luminosity_lock_value;
+
+  /* Alpha component. */
+  bool has_alpha;
 };
 
 struct ColorPickerData {
@@ -593,9 +605,7 @@ struct uiBlock {
   int (*block_event_func)(const bContext *C, uiBlock *, const wmEvent *);
 
   /** Custom extra draw function for custom blocks. */
-  void (*drawextra)(const bContext *C, void *idv, void *arg1, void *arg2, rcti *rect);
-  void *drawextra_arg1;
-  void *drawextra_arg2;
+  std::function<void(const bContext *, rcti *)> drawextra;
 
   int flag;
   short alignnr;
@@ -734,10 +744,9 @@ void ui_but_hsv_set(uiBut *but);
  * For buttons pointing to color for example.
  */
 void ui_but_v3_get(uiBut *but, float vec[3]);
-/**
- * For buttons pointing to color for example.
- */
 void ui_but_v3_set(uiBut *but, const float vec[3]);
+void ui_but_v4_get(uiBut *but, float vec[4]);
+void ui_but_v4_set(uiBut *but, const float vec[4]);
 
 void ui_hsvcircle_vals_from_pos(
     const rcti *rect, float mx, float my, float *r_val_rad, float *r_val_dist);
@@ -745,9 +754,9 @@ void ui_hsvcircle_vals_from_pos(
  * Cursor in HSV circle, in float units -1 to 1, to map on radius.
  */
 void ui_hsvcircle_pos_from_vals(
-    const ColorPicker *cpicker, const rcti *rect, const float *hsv, float *xpos, float *ypos);
+    const ColorPicker *cpicker, const rcti *rect, const float *hsv, float *r_xpos, float *r_ypos);
 void ui_hsvcube_pos_from_vals(
-    const uiButHSVCube *hsv_but, const rcti *rect, const float *hsv, float *xp, float *yp);
+    const uiButHSVCube *hsv_but, const rcti *rect, const float *hsv, float *r_xp, float *r_yp);
 
 /**
  * \param float_precision: For number buttons the precision
@@ -774,7 +783,7 @@ char *ui_but_string_get_dynamic(uiBut *but, int *r_str_size);
  */
 void ui_but_convert_to_unit_alt_name(uiBut *but, char *str, size_t str_maxncpy) ATTR_NONNULL();
 bool ui_but_string_set(bContext *C, uiBut *but, const char *str) ATTR_NONNULL();
-bool ui_but_string_eval_number(bContext *C, const uiBut *but, const char *str, double *value)
+bool ui_but_string_eval_number(bContext *C, const uiBut *but, const char *str, double *r_value)
     ATTR_NONNULL();
 int ui_but_string_get_maxncpy(uiBut *but);
 /**
@@ -954,6 +963,11 @@ void ui_color_picker_hsv_to_rgb(const float r_cp[3], float rgb[3]);
  */
 bool ui_but_is_color_gamma(uiBut *but);
 
+/**
+ * Returns true if the button represents a color with an Alpha component.
+ */
+bool ui_but_color_has_alpha(uiBut *but);
+
 void ui_scene_linear_to_perceptual_space(uiBut *but, float rgb[3]);
 void ui_perceptual_to_scene_linear_space(uiBut *but, float rgb[3]);
 
@@ -1109,15 +1123,15 @@ void ui_draw_but_TAB_outline(const rcti *rect,
 void ui_draw_but_HISTOGRAM(ARegion *region,
                            uiBut *but,
                            const uiWidgetColors *wcol,
-                           const rcti *rect);
+                           const rcti *recti);
 void ui_draw_but_WAVEFORM(ARegion *region,
                           uiBut *but,
                           const uiWidgetColors *wcol,
-                          const rcti *rect);
+                          const rcti *recti);
 void ui_draw_but_VECTORSCOPE(ARegion *region,
                              uiBut *but,
                              const uiWidgetColors *wcol,
-                             const rcti *rect);
+                             const rcti *recti);
 void ui_draw_but_COLORBAND(uiBut *but, const uiWidgetColors *wcol, const rcti *rect);
 void ui_draw_but_UNITVEC(uiBut *but, const uiWidgetColors *wcol, const rcti *rect, float radius);
 void ui_draw_but_CURVE(ARegion *region, uiBut *but, const uiWidgetColors *wcol, const rcti *rect);
@@ -1132,7 +1146,7 @@ void ui_draw_but_IMAGE(ARegion *region, uiBut *but, const uiWidgetColors *wcol, 
 void ui_draw_but_TRACKPREVIEW(ARegion *region,
                               uiBut *but,
                               const uiWidgetColors *wcol,
-                              const rcti *rect);
+                              const rcti *recti);
 
 /* `interface_undo.cc` */
 
@@ -1142,14 +1156,14 @@ void ui_draw_but_TRACKPREVIEW(ARegion *region,
  * \note The current state should be pushed immediately after calling this.
  */
 uiUndoStack_Text *ui_textedit_undo_stack_create();
-void ui_textedit_undo_stack_destroy(uiUndoStack_Text *undo_stack);
+void ui_textedit_undo_stack_destroy(uiUndoStack_Text *stack);
 /**
  * Push the information in the arguments to a new state in the undo stack.
  *
  * \note Currently the total length of the undo stack is not limited.
  */
-void ui_textedit_undo_push(uiUndoStack_Text *undo_stack, const char *text, int cursor_index);
-const char *ui_textedit_undo(uiUndoStack_Text *undo_stack, int direction, int *r_cursor_index);
+void ui_textedit_undo_push(uiUndoStack_Text *stack, const char *text, int cursor_index);
+const char *ui_textedit_undo(uiUndoStack_Text *stack, int direction, int *r_cursor_index);
 
 /* interface_handlers.cc */
 
@@ -1247,14 +1261,14 @@ enum {
 blender::gpu::Batch *ui_batch_roundbox_widget_get();
 blender::gpu::Batch *ui_batch_roundbox_shadow_get();
 
-void ui_draw_menu_back(uiStyle *style, uiBlock *block, rcti *rect);
-void ui_draw_popover_back(ARegion *region, uiStyle *style, uiBlock *block, rcti *rect);
+void ui_draw_menu_back(uiStyle *style, uiBlock *block, const rcti *rect);
+void ui_draw_popover_back(ARegion *region, uiStyle *style, uiBlock *block, const rcti *rect);
 void ui_draw_pie_center(uiBlock *block);
 const uiWidgetColors *ui_tooltip_get_theme();
 
 void ui_draw_widget_menu_back_color(const rcti *rect, bool use_shadow, const float color[4]);
 void ui_draw_widget_menu_back(const rcti *rect, bool use_shadow);
-void ui_draw_tooltip_background(const uiStyle *style, uiBlock *block, rcti *rect);
+void ui_draw_tooltip_background(const uiStyle *style, uiBlock *block, const rcti *rect);
 
 /**
  * Conversion from old to new buttons, so still messy.
@@ -1339,14 +1353,10 @@ int ui_id_icon_get(const bContext *C, ID *id, bool big);
 
 /* interface_icons_event.cc */
 
-void icon_draw_rect_input(float x,
-                          float y,
-                          int w,
-                          int h,
-                          float alpha,
-                          short event_type,
-                          short event_value,
-                          bool inverted = false);
+float ui_event_icon_offset(int icon_id);
+
+void icon_draw_rect_input(
+    float x, float y, int w, int h, int icon_id, float aspect, float alpha, bool inverted);
 
 /* resources.cc */
 
@@ -1541,6 +1551,9 @@ void UI_OT_eyedropper_color(wmOperatorType *ot);
 namespace blender::ui {
 void UI_OT_eyedropper_colorramp(wmOperatorType *ot);
 void UI_OT_eyedropper_colorramp_point(wmOperatorType *ot);
+
+void UI_OT_eyedropper_bone(wmOperatorType *ot);
+
 }  // namespace blender::ui
 
 /* interface_eyedropper_datablock.c */
@@ -1555,9 +1568,9 @@ void UI_OT_eyedropper_depth(wmOperatorType *ot);
 
 void UI_OT_eyedropper_driver(wmOperatorType *ot);
 
-/* interface_eyedropper_gpencil_color.c */
+/* eyedropper_grease_pencil_color.cc */
 
-void UI_OT_eyedropper_gpencil_color(wmOperatorType *ot);
+void UI_OT_eyedropper_grease_pencil_color(wmOperatorType *ot);
 
 /* interface_template_asset_shelf_popover.cc */
 std::optional<blender::StringRefNull> UI_asset_shelf_idname_from_button_context(const uiBut *but);

@@ -25,10 +25,8 @@
 #include "RNA_types.hh"
 
 struct ID;
-struct ListBase;
 struct Main;
 struct Scene;
-struct ViewLayer;
 
 struct AnimationEvalContext;
 struct NlaKeyframingContext;
@@ -82,7 +80,7 @@ class CombinedKeyingResult {
   void add(SingleKeyingResult result, int count = 1);
 
   /* Add values of the given result to this result. */
-  void merge(const CombinedKeyingResult &combined_result);
+  void merge(const CombinedKeyingResult &other);
 
   int get_count(const SingleKeyingResult result) const;
 
@@ -126,6 +124,13 @@ void update_autoflags_fcurve_direct(FCurve *fcu, PropertyRNA *prop);
  * animation data (AnimData, Action, ...) is created if it doesn't already
  * exist.
  *
+ * Note that this function was created as part of an ongoing refactor by merging
+ * two other functions that were *almost* identical to each other. There are
+ * still things left over from that which can and should be improved (such as
+ * the partially redundant `scene_frame` and `anim_eval_context`parameters).
+ * Additionally, it's a bit of a mega-function now, and can probably be stripped
+ * down to a clearer core functionality.
+ *
  * \param struct_pointer: RNA pointer to the struct to be keyed. This is often
  * an ID, but not necessarily. For example, pose bones are also common. Note
  * that if you have an `ID` and want to pass it here for keying, you can create
@@ -142,8 +147,6 @@ void update_autoflags_fcurve_direct(FCurve *fcu, PropertyRNA *prop);
  * \param scene_frame: the frame to insert the keys at. This is in scene time,
  * not NLA mapped (NLA mapping is already handled internally by this function).
  * If not given, the evaluation time from `anim_eval_context` is used instead.
- * TODO: this redundancy between `scene_frame` and `anim_eval_context` should
- * be eliminated. We shouldn't need both!
  *
  * \returns A summary of the successful and failed keyframe insertions, with
  * reasons for the failures.
@@ -179,7 +182,7 @@ bool insert_keyframe_direct(ReportList *reports,
                             FCurve *fcu,
                             const AnimationEvalContext *anim_eval_context,
                             eBezTriple_KeyframeType keytype,
-                            NlaKeyframingContext *nla,
+                            NlaKeyframingContext *nla_context,
                             eInsertKeyFlags flag);
 
 /**
@@ -189,31 +192,16 @@ bool insert_keyframe_direct(ReportList *reports,
  * Will perform checks just in case.
  * \return The number of key-frames deleted.
  */
-int delete_keyframe(Main *bmain,
-                    ReportList *reports,
-                    ID *id,
-                    bAction *act,
-                    const char rna_path[],
-                    int array_index,
-                    float cfra);
+int delete_keyframe(Main *bmain, ReportList *reports, ID *id, const RNAPath &rna_path, float cfra);
 
 /**
  * Main Keyframing API call:
  * Use this when validation of necessary animation data isn't necessary as it
  * already exists. It will clear the current buttons fcurve(s).
  *
- * The flag argument is used for special settings that alter the behavior of
- * the keyframe deletion. These include the quick refresh options.
- *
  * \return The number of f-curves removed.
  */
-int clear_keyframe(Main *bmain,
-                   ReportList *reports,
-                   ID *id,
-                   bAction *act,
-                   const char rna_path[],
-                   int array_index,
-                   eInsertKeyFlags /*flag*/);
+int clear_keyframe(Main *bmain, ReportList *reports, ID *id, const RNAPath &rna_path);
 
 /** Check if a flag is set for keyframing (per scene takes precedence). */
 bool is_keying_flag(const Scene *scene, eKeying_Flag flag);

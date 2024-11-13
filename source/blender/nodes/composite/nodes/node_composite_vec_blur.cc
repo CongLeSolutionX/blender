@@ -71,6 +71,17 @@ class VectorBlurOperation : public NodeOperation {
 
   void execute() override
   {
+    /* Not yet supported on CPU. */
+    if (!context().use_gpu()) {
+      for (const bNodeSocket *output : this->node()->output_sockets()) {
+        Result &output_result = get_result(output->identifier);
+        if (output_result.should_compute()) {
+          output_result.allocate_invalid();
+        }
+      }
+      return;
+    }
+
     Result &input = get_input("Image");
     Result &output = get_result("Image");
     if (input.is_single_value()) {
@@ -97,7 +108,7 @@ class VectorBlurOperation : public NodeOperation {
     Result &input = get_input("Speed");
     input.bind_as_texture(shader, "input_tx");
 
-    Result output = context().create_temporary_result(ResultType::Color);
+    Result output = context().create_result(ResultType::Color);
     const int2 tiles_count = math::divide_ceil(input.domain().size, int2(32));
     output.allocate_texture(Domain(tiles_count));
     output.bind_as_image(shader, "output_img");
@@ -205,5 +216,5 @@ void register_node_type_cmp_vecblur()
       &ntype, "NodeBlurData", node_free_standard_storage, node_copy_standard_storage);
   ntype.get_compositor_operation = file_ns::get_compositor_operation;
 
-  blender::bke::nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }

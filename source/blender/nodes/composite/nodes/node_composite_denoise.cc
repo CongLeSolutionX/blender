@@ -93,6 +93,17 @@ class DenoiseOperation : public NodeOperation {
 
   void execute() override
   {
+    /* Not yet supported on CPU. */
+    if (!context().use_gpu()) {
+      for (const bNodeSocket *output : this->node()->output_sockets()) {
+        Result &output_result = get_result(output->identifier);
+        if (output_result.should_compute()) {
+          output_result.allocate_invalid();
+        }
+      }
+      return;
+    }
+
     Result &input_image = get_input("Image");
     Result &output_image = get_result("Image");
 
@@ -103,14 +114,15 @@ class DenoiseOperation : public NodeOperation {
 
 #ifdef WITH_OPENIMAGEDENOISE
     oidn::DeviceRef device;
-    bool host_buffer = false;
+    bool host_buffer = true;
     if (context().get_render_data().compositor_device == SCE_COMPOSITOR_DEVICE_CPU) {
       device = oidn::newDevice(oidn::DeviceType::CPU);
     }
     else {
+      /* Let OIDN find the best device */
       device = oidn::newDevice();
+      host_buffer = device.get<bool>("systemMemorySupported");
     }
-    host_buffer = device.get<bool>("systemMemorySupported");
 
     device.commit();
 
@@ -124,7 +136,7 @@ class DenoiseOperation : public NodeOperation {
     /* Download the input texture and set it as both the input and output of the filter to denoise
      * it in-place. */
     GPU_memory_barrier(GPU_BARRIER_TEXTURE_UPDATE);
-    float *color = static_cast<float *>(GPU_texture_read(input_image.texture(), data_format, 0));
+    float *color = static_cast<float *>(GPU_texture_read(input_image, data_format, 0));
     oidn::BufferRef color_buffer;
     if (host_buffer) {
       color_buffer = device.newBuffer(color, buffer_size);
@@ -145,7 +157,7 @@ class DenoiseOperation : public NodeOperation {
     float *albedo = nullptr;
     Result &input_albedo = get_input("Albedo");
     if (!input_albedo.is_single_value()) {
-      albedo = static_cast<float *>(GPU_texture_read(input_albedo.texture(), data_format, 0));
+      albedo = static_cast<float *>(GPU_texture_read(input_albedo, data_format, 0));
       oidn::BufferRef albedo_buffer;
       if (host_buffer) {
         albedo_buffer = device.newBuffer(albedo, buffer_size);
@@ -175,7 +187,7 @@ class DenoiseOperation : public NodeOperation {
     float *normal = nullptr;
     Result &input_normal = get_input("Normal");
     if (albedo && !input_normal.is_single_value()) {
-      normal = static_cast<float *>(GPU_texture_read(input_normal.texture(), data_format, 0));
+      normal = static_cast<float *>(GPU_texture_read(input_normal, data_format, 0));
       oidn::BufferRef normal_buffer;
       if (host_buffer) {
         normal_buffer = device.newBuffer(normal, buffer_size);
@@ -205,7 +217,7 @@ class DenoiseOperation : public NodeOperation {
     color_buffer.read(0, buffer_size, color);
 
     output_image.allocate_texture(input_image.domain());
-    GPU_texture_update(output_image.texture(), data_format, color);
+    GPU_texture_update(output_image, data_format, color);
 
     MEM_freeN(color);
     if (albedo) {
@@ -283,5 +295,5 @@ void register_node_type_cmp_denoise()
       &ntype, "NodeDenoise", node_free_standard_storage, node_copy_standard_storage);
   ntype.get_compositor_operation = file_ns::get_compositor_operation;
 
-  blender::bke::nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }

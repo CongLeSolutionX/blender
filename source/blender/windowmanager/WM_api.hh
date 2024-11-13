@@ -57,9 +57,6 @@ struct wmEventHandler_Op;
 struct wmEventHandler_UI;
 struct wmGenericUserData;
 struct wmGesture;
-struct wmGizmo;
-struct wmGizmoMap;
-struct wmGizmoMapType;
 struct wmJob;
 struct wmJobWorkerStatus;
 struct wmOperator;
@@ -273,8 +270,12 @@ bool WM_window_pixels_read_sample(bContext *C, wmWindow *win, const int pos[2], 
  *
  * \note macOS retina opens window in size X, but it has up to 2 x more pixels.
  */
-int WM_window_pixels_x(const wmWindow *win);
-int WM_window_pixels_y(const wmWindow *win);
+int WM_window_native_pixel_x(const wmWindow *win);
+int WM_window_native_pixel_y(const wmWindow *win);
+
+blender::int2 WM_window_native_pixel_size(const wmWindow *win);
+
+void WM_window_native_pixel_coords(const wmWindow *win, int *x, int *y);
 /**
  * Get boundaries usable by all window contents, including global areas.
  */
@@ -304,7 +305,7 @@ Scene *WM_window_get_active_scene(const wmWindow *win) ATTR_NONNULL() ATTR_WARN_
 /**
  * \warning Only call outside of area/region loops.
  */
-void WM_window_set_active_scene(Main *bmain, bContext *C, wmWindow *win, Scene *scene_new)
+void WM_window_set_active_scene(Main *bmain, bContext *C, wmWindow *win, Scene *scene)
     ATTR_NONNULL();
 WorkSpace *WM_window_get_active_workspace(const wmWindow *win)
     ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
@@ -372,7 +373,7 @@ void WM_window_set_dpi(const wmWindow *win);
  */
 void WM_window_title(wmWindowManager *wm, wmWindow *win, const char *title = nullptr);
 
-bool WM_stereo3d_enabled(wmWindow *win, bool only_fullscreen_test);
+bool WM_stereo3d_enabled(wmWindow *win, bool skip_stereo3d_check);
 
 /* `wm_files.cc`. */
 
@@ -470,11 +471,45 @@ enum eWM_EventHandlerFlag {
 };
 ENUM_OPERATORS(eWM_EventHandlerFlag, WM_HANDLER_DO_FREE)
 
-using EventHandlerPoll = bool (*)(const ARegion *region, const wmEvent *event);
+using EventHandlerPoll = bool (*)(const wmWindow *win,
+                                  const ScrArea *area,
+                                  const ARegion *region,
+                                  const wmEvent *event);
 wmEventHandler_Keymap *WM_event_add_keymap_handler(ListBase *handlers, wmKeyMap *keymap);
 wmEventHandler_Keymap *WM_event_add_keymap_handler_poll(ListBase *handlers,
                                                         wmKeyMap *keymap,
                                                         EventHandlerPoll poll);
+
+/**
+ * \return true when the `event` should be handled by the 2D views masked region.
+ *
+ * \note uses the #EventHandlerPoll signature.
+ */
+bool WM_event_handler_region_v2d_mask_poll(const wmWindow *win,
+                                           const ScrArea *area,
+                                           const ARegion *region,
+                                           const wmEvent *event);
+/**
+ * \return true when the `event` is inside the marker region.
+ *
+ * \note There are no checks that markers are displayed.
+ */
+bool WM_event_handler_region_marker_poll(const wmWindow *win,
+                                         const ScrArea *area,
+                                         const ARegion *region,
+                                         const wmEvent *event);
+
+/**
+ * A version of #WM_event_handler_region_v2d_mask_poll which excludes events
+ * (returning false) in the marker region.
+ *
+ * \note uses the #EventHandlerPoll signature.
+ */
+bool WM_event_handler_region_v2d_mask_no_marker_poll(const wmWindow *win,
+                                                     const ScrArea *area,
+                                                     const ARegion *region,
+                                                     const wmEvent *event);
+
 wmEventHandler_Keymap *WM_event_add_keymap_handler_v2d_mask(ListBase *handlers, wmKeyMap *keymap);
 /**
  * \note Priorities not implemented yet, for time being just insert in begin of list.
@@ -897,7 +932,7 @@ void WM_operator_properties_sanitize(PointerRNA *ptr, bool no_context);
  */
 bool WM_operator_properties_default(PointerRNA *ptr, bool do_update);
 /**
- * Remove all props without #PROP_SKIP_SAVE.
+ * Remove all props without #PROP_SKIP_SAVE or #PROP_SKIP_PRESET.
  */
 void WM_operator_properties_reset(wmOperator *op);
 void WM_operator_properties_create(PointerRNA *ptr, const char *opstring);
@@ -996,8 +1031,8 @@ void WM_operator_properties_id_lookup(wmOperatorType *ot, const bool add_name_pr
  */
 void WM_operator_properties_use_cursor_init(wmOperatorType *ot);
 void WM_operator_properties_border(wmOperatorType *ot);
-void WM_operator_properties_border_to_rcti(wmOperator *op, rcti *rect);
-void WM_operator_properties_border_to_rctf(wmOperator *op, rctf *rect);
+void WM_operator_properties_border_to_rcti(wmOperator *op, rcti *r_rect);
+void WM_operator_properties_border_to_rctf(wmOperator *op, rctf *r_rect);
 /**
  * Use with #WM_gesture_box_invoke
  */
@@ -1540,7 +1575,8 @@ std::string WM_drag_get_string_firstline(const wmDrag *drag);
 /* Set OpenGL viewport and scissor. */
 void wmViewport(const rcti *winrct);
 void wmPartialViewport(rcti *drawrct, const rcti *winrct, const rcti *partialrct);
-void wmWindowViewport(wmWindow *win);
+void wmWindowViewport(const wmWindow *win);
+void wmWindowViewport_ex(const wmWindow *win, float offset);
 
 /* OpenGL utilities with safety check. */
 void wmOrtho2(float x1, float x2, float y1, float y2);
@@ -1865,7 +1901,7 @@ bool WM_event_consecutive_gesture_test_break(const wmWindow *win, const wmEvent 
 
 int WM_event_drag_threshold(const wmEvent *event);
 bool WM_event_drag_test(const wmEvent *event, const int prev_xy[2]);
-bool WM_event_drag_test_with_delta(const wmEvent *event, const int delta[2]);
+bool WM_event_drag_test_with_delta(const wmEvent *event, const int drag_delta[2]);
 void WM_event_drag_start_mval(const wmEvent *event, const ARegion *region, int r_mval[2]);
 void WM_event_drag_start_mval_fl(const wmEvent *event, const ARegion *region, float r_mval[2]);
 void WM_event_drag_start_xy(const wmEvent *event, int r_xy[2]);

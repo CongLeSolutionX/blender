@@ -9,7 +9,6 @@
 #include "vk_framebuffer.hh"
 #include "vk_backend.hh"
 #include "vk_context.hh"
-#include "vk_memory.hh"
 #include "vk_state_manager.hh"
 #include "vk_texture.hh"
 
@@ -35,6 +34,14 @@ VKFrameBuffer::VKFrameBuffer(const char *name)
   size_set(1, 1);
   srgb_ = false;
   enabled_srgb_ = false;
+}
+
+VKFrameBuffer::~VKFrameBuffer()
+{
+  VKContext &context = *VKContext::get();
+  if (context.active_framebuffer_get() == this) {
+    context.deactivate_framebuffer();
+  }
 }
 
 /** \} */
@@ -178,7 +185,12 @@ void VKFrameBuffer::clear(const eGPUFrameBufferBits buffers,
 
     /* Clearing depth via vkCmdClearAttachments requires a render pass with write depth or stencil
      * enabled. When not enabled, clearing should be done via texture directly. */
-    if ((context.state_manager_get().state.write_mask & needed_mask) == needed_mask) {
+    /* WORKAROUND: Clearing depth attachment when using dynamic rendering are not working on AMD
+     * official drivers.
+     * See #129265 */
+    if ((context.state_manager_get().state.write_mask & needed_mask) == needed_mask &&
+        !GPU_type_matches(GPU_DEVICE_ATI, GPU_OS_ANY, GPU_DRIVER_OFFICIAL))
+    {
       build_clear_attachments_depth_stencil(
           buffers, clear_depth, clear_stencil, clear_attachments);
     }
@@ -277,17 +289,17 @@ static void set_load_store(VkRenderingAttachmentInfo &r_rendering_attachment,
 void VKFrameBuffer::subpass_transition_impl(const GPUAttachmentState depth_attachment_state,
                                             Span<GPUAttachmentState> color_attachment_states)
 {
-  // TODO: this is a fallback implementation. We should also provide support for
-  // `VK_EXT_dynamic_rendering_local_read`. This extension is only supported on Windows
-  // platforms (2024Q2), but would reduce the rendering synchronization overhead.
+  /* TODO: this is a fallback implementation. We should also provide support for
+   * `VK_EXT_dynamic_rendering_local_read`. This extension is only supported on Windows
+   * platforms (2024Q2), but would reduce the rendering synchronization overhead. */
   VKContext &context = *VKContext::get();
   if (is_rendering_) {
     rendering_end(context);
 
-    // TODO: this might need a better implementation:
-    // READ -> DONTCARE
-    // WRITE -> LOAD, STORE based on previous value.
-    // IGNORE -> DONTCARE -> IGNORE
+    /* TODO: this might need a better implementation:
+     * READ -> DONTCARE
+     * WRITE -> LOAD, STORE based on previous value.
+     * IGNORE -> DONTCARE -> IGNORE */
     load_stores.fill(default_load_store());
   }
 
@@ -343,9 +355,9 @@ void VKFrameBuffer::read(eGPUFrameBufferBits plane,
   if (texture == nullptr) {
     return;
   }
-  const int area6[6] = {area[0], area[1], 0, area[2], area[3], 1};
+  const int region[6] = {area[0], area[1], 0, area[0] + area[2], area[1] + area[3], 1};
   IndexRange layers(max_ii(attachment->layer, 0), 1);
-  texture->read_sub(0, format, area6, layers, r_data);
+  texture->read_sub(0, format, region, layers, r_data);
 }
 
 /** \} */
@@ -519,6 +531,7 @@ void VKFrameBuffer::rendering_ensure(VKContext &context)
   if (is_rendering_) {
     return;
   }
+  const VKWorkarounds &workarounds = VKBackend::get().device.workarounds_get();
   is_rendering_ = true;
   dirty_attachments_ = false;
   dirty_state_ = false;
@@ -541,21 +554,32 @@ void VKFrameBuffer::rendering_ensure(VKContext &context)
     }
 
     VKTexture &color_texture = *unwrap(unwrap(attachment.tex));
+    /* To support `gpu_Layer` we need to set the layerCount to the number of layers it can access.
+     */
+    int layer_count = color_texture.layer_count();
+    if (attachment.layer == -1 && layer_count != 1) {
+      begin_rendering.node_data.vk_rendering_info.layerCount = max_ii(
+          begin_rendering.node_data.vk_rendering_info.layerCount, layer_count);
+    }
+
     VkRenderingAttachmentInfo &attachment_info =
         begin_rendering.node_data
             .color_attachments[begin_rendering.node_data.vk_rendering_info.colorAttachmentCount++];
     attachment_info.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
 
     VkImageView vk_image_view = VK_NULL_HANDLE;
+    uint32_t layer_base = max_ii(attachment.layer, 0);
     GPUAttachmentState attachment_state = attachment_states_[color_attachment_index];
     if (attachment_state == GPU_ATTACHMENT_WRITE) {
-      VKImageViewInfo image_view_info = {eImageViewUsage::Attachment,
-                                         IndexRange(max_ii(attachment.layer, 0), 1),
-                                         IndexRange(attachment.mip, 1),
-                                         {{'r', 'g', 'b', 'a'}},
-                                         false,
-                                         srgb_ && enabled_srgb_,
-                                         VKImageViewArrayed::DONT_CARE};
+      VKImageViewInfo image_view_info = {
+          eImageViewUsage::Attachment,
+          IndexRange(layer_base,
+                     layer_count != 1 ? max_ii(layer_count - layer_base, 1) : layer_count),
+          IndexRange(attachment.mip, 1),
+          {{'r', 'g', 'b', 'a'}},
+          false,
+          srgb_ && enabled_srgb_,
+          VKImageViewArrayed::DONT_CARE};
       vk_image_view = color_texture.image_view_get(image_view_info).vk_handle();
     }
     attachment_info.imageView = vk_image_view;
@@ -565,8 +589,12 @@ void VKFrameBuffer::rendering_ensure(VKContext &context)
     access_info.images.append(
         {color_texture.vk_image_handle(),
          VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-         VK_IMAGE_ASPECT_COLOR_BIT});
-    color_attachment_formats_.append(to_vk_format(color_texture.device_format_get()));
+         VK_IMAGE_ASPECT_COLOR_BIT,
+         layer_base});
+    color_attachment_formats_.append(
+        (workarounds.dynamic_rendering_unused_attachments && vk_image_view == VK_NULL_HANDLE) ?
+            VK_FORMAT_UNDEFINED :
+            to_vk_format(color_texture.device_format_get()));
 
     begin_rendering.node_data.vk_rendering_info.pColorAttachments =
         begin_rendering.node_data.color_attachments;
@@ -586,7 +614,6 @@ void VKFrameBuffer::rendering_ensure(VKContext &context)
     VkImageLayout vk_image_layout = is_depth_stencil_attachment ?
                                         VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL :
                                         VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-    VkFormat vk_format = to_vk_format(depth_texture.device_format_get());
     GPUAttachmentState attachment_state = attachment_states_[GPU_FB_DEPTH_ATTACHMENT];
     VkImageView depth_image_view = VK_NULL_HANDLE;
     if (attachment_state == GPU_ATTACHMENT_WRITE) {
@@ -599,10 +626,14 @@ void VKFrameBuffer::rendering_ensure(VKContext &context)
                                          VKImageViewArrayed::DONT_CARE};
       depth_image_view = depth_texture.image_view_get(image_view_info).vk_handle();
     }
+    VkFormat vk_format = (workarounds.dynamic_rendering_unused_attachments &&
+                          depth_image_view == VK_NULL_HANDLE) ?
+                             VK_FORMAT_UNDEFINED :
+                             to_vk_format(depth_texture.device_format_get());
 
-    // TODO: we should be able to use a single attachment info and only set the
-    // pDepthAttachment/pStencilAttachment to the same struct. But perhaps the stencil clear op
-    // might be different.
+    /* TODO: we should be able to use a single attachment info and only set the
+     * #pDepthAttachment/#pStencilAttachment to the same struct.
+     * But perhaps the stencil clear op might be different. */
     {
       VkRenderingAttachmentInfo &attachment_info = begin_rendering.node_data.depth_attachment;
       attachment_info.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
@@ -633,7 +664,8 @@ void VKFrameBuffer::rendering_ensure(VKContext &context)
                                is_stencil_attachment ?
                                    static_cast<VkImageAspectFlags>(VK_IMAGE_ASPECT_DEPTH_BIT |
                                                                    VK_IMAGE_ASPECT_STENCIL_BIT) :
-                                   static_cast<VkImageAspectFlags>(VK_IMAGE_ASPECT_DEPTH_BIT)});
+                                   static_cast<VkImageAspectFlags>(VK_IMAGE_ASPECT_DEPTH_BIT),
+                               0});
     break;
   }
 

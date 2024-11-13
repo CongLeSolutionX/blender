@@ -21,13 +21,12 @@ namespace blender::io::usd {
 class USDCurvesReader : public USDGeomReader {
  protected:
   pxr::UsdGeomBasisCurves curve_prim_;
-  Curves *curve_;
 
  public:
   USDCurvesReader(const pxr::UsdPrim &prim,
                   const USDImportParams &import_params,
                   const ImportSettings &settings)
-      : USDGeomReader(prim, import_params, settings), curve_prim_(prim), curve_(nullptr)
+      : USDGeomReader(prim, import_params, settings), curve_prim_(prim)
   {
   }
 
@@ -43,7 +42,7 @@ class USDCurvesReader : public USDGeomReader {
 
   void read_geometry(bke::GeometrySet &geometry_set,
                      USDMeshReadParams params,
-                     const char **err_str) override;
+                     const char **r_err_str) override;
 
   void read_custom_data(bke::CurvesGeometry &curves, const double motionSampleTime) const;
 };

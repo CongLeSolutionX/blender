@@ -79,7 +79,7 @@ static void region_draw_emboss(const ARegion *region, const rcti *scirct, int si
   GPU_blend(GPU_BLEND_ALPHA);
 
   float color[4] = {0.0f, 0.0f, 0.0f, 0.25f};
-  UI_GetThemeColor3fv(TH_EDITOR_OUTLINE, color);
+  UI_GetThemeColor3fv(TH_EDITOR_BORDER, color);
 
   GPUVertFormat *format = immVertexFormat();
   uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
@@ -342,7 +342,7 @@ static void region_draw_azones(ScrArea *area, ARegion *region)
 static void region_draw_status_text(ScrArea * /*area*/, ARegion *region)
 {
   float header_color[4];
-  UI_GetThemeColor4fv(TH_HEADER_ACTIVE, header_color);
+  UI_GetThemeColor4fv(TH_HEADER, header_color);
 
   /* Clear the region from the buffer. */
   GPU_clear_color(0.0f, 0.0f, 0.0f, 0.0f);
@@ -517,7 +517,7 @@ void ED_region_do_draw(bContext *C, ARegion *region)
   UI_SetTheme(area ? area->spacetype : 0, at->regionid);
 
   if (area && area_is_pseudo_minimized(area)) {
-    UI_ThemeClearColor(TH_EDITOR_OUTLINE);
+    UI_ThemeClearColor(TH_EDITOR_BORDER);
     return;
   }
   /* optional header info instead? */
@@ -572,7 +572,7 @@ void ED_region_do_draw(bContext *C, ARegion *region)
       /* draw separating lines between the quad views */
 
       float color[4] = {0.0f, 0.0f, 0.0f, 0.8f};
-      UI_GetThemeColor3fv(TH_EDITOR_OUTLINE, color);
+      UI_GetThemeColor3fv(TH_EDITOR_BORDER, color);
       GPUVertFormat *format = immVertexFormat();
       uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
       immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
@@ -793,7 +793,8 @@ void ED_region_search_filter_update(const ScrArea *area, ARegion *region)
 
   const char *search_filter = ED_area_region_search_filter_get(area, region);
   SET_FLAG_FROM_TEST(region->flag,
-                     region->regiontype == RGN_TYPE_WINDOW && search_filter[0] != '\0',
+                     region->regiontype == RGN_TYPE_WINDOW && search_filter &&
+                         search_filter[0] != '\0',
                      RGN_FLAG_SEARCH_FILTER_ACTIVE);
 }
 
@@ -875,30 +876,24 @@ WorkspaceStatus::WorkspaceStatus(bContext *C)
  * \{ */
 
 static constexpr float STATUS_AFTER_TEXT = 0.7f;
-static constexpr float STATUS_BEFORE_TEXT = 0.3f;
 static constexpr float STATUS_MOUSE_ICON_PAD = -0.5f;
 
 static void ed_workspace_status_text_item(WorkSpace *workspace, std::string text)
 {
   if (!text.empty()) {
-    ed_workspace_status_space(workspace, STATUS_BEFORE_TEXT);
     ed_workspace_status_item(workspace, std::move(text), ICON_NONE);
     ed_workspace_status_space(workspace, STATUS_AFTER_TEXT);
   }
 }
 
-static void ed_workspace_status_mouse_item(WorkSpace *workspace,
-                                           const int icon,
-                                           const bool inverted = false)
+static void ed_workspace_status_icon_item(WorkSpace *workspace,
+                                          const int icon,
+                                          const bool inverted = false)
 {
   if (icon) {
-    if (icon >= ICON_MOUSE_LMB && icon <= ICON_MOUSE_RMB_DRAG) {
-      /* Negative space before all narrow mice icons. */
-      ed_workspace_status_space(workspace, STATUS_MOUSE_ICON_PAD);
-    }
     ed_workspace_status_item(workspace, {}, icon, 0.0f, inverted);
-    if (icon >= ICON_MOUSE_LMB && icon <= ICON_MOUSE_RMB) {
-      /* Negative space after non-drag mice icons. */
+    if (icon >= ICON_MOUSE_LMB && icon <= ICON_MOUSE_MMB_SCROLL) {
+      /* Negative space after narrow mice icons. */
       ed_workspace_status_space(workspace, STATUS_MOUSE_ICON_PAD);
     }
   }
@@ -912,8 +907,8 @@ static void ed_workspace_status_mouse_item(WorkSpace *workspace,
 
 void WorkspaceStatus::item(std::string text, const int icon1, const int icon2)
 {
-  ed_workspace_status_mouse_item(workspace_, icon1);
-  ed_workspace_status_mouse_item(workspace_, icon2);
+  ed_workspace_status_icon_item(workspace_, icon1);
+  ed_workspace_status_icon_item(workspace_, icon2);
   ed_workspace_status_text_item(workspace_, std::move(text));
 }
 
@@ -931,8 +926,8 @@ void WorkspaceStatus::item_bool(std::string text,
                                 const int icon1,
                                 const int icon2)
 {
-  ed_workspace_status_mouse_item(workspace_, icon1, inverted);
-  ed_workspace_status_mouse_item(workspace_, icon2, inverted);
+  ed_workspace_status_icon_item(workspace_, icon1, inverted);
+  ed_workspace_status_icon_item(workspace_, icon2, inverted);
   ed_workspace_status_text_item(workspace_, std::move(text));
 }
 
@@ -962,11 +957,7 @@ void WorkspaceStatus::opmodal(std::string text,
       if (!ELEM(kmi->oskey, KM_NOTHING, KM_ANY)) {
         ed_workspace_status_item(workspace_, {}, ICON_EVENT_OS, 0.0f, inverted);
       }
-      if (kmi->val == KM_DBL_CLICK) {
-        ed_workspace_status_item(workspace_, "2" BLI_STR_UTF8_MULTIPLICATION_SIGN, ICON_NONE);
-        ed_workspace_status_space(workspace_, -0.7f);
-      }
-      ed_workspace_status_mouse_item(workspace_, icon, inverted);
+      ed_workspace_status_icon_item(workspace_, icon, inverted);
       ed_workspace_status_text_item(workspace_, std::move(text));
     }
   }
@@ -1031,7 +1022,7 @@ static void area_azone_init(wmWindow *win, const bScreen *screen, ScrArea *area)
 #ifdef __APPLE__
     if (!WM_window_is_fullscreen(win) &&
         ((coords[i][0] == 0 && coords[i][1] == 0) ||
-         (coords[i][0] == WM_window_pixels_x(win) && coords[i][1] == 0)))
+         (coords[i][0] == WM_window_native_pixel_x(win) && coords[i][1] == 0)))
     {
       continue;
     }
@@ -1420,7 +1411,7 @@ bool ED_region_is_overlap(int spacetype, int regiontype)
   }
   if (U.uiflag2 & USER_REGION_OVERLAP) {
     if (spacetype == SPACE_NODE) {
-      if (regiontype == RGN_TYPE_TOOLS) {
+      if (ELEM(regiontype, RGN_TYPE_TOOLS, RGN_TYPE_UI)) {
         return true;
       }
     }
@@ -1851,13 +1842,6 @@ static void region_evaulate_visibility(ARegion *region)
   region->visible = !hidden;
 }
 
-static bool event_in_markers_region(const ARegion *region, const wmEvent *event)
-{
-  rcti rect = region->winrct;
-  rect.ymax = rect.ymin + UI_MARKER_MARGIN_Y;
-  return BLI_rcti_isect_pt_v(&rect, event->xy);
-}
-
 /**
  * \param region: Region, may be nullptr when adding handlers for \a area.
  */
@@ -1904,11 +1888,11 @@ static void ed_default_handlers(
 
     /* time-markers */
     keymap = WM_keymap_ensure(wm->defaultconf, "Markers", SPACE_EMPTY, RGN_TYPE_WINDOW);
-    WM_event_add_keymap_handler_poll(handlers, keymap, event_in_markers_region);
+    WM_event_add_keymap_handler_poll(handlers, keymap, WM_event_handler_region_marker_poll);
 
     /* time-scrub */
     keymap = WM_keymap_ensure(wm->defaultconf, "Time Scrub", SPACE_EMPTY, RGN_TYPE_WINDOW);
-    WM_event_add_keymap_handler_poll(handlers, keymap, ED_time_scrub_event_in_region);
+    WM_event_add_keymap_handler_poll(handlers, keymap, ED_time_scrub_event_in_region_poll);
 
     /* frame changing and timeline operators (for time spaces) */
     keymap = WM_keymap_ensure(wm->defaultconf, "Animation", SPACE_EMPTY, RGN_TYPE_WINDOW);
@@ -1957,161 +1941,9 @@ static void ed_default_handlers(
   /* Keep last because of LMB/RMB handling, see: #57527. */
   if (flag & ED_KEYMAP_GPENCIL) {
     /* grease pencil */
-    /* NOTE: This is now 4 keymaps - One for basic functionality,
-     *       and others for special stroke modes (edit, paint and sculpt).
-     *
-     *       For now, it's easier to just include all,
-     *       since you hardly want one without the others.
-     */
     {
       wmKeyMap *keymap = WM_keymap_ensure(
           wm->defaultconf, "Grease Pencil", SPACE_EMPTY, RGN_TYPE_WINDOW);
-      WM_event_add_keymap_handler(handlers, keymap);
-    }
-    {
-      wmKeyMap *keymap = WM_keymap_ensure(
-          wm->defaultconf, "Grease Pencil Stroke Curve Edit Mode", SPACE_EMPTY, RGN_TYPE_WINDOW);
-      WM_event_add_keymap_handler(handlers, keymap);
-    }
-    {
-      wmKeyMap *keymap = WM_keymap_ensure(
-          wm->defaultconf, "Grease Pencil Stroke Edit Mode", SPACE_EMPTY, RGN_TYPE_WINDOW);
-      WM_event_add_keymap_handler(handlers, keymap);
-    }
-    {
-      wmKeyMap *keymap = WM_keymap_ensure(
-          wm->defaultconf, "Grease Pencil Stroke Paint Mode", SPACE_EMPTY, RGN_TYPE_WINDOW);
-      WM_event_add_keymap_handler(handlers, keymap);
-    }
-    {
-      wmKeyMap *keymap = WM_keymap_ensure(wm->defaultconf,
-                                          "Grease Pencil Stroke Paint (Draw brush)",
-                                          SPACE_EMPTY,
-                                          RGN_TYPE_WINDOW);
-      WM_event_add_keymap_handler(handlers, keymap);
-    }
-    {
-      wmKeyMap *keymap = WM_keymap_ensure(
-          wm->defaultconf, "Grease Pencil Stroke Paint (Erase)", SPACE_EMPTY, RGN_TYPE_WINDOW);
-      WM_event_add_keymap_handler(handlers, keymap);
-    }
-    {
-      wmKeyMap *keymap = WM_keymap_ensure(
-          wm->defaultconf, "Grease Pencil Stroke Paint (Fill)", SPACE_EMPTY, RGN_TYPE_WINDOW);
-      WM_event_add_keymap_handler(handlers, keymap);
-    }
-    {
-      wmKeyMap *keymap = WM_keymap_ensure(
-          wm->defaultconf, "Grease Pencil Stroke Paint (Tint)", SPACE_EMPTY, RGN_TYPE_WINDOW);
-      WM_event_add_keymap_handler(handlers, keymap);
-    }
-    {
-      wmKeyMap *keymap = WM_keymap_ensure(
-          wm->defaultconf, "Grease Pencil Stroke Sculpt Mode", SPACE_EMPTY, RGN_TYPE_WINDOW);
-      WM_event_add_keymap_handler(handlers, keymap);
-    }
-    {
-      wmKeyMap *keymap = WM_keymap_ensure(
-          wm->defaultconf, "Grease Pencil Stroke Vertex Mode", SPACE_EMPTY, RGN_TYPE_WINDOW);
-      WM_event_add_keymap_handler(handlers, keymap);
-    }
-    {
-      wmKeyMap *keymap = WM_keymap_ensure(
-          wm->defaultconf, "Grease Pencil Stroke Vertex (Draw)", SPACE_EMPTY, RGN_TYPE_WINDOW);
-      WM_event_add_keymap_handler(handlers, keymap);
-    }
-    {
-      wmKeyMap *keymap = WM_keymap_ensure(
-          wm->defaultconf, "Grease Pencil Stroke Vertex (Blur)", SPACE_EMPTY, RGN_TYPE_WINDOW);
-      WM_event_add_keymap_handler(handlers, keymap);
-    }
-    {
-      wmKeyMap *keymap = WM_keymap_ensure(
-          wm->defaultconf, "Grease Pencil Stroke Vertex (Average)", SPACE_EMPTY, RGN_TYPE_WINDOW);
-      WM_event_add_keymap_handler(handlers, keymap);
-    }
-    {
-      wmKeyMap *keymap = WM_keymap_ensure(
-          wm->defaultconf, "Grease Pencil Stroke Vertex (Smear)", SPACE_EMPTY, RGN_TYPE_WINDOW);
-      WM_event_add_keymap_handler(handlers, keymap);
-    }
-    {
-      wmKeyMap *keymap = WM_keymap_ensure(
-          wm->defaultconf, "Grease Pencil Stroke Vertex (Replace)", SPACE_EMPTY, RGN_TYPE_WINDOW);
-      WM_event_add_keymap_handler(handlers, keymap);
-    }
-    {
-      wmKeyMap *keymap = WM_keymap_ensure(
-          wm->defaultconf, "Grease Pencil Stroke Sculpt (Smooth)", SPACE_EMPTY, RGN_TYPE_WINDOW);
-      WM_event_add_keymap_handler(handlers, keymap);
-    }
-    {
-      wmKeyMap *keymap = WM_keymap_ensure(wm->defaultconf,
-                                          "Grease Pencil Stroke Sculpt (Thickness)",
-                                          SPACE_EMPTY,
-                                          RGN_TYPE_WINDOW);
-      WM_event_add_keymap_handler(handlers, keymap);
-    }
-    {
-      wmKeyMap *keymap = WM_keymap_ensure(
-          wm->defaultconf, "Grease Pencil Stroke Sculpt (Strength)", SPACE_EMPTY, RGN_TYPE_WINDOW);
-      WM_event_add_keymap_handler(handlers, keymap);
-    }
-    {
-      wmKeyMap *keymap = WM_keymap_ensure(
-          wm->defaultconf, "Grease Pencil Stroke Sculpt (Grab)", SPACE_EMPTY, RGN_TYPE_WINDOW);
-      WM_event_add_keymap_handler(handlers, keymap);
-    }
-    {
-      wmKeyMap *keymap = WM_keymap_ensure(
-          wm->defaultconf, "Grease Pencil Stroke Sculpt (Push)", SPACE_EMPTY, RGN_TYPE_WINDOW);
-      WM_event_add_keymap_handler(handlers, keymap);
-    }
-    {
-      wmKeyMap *keymap = WM_keymap_ensure(
-          wm->defaultconf, "Grease Pencil Stroke Sculpt (Twist)", SPACE_EMPTY, RGN_TYPE_WINDOW);
-      WM_event_add_keymap_handler(handlers, keymap);
-    }
-    {
-      wmKeyMap *keymap = WM_keymap_ensure(
-          wm->defaultconf, "Grease Pencil Stroke Sculpt (Pinch)", SPACE_EMPTY, RGN_TYPE_WINDOW);
-      WM_event_add_keymap_handler(handlers, keymap);
-    }
-    {
-      wmKeyMap *keymap = WM_keymap_ensure(wm->defaultconf,
-                                          "Grease Pencil Stroke Sculpt (Randomize)",
-                                          SPACE_EMPTY,
-                                          RGN_TYPE_WINDOW);
-      WM_event_add_keymap_handler(handlers, keymap);
-    }
-    {
-      wmKeyMap *keymap = WM_keymap_ensure(
-          wm->defaultconf, "Grease Pencil Stroke Sculpt (Clone)", SPACE_EMPTY, RGN_TYPE_WINDOW);
-      WM_event_add_keymap_handler(handlers, keymap);
-    }
-    {
-      wmKeyMap *keymap = WM_keymap_ensure(
-          wm->defaultconf, "Grease Pencil Stroke Weight Mode", SPACE_EMPTY, RGN_TYPE_WINDOW);
-      WM_event_add_keymap_handler(handlers, keymap);
-    }
-    {
-      wmKeyMap *keymap = WM_keymap_ensure(
-          wm->defaultconf, "Grease Pencil Stroke Weight (Draw)", SPACE_EMPTY, RGN_TYPE_WINDOW);
-      WM_event_add_keymap_handler(handlers, keymap);
-    }
-    {
-      wmKeyMap *keymap = WM_keymap_ensure(
-          wm->defaultconf, "Grease Pencil Stroke Weight (Blur)", SPACE_EMPTY, RGN_TYPE_WINDOW);
-      WM_event_add_keymap_handler(handlers, keymap);
-    }
-    {
-      wmKeyMap *keymap = WM_keymap_ensure(
-          wm->defaultconf, "Grease Pencil Stroke Weight (Average)", SPACE_EMPTY, RGN_TYPE_WINDOW);
-      WM_event_add_keymap_handler(handlers, keymap);
-    }
-    {
-      wmKeyMap *keymap = WM_keymap_ensure(
-          wm->defaultconf, "Grease Pencil Stroke Weight (Smear)", SPACE_EMPTY, RGN_TYPE_WINDOW);
       WM_event_add_keymap_handler(handlers, keymap);
     }
   }
@@ -2264,11 +2096,22 @@ void ED_area_init(wmWindowManager *wm, wmWindow *win, ScrArea *area)
     region_azones_add(screen, area, region);
   }
 
-  /* Avoid re-initializing tools while resizing the window. */
+  /* Avoid re-initializing tools while resizing areas & regions. */
   if ((G.moving & G_TRANSFORM_WM) == 0) {
     if ((1 << area->spacetype) & WM_TOOLSYSTEM_SPACE_MASK) {
-      WM_toolsystem_refresh_screen_area(workspace, scene, view_layer, area);
-      area->flag |= AREA_FLAG_ACTIVE_TOOL_UPDATE;
+      if (WM_toolsystem_refresh_screen_area(workspace, scene, view_layer, area) ||
+          /* When the tool is null it may not be initialized.
+           * This happens when switching to a new area, see: #126990.
+           *
+           * NOTE(@ideasman42): There is a possible down-side here: when refreshing
+           * tools results in a null value, refreshing won't be skipped here as intended.
+           * As it happens, spaces that use tools will practically always have a default tool. */
+          (area->runtime.tool == nullptr))
+      {
+        /* Only re-initialize as needed to prevent redundant updates as they
+         * can cause gizmos to flicker when the flag is set continuously, see: #126525. */
+        area->flag |= AREA_FLAG_ACTIVE_TOOL_UPDATE;
+      }
     }
     else {
       area->runtime.tool = nullptr;
@@ -2742,6 +2585,7 @@ void ED_area_swapspace(bContext *C, ScrArea *sa1, ScrArea *sa2)
 void ED_area_newspace(bContext *C, ScrArea *area, int type, const bool skip_region_exit)
 {
   wmWindow *win = CTX_wm_window(C);
+  SpaceType *st = BKE_spacetype_from_id(type);
 
   if (area->spacetype != type) {
     SpaceLink *slold = static_cast<SpaceLink *>(area->spacedata.first);
@@ -2777,8 +2621,6 @@ void ED_area_newspace(bContext *C, ScrArea *area, int type, const bool skip_regi
     if (skip_region_exit && area->type) {
       area->type->exit = area_exit;
     }
-
-    SpaceType *st = BKE_spacetype_from_id(type);
 
     area->spacetype = type;
     area->type = st;
@@ -2852,6 +2694,12 @@ void ED_area_newspace(bContext *C, ScrArea *area, int type, const bool skip_regi
 
     ED_area_tag_refresh(area);
   }
+
+  /* Set area space subtype if applicable. */
+  if (st->space_subtype_item_extend != nullptr) {
+    st->space_subtype_set(area, area->butspacetype_subtype);
+  }
+  area->butspacetype_subtype = 0;
 
   if (BLI_listbase_is_single(&CTX_wm_screen(C)->areabase)) {
     /* If there is only one area update the window title. */
@@ -2936,19 +2784,12 @@ int ED_area_header_switchbutton(const bContext *C, uiBlock *block, int yco)
 
 /************************ standard UI regions ************************/
 
-static ThemeColorID region_background_color_id(const bContext *C, const ARegion *region)
+static ThemeColorID region_background_color_id(const bContext * /*C*/, const ARegion *region)
 {
-  ScrArea *area = CTX_wm_area(C);
-
   switch (region->regiontype) {
     case RGN_TYPE_HEADER:
     case RGN_TYPE_TOOL_HEADER:
-      if (ED_screen_area_active(C) && !ED_area_is_global(area)) {
-        return TH_HEADER_ACTIVE;
-      }
-      else {
-        return TH_HEADER;
-      }
+      return TH_HEADER;
     case RGN_TYPE_PREVIEW:
       return TH_PREVIEW_BACK;
     default:
@@ -3913,7 +3754,7 @@ int ED_region_global_size_y()
 
 void ED_region_info_draw_multiline(ARegion *region,
                                    const char *text_array[],
-                                   float fill_color[4],
+                                   const float fill_color[4],
                                    const bool full_redraw)
 {
   const int header_height = UI_UNIT_Y;
@@ -3989,7 +3830,7 @@ void ED_region_info_draw_multiline(ARegion *region,
 
 void ED_region_info_draw(ARegion *region,
                          const char *text,
-                         float fill_color[4],
+                         const float fill_color[4],
                          const bool full_redraw)
 {
   const char *text_array[2] = {text, nullptr};

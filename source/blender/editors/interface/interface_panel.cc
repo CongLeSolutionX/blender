@@ -307,20 +307,24 @@ void UI_panels_free_instanced(const bContext *C, ARegion *region)
 {
   /* Delete panels with the instanced flag. */
   LISTBASE_FOREACH_MUTABLE (Panel *, panel, &region->panels) {
-    if ((panel->type != nullptr) && (panel->type->flag & PANEL_TYPE_INSTANCED)) {
-      /* Make sure the panel's handler is removed before deleting it. */
-      if (C != nullptr && panel->activedata != nullptr) {
-        panel_activate_state(C, panel, PANEL_STATE_EXIT);
-      }
-
-      /* Free panel's custom data. */
-      if (panel->runtime->custom_data_ptr != nullptr) {
-        MEM_freeN(panel->runtime->custom_data_ptr);
-      }
-
-      /* Free the panel and its sub-panels. */
-      panel_delete(region, &region->panels, panel);
+    if (!panel->type) {
+      continue;
     }
+    if ((panel->type->flag & PANEL_TYPE_INSTANCED) == 0) {
+      continue;
+    }
+    /* Make sure the panel's handler is removed before deleting it. */
+    if (C != nullptr && panel->activedata != nullptr) {
+      panel_activate_state(C, panel, PANEL_STATE_EXIT);
+    }
+
+    /* Free panel's custom data. */
+    if (panel->runtime->custom_data_ptr != nullptr) {
+      MEM_delete(panel->runtime->custom_data_ptr);
+    }
+
+    /* Free the panel and its sub-panels. */
+    panel_delete(region, &region->panels, panel);
   }
 }
 
@@ -1099,7 +1103,7 @@ static void panel_draw_aligned_widgets(const uiStyle *style,
                                        const bool region_search_filter_active)
 {
   const bool is_subpanel = panel->type->parent != nullptr;
-  const uiFontStyle *fontstyle = (is_subpanel) ? &style->widgetlabel : &style->paneltitle;
+  const uiFontStyle *fontstyle = (is_subpanel) ? &style->widget : &style->paneltitle;
 
   const int header_height = BLI_rcti_size_y(header_rect);
   const int scaled_unit = round_fl_to_int(UI_UNIT_X / aspect);
@@ -1375,7 +1379,9 @@ void UI_panel_category_draw_all(ARegion *region, const char *category_id_active)
   const uiFontStyle *fstyle = &style->widget;
   const int fontid = fstyle->uifont_id;
   float fstyle_points = fstyle->points;
-  const float aspect = ((uiBlock *)region->uiblocks.first)->aspect;
+  const float aspect = BLI_listbase_is_empty(&region->uiblocks) ?
+                           1.0f :
+                           ((uiBlock *)region->uiblocks.first)->aspect;
   const float zoom = 1.0f / aspect;
   const int px = U.pixelsize;
   const int category_tabs_width = round_fl_to_int(UI_PANEL_CATEGORY_MARGIN_WIDTH * zoom);
@@ -2172,7 +2178,7 @@ bool ui_layout_panel_toggle_open(const bContext *C, LayoutPanelHeader *header)
 }
 
 static void ui_handle_layout_panel_header(
-    const bContext *C, const uiBlock *block, const int /*mx*/, const int my, const int event_type)
+    bContext *C, const uiBlock *block, const int /*mx*/, const int my, const int event_type)
 {
   Panel *panel = block->panel;
   BLI_assert(panel->type != nullptr);
@@ -2183,6 +2189,7 @@ static void ui_handle_layout_panel_header(
   }
   const bool new_state = ui_layout_panel_toggle_open(C, header);
   ED_region_tag_redraw(CTX_wm_region(C));
+  WM_tooltip_clear(C, CTX_wm_window(C));
 
   if (event_type == LEFTMOUSE) {
     ui_panel_drag_collapse_handler_add(C, !new_state);
@@ -2526,7 +2533,9 @@ int ui_handler_panel_region(bContext *C,
     return retval;
   }
 
-  const bool region_has_active_button = (ui_region_find_active_but(region) != nullptr);
+  const uiBut *region_active_but = ui_region_find_active_but(region);
+  const bool region_has_active_button = region_active_but &&
+                                        region_active_but->type != UI_BTYPE_LABEL;
 
   LISTBASE_FOREACH (uiBlock *, block, &region->uiblocks) {
     Panel *panel = block->panel;
@@ -2611,7 +2620,7 @@ void UI_panel_custom_data_set(Panel *panel, PointerRNA *custom_data)
 
   /* Free the old custom data, which should be shared among all of the panel's sub-panels. */
   if (panel->runtime->custom_data_ptr != nullptr) {
-    MEM_freeN(panel->runtime->custom_data_ptr);
+    MEM_delete(panel->runtime->custom_data_ptr);
   }
 
   ui_panel_custom_data_set_recursive(panel, custom_data);

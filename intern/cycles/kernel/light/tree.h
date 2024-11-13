@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0 */
 
 /* This code implements a modified version of the paper [Importance Sampling of Many Lights with
- * Adaptive Tree Splitting](http://www.aconty.com/pdf/many-lights-hpg2018.pdf) by Alejandro Conty
- * Estevez, Christopher Kulla.
+ * Adaptive Tree Splitting](https://fpsunflower.github.io/ckulla/data/many-lights-hpg2018.pdf)
+ * by Alejandro Conty Estevez and Christopher Kulla.
  * The original paper traverses both children when the variance of a node is too high (called
  * splitting). However, Cycles does not support multiple lights per shading point. Therefore, we
  * adjust the importance computation: instead of using a conservative measure (i.e., the maximal
@@ -23,30 +23,20 @@
 
 CCL_NAMESPACE_BEGIN
 
-/* TODO: this seems like a relative expensive computation. We can make it a lot cheaper by using a
- * bounding sphere instead of a bounding box, but this will reduce the accuracy sometimes. */
-ccl_device float light_tree_cos_bounding_box_angle(const BoundingBox bbox,
-                                                   const float3 P,
-                                                   const float3 point_to_centroid)
+/* Consine of the angle subtended by the smallest enclosing sphere of the node bounding box. */
+ccl_device float light_tree_cos_bound_subtended_angle(const KernelBoundingBox bbox,
+                                                      const float3 centroid,
+                                                      const float3 P)
 {
-  if (P.x > bbox.min.x && P.y > bbox.min.y && P.z > bbox.min.z && P.x < bbox.max.x &&
-      P.y < bbox.max.y && P.z < bbox.max.z)
-  {
-    /* If P is inside the bbox, `theta_u` covers the whole sphere. */
-    return -1.0f;
-  }
-  float cos_theta_u = 1.0f;
-  /* Iterate through all 8 possible points of the bounding box. */
-  for (int i = 0; i < 8; ++i) {
-    const float3 corner = make_float3((i & 1) ? bbox.max.x : bbox.min.x,
-                                      (i & 2) ? bbox.max.y : bbox.min.y,
-                                      (i & 4) ? bbox.max.z : bbox.min.z);
+  float distance_to_center_sq = len_squared(P - centroid);
+  float radius_sq = len_squared(bbox.max - centroid);
 
-    /* Calculate the bounding box angle. */
-    float3 point_to_corner = normalize(corner - P);
-    cos_theta_u = fminf(cos_theta_u, dot(point_to_centroid, point_to_corner));
-  }
-  return cos_theta_u;
+  /* If P is inside the bounding sphere, `theta_u` covers the whole sphere and return -1.0
+   * Otherwise compute cos(theta_u) by substituting our values into the cos_from_sin() formula on
+   * the basis that `sin(theta_u) = radius / distance_to_center`. */
+  return (distance_to_center_sq <= radius_sq) ?
+             -1.0f :
+             safe_sqrtf(1.0f - (radius_sq / distance_to_center_sq));
 }
 
 /* Compute vector v as in Fig .8. P_v is the corresponding point along the ray. */
@@ -131,7 +121,7 @@ ccl_device void light_tree_importance(const float3 N_or_D,
                                       const bool has_transmission,
                                       const float3 point_to_centroid,
                                       const float cos_theta_u,
-                                      const BoundingCone bcone,
+                                      const KernelBoundingCone bcone,
                                       const float max_distance,
                                       const float min_distance,
                                       const float energy,
@@ -189,7 +179,7 @@ ccl_device void light_tree_importance(const float3 N_or_D,
   float cos_theta_o, sin_theta_o;
   fast_sincosf(bcone.theta_o, &sin_theta_o, &cos_theta_o);
 
-  /* Minimum angle an emitter’s axis would form with the direction to the shading point,
+  /* Minimum angle an emitter's axis would form with the direction to the shading point,
    * cos(theta') in the paper. */
   float cos_min_outgoing_angle;
   if ((cos_theta >= cos_theta_u) || (cos_theta_minus_theta_u >= cos_theta_o)) {
@@ -313,8 +303,8 @@ ccl_device void light_tree_node_importance(KernelGlobals kg,
                                            ccl_private float &max_importance,
                                            ccl_private float &min_importance)
 {
-  const BoundingCone bcone = knode->bcone;
-  const BoundingBox bbox = knode->bbox;
+  const KernelBoundingCone bcone = knode->bcone;
+  const KernelBoundingBox bbox = knode->bbox;
 
   float3 point_to_centroid;
   float cos_theta_u, distance, theta_d;
@@ -343,8 +333,7 @@ ccl_device void light_tree_node_importance(KernelGlobals kg,
       theta_d = fast_atan2f(t - closest_t, distance) + fast_atan2f(closest_t, distance);
       /* Vector that forms a minimal angle with the emitter centroid. */
       point_to_centroid = -compute_v(centroid, P, D, bcone.axis, t);
-      cos_theta_u = light_tree_cos_bounding_box_angle(
-          bbox, closest_point, normalize(centroid - closest_point));
+      cos_theta_u = light_tree_cos_bound_subtended_angle(bbox, centroid, closest_point);
     }
     else {
       const float3 N = N_or_D;
@@ -360,7 +349,7 @@ ccl_device void light_tree_node_importance(KernelGlobals kg,
       }
 
       point_to_centroid = normalize_len(centroid - P, &distance);
-      cos_theta_u = light_tree_cos_bounding_box_angle(bbox, P, point_to_centroid);
+      cos_theta_u = light_tree_cos_bound_subtended_angle(bbox, centroid, P);
       theta_d = 1.0f;
     }
     /* Clamp distance to half the radius of the cluster when splitting is disabled. */
@@ -406,7 +395,7 @@ ccl_device void light_tree_emitter_importance(KernelGlobals kg,
     return;
   }
 
-  BoundingCone bcone;
+  KernelBoundingCone bcone;
   bcone.theta_o = kemitter->theta_o;
   bcone.theta_e = kemitter->theta_e;
   float cos_theta_u, theta_d = 1.0f;
@@ -459,9 +448,6 @@ ccl_device void light_tree_emitter_importance(KernelGlobals kg,
       case LIGHT_DISTANT:
         is_visible = distant_light_tree_parameters<in_volume_segment>(
             centroid, bcone.theta_e, t, cos_theta_u, distance, point_to_centroid, theta_d);
-        if (in_volume_segment) {
-          centroid = P - bcone.axis;
-        }
         break;
       default:
         return;
@@ -476,6 +462,15 @@ ccl_device void light_tree_emitter_importance(KernelGlobals kg,
   if (in_volume_segment) {
     /* Vector that forms a minimal angle with the emitter centroid. */
     point_to_centroid = -compute_v(centroid, P, N_or_D, bcone.axis, t);
+
+    if (is_light(kemitter)) {
+      const ccl_global KernelLight *klight = &kernel_data_fetch(lights, ~(kemitter->light.id));
+      if (klight->type == LIGHT_DISTANT) {
+        /* For distant light `theta_min` is 0, but due to numerical issues this is not always true.
+         * Therefore explicitly assign `-bcone.axis` to `point_to_centroid` in this case. */
+        point_to_centroid = -bcone.axis;
+      }
+    }
   }
 
   light_tree_importance<in_volume_segment>(N_or_D,

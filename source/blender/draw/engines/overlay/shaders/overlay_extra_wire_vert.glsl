@@ -2,8 +2,9 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#pragma BLENDER_REQUIRE(common_view_clipping_lib.glsl)
-#pragma BLENDER_REQUIRE(common_view_lib.glsl)
+#include "common_view_clipping_lib.glsl"
+#include "common_view_lib.glsl"
+#include "select_lib.glsl"
 
 vec2 screen_position(vec4 p)
 {
@@ -12,6 +13,12 @@ vec2 screen_position(vec4 p)
 
 void main()
 {
+#ifdef OBJECT_WIRE
+  select_id_set(drw_CustomID);
+#else
+  select_id_set(in_select_buf[gl_InstanceID]);
+#endif
+
   vec3 world_pos = point_object_to_world(pos);
   gl_Position = point_world_to_ndc(world_pos);
 

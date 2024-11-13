@@ -829,7 +829,7 @@ static void clip_preview_region_init(wmWindowManager *wm, ARegion *region)
   WM_event_add_keymap_handler_v2d_mask(&region->handlers, keymap);
 
   keymap = WM_keymap_ensure(wm->defaultconf, "Clip Time Scrub", SPACE_CLIP, RGN_TYPE_PREVIEW);
-  WM_event_add_keymap_handler_poll(&region->handlers, keymap, ED_time_scrub_event_in_region);
+  WM_event_add_keymap_handler_poll(&region->handlers, keymap, ED_time_scrub_event_in_region_poll);
 
   keymap = WM_keymap_ensure(wm->defaultconf, "Clip Graph Editor", SPACE_CLIP, RGN_TYPE_WINDOW);
   WM_event_add_keymap_handler_v2d_mask(&region->handlers, keymap);
@@ -873,8 +873,10 @@ static void graph_region_draw(const bContext *C, ARegion *region)
   ED_time_scrub_draw_current_frame(region, scene, sc->flag & SC_SHOW_SECONDS);
 
   /* scrollers */
-  const rcti scroller_mask = ED_time_scrub_clamp_scroller_mask(v2d->mask);
-  UI_view2d_scrollers_draw(v2d, &scroller_mask);
+  if (region->winy > HEADERY * UI_SCALE_FAC) {
+    const rcti scroller_mask = ED_time_scrub_clamp_scroller_mask(v2d->mask);
+    UI_view2d_scrollers_draw(v2d, &scroller_mask);
+  }
 
   /* scale indicators */
   {
@@ -924,7 +926,9 @@ static void dopesheet_region_draw(const bContext *C, ARegion *region)
   ED_time_scrub_draw_current_frame(region, scene, sc->flag & SC_SHOW_SECONDS);
 
   /* scrollers */
-  UI_view2d_scrollers_draw(v2d, nullptr);
+  if (region->winy > HEADERY * UI_SCALE_FAC) {
+    UI_view2d_scrollers_draw(v2d, nullptr);
+  }
 }
 
 static void clip_preview_region_draw(const bContext *C, ARegion *region)

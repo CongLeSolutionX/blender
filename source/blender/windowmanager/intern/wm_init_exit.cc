@@ -23,7 +23,7 @@
 
 #include "BLI_fileops.h"
 #include "BLI_listbase.h"
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 #include "BLI_string.h"
 #include "BLI_task.h"
 #include "BLI_threads.h"
@@ -38,7 +38,7 @@
 #include "BKE_context.hh"
 #include "BKE_global.hh"
 #include "BKE_icons.h"
-#include "BKE_image.h"
+#include "BKE_image.hh"
 #include "BKE_keyconfig.h"
 #include "BKE_lib_remap.hh"
 #include "BKE_main.hh"
@@ -62,8 +62,8 @@
 #include "RE_pipeline.h" /* `RE_` free stuff. */
 
 #ifdef WITH_PYTHON
-#  include "BPY_extern_python.h"
-#  include "BPY_extern_run.h"
+#  include "BPY_extern_python.hh"
+#  include "BPY_extern_run.hh"
 #endif
 
 #include "GHOST_C-api.h"
@@ -102,6 +102,7 @@
 #include "UI_resources.hh"
 #include "UI_string_search.hh"
 
+#include "GPU_compilation_subprocess.hh"
 #include "GPU_context.hh"
 #include "GPU_init_exit.hh"
 #include "GPU_material.hh"
@@ -473,7 +474,8 @@ void WM_exit_ex(bContext *C, const bool do_python_exit, const bool do_user_exit_
       /* Save quit.blend. */
       Main *bmain = CTX_data_main(C);
       char filepath[FILE_MAX];
-      const int fileflags = G.fileflags & ~G_FILE_COMPRESS;
+      int fileflags = G.fileflags & ~G_FILE_COMPRESS;
+      fileflags |= G_FILE_RECOVER_WRITE;
 
       BLI_path_join(filepath, sizeof(filepath), BKE_tempdir_base(), BLENDER_QUIT_FILE);
 
@@ -531,8 +533,9 @@ void WM_exit_ex(bContext *C, const bool do_python_exit, const bool do_user_exit_
    * Which can happen when the GPU backend fails to initialize.
    */
   if (C && CTX_py_init_get(C)) {
-    const char *imports[2] = {"addon_utils", nullptr};
-    BPY_run_string_eval(C, imports, "addon_utils.disable_all()");
+    /* Calls `addon_utils.disable_all()` as well as unregistering all "startup" modules.  */
+    const char *imports[] = {"bpy", "bpy.utils", nullptr};
+    BPY_run_string_eval(C, imports, "bpy.utils._on_exit()");
   }
 #endif
 
@@ -654,6 +657,7 @@ void WM_exit_ex(bContext *C, const bool do_python_exit, const bool do_user_exit_
     DRW_gpu_context_enable_ex(false);
     UI_exit();
     GPU_pass_cache_free();
+    GPU_shader_cache_dir_clear_old();
     GPU_exit();
     DRW_gpu_context_disable_ex(false);
     DRW_gpu_context_destroy();
@@ -709,4 +713,11 @@ void WM_exit(bContext *C, const int exit_code)
 void WM_script_tag_reload()
 {
   UI_interface_tag_script_reload();
+
+  /* Any operators referenced by gizmos may now be a dangling pointer.
+   *
+   * While it is possible to inspect the gizmos it's simpler to re-create them,
+   * especially for script reloading - where we can accept slower logic
+   * for the sake of simplicity, see #126852. */
+  WM_gizmoconfig_update_tag_reinit_all();
 }

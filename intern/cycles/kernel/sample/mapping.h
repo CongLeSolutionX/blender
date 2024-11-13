@@ -29,7 +29,7 @@ ccl_device float2 sample_uniform_disk(const float2 rand)
     phi = M_PI_2_F - M_PI_4_F * (a / b);
   }
 
-  return make_float2(r * cosf(phi), r * sinf(phi));
+  return polar_to_cartesian(r, phi);
 }
 
 /* return an orthogonal tangent and bitangent given a normal and tangent that
@@ -131,10 +131,10 @@ ccl_device_inline float3 sample_uniform_cone(const float3 N,
      * directly to the radius.
      *
      * To find this mapping, we consider the simplest sampling strategies for cosine-weighted
-     * hemispheres and uniform cones. In both, phi is chosen as 2pi * random(). For the former,
-     * r_disk(rand) = sqrt(rand). This is just naive disk sampling, since the projection to the
-     * hemisphere doesn't change the radius. For the latter, r_cone(rand) =
-     * sin_from_cos(mix(cos_angle, 1, rand)).
+     * hemispheres and uniform cones. In both, phi is chosen as `2pi * random()`. For the former,
+     * `r_disk(rand) = sqrt(rand)`. This is just naive disk sampling, since the projection to the
+     * hemisphere doesn't change the radius.
+     * For the latter, `r_cone(rand) = sin_from_cos(mix(cos_angle, 1, rand))`.
      *
      * So, to remap, we just invert r_disk `(-> rand(r_disk) = r_disk^2)` and insert it into
      * r_cone: `r_cone(r_disk) = r_cone(rand(r_disk)) = sin_from_cos(mix(cos_angle, 1, r_disk^2))`.
@@ -168,10 +168,8 @@ ccl_device float3 sample_uniform_sphere(const float2 rand)
   float z = 1.0f - 2.0f * rand.x;
   float r = sin_from_cos(z);
   float phi = M_2PI_F * rand.y;
-  float x = r * cosf(phi);
-  float y = r * sinf(phi);
 
-  return make_float3(x, y, z);
+  return float2_to_float3(polar_to_cartesian(r, phi), z);
 }
 
 /* sample point in unit polygon with given number of corners and rotation */

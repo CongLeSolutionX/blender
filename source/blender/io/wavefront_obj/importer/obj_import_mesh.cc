@@ -6,8 +6,6 @@
  * \ingroup obj
  */
 
-#include <iostream>
-
 #include "DNA_customdata_types.h"
 #include "DNA_material_types.h"
 #include "DNA_meshdata_types.h"
@@ -28,6 +26,9 @@
 #include "importer_mesh_utils.hh"
 #include "obj_export_mtl.hh"
 #include "obj_import_mesh.hh"
+
+#include "CLG_log.h"
+static CLG_LogRef LOG = {"io.obj"};
 
 namespace blender::io::obj {
 
@@ -223,7 +224,7 @@ void MeshFromGeometry::create_faces(Mesh *mesh, bool use_vertex_groups)
     const FaceElem &curr_face = mesh_geometry_.face_elements_[face_idx];
     if (curr_face.corner_count_ < 3) {
       /* Don't add single vertex face, or edges. */
-      std::cerr << "Face with less than 3 vertices found, skipping." << std::endl;
+      CLOG_WARN(&LOG, "Face with less than 3 vertices found, skipping.");
       continue;
     }
 
@@ -420,25 +421,28 @@ void MeshFromGeometry::create_colors(Mesh *mesh)
     return;
   }
 
-  /* Find which vertex color block is for this mesh (if any). */
-  for (const auto &block : global_vertices_.vertex_colors) {
-    if (mesh_geometry_.vertex_index_min_ >= block.start_vertex_index &&
-        mesh_geometry_.vertex_index_max_ < block.start_vertex_index + block.colors.size())
-    {
-      /* This block is suitable, use colors from it. */
-      AttributeOwner owner = AttributeOwner::from_id(&mesh->id);
-      CustomDataLayer *color_layer = BKE_attribute_new(
-          owner, "Color", CD_PROP_COLOR, bke::AttrDomain::Point, nullptr);
-      BKE_id_attributes_active_color_set(&mesh->id, color_layer->name);
-      BKE_id_attributes_default_color_set(&mesh->id, color_layer->name);
-      float4 *colors = (float4 *)color_layer->data;
-      int offset = mesh_geometry_.vertex_index_min_ - block.start_vertex_index;
-      for (int i = 0, n = mesh_geometry_.get_vertex_count(); i != n; ++i) {
-        float3 c = block.colors[offset + i];
-        colors[i] = float4(c.x, c.y, c.z, 1.0f);
-      }
+  /* First pass to determine if we need to create a color attribute. */
+  for (int vi : mesh_geometry_.vertices_) {
+    if (!global_vertices_.has_vertex_color(vi)) {
       return;
     }
+  }
+
+  AttributeOwner owner = AttributeOwner::from_id(&mesh->id);
+  CustomDataLayer *color_layer = BKE_attribute_new(
+      owner, "Color", CD_PROP_COLOR, bke::AttrDomain::Point, nullptr);
+  BKE_id_attributes_active_color_set(&mesh->id, color_layer->name);
+  BKE_id_attributes_default_color_set(&mesh->id, color_layer->name);
+  float4 *colors = (float4 *)color_layer->data;
+
+  /* Second pass to fill out the data. */
+  for (auto item : mesh_geometry_.global_to_local_vertices_.items()) {
+    const int vi = item.key;
+    const int local_vi = item.value;
+    BLI_assert(vi >= 0 && vi < global_vertices_.vertex_colors.size());
+    BLI_assert(local_vi >= 0 && local_vi < mesh->verts_num);
+    const float3 &c = global_vertices_.vertex_colors[vi];
+    colors[local_vi] = float4(c.x, c.y, c.z, 1.0);
   }
 }
 

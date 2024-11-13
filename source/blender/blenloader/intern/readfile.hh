@@ -23,6 +23,7 @@
 #include "BLO_readfile.hh"
 
 struct BlendFileData;
+struct BlendfileLinkAppendContext;
 struct BlendFileReadParams;
 struct BlendFileReadReport;
 struct BLOCacheStorage;
@@ -34,7 +35,6 @@ struct Main;
 struct MemFile;
 struct Object;
 struct OldNewMap;
-struct ReportList;
 struct UserDef;
 
 enum eFileDataFlag {
@@ -43,16 +43,25 @@ enum eFileDataFlag {
   FD_FLAGS_POINTSIZE_DIFFERS = 1 << 2,
   FD_FLAGS_FILE_OK = 1 << 3,
   FD_FLAGS_IS_MEMFILE = 1 << 4,
-  /* XXX Unused in practice (checked once but never set). */
-  FD_FLAGS_NOT_MY_LIBMAP = 1 << 5,
+  /**
+   * The Blender file is not compatible with current code, but is still likely a blender file
+   * 'from the future'. Improves report to the user.
+   */
+  FD_FLAGS_FILE_FUTURE = 1 << 5,
 };
-ENUM_OPERATORS(eFileDataFlag, FD_FLAGS_NOT_MY_LIBMAP)
+ENUM_OPERATORS(eFileDataFlag, FD_FLAGS_IS_MEMFILE)
 
 /* Disallow since it's 32bit on ms-windows. */
 #ifdef __GNUC__
 #  pragma GCC poison off_t
 #endif
 
+/**
+ * General data used during a blend-file reading.
+ *
+ * Note that this data (and its accesses) are absolutely not thread-safe currently. It should never
+ * be accessed concurrently.
+ */
 struct FileData {
   /** Linked list of BHeadN's. */
   ListBase bhead_list;
@@ -138,6 +147,9 @@ struct FileData {
   IDNameLib_Map *new_idmap_uid;
 
   BlendFileReadReport *reports;
+
+  /** Opaque handle to the storage system used for non-static allocation strings. */
+  void *storage_handle;
 };
 
 #define SIZEOFBLENDERHEADER 12
@@ -240,7 +252,9 @@ void do_versions_after_linking_300(FileData *fd, Main *bmain);
 void do_versions_after_linking_400(FileData *fd, Main *bmain);
 void do_versions_after_linking_cycles(Main *bmain);
 
-void do_versions_after_setup(Main *new_bmain, BlendFileReadReport *reports);
+void do_versions_after_setup(Main *new_bmain,
+                             BlendfileLinkAppendContext *lapp_context,
+                             BlendFileReadReport *reports);
 
 /**
  * Direct data-blocks with global linking.

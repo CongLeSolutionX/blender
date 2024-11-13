@@ -15,7 +15,7 @@
 
 #include "BKE_bvhutils.hh"
 #include "BKE_editmesh.hh"
-#include "BKE_editmesh_bvh.h"
+#include "BKE_editmesh_bvh.hh"
 #include "BKE_editmesh_cache.hh"
 
 #include "extract_mesh.hh"
@@ -70,7 +70,7 @@ static void statvis_calc_overhang(const MeshRenderData &mr, MutableSpan<float> r
   mul_transposed_mat3_m4_v3(mr.object_to_world.ptr(), dir);
   normalize_v3(dir);
 
-  if (mr.extract_type == MR_EXTRACT_BMESH) {
+  if (mr.extract_type == MeshExtractType::BMesh) {
     int l_index = 0;
     BM_ITER_MESH (f, &iter, bm, BM_FACES_OF_MESH) {
       float fac = angle_normalized_v3v3(bm_face_no_get(mr, f), dir) / float(M_PI);
@@ -143,7 +143,7 @@ static void statvis_calc_thickness(const MeshRenderData &mr, MutableSpan<float> 
     uv_from_jitter_v2(jit_ofs[j]);
   }
 
-  if (mr.extract_type == MR_EXTRACT_BMESH) {
+  if (mr.extract_type == MeshExtractType::BMesh) {
     BMesh *bm = em->bm;
     BM_mesh_elem_index_ensure(bm, BM_FACE);
 
@@ -198,6 +198,10 @@ static void statvis_calc_thickness(const MeshRenderData &mr, MutableSpan<float> 
     BVHTreeFromMesh treeData = {nullptr};
 
     BVHTree *tree = BKE_bvhtree_from_mesh_get(&treeData, mr.mesh, BVHTREE_FROM_CORNER_TRIS, 4);
+    if (tree == nullptr) {
+      return;
+    }
+
     const Span<int3> corner_tris = mr.mesh->corner_tris();
     const Span<int> tri_faces = mr.mesh->corner_tri_faces();
     for (const int i : corner_tris.index_range()) {
@@ -292,7 +296,7 @@ static void statvis_calc_intersect(const MeshRenderData &mr, MutableSpan<float> 
     r_intersect[l_index] = -1.0f;
   }
 
-  if (mr.extract_type == MR_EXTRACT_BMESH) {
+  if (mr.extract_type == MeshExtractType::BMesh) {
     uint overlap_len;
     BMesh *bm = em->bm;
 
@@ -326,6 +330,9 @@ static void statvis_calc_intersect(const MeshRenderData &mr, MutableSpan<float> 
     BVHTreeFromMesh treeData = {nullptr};
 
     BVHTree *tree = BKE_bvhtree_from_mesh_get(&treeData, mr.mesh, BVHTREE_FROM_CORNER_TRIS, 4);
+    if (tree == nullptr) {
+      return;
+    }
 
     BVHTree_OverlapData data = {};
     data.positions = mr.vert_positions;
@@ -373,7 +380,7 @@ static void statvis_calc_distort(const MeshRenderData &mr, MutableSpan<float> r_
   const float max = statvis->distort_max;
   const float minmax_irange = 1.0f / (max - min);
 
-  if (mr.extract_type == MR_EXTRACT_BMESH) {
+  if (mr.extract_type == MeshExtractType::BMesh) {
     BMIter iter;
     BMesh *bm = em->bm;
     BMFace *f;
@@ -480,7 +487,7 @@ static void statvis_calc_sharp(const MeshRenderData &mr, MutableSpan<float> r_sh
   float *vert_angles = (float *)MEM_mallocN(sizeof(float) * mr.verts_num, __func__);
   copy_vn_fl(vert_angles, mr.verts_num, -M_PI);
 
-  if (mr.extract_type == MR_EXTRACT_BMESH) {
+  if (mr.extract_type == MeshExtractType::BMesh) {
     BMIter iter;
     BMesh *bm = em->bm;
     BMFace *efa;

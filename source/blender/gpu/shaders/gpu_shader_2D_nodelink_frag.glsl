@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#include "infos/gpu_shader_2D_nodelink_info.hh"
+
+FRAGMENT_SHADER_CREATE_INFO(gpu_shader_2D_nodelink)
+
 #define ANTIALIAS 0.75
 
 float get_line_alpha(float center, float relative_radius)
@@ -13,16 +17,9 @@ float get_line_alpha(float center, float relative_radius)
 
 void main()
 {
-  if (isMainLine == 0) {
-    fragColor = finalColor;
-    fragColor.a *= get_line_alpha(0.5, 0.5);
-    return;
-  }
-
   float dash_frag_alpha = 1.0;
   if (dashFactor < 1.0) {
     float distance_along_line = lineLength * lineUV.x;
-    float normalized_distance = fract(distance_along_line / dashLength);
 
     /* Checking if `normalized_distance <= dashFactor` is already enough for a basic
      * dash, however we want to handle a nice anti-alias. */
@@ -39,9 +36,15 @@ void main()
     dash_frag_alpha = alpha;
   }
 
+  if (isMainLine == 0) {
+    fragColor = finalColor;
+    fragColor.a *= get_line_alpha(0.5, 0.5) * dash_frag_alpha;
+    return;
+  }
+
   if (hasBackLink == 0) {
     fragColor = finalColor;
-    fragColor.a *= get_line_alpha(0.5, 0.5);
+    fragColor.a *= get_line_alpha(0.5, 0.5) * dash_frag_alpha;
   }
   else {
     /* Draw two links right next to each other, the main link and the back-link. */
@@ -54,6 +57,6 @@ void main()
     /* Combine both links. */
     fragColor.rgb = main_link_color.rgb * main_link_color.a +
                     back_link_color.rgb * back_link_color.a;
-    fragColor.a = main_link_color.a + back_link_color.a;
+    fragColor.a = main_link_color.a * dash_frag_alpha + back_link_color.a;
   }
 }

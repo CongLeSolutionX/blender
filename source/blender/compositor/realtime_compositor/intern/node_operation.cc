@@ -23,6 +23,7 @@
 
 #include "BKE_node.hh"
 
+#include "COM_algorithm_compute_preview.hh"
 #include "COM_context.hh"
 #include "COM_input_descriptor.hh"
 #include "COM_node_operation.hh"
@@ -60,8 +61,8 @@ void NodeOperation::evaluate()
 
 void NodeOperation::compute_preview()
 {
-  if (is_node_preview_needed(node())) {
-    compute_preview_from_result(context(), node(), *get_preview_result());
+  if (context().should_compute_node_previews() && is_node_preview_needed(node())) {
+    realtime_compositor::compute_preview(context(), node(), *get_preview_result());
   }
 }
 

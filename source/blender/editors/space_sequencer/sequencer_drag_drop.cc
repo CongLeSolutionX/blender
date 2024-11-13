@@ -17,7 +17,7 @@
 
 #include "BKE_context.hh"
 #include "BKE_file_handler.hh"
-#include "BKE_image.h"
+#include "BKE_image.hh"
 #include "BKE_main.hh"
 
 #include "SEQ_channels.hh"
@@ -377,7 +377,7 @@ static void draw_seq_in_view(bContext *C, wmWindow * /*win*/, wmDrag *drag, cons
   float strip_len = update_overlay_strip_position_data(C, mval);
 
   GPU_matrix_push();
-  UI_view2d_view_ortho(&region->v2d);
+  wmOrtho2_region_pixelspace(region);
 
   /* Sometimes the active theme is not the sequencer theme, e.g. when an operator invokes the
    * file browser. This makes sure we get the right color values for the theme. */
@@ -401,7 +401,7 @@ static void draw_seq_in_view(bContext *C, wmWindow * /*win*/, wmDrag *drag, cons
   float pixelx = BLI_rctf_size_x(&region->v2d.cur) / BLI_rcti_size_x(&region->v2d.mask);
   float pixely = BLI_rctf_size_y(&region->v2d.cur) / BLI_rcti_size_y(&region->v2d.mask);
 
-  StripsDrawBatch batch(pixelx, pixely);
+  StripsDrawBatch batch(&region->v2d);
 
   for (int i = 0; i < coords->channel_len; i++) {
     float y1 = floorf(coords->channel) + i + SEQ_STRIP_OFSBOTTOM;

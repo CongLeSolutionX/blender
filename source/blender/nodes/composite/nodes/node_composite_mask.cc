@@ -51,16 +51,7 @@ static void node_composit_buts_mask(uiLayout *layout, bContext *C, PointerRNA *p
 {
   bNode *node = (bNode *)ptr->data;
 
-  uiTemplateID(layout,
-               C,
-               ptr,
-               "mask",
-               nullptr,
-               nullptr,
-               nullptr,
-               UI_TEMPLATE_ID_FILTER_ALL,
-               false,
-               nullptr);
+  uiTemplateID(layout, C, ptr, "mask", nullptr, nullptr, nullptr);
   uiItemR(layout, ptr, "use_feather", UI_ITEM_R_SPLIT_EMPTY_NAME, nullptr, ICON_NONE);
 
   uiItemR(layout, ptr, "size_source", UI_ITEM_R_SPLIT_EMPTY_NAME, "", ICON_NONE);
@@ -92,16 +83,15 @@ class MaskOperation : public NodeOperation {
     }
 
     const Domain domain = compute_domain();
-    CachedMask &cached_mask = context().cache_manager().cached_masks.get(
-        context(),
-        get_mask(),
-        domain.size,
-        get_aspect_ratio(),
-        get_use_feather(),
-        get_motion_blur_samples(),
-        get_motion_blur_shutter());
+    Result &cached_mask = context().cache_manager().cached_masks.get(context(),
+                                                                     get_mask(),
+                                                                     domain.size,
+                                                                     get_aspect_ratio(),
+                                                                     get_use_feather(),
+                                                                     get_motion_blur_samples(),
+                                                                     get_motion_blur_shutter());
 
-    output_mask.wrap_external(cached_mask.texture());
+    output_mask.wrap_external(cached_mask);
   }
 
   Domain compute_domain() override
@@ -195,5 +185,5 @@ void register_node_type_cmp_mask()
   blender::bke::node_type_storage(
       &ntype, "NodeMask", node_free_standard_storage, node_copy_standard_storage);
 
-  blender::bke::nodeRegisterType(&ntype);
+  blender::bke::node_register_type(&ntype);
 }

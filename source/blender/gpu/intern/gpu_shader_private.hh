@@ -20,10 +20,10 @@
 #include <mutex>
 #include <string>
 
-namespace blender {
-namespace gpu {
+namespace blender::gpu {
 
 class GPULogParser;
+class Context;
 
 /* Set to 1 to log the full source of shaders that fail to compile. */
 #define DEBUG_LOG_SHADER_SRC_ON_ERROR 0
@@ -82,10 +82,10 @@ class Shader {
    * `GPU_shader_batch`. Backends that use the `ShaderCompilerGeneric` can ignore it. */
   virtual void init(const shader::ShaderCreateInfo &info, bool is_batch_compilation) = 0;
 
-  virtual void vertex_shader_from_glsl(MutableSpan<const char *> sources) = 0;
-  virtual void geometry_shader_from_glsl(MutableSpan<const char *> sources) = 0;
-  virtual void fragment_shader_from_glsl(MutableSpan<const char *> sources) = 0;
-  virtual void compute_shader_from_glsl(MutableSpan<const char *> sources) = 0;
+  virtual void vertex_shader_from_glsl(MutableSpan<StringRefNull> sources) = 0;
+  virtual void geometry_shader_from_glsl(MutableSpan<StringRefNull> sources) = 0;
+  virtual void fragment_shader_from_glsl(MutableSpan<StringRefNull> sources) = 0;
+  virtual void compute_shader_from_glsl(MutableSpan<StringRefNull> sources) = 0;
   virtual bool finalize(const shader::ShaderCreateInfo *info = nullptr) = 0;
   /* Pre-warms PSOs using parent shader's cached PSO descriptors. Limit specifies maximum PSOs to
    * warm. If -1, compiles all PSO permutations in parent shader.
@@ -122,7 +122,7 @@ class Shader {
   virtual bool get_uses_ssbo_vertex_fetch() const = 0;
   virtual int get_ssbo_vertex_fetch_output_num_verts() const = 0;
 
-  inline const char *const name_get() const
+  inline StringRefNull name_get() const
   {
     return name;
   }
@@ -142,7 +142,7 @@ class Shader {
   static void set_framebuffer_srgb_target(int use_srgb_to_linear);
 
  protected:
-  void print_log(Span<const char *> sources,
+  void print_log(Span<StringRefNull> sources,
                  const char *log,
                  const char *stage,
                  bool error,
@@ -173,7 +173,7 @@ class ShaderCompiler {
   };
 
  public:
-  virtual ~ShaderCompiler(){};
+  virtual ~ShaderCompiler() = default;
 
   Shader *compile(const shader::ShaderCreateInfo &info, bool is_batch_compilation);
 
@@ -208,11 +208,11 @@ class ShaderCompilerGeneric : public ShaderCompiler {
   Map<BatchHandle, Batch> batches;
 
  public:
-  virtual ~ShaderCompilerGeneric() override;
+  ~ShaderCompilerGeneric() override;
 
-  virtual BatchHandle batch_compile(Span<const shader::ShaderCreateInfo *> &infos) override;
-  virtual bool batch_is_ready(BatchHandle handle) override;
-  virtual Vector<Shader *> batch_finalize(BatchHandle &handle) override;
+  BatchHandle batch_compile(Span<const shader::ShaderCreateInfo *> &infos) override;
+  bool batch_is_ready(BatchHandle handle) override;
+  Vector<Shader *> batch_finalize(BatchHandle &handle) override;
 };
 
 enum class Severity {
@@ -231,7 +231,6 @@ struct LogCursor {
 
 struct GPULogItem {
   LogCursor cursor;
-  bool source_base_row = false;
   Severity severity = Severity::Unknown;
 };
 
@@ -256,8 +255,10 @@ class GPULogParser {
   MEM_CXX_CLASS_ALLOC_FUNCS("GPULogParser");
 };
 
-}  // namespace gpu
-}  // namespace blender
+void printf_begin(Context *ctx);
+void printf_end(Context *ctx);
+
+}  // namespace blender::gpu
 
 /* XXX do not use it. Special hack to use OCIO with batch API. */
 GPUShader *immGetShader();
