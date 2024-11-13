@@ -886,6 +886,26 @@ class SEQUENCER_MT_strip_transform(Menu):
             layout.operator("sequencer.gap_insert")
 
 
+class SEQUENCER_MT_strip_text(Menu):
+    bl_label = "Text"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.operator_context = 'INVOKE_REGION_PREVIEW'
+        layout.operator("sequencer.text_edit_mode_toggle")
+        layout.separator()
+        layout.operator("sequencer.text_edit_copy", icon='COPYDOWN')
+        layout.operator("sequencer.text_edit_paste", icon='PASTEDOWN')
+        layout.operator("sequencer.text_edit_cut")
+        layout.separator()
+        props = layout.operator("sequencer.text_delete")
+        props.type = 'PREVIOUS_OR_SELECTION'
+        layout.operator("sequencer.text_line_break")
+        layout.separator()
+        layout.operator("sequencer.text_select_all")
+        layout.operator("sequencer.text_deselect_all")
+
+
 class SEQUENCER_MT_strip_input(Menu):
     bl_label = "Inputs"
 
@@ -988,9 +1008,13 @@ class SEQUENCER_MT_strip(Menu):
 
         layout = self.layout
         st = context.space_data
-        has_sequencer, _has_preview = _space_view_types(st)
+        has_sequencer, has_preview = _space_view_types(st)
 
         layout.menu("SEQUENCER_MT_strip_transform")
+        
+        strip = context.active_sequence_strip
+        if has_preview and strip and strip.type == 'TEXT':
+            layout.menu("SEQUENCER_MT_strip_text")
 
         if has_sequencer:
             layout.menu("SEQUENCER_MT_strip_retiming")
@@ -1011,8 +1035,6 @@ class SEQUENCER_MT_strip(Menu):
 
         layout.separator()
         layout.operator("sequencer.delete", text="Delete")
-
-        strip = context.active_sequence_strip
 
         if strip and strip.type == 'SCENE':
             layout.operator("sequencer.delete", text="Delete Strip & Data").delete_data = True
@@ -2982,6 +3004,7 @@ classes = (
     SEQUENCER_MT_strip,
     SEQUENCER_MT_strip_transform,
     SEQUENCER_MT_strip_retiming,
+    SEQUENCER_MT_strip_text,
     SEQUENCER_MT_strip_input,
     SEQUENCER_MT_strip_lock_mute,
     SEQUENCER_MT_image,
