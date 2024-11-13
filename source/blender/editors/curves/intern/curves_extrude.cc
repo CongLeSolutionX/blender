@@ -65,11 +65,10 @@ static int handle_range(const int interval_offset,
   return range.size();
 }
 
-static void finish_curve(const int curve_index,
-                         const int last_interval,
+static void finish_curve(const int last_interval,
                          const IndexRange curve_points,
                          MutableSpan<int> copy_intervals,
-                         MutableSpan<int> curves_intervals_offsets,
+                         int &curves_intervals_offset,
                          int &interval_offset,
                          bool &is_first_selected)
 {
@@ -89,25 +88,23 @@ static void finish_curve(const int curve_index,
     is_first_selected = false;
     appended_point++;
   }
-  curves_intervals_offsets[curve_index + 1] = last_interval_index + appended_point + 1;
+  curves_intervals_offset = last_interval_index + appended_point + 1;
   interval_offset += last_interval + appended_point + 1;
 }
 
-static void finish_curve_or_full_copy(const int curve_index,
-                                      const int current_interval,
+static void finish_curve_or_full_copy(const int current_interval,
                                       const std::optional<IndexRange> prev_range,
                                       const IndexRange curve_points,
                                       MutableSpan<int> copy_intervals,
-                                      MutableSpan<int> curves_intervals_offsets,
+                                      int &curves_intervals_offset,
                                       int &interval_offset,
                                       bool &is_first_selected)
 {
   if (prev_range.has_value() && prev_range.value().last() >= curve_points.start()) {
-    finish_curve(curve_index,
-                 current_interval - 1,
+    finish_curve(current_interval - 1,
                  curve_points,
                  copy_intervals,
-                 curves_intervals_offsets,
+                 curves_intervals_offset,
                  interval_offset,
                  is_first_selected);
   }
@@ -116,7 +113,7 @@ static void finish_curve_or_full_copy(const int curve_index,
     is_first_selected = false;
     copy_intervals[interval_offset] = curve_points.first();
     copy_intervals[interval_offset + 1] = curve_points.last();
-    curves_intervals_offsets[curve_index + 1] = interval_offset + 2;
+    curves_intervals_offset = interval_offset + 2;
     interval_offset += 2;
   }
 }
@@ -139,12 +136,11 @@ static void calc_curves_extrusion(const IndexMask &selection,
     /* Beginning of the range outside current curve. */
     if (range.first() > curve_points.last()) {
       do {
-        finish_curve_or_full_copy(curve_index,
-                                  current_interval,
+        finish_curve_or_full_copy(current_interval,
                                   prev_range,
                                   curve_points,
                                   copy_intervals,
-                                  curves_intervals_offsets,
+                                  curves_intervals_offsets[curve_index + 1],
                                   interval_offset,
                                   is_first_selected[curve_index]);
         curve_points = points_by_curve[++curve_index];
@@ -161,11 +157,10 @@ static void calc_curves_extrusion(const IndexMask &selection,
                         copy_intervals,
                         is_first_selected[curve_index]))
     {
-      finish_curve(curve_index,
-                   current_interval - 1,
+      finish_curve(current_interval - 1,
                    curve_points,
                    copy_intervals,
-                   curves_intervals_offsets,
+                   curves_intervals_offsets[curve_index + 1],
                    interval_offset,
                    is_first_selected[curve_index]);
       curve_points = points_by_curve[++curve_index];
@@ -176,12 +171,11 @@ static void calc_curves_extrusion(const IndexMask &selection,
   });
 
   do {
-    finish_curve_or_full_copy(curve_index,
-                              current_interval,
+    finish_curve_or_full_copy(current_interval,
                               prev_range,
                               points_by_curve[curve_index],
                               copy_intervals,
-                              curves_intervals_offsets,
+                              curves_intervals_offsets[curve_index + 1],
                               interval_offset,
                               is_first_selected[curve_index]);
     curve_index++;
