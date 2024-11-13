@@ -207,7 +207,7 @@ static void extrude_curves(Curves &curves_id)
    * [0, 3] and two for second [4, 4][4, 4]. The first curve will be copied as is without changes,
    * in the second one (consisting only one point - 4) first point will be duplicated (extruded).
    */
-  Array<int> copy_intervals(extruded_points.size() * 2 + curves_num * 2);
+  Array<int> copy_interval_offsets(extruded_points.size() * 2 + curves_num * 2);
 
   /* Points to intervals for each curve in the copy_intervals array.
    * For example above value would be [0, 3, 5]. Meaning that [0 .. 2] are indices for curve 0 in
@@ -221,7 +221,7 @@ static void extrude_curves(Curves &curves_id)
 
   calc_curves_extrusion(extruded_points,
                         curves.points_by_curve(),
-                        copy_intervals,
+                        copy_interval_offsets,
                         curves_intervals_offsets,
                         is_first_selected);
 
@@ -258,26 +258,25 @@ static void extrude_curves(Curves &curves_id)
   }
 
   const OffsetIndices<int> intervals_by_curve = curves_intervals_offsets.as_span();
+  const OffsetIndices<int> copy_intervals = copy_interval_offsets.as_span().slice(
+      0, curves_intervals_offsets.as_span().last());
 
   threading::parallel_for(curves.curves_range(), 256, [&](IndexRange curves_range) {
     for (const int curve : curves_range) {
       const int first_index = intervals_by_curve[curve].start();
-      const int first_value = copy_intervals[first_index];
+      const int first_value = copy_intervals[first_index].start();
       bool is_selected = is_first_selected[curve];
 
       for (const int i : intervals_by_curve[curve].drop_back(1)) {
-        const int dest_index = new_offsets[curve] + copy_intervals[i] - first_value + i -
-                               first_index;
-        const int size = copy_intervals[i + 1] - copy_intervals[i] + 1;
+        const IndexRange src = copy_intervals[i].extend(1);
+        const IndexRange dst = src.shift(new_offsets[curve] - first_value + i - first_index);
 
         for (const int selection_i : selection_attr_names.index_range()) {
-          GMutableSpan dst_span = dst_selections[selection_i].span.slice(
-              IndexRange(dest_index, size));
+          GMutableSpan dst_span = dst_selections[selection_i].span.slice(dst);
           if (is_selected) {
+            GSpan src_span = src_selection[selection_i].slice(src);
             src_selection[selection_i].type().copy_assign_n(
-                src_selection[selection_i].slice(IndexRange(copy_intervals[i], size)).data(),
-                dst_span.data(),
-                size);
+                src_span.data(), dst_span.data(), src.size());
           }
           else {
             fill_selection(dst_span, false);
@@ -293,7 +292,8 @@ static void extrude_curves(Curves &curves_id)
     dst_selections[selection_i].finish();
   }
 
-  const OffsetIndices<int> intervals = compress_intervals(intervals_by_curve, copy_intervals);
+  const OffsetIndices<int> compact_intervals = compress_intervals(intervals_by_curve,
+                                                                  copy_interval_offsets);
 
   bke::MutableAttributeAccessor dst_attributes = new_curves.attributes_for_write();
 
@@ -305,9 +305,9 @@ static void extrude_curves(Curves &curves_id)
                {".selection", ".selection_handle_left", ".selection_handle_right"})))
   {
     const CPPType &type = attribute.src.type();
-    threading::parallel_for(intervals.index_range(), 512, [&](IndexRange range) {
+    threading::parallel_for(compact_intervals.index_range(), 512, [&](IndexRange range) {
       for (const int i : range) {
-        const IndexRange src = intervals[i].extend(1);
+        const IndexRange src = compact_intervals[i].extend(1);
         const IndexRange dst = src.shift(i);
         type.copy_assign_n(
             attribute.src.slice(src).data(), attribute.dst.span.slice(dst).data(), src.size());
