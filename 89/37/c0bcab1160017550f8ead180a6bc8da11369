@@ -1,3 +1,4 @@
 Referenced by issue #122944, Blender 4.3 can no longer find the config folder
 Referenced by pull request #125231, Fix #125228: Image Editor Memory leaks showing image tooltip thumbnail
 Referenced by commit b25e67189c8d138932ae3f997d205a0872defbf8, Fix #125228: Image Editor Memory leaks showing image tooltip thumbnail
+Referenced by issue #125228, Image Editor: Memory leaks when showing image thumbnail on dropdown
