@@ -1,2 +1,3 @@
 Referenced by pull request #130197, Fix #125787: Textures don't load for brushes when using "Use Relative Paths" option.
 Referenced by issue #130194, Blendfile corruption when loading a local Image which is already loaded through linked data
+Referenced by commit a090ae3318a914f34560937601414d347881e931, Fix #125787: Textures don't load for brushes when using "Use Relative Paths" option.
