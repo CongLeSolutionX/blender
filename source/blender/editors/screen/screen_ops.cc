@@ -4097,6 +4097,26 @@ static void area_join_update_data(bContext *C, sAreaJoinData *jd, const wmEvent 
 {
   ScrArea *area = ED_area_find_under_cursor(C, SPACE_TYPE_ANY, event->xy);
 
+  /* TODO: The following is needed only until we have linux-specific implementations of
+   * getWindowUnderCursor. Check for overlapping windows, and if so, only use active one. */
+
+#if !(defined(WIN32) || defined(__APPLE__))
+  int win_count = 0;
+  LISTBASE_FOREACH (wmWindow *, win, &CTX_wm_manager(C)->windows) {
+    int cursor[2];
+    if (wm_cursor_position_get(win, &cursor[0], &cursor[1])) {
+      bScreen *screen = WM_window_get_active_screen(win);
+      if (BKE_screen_find_area_xy(screen, SPACE_TYPE_ANY, cursor)) {
+        win_count++;
+      }
+    }
+  }
+
+  if (win_count > 1) {
+    area = BKE_screen_find_area_xy(CTX_wm_screen(C), SPACE_TYPE_ANY, event->xy);
+  }
+#endif
+
   jd->win2 = WM_window_find_by_area(CTX_wm_manager(C), jd->sa2);
   jd->dir = SCREEN_DIR_NONE;
   jd->dock_target = AreaDockTarget::None;
