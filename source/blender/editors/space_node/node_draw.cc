@@ -4206,6 +4206,7 @@ static StringRefNull reroute_node_get_auto_label(TreeDrawContext &tree_draw_ctx,
 static void reroute_node_draw_body(const bContext &C,
                                    const bNodeTree &ntree,
                                    const bNode &node,
+                                   uiBlock &block,
                                    const bool selected)
 {
   BLI_assert(node.is_reroute());
@@ -4227,6 +4228,12 @@ static void reroute_node_draw_body(const bContext &C,
                        NODE_SOCKET_OUTLINE,
                        NODE_SOCKET_DOT,
                        sock.display_shape);
+
+  const float2 location = float2(BLI_rctf_cent_x(&node.runtime->totr),
+                                 BLI_rctf_cent_y(&node.runtime->totr));
+  const float2 size = float2(BLI_rctf_size_x(&node.runtime->totr),
+                             BLI_rctf_size_y(&node.runtime->totr));
+  node_socket_tooltip_set(block, sock.index_in_tree(), location, size);
 }
 
 static void reroute_node_draw_label(TreeDrawContext &tree_draw_ctx,
@@ -4290,7 +4297,7 @@ static void reroute_node_draw(const bContext &C,
 
   /* Only draw the input socket, since all sockets are at the same location. */
   const bool selected = node.flag & NODE_SELECT;
-  reroute_node_draw_body(C, ntree, node, selected);
+  reroute_node_draw_body(C, ntree, node, block, selected);
 
   UI_block_end(&C, &block);
   UI_block_draw(&C, &block);
