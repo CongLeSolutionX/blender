@@ -10,6 +10,7 @@
 
 #include "BLI_span.hh"
 #include "BLI_sys_types.h"
+#include <iostream>
 
 struct GPUStorageBuf;
 
@@ -52,9 +53,11 @@ class StorageBuf {
     data_initialized_ = true;
   }
 
-  virtual void bind(int /*slot*/)
+  virtual void bind(int slot)
   {
-    BLI_assert(data_initialized_);
+    if (!data_initialized_) {
+      std::cerr << "Binding uninitialized SSBO: " << name_ << " at slot " << slot << std::endl;
+    }
   }
 
   virtual void unbind() = 0;

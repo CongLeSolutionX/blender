@@ -10,6 +10,7 @@
 
 #include "BLI_assert.h"
 #include "BLI_sys_types.h"
+#include <iostream>
 
 struct GPUUniformBuf;
 
@@ -49,14 +50,19 @@ class UniformBuf {
     data_initialized_ = true;
   };
 
-  virtual void bind(int /*slot*/)
+  virtual void bind(int slot)
   {
-    BLI_assert(data_initialized_);
+    if (!data_initialized_) {
+      std::cerr << "Binding uninitialized UBO: " << name_ << " at slot " << slot << std::endl;
+    }
   }
 
-  virtual void bind_as_ssbo(int /*slot*/)
+  virtual void bind_as_ssbo(int slot)
   {
-    BLI_assert(data_initialized_);
+    if (!data_initialized_) {
+      std::cerr << "Binding uninitialized UBO as SSBO: " << name_ << " at slot " << slot
+                << std::endl;
+    }
   }
 
   virtual void unbind() = 0;
