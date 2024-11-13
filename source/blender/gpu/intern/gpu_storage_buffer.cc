@@ -62,6 +62,9 @@ GPUStorageBuf *GPU_storagebuf_create_ex(size_t size,
   if (data != nullptr) {
     ssbo->update(data);
   }
+  if (usage == GPU_USAGE_DEVICE_ONLY) {
+    ssbo->force_data_initialized();
+  }
   return wrap(ssbo);
 }
 

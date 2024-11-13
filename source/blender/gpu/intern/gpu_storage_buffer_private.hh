@@ -33,6 +33,7 @@ class StorageBuf {
   size_t size_in_bytes_;
   /** Continuous memory block to copy to GPU. This data is owned by the StorageBuf. */
   void *data_ = nullptr;
+  bool data_initialized_ = false;
   /** Debugging name */
   char name_[DEBUG_NAME_LEN];
 
@@ -40,11 +41,39 @@ class StorageBuf {
   StorageBuf(size_t size, const char *name);
   virtual ~StorageBuf();
 
-  virtual void update(const void *data) = 0;
-  virtual void bind(int slot) = 0;
+  /* Used for device_only buffers. */
+  void force_data_initialized()
+  {
+    data_initialized_ = true;
+  }
+
+  virtual void update(const void * /*data*/)
+  {
+    data_initialized_ = true;
+  }
+
+  virtual void bind(int /*slot*/)
+  {
+    BLI_assert(data_initialized_);
+  }
+
   virtual void unbind() = 0;
-  virtual void clear(uint32_t clear_value) = 0;
-  virtual void copy_sub(VertBuf *src, uint dst_offset, uint src_offset, uint copy_size) = 0;
+
+  virtual void clear(uint32_t /*clear_value*/)
+  {
+    data_initialized_ = true;
+  }
+
+  virtual void copy_sub(VertBuf * /*src*/,
+                        uint /*dst_offset*/,
+                        uint /*src_offset*/,
+                        uint copy_size)
+  {
+    if (copy_size == size_in_bytes_) {
+      data_initialized_ = true;
+    }
+  }
+
   virtual void read(void *data) = 0;
   virtual void async_flush_to_host() = 0;
   virtual void sync_as_indirect_buffer() = 0;

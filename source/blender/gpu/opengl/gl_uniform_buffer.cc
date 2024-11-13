@@ -50,6 +50,8 @@ void GLUniformBuf::init()
 
 void GLUniformBuf::update(const void *data)
 {
+  UniformBuf::update(data);
+
   if (ubo_id_ == 0) {
     this->init();
   }
@@ -60,6 +62,8 @@ void GLUniformBuf::update(const void *data)
 
 void GLUniformBuf::clear_to_zero()
 {
+  UniformBuf::clear_to_zero();
+
   if (ubo_id_ == 0) {
     this->init();
   }
@@ -95,6 +99,8 @@ void GLUniformBuf::clear_to_zero()
 
 void GLUniformBuf::bind(int slot)
 {
+  UniformBuf::bind(slot);
+
   if (slot >= GLContext::max_ubo_binds) {
     fprintf(
         stderr,
@@ -125,6 +131,8 @@ void GLUniformBuf::bind(int slot)
 
 void GLUniformBuf::bind_as_ssbo(int slot)
 {
+  UniformBuf::bind_as_ssbo(slot);
+
   if (ubo_id_ == 0) {
     this->init();
   }

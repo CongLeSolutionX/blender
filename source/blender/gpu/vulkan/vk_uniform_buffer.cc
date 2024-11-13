@@ -17,6 +17,8 @@ namespace blender::gpu {
 
 void VKUniformBuffer::update(const void *data)
 {
+  UniformBuf::update(data);
+
   if (!buffer_.is_allocated()) {
     allocate();
   }
@@ -40,6 +42,8 @@ void VKUniformBuffer::allocate()
 
 void VKUniformBuffer::clear_to_zero()
 {
+  UniformBuf::clear_to_zero();
+
   if (!buffer_.is_allocated()) {
     allocate();
   }
@@ -64,12 +68,16 @@ void VKUniformBuffer::ensure_updated()
 
 void VKUniformBuffer::bind(int slot)
 {
+  UniformBuf::bind(slot);
+
   VKContext &context = *VKContext::get();
   context.state_manager_get().uniform_buffer_bind(this, slot);
 }
 
 void VKUniformBuffer::bind_as_ssbo(int slot)
 {
+  UniformBuf::bind_as_ssbo(slot);
+
   VKContext &context = *VKContext::get();
   context.state_manager_get().storage_buffer_bind(
       BindSpaceStorageBuffers::Type::UniformBuffer, this, slot);
