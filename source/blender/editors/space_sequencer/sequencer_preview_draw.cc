@@ -22,6 +22,7 @@
 #include "BLI_utildefines.h"
 
 #include "BLI_vector.hh"
+#include "DNA_view2d_types.h"
 #include "GPU_primitive.hh"
 #include "IMB_imbuf_types.hh"
 
@@ -1145,6 +1146,18 @@ static void text_selection_draw(const bContext *C, Sequence *seq, uint pos)
   }
 }
 
+static blender::float2 coords_region_view_align(const View2D *v2d, blender::float2 coords)
+{
+  blender::int2 coords_view;
+  UI_view2d_view_to_region(v2d, coords.x, coords.y, &coords_view.x, &coords_view.y);
+  coords_view.x = std::round(coords_view.x);
+  coords_view.y = std::round(coords_view.y);
+  blender::float2 coords_region_aligned;
+  UI_view2d_region_to_view(
+      v2d, coords_view.x, coords_view.y, &coords_region_aligned.x, &coords_region_aligned.y);
+  return coords_region_aligned;
+}
+
 static void text_edit_draw_cursor(const bContext *C, Sequence *seq, uint pos)
 {
   TextVars *data = static_cast<TextVars *>(seq->effectdata);
@@ -1157,7 +1170,7 @@ static void text_edit_draw_cursor(const bContext *C, Sequence *seq, uint pos)
   SEQ_image_transform_matrix_get(scene, seq, transform_mat.ptr());
   const blender::int2 cursor_position = seq_text_cursor_offset_to_position(text,
                                                                            data->cursor_offset);
-  const int cursor_width = 10;
+  const float cursor_width = 10;
   blender::float2 cursor_coords =
       text->lines[cursor_position.y].characters[cursor_position.x].position;
   /* Clamp cursor coords to be inside of text boundbox. Compensate for cursor width, but also line
@@ -1167,6 +1180,7 @@ static void text_edit_draw_cursor(const bContext *C, Sequence *seq, uint pos)
   text_boundbox.xmin += U.pixelsize;
 
   CLAMP(cursor_coords.x, text_boundbox.xmin, text_boundbox.xmax);
+  cursor_coords = coords_region_view_align(UI_view2d_fromcontext(C), cursor_coords);
 
   blender::float4x3 cursor_quad{
       {cursor_coords.x, cursor_coords.y, 0.0f},
