@@ -156,7 +156,8 @@ class UnitTesting(unittest.TestCase):
         libraries = getNeededLibraries(binary_filepath)
         for lib_name in libraries:
             lib_name_no_abi = stripLibraryABI(lib_name)
-            self.assertTrue(lib_name_no_abi in ALLOWED_LIBS,
+            with self.subTest(msg=os.path.basename(binary_filepath) + ' check'):
+                self.assertTrue(lib_name_no_abi in ALLOWED_LIBS,
                             "Error detected in {}: library used {}" . format(
                                 binary_filepath, lib_name))
 
