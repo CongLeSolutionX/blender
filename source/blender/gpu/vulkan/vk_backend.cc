@@ -291,6 +291,8 @@ void VKBackend::detect_workarounds(VKDevice &device)
     workarounds.dynamic_rendering = true;
     workarounds.dynamic_rendering_unused_attachments = true;
 
+    GCaps.render_pass_workaround = true;
+
     device.workarounds_ = workarounds;
     return;
   }
