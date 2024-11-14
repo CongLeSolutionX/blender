@@ -1,1 +1,2 @@
 Referenced by issue #124452, Blender LTS: Maintenance Task 4.2
+Referenced by commit 65abb1ef93a9f52b5049db323500c7791b221e33, BLI: improve Map iteration API to avoid common issues at compile time
