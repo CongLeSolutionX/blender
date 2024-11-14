@@ -1,2 +1,3 @@
 Referenced by commit 301c853b9c30375c464cfa570b53607ea76df5ee, DRW: Rename draw_debug_info.hh to avoid conflict with main branch
 Referenced by issue #129571, EEVEE Lights Disappear with Shadows on Apple Silicon M1
+Referenced by pull request #130297, DRW: Rename draw_debug_info.hh to avoid conflict with main branch
