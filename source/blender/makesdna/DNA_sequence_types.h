@@ -231,6 +231,10 @@ typedef struct Sequence {
   /* pointers for effects: */
   struct Sequence *seq1, *seq2;
 
+  /* This strange padding is needed due to how seqbasep serialization is
+   * done right now in #scene_blend_read_data. */
+  void *_pad7, *_pad8;
+
   /** List of strips for meta-strips. */
   ListBase seqbase;
   ListBase channels; /* SeqTimelineChannel */
