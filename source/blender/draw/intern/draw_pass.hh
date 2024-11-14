@@ -247,14 +247,14 @@ class PassBase {
             uint instance_len = -1,
             uint vertex_len = -1,
             uint vertex_first = -1,
-            ResourceHandle handle = {0},
+            ResourceHandleRange handle = {0},
             uint custom_id = 0);
 
   /**
    * Shorter version for the common case.
    * \note Implemented in derived class. Not a virtual function to avoid indirection.
    */
-  void draw(gpu::Batch *batch, ResourceHandle handle, uint custom_id = 0);
+  void draw(gpu::Batch *batch, ResourceHandleRange handle, uint custom_id = 0);
 
   /**
    * Record a procedural draw call. Geometry is **NOT** source from a gpu::Batch.
@@ -779,7 +779,7 @@ inline void PassBase<T>::draw(gpu::Batch *batch,
                               uint instance_len,
                               uint vertex_len,
                               uint vertex_first,
-                              ResourceHandle handle,
+                              ResourceHandleRange handle,
                               uint custom_id)
 {
   if (instance_len == 0 || vertex_len == 0) {
@@ -799,7 +799,7 @@ inline void PassBase<T>::draw(gpu::Batch *batch,
 }
 
 template<class T>
-inline void PassBase<T>::draw(gpu::Batch *batch, ResourceHandle handle, uint custom_id)
+inline void PassBase<T>::draw(gpu::Batch *batch, ResourceHandleRange handle, uint custom_id)
 {
   this->draw(batch, -1, -1, -1, handle, custom_id);
 }
