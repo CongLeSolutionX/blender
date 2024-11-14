@@ -184,7 +184,7 @@ static void node_geo_exec(GeoNodeExecParams params)
   const int uv_smooth = storage.uv_smooth;
   const int boundary_smooth = storage.boundary_smooth;
   const int level = std::clamp(params.extract_input<int>("Level"), 0, 11);
-  const bool use_limit_surface = params.extract_input<bool>("Use Limit Surface");
+  const bool use_limit_surface = params.extract_input<bool>("Limit Surface");
   if (level == 0) {
     params.set_output("Mesh", std::move(geometry_set));
     return;
