@@ -36,7 +36,7 @@
 #include "BKE_multires.hh"
 #include "BKE_object.hh"
 #include "BKE_paint.hh"
-#include "BKE_pbvh_api.hh"
+#include "BKE_paint_bvh.hh"
 #include "BKE_report.hh"
 #include "BKE_scene.hh"
 #include "BKE_subdiv_ccg.hh"
@@ -645,7 +645,7 @@ static int sample_color_invoke(bContext *C, wmOperator *op, const wmEvent * /*ev
 
   float color_srgb[3];
   IMB_colormanagement_scene_linear_to_srgb_v3(color_srgb, active_vertex_color);
-  BKE_brush_color_set(&scene, &brush, color_srgb);
+  BKE_brush_color_set(&scene, &sd.paint, &brush, color_srgb);
 
   WM_event_add_notifier(C, NC_BRUSH | NA_EDITED, &brush);
 

@@ -983,6 +983,12 @@ static void decode_blender_header(FileData *fd)
     num[3] = 0;
     fd->fileversion = atoi(num);
   }
+  else if (STREQLEN(header, "BLENDER", 7)) {
+    /* If the first 7 bytes are BLENDER, it is very likely that this is a newer version of the
+     * blendfile format. Unreadable currently, but avoid telling the user that this is not a blend
+     * file. */
+    fd->flags |= FD_FLAGS_FILE_FUTURE;
+  }
 }
 
 /**
@@ -1174,9 +1180,17 @@ static FileData *blo_decode_and_check(FileData *fd, ReportList *reports)
       fd = nullptr;
     }
   }
-  else {
+  else if (fd->flags & FD_FLAGS_FILE_FUTURE) {
     BKE_reportf(
-        reports, RPT_ERROR, "Failed to read blend file '%s', not a blend file", fd->relabase);
+        reports,
+        RPT_ERROR,
+        "Cannot read blend file '%s', incomplete header, may be from a newer version of Blender",
+        fd->relabase);
+    blo_filedata_free(fd);
+    fd = nullptr;
+  }
+  else {
+    BKE_reportf(reports, RPT_ERROR, "Failed to read file '%s', not a blend file", fd->relabase);
     blo_filedata_free(fd);
     fd = nullptr;
   }
@@ -3619,13 +3633,22 @@ BlendFileData *blo_read_file_internal(FileData *fd, const char *filepath)
         bhead->code = ID_SCR;
         /* pass on to default */
         ATTR_FALLTHROUGH;
-      default:
-        if (fd->skip_flags & BLO_READ_SKIP_DATA) {
-          bhead = blo_bhead_next(fd, bhead);
+      default: {
+        if (blo_bhead_is_id_valid_type(bhead)) {
+          /* BHead is a valid known ID type one, read the whole ID and its sub-data, unless reading
+           * actual data is skipped. */
+          if (fd->skip_flags & BLO_READ_SKIP_DATA) {
+            bhead = blo_bhead_next(fd, bhead);
+          }
+          else {
+            bhead = read_libblock(fd, bfd->main, bhead, ID_TAG_LOCAL, false, nullptr);
+          }
         }
         else {
-          bhead = read_libblock(fd, bfd->main, bhead, ID_TAG_LOCAL, false, nullptr);
+          /* Unknown BHead type (or ID type), ignore it and skip to next BHead. */
+          bhead = blo_bhead_next(fd, bhead);
         }
+      }
     }
 
     if (bfd->main->is_read_invalid) {
@@ -3706,7 +3729,11 @@ BlendFileData *blo_read_file_internal(FileData *fd, const char *filepath)
       /* Yep, second splitting... but this is a very cheap operation, so no big deal. */
       blo_split_main(&mainlist, bfd->main);
       LISTBASE_FOREACH (Main *, mainvar, &mainlist) {
-        BLI_assert(mainvar->versionfile != 0);
+        /* Do versioning for newly added linked data-blocks. If no data-blocks were read from a
+         * library versionfile will still be zero and we can skip it. */
+        if (mainvar->versionfile == 0) {
+          continue;
+        }
         do_versions_after_linking((mainvar->curlib && mainvar->curlib->runtime.filedata) ?
                                       mainvar->curlib->runtime.filedata :
                                       fd,
@@ -3722,11 +3749,32 @@ BlendFileData *blo_read_file_internal(FileData *fd, const char *filepath)
       BKE_main_id_refcount_recompute(bfd->main, false);
     }
 
-    LISTBASE_FOREACH (Library *, lib, &bfd->main->libraries) {
+    LISTBASE_FOREACH_MUTABLE (Library *, lib, &bfd->main->libraries) {
       /* Now we can clear this runtime library filedata, it is not needed anymore. */
       if (lib->runtime.filedata) {
+        BLI_assert(lib->runtime.versionfile != 0);
         blo_filedata_free(lib->runtime.filedata);
         lib->runtime.filedata = nullptr;
+      }
+      /* If no data-blocks were read from a library (should only happen when all references to a
+       * library's data are `ID_FLAG_INDIRECT_WEAK_LINK`), its versionfile will still be zero and
+       * it can be deleted.
+       *
+       * NOTES:
+       *  - In case the library blendfile exists but is missing all the referenced linked IDs, the
+       *    placeholders IDs created will reference the library ID, and the library ID will have a
+       *    valid version number as the file was read to search for the linked IDs.
+       *  - In case the library blendfile does not exist, its local Library ID will get the version
+       *    of the current local Main (i.e. the loaded blendfile). */
+      else if (lib->runtime.versionfile == 0) {
+#ifndef NDEBUG
+        ID *id_iter;
+        FOREACH_MAIN_ID_BEGIN (bfd->main, id_iter) {
+          BLI_assert(id_iter->lib != lib);
+        }
+        FOREACH_MAIN_ID_END;
+#endif
+        BKE_id_delete(bfd->main, lib);
       }
     }
 
@@ -3995,6 +4043,13 @@ static void expand_doit_library(void *fdhandle, Main *mainvar, void *old)
   if (bhead == nullptr) {
     return;
   }
+  /* In 2.50+ file identifier for screens is patched, forward compatibility. */
+  if (bhead->code == ID_SCRN) {
+    bhead->code = ID_SCR;
+  }
+  if (!blo_bhead_is_id_valid_type(bhead)) {
+    return;
+  }
 
   if (bhead->code == ID_LINK_PLACEHOLDER) {
     /* Placeholder link to data-block in another library. */
@@ -4065,11 +4120,6 @@ static void expand_doit_library(void *fdhandle, Main *mainvar, void *old)
   }
   else {
     /* Data-block in same library. */
-    /* In 2.50+ file identifier for screens is patched, forward compatibility. */
-    if (bhead->code == ID_SCRN) {
-      bhead->code = ID_SCR;
-    }
-
     ID *id = library_id_is_yet_read(fd, mainvar, bhead);
     if (id == nullptr) {
       read_libblock(
@@ -4175,7 +4225,7 @@ static ID *link_named_part(
 
   BLI_assert(BKE_idtype_idcode_is_linkable(idcode) && BKE_idtype_idcode_is_valid(idcode));
 
-  if (bhead) {
+  if (bhead && blo_bhead_is_id_valid_type(bhead)) {
     id = library_id_is_yet_read(fd, mainl, bhead);
     if (id == nullptr) {
       /* not read yet */
@@ -4208,8 +4258,7 @@ static ID *link_named_part(
     id = nullptr;
   }
 
-  /* if we found the id but the id is nullptr, this is really bad */
-  BLI_assert(!((bhead != nullptr) && (id == nullptr)));
+  /* NOTE: `id` may be `nullptr` even if a BHead was found, in case e.g. it is an invalid BHead. */
 
   return id;
 }

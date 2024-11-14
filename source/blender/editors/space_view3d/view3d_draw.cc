@@ -23,7 +23,7 @@
 #include "BKE_context.hh"
 #include "BKE_customdata.hh"
 #include "BKE_global.hh"
-#include "BKE_image.h"
+#include "BKE_image.hh"
 #include "BKE_key.hh"
 #include "BKE_layer.hh"
 #include "BKE_main.hh"
@@ -1852,6 +1852,11 @@ void ED_view3d_draw_offscreen_simple(Depsgraph *depsgraph,
   /* Actually not used since we pass in the projection matrix. */
   v3d.lens = 0;
 
+  /* WORKAROUND: Disable overscan because it is not supported for arbitrary input matrices.
+   * The proper fix to this would be to support arbitrary matrices in `eevee::Camera::sync()`. */
+  float overscan = scene->eevee.overscan;
+  scene->eevee.overscan = 0.0f;
+
   ED_view3d_draw_offscreen(depsgraph,
                            scene,
                            drawtype,
@@ -1868,6 +1873,9 @@ void ED_view3d_draw_offscreen_simple(Depsgraph *depsgraph,
                            true,
                            ofs,
                            viewport);
+
+  /* Restore overscan. */
+  scene->eevee.overscan = overscan;
 }
 
 ImBuf *ED_view3d_draw_offscreen_imbuf(Depsgraph *depsgraph,

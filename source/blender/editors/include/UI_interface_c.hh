@@ -877,7 +877,21 @@ uiBlock *UI_block_begin(const bContext *C,
                         ARegion *region,
                         std::string name,
                         eUIEmbossType emboss);
-void UI_block_end_ex(const bContext *C, uiBlock *block, const int xy[2], int r_xy[2]);
+uiBlock *UI_block_begin(const bContext *C,
+                        Scene *scene,
+                        wmWindow *window,
+                        ARegion *region,
+                        std::string name,
+                        eUIEmbossType emboss);
+void UI_block_end_ex(const bContext *C,
+                     Main *bmain,
+                     wmWindow *window,
+                     Scene *scene,
+                     ARegion *region,
+                     Depsgraph *depsgraph,
+                     uiBlock *block,
+                     const int xy[2] = nullptr,
+                     int r_xy[2] = nullptr);
 void UI_block_end(const bContext *C, uiBlock *block);
 /**
  * Uses local copy of style, to scale things down, and allow widgets to change stuff.
@@ -1807,9 +1821,7 @@ void UI_but_funcN_set(uiBut *but,
 void UI_but_func_complete_set(uiBut *but, uiButCompleteFunc func, void *arg);
 
 void UI_but_func_drawextra_set(uiBlock *block,
-                               void (*func)(const bContext *C, void *, void *, void *, rcti *rect),
-                               void *arg1,
-                               void *arg2);
+                               std::function<void(const bContext *C, rcti *rect)> func);
 
 void UI_but_func_menu_step_set(uiBut *but, uiMenuStepFunc func);
 

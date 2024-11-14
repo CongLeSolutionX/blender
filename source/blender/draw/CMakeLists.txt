@@ -25,14 +25,6 @@ set(INC
   ../compositor/realtime_compositor/cached_resources
   ../windowmanager
 
-  # For shader includes
-  engines/eevee_next/shaders
-  engines/workbench/shaders
-  engines/overlay/shaders
-  intern/shaders
-  ../gpu/shaders/common
-  ../gpu/shaders
-
   ../../../intern/opensubdiv
 )
 
@@ -76,7 +68,6 @@ set(SRC
   intern/draw_attributes.cc
   intern/draw_cache_impl_curve.cc
   intern/draw_cache_impl_curves.cc
-  intern/draw_cache_impl_gpencil_legacy.cc
   intern/draw_cache_impl_grease_pencil.cc
   intern/draw_cache_impl_lattice.cc
   intern/draw_cache_impl_mesh.cc
@@ -182,7 +173,6 @@ set(SRC
   engines/overlay/overlay_extra.cc
   engines/overlay/overlay_facing.cc
   engines/overlay/overlay_fade.cc
-  engines/overlay/overlay_gpencil_legacy.cc
   engines/overlay/overlay_grease_pencil.cc
   engines/overlay/overlay_grid.cc
   engines/overlay/overlay_image.cc
@@ -840,6 +830,7 @@ if(WITH_DRAW_DEBUG)
 endif()
 
 if(WITH_OPENSUBDIV)
+  add_definitions(-DWITH_OPENSUBDIV)
   list(APPEND INC_SYS
     ${OPENSUBDIV_INCLUDE_DIRS}
   )

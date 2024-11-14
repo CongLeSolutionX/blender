@@ -144,11 +144,9 @@ set(SRC
   intern/geometry_fields.cc
   intern/geometry_set.cc
   intern/geometry_set_instances.cc
-  intern/gpencil_curve_legacy.cc
   intern/gpencil_geom_legacy.cc
   intern/gpencil_legacy.cc
   intern/gpencil_modifier_legacy.cc
-  intern/gpencil_update_cache_legacy.cc
   intern/grease_pencil.cc
   intern/grease_pencil_convert_legacy.cc
   intern/grease_pencil_vertex_groups.cc
@@ -407,11 +405,9 @@ set(SRC
   BKE_geometry_set.hh
   BKE_geometry_set_instances.hh
   BKE_global.hh
-  BKE_gpencil_curve_legacy.h
   BKE_gpencil_geom_legacy.h
   BKE_gpencil_legacy.h
   BKE_gpencil_modifier_legacy.h
-  BKE_gpencil_update_cache_legacy.h
   BKE_grease_pencil.h
   BKE_grease_pencil.hh
   BKE_grease_pencil_legacy_convert.hh
@@ -419,10 +415,10 @@ set(SRC
   BKE_icons.h
   BKE_idprop.hh
   BKE_idtype.hh
-  BKE_image.h
-  BKE_image_format.h
+  BKE_image.hh
+  BKE_image_format.hh
   BKE_image_partial_update.hh
-  BKE_image_save.h
+  BKE_image_save.hh
   BKE_image_wrappers.hh
   BKE_instances.hh
   BKE_ipo.h
@@ -483,10 +479,9 @@ set(SRC
   BKE_outliner_treehash.hh
   BKE_packedFile.hh
   BKE_paint.hh
+  BKE_paint_bvh.hh
+  BKE_paint_bvh_pixels.hh
   BKE_particle.h
-  BKE_pbvh.hh
-  BKE_pbvh_api.hh
-  BKE_pbvh_pixels.hh
   BKE_pointcache.h
   BKE_pointcloud.hh
   BKE_pose_backup.h

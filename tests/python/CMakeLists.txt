@@ -219,7 +219,7 @@ add_blender_test(
 # This test can be extremely long, especially in debug builds.
 # Generate BLENDFILE_VERSIONING_SPLIT_RANGE instances of the test,
 # each processing their own subset of the whole set of blendfiles.
-set(BLENDFILE_VERSIONING_SPLIT_RANGE 8)
+set(BLENDFILE_VERSIONING_SPLIT_RANGE 32)
 math(EXPR BLENDFILE_VERSIONING_SPLIT_RANGE_CMAKE "${BLENDFILE_VERSIONING_SPLIT_RANGE} - 1")
 foreach(idx RANGE ${BLENDFILE_VERSIONING_SPLIT_RANGE_CMAKE})
   add_blender_test(
@@ -1113,6 +1113,7 @@ else()
     transform
     blend_modes_byte
     blend_modes_float
+    ffmpeg
   )
 
   foreach(render_test ${render_tests})

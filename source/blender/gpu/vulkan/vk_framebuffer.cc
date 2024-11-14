@@ -107,9 +107,36 @@ Array<VkRect2D, 16> VKFrameBuffer::vk_render_areas_get() const
   return render_areas;
 }
 
-bool VKFrameBuffer::check(char /*err_out*/[256])
+bool VKFrameBuffer::check(char err_out[256])
 {
-  return true;
+  bool success = true;
+
+  if (has_gaps_between_color_attachments()) {
+    success = false;
+
+    BLI_snprintf(err_out,
+                 256,
+                 "Framebuffer '%s' has gaps between color attachments. This is not supported by "
+                 "legacy devices using VkRenderPass natively.\n",
+                 name_);
+  }
+
+  return success;
+}
+
+bool VKFrameBuffer::has_gaps_between_color_attachments() const
+{
+  bool empty_slot = false;
+  for (int attachment_index : IndexRange(GPU_FB_COLOR_ATTACHMENT0, GPU_FB_MAX_COLOR_ATTACHMENT)) {
+    const GPUAttachment &attachment = attachments_[attachment_index];
+    if (attachment.tex == nullptr) {
+      empty_slot = true;
+    }
+    else if (empty_slot) {
+      return true;
+    }
+  }
+  return false;
 }
 
 void VKFrameBuffer::build_clear_attachments_depth_stencil(
@@ -185,7 +212,12 @@ void VKFrameBuffer::clear(const eGPUFrameBufferBits buffers,
 
     /* Clearing depth via vkCmdClearAttachments requires a render pass with write depth or stencil
      * enabled. When not enabled, clearing should be done via texture directly. */
-    if ((context.state_manager_get().state.write_mask & needed_mask) == needed_mask) {
+    /* WORKAROUND: Clearing depth attachment when using dynamic rendering are not working on AMD
+     * official drivers.
+     * See #129265 */
+    if ((context.state_manager_get().state.write_mask & needed_mask) == needed_mask &&
+        !GPU_type_matches(GPU_DEVICE_ATI, GPU_OS_ANY, GPU_DRIVER_OFFICIAL))
+    {
       build_clear_attachments_depth_stencil(
           buffers, clear_depth, clear_stencil, clear_attachments);
     }
@@ -526,6 +558,15 @@ void VKFrameBuffer::rendering_ensure(VKContext &context)
   if (is_rendering_) {
     return;
   }
+
+#ifndef NDEBUG
+  if (G.debug & G_DEBUG_GPU) {
+    char message[256];
+    message[0] = '\0';
+    BLI_assert_msg(this->check(message), message);
+  }
+#endif
+
   const VKWorkarounds &workarounds = VKBackend::get().device.workarounds_get();
   is_rendering_ = true;
   dirty_attachments_ = false;
