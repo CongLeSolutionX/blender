@@ -4850,7 +4850,6 @@ static void node_draw_nodetree(const bContext &C,
                                Span<uiBlock *> blocks,
                                bNodeInstanceKey parent_key)
 {
-  SCOPED_TIMER_AVERAGED(__func__);
 #ifdef USE_DRAW_TOT_UPDATE
   BLI_rctf_init_minmax(&region.v2d.tot);
 #endif
