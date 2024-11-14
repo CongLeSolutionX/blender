@@ -451,6 +451,7 @@ static void do_versions_fix_annotations(bGPdata *gpd)
 
 static void do_versions_remove_region(ListBase *regionbase, ARegion *region)
 {
+  MEM_delete(region->runtime);
   BLI_freelinkN(regionbase, region);
 }
 
