@@ -153,9 +153,9 @@ void OpaquePass::draw(Manager &manager,
 
   if (!gbuffer_in_front_ps_.is_empty()) {
     gbuffer_in_front_fb.ensure(GPU_ATTACHMENT_TEXTURE(resources.depth_tx),
-                               object_id_attachment,
                                GPU_ATTACHMENT_TEXTURE(gbuffer_material_tx),
-                               GPU_ATTACHMENT_TEXTURE(gbuffer_normal_tx));
+                               GPU_ATTACHMENT_TEXTURE(gbuffer_normal_tx),
+                               object_id_attachment);
     gbuffer_in_front_fb.bind();
 
     manager.submit(gbuffer_in_front_ps_, view);
@@ -167,9 +167,9 @@ void OpaquePass::draw(Manager &manager,
 
   if (!gbuffer_ps_.is_empty()) {
     gbuffer_fb.ensure(GPU_ATTACHMENT_TEXTURE(resources.depth_tx),
-                      object_id_attachment,
                       GPU_ATTACHMENT_TEXTURE(gbuffer_material_tx),
-                      GPU_ATTACHMENT_TEXTURE(gbuffer_normal_tx));
+                      GPU_ATTACHMENT_TEXTURE(gbuffer_normal_tx),
+                      object_id_attachment);
     gbuffer_fb.bind();
 
     manager.submit(gbuffer_ps_, view);
@@ -335,9 +335,9 @@ void TransparentDepthPass::draw(Manager &manager, View &view, SceneResources &re
 
   if (!in_front_ps_.is_empty()) {
     in_front_fb.ensure(GPU_ATTACHMENT_TEXTURE(resources.depth_in_front_tx),
-                       object_id_attachment,
                        GPU_ATTACHMENT_NONE,
-                       GPU_ATTACHMENT_NONE);
+                       GPU_ATTACHMENT_NONE,
+                       object_id_attachment);
     in_front_fb.bind();
     manager.submit(in_front_ps_, view);
 
@@ -348,9 +348,9 @@ void TransparentDepthPass::draw(Manager &manager, View &view, SceneResources &re
 
   if (!main_ps_.is_empty()) {
     main_fb.ensure(GPU_ATTACHMENT_TEXTURE(resources.depth_tx),
-                   object_id_attachment,
                    GPU_ATTACHMENT_NONE,
-                   GPU_ATTACHMENT_NONE);
+                   GPU_ATTACHMENT_NONE,
+                   object_id_attachment);
     main_fb.bind();
     manager.submit(main_ps_, view);
   }
