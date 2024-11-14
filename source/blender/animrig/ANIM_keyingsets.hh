@@ -78,7 +78,8 @@ namespace blender::animrig {
 /** Mode for modify_keyframes. */
 enum class ModifyKeyMode {
   INSERT = 0,
-  DELETE,
+  /* Not calling it just `DELETE` because that interferes with a macro on windows. */
+  DELETE_KEY,
 };
 
 /** Return codes for errors (with Relative KeyingSets). */

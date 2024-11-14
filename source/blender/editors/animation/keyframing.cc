@@ -636,7 +636,7 @@ static int delete_key_using_keying_set(bContext *C, wmOperator *op, KeyingSet *k
 
   /* try to delete keyframes for the channels specified by KeyingSet */
   num_channels = blender::animrig::apply_keyingset(
-      C, nullptr, ks, blender::animrig::ModifyKeyMode::DELETE, cfra);
+      C, nullptr, ks, blender::animrig::ModifyKeyMode::DELETE_KEY, cfra);
   if (G.debug & G_DEBUG) {
     printf("KeyingSet '%s' - Successfully removed %d Keyframes\n", ks->name, num_channels);
   }

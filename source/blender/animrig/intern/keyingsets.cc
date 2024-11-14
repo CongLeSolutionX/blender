@@ -373,7 +373,7 @@ static int insert_key_to_keying_set_path(bContext *C,
       keyed_channels += result.get_count(SingleKeyingResult::SUCCESS);
       combined_result.merge(result);
     }
-    else if (mode == ModifyKeyMode::DELETE) {
+    else if (mode == ModifyKeyMode::DELETE_KEY) {
       RNAPath rna_path = {keyingset_path->rna_path, std::nullopt, array_index};
       if (array_index < 0) {
         rna_path.index = std::nullopt;
@@ -425,7 +425,7 @@ int apply_keyingset(bContext *C,
                                          eInsertKeyFlags(keyingset->keyingoverride),
                                          eInsertKeyFlags(keyingset->keyingflag));
   }
-  else if (mode == ModifyKeyMode::DELETE) {
+  else if (mode == ModifyKeyMode::DELETE_KEY) {
     kflag = INSERTKEY_NOFLAGS;
   }
 
