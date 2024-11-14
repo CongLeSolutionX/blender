@@ -4108,8 +4108,9 @@ static void area_join_update_data(bContext *C, sAreaJoinData *jd, const wmEvent 
   LISTBASE_FOREACH (wmWindow *, win, &CTX_wm_manager(C)->windows) {
     int cursor[2];
     if (wm_cursor_position_get(win, &cursor[0], &cursor[1])) {
-      bScreen *screen = WM_window_get_active_screen(win);
-      if (BKE_screen_find_area_xy(screen, SPACE_TYPE_ANY, cursor)) {
+      rcti rect;
+      WM_window_rect_calc(win, &rect);
+      if (BLI_rcti_isect_pt_v(&rect, cursor)) {
         win_count++;
       }
     }
