@@ -3369,17 +3369,17 @@ static void unique_node_name_ex(VectorSet<blender::StringRefNull> &names,
 
 static std::string unique_node_name(const GreasePencil &grease_pencil,
                                     const char *default_name,
-                                    blender::StringRefNull name)
+                                    blender::StringRef name)
 {
   using namespace blender;
   char unique_name[MAX_NAME];
-  STRNCPY(unique_name, name.c_str());
+  STRNCPY(unique_name, name.data());
   VectorSet<StringRefNull> names = get_node_names(grease_pencil);
   unique_node_name_ex(names, default_name, unique_name);
   return unique_name;
 }
 
-std::string GreasePencil::unique_layer_name(blender::StringRefNull name)
+std::string GreasePencil::unique_layer_name(blender::StringRef name)
 {
   return unique_node_name(*this, DATA_("Layer"), name);
 }
