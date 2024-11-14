@@ -12,6 +12,7 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "BLI_build_config.h"
 #include "BLI_math_rotation.h"
 #include "BLI_math_vector.h"
 #include "BLI_utildefines.h"
@@ -4095,12 +4096,14 @@ static float area_split_factor(bContext *C, sAreaJoinData *jd, const wmEvent *ev
 
 static void area_join_update_data(bContext *C, sAreaJoinData *jd, const wmEvent *event)
 {
-  ScrArea *area = ED_area_find_under_cursor(C, SPACE_TYPE_ANY, event->xy);
+  ScrArea *area = nullptr;
 
-  /* TODO: The following is needed only until we have linux-specific implementations of
-   * getWindowUnderCursor. Check for overlapping windows, and if so, only use active one. */
+  /* TODO: The following is needed until we have linux-specific implementations of
+   * getWindowUnderCursor. See #130242. Use active window if there are overlapping. */
 
-#if !(defined(WIN32) || defined(__APPLE__))
+#if (OS_WINDOWS || OS_MAC)
+  area = ED_area_find_under_cursor(C, SPACE_TYPE_ANY, event->xy);
+#else
   int win_count = 0;
   LISTBASE_FOREACH (wmWindow *, win, &CTX_wm_manager(C)->windows) {
     int cursor[2];
@@ -4114,6 +4117,9 @@ static void area_join_update_data(bContext *C, sAreaJoinData *jd, const wmEvent 
 
   if (win_count > 1) {
     area = BKE_screen_find_area_xy(CTX_wm_screen(C), SPACE_TYPE_ANY, event->xy);
+  }
+  else {
+    area = ED_area_find_under_cursor(C, SPACE_TYPE_ANY, event->xy);
   }
 #endif
 
