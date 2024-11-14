@@ -233,6 +233,8 @@ static void view3d_ndof_orbit(const wmNDOFMotionData *ndof,
   }
 
   if (apply_dyn_ofs) {
+    /* Use CoR as a dynamic offset. */
+    vod->use_dyn_ofs = true;
     copy_v3_v3(vod->dyn_ofs, rv3d->cor);
     viewrotate_apply_dyn_ofs(vod, rv3d->viewquat);
   }
