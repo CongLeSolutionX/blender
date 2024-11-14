@@ -496,7 +496,7 @@ const EnumPropertyItem rna_enum_clip_editor_mode_items[] = {
 
 /* Actually populated dynamically through a function,
  * but helps for context-less access (e.g. doc, i18n...). */
-static const EnumPropertyItem buttons_context_items[] = {
+const EnumPropertyItem rna_enum_properties_editor_context_items[] = {
     {BCONTEXT_TOOL, "TOOL", ICON_TOOL_SETTINGS, "Tool", "Active Tool and Workspace settings"},
     {BCONTEXT_SCENE, "SCENE", ICON_SCENE_DATA, "Scene", "Scene Properties"},
     {BCONTEXT_RENDER, "RENDER", ICON_SCENE, "Render", "Render Properties"},
@@ -2070,7 +2070,7 @@ static void rna_SpaceProperties_context_set(PointerRNA *ptr, int value)
   sbuts->mainbuser = value;
 }
 
-static const EnumPropertyItem *rna_SpaceProperties_context_itemf(bContext * /*C*/,
+static const EnumPropertyItem *rna_SpaceProperties_context_itemf(bContext *C,
                                                                  PointerRNA *ptr,
                                                                  PropertyRNA * /*prop*/,
                                                                  bool *r_free)
@@ -2081,7 +2081,7 @@ static const EnumPropertyItem *rna_SpaceProperties_context_itemf(bContext * /*C*
   /* Although it would never reach this amount, a theoretical maximum number of tabs
    * is BCONTEXT_TOT * 2, with every tab displayed and a spacer in every other item. */
   short context_tabs_array[BCONTEXT_TOT * 2];
-  int totitem = ED_buttons_tabs_list(sbuts, context_tabs_array);
+  int totitem = ED_buttons_tabs_list(CTX_wm_workspace(C), sbuts, context_tabs_array);
   BLI_assert(totitem <= ARRAY_SIZE(context_tabs_array));
 
   int totitem_added = 0;
@@ -2095,7 +2095,8 @@ static const EnumPropertyItem *rna_SpaceProperties_context_itemf(bContext * /*C*
       continue;
     }
 
-    RNA_enum_items_add_value(&item, &totitem_added, buttons_context_items, context_tabs_array[i]);
+    RNA_enum_items_add_value(
+        &item, &totitem_added, rna_enum_properties_editor_context_items, context_tabs_array[i]);
     add_separator = true;
 
     /* Add the object data icon dynamically for the data tab. */
@@ -5637,44 +5638,6 @@ static void rna_def_space_view3d(BlenderRNA *brna)
   RNA_api_region_view3d(srna);
 }
 
-static const char *filter_items[] = {
-    "show_tool",
-    "show_scene",
-    "show_render",
-    "show_output",
-    "show_view_layer",
-    "show_world",
-    "show_collection",
-    "show_object",
-    "show_constraints",
-    "show_modifiers",
-    "show_data",
-    "show_bone",
-    "show_bone_constraints",
-    "show_material",
-    "show_texture",
-    "show_particles",
-    "show_physics",
-    "show_effects",
-};
-
-static void rna_def_space_properties_filter(StructRNA *srna)
-{
-  for (int i = 1; i < BCONTEXT_TOT; i++) {
-    EnumPropertyItem item = buttons_context_items[i];
-    int value = (1 << item.value);
-
-    const char *prop_name = filter_items[i];
-
-    PropertyRNA *prop = RNA_def_property(srna, prop_name, PROP_BOOLEAN, PROP_NONE);
-    RNA_def_property_boolean_sdna(prop, nullptr, "filter", value);
-    RNA_def_property_ui_icon(prop, item.icon, 0);
-    RNA_def_property_ui_text(prop, item.name, "");
-    RNA_def_property_update(
-        prop, NC_SPACE | ND_SPACE_PROPERTIES, "rna_SpaceProperties_context_update");
-  }
-}
-
 static void rna_def_space_properties(BlenderRNA *brna)
 {
   StructRNA *srna;
@@ -5705,7 +5668,7 @@ static void rna_def_space_properties(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "context", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, nullptr, "mainb");
-  RNA_def_property_enum_items(prop, buttons_context_items);
+  RNA_def_property_enum_items(prop, rna_enum_properties_editor_context_items);
   RNA_def_property_enum_funcs(
       prop, nullptr, "rna_SpaceProperties_context_set", "rna_SpaceProperties_context_itemf");
   RNA_def_property_ui_text(prop, "", "");
@@ -5762,8 +5725,6 @@ static void rna_def_space_properties(BlenderRNA *brna)
                            "Outliner Sync",
                            "Change to the corresponding tab when outliner data icons are clicked");
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_PROPERTIES, nullptr);
-
-  rna_def_space_properties_filter(srna);
 }
 
 static void rna_def_space_image_overlay(BlenderRNA *brna)

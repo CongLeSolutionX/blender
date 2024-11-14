@@ -9,6 +9,7 @@
 #include <cstdio>
 #include <cstring>
 
+#include "DNA_workspace_types.h"
 #include "MEM_guardedalloc.h"
 
 #include "BLI_bitmap.h"
@@ -155,11 +156,21 @@ static void buttons_main_region_init(wmWindowManager *wm, ARegion *region)
 /* -------------------------------------------------------------------- */
 /** \name Property Editor Layout
  * \{ */
-
 int ED_buttons_tabs_list(SpaceProperties *sbuts, short *context_tabs_array)
 {
+  return ED_buttons_tabs_list(nullptr, sbuts, context_tabs_array);
+}
+
+int ED_buttons_tabs_list(const WorkSpace *ws, SpaceProperties *sbuts, short *context_tabs_array)
+{
+  int filter = 0xFFFF;
+
+  if (ws != nullptr) {
+    filter = ws->properties_filter;
+  }
+
   int length = 0;
-  if (sbuts->pathflag & (1 << BCONTEXT_TOOL) && sbuts->filter & (1 << BCONTEXT_TOOL)) {
+  if (sbuts->pathflag & (1 << BCONTEXT_TOOL) && filter & (1 << BCONTEXT_TOOL)) {
     context_tabs_array[length] = BCONTEXT_TOOL;
     length++;
   }
@@ -167,27 +178,27 @@ int ED_buttons_tabs_list(SpaceProperties *sbuts, short *context_tabs_array)
     context_tabs_array[length] = -1;
     length++;
   }
-  if (sbuts->pathflag & (1 << BCONTEXT_RENDER) && sbuts->filter & (1 << BCONTEXT_RENDER)) {
+  if (sbuts->pathflag & (1 << BCONTEXT_RENDER) && filter & (1 << BCONTEXT_RENDER)) {
     context_tabs_array[length] = BCONTEXT_RENDER;
     length++;
   }
-  if (sbuts->pathflag & (1 << BCONTEXT_OUTPUT) && sbuts->filter & (1 << BCONTEXT_OUTPUT)) {
+  if (sbuts->pathflag & (1 << BCONTEXT_OUTPUT) && filter & (1 << BCONTEXT_OUTPUT)) {
     context_tabs_array[length] = BCONTEXT_OUTPUT;
     length++;
   }
-  if (sbuts->pathflag & (1 << BCONTEXT_VIEW_LAYER) && sbuts->filter & (1 << BCONTEXT_VIEW_LAYER)) {
+  if (sbuts->pathflag & (1 << BCONTEXT_VIEW_LAYER) && filter & (1 << BCONTEXT_VIEW_LAYER)) {
     context_tabs_array[length] = BCONTEXT_VIEW_LAYER;
     length++;
   }
-  if (sbuts->pathflag & (1 << BCONTEXT_SCENE) && sbuts->filter & (1 << BCONTEXT_SCENE)) {
+  if (sbuts->pathflag & (1 << BCONTEXT_SCENE) && filter & (1 << BCONTEXT_SCENE)) {
     context_tabs_array[length] = BCONTEXT_SCENE;
     length++;
   }
-  if (sbuts->pathflag & (1 << BCONTEXT_WORLD) && sbuts->filter & (1 << BCONTEXT_WORLD)) {
+  if (sbuts->pathflag & (1 << BCONTEXT_WORLD) && filter & (1 << BCONTEXT_WORLD)) {
     context_tabs_array[length] = BCONTEXT_WORLD;
     length++;
   }
-  if (sbuts->pathflag & (1 << BCONTEXT_COLLECTION) && sbuts->filter & (1 << BCONTEXT_COLLECTION)) {
+  if (sbuts->pathflag & (1 << BCONTEXT_COLLECTION) && filter & (1 << BCONTEXT_COLLECTION)) {
     if (length != 0) {
       context_tabs_array[length] = -1;
       length++;
@@ -199,45 +210,45 @@ int ED_buttons_tabs_list(SpaceProperties *sbuts, short *context_tabs_array)
     context_tabs_array[length] = -1;
     length++;
   }
-  if (sbuts->pathflag & (1 << BCONTEXT_OBJECT) && sbuts->filter & (1 << BCONTEXT_OBJECT)) {
+  if (sbuts->pathflag & (1 << BCONTEXT_OBJECT) && filter & (1 << BCONTEXT_OBJECT)) {
     context_tabs_array[length] = BCONTEXT_OBJECT;
     length++;
   }
-  if (sbuts->pathflag & (1 << BCONTEXT_MODIFIER) && sbuts->filter & (1 << BCONTEXT_MODIFIER)) {
+  if (sbuts->pathflag & (1 << BCONTEXT_MODIFIER) && filter & (1 << BCONTEXT_MODIFIER)) {
     context_tabs_array[length] = BCONTEXT_MODIFIER;
     length++;
   }
-  if (sbuts->pathflag & (1 << BCONTEXT_SHADERFX) && sbuts->filter & (1 << BCONTEXT_SHADERFX)) {
+  if (sbuts->pathflag & (1 << BCONTEXT_SHADERFX) && filter & (1 << BCONTEXT_SHADERFX)) {
     context_tabs_array[length] = BCONTEXT_SHADERFX;
     length++;
   }
-  if (sbuts->pathflag & (1 << BCONTEXT_PARTICLE) && sbuts->filter & (1 << BCONTEXT_PARTICLE)) {
+  if (sbuts->pathflag & (1 << BCONTEXT_PARTICLE) && filter & (1 << BCONTEXT_PARTICLE)) {
     context_tabs_array[length] = BCONTEXT_PARTICLE;
     length++;
   }
-  if (sbuts->pathflag & (1 << BCONTEXT_PHYSICS) && sbuts->filter & (1 << BCONTEXT_PHYSICS)) {
+  if (sbuts->pathflag & (1 << BCONTEXT_PHYSICS) && filter & (1 << BCONTEXT_PHYSICS)) {
     context_tabs_array[length] = BCONTEXT_PHYSICS;
     length++;
   }
-  if (sbuts->pathflag & (1 << BCONTEXT_CONSTRAINT) && sbuts->filter & (1 << BCONTEXT_CONSTRAINT)) {
+  if (sbuts->pathflag & (1 << BCONTEXT_CONSTRAINT) && filter & (1 << BCONTEXT_CONSTRAINT)) {
     context_tabs_array[length] = BCONTEXT_CONSTRAINT;
     length++;
   }
-  if (sbuts->pathflag & (1 << BCONTEXT_DATA) && sbuts->filter & (1 << BCONTEXT_DATA)) {
+  if (sbuts->pathflag & (1 << BCONTEXT_DATA) && filter & (1 << BCONTEXT_DATA)) {
     context_tabs_array[length] = BCONTEXT_DATA;
     length++;
   }
-  if (sbuts->pathflag & (1 << BCONTEXT_BONE) && sbuts->filter & (1 << BCONTEXT_BONE)) {
+  if (sbuts->pathflag & (1 << BCONTEXT_BONE) && filter & (1 << BCONTEXT_BONE)) {
     context_tabs_array[length] = BCONTEXT_BONE;
     length++;
   }
   if (sbuts->pathflag & (1 << BCONTEXT_BONE_CONSTRAINT) &&
-      sbuts->filter & (1 << BCONTEXT_BONE_CONSTRAINT))
+      filter & (1 << BCONTEXT_BONE_CONSTRAINT))
   {
     context_tabs_array[length] = BCONTEXT_BONE_CONSTRAINT;
     length++;
   }
-  if (sbuts->pathflag & (1 << BCONTEXT_MATERIAL) && sbuts->filter & (1 << BCONTEXT_MATERIAL)) {
+  if (sbuts->pathflag & (1 << BCONTEXT_MATERIAL) && filter & (1 << BCONTEXT_MATERIAL)) {
     context_tabs_array[length] = BCONTEXT_MATERIAL;
     length++;
   }
@@ -245,7 +256,7 @@ int ED_buttons_tabs_list(SpaceProperties *sbuts, short *context_tabs_array)
     context_tabs_array[length] = -1;
     length++;
   }
-  if (sbuts->pathflag & (1 << BCONTEXT_TEXTURE) && sbuts->filter & (1 << BCONTEXT_TEXTURE)) {
+  if (sbuts->pathflag & (1 << BCONTEXT_TEXTURE) && filter & (1 << BCONTEXT_TEXTURE)) {
     context_tabs_array[length] = BCONTEXT_TEXTURE;
     length++;
   }
@@ -461,7 +472,7 @@ static void buttons_main_region_property_search(const bContext *C,
 {
   /* Theoretical maximum of every context shown with a spacer between every tab. */
   short context_tabs_array[BCONTEXT_TOT * 2];
-  int tabs_len = ED_buttons_tabs_list(sbuts, context_tabs_array);
+  int tabs_len = ED_buttons_tabs_list(CTX_wm_workspace(C), sbuts, context_tabs_array);
 
   property_search_all_tabs(C, sbuts, region, context_tabs_array, tabs_len);
 

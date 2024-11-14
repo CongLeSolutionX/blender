@@ -5038,23 +5038,16 @@ void blo_do_versions_400(FileData *fd, Library * /*lib*/, Main *bmain)
   }
 
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 404, 7)) {
-    LISTBASE_FOREACH (bScreen *, screen, &bmain->screens) {
-      LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
-        LISTBASE_FOREACH (SpaceLink *, sl, &area->spacedata) {
-          if (sl->spacetype == SPACE_PROPERTIES) {
-            SpaceProperties *sbuts = (SpaceProperties *)sl;
-            sbuts->filter = (1 << BCONTEXT_TOOL) | (1 << BCONTEXT_SCENE) | (1 << BCONTEXT_RENDER) |
-                            (1 << BCONTEXT_OUTPUT) | (1 << BCONTEXT_VIEW_LAYER) |
-                            (1 << BCONTEXT_WORLD) | (1 << BCONTEXT_COLLECTION) |
-                            (1 << BCONTEXT_OBJECT) | (1 << BCONTEXT_CONSTRAINT) |
-                            (1 << BCONTEXT_MODIFIER) | (1 << BCONTEXT_DATA) |
-                            (1 << BCONTEXT_BONE) | (1 << BCONTEXT_BONE_CONSTRAINT) |
-                            (1 << BCONTEXT_MATERIAL) | (1 << BCONTEXT_TEXTURE) |
-                            (1 << BCONTEXT_PARTICLE) | (1 << BCONTEXT_PHYSICS) |
-                            (1 << BCONTEXT_SHADERFX);
-          }
-        }
-      }
+    LISTBASE_FOREACH (WorkSpace *, workspace, &bmain->workspaces) {
+      workspace->properties_filter = (1 << BCONTEXT_TOOL) | (1 << BCONTEXT_SCENE) |
+                                     (1 << BCONTEXT_RENDER) | (1 << BCONTEXT_OUTPUT) |
+                                     (1 << BCONTEXT_VIEW_LAYER) | (1 << BCONTEXT_WORLD) |
+                                     (1 << BCONTEXT_COLLECTION) | (1 << BCONTEXT_OBJECT) |
+                                     (1 << BCONTEXT_CONSTRAINT) | (1 << BCONTEXT_MODIFIER) |
+                                     (1 << BCONTEXT_DATA) | (1 << BCONTEXT_BONE) |
+                                     (1 << BCONTEXT_BONE_CONSTRAINT) | (1 << BCONTEXT_MATERIAL) |
+                                     (1 << BCONTEXT_TEXTURE) | (1 << BCONTEXT_PARTICLE) |
+                                     (1 << BCONTEXT_PHYSICS) | (1 << BCONTEXT_SHADERFX);
     }
   }
 

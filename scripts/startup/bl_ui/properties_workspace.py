@@ -164,6 +164,34 @@ class WORKSPACE_UL_addons_items(UIList):
         ).owner_id = addon.module
 
 
+class WORKSPACE_PT_prop_filter(WorkSpaceButtonsPanel, Panel):
+    bl_parent_id = "WORKSPACE_PT_main"
+    bl_label = "Display Properties"
+
+    def draw(self, context):
+        layout = self.layout
+        workspace = context.workspace
+
+        col = layout.column(align=True)
+        col.prop(workspace, "show_scene")
+        col.prop(workspace, "show_render")
+        col.prop(workspace, "show_output")
+        col.prop(workspace, "show_view_layer")
+        col.prop(workspace, "show_world")
+        col.prop(workspace, "show_collection")
+        col.prop(workspace, "show_object")
+        col.prop(workspace, "show_constraints")
+        col.prop(workspace, "show_modifiers")
+        col.prop(workspace, "show_data")
+        col.prop(workspace, "show_bone")
+        col.prop(workspace, "show_bone_constraints")
+        col.prop(workspace, "show_material")
+        col.prop(workspace, "show_texture")
+        col.prop(workspace, "show_particles")
+        col.prop(workspace, "show_physics")
+        col.prop(workspace, "show_effects")
+
+
 class WORKSPACE_PT_custom_props(WorkSpaceButtonsPanel, PropertyPanel, Panel):
     bl_parent_id = "WORKSPACE_PT_main"
 
@@ -176,6 +204,7 @@ classes = (
 
     WORKSPACE_PT_main,
     WORKSPACE_PT_addons,
+    WORKSPACE_PT_prop_filter,
     WORKSPACE_PT_custom_props,
 )
 

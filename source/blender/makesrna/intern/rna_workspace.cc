@@ -21,6 +21,7 @@
 
 #include "rna_internal.hh"
 
+#include "DNA_space_types.h"
 #include "DNA_workspace_types.h"
 
 #ifdef RNA_RUNTIME
@@ -423,6 +424,43 @@ static void rna_def_workspace_tools(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_function_return(func, parm);
 }
 
+static const char *filter_items[] = {
+    "show_tool",
+    "show_scene",
+    "show_render",
+    "show_output",
+    "show_view_layer",
+    "show_world",
+    "show_collection",
+    "show_object",
+    "show_constraints",
+    "show_modifiers",
+    "show_data",
+    "show_bone",
+    "show_bone_constraints",
+    "show_material",
+    "show_texture",
+    "show_particles",
+    "show_physics",
+    "show_effects",
+};
+
+static void rna_def_space_properties_filter(StructRNA *srna)
+{
+  for (int i = 1; i < BCONTEXT_TOT; i++) {
+    EnumPropertyItem item = rna_enum_properties_editor_context_items[i];
+    int value = (1 << item.value);
+
+    const char *prop_name = filter_items[i];
+
+    PropertyRNA *prop = RNA_def_property(srna, prop_name, PROP_BOOLEAN, PROP_NONE);
+    RNA_def_property_boolean_sdna(prop, nullptr, "properties_filter", value);
+    RNA_def_property_ui_icon(prop, item.icon, 0);
+    RNA_def_property_ui_text(prop, item.name, "");
+    RNA_def_property_update(prop, NC_SPACE | ND_SPACE_PROPERTIES, "rna_window_update_all");
+  }
+}
+
 static void rna_def_workspace(BlenderRNA *brna)
 {
   StructRNA *srna;
@@ -487,6 +525,8 @@ static void rna_def_workspace(BlenderRNA *brna)
                            "Active asset library to show in the UI, not used by the Asset Browser "
                            "(which has its own active asset library)");
   RNA_def_property_update(prop, NC_ASSET | ND_ASSET_LIST_READING, nullptr);
+
+  rna_def_space_properties_filter(srna);
 
   RNA_api_workspace(srna);
 }

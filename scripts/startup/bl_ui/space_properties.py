@@ -32,36 +32,8 @@ class PROPERTIES_HT_header(Header):
 
         layout.separator_spacer()
 
-        layout.popover(panel="PROPERTIES_PT_filter", text="", icon='FILTER')
         layout.popover(panel="PROPERTIES_PT_options", text="")
 
-
-class PROPERTIES_PT_filter(Panel):
-    bl_space_type = 'PROPERTIES'
-    bl_region_type = 'HEADER'
-    bl_label = "Filter"
-
-    def draw(self, context):
-        layout = self.layout
-        view = context.space_data
-        col = layout.column(align=True)
-        col.prop(view, "show_scene")
-        col.prop(view, "show_render")
-        col.prop(view, "show_output")
-        col.prop(view, "show_view_layer")
-        col.prop(view, "show_world")
-        col.prop(view, "show_collection")
-        col.prop(view, "show_object")
-        col.prop(view, "show_constraints")
-        col.prop(view, "show_modifiers")
-        col.prop(view, "show_data")
-        col.prop(view, "show_bone")
-        col.prop(view, "show_bone_constraints")
-        col.prop(view, "show_material")
-        col.prop(view, "show_texture")
-        col.prop(view, "show_particles")
-        col.prop(view, "show_physics")
-        col.prop(view, "show_effects")
 
 
 class PROPERTIES_PT_navigation_bar(Panel):
@@ -170,7 +142,6 @@ class PropertiesAnimationMixin:
 
 classes = (
     PROPERTIES_HT_header,
-    PROPERTIES_PT_filter,
     PROPERTIES_PT_navigation_bar,
     PROPERTIES_PT_options,
 )
