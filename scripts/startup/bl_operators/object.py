@@ -226,6 +226,12 @@ class SubdivisionSet(Operator):
         description="Apply the subdivision surface level as an offset relative to the current level",
         default=False,
     )
+    ensure_modifier: BoolProperty(
+        name="Ensure Modifier",
+        description="Create the corresponding modifier if it does not exist",
+        default=True,
+        options={'HIDDEN'}
+    )
 
     @classmethod
     def poll(cls, context):
@@ -235,9 +241,24 @@ class SubdivisionSet(Operator):
     def execute(self, context):
         level = self.level
         relative = self.relative
+        ensure_modifier = self.ensure_modifier
 
         if relative and level == 0:
             return {'CANCELLED'}  # nothing to do
+
+        if relative and ensure_modifier:
+            return {'CANCELLED'}  # invalid combination
+
+        if not ensure_modifier:
+            any_object_has_relevant_modifier = False
+            for obj in context.selected_editable_objects:
+                if obj.mode == 'SCULPT':
+                    any_object_has_relevant_modifier |= any(mod.type == 'MULTIRES' for mod in obj.modifiers)
+                elif obj.mode == 'OBJECT':
+                    any_object_has_relevant_modifier |= any(mod.type == 'SUBSURF' for mod in obj.modifiers)
+
+            if not any_object_has_relevant_modifier:
+                return {'CANCELLED'}
 
         if not relative and level < 0:
             self.level = level = 0
@@ -277,17 +298,19 @@ class SubdivisionSet(Operator):
                     return
 
             # add a new modifier
-            try:
-                if obj.mode == 'SCULPT':
-                    mod = obj.modifiers.new("Multires", 'MULTIRES')
-                    if level > 0:
-                        for _ in range(level):
-                            bpy.ops.object.multires_subdivide(modifier="Multires")
-                else:
-                    mod = obj.modifiers.new("Subdivision", 'SUBSURF')
-                    mod.levels = level
-            except Exception:
-                self.report({'WARNING'}, "Modifiers cannot be added to object: " + obj.name)
+            if ensure_modifier:
+                try:
+                    if obj.mode == 'SCULPT':
+                        if not relative:
+                            mod = obj.modifiers.new("Multires", 'MULTIRES')
+                            if level > 0:
+                                for _ in range(level):
+                                    bpy.ops.object.multires_subdivide(modifier="Multires")
+                    else:
+                        mod = obj.modifiers.new("Subdivision", 'SUBSURF')
+                        mod.levels = level
+                except Exception:
+                    self.report({'WARNING'}, "Modifiers cannot be added to object: " + obj.name)
 
         for obj in context.selected_editable_objects:
             set_object_subd(obj)
