@@ -10,12 +10,14 @@
 
 #pragma once
 
-#include "RNA_types.hh"
-
 struct KeyingSet;
 struct ExtensionRNA;
 /* Forward declaration for this struct which is declared a bit later. */
 struct KeyingSetInfo;
+struct bContext;
+struct ID;
+struct Scene;
+struct PointerRNA;
 
 /* Names for builtin keying sets so we don't confuse these with labels/text,
  * defined in python script: `keyingsets_builtins.py`. */
@@ -74,7 +76,10 @@ struct KeyingSetInfo {
 namespace blender::animrig {
 
 /** Mode for modify_keyframes. */
-enum class ModifyKeyMode { INSERT = 0, DELETE };
+enum class ModifyKeyMode {
+  INSERT = 0,
+  DELETE,
+};
 
 /** Return codes for errors (with Relative KeyingSets). */
 enum class ModifyKeyReturn {
