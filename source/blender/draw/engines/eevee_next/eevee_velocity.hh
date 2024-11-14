@@ -105,10 +105,10 @@ class VelocityModule {
   void step_sync(eVelocityStep step, float time);
 
   /* Gather motion data. Returns true if the object **can** have motion. */
-  bool step_object_sync(Object *ob,
-                        ObjectKey &object_key,
-                        ResourceHandle resource_handle,
+  bool step_object_sync(ObjectKey &object_key,
+                        const ObjectRef &object_ref,
                         int recalc = 0,
+                        ResourceHandle resource_handle = {0},
                         ModifierData *modifier_data = nullptr,
                         ParticleSystem *particle_sys = nullptr);
 
