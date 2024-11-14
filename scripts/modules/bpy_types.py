@@ -1423,3 +1423,17 @@ class GreasePencilDrawing(_StructRNA):
         from _bpy_internal.grease_pencil.stroke import GreasePencilStrokeSlice
         num_strokes = self.attributes.domain_size('CURVE')
         return GreasePencilStrokeSlice(self, 0, num_strokes)
+    
+    def get_attribute(self, name):
+        """
+        TODO
+        """
+        from _bpy_internal.attributes.attribute_helper import get_attribute
+        return get_attribute(self.attributes, name)
+    
+    def get_attribute_for_write(self, name):
+        """
+        TODO
+        """
+        from _bpy_internal.attributes.attribute_helper import AttributeContextWriter
+        return AttributeContextWriter(self.attributes, name)
