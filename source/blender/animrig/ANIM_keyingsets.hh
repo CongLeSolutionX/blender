@@ -22,14 +22,14 @@ struct PointerRNA;
 /* Names for builtin keying sets so we don't confuse these with labels/text,
  * defined in python script: `keyingsets_builtins.py`. */
 
-#define ANIM_KS_LOCATION_ID "Location"
-#define ANIM_KS_ROTATION_ID "Rotation"
-#define ANIM_KS_SCALING_ID "Scaling"
-#define ANIM_KS_LOC_ROT_SCALE_ID "LocRotScale"
-#define ANIM_KS_LOC_ROT_SCALE_CPROP_ID "LocRotScaleCProp"
-#define ANIM_KS_AVAILABLE_ID "Available"
-#define ANIM_KS_WHOLE_CHARACTER_ID "WholeCharacter"
-#define ANIM_KS_WHOLE_CHARACTER_SELECTED_ID "WholeCharacterSelected"
+static constexpr const char *ANIM_KS_LOCATION_ID = "Location";
+static constexpr const char *ANIM_KS_ROTATION_ID = "Rotation";
+static constexpr const char *ANIM_KS_SCALING_ID = "Scaling";
+static constexpr const char *ANIM_KS_LOC_ROT_SCALE_ID = "LocRotScale";
+static constexpr const char *ANIM_KS_LOC_ROT_SCALE_CPROP_ID = "LocRotScaleCProp";
+static constexpr const char *ANIM_KS_AVAILABLE_ID = "Available";
+static constexpr const char *ANIM_KS_WHOLE_CHARACTER_ID = "WholeCharacter";
+static constexpr const char *ANIM_KS_WHOLE_CHARACTER_SELECTED_ID = "WholeCharacterSelected";
 
 /** Polling Callback for KeyingSets. */
 using cbKeyingSet_Poll = bool (*)(KeyingSetInfo *ksi, bContext *C);
