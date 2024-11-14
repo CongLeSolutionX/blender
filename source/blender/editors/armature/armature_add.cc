@@ -417,12 +417,12 @@ static void update_duplicate_subtarget(EditBone *dup_bone,
       if (!ct->tar || !ct->subtarget[0]) {
         continue;
       }
-      Object *target = ct->tar;
-      if (target->type != OB_ARMATURE || !target->data) {
+      Object *target_ob = ct->tar;
+      if (target_ob->type != OB_ARMATURE || !target_ob->data) {
         /* Can only mirror armature. */
         continue;
       }
-      bArmature *target_armature = static_cast<bArmature *>(target->data);
+      bArmature *target_armature = static_cast<bArmature *>(target_ob->data);
       /* Was the subtarget bone duplicated too? If
        * so, update the constraint to point at the
        * duplicate of the old subtarget.
