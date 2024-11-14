@@ -148,6 +148,10 @@ class VKFrameBuffer : public FrameBuffer {
       const bool multi_clear_colors,
       render_graph::VKClearAttachmentsNode::CreateInfo &clear_attachments) const;
   void clear(render_graph::VKClearAttachmentsNode::CreateInfo &clear_attachments);
+
+#ifndef NDEBUG
+  bool has_gaps_between_color_attachments() const;
+#endif
 };
 
 static inline VKFrameBuffer *unwrap(FrameBuffer *framebuffer)

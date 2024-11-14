@@ -526,11 +526,36 @@ void VKFrameBuffer::rendering_reset()
   is_rendering_ = false;
 }
 
+#ifndef NDEBUG
+bool VKFrameBuffer::has_gaps_between_color_attachments() const
+{
+  bool empty_slot = false;
+  for (int attachment_index : IndexRange(GPU_FB_COLOR_ATTACHMENT0, GPU_FB_MAX_COLOR_ATTACHMENT)) {
+    const GPUAttachment &attachment = attachments_[attachment_index];
+    if (attachment.tex == nullptr) {
+      empty_slot = true;
+    }
+    else if (empty_slot) {
+      return true;
+    }
+  }
+  return false;
+}
+#endif
+
 void VKFrameBuffer::rendering_ensure(VKContext &context)
 {
   if (is_rendering_) {
     return;
   }
+#ifndef NDEBUG
+  if (has_gaps_between_color_attachments()) {
+    BLI_assert_msg(false,
+                   ("Framebuffer '" + StringRefNull(name_) +
+                    "' has gaps between color attachments. This is not supported by VkRenderPass.")
+                       .c_str());
+  }
+#endif
   const VKWorkarounds &workarounds = VKBackend::get().device.workarounds_get();
   is_rendering_ = true;
   dirty_attachments_ = false;
