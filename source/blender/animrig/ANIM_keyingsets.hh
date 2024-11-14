@@ -82,7 +82,7 @@ enum class ModifyKeyReturn {
   /** Context info was invalid for using the Keying Set. */
   INVALID_CONTEXT = -1,
   /** There isn't any type-info for generating paths from context. */
-  MISSING_TYPEINFO = -2
+  MISSING_TYPEINFO = -2,
 };
 
 /* -------------------------------------------------------------------- */
