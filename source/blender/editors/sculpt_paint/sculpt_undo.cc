@@ -341,40 +341,6 @@ static void swap_indexed_data(MutableSpan<T> full, const Span<int> indices, Muta
   }
 }
 
-struct ShapeKeyData {
-  MutableSpan<float3> active_key_data;
-  bool basis_key_active;
-  Vector<MutableSpan<float3>> dependent_keys;
-
-  static std::optional<ShapeKeyData> from_object(Object &object)
-  {
-    Mesh &mesh = *static_cast<Mesh *>(object.data);
-    Key *keys = mesh.key;
-    if (!keys) {
-      return std::nullopt;
-    }
-    const int active_index = object.shapenr - 1;
-    const KeyBlock *active_key = BKE_keyblock_find_by_index(keys, active_index);
-    if (!active_key) {
-      return std::nullopt;
-    }
-    ShapeKeyData data;
-    data.active_key_data = {static_cast<float3 *>(active_key->data), active_key->totelem};
-    data.basis_key_active = active_key == keys->refkey;
-    if (const std::optional<Array<bool>> dependent = BKE_keyblock_get_dependent_keys(keys,
-                                                                                     active_index))
-    {
-      int i;
-      LISTBASE_FOREACH_INDEX (KeyBlock *, other_key, &keys->block, i) {
-        if ((other_key != active_key) && (*dependent)[i]) {
-          data.dependent_keys.append({static_cast<float3 *>(other_key->data), other_key->totelem});
-        }
-      }
-    }
-    return data;
-  }
-};
-
 static void restore_position_mesh(Object &object,
                                   const Span<std::unique_ptr<Node>> unodes,
                                   const MutableSpan<bool> modified_verts)
@@ -1683,20 +1649,11 @@ static void save_active_attribute(Object &object, SculptAttrRef *attr)
   attr->type = meta_data->data_type;
 }
 
-void push_begin_ex(const Scene & /*scene*/, Object &ob, const char *name)
+/**
+ * Does not save topology counts, as that data is unneded for full geometry pushes and
+ * requires the PBVH to exist. */
+static void save_common_data(Object &ob, SculptUndoStep *us)
 {
-  UndoStack *ustack = ED_undo_stack_get();
-
-  /* If possible, we need to tag the object and its geometry data as 'changed in the future' in
-   * the previous undo step if it's a memfile one. */
-  ED_undosys_stack_memfile_id_changed_tag(ustack, &ob.id);
-  ED_undosys_stack_memfile_id_changed_tag(ustack, static_cast<ID *>(ob.data));
-
-  /* Special case, we never read from this. */
-  bContext *C = nullptr;
-
-  SculptUndoStep *us = reinterpret_cast<SculptUndoStep *>(
-      BKE_undosys_step_push_init_with_type(ustack, C, name, BKE_UNDOSYS_TYPE_SCULPT));
   us->data.object_name = ob.id.name;
 
   if (!us->active_color_start.was_set) {
@@ -1712,7 +1669,34 @@ void push_begin_ex(const Scene & /*scene*/, Object &ob, const char *name)
   }
 
   const SculptSession &ss = *ob.sculpt;
+
+  us->data.pivot_pos = ss.pivot_pos;
+  us->data.pivot_rot = ss.pivot_rot;
+
+  if (const KeyBlock *key = BKE_keyblock_from_object(&ob)) {
+    us->data.active_shape_key_name = key->name;
+  }
+}
+
+void push_begin_ex(const Scene & /*scene*/, Object &ob, const char *name)
+{
+  UndoStack *ustack = ED_undo_stack_get();
+
+  /* If possible, we need to tag the object and its geometry data as 'changed in the future' in
+   * the previous undo step if it's a memfile one. */
+  ED_undosys_stack_memfile_id_changed_tag(ustack, &ob.id);
+  ED_undosys_stack_memfile_id_changed_tag(ustack, static_cast<ID *>(ob.data));
+
+  /* Special case, we never read from this. */
+  bContext *C = nullptr;
+
+  SculptUndoStep *us = reinterpret_cast<SculptUndoStep *>(
+      BKE_undosys_step_push_init_with_type(ustack, C, name, BKE_UNDOSYS_TYPE_SCULPT));
+
+  const SculptSession &ss = *ob.sculpt;
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(ob);
+
+  save_common_data(ob, us);
 
   switch (pbvh.type()) {
     case bke::pbvh::Type::Mesh: {
@@ -1729,14 +1713,6 @@ void push_begin_ex(const Scene & /*scene*/, Object &ob, const char *name)
     case bke::pbvh::Type::BMesh: {
       break;
     }
-  }
-
-  /* Store sculpt pivot. */
-  us->data.pivot_pos = ss.pivot_pos;
-  us->data.pivot_rot = ss.pivot_rot;
-
-  if (const KeyBlock *key = BKE_keyblock_from_object(&ob)) {
-    us->data.active_shape_key_name = key->name;
   }
 }
 
@@ -2029,20 +2005,41 @@ static void step_free(UndoStep *us_p)
 
 void geometry_begin(const Scene &scene, Object &ob, const wmOperator *op)
 {
-  push_begin(scene, ob, op);
-  geometry_push(ob);
+  geometry_begin_ex(scene, ob, op->type->name);
 }
 
-void geometry_begin_ex(const Scene &scene, Object &ob, const char *name)
+void geometry_begin_ex(const Scene & /*scene*/, Object &ob, const char *name)
 {
-  push_begin_ex(scene, ob, name);
+  UndoStack *ustack = ED_undo_stack_get();
+
+  /* If possible, we need to tag the object and its geometry data as 'changed in the future' in
+   * the previous undo step if it's a memfile one. */
+  ED_undosys_stack_memfile_id_changed_tag(ustack, &ob.id);
+  ED_undosys_stack_memfile_id_changed_tag(ustack, static_cast<ID *>(ob.data));
+
+  /* Special case, we never read from this. */
+  bContext *C = nullptr;
+
+  SculptUndoStep *us = reinterpret_cast<SculptUndoStep *>(
+      BKE_undosys_step_push_init_with_type(ustack, C, name, BKE_UNDOSYS_TYPE_SCULPT));
+  save_common_data(ob, us);
   geometry_push(ob);
 }
 
 void geometry_end(Object &ob)
 {
   geometry_push(ob);
-  push_end(ob);
+
+  /* We could remove this and enforce all callers run in an operator using 'OPTYPE_UNDO'. */
+  wmWindowManager *wm = static_cast<wmWindowManager *>(G_MAIN->wm.first);
+  if (wm->op_undo_depth == 0) {
+    UndoStack *ustack = ED_undo_stack_get();
+    BKE_undosys_step_push(ustack, nullptr, nullptr);
+    if (wm->op_undo_depth == 0) {
+      BKE_undosys_stack_limit_steps_and_memory_defaults(ustack);
+    }
+    WM_file_tag_modified();
+  }
 }
 
 void register_type(UndoType *ut)
