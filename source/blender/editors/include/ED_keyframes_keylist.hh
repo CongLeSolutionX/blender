@@ -158,9 +158,15 @@ int64_t ED_keylist_array_len(const AnimKeylist *keylist);
  * \param adt: can be a nullptr.
  * \param range: adds keys in the given range to the keylist plus 1 extra on each side if
  * available.
+ * \param use_nla_remapping: whether to allow NLA remapping or not. `true` by default, basically
+ * only `false` when this F-Curve is an NLA control curve (like animated influence) or a driver.
  */
-void fcurve_to_keylist(
-    AnimData *adt, FCurve *fcu, AnimKeylist *keylist, int saction_flag, blender::float2 range);
+void fcurve_to_keylist(AnimData *adt,
+                       FCurve *fcu,
+                       AnimKeylist *keylist,
+                       int saction_flag,
+                       blender::float2 range,
+                       bool use_nla_remapping);
 /* Action Group */
 void action_group_to_keylist(AnimData *adt,
                              bActionGroup *agrp,

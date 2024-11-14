@@ -188,9 +188,8 @@ static bool get_channel_bounds(bAnimContext *ac,
 
     case ALE_FCURVE: {
       FCurve *fcu = (FCurve *)ale->key_data;
-      AnimData *anim_data = ANIM_nla_mapping_get(ac, ale);
       found_bounds = get_normalized_fcurve_bounds(
-          fcu, anim_data, ac->sl, ac->scene, ale->id, include_handles, range, r_bounds);
+          fcu, ale->adt, ac->sl, ac->scene, ale->id, include_handles, range, r_bounds);
       break;
     }
     case ALE_NONE:
@@ -5089,10 +5088,10 @@ static int channels_bake_exec(bContext *C, wmOperator *op)
     if (!fcu->bezt) {
       continue;
     }
-    AnimData *adt = ANIM_nla_mapping_get(&ac, ale);
-    blender::int2 nla_mapped_range;
-    nla_mapped_range[0] = int(BKE_nla_tweakedit_remap(adt, frame_range[0], NLATIME_CONVERT_UNMAP));
-    nla_mapped_range[1] = int(BKE_nla_tweakedit_remap(adt, frame_range[1], NLATIME_CONVERT_UNMAP));
+    blender::int2 nla_mapped_range = {
+        ANIM_nla_tweakedit_remap(ale, frame_range[0], NLATIME_CONVERT_UNMAP),
+        ANIM_nla_tweakedit_remap(ale, frame_range[1], NLATIME_CONVERT_UNMAP),
+    };
     /* Save current state of modifier flags so they can be reapplied after baking. */
     blender::Vector<short> modifier_flags;
     if (!bake_modifiers) {

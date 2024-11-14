@@ -1123,9 +1123,7 @@ void fcurve_to_keylist(AnimData *adt,
   }
   ED_keylist_reset_last_accessed(keylist);
 
-  if (adt) {
-    ANIM_nla_mapping_apply_fcurve(adt, fcu, false, false);
-  }
+  ANIM_nla_mapping_apply_fcurve(adt, fcu, false, false);
 
   const bool is_cyclic = BKE_fcurve_is_cyclic(fcu) && (fcu->totvert >= 2);
   const bool do_extremes = (saction_flag & SACTION_SHOW_EXTREMES) != 0;
@@ -1183,9 +1181,7 @@ void fcurve_to_keylist(AnimData *adt,
         keylist, &fcu->bezt[index_bounds.min], (index_bounds.max + 1) - index_bounds.min);
   }
 
-  if (adt) {
-    ANIM_nla_mapping_apply_fcurve(adt, fcu, true, false);
-  }
+  ANIM_nla_mapping_apply_fcurve(adt, fcu, true, false);
 }
 
 void action_group_to_keylist(AnimData *adt,
@@ -1255,6 +1251,7 @@ void action_to_keylist(AnimData *adt,
    * Assumption: the animation is bound to adt->slot_handle. This assumption will break when we
    * have things like reference strips, where the strip can reference another slot handle.
    */
+  BLI_assert(adt);
   action_slot_to_keylist(adt, action, adt->slot_handle, keylist, saction_flag, range);
 }
 

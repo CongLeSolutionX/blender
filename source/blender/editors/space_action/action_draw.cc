@@ -348,8 +348,6 @@ static void draw_keyframes(bAnimContext *ac,
       continue;
     }
 
-    AnimData *adt = ANIM_nla_mapping_get(ac, ale);
-
     /* Add channels to list to draw later. */
     switch (ale->datatype) {
       case ALE_ALL:
@@ -374,7 +372,7 @@ static void draw_keyframes(bAnimContext *ac,
         break;
       case ALE_ACTION_LAYERED:
         ED_add_action_layered_channel(draw_list,
-                                      adt,
+                                      ale->adt,
                                       static_cast<bAction *>(ale->key_data),
                                       ycenter,
                                       scale_factor,
@@ -382,7 +380,7 @@ static void draw_keyframes(bAnimContext *ac,
         break;
       case ALE_ACTION_SLOT:
         ED_add_action_slot_channel(draw_list,
-                                   adt,
+                                   ale->adt,
                                    static_cast<bAction *>(ale->key_data)->wrap(),
                                    *static_cast<animrig::Slot *>(ale->data),
                                    ycenter,
@@ -391,7 +389,7 @@ static void draw_keyframes(bAnimContext *ac,
         break;
       case ALE_ACT:
         ED_add_action_channel(draw_list,
-                              adt,
+                              ale->adt,
                               static_cast<bAction *>(ale->key_data),
                               ycenter,
                               scale_factor,
@@ -399,7 +397,7 @@ static void draw_keyframes(bAnimContext *ac,
         break;
       case ALE_GROUP:
         ED_add_action_group_channel(draw_list,
-                                    adt,
+                                    ale->adt,
                                     static_cast<bActionGroup *>(ale->data),
                                     ycenter,
                                     scale_factor,
@@ -407,7 +405,7 @@ static void draw_keyframes(bAnimContext *ac,
         break;
       case ALE_FCURVE:
         ED_add_fcurve_channel(draw_list,
-                              adt,
+                              ale->adt,
                               static_cast<FCurve *>(ale->key_data),
                               ycenter,
                               scale_factor,

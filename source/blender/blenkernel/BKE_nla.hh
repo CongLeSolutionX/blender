@@ -536,13 +536,15 @@ enum eNlaTime_ConvertModes {
 };
 
 /**
- * Non clipped mapping for strip-time <-> global time:
- * `mode = eNlaTime_ConvertModes -> NLATIME_CONVERT_*`
+ * Non clipped mapping for strip-time <-> global time.
  *
  * Public API method - perform this mapping using the given AnimData block
- * and perform any necessary sanity checks on the value
+ * and perform any necessary sanity checks on the value.
+ *
+ * \note Do not call this with an `adt` obtained from an `bAnimListElem`. Instead, use
+ * `ANIM_nla_tweakedit_remap()` for that.
  */
-float BKE_nla_tweakedit_remap(AnimData *adt, float cframe, short mode);
+float BKE_nla_tweakedit_remap(AnimData *adt, float cframe, eNlaTime_ConvertModes mode);
 
 /* ----------------------------- */
 /* .blend file API */
