@@ -105,6 +105,15 @@ class AbstractView {
   virtual void scroll(ViewScrollDirection direction);
 
   /**
+   * From the current view state, return certain state that will be written to files (stored in
+   * #ARegion.view_states) to preserve it over UI changes and file loading.
+   *
+   * Return an empty value if there's no state to preserve.
+   */
+  virtual std::optional<uiViewState> persistent_state_for_file_store() const;
+  virtual void persistent_state_apply(const uiViewState &state);
+
+  /**
    * Makes \a item valid for display in this view. Behavior is undefined for items not registered
    * with this.
    */

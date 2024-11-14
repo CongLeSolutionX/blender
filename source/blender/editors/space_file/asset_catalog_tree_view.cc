@@ -757,7 +757,8 @@ bool file_is_asset_visible_in_catalog_filter_settings(
 void file_create_asset_catalog_tree_view_in_layout(asset_system::AssetLibrary *asset_library,
                                                    uiLayout *layout,
                                                    SpaceFile *space_file,
-                                                   FileAssetSelectParams *params)
+                                                   FileAssetSelectParams *params,
+                                                   const ARegion *region)
 {
   uiBlock *block = uiLayoutGetBlock(layout);
 
@@ -769,7 +770,7 @@ void file_create_asset_catalog_tree_view_in_layout(asset_system::AssetLibrary *a
       std::make_unique<ed::asset_browser::AssetCatalogTreeView>(
           asset_library, params, *space_file));
   tree_view->set_context_menu_title("Catalog");
-  ui::TreeViewBuilder::build_tree_view(*tree_view, *layout);
+  ui::TreeViewBuilder::build_tree_view(*tree_view, *region, *layout);
 }
 
 }  // namespace blender::ed::asset_browser
