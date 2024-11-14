@@ -959,54 +959,73 @@ std::string VKShader::fragment_interface_declare(const shader::ShaderCreateInfo 
   }
 
   ss << "\n/* Sub-pass Inputs. */\n";
-  for (const ShaderCreateInfo::SubpassIn &input : info.subpass_inputs_) {
-    std::string image_name = "gpu_subpass_img_";
-    image_name += std::to_string(input.index);
+  if (workarounds.dynamic_rendering) {
+    for (const ShaderCreateInfo::SubpassIn &input : info.subpass_inputs_) {
+      std::string image_name = "gpu_subpass_img_";
+      image_name += std::to_string(input.index);
 
-    /* Declare global for input. */
-    ss << to_string(input.type) << " " << input.name << ";\n";
+      /* Declare global for input. */
+      ss << to_string(input.type) << " " << input.name << ";\n";
 
-    /* IMPORTANT: We assume that the frame-buffer will be layered or not based on the layer
-     * built-in flag. */
-    bool is_layered_fb = bool(info.builtins_ & BuiltinBits::LAYER);
+      /* IMPORTANT: We assume that the frame-buffer will be layered or not based on the layer
+       * built-in flag. */
+      bool is_layered_fb = bool(info.builtins_ & BuiltinBits::LAYER);
 
-    /* Start with invalid value to detect failure cases. */
-    ImageType image_type = ImageType::FLOAT_BUFFER;
-    switch (to_component_type(input.type)) {
-      case Type::FLOAT:
-        image_type = is_layered_fb ? ImageType::FLOAT_2D_ARRAY : ImageType::FLOAT_2D;
-        break;
-      case Type::INT:
-        image_type = is_layered_fb ? ImageType::INT_2D_ARRAY : ImageType::INT_2D;
-        break;
-      case Type::UINT:
-        image_type = is_layered_fb ? ImageType::UINT_2D_ARRAY : ImageType::UINT_2D;
-        break;
-      default:
-        break;
+      /* Start with invalid value to detect failure cases. */
+      ImageType image_type = ImageType::FLOAT_BUFFER;
+      switch (to_component_type(input.type)) {
+        case Type::FLOAT:
+          image_type = is_layered_fb ? ImageType::FLOAT_2D_ARRAY : ImageType::FLOAT_2D;
+          break;
+        case Type::INT:
+          image_type = is_layered_fb ? ImageType::INT_2D_ARRAY : ImageType::INT_2D;
+          break;
+        case Type::UINT:
+          image_type = is_layered_fb ? ImageType::UINT_2D_ARRAY : ImageType::UINT_2D;
+          break;
+        default:
+          break;
+      }
+      /* Declare image. */
+      using Resource = ShaderCreateInfo::Resource;
+      /* NOTE(fclem): Using the attachment index as resource index might be problematic as it might
+       * collide with other resources. */
+      Resource res(Resource::BindType::SAMPLER, input.index);
+      res.sampler.type = image_type;
+      res.sampler.sampler = GPUSamplerState::default_sampler();
+      res.sampler.name = image_name;
+      print_resource(ss, interface_get(), res);
+
+      char swizzle[] = "xyzw";
+      swizzle[to_component_count(input.type)] = '\0';
+
+      std::string texel_co = (is_layered_fb) ? "ivec3(gl_FragCoord.xy, gpu_Layer)" :
+                                               "ivec2(gl_FragCoord.xy)";
+
+      std::stringstream ss_pre;
+      /* Populate the global before main using imageLoad. */
+      ss_pre << "  " << input.name << " = texelFetch(" << image_name << ", " << texel_co << ", 0)."
+             << swizzle << ";\n";
+
+      pre_main += ss_pre.str();
     }
-    /* Declare image. */
-    using Resource = ShaderCreateInfo::Resource;
-    /* NOTE(fclem): Using the attachment index as resource index might be problematic as it might
-     * collide with other resources. */
-    Resource res(Resource::BindType::SAMPLER, input.index);
-    res.sampler.type = image_type;
-    res.sampler.sampler = GPUSamplerState::default_sampler();
-    res.sampler.name = image_name;
-    print_resource(ss, interface_get(), res);
+  }
+  else {
+    for (const ShaderCreateInfo::SubpassIn &input : info.subpass_inputs_) {
+      std::string image_name = "gpu_subpass_img_" + std::to_string(input.index);
 
-    char swizzle[] = "xyzw";
-    swizzle[to_component_count(input.type)] = '\0';
-
-    std::string texel_co = (is_layered_fb) ? "ivec3(gl_FragCoord.xy, gpu_Layer)" :
-                                             "ivec2(gl_FragCoord.xy)";
-
-    std::stringstream ss_pre;
-    /* Populate the global before main using imageLoad. */
-    ss_pre << "  " << input.name << " = texelFetch(" << image_name << ", " << texel_co << ", 0)."
-           << swizzle << ";\n";
-
-    pre_main += ss_pre.str();
+      /* Declare global for input. */
+      ss << to_string(input.type) << " " << input.name << ";\n";
+      /* Declare subpass input. */
+      ss << "layout(input_attachment_index=" << input.index << ", set=0, binding=" << input.index
+         << ") uniform subpassInput " << image_name << ";";
+      /* Read data from subpass input. */
+      char swizzle[] = "xyzw";
+      swizzle[to_component_count(input.type)] = '\0';
+      std::stringstream ss_pre;
+      ss_pre << "  " << input.name << " = subpassLoad(" << image_name << ")." << swizzle << ";";
+      pre_main += ss_pre.str();
+    }
   }
 
   ss << "\n/* Outputs. */\n";
