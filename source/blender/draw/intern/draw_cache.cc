@@ -26,8 +26,6 @@
 #include "BKE_object.hh"
 #include "BKE_paint.hh"
 
-#include "DEG_depsgraph_query.hh"
-
 #include "GPU_batch.hh"
 #include "GPU_batch_utils.hh"
 #include "GPU_capabilities.hh"
@@ -3367,13 +3365,8 @@ void drw_batch_cache_generate_requested(Object *ob)
 
   switch (ob->type) {
     case OB_MESH:
-      DRW_mesh_batch_cache_create_requested(*DST.task_graph,
-                                            *ob,
-                                            *(Mesh *)ob->data,
-                                            DEG_get_original_object(ob),
-                                            *scene,
-                                            is_paint_mode,
-                                            use_hide);
+      DRW_mesh_batch_cache_create_requested(
+          *DST.task_graph, *ob, *(Mesh *)ob->data, *scene, is_paint_mode, use_hide);
       break;
     case OB_CURVES_LEGACY:
     case OB_FONT:
@@ -3416,7 +3409,7 @@ void drw_batch_cache_generate_requested_evaluated_mesh_or_curve(Object *ob)
    */
   if (mesh != nullptr) {
     DRW_mesh_batch_cache_create_requested(
-        *DST.task_graph, *ob, *mesh, nullptr, *scene, is_paint_mode, use_hide);
+        *DST.task_graph, *ob, *mesh, *scene, is_paint_mode, use_hide);
   }
   else if (ELEM(ob->type, OB_CURVES_LEGACY, OB_FONT, OB_SURF)) {
     DRW_curve_batch_cache_create_requested(ob, scene);

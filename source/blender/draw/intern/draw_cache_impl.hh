@@ -181,7 +181,6 @@ blender::gpu::Batch *DRW_volume_batch_cache_get_selection_surface(Volume *volume
 void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
                                            Object &ob,
                                            Mesh &mesh,
-                                           const Object *object_orig,
                                            const Scene &scene,
                                            bool is_paint_mode,
                                            bool use_hide);

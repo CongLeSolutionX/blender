@@ -20,8 +20,6 @@
 #include "draw_cache_impl.hh"
 #include "draw_manager_text.hh"
 
-#include "DEG_depsgraph_query.hh"
-
 #include "overlay_private.hh"
 
 #define OVERLAY_EDIT_TEXT \
@@ -238,17 +236,13 @@ static void overlay_edit_mesh_add_ob_to_pass(OVERLAY_PrivateData *pd, Object *ob
   bool has_skin_roots = false;
   /* TODO: Should be its own function. */
   Mesh &mesh = *(Mesh *)ob->data;
-  Object *object_orig = DEG_get_original_object(ob);
   if (BMEditMesh *em = mesh.runtime->edit_mesh.get()) {
+    const Mesh *editmesh_orig = BKE_object_get_pre_modified_mesh(ob);
     const Mesh *editmesh_eval_final = BKE_object_get_editmesh_eval_final(ob);
     const Mesh *editmesh_eval_cage = BKE_object_get_editmesh_eval_cage(ob);
 
-    const bool mapping_valid = BKE_object_editmesh_eval_to_orig_mapping_valid(*ob, object_orig);
-    if (!mapping_valid && !editmesh_eval_cage->runtime->is_original_bmesh) {
-      return;
-    }
-
-    has_edit_mesh_cage = editmesh_eval_cage && (editmesh_eval_cage != editmesh_eval_final);
+    has_edit_mesh_cage = editmesh_eval_cage && (editmesh_eval_cage != editmesh_eval_final) &&
+                         BKE_editmesh_eval_orig_map_available(*editmesh_eval_cage, editmesh_orig);
     has_skin_roots = CustomData_get_offset(&em->bm->vdata, CD_MVERT_SKIN) != -1;
   }
 

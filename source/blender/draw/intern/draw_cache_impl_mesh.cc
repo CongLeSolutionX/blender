@@ -1330,7 +1330,6 @@ static void drw_mesh_batch_cache_check_available(TaskGraph &task_graph, Mesh &me
 void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
                                            Object &ob,
                                            Mesh &mesh,
-                                           const Object *object_orig,
                                            const Scene &scene,
                                            const bool is_paint_mode,
                                            const bool use_hide)
@@ -1372,8 +1371,9 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
   }
 
   const bool is_editmode = ob.mode == OB_MODE_EDIT;
+  const Mesh *orig_edit_mesh = is_editmode ? BKE_object_get_pre_modified_mesh(&ob) : nullptr;
   const bool edit_mapping_valid = is_editmode &&
-                                  BKE_object_editmesh_eval_to_orig_mapping_valid(ob, object_orig);
+                                  BKE_editmesh_eval_orig_map_available(mesh, orig_edit_mesh);
 
   DRWBatchFlag batch_requested = cache.batch_requested;
   cache.batch_requested = (DRWBatchFlag)0;
@@ -1501,21 +1501,12 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
   cache.batch_ready |= batch_requested;
 
   bool do_cage = false, do_uvcage = false;
-  Mesh *cage_mesh = &mesh;
   if (is_editmode) {
     const Mesh *editmesh_eval_final = BKE_object_get_editmesh_eval_final(&ob);
     const Mesh *editmesh_eval_cage = BKE_object_get_editmesh_eval_cage(&ob);
 
-    do_cage = editmesh_eval_final != editmesh_eval_cage;
-    if (do_cage) {
-      if (!edit_mapping_valid) {
-        if (object_orig) {
-          if (object_orig->type == OB_MESH) {
-            cage_mesh = static_cast<Mesh *>(object_orig->data);
-          }
-        }
-      }
-    }
+    do_cage = editmesh_eval_cage && editmesh_eval_final != editmesh_eval_cage &&
+              BKE_editmesh_eval_orig_map_available(*editmesh_eval_cage, orig_edit_mesh);
     do_uvcage = editmesh_eval_final &&
                 !(editmesh_eval_final->runtime->is_original_bmesh &&
                   editmesh_eval_final->runtime->wrapper_type == ME_WRAPPER_TYPE_BMESH);
@@ -1895,7 +1886,7 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
                                        cache,
                                        cache.cage,
                                        ob,
-                                       *cage_mesh,
+                                       mesh,
                                        is_editmode,
                                        is_paint_mode,
                                        ob.object_to_world(),

@@ -544,17 +544,17 @@ std::unique_ptr<MeshRenderData> mesh_render_data_create(Object &object,
 
   mr->use_hide = use_hide;
 
-  if (is_editmode && mesh.runtime->edit_mesh) {
-    const Mesh *editmesh_eval_final = BKE_object_get_editmesh_eval_final(&object);
+  if (is_editmode) {
+    const Mesh *editmesh_orig = BKE_object_get_pre_modified_mesh(&object);
     const Mesh *editmesh_eval_cage = BKE_object_get_editmesh_eval_cage(&object);
 
-    mr->bm = mesh.runtime->edit_mesh->bm;
-    mr->edit_bmesh = mesh.runtime->edit_mesh.get();
-    mr->mesh = (do_final) ? editmesh_eval_final : editmesh_eval_cage;
+    mr->bm = editmesh_orig->runtime->edit_mesh->bm;
+    mr->edit_bmesh = editmesh_orig->runtime->edit_mesh.get();
+    mr->mesh = (do_final) ? &mesh : editmesh_eval_cage;
     mr->edit_data = is_editmode ? mr->mesh->runtime->edit_data.get() : nullptr;
 
     /* If there is no distinct cage, hide unmapped edges that can't be selected. */
-    mr->hide_unmapped_edges = !do_final || editmesh_eval_final == editmesh_eval_cage;
+    mr->hide_unmapped_edges = !do_final || &mesh == editmesh_eval_cage;
 
     if (bke::EditMeshData *emd = mr->edit_data) {
       if (!emd->vert_positions.is_empty()) {
