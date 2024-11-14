@@ -102,7 +102,7 @@ void SyncModule::sync_mesh(Object *ob, ObjectHandle &ob_handle, const ObjectRef 
   ResourceHandle res_handle = inst_.manager->unique_handle(ob_ref);
 
   bool has_motion = inst_.velocity.step_object_sync(
-      ob_handle.object_key, ob_ref, ob_handle.recalc);
+      ob_handle.object_key, ob_ref, ob_handle.recalc, res_handle);
 
   MaterialArray &material_array = inst_.materials.material_array_get(ob, has_motion);
 
@@ -269,7 +269,7 @@ void SyncModule::sync_point_cloud(Object *ob, ObjectHandle &ob_handle, const Obj
   ResourceHandle res_handle = inst_.manager->unique_handle(ob_ref);
 
   bool has_motion = inst_.velocity.step_object_sync(
-      ob_handle.object_key, ob_ref, ob_handle.recalc);
+      ob_handle.object_key, ob_ref, ob_handle.recalc, res_handle);
 
   Material &material = inst_.materials.material_get(
       ob, has_motion, material_slot - 1, MAT_GEOM_POINT_CLOUD);
