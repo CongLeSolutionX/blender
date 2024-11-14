@@ -349,7 +349,7 @@ static void grid_coords_from_face_verts(const MultiresReshapeSmoothContext *resh
                                         const blender::IndexRange face,
                                         const GridCoord *grid_coords[])
 {
-  BLI_assert(face->num_corners == 4);
+  BLI_assert(face.size());
 
   const int grid_index = get_face_grid_index(reshape_smooth_context, face);
   BLI_assert(grid_index != -1);
