@@ -1,2 +1,2 @@
 Referenced by issue #91571, Cycles HIP device
-Referenced by issue #129927, Material preview still on CPU when GPU is enabled
+Referenced by issue #129927, Cycles: Material preview still uses CPU when GPU is enabled
