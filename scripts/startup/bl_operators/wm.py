@@ -2748,7 +2748,7 @@ class WM_OT_batch_rename(Operator):
             ('GPENCIL', "Grease Pencils", "", 'OUTLINER_DATA_GREASEPENCIL', 7),
             ('ARMATURE', "Armatures", "", 'ARMATURE_DATA', 8),
             ('LATTICE', "Lattices", "", 'LATTICE_DATA', 9),
-            ('LIGHT', "Light", "", 'LIGHT_DATA', 10),
+            ('LIGHT', "Lights", "", 'LIGHT_DATA', 10),
             ('LIGHT_PROBE', "Light Probes", "", 'OUTLINER_DATA_LIGHTPROBE', 11),
             ('CAMERA', "Cameras", "", 'CAMERA_DATA', 12),
             ('SPEAKER', "Speakers", "", 'OUTLINER_DATA_SPEAKER', 13),
