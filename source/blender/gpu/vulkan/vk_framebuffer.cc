@@ -111,7 +111,6 @@ bool VKFrameBuffer::check(char err_out[256])
 {
   bool success = true;
 
-#ifndef NDEBUG
   if (has_gaps_between_color_attachments()) {
     success = false;
 
@@ -121,9 +120,23 @@ bool VKFrameBuffer::check(char err_out[256])
                  "legacy devices using VkRenderPass natively.\n",
                  name_);
   }
-#endif
 
   return success;
+}
+
+bool VKFrameBuffer::has_gaps_between_color_attachments() const
+{
+  bool empty_slot = false;
+  for (int attachment_index : IndexRange(GPU_FB_COLOR_ATTACHMENT0, GPU_FB_MAX_COLOR_ATTACHMENT)) {
+    const GPUAttachment &attachment = attachments_[attachment_index];
+    if (attachment.tex == nullptr) {
+      empty_slot = true;
+    }
+    else if (empty_slot) {
+      return true;
+    }
+  }
+  return false;
 }
 
 void VKFrameBuffer::build_clear_attachments_depth_stencil(
@@ -540,28 +553,12 @@ void VKFrameBuffer::rendering_reset()
   is_rendering_ = false;
 }
 
-#ifndef NDEBUG
-bool VKFrameBuffer::has_gaps_between_color_attachments() const
-{
-  bool empty_slot = false;
-  for (int attachment_index : IndexRange(GPU_FB_COLOR_ATTACHMENT0, GPU_FB_MAX_COLOR_ATTACHMENT)) {
-    const GPUAttachment &attachment = attachments_[attachment_index];
-    if (attachment.tex == nullptr) {
-      empty_slot = true;
-    }
-    else if (empty_slot) {
-      return true;
-    }
-  }
-  return false;
-}
-#endif
-
 void VKFrameBuffer::rendering_ensure(VKContext &context)
 {
   if (is_rendering_) {
     return;
   }
+
 #ifndef NDEBUG
   if (G.debug & G_DEBUG_GPU) {
     char message[256];

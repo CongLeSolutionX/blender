@@ -149,9 +149,12 @@ class VKFrameBuffer : public FrameBuffer {
       render_graph::VKClearAttachmentsNode::CreateInfo &clear_attachments) const;
   void clear(render_graph::VKClearAttachmentsNode::CreateInfo &clear_attachments);
 
-#ifndef NDEBUG
+  /**
+   * Check if there are gaps between color attachments.
+   *
+   * This is not supported when using VkRenderPass/VkFramebuffer.
+   */
   bool has_gaps_between_color_attachments() const;
-#endif
 };
 
 static inline VKFrameBuffer *unwrap(FrameBuffer *framebuffer)
