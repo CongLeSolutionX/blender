@@ -937,15 +937,18 @@ void TreeViewBuilder::ensure_min_rows_items(AbstractTreeView &tree_view)
   }
 }
 
-void TreeViewBuilder::build_tree_view(AbstractTreeView &tree_view,
-                                      const ARegion &region,
+void TreeViewBuilder::build_tree_view(const bContext &C,
+                                      AbstractTreeView &tree_view,
                                       uiLayout &layout,
                                       std::optional<StringRef> search_string,
                                       const bool add_box)
 {
   uiBlock &block = *uiLayoutGetBlock(&layout);
 
-  ui_block_view_persistent_state_restore(region, block, tree_view);
+  const ARegion *region = CTX_wm_region_popup(&C) ? CTX_wm_region_popup(&C) : CTX_wm_region(&C);
+  if (region) {
+    ui_block_view_persistent_state_restore(*region, block, tree_view);
+  }
 
   tree_view.build_tree();
   tree_view.update_from_old(block);

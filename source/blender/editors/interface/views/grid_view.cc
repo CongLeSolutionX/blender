@@ -12,6 +12,7 @@
 #include <optional>
 #include <stdexcept>
 
+#include "BKE_context.hh"
 #include "BKE_icons.h"
 
 #include "BLI_index_range.hh"
@@ -457,6 +458,11 @@ void GridViewBuilder::build_grid_view(const bContext &C,
                                       std::optional<StringRef> search_string)
 {
   uiBlock &block = *uiLayoutGetBlock(&layout);
+
+  const ARegion *region = CTX_wm_region_popup(&C) ? CTX_wm_region_popup(&C) : CTX_wm_region(&C);
+  if (region) {
+    ui_block_view_persistent_state_restore(*region, block, grid_view);
+  }
 
   grid_view.build_items();
   grid_view.update_from_old(block);

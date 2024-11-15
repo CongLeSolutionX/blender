@@ -400,5 +400,5 @@ void uiTemplateLightLinkingCollection(
   tree_view->set_context_menu_title("Light Linking");
   tree_view->set_default_rows(3);
 
-  blender::ui::TreeViewBuilder::build_tree_view(*tree_view, *CTX_wm_region(C), *layout);
+  blender::ui::TreeViewBuilder::build_tree_view(*C, *tree_view, *layout);
 }

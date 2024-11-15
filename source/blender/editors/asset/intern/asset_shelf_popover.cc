@@ -155,7 +155,7 @@ class AssetCatalogTreeView : public ui::AbstractTreeView {
   }
 };
 
-static void catalog_tree_draw(const ARegion &region, uiLayout &layout, AssetShelf &shelf)
+static void catalog_tree_draw(const bContext &C, uiLayout &layout, AssetShelf &shelf)
 {
   const asset_system::AssetLibrary *library = list::library_get_once_available(
       shelf.settings.asset_library_reference);
@@ -169,7 +169,7 @@ static void catalog_tree_draw(const ARegion &region, uiLayout &layout, AssetShel
       "asset shelf catalog tree view",
       std::make_unique<AssetCatalogTreeView>(*library, shelf));
 
-  ui::TreeViewBuilder::build_tree_view(*tree_view, region, layout);
+  ui::TreeViewBuilder::build_tree_view(C, *tree_view, layout);
 }
 
 static AssetShelfType *lookup_type_from_idname_in_context(const bContext *C)
@@ -222,7 +222,7 @@ static void popover_panel_draw(const bContext *C, Panel *panel)
   uiLayoutSetUnitsX(catalogs_col, LEFT_COL_WIDTH_UNITS);
   uiLayoutSetFixedSize(catalogs_col, true);
   library_selector_draw(C, catalogs_col, *shelf);
-  catalog_tree_draw(*region, *catalogs_col, *shelf);
+  catalog_tree_draw(*C, *catalogs_col, *shelf);
 
   uiLayout *right_col = uiLayoutColumn(row, false);
   uiLayout *sub = uiLayoutRow(right_col, false);
