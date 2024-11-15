@@ -50,7 +50,7 @@ static void calc_curves_extrusion(const IndexMask &selection,
     selection_offsets.append(range.first());
     selection_offsets.append(range.last());
   });
-  selection_offsets.append(offsets.last() + 1);
+  selection_offsets.append(INT_MAX);
 
   is_first_selected[0] = false;
   curves_intervals_offsets[0] = 0;
@@ -60,9 +60,9 @@ static void calc_curves_extrusion(const IndexMask &selection,
   bool right_endpoint = false;
   int dst = 0;
   bool is_selected = false;
-  int prev_curve_endpoint = offsets.last();
-  int curve_endpoint = offsets[curve_i] - right_endpoint;
-  int selection_endpoint = selection_offsets[selection_i];
+  int prev_curve_endpoint = INT_MIN;
+  int curve_endpoint = offsets[0];
+  int selection_endpoint = selection_offsets[0];
 
   while (curve_endpoint < offsets.last()) {
     if (selection_endpoint < curve_endpoint) {
