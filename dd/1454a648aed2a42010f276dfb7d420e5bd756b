@@ -1,2 +1,3 @@
 Referenced by commit 0adeeae2c7263dbc605fd3d95613d8db34e30886, Fix: Sculpt: Performance regression in expand operator
 Referenced by commit 6e0223a04c39efa3f92e01fa45fe9e4343178d2b, Fix #127356: Expand face set snapping doesn't work
+Referenced by issue #127356, Sculpt Mode: Mask Expand doesn't snap to Face Sets
