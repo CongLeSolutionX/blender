@@ -323,6 +323,7 @@ void VKDescriptorSetTracker::upload_descriptor_sets()
     switch (vk_write_descriptor_set.descriptorType) {
       case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
       case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
+      case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
         vk_write_descriptor_set.pImageInfo = &vk_descriptor_image_infos_[image_index++];
         break;
 

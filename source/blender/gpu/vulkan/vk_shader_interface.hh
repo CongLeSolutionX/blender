@@ -42,6 +42,7 @@ struct VKResourceBinding {
   VKDescriptorSet::Location location;
   VKImageViewArrayed arrayed = VKImageViewArrayed::DONT_CARE;
   VkAccessFlags access_mask = VK_ACCESS_NONE;
+  bool is_subpass_input = false;
 };
 
 class VKShaderInterface : public ShaderInterface {

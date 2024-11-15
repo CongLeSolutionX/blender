@@ -959,14 +959,19 @@ std::string VKShader::fragment_interface_declare(const shader::ShaderCreateInfo 
   }
 
   ss << "\n/* Sub-pass Inputs. */\n";
+  const VKShaderInterface &interface = interface_get();
   if (workarounds.dynamic_rendering) {
     for (const ShaderCreateInfo::SubpassIn &input : info.subpass_inputs_) {
+      using Resource = ShaderCreateInfo::Resource;
+      Resource res(Resource::BindType::SAMPLER, input.index);
+      const VKDescriptorSet::Location location = interface.descriptor_set_location(res);
+
       std::string image_name = "gpu_subpass_img_" + std::to_string(input.index);
 
       /* Declare global for input. */
       ss << to_string(input.type) << " " << input.name << ";\n";
       /* Declare subpass input. */
-      ss << "layout(input_attachment_index=" << input.index << ", set=0, binding=" << input.index
+      ss << "layout(input_attachment_index=" << input.index << ", set=0, binding=" << location
          << ") uniform ";
       switch (to_component_type(input.type)) {
         case Type::INT:
@@ -1025,7 +1030,7 @@ std::string VKShader::fragment_interface_declare(const shader::ShaderCreateInfo 
       res.sampler.type = image_type;
       res.sampler.sampler = GPUSamplerState::default_sampler();
       res.sampler.name = image_name;
-      print_resource(ss, interface_get(), res);
+      print_resource(ss, interface, res);
 
       char swizzle[] = "xyzw";
       swizzle[to_component_count(input.type)] = '\0';
