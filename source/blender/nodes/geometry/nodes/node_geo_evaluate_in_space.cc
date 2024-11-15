@@ -1190,20 +1190,27 @@ static void sample_average_fast(const OffsetIndices<int> buckets_offsets,
       });
 }
 
-static constexpr int32_t x_axis_stack_mask = 0b00100100'10010010'01001001'00100100;
-static constexpr int32_t y_axis_stack_mask = 0b10010010'01001001'00100100'10010010;
-static constexpr int32_t z_axis_stack_mask = 0b01001001'00100100'10010010'01001001;
+static constexpr int32_t x_axis_stack_mask = 0b10010010'01001001'00100100'10010010;
+static constexpr int32_t y_axis_stack_mask = 0b01001001'00100100'10010010'01001001;
+static constexpr int32_t z_axis_stack_mask = 0b00100100'10010010'01001001'00100100;
 
-static int joint_i_to_stack(const int depth_i, const int joint_i)
+static uint32_t joint_i_to_stack(const int depth_i, const int joint_i)
 {
   BLI_assert(depth_i > 0);
-  return joint_i << (32 - depth_i);
+  BLI_assert(joint_i >= 0);
+  return uint32_t(joint_i) << (32 - depth_i);
 }
 
 static int stack_mask(const int depth_i)
 {
   BLI_assert(depth_i > 0);
   return ~((1 << (32 - depth_i)) - 1);
+}
+
+static int stack_to_i(const int depth_i, const uint32_t stack)
+{
+  BLI_assert(depth_i > 0);
+  return int(stack >> (32 - depth_i));
 }
 
 static std::array<bool, 3> dominant_difference(const int a_i,
@@ -1213,15 +1220,18 @@ static std::array<bool, 3> dominant_difference(const int a_i,
 {
   BLI_assert_msg(a_depth_i > 0, "Which dirrection should be at 0 level? Here is only one joint.");
   BLI_assert_msg(b_depth_i > 0, "Which dirrection should be at 0 level? Here is only one joint.");
-  const int32_t a_stack = joint_i_to_stack(a_depth_i, a_i);
-  const int32_t b_stack = joint_i_to_stack(b_depth_i, b_i);
+  const uint32_t a_stack = joint_i_to_stack(a_depth_i, a_i);
+  const uint32_t b_stack = joint_i_to_stack(b_depth_i, b_i);
 
-  const int32_t stack_diff = a_stack ^ b_stack;
+  const uint32_t stack_diff = a_stack ^ b_stack;
 
   constexpr int default_diff = 1;
-  const int x_axis_dirrection_i = bitscan_reverse_i(stack_diff & x_axis_stack_mask | default_diff);
-  const int y_axis_dirrection_i = bitscan_reverse_i(stack_diff & y_axis_stack_mask | default_diff);
-  const int z_axis_dirrection_i = bitscan_reverse_i(stack_diff & z_axis_stack_mask | default_diff);
+  const int x_axis_dirrection_i = bitscan_reverse_uint(stack_diff & x_axis_stack_mask |
+                                                       default_diff);
+  const int y_axis_dirrection_i = bitscan_reverse_uint(stack_diff & y_axis_stack_mask |
+                                                       default_diff);
+  const int z_axis_dirrection_i = bitscan_reverse_uint(stack_diff & z_axis_stack_mask |
+                                                       default_diff);
 
   const bool x_axis_dirrection = bool(a_stack & (1 << x_axis_dirrection_i));
   const bool y_axis_dirrection = bool(a_stack & (1 << y_axis_dirrection_i));
@@ -1253,6 +1263,23 @@ static std::array<bool, 3> dominant_difference(const int a_i,
   BLI_assert(stack_mask(1) == 0b10000000'00000000'00000000'00000000);
   BLI_assert(stack_mask(2) == 0b11000000'00000000'00000000'00000000);
   BLI_assert(stack_mask(3) == 0b11100000'00000000'00000000'00000000);
+
+  BLI_assert(stack_to_i(1, joint_i_to_stack(1, 0)) == 0);
+  BLI_assert(stack_to_i(1, joint_i_to_stack(1, 1)) == 1);
+
+  BLI_assert(stack_to_i(2, joint_i_to_stack(2, 0)) == 0);
+  BLI_assert(stack_to_i(2, joint_i_to_stack(2, 1)) == 1);
+  BLI_assert(stack_to_i(2, joint_i_to_stack(2, 2)) == 2);
+  BLI_assert(stack_to_i(2, joint_i_to_stack(2, 3)) == 3);
+
+  BLI_assert(stack_to_i(3, joint_i_to_stack(3, 0)) == 0);
+  BLI_assert(stack_to_i(3, joint_i_to_stack(3, 1)) == 1);
+  BLI_assert(stack_to_i(3, joint_i_to_stack(3, 2)) == 2);
+  BLI_assert(stack_to_i(3, joint_i_to_stack(3, 3)) == 3);
+  BLI_assert(stack_to_i(3, joint_i_to_stack(3, 4)) == 4);
+  BLI_assert(stack_to_i(3, joint_i_to_stack(3, 5)) == 5);
+  BLI_assert(stack_to_i(3, joint_i_to_stack(3, 6)) == 6);
+  BLI_assert(stack_to_i(3, joint_i_to_stack(3, 7)) == 7);
 }
 #endif
 
