@@ -13,6 +13,7 @@ from bl_ui.properties_data_grease_pencil import (
     GreasePencil_LayerMaskPanel,
     GreasePencil_LayerTransformPanel,
     GreasPencil_LayerRelationsPanel,
+    GreasePencil_LayerAdjustmentsPanel,
 )
 
 from rna_prop_ui import PropertyPanel
@@ -960,6 +961,13 @@ class DOPESHEET_PT_grease_pencil_layer_relations(
     bl_parent_id = "DOPESHEET_PT_grease_pencil_mode"
     bl_options = {'DEFAULT_CLOSED'}
 
+class DOPESHEET_PT_grease_pencil_layer_adjustments(
+        GreasePencilLayersDopeSheetPanel,
+        GreasePencil_LayerAdjustmentsPanel,
+        Panel):
+    bl_label = "Adjustments"
+    bl_parent_id = "DOPESHEET_PT_grease_pencil_mode"
+    bl_options = {'DEFAULT_CLOSED'}
 
 classes = (
     DOPESHEET_HT_header,
@@ -986,6 +994,7 @@ classes = (
     DOPESHEET_PT_grease_pencil_mode,
     DOPESHEET_PT_grease_pencil_layer_masks,
     DOPESHEET_PT_grease_pencil_layer_transform,
+    DOPESHEET_PT_grease_pencil_layer_adjustments,
     DOPESHEET_PT_grease_pencil_layer_relations,
 )
 
