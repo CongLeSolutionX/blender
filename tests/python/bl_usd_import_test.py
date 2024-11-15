@@ -264,11 +264,12 @@ class USDImportTest(AbstractUSDTest):
         self.assertEqual(self.round_vector(node.inputs[3].default_value), [0.5, 0.5, 1])
 
         mat = bpy.data.materials["NormalMap"]
-        self.assert_all_nodes_present(mat, ["Principled BSDF", "Image Texture", "UV Map", "Normal Map", "Material Output"])
+        self.assert_all_nodes_present(
+            mat, ["Principled BSDF", "Image Texture", "UV Map", "Normal Map", "Material Output"])
 
         mat = bpy.data.materials["NormalMap_Scale_Bias"]
         self.assert_all_nodes_present(mat, ["Principled BSDF", "Image Texture", "UV Map",
-                                       "Normal Map", "Vector Math", "Vector Math.001", "Material Output"])
+                                            "Normal Map", "Vector Math", "Vector Math.001", "Material Output"])
         node = mat.node_tree.nodes["Vector Math"]
         self.assertEqual(self.round_vector(node.inputs[1].default_value), [2, -2, 2])
         self.assertEqual(self.round_vector(node.inputs[2].default_value), [-1, 1, -1])
@@ -310,17 +311,20 @@ class USDImportTest(AbstractUSDTest):
         self.assertAlmostEqual(node.inputs[1].default_value, 0.5, 3)
 
         mat = bpy.data.materials["Channel"]
-        self.assert_all_nodes_present(mat, ["Principled BSDF", "Image Texture", "Separate Color", "UV Map", "Material Output"])
+        self.assert_all_nodes_present(
+            mat, ["Principled BSDF", "Image Texture", "Separate Color", "UV Map", "Material Output"])
 
         mat = bpy.data.materials["ChannelClip_LessThan"]
         self.assert_all_nodes_present(
-            mat, ["Principled BSDF", "Image Texture", "Separate Color", "UV Map", "Math", "Math.001", "Material Output"])
+            mat,
+            ["Principled BSDF", "Image Texture", "Separate Color", "UV Map", "Math", "Math.001", "Material Output"])
         node = [n for n in mat.node_tree.nodes if n.type == 'MATH' and n.operation == "LESS_THAN"][0]
         self.assertAlmostEqual(node.inputs[1].default_value, 0.2, 3)
 
         mat = bpy.data.materials["ChannelClip_Round"]
         self.assert_all_nodes_present(
-            mat, ["Principled BSDF", "Image Texture", "Separate Color", "UV Map", "Math", "Math.001", "Material Output"])
+            mat,
+            ["Principled BSDF", "Image Texture", "Separate Color", "UV Map", "Math", "Math.001", "Material Output"])
         node = [n for n in mat.node_tree.nodes if n.type == 'MATH' and n.operation == "LESS_THAN"][0]
         self.assertAlmostEqual(node.inputs[1].default_value, 0.5, 3)
 
