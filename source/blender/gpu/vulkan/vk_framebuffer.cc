@@ -764,9 +764,6 @@ void VKFrameBuffer::rendering_ensure_render_pass(VKContext &context)
    */
   if (use_explicit_load_store_) {
     render_graph::VKClearAttachmentsNode::CreateInfo clear_attachments = {};
-    render_area_update(clear_attachments.vk_clear_rect.rect);
-    clear_attachments.vk_clear_rect.baseArrayLayer = 0;
-    clear_attachments.vk_clear_rect.layerCount = 1;
     for (int attachment_index : IndexRange(GPU_FB_MAX_ATTACHMENT)) {
       GPULoadStore &load_store = load_stores[attachment_index];
       if (load_store.load_action != GPU_LOADACTION_CLEAR) {
@@ -782,7 +779,13 @@ void VKFrameBuffer::rendering_ensure_render_pass(VKContext &context)
         build_clear_attachments_color(&load_store.clear_value, false, clear_attachments);
       }
     }
-    context.render_graph.add_node(clear_attachments);
+
+    if (clear_attachments.attachment_count != 0) {
+      render_area_update(clear_attachments.vk_clear_rect.rect);
+      clear_attachments.vk_clear_rect.baseArrayLayer = 0;
+      clear_attachments.vk_clear_rect.layerCount = 1;
+      context.render_graph.add_node(clear_attachments);
+    }
   }
 }
 
