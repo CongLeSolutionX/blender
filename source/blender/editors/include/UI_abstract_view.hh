@@ -106,11 +106,16 @@ class AbstractView {
 
   /**
    * From the current view state, return certain state that will be written to files (stored in
-   * #ARegion.view_states) to preserve it over UI changes and file loading.
+   * #ARegion.view_states) to preserve it over UI changes and file loading. The state can be
+   * restored using #persistent_state_apply().
    *
-   * Return an empty value if there's no state to preserve.
+   * Return an empty value if there's no state to preserve (default implementation).
    */
   virtual std::optional<uiViewState> persistent_state_for_file_store() const;
+  /**
+   * Restore a view state given in \a state, which was created by
+   * #persistent_state_for_file_store() for saving in files, and potentially loaded from a file.
+   */
   virtual void persistent_state_apply(const uiViewState &state);
 
   /**
