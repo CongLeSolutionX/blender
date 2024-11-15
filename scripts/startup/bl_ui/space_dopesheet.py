@@ -961,6 +961,7 @@ class DOPESHEET_PT_grease_pencil_layer_relations(
     bl_parent_id = "DOPESHEET_PT_grease_pencil_mode"
     bl_options = {'DEFAULT_CLOSED'}
 
+
 class DOPESHEET_PT_grease_pencil_layer_adjustments(
         GreasePencilLayersDopeSheetPanel,
         GreasePencil_LayerAdjustmentsPanel,
@@ -968,6 +969,7 @@ class DOPESHEET_PT_grease_pencil_layer_adjustments(
     bl_label = "Adjustments"
     bl_parent_id = "DOPESHEET_PT_grease_pencil_mode"
     bl_options = {'DEFAULT_CLOSED'}
+
 
 classes = (
     DOPESHEET_HT_header,
