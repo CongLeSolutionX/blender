@@ -23,11 +23,11 @@ message("msys2_LIBDIR = ${msys2_LIBDIR}")
 
 # Get msys2-base (currently x64 only)
 message("Checking for msys2 base")
-if(NOT EXISTS "${DOWNLOAD_DIR}/msys2-base-x86_64-20221028.tar.xz")
+if(NOT EXISTS "${DOWNLOAD_DIR}/msys2-base-x86_64-20221216.tar.xz")
   message("Downloading msys2-base")
   file(DOWNLOAD
-    "https://repo.msys2.org/distrib/x86_64/msys2-base-x86_64-20221028.tar.xz"
-    "${DOWNLOAD_DIR}/msys2-base-x86_64-20221028.tar.xz"
+    "https://repo.msys2.org/distrib/x86_64/msys2-base-x86_64-20221216.tar.xz"
+    "${DOWNLOAD_DIR}/msys2-base-x86_64-20221216.tar.xz"
   )
 endif()
 
@@ -41,10 +41,10 @@ endif()
 
 # Extract msys2
 if((NOT EXISTS "${DOWNLOAD_DIR}/msys2/msys64/msys2_shell.cmd") AND
-   (EXISTS "${DOWNLOAD_DIR}/msys2-base-x86_64-20221028.tar.xz"))
+   (EXISTS "${DOWNLOAD_DIR}/msys2-base-x86_64-20221216.tar.xz"))
   message("Extracting msys2 base")
   execute_process(
-    COMMAND ${CMAKE_COMMAND} -E tar jxf ${DOWNLOAD_DIR}/msys2-base-x86_64-20221028.tar.xz
+    COMMAND ${CMAKE_COMMAND} -E tar jxf ${DOWNLOAD_DIR}/msys2-base-x86_64-20221216.tar.xz
     WORKING_DIRECTORY ${DOWNLOAD_DIR}/msys2
   )
 
