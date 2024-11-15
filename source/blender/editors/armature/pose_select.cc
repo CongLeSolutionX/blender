@@ -267,6 +267,7 @@ bool ED_armature_pose_select_pick_with_buffer(const Scene *scene,
                                               const SelectPick_Params *params,
                                               bool do_nearest)
 {
+  if (!base) return false;
   Object *ob = base->object;
   Bone *nearBone;
 
