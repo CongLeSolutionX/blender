@@ -144,6 +144,12 @@ class GHOST_SystemX11 : public GHOST_System {
   GHOST_TSuccess disposeContext(GHOST_IContext *context) override;
 
   /**
+   * Get the Window under the mouse cursor. Location obtained from the OS.
+   * \return The window under the cursor or nullptr if none.
+   */
+  GHOST_IWindow *getWindowUnderCursor(int32_t /*x*/, int32_t /*y*/);
+
+  /**
    * Retrieves events from the system and stores them in the queue.
    * \param waitForEvent: Flag to wait for an event (or return immediately).
    * \return Indication of the presence of events.

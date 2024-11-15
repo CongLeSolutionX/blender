@@ -1611,6 +1611,45 @@ void GHOST_SystemX11::processEvent(XEvent *xe)
   }
 }
 
+GHOST_IWindow *GHOST_SystemX11::getWindowUnderCursor(const int32_t /*x*/, const int32_t /*y*/)
+{
+  /* Ignore the input coordinates, and query window under the current mouse coordinate.
+   * This simplifies the query and matches the behavior of GHOST_SystemWin32::getWindowUnderCursor.
+   */
+
+  /* It appears that desktop environment (Gnome/Unity) can wrap the X window created by GHOST by
+   * other X windows. presumably this is for the window decorations. We go to the deepest child
+   * under the cursor, which will give X window created by GHOST_WindowX11 when the mouse is over
+   * a Blender window. If the mouse is over a window of different application we might spend a bit
+   * of time traversing the hierarchy, but in practice it is unlikely to cause noticeable
+   * performance issues. */
+  Window current_window = RootWindow(m_display, DefaultScreen(m_display));
+  for (;;) {
+    Window root_return;
+    Window child_return;
+    uint mask_return;
+    int rx, ry, wx, wy;
+    if (XQueryPointer(m_display,
+                      current_window,
+                      &root_return,
+                      &child_return,
+                      &rx,
+                      &ry,
+                      &wx,
+                      &wy,
+                      &mask_return) == False)
+    {
+      return nullptr;
+    }
+    if (!child_return) {
+      break;
+    }
+    current_window = child_return;
+  }
+
+  return findGhostWindow(current_window);
+}
+
 GHOST_TSuccess GHOST_SystemX11::getPixelAtCursor(float r_color[3]) const
 {
   /* NOTE: There are known issues/limitations at the moment:
