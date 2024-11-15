@@ -608,8 +608,9 @@ void VKFrameBuffer::rendering_ensure_render_pass(VKContext &context)
         srgb_ && enabled_srgb_,
         VKImageViewArrayed::DONT_CARE};
     vk_image_view = color_texture.image_view_get(image_view_info).vk_handle();
+    // TODO: Use VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL for readonly attachments.
     vk_image_layout = (attachment_state == GPU_ATTACHMENT_READ) ?
-                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL :
+                          VK_IMAGE_LAYOUT_GENERAL :
                           VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     attachment_reference = color_attachment_index - GPU_FB_COLOR_ATTACHMENT0;
     /* Depth attachment should always be right after the last color attachment. If not shaders
