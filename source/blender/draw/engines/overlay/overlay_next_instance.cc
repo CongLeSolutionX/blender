@@ -440,7 +440,7 @@ void Instance::draw(Manager &manager)
   regular.cameras.draw_scene_background_images(resources.overlay_fb, manager, view);
   infront.cameras.draw_scene_background_images(resources.overlay_fb, manager, view);
 
-  regular.empties.draw_background_images(resources.overlay_color_only_fb, manager, view);
+  regular.empties.draw_background_images(resources.overlay_fb, manager, view);
   regular.cameras.draw_background_images(resources.overlay_fb, manager, view);
   infront.cameras.draw_background_images(resources.overlay_fb, manager, view);
 
