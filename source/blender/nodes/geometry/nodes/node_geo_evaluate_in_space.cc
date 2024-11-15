@@ -1171,8 +1171,8 @@ constexpr int32_t three_dimention_mask = 0b1001'0010'0100'1001'0010'0100'1001'00
 
 static std::array<bool, 3> dominant_difference(const int a_i, const int a_depth_i, const int b_i, const int b_depth_i)
 {
-  BLI_assert(a_depth_i > 0, "Which dirrection should be at 0 level? Here is only one joint.");
-  BLI_assert(b_depth_i > 0, "Which dirrection should be at 0 level? Here is only one joint.");
+  BLI_assert_msg(a_depth_i > 0, "Which dirrection should be at 0 level? Here is only one joint.");
+  BLI_assert_msg(b_depth_i > 0, "Which dirrection should be at 0 level? Here is only one joint.");
   const int32_t a_stack = a_i << (32 - a_depth_i);
   const int32_t b_stack = b_i << (32 - b_depth_i);
 
@@ -1189,6 +1189,45 @@ static std::array<bool, 3> dominant_difference(const int a_i, const int a_depth_
 
   return {x_axis_dirrection, y_axis_dirrection, z_axis_dirrection};
 }
+
+static int joint_i_to_stack(const int depth_i, const int joint_i)
+{
+  return joint_i << (32 - depth_i);
+}
+
+static int stack_mask(const int depth_i)
+{
+  return (1 << (32 - depth_i)) - 1;
+}
+
+#ifdef DEBUG
+[[maybe_unused]] static void test3()
+{
+  printf("RUN!\n");
+  BLI_assert(joint_i_to_stack(1, 0) == 0b00000000'00000000'00000000'00000000);
+  BLI_assert(joint_i_to_stack(1, 1) == 0b10000000'00000000'00000000'00000000);
+
+  BLI_assert(joint_i_to_stack(2, 0) == 0b00000000'00000000'00000000'00000000);
+  BLI_assert(joint_i_to_stack(2, 1) == 0b01000000'00000000'00000000'00000000);
+  BLI_assert(joint_i_to_stack(2, 2) == 0b10000000'00000000'00000000'00000000);
+  BLI_assert(joint_i_to_stack(2, 3) == 0b11000000'00000000'00000000'00000000);
+
+  BLI_assert(joint_i_to_stack(3, 0) == 0b00000000'00000000'00000000'00000000);
+  BLI_assert(joint_i_to_stack(3, 1) == 0b00100000'00000000'00000000'00000000);
+  BLI_assert(joint_i_to_stack(3, 2) == 0b01000000'00000000'00000000'00000000);
+  BLI_assert(joint_i_to_stack(3, 3) == 0b01100000'00000000'00000000'00000000);
+  BLI_assert(joint_i_to_stack(3, 4) == 0b10000000'00000000'00000000'00000000);
+  BLI_assert(joint_i_to_stack(3, 5) == 0b10100000'00000000'00000000'00000000);
+  BLI_assert(joint_i_to_stack(3, 6) == 0b11000000'00000000'00000000'00000000);
+  BLI_assert(joint_i_to_stack(3, 7) == 0b11100000'00000000'00000000'00000000);
+
+  BLI_assert(stack_mask(1) == 0b10000000'00000000'00000000'00000000);
+  BLI_assert(stack_mask(2) == 0b11000000'00000000'00000000'00000000);
+  BLI_assert(stack_mask(3) == 0b11100000'00000000'00000000'00000000);
+  
+  BLI_assert(false);
+}
+#endif
 
 static int lowest_joint_in_dirrection(const int prefix_joint, const int prefix_depth_i, const int total_depth, std::array<bool, 3> dirrection)
 {
@@ -1646,12 +1685,25 @@ class DifferenceSumFieldInput final : public bke::GeometryFieldInput {
   }
 };
 
+#ifdef DEBUG
+static_assert(false, "ifdef DEBUG");
+#else
+static_assert(false, "ifdef !DEBUG");
+#endif
+
+#ifdef NDEBUG
+static_assert(false, "ifdef NDEBUG");
+#else
+static_assert(false, "ifdef !NDEBUG");
+#endif
+
 static void node_geo_exec(GeoNodeExecParams params)
 {
+  printf("RUNAAAA!\n");
 #ifdef DEBUG
   akdbt::test();
   akdbt::test2();
-  bits::test();
+  akdbt::test3();
 #endif
 
   Field<float3> position_field = params.extract_input<Field<float3>>("Position");
