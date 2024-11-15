@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "BKE_nla.hh"
+
 #include "BLI_sys_types.h"
 #include "BLI_utildefines.h"
 
@@ -982,6 +984,11 @@ float ANIM_nla_tweakedit_remap(bAnimListElem *ale, float cframe, eNlaTime_Conver
  * Apply/Unapply NLA mapping to all keyframes in the nominated F-Curve
  * \param restore: Whether to map points back to non-mapped time.
  * \param only_keys: Whether to only adjust the location of the center point of beztriples.
+ *
+ * TODO: this variant (that takes an adt instead of an ale) is only used by
+ * `fcurve_to_keylist()` at this point. Perhaps with some refactoring we can
+ * make `fcurve_to_keylist()` use the other variant as well, and then we can
+ * get rid of this one.
  */
 void ANIM_nla_mapping_apply_fcurve(AnimData *adt, FCurve *fcu, bool restore, bool only_keys);
 

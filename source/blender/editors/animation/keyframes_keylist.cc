@@ -957,7 +957,7 @@ void summary_to_keylist(bAnimContext *ac,
     switch (ale->datatype) {
       case ALE_FCURVE:
         fcurve_to_keylist(
-            ale->adt, static_cast<FCurve *>(ale->data), keylist, saction_flag, range);
+            ale->adt, static_cast<FCurve *>(ale->data), keylist, saction_flag, range, ANIM_nla_mapping_allowed(ale));
         break;
       case ALE_MASKLAY:
         mask_to_keylist(ac->ads, static_cast<MaskLayer *>(ale->data), keylist);
@@ -1010,7 +1010,7 @@ void scene_to_keylist(bDopeSheet *ads,
 
   /* Loop through each F-Curve, grabbing the keyframes. */
   LISTBASE_FOREACH (const bAnimListElem *, ale, &anim_data) {
-    fcurve_to_keylist(ale->adt, static_cast<FCurve *>(ale->data), keylist, saction_flag, range);
+    fcurve_to_keylist(ale->adt, static_cast<FCurve *>(ale->data), keylist, saction_flag, range, ANIM_nla_mapping_allowed(ale));
   }
 
   ANIM_animdata_freelist(&anim_data);
@@ -1051,7 +1051,7 @@ void ob_to_keylist(bDopeSheet *ads,
 
   /* Loop through each F-Curve, grabbing the keyframes. */
   LISTBASE_FOREACH (const bAnimListElem *, ale, &anim_data) {
-    fcurve_to_keylist(ale->adt, static_cast<FCurve *>(ale->data), keylist, saction_flag, range);
+    fcurve_to_keylist(ale->adt, static_cast<FCurve *>(ale->data), keylist, saction_flag, range, ANIM_nla_mapping_allowed(ale));
   }
 
   ANIM_animdata_freelist(&anim_data);
@@ -1087,7 +1087,7 @@ void cachefile_to_keylist(bDopeSheet *ads,
   /* Loop through each F-Curve, grabbing the keyframes. */
   LISTBASE_FOREACH (const bAnimListElem *, ale, &anim_data) {
     fcurve_to_keylist(
-        ale->adt, static_cast<FCurve *>(ale->data), keylist, saction_flag, {-FLT_MAX, FLT_MAX});
+        ale->adt, static_cast<FCurve *>(ale->data), keylist, saction_flag, {-FLT_MAX, FLT_MAX}, ANIM_nla_mapping_allowed(ale));
   }
 
   ANIM_animdata_freelist(&anim_data);
@@ -1116,14 +1116,17 @@ void fcurve_to_keylist(AnimData *adt,
                        FCurve *fcu,
                        AnimKeylist *keylist,
                        const int saction_flag,
-                       blender::float2 range)
+                       blender::float2 range,
+                       bool use_nla_remapping)
 {
   if (!fcu || fcu->totvert == 0 || !fcu->bezt) {
     return;
   }
   ED_keylist_reset_last_accessed(keylist);
 
-  ANIM_nla_mapping_apply_fcurve(adt, fcu, false, false);
+  if (use_nla_remapping) {
+    ANIM_nla_mapping_apply_fcurve(adt, fcu, false, false);
+  }
 
   const bool is_cyclic = BKE_fcurve_is_cyclic(fcu) && (fcu->totvert >= 2);
   const bool do_extremes = (saction_flag & SACTION_SHOW_EXTREMES) != 0;
@@ -1181,7 +1184,9 @@ void fcurve_to_keylist(AnimData *adt,
         keylist, &fcu->bezt[index_bounds.min], (index_bounds.max + 1) - index_bounds.min);
   }
 
-  ANIM_nla_mapping_apply_fcurve(adt, fcu, true, false);
+  if (use_nla_remapping) {
+    ANIM_nla_mapping_apply_fcurve(adt, fcu, true, false);
+  }
 }
 
 void action_group_to_keylist(AnimData *adt,
@@ -1200,7 +1205,7 @@ void action_group_to_keylist(AnimData *adt,
       if (fcu->grp != agrp) {
         break;
       }
-      fcurve_to_keylist(adt, fcu, keylist, saction_flag, range);
+      fcurve_to_keylist(adt, fcu, keylist, saction_flag, range, true);
     }
     return;
   }
@@ -1210,7 +1215,7 @@ void action_group_to_keylist(AnimData *adt,
   Span<FCurve *> fcurves = channel_bag.fcurves().slice(agrp->fcurve_range_start,
                                                        agrp->fcurve_range_length);
   for (FCurve *fcurve : fcurves) {
-    fcurve_to_keylist(adt, fcurve, keylist, saction_flag, range);
+    fcurve_to_keylist(adt, fcurve, keylist, saction_flag, range, true);
   }
 }
 
@@ -1223,7 +1228,7 @@ void action_slot_to_keylist(AnimData *adt,
 {
   BLI_assert(GS(action.id.name) == ID_AC);
   for (FCurve *fcurve : fcurves_for_action_slot(action, slot_handle)) {
-    fcurve_to_keylist(adt, fcurve, keylist, saction_flag, range);
+    fcurve_to_keylist(adt, fcurve, keylist, saction_flag, range, true);
   }
 }
 
@@ -1242,7 +1247,7 @@ void action_to_keylist(AnimData *adt,
   /* TODO: move this into fcurves_for_action_slot(). */
   if (action.is_action_legacy()) {
     LISTBASE_FOREACH (FCurve *, fcu, &action.curves) {
-      fcurve_to_keylist(adt, fcu, keylist, saction_flag, range);
+      fcurve_to_keylist(adt, fcu, keylist, saction_flag, range, true);
     }
     return;
   }

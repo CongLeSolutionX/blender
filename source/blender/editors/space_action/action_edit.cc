@@ -1976,16 +1976,11 @@ static void snap_action_keys(bAnimContext *ac, short mode)
     }
     else {
       FCurve *fcurve = static_cast<FCurve *>(ale->key_data);
-      const bool should_remap_time = ANIM_nla_mapping_allowed(ale);
-      if (should_remap_time) {
-        ANIM_nla_mapping_apply_fcurve(ale->adt, fcurve, false, false);
-      }
+      ANIM_nla_mapping_apply_fcurve(ale, fcurve, false, false);
       ANIM_fcurve_keyframes_loop(&ked, fcurve, nullptr, edit_cb, BKE_fcurve_handles_recalc);
       BKE_fcurve_merge_duplicate_keys(
           fcurve, SELECT, false); /* only use handles in graph editor */
-      if (should_remap_time) {
-        ANIM_nla_mapping_apply_fcurve(ale->adt, fcurve, true, false);
-      }
+      ANIM_nla_mapping_apply_fcurve(ale, fcurve, true, false);
     }
 
     ale->update |= ANIM_UPDATE_DEFAULT;
@@ -2116,15 +2111,10 @@ static void mirror_action_keys(bAnimContext *ac, short mode)
       /* TODO */
     }
     else {
-      const bool should_remap_time = ANIM_nla_mapping_allowed(ale);
       FCurve *fcurve = static_cast<FCurve *>(ale->key_data);
-      if (should_remap_time) {
-        ANIM_nla_mapping_apply_fcurve(adt, fcurve, false, false);
-      }
+      ANIM_nla_mapping_apply_fcurve(ale, fcurve, false, false);
       ANIM_fcurve_keyframes_loop(&ked, fcurve, nullptr, edit_cb, BKE_fcurve_handles_recalc);
-      if (should_remap_time) {
-        ANIM_nla_mapping_apply_fcurve(adt, fcurve, true, false);
-      }
+      ANIM_nla_mapping_apply_fcurve(ale, fcurve, true, false);
     }
 
     ale->update |= ANIM_UPDATE_DEFAULT;

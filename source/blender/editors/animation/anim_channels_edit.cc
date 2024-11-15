@@ -5089,8 +5089,8 @@ static int channels_bake_exec(bContext *C, wmOperator *op)
       continue;
     }
     blender::int2 nla_mapped_range = {
-        ANIM_nla_tweakedit_remap(ale, frame_range[0], NLATIME_CONVERT_UNMAP),
-        ANIM_nla_tweakedit_remap(ale, frame_range[1], NLATIME_CONVERT_UNMAP),
+        int(ANIM_nla_tweakedit_remap(ale, frame_range[0], NLATIME_CONVERT_UNMAP)),
+        int(ANIM_nla_tweakedit_remap(ale, frame_range[1], NLATIME_CONVERT_UNMAP)),
     };
     /* Save current state of modifier flags so they can be reapplied after baking. */
     blender::Vector<short> modifier_flags;

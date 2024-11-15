@@ -234,7 +234,7 @@ bool ANIM_nla_mapping_allowed(bAnimListElem *ale)
     case ANIMTYPE_FCURVE: {
       /* The F-Curve data of a driver should never get NLA-remapped. */
       FCurve *fcurve = static_cast<FCurve *>(ale->key_data);
-      return !fcu->driver;
+      return !fcurve->driver;
     }
     case ANIMTYPE_DSGPENCIL:
     case ANIMTYPE_GPDATABLOCK:

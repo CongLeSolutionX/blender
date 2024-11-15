@@ -92,7 +92,14 @@ static void actkeys_list_element_to_keylist(bAnimContext *ac,
                                             AnimKeylist *keylist,
                                             bAnimListElem *ale)
 {
-  AnimData *adt = ANIM_nla_mapping_get(ac, ale);
+  /* TODO: handle this properly. Previously this was:
+   *
+   * `AnimData *adt = ANIM_nla_mapping_get(ac, ale);`
+   *
+   * Which only returned an adt for things that should be nla remapped.  We
+   * haven't properly handled this yet.
+   */
+  AnimData *adt = ale->adt;
 
   bDopeSheet *ads = nullptr;
   if (ELEM(ac->datatype, ANIMCONT_DOPESHEET, ANIMCONT_TIMELINE)) {
@@ -133,7 +140,7 @@ static void actkeys_list_element_to_keylist(bAnimContext *ac,
       }
       case ALE_FCURVE: {
         FCurve *fcu = (FCurve *)ale->key_data;
-        fcurve_to_keylist(adt, fcu, keylist, 0, range);
+        fcurve_to_keylist(adt, fcu, keylist, 0, range, ANIM_nla_mapping_allowed(ale));
         break;
       }
       case ALE_NONE:
@@ -200,8 +207,6 @@ static void actkeys_find_key_in_list_element(bAnimContext *ac,
   actkeys_list_element_to_keylist(ac, keylist, ale);
   ED_keylist_prepare_for_direct_access(keylist);
 
-  AnimData *adt = ANIM_nla_mapping_get(ac, ale);
-
   /* standard channel height (to allow for some slop) */
   float key_hsize = ANIM_UI_get_channel_height() * 0.8f;
   /* half-size (for either side), but rounded up to nearest int (for easier targeting) */
@@ -218,7 +223,7 @@ static void actkeys_find_key_in_list_element(bAnimContext *ac,
      * so that the frame will get selected by the selection functions without
      * requiring to map each frame once again...
      */
-    *r_selx = BKE_nla_tweakedit_remap(adt, ak->cfra, NLATIME_CONVERT_UNMAP);
+    *r_selx = ANIM_nla_tweakedit_remap(ale, ak->cfra, NLATIME_CONVERT_UNMAP);
     *r_frame = ak->cfra;
     *r_found = true;
     *r_is_selected = (ak->sel & SELECT) != 0;
@@ -574,20 +579,17 @@ static void box_select_action(bAnimContext *ac,
   for (ale = static_cast<bAnimListElem *>(anim_data.first); ale;
        ale = ale->next, ymax -= channel_step)
   {
-    AnimData *adt = ANIM_nla_mapping_get(ac, ale);
-
     /* get new vertical minimum extent of channel */
     float ymin = ymax - channel_step;
 
     /* set horizontal range (if applicable) */
     if (ELEM(mode, ACTKEYS_BORDERSEL_FRAMERANGE, ACTKEYS_BORDERSEL_ALLKEYS)) {
       /* if channel is mapped in NLA, apply correction */
-      if (adt) {
+      if (ANIM_nla_mapping_allowed(ale)) {
         sel_data.ked.iterflags &= ~(KED_F1_NLA_UNMAP | KED_F2_NLA_UNMAP);
-        sel_data.ked.f1 = BKE_nla_tweakedit_remap(adt, rectf.xmin, NLATIME_CONVERT_UNMAP);
-        sel_data.ked.f2 = BKE_nla_tweakedit_remap(adt, rectf.xmax, NLATIME_CONVERT_UNMAP);
-      }
-      else {
+        sel_data.ked.f1 = ANIM_nla_tweakedit_remap(ale, rectf.xmin, NLATIME_CONVERT_UNMAP);
+        sel_data.ked.f2 = ANIM_nla_tweakedit_remap(ale, rectf.xmax, NLATIME_CONVERT_UNMAP);
+      } else {
         sel_data.ked.iterflags |= (KED_F1_NLA_UNMAP | KED_F2_NLA_UNMAP); /* for summary tracks */
         sel_data.ked.f1 = rectf.xmin;
         sel_data.ked.f2 = rectf.xmax;
@@ -871,8 +873,6 @@ static void region_select_action_keys(bAnimContext *ac,
   for (ale = static_cast<bAnimListElem *>(anim_data.first); ale;
        ale = ale->next, ymax -= channel_step)
   {
-    AnimData *adt = ANIM_nla_mapping_get(ac, ale);
-
     /* get new vertical minimum extent of channel */
     const float ymin = ymax - channel_step;
 
@@ -885,10 +885,10 @@ static void region_select_action_keys(bAnimContext *ac,
      * - Save result to the scaled_rect, which is all that these operators
      *   will read from
      */
-    if (adt) {
+    if (ANIM_nla_mapping_allowed(ale)) {
       sel_data.ked.iterflags &= ~(KED_F1_NLA_UNMAP | KED_F2_NLA_UNMAP);
-      sel_data.ked.f1 = BKE_nla_tweakedit_remap(adt, rectf.xmin, NLATIME_CONVERT_UNMAP);
-      sel_data.ked.f2 = BKE_nla_tweakedit_remap(adt, rectf.xmax, NLATIME_CONVERT_UNMAP);
+      sel_data.ked.f1 = ANIM_nla_tweakedit_remap(ale, rectf.xmin, NLATIME_CONVERT_UNMAP);
+      sel_data.ked.f2 = ANIM_nla_tweakedit_remap(ale, rectf.xmax, NLATIME_CONVERT_UNMAP);
     }
     else {
       sel_data.ked.iterflags |= (KED_F1_NLA_UNMAP | KED_F2_NLA_UNMAP); /* for summary tracks */
@@ -1122,16 +1122,10 @@ static void markers_selectkeys_between(bAnimContext *ac)
         break;
 
       case ANIMTYPE_FCURVE: {
-        AnimData *adt = ANIM_nla_mapping_get(ac, ale);
         FCurve *fcurve = static_cast<FCurve *>(ale->key_data);
-        if (adt) {
-          ANIM_nla_mapping_apply_fcurve(adt, fcurve, false, true);
-          ANIM_fcurve_keyframes_loop(&ked, fcurve, ok_cb, select_cb, nullptr);
-          ANIM_nla_mapping_apply_fcurve(adt, fcurve, true, true);
-        }
-        else {
-          ANIM_fcurve_keyframes_loop(&ked, fcurve, ok_cb, select_cb, nullptr);
-        }
+        ANIM_nla_mapping_apply_fcurve(ale, fcurve, false, true);
+        ANIM_fcurve_keyframes_loop(&ked, fcurve, ok_cb, select_cb, nullptr);
+        ANIM_nla_mapping_apply_fcurve(ale, fcurve, true, true);
         break;
       }
 
@@ -1223,19 +1217,12 @@ static void columnselect_action_keys(bAnimContext *ac, short mode)
   ANIM_animdata_filter(ac, &anim_data, filter, ac->data, eAnimCont_Types(ac->datatype));
 
   LISTBASE_FOREACH (bAnimListElem *, ale, &anim_data) {
-    AnimData *adt = ANIM_nla_mapping_get(ac, ale);
-
     /* loop over cfraelems (stored in the KeyframeEditData->list)
      * - we need to do this here, as we can apply fewer NLA-mapping conversions
      */
     LISTBASE_FOREACH (CfraElem *, ce, &ked.list) {
       /* set frame for validation callback to refer to */
-      if (adt) {
-        ked.f1 = BKE_nla_tweakedit_remap(adt, ce->cfra, NLATIME_CONVERT_UNMAP);
-      }
-      else {
-        ked.f1 = ce->cfra;
-      }
+      ked.f1 = ANIM_nla_tweakedit_remap(ale, ce->cfra, NLATIME_CONVERT_UNMAP);
 
       /* select elements with frame number matching cfraelem */
       if (ale->type == ANIMTYPE_GPLAYER) {
@@ -1580,16 +1567,10 @@ static void actkeys_select_leftright(bAnimContext *ac,
         break;
 
       case ANIMTYPE_FCURVE: {
-        AnimData *adt = ANIM_nla_mapping_get(ac, ale);
         FCurve *fcurve = static_cast<FCurve *>(ale->key_data);
-        if (adt) {
-          ANIM_nla_mapping_apply_fcurve(adt, fcurve, false, true);
-          ANIM_fcurve_keyframes_loop(&ked, fcurve, ok_cb, select_cb, nullptr);
-          ANIM_nla_mapping_apply_fcurve(adt, fcurve, true, true);
-        }
-        else {
-          ANIM_fcurve_keyframes_loop(&ked, fcurve, ok_cb, select_cb, nullptr);
-        }
+        ANIM_nla_mapping_apply_fcurve(ale, fcurve, false, true);
+        ANIM_fcurve_keyframes_loop(&ked, fcurve, ok_cb, select_cb, nullptr);
+        ANIM_nla_mapping_apply_fcurve(ale, fcurve, true, true);
         break;
       }
 
@@ -1858,15 +1839,8 @@ static void actkeys_mselect_column(bAnimContext *ac, eEditKeyframes_Select selec
       ale->update |= ANIM_UPDATE_DEPS;
     }
     else {
-      AnimData *adt = ANIM_nla_mapping_get(ac, ale);
-
       /* set frame for validation callback to refer to */
-      if (adt) {
-        ked.f1 = BKE_nla_tweakedit_remap(adt, selx, NLATIME_CONVERT_UNMAP);
-      }
-      else {
-        ked.f1 = selx;
-      }
+      ked.f1 = ANIM_nla_tweakedit_remap(ale, selx, NLATIME_CONVERT_UNMAP);
 
       ANIM_fcurve_keyframes_loop(
           &ked, static_cast<FCurve *>(ale->key_data), ok_cb, select_cb, nullptr);

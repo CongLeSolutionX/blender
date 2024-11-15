@@ -443,7 +443,8 @@ static void build_channel_keylist(ChannelListElement *elem, blender::float2 rang
       break;
     }
     case ChannelType::FCURVE: {
-      fcurve_to_keylist(elem->adt, elem->fcu, elem->keylist, elem->saction_flag, range);
+      /* TODO: right now we make this always do remapping, but is that really appropriate here? */
+      fcurve_to_keylist(elem->adt, elem->fcu, elem->keylist, elem->saction_flag, range, true);
       break;
     }
     case ChannelType::ACTION_LAYERED: {
