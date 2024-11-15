@@ -80,6 +80,7 @@ struct TraceJob {
   Image *image;
   Object *ob_grease_pencil;
   bke::greasepencil::Layer *layer;
+  Array<bke::greasepencil::Drawing *> drawings;
 
   bool was_ob_created;
   bool use_current_frame;
@@ -127,6 +128,35 @@ void TraceJob::ensure_output_object()
     Layer &new_layer = grease_pencil.add_layer(DATA_("Trace"));
     grease_pencil.set_active_layer(&new_layer);
     this->layer = &new_layer;
+  }
+
+  /* Gather target drawings in advance, since modifying the drawings array is not thread-safe. */
+  switch (this->mode) {
+    case TraceMode::Single: {
+      bke::greasepencil::Drawing *drawing = grease_pencil.get_drawing_at(*this->layer,
+                                                                         this->frame_target);
+      if (drawing == nullptr) {
+        drawing = grease_pencil.insert_frame(*this->layer, this->frame_target);
+      }
+      this->drawings = {drawing};
+      break;
+    }
+    case TraceMode::Sequence: {
+      const ImageUser &iuser = *this->ob_active->iuser;
+      const int init_frame = std::max((this->use_current_frame) ? this->frame_target : 0, 0);
+      const int num_frames = iuser.frames - init_frame + 1;
+      this->drawings.reinitialize(num_frames);
+      for (const int i : IndexRange(num_frames)) {
+        const int frame_number = init_frame + i;
+        bke::greasepencil::Drawing *drawing = grease_pencil.get_drawing_at(*this->layer,
+                                                                           frame_number);
+        if (drawing == nullptr) {
+          drawing = grease_pencil.insert_frame(*this->layer, frame_number);
+        }
+        this->drawings[i] = drawing;
+      }
+      break;
+    }
   }
 }
 
@@ -219,6 +249,7 @@ static bool grease_pencil_trace_image(TraceJob &trace_job,
   attributes.remove(hole_attribute_id);
 
   drawing.strokes_for_write() = trace_curves;
+  drawing.tag_topology_changed();
   /* Uniform radius for all trace curves. */
   drawing.radii_for_write().fill(trace_job.radius);
 
@@ -228,7 +259,6 @@ static bool grease_pencil_trace_image(TraceJob &trace_job,
 static void trace_start_job(void *customdata, wmJobWorkerStatus *worker_status)
 {
   TraceJob &trace_job = *static_cast<TraceJob *>(customdata);
-  GreasePencil &grease_pencil = *static_cast<GreasePencil *>(trace_job.ob_grease_pencil->data);
 
   trace_job.stop = &worker_status->stop;
   trace_job.do_update = &worker_status->do_update;
@@ -240,20 +270,16 @@ static void trace_start_job(void *customdata, wmJobWorkerStatus *worker_status)
 
   /* Single Image. */
   if (trace_job.image->source == IMA_SRC_FILE || trace_job.mode == TraceMode::Single) {
-    void *lock;
     ImageUser &iuser = *trace_job.ob_active->iuser;
+    BLI_assert(trace_job.drawings.size() == 1);
 
     iuser.framenr = ((trace_job.frame_number == 0) || (trace_job.frame_number > iuser.frames)) ?
                         init_frame :
                         trace_job.frame_number;
+    void *lock;
     ImBuf *ibuf = BKE_image_acquire_ibuf(trace_job.image, &iuser, &lock);
     if (ibuf) {
-      /* Create frame. */
-      bke::greasepencil::Drawing *drawing = grease_pencil.get_drawing_at(*trace_job.layer,
-                                                                         trace_job.frame_target);
-      if (drawing == nullptr) {
-        drawing = grease_pencil.insert_frame(*trace_job.layer, trace_job.frame_target);
-      }
+      bke::greasepencil::Drawing *drawing = trace_job.drawings.first();
       grease_pencil_trace_image(trace_job, *ibuf, *drawing);
       BKE_image_release_ibuf(trace_job.image, ibuf, lock);
       *(trace_job.progress) = 1.0f;
@@ -262,12 +288,16 @@ static void trace_start_job(void *customdata, wmJobWorkerStatus *worker_status)
   /* Image sequence. */
   else if (trace_job.image->type == IMA_TYPE_IMAGE) {
     ImageUser &iuser = *trace_job.ob_active->iuser;
-    for (int frame_number = init_frame; frame_number <= iuser.frames; frame_number++) {
+    BLI_assert(trace_job.drawings.size() == iuser.frames - init_frame + 1);
+
+    const int num_frames = iuser.frames - init_frame + 1;
+    for (const int i : IndexRange(num_frames)) {
       if (G.is_break) {
         trace_job.was_canceled = true;
         break;
       }
 
+      const int frame_number = init_frame + i;
       *(trace_job.progress) = float(frame_number) / float(iuser.frames);
       worker_status->do_update = true;
 
@@ -276,15 +306,8 @@ static void trace_start_job(void *customdata, wmJobWorkerStatus *worker_status)
       void *lock;
       ImBuf *ibuf = BKE_image_acquire_ibuf(trace_job.image, &iuser, &lock);
       if (ibuf) {
-        /* Create frame. */
-        // bGPDframe *gpf = BKE_gpencil_layer_frame_get(trace_job.gpl, i, GP_GETFRAME_ADD_NEW);
-        bke::greasepencil::Drawing *drawing = grease_pencil.get_drawing_at(*trace_job.layer,
-                                                                           frame_number);
-        if (drawing == nullptr) {
-          drawing = grease_pencil.insert_frame(*trace_job.layer, frame_number);
-        }
+        bke::greasepencil::Drawing *drawing = trace_job.drawings[i];
         grease_pencil_trace_image(trace_job, *ibuf, *drawing);
-
         BKE_image_release_ibuf(trace_job.image, ibuf, lock);
       }
     }
@@ -320,7 +343,7 @@ static void trace_end_job(void *customdata)
 static void trace_free_job(void *customdata)
 {
   TraceJob *tj = static_cast<TraceJob *>(customdata);
-  MEM_freeN(tj);
+  MEM_delete(tj);
 }
 
 /* Trace Image to Grease Pencil. */
@@ -343,7 +366,7 @@ static bool grease_pencil_trace_image_poll(bContext *C)
 
 static int grease_pencil_trace_image_exec(bContext *C, wmOperator *op)
 {
-  TraceJob *job = static_cast<TraceJob *>(MEM_mallocN(sizeof(TraceJob), "TraceJob"));
+  TraceJob *job = MEM_new<TraceJob>("TraceJob");
   job->C = C;
   job->owner = CTX_data_active_object(C);
   job->wm = CTX_wm_manager(C);
