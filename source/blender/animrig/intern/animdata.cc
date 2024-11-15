@@ -31,8 +31,6 @@
 #include "DNA_mesh_types.h"
 #include "DNA_particle_types.h"
 
-#include "ED_anim_api.hh"
-
 #include "RNA_access.hh"
 #include "RNA_path.hh"
 
@@ -252,7 +250,7 @@ bAction *id_action_ensure(Main *bmain, ID *id)
   return adt->action;
 }
 
-void animdata_fcurve_delete(bAnimContext *ac, AnimData *adt, FCurve *fcu)
+void animdata_fcurve_delete(AnimData *adt, FCurve *fcu, const bool is_driver)
 {
   /* - If no AnimData, we've got nowhere to remove the F-Curve from
    *   (this doesn't guarantee that the F-Curve is in there, but at least we tried
@@ -262,13 +260,7 @@ void animdata_fcurve_delete(bAnimContext *ac, AnimData *adt, FCurve *fcu)
     return;
   }
 
-  /* Remove from whatever list it came from
-   * - Action Group
-   * - Action
-   * - Drivers
-   * - TODO... some others?
-   */
-  if ((ac) && (ac->datatype == ANIMCONT_DRIVERS)) {
+  if (is_driver) {
     BLI_remlink(&adt->drivers, fcu);
   }
   else if (adt->action) {

@@ -16,7 +16,6 @@
 struct ID;
 struct Main;
 
-struct bAnimContext;
 struct AnimData;
 struct FCurve;
 struct bAction;
@@ -35,7 +34,7 @@ bAction *id_action_ensure(Main *bmain, ID *id);
  * Delete the F-Curve from the given AnimData block (if possible),
  * as appropriate according to animation context.
  */
-void animdata_fcurve_delete(bAnimContext *ac, AnimData *adt, FCurve *fcu);
+void animdata_fcurve_delete(AnimData *adt, FCurve *fcu, bool is_driver);
 
 /**
  * Unlink the action from animdata if it's empty.

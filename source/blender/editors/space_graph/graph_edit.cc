@@ -759,6 +759,8 @@ static bool delete_graph_keys(bAnimContext *ac)
   ANIM_animdata_filter(
       ac, &anim_data, eAnimFilter_Flags(filter), ac->data, eAnimCont_Types(ac->datatype));
 
+  const bool is_driver = ac->datatype == ANIMCONT_DRIVERS;
+
   /* Loop through filtered data and delete selected keys. */
   LISTBASE_FOREACH (bAnimListElem *, ale, &anim_data) {
     FCurve *fcu = (FCurve *)ale->key_data;
@@ -775,7 +777,7 @@ static bool delete_graph_keys(bAnimContext *ac)
 
     /* Only delete curve too if it won't be doing anything anymore. */
     if (BKE_fcurve_is_empty(fcu)) {
-      blender::animrig::animdata_fcurve_delete(ac, adt, fcu);
+      blender::animrig::animdata_fcurve_delete(adt, fcu, is_driver);
       ale->key_data = nullptr;
     }
   }

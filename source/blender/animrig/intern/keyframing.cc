@@ -746,7 +746,7 @@ int delete_keyframe(Main *bmain, ReportList *reports, ID *id, const RNAPath &rna
   if (!modified_fcurves.is_empty()) {
     for (FCurve *fcurve : modified_fcurves) {
       if (BKE_fcurve_is_empty(fcurve)) {
-        animdata_fcurve_delete(nullptr, adt, fcurve);
+        animdata_fcurve_delete(adt, fcurve, false);
       }
     }
     deg_tag_after_keyframe_delete(bmain, id, adt);
@@ -841,7 +841,7 @@ int clear_keyframe(Main *bmain, ReportList *reports, ID *id, const RNAPath &rna_
         continue;
       }
 
-      animdata_fcurve_delete(nullptr, adt, fcu);
+      animdata_fcurve_delete(adt, fcu, false);
 
       key_count++;
     }
