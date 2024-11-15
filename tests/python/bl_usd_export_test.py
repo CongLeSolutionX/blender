@@ -70,15 +70,6 @@ class AbstractUSDTest(unittest.TestCase):
 
         self.assertFalse(failed_checks, pprint.pformat(failed_checks))
 
-    def export_without_validating(self, **kwargs):
-        """Export without validating"""
-
-        export_path = kwargs["filepath"]
-
-        # Do the actual export
-        res = bpy.ops.wm.usd_export(**kwargs)
-        self.assertEqual({'FINISHED'}, res, f"Unable to export to {export_path}")
-
 
 class USDExportTest(AbstractUSDTest):
     # Utility function to round each component of a vector to a few digits. The "+ 0" is to
@@ -959,51 +950,43 @@ class USDExportTest(AbstractUSDTest):
     def test_merge_parent_xform_true(self):
         bpy.ops.wm.open_mainfile(filepath=str(self.testdir / "usd_hierarchy_export_test.blend"))
 
-        test_path = self.tempdir / "test_merge_parent_xform_true.usda"
+#        test_path = self.tempdir / "test_merge_parent_xform_true.usda"
+        test_path = "F:/tmp/test_merge_parent_xform_true.usda"
 
-        # The current implementation of merge_parent_xform allows exported nested UsdGeomGprim,
-        # which makes an USD stage invalid. This happens when Blender non-Empty objects are nested.
-        # In this scene, the mesh `GEO_Head_0` has another mesh `GEO_Ear_R_2` in its children. This is
-        # valid in Blender, but invalid in USD. In this case, we shouldn't try to `merge_parent_xform`
-        # and the USD hierarchy would be:
-        # ...
-        # ('/root/ParentOfDupli2/Dupli2/GEO_Head_0', 'Xform'),             # <- xform not merged
-        # ('/root/ParentOfDupli2/Dupli2/GEO_Head_0/GEO_Head_0', 'Mesh'),   # <- gprim not merged
-        # ('/root/ParentOfDupli2/Dupli2/GEO_Head_0/GEO_Ear_R_2', 'Mesh'),
-        # ...
-        # This isn't the case yet, hence the call to `self.export_without_validating`, which does
-        # not call `UsdUtils.ComplianceChecker.CheckCompliance`.
-        # This would fail on `PrimEncapsulationChecker`
-
-        self.export_without_validating(filepath=str(test_path), merge_parent_xform=True)
+        self.export_and_validate(filepath=str(test_path), merge_parent_xform=True)
 
         expected = (
-            ('/root', 'Xform'),
-            ('/root/Camera', 'Camera'),
-            ('/root/ParentOfDupli2', 'Mesh'),
-            ('/root/ParentOfDupli2/Dupli2', 'Xform'),
-            ('/root/ParentOfDupli2/Dupli2/GEO_Head_0', 'Mesh'),
-            ('/root/ParentOfDupli2/Dupli2/GEO_Head_0/GEO_Ear_R_2', 'Mesh'),
-            ('/root/ParentOfDupli2/Dupli2/GEO_Head_0/GEO_Ear_L_1', 'Mesh'),
-            ('/root/ParentOfDupli2/Dupli2/GEO_Head_0/GEO_Nose_3', 'Mesh'),
-            ('/root/_materials', 'Scope'),
-            ('/root/_materials/Head', 'Material'),
-            ('/root/_materials/Head/Principled_BSDF', 'Shader'),
-            ('/root/_materials/Nose', 'Material'),
-            ('/root/_materials/Nose/Principled_BSDF', 'Shader'),
-            ('/root/Dupli1', 'Xform'),
-            ('/root/Dupli1/GEO_Head_0', 'Mesh'),
-            ('/root/Dupli1/GEO_Head_0/GEO_Nose_3', 'Mesh'),
-            ('/root/Dupli1/GEO_Head_0/GEO_Ear_R_2', 'Mesh'),
-            ('/root/Dupli1/GEO_Head_0/GEO_Ear_L_1', 'Mesh'),
-            ('/root/Ground_plane', 'Mesh'),
-            ('/root/Ground_plane/OutsideDupliGrandParent', 'Xform'),
-            ('/root/Ground_plane/OutsideDupliGrandParent/OutsideDupliParent', 'Xform'),
-            ('/root/Ground_plane/OutsideDupliGrandParent/OutsideDupliParent/GEO_Head', 'Mesh'),
-            ('/root/Ground_plane/OutsideDupliGrandParent/OutsideDupliParent/GEO_Head/GEO_Nose', 'Mesh'),
-            ('/root/Ground_plane/OutsideDupliGrandParent/OutsideDupliParent/GEO_Head/GEO_Ear_R', 'Mesh'),
-            ('/root/Ground_plane/OutsideDupliGrandParent/OutsideDupliParent/GEO_Head/GEO_Ear_L', 'Mesh'),
-            ('/root/env_light', 'DomeLight')
+            ("/root", "Xform"),
+            ("/root/Dupli1", "Xform"),
+            ("/root/Dupli1/GEO_Head_0", "Xform"),
+            ("/root/Dupli1/GEO_Head_0/Face", "Mesh"),
+            ("/root/Dupli1/GEO_Head_0/GEO_Ear_R_2", "Mesh"),
+            ("/root/Dupli1/GEO_Head_0/GEO_Ear_L_1", "Mesh"),
+            ("/root/Dupli1/GEO_Head_0/GEO_Nose_3", "Mesh"),
+            ("/root/_materials", "Scope"),
+            ("/root/_materials/Head", "Material"),
+            ("/root/_materials/Head/Principled_BSDF", "Shader"),
+            ("/root/_materials/Nose", "Material"),
+            ("/root/_materials/Nose/Principled_BSDF", "Shader"),
+            ("/root/ParentOfDupli2", "Xform"),
+            ("/root/ParentOfDupli2/Icosphere", "Mesh"),
+            ("/root/ParentOfDupli2/Dupli2", "Xform"),
+            ("/root/ParentOfDupli2/Dupli2/GEO_Head_0", "Xform"),
+            ("/root/ParentOfDupli2/Dupli2/GEO_Head_0/Face", "Mesh"),
+            ("/root/ParentOfDupli2/Dupli2/GEO_Head_0/GEO_Ear_L_1", "Mesh"),
+            ("/root/ParentOfDupli2/Dupli2/GEO_Head_0/GEO_Ear_R_2", "Mesh"),
+            ("/root/ParentOfDupli2/Dupli2/GEO_Head_0/GEO_Nose_3", "Mesh"),
+            ("/root/Ground_plane", "Xform"),
+            ("/root/Ground_plane/Plane", "Mesh"),
+            ("/root/Ground_plane/OutsideDupliGrandParent", "Xform"),
+            ("/root/Ground_plane/OutsideDupliGrandParent/OutsideDupliParent", "Xform"),
+            ("/root/Ground_plane/OutsideDupliGrandParent/OutsideDupliParent/GEO_Head", "Xform"),
+            ("/root/Ground_plane/OutsideDupliGrandParent/OutsideDupliParent/GEO_Head/Face", "Mesh"),
+            ("/root/Ground_plane/OutsideDupliGrandParent/OutsideDupliParent/GEO_Head/GEO_Ear_R", "Mesh"),
+            ("/root/Ground_plane/OutsideDupliGrandParent/OutsideDupliParent/GEO_Head/GEO_Nose", "Mesh"),
+            ("/root/Ground_plane/OutsideDupliGrandParent/OutsideDupliParent/GEO_Head/GEO_Ear_L", "Mesh"),
+            ("/root/Camera", "Camera"),
+            ("/root/env_light", "DomeLight")
         )
 
         def key(el):

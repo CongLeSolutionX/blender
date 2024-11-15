@@ -73,6 +73,13 @@ struct HierarchyContext {
    * merge_transform_and_shape option is meaningless for object, it only makes sense for data. */
   bool is_object_data_context;
 
+  /* This flag tells, within a object data context, if an object is the parent of other objects.
+   * This is useful when exporting UsdGeomGprim: those cannot be nested into each other. For
+   * example, an UsdGeomMesh cannot have other UsdGeomMesh as descendants and other hierarchy
+   * strategies need to be adopted.
+  */
+  bool is_parent;
+
   /*********** Determined during writer creation: ***************/
   float parent_matrix_inv_world[4][4]; /* Inverse of the parent's world matrix. */
   std::string export_path; /* Hierarchical path, such as "/grandparent/parent/object_name". */
