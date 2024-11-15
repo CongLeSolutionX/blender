@@ -6,7 +6,13 @@
  * \ingroup gpu
  */
 
-#include "gpu_interface_info.hh"
+#ifdef GPU_SHADER
+#  pragma once
+#  include "gpu_glsl_cpp_stubs.hh"
+
+#  define widgetID 0
+#endif
+
 #include "gpu_shader_create_info.hh"
 
 GPU_SHADER_INTERFACE_INFO(gpu_node_socket_iface)
@@ -26,7 +32,7 @@ GPU_SHADER_INTERFACE_END()
 #define MAX_SOCKET_INSTANCE 32
 
 GPU_SHADER_CREATE_INFO(gpu_shader_2D_node_socket_shared)
-DEFINE_VALUE("MAX_PARAM", STRINGIFY(MAX_SOCKET_PARAMETERS))
+DEFINE_VALUE("MAX_SOCKET_PARAMETERS", STRINGIFY(MAX_SOCKET_PARAMETERS))
 PUSH_CONSTANT(MAT4, ModelViewProjectionMatrix)
 VERTEX_OUT(gpu_node_socket_iface)
 FRAGMENT_OUT(0, VEC4, fragColor)

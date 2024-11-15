@@ -2,8 +2,11 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#define COS45 (0.70710678118)
-#define SIN45 (0.70710678118)
+#include "infos/gpu_shader_2D_node_socket_info.hh"
+
+#include "gpu_shader_math_matrix_lib.glsl"
+
+FRAGMENT_SHADER_CREATE_INFO(gpu_shader_2D_node_socket_inst)
 
 /* Values in `eNodeSocketDisplayShape` in DNA_node_types.h. Keep in sync. */
 #define SOCK_DISPLAY_SHAPE_CIRCLE 0
@@ -22,7 +25,7 @@ float square_sdf(vec2 absCo, float half_width_x, float half_width_y)
 
 vec2 rotate_45(vec2 co)
 {
-  return vec2(COS45 * co.x - SIN45 * co.y, SIN45 * co.x + COS45 * co.y);
+  return from_rotation(Angle(M_PI * 0.25)) * co;
 }
 
 /* Calculates an upper and lower limit for an antialiased cutoff of the squared distance. */

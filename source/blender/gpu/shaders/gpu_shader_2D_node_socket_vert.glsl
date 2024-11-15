@@ -2,13 +2,17 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#define rect parameters[widgetID * MAX_PARAM + 0]
-#define colorInner parameters[widgetID * MAX_PARAM + 1]
-#define colorOutline parameters[widgetID * MAX_PARAM + 2]
-#define outlineThickness parameters[widgetID * MAX_PARAM + 3].x
-#define outlineOffset parameters[widgetID * MAX_PARAM + 3].y
-#define dotRadius parameters[widgetID * MAX_PARAM + 3].z
-#define shape parameters[widgetID * MAX_PARAM + 3].w
+#include "infos/gpu_shader_2D_node_socket_info.hh"
+
+VERTEX_SHADER_CREATE_INFO(gpu_shader_2D_node_socket_inst)
+
+#define rect parameters[widgetID * MAX_SOCKET_PARAMETERS + 0]
+#define colorInner parameters[widgetID * MAX_SOCKET_PARAMETERS + 1]
+#define colorOutline parameters[widgetID * MAX_SOCKET_PARAMETERS + 2]
+#define outlineThickness parameters[widgetID * MAX_SOCKET_PARAMETERS + 3].x
+#define outlineOffset parameters[widgetID * MAX_SOCKET_PARAMETERS + 3].y
+#define dotRadius parameters[widgetID * MAX_SOCKET_PARAMETERS + 3].z
+#define shape parameters[widgetID * MAX_SOCKET_PARAMETERS + 3].w
 
 void main()
 {
