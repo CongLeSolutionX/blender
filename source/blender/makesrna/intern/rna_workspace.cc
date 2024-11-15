@@ -6,15 +6,19 @@
  * \ingroup RNA
  */
 
+#include "DNA_listBase.h"
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
 #include "RNA_types.hh"
 
 #include "BKE_workspace.hh"
 
+#include "ED_buttons.hh"
 #include "ED_render.hh"
 
 #include "RE_engine.h"
+
+#include "BLI_array_utils.h"
 
 #include "WM_api.hh"
 #include "WM_types.hh"
@@ -44,6 +48,80 @@
 
 static void rna_window_update_all(Main * /*bmain*/, Scene * /*scene*/, PointerRNA * /*ptr*/)
 {
+  WM_main_add_notifier(NC_WINDOW, nullptr);
+}
+
+static int find_new_properties_tab(const WorkSpace *workspace,
+                                   const SpaceProperties *sbuts,
+                                   int iter_step)
+{
+  short tabs_array_no_filter[BCONTEXT_TOT * 2];
+  const int tabs_no_filter_len = ED_buttons_tabs_list(
+      nullptr, const_cast<SpaceProperties *>(sbuts), tabs_array_no_filter);
+
+  short tabs_array[BCONTEXT_TOT * 2];
+  const int tabs_len = ED_buttons_tabs_list(
+      workspace, const_cast<SpaceProperties *>(sbuts), tabs_array);
+
+  const int old_index = BLI_array_findindex(
+      tabs_array_no_filter, tabs_no_filter_len, &sbuts->mainb);
+
+  /* Try to find next tab to switch to. */
+  int new_tab = -1;
+  for (int i = old_index; i < tabs_no_filter_len; i += iter_step) {
+    const int candidate_tab = tabs_array_no_filter[i];
+
+    if (candidate_tab == -1) {
+      continue;
+    }
+
+    const int found_tab_index = BLI_array_findindex(tabs_array, tabs_len, &candidate_tab);
+
+    if (found_tab_index != -1) {
+      new_tab = tabs_array[found_tab_index];
+      break;
+    }
+  }
+
+  return new_tab;
+}
+
+static void rna_properties_filter_update(Main * /*bmain*/, Scene * /*scene*/, PointerRNA *ptr)
+{
+  const WorkSpace *workspace = (WorkSpace *)ptr->owner_id;
+  LISTBASE_FOREACH (const WorkSpaceLayout *, layout, &workspace->layouts) {
+    bScreen *screen = BKE_workspace_layout_screen_get(layout);
+
+    LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
+      LISTBASE_FOREACH (SpaceLink *, sl, &area->spacedata) {
+        if (sl->spacetype != SPACE_PROPERTIES) {
+          continue;
+        }
+
+        SpaceProperties *sbuts = reinterpret_cast<SpaceProperties *>(sl);
+
+        if (((1 << sbuts->mainb) & workspace->properties_filter) != 0) {
+          continue;
+        }
+
+        /* Activate next visible tab if possible, fallback to last visible in the list. */
+        int new_tab = find_new_properties_tab(workspace, sbuts, +1);
+
+        /* Try to find previous tab to switch to. */
+        if (new_tab == -1) {
+          new_tab = find_new_properties_tab(workspace, sbuts, -1);
+        }
+
+        if (new_tab == -1) {
+          new_tab = (1 << BCONTEXT_TOOL);
+          BLI_assert_unreachable();
+        }
+
+        sbuts->mainb = new_tab;
+        sbuts->mainbuser = new_tab;
+      }
+    }
+  }
   WM_main_add_notifier(NC_WINDOW, nullptr);
 }
 
@@ -457,7 +535,7 @@ static void rna_def_space_properties_filter(StructRNA *srna)
     RNA_def_property_boolean_sdna(prop, nullptr, "properties_filter", value);
     RNA_def_property_ui_icon(prop, item.icon, 0);
     RNA_def_property_ui_text(prop, item.name, "");
-    RNA_def_property_update(prop, NC_SPACE | ND_SPACE_PROPERTIES, "rna_window_update_all");
+    RNA_def_property_update(prop, NC_SPACE | ND_SPACE_PROPERTIES, "rna_properties_filter_update");
   }
 }
 

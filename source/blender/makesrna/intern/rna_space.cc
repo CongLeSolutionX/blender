@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "BLI_array_utils.h"
 #include "MEM_guardedalloc.h"
 
 #include "BLT_translation.hh"

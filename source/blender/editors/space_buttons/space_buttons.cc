@@ -8,6 +8,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <limits>
 
 #include "DNA_workspace_types.h"
 #include "MEM_guardedalloc.h"
@@ -163,7 +164,7 @@ int ED_buttons_tabs_list(SpaceProperties *sbuts, short *context_tabs_array)
 
 int ED_buttons_tabs_list(const WorkSpace *ws, SpaceProperties *sbuts, short *context_tabs_array)
 {
-  int filter = 0xFFFF;
+  int filter = std::numeric_limits<int>::max();
 
   if (ws != nullptr) {
     filter = ws->properties_filter;
