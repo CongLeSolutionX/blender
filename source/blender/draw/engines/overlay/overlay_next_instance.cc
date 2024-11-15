@@ -510,6 +510,7 @@ void Instance::draw(Manager &manager)
   draw_layer_color_only(regular, resources.overlay_color_only_fb);
   draw_layer_color_only(infront, resources.overlay_color_only_fb);
 
+  regular.empties.draw_in_front_images(resources.overlay_color_only_fb, manager, view);
   infront.empties.draw_in_front_images(resources.overlay_color_only_fb, manager, view);
   regular.cameras.draw_in_front(resources.overlay_color_only_fb, manager, view);
   infront.cameras.draw_in_front(resources.overlay_color_only_fb, manager, view);
