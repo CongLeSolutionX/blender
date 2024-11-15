@@ -1,1 +1,2 @@
 Referenced by commit 3f6e36bdda7924f248340ff7ac5f5178c7774c88, Fix #127994: Stack use after scope constructing sculpt BVH
+Referenced by issue #127994, Crash when opening tests/data/sculpting/sculpt.blend (includes a debug build assert)
