@@ -303,8 +303,9 @@ def shape_difference_exclude_similar(sv_cos_nors, ref_cos_nors, e=1e-6):
     if np.array_equal(sv_cos, ref_cos):
         # There's no difference between the two arrays.
         empty_cos = np.empty((0, 3), dtype=sv_cos.dtype)
+        empty_nors = np.empty((0, 3), dtype=sv_nors.dtype)
         empty_indices = np.empty(0, dtype=np.int32)
-        return empty_cos, empty_indices
+        return empty_cos, empty_nors, empty_indices
 
     # Note that unlike math.isclose(a,b), np.isclose(a,b) is not symmetrical and the second argument 'b', is
     # considered to be the reference value.
