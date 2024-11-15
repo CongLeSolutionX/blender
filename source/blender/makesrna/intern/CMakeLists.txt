@@ -247,6 +247,7 @@ set(INC
   ../../draw
   ../../functions
   ../../gpu
+  ../../geometry
   ../../ikplugin
   ../../imbuf
   ../../io/usd
