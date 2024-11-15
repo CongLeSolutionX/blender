@@ -1420,7 +1420,7 @@ static int transform_from_gizmo_invoke(bContext *C, wmOperator * /*op*/, const w
   bToolRef *tref = WM_toolsystem_ref_from_context(C);
   if (tref) {
     ARegion *region = CTX_wm_region(C);
-    wmGizmoMap *gzmap = region->gizmo_map;
+    wmGizmoMap *gzmap = region->runtime->gizmo_map;
     wmGizmoGroup *gzgroup = gzmap ? WM_gizmomap_group_find(gzmap, "VIEW3D_GGT_xform_gizmo") :
                                     nullptr;
     if (gzgroup != nullptr) {

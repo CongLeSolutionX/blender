@@ -740,10 +740,10 @@ void freeTransCustomDataForMode(TransInfo *t)
 void postTrans(bContext *C, TransInfo *t)
 {
   if (t->draw_handle_view) {
-    ED_region_draw_cb_exit(t->region->type, t->draw_handle_view);
+    ED_region_draw_cb_exit(t->region->runtime->type, t->draw_handle_view);
   }
   if (t->draw_handle_pixel) {
-    ED_region_draw_cb_exit(t->region->type, t->draw_handle_pixel);
+    ED_region_draw_cb_exit(t->region->runtime->type, t->draw_handle_pixel);
   }
   if (t->draw_handle_cursor) {
     WM_paint_cursor_end(static_cast<wmPaintCursor *>(t->draw_handle_cursor));

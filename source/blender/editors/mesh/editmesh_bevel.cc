@@ -290,8 +290,10 @@ static bool edbm_bevel_init(bContext *C, wmOperator *op, const bool is_modal)
       BMEditMesh *em = BKE_editmesh_from_object(obedit);
       ob_store.mesh_backup = EDBM_redo_state_store(em);
     }
-    opdata->draw_handle_pixel = ED_region_draw_cb_activate(
-        region->type, ED_region_draw_mouse_line_cb, opdata->mcenter, REGION_DRAW_POST_PIXEL);
+    opdata->draw_handle_pixel = ED_region_draw_cb_activate(region->runtime->type,
+                                                           ED_region_draw_mouse_line_cb,
+                                                           opdata->mcenter,
+                                                           REGION_DRAW_POST_PIXEL);
     G.moving = G_TRANSFORM_EDIT;
   }
 
@@ -408,7 +410,7 @@ static void edbm_bevel_exit(bContext *C, wmOperator *op)
     for (BevelObjectStore &ob_store : opdata->ob_store) {
       EDBM_redo_state_free(&ob_store.mesh_backup);
     }
-    ED_region_draw_cb_exit(region->type, opdata->draw_handle_pixel);
+    ED_region_draw_cb_exit(region->runtime->type, opdata->draw_handle_pixel);
     G.moving = 0;
   }
   MEM_delete(opdata);

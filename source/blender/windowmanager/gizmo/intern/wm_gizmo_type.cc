@@ -125,7 +125,7 @@ static void gizmotype_unlink(bContext *C, Main *bmain, wmGizmoType *gzt)
       LISTBASE_FOREACH (SpaceLink *, sl, &area->spacedata) {
         ListBase *lb = (sl == area->spacedata.first) ? &area->regionbase : &sl->regionbase;
         LISTBASE_FOREACH (ARegion *, region, lb) {
-          wmGizmoMap *gzmap = region->gizmo_map;
+          wmGizmoMap *gzmap = region->runtime->gizmo_map;
           if (gzmap) {
             LISTBASE_FOREACH (wmGizmoGroup *, gzgroup, &gzmap->groups) {
               for (wmGizmo *gz = static_cast<wmGizmo *>(gzgroup->gizmos.first), *gz_next; gz;

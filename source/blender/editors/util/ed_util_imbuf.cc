@@ -472,9 +472,9 @@ int ED_imbuf_sample_invoke(bContext *C, wmOperator *op, const wmEvent *event)
   ImageSampleInfo *info = static_cast<ImageSampleInfo *>(
       MEM_callocN(sizeof(ImageSampleInfo), "ImageSampleInfo"));
 
-  info->art = region->type;
+  info->art = region->runtime->type;
   info->draw_handle = ED_region_draw_cb_activate(
-      region->type, ED_imbuf_sample_draw, info, REGION_DRAW_POST_PIXEL);
+      region->runtime->type, ED_imbuf_sample_draw, info, REGION_DRAW_POST_PIXEL);
   info->sample_size = RNA_int_get(op->ptr, "size");
   op->customdata = info;
 

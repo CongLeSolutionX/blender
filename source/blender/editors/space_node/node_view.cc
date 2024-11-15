@@ -662,9 +662,9 @@ static int sample_invoke(bContext *C, wmOperator *op, const wmEvent *event)
   }
 
   info = MEM_cnew<ImageSampleInfo>("ImageSampleInfo");
-  info->art = region->type;
+  info->art = region->runtime->type;
   info->draw_handle = ED_region_draw_cb_activate(
-      region->type, sample_draw, info, REGION_DRAW_POST_PIXEL);
+      region->runtime->type, sample_draw, info, REGION_DRAW_POST_PIXEL);
   op->customdata = info;
 
   sample_apply(C, op, event);

@@ -422,6 +422,9 @@ struct Panel_Runtime {
 namespace blender::bke {
 
 struct ARegionRuntime {
+  /** Callbacks for this region type. */
+  struct ARegionType *type;
+
   /** Panel category to use between 'layout' and 'draw'. */
   const char *category = nullptr;
 
@@ -438,6 +441,31 @@ struct ARegionRuntime {
 
   /** Maps #uiBlock::name to uiBlock for faster lookups. */
   GHash *block_name_map = nullptr;
+  /** #uiBlock. */
+  ListBase uiblocks = {};
+
+  /** #wmEventHandler. */
+  ListBase handlers;
+
+  /** Use this string to draw info. */
+  char *headerstr;
+
+  /** Gizmo-map of this region. */
+  struct wmGizmoMap *gizmo_map;
+
+  /** Blend in/out. */
+  struct wmTimer *regiontimer;
+
+  struct wmDrawBuffer *draw_buffer;
+
+  /** Panel categories runtime. */
+  ListBase panels_category;
+
+  /** Region is currently visible on screen. */
+  short visible;
+
+  /** Private, cached notifier events. */
+  short do_draw;
 
   /* Dummy panel used in popups so they can support layout panels. */
   Panel *popup_block_panel = nullptr;

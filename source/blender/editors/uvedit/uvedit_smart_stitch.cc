@@ -2335,7 +2335,7 @@ static int stitch_init_all(bContext *C, wmOperator *op)
   stitch_update_header(ssc, C);
 
   ssc->draw_handle = ED_region_draw_cb_activate(
-      region->type, stitch_draw, ssc, REGION_DRAW_POST_VIEW);
+      region->runtime->type, stitch_draw, ssc, REGION_DRAW_POST_VIEW);
 
   return 1;
 }

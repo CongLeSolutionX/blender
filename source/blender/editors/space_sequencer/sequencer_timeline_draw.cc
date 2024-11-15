@@ -1921,7 +1921,7 @@ static void draw_timeline_gizmos(TimelineDrawContext *ctx)
     return;
   }
 
-  WM_gizmomap_draw(ctx->region->gizmo_map, ctx->C, WM_GIZMOMAP_DRAWSTEP_2D);
+  WM_gizmomap_draw(ctx->region->runtime->gizmo_map, ctx->C, WM_GIZMOMAP_DRAWSTEP_2D);
 }
 
 static void draw_timeline_pre_view_callbacks(TimelineDrawContext *ctx)

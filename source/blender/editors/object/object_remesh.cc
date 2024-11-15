@@ -350,7 +350,7 @@ static void voxel_size_edit_cancel(bContext *C, wmOperator *op)
   ARegion *region = CTX_wm_region(C);
   VoxelSizeEditCustomData *cd = static_cast<VoxelSizeEditCustomData *>(op->customdata);
 
-  ED_region_draw_cb_exit(region->type, cd->draw_handle);
+  ED_region_draw_cb_exit(region->runtime->type, cd->draw_handle);
 
   MEM_freeN(op->customdata);
 
@@ -388,7 +388,7 @@ static int voxel_size_edit_modal(bContext *C, wmOperator *op, const wmEvent *eve
       (event->type == EVT_RETKEY && event->val == KM_PRESS) ||
       (event->type == EVT_PADENTER && event->val == KM_PRESS))
   {
-    ED_region_draw_cb_exit(region->type, cd->draw_handle);
+    ED_region_draw_cb_exit(region->runtime->type, cd->draw_handle);
     mesh->remesh_voxel_size = cd->voxel_size;
     MEM_freeN(op->customdata);
     ED_region_tag_redraw(region);
@@ -444,7 +444,7 @@ static int voxel_size_edit_invoke(bContext *C, wmOperator *op, const wmEvent *ev
 
   /* Initial operator Custom Data setup. */
   cd->draw_handle = ED_region_draw_cb_activate(
-      region->type, voxel_size_edit_draw, cd, REGION_DRAW_POST_VIEW);
+      region->runtime->type, voxel_size_edit_draw, cd, REGION_DRAW_POST_VIEW);
   cd->active_object = active_object;
   cd->init_mval[0] = event->mval[0];
   cd->init_mval[1] = event->mval[1];

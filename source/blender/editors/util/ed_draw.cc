@@ -453,7 +453,7 @@ tSlider *ED_slider_create(bContext *C)
       if (region->regiontype == RGN_TYPE_HEADER) {
         slider->region_header = region;
         slider->draw_handle = ED_region_draw_cb_activate(
-            region->type, slider_draw, slider, REGION_DRAW_POST_PIXEL);
+            region->runtime->type, slider_draw, slider, REGION_DRAW_POST_PIXEL);
       }
     }
   }

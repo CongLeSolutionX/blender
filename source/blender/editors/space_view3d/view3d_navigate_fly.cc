@@ -370,7 +370,7 @@ static bool initFlyInfo(bContext *C, FlyInfo *fly, wmOperator *op, const wmEvent
   fly->time_lastdraw = fly->time_lastwheel = BLI_time_now_seconds();
 
   fly->draw_handle_pixel = ED_region_draw_cb_activate(
-      fly->region->type, drawFlyPixel, fly, REGION_DRAW_POST_PIXEL);
+      fly->region->runtime->type, drawFlyPixel, fly, REGION_DRAW_POST_PIXEL);
 
   fly->rv3d->rflag |= RV3D_NAVIGATING;
 
@@ -442,7 +442,7 @@ static int flyEnd(bContext *C, FlyInfo *fly)
 
   WM_event_timer_remove(CTX_wm_manager(C), win, fly->timer);
 
-  ED_region_draw_cb_exit(fly->region->type, fly->draw_handle_pixel);
+  ED_region_draw_cb_exit(fly->region->runtime->type, fly->draw_handle_pixel);
 
   ED_view3d_cameracontrol_release(fly->v3d_camera_control, fly->state == FLY_CANCEL);
 

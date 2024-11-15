@@ -119,7 +119,7 @@ static void external_engine_init(void *vedata)
 
   /* Progressive render samples are tagged with no rebuild, in that case we
    * can skip updating the depth buffer */
-  if (region && (region->do_draw & RGN_DRAW_NO_REBUILD)) {
+  if (region && (region->runtime->do_draw & RGN_DRAW_NO_REBUILD)) {
     stl->g_data->update_depth = false;
   }
 }
