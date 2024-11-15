@@ -291,7 +291,7 @@ static void trace_end_job(void *customdata)
   TraceJob &trace_job = *static_cast<TraceJob *>(customdata);
   GreasePencil &grease_pencil = *static_cast<GreasePencil *>(trace_job.ob_grease_pencil->data);
 
-  auto ensure_drawing_at_frame = [&](const int frame_number){
+  auto ensure_drawing_at_frame = [&](const int frame_number) {
     const std::optional<int> start_frame = trace_job.layer->start_frame_at(frame_number);
     if (start_frame && *start_frame == frame_number) {
       return grease_pencil.get_editable_drawing_at(*trace_job.layer, frame_number);
