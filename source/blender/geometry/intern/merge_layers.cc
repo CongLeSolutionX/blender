@@ -46,7 +46,7 @@ GreasePencil *merge_layers(const GreasePencil &src_grease_pencil,
   using namespace bke::greasepencil;
 
   GreasePencil *new_grease_pencil = BKE_grease_pencil_new_nomain();
- BKE_grease_pencil_copy_parameters(src_grease_pencil, *new_grease_pencil);
+  BKE_grease_pencil_copy_parameters(src_grease_pencil, *new_grease_pencil);
   new_grease_pencil->runtime->eval_frame = src_grease_pencil.runtime->eval_frame;
   new_grease_pencil->material_array = static_cast<Material **>(
       MEM_dupallocN(src_grease_pencil.material_array));
