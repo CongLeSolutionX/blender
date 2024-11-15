@@ -162,12 +162,14 @@ int ED_buttons_tabs_list(SpaceProperties *sbuts, short *context_tabs_array)
   return ED_buttons_tabs_list(nullptr, sbuts, context_tabs_array);
 }
 
-int ED_buttons_tabs_list(const WorkSpace *ws, SpaceProperties *sbuts, short *context_tabs_array)
+int ED_buttons_tabs_list(const WorkSpace *workspace,
+                         SpaceProperties *sbuts,
+                         short *context_tabs_array)
 {
-  int filter = std::numeric_limits<int>::max();
+  int filter = std::numeric_limits<int>::max(); /* Initialize mask to 0x7fffffff. */
 
-  if (ws != nullptr) {
-    filter = ws->properties_filter;
+  if (workspace != nullptr) {
+    filter = workspace->properties_filter;
   }
 
   int length = 0;

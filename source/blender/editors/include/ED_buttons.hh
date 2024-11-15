@@ -20,7 +20,9 @@ struct PointerRNA;
  * \return The total number of items in the array returned.
  */
 int ED_buttons_tabs_list(SpaceProperties *sbuts, short *context_tabs_array);
-int ED_buttons_tabs_list(const WorkSpace *ws, SpaceProperties *sbuts, short *context_tabs_array);
+int ED_buttons_tabs_list(const WorkSpace *workspace,
+                         SpaceProperties *sbuts,
+                         short *context_tabs_array);
 bool ED_buttons_tab_has_search_result(SpaceProperties *sbuts, int index);
 
 void ED_buttons_search_string_set(SpaceProperties *sbuts, const char *value);

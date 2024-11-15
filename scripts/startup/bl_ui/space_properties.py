@@ -35,7 +35,6 @@ class PROPERTIES_HT_header(Header):
         layout.popover(panel="PROPERTIES_PT_options", text="")
 
 
-
 class PROPERTIES_PT_navigation_bar(Panel):
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'NAVIGATION_BAR'
