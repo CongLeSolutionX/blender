@@ -322,16 +322,6 @@ static void set_load_store(VkRenderingAttachmentInfo &r_rendering_attachment,
   r_rendering_attachment.storeOp = to_vk_attachment_store_op(ls.store_action);
 }
 
-static void set_load_store(VkAttachmentDescription &r_attachment_description,
-                           const GPULoadStore &ls)
-{
-  // TODO: copy_v4_v4(r_attachment_description.clearValue.color.float32, ls.clear_value);
-  r_attachment_description.stencilLoadOp = r_attachment_description.loadOp =
-      to_vk_attachment_load_op(ls.load_action);
-  r_attachment_description.stencilStoreOp = r_attachment_description.storeOp =
-      to_vk_attachment_store_op(ls.store_action);
-}
-
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -629,7 +619,6 @@ void VKFrameBuffer::rendering_ensure_render_pass(VKContext &context)
     VkAttachmentDescription vk_attachment_description = {};
     vk_attachment_description.format = to_vk_format(color_texture.device_format_get());
     vk_attachment_description.samples = VK_SAMPLE_COUNT_1_BIT;
-    set_load_store(vk_attachment_description, load_stores[color_attachment_index]);
     vk_attachment_description.initialLayout = vk_image_layout;
     vk_attachment_description.finalLayout = vk_image_layout;
     vk_attachment_descriptions.append(std::move(vk_attachment_description));
@@ -700,9 +689,6 @@ void VKFrameBuffer::rendering_ensure_render_pass(VKContext &context)
     VkAttachmentDescription vk_attachment_description = {};
     vk_attachment_description.format = to_vk_format(depth_texture.device_format_get());
     vk_attachment_description.samples = VK_SAMPLE_COUNT_1_BIT;
-    // TODO: add clear values to internal array, it needs to be passed along with
-    // VKBeginRenderingNode.
-    set_load_store(vk_attachment_description, load_stores[depth_attachment_index]);
     vk_attachment_description.initialLayout = vk_image_layout;
     vk_attachment_description.finalLayout = vk_image_layout;
     vk_attachment_descriptions.append(std::move(vk_attachment_description));
@@ -765,9 +751,39 @@ void VKFrameBuffer::rendering_ensure_render_pass(VKContext &context)
   begin_info.renderPass = vk_render_pass;
   begin_info.framebuffer = vk_framebuffer;
   render_area_update(begin_info.renderArea);
-  /* TODO: Add suppVK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMALort for clear operations. */
 
   context.render_graph.add_node(begin_rendering);
+
+  /* Load store operations are not supported inside a render pass. It requires duplicating render
+   * passes and framebuffers to support suspend/resume rendering. After suspension all the graphics
+   * pipelines needs to be created using the resume handles. Due to command reordering it is
+   * unclear when this switch needs to be made and would require to double the graphics pipelines.
+   *
+   * This all adds a lot of complexity just to support clearing ops on legacy platforms. An easier
+   * solution is to use vkCmdClearAttachments right after the begin rendering.
+   */
+  if (use_explicit_load_store_) {
+    render_graph::VKClearAttachmentsNode::CreateInfo clear_attachments = {};
+    render_area_update(clear_attachments.vk_clear_rect.rect);
+    clear_attachments.vk_clear_rect.baseArrayLayer = 0;
+    clear_attachments.vk_clear_rect.layerCount = 1;
+    for (int attachment_index : IndexRange(GPU_FB_MAX_ATTACHMENT)) {
+      GPULoadStore &load_store = load_stores[attachment_index];
+      if (load_store.load_action != GPU_LOADACTION_CLEAR) {
+        continue;
+      }
+
+      bool is_depth = attachment_index < GPU_FB_COLOR_ATTACHMENT0;
+      if (is_depth) {
+        build_clear_attachments_depth_stencil(
+            GPU_DEPTH_BIT, load_store.clear_value[0], 0, clear_attachments);
+      }
+      else {
+        build_clear_attachments_color(&load_store.clear_value, false, clear_attachments);
+      }
+    }
+    context.render_graph.add_node(clear_attachments);
+  }
 }
 
 void VKFrameBuffer::rendering_ensure_dynamic_rendering(VKContext &context,
