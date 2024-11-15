@@ -437,12 +437,12 @@ void Instance::draw(Manager &manager)
     GPU_framebuffer_clear_color(resources.overlay_line_fb, clear_color);
   }
 
-  regular.cameras.draw_scene_background_images(resources.overlay_color_only_fb, manager, view);
-  infront.cameras.draw_scene_background_images(resources.overlay_color_only_fb, manager, view);
+  regular.cameras.draw_scene_background_images(resources.overlay_fb, manager, view);
+  infront.cameras.draw_scene_background_images(resources.overlay_fb, manager, view);
 
   regular.empties.draw_background_images(resources.overlay_color_only_fb, manager, view);
-  regular.cameras.draw_background_images(resources.overlay_color_only_fb, manager, view);
-  infront.cameras.draw_background_images(resources.overlay_color_only_fb, manager, view);
+  regular.cameras.draw_background_images(resources.overlay_fb, manager, view);
+  infront.cameras.draw_background_images(resources.overlay_fb, manager, view);
 
   /* TODO(fclem): Would be better to have a v2d overlay class instead of this condition. */
   if (state.space_type == SPACE_IMAGE) {
