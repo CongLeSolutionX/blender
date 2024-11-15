@@ -13,13 +13,6 @@
 #define SOCK_DISPLAY_SHAPE_SQUARE_DOT 4
 #define SOCK_DISPLAY_SHAPE_DIAMOND_DOT 5
 
-#define CIRCLE_RADIUS 0.5
-#define SQUARE_RADIUS 0.5
-#define DIAMOND_RADIUS 0.42
-
-/* Round the sharp corners of the square and diamond a little bit. */
-#define CORNER_ROUNDING 0.15
-
 /* Calculates a squared distance field of a square. */
 float square_sdf(vec2 absCo, float half_width_x, float half_width_y)
 {
@@ -49,42 +42,48 @@ void main()
   float alpha_threshold = 0.0;
   float dot_threshold = -1.0;
 
+  const float circle_radius = 0.5;
+  const float square_radius = 0.5;
+  const float diamond_radius = 0.42;
+  /* Round the sharp corners of the square and diamond a little bit. */
+  const float corner_rounding = 0.15;
+
   switch (finalShape) {
     default:
     case SOCK_DISPLAY_SHAPE_CIRCLE: {
       distance_squared = dot(co, co);
-      alpha_threshold = CIRCLE_RADIUS;
+      alpha_threshold = circle_radius;
       break;
     }
     case SOCK_DISPLAY_SHAPE_CIRCLE_DOT: {
       distance_squared = dot(co, co);
-      alpha_threshold = CIRCLE_RADIUS;
+      alpha_threshold = circle_radius;
       dot_threshold = finalDotRadius;
       break;
     }
     case SOCK_DISPLAY_SHAPE_SQUARE: {
-      float square_radius = SQUARE_RADIUS - CORNER_ROUNDING;
+      float square_radius = square_radius - corner_rounding;
       distance_squared = square_sdf(co, square_radius, square_radius);
-      alpha_threshold = CORNER_ROUNDING;
+      alpha_threshold = corner_rounding;
       break;
     }
     case SOCK_DISPLAY_SHAPE_SQUARE_DOT: {
-      float square_radius = SQUARE_RADIUS - CORNER_ROUNDING;
+      float square_radius = square_radius - corner_rounding;
       distance_squared = square_sdf(co, square_radius, square_radius);
-      alpha_threshold = CORNER_ROUNDING;
+      alpha_threshold = corner_rounding;
       dot_threshold = finalDotRadius;
       break;
     }
     case SOCK_DISPLAY_SHAPE_DIAMOND: {
-      float diamond_radius = DIAMOND_RADIUS - CORNER_ROUNDING;
+      float diamond_radius = diamond_radius - corner_rounding;
       distance_squared = square_sdf(abs(rotate_45(co)), diamond_radius, diamond_radius);
-      alpha_threshold = CORNER_ROUNDING;
+      alpha_threshold = corner_rounding;
       break;
     }
     case SOCK_DISPLAY_SHAPE_DIAMOND_DOT: {
-      float diamond_radius = DIAMOND_RADIUS - CORNER_ROUNDING;
+      float diamond_radius = diamond_radius - corner_rounding;
       distance_squared = square_sdf(abs(rotate_45(co)), diamond_radius, diamond_radius);
-      alpha_threshold = CORNER_ROUNDING;
+      alpha_threshold = corner_rounding;
       dot_threshold = finalDotRadius;
       break;
     }
