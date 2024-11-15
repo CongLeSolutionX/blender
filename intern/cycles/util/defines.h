@@ -68,6 +68,7 @@
 
 #  define ccl_restrict __restrict
 #  define ccl_optional_struct_init
+/* TODO(weizhen): remove */
 #  define ccl_loop_no_unroll
 #  define ccl_attr_maybe_unused [[maybe_unused]]
 #  define __KERNEL_WITH_SSE_ALIGN__

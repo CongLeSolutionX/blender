@@ -406,7 +406,7 @@ void Shader::tag_update(Scene *scene)
   }
 
   if (has_volume || prev_has_volume) {
-    scene->volume_manager->need_update_ = true;
+    scene->volume_manager->tag_update(this);
   }
 }
 

@@ -4,6 +4,7 @@
 
 #include "scene/volume.h"
 #include "scene/attribute.h"
+#include "scene/background.h"
 #include "scene/image_vdb.h"
 #include "scene/object.h"
 #include "scene/scene.h"
@@ -11,6 +12,7 @@
 #ifdef WITH_OPENVDB
 #  include <openvdb/tools/Dense.h>
 #  include <openvdb/tools/GridTransformer.h>
+#  include <openvdb/tools/LevelSetUtil.h>
 #  include <openvdb/tools/Morphology.h>
 #  include <openvdb/tools/Statistics.h>
 #endif
@@ -732,15 +734,317 @@ void GeometryManager::create_volume_mesh(const Scene *scene, Volume *volume, Pro
 
 VolumeManager::VolumeManager()
 {
-  /* TODO(weizhen): update the tree when mesh object is unhidden. */
-  need_update_ = true;
+  need_rebuild_ = true;
 }
 
-VolumeManager::~VolumeManager() {}
-
-bool VolumeManager::need_update() const
+void VolumeManager::tag_update()
 {
-  return need_update_;
+  need_rebuild_ = true;
+}
+
+void VolumeManager::tag_update(const Object *object, uint32_t flag)
+{
+  if (flag & ObjectManager::VISIBILITY_MODIFIED) {
+    tag_update();
+  }
+
+  for (const Node *node : object->get_geometry()->get_used_shaders()) {
+    const Shader *shader = static_cast<const Shader *>(node);
+    if (shader->has_volume_spatial_varying || (flag & ObjectManager::OBJECT_REMOVED)) {
+      /* TODO(weizhen): no need to update if the spatial variation is not in world space. */
+      tag_update();
+      object_octrees_.erase({object, shader});
+    }
+  }
+
+  if (!need_rebuild_ && (flag & ObjectManager::TRANSFORM_MODIFIED)) {
+    update_visualization_ = true;
+  }
+}
+
+void VolumeManager::tag_update(const Shader *shader)
+{
+  tag_update();
+  for (auto it = object_octrees_.begin(); it != object_octrees_.end();) {
+    if (it->first.second == shader) {
+      it = object_octrees_.erase(it);
+    }
+    else {
+      it++;
+    }
+  }
+}
+
+void VolumeManager::tag_update(const Geometry *geometry)
+{
+  tag_update();
+  /* Tag Octree for update. */
+  for (auto it = object_octrees_.begin(); it != object_octrees_.end();) {
+    if (it->first.first->get_geometry() == geometry) {
+      it = object_octrees_.erase(it);
+    }
+    else {
+      it++;
+    }
+  }
+  /* Tag VDB map for update. */
+  for (auto it = vdb_map_.begin(); it != vdb_map_.end();) {
+    if (it->first.first == geometry) {
+      it = vdb_map_.erase(it);
+    }
+    else {
+      it++;
+    }
+  }
+}
+
+bool VolumeManager::is_homogeneous_volume(const Object *object, const Shader *shader)
+{
+  if (!shader->has_volume || shader->has_volume_spatial_varying) {
+    return false;
+  }
+
+  if (object && shader->has_volume_attribute_dependency) {
+    for (Attribute &attr : object->get_geometry()->attributes.attributes) {
+      /* If both the shader and the object needs volume attributes, the volume is heterogeneous. */
+      if (attr.element == ATTR_ELEMENT_VOXEL) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+#ifdef WITH_OPENVDB
+openvdb::BoolGrid::ConstPtr VolumeManager::mesh_to_sdf_grid_(const Mesh *mesh,
+                                                             const Shader *shader,
+                                                             const float half_width)
+{
+  const int num_verts = mesh->get_verts().size();
+  std::vector<openvdb::Vec3f> points(num_verts);
+  parallel_for(0, num_verts, [&](int i) {
+    const float3 &vert = mesh->get_verts()[i];
+    points[i] = openvdb::Vec3f(vert.x, vert.y, vert.z);
+  });
+
+  const int max_num_triangles = mesh->num_triangles();
+  std::vector<openvdb::Vec3I> triangles;
+  triangles.reserve(max_num_triangles);
+  for (int i = 0; i < max_num_triangles; i++) {
+    /* Only push triangles with matching shader. */
+    const int shader_index = mesh->get_shader()[i];
+    if (static_cast<const Shader *>(mesh->get_used_shaders()[shader_index]) == shader) {
+      triangles.emplace_back(mesh->get_triangles()[i * 3],
+                             mesh->get_triangles()[i * 3 + 1],
+                             mesh->get_triangles()[i * 3 + 2]);
+    }
+  }
+
+  /* TODO(weizhen): Should consider object instead of mesh size. */
+  const float3 mesh_size = mesh->bounds.size();
+  const auto vdb_voxel_size = openvdb::Vec3d(mesh_size.x, mesh_size.y, mesh_size.z) /
+                              double(1 << VOLUME_OCTREE_MAX_DEPTH);
+
+  auto xform = openvdb::math::Transform::createLinearTransform(1.0);
+  xform->postScale(vdb_voxel_size);
+
+  auto sdf_grid = openvdb::tools::meshToLevelSet<openvdb::FloatGrid>(
+      *xform, points, triangles, half_width);
+
+  return openvdb::tools::sdfInteriorMask(*sdf_grid, 0.5 * vdb_voxel_size.length());
+}
+#endif
+
+void VolumeManager::initialize_octree_(const Scene *scene)
+{
+  const Shader *bg_shader = scene->background->get_shader(scene);
+  if (bg_shader->has_volume) {
+    auto it = object_octrees_.find({nullptr, bg_shader});
+    if (it == object_octrees_.end()) {
+      /* Some large number. */
+      const float3 size = make_float3(10000.0f);
+      object_octrees_[{nullptr, bg_shader}] = std::make_shared<Octree>(BoundBox(-size, size));
+    }
+  }
+
+  /* Non-spatial varying instanced objects can share one octree. */
+  std::map<std::pair<const Geometry *, const Shader *>, std::shared_ptr<Octree>> geometry_octrees;
+  for (const auto &it : object_octrees_) {
+    const Shader *shader = it.first.second;
+    if (!shader->has_volume_spatial_varying) {
+      if (const Object *object = it.first.first) {
+        geometry_octrees[{object->get_geometry(), shader}] = it.second;
+      }
+    }
+  }
+
+  /* Loop through the volume objects to initialize the root node. */
+  for (Object *object : scene->objects) {
+    const Geometry *geom = object->get_geometry();
+    if (!geom->has_volume) {
+      continue;
+    }
+
+    /* Create Octree. */
+    for (const Node *node : geom->get_used_shaders()) {
+      const Shader *shader = static_cast<const Shader *>(node);
+      if (!shader->has_volume) {
+        continue;
+      }
+
+      if (object_octrees_.find({object, shader}) == object_octrees_.end()) {
+        const Mesh *mesh = static_cast<const Mesh *>(geom);
+        if (!shader->has_volume_spatial_varying) {
+          /* TODO(weizhen): check object attribute. */
+          /* TODO(weizhen): check maximal resolution needed. */
+          if (auto it = geometry_octrees.find({geom, shader}); it != geometry_octrees.end()) {
+            object_octrees_[{object, shader}] = it->second;
+          }
+          else {
+            auto octree = std::make_shared<Octree>(mesh->bounds);
+            geometry_octrees[{geom, shader}] = octree;
+            object_octrees_[{object, shader}] = octree;
+          }
+        }
+        else {
+          object_octrees_[{object, shader}] = std::make_shared<Octree>(mesh->bounds);
+        }
+      }
+
+#ifdef WITH_OPENVDB
+      /* Create SDF grid for mesh volumes, to determine whether a certain point is in the
+       * interior of the mesh. This reduces evaluation time needed for heterogeneous volume. */
+      if (geom->is_mesh() && !VolumeManager::is_homogeneous_volume(object, shader) &&
+          vdb_map_.find({geom, shader}) == vdb_map_.end())
+      {
+        const Mesh *mesh = static_cast<const Mesh *>(geom);
+        vdb_map_[{geom, shader}] = mesh_to_sdf_grid_(mesh, shader, 1.0f);
+      }
+#endif
+    }
+  }
+}
+
+#ifdef WITH_OPENVDB
+openvdb::BoolGrid::ConstPtr VolumeManager::get_vdb_(const Geometry *geom,
+                                                    const Shader *shader) const
+{
+  if (geom && geom->is_mesh()) {
+    if (auto it = vdb_map_.find({geom, shader}); it != vdb_map_.end()) {
+      return it->second;
+    }
+  }
+  /* Create empty grid. */
+  return openvdb::BoolGrid::create();
+}
+#endif
+
+void VolumeManager::build_octree_(Device *device, Progress &progress)
+{
+  double start_time = time_dt();
+
+  for (auto &it : object_octrees_) {
+    if (it.second->is_built()) {
+      continue;
+    }
+
+    const Object *object = it.first.first;
+    const Shader *shader = it.first.second;
+    openvdb::BoolGrid::ConstPtr interior_mask = get_vdb_(object ? object->get_geometry() : nullptr,
+                                                         shader);
+    it.second->build(device, progress, object, shader, interior_mask);
+  }
+
+  double build_time = time_dt() - start_time;
+  std::cout << "Volume octree built in " << build_time << " seconds." << std::endl;
+  VLOG_INFO << "Volume octree built in " << build_time << " seconds.";
+}
+
+void VolumeManager::flatten_octree_(DeviceScene *dscene, const Scene *scene) const
+{
+  /* Count total number of nodes. */
+  int num_nodes = 0;
+  {
+    std::set<const Octree *> unique_octrees;
+    for (const auto &it : object_octrees_) {
+      const Octree *octree = it.second.get();
+      if (unique_octrees.find(octree) == unique_octrees.end()) {
+        unique_octrees.insert(octree);
+        num_nodes += octree->get_num_nodes();
+      }
+    }
+  }
+
+  int node_index = 0;
+  std::map<const Octree *, int> octree_root_indices;
+  /* Plus one for world volume. */
+  int *roots = dscene->volume_tree_roots.alloc(scene->objects.size() + 1);
+
+  KernelOctreeNode *knodes = dscene->volume_tree_nodes.alloc(num_nodes);
+
+  for (const auto &it : object_octrees_) {
+    const Object *object = it.first.first;
+    const int object_id = object ? object->get_device_index() + 1 : 0;
+    const Octree *octree = it.second.get();
+    if (auto entry = octree_root_indices.find(octree); entry != octree_root_indices.end()) {
+      roots[object_id] = entry->second;
+    }
+    else {
+      const uint root_index = node_index++;
+      roots[object_id] = root_index;
+      octree_root_indices[octree] = root_index;
+      knodes[root_index].parent = -1;
+      octree->flatten(knodes, root_index, octree->get_root(), node_index);
+    }
+  }
+
+  dscene->volume_tree_nodes.copy_to_device();
+  dscene->volume_tree_roots.copy_to_device();
+}
+
+std::string VolumeManager::visualize_octree_(const DeviceScene *dscene, const char *filename) const
+{
+  int node_index = 0;
+  std::map<const Octree *, int> octree_root_indices;
+  for (const auto &it : object_octrees_) {
+    const Octree *octree = it.second.get();
+    if (octree_root_indices.find(octree) == octree_root_indices.end()) {
+      octree_root_indices[octree] = node_index;
+      node_index += octree->get_num_nodes();
+    }
+  }
+
+  const KernelOctreeNode *knodes = dscene->volume_tree_nodes.data();
+
+  std::ofstream file(filename);
+  if (file.is_open()) {
+    std::ostringstream buffer;
+    file << "# Visualize volume octree.\n\n"
+            "import bpy\nimport mathutils\n\n"
+            "octree = bpy.data.collections.new(name='Octree')\n"
+            "bpy.context.scene.collection.children.link(octree)\n\n";
+
+    for (const auto &it : object_octrees_) {
+      /* Draw Octree. */
+      const Octree *octree = it.second.get();
+      octree->visualize(knodes, octree_root_indices.at(octree), file);
+
+      /* Apply transform. */
+      const Object *object = it.first.first;
+      if (object && !object->get_geometry()->transform_applied) {
+        const Transform t = object->get_tfm();
+        file << "obj.matrix_world = mathutils.Matrix((" << t.x << ", " << t.y << ", " << t.z
+             << ", (" << 0 << "," << 0 << "," << 0 << "," << 1 << ")))\n\n";
+      }
+    }
+
+    file.close();
+  }
+
+  /* TODO(weizhen): returns empty string so that the function is only called with `--debug-cycles`.
+   * But it feels hacky. */
+  return "";
 }
 
 void VolumeManager::device_update(Device *device,
@@ -748,38 +1052,38 @@ void VolumeManager::device_update(Device *device,
                                   Scene *scene,
                                   Progress &progress)
 {
-  if (!need_update()) {
-    /* TODO(weizhen): geometry nodes set material should get updated. */
-    return;
+  /* TODO(weizhen): geometry nodes set material should get updated. */
+  /* TODO(weizhen): only rebuild if there is volume in the scene. */
+
+  if (need_rebuild_) {
+    initialize_octree_(scene);
+    build_octree_(device, progress);
+    flatten_octree_(dscene, scene);
+
+    update_visualization_ = true;
+    need_rebuild_ = false;
   }
 
-  Octree octree(scene);
-
-  if (!octree.is_empty()) {
-    octree.build(device, progress, scene);
-
-    KernelOctreeNode *knodes = dscene->volume_tree_nodes.alloc(octree.get_num_nodes());
-    octree.flatten(knodes);
-#if WITH_CYCLES_DEBUG
-    octree.visualize(knodes, "octree.py");
-#endif
-
-    dscene->volume_tree_nodes.copy_to_device();
+  if (update_visualization_) {
+    VLOG_INFO << visualize_octree_(dscene, "octree.py")
+              << "Octree has been written to file octree.py.";
+    update_visualization_ = false;
   }
-  else {
-    /* TODO(weizhen): maybe there is shader with volume but the object scale is zero, so this is
-     * needed. but does this belong to volume or integrator manager? How about subsurface? */
-    printf("No volume in the scene.\n");
-    VLOG_INFO << "No volume in the scene.";
-    dscene->data.integrator.use_volumes = false;
-  }
-
-  need_update_ = false;
 }
 
-void VolumeManager::device_free(Device *device, DeviceScene *dscene)
+void VolumeManager::device_free(DeviceScene *dscene)
 {
   dscene->volume_tree_nodes.free();
+  dscene->volume_tree_roots.free();
+}
+
+VolumeManager::~VolumeManager()
+{
+#ifdef WITH_OPENVDB
+  for (auto &it : vdb_map_) {
+    it.second.reset();
+  }
+#endif
 }
 
 CCL_NAMESPACE_END

@@ -89,5 +89,6 @@ KERNEL_DATA_ARRAY(float, ies)
 
 /* Volume. */
 KERNEL_DATA_ARRAY(KernelOctreeNode, volume_tree_nodes)
+KERNEL_DATA_ARRAY(int, volume_tree_roots)
 
 #undef KERNEL_DATA_ARRAY

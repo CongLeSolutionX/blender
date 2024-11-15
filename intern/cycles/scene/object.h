@@ -116,10 +116,6 @@ class Object : public Node {
   bool has_light_linking() const;
   bool has_shadow_linking() const;
 
-  /* Check whether the object is a homogeneous volume. */
-  /* TODO(weizhen): if used often enough we can make it a variable? */
-  bool is_homogeneous_volume() const;
-
  protected:
   /* Specifies the position of the object in scene->objects and
    * in the device vectors. Gets set in device_update. */
@@ -149,7 +145,6 @@ class ObjectManager {
     HOLDOUT_MODIFIED = (1 << 6),
     TRANSFORM_MODIFIED = (1 << 7),
     VISIBILITY_MODIFIED = (1 << 8),
-    VOLUME_REMOVED = (1 << 9),
 
     /* tag everything in the manager for an update */
     UPDATE_ALL = ~0u,

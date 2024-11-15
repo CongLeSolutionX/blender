@@ -148,6 +148,13 @@ ccl_device void kernel_volume_density_evaluate(KernelGlobals kg,
   const float3 voxel_size = make_float3(__int_as_float(in.prim), in.u, in.v);
   Extrema<float> extrema;
   const int num_samples = input[0].object;
+
+  const bool need_transformation = sd.object != OBJECT_NONE &&
+                                   !(kernel_data_fetch(object_flag, sd.object) &
+                                     SD_OBJECT_TRANSFORM_APPLIED);
+  const Transform tfm = need_transformation ?
+                            object_fetch_transform(kg, sd.object, OBJECT_TRANSFORM) :
+                            Transform();
   for (int sample = 0; sample < num_samples; sample++) {
     /* Blue noise indexing. The sequence length is the number of samples. */
     const uint3 index = make_uint3(sample + offset * num_samples, 0, 0xffffffff);
@@ -156,7 +163,10 @@ ccl_device void kernel_volume_density_evaluate(KernelGlobals kg,
     const float3 rand_p = sobol_burley_sample_3D(
         index.x, PRNG_VOLUME_DENSITY_EVAL, index.y, index.z);
     sd.P = ray.P + rand_p * voxel_size;
-
+    if (need_transformation) {
+      /* Convert to world spcace. */
+      sd.P = transform_point(&tfm, sd.P);
+    }
     sd.closure_transparent_extinction = zero_float3();
 
     /* Evaluate volume coefficients. */
@@ -173,8 +183,10 @@ ccl_device void kernel_volume_density_evaluate(KernelGlobals kg,
   }
 
   /* Write output. */
-  output[offset * 2 + 0] = extrema.min;
-  output[offset * 2 + 1] = extrema.max;
+  const float scale = object_volume_density(kg, sd.object);
+  /* TODO(weizhen): don't divide here. */
+  output[offset * 2 + 0] = extrema.min / scale;
+  output[offset * 2 + 1] = extrema.max / scale;
 #endif
 }
 

@@ -93,6 +93,7 @@ class DeviceScene {
 
   /* Volume */
   device_vector<KernelOctreeNode> volume_tree_nodes;
+  device_vector<int> volume_tree_roots;
 
   KernelData data;
 

@@ -452,12 +452,18 @@ void GeometryManager::device_update_preprocess(Device *device, Scene *scene, Pro
       device_update_flags |= DEVICE_MESH_DATA_NEEDS_REALLOC;
     }
 
-    if (geom->is_modified() && geom->has_volume) {
-      scene->volume_manager->need_update_ = true;
+    if (geom->has_volume) {
+      if (geom->is_modified()) {
+        scene->volume_manager->tag_update(geom);
+      }
+      if (!prev_has_volume) {
+        scene->volume_manager->tag_update();
+      }
     }
-
-    if (geom->has_volume != prev_has_volume) {
-      scene->volume_manager->need_update_ = true;
+    else {
+      if (prev_has_volume) {
+        scene->volume_manager->tag_update(geom);
+      }
     }
 
     if (geom->is_hair()) {

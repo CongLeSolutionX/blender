@@ -147,7 +147,7 @@ void Scene::free_memory(bool final)
     light_manager->device_free(device, &dscene);
     particle_system_manager->device_free(device, &dscene);
     bake_manager->device_free(device, &dscene);
-    volume_manager->device_free(device, &dscene);
+    volume_manager->device_free(&dscene);
 
     if (final) {
       image_manager->device_free(device);
@@ -899,6 +899,9 @@ template<> void Scene::delete_node_impl(Geometry *node)
   }
   else {
     flag = GeometryManager::MESH_REMOVED;
+    if (node->has_volume) {
+      volume_manager->tag_update(node);
+    }
   }
 
   delete_node_from_array(geometry, node);
@@ -909,7 +912,7 @@ template<> void Scene::delete_node_impl(Object *node)
 {
   uint flag = ObjectManager::OBJECT_REMOVED;
   if (node->get_geometry()->has_volume) {
-    flag |= ObjectManager::VOLUME_REMOVED;
+    volume_manager->tag_update(node, flag);
   }
   delete_node_from_array(objects, node);
   object_manager->tag_update(this, flag);

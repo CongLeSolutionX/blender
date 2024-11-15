@@ -1102,8 +1102,27 @@ template<> struct Extrema<float> {
   float min;
   float max;
   Extrema<float>() : min(FLT_MAX), max(-FLT_MAX) {}
+  Extrema<float>(float value) : min(value), max(value) {}
   Extrema<float>(float min_, float max_) : min(min_), max(max_) {}
 };
+
+template<typename T> ccl_device_inline Extrema<T> operator*(const Extrema<T> a, const T b)
+{
+  return {a.min * b, a.max * b};
+}
+
+template<typename T>
+ccl_device_inline Extrema<T> operator+(const ccl_private Extrema<T> &a,
+                                       const ccl_private Extrema<T> &b)
+{
+  return {a.min + b.min, a.max + b.max};
+}
+
+template<typename T>
+ccl_device_inline Extrema<T> operator+=(ccl_private Extrema<T> &a, const ccl_private Extrema<T> &b)
+{
+  return a = a + b;
+}
 
 template<typename T>
 ccl_device_inline Extrema<T> join(const ccl_private Extrema<T> &a, const ccl_private Extrema<T> &b)

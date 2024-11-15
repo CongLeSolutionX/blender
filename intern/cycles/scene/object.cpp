@@ -228,7 +228,9 @@ void Object::tag_update(Scene *scene)
   if (geometry) {
     if (tfm_is_modified() || motion_is_modified()) {
       flag |= ObjectManager::TRANSFORM_MODIFIED;
-      scene->volume_manager->need_update_ |= geometry->has_volume;
+      if (geometry->has_volume) {
+        scene->volume_manager->tag_update(this, flag);
+      }
     }
 
     if (visibility_is_modified()) {
@@ -344,41 +346,6 @@ bool Object::has_shadow_linking() const
   }
 
   return false;
-}
-
-bool Object::is_homogeneous_volume() const
-{
-  if (!geometry->has_volume) {
-    return false;
-  }
-
-  bool object_has_volume_attributes = false;
-  foreach (Attribute &attr, geometry->attributes.attributes) {
-    if (attr.element == ATTR_ELEMENT_VOXEL) {
-      object_has_volume_attributes = true;
-      break;
-    }
-  }
-
-  int num_volume_shader = 0;
-  for (Node *node : geometry->get_used_shaders()) {
-    const Shader *shader = static_cast<const Shader *>(node);
-    if (shader->has_volume) {
-      if (++num_volume_shader > 1) {
-        return false;
-      }
-
-      if (shader->has_volume_spatial_varying) {
-        return false;
-      }
-
-      if (shader->has_volume_attribute_dependency && object_has_volume_attributes) {
-        return false;
-      }
-    }
-  }
-
-  return true;
 }
 
 /* Object Manager */
@@ -1029,10 +996,6 @@ void ObjectManager::tag_update(Scene *scene, uint32_t flag)
   /* Integrator's shadow catcher settings depends on object visibility settings. */
   if (flag & (OBJECT_ADDED | OBJECT_REMOVED | OBJECT_MODIFIED)) {
     scene->integrator->tag_update(scene, Integrator::OBJECT_MANAGER);
-  }
-
-  if (flag & VOLUME_REMOVED) {
-    scene->volume_manager->need_update_ = true;
   }
 }
 

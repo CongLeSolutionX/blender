@@ -4,7 +4,6 @@
 
 #include "bvh/octree.h"
 
-#include "scene/background.h"
 #include "scene/geometry.h"
 #include "scene/image_vdb.h"
 #include "scene/object.h"
@@ -21,35 +20,13 @@
 
 #ifdef WITH_OPENVDB
 #  include <openvdb/tools/FindActiveValues.h>
-#  include <openvdb/tools/LevelSetUtil.h>
 #endif
 
 CCL_NAMESPACE_BEGIN
 
-__forceinline static int flatten_index(int x, int y, int z, int3 size)
-{
-  return x + size.x * (y + z * size.y);
-}
-
 __forceinline int Octree::flatten_index(int x, int y, int z) const
 {
   return x + width * (y + z * width);
-}
-
-bool OctreeNode::contains_homogeneous_volume(const Scene *scene) const
-{
-  if (objects.size() > 1) {
-    /* If node contains multiple objects, do not consider it as homogeneous. */
-    return false;
-  }
-
-  const Object *object = dynamic_cast<const Object *>(objects[0]);
-  if (object) {
-    return object->is_homogeneous_volume();
-  }
-
-  const Background *background = dynamic_cast<const Background *>(objects[0]);
-  return !background->get_shader(scene)->has_volume_spatial_varying;
 }
 
 Extrema<float> Octree::get_extrema(const vector<Extrema<float>> &values,
@@ -76,21 +53,16 @@ Extrema<float> Octree::get_extrema(const vector<Extrema<float>> &values,
   return parallel_reduce(range, identity, reduction_func, join_func);
 }
 
-bool Octree::should_split(const Scene *scene, std::shared_ptr<OctreeNode> &node) const
+bool Octree::should_split(std::shared_ptr<OctreeNode> &node,
+                          const bool is_homogeneous_volume) const
 {
-  if (node->objects.empty() || !node->bbox.valid()) {
-    /* If no local volume exists, do not split. */
-    return false;
-  }
-
-  const int3 index_min = world_to_floor_index(node->bbox.min);
-  const int3 index_max = world_to_ceil_index(node->bbox.max);
+  const int3 index_min = object_to_floor_index(node->bbox.min);
+  const int3 index_max = object_to_ceil_index(node->bbox.max);
   const Extrema<float> sigma_extrema = get_extrema(sigmas, index_min, index_max);
 
   /* Do not split homogeneous volume. Volume stack already skips the zero-density regions. */
   node->sigma.max = sigma_extrema.max;
-  node->sigma.min = node->contains_homogeneous_volume(scene) ? sigma_extrema.max :
-                                                               sigma_extrema.min;
+  node->sigma.min = is_homogeneous_volume ? sigma_extrema.max : sigma_extrema.min;
 
   /* TODO(weizhen): force subdivision of aggregate nodes that are larger than the volume contained,
    * regardless of the volume's majorant extinction. */
@@ -121,9 +93,10 @@ shared_ptr<OctreeInternalNode> Octree::make_internal(shared_ptr<OctreeNode> &nod
   return internal;
 }
 
-void Octree::recursive_build_(const Scene *scene, shared_ptr<OctreeNode> &octree_node)
+void Octree::recursive_build_(shared_ptr<OctreeNode> &octree_node,
+                              const bool is_homogeneous_volume = false)
 {
-  if (!should_split(scene, octree_node)) {
+  if (!should_split(octree_node, is_homogeneous_volume)) {
     return;
   }
 
@@ -131,66 +104,17 @@ void Octree::recursive_build_(const Scene *scene, shared_ptr<OctreeNode> &octree
   auto internal = make_internal(octree_node);
 
   for (auto &child : internal->children_) {
-    child->objects.reserve(internal->objects.size());
-    for (Node *node : internal->objects) {
-      /* TODO(weizhen): more granular than object bounding box is to use the geometry bvh. */
-      Object *object = dynamic_cast<Object *>(node);
-      if (!object || object->bounds.intersects(child->bbox)) {
-        /* If world volume or if object bounding box intersect the node bounding box. */
-        child->objects.push_back(object);
-      }
-    }
     /* TODO(weizhen): check the performance. */
-    task_pool.push([&] { recursive_build_(scene, child); });
+    task_pool.push([&] { recursive_build_(child); });
   }
 
   octree_node = internal;
 }
 
-#ifdef WITH_OPENVDB
-openvdb::BoolGrid::ConstPtr Octree::mesh_to_sdf_grid(const Mesh *mesh,
-                                                     const Shader *shader,
-                                                     const float half_width)
-{
-  const int num_verts = mesh->get_verts().size();
-  std::vector<openvdb::Vec3f> points(num_verts);
-  parallel_for(0, num_verts, [&](int i) {
-    const float3 &vert = mesh->get_verts()[i];
-    points[i] = openvdb::Vec3f(vert.x, vert.y, vert.z);
-  });
-
-  const int max_num_triangles = mesh->num_triangles();
-  std::vector<openvdb::Vec3I> triangles;
-  triangles.reserve(max_num_triangles);
-  for (int i = 0; i < max_num_triangles; i++) {
-    /* Only push triangles with matching shader. */
-    const int shader_index = mesh->get_shader()[i];
-    if (static_cast<const Shader *>(mesh->get_used_shaders()[shader_index]) == shader) {
-      triangles.emplace_back(mesh->get_triangles()[i * 3],
-                             mesh->get_triangles()[i * 3 + 1],
-                             mesh->get_triangles()[i * 3 + 2]);
-    }
-  }
-
-  /* TODO(weizhen): Should consider object instead of mesh size. */
-  const float3 mesh_size = mesh->bounds.size();
-  const auto vdb_voxel_size = openvdb::Vec3d(mesh_size.x, mesh_size.y, mesh_size.z) /
-                              double(width);
-
-  auto xform = openvdb::math::Transform::createLinearTransform(1.0);
-  xform->postScale(vdb_voxel_size);
-
-  auto sdf_grid = openvdb::tools::meshToLevelSet<openvdb::FloatGrid>(
-      *xform, points, triangles, half_width);
-
-  return openvdb::tools::sdfInteriorMask(*sdf_grid, 0.5 * vdb_voxel_size.length());
-}
-#endif
-
-void Octree::flatten_(KernelOctreeNode *knodes,
-                      const int current_index,
-                      shared_ptr<OctreeNode> &node,
-                      int &child_index)
+void Octree::flatten(KernelOctreeNode *knodes,
+                     const int current_index,
+                     const shared_ptr<OctreeNode> &node,
+                     int &child_index) const
 {
   KernelOctreeNode &knode = knodes[current_index];
   knode.bbox.max = node->bbox.max;
@@ -202,7 +126,7 @@ void Octree::flatten_(KernelOctreeNode *knodes,
     /* Loop through all the children. */
     for (int i = 0; i < 8; i++) {
       knodes[knode.first_child + i].parent = current_index;
-      flatten_(knodes, knode.first_child + i, internal_ptr->children_[i], child_index);
+      flatten(knodes, knode.first_child + i, internal_ptr->children_[i], child_index);
     }
   }
   else {
@@ -211,73 +135,38 @@ void Octree::flatten_(KernelOctreeNode *knodes,
   }
 }
 
-void Octree::flatten(KernelOctreeNode *knodes)
+/* Convert from position in object space to object. */
+__forceinline float3 Octree::object_to_index(float3 p) const
 {
-  int node_index = 0;
-
-  /* World volume. */
-  /* TODO(weizhen): is there a better way than putting world volume in the octree array? */
-  KernelOctreeNode &knode = knodes[node_index++];
-  knode.first_child = -1;
-  knode.parent = -1;
-  knode.sigma = background_density;
-  knode.bbox.max = make_float3(FLT_MAX);
-  knode.bbox.min = -make_float3(FLT_MAX);
-
-  const int root_index = node_index++;
-  knodes[root_index].parent = -1;
-  flatten_(knodes, root_index, root_, node_index);
-  /* TODO(weizhen): rescale the bounding box to match its resolution, for more robust traversing.
-   */
+  return (p - root_->bbox.min) * object_to_index_scale_;
 }
 
-__forceinline float3 Octree::world_to_index(float3 p) const
+int3 Octree::object_to_floor_index(float3 p) const
 {
-  return (p - root_->bbox.min) * world_to_index_scale_;
-}
-
-int3 Octree::world_to_floor_index(float3 p) const
-{
-  const float3 index = floor(world_to_index(p));
+  const float3 index = floor(object_to_index(p));
   return make_int3(int(index.x), int(index.y), int(index.z));
 }
 
-int3 Octree::world_to_ceil_index(float3 p) const
+int3 Octree::object_to_ceil_index(float3 p) const
 {
-  const float3 index = ceil(world_to_index(p));
+  const float3 index = ceil(object_to_index(p));
   return make_int3(int(index.x), int(index.y), int(index.z));
 }
 
-__forceinline float3 Octree::index_to_world(int x, int y, int z) const
+/* Convert from index to position in object space. */
+__forceinline float3 Octree::index_to_object(int x, int y, int z) const
 {
-  return root_->bbox.min + make_float3(x, y, z) * index_to_world_scale_;
+  return root_->bbox.min + make_float3(x, y, z) * index_to_object_scale_;
 }
 
 __forceinline float3 Octree::voxel_size() const
 {
-  return index_to_world_scale_;
-}
-
-__forceinline int Octree::get_width() const
-{
-  return width;
+  return index_to_object_scale_;
 }
 
 #ifdef WITH_OPENVDB
-openvdb::BoolGrid::ConstPtr Octree::get_vdb(
-    const std::pair<const Geometry *, const Shader *> &geom_shader) const
-{
-  if (vdb_map.count(geom_shader) > 0) {
-    return vdb_map.at(geom_shader);
-  }
-  /* Create empty grid. */
-  return openvdb::BoolGrid::create();
-}
-
 static bool vdb_voxel_intersect(const float3 p_min,
                                 const float3 p_max,
-                                const Transform itfm,
-                                const bool transform_applied,
                                 openvdb::BoolGrid::ConstPtr &grid,
                                 const openvdb::tools::FindActiveValues<openvdb::BoolTree> &find)
 {
@@ -286,20 +175,9 @@ static bool vdb_voxel_intersect(const float3 p_min,
     return true;
   }
 
-  /* Transform bounding box from world space to vdb space. */
-  openvdb::math::BBox<openvdb::Vec3f> vdb_bbox;
-  for (int i = 0; i < 8; i++) {
-    const float3 t = make_float3(i & 1, (i >> 1) & 1, (i >> 2) & 1);
-    float3 v = mix(p_min, p_max, t);
-    if (!transform_applied) {
-      v = transform_point(&itfm, v);
-    }
-    vdb_bbox.expand(openvdb::Vec3f(v.x, v.y, v.z));
-  }
-
   const openvdb::math::CoordBBox coord_bbox(
-      openvdb::Coord::floor(grid->worldToIndex(vdb_bbox.min())),
-      openvdb::Coord::ceil(grid->worldToIndex(vdb_bbox.max())));
+      openvdb::Coord::floor(grid->worldToIndex({p_min.x, p_min.y, p_min.z})),
+      openvdb::Coord::ceil(grid->worldToIndex({p_max.x, p_max.y, p_max.z})));
 
   /* Check if the bounding box lies inside or partially overlaps the mesh.
    * For interior mask grids, all the interior voxels are active. */
@@ -310,64 +188,39 @@ static bool vdb_voxel_intersect(const float3 p_min,
 /* Fill in coordinates for shading the volume density. */
 static void fill_shader_input(device_vector<KernelShaderEvalInput> &d_input,
                               const Octree *octree,
-                              const Node *node,
+                              const Object *object,
                               const Shader *shader,
-                              const int3 &index_min,
-                              const int3 &index_range)
+                              const int width,
+                              openvdb::BoolGrid::ConstPtr &interior_mask)
 {
   /* Get object id. */
-  const Object *object = dynamic_cast<const Object *>(node);
   const int object_id = object ? object->get_device_index() : OBJECT_NONE;
-  const Geometry *geom = object ? object->get_geometry() : nullptr;
 
   /* Get shader id. */
   const uint shader_id = shader->id;
 
-  /* Get object boundary VDB. */
-  openvdb::BoolGrid::ConstPtr grid = octree->get_vdb({geom, shader});
-
-  /* Get object transform. */
-  Transform itfm;
-  bool transform_applied = true;
-  if (!grid->empty()) {
-    const Mesh *mesh = static_cast<const Mesh *>(geom);
-    if (!mesh->transform_applied) {
-      transform_applied = false;
-      itfm = transform_inverse(object->get_tfm());
-    }
-  }
-
-  int num_samples;
-  if (object && object->is_homogeneous_volume()) {
-    num_samples = 1;
-  }
-  else {
-    /* Use roughly the same amount of samples per object, but not more than 256 per voxel. */
-    const int width = octree->get_width();
-    const int global_grids = width * width * width;
-    const int local_grids = index_range.x * index_range.y * index_range.z;
-    num_samples = min(global_grids / local_grids * 16, 256);
-  }
+  const int num_samples = VolumeManager::is_homogeneous_volume(object, shader) ? 1 : 16;
 
   KernelShaderEvalInput *d_input_data = d_input.data();
   d_input_data[0].object = num_samples;
 
   const float3 voxel_size = octree->voxel_size();
-  const blocked_range3d<int> range(0, index_range.x, 8, 0, index_range.y, 8, 0, index_range.z, 8);
+  const blocked_range3d<int> range(0, width, 8, 0, width, 8, 0, width, 8);
   parallel_for(range, [&](const blocked_range3d<int> &r) {
     /* One accessor per thread is important for cached access. */
-    const auto find = openvdb::tools::FindActiveValues(grid->tree());
+    const auto find = openvdb::tools::FindActiveValues(interior_mask->tree());
 
     for (int z = r.cols().begin(); z < r.cols().end(); ++z) {
       for (int y = r.rows().begin(); y < r.rows().end(); ++y) {
         for (int x = r.pages().begin(); x < r.pages().end(); ++x) {
-          const int offset = flatten_index(x, y, z, index_range);
-          const float3 p = octree->index_to_world(
-              x + index_min.x, y + index_min.y, z + index_min.z);
+          const int offset = octree->flatten_index(x, y, z);
+          /* TODO(weizhen): check if we can use index directly instead of position for mesh
+           * interior. */
+          const float3 p = octree->index_to_object(x, y, z);
 
 #ifdef WITH_OPENVDB
           /* Zero density for cells outside of the mesh. */
-          if (!vdb_voxel_intersect(p, p + voxel_size, itfm, transform_applied, grid, find)) {
+          if (!vdb_voxel_intersect(p, p + voxel_size, interior_mask, find)) {
             d_input_data[offset * 2 + 1].object = OBJECT_NONE;
             d_input_data[offset * 2 + 2].object = SHADER_NONE;
             continue;
@@ -395,33 +248,38 @@ static void fill_shader_input(device_vector<KernelShaderEvalInput> &d_input,
 /* Read back the volume densty. */
 static void read_shader_output(const device_vector<float> &d_output,
                                const Octree *octree,
-                               const int3 &index_min,
-                               const int3 &index_range,
                                const int num_channels,
+                               const int width,
                                vector<Extrema<float>> &sigmas)
 {
   const float *d_output_data = d_output.data();
-  const blocked_range3d<int> range(
-      0, index_range.x, 32, 0, index_range.y, 32, 0, index_range.z, 32);
+  const blocked_range3d<int> range(0, width, 32, 0, width, 32, 0, width, 32);
 
   parallel_for(range, [&](const blocked_range3d<int> &r) {
     for (int z = r.cols().begin(); z < r.cols().end(); ++z) {
       for (int y = r.rows().begin(); y < r.rows().end(); ++y) {
         for (int x = r.pages().begin(); x < r.pages().end(); ++x) {
-          const int local_index = flatten_index(x, y, z, index_range);
-          const int global_index = octree->flatten_index(
-              x + index_min.x, y + index_min.y, z + index_min.z);
-          sigmas[global_index].min += d_output_data[local_index * num_channels + 0];
-          sigmas[global_index].max += d_output_data[local_index * num_channels + 1];
+          const int index = octree->flatten_index(x, y, z);
+          sigmas[index].min += d_output_data[index * num_channels + 0];
+          sigmas[index].max += d_output_data[index * num_channels + 1];
         }
       }
     }
   });
 }
 
-void Octree::evaluate_volume_density_(Device *device, Progress &progress, Scene *scene)
+void Octree::evaluate_volume_density_(Device *device,
+                                      Progress &progress,
+                                      const Object *object,
+                                      const Shader *shader,
+                                      openvdb::BoolGrid::ConstPtr &interior_mask)
 {
+  width = VolumeManager::is_homogeneous_volume(object, shader) ? 1 : 1 << VOLUME_OCTREE_MAX_DEPTH;
+  object_to_index_scale_ = float(width) / root_->bbox.size();
+  index_to_object_scale_ = 1.0f / object_to_index_scale_;
+
   /* Initialize density field. */
+  /* TODO(weizhen): maybe lower the resolution. */
   const int size = width * width * width;
   sigmas.resize(size);
   parallel_for(0, size, [&](int i) { sigmas[i] = {0.0f, 0.0f}; });
@@ -429,265 +287,110 @@ void Octree::evaluate_volume_density_(Device *device, Progress &progress, Scene 
   /* Min and max. */
   const int num_channels = 2;
 
-  auto eval_density = [&](const Node *object,
-                          const Shader *shader,
-                          vector<Extrema<float>> &dest,
-                          const int3 index_min,
-                          const int3 index_range) {
-    const int size = index_range.x * index_range.y * index_range.z;
-
-    /* Evaluate shader on device. */
-    ShaderEval shader_eval(device, progress);
-    shader_eval.eval(
-        SHADER_EVAL_VOLUME_DENSITY,
-        size * 2 + 1,
-        num_channels,
-        [&](device_vector<KernelShaderEvalInput> &d_input) {
-          fill_shader_input(d_input, this, object, shader, index_min, index_range);
-          return size;
-        },
-        [&](device_vector<float> &d_output) {
-          read_shader_output(d_output, this, index_min, index_range, num_channels, dest);
-        });
-  };
-
-  for (const Node *node : root_->objects) {
-    if (progress.get_cancel()) {
-      return;
-    }
-
-    if (const Object *object = dynamic_cast<const Object *>(node)) {
-      /* Evaluate density inside object bounds. */
-      const int3 index_min = world_to_floor_index(object->bounds.min);
-      const int3 index_max = world_to_ceil_index(object->bounds.max);
-      const int3 index_range = index_max - index_min;
-
-      const Geometry *geom = object->get_geometry();
-      for (const Node *shader_node : geom->get_used_shaders()) {
-        const Shader *shader = static_cast<const Shader *>(shader_node);
-        if (!shader->has_volume) {
-          continue;
-        }
-
-#ifdef WITH_OPENVDB
-        /* Create SDF grid for mesh volumes, to determine whether a certain point is in the
-         * interior of the mesh. */
-        std::pair<const Geometry *, const Shader *> geom_shader = {geom, shader};
-        if (geom->is_mesh() && !vdb_map.count(geom_shader)) {
-          const Mesh *mesh = static_cast<const Mesh *>(geom);
-          vdb_map[geom_shader] = mesh_to_sdf_grid(mesh, shader, 1.0f);
-        }
-#endif
-
-        /* Evaluate shader on device. */
-        eval_density(object, shader, sigmas, index_min, index_range);
-      }
-    }
-    else {
-      const int3 index_min = make_int3(0);
-      const int3 index_max = make_int3(width);
-      const int3 index_range = index_max - index_min;
-
-      const Background *background = static_cast<const Background *>(node);
-
-      /* Evaluate shader on device. */
-      eval_density(background, background->get_shader(scene), sigmas, index_min, index_range);
-
-      /* NOTE: world volume is the first in the list, so until now `sigma_s` only contains density
-       * evaluation of the world. */
-      background_density = get_extrema(sigmas, index_min, index_max);
-    }
-  }
-
-  /* Check if we should refine the background density. */
-  if (has_world_volume()) {
-    if (!root_->bbox.valid()) {
-      /* Scene has only world volume, the density was already evaluated in the previous loop. */
-      return;
-    }
-    const Background *background = static_cast<const Background *>(root_->objects[0]);
-    const Shader *shader = background->get_shader(scene);
-    if (shader->has_volume_spatial_varying) {
-      /* For spatial varying volume, the density inside the octree bound box are not representative
-       * enough for the whole world, so we evaluate density again in a larger scale. */
-
-      /* Tempararily change the scale for calculating the postions. */
-      const float3 previous_index_to_world_scale = index_to_world_scale_;
-      index_to_world_scale_ = make_float3(10000.0f) / float(width);
-
-      /* Initialize density field. */
-      vector<Extrema<float>> world_density;
-      world_density.resize(size);
-      parallel_for(0, size, [&](int i) { world_density[i] = {0.0f, 0.0f}; });
-
-      const int3 index_min = make_int3(0);
-      const int3 index_max = make_int3(width);
-      const int3 index_range = index_max;
-
-      eval_density(
-          background, background->get_shader(scene), world_density, index_min, index_range);
-
-      background_density = join(background_density,
-                                get_extrema(world_density, index_min, index_max));
-
-      /* Change scale back. */
-      index_to_world_scale_ = previous_index_to_world_scale;
-    }
-  }
+  /* Evaluate shader on device. */
+  ShaderEval shader_eval(device, progress);
+  shader_eval.eval(
+      SHADER_EVAL_VOLUME_DENSITY,
+      size * 2 + 1,
+      num_channels,
+      [&](device_vector<KernelShaderEvalInput> &d_input) {
+        fill_shader_input(d_input, this, object, shader, width, interior_mask);
+        return size;
+      },
+      [&](device_vector<float> &d_output) {
+        read_shader_output(d_output, this, num_channels, width, sigmas);
+      });
 }
 
-void Octree::build(Device *device, Progress &progress, Scene *scene)
+void Octree::build(Device *device,
+                   Progress &progress,
+                   const Object *object,
+                   const Shader *shader,
+                   openvdb::BoolGrid::ConstPtr &interior_mask)
 {
-  // if (!root_) {
-  //   return;
-  // }
-
   progress.set_substatus("Evaluate volume density");
-  double start_time = time_dt();
 
-  evaluate_volume_density_(device, progress, scene);
+  evaluate_volume_density_(device, progress, object, shader, interior_mask);
   if (progress.get_cancel()) {
     return;
   }
 
-  std::cout << "Volume density evaluated in " << time_dt() - start_time << " seconds."
-            << std::endl;
-  VLOG_INFO << "Volume density evaluated in " << time_dt() - start_time << " seconds.";
-
   progress.set_substatus("Building Octree for volumes");
-  start_time = time_dt();
 
-  recursive_build_(scene, root_);
+  recursive_build_(root_, VolumeManager::is_homogeneous_volume(object, shader));
 
   task_pool.wait_work();
 
-  std::cout << "Built volume Octree with " << num_nodes << " nodes in " << time_dt() - start_time
-            << " seconds." << std::endl;
-  VLOG_INFO << "Built volume Octree with " << num_nodes << " nodes in " << time_dt() - start_time
-            << " seconds.";
+  is_built_ = true;
+  sigmas.clear();
 }
 
-Octree::Octree(const Scene *scene)
+Octree::Octree(const BoundBox &bbox)
 {
-  root_ = std::make_shared<OctreeNode>();
-
-  /* Push world volume at the begining of the list. */
-  Shader *bg_shader = scene->background->get_shader(scene);
-  if (bg_shader->has_volume) {
-    root_->objects.push_back(scene->background);
-  }
-  else {
-    background_density = {0.0f, 0.0f};
-  }
-
-  /* Loop through the volume objects to initialize the root node. */
-  for (Object *object : scene->objects) {
-    const Geometry *geom = object->get_geometry();
-    if (geom->has_volume) {
-      const float3 size = object->bounds.size();
-      /* Don't push zero-sized volume. */
-      if (size.x == 0.0f || size.y == 0.0f || size.z == 0.0f) {
-        /* TODO(weizhen): how about this swimming pool mesh? */
-        continue;
-      }
-
-      root_->bbox.grow(object->bounds);
-      root_->objects.push_back(object);
-    }
-  }
-
-  /* 2^max_depth. */
-  width = 1 << VOLUME_OCTREE_MAX_DEPTH;
-  /* Some large number if only world volume exists. */
-  world_to_index_scale_ = float(width) /
-                          (root_->bbox.valid() ? root_->bbox.size() : make_float3(10000.0f));
-  index_to_world_scale_ = 1.0f / world_to_index_scale_;
-
-  // if (!root_->bbox.valid()) {
-  //   root_.reset();
-  //   return;
-  // }
-
-  VLOG_INFO << "Total " << root_->objects.size()
-            << " volume objects with bounding box min = " << root_->bbox.min
-            << ", max = " << root_->bbox.max << ".";
+  root_ = std::make_shared<OctreeNode>(bbox, 0);
+  is_built_ = false;
 }
 
-bool Octree::is_empty() const
+bool Octree::is_built() const
 {
-  /* TODO(weizhen): zero size? */
-  return !(root_->bbox.valid() || has_world_volume());
+  return is_built_;
 }
 
 int Octree::get_num_nodes() const
 {
-  /* Plus one to account for world volume. */
-  return num_nodes + 1;
+  return num_nodes;
 }
 
-bool Octree::has_world_volume() const
+std::shared_ptr<OctreeNode> Octree::get_root() const
 {
-  return !root_->objects.empty() && dynamic_cast<const Background *>(root_->objects[0]);
+  return root_;
 }
 
-void Octree::visualize(KernelOctreeNode *knodes, const char *filename) const
+void Octree::visualize(const KernelOctreeNode *knodes, const int root, std::ofstream &file) const
 {
-  std::ofstream file(filename);
-  if (file.is_open()) {
-    file << "# Visualize volume octree.\n\n";
-    file << "import bpy\n\n";
-
-    file << "vertices = [";
-    for (int i = 1; i < get_num_nodes(); i++) {
-      if (knodes[i].is_leaf()) {
-        continue;
-      }
-      const float3 mid = knodes[i].bbox.center();
-      const float3 max = knodes[i].bbox.max;
-      const float3 min = knodes[i].bbox.min;
-      /* Create three orthogonal faces. */
-      file << "(" << mid.x << "," << mid.y << "," << min.z << "), (" << mid.x << "," << mid.y
-           << "," << max.z << "), (" << mid.x << "," << max.y << "," << max.z << "), (" << mid.x
-           << "," << max.y << "," << min.z << "), (" << mid.x << "," << min.y << "," << min.z
-           << "), (" << mid.x << "," << min.y << "," << max.z << "), ";
-      file << "(" << min.x << "," << mid.y << "," << mid.z << "), (" << max.x << "," << mid.y
-           << "," << mid.z << "), (" << max.x << "," << mid.y << "," << max.z << "), (" << min.x
-           << "," << mid.y << "," << max.z << "), (" << min.x << "," << mid.y << "," << min.z
-           << "), (" << max.x << "," << mid.y << "," << min.z << "), ";
-      file << "(" << mid.x << "," << min.y << "," << mid.z << "), (" << mid.x << "," << max.y
-           << "," << mid.z << "), (" << max.x << "," << max.y << "," << mid.z << "), (" << max.x
-           << "," << min.y << "," << mid.z << "), (" << min.x << "," << min.y << "," << mid.z
-           << "), (" << min.x << "," << max.y << "," << mid.z << "), ";
+  std::string str = "vertices = [";
+  for (int i = root; i < get_num_nodes() + root; i++) {
+    if (knodes[i].is_leaf()) {
+      continue;
     }
-    file << "]\nr = range(len(vertices))\n";
-    file << "edges = [(i, i+1 if i%6<5 else i-4) for i in r]\n";
-    file << "mesh = bpy.data.meshes.new('Octree')\n";
-    file << "mesh.from_pydata(vertices, edges, [])\n";
-    file << "mesh.update()\n";
-    file << "obj = bpy.data.objects.new('Octree', mesh)\n";
-    file << "bpy.context.scene.collection.objects.link(obj)\n";
-    file << "bpy.context.view_layer.objects.active = obj\n";
-    file << "bpy.ops.object.mode_set(mode='EDIT')\n\n";
-
-    const float3 center = knodes[1].bbox.center();
-    const float3 size = knodes[1].bbox.size() * 0.5f;
-    file << "bpy.ops.mesh.primitive_cube_add(location = (" << center.x << ", " << center.y << ", "
-         << center.z << "), scale = (" << size.x << ", " << size.y << ", " << size.z << "))\n";
-    file << "bpy.ops.mesh.delete(type='ONLY_FACE')\n";
-    file << "bpy.ops.object.mode_set(mode='OBJECT')\n";
-    file << "obj.select_set(True)\n";
-
-    file.close();
+    const float3 mid = knodes[i].bbox.center();
+    const float3 max = knodes[i].bbox.max;
+    const float3 min = knodes[i].bbox.min;
+    const std::string mid_x = to_string(mid.x), mid_y = to_string(mid.y), mid_z = to_string(mid.z),
+                      min_x = to_string(min.x), min_y = to_string(min.y), min_z = to_string(min.z),
+                      max_x = to_string(max.x), max_y = to_string(max.y), max_z = to_string(max.z);
+    /* Create three orthogonal faces. */
+    str += "(" + mid_x + "," + mid_y + "," + min_z + "), (" + mid_x + "," + mid_y + "," + max_z +
+           "), (" + mid_x + "," + max_y + "," + max_z + "), (" + mid_x + "," + max_y + "," +
+           min_z + "), (" + mid_x + "," + min_y + "," + min_z + "), (" + mid_x + "," + min_y +
+           "," + max_z + "), ";
+    str += "(" + min_x + "," + mid_y + "," + mid_z + "), (" + max_x + "," + mid_y + "," + mid_z +
+           "), (" + max_x + "," + mid_y + "," + max_z + "), (" + min_x + "," + mid_y + "," +
+           max_z + "), (" + min_x + "," + mid_y + "," + min_z + "), (" + max_x + "," + mid_y +
+           "," + min_z + "), ";
+    str += "(" + mid_x + "," + min_y + "," + mid_z + "), (" + mid_x + "," + max_y + "," + mid_z +
+           "), (" + max_x + "," + max_y + "," + mid_z + "), (" + max_x + "," + min_y + "," +
+           mid_z + "), (" + min_x + "," + min_y + "," + mid_z + "), (" + min_x + "," + max_y +
+           "," + mid_z + "), ";
   }
-}
+  str +=
+      "]\nr = range(len(vertices))\n"
+      "edges = [(i, i+1 if i%6<5 else i-4) for i in r]\n"
+      "mesh = bpy.data.meshes.new('Octree')\n"
+      "mesh.from_pydata(vertices, edges, [])\n"
+      "mesh.update()\n"
+      "obj = bpy.data.objects.new('Octree', mesh)\n"
+      "octree.objects.link(obj)\n"
+      "bpy.context.view_layer.objects.active = obj\n"
+      "bpy.ops.object.mode_set(mode='EDIT')\n";
+  file << str;
 
-Octree::~Octree()
-{
-#ifdef WITH_OPENVDB
-  for (auto &it : vdb_map) {
-    it.second.reset();
-  }
-#endif
+  const float3 center = knodes[root].bbox.center();
+  const float3 size = knodes[root].bbox.size() * 0.5f;
+  file << "bpy.ops.mesh.primitive_cube_add(location = " << center << ", scale = " << size << ")\n";
+  file << "bpy.ops.mesh.delete(type='ONLY_FACE')\n"
+          "bpy.ops.object.mode_set(mode='OBJECT')\n"
+          "obj.select_set(True)\n";
 }
 
 CCL_NAMESPACE_END
