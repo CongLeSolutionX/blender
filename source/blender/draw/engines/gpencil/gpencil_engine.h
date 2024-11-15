@@ -110,11 +110,9 @@ typedef struct GPENCIL_tLayer {
   /** Single linked-list. */
   struct GPENCIL_tLayer *next;
   /** Geometry pass (draw all strokes). */
-  DRWPass *geom_ps;
+  std::unique_ptr<PassSimple> geom_ps;
   /** Blend pass to composite onto the target buffer (blends modes). NULL if not needed. */
   std::unique_ptr<PassSimple> blend_ps;
-  /** First shading group created for this layer. Contains all uniforms. */
-  DRWShadingGroup *base_shgrp;
   /** Layer id of the mask. */
   BLI_bitmap *mask_bits;
   BLI_bitmap *mask_invert_bits;
@@ -141,7 +139,7 @@ typedef struct GPENCIL_tObject {
   /* Used for stroke thickness scaling. */
   float object_scale;
   /* Normal used for shading. Based on view angle. */
-  float plane_normal[3];
+  float3 plane_normal;
   /* Used for drawing depth merge pass. */
   float plane_mat[4][4];
 
@@ -195,6 +193,8 @@ struct GPENCIL_Instance {
   PassSimple merge_depth_ps = {"merge_depth_ps"};
   /* Invert mask buffer content. */
   PassSimple mask_invert_ps = {"mask_invert_ps"};
+
+  blender::draw::View view = {"GPView"};
 };
 
 struct GPENCIL_Data {

@@ -433,6 +433,12 @@ GPENCIL_tLayer *grease_pencil_layer_cache_add(GPENCIL_PrivateData *pd,
 
   /* Geometry pass */
   {
+    if (tgp_layer->geom_ps == nullptr) {
+      tgp_layer->geom_ps = std::make_unique<PassSimple>("GPencil Layer");
+    }
+
+    PassSimple &pass = *tgp_layer->geom_ps;
+
     GPUTexture *depth_tex = (is_in_front) ? pd->dummy_tx : pd->scene_depth_tx;
     GPUTexture **mask_tex = (is_masked) ? &pd->mask_tx : &pd->dummy_tx;
 
@@ -442,32 +448,29 @@ GPENCIL_tLayer *grease_pencil_layer_cache_add(GPENCIL_PrivateData *pd,
     /* Always write stencil. Only used as optimization for blending. */
     state |= DRW_STATE_WRITE_STENCIL | DRW_STATE_STENCIL_ALWAYS;
 
-    tgp_layer->geom_ps = DRW_pass_create("GPencil Layer", state);
-
-    GPUShader *sh = GPENCIL_shader_geometry_get();
-    DRWShadingGroup *grp = tgp_layer->base_shgrp = DRW_shgroup_create(sh, tgp_layer->geom_ps);
-
-    DRW_shgroup_uniform_texture(grp, "gpSceneDepthTexture", depth_tex);
-    DRW_shgroup_uniform_texture_ref(grp, "gpMaskTexture", mask_tex);
-    DRW_shgroup_uniform_vec3_copy(grp, "gpNormal", tgp_ob->plane_normal);
-    DRW_shgroup_uniform_bool_copy(grp, "gpStrokeOrder3d", tgp_ob->is_drawmode3d);
-    DRW_shgroup_uniform_float_copy(grp, "gpThicknessScale", tgp_ob->object_scale);
+    pass.state_set(state);
+    pass.shader_set(GPENCIL_shader_geometry_get());
+    pass.bind_texture("gpSceneDepthTexture", depth_tex);
+    pass.bind_texture("gpMaskTexture", mask_tex);
+    pass.push_constant("gpNormal", tgp_ob->plane_normal);
+    pass.push_constant("gpStrokeOrder3d", tgp_ob->is_drawmode3d);
+    pass.push_constant("gpThicknessScale", tgp_ob->object_scale);
     /* Replaced by a modifier in GPv3. */
-    DRW_shgroup_uniform_float_copy(grp, "gpThicknessOffset", 0.0f);
-    DRW_shgroup_uniform_float_copy(grp, "gpThicknessWorldScale", thickness_scale);
-    DRW_shgroup_uniform_float_copy(grp, "gpVertexColorOpacity", vert_col_opacity);
+    pass.push_constant("gpThicknessOffset", 0.0f);
+    pass.push_constant("gpThicknessWorldScale", thickness_scale);
+    pass.push_constant("gpVertexColorOpacity", vert_col_opacity);
 
     /* If random color type, need color by layer. */
-    float gpl_color[4];
+    float4 gpl_color;
     copy_v4_v4(gpl_color, layer_tint);
     if (pd->v3d_color_type == V3D_SHADING_RANDOM_COLOR) {
       grease_pencil_layer_random_color_get(ob, layer, gpl_color);
       gpl_color[3] = 1.0f;
     }
-    DRW_shgroup_uniform_vec4_copy(grp, "gpLayerTint", gpl_color);
+    pass.push_constant("gpLayerTint", gpl_color);
 
-    DRW_shgroup_uniform_float_copy(grp, "gpLayerOpacity", layer_alpha);
-    DRW_shgroup_stencil_mask(grp, 0xFF);
+    pass.push_constant("gpLayerOpacity", layer_alpha);
+    pass.state_stencil(0xFF, 0xFF, 0xFF);
   }
 
   return tgp_layer;
