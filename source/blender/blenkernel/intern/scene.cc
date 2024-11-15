@@ -1336,8 +1336,13 @@ static void scene_blend_read_data(BlendDataReader *reader, ID *id)
        * map of seqbase pointers to avoid this offset magic. */
       constexpr intptr_t seqbase_offset = offsetof(Sequence, seqbase);
       constexpr intptr_t channels_offset = offsetof(Sequence, channels);
+#if ARCH_CPU_64_BITS
       static_assert(seqbase_offset == 264, "Sequence seqbase member offset cannot be changed");
       static_assert(channels_offset == 280, "Sequence channels member offset cannot be changed");
+#else
+      static_assert(seqbase_offset == 204, "Sequence seqbase member offset cannot be changed");
+      static_assert(channels_offset == 212, "Sequence channels member offset cannot be changed");
+#endif
 
       /* seqbase root pointer */
       if (ed->seqbasep == old_seqbasep) {
