@@ -10,16 +10,10 @@
 #define dotRadius parameters[widgetID * MAX_PARAM + 3].z
 #define shape parameters[widgetID * MAX_PARAM + 3].w
 
-/* Offsetting by two pixels further to avoid losing pixels. */
-vec2 ofs = vec2(outlineOffset + 1.0, -outlineOffset - 1.0);
-
-/* Calculate size of the original rectangle before expanding it based on the offset for the outline
- */
-vec2 rectSize = rect.yw - rect.xz + 2.0 * vec2(outlineOffset, outlineOffset);
-float minSize = min(rectSize.x, rectSize.y);
-
 void main()
 {
+  /* Offsetting by a pixel further to avoid losing pixels. */
+  vec2 ofs = vec2(outlineOffset + 1.0, -outlineOffset - 1.0);
   vec2 pos;
   switch (gl_VertexID) {
     default:
@@ -42,6 +36,9 @@ void main()
   }
 
   gl_Position = ModelViewProjectionMatrix * vec4(pos, 0.0, 1.0);
+
+  vec2 rectSize = rect.yw - rect.xz + 2.0 * vec2(outlineOffset, outlineOffset);
+  float minSize = min(rectSize.x, rectSize.y);
 
   vec2 centeredCoordinates = pos - ((rect.xz + rect.yw) / 2.0);
   uv = centeredCoordinates / minSize;
