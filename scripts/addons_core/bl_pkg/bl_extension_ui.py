@@ -1142,14 +1142,16 @@ class ExtensionUI_Section:
         # in this case the previous panel is used.
         "panel_header",
         "ui_ext_sort_fn",
+        "panel_header_action",
 
         "enabled",
         "extension_ui_list",
     )
 
-    def __init__(self, *, panel_header, ui_ext_sort_fn):
+    def __init__(self, *, panel_header, ui_ext_sort_fn, panel_header_action=None):
         self.panel_header = panel_header
         self.ui_ext_sort_fn = ui_ext_sort_fn
+        self.panel_header_action = panel_header_action
 
         self.enabled = True
         self.extension_ui_list = []
@@ -1539,6 +1541,9 @@ def extensions_panel_draw_impl(
         ExtensionUI_Section(
             panel_header=(iface_("Installed"), "extension_show_panel_installed"),
             ui_ext_sort_fn=ExtensionUI_Section.sort_by_blocked_and_name_fn,
+            panel_header_action=(
+                ((iface_("Update All"), "extensions.package_upgrade_all")) if wm.extensions_updates > 0 else None
+            ),
         ),
         # Installed (upgrade, disabled). Use the previous panel.
         ExtensionUI_Section(
@@ -1684,6 +1689,14 @@ def extensions_panel_draw_impl(
             label, prop_id = section.panel_header
             layout_header, layout_panel = layout.panel_prop(wm, prop_id)
             layout_header.label(text=label, translate=False)
+
+            if section.panel_header_action is not None:
+                operator_label, operator = section.panel_header_action
+                row = layout_header.row()
+                row.active = wm.extensions_updates > 0 and not operation_in_progress
+                row.alignment = 'RIGHT'
+                row.operator(operator, text=operator_label)
+                del operator, operator_label, row
             del label, prop_id, layout_header
 
         if layout_panel is None:
@@ -1776,8 +1789,7 @@ class USERPREF_MT_extensions_settings(Menu):
 
         layout.separator()
 
-        layout.operator("extensions.package_upgrade_all", text="Install Available Updates", icon='IMPORT')
-        layout.operator("extensions.package_install_files", text="Install from Disk...")
+        layout.operator("extensions.package_install_files", text="Install from Disk...", icon='IMPORT')
 
         if prefs.experimental.use_extensions_debug:
 
