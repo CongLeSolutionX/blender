@@ -105,10 +105,10 @@ class Preprocessor {
       small_type_linting(str, report_error);
     }
     str = remove_quotes(str);
+    str = enum_macro_injection(str);
     if (do_resource_argument) {
       str = resource_arguments_mutation(str);
     }
-    str = enum_macro_injection(str);
     str = argument_decorator_macro_injection(str);
     str = array_constructor_macro_injection(str);
     return generated_header_.str() + line_directive_prefix(filename) + str +
@@ -419,10 +419,10 @@ class Preprocessor {
     };
     std::vector<Replacement> fn_replace;
 
-    std::regex regex_func(R"(\n(\w+))"                        /* Return type. */
-                          R"(\s+(\w+))"                       /* Function name. */
-                          R"(\s*\(((?:[^)]|\)(?!\n\{))+\)))"  /* Arguments. */
-                          R"(\s*\{((?:\S|\ |\n(?!\}))+)\n\})" /* Body (assume formatting). */
+    /* Note: Keep the regex simple to avoid stack overflow on MSVC. */
+    std::regex regex_func(R"(\n(\w+))"  /* Return type. */
+                          R"(\s+(\w+))" /* Function name. */
+                          R"(\s*\()"    /* Ensure we capture functions. */
     );
 
     /* Line count from the beginning of the input string. */
@@ -430,11 +430,6 @@ class Preprocessor {
     /* Offset in char from the beginning of the input string. */
     size_t offset = 0;
     regex_global_search(str, regex_func, [&](const std::smatch &match) {
-      std::string fn_return = match[1].str();
-      std::string fn_name = match[2].str();
-      std::string fn_args = match[3].str();
-      std::string fn_body = match[4].str();
-
       std::string prefix = match.prefix().str();
       std::string content = match[0].str();
       std::string suffix = match.suffix().str();
@@ -443,8 +438,20 @@ class Preprocessor {
       line += std::count(prefix.begin(), prefix.end(), '\n') +
               std::count(content.begin(), content.end(), '\n');
 
+      if (!is_function_declaration(suffix)) {
+        return;
+      }
+
+      /* Recover the rest of the function */
+      content += split_on_first(suffix, "\n}", true).front();
+
+      std::string fn_return = match[1].str();
+      std::string fn_name = match[2].str();
+      std::string fn_args = get_content_between_balanced_pair(content, '(', ')');
+      std::string fn_body = get_content_between_balanced_pair(content, '{', '}');
+
       /* Early out if no resource keyword is found. Avoid false positive that can degenerate. */
-      if (!regex_search(str, std::regex(R"(\b(buffer|uniform|image)\b)"))) {
+      if (!regex_search(fn_args, std::regex(R"(\b(buffer|uniform|image)\b)"))) {
         return;
       }
 
@@ -462,34 +469,39 @@ class Preprocessor {
       std::vector<Argument> regular_args;
       std::vector<Argument> all_args;
 
-      std::regex regex_arg(
-          R"(\s*(binding\((\w+)\))?)" /* Resource binding slot (optional). */
-#define mem_qualifier R"(\s*(coherent|volatile|restrict|readonly|writeonly)?)"
-          /* We can have a total of 5 memory qualifiers. Capture them individually. */
-          mem_qualifier mem_qualifier mem_qualifier mem_qualifier mem_qualifier
-#undef mem_qualifier
-          R"(\s*\b(image|uniform|buffer)?\b)" /* Resource qualifier (optional). */
-          R"(\s*\b(const|inout|in|out|)?\b)"  /* Parameter qualifier (optional). */
-          R"(\s*(\w+))"                       /* Type. */
-          R"(\s*(\w+))"                       /* Name. */
-          R"(\s*(\[\w*\])?)"                  /* Array (optional). */
-          R"(\s*(?:,|\)))"                    /* Separator. */
-      );
-
       size_t permutation_len = 1;
-      regex_global_search(fn_args, regex_arg, [&](const std::smatch &arg_match) {
+      for (const std::string &argument : split(fn_args, ',')) {
         Argument arg;
-        for (int i = 3; i <= 7; i++) {
-          if (arg_match[i].str().empty() == false) {
-            arg.mem_qualifiers.emplace_back(arg_match[i].str());
-          }
+
+        /* Parse the memory qualifiers and remove them from the argument string to simplify the
+         * subsequent regex. */
+        std::regex regex_qual(R"(\s*\b(coherent|readonly|restrict|volatile|writeonly)\b)");
+        regex_global_search(argument, regex_qual, [&](const std::smatch &qualifier_match) {
+          arg.mem_qualifiers.emplace_back(qualifier_match[1].str());
+        });
+        std::string argument_no_qualifiers = std::regex_replace(argument, regex_qual, " ");
+
+        /* Note: Keep the regex simple to avoid stack overflow on MSVC. */
+        static std::regex regex_arg(
+            R"(\s*(binding\((\w+)\))?)"         /* Resource binding slot (optional). */
+            R"(\s*\b(image|uniform|buffer)?\b)" /* Resource qualifier (optional). */
+            R"(\s*\b(const|inout|in|out|)?\b)"  /* Parameter qualifier (optional). */
+            R"(\s*(\w+))"                       /* Type. */
+            R"(\s*(\w+))"                       /* Name. */
+            R"(\s*(\[\w*\])?)"                  /* Array (optional). */
+        );
+
+        std::smatch arg_match;
+        if (!std::regex_match(argument_no_qualifiers, arg_match, regex_arg)) {
+          std::cerr << "Argument parsing failed in \"" << fn_name << "\". " << std::endl;
         }
-        arg.qualifier = arg_match[9].str();
-        arg.type = arg_match[10].str();
-        arg.name = arg_match[11].str();
-        arg.array = arg_match[12].str();
-        if (arg_match[8].matched) {
-          switch (hash(arg_match[8].str())) {
+
+        arg.qualifier = arg_match[4].str();
+        arg.type = arg_match[5].str();
+        arg.name = arg_match[6].str();
+        arg.array = arg_match[7].str();
+        if (arg_match[3].matched) {
+          switch (hash(arg_match[3].str())) {
             case hash("uniform"):
               arg.prefix = "UNI_";
               break;
@@ -517,7 +529,7 @@ class Preprocessor {
           regular_args.emplace_back(arg);
         }
         all_args.emplace_back(arg);
-      });
+      }
 
       if (resource_args.empty()) {
         return;
@@ -534,10 +546,12 @@ class Preprocessor {
       /* `#if 0` out the original declaration. Allows correct error report.  */
       Replacement fn;
       fn.position = offset - match.length(0);
-      fn.length = match.length(0);
+      fn.length = content.length();
       fn.content = content;
       fn.content.replace(fn.length - 1, 1, "#endif //");
       fn.content.replace(1, 0, "#if 0 //");
+
+      std::cerr << "START\n" << fn.content << "END\n" << std::endl;
 
       /* One slot per resource argument for each slot the resource is declared for. */
       using Permutation = std::vector<std::string>;
@@ -594,7 +608,8 @@ class Preprocessor {
         std::string perm_proto_name = " prototype_" + perm_name + " ";
 
         /* Prepend prototype at the original function position to allow in argument type from
-         * inside the file. */
+         * inside the file. The prototype is defined as a macro at the top of the file to not mess
+         * with error line. */
         fn.content = perm_proto_name + fn.content;
 
         std::string perm_cond_start = create_string([&](std::stringstream &ss) {
@@ -1002,6 +1017,84 @@ class Preprocessor {
 #endif
     suffix << "\n";
     return suffix.str();
+  }
+
+  /* Returns true if str starts inside a function definition.
+   * That is, if a semicolon doesn't exists before the function body.
+   * Assumes strings already starts in either a function definition or declaration. */
+  bool is_function_declaration(const std::string &str)
+  {
+    /* Assumes formatting and that function is in global scope. */
+    size_t scope_pos = str.find("\n{");
+    if (scope_pos == std::string::npos) {
+      /* No function scope. */
+      return false;
+    }
+    size_t semicol_pos = str.find(';');
+    if (semicol_pos == std::string::npos) {
+      /* Weird. But maybe the function is empty or uses macros. */
+      return true;
+    }
+    /* Make sure this is a function definition and not a prototype. */
+    return scope_pos < semicol_pos;
+  }
+
+  /* Split input string into many substrings based on a separator.
+   * The returned substring doesn't include the separator.
+   * Returns only the input string if no separator exists. */
+  std::vector<std::string> split(const std::string &input, const char separator)
+  {
+    size_t start = 0;
+    size_t end = 0;
+    std::vector<std::string> result;
+    while ((end = input.find(separator, start)) != std::string::npos) {
+      result.push_back(input.substr(start, end - start));
+      start = end + 1;
+    }
+    result.push_back(input.substr(start));
+    return result;
+  }
+
+  /* Split input string into many substrings based on a separator.
+   * The returned substring doesn't include the separator, except if include_separator is true.
+   * Returns only the input string if no separator exists. */
+  std::array<std::string, 2> split_on_first(const std::string &input,
+                                            const std::string &separator,
+                                            bool include_separator = false)
+  {
+    size_t pos = input.find(separator);
+    if (pos == std::string::npos) {
+      return {input, ""};
+    }
+    size_t content_end = pos + (include_separator ? separator.length() : 0);
+    size_t suffix_start = pos + separator.length();
+    return {input.substr(0, content_end), input.substr(suffix_start)};
+  }
+
+  std::string get_content_between_balanced_pair(const std::string &input,
+                                                const char start_delimiter,
+                                                const char end_delimiter)
+  {
+    int balance = 0;
+    size_t start = std::string::npos;
+    size_t end = std::string::npos;
+
+    for (size_t i = 0; i < input.length(); ++i) {
+      if (input[i] == start_delimiter) {
+        if (balance == 0) {
+          start = i;
+        }
+        balance++;
+      }
+      else if (input[i] == end_delimiter) {
+        balance--;
+        if (balance == 0 && start != std::string::npos) {
+          end = i;
+          return input.substr(start + 1, end - start - 1);
+        }
+      }
+    }
+    return "";
   }
 };
 
