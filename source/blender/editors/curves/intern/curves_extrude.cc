@@ -23,12 +23,15 @@ static Span<int> compress_intervals(const OffsetIndices<int> intervals_by_curve,
                                     MutableSpan<int> intervals)
 {
   const int *src = intervals.data();
-  /* Skip the first curve, as all the data stays in the same place. */
-  int *dst = intervals.data() + intervals_by_curve[0].drop_back(1).size();
+  /* Skip the first curve, as all the data stays in the same place.
+   * -1 to drop index denoting curves right endpoint.
+   */
+  int *dst = intervals.data() + intervals_by_curve[0].size() - 1;
 
   for (const int curve : IndexRange(1, intervals_by_curve.size() - 1)) {
-    const IndexRange range = intervals_by_curve[curve].drop_back(1);
-    const int width = range.size() - 1;
+    const IndexRange range = intervals_by_curve[curve];
+    /* -2 one to drop index denoting curve's beginning, second one for ending. */
+    const int width = range.size() - 2;
     std::copy_n(src + range.first() + 1, width, dst);
     dst += width;
   }
