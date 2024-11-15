@@ -178,7 +178,7 @@ class IndexRange {
   /**
    * Creates a new index range with the same beginning but a shifted end.
    */
-  constexpr IndexRange extend(const int64_t n) const
+  constexpr IndexRange extend_back(const int64_t n) const
   {
     return IndexRange::from_begin_size(start_, size_ + n);
   }
