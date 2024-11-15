@@ -331,7 +331,8 @@ GPENCIL_tLayer *grease_pencil_layer_cache_add(GPENCIL_PrivateData *pd,
       pd, grease_pencil, onion_id, &layer_alpha);
 
   /* Create the new layer descriptor. */
-  GPENCIL_tLayer *tgp_layer = static_cast<GPENCIL_tLayer *>(BLI_memblock_alloc(pd->gp_layer_pool));
+  int64_t id = pd->gp_layer_pool->append_and_get_index({});
+  GPENCIL_tLayer *tgp_layer = &(*pd->gp_layer_pool)[id];
   BLI_LINKS_APPEND(&tgp_ob->layers, tgp_layer);
   tgp_layer->layer_id = *grease_pencil.get_layer_index(layer);
   tgp_layer->is_onion = onion_id != 0;
@@ -404,26 +405,27 @@ GPENCIL_tLayer *grease_pencil_layer_cache_add(GPENCIL_PrivateData *pd,
       pd->use_signed_fb = true;
     }
 
-    tgp_layer->blend_ps = DRW_pass_create("GPencil Blend Layer", state);
-
-    GPUShader *sh = GPENCIL_shader_layer_blend_get();
-    DRWShadingGroup *grp = DRW_shgroup_create(sh, tgp_layer->blend_ps);
-    DRW_shgroup_uniform_int_copy(grp, "blendMode", layer.blend_mode);
-    DRW_shgroup_uniform_float_copy(grp, "blendOpacity", layer_opacity);
-    DRW_shgroup_uniform_texture_ref(grp, "colorBuf", &pd->color_layer_tx);
-    DRW_shgroup_uniform_texture_ref(grp, "revealBuf", &pd->reveal_layer_tx);
-    DRW_shgroup_uniform_texture_ref(grp, "maskBuf", (is_masked) ? &pd->mask_tx : &pd->dummy_tx);
-    DRW_shgroup_stencil_mask(grp, 0xFF);
-    DRW_shgroup_call_procedural_triangles(grp, nullptr, 1);
+    if (tgp_layer->blend_ps == nullptr) {
+      tgp_layer->blend_ps = std::make_unique<PassSimple>("GPencil Blend Layer");
+    }
+    PassSimple &pass = *tgp_layer->blend_ps;
+    pass.init();
+    pass.state_set(state);
+    pass.shader_set(GPENCIL_shader_layer_blend_get());
+    pass.push_constant("blendMode", int(layer.blend_mode));
+    pass.push_constant("blendOpacity", layer_opacity);
+    pass.bind_texture("colorBuf", &pd->color_layer_tx);
+    pass.bind_texture("revealBuf", &pd->reveal_layer_tx);
+    pass.bind_texture("maskBuf", (is_masked) ? &pd->mask_tx : &pd->dummy_tx);
+    pass.state_stencil(0xFF, 0xFF, 0xFF);
+    pass.draw_procedural(GPU_PRIM_TRIS, 1, 3);
 
     if (layer.blend_mode == GP_LAYER_BLEND_HARDLIGHT) {
       /* We cannot do custom blending on Multi-Target frame-buffers.
        * Workaround by doing 2 passes. */
-      grp = DRW_shgroup_create(sh, tgp_layer->blend_ps);
-      DRW_shgroup_state_disable(grp, DRW_STATE_BLEND_MUL);
-      DRW_shgroup_state_enable(grp, DRW_STATE_BLEND_ADD_FULL);
-      DRW_shgroup_uniform_int_copy(grp, "blendMode", 999);
-      DRW_shgroup_call_procedural_triangles(grp, nullptr, 1);
+      pass.state_set((state & ~DRW_STATE_BLEND_MUL) | DRW_STATE_BLEND_ADD_FULL);
+      pass.push_constant("blendMode", 999);
+      pass.draw_procedural(GPU_PRIM_TRIS, 1, 3);
     }
 
     pd->use_layer_fb = true;

@@ -79,7 +79,7 @@ void GPENCIL_engine_init(void *ved)
   BLI_memblock_clear(vldata->gp_light_pool, gpencil_light_pool_free);
   BLI_memblock_clear(vldata->gp_material_pool, gpencil_material_pool_free);
   BLI_memblock_clear(vldata->gp_object_pool, nullptr);
-  BLI_memblock_clear(vldata->gp_layer_pool, nullptr);
+  vldata->gp_layer_pool->clear();
   vldata->gp_vfx_pool->clear();
   BLI_memblock_clear(vldata->gp_maskbit_pool, nullptr);
 
@@ -735,8 +735,9 @@ static void GPENCIL_draw_scene_depth_only(void *ved)
     GPU_framebuffer_bind(dfbl->default_fb);
   }
 
-  pd->gp_object_pool = pd->gp_layer_pool = pd->gp_maskbit_pool = nullptr;
+  pd->gp_object_pool = pd->gp_maskbit_pool = nullptr;
   pd->gp_vfx_pool = nullptr;
+  pd->gp_layer_pool = nullptr;
 }
 
 static void gpencil_draw_mask(GPENCIL_Data *vedata, GPENCIL_tObject *ob, GPENCIL_tLayer *layer)
@@ -827,7 +828,7 @@ static void GPENCIL_draw_object(GPENCIL_Data *vedata, GPENCIL_tObject *ob)
 
     if (layer->blend_ps) {
       GPU_framebuffer_bind(fb_object);
-      DRW_draw_pass(layer->blend_ps);
+      manager->submit(*layer->blend_ps);
     }
   }
 
@@ -932,8 +933,9 @@ void GPENCIL_draw_scene(void *ved)
     GPENCIL_antialiasing_draw(vedata);
   }
 
-  pd->gp_object_pool = pd->gp_layer_pool = pd->gp_maskbit_pool = nullptr;
+  pd->gp_object_pool = pd->gp_maskbit_pool = nullptr;
   pd->gp_vfx_pool = nullptr;
+  pd->gp_layer_pool = nullptr;
 }
 
 static void GPENCIL_engine_free()
