@@ -1172,9 +1172,11 @@ add_subdirectory(collada)
 # Linux Release sainty checks
 
 if(WITH_LINUX_OFFICIAL_RELEASE_TESTS)
+  cmake_path(GET TEST_BLENDER_EXE PARENT_PATH release_root_folder)
   add_python_test(
     linux_release_sanity_checks
     ${CMAKE_SOURCE_DIR}/tools/check_blender_release/check_release.py
-    -- ${CMAKE_BINARY_DIR}/bin
+    -- ${release_root_folder}
   )
+  unset(release_root_folder)
 endif()
