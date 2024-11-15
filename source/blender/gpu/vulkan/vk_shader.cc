@@ -1018,7 +1018,21 @@ std::string VKShader::fragment_interface_declare(const shader::ShaderCreateInfo 
       ss << to_string(input.type) << " " << input.name << ";\n";
       /* Declare subpass input. */
       ss << "layout(input_attachment_index=" << input.index << ", set=0, binding=" << input.index
-         << ") uniform subpassInput " << image_name << ";";
+         << ") uniform ";
+      switch (to_component_type(input.type)) {
+        case Type::INT:
+          ss << "isubpassInput";
+          break;
+        case Type::UINT:
+          ss << "usubpassInput";
+          break;
+        case Type::FLOAT:
+        default:
+          ss << "subpassInput";
+          break;
+      }
+      ss << " " << image_name << ";";
+
       /* Read data from subpass input. */
       char swizzle[] = "xyzw";
       swizzle[to_component_count(input.type)] = '\0';
