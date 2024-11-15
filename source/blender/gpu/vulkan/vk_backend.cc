@@ -329,6 +329,33 @@ void VKBackend::detect_workarounds(VKDevice &device)
   workarounds.dynamic_rendering_unused_attachments = !device.supports_extension(
       VK_EXT_DYNAMIC_RENDERING_UNUSED_ATTACHMENTS_EXTENSION_NAME);
 
+  /* Perform platform specific checks.
+   *
+   * Although some platforms implemented certain extensions and the driver was validated via Vulkan
+   * CTS (Conformance test suite). It actually depends on the conformance test version being
+   * executed if the feature is correctly validated.
+   */
+  uint32_t conformance_version = VK_MAKE_API_VERSION(
+      device.vk_physical_device_driver_properties_.conformanceVersion.major,
+      device.vk_physical_device_driver_properties_.conformanceVersion.minor,
+      device.vk_physical_device_driver_properties_.conformanceVersion.subminor,
+      device.vk_physical_device_driver_properties_.conformanceVersion.patch);
+
+  /* Intel IRIS on 10th gen CPU crashes due to issues when using dynamic rendering. It seems like
+   * when vkCmdBeginRendering is called some requirements need to be met, that can only be met when
+   * actually calling a vkCmdDraw command. As driver versions are not easy accessible we check
+   * against the latest conformance test version.
+   */
+  if (device.vk_physical_device_driver_properties_.driverID ==
+          VK_DRIVER_ID_INTEL_PROPRIETARY_WINDOWS &&
+      device.vk_physical_device_properties_.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU &&
+      conformance_version < VK_MAKE_API_VERSION(1, 3, 2, 0))
+  {
+    workarounds.dynamic_rendering = true;
+    workarounds.dynamic_rendering_unused_attachments = true;
+    GCaps.render_pass_workaround = true;
+  }
+
   device.workarounds_ = workarounds;
 }
 

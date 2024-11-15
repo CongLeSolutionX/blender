@@ -136,7 +136,7 @@ void VKCommandBuilder::build_node_group(VKRenderGraph &render_graph,
         is_rendering = true;
       }
     }
-#if 0
+#if 1
     std::cout << "node_group: " << node_group.first() << "-" << node_group.last()
               << ", node_handle: " << node_handle << ", node_type: " << node.type << "\n";
 #endif
