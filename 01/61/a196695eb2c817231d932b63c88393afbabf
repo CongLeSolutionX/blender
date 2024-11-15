@@ -1,3 +1,4 @@
 Referenced by pull request #128723, Fix #128675: Layer brush creates bumps in mesh
 Referenced by commit 03d553078850650de64f4ccc6fc0775cfbc69b3a, Fix #128675: Layer brush creates bumps in mesh
 Referenced by issue #129571, EEVEE Lights Disappear with Shadows on Apple Silicon M1
+Referenced by issue #128675, Sculpt: Regression: Layer brush with large height gets bumpy
