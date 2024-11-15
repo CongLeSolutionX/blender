@@ -77,7 +77,7 @@ struct HierarchyContext {
    * This is useful when exporting UsdGeomGprim: those cannot be nested into each other. For
    * example, an UsdGeomMesh cannot have other UsdGeomMesh as descendants and other hierarchy
    * strategies need to be adopted.
-  */
+   */
   bool is_parent;
 
   /*********** Determined during writer creation: ***************/

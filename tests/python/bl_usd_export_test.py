@@ -950,8 +950,7 @@ class USDExportTest(AbstractUSDTest):
     def test_merge_parent_xform_true(self):
         bpy.ops.wm.open_mainfile(filepath=str(self.testdir / "usd_hierarchy_export_test.blend"))
 
-#        test_path = self.tempdir / "test_merge_parent_xform_true.usda"
-        test_path = "F:/tmp/test_merge_parent_xform_true.usda"
+        test_path = self.tempdir / "test_merge_parent_xform_true.usda"
 
         self.export_and_validate(filepath=str(test_path), merge_parent_xform=True)
 
