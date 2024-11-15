@@ -961,6 +961,37 @@ std::string VKShader::fragment_interface_declare(const shader::ShaderCreateInfo 
   ss << "\n/* Sub-pass Inputs. */\n";
   if (workarounds.dynamic_rendering) {
     for (const ShaderCreateInfo::SubpassIn &input : info.subpass_inputs_) {
+      std::string image_name = "gpu_subpass_img_" + std::to_string(input.index);
+
+      /* Declare global for input. */
+      ss << to_string(input.type) << " " << input.name << ";\n";
+      /* Declare subpass input. */
+      ss << "layout(input_attachment_index=" << input.index << ", set=0, binding=" << input.index
+         << ") uniform ";
+      switch (to_component_type(input.type)) {
+        case Type::INT:
+          ss << "isubpassInput";
+          break;
+        case Type::UINT:
+          ss << "usubpassInput";
+          break;
+        case Type::FLOAT:
+        default:
+          ss << "subpassInput";
+          break;
+      }
+      ss << " " << image_name << ";";
+
+      /* Read data from subpass input. */
+      char swizzle[] = "xyzw";
+      swizzle[to_component_count(input.type)] = '\0';
+      std::stringstream ss_pre;
+      ss_pre << "  " << input.name << " = subpassLoad(" << image_name << ")." << swizzle << ";";
+      pre_main += ss_pre.str();
+    }
+  }
+  else {
+    for (const ShaderCreateInfo::SubpassIn &input : info.subpass_inputs_) {
       std::string image_name = "gpu_subpass_img_";
       image_name += std::to_string(input.index);
 
@@ -1007,37 +1038,6 @@ std::string VKShader::fragment_interface_declare(const shader::ShaderCreateInfo 
       ss_pre << "  " << input.name << " = texelFetch(" << image_name << ", " << texel_co << ", 0)."
              << swizzle << ";\n";
 
-      pre_main += ss_pre.str();
-    }
-  }
-  else {
-    for (const ShaderCreateInfo::SubpassIn &input : info.subpass_inputs_) {
-      std::string image_name = "gpu_subpass_img_" + std::to_string(input.index);
-
-      /* Declare global for input. */
-      ss << to_string(input.type) << " " << input.name << ";\n";
-      /* Declare subpass input. */
-      ss << "layout(input_attachment_index=" << input.index << ", set=0, binding=" << input.index
-         << ") uniform ";
-      switch (to_component_type(input.type)) {
-        case Type::INT:
-          ss << "isubpassInput";
-          break;
-        case Type::UINT:
-          ss << "usubpassInput";
-          break;
-        case Type::FLOAT:
-        default:
-          ss << "subpassInput";
-          break;
-      }
-      ss << " " << image_name << ";";
-
-      /* Read data from subpass input. */
-      char swizzle[] = "xyzw";
-      swizzle[to_component_count(input.type)] = '\0';
-      std::stringstream ss_pre;
-      ss_pre << "  " << input.name << " = subpassLoad(" << image_name << ")." << swizzle << ";";
       pre_main += ss_pre.str();
     }
   }
