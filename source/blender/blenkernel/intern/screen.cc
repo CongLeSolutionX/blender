@@ -1219,8 +1219,6 @@ static void direct_link_region(BlendDataReader *reader, ARegion *region, int spa
     ui_preview->tag = 0;
   }
 
-  BLO_read_struct_list(reader, uiViewStateLink, &region->view_states);
-
   if (spacetype == SPACE_EMPTY) {
     /* unknown space type, don't leak regiondata */
     region->regiondata = nullptr;
