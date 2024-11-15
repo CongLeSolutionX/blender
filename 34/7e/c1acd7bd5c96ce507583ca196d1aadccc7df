@@ -10,3 +10,4 @@ Referenced by pull request #128221, Cleanup: Sculpt: Simplify threaded node iter
 Referenced by commit f241c150426b20232ecd38ca47ff93ed9ccc80ee, Cleanup: Sculpt: Simplify threaded node iteration
 Referenced by pull request #129017, Fix #128999: Smooth Surface brush doesn't update viewport
 Referenced by commit 3d40d6e188407d6be70d85187c5f12fdbaeaeaad, Fix #128999: Smooth Surface brush doesn't update viewport
+Referenced by issue #127396, Sculpt Mode: Invert Mask only done on part of the mesh
