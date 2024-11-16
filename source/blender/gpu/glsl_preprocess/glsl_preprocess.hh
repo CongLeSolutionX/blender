@@ -551,8 +551,6 @@ class Preprocessor {
       fn.content.replace(fn.length - 1, 1, "#endif //");
       fn.content.replace(1, 0, "#if 0 //");
 
-      std::cerr << "START\n" << fn.content << "END\n" << std::endl;
-
       /* One slot per resource argument for each slot the resource is declared for. */
       using Permutation = std::vector<std::string>;
 
