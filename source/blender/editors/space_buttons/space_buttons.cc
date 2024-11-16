@@ -166,7 +166,7 @@ int ED_buttons_tabs_list(const WorkSpace *workspace,
                          SpaceProperties *sbuts,
                          short *context_tabs_array)
 {
-  int filter = std::numeric_limits<int>::max(); /* Initialize mask to 0x7fffffff. */
+  int filter = 0xffffffff;
 
   if (workspace != nullptr) {
     filter = workspace->properties_filter;
