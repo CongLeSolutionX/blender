@@ -229,16 +229,38 @@ class DenoiseOperation : public NodeOperation {
 #ifdef WITH_OPENIMAGEDENOISE
   OIDNQuality get_quality()
   {
-    switch (static_cast<CMPNodeDenoiseQuality>(node_storage(bnode()).quality)) {
-#    if OIDN_VERSION >= 20300
-      case CMP_NODE_DENOISE_QUALITY_FAST:
-        return OIDN_QUALITY_FAST;
-#    endif
-      case CMP_NODE_DENOISE_QUALITY_BALANCED:
-        return OIDN_QUALITY_BALANCED;
-      case CMP_NODE_DENOISE_QUALITY_HIGH:
-      default:
-        return OIDN_QUALITY_HIGH;
+    const CMPNodeDenoiseQuality node_quality = static_cast<CMPNodeDenoiseQuality>(
+        node_storage(bnode()).quality);
+
+    /* TODO: Switch based on if we're using the viewport or the final render */
+    const eCompositorDenoiseQaulity scene_quality = false ? context().denoise_preview_quality() :
+                                                            context().denoise_final_quality();
+
+    if (node_quality == CMP_NODE_DENOISE_QUALITY_DEFAULT) {
+      switch (scene_quality) {
+#  if OIDN_VERSION >= 20300
+        case SCE_COMPOSITOR_DENOISE_FAST:
+          return OIDN_QUALITY_FAST;
+#  endif
+        case SCE_COMPOSITOR_DENOISE_BALANCED:
+          return OIDN_QUALITY_BALANCED;
+        case SCE_COMPOSITOR_DENOISE_HIGH:
+        default:
+          return OIDN_QUALITY_HIGH;
+      }
+    }
+    else {
+      switch (node_quality) {
+#  if OIDN_VERSION >= 20300
+        case CMP_NODE_DENOISE_QUALITY_FAST:
+          return OIDN_QUALITY_FAST;
+#  endif
+        case CMP_NODE_DENOISE_QUALITY_BALANCED:
+          return OIDN_QUALITY_BALANCED;
+        case CMP_NODE_DENOISE_QUALITY_HIGH:
+        default:
+          return OIDN_QUALITY_HIGH;
+      }
     }
   }
 #endif

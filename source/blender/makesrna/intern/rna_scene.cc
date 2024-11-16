@@ -6796,6 +6796,17 @@ static void rna_def_scene_render_data(BlenderRNA *brna)
       {0, nullptr, 0, nullptr, nullptr},
   };
 
+  static const EnumPropertyItem compositor_denoise_qaulity_items[] = {
+      {SCE_COMPOSITOR_DENOISE_HIGH, "HIGH", 0, "High", "High quality"},
+      {SCE_COMPOSITOR_DENOISE_BALANCED,
+       "BALANCED",
+       0,
+       "Balanced",
+       "Balanced between performance and quality"},
+      {SCE_COMPOSITOR_DENOISE_FAST, "FAST", 0, "Fast", "High perfomance"},
+      {0, nullptr, 0, nullptr, nullptr},
+  };
+
   rna_def_scene_ffmpeg_settings(brna);
 
   srna = RNA_def_struct(brna, "RenderSettings", nullptr);
@@ -7535,6 +7546,23 @@ static void rna_def_scene_render_data(BlenderRNA *brna)
   RNA_def_property_enum_items(prop, compositor_precision_items);
   RNA_def_property_ui_text(
       prop, "Compositor Precision", "The precision of compositor intermediate result");
+  RNA_def_property_update(prop, NC_NODE | ND_DISPLAY, "rna_Scene_compositor_update");
+
+  prop = RNA_def_property(srna, "compositor_denoise_preview_quality", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "compositor_denoise_preview_quality");
+  RNA_def_property_enum_items(prop, compositor_denoise_qaulity_items);
+  RNA_def_property_enum_default(prop, SCE_COMPOSITOR_DENOISE_BALANCED);
+  RNA_def_property_ui_text(prop,
+                           "Compositor Preview Denoise Quality",
+                           "The quality setting denoise nodes use in viewport compositing");
+  RNA_def_property_update(prop, NC_NODE | ND_DISPLAY, "rna_Scene_compositor_update");
+
+  prop = RNA_def_property(srna, "compositor_denoise_final_quality", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "compositor_denoise_final_quality");
+  RNA_def_property_enum_items(prop, compositor_denoise_qaulity_items);
+  RNA_def_property_ui_text(prop,
+                           "Compositor Final Denoise Quality",
+                           "The quality setting denoise nodes use in final renders");
   RNA_def_property_update(prop, NC_NODE | ND_DISPLAY, "rna_Scene_compositor_update");
 
   prop = RNA_def_property(srna, "use_new_cpu_compositor", PROP_BOOLEAN, PROP_NONE);

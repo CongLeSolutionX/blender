@@ -54,6 +54,9 @@ class Context {
   /* True if the compositor should use GPU acceleration. */
   virtual bool use_gpu() const = 0;
 
+  virtual const eCompositorDenoiseQaulity denoise_preview_quality() const = 0;
+  virtual const eCompositorDenoiseQaulity denoise_final_quality() const = 0;
+
   /* True if the compositor should write file outputs, false otherwise. */
   virtual bool use_file_output() const = 0;
 

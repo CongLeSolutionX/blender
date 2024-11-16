@@ -2799,9 +2799,10 @@ typedef enum CMPNodeDenoisePrefilter {
 
 /** #NodeDenoise.quality */
 typedef enum CMPNodeDenoiseQuality {
-  CMP_NODE_DENOISE_QUALITY_FAST = 0,
-  CMP_NODE_DENOISE_QUALITY_BALANCED = 1,
-  CMP_NODE_DENOISE_QUALITY_HIGH = 2
+  CMP_NODE_DENOISE_QUALITY_DEFAULT = 0,
+  CMP_NODE_DENOISE_QUALITY_HIGH = 1,
+  CMP_NODE_DENOISE_QUALITY_BALANCED = 2,
+  CMP_NODE_DENOISE_QUALITY_FAST = 3,
 } CMPNodeDenoiseQuality;
 
 /* Color combine/separate modes */

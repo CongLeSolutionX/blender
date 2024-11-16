@@ -207,6 +207,18 @@ class Context : public realtime_compositor::Context {
     return this->get_render_data().compositor_device == SCE_COMPOSITOR_DEVICE_GPU;
   }
 
+  const eCompositorDenoiseQaulity denoise_preview_quality() const override
+  {
+    return static_cast<eCompositorDenoiseQaulity>(
+        this->get_render_data().compositor_denoise_preview_quality);
+  }
+
+  const eCompositorDenoiseQaulity denoise_final_quality() const override
+  {
+    return static_cast<eCompositorDenoiseQaulity>(
+        this->get_render_data().compositor_denoise_final_quality);
+  }
+
   bool use_file_output() const override
   {
     return this->render_context() != nullptr;

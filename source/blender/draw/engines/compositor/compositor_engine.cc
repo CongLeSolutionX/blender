@@ -74,6 +74,16 @@ class Context : public realtime_compositor::Context {
     return true;
   }
 
+  const eCompositorDenoiseQaulity denoise_preview_quality() const override
+  {
+    return SCE_COMPOSITOR_DENOISE_BALANCED;
+  }
+
+  const eCompositorDenoiseQaulity denoise_final_quality() const override
+  {
+    return SCE_COMPOSITOR_DENOISE_HIGH;
+  }
+
   bool use_file_output() const override
   {
     return false;
