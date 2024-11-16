@@ -1253,7 +1253,13 @@ void do_versions_after_linking_400(FileData *fd, Main *bmain)
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 403, 6)) {
     /* Shift animation data to accommodate the new Diffuse Roughness input. */
     version_node_socket_index_animdata(bmain, NTREE_SHADER, SH_NODE_BSDF_PRINCIPLED, 7, 1, 30);
+  }
 
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 404, 2)) {
+    version_legacy_actions_to_layered(bmain);
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 404, 7)) {
 #define SCE_SNAP_TO_NODE_X (1 << 0)
 #define SCE_SNAP_TO_NODE_Y (1 << 1)
     LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
@@ -1265,10 +1271,6 @@ void do_versions_after_linking_400(FileData *fd, Main *bmain)
     }
 #undef macroSCE_SNAP_TO_NODE_X
 #undef macroSCE_SNAP_TO_NODE_Y
-  }
-
-  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 404, 2)) {
-    version_legacy_actions_to_layered(bmain);
   }
 
   /**
