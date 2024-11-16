@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Authors
+/* SPDX-FileCopyrightText: 2024 Blender Authors
  *
  * SPDX-License-Identifier: Apache-2.0 */
 
@@ -23,11 +23,11 @@ TEST(binary_search, Empty)
 
 TEST(binary_search, One)
 {
-  EXPECT_EQ(first_if(Span<bool>{true}, value_pass), 0);
-  EXPECT_EQ(last_if(Span<bool>{true}, value_pass), 0);
+  EXPECT_EQ(first_if(Span{true}, value_pass), 0);
+  EXPECT_EQ(last_if(Span{true}, value_pass), 0);
 
-  EXPECT_EQ(first_if(Span<bool>{false}, value_pass), 1);
-  EXPECT_EQ(last_if(Span<bool>{false}, value_pass), -1);
+  EXPECT_EQ(first_if(Span{false}, value_pass), 1);
+  EXPECT_EQ(last_if(Span{false}, value_pass), -1);
 }
 
 TEST(binary_search, Multiple)
