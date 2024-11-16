@@ -1260,8 +1260,8 @@ void do_versions_after_linking_400(FileData *fd, Main *bmain)
   }
 
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 404, 7)) {
-#define SCE_SNAP_TO_NODE_X (1 << 0)
-#define SCE_SNAP_TO_NODE_Y (1 << 1)
+    constexpr char SCE_SNAP_TO_NODE_X = (1 << 0);
+    constexpr char SCE_SNAP_TO_NODE_Y = (1 << 1);
     LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
       if (scene->toolsettings->snap_node_mode & SCE_SNAP_TO_NODE_X ||
           scene->toolsettings->snap_node_mode & SCE_SNAP_TO_NODE_Y)
@@ -1269,8 +1269,6 @@ void do_versions_after_linking_400(FileData *fd, Main *bmain)
         scene->toolsettings->snap_node_mode = SCE_SNAP_TO_GRID;
       }
     }
-#undef macroSCE_SNAP_TO_NODE_X
-#undef macroSCE_SNAP_TO_NODE_Y
   }
 
   /**
