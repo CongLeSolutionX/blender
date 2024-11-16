@@ -1,3 +1,4 @@
 Referenced by commit 43a96d6b8dd7278759052c506fdb38261325c5e8, Fix: Compile error from missing includes after attribute ID refactor
 Referenced by pull request #127140, Attributes: remove AttributeIDRef in favor of just using strings
 Referenced by commit 89ae1ba38ac46dcb4e72a2dbaf8bab13564c3b31, Attributes: remove AttributeIDRef in favor of just using strings
+Referenced by issue #130369, Broken selection state inside geometry nodes
