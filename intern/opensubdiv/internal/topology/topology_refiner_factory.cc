@@ -63,10 +63,9 @@ inline bool TopologyRefinerFactory<TopologyRefinerData>::resizeComponentTopology
 
   // Faces and face-vertices.
   const blender::OffsetIndices<int> src_faces = converter->faces;
-  const int num_faces = src_faces.size();
-  base_mesh_topology->setNumFaces(num_faces);
-  setNumBaseFaces(refiner, num_faces);
-  for (int face_index = 0; face_index < num_faces; ++face_index) {
+  base_mesh_topology->setNumFaces(src_faces.size());
+  setNumBaseFaces(refiner, src_faces.size());
+  for (const int face_index : src_faces.index_range()) {
     const int num_face_vertices = src_faces[face_index].size();
     base_mesh_topology->setNumFaceVertices(face_index, num_face_vertices);
     setNumBaseFaceVertices(refiner, face_index, num_face_vertices);
