@@ -1652,6 +1652,10 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
   }
 
   mbuflist = (do_cage) ? &cache.cage.buff : &cache.final.buff;
+  // todo: check if the cage or final extraction is possible (mapping is valid) and if it isn't,
+  // create dummy buffers instead of requesting them and filling them later. Then only this code
+  // needs to change, any code it calls can stay the same (again just creating the data that's
+  // requested in a "dumb" way).
 
   /* Edit Mesh */
   assert_deps_valid(MBC_EDIT_TRIANGLES,
