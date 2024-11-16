@@ -3924,7 +3924,7 @@ static void ui_but_build_drawstr_float(uiBut *but, double value)
   }
   else {
     const int prec = ui_but_calc_float_precision(but, value);
-    but->drawstr = fmt::format("{}{:.{}f}", but->str, value, prec);
+    but->drawstr = fmt::format("{}{:.{}g}", but->str, value, prec);
   }
 }
 
