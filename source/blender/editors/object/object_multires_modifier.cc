@@ -115,6 +115,7 @@ static EnumPropertyItem prop_multires_subdivide_mode_type[] = {
 
 static int multires_subdivide_exec(bContext *C, wmOperator *op)
 {
+  const Scene &scene = *CTX_data_scene(C);
   Object *object = context_active_object(C);
   MultiresModifierData *mmd = (MultiresModifierData *)edit_modifier_property_get(
       op, object, eModifierType_Multires);
@@ -123,9 +124,17 @@ static int multires_subdivide_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
+  if (object->mode & OB_MODE_SCULPT) {
+    sculpt_paint::undo::multires_subdivide_begin(scene, *object, op, mmd->totlvl, mmd->sculptlvl, mmd->renderlvl);
+  }
+
   const eMultiresSubdivideModeType subdivide_mode = (eMultiresSubdivideModeType)RNA_enum_get(
       op->ptr, "mode");
   multiresModifier_subdivide(object, mmd, subdivide_mode);
+
+  if (object->mode & OB_MODE_SCULPT) {
+    sculpt_paint::undo::multires_subdivide_end(*object);
+  }
 
   iter_other(CTX_data_main(C), object, true, multires_update_totlevels, &mmd->totlvl);
 

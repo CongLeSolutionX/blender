@@ -64,6 +64,7 @@
 #include "BKE_subsurf.hh"
 #include "BKE_undo_system.hh"
 
+#include "BKE_modifier.hh"
 /* TODO(sergey): Ideally should be no direct call to such low level things. */
 #include "BKE_subdiv_eval.hh"
 
@@ -88,7 +89,6 @@
 #include "sculpt_intern.hh"
 
 namespace blender::ed::sculpt_paint::undo {
-
 /* Implementation of undo system for objects in sculpt mode.
  *
  * Each undo step in sculpt mode consists of list of nodes, each node contains a flat array of data
@@ -185,6 +185,12 @@ struct NodeGeometry {
 
 struct Node;
 
+struct MultiresLevels {
+  char totlvl;
+  char sculptlvl;
+  char renderlvl;
+};
+
 struct StepData {
   /**
    * The type of data stored in this undo step. For historical reasons this is often set when the
@@ -212,6 +218,8 @@ struct StepData {
     int grids_num;
     /** A copy of #SubdivCCG::grid_size. */
     int grid_size;
+
+    std::optional<MultiresLevels> levels;
   } grids;
 
   struct {
@@ -715,21 +723,55 @@ static void geometry_free_data(NodeGeometry *geometry)
                                      &geometry->face_offsets_sharing_info);
 }
 
-static void restore_geometry(StepData &step_data, Object &object)
+static MultiresModifierData *multires_modifier_get(const Scene &scene, const Object &ob)
+{
+  VirtualModifierData virtual_modifier_data;
+  for (ModifierData *md = BKE_modifiers_get_virtual_modifierlist(&ob, &virtual_modifier_data); md; md = md->next)
+  {
+    if (md->type == eModifierType_Multires) {
+      MultiresModifierData *mmd = reinterpret_cast<MultiresModifierData *>(md);
+
+      if (!BKE_modifier_is_enabled(&scene, md, eModifierMode_Realtime)) {
+        continue;
+      }
+
+      return mmd;
+    }
+  }
+
+  return nullptr;
+}
+
+static void restore_geometry(StepData &step_data, Scene& scene, Object &object)
 {
   if (step_data.geometry_clear_pbvh) {
     BKE_sculptsession_free_pbvh(object);
     DEG_id_tag_update(&object.id, ID_RECALC_GEOMETRY);
   }
 
+  SculptSession &ss = *object.sculpt;
   Mesh *mesh = static_cast<Mesh *>(object.data);
 
   if (step_data.applied) {
     restore_geometry_data(&step_data.geometry_modified, mesh);
+    if (ss.subdiv_ccg && step_data.grids.levels) {
+      MultiresLevels levels = *step_data.grids.levels;
+      MultiresModifierData& mmd = *multires_modifier_get(scene, object);
+      std::swap(mmd.totlvl, levels.totlvl);
+      std::swap(mmd.sculptlvl, levels.sculptlvl);
+      std::swap(mmd.renderlvl, levels.renderlvl);
+    }
     step_data.applied = false;
   }
   else {
     restore_geometry_data(&step_data.geometry_original, mesh);
+    if (ss.subdiv_ccg && step_data.grids.levels) {
+      MultiresLevels levels = *step_data.grids.levels;
+      MultiresModifierData& mmd = *multires_modifier_get(scene, object);
+      std::swap(mmd.totlvl, levels.totlvl);
+      std::swap(mmd.sculptlvl, levels.sculptlvl);
+      std::swap(mmd.renderlvl, levels.renderlvl);
+    }
     step_data.applied = true;
   }
 }
@@ -1068,7 +1110,7 @@ static void restore_list(bContext *C, Depsgraph *depsgraph, StepData &step_data)
     case Type::Geometry: {
       BLI_assert(!ss.bm);
 
-      restore_geometry(step_data, object);
+      restore_geometry(step_data, *scene, object);
       BKE_sculptsession_free_deformMats(&ss);
       if (SubdivCCG *subdiv_ccg = ss.subdiv_ccg) {
         refine_subdiv(depsgraph, ss, object, subdiv_ccg->subdiv);
@@ -2143,6 +2185,19 @@ void push_multires_mesh_end(bContext *C, const char *str)
   get_step_data()->geometry_clear_pbvh = false;
 
   push_end(*object);
+}
+
+void multires_subdivide_begin(const Scene &scene, Object &ob, const wmOperator *op, const char tot_level, const char sculpt_level, const char render_level)
+{
+  geometry_begin_ex(scene, ob, op->type->name);
+  StepData* data = get_step_data();
+  MultiresLevels levels = {tot_level, sculpt_level, render_level};
+  data->grids.levels = levels;
+}
+
+void multires_subdivide_end(Object &ob)
+{
+  geometry_end(ob);
 }
 
 /** \} */

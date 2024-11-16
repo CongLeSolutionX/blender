@@ -65,6 +65,13 @@ void geometry_end(Object &ob);
  * Undo for changes happening on a base mesh for multires sculpting.
  * if there is no multi-res sculpt active regular undo is used.
  */
+void multires_subdivide_begin(const Scene &scene, Object &ob, const wmOperator *op, char tot_level, char sculpt_level, char render_level);
+void multires_subdivide_end(Object &ob);
+
+/**
+ * Undo for changes happening on a base mesh for multires sculpting.
+ * if there is no multi-res sculpt active regular undo is used.
+ */
 void push_multires_mesh_begin(bContext *C, const char *str);
 void push_multires_mesh_end(bContext *C, const char *str);
 
