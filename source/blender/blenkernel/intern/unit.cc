@@ -1672,7 +1672,7 @@ static size_t unit_as_string(char *str,
    * to replace 'scientific notation' in those cases. */
   prec -= integer_digits_d(value_conv);
 
-  CLAMP(prec, 0, 6);
+  CLAMP(prec, 0, 7);
 
   /* Convert to a string. */
   size_t len = BLI_snprintf_rlen(str, str_maxncpy, "%.*f", prec, value_conv);

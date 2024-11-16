@@ -3476,7 +3476,7 @@ ARegion *UI_tooltip_create_from_search_item_generic(bContext *C,
 #define UI_TOOLTIP_DELAY_LABEL 0.2
 
 /* Float precision helpers */
-#define UI_PRECISION_FLOAT_MAX 6
+#define UI_PRECISION_FLOAT_MAX 7
 /* For float buttons the 'step', is scaled */
 #define UI_PRECISION_FLOAT_SCALE 0.01f
 
