@@ -1327,7 +1327,7 @@ static void drw_mesh_batch_cache_check_available(TaskGraph &task_graph, Mesh &me
 }
 #endif
 
-static void fill_dummy_batch(gpu::Batch &batch) {}
+static void init_dummy_batch(gpu::Batch &batch) {}
 
 void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
                                            Object &ob,
@@ -1665,7 +1665,7 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
       DRW_vbo_request(cache.batch.edit_triangles, &mbuflist->vbo.edit_data);
     }
     else {
-      fill_dummy_batch(*cache.batch.edit_triangles);
+      init_dummy_batch(*cache.batch.edit_triangles);
     }
   }
   assert_deps_valid(
@@ -1682,7 +1682,7 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
       }
     }
     else {
-      fill_dummy_batch(*cache.batch.edit_vertices);
+      init_dummy_batch(*cache.batch.edit_vertices);
     }
   }
   assert_deps_valid(MBC_EDIT_EDGES,
@@ -1698,7 +1698,7 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
       }
     }
     else {
-      fill_dummy_batch(*cache.batch.edit_edges);
+      init_dummy_batch(*cache.batch.edit_edges);
     }
   }
   assert_deps_valid(MBC_EDIT_VNOR,
@@ -1713,7 +1713,7 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
       }
     }
     else {
-      fill_dummy_batch(*cache.batch.edit_vnor);
+      init_dummy_batch(*cache.batch.edit_vnor);
     }
   }
   assert_deps_valid(MBC_EDIT_LNOR,
@@ -1725,7 +1725,7 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
       DRW_vbo_request(cache.batch.edit_lnor, &mbuflist->vbo.nor);
     }
     else {
-      fill_dummy_batch(*cache.batch.edit_lnor);
+      init_dummy_batch(*cache.batch.edit_lnor);
     }
   }
   assert_deps_valid(
@@ -1738,7 +1738,7 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
       DRW_vbo_request(cache.batch.edit_fdots, &mbuflist->vbo.fdots_nor);
     }
     else {
-      fill_dummy_batch(*cache.batch.edit_fdots);
+      init_dummy_batch(*cache.batch.edit_fdots);
     }
   }
   assert_deps_valid(MBC_SKIN_ROOTS, {BUFFER_INDEX(vbo.skin_roots)});
@@ -1747,7 +1747,7 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
       DRW_vbo_request(cache.batch.edit_skin_roots, &mbuflist->vbo.skin_roots);
     }
     else {
-      fill_dummy_batch(*cache.batch.edit_skin_roots);
+      init_dummy_batch(*cache.batch.edit_skin_roots);
     }
   }
 
@@ -1761,7 +1761,7 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
       DRW_vbo_request(cache.batch.edit_selection_verts, &mbuflist->vbo.vert_idx);
     }
     else {
-      fill_dummy_batch(*cache.batch.edit_selection_verts);
+      init_dummy_batch(*cache.batch.edit_selection_verts);
     }
   }
   assert_deps_valid(MBC_EDIT_SELECTION_EDGES,
@@ -1773,7 +1773,7 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
       DRW_vbo_request(cache.batch.edit_selection_edges, &mbuflist->vbo.edge_idx);
     }
     else {
-      fill_dummy_batch(*cache.batch.edit_selection_edges);
+      init_dummy_batch(*cache.batch.edit_selection_edges);
     }
   }
   assert_deps_valid(MBC_EDIT_SELECTION_FACES,
@@ -1785,7 +1785,7 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
       DRW_vbo_request(cache.batch.edit_selection_faces, &mbuflist->vbo.face_idx);
     }
     else {
-      fill_dummy_batch(*cache.batch.edit_selection_faces);
+      init_dummy_batch(*cache.batch.edit_selection_faces);
     }
   }
   assert_deps_valid(
@@ -1798,7 +1798,7 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
       DRW_vbo_request(cache.batch.edit_selection_fdots, &mbuflist->vbo.fdot_idx);
     }
     else {
-      fill_dummy_batch(*cache.batch.edit_selection_fdots);
+      init_dummy_batch(*cache.batch.edit_selection_fdots);
     }
   }
 
@@ -1820,7 +1820,7 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
       DRW_vbo_request(cache.batch.edituv_faces, &mbuflist->vbo.edituv_data);
     }
     else {
-      fill_dummy_batch(*cache.batch.edituv_faces);
+      init_dummy_batch(*cache.batch.edituv_faces);
     }
   }
   assert_deps_valid(MBC_EDITUV_FACES_STRETCH_AREA,
@@ -1836,7 +1836,7 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
       DRW_vbo_request(cache.batch.edituv_faces_stretch_area, &mbuflist->vbo.edituv_stretch_area);
     }
     else {
-      fill_dummy_batch(*cache.batch.edituv_faces_stretch_area);
+      init_dummy_batch(*cache.batch.edituv_faces_stretch_area);
     }
   }
   assert_deps_valid(MBC_EDITUV_FACES_STRETCH_ANGLE,
@@ -1852,7 +1852,7 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
       DRW_vbo_request(cache.batch.edituv_faces_stretch_angle, &mbuflist->vbo.edituv_stretch_angle);
     }
     else {
-      fill_dummy_batch(*cache.batch.edituv_faces_stretch_angle);
+      init_dummy_batch(*cache.batch.edituv_faces_stretch_angle);
     }
   }
   assert_deps_valid(
@@ -1865,7 +1865,7 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
       DRW_vbo_request(cache.batch.edituv_edges, &mbuflist->vbo.edituv_data);
     }
     else {
-      fill_dummy_batch(*cache.batch.edituv_edges);
+      init_dummy_batch(*cache.batch.edituv_edges);
     }
   }
   assert_deps_valid(
@@ -1878,7 +1878,7 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
       DRW_vbo_request(cache.batch.edituv_verts, &mbuflist->vbo.edituv_data);
     }
     else {
-      fill_dummy_batch(*cache.batch.edituv_verts);
+      init_dummy_batch(*cache.batch.edituv_verts);
     }
   }
   assert_deps_valid(MBC_EDITUV_FACEDOTS,
@@ -1892,7 +1892,7 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
       DRW_vbo_request(cache.batch.edituv_fdots, &mbuflist->vbo.fdots_edituv_data);
     }
     else {
-      fill_dummy_batch(*cache.batch.edituv_fdots);
+      init_dummy_batch(*cache.batch.edituv_fdots);
     }
   }
   assert_deps_valid(
@@ -1905,7 +1905,7 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
       DRW_vbo_request(cache.batch.surface_viewer_attribute, &mbuflist->vbo.attr_viewer);
     }
     else {
-      fill_dummy_batch(*cache.batch.surface_viewer_attribute);
+      init_dummy_batch(*cache.batch.surface_viewer_attribute);
     }
   }
 
