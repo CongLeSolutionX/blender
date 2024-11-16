@@ -432,12 +432,6 @@ bool ED_undo_is_legacy_compatible_for_property(bContext *C, ID *id)
     BKE_view_layer_synced_ensure(scene, view_layer);
     Object *obact = BKE_view_layer_active_object_get(view_layer);
     if (obact != nullptr) {
-      if (obact->mode & OB_MODE_ALL_PAINT) {
-        /* Don't store property changes when painting
-         * (only do undo pushes on brush strokes which each paint operator handles on its own). */
-        CLOG_INFO(&LOG, 1, "skipping undo for paint-mode");
-        return false;
-      }
       if (obact->mode & OB_MODE_EDIT) {
         if ((id == nullptr) || (obact->data == nullptr) ||
             (GS(id->name) != GS(((ID *)obact->data)->name)))

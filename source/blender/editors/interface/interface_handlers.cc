@@ -986,16 +986,6 @@ static void ui_apply_but_undo(uiBut *but)
     }
   }
 
-  if (skip_undo == false) {
-    /* XXX: disable all undo pushes from UI changes from sculpt mode as they cause memfile undo
-     * steps to be written which cause lag: #71434. */
-    if (BKE_paintmode_get_active_from_context(static_cast<bContext *>(but->block->evil_C)) ==
-        PaintMode::Sculpt)
-    {
-      skip_undo = true;
-    }
-  }
-
   if (skip_undo) {
     str = "";
   }
