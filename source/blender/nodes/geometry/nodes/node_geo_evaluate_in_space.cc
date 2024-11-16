@@ -23,6 +23,7 @@
 
 #include "BLI_array.hh"
 #include "BLI_array_utils.hh"
+#include "BLI_binary_search.hh"
 #include "BLI_function_ref.hh"
 #include "BLI_index_mask.hh"
 #include "BLI_math_base.hh"
@@ -158,6 +159,12 @@ static int joint_size_at_depth(const int total_depth, const int depth_i)
 {
   BLI_assert(total_depth > 0);
   return int(1 << (total_depth - depth_i - 1));
+}
+
+static int joint_index_at_depth(const int depth_i, const int joint_i)
+{
+  BLI_assert(IndexRange(total_joints_at_depth(depth_i)).contains(joint_i));
+  return total_joints_at_start(depth_i) + joint_i;
 }
 
 static int total_buckets_at(const int depth_i)
@@ -1194,6 +1201,11 @@ static constexpr int32_t x_axis_stack_mask = 0b10010010'01001001'00100100'100100
 static constexpr int32_t y_axis_stack_mask = 0b01001001'00100100'10010010'01001001;
 static constexpr int32_t z_axis_stack_mask = 0b00100100'10010010'01001001'00100100;
 
+static uint32_t to_mask(const bool value)
+{
+  return value ? ~uint32_t(0) : uint32_t(0);
+}
+
 static uint32_t joint_i_to_stack(const int depth_i, const int joint_i)
 {
   BLI_assert(depth_i > 0);
@@ -1213,31 +1225,38 @@ static int stack_to_i(const int depth_i, const uint32_t stack)
   return int(stack >> (32 - depth_i));
 }
 
-static std::array<bool, 3> dominant_difference(const int a_i,
-                                               const int a_depth_i,
-                                               const int b_i,
-                                               const int b_depth_i)
+static uint32_t one_way_stack(const bool x_axis, const bool y_axis, const bool z_axis)
 {
-  BLI_assert_msg(a_depth_i > 0, "Which dirrection should be at 0 level? Here is only one joint.");
-  BLI_assert_msg(b_depth_i > 0, "Which dirrection should be at 0 level? Here is only one joint.");
-  const uint32_t a_stack = joint_i_to_stack(a_depth_i, a_i);
-  const uint32_t b_stack = joint_i_to_stack(b_depth_i, b_i);
+  const uint32_t x_axis_stack = x_axis_stack_mask & to_mask(x_axis);
+  const uint32_t y_axis_stack = y_axis_stack_mask & to_mask(y_axis);
+  const uint32_t z_axis_stack = z_axis_stack_mask & to_mask(z_axis);
 
-  const uint32_t stack_diff = a_stack ^ b_stack;
+  return x_axis_stack | y_axis_stack | z_axis_stack;
+}
 
-  constexpr int default_diff = 1;
-  const int x_axis_dirrection_i = bitscan_reverse_uint(stack_diff & x_axis_stack_mask |
-                                                       default_diff);
-  const int y_axis_dirrection_i = bitscan_reverse_uint(stack_diff & y_axis_stack_mask |
-                                                       default_diff);
-  const int z_axis_dirrection_i = bitscan_reverse_uint(stack_diff & z_axis_stack_mask |
-                                                       default_diff);
+static uint32_t stack_from_highest_diff(const uint32_t stack_a, const uint32_t stack_b)
+{
+  const uint32_t stack_diff = stack_a ^ stack_b;
 
-  const bool x_axis_dirrection = bool(a_stack & (1 << x_axis_dirrection_i));
-  const bool y_axis_dirrection = bool(a_stack & (1 << y_axis_dirrection_i));
-  const bool z_axis_dirrection = bool(a_stack & (1 << z_axis_dirrection_i));
+  constexpr uint32_t never_empty_diff = 1;
+  const uint32_t x_axis_diff_mask = highest_order_bit_uint(stack_diff & x_axis_stack_mask |
+                                                           never_empty_diff);
+  const uint32_t y_axis_diff_mask = highest_order_bit_uint(stack_diff & y_axis_stack_mask |
+                                                           never_empty_diff);
+  const uint32_t z_axis_diff_mask = highest_order_bit_uint(stack_diff & z_axis_stack_mask |
+                                                           never_empty_diff);
 
-  return {x_axis_dirrection, y_axis_dirrection, z_axis_dirrection};
+  const bool x_axis_dirrection = bool(stack_a & x_axis_diff_mask);
+  const bool y_axis_dirrection = bool(stack_a & y_axis_diff_mask);
+  const bool z_axis_dirrection = bool(stack_a & z_axis_diff_mask);
+
+  return one_way_stack(x_axis_dirrection, y_axis_dirrection, z_axis_dirrection);
+}
+
+static uint32_t merge_stacks(const int depth_i, const uint32_t prefix, const uint32_t postrix)
+{
+  const uint32_t prefix_mask = stack_mask(depth_i);
+  return (prefix & prefix_mask) | (postrix & ~prefix_mask);
 }
 
 #ifndef NDEBUG
@@ -1283,25 +1302,78 @@ static std::array<bool, 3> dominant_difference(const int a_i,
 }
 #endif
 
-static int lowest_joint_in_dirrection(const int prefix_joint,
-                                      const int prefix_depth_i,
-                                      const int total_depth,
-                                      std::array<bool, 3> dirrection)
+namespace binary_search {
+
+template<typename Iterator, typename Predicate>
+static int64_t first_if(Iterator begin, Iterator end, Predicate &&predicate)
 {
-  BLI_assert(total_depth > prefix_depth_i);
-  const int prefix_at_depth = prefix_joint << (total_depth - prefix_depth_i - 1);
-
-  const int bottom_part_mask = (1 << (total_depth - prefix_depth_i - 1)) - 1;
-
-  // prefix_at_depth | (bottom_part_mask & three_dimention_mask & 0);
-
-  return 0;
+  return std::lower_bound(begin,
+                          end,
+                          nullptr,
+                          [&](const auto &value, void * /*dummy*/) { return !predicate(value); }) -
+         begin;
 }
+
+template<typename Range, typename Predicate>
+int64_t first_if(const Range &range, Predicate &&predicate)
+{
+  return first_if(range.begin(), range.end(), predicate);
+}
+
+template<typename Iterator, typename Predicate>
+static int64_t last_if(Iterator begin, Iterator end, Predicate &&predicate)
+{
+  return std::upper_bound(begin,
+                          end,
+                          nullptr,
+                          [&](void * /*dummy*/, const auto &value) { return !predicate(value); }) -
+         begin - 1;
+}
+
+template<typename Range, typename Predicate>
+int64_t last_if(const Range &range, Predicate &&predicate)
+{
+  return last_if(range.begin(), range.end(), predicate);
+}
+
+}  // namespace binary_search
+
+#ifndef NDEBUG
+[[maybe_unused]] static void test4()
+{
+  const auto value_pass = [](const bool value) -> bool { return value; };
+
+  BLI_assert(binary_search::first_if(Span<bool>{}, value_pass) == 0);
+  BLI_assert(binary_search::last_if(Span<bool>{}, value_pass) == -1);
+
+  BLI_assert(binary_search::first_if(Span{true, true, true, true, true, true}, value_pass) == 0);
+  BLI_assert(binary_search::first_if(Span{false, true, true, true, true, true}, value_pass) == 1);
+  BLI_assert(binary_search::first_if(Span{false, false, true, true, true, true}, value_pass) == 2);
+  BLI_assert(binary_search::first_if(Span{false, false, false, true, true, true}, value_pass) ==
+             3);
+  BLI_assert(binary_search::first_if(Span{false, false, false, false, true, true}, value_pass) ==
+             4);
+  BLI_assert(binary_search::first_if(Span{false, false, false, false, false, true}, value_pass) ==
+             5);
+  BLI_assert(binary_search::first_if(Span{false, false, false, false, false, false}, value_pass) ==
+             6);
+
+  BLI_assert(binary_search::last_if(Span{false, false, false, false, false, false}, value_pass) ==
+             -1);
+  BLI_assert(binary_search::last_if(Span{true, false, false, false, false, false}, value_pass) ==
+             0);
+  BLI_assert(binary_search::last_if(Span{true, true, false, false, false, false}, value_pass) ==
+             1);
+  BLI_assert(binary_search::last_if(Span{true, true, true, false, false, false}, value_pass) == 2);
+  BLI_assert(binary_search::last_if(Span{true, true, true, true, false, false}, value_pass) == 3);
+  BLI_assert(binary_search::last_if(Span{true, true, true, true, true, false}, value_pass) == 4);
+  BLI_assert(binary_search::last_if(Span{true, true, true, true, true, true}, value_pass) == 5);
+}
+#endif
 
 template<typename LeafFuncT, typename JointPredicateT, typename JointFuncT>
 static void for_each_to_bottom_latest(const OffsetIndices<int> buckets_offsets,
                                       const int total_depth,
-                                      const IndexRange range,
                                       const JointPredicateT &joint_predicate,
                                       const JointFuncT &joint_func,
                                       const LeafFuncT &leaf_func)
@@ -1320,54 +1392,56 @@ static void for_each_to_bottom_latest(const OffsetIndices<int> buckets_offsets,
 
     const int joint_to_pass_depth = joint_to_pass_depht_stack.pop_last();
     const int joint_to_pass_i = joint_to_pass_i_stack.pop_last();
+    const int joint_to_pass_index = joint_index_at_depth(joint_to_pass_depth, joint_to_pass_i);
+    const uint32_t stack_to_pass = joint_i_to_stack(joint_to_pass_depth, joint_to_pass_i);
+
     const int joint_to_sample_depth = joint_to_sample_depth_stack.pop_last();
     const int joint_to_sample_i = joint_to_sample_i_stack.pop_last();
+    const int joint_to_sample_index = joint_index_at_depth(joint_to_sample_depth,
+                                                           joint_to_sample_i);
+    const uint32_t stack_to_sample = joint_i_to_stack(joint_to_sample_depth, joint_to_sample_i);
 
-    const int joint_to_pass_index = joints_range_at_depth(joint_to_pass_depth)[joint_to_pass_i];
-    const int joint_to_sample_index = joints_range_at_depth(
-        joint_to_sample_depth)[joint_to_sample_i];
+    const uint32_t to_pass_dirrection_stack = stack_from_highest_diff(stack_to_pass,
+                                                                      stack_to_sample);
+    const uint32_t down_stack_to_pass = merge_stacks(
+        joint_to_pass_depth, stack_to_pass, to_pass_dirrection_stack);
 
-    const std::array<bool, 3> dominant_dirrection = dominant_difference(
-        joint_to_pass_i, joint_to_pass_depth, joint_to_sample_i, joint_to_sample_depth);
+    const IndexRange rest_depth = IndexRange::from_begin_end(joint_to_sample_depth, total_depth);
+    const int rest_depth_i = binary_search::last_if(rest_depth, [&](const int depth_i) {
+      const int sub_joint_i_to_pass = stack_to_i(depth_i, down_stack_to_pass);
+      const int sub_joint_index_to_pass = joint_index_at_depth(depth_i, sub_joint_i_to_pass);
 
-    const int joint_to_pass_lowest = lowest_joint_in_dirrection(
-        joint_to_pass_i, joint_to_pass_i, total_depth, dominant_dirrection);
+      return joint_predicate(joint_to_sample_index, sub_joint_index_to_pass);
+    });
+    const bool need_to_double_sampler = rest_depth_i == -1;
 
-    // const int2 lowest_sub_joint_to_pass = binary_search_to_bottom(joint_to_pass_depth,
-    // joint_to_sample_depth);
+    if (need_to_double_sampler) {
+      if (joint_to_sample_depth == IndexRange(total_depth).last()) {
+        const IndexRange buckets_to_pass = joint_buckets_range_at_depth(
+            total_depth, joint_to_pass_depth, joint_to_pass_i);
+        const IndexRange range_to_pass = buckets_offsets[buckets_to_pass];
 
-    /*
-        const Item item = stack.pop_last();
-        const int depth_i = item.depth_i;
-        const int joint_i = item.joint_i;
-        const MutableSpan<int> to_visit =
-       indices.as_mutable_span().take_front(item.prefix_to_visit); const IndexRange joints_range =
-       joints_range_at_depth(depth_i); const IndexRange joint_buckets =
-       joint_buckets_range_at_depth(total_depth, depth_i, joint_i);
+        const IndexRange buckets_to_sample = joint_buckets_range_at_depth(
+            total_depth, joint_to_sample_depth, joint_to_sample_i);
+        const IndexRange range_to_sample = buckets_offsets[buckets_to_sample];
 
-        const auto end_of_prefix = std::stable_partition(
-            to_visit.begin(), to_visit.end(), [&](const int i) -> bool {
-              return joint_predicate(int(joints_range[joint_i]), i);
-            });
+        leaf_func(range_to_pass, range_to_sample);
+        continue;
+      }
 
-        const Span<int> finished_indices = to_visit.drop_front(
-            std::distance(to_visit.begin(), end_of_prefix));
-        joint_func(buckets_offsets[joint_buckets], int(joints_range[joint_i]), finished_indices);
+      joint_to_pass_depht_stack.append(joint_to_pass_depth);
+      joint_to_pass_i_stack.append(joint_to_pass_i);
 
-        const Span<int> next_indices = to_visit.take_front(
-            std::distance(to_visit.begin(), end_of_prefix));
-        if (next_indices.is_empty()) {
-          continue;
-        }
+      joint_to_sample_depth_stack.append(joint_to_sample_depth + 1);
+      joint_to_sample_i_stack.append(joint_to_sample_i * 2 + 0);
 
-        if (depth_i == total_depth - 1) {
-          leaf_func(buckets_offsets[joint_i], next_indices);
-          continue;
-        }
+      joint_to_pass_depht_stack.append(joint_to_pass_depth);
+      joint_to_pass_i_stack.append(joint_to_pass_i);
 
-        stack.append({depth_i + 1, joint_i * 2 + 1, int(next_indices.size())});
-        stack.append({depth_i + 1, joint_i * 2 + 0, int(next_indices.size())});
-      */
+      joint_to_sample_depth_stack.append(joint_to_sample_depth + 1);
+      joint_to_sample_i_stack.append(joint_to_sample_i * 2 + 1);
+      continue;
+    }
   }
 }
 
@@ -1388,64 +1462,12 @@ static void sample_average_latest(const OffsetIndices<int> buckets_offsets,
   const FunctionRef<void(int, MutableSpan<float>)> squared_distance_invertion =
       powered_rcp_for_squared(power_value);
 
-  constexpr int grain_size = 1024;
-  for (const int grain_i : IndexRange((src_bucket_value.size() + grain_size - 1) / grain_size)) {
-    const IndexRange range =
-        src_bucket_value.index_range().drop_front(grain_i * grain_size).take_front(grain_size);
-
-    Vector<float> buffer;
-    buffer.reserve(range.size());
-
-    for_each_to_bottom_latest(
-        buckets_offsets,
-        total_depth,
-        range,
-        [&](const int joint_index, const int value_i) -> bool {
-          return math::distance_squared(src_joints_centre[joint_index],
-                                        src_bucket_position[value_i]) <=
-                 math::square(src_joints_min_distance[joint_index]);
-        },
-        [&](const IndexRange buckets_range, const int joint_index, const Span<int> value_indices) {
-          buffer.resize(value_indices.size());
-          for (const int value_i : value_indices.index_range()) {
-            const int value_index = value_indices[value_i];
-            buffer[value_i] = math::distance_squared(src_joints_centre[joint_index],
-                                                     src_bucket_position[value_index]);
-          }
-
-          squared_distance_invertion(power_value, buffer.as_mutable_span());
-
-          const float total_factor = buckets_range.size();
-          for (const int value_i : value_indices.index_range()) {
-            const int value_index = value_indices[value_i];
-            dst_buckets_data[value_index] += (src_joints_value[joint_index] -
-                                              src_bucket_value[value_index]) *
-                                             buffer[value_i] * total_factor;
-          }
-        },
-        [&](const IndexRange bucket_range, const Span<int> value_indices) {
-          buffer.resize(bucket_range.size());
-          for (const int value_i : value_indices) {
-            const float3 position = src_bucket_position[value_i];
-
-            for (const int index : bucket_range.index_range()) {
-              buffer[index] = math::distance_squared(src_bucket_position[bucket_range[index]],
-                                                     position);
-            }
-
-            squared_distance_invertion(power_value, buffer.as_mutable_span());
-
-            const float3 self_value = src_bucket_value[value_i];
-            for (const int i : bucket_range.index_range()) {
-              const int index = bucket_range[i];
-              const float relation_factor = buffer[i];
-              const float safe_relation_factor = index == value_i ? 0.0f : relation_factor;
-              dst_buckets_data[value_i] += (src_bucket_value[index] - self_value) *
-                                           safe_relation_factor;
-            }
-          }
-        });
-  }
+  for_each_to_bottom_latest(
+      buckets_offsets,
+      total_depth,
+      [&](const int joint_a, const int joint_b) -> bool { return false; },
+      [&](const IndexRange range_to_pass, const int joint_to_sample) {},
+      [&](const IndexRange range_to_pass, const IndexRange range_to_sample) {});
 }
 
 }  // namespace akdbt
@@ -1758,6 +1780,7 @@ static void node_geo_exec(GeoNodeExecParams params)
   akdbt::test();
   akdbt::test2();
   akdbt::test3();
+  akdbt::test4();
 #endif
 
   Field<float3> position_field = params.extract_input<Field<float3>>("Position");
