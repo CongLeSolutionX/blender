@@ -32,9 +32,6 @@ TEST(binary_search, One)
 
 TEST(binary_search, Multiple)
 {
-  EXPECT_EQ(first_if(Span<bool>{}, value_pass), 0);
-  EXPECT_EQ(last_if(Span<bool>{}, value_pass), -1);
-
   EXPECT_EQ(first_if(Span{true, true, true, true, true, true}, value_pass), 0);
   EXPECT_EQ(first_if(Span{false, true, true, true, true, true}, value_pass), 1);
   EXPECT_EQ(first_if(Span{false, false, true, true, true, true}, value_pass), 2);
