@@ -1259,6 +1259,12 @@ static uint32_t merge_stacks(const int depth_i, const uint32_t prefix, const uin
   return (prefix & prefix_mask) | (postrix & ~prefix_mask);
 }
 
+static uint32_t stack_switch_branch(const uint32_t stack, const int depth_i)
+{
+  BLI_assert(depth_i > 0);
+  return stack ^ (1 << (32 - depth_i));
+}
+
 #ifndef NDEBUG
 [[maybe_unused]] static void test3()
 {
@@ -1299,6 +1305,23 @@ static uint32_t merge_stacks(const int depth_i, const uint32_t prefix, const uin
   BLI_assert(stack_to_i(3, joint_i_to_stack(3, 5)) == 5);
   BLI_assert(stack_to_i(3, joint_i_to_stack(3, 6)) == 6);
   BLI_assert(stack_to_i(3, joint_i_to_stack(3, 7)) == 7);
+
+  BLI_assert(stack_switch_branch(0b00000000'00000000'00000000'00000000, 1) ==
+             0b10000000'00000000'00000000'00000000);
+  BLI_assert(stack_switch_branch(0b00100000'00000000'00000000'00000000, 1) ==
+             0b10100000'00000000'00000000'00000000);
+  BLI_assert(stack_switch_branch(0b01000000'00000000'00000000'00000000, 1) ==
+             0b11000000'00000000'00000000'00000000);
+  BLI_assert(stack_switch_branch(0b01100000'00000000'00000000'00000000, 1) ==
+             0b11100000'00000000'00000000'00000000);
+  BLI_assert(stack_switch_branch(0b10000000'00000000'00000000'00000000, 2) ==
+             0b11000000'00000000'00000000'00000000);
+  BLI_assert(stack_switch_branch(0b10100000'00000000'00000000'00000000, 2) ==
+             0b11100000'00000000'00000000'00000000);
+  BLI_assert(stack_switch_branch(0b11000000'00000000'00000000'00000000, 2) ==
+             0b10000000'00000000'00000000'00000000);
+  BLI_assert(stack_switch_branch(0b11100000'00000000'00000000'00000000, 3) ==
+             0b11000000'00000000'00000000'00000000);
 }
 #endif
 
@@ -1392,7 +1415,7 @@ static void for_each_to_bottom_latest(const OffsetIndices<int> buckets_offsets,
 
     const int joint_to_pass_depth = joint_to_pass_depht_stack.pop_last();
     const int joint_to_pass_i = joint_to_pass_i_stack.pop_last();
-    const int joint_to_pass_index = joint_index_at_depth(joint_to_pass_depth, joint_to_pass_i);
+    // const int joint_to_pass_index = joint_index_at_depth(joint_to_pass_depth, joint_to_pass_i);
     const uint32_t stack_to_pass = joint_i_to_stack(joint_to_pass_depth, joint_to_pass_i);
 
     const int joint_to_sample_depth = joint_to_sample_depth_stack.pop_last();
@@ -1407,13 +1430,12 @@ static void for_each_to_bottom_latest(const OffsetIndices<int> buckets_offsets,
         joint_to_pass_depth, stack_to_pass, to_pass_dirrection_stack);
 
     const IndexRange rest_depth = IndexRange::from_begin_end(joint_to_sample_depth, total_depth);
-    const int rest_depth_i = binary_search::last_if(rest_depth, [&](const int depth_i) {
+    const int rest_depth_i = binary_search::first_if(rest_depth, [&](const int depth_i) {
       const int sub_joint_i_to_pass = stack_to_i(depth_i, down_stack_to_pass);
       const int sub_joint_index_to_pass = joint_index_at_depth(depth_i, sub_joint_i_to_pass);
-
       return joint_predicate(joint_to_sample_index, sub_joint_index_to_pass);
     });
-    const bool need_to_double_sampler = rest_depth_i == -1;
+    const bool need_to_double_sampler = rest_depth_i == rest_depth.size();
 
     if (need_to_double_sampler) {
       if (joint_to_sample_depth == IndexRange(total_depth).last()) {
@@ -1441,6 +1463,29 @@ static void for_each_to_bottom_latest(const OffsetIndices<int> buckets_offsets,
       joint_to_sample_depth_stack.append(joint_to_sample_depth + 1);
       joint_to_sample_i_stack.append(joint_to_sample_i * 2 + 1);
       continue;
+    }
+
+    const int highest_joint_i_to_pass = stack_to_i(rest_depth[rest_depth_i], down_stack_to_pass);
+    const IndexRange highest_buckets_to_pass = joint_buckets_range_at_depth(
+        total_depth, rest_depth[rest_depth_i], highest_joint_i_to_pass);
+    const IndexRange highest_range_to_pass = buckets_offsets[highest_buckets_to_pass];
+    joint_func(highest_range_to_pass, joint_to_sample_index);
+
+    for (const int lerp_depth_i : rest_depth.take_front(rest_depth_i)) {
+      const uint32_t down_stack_other_pass = stack_switch_branch(down_stack_to_pass, lerp_depth_i);
+      const int joint_i_other_pass = stack_to_i(lerp_depth_i, down_stack_other_pass);
+
+      joint_to_pass_depht_stack.append(lerp_depth_i);
+      joint_to_pass_i_stack.append(joint_i_other_pass);
+
+      joint_to_sample_depth_stack.append(joint_to_sample_depth + 1);
+      joint_to_sample_i_stack.append(joint_to_sample_i * 2 + 0);
+
+      joint_to_pass_depht_stack.append(lerp_depth_i);
+      joint_to_pass_i_stack.append(joint_i_other_pass);
+
+      joint_to_sample_depth_stack.append(joint_to_sample_depth + 1);
+      joint_to_sample_i_stack.append(joint_to_sample_i * 2 + 1);
     }
   }
 }
