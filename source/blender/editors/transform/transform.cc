@@ -14,6 +14,7 @@
 #include "BKE_editmesh.hh"
 #include "BKE_layer.hh"
 #include "BKE_mask.h"
+#include "BKE_screen.hh"
 #include "BKE_workspace.hh"
 
 #include "GPU_state.hh"

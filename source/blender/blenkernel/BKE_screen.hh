@@ -54,10 +54,12 @@ struct bScreen;
 struct uiBlock;
 struct uiLayout;
 struct uiList;
+struct wmDrawBuffer;
 struct wmGizmoMap;
 struct wmKeyConfig;
 struct wmMsgBus;
 struct wmNotifier;
+struct wmTimer;
 struct wmWindow;
 struct wmWindowManager;
 
@@ -451,12 +453,12 @@ struct ARegionRuntime {
   char *headerstr;
 
   /** Gizmo-map of this region. */
-  struct wmGizmoMap *gizmo_map;
+  wmGizmoMap *gizmo_map;
 
   /** Blend in/out. */
-  struct wmTimer *regiontimer;
+  wmTimer *regiontimer;
 
-  struct wmDrawBuffer *draw_buffer;
+  wmDrawBuffer *draw_buffer;
 
   /** Panel categories runtime. */
   ListBase panels_category;

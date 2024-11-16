@@ -160,7 +160,7 @@ static void userpref_navigation_region_draw(const bContext *C, ARegion *region)
 static bool userpref_execute_region_poll(const RegionPollParams *params)
 {
   const ARegion *region_header = BKE_area_find_region_type(params->area, RGN_TYPE_HEADER);
-  return !region_header->visible;
+  return !region_header->runtime->visible;
 }
 
 /* add handlers, stuff you only do once or on area/region changes */

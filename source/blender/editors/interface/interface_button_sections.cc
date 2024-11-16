@@ -13,6 +13,8 @@
 #include "BLI_span.hh"
 #include "BLI_vector.hh"
 
+#include "BKE_screen.hh"
+
 #include "DNA_screen_types.h"
 
 #include "GPU_immediate.hh"

@@ -17,6 +17,7 @@
 #include "BLI_math_rotation.h"
 
 #include "BKE_context.hh"
+#include "BKE_screen.hh"
 
 #include "RNA_access.hh"
 #include "RNA_define.hh"

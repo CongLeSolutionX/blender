@@ -21,6 +21,7 @@
 
 #include "BKE_context.hh"
 #include "BKE_image.hh"
+#include "BKE_screen.hh"
 
 #include "BLF_api.hh"
 
@@ -554,7 +555,7 @@ void ED_slider_destroy(bContext *C, tSlider *slider)
 {
   /* Remove draw callback. */
   if (slider->draw_handle) {
-    ED_region_draw_cb_exit(slider->region_header->type, slider->draw_handle);
+    ED_region_draw_cb_exit(slider->region_header->runtime->type, slider->draw_handle);
   }
   ED_area_status_text(slider->area, nullptr);
   ED_workspace_status_text(C, nullptr);

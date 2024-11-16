@@ -14,6 +14,7 @@
 #include "BKE_curves.hh"
 #include "BKE_object_types.hh"
 #include "BKE_report.hh"
+#include "BKE_screen.hh"
 
 #include "DEG_depsgraph.hh"
 

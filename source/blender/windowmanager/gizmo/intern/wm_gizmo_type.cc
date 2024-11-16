@@ -13,6 +13,7 @@
 #include "BLI_utildefines.h"
 
 #include "BKE_main.hh"
+#include "BKE_screen.hh"
 
 #include "DNA_screen_types.h"
 #include "DNA_space_types.h"

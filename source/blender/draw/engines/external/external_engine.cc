@@ -18,6 +18,7 @@
 
 #include "BKE_object.hh"
 #include "BKE_particle.h"
+#include "BKE_screen.hh"
 
 #include "ED_image.hh"
 #include "ED_screen.hh"

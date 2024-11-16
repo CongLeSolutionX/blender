@@ -16,10 +16,10 @@
 
 #include "BKE_context.hh"
 #include "BKE_gpencil_legacy.h"
-#include "BKE_report.hh"
-
 #include "BKE_layer.hh"
+#include "BKE_report.hh"
 #include "BKE_scene.hh"
+#include "BKE_screen.hh"
 #include "BKE_unit.hh"
 
 #include "DNA_gpencil_legacy_types.h"

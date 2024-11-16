@@ -36,6 +36,7 @@
 #include "BKE_object_types.hh"
 #include "BKE_paint.hh"
 #include "BKE_report.hh"
+#include "BKE_screen.hh"
 #include "BKE_shrinkwrap.hh"
 #include "BKE_unit.hh"
 

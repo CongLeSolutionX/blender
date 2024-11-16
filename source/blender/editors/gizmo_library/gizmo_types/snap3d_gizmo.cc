@@ -18,6 +18,7 @@
 #include "BLI_math_vector.h"
 
 #include "BKE_context.hh"
+#include "BKE_screen.hh"
 
 #include "ED_gizmo_library.hh"
 #include "ED_screen.hh"

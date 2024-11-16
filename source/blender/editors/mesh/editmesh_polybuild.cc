@@ -19,6 +19,7 @@
 #include "BKE_editmesh.hh"
 #include "BKE_layer.hh"
 #include "BKE_object_types.hh"
+#include "BKE_screen.hh"
 
 #include "BLI_math_geom.h"
 #include "BLI_math_matrix.h"

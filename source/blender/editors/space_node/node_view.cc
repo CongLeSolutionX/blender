@@ -15,6 +15,7 @@
 #include "BKE_context.hh"
 #include "BKE_image.hh"
 #include "BKE_node_runtime.hh"
+#include "BKE_screen.hh"
 
 #include "ED_image.hh"
 #include "ED_node.hh" /* own include */

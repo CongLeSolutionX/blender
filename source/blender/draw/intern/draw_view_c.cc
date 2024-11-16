@@ -32,6 +32,7 @@
 #include "BKE_global.hh"
 #include "BKE_object.hh"
 #include "BKE_paint.hh"
+#include "BKE_screen.hh"
 
 #include "view3d_intern.hh"
 

@@ -25,6 +25,7 @@
 #include "BKE_mask.h"
 #include "BKE_modifier.hh"
 #include "BKE_paint.hh"
+#include "BKE_screen.hh"
 
 #include "SEQ_transform.hh"
 
