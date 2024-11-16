@@ -606,6 +606,15 @@ void ntree_update_reroute_nodes(bNodeTree *ntree)
     if (link->tonode->type != NODE_REROUTE) {
       nodes_linked_with_reroutes.add(link->tonode);
     }
+
+    /* Special case when there is a reroute chain that is disconnected from any other nodes */
+    if (link->fromnode->type == NODE_REROUTE 
+        && link->tonode->type == NODE_REROUTE 
+        && !static_cast<bNodeSocket*>(link->fromnode->inputs.first)->is_directly_linked())
+    {
+      nodes_linked_with_reroutes.add(link->fromnode);
+    }
+
     links_map.add(link->fromsock, link);
     links_map.add(link->tosock, link);
   }
