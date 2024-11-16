@@ -270,7 +270,7 @@ static void select_draw_scene(void *vedata)
     inst.view_verts.sync(DRW_view_create_with_zoffset(view_default, draw_ctx->rv3d, 1.1f));
   }
 
-  if (false) {
+  {
     DefaultFramebufferList *dfbl = DRW_viewport_framebuffer_list_get();
     GPU_framebuffer_bind(dfbl->depth_only_fb);
     GPU_framebuffer_clear_depth(dfbl->depth_only_fb, 1.0f);
