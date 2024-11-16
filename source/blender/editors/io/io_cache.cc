@@ -12,7 +12,7 @@
 #include "DNA_space_types.h"
 
 #include "BLI_listbase.h"
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 #include "BLI_string.h"
 
 #include "BKE_cachefile.hh"
@@ -105,7 +105,8 @@ static int cachefile_open_exec(bContext *C, wmOperator *op)
       RNA_property_update(C, &pprop->ptr, pprop->prop);
     }
 
-    MEM_freeN(op->customdata);
+    op->customdata = nullptr;
+    MEM_delete(pprop);
   }
 
   return OPERATOR_FINISHED;

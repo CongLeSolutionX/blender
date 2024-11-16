@@ -14,7 +14,6 @@
 
 #include "vk_backend.hh"
 #include "vk_framebuffer.hh"
-#include "vk_memory.hh"
 #include "vk_shader_interface.hh"
 #include "vk_shader_log.hh"
 #include "vk_state_manager.hh"
@@ -24,6 +23,8 @@
 #include "BLI_vector.hh"
 
 #include "BKE_global.hh"
+
+#include <fmt/format.h>
 
 using namespace blender::gpu::shader;
 
@@ -380,14 +381,14 @@ static void print_resource(std::ostream &os,
     case ShaderCreateInfo::Resource::BindType::UNIFORM_BUFFER:
       array_offset = res.uniformbuf.name.find_first_of("[");
       name_no_array = (array_offset == -1) ? res.uniformbuf.name :
-                                             StringRef(res.uniformbuf.name.c_str(), array_offset);
+                                             StringRef(res.uniformbuf.name.data(), array_offset);
       os << "uniform _" << name_no_array << " { " << res.uniformbuf.type_name << " "
          << res.uniformbuf.name << "; };\n";
       break;
     case ShaderCreateInfo::Resource::BindType::STORAGE_BUFFER:
       array_offset = res.storagebuf.name.find_first_of("[");
       name_no_array = (array_offset == -1) ? res.storagebuf.name :
-                                             StringRef(res.storagebuf.name.c_str(), array_offset);
+                                             StringRef(res.storagebuf.name.data(), array_offset);
       print_qualifier(os, res.storagebuf.qualifiers);
       os << "buffer _";
       os << name_no_array << " { " << res.storagebuf.type_name << " " << res.storagebuf.name
@@ -482,12 +483,9 @@ static std::string main_function_wrapper(std::string &pre_main, std::string &pos
   return ss.str();
 }
 
-static std::string combine_sources(Span<const char *> sources)
+static std::string combine_sources(Span<StringRefNull> sources)
 {
-  char *sources_combined = BLI_string_join_arrayN((const char **)sources.data(), sources.size());
-  std::string result(sources_combined);
-  MEM_freeN(sources_combined);
-  return result;
+  return fmt::to_string(fmt::join(sources, ""));
 }
 
 VKShader::VKShader(const char *name) : Shader(name)
@@ -518,7 +516,7 @@ VKShader::~VKShader()
   vk_descriptor_set_layout_ = VK_NULL_HANDLE;
 }
 
-void VKShader::build_shader_module(MutableSpan<const char *> sources,
+void VKShader::build_shader_module(MutableSpan<StringRefNull> sources,
                                    shaderc_shader_kind stage,
                                    VKShaderModule &r_shader_module)
 {
@@ -538,22 +536,22 @@ void VKShader::build_shader_module(MutableSpan<const char *> sources,
   }
 }
 
-void VKShader::vertex_shader_from_glsl(MutableSpan<const char *> sources)
+void VKShader::vertex_shader_from_glsl(MutableSpan<StringRefNull> sources)
 {
   build_shader_module(sources, shaderc_vertex_shader, vertex_module);
 }
 
-void VKShader::geometry_shader_from_glsl(MutableSpan<const char *> sources)
+void VKShader::geometry_shader_from_glsl(MutableSpan<StringRefNull> sources)
 {
   build_shader_module(sources, shaderc_geometry_shader, geometry_module);
 }
 
-void VKShader::fragment_shader_from_glsl(MutableSpan<const char *> sources)
+void VKShader::fragment_shader_from_glsl(MutableSpan<StringRefNull> sources)
 {
   build_shader_module(sources, shaderc_fragment_shader, fragment_module);
 }
 
-void VKShader::compute_shader_from_glsl(MutableSpan<const char *> sources)
+void VKShader::compute_shader_from_glsl(MutableSpan<StringRefNull> sources)
 {
   build_shader_module(sources, shaderc_compute_shader, compute_module);
 }
@@ -574,9 +572,9 @@ bool VKShader::finalize(const shader::ShaderCreateInfo *info)
 
   if (do_geometry_shader_injection(info)) {
     std::string source = workaround_geometry_shader_source_create(*info);
-    Vector<const char *> sources;
+    Vector<StringRefNull> sources;
     sources.append("version");
-    sources.append(source.c_str());
+    sources.append(source);
     geometry_shader_from_glsl(sources);
   }
 
@@ -627,8 +625,7 @@ bool VKShader::finalize_shader_module(VKShaderModule &shader_module, const char 
   if (bool(shader_module.compilation_result.GetNumWarnings() +
            shader_module.compilation_result.GetNumErrors()))
   {
-    const char *sources = shader_module.combined_sources.c_str();
-    print_log(Span<const char *>(&sources, 1),
+    print_log({shader_module.combined_sources},
               shader_module.compilation_result.GetErrorMessage().c_str(),
               stage_name,
               bool(shader_module.compilation_result.GetNumErrors()),
@@ -640,6 +637,7 @@ bool VKShader::finalize_shader_module(VKShaderModule &shader_module, const char 
   shader_module.combined_sources.clear();
   shader_module.sources_hash.clear();
   shader_module.compilation_result = {};
+  shader_module.spirv_binary.clear();
   return compilation_succeeded;
 }
 
@@ -651,8 +649,6 @@ bool VKShader::is_ready() const
 bool VKShader::finalize_pipeline_layout(VkDevice vk_device,
                                         const VKShaderInterface &shader_interface)
 {
-  VK_ALLOCATION_CALLBACKS
-
   const uint32_t layout_count = vk_descriptor_set_layout_ == VK_NULL_HANDLE ? 0 : 1;
   VkPipelineLayoutCreateInfo pipeline_info = {};
   VkPushConstantRange push_constant_range = {};
@@ -673,8 +669,8 @@ bool VKShader::finalize_pipeline_layout(VkDevice vk_device,
     pipeline_info.pPushConstantRanges = &push_constant_range;
   }
 
-  if (vkCreatePipelineLayout(
-          vk_device, &pipeline_info, vk_allocation_callbacks, &vk_pipeline_layout) != VK_SUCCESS)
+  if (vkCreatePipelineLayout(vk_device, &pipeline_info, nullptr, &vk_pipeline_layout) !=
+      VK_SUCCESS)
   {
     return false;
   };
@@ -844,22 +840,11 @@ std::string VKShader::vertex_interface_declare(const shader::ShaderCreateInfo &i
   {
     ss << "layout(location=" << (location++) << ") out int gpu_ViewportIndex;\n";
   }
-  if (bool(info.builtins_ & BuiltinBits::BARYCENTRIC_COORD)) {
-    /* Need this for stable barycentric. */
-    ss << "layout(location=" << (location++) << ") flat out vec4 gpu_pos_flat;\n";
-    ss << "layout(location=" << (location++) << ") out vec4 gpu_pos;\n";
-
-    post_main += "  gpu_pos = gpu_pos_flat = gl_Position;\n";
-  }
   ss << "\n";
 
   /* Retarget depth from -1..1 to 0..1. This will be done by geometry stage, when geometry shaders
    * are used. */
-  const bool has_geometry_stage = bool(info.builtins_ & (BuiltinBits::BARYCENTRIC_COORD)) ||
-                                  (bool(info.builtins_ & (BuiltinBits::LAYER)) &&
-                                   workarounds.shader_output_layer) ||
-                                  (bool(info.builtins_ & (BuiltinBits::VIEWPORT_INDEX)) &&
-                                   workarounds.shader_output_viewport_index) ||
+  const bool has_geometry_stage = do_geometry_shader_injection(&info) ||
                                   !info.geometry_source_.is_empty();
   const bool retarget_depth = !has_geometry_stage;
   if (retarget_depth) {
@@ -943,42 +928,21 @@ std::string VKShader::fragment_interface_declare(const shader::ShaderCreateInfo 
     ss << "#define gpu_ViewportIndex gl_ViewportIndex\n";
   }
 
-  if (bool(info.builtins_ & BuiltinBits::BARYCENTRIC_COORD)) {
-    /* TODO: add support for
-     * https://docs.vulkan.org/features/latest/features/proposals/VK_KHR_fragment_shader_barycentric.html
-     */
-    ss << "layout(location=" << (location) << ") flat in vec4 gpu_pos[3];\n";
-    location += 3;
+  if (workarounds.fragment_shader_barycentric &&
+      bool(info.builtins_ & BuiltinBits::BARYCENTRIC_COORD))
+  {
     ss << "layout(location=" << (location++) << ") smooth in vec3 gpu_BaryCoord;\n";
     ss << "layout(location=" << (location++) << ") noperspective in vec3 gpu_BaryCoordNoPersp;\n";
-
-#if 0
-    std::cout << "native" << std::endl;
-    /* NOTE(fclem): This won't work with geometry shader. Hopefully, we don't need geometry
-     * shader workaround if this extension/feature is detected. */
-    ss << "\n/* Stable Barycentric Coordinates. */\n";
-    ss << "flat in vec4 gpu_pos_flat;\n";
-    ss << "__explicitInterpAMD in vec4 gpu_pos;\n";
-    /* Globals. */
-    ss << "vec3 gpu_BaryCoord;\n";
-    ss << "vec3 gpu_BaryCoordNoPersp;\n";
-    ss << "\n";
-    ss << "vec2 stable_bary_(vec2 in_bary) {\n";
-    ss << "  vec3 bary = vec3(in_bary, 1.0 - in_bary.x - in_bary.y);\n";
-    ss << "  if (interpolateAtVertexAMD(gpu_pos, 0) == gpu_pos_flat) { return bary.zxy; }\n";
-    ss << "  if (interpolateAtVertexAMD(gpu_pos, 2) == gpu_pos_flat) { return bary.yzx; }\n";
-    ss << "  return bary.xyz;\n";
-    ss << "}\n";
-    ss << "\n";
-
-    pre_main += "  gpu_BaryCoord = stable_bary_(gl_BaryCoordSmoothAMD);\n";
-    pre_main += "  gpu_BaryCoordNoPersp = stable_bary_(gl_BaryCoordNoPerspAMD);\n";
-#endif
   }
+
   if (info.early_fragment_test_) {
     ss << "layout(early_fragment_tests) in;\n";
   }
-  ss << "layout(" << to_string(info.depth_write_) << ") out float gl_FragDepth;\n";
+  const bool use_gl_frag_depth = info.depth_write_ != DepthWrite::UNCHANGED &&
+                                 info.fragment_source_.find("gl_FragDepth") != std::string::npos;
+  if (use_gl_frag_depth) {
+    ss << "layout(" << to_string(info.depth_write_) << ") out float gl_FragDepth;\n";
+  }
 
   ss << "\n/* Sub-pass Inputs. */\n";
   for (const ShaderCreateInfo::SubpassIn &input : info.subpass_inputs_) {
@@ -1153,7 +1117,8 @@ std::string VKShader::workaround_geometry_shader_source_create(
                                    bool(info.builtins_ & BuiltinBits::LAYER);
   const bool do_viewport_workaround = workarounds.shader_output_viewport_index &&
                                       bool(info.builtins_ & BuiltinBits::VIEWPORT_INDEX);
-  const bool do_barycentric_workaround = bool(info.builtins_ & BuiltinBits::BARYCENTRIC_COORD);
+  const bool do_barycentric_workaround = workarounds.fragment_shader_barycentric &&
+                                         bool(info.builtins_ & BuiltinBits::BARYCENTRIC_COORD);
 
   shader::ShaderCreateInfo info_modified = info;
   info_modified.geometry_out_interfaces_ = info_modified.vertex_out_interfaces_;
@@ -1172,17 +1137,18 @@ std::string VKShader::workaround_geometry_shader_source_create(
     }
   }
 
+  int location_in = location;
+  int location_out = location;
   if (do_layer_workaround) {
-    ss << "layout(location=" << (location++) << ") in int gpu_Layer[];\n";
+    ss << "layout(location=" << (location_in++) << ") in int gpu_Layer[];\n";
   }
   if (do_viewport_workaround) {
-    ss << "layout(location=" << (location++) << ") in int gpu_ViewportIndex[];\n";
+    ss << "layout(location=" << (location_in++) << ") in int gpu_ViewportIndex[];\n";
   }
   if (do_barycentric_workaround) {
-    ss << "layout(location=" << (location) << ") flat out vec4 gpu_pos[3];\n";
-    location += 3;
-    ss << "layout(location=" << (location++) << ") smooth out vec3 gpu_BaryCoord;\n";
-    ss << "layout(location=" << (location++) << ") noperspective out vec3 gpu_BaryCoordNoPersp;\n";
+    ss << "layout(location=" << (location_out++) << ") smooth out vec3 gpu_BaryCoord;\n";
+    ss << "layout(location=" << (location_out++)
+       << ") noperspective out vec3 gpu_BaryCoordNoPersp;\n";
   }
   ss << "\n";
 
@@ -1193,11 +1159,6 @@ std::string VKShader::workaround_geometry_shader_source_create(
   }
   if (do_viewport_workaround) {
     ss << "  gl_ViewportIndex = gpu_ViewportIndex[0];\n";
-  }
-  if (do_barycentric_workaround) {
-    ss << "  gpu_pos[0] = gl_in[0].gl_Position;\n";
-    ss << "  gpu_pos[1] = gl_in[1].gl_Position;\n";
-    ss << "  gpu_pos[2] = gl_in[2].gl_Position;\n";
   }
   for (auto i : IndexRange(3)) {
     for (StageInterfaceInfo *iface : info_modified.vertex_out_interfaces_) {
@@ -1217,11 +1178,11 @@ std::string VKShader::workaround_geometry_shader_source_create(
   return ss.str();
 }
 
-bool VKShader::do_geometry_shader_injection(const shader::ShaderCreateInfo *info)
+bool VKShader::do_geometry_shader_injection(const shader::ShaderCreateInfo *info) const
 {
   const VKWorkarounds &workarounds = VKBackend::get().device.workarounds_get();
   BuiltinBits builtins = info->builtins_;
-  if (bool(builtins & BuiltinBits::BARYCENTRIC_COORD)) {
+  if (workarounds.fragment_shader_barycentric && bool(builtins & BuiltinBits::BARYCENTRIC_COORD)) {
     return true;
   }
   if (workarounds.shader_output_layer && bool(builtins & BuiltinBits::LAYER)) {

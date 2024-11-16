@@ -426,7 +426,7 @@ void MetalDevice::make_source(MetalPipelineType pso_type, const uint kernel_feat
 bool MetalDevice::load_kernels(const uint _kernel_features)
 {
   @autoreleasepool {
-    kernel_features = _kernel_features;
+    kernel_features |= _kernel_features;
 
     /* check if GPU is supported */
     if (!support_device(kernel_features))
@@ -436,7 +436,7 @@ bool MetalDevice::load_kernels(const uint _kernel_features)
      * This is necessary since objects may be reported to have motion if the Vector pass is
      * active, but may still need to be rendered without motion blur if that isn't active as well.
      */
-    motion_blur = kernel_features & KERNEL_FEATURE_OBJECT_MOTION;
+    motion_blur |= kernel_features & KERNEL_FEATURE_OBJECT_MOTION;
 
     /* Only request generic kernels if they aren't cached in memory. */
     refresh_source_and_kernels_md5(PSO_GENERIC);
@@ -709,7 +709,7 @@ MetalDevice::MetalMem *MetalDevice::generic_alloc(device_memory &mem)
     mem.device_size = metal_buffer.allocatedSize;
     stats.mem_alloc(mem.device_size);
 
-    metal_buffer.label = [[NSString alloc] initWithFormat:@"%s", mem.name];
+    metal_buffer.label = [NSString stringWithFormat:@"%s", mem.name];
 
     std::lock_guard<std::recursive_mutex> lock(metal_mem_map_mutex);
 

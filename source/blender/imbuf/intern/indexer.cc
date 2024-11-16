@@ -16,7 +16,7 @@
 #include "BLI_fileops.h"
 #include "BLI_ghash.h"
 #include "BLI_math_base.h"
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 #include "BLI_string.h"
 #include "BLI_string_utils.hh"
 #include "BLI_threads.h"
@@ -37,7 +37,6 @@
 #ifdef WITH_FFMPEG
 extern "C" {
 #  include "ffmpeg_compat.h"
-#  include <libavutil/cpu.h>
 #  include <libavutil/imgutils.h>
 }
 #endif
@@ -469,8 +468,13 @@ struct proxy_output_ctx {
   ImBufAnim *anim;
 };
 
-static proxy_output_ctx *alloc_proxy_output_ffmpeg(
-    ImBufAnim *anim, AVStream *st, IMB_Proxy_Size proxy_size, int width, int height, int quality)
+static proxy_output_ctx *alloc_proxy_output_ffmpeg(ImBufAnim *anim,
+                                                   AVCodecContext *codec_ctx,
+                                                   AVStream *st,
+                                                   IMB_Proxy_Size proxy_size,
+                                                   int width,
+                                                   int height,
+                                                   int quality)
 {
   proxy_output_ctx *rv = MEM_cnew<proxy_output_ctx>("alloc_proxy_output");
 
@@ -560,6 +564,11 @@ static proxy_output_ctx *alloc_proxy_output_ffmpeg(
     rv->c->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
   }
 
+  rv->c->color_range = codec_ctx->color_range;
+  rv->c->color_primaries = codec_ctx->color_primaries;
+  rv->c->color_trc = codec_ctx->color_trc;
+  rv->c->colorspace = codec_ctx->colorspace;
+
   avcodec_parameters_from_context(rv->st->codecpar, rv->c);
 
   int ret = avio_open(&rv->of->pb, filepath, AVIO_FLAG_WRITE);
@@ -598,7 +607,7 @@ static proxy_output_ctx *alloc_proxy_output_ffmpeg(
   if (st->codecpar->width != width || st->codecpar->height != height ||
       st->codecpar->format != rv->c->pix_fmt)
   {
-    const size_t align = av_cpu_max_align();
+    const size_t align = ffmpeg_get_buffer_alignment();
     rv->frame = av_frame_alloc();
     rv->frame->format = rv->c->pix_fmt;
     rv->frame->width = width;
@@ -885,7 +894,7 @@ static IndexBuildContext *index_ffmpeg_create_context(ImBufAnim *anim,
       width += width % 2;
       height += height % 2;
       context->proxy_ctx[i] = alloc_proxy_output_ffmpeg(
-          anim, context->iStream, proxy_sizes[i], width, height, quality);
+          anim, context->iCodecCtx, context->iStream, proxy_sizes[i], width, height, quality);
       if (!context->proxy_ctx[i]) {
         proxy_sizes_in_use &= ~int(proxy_sizes[i]);
       }

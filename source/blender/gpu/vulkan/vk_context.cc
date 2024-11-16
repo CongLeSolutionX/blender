@@ -11,7 +11,6 @@
 #include "vk_backend.hh"
 #include "vk_framebuffer.hh"
 #include "vk_immediate.hh"
-#include "vk_memory.hh"
 #include "vk_shader.hh"
 #include "vk_shader_interface.hh"
 #include "vk_state_manager.hh"
@@ -21,14 +20,15 @@
 
 namespace blender::gpu {
 
-VKContext::VKContext(void *ghost_window, void *ghost_context, VKThreadData &thread_data)
-    : thread_data_(thread_data), render_graph(thread_data_.render_graph)
+VKContext::VKContext(void *ghost_window,
+                     void *ghost_context,
+                     render_graph::VKResourceStateTracker &resources)
+    : render_graph(std::make_unique<render_graph::VKCommandBufferWrapper>(), resources)
 {
   ghost_window_ = ghost_window;
   ghost_context_ = ghost_context;
 
   state_manager = new VKStateManager();
-  imm = new VKImmediate();
 
   back_left = new VKFrameBuffer("back_left");
   front_left = new VKFrameBuffer("front_left");
@@ -47,9 +47,7 @@ VKContext::~VKContext()
   }
   VKBackend::get().device.context_unregister(*this);
 
-  delete imm;
   imm = nullptr;
-
   compiler = nullptr;
 }
 
@@ -59,9 +57,10 @@ void VKContext::sync_backbuffer()
   if (ghost_window_) {
     GHOST_VulkanSwapChainData swap_chain_data = {};
     GHOST_GetVulkanSwapChainFormat((GHOST_WindowHandle)ghost_window_, &swap_chain_data);
-    if (assign_if_different(thread_data_.resource_pool_index, swap_chain_data.swap_chain_index)) {
-      thread_data_.resource_pool_index = swap_chain_data.swap_chain_index;
-      VKResourcePool &resource_pool = thread_data_.resource_pool_get();
+    VKThreadData &thread_data = thread_data_.value().get();
+    if (assign_if_different(thread_data.resource_pool_index, swap_chain_data.swap_chain_index)) {
+      VKResourcePool &resource_pool = thread_data.resource_pool_get();
+      imm = &resource_pool.immediate;
       resource_pool.discard_pool.destroy_discarded_resources(device);
       resource_pool.reset();
       resource_pool.discard_pool.move_data(device.orphaned_data);
@@ -109,6 +108,12 @@ void VKContext::activate()
   /* Make sure no other context is already bound to this thread. */
   BLI_assert(is_active_ == false);
 
+  VKDevice &device = VKBackend::get().device;
+  VKThreadData &thread_data = device.current_thread_data();
+  thread_data_ = std::reference_wrapper<VKThreadData>(thread_data);
+
+  imm = &thread_data.resource_pool_get().immediate;
+
   is_active_ = true;
 
   sync_backbuffer();
@@ -118,8 +123,10 @@ void VKContext::activate()
 
 void VKContext::deactivate()
 {
-  rendering_end();
+  flush_render_graph();
   immDeactivate();
+  imm = nullptr;
+  thread_data_.reset();
   is_active_ = false;
 }
 
@@ -137,6 +144,7 @@ void VKContext::flush_render_graph()
       framebuffer.rendering_end(*this);
     }
   }
+  descriptor_set_get().upload_descriptor_sets();
   render_graph.submit();
 }
 
@@ -154,12 +162,12 @@ void VKContext::memory_statistics_get(int *r_total_mem_kb, int *r_free_mem_kb)
 
 VKDescriptorPools &VKContext::descriptor_pools_get()
 {
-  return thread_data_.resource_pool_get().descriptor_pools;
+  return thread_data_.value().get().resource_pool_get().descriptor_pools;
 }
 
 VKDescriptorSetTracker &VKContext::descriptor_set_get()
 {
-  return thread_data_.resource_pool_get().descriptor_set;
+  return thread_data_.value().get().resource_pool_get().descriptor_set;
 }
 
 VKStateManager &VKContext::state_manager_get() const
@@ -260,34 +268,23 @@ void VKContext::update_pipeline_data(VKShader &vk_shader,
   r_pipeline_data.push_constants_size = 0;
   const VKPushConstants::Layout &push_constants_layout =
       vk_shader.interface_get().push_constants_layout_get();
-  vk_shader.push_constants.update(*this);
   if (push_constants_layout.storage_type_get() == VKPushConstants::StorageType::PUSH_CONSTANTS) {
     r_pipeline_data.push_constants_size = push_constants_layout.size_in_bytes();
     r_pipeline_data.push_constants_data = vk_shader.push_constants.data();
-  }
-
-  /* When using the push constant fallback we need to add a read access dependency to the uniform
-   * buffer after the buffer has been updated.
-   * NOTE: this alters the context instance variable `access_info_` which isn't clear from the API.
-   */
-  if (push_constants_layout.storage_type_get() == VKPushConstants::StorageType::UNIFORM_BUFFER) {
-    access_info_.buffers.append(
-        {vk_shader.push_constants.uniform_buffer_get()->vk_handle(), VK_ACCESS_UNIFORM_READ_BIT});
   }
 
   /* Update descriptor set. */
   r_pipeline_data.vk_descriptor_set = VK_NULL_HANDLE;
   if (vk_shader.has_descriptor_set()) {
     VKDescriptorSetTracker &descriptor_set = descriptor_set_get();
-    descriptor_set.update(*this);
-    r_pipeline_data.vk_descriptor_set = descriptor_set.active_descriptor_set()->vk_handle();
+    descriptor_set.update_descriptor_set(*this, access_info_);
+    r_pipeline_data.vk_descriptor_set = descriptor_set.vk_descriptor_set;
   }
 }
 
-render_graph::VKResourceAccessInfo &VKContext::update_and_get_access_info()
+render_graph::VKResourceAccessInfo &VKContext::reset_and_get_access_info()
 {
   access_info_.reset();
-  state_manager_get().apply_bindings(*this, access_info_);
   return access_info_;
 }
 
@@ -322,7 +319,7 @@ void VKContext::swap_buffers_pre_handler(const GHOST_VulkanSwapChainData &swap_c
   blit_image.filter = VK_FILTER_NEAREST;
 
   VkImageBlit &region = blit_image.region;
-  region.srcOffsets[0] = {0, color_attachment->height_get() - 1, 0};
+  region.srcOffsets[0] = {0, color_attachment->height_get(), 0};
   region.srcOffsets[1] = {color_attachment->width_get(), 0, 1};
   region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
   region.srcSubresource.mipLevel = 0;
@@ -349,6 +346,7 @@ void VKContext::swap_buffers_pre_handler(const GHOST_VulkanSwapChainData &swap_c
 
   framebuffer.rendering_end(*this);
   render_graph.add_node(blit_image);
+  descriptor_set_get().upload_descriptor_sets();
   render_graph.submit_for_present(swap_chain_data.image);
 
   device.resources.remove_image(swap_chain_data.image);

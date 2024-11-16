@@ -166,8 +166,7 @@ typedef struct SequenceRuntime {
  */
 typedef struct Sequence {
   struct Sequence *next, *prev;
-  /** Temp var for duplication, pointing to the newly duplicated Sequence. */
-  void *tmp;
+  void *_pad;
   /** Needed (to be like ipo), else it will raise libdata warnings, this should never be used. */
   void *lib;
   /** SEQ_NAME_MAXSTR - name, set by default and needs to be unique, for RNA paths. */
@@ -201,7 +200,7 @@ typedef struct Sequence {
 
   /** Stream-index for movie or sound files with several streams. */
   short streamindex;
-  short _pad;
+  short _pad1;
   /** For multi-camera source selection. */
   int multicam_source;
   /** MOVIECLIP render flags. */
@@ -230,6 +229,11 @@ typedef struct Sequence {
 
   /* pointers for effects: */
   struct Sequence *seq1, *seq2;
+
+  /* This strange padding is needed due to how seqbasep deserialization is
+   * done right now in #scene_blend_read_data. */
+  void *_pad7;
+  int _pad8[2];
 
   /** List of strips for meta-strips. */
   ListBase seqbase;
@@ -289,6 +293,7 @@ typedef struct Sequence {
   float speed_factor;
 
   struct SeqRetimingKey *retiming_keys;
+  void *_pad5;
   int retiming_keys_num;
   char _pad6[4];
 
@@ -446,8 +451,10 @@ typedef struct TextVars {
   float shadow_blur;
   float outline_width;
   char flag;
-  char align, align_y;
-  char _pad[5];
+  char align;
+  char align_y DNA_DEPRECATED /* Only used for versioning. */;
+  char anchor_x, anchor_y;
+  char _pad[3];
 } TextVars;
 
 /** #TextVars.flag */

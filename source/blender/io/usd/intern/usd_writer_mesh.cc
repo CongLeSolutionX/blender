@@ -153,49 +153,47 @@ void USDGenericMeshWriter::write_custom_data(const Object *obj,
   const StringRef active_uvmap_name = CustomData_get_render_layer_name(&mesh->corner_data,
                                                                        CD_PROP_FLOAT2);
 
-  attributes.for_all([&](const StringRef attribute_id, const bke::AttributeMetaData &meta_data) {
+  attributes.foreach_attribute([&](const bke::AttributeIter &iter) {
     /* Skip "internal" Blender properties and attributes processed elsewhere.
      * Skip edge domain because USD doesn't have a good conversion for them. */
-    if (attribute_id[0] == '.' || bke::attribute_name_is_anonymous(attribute_id) ||
-        meta_data.domain == bke::AttrDomain::Edge ||
-        ELEM(attribute_id, "position", "material_index", "velocity", "crease_vert"))
+    if (iter.name[0] == '.' || bke::attribute_name_is_anonymous(iter.name) ||
+        iter.domain == bke::AttrDomain::Edge ||
+        ELEM(iter.name, "position", "material_index", "velocity", "crease_vert"))
     {
-      return true;
+      return;
     }
 
     if ((usd_export_context_.export_params.export_armatures ||
          usd_export_context_.export_params.export_shapekeys) &&
-        attribute_id.rfind("skel:") == 0)
+        iter.name.rfind("skel:") == 0)
     {
       /* If we're exporting armatures or shape keys to UsdSkel, we skip any
        * attributes that have names with the "skel:" namespace, to avoid possible
        * conflicts. Such attribute might have been previously imported into Blender
        * from USD, but can no longer be considered valid. */
-      return true;
+      return;
     }
 
     if (usd_export_context_.export_params.export_armatures &&
-        is_armature_modifier_bone_name(*obj, attribute_id.data(), usd_export_context_.depsgraph))
+        is_armature_modifier_bone_name(*obj, iter.name, usd_export_context_.depsgraph))
     {
       /* This attribute is likely a vertex group for the armature modifier,
        * and it may conflict with skinning data that will be written to
        * the USD mesh, so we skip it.  Such vertex groups will instead be
        * handled in #export_deform_verts(). */
-      return true;
+      return;
     }
 
     /* UV Data. */
-    if (meta_data.domain == bke::AttrDomain::Corner && meta_data.data_type == CD_PROP_FLOAT2) {
+    if (iter.domain == bke::AttrDomain::Corner && iter.data_type == CD_PROP_FLOAT2) {
       if (usd_export_context_.export_params.export_uvmaps) {
-        this->write_uv_data(mesh, usd_mesh, attribute_id, active_uvmap_name);
+        this->write_uv_data(usd_mesh, iter, active_uvmap_name);
       }
     }
 
     else {
-      this->write_generic_data(mesh, usd_mesh, attribute_id, meta_data);
+      this->write_generic_data(mesh, usd_mesh, iter);
     }
-
-    return true;
   });
 }
 
@@ -218,29 +216,27 @@ static std::optional<pxr::TfToken> convert_blender_domain_to_usd(
 
 void USDGenericMeshWriter::write_generic_data(const Mesh *mesh,
                                               const pxr::UsdGeomMesh &usd_mesh,
-                                              const StringRef attribute_id,
-                                              const bke::AttributeMetaData &meta_data)
+                                              const bke::AttributeIter &attr)
 {
   const pxr::TfToken pv_name(
-      make_safe_name(attribute_id, usd_export_context_.export_params.allow_unicode));
+      make_safe_name(attr.name, usd_export_context_.export_params.allow_unicode));
   const bool use_color3f_type = pv_name == usdtokens::displayColor;
-  const std::optional<pxr::TfToken> pv_interp = convert_blender_domain_to_usd(meta_data.domain);
+  const std::optional<pxr::TfToken> pv_interp = convert_blender_domain_to_usd(attr.domain);
   const std::optional<pxr::SdfValueTypeName> pv_type = convert_blender_type_to_usd(
-      meta_data.data_type, use_color3f_type);
+      attr.data_type, use_color3f_type);
 
   if (!pv_interp || !pv_type) {
     BKE_reportf(reports(),
                 RPT_WARNING,
                 "Mesh '%s', Attribute '%s' (domain %d, type %d) cannot be converted to USD",
-                &mesh->id.name[2],
-                attribute_id.data(),
-                int8_t(meta_data.domain),
-                meta_data.data_type);
+                BKE_id_name(mesh->id),
+                attr.name.c_str(),
+                int8_t(attr.domain),
+                attr.data_type);
     return;
   }
 
-  const GVArray attribute = *mesh->attributes().lookup(
-      attribute_id, meta_data.domain, meta_data.data_type);
+  const GVArray attribute = *attr.get();
   if (attribute.is_empty()) {
     return;
   }
@@ -251,16 +247,14 @@ void USDGenericMeshWriter::write_generic_data(const Mesh *mesh,
   pxr::UsdGeomPrimvar pv_attr = pv_api.CreatePrimvar(pv_name, *pv_type, *pv_interp);
 
   copy_blender_attribute_to_primvar(
-      attribute, meta_data.data_type, timecode, pv_attr, usd_value_writer_);
+      attribute, attr.data_type, timecode, pv_attr, usd_value_writer_);
 }
 
-void USDGenericMeshWriter::write_uv_data(const Mesh *mesh,
-                                         const pxr::UsdGeomMesh &usd_mesh,
-                                         const StringRef attribute_id,
+void USDGenericMeshWriter::write_uv_data(const pxr::UsdGeomMesh &usd_mesh,
+                                         const bke::AttributeIter &attr,
                                          const StringRef active_uvmap_name)
 {
-  const VArray<float2> buffer = *mesh->attributes().lookup<float2>(attribute_id,
-                                                                   bke::AttrDomain::Corner);
+  const VArray<float2> buffer = *attr.get<float2>(bke::AttrDomain::Corner);
   if (buffer.is_empty()) {
     return;
   }
@@ -268,9 +262,9 @@ void USDGenericMeshWriter::write_uv_data(const Mesh *mesh,
   /* Optionally rename active UV map to "st", to follow USD conventions
    * and better work with MaterialX shader nodes. */
   const StringRef name = usd_export_context_.export_params.rename_uvmaps &&
-                                 active_uvmap_name == attribute_id ?
+                                 active_uvmap_name == attr.name ?
                              "st" :
-                             attribute_id;
+                             attr.name;
 
   const pxr::UsdTimeCode timecode = get_export_time_code();
   const pxr::TfToken pv_name(
@@ -881,7 +875,8 @@ Mesh *USDMeshWriter::get_export_mesh(Object *object_eval, bool &r_needsfree)
     /* We must export the skinned mesh in its rest pose.  We therefore
      * return the pre-modified mesh, so that the armature modifier isn't
      * applied. */
-    return BKE_object_get_pre_modified_mesh(object_eval);
+    /* TODO: Store the "needs free" mesh in a separate variable. */
+    return const_cast<Mesh *>(BKE_object_get_pre_modified_mesh(object_eval));
   }
 
   /* Return the fully evaluated mesh. */

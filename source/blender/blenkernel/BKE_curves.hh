@@ -158,6 +158,11 @@ class CurvesGeometry : public ::CurvesGeometry {
    * The number of curves in the data-block.
    */
   int curves_num() const;
+  /**
+   * Return true if there are no curves in the geometry.
+   */
+  bool is_empty() const;
+
   IndexRange points_range() const;
   IndexRange curves_range() const;
 
@@ -660,6 +665,11 @@ void calculate_auto_handles(bool cyclic,
                             MutableSpan<float3> positions_left,
                             MutableSpan<float3> positions_right);
 
+void calculate_aligned_handles(const IndexMask &selection,
+                               Span<float3> positions,
+                               Span<float3> align_by,
+                               MutableSpan<float3> align);
+
 /**
  * Change the handles of a single control point, aligning any aligned (#BEZIER_HANDLE_ALIGN)
  * handles on the other side of the control point.
@@ -874,6 +884,12 @@ inline int CurvesGeometry::points_num() const
 inline int CurvesGeometry::curves_num() const
 {
   return this->curve_num;
+}
+inline bool CurvesGeometry::is_empty() const
+{
+  /* Each curve must have at least one point. */
+  BLI_assert((this->curve_num == 0) == (this->point_num == 0));
+  return this->curve_num == 0;
 }
 inline IndexRange CurvesGeometry::points_range() const
 {

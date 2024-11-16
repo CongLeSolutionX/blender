@@ -50,6 +50,14 @@ Vector<const FCurve *> fcurves_all(const bAction *action);
 Vector<FCurve *> fcurves_all(bAction *action);
 
 /**
+ * Return the F-Curves for the first slot of this Action.
+ *
+ * This works for both legacy and layered Actions. For the former, it will
+ * return all F-Curves in the Action.
+ */
+Vector<FCurve *> fcurves_first_slot(bAction *action);
+
+/**
  * Return the F-Curves for this specific slot handle.
  *
  * On a legacy Action, this returns all F-Curves, and ignores the slot handle.
@@ -114,5 +122,21 @@ Vector<bActionGroup *> channel_groups_for_assigned_slot(AnimData *adt);
  * - legacy Action: always returns true.
  */
 bool action_treat_as_legacy(const bAction &action);
+
+/**
+ * Remove all F-Curves whose RNA path starts with the given prefix from an Action Slot.
+ *
+ * This function works for both legacy and layered Actions. For the former, the
+ * slot handle is ignored.
+ *
+ * \param rna_path_prefix All F-Curves whose RNA path start with this string will get removed. Note
+ * that there is no other semantics here, so `prefix = "rotation"` will remove "rotation_euler" as
+ * well. The prefix may not be an empty string.
+ *
+ * \return true if any were removed, false otherwise.
+ */
+bool action_fcurves_remove(bAction &action,
+                           slot_handle_t slot_handle,
+                           StringRefNull rna_path_prefix);
 
 }  // namespace blender::animrig::legacy

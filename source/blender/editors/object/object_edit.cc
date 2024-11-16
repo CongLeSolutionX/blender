@@ -51,7 +51,7 @@
 #include "BKE_effect.h"
 #include "BKE_global.hh"
 #include "BKE_idprop.hh"
-#include "BKE_image.h"
+#include "BKE_image.hh"
 #include "BKE_lattice.hh"
 #include "BKE_layer.hh"
 #include "BKE_lib_id.hh"
@@ -716,6 +716,8 @@ bool editmode_exit_ex(Main *bmain, Scene *scene, Object *obedit, int flag)
       obedit->mode &= ~OB_MODE_EDIT;
       /* Also happens when mesh is shared across multiple objects. #69834. */
       DEG_id_tag_update(&obedit->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
+      /* Leaving edit mode may modify the original object data; tag that as well. */
+      DEG_id_tag_update(static_cast<ID *>(obedit->data), ID_RECALC_GEOMETRY);
     }
     return true;
   }
@@ -738,6 +740,8 @@ bool editmode_exit_ex(Main *bmain, Scene *scene, Object *obedit, int flag)
 
     /* also flush ob recalc, doesn't take much overhead, but used for particles */
     DEG_id_tag_update(&obedit->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
+    /* Leaving edit mode may modify the original object data; tag that as well. */
+    DEG_id_tag_update(static_cast<ID *>(obedit->data), ID_RECALC_GEOMETRY);
 
     WM_main_add_notifier(NC_SCENE | ND_MODE | NS_MODE_OBJECT, scene);
 
@@ -1952,11 +1956,6 @@ static int object_mode_set_exec(bContext *C, wmOperator *op)
   Object *ob = CTX_data_active_object(C);
   eObjectMode mode = eObjectMode(RNA_enum_get(op->ptr, "mode"));
   const bool toggle = RNA_boolean_get(op->ptr, "toggle");
-
-  /* by default the operator assume is a mesh, but if gp object change mode */
-  if ((ob->type == OB_GPENCIL_LEGACY) && (mode == OB_MODE_EDIT)) {
-    mode = OB_MODE_EDIT_GPENCIL_LEGACY;
-  }
 
   if (!mode_compat_test(ob, mode)) {
     return OPERATOR_PASS_THROUGH;

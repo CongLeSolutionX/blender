@@ -27,10 +27,15 @@
 #include "BKE_subdiv_mesh.hh"
 
 #include "opensubdiv_converter_capi.hh"
+#ifdef WITH_OPENSUBDIV
+#  include "opensubdiv_evaluator.hh"
+#endif
 #include "opensubdiv_evaluator_capi.hh"
 
 #include "atomic_ops.h"
 #include "subdiv_converter.hh"
+
+#ifdef WITH_OPENSUBDIV
 
 /* -------------------------------------------------------------------- */
 /** \name Local Structs
@@ -317,13 +322,13 @@ static int get_face_grid_index(const MultiresReshapeSmoothContext *reshape_smoot
   const Corner *first_corner = &reshape_smooth_context->geometry.corners[face->start_corner_index];
   const int grid_index = first_corner->grid_index;
 
-#ifndef NDEBUG
+#  ifndef NDEBUG
   for (int face_corner = 0; face_corner < face->num_corners; ++face_corner) {
     const int corner_index = face->start_corner_index + face_corner;
     const Corner *corner = &reshape_smooth_context->geometry.corners[corner_index];
     BLI_assert(corner->grid_index == grid_index);
   }
-#endif
+#  endif
 
   return grid_index;
 }
@@ -1077,9 +1082,9 @@ static void reshape_subdiv_refine(const MultiresReshapeSmoothContext *reshape_sm
     const Vertex *vertex = &reshape_smooth_context->geometry.vertices[i];
     float P[3];
     coarse_position_cb(reshape_smooth_context, vertex, P);
-    reshape_subdiv->evaluator->setCoarsePositions(reshape_subdiv->evaluator, P, i, 1);
+    reshape_subdiv->evaluator->eval_output->setCoarsePositions(P, i, 1);
   }
-  reshape_subdiv->evaluator->refine(reshape_subdiv->evaluator);
+  reshape_subdiv->evaluator->eval_output->refine();
 }
 
 BLI_INLINE const GridCoord *reshape_subdiv_refine_vertex_grid_coord(const Vertex *vertex)
@@ -1422,6 +1427,8 @@ static void evaluate_higher_grid_positions(
       });
 }
 
+#endif
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -1431,6 +1438,7 @@ static void evaluate_higher_grid_positions(
 void multires_reshape_smooth_object_grids_with_details(
     const MultiresReshapeContext *reshape_context)
 {
+#ifdef WITH_OPENSUBDIV
   const int level_difference = (reshape_context->top.level - reshape_context->reshape.level);
   if (level_difference == 0) {
     /* Early output. */
@@ -1458,11 +1466,15 @@ void multires_reshape_smooth_object_grids_with_details(
   evaluate_higher_grid_positions_with_details(&reshape_smooth_context);
 
   context_free(&reshape_smooth_context);
+#else
+  UNUSED_VARS(reshape_context);
+#endif
 }
 
 void multires_reshape_smooth_object_grids(const MultiresReshapeContext *reshape_context,
                                           const eMultiresSubdivideModeType mode)
 {
+#ifdef WITH_OPENSUBDIV
   const int level_difference = (reshape_context->top.level - reshape_context->reshape.level);
   if (level_difference == 0) {
     /* Early output. */
@@ -1481,6 +1493,9 @@ void multires_reshape_smooth_object_grids(const MultiresReshapeContext *reshape_
   evaluate_higher_grid_positions(&reshape_smooth_context);
 
   context_free(&reshape_smooth_context);
+#else
+  UNUSED_VARS(reshape_context, mode);
+#endif
 }
 
 /** \} */

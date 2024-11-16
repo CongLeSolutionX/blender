@@ -108,7 +108,7 @@ static void fillet_grease_pencil(GreasePencil &grease_pencil,
       continue;
     }
     const bke::CurvesGeometry &src_curves = drawing->strokes();
-    if (src_curves.points_num() == 0) {
+    if (src_curves.is_empty()) {
       continue;
     }
     const bke::GreasePencilLayerFieldContext field_context(
@@ -146,7 +146,7 @@ static void node_geo_exec(GeoNodeExecParams params)
     if (geometry_set.has_curves()) {
       const Curves &curves_id = *geometry_set.get_curves();
       const bke::CurvesGeometry &src_curves = curves_id.geometry.wrap();
-      const bke::CurvesFieldContext field_context{src_curves, AttrDomain::Point};
+      const bke::CurvesFieldContext field_context{curves_id, AttrDomain::Point};
       bke::CurvesGeometry dst_curves = fillet_curve(src_curves,
                                                     mode,
                                                     field_context,

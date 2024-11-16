@@ -68,8 +68,8 @@ TEST_F(ActionFilterTest, slots_expanded_or_not)
 {
   Slot &slot_cube = action->slot_add();
   Slot &slot_suzanne = action->slot_add();
-  assign_action(action, cube->id);
-  assign_action(action, suzanne->id);
+  ASSERT_TRUE(assign_action(action, cube->id));
+  ASSERT_TRUE(assign_action(action, suzanne->id));
   ASSERT_EQ(assign_action_slot(&slot_cube, cube->id), ActionSlotAssignmentResult::OK);
   ASSERT_EQ(assign_action_slot(&slot_suzanne, suzanne->id), ActionSlotAssignmentResult::OK);
 
@@ -103,7 +103,7 @@ TEST_F(ActionFilterTest, slots_expanded_or_not)
   SpaceAction saction = {nullptr};
   saction.action = action;
   saction.action_slot_handle = slot_cube.handle;
-  saction.ads.filterflag = ADS_FILTER_ALL_SLOTS;
+  saction.ads.filterflag = eDopeSheet_FilterFlag(0);
 
   bAnimContext ac = {nullptr};
   ac.bmain = bmain;
@@ -260,7 +260,7 @@ TEST_F(ActionFilterTest, layered_action_active_fcurves)
   SpaceAction saction = {nullptr};
   saction.action = action;
   saction.action_slot_handle = slot_cube.handle;
-  saction.ads.filterflag = ADS_FILTER_ALL_SLOTS;
+  saction.ads.filterflag = eDopeSheet_FilterFlag(0);
 
   bAnimContext ac = {nullptr};
   ac.bmain = bmain;

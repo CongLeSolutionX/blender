@@ -12,7 +12,7 @@
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 #include "BLI_utildefines.h"
 
 #ifdef WITH_PYTHON
@@ -21,7 +21,7 @@
 
 #include "DEG_depsgraph.hh"
 
-#include "BKE_image.h"
+#include "BKE_image.hh"
 #include "BKE_scene.hh"
 
 #include "RNA_define.hh"

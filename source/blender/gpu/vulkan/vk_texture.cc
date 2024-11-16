@@ -6,13 +6,14 @@
  * \ingroup gpu
  */
 
+#include "GPU_capabilities.hh"
+
 #include "vk_texture.hh"
 
 #include "vk_buffer.hh"
 #include "vk_context.hh"
 #include "vk_data_conversion.hh"
 #include "vk_framebuffer.hh"
-#include "vk_memory.hh"
 #include "vk_pixel_buffer.hh"
 #include "vk_shader.hh"
 #include "vk_shader_interface.hh"
@@ -205,6 +206,7 @@ void VKTexture::read_sub(
   VKContext &context = *VKContext::get();
   context.rendering_end();
   context.render_graph.add_node(copy_image_to_buffer);
+  context.descriptor_set_get().upload_descriptor_sets();
   context.render_graph.submit_buffer_for_read(staging_buffer.vk_handle());
 
   convert_device_to_host(
@@ -320,9 +322,10 @@ void VKTexture::update_sub(int offset_[3],
   update_sub(0, offset_, extent_, format, pixel_buffer.map());
 }
 
-/* TODO(fclem): Legacy. Should be removed at some point. */
 uint VKTexture::gl_bindcode_get() const
 {
+  /* TODO(fclem): Legacy. Should be removed at some point. */
+
   return 0;
 }
 
@@ -448,12 +451,19 @@ bool VKTexture::allocate()
   BLI_assert(vk_image_ == VK_NULL_HANDLE);
   BLI_assert(!is_texture_view());
 
+  VkExtent3D vk_extent = vk_extent_3d(0);
+  const uint32_t limit = (type_ == GPU_TEXTURE_3D) ? GPU_max_texture_3d_size() :
+                                                     GPU_max_texture_size();
+  if (vk_extent.depth > limit || vk_extent.height > limit || vk_extent.depth > limit) {
+    return false;
+  }
+
   VKDevice &device = VKBackend::get().device;
   VkImageCreateInfo image_info = {};
   image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
   image_info.flags = to_vk_image_create(type_, format_flag_, usage_get());
   image_info.imageType = to_vk_image_type(type_);
-  image_info.extent = vk_extent_3d(0);
+  image_info.extent = vk_extent;
   image_info.mipLevels = max_ii(mipmaps_, 1);
   image_info.arrayLayers = vk_layer_count(1);
   image_info.format = to_vk_format(device_format_);
@@ -504,54 +514,6 @@ bool VKTexture::allocate()
                              name_);
 
   return result == VK_SUCCESS;
-}
-
-void VKTexture::add_to_descriptor_set(AddToDescriptorSetContext &data,
-                                      int binding,
-                                      shader::ShaderCreateInfo::Resource::BindType bind_type,
-                                      const GPUSamplerState sampler_state)
-{
-  /* Forwarding the call to the source vertex buffer as in vulkan a texel buffer is a buffer(view)
-   * and not a texture. */
-  if (type_ == GPU_TEXTURE_BUFFER) {
-    source_buffer_->add_to_descriptor_set(data, binding, bind_type, sampler_state);
-    return;
-  }
-
-  /* TODO: Based on the actual usage we should use
-   * VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL or VK_IMAGE_LAYOUT_GENERAL. */
-  const std::optional<VKDescriptorSet::Location> location =
-      data.shader_interface.descriptor_set_location(bind_type, binding);
-  if (location) {
-    const VKImageViewArrayed arrayed = data.shader_interface.arrayed(bind_type, binding);
-    if (bind_type == shader::ShaderCreateInfo::Resource::BindType::IMAGE) {
-      data.descriptor_set.bind_image(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                                     VK_NULL_HANDLE,
-                                     image_view_get(arrayed).vk_handle(),
-                                     VK_IMAGE_LAYOUT_GENERAL,
-                                     *location);
-    }
-    else {
-      VKDevice &device = VKBackend::get().device;
-      const VKSampler &sampler = device.samplers().get(sampler_state);
-      data.descriptor_set.bind_image(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                                     sampler.vk_handle(),
-                                     image_view_get(arrayed).vk_handle(),
-                                     VK_IMAGE_LAYOUT_GENERAL,
-                                     *location);
-    }
-    uint32_t layer_base = 0;
-    uint32_t layer_count = VK_REMAINING_ARRAY_LAYERS;
-    if (arrayed == VKImageViewArrayed::ARRAYED && is_texture_view()) {
-      layer_base = layer_offset_;
-      layer_count = vk_layer_count(VK_REMAINING_ARRAY_LAYERS);
-    }
-    data.resource_access_info.images.append({vk_image_handle(),
-                                             data.shader_interface.access_mask(bind_type, binding),
-                                             to_vk_image_aspect_flag_bits(device_format_),
-                                             layer_base,
-                                             layer_count});
-  }
 }
 
 /* -------------------------------------------------------------------- */

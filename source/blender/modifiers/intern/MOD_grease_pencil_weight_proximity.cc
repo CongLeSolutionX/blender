@@ -21,6 +21,7 @@
 #include "RNA_access.hh"
 
 #include "BKE_curves.hh"
+#include "BKE_deform.hh"
 #include "BKE_geometry_set.hh"
 #include "BKE_grease_pencil.hh"
 #include "BKE_lib_query.hh"
@@ -127,8 +128,7 @@ static float get_distance_factor(float3 target_pos,
 
 static int ensure_vertex_group(const StringRefNull name, ListBase &vertex_group_names)
 {
-  int def_nr = BLI_findstringindex(
-      &vertex_group_names, name.c_str(), offsetof(bDeformGroup, name));
+  int def_nr = BKE_defgroup_name_index(&vertex_group_names, name);
   if (def_nr < 0) {
     bDeformGroup *defgroup = MEM_cnew<bDeformGroup>(__func__);
     STRNCPY(defgroup->name, name.c_str());
@@ -142,8 +142,7 @@ static int ensure_vertex_group(const StringRefNull name, ListBase &vertex_group_
 static bool target_vertex_group_available(const StringRefNull name,
                                           const ListBase &vertex_group_names)
 {
-  const int def_nr = BLI_findstringindex(
-      &vertex_group_names, name.c_str(), offsetof(bDeformGroup, name));
+  const int def_nr = BKE_defgroup_name_index(&vertex_group_names, name);
   if (def_nr < 0) {
     return false;
   }
@@ -156,7 +155,7 @@ static void write_weights_for_drawing(const ModifierData &md,
 {
   const auto &mmd = reinterpret_cast<const GreasePencilWeightProximityModifierData &>(md);
   bke::CurvesGeometry &curves = drawing.strokes_for_write();
-  if (curves.points_num() == 0) {
+  if (curves.is_empty()) {
     return;
   }
   IndexMaskMemory memory;
@@ -270,7 +269,7 @@ static void panel_draw(const bContext *C, Panel *panel)
   uiItemR(layout, ptr, "use_multiply", UI_ITEM_NONE, nullptr, ICON_NONE);
 
   if (uiLayout *influence_panel = uiLayoutPanelProp(
-          C, layout, ptr, "open_influence_panel", "Influence"))
+          C, layout, ptr, "open_influence_panel", IFACE_("Influence")))
   {
     modifier::greasepencil::draw_layer_filter_settings(C, influence_panel, ptr);
     modifier::greasepencil::draw_material_filter_settings(C, influence_panel, ptr);

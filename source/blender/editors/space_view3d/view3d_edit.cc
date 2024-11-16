@@ -272,7 +272,7 @@ static int render_border_exec(bContext *C, wmOperator *op)
 
   if (rv3d->persp == RV3D_CAMOB) {
     const Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
-    ED_view3d_calc_camera_border(scene, depsgraph, region, v3d, rv3d, &vb, false);
+    ED_view3d_calc_camera_border(scene, depsgraph, region, v3d, rv3d, false, &vb);
   }
   else {
     vb.xmin = 0;
@@ -915,7 +915,7 @@ void ED_view3d_cursor3d_position_rotation(bContext *C,
     SnapObjectParams params{};
     params.snap_target_select = SCE_SNAP_TARGET_ALL;
     params.edit_mode_type = SNAP_GEOM_FINAL;
-    params.use_occlusion_test = true;
+    params.occlusion_test = SNAP_OCCLUSION_AS_SEEM;
     if (ED_transform_snap_object_project_view3d_ex(snap_context,
                                                    CTX_data_ensure_evaluated_depsgraph(C),
                                                    region,

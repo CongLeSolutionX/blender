@@ -167,7 +167,7 @@ enum eTModifier {
   MOD_SNAP_FORCED = 1 << 6,
   MOD_EDIT_SNAP_SOURCE = 1 << 7,
 };
-ENUM_OPERATORS(eTModifier, MOD_NODE_ATTACH)
+ENUM_OPERATORS(eTModifier, MOD_EDIT_SNAP_SOURCE)
 
 /** #TransSnap.status */
 enum eTSnap {
@@ -726,6 +726,7 @@ void transform_final_value_get(const TransInfo *t, float *value, int value_num);
 /** \name General Utils
  * \{ */
 
+/** Calculates projection vector based on a location. */
 void transform_view_vector_calc(const TransInfo *t, const float focus[3], float r_vec[3]);
 bool transdata_check_local_islands(TransInfo *t, short around);
 
