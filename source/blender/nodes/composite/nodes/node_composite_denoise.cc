@@ -134,8 +134,8 @@ class DenoiseOperation : public NodeOperation {
     filter.set("hdr", use_hdr());
 #  if OIDN_VERSION_MAJOR >= 2
     filter.set("cleanAux", auxiliary_passes_are_clean());
-#  endif
     filter.set("quality", get_quality());
+#  endif
     filter.setProgressMonitorFunction(oidn_progress_monitor_function, &context());
 
     /* If the albedo input is not a single value input, download the albedo texture, denoise it
@@ -229,7 +229,6 @@ class DenoiseOperation : public NodeOperation {
 #ifdef WITH_OPENIMAGEDENOISE
   OIDNQuality get_quality()
   {
-#  if OIDN_VERSION_MAJOR >= 2
     switch (static_cast<CMPNodeDenoiseQuality>(node_storage(bnode()).quality)) {
 #    if OIDN_VERSION >= 20300
       case CMP_NODE_DENOISE_QUALITY_FAST:
@@ -241,7 +240,6 @@ class DenoiseOperation : public NodeOperation {
       default:
         return OIDN_QUALITY_HIGH;
     }
-#  endif
   }
 #endif
 
