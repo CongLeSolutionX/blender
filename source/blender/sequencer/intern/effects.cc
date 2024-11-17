@@ -3038,10 +3038,17 @@ static rcti draw_text_outline(const SeqRenderData *context,
   return outline_rect;
 }
 
-static inline void fill_ellipse_alpha_under(
-    const ImBuf *ibuf, const float col[4], int x1, int y1, int x2, int y2, float origin_x, float origin_y, float radius)
+static inline void fill_ellipse_alpha_under(const ImBuf *ibuf,
+                                            const float col[4],
+                                            int x1,
+                                            int y1,
+                                            int x2,
+                                            int y2,
+                                            float origin_x,
+                                            float origin_y,
+                                            float radius)
 {
-  float curve_pow = 2.1;
+  float curve_pow = 2.1f;
   float4 color;
   float4 premul_color;
   for (int y = y1; y < y2; y++) {
@@ -3049,8 +3056,9 @@ static inline void fill_ellipse_alpha_under(
     for (int x = x1; x < x2; x++) {
       color = col;
 
-      float r = powf(powf(abs(x-origin_x), curve_pow) + powf(abs(y-origin_y), curve_pow), 1/curve_pow);
-      color.w = std::clamp(radius - r, 0.0f, color.w);
+      float r = powf(powf(abs(x - origin_x), curve_pow) + powf(abs(y - origin_y), curve_pow),
+                     1.0f / curve_pow);
+      color.w = math::clamp(radius - r, 0.0f, color.w);
 
       straight_to_premul_v4_v4(premul_color, color);
       float4 pix = load_premul_pixel(dst);
@@ -3083,54 +3091,61 @@ static void fill_rect_alpha_under(
     return;
   }
 
-  corner_radius = math::clamp(corner_radius, 0.0f, math::min(x2-x1, y2-y1)/2.0f);
+  corner_radius = math::clamp(corner_radius, 0.0f, math::min(x2 - x1, y2 - y1) / 2.0f);
 
-  if (corner_radius > 0.0) {
+  if (corner_radius > 0.0f) {
     int cr = (int)corner_radius;
     /* bottom left */
-    fill_ellipse_alpha_under(ibuf, col,
-                             x1,    y1,
-                             x1+cr, y1+cr,
-                             x1+corner_radius-1, y1+corner_radius-1,
+    fill_ellipse_alpha_under(ibuf,
+                             col,
+                             x1,
+                             y1,
+                             x1 + cr,
+                             y1 + cr,
+                             x1 + corner_radius - 1,
+                             y1 + corner_radius - 1,
                              corner_radius);
 
     /* top left */
-    fill_ellipse_alpha_under(ibuf, col,
-                             x1,    y2-cr,
-                             x1+cr, y2,
-                             x1+corner_radius-1, y2-corner_radius,
+    fill_ellipse_alpha_under(ibuf,
+                             col,
+                             x1,
+                             y2 - cr,
+                             x1 + cr,
+                             y2,
+                             x1 + corner_radius - 1,
+                             y2 - corner_radius,
                              corner_radius);
 
     /* top right */
-    fill_ellipse_alpha_under(ibuf, col,
-                             x2-cr, y2-cr,
-                             x2,    y2,
-                             x2-corner_radius, y2-corner_radius,
+    fill_ellipse_alpha_under(ibuf,
+                             col,
+                             x2 - cr,
+                             y2 - cr,
+                             x2,
+                             y2,
+                             x2 - corner_radius,
+                             y2 - corner_radius,
                              corner_radius);
 
     /* bottom right */
-    fill_ellipse_alpha_under(ibuf, col,
-                             x2-cr, y1,
-                             x2,    y1+cr,
-                             x2-corner_radius, y1+corner_radius-1,
+    fill_ellipse_alpha_under(ibuf,
+                             col,
+                             x2 - cr,
+                             y1,
+                             x2,
+                             y1 + cr,
+                             x2 - corner_radius,
+                             y1 + corner_radius - 1,
                              corner_radius);
 
     /* fill in areas between corners */
     /* bottom */
-    fill_rect_alpha_under(ibuf, col,
-                          x1+cr, y1,
-                          x2-cr, y1+cr,
-                          0.0);
+    fill_rect_alpha_under(ibuf, col, x1 + cr, y1, x2 - cr, y1 + cr, 0.0f);
     /* middle */
-    fill_rect_alpha_under(ibuf, col,
-                          x1, y1+cr,
-                          x2, y2-cr,
-                          0.0);
+    fill_rect_alpha_under(ibuf, col, x1, y1 + cr, x2, y2 - cr, 0.0f);
     /* top */
-    fill_rect_alpha_under(ibuf, col,
-                          x1+cr, y2,
-                          x2-cr, y2-cr,
-                          0.0);
+    fill_rect_alpha_under(ibuf, col, x1 + cr, y2, x2 - cr, y2 - cr, 0.0f);
   }
   else {
     float4 premul_col;
@@ -3406,7 +3421,7 @@ static ImBuf *do_text_effect(const SeqRenderData *context,
       const int maxx = runtime.text_boundbox.xmax + margin;
       const int miny = runtime.text_boundbox.ymin - margin;
       const int maxy = runtime.text_boundbox.ymax + margin;
-      float corner_radius = data->box_roundness * (maxy-miny)/2.0;
+      float corner_radius = data->box_roundness * (maxy - miny) / 2.0f;
       fill_rect_alpha_under(out, data->box_color, minx, miny, maxx, maxy, corner_radius);
     }
   }
