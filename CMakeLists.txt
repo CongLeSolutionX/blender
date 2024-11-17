@@ -669,7 +669,7 @@ if(NOT APPLE AND NOT (WIN32 AND CMAKE_SYSTEM_PROCESSOR STREQUAL "ARM64"))
 
   option(WITH_CYCLES_CUDA_BINARIES "Build Cycles NVIDIA CUDA binaries" OFF)
   set(CYCLES_CUDA_BINARIES_ARCH
-    sm_30 sm_35 sm_37 sm_50 sm_52 sm_60 sm_61 sm_70 sm_75 sm_86 sm_89 compute_75
+    compute_75
     CACHE STRING "CUDA architectures to build binaries for"
   )
   option(WITH_CYCLES_CUDA_BUILD_SERIAL "\
@@ -702,7 +702,6 @@ if(NOT APPLE AND NOT (WIN32 AND CMAKE_SYSTEM_PROCESSOR STREQUAL "ARM64"))
   option(WITH_CYCLES_HIP_BINARIES "Build Cycles AMD HIP binaries" OFF)
   # Radeon VII (gfx906) not currently working with HIP SDK, so left out of the list.
   set(CYCLES_HIP_BINARIES_ARCH
-    gfx900 gfx90c gfx902
     gfx1010 gfx1011 gfx1012
     gfx1030 gfx1031 gfx1032 gfx1034 gfx1035 gfx1036
     gfx1100 gfx1101 gfx1102 gfx1103 gfx1150 gfx1151
