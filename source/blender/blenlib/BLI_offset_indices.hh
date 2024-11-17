@@ -127,11 +127,6 @@ template<typename T> struct GroupedSpan {
     return this->data.slice(this->offsets[index]);
   }
 
-  Span<T> operator[](const IndexRange indices) const
-  {
-    return this->data.slice(this->offsets[indices]);
-  }
-
   int64_t size() const
   {
     return this->offsets.size();
