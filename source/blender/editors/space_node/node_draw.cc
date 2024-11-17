@@ -3390,8 +3390,67 @@ static void node_draw_basis(const bContext &C,
     UI_draw_roundbox_4fv(&rect, true, corner_radius, color_header);
   }
 
-  /* Show/hide icons. */
+  /* Title. */
+  if (node.flag & SELECT) {
+    UI_GetThemeColor4fv(TH_SELECT, color);
+  }
+  else {
+    UI_GetThemeColorBlendShade4fv(TH_SELECT, color_id, 0.4f, 10, color);
+  }
+
+  /* Collapse icon */
+  {
+    const int but_size = U.widget_unit * 0.8f;
+    UI_block_emboss_set(&block, UI_EMBOSS_NONE);
+
+    uiBut *but = uiDefIconBut(&block,
+                              UI_BTYPE_BUT_TOGGLE,
+                              0,
+                              ICON_DOWNARROW_HLT,
+                              rct.xmin + (NODE_MARGIN_X / 3),
+                              rct.ymax - NODE_DY / 2.2f - but_size / 2,
+                              but_size,
+                              but_size,
+                              nullptr,
+                              0.0f,
+                              0.0f,
+                              "");
+
+    UI_but_func_set(but,
+                    node_toggle_button_cb,
+                    POINTER_FROM_INT(node.identifier),
+                    (void *)"NODE_OT_hide_toggle");
+    UI_block_emboss_set(&block, UI_EMBOSS);
+  }
+
+  /* Position on right side of the Node for displaying icons */
   float iconofs = rct.xmax - 0.35f * U.widget_unit;
+  char showname[128];
+  bke::nodeLabel(&ntree, &node, showname, sizeof(showname));
+
+  uiBut *but = uiDefBut(&block,
+                        UI_BTYPE_LABEL,
+                        0,
+                        showname,
+                        int(rct.xmin + NODE_MARGIN_X + 0.4f),
+                        int(rct.ymax - NODE_DY),
+                        short(iconofs - rct.xmin - (18.0f * UI_SCALE_FAC)),
+                        short(NODE_DY),
+                        nullptr,
+                        0,
+                        0,
+                        TIP_(node.typeinfo->ui_description));
+  UI_but_func_tooltip_set(
+      but,
+      [](bContext * /*C*/, void *arg, const char *tip) -> std::string {
+        const bNode &node = *static_cast<const bNode *>(arg);
+        if (node.typeinfo->ui_description_fn) {
+          return node.typeinfo->ui_description_fn(node);
+        }
+        return StringRef(tip);
+      },
+      const_cast<bNode *>(&node),
+      nullptr);
 
   /* Group edit. This icon should be the first for the node groups. */
   if (node.type == NODE_GROUP) {
@@ -3482,65 +3541,6 @@ static void node_draw_basis(const bContext &C,
 
   node_add_error_message_button(tree_draw_ctx, node, block, rct, iconofs);
 
-  /* Title. */
-  if (node.flag & SELECT) {
-    UI_GetThemeColor4fv(TH_SELECT, color);
-  }
-  else {
-    UI_GetThemeColorBlendShade4fv(TH_SELECT, color_id, 0.4f, 10, color);
-  }
-
-  /* Collapse/expand icon. */
-  {
-    const int but_size = U.widget_unit * 0.8f;
-    UI_block_emboss_set(&block, UI_EMBOSS_NONE);
-
-    uiBut *but = uiDefIconBut(&block,
-                              UI_BTYPE_BUT_TOGGLE,
-                              0,
-                              ICON_DOWNARROW_HLT,
-                              rct.xmin + (NODE_MARGIN_X / 3),
-                              rct.ymax - NODE_DY / 2.2f - but_size / 2,
-                              but_size,
-                              but_size,
-                              nullptr,
-                              0.0f,
-                              0.0f,
-                              "");
-
-    UI_but_func_set(but,
-                    node_toggle_button_cb,
-                    POINTER_FROM_INT(node.identifier),
-                    (void *)"NODE_OT_hide_toggle");
-    UI_block_emboss_set(&block, UI_EMBOSS);
-  }
-
-  char showname[128];
-  bke::nodeLabel(&ntree, &node, showname, sizeof(showname));
-
-  uiBut *but = uiDefBut(&block,
-                        UI_BTYPE_LABEL,
-                        0,
-                        showname,
-                        int(rct.xmin + NODE_MARGIN_X + 0.4f),
-                        int(rct.ymax - NODE_DY),
-                        short(iconofs - rct.xmin - (18.0f * UI_SCALE_FAC)),
-                        short(NODE_DY),
-                        nullptr,
-                        0,
-                        0,
-                        TIP_(node.typeinfo->ui_description));
-  UI_but_func_tooltip_set(
-      but,
-      [](bContext * /*C*/, void *arg, const char *tip) -> std::string {
-        const bNode &node = *static_cast<const bNode *>(arg);
-        if (node.typeinfo->ui_description_fn) {
-          return node.typeinfo->ui_description_fn(node);
-        }
-        return StringRef(tip);
-      },
-      const_cast<bNode *>(&node),
-      nullptr);
 
   if (node.flag & NODE_MUTED) {
     UI_but_flag_enable(but, UI_BUT_INACTIVE);
