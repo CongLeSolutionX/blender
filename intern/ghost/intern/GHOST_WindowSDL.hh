@@ -70,6 +70,7 @@ class GHOST_WindowSDL : public GHOST_Window {
 
   void getWindowBounds(GHOST_Rect &bounds) const override;
   void getClientBounds(GHOST_Rect &bounds) const override;
+  void getMouseBounds(GHOST_Rect &bounds) const override;
 
  protected:
   /**

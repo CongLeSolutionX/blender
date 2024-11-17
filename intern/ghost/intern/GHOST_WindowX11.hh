@@ -75,6 +75,8 @@ class GHOST_WindowX11 : public GHOST_Window {
 
   void getClientBounds(GHOST_Rect &bounds) const override;
 
+  void getMouseBounds(GHOST_Rect &bounds) const override;
+
   bool isDialog() const override;
 
   GHOST_TSuccess setClientWidth(uint32_t width) override;

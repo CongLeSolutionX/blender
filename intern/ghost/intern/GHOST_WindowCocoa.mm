@@ -609,6 +609,15 @@ void GHOST_WindowCocoa::getClientBounds(GHOST_Rect &bounds) const
   }
 }
 
+void GHOST_WindowCocoa::getMouseBounds(GHOST_Rect &bounds) const
+{
+  /* Not implemented yet. */
+    bounds.m_l = INT_MIN;
+    bounds.m_t = INT_MIN;
+    bounds.m_r = INT_MAX;
+    bounds.m_b = INT_MAX;
+}
+
 GHOST_TSuccess GHOST_WindowCocoa::setClientWidth(uint32_t width)
 {
   GHOST_ASSERT(getValid(), "GHOST_WindowCocoa::setClientWidth(): window invalid");

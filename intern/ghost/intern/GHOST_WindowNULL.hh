@@ -85,6 +85,14 @@ class GHOST_WindowNULL : public GHOST_Window {
   void getClientBounds(GHOST_Rect & /*bounds*/) const override
   { /* nothing */
   }
+  void getMouseBounds(GHOST_Rect &bounds) const override
+  {
+    /* Not implemented. */
+    bounds.m_l = INT_MIN;
+    bounds.m_t = INT_MIN;
+    bounds.m_r = INT_MAX;
+    bounds.m_b = INT_MAX;
+  }
   GHOST_TSuccess setClientWidth(uint32_t /*width*/) override
   {
     return GHOST_kFailure;

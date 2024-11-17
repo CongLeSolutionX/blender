@@ -102,6 +102,13 @@ class GHOST_IWindow {
   virtual void getClientBounds(GHOST_Rect &bounds) const = 0;
 
   /**
+   * Retrieves the bounds of the mouse relative to the virtual screen.
+   * The `bounds` parameter is populated with the screen's edges that the mouse can reach.
+   * \param bounds: The `GHOST_Rect` to store the mouse bounding rectangle dimensions.
+   */
+  virtual void getMouseBounds(GHOST_Rect &bounds) const = 0;
+
+  /**
    * Resizes client rectangle width.
    * \param width: The new width of the client area of the window.
    */

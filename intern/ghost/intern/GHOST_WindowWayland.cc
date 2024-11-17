@@ -2341,6 +2341,15 @@ void GHOST_WindowWayland::getClientBounds(GHOST_Rect &bounds) const
   bounds.set(0, 0, UNPACK2(window_->frame.size));
 }
 
+void GHOST_WindowWayland::getMouseBounds(GHOST_Rect &bounds) const
+{
+  /* Not implemented yet. */
+  bounds.m_l = INT_MIN;
+  bounds.m_t = INT_MIN;
+  bounds.m_r = INT_MAX;
+  bounds.m_b = INT_MAX;
+}
+
 GHOST_TSuccess GHOST_WindowWayland::setClientWidth(const uint32_t width)
 {
   return setClientSize(width, uint32_t(window_->frame.size[1]));

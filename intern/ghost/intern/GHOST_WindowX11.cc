@@ -533,6 +533,15 @@ void GHOST_WindowX11::getClientBounds(GHOST_Rect &bounds) const
   bounds.m_b = bounds.m_t + h_return;
 }
 
+void GHOST_WindowX11::getClientBounds(GHOST_Rect &bounds) const
+{
+  /* Not implemented yet. */
+  bounds.m_l = INT_MIN;
+  bounds.m_t = INT_MIN;
+  bounds.m_r = INT_MAX;
+  bounds.m_b = INT_MAX;
+}
+
 GHOST_TSuccess GHOST_WindowX11::setClientWidth(uint32_t width)
 {
   XWindowChanges values;

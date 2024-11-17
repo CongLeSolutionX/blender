@@ -442,6 +442,20 @@ void GHOST_WindowWin32::getClientBounds(GHOST_Rect &bounds) const
   }
 }
 
+void GHOST_WindowWin32::getMouseBounds(GHOST_Rect &bounds) const
+{
+  /* Get the virtual screen bounds(spans across all monitors). */
+  int left = ::GetSystemMetrics(SM_XVIRTUALSCREEN);
+  int top = ::GetSystemMetrics(SM_YVIRTUALSCREEN);
+  int right = left + ::GetSystemMetrics(SM_CXVIRTUALSCREEN);
+  int bottom = top + ::GetSystemMetrics(SM_CYVIRTUALSCREEN);
+
+  bounds.m_l = left;
+  bounds.m_t = top;
+  bounds.m_r = right;
+  bounds.m_b = bottom;
+}
+
 GHOST_TSuccess GHOST_WindowWin32::setClientWidth(uint32_t width)
 {
   GHOST_TSuccess success;

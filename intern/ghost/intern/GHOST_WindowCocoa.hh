@@ -109,6 +109,13 @@ class GHOST_WindowCocoa : public GHOST_Window {
   void getClientBounds(GHOST_Rect &bounds) const override;
 
   /**
+   * Retrieves the virtual screen rectangle dimensions.
+   * The `bounds` parameter is populated with the screen's edges that the mouse can reach.
+   * \param bounds: The bounding rectangle of the virtual screen dimensions.
+   */
+  void getMouseBounds(GHOST_Rect &bounds) const override;
+
+  /**
    * Resizes client rectangle width.
    * \param width: The new width of the client area of the window.
    */

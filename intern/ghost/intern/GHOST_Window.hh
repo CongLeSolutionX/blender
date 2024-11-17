@@ -46,6 +46,7 @@ class GHOST_Window : public GHOST_IWindow {
    * virtual std::string getTitle() const = 0;
    * virtual  void getWindowBounds(GHOST_Rect& bounds) const = 0;
    * virtual  void getClientBounds(GHOST_Rect& bounds) const = 0;
+   * virtual  void getMouseBounds(GHOST_Rect& bounds) const = 0;
    * virtual  GHOST_TSuccess setClientWidth(uint32_t width) = 0;
    * virtual  GHOST_TSuccess setClientHeight(uint32_t height) = 0;
    * virtual  GHOST_TSuccess setClientSize(uint32_t width, uint32_t height) = 0;

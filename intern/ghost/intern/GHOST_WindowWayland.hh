@@ -116,6 +116,8 @@ class GHOST_WindowWayland : public GHOST_Window {
 
   void getClientBounds(GHOST_Rect &bounds) const override;
 
+  void getMouseBounds(GHOST_Rect &bounds) const override;
+
   GHOST_TSuccess setClientWidth(uint32_t width) override;
 
   GHOST_TSuccess setClientHeight(uint32_t height) override;

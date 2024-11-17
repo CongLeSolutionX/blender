@@ -159,7 +159,8 @@ GHOST_TSuccess GHOST_Window::setCursorGrab(GHOST_TGrabCursorMode mode,
       m_cursorGrabBounds.m_l = m_cursorGrabBounds.m_r = -1;
     }
     else if (bounds) {
-      m_cursorGrabBounds = *bounds;
+      getMouseBounds(m_cursorGrabBounds);
+      bounds->clip(m_cursorGrabBounds);
     }
     else { /* if bounds not defined, use window */
       getClientBounds(m_cursorGrabBounds);
