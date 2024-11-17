@@ -1616,6 +1616,253 @@ static void sample_average_latest(const OffsetIndices<int> buckets_offsets,
   }
 }
 
+template<typename LeafFuncT, typename JointPredicateT, typename JointFuncT>
+static void for_each_to_bottom_latest_linear(const OffsetIndices<int> buckets_offsets,
+                                             const int total_depth,
+                                             const int parent_depth_i,
+                                             const int parent_i,
+                                             const JointPredicateT &joint_predicate,
+                                             const JointFuncT &joint_func,
+                                             const LeafFuncT &leaf_func)
+{
+  BLI_assert(!buckets_offsets.is_empty());
+
+  Vector<int, 64> joint_to_pass_depht_stack = {parent_depth_i + 1, parent_depth_i + 1};
+  Vector<int, 64> joint_to_pass_i_stack = {parent_i * 2 + 1, parent_i * 2 + 0};
+  Vector<int, 64> joint_to_sample_depth_stack = {parent_depth_i + 1, parent_depth_i + 1};
+  Vector<int, 64> joint_to_sample_i_stack = {parent_i * 2 + 0, parent_i * 2 + 1};
+
+  Vector<std::pair<int2, int>> range_to_joint;
+
+  Vector<std::pair<int2, int2>> leafs_to_joint;
+
+  while (!joint_to_pass_depht_stack.is_empty()) {
+    BLI_assert(joint_to_pass_depht_stack.size() == joint_to_pass_i_stack.size());
+    BLI_assert(joint_to_pass_depht_stack.size() == joint_to_sample_depth_stack.size());
+    BLI_assert(joint_to_pass_depht_stack.size() == joint_to_sample_i_stack.size());
+
+    const int joint_to_pass_depth = joint_to_pass_depht_stack.pop_last();
+    const int joint_to_pass_i = joint_to_pass_i_stack.pop_last();
+    const uint32_t stack_to_pass = joint_i_to_stack(joint_to_pass_depth, joint_to_pass_i);
+
+    const int joint_to_sample_depth = joint_to_sample_depth_stack.pop_last();
+    const int joint_to_sample_i = joint_to_sample_i_stack.pop_last();
+    const int joint_to_sample_index = joint_index_at_depth(joint_to_sample_depth,
+                                                           joint_to_sample_i);
+    const uint32_t stack_to_sample = joint_i_to_stack(joint_to_sample_depth, joint_to_sample_i);
+
+    BLI_assert(joint_to_pass_depth < total_depth);
+    BLI_assert(joint_to_sample_depth < total_depth);
+
+    const uint32_t to_pass_dirrection_stack = stack_from_highest_diff(stack_to_pass,
+                                                                      stack_to_sample);
+    const uint32_t down_stack_to_pass = merge_stacks(
+        joint_to_pass_depth, stack_to_pass, to_pass_dirrection_stack);
+
+    const IndexRange rest_depth_to_pass = IndexRange::from_begin_end(joint_to_pass_depth,
+                                                                     total_depth);
+    const int rest_depth_to_pass_i = binary_search::first_if(
+        rest_depth_to_pass, [&](const int depth_i) {
+          const int sub_joint_i_to_pass = stack_to_i(depth_i, down_stack_to_pass);
+          const int sub_joint_index_to_pass = joint_index_at_depth(depth_i, sub_joint_i_to_pass);
+          return joint_predicate(sub_joint_index_to_pass, joint_to_sample_index);
+        });
+    const bool need_to_double_sampler = rest_depth_to_pass_i == rest_depth_to_pass.size();
+
+    if (need_to_double_sampler) {
+      if (joint_to_sample_depth == IndexRange(total_depth).last()) {
+        const IndexRange buckets_to_pass = joint_buckets_range_at_depth(
+            total_depth, joint_to_pass_depth, joint_to_pass_i);
+        const IndexRange range_to_pass = buckets_offsets[buckets_to_pass];
+
+        const IndexRange buckets_to_sample = joint_buckets_range_at_depth(
+            total_depth, joint_to_sample_depth, joint_to_sample_i);
+        const IndexRange range_to_sample = buckets_offsets[buckets_to_sample];
+
+        leafs_to_joint.append({int2(range_to_pass.start(), range_to_pass.size()),
+                               int2(range_to_sample.start(), range_to_sample.size())});
+        continue;
+      }
+
+      joint_to_pass_depht_stack.append(joint_to_pass_depth);
+      joint_to_pass_i_stack.append(joint_to_pass_i);
+
+      joint_to_sample_depth_stack.append(joint_to_sample_depth + 1);
+      joint_to_sample_i_stack.append(joint_to_sample_i * 2 + 1);
+
+      joint_to_pass_depht_stack.append(joint_to_pass_depth);
+      joint_to_pass_i_stack.append(joint_to_pass_i);
+
+      joint_to_sample_depth_stack.append(joint_to_sample_depth + 1);
+      joint_to_sample_i_stack.append(joint_to_sample_i * 2 + 0);
+      continue;
+    }
+
+    const int highest_depth_to_pass = rest_depth_to_pass[rest_depth_to_pass_i];
+
+    const int highest_joint_i_to_pass = stack_to_i(highest_depth_to_pass, down_stack_to_pass);
+    const IndexRange highest_buckets_to_pass = joint_buckets_range_at_depth(
+        total_depth, highest_depth_to_pass, highest_joint_i_to_pass);
+    const IndexRange highest_range_to_pass = buckets_offsets[highest_buckets_to_pass];
+    BLI_assert(
+        joint_predicate(joint_index_at_depth(highest_depth_to_pass, highest_joint_i_to_pass),
+                        joint_to_sample_index));
+    range_to_joint.append({int2(highest_range_to_pass.start(), highest_range_to_pass.size()),
+                           joint_to_sample_index});
+
+    for (const int rest_depth_i :
+         IndexRange::from_begin_end(joint_to_pass_depth, highest_depth_to_pass).drop_front(1))
+    {
+      const uint32_t down_stack_other_pass = stack_switch_branch(down_stack_to_pass, rest_depth_i);
+      const int joint_i_other_pass = stack_to_i(rest_depth_i, down_stack_other_pass);
+
+      joint_to_sample_depth_stack.append(joint_to_sample_depth);
+      joint_to_sample_i_stack.append(joint_to_sample_i);
+
+      joint_to_pass_depht_stack.append(rest_depth_i);
+      joint_to_pass_i_stack.append(joint_i_other_pass);
+    }
+  }
+
+  threading::parallel_for(
+      range_to_joint.index_range(),
+      1024,
+      [&](const IndexRange range) {
+        for (const std::pair<int2, int> to_pass : range_to_joint.as_span().slice(range)) {
+          joint_func(IndexRange::from_begin_size(to_pass.first[0], to_pass.first[1]),
+                     to_pass.second);
+        }
+      },
+      threading::individual_task_sizes(
+          [&](const int64_t index) { return range_to_joint[index].first[1]; }));
+
+  threading::parallel_for(
+      leafs_to_joint.index_range(),
+      1024,
+      [&](const IndexRange range) {
+        for (const std::pair<int2, int2> leaf : leafs_to_joint.as_span().slice(range)) {
+          leaf_func(IndexRange::from_begin_size(leaf.first[0], leaf.first[1]),
+                    IndexRange::from_begin_size(leaf.second[0], leaf.second[1]));
+        }
+      },
+      threading::individual_task_sizes([&](const int64_t index) {
+        return leafs_to_joint[index].first[1] + leafs_to_joint[index].second[1];
+      }));
+}
+
+static void sample_average_latest_linear(const OffsetIndices<int> buckets_offsets,
+                                         const int total_depth,
+                                         const int power_value,
+                                         const Span<float3> joints_centre,
+                                         const Span<float> joints_radius,
+                                         const Span<float> joints_min_distance,
+                                         const Span<float> joints_value_factor,
+                                         const Span<float3> joints_value,
+                                         const Span<float3> bucket_position,
+                                         const Span<float3> src_bucket_value,
+                                         MutableSpan<float3> dst_buckets_data)
+{
+  BLI_assert(joints_centre.size() == joints_radius.size());
+  BLI_assert(joints_centre.size() == joints_min_distance.size());
+  BLI_assert(joints_centre.size() == joints_value_factor.size());
+  BLI_assert(joints_centre.size() == joints_value.size());
+
+  BLI_assert(bucket_position.size() == src_bucket_value.size());
+  BLI_assert(bucket_position.size() == dst_buckets_data.size());
+
+  const FunctionRef<void(int, MutableSpan<float>)> squared_distance_invertion =
+      powered_rcp_for_squared(power_value);
+
+  const auto accumulate_under = [&](const int parent_depth_i,
+                                    const int parent_i,
+                                    Vector<float> &distance_buffer) {
+    for_each_to_bottom_latest_linear(
+        buckets_offsets,
+        total_depth,
+        parent_depth_i,
+        parent_i,
+        [&](const int joint_a, const int joint_b) -> bool {
+          const float dist = math::distance_squared(joints_centre[joint_a],
+                                                    joints_centre[joint_b]);
+          const float min_dist = math::square(joints_radius[joint_a] +
+                                              joints_min_distance[joint_b]);
+          return dist > min_dist;
+        },
+        [&](const IndexRange range_to_pass, const int joint_to_sample) {
+          const float3 sample_position = joints_centre[joint_to_sample];
+          const float3 sample_value = joints_value[joint_to_sample];
+          const float sample_factor = joints_value_factor[joint_to_sample];
+
+          const Span<float3> self_position = bucket_position.slice(range_to_pass);
+          const Span<float3> self_values = src_bucket_value.slice(range_to_pass);
+          MutableSpan<float3> dst_values = dst_buckets_data.slice(range_to_pass);
+
+          Array<float> distance_buffer(range_to_pass.size());
+          squared_distance(sample_position, self_position, distance_buffer.as_mutable_span());
+          squared_distance_invertion(power_value, distance_buffer.as_mutable_span());
+          for (const int i : range_to_pass.index_range()) {
+            dst_values[i] += (sample_value - self_values[i]) * distance_buffer[i] * sample_factor;
+          }
+        },
+        [&](const IndexRange range_to_pass, const IndexRange range_to_sample) {
+          BLI_assert(range_to_pass.intersect(range_to_sample).is_empty());
+          const Span<float3> sample_position = bucket_position.slice(range_to_sample);
+          const Span<float3> sample_value = src_bucket_value.slice(range_to_sample);
+
+          const Span<float3> self_positions = bucket_position.slice(range_to_pass);
+          const Span<float3> self_values = src_bucket_value.slice(range_to_pass);
+          MutableSpan<float3> dst_values = dst_buckets_data.slice(range_to_pass);
+
+          Array<float> distance_buffer(range_to_sample.size());
+          for (const int index : range_to_pass.index_range()) {
+            const float3 position = self_positions[index];
+            const float3 value = self_values[index];
+
+            squared_distance(position, sample_position, distance_buffer);
+            squared_distance_invertion(power_value, distance_buffer.as_mutable_span());
+            dst_values[index] += accumulate_difference(value, sample_value, distance_buffer);
+          }
+        });
+  };
+
+  for (const int depth_i : IndexRange(total_depth).drop_back(1)) {
+    const IndexRange joints_range = joints_range_at_depth(depth_i);
+    threading::parallel_for(
+        joints_range.index_range(),
+        1024 * 16,
+        [&](const IndexRange range) {
+          Vector<float> distance_buffer;
+          for (const int joint_i : range) {
+            accumulate_under(depth_i, joint_i, distance_buffer);
+          }
+        },
+        threading::accumulated_task_sizes([&](const IndexRange joints_range) {
+          return joint_size_at_depth(total_depth, depth_i) * joints_range.size();
+        }));
+  }
+
+  for_each_leaf(
+      buckets_offsets,
+      total_depth,
+      GrainSize(4096),
+      [&](const IndexRange bucket_range, const int /*joint_index*/, const int /*depth_i*/) {
+        const Span<float3> self_positions = bucket_position.slice(bucket_range);
+        const Span<float3> self_values = src_bucket_value.slice(bucket_range);
+        MutableSpan<float3> dst_values = dst_buckets_data.slice(bucket_range);
+        Array<float, min_bucket_size> distance_buffer(bucket_range.size());
+
+        for (const int index : bucket_range.index_range()) {
+          const float3 position = self_positions[index];
+          const float3 value = self_values[index];
+
+          squared_distance(position, self_positions, distance_buffer);
+          squared_distance_invertion(power_value, distance_buffer.as_mutable_span());
+          distance_buffer[index] = 0.0f;
+          dst_values[index] += accumulate_difference(value, self_values, distance_buffer);
+        }
+      });
+}
+
 #if (0)
 [[maybe_unused]] static void test5(const OffsetIndices<int> base_offsets,
                                    const int total_depth,
@@ -1933,18 +2180,18 @@ class DifferenceSumFieldInput final : public bke::GeometryFieldInput {
 
     Array<float3> sampled_bucket_values_latest(domain_size, float3(0));
     if constexpr (true) {
-      SCOPED_TIMER_AVERAGED("akdbt::sample_average_latest");
-      akdbt::sample_average_latest(base_offsets,
-                                   total_depth,
-                                   distance_power_,
-                                   joints_positions,
-                                   joints_min_radii,
-                                   joints_min_distance,
-                                   joints_values_factors,
-                                   joints_values,
-                                   bucket_positions,
-                                   bucket_values,
-                                   sampled_bucket_values_latest);
+      SCOPED_TIMER_AVERAGED("akdbt::sample_average_latest_linear");
+      akdbt::sample_average_latest_linear(base_offsets,
+                                          total_depth,
+                                          distance_power_,
+                                          joints_positions,
+                                          joints_min_radii,
+                                          joints_min_distance,
+                                          joints_values_factors,
+                                          joints_values,
+                                          bucket_positions,
+                                          bucket_values,
+                                          sampled_bucket_values_latest);
       sampled_bucket_values = std::move(sampled_bucket_values_latest);
     }
 
