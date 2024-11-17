@@ -4500,12 +4500,41 @@ static StringRefNull reroute_node_get_auto_label(TreeDrawContext &tree_draw_ctx,
     reroute_auto_labels.add(reroute, "");
   }
 
-  /* Remember the label for each node on the path to avoid recomputing it. */
-  for (const bNode *reroute : reroute_path) {
-    reroute_auto_labels.add_overwrite(reroute, label);
+  if (!label.is_empty()) {
+    /* Remember the label for each node on the path to avoid recomputing it. */
+    for (const bNode *reroute : reroute_path) {
+      reroute_auto_labels.add_overwrite(reroute, label);
+    }
+    return label;
   }
 
-  return label;
+  /* Reverse so that we can easily iterate over the reroutes from left to right. */
+  std::reverse(reroute_path.begin(), reroute_path.end());
+  const bNode *first_reroute = reroute_path.first();
+  const Span<const bNodeSocket *> origin_sockets =
+      first_reroute->input_socket(0).directly_linked_sockets();
+  if (origin_sockets.is_empty()) {
+    return "";
+  }
+  const bNodeSocket &origin_socket = *origin_sockets[0];
+  if (origin_socket.owner_node().is_reroute()) {
+    return "";
+  }
+  label = origin_socket.name;
+  bool use_auto_name = false;
+  for (const bNode *reroute : reroute_path) {
+    const NodeReroute &storage = *static_cast<const NodeReroute *>(reroute->storage);
+    if (storage.flag & NODE_REROUTE_FLAG_AUTO_NAME) {
+      use_auto_name = true;
+    }
+    if (use_auto_name) {
+      reroute_auto_labels.add_overwrite(reroute, label);
+    }
+  }
+  if (use_auto_name) {
+    return label;
+  }
+  return "";
 }
 
 static void reroute_node_draw_label(TreeDrawContext &tree_draw_ctx,

@@ -1024,8 +1024,14 @@ typedef struct NodeFrame {
 typedef struct NodeReroute {
   /** Name of the socket type (e.g. `NodeSocketFloat`). */
   char type_idname[64];
-
+  /** #NodeRerouteFlag. */
+  uint8_t flag;
+  char _pad[3];
 } NodeReroute;
+
+typedef enum NodeRerouteFlag {
+  NODE_REROUTE_FLAG_AUTO_NAME = (1 << 0),
+} NodeRerouteFlag;
 
 /** \note This one has been replaced with #ImageUser, keep it for do_versions(). */
 typedef struct NodeImageAnim {

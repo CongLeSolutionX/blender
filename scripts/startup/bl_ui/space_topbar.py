@@ -675,7 +675,7 @@ class TOPBAR_PT_name(Panel):
         # Edit first editable button in popup
         def row_with_icon(layout, icon):
             row = layout.row()
-            row.activate_init = True
+            # row.activate_init = True
             row.label(icon=icon)
             return row
 
@@ -697,6 +697,9 @@ class TOPBAR_PT_name(Panel):
                 row = row_with_icon(layout, 'NODE')
                 row.prop(item, "label", text="")
                 found = True
+            selected_nodes = context.selected_nodes
+            if any(node.type == 'REROUTE' for node in selected_nodes):
+                layout.operator("node.reroute_auto_name_toggle", text="Toggle Auto Reroute Name")
         elif space_type == 'NLA_EDITOR':
             layout.label(text="NLA Strip Name")
             item = next(
