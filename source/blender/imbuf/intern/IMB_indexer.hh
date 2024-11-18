@@ -36,7 +36,6 @@
 
 struct anim_index_entry {
   int frameno;
-  uint64_t _pad; /* Was previously seek_pos, but was deprecated by FFmpeg in 6.0 */
   uint64_t seek_pos_pts;
   uint64_t seek_pos_dts;
   uint64_t pts;

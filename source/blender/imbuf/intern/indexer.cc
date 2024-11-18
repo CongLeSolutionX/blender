@@ -193,9 +193,10 @@ ImBufAnimIndex *IMB_indexer_open(const char *filepath)
       MEM_callocN(sizeof(anim_index_entry) * idx->num_entries, "anim_index_entries"));
 
   size_t items_read = 0;
+  uint64_t pad;
   for (i = 0; i < idx->num_entries; i++) {
     items_read += fread(&idx->entries[i].frameno, sizeof(int), 1, fp);
-    items_read += fread(&idx->entries[i]._pad, sizeof(uint64_t), 1, fp);
+    items_read += fread(&pad, sizeof(uint64_t), 1, fp);
     items_read += fread(&idx->entries[i].seek_pos_pts, sizeof(uint64_t), 1, fp);
     items_read += fread(&idx->entries[i].seek_pos_dts, sizeof(uint64_t), 1, fp);
     items_read += fread(&idx->entries[i].pts, sizeof(uint64_t), 1, fp);
@@ -212,7 +213,6 @@ ImBufAnimIndex *IMB_indexer_open(const char *filepath)
   if ((ENDIAN_ORDER == B_ENDIAN) != (header[8] == 'V')) {
     for (i = 0; i < idx->num_entries; i++) {
       BLI_endian_switch_int32(&idx->entries[i].frameno);
-      BLI_endian_switch_uint64(&idx->entries[i]._pad);
       BLI_endian_switch_uint64(&idx->entries[i].seek_pos_pts);
       BLI_endian_switch_uint64(&idx->entries[i].seek_pos_dts);
       BLI_endian_switch_uint64(&idx->entries[i].pts);
