@@ -1726,28 +1726,23 @@ static void for_each_to_bottom_latest_linear(const OffsetIndices<int> buckets_of
 
   threading::parallel_for(
       range_to_joint.index_range(),
-      1024,
+      1024'00000000,
       [&](const IndexRange range) {
         for (const std::pair<int2, int> to_pass : range_to_joint.as_span().slice(range)) {
           joint_func(IndexRange::from_begin_size(to_pass.first[0], to_pass.first[1]),
                      to_pass.second);
         }
-      },
-      threading::individual_task_sizes(
-          [&](const int64_t index) { return range_to_joint[index].first[1]; }));
+      });
 
   threading::parallel_for(
       leafs_to_joint.index_range(),
-      1024,
+      1024'00000000,
       [&](const IndexRange range) {
         for (const std::pair<int2, int2> leaf : leafs_to_joint.as_span().slice(range)) {
           leaf_func(IndexRange::from_begin_size(leaf.first[0], leaf.first[1]),
                     IndexRange::from_begin_size(leaf.second[0], leaf.second[1]));
         }
-      },
-      threading::individual_task_sizes([&](const int64_t index) {
-        return leafs_to_joint[index].first[1] + leafs_to_joint[index].second[1];
-      }));
+      });
 }
 
 static void sample_average_latest_linear(const OffsetIndices<int> buckets_offsets,
