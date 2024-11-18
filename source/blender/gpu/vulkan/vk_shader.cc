@@ -486,10 +486,12 @@ static std::string main_function_wrapper(std::string &pre_main, std::string &pos
 static std::string combine_sources(Span<StringRefNull> sources)
 {
   std::string result = fmt::to_string(fmt::join(sources, ""));
-  /* Renderdoc doesn't work well with the #line directive. When running in renderdoc we scramble
-   * `#line` => `//ine`. Renderdoc doesn't work with indexed line directive and when using the
-   * filename it looks for the file on disk. In both cases the step-by-step debugger cannot be
-   * used. */
+  /* Renderdoc step-by-step debugger cannot be used when using the #line directive. The indexed
+   * based is not supported as it doesn't make sense in Vulkan and Blender misuses this to store a
+   * hash. The filename based directive cannot be used as it cannot find the actual file on disk
+   * and state is set incorrectly.
+   *
+   * When running in renderdoc we scramble `#line` into `//ine` to work around these limitation. */
   if (G.debug & G_DEBUG_GPU_RENDERDOC) {
     size_t start_pos = 0;
     while ((start_pos = result.find("#line ", start_pos)) != std::string::npos) {
