@@ -5241,10 +5241,7 @@ static bool match_region_with_redraws(const ScrArea *area,
   }
   else if (regiontype == RGN_TYPE_HEADER) {
     if (spacetype == SPACE_ACTION) {
-      /* The timeline shows the current frame in the header. Other headers
-       * don't need to be updated. */
-      SpaceAction *saction = (SpaceAction *)area->spacedata.first;
-      return saction->mode == SACTCONT_TIMELINE;
+      return true;
     }
   }
   else if (regiontype == RGN_TYPE_PREVIEW) {
