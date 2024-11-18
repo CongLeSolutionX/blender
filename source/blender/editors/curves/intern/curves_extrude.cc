@@ -28,7 +28,7 @@ static Span<int> compress_intervals(const OffsetIndices<int> intervals_by_curve,
    */
   int *dst = intervals.data() + intervals_by_curve[0].size() - 1;
 
-  for (const int curve : IndexRange(1, intervals_by_curve.size() - 1)) {
+  for (const int curve : intervals_by_curve.index_range().drop_front(1)) {
     const IndexRange range = intervals_by_curve[curve];
     /* -2 one to drop index denoting curve's beginning, second one for ending. */
     const int width = range.size() - 2;
