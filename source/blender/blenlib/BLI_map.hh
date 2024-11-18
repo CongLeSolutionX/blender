@@ -224,6 +224,26 @@ class Map {
     other.noexcept_reset();
   }
 
+  /**
+   * Initializes the Map based on some key-value-pairs:
+   *   `Map<int, std::string> map = {{1, "where"}, {3, "when"}, {5, "why"}};`
+   */
+  Map(const Span<std::pair<Key, Value>> items, Allocator allocator = {}) : Map(allocator)
+  {
+    for (const std::pair<Key, Value> &item : items) {
+      this->add(item.first, item.second);
+    }
+  }
+
+  /**
+   * This is pretty much the same as the constructor with a #Span above. Having it helps with type
+   * inferencing when initializer lists are used.
+   */
+  Map(const std::initializer_list<std::pair<Key, Value>> items, Allocator allocator = {})
+      : Map(Span(items), allocator)
+  {
+  }
+
   Map &operator=(const Map &other)
   {
     return copy_assign_container(*this, other);

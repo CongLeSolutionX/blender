@@ -25,6 +25,39 @@ TEST(map, DefaultConstructor)
   EXPECT_TRUE(map.is_empty());
 }
 
+TEST(map, ItemsConstructor)
+{
+  {
+    Map<int, std::string> map = {{1, "where"}, {3, "when"}, {5, "why"}};
+    EXPECT_EQ(map.size(), 3);
+    EXPECT_EQ(map.lookup(1), "where");
+    EXPECT_EQ(map.lookup(3), "when");
+    EXPECT_EQ(map.lookup(5), "why");
+  }
+  {
+    Map<int, std::string> map{{1, "where"}, {3, "when"}, {5, "why"}};
+    EXPECT_EQ(map.size(), 3);
+    EXPECT_EQ(map.lookup(1), "where");
+    EXPECT_EQ(map.lookup(3), "when");
+    EXPECT_EQ(map.lookup(5), "why");
+  }
+  {
+    Map<int, std::string> map{{{1, "where"}, {3, "when"}, {5, "why"}}};
+    EXPECT_EQ(map.size(), 3);
+    EXPECT_EQ(map.lookup(1), "where");
+    EXPECT_EQ(map.lookup(3), "when");
+    EXPECT_EQ(map.lookup(5), "why");
+  }
+  {
+    const Array<std::pair<int, std::string>> items = {{1, "where"}, {3, "when"}, {5, "why"}};
+    Map<int, std::string> map{items};
+    EXPECT_EQ(map.size(), 3);
+    EXPECT_EQ(map.lookup(1), "where");
+    EXPECT_EQ(map.lookup(3), "when");
+    EXPECT_EQ(map.lookup(5), "why");
+  }
+}
+
 TEST(map, AddIncreasesSize)
 {
   Map<int, float> map;
