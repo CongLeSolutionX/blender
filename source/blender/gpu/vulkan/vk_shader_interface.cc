@@ -338,7 +338,6 @@ void VKShaderInterface::descriptor_set_location_update(
   resource_binding.location = location;
   resource_binding.arrayed = arrayed;
   resource_binding.access_mask = vk_access_flags;
-  resource_binding.is_subpass_input = is_subpass_input;
 }
 
 const VKResourceBinding &VKShaderInterface::resource_binding_info(

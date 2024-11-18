@@ -153,17 +153,31 @@ void VKDescriptorSetTracker::bind_input_attachment_resource(
   VKTexture *texture = static_cast<VKTexture *>(elem.resource);
   BLI_assert(elem.resource_type == BindSpaceTextures::Type::Texture);
 
-  const VKSampler &sampler = device.samplers().get(elem.sampler);
-  bind_image(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-             sampler.vk_handle(),
-             texture->image_view_get(resource_binding.arrayed).vk_handle(),
-             VK_IMAGE_LAYOUT_GENERAL,
-             resource_binding.location);
-  access_info.images.append({texture->vk_image_handle(),
-                             resource_binding.access_mask,
-                             to_vk_image_aspect_flag_bits(texture->device_format_get()),
-                             0,
-                             VK_REMAINING_ARRAY_LAYERS});
+  if (!device.workarounds_get().dynamic_rendering) {
+    const VKSampler &sampler = device.samplers().get(elem.sampler);
+    bind_image(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+               sampler.vk_handle(),
+               texture->image_view_get(resource_binding.arrayed).vk_handle(),
+               VK_IMAGE_LAYOUT_GENERAL,
+               resource_binding.location);
+    access_info.images.append({texture->vk_image_handle(),
+                               resource_binding.access_mask,
+                               to_vk_image_aspect_flag_bits(texture->device_format_get()),
+                               0,
+                               VK_REMAINING_ARRAY_LAYERS});
+  }
+  else {
+    bind_image(VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
+               VK_NULL_HANDLE,
+               texture->image_view_get(resource_binding.arrayed).vk_handle(),
+               VK_IMAGE_LAYOUT_GENERAL,
+               resource_binding.location);
+    access_info.images.append({texture->vk_image_handle(),
+                               resource_binding.access_mask,
+                               to_vk_image_aspect_flag_bits(texture->device_format_get()),
+                               0,
+                               VK_REMAINING_ARRAY_LAYERS});
+  }
 }
 
 void VKDescriptorSetTracker::bind_storage_buffer_resource(
