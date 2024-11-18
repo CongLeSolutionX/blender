@@ -87,17 +87,14 @@ void multires_customdata_delete(Mesh *mesh)
 
 /** Grid hiding */
 static BLI_bitmap *multires_mdisps_upsample_hidden(BLI_bitmap *lo_hidden,
-                                                   int lo_level,
-                                                   int hi_level,
+                                                   const int lo_level,
+                                                   const int hi_level,
 
                                                    /* assumed to be at hi_level (or null) */
                                                    const BLI_bitmap *prev_hidden)
 {
-  BLI_bitmap *subd;
-  int hi_gridsize = BKE_ccg_gridsize(hi_level);
-  int lo_gridsize = BKE_ccg_gridsize(lo_level);
-  int yh, xh, xl, yl, xo, yo, hi_ndx;
-  int offset, factor;
+  const int hi_gridsize = BKE_ccg_gridsize(hi_level);
+  const int lo_gridsize = BKE_ccg_gridsize(lo_level);
 
   BLI_assert(lo_level <= hi_level);
 
@@ -106,30 +103,30 @@ static BLI_bitmap *multires_mdisps_upsample_hidden(BLI_bitmap *lo_hidden,
     return static_cast<BLI_bitmap *>(MEM_dupallocN(lo_hidden));
   }
 
-  subd = BLI_BITMAP_NEW(square_i(hi_gridsize), "MDisps.hidden upsample");
+  BLI_bitmap *subd = BLI_BITMAP_NEW(square_i(hi_gridsize), "MDisps.hidden upsample");
 
-  factor = BKE_ccg_factor(lo_level, hi_level);
-  offset = 1 << (hi_level - lo_level - 1);
+  const int factor = BKE_ccg_factor(lo_level, hi_level);
+  const int offset = 1 << (hi_level - lo_level - 1);
 
   /* low-res blocks */
-  for (yl = 0; yl < lo_gridsize; yl++) {
-    for (xl = 0; xl < lo_gridsize; xl++) {
-      int lo_val = BLI_BITMAP_TEST(lo_hidden, yl * lo_gridsize + xl);
+  for (int yl = 0; yl < lo_gridsize; yl++) {
+    for (int xl = 0; xl < lo_gridsize; xl++) {
+      const int lo_val = BLI_BITMAP_TEST(lo_hidden, yl * lo_gridsize + xl);
 
       /* high-res blocks */
-      for (yo = -offset; yo <= offset; yo++) {
-        yh = yl * factor + yo;
+      for (int yo = -offset; yo <= offset; yo++) {
+        const int yh = yl * factor + yo;
         if (yh < 0 || yh >= hi_gridsize) {
           continue;
         }
 
-        for (xo = -offset; xo <= offset; xo++) {
-          xh = xl * factor + xo;
+        for (int xo = -offset; xo <= offset; xo++) {
+          const int xh = xl * factor + xo;
           if (xh < 0 || xh >= hi_gridsize) {
             continue;
           }
 
-          hi_ndx = yh * hi_gridsize + xh;
+          const int hi_ndx = yh * hi_gridsize + xh;
 
           if (prev_hidden) {
             /* If prev_hidden is available, copy it to
@@ -154,21 +151,19 @@ static BLI_bitmap *multires_mdisps_upsample_hidden(BLI_bitmap *lo_hidden,
 }
 
 static BLI_bitmap *multires_mdisps_downsample_hidden(const BLI_bitmap *old_hidden,
-                                                     int old_level,
-                                                     int new_level)
+                                                     const int old_level,
+                                                     const int new_level)
 {
-  BLI_bitmap *new_hidden;
-  int new_gridsize = BKE_ccg_gridsize(new_level);
-  int old_gridsize = BKE_ccg_gridsize(old_level);
-  int x, y, factor, old_value;
+  const int new_gridsize = BKE_ccg_gridsize(new_level);
+  const int old_gridsize = BKE_ccg_gridsize(old_level);
 
   BLI_assert(new_level <= old_level);
-  factor = BKE_ccg_factor(new_level, old_level);
-  new_hidden = BLI_BITMAP_NEW(square_i(new_gridsize), "downsample hidden");
+  const int factor = BKE_ccg_factor(new_level, old_level);
+  BLI_bitmap *new_hidden = BLI_BITMAP_NEW(square_i(new_gridsize), "downsample hidden");
 
-  for (y = 0; y < new_gridsize; y++) {
-    for (x = 0; x < new_gridsize; x++) {
-      old_value = BLI_BITMAP_TEST(old_hidden, factor * y * old_gridsize + x * factor);
+  for (int y = 0; y < new_gridsize; y++) {
+    for (int x = 0; x < new_gridsize; x++) {
+      int old_value = BLI_BITMAP_TEST(old_hidden, factor * y * old_gridsize + x * factor);
 
       BLI_BITMAP_SET(new_hidden, y * new_gridsize + x, old_value);
     }
@@ -183,13 +178,11 @@ static void multires_output_hidden_to_ccgdm(CCGDerivedMesh *ccgdm, Mesh *mesh, i
   const MDisps *mdisps = static_cast<const MDisps *>(
       CustomData_get_layer(&mesh->corner_data, CD_MDISPS));
   BLI_bitmap **grid_hidden = ccgdm->gridHidden;
-  int *gridOffset;
-  int j;
 
-  gridOffset = ccgdm->dm.getGridOffset(&ccgdm->dm);
+  const int *gridOffset = ccgdm->dm.getGridOffset(&ccgdm->dm);
 
   for (const int i : faces.index_range()) {
-    for (j = 0; j < faces[i].size(); j++) {
+    for (int j = 0; j < faces[i].size(); j++) {
       int g = gridOffset[i] + j;
       const MDisps *md = &mdisps[g];
       BLI_bitmap *gh = md->hidden;
