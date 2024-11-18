@@ -176,15 +176,6 @@ class IndexRange {
   }
 
   /**
-   * Creates a new index range with the same beginning but a shifted end.
-   */
-  constexpr IndexRange shift_end_by(const int64_t n) const
-  {
-    BLI_assert(!this->is_empty());
-    return IndexRange::from_begin_size(start_, size_ + n);
-  }
-
-  /**
    * Create a new range starting at the end of the current one.
    */
   constexpr IndexRange after(int64_t n) const

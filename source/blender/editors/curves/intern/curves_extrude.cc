@@ -180,6 +180,14 @@ static void calc_new_offsets(const Span<int> old_offsets,
   });
 }
 
+/**
+ * Creates a new index range with the same beginning but a shifted end.
+ */
+static IndexRange shift_end_by(const IndexRange &range, const int n)
+{
+  return IndexRange::from_begin_size(range.start(), range.size() + n);
+}
+
 static void extrude_curves(Curves &curves_id)
 {
   const bke::AttrDomain selection_domain = bke::AttrDomain(curves_id.selection_domain);
@@ -259,7 +267,7 @@ static void extrude_curves(Curves &curves_id)
       bool is_selected = is_first_selected[curve];
 
       for (const int i : intervals_by_curve[curve].drop_back(1)) {
-        const IndexRange src = copy_intervals[i].shift_end_by(1);
+        const IndexRange src = shift_end_by(copy_intervals[i], 1);
         const IndexRange dst = src.shift(new_offsets[curve] - first_value + i - first_index);
 
         for (const int selection_i : selection_attr_names.index_range()) {
@@ -298,7 +306,7 @@ static void extrude_curves(Curves &curves_id)
     const CPPType &type = attribute.src.type();
     threading::parallel_for(compact_intervals.index_range(), 512, [&](IndexRange range) {
       for (const int i : range) {
-        const IndexRange src = compact_intervals[i].shift_end_by(1);
+        const IndexRange src = shift_end_by(compact_intervals[i], 1);
         const IndexRange dst = src.shift(i);
         type.copy_assign_n(
             attribute.src.slice(src).data(), attribute.dst.span.slice(dst).data(), src.size());
