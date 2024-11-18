@@ -274,14 +274,15 @@ static void mix_arrays(const GSpan src_from,
   });
 }
 
-void interpolate_curves(const CurvesGeometry &from_curves,
-                        const CurvesGeometry &to_curves,
-                        const Span<int> from_curve_indices,
-                        const Span<int> to_curve_indices,
-                        const IndexMask &dst_curve_mask,
-                        const Span<bool> dst_curve_flip_direction,
-                        const float mix_factor,
-                        CurvesGeometry &dst_curves)
+void interpolate_curves_with_sampling(const CurvesGeometry &from_curves,
+                                      const CurvesGeometry &to_curves,
+                                      const Span<int> from_curve_indices,
+                                      const Span<int> to_curve_indices,
+                                      const IndexMask &dst_curve_mask,
+                                      const Span<bool> dst_curve_flip_direction,
+                                      const float mix_factor,
+                                      CurveSamplingFunc sampling_fn,
+                                      CurvesGeometry &dst_curves)
 {
   BLI_assert(from_curve_indices.size() == dst_curve_mask.size());
   BLI_assert(to_curve_indices.size() == dst_curve_mask.size());
@@ -487,6 +488,40 @@ void interpolate_curves(const CurvesGeometry &from_curves,
   for (bke::GSpanAttributeWriter &attribute : curve_attributes.dst) {
     attribute.finish();
   }
+}
+
+void interpolate_curves(const CurvesGeometry &from_curves,
+                        const CurvesGeometry &to_curves,
+                        const Span<int> from_curve_indices,
+                        const Span<int> to_curve_indices,
+                        const IndexMask &dst_curve_mask,
+                        const Span<bool> dst_curve_flip_direction,
+                        const float mix_factor,
+                        CurvesGeometry &dst_curves)
+{
+  auto sample_uniform = [&](const Span<float> segment_lengths,
+                            const bool cyclic,
+                            const bool reverse,
+                            MutableSpan<int> r_segment_indices,
+                            MutableSpan<float> r_factors) {
+    if (reverse) {
+      length_parameterize::sample_uniform_reverse(
+          segment_lengths, !cyclic, r_segment_indices, r_factors);
+    }
+    else {
+      length_parameterize::sample_uniform(segment_lengths, !cyclic, r_segment_indices, r_factors);
+    }
+  };
+
+  interpolate_curves_with_sampling(from_curves,
+                                   to_curves,
+                                   from_curve_indices,
+                                   to_curve_indices,
+                                   dst_curve_mask,
+                                   dst_curve_flip_direction,
+                                   mix_factor,
+                                   sample_uniform,
+                                   dst_curves);
 }
 
 }  // namespace blender::geometry
