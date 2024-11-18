@@ -58,14 +58,14 @@ class UniformBuf {
 
   virtual void bind(int slot)
   {
-    if (!data_initialized_) {
+    if (!data_initialized_ && G.debug & G_DEBUG_GPU) {
       std::cerr << "Binding uninitialized UBO: " << name_ << " at slot " << slot << std::endl;
     }
   }
 
   virtual void bind_as_ssbo(int slot)
   {
-    if (!data_initialized_) {
+    if (!data_initialized_ && G.debug & G_DEBUG_GPU) {
       std::cerr << "Binding uninitialized UBO as SSBO: " << name_ << " at slot " << slot
                 << std::endl;
     }
