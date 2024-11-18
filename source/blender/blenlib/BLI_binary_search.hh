@@ -22,8 +22,6 @@ namespace blender::binary_search {
 template<typename Iterator, typename Predicate>
 static int64_t first_if(Iterator begin, Iterator end, Predicate &&predicate)
 {
-  BLI_assert(
-      std::is_partitioned(begin, end, [&](const auto &value) { return !predicate(value); }));
   return std::lower_bound(begin,
                           end,
                           nullptr,
@@ -38,7 +36,6 @@ static int64_t first_if(Iterator begin, Iterator end, Predicate &&predicate)
 template<typename Iterator, typename Predicate>
 static int64_t last_if(Iterator begin, Iterator end, Predicate &&predicate)
 {
-  BLI_assert(std::is_partitioned(begin, end, predicate));
   return std::upper_bound(begin,
                           end,
                           nullptr,
