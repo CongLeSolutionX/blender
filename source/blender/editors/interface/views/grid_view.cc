@@ -221,7 +221,7 @@ class BuildOnlyVisibleButtonsHelper {
   std::optional<IndexRange> visible_items_range_;
 
  public:
-  BuildOnlyVisibleButtonsHelper(const View2D *v2d,
+  BuildOnlyVisibleButtonsHelper(const View2D &v2d,
                                 const AbstractGridView &grid_view,
                                 int cols_per_row,
                                 const AbstractGridViewItem *force_visible_item);
@@ -237,14 +237,14 @@ class BuildOnlyVisibleButtonsHelper {
 };
 
 BuildOnlyVisibleButtonsHelper::BuildOnlyVisibleButtonsHelper(
-    const View2D *v2d,
+    const View2D &v2d,
     const AbstractGridView &grid_view,
     const int cols_per_row,
     const AbstractGridViewItem *force_visible_item)
     : grid_view_(grid_view), style_(grid_view.get_style()), cols_per_row_(cols_per_row)
 {
-  if (v2d && (v2d->flag & V2D_IS_INIT) && grid_view.get_item_count_filtered()) {
-    visible_items_range_ = this->get_visible_range(*v2d, force_visible_item);
+  if (v2d.flag & V2D_IS_INIT && grid_view.get_item_count_filtered()) {
+    visible_items_range_ = this->get_visible_range(v2d, force_visible_item);
   }
 }
 
@@ -371,7 +371,7 @@ class GridViewLayoutBuilder {
 
   void build_from_view(const bContext &C,
                        const AbstractGridView &grid_view,
-                       const View2D *v2d) const;
+                       const View2D &v2d) const;
 
  private:
   void build_grid_tile(const bContext &C, uiLayout &grid_layout, AbstractGridViewItem &item) const;
@@ -396,7 +396,7 @@ void GridViewLayoutBuilder::build_grid_tile(const bContext &C,
 
 void GridViewLayoutBuilder::build_from_view(const bContext &C,
                                             const AbstractGridView &grid_view,
-                                            const View2D *v2d) const
+                                            const View2D &v2d) const
 {
   uiLayout *parent_layout = this->current_layout();
 
@@ -459,9 +459,7 @@ void GridViewBuilder::build_grid_view(const bContext &C,
   uiBlock &block = *uiLayoutGetBlock(&layout);
 
   const ARegion *region = CTX_wm_region_popup(&C) ? CTX_wm_region_popup(&C) : CTX_wm_region(&C);
-  if (region) {
-    ui_block_view_persistent_state_restore(*region, block, grid_view);
-  }
+  ui_block_view_persistent_state_restore(*region, block, grid_view);
 
   grid_view.build_items();
   grid_view.update_from_old(block);
@@ -472,7 +470,7 @@ void GridViewBuilder::build_grid_view(const bContext &C,
   UI_block_layout_set_current(&block, &layout);
 
   GridViewLayoutBuilder builder(layout);
-  builder.build_from_view(C, grid_view, region ? &region->v2d : nullptr);
+  builder.build_from_view(C, grid_view, region->v2d);
 }
 
 /* ---------------------------------------------------------------------- */

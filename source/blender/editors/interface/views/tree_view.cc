@@ -131,7 +131,7 @@ void AbstractTreeView::set_default_rows(int default_rows)
   custom_height_ = std::make_unique<int>(default_rows * padded_item_height());
 }
 
-std::optional<uiViewState> AbstractTreeView::persistent_state_for_file_store() const
+std::optional<uiViewState> AbstractTreeView::persistent_state() const
 {
   if (!custom_height_) {
     return {};

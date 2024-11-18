@@ -136,7 +136,7 @@ void AbstractView::scroll(ViewScrollDirection /*direction*/)
   BLI_assert_msg(false, "Unsupported for this view type");
 }
 
-std::optional<uiViewState> AbstractView::persistent_state_for_file_store() const
+std::optional<uiViewState> AbstractView::persistent_state() const
 {
   return {};
 }

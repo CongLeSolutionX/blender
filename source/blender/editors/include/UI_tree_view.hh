@@ -146,7 +146,7 @@ class AbstractTreeView : public AbstractView, public TreeViewItemContainer {
  protected:
   virtual void build_tree() = 0;
 
-  std::optional<uiViewState> persistent_state_for_file_store() const override;
+  std::optional<uiViewState> persistent_state() const override;
   void persistent_state_apply(const uiViewState &state) override;
 
  private:

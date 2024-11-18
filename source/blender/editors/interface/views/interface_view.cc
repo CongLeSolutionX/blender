@@ -175,7 +175,7 @@ void ui_block_views_end(ARegion *region, const uiBlock *block)
   if (region && region->regiontype != RGN_TYPE_TEMPORARY) {
     LISTBASE_FOREACH (const ViewLink *, link, &block->views) {
       /* Ensure persistent view state storage for writing to files if needed. */
-      if (std::optional<uiViewState> temp_state = link->view->persistent_state_for_file_store()) {
+      if (std::optional<uiViewState> temp_state = link->view->persistent_state()) {
         uiViewStateLink *state_link = ensure_view_state(*region, *link);
         state_link->state = *temp_state;
       }

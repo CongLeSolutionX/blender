@@ -111,10 +111,10 @@ class AbstractView {
    *
    * Return an empty value if there's no state to preserve (default implementation).
    */
-  virtual std::optional<uiViewState> persistent_state_for_file_store() const;
+  virtual std::optional<uiViewState> persistent_state() const;
   /**
-   * Restore a view state given in \a state, which was created by
-   * #persistent_state_for_file_store() for saving in files, and potentially loaded from a file.
+   * Restore a view state given in \a state, which was created by #persistent_state() for saving in
+   * files, and potentially loaded from a file.
    */
   virtual void persistent_state_apply(const uiViewState &state);
 
