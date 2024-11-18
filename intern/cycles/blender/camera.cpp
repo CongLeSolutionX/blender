@@ -58,6 +58,12 @@ struct BlenderCamera {
   float pole_merge_angle_from;
   float pole_merge_angle_to;
 
+  float fisheye_polynomial_k0;
+  float fisheye_polynomial_k1;
+  float fisheye_polynomial_k2;
+  float fisheye_polynomial_k3;
+  float fisheye_polynomial_k4;
+
   float oblique_angle;
   float oblique_length;
   float oblique_focal;
@@ -244,6 +250,12 @@ static void blender_camera_from_object(BlenderCamera *bcam,
     bcam->latitude_max = b_camera.latitude_max();
     bcam->longitude_min = b_camera.longitude_min();
     bcam->longitude_max = b_camera.longitude_max();
+
+    bcam->fisheye_polynomial_k0 = b_camera.fisheye_polynomial_k0();
+    bcam->fisheye_polynomial_k1 = b_camera.fisheye_polynomial_k1();
+    bcam->fisheye_polynomial_k2 = b_camera.fisheye_polynomial_k2();
+    bcam->fisheye_polynomial_k3 = b_camera.fisheye_polynomial_k3();
+    bcam->fisheye_polynomial_k4 = b_camera.fisheye_polynomial_k4();
 
     bcam->central_cylindrical_range_u_min = b_camera.central_cylindrical_range_u_min();
     bcam->central_cylindrical_range_u_max = b_camera.central_cylindrical_range_u_max();
@@ -522,6 +534,12 @@ static void blender_camera_sync(Camera *cam,
   cam->set_fisheye_lens(bcam->fisheye_lens);
   cam->set_latitude_min(bcam->latitude_min);
   cam->set_latitude_max(bcam->latitude_max);
+
+  cam->set_fisheye_polynomial_k0(bcam->fisheye_polynomial_k0);
+  cam->set_fisheye_polynomial_k1(bcam->fisheye_polynomial_k1);
+  cam->set_fisheye_polynomial_k2(bcam->fisheye_polynomial_k2);
+  cam->set_fisheye_polynomial_k3(bcam->fisheye_polynomial_k3);
+  cam->set_fisheye_polynomial_k4(bcam->fisheye_polynomial_k4);
 
   cam->set_oblique_angle(bcam->oblique_angle);
   cam->set_oblique_length(bcam->oblique_length);

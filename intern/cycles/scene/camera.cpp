@@ -103,6 +103,12 @@ NODE_DEFINE(Camera)
   SOCKET_FLOAT(fov_pre, "FOV Pre", M_PI_4_F);
   SOCKET_FLOAT(fov_post, "FOV Post", M_PI_4_F);
 
+  SOCKET_FLOAT(fisheye_polynomial_k0, "Fisheye Polynomial K0", 0.0f);
+  SOCKET_FLOAT(fisheye_polynomial_k1, "Fisheye Polynomial K1", 0.0f);
+  SOCKET_FLOAT(fisheye_polynomial_k2, "Fisheye Polynomial K2", 0.0f);
+  SOCKET_FLOAT(fisheye_polynomial_k3, "Fisheye Polynomial K3", 0.0f);
+  SOCKET_FLOAT(fisheye_polynomial_k4, "Fisheye Polynomial K4", 0.0f);
+
   SOCKET_FLOAT(oblique_angle, "oblique_angle", 0.0f);
   SOCKET_FLOAT(oblique_length, "oblique_length", 0.0f);
   SOCKET_FLOAT(oblique_focal, "oblique_focal", 0.0f);
@@ -437,8 +443,9 @@ void Camera::update(Scene *scene)
                                             -longitude_min,
                                             latitude_min - latitude_max,
                                             -latitude_min + M_PI_2_F);
-  kcam->fisheye_lens_polynomial_bias = 0.0f;
-  kcam->fisheye_lens_polynomial_coefficients = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+  kcam->fisheye_lens_polynomial_bias = fisheye_polynomial_k0;
+  kcam->fisheye_lens_polynomial_coefficients = make_float4(
+      fisheye_polynomial_k1, fisheye_polynomial_k2, fisheye_polynomial_k3, fisheye_polynomial_k4);
   kcam->central_cylindrical_range = make_float4(-central_cylindrical_range_u_min,
                                                 -central_cylindrical_range_u_max,
                                                 central_cylindrical_range_v_min,

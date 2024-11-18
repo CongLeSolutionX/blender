@@ -81,6 +81,12 @@ class Camera : public Node {
   NODE_SOCKET_API(float, longitude_min)
   NODE_SOCKET_API(float, longitude_max)
 
+  NODE_SOCKET_API(float, fisheye_polynomial_k0)
+  NODE_SOCKET_API(float, fisheye_polynomial_k1)
+  NODE_SOCKET_API(float, fisheye_polynomial_k2)
+  NODE_SOCKET_API(float, fisheye_polynomial_k3)
+  NODE_SOCKET_API(float, fisheye_polynomial_k4)
+
   NODE_SOCKET_API(float, oblique_angle)
   NODE_SOCKET_API(float, oblique_length)
   NODE_SOCKET_API(float, oblique_focal)
