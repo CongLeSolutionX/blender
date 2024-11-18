@@ -207,7 +207,7 @@ void ANIM_draw_action_framerange(
 /* *************************************************** */
 /* NLA-MAPPING UTILITIES (required for drawing and also editing keyframes). */
 
-bool ANIM_nla_mapping_allowed(bAnimListElem *ale)
+bool ANIM_nla_mapping_allowed(const bAnimListElem *ale)
 {
   /* Historically, there was another check in the code that this function replaced:
    * if (!ELEM(ac->datatype,
