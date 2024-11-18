@@ -719,11 +719,14 @@ static bool write_at_address_validate(WriteData *wd, int filecode, const void *a
   return true;
 }
 
+static void write_bhead(WriteData *wd, const BHead &bhead)
+{
+  mywrite(wd, &bhead, sizeof(BHead));
+}
+
 static void writestruct_at_address_nr(
     WriteData *wd, int filecode, const int struct_nr, int nr, const void *adr, const void *data)
 {
-  BHead bh;
-
   BLI_assert(struct_nr > 0 && struct_nr < SDNA_TYPE_MAX);
 
   if (adr == nullptr || data == nullptr || nr == 0) {
@@ -734,11 +737,10 @@ static void writestruct_at_address_nr(
     return;
   }
 
-  /* Initialize #BHead. */
+  BHead bh;
   bh.code = filecode;
   bh.old = adr;
   bh.nr = nr;
-
   bh.SDNAnr = struct_nr;
   bh.len = nr * DNA_struct_size(wd->sdna, bh.SDNAnr);
 
@@ -746,7 +748,7 @@ static void writestruct_at_address_nr(
     return;
   }
 
-  mywrite(wd, &bh, sizeof(BHead));
+  write_bhead(wd, bh);
   mywrite(wd, data, size_t(bh.len));
 }
 
@@ -761,8 +763,6 @@ static void writestruct_nr(
  */
 static void writedata(WriteData *wd, int filecode, size_t len, const void *adr)
 {
-  BHead bh;
-
   if (adr == nullptr || len == 0) {
     return;
   }
@@ -776,7 +776,7 @@ static void writedata(WriteData *wd, int filecode, size_t len, const void *adr)
     return;
   }
 
-  /* Initialize #BHead. */
+  BHead bh;
   bh.code = filecode;
   bh.old = adr;
   bh.nr = 1;
@@ -784,7 +784,7 @@ static void writedata(WriteData *wd, int filecode, size_t len, const void *adr)
   bh.SDNAnr = SDNA_RAW_DATA_STRUCT_INDEX;
   bh.len = int(len);
 
-  mywrite(wd, &bh, sizeof(BHead));
+  write_bhead(wd, bh);
   mywrite(wd, adr, len);
 }
 
@@ -1299,7 +1299,6 @@ static bool write_file_handle(Main *mainvar,
                               bool use_userdef,
                               const BlendThumbnail *thumb)
 {
-  BHead bhead;
   ListBase mainlist;
   char buf[16];
   WriteData *wd;
@@ -1498,9 +1497,9 @@ static bool write_file_handle(Main *mainvar,
   writedata(wd, BLO_CODE_DNA1, size_t(wd->sdna->data_size), wd->sdna->data);
 
   /* End of file. */
-  memset(&bhead, 0, sizeof(BHead));
+  BHead bhead{};
   bhead.code = BLO_CODE_ENDB;
-  mywrite(wd, &bhead, sizeof(BHead));
+  write_bhead(wd, bhead);
 
   blo_join_main(&mainlist);
 
