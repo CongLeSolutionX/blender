@@ -249,23 +249,22 @@ static void action_foreach_id(ID *id, LibraryForeachIDData *data)
   const int flag = BKE_lib_query_foreachid_process_flags_get(data);
   constexpr int idwalk_flags = IDWALK_CB_NEVER_SELF | IDWALK_CB_LOOPBACK;
 
+  /* Note that `bmain` can be `nullptr`. An example is in
+   * `deg_eval_copy_on_write.cc`, function `deg_expand_eval_copy_datablock`. */
   Main *bmain = BKE_lib_query_foreachid_process_main_get(data);
 
-  /* Because BKE_library_foreach_ID_link() can be called with bmain=nullptr,
-   * there are cases where we do not know which `main` this is called for. An example is in
-   * `deg_eval_copy_on_write.cc`, function `deg_expand_eval_copy_datablock`.
-   *
-   * This function should not rebuild the slot user map, because that in turn loops over all IDs.
-   *
-   * TODO: Describe replacing MECube with MESuzanne.
-   */
+  /* This function should not rebuild the slot user map, because that in turn loops over all IDs.
+   * The pointers in the user map should be valid enough to process here, though. */
   bool should_invalidate = false;
-
   for (animrig::Slot *slot : action.slots()) {
     for (ID *&slot_user : slot->runtime_users()) {
       ID *const old_pointer = slot_user;
       BKE_LIB_FOREACHID_PROCESS_ID(data, slot_user, idwalk_flags);
-      /* If slot_user changed, the cache should be invalidated. */
+      /* If slot_user changed, the cache should be invalidated. Not all pointer changes are
+       * semantically correct for our use. For example, when ID-remapping is used to replace MECube
+       * with MESuzanne. If MECube is animated by some slot before the remap, it will remain
+       * animated by that slot after the remap, even when all `object->data` pointers now reference
+       * MESuzanne instead. */
       should_invalidate |= (slot_user != old_pointer);
     }
   }

@@ -272,7 +272,7 @@ template<typename T> class Span {
   }
 
   /**
-   * Does a linear search to see of the value is in the array.
+   * Does a linear search to see if the value is in the array.
    * Returns true if it is, otherwise false.
    */
   constexpr bool contains(const T &value) const
@@ -710,7 +710,7 @@ template<typename T> class MutableSpan {
   }
 
   /**
-   * Does a linear search to see of the value is in the array.
+   * Does a linear search to see if the value is in the array.
    * Returns true if it is, otherwise false.
    */
   constexpr bool contains(const T &value) const
