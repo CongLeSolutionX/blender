@@ -506,9 +506,21 @@ static float get_factor_from_draw_speed(const bke::CurvesGeometry &curves,
     start_times[curve] = previous_end_time + gap_delta_time;
     accumulated_shift_delta_time += math::max(shifted_start_time - start_times[curve], 0.0f);
   }
+
+  /* Caclulates the maximum time of this frame, which is the time between the beginning of the
+   * first stroke and the end of the last stroke. `start_times.last()` gives the starting time of
+   * the last stroke related to frame beginning, and `delta_time.last()` gives how long that stroke
+   * lasted.  */
   const float max_time = start_times.last() + delta_times.last();
+
+  /* If the time needed for building the frame is shorter than frame length, this gives the
+   * percentage of time it needs to be compared to original drawing time. `max_time/speed_fac`
+   * gives time after speed scaling, then divided by `frame_duration` gives the percentage. */
   const float time_compress_factor = math::max(max_time / speed_fac / frame_duration, 1.0f);
+
+  /* Finally actual building limit is then scaled with speed factor and time compress factor. */
   const float limit = time_elapsed * speed_fac * time_compress_factor;
+
   for (const int curve : curves.curves_range()) {
     const float start_time = start_times[curve];
     for (const int point : points_by_curve[curve]) {
