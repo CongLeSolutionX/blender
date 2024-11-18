@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "BLI_assert.h"
+#include "BKE_global.hh"
 #include "BLI_sys_types.h"
 #include <iostream>
 

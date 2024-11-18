@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "BLI_span.hh"
+#include "BKE_global.hh"
 #include "BLI_sys_types.h"
 #include <iostream>
 
