@@ -1344,7 +1344,7 @@ static void init_dummy_batch(gpu::Batch &batch)
     GPU_vertbuf_data_alloc(*vbo, 1);
     return std::unique_ptr<gpu::VertBuf, VBODeleter>(vbo);
   }();
-  GPU_batch_init(&batch, GPU_PRIM_POINTS, dummy_vbo.get(), nullptr);
+  GPU_batch_vertbuf_add(&batch, dummy_vbo.get(), false);
 }
 
 void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
