@@ -198,7 +198,7 @@ ccl_device void camera_sample_orthographic(KernelGlobals kg,
     P = Pcamera + lens_uvw + (D * (kernel_data.cam.nearclip / D.z));
   }
   else {
-    P = Pcamera + make_float3(0.0f, 0.0f, kernel_data.cam.nearclip);
+    P = Pcamera;
     D = Pcamera_far - Pcamera;
   }
   /* transform ray from camera to world */
