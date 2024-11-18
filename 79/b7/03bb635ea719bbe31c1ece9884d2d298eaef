@@ -2,3 +2,4 @@ Referenced by commit 7711231838e, Fix T71865: Separating mesh parts breaks shape
 Referenced by issue #71865, Separating mesh parts breaks shape keys
 Referenced by issue #71434, Sculpt Performance Regression in 2.81
 Referenced by issue #69822, Undo is making objects to disappear in sculpt mode
+Referenced by pull request #130472, Fix #130420: Undo/Redo broken when using Transfer Mode operator.
