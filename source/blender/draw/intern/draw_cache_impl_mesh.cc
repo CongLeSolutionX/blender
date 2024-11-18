@@ -1330,21 +1330,12 @@ static void drw_mesh_batch_cache_check_available(TaskGraph &task_graph, Mesh &me
 
 static void init_dummy_batch(gpu::Batch &batch)
 {
-  class VBODeleter {
-   public:
-    void operator()(gpu::VertBuf *vbo)
-    {
-      GPU_vertbuf_discard(vbo);
-    }
-  };
-  static std::unique_ptr<gpu::VertBuf, VBODeleter> dummy_vbo = []() {
-    GPUVertFormat format{};
-    GPU_vertformat_attr_add(&format, "dummy", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
-    blender::gpu::VertBuf *vbo = GPU_vertbuf_create_with_format(format);
-    GPU_vertbuf_data_alloc(*vbo, 1);
-    return std::unique_ptr<gpu::VertBuf, VBODeleter>(vbo);
-  }();
-  GPU_batch_vertbuf_add(&batch, dummy_vbo.get(), false);
+  GPUVertFormat format{};
+  GPU_vertformat_attr_add(&format, "dummy", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
+  blender::gpu::VertBuf *vbo = GPU_vertbuf_create_with_format(format);
+  GPU_vertbuf_data_alloc(*vbo, 1);
+
+  GPU_batch_vertbuf_add(&batch, vbo, true);
 }
 
 void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
