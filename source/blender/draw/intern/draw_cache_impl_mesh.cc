@@ -1330,6 +1330,8 @@ static void drw_mesh_batch_cache_check_available(TaskGraph &task_graph, Mesh &me
 
 static void init_dummy_batch(gpu::Batch &batch)
 {
+  /* The dummy batch is only used in cases with invalid edit mode mapping, so the overhead of
+   * creating a vertex buffer shouldn't matter. */
   GPUVertFormat format{};
   GPU_vertformat_attr_add(&format, "dummy", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
   blender::gpu::VertBuf *vbo = GPU_vertbuf_create_with_format(format);
