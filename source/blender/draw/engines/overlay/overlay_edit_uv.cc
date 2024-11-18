@@ -445,9 +445,10 @@ static void overlay_edit_uv_cache_populate(OVERLAY_Data *vedata, Object &ob)
   Mesh &mesh = *(Mesh *)ob.data;
   const bool has_active_object_uvmap = CustomData_get_active_layer(&mesh.corner_data,
                                                                    CD_PROP_FLOAT2) != -1;
-  const bool has_active_edit_uvmap = is_edit_object && (CustomData_get_active_layer(
-                                                            &mesh.runtime->edit_mesh->bm->ldata,
-                                                            CD_PROP_FLOAT2) != -1);
+  /* Currently we only support extracting UV data for an original edit #BMesh mesh. */
+  const bool has_active_edit_uvmap =
+      is_edit_object && mesh.runtime->edit_mesh &&
+      (CustomData_get_active_layer(&mesh.runtime->edit_mesh->bm->ldata, CD_PROP_FLOAT2) != -1);
   const bool draw_shadows = (draw_ctx->object_mode != OB_MODE_OBJECT) &&
                             (ob.mode == draw_ctx->object_mode);
 
