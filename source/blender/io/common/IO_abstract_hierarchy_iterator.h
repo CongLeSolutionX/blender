@@ -70,7 +70,7 @@ struct HierarchyContext {
 
   /* The flag makes unambiguous the fact that the current context targets object or data. This is
    * notably used in USDHierarchyIterator::create_usd_export_context: options like
-   * merge_transform_and_shape option is meaningless for object, it only makes sense for data. */
+   * merge_parent_xform option is meaningless for object, it only makes sense for data. */
   bool is_object_data_context;
 
   /* This flag tells, within a object data context, if an object is the parent of other objects.
