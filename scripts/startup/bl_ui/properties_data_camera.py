@@ -104,7 +104,7 @@ class DATA_PT_lens(CameraButtonsPanel, Panel):
 
             sub = col.column(align=True)
             sub.prop(cam, "oblique_angle", text="Oblique Angle")
-            sub.prop(cam, "oblique_length", text="Length")
+            sub.prop(cam, "oblique_length", text="Ratio")
 
             row = sub.row(align=True)
             row.prop(cam, "oblique_focal", text="Focal")
