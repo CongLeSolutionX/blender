@@ -1666,9 +1666,11 @@ int paint_stroke_exec(bContext *C, wmOperator *op, PaintStroke *stroke)
     RNA_END;
   }
 
+  const bool ok = stroke->stroke_started;
+
   stroke_done(C, op, stroke);
 
-  return stroke->stroke_started ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
+  return ok ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
 }
 
 void paint_stroke_cancel(bContext *C, wmOperator *op, PaintStroke *stroke)
