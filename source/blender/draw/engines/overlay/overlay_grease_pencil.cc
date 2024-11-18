@@ -236,6 +236,7 @@ void OVERLAY_grease_pencil_cache_init(OVERLAY_Data *vedata)
       break;
     case GP_LOCKAXIS_CURSOR: {
       mat = float4x4(cursor->matrix<float3x3>());
+      mat.location() = cursor->location;
       break;
     }
     case GP_LOCKAXIS_VIEW:
@@ -245,15 +246,8 @@ void OVERLAY_grease_pencil_cache_init(OVERLAY_Data *vedata)
   }
 
   /* Note: This is here to match the legacy size. */
-  mat *= 2.0f;
+  mat.view<3, 3>() *= 2.0f;
 
-  if (ts->gpencil_v3d_align & GP_PROJECT_CURSOR) {
-    mat.location() = cursor->location;
-  }
-  else if (grease_pencil.has_active_layer()) {
-    const bke::greasepencil::Layer &layer = *grease_pencil.get_active_layer();
-    mat.location() = layer.to_world_space(*ob).location();
-  }
   /* Local transform of the grid from the overlay settings. */
   const float3 offset = float3(
       v3d->overlay.gpencil_grid_offset[0], v3d->overlay.gpencil_grid_offset[1], 0.0f);
