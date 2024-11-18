@@ -215,11 +215,8 @@ static bool get_keyframe_extents(bAnimContext *ac, float *min, float *max, const
 
         /* get range and apply necessary scaling before processing */
         if (BKE_fcurve_calc_range(fcu, &tmin, &tmax, onlySel)) {
-
-          if (ANIM_nla_mapping_allowed(ale)) {
-            tmin = BKE_nla_tweakedit_remap(ale->adt, tmin, NLATIME_CONVERT_MAP);
-            tmax = BKE_nla_tweakedit_remap(ale->adt, tmax, NLATIME_CONVERT_MAP);
-          }
+          tmin = ANIM_nla_tweakedit_remap(ale, tmin, NLATIME_CONVERT_MAP);
+          tmax = ANIM_nla_tweakedit_remap(ale, tmax, NLATIME_CONVERT_MAP);
 
           /* Try to set cur using these values,
            * if they're more extreme than previously set values. */
