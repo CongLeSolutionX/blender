@@ -210,7 +210,7 @@ class Context : public realtime_compositor::Context {
   const eCompositorDenoiseQaulity denoise_preview_quality() const override
   {
     return static_cast<eCompositorDenoiseQaulity>(
-        this->get_render_data().compositor_denoise_preview_quality);
+        this->get_render_data().compositor_denoise_viewport_quality);
   }
 
   const eCompositorDenoiseQaulity denoise_final_quality() const override

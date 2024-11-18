@@ -53,7 +53,7 @@ static void node_composit_init_denonise(bNodeTree * /*ntree*/, bNode *node)
   NodeDenoise *ndg = MEM_cnew<NodeDenoise>(__func__);
   ndg->hdr = true;
   ndg->prefilter = CMP_NODE_DENOISE_PREFILTER_ACCURATE;
-  ndg->quality = CMP_NODE_DENOISE_QUALITY_HIGH;
+  ndg->quality = CMP_NODE_DENOISE_QUALITY_DEFAULT;
   node->storage = ndg;
 }
 
