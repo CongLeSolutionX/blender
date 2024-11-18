@@ -176,30 +176,25 @@ ccl_device void camera_sample_orthographic(KernelGlobals kg,
   float3 Pcamera_far = transform_perspective(&rastertocamera,
                                              make_float3(raster_xy.x, raster_xy.y, 1.0));
 
-  float3 P;
-  float3 D = make_float3(0.0f, 0.0f, 1.0f);
+  float3 P = Pcamera;
+  float3 D = Pcamera_far - Pcamera;
 
   /* modify ray for depth of field */
   float aperturesize = kernel_data.cam.aperturesize;
 
   if (aperturesize > 0.0f) {
+    /* I have no clue why this factor is needed.
+     * If removed the circle of confusion is too large. */
+    aperturesize *= 0.25f;
+
     /* sample point on aperture */
     float2 lens_uv = camera_sample_aperture(&kernel_data.cam, rand_lens) * aperturesize;
-
-    /* compute point on plane of focus */
-    float3 Pfocus = D * kernel_data.cam.focaldistance;
 
     /* Update ray for effect of lens */
     float3 lens_uvw = float2_to_float3(lens_uv);
 
-    D = normalize(Pfocus - lens_uvw);
-    /* Compute position the ray will be if it traveled until it intersected the near clip plane.
-     * This allows for correct DOF while allowing near clipping. */
-    P = Pcamera + lens_uvw + (D * (kernel_data.cam.nearclip / D.z));
-  }
-  else {
-    P = Pcamera;
-    D = Pcamera_far - Pcamera;
+    D = D - lens_uvw * kernel_data.cam.cliplength;
+    P = P + lens_uvw * (kernel_data.cam.focaldistance - kernel_data.cam.nearclip);
   }
   /* transform ray from camera to world */
   Transform cameratoworld = kernel_data.cam.cameratoworld;
