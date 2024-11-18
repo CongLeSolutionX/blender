@@ -1648,7 +1648,7 @@ int paint_stroke_modal(bContext *C, wmOperator *op, const wmEvent *event, PaintS
 int paint_stroke_exec(bContext *C, wmOperator *op, PaintStroke *stroke)
 {
   /* only when executed for the first time */
-  if (stroke->stroke_started == 0) {
+  if (!stroke->stroke_started) {
     PointerRNA firstpoint;
     PropertyRNA *strokeprop = RNA_struct_find_property(op->ptr, "stroke");
 
@@ -1666,11 +1666,9 @@ int paint_stroke_exec(bContext *C, wmOperator *op, PaintStroke *stroke)
     RNA_END;
   }
 
-  const bool ok = stroke->stroke_started != 0;
-
   stroke_done(C, op, stroke);
 
-  return ok ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
+  return stroke->stroke_started ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
 }
 
 void paint_stroke_cancel(bContext *C, wmOperator *op, PaintStroke *stroke)
