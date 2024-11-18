@@ -589,7 +589,8 @@ static void box_select_action(bAnimContext *ac,
         sel_data.ked.iterflags &= ~(KED_F1_NLA_UNMAP | KED_F2_NLA_UNMAP);
         sel_data.ked.f1 = ANIM_nla_tweakedit_remap(ale, rectf.xmin, NLATIME_CONVERT_UNMAP);
         sel_data.ked.f2 = ANIM_nla_tweakedit_remap(ale, rectf.xmax, NLATIME_CONVERT_UNMAP);
-      } else {
+      }
+      else {
         sel_data.ked.iterflags |= (KED_F1_NLA_UNMAP | KED_F2_NLA_UNMAP); /* for summary tracks */
         sel_data.ked.f1 = rectf.xmin;
         sel_data.ked.f2 = rectf.xmax;

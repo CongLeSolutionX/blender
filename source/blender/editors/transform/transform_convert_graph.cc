@@ -586,7 +586,8 @@ static void createTransGraphEditData(bContext *C, TransInfo *t)
 
       /* Convert current-frame to action-time (slightly less accurate, especially under
        * higher scaling ratios, but is faster than converting all points). */
-      const float cfra = ANIM_nla_tweakedit_remap(ale, float(scene->r.cfra), NLATIME_CONVERT_UNMAP);
+      const float cfra = ANIM_nla_tweakedit_remap(
+          ale, float(scene->r.cfra), NLATIME_CONVERT_UNMAP);
 
       for (i = 0, bezt = fcu->bezt; i < fcu->totvert; i++, bezt++) {
         /* Only include BezTriples whose 'keyframe' occurs on the

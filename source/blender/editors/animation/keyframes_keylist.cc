@@ -956,8 +956,12 @@ void summary_to_keylist(bAnimContext *ac,
      * there isn't really any benefit at all from including them. - Aligorith */
     switch (ale->datatype) {
       case ALE_FCURVE:
-        fcurve_to_keylist(
-            ale->adt, static_cast<FCurve *>(ale->data), keylist, saction_flag, range, ANIM_nla_mapping_allowed(ale));
+        fcurve_to_keylist(ale->adt,
+                          static_cast<FCurve *>(ale->data),
+                          keylist,
+                          saction_flag,
+                          range,
+                          ANIM_nla_mapping_allowed(ale));
         break;
       case ALE_MASKLAY:
         mask_to_keylist(ac->ads, static_cast<MaskLayer *>(ale->data), keylist);
@@ -1010,7 +1014,12 @@ void scene_to_keylist(bDopeSheet *ads,
 
   /* Loop through each F-Curve, grabbing the keyframes. */
   LISTBASE_FOREACH (const bAnimListElem *, ale, &anim_data) {
-    fcurve_to_keylist(ale->adt, static_cast<FCurve *>(ale->data), keylist, saction_flag, range, ANIM_nla_mapping_allowed(ale));
+    fcurve_to_keylist(ale->adt,
+                      static_cast<FCurve *>(ale->data),
+                      keylist,
+                      saction_flag,
+                      range,
+                      ANIM_nla_mapping_allowed(ale));
   }
 
   ANIM_animdata_freelist(&anim_data);
@@ -1051,7 +1060,12 @@ void ob_to_keylist(bDopeSheet *ads,
 
   /* Loop through each F-Curve, grabbing the keyframes. */
   LISTBASE_FOREACH (const bAnimListElem *, ale, &anim_data) {
-    fcurve_to_keylist(ale->adt, static_cast<FCurve *>(ale->data), keylist, saction_flag, range, ANIM_nla_mapping_allowed(ale));
+    fcurve_to_keylist(ale->adt,
+                      static_cast<FCurve *>(ale->data),
+                      keylist,
+                      saction_flag,
+                      range,
+                      ANIM_nla_mapping_allowed(ale));
   }
 
   ANIM_animdata_freelist(&anim_data);
@@ -1086,8 +1100,12 @@ void cachefile_to_keylist(bDopeSheet *ads,
 
   /* Loop through each F-Curve, grabbing the keyframes. */
   LISTBASE_FOREACH (const bAnimListElem *, ale, &anim_data) {
-    fcurve_to_keylist(
-        ale->adt, static_cast<FCurve *>(ale->data), keylist, saction_flag, {-FLT_MAX, FLT_MAX}, ANIM_nla_mapping_allowed(ale));
+    fcurve_to_keylist(ale->adt,
+                      static_cast<FCurve *>(ale->data),
+                      keylist,
+                      saction_flag,
+                      {-FLT_MAX, FLT_MAX},
+                      ANIM_nla_mapping_allowed(ale));
   }
 
   ANIM_animdata_freelist(&anim_data);
