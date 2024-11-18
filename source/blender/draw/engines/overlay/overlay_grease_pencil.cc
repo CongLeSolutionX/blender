@@ -236,13 +236,16 @@ void OVERLAY_grease_pencil_cache_init(OVERLAY_Data *vedata)
       break;
     case GP_LOCKAXIS_CURSOR: {
       mat = float4x4(cursor->matrix<float3x3>());
-      mat.location() = cursor->location;
       break;
     }
     case GP_LOCKAXIS_VIEW:
       /* view aligned */
       DRW_view_viewmat_get(nullptr, mat.ptr(), true);
       break;
+  }
+
+  if (ts->gpencil_v3d_align & GP_PROJECT_CURSOR) {
+    mat.location() = cursor->location;
   }
 
   /* Note: This is here to match the legacy size. */
