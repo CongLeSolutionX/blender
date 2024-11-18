@@ -64,7 +64,8 @@ void ED_add_fcurve_channel(ChannelDrawList *draw_list,
                            FCurve *fcu,
                            float ypos,
                            float yscale_fac,
-                           int saction_flag);
+                           int saction_flag,
+                           bool use_nla_remapping);
 /* Action Group Summary */
 void ED_add_action_group_channel(ChannelDrawList *draw_list,
                                  AnimData *adt,

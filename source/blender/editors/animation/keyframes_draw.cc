@@ -410,6 +410,11 @@ struct ChannelListElement {
   eSAction_Flag saction_flag;
   bool channel_locked;
 
+  /* Currently only used for F-Curve channels, because some should be nla
+   * remapped but not others. All other channel types ignore this, as it's clear
+   * from the type whether they should be nla remapped or not. */
+  bool use_nla_remapping;
+
   /* TODO: check which of these can be put into a `union`: */
   bAnimContext *ac;
   bDopeSheet *ads;
@@ -443,8 +448,8 @@ static void build_channel_keylist(ChannelListElement *elem, blender::float2 rang
       break;
     }
     case ChannelType::FCURVE: {
-      /* TODO: right now we make this always do remapping, but is that really appropriate here? */
-      fcurve_to_keylist(elem->adt, elem->fcu, elem->keylist, elem->saction_flag, range, true);
+      fcurve_to_keylist(
+          elem->adt, elem->fcu, elem->keylist, elem->saction_flag, range, elem->use_nla_remapping);
       break;
     }
     case ChannelType::ACTION_LAYERED: {
@@ -701,7 +706,8 @@ void ED_add_fcurve_channel(ChannelDrawList *channel_list,
                            FCurve *fcu,
                            float ypos,
                            float yscale_fac,
-                           int saction_flag)
+                           int saction_flag,
+                           bool use_nla_remapping)
 {
   const bool locked = (fcu->flag & FCURVE_PROTECTED) ||
                       ((fcu->grp) && (fcu->grp->flag & AGRP_PROTECTED)) ||
@@ -713,6 +719,7 @@ void ED_add_fcurve_channel(ChannelDrawList *channel_list,
   draw_elem->adt = adt;
   draw_elem->fcu = fcu;
   draw_elem->channel_locked = locked;
+  draw_elem->use_nla_remapping = use_nla_remapping;
 }
 
 void ED_add_action_group_channel(ChannelDrawList *channel_list,

@@ -403,14 +403,17 @@ static void draw_keyframes(bAnimContext *ac,
                                     scale_factor,
                                     action_flag);
         break;
-      case ALE_FCURVE:
+      case ALE_FCURVE: {
+        const bool use_nla_remapping = ale->type == ANIMTYPE_NLACURVE;
         ED_add_fcurve_channel(draw_list,
                               ale->adt,
                               static_cast<FCurve *>(ale->key_data),
                               ycenter,
                               scale_factor,
-                              action_flag);
+                              action_flag,
+                              use_nla_remapping);
         break;
+      }
       case ALE_GREASE_PENCIL_CEL:
         ED_add_grease_pencil_cels_channel(draw_list,
                                           ads,
