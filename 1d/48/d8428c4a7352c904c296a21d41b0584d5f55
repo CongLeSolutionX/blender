@@ -1,1 +1,2 @@
 Referenced by issue #130456, Crash on files with Grease Pencil
+Referenced by pull request #130468, Fix #130456: GP Render engine crash due to C/C++ mix
