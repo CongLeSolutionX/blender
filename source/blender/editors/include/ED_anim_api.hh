@@ -985,10 +985,10 @@ float ANIM_nla_tweakedit_remap(bAnimListElem *ale, float cframe, eNlaTime_Conver
  * \param restore: Whether to map points back to non-mapped time.
  * \param only_keys: Whether to only adjust the location of the center point of beztriples.
  *
- * TODO: this variant (that takes an adt instead of an ale) is only used by
- * `fcurve_to_keylist()` at this point. Perhaps with some refactoring we can
- * make `fcurve_to_keylist()` use the other variant as well, and then we can
- * get rid of this one.
+ * TODO: this is only used by `fcurve_to_keylist()` at this point. Perhaps with
+ * some refactoring we can make `fcurve_to_keylist()` use
+ * `ANIM_nla_mapping_apply_if_needed_fcurve()` instead, and then we can get rid
+ * of this one.
  */
 void ANIM_nla_mapping_apply_fcurve(AnimData *adt, FCurve *fcu, bool restore, bool only_keys);
 
