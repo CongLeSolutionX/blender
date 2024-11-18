@@ -1285,6 +1285,81 @@ static int write_id_direct_linked_data_process_cb(LibraryIDLinkCallbackData *cb_
   return IDWALK_RET_NOP;
 }
 
+static void write_id(WriteData *wd,
+                     ID *id,
+                     BLO_Write_IDBuffer *id_buffer,
+                     const IDTypeInfo *id_type)
+{
+  mywrite_id_begin(wd, id);
+  id_buffer_init_for_id_type(id_buffer, id_type);
+  id_buffer_init_from_id(id_buffer, id, wd->use_memfile);
+  if (id_type->blend_write != nullptr) {
+    BlendWriter writer = {wd};
+    id_type->blend_write(&writer, static_cast<ID *>(id_buffer->temp_id), id);
+  }
+  mywrite_id_end(wd, id);
+}
+
+static blender::Vector<ID *> gather_local_ids_to_write(Main *bmain, const bool is_undo)
+{
+  blender::Vector<ID *> local_ids_to_write;
+  ID *id;
+  FOREACH_MAIN_ID_BEGIN (bmain, id) {
+    if (GS(id->name) == ID_LI) {
+      /* Libraries are handled separately below. */
+      continue;
+    }
+    const IDTypeInfo *id_type = BKE_idtype_get_info_from_id(id);
+    /* We should never attempt to write non-regular IDs
+     * (i.e. all kind of temp/runtime ones). */
+    BLI_assert((id->tag & (ID_TAG_NO_MAIN | ID_TAG_NO_USER_REFCOUNT | ID_TAG_NOT_ALLOCATED)) == 0);
+    /* We only write unused IDs in undo case. */
+    if (!is_undo) {
+      /* NOTE: All 'never unused' local IDs (Scenes, WindowManagers, ...) should always be
+       * written to disk, so their user-count should never be zero currently. Note that
+       * libraries have already been skipped above, as they need a specific handling. */
+      if (id->us == 0) {
+        /* FIXME: #124857: Some old files seem to cause incorrect handling of their temp
+         * screens.
+         *
+         * See e.g. file attached to #124777 (from 2.79.1).
+         *
+         * For now ignore, issue is not obvious to track down (`temp` bScreen ID from read data
+         * _does_ have the proper `temp` tag), and seems anecdotal at worst. */
+        BLI_assert((id_type->flags & IDTYPE_FLAGS_NEVER_UNUSED) == 0);
+        continue;
+      }
+
+      /* XXX Special handling for ShapeKeys, as having unused shapekeys is not a good thing
+       * (and reported as error by e.g. `BLO_main_validate_shapekeys`), skip writing shapekeys
+       * when their 'owner' is not written.
+       *
+       * NOTE: Since ShapeKeys are conceptually embedded IDs (like root node trees e.g.), this
+       * behavior actually makes sense anyway. This remains more of a temp hack until topic of
+       * how to handle unused data on save is properly tackled. */
+      if (GS(id->name) == ID_KE) {
+        Key *shape_key = reinterpret_cast<Key *>(id);
+        /* NOTE: Here we are accessing the real owner ID data, not it's 'proxy' shallow copy
+         * generated for its file-writing. This is not expected to be an issue, but is worth
+         * noting. */
+        if (shape_key->from == nullptr || shape_key->from->us == 0) {
+          continue;
+        }
+      }
+    }
+
+    if ((id->tag & ID_TAG_RUNTIME) != 0 && !is_undo) {
+      /* Runtime IDs are never written to .blend files, and they should not influence
+       * (in)direct status of linked IDs they may use. */
+      continue;
+    }
+
+    local_ids_to_write.append(id);
+  }
+  FOREACH_MAIN_ID_END;
+  return local_ids_to_write;
+}
+
 /**
  * When #MemFile arguments are non-null, this is a file-safe to memory.
  *
@@ -1370,109 +1445,51 @@ static bool write_file_handle(Main *mainvar,
    * avoid thumbnail detecting changes because of this. */
   mywrite_flush(wd);
 
-  OverrideLibraryStorage *override_storage = wd->use_memfile ?
+  const bool is_undo = wd->use_memfile;
+  blender::Vector<ID *> local_ids_to_write = gather_local_ids_to_write(mainvar, is_undo);
+
+  /* If not writing undo data, properly set directly linked IDs as `ID_TAG_EXTERN`. */
+  if (!is_undo) {
+    for (ID *id : local_ids_to_write) {
+      BKE_library_foreach_ID_link(mainvar,
+                                  id,
+                                  write_id_direct_linked_data_process_cb,
+                                  nullptr,
+                                  IDWALK_READONLY | IDWALK_INCLUDE_UI);
+    }
+  }
+
+  OverrideLibraryStorage *override_storage = is_undo ?
                                                  nullptr :
                                                  BKE_lib_override_library_operations_store_init();
 
-  /* This outer loop allows to save first data-blocks from real mainvar,
-   * then the temp ones from override process,
-   * if needed, without duplicating whole code. */
-  Main *bmain = mainvar;
   BLO_Write_IDBuffer *id_buffer = BLO_write_allocate_id_buffer();
-  do {
-    ListBase *lbarray[INDEX_ID_MAX];
-    int a = set_listbasepointers(bmain, lbarray);
-    while (a--) {
-      ID *id = static_cast<ID *>(lbarray[a]->first);
+  for (ID *id : local_ids_to_write) {
+    const IDTypeInfo *id_type = BKE_idtype_get_info_from_id(id);
 
-      if (id == nullptr || GS(id->name) == ID_LI) {
-        continue; /* Libraries are handled separately below. */
-      }
-
-      const IDTypeInfo *id_type = BKE_idtype_get_info_from_id(id);
-      id_buffer_init_for_id_type(id_buffer, id_type);
-
-      for (; id; id = static_cast<ID *>(id->next)) {
-        /* We should never attempt to write non-regular IDs
-         * (i.e. all kind of temp/runtime ones). */
-        BLI_assert((id->tag & (ID_TAG_NO_MAIN | ID_TAG_NO_USER_REFCOUNT | ID_TAG_NOT_ALLOCATED)) ==
-                   0);
-
-        /* We only write unused IDs in undo case. */
-        if (!wd->use_memfile) {
-          /* NOTE: All 'never unused' local IDs (Scenes, WindowManagers, ...) should always be
-           * written to disk, so their user-count should never be zero currently. Note that
-           * libraries have already been skipped above, as they need a specific handling. */
-          if (id->us == 0) {
-            /* FIXME: #124857: Some old files seem to cause incorrect handling of their temp
-             * screens.
-             *
-             * See e.g. file attached to #124777 (from 2.79.1).
-             *
-             * For now ignore, issue is not obvious to track down (`temp` bScreen ID from read data
-             * _does_ have the proper `temp` tag), and seems anecdotal at worst. */
-            BLI_assert((id_type->flags & IDTYPE_FLAGS_NEVER_UNUSED) == 0);
-            continue;
-          }
-
-          /* XXX Special handling for ShapeKeys, as having unused shapekeys is not a good thing
-           * (and reported as error by e.g. `BLO_main_validate_shapekeys`), skip writing shapekeys
-           * when their 'owner' is not written.
-           *
-           * NOTE: Since ShapeKeys are conceptually embedded IDs (like root node trees e.g.), this
-           * behavior actually makes sense anyway. This remains more of a temp hack until topic of
-           * how to handle unused data on save is properly tackled. */
-          if (GS(id->name) == ID_KE) {
-            Key *shape_key = reinterpret_cast<Key *>(id);
-            /* NOTE: Here we are accessing the real owner ID data, not it's 'proxy' shallow copy
-             * generated for its file-writing. This is not expected to be an issue, but is worth
-             * noting. */
-            if (shape_key->from == nullptr || shape_key->from->us == 0) {
-              continue;
-            }
-          }
-        }
-
-        if ((id->tag & ID_TAG_RUNTIME) != 0 && !wd->use_memfile) {
-          /* Runtime IDs are never written to .blend files, and they should not influence
-           * (in)direct status of linked IDs they may use. */
-          continue;
-        }
-
-        const bool do_override = !ELEM(override_storage, nullptr, bmain) &&
-                                 ID_IS_OVERRIDE_LIBRARY_REAL(id);
-
-        /* If not writing undo data, properly set directly linked IDs as `ID_TAG_EXTERN`. */
-        if (!wd->use_memfile) {
-          BKE_library_foreach_ID_link(bmain,
-                                      id,
-                                      write_id_direct_linked_data_process_cb,
-                                      nullptr,
-                                      IDWALK_READONLY | IDWALK_INCLUDE_UI);
-        }
-
-        if (do_override) {
-          BKE_lib_override_library_operations_store_start(bmain, override_storage, id);
-        }
-
-        mywrite_id_begin(wd, id);
-
-        id_buffer_init_from_id(id_buffer, id, wd->use_memfile);
-
-        if (id_type->blend_write != nullptr) {
-          id_type->blend_write(&writer, static_cast<ID *>(id_buffer->temp_id), id);
-        }
-
-        if (do_override) {
-          BKE_lib_override_library_operations_store_end(override_storage, id);
-        }
-
-        mywrite_id_end(wd, id);
-      }
-
-      mywrite_flush(wd);
+    const bool do_override = ID_IS_OVERRIDE_LIBRARY_REAL(id) && override_storage;
+    if (do_override) {
+      BKE_lib_override_library_operations_store_start(mainvar, override_storage, id);
     }
-  } while ((bmain != override_storage) && (bmain = override_storage));
+    write_id(wd, id, id_buffer, id_type);
+    if (do_override) {
+      BKE_lib_override_library_operations_store_end(override_storage, id);
+    }
+  }
+
+  if (override_storage) {
+    blender::Vector<ID *> override_ids_to_write;
+    ID *id;
+    FOREACH_MAIN_ID_BEGIN (override_storage, id) {
+      override_ids_to_write.append(id);
+    }
+    FOREACH_MAIN_ID_END;
+
+    for (ID *id : override_ids_to_write) {
+      const IDTypeInfo *id_type = BKE_idtype_get_info_from_id(id);
+      write_id(wd, id, id_buffer, id_type);
+    }
+  }
 
   BLO_write_destroy_id_buffer(&id_buffer);
 
