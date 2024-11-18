@@ -227,6 +227,8 @@ class Map {
   /**
    * Initializes the Map based on some key-value-pairs:
    *   `Map<int, std::string> map = {{1, "where"}, {3, "when"}, {5, "why"}};`
+   *
+   * If the same key appears multiple times, only the first one is used and the others are ignored.
    */
   Map(const Span<std::pair<Key, Value>> items, Allocator allocator = {}) : Map(allocator)
   {

@@ -58,6 +58,15 @@ TEST(map, ItemsConstructor)
   }
 }
 
+TEST(map, ItemsConstructorDuplicates)
+{
+  Map<int, int> map = {{1, 2}, {3, 4}, {1, 4}, {2, 5}, {2, 6}};
+  EXPECT_EQ(map.size(), 3);
+  EXPECT_EQ(map.lookup(1), 2);
+  EXPECT_EQ(map.lookup(2), 5);
+  EXPECT_EQ(map.lookup(3), 4);
+}
+
 TEST(map, AddIncreasesSize)
 {
   Map<int, float> map;
