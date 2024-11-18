@@ -966,19 +966,20 @@ void RNA_def_camera(BlenderRNA *brna)
   RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Camera_update");
 
   prop = RNA_def_property(srna, "oblique_angle", PROP_FLOAT, PROP_ANGLE);
-  RNA_def_property_ui_text(prop, "Oblique Z angle", "Oblique Z angle");
+  RNA_def_property_ui_text(prop, "Oblique Angle", "Direction of the Z axis");
   RNA_def_property_update(prop, NC_CAMERA | ND_DRAW_RENDER_VIEWPORT, nullptr);
 
   prop = RNA_def_property(srna, "oblique_length", PROP_FLOAT, PROP_FACTOR);
   RNA_def_property_range(prop, 0.0f, FLT_MAX);
   RNA_def_property_ui_range(prop, 0.0f, 1.0f, 0.1f, 3);
-  RNA_def_property_ui_text(prop, "Oblique Z length", "Oblique Z length");
+  RNA_def_property_ui_text(
+      prop, "Oblique Ratio", "Ratio of the Z axis length relative to the other axes");
   RNA_def_property_update(prop, NC_CAMERA | ND_DRAW_RENDER_VIEWPORT, nullptr);
 
   prop = RNA_def_property(srna, "oblique_focal", PROP_FLOAT, PROP_DISTANCE);
   RNA_def_property_range(prop, 0.0f, FLT_MAX);
   RNA_def_property_ui_range(prop, 0.0f, 5000.0f, 1, 4);
-  RNA_def_property_ui_text(prop, "Oblique Focal", "Oblique Focal");
+  RNA_def_property_ui_text(prop, "Oblique Focal", "Origin of the oblique transformation");
   RNA_def_property_update(prop, NC_CAMERA | ND_DRAW_RENDER_VIEWPORT, nullptr);
 
   /* pointers */

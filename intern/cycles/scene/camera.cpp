@@ -265,7 +265,8 @@ void Camera::update(Scene *scene)
   else if (camera_type == CAMERA_ORTHOGRAPHIC) {
     cameratoscreen = projection_orthographic(nearclip, farclip);
 
-    float2 z_axis = make_float2(cosf(oblique_angle), sinf(oblique_angle)) * oblique_length;
+    float angle = 3.0f * M_PI_2_F - oblique_angle;
+    float2 z_axis = make_float2(cosf(angle), sinf(angle)) * oblique_length;
     Transform shear = make_transform(make_float3(1.0f, 0.0f, z_axis.x),
                                      make_float3(0.0f, 1.0f, z_axis.y),
                                      make_float3(0.0f, 0.0f, 1.0f));

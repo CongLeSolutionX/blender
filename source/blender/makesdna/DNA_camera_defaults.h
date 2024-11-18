@@ -60,8 +60,8 @@
     .central_cylindrical_range_v_max = 1.0f,\
     .central_cylindrical_radius = 1.0f,\
  \
-    .oblique_angle = DEG2RADF(45.0f),\
-    .oblique_length = 1.0f,\
+    .oblique_angle = DEG2RADF(0.0f),\
+    .oblique_length = 0.25f,\
     .oblique_focal = 0.0f,\
  \
     .dof = _DNA_DEFAULT_CameraDOFSettings, \

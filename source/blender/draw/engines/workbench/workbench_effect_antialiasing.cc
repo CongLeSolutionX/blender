@@ -231,7 +231,7 @@ void AntiAliasingPass::setup_view(View &view, const SceneState &scene_state)
 
   if (scene_state.camera && scene_state.camera->type == CAM_OBLIQUE) {
     const Camera *cam = scene_state.camera;
-    float angle_z = cam->oblique_angle;
+    float angle_z = 3.0f * float(M_PI_2) - cam->oblique_angle;
     float focal = cam->oblique_focal;
 
     float2 z_axis = float2(cos(angle_z), sin(angle_z)) * cam->oblique_length;

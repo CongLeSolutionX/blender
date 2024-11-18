@@ -104,12 +104,10 @@ class DATA_PT_lens(CameraButtonsPanel, Panel):
 
             sub = col.column(align=True)
             sub.prop(cam, "oblique_angle", text="Oblique Angle")
-
-            sub = col.column(align=True)
             sub.prop(cam, "oblique_length", text="Length")
 
-            row = col.row(align=True)
-            row.prop(cam, "oblique_focal")
+            row = sub.row(align=True)
+            row.prop(cam, "oblique_focal", text="Focal")
             row.operator(
                 "ui.eyedropper_depth",
                 icon='EYEDROPPER',

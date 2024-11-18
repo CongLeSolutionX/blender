@@ -193,7 +193,7 @@ void Camera::sync()
   }
 
   if (cam_data && cam_data->type == CAM_OBLIQUE) {
-    float angle_z = cam_data->oblique_angle;
+    float angle_z = 3.0f * float(M_PI_2) - cam_data->oblique_angle;
     float focal = cam_data->oblique_focal;
 
     float2 z_axis = float2(cos(angle_z), sin(angle_z)) * cam_data->oblique_length;
