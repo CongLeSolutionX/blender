@@ -231,14 +231,15 @@ static const char *node_socket_get_translation_context(const bNodeSocket &socket
     return nullptr;
   }
 
-  blender::StringRefNull translation_context = socket.runtime->declaration->translation_context;
+  const std::optional<std::string> &translation_context =
+      socket.runtime->declaration->translation_context;
 
   /* Default context. */
-  if (translation_context.is_empty()) {
+  if (!translation_context.has_value()) {
     return nullptr;
   }
 
-  return translation_context.data();
+  return translation_context->c_str();
 }
 
 static void node_socket_add_tooltip_in_node_editor(const bNodeSocket &sock, uiLayout &layout);
@@ -353,7 +354,7 @@ static Array<uiBlock *> node_uiblocks_init(const bContext &C, const Span<bNode *
   for (const int i : nodes.index_range()) {
     const bNode &node = *nodes[i];
     std::string block_name = "node_" + std::string(node.name);
-    uiBlock *block = UI_block_begin(&C, CTX_wm_region(&C), std::move(block_name), UI_EMBOSS);
+    uiBlock *block = UI_block_begin(&C, scene, window, region, std::move(block_name), UI_EMBOSS);
     blocks[node.index()] = block;
     /* This cancels events for background nodes. */
     UI_block_flag_enable(block, UI_BLOCK_CLIP_EVENTS);
