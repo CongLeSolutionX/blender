@@ -1517,17 +1517,25 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
 
   cache.batch_ready |= batch_requested;
 
-  bool do_cage = false, do_uvcage = false;
   const Mesh *orig_edit_mesh = is_editmode ? BKE_object_get_pre_modified_mesh(&ob) : nullptr;
-  if (is_editmode) {
-    const Mesh *editmesh_eval_final = BKE_object_get_editmesh_eval_final(&ob);
-    const Mesh *editmesh_eval_cage = BKE_object_get_editmesh_eval_cage(&ob);
 
-    do_cage = editmesh_eval_cage && editmesh_eval_final != editmesh_eval_cage &&
-              BKE_editmesh_eval_orig_map_available(*editmesh_eval_cage, orig_edit_mesh);
-    do_uvcage = editmesh_eval_final &&
-                !(editmesh_eval_final->runtime->is_original_bmesh &&
-                  editmesh_eval_final->runtime->wrapper_type == ME_WRAPPER_TYPE_BMESH);
+  bool do_cage = false;
+  const Mesh *edit_data_mesh = nullptr;
+  if (is_editmode) {
+    const Mesh *eval_cage = BKE_object_get_editmesh_eval_cage(&ob);
+    if (eval_cage && eval_cage != &mesh) {
+      do_cage = true;
+      edit_data_mesh = eval_cage;
+    }
+    else {
+      edit_data_mesh = &mesh;
+    }
+  }
+
+  bool do_uvcage = false;
+  if (is_editmode) {
+    do_uvcage = !(mesh.runtime->is_original_bmesh &&
+                  mesh.runtime->wrapper_type == ME_WRAPPER_TYPE_BMESH);
   }
 
   const bool do_subdivision = BKE_subsurf_modifier_has_gpu_subdiv(&mesh);
@@ -1670,8 +1678,8 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
   }
 
   mbuflist = (do_cage) ? &cache.cage.buff : &cache.final.buff;
-  const bool edit_mapping_valid = is_editmode && !do_cage &&
-                                  BKE_editmesh_eval_orig_map_available(mesh, orig_edit_mesh);
+  const bool edit_mapping_valid = is_editmode && BKE_editmesh_eval_orig_map_available(
+                                                     *edit_data_mesh, orig_edit_mesh);
 
   /* Edit Mesh */
   assert_deps_valid(MBC_EDIT_TRIANGLES,
