@@ -135,7 +135,7 @@ struct EraseOperationExecutor {
      * Since the solution multiplies by this factor for integer math,
      * the valid case of degenerate segments inside the circle needs special handling. */
     if (a == 0) {
-      const int64_t i = 4 * c;
+      const int64_t i = -4 * c;
       if (i < 0) {
         /* No intersections. */
         return 0;
