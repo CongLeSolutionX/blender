@@ -158,7 +158,6 @@ void Instance::begin_sync()
 
 void Instance::object_sync(ObjectRef &ob_ref, Manager &manager)
 {
-
   const bool in_edit_mode = ob_ref.object->mode == OB_MODE_EDIT;
   const bool in_paint_mode = object_is_paint_mode(ob_ref.object);
   const bool in_sculpt_mode = object_is_sculpt_mode(ob_ref);
@@ -210,8 +209,6 @@ void Instance::object_sync(ObjectRef &ob_ref, Manager &manager)
   if (in_edit_mode && !state.hide_overlays) {
     switch (ob_ref.object->type) {
       case OB_MESH:
-        // TODO: Don't draw edit overlays for evaluated mesh if the edit mesh pointer doesn't match
-        // the original edit mesh pointer.
         layer.meshes.edit_object_sync(manager, ob_ref, state, resources);
         /* TODO(fclem): Find a better place / condition. */
         layer.mesh_uvs.edit_object_sync(manager, ob_ref, state);
