@@ -12,3 +12,4 @@ Referenced by issue #125565, Unexpected behavior when clearing parent then switc
 Referenced by issue #125780, Object World Matrix in duplicated scene is not accessible
 Referenced by issue #128194, Object looses transformation after unlining from scene, then save and reload blend file. B4.2
 Referenced by issue #129282, Object move/rotate/scale does not register for operator redo panel
+Referenced by issue #130289, bpy.data.libraries.load doesn't load matrix_world (worked in 3.6.5 and older)
