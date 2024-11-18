@@ -2021,8 +2021,8 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
                            use_hide);
   }
   else {
-    /* The subsurf modifier may have been recently removed, or another modifier was added after
-     * it, so free any potential subdivision cache as it is not needed anymore. */
+    /* The subsurf modifier may have been recently removed, or another modifier was added after it,
+     * so free any potential subdivision cache as it is not needed anymore. */
     mesh_batch_cache_free_subdiv_cache(cache);
   }
 
