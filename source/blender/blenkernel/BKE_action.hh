@@ -30,7 +30,6 @@ struct Main;
 struct Object;
 struct bAction;
 struct bActionGroup;
-struct ActionSlot;
 struct bItasc;
 struct bPose;
 struct bPoseChannel;
