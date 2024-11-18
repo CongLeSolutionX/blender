@@ -1,2 +1,3 @@
 Referenced by pull request #130431, Fix #130422: Expand Active Face Set crashes on Multires mesh
 Referenced by issue #130422, Sculpt Crash | Blender v4.3+ 'Expand Active Face Set' operator with Multires subdiv
+Referenced by commit 28a5a800ee58f6848592d0492415687e6c47d4a8, Fix #130422: Expand Active Face Set crashes on Multires mesh
