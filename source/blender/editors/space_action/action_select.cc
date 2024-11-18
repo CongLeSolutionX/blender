@@ -92,15 +92,6 @@ static void actkeys_list_element_to_keylist(bAnimContext *ac,
                                             AnimKeylist *keylist,
                                             bAnimListElem *ale)
 {
-  /* TODO: handle this properly. Previously this was:
-   *
-   * `AnimData *adt = ANIM_nla_mapping_get(ac, ale);`
-   *
-   * Which only returned an adt for things that should be nla remapped.  We
-   * haven't properly handled this yet.
-   */
-  AnimData *adt = ale->adt;
-
   bDopeSheet *ads = nullptr;
   if (ELEM(ac->datatype, ANIMCONT_DOPESHEET, ANIMCONT_TIMELINE)) {
     ads = static_cast<bDopeSheet *>(ac->data);
@@ -122,7 +113,7 @@ static void actkeys_list_element_to_keylist(bAnimContext *ac,
       }
       case ALE_ACTION_LAYERED: {
         bAction *action = (bAction *)ale->key_data;
-        action_to_keylist(adt, action, keylist, 0, range);
+        action_to_keylist(ale->adt, action, keylist, 0, range);
         break;
       }
       case ALE_ACTION_SLOT: {
@@ -130,17 +121,17 @@ static void actkeys_list_element_to_keylist(bAnimContext *ac,
         animrig::Slot *slot = static_cast<animrig::Slot *>(ale->data);
         BLI_assert(action);
         BLI_assert(slot);
-        action_slot_to_keylist(adt, *action, slot->handle, keylist, 0, range);
+        action_slot_to_keylist(ale->adt, *action, slot->handle, keylist, 0, range);
         break;
       }
       case ALE_ACT: {
         bAction *act = (bAction *)ale->key_data;
-        action_to_keylist(adt, act, keylist, 0, range);
+        action_to_keylist(ale->adt, act, keylist, 0, range);
         break;
       }
       case ALE_FCURVE: {
         FCurve *fcu = (FCurve *)ale->key_data;
-        fcurve_to_keylist(adt, fcu, keylist, 0, range, ANIM_nla_mapping_allowed(ale));
+        fcurve_to_keylist(ale->adt, fcu, keylist, 0, range, ANIM_nla_mapping_allowed(ale));
         break;
       }
       case ALE_NONE:
@@ -162,22 +153,22 @@ static void actkeys_list_element_to_keylist(bAnimContext *ac,
   else if (ale->type == ANIMTYPE_GROUP) {
     /* TODO: why don't we just give groups key_data too? */
     bActionGroup *agrp = (bActionGroup *)ale->data;
-    action_group_to_keylist(adt, agrp, keylist, 0, range);
+    action_group_to_keylist(ale->adt, agrp, keylist, 0, range);
   }
   else if (ale->type == ANIMTYPE_GREASE_PENCIL_LAYER) {
     /* TODO: why don't we just give grease pencil layers key_data too? */
     grease_pencil_cels_to_keylist(
-        adt, static_cast<const GreasePencilLayer *>(ale->data), keylist, 0);
+        ale->adt, static_cast<const GreasePencilLayer *>(ale->data), keylist, 0);
   }
   else if (ale->type == ANIMTYPE_GREASE_PENCIL_LAYER_GROUP) {
     /* TODO: why don't we just give grease pencil layers key_data too? */
     grease_pencil_layer_group_to_keylist(
-        adt, static_cast<const GreasePencilLayerTreeGroup *>(ale->data), keylist, 0);
+        ale->adt, static_cast<const GreasePencilLayerTreeGroup *>(ale->data), keylist, 0);
   }
   else if (ale->type == ANIMTYPE_GREASE_PENCIL_DATABLOCK) {
     /* TODO: why don't we just give grease pencil layers key_data too? */
     grease_pencil_data_block_to_keylist(
-        adt, static_cast<const GreasePencil *>(ale->data), keylist, 0, false);
+        ale->adt, static_cast<const GreasePencil *>(ale->data), keylist, 0, false);
   }
   else if (ale->type == ANIMTYPE_GPLAYER) {
     /* TODO: why don't we just give gplayers key_data too? */
