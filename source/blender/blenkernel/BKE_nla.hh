@@ -13,12 +13,10 @@
 
 #include "DNA_listBase.h"
 
+#include "BKE_action.hh"
 #include "BKE_anim_data.hh"
 
 #include "BLI_function_ref.hh"
-
-/* For blender::animrig::slot_handle_t. */
-#include "ANIM_action.hh"
 
 struct AnimData;
 struct ID;
