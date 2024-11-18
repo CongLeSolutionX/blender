@@ -281,7 +281,8 @@ void interpolate_curves_with_sampling(const CurvesGeometry &from_curves,
                                       const IndexMask &dst_curve_mask,
                                       const Span<bool> dst_curve_flip_direction,
                                       const float mix_factor,
-                                      CurveSamplingFunc sampling_fn,
+                                      CurveSamplingFunc from_sampling_fn,
+                                      CurveSamplingFunc to_sampling_fn,
                                       CurvesGeometry &dst_curves)
 {
   BLI_assert(from_curve_indices.size() == dst_curve_mask.size());
@@ -326,42 +327,17 @@ void interpolate_curves_with_sampling(const CurvesGeometry &from_curves,
     const int i_from_curve = from_curve_indices[pos];
     const int i_to_curve = to_curve_indices[pos];
     const IndexRange dst_points = dst_points_by_curve[i_dst_curve];
-    const Span<float> from_lengths = from_curves.evaluated_lengths_for_curve(
-        i_from_curve, from_curves_cyclic[i_from_curve]);
-    const Span<float> to_lengths = to_curves.evaluated_lengths_for_curve(
-        i_to_curve, to_curves_cyclic[i_to_curve]);
-
-    if (from_lengths.is_empty()) {
-      /* Handle curves with only one evaluated point. */
-      from_sample_indices.as_mutable_span().slice(dst_points).fill(0);
-      from_sample_factors.as_mutable_span().slice(dst_points).fill(0.0f);
-    }
-    else {
-      length_parameterize::sample_uniform(from_lengths,
-                                          !from_curves_cyclic[i_from_curve],
-                                          from_sample_indices.as_mutable_span().slice(dst_points),
-                                          from_sample_factors.as_mutable_span().slice(dst_points));
-    }
-    if (to_lengths.is_empty()) {
-      /* Handle curves with only one evaluated point. */
-      to_sample_indices.as_mutable_span().slice(dst_points).fill(0);
-      to_sample_factors.as_mutable_span().slice(dst_points).fill(0.0f);
-    }
-    else {
-      if (dst_curve_flip_direction[i_dst_curve]) {
-        length_parameterize::sample_uniform_reverse(
-            to_lengths,
-            !to_curves_cyclic[i_to_curve],
-            to_sample_indices.as_mutable_span().slice(dst_points),
-            to_sample_factors.as_mutable_span().slice(dst_points));
-      }
-      else {
-        length_parameterize::sample_uniform(to_lengths,
-                                            !to_curves_cyclic[i_to_curve],
-                                            to_sample_indices.as_mutable_span().slice(dst_points),
-                                            to_sample_factors.as_mutable_span().slice(dst_points));
-      }
-    }
+    /* First curve is sampled in forward direction, second curve may be reversed. */
+    from_sampling_fn(i_from_curve,
+                     from_curves_cyclic[i_from_curve],
+                     false,
+                     from_sample_indices.as_mutable_span().slice(dst_points),
+                     from_sample_factors.as_mutable_span().slice(dst_points));
+    to_sampling_fn(i_to_curve,
+                   to_curves_cyclic[i_to_curve],
+                   dst_curve_flip_direction[i_dst_curve],
+                   to_sample_indices.as_mutable_span().slice(dst_points),
+                   to_sample_factors.as_mutable_span().slice(dst_points));
   });
 
   /* For every attribute, evaluate attributes from every curve in the range in the original
@@ -490,6 +466,30 @@ void interpolate_curves_with_sampling(const CurvesGeometry &from_curves,
   }
 }
 
+static void sample_uniform_curve(const bke::CurvesGeometry &curves,
+                                 const int curve_index,
+                                 const bool cyclic,
+                                 const bool reverse,
+                                 MutableSpan<int> r_segment_indices,
+                                 MutableSpan<float> r_factors)
+{
+  const Span<float> segment_lengths = curves.evaluated_lengths_for_curve(curve_index, cyclic);
+  if (segment_lengths.is_empty()) {
+    /* Handle curves with only one evaluated point. */
+    r_segment_indices.fill(0);
+    r_factors.fill(0.0f);
+    return;
+  }
+
+  if (reverse) {
+    length_parameterize::sample_uniform_reverse(
+        segment_lengths, !cyclic, r_segment_indices, r_factors);
+  }
+  else {
+    length_parameterize::sample_uniform(segment_lengths, !cyclic, r_segment_indices, r_factors);
+  }
+};
+
 void interpolate_curves(const CurvesGeometry &from_curves,
                         const CurvesGeometry &to_curves,
                         const Span<int> from_curve_indices,
@@ -499,18 +499,19 @@ void interpolate_curves(const CurvesGeometry &from_curves,
                         const float mix_factor,
                         CurvesGeometry &dst_curves)
 {
-  auto sample_uniform = [&](const Span<float> segment_lengths,
-                            const bool cyclic,
-                            const bool reverse,
-                            MutableSpan<int> r_segment_indices,
-                            MutableSpan<float> r_factors) {
-    if (reverse) {
-      length_parameterize::sample_uniform_reverse(
-          segment_lengths, !cyclic, r_segment_indices, r_factors);
-    }
-    else {
-      length_parameterize::sample_uniform(segment_lengths, !cyclic, r_segment_indices, r_factors);
-    }
+  auto from_sample_uniform = [&](const int curve_index,
+                                 const bool cyclic,
+                                 const bool reverse,
+                                 MutableSpan<int> r_segment_indices,
+                                 MutableSpan<float> r_factors) {
+    sample_uniform_curve(from_curves, curve_index, cyclic, reverse, r_segment_indices, r_factors);
+  };
+  auto to_sample_uniform = [&](const int curve_index,
+                               const bool cyclic,
+                               const bool reverse,
+                               MutableSpan<int> r_segment_indices,
+                               MutableSpan<float> r_factors) {
+    sample_uniform_curve(to_curves, curve_index, cyclic, reverse, r_segment_indices, r_factors);
   };
 
   interpolate_curves_with_sampling(from_curves,
@@ -520,7 +521,8 @@ void interpolate_curves(const CurvesGeometry &from_curves,
                                    dst_curve_mask,
                                    dst_curve_flip_direction,
                                    mix_factor,
-                                   sample_uniform,
+                                   from_sample_uniform,
+                                   to_sample_uniform,
                                    dst_curves);
 }
 

@@ -549,14 +549,44 @@ static bke::CurvesGeometry interpolate_between_curves(const GreasePencil &grease
       sorted_to_curve_indices[i] = std::clamp(
           curve_pairs.to_curves[pair_index], 0, int(to_curves.last()));
     }
-    geometry::interpolate_curves(from_drawing->strokes(),
-                                 to_drawing->strokes(),
-                                 pair_from_indices,
-                                 pair_to_indices,
-                                 dst_curve_mask,
-                                 dst_curve_flip,
-                                 mix_factor,
-                                 dst_curves);
+
+    /* Copy samples of the input curves to keep changes minimal. */
+    const OffsetIndices from_points_by_curve = from_drawing->strokes().points_by_curve();
+    const OffsetIndices to_points_by_curve = to_drawing->strokes().points_by_curve();
+    auto from_sample_copy = [&](const int curve_index,
+                                const bool cyclic,
+                                const bool reverse,
+                                MutableSpan<int> r_segment_indices,
+                                MutableSpan<float> r_factors) {
+      const IndexRange from_points = from_points_by_curve[curve_index];
+      const IndexRange to_points = to_points_by_curve[curve_index];
+      const bool use_from_points = (from_points.size() >= to_points.size());
+
+      const Span<float> segment_lengths =
+          (use_from_points ?
+               from_drawing->strokes().evaluated_lengths_for_curve(curve_index, cyclic) :
+               to_drawing->strokes().evaluated_lengths_for_curve(curve_index, cyclic));
+      const OffsetIndices from_points_by_curve = from_drawing->strokes().points_by_curve();
+      if (reverse) {
+        length_parameterize::sample_uniform_reverse(
+            segment_lengths, !cyclic, r_segment_indices, r_factors);
+      }
+      else {
+        length_parameterize::sample_uniform(
+            segment_lengths, !cyclic, r_segment_indices, r_factors);
+      }
+
+      r_segment_indices.copy_from();
+    };
+
+    geometry::interpolate_curves_with_sampling(from_drawing->strokes(),
+                                               to_drawing->strokes(),
+                                               pair_from_indices,
+                                               pair_to_indices,
+                                               dst_curve_mask,
+                                               dst_curve_flip,
+                                               mix_factor,
+                                               dst_curves);
   }
 
   return dst_curves;

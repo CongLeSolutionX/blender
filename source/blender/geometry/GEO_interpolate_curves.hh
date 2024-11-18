@@ -25,7 +25,7 @@ void interpolate_curves(const bke::CurvesGeometry &from_curves,
                         bke::CurvesGeometry &dst_curves);
 
 /* Customized callback */
-using CurveSamplingFunc = FunctionRef<void(const Span<float> segment_lengths,
+using CurveSamplingFunc = FunctionRef<void(const int curve_index,
                                            const bool cyclic,
                                            const bool reverse,
                                            MutableSpan<int> r_segment_indices,
@@ -33,12 +33,13 @@ using CurveSamplingFunc = FunctionRef<void(const Span<float> segment_lengths,
 
 void interpolate_curves_with_sampling(const CurvesGeometry &from_curves,
                                       const CurvesGeometry &to_curves,
-                                      const Span<int> from_curve_indices,
-                                      const Span<int> to_curve_indices,
+                                      Span<int> from_curve_indices,
+                                      Span<int> to_curve_indices,
                                       const IndexMask &dst_curve_mask,
-                                      const Span<bool> dst_curve_flip_direction,
-                                      const float mix_factor,
-                                      CurveSamplingFunc sampling_fn,
+                                      Span<bool> dst_curve_flip_direction,
+                                      float mix_factor,
+                                      CurveSamplingFunc from_sampling_fn,
+                                      CurveSamplingFunc to_sampling_fn,
                                       CurvesGeometry &dst_curves);
 
 }  // namespace blender::geometry
