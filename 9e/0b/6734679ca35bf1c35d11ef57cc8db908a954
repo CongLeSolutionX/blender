@@ -1,1 +1,2 @@
 Referenced by issue #130420, Sculpt Redo Broken when sculpting on multiple meshes.
+Referenced by pull request #130472, Fix #130420: Unod/Redo broken when using Transfer Mode operator.
