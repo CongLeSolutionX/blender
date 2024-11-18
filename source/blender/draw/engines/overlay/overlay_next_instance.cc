@@ -133,7 +133,7 @@ void Instance::begin_sync()
     layer.fluids.begin_sync(resources, state);
     layer.grease_pencil.begin_sync(resources, state, view);
     layer.lattices.begin_sync(resources, state);
-    layer.lights.begin_sync();
+    layer.lights.begin_sync(state);
     layer.light_probes.begin_sync(resources, state);
     layer.metaballs.begin_sync();
     layer.meshes.begin_sync(resources, state, view);
@@ -337,6 +337,32 @@ void Instance::end_sync()
 
 void Instance::draw(Manager &manager)
 {
+  const DRWView *view_legacy = DRW_view_default_get();
+  View view("OverlayView", view_legacy);
+
+  /* Pre-Draw: Run the compute steps of all passes up-front
+   * to avoid constant GPU compute/raster context switching. */
+  {
+    manager.compute_visibility(view);
+
+    auto pre_draw = [&](OverlayLayer &layer) {
+      layer.attribute_viewer.pre_draw(manager, view);
+      layer.cameras.pre_draw(manager, view);
+      layer.empties.pre_draw(manager, view);
+      layer.facing.pre_draw(manager, view);
+      layer.fade.pre_draw(manager, view);
+      layer.lattices.pre_draw(manager, view);
+      layer.light_probes.pre_draw(manager, view);
+      layer.particles.pre_draw(manager, view);
+      layer.prepass.pre_draw(manager, view);
+      layer.wireframe.pre_draw(manager, view);
+    };
+
+    pre_draw(regular);
+    pre_draw(infront);
+    outline.pre_draw(manager, view);
+  }
+
   resources.depth_tx.wrap(DRW_viewport_texture_list_get()->depth);
   resources.depth_in_front_tx.wrap(DRW_viewport_texture_list_get()->depth_in_front);
   resources.color_overlay_tx.wrap(DRW_viewport_texture_list_get()->color_overlay);
@@ -346,9 +372,6 @@ void Instance::draw(Manager &manager)
   resources.render_in_front_fb = DRW_viewport_framebuffer_list_get()->in_front_fb;
 
   int2 render_size = int2(resources.depth_tx.size());
-
-  const DRWView *view_legacy = DRW_view_default_get();
-  View view("OverlayView", view_legacy);
 
   /* TODO(fclem): Remove mandatory allocation. */
   if (!resources.depth_in_front_tx.is_valid()) {
@@ -444,6 +467,11 @@ void Instance::draw(Manager &manager)
   regular.cameras.draw_background_images(resources.overlay_color_only_fb, manager, view);
   infront.cameras.draw_background_images(resources.overlay_color_only_fb, manager, view);
 
+  /* TODO(fclem): Would be better to have a v2d overlay class instead of this condition. */
+  if (state.space_type == SPACE_IMAGE) {
+    grid.draw(resources.overlay_color_only_fb, manager, view);
+  }
+
   regular.empties.draw_images(resources.overlay_fb, manager, view);
 
   regular.prepass.draw(resources.overlay_line_fb, manager, view);
@@ -462,7 +490,7 @@ void Instance::draw(Manager &manager)
 
   auto draw_layer = [&](OverlayLayer &layer, Framebuffer &framebuffer) {
     layer.bounds.draw(framebuffer, manager, view);
-    layer.wireframe.draw(framebuffer, manager, view);
+    layer.wireframe.draw(framebuffer, resources, manager, view);
     layer.cameras.draw(framebuffer, manager, view);
     layer.empties.draw(framebuffer, manager, view);
     layer.force_fields.draw(framebuffer, manager, view);
@@ -498,7 +526,9 @@ void Instance::draw(Manager &manager)
 
   motion_paths.draw_color_only(resources.overlay_color_only_fb, manager, view);
   xray_fade.draw(resources.overlay_color_only_fb, manager, view);
-  grid.draw(resources.overlay_color_only_fb, manager, view);
+  if (state.space_type != SPACE_IMAGE) {
+    grid.draw(resources.overlay_color_only_fb, manager, view);
+  }
 
   draw_layer_color_only(regular, resources.overlay_color_only_fb);
   draw_layer_color_only(infront, resources.overlay_color_only_fb);
@@ -647,13 +677,21 @@ bool Instance::object_is_in_front(const Object *object, const State &state)
 
 bool Instance::object_needs_prepass(const ObjectRef &ob_ref, bool in_paint_mode)
 {
+  if (selection_type_ != SelectionType::DISABLED) {
+    /* Selection always need a prepass. Except if it is in xray mode. */
+    return !state.xray_enabled;
+  }
+
   if (in_paint_mode) {
     /* Allow paint overlays to draw with depth equal test. */
     return object_is_rendered_transparent(ob_ref.object, state);
   }
 
-  if (!state.xray_enabled || (selection_type_ != SelectionType::DISABLED)) {
-    return ob_ref.object->dt >= OB_SOLID;
+  if (!state.xray_enabled) {
+    /* Only workbench ensures the depth buffer is matching overlays.
+     * Force depth prepass for other render engines. */
+    /* TODO(fclem): Make an exception for EEVEE if not using mixed resolution. */
+    return state.v3d && (state.v3d->shading.type > OB_SOLID) && (ob_ref.object->dt >= OB_SOLID);
   }
 
   return false;

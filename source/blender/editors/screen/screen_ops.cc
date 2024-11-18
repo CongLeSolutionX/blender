@@ -12,6 +12,7 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "BLI_build_config.h"
 #include "BLI_math_rotation.h"
 #include "BLI_math_vector.h"
 #include "BLI_utildefines.h"
@@ -2075,6 +2076,10 @@ static int area_move_modal(bContext *C, wmOperator *op, const wmEvent *event)
       area_move_apply(C, op);
       break;
     }
+    case RIGHTMOUSE: {
+      area_move_cancel(C, op);
+      return OPERATOR_CANCELLED;
+    }
     case EVT_MODAL_MAP: {
       switch (event->val) {
         case KM_MODAL_APPLY:
@@ -3646,11 +3651,20 @@ static bool area_join_init(bContext *C, wmOperator *op, ScrArea *sa1, ScrArea *s
 {
   if (sa1 == nullptr && sa2 == nullptr) {
     /* Get areas from cursor location if not specified. */
+    PropertyRNA *prop;
     int cursor[2];
-    RNA_int_get_array(op->ptr, "source_xy", cursor);
-    sa1 = BKE_screen_find_area_xy(CTX_wm_screen(C), SPACE_TYPE_ANY, cursor);
-    RNA_int_get_array(op->ptr, "target_xy", cursor);
-    sa2 = BKE_screen_find_area_xy(CTX_wm_screen(C), SPACE_TYPE_ANY, cursor);
+
+    prop = RNA_struct_find_property(op->ptr, "source_xy");
+    if (RNA_property_is_set(op->ptr, prop)) {
+      RNA_property_int_get_array(op->ptr, prop, cursor);
+      sa1 = BKE_screen_find_area_xy(CTX_wm_screen(C), SPACE_TYPE_ANY, cursor);
+    }
+
+    prop = RNA_struct_find_property(op->ptr, "target_xy");
+    if (RNA_property_is_set(op->ptr, prop)) {
+      RNA_property_int_get_array(op->ptr, prop, cursor);
+      sa2 = BKE_screen_find_area_xy(CTX_wm_screen(C), SPACE_TYPE_ANY, cursor);
+    }
   }
   if (sa1 == nullptr) {
     return false;
@@ -3804,7 +3818,7 @@ void static area_docking_apply(bContext *C, wmOperator *op)
   bool same_area = (jd->sa1 == jd->sa2);
 
   if (!(jd->dock_target == AreaDockTarget::Center)) {
-    eScreenAxis dir = (ELEM(jd->dock_target, AreaDockTarget::Left, AreaDockTarget::Right)) ?
+    eScreenAxis dir = ELEM(jd->dock_target, AreaDockTarget::Left, AreaDockTarget::Right) ?
                           SCREEN_AXIS_V :
                           SCREEN_AXIS_H;
 
@@ -3992,7 +4006,7 @@ static AreaDockTarget area_docking_target(sAreaJoinData *jd, const wmEvent *even
     if (fac_y > 0.4f && fac_y < 0.6f) {
       return AreaDockTarget::Center;
     }
-    if ((float(y) > float(jd->sa2->winy) / 2.0f)) {
+    if (float(y) > float(jd->sa2->winy) / 2.0f) {
       jd->factor = area_docking_snap(1.0f - float(y) / float(jd->sa2->winy), event);
       return AreaDockTarget::Top;
     }
@@ -4005,7 +4019,7 @@ static AreaDockTarget area_docking_target(sAreaJoinData *jd, const wmEvent *even
     if (fac_x > 0.4f && fac_x < 0.6f) {
       return AreaDockTarget::Center;
     }
-    if ((float(x) > float(jd->sa2->winx) / 2.0f)) {
+    if (float(x) > float(jd->sa2->winx) / 2.0f) {
       jd->factor = area_docking_snap(1.0f - float(x) / float(jd->sa2->winx), event);
       return AreaDockTarget::Right;
     }
@@ -4082,7 +4096,33 @@ static float area_split_factor(bContext *C, sAreaJoinData *jd, const wmEvent *ev
 
 static void area_join_update_data(bContext *C, sAreaJoinData *jd, const wmEvent *event)
 {
-  ScrArea *area = ED_area_find_under_cursor(C, SPACE_TYPE_ANY, event->xy);
+  ScrArea *area = nullptr;
+
+  /* TODO: The following is needed until we have linux-specific implementations of
+   * getWindowUnderCursor. See #130242. Use active window if there are overlapping. */
+
+#if (OS_WINDOWS || OS_MAC)
+  area = ED_area_find_under_cursor(C, SPACE_TYPE_ANY, event->xy);
+#else
+  int win_count = 0;
+  LISTBASE_FOREACH (wmWindow *, win, &CTX_wm_manager(C)->windows) {
+    int cursor[2];
+    if (wm_cursor_position_get(win, &cursor[0], &cursor[1])) {
+      rcti rect;
+      WM_window_rect_calc(win, &rect);
+      if (BLI_rcti_isect_pt_v(&rect, cursor)) {
+        win_count++;
+      }
+    }
+  }
+
+  if (win_count > 1) {
+    area = BKE_screen_find_area_xy(CTX_wm_screen(C), SPACE_TYPE_ANY, event->xy);
+  }
+  else {
+    area = ED_area_find_under_cursor(C, SPACE_TYPE_ANY, event->xy);
+  }
+#endif
 
   jd->win2 = WM_window_find_by_area(CTX_wm_manager(C), jd->sa2);
   jd->dir = SCREEN_DIR_NONE;
@@ -4126,6 +4166,7 @@ static int area_join_modal(bContext *C, wmOperator *op, const wmEvent *event)
 {
   if (event->type == WINDEACTIVATE) {
     /* This operator can close windows, which can cause it to be re-run. */
+    area_join_exit(C, op);
     return OPERATOR_FINISHED;
   }
 
@@ -4365,8 +4406,7 @@ static int screen_area_options_invoke(bContext *C, wmOperator *op, const wmEvent
     if (dir != SCREEN_DIR_NONE) {
       uiItemFullO(layout,
                   "SCREEN_OT_area_join",
-                  (ELEM(dir, SCREEN_DIR_N, SCREEN_DIR_S)) ? IFACE_("Join Up") :
-                                                            IFACE_("Join Right"),
+                  ELEM(dir, SCREEN_DIR_N, SCREEN_DIR_S) ? IFACE_("Join Up") : IFACE_("Join Right"),
                   ELEM(dir, SCREEN_DIR_N, SCREEN_DIR_S) ? ICON_AREA_JOIN_UP : ICON_AREA_JOIN,
                   nullptr,
                   WM_OP_EXEC_DEFAULT,
@@ -4378,7 +4418,7 @@ static int screen_area_options_invoke(bContext *C, wmOperator *op, const wmEvent
       uiItemFullO(
           layout,
           "SCREEN_OT_area_join",
-          (ELEM(dir, SCREEN_DIR_N, SCREEN_DIR_S)) ? IFACE_("Join Down") : IFACE_("Join Left"),
+          ELEM(dir, SCREEN_DIR_N, SCREEN_DIR_S) ? IFACE_("Join Down") : IFACE_("Join Left"),
           ELEM(dir, SCREEN_DIR_N, SCREEN_DIR_S) ? ICON_AREA_JOIN_DOWN : ICON_AREA_JOIN_LEFT,
           nullptr,
           WM_OP_EXEC_DEFAULT,
@@ -4947,9 +4987,6 @@ static void screen_area_menu_items(ScrArea *area, uiLayout *layout)
 
   PointerRNA ptr;
 
-  /* Mouse position as if in middle of area. */
-  const int loc[2] = {BLI_rcti_cent_x(&area->totrct), BLI_rcti_cent_y(&area->totrct)};
-
   uiItemFullO(layout,
               "SCREEN_OT_area_join",
               IFACE_("Move/Split Area"),
@@ -4958,7 +4995,6 @@ static void screen_area_menu_items(ScrArea *area, uiLayout *layout)
               WM_OP_INVOKE_DEFAULT,
               UI_ITEM_NONE,
               &ptr);
-  RNA_int_set_array(&ptr, "source_xy", loc);
 
   uiItemS(layout);
 
