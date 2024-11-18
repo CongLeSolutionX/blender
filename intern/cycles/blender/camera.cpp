@@ -58,12 +58,8 @@ struct BlenderCamera {
   float pole_merge_angle_from;
   float pole_merge_angle_to;
 
-  float oblique_angle_x;
-  float oblique_angle_y;
-  float oblique_angle_z;
-  float oblique_length_x;
-  float oblique_length_y;
-  float oblique_length_z;
+  float oblique_angle;
+  float oblique_length;
   float oblique_focal;
 
   float central_cylindrical_range_u_min;
@@ -215,24 +211,16 @@ static void blender_camera_from_object(BlenderCamera *bcam,
         bcam->type = CAMERA_ORTHOGRAPHIC;
         /* Oblique reuses the orthographic camera mode.
          * Load the correct values for oblique case. */
-        bcam->oblique_angle_x = b_camera.oblique_angle_x();
-        bcam->oblique_angle_y = b_camera.oblique_angle_y();
-        bcam->oblique_angle_z = b_camera.oblique_angle_z();
-        bcam->oblique_length_x = b_camera.oblique_length_x();
-        bcam->oblique_length_y = b_camera.oblique_length_y();
-        bcam->oblique_length_z = b_camera.oblique_length_z();
+        bcam->oblique_angle = b_camera.oblique_angle();
+        bcam->oblique_length = b_camera.oblique_length();
         bcam->oblique_focal = b_camera.oblique_focal();
         break;
       case BL::Camera::type_ORTHO:
         bcam->type = CAMERA_ORTHOGRAPHIC;
         /* Oblique reuses the orthographic camera mode.
          * Load default values (no shear) for orthographic case. */
-        bcam->oblique_angle_x = 0.0f;
-        bcam->oblique_angle_y = M_PI_2_F;
-        bcam->oblique_angle_z = 0.0f;
-        bcam->oblique_length_x = 1.0f;
-        bcam->oblique_length_y = 1.0f;
-        bcam->oblique_length_z = 0.0f;
+        bcam->oblique_angle = 0.0f;
+        bcam->oblique_length = 0.0f;
         bcam->oblique_focal = 0.0f;
         break;
       case BL::Camera::type_PANO:
@@ -535,12 +523,8 @@ static void blender_camera_sync(Camera *cam,
   cam->set_latitude_min(bcam->latitude_min);
   cam->set_latitude_max(bcam->latitude_max);
 
-  cam->set_oblique_angle_x(bcam->oblique_angle_x);
-  cam->set_oblique_angle_y(bcam->oblique_angle_y);
-  cam->set_oblique_angle_z(bcam->oblique_angle_z);
-  cam->set_oblique_length_x(bcam->oblique_length_x);
-  cam->set_oblique_length_y(bcam->oblique_length_y);
-  cam->set_oblique_length_z(bcam->oblique_length_z);
+  cam->set_oblique_angle(bcam->oblique_angle);
+  cam->set_oblique_length(bcam->oblique_length);
   cam->set_oblique_focal(bcam->oblique_focal);
 
   cam->set_longitude_min(bcam->longitude_min);

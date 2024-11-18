@@ -103,12 +103,8 @@ NODE_DEFINE(Camera)
   SOCKET_FLOAT(fov_pre, "FOV Pre", M_PI_4_F);
   SOCKET_FLOAT(fov_post, "FOV Post", M_PI_4_F);
 
-  SOCKET_FLOAT(oblique_angle_x, "oblique_angle_x", 0.0f);
-  SOCKET_FLOAT(oblique_angle_y, "oblique_angle_y", 0.0f);
-  SOCKET_FLOAT(oblique_angle_z, "oblique_angle_z", 0.0f);
-  SOCKET_FLOAT(oblique_length_x, "oblique_length_x", 0.0f);
-  SOCKET_FLOAT(oblique_length_y, "oblique_length_y", 0.0f);
-  SOCKET_FLOAT(oblique_length_z, "oblique_length_z", 0.0f);
+  SOCKET_FLOAT(oblique_angle, "oblique_angle", 0.0f);
+  SOCKET_FLOAT(oblique_length, "oblique_length", 0.0f);
   SOCKET_FLOAT(oblique_focal, "oblique_focal", 0.0f);
 
   SOCKET_FLOAT(central_cylindrical_range_u_min, "Central Cylindrical Range U Min", -M_PI_F);
@@ -269,11 +265,9 @@ void Camera::update(Scene *scene)
   else if (camera_type == CAMERA_ORTHOGRAPHIC) {
     cameratoscreen = projection_orthographic(nearclip, farclip);
 
-    float2 x_axis = make_float2(cosf(oblique_angle_x), sinf(oblique_angle_x)) * oblique_length_x;
-    float2 y_axis = make_float2(cosf(oblique_angle_y), sinf(oblique_angle_y)) * oblique_length_y;
-    float2 z_axis = make_float2(cosf(oblique_angle_z), sinf(oblique_angle_z)) * oblique_length_z;
-    Transform shear = make_transform(make_float3(x_axis.x, y_axis.x, z_axis.x),
-                                     make_float3(x_axis.y, y_axis.y, z_axis.y),
+    float2 z_axis = make_float2(cosf(oblique_angle), sinf(oblique_angle)) * oblique_length;
+    Transform shear = make_transform(make_float3(1.0f, 0.0f, z_axis.x),
+                                     make_float3(0.0f, 1.0f, z_axis.y),
                                      make_float3(0.0f, 0.0f, 1.0f));
 
     Transform shift = transform_translate(0.0f, 0.0f, -oblique_focal);

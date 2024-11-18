@@ -81,12 +81,8 @@ class Camera : public Node {
   NODE_SOCKET_API(float, longitude_min)
   NODE_SOCKET_API(float, longitude_max)
 
-  NODE_SOCKET_API(float, oblique_angle_x)
-  NODE_SOCKET_API(float, oblique_angle_y)
-  NODE_SOCKET_API(float, oblique_angle_z)
-  NODE_SOCKET_API(float, oblique_length_x)
-  NODE_SOCKET_API(float, oblique_length_y)
-  NODE_SOCKET_API(float, oblique_length_z)
+  NODE_SOCKET_API(float, oblique_angle)
+  NODE_SOCKET_API(float, oblique_length)
   NODE_SOCKET_API(float, oblique_focal)
 
   NODE_SOCKET_API(float, central_cylindrical_range_u_min)

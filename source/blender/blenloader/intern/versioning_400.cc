@@ -5040,12 +5040,8 @@ void blo_do_versions_400(FileData *fd, Library * /*lib*/, Main *bmain)
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 404, 7)) {
     Camera default_cam = *DNA_struct_default_get(Camera);
     LISTBASE_FOREACH (Camera *, camera, &bmain->cameras) {
-      camera->oblique_angle_x = default_cam.oblique_angle_x;
-      camera->oblique_angle_y = default_cam.oblique_angle_y;
-      camera->oblique_angle_z = default_cam.oblique_angle_z;
-      camera->oblique_length_x = default_cam.oblique_length_x;
-      camera->oblique_length_y = default_cam.oblique_length_y;
-      camera->oblique_length_z = default_cam.oblique_length_z;
+      camera->oblique_angle = default_cam.oblique_angle;
+      camera->oblique_length = default_cam.oblique_length;
       camera->oblique_focal = default_cam.oblique_focal;
     }
   }

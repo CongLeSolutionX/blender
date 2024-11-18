@@ -231,15 +231,11 @@ void AntiAliasingPass::setup_view(View &view, const SceneState &scene_state)
 
   if (scene_state.camera && scene_state.camera->type == CAM_OBLIQUE) {
     const Camera *cam = scene_state.camera;
-    float angle_x = cam->oblique_angle_x;
-    float angle_y = cam->oblique_angle_y;
-    float angle_z = cam->oblique_angle_z;
+    float angle_z = cam->oblique_angle;
     float focal = cam->oblique_focal;
 
-    float2 x_axis = float2(cos(angle_x), sin(angle_x)) * cam->oblique_length_x;
-    float2 y_axis = float2(cos(angle_y), sin(angle_y)) * cam->oblique_length_y;
-    float2 z_axis = float2(cos(angle_z), sin(angle_z)) * cam->oblique_length_z;
-    float3x3 shear(float3(x_axis, 0.0f), float3(y_axis, 0.0f), float3(-z_axis, 1.0f));
+    float2 z_axis = float2(cos(angle_z), sin(angle_z)) * cam->oblique_length;
+    float3x3 shear(float3(1.0f, 0.0f, 0.0f), float3(0.0f, 1.0f, 0.0f), float3(-z_axis, 1.0f));
 
     float4x4 shift = math::from_location<float4x4>(float3(0.0f, 0.0f, focal));
     float4x4 shift_inv = math::from_location<float4x4>(float3(0.0f, 0.0f, -focal));
