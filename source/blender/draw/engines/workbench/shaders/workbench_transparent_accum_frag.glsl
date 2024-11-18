@@ -2,7 +2,13 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "common_view_lib.glsl"
+#include "infos/workbench_prepass_info.hh"
+
+FRAGMENT_SHADER_CREATE_INFO(workbench_prepass)
+FRAGMENT_SHADER_CREATE_INFO(workbench_transparent_accum)
+FRAGMENT_SHADER_CREATE_INFO(workbench_lighting_matcap)
+
+#include "draw_view_lib.glsl"
 #include "workbench_common_lib.glsl"
 #include "workbench_image_lib.glsl"
 #include "workbench_matcap_lib.glsl"
@@ -26,7 +32,7 @@ float linear_zdepth(float depth, mat4 proj_mat)
  * McGuire and Bavoil, Weighted Blended Order-Independent Transparency, Journal of
  * Computer Graphics Techniques (JCGT), vol. 2, no. 2, 122–141, 2013
  */
-float calculate_transparent_weight(void)
+float calculate_transparent_weight()
 {
   float z = linear_zdepth(gl_FragCoord.z, drw_view.winmat);
 #if 0
@@ -52,7 +58,7 @@ void main()
 {
   /* Normal and Incident vector are in view-space. Lighting is evaluated in view-space. */
   vec2 uv_viewport = gl_FragCoord.xy * world_data.viewport_size_inv;
-  vec3 I = get_view_vector_from_screen_uv(uv_viewport);
+  vec3 I = normalize(drw_point_screen_to_view(vec3(uv_viewport, 0.5)));
   vec3 N = normalize(normal_interp);
 
   vec3 color = color_interp;

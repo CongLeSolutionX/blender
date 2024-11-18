@@ -327,12 +327,8 @@ int MTLBatch::prepare_vertex_binding(MTLVertBuf *verts,
              *
              * NOTE: Even if full conversion is not supported, we may still partially perform an
              * implicit conversion where possible, such as vector truncation or expansion. */
-            MTLVertexFormat converted_format;
-            bool can_convert = mtl_vertex_format_resize(
-                mtl_attr.format, a->comp_len, &converted_format);
-            desc.vertex_descriptor.attributes[mtl_attr.location].format = can_convert ?
-                                                                              converted_format :
-                                                                              mtl_attr.format;
+            MTLVertexFormat converted_format = format_resize_comp(mtl_attr.format, a->comp_len);
+            desc.vertex_descriptor.attributes[mtl_attr.location].format = converted_format;
             desc.vertex_descriptor.attributes[mtl_attr.location].format_conversion_mode =
                 (GPUVertFetchMode)a->fetch_mode;
             BLI_assert(desc.vertex_descriptor.attributes[mtl_attr.location].format !=
@@ -433,7 +429,7 @@ id<MTLRenderCommandEncoder> MTLBatch::bind(uint v_count)
 
   /* Ensure Index Buffer is ready. */
   MTLIndexBuf *mtl_elem = static_cast<MTLIndexBuf *>(reinterpret_cast<IndexBuf *>(this->elem));
-  if (mtl_elem != NULL) {
+  if (mtl_elem != nullptr) {
     mtl_elem->upload_data();
   }
 
@@ -449,7 +445,7 @@ id<MTLRenderCommandEncoder> MTLBatch::bind(uint v_count)
    * data operations are required. */
   for (int i = 0; i < num_buffers; i++) {
     MTLVertBuf *buf_at_index = buffers[i];
-    if (buf_at_index == NULL) {
+    if (buf_at_index == nullptr) {
       BLI_assert_msg(
           false,
           "Total buffer count does not match highest buffer index, could be gaps in bindings");
@@ -519,7 +515,7 @@ id<MTLRenderCommandEncoder> MTLBatch::bind(uint v_count)
     /* Ensure all attributes are set. */
     active_shader_->ssbo_vertex_fetch_bind_attributes_end(rec);
 
-    /* Bind NULL Buffers for unused vertex data slots. */
+    /* Bind nullptr Buffers for unused vertex data slots. */
     id<MTLBuffer> null_buffer = ctx->get_null_buffer();
     BLI_assert(null_buffer != nil);
     for (int i = num_buffers; i < MTL_SSBO_VERTEX_FETCH_MAX_VBOS; i++) {
@@ -561,7 +557,7 @@ id<MTLRenderCommandEncoder> MTLBatch::bind(uint v_count)
   /* Bind Vertex Buffers. */
   for (int i = 0; i < num_buffers; i++) {
     MTLVertBuf *buf_at_index = buffers[i];
-    if (buf_at_index == NULL) {
+    if (buf_at_index == nullptr) {
       BLI_assert_msg(
           false,
           "Total buffer count does not match highest buffer index, could be gaps in bindings");
@@ -686,7 +682,7 @@ void MTLBatch::prepare_vertex_descriptor_and_bindings(MTLVertBuf **buffers, int 
 
     /* Extract Vertex attributes (First-bound vertex buffer takes priority). */
     for (int v = 0; v < GPU_BATCH_VBO_MAX_LEN; v++) {
-      if (mtl_verts[v] != NULL) {
+      if (mtl_verts[v] != nullptr) {
         MTL_LOG_INFO(" -- [Batch] Checking bindings for bound vertex buffer %p", mtl_verts[v]);
         int buffer_ind = this->prepare_vertex_binding(
             mtl_verts[v], desc, interface, attr_mask, false);
@@ -741,10 +737,7 @@ void MTLBatch::prepare_vertex_descriptor_and_bindings(MTLVertBuf **buffers, int 
 
 void MTLBatch::draw_advanced(int v_first, int v_count, int i_first, int i_count)
 {
-
-#if TRUST_NO_ONE
   BLI_assert(v_count > 0 && i_count > 0);
-#endif
 
   /* Setup RenderPipelineState for batch. */
   MTLContext *ctx = MTLContext::get();
@@ -783,7 +776,7 @@ void MTLBatch::draw_advanced(int v_first, int v_count, int i_first, int i_count)
     ctx->main_command_buffer.register_draw_counters(output_num_verts * i_count);
   }
   /* Perform regular draw. */
-  else if (mtl_elem == NULL) {
+  else if (mtl_elem == nullptr) {
 
     /* Primitive Type toplogy emulation. */
     if (mtl_needs_topology_emulation(this->prim_type)) {
@@ -945,7 +938,7 @@ void MTLBatch::draw_advanced_indirect(GPUStorageBuf *indirect_buf, intptr_t offs
     return;
   }
 
-  if (mtl_elem == NULL) {
+  if (mtl_elem == nullptr) {
     /* Set depth stencil state (requires knowledge of primitive type). */
     ctx->ensure_depth_stencil_state(mtl_prim_type);
 

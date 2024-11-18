@@ -23,7 +23,6 @@ struct PTCacheEdit;
 struct ParticleSystem;
 struct Volume;
 struct bGPDstroke;
-struct bGPdata;
 struct Scene;
 
 /**
@@ -257,11 +256,6 @@ DRWVolumeGrid *DRW_volume_batch_cache_get_grid(Volume *volume,
                                                const bke::VolumeGridData *volume_grid);
 blender::gpu::Batch *DRW_cache_volume_face_wireframe_get(Object *ob);
 blender::gpu::Batch *DRW_cache_volume_selection_surface_get(Object *ob);
-
-/**
- * Sbuffer batches are temporary. We need to clear it after drawing.
- */
-void DRW_cache_gpencil_sbuffer_clear(Object *ob);
 
 /* Grease Pencil */
 

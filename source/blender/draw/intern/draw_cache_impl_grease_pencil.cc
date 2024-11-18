@@ -14,6 +14,7 @@
 #include "BKE_grease_pencil.h"
 #include "BKE_grease_pencil.hh"
 
+#include "BLI_array_utils.hh"
 #include "BLI_offset_indices.hh"
 #include "BLI_task.hh"
 
@@ -163,6 +164,7 @@ static void grease_pencil_batch_cache_clear(GreasePencil &grease_pencil)
 
   GPU_VERTBUF_DISCARD_SAFE(cache->edit_points_pos);
   GPU_VERTBUF_DISCARD_SAFE(cache->edit_points_selection);
+  GPU_VERTBUF_DISCARD_SAFE(cache->edit_points_vflag);
   GPU_INDEXBUF_DISCARD_SAFE(cache->edit_points_indices);
 
   GPU_VERTBUF_DISCARD_SAFE(cache->edit_line_pos);
@@ -827,14 +829,16 @@ static void grease_pencil_edit_batch_ensure(Object &object,
               positions_eval, range, layer_space_to_object_space, positions_eval_slice);
         });
 
-    for (const int curve_i : points_by_curve.index_range()) {
-      const IndexRange range = points_by_curve[curve_i];
-      edit_points_vflag[range.first()] |= GREASE_PENCIL_EDIT_STROKE_START;
-      edit_points_vflag[range.last()] |= GREASE_PENCIL_EDIT_STROKE_END;
-    }
-
     /* Do not show selection for locked layers. */
     if (!layer.is_locked()) {
+
+      /* Flag the start and end points. */
+      for (const int curve_i : curves.curves_range()) {
+        const IndexRange points = points_by_curve[curve_i].shift(drawing_start_offset);
+        edit_points_vflag[points.first()] |= GREASE_PENCIL_EDIT_STROKE_START;
+        edit_points_vflag[points.last()] |= GREASE_PENCIL_EDIT_STROKE_END;
+      }
+
       const IndexMask selected_editable_points =
           ed::greasepencil::retrieve_editable_and_selected_points(
               object, info.drawing, info.layer_index, memory);
@@ -1346,10 +1350,11 @@ static void grease_pencil_wire_batch_ensure(Object &object,
 
   /* Get the visible drawings. */
   const Vector<ed::greasepencil::DrawingInfo> drawings =
-      ed::greasepencil::retrieve_visible_drawings(scene, grease_pencil, false);
+      ed::greasepencil::retrieve_visible_drawings(scene, grease_pencil, true);
 
   Vector<int> index_start_per_curve;
   Vector<bool> cyclic_per_curve;
+  Vector<bool> is_onion_per_curve;
 
   int index_len = 0;
   for (const ed::greasepencil::DrawingInfo &info : drawings) {
@@ -1367,8 +1372,10 @@ static void grease_pencil_wire_batch_ensure(Object &object,
       const bool is_cyclic = cyclic[curve_i] && (point_len > 2);
       /* Count the primitive restart. */
       index_len += point_len + (is_cyclic ? 1 : 0) + 1;
+      /* Don't draw the onion frames in wireframe mode. */
       index_start_per_curve.append(point_start);
       cyclic_per_curve.append(is_cyclic);
+      is_onion_per_curve.append(info.onion_id != 0);
     });
   }
   index_start_per_curve.append(index_len);
@@ -1386,11 +1393,21 @@ static void grease_pencil_wire_batch_ensure(Object &object,
       /* Shift the range by `curve` to account for the second padding vertices.
        * The first one is already accounted for during counting (as primitive restart). */
       const IndexRange index_range = offset_range.shift(curve + 1);
-      for (const int i : offset_range.index_range()) {
-        indices[offset_range[i]] = index_range[i];
+      if (is_onion_per_curve[curve]) {
+        for (const int i : offset_range.index_range()) {
+          indices[offset_range[i]] = gpu::RESTART_INDEX;
+        }
+        if (cyclic_per_curve[curve]) {
+          indices[offset_range.last()] = gpu::RESTART_INDEX;
+        }
       }
-      if (cyclic_per_curve[curve]) {
-        indices[offset_range.last()] = index_range.first();
+      else {
+        for (const int i : offset_range.index_range()) {
+          indices[offset_range[i]] = index_range[i];
+        }
+        if (cyclic_per_curve[curve]) {
+          indices[offset_range.last()] = index_range.first();
+        }
       }
       indices[offset_range.one_after_last()] = gpu::RESTART_INDEX;
     }

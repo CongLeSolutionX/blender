@@ -95,9 +95,10 @@ void TreeViewItemContainer::foreach_parent(ItemIterFn iter_fn) const
 
 /* ---------------------------------------------------------------------- */
 
-/* Implementation for the base class virtual function. More specialized iterators below. */
 void AbstractTreeView::foreach_view_item(FunctionRef<void(AbstractViewItem &)> iter_fn) const
 {
+  /* Implementation for the base class virtual function. More specialized iterators below. */
+
   this->foreach_item_recursive(iter_fn);
 }
 
@@ -128,6 +129,28 @@ AbstractTreeViewItem *AbstractTreeView::find_hovered(const ARegion &region, cons
 void AbstractTreeView::set_default_rows(int default_rows)
 {
   custom_height_ = std::make_unique<int>(default_rows * padded_item_height());
+}
+
+std::optional<uiViewState> AbstractTreeView::persistent_state() const
+{
+  if (!custom_height_) {
+    return {};
+  }
+
+  uiViewState state{0};
+
+  if (custom_height_) {
+    state.custom_height = *custom_height_ * UI_INV_SCALE_FAC;
+  }
+
+  return state;
+}
+
+void AbstractTreeView::persistent_state_apply(const uiViewState &state)
+{
+  if (state.custom_height) {
+    set_default_rows(round_fl_to_int(state.custom_height * UI_SCALE_FAC) / padded_item_height());
+  }
 }
 
 int AbstractTreeView::count_visible_descendants(const AbstractTreeViewItem &parent) const
@@ -914,12 +937,18 @@ void TreeViewBuilder::ensure_min_rows_items(AbstractTreeView &tree_view)
   }
 }
 
-void TreeViewBuilder::build_tree_view(AbstractTreeView &tree_view,
+void TreeViewBuilder::build_tree_view(const bContext &C,
+                                      AbstractTreeView &tree_view,
                                       uiLayout &layout,
                                       std::optional<StringRef> search_string,
                                       const bool add_box)
 {
   uiBlock &block = *uiLayoutGetBlock(&layout);
+
+  const ARegion *region = CTX_wm_region_popup(&C) ? CTX_wm_region_popup(&C) : CTX_wm_region(&C);
+  if (region) {
+    ui_block_view_persistent_state_restore(*region, block, tree_view);
+  }
 
   tree_view.build_tree();
   tree_view.update_from_old(block);
