@@ -836,7 +836,7 @@ static void GPENCIL_draw_object(GPENCIL_Data *vedata, GPENCIL_tObject *ob)
     manager->submit(*vfx->vfx_ps);
   }
 
-  pd->object_bound_mat = float4x4(ob->plane_mat);
+  copy_m4_m4(pd->object_bound_mat, ob->plane_mat);
   pd->is_stroke_order_3d = ob->is_drawmode3d;
 
   if (pd->scene_fb) {
