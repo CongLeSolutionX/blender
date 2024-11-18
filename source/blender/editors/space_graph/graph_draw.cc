@@ -1145,7 +1145,7 @@ static void draw_fcurve(bAnimContext *ac, SpaceGraph *sipo, ARegion *region, bAn
   FModifier *fcm = find_active_fmodifier(&fcu->modifiers);
 
   /* map keyframes for drawing if scaled F-Curve */
-  ANIM_nla_mapping_apply_fcurve(ale, static_cast<FCurve *>(ale->key_data), false, false);
+  ANIM_nla_mapping_apply_if_needed_fcurve(ale, static_cast<FCurve *>(ale->key_data), false, false);
 
   /* draw curve:
    * - curve line may be result of one or more destructive modifiers or just the raw data,
@@ -1216,7 +1216,8 @@ static void draw_fcurve(bAnimContext *ac, SpaceGraph *sipo, ARegion *region, bAn
        * F-modifier evaluations are not. So we undo the keyframe remapping and instead remap the
        * evaluation time when drawing the curve itself. Afterward, we go back and redo the keyframe
        * remapping so the controls are drawn properly. */
-      ANIM_nla_mapping_apply_fcurve(ale, static_cast<FCurve *>(ale->key_data), true, false);
+      ANIM_nla_mapping_apply_if_needed_fcurve(
+          ale, static_cast<FCurve *>(ale->key_data), true, false);
       draw_fcurve_curve(ac,
                         ale->id,
                         fcu,
@@ -1224,7 +1225,8 @@ static void draw_fcurve(bAnimContext *ac, SpaceGraph *sipo, ARegion *region, bAn
                         shdr_pos,
                         ANIM_nla_mapping_allowed(ale),
                         draw_extrapolation);
-      ANIM_nla_mapping_apply_fcurve(ale, static_cast<FCurve *>(ale->key_data), false, false);
+      ANIM_nla_mapping_apply_if_needed_fcurve(
+          ale, static_cast<FCurve *>(ale->key_data), false, false);
     }
     else if (((fcu->bezt) || (fcu->fpt)) && (fcu->totvert)) {
       /* just draw curve based on defined data (i.e. no modifiers) */
@@ -1301,7 +1303,7 @@ static void draw_fcurve(bAnimContext *ac, SpaceGraph *sipo, ARegion *region, bAn
   }
 
   /* undo mapping of keyframes for drawing if scaled F-Curve */
-  ANIM_nla_mapping_apply_fcurve(ale, static_cast<FCurve *>(ale->key_data), true, false);
+  ANIM_nla_mapping_apply_if_needed_fcurve(ale, static_cast<FCurve *>(ale->key_data), true, false);
 }
 
 /* Debugging -------------------------------- */

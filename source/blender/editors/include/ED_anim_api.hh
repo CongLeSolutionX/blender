@@ -995,7 +995,10 @@ void ANIM_nla_mapping_apply_fcurve(AnimData *adt, FCurve *fcu, bool restore, boo
 /**
  * Same as above, but only if `ANIM_nla_mapping_allowed(ale)` returns `true`.
  */
-void ANIM_nla_mapping_apply_fcurve(bAnimListElem *ale, FCurve *fcu, bool restore, bool only_keys);
+void ANIM_nla_mapping_apply_if_needed_fcurve(bAnimListElem *ale,
+                                             FCurve *fcu,
+                                             bool restore,
+                                             bool only_keys);
 
 /* ..... */
 

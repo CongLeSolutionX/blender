@@ -190,7 +190,8 @@ static void get_nearest_fcurve_verts_list(bAnimContext *ac, const int mval[2], L
         ac->scene, ale->id, fcu, mapping_flag, &offset);
 
     /* apply NLA mapping to all the keyframes */
-    ANIM_nla_mapping_apply_fcurve(ale, static_cast<FCurve *>(ale->key_data), false, false);
+    ANIM_nla_mapping_apply_if_needed_fcurve(
+        ale, static_cast<FCurve *>(ale->key_data), false, false);
 
     if (fcu->bezt) {
       BezTriple *bezt1 = fcu->bezt, *prevbezt = nullptr;
@@ -248,7 +249,8 @@ static void get_nearest_fcurve_verts_list(bAnimContext *ac, const int mval[2], L
     }
 
     /* un-apply NLA mapping from all the keyframes */
-    ANIM_nla_mapping_apply_fcurve(ale, static_cast<FCurve *>(ale->key_data), true, false);
+    ANIM_nla_mapping_apply_if_needed_fcurve(
+        ale, static_cast<FCurve *>(ale->key_data), true, false);
   }
 
   /* free channels */
@@ -620,7 +622,7 @@ static bool box_select_graphkeys(bAnimContext *ac,
     /* Apply NLA mapping to all the keyframes, since it's easier than trying to
      * guess when a callback might use something different.
      */
-    ANIM_nla_mapping_apply_fcurve(
+    ANIM_nla_mapping_apply_if_needed_fcurve(
         ale, static_cast<FCurve *>(ale->key_data), false, incl_handles == 0);
 
     scaled_rectf.xmin = rectf.xmin;
@@ -657,7 +659,7 @@ static bool box_select_graphkeys(bAnimContext *ac,
     }
 
     /* Un-apply NLA mapping from all the keyframes. */
-    ANIM_nla_mapping_apply_fcurve(
+    ANIM_nla_mapping_apply_if_needed_fcurve(
         ale, static_cast<FCurve *>(ale->key_data), true, incl_handles == 0);
   }
 
@@ -1184,10 +1186,11 @@ static void markers_selectkeys_between(bAnimContext *ac)
 
   /* select keys in-between */
   LISTBASE_FOREACH (bAnimListElem *, ale, &anim_data) {
-    ANIM_nla_mapping_apply_fcurve(ale, static_cast<FCurve *>(ale->key_data), false, true);
+    ANIM_nla_mapping_apply_if_needed_fcurve(
+        ale, static_cast<FCurve *>(ale->key_data), false, true);
     ANIM_fcurve_keyframes_loop(
         &ked, static_cast<FCurve *>(ale->key_data), ok_cb, select_cb, nullptr);
-    ANIM_nla_mapping_apply_fcurve(ale, static_cast<FCurve *>(ale->key_data), true, true);
+    ANIM_nla_mapping_apply_if_needed_fcurve(ale, static_cast<FCurve *>(ale->key_data), true, true);
   }
 
   /* Cleanup */
@@ -1557,10 +1560,11 @@ static void graphkeys_select_leftright(bAnimContext *ac,
 
   /* select keys */
   LISTBASE_FOREACH (bAnimListElem *, ale, &anim_data) {
-    ANIM_nla_mapping_apply_fcurve(ale, static_cast<FCurve *>(ale->key_data), false, true);
+    ANIM_nla_mapping_apply_if_needed_fcurve(
+        ale, static_cast<FCurve *>(ale->key_data), false, true);
     ANIM_fcurve_keyframes_loop(
         &ked, static_cast<FCurve *>(ale->key_data), ok_cb, select_cb, nullptr);
-    ANIM_nla_mapping_apply_fcurve(ale, static_cast<FCurve *>(ale->key_data), true, true);
+    ANIM_nla_mapping_apply_if_needed_fcurve(ale, static_cast<FCurve *>(ale->key_data), true, true);
   }
 
   /* Cleanup */

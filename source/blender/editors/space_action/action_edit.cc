@@ -1854,9 +1854,9 @@ static int actkeys_framejump_exec(bContext *C, wmOperator * /*op*/)
 
       case ALE_FCURVE: {
         FCurve *fcurve = static_cast<FCurve *>(ale->key_data);
-        ANIM_nla_mapping_apply_fcurve(ale, fcurve, false, true);
+        ANIM_nla_mapping_apply_if_needed_fcurve(ale, fcurve, false, true);
         ANIM_fcurve_keyframes_loop(&ked, fcurve, nullptr, bezt_calc_average, nullptr);
-        ANIM_nla_mapping_apply_fcurve(ale, fcurve, true, true);
+        ANIM_nla_mapping_apply_if_needed_fcurve(ale, fcurve, true, true);
         break;
       }
 
@@ -1976,11 +1976,11 @@ static void snap_action_keys(bAnimContext *ac, short mode)
     }
     else {
       FCurve *fcurve = static_cast<FCurve *>(ale->key_data);
-      ANIM_nla_mapping_apply_fcurve(ale, fcurve, false, false);
+      ANIM_nla_mapping_apply_if_needed_fcurve(ale, fcurve, false, false);
       ANIM_fcurve_keyframes_loop(&ked, fcurve, nullptr, edit_cb, BKE_fcurve_handles_recalc);
       BKE_fcurve_merge_duplicate_keys(
           fcurve, SELECT, false); /* only use handles in graph editor */
-      ANIM_nla_mapping_apply_fcurve(ale, fcurve, true, false);
+      ANIM_nla_mapping_apply_if_needed_fcurve(ale, fcurve, true, false);
     }
 
     ale->update |= ANIM_UPDATE_DEFAULT;
@@ -2112,9 +2112,9 @@ static void mirror_action_keys(bAnimContext *ac, short mode)
     }
     else {
       FCurve *fcurve = static_cast<FCurve *>(ale->key_data);
-      ANIM_nla_mapping_apply_fcurve(ale, fcurve, false, false);
+      ANIM_nla_mapping_apply_if_needed_fcurve(ale, fcurve, false, false);
       ANIM_fcurve_keyframes_loop(&ked, fcurve, nullptr, edit_cb, BKE_fcurve_handles_recalc);
-      ANIM_nla_mapping_apply_fcurve(ale, fcurve, true, false);
+      ANIM_nla_mapping_apply_if_needed_fcurve(ale, fcurve, true, false);
     }
 
     ale->update |= ANIM_UPDATE_DEFAULT;

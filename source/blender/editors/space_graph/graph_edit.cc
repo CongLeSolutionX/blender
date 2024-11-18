@@ -2142,10 +2142,11 @@ static KeyframeEditData sum_selected_keyframes(bAnimContext *ac)
 
     memset(&current_ked, 0, sizeof(current_ked));
 
-    ANIM_nla_mapping_apply_fcurve(ale, static_cast<FCurve *>(ale->key_data), false, true);
+    ANIM_nla_mapping_apply_if_needed_fcurve(
+        ale, static_cast<FCurve *>(ale->key_data), false, true);
     ANIM_fcurve_keyframes_loop(
         &current_ked, static_cast<FCurve *>(ale->key_data), nullptr, bezt_calc_average, nullptr);
-    ANIM_nla_mapping_apply_fcurve(ale, static_cast<FCurve *>(ale->key_data), true, true);
+    ANIM_nla_mapping_apply_if_needed_fcurve(ale, static_cast<FCurve *>(ale->key_data), true, true);
 
     if (current_ked.i1 == 0) {
       continue;
@@ -2280,9 +2281,9 @@ static int keyframe_jump_exec(bContext *C, wmOperator *op)
     }
 
     float closest_fcu_frame;
-    ANIM_nla_mapping_apply_fcurve(ale, fcu, false, true);
+    ANIM_nla_mapping_apply_if_needed_fcurve(ale, fcu, false, true);
     const bool success = find_closest_frame(fcu, current_frame, next, &closest_fcu_frame);
-    ANIM_nla_mapping_apply_fcurve(ale, fcu, true, true);
+    ANIM_nla_mapping_apply_if_needed_fcurve(ale, fcu, true, true);
 
     if (!success) {
       continue;
@@ -2462,12 +2463,14 @@ static void snap_graph_keys(bAnimContext *ac, short mode)
     }
 
     /* Perform snapping. */
-    ANIM_nla_mapping_apply_fcurve(ale, static_cast<FCurve *>(ale->key_data), false, false);
+    ANIM_nla_mapping_apply_if_needed_fcurve(
+        ale, static_cast<FCurve *>(ale->key_data), false, false);
     ANIM_fcurve_keyframes_loop(
         &ked, static_cast<FCurve *>(ale->key_data), nullptr, edit_cb, BKE_fcurve_handles_recalc);
     BKE_fcurve_merge_duplicate_keys(
         static_cast<FCurve *>(ale->key_data), BEZT_FLAG_TEMP_TAG, use_handle);
-    ANIM_nla_mapping_apply_fcurve(ale, static_cast<FCurve *>(ale->key_data), true, false);
+    ANIM_nla_mapping_apply_if_needed_fcurve(
+        ale, static_cast<FCurve *>(ale->key_data), true, false);
 
     ale->update |= ANIM_UPDATE_DEFAULT;
   }
@@ -2768,10 +2771,12 @@ static void mirror_graph_keys(bAnimContext *ac, short mode)
     }
 
     /* Perform actual mirroring. */
-    ANIM_nla_mapping_apply_fcurve(ale, static_cast<FCurve *>(ale->key_data), false, false);
+    ANIM_nla_mapping_apply_if_needed_fcurve(
+        ale, static_cast<FCurve *>(ale->key_data), false, false);
     ANIM_fcurve_keyframes_loop(
         &ked, static_cast<FCurve *>(ale->key_data), nullptr, edit_cb, BKE_fcurve_handles_recalc);
-    ANIM_nla_mapping_apply_fcurve(ale, static_cast<FCurve *>(ale->key_data), true, false);
+    ANIM_nla_mapping_apply_if_needed_fcurve(
+        ale, static_cast<FCurve *>(ale->key_data), true, false);
 
     ale->update |= ANIM_UPDATE_DEFAULT;
   }

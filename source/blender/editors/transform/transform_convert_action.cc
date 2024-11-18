@@ -1187,11 +1187,13 @@ static void posttrans_action_clean(bAnimContext *ac, bAction *act)
    *      - all keyframes are converted in/out of global time.
    */
   LISTBASE_FOREACH (bAnimListElem *, ale, &anim_data) {
-    ANIM_nla_mapping_apply_fcurve(ale, static_cast<FCurve *>(ale->key_data), false, false);
+    ANIM_nla_mapping_apply_if_needed_fcurve(
+        ale, static_cast<FCurve *>(ale->key_data), false, false);
     BKE_fcurve_merge_duplicate_keys(static_cast<FCurve *>(ale->key_data),
                                     SELECT,
                                     false); /* Only use handles in graph editor. */
-    ANIM_nla_mapping_apply_fcurve(ale, static_cast<FCurve *>(ale->key_data), true, false);
+    ANIM_nla_mapping_apply_if_needed_fcurve(
+        ale, static_cast<FCurve *>(ale->key_data), true, false);
   }
 
   /* Free temp data. */
@@ -1239,10 +1241,10 @@ static void special_aftertrans_update__actedit(bContext *C, TransInfo *t)
            *                            but we made duplicates, so get rid of these.
            */
           if ((saction->flag & SACTION_NOTRANSKEYCULL) == 0 && ((canceled == 0) || (duplicate))) {
-            ANIM_nla_mapping_apply_fcurve(ale, fcu, false, false);
+            ANIM_nla_mapping_apply_if_needed_fcurve(ale, fcu, false, false);
             BKE_fcurve_merge_duplicate_keys(
                 fcu, SELECT, false); /* Only use handles in graph editor. */
-            ANIM_nla_mapping_apply_fcurve(ale, fcu, true, false);
+            ANIM_nla_mapping_apply_if_needed_fcurve(ale, fcu, true, false);
           }
           break;
         }

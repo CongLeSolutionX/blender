@@ -1115,9 +1115,9 @@ static void markers_selectkeys_between(bAnimContext *ac)
 
       case ANIMTYPE_FCURVE: {
         FCurve *fcurve = static_cast<FCurve *>(ale->key_data);
-        ANIM_nla_mapping_apply_fcurve(ale, fcurve, false, true);
+        ANIM_nla_mapping_apply_if_needed_fcurve(ale, fcurve, false, true);
         ANIM_fcurve_keyframes_loop(&ked, fcurve, ok_cb, select_cb, nullptr);
-        ANIM_nla_mapping_apply_fcurve(ale, fcurve, true, true);
+        ANIM_nla_mapping_apply_if_needed_fcurve(ale, fcurve, true, true);
         break;
       }
 
@@ -1560,9 +1560,9 @@ static void actkeys_select_leftright(bAnimContext *ac,
 
       case ANIMTYPE_FCURVE: {
         FCurve *fcurve = static_cast<FCurve *>(ale->key_data);
-        ANIM_nla_mapping_apply_fcurve(ale, fcurve, false, true);
+        ANIM_nla_mapping_apply_if_needed_fcurve(ale, fcurve, false, true);
         ANIM_fcurve_keyframes_loop(&ked, fcurve, ok_cb, select_cb, nullptr);
-        ANIM_nla_mapping_apply_fcurve(ale, fcurve, true, true);
+        ANIM_nla_mapping_apply_if_needed_fcurve(ale, fcurve, true, true);
         break;
       }
 

@@ -1002,9 +1002,9 @@ static void special_aftertrans_update__graph(bContext *C, TransInfo *t)
        *                            but we made duplicates, so get rid of these.
        */
       if ((sipo->flag & SIPO_NOTRANSKEYCULL) == 0 && ((canceled == 0) || (duplicate))) {
-        ANIM_nla_mapping_apply_fcurve(ale, fcu, false, false);
+        ANIM_nla_mapping_apply_if_needed_fcurve(ale, fcu, false, false);
         BKE_fcurve_merge_duplicate_keys(fcu, BEZT_FLAG_TEMP_TAG, use_handle);
-        ANIM_nla_mapping_apply_fcurve(ale, fcu, true, false);
+        ANIM_nla_mapping_apply_if_needed_fcurve(ale, fcu, true, false);
       }
     }
 

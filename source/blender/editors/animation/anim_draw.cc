@@ -332,10 +332,10 @@ void ANIM_nla_mapping_apply_fcurve(AnimData *adt, FCurve *fcu, bool restore, boo
   ANIM_fcurve_keyframes_loop(&ked, fcu, nullptr, map_cb, nullptr);
 }
 
-void ANIM_nla_mapping_apply_fcurve(bAnimListElem *ale,
-                                   FCurve *fcu,
-                                   const bool restore,
-                                   const bool only_keys)
+void ANIM_nla_mapping_apply_if_needed_fcurve(bAnimListElem *ale,
+                                             FCurve *fcu,
+                                             const bool restore,
+                                             const bool only_keys)
 {
   if (!ANIM_nla_mapping_allowed(ale)) {
     return;

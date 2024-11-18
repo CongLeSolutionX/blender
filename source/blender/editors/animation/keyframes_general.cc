@@ -1855,9 +1855,11 @@ eKeyPasteError paste_animedit_keys(bAnimContext *ac,
 
           offset[1] = paste_get_y_offset(ac, aci, ale, value_offset_mode);
 
-          ANIM_nla_mapping_apply_fcurve(ale, static_cast<FCurve *>(ale->key_data), false, false);
+          ANIM_nla_mapping_apply_if_needed_fcurve(
+              ale, static_cast<FCurve *>(ale->key_data), false, false);
           paste_animedit_keys_fcurve(fcu, aci, offset, merge_mode, flip);
-          ANIM_nla_mapping_apply_fcurve(ale, static_cast<FCurve *>(ale->key_data), true, false);
+          ANIM_nla_mapping_apply_if_needed_fcurve(
+              ale, static_cast<FCurve *>(ale->key_data), true, false);
         }
 
         ale->update |= ANIM_UPDATE_DEFAULT;
