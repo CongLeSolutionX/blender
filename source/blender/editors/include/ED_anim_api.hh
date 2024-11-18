@@ -988,7 +988,7 @@ float ANIM_nla_tweakedit_remap(bAnimListElem *ale, float cframe, eNlaTime_Conver
  * TODO: this is only used by `fcurve_to_keylist()` at this point. Perhaps with
  * some refactoring we can make `fcurve_to_keylist()` use
  * `ANIM_nla_mapping_apply_if_needed_fcurve()` instead, and then we can get rid
- * of this one.
+ * of this.
  */
 void ANIM_nla_mapping_apply_fcurve(AnimData *adt, FCurve *fcu, bool restore, bool only_keys);
 
