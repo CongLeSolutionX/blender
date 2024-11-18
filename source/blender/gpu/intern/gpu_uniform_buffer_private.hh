@@ -40,6 +40,12 @@ class UniformBuf {
   UniformBuf(size_t size, const char *name);
   virtual ~UniformBuf();
 
+  /* Used after filling uninitialized buffers with poison values. */
+  void force_data_uninitialized()
+  {
+    data_initialized_ = false;
+  }
+
   virtual void update(const void * /*data*/)
   {
     data_initialized_ = true;

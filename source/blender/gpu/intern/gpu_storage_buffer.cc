@@ -69,6 +69,8 @@ GPUStorageBuf *GPU_storagebuf_create_ex(size_t size,
      * (NaN for floats, -1 for ints and "max value" for uints). */
     blender::Vector<uchar> uninitialized_data(size, 0xFF);
     ssbo->update(uninitialized_data.data());
+    /* `update` tags the buffer data as initialized so we revert that. */
+    ssbo->force_data_uninitialized();
   }
 
   if (usage == GPU_USAGE_DEVICE_ONLY) {

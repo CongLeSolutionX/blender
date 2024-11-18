@@ -202,6 +202,8 @@ GPUUniformBuf *GPU_uniformbuf_create_ex(size_t size, const void *data, const cha
      * (NaN for floats, -1 for ints and "max value" for uints). */
     blender::Vector<uchar> uninitialized_data(size, 0xFF);
     ubo->update(uninitialized_data.data());
+    /* `update` tags the buffer data as initialized so we revert that. */
+    ubo->force_data_uninitialized();
   }
   return wrap(ubo);
 }
