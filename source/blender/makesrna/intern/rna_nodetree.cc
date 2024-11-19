@@ -364,7 +364,7 @@ const EnumPropertyItem rna_enum_node_bit_math_items[] = {
      "NOT",
      0,
      "Not",
-     "Returns the opposite bit value of A, in decimal it is equivalent of A = -A − 1, ~ A"},
+     "Returns the opposite bit value of A, in decimal it is equivalent of A = -A - 1, ~ A"},
     {NODE_BIT_MATH_AND_NOT,
      "AND_NOT",
      0,
