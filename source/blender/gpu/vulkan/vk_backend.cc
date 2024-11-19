@@ -39,6 +39,11 @@ static CLG_LogRef LOG = {"gpu.vulkan"};
 namespace blender::gpu {
 static const char *KNOWN_CRASHING_DRIVER = "unstable driver";
 
+static const char *vk_extension_get(int index)
+{
+  return VKBackend::get().device.extension_name_get(index);
+}
+
 static Vector<StringRefNull> missing_capabilities_get(VkPhysicalDevice vk_physical_device)
 {
   Vector<StringRefNull> missing_capabilities;
@@ -282,6 +287,10 @@ void VKBackend::platform_init(const VKDevice &device)
   std::string vendor_name = device.vendor_name();
   std::string driver_version = device.driver_version();
 
+  /* GPG has already been initialized, but without a specific device. Calling init twice will
+   * clear the list of devices. Making a copy of the device list and set it after initialization to
+   * make sure the list isn't destroyed at this moment, but only when the backend is destroyed. */
+  Vector<GPUDevice> devices = GPG.devices;
   GPG.init(device_type,
            os,
            driver,
@@ -291,6 +300,7 @@ void VKBackend::platform_init(const VKDevice &device)
            properties.deviceName,
            driver_version.c_str(),
            GPU_ARCHITECTURE_IMR);
+  GPG.devices = devices;
 
   CLOG_INFO(&LOG,
             0,
@@ -345,6 +355,9 @@ void VKBackend::detect_workarounds(VKDevice &device)
 
   workarounds.dynamic_rendering_unused_attachments = !device.supports_extension(
       VK_EXT_DYNAMIC_RENDERING_UNUSED_ATTACHMENTS_EXTENSION_NAME);
+
+  /* TODO(jbakker): This should be set when dynamic rendering is not available. See #129062. */
+  GCaps.render_pass_workaround = false;
 
   device.workarounds_ = workarounds;
 }
@@ -548,6 +561,12 @@ void VKBackend::capabilities_init(VKDevice &device)
 
   GCaps.max_parallel_compilations = BLI_system_thread_count();
   GCaps.mem_stats_support = true;
+
+  uint32_t vk_extension_count;
+  vkEnumerateDeviceExtensionProperties(
+      device.physical_device_get(), nullptr, &vk_extension_count, nullptr);
+  GCaps.extensions_len = vk_extension_count;
+  GCaps.extension_get = vk_extension_get;
 
   detect_workarounds(device);
 }

@@ -264,7 +264,7 @@ bool MTLShader::finalize(const shader::ShaderCreateInfo *info)
 
   /* Compute shaders. */
   bool is_compute = false;
-  if (shd_builder_->glsl_compute_source_.size() > 0) {
+  if (shd_builder_->glsl_compute_source_.empty() == false) {
     BLI_assert_msg(info != nullptr, "Compute shaders must use CreateInfo.\n");
     BLI_assert_msg(!shd_builder_->source_from_msl_, "Compute shaders must compile from GLSL.");
     is_compute = true;
@@ -333,7 +333,7 @@ bool MTLShader::finalize(const shader::ShaderCreateInfo *info)
     /* Raster order groups for tile data in struct require Metal 2.3.
      * Retaining Metal 2.2. for old shaders to maintain backwards
      * compatibility for existing features. */
-    if (info->subpass_inputs_.size() > 0) {
+    if (info->subpass_inputs_.is_empty() == false) {
       options.languageVersion = MTLLanguageVersion2_3;
     }
 #if defined(MAC_OS_VERSION_14_0)
@@ -1940,13 +1940,14 @@ void MTLParallelShaderCompiler::create_compile_threads()
     GPU_context_active_set(main_thread_context);
 
     /* Create a new thread */
-    compile_threads.push_back(std::thread([this, per_thread_context] {
-      this->parallel_compilation_thread_func(per_thread_context);
+    compile_threads.push_back(std::thread([this, per_thread_context, ghost_gpu_context] {
+      this->parallel_compilation_thread_func(per_thread_context, ghost_gpu_context);
     }));
   }
 }
 
-void MTLParallelShaderCompiler::parallel_compilation_thread_func(GPUContext *blender_gpu_context)
+void MTLParallelShaderCompiler::parallel_compilation_thread_func(
+    GPUContext *blender_gpu_context, GHOST_ContextHandle ghost_gpu_context)
 {
   /* Contexts can only be created on the main thread so we have to
    * pass one in and make it active here  */
@@ -2006,6 +2007,11 @@ void MTLParallelShaderCompiler::parallel_compilation_thread_func(GPUContext *ble
   }
 
   GPU_context_discard(blender_gpu_context);
+
+  GHOST_SystemHandle ghost_system = reinterpret_cast<GHOST_SystemHandle>(
+      GPU_backend_ghost_system_get());
+  BLI_assert(ghost_system);
+  GHOST_DisposeGPUContext(ghost_system, ghost_gpu_context);
 }
 
 BatchHandle MTLParallelShaderCompiler::create_batch(size_t batch_size)
