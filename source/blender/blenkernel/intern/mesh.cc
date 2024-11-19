@@ -701,6 +701,17 @@ void Mesh::count_memory(blender::MemoryCounter &memory) const
   CustomData_count_memory(this->corner_data, this->corners_num, memory);
 }
 
+blender::bke::AttributeAccessor Mesh::attributes() const
+{
+  return blender::bke::AttributeAccessor(this, blender::bke::get_mesh_accessor_functions_ref());
+}
+
+blender::bke::MutableAttributeAccessor Mesh::attributes_for_write()
+{
+  return blender::bke::MutableAttributeAccessor(this,
+                                                blender::bke::get_mesh_accessor_functions_ref());
+}
+
 Mesh *BKE_mesh_new_nomain(const int verts_num,
                           const int edges_num,
                           const int faces_num,
