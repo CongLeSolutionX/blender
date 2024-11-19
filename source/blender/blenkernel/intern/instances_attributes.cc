@@ -99,7 +99,7 @@ static AttributeAccessorFunctions get_instances_accessor_functions()
   return fn;
 }
 
-const AttributeAccessorFunctions &get_instances_accessor_functions_ref()
+const AttributeAccessorFunctions &instance_attribute_accessor_functions()
 {
   static const AttributeAccessorFunctions fn = get_instances_accessor_functions();
   return fn;

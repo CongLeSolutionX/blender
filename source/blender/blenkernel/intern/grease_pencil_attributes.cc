@@ -76,7 +76,7 @@ static AttributeAccessorFunctions get_grease_pencil_accessor_functions()
   return fn;
 }
 
-const AttributeAccessorFunctions &get_grease_pencil_accessor_functions_ref()
+const AttributeAccessorFunctions &get_attribute_accessor_functions()
 {
   static const AttributeAccessorFunctions fn = get_grease_pencil_accessor_functions();
   return fn;

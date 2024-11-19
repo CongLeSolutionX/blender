@@ -230,7 +230,7 @@ class Instances {
 
 VArray<float3> instance_position_varray(const Instances &instances);
 VMutableArray<float3> instance_position_varray_for_write(Instances &instances);
-const AttributeAccessorFunctions &get_instances_accessor_functions_ref();
+const AttributeAccessorFunctions &instance_attribute_accessor_functions();
 
 /* -------------------------------------------------------------------- */
 /** \name #InstanceReference Inline Methods

@@ -317,14 +317,14 @@ std::optional<AttrDomain> CurveLengthFieldInput::preferred_domain(
 std::optional<AttributeAccessor> CurveComponent::attributes() const
 {
   return AttributeAccessor(curves_ ? &curves_->geometry : nullptr,
-                           curves::get_curves_accessor_functions_ref());
+                           curves::get_attribute_accessor_functions());
 }
 
 std::optional<MutableAttributeAccessor> CurveComponent::attributes_for_write()
 {
   Curves *curves = this->get_for_write();
   return MutableAttributeAccessor(curves ? &curves->geometry : nullptr,
-                                  curves::get_curves_accessor_functions_ref());
+                                  curves::get_attribute_accessor_functions());
 }
 
 }  // namespace blender::bke

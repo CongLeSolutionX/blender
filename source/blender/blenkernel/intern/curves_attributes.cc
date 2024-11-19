@@ -401,7 +401,7 @@ static AttributeAccessorFunctions get_curves_accessor_functions()
   return fn;
 }
 
-const AttributeAccessorFunctions &get_curves_accessor_functions_ref()
+const AttributeAccessorFunctions &get_attribute_accessor_functions()
 {
   static const AttributeAccessorFunctions fn = get_curves_accessor_functions();
   return fn;

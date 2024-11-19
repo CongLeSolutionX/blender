@@ -883,7 +883,7 @@ inline LayerGroup &Layer::parent_group()
 
 TREENODE_COMMON_METHODS_FORWARD_IMPL(LayerGroup);
 
-const AttributeAccessorFunctions &get_grease_pencil_accessor_functions_ref();
+const AttributeAccessorFunctions &get_attribute_accessor_functions();
 
 }  // namespace greasepencil
 

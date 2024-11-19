@@ -119,12 +119,12 @@ void InstancesComponent::count_memory(MemoryCounter &memory) const
 
 std::optional<AttributeAccessor> InstancesComponent::attributes() const
 {
-  return AttributeAccessor(instances_, get_instances_accessor_functions_ref());
+  return AttributeAccessor(instances_, instance_attribute_accessor_functions());
 }
 
 std::optional<MutableAttributeAccessor> InstancesComponent::attributes_for_write()
 {
-  return MutableAttributeAccessor(instances_, get_instances_accessor_functions_ref());
+  return MutableAttributeAccessor(instances_, instance_attribute_accessor_functions());
 }
 
 /** \} */

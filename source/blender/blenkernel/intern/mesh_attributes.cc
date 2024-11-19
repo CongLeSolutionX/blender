@@ -1006,7 +1006,7 @@ static AttributeAccessorFunctions get_mesh_accessor_functions()
   return fn;
 }
 
-const AttributeAccessorFunctions &get_mesh_accessor_functions_ref()
+const AttributeAccessorFunctions &mesh_attribute_accessor_functions()
 {
   static const AttributeAccessorFunctions fn = get_mesh_accessor_functions();
   return fn;

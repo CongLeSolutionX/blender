@@ -181,13 +181,13 @@ namespace blender::bke {
 
 std::optional<AttributeAccessor> MeshComponent::attributes() const
 {
-  return AttributeAccessor(mesh_, get_mesh_accessor_functions_ref());
+  return AttributeAccessor(mesh_, mesh_attribute_accessor_functions());
 }
 
 std::optional<MutableAttributeAccessor> MeshComponent::attributes_for_write()
 {
   Mesh *mesh = this->get_for_write();
-  return MutableAttributeAccessor(mesh, get_mesh_accessor_functions_ref());
+  return MutableAttributeAccessor(mesh, mesh_attribute_accessor_functions());
 }
 
 /** \} */

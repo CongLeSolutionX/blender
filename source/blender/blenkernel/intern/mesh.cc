@@ -703,13 +703,13 @@ void Mesh::count_memory(blender::MemoryCounter &memory) const
 
 blender::bke::AttributeAccessor Mesh::attributes() const
 {
-  return blender::bke::AttributeAccessor(this, blender::bke::get_mesh_accessor_functions_ref());
+  return blender::bke::AttributeAccessor(this, blender::bke::mesh_attribute_accessor_functions());
 }
 
 blender::bke::MutableAttributeAccessor Mesh::attributes_for_write()
 {
   return blender::bke::MutableAttributeAccessor(this,
-                                                blender::bke::get_mesh_accessor_functions_ref());
+                                                blender::bke::mesh_attribute_accessor_functions());
 }
 
 Mesh *BKE_mesh_new_nomain(const int verts_num,

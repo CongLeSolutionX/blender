@@ -3947,13 +3947,13 @@ void GreasePencil::print_layer_tree()
 blender::bke::AttributeAccessor GreasePencil::attributes() const
 {
   return blender::bke::AttributeAccessor(
-      this, blender::bke::greasepencil::get_grease_pencil_accessor_functions_ref());
+      this, blender::bke::greasepencil::get_attribute_accessor_functions());
 }
 
 blender::bke::MutableAttributeAccessor GreasePencil::attributes_for_write()
 {
   return blender::bke::MutableAttributeAccessor(
-      this, blender::bke::greasepencil::get_grease_pencil_accessor_functions_ref());
+      this, blender::bke::greasepencil::get_attribute_accessor_functions());
 }
 
 /** \} */

@@ -371,6 +371,6 @@ void mesh_data_update(Depsgraph &depsgraph,
                       Object &ob,
                       const CustomData_MeshMasks &dataMask);
 
-const AttributeAccessorFunctions &get_mesh_accessor_functions_ref();
+const AttributeAccessorFunctions &mesh_attribute_accessor_functions();
 
 }  // namespace blender::bke

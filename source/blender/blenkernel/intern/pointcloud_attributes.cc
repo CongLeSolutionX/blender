@@ -96,7 +96,7 @@ static AttributeAccessorFunctions get_pointcloud_accessor_functions()
   return fn;
 }
 
-const AttributeAccessorFunctions &get_pointcloud_accessor_functions_ref()
+const AttributeAccessorFunctions &pointcloud_attribute_accessor_functions()
 {
   static const AttributeAccessorFunctions fn = get_pointcloud_accessor_functions();
   return fn;

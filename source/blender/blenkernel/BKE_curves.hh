@@ -1023,7 +1023,7 @@ inline float3 calculate_vector_handle(const float3 &point, const float3 &next_po
 
 /** \} */
 
-const AttributeAccessorFunctions &get_curves_accessor_functions_ref();
+const AttributeAccessorFunctions &get_attribute_accessor_functions();
 
 }  // namespace curves
 

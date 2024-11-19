@@ -64,12 +64,12 @@ void InstanceReference::count_memory(MemoryCounter &memory) const
 
 AttributeAccessor Instances::attributes() const
 {
-  return AttributeAccessor(this, get_instances_accessor_functions_ref());
+  return AttributeAccessor(this, instance_attribute_accessor_functions());
 }
 
 MutableAttributeAccessor Instances::attributes_for_write()
 {
-  return MutableAttributeAccessor(this, get_instances_accessor_functions_ref());
+  return MutableAttributeAccessor(this, instance_attribute_accessor_functions());
 }
 
 static void convert_collection_to_instances(const Collection &collection,

@@ -107,15 +107,13 @@ namespace blender::bke {
 
 std::optional<AttributeAccessor> GreasePencilComponent::attributes() const
 {
-  return AttributeAccessor(grease_pencil_,
-                           greasepencil::get_grease_pencil_accessor_functions_ref());
+  return AttributeAccessor(grease_pencil_, greasepencil::get_attribute_accessor_functions());
 }
 
 std::optional<MutableAttributeAccessor> GreasePencilComponent::attributes_for_write()
 {
   GreasePencil *grease_pencil = this->get_for_write();
-  return MutableAttributeAccessor(grease_pencil,
-                                  greasepencil::get_grease_pencil_accessor_functions_ref());
+  return MutableAttributeAccessor(grease_pencil, greasepencil::get_attribute_accessor_functions());
 }
 
 }  // namespace blender::bke

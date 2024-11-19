@@ -125,13 +125,13 @@ namespace blender::bke {
 
 std::optional<AttributeAccessor> PointCloudComponent::attributes() const
 {
-  return AttributeAccessor(pointcloud_, get_pointcloud_accessor_functions_ref());
+  return AttributeAccessor(pointcloud_, pointcloud_attribute_accessor_functions());
 }
 
 std::optional<MutableAttributeAccessor> PointCloudComponent::attributes_for_write()
 {
   PointCloud *pointcloud = this->get_for_write();
-  return MutableAttributeAccessor(pointcloud, get_pointcloud_accessor_functions_ref());
+  return MutableAttributeAccessor(pointcloud, pointcloud_attribute_accessor_functions());
 }
 
 /** \} */
