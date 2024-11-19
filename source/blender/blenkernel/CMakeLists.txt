@@ -149,6 +149,7 @@ set(SRC
   intern/gpencil_legacy.cc
   intern/gpencil_modifier_legacy.cc
   intern/grease_pencil.cc
+  intern/grease_pencil_attributes.cc
   intern/grease_pencil_convert_legacy.cc
   intern/grease_pencil_vertex_groups.cc
   intern/icons.cc

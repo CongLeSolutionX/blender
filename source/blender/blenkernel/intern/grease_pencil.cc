@@ -3944,6 +3944,18 @@ void GreasePencil::print_layer_tree()
   this->root_group().print_nodes("Layer Tree:");
 }
 
+blender::bke::AttributeAccessor GreasePencil::attributes() const
+{
+  return blender::bke::AttributeAccessor(
+      this, blender::bke::greasepencil::get_grease_pencil_accessor_functions_ref());
+}
+
+blender::bke::MutableAttributeAccessor GreasePencil::attributes_for_write()
+{
+  return blender::bke::MutableAttributeAccessor(
+      this, blender::bke::greasepencil::get_grease_pencil_accessor_functions_ref());
+}
+
 /** \} */
 
 /* ------------------------------------------------------------------- */
