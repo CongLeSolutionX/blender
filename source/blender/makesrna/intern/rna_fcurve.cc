@@ -1682,7 +1682,7 @@ static void rna_def_fmodifier_noise(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "lacunarity", PROP_FLOAT, PROP_NONE);
   RNA_def_property_float_sdna(prop, nullptr, "lacunarity");
-  RNA_def_property_float_default(prop, 20.0);
+  RNA_def_property_float_default(prop, 2.3);
   RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
   RNA_def_property_ui_text(prop,
                            "Lacunarity",
@@ -1692,7 +1692,7 @@ static void rna_def_fmodifier_noise(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "roughness", PROP_FLOAT, PROP_NONE);
   RNA_def_property_float_sdna(prop, nullptr, "roughness");
-  RNA_def_property_float_default(prop, 0.1);
+  RNA_def_property_float_default(prop, 5.0);
   RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
   RNA_def_property_ui_text(prop,
                            "Roughness",

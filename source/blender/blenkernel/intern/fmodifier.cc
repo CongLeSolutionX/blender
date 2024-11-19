@@ -809,7 +809,7 @@ static void fcm_noise_new_data(void *mdata)
   data->offset = 0.0f;
   data->depth = 0;
   data->modification = FCM_NOISE_MODIF_REPLACE;
-  data->lacunarity = 3.0f;
+  data->lacunarity = 2.3f;
   data->roughness = 5.0f;
   data->legacy_noise = 0;
 }
@@ -838,16 +838,19 @@ static void fcm_noise_evaluate(const FCurve * /*fcu*/,
     else {
       scale = 1.0 / data->size;
     }
-    /* Using float2 to generate a phase offset. */
+    /* See NOISE_SHD_PERLIN_FBM in noise.cc. */
+    const int type = 1;
+    /* Using float2 to generate a phase offset. Offsetting the evaltime by 0.5 to ensure that the
+     * noise at full frames isn't always at 0. */
     noise = blender::noise::perlin_fractal_distorted<blender::float2>(
-        blender::float2(evaltime * scale - data->offset, data->phase),
+        blender::float2(evaltime * scale - data->offset + 0.5, data->phase),
         data->depth / 10.0,
         data->roughness,
         data->lacunarity,
         0,
         0,
         0,
-        1,
+        type,
         true);
   }
 
