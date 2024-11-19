@@ -408,31 +408,6 @@ class NODE_OT_interface_item_remove(NodeInterfaceOperator, Operator):
         return {'FINISHED'}
 
 
-class NODE_OT_reroute_auto_name_toggle(Operator):
-    """Toggle auto naming of selected reroute nodes"""
-    bl_idname = "node.reroute_auto_name_toggle"
-    bl_label = "Toggle Reroute Auto Name"
-    bl_options = {'REGISTER', 'UNDO'}
-
-    @classmethod
-    def poll(cls, context):
-        space = context.space_data
-        if not space or space.type != 'NODE_EDITOR' or not space.edit_tree:
-            return False
-        return True
-
-    def execute(self, context):
-        reroute_nodes = list(node for node in context.selected_nodes if node.type == 'REROUTE')
-        was_any_active = any(node.use_auto_name for node in reroute_nodes)
-        if was_any_active:
-            for node in reroute_nodes:
-                node.use_auto_name = False
-        else:
-            for node in reroute_nodes:
-                node.use_auto_name = True
-        return {'FINISHED'}
-
-
 class NODE_FH_image_node(FileHandler):
     bl_idname = "NODE_FH_image_node"
     bl_label = "Image node"
@@ -463,5 +438,4 @@ classes = (
     NODE_OT_interface_item_duplicate,
     NODE_OT_interface_item_remove,
     NODE_OT_tree_path_parent,
-    NODE_OT_reroute_auto_name_toggle,
 )
