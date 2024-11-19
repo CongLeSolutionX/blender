@@ -4,7 +4,10 @@
 
 #pragma once
 
+#include "BLI_assert.h"
+#include "BLI_math_interp.hh"
 #include "BLI_math_matrix_types.hh"
+#include "BLI_math_vector.h"
 #include "BLI_math_vector_types.hh"
 
 #include "GPU_shader.hh"
@@ -166,6 +169,10 @@ class Result {
   /* Construct a result of the given type and precision within the given context. */
   Result(Context &context, ResultType type, ResultPrecision precision);
 
+  /* Construct a result of an appropriate type and precision based on the given GPU texture format
+   * within the given context. */
+  Result(Context &context, eGPUTextureFormat format);
+
   /* Returns the appropriate GPU texture format based on the given result type and precision. */
   static eGPUTextureFormat gpu_texture_format(ResultType type, ResultPrecision precision);
 
@@ -275,6 +282,9 @@ class Result {
   /* Identical to GPU variant of wrap_external but wraps an integer buffer instead. */
   void wrap_external(int *texture, int2 size);
 
+  /* Identical to GPU variant of wrap_external but wraps whatever the given result has instead. */
+  void wrap_external(const Result &result);
+
   /* Sets the transformation of the domain of the result to the given transformation. */
   void set_transformation(const float3x3 &transformation);
 
@@ -332,6 +342,10 @@ class Result {
    * it. If this result have a master result, the master result is released instead. */
   void release();
 
+  /* Frees the result data. If the result is not allocated or wraps external data, then this does
+   * nothing. If this result have a master result, the master result is freed instead. */
+  void free();
+
   /* Returns true if this result should be computed and false otherwise. The result should be
    * computed if its reference count is not zero, that is, its result is used by at least one
    * operation. */
@@ -363,7 +377,7 @@ class Result {
   const Domain &domain() const;
 
   /* Returns a reference to the allocate float data. */
-  float *float_texture();
+  float *float_texture() const;
 
   /* Loads the float pixel at the given texel coordinates and returns it in a float4. If the number
    * of channels in the result are less than 4, then the rest of the returned float4 will have its
@@ -376,6 +390,12 @@ class Result {
    * is given, only the number of channels of the result will be written, while the rest of the
    * float4 will be ignored. This is similar to how the imageStore function in GLSL works. */
   void store_pixel(const int2 &texel, const float4 &pixel_value);
+
+  /* Equivalent to the GLSL texture() function with nearest interpolation and zero boundary
+   * conditions. The coordinates are thus expected to have half-pixels offsets. A float4 is always
+   * returned regardless of the number of channels of the buffer, the remaining channels will be
+   * initialized with the template float4(0, 0, 0, 1). */
+  float4 sample_nearest_zero(const float2 coordinates) const;
 
  private:
   /* Allocates the texture data for the given size, either on the GPU or CPU based on the result's
@@ -391,5 +411,100 @@ class Result {
   /* Copy the float pixel from the source pointer to the target pointer. */
   void copy_pixel(float *target, const float *source) const;
 };
+
+/* -------------------------------------------------------------------- */
+/* Inline Methods.
+ */
+
+inline float4 Result::sample_nearest_zero(const float2 coordinates) const
+{
+  float4 pixel_value = float4(0.0f, 0.0f, 0.0f, 1.0f);
+  if (is_single_value_) {
+    this->copy_pixel(pixel_value, float_texture_);
+    return pixel_value;
+  }
+
+  const int2 size = domain_.size;
+  const float2 texel_coordinates = coordinates * float2(size);
+
+  math::interpolate_nearest_border_fl(this->float_texture(),
+                                      pixel_value,
+                                      size.x,
+                                      size.y,
+                                      this->channels_count(),
+                                      texel_coordinates.x,
+                                      texel_coordinates.y);
+  return pixel_value;
+}
+
+inline const Domain &Result::domain() const
+{
+  return domain_;
+}
+
+inline float *Result::float_texture() const
+{
+  BLI_assert(storage_type_ == ResultStorageType::FloatCPU);
+  return float_texture_;
+}
+
+inline float4 Result::load_pixel(const int2 &texel) const
+{
+  float4 pixel_value = float4(0.0f, 0.0f, 0.0f, 1.0f);
+  if (is_single_value_) {
+    this->copy_pixel(pixel_value, float_texture_);
+  }
+  else {
+    this->copy_pixel(pixel_value, this->get_float_pixel(texel));
+  }
+  return pixel_value;
+}
+
+inline void Result::store_pixel(const int2 &texel, const float4 &pixel_value)
+{
+  this->copy_pixel(this->get_float_pixel(texel), pixel_value);
+}
+
+inline int64_t Result::channels_count() const
+{
+  switch (type_) {
+    case ResultType::Float:
+      return 1;
+    case ResultType::Float2:
+    case ResultType::Int2:
+      return 2;
+    case ResultType::Float3:
+      return 3;
+    case ResultType::Vector:
+    case ResultType::Color:
+      return 4;
+  }
+  return 4;
+}
+
+inline float *Result::get_float_pixel(const int2 &texel) const
+{
+  return float_texture_ + (texel.y * domain_.size.x + texel.x) * this->channels_count();
+}
+
+inline void Result::copy_pixel(float *target, const float *source) const
+{
+  switch (type_) {
+    case ResultType::Float:
+      *target = *source;
+      break;
+    case ResultType::Float2:
+    case ResultType::Int2:
+      copy_v2_v2(target, source);
+      break;
+    case ResultType::Float3:
+      copy_v3_v3(target, source);
+      break;
+    case ResultType::Vector:
+    case ResultType::Color:
+      copy_v4_v4(target, source);
+      break;
+  }
+}
 
 }  // namespace blender::realtime_compositor

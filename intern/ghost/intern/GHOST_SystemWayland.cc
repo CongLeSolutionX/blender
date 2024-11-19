@@ -294,9 +294,17 @@ enum {
 
 /**
  * Keyboard scan-codes.
+ *
+ * From `linux/input-event-codes.h`.
  */
 enum {
   KEY_GRAVE = 41,
+  /**
+   * Sometimes called OEM 102, used for German `GrLess` key.
+   * For the common case this key will be mapped using #XKB_KEY_less.
+   * Use a scan-code to prevent the key being unknown.
+   */
+  KEY_102ND = 86,
 
 #ifdef USE_NON_LATIN_KB_WORKAROUND
   KEY_1 = 2,
@@ -589,11 +597,6 @@ struct GWL_DataOffer {
   std::unordered_set<std::string> types;
 
   struct {
-    /**
-     * Prevents freeing after #wl_data_device_listener.leave,
-     * before #wl_data_device_listener.drop.
-     */
-    bool in_use = false;
     /**
      * Bit-mask with available drop options.
      * #WL_DATA_DEVICE_MANAGER_DND_ACTION_COPY, #WL_DATA_DEVICE_MANAGER_DND_ACTION_MOVE.. etc.
@@ -1596,6 +1599,13 @@ static int gwl_display_seat_index(GWL_Display *display, const GWL_Seat *seat)
   return index;
 }
 
+/**
+ * Callers must null check the return value unless it's known there is a seat.
+ *
+ * \note Running Blender in an instance of the Weston compositor
+ * called with `--backend=headless` causes there to be no seats.
+ * CMake's `WITH_UI_TESTS` does this.
+ */
 static GWL_Seat *gwl_display_seat_active_get(const GWL_Display *display)
 {
   if (UNLIKELY(display->seats.empty())) {
@@ -2126,6 +2136,7 @@ static GHOST_TKey xkb_map_gkey(const xkb_keysym_t sym)
 
       /* Uses the same physical key as #XKB_KEY_KP_Decimal for QWERTZ layout, see: #102287. */
       GXMAP(gkey, XKB_KEY_KP_Separator, GHOST_kKeyNumpadPeriod);
+      GXMAP(gkey, XKB_KEY_less, GHOST_kKeyGrLess);
 
       default:
         /* Rely on #xkb_map_gkey_or_scan_code to report when no key can be found. */
@@ -2153,6 +2164,10 @@ static GHOST_TKey xkb_map_gkey_or_scan_code(const xkb_keysym_t sym, const uint32
     switch (key) {
       case KEY_GRAVE: {
         gkey = GHOST_kKeyAccentGrave;
+        break;
+      }
+      case KEY_102ND: {
+        gkey = GHOST_kKeyGrLess;
         break;
       }
       default: {
@@ -3172,13 +3187,14 @@ static char *read_buffer_from_data_offer(GWL_DataOffer *data_offer,
     CLOG_WARN(LOG, "error creating pipe: %s", std::strerror(errno));
   }
 
-  /* Only for DND (A no-op to disable for clipboard data-offer). */
-  data_offer->dnd.in_use = false;
-
   if (mutex) {
     mutex->unlock();
   }
-  /* WARNING: `data_offer` may be freed from now on. */
+  /* NOTE: Regarding `data_offer`:
+   * - In the case of the clipboard - unlocking the `mutex` means, it may be feed from now on.
+   * - In the case of drag & drop - the caller owns & no locking is needed
+   *   (locking is performed while transferring the ownership).
+   */
   char *buf = nullptr;
   if (pipefd_ok) {
     buf = read_file_as_buffer(pipefd[0], nil_terminate, r_len);
@@ -3432,7 +3448,6 @@ static void data_device_handle_enter(void *data,
   /* Transfer ownership of the `data_offer`. */
   seat->data_offer_dnd = data_offer;
 
-  data_offer->dnd.in_use = true;
   data_offer->dnd.xy[0] = x;
   data_offer->dnd.xy[1] = y;
 
@@ -3468,7 +3483,7 @@ static void data_device_handle_leave(void *data, wl_data_device * /*wl_data_devi
   dnd_events(seat, GHOST_kEventDraggingExited, event_ms);
   seat->wl.surface_window_focus_dnd = nullptr;
 
-  if (seat->data_offer_dnd && !seat->data_offer_dnd->dnd.in_use) {
+  if (seat->data_offer_dnd) {
     wl_data_offer_destroy(seat->data_offer_dnd->wl.id);
     delete seat->data_offer_dnd;
     seat->data_offer_dnd = nullptr;
@@ -3507,6 +3522,10 @@ static void data_device_handle_drop(void *data, wl_data_device * /*wl_data_devic
    * because the data-offer has not been accepted (actions set... etc). */
   GWL_DataOffer *data_offer = seat->data_offer_dnd;
 
+  /* Take ownership of `data_offer` to prevent a double-free, see: #128766.
+   * The thread this function spawns is responsible for freeing it. */
+  seat->data_offer_dnd = nullptr;
+
   /* Use a blank string for  `mime_receive` to prevent crashes, although could also be `nullptr`.
    * Failure to set this to a known type just means the file won't have any special handling.
    * GHOST still generates a dropped file event.
@@ -3540,9 +3559,6 @@ static void data_device_handle_drop(void *data, wl_data_device * /*wl_data_devic
     wl_data_offer_finish(data_offer->wl.id);
     wl_data_offer_destroy(data_offer->wl.id);
 
-    if (seat->data_offer_dnd == data_offer) {
-      seat->data_offer_dnd = nullptr;
-    }
     delete data_offer;
     data_offer = nullptr;
 
@@ -8484,6 +8500,10 @@ GHOST_TSuccess GHOST_SystemWayland::cursor_shape_check(const GHOST_TStandardCurs
 {
   /* No need to lock `server_mutex`. */
   GWL_Seat *seat = gwl_display_seat_active_get(display_);
+  if (UNLIKELY(!seat)) {
+    return GHOST_kFailure;
+  }
+
   const wl_cursor *wl_cursor = gwl_seat_cursor_find_from_shape(seat, cursorShape, nullptr);
   if (wl_cursor == nullptr) {
     return GHOST_kFailure;
@@ -8610,7 +8630,9 @@ GHOST_TSuccess GHOST_SystemWayland::cursor_visibility_set(const bool visible)
 
 GHOST_TCapabilityFlag GHOST_SystemWayland::getCapabilities() const
 {
-  GHOST_ASSERT(has_wl_trackpad_physical_direction != -1,
+  /* It's possible there are no seats, ignore the value in this case. */
+  GHOST_ASSERT(((gwl_display_seat_active_get(display_) == nullptr) ||
+                (has_wl_trackpad_physical_direction != -1)),
                "The trackpad direction was expected to be initialized");
 
   return GHOST_TCapabilityFlag(
@@ -8636,7 +8658,9 @@ GHOST_TCapabilityFlag GHOST_SystemWayland::getCapabilities() const
           /* This WAYLAND back-end has not yet implemented desktop color sample. */
           GHOST_kCapabilityDesktopSample |
           /* This flag will eventually be removed. */
-          (has_wl_trackpad_physical_direction ? 0 : GHOST_kCapabilityTrackpadPhysicalDirection)));
+          ((has_wl_trackpad_physical_direction == 1) ?
+               0 :
+               GHOST_kCapabilityTrackpadPhysicalDirection)));
 }
 
 bool GHOST_SystemWayland::cursor_grab_use_software_display_get(const GHOST_TGrabCursorMode mode)
@@ -9094,11 +9118,12 @@ void GHOST_SystemWayland::seat_active_set(const GWL_Seat *seat)
 wl_seat *GHOST_SystemWayland::wl_seat_active_get_with_input_serial(uint32_t &serial)
 {
   GWL_Seat *seat = gwl_display_seat_active_get(display_);
-  if (seat) {
-    serial = seat->data_source_serial;
-    return seat->wl.seat;
+  if (UNLIKELY(!seat)) {
+    return nullptr;
   }
-  return nullptr;
+
+  serial = seat->data_source_serial;
+  return seat->wl.seat;
 }
 
 bool GHOST_SystemWayland::window_surface_unref(const wl_surface *wl_surface)

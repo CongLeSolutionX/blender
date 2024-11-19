@@ -240,6 +240,17 @@ class BaseCryptoMatteOperation : public NodeOperation {
 
   void execute() override
   {
+    /* Not yet supported on CPU. */
+    if (!context().use_gpu()) {
+      for (const bNodeSocket *output : this->node()->output_sockets()) {
+        Result &output_result = get_result(output->identifier);
+        if (output_result.should_compute()) {
+          output_result.allocate_invalid();
+        }
+      }
+      return;
+    }
+
     Vector<GPUTexture *> layers = get_layers();
     if (layers.is_empty()) {
       allocate_invalid();
@@ -561,8 +572,7 @@ class CryptoMatteOperation : public BaseCryptoMatteOperation {
       const int cryptomatte_layers_count = int(math::ceil(view_layer->cryptomatte_levels / 2.0f));
       for (int i = 0; i < cryptomatte_layers_count; i++) {
         const std::string pass_name = fmt::format("{}{:02}", cryptomatte_type, i);
-        GPUTexture *pass_texture = context().get_input_texture(
-            scene, view_layer_index, pass_name.c_str());
+        GPUTexture *pass_texture = context().get_pass(scene, view_layer_index, pass_name.c_str());
 
         /* If this Cryptomatte layer wasn't found, then all later Cryptomatte layers can't be used
          * even if they were found. */
@@ -613,7 +623,9 @@ class CryptoMatteOperation : public BaseCryptoMatteOperation {
       image_user_for_layer.layer = layer_index;
       LISTBASE_FOREACH (RenderPass *, render_pass, &render_layer->passes) {
         /* If the combined pass name doesn't start with the Cryptomatte type name, then it is not a
-         * Cryptomatte layer. */
+         * Cryptomatte layer. Furthermore, if it is equal to the Cryptomatte type name with no
+         * suffix, then it can be ignored, because it is a deprecated Cryptomatte preview layer
+         * according to the "EXR File: Layer Naming" section of the Cryptomatte specification. */
         const std::string combined_name = get_combined_layer_pass_name(render_layer, render_pass);
         if (combined_name == type_name || !StringRef(combined_name).startswith(type_name)) {
           continue;
