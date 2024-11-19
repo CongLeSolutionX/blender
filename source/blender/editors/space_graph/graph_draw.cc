@@ -80,7 +80,8 @@ static blender::IndexRange get_bounding_bezt_index_range(const FCurve *fcu,
 
 /* TODO: draw a shaded poly showing the region of influence too!!! */
 /**
- * \param ale_nla_remap: used to know if and how to do NLA remapping.
+ * \param ale_nla_remap: the anim list element of the fcurve that this modifier
+ * is on. This is used to do NLA time remapping, as appropriate.
  */
 static void draw_fcurve_modifier_controls_envelope(FModifier *fcm,
                                                    View2D *v2d,
