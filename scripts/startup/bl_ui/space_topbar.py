@@ -675,8 +675,7 @@ class TOPBAR_PT_name(Panel):
         # Edit first editable button in popup
         def row_with_icon(layout, icon):
             row = layout.row()
-            # TODO: For some reason, it's not possible to press a button when this is there.
-            # row.activate_init = True
+            row.activate_init = True
             row.label(icon=icon)
             return row
 

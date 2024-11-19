@@ -908,6 +908,13 @@ struct uiPopupBlockHandle {
   bool can_refresh;
   bool refresh;
 
+  /**
+   * Close popup when pressing enter in the default-init text box.
+   * This can be used to build popups that close automatically in the common case, but can still
+   * show more options if necessary.
+   */
+  bool close_on_enter_init;
+
   wmTimer *scrolltimer;
   float scrolloffset;
 

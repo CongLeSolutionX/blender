@@ -10530,6 +10530,13 @@ static int ui_handle_menu_button(bContext *C, const wmEvent *event, uiPopupBlock
         but = nullptr;
       }
     }
+
+    if (menu->close_on_enter_init) {
+      if (but->flag2 & UI_BUT2_ACTIVE_ON_INIT_WAS_SET && event->type == EVT_RETKEY) {
+        /* Close the popup when pressing enter. */
+        menu->menuretval = UI_RETURN_OUT;
+      }
+    }
   }
 
   int retval;

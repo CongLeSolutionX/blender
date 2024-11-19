@@ -306,7 +306,6 @@ uiPopupBlockHandle *ui_popover_panel_create(bContext *C,
 
 int UI_popover_panel_invoke(bContext *C, const char *idname, bool keep_open, ReportList *reports)
 {
-  uiLayout *layout;
   PanelType *pt = WM_paneltype_find(idname, true);
   if (pt == nullptr) {
     BKE_reportf(reports, RPT_ERROR, "Panel \"%s\" not found", idname);
@@ -318,20 +317,11 @@ int UI_popover_panel_invoke(bContext *C, const char *idname, bool keep_open, Rep
     return (OPERATOR_CANCELLED | OPERATOR_PASS_THROUGH);
   }
 
-  uiBlock *block = nullptr;
-  if (keep_open) {
-    uiPopupBlockHandle *handle = ui_popover_panel_create(
-        C, nullptr, nullptr, ui_item_paneltype_func, pt);
-    uiPopover *pup = static_cast<uiPopover *>(handle->popup_create_vars.arg);
-    block = pup->block;
-  }
-  else {
-    uiPopover *pup = UI_popover_begin(C, U.widget_unit * pt->ui_units_x, false);
-    layout = UI_popover_layout(pup);
-    UI_paneltype_draw(C, pt, layout);
-    UI_popover_end(C, pup, nullptr);
-    block = pup->block;
-  }
+  uiPopupBlockHandle *handle = ui_popover_panel_create(
+      C, nullptr, nullptr, ui_item_paneltype_func, pt);
+  handle->close_on_enter_init = !keep_open;
+  uiPopover *pup = static_cast<uiPopover *>(handle->popup_create_vars.arg);
+  uiBlock *block = pup->block;
 
   if (block) {
     uiPopupBlockHandle *handle = static_cast<uiPopupBlockHandle *>(block->handle);

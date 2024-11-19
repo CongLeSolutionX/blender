@@ -272,6 +272,12 @@ enum {
    * buttons currently.
    */
   UI_BUT2_FORCE_SEMI_MODAL_ACTIVE = 1 << 1,
+  /**
+   * This is true for any #uiBut that also has #UI_BUT_ACTIVATE_ON_INIT set. However,
+   * #UI_BUT_ACTIVATE_ON_INIT is reset after initialization while this flag will stay active.
+   * This allows checking if a specific button had the flag set.
+   */
+  UI_BUT2_ACTIVE_ON_INIT_WAS_SET = 1 << 2,
 };
 
 /** #uiBut.dragflag */

@@ -2425,6 +2425,7 @@ void uiItemFullR(uiLayout *layout,
 
     if (layout->activate_init) {
       UI_but_flag_enable(but, UI_BUT_ACTIVATE_ON_INIT);
+      but->flag2 |= UI_BUT2_ACTIVE_ON_INIT_WAS_SET;
     }
   }
   /* single button */
@@ -2462,6 +2463,7 @@ void uiItemFullR(uiLayout *layout,
 
     if (layout->activate_init) {
       UI_but_flag_enable(but, UI_BUT_ACTIVATE_ON_INIT);
+      but->flag2 |= UI_BUT2_ACTIVE_ON_INIT_WAS_SET;
     }
   }
 
