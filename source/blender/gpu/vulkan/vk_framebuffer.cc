@@ -580,7 +580,8 @@ void VKFrameBuffer::rendering_ensure_render_pass(VKContext &context)
   Vector<VkAttachmentReference> color_attachments;
   Vector<VkAttachmentReference> input_attachments;
   Vector<VkImageView> vk_image_views;
-  uint32_t layer_count = 1;
+
+  uint32_t max_layer_count = 1;
 
   /* Color attachments */
   VkAttachmentReference depth_attachment_reference = {0u};
@@ -597,6 +598,10 @@ void VKFrameBuffer::rendering_ensure_render_pass(VKContext &context)
     VkImageLayout vk_image_layout = VK_IMAGE_LAYOUT_UNDEFINED;
     uint32_t attachment_reference = VK_ATTACHMENT_UNUSED;
     uint32_t layer_base = max_ii(attachment.layer, 0);
+    int layer_count = color_texture.layer_count();
+    if (attachment.layer == -1 && layer_count != 1) {
+      max_layer_count = max_ii(max_layer_count, layer_count);
+    }
 
     VKImageViewInfo image_view_info = {
         eImageViewUsage::Attachment,
@@ -741,7 +746,7 @@ void VKFrameBuffer::rendering_ensure_render_pass(VKContext &context)
   vk_framebuffer_create_info.pAttachments = vk_image_views.data();
   vk_framebuffer_create_info.width = width_;
   vk_framebuffer_create_info.height = height_;
-  vk_framebuffer_create_info.layers = layer_count;
+  vk_framebuffer_create_info.layers = max_layer_count;
   vkCreateFramebuffer(device.vk_handle(), &vk_framebuffer_create_info, nullptr, &vk_framebuffer);
   debug::object_label(vk_framebuffer, name_);
 
