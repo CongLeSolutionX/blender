@@ -45,6 +45,7 @@ class MutableAttributeAccessor;
 namespace blender::bke {
 
 struct GeometrySet;
+struct AttributeAccessorFunctions;
 
 /**
  * Holds a reference to conceptually unique geometry or a pointer to object/collection data
@@ -229,6 +230,7 @@ class Instances {
 
 VArray<float3> instance_position_varray(const Instances &instances);
 VMutableArray<float3> instance_position_varray_for_write(Instances &instances);
+const AttributeAccessorFunctions &get_instances_accessor_functions_ref();
 
 /* -------------------------------------------------------------------- */
 /** \name #InstanceReference Inline Methods

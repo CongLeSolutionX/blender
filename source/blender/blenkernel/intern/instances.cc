@@ -62,6 +62,16 @@ void InstanceReference::count_memory(MemoryCounter &memory) const
   }
 }
 
+AttributeAccessor Instances::attributes() const
+{
+  return AttributeAccessor(this, get_instances_accessor_functions_ref());
+}
+
+MutableAttributeAccessor Instances::attributes_for_write()
+{
+  return MutableAttributeAccessor(this, get_instances_accessor_functions_ref());
+}
+
 static void convert_collection_to_instances(const Collection &collection,
                                             bke::Instances &instances)
 {
