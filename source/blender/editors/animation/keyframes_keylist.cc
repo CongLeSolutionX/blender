@@ -1135,7 +1135,7 @@ void fcurve_to_keylist(AnimData *adt,
                        AnimKeylist *keylist,
                        const int saction_flag,
                        blender::float2 range,
-                       bool use_nla_remapping)
+                       const bool use_nla_remapping)
 {
   if (!fcu || fcu->totvert == 0 || !fcu->bezt) {
     return;
