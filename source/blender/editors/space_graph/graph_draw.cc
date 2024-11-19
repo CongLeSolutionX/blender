@@ -1212,11 +1212,13 @@ static void draw_fcurve(bAnimContext *ac, SpaceGraph *sipo, ARegion *region, bAn
     if ((fcu->modifiers.first) || (fcu->flag & FCURVE_INT_VALUES)) {
       /* draw a curve affected by modifiers or only allowed to have integer values
        * by sampling it at various small-intervals over the visible region
+       */
+      /* We have to do this mapping dance since the keyframes were remapped but the F-modifier
+       * evaluations are not.
        *
-       * Note: We have to do this mapping dance since the keyframes were remapped but the
-       * F-modifier evaluations are not. So we undo the keyframe remapping and instead remap the
-       * evaluation time when drawing the curve itself. Afterward, we go back and redo the keyframe
-       * remapping so the controls are drawn properly. */
+       * So we undo the keyframe remapping and instead remap the evaluation time when drawing
+       * the curve itself. Afterward, we go back and redo the keyframe remapping so the controls are
+       * drawn properly. */
       ANIM_nla_mapping_apply_if_needed_fcurve(
           ale, static_cast<FCurve *>(ale->key_data), true, false);
       draw_fcurve_curve(ac,
