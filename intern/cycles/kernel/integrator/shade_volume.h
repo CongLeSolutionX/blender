@@ -104,9 +104,9 @@ typedef struct VolumeIntegrateState {
 
 /* Hierarchical DDA for ray tracing the volume octree. */
 struct OctreeTracing {
-  /* Stack of parent nodes of the current node. Plus two for world volume and root node. */
-  /* TODO(weizhen): check if we actually need to store world. */
-  KernelStack<ccl_global const KernelOctreeNode *, VOLUME_OCTREE_MAX_DEPTH + 2> nodes;
+  /* Current active leaf node. */
+  /* TODO(weizhen): maybe int is better. */
+  ccl_global const KernelOctreeNode *node;
 
   /* Current active interval. */
   Interval<float> t;
@@ -115,37 +115,13 @@ struct OctreeTracing {
   /* TODO(weizhen): do we really need to store this offset? */
   packed_float3 ray_offset;
 
-  /* Whether world volume exists, if so the first element in the stack is always the world. */
-  bool has_world_volume;
-
   /* Precompute the inverse of the ray direction for finding the next voxel crossing. */
   float3 inv_ray_D;
-
-  ccl_device_inline_method bool finished() const
-  {
-    return nodes.is_empty();
-  }
-
-  ccl_device_inline_method void pop()
-  {
-    nodes.pop();
-  }
-
-  ccl_device_inline_method void push(ccl_global const KernelOctreeNode *node)
-  {
-    nodes.push(node);
-  }
-
-  /* Access the current active leaf node. */
-  ccl_device_inline_method ccl_global const KernelOctreeNode *get_voxel() const
-  {
-    return nodes.top();
-  }
 
   /* See `ray_aabb_intersect()`. */
   ccl_device_inline_method float ray_voxel_intersect(const float3 ray_P, const float ray_tmax)
   {
-    const KernelBoundingBox bbox = get_voxel()->bbox;
+    const KernelBoundingBox bbox = node->bbox;
 
     /* TODO(weizhen): check when ray_D is zero in some directions. */
     /* Absolute distances to lower and upper box coordinates; */
@@ -156,11 +132,8 @@ struct OctreeTracing {
     const float3 tmaxes = max(t_lower, t_upper);
     const float tmax = reduce_min(tmaxes);
 
-    /* Offset the ray along the direction of the face normal. The magnitude of the offset is half
-     * the size of the smallest bounding box. */
-    /* TODO(weizhen): offset to the next box center. */
-    const int depth = nodes.size() - 1 - has_world_volume;
-    ray_offset = bbox.size() / (2 << (VOLUME_OCTREE_MAX_DEPTH - depth)) *
+    /* TODO(weizhen): use proper depth. */
+    ray_offset = bbox.size() / (2 << VOLUME_OCTREE_MAX_DEPTH) *
                  make_float3(copysignf(tmax == tmaxes.x, inv_ray_D.x),
                              copysignf(tmax == tmaxes.y, inv_ray_D.y),
                              copysignf(tmax == tmaxes.z, inv_ray_D.z));
@@ -181,12 +154,13 @@ ccl_device void volume_voxel_get(KernelGlobals kg,
                                  ccl_private OctreeTracing &tracing,
                                  const float3 P)
 {
-  const ccl_global KernelOctreeNode *knode = tracing.get_voxel();
-  while (!knode->is_leaf) {
+  ccl_global const KernelOctreeNode *knode = tracing.node;
+  while (knode->first_child != -1) {
+    // while (!knode->is_leaf()) {
     const int child_index = knode->first_child + volume_tree_get_octant(knode->bbox, P);
     knode = &kernel_data_fetch(volume_tree_nodes, child_index);
-    tracing.push(knode);
   }
+  tracing.node = knode;
 }
 
 ccl_device_inline bool volume_octree_tracing_init(KernelGlobals kg,
@@ -197,28 +171,27 @@ ccl_device_inline bool volume_octree_tracing_init(KernelGlobals kg,
   tracing.inv_ray_D = rcp(ray->D);
   tracing.t.min = ray->tmin;
   tracing.ray_offset = zero_float3();
-  tracing.has_world_volume = (kernel_data.background.volume_shader != SHADER_NONE);
-
-  if (tracing.has_world_volume) {
-    /* World volume. */
-    tracing.push(&kernel_data_fetch(volume_tree_nodes, 0));
-  }
 
   const ccl_global KernelOctreeNode *kroot = &kernel_data_fetch(volume_tree_nodes, 1);
   const KernelBoundingBox root_bbox = kroot->bbox;
   if (!root_bbox.contains(P, OVERLAP_EXP)) {
-    /* kernel_assert(tracing.has_world_volume); */
-    /* TODO(weizhen): handle implicit volume. */
-    /* The current ray segment is inside the world volume. */
-    tracing.t.max = ray->tmax;
+    if (kernel_data.background.volume_shader != SHADER_NONE) {
+      /* The current ray segment is inside the world volume. */
+      tracing.node = &kernel_data_fetch(volume_tree_nodes, 0);
+      tracing.t.max = ray->tmax;
+    }
+    else {
+      /* TODO(weizhen): handle implicit volume. */
+      return false;
+    }
   }
   else {
-    tracing.push(kroot);
+    tracing.node = kroot;
     volume_voxel_get(kg, tracing, P);
     tracing.t.max = tracing.ray_voxel_intersect(ray->P, ray->tmax);
   }
 
-  return !tracing.finished() && !tracing.t.is_empty();
+  return !tracing.t.is_empty();
 }
 
 /* Advance to the next adjacent voxel and update the active interval. */
@@ -235,28 +208,40 @@ ccl_device_inline bool volume_octree_tracing_advance(KernelGlobals kg,
   const float3 shade_P = ray->P + ray->D * tracing.t.max + tracing.ray_offset;
 
   /* Find the deepest internal node that contains the current shading point. */
-  /* TODO(weizhen): Metal does not accept the following expression because of this `ccl_global`
-   * qualifier?? */
-  // while (!tracing.get_voxel()->bbox.contains(shade_P)) {
-  KernelBoundingBox bbox = tracing.get_voxel()->bbox;
+  /* TODO(weizhen): Metal does not accept the following expression?? */
+  //   while (!tracing.node->bbox.contains(shade_P)) {
+  KernelBoundingBox bbox = tracing.node->bbox;
   while (!bbox.contains(shade_P)) {
-    tracing.pop();
-    if (tracing.finished()) {
+    /* TODO(weizhen): Metal complains that the function is not marked as const, I don't understand.
+     */
+    // if (tracing.node->is_root()) {
+    if (tracing.node->parent == -1) {
       if (fabsf(tracing.t.max - ray->tmax) <= OVERLAP_EXP) {
         /* This could happen due to numerical issues, when the bounding box overlaps with a
          * primitive, but different interesctions are registered for both. */
         return false;
       }
+
+      if (kernel_data.background.volume_shader != SHADER_NONE) {
+        /* TODO(weizhen): do not enter object node if only world is in the stack. */
+        /* Enter world volume. */
+        tracing.node = &kernel_data_fetch(volume_tree_nodes, 0);
+        break;
+      }
+
       /* TODO(weizhen): deal with this case. It could happen due to numerical issue, where the
        * shading point is close to the object boundary and the shadow ray did not register a hit,
        * or when there is implicit volume. */
       // kernel_assert(false);
       return false;
     }
-    bbox = tracing.get_voxel()->bbox;
+
+    /* Fetch parent node. */
+    tracing.node = &kernel_data_fetch(volume_tree_nodes, tracing.node->parent);
+    bbox = tracing.node->bbox;
   }
 
-  /* Push the leaf node that contains the current shading point to the stack. */
+  /* Find the current active leaf node. */
   volume_voxel_get(kg, tracing, shade_P);
 
   /* Advance to the next segment. */
@@ -440,7 +425,7 @@ ccl_device Spectrum volume_unbiased_ray_marching(KernelGlobals kg,
                                                  const float tmin,
                                                  const float tmax,
                                                  ccl_private int &step,
-                                                 const ccl_global KernelOctreeNode *knode,
+                                                 const ccl_global KernelOctreeNode *const knode,
                                                  ccl_private RNGState &rng_state,
                                                  ccl_private Spectrum *biased_tau = nullptr)
 {
@@ -529,11 +514,8 @@ ccl_device void volume_shadow_heterogeneous(KernelGlobals kg,
   }
 
   while (vstate.step < kernel_data.integrator.volume_max_steps) {
-    const ccl_global KernelOctreeNode *knode = tracing.get_voxel();
-
     *throughput *= volume_unbiased_ray_marching<true>(
-        kg, state, ray, sd, tracing.t.min, tracing.t.max, vstate.step, knode, rng_state);
-
+        kg, state, ray, sd, tracing.t.min, tracing.t.max, vstate.step, tracing.node, rng_state);
     /* TODO(weizhen): early termination.  */
 
     if (!volume_octree_tracing_advance(kg, tracing, ray)) {
@@ -761,8 +743,8 @@ ccl_device void volume_integrate_step_scattering(
     ccl_private const EquiangularCoefficients &equiangular_coeffs,
     ccl_private VolumeIntegrateResult &ccl_restrict result)
 {
-  const ccl_global KernelOctreeNode *knode = tracing.get_voxel();
-  kernel_assert(knode->is_leaf);
+  const ccl_global KernelOctreeNode *knode = tracing.node;
+  kernel_assert(knode->is_leaf());
 
   if (volume_sample_indirect_scatter(
           kg, state, ray, sd, knode->sigma.max, tracing.t, lcg_state, vstate, result))

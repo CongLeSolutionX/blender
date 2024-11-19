@@ -87,9 +87,9 @@ class Octree {
   void recursive_build_(const Scene *scene, std::shared_ptr<OctreeNode> &node);
   /* Breadth-first flatten, so that children are stored in consecutive indices. */
   void flatten_(KernelOctreeNode *knodes,
-                KernelOctreeNode &knode,
+                const int current_index,
                 std::shared_ptr<OctreeNode> &node,
-                int &node_index);
+                int &child_index);
   void evaluate_volume_density_(Device *device, Progress &progress, Scene *scene);
   Extrema<float> get_extrema(const vector<Extrema<float>> &values,
                              const int3 index_min,

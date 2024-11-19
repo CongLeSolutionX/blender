@@ -188,24 +188,25 @@ openvdb::BoolGrid::ConstPtr Octree::mesh_to_sdf_grid(const Mesh *mesh,
 #endif
 
 void Octree::flatten_(KernelOctreeNode *knodes,
-                      KernelOctreeNode &knode,
+                      const int current_index,
                       shared_ptr<OctreeNode> &node,
-                      int &node_index)
+                      int &child_index)
 {
+  KernelOctreeNode &knode = knodes[current_index];
   knode.bbox.max = node->bbox.max;
   knode.bbox.min = node->bbox.min;
 
   if (auto internal_ptr = std::dynamic_pointer_cast<OctreeInternalNode>(node)) {
-    knode.is_leaf = false;
-    knode.first_child = node_index;
-    node_index += 8;
+    knode.first_child = child_index;
+    child_index += 8;
     /* Loop through all the children. */
     for (int i = 0; i < 8; i++) {
-      flatten_(knodes, knodes[knode.first_child + i], internal_ptr->children_[i], node_index);
+      knodes[knode.first_child + i].parent = current_index;
+      flatten_(knodes, knode.first_child + i, internal_ptr->children_[i], child_index);
     }
   }
   else {
-    knode.is_leaf = true;
+    knode.first_child = -1;
     knode.sigma = node->sigma;
   }
 }
@@ -217,13 +218,15 @@ void Octree::flatten(KernelOctreeNode *knodes)
   /* World volume. */
   /* TODO(weizhen): is there a better way than putting world volume in the octree array? */
   KernelOctreeNode &knode = knodes[node_index++];
-  knode.is_leaf = true;
+  knode.first_child = -1;
+  knode.parent = -1;
   knode.sigma = background_density;
   knode.bbox.max = make_float3(FLT_MAX);
   knode.bbox.min = -make_float3(FLT_MAX);
 
   const int root_index = node_index++;
-  flatten_(knodes, knodes[root_index], root_, node_index);
+  knodes[root_index].parent = -1;
+  flatten_(knodes, root_index, root_, node_index);
   /* TODO(weizhen): rescale the bounding box to match its resolution, for more robust traversing.
    */
 }
@@ -639,7 +642,7 @@ void Octree::visualize(KernelOctreeNode *knodes, const char *filename) const
     file << "bpy.ops.mesh.primitive_cube_add(location = (0, 0, 0), scale=(1, 1, 1))\n";
     file << "cube = bpy.context.object\n";
     for (int i = 1; i < get_num_nodes(); i++) {
-      if (!knodes[i].is_leaf) {
+      if (!knodes[i].is_leaf()) {
         /* Only draw leaf nodes. */
         continue;
       }
@@ -686,7 +689,7 @@ void Octree::visualize_fast(KernelOctreeNode *knodes, const char *filename) cons
 
     file << "vertices = [";
     for (int i = 1; i < get_num_nodes(); i++) {
-      if (knodes[i].is_leaf) {
+      if (knodes[i].is_leaf()) {
         continue;
       }
       center = knodes[i].bbox.center();

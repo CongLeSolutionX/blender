@@ -1734,47 +1734,20 @@ typedef struct KernelLightTreeNode {
 static_assert_align(KernelLightTreeNode, 16);
 
 struct KernelOctreeNode {
-  bool is_leaf;
-  /* TODO(weizhen): only 22 bits needed. Also leaf node doesn't need this field, can use union. */
+  int parent;
   int first_child;
   Extrema<float> sigma;
 
   KernelBoundingBox bbox;
-};
 
-/* TODO(weizhen): make it a class. */
-template<typename type, int MAX_SIZE> struct KernelStack {
-  type array[MAX_SIZE];
-  /* Index of the top element. */
-  int index = -1;
-
-  ccl_device_inline_method bool is_empty() const
+  ccl_device_inline_method bool is_leaf() const
   {
-    return index < 0;
+    return first_child == -1;
   }
 
-  ccl_device_inline_method void pop()
+  ccl_device_inline_method bool is_root() const
   {
-    assert(!is_empty());
-    index--;
-  }
-
-  ccl_device_inline_method void push(type elem)
-  {
-    assert(index < MAX_SIZE - 1);
-    array[++index] = elem;
-  }
-
-  /* Access the top element. */
-  ccl_device_inline_method type top() const
-  {
-    assert(!is_empty());
-    return array[index];
-  }
-
-  ccl_device_inline_method int size() const
-  {
-    return index + 1;
+    return parent == -1;
   }
 };
 
