@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <cstdlib>
 #include <cstring>
+#include <new>
 #include <sstream>
 
 #include <fmt/format.h>
@@ -55,6 +56,7 @@
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
 #include "RNA_path.hh"
+#include "RNA_types.hh"
 
 #include "WM_api.hh"
 #include "WM_message.hh"
@@ -63,12 +65,19 @@
 #include "DNA_object_types.h"
 #include "WM_types.hh"
 
+#ifdef WITH_PYTHON
+#  include "BPY_extern.hh"
+#endif
+
 #include "rna_access_internal.hh"
 #include "rna_internal.hh"
 
 static CLG_LogRef LOG = {"rna.access"};
 
 /* Init/Exit */
+
+/* NOTE: Initializing this object here is fine for now, as it should not allocate any memory. */
+extern const PointerRNA PointerRNA_NULL = {};
 
 void RNA_init()
 {
@@ -93,6 +102,21 @@ void RNA_init()
     BLI_ghash_insert(BLENDER_RNA.structs_map, (void *)srna->identifier, srna);
     BLENDER_RNA.structs_len += 1;
   }
+}
+
+void RNA_bpy_exit()
+{
+#ifdef WITH_PYTHON
+  StructRNA *srna;
+
+  for (srna = static_cast<StructRNA *>(BLENDER_RNA.structs.first); srna;
+       srna = static_cast<StructRNA *>(srna->cont.next))
+  {
+    /* NOTE(@ideasman42): each call locks the Python's GIL. Only locking/unlocking once
+     * is possible but gives barely measurable speedup (< ~1millisecond) so leave as-is. */
+    BPY_free_srna_pytype(srna);
+  }
+#endif
 }
 
 void RNA_exit()
@@ -198,7 +222,7 @@ static void rna_pointer_inherit_id(const StructRNA *type,
 
 PointerRNA RNA_blender_rna_pointer_create()
 {
-  PointerRNA ptr;
+  PointerRNA ptr = {};
   ptr.owner_id = nullptr;
   ptr.type = &RNA_BlenderRNA;
   ptr.data = &BLENDER_RNA;
@@ -473,7 +497,7 @@ void rna_property_rna_or_id_get(PropertyRNA *prop,
    * pointer to the IDProperty. */
   *r_prop_rna_or_id = {};
 
-  r_prop_rna_or_id->ptr = *ptr;
+  r_prop_rna_or_id->ptr = ptr;
   r_prop_rna_or_id->rawprop = prop;
 
   if (prop->magic == RNA_MAGIC) {
@@ -6270,6 +6294,10 @@ ParameterList *RNA_parameter_list_create(ParameterList *parms,
       data_alloc->array_tot = 0;
       data_alloc->array = nullptr;
     }
+    else if ((parm->flag_parameter & PARM_RNAPTR) && (parm->flag & PROP_THICK_WRAP)) {
+      BLI_assert(parm->type == PROP_POINTER);
+      new (static_cast<PointerRNA *>(data)) PointerRNA();
+    }
 
     if (!(parm->flag_parameter & PARM_REQUIRED) && !(parm->flag & PROP_DYNAMIC)) {
       switch (parm->type) {
@@ -6331,23 +6359,28 @@ ParameterList *RNA_parameter_list_create(ParameterList *parms,
 void RNA_parameter_list_free(ParameterList *parms)
 {
   PropertyRNA *parm;
-  int tot;
 
   parm = static_cast<PropertyRNA *>(parms->func->cont.properties.first);
-  for (tot = 0; parm; parm = parm->next) {
+  void *data = parms->data;
+  for (; parm; parm = parm->next) {
     if (parm->type == PROP_COLLECTION) {
-      BLI_freelistN((ListBase *)((char *)parms->data + tot));
+      BLI_freelistN(static_cast<ListBase *>(data));
+    }
+    else if ((parm->flag_parameter & PARM_RNAPTR) && (parm->flag & PROP_THICK_WRAP)) {
+      BLI_assert(parm->type == PROP_POINTER);
+      PointerRNA *ptr = static_cast<PointerRNA *>(data);
+      /* #RNA_parameter_list_create ensures that 'thick wrap' PointerRNA parameters are
+       * constructed. */
+      ptr->~PointerRNA();
     }
     else if (parm->flag & PROP_DYNAMIC) {
       /* for dynamic arrays and strings, data is a pointer to an array */
-      ParameterDynAlloc *data_alloc = static_cast<ParameterDynAlloc *>(
-          (void *)(((char *)parms->data) + tot));
+      ParameterDynAlloc *data_alloc = static_cast<ParameterDynAlloc *>(data);
       if (data_alloc->array) {
         MEM_freeN(data_alloc->array);
       }
     }
-
-    tot += rna_parameter_size_pad(rna_parameter_size(parm));
+    data = static_cast<char *>(data) + rna_parameter_size_pad(rna_parameter_size(parm));
   }
 
   MEM_freeN(parms->data);
@@ -6486,6 +6519,14 @@ void RNA_parameter_set(ParameterList *parms, PropertyRNA *parm, const void *valu
       }
       data_alloc->array = MEM_mallocN(size, __func__);
       memcpy(data_alloc->array, value, size);
+    }
+    else if ((parm->flag_parameter & PARM_RNAPTR) && (parm->flag & PROP_THICK_WRAP)) {
+      BLI_assert(parm->type == PROP_POINTER);
+      BLI_assert(iter.size == sizeof(PointerRNA));
+      PointerRNA *ptr = static_cast<PointerRNA *>(iter.data);
+      /* #RNA_parameter_list_create ensures that 'thick wrap' PointerRNA parameters are
+       * constructed. */
+      *ptr = PointerRNA(*static_cast<const PointerRNA *>(value));
     }
     else {
       memcpy(iter.data, value, iter.size);
@@ -6707,7 +6748,7 @@ bool RNA_property_assign_default(PointerRNA *ptr, PropertyRNA *prop)
 }
 
 #ifdef WITH_PYTHON
-extern "C" void PyC_LineSpit(void);
+extern void PyC_LineSpit(void);
 #endif
 
 void _RNA_warning(const char *format, ...)

@@ -26,12 +26,12 @@
 #include "BKE_ccg.hh"
 #include "BKE_colortools.hh"
 #include "BKE_context.hh"
-#include "BKE_image.h"
+#include "BKE_image.hh"
 #include "BKE_layer.hh"
 #include "BKE_mesh.hh"
 #include "BKE_mesh_mapping.hh"
 #include "BKE_paint.hh"
-#include "BKE_pbvh_api.hh"
+#include "BKE_paint_bvh.hh"
 #include "BKE_report.hh"
 #include "BKE_subdiv_ccg.hh"
 
@@ -550,86 +550,133 @@ static void check_topology_islands(Object &ob, FalloffType falloff_type)
   }
 }
 
+}  // namespace blender::ed::sculpt_paint::expand
+
+namespace blender::ed::sculpt_paint {
+
 /* Functions implementing different algorithms for initializing falloff values. */
 
-/**
- * Utility function to get the closest vertices after flipping an original vertex position for
- * all symmetry passes.
- */
-static Vector<int> calc_symmetry_vert_indices(const Depsgraph &depsgraph,
-                                              const Object &object,
-                                              const ePaintSymmetryFlags symm,
-                                              const int original_vert)
+Vector<int> find_symm_verts_mesh(const Depsgraph &depsgraph,
+                                 const Object &object,
+                                 const int original_vert,
+                                 const float max_distance)
 {
-  const SculptSession &ss = *object.sculpt;
+  const ePaintSymmetryFlags symm = SCULPT_mesh_symmetry_xyz_get(object);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
-  const float max_distance = FLT_MAX;
   const bool use_original = false;
+
   Vector<int> symm_verts;
   symm_verts.append(original_vert);
-  switch (pbvh.type()) {
-    case bke::pbvh::Type::Mesh: {
-      const Mesh &mesh = *static_cast<const Mesh *>(object.data);
-      const Span<float3> positions = bke::pbvh::vert_positions_eval(depsgraph, object);
-      const bke::AttributeAccessor attributes = mesh.attributes();
-      const VArraySpan hide_vert = *attributes.lookup<bool>(".hide_vert", bke::AttrDomain::Point);
 
-      const float3 location = positions[original_vert];
-      for (char symm_it = 1; symm_it <= symm; symm_it++) {
-        if (!SCULPT_is_symmetry_iteration_valid(symm_it, symm)) {
-          continue;
-        }
-        const float3 symm_location = symmetry_flip(location, ePaintSymmetryFlags(symm_it));
-        const std::optional<int> nearest = nearest_vert_calc_mesh(
-            pbvh, positions, hide_vert, symm_location, max_distance, use_original);
-        if (!nearest) {
-          continue;
-        }
-        symm_verts.append(*nearest);
-      }
-      break;
+  const Mesh &mesh = *static_cast<const Mesh *>(object.data);
+  const Span<float3> positions = bke::pbvh::vert_positions_eval(depsgraph, object);
+  const bke::AttributeAccessor attributes = mesh.attributes();
+  const VArraySpan hide_vert = *attributes.lookup<bool>(".hide_vert", bke::AttrDomain::Point);
+
+  const float3 location = positions[original_vert];
+  for (char symm_it = 1; symm_it <= symm; symm_it++) {
+    if (!SCULPT_is_symmetry_iteration_valid(symm_it, symm)) {
+      continue;
     }
-    case bke::pbvh::Type::Grids: {
-      SubdivCCG &subdiv_ccg = *ss.subdiv_ccg;
-      const CCGKey key = BKE_subdiv_ccg_key_top_level(subdiv_ccg);
-      const Span<float3> positions = subdiv_ccg.positions;
-      const float3 location = positions[original_vert];
-      for (char symm_it = 1; symm_it <= symm; symm_it++) {
-        if (!SCULPT_is_symmetry_iteration_valid(symm_it, symm)) {
-          continue;
-        }
-        const float3 symm_location = symmetry_flip(location, ePaintSymmetryFlags(symm_it));
-        const std::optional<SubdivCCGCoord> nearest = nearest_vert_calc_grids(
-            pbvh, subdiv_ccg, symm_location, max_distance, use_original);
-        if (!nearest) {
-          continue;
-        }
-        symm_verts.append(nearest->to_index(key));
-      }
-      break;
+    const float3 symm_location = symmetry_flip(location, ePaintSymmetryFlags(symm_it));
+    const std::optional<int> nearest = nearest_vert_calc_mesh(
+        pbvh, positions, hide_vert, symm_location, max_distance, use_original);
+    if (!nearest) {
+      continue;
     }
-    case bke::pbvh::Type::BMesh: {
-      BMesh &bm = *ss.bm;
-      const BMVert *original_bm_vert = BM_vert_at_index(&bm, original_vert);
-      const float3 location = original_bm_vert->co;
-      for (char symm_it = 1; symm_it <= symm; symm_it++) {
-        if (!SCULPT_is_symmetry_iteration_valid(symm_it, symm)) {
-          continue;
-        }
-        const float3 symm_location = symmetry_flip(location, ePaintSymmetryFlags(symm_it));
-        const std::optional<BMVert *> nearest = nearest_vert_calc_bmesh(
-            pbvh, symm_location, max_distance, use_original);
-        if (!nearest) {
-          continue;
-        }
-        symm_verts.append(BM_elem_index_get(*nearest));
-      }
-      break;
-    }
+    symm_verts.append(*nearest);
   }
+
   std::sort(symm_verts.begin(), symm_verts.end());
   return symm_verts;
 }
+
+Vector<int> find_symm_verts_grids(const Object &object,
+                                  const int original_vert,
+                                  const float max_distance)
+{
+  const ePaintSymmetryFlags symm = SCULPT_mesh_symmetry_xyz_get(object);
+  const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
+  const bool use_original = false;
+
+  Vector<int> symm_verts;
+  symm_verts.append(original_vert);
+
+  const SculptSession &ss = *object.sculpt;
+  const SubdivCCG &subdiv_ccg = *ss.subdiv_ccg;
+  const CCGKey key = BKE_subdiv_ccg_key_top_level(subdiv_ccg);
+  const Span<float3> positions = subdiv_ccg.positions;
+  const float3 location = positions[original_vert];
+  for (char symm_it = 1; symm_it <= symm; symm_it++) {
+    if (!SCULPT_is_symmetry_iteration_valid(symm_it, symm)) {
+      continue;
+    }
+    const float3 symm_location = symmetry_flip(location, ePaintSymmetryFlags(symm_it));
+    const std::optional<SubdivCCGCoord> nearest = nearest_vert_calc_grids(
+        pbvh, subdiv_ccg, symm_location, max_distance, use_original);
+    if (!nearest) {
+      continue;
+    }
+    symm_verts.append(nearest->to_index(key));
+  }
+
+  std::sort(symm_verts.begin(), symm_verts.end());
+  return symm_verts;
+}
+
+Vector<int> find_symm_verts_bmesh(const Object &object,
+                                  const int original_vert,
+                                  const float max_distance)
+{
+  const ePaintSymmetryFlags symm = SCULPT_mesh_symmetry_xyz_get(object);
+  const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
+  const bool use_original = false;
+
+  Vector<int> symm_verts;
+  symm_verts.append(original_vert);
+
+  const SculptSession &ss = *object.sculpt;
+  BMesh &bm = *ss.bm;
+  const BMVert *original_bm_vert = BM_vert_at_index(&bm, original_vert);
+  const float3 location = original_bm_vert->co;
+  for (char symm_it = 1; symm_it <= symm; symm_it++) {
+    if (!SCULPT_is_symmetry_iteration_valid(symm_it, symm)) {
+      continue;
+    }
+    const float3 symm_location = symmetry_flip(location, ePaintSymmetryFlags(symm_it));
+    const std::optional<BMVert *> nearest = nearest_vert_calc_bmesh(
+        pbvh, symm_location, max_distance, use_original);
+    if (!nearest) {
+      continue;
+    }
+    symm_verts.append(BM_elem_index_get(*nearest));
+  }
+
+  std::sort(symm_verts.begin(), symm_verts.end());
+  return symm_verts;
+}
+
+Vector<int> find_symm_verts(const Depsgraph &depsgraph,
+                            const Object &object,
+                            const int original_vert,
+                            const float max_distance)
+{
+  const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
+  switch (pbvh.type()) {
+    case bke::pbvh::Type::Mesh:
+      return find_symm_verts_mesh(depsgraph, object, original_vert, max_distance);
+    case bke::pbvh::Type::Grids:
+      return find_symm_verts_grids(object, original_vert, max_distance);
+    case bke::pbvh::Type::BMesh:
+      return find_symm_verts_bmesh(object, original_vert, max_distance);
+  }
+  BLI_assert_unreachable();
+  return {};
+}
+
+}  // namespace blender::ed::sculpt_paint
+
+namespace blender::ed::sculpt_paint::expand {
 
 /**
  * Geodesic: Initializes the falloff with geodesic distances from the given active vertex, taking
@@ -675,8 +722,7 @@ static Array<float> geodesic_falloff_create(const Depsgraph &depsgraph,
                                             Object &ob,
                                             const int initial_vert)
 {
-  const Vector<int> symm_verts = calc_symmetry_vert_indices(
-      depsgraph, ob, SCULPT_mesh_symmetry_xyz_get(ob), initial_vert);
+  const Vector<int> symm_verts = find_symm_verts(depsgraph, ob, initial_vert);
 
   IndexMaskMemory memory;
   const IndexMask mask = IndexMask::from_indices(symm_verts.as_span(), memory);
@@ -753,8 +799,7 @@ static Array<float> topology_falloff_create(const Depsgraph &depsgraph,
                                             Object &ob,
                                             const int initial_vert)
 {
-  const Vector<int> symm_verts = calc_symmetry_vert_indices(
-      depsgraph, ob, SCULPT_mesh_symmetry_xyz_get(ob), initial_vert);
+  const Vector<int> symm_verts = find_symm_verts(depsgraph, ob, initial_vert);
 
   IndexMaskMemory memory;
   const IndexMask mask = IndexMask::from_indices(symm_verts.as_span(), memory);
@@ -789,7 +834,7 @@ static Array<float> normals_falloff_create(const Depsgraph &depsgraph,
 
       const float3 orig_normal = vert_normals[vert];
       flood_fill::FillDataMesh flood(totvert);
-      flood.add_initial_with_symmetry(depsgraph, ob, pbvh, vert, FLT_MAX);
+      flood.add_initial(find_symm_verts(depsgraph, ob, vert));
       flood.execute(ob, vert_to_face_map, [&](const int from_vert, const int to_vert) {
         const float3 &from_normal = vert_normals[from_vert];
         const float3 &to_normal = vert_normals[to_vert];
@@ -808,8 +853,7 @@ static Array<float> normals_falloff_create(const Depsgraph &depsgraph,
       const Span<float3> normals = subdiv_ccg.normals;
       const float3 orig_normal = normals[vert];
       flood_fill::FillDataGrids flood(totvert);
-      flood.add_initial_with_symmetry(
-          ob, pbvh, subdiv_ccg, SubdivCCGCoord::from_index(key, vert), FLT_MAX);
+      flood.add_initial(key, find_symm_verts(depsgraph, ob, vert));
       flood.execute(
           ob,
           subdiv_ccg,
@@ -837,7 +881,7 @@ static Array<float> normals_falloff_create(const Depsgraph &depsgraph,
       flood_fill::FillDataBMesh flood(totvert);
       BMVert *orig_vert = BM_vert_at_index(ss.bm, vert);
       const float3 orig_normal = orig_vert->no;
-      flood.add_initial_with_symmetry(ob, pbvh, orig_vert, FLT_MAX);
+      flood.add_initial(*ss.bm, find_symm_verts(depsgraph, ob, vert));
       flood.execute(ob, [&](BMVert *from_bm_vert, BMVert *to_bm_vert) {
         const float3 &from_normal = from_bm_vert->no;
         const float3 &to_normal = to_bm_vert->no;
@@ -875,8 +919,7 @@ static Array<float> spherical_falloff_create(const Depsgraph &depsgraph,
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
   Array<float> dists(SCULPT_vertex_count_get(object));
 
-  const Vector<int> symm_verts = calc_symmetry_vert_indices(
-      depsgraph, object, SCULPT_mesh_symmetry_xyz_get(object), vert);
+  const Vector<int> symm_verts = find_symm_verts(depsgraph, object, vert);
 
   switch (pbvh.type()) {
     case bke::pbvh::Type::Mesh: {
@@ -950,8 +993,7 @@ static Array<float> boundary_topology_falloff_create(const Depsgraph &depsgraph,
                                                      Object &ob,
                                                      const int inititial_vert)
 {
-  const Vector<int> symm_verts = calc_symmetry_vert_indices(
-      depsgraph, ob, SCULPT_mesh_symmetry_xyz_get(ob), inititial_vert);
+  const Vector<int> symm_verts = find_symm_verts(depsgraph, ob, inititial_vert);
 
   BitVector<> boundary_verts(SCULPT_vertex_count_get(ob));
   for (const int vert : symm_verts) {
@@ -996,8 +1038,7 @@ static Array<float> diagonals_falloff_create(const Depsgraph &depsgraph,
     return dists;
   }
 
-  const Vector<int> symm_verts = calc_symmetry_vert_indices(
-      depsgraph, ob, SCULPT_mesh_symmetry_xyz_get(ob), vert);
+  const Vector<int> symm_verts = find_symm_verts(depsgraph, ob, vert);
 
   /* Search and mask as visited the initial vertices using the enabled symmetry passes. */
   BitVector<> visited_verts(totvert);
@@ -1271,15 +1312,11 @@ static void init_from_face_set_boundary(const Depsgraph &depsgraph,
       const CCGKey key = BKE_subdiv_ccg_key_top_level(subdiv_ccg);
       threading::parallel_for(IndexRange(totvert), 1024, [&](const IndexRange range) {
         for (const int vert : range) {
+          const SubdivCCGCoord coord = SubdivCCGCoord::from_index(key, vert);
           vert_has_face_set[vert] = face_set::vert_has_face_set(
-              subdiv_ccg, face_sets, vert, active_face_set);
+              subdiv_ccg, face_sets, coord.grid_index, active_face_set);
           vert_has_unique_face_set[vert] = face_set::vert_has_unique_face_set(
-              faces,
-              corner_verts,
-              vert_to_face_map,
-              face_sets,
-              subdiv_ccg,
-              SubdivCCGCoord::from_index(key, vert));
+              faces, corner_verts, vert_to_face_map, face_sets, subdiv_ccg, coord);
         }
       });
       break;
@@ -2122,7 +2159,7 @@ static void find_active_connected_components_from_vert(const Depsgraph &depsgrap
 
   const ePaintSymmetryFlags symm = SCULPT_mesh_symmetry_xyz_get(ob);
 
-  const Vector<int> symm_verts = calc_symmetry_vert_indices(depsgraph, ob, symm, initial_vertex);
+  const Vector<int> symm_verts = find_symm_verts(depsgraph, ob, initial_vertex);
 
   int valid_index = 0;
   for (char symm_it = 0; symm_it <= symm; symm_it++) {
@@ -2232,10 +2269,16 @@ static int active_face_set_id_get(Object &object, Cache &expand_cache)
   SculptSession &ss = *object.sculpt;
   switch (bke::object::pbvh_get(object)->type()) {
     case bke::pbvh::Type::Mesh:
-      return expand_cache.original_face_sets[ss.active_face_index];
+      if (!ss.active_face_index) {
+        return SCULPT_FACE_SET_NONE;
+      }
+      return expand_cache.original_face_sets[*ss.active_face_index];
     case bke::pbvh::Type::Grids: {
+      if (!ss.active_grid_index) {
+        return SCULPT_FACE_SET_NONE;
+      }
       const int face_index = BKE_subdiv_ccg_grid_to_face_index(*ss.subdiv_ccg,
-                                                               ss.active_grid_index);
+                                                               *ss.active_grid_index);
       return expand_cache.original_face_sets[face_index];
     }
     case bke::pbvh::Type::BMesh: {
@@ -2532,11 +2575,12 @@ static void cache_initial_config_set(bContext *C, wmOperator *op, Cache &expand_
 
   /* Texture and color data from the active Brush. */
   Scene &scene = *CTX_data_scene(C);
+  const Paint *paint = BKE_paint_get_active_from_context(C);
   const Sculpt &sd = *CTX_data_tool_settings(C)->sculpt;
   expand_cache.brush = BKE_paint_brush_for_read(&sd.paint);
   BKE_curvemapping_init(expand_cache.brush->curve);
   copy_v4_fl(expand_cache.fill_color, 1.0f);
-  copy_v3_v3(expand_cache.fill_color, BKE_brush_color_get(&scene, expand_cache.brush));
+  copy_v3_v3(expand_cache.fill_color, BKE_brush_color_get(&scene, paint, expand_cache.brush));
   IMB_colormanagement_srgb_to_scene_linear_v3(expand_cache.fill_color, expand_cache.fill_color);
 
   expand_cache.scene = CTX_data_scene(C);

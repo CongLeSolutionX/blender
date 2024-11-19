@@ -27,7 +27,11 @@
 #include "BKE_armature.hh"
 #include "BKE_fcurve.hh"
 
+#include "ANIM_action_legacy.hh"
+
 #include "DEG_depsgraph.hh"
+
+using namespace blender;
 
 /* -------------------------------------------------------------------- */
 /** \name Flip the Action (Armature/Pose Objects)
@@ -390,11 +394,11 @@ static void action_flip_pchan_rna_paths(bAction *act)
   const int path_pose_prefix_len = strlen(path_pose_prefix);
 
   /* Tag curves that have renamed f-curves. */
-  LISTBASE_FOREACH (bActionGroup *, agrp, &act->groups) {
+  for (bActionGroup *agrp : blender::animrig::legacy::channel_groups_all(act)) {
     agrp->flag &= ~AGRP_TEMP;
   }
 
-  LISTBASE_FOREACH (FCurve *, fcu, &act->curves) {
+  for (FCurve *fcu : blender::animrig::legacy::fcurves_all(act)) {
     if (!STRPREFIX(fcu->rna_path, path_pose_prefix)) {
       continue;
     }
@@ -434,7 +438,7 @@ static void action_flip_pchan_rna_paths(bAction *act)
   }
 
   /* Rename tagged groups. */
-  LISTBASE_FOREACH (bActionGroup *, agrp, &act->groups) {
+  for (bActionGroup *agrp : blender::animrig::legacy::channel_groups_all(act)) {
     if ((agrp->flag & AGRP_TEMP) == 0) {
       continue;
     }
@@ -449,7 +453,8 @@ static void action_flip_pchan_rna_paths(bAction *act)
 
 void BKE_action_flip_with_pose(bAction *act, Object *ob_arm)
 {
-  FCurvePathCache *fcache = BKE_fcurve_pathcache_create(&act->curves);
+  Vector<FCurve *> fcurves = animrig::legacy::fcurves_first_slot(act);
+  FCurvePathCache *fcache = BKE_fcurve_pathcache_create(fcurves);
   int i;
   LISTBASE_FOREACH_INDEX (bPoseChannel *, pchan, &ob_arm->pose->chanbase, i) {
     action_flip_pchan(ob_arm, pchan, fcache);

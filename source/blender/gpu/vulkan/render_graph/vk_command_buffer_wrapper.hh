@@ -18,8 +18,8 @@ class VKCommandBufferInterface {
 
   virtual void begin_recording() = 0;
   virtual void end_recording() = 0;
-  virtual void submit_with_cpu_synchronization() = 0;
-  virtual void wait_for_cpu_synchronization() = 0;
+  virtual void submit_with_cpu_synchronization(VkFence vk_fence = VK_NULL_HANDLE) = 0;
+  virtual void wait_for_cpu_synchronization(VkFence vk_fence = VK_NULL_HANDLE) = 0;
 
   virtual void bind_pipeline(VkPipelineBindPoint pipeline_bind_point, VkPipeline pipeline) = 0;
   virtual void bind_descriptor_sets(VkPipelineBindPoint pipeline_bind_point,
@@ -55,6 +55,10 @@ class VKCommandBufferInterface {
                         uint32_t group_count_y,
                         uint32_t group_count_z) = 0;
   virtual void dispatch_indirect(VkBuffer buffer, VkDeviceSize offset) = 0;
+  virtual void update_buffer(VkBuffer dst_buffer,
+                             VkDeviceSize dst_offset,
+                             VkDeviceSize data_size,
+                             const void *p_data) = 0;
   virtual void copy_buffer(VkBuffer src_buffer,
                            VkBuffer dst_buffer,
                            uint32_t region_count,
@@ -148,8 +152,8 @@ class VKCommandBufferWrapper : public VKCommandBufferInterface {
 
   void begin_recording() override;
   void end_recording() override;
-  void submit_with_cpu_synchronization() override;
-  void wait_for_cpu_synchronization() override;
+  void submit_with_cpu_synchronization(VkFence vk_fence) override;
+  void wait_for_cpu_synchronization(VkFence vk_fence) override;
 
   void bind_pipeline(VkPipelineBindPoint pipeline_bind_point, VkPipeline pipeline) override;
   void bind_descriptor_sets(VkPipelineBindPoint pipeline_bind_point,
@@ -183,6 +187,10 @@ class VKCommandBufferWrapper : public VKCommandBufferInterface {
                              uint32_t stride) override;
   void dispatch(uint32_t group_count_x, uint32_t group_count_y, uint32_t group_count_z) override;
   void dispatch_indirect(VkBuffer buffer, VkDeviceSize offset) override;
+  void update_buffer(VkBuffer dst_buffer,
+                     VkDeviceSize dst_offset,
+                     VkDeviceSize data_size,
+                     const void *p_data) override;
   void copy_buffer(VkBuffer src_buffer,
                    VkBuffer dst_buffer,
                    uint32_t region_count,

@@ -114,6 +114,9 @@ static std::unique_ptr<GreasePencilStrokeOperation> get_stroke_operation(bContex
     }
   }
   else if (mode == PaintMode::SculptGreasePencil) {
+    if (stroke_mode == BRUSH_STROKE_SMOOTH) {
+      return greasepencil::new_smooth_operation(stroke_mode);
+    }
     switch (eBrushGPSculptType(brush.gpencil_sculpt_brush_type)) {
       case GPSCULPT_BRUSH_TYPE_SMOOTH:
         return greasepencil::new_smooth_operation(stroke_mode);
@@ -327,6 +330,7 @@ static bool grease_pencil_sculpt_paint_poll(bContext *C)
 
 static int grease_pencil_sculpt_paint_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
+  const Scene *scene = CTX_data_scene(C);
   const Object *object = CTX_data_active_object(C);
   if (!object || object->type != OB_GREASE_PENCIL) {
     return OPERATOR_CANCELLED;
@@ -355,15 +359,18 @@ static int grease_pencil_sculpt_paint_invoke(bContext *C, wmOperator *op, const 
   /* For the sculpt tools, we don't want the auto-key to create an empty keyframe, so we duplicate
    * the previous key. */
   const bool use_duplicate_previous_key = true;
-  if (!ed::greasepencil::ensure_active_keyframe(
-          C, grease_pencil, use_duplicate_previous_key, inserted_keyframe))
-  {
+  for (bke::greasepencil::Layer *layer : grease_pencil.layers_for_write()) {
+    if (ed::greasepencil::ensure_active_keyframe(
+            *scene, grease_pencil, *layer, use_duplicate_previous_key, inserted_keyframe))
+    {
+      inserted_keyframe = true;
+    }
+  }
+  if (!inserted_keyframe) {
     BKE_report(op->reports, RPT_ERROR, "No Grease Pencil frame to draw on");
     return OPERATOR_CANCELLED;
   }
-  if (inserted_keyframe) {
-    WM_event_add_notifier(C, NC_GPENCIL | NA_EDITED, nullptr);
-  }
+  WM_event_add_notifier(C, NC_GPENCIL | NA_EDITED, nullptr);
 
   op->customdata = paint_stroke_new(C,
                                     op,
@@ -523,6 +530,7 @@ static int grease_pencil_vertex_brush_stroke_invoke(bContext *C,
                                                     wmOperator *op,
                                                     const wmEvent *event)
 {
+  const Scene *scene = CTX_data_scene(C);
   const Object *object = CTX_data_active_object(C);
   if (!object || object->type != OB_GREASE_PENCIL) {
     return OPERATOR_CANCELLED;
@@ -552,7 +560,7 @@ static int grease_pencil_vertex_brush_stroke_invoke(bContext *C,
    * duplicate the previous key. */
   const bool use_duplicate_previous_key = true;
   if (!ed::greasepencil::ensure_active_keyframe(
-          C, grease_pencil, use_duplicate_previous_key, inserted_keyframe))
+          *scene, grease_pencil, active_layer, use_duplicate_previous_key, inserted_keyframe))
   {
     BKE_report(op->reports, RPT_ERROR, "No Grease Pencil frame to draw on");
     return OPERATOR_CANCELLED;
@@ -704,7 +712,7 @@ static void grease_pencil_fill_extension_cut(const bContext &C,
 
   /* Upper bound for segment count. Arrays are sized for easy index mapping, exact count isn't
    * necessary. Not all entries are added to the BVH tree. */
-  const int max_bvh_lines = bvh_curve_offsets.total_size();
+  const int max_bvh_lines = bvh_curve_offsets.data().last();
   /* Cached view positions for lines. */
   Array<float2> view_starts(max_bvh_lines);
   Array<float2> view_ends(max_bvh_lines);
@@ -1275,7 +1283,7 @@ static Vector<FillToolTargetInfo> ensure_editable_drawings(const Scene &scene,
 static void smooth_fill_strokes(bke::CurvesGeometry &curves, const IndexMask &stroke_mask)
 {
   const int iterations = 20;
-  if (curves.points_num() == 0) {
+  if (curves.is_empty()) {
     return;
   }
   if (stroke_mask.is_empty()) {
@@ -1346,7 +1354,7 @@ static bool grease_pencil_apply_fill(bContext &C, wmOperator &op, const wmEvent 
   GreasePencil &grease_pencil = *static_cast<GreasePencil *>(object.data);
   auto &op_data = *static_cast<GreasePencilFillOpData *>(op.customdata);
   const ToolSettings &ts = *CTX_data_tool_settings(&C);
-  const Brush &brush = *BKE_paint_brush(&ts.gp_paint->paint);
+  Brush &brush = *BKE_paint_brush(&ts.gp_paint->paint);
   const float2 mouse_position = float2(event.mval);
   const int simplify_levels = brush.gpencil_settings->fill_simplylvl;
   const std::optional<float> alpha_threshold =
@@ -1391,24 +1399,51 @@ static bool grease_pencil_apply_fill(bContext &C, wmOperator &op, const wmEvent 
       fill_curves = simplify_fixed(fill_curves, brush.gpencil_settings->fill_simplylvl);
     }
 
-    Curves *dst_curves_id = curves_new_nomain(std::move(info.target.drawing.strokes_for_write()));
+    bke::CurvesGeometry &dst_curves = info.target.drawing.strokes_for_write();
+    /* If the `fill_strokes` function creates the "fill_opacity" attribute, make sure that we
+     * initialize this to full opacity on the target geometry. */
+    if (fill_curves.attributes().contains("fill_opacity") &&
+        !dst_curves.attributes().contains("fill_opacity"))
+    {
+      bke::SpanAttributeWriter<float> fill_opacities =
+          dst_curves.attributes_for_write().lookup_or_add_for_write_span<float>(
+              "fill_opacity",
+              bke::AttrDomain::Curve,
+              bke::AttributeInitVArray(VArray<float>::ForSingle(1.0f, dst_curves.curves_num())));
+      fill_opacities.finish();
+    }
+
+    Curves *dst_curves_id = curves_new_nomain(dst_curves);
     Curves *fill_curves_id = curves_new_nomain(fill_curves);
-    Array<bke::GeometrySet> geometry_sets = {
+    const Array<bke::GeometrySet> geometry_sets = {
         bke::GeometrySet::from_curves(on_back ? fill_curves_id : dst_curves_id),
         bke::GeometrySet::from_curves(on_back ? dst_curves_id : fill_curves_id)};
+    const int num_new_curves = fill_curves.curves_num();
+    const IndexRange new_curves_range = (on_back ?
+                                             IndexRange(num_new_curves) :
+                                             dst_curves.curves_range().after(num_new_curves));
+
     bke::GeometrySet joined_geometry_set = geometry::join_geometries(geometry_sets, {});
-    bke::CurvesGeometry joined_curves =
-        (joined_geometry_set.has_curves() ?
-             std::move(joined_geometry_set.get_curves_for_write()->geometry.wrap()) :
-             bke::CurvesGeometry());
-    info.target.drawing.strokes_for_write() = std::move(joined_curves);
-    info.target.drawing.tag_topology_changed();
+    if (joined_geometry_set.has_curves()) {
+      dst_curves = joined_geometry_set.get_curves_for_write()->geometry.wrap();
+      info.target.drawing.tag_topology_changed();
+
+      /* Compute texture matrix for the new curves. */
+      const ed::greasepencil::DrawingPlacement placement(
+          scene, region, *view_context.v3d, object, &layer);
+      const float4x2 texture_space = ed::greasepencil::calculate_texture_space(
+          &scene, &region, mouse_position, placement);
+      Array<float4x2> texture_matrices(num_new_curves, texture_space);
+      info.target.drawing.set_texture_matrices(texture_matrices, new_curves_range);
+    }
   }
 
   WM_cursor_modal_restore(&win);
 
   /* Save extend value for next operation. */
-  brush.gpencil_settings->fill_extend_fac = op_data.extension_length;
+  brush.gpencil_settings->fill_extend_fac = op_data.extension_length /
+                                            bke::greasepencil::LEGACY_RADIUS_CONVERSION_FACTOR;
+  BKE_brush_tag_unsaved_changes(&brush);
 
   return true;
 }

@@ -10,7 +10,7 @@
 
 #include "BLI_fileops.h"
 #include "BLI_math_vector.h"
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 #include "BLI_string.h"
 #include "BLI_timecode.h"
 #include "BLI_utildefines.h"
@@ -43,6 +43,8 @@
 #include "SEQ_time.hh"
 #include "SEQ_transform.hh"
 #include "SEQ_utils.hh"
+
+#include "ANIM_action_legacy.hh"
 
 #include "WM_api.hh"
 #include "WM_types.hh"
@@ -135,7 +137,7 @@ bool ED_space_sequencer_has_playback_animation(const SpaceSeq *sseq, const Scene
     return false;
   }
 
-  LISTBASE_FOREACH (FCurve *, fcurve, &scene->adt->action->curves) {
+  for (FCurve *fcurve : blender::animrig::legacy::fcurves_for_assigned_action(scene->adt)) {
     if (sequencer_fcurves_targets_color_strip(fcurve)) {
       return true;
     }
@@ -1459,10 +1461,6 @@ static int sequencer_split_exec(bContext *C, wmOperator *op)
 
   SEQ_prefetch_stop(scene);
 
-  LISTBASE_FOREACH (Sequence *, seq, ed->seqbasep) {
-    seq->tmp = nullptr;
-  }
-
   LISTBASE_FOREACH_BACKWARD (Sequence *, seq, ed->seqbasep) {
     if (use_cursor_position && seq->machine != split_channel) {
       continue;
@@ -1762,8 +1760,12 @@ static int sequencer_delete_exec(bContext *C, wmOperator *op)
   SEQ_edit_remove_flagged_sequences(scene, seqbasep);
 
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
+  if (scene->adt && scene->adt->action) {
+    DEG_id_tag_update(&scene->adt->action->id, ID_RECALC_ANIMATION_NO_FLUSH);
+  }
   DEG_relations_tag_update(bmain);
   WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
+  WM_event_add_notifier(C, NC_SCENE | ND_ANIMCHAN, scene);
   return OPERATOR_FINISHED;
 }
 

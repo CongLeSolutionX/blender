@@ -201,13 +201,18 @@ class ShaderModule {
 
  public:
   /** Shaders */
+  ShaderPtr attribute_viewer_mesh;
+  ShaderPtr attribute_viewer_pointcloud;
+  ShaderPtr attribute_viewer_curve;
+  ShaderPtr attribute_viewer_curves;
+
   ShaderPtr anti_aliasing = shader("overlay_antialiasing");
   ShaderPtr armature_degrees_of_freedom;
   ShaderPtr background_fill = shader("overlay_background");
   ShaderPtr background_clip_bound = shader("overlay_clipbound");
   ShaderPtr curve_edit_points;
   ShaderPtr curve_edit_line;
-  ShaderPtr curve_edit_handles;
+  ShaderPtr curve_edit_handles = shader("overlay_edit_curves_handle_next");
   ShaderPtr extra_point;
   ShaderPtr facing;
   ShaderPtr grid = shader("overlay_grid");
@@ -289,6 +294,7 @@ class ShaderModule {
   ShaderPtr fluid_velocity_mac;
   ShaderPtr fluid_velocity_needle;
   ShaderPtr image_plane;
+  ShaderPtr image_plane_depth_bias;
   ShaderPtr lattice_points;
   ShaderPtr lattice_wire;
   ShaderPtr particle_dot;
@@ -354,6 +360,8 @@ struct Resources : public select::SelectMap {
   TextureFromPool color_overlay_alloc_tx = {"overlay_color_overlay_alloc_tx"};
   TextureFromPool color_render_alloc_tx = {"overlay_color_render_alloc_tx"};
 
+  /* 1px texture containing only maximum depth. To be used for fulfilling bindings when depth
+   * texture is not available or not needed. */
   Texture dummy_depth_tx = {"dummy_depth_tx"};
 
   /** TODO(fclem): Copy of G_data.block that should become theme colors only and managed by the

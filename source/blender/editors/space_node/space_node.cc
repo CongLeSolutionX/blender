@@ -373,6 +373,13 @@ bool push_compute_context_for_tree_path(const SpaceNode &snode,
                                                                       storage.inspection_index);
           break;
         }
+        case GEO_NODE_FOREACH_GEOMETRY_ELEMENT_OUTPUT: {
+          const auto &storage = *static_cast<const NodeGeometryForeachGeometryElementOutput *>(
+              zone->output_node->storage);
+          compute_context_builder.push<bke::ForeachGeometryElementZoneComputeContext>(
+              *zone->output_node, storage.inspection_index);
+          break;
+        }
       }
     }
     compute_context_builder.push<bke::GroupNodeComputeContext>(*group_node, *tree);
@@ -402,21 +409,21 @@ static SpaceLink *node_create(const ScrArea * /*area*/, const Scene * /*scene*/)
   NODE_TREE_TYPES_END;
 
   /* header */
-  ARegion *region = MEM_cnew<ARegion>("header for node");
+  ARegion *region = BKE_area_region_new();
 
   BLI_addtail(&snode->regionbase, region);
   region->regiontype = RGN_TYPE_HEADER;
   region->alignment = (U.uiflag & USER_HEADER_BOTTOM) ? RGN_ALIGN_BOTTOM : RGN_ALIGN_TOP;
 
   /* buttons/list view */
-  region = MEM_cnew<ARegion>("buttons for node");
+  region = BKE_area_region_new();
 
   BLI_addtail(&snode->regionbase, region);
   region->regiontype = RGN_TYPE_UI;
   region->alignment = RGN_ALIGN_RIGHT;
 
   /* toolbar */
-  region = MEM_cnew<ARegion>("node tools");
+  region = BKE_area_region_new();
 
   BLI_addtail(&snode->regionbase, region);
   region->regiontype = RGN_TYPE_TOOLS;
@@ -425,7 +432,7 @@ static SpaceLink *node_create(const ScrArea * /*area*/, const Scene * /*scene*/)
   region->flag = RGN_FLAG_HIDDEN;
 
   /* main region */
-  region = MEM_cnew<ARegion>("main region for node");
+  region = BKE_area_region_new();
 
   BLI_addtail(&snode->regionbase, region);
   region->regiontype = RGN_TYPE_WINDOW;

@@ -1139,7 +1139,7 @@ static void do_wpaint_brush_blur(const Depsgraph &depsgraph,
       const Span<int> verts = nodes[i].verts();
       tls.factors.resize(verts.size());
       const MutableSpan<float> factors = tls.factors;
-      fill_factor_from_hide(mesh, verts, factors);
+      fill_factor_from_hide(hide_vert, verts, factors);
       if (!select_vert.is_empty()) {
         filter_factors_with_selection(select_vert, verts, factors);
       }
@@ -1257,7 +1257,7 @@ static void do_wpaint_brush_smear(const Depsgraph &depsgraph,
       const Span<int> verts = nodes[i].verts();
       tls.factors.resize(verts.size());
       const MutableSpan<float> factors = tls.factors;
-      fill_factor_from_hide(mesh, verts, factors);
+      fill_factor_from_hide(hide_vert, verts, factors);
       if (!select_vert.is_empty()) {
         filter_factors_with_selection(select_vert, verts, factors);
       }
@@ -1374,7 +1374,7 @@ static void do_wpaint_brush_draw(const Depsgraph &depsgraph,
       const Span<int> verts = nodes[i].verts();
       tls.factors.resize(verts.size());
       const MutableSpan<float> factors = tls.factors;
-      fill_factor_from_hide(mesh, verts, factors);
+      fill_factor_from_hide(hide_vert, verts, factors);
       if (!select_vert.is_empty()) {
         filter_factors_with_selection(select_vert, verts, factors);
       }
@@ -1461,7 +1461,7 @@ static float calculate_average_weight(const Depsgraph &depsgraph,
           const Span<int> verts = nodes[i].verts();
           tls.factors.resize(verts.size());
           const MutableSpan<float> factors = tls.factors;
-          fill_factor_from_hide(mesh, verts, factors);
+          fill_factor_from_hide(hide_vert, verts, factors);
           if (!select_vert.is_empty()) {
             filter_factors_with_selection(select_vert, verts, factors);
           }
@@ -1786,7 +1786,7 @@ static void wpaint_do_symmetrical_brush_actions(
 }
 
 static void wpaint_stroke_update_step(bContext *C,
-                                      wmOperator * /*op*/,
+                                      wmOperator *op,
                                       PaintStroke *stroke,
                                       PointerRNA *itemptr)
 {
@@ -1840,7 +1840,7 @@ static void wpaint_stroke_update_step(bContext *C,
   wpi.vgroup_validmap = wpd->vgroup_validmap;
   wpi.vgroup_locked = wpd->vgroup_locked;
   wpi.vgroup_unlocked = wpd->vgroup_unlocked;
-  wpi.do_flip = RNA_boolean_get(itemptr, "pen_flip") || ss.cache->invert;
+  wpi.do_flip = RNA_boolean_get(op->ptr, "pen_flip") || ss.cache->invert;
   wpi.do_multipaint = wpd->do_multipaint;
   wpi.do_auto_normalize = ((ts.auto_normalize != 0) && (wpi.vgroup_validmap != nullptr) &&
                            (wpi.do_multipaint || wpi.vgroup_validmap[wpi.active.index]));

@@ -25,7 +25,7 @@
 #include "BLI_math_matrix.h"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 #include "BLI_string.h"
 #include "BLI_string_ref.hh"
 #include "BLI_task.hh"
@@ -321,7 +321,7 @@ void BKE_volume_init_grids(Volume *volume)
 #endif
 }
 
-void *BKE_volume_add(Main *bmain, const char *name)
+Volume *BKE_volume_add(Main *bmain, const char *name)
 {
   Volume *volume = (Volume *)BKE_id_new(bmain, ID_VO, name);
 

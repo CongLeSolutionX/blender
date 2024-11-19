@@ -46,6 +46,7 @@
 #include "ED_util.hh"
 
 #include "ANIM_action.hh"
+#include "ANIM_action_legacy.hh"
 #include "ANIM_bone_collections.hh"
 #include "ANIM_keyframing.hh"
 #include "ANIM_keyingsets.hh"
@@ -135,12 +136,13 @@ static void poselib_keytag_pose(bContext *C, Scene *scene, PoseBlendData *pbd)
   bPose *pose = pbd->ob->pose;
   bAction *act = poselib_action_to_blend(pbd);
 
-  KeyingSet *ks = ANIM_get_keyingset_for_autokeying(scene, ANIM_KS_WHOLE_CHARACTER_ID);
+  KeyingSet *ks = blender::animrig::get_keyingset_for_autokeying(scene,
+                                                                 ANIM_KS_WHOLE_CHARACTER_ID);
   blender::Vector<PointerRNA> sources;
 
   /* start tagging/keying */
   const bArmature *armature = static_cast<const bArmature *>(pbd->ob->data);
-  LISTBASE_FOREACH (bActionGroup *, agrp, &act->groups) {
+  for (bActionGroup *agrp : blender::animrig::legacy::channel_groups_all(act)) {
     /* Only for selected bones unless there aren't any selected, in which case all are included. */
     bPoseChannel *pchan = BKE_pose_channel_find_name(pose, agrp->name);
     if (pchan == nullptr) {
@@ -154,7 +156,7 @@ static void poselib_keytag_pose(bContext *C, Scene *scene, PoseBlendData *pbd)
     }
 
     /* Add data-source override for the PoseChannel, to be used later. */
-    ANIM_relative_keyingset_add_source(sources, &pbd->ob->id, &RNA_PoseBone, pchan);
+    blender::animrig::relative_keyingset_add_source(sources, &pbd->ob->id, &RNA_PoseBone, pchan);
   }
 
   if (adt->action) {
@@ -162,7 +164,7 @@ static void poselib_keytag_pose(bContext *C, Scene *scene, PoseBlendData *pbd)
   }
 
   /* Perform actual auto-keying. */
-  ANIM_apply_keyingset(
+  blender::animrig::apply_keyingset(
       C, &sources, ks, blender::animrig::ModifyKeyMode::INSERT, float(scene->r.cfra));
 
   /* send notifiers for this */
