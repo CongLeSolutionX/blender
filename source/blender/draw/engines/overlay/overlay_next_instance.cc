@@ -139,6 +139,7 @@ void Instance::begin_sync()
     layer.meshes.begin_sync(resources, state, view);
     layer.mesh_uvs.begin_sync(resources, state);
     layer.mode_transfer.begin_sync(resources, state);
+    layer.names.begin_sync(resources, state);
     layer.paints.begin_sync(resources, state);
     layer.particles.begin_sync(resources, state);
     layer.prepass.begin_sync(resources, state);
@@ -286,6 +287,7 @@ void Instance::object_sync(ObjectRef &ob_ref, Manager &manager)
     layer.fluids.object_sync(manager, ob_ref, resources, state);
     layer.particles.object_sync(manager, ob_ref, resources, state);
     layer.relations.object_sync(ob_ref, resources, state);
+    layer.names.object_sync(ob_ref, resources, state);
 
     motion_paths.object_sync(ob_ref, resources, state);
     origins.object_sync(ob_ref, resources, state);
@@ -660,19 +662,9 @@ bool Instance::object_is_in_front(const Object *object, const State &state)
     case OB_ARMATURE:
       return (object->dtx & OB_DRAW_IN_FRONT) ||
              (state.do_pose_xray && Armatures::is_pose_mode(object, state));
-    case OB_MESH:
-    case OB_CURVES_LEGACY:
-    case OB_GREASE_PENCIL:
-    case OB_SURF:
-    case OB_LATTICE:
-    case OB_MBALL:
-    case OB_FONT:
-    case OB_CURVES:
-    case OB_POINTCLOUD:
-    case OB_VOLUME:
+    default:
       return state.use_in_front && (object->dtx & OB_DRAW_IN_FRONT);
   }
-  return false;
 }
 
 bool Instance::object_needs_prepass(const ObjectRef &ob_ref, bool in_paint_mode)
