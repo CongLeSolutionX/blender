@@ -442,7 +442,8 @@ void interpolate_curves_with_samples(const CurvesGeometry &from_curves,
     const GSpan src_to = curve_attributes.src_to[i_attribute];
     GMutableSpan dst = curve_attributes.dst[i_attribute].span;
 
-    /* Only mix "safe" attribute types for now. Other types (int, bool, etc.) are just copied from
+    /* Only mix "safe" attribute types for now. Other types (int, bool, etc.) are just copied
+    from
      * the first curve of each pair. */
     const bool can_mix_attribute = ELEM(bke::cpp_type_to_custom_data_type(dst.type()),
                                         CD_PROP_FLOAT,

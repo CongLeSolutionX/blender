@@ -361,6 +361,42 @@ InterpolateOpData *InterpolateOpData::from_operator(const bContext &C, const wmO
   return data;
 }
 
+/* Find ranges of sorted pairs with the same from/to frame intervals. */
+static Vector<int> find_curve_pair_offsets(const InterpolationPairs &curve_pairs,
+                                           const Span<int> order)
+{
+  Vector<int> pair_offsets;
+
+  int prev_from_frame = INT_MIN;
+  int prev_to_frame = INT_MIN;
+  int current_count = 0;
+  for (const int pair_index : order) {
+    const int from_frame = curve_pairs.from_frames[pair_index];
+    const int to_frame = curve_pairs.to_frames[pair_index];
+    if (from_frame != prev_from_frame || to_frame != prev_to_frame) {
+      /* New pair. */
+      if (current_count > 0) {
+        pair_offsets.append(current_count);
+      }
+      current_count = 0;
+    }
+    ++current_count;
+  }
+  if (current_count > 0) {
+    pair_offsets.append(current_count);
+  }
+
+  /* Last entry for overall size. */
+  if (pair_offsets.is_empty()) {
+    return {};
+  }
+
+  pair_offsets.append(0);
+  offset_indices::accumulate_counts_to_offsets(pair_offsets);
+
+  return pair_offsets;
+}
+
 static bool compute_auto_flip(const Span<float3> from_positions, const Span<float3> to_positions)
 {
   if (from_positions.size() < 2 || to_positions.size() < 2) {
@@ -397,56 +433,90 @@ static bool compute_auto_flip(const Span<float3> from_positions, const Span<floa
   return math::dot(from_last - from_first, to_last - to_first) < 0.0f;
 }
 
-/* Create samples for a curve based on the evaluated lengths of another curve.
- * The output sample indices and factors match the relative positions of the template curve. */
-static void sample_curve_from_template(const bke::CurvesGeometry &curves,
-                                       const int curve_index,
-                                       const bool cyclic,
-                                       const int template_curve_index,
-                                       const int template_cyclic,
-                                       const bool reverse,
-                                       MutableSpan<int> r_segment_indices,
-                                       MutableSpan<float> r_factors)
+// /* Create samples for a curve based on the evaluated lengths of another curve.
+//  * The output sample indices and factors match the relative positions of the template curve. */
+// static void sample_curve_from_template(const bke::CurvesGeometry &curves,
+//                                        const int curve_index,
+//                                        const bool cyclic,
+//                                        const int template_curve_index,
+//                                        const int template_cyclic,
+//                                        const bool reverse,
+//                                        MutableSpan<int> r_segment_indices,
+//                                        MutableSpan<float> r_factors)
+// {
+//   const Span<float> segment_lengths = curves.evaluated_lengths_for_curve(curve_index, cyclic);
+//   if (segment_lengths.is_empty()) {
+//     /* Handle curves with only one evaluated point. */
+//     r_segment_indices.fill(0);
+//     r_factors.fill(0.0f);
+//     return;
+//   }
+
+//   /* Find lengths from relative length along the template curve. */
+//   const Span<float3> positions = curves.positions();
+//   const float total_length = segment_lengths.last();
+//   const IndexRange template_points = curves.points_by_curve()[template_curve_index];
+//   /* Template curve size must match the output size. */
+//   BLI_assert(template_points.size() == r_segment_indices.size());
+
+//   Array<float> sample_lengths(template_points.size());
+//   float template_length = 0.0f;
+//   for (const int i : template_points.index_range().drop_back(1)) {
+//     const float segment_length = math::distance(positions[template_points[i]],
+//                                                 positions[template_points[i + 1]]);
+//     sample_lengths[i] = template_length;
+//     template_length += segment_length;
+//   }
+//   sample_lengths.last() = template_length;
+//   const float length_ratio = math::safe_divide(total_length, template_length);
+//   if (reverse) {
+//     for (const int i : template_points.index_range()) {
+//       sample_lengths[i] = total_length - sample_lengths[i] * length_ratio;
+//     }
+//   }
+//   else {
+//     for (const int i : template_points.index_range()) {
+//       sample_lengths[i] = sample_lengths[i] * length_ratio;
+//     }
+//   }
+
+//   length_parameterize::sample_at_lengths(
+//       segment_lengths, sample_lengths, r_segment_indices, r_factors);
+// };
+
+/* Copy existing sample positions and insert new samples inbetween to reach the final count. */
+static void sample_curve_padded(const bke::CurvesGeometry &curves,
+                                const int curve_index,
+                                const bool cyclic,
+                                const bool reverse,
+                                MutableSpan<int> r_segment_indices,
+                                MutableSpan<float> r_factors)
 {
-  const Span<float> segment_lengths = curves.evaluated_lengths_for_curve(curve_index, cyclic);
-  if (segment_lengths.is_empty()) {
-    /* Handle curves with only one evaluated point. */
-    r_segment_indices.fill(0);
-    r_factors.fill(0.0f);
+  const int num_dst_segments = r_segment_indices.size();
+  const IndexRange points = curves.points_by_curve()[curve_index];
+  const Span<float3> positions = curves.positions();
+  if (points.is_empty()) {
     return;
   }
 
-  /* Find lengths from relative length along the template curve. */
-  const Span<float3> positions = curves.positions();
-  const float total_length = segment_lengths.last();
-  const IndexRange template_points = curves.points_by_curve()[template_curve_index];
-  /* Template curve size must match the output size. */
-  BLI_assert(template_points.size() == r_segment_indices.size());
-
-  Array<float> sample_lengths(template_points.size());
-  float template_length = 0.0f;
-  for (const int i : template_points.index_range().drop_back(1)) {
-    const float segment_length = math::distance(positions[template_points[i]],
-                                                positions[template_points[i + 1]]);
-    sample_lengths[i] = template_length;
-    template_length += segment_length;
+  Array<float> point_lengths(points.size());
+  point_lengths[0] = 0.0f;
+  for (const int i : points.index_range().drop_front(1)) {
+    const float segment_length = math::distance(positions[points[i - 1]], positions[points[i]]);
+    point_lengths[i] = point_lengths[i - 1] + segment_length;
   }
-  sample_lengths.last() = template_length;
-  const float length_ratio = math::safe_divide(total_length, template_length);
-  if (reverse) {
-    for (const int i : template_points.index_range()) {
-      sample_lengths[i] = total_length - sample_lengths[i] * length_ratio;
+  const float total_length = point_lengths.last();
+
+  for (const int point_i : points.index_range().drop_back(1)) {
+    const int segments_begin = point_lengths[point_i] / total_length * num_dst_segments;
+    const int segments_end = point_lengths[point_i + 1] / total_length * num_dst_segments;
+    const IndexRange segments = IndexRange::from_begin_end(segments_begin, segments_end);
+    r_segment_indices.slice(segments).fill(points[point_i]);
+    for (const int segment_i : segments.index_range()) {
+      r_factors[segments[segment_i]] = float(segment_i) / segments.size();
     }
   }
-  else {
-    for (const int i : template_points.index_range()) {
-      sample_lengths[i] = sample_lengths[i] * length_ratio;
-    }
-  }
-
-  length_parameterize::sample_at_lengths(
-      segment_lengths, sample_lengths, r_segment_indices, r_factors);
-};
+}
 
 static bke::CurvesGeometry interpolate_between_curves(const GreasePencil &grease_pencil,
                                                       const bke::greasepencil::Layer &layer,
@@ -477,36 +547,8 @@ static bke::CurvesGeometry interpolate_between_curves(const GreasePencil &grease
   });
 
   /* Find ranges of sorted pairs with the same from/to frame intervals. */
-  Vector<int> pair_offsets;
-  const OffsetIndices curves_by_pair = [&]() {
-    int prev_from_frame = INT_MIN;
-    int prev_to_frame = INT_MIN;
-    int current_count = 0;
-    for (const int sorted_index : IndexRange(dst_curve_num)) {
-      const int pair_index = sorted_pairs[sorted_index];
-      const int from_frame = curve_pairs.from_frames[pair_index];
-      const int to_frame = curve_pairs.to_frames[pair_index];
-      if (from_frame != prev_from_frame || to_frame != prev_to_frame) {
-        /* New pair. */
-        if (current_count > 0) {
-          pair_offsets.append(current_count);
-        }
-        current_count = 0;
-      }
-      ++current_count;
-    }
-    if (current_count > 0) {
-      pair_offsets.append(current_count);
-    }
-
-    /* Last entry for overall size. */
-    if (pair_offsets.is_empty()) {
-      return OffsetIndices<int>{};
-    }
-
-    pair_offsets.append(0);
-    return offset_indices::accumulate_counts_to_offsets(pair_offsets);
-  }();
+  Vector<int> pair_offsets = find_curve_pair_offsets(curve_pairs, sorted_pairs);
+  const OffsetIndices<int> curves_by_pair(pair_offsets);
 
   /* Compute curve length and flip mode for each pair. */
   Array<int> dst_curve_offsets(curves_by_pair.size() + 1, 0);
@@ -614,24 +656,29 @@ static bke::CurvesGeometry interpolate_between_curves(const GreasePencil &grease
       const IndexRange from_points = from_points_by_curve[from_curve];
       const IndexRange to_points = to_points_by_curve[to_curve];
       const IndexRange dst_points = dst_points_by_curve[pair_index];
+
       if (from_points.size() >= to_points.size()) {
         /* Target curve samples match 'from' points. */
         BLI_assert(from_points.size() == dst_points.size());
         array_utils::fill_index_range(from_sample_indices.as_mutable_span().slice(dst_points),
                                       int(from_points.start()));
         from_sample_factors.as_mutable_span().slice(dst_points).fill(0.0f);
-        sample_curve_from_template(to_drawing->strokes(),
-                                   to_curve,
-                                   to_curves_cyclic[to_curve],
-                                   from_curve,
-                                   from_curves_cyclic[from_curve],
-                                   dst_curve_flip[pair_index], )
-        // TODO map 'from' sample positions to 'to' sample indices/factors
+        sample_curve_padded(to_drawing->strokes(),
+                            to_curve,
+                            to_curves_cyclic[to_curve],
+                            dst_curve_flip[pair_index],
+                            to_sample_indices.as_mutable_span().slice(dst_points),
+                            to_sample_factors.as_mutable_span().slice(dst_points));
       }
       else {
         /* Target curve samples match 'to' points. */
         BLI_assert(to_points.size() == dst_points.size());
-        // TODO map 'to' sample positions to 'from' sample indices/factors
+        sample_curve_padded(from_drawing->strokes(),
+                            from_curve,
+                            from_curves_cyclic[from_curve],
+                            dst_curve_flip[pair_index],
+                            from_sample_indices.as_mutable_span().slice(dst_points),
+                            from_sample_factors.as_mutable_span().slice(dst_points));
         array_utils::fill_index_range(to_sample_indices.as_mutable_span().slice(dst_points),
                                       int(to_points.start()));
         to_sample_factors.fill(0.0f);
