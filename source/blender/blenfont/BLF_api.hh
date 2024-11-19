@@ -62,6 +62,7 @@ int BLF_load_mem(const char *name, const unsigned char *mem, int mem_size) ATTR_
 
 bool BLF_is_loaded(const char *filepath) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL(1);
 bool BLF_is_loaded_mem(const char *name) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL(1);
+bool BLF_is_loaded_id(int fontid) ATTR_WARN_UNUSED_RESULT;
 
 int BLF_load_unique(const char *filepath) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL(1);
 int BLF_load_mem_unique(const char *name, const unsigned char *mem, int mem_size)
@@ -74,6 +75,8 @@ void BLF_unload_mem(const char *name) ATTR_NONNULL(1);
 
 void BLF_unload_id(int fontid);
 void BLF_unload_all();
+
+void BLF_addref_id(int fontid);
 
 char *BLF_display_name_from_file(const char *filepath) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL(1);
 

@@ -171,6 +171,12 @@ bool BLF_is_loaded_mem(const char *name)
   return blf_search_by_mem_name(name) >= 0;
 }
 
+bool BLF_is_loaded_id(int fontid)
+{
+  FontBLF *font = blf_get(fontid);
+  return font != nullptr;
+}
+
 int BLF_load(const char *filepath)
 {
   /* check if we already load this font. */
@@ -307,6 +313,14 @@ void BLF_unload_all()
   blf_mono_font = -1;
   blf_mono_font_render = -1;
   BLF_default_set(-1);
+}
+
+void BLF_addref_id(int fontid)
+{
+  FontBLF *font = blf_get(fontid);
+  if (font) {
+    font->reference_count++;
+  }
 }
 
 void BLF_enable(int fontid, int option)
