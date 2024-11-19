@@ -67,7 +67,7 @@ void VKFrameBuffer::bind(bool enabled_srgb)
   scissor_reset();
 }
 
-void VKFrameBuffer::vk_viewports_append(Vector<VkViewport> r_viewports) const
+void VKFrameBuffer::vk_viewports_append(Vector<VkViewport> &r_viewports) const
 {
   BLI_assert(r_viewports.is_empty());
   for (int64_t index : IndexRange(this->multi_viewport_ ? GPU_MAX_VIEWPORTS : 1)) {

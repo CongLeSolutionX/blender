@@ -78,7 +78,7 @@ class VKFrameBuffer : public FrameBuffer {
                int dst_offset_x,
                int dst_offset_y) override;
 
-  void vk_viewports_append(Vector<VkViewport> r_viewports) const;
+  void vk_viewports_append(Vector<VkViewport> &r_viewports) const;
   void vk_render_areas_append(Vector<VkRect2D> &r_render_areas) const;
 
   void render_area_update(VkRect2D &render_area) const;
