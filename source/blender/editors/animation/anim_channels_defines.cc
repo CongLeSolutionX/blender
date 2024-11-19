@@ -3905,6 +3905,14 @@ static void *layer_setting_ptr(bAnimListElem *ale,
   return GET_ACF_FLAG_PTR(layer->base.flag, r_type);
 }
 
+static bool layer_channel_color(const bAnimListElem *ale, uint8_t r_color[3])
+{
+  using namespace bke::greasepencil;
+  Layer &layer = *static_cast<Layer *>(ale->data);
+  rgb_float_to_uchar(r_color, layer.channel_color);
+  return true;
+}
+
 static int layer_group_icon(bAnimListElem *ale)
 {
   using namespace bke::greasepencil;
@@ -3987,7 +3995,7 @@ static bAnimChannelType ACF_GPL = {
     /*channel_role*/ ACHANNEL_ROLE_CHANNEL,
 
     /*get_backdrop_color*/ acf_generic_channel_color,
-    /*get_channel_color*/ nullptr,
+    /*get_channel_color*/ greasepencil::layer_channel_color,
     /*draw_backdrop*/ acf_generic_channel_backdrop,
     /*get_indent_level*/ acf_generic_indentation_flexible,
     /*get_offset*/ greasepencil::layer_offset,
