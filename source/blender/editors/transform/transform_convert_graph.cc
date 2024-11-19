@@ -115,7 +115,7 @@ static void bezt_to_transdata(TransData *td,
    * should be done. This is left over from old code, most of which was changed
    * in #130440 to avoid using `adt == nullptr` as an indicator for that. This
    * was left that way because updating it cleanly was more involved than made
-   * sense for the bug fix in #130440.*/
+   * sense for the bug fix in #130440. */
   if (ANIM_nla_mapping_allowed(ale)) {
     td->extra = ale->adt;
   }
