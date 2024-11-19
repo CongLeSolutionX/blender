@@ -250,7 +250,7 @@ bAction *id_action_ensure(Main *bmain, ID *id)
   return adt->action;
 }
 
-void animdata_fcurve_delete(AnimData *adt, FCurve *fcu, const bool is_driver)
+void animdata_fcurve_delete(AnimData *adt, FCurve *fcu)
 {
   /* - If no AnimData, we've got nowhere to remove the F-Curve from
    *   (this doesn't guarantee that the F-Curve is in there, but at least we tried
@@ -260,6 +260,7 @@ void animdata_fcurve_delete(AnimData *adt, FCurve *fcu, const bool is_driver)
     return;
   }
 
+  const bool is_driver = fcu->driver != nullptr;
   if (is_driver) {
     BLI_remlink(&adt->drivers, fcu);
   }

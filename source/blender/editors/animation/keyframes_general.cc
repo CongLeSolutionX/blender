@@ -228,8 +228,7 @@ void clean_fcurve(bAnimContext *ac,
       /* check if curve is really unused and if it is, return signal for deletion */
       if (BKE_fcurve_is_empty(fcu)) {
         AnimData *adt = ale->adt;
-        const bool is_driver = ac->datatype == ANIMCONT_DRIVERS;
-        blender::animrig::animdata_fcurve_delete(adt, fcu, is_driver);
+        blender::animrig::animdata_fcurve_delete(adt, fcu);
         ale->key_data = nullptr;
       }
     }
