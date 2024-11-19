@@ -665,7 +665,6 @@ static void createTransActionData(bContext *C, TransInfo *t)
 
   int count = 0;
   int gpf_count = 0;
-  float cfra;
   float ypos = 1.0f / ((ysize / xsize) * (xmask / ymask)) * BLI_rctf_cent_y(&t->region->v2d.cur);
 
   /* Determine what type of data we are operating on. */
@@ -692,7 +691,7 @@ static void createTransActionData(bContext *C, TransInfo *t)
     int ale_count = 0;
     /* Convert current-frame to action-time (slightly less accurate, especially under
      * higher scaling ratios, but is faster than converting all points). */
-    cfra = ANIM_nla_tweakedit_remap(ale, float(scene->r.cfra), NLATIME_CONVERT_UNMAP);
+    const float cfra = ANIM_nla_tweakedit_remap(ale, float(scene->r.cfra), NLATIME_CONVERT_UNMAP);
 
     switch (ale->type) {
       case ANIMTYPE_FCURVE:
@@ -795,7 +794,7 @@ static void createTransActionData(bContext *C, TransInfo *t)
       continue;
     }
 
-    cfra = ANIM_nla_tweakedit_remap(ale, cfra, NLATIME_CONVERT_UNMAP);
+    const float cfra = ANIM_nla_tweakedit_remap(ale, float(scene->r.cfra), NLATIME_CONVERT_UNMAP);
 
     if (ale->type == ANIMTYPE_GPLAYER) {
       bGPDlayer *gpl = (bGPDlayer *)ale->data;
@@ -840,7 +839,8 @@ static void createTransActionData(bContext *C, TransInfo *t)
         continue;
       }
 
-      cfra = ANIM_nla_tweakedit_remap(ale, float(scene->r.cfra), NLATIME_CONVERT_UNMAP);
+      const float cfra = ANIM_nla_tweakedit_remap(
+          ale, float(scene->r.cfra), NLATIME_CONVERT_UNMAP);
 
       if (ale->type == ANIMTYPE_GPLAYER) {
         bGPDlayer *gpl = (bGPDlayer *)ale->data;
