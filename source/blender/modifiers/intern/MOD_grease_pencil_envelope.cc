@@ -9,6 +9,7 @@
 #include "DNA_defaults.h"
 #include "DNA_modifier_types.h"
 
+#include "BLI_array_utils.hh"
 #include "BLI_math_geom.h"
 
 #include "BKE_curves.hh"
@@ -630,6 +631,8 @@ static void modify_drawing(const GreasePencilEnvelopeModifierData &emd,
 {
   const EnvelopeInfo info = get_envelope_info(emd, ctx);
 
+  modifier::greasepencil::ensure_no_bezier_curves(drawing);
+
   IndexMaskMemory mask_memory;
   const IndexMask curves_mask = modifier::greasepencil::get_filtered_stroke_mask(
       ctx.object, drawing.strokes(), emd.influence, mask_memory);
@@ -700,7 +703,7 @@ static void panel_draw(const bContext *C, Panel *panel)
   }
 
   if (uiLayout *influence_panel = uiLayoutPanelProp(
-          C, layout, ptr, "open_influence_panel", "Influence"))
+          C, layout, ptr, "open_influence_panel", IFACE_("Influence")))
   {
     modifier::greasepencil::draw_layer_filter_settings(C, influence_panel, ptr);
     modifier::greasepencil::draw_material_filter_settings(C, influence_panel, ptr);

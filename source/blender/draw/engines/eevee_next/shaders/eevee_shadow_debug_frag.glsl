@@ -37,11 +37,10 @@ vec3 debug_random_color(int v)
 void debug_tile_print(ShadowTileData tile, ivec4 tile_coord)
 {
   /* This `printf` injection is based on string literal detection. Comment it out unless needed. */
-#if 0
-  printf("Tile (%u, %u) in Tilemap %u: page(%u, %u, %u), cache_index %u",
-         tile_coord.x, tile_coord.y, tile_coord.z, tile.page.x, tile.page.y, tile.page.z,
-         tile.cache_index);
-#endif
+  /* NOTE: using `#if 0` here causes a crash on exit for debug builds, stick to C++ comments. */
+  // printf("Tile (%u, %u) in Tilemap %u: page(%u, %u, %u), cache_index %u",
+  // tile_coord.x, tile_coord.y, tile_coord.z, tile.page.x, tile.page.y, tile.page.z,
+  // tile.cache_index);
 }
 
 vec3 debug_tile_state_color(ShadowTileData tile)
@@ -113,6 +112,10 @@ LightData debug_light_get()
     }
   }
   LIGHT_FOREACH_END
+
+  /* TODO Assert. */
+  /* Silence compiler warning. */
+  return light_buf[0];
 }
 
 /** Return true if a pixel was written. */
@@ -226,6 +229,8 @@ void main()
         break;
       case DEBUG_SHADOW_TILEMAP_RANDOM_COLOR:
         debug_random_tilemap_color(P, light);
+        break;
+      default:
         break;
     }
   }

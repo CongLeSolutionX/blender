@@ -17,7 +17,7 @@
 
 #include "BKE_context.hh"
 #include "BKE_global.hh"
-#include "BKE_image.h"
+#include "BKE_image.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_main.hh"
 #include "BKE_scene.hh"
@@ -459,22 +459,22 @@ class ImageOperation : public NodeOperation {
       return;
     }
 
-    Result *cached_image = context().cache_manager().cached_images.get(
+    Result cached_image = context().cache_manager().cached_images.get(
         context(), get_image(), get_image_user(), get_pass_name(identifier));
 
     Result &result = get_result(identifier);
-    if (!cached_image || !cached_image->is_allocated()) {
+    if (!cached_image.is_allocated()) {
       result.allocate_invalid();
       return;
     }
 
     /* Alpha is not an actual pass, but one that is extracted from the combined pass. */
     if (identifier == "Alpha") {
-      extract_alpha(context(), *cached_image, result);
+      extract_alpha(context(), cached_image, result);
     }
     else {
-      result.set_precision(cached_image->precision());
-      result.wrap_external(*cached_image);
+      result.set_precision(cached_image.precision());
+      result.wrap_external(cached_image);
     }
   }
 

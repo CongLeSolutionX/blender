@@ -265,15 +265,17 @@ bool selection_update(const ViewContext *vc,
 
         /* Modes that un-set all elements not in the mask. */
         if (ELEM(sel_op, SEL_OP_SET, SEL_OP_AND)) {
-          bke::GSpanAttributeWriter selection =
-              curves.attributes_for_write().lookup_for_write_span(attribute_name);
-          ed::curves::fill_selection_false(selection.span);
+          if (bke::GSpanAttributeWriter selection =
+                  curves.attributes_for_write().lookup_for_write_span(attribute_name))
+          {
+            ed::curves::fill_selection_false(selection.span);
+            selection.finish();
+          }
         }
 
         if (use_segment_selection) {
           /* Range of points in tree data matching this curve, for re-using screen space
-           * positions.
-           */
+           * positions. */
           const IndexRange tree_data_range = tree_data_by_drawing[i_drawing];
           changed |= ed::greasepencil::apply_mask_as_segment_selection(curves,
                                                                        changed_element_mask,
@@ -775,12 +777,13 @@ static void GREASE_PENCIL_OT_select_similar(wmOperatorType *ot)
   ot->idname = "GREASE_PENCIL_OT_select_similar";
   ot->description = "Select all strokes with similar characteristics";
 
+  ot->invoke = WM_menu_invoke;
   ot->exec = select_similar_exec;
   ot->poll = editable_grease_pencil_point_selection_poll;
 
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
-  RNA_def_enum(
+  ot->prop = RNA_def_enum(
       ot->srna, "mode", select_similar_mode_items, int(SelectSimilarMode::LAYER), "Mode", "");
 
   RNA_def_float(ot->srna, "threshold", 0.1f, 0.0f, FLT_MAX, "Threshold", "", 0.0f, 10.0f);
@@ -871,7 +874,7 @@ static int select_set_mode_exec(bContext *C, wmOperator *op)
 
     GreasePencilDrawing *drawing = reinterpret_cast<GreasePencilDrawing *>(drawing_base);
     bke::CurvesGeometry &curves = drawing->wrap().strokes_for_write();
-    if (curves.points_num() == 0) {
+    if (curves.is_empty()) {
       continue;
     }
 

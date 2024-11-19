@@ -62,7 +62,7 @@
 #include "BKE_file_handler.hh"
 #include "BKE_grease_pencil.hh"
 #include "BKE_idprop.hh"
-#include "BKE_image_format.h"
+#include "BKE_image_format.hh"
 #include "BKE_lib_query.hh"
 #include "BKE_main.hh"
 #include "BKE_material.h"
@@ -3118,6 +3118,21 @@ static bool versioning_convert_seq_text_anchor(Sequence *seq, void * /*user_data
   return true;
 }
 
+static void add_subsurf_node_limit_surface_option(Main &bmain)
+{
+  LISTBASE_FOREACH (bNodeTree *, ntree, &bmain.nodetrees) {
+    if (ntree->type == NTREE_GEOMETRY) {
+      LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+        if (node->type == GEO_NODE_SUBDIVISION_SURFACE) {
+          bNodeSocket *socket = version_node_add_socket_if_not_exist(
+              ntree, node, SOCK_IN, SOCK_BOOLEAN, PROP_NONE, "Limit Surface", "Limit Surface");
+          static_cast<bNodeSocketValueBoolean *>(socket->default_value)->value = false;
+        }
+      }
+    }
+  }
+}
+
 void blo_do_versions_400(FileData *fd, Library * /*lib*/, Main *bmain)
 {
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 400, 1)) {
@@ -4424,7 +4439,7 @@ void blo_do_versions_400(FileData *fd, Library * /*lib*/, Main *bmain)
     bool shadow_resolution_absolute = false;
     /* Try to get default resolution from scene setting. */
     LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
-      shadow_max_res_local = (2.0f * M_SQRT2) / scene->eevee.shadow_cube_size;
+      shadow_max_res_local = (2.0f * M_SQRT2) / scene->eevee.shadow_cube_size_deprecated;
       /* Round to avoid weird numbers in the UI. */
       shadow_max_res_local = ceil(shadow_max_res_local * 1000.0f) / 1000.0f;
       shadow_resolution_absolute = true;
@@ -4993,6 +5008,33 @@ void blo_do_versions_400(FileData *fd, Library * /*lib*/, Main *bmain)
         SEQ_for_each_callback(&ed->seqbase, versioning_convert_seq_text_anchor, nullptr);
       }
     }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 404, 4)) {
+    LISTBASE_FOREACH (bScreen *, screen, &bmain->screens) {
+      LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
+        LISTBASE_FOREACH (SpaceLink *, sl, &area->spacedata) {
+          if (sl->spacetype != SPACE_FILE) {
+            continue;
+          }
+          SpaceFile *sfile = reinterpret_cast<SpaceFile *>(sl);
+          if (sfile->asset_params) {
+            sfile->asset_params->base_params.sort = FILE_SORT_ASSET_CATALOG;
+          }
+        }
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 404, 5)) {
+    LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
+      SequencerToolSettings *sequencer_tool_settings = SEQ_tool_settings_ensure(scene);
+      sequencer_tool_settings->snap_mode |= SEQ_SNAP_TO_RETIMING;
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 404, 6)) {
+    add_subsurf_node_limit_surface_option(*bmain);
   }
 
   /* Always run this versioning; meshes are written with the legacy format which always needs to

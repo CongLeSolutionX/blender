@@ -29,6 +29,9 @@
 
 #include "DEG_depsgraph_query.hh"
 
+#include "DNA_brush_types.h"
+#include "DNA_material_types.h"
+
 #include "ED_grease_pencil.hh"
 #include "ED_screen.hh"
 #include "ED_space_api.hh"
@@ -109,6 +112,7 @@ struct PrimitiveToolOperation {
   ViewContext vc;
 
   int segments;
+  /* Stored in layer space. */
   Vector<float3> control_points;
   /* Store the control points temporally. */
   Vector<float3> temp_control_points;
@@ -121,13 +125,16 @@ struct PrimitiveToolOperation {
   DrawingPlacement placement;
 
   bke::greasepencil::Drawing *drawing;
+  Brush *brush;
   BrushGpencilSettings *settings;
   std::optional<ColorGeometry4f> vertex_color;
   std::optional<ColorGeometry4f> fill_color;
   int material_index;
+  bool use_fill;
   float softness;
-  Brush *brush;
+  float fill_opacity;
   float4x2 texture_space;
+  float4x4 local_transform;
 
   OperatorMode mode;
   float2 start_position_2d;
@@ -247,13 +254,14 @@ static void draw_control_points(PrimitiveToolOperation &ptd)
   control_point_colors_and_sizes(ptd, colors, sizes);
 
   for (const int point : ptd.control_points.index_range()) {
-    const float3 point3d = ptd.control_points[point];
+    const float3 world_pos = math::transform_point(ptd.placement.to_world_space(),
+                                                   ptd.control_points[point]);
     const ColorGeometry4f color = colors[point];
     const float size = sizes[point];
 
     immAttr4f(col3d, color[0], color[1], color[2], color[3]);
     immAttr1f(siz3d, size * 2.0f);
-    immVertex3fv(pos3d, point3d);
+    immVertex3fv(pos3d, world_pos);
   }
 
   immEnd();
@@ -386,13 +394,18 @@ static void primitive_calulate_curve_positions(PrimitiveToolOperation &ptd,
   }
 }
 
+static float2 primitive_local_to_screen(const PrimitiveToolOperation &ptd, const float3 &point)
+{
+  return ED_view3d_project_float_v2_m4(
+      ptd.vc.region, math::transform_point(ptd.local_transform, point), ptd.projection);
+}
+
 static void primitive_calulate_curve_positions_2d(PrimitiveToolOperation &ptd,
                                                   MutableSpan<float2> new_positions)
 {
   Array<float2> control_points_2d(ptd.control_points.size());
   for (const int i : ptd.control_points.index_range()) {
-    control_points_2d[i] = ED_view3d_project_float_v2_m4(
-        ptd.vc.region, ptd.control_points[i], ptd.projection);
+    control_points_2d[i] = primitive_local_to_screen(ptd, ptd.control_points[i]);
   }
 
   primitive_calulate_curve_positions(ptd, control_points_2d, new_positions);
@@ -422,43 +435,11 @@ static int grease_pencil_primitive_curve_points_number(PrimitiveToolOperation &p
   return 0;
 }
 
-/* Attributes that are defined explicitly and should not be copied from original geometry. */
-static Set<std::string> skipped_attribute_ids(const PrimitiveToolOperation &ptd,
-                                              const bke::AttrDomain domain)
-{
-  switch (domain) {
-    case bke::AttrDomain::Point:
-      if (ptd.vertex_color) {
-        return {"position", "radius", "opacity", "vertex_color"};
-      }
-      else {
-        return {"position", "radius", "opacity"};
-      }
-    case bke::AttrDomain::Curve:
-      if (ptd.fill_color) {
-        return {"curve_type",
-                "material_index",
-                "cyclic",
-                "softness",
-                "start_cap",
-                "end_cap",
-                "fill_color"};
-      }
-      else {
-        return {"curve_type", "material_index", "cyclic", "softness", "start_cap", "end_cap"};
-      }
-    default:
-      return {};
-  }
-  return {};
-}
-
 static void grease_pencil_primitive_update_curves(PrimitiveToolOperation &ptd)
 {
   bke::CurvesGeometry &curves = ptd.drawing->strokes_for_write();
 
   const int last_points_num = curves.points_by_curve()[curves.curves_range().last()].size();
-
   const int new_points_num = grease_pencil_primitive_curve_points_number(ptd);
 
   curves.resize(curves.points_num() - last_points_num + new_points_num, curves.curves_num());
@@ -471,12 +452,10 @@ static void grease_pencil_primitive_update_curves(PrimitiveToolOperation &ptd)
   primitive_calulate_curve_positions_2d(ptd, positions_2d);
   ptd.placement.project(positions_2d, positions_3d);
 
+  Set<std::string> point_attributes_to_skip;
+
   MutableSpan<float> new_radii = ptd.drawing->radii_for_write().slice(curve_points);
   MutableSpan<float> new_opacities = ptd.drawing->opacities_for_write().slice(curve_points);
-
-  if (ptd.vertex_color) {
-    ptd.drawing->vertex_colors_for_write().slice(curve_points).fill(*ptd.vertex_color);
-  }
 
   const ToolSettings *ts = ptd.vc.scene->toolsettings;
   const GP_Sculpt_Settings *gset = &ts->gp_sculpt;
@@ -502,19 +481,19 @@ static void grease_pencil_primitive_update_curves(PrimitiveToolOperation &ptd)
     new_radii[point] = radius;
     new_opacities[point] = opacity;
   }
+  point_attributes_to_skip.add_multiple({"position", "radius", "opacity"});
+
+  if (ptd.vertex_color) {
+    ptd.drawing->vertex_colors_for_write().slice(curve_points).fill(*ptd.vertex_color);
+    point_attributes_to_skip.add("vertex_color");
+  }
 
   /* Initialize the rest of the attributes with default values. */
   bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
-  bke::fill_attribute_range_default(
-      attributes,
-      bke::AttrDomain::Point,
-      bke::attribute_filter_from_skip_ref(skipped_attribute_ids(ptd, bke::AttrDomain::Point)),
-      curve_points);
-  bke::fill_attribute_range_default(
-      attributes,
-      bke::AttrDomain::Curve,
-      bke::attribute_filter_from_skip_ref(skipped_attribute_ids(ptd, bke::AttrDomain::Curve)),
-      curves.curves_range().take_back(1));
+  bke::fill_attribute_range_default(attributes,
+                                    bke::AttrDomain::Point,
+                                    bke::attribute_filter_from_skip_ref(point_attributes_to_skip),
+                                    curve_points);
 
   ptd.drawing->tag_topology_changed();
   ptd.drawing->set_texture_matrices({ptd.texture_space},
@@ -528,6 +507,8 @@ static void grease_pencil_primitive_init_curves(PrimitiveToolOperation &ptd)
   const int num_old_points = curves.points_num();
   curves.resize(curves.points_num() + 1, curves.curves_num() + 1);
   curves.offsets_for_write().last(1) = num_old_points;
+
+  Set<std::string> curve_attributes_to_skip;
 
   bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
   bke::SpanAttributeWriter<int> materials = attributes.lookup_or_add_for_write_span<int>(
@@ -543,6 +524,7 @@ static void grease_pencil_primitive_init_curves(PrimitiveToolOperation &ptd)
         "start_cap", bke::AttrDomain::Curve);
     start_caps.span.last() = ptd.settings->caps_type;
     start_caps.finish();
+    curve_attributes_to_skip.add("start_cap");
   }
 
   if (ptd.settings->caps_type != GP_STROKE_CAP_TYPE_ROUND || attributes.contains("end_cap")) {
@@ -550,6 +532,7 @@ static void grease_pencil_primitive_init_curves(PrimitiveToolOperation &ptd)
         "end_cap", bke::AttrDomain::Curve);
     end_caps.span.last() = ptd.settings->caps_type;
     end_caps.finish();
+    curve_attributes_to_skip.add("end_cap");
   }
 
   const bool is_cyclic = ELEM(ptd.type, PrimitiveType::Box, PrimitiveType::Circle);
@@ -557,29 +540,36 @@ static void grease_pencil_primitive_init_curves(PrimitiveToolOperation &ptd)
   materials.span.last() = ptd.material_index;
   softness.span.last() = ptd.softness;
 
+  if (ptd.use_fill && (ptd.fill_opacity < 1.0f || attributes.contains("fill_opacity"))) {
+    bke::SpanAttributeWriter<float> fill_opacities =
+        attributes.lookup_or_add_for_write_span<float>(
+            "fill_opacity",
+            bke::AttrDomain::Curve,
+            bke::AttributeInitVArray(VArray<float>::ForSingle(1.0f, curves.curves_num())));
+    fill_opacities.span.last() = ptd.fill_opacity;
+    fill_opacities.finish();
+    curve_attributes_to_skip.add("fill_opacity");
+  }
+
   if (ptd.fill_color) {
     ptd.drawing->fill_colors_for_write().last() = *ptd.fill_color;
+    curve_attributes_to_skip.add("fill_color");
   }
 
   cyclic.finish();
   materials.finish();
   softness.finish();
+  curve_attributes_to_skip.add_multiple({"material_index", "cyclic", "softness"});
 
   curves.curve_types_for_write().last() = CURVE_TYPE_POLY;
   curves.update_curve_types();
+  curve_attributes_to_skip.add("curve_type");
 
   /* Initialize the rest of the attributes with default values. */
-  bke::fill_attribute_range_default(
-      attributes,
-      bke::AttrDomain::Point,
-      bke::attribute_filter_from_skip_ref(skipped_attribute_ids(ptd, bke::AttrDomain::Point)),
-      curves.points_range().take_back(1));
-  bke::fill_attribute_range_default(
-      attributes,
-      bke::AttrDomain::Curve,
-      bke::attribute_filter_from_skip_ref(skipped_attribute_ids(ptd, bke::AttrDomain::Curve)),
-      curves.curves_range().take_back(1));
-
+  bke::fill_attribute_range_default(attributes,
+                                    bke::AttrDomain::Curve,
+                                    bke::attribute_filter_from_skip_ref(curve_attributes_to_skip),
+                                    curves.curves_range().take_back(1));
   grease_pencil_primitive_update_curves(ptd);
 }
 
@@ -628,9 +618,10 @@ static void grease_pencil_primitive_status_indicators(bContext *C,
     return WM_modalkeymap_operator_items_to_string(op->type, int(id), true).value_or("");
   };
 
-  header += fmt::format(IFACE_("{}: confirm, {}: cancel, Shift: align"),
+  header += fmt::format(IFACE_("{}: confirm, {}: cancel, {}: panning, Shift: align"),
                         get_modal_key_str(ModalKeyMode::Confirm),
-                        get_modal_key_str(ModalKeyMode::Cancel));
+                        get_modal_key_str(ModalKeyMode::Cancel),
+                        get_modal_key_str(ModalKeyMode::Panning));
 
   header += fmt::format(IFACE_(", {}/{}: adjust subdivisions: {}"),
                         get_modal_key_str(ModalKeyMode::IncreaseSubdivision),
@@ -757,6 +748,7 @@ static int grease_pencil_primitive_invoke(bContext *C, wmOperator *op, const wmE
   Material *material = BKE_grease_pencil_object_material_ensure_from_active_input_brush(
       CTX_data_main(C), vc.obact, ptd.brush);
   ptd.material_index = BKE_object_material_index_get(vc.obact, material);
+  ptd.use_fill = (material->gp_style->flag & GP_MATERIAL_FILL_SHOW) != 0;
 
   const bool use_vertex_color = (vc.scene->toolsettings->gp_paint->mode ==
                                  GPPAINT_FLAG_USE_VERTEXCOLOR);
@@ -776,12 +768,14 @@ static int grease_pencil_primitive_invoke(bContext *C, wmOperator *op, const wmE
     ptd.fill_color = std::nullopt;
   }
 
+  ptd.fill_opacity = ptd.brush->alpha;
   ptd.softness = 1.0 - ptd.settings->hardness;
 
   ptd.texture_space = ed::greasepencil::calculate_texture_space(
       vc.scene, ptd.region, ptd.start_position_2d, ptd.placement);
 
   BLI_assert(grease_pencil->has_active_layer());
+  ptd.local_transform = grease_pencil->get_active_layer()->local_transform();
   ptd.drawing = grease_pencil->get_editable_drawing_at(*grease_pencil->get_active_layer(),
                                                        vc.scene->r.cfra);
 
@@ -892,8 +886,7 @@ static void grease_pencil_primitive_drag_all_update(PrimitiveToolOperation &ptd,
   const float2 dif = end - start;
 
   for (const int point_index : ptd.control_points.index_range()) {
-    const float2 start_pos2 = ED_view3d_project_float_v2_m4(
-        ptd.vc.region, ptd.temp_control_points[point_index], ptd.projection);
+    const float2 start_pos2 = primitive_local_to_screen(ptd, ptd.temp_control_points[point_index]);
 
     float3 pos = ptd.placement.project(start_pos2 + dif);
     ptd.control_points[point_index] = pos;
@@ -921,8 +914,8 @@ static void grease_pencil_primitive_grab_update(PrimitiveToolOperation &ptd, con
                               control_point_first;
 
   /* Get the location of the other control point.*/
-  const float2 other_point_2d = ED_view3d_project_float_v2_m4(
-      ptd.vc.region, ptd.temp_control_points[other_point], ptd.projection);
+  const float2 other_point_2d = primitive_local_to_screen(ptd,
+                                                          ptd.temp_control_points[other_point]);
 
   /* Set the center point to between the first and last point. */
   ptd.control_points[control_point_center] = ptd.placement.project(
@@ -936,8 +929,8 @@ static void grease_pencil_primitive_drag_update(PrimitiveToolOperation &ptd, con
   const float2 end = float2(event->mval);
   const float2 dif = end - start;
 
-  const float2 start_pos2 = ED_view3d_project_float_v2_m4(
-      ptd.vc.region, ptd.temp_control_points[ptd.active_control_point_index], ptd.projection);
+  const float2 start_pos2 = primitive_local_to_screen(
+      ptd, ptd.temp_control_points[ptd.active_control_point_index]);
 
   const float3 pos = ptd.placement.project(start_pos2 + dif);
   ptd.control_points[ptd.active_control_point_index] = pos;
@@ -946,14 +939,12 @@ static void grease_pencil_primitive_drag_update(PrimitiveToolOperation &ptd, con
 static float2 primitive_center_of_mass(const PrimitiveToolOperation &ptd)
 {
   if (ELEM(ptd.type, PrimitiveType::Box, PrimitiveType::Circle)) {
-    return ED_view3d_project_float_v2_m4(
-        ptd.vc.region, ptd.temp_control_points[control_point_center], ptd.projection);
+    return primitive_local_to_screen(ptd, ptd.temp_control_points[control_point_center]);
   }
   float2 center_of_mass = float2(0.0f, 0.0f);
 
   for (const int point_index : ptd.control_points.index_range()) {
-    center_of_mass += ED_view3d_project_float_v2_m4(
-        ptd.vc.region, ptd.temp_control_points[point_index], ptd.projection);
+    center_of_mass += primitive_local_to_screen(ptd, ptd.temp_control_points[point_index]);
   }
   center_of_mass /= ptd.control_points.size();
   return center_of_mass;
@@ -972,8 +963,7 @@ static void grease_pencil_primitive_rotate_all_update(PrimitiveToolOperation &pt
   const float rotation = math::atan2(start_[0], start_[1]) - math::atan2(end_[0], end_[1]);
 
   for (const int point_index : ptd.control_points.index_range()) {
-    const float2 start_pos2 = ED_view3d_project_float_v2_m4(
-        ptd.vc.region, ptd.temp_control_points[point_index], ptd.projection);
+    const float2 start_pos2 = primitive_local_to_screen(ptd, ptd.temp_control_points[point_index]);
 
     const float2 dif = start_pos2 - center_of_mass;
     const float c = math::cos(rotation);
@@ -996,8 +986,7 @@ static void grease_pencil_primitive_scale_all_update(PrimitiveToolOperation &ptd
   const float scale = math::length(end - center_of_mass) / math::length(start - center_of_mass);
 
   for (const int point_index : ptd.control_points.index_range()) {
-    const float2 start_pos2 = ED_view3d_project_float_v2_m4(
-        ptd.vc.region, ptd.temp_control_points[point_index], ptd.projection);
+    const float2 start_pos2 = primitive_local_to_screen(ptd, ptd.temp_control_points[point_index]);
 
     const float2 pos2 = (start_pos2 - center_of_mass) * scale + center_of_mass;
     const float3 pos = ptd.placement.project(pos2);
@@ -1012,8 +1001,7 @@ static int primitive_check_ui_hover(const PrimitiveToolOperation &ptd, const wmE
 
   for (const int i : ptd.control_points.index_range()) {
     const int point = (ptd.control_points.size() - 1) - i;
-    const float2 pos_proj = ED_view3d_project_float_v2_m4(
-        ptd.vc.region, ptd.control_points[point], ptd.projection);
+    const float2 pos_proj = primitive_local_to_screen(ptd, ptd.control_points[point]);
     const float radius_sq = ui_point_hit_size_px * ui_point_hit_size_px;
     const float distance_squared = math::distance_squared(pos_proj, float2(event->mval));
     /* If the mouse is over a control point. */
@@ -1091,8 +1079,7 @@ static int grease_pencil_primitive_event_modal_map(bContext *C,
         ptd.mode = OperatorMode::Extruding;
         grease_pencil_primitive_save(ptd);
 
-        ptd.start_position_2d = ED_view3d_project_float_v2_m4(
-            ptd.vc.region, ptd.control_points.last(), ptd.projection);
+        ptd.start_position_2d = primitive_local_to_screen(ptd, ptd.control_points.last());
         const float3 pos = ptd.placement.project(ptd.start_position_2d);
 
         const int number_control_points = control_points_per_segment(ptd);
@@ -1109,8 +1096,7 @@ static int grease_pencil_primitive_event_modal_map(bContext *C,
         ptd.mode = OperatorMode::Extruding;
         grease_pencil_primitive_save(ptd);
 
-        ptd.start_position_2d = ED_view3d_project_float_v2_m4(
-            ptd.vc.region, ptd.control_points.last(), ptd.projection);
+        ptd.start_position_2d = primitive_local_to_screen(ptd, ptd.control_points.last());
         ptd.active_control_point_index = -1;
         const float3 pos = ptd.placement.project(float2(event->mval));
 
@@ -1208,8 +1194,8 @@ static int grease_pencil_primitive_mouse_event(PrimitiveToolOperation &ptd, cons
       const ControlPointType control_point_type = get_control_point_type(ptd, ui_id);
 
       if (control_point_type == ControlPointType::JoinPoint) {
-        ptd.start_position_2d = ED_view3d_project_float_v2_m4(
-            ptd.vc.region, ptd.control_points[ptd.active_control_point_index], ptd.projection);
+        ptd.start_position_2d = primitive_local_to_screen(
+            ptd, ptd.control_points[ptd.active_control_point_index]);
         ptd.mode = OperatorMode::Grab;
 
         grease_pencil_primitive_save(ptd);
@@ -1231,8 +1217,7 @@ static int grease_pencil_primitive_mouse_event(PrimitiveToolOperation &ptd, cons
     ptd.mode = OperatorMode::Extruding;
     grease_pencil_primitive_save(ptd);
 
-    ptd.start_position_2d = ED_view3d_project_float_v2_m4(
-        ptd.vc.region, ptd.control_points.last(), ptd.projection);
+    ptd.start_position_2d = primitive_local_to_screen(ptd, ptd.control_points.last());
     const float3 pos = ptd.placement.project(float2(event->mval));
 
     /* If we have only two points and they're the same then don't extrude new a point. */
@@ -1289,6 +1274,27 @@ static void grease_pencil_primitive_operator_update(PrimitiveToolOperation &ptd,
 static int grease_pencil_primitive_modal(bContext *C, wmOperator *op, const wmEvent *event)
 {
   PrimitiveToolOperation &ptd = *reinterpret_cast<PrimitiveToolOperation *>(op->customdata);
+
+  /* Check for confirm before navigation. */
+  if (event->type == EVT_MODAL_MAP) {
+    if (event->val == int(ModalKeyMode::Confirm)) {
+      grease_pencil_primitive_exit(C, op);
+
+      return OPERATOR_FINISHED;
+    }
+  }
+
+  const float3 pos = ptd.control_points.first();
+  if (ED_view3d_navigation_do(C, ptd.vod, event, pos)) {
+    if (ptd.vc.rv3d->rflag & RV3D_NAVIGATING) {
+      ptd.projection = ED_view3d_ob_project_mat_get(ptd.vc.rv3d, ptd.vc.obact);
+
+      grease_pencil_primitive_update_curves(ptd);
+      grease_pencil_primitive_update_view(C, ptd);
+
+      return OPERATOR_RUNNING_MODAL;
+    }
+  }
 
   ptd.projection = ED_view3d_ob_project_mat_get(ptd.vc.rv3d, ptd.vc.obact);
   grease_pencil_primitive_cursor_update(C, ptd, event);

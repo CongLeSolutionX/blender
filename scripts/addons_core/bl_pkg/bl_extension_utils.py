@@ -43,6 +43,8 @@ __all__ = (
     "pkg_manifest_dict_from_archive_or_error",
     "pkg_manifest_archive_url_abs_from_remote_url",
 
+    "python_versions_from_wheel_python_tag",
+
     "CommandBatch",
     "RepoCacheStore",
 
@@ -65,12 +67,13 @@ import tomllib
 
 from typing import (
     Any,
-    Generator,
     IO,
     NamedTuple,
 )
 from collections.abc import (
     Callable,
+    Generator,
+    Iterator,
     Sequence,
 )
 
@@ -184,7 +187,7 @@ def file_mtime_or_none_with_error_fn(
     return None
 
 
-def scandir_with_demoted_errors(path: str) -> Generator[os.DirEntry[str], None, None]:
+def scandir_with_demoted_errors(path: str) -> Iterator[os.DirEntry[str]]:
     try:
         yield from os.scandir(path)
     except Exception as ex:
@@ -310,7 +313,7 @@ def repository_iter_package_dirs(
         *,
         error_fn: Callable[[Exception], None],
         ignore_missing: bool = False,
-) -> Generator[os.DirEntry[str], None, None]:
+) -> Iterator[os.DirEntry[str]]:
     try:
         dir_entries = os.scandir(directory)
     except Exception as ex:
@@ -430,7 +433,12 @@ def _url_append_query(url: str, query: dict[str, str]) -> str:
     return new_url
 
 
-def url_append_query_for_blender(url: str, blender_version: tuple[int, int, int]) -> str:
+def url_append_query_for_blender(
+        *,
+        url: str,
+        blender_version: tuple[int, int, int],
+        python_version: tuple[int, int, int],
+) -> str:
     # `blender_version` is typically `bpy.app.version`.
 
     # While this won't cause errors, it's redundant to add this information to file URL's.
@@ -440,6 +448,7 @@ def url_append_query_for_blender(url: str, blender_version: tuple[int, int, int]
     query = {
         "platform": platform_from_this_system(),
         "blender_version": "{:d}.{:d}.{:d}".format(*blender_version),
+        "python_version": "{:d}.{:d}.{:d}".format(*python_version),
     }
     return _url_append_query(url, query)
 
@@ -470,7 +479,7 @@ def url_parse_for_blender(url: str) -> tuple[str, dict[str, str]]:
     for key, value in query:
         value_xform = None
         match key:
-            case "blender_version_min" | "blender_version_max" | "platforms":
+            case "blender_version_min" | "blender_version_max" | "python_versions" | "platforms":
                 if value:
                     value_xform = value
             case "repository":
@@ -547,7 +556,7 @@ def repo_sync(
         dry_run: bool = False,
         demote_connection_errors_to_status: bool = False,
         extension_override: str = "",
-) -> Generator[InfoItemSeq, None, None]:
+) -> Iterator[InfoItemSeq]:
     """
     Implementation:
     ``bpy.ops.ext.repo_sync(directory)``.
@@ -579,7 +588,7 @@ def repo_upgrade(
         access_token: str,
         use_idle: bool,
         python_args: Sequence[str],
-) -> Generator[InfoItemSeq, None, None]:
+) -> Iterator[InfoItemSeq]:
     """
     Implementation:
     ``bpy.ops.ext.repo_upgrade(directory)``.
@@ -598,7 +607,7 @@ def repo_upgrade(
 def repo_listing(
         *,
         repos: Sequence[str],
-) -> Generator[InfoItemSeq, None, None]:
+) -> Iterator[InfoItemSeq]:
     """
     Implementation:
     ``bpy.ops.ext.repo_listing(directory)``.
@@ -619,9 +628,10 @@ def pkg_install_files(
         directory: str,
         files: Sequence[str],
         blender_version: tuple[int, int, int],
+        python_version: tuple[int, int, int],
         use_idle: bool,
         python_args: Sequence[str],
-) -> Generator[InfoItemSeq, None, None]:
+) -> Iterator[InfoItemSeq]:
     """
     Implementation:
     ``bpy.ops.ext.pkg_install_files(directory, files)``.
@@ -630,6 +640,7 @@ def pkg_install_files(
         "install-files", *files,
         "--local-dir", directory,
         "--blender-version", "{:d}.{:d}.{:d}".format(*blender_version),
+        "--python-version", "{:d}.{:d}.{:d}".format(*python_version),
         "--temp-prefix-and-suffix", "/".join(PKG_TEMP_PREFIX_AND_SUFFIX),
     ], use_idle=use_idle, python_args=python_args)
     yield [COMPLETE_ITEM]
@@ -641,13 +652,14 @@ def pkg_install(
         remote_url: str,
         pkg_id_sequence: Sequence[str],
         blender_version: tuple[int, int, int],
+        python_version: tuple[int, int, int],
         online_user_agent: str,
         access_token: str,
         timeout: float,
         use_cache: bool,
         use_idle: bool,
         python_args: Sequence[str],
-) -> Generator[InfoItemSeq, None, None]:
+) -> Iterator[InfoItemSeq]:
     """
     Implementation:
     ``bpy.ops.ext.pkg_install(directory, pkg_id)``.
@@ -657,6 +669,7 @@ def pkg_install(
         "--local-dir", directory,
         "--remote-url", remote_url,
         "--blender-version", "{:d}.{:d}.{:d}".format(*blender_version),
+        "--python-version", "{:d}.{:d}.{:d}".format(*python_version),
         "--online-user-agent", online_user_agent,
         "--access-token", access_token,
         "--local-cache", str(int(use_cache)),
@@ -673,7 +686,7 @@ def pkg_uninstall(
         pkg_id_sequence: Sequence[str],
         use_idle: bool,
         python_args: Sequence[str],
-) -> Generator[InfoItemSeq, None, None]:
+) -> Iterator[InfoItemSeq]:
     """
     Implementation:
     ``bpy.ops.ext.pkg_uninstall(directory, pkg_id)``.
@@ -816,6 +829,20 @@ def pkg_repo_cache_clear(local_dir: str) -> None:
             os.unlink(entry.path)
         except Exception as ex:
             print("Error: unlink", ex)
+
+
+def python_versions_from_wheel_python_tag(python_tag: str) -> set[tuple[int] | tuple[int, int]] | str:
+    from .cli.blender_ext import python_versions_from_wheel_python_tag as fn
+    result = fn(python_tag)
+    assert isinstance(result, (set, str))
+    return result
+
+
+def python_versions_from_wheels(wheel_files: Sequence[str]) -> set[tuple[int] | tuple[int, int]] | str:
+    from .cli.blender_ext import python_versions_from_wheels as fn
+    result = fn(wheel_files)
+    assert isinstance(result, (set, str))
+    return result
 
 
 # -----------------------------------------------------------------------------
@@ -1334,6 +1361,7 @@ def repository_id_with_error_fn(
 class PkgManifest_FilterParams(NamedTuple):
     platform: str
     blender_version: tuple[int, int, int]
+    python_version: tuple[int, int, int]
 
 
 def repository_filter_skip(
@@ -1345,6 +1373,7 @@ def repository_filter_skip(
     result = repository_filter_skip_impl(
         item,
         filter_blender_version=filter_params.blender_version,
+        filter_python_version=filter_params.python_version,
         filter_platform=filter_params.platform,
         skip_message_fn=None,
         error_fn=error_fn,
@@ -1358,8 +1387,10 @@ def pkg_manifest_params_compatible_or_error(
         blender_version_min: str,
         blender_version_max: str,
         platforms: list[str],
+        python_versions: list[str],
         this_platform: tuple[int, int, int],
         this_blender_version: tuple[int, int, int],
+        this_python_version: tuple[int, int, int],
         error_fn: Callable[[Exception], None],
 ) -> str | None:
     from .cli.blender_ext import repository_filter_skip as fn
@@ -1372,11 +1403,14 @@ def pkg_manifest_params_compatible_or_error(
         item["blender_version_max"] = blender_version_max
     if platforms:
         item["platforms"] = platforms
+    if python_versions:
+        item["python_versions"] = python_versions
 
     result_report = []
     result = fn(
         item=item,
         filter_blender_version=this_blender_version,
+        filter_python_version=this_python_version,
         filter_platform=this_platform,
         # pylint: disable-next=unnecessary-lambda
         skip_message_fn=lambda msg: result_report.append(msg),
@@ -1986,11 +2020,17 @@ class RepoCacheStore:
         "_is_init",
     )
 
-    def __init__(self, blender_version: tuple[int, int, int]) -> None:
+    def __init__(
+        self,
+            *,
+            blender_version: tuple[int, int, int],
+            python_version: tuple[int, int, int],
+    ) -> None:
         self._repos: list[_RepoCacheEntry] = []
         self._filter_params = PkgManifest_FilterParams(
             platform=platform_from_this_system(),
             blender_version=blender_version,
+            python_version=python_version,
         )
         self._is_init = False
 
@@ -2055,7 +2095,7 @@ class RepoCacheStore:
             check_files: bool = False,
             ignore_missing: bool = False,
             directory_subset: set[str] | None = None,
-    ) -> Generator[dict[str, PkgManifest_Normalized] | None, None, None]:
+    ) -> Iterator[dict[str, PkgManifest_Normalized] | None]:
         for repo_entry in self._repos:
             if directory_subset is not None:
                 if repo_entry.directory not in directory_subset:
@@ -2080,7 +2120,7 @@ class RepoCacheStore:
             check_files: bool = False,
             ignore_missing: bool = False,
             directory_subset: set[str] | None = None,
-    ) -> Generator[dict[str, PkgManifest_Normalized] | None, None, None]:
+    ) -> Iterator[dict[str, PkgManifest_Normalized] | None]:
         for repo_entry in self._repos:
             if directory_subset is not None:
                 if repo_entry.directory not in directory_subset:

@@ -672,27 +672,32 @@ static bool rna_BrushCapabilitiesImagePaint_has_radius_get(PointerRNA *ptr)
 
 static PointerRNA rna_Sculpt_brush_capabilities_get(PointerRNA *ptr)
 {
-  return rna_pointer_inherit_refine(ptr, &RNA_BrushCapabilitiesSculpt, ptr->owner_id);
+  BLI_assert(ptr->owner_id == ptr->data);
+  return rna_pointer_inherit_refine(ptr, &RNA_BrushCapabilitiesSculpt, ptr->data);
 }
 
 static PointerRNA rna_Imapaint_brush_capabilities_get(PointerRNA *ptr)
 {
-  return rna_pointer_inherit_refine(ptr, &RNA_BrushCapabilitiesImagePaint, ptr->owner_id);
+  BLI_assert(ptr->owner_id == ptr->data);
+  return rna_pointer_inherit_refine(ptr, &RNA_BrushCapabilitiesImagePaint, ptr->data);
 }
 
 static PointerRNA rna_Vertexpaint_brush_capabilities_get(PointerRNA *ptr)
 {
-  return rna_pointer_inherit_refine(ptr, &RNA_BrushCapabilitiesVertexPaint, ptr->owner_id);
+  BLI_assert(ptr->owner_id == ptr->data);
+  return rna_pointer_inherit_refine(ptr, &RNA_BrushCapabilitiesVertexPaint, ptr->data);
 }
 
 static PointerRNA rna_Weightpaint_brush_capabilities_get(PointerRNA *ptr)
 {
-  return rna_pointer_inherit_refine(ptr, &RNA_BrushCapabilitiesWeightPaint, ptr->owner_id);
+  BLI_assert(ptr->owner_id == ptr->data);
+  return rna_pointer_inherit_refine(ptr, &RNA_BrushCapabilitiesWeightPaint, ptr->data);
 }
 
 static PointerRNA rna_Brush_capabilities_get(PointerRNA *ptr)
 {
-  return rna_pointer_inherit_refine(ptr, &RNA_BrushCapabilities, ptr->owner_id);
+  BLI_assert(ptr->owner_id == ptr->data);
+  return rna_pointer_inherit_refine(ptr, &RNA_BrushCapabilities, ptr->data);
 }
 
 static void rna_Brush_reset_icon(Brush *br)
@@ -3894,7 +3899,6 @@ static void rna_def_brush(BlenderRNA *brna)
  * - 3D location of the brush
  * - 2D mouse location
  * - Tablet pressure
- * - Direction flip
  * - Brush type switch
  * - Time
  */
@@ -3930,10 +3934,6 @@ static void rna_def_operator_stroke_element(BlenderRNA *brna)
   RNA_def_property_flag(prop, PROP_IDPROPERTY);
   RNA_def_property_range(prop, 0.0f, FLT_MAX);
   RNA_def_property_ui_text(prop, "Brush Size", "Brush size in screen space");
-
-  prop = RNA_def_property(srna, "pen_flip", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_flag(prop, PROP_IDPROPERTY);
-  RNA_def_property_ui_text(prop, "Flip", "");
 
   prop = RNA_def_property(srna, "x_tilt", PROP_FLOAT, PROP_FACTOR);
   RNA_def_property_flag(prop, PROP_IDPROPERTY);
