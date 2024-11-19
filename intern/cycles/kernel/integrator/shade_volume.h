@@ -256,19 +256,6 @@ ccl_device_inline bool volume_octree_tracing_advance(KernelGlobals kg,
     bbox = tracing.get_voxel()->bbox;
   }
 
-  /* World volume special cases. */
-  if (tracing.has_world_volume && tracing.nodes.size() == 1) {
-    const ccl_global KernelOctreeNode *kroot = &kernel_data_fetch(volume_tree_nodes, 1);
-    const KernelBoundingBox root_bbox = kroot->bbox;
-    if (root_bbox.contains(shade_P, OVERLAP_EXP)) {
-      /* Enters root node. */
-      tracing.push(kroot);
-    }
-    else {
-      /* Leaves root node. */
-    }
-  }
-
   /* Push the leaf node that contains the current shading point to the stack. */
   volume_voxel_get(kg, tracing, shade_P);
 
