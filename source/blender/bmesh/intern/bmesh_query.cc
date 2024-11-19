@@ -1629,25 +1629,25 @@ BMFace *BM_face_exists(BMVert *const *varr, int len)
      * its faster to iterate on the data directly */
     do {
       if (e_iter->l) {
-        BMLoop *l_iter_radial, *l_first_radial;
-        l_iter_radial = l_first_radial = e_iter->l;
+        BMLoop *l_iter, *l_first;
+        l_iter = l_first = e_iter->l;
 
         do {
-          if ((l_iter_radial->v == varr[0]) && (l_iter_radial->f->len == len)) {
+          if ((l_iter->v == varr[0]) && (l_iter->f->len == len)) {
             /* the fist 2 verts match, now check the remaining (len - 2) faces do too
              * winding isn't known, so check in both directions */
             int i_walk = 2;
 
-            if (l_iter_radial->next->v == varr[1]) {
-              BMLoop *l_walk = l_iter_radial->next->next;
+            if (l_iter->next->v == varr[1]) {
+              BMLoop *l_walk = l_iter->next->next;
               do {
                 if (l_walk->v != varr[i_walk]) {
                   break;
                 }
               } while ((void)(l_walk = l_walk->next), ++i_walk != len);
             }
-            else if (l_iter_radial->prev->v == varr[1]) {
-              BMLoop *l_walk = l_iter_radial->prev->prev;
+            else if (l_iter->prev->v == varr[1]) {
+              BMLoop *l_walk = l_iter->prev->prev;
               do {
                 if (l_walk->v != varr[i_walk]) {
                   break;
@@ -1656,10 +1656,10 @@ BMFace *BM_face_exists(BMVert *const *varr, int len)
             }
 
             if (i_walk == len) {
-              return l_iter_radial->f;
+              return l_iter->f;
             }
           }
-        } while ((l_iter_radial = l_iter_radial->radial_next) != l_first_radial);
+        } while ((l_iter = l_iter->radial_next) != l_first);
       }
     } while ((e_iter = BM_DISK_EDGE_NEXT(e_iter, varr[0])) != e_first);
   }
@@ -1670,28 +1670,28 @@ BMFace *BM_face_exists(BMVert *const *varr, int len)
 BMFace *BM_face_find_double(BMFace *f)
 {
   BMLoop *l_first = BM_FACE_FIRST_LOOP(f);
-  for (BMLoop *l_iter = l_first->radial_next; l_first != l_iter; l_iter = l_iter->radial_next) {
-    if (l_iter->f->len == l_first->f->len) {
-      if (l_iter->v == l_first->v) {
-        BMLoop *l_a = l_first, *l_b = l_iter, *l_b_init = l_iter;
+  for (BMLoop *l_iter_radial = l_first->radial_next; l_first != l_iter_radial; l_iter_radial = l_iter_radial->radial_next) {
+    if (l_iter_radial->f->len == l_first->f->len) {
+      if (l_iter_radial->v == l_first->v) {
+        BMLoop *l_a = l_first, *l_b = l_iter_radial, *l_b_init = l_iter_radial;
         do {
           if (l_a->e != l_b->e) {
             break;
           }
         } while (((void)(l_a = l_a->next), (l_b = l_b->next)) != l_b_init);
         if (l_b == l_b_init) {
-          return l_iter->f;
+          return l_iter_radial->f;
         }
       }
       else {
-        BMLoop *l_a = l_first, *l_b = l_iter, *l_b_init = l_iter;
+        BMLoop *l_a = l_first, *l_b = l_iter_radial, *l_b_init = l_iter_radial;
         do {
           if (l_a->e != l_b->e) {
             break;
           }
         } while (((void)(l_a = l_a->prev), (l_b = l_b->next)) != l_b_init);
         if (l_b == l_b_init) {
-          return l_iter->f;
+          return l_iter_radial->f;
         }
       }
     }
