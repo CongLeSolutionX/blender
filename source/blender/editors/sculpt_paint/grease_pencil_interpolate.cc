@@ -12,6 +12,7 @@
 #include "BLI_array_utils.hh"
 #include "BLI_easing.h"
 #include "BLI_index_mask.hh"
+#include "BLI_length_parameterize.hh"
 #include "BLI_math_angle_types.hh"
 #include "BLI_math_geom.h"
 #include "BLI_math_rotation.h"
@@ -396,6 +397,57 @@ static bool compute_auto_flip(const Span<float3> from_positions, const Span<floa
   return math::dot(from_last - from_first, to_last - to_first) < 0.0f;
 }
 
+/* Create samples for a curve based on the evaluated lengths of another curve.
+ * The output sample indices and factors match the relative positions of the template curve. */
+static void sample_curve_from_template(const bke::CurvesGeometry &curves,
+                                       const int curve_index,
+                                       const bool cyclic,
+                                       const int template_curve_index,
+                                       const int template_cyclic,
+                                       const bool reverse,
+                                       MutableSpan<int> r_segment_indices,
+                                       MutableSpan<float> r_factors)
+{
+  const Span<float> segment_lengths = curves.evaluated_lengths_for_curve(curve_index, cyclic);
+  if (segment_lengths.is_empty()) {
+    /* Handle curves with only one evaluated point. */
+    r_segment_indices.fill(0);
+    r_factors.fill(0.0f);
+    return;
+  }
+
+  /* Find lengths from relative length along the template curve. */
+  const Span<float3> positions = curves.positions();
+  const float total_length = segment_lengths.last();
+  const IndexRange template_points = curves.points_by_curve()[template_curve_index];
+  /* Template curve size must match the output size. */
+  BLI_assert(template_points.size() == r_segment_indices.size());
+
+  Array<float> sample_lengths(template_points.size());
+  float template_length = 0.0f;
+  for (const int i : template_points.index_range().drop_back(1)) {
+    const float segment_length = math::distance(positions[template_points[i]],
+                                                positions[template_points[i + 1]]);
+    sample_lengths[i] = template_length;
+    template_length += segment_length;
+  }
+  sample_lengths.last() = template_length;
+  const float length_ratio = math::safe_divide(total_length, template_length);
+  if (reverse) {
+    for (const int i : template_points.index_range()) {
+      sample_lengths[i] = total_length - sample_lengths[i] * length_ratio;
+    }
+  }
+  else {
+    for (const int i : template_points.index_range()) {
+      sample_lengths[i] = sample_lengths[i] * length_ratio;
+    }
+  }
+
+  length_parameterize::sample_at_lengths(
+      segment_lengths, sample_lengths, r_segment_indices, r_factors);
+};
+
 static bke::CurvesGeometry interpolate_between_curves(const GreasePencil &grease_pencil,
                                                       const bke::greasepencil::Layer &layer,
                                                       const InterpolationPairs &curve_pairs,
@@ -520,6 +572,10 @@ static bke::CurvesGeometry interpolate_between_curves(const GreasePencil &grease
    * for interpolating all curves of a frame pair at once. */
   Array<int> sorted_from_curve_indices(dst_curve_num);
   Array<int> sorted_to_curve_indices(dst_curve_num);
+  Array<int> from_sample_indices(dst_point_num);
+  Array<int> to_sample_indices(dst_point_num);
+  Array<float> from_sample_factors(dst_point_num);
+  Array<float> to_sample_factors(dst_point_num);
 
   for (const int pair_range_i : curves_by_pair.index_range()) {
     const IndexRange pair_range = curves_by_pair[pair_range_i];
@@ -533,6 +589,10 @@ static bke::CurvesGeometry interpolate_between_curves(const GreasePencil &grease
     }
     const IndexRange from_curves = from_drawing->strokes().curves_range();
     const IndexRange to_curves = to_drawing->strokes().curves_range();
+    const OffsetIndices from_points_by_curve = from_drawing->strokes().points_by_curve();
+    const OffsetIndices to_points_by_curve = to_drawing->strokes().points_by_curve();
+    const VArray<bool> from_curves_cyclic = from_drawing->strokes().cyclic();
+    const VArray<bool> to_curves_cyclic = to_drawing->strokes().cyclic();
 
     IndexMaskMemory selection_memory;
     /* Subset of target curves that are filled by this frame pair. Selection is built from pair
@@ -548,45 +608,79 @@ static bke::CurvesGeometry interpolate_between_curves(const GreasePencil &grease
           curve_pairs.from_curves[pair_index], 0, int(from_curves.last()));
       sorted_to_curve_indices[i] = std::clamp(
           curve_pairs.to_curves[pair_index], 0, int(to_curves.last()));
-    }
 
-    /* Copy samples of the input curves to keep changes minimal. */
-    const OffsetIndices from_points_by_curve = from_drawing->strokes().points_by_curve();
-    const OffsetIndices to_points_by_curve = to_drawing->strokes().points_by_curve();
-    auto from_sample_copy = [&](const int curve_index,
-                                const bool cyclic,
-                                const bool reverse,
-                                MutableSpan<int> r_segment_indices,
-                                MutableSpan<float> r_factors) {
-      const IndexRange from_points = from_points_by_curve[curve_index];
-      const IndexRange to_points = to_points_by_curve[curve_index];
-      const bool use_from_points = (from_points.size() >= to_points.size());
-
-      const Span<float> segment_lengths =
-          (use_from_points ?
-               from_drawing->strokes().evaluated_lengths_for_curve(curve_index, cyclic) :
-               to_drawing->strokes().evaluated_lengths_for_curve(curve_index, cyclic));
-      const OffsetIndices from_points_by_curve = from_drawing->strokes().points_by_curve();
-      if (reverse) {
-        length_parameterize::sample_uniform_reverse(
-            segment_lengths, !cyclic, r_segment_indices, r_factors);
+      const int from_curve = curve_pairs.from_curves[pair_index];
+      const int to_curve = curve_pairs.to_curves[pair_index];
+      const IndexRange from_points = from_points_by_curve[from_curve];
+      const IndexRange to_points = to_points_by_curve[to_curve];
+      const IndexRange dst_points = dst_points_by_curve[pair_index];
+      if (from_points.size() >= to_points.size()) {
+        /* Target curve samples match 'from' points. */
+        BLI_assert(from_points.size() == dst_points.size());
+        array_utils::fill_index_range(from_sample_indices.as_mutable_span().slice(dst_points),
+                                      int(from_points.start()));
+        from_sample_factors.as_mutable_span().slice(dst_points).fill(0.0f);
+        sample_curve_from_template(to_drawing->strokes(),
+                                   to_curve,
+                                   to_curves_cyclic[to_curve],
+                                   from_curve,
+                                   from_curves_cyclic[from_curve],
+                                   dst_curve_flip[pair_index], )
+        // TODO map 'from' sample positions to 'to' sample indices/factors
       }
       else {
-        length_parameterize::sample_uniform(
-            segment_lengths, !cyclic, r_segment_indices, r_factors);
+        /* Target curve samples match 'to' points. */
+        BLI_assert(to_points.size() == dst_points.size());
+        // TODO map 'to' sample positions to 'from' sample indices/factors
+        array_utils::fill_index_range(to_sample_indices.as_mutable_span().slice(dst_points),
+                                      int(to_points.start()));
+        to_sample_factors.fill(0.0f);
       }
+    }
 
-      r_segment_indices.copy_from();
-    };
+    // /* Copy samples of the input curves to keep changes minimal. */
+    // auto from_sample_copy = [&](const int curve_index,
+    //                             const bool cyclic,
+    //                             const bool reverse,
+    //                             MutableSpan<int> r_segment_indices,
+    //                             MutableSpan<float> r_factors) {
+    //   const IndexRange from_points = from_points_by_curve[curve_index];
+    //   const IndexRange to_points = to_points_by_curve[curve_index];
+    //   const bool use_from_points = (from_points.size() >= to_points.size());
+    //   const bke::CurvesGeometry &curves = (use_from_points ? from_drawing->strokes() :
+    //                                                          to_drawing->strokes());
+    //   const Span<float> segment_lengths = curves.evaluated_lengths_for_curve(curve_index,
+    //   cyclic);
 
-    geometry::interpolate_curves_with_sampling(from_drawing->strokes(),
-                                               to_drawing->strokes(),
-                                               pair_from_indices,
-                                               pair_to_indices,
-                                               dst_curve_mask,
-                                               dst_curve_flip,
-                                               mix_factor,
-                                               dst_curves);
+    //   if (reverse) {
+    //     length_parameterize::sample_uniform_reverse(
+    //         segment_lengths, !cyclic, r_segment_indices, r_factors);
+    //   }
+    //   else {
+    //     length_parameterize::sample_uniform(
+    //         segment_lengths, !cyclic, r_segment_indices, r_factors);
+    //   }
+
+    //   r_segment_indices.copy_from();
+    // };
+    // auto to_sample_copy = [&](const int curve_index,
+    //                           const bool cyclic,
+    //                           const bool reverse,
+    //                           MutableSpan<int> r_segment_indices,
+    //                           MutableSpan<float> r_factors) {};
+
+    geometry::interpolate_curves_with_samples(from_drawing->strokes(),
+                                              to_drawing->strokes(),
+                                              pair_from_indices,
+                                              pair_to_indices,
+                                              from_sample_indices,
+                                              to_sample_indices,
+                                              from_sample_factors,
+                                              to_sample_factors,
+                                              dst_curve_mask,
+                                              dst_curve_flip,
+                                              mix_factor,
+                                              dst_curves);
   }
 
   return dst_curves;

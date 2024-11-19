@@ -274,26 +274,33 @@ static void mix_arrays(const GSpan src_from,
   });
 }
 
-void interpolate_curves_with_sampling(const CurvesGeometry &from_curves,
-                                      const CurvesGeometry &to_curves,
-                                      const Span<int> from_curve_indices,
-                                      const Span<int> to_curve_indices,
-                                      const IndexMask &dst_curve_mask,
-                                      const Span<bool> dst_curve_flip_direction,
-                                      const float mix_factor,
-                                      CurveSamplingFunc from_sampling_fn,
-                                      CurveSamplingFunc to_sampling_fn,
-                                      CurvesGeometry &dst_curves)
+void interpolate_curves_with_samples(const CurvesGeometry &from_curves,
+                                     const CurvesGeometry &to_curves,
+                                     const Span<int> from_curve_indices,
+                                     const Span<int> to_curve_indices,
+                                     const Span<int> from_sample_indices,
+                                     const Span<int> to_sample_indices,
+                                     const Span<float> from_sample_factors,
+                                     const Span<float> to_sample_factors,
+                                     const IndexMask &dst_curve_mask,
+                                     const Span<bool> dst_curve_flip_direction,
+                                     const float mix_factor,
+                                     CurvesGeometry &dst_curves)
 {
   BLI_assert(from_curve_indices.size() == dst_curve_mask.size());
   BLI_assert(to_curve_indices.size() == dst_curve_mask.size());
+  BLI_assert(from_sample_indices.size() == dst_curves.points_num());
+  BLI_assert(to_sample_indices.size() == dst_curves.points_num());
+  BLI_assert(from_sample_factors.size() == dst_curves.points_num());
+  BLI_assert(to_sample_factors.size() == dst_curves.points_num());
+
+  // const VArray<bool> from_curves_cyclic = from_curves.cyclic();
+  // const VArray<bool> to_curves_cyclic = to_curves.cyclic();
 
   if (from_curves.is_empty() || to_curves.is_empty()) {
     return;
   }
 
-  const VArray<bool> from_curves_cyclic = from_curves.cyclic();
-  const VArray<bool> to_curves_cyclic = to_curves.cyclic();
   const Span<float3> from_evaluated_positions = from_curves.evaluated_positions();
   const Span<float3> to_evaluated_positions = to_curves.evaluated_positions();
 
@@ -307,38 +314,36 @@ void interpolate_curves_with_sampling(const CurvesGeometry &from_curves,
   AttributesForInterpolation curve_attributes = gather_curve_attributes_to_interpolate(
       from_curves, to_curves, dst_curves);
 
-  from_curves.ensure_evaluated_lengths();
-  to_curves.ensure_evaluated_lengths();
-
-  /* Sampling arbitrary attributes works by first interpolating them to the curve's standard
-   * "evaluated points" and then interpolating that result with the uniform samples. This is
-   * potentially wasteful when down-sampling a curve to many fewer points. There are two possible
-   * solutions: only sample the necessary points for interpolation, or first sample curve
-   * parameter/segment indices and evaluate the curve directly. */
-  Array<int> from_sample_indices(dst_curves.points_num());
-  Array<int> to_sample_indices(dst_curves.points_num());
-  Array<float> from_sample_factors(dst_curves.points_num());
-  Array<float> to_sample_factors(dst_curves.points_num());
-
   const OffsetIndices dst_points_by_curve = dst_curves.points_by_curve();
 
-  /* Gather uniform samples based on the accumulated lengths of the original curve. */
-  dst_curve_mask.foreach_index(GrainSize(32), [&](const int i_dst_curve, const int pos) {
-    const int i_from_curve = from_curve_indices[pos];
-    const int i_to_curve = to_curve_indices[pos];
-    const IndexRange dst_points = dst_points_by_curve[i_dst_curve];
-    /* First curve is sampled in forward direction, second curve may be reversed. */
-    from_sampling_fn(i_from_curve,
-                     from_curves_cyclic[i_from_curve],
-                     false,
-                     from_sample_indices.as_mutable_span().slice(dst_points),
-                     from_sample_factors.as_mutable_span().slice(dst_points));
-    to_sampling_fn(i_to_curve,
-                   to_curves_cyclic[i_to_curve],
-                   dst_curve_flip_direction[i_dst_curve],
-                   to_sample_indices.as_mutable_span().slice(dst_points),
-                   to_sample_factors.as_mutable_span().slice(dst_points));
-  });
+  // /* Sampling arbitrary attributes works by first interpolating them to the curve's standard
+  //  * "evaluated points" and then interpolating that result with the uniform samples. This is
+  //  * potentially wasteful when down-sampling a curve to many fewer points. There are two
+  //  possible
+  //  * solutions: only sample the necessary points for interpolation, or first sample curve
+  //  * parameter/segment indices and evaluate the curve directly. */
+  // Array<int> from_sample_indices(dst_curves.points_num());
+  // Array<int> to_sample_indices(dst_curves.points_num());
+  // Array<float> from_sample_factors(dst_curves.points_num());
+  // Array<float> to_sample_factors(dst_curves.points_num());
+
+  // /* Gather uniform samples based on the accumulated lengths of the original curve. */
+  // dst_curve_mask.foreach_index(GrainSize(32), [&](const int i_dst_curve, const int pos) {
+  //   const int i_from_curve = from_curve_indices[pos];
+  //   const int i_to_curve = to_curve_indices[pos];
+  //   const IndexRange dst_points = dst_points_by_curve[i_dst_curve];
+  //   /* First curve is sampled in forward direction, second curve may be reversed. */
+  //   from_sampling_fn(i_from_curve,
+  //                    from_curves_cyclic[i_from_curve],
+  //                    false,
+  //                    from_sample_indices.as_mutable_span().slice(dst_points),
+  //                    from_sample_factors.as_mutable_span().slice(dst_points));
+  //   to_sampling_fn(i_to_curve,
+  //                  to_curves_cyclic[i_to_curve],
+  //                  dst_curve_flip_direction[i_dst_curve],
+  //                  to_sample_indices.as_mutable_span().slice(dst_points),
+  //                  to_sample_factors.as_mutable_span().slice(dst_points));
+  // });
 
   /* For every attribute, evaluate attributes from every curve in the range in the original
    * curve's "evaluated points", then use linear interpolation to sample to the result. */
@@ -466,7 +471,7 @@ void interpolate_curves_with_sampling(const CurvesGeometry &from_curves,
   }
 }
 
-static void sample_uniform_curve(const bke::CurvesGeometry &curves,
+static void sample_curve_uniform(const bke::CurvesGeometry &curves,
                                  const int curve_index,
                                  const bool cyclic,
                                  const bool reverse,
@@ -499,31 +504,57 @@ void interpolate_curves(const CurvesGeometry &from_curves,
                         const float mix_factor,
                         CurvesGeometry &dst_curves)
 {
-  auto from_sample_uniform = [&](const int curve_index,
-                                 const bool cyclic,
-                                 const bool reverse,
-                                 MutableSpan<int> r_segment_indices,
-                                 MutableSpan<float> r_factors) {
-    sample_uniform_curve(from_curves, curve_index, cyclic, reverse, r_segment_indices, r_factors);
-  };
-  auto to_sample_uniform = [&](const int curve_index,
-                               const bool cyclic,
-                               const bool reverse,
-                               MutableSpan<int> r_segment_indices,
-                               MutableSpan<float> r_factors) {
-    sample_uniform_curve(to_curves, curve_index, cyclic, reverse, r_segment_indices, r_factors);
-  };
+  const VArray<bool> from_curves_cyclic = from_curves.cyclic();
+  const VArray<bool> to_curves_cyclic = to_curves.cyclic();
+  const Span<float3> from_evaluated_positions = from_curves.evaluated_positions();
+  const Span<float3> to_evaluated_positions = to_curves.evaluated_positions();
+  const OffsetIndices dst_points_by_curve = dst_curves.points_by_curve();
 
-  interpolate_curves_with_sampling(from_curves,
-                                   to_curves,
-                                   from_curve_indices,
-                                   to_curve_indices,
-                                   dst_curve_mask,
-                                   dst_curve_flip_direction,
-                                   mix_factor,
-                                   from_sample_uniform,
-                                   to_sample_uniform,
-                                   dst_curves);
+  /* Sampling arbitrary attributes works by first interpolating them to the curve's standard
+   * "evaluated points" and then interpolating that result with the uniform samples. This is
+   * potentially wasteful when down-sampling a curve to many fewer points. There are two possible
+   * solutions: only sample the necessary points for interpolation, or first sample curve
+   * parameter/segment indices and evaluate the curve directly. */
+  Array<int> from_sample_indices(dst_curves.points_num());
+  Array<int> to_sample_indices(dst_curves.points_num());
+  Array<float> from_sample_factors(dst_curves.points_num());
+  Array<float> to_sample_factors(dst_curves.points_num());
+
+  from_curves.ensure_evaluated_lengths();
+  to_curves.ensure_evaluated_lengths();
+
+  /* Gather uniform samples based on the accumulated lengths of the original curve. */
+  dst_curve_mask.foreach_index(GrainSize(32), [&](const int i_dst_curve, const int pos) {
+    const int i_from_curve = from_curve_indices[pos];
+    const int i_to_curve = to_curve_indices[pos];
+    const IndexRange dst_points = dst_points_by_curve[i_dst_curve];
+    /* First curve is sampled in forward direction, second curve may be reversed. */
+    sample_curve_uniform(from_curves,
+                         i_from_curve,
+                         from_curves_cyclic[i_from_curve],
+                         false,
+                         from_sample_indices.as_mutable_span().slice(dst_points),
+                         from_sample_factors.as_mutable_span().slice(dst_points));
+    sample_curve_uniform(to_curves,
+                         i_to_curve,
+                         to_curves_cyclic[i_to_curve],
+                         dst_curve_flip_direction[i_dst_curve],
+                         to_sample_indices.as_mutable_span().slice(dst_points),
+                         to_sample_factors.as_mutable_span().slice(dst_points));
+  });
+
+  interpolate_curves_with_samples(from_curves,
+                                  to_curves,
+                                  from_curve_indices,
+                                  to_curve_indices,
+                                  from_sample_indices,
+                                  to_sample_indices,
+                                  from_sample_factors,
+                                  to_sample_factors,
+                                  dst_curve_mask,
+                                  dst_curve_flip_direction,
+                                  mix_factor,
+                                  dst_curves);
 }
 
 }  // namespace blender::geometry
