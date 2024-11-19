@@ -5501,6 +5501,7 @@ static rctf calculate_fcurve_bounds_and_unhide(SpaceLink *space_link,
       anim_data, frame_range[0], NLATIME_CONVERT_UNMAP);
   mapped_frame_range[1] = BKE_nla_tweakedit_remap(
       anim_data, frame_range[1], NLATIME_CONVERT_UNMAP);
+
   /* We already did the nla remapping manually, so downstream code shouldn't do
    * it again. */
   const bool use_nla_remapping = false;

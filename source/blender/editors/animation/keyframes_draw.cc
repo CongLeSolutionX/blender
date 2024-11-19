@@ -707,7 +707,7 @@ void ED_add_fcurve_channel(ChannelDrawList *channel_list,
                            float ypos,
                            float yscale_fac,
                            int saction_flag,
-                           bool use_nla_remapping)
+                           const bool use_nla_remapping)
 {
   const bool locked = (fcu->flag & FCURVE_PROTECTED) ||
                       ((fcu->grp) && (fcu->grp->flag & AGRP_PROTECTED)) ||

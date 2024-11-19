@@ -297,7 +297,6 @@ static int graphkeys_click_insert_exec(bContext *C, wmOperator *op)
   bAnimContext ac;
   bAnimListElem *ale;
   FCurve *fcu;
-  float frame, val;
 
   /* Get animation context. */
   if (ANIM_animdata_get_context(C, &ac) == 0) {
@@ -321,9 +320,6 @@ static int graphkeys_click_insert_exec(bContext *C, wmOperator *op)
     ListBase anim_data;
     ToolSettings *ts = ac.scene->toolsettings;
 
-    short mapping_flag = ANIM_get_normalization_flags(ac.sl);
-    float scale, offset;
-
     /* Preserve selection? */
     if (RNA_boolean_get(op->ptr, "extend") == false) {
       /* Deselect all keyframes first,
@@ -332,18 +328,23 @@ static int graphkeys_click_insert_exec(bContext *C, wmOperator *op)
       deselect_graph_keys(&ac, false, SELECT_SUBTRACT, false);
     }
 
-    /* Get frame and value from props. */
-    frame = RNA_float_get(op->ptr, "frame");
-    val = RNA_float_get(op->ptr, "value");
-
-    /* Apply inverse NLA-mapping to frame to get correct time in un-scaled action. */
-    frame = ANIM_nla_tweakedit_remap(ale, frame, NLATIME_CONVERT_UNMAP);
+    /* Get frame and value from props.
+     *
+     * We apply inverse NLA-mapping to `frame` to get correct time in un-scaled
+     * action. */
+    const float frame = ANIM_nla_tweakedit_remap(
+        ale, RNA_float_get(op->ptr, "frame"), NLATIME_CONVERT_UNMAP);
+    float val = RNA_float_get(op->ptr, "value");
 
     /* Apply inverse unit-mapping to value to get correct value for F-Curves. */
-    scale = ANIM_unit_mapping_get_factor(
-        ac.scene, ale->id, fcu, mapping_flag | ANIM_UNITCONV_RESTORE, &offset);
+    {
+      const short mapping_flag = ANIM_get_normalization_flags(ac.sl);
+      float offset;
+      const float scale = ANIM_unit_mapping_get_factor(
+          ac.scene, ale->id, fcu, mapping_flag | ANIM_UNITCONV_RESTORE, &offset);
 
-    val = val * scale - offset;
+      val = val * scale - offset;
+    }
 
     KeyframeSettings settings = get_keyframe_settings(true);
     settings.keyframe_type = eBezTriple_KeyframeType(ts->keyframe_type);
