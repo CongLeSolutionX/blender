@@ -1,1 +1,2 @@
 Referenced by issue #130382, Unexpected geometry deletion during on sculpt mode
+Referenced by issue #130501, GPv3: Stroke primitive creates extra Black material if one already exists
