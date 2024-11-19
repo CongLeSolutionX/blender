@@ -697,9 +697,9 @@ class TOPBAR_PT_name(Panel):
                 row = row_with_icon(layout, 'NODE')
                 row.prop(item, "label", text="")
                 found = True
-            selected_nodes = context.selected_nodes
-            if any(node.type == 'REROUTE' for node in selected_nodes):
-                layout.operator("node.reroute_auto_name_toggle", text="Toggle Auto Reroute Name")
+                row = layout.row()
+                row.active = context.space_data.overlay.show_reroute_auto_labels
+                row.prop(item, "use_auto_name", text="Auto Reroute Name")
         elif space_type == 'NLA_EDITOR':
             layout.label(text="NLA Strip Name")
             item = next(

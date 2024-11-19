@@ -10520,7 +10520,7 @@ static void def_reroute(StructRNA *srna)
   RNA_def_property_ui_text(prop, "Type of socket", "");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_socket_update");
 
-  prop = RNA_def_property(srna, "auto_name", PROP_BOOLEAN, PROP_NONE);
+  prop = RNA_def_property(srna, "use_auto_name", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", NODE_REROUTE_FLAG_AUTO_NAME);
   RNA_def_property_ui_text(
       prop,

@@ -423,13 +423,13 @@ class NODE_OT_reroute_auto_name_toggle(Operator):
 
     def execute(self, context):
         reroute_nodes = list(node for node in context.selected_nodes if node.type == 'REROUTE')
-        was_any_active = any(node.auto_name for node in reroute_nodes)
+        was_any_active = any(node.use_auto_name for node in reroute_nodes)
         if was_any_active:
             for node in reroute_nodes:
-                node.auto_name = False
+                node.use_auto_name = False
         else:
             for node in reroute_nodes:
-                node.auto_name = True
+                node.use_auto_name = True
         return {'FINISHED'}
 
 
