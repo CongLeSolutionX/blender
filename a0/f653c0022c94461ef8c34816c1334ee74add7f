@@ -1,1 +1,2 @@
 Referenced by commit 99324277fa2a56f8051c591d699fca05193e78e4, CMake: restore WITH_DRACO, WITH_PYTHON_INSTALL dependency
+Referenced by issue #130549, bpy_module build: libextern_draco.so doesn't get installed in the right directory
