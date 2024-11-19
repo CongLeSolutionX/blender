@@ -2850,7 +2850,8 @@ static void update_paint_modes_for_brush_assets(Main &bmain)
     LISTBASE_FOREACH (bToolRef *, tref, &workspace->tools) {
       /* While avoiding the string comparison would be nice, unfortunatley one of the draw brushes
        * does not provide a sane way of distinguishing it from other possible tools. The texture
-       * paint brush in the default workspace has SPACE_IMAGE and CTX_MODE_EDIT_CURVE as properties
+       * paint brush in the default texture paint workspace has SPACE_IMAGE and CTX_MODE_EDIT_CURVE
+       * as properties instead of SPACE_IMAGE and CTX_MODE_PAINT_TEXTURE.
        *
        * See: #130548
        */
@@ -2876,7 +2877,6 @@ static void update_paint_modes_for_brush_assets(Main &bmain)
           continue;
         }
       }
-
       STRNCPY(tref->idname, "builtin.brush");
     }
   }
