@@ -539,8 +539,11 @@ enum eNlaTime_ConvertModes {
  * Public API method - perform this mapping using the given AnimData block
  * and perform any necessary sanity checks on the value.
  *
- * \note Do not call this with an `adt` obtained from an `bAnimListElem`. Instead, use
- * `ANIM_nla_tweakedit_remap()` for that.
+ * \note Do not call this with an `adt` obtained from an `bAnimListElem`.
+ * Instead, use `ANIM_nla_tweakedit_remap()` for that. This is because not all
+ * data that might be in an `bAnimListElem` should be nla remapped, and this
+ * function cannot account for that, whereas `ANIM_nla_tweakedit_remap()` takes
+ * the `bAnimListElem` directly and makes sure the right thing is done.
  */
 float BKE_nla_tweakedit_remap(AnimData *adt, float cframe, eNlaTime_ConvertModes mode);
 
