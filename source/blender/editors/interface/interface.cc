@@ -491,6 +491,14 @@ static void ui_block_bounds_calc_centered(wmWindow *window, uiBlock *block)
   ui_block_bounds_calc(block);
 }
 
+static void ui_block_bounds_calc_post_centered(wmWindow *window, uiBlock *block, const int xy[2])
+{
+  const int margin = int(12 * UI_SCALE_FAC);
+  ui_block_bounds_calc(block);
+  UI_block_translate(block, xy[0] - block->rect.xmin + margin, xy[1] - block->rect.ymin + margin);
+  ui_block_bounds_calc(block);
+}
+
 static void ui_block_bounds_calc_centered_pie(uiBlock *block)
 {
   const int xy[2] = {
@@ -1997,7 +2005,12 @@ void UI_block_end_ex(const bContext *C,
       ui_block_bounds_calc_text(block, 0.0f);
       break;
     case UI_BLOCK_BOUNDS_POPUP_CENTER:
-      ui_block_bounds_calc_centered(window, block);
+      if (xy != r_xy) {
+        ui_block_bounds_calc_post_centered(window, block, xy);
+      }
+      else {
+        ui_block_bounds_calc_centered(window, block);
+      }
       break;
     case UI_BLOCK_BOUNDS_PIE_CENTER:
       ui_block_bounds_calc_centered_pie(block);

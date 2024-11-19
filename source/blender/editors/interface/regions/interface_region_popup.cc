@@ -715,6 +715,31 @@ uiBlock *ui_popup_block_refresh(bContext *C,
                     block,
                     handle->popup_create_vars.event_xy,
                     handle->popup_create_vars.event_xy);
+
+    /* Do not center if it has been moved. */
+    if (handle->refresh && !(handle->grab_xy_prev[0] == 0 && handle->grab_xy_prev[1] == 0)) {
+      const int xy[2] = {region->winrct.xmin, region->winrct.ymin};
+      UI_block_end_ex(C,
+                      CTX_data_main(C),
+                      window,
+                      CTX_data_scene(C),
+                      region,
+                      CTX_data_depsgraph_pointer(C),
+                      block,
+                      xy,
+                      handle->popup_create_vars.event_xy);
+    }
+    else {
+      UI_block_end_ex(C,
+                      CTX_data_main(C),
+                      window,
+                      CTX_data_scene(C),
+                      region,
+                      CTX_data_depsgraph_pointer(C),
+                      block,
+                      handle->popup_create_vars.event_xy,
+                      handle->popup_create_vars.event_xy);
+    }
   }
 
   /* if this is being created from a button */
