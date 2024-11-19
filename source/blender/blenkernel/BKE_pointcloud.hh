@@ -74,3 +74,8 @@ void BKE_pointcloud_batch_cache_free(PointCloud *pointcloud);
 
 extern void (*BKE_pointcloud_batch_cache_dirty_tag_cb)(PointCloud *pointcloud, int mode);
 extern void (*BKE_pointcloud_batch_cache_free_cb)(PointCloud *pointcloud);
+
+namespace blender::bke {
+struct AttributeAccessorFunctions;
+const AttributeAccessorFunctions &get_pointcloud_accessor_functions_ref();
+}  // namespace blender::bke

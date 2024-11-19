@@ -284,6 +284,18 @@ void PointCloud::count_memory(blender::MemoryCounter &memory) const
   CustomData_count_memory(this->pdata, this->totpoint, memory);
 }
 
+blender::bke::AttributeAccessor PointCloud::attributes() const
+{
+  return blender::bke::AttributeAccessor(this,
+                                         blender::bke::get_pointcloud_accessor_functions_ref());
+}
+
+blender::bke::MutableAttributeAccessor PointCloud::attributes_for_write()
+{
+  return blender::bke::MutableAttributeAccessor(
+      this, blender::bke::get_pointcloud_accessor_functions_ref());
+}
+
 bool BKE_pointcloud_attribute_required(const PointCloud * /*pointcloud*/, const char *name)
 {
   return STREQ(name, POINTCLOUD_ATTR_POSITION);
