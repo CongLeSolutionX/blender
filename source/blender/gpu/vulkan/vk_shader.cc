@@ -1168,12 +1168,6 @@ std::string VKShader::workaround_geometry_shader_source_create(
 
   ss << "void main()\n";
   ss << "{\n";
-  if (do_layer_workaround) {
-    ss << "  gl_Layer = gpu_Layer[0];\n";
-  }
-  if (do_viewport_workaround) {
-    ss << "  gl_ViewportIndex = gpu_ViewportIndex[0];\n";
-  }
   for (auto i : IndexRange(3)) {
     for (StageInterfaceInfo *iface : info_modified.vertex_out_interfaces_) {
       for (auto &inout : iface->inouts) {
@@ -1186,6 +1180,12 @@ std::string VKShader::workaround_geometry_shader_source_create(
       ss << " vec3(" << int(i == 0) << ", " << int(i == 1) << ", " << int(i == 2) << ");\n";
     }
     ss << "  gl_Position = gl_in[" << i << "].gl_Position;\n";
+    if (do_layer_workaround) {
+      ss << "  gl_Layer = gpu_Layer[" << i << "];\n";
+    }
+    if (do_viewport_workaround) {
+      ss << "  gl_ViewportIndex = gpu_ViewportIndex[" << i << "];\n";
+    }
     ss << "  gpu_EmitVertex();\n";
   }
   ss << "}\n";
@@ -1264,11 +1264,10 @@ VkPipeline VKShader::ensure_and_get_graphics_pipeline(GPUPrimType primitive,
   graphics_info.fragment_shader.vk_fragment_module = fragment_module.vk_shader_module;
   graphics_info.state = state_manager.state;
   graphics_info.mutable_state = state_manager.mutable_state;
-  // TODO: in stead of extend use a build pattern.
   graphics_info.fragment_shader.viewports.clear();
-  graphics_info.fragment_shader.viewports.extend(framebuffer.vk_viewports_get());
+  framebuffer.vk_viewports_append(graphics_info.fragment_shader.viewports);
   graphics_info.fragment_shader.scissors.clear();
-  graphics_info.fragment_shader.scissors.extend(framebuffer.vk_render_areas_get());
+  framebuffer.vk_render_areas_append(graphics_info.fragment_shader.scissors);
 
   graphics_info.fragment_out.depth_attachment_format = framebuffer.depth_attachment_format_get();
   graphics_info.fragment_out.stencil_attachment_format =

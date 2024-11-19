@@ -2877,8 +2877,6 @@ void GreasePencil::add_layers_with_empty_drawings_for_eval(const int num)
     for (const int i : range) {
       const int new_drawing_i = old_drawings_num + i;
       const int new_layer_i = old_layers_num + i;
-      Drawing &drawing =
-          reinterpret_cast<GreasePencilDrawing *>(this->drawing(new_drawing_i))->wrap();
       Layer &layer = this->layer(new_layer_i);
       GreasePencilFrame *frame = layer.add_frame(this->runtime->eval_frame);
       BLI_assert(frame);
@@ -3941,6 +3939,18 @@ void GreasePencil::print_layer_tree()
 {
   using namespace blender::bke::greasepencil;
   this->root_group().print_nodes("Layer Tree:");
+}
+
+blender::bke::AttributeAccessor GreasePencil::attributes() const
+{
+  return blender::bke::AttributeAccessor(
+      this, blender::bke::greasepencil::get_attribute_accessor_functions());
+}
+
+blender::bke::MutableAttributeAccessor GreasePencil::attributes_for_write()
+{
+  return blender::bke::MutableAttributeAccessor(
+      this, blender::bke::greasepencil::get_attribute_accessor_functions());
 }
 
 /** \} */
