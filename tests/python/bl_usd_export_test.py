@@ -251,6 +251,133 @@ class USDExportTest(AbstractUSDTest):
         geom_subsets = UsdGeom.Subset.GetGeomSubsets(dynamic_mesh_prim)
         self.assertEqual(len(geom_subsets), 0)
 
+    def test_export_material_inmem(self):
+        """Validate correct export of in memory and packed images"""
+
+        bpy.ops.wm.open_mainfile(filepath=str(self.testdir / "usd_materials_inmem_pack.blend"))
+        export_path1 = self.tempdir / "usd_materials_inmem_pack_relative.usda"
+        self.export_and_validate(filepath=str(export_path1), export_textures_mode='NEW', relative_paths=True)
+
+        export_path2 = self.tempdir / "usd_materials_inmem_pack_absolute.usda"
+        self.export_and_validate(filepath=str(export_path2), export_textures_mode='NEW', relative_paths=False)
+
+        # Validate that we actually see the correct set of files being saved to the filesystem
+
+        # Relative path variations
+        stage = Usd.Stage.Open(str(export_path1))
+        stage_path = pathlib.Path(stage.GetRootLayer().realPath)
+
+        shader_prim = stage.GetPrimAtPath("/root/_materials/MAT_inmem_single/Image_Texture")
+        shader = UsdShade.Shader(shader_prim)
+        asset_path = pathlib.Path(shader.GetInput("file").GetAttr().Get().path)
+        self.assertFalse(asset_path.is_absolute())
+        self.assertTrue(stage_path.parent.joinpath(asset_path).is_file())
+
+        shader_prim = stage.GetPrimAtPath("/root/_materials/MAT_inmem_udim/Image_Texture")
+        shader = UsdShade.Shader(shader_prim)
+        asset_path = pathlib.Path(shader.GetInput("file").GetAttr().Get().path)
+        image_path1 = pathlib.Path(str(asset_path).replace("<UDIM>", "1001"))
+        image_path2 = pathlib.Path(str(asset_path).replace("<UDIM>", "1002"))
+        self.assertFalse(asset_path.is_absolute())
+        self.assertTrue(stage_path.parent.joinpath(image_path1).is_file())
+        self.assertTrue(stage_path.parent.joinpath(image_path2).is_file())
+
+        shader_prim = stage.GetPrimAtPath("/root/_materials/MAT_pack_single/Image_Texture")
+        shader = UsdShade.Shader(shader_prim)
+        asset_path = pathlib.Path(shader.GetInput("file").GetAttr().Get().path)
+        self.assertFalse(asset_path.is_absolute())
+        self.assertTrue(stage_path.parent.joinpath(asset_path).is_file())
+
+        shader_prim = stage.GetPrimAtPath("/root/_materials/MAT_pack_udim/Image_Texture")
+        shader = UsdShade.Shader(shader_prim)
+        asset_path = pathlib.Path(shader.GetInput("file").GetAttr().Get().path)
+        image_path1 = pathlib.Path(str(asset_path).replace("<UDIM>", "1001"))
+        image_path2 = pathlib.Path(str(asset_path).replace("<UDIM>", "1002"))
+        self.assertFalse(asset_path.is_absolute())
+        self.assertTrue(stage_path.parent.joinpath(image_path1).is_file())
+        self.assertTrue(stage_path.parent.joinpath(image_path2).is_file())
+
+        # Absolute path variations
+        stage = Usd.Stage.Open(str(export_path2))
+        stage_path = pathlib.Path(stage.GetRootLayer().realPath)
+
+        shader_prim = stage.GetPrimAtPath("/root/_materials/MAT_inmem_single/Image_Texture")
+        shader = UsdShade.Shader(shader_prim)
+        asset_path = pathlib.Path(shader.GetInput("file").GetAttr().Get().path)
+        self.assertTrue(asset_path.is_absolute())
+        self.assertTrue(stage_path.parent.joinpath(asset_path).is_file())
+
+        shader_prim = stage.GetPrimAtPath("/root/_materials/MAT_inmem_udim/Image_Texture")
+        shader = UsdShade.Shader(shader_prim)
+        asset_path = pathlib.Path(shader.GetInput("file").GetAttr().Get().path)
+        image_path1 = pathlib.Path(str(asset_path).replace("<UDIM>", "1001"))
+        image_path2 = pathlib.Path(str(asset_path).replace("<UDIM>", "1002"))
+        self.assertTrue(asset_path.is_absolute())
+        self.assertTrue(stage_path.parent.joinpath(image_path1).is_file())
+        self.assertTrue(stage_path.parent.joinpath(image_path2).is_file())
+
+        shader_prim = stage.GetPrimAtPath("/root/_materials/MAT_pack_single/Image_Texture")
+        shader = UsdShade.Shader(shader_prim)
+        asset_path = pathlib.Path(shader.GetInput("file").GetAttr().Get().path)
+        self.assertTrue(asset_path.is_absolute())
+        self.assertTrue(stage_path.parent.joinpath(asset_path).is_file())
+
+        shader_prim = stage.GetPrimAtPath("/root/_materials/MAT_pack_udim/Image_Texture")
+        shader = UsdShade.Shader(shader_prim)
+        asset_path = pathlib.Path(shader.GetInput("file").GetAttr().Get().path)
+        image_path1 = pathlib.Path(str(asset_path).replace("<UDIM>", "1001"))
+        image_path2 = pathlib.Path(str(asset_path).replace("<UDIM>", "1002"))
+        self.assertTrue(asset_path.is_absolute())
+        self.assertTrue(stage_path.parent.joinpath(image_path1).is_file())
+        self.assertTrue(stage_path.parent.joinpath(image_path2).is_file())
+
+    def test_export_material_displacement(self):
+        """Validate correct export of Displacement information for the UsdPreviewSurface"""
+
+        # Use the common materials .blend file
+        bpy.ops.wm.open_mainfile(filepath=str(self.testdir / "usd_materials_displace.blend"))
+        export_path = self.tempdir / "material_displace.usda"
+        self.export_and_validate(filepath=str(export_path), export_materials=True)
+
+        stage = Usd.Stage.Open(str(export_path))
+
+        # Verify "constant" displacement
+        shader_surface = UsdShade.Shader(stage.GetPrimAtPath("/root/_materials/constant/Principled_BSDF"))
+        self.assertEqual(shader_surface.GetIdAttr().Get(), "UsdPreviewSurface")
+        input_displacement = shader_surface.GetInput('displacement')
+        self.assertEqual(input_displacement.HasConnectedSource(), False, "Displacement input should not be connected")
+        self.assertAlmostEqual(input_displacement.Get(), 0.45, 5)
+
+        # Validate various Midlevel and Scale scenarios
+        def validate_displacement(mat_name, expected_scale, expected_bias):
+            shader_surface = UsdShade.Shader(stage.GetPrimAtPath(f"/root/_materials/{mat_name}/Principled_BSDF"))
+            shader_image = UsdShade.Shader(stage.GetPrimAtPath(f"/root/_materials/{mat_name}/Image_Texture"))
+            self.assertEqual(shader_surface.GetIdAttr().Get(), "UsdPreviewSurface")
+            self.assertEqual(shader_image.GetIdAttr().Get(), "UsdUVTexture")
+            input_displacement = shader_surface.GetInput('displacement')
+            input_colorspace = shader_image.GetInput('sourceColorSpace')
+            input_scale = shader_image.GetInput('scale')
+            input_bias = shader_image.GetInput('bias')
+            self.assertEqual(input_displacement.HasConnectedSource(), True, "Displacement input should be connected")
+            self.assertEqual(input_colorspace.Get(), 'raw')
+            self.assertEqual(self.round_vector(input_scale.Get()), expected_scale)
+            self.assertEqual(self.round_vector(input_bias.Get()), expected_bias)
+
+        validate_displacement("mid_0_0", [1.0, 1.0, 1.0, 1.0], [0, 0, 0, 0])
+        validate_displacement("mid_0_5", [1.0, 1.0, 1.0, 1.0], [-0.5, -0.5, -0.5, 0])
+        validate_displacement("mid_1_0", [1.0, 1.0, 1.0, 1.0], [-1, -1, -1, 0])
+        validate_displacement("mid_0_0_scale_0_3", [0.3, 0.3, 0.3, 1.0], [0, 0, 0, 0])
+        validate_displacement("mid_0_5_scale_0_3", [0.3, 0.3, 0.3, 1.0], [-0.15, -0.15, -0.15, 0])
+        validate_displacement("mid_1_0_scale_0_3", [0.3, 0.3, 0.3, 1.0], [-0.3, -0.3, -0.3, 0])
+
+        # Validate that no displacement occurs for scenarios USD doesn't support
+        shader_surface = UsdShade.Shader(stage.GetPrimAtPath(f"/root/_materials/bad_wrong_space/Principled_BSDF"))
+        input_displacement = shader_surface.GetInput('displacement')
+        self.assertTrue(input_displacement.Get() is None)
+        shader_surface = UsdShade.Shader(stage.GetPrimAtPath(f"/root/_materials/bad_non_const/Principled_BSDF"))
+        input_displacement = shader_surface.GetInput('displacement')
+        self.assertTrue(input_displacement.Get() is None)
+
     def check_primvar(self, prim, pv_name, pv_typeName, pv_interp, elements_len):
         pv = UsdGeom.PrimvarsAPI(prim).GetPrimvar(pv_name)
         self.assertTrue(pv.HasValue())

@@ -1189,7 +1189,7 @@ void CurvesGeometry::transform(const float4x4 &matrix)
 
 std::optional<Bounds<float3>> CurvesGeometry::bounds_min_max() const
 {
-  if (this->points_num() == 0) {
+  if (this->is_empty()) {
     return std::nullopt;
   }
   this->runtime->bounds_cache.ensure(
@@ -1567,6 +1567,16 @@ GVArray CurvesGeometry::adapt_domain(const GVArray &varray,
 
   BLI_assert_unreachable();
   return {};
+}
+
+AttributeAccessor CurvesGeometry::attributes() const
+{
+  return AttributeAccessor(this, curves::get_attribute_accessor_functions());
+}
+
+MutableAttributeAccessor CurvesGeometry::attributes_for_write()
+{
+  return MutableAttributeAccessor(this, curves::get_attribute_accessor_functions());
 }
 
 /** \} */

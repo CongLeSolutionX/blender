@@ -96,7 +96,7 @@
 #include "BKE_grease_pencil.hh"
 #include "BKE_idprop.hh"
 #include "BKE_idtype.hh"
-#include "BKE_image.h"
+#include "BKE_image.hh"
 #include "BKE_key.hh"
 #include "BKE_lattice.hh"
 #include "BKE_layer.hh"
@@ -262,9 +262,7 @@ static void object_copy_data(Main *bmain,
   ob_dst->avs = ob_src->avs;
   ob_dst->mpath = animviz_copy_motionpath(ob_src->mpath);
 
-  /* Do not copy object's preview
-   * (mostly due to the fact renderers create temp copy of objects). */
-  if ((flag & LIB_ID_COPY_NO_PREVIEW) == 0 && false) { /* XXX TODO: temp hack. */
+  if ((flag & LIB_ID_COPY_NO_PREVIEW) == 0) {
     BKE_previewimg_id_copy(&ob_dst->id, &ob_src->id);
   }
   else {
@@ -668,7 +666,6 @@ static void object_blend_write(BlendWriter *writer, ID *id, const void *id_addre
 
   BKE_particle_system_blend_write(writer, &ob->particlesystem);
   BKE_modifier_blend_write(writer, &ob->id, &ob->modifiers);
-  BKE_gpencil_modifier_blend_write(writer, &ob->greasepencil_modifiers);
   BKE_shaderfx_blend_write(writer, &ob->shader_fx);
 
   BLO_write_struct_list(writer, LinkData, &ob->pc_ids);
@@ -1744,9 +1741,6 @@ bool BKE_object_is_in_editmode(const Object *ob)
     case OB_SURF:
     case OB_CURVES_LEGACY:
       return ((Curve *)ob->data)->editnurb != nullptr;
-    case OB_GPENCIL_LEGACY:
-      /* Grease Pencil object has no edit mode data. */
-      return GPENCIL_EDIT_MODE((bGPdata *)ob->data);
     case OB_CURVES:
     case OB_POINTCLOUD:
     case OB_GREASE_PENCIL:
@@ -3556,8 +3550,6 @@ std::optional<blender::Bounds<blender::float3>> BKE_object_boundbox_get(const Ob
       return BKE_lattice_minmax(static_cast<const Lattice *>(ob->data));
     case OB_ARMATURE:
       return BKE_armature_min_max(ob);
-    case OB_GPENCIL_LEGACY:
-      return BKE_gpencil_data_minmax(static_cast<const bGPdata *>(ob->data));
     case OB_CURVES:
       return static_cast<const Curves *>(ob->data)->geometry.wrap().bounds_min_max();
     case OB_POINTCLOUD:
@@ -4146,19 +4138,19 @@ Mesh *BKE_object_get_evaluated_mesh(const Object *object_eval)
   return BKE_object_get_evaluated_mesh_unchecked(object_eval);
 }
 
-Mesh *BKE_object_get_pre_modified_mesh(const Object *object)
+const Mesh *BKE_object_get_pre_modified_mesh(const Object *object)
 {
   if (object->type == OB_MESH && object->runtime->data_orig != nullptr) {
     BLI_assert(object->id.tag & ID_TAG_COPIED_ON_EVAL);
     BLI_assert(object->id.orig_id != nullptr);
-    BLI_assert(object->runtime->data_orig->orig_id == ((Object *)object->id.orig_id)->data);
-    Mesh *result = (Mesh *)object->runtime->data_orig;
+    BLI_assert(object->runtime->data_orig->orig_id == ((const Object *)object->id.orig_id)->data);
+    const Mesh *result = (const Mesh *)object->runtime->data_orig;
     BLI_assert((result->id.tag & ID_TAG_COPIED_ON_EVAL) != 0);
     BLI_assert((result->id.tag & ID_TAG_COPIED_ON_EVAL_FINAL_RESULT) == 0);
     return result;
   }
   BLI_assert((object->id.tag & ID_TAG_COPIED_ON_EVAL) == 0);
-  return (Mesh *)object->data;
+  return (const Mesh *)object->data;
 }
 
 Mesh *BKE_object_get_original_mesh(const Object *object)
@@ -4258,12 +4250,13 @@ static int pc_cmp(const void *a, const void *b)
   return 0;
 }
 
-/* TODO: Review the usages of this function, currently with copy-on-eval it will be called for orig
- * object and then again for evaluated copies of it, think this is bad since there is no guarantee
- * that we get the same stack index in both cases? Order is important since this index is used for
- * filenames on disk. */
 int BKE_object_insert_ptcache(Object *ob)
 {
+  /* TODO: Review the usages of this function, currently with copy-on-eval it will be called for
+   * orig object and then again for evaluated copies of it, think this is bad since there is no
+   * guarantee that we get the same stack index in both cases? Order is important since this index
+   * is used for filenames on disk. */
+
   LinkData *link = nullptr;
   int i = 0;
 

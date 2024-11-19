@@ -113,6 +113,7 @@ set(SRC
   intern/curve_to_mesh_convert.cc
   intern/curveprofile.cc
   intern/curves.cc
+  intern/curves_attributes.cc
   intern/curves_geometry.cc
   intern/curves_utils.cc
   intern/customdata.cc
@@ -144,12 +145,11 @@ set(SRC
   intern/geometry_fields.cc
   intern/geometry_set.cc
   intern/geometry_set_instances.cc
-  intern/gpencil_curve_legacy.cc
   intern/gpencil_geom_legacy.cc
   intern/gpencil_legacy.cc
   intern/gpencil_modifier_legacy.cc
-  intern/gpencil_update_cache_legacy.cc
   intern/grease_pencil.cc
+  intern/grease_pencil_attributes.cc
   intern/grease_pencil_convert_legacy.cc
   intern/grease_pencil_vertex_groups.cc
   intern/icons.cc
@@ -166,6 +166,7 @@ set(SRC
   intern/image_partial_update.cc
   intern/image_save.cc
   intern/instances.cc
+  intern/instances_attributes.cc
   intern/ipo.cc
   intern/kelvinlet.cc
   intern/key.cc
@@ -197,6 +198,7 @@ set(SRC
   intern/mball.cc
   intern/mball_tessellate.cc
   intern/mesh.cc
+  intern/mesh_attributes.cc
   intern/mesh_calc_edges.cc
   intern/mesh_compare.cc
   intern/mesh_convert.cc
@@ -265,6 +267,7 @@ set(SRC
   intern/pbvh_uv_islands.cc
   intern/pointcache.cc
   intern/pointcloud.cc
+  intern/pointcloud_attributes.cc
   intern/pose_backup.cc
   intern/preferences.cc
   intern/preview_image.cc
@@ -406,11 +409,9 @@ set(SRC
   BKE_geometry_set.hh
   BKE_geometry_set_instances.hh
   BKE_global.hh
-  BKE_gpencil_curve_legacy.h
   BKE_gpencil_geom_legacy.h
   BKE_gpencil_legacy.h
   BKE_gpencil_modifier_legacy.h
-  BKE_gpencil_update_cache_legacy.h
   BKE_grease_pencil.h
   BKE_grease_pencil.hh
   BKE_grease_pencil_legacy_convert.hh
@@ -418,10 +419,10 @@ set(SRC
   BKE_icons.h
   BKE_idprop.hh
   BKE_idtype.hh
-  BKE_image.h
-  BKE_image_format.h
+  BKE_image.hh
+  BKE_image_format.hh
   BKE_image_partial_update.hh
-  BKE_image_save.h
+  BKE_image_save.hh
   BKE_image_wrappers.hh
   BKE_instances.hh
   BKE_ipo.h

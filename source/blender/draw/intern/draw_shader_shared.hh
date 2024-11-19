@@ -2,9 +2,9 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#if !defined(GPU_SHADER) && !defined(GLSL_CPP_STUBS)
-#  pragma once
+#pragma once
 
+#if !defined(GPU_SHADER) && !defined(GLSL_CPP_STUBS)
 #  include "GPU_shader.hh"
 #  include "GPU_shader_shared_utils.hh"
 #  include "draw_defines.hh"
@@ -274,6 +274,10 @@ struct ObjectAttribute {
   uint hash_code;
 
 #if !defined(GPU_SHADER) && defined(__cplusplus)
+  /**
+   * Go through all possible source of the given object uniform attribute.
+   * Returns true if the attribute was correctly filled.
+   */
   bool sync(const blender::draw::ObjectRef &ref, const GPUUniformAttr &attr);
 #endif
 };

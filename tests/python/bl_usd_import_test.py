@@ -72,6 +72,30 @@ class USDImportTest(AbstractUSDTest):
         self.assertEqual(objects['World'], objects['Empty'].parent, "Empty should be a child of /World")
         self.assertEqual(objects['Empty'], objects['Plane_002'].parent, "Plane_002 should be a child of /World")
 
+    def test_import_xform_and_mesh_merged_false(self):
+        """Test importing a simple object hierarchy (xform and mesh) from a USDA file."""
+
+        infile = str(self.testdir / "usd_mesh_polygon_types.usda")
+
+        res = bpy.ops.wm.usd_import(filepath=infile, merge_parent_xform=False)
+        self.assertEqual({'FINISHED'}, res, f"Unable to import USD file {infile}")
+
+        objects = bpy.context.scene.collection.objects
+        self.assertEqual(10, len(objects), f"Test scene {infile} should have ten objects; found {len(objects)}")
+
+        # Test the hierarchy.
+        self.assertEqual(
+            objects['degenerate'],
+            objects['m_degenerate'].parent,
+            "m_degenerate should be child of /degenerate")
+        self.assertEqual(
+            objects['triangles'],
+            objects['m_triangles'].parent,
+            "m_triangles should be a child of /triangles")
+        self.assertEqual(objects['quad'], objects['m_quad'].parent, "m_quad should be a child of /quad")
+        self.assertEqual(objects['ngon_concave'], objects['m_ngon_concave'].parent,
+                         "m_ngon_concave should be a child of /ngon_concave")
+
     def test_import_mesh_topology(self):
         """Test importing meshes with different polygon types."""
 
@@ -294,6 +318,54 @@ class USDImportTest(AbstractUSDTest):
         for mat_index in range(0, 4):
             face_indices = [i for i, d in enumerate(material_index_attr.data) if d.value == mat_index]
             self.assertEqual(len(face_indices), 4, f"Incorrect number of faces with material index {mat_index}")
+
+    def test_import_material_displacement(self):
+        """Validate correct import of Displacement information for the UsdPreviewSurface"""
+
+        # Use the existing materials test file to create the USD file
+        # for import. It is validated as part of the bl_usd_export test.
+        bpy.ops.wm.open_mainfile(filepath=str(self.testdir / "usd_materials_displace.blend"))
+        testfile = str(self.tempdir / "temp_material_displace.usda")
+        res = bpy.ops.wm.usd_export(filepath=str(testfile), export_materials=True)
+        self.assertEqual({'FINISHED'}, res, f"Unable to export to {testfile}")
+
+        # Reload the empty file and import back in
+        bpy.ops.wm.open_mainfile(filepath=str(self.testdir / "empty.blend"))
+        res = bpy.ops.wm.usd_import(filepath=testfile)
+        self.assertEqual({'FINISHED'}, res, f"Unable to import USD file {testfile}")
+
+        # Most shader graph validation should occur through the Hydra render test suite. Here we
+        # will only check some high-level criteria for each expected node graph.
+
+        def assert_displacement(mat, height, midlevel, scale):
+            nodes = mat.node_tree.nodes
+            node_displace_index = nodes.find("Displacement")
+            self.assertTrue(node_displace_index >= 0)
+
+            node_displace = nodes[node_displace_index]
+            if height is not None:
+                self.assertAlmostEqual(node_displace.inputs[0].default_value, height)
+            else:
+                self.assertEqual(len(node_displace.inputs[0].links), 1)
+            self.assertAlmostEqual(node_displace.inputs[1].default_value, midlevel)
+            self.assertAlmostEqual(node_displace.inputs[2].default_value, scale)
+
+        mat = bpy.data.materials["constant"]
+        assert_displacement(mat, 0.95, 0.5, 1.0)
+
+        mat = bpy.data.materials["mid_1_0"]
+        assert_displacement(mat, None, 1.0, 1.0)
+        mat = bpy.data.materials["mid_0_5"]
+        assert_displacement(mat, None, 0.5, 1.0)
+        mat = bpy.data.materials["mid_0_0"]
+        assert_displacement(mat, None, 0.0, 1.0)
+
+        mat = bpy.data.materials["mid_1_0_scale_0_3"]
+        assert_displacement(mat, None, 1.0, 0.3)
+        mat = bpy.data.materials["mid_0_5_scale_0_3"]
+        assert_displacement(mat, None, 0.5, 0.3)
+        mat = bpy.data.materials["mid_0_0_scale_0_3"]
+        assert_displacement(mat, None, 0.0, 0.3)
 
     def test_import_shader_varname_with_connection(self):
         """Test importing USD shader where uv primvar is a connection"""

@@ -7,7 +7,7 @@
 #include "common_view_lib.glsl"
 #include "gpu_shader_utildefines_lib.glsl"
 
-uint outline_colorid_get(void)
+uint outline_colorid_get()
 {
 #ifdef OBINFO_NEW
   eObjectInfoFlag ob_flag = eObjectInfoFlag(floatBitsToUint(drw_infos[resource_id].infos.w));
@@ -43,7 +43,6 @@ void main()
   vec3 center_wpos, tan, binor;
 
   hair_get_center_pos_tan_binor_time(is_persp,
-                                     ModelMatrixInverse,
                                      drw_view.viewinv[3].xyz,
                                      drw_view.viewinv[2].xyz,
                                      center_wpos,

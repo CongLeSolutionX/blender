@@ -78,8 +78,10 @@ class VKFrameBuffer : public FrameBuffer {
                int dst_offset_x,
                int dst_offset_y) override;
 
-  Array<VkViewport, 16> vk_viewports_get() const;
-  Array<VkRect2D, 16> vk_render_areas_get() const;
+  void vk_viewports_append(Vector<VkViewport> &r_viewports) const;
+  void vk_render_areas_append(Vector<VkRect2D> &r_render_areas) const;
+
+  void render_area_update(VkRect2D &render_area) const;
   VkFormat depth_attachment_format_get() const;
   VkFormat stencil_attachment_format_get() const;
   Span<VkFormat> color_attachment_formats_get() const;
@@ -148,6 +150,13 @@ class VKFrameBuffer : public FrameBuffer {
       const bool multi_clear_colors,
       render_graph::VKClearAttachmentsNode::CreateInfo &clear_attachments) const;
   void clear(render_graph::VKClearAttachmentsNode::CreateInfo &clear_attachments);
+
+  /**
+   * Check if there are gaps between color attachments.
+   *
+   * This is not supported when using VkRenderPass/VkFramebuffer.
+   */
+  bool has_gaps_between_color_attachments() const;
 };
 
 static inline VKFrameBuffer *unwrap(FrameBuffer *framebuffer)
