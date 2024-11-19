@@ -1569,6 +1569,16 @@ GVArray CurvesGeometry::adapt_domain(const GVArray &varray,
   return {};
 }
 
+AttributeAccessor CurvesGeometry::attributes() const
+{
+  return AttributeAccessor(this, curves::get_curves_accessor_functions_ref());
+}
+
+MutableAttributeAccessor CurvesGeometry::attributes_for_write()
+{
+  return MutableAttributeAccessor(this, curves::get_curves_accessor_functions_ref());
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
