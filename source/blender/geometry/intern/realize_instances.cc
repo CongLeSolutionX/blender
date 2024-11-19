@@ -26,7 +26,6 @@ namespace blender::geometry {
 
 using blender::bke::AttrDomain;
 using blender::bke::AttributeDomainAndType;
-using blender::bke::AttributeMetaData;
 using blender::bke::GSpanAttributeWriter;
 using blender::bke::InstanceReference;
 using blender::bke::Instances;
