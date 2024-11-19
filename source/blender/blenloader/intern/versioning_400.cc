@@ -2848,26 +2848,35 @@ static void update_paint_modes_for_brush_assets(Main &bmain)
   /* Replace persistent tool references with the new single builtin brush tool. */
   LISTBASE_FOREACH (WorkSpace *, workspace, &bmain.workspaces) {
     LISTBASE_FOREACH (bToolRef *, tref, &workspace->tools) {
-      if (tref->space_type != SPACE_VIEW3D) {
-        continue;
+      /* While avoiding the string comparison would be nice, unfortunatley one of the draw brushes
+       * does not provide a sane way of distinguishing it from other possible tools. The texture
+       * paint brush in the default workspace has SPACE_IMAGE and CTX_MODE_EDIT_CURVE as properties
+       *
+       * See: #130548
+       */
+      if (!STREQ(tref->idname, "builtin_brush.Draw")) {
+        if (tref->space_type != SPACE_VIEW3D) {
+          continue;
+        }
+        if (!ELEM(tref->mode,
+                  CTX_MODE_SCULPT,
+                  CTX_MODE_PAINT_VERTEX,
+                  CTX_MODE_PAINT_WEIGHT,
+                  CTX_MODE_PAINT_TEXTURE,
+                  CTX_MODE_PAINT_GPENCIL_LEGACY,
+                  CTX_MODE_PAINT_GREASE_PENCIL,
+                  CTX_MODE_SCULPT_GPENCIL_LEGACY,
+                  CTX_MODE_SCULPT_GREASE_PENCIL,
+                  CTX_MODE_WEIGHT_GPENCIL_LEGACY,
+                  CTX_MODE_WEIGHT_GREASE_PENCIL,
+                  CTX_MODE_VERTEX_GREASE_PENCIL,
+                  CTX_MODE_VERTEX_GPENCIL_LEGACY,
+                  CTX_MODE_SCULPT_CURVES))
+        {
+          continue;
+        }
       }
-      if (!ELEM(tref->mode,
-                CTX_MODE_SCULPT,
-                CTX_MODE_PAINT_VERTEX,
-                CTX_MODE_PAINT_WEIGHT,
-                CTX_MODE_PAINT_TEXTURE,
-                CTX_MODE_PAINT_GPENCIL_LEGACY,
-                CTX_MODE_PAINT_GREASE_PENCIL,
-                CTX_MODE_SCULPT_GPENCIL_LEGACY,
-                CTX_MODE_SCULPT_GREASE_PENCIL,
-                CTX_MODE_WEIGHT_GPENCIL_LEGACY,
-                CTX_MODE_WEIGHT_GREASE_PENCIL,
-                CTX_MODE_VERTEX_GREASE_PENCIL,
-                CTX_MODE_VERTEX_GPENCIL_LEGACY,
-                CTX_MODE_SCULPT_CURVES))
-      {
-        continue;
-      }
+
       STRNCPY(tref->idname, "builtin.brush");
     }
   }
