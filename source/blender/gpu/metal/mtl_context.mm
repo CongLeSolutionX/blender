@@ -660,21 +660,21 @@ gpu::MTLTexture *MTLContext::get_dummy_texture(eGPUTextureType type,
       if (!dummy_verts_[sampler_format]) {
         GPU_vertformat_clear(&dummy_vertformat_[sampler_format]);
 
-        GPUVertCompType comp_type = GPU_COMP_F32;
+        VertAttrType comp_type = VertAttrType::F32;
         GPUVertFetchMode fetch_mode = GPU_FETCH_FLOAT;
 
         switch (sampler_format) {
           case GPU_SAMPLER_TYPE_FLOAT:
           case GPU_SAMPLER_TYPE_DEPTH:
-            comp_type = GPU_COMP_F32;
+            comp_type = VertAttrType::F32;
             fetch_mode = GPU_FETCH_FLOAT;
             break;
           case GPU_SAMPLER_TYPE_INT:
-            comp_type = GPU_COMP_I32;
+            comp_type = VertAttrType::I32;
             fetch_mode = GPU_FETCH_INT;
             break;
           case GPU_SAMPLER_TYPE_UINT:
-            comp_type = GPU_COMP_U32;
+            comp_type = VertAttrType::U32;
             fetch_mode = GPU_FETCH_INT;
             break;
           default:

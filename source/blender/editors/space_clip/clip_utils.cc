@@ -609,7 +609,8 @@ void clip_draw_sfra_efra(View2D *v2d, Scene *scene)
   /* currently clip editor supposes that editing clip length is equal to scene frame range */
   GPU_blend(GPU_BLEND_ALPHA);
 
-  uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+  uint pos = GPU_vertformat_attr_add(
+      immVertexFormat(), "pos", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
   immUniformColor4f(0.0f, 0.0f, 0.0f, 0.4f);

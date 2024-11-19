@@ -79,7 +79,7 @@ static void button2d_geom_draw_backdrop(const wmGizmo *gz,
 
   GPUVertFormat *format = immVertexFormat();
   /* NOTE(Metal): Prefer 3D coordinate for 2D rendering when using 3D shader. */
-  uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+  uint pos = GPU_vertformat_attr_add(format, "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
 
   /* TODO: other draw styles. */
   if (color[3] == 1.0 && fill_alpha == 1.0 && select == false) {
@@ -161,7 +161,8 @@ static void button2d_draw_intern(const bContext *C,
   if ((select == false) && (draw_options & ED_GIZMO_BUTTON_SHOW_HELPLINE)) {
     float matrix_final_no_offset[4][4];
     WM_gizmo_calc_matrix_final_no_offset(gz, matrix_final_no_offset);
-    uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+    uint pos = GPU_vertformat_attr_add(
+        immVertexFormat(), "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
     immBindBuiltinProgram(GPU_SHADER_3D_POLYLINE_UNIFORM_COLOR);
     immUniform2fv("viewportSize", &viewport[2]);
     immUniform1f("lineWidth", gz->line_width * U.pixelsize);

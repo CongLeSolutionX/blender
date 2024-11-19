@@ -141,7 +141,8 @@ void DRW_draw_cursor()
 
   /* Draw lines */
   if (is_aligned == false) {
-    uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+    uint pos = GPU_vertformat_attr_add(
+        immVertexFormat(), "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
     immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
     immUniformThemeColor3(TH_VIEW_OVERLAY);
     immBegin(GPU_PRIM_LINES, 12);

@@ -102,9 +102,10 @@ static GPUVertFormat *edit_points_vert_format_get(uint *r_pos_id, uint *r_select
   static uint pos_id, selection_id;
   if (edit_point_format.attr_len == 0) {
     /* Keep in sync with EditStrandData */
-    pos_id = GPU_vertformat_attr_add(&edit_point_format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+    pos_id = GPU_vertformat_attr_add(
+        &edit_point_format, "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
     selection_id = GPU_vertformat_attr_add(
-        &edit_point_format, "selection", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
+        &edit_point_format, "selection", VertAttrType::F32, 1, GPU_FETCH_FLOAT);
   }
   *r_pos_id = pos_id;
   *r_selection_id = selection_id;
@@ -824,7 +825,7 @@ static void particle_batch_cache_ensure_procedural_final_points(ParticleHairCach
 {
   /* Same format as proc_point_buf. */
   GPUVertFormat format = {0};
-  GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
+  GPU_vertformat_attr_add(&format, "pos", VertAttrType::F32, 4, GPU_FETCH_FLOAT);
 
   /* Transform feedback buffer only needs to be resident in device memory. */
   GPUUsageType type = GPU_transform_feedback_support() ? GPU_USAGE_DEVICE_ONLY : GPU_USAGE_STATIC;
@@ -885,17 +886,18 @@ static void particle_batch_cache_ensure_procedural_strand_data(PTCacheEdit *edit
   MCol **parent_mcol = nullptr;
 
   GPUVertFormat format_data = {0};
-  uint data_id = GPU_vertformat_attr_add(&format_data, "data", GPU_COMP_U32, 1, GPU_FETCH_INT);
+  uint data_id = GPU_vertformat_attr_add(
+      &format_data, "data", VertAttrType::U32, 1, GPU_FETCH_INT);
 
   GPUVertFormat format_seg = {0};
-  uint seg_id = GPU_vertformat_attr_add(&format_seg, "data", GPU_COMP_U16, 1, GPU_FETCH_INT);
+  uint seg_id = GPU_vertformat_attr_add(&format_seg, "data", VertAttrType::U16, 1, GPU_FETCH_INT);
 
   GPUVertFormat format_uv = {0};
-  uint uv_id = GPU_vertformat_attr_add(&format_uv, "uv", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+  uint uv_id = GPU_vertformat_attr_add(&format_uv, "uv", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
 
   GPUVertFormat format_col = {0};
   uint col_id = GPU_vertformat_attr_add(
-      &format_col, "col", GPU_COMP_U16, 4, GPU_FETCH_INT_TO_FLOAT_UNIT);
+      &format_col, "col", VertAttrType::U16, 4, GPU_FETCH_INT_TO_FLOAT_UNIT);
 
   memset(cache->uv_layer_names, 0, sizeof(cache->uv_layer_names));
 
@@ -1094,9 +1096,9 @@ static void particle_batch_cache_ensure_procedural_indices(PTCacheEdit *edit,
   static GPUVertFormat format = {0};
   GPU_vertformat_clear(&format);
 
-  /* NOTE: initialize vertex format. Using GPU_COMP_U32 to satisfy Metal's 4-byte minimum
+  /* NOTE: initialize vertex format. Using VertAttrType::U32 to satisfy Metal's 4-byte minimum
    * stride requirement. */
-  GPU_vertformat_attr_add(&format, "dummy", GPU_COMP_U32, 1, GPU_FETCH_INT_TO_FLOAT_UNIT);
+  GPU_vertformat_attr_add(&format, "dummy", VertAttrType::U32, 1, GPU_FETCH_INT_TO_FLOAT_UNIT);
 
   gpu::VertBuf *vbo = GPU_vertbuf_create_with_format(format);
   GPU_vertbuf_data_alloc(*vbo, 1);
@@ -1136,7 +1138,7 @@ static void particle_batch_cache_ensure_procedural_pos(PTCacheEdit *edit,
     /* initialize vertex format */
     GPUVertFormat pos_format = {0};
     uint pos_id = GPU_vertformat_attr_add(
-        &pos_format, "posTime", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
+        &pos_format, "posTime", VertAttrType::F32, 4, GPU_FETCH_FLOAT);
 
     cache->proc_point_buf = GPU_vertbuf_create_with_format_ex(
         pos_format, GPU_USAGE_STATIC | GPU_USAGE_FLAG_BUFFER_TEXTURE_ONLY);
@@ -1147,7 +1149,7 @@ static void particle_batch_cache_ensure_procedural_pos(PTCacheEdit *edit,
 
     GPUVertFormat length_format = {0};
     uint length_id = GPU_vertformat_attr_add(
-        &length_format, "hairLength", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
+        &length_format, "hairLength", VertAttrType::F32, 1, GPU_FETCH_FLOAT);
 
     cache->proc_length_buf = GPU_vertbuf_create_with_format_ex(
         length_format, GPU_USAGE_STATIC | GPU_USAGE_FLAG_BUFFER_TEXTURE_ONLY);
@@ -1223,9 +1225,9 @@ static void particle_batch_cache_ensure_pos_and_seg(PTCacheEdit *edit,
   GPU_vertformat_clear(&format);
 
   /* initialize vertex format */
-  attr_id.pos = GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
-  attr_id.tan = GPU_vertformat_attr_add(&format, "nor", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
-  attr_id.ind = GPU_vertformat_attr_add(&format, "ind", GPU_COMP_I32, 1, GPU_FETCH_INT);
+  attr_id.pos = GPU_vertformat_attr_add(&format, "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
+  attr_id.tan = GPU_vertformat_attr_add(&format, "nor", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
+  attr_id.ind = GPU_vertformat_attr_add(&format, "ind", VertAttrType::I32, 1, GPU_FETCH_INT);
 
   if (psmd) {
     uv_id = static_cast<uint *>(MEM_mallocN(sizeof(*uv_id) * num_uv_layers, "UV attr format"));
@@ -1239,7 +1241,7 @@ static void particle_batch_cache_ensure_pos_and_seg(PTCacheEdit *edit,
       GPU_vertformat_safe_attr_name(name, attr_safe_name, GPU_MAX_SAFE_ATTR_NAME);
 
       SNPRINTF(uuid, "a%s", attr_safe_name);
-      uv_id[i] = GPU_vertformat_attr_add(&format, uuid, GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+      uv_id[i] = GPU_vertformat_attr_add(&format, uuid, VertAttrType::F32, 2, GPU_FETCH_FLOAT);
 
       if (i == active_uv) {
         GPU_vertformat_alias_add(&format, "a");
@@ -1253,7 +1255,7 @@ static void particle_batch_cache_ensure_pos_and_seg(PTCacheEdit *edit,
       GPU_vertformat_safe_attr_name(name, attr_safe_name, GPU_MAX_SAFE_ATTR_NAME);
 
       SNPRINTF(uuid, "a%s", attr_safe_name);
-      col_id[i] = GPU_vertformat_attr_add(&format, uuid, GPU_COMP_U16, 4, GPU_FETCH_FLOAT);
+      col_id[i] = GPU_vertformat_attr_add(&format, uuid, VertAttrType::U16, 4, GPU_FETCH_FLOAT);
 
       if (i == active_col) {
         GPU_vertformat_alias_add(&format, "c");
@@ -1405,9 +1407,9 @@ static void particle_batch_cache_ensure_pos(Object *object,
 
   if (format.attr_len == 0) {
     /* initialize vertex format */
-    pos_id = GPU_vertformat_attr_add(&format, "part_pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
-    val_id = GPU_vertformat_attr_add(&format, "part_val", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
-    rot_id = GPU_vertformat_attr_add(&format, "part_rot", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
+    pos_id = GPU_vertformat_attr_add(&format, "part_pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
+    val_id = GPU_vertformat_attr_add(&format, "part_val", VertAttrType::F32, 1, GPU_FETCH_FLOAT);
+    rot_id = GPU_vertformat_attr_add(&format, "part_rot", VertAttrType::F32, 4, GPU_FETCH_FLOAT);
   }
 
   point_cache->pos = GPU_vertbuf_create_with_format(format);

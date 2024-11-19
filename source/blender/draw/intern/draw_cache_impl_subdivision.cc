@@ -93,8 +93,8 @@ constexpr int NUM_SHADERS = 21;
 static GPUShader *g_subdiv_shaders[NUM_SHADERS];
 
 #define SHADER_CUSTOM_DATA_INTERP_MAX_DIMENSIONS 4
-static GPUShader
-    *g_subdiv_custom_data_shaders[SHADER_CUSTOM_DATA_INTERP_MAX_DIMENSIONS][GPU_COMP_MAX];
+static GPUShader *g_subdiv_custom_data_shaders[SHADER_CUSTOM_DATA_INTERP_MAX_DIMENSIONS]
+                                              [int(VertAttrType::GPU_COMP_MAX)];
 
 static StringRefNull get_shader_code(SubdivShaderType shader_type)
 {
@@ -321,14 +321,14 @@ static GPUShader *get_subdiv_shader(SubdivShaderType shader_type)
   return g_subdiv_shaders[shader_type];
 }
 
-static GPUShader *get_subdiv_custom_data_shader(int comp_type, int dimensions)
+static GPUShader *get_subdiv_custom_data_shader(VertAttrType comp_type, int dimensions)
 {
   BLI_assert(dimensions >= 1 && dimensions <= SHADER_CUSTOM_DATA_INTERP_MAX_DIMENSIONS);
-  if (comp_type == GPU_COMP_U16) {
+  if (comp_type == VertAttrType::U16) {
     BLI_assert(dimensions == 4);
   }
 
-  GPUShader *&shader = g_subdiv_custom_data_shaders[dimensions - 1][comp_type];
+  GPUShader *&shader = g_subdiv_custom_data_shaders[dimensions - 1][int(comp_type)];
 
   if (shader == nullptr) {
     SubdivShaderType shader_type = SubdivShaderType(SHADER_COMP_CUSTOM_DATA_INTERP_1D +
@@ -338,13 +338,13 @@ static GPUShader *get_subdiv_custom_data_shader(int comp_type, int dimensions)
     std::string defines = "#define SUBDIV_POLYGON_OFFSET\n";
     defines += "#define DIMENSIONS " + std::to_string(dimensions) + "\n";
     switch (comp_type) {
-      case GPU_COMP_U16:
-        defines += "#define GPU_COMP_U16\n";
+      case VertAttrType::U16:
+        defines += "#define VertAttrTypeU16\n";
         break;
-      case GPU_COMP_I32:
-        defines += "#define GPU_COMP_I32\n";
+      case VertAttrType::I32:
+        defines += "#define VertAttrTypeI32\n";
         break;
-      case GPU_COMP_F32:
+      case VertAttrType::F32:
         /* float is the default */
         break;
       default:
@@ -370,7 +370,7 @@ static const GPUVertFormat &get_uvs_format()
 {
   static GPUVertFormat format = {0};
   if (format.attr_len == 0) {
-    GPU_vertformat_attr_add(&format, "uvs", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+    GPU_vertformat_attr_add(&format, "uvs", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
   }
   return format;
 }
@@ -380,12 +380,12 @@ static const GPUVertFormat &get_patch_array_format()
 {
   static GPUVertFormat format = {0};
   if (format.attr_len == 0) {
-    GPU_vertformat_attr_add(&format, "regDesc", GPU_COMP_I32, 1, GPU_FETCH_INT);
-    GPU_vertformat_attr_add(&format, "desc", GPU_COMP_I32, 1, GPU_FETCH_INT);
-    GPU_vertformat_attr_add(&format, "numPatches", GPU_COMP_I32, 1, GPU_FETCH_INT);
-    GPU_vertformat_attr_add(&format, "indexBase", GPU_COMP_I32, 1, GPU_FETCH_INT);
-    GPU_vertformat_attr_add(&format, "stride", GPU_COMP_I32, 1, GPU_FETCH_INT);
-    GPU_vertformat_attr_add(&format, "primitiveIdBase", GPU_COMP_I32, 1, GPU_FETCH_INT);
+    GPU_vertformat_attr_add(&format, "regDesc", VertAttrType::I32, 1, GPU_FETCH_INT);
+    GPU_vertformat_attr_add(&format, "desc", VertAttrType::I32, 1, GPU_FETCH_INT);
+    GPU_vertformat_attr_add(&format, "numPatches", VertAttrType::I32, 1, GPU_FETCH_INT);
+    GPU_vertformat_attr_add(&format, "indexBase", VertAttrType::I32, 1, GPU_FETCH_INT);
+    GPU_vertformat_attr_add(&format, "stride", VertAttrType::I32, 1, GPU_FETCH_INT);
+    GPU_vertformat_attr_add(&format, "primitiveIdBase", VertAttrType::I32, 1, GPU_FETCH_INT);
   }
   return format;
 }
@@ -395,9 +395,9 @@ static const GPUVertFormat &get_patch_handle_format()
 {
   static GPUVertFormat format = {0};
   if (format.attr_len == 0) {
-    GPU_vertformat_attr_add(&format, "vertex_index", GPU_COMP_I32, 1, GPU_FETCH_INT);
-    GPU_vertformat_attr_add(&format, "array_index", GPU_COMP_I32, 1, GPU_FETCH_INT);
-    GPU_vertformat_attr_add(&format, "patch_index", GPU_COMP_I32, 1, GPU_FETCH_INT);
+    GPU_vertformat_attr_add(&format, "vertex_index", VertAttrType::I32, 1, GPU_FETCH_INT);
+    GPU_vertformat_attr_add(&format, "array_index", VertAttrType::I32, 1, GPU_FETCH_INT);
+    GPU_vertformat_attr_add(&format, "patch_index", VertAttrType::I32, 1, GPU_FETCH_INT);
   }
   return format;
 }
@@ -407,7 +407,7 @@ static const GPUVertFormat &get_quadtree_format()
 {
   static GPUVertFormat format = {0};
   if (format.attr_len == 0) {
-    GPU_vertformat_attr_add(&format, "child", GPU_COMP_U32, 4, GPU_FETCH_INT);
+    GPU_vertformat_attr_add(&format, "child", VertAttrType::U32, 4, GPU_FETCH_INT);
   }
   return format;
 }
@@ -418,7 +418,7 @@ static const GPUVertFormat &get_patch_param_format()
 {
   static GPUVertFormat format = {0};
   if (format.attr_len == 0) {
-    GPU_vertformat_attr_add(&format, "data", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+    GPU_vertformat_attr_add(&format, "data", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
   }
   return format;
 }
@@ -428,7 +428,7 @@ static const GPUVertFormat &get_patch_index_format()
 {
   static GPUVertFormat format = {0};
   if (format.attr_len == 0) {
-    GPU_vertformat_attr_add(&format, "data", GPU_COMP_I32, 1, GPU_FETCH_INT);
+    GPU_vertformat_attr_add(&format, "data", VertAttrType::I32, 1, GPU_FETCH_INT);
   }
   return format;
 }
@@ -440,7 +440,7 @@ static const GPUVertFormat &get_subdiv_vertex_format()
   if (format.attr_len == 0) {
     /* We use 4 components for the vectors to account for padding in the compute shaders, where
      * vec3 is promoted to vec4. */
-    GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
+    GPU_vertformat_attr_add(&format, "pos", VertAttrType::F32, 4, GPU_FETCH_FLOAT);
   }
   return format;
 }
@@ -466,8 +466,8 @@ static const GPUVertFormat &get_blender_patch_coords_format()
   static GPUVertFormat format = {0};
   if (format.attr_len == 0) {
     /* WARNING! Adjust #CompressedPatchCoord accordingly. */
-    GPU_vertformat_attr_add(&format, "ptex_face_index", GPU_COMP_U32, 1, GPU_FETCH_INT);
-    GPU_vertformat_attr_add(&format, "uv", GPU_COMP_U32, 1, GPU_FETCH_INT);
+    GPU_vertformat_attr_add(&format, "ptex_face_index", VertAttrType::U32, 1, GPU_FETCH_INT);
+    GPU_vertformat_attr_add(&format, "uv", VertAttrType::U32, 1, GPU_FETCH_INT);
   }
   return format;
 }
@@ -478,7 +478,7 @@ static const GPUVertFormat &get_origindex_format()
 {
   static GPUVertFormat format;
   if (format.attr_len == 0) {
-    GPU_vertformat_attr_add(&format, "index", GPU_COMP_I32, 1, GPU_FETCH_INT);
+    GPU_vertformat_attr_add(&format, "index", VertAttrType::I32, 1, GPU_FETCH_INT);
   }
   return format;
 }
@@ -487,8 +487,8 @@ const GPUVertFormat &draw_subdiv_get_pos_nor_format()
 {
   static GPUVertFormat format = {0};
   if (format.attr_len == 0) {
-    GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
-    GPU_vertformat_attr_add(&format, "nor", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
+    GPU_vertformat_attr_add(&format, "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
+    GPU_vertformat_attr_add(&format, "nor", VertAttrType::F32, 4, GPU_FETCH_FLOAT);
     GPU_vertformat_alias_add(&format, "vnor");
   }
   return format;
@@ -816,7 +816,7 @@ static void draw_subdiv_cache_update_extra_coarse_face_data(DRWSubdivCache &cach
     cache.extra_coarse_face_data = GPU_vertbuf_calloc();
     static GPUVertFormat format;
     if (format.attr_len == 0) {
-      GPU_vertformat_attr_add(&format, "data", GPU_COMP_U32, 1, GPU_FETCH_INT);
+      GPU_vertformat_attr_add(&format, "data", VertAttrType::U32, 1, GPU_FETCH_INT);
     }
     GPU_vertbuf_init_with_format_ex(*cache.extra_coarse_face_data, format, GPU_USAGE_DYNAMIC);
     GPU_vertbuf_data_alloc(*cache.extra_coarse_face_data,
@@ -1620,7 +1620,7 @@ void draw_subdiv_extract_uvs(const DRWSubdivCache &cache,
 void draw_subdiv_interp_custom_data(const DRWSubdivCache &cache,
                                     gpu::VertBuf &src_data,
                                     gpu::VertBuf &dst_data,
-                                    int comp_type, /*GPUVertCompType*/
+                                    VertAttrType comp_type,
                                     int dimensions,
                                     int dst_offset)
 {

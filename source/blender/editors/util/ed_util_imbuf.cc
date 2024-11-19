@@ -409,7 +409,7 @@ void ED_imbuf_sample_draw(const bContext *C, ARegion *region, void *arg_info)
 
       SpaceImage *sima = CTX_wm_space_image(C);
       GPUVertFormat *format = immVertexFormat();
-      uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+      uint pos = GPU_vertformat_attr_add(format, "pos", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
 
       const float color[3] = {1, 1, 1};
       immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);

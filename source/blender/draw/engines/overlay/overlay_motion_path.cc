@@ -50,8 +50,8 @@ static blender::gpu::VertBuf *mpath_vbo_get(bMotionPath *mpath)
   if (!mpath->points_vbo) {
     GPUVertFormat format = {0};
     /* Match structure of #bMotionPathVert. */
-    GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
-    GPU_vertformat_attr_add(&format, "flag", GPU_COMP_I32, 1, GPU_FETCH_INT);
+    GPU_vertformat_attr_add(&format, "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
+    GPU_vertformat_attr_add(&format, "flag", VertAttrType::I32, 1, GPU_FETCH_INT);
     mpath->points_vbo = GPU_vertbuf_create_with_format(format);
     GPU_vertbuf_data_alloc(*mpath->points_vbo, mpath->length);
     /* meh... a useless `memcpy`. */

@@ -53,7 +53,7 @@ static void drw_hair_ensure_vbo()
   }
   /* initialize vertex format */
   GPUVertFormat format = {0};
-  uint dummy_id = GPU_vertformat_attr_add(&format, "dummy", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
+  uint dummy_id = GPU_vertformat_attr_add(&format, "dummy", VertAttrType::F32, 4, GPU_FETCH_FLOAT);
 
   g_dummy_vbo = GPU_vertbuf_create_with_format_ex(
       format, GPU_USAGE_STATIC | GPU_USAGE_FLAG_BUFFER_TEXTURE_ONLY);

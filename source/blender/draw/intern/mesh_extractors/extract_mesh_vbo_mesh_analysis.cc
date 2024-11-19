@@ -575,7 +575,7 @@ void extract_mesh_analysis(const MeshRenderData &mr, gpu::VertBuf &vbo)
 
   static GPUVertFormat format = {0};
   if (format.attr_len == 0) {
-    GPU_vertformat_attr_add(&format, "weight", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
+    GPU_vertformat_attr_add(&format, "weight", VertAttrType::F32, 1, GPU_FETCH_FLOAT);
   }
   GPU_vertbuf_init_with_format(vbo, format);
   GPU_vertbuf_data_alloc(vbo, mr.corners_num);

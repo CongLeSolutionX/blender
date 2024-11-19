@@ -38,7 +38,7 @@ template<typename T> struct AttributeConverter {
 
 template<> struct AttributeConverter<bool> {
   using VBOType = VecBase<int, COMPONENT_LEN_SCALAR>;
-  static constexpr GPUVertCompType gpu_component_type = GPU_COMP_I32;
+  static constexpr VertAttrType gpu_component_type = VertAttrType::I32;
   static constexpr int gpu_component_len = COMPONENT_LEN_SCALAR;
   static constexpr GPUVertFetchMode gpu_fetch_mode = GPU_FETCH_INT_TO_FLOAT;
   static VBOType convert(const bool &value)
@@ -48,7 +48,7 @@ template<> struct AttributeConverter<bool> {
 };
 template<> struct AttributeConverter<int8_t> {
   using VBOType = VecBase<int, COMPONENT_LEN_SCALAR>;
-  static constexpr GPUVertCompType gpu_component_type = GPU_COMP_I32;
+  static constexpr VertAttrType gpu_component_type = VertAttrType::I32;
   static constexpr int gpu_component_len = COMPONENT_LEN_SCALAR;
   static constexpr GPUVertFetchMode gpu_fetch_mode = GPU_FETCH_INT_TO_FLOAT;
   static VBOType convert(const int8_t &value)
@@ -58,7 +58,7 @@ template<> struct AttributeConverter<int8_t> {
 };
 template<> struct AttributeConverter<int> {
   using VBOType = VecBase<int, COMPONENT_LEN_SCALAR>;
-  static constexpr GPUVertCompType gpu_component_type = GPU_COMP_I32;
+  static constexpr VertAttrType gpu_component_type = VertAttrType::I32;
   static constexpr int gpu_component_len = COMPONENT_LEN_SCALAR;
   static constexpr GPUVertFetchMode gpu_fetch_mode = GPU_FETCH_INT_TO_FLOAT;
   static VBOType convert(const int &value)
@@ -68,7 +68,7 @@ template<> struct AttributeConverter<int> {
 };
 template<> struct AttributeConverter<int2> {
   using VBOType = int2;
-  static constexpr GPUVertCompType gpu_component_type = GPU_COMP_I32;
+  static constexpr VertAttrType gpu_component_type = VertAttrType::I32;
   static constexpr int gpu_component_len = 2;
   static constexpr GPUVertFetchMode gpu_fetch_mode = GPU_FETCH_INT_TO_FLOAT;
   static VBOType convert(const int2 &value)
@@ -78,7 +78,7 @@ template<> struct AttributeConverter<int2> {
 };
 template<> struct AttributeConverter<float> {
   using VBOType = VecBase<float, COMPONENT_LEN_SCALAR>;
-  static constexpr GPUVertCompType gpu_component_type = GPU_COMP_F32;
+  static constexpr VertAttrType gpu_component_type = VertAttrType::F32;
   static constexpr int gpu_component_len = COMPONENT_LEN_SCALAR;
   static constexpr GPUVertFetchMode gpu_fetch_mode = GPU_FETCH_FLOAT;
   static VBOType convert(const float &value)
@@ -88,7 +88,7 @@ template<> struct AttributeConverter<float> {
 };
 template<> struct AttributeConverter<float2> {
   using VBOType = float2;
-  static constexpr GPUVertCompType gpu_component_type = GPU_COMP_F32;
+  static constexpr VertAttrType gpu_component_type = VertAttrType::F32;
   static constexpr int gpu_component_len = 2;
   static constexpr GPUVertFetchMode gpu_fetch_mode = GPU_FETCH_FLOAT;
   static VBOType convert(const float2 &value)
@@ -98,7 +98,7 @@ template<> struct AttributeConverter<float2> {
 };
 template<> struct AttributeConverter<float3> {
   using VBOType = float3;
-  static constexpr GPUVertCompType gpu_component_type = GPU_COMP_F32;
+  static constexpr VertAttrType gpu_component_type = VertAttrType::F32;
   static constexpr int gpu_component_len = 3;
   static constexpr GPUVertFetchMode gpu_fetch_mode = GPU_FETCH_FLOAT;
   static VBOType convert(const float3 &value)
@@ -109,7 +109,7 @@ template<> struct AttributeConverter<float3> {
 template<> struct AttributeConverter<ColorGeometry4b> {
   /* 16 bits are required to store the color in linear space without precision loss. */
   using VBOType = ushort4;
-  static constexpr GPUVertCompType gpu_component_type = GPU_COMP_U16;
+  static constexpr VertAttrType gpu_component_type = VertAttrType::U16;
   static constexpr int gpu_component_len = 4;
   static constexpr GPUVertFetchMode gpu_fetch_mode = GPU_FETCH_INT_TO_FLOAT_UNIT;
   static VBOType convert(const ColorGeometry4b &value)
@@ -122,7 +122,7 @@ template<> struct AttributeConverter<ColorGeometry4b> {
 };
 template<> struct AttributeConverter<ColorGeometry4f> {
   using VBOType = ColorGeometry4f;
-  static constexpr GPUVertCompType gpu_component_type = GPU_COMP_F32;
+  static constexpr VertAttrType gpu_component_type = VertAttrType::F32;
   static constexpr int gpu_component_len = 4;
   static constexpr GPUVertFetchMode gpu_fetch_mode = GPU_FETCH_FLOAT;
   static VBOType convert(const ColorGeometry4f &value)
@@ -132,7 +132,7 @@ template<> struct AttributeConverter<ColorGeometry4f> {
 };
 template<> struct AttributeConverter<math::Quaternion> {
   using VBOType = float4;
-  static constexpr GPUVertCompType gpu_component_type = GPU_COMP_F32;
+  static constexpr VertAttrType gpu_component_type = VertAttrType::F32;
   static constexpr int gpu_component_len = 4;
   static constexpr GPUVertFetchMode gpu_fetch_mode = GPU_FETCH_FLOAT;
   static VBOType convert(const math::Quaternion &value)

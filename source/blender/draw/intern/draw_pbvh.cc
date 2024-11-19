@@ -280,7 +280,7 @@ static const GPUVertFormat &position_format()
 {
   static GPUVertFormat format{};
   if (format.attr_len == 0) {
-    GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+    GPU_vertformat_attr_add(&format, "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
   }
   return format;
 }
@@ -289,7 +289,7 @@ static const GPUVertFormat &normal_format()
 {
   static GPUVertFormat format{};
   if (format.attr_len == 0) {
-    GPU_vertformat_attr_add(&format, "nor", GPU_COMP_I16, 3, GPU_FETCH_INT_TO_FLOAT_UNIT);
+    GPU_vertformat_attr_add(&format, "nor", VertAttrType::I16, 3, GPU_FETCH_INT_TO_FLOAT_UNIT);
   }
   return format;
 }
@@ -298,7 +298,7 @@ static const GPUVertFormat &mask_format()
 {
   static GPUVertFormat format{};
   if (format.attr_len == 0) {
-    GPU_vertformat_attr_add(&format, "msk", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
+    GPU_vertformat_attr_add(&format, "msk", VertAttrType::F32, 1, GPU_FETCH_FLOAT);
   }
   return format;
 }
@@ -307,7 +307,7 @@ static const GPUVertFormat &face_set_format()
 {
   static GPUVertFormat format{};
   if (format.attr_len == 0) {
-    GPU_vertformat_attr_add(&format, "fset", GPU_COMP_U8, 3, GPU_FETCH_INT_TO_FLOAT_UNIT);
+    GPU_vertformat_attr_add(&format, "fset", VertAttrType::U8, 3, GPU_FETCH_INT_TO_FLOAT_UNIT);
   }
   return format;
 }

@@ -60,7 +60,8 @@ void extract_face_dot_normals(const MeshRenderData &mr, const bool use_hq, gpu::
   if (use_hq) {
     static GPUVertFormat format = {0};
     if (format.attr_len == 0) {
-      GPU_vertformat_attr_add(&format, "norAndFlag", GPU_COMP_I16, 4, GPU_FETCH_INT_TO_FLOAT_UNIT);
+      GPU_vertformat_attr_add(
+          &format, "norAndFlag", VertAttrType::I16, 4, GPU_FETCH_INT_TO_FLOAT_UNIT);
     }
     GPU_vertbuf_init_with_format(vbo, format);
     GPU_vertbuf_data_alloc(vbo, mr.faces_num);
@@ -76,7 +77,8 @@ void extract_face_dot_normals(const MeshRenderData &mr, const bool use_hq, gpu::
   else {
     static GPUVertFormat format = {0};
     if (format.attr_len == 0) {
-      GPU_vertformat_attr_add(&format, "norAndFlag", GPU_COMP_I10, 4, GPU_FETCH_INT_TO_FLOAT_UNIT);
+      GPU_vertformat_attr_add(
+          &format, "norAndFlag", VertAttrType::I10_10_10_2, 4, GPU_FETCH_INT_TO_FLOAT_UNIT);
     }
     GPU_vertbuf_init_with_format(vbo, format);
     GPU_vertbuf_data_alloc(vbo, mr.faces_num);

@@ -17,7 +17,7 @@ static MutableSpan<int> init_vbo_data(gpu::VertBuf &vbo, const int size)
 {
   static GPUVertFormat format = {0};
   if (format.attr_len == 0) {
-    GPU_vertformat_attr_add(&format, "index", GPU_COMP_I32, 1, GPU_FETCH_INT);
+    GPU_vertformat_attr_add(&format, "index", VertAttrType::I32, 1, GPU_FETCH_INT);
   }
   GPU_vertbuf_init_with_format(vbo, format);
   GPU_vertbuf_data_alloc(vbo, size);

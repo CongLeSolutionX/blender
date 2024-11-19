@@ -108,7 +108,7 @@ void transform_draw_cursor_draw(bContext * /*C*/, int x, int y, void *customdata
   GPU_line_smooth(true);
   GPU_blend(GPU_BLEND_ALPHA);
   const uint pos_id = GPU_vertformat_attr_add(
-      immVertexFormat(), "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+      immVertexFormat(), "pos", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
 
   /* Dashed lines first. */
   if (ELEM(t->helpline, HLP_SPRING, HLP_ANGLE)) {

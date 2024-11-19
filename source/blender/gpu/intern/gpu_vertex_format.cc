@@ -55,27 +55,27 @@ void GPU_vertformat_copy(GPUVertFormat *dest, const GPUVertFormat &src)
   memcpy(dest, &src, sizeof(GPUVertFormat));
 }
 
-static uint comp_size(GPUVertCompType type)
+static uint comp_size(VertAttrType type)
 {
-  BLI_assert(type <= GPU_COMP_F32); /* other types have irregular sizes (not bytes) */
+  BLI_assert(type <= VertAttrType::F32); /* other types have irregular sizes (not bytes) */
   const uint sizes[] = {1, 1, 2, 2, 4, 4, 4};
-  return sizes[type];
+  return sizes[int(type)];
 }
 
 static uint attr_size(const GPUVertAttr *a)
 {
-  if (a->comp_type == GPU_COMP_I10) {
+  if (VertAttrType(a->comp_type) == VertAttrType::I10_10_10_2) {
     return 4; /* always packed as 10_10_10_2 */
   }
-  return a->comp_len * comp_size(static_cast<GPUVertCompType>(a->comp_type));
+  return a->comp_len * comp_size(VertAttrType(a->comp_type));
 }
 
 static uint attr_align(const GPUVertAttr *a, uint minimum_stride)
 {
-  if (a->comp_type == GPU_COMP_I10) {
+  if (VertAttrType(a->comp_type) == VertAttrType::I10_10_10_2) {
     return 4; /* always packed as 10_10_10_2 */
   }
-  uint c = comp_size(static_cast<GPUVertCompType>(a->comp_type));
+  uint c = comp_size(VertAttrType(a->comp_type));
   if (a->comp_len == 3 && c <= 2) {
     return 4 * c; /* AMD HW can't fetch these well, so pad it out (other vendors too?) */
   }
@@ -117,7 +117,7 @@ static uchar copy_attr_name(GPUVertFormat *format, const char *name)
 
 uint GPU_vertformat_attr_add(GPUVertFormat *format,
                              const char *name,
-                             GPUVertCompType comp_type,
+                             VertAttrType comp_type,
                              uint comp_len,
                              GPUVertFetchMode fetch_mode)
 {
@@ -128,11 +128,11 @@ uint GPU_vertformat_attr_add(GPUVertFormat *format,
              comp_len == 16);
 
   switch (comp_type) {
-    case GPU_COMP_F32:
+    case VertAttrType::F32:
       /* float type can only kept as float */
       BLI_assert(fetch_mode == GPU_FETCH_FLOAT);
       break;
-    case GPU_COMP_I10:
+    case VertAttrType::I10_10_10_2:
       /* 10_10_10 format intended for normals (XYZ) or colors (RGB)
        * extra component packed.w can be manually set to { -2, -1, 0, 1 } */
       BLI_assert(ELEM(comp_len, 3, 4));
@@ -154,8 +154,8 @@ uint GPU_vertformat_attr_add(GPUVertFormat *format,
   GPUVertAttr *attr = &format->attrs[attr_id];
 
   attr->names[attr->name_len++] = copy_attr_name(format, name);
-  attr->comp_type = comp_type;
-  attr->comp_len = (comp_type == GPU_COMP_I10) ?
+  attr->comp_type = uint(comp_type);
+  attr->comp_len = (comp_type == VertAttrType::I10_10_10_2) ?
                        4 :
                        comp_len; /* system needs 10_10_10_2 to be 4 or BGRA */
   attr->size = attr_size(attr);
@@ -390,7 +390,7 @@ static uint component_size_get(const Type gpu_type)
 }
 
 static void recommended_fetch_mode_and_comp_type(Type gpu_type,
-                                                 GPUVertCompType *r_comp_type,
+                                                 VertAttrType *r_comp_type,
                                                  GPUVertFetchMode *r_fetch_mode)
 {
   switch (gpu_type) {
@@ -400,21 +400,21 @@ static void recommended_fetch_mode_and_comp_type(Type gpu_type,
     case Type::VEC4:
     case Type::MAT3:
     case Type::MAT4:
-      *r_comp_type = GPU_COMP_F32;
+      *r_comp_type = VertAttrType::F32;
       *r_fetch_mode = GPU_FETCH_FLOAT;
       break;
     case Type::INT:
     case Type::IVEC2:
     case Type::IVEC3:
     case Type::IVEC4:
-      *r_comp_type = GPU_COMP_I32;
+      *r_comp_type = VertAttrType::I32;
       *r_fetch_mode = GPU_FETCH_INT;
       break;
     case Type::UINT:
     case Type::UVEC2:
     case Type::UVEC3:
     case Type::UVEC4:
-      *r_comp_type = GPU_COMP_U32;
+      *r_comp_type = VertAttrType::U32;
       *r_fetch_mode = GPU_FETCH_INT;
       break;
     default:
@@ -435,7 +435,7 @@ void GPU_vertformat_from_shader(GPUVertFormat *format, const GPUShader *shader)
       continue;
     }
 
-    GPUVertCompType comp_type;
+    VertAttrType comp_type;
     GPUVertFetchMode fetch_mode;
     recommended_fetch_mode_and_comp_type(gpu_type, &comp_type, &fetch_mode);
 

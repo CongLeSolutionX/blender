@@ -70,9 +70,9 @@ static GPUVertFormat &preset_3d_format()
   if (g_presets_3d.format.attr_len == 0) {
     GPUVertFormat *format = &g_presets_3d.format;
     g_presets_3d.attr_id.pos = GPU_vertformat_attr_add(
-        format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+        format, "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
     g_presets_3d.attr_id.nor = GPU_vertformat_attr_add(
-        format, "nor", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+        format, "nor", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
   }
   return g_presets_3d.format;
 }
@@ -82,9 +82,9 @@ static GPUVertFormat &preset_2d_format()
   if (g_presets_2d.format.attr_len == 0) {
     GPUVertFormat *format = &g_presets_2d.format;
     g_presets_2d.attr_id.pos = GPU_vertformat_attr_add(
-        format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+        format, "pos", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
     g_presets_2d.attr_id.col = GPU_vertformat_attr_add(
-        format, "color", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
+        format, "color", VertAttrType::F32, 4, GPU_FETCH_FLOAT);
   }
   return g_presets_2d.format;
 }

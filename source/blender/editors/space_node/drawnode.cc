@@ -625,7 +625,7 @@ static void node_composit_backdrop_boxmask(
   y4 = cy - (-sine * halveBoxWidth + cosine * -halveBoxHeight) * snode->zoom;
 
   GPUVertFormat *format = immVertexFormat();
-  uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+  uint pos = GPU_vertformat_attr_add(format, "pos", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
 
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
@@ -670,7 +670,7 @@ static void node_composit_backdrop_ellipsemask(
   y4 = cy - (-sine * halveBoxWidth + cosine * -halveBoxHeight) * snode->zoom;
 
   GPUVertFormat *format = immVertexFormat();
-  uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+  uint pos = GPU_vertformat_attr_add(format, "pos", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
 
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
@@ -1712,7 +1712,7 @@ void draw_nodespace_back_pix(const bContext &C,
                       y + snode.zoom * viewer_border->ymax * ibuf->y);
 
         uint pos = GPU_vertformat_attr_add(
-            immVertexFormat(), "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+            immVertexFormat(), "pos", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
         immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
         immUniformThemeColor(TH_ACTIVE);
 
@@ -1885,9 +1885,11 @@ static void set_nodelink_vertex(gpu::VertBuf *vbo,
 static void nodelink_batch_init()
 {
   GPUVertFormat format = {0};
-  uint uv_id = GPU_vertformat_attr_add(&format, "uv", GPU_COMP_U8, 2, GPU_FETCH_INT_TO_FLOAT_UNIT);
-  uint pos_id = GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
-  uint expand_id = GPU_vertformat_attr_add(&format, "expand", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+  uint uv_id = GPU_vertformat_attr_add(
+      &format, "uv", VertAttrType::U8, 2, GPU_FETCH_INT_TO_FLOAT_UNIT);
+  uint pos_id = GPU_vertformat_attr_add(&format, "pos", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
+  uint expand_id = GPU_vertformat_attr_add(
+      &format, "expand", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
   gpu::VertBuf *vbo = GPU_vertbuf_create_with_format_ex(format, GPU_USAGE_STATIC);
   int vcount = LINK_RESOL * 2; /* curve */
   vcount += 2;                 /* restart strip */
@@ -1971,29 +1973,29 @@ static void nodelink_batch_init()
   /* Instances data */
   GPUVertFormat format_inst = {0};
   g_batch_link.p0_id = GPU_vertformat_attr_add(
-      &format_inst, "P0", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+      &format_inst, "P0", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
   g_batch_link.p1_id = GPU_vertformat_attr_add(
-      &format_inst, "P1", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+      &format_inst, "P1", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
   g_batch_link.p2_id = GPU_vertformat_attr_add(
-      &format_inst, "P2", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+      &format_inst, "P2", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
   g_batch_link.p3_id = GPU_vertformat_attr_add(
-      &format_inst, "P3", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+      &format_inst, "P3", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
   g_batch_link.colid_id = GPU_vertformat_attr_add(
-      &format_inst, "colid_doarrow", GPU_COMP_U8, 4, GPU_FETCH_INT);
+      &format_inst, "colid_doarrow", VertAttrType::U8, 4, GPU_FETCH_INT);
   g_batch_link.start_color_id = GPU_vertformat_attr_add(
-      &format_inst, "start_color", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
+      &format_inst, "start_color", VertAttrType::F32, 4, GPU_FETCH_FLOAT);
   g_batch_link.end_color_id = GPU_vertformat_attr_add(
-      &format_inst, "end_color", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
+      &format_inst, "end_color", VertAttrType::F32, 4, GPU_FETCH_FLOAT);
   g_batch_link.muted_id = GPU_vertformat_attr_add(
-      &format_inst, "domuted", GPU_COMP_U8, 2, GPU_FETCH_INT);
+      &format_inst, "domuted", VertAttrType::U8, 2, GPU_FETCH_INT);
   g_batch_link.dim_factor_id = GPU_vertformat_attr_add(
-      &format_inst, "dim_factor", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
+      &format_inst, "dim_factor", VertAttrType::F32, 1, GPU_FETCH_FLOAT);
   g_batch_link.thickness_id = GPU_vertformat_attr_add(
-      &format_inst, "thickness", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
+      &format_inst, "thickness", VertAttrType::F32, 1, GPU_FETCH_FLOAT);
   g_batch_link.dash_params_id = GPU_vertformat_attr_add(
-      &format_inst, "dash_params", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+      &format_inst, "dash_params", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
   g_batch_link.has_back_link_id = GPU_vertformat_attr_add(
-      &format_inst, "has_back_link", GPU_COMP_I32, 1, GPU_FETCH_INT);
+      &format_inst, "has_back_link", VertAttrType::I32, 1, GPU_FETCH_INT);
   g_batch_link.inst_vbo = GPU_vertbuf_create_with_format_ex(format_inst, GPU_USAGE_STREAM);
   /* Alloc max count but only draw the range we need. */
   GPU_vertbuf_data_alloc(*g_batch_link.inst_vbo, NODELINK_GROUP_SIZE);

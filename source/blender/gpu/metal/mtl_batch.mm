@@ -300,11 +300,11 @@ int MTLBatch::prepare_vertex_binding(MTLVertBuf *verts,
           MTLVertexFormat converted_format;
           bool can_use_internal_conversion = mtl_convert_vertex_format(
               mtl_attr.format,
-              (GPUVertCompType)a->comp_type,
+              VertAttrType(a->comp_type),
               a->comp_len,
-              (GPUVertFetchMode)a->fetch_mode,
+              GPUVertFetchMode(a->fetch_mode),
               &converted_format);
-          bool is_floating_point_format = (a->comp_type == GPU_COMP_F32);
+          bool is_floating_point_format = (VertAttrType(a->comp_type) == VertAttrType::F32);
 
           if (can_use_internal_conversion) {
             desc.vertex_descriptor.attributes[mtl_attr.location].format = converted_format;

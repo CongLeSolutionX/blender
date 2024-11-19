@@ -78,8 +78,8 @@ class BatchUpdater {
   void ensure_format()
   {
     if (format.attr_len == 0) {
-      GPU_vertformat_attr_add(&format, "pos", GPU_COMP_I32, 2, GPU_FETCH_INT);
-      GPU_vertformat_attr_add(&format, "uv", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+      GPU_vertformat_attr_add(&format, "pos", VertAttrType::I32, 2, GPU_FETCH_INT);
+      GPU_vertformat_attr_add(&format, "uv", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
 
       pos_id = GPU_vertformat_attr_id_get(&format, "pos");
       uv_id = GPU_vertformat_attr_id_get(&format, "uv");

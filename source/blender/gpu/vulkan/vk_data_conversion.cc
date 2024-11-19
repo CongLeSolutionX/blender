@@ -1082,13 +1082,13 @@ void convert_device_to_host(void *dst_buffer,
  * \{ */
 
 static bool attribute_check(const GPUVertAttr attribute,
-                            GPUVertCompType comp_type,
+                            VertAttrType comp_type,
                             GPUVertFetchMode fetch_mode)
 {
   return attribute.comp_type == comp_type && attribute.fetch_mode == fetch_mode;
 }
 
-static bool attribute_check(const GPUVertAttr attribute, GPUVertCompType comp_type, uint comp_len)
+static bool attribute_check(const GPUVertAttr attribute, VertAttrType comp_type, uint comp_len)
 {
   return attribute.comp_type == comp_type && attribute.comp_len == comp_len;
 }
@@ -1147,12 +1147,13 @@ void VertexFormatConverter::update_conversion_flags(const GPUVertAttr &vertex_at
 {
   /* I32/U32 to F32 conversion doesn't exist in vulkan. */
   if (vertex_attribute.fetch_mode == GPU_FETCH_INT_TO_FLOAT &&
-      ELEM(vertex_attribute.comp_type, GPU_COMP_I32, GPU_COMP_U32))
+      ELEM(vertex_attribute.comp_type, VertAttrType::I32, VertAttrType::U32))
   {
     needs_conversion_ = true;
   }
   /* r8g8b8 formats will be stored as r8g8b8a8. */
-  else if (workarounds.vertex_formats.r8g8b8 && attribute_check(vertex_attribute, GPU_COMP_U8, 3))
+  else if (workarounds.vertex_formats.r8g8b8 &&
+           attribute_check(vertex_attribute, VertAttrType::U8, 3))
   {
     needs_conversion_ = true;
   }
@@ -1180,12 +1181,13 @@ void VertexFormatConverter::make_device_compatible(GPUVertAttr &vertex_attribute
                                                    bool &r_needs_repack) const
 {
   if (vertex_attribute.fetch_mode == GPU_FETCH_INT_TO_FLOAT &&
-      ELEM(vertex_attribute.comp_type, GPU_COMP_I32, GPU_COMP_U32))
+      ELEM(vertex_attribute.comp_type, VertAttrType::I32, VertAttrType::U32))
   {
     vertex_attribute.fetch_mode = GPU_FETCH_FLOAT;
-    vertex_attribute.comp_type = GPU_COMP_F32;
+    vertex_attribute.comp_type = VertAttrType::F32;
   }
-  else if (workarounds.vertex_formats.r8g8b8 && attribute_check(vertex_attribute, GPU_COMP_U8, 3))
+  else if (workarounds.vertex_formats.r8g8b8 &&
+           attribute_check(vertex_attribute, VertAttrType::U8, 3))
   {
     vertex_attribute.comp_len = 4;
     vertex_attribute.size = 4;
@@ -1235,8 +1237,8 @@ void VertexFormatConverter::convert_attribute(void *device_row_data,
   {
     /* This check is done first to improve possible branch prediction. */
   }
-  else if (attribute_check(source_attribute, GPU_COMP_I32, GPU_FETCH_INT_TO_FLOAT) &&
-           attribute_check(device_attribute, GPU_COMP_F32, GPU_FETCH_FLOAT))
+  else if (attribute_check(source_attribute, VertAttrType::I32, GPU_FETCH_INT_TO_FLOAT) &&
+           attribute_check(device_attribute, VertAttrType::F32, GPU_FETCH_FLOAT))
   {
     for (int component : IndexRange(source_attribute.comp_len)) {
       const int32_t *component_in = static_cast<const int32_t *>(source_attr_data) + component;
@@ -1244,8 +1246,8 @@ void VertexFormatConverter::convert_attribute(void *device_row_data,
       *component_out = float(*component_in);
     }
   }
-  else if (attribute_check(source_attribute, GPU_COMP_U32, GPU_FETCH_INT_TO_FLOAT) &&
-           attribute_check(device_attribute, GPU_COMP_F32, GPU_FETCH_FLOAT))
+  else if (attribute_check(source_attribute, VertAttrType::U32, GPU_FETCH_INT_TO_FLOAT) &&
+           attribute_check(device_attribute, VertAttrType::F32, GPU_FETCH_FLOAT))
   {
     for (int component : IndexRange(source_attribute.comp_len)) {
       const uint32_t *component_in = static_cast<const uint32_t *>(source_attr_data) + component;
@@ -1253,8 +1255,8 @@ void VertexFormatConverter::convert_attribute(void *device_row_data,
       *component_out = float(*component_in);
     }
   }
-  else if (attribute_check(source_attribute, GPU_COMP_U8, 3) &&
-           attribute_check(device_attribute, GPU_COMP_U8, 4))
+  else if (attribute_check(source_attribute, VertAttrType::U8, 3) &&
+           attribute_check(device_attribute, VertAttrType::U8, 4))
   {
     const uchar3 *attr_in = static_cast<const uchar3 *>(source_attr_data);
     uchar4 *attr_out = static_cast<uchar4 *>(device_attr_data);

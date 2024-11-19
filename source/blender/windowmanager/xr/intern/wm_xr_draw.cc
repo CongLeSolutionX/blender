@@ -228,8 +228,8 @@ static blender::gpu::Batch *wm_xr_controller_model_batch_create(GHOST_XrContextH
   }
 
   GPUVertFormat format = {0};
-  GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
-  GPU_vertformat_attr_add(&format, "nor", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+  GPU_vertformat_attr_add(&format, "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
+  GPU_vertformat_attr_add(&format, "nor", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
 
   blender::gpu::VertBuf *vbo = GPU_vertbuf_create_with_format(format);
   GPU_vertbuf_data_alloc(*vbo, model_data.count_vertices);
@@ -338,8 +338,9 @@ static void wm_xr_controller_aim_draw(const XrSessionSettings *settings, wmXrSes
   }
 
   GPUVertFormat *format = immVertexFormat();
-  uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
-  uint col = GPU_vertformat_attr_add(format, "color", GPU_COMP_U8, 4, GPU_FETCH_INT_TO_FLOAT_UNIT);
+  uint pos = GPU_vertformat_attr_add(format, "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
+  uint col = GPU_vertformat_attr_add(
+      format, "color", VertAttrType::U8, 4, GPU_FETCH_INT_TO_FLOAT_UNIT);
   immBindBuiltinProgram(GPU_SHADER_3D_POLYLINE_FLAT_COLOR);
 
   float viewport[4];

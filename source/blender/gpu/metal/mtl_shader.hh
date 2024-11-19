@@ -561,7 +561,7 @@ inline MTLVertexFormat format_get_component_type(MTLVertexFormat mtl_format)
   return format_resize_comp(mtl_format, 1);
 }
 
-inline MTLVertexFormat to_mtl(GPUVertCompType component_type,
+inline MTLVertexFormat to_mtl(VertAttrType component_type,
                               GPUVertFetchMode fetch_mode,
                               uint32_t component_len)
 {
@@ -611,19 +611,19 @@ inline MTLVertexFormat to_mtl(GPUVertCompType component_type,
   break;
 
   switch (component_type) {
-    case GPU_COMP_I8:
+    case VertAttrType::I8:
       FORMAT_PER_COMP_SMALL_INT(Char)
-    case GPU_COMP_U8:
+    case VertAttrType::U8:
       FORMAT_PER_COMP_SMALL_INT(UChar)
-    case GPU_COMP_I16:
+    case VertAttrType::I16:
       FORMAT_PER_COMP_SMALL_INT(Short)
-    case GPU_COMP_U16:
+    case VertAttrType::U16:
       FORMAT_PER_COMP_SMALL_INT(UShort)
-    case GPU_COMP_I32:
+    case VertAttrType::I32:
       FORMAT_PER_COMP_INT(Int)
-    case GPU_COMP_U32:
+    case VertAttrType::U32:
       FORMAT_PER_COMP_INT(UInt)
-    case GPU_COMP_F32:
+    case VertAttrType::F32:
       switch (fetch_mode) {
         case GPU_FETCH_FLOAT:
           FORMAT_PER_COMP(Float, )
@@ -634,7 +634,7 @@ inline MTLVertexFormat to_mtl(GPUVertCompType component_type,
           BLI_assert_msg(0, "Invalid fetch mode for float attribute");
           break;
       }
-    case GPU_COMP_I10:
+    case VertAttrType::I10_10_10_2:
       switch (fetch_mode) {
         case GPU_FETCH_INT_TO_FLOAT_UNIT:
           return MTLVertexFormatInt1010102Normalized;
@@ -644,7 +644,7 @@ inline MTLVertexFormat to_mtl(GPUVertCompType component_type,
           BLI_assert_msg(0, "Invalid fetch mode for compressed attribute");
           break;
       }
-    case GPU_COMP_MAX:
+    case VertAttrType::GPU_COMP_MAX:
       BLI_assert_unreachable();
       break;
   }
@@ -730,7 +730,7 @@ inline bool mtl_format_is_normalized(MTLVertexFormat format)
  * attribute `GPUVertFetchMode fetch_mode` e.g. `GPU_FETCH_INT`.
  */
 inline MTLVertexFormat mtl_convert_vertex_format_ex(MTLVertexFormat shader_attr_format,
-                                                    GPUVertCompType component_type,
+                                                    VertAttrType component_type,
                                                     uint32_t component_len,
                                                     GPUVertFetchMode fetch_mode)
 {
@@ -748,7 +748,7 @@ inline MTLVertexFormat mtl_convert_vertex_format_ex(MTLVertexFormat shader_attr_
 
   if (vertex_attr_format == MTLVertexFormatInt1010102Normalized) {
     BLI_assert_msg(format_get_component_type(shader_attr_format) == MTLVertexFormatFloat,
-                   "Vertex format is GPU_COMP_I10 but shader input is not float");
+                   "Vertex format is VertAttrType::I10_10_10_2 but shader input is not float");
     return vertex_attr_format;
   }
 
@@ -763,7 +763,7 @@ inline MTLVertexFormat mtl_convert_vertex_format_ex(MTLVertexFormat shader_attr_
 
   if (shader_attr_comp_type != MTLVertexFormatFloat) {
     BLI_assert_msg(vertex_attr_comp_type != MTLVertexFormatFloat,
-                   "Vertex format is GPU_COMP_F32 but shader input is not float");
+                   "Vertex format is VertAttrType::F32 but shader input is not float");
   }
   /* Casting normalized MTLVertexFormat types are only valid to float or half. */
   if (shader_attr_comp_type == MTLVertexFormatFloat) {
@@ -785,7 +785,7 @@ inline MTLVertexFormat mtl_convert_vertex_format_ex(MTLVertexFormat shader_attr_
 }
 
 inline bool mtl_convert_vertex_format(MTLVertexFormat shader_attr_format,
-                                      GPUVertCompType component_type,
+                                      VertAttrType component_type,
                                       uint32_t component_len,
                                       GPUVertFetchMode fetch_mode,
                                       MTLVertexFormat *r_convertedFormat)

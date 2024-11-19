@@ -302,7 +302,7 @@ static void drawVertSlide(TransInfo *t)
       GPU_line_width(line_size);
 
       const uint shdr_pos = GPU_vertformat_attr_add(
-          immVertexFormat(), "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+          immVertexFormat(), "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
 
       immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
       immUniformThemeColorShadeAlpha(TH_EDGE_SELECT, 80, alpha_shade);
@@ -361,7 +361,7 @@ static void drawVertSlide(TransInfo *t)
         GPU_line_width(1.0f);
 
         const uint shdr_pos_2d = GPU_vertformat_attr_add(
-            immVertexFormat(), "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+            immVertexFormat(), "pos", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
 
         immBindBuiltinProgram(GPU_SHADER_3D_LINE_DASHED_UNIFORM_COLOR);
 

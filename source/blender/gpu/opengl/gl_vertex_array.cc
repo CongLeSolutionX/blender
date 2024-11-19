@@ -49,7 +49,7 @@ static uint16_t vbo_bind(const ShaderInterface *interface,
 
     /* This is in fact an offset in memory. */
     const GLvoid *pointer = (const GLubyte *)intptr_t(offset + v_first * stride);
-    const GLenum type = to_gl(static_cast<GPUVertCompType>(a->comp_type));
+    const GLenum type = to_gl(static_cast<VertAttrType>(a->comp_type));
 
     for (uint n_idx = 0; n_idx < a->name_len; n_idx++) {
       const char *name = GPU_vertformat_attr_name_get(format, a, n_idx);
@@ -63,7 +63,7 @@ static uint16_t vbo_bind(const ShaderInterface *interface,
 
       if (ELEM(a->comp_len, 16, 12, 8)) {
         BLI_assert(a->fetch_mode == GPU_FETCH_FLOAT);
-        BLI_assert(a->comp_type == GPU_COMP_F32);
+        BLI_assert(a->comp_type == VertAttrType::F32);
         for (int i = 0; i < a->comp_len / 4; i++) {
           glEnableVertexAttribArray(input->location + i);
           glVertexAttribDivisor(input->location + i, divisor);
@@ -133,7 +133,7 @@ void GLVertArray::update_bindings(const GLuint vao,
       glEnableVertexAttribArray(input->location);
       glVertexAttribDivisor(input->location, 1);
       glVertexAttribIPointer(
-          input->location, component_len, to_gl(GPU_COMP_I32), 0, (GLvoid *)nullptr);
+          input->location, component_len, to_gl(VertAttrType::I32), 0, (GLvoid *)nullptr);
       attr_mask &= ~(1 << input->location);
     }
   }

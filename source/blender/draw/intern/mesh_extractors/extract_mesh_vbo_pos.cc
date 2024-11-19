@@ -71,7 +71,7 @@ void extract_positions(const MeshRenderData &mr, gpu::VertBuf &vbo)
 {
   static GPUVertFormat format = {0};
   if (format.attr_len == 0) {
-    GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+    GPU_vertformat_attr_add(&format, "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
   }
   GPU_vertbuf_init_with_format(vbo, format);
   GPU_vertbuf_data_alloc(vbo, mr.corners_num + mr.loose_indices_num);
@@ -89,7 +89,7 @@ static const GPUVertFormat &get_normals_format()
 {
   static GPUVertFormat format = {0};
   if (format.attr_len == 0) {
-    GPU_vertformat_attr_add(&format, "nor", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
+    GPU_vertformat_attr_add(&format, "nor", VertAttrType::F32, 4, GPU_FETCH_FLOAT);
     GPU_vertformat_alias_add(&format, "lnor");
   }
   return format;
@@ -99,7 +99,7 @@ static const GPUVertFormat &get_custom_normals_format()
 {
   static GPUVertFormat format = {0};
   if (format.attr_len == 0) {
-    GPU_vertformat_attr_add(&format, "nor", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+    GPU_vertformat_attr_add(&format, "nor", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
     GPU_vertformat_alias_add(&format, "lnor");
   }
   return format;
@@ -195,7 +195,7 @@ void extract_positions_subdiv(const DRWSubdivCache &subdiv_cache,
   gpu::VertBuf *flags_buffer = GPU_vertbuf_calloc();
   static GPUVertFormat flag_format = {0};
   if (flag_format.attr_len == 0) {
-    GPU_vertformat_attr_add(&flag_format, "data", GPU_COMP_I32, 1, GPU_FETCH_INT);
+    GPU_vertformat_attr_add(&flag_format, "data", VertAttrType::I32, 1, GPU_FETCH_INT);
     GPU_vertformat_alias_add(&flag_format, "flag");
   }
   GPU_vertbuf_init_with_format(*flags_buffer, flag_format);
@@ -211,7 +211,7 @@ void extract_positions_subdiv(const DRWSubdivCache &subdiv_cache,
        * attributes. This is a substantial waste of video-ram and should be done another way.
        * Unfortunately, at the time of writing, I did not found any other "non disruptive"
        * alternative. */
-      GPU_vertformat_attr_add(&format, "orco", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
+      GPU_vertformat_attr_add(&format, "orco", VertAttrType::F32, 4, GPU_FETCH_FLOAT);
     }
     GPU_vertbuf_init_build_on_device(*orco_vbo, format, subdiv_cache.num_subdiv_loops);
   }
@@ -232,7 +232,7 @@ void extract_positions_subdiv(const DRWSubdivCache &subdiv_cache,
         *dst_custom_normals, get_custom_normals_format(), subdiv_cache.num_subdiv_loops);
 
     draw_subdiv_interp_custom_data(
-        subdiv_cache, *src_custom_normals, *dst_custom_normals, GPU_COMP_F32, 3, 0);
+        subdiv_cache, *src_custom_normals, *dst_custom_normals, VertAttrType::F32, 3, 0);
 
     draw_subdiv_finalize_custom_normals(subdiv_cache, dst_custom_normals, &vbo);
 

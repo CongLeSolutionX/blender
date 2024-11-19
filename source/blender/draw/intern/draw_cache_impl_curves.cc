@@ -106,7 +106,7 @@ struct CurvesBatchCache {
 static uint DUMMY_ID;
 
 static GPUVertFormat single_attr_vbo_format(const char *name,
-                                            const GPUVertCompType comp_type,
+                                            const VertAttrType comp_type,
                                             const uint comp_len,
                                             const GPUVertFetchMode fetch_mode,
                                             uint &attr_id = DUMMY_ID)
@@ -251,14 +251,14 @@ static void create_points_position_time_vbo(const bke::CurvesGeometry &curves,
                                             CurvesEvalCache &cache)
 {
   GPUVertFormat format = {0};
-  GPU_vertformat_attr_add(&format, "posTime", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
+  GPU_vertformat_attr_add(&format, "posTime", VertAttrType::F32, 4, GPU_FETCH_FLOAT);
 
   cache.proc_point_buf = GPU_vertbuf_create_with_format_ex(
       format, GPU_USAGE_STATIC | GPU_USAGE_FLAG_BUFFER_TEXTURE_ONLY);
   GPU_vertbuf_data_alloc(*cache.proc_point_buf, cache.points_num);
 
   GPUVertFormat length_format = {0};
-  GPU_vertformat_attr_add(&length_format, "hairLength", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
+  GPU_vertformat_attr_add(&length_format, "hairLength", VertAttrType::F32, 1, GPU_FETCH_FLOAT);
 
   cache.proc_length_buf = GPU_vertbuf_create_with_format_ex(
       length_format, GPU_USAGE_STATIC | GPU_USAGE_FLAG_BUFFER_TEXTURE_ONLY);
@@ -285,11 +285,11 @@ static void create_edit_points_position_and_data(
     CurvesBatchCache &cache)
 {
   static GPUVertFormat format_pos = single_attr_vbo_format(
-      "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
-  /* GPU_COMP_U32 is used instead of GPU_COMP_U8 because depending on running hardware stride might
-   * still be 4. Thus adding complexity to the code and still sparing no memory. */
+      "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
+  /* VertAttrType::U32 is used instead of VertAttrType::U8 because depending on running hardware
+   * stride might still be 4. Thus adding complexity to the code and still sparing no memory. */
   static GPUVertFormat format_data = single_attr_vbo_format(
-      "data", GPU_COMP_U32, 1, GPU_FETCH_INT);
+      "data", VertAttrType::U32, 1, GPU_FETCH_INT);
 
   Span<float3> deformed_positions = deformation.positions;
   const int bezier_point_count = bezier_dst_offsets.total_size();
@@ -381,7 +381,7 @@ static void create_edit_points_selection(const bke::CurvesGeometry &curves,
                                          CurvesBatchCache &cache)
 {
   static GPUVertFormat format_data = single_attr_vbo_format(
-      "selection", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
+      "selection", VertAttrType::F32, 1, GPU_FETCH_FLOAT);
 
   const int bezier_point_count = bezier_dst_offsets.total_size();
   const int vert_count = curves.points_num() + bezier_point_count * 2;
@@ -546,7 +546,7 @@ static void ensure_final_attribute(const Curves &curves,
 
   GPUVertFormat format = {0};
   /* All attributes use vec4, see comment below. */
-  GPU_vertformat_attr_add(&format, sampler_name, GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
+  GPU_vertformat_attr_add(&format, sampler_name, VertAttrType::F32, 4, GPU_FETCH_FLOAT);
 
   ensure_control_point_attribute(curves, cache, request, index, format);
 
@@ -578,10 +578,11 @@ static void create_curve_offsets_vbos(const OffsetIndices<int> points_by_curve,
   GPUVertBufRaw data_step, seg_step;
 
   GPUVertFormat format_data = {0};
-  uint data_id = GPU_vertformat_attr_add(&format_data, "data", GPU_COMP_U32, 1, GPU_FETCH_INT);
+  uint data_id = GPU_vertformat_attr_add(
+      &format_data, "data", VertAttrType::U32, 1, GPU_FETCH_INT);
 
   GPUVertFormat format_seg = {0};
-  uint seg_id = GPU_vertformat_attr_add(&format_seg, "data", GPU_COMP_U16, 1, GPU_FETCH_INT);
+  uint seg_id = GPU_vertformat_attr_add(&format_seg, "data", VertAttrType::U16, 1, GPU_FETCH_INT);
 
   /* Curve Data. */
   cache.proc_strand_buf = GPU_vertbuf_create_with_format_ex(
@@ -601,7 +602,7 @@ static void alloc_final_points_vbo(CurvesEvalCache &cache)
 {
   /* Same format as proc_point_buf. */
   GPUVertFormat format = {0};
-  GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
+  GPU_vertformat_attr_add(&format, "pos", VertAttrType::F32, 4, GPU_FETCH_FLOAT);
 
   cache.final.proc_buf = GPU_vertbuf_create_with_format_ex(
       format, GPU_USAGE_DEVICE_ONLY | GPU_USAGE_FLAG_BUFFER_TEXTURE_ONLY);
@@ -643,7 +644,7 @@ static void calc_final_indices(const bke::CurvesGeometry &curves,
   GPU_vertformat_clear(&format);
 
   /* initialize vertex format */
-  GPU_vertformat_attr_add(&format, "dummy", GPU_COMP_U8, 1, GPU_FETCH_INT_TO_FLOAT_UNIT);
+  GPU_vertformat_attr_add(&format, "dummy", VertAttrType::U8, 1, GPU_FETCH_INT_TO_FLOAT_UNIT);
 
   gpu::VertBuf *vbo = GPU_vertbuf_create_with_format(format);
   GPU_vertbuf_data_alloc(*vbo, 1);
@@ -1043,7 +1044,7 @@ static void create_edit_points_position_vbo(
 {
   static uint attr_id;
   static GPUVertFormat format = single_attr_vbo_format(
-      "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT, attr_id);
+      "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT, attr_id);
 
   /* TODO: Deform curves using deformations. */
   const Span<float3> positions = curves.evaluated_positions();

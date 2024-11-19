@@ -107,7 +107,7 @@ static void draw_single_handle(const MaskLayer *mask_layer,
   }
 
   GPUVertFormat *format = immVertexFormat();
-  uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+  uint pos = GPU_vertformat_attr_add(format, "pos", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
   const uchar rgb_gray[4] = {0x60, 0x60, 0x60, 0xff};
 
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
@@ -199,7 +199,7 @@ static void draw_spline_points(const bContext *C,
   mask_spline_color_get(mask_layer, spline, is_spline_sel, rgb_spline);
 
   GPUVertFormat *format = immVertexFormat();
-  uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+  uint pos = GPU_vertformat_attr_add(format, "pos", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
 
   immBindBuiltinProgram(GPU_SHADER_2D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_AA);
   immUniform1f("size", 0.7f * handle_size);
@@ -400,7 +400,7 @@ static void mask_draw_curve_type(const bContext *C,
   }
 
   GPUVertFormat *format = immVertexFormat();
-  uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+  uint pos = GPU_vertformat_attr_add(format, "pos", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
 
   switch (draw_type) {
 
@@ -788,7 +788,7 @@ void ED_mask_draw_frames(
   const int region_bottom = rect_visible->ymin;
 
   uint pos = GPU_vertformat_attr_add(
-      immVertexFormat(), "pos", GPU_COMP_I32, 2, GPU_FETCH_INT_TO_FLOAT);
+      immVertexFormat(), "pos", VertAttrType::I32, 2, GPU_FETCH_INT_TO_FLOAT);
 
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
   immUniformColor4ub(255, 175, 0, 255);

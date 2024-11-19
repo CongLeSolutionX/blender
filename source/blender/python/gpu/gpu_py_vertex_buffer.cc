@@ -28,32 +28,32 @@
  * \{ */
 
 #define PYGPU_AS_NATIVE_SWITCH(attr) \
-  switch (attr->comp_type) { \
-    case GPU_COMP_I8: { \
+  switch (VertAttrType(attr->comp_type)) { \
+    case VertAttrType::I8: { \
       PY_AS_NATIVE(int8_t, PyC_Long_AsI8); \
       break; \
     } \
-    case GPU_COMP_U8: { \
+    case VertAttrType::U8: { \
       PY_AS_NATIVE(uint8_t, PyC_Long_AsU8); \
       break; \
     } \
-    case GPU_COMP_I16: { \
+    case VertAttrType::I16: { \
       PY_AS_NATIVE(int16_t, PyC_Long_AsI16); \
       break; \
     } \
-    case GPU_COMP_U16: { \
+    case VertAttrType::U16: { \
       PY_AS_NATIVE(uint16_t, PyC_Long_AsU16); \
       break; \
     } \
-    case GPU_COMP_I32: { \
+    case VertAttrType::I32: { \
       PY_AS_NATIVE(int32_t, PyC_Long_AsI32); \
       break; \
     } \
-    case GPU_COMP_U32: { \
+    case VertAttrType::U32: { \
       PY_AS_NATIVE(uint32_t, PyC_Long_AsU32); \
       break; \
     } \
-    case GPU_COMP_F32: { \
+    case VertAttrType::F32: { \
       PY_AS_NATIVE(float, PyFloat_AsDouble); \
       break; \
     } \

@@ -159,12 +159,14 @@ static void drw_volume_wireframe_cb(
   } attr_id;
 
   if (format.attr_len == 0) {
-    attr_id.pos_id = GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+    attr_id.pos_id = GPU_vertformat_attr_add(
+        &format, "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
     attr_id.nor_id = GPU_vertformat_attr_add(
-        &format, "nor", GPU_COMP_I10, 4, GPU_FETCH_INT_TO_FLOAT_UNIT);
-    attr_id.pos_id = GPU_vertformat_attr_add(&format_hq, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+        &format, "nor", VertAttrType::I10_10_10_2, 4, GPU_FETCH_INT_TO_FLOAT_UNIT);
+    attr_id.pos_id = GPU_vertformat_attr_add(
+        &format_hq, "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
     attr_id.nor_id = GPU_vertformat_attr_add(
-        &format_hq, "nor", GPU_COMP_I16, 3, GPU_FETCH_INT_TO_FLOAT_UNIT);
+        &format_hq, "nor", VertAttrType::I16, 3, GPU_FETCH_INT_TO_FLOAT_UNIT);
   }
 
   static float normal[3] = {1.0f, 0.0f, 0.0f};
@@ -239,7 +241,7 @@ static void drw_volume_selection_surface_cb(
   static GPUVertFormat format = {0};
   static uint pos_id;
   if (format.attr_len == 0) {
-    pos_id = GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+    pos_id = GPU_vertformat_attr_add(&format, "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
   }
 
   /* Create vertex buffer. */

@@ -187,7 +187,7 @@ static void draw_parallel_lines(const ParallelLinesSet *lines,
   }
 
   GPUVertFormat *format = immVertexFormat();
-  const uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+  const uint pos = GPU_vertformat_attr_add(format, "pos", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
 
   if (U.pixelsize > 1.0f) {
     float viewport[4];

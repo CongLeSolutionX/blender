@@ -25,20 +25,45 @@ constexpr static int GPU_VERT_FORMAT_MAX_NAMES = 63; /* More than enough, actual
 /* Computed as GPU_VERT_ATTR_NAMES_BUF_LEN / 30 (actual max format name). */
 constexpr static int GPU_MAX_SAFE_ATTR_NAME = 12;
 
-enum GPUVertCompType {
-  GPU_COMP_I8 = 0,
-  GPU_COMP_U8,
-  GPU_COMP_I16,
-  GPU_COMP_U16,
-  GPU_COMP_I32,
-  GPU_COMP_U32,
+enum DataType : uint {
+  I8 = 0,
+  U8,
+  I16,
+  U16,
+  I32,
+  U32,
+  F32,
+  I10_10_10_2,
+  /* End of vertex only types. */
+  U10_10_10_2,
+  F16,
+  U24_8,
+  F11_11_10,
+};
 
-  GPU_COMP_F32,
+enum class VertAttrType : uint {
+  I8 = DataType::I8,
+  U8 = DataType::U8,
+  I16 = DataType::I16,
+  U16 = DataType::U16,
+  I32 = DataType::I32,
+  U32 = DataType::U32,
+  F32 = DataType::F32,
+  I10_10_10_2 = DataType::I10_10_10_2,
 
-  GPU_COMP_I10,
   /* Warning! adjust GPUVertAttr if changing. */
-
   GPU_COMP_MAX
+};
+
+enum class TextureDataType : uint {
+  U8 = DataType::U8,
+  I32 = DataType::I32,
+  U32 = DataType::U32,
+  F16 = DataType::F16,
+  F32 = DataType::F32,
+  U10_10_10_2 = DataType::U10_10_10_2,
+  U24_8 = DataType::U24_8,
+  F11_11_10 = DataType::F11_11_10,
 };
 
 enum GPUVertFetchMode {
@@ -52,7 +77,7 @@ enum GPUVertFetchMode {
 struct GPUVertAttr {
   /* GPUVertFetchMode */
   uint fetch_mode : 2;
-  /* GPUVertCompType */
+  /* VertAttrType */
   uint comp_type : 3;
   /* 1 to 4 or 8 or 12 or 16 */
   uint comp_len : 5;
@@ -94,7 +119,7 @@ void GPU_vertformat_copy(GPUVertFormat *dest, const GPUVertFormat &src);
 void GPU_vertformat_from_shader(GPUVertFormat *format, const GPUShader *shader);
 
 uint GPU_vertformat_attr_add(
-    GPUVertFormat *, const char *name, GPUVertCompType, uint comp_len, GPUVertFetchMode);
+    GPUVertFormat *, const char *name, VertAttrType, uint comp_len, GPUVertFetchMode);
 void GPU_vertformat_alias_add(GPUVertFormat *, const char *alias);
 
 /**

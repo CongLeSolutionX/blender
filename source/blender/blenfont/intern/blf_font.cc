@@ -189,14 +189,15 @@ static ft_pix blf_unscaled_F26Dot6_to_pixels(FontBLF *font, FT_Pos value)
 static void blf_batch_draw_init()
 {
   GPUVertFormat format = {0};
-  g_batch.pos_loc = GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
+  g_batch.pos_loc = GPU_vertformat_attr_add(&format, "pos", VertAttrType::F32, 4, GPU_FETCH_FLOAT);
   g_batch.col_loc = GPU_vertformat_attr_add(
-      &format, "col", GPU_COMP_U8, 4, GPU_FETCH_INT_TO_FLOAT_UNIT);
-  g_batch.offset_loc = GPU_vertformat_attr_add(&format, "offset", GPU_COMP_I32, 1, GPU_FETCH_INT);
+      &format, "col", VertAttrType::U8, 4, GPU_FETCH_INT_TO_FLOAT_UNIT);
+  g_batch.offset_loc = GPU_vertformat_attr_add(
+      &format, "offset", VertAttrType::I32, 1, GPU_FETCH_INT);
   g_batch.glyph_size_loc = GPU_vertformat_attr_add(
-      &format, "glyph_size", GPU_COMP_I32, 2, GPU_FETCH_INT);
+      &format, "glyph_size", VertAttrType::I32, 2, GPU_FETCH_INT);
   g_batch.glyph_flags_loc = GPU_vertformat_attr_add(
-      &format, "flags", GPU_COMP_U32, 1, GPU_FETCH_INT);
+      &format, "flags", VertAttrType::U32, 1, GPU_FETCH_INT);
 
   g_batch.verts = GPU_vertbuf_create_with_format_ex(format, GPU_USAGE_STREAM);
   GPU_vertbuf_data_alloc(*g_batch.verts, BLF_BATCH_DRAW_LEN_MAX);

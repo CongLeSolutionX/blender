@@ -620,7 +620,7 @@ static void wm_xr_raycast_draw(const bContext * /*C*/, ARegion * /*region*/, voi
   const XrRaycastData *data = static_cast<const XrRaycastData *>(customdata);
 
   GPUVertFormat *format = immVertexFormat();
-  uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+  uint pos = GPU_vertformat_attr_add(format, "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
 
   if (data->from_viewer) {
     immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
@@ -634,7 +634,7 @@ static void wm_xr_raycast_draw(const bContext * /*C*/, ARegion * /*region*/, voi
     immEnd();
   }
   else {
-    uint col = GPU_vertformat_attr_add(format, "color", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
+    uint col = GPU_vertformat_attr_add(format, "color", VertAttrType::F32, 4, GPU_FETCH_FLOAT);
     immBindBuiltinProgram(GPU_SHADER_3D_POLYLINE_FLAT_COLOR);
 
     float viewport[4];

@@ -24,14 +24,14 @@
  * \{ */
 
 static PyC_StringEnumItems pygpu_vertcomptype_items[] = {
-    {GPU_COMP_I8, "I8"},
-    {GPU_COMP_U8, "U8"},
-    {GPU_COMP_I16, "I16"},
-    {GPU_COMP_U16, "U16"},
-    {GPU_COMP_I32, "I32"},
-    {GPU_COMP_U32, "U32"},
-    {GPU_COMP_F32, "F32"},
-    {GPU_COMP_I10, "I10"},
+    {int(VertAttrType::I8), "I8"},
+    {int(VertAttrType::U8), "U8"},
+    {int(VertAttrType::I16), "I16"},
+    {int(VertAttrType::U16), "U16"},
+    {int(VertAttrType::I32), "I32"},
+    {int(VertAttrType::U32), "U32"},
+    {int(VertAttrType::F32), "F32"},
+    {int(VertAttrType::I10_10_10_2), "I10"},
     {0, nullptr},
 };
 
@@ -85,7 +85,7 @@ static PyObject *pygpu_vertformat_attr_add(BPyGPUVertFormat *self, PyObject *arg
 {
   const char *id;
   uint len;
-  PyC_StringEnum comp_type = {pygpu_vertcomptype_items, GPU_COMP_I8};
+  PyC_StringEnum comp_type = {pygpu_vertcomptype_items, int(VertAttrType::I8)};
   PyC_StringEnum fetch_mode = {pygpu_vertfetchmode_items, GPU_FETCH_FLOAT};
 
   if (self->fmt.attr_len == GPU_VERT_ATTR_MAX_LEN) {
@@ -120,7 +120,7 @@ static PyObject *pygpu_vertformat_attr_add(BPyGPUVertFormat *self, PyObject *arg
 
   uint attr_id = GPU_vertformat_attr_add(&self->fmt,
                                          id,
-                                         GPUVertCompType(comp_type.value_found),
+                                         VertAttrType(comp_type.value_found),
                                          len,
                                          GPUVertFetchMode(fetch_mode.value_found));
   return PyLong_FromLong(attr_id);

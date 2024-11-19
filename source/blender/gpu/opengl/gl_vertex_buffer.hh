@@ -73,24 +73,24 @@ static inline GLenum to_gl(GPUUsageType type)
   }
 }
 
-static inline GLenum to_gl(GPUVertCompType type)
+static inline GLenum to_gl(VertAttrType type)
 {
   switch (type) {
-    case GPU_COMP_I8:
+    case VertAttrType::I8:
       return GL_BYTE;
-    case GPU_COMP_U8:
+    case VertAttrType::U8:
       return GL_UNSIGNED_BYTE;
-    case GPU_COMP_I16:
+    case VertAttrType::I16:
       return GL_SHORT;
-    case GPU_COMP_U16:
+    case VertAttrType::U16:
       return GL_UNSIGNED_SHORT;
-    case GPU_COMP_I32:
+    case VertAttrType::I32:
       return GL_INT;
-    case GPU_COMP_U32:
+    case VertAttrType::U32:
       return GL_UNSIGNED_INT;
-    case GPU_COMP_F32:
+    case VertAttrType::F32:
       return GL_FLOAT;
-    case GPU_COMP_I10:
+    case VertAttrType::I10_10_10_2:
       return GL_INT_2_10_10_10_REV;
     default:
       BLI_assert(0);

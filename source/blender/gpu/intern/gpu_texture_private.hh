@@ -1089,40 +1089,40 @@ static inline eGPUTextureFormat to_texture_format(const GPUVertFormat *format)
   }
   switch (format->attrs[0].comp_len) {
     case 1:
-      switch (format->attrs[0].comp_type) {
-        case GPU_COMP_I8:
+      switch (VertAttrType(format->attrs[0].comp_type)) {
+        case VertAttrType::I8:
           return GPU_R8I;
-        case GPU_COMP_U8:
+        case VertAttrType::U8:
           return GPU_R8UI;
-        case GPU_COMP_I16:
+        case VertAttrType::I16:
           return GPU_R16I;
-        case GPU_COMP_U16:
+        case VertAttrType::U16:
           return GPU_R16UI;
-        case GPU_COMP_I32:
+        case VertAttrType::I32:
           return GPU_R32I;
-        case GPU_COMP_U32:
+        case VertAttrType::U32:
           return GPU_R32UI;
-        case GPU_COMP_F32:
+        case VertAttrType::F32:
           return GPU_R32F;
         default:
           break;
       }
       break;
     case 2:
-      switch (format->attrs[0].comp_type) {
-        case GPU_COMP_I8:
+      switch (VertAttrType(format->attrs[0].comp_type)) {
+        case VertAttrType::I8:
           return GPU_RG8I;
-        case GPU_COMP_U8:
+        case VertAttrType::U8:
           return GPU_RG8UI;
-        case GPU_COMP_I16:
+        case VertAttrType::I16:
           return GPU_RG16I;
-        case GPU_COMP_U16:
+        case VertAttrType::U16:
           return GPU_RG16UI;
-        case GPU_COMP_I32:
+        case VertAttrType::I32:
           return GPU_RG32I;
-        case GPU_COMP_U32:
+        case VertAttrType::U32:
           return GPU_RG32UI;
-        case GPU_COMP_F32:
+        case VertAttrType::F32:
           return GPU_RG32F;
         default:
           break;
@@ -1132,14 +1132,14 @@ static inline eGPUTextureFormat to_texture_format(const GPUVertFormat *format)
       /* Not supported until GL 4.0 */
       break;
     case 4:
-      switch (format->attrs[0].comp_type) {
-        case GPU_COMP_I8:
+      switch (VertAttrType(format->attrs[0].comp_type)) {
+        case VertAttrType::I8:
           return GPU_RGBA8I;
-        case GPU_COMP_U8:
+        case VertAttrType::U8:
           return GPU_RGBA8UI;
-        case GPU_COMP_I16:
+        case VertAttrType::I16:
           return GPU_RGBA16I;
-        case GPU_COMP_U16:
+        case VertAttrType::U16:
           /* NOTE: Checking the fetch mode to select the right GPU texture format. This can be
            * added to other formats as well. */
           switch (format->attrs[0].fetch_mode) {
@@ -1152,11 +1152,11 @@ static inline eGPUTextureFormat to_texture_format(const GPUVertFormat *format)
             case GPU_FETCH_FLOAT:
               return GPU_RGBA16F;
           }
-        case GPU_COMP_I32:
+        case VertAttrType::I32:
           return GPU_RGBA32I;
-        case GPU_COMP_U32:
+        case VertAttrType::U32:
           return GPU_RGBA32UI;
-        case GPU_COMP_F32:
+        case VertAttrType::F32:
           return GPU_RGBA32F;
         default:
           break;

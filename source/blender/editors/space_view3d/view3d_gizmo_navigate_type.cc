@@ -98,8 +98,10 @@ static void gizmo_axis_draw(const bContext *C, wmGizmo *gz)
   GPU_matrix_mul(matrix_screen);
 
   GPUVertFormat *format = immVertexFormat();
-  const uint pos_id = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
-  const uint color_id = GPU_vertformat_attr_add(format, "color", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
+  const uint pos_id = GPU_vertformat_attr_add(
+      format, "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
+  const uint color_id = GPU_vertformat_attr_add(
+      format, "color", VertAttrType::F32, 4, GPU_FETCH_FLOAT);
   float viewport_size[4];
   GPU_viewport_size_get_f(viewport_size);
 

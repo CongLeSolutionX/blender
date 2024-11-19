@@ -178,7 +178,7 @@ static void ui_draw_button_sections_alignment_separator(const ARegion *region,
   {
     GPUVertFormat *format = immVertexFormat();
     const uint pos = GPU_vertformat_attr_add(
-        format, "pos", GPU_COMP_I32, 2, GPU_FETCH_INT_TO_FLOAT);
+        format, "pos", VertAttrType::I32, 2, GPU_FETCH_INT_TO_FLOAT);
     immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
     immUniformColor4fv(bg_color);
 

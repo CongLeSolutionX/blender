@@ -2275,12 +2275,12 @@ void node_socket_draw(bNodeSocket *sock, const rcti *rect, const float color[4],
   BLI_rcti_resize(&draw_rect, size, size);
 
   GPUVertFormat *format = immVertexFormat();
-  uint pos_id = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
-  uint col_id = GPU_vertformat_attr_add(format, "color", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
-  uint shape_id = GPU_vertformat_attr_add(format, "flags", GPU_COMP_U32, 1, GPU_FETCH_INT);
-  uint size_id = GPU_vertformat_attr_add(format, "size", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
+  uint pos_id = GPU_vertformat_attr_add(format, "pos", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
+  uint col_id = GPU_vertformat_attr_add(format, "color", VertAttrType::F32, 4, GPU_FETCH_FLOAT);
+  uint shape_id = GPU_vertformat_attr_add(format, "flags", VertAttrType::U32, 1, GPU_FETCH_INT);
+  uint size_id = GPU_vertformat_attr_add(format, "size", VertAttrType::F32, 1, GPU_FETCH_FLOAT);
   uint outline_col_id = GPU_vertformat_attr_add(
-      format, "outlineColor", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
+      format, "outlineColor", VertAttrType::F32, 4, GPU_FETCH_FLOAT);
 
   eGPUBlend state = GPU_blend_get();
   GPU_blend(GPU_BLEND_ALPHA);
@@ -2324,7 +2324,7 @@ static float node_tree_view_scale(const SpaceNode &snode)
 static void node_draw_preview_background(rctf *rect)
 {
   GPUVertFormat *format = immVertexFormat();
-  uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+  uint pos = GPU_vertformat_attr_add(format, "pos", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
 
   immBindBuiltinProgram(GPU_SHADER_2D_CHECKER);
 
@@ -2441,12 +2441,12 @@ static void node_draw_sockets(const View2D &v2d,
   bool selected = false;
 
   GPUVertFormat *format = immVertexFormat();
-  uint pos_id = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
-  uint col_id = GPU_vertformat_attr_add(format, "color", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
-  uint shape_id = GPU_vertformat_attr_add(format, "flags", GPU_COMP_U32, 1, GPU_FETCH_INT);
-  uint size_id = GPU_vertformat_attr_add(format, "size", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
+  uint pos_id = GPU_vertformat_attr_add(format, "pos", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
+  uint col_id = GPU_vertformat_attr_add(format, "color", VertAttrType::F32, 4, GPU_FETCH_FLOAT);
+  uint shape_id = GPU_vertformat_attr_add(format, "flags", VertAttrType::U32, 1, GPU_FETCH_INT);
+  uint size_id = GPU_vertformat_attr_add(format, "size", VertAttrType::F32, 1, GPU_FETCH_FLOAT);
   uint outline_col_id = GPU_vertformat_attr_add(
-      format, "outlineColor", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
+      format, "outlineColor", VertAttrType::F32, 4, GPU_FETCH_FLOAT);
 
   GPU_blend(GPU_BLEND_ALPHA);
   GPU_program_point_size(true);
@@ -4001,7 +4001,8 @@ static void node_draw_hidden(const bContext &C,
   }
 
   /* Scale widget thing. */
-  uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+  uint pos = GPU_vertformat_attr_add(
+      immVertexFormat(), "pos", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
   GPU_blend(GPU_BLEND_ALPHA);
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
@@ -4744,7 +4745,7 @@ static void node_draw_zones_and_frames(const bContext &C,
   };
 
   const uint pos = GPU_vertformat_attr_add(
-      immVertexFormat(), "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+      immVertexFormat(), "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
 
   using ZoneOrNode = std::variant<const bNodeTreeZone *, const bNode *>;
   Vector<ZoneOrNode> draw_order;

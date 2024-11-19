@@ -97,7 +97,7 @@ enum class Type {
    * NOTE: These types must be representable in all APIs. E.g. `VEC3_101010I2` is aliased as vec3
    * in the GL back-end, as implicit type conversions from packed normal attribute data to vec3 is
    * supported. UCHAR/CHAR types are natively supported in Metal and can be used to avoid
-   * additional data conversions for `GPU_COMP_U8` vertex attributes. */
+   * additional data conversions for `VertAttrType::U8` vertex attributes. */
   VEC3_101010I2,
   UCHAR,
   UCHAR2,

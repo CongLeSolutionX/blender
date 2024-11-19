@@ -87,9 +87,9 @@ static GPUVertFormat *grease_pencil_stroke_format()
 {
   static GPUVertFormat format = {0};
   if (format.attr_len == 0) {
-    GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
-    GPU_vertformat_attr_add(&format, "ma", GPU_COMP_I32, 4, GPU_FETCH_INT);
-    GPU_vertformat_attr_add(&format, "uv", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
+    GPU_vertformat_attr_add(&format, "pos", VertAttrType::F32, 4, GPU_FETCH_FLOAT);
+    GPU_vertformat_attr_add(&format, "ma", VertAttrType::I32, 4, GPU_FETCH_INT);
+    GPU_vertformat_attr_add(&format, "uv", VertAttrType::F32, 4, GPU_FETCH_FLOAT);
   }
   return &format;
 }
@@ -104,8 +104,8 @@ static GPUVertFormat *grease_pencil_color_format()
 {
   static GPUVertFormat format = {0};
   if (format.attr_len == 0) {
-    GPU_vertformat_attr_add(&format, "col", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
-    GPU_vertformat_attr_add(&format, "fcol", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
+    GPU_vertformat_attr_add(&format, "col", VertAttrType::F32, 4, GPU_FETCH_FLOAT);
+    GPU_vertformat_attr_add(&format, "fcol", VertAttrType::F32, 4, GPU_FETCH_FLOAT);
   }
   return &format;
 }
@@ -266,12 +266,13 @@ static void grease_pencil_weight_batch_ensure(Object &object,
 
   static GPUVertFormat format_points_pos = {0};
   if (format_points_pos.attr_len == 0) {
-    GPU_vertformat_attr_add(&format_points_pos, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+    GPU_vertformat_attr_add(&format_points_pos, "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
   }
 
   static GPUVertFormat format_points_weight = {0};
   if (format_points_weight.attr_len == 0) {
-    GPU_vertformat_attr_add(&format_points_weight, "selection", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
+    GPU_vertformat_attr_add(
+        &format_points_weight, "selection", VertAttrType::F32, 1, GPU_FETCH_FLOAT);
   }
 
   GPUUsageType vbo_flag = GPU_USAGE_STATIC | GPU_USAGE_FLAG_BUFFER_TEXTURE_ONLY;
@@ -700,29 +701,30 @@ static void grease_pencil_edit_batch_ensure(Object &object,
 
   static GPUVertFormat format_edit_points_pos = {0};
   if (format_edit_points_pos.attr_len == 0) {
-    GPU_vertformat_attr_add(&format_edit_points_pos, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+    GPU_vertformat_attr_add(&format_edit_points_pos, "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
   }
 
   static GPUVertFormat format_edit_line_pos = {0};
   if (format_edit_line_pos.attr_len == 0) {
-    GPU_vertformat_attr_add(&format_edit_line_pos, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+    GPU_vertformat_attr_add(&format_edit_line_pos, "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
   }
 
   static GPUVertFormat format_edit_points_selection = {0};
   if (format_edit_points_selection.attr_len == 0) {
     GPU_vertformat_attr_add(
-        &format_edit_points_selection, "selection", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
+        &format_edit_points_selection, "selection", VertAttrType::F32, 1, GPU_FETCH_FLOAT);
   }
 
   static GPUVertFormat format_edit_points_vflag = {0};
   if (format_edit_points_vflag.attr_len == 0) {
-    GPU_vertformat_attr_add(&format_edit_points_vflag, "vflag", GPU_COMP_U32, 1, GPU_FETCH_INT);
+    GPU_vertformat_attr_add(
+        &format_edit_points_vflag, "vflag", VertAttrType::U32, 1, GPU_FETCH_INT);
   }
 
   static GPUVertFormat format_edit_line_selection = {0};
   if (format_edit_line_selection.attr_len == 0) {
     GPU_vertformat_attr_add(
-        &format_edit_line_selection, "selection", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
+        &format_edit_line_selection, "selection", VertAttrType::F32, 1, GPU_FETCH_FLOAT);
   }
 
   GPUUsageType vbo_flag = GPU_USAGE_STATIC | GPU_USAGE_FLAG_BUFFER_TEXTURE_ONLY;

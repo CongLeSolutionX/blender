@@ -67,7 +67,7 @@ void extract_face_dots_uv(const MeshRenderData &mr, gpu::VertBuf &vbo)
 {
   static GPUVertFormat format = {0};
   if (format.attr_len == 0) {
-    GPU_vertformat_attr_add(&format, "u", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+    GPU_vertformat_attr_add(&format, "u", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
     GPU_vertformat_alias_add(&format, "au");
     GPU_vertformat_alias_add(&format, "pos");
   }

@@ -251,7 +251,8 @@ static void gradient_draw_line(bContext * /*C*/, int x, int y, void *customdata)
     GPU_blend(GPU_BLEND_ALPHA);
 
     GPUVertFormat *format = immVertexFormat();
-    uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_I32, 2, GPU_FETCH_INT_TO_FLOAT);
+    uint pos = GPU_vertformat_attr_add(
+        format, "pos", VertAttrType::I32, 2, GPU_FETCH_INT_TO_FLOAT);
 
     ARegion *region = pop->vc.region;
 

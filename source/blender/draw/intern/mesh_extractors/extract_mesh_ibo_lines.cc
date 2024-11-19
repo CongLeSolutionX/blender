@@ -262,7 +262,7 @@ static void extract_lines_loose_geom_subdiv(const DRWSubdivCache &subdiv_cache,
   /* Update flags for loose edges, points are already handled. */
   static GPUVertFormat format;
   if (format.attr_len == 0) {
-    GPU_vertformat_attr_add(&format, "data", GPU_COMP_U32, 1, GPU_FETCH_INT);
+    GPU_vertformat_attr_add(&format, "data", VertAttrType::U32, 1, GPU_FETCH_INT);
   }
 
   gpu::VertBuf *flags = GPU_vertbuf_calloc();

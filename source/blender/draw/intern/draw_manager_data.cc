@@ -1509,7 +1509,8 @@ DRWCallBuffer *DRW_shgroup_call_buffer(DRWShadingGroup *shgroup,
   if (G.f & G_FLAG_PICKSEL) {
     /* Not actually used for rendering but allocated in one chunk. */
     if (inst_select_format.attr_len == 0) {
-      GPU_vertformat_attr_add(&inst_select_format, "selectId", GPU_COMP_I32, 1, GPU_FETCH_INT);
+      GPU_vertformat_attr_add(
+          &inst_select_format, "selectId", VertAttrType::I32, 1, GPU_FETCH_INT);
     }
     callbuf->buf_select = DRW_temp_buffer_request(
         DST.vmempool->idatalist, &inst_select_format, &callbuf->count);
@@ -1540,7 +1541,8 @@ DRWCallBuffer *DRW_shgroup_call_buffer_instance(DRWShadingGroup *shgroup,
   if (G.f & G_FLAG_PICKSEL) {
     /* Not actually used for rendering but allocated in one chunk. */
     if (inst_select_format.attr_len == 0) {
-      GPU_vertformat_attr_add(&inst_select_format, "selectId", GPU_COMP_I32, 1, GPU_FETCH_INT);
+      GPU_vertformat_attr_add(
+          &inst_select_format, "selectId", VertAttrType::I32, 1, GPU_FETCH_INT);
     }
     callbuf->buf_select = DRW_temp_buffer_request(
         DST.vmempool->idatalist, &inst_select_format, &callbuf->count);
@@ -1847,7 +1849,8 @@ GPUVertFormat *DRW_shgroup_instance_format_array(const DRWInstanceAttrFormat att
   for (int i = 0; i < arraysize; i++) {
     GPU_vertformat_attr_add(format,
                             attrs[i].name,
-                            (attrs[i].type == DRW_ATTR_INT) ? GPU_COMP_I32 : GPU_COMP_F32,
+                            (attrs[i].type == DRW_ATTR_INT) ? VertAttrType::I32 :
+                                                              VertAttrType::F32,
                             attrs[i].components,
                             (attrs[i].type == DRW_ATTR_INT) ? GPU_FETCH_INT : GPU_FETCH_FLOAT);
   }

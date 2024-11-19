@@ -787,7 +787,8 @@ static void drawLine(
   }
   UI_make_axis_color(col, axis, col2);
 
-  uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+  uint pos = GPU_vertformat_attr_add(
+      immVertexFormat(), "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
 
   float viewport[4];
   GPU_viewport_size_get_f(viewport);
@@ -843,7 +844,7 @@ void drawConstraint(TransInfo *t)
       }
 
       const uint shdr_pos = GPU_vertformat_attr_add(
-          immVertexFormat(), "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+          immVertexFormat(), "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
 
       immBindBuiltinProgram(GPU_SHADER_3D_LINE_DASHED_UNIFORM_COLOR);
 
@@ -915,7 +916,8 @@ void drawPropCircle(TransInfo *t)
       GPU_depth_test(GPU_DEPTH_NONE);
     }
 
-    uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+    uint pos = GPU_vertformat_attr_add(
+        immVertexFormat(), "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
 
     immBindBuiltinProgram(GPU_SHADER_3D_POLYLINE_UNIFORM_COLOR);
 
@@ -949,7 +951,8 @@ void drawPropRange(TransInfo *t)
     return;
   }
 
-  uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+  uint pos = GPU_vertformat_attr_add(
+      immVertexFormat(), "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
 
   immBindBuiltinProgram(GPU_SHADER_3D_POLYLINE_UNIFORM_COLOR);
 

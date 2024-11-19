@@ -34,8 +34,8 @@ static gpu::VertBuf *vbo_from_vector(const Vector<Vertex> &vector)
 {
   static GPUVertFormat format = {0};
   if (format.attr_len == 0) {
-    GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
-    GPU_vertformat_attr_add(&format, "vclass", GPU_COMP_I32, 1, GPU_FETCH_INT);
+    GPU_vertformat_attr_add(&format, "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
+    GPU_vertformat_attr_add(&format, "vclass", VertAttrType::I32, 1, GPU_FETCH_INT);
   }
 
   gpu::VertBuf *vbo = GPU_vertbuf_create_with_format(format);
@@ -48,9 +48,9 @@ static gpu::VertBuf *vbo_from_vector(Vector<VertShaded> &vector)
 {
   static GPUVertFormat format = {0};
   if (format.attr_len == 0) {
-    GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
-    GPU_vertformat_attr_add(&format, "vclass", GPU_COMP_I32, 1, GPU_FETCH_INT);
-    GPU_vertformat_attr_add(&format, "nor", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+    GPU_vertformat_attr_add(&format, "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
+    GPU_vertformat_attr_add(&format, "vclass", VertAttrType::I32, 1, GPU_FETCH_INT);
+    GPU_vertformat_attr_add(&format, "nor", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
   }
 
   gpu::VertBuf *vbo = GPU_vertbuf_create_with_format(format);
@@ -63,9 +63,9 @@ static gpu::VertBuf *vbo_from_vector(Vector<VertexTriple> &vector)
 {
   static GPUVertFormat format = {0};
   if (format.attr_len == 0) {
-    GPU_vertformat_attr_add(&format, "pos0", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
-    GPU_vertformat_attr_add(&format, "pos1", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
-    GPU_vertformat_attr_add(&format, "pos2", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+    GPU_vertformat_attr_add(&format, "pos0", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
+    GPU_vertformat_attr_add(&format, "pos1", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
+    GPU_vertformat_attr_add(&format, "pos2", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
   }
 
   gpu::VertBuf *vbo = GPU_vertbuf_create_with_format(format);

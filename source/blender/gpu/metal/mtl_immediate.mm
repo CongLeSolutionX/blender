@@ -172,7 +172,7 @@ void MTLImmediate::end()
       MTLVertexFormat convertedFormat;
       bool can_use_implicit_conversion = mtl_convert_vertex_format(
           mtl_shader_attribute.format,
-          (GPUVertCompType)attr->comp_type,
+          (VertAttrType)attr->comp_type,
           attr->comp_len,
           (GPUVertFetchMode)attr->fetch_mode,
           &convertedFormat);
@@ -186,7 +186,7 @@ void MTLImmediate::end()
          * (See
          * https://developer.apple.com/documentation/metal/mtlvertexattributedescriptor/1516081-format)
          */
-        bool is_floating_point_format = (attr->comp_type == GPU_COMP_F32);
+        bool is_floating_point_format = (VertAttrType(attr->comp_type) == VertAttrType::F32);
         desc.vertex_descriptor.attributes[i].format = convertedFormat;
         desc.vertex_descriptor.attributes[i].format_conversion_mode =
             (is_floating_point_format) ? (GPUVertFetchMode)GPU_FETCH_FLOAT :

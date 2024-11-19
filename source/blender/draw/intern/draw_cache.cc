@@ -188,7 +188,7 @@ blender::gpu::Batch *drw_cache_procedural_points_get()
   if (!SHC.drw_procedural_verts) {
     /* TODO(fclem): get rid of this dummy VBO. */
     GPUVertFormat format = {0};
-    GPU_vertformat_attr_add(&format, "dummy", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
+    GPU_vertformat_attr_add(&format, "dummy", VertAttrType::F32, 1, GPU_FETCH_FLOAT);
     blender::gpu::VertBuf *vbo = GPU_vertbuf_create_with_format(format);
     GPU_vertbuf_data_alloc(*vbo, 1);
 
@@ -203,7 +203,7 @@ blender::gpu::Batch *drw_cache_procedural_lines_get()
   if (!SHC.drw_procedural_lines) {
     /* TODO(fclem): get rid of this dummy VBO. */
     GPUVertFormat format = {0};
-    GPU_vertformat_attr_add(&format, "dummy", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
+    GPU_vertformat_attr_add(&format, "dummy", VertAttrType::F32, 1, GPU_FETCH_FLOAT);
     blender::gpu::VertBuf *vbo = GPU_vertbuf_create_with_format(format);
     GPU_vertbuf_data_alloc(*vbo, 1);
 
@@ -218,7 +218,7 @@ blender::gpu::Batch *drw_cache_procedural_triangles_get()
   if (!SHC.drw_procedural_tris) {
     /* TODO(fclem): get rid of this dummy VBO. */
     GPUVertFormat format = {0};
-    GPU_vertformat_attr_add(&format, "dummy", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
+    GPU_vertformat_attr_add(&format, "dummy", VertAttrType::F32, 1, GPU_FETCH_FLOAT);
     blender::gpu::VertBuf *vbo = GPU_vertbuf_create_with_format(format);
     GPU_vertbuf_data_alloc(*vbo, 1);
 
@@ -232,7 +232,7 @@ blender::gpu::Batch *drw_cache_procedural_triangle_strips_get()
   if (!SHC.drw_procedural_tri_strips) {
     /* TODO(fclem): get rid of this dummy VBO. */
     GPUVertFormat format = {0};
-    GPU_vertformat_attr_add(&format, "dummy", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
+    GPU_vertformat_attr_add(&format, "dummy", VertAttrType::F32, 1, GPU_FETCH_FLOAT);
     blender::gpu::VertBuf *vbo = GPU_vertbuf_create_with_format(format);
     GPU_vertbuf_data_alloc(*vbo, 1);
 
@@ -251,8 +251,8 @@ blender::gpu::Batch *drw_cache_procedural_triangle_strips_get()
 static GPUVertFormat extra_vert_format()
 {
   GPUVertFormat format = {0};
-  GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
-  GPU_vertformat_attr_add(&format, "vclass", GPU_COMP_I32, 1, GPU_FETCH_INT);
+  GPU_vertformat_attr_add(&format, "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
+  GPU_vertformat_attr_add(&format, "vclass", VertAttrType::I32, 1, GPU_FETCH_INT);
   return format;
 }
 
@@ -302,7 +302,7 @@ static blender::gpu::VertBuf *fill_arrows_vbo(const float scale)
     uint pos;
   } attr_id;
   if (format.attr_len == 0) {
-    attr_id.pos = GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+    attr_id.pos = GPU_vertformat_attr_add(&format, "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
   }
 
   /* Line */
@@ -402,8 +402,8 @@ blender::gpu::Batch *DRW_cache_fullscreen_quad_get()
       uint pos, uvs;
     } attr_id;
     if (format.attr_len == 0) {
-      attr_id.pos = GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
-      attr_id.uvs = GPU_vertformat_attr_add(&format, "uvs", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+      attr_id.pos = GPU_vertformat_attr_add(&format, "pos", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
+      attr_id.uvs = GPU_vertformat_attr_add(&format, "uvs", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
       GPU_vertformat_alias_add(&format, "texCoord");
       GPU_vertformat_alias_add(&format, "orco"); /* Fix driver bug (see #70004) */
     }
@@ -471,7 +471,7 @@ blender::gpu::Batch *DRW_cache_grid_get()
       uint pos;
     } attr_id;
     if (format.attr_len == 0) {
-      attr_id.pos = GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+      attr_id.pos = GPU_vertformat_attr_add(&format, "pos", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
     }
 
     blender::gpu::VertBuf *vbo = GPU_vertbuf_create_with_format(format);
@@ -541,7 +541,7 @@ blender::gpu::Batch *DRW_cache_sphere_get(const eDRWLevelOfDetail level_of_detai
     }
 
     GPUVertFormat format = extra_vert_format();
-    GPU_vertformat_attr_add(&format, "nor", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+    GPU_vertformat_attr_add(&format, "nor", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
 
     blender::gpu::VertBuf *vbo = GPU_vertbuf_create_with_format(format);
     int v_len = (lat_res - 1) * lon_res * 6;
@@ -777,7 +777,7 @@ blender::gpu::Batch *DRW_cache_normal_arrow_get()
 {
   if (!SHC.drw_normal_arrow) {
     GPUVertFormat format = {0};
-    GPU_vertformat_attr_add(&format, "dummy", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
+    GPU_vertformat_attr_add(&format, "dummy", VertAttrType::F32, 1, GPU_FETCH_FLOAT);
 
     blender::gpu::VertBuf *vbo = GPU_vertbuf_create_with_format(format);
     GPU_vertbuf_data_alloc(*vbo, 2);
@@ -802,10 +802,10 @@ void DRW_vertbuf_create_wiredata(blender::gpu::VertBuf *vbo, const int vert_len)
     if (!GPU_crappy_amd_driver()) {
       /* Some AMD drivers strangely crash with a vbo with this format. */
       attr_id.wd = GPU_vertformat_attr_add(
-          &format, "wd", GPU_COMP_U8, 1, GPU_FETCH_INT_TO_FLOAT_UNIT);
+          &format, "wd", VertAttrType::U8, 1, GPU_FETCH_INT_TO_FLOAT_UNIT);
     }
     else {
-      attr_id.wd = GPU_vertformat_attr_add(&format, "wd", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
+      attr_id.wd = GPU_vertformat_attr_add(&format, "wd", VertAttrType::F32, 1, GPU_FETCH_FLOAT);
     }
   }
 
@@ -839,8 +839,8 @@ blender::gpu::Batch *DRW_gpencil_dummy_buffer_get()
 {
   if (SHC.drw_gpencil_dummy_quad == nullptr) {
     GPUVertFormat format = {0};
-    /* NOTE: Use GPU_COMP_U32 to satisfy minimum 4-byte vertex stride for Metal backend. */
-    GPU_vertformat_attr_add(&format, "dummy", GPU_COMP_U32, 1, GPU_FETCH_INT);
+    /* NOTE: Use VertAttrType::U32 to satisfy minimum 4-byte vertex stride for Metal backend. */
+    GPU_vertformat_attr_add(&format, "dummy", VertAttrType::U32, 1, GPU_FETCH_INT);
     blender::gpu::VertBuf *vbo = GPU_vertbuf_create_with_format(format);
     GPU_vertbuf_data_alloc(*vbo, 4);
 
@@ -1173,7 +1173,7 @@ blender::gpu::Batch *DRW_cache_empty_capsule_body_get()
       uint pos;
     } attr_id;
     if (format.attr_len == 0) {
-      attr_id.pos = GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+      attr_id.pos = GPU_vertformat_attr_add(&format, "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
     }
 
     blender::gpu::VertBuf *vbo = GPU_vertbuf_create_with_format(format);
@@ -1204,7 +1204,7 @@ blender::gpu::Batch *DRW_cache_empty_capsule_cap_get()
       uint pos;
     } attr_id;
     if (format.attr_len == 0) {
-      attr_id.pos = GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+      attr_id.pos = GPU_vertformat_attr_add(&format, "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
     }
 
     blender::gpu::VertBuf *vbo = GPU_vertbuf_create_with_format(format);
@@ -1750,7 +1750,7 @@ blender::gpu::Batch *DRW_cache_speaker_get()
       uint pos;
     } attr_id;
     if (format.attr_len == 0) {
-      attr_id.pos = GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+      attr_id.pos = GPU_vertformat_attr_add(&format, "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
     }
 
     blender::gpu::VertBuf *vbo = GPU_vertbuf_create_with_format(format);
@@ -2055,8 +2055,8 @@ blender::gpu::Batch *DRW_cache_bone_octahedral_get()
       uint pos, nor;
     } attr_id;
     if (format.attr_len == 0) {
-      attr_id.pos = GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
-      attr_id.nor = GPU_vertformat_attr_add(&format, "nor", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+      attr_id.pos = GPU_vertformat_attr_add(&format, "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
+      attr_id.nor = GPU_vertformat_attr_add(&format, "nor", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
     }
 
     /* Vertices */
@@ -2111,8 +2111,8 @@ blender::gpu::Batch *DRW_cache_bone_box_get()
       uint pos, nor;
     } attr_id;
     if (format.attr_len == 0) {
-      attr_id.pos = GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
-      attr_id.nor = GPU_vertformat_attr_add(&format, "nor", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+      attr_id.pos = GPU_vertformat_attr_add(&format, "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
+      attr_id.nor = GPU_vertformat_attr_add(&format, "nor", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
     }
 
     /* Vertices */
@@ -2179,7 +2179,7 @@ blender::gpu::Batch *DRW_cache_bone_envelope_solid_get()
       uint pos;
     } attr_id;
     if (format.attr_len == 0) {
-      attr_id.pos = GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+      attr_id.pos = GPU_vertformat_attr_add(&format, "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
     }
 
     /* Vertices */
@@ -2229,9 +2229,12 @@ blender::gpu::Batch *DRW_cache_bone_envelope_outline_get()
       uint pos0, pos1, pos2;
     } attr_id;
     if (format.attr_len == 0) {
-      attr_id.pos0 = GPU_vertformat_attr_add(&format, "pos0", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
-      attr_id.pos1 = GPU_vertformat_attr_add(&format, "pos1", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
-      attr_id.pos2 = GPU_vertformat_attr_add(&format, "pos2", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+      attr_id.pos0 = GPU_vertformat_attr_add(
+          &format, "pos0", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
+      attr_id.pos1 = GPU_vertformat_attr_add(
+          &format, "pos1", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
+      attr_id.pos2 = GPU_vertformat_attr_add(
+          &format, "pos2", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
     }
 
     blender::gpu::VertBuf *vbo = GPU_vertbuf_create_with_format(format);
@@ -2277,8 +2280,8 @@ blender::gpu::Batch *DRW_cache_bone_point_get()
       uint pos, nor;
     } attr_id;
     if (format.attr_len == 0) {
-      attr_id.pos = GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
-      attr_id.nor = GPU_vertformat_attr_add(&format, "nor", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+      attr_id.pos = GPU_vertformat_attr_add(&format, "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
+      attr_id.nor = GPU_vertformat_attr_add(&format, "nor", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
     }
 
     /* Vertices */
@@ -2317,7 +2320,7 @@ blender::gpu::Batch *DRW_cache_bone_point_get()
       uint pos;
     } attr_id;
     if (format.attr_len == 0) {
-      attr_id.pos = GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+      attr_id.pos = GPU_vertformat_attr_add(&format, "pos", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
     }
 
     blender::gpu::VertBuf *vbo = GPU_vertbuf_create_with_format(format);
@@ -2353,7 +2356,7 @@ blender::gpu::Batch *DRW_cache_bone_point_wire_outline_get()
       uint pos;
     } attr_id;
     if (format.attr_len == 0) {
-      attr_id.pos = GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+      attr_id.pos = GPU_vertformat_attr_add(&format, "pos", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
     }
 
     blender::gpu::VertBuf *vbo = GPU_vertbuf_create_with_format(format);
@@ -2400,8 +2403,8 @@ blender::gpu::Batch *DRW_cache_bone_stick_get()
       uint pos, flag;
     } attr_id;
     if (format.attr_len == 0) {
-      attr_id.pos = GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
-      attr_id.flag = GPU_vertformat_attr_add(&format, "flag", GPU_COMP_U32, 1, GPU_FETCH_INT);
+      attr_id.pos = GPU_vertformat_attr_add(&format, "pos", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
+      attr_id.flag = GPU_vertformat_attr_add(&format, "flag", VertAttrType::U32, 1, GPU_FETCH_INT);
     }
 
     const uint vcount = (CIRCLE_RESOL + 1) * 2 + 6;
@@ -2606,7 +2609,7 @@ blender::gpu::Batch *DRW_cache_bone_dof_sphere_get()
       uint pos;
     } attr_id;
     if (format.attr_len == 0) {
-      attr_id.pos = GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+      attr_id.pos = GPU_vertformat_attr_add(&format, "pos", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
     }
 
     blender::gpu::VertBuf *vbo = GPU_vertbuf_create_with_format(format);
@@ -2659,7 +2662,7 @@ blender::gpu::Batch *DRW_cache_bone_dof_lines_get()
       uint pos;
     } attr_id;
     if (format.attr_len == 0) {
-      attr_id.pos = GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+      attr_id.pos = GPU_vertformat_attr_add(&format, "pos", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
     }
 
     blender::gpu::VertBuf *vbo = GPU_vertbuf_create_with_format(format);
@@ -3238,9 +3241,9 @@ blender::gpu::Batch *DRW_cache_cursor_get(bool crosshair_lines)
       uint pos, color;
     } attr_id;
     if (format.attr_len == 0) {
-      attr_id.pos = GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+      attr_id.pos = GPU_vertformat_attr_add(&format, "pos", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
       attr_id.color = GPU_vertformat_attr_add(
-          &format, "color", GPU_COMP_U8, 3, GPU_FETCH_INT_TO_FLOAT_UNIT);
+          &format, "color", VertAttrType::U8, 3, GPU_FETCH_INT_TO_FLOAT_UNIT);
     }
 
     GPUIndexBufBuilder elb;

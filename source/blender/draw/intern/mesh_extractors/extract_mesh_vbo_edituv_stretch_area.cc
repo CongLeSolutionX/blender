@@ -103,7 +103,7 @@ void extract_edituv_stretch_area(const MeshRenderData &mr,
 
   static GPUVertFormat format = {0};
   if (format.attr_len == 0) {
-    GPU_vertformat_attr_add(&format, "ratio", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
+    GPU_vertformat_attr_add(&format, "ratio", VertAttrType::F32, 1, GPU_FETCH_FLOAT);
   }
   GPU_vertbuf_init_with_format(vbo, format);
   GPU_vertbuf_data_alloc(vbo, mr.corners_num);
@@ -141,7 +141,7 @@ void extract_edituv_stretch_area_subdiv(const MeshRenderData &mr,
 {
   static GPUVertFormat format = {0};
   if (format.attr_len == 0) {
-    GPU_vertformat_attr_add(&format, "ratio", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
+    GPU_vertformat_attr_add(&format, "ratio", VertAttrType::F32, 1, GPU_FETCH_FLOAT);
   }
   GPU_vertbuf_init_build_on_device(vbo, format, subdiv_cache.num_subdiv_loops);
 

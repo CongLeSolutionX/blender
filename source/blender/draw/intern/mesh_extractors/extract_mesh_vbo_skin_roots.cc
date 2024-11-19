@@ -24,8 +24,8 @@ void extract_skin_roots(const MeshRenderData &mr, gpu::VertBuf &vbo)
 
   static GPUVertFormat format = {0};
   if (format.attr_len == 0) {
-    GPU_vertformat_attr_add(&format, "size", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
-    GPU_vertformat_attr_add(&format, "local_pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+    GPU_vertformat_attr_add(&format, "size", VertAttrType::F32, 1, GPU_FETCH_FLOAT);
+    GPU_vertformat_attr_add(&format, "local_pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
   }
 
   Vector<SkinRootData> skin_roots;

@@ -42,8 +42,8 @@ SeqQuadsBatch::SeqQuadsBatch()
 
   GPUVertFormat format;
   GPU_vertformat_clear(&format);
-  GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
-  GPU_vertformat_attr_add(&format, "color", GPU_COMP_U8, 4, GPU_FETCH_INT_TO_FLOAT_UNIT);
+  GPU_vertformat_attr_add(&format, "pos", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
+  GPU_vertformat_attr_add(&format, "color", VertAttrType::U8, 4, GPU_FETCH_INT_TO_FLOAT_UNIT);
 
   vbo_quads = GPU_vertbuf_create_with_format_ex(format, GPU_USAGE_STREAM);
   GPU_vertbuf_data_alloc(*vbo_quads, MAX_QUADS * 4);

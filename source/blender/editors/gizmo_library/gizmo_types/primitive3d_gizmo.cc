@@ -108,7 +108,8 @@ static void gizmo_primitive_draw_geom(PrimitiveGizmo3D *gz_prim,
                                       const int nsegments,
                                       const bool draw_inner)
 {
-  uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+  uint pos = GPU_vertformat_attr_add(
+      immVertexFormat(), "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
   const bool use_polyline_shader = gz_prim->gizmo.line_width > 1.0f;
 
   if (draw_inner || !use_polyline_shader) {

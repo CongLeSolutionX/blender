@@ -140,7 +140,7 @@ static void paint_draw_smooth_cursor(bContext *C, const int x, const int y, void
     const ARegion *region = stroke->vc.region;
 
     const uint pos = GPU_vertformat_attr_add(
-        immVertexFormat(), "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+        immVertexFormat(), "pos", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
     immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
     immUniformColor4ubv(paint->paint_cursor_col);
 
@@ -167,7 +167,7 @@ static void paint_draw_line_cursor(bContext *C, const int x, const int y, void *
   GPU_line_smooth(true);
 
   const uint shdr_pos = GPU_vertformat_attr_add(
-      immVertexFormat(), "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+      immVertexFormat(), "pos", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
 
   immBindBuiltinProgram(GPU_SHADER_3D_LINE_DASHED_UNIFORM_COLOR);
 

@@ -308,7 +308,7 @@ void extract_attr_viewer(const MeshRenderData &mr, gpu::VertBuf &vbo)
 {
   static GPUVertFormat format = {0};
   if (format.attr_len == 0) {
-    GPU_vertformat_attr_add(&format, "attribute_value", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
+    GPU_vertformat_attr_add(&format, "attribute_value", VertAttrType::F32, 4, GPU_FETCH_FLOAT);
   }
 
   GPU_vertbuf_init_with_format(vbo, format);

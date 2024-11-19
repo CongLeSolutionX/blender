@@ -431,7 +431,8 @@ static void knifetool_draw_angle_snapping(const KnifeTool_OpData *kcd)
 
   knifetool_raycast_planes(kcd, v1, v2);
 
-  uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+  uint pos = GPU_vertformat_attr_add(
+      immVertexFormat(), "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
 
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
   immUniformThemeColor3(TH_TRANSFORM);
@@ -456,7 +457,8 @@ static void knifetool_draw_orientation_locking(const KnifeTool_OpData *kcd)
   /* This is causing buggy behavior when `prev.cage` and `curr.cage` are too close together. */
   knifetool_raycast_planes(kcd, v1, v2);
 
-  uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+  uint pos = GPU_vertformat_attr_add(
+      immVertexFormat(), "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
   switch (kcd->constrain_axis) {
@@ -495,7 +497,8 @@ static void knifetool_draw_visible_distances(const KnifeTool_OpData *kcd)
   GPU_matrix_identity_set();
   wmOrtho2_region_pixelspace(kcd->region);
 
-  uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+  uint pos = GPU_vertformat_attr_add(
+      immVertexFormat(), "pos", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
   char numstr[256];
@@ -579,7 +582,7 @@ static void knifetool_draw_angle(const KnifeTool_OpData *kcd,
   GPU_blend(GPU_BLEND_ALPHA);
 
   const uint pos_3d = GPU_vertformat_attr_add(
-      immVertexFormat(), "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+      immVertexFormat(), "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
   {
@@ -636,7 +639,7 @@ static void knifetool_draw_angle(const KnifeTool_OpData *kcd,
   wmOrtho2_region_pixelspace(kcd->region);
 
   uint pos_2d = GPU_vertformat_attr_add(
-      immVertexFormat(), "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+      immVertexFormat(), "pos", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
   /* Angle as string. */
@@ -898,7 +901,7 @@ static void knifetool_draw(const bContext * /*C*/, ARegion * /*region*/, void *a
   GPU_polygon_offset(1.0f, 1.0f);
 
   GPUVertFormat *format = immVertexFormat();
-  uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+  uint pos = GPU_vertformat_attr_add(format, "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
 
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 

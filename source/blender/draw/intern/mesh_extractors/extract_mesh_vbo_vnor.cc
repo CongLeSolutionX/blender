@@ -70,7 +70,8 @@ void extract_vert_normals(const MeshRenderData &mr, gpu::VertBuf &vbo)
 {
   static GPUVertFormat format = {0};
   if (format.attr_len == 0) {
-    GPU_vertformat_attr_add(&format, "vnor", GPU_COMP_I10, 4, GPU_FETCH_INT_TO_FLOAT_UNIT);
+    GPU_vertformat_attr_add(
+        &format, "vnor", VertAttrType::I10_10_10_2, 4, GPU_FETCH_INT_TO_FLOAT_UNIT);
   }
   const int size = mr.corners_num + mr.loose_indices_num;
   GPU_vertbuf_init_with_format(vbo, format);

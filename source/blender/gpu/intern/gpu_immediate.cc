@@ -290,7 +290,7 @@ void immAttr1f(uint attr_id, float x)
 {
   GPUVertAttr *attr = &imm->vertex_format.attrs[attr_id];
   BLI_assert(attr_id < imm->vertex_format.attr_len);
-  BLI_assert(attr->comp_type == GPU_COMP_F32);
+  BLI_assert(VertAttrType(attr->comp_type) == VertAttrType::F32);
   BLI_assert(attr->comp_len == 1);
   BLI_assert(imm->vertex_idx < imm->vertex_len);
   BLI_assert(imm->prim_type != GPU_PRIM_NONE); /* make sure we're between a Begin/End pair */
@@ -306,7 +306,7 @@ void immAttr2f(uint attr_id, float x, float y)
 {
   GPUVertAttr *attr = &imm->vertex_format.attrs[attr_id];
   BLI_assert(attr_id < imm->vertex_format.attr_len);
-  BLI_assert(attr->comp_type == GPU_COMP_F32);
+  BLI_assert(VertAttrType(attr->comp_type) == VertAttrType::F32);
   BLI_assert(attr->comp_len == 2);
   BLI_assert(imm->vertex_idx < imm->vertex_len);
   BLI_assert(imm->prim_type != GPU_PRIM_NONE); /* make sure we're between a Begin/End pair */
@@ -323,7 +323,7 @@ void immAttr3f(uint attr_id, float x, float y, float z)
 {
   GPUVertAttr *attr = &imm->vertex_format.attrs[attr_id];
   BLI_assert(attr_id < imm->vertex_format.attr_len);
-  BLI_assert(attr->comp_type == GPU_COMP_F32);
+  BLI_assert(VertAttrType(attr->comp_type) == VertAttrType::F32);
   BLI_assert(attr->comp_len == 3);
   BLI_assert(imm->vertex_idx < imm->vertex_len);
   BLI_assert(imm->prim_type != GPU_PRIM_NONE); /* make sure we're between a Begin/End pair */
@@ -341,7 +341,7 @@ void immAttr4f(uint attr_id, float x, float y, float z, float w)
 {
   GPUVertAttr *attr = &imm->vertex_format.attrs[attr_id];
   BLI_assert(attr_id < imm->vertex_format.attr_len);
-  BLI_assert(attr->comp_type == GPU_COMP_F32);
+  BLI_assert(VertAttrType(attr->comp_type) == VertAttrType::F32);
   BLI_assert(attr->comp_len == 4);
   BLI_assert(imm->vertex_idx < imm->vertex_len);
   BLI_assert(imm->prim_type != GPU_PRIM_NONE); /* make sure we're between a Begin/End pair */
@@ -360,7 +360,7 @@ void immAttr1u(uint attr_id, uint x)
 {
   GPUVertAttr *attr = &imm->vertex_format.attrs[attr_id];
   BLI_assert(attr_id < imm->vertex_format.attr_len);
-  BLI_assert(attr->comp_type == GPU_COMP_U32);
+  BLI_assert(VertAttrType(attr->comp_type) == VertAttrType::U32);
   BLI_assert(attr->comp_len == 1);
   BLI_assert(imm->vertex_idx < imm->vertex_len);
   BLI_assert(imm->prim_type != GPU_PRIM_NONE); /* make sure we're between a Begin/End pair */
@@ -375,7 +375,7 @@ void immAttr2i(uint attr_id, int x, int y)
 {
   GPUVertAttr *attr = &imm->vertex_format.attrs[attr_id];
   BLI_assert(attr_id < imm->vertex_format.attr_len);
-  BLI_assert(attr->comp_type == GPU_COMP_I32);
+  BLI_assert(VertAttrType(attr->comp_type) == VertAttrType::I32);
   BLI_assert(attr->comp_len == 2);
   BLI_assert(imm->vertex_idx < imm->vertex_len);
   BLI_assert(imm->prim_type != GPU_PRIM_NONE); /* make sure we're between a Begin/End pair */
@@ -391,7 +391,7 @@ void immAttr2s(uint attr_id, short x, short y)
 {
   GPUVertAttr *attr = &imm->vertex_format.attrs[attr_id];
   BLI_assert(attr_id < imm->vertex_format.attr_len);
-  BLI_assert(attr->comp_type == GPU_COMP_I16);
+  BLI_assert(VertAttrType(attr->comp_type) == VertAttrType::I16);
   BLI_assert(attr->comp_len == 2);
   BLI_assert(imm->vertex_idx < imm->vertex_len);
   BLI_assert(imm->prim_type != GPU_PRIM_NONE); /* make sure we're between a Begin/End pair */
@@ -422,7 +422,7 @@ void immAttr3ub(uint attr_id, uchar r, uchar g, uchar b)
 {
   GPUVertAttr *attr = &imm->vertex_format.attrs[attr_id];
   BLI_assert(attr_id < imm->vertex_format.attr_len);
-  BLI_assert(attr->comp_type == GPU_COMP_U8);
+  BLI_assert(VertAttrType(attr->comp_type) == VertAttrType::U8);
   BLI_assert(attr->comp_len == 3);
   BLI_assert(imm->vertex_idx < imm->vertex_len);
   BLI_assert(imm->prim_type != GPU_PRIM_NONE); /* make sure we're between a Begin/End pair */
@@ -440,7 +440,7 @@ void immAttr4ub(uint attr_id, uchar r, uchar g, uchar b, uchar a)
 {
   GPUVertAttr *attr = &imm->vertex_format.attrs[attr_id];
   BLI_assert(attr_id < imm->vertex_format.attr_len);
-  BLI_assert(attr->comp_type == GPU_COMP_U8);
+  BLI_assert(VertAttrType(attr->comp_type) == VertAttrType::U8);
   BLI_assert(attr->comp_len == 4);
   BLI_assert(imm->vertex_idx < imm->vertex_len);
   BLI_assert(imm->prim_type != GPU_PRIM_NONE); /* make sure we're between a Begin/End pair */

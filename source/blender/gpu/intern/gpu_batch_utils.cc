@@ -81,7 +81,7 @@ blender::gpu::Batch *GPU_batch_tris_from_poly_2d_encoded(const uchar *polys_flat
     uint pos;
   } attr_id;
   if (format.attr_len == 0) {
-    attr_id.pos = GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+    attr_id.pos = GPU_vertformat_attr_add(&format, "pos", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
   }
 
   const uint verts_len = (verts_step - verts);
@@ -183,7 +183,7 @@ blender::gpu::Batch *GPU_batch_wire_from_poly_2d_encoded(const uchar *polys_flat
     uint pos;
   } attr_id;
   if (format.attr_len == 0) {
-    attr_id.pos = GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+    attr_id.pos = GPU_vertformat_attr_add(&format, "pos", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
   }
 
   blender::gpu::VertBuf *vbo = GPU_vertbuf_create_with_format(format);

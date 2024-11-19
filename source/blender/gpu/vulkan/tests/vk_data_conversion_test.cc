@@ -64,7 +64,7 @@ TEST(VulkanDataConversion, vertex_format_i32_as_float)
 {
   GPUVertFormat source_format;
   GPU_vertformat_clear(&source_format);
-  GPU_vertformat_attr_add(&source_format, "pos", GPU_COMP_I32, 2, GPU_FETCH_INT_TO_FLOAT);
+  GPU_vertformat_attr_add(&source_format, "pos", VertAttrType::I32, 2, GPU_FETCH_INT_TO_FLOAT);
   VertexFormat_pack(&source_format);
 
   union TestData {
@@ -95,7 +95,7 @@ TEST(VulkanDataConversion, vertex_format_u32_as_float)
 {
   GPUVertFormat source_format;
   GPU_vertformat_clear(&source_format);
-  GPU_vertformat_attr_add(&source_format, "pos", GPU_COMP_U32, 3, GPU_FETCH_INT_TO_FLOAT);
+  GPU_vertformat_attr_add(&source_format, "pos", VertAttrType::U32, 3, GPU_FETCH_INT_TO_FLOAT);
   VertexFormat_pack(&source_format);
 
   union TestData {
@@ -126,7 +126,8 @@ TEST(VulkanDataConversion, vertex_format_r8g8b8)
 {
   GPUVertFormat source_format;
   GPU_vertformat_clear(&source_format);
-  GPU_vertformat_attr_add(&source_format, "color", GPU_COMP_U8, 3, GPU_FETCH_INT_TO_FLOAT_UNIT);
+  GPU_vertformat_attr_add(
+      &source_format, "color", VertAttrType::U8, 3, GPU_FETCH_INT_TO_FLOAT_UNIT);
   VertexFormat_pack(&source_format);
 
   struct SourceData {
@@ -168,9 +169,10 @@ TEST(VulkanDataConversion, vertex_format_multiple_attributes)
 {
   GPUVertFormat source_format;
   GPU_vertformat_clear(&source_format);
-  GPU_vertformat_attr_add(&source_format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
-  GPU_vertformat_attr_add(&source_format, "color", GPU_COMP_U8, 3, GPU_FETCH_INT_TO_FLOAT_UNIT);
-  GPU_vertformat_attr_add(&source_format, "flag", GPU_COMP_U32, 1, GPU_FETCH_INT);
+  GPU_vertformat_attr_add(&source_format, "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
+  GPU_vertformat_attr_add(
+      &source_format, "color", VertAttrType::U8, 3, GPU_FETCH_INT_TO_FLOAT_UNIT);
+  GPU_vertformat_attr_add(&source_format, "flag", VertAttrType::U32, 1, GPU_FETCH_INT);
   VertexFormat_pack(&source_format);
 
   struct SourceData {

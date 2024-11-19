@@ -111,7 +111,7 @@ static void dial_geom_draw(const float color[4],
 
   GPUVertFormat *format = immVertexFormat();
   /* NOTE(Metal): Prefer using 3D coordinates with 3D shader, even if rendering 2D gizmo's. */
-  uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+  uint pos = GPU_vertformat_attr_add(format, "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
 
   if (clip_plane) {
     immBindBuiltinProgram(filled ? GPU_SHADER_3D_CLIPPED_UNIFORM_COLOR :
@@ -190,7 +190,8 @@ static void dial_ghostarc_draw_helpline(const float angle,
   GPU_matrix_push();
   GPU_matrix_rotate_3f(RAD2DEGF(angle), 0.0f, 0.0f, -1.0f);
 
-  uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+  uint pos = GPU_vertformat_attr_add(
+      immVertexFormat(), "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
 
   immBindBuiltinProgram(GPU_SHADER_3D_POLYLINE_UNIFORM_COLOR);
 
@@ -219,7 +220,8 @@ static void dial_ghostarc_draw_incremental_angle(const float incremental_angle,
                                                  const float angle_delta)
 {
 
-  uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+  uint pos = GPU_vertformat_attr_add(
+      immVertexFormat(), "pos", VertAttrType::F32, 3, GPU_FETCH_FLOAT);
   immBindBuiltinProgram(GPU_SHADER_3D_POLYLINE_UNIFORM_COLOR);
 
   immUniformColor3f(1.0f, 1.0f, 1.0f);
@@ -263,7 +265,7 @@ static void dial_ghostarc_draw(const float angle_ofs,
 {
   const float width_inner = DIAL_WIDTH;
   GPUVertFormat *format = immVertexFormat();
-  uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+  uint pos = GPU_vertformat_attr_add(format, "pos", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
   /* Avoid artifacts by drawing the main arc over the span of one rotation only. */

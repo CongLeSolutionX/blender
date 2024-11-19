@@ -109,7 +109,7 @@ void clip_draw_dopesheet_main(SpaceClip *sc, ARegion *region, Scene *scene)
     uint keyframe_len = 0;
 
     GPUVertFormat *format = immVertexFormat();
-    uint pos_id = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+    uint pos_id = GPU_vertformat_attr_add(format, "pos", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
     immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
     /* don't use totrect set, as the width stays the same
@@ -201,12 +201,15 @@ void clip_draw_dopesheet_main(SpaceClip *sc, ARegion *region, Scene *scene)
     if (keyframe_len > 0) {
       /* draw keyframe markers */
       format = immVertexFormat();
-      pos_id = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
-      uint size_id = GPU_vertformat_attr_add(format, "size", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
-      uint color_id = GPU_vertformat_attr_add(format, "color", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
+      pos_id = GPU_vertformat_attr_add(format, "pos", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
+      uint size_id = GPU_vertformat_attr_add(
+          format, "size", VertAttrType::F32, 1, GPU_FETCH_FLOAT);
+      uint color_id = GPU_vertformat_attr_add(
+          format, "color", VertAttrType::F32, 4, GPU_FETCH_FLOAT);
       uint outline_color_id = GPU_vertformat_attr_add(
-          format, "outlineColor", GPU_COMP_U8, 4, GPU_FETCH_INT_TO_FLOAT_UNIT);
-      uint flags_id = GPU_vertformat_attr_add(format, "flags", GPU_COMP_U32, 1, GPU_FETCH_INT);
+          format, "outlineColor", VertAttrType::U8, 4, GPU_FETCH_INT_TO_FLOAT_UNIT);
+      uint flags_id = GPU_vertformat_attr_add(
+          format, "flags", VertAttrType::U32, 1, GPU_FETCH_INT);
 
       GPU_program_point_size(true);
       immBindBuiltinProgram(GPU_SHADER_KEYFRAME_SHAPE);
@@ -312,7 +315,7 @@ void clip_draw_dopesheet_channels(const bContext *C, ARegion *region)
   float y = float(CHANNEL_FIRST);
 
   GPUVertFormat *format = immVertexFormat();
-  uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+  uint pos = GPU_vertformat_attr_add(format, "pos", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
 
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 

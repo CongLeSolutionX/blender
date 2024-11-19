@@ -101,7 +101,7 @@ static void nla_action_draw_keyframes(
   color[3] = min_ff(0.7f, color[3] * 2.5f);
 
   GPUVertFormat *format = immVertexFormat();
-  uint pos_id = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+  uint pos_id = GPU_vertformat_attr_add(format, "pos", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
 
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
@@ -123,15 +123,16 @@ static void nla_action_draw_keyframes(
   if (key_len > 0) {
     format = immVertexFormat();
     KeyframeShaderBindings sh_bindings;
-    sh_bindings.pos_id = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+    sh_bindings.pos_id = GPU_vertformat_attr_add(
+        format, "pos", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
     sh_bindings.size_id = GPU_vertformat_attr_add(
-        format, "size", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
+        format, "size", VertAttrType::F32, 1, GPU_FETCH_FLOAT);
     sh_bindings.color_id = GPU_vertformat_attr_add(
-        format, "color", GPU_COMP_U8, 4, GPU_FETCH_INT_TO_FLOAT_UNIT);
+        format, "color", VertAttrType::U8, 4, GPU_FETCH_INT_TO_FLOAT_UNIT);
     sh_bindings.outline_color_id = GPU_vertformat_attr_add(
-        format, "outlineColor", GPU_COMP_U8, 4, GPU_FETCH_INT_TO_FLOAT_UNIT);
+        format, "outlineColor", VertAttrType::U8, 4, GPU_FETCH_INT_TO_FLOAT_UNIT);
     sh_bindings.flags_id = GPU_vertformat_attr_add(
-        format, "flags", GPU_COMP_U32, 1, GPU_FETCH_INT);
+        format, "flags", VertAttrType::U32, 1, GPU_FETCH_INT);
 
     GPU_program_point_size(true);
     immBindBuiltinProgram(GPU_SHADER_KEYFRAME_SHAPE);
@@ -177,7 +178,7 @@ static void nla_actionclip_draw_markers(
   }
 
   const uint shdr_pos = GPU_vertformat_attr_add(
-      immVertexFormat(), "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+      immVertexFormat(), "pos", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
   if (dashed) {
     immBindBuiltinProgram(GPU_SHADER_3D_LINE_DASHED_UNIFORM_COLOR);
 
@@ -367,7 +368,7 @@ static uint nla_draw_use_dashed_outlines(const float color[4], bool muted)
 {
   /* Note that we use dashed shader here, and make it draw solid lines if not muted... */
   uint shdr_pos = GPU_vertformat_attr_add(
-      immVertexFormat(), "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+      immVertexFormat(), "pos", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
   immBindBuiltinProgram(GPU_SHADER_3D_LINE_DASHED_UNIFORM_COLOR);
 
   float viewport_size[4];
@@ -439,7 +440,8 @@ static void nla_draw_strip(SpaceNla *snla,
   /* get color of strip */
   nla_strip_get_color_inside(adt, strip, color);
 
-  shdr_pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+  shdr_pos = GPU_vertformat_attr_add(
+      immVertexFormat(), "pos", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
   /* draw extrapolation info first (as backdrop)
@@ -497,7 +499,8 @@ static void nla_draw_strip(SpaceNla *snla,
     UI_draw_roundbox_4fv(&rect, true, 0.0f, color);
 
     /* restore current vertex format & program (roundbox trashes it) */
-    shdr_pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+    shdr_pos = GPU_vertformat_attr_add(
+        immVertexFormat(), "pos", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
     immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
   }
   else {
@@ -855,7 +858,7 @@ void draw_nla_main_data(bAnimContext *ac, SpaceNla *snla, ARegion *region)
           }
 
           uint pos = GPU_vertformat_attr_add(
-              immVertexFormat(), "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+              immVertexFormat(), "pos", VertAttrType::F32, 2, GPU_FETCH_FLOAT);
           immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
           /* just draw a semi-shaded rect spanning the width of the viewable area, based on if
