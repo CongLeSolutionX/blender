@@ -23,7 +23,7 @@ extern "C" {
 /** Blender major and minor version. */
 #define BLENDER_VERSION 404
 /** Blender patch version for bug-fix releases. */
-#define BLENDER_VERSION_PATCH 6
+#define BLENDER_VERSION_PATCH 7
 /** Blender release cycle stage: alpha/beta/rc/release. */
 #define BLENDER_VERSION_CYCLE alpha
 /** Blender release type suffix. LTS or blank. */

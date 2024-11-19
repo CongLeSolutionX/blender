@@ -5050,7 +5050,7 @@ void blo_do_versions_400(FileData *fd, Library * /*lib*/, Main *bmain)
     add_subsurf_node_limit_surface_option(*bmain);
   }
 
-  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 404, 6)) {
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 404, 7)) {
     LISTBASE_FOREACH (bAction *, dna_action, &bmain->actions) {
       blender::animrig::Action &action = dna_action->wrap();
       blender::animrig::foreach_fcurve_in_action(
