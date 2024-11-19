@@ -11,7 +11,7 @@
 #include "vk_common.hh"
 
 namespace blender::gpu {
-class VKWorkarounds;
+struct VKWorkarounds;
 }
 
 namespace blender::gpu::render_graph {
