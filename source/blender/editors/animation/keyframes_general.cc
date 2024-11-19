@@ -92,8 +92,7 @@ bool duplicate_fcurve_keys(FCurve *fcu)
 /** \name Various Tools
  * \{ */
 
-void clean_fcurve(bAnimContext *ac,
-                  bAnimListElem *ale,
+void clean_fcurve(bAnimListElem *ale,
                   float thresh,
                   bool cleardefault,
                   const bool only_selected_keys)

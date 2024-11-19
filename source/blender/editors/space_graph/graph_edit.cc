@@ -862,8 +862,7 @@ static void clean_graph_keys(bAnimContext *ac, float thresh, bool clean_chan)
   const bool only_selected_keys = !clean_chan;
   /* Loop through filtered data and clean curves. */
   LISTBASE_FOREACH (bAnimListElem *, ale, &anim_data) {
-
-    clean_fcurve(ac, ale, thresh, clean_chan, only_selected_keys);
+    clean_fcurve(ale, thresh, clean_chan, only_selected_keys);
 
     ale->update |= ANIM_UPDATE_DEFAULT;
   }
