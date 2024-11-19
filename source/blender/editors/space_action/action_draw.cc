@@ -372,7 +372,7 @@ static void draw_keyframes(bAnimContext *ac,
         break;
       case ALE_ACTION_LAYERED:
         ED_add_action_layered_channel(draw_list,
-                                      ale->adt,
+                                      ale,
                                       static_cast<bAction *>(ale->key_data),
                                       ycenter,
                                       scale_factor,
@@ -380,7 +380,7 @@ static void draw_keyframes(bAnimContext *ac,
         break;
       case ALE_ACTION_SLOT:
         ED_add_action_slot_channel(draw_list,
-                                   ale->adt,
+                                   ale,
                                    static_cast<bAction *>(ale->key_data)->wrap(),
                                    *static_cast<animrig::Slot *>(ale->data),
                                    ycenter,
@@ -389,7 +389,7 @@ static void draw_keyframes(bAnimContext *ac,
         break;
       case ALE_ACT:
         ED_add_action_channel(draw_list,
-                              ale->adt,
+                              ale,
                               static_cast<bAction *>(ale->key_data),
                               ycenter,
                               scale_factor,
@@ -397,21 +397,19 @@ static void draw_keyframes(bAnimContext *ac,
         break;
       case ALE_GROUP:
         ED_add_action_group_channel(draw_list,
-                                    ale->adt,
+                                    ale,
                                     static_cast<bActionGroup *>(ale->data),
                                     ycenter,
                                     scale_factor,
                                     action_flag);
         break;
       case ALE_FCURVE: {
-        const bool use_nla_remapping = ale->type != ANIMTYPE_NLACURVE;
         ED_add_fcurve_channel(draw_list,
-                              ale->adt,
+                              ale,
                               static_cast<FCurve *>(ale->key_data),
                               ycenter,
                               scale_factor,
-                              action_flag,
-                              use_nla_remapping);
+                              action_flag);
         break;
       }
       case ALE_GREASE_PENCIL_CEL:
@@ -434,7 +432,7 @@ static void draw_keyframes(bAnimContext *ac,
       case ALE_GREASE_PENCIL_DATA:
         ED_add_grease_pencil_datablock_channel(draw_list,
                                                ac,
-                                               ale->adt,
+                                               ale,
                                                static_cast<const GreasePencil *>(ale->data),
                                                ycenter,
                                                scale_factor,

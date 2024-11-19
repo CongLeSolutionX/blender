@@ -702,46 +702,46 @@ void ED_add_object_channel(ChannelDrawList *channel_list,
 }
 
 void ED_add_fcurve_channel(ChannelDrawList *channel_list,
-                           AnimData *adt,
+                           bAnimListElem *ale,
                            FCurve *fcu,
                            float ypos,
                            float yscale_fac,
-                           int saction_flag,
-                           const bool use_nla_remapping)
+                           int saction_flag)
 {
   const bool locked = (fcu->flag & FCURVE_PROTECTED) ||
                       ((fcu->grp) && (fcu->grp->flag & AGRP_PROTECTED)) ||
-                      ((adt && adt->action) &&
-                       (!ID_IS_EDITABLE(adt->action) || ID_IS_OVERRIDE_LIBRARY(adt->action)));
+                      ((ale->adt && ale->adt->action) &&
+                       (!ID_IS_EDITABLE(ale->adt->action) ||
+                        ID_IS_OVERRIDE_LIBRARY(ale->adt->action)));
 
   ChannelListElement *draw_elem = channel_list_add_element(
       channel_list, ChannelType::FCURVE, ypos, yscale_fac, eSAction_Flag(saction_flag));
-  draw_elem->adt = adt;
+  draw_elem->adt = ale->adt;
   draw_elem->fcu = fcu;
   draw_elem->channel_locked = locked;
-  draw_elem->use_nla_remapping = use_nla_remapping;
+  draw_elem->use_nla_remapping = ale->type != ANIMTYPE_NLACURVE;
 }
 
 void ED_add_action_group_channel(ChannelDrawList *channel_list,
-                                 AnimData *adt,
+                                 bAnimListElem *ale,
                                  bActionGroup *agrp,
                                  float ypos,
                                  float yscale_fac,
                                  int saction_flag)
 {
   bool locked = (agrp->flag & AGRP_PROTECTED) ||
-                ((adt && adt->action) &&
-                 (!ID_IS_EDITABLE(adt->action) || ID_IS_OVERRIDE_LIBRARY(adt->action)));
+                ((ale->adt && ale->adt->action) &&
+                 (!ID_IS_EDITABLE(ale->adt->action) || ID_IS_OVERRIDE_LIBRARY(ale->adt->action)));
 
   ChannelListElement *draw_elem = channel_list_add_element(
       channel_list, ChannelType::ACTION_GROUP, ypos, yscale_fac, eSAction_Flag(saction_flag));
-  draw_elem->adt = adt;
+  draw_elem->adt = ale->adt;
   draw_elem->agrp = agrp;
   draw_elem->channel_locked = locked;
 }
 
 void ED_add_action_layered_channel(ChannelDrawList *channel_list,
-                                   AnimData *adt,
+                                   bAnimListElem *ale,
                                    bAction *action,
                                    const float ypos,
                                    const float yscale_fac,
@@ -755,13 +755,13 @@ void ED_add_action_layered_channel(ChannelDrawList *channel_list,
 
   ChannelListElement *draw_elem = channel_list_add_element(
       channel_list, ChannelType::ACTION_LAYERED, ypos, yscale_fac, eSAction_Flag(saction_flag));
-  draw_elem->adt = adt;
+  draw_elem->adt = ale->adt;
   draw_elem->act = action;
   draw_elem->channel_locked = locked;
 }
 
 void ED_add_action_slot_channel(ChannelDrawList *channel_list,
-                                AnimData *adt,
+                                bAnimListElem *ale,
                                 animrig::Action &action,
                                 animrig::Slot &slot,
                                 const float ypos,
@@ -773,14 +773,14 @@ void ED_add_action_slot_channel(ChannelDrawList *channel_list,
 
   ChannelListElement *draw_elem = channel_list_add_element(
       channel_list, ChannelType::ACTION_SLOT, ypos, yscale_fac, eSAction_Flag(saction_flag));
-  draw_elem->adt = adt;
+  draw_elem->adt = ale->adt;
   draw_elem->act = &action;
   draw_elem->action_slot = &slot;
   draw_elem->channel_locked = locked;
 }
 
 void ED_add_action_channel(ChannelDrawList *channel_list,
-                           AnimData *adt,
+                           bAnimListElem *ale,
                            bAction *act,
                            float ypos,
                            float yscale_fac,
@@ -793,14 +793,14 @@ void ED_add_action_channel(ChannelDrawList *channel_list,
 
   ChannelListElement *draw_elem = channel_list_add_element(
       channel_list, ChannelType::ACTION_LEGACY, ypos, yscale_fac, eSAction_Flag(saction_flag));
-  draw_elem->adt = adt;
+  draw_elem->adt = ale->adt;
   draw_elem->act = act;
   draw_elem->channel_locked = locked;
 }
 
 void ED_add_grease_pencil_datablock_channel(ChannelDrawList *channel_list,
                                             bAnimContext *ac,
-                                            AnimData *adt,
+                                            bAnimListElem *ale,
                                             const GreasePencil *grease_pencil,
                                             const float ypos,
                                             const float yscale_fac,
@@ -813,8 +813,8 @@ void ED_add_grease_pencil_datablock_channel(ChannelDrawList *channel_list,
                                                            eSAction_Flag(saction_flag));
   /* GreasePencil properties can be animated via an Action, so the GP-related
    * animation data is not limited to GP drawings. */
-  draw_elem->adt = adt;
-  draw_elem->act = adt ? adt->action : nullptr;
+  draw_elem->adt = ale->adt;
+  draw_elem->act = ale->adt ? ale->adt->action : nullptr;
   draw_elem->grease_pencil = grease_pencil;
   draw_elem->ac = ac;
 }
