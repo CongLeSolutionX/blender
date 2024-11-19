@@ -53,9 +53,9 @@ class VKDiscardPool {
   /**
    * Move discarded resources from src_pool into this.
    *
-   * GPU resources that are discarded from the dependency graph are stored in the device
-   * orphaned data. When a swap chain context list is made active the orphaned data can be
-   * merged into a swap chain discard pool.
+   * GPU resources that are discarded from the dependency graph are stored in the device orphaned
+   * data. When a swap chain context list is made active the orphaned data can be merged into a
+   * swap chain discard pool.
    */
   void move_data(VKDiscardPool &src_pool);
   void destroy_discarded_resources(VKDevice &device);
