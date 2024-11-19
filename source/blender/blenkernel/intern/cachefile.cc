@@ -25,6 +25,7 @@
 
 #include "BKE_bpath.hh"
 #include "BKE_cachefile.hh"
+#include "BKE_idprop.hh"
 #include "BKE_idtype.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_main.hh"
@@ -70,6 +71,7 @@ static void cache_file_copy_data(Main * /*bmain*/,
 
   cache_file_dst->handle = nullptr;
   cache_file_dst->handle_readers = nullptr;
+  cache_file_dst->properties = IDP_CopyProperty(cache_file_src->properties);
   BLI_duplicatelist(&cache_file_dst->object_paths, &cache_file_src->object_paths);
   BLI_duplicatelist(&cache_file_dst->layers, &cache_file_src->layers);
 }
@@ -78,6 +80,9 @@ static void cache_file_free_data(ID *id)
 {
   CacheFile *cache_file = (CacheFile *)id;
   cachefile_handle_free(cache_file);
+  if (cache_file->properties) {
+    IDP_FreeProperty(cache_file->properties);
+  }
   BLI_freelistN(&cache_file->object_paths);
   BLI_freelistN(&cache_file->layers);
 }
@@ -106,6 +111,8 @@ static void cache_file_blend_write(BlendWriter *writer, ID *id, const void *id_a
   LISTBASE_FOREACH (CacheFileLayer *, layer, &cache_file->layers) {
     BLO_write_struct(writer, CacheFileLayer, layer);
   }
+
+  IDP_BlendWrite(writer, cache_file->properties);
 }
 
 static void cache_file_blend_read_data(BlendDataReader *reader, ID *id)
@@ -118,6 +125,9 @@ static void cache_file_blend_read_data(BlendDataReader *reader, ID *id)
 
   /* relink layers */
   BLO_read_struct_list(reader, CacheFileLayer, &cache_file->layers);
+
+  BLO_read_struct(reader, IDProperty, &cache_file->properties);
+  IDP_BlendDataRead(reader, &cache_file->properties);
 }
 
 IDTypeInfo IDType_ID_CF = {
@@ -365,8 +375,12 @@ void BKE_cachefile_eval(Main *bmain, Depsgraph *depsgraph, CacheFile *cache_file
 #ifdef WITH_USD
   if (BLI_path_extension_check_glob(filepath, "*.usd;*.usda;*.usdc;*.usdz")) {
     cache_file->type = CACHEFILE_TYPE_USD;
+
+    blender::io::usd::USDImportParams params = blender::io::usd::USD_load_import_params(
+        cache_file->properties);
+
     cache_file->handle = blender::io::usd::USD_create_handle(
-        bmain, filepath, &cache_file->object_paths);
+        bmain, filepath, params, &cache_file->object_paths);
     STRNCPY(cache_file->handle_filepath, filepath);
   }
 #endif

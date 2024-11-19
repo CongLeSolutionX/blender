@@ -481,34 +481,27 @@ void USDMeshReader::read_mesh_sample(ImportSettings *settings,
    * regardless of the value of the read_flag, to avoid a crash downstream
    * in code that expect this data to be there. */
 
-  if (new_mesh || (settings->read_flag & MOD_MESHSEQ_READ_VERT) != 0) {
-    MutableSpan<float3> vert_positions = mesh->vert_positions_for_write();
-    vert_positions.copy_from(Span(positions_.data(), positions_.size()).cast<float3>());
-    mesh->tag_positions_changed();
+  MutableSpan<float3> vert_positions = mesh->vert_positions_for_write();
+  vert_positions.copy_from(Span(positions_.data(), positions_.size()).cast<float3>());
+  mesh->tag_positions_changed();
 
-    read_vertex_creases(mesh, motionSampleTime);
+  read_vertex_creases(mesh, motionSampleTime);
+
+  read_mpolys(mesh);
+  if (normal_interpolation_ == pxr::UsdGeomTokens->faceVarying) {
+    process_normals_face_varying(mesh);
   }
-
-  if (new_mesh || (settings->read_flag & MOD_MESHSEQ_READ_POLY) != 0) {
-    read_mpolys(mesh);
-    if (normal_interpolation_ == pxr::UsdGeomTokens->faceVarying) {
-      process_normals_face_varying(mesh);
-    }
-    else if (normal_interpolation_ == pxr::UsdGeomTokens->uniform) {
-      process_normals_uniform(mesh);
-    }
+  else if (normal_interpolation_ == pxr::UsdGeomTokens->uniform) {
+    process_normals_uniform(mesh);
   }
 
   /* Process point normals after reading faces. */
-  if ((settings->read_flag & MOD_MESHSEQ_READ_VERT) != 0 &&
-      normal_interpolation_ == pxr::UsdGeomTokens->vertex)
-  {
+  if (normal_interpolation_ == pxr::UsdGeomTokens->vertex) {
     process_normals_vertex_varying(mesh);
   }
 
   /* Custom Data layers. */
-  if ((settings->read_flag & MOD_MESHSEQ_READ_VERT) ||
-      (settings->read_flag & MOD_MESHSEQ_READ_COLOR) ||
+  if ((settings->read_flag & MOD_MESHSEQ_READ_COLOR) ||
       (settings->read_flag & MOD_MESHSEQ_READ_ATTRIBUTES))
   {
     read_velocities(mesh, motionSampleTime);

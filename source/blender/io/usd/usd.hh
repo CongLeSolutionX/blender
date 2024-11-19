@@ -228,7 +228,7 @@ struct USDImportParams {
    * Communication structure between the wmJob management code and the worker code. Currently used
    * to generate safely reports from the worker thread.
    */
-  wmJobWorkerStatus *worker_status;
+  wmJobWorkerStatus *worker_status = nullptr;
 };
 
 /**
@@ -261,6 +261,7 @@ bool USD_import(const bContext *C,
                 const char *filepath,
                 const USDImportParams *params,
                 bool as_background_job,
+                IDProperty *properties,
                 ReportList *reports);
 
 int USD_get_version();
@@ -273,7 +274,10 @@ int USD_get_version();
  * attempting to normalize the path. */
 void USD_path_abs(char *path, const char *basepath, bool for_import);
 
-CacheArchiveHandle *USD_create_handle(Main *bmain, const char *filepath, ListBase *object_paths);
+CacheArchiveHandle *USD_create_handle(Main *bmain,
+                                      const char *filepath,
+                                      const USDImportParams &params,
+                                      ListBase *object_paths);
 
 void USD_free_handle(CacheArchiveHandle *handle);
 
@@ -298,6 +302,8 @@ CacheReader *CacheReader_open_usd_object(CacheArchiveHandle *handle,
                                          const char *object_path);
 
 void USD_CacheReader_free(CacheReader *reader);
+
+USDImportParams USD_load_import_params(IDProperty *properties);
 
 /** Data for registering USD IO hooks. */
 struct USDHook {

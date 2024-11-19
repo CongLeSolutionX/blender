@@ -884,135 +884,7 @@ static int wm_usd_import_exec(bContext *C, wmOperator *op)
   const bool as_background_job = (options != nullptr && options->as_background_job);
   MEM_SAFE_FREE(op->customdata);
 
-  const float scale = RNA_float_get(op->ptr, "scale");
-
-  const bool set_frame_range = RNA_boolean_get(op->ptr, "set_frame_range");
-
-  const bool read_mesh_uvs = RNA_boolean_get(op->ptr, "read_mesh_uvs");
-  const bool read_mesh_colors = RNA_boolean_get(op->ptr, "read_mesh_colors");
-  const bool read_mesh_attributes = RNA_boolean_get(op->ptr, "read_mesh_attributes");
-
-  char mesh_read_flag = MOD_MESHSEQ_READ_VERT | MOD_MESHSEQ_READ_POLY;
-  if (read_mesh_uvs) {
-    mesh_read_flag |= MOD_MESHSEQ_READ_UV;
-  }
-  if (read_mesh_colors) {
-    mesh_read_flag |= MOD_MESHSEQ_READ_COLOR;
-  }
-  if (read_mesh_attributes) {
-    mesh_read_flag |= MOD_MESHSEQ_READ_ATTRIBUTES;
-  }
-
-  const bool import_cameras = RNA_boolean_get(op->ptr, "import_cameras");
-  const bool import_curves = RNA_boolean_get(op->ptr, "import_curves");
-  const bool import_lights = RNA_boolean_get(op->ptr, "import_lights");
-  const bool import_materials = RNA_boolean_get(op->ptr, "import_materials");
-  const bool import_meshes = RNA_boolean_get(op->ptr, "import_meshes");
-  const bool import_volumes = RNA_boolean_get(op->ptr, "import_volumes");
-  const bool import_shapes = RNA_boolean_get(op->ptr, "import_shapes");
-  const bool import_skeletons = RNA_boolean_get(op->ptr, "import_skeletons");
-  const bool import_blendshapes = RNA_boolean_get(op->ptr, "import_blendshapes");
-  const bool import_points = RNA_boolean_get(op->ptr, "import_points");
-
-  const bool import_subdiv = RNA_boolean_get(op->ptr, "import_subdiv");
-
-  const bool support_scene_instancing = RNA_boolean_get(op->ptr, "support_scene_instancing");
-
-  const bool import_visible_only = RNA_boolean_get(op->ptr, "import_visible_only");
-
-  const bool import_defined_only = RNA_boolean_get(op->ptr, "import_defined_only");
-
-  const bool create_collection = RNA_boolean_get(op->ptr, "create_collection");
-
-  char *prim_path_mask = RNA_string_get_alloc(op->ptr, "prim_path_mask", nullptr, 0, nullptr);
-
-  const bool import_guide = RNA_boolean_get(op->ptr, "import_guide");
-  const bool import_proxy = RNA_boolean_get(op->ptr, "import_proxy");
-  const bool import_render = RNA_boolean_get(op->ptr, "import_render");
-
-  const bool import_all_materials = RNA_boolean_get(op->ptr, "import_all_materials");
-
-  const bool import_usd_preview = RNA_boolean_get(op->ptr, "import_usd_preview");
-  const bool set_material_blend = RNA_boolean_get(op->ptr, "set_material_blend");
-
-  const float light_intensity_scale = RNA_float_get(op->ptr, "light_intensity_scale");
-
-  const eUSDMtlPurpose mtl_purpose = eUSDMtlPurpose(RNA_enum_get(op->ptr, "mtl_purpose"));
-  const eUSDMtlNameCollisionMode mtl_name_collision_mode = eUSDMtlNameCollisionMode(
-      RNA_enum_get(op->ptr, "mtl_name_collision_mode"));
-
-  const eUSDAttrImportMode attr_import_mode = eUSDAttrImportMode(
-      RNA_enum_get(op->ptr, "attr_import_mode"));
-
-  const bool validate_meshes = RNA_boolean_get(op->ptr, "validate_meshes");
-
-  const bool create_world_material = RNA_boolean_get(op->ptr, "create_world_material");
-
-  const bool merge_parent_xform = RNA_boolean_get(op->ptr, "merge_parent_xform");
-
-  /* TODO(makowalski): Add support for sequences. */
-  const bool is_sequence = false;
-  int offset = 0;
-  int sequence_len = 1;
-
-  const eUSDTexImportMode import_textures_mode = eUSDTexImportMode(
-      RNA_enum_get(op->ptr, "import_textures_mode"));
-
-  char import_textures_dir[FILE_MAXDIR];
-  RNA_string_get(op->ptr, "import_textures_dir", import_textures_dir);
-
-  const eUSDTexNameCollisionMode tex_name_collision_mode = eUSDTexNameCollisionMode(
-      RNA_enum_get(op->ptr, "tex_name_collision_mode"));
-
-  USDImportParams params{};
-  params.prim_path_mask = prim_path_mask;
-  params.scale = scale;
-  params.light_intensity_scale = light_intensity_scale;
-
-  params.mesh_read_flag = mesh_read_flag;
-  params.set_frame_range = set_frame_range;
-  params.is_sequence = is_sequence;
-  params.sequence_len = sequence_len;
-  params.offset = offset;
-
-  params.import_visible_only = import_visible_only;
-  params.import_defined_only = import_defined_only;
-
-  params.import_cameras = import_cameras;
-  params.import_curves = import_curves;
-  params.import_lights = import_lights;
-  params.import_materials = import_materials;
-  params.import_all_materials = import_all_materials;
-  params.import_meshes = import_meshes;
-  params.import_points = import_points;
-  params.import_subdiv = import_subdiv;
-  params.import_volumes = import_volumes;
-
-  params.create_collection = create_collection;
-  params.create_world_material = create_world_material;
-  params.support_scene_instancing = support_scene_instancing;
-
-  params.import_shapes = import_shapes;
-  params.import_skeletons = import_skeletons;
-  params.import_blendshapes = import_blendshapes;
-
-  params.validate_meshes = validate_meshes;
-  params.merge_parent_xform = merge_parent_xform;
-
-  params.import_guide = import_guide;
-  params.import_proxy = import_proxy;
-  params.import_render = import_render;
-
-  params.import_usd_preview = import_usd_preview;
-  params.set_material_blend = set_material_blend;
-  params.mtl_purpose = mtl_purpose;
-  params.mtl_name_collision_mode = mtl_name_collision_mode;
-  params.import_textures_mode = import_textures_mode;
-  params.tex_name_collision_mode = tex_name_collision_mode;
-
-  params.attr_import_mode = attr_import_mode;
-
-  STRNCPY(params.import_textures_dir, import_textures_dir);
+  USDImportParams params = USD_load_import_params(op->properties);
 
   /* Switch out of edit mode to avoid being stuck in it (#54326). */
   Object *obedit = CTX_data_edit_object(C);
@@ -1020,7 +892,7 @@ static int wm_usd_import_exec(bContext *C, wmOperator *op)
     blender::ed::object::mode_set(C, OB_MODE_EDIT);
   }
 
-  const bool ok = USD_import(C, filepath, &params, as_background_job, op->reports);
+  const bool ok = USD_import(C, filepath, &params, as_background_job, op->properties, op->reports);
 
   return as_background_job || ok ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
 }

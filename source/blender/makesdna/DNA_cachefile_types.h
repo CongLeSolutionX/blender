@@ -71,6 +71,8 @@ typedef struct CacheFile {
   /** 1024 = FILE_MAX. */
   char filepath[1024];
 
+  IDProperty *properties;
+
   char is_sequence;
   char forward_axis;
   char up_axis;

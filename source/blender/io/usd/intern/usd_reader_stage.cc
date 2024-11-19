@@ -117,6 +117,7 @@ USDStageReader::USDStageReader(pxr::UsdStageRefPtr stage,
 USDStageReader::~USDStageReader()
 {
   clear_readers();
+  MEM_SAFE_FREE(params_.prim_path_mask);
 }
 
 bool USDStageReader::valid() const
