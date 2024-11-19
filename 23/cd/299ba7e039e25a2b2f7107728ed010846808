@@ -1,3 +1,4 @@
 Referenced by issue #128104, "Tweak" selection permanently enabled
 Referenced by issue #130459, Select tool in weight paint mode is not working
 Referenced by pull request #130480, Fix #130459: Select tools do not work in Weight Paint
+Referenced by commit 2b18cad88b138a1b16617c27540858fba59e66f5, Fix #130459: Select tools do not work in Weight Paint
