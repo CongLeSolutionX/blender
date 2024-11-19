@@ -719,7 +719,7 @@ void ED_add_fcurve_channel(ChannelDrawList *channel_list,
   draw_elem->adt = ale->adt;
   draw_elem->fcu = fcu;
   draw_elem->channel_locked = locked;
-  draw_elem->use_nla_remapping = ale->type != ANIMTYPE_NLACURVE;
+  draw_elem->use_nla_remapping = ANIM_nla_mapping_allowed(ale);
 }
 
 void ED_add_action_group_channel(ChannelDrawList *channel_list,

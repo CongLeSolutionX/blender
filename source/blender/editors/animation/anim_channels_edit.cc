@@ -191,7 +191,6 @@ static bool get_channel_bounds(bAnimContext *ac,
 
     case ALE_FCURVE: {
       FCurve *fcu = (FCurve *)ale->key_data;
-      const bool use_nla_remapping = ale->type != ANIMTYPE_NLACURVE;
       found_bounds = get_normalized_fcurve_bounds(fcu,
                                                   ale->adt,
                                                   ac->sl,
@@ -200,7 +199,7 @@ static bool get_channel_bounds(bAnimContext *ac,
                                                   include_handles,
                                                   range,
                                                   r_bounds,
-                                                  use_nla_remapping);
+                                                  ANIM_nla_mapping_allowed(ale));
       break;
     }
     case ALE_NONE:
