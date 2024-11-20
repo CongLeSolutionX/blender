@@ -203,7 +203,11 @@ void main()
     }
   }
 
-  float scene_depth = texture(depth_tx, gl_FragCoord.xy / vec2(textureSize(depth_tx, 0)), 0).r;
+  vec2 uv = gl_FragCoord.xy / vec2(textureSize(depth_tx, 0));
+  float scene_depth = texture(depth_tx, uv, 0).r;
+  float scene_depth_infront = texture(depth_infront_tx, uv, 0).r;
+  scene_depth = min(scene_depth, scene_depth_infront);
+
   if (flag_test(grid_flag, GRID_BACK)) {
     fade *= (scene_depth == 1.0) ? 1.0 : 0.0;
   }
