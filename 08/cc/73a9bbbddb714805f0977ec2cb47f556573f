@@ -1,3 +1,4 @@
 Referenced by pull request #123341, Fix #123324: Improve Cycles camera bounding box size calculation
 Referenced by issue #123324, Cycles: Interior of volumes sometimes do not render properly in orthographic mode
 Referenced by pull request #130500, Tests: Add render test for Orthographic camera with DOF with far nearclip
+Referenced by commit 60bf09e8db9e973483ef35e1d5c8dd5d66af1ff9, Tests: Add render test for Orthographic camera with DOF with far nearclip
