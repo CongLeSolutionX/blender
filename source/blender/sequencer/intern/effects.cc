@@ -27,6 +27,7 @@
 #include "BLI_string.h"
 #include "BLI_string_utf8.h"
 #include "BLI_task.hh"
+#include "BLI_threads.h"
 #include "BLI_utildefines.h"
 
 #include "DNA_packedFile_types.h"
@@ -103,23 +104,28 @@ void SEQ_fontmap_clear()
 
 static int seq_load_font_file(const std::string &path)
 {
+  const bool is_main_thread = BLI_thread_is_main();
   std::lock_guard lock(font_map.mutex);
   int fontid = font_map.name_to_font_id_file.add_or_modify(
       path,
       [&](int *fontid) {
-        /* New path: load font. */
-        *fontid = BLF_load_unique(path.c_str());
+        /* New path: load font if we're on the main thread.
+         * It should not really happen that we haven't seen this
+         * path on the main thread yet. */
+        *fontid = is_main_thread ? BLF_load_unique(path.c_str()) : -1;
         return *fontid;
       },
       [&](int *fontid) {
-        /* Path already in cache: add reference to
-         * already loaded font, or load a new one in
-         * case that font id was unloaded behind our backs. */
-        if (BLF_is_loaded_id(*fontid)) {
-          BLF_addref_id(*fontid);
-        }
-        else {
-          *fontid = BLF_load_unique(path.c_str());
+        /* Path already in cache: add reference to already loaded font,
+         * or (if we're on the main thread) load a new one in case that
+         * font id was unloaded behind our backs. */
+        if (*fontid >= 0) {
+          if (BLF_is_loaded_id(*fontid)) {
+            BLF_addref_id(*fontid);
+          }
+          else if (is_main_thread) {
+            *fontid = BLF_load_unique(path.c_str());
+          }
         }
         return *fontid;
       });
@@ -128,23 +134,28 @@ static int seq_load_font_file(const std::string &path)
 
 static int seq_load_font_mem(const std::string &name, const unsigned char *data, int data_size)
 {
+  const bool is_main_thread = BLI_thread_is_main();
   std::lock_guard lock(font_map.mutex);
   int fontid = font_map.name_to_font_id_mem.add_or_modify(
       name,
       [&](int *fontid) {
-        /* New name: load font. */
-        *fontid = BLF_load_mem_unique(name.c_str(), data, data_size);
+        /* New name: load font if we're on the main thread.
+         * It should not really happen that we haven't seen this
+         * path on the main thread yet. */
+        *fontid = is_main_thread ? BLF_load_mem_unique(name.c_str(), data, data_size) : -1;
         return *fontid;
       },
       [&](int *fontid) {
-        /* Name already in cache: add reference to
-         * already loaded font, or load a new one in
-         * case that font id was unloaded behind our backs. */
-        if (BLF_is_loaded_id(*fontid)) {
-          BLF_addref_id(*fontid);
-        }
-        else {
-          *fontid = BLF_load_mem_unique(name.c_str(), data, data_size);
+        /* Name already in cache: add reference to already loaded font,
+         * or (if we're on the main thread) load a new one in case that
+         * font id was unloaded behind our backs. */
+        if (*fontid >= 0) {
+          if (BLF_is_loaded_id(*fontid)) {
+            BLF_addref_id(*fontid);
+          }
+          else if (is_main_thread) {
+            *fontid = BLF_load_mem_unique(name.c_str(), data, data_size);
+          }
         }
         return *fontid;
       });
