@@ -17,6 +17,7 @@
 #include "BLI_vector_set.hh"
 
 #include "BLI_heap.h"
+#include "BLI_index_ranges_builder.hh"
 #include "BLI_memarena.h"
 
 #include "BKE_attribute.hh"
@@ -537,27 +538,37 @@ static IndexMask calc_unselected_faces(const Mesh &mesh,
   if (mesh.no_overlapping_topology()) {
     return unselected;
   }
-  const bool has_tris = threading::parallel_reduce(
-      unselected.index_range(),
-      4096,
-      false,
-      [&](const IndexRange range, const bool init) {
-        if (init) {
-          return init;
-        }
-        const IndexMask sliced_mask = unselected.slice(range);
-        for (const int64_t segment_i : IndexRange(sliced_mask.segments_num())) {
-          const IndexMaskSegment segment = sliced_mask.segment(segment_i);
-          for (const int i : segment) {
-            if (src_faces[i].size() == 3) {
-              return true;
-            }
+  IndexMaskMemory tris_memory;
+  const IndexMask unselected_tris = IndexMask::from_batch_predicate(
+      unselected,
+      GrainSize(4096),
+      tris_memory,
+      [&](const IndexMaskSegment universe_segment, IndexRangesBuilder<int16_t> &builder) {
+        /* Try a few constant time checks to avoid checking each face individually. */
+        if (unique_sorted_indices::non_empty_is_range(universe_segment.base_span())) {
+          const IndexRange segment_range(universe_segment.offset(), universe_segment.size());
+          const OffsetIndices segment_faces = src_faces.slice(segment_range);
+          if (segment_faces.total_size() >= segment_faces.size() * 4) {
+            /* All faces in segement are quads or at least not triangles. */
+            return universe_segment.offset();
+          }
+          if (segment_faces.total_size() == segment_faces.size() * 3) {
+            /* All faces in segment are triangles. */
+            builder.add_range(universe_segment.base_span().first(),
+                              universe_segment.base_span().last());
+            return universe_segment.offset();
           }
         }
-        return false;
-      },
-      std::logical_or());
-  if (!has_tris) {
+
+        for (const int16_t i : universe_segment.base_span()) {
+          const int face = int(universe_segment.offset() + i);
+          if (src_faces[face].size() == 3) {
+            builder.add(i);
+          }
+        }
+        return universe_segment.offset();
+      });
+  if (unselected_tris.is_empty()) {
     return unselected;
   }
   Array<int3> vert_tris(corner_tris.size());
