@@ -256,11 +256,8 @@ static void fill_mask_mesh(Object &object, const float value, const Span<PBVHNod
   mask.finish();
 }
 
-static void fill_mask_grids(Main &bmain,
-                            const Scene &scene,
-                            Depsgraph &depsgraph,
-                            Object &object,
-                            const float value)
+static void fill_mask_grids(
+    Main &bmain, const Scene &scene, Depsgraph &depsgraph, Object &object, const float value)
 {
   SculptSession &ss = *object.sculpt;
 
