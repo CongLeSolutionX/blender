@@ -465,8 +465,9 @@ static void sample_curve_padded(const bke::CurvesGeometry &curves,
   const float length_to_index = math::safe_divide(float(num_dst_points - 1), total_length);
 
   auto add_src_point_samples = [&](const int point_i) {
-    const IndexRange segments = IndexRange::from_begin_end(
-        point_lengths[point_i] * length_to_index, point_lengths[point_i + 1] * length_to_index);
+    const IndexRange segments = IndexRange::from_begin_end_inclusive(
+        math::ceil(point_lengths[point_i] * length_to_index),
+        math::floor(point_lengths[point_i + 1] * length_to_index));
     r_segment_indices.slice(segments).fill(point_i);
     for (const int segment_i : segments.index_range()) {
       const int segment = reverse ? segments[segments.size() - 1 - segment_i] :
