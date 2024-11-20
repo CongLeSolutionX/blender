@@ -464,22 +464,23 @@ static void sample_curve_padded(const bke::CurvesGeometry &curves,
   /* Factor that turns length along the source curve into a point index. */
   const float length_to_index = math::safe_divide(float(num_dst_points - 1), total_length);
 
-  for (const int point_i : src_points.index_range().drop_back(1)) {
+  auto add_src_point_samples = [&](const int point_i) {
     const IndexRange segments = IndexRange::from_begin_end(
         point_lengths[point_i] * length_to_index, point_lengths[point_i + 1] * length_to_index);
     r_segment_indices.slice(segments).fill(point_i);
     for (const int segment_i : segments.index_range()) {
-      r_factors[segments[segment_i]] = float(segment_i) / segments.size();
+      const int segment = reverse ? segments[segments.size() - 1 - segment_i] :
+                                    segments[segment_i];
+      const float factor = float(segment_i) / segments.size();
+      r_factors[segment] = reverse ? 1.0f - factor : factor;
     }
+  };
+
+  for (const int point_i : src_points.index_range().drop_back(1)) {
+    add_src_point_samples(point_i);
   }
   if (cyclic) {
-    const int point_i = src_points.size() - 1;
-    const IndexRange segments = IndexRange::from_begin_end(
-        point_lengths[point_i] * length_to_index, num_dst_points - 1);
-    r_segment_indices.slice(segments).fill(point_i);
-    for (const int segment_i : segments.index_range()) {
-      r_factors[segments[segment_i]] = float(segment_i) / segments.size();
-    }
+    add_src_point_samples(src_points.size() - 1);
 
     r_segment_indices.last() = 0;
     r_factors.last() = 0.0f;
