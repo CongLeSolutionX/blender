@@ -40,10 +40,10 @@ using namespace blender;
  * or are on coplanar faces. */
 #define RAYCAST_DEPTH_EPSILON (10 * FLT_EPSILON)
 
-/* Tag that indicates the non-wire mesh that intersects. */
+/* Tag that identifies the closed geometries for boolean operations. */
 #define MESH_OPERAND_TAG BM_ELEM_TAG_ALT
 
-/* Tag that indicates the wire mesh (edges and vertices) that intersect. */
+/* Tag that identifies opened geometry and wire mesh (loose edges) for intersection. */
 #define MESH_OPERAND_TAG2 BM_ELEM_TAG
 
 /* -------------------------------------------------------------------- */
@@ -338,6 +338,8 @@ static ExtrudeMeshData *extrude_boolean_data_create(Object *obedit, float doubli
   extrudata->cd_offset = -1;
 
   if (em->bm->totfacesel) {
+    /* Mark each selection island on the face. This will allow you to have a raycast target per
+     * island and thus have more control over the geometry that is inside or outside. */
     int *groups_array = nullptr;
     int(*group_index)[2] = nullptr;
     groups_array = static_cast<int *>(
@@ -372,6 +374,7 @@ static ExtrudeMeshData *extrude_boolean_data_create(Object *obedit, float doubli
     MEM_freeN(group_index);
   }
 
+  /* Clean up tags. Needs to be called after #BM_mesh_calc_face_groups. */
   BM_mesh_elem_hflag_disable_all(
       extrudata->bm, BM_VERT | BM_EDGE | BM_FACE, MESH_OPERAND_TAG | MESH_OPERAND_TAG2, false);
 
@@ -379,10 +382,14 @@ static ExtrudeMeshData *extrude_boolean_data_create(Object *obedit, float doubli
   int edge_tag_len = 0;
   int face_tag_len = 0;
 
+  /* First, duplicate the selected geometry. */
   BMOperator dupop;
   BMOperator extrudeop;
   BMO_op_initf(extrudata->bm, &dupop, 0, "duplicate geom=%hvef", BM_ELEM_SELECT);
   BMO_op_exec(extrudata->bm, &dupop);
+
+  /* Disable selection of this geometry. Only the geometry on the end faces of the extrusion will
+   * be selected. */
   BMO_ITER (ele, &oiter, dupop.slots_out, "geom_orig.out", BM_VERT | BM_EDGE | BM_FACE) {
     if (ele->head.htype != BM_FACE) {
       BM_elem_flag_disable(ele, BM_ELEM_SELECT);
@@ -390,6 +397,8 @@ static ExtrudeMeshData *extrude_boolean_data_create(Object *obedit, float doubli
   }
   BMO_ITER (ele, &oiter, dupop.slots_out, "geom.out", BM_VERT | BM_EDGE) {
     BM_elem_flag_disable(ele, BM_ELEM_SELECT);
+    /* At first, tag all new vertices and edges with #MESH_OPERAND_TAG2, this tag is only for loose
+     * elements, so it will be cleaned up on those on faces later. */
     BM_elem_flag_enable(ele, MESH_OPERAND_TAG2);
     if (ele->head.htype == BM_VERT) {
       vert_tag_len++;
@@ -405,12 +414,16 @@ static ExtrudeMeshData *extrude_boolean_data_create(Object *obedit, float doubli
     BMLoop *l_iter, *l_first;
     l_iter = l_first = BM_FACE_FIRST_LOOP(f);
     do {
+      /* Replace #MESH_OPERAND_TAG2 with #MESH_OPERAND_TAG on geometry that will not participate in
+       * the intersection of edges and verts. */
       BM_elem_flag_disable(l_iter->v, MESH_OPERAND_TAG2);
       BM_elem_flag_disable(l_iter->e, MESH_OPERAND_TAG2);
       BM_elem_flag_enable(l_iter->v, MESH_OPERAND_TAG);
       BM_elem_flag_enable(l_iter->e, MESH_OPERAND_TAG);
     } while ((l_iter = l_iter->next) != l_first);
   }
+  /* For operations other than boolean, identify if the geometry is open and/or has loose edges
+   * (for edge intersections). */
   BMO_ITER (ele, &oiter, dupop.slots_out, "geom.out", BM_VERT | BM_EDGE) {
     if (BM_elem_flag_test(ele, MESH_OPERAND_TAG2)) {
       if (ele->head.htype == BM_EDGE) {
@@ -422,19 +435,24 @@ static ExtrudeMeshData *extrude_boolean_data_create(Object *obedit, float doubli
     }
   }
 
+  /* Add the new vertices in the list of vertices that move. */
   extrudata->moving_verts.reinitialize(2 * vert_tag_len);
   vert_tag_len = 0;
   BMO_ITER (v, &oiter, dupop.slots_out, "geom.out", BM_VERT) {
     extrudata->moving_verts[vert_tag_len++] = v;
   }
 
+  /* Boolean operations only work in closed geometry (identified by #MESH_OPERAND_TAG). */
   extrudata->has_closed_geom = face_tag_len != 0;
 
+  /* Now extrude the new geometry created in the duplication. Tags will be copied too. */
   BMO_op_initf(extrudata->bm, &extrudeop, 0, "extrude_face_region geom=%S", &dupop, "geom.out");
   BMO_op_exec(extrudata->bm, &extrudeop);
   BMO_ITER (ele, &oiter, extrudeop.slots_out, "geom.out", BM_ALL_NOLOOP) {
+    /* This geometry will be the one selected. */
     BM_elem_select_set(extrudata->bm, ele, true);
     if (ele->head.htype == BM_VERT) {
+      /* Add the new vertices in the list of vertices that move */
       extrudata->moving_verts[vert_tag_len++] = reinterpret_cast<BMVert *>(ele);
       /* Tag the connected edge for drawing. */
       BMIter iter;
@@ -538,7 +556,7 @@ static void raycast_fn(void *userdata, int index, const BVHTreeRay *ray, BVHTree
   }
 }
 
-static bool is_point_inside_bound(const Bounds<float3> &bb, const float3 &point)
+static bool is_point_outside_bound(const Bounds<float3> &bb, const float3 &point)
 {
   return (point[0] < bb.min[0]) || (point[1] < bb.min[1]) || (point[2] < bb.min[2]) ||
          (point[0] > bb.max[0]) || (point[1] > bb.max[1]) || (point[2] > bb.max[2]);
@@ -582,7 +600,7 @@ static bool is_face_group_to_remove_fn(ExtrudeMeshData *extrudata,
     else {
       Bounds<float3> bb;
       BLI_bvhtree_get_bounding_box(trees[1], bb.min, bb.max);
-      if (is_point_inside_bound(bb, ray_orig)) {
+      if (is_point_outside_bound(bb, ray_orig)) {
         /* Quick test to see if the point is outside the mesh. */
         return false;
       }
@@ -795,7 +813,7 @@ static int mesh_extrude_boolean_exec(bContext *C, wmOperator *op)
   }
 
   int transform_data_len = extrudata->moving_verts.size() / 2;
-  bool ok = ED_transform_reserve_custom(
+  ED_transform_reserve_custom(
       obedit,
       transform_data_len,
       extrudata,
@@ -807,11 +825,6 @@ static int mesh_extrude_boolean_exec(bContext *C, wmOperator *op)
       },
       extrude_boolean_recalc_data_fn,
       extrude_boolean_apply_fn);
-
-  if (!ok) {
-    extrude_boolean_data_free(extrudata);
-    return OPERATOR_CANCELLED;
-  }
 
   return OPERATOR_FINISHED;
 }

@@ -243,10 +243,8 @@ struct TransDataBasic {
  * \param foreach_data_fn: Callback to set up each geometry element to be read for transformation.
  * \param recalc_data_fn: Optional callback to adjust original geometry during tranformation.
  * \param finish_fn: callback called when we finish the operation.
-
- * \returns True if the geometry reservation is successful.
  */
-bool ED_transform_reserve_custom(
+void ED_transform_reserve_custom(
     Object *obedit,
     int data_len,
     void *userdata,

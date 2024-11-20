@@ -1292,7 +1292,7 @@ void recalc_data(TransInfo *t)
 
 /** \} */
 
-bool ED_transform_reserve_custom(
+void ED_transform_reserve_custom(
     Object *obedit,
     int data_len,
     void *userdata,
@@ -1301,7 +1301,7 @@ bool ED_transform_reserve_custom(
     blender::FunctionRef<void(void *userdata, bool is_cancel)> finish_fn)
 {
   if (g_tc_reserved) {
-    return false;
+    return;
   }
   g_tc_reserved = MEM_cnew<TransDataContainer>(__func__);
   if (obedit) {
@@ -1330,6 +1330,4 @@ bool ED_transform_reserve_custom(
         delete data;
         custom_data->data = nullptr;
       };
-
-  return true;
 }
