@@ -294,6 +294,7 @@ class ShaderModule {
   ShaderPtr fluid_velocity_mac;
   ShaderPtr fluid_velocity_needle;
   ShaderPtr image_plane;
+  ShaderPtr image_plane_depth_bias;
   ShaderPtr lattice_points;
   ShaderPtr lattice_wire;
   ShaderPtr particle_dot;
@@ -658,5 +659,19 @@ struct LinePrimitiveBuf : public VertexPrimitiveBuf {
     VertexPrimitiveBuf::end_sync(pass, GPU_PRIM_LINES);
   }
 };
+
+/* Consider instance any object form a set or a dupli system.
+ * This hides some overlay to avoid making the viewport unreadable. */
+static inline bool is_from_dupli_or_set(const Object *ob)
+{
+  return ob->base_flag & (BASE_FROM_SET | BASE_FROM_DUPLI);
+}
+
+/* Consider instance any object form a set or a dupli system.
+ * This hides some overlay to avoid making the viewport unreadable. */
+static inline bool is_from_dupli_or_set(const ObjectRef &ob_ref)
+{
+  return is_from_dupli_or_set(ob_ref.object);
+}
 
 }  // namespace blender::draw::overlay
