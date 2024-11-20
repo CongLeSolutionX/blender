@@ -317,7 +317,10 @@ static void calc_point_in_tesselation(Span<std::array<BMLoop *, 3>> face_tessela
   mid_v3_v3v3v3(r_co, tri_v[0]->co, tri_v[1]->co, tri_v[2]->co);
 }
 
-static ExtrudeMeshData *extrude_boolean_data_create(Object *obedit, float doublimit)
+static ExtrudeMeshData *extrude_boolean_data_create(Object *obedit,
+                                                    float doublimit,
+                                                    bool do_subtract,
+                                                    bool do_remove_coplanar)
 {
   BMOIter oiter;
   BMElem *ele;
@@ -516,8 +519,8 @@ static ExtrudeMeshData *extrude_boolean_data_create(Object *obedit, float doubli
   extrudata->face_tag_len = face_tag_len;
   extrudata->obedit = obedit;
   extrudata->doublimit = doublimit;
-  extrudata->do_subtract = false;
-  extrudata->do_remove_coplanar = true;
+  extrudata->do_subtract = do_subtract;
+  extrudata->do_remove_coplanar = do_remove_coplanar;
   BMO_op_finish(extrudata->bm, &extrudeop);
   BMO_op_finish(extrudata->bm, &dupop);
   return extrudata;
@@ -779,14 +782,15 @@ static int mesh_extrude_boolean_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  const float eps = RNA_float_get(op->ptr, "threshold");
-  ExtrudeMeshData *extrudata = extrude_boolean_data_create(obedit, eps);
+  float eps = RNA_float_get(op->ptr, "threshold");
+  bool do_subtract = RNA_boolean_get(op->ptr, "invert");
+  bool do_remove_coplanar = RNA_boolean_get(op->ptr, "remove_coplanar");
+  ExtrudeMeshData *extrudata = extrude_boolean_data_create(
+      obedit, eps, do_subtract, do_remove_coplanar);
   if (!extrudata) {
     return OPERATOR_CANCELLED;
   }
 
-  extrudata->do_subtract = RNA_boolean_get(op->ptr, "invert");
-  extrudata->do_remove_coplanar = RNA_boolean_get(op->ptr, "remove_coplanar");
   if (!(op->flag & OP_IS_REPEAT)) {
     ARegion *region = CTX_wm_region(C);
     extrudata->draw_data.init(region,
@@ -845,7 +849,8 @@ void MESH_OT_extrude_boolean_intern(wmOperatorType *ot)
   /* props */
   RNA_def_float_distance(
       ot->srna, "threshold", 0.0001f, 0.0f, FLT_MAX, "Overlap Threshold", "", 0.0001f, 0.1f);
-  RNA_def_boolean(ot->srna, "invert", false, "Invert", "Which boolean operation to apply");
+  RNA_def_boolean(
+      ot->srna, "invert", false, "Invert", "Remove the inside faces instead of the outside ones");
   RNA_def_boolean(ot->srna, "remove_coplanar", true, "Remove coplanar faces", "");
 }
 
