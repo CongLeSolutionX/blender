@@ -116,10 +116,12 @@ static void handle_curves_preceding(const int end_curve,
   current_curve = end_curve;
 }
 
-static int find_curve_containing(const OffsetIndices<int> points_by_curve, const int point)
+static int find_curve_containing(const int point,
+                                 const OffsetIndices<int> points_by_curve,
+                                 const int start_from)
 {
   const Span<int> data = points_by_curve.data();
-  return std::upper_bound(data.begin(), data.end(), point) - data.begin() - 1;
+  return std::upper_bound(data.begin() + start_from, data.end(), point) - data.begin() - 1;
 }
 
 static void calc_curves_extrusion(const IndexMask &selection,
@@ -137,13 +139,14 @@ static void calc_curves_extrusion(const IndexMask &selection,
     IndexRange curve_points = points_by_curve[current_curve];
     /* Beginning of the range outside current curve. */
     if (range.first() > curve_points.last()) {
-      handle_curves_preceding(find_curve_containing(points_by_curve, range.first()),
-                              points_by_curve,
-                              copy_intervals,
-                              curves_intervals_offsets,
-                              is_first_selected,
-                              current_curve,
-                              current_endpoint_index);
+      handle_curves_preceding(
+          find_curve_containing(range.first(), points_by_curve, current_curve + 1),
+          points_by_curve,
+          copy_intervals,
+          curves_intervals_offsets,
+          is_first_selected,
+          current_curve,
+          current_endpoint_index);
       curve_points = points_by_curve[current_curve];
       copy_intervals[curves_intervals_offsets[current_curve]] = curve_points.start();
     }
