@@ -36,190 +36,228 @@
 
 using namespace blender;
 
+/* Threshold of the distance between two hits that indicates whether they are hits on the same face
+ * or are on coplanar faces. */
 #define RAYCAST_DEPTH_EPSILON (10 * FLT_EPSILON)
+
+/* Tag that indicates the non-wire mesh that intersects. */
 #define MESH_OPERAND_TAG BM_ELEM_TAG_ALT
+
+/* Tag that indicates the wire mesh (edges and vertices) that intersect. */
 #define MESH_OPERAND_TAG2 BM_ELEM_TAG
 
 /* -------------------------------------------------------------------- */
 /** \name Draw
  * \{ */
 
-struct ExtrudeDrawData {
+static void extrude_boolean_draw_fn(const bContext *C, ARegion *region, void *data);
+
+/* Handle data for drawing the mesh being transformed. */
+class ExtrudeDrawData {
+  /* Drawing handle for `ED_region_draw_cb_`. */
   void *draw_handle;
   ARegion *region;
-  const float (*object_to_world)[4];
-  float color[4];
-  float point_size;
+  const float (*object_to_world)[4]; /* Matrix for drawing space. */
+  float color[4];                    /* Color used in drawing faces, edges and vertices. */
+  float point_size;                  /* Pixel size of vertices. */
 
-  gpu::IndexBuf *ibo_edges;
-  gpu::IndexBuf *ibo_faces;
-  gpu::Batch *batch_verts;
-  gpu::Batch *batch_edges;
-  gpu::Batch *batch_faces;
-  gpu::VertBuf *vbo;
-  MutableSpan<float3> v_co;
-} draw_data;
+  /* GPU buffers and batches. */
+  gpu::VertBuf *vbo; /* Vertex buffer object with the coordinates of the vertices of the mesh. */
+  MutableSpan<float3> v_co; /* `vbo` coordinates for dynamic update (#GPU_USAGE_DYNAMIC) */
+  gpu::IndexBuf *ibo_edges; /* Indices for edge drawing. */
+  gpu::IndexBuf *ibo_faces; /* Indices for triangle drawing. */
+  gpu::Batch *batch_verts;  /* Batch for vertices. */
+  gpu::Batch *batch_edges;  /* Batch for edges. */
+  gpu::Batch *batch_faces;  /* Batch for triangles. */
 
-static void extrude_boolean_drawdata_clear(ExtrudeDrawData &draw_data)
-{
-  ED_region_draw_cb_exit(draw_data.region->type, draw_data.draw_handle);
-
-  GPU_batch_discard(draw_data.batch_edges);
-  GPU_indexbuf_discard(draw_data.ibo_edges);
-  GPU_BATCH_DISCARD_SAFE(draw_data.batch_verts);
-  GPU_BATCH_DISCARD_SAFE(draw_data.batch_faces);
-  GPU_INDEXBUF_DISCARD_SAFE(draw_data.ibo_faces);
-  GPU_vertbuf_discard(draw_data.vbo);
-}
-
-static void extrude_boolean_draw_fn(const bContext * /*C*/, ARegion *region, void *data)
-{
-  ExtrudeDrawData *draw_data = static_cast<ExtrudeDrawData *>(data);
-  RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
-
-  GPU_matrix_push();
-  GPU_matrix_mul(draw_data->object_to_world);
-
-  if (GPU_vertbuf_get_status(draw_data->vbo) & GPU_VERTBUF_DATA_DIRTY) {
-    GPU_vertbuf_use(draw_data->vbo);
-  }
-
-  GPUShader *sh = draw_data->batch_edges->shader;
-  GPU_shader_bind(sh);
-  GPU_shader_uniform_4fv(sh, "color", draw_data->color);
-
-  ED_view3d_polygon_offset(rv3d, 1.0f);
-  GPU_depth_mask(false);
-
-  if (draw_data->batch_faces) {
-    GPU_blend(GPU_BLEND_ALPHA);
-    GPU_depth_test(GPU_DEPTH_LESS_EQUAL);
-    GPU_batch_draw(draw_data->batch_faces);
-  }
-
-  GPU_depth_test(GPU_DEPTH_NONE);
-  GPU_blend(GPU_BLEND_NONE);
-  GPU_batch_draw(draw_data->batch_edges);
-
-  if (draw_data->batch_verts) {
-    GPU_point_size(draw_data->point_size);
-    GPU_batch_draw(draw_data->batch_verts);
-  }
-
-  ED_view3d_polygon_offset(rv3d, 0.0f);
-  GPU_matrix_pop();
-
-  GPU_depth_mask(true);
-}
-
-static void extrude_boolean_drawdata_create(ARegion *region,
-                                            BMesh *bm,
-                                            Span<BMVert *> moving_verts,
-                                            Array<std::array<BMLoop *, 3>> corner_tris,
-                                            const float (*object_to_world)[4],
-                                            int edge_tag_len,
-                                            int face_tag_len,
-                                            bool draw_verts,
-                                            ExtrudeDrawData *r_draw_data)
-{
-  static GPUVertFormat v_format = {0};
-  static GPUVertFormat line_format = {0};
-  if (v_format.attr_len == 0) {
-    GPU_vertformat_attr_add(&v_format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
-    GPU_vertformat_attr_add(&line_format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
-  }
-
-  BMIter iter;
-  BMVert *v;
-  BMEdge *e;
-  BMFace *f;
-  int vert_len = moving_verts.size();
-  int i;
-
-  gpu::VertBuf *vbo = GPU_vertbuf_create_with_format_ex(v_format, GPU_USAGE_DYNAMIC);
-  GPU_vertbuf_data_alloc(*vbo, vert_len);
-  MutableSpan<float3> v_co = vbo->data<float3>();
-  for (i = 0; i < vert_len; i++) {
-    v = moving_verts[i];
-    copy_v3_v3(v_co[i], v->co);
-    /* Indexes used to identify the triangles in the drawing. */
-    BM_elem_index_set(v, i);
-  }
-
-  bm->elem_index_dirty |= BM_VERT;
-
-  gpu::IndexBuf *ibo_faces = nullptr;
-  if (face_tag_len) {
-    int looptris_draw_len = 0;
-    BM_ITER_MESH (f, &iter, bm, BM_FACES_OF_MESH) {
-      if (BM_elem_flag_test(f, MESH_OPERAND_TAG | MESH_OPERAND_TAG2)) {
-        looptris_draw_len += f->len - 2;
-      }
+ public:
+  /* Initialize the draw data with the required buffers and batches. */
+  void init(ARegion *region,
+            BMesh *bm,
+            Span<BMVert *> moving_verts,
+            Array<std::array<BMLoop *, 3>> corner_tris,
+            const float (*object_to_world)[4],
+            int edge_tag_len,
+            int face_tag_len,
+            bool draw_verts)
+  {
+    static GPUVertFormat v_format = {0};
+    static GPUVertFormat line_format = {0};
+    if (v_format.attr_len == 0) {
+      GPU_vertformat_attr_add(&v_format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+      GPU_vertformat_attr_add(&line_format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
     }
 
-    GPUIndexBufBuilder builder;
-    GPU_indexbuf_init(&builder, GPU_PRIM_TRIS, looptris_draw_len, vert_len);
-    int loop_first = 0;
-    BM_ITER_MESH_INDEX (f, &iter, bm, BM_FACES_OF_MESH, i) {
-      if (BM_elem_flag_test(f, MESH_OPERAND_TAG | MESH_OPERAND_TAG2)) {
-        int ltri_index = poly_to_tri_count(i, loop_first);
-        int tri_len = f->len - 2;
-        while (tri_len--) {
-          std::array<BMLoop *, 3> &ltri = corner_tris[ltri_index++];
-          GPU_indexbuf_add_tri_verts(&builder,
-                                     BM_elem_index_get(ltri[0]->v),
-                                     BM_elem_index_get(ltri[1]->v),
-                                     BM_elem_index_get(ltri[2]->v));
+    BMIter iter;
+    BMEdge *e;
+    int vert_len = moving_verts.size();
+    int i;
+
+    gpu::VertBuf *vbo = GPU_vertbuf_create_with_format_ex(v_format, GPU_USAGE_DYNAMIC);
+    GPU_vertbuf_data_alloc(*vbo, vert_len);
+    MutableSpan<float3> v_co = vbo->data<float3>();
+    for (i = 0; i < vert_len; i++) {
+      BMVert *v = moving_verts[i];
+      copy_v3_v3(v_co[i], v->co);
+      /* Indexes used to identify the triangles in the drawing. */
+      BM_elem_index_set(v, i);
+    }
+
+    bm->elem_index_dirty |= BM_VERT;
+
+    gpu::IndexBuf *ibo_faces = nullptr;
+    if (face_tag_len) {
+      BMFace *f;
+      int looptris_draw_len = 0;
+      BM_ITER_MESH (f, &iter, bm, BM_FACES_OF_MESH) {
+        if (BM_elem_flag_test(f, MESH_OPERAND_TAG | MESH_OPERAND_TAG2)) {
+          looptris_draw_len += f->len - 2;
         }
       }
-      loop_first += f->len;
-    }
 
-    ibo_faces = GPU_indexbuf_build(&builder);
-  }
-
-  gpu::IndexBuf *ibo_edges;
-  {
-    GPUIndexBufBuilder builder;
-    GPU_indexbuf_init(&builder, GPU_PRIM_LINES, edge_tag_len, vert_len);
-    BM_ITER_MESH (e, &iter, bm, BM_EDGES_OF_MESH) {
-      if (BM_elem_flag_test(e, MESH_OPERAND_TAG | MESH_OPERAND_TAG2)) {
-        GPU_indexbuf_add_line_verts(&builder, BM_elem_index_get(e->v1), BM_elem_index_get(e->v2));
+      GPUIndexBufBuilder builder;
+      GPU_indexbuf_init(&builder, GPU_PRIM_TRIS, looptris_draw_len, vert_len);
+      int loop_first = 0;
+      BM_ITER_MESH_INDEX (f, &iter, bm, BM_FACES_OF_MESH, i) {
+        if (BM_elem_flag_test(f, MESH_OPERAND_TAG | MESH_OPERAND_TAG2)) {
+          int ltri_index = poly_to_tri_count(i, loop_first);
+          int tri_len = f->len - 2;
+          while (tri_len--) {
+            std::array<BMLoop *, 3> &ltri = corner_tris[ltri_index++];
+            GPU_indexbuf_add_tri_verts(&builder,
+                                       BM_elem_index_get(ltri[0]->v),
+                                       BM_elem_index_get(ltri[1]->v),
+                                       BM_elem_index_get(ltri[2]->v));
+          }
+        }
+        loop_first += f->len;
       }
+
+      ibo_faces = GPU_indexbuf_build(&builder);
     }
-    ibo_edges = GPU_indexbuf_build(&builder);
+
+    gpu::IndexBuf *ibo_edges;
+    {
+      GPUIndexBufBuilder builder;
+      GPU_indexbuf_init(&builder, GPU_PRIM_LINES, edge_tag_len, vert_len);
+      BM_ITER_MESH (e, &iter, bm, BM_EDGES_OF_MESH) {
+        if (BM_elem_flag_test(e, MESH_OPERAND_TAG | MESH_OPERAND_TAG2)) {
+          GPU_indexbuf_add_line_verts(
+              &builder, BM_elem_index_get(e->v1), BM_elem_index_get(e->v2));
+        }
+      }
+      ibo_edges = GPU_indexbuf_build(&builder);
+    }
+
+    gpu::Batch *batch_faces = nullptr;
+    if (ibo_faces) {
+      batch_faces = GPU_batch_create(GPU_PRIM_TRIS, vbo, ibo_faces);
+      GPU_batch_program_set_builtin(batch_faces, GPU_SHADER_3D_UNIFORM_COLOR);
+    }
+
+    gpu::Batch *batch_edges = GPU_batch_create(GPU_PRIM_LINES, vbo, ibo_edges);
+    GPU_batch_program_set_builtin(batch_edges, GPU_SHADER_3D_UNIFORM_COLOR);
+
+    gpu::Batch *batch_verts = nullptr;
+    if (draw_verts) {
+      batch_verts = GPU_batch_create(GPU_PRIM_POINTS, vbo, nullptr);
+      GPU_batch_program_set_builtin(batch_verts, GPU_SHADER_3D_UNIFORM_COLOR);
+      this->point_size = UI_GetThemeValuef(TH_VERTEX_SIZE) * UI_SCALE_FAC;
+    }
+
+    this->region = region;
+    this->object_to_world = object_to_world;
+    this->batch_faces = batch_faces;
+    this->batch_edges = batch_edges;
+    this->batch_verts = batch_verts;
+    this->vbo = vbo;
+    this->ibo_faces = ibo_faces;
+    this->ibo_edges = ibo_edges;
+    this->v_co = std::move(v_co);
+
+    UI_GetThemeColor4fv(TH_GIZMO_PRIMARY, this->color);
+    this->color[3] = 0.25f;
+    this->draw_handle = ED_region_draw_cb_activate(
+        region->type, extrude_boolean_draw_fn, this, REGION_DRAW_POST_VIEW);
   }
 
-  gpu::Batch *batch_faces = nullptr;
-  if (ibo_faces) {
-    batch_faces = GPU_batch_create(GPU_PRIM_TRIS, vbo, ibo_faces);
-    GPU_batch_program_set_builtin(batch_faces, GPU_SHADER_3D_UNIFORM_COLOR);
+  /* Remove handle and clears allocated resources. */
+  void clear()
+  {
+    if (this->draw_handle == nullptr) {
+      return;
+    }
+    ED_region_draw_cb_exit(this->region->type, this->draw_handle);
+
+    GPU_batch_discard(this->batch_edges);
+    GPU_indexbuf_discard(this->ibo_edges);
+    GPU_BATCH_DISCARD_SAFE(this->batch_verts);
+    GPU_BATCH_DISCARD_SAFE(this->batch_faces);
+    GPU_INDEXBUF_DISCARD_SAFE(this->ibo_faces);
+    GPU_vertbuf_discard(this->vbo);
   }
 
-  gpu::Batch *batch_edges = GPU_batch_create(GPU_PRIM_LINES, vbo, ibo_edges);
-  GPU_batch_program_set_builtin(batch_edges, GPU_SHADER_3D_UNIFORM_COLOR);
+  /* Performs drawing using the GPU. */
+  void draw()
+  {
+    RegionView3D *rv3d = static_cast<RegionView3D *>(this->region->regiondata);
 
-  gpu::Batch *batch_verts = nullptr;
-  if (draw_verts) {
-    batch_verts = GPU_batch_create(GPU_PRIM_POINTS, vbo, nullptr);
-    GPU_batch_program_set_builtin(batch_verts, GPU_SHADER_3D_UNIFORM_COLOR);
-    r_draw_data->point_size = UI_GetThemeValuef(TH_VERTEX_SIZE) * UI_SCALE_FAC;
+    GPU_matrix_push();
+    GPU_matrix_mul(this->object_to_world);
+
+    if (GPU_vertbuf_get_status(this->vbo) & GPU_VERTBUF_DATA_DIRTY) {
+      GPU_vertbuf_use(this->vbo);
+    }
+
+    GPUShader *sh = this->batch_edges->shader;
+    GPU_shader_bind(sh);
+    GPU_shader_uniform_4fv(sh, "color", this->color);
+
+    ED_view3d_polygon_offset(rv3d, 1.0f);
+    GPU_depth_mask(false);
+
+    if (this->batch_faces) {
+      GPU_blend(GPU_BLEND_ALPHA);
+      GPU_depth_test(GPU_DEPTH_LESS_EQUAL);
+      GPU_batch_draw(this->batch_faces);
+    }
+
+    GPU_depth_test(GPU_DEPTH_NONE);
+    GPU_blend(GPU_BLEND_NONE);
+    GPU_batch_draw(this->batch_edges);
+
+    if (this->batch_verts) {
+      GPU_point_size(this->point_size);
+      GPU_batch_draw(this->batch_verts);
+    }
+
+    ED_view3d_polygon_offset(rv3d, 0.0f);
+    GPU_matrix_pop();
+
+    GPU_depth_mask(true);
   }
 
-  r_draw_data->region = region;
-  r_draw_data->object_to_world = object_to_world;
-  r_draw_data->batch_faces = batch_faces;
-  r_draw_data->batch_edges = batch_edges;
-  r_draw_data->batch_verts = batch_verts;
-  r_draw_data->vbo = vbo;
-  r_draw_data->ibo_faces = ibo_faces;
-  r_draw_data->ibo_edges = ibo_edges;
-  r_draw_data->v_co = std::move(v_co);
+  /* Updates the vertex buffer with new coordinates and redraws. */
+  void update_drawing(Span<BMVert *> moving_verts)
+  {
+    if (!this->draw_handle) {
+      return;
+    }
 
-  UI_GetThemeColor4fv(TH_GIZMO_PRIMARY, r_draw_data->color);
-  r_draw_data->color[3] = 0.25f;
-  r_draw_data->draw_handle = ED_region_draw_cb_activate(
-      region->type, extrude_boolean_draw_fn, r_draw_data, REGION_DRAW_POST_VIEW);
+    int i = 0;
+    for (BMVert *v : moving_verts.drop_front(moving_verts.size() / 2)) {
+      this->v_co[i++] = v->co;
+    }
+    GPU_vertbuf_tag_dirty(this->vbo);
+    ED_region_tag_redraw(this->region);
+  }
+};
+
+/* Callback for `ED_region_draw_cb_activate`. */
+static void extrude_boolean_draw_fn(const bContext * /*C*/, ARegion * /*region*/, void *data)
+{
+  ExtrudeDrawData *draw_data = static_cast<ExtrudeDrawData *>(data);
+  draw_data->draw();
 }
 
 /** \} */
@@ -250,9 +288,7 @@ struct ExtrudeMeshData {
 
 static void extrude_boolean_data_free(ExtrudeMeshData *extrudata)
 {
-  if (extrudata->draw_data.draw_handle) {
-    extrude_boolean_drawdata_clear(extrudata->draw_data);
-  }
+  extrudata->draw_data.clear();
   if (extrudata->bm) {
     BM_mesh_free(extrudata->bm);
   }
@@ -478,18 +514,7 @@ static ExtrudeMeshData *extrude_boolean_data_create(Object *obedit, float doubli
 static void extrude_boolean_recalc_data_fn(void *usedata)
 {
   ExtrudeMeshData *extrudata = static_cast<ExtrudeMeshData *>(usedata);
-  if (!extrudata->draw_data.draw_handle) {
-    return;
-  }
-
-  int i = 0;
-  for (BMVert *v :
-       extrudata->moving_verts.as_span().drop_front(extrudata->moving_verts.size() / 2))
-  {
-    extrudata->draw_data.v_co[i++] = v->co;
-  }
-  GPU_vertbuf_tag_dirty(extrudata->draw_data.vbo);
-  ED_region_tag_redraw(extrudata->draw_data.region);
+  extrudata->draw_data.update_drawing(extrudata->moving_verts);
 }
 
 /** \} */
@@ -746,15 +771,14 @@ static int mesh_extrude_boolean_exec(bContext *C, wmOperator *op)
   extrudata->do_remove_coplanar = RNA_boolean_get(op->ptr, "remove_coplanar");
   if (!(op->flag & OP_IS_REPEAT)) {
     ARegion *region = CTX_wm_region(C);
-    extrude_boolean_drawdata_create(region,
-                                    extrudata->bm,
-                                    extrudata->moving_verts,
-                                    extrudata->corner_tris,
-                                    obedit->object_to_world().ptr(),
-                                    extrudata->edge_tag_len,
-                                    extrudata->face_tag_len,
-                                    extrudata->has_loose_edge,
-                                    &extrudata->draw_data);
+    extrudata->draw_data.init(region,
+                              extrudata->bm,
+                              extrudata->moving_verts,
+                              extrudata->corner_tris,
+                              obedit->object_to_world().ptr(),
+                              extrudata->edge_tag_len,
+                              extrudata->face_tag_len,
+                              extrudata->has_loose_edge);
 
     /* Tag (not hide) selected faces with #BM_ELEM_HIDDEN. This helps with snapping. */
     BMEditMesh *em = BKE_editmesh_from_object(obedit);
