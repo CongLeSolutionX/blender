@@ -450,13 +450,13 @@ void Instance::draw(Manager &manager)
     draw_scope.begin_capture();
   }
 
+  regular.cameras.draw_scene_background_images(resources.render_fb, manager, view);
+  infront.cameras.draw_scene_background_images(resources.render_fb, manager, view);
+
   regular.sculpts.draw_on_render(resources.render_fb, manager, view);
   regular.mesh_uvs.draw_on_render(resources.render_fb, manager, view);
   infront.sculpts.draw_on_render(resources.render_in_front_fb, manager, view);
   regular.mesh_uvs.draw_on_render(resources.render_in_front_fb, manager, view);
-
-  regular.cameras.draw_scene_background_images(resources.render_fb, manager, view);
-  infront.cameras.draw_scene_background_images(resources.render_fb, manager, view);
 
   GPU_framebuffer_bind(resources.overlay_line_fb);
   float4 clear_color(0.0f);
