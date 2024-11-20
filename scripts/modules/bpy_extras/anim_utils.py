@@ -92,6 +92,33 @@ def _ensure_channelbag_exists(action: Action, slot: ActionSlot):
         for strip in layer.strips:
             return strip.channelbags.new(slot)
 
+def get_initial_frame_range(context):
+
+    objs = {obj for obj in context.selected_objects if obj.animation_data is not None}
+    actions = set()
+    scene = context.scene
+    if scene.use_preview_range:
+        scene_start = scene.frame_preview_start
+        scene_end = scene.frame_preview_end
+    else:
+        scene_start = scene.frame_start
+        scene_end = scene.frame_end
+
+    #get all the actions
+    for obj in objs:
+        if obj.animation_data.action:
+            actions.add(obj.animation_data.action)
+        if not obj.animation_data.use_nla:
+            continue
+        actions.update({strip.action for track in obj.animation_data.nla_tracks for strip in track.strips if strip.action})
+
+    frame_ranges = [action.frame_range for action in actions]
+    frames_start, frames_end = zip(*frame_ranges)
+
+    frame_start = int(max([min(frames_start), scene_start]))
+    frame_end = int(min([max(frames_end), scene_end]))
+
+    return frame_start, frame_end
 
 def bake_action(
         obj,

@@ -318,13 +318,10 @@ class NLA_OT_bake(Operator):
         return {'FINISHED'}
 
     def invoke(self, context, _event):
-        scene = context.scene
-        if scene.use_preview_range:
-            self.frame_start = scene.frame_preview_start
-            self.frame_end = scene.frame_preview_end
-        else:
-            self.frame_start = scene.frame_start
-            self.frame_end = scene.frame_end
+        from bpy_extras import anim_utils
+
+        self.frame_start, self.frame_end = anim_utils.get_initial_frame_range(context)
+
         self.bake_types = {'POSE'} if context.mode == 'POSE' else {'OBJECT'}
 
         wm = context.window_manager
