@@ -166,7 +166,7 @@ ShaderModule::ShaderModule(const SelectionType selection_type, const bool clippi
   curve_edit_line = shader("overlay_edit_particle_strand",
                            [](gpu::shader::ShaderCreateInfo &info) { shader_patch_common(info); });
 
-  extra_point = shader("overlay_extra_point", [](gpu::shader::ShaderCreateInfo &info) {
+  extra_point = selectable_shader("overlay_extra_point", [](gpu::shader::ShaderCreateInfo &info) {
     info.additional_infos_.clear();
     info.vertex_inputs_.pop_last();
     info.push_constants_.pop_last();
@@ -581,6 +581,15 @@ ShaderModule::ShaderModule(const SelectionType selection_type, const bool clippi
         info.define("DEPTH_BIAS");
         info.push_constant(gpu::shader::Type::MAT4, "depth_bias_winmat");
       });
+
+  light_spot_cone = shader("overlay_extra", [](gpu::shader::ShaderCreateInfo &info) {
+    info.storage_buf(0, Qualifier::READ, "ExtraInstanceData", "data_buf[]");
+    info.define("color", "data_buf[gl_InstanceID].color_");
+    info.define("inst_obmat", "data_buf[gl_InstanceID].object_to_world_");
+    info.vertex_inputs_.pop_last();
+    info.vertex_inputs_.pop_last();
+    info.define("IS_SPOT_CONE");
+  });
 
   particle_dot = selectable_shader("overlay_particle_dot",
                                    [](gpu::shader::ShaderCreateInfo &info) {
