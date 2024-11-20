@@ -43,16 +43,14 @@ class GREASE_PENCIL_UL_masks(UIList):
 
 class GreasePencil_LayerMaskPanel:
     def draw_header(self, context):
-        ob = context.object
-        grease_pencil = ob.data
+        grease_pencil = context.grease_pencil
         layer = grease_pencil.layers.active
 
         self.layout.prop(layer, "use_masks", text="", toggle=0)
 
     def draw(self, context):
         layout = self.layout
-        ob = context.object
-        grease_pencil = ob.data
+        grease_pencil = context.grease_pencil
         layer = grease_pencil.layers.active
 
         layout = self.layout
@@ -85,8 +83,7 @@ class GreasePencil_LayerTransformPanel:
         layout = self.layout
         layout.use_property_split = True
 
-        ob = context.object
-        grease_pencil = ob.data
+        grease_pencil = context.grease_pencil
         layer = grease_pencil.layers.active
         layout.active = not layer.lock
 
@@ -105,8 +102,7 @@ class GreasePencil_LayerAdjustmentsPanel:
         layout = self.layout
         layout.use_property_split = True
 
-        ob = context.object
-        grease_pencil = ob.data
+        grease_pencil = context.grease_pencil
         layer = grease_pencil.layers.active
         layout.active = not layer.lock
 
@@ -120,13 +116,12 @@ class GreasePencil_LayerAdjustmentsPanel:
         col.prop(layer, "radius_offset", text="Stroke Thickness")
 
 
-class GreasPencil_LayerRelationsPanel:
+class GreasePencil_LayerRelationsPanel:
     def draw(self, context):
         layout = self.layout
         layout.use_property_split = True
 
-        ob = context.object
-        grease_pencil = ob.data
+        grease_pencil = context.grease_pencil
         layer = grease_pencil.layers.active
         layout.active = not layer.lock
 
@@ -193,8 +188,7 @@ class GREASE_PENCIL_MT_grease_pencil_add_layer_extra(Menu):
 
     def draw(self, context):
         layout = self.layout
-        ob = context.object
-        grease_pencil = ob.data
+        grease_pencil = context.grease_pencil
         layer = grease_pencil.layers.active
 
         layout.separator()
@@ -315,7 +309,7 @@ class DATA_PT_grease_pencil_layer_adjustments(LayerDataButtonsPanel, GreasePenci
     bl_options = {'DEFAULT_CLOSED'}
 
 
-class DATA_PT_grease_pencil_layer_relations(LayerDataButtonsPanel, GreasPencil_LayerRelationsPanel, Panel):
+class DATA_PT_grease_pencil_layer_relations(LayerDataButtonsPanel, GreasePencil_LayerRelationsPanel, Panel):
     bl_label = "Relations"
     bl_parent_id = "DATA_PT_grease_pencil_layers"
     bl_options = {'DEFAULT_CLOSED'}
@@ -447,12 +441,6 @@ class GREASE_PENCIL_UL_attributes(UIList):
 class DATA_PT_grease_pencil_attributes(DataButtonsPanel, Panel):
     bl_label = "Attributes"
     bl_options = {'DEFAULT_CLOSED'}
-    COMPAT_ENGINES = {
-        'BLENDER_RENDER',
-        'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
-        'BLENDER_WORKBENCH',
-    }
 
     def draw(self, context):
         grease_pencil = context.grease_pencil

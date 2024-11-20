@@ -220,7 +220,7 @@ def addon_draw_item_expanded(
         item_description,  # `str`
         item_maintainer,  # `str`
         item_version,  # `str`
-        item_warnings,  # `List[str]`
+        item_warnings,  # `list[str]`
         item_doc_url,  # `str`
         item_tracker_url,  # `str`
         show_developer_ui, # `bool`
@@ -310,7 +310,7 @@ def addons_panel_draw_missing_with_extension_impl(
         *,
         context,  # `bpy.types.Context`
         layout,  # `bpy.types.UILayout`
-        missing_modules  # `Set[str]`
+        missing_modules  # `set[str]`
 ):
     layout_header, layout_panel = layout.panel("builtin_addons", default_closed=True)
     layout_header.label(text="Missing Built-in Add-ons", icon='ERROR')
@@ -405,7 +405,7 @@ def addons_panel_draw_missing_with_extension_impl(
 def addons_panel_draw_missing_impl(
         *,
         layout,  # `bpy.types.UILayout`
-        missing_modules,  # `Set[str]`
+        missing_modules,  # `set[str]`
 ):
     layout_header, layout_panel = layout.panel("missing_script_files", default_closed=True)
     layout_header.label(text="Missing Add-ons", icon='ERROR')
@@ -434,12 +434,12 @@ def addons_panel_draw_items(
         context,  # `bpy.types.Context`
         *,
         addon_modules,  # `Iterable[ModuleType]`
-        used_addon_module_name_map,  # `Dict[str, bpy.types.Addon]`
+        used_addon_module_name_map,  # `dict[str, bpy.types.Addon]`
         search_casefold,  # `str`
-        addon_tags_exclude,  # `Set[str]`
+        addon_tags_exclude,  # `set[str]`
         enabled_only,  # `bool`
-        addon_extension_manifest_map,  # `Dict[str, PkgManifest_Normalized]`
-        addon_extension_block_map,  # `Dict[str, PkgBlock_Normalized]`
+        addon_extension_manifest_map,  # `dict[str, PkgManifest_Normalized]`
+        addon_extension_block_map,  # `dict[str, PkgBlock_Normalized]`
 
         show_development,  # `bool`
         show_developer_ui, # `bool`
@@ -646,7 +646,7 @@ def addons_panel_draw_impl(
         panel,
         context,  # `bpy.types.Context`
         search_casefold,  # `str`
-        addon_tags_exclude,  # `Set[str]`
+        addon_tags_exclude,  # `set[str]`
         enabled_only,  # `bool`
         *,
         show_development,  # `bool`
@@ -937,8 +937,8 @@ class ExtensionUI_FilterParams:
     def extension_ui_visible(
             self,
             repo_index,  # `int`
-            pkg_manifest_local,  # `Dict[str, PkgManifest_Normalized]`
-            pkg_manifest_remote,  # `Dict[str, PkgManifest_Normalized]`
+            pkg_manifest_local,  # `dict[str, PkgManifest_Normalized]`
+            pkg_manifest_remote,  # `dict[str, PkgManifest_Normalized]`
     ):
         from .bl_extension_ops import (
             pkg_info_check_exclude_filter,
@@ -1267,12 +1267,12 @@ def extension_draw_item(
         layout,
         *,
         pkg_id,  # `str`
-        item_local,  # `Optional[PkgManifest_Normalized]`
-        item_remote,  # `Optional[PkgManifest_Normalized]`
+        item_local,  # `PkgManifest_Normalized | None`
+        item_remote,  # `PkgManifest_Normalized | None`
         is_enabled,  # `bool`
         is_outdated,  # `bool`
         show,  # `bool`.
-        mark,  # `Optional[bool]`.
+        mark,  # `bool | None`.
 
         # General vars.
         repo_index,  # `int`
@@ -1753,7 +1753,7 @@ def extensions_panel_draw_impl(
 
 
 class USERPREF_PT_addons_tags(Panel):
-    bl_label = "Addon Tags"
+    bl_label = "Add-on Tags"
 
     bl_space_type = 'TOPBAR'  # dummy.
     bl_region_type = 'HEADER'
@@ -2141,8 +2141,8 @@ class USERPREF_MT_extensions_active_repo_extra(Menu):
 # Shared (Extension / Legacy Add-ons) Tags Logic
 
 def tags_exclude_match(
-        item_tags,  # `Tuple[str]`
-        exclude_tags,  # `Set[str]`
+        item_tags,  # `tuple[str]`
+        exclude_tags,  # `set[str]`
 ):
     if not item_tags:
         # When an item has no tags then including it makes no sense
