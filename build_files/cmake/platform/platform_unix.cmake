@@ -487,20 +487,19 @@ if(WITH_BOOST)
     endif()
     list(APPEND __boost_packages system)
     set(Boost_NO_WARN_NEW_VERSIONS ON)
-    find_package(Boost 1.48 COMPONENTS ${__boost_packages})
+    find_package(Boost CONFIG COMPONENTS ${__boost_packages})
     if(NOT Boost_FOUND)
       # try to find non-multithreaded if -mt not found, this flag
       # doesn't matter for us, it has nothing to do with thread
       # safety, but keep it to not disturb build setups
       set(Boost_USE_MULTITHREADED OFF)
-      find_package(Boost 1.48 COMPONENTS ${__boost_packages})
+      find_package(Boost CONFIG COMPONENTS ${__boost_packages})
     endif()
     unset(__boost_packages)
     if(Boost_USE_STATIC_LIBS AND WITH_BOOST_ICU)
       find_package(IcuLinux)
     endif()
     mark_as_advanced(Boost_DIR)  # why doesn't boost do this?
-    mark_as_advanced(Boost_INCLUDE_DIR)  # why doesn't boost do this?
   endif()
 
   # Boost Python is separate to avoid linking Python into tests that don't need it.

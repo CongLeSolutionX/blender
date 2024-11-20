@@ -120,4 +120,5 @@ add_dependencies(
 if(NOT WIN32)
   harvest(external_boost boost/include boost/include "*")
   harvest_rpath_lib(external_boost boost/lib boost/lib "*${SHAREDLIBEXT}*")
+  harvest(external_boost boost/lib/cmake boost/lib/cmake "*")
 endif()
