@@ -56,7 +56,6 @@ else()
         USE_SOURCE_PERMISSIONS
         FILES_MATCHING PATTERN ${pattern}
         PATTERN "pkgconfig" EXCLUDE
-        PATTERN "cmake" EXCLUDE
         PATTERN "__pycache__" EXCLUDE
         PATTERN "tests" EXCLUDE
         PATTERN "meson*" EXCLUDE
