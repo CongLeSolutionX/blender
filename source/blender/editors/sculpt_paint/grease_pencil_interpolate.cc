@@ -511,13 +511,13 @@ static void sample_curve_padded(const bke::CurvesGeometry &curves,
     const int points_begin = point_lengths[point_i] / total_length * (num_dst_points - 1);
     const int points_end = point_lengths[point_i + 1] / total_length * (num_dst_points - 1);
     const IndexRange segments = IndexRange::from_begin_end(points_begin, points_end);
-    r_segment_indices.slice(segments).fill(src_points[point_i]);
+    r_segment_indices.slice(segments).fill(point_i);
     for (const int segment_i : segments.index_range()) {
       r_factors[segments[segment_i]] = float(segment_i) / segments.size();
     }
   }
-  r_segment_indices.last() = (src_points.size() > 1 ? src_points.last() - 1 : src_points.first());
-  r_factors.last() = 1.0f;
+  r_segment_indices.last() = src_points.size() - 1;
+  r_factors.last() = 0.0f;
 }
 
 static bke::CurvesGeometry interpolate_between_curves(const GreasePencil &grease_pencil,
@@ -662,8 +662,7 @@ static bke::CurvesGeometry interpolate_between_curves(const GreasePencil &grease
       if (from_points.size() >= to_points.size()) {
         /* Target curve samples match 'from' points. */
         BLI_assert(from_points.size() == dst_points.size());
-        array_utils::fill_index_range(from_sample_indices.as_mutable_span().slice(dst_points),
-                                      int(from_points.start()));
+        array_utils::fill_index_range(from_sample_indices.as_mutable_span().slice(dst_points));
         from_sample_factors.as_mutable_span().slice(dst_points).fill(0.0f);
         sample_curve_padded(to_drawing->strokes(),
                             to_curve,
@@ -681,8 +680,7 @@ static bke::CurvesGeometry interpolate_between_curves(const GreasePencil &grease
                             dst_curve_flip[pair_index],
                             from_sample_indices.as_mutable_span().slice(dst_points),
                             from_sample_factors.as_mutable_span().slice(dst_points));
-        array_utils::fill_index_range(to_sample_indices.as_mutable_span().slice(dst_points),
-                                      int(to_points.start()));
+        array_utils::fill_index_range(to_sample_indices.as_mutable_span().slice(dst_points));
         to_sample_factors.fill(0.0f);
       }
     }
