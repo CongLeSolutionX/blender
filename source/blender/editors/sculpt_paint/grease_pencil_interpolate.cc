@@ -499,25 +499,46 @@ static void sample_curve_padded(const bke::CurvesGeometry &curves,
     return;
   }
 
-  Array<float> point_lengths(src_points.size());
+  /* Extra interpolation point at the end for cyclic curves. */
+  Array<float> point_lengths(src_points.size() + cyclic);
   point_lengths[0] = 0.0f;
   for (const int i : src_points.index_range().drop_front(1)) {
     point_lengths[i] = point_lengths[i - 1] + math::distance(src_positions[src_points[i - 1]],
                                                              src_positions[src_points[i]]);
   }
+  if (cyclic) {
+    const int i = src_points.size();
+    point_lengths[i] = point_lengths[i - 1] + math::distance(src_positions[src_points[i - 1]],
+                                                             src_positions[src_points[0]]);
+  }
   const float total_length = point_lengths.last();
+  /* Factor that turns length along the source curve into a point index. */
+  const float length_to_index = math::safe_divide(float(num_dst_points - 1), total_length);
 
   for (const int point_i : src_points.index_range().drop_back(1)) {
-    const int points_begin = point_lengths[point_i] / total_length * (num_dst_points - 1);
-    const int points_end = point_lengths[point_i + 1] / total_length * (num_dst_points - 1);
-    const IndexRange segments = IndexRange::from_begin_end(points_begin, points_end);
+    const IndexRange segments = IndexRange::from_begin_end(
+        point_lengths[point_i] * length_to_index, point_lengths[point_i + 1] * length_to_index);
     r_segment_indices.slice(segments).fill(point_i);
     for (const int segment_i : segments.index_range()) {
       r_factors[segments[segment_i]] = float(segment_i) / segments.size();
     }
   }
-  r_segment_indices.last() = src_points.size() - 1;
-  r_factors.last() = 0.0f;
+  if (cyclic) {
+    const int point_i = src_points.size() - 1;
+    const IndexRange segments = IndexRange::from_begin_end(
+        point_lengths[point_i] * length_to_index, num_dst_points - 1);
+    r_segment_indices.slice(segments).fill(point_i);
+    for (const int segment_i : segments.index_range()) {
+      r_factors[segments[segment_i]] = float(segment_i) / segments.size();
+    }
+
+    r_segment_indices.last() = 0;
+    r_factors.last() = 0.0f;
+  }
+  else {
+    r_segment_indices.last() = src_points.size() - 1;
+    r_factors.last() = 0.0f;
+  }
 }
 
 static bke::CurvesGeometry interpolate_between_curves(const GreasePencil &grease_pencil,
