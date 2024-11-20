@@ -439,6 +439,8 @@ void Instance::draw(Manager &manager)
                                          GPU_ATTACHMENT_TEXTURE(resources.overlay_tx));
   resources.overlay_output_fb.ensure(GPU_ATTACHMENT_NONE,
                                      GPU_ATTACHMENT_TEXTURE(resources.color_overlay_tx));
+  resources.render_color_fb.ensure(GPU_ATTACHMENT_NONE,
+                                   GPU_ATTACHMENT_TEXTURE(resources.color_render_tx));
 
   static gpu::DebugScope select_scope = {"Selection"};
   static gpu::DebugScope draw_scope = {"Overlay"};
@@ -464,13 +466,6 @@ void Instance::draw(Manager &manager)
   else {
     GPU_framebuffer_clear_color(resources.overlay_line_fb, clear_color);
   }
-
-  regular.cameras.draw_scene_background_images(resources.overlay_fb, manager, view);
-  infront.cameras.draw_scene_background_images(resources.overlay_fb, manager, view);
-
-  regular.empties.draw_background_images(resources.overlay_fb, manager, view);
-  regular.cameras.draw_background_images(resources.overlay_fb, manager, view);
-  infront.cameras.draw_background_images(resources.overlay_fb, manager, view);
 
   /* TODO(fclem): Would be better to have a v2d overlay class instead of this condition. */
   if (state.space_type == SPACE_IMAGE) {
@@ -545,6 +540,20 @@ void Instance::draw(Manager &manager)
   infront.cameras.draw_in_front(resources.overlay_color_only_fb, manager, view);
 
   origins.draw(resources.overlay_color_only_fb, manager, view);
+
+  regular.cameras.draw_scene_background_images(resources.render_color_fb, manager, view);
+  infront.cameras.draw_scene_background_images(resources.render_color_fb, manager, view);
+
+  /* Don't clear background for the node editor. The node editor draws the background and we
+   * need to mask out the image from the already drawn overlay color buffer. */
+  if (state.space_type != SPACE_NODE) {
+    GPU_framebuffer_bind(resources.overlay_output_fb);
+    GPU_framebuffer_clear_color(resources.overlay_output_fb, clear_color);
+  }
+
+  regular.cameras.draw_background_images(resources.overlay_output_fb, manager, view);
+  infront.cameras.draw_background_images(resources.overlay_output_fb, manager, view);
+  regular.empties.draw_background_images(resources.overlay_output_fb, manager, view);
 
   background.draw(resources.overlay_output_fb, manager, view);
   anti_aliasing.draw(resources.overlay_output_fb, manager, view);
