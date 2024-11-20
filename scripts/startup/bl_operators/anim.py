@@ -192,7 +192,17 @@ class NLA_OT_bake(Operator):
     bl_idname = "nla.bake"
     bl_label = "Bake Action"
     bl_options = {'REGISTER', 'UNDO'}
-
+    
+    range_type: EnumProperty(
+        name="Range Type",
+        description="Types of bake frame range",
+        items=(
+            ('CUSTOM', "Custom", "Use custom frame range"),
+            ('SCENE', "Scene", "Use scene frame range"),
+            ('KEYFRAMES', "Keyframes", "Use Keyframes frame range"),
+        ),
+        default = 'CUSTOM',
+    )
     frame_start: IntProperty(
         name="Start Frame",
         description="Start frame for baking",
@@ -267,6 +277,7 @@ class NLA_OT_bake(Operator):
         default={'LOCATION', 'ROTATION', 'SCALE', 'BBONE', 'PROPS'},
     )
 
+
     def execute(self, context):
         from bpy_extras import anim_utils
 
@@ -305,6 +316,17 @@ class NLA_OT_bake(Operator):
             [(obj, None) for obj in objects]
         )
 
+        if self.range_type == 'KEYFRAMES':
+            if hasattr(self, 'keyframes_start'):
+                self.frame_start, self.frame_end = self.keyframes_start, self.keyframes_end
+            else:
+                self.frame_start, self.frame_end = anim_utils.keyframes_frame_range(context)
+        elif self.range_type == 'SCENE':
+            if hasattr(self, 'scene_start'):
+                self.frame_start, self.frame_end = self.scene_start, self.scene_end
+            else:
+                self.frame_start, self.frame_end = anim_utils.scene_frame_range(context)
+            
         actions = anim_utils.bake_action_objects(
             object_action_pairs,
             frames=range(self.frame_start, self.frame_end + 1, self.step),
@@ -320,13 +342,53 @@ class NLA_OT_bake(Operator):
     def invoke(self, context, _event):
         from bpy_extras import anim_utils
 
-        self.frame_start, self.frame_end = anim_utils.get_initial_frame_range(context)
+        self.frame_start, self.frame_end = anim_utils.get_initial_frame_range(self, context)
 
         self.bake_types = {'POSE'} if context.mode == 'POSE' else {'OBJECT'}
 
         wm = context.window_manager
         return wm.invoke_props_dialog(self)
 
+    def draw(self, context):
+        layout = self.layout
+        box = layout.box()
+        
+        if self.range_type == 'CUSTOM':
+            split = box.split(factor=0.5, align = True)
+            split.label(text = 'Frame Range :')
+            split.prop(self, 'frame_start', text = '')
+            split.prop(self, 'frame_end', text = '')
+
+        split = box.split(factor=0.5, align = True)
+        split.label(text = 'Range Type :')
+        split.prop(self, 'range_type', text = '')
+
+        split = box.split(factor=0.5, align = True)
+        split.label(text = 'Frame Step :')
+        split.prop(self, 'step', text = '')
+
+        col = layout.column()
+        col.prop(self, 'only_selected')
+        col.prop(self, 'visual_keying')
+        col.prop(self, 'use_current_action')
+        col.prop(self, 'clean_curves')
+        
+        box = layout.box()
+        split = box.split(factor=0.5, align = True)
+        split.prop(self, 'clear_constraints')
+        split.prop(self, 'clear_parents')
+        layout.separator(factor = 0.2)
+
+        box = layout.box()
+        row = box.row()
+        row.label(text = 'Bake Data :')
+        row = box.row()
+        row.prop(self, 'bake_types', text = 'Bake Data')
+
+        layout.separator(factor = 0.2)
+
+        col = layout.column()
+        col.prop_menu_enum(self, 'channel_types')
 
 class ClearUselessActions(Operator):
     """Mark actions with no F-Curves for deletion after save and reload of """ \
