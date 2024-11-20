@@ -3996,12 +3996,6 @@ void blo_do_versions_400(FileData *fd, Library * /*lib*/, Main *bmain)
         fix_geometry_nodes_object_info_scale(*ntree);
       }
     }
-
-    LISTBASE_FOREACH (bNodeTree *, ntree, &bmain->nodetrees) {
-      if (ntree->type == NTREE_GEOMETRY) {
-        remove_triangulate_node_min_size_input(ntree);
-      }
-    }
   }
 
   if (MAIN_VERSION_FILE_ATLEAST(bmain, 400, 20) && !MAIN_VERSION_FILE_ATLEAST(bmain, 401, 11)) {
@@ -5138,6 +5132,14 @@ void blo_do_versions_400(FileData *fd, Library * /*lib*/, Main *bmain)
 
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 404, 6)) {
     add_subsurf_node_limit_surface_option(*bmain);
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 404, 7)) {
+    LISTBASE_FOREACH (bNodeTree *, ntree, &bmain->nodetrees) {
+      if (ntree->type == NTREE_GEOMETRY) {
+        remove_triangulate_node_min_size_input(ntree);
+      }
+    }
   }
 
   /* Always run this versioning; meshes are written with the legacy format which always needs to
