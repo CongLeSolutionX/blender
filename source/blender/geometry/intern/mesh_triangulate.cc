@@ -141,31 +141,41 @@ static void calc_quad_directions(const Span<float3> positions,
                                  const TriangulateQuadMode quad_mode,
                                  MutableSpan<QuadDirection> directions)
 {
-  if (quad_mode == TriangulateQuadMode::Fixed) {
-    directions.fill(QuadDirection::Edge_0_2);
-  }
-  else if (quad_mode == TriangulateQuadMode::Alternate) {
-    directions.fill(QuadDirection::Edge_1_3);
-  }
-  else if (quad_mode == TriangulateQuadMode::Beauty) {
-    for (const int i : face_offsets.index_range()) {
-      const Span<int> verts = corner_verts.slice(face_offsets[i], 4);
-      directions[i] = calc_quad_direction_beauty(
-          positions[verts[0]], positions[verts[1]], positions[verts[2]], positions[verts[3]]);
+  switch (quad_mode) {
+    case TriangulateQuadMode::Fixed: {
+      directions.fill(QuadDirection::Edge_0_2);
+      break;
     }
-  }
-  else {
-    const QuadDirection long_dir = quad_mode == TriangulateQuadMode::ShortEdge ?
-                                       QuadDirection::Edge_0_2 :
-                                       QuadDirection::Edge_1_3;
-    const QuadDirection short_dir = quad_mode == TriangulateQuadMode::ShortEdge ?
-                                        QuadDirection::Edge_1_3 :
-                                        QuadDirection::Edge_0_2;
-    for (const int i : face_offsets.index_range()) {
-      const Span<int> verts = corner_verts.slice(face_offsets[i], 4);
-      const float dist_0_2 = math::distance_squared(positions[verts[0]], positions[verts[2]]);
-      const float dist_1_3 = math::distance_squared(positions[verts[1]], positions[verts[3]]);
-      directions[i] = dist_0_2 < dist_1_3 ? long_dir : short_dir;
+    case TriangulateQuadMode::Alternate: {
+      directions.fill(QuadDirection::Edge_1_3);
+      break;
+    }
+    case TriangulateQuadMode::ShortEdge: {
+      for (const int i : face_offsets.index_range()) {
+        const Span<int> verts = corner_verts.slice(face_offsets[i], 4);
+        const float dist_0_2 = math::distance_squared(positions[verts[0]], positions[verts[2]]);
+        const float dist_1_3 = math::distance_squared(positions[verts[1]], positions[verts[3]]);
+        directions[i] = dist_0_2 < dist_1_3 ? QuadDirection::Edge_0_2 : QuadDirection::Edge_1_3;
+      }
+      break;
+    }
+    case TriangulateQuadMode::LongEdge: {
+      for (const int i : face_offsets.index_range()) {
+        const Span<int> verts = corner_verts.slice(face_offsets[i], 4);
+        const float dist_0_2 = math::distance_squared(positions[verts[0]], positions[verts[2]]);
+        const float dist_1_3 = math::distance_squared(positions[verts[1]], positions[verts[3]]);
+        directions[i] = dist_0_2 > dist_1_3 ? QuadDirection::Edge_0_2 : QuadDirection::Edge_1_3;
+      }
+      break;
+    }
+    case TriangulateQuadMode::Beauty: {
+      for (const int i : face_offsets.index_range()) {
+        const Span<int> verts = corner_verts.slice(face_offsets[i], 4);
+        directions[i] = calc_quad_direction_beauty(
+            positions[verts[0]], positions[verts[1]], positions[verts[2]], positions[verts[3]]);
+      }
+
+      break;
     }
   }
 }
