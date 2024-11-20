@@ -12,7 +12,8 @@ from bpy.types import (
 from bl_ui.properties_data_grease_pencil import (
     GreasePencil_LayerMaskPanel,
     GreasePencil_LayerTransformPanel,
-    GreasPencil_LayerRelationsPanel,
+    GreasePencil_LayerRelationsPanel,
+    GreasePencil_LayerAdjustmentsPanel,
 )
 
 from rna_prop_ui import PropertyPanel
@@ -29,8 +30,8 @@ def dopesheet_filter(layout, context):
     is_action_editor = not is_nla and context.space_data.mode == 'ACTION'
 
     row = layout.row(align=True)
-    if is_action_editor and context.preferences.experimental.use_animation_baklava:
-        row.prop(dopesheet, "show_all_slots", text="")
+    if is_action_editor:
+        row.prop(dopesheet, "show_only_slot_of_active_object", text="")
     row.prop(dopesheet, "show_only_selected", text="")
     row.prop(dopesheet, "show_hidden", text="")
 
@@ -310,9 +311,6 @@ class DOPESHEET_HT_editor_buttons:
 
         row.template_action(animated_id, new="action.new", unlink="action.unlink")
 
-        if not context.preferences.experimental.use_animation_baklava:
-            return
-
         adt = animated_id and animated_id.animation_data
         if not adt or not adt.action or not adt.action.is_action_layered:
             return
@@ -392,8 +390,7 @@ class DOPESHEET_MT_editor_menus(Menu):
         layout.menu("DOPESHEET_MT_key")
 
         if st.mode in {'ACTION', 'SHAPEKEY'} and st.action is not None:
-            if context.preferences.experimental.use_animation_baklava:
-                layout.menu("DOPESHEET_MT_action")
+            layout.menu("DOPESHEET_MT_action")
 
 
 class DOPESHEET_MT_view(Menu):
@@ -690,8 +687,6 @@ class DOPESHEET_PT_action_slot(Panel):
 
     @classmethod
     def poll(cls, context):
-        if not context.preferences.experimental.use_animation_baklava:
-            return False
         action = context.active_action
         return bool(action and action.slots.active)
 
@@ -954,9 +949,18 @@ class DOPESHEET_PT_grease_pencil_layer_transform(
 
 class DOPESHEET_PT_grease_pencil_layer_relations(
         GreasePencilLayersDopeSheetPanel,
-        GreasPencil_LayerRelationsPanel,
+        GreasePencil_LayerRelationsPanel,
         Panel):
     bl_label = "Relations"
+    bl_parent_id = "DOPESHEET_PT_grease_pencil_mode"
+    bl_options = {'DEFAULT_CLOSED'}
+
+
+class DOPESHEET_PT_grease_pencil_layer_adjustments(
+        GreasePencilLayersDopeSheetPanel,
+        GreasePencil_LayerAdjustmentsPanel,
+        Panel):
+    bl_label = "Adjustments"
     bl_parent_id = "DOPESHEET_PT_grease_pencil_mode"
     bl_options = {'DEFAULT_CLOSED'}
 
@@ -986,6 +990,7 @@ classes = (
     DOPESHEET_PT_grease_pencil_mode,
     DOPESHEET_PT_grease_pencil_layer_masks,
     DOPESHEET_PT_grease_pencil_layer_transform,
+    DOPESHEET_PT_grease_pencil_layer_adjustments,
     DOPESHEET_PT_grease_pencil_layer_relations,
 )
 

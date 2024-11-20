@@ -117,7 +117,7 @@ static void shader_patch_edit_mesh_normal_common(gpu::shader::ShaderCreateInfo &
   shader_patch_common(info);
   info.defines_.clear(); /* Removes WORKAROUND_INDEX_LOAD_INCLUDE. */
   info.vertex_inputs_.clear();
-  info.additional_info("gpu_index_load");
+  info.additional_info("gpu_index_buffer_load");
   info.storage_buf(1, Qualifier::READ, "float", "pos[]", Frequency::GEOMETRY);
 }
 
@@ -160,13 +160,13 @@ ShaderModule::ShaderModule(const SelectionType selection_type, const bool clippi
         info.vertex_inputs_.pop_last();
       });
 
-  curve_edit_points = shader(
-      "overlay_edit_particle_point",
-      [](gpu::shader::ShaderCreateInfo &info) { shader_patch_common(info); });
+  curve_edit_points = shader("overlay_edit_curves_point", [](gpu::shader::ShaderCreateInfo &info) {
+    shader_patch_common(info);
+  });
   curve_edit_line = shader("overlay_edit_particle_strand",
                            [](gpu::shader::ShaderCreateInfo &info) { shader_patch_common(info); });
 
-  extra_point = shader("overlay_extra_point", [](gpu::shader::ShaderCreateInfo &info) {
+  extra_point = selectable_shader("overlay_extra_point", [](gpu::shader::ShaderCreateInfo &info) {
     info.additional_infos_.clear();
     info.vertex_inputs_.pop_last();
     info.push_constants_.pop_last();
@@ -572,6 +572,15 @@ ShaderModule::ShaderModule(const SelectionType selection_type, const bool clippi
     info.additional_info(
         "draw_view", "draw_globals", "draw_modelmat_new", "draw_resource_handle_new");
   });
+
+  image_plane_depth_bias = selectable_shader(
+      "overlay_image", [](gpu::shader::ShaderCreateInfo &info) {
+        info.additional_infos_.clear();
+        info.additional_info(
+            "draw_view", "draw_globals", "draw_modelmat_new", "draw_resource_handle_new");
+        info.define("DEPTH_BIAS");
+        info.push_constant(gpu::shader::Type::MAT4, "depth_bias_winmat");
+      });
 
   particle_dot = selectable_shader("overlay_particle_dot",
                                    [](gpu::shader::ShaderCreateInfo &info) {

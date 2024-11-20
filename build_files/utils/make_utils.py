@@ -4,7 +4,17 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 """
-Utility functions for make update and make tests.
+Utility functions for make update and make tests
+
+WARNING:
+- Python 3.6 is used on the Linux VM (Rocky8) to run "make update" to checkout LFS.
+- Python 3.9 is used on the built-bot.
+
+Take care *not* to use features from the Python version used by Blender!
+
+NOTE:
+Some type annotations are quoted to avoid errors in older Python versions.
+These can be unquoted eventually.
 """
 
 import re
@@ -20,18 +30,25 @@ from types import (
 )
 from typing import (
     Any,
-    Callable,
-    Dict,
-    Sequence,
-    Optional,
 )
+
+if sys.version_info >= (3, 9):
+    from collections.abc import (
+        Callable,
+        Sequence,
+    )
+else:
+    from typing import (
+        Callable,
+        Sequence,
+    )
 
 
 def call(
         cmd: Sequence[str],
         exit_on_error: bool = True,
         silent: bool = False,
-        env: Optional[Dict[str, str]] = None,
+        env: "dict[str, str] | None" = None,
 ) -> int:
     if not silent:
         cmd_str = ""
@@ -129,14 +146,14 @@ def git_branch(git_command: str) -> str:
     return branch.strip().decode('utf8')
 
 
-def git_get_config(git_command: str, key: str, file: Optional[str] = None) -> str:
+def git_get_config(git_command: str, key: str, file: "str | None" = None) -> str:
     if file:
         return check_output([git_command, "config", "--file", file, "--get", key])
 
     return check_output([git_command, "config", "--get", key])
 
 
-def git_set_config(git_command: str, key: str, value: str, file: Optional[str] = None) -> str:
+def git_set_config(git_command: str, key: str, value: str, file: "str | None" = None) -> str:
     if file:
         return check_output([git_command, "config", "--file", file, key, value])
 
@@ -284,10 +301,11 @@ def remove_directory(directory: Path) -> None:
     Takes care of clearing read-only attributes which might prevent deletion on
     Windows.
     """
+    # NOTE: unquote typing once Python 3.6x is dropped.
     def remove_readonly(
             func: Callable[..., Any],
             path: str,
-            _: tuple[type[BaseException], BaseException, TracebackType],
+            _: "tuple[type[BaseException], BaseException, TracebackType]",
     ) -> None:
         "Clear the read-only bit and reattempt the removal."
         os.chmod(path, stat.S_IWRITE)

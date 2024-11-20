@@ -76,8 +76,7 @@ bool transdata_check_local_islands(TransInfo *t, short around)
   if (t->options & (CTX_CURSOR | CTX_TEXTURE_SPACE)) {
     return false;
   }
-  return ((around == V3D_AROUND_LOCAL_ORIGINS) &&
-          ELEM(t->obedit_type, OB_MESH, OB_GPENCIL_LEGACY));
+  return ((around == V3D_AROUND_LOCAL_ORIGINS) && ELEM(t->obedit_type, OB_MESH));
 }
 
 /** \} */
@@ -434,13 +433,6 @@ static void viewRedrawForce(const bContext *C, TransInfo *t)
   if (t->options & CTX_GPENCIL_STROKES) {
     if (t->obedit_type == OB_GREASE_PENCIL) {
       WM_event_add_notifier(C, NC_GEOM | ND_DATA, nullptr);
-    }
-    else if (t->obedit_type == OB_GPENCIL_LEGACY) {
-      bGPdata *gpd = ED_gpencil_data_get_active(C);
-      if (gpd) {
-        DEG_id_tag_update(&gpd->id, ID_RECALC_GEOMETRY);
-      }
-      WM_event_add_notifier(C, NC_GPENCIL | NA_EDITED, nullptr);
     }
   }
   else if (t->spacetype == SPACE_VIEW3D) {
@@ -977,13 +969,11 @@ static bool transform_event_modal_constraint(TransInfo *t, short modal_type)
     /* Take the opportunity to update the gizmo. */
     transform_gizmo_3d_model_from_constraint_and_mode_set(t);
   }
-  t->redraw |= TREDRAW_HARD;
   return true;
 }
 
 int transformEvent(TransInfo *t, wmOperator *op, const wmEvent *event)
 {
-  bool handled = false;
   bool is_navigating = t->vod ? ((RegionView3D *)t->region->regiondata)->rflag & RV3D_NAVIGATING :
                                 false;
 
@@ -992,7 +982,6 @@ int transformEvent(TransInfo *t, wmOperator *op, const wmEvent *event)
       hasNumInput(&t->num) && handleNumInput(t->context, &(t->num), event))
   {
     t->redraw |= TREDRAW_HARD;
-    handled = true;
   }
   else if (event->type == TIMER) {
     if (ED_uvedit_live_unwrap_timer_check(static_cast<const wmTimer *>(event->customdata))) {
@@ -1014,7 +1003,6 @@ int transformEvent(TransInfo *t, wmOperator *op, const wmEvent *event)
 
     /* Snapping mouse move events. */
     t->redraw |= handleSnapping(t, event);
-    handled = true;
   }
   /* Handle modal keymap first. */
   /* Enforce redraw of transform when modifiers are used. */
@@ -1023,13 +1011,11 @@ int transformEvent(TransInfo *t, wmOperator *op, const wmEvent *event)
       case TFM_MODAL_CANCEL:
         if (!(t->modifiers & MOD_EDIT_SNAP_SOURCE)) {
           t->state = TRANS_CANCEL;
-          handled = true;
         }
         break;
       case TFM_MODAL_CONFIRM:
         if (!(t->modifiers & MOD_EDIT_SNAP_SOURCE)) {
           t->state = TRANS_CONFIRM;
-          handled = true;
         }
         break;
       case TFM_MODAL_TRANSLATE:
@@ -1051,7 +1037,6 @@ int transformEvent(TransInfo *t, wmOperator *op, const wmEvent *event)
 
             t->flag ^= T_ALT_TRANSFORM;
             t->redraw |= TREDRAW_HARD;
-            handled = true;
           }
           break;
         }
@@ -1114,7 +1099,6 @@ int transformEvent(TransInfo *t, wmOperator *op, const wmEvent *event)
         initSnapping(t, nullptr);
         applyMouseInput(t, &t->mouse, t->mval, t->values);
         t->redraw |= TREDRAW_HARD;
-        handled = true;
         break;
 
       case TFM_MODAL_SNAP_INV_ON:
@@ -1123,21 +1107,18 @@ int transformEvent(TransInfo *t, wmOperator *op, const wmEvent *event)
           transform_snap_flag_from_modifiers_set(t);
           t->redraw |= TREDRAW_HARD;
         }
-        handled = true;
         break;
       case TFM_MODAL_SNAP_INV_OFF:
         if (t->modifiers & MOD_SNAP_INVERT) {
           t->modifiers &= ~MOD_SNAP_INVERT;
           transform_snap_flag_from_modifiers_set(t);
           t->redraw |= TREDRAW_HARD;
-          handled = true;
         }
         break;
       case TFM_MODAL_SNAP_TOGGLE:
         t->modifiers ^= MOD_SNAP;
         transform_snap_flag_from_modifiers_set(t);
         t->redraw |= TREDRAW_HARD;
-        handled = true;
         break;
       case TFM_MODAL_AXIS_X:
       case TFM_MODAL_AXIS_Y:
@@ -1146,25 +1127,22 @@ int transformEvent(TransInfo *t, wmOperator *op, const wmEvent *event)
       case TFM_MODAL_PLANE_Y:
       case TFM_MODAL_PLANE_Z:
         if (transform_event_modal_constraint(t, event->val)) {
-          handled = true;
+          t->redraw |= TREDRAW_HARD;
         }
         break;
       case TFM_MODAL_CONS_OFF:
         if ((t->flag & T_NO_CONSTRAINT) == 0) {
           stopConstraint(t);
           t->redraw |= TREDRAW_HARD;
-          handled = true;
         }
         break;
       case TFM_MODAL_ADD_SNAP:
         addSnapPoint(t);
         t->redraw |= TREDRAW_HARD;
-        handled = true;
         break;
       case TFM_MODAL_REMOVE_SNAP:
         removeSnapPoint(t);
         t->redraw |= TREDRAW_HARD;
-        handled = true;
         break;
       case TFM_MODAL_PROPSIZE:
         /* MOUSEPAN usage... */
@@ -1180,7 +1158,6 @@ int transformEvent(TransInfo *t, wmOperator *op, const wmEvent *event)
           }
           calculatePropRatio(t);
           t->redraw |= TREDRAW_HARD;
-          handled = true;
         }
         break;
       case TFM_MODAL_PROPSIZE_UP:
@@ -1194,7 +1171,6 @@ int transformEvent(TransInfo *t, wmOperator *op, const wmEvent *event)
           }
           calculatePropRatio(t);
           t->redraw |= TREDRAW_HARD;
-          handled = true;
         }
         break;
       case TFM_MODAL_PROPSIZE_DOWN:
@@ -1203,21 +1179,18 @@ int transformEvent(TransInfo *t, wmOperator *op, const wmEvent *event)
           t->prop_size = max_ff(t->prop_size, T_PROP_SIZE_MIN);
           calculatePropRatio(t);
           t->redraw |= TREDRAW_HARD;
-          handled = true;
         }
         break;
       case TFM_MODAL_AUTOIK_LEN_INC:
         if (t->flag & T_AUTOIK) {
           transform_autoik_update(t, 1);
           t->redraw |= TREDRAW_HARD;
-          handled = true;
         }
         break;
       case TFM_MODAL_AUTOIK_LEN_DEC:
         if (t->flag & T_AUTOIK) {
           transform_autoik_update(t, -1);
           t->redraw |= TREDRAW_HARD;
-          handled = true;
         }
         break;
       case TFM_MODAL_INSERTOFS_TOGGLE_DIR:
@@ -1242,12 +1215,10 @@ int transformEvent(TransInfo *t, wmOperator *op, const wmEvent *event)
       case TFM_MODAL_NODE_ATTACH_ON:
         t->modifiers |= MOD_NODE_ATTACH;
         t->redraw |= TREDRAW_HARD;
-        handled = true;
         break;
       case TFM_MODAL_NODE_ATTACH_OFF:
         t->modifiers &= ~MOD_NODE_ATTACH;
         t->redraw |= TREDRAW_HARD;
-        handled = true;
         break;
 
       case TFM_MODAL_AUTOCONSTRAINT:
@@ -1299,7 +1270,6 @@ int transformEvent(TransInfo *t, wmOperator *op, const wmEvent *event)
               }
             }
           }
-          handled = true;
         }
         break;
       case TFM_MODAL_PRECISION:
@@ -1323,8 +1293,10 @@ int transformEvent(TransInfo *t, wmOperator *op, const wmEvent *event)
         }
         break;
       case TFM_MODAL_EDIT_SNAP_SOURCE_ON:
-        transform_mode_snap_source_init(t, nullptr);
-        t->redraw |= TREDRAW_HARD;
+        if (!(t->modifiers & MOD_EDIT_SNAP_SOURCE)) {
+          transform_mode_snap_source_init(t, nullptr);
+          t->redraw |= TREDRAW_HARD;
+        }
         break;
       default:
         break;
@@ -1343,7 +1315,6 @@ int transformEvent(TransInfo *t, wmOperator *op, const wmEvent *event)
             sort_trans_data_dist(t);
             calculatePropRatio(t);
             t->redraw = TREDRAW_HARD;
-            handled = true;
           }
         }
         break;
@@ -1355,7 +1326,6 @@ int transformEvent(TransInfo *t, wmOperator *op, const wmEvent *event)
           t->prop_mode = (t->prop_mode + 1) % PROP_MODE_MAX;
           calculatePropRatio(t);
           t->redraw |= TREDRAW_HARD;
-          handled = true;
         }
         break;
       case EVT_PADPLUSKEY:
@@ -1366,7 +1336,6 @@ int transformEvent(TransInfo *t, wmOperator *op, const wmEvent *event)
           }
           calculatePropRatio(t);
           t->redraw = TREDRAW_HARD;
-          handled = true;
         }
         break;
       case EVT_PADMINUS:
@@ -1374,7 +1343,6 @@ int transformEvent(TransInfo *t, wmOperator *op, const wmEvent *event)
           t->prop_size /= (t->modifiers & MOD_PRECISION) ? 1.01f : 1.1f;
           calculatePropRatio(t);
           t->redraw = TREDRAW_HARD;
-          handled = true;
         }
         break;
       case EVT_LEFTALTKEY:
@@ -1382,15 +1350,11 @@ int transformEvent(TransInfo *t, wmOperator *op, const wmEvent *event)
         if (ELEM(t->spacetype, SPACE_SEQ, SPACE_VIEW3D, SPACE_IMAGE)) {
           t->flag |= T_ALT_TRANSFORM;
           t->redraw |= TREDRAW_HARD;
-          handled = true;
         }
         break;
       default:
         break;
     }
-
-    /* Snapping key events. */
-    t->redraw |= handleSnapping(t, event);
   }
   else if (event->val == KM_RELEASE) {
     switch (event->type) {
@@ -1400,7 +1364,6 @@ int transformEvent(TransInfo *t, wmOperator *op, const wmEvent *event)
         if (ELEM(t->spacetype, SPACE_SEQ, SPACE_VIEW3D, SPACE_IMAGE)) {
           t->flag &= ~T_ALT_TRANSFORM;
           t->redraw |= TREDRAW_HARD;
-          handled = true;
         }
         break;
     }
@@ -1412,32 +1375,25 @@ int transformEvent(TransInfo *t, wmOperator *op, const wmEvent *event)
   }
 
   /* Per transform event, if present. */
-  if (t->mode_info && t->mode_info->handle_event_fn &&
-      (!handled ||
-       /* Needed for vertex slide, see #38756. */
-       (event->type == MOUSEMOVE)))
-  {
+  if (t->mode_info && t->mode_info->handle_event_fn) {
     t->redraw |= t->mode_info->handle_event_fn(t, event);
   }
 
   /* Try to init modal numinput now, if possible. */
-  if (!(handled || t->redraw) && ((event->val == KM_PRESS) || (event->type == EVT_MODAL_MAP)) &&
+  if (!t->redraw && ((event->val == KM_PRESS) || (event->type == EVT_MODAL_MAP)) &&
       handleNumInput(t->context, &(t->num), event))
   {
     t->redraw |= TREDRAW_HARD;
-    handled = true;
   }
 
   if (t->redraw && !ISMOUSE_MOTION(event->type)) {
+    /* The status area is currently also tagged to update by the notifiers in
+     * `viewRedrawForce`. However, this may change in the future, and tagging
+     * the region twice doesn't add any overhead. */
     WM_window_status_area_tag_redraw(CTX_wm_window(t->context));
   }
 
-  WorkSpace *workspace = CTX_wm_workspace(t->context);
-  if (workspace) {
-    BKE_workspace_status_clear(workspace);
-  }
-
-  if (!is_navigating && (handled || t->redraw)) {
+  if (!is_navigating && t->redraw) {
     return 0;
   }
   return OPERATOR_PASS_THROUGH;

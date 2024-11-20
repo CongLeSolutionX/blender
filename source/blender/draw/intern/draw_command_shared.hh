@@ -76,11 +76,7 @@ struct DrawGroup {
 
     /** Needed to create the correct draw call. */
     gpu::Batch *gpu_batch;
-#  ifdef WITH_METAL_BACKEND
-    GPUShader *gpu_shader;
-#  else
     uint64_t _cpu_pad0;
-#  endif
   } desc;
 #endif
 };
@@ -95,7 +91,7 @@ struct DrawPrototype {
   /* Reference to parent DrawGroup to get the gpu::Batch vertex / instance count. */
   uint group_id;
   /* Resource handle associated with this call. Also reference visibility. */
-  uint resource_handle;
+  uint res_handle;
   /* Custom extra value to be used by the engines. */
   uint custom_id;
   /* Number of instances. */

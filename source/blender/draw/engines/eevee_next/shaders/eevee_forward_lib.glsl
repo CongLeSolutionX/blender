@@ -2,17 +2,25 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#pragma once
+
 /**
  * Forward lighting evaluation: Lighting is evaluated during the geometry rasterization.
  *
  * This is used by alpha blended materials and materials using Shader to RGB nodes.
  */
 
-#pragma BLENDER_REQUIRE(gpu_shader_codegen_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_subsurface_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_light_eval_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_lightprobe_eval_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_colorspace_lib.glsl)
+#include "eevee_colorspace_lib.glsl"
+#include "eevee_light_eval_lib.glsl"
+#include "eevee_lightprobe_eval_lib.glsl"
+#include "eevee_nodetree_lib.glsl"
+#include "eevee_subsurface_lib.glsl"
+#include "gpu_shader_codegen_lib.glsl"
+
+/* Allow static compilation of forward materials. */
+#ifndef CLOSURE_BIN_COUNT
+#  define CLOSURE_BIN_COUNT LIGHT_CLOSURE_EVAL_COUNT
+#endif
 
 #if CLOSURE_BIN_COUNT != LIGHT_CLOSURE_EVAL_COUNT
 #  error Closure data count and eval count must match
@@ -80,7 +88,7 @@ void forward_lighting_eval(float thickness, out vec3 radiance, out vec3 transmit
   /* Combine all radiance. */
   vec3 radiance_direct = vec3(0.0);
   vec3 radiance_indirect = vec3(0.0);
-  for (int i = 0; i < LIGHT_CLOSURE_EVAL_COUNT; i++) {
+  for (uchar i = 0; i < LIGHT_CLOSURE_EVAL_COUNT; i++) {
     ClosureUndetermined cl = g_closure_get_resolved(i, 1.0);
     if (cl.weight > 1e-5) {
       vec3 direct_light = closure_light_get(stack, i).light_shadowed;

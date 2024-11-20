@@ -8,10 +8,10 @@
 
 #include "vk_command_buffer_wrapper.hh"
 #include "vk_backend.hh"
-#include "vk_memory.hh"
+#include "vk_device.hh"
 
 namespace blender::gpu::render_graph {
-VKCommandBufferWrapper::VKCommandBufferWrapper()
+VKCommandBufferWrapper::VKCommandBufferWrapper(const VKWorkarounds &workarounds)
 {
   vk_command_pool_create_info_ = {};
   vk_command_pool_create_info_.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -40,38 +40,36 @@ VKCommandBufferWrapper::VKCommandBufferWrapper()
   vk_submit_info_.pCommandBuffers = &vk_command_buffer_;
   vk_submit_info_.signalSemaphoreCount = 0;
   vk_submit_info_.pSignalSemaphores = nullptr;
+
+  use_dynamic_rendering = !workarounds.dynamic_rendering;
 }
 
 VKCommandBufferWrapper::~VKCommandBufferWrapper()
 {
-  VK_ALLOCATION_CALLBACKS;
   VKDevice &device = VKBackend::get().device;
 
   if (vk_command_pool_ != VK_NULL_HANDLE) {
-    vkDestroyCommandPool(device.vk_handle(), vk_command_pool_, vk_allocation_callbacks);
+    vkDestroyCommandPool(device.vk_handle(), vk_command_pool_, nullptr);
     vk_command_pool_ = VK_NULL_HANDLE;
   }
   if (vk_fence_ != VK_NULL_HANDLE) {
-    vkDestroyFence(device.vk_handle(), vk_fence_, vk_allocation_callbacks);
+    vkDestroyFence(device.vk_handle(), vk_fence_, nullptr);
     vk_fence_ = VK_NULL_HANDLE;
   }
 }
 
 void VKCommandBufferWrapper::begin_recording()
 {
-  VK_ALLOCATION_CALLBACKS;
   VKDevice &device = VKBackend::get().device;
   if (vk_command_pool_ == VK_NULL_HANDLE) {
     vk_command_pool_create_info_.queueFamilyIndex = device.queue_family_get();
-    vkCreateCommandPool(device.vk_handle(),
-                        &vk_command_pool_create_info_,
-                        vk_allocation_callbacks,
-                        &vk_command_pool_);
+    vkCreateCommandPool(
+        device.vk_handle(), &vk_command_pool_create_info_, nullptr, &vk_command_pool_);
     vk_command_buffer_allocate_info_.commandPool = vk_command_pool_;
     vk_command_pool_create_info_.queueFamilyIndex = 0;
   }
   if (vk_fence_ == VK_NULL_HANDLE) {
-    vkCreateFence(device.vk_handle(), &vk_fence_create_info_, vk_allocation_callbacks, &vk_fence_);
+    vkCreateFence(device.vk_handle(), &vk_fence_create_info_, nullptr, &vk_fence_);
   }
   BLI_assert(vk_command_buffer_ == VK_NULL_HANDLE);
   vkAllocateCommandBuffers(
@@ -329,6 +327,16 @@ void VKCommandBufferWrapper::push_constants(VkPipelineLayout layout,
                                             const void *p_values)
 {
   vkCmdPushConstants(vk_command_buffer_, layout, stage_flags, offset, size, p_values);
+}
+
+void VKCommandBufferWrapper::begin_render_pass(const VkRenderPassBeginInfo *render_pass_begin_info)
+{
+  vkCmdBeginRenderPass(vk_command_buffer_, render_pass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
+}
+
+void VKCommandBufferWrapper::end_render_pass()
+{
+  vkCmdEndRenderPass(vk_command_buffer_);
 }
 
 void VKCommandBufferWrapper::begin_rendering(const VkRenderingInfo *p_rendering_info)
