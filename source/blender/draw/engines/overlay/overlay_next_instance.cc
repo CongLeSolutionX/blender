@@ -439,8 +439,6 @@ void Instance::draw(Manager &manager)
                                          GPU_ATTACHMENT_TEXTURE(resources.overlay_tx));
   resources.overlay_output_fb.ensure(GPU_ATTACHMENT_NONE,
                                      GPU_ATTACHMENT_TEXTURE(resources.color_overlay_tx));
-  resources.render_color_fb.ensure(GPU_ATTACHMENT_NONE,
-                                   GPU_ATTACHMENT_TEXTURE(resources.color_render_tx));
 
   static gpu::DebugScope select_scope = {"Selection"};
   static gpu::DebugScope draw_scope = {"Overlay"};
@@ -456,6 +454,9 @@ void Instance::draw(Manager &manager)
   regular.mesh_uvs.draw_on_render(resources.render_fb, manager, view);
   infront.sculpts.draw_on_render(resources.render_in_front_fb, manager, view);
   regular.mesh_uvs.draw_on_render(resources.render_in_front_fb, manager, view);
+
+  regular.cameras.draw_scene_background_images(resources.render_fb, manager, view);
+  infront.cameras.draw_scene_background_images(resources.render_fb, manager, view);
 
   GPU_framebuffer_bind(resources.overlay_line_fb);
   float4 clear_color(0.0f);
@@ -540,9 +541,6 @@ void Instance::draw(Manager &manager)
   infront.cameras.draw_in_front(resources.overlay_color_only_fb, manager, view);
 
   origins.draw(resources.overlay_color_only_fb, manager, view);
-
-  regular.cameras.draw_scene_background_images(resources.render_color_fb, manager, view);
-  infront.cameras.draw_scene_background_images(resources.render_color_fb, manager, view);
 
   /* Don't clear background for the node editor. The node editor draws the background and we
    * need to mask out the image from the already drawn overlay color buffer. */

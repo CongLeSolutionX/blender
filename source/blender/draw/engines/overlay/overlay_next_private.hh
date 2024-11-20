@@ -338,8 +338,6 @@ struct Resources : public select::SelectMap {
   Framebuffer overlay_in_front_fb = {"overlay_in_front_fb"};
   /* Depth In-Front, Overlay Color, Line Data. */
   Framebuffer overlay_line_in_front_fb = {"overlay_line_in_front_fb"};
-  /* Render Color */
-  Framebuffer render_color_fb = {"render_color_fb"};
 
   /* Output Color. */
   Framebuffer overlay_output_fb = {"overlay_output_fb"};
