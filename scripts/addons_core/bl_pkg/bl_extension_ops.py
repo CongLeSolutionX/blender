@@ -1017,7 +1017,7 @@ def _extensions_wheel_filter_for_this_system(wheels):
                         python_version_is_compat = True
                         break
                 else:
-                    if python_version_current == python_version:
+                    if python_version_current >= python_version:
                         python_version_is_compat = True
                         break
             if not python_version_is_compat:
