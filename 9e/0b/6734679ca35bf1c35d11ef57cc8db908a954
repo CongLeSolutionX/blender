@@ -1,2 +1,3 @@
 Referenced by issue #130420, Sculpt Redo Broken with transfer mode operator
 Referenced by pull request #130472, Fix #130420: Undo/Redo broken when using Transfer Mode operator.
+Referenced by commit c51615923b35a30fa236b3b4fafb0064b58733cc, Fix #130420: Undo/Redo broken when using Transfer Mode operator.
