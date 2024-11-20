@@ -538,11 +538,10 @@ static IndexMask calc_unselected_faces(const Mesh &mesh,
   if (mesh.no_overlapping_topology()) {
     return unselected;
   }
-  IndexMaskMemory tris_memory;
   const IndexMask unselected_tris = IndexMask::from_batch_predicate(
       unselected,
       GrainSize(4096),
-      tris_memory,
+      memory,
       [&](const IndexMaskSegment universe_segment, IndexRangesBuilder<int16_t> &builder) {
         /* Try a few constant time checks to avoid checking each face individually. */
         if (unique_sorted_indices::non_empty_is_range(universe_segment.base_span())) {
@@ -568,9 +567,11 @@ static IndexMask calc_unselected_faces(const Mesh &mesh,
         }
         return universe_segment.offset();
       });
+
   if (unselected_tris.is_empty()) {
     return unselected;
   }
+
   Array<int3> vert_tris(corner_tris.size());
   bke::attribute_math::gather(
       src_corner_verts, corner_tris.cast<int>(), vert_tris.as_mutable_span().cast<int>());
@@ -580,23 +581,24 @@ static IndexMask calc_unselected_faces(const Mesh &mesh,
   const GroupedSpan<int> vert_to_tri = build_vert_to_tri_map(
       mesh.verts_num, vert_tris, vert_to_tri_offsets, vert_to_tri_indices);
 
-  auto face_added_by_triangulation = [&](const Span<int> face_verts) {
-    if (face_verts.size() != 3) {
-      return false;
-    }
+  auto tri_exists = [&](const std::array<int, 3> &tri_verts) {
     /* TODO: Sorting the three values with a few comparisons would be faster than a #Set. */
-    const Set<int, 3> vert_set(face_verts);
-    return std::any_of(face_verts.begin(), face_verts.end(), [&](const int vert) {
+    const Set<int, 3> vert_set(tri_verts);
+    return std::any_of(tri_verts.begin(), tri_verts.end(), [&](const int vert) {
       return std::any_of(vert_to_tri[vert].begin(), vert_to_tri[vert].end(), [&](const int tri) {
-        const Set<int, 3> other_vert_set(Span(&vert_tris[tri].x, 3));
-        return other_vert_set == vert_set;
+        const Set<int, 3> other_tri_verts(Span(&vert_tris[tri].x, 3));
+        return other_tri_verts == vert_set;
       });
     });
   };
 
-  return IndexMask::from_predicate(unselected, GrainSize(1024), memory, [&](const int i) {
-    return !face_added_by_triangulation(src_corner_verts.slice(src_faces[i]));
-  });
+  const IndexMask duplicate_triangles = IndexMask::from_predicate(
+      unselected_tris, GrainSize(1024), memory, [&](const int i) {
+        const Span<int> face_verts = src_corner_verts.slice(src_faces[i]);
+        return tri_exists({face_verts[0], face_verts[1], face_verts[2]});
+      });
+
+  return IndexMask::from_difference(unselected, duplicate_triangles, memory);
 }
 
 static std::optional<int> find_edge_duplicate(const GroupedSpan<int> vert_to_edge_map,
