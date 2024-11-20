@@ -627,32 +627,6 @@ void GeometrySet::attribute_foreach(const Span<GeometryComponent::Type> componen
   }
 }
 
-void GeometrySet::propagate_attributes_from_layer_to_instances(
-    const AttributeAccessor src_attributes,
-    MutableAttributeAccessor dst_attributes,
-    const AttributeFilter &attribute_filter)
-{
-  src_attributes.foreach_attribute([&](const AttributeIter &iter) {
-    if (attribute_filter.allow_skip(iter.name)) {
-      return;
-    }
-    const GAttributeReader src = iter.get(AttrDomain::Layer);
-    if (src.sharing_info && src.varray.is_span()) {
-      const AttributeInitShared init(src.varray.get_internal_span().data(), *src.sharing_info);
-      if (dst_attributes.add(iter.name, AttrDomain::Instance, iter.data_type, init)) {
-        return;
-      }
-    }
-    GSpanAttributeWriter dst = dst_attributes.lookup_or_add_for_write_only_span(
-        iter.name, AttrDomain::Instance, iter.data_type);
-    if (!dst) {
-      return;
-    }
-    array_utils::copy(src.varray, dst.span);
-    dst.finish();
-  });
-}
-
 bool attribute_is_builtin_on_component_type(const GeometryComponent::Type type,
                                             const StringRef name)
 {
@@ -694,7 +668,7 @@ void GeometrySet::gather_attributes_for_propagation(
     const GeometryComponent::Type dst_component_type,
     bool include_instances,
     const AttributeFilter &attribute_filter,
-    Map<StringRef, AttributeKind> &r_attributes) const
+    Map<StringRef, AttributeDomainAndType> &r_attributes) const
 {
   this->attribute_foreach(
       component_types,
@@ -723,11 +697,11 @@ void GeometrySet::gather_attributes_for_propagation(
           domain = AttrDomain::Point;
         }
 
-        auto add_info = [&](AttributeKind *attribute_kind) {
+        auto add_info = [&](AttributeDomainAndType *attribute_kind) {
           attribute_kind->domain = domain;
           attribute_kind->data_type = meta_data.data_type;
         };
-        auto modify_info = [&](AttributeKind *attribute_kind) {
+        auto modify_info = [&](AttributeDomainAndType *attribute_kind) {
           attribute_kind->domain = bke::attribute_domain_highest_priority(
               {attribute_kind->domain, domain});
           attribute_kind->data_type = bke::attribute_data_type_highest_complexity(

@@ -12,6 +12,7 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "BLI_build_config.h"
 #include "BLI_math_rotation.h"
 #include "BLI_math_vector.h"
 #include "BLI_utildefines.h"
@@ -4000,30 +4001,33 @@ static AreaDockTarget area_docking_target(sAreaJoinData *jd, const wmEvent *even
   jd->dir = SCREEN_DIR_NONE;
   jd->factor = 0.5f;
 
+  const float min_fac_x = 1.5f * AREAMINX * UI_SCALE_FAC / float(jd->sa2->winx);
+  const float min_fac_y = 1.5f * HEADERY * UI_SCALE_FAC / float(jd->sa2->winy);
+
   /* if the area is narrow then there are only two docking targets. */
-  if (jd->sa2->winx < min_x) {
+  if (jd->sa2->winx < (min_x * 3)) {
     if (fac_y > 0.4f && fac_y < 0.6f) {
       return AreaDockTarget::Center;
     }
     if (float(y) > float(jd->sa2->winy) / 2.0f) {
-      jd->factor = area_docking_snap(1.0f - float(y) / float(jd->sa2->winy), event);
+      jd->factor = area_docking_snap(std::max(1.0f - fac_y, min_fac_y), event);
       return AreaDockTarget::Top;
     }
     else {
-      jd->factor = area_docking_snap(float(y) / float(jd->sa2->winy), event);
+      jd->factor = area_docking_snap(std::max(fac_y, min_fac_y), event);
       return AreaDockTarget::Bottom;
     }
   }
-  if (jd->sa2->winy < min_y) {
+  if (jd->sa2->winy < (min_y * 3)) {
     if (fac_x > 0.4f && fac_x < 0.6f) {
       return AreaDockTarget::Center;
     }
     if (float(x) > float(jd->sa2->winx) / 2.0f) {
-      jd->factor = area_docking_snap(1.0f - float(x) / float(jd->sa2->winx), event);
+      jd->factor = area_docking_snap(std::max(1.0f - fac_x, min_fac_x), event);
       return AreaDockTarget::Right;
     }
     else {
-      jd->factor = area_docking_snap(float(x) / float(jd->sa2->winx), event);
+      jd->factor = area_docking_snap(std::max(fac_x, min_fac_x), event);
       return AreaDockTarget::Left;
     }
   }
@@ -4041,19 +4045,19 @@ static AreaDockTarget area_docking_target(sAreaJoinData *jd, const wmEvent *even
   const bool lower_left = float(x) / float(jd->sa2->winy - y + 1) < area_ratio;
 
   if (upper_left && !lower_left) {
-    jd->factor = area_docking_snap(1.0f - float(y) / float(jd->sa2->winy), event);
+    jd->factor = area_docking_snap(std::max(1.0f - fac_y, min_fac_y), event);
     return AreaDockTarget::Top;
   }
   if (!upper_left && lower_left) {
-    jd->factor = area_docking_snap(float(y) / float(jd->sa2->winy), event);
+    jd->factor = area_docking_snap(std::max(fac_y, min_fac_y), event);
     return AreaDockTarget::Bottom;
   }
   if (upper_left && lower_left) {
-    jd->factor = area_docking_snap(float(x) / float(jd->sa2->winx), event);
+    jd->factor = area_docking_snap(std::max(fac_x, min_fac_x), event);
     return AreaDockTarget::Left;
   }
   if (!upper_left && !lower_left) {
-    jd->factor = area_docking_snap(1.0f - float(x) / float(jd->sa2->winx), event);
+    jd->factor = area_docking_snap(std::max(1.0f - fac_x, min_fac_x), event);
     return AreaDockTarget::Right;
   }
   return AreaDockTarget::None;
@@ -4095,7 +4099,33 @@ static float area_split_factor(bContext *C, sAreaJoinData *jd, const wmEvent *ev
 
 static void area_join_update_data(bContext *C, sAreaJoinData *jd, const wmEvent *event)
 {
-  ScrArea *area = ED_area_find_under_cursor(C, SPACE_TYPE_ANY, event->xy);
+  ScrArea *area = nullptr;
+
+  /* TODO: The following is needed until we have linux-specific implementations of
+   * getWindowUnderCursor. See #130242. Use active window if there are overlapping. */
+
+#if (OS_WINDOWS || OS_MAC)
+  area = ED_area_find_under_cursor(C, SPACE_TYPE_ANY, event->xy);
+#else
+  int win_count = 0;
+  LISTBASE_FOREACH (wmWindow *, win, &CTX_wm_manager(C)->windows) {
+    int cursor[2];
+    if (wm_cursor_position_get(win, &cursor[0], &cursor[1])) {
+      rcti rect;
+      WM_window_rect_calc(win, &rect);
+      if (BLI_rcti_isect_pt_v(&rect, cursor)) {
+        win_count++;
+      }
+    }
+  }
+
+  if (win_count > 1) {
+    area = BKE_screen_find_area_xy(CTX_wm_screen(C), SPACE_TYPE_ANY, event->xy);
+  }
+  else {
+    area = ED_area_find_under_cursor(C, SPACE_TYPE_ANY, event->xy);
+  }
+#endif
 
   jd->win2 = WM_window_find_by_area(CTX_wm_manager(C), jd->sa2);
   jd->dir = SCREEN_DIR_NONE;
@@ -5853,7 +5883,7 @@ static std::string userpref_show_get_description(bContext *C,
     int section = RNA_property_enum_get(ptr, prop);
     const char *section_name;
     if (RNA_property_enum_name_gettexted(C, ptr, prop, section, &section_name)) {
-      return fmt::format(TIP_("Show {} preferences"), section_name);
+      return fmt::format(fmt::runtime(TIP_("Show {} preferences")), section_name);
     }
   }
   /* Fallback to default. */

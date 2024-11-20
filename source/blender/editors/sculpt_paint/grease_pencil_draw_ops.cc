@@ -1052,8 +1052,9 @@ static void grease_pencil_fill_status_indicators(bContext &C,
   const bool is_extend = (op_data.extension_mode == GP_FILL_EMODE_EXTEND);
 
   const std::string status_str = fmt::format(
-      IFACE_("Fill: ESC/RMB cancel, LMB Fill, MMB Adjust Extension, S: "
-             "Switch Mode, D: Stroke Collision | Mode: {}, Collision {}, Length: {:.3f}"),
+      fmt::runtime(
+          IFACE_("Fill: ESC/RMB cancel, LMB Fill, MMB Adjust Extension, S: "
+                 "Switch Mode, D: Stroke Collision | Mode: {}, Collision {}, Length: {:.3f}")),
       (is_extend) ? IFACE_("Extend") : IFACE_("Radius"),
       (is_extend && op_data.extension_cut) ? IFACE_("ON") : IFACE_("OFF"),
       op_data.extension_length);
@@ -1283,7 +1284,7 @@ static Vector<FillToolTargetInfo> ensure_editable_drawings(const Scene &scene,
 static void smooth_fill_strokes(bke::CurvesGeometry &curves, const IndexMask &stroke_mask)
 {
   const int iterations = 20;
-  if (curves.points_num() == 0) {
+  if (curves.is_empty()) {
     return;
   }
   if (stroke_mask.is_empty()) {
@@ -1400,6 +1401,19 @@ static bool grease_pencil_apply_fill(bContext &C, wmOperator &op, const wmEvent 
     }
 
     bke::CurvesGeometry &dst_curves = info.target.drawing.strokes_for_write();
+    /* If the `fill_strokes` function creates the "fill_opacity" attribute, make sure that we
+     * initialize this to full opacity on the target geometry. */
+    if (fill_curves.attributes().contains("fill_opacity") &&
+        !dst_curves.attributes().contains("fill_opacity"))
+    {
+      bke::SpanAttributeWriter<float> fill_opacities =
+          dst_curves.attributes_for_write().lookup_or_add_for_write_span<float>(
+              "fill_opacity",
+              bke::AttrDomain::Curve,
+              bke::AttributeInitVArray(VArray<float>::ForSingle(1.0f, dst_curves.curves_num())));
+      fill_opacities.finish();
+    }
+
     Curves *dst_curves_id = curves_new_nomain(dst_curves);
     Curves *fill_curves_id = curves_new_nomain(fill_curves);
     const Array<bke::GeometrySet> geometry_sets = {
