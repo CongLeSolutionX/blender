@@ -433,57 +433,6 @@ static bool compute_auto_flip(const Span<float3> from_positions, const Span<floa
   return math::dot(from_last - from_first, to_last - to_first) < 0.0f;
 }
 
-// /* Create samples for a curve based on the evaluated lengths of another curve.
-//  * The output sample indices and factors match the relative positions of the template curve. */
-// static void sample_curve_from_template(const bke::CurvesGeometry &curves,
-//                                        const int curve_index,
-//                                        const bool cyclic,
-//                                        const int template_curve_index,
-//                                        const int template_cyclic,
-//                                        const bool reverse,
-//                                        MutableSpan<int> r_segment_indices,
-//                                        MutableSpan<float> r_factors)
-// {
-//   const Span<float> segment_lengths = curves.evaluated_lengths_for_curve(curve_index, cyclic);
-//   if (segment_lengths.is_empty()) {
-//     /* Handle curves with only one evaluated point. */
-//     r_segment_indices.fill(0);
-//     r_factors.fill(0.0f);
-//     return;
-//   }
-
-//   /* Find lengths from relative length along the template curve. */
-//   const Span<float3> positions = curves.positions();
-//   const float total_length = segment_lengths.last();
-//   const IndexRange template_points = curves.points_by_curve()[template_curve_index];
-//   /* Template curve size must match the output size. */
-//   BLI_assert(template_points.size() == r_segment_indices.size());
-
-//   Array<float> sample_lengths(template_points.size());
-//   float template_length = 0.0f;
-//   for (const int i : template_points.index_range().drop_back(1)) {
-//     const float segment_length = math::distance(positions[template_points[i]],
-//                                                 positions[template_points[i + 1]]);
-//     sample_lengths[i] = template_length;
-//     template_length += segment_length;
-//   }
-//   sample_lengths.last() = template_length;
-//   const float length_ratio = math::safe_divide(total_length, template_length);
-//   if (reverse) {
-//     for (const int i : template_points.index_range()) {
-//       sample_lengths[i] = total_length - sample_lengths[i] * length_ratio;
-//     }
-//   }
-//   else {
-//     for (const int i : template_points.index_range()) {
-//       sample_lengths[i] = sample_lengths[i] * length_ratio;
-//     }
-//   }
-
-//   length_parameterize::sample_at_lengths(
-//       segment_lengths, sample_lengths, r_segment_indices, r_factors);
-// };
-
 /* Copy existing sample positions and insert new samples inbetween to reach the final count. */
 static void sample_curve_padded(const bke::CurvesGeometry &curves,
                                 const int curve_index,
@@ -705,37 +654,6 @@ static bke::CurvesGeometry interpolate_between_curves(const GreasePencil &grease
         to_sample_factors.fill(0.0f);
       }
     }
-
-    // /* Copy samples of the input curves to keep changes minimal. */
-    // auto from_sample_copy = [&](const int curve_index,
-    //                             const bool cyclic,
-    //                             const bool reverse,
-    //                             MutableSpan<int> r_segment_indices,
-    //                             MutableSpan<float> r_factors) {
-    //   const IndexRange from_points = from_points_by_curve[curve_index];
-    //   const IndexRange to_points = to_points_by_curve[curve_index];
-    //   const bool use_from_points = (from_points.size() >= to_points.size());
-    //   const bke::CurvesGeometry &curves = (use_from_points ? from_drawing->strokes() :
-    //                                                          to_drawing->strokes());
-    //   const Span<float> segment_lengths = curves.evaluated_lengths_for_curve(curve_index,
-    //   cyclic);
-
-    //   if (reverse) {
-    //     length_parameterize::sample_uniform_reverse(
-    //         segment_lengths, !cyclic, r_segment_indices, r_factors);
-    //   }
-    //   else {
-    //     length_parameterize::sample_uniform(
-    //         segment_lengths, !cyclic, r_segment_indices, r_factors);
-    //   }
-
-    //   r_segment_indices.copy_from();
-    // };
-    // auto to_sample_copy = [&](const int curve_index,
-    //                           const bool cyclic,
-    //                           const bool reverse,
-    //                           MutableSpan<int> r_segment_indices,
-    //                           MutableSpan<float> r_factors) {};
 
     geometry::interpolate_curves_with_samples(from_drawing->strokes(),
                                               to_drawing->strokes(),
