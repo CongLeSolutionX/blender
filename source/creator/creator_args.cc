@@ -24,7 +24,7 @@
 #  include "BLI_dynstr.h"
 #  include "BLI_fileops.h"
 #  include "BLI_listbase.h"
-#  include "BLI_path_util.h"
+#  include "BLI_path_utils.hh"
 #  include "BLI_string.h"
 #  include "BLI_string_utf8.h"
 #  include "BLI_system.h"
@@ -41,7 +41,7 @@
 #  include "BKE_context.hh"
 
 #  include "BKE_global.hh"
-#  include "BKE_image_format.h"
+#  include "BKE_image_format.hh"
 #  include "BKE_lib_id.hh"
 #  include "BKE_main.hh"
 #  include "BKE_report.hh"
@@ -1436,7 +1436,7 @@ static int arg_handle_debug_gpu_scope_capture_set(int argc, const char **argv, v
 
 static const char arg_handle_debug_gpu_renderdoc_set_doc[] =
     "\n"
-    "\tEnable Renderdoc integration for GPU frame grabbing and debugging.";
+    "\tEnable RenderDoc integration for GPU frame grabbing and debugging.";
 static int arg_handle_debug_gpu_renderdoc_set(int /*argc*/,
                                               const char ** /*argv*/,
                                               void * /*data*/)

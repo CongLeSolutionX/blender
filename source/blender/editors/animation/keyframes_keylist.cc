@@ -101,9 +101,7 @@ struct AnimKeylist {
     BLI_listbase_clear(&this->runtime.list_wrapper);
   }
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("editors:AnimKeylist")
-#endif
 };
 
 AnimKeylist *ED_keylist_create()
@@ -1212,7 +1210,7 @@ void action_group_to_keylist(AnimData *adt,
   }
 
   /* Layered actions. */
-  animrig::ChannelBag channel_bag = agrp->channel_bag->wrap();
+  animrig::ChannelBag &channel_bag = agrp->channel_bag->wrap();
   Span<FCurve *> fcurves = channel_bag.fcurves().slice(agrp->fcurve_range_start,
                                                        agrp->fcurve_range_length);
   for (FCurve *fcurve : fcurves) {

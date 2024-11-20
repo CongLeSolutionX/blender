@@ -89,9 +89,14 @@ static void save_selection_as_attribute(MutableAttributeAccessor attributes,
 static void remove_non_propagated_attributes(MutableAttributeAccessor attributes,
                                              const AttributeFilter &attribute_filter)
 {
-  Set<StringRefNull> ids_to_remove = attributes.all_ids();
-  ids_to_remove.remove_if([&](const StringRef id) { return !attribute_filter.allow_skip(id); });
-  for (const StringRef id : ids_to_remove) {
+  Vector<std::string> names_to_remove;
+  const Set<StringRefNull> all_names = attributes.all_ids();
+  for (const StringRefNull name : all_names) {
+    if (attribute_filter.allow_skip(name)) {
+      names_to_remove.append(name);
+    }
+  }
+  for (const StringRef id : names_to_remove) {
     attributes.remove(id);
   }
 }
@@ -264,15 +269,14 @@ static IDsByDomain attribute_ids_by_domain(const AttributeAccessor attributes,
                                            const Set<StringRef> &skip)
 {
   IDsByDomain ids_by_domain;
-  attributes.for_all([&](const StringRef id, const AttributeMetaData meta_data) {
-    if (meta_data.data_type == CD_PROP_STRING) {
-      return true;
+  attributes.foreach_attribute([&](const bke::AttributeIter &iter) {
+    if (iter.data_type == CD_PROP_STRING) {
+      return;
     }
-    if (skip.contains(id)) {
-      return true;
+    if (skip.contains(iter.name)) {
+      return;
     }
-    ids_by_domain[int(meta_data.domain)].append(id);
-    return true;
+    ids_by_domain[int(iter.domain)].append(iter.name);
   });
   return ids_by_domain;
 }
@@ -282,18 +286,18 @@ static bool is_empty_domain(const AttributeAccessor attributes,
                             const AttrDomain domain)
 {
   bool is_empty = true;
-  attributes.for_all([&](const StringRef id, const AttributeMetaData meta_data) {
-    if (meta_data.data_type == CD_PROP_STRING) {
-      return true;
+  attributes.foreach_attribute([&](const bke::AttributeIter &iter) {
+    if (iter.data_type == CD_PROP_STRING) {
+      return;
     }
-    if (meta_data.domain != domain) {
-      return true;
+    if (iter.domain != domain) {
+      return;
     }
-    if (skip.contains(id)) {
-      return true;
+    if (skip.contains(iter.name)) {
+      return;
     }
     is_empty = false;
-    return false;
+    iter.stop();
   });
   return is_empty;
 }

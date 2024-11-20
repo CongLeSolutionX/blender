@@ -22,7 +22,7 @@
 #include "BLI_listbase.h"
 #include "BLI_math_geom.h"
 #include "BLI_math_rotation.h"
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 #include "BLI_rect.h"
 #include "BLI_task.hh"
 
@@ -30,7 +30,7 @@
 #include "BKE_animsys.h"
 #include "BKE_fcurve.hh"
 #include "BKE_global.hh"
-#include "BKE_image.h"
+#include "BKE_image.hh"
 #include "BKE_layer.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_main.hh"
@@ -271,26 +271,21 @@ Vector<Sequence *> seq_get_shown_sequences(const Scene *scene,
                                            const int timeline_frame,
                                            const int chanshown)
 {
-  Vector<Sequence *> result;
   VectorSet strips = SEQ_query_rendered_strips(
       scene, channels, seqbase, timeline_frame, chanshown);
   const int strip_count = strips.size();
 
   if (UNLIKELY(strip_count > SEQ_MAX_CHANNELS)) {
     BLI_assert_msg(0, "Too many strips, this shouldn't happen");
-    return result;
+    return {};
   }
 
-  result.reserve(strips.size());
-  for (Sequence *seq : strips) {
-    result.append(seq);
-  }
-
+  Vector<Sequence *> strips_vec = strips.extract_vector();
   /* Sort strips by channel. */
-  std::sort(result.begin(), result.end(), [](const Sequence *a, const Sequence *b) {
+  std::sort(strips_vec.begin(), strips_vec.end(), [](const Sequence *a, const Sequence *b) {
     return a->machine < b->machine;
   });
-  return result;
+  return strips_vec;
 }
 
 StripScreenQuad get_strip_screen_quad(const SeqRenderData *context, const Sequence *seq)
@@ -873,8 +868,14 @@ static ImBuf *seq_render_effect_strip_impl(const SeqRenderData *context,
       for (i = 0; i < 2; i++) {
         /* Speed effect requires time remapping of `timeline_frame` for input(s). */
         if (input[0] && seq->type == SEQ_TYPE_SPEED) {
-          int target_frame = floor(
-              seq_speed_effect_target_frame_get(scene, seq, timeline_frame, i));
+          float target_frame = seq_speed_effect_target_frame_get(scene, seq, timeline_frame, i);
+
+          /* Only convert to int when interpolation is not used. */
+          SpeedControlVars *s = reinterpret_cast<SpeedControlVars *>(seq->effectdata);
+          if ((s->flags & SEQ_SPEED_USE_INTERPOLATION) != 0) {
+            target_frame = std::floor(target_frame);
+          }
+
           ibuf[i] = seq_render_strip(context, state, input[0], target_frame);
         }
         else { /* Other effects. */
@@ -1472,8 +1473,7 @@ static ImBuf *seq_render_scene_strip(const SeqRenderData *context,
    */
 
   const bool is_rendering = G.is_rendering;
-  bool do_seq_gl = !context->for_render && (context->scene->r.seq_prev_type) != OB_RENDER &&
-                   BLI_thread_is_main();
+  bool is_preview = !context->for_render && (context->scene->r.seq_prev_type) != OB_RENDER;
 
   bool have_comp = false;
   bool use_gpencil = true;
@@ -1540,7 +1540,7 @@ static ImBuf *seq_render_scene_strip(const SeqRenderData *context,
   is_frame_update = (orig_data.timeline_frame != scene->r.cfra) ||
                     (orig_data.subframe != scene->r.subframe);
 
-  if (sequencer_view3d_fn && do_seq_gl && camera) {
+  if (sequencer_view3d_fn && is_preview && camera && BLI_thread_is_main()) {
     char err_out[256] = "unknown";
     int width, height;
     BKE_render_resolution(&scene->r, false, &width, &height);
@@ -1596,7 +1596,8 @@ static ImBuf *seq_render_scene_strip(const SeqRenderData *context,
      * When rendering from command line renderer is called from main thread, in this
      * case it's always safe to render scene here
      */
-    if (!context->for_render && (is_rendering && !G.background)) {
+
+    if (is_preview && (is_rendering && !G.background)) {
       goto finally;
     }
 

@@ -11,8 +11,10 @@
 #include "vk_common.hh"
 
 #include "vk_descriptor_pools.hh"
+#include "vk_immediate.hh"
 
 namespace blender::gpu {
+class VKDevice;
 
 /**
  * Pool of resources that are discarded, but can still be in used and cannot be destroyed.
@@ -25,12 +27,16 @@ namespace blender::gpu {
  * screen.
  */
 class VKDiscardPool {
+  friend class VKDevice;
+
  private:
   Vector<std::pair<VkImage, VmaAllocation>> images_;
   Vector<std::pair<VkBuffer, VmaAllocation>> buffers_;
   Vector<VkImageView> image_views_;
   Vector<VkShaderModule> shader_modules_;
   Vector<VkPipelineLayout> pipeline_layouts_;
+  Vector<VkRenderPass> render_passes_;
+  Vector<VkFramebuffer> framebuffers_;
   std::mutex mutex_;
 
  public:
@@ -41,6 +47,9 @@ class VKDiscardPool {
   void discard_buffer(VkBuffer vk_buffer, VmaAllocation vma_allocation);
   void discard_shader_module(VkShaderModule vk_shader_module);
   void discard_pipeline_layout(VkPipelineLayout vk_pipeline_layout);
+  void discard_framebuffer(VkFramebuffer vk_framebuffer);
+  void discard_render_pass(VkRenderPass vk_render_pass);
+
   /**
    * Move discarded resources from src_pool into this.
    *
@@ -58,6 +67,7 @@ class VKResourcePool {
   VKDescriptorPools descriptor_pools;
   VKDescriptorSetTracker descriptor_set;
   VKDiscardPool discard_pool;
+  VKImmediate immediate;
 
   void init(VKDevice &device);
   void deinit(VKDevice &device);

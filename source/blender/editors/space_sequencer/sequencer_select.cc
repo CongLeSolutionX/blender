@@ -264,12 +264,12 @@ void ED_sequencer_select_sequence_single(Scene *scene, Sequence *seq, bool desel
   recurs_sel_seq(seq);
 }
 
-void seq_rectf(const Scene *scene, const Sequence *seq, rctf *rect)
+void seq_rectf(const Scene *scene, const Sequence *seq, rctf *r_rect)
 {
-  rect->xmin = SEQ_time_left_handle_frame_get(scene, seq);
-  rect->xmax = SEQ_time_right_handle_frame_get(scene, seq);
-  rect->ymin = seq->machine + SEQ_STRIP_OFSBOTTOM;
-  rect->ymax = seq->machine + SEQ_STRIP_OFSTOP;
+  r_rect->xmin = SEQ_time_left_handle_frame_get(scene, seq);
+  r_rect->xmax = SEQ_time_right_handle_frame_get(scene, seq);
+  r_rect->ymin = seq->machine + SEQ_STRIP_OFSBOTTOM;
+  r_rect->ymax = seq->machine + SEQ_STRIP_OFSTOP;
 }
 
 Sequence *find_neighboring_sequence(Scene *scene, Sequence *test, int lr, int sel)
@@ -1406,11 +1406,6 @@ static int sequencer_select_handle_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED | OPERATOR_PASS_THROUGH;
   }
 
-  if (sequencer_retiming_mode_is_active(C) && retiming_keys_can_be_displayed(CTX_wm_space_seq(C)))
-  {
-    return OPERATOR_CANCELLED | OPERATOR_PASS_THROUGH;
-  }
-
   MouseCoords mouse_co(v2d, RNA_int_get(op->ptr, "mouse_x"), RNA_int_get(op->ptr, "mouse_y"));
 
   StripSelection selection = ED_sequencer_pick_strip_and_handle(scene, v2d, mouse_co.view);
@@ -1449,6 +1444,7 @@ static int sequencer_select_handle_exec(bContext *C, wmOperator *op)
     sequencer_select_connected_strips(selection);
   }
 
+  SEQ_retiming_selection_clear(ed);
   sequencer_select_do_updates(C, scene);
   sequencer_select_set_active(scene, selection.seq1);
   return OPERATOR_FINISHED | OPERATOR_PASS_THROUGH;
@@ -2015,7 +2011,9 @@ void SEQUENCER_OT_select_side(wmOperatorType *ot)
 /** \name Box Select Operator
  * \{ */
 
-static bool seq_box_select_rect_image_isect(const Scene *scene, const Sequence *seq, rctf *rect)
+static bool seq_box_select_rect_image_isect(const Scene *scene,
+                                            const Sequence *seq,
+                                            const rctf *rect)
 {
   float seq_image_quad[4][2];
   SEQ_image_transform_final_quad_get(scene, seq, seq_image_quad);
@@ -2038,7 +2036,9 @@ static bool seq_box_select_rect_image_isect(const Scene *scene, const Sequence *
              seq_image_quad[3], rect_quad[0], rect_quad[1], rect_quad[2], rect_quad[3]);
 }
 
-static void seq_box_select_seq_from_preview(const bContext *C, rctf *rect, const eSelectOp mode)
+static void seq_box_select_seq_from_preview(const bContext *C,
+                                            const rctf *rect,
+                                            const eSelectOp mode)
 {
   Scene *scene = CTX_data_scene(C);
   Editing *ed = SEQ_editing_get(scene);
@@ -2190,19 +2190,6 @@ static int sequencer_box_select_invoke(bContext *C, wmOperator *op, const wmEven
     StripSelection selection = ED_sequencer_pick_strip_and_handle(scene, v2d, mouse_co);
 
     if (selection.seq1 != nullptr) {
-      if (selection.handle != SEQ_HANDLE_NONE) {
-        SpaceSeq *sseq = CTX_wm_space_seq(C);
-        sseq->flag |= SPACE_SEQ_DESELECT_STRIP_HANDLE;
-        ED_sequencer_deselect_all(scene);
-
-        selection.seq1->flag |= (SELECT) | ((selection.handle == SEQ_HANDLE_RIGHT) ? SEQ_RIGHTSEL :
-                                                                                     SEQ_LEFTSEL);
-        if (selection.seq2 != nullptr) {
-          selection.seq2->flag |= (SELECT) |
-                                  ((selection.handle == SEQ_HANDLE_RIGHT) ? SEQ_LEFTSEL :
-                                                                            SEQ_RIGHTSEL);
-        }
-      }
       return OPERATOR_CANCELLED | OPERATOR_PASS_THROUGH;
     }
   }
@@ -2235,8 +2222,13 @@ void SEQUENCER_OT_select_box(wmOperatorType *ot)
   WM_operator_properties_select_operation_simple(ot);
 
   prop = RNA_def_boolean(
-      ot->srna, "tweak", false, "Tweak", "Operator has been activated using a click-drag event");
+      ot->srna,
+      "tweak",
+      false,
+      "Tweak",
+      "Make box select pass through to sequence slide when the cursor is hovering on a strip");
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+
   prop = RNA_def_boolean(
       ot->srna, "include_handles", false, "Select Handles", "Select the strips and their handles");
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);

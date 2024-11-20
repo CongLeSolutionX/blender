@@ -17,7 +17,7 @@
 #include "BLI_fileops.h"
 #include "BLI_ghash.h"
 #include "BLI_hash_md5.hh"
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 #include "BLI_string.h"
 #include "BLI_string_utils.hh"
 #include "BLI_system.h"
@@ -81,9 +81,9 @@ static bool get_thumb_dir(char *dir, ThumbSize size)
 #else
 #  if defined(USE_FREEDESKTOP)
   const char *home_cache = BLI_getenv("XDG_CACHE_HOME");
-  const char *home = home_cache ? home_cache : BLI_getenv("HOME");
+  const char *home = home_cache ? home_cache : BLI_dir_home();
 #  else
-  const char *home = BLI_getenv("HOME");
+  const char *home = BLI_dir_home();
 #  endif
   if (!home) {
     return false;

@@ -62,7 +62,7 @@
 
 #include "BLI_fileops.h"
 #include "BLI_listbase.h"
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 #include "BLI_string.h"
 #include "BLI_utildefines.h"
 
@@ -74,7 +74,7 @@
 #include "BKE_customdata.hh"
 #include "BKE_fcurve.hh"
 #include "BKE_global.hh"
-#include "BKE_image.h"
+#include "BKE_image.hh"
 #include "BKE_main.hh"
 #include "BKE_material.h"
 #include "BKE_object.hh"

@@ -25,6 +25,7 @@
 #include "BKE_grease_pencil.hh"
 
 #include "DNA_curves_types.h"
+#include "DNA_gpencil_legacy_types.h"
 
 #include "ED_curves.hh"
 #include "ED_grease_pencil.hh"
@@ -302,20 +303,20 @@ blender::bke::CurvesGeometry curves_merge_by_distance(const bke::CurvesGeometry 
 
   bke::AttributeAccessor src_attributes = src_curves.attributes();
   bke::MutableAttributeAccessor dst_attributes = dst_curves.attributes_for_write();
-  src_attributes.for_all([&](const StringRef id, const bke::AttributeMetaData &meta_data) {
-    if (attribute_filter.allow_skip(id)) {
-      return true;
+  src_attributes.foreach_attribute([&](const bke::AttributeIter &iter) {
+    if (attribute_filter.allow_skip(iter.name)) {
+      return;
     }
-    if (meta_data.domain != bke::AttrDomain::Point) {
-      return true;
+    if (iter.domain != bke::AttrDomain::Point) {
+      return;
     }
 
-    bke::GAttributeReader src_attribute = src_attributes.lookup(id);
+    bke::GAttributeReader src_attribute = iter.get();
     bke::attribute_math::convert_to_static_type(src_attribute.varray.type(), [&](auto dummy) {
       using T = decltype(dummy);
       if constexpr (!std::is_void_v<bke::attribute_math::DefaultMixer<T>>) {
         bke::SpanAttributeWriter<T> dst_attribute =
-            dst_attributes.lookup_or_add_for_write_only_span<T>(id, bke::AttrDomain::Point);
+            dst_attributes.lookup_or_add_for_write_only_span<T>(iter.name, bke::AttrDomain::Point);
         VArraySpan<T> src = src_attribute.varray.typed<T>();
 
         threading::parallel_for(dst_curves.points_range(), 1024, [&](IndexRange range) {
@@ -337,7 +338,6 @@ blender::bke::CurvesGeometry curves_merge_by_distance(const bke::CurvesGeometry 
         dst_attribute.finish();
       }
     });
-    return true;
   });
 
   return dst_curves;
@@ -504,6 +504,8 @@ static void generate_cap(const float3 &point,
                                        r_src_indices);
       break;
     case GP_STROKE_CAP_FLAT:
+      r_perimeter.append(point - normal * radius);
+      r_src_indices.append(src_point_index);
       r_perimeter.append(point + normal * radius);
       r_src_indices.append(src_point_index);
       break;
@@ -811,8 +813,8 @@ bke::CurvesGeometry create_curves_outline(const bke::greasepencil::Drawing &draw
                          dst_point_map,
                          dst_attributes);
   bke::gather_attributes(src_attributes,
-                         bke::AttrDomain::Point,
-                         bke::AttrDomain::Point,
+                         bke::AttrDomain::Curve,
+                         bke::AttrDomain::Curve,
                          bke::attribute_filter_from_skip_ref({"cyclic", "material_index"}),
                          dst_curve_map,
                          dst_attributes);

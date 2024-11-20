@@ -38,6 +38,7 @@ class VKDescriptorPools {
   static constexpr uint32_t POOL_SIZE_COMBINED_IMAGE_SAMPLER = 1000;
   static constexpr uint32_t POOL_SIZE_UNIFORM_BUFFER = 1000;
   static constexpr uint32_t POOL_SIZE_UNIFORM_TEXEL_BUFFER = 1000;
+  static constexpr uint32_t POOL_SIZE_INPUT_ATTACHMENT = 1000;
 
   Vector<VkDescriptorPool> pools_;
   int64_t active_pool_index_ = 0;
@@ -48,7 +49,7 @@ class VKDescriptorPools {
 
   void init(const VKDevice &vk_device);
 
-  std::unique_ptr<VKDescriptorSet> allocate(const VkDescriptorSetLayout &descriptor_set_layout);
+  VkDescriptorSet allocate(const VkDescriptorSetLayout descriptor_set_layout);
 
   /**
    * Reset the pools to start looking for free space from the first descriptor pool.

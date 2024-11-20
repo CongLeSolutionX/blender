@@ -12,7 +12,7 @@
 #include "BLI_kdopbvh.h"
 #include "BLI_math_matrix.h"
 #include "BLI_math_vector.h"
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 #include "BLI_utildefines.h"
 
 #include "RNA_define.hh"
@@ -32,7 +32,7 @@
 
 #  include "BKE_editmesh.hh"
 #  include "BKE_global.hh"
-#  include "BKE_image.h"
+#  include "BKE_image.hh"
 #  include "BKE_scene.hh"
 #  include "BKE_writemovie.hh"
 

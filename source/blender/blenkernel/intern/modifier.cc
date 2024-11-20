@@ -36,7 +36,7 @@
 
 #include "BLI_linklist.h"
 #include "BLI_listbase.h"
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 #include "BLI_rand.hh"
 #include "BLI_session_uid.h"
 #include "BLI_string.h"
@@ -770,7 +770,14 @@ bool BKE_modifiers_uses_armature(Object *ob, bArmature *arm)
 
   for (; md; md = md->next) {
     if (md->type == eModifierType_Armature) {
-      ArmatureModifierData *amd = (ArmatureModifierData *)md;
+      ArmatureModifierData *amd = reinterpret_cast<ArmatureModifierData *>(md);
+      if (amd->object && amd->object->data == arm) {
+        return true;
+      }
+    }
+    else if (md->type == eModifierType_GreasePencilArmature) {
+      GreasePencilArmatureModifierData *amd = reinterpret_cast<GreasePencilArmatureModifierData *>(
+          md);
       if (amd->object && amd->object->data == arm) {
         return true;
       }

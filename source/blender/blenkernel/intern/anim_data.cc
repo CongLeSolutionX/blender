@@ -49,14 +49,11 @@
 #include "RNA_access.hh"
 #include "RNA_path.hh"
 
+#include "ANIM_action.hh"
 #include "ANIM_action_iterators.hh"
 #include "ANIM_action_legacy.hh"
 
 #include "CLG_log.h"
-
-#ifdef WITH_ANIM_BAKLAVA
-#  include "ANIM_action.hh"
-#endif  // WITH_ANIM_BAKLAVA
 
 static CLG_LogRef LOG = {"bke.anim_sys"};
 
@@ -195,10 +192,16 @@ bool BKE_animdata_set_action(ReportList *reports, ID *id, bAction *act)
 {
   using namespace blender;
 
-  AnimData *adt = BKE_animdata_from_id(id);
+  /* If we're unassigning (null action pointer) and there's no animdata, we can
+   * skip the whole song and dance of creating animdata just to "unassign" the
+   * action from it. */
+  if (act == nullptr && BKE_animdata_from_id(id) == nullptr) {
+    return true;
+  }
 
+  AnimData *adt = BKE_animdata_ensure_id(id);
   if (adt == nullptr) {
-    BKE_report(reports, RPT_WARNING, "No AnimData to set action on");
+    BKE_report(reports, RPT_WARNING, "Attempt to set action on non-animatable ID");
     return false;
   }
 
@@ -208,16 +211,7 @@ bool BKE_animdata_set_action(ReportList *reports, ID *id, bAction *act)
     return false;
   }
 
-#ifdef WITH_ANIM_BAKLAVA
-  if (!act) {
-    animrig::unassign_action(*id);
-    return true;
-  }
-  animrig::Action &action = act->wrap();
-  return animrig::assign_action(&action, *id);
-#else
-  return animdata_set_action(reports, id, &adt->action, act);
-#endif  // WITH_ANIM_BAKLAVA
+  return animrig::assign_action(act, {*id, *adt});
 }
 
 bool BKE_animdata_action_editable(const AnimData *adt)
@@ -237,8 +231,7 @@ bool BKE_animdata_action_ensure_idroot(const ID *owner, bAction *action)
     return true;
   }
 
-#ifdef WITH_ANIM_BAKLAVA
-  if (action->wrap().is_action_layered()) {
+  if (!blender::animrig::legacy::action_treat_as_legacy(*action)) {
     /* TODO: for layered Actions, this function doesn't make sense. Once all Actions are
      * auto-versioned to layered Actions, this entire function can be removed. */
     action->idroot = 0;
@@ -246,7 +239,6 @@ bool BKE_animdata_action_ensure_idroot(const ID *owner, bAction *action)
      * that are specialized. */
     return true;
   }
-#endif
 
   if (action->idroot == 0) {
     /* First time this Action is assigned, lock it to this ID type. */
@@ -272,24 +264,23 @@ void BKE_animdata_free(ID *id, const bool do_id_user)
   }
 
   if (do_id_user) {
-    /* unlink action (don't free, as it's in its own list) */
+    /* The ADT is going to be freed, which means that if it's in tweak mode, it'll have to exit
+     * that first. Otherwise we cannot un-assign its Action. */
+    BKE_nla_tweakmode_exit({*id, *adt});
+
     if (adt->action) {
-#ifdef WITH_ANIM_BAKLAVA
-      blender::animrig::unassign_action(*id);
-#else
-      id_us_min(&adt->action->id);
-#endif
+      const bool unassign_ok = blender::animrig::unassign_action(*id);
+      BLI_assert_msg(unassign_ok,
+                     "Expecting action un-assignment to always work when not in NLA tweak mode");
+      UNUSED_VARS_NDEBUG(unassign_ok);
     }
     /* same goes for the temporarily displaced action */
     if (adt->tmpact) {
-#ifdef WITH_ANIM_BAKLAVA
-      /* TODO: Linked Actions do not support usage in the NLA yet, so work around this and cleanly
-       * unassign the Action by moving it back to `adt->action`.  */
-      adt->action = adt->tmpact;
-      blender::animrig::unassign_action(*id);
-#else
-      id_us_min(&adt->tmpact->id);
-#endif
+      /* This should never happen, as we _just_ exited tweak mode. */
+      BLI_assert_unreachable();
+      const bool unassign_ok = blender::animrig::assign_tmpaction(nullptr, {*id, *adt});
+      BLI_assert_msg(unassign_ok, "Expecting tmpaction un-assignment to always work");
+      UNUSED_VARS_NDEBUG(unassign_ok);
     }
   }
 
@@ -477,9 +468,10 @@ static void animdata_copy_id_action(Main *bmain,
 
       /* The Action was cloned, so this should find the same-named slot automatically. */
       const slot_handle_t orig_slot_handle = adt->slot_handle;
-      assign_action(&cloned_action->wrap(), *id);
+      const bool assign_ok = assign_action(&cloned_action->wrap(), *id);
+      BLI_assert_msg(assign_ok, "Expected action assignment to work when copying animdata");
       BLI_assert(orig_slot_handle == adt->slot_handle);
-      UNUSED_VARS_NDEBUG(orig_slot_handle);
+      UNUSED_VARS_NDEBUG(assign_ok, orig_slot_handle);
     }
     if (adt->tmpact && (do_linked_id || !ID_IS_LINKED(adt->tmpact))) {
       bAction *cloned_action = reinterpret_cast<bAction *>(BKE_id_copy(bmain, &adt->tmpact->id));
@@ -489,9 +481,10 @@ static void animdata_copy_id_action(Main *bmain,
 
       /* The Action was cloned, so this should find the same-named slot automatically. */
       const slot_handle_t orig_slot_handle = adt->tmp_slot_handle;
-      assign_tmpaction(&cloned_action->wrap(), {*id, *adt});
+      const bool assign_ok = assign_tmpaction(&cloned_action->wrap(), {*id, *adt});
+      BLI_assert_msg(assign_ok, "Expected tmp-action assignment to work when copying animdata");
       BLI_assert(orig_slot_handle == adt->tmp_slot_handle);
-      UNUSED_VARS_NDEBUG(orig_slot_handle);
+      UNUSED_VARS_NDEBUG(assign_ok, orig_slot_handle);
     }
   }
   bNodeTree *ntree = blender::bke::node_tree_from_id(id);
@@ -716,20 +709,21 @@ void BKE_animdata_transfer_by_basepath(Main *bmain, ID *srcID, ID *dstID, ListBa
                 srcAdt->action->id.name);
 
       /* This sets dstAdt->action to nullptr. */
-      animrig::unassign_action(dst_owned_adt);
+      const bool unassign_ok = animrig::unassign_action(dst_owned_adt);
+      BLI_assert_msg(unassign_ok, "Expected Action unassignment to work");
+      UNUSED_VARS_NDEBUG(unassign_ok);
     }
 
     /* Set up an action if necessary, and name it in a similar way so that it
      * can be easily found again. */
     if (!dstAdt->action) {
       animrig::Action &new_action = animrig::action_add(*bmain, srcAdt->action->id.name + 2);
-      if (USER_EXPERIMENTAL_TEST(&U, use_animation_baklava)) {
-        new_action.slot_add_for_id(*dstID);
-      }
-      animrig::assign_action(&new_action, dst_owned_adt);
-      if (USER_EXPERIMENTAL_TEST(&U, use_animation_baklava)) {
-        BLI_assert(dstAdt->slot_handle != animrig::Slot::unassigned);
-      }
+      new_action.slot_add_for_id(*dstID);
+
+      const bool assign_ok = animrig::assign_action(&new_action, dst_owned_adt);
+      BLI_assert_msg(assign_ok, "Expected Action assignment to work");
+      UNUSED_VARS_NDEBUG(assign_ok);
+      BLI_assert(dstAdt->slot_handle != animrig::Slot::unassigned);
     }
 
     /* loop over base paths, trying to fix for each one... */
@@ -1153,8 +1147,8 @@ void BKE_animdata_fix_paths_rename(ID *owner_id,
 
 /* Remove FCurves with Prefix  -------------------------------------- */
 
-/* Check RNA-Paths for a list of F-Curves */
-static bool fcurves_path_remove_fix(const char *prefix, ListBase *curves)
+/** Remove F-Curves from the listbase when their RNA path starts with `prefix`. */
+static bool fcurves_path_remove_from_listbase(const char *prefix, ListBase *curves)
 {
   FCurve *fcu, *fcn;
   bool any_removed = false;
@@ -1186,42 +1180,43 @@ static bool nlastrips_path_remove_fix(const char *prefix, ListBase *strips)
   LISTBASE_FOREACH (NlaStrip *, strip, strips) {
     /* fix strip's action */
     if (strip->act) {
-      any_removed |= fcurves_path_remove_fix(prefix, &strip->act->curves);
+      any_removed |= animrig::legacy::action_fcurves_remove(
+          *strip->act, strip->action_slot_handle, prefix);
     }
 
     /* Check sub-strips (if meta-strips). */
     any_removed |= nlastrips_path_remove_fix(prefix, &strip->strips);
   }
+
   return any_removed;
 }
 
 bool BKE_animdata_fix_paths_remove(ID *id, const char *prefix)
 {
-  /* Only some ID-blocks have this info for now, so we cast the
-   * types that do to be of type IdAdtTemplate
-   */
-  if (!id_can_have_animdata(id)) {
+  AnimData *adt = BKE_animdata_from_id(id);
+  if (!adt) {
     return false;
   }
+
   bool any_removed = false;
-  IdAdtTemplate *iat = (IdAdtTemplate *)id;
-  AnimData *adt = iat->adt;
-  /* check if there's any AnimData to start with */
-  if (adt) {
-    /* free fcurves */
-    if (adt->action != nullptr) {
-      any_removed |= fcurves_path_remove_fix(prefix, &adt->action->curves);
-    }
-    if (adt->tmpact != nullptr) {
-      any_removed |= fcurves_path_remove_fix(prefix, &adt->tmpact->curves);
-    }
-    /* free drivers - stored as a list of F-Curves */
-    any_removed |= fcurves_path_remove_fix(prefix, &adt->drivers);
-    /* NLA Data - Animation Data for Strips */
-    LISTBASE_FOREACH (NlaTrack *, nlt, &adt->nla_tracks) {
-      any_removed |= nlastrips_path_remove_fix(prefix, &nlt->strips);
-    }
+
+  /* Actions. */
+  if (adt->action) {
+    any_removed |= animrig::legacy::action_fcurves_remove(*adt->action, adt->slot_handle, prefix);
   }
+  if (adt->tmpact) {
+    any_removed |= animrig::legacy::action_fcurves_remove(
+        *adt->action, adt->tmp_slot_handle, prefix);
+  }
+
+  /* Drivers. */
+  any_removed |= fcurves_path_remove_from_listbase(prefix, &adt->drivers);
+
+  /* NLA strips. */
+  LISTBASE_FOREACH (NlaTrack *, nlt, &adt->nla_tracks) {
+    any_removed |= nlastrips_path_remove_fix(prefix, &nlt->strips);
+  }
+
   return any_removed;
 }
 
@@ -1391,6 +1386,9 @@ void BKE_animdata_main_cb(Main *bmain, const FunctionRef<void(ID *, AnimData *)>
 
   /* grease pencil */
   ANIMDATA_IDS_CB(bmain->gpencils.first);
+
+  /* grease pencil */
+  ANIMDATA_IDS_CB(bmain->grease_pencils.first);
 
   /* palettes */
   ANIMDATA_IDS_CB(bmain->palettes.first);

@@ -7,11 +7,15 @@
  */
 
 #include "ED_screen.hh"
+#include "ED_screen_types.hh"
 
 #include "GPU_batch_presets.hh"
 #include "GPU_immediate.hh"
 #include "GPU_platform.hh"
 #include "GPU_state.hh"
+
+#include "BKE_global.hh"
+#include "BKE_screen.hh"
 
 #include "BLF_api.hh"
 
@@ -165,6 +169,38 @@ void ED_screen_draw_edges(wmWindow *win)
     return;
   }
 
+  ARegion *region = screen->active_region;
+  ScrArea *active_area = nullptr;
+
+  if (region) {
+    /* Find active area from active region. */
+    const int pos[2] = {BLI_rcti_cent_x(&region->winrct), BLI_rcti_cent_y(&region->winrct)};
+    active_area = BKE_screen_find_area_xy(screen, SPACE_TYPE_ANY, pos);
+  }
+
+  if (!active_area) {
+    LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
+      AZone *zone = ED_area_actionzone_find_xy(area, win->eventstate->xy);
+      /* Get area from action zone, if not scroll-bar. */
+      if (zone && zone->type != AZONE_REGION_SCROLL) {
+        active_area = area;
+        break;
+      }
+    }
+  }
+
+  if (!active_area && G.moving & G_TRANSFORM_WM) {
+    active_area = BKE_screen_find_area_xy(screen, SPACE_TYPE_ANY, win->eventstate->xy);
+    /* We don't want an active area if at a border edge. */
+    if (active_area) {
+      rcti rect = active_area->totrct;
+      BLI_rcti_pad(&rect, -BORDERPADDING, -BORDERPADDING);
+      if (!BLI_rcti_isect_pt_v(&rect, win->eventstate->xy)) {
+        active_area = nullptr;
+      }
+    }
+  }
+
   const blender::int2 win_size = WM_window_native_pixel_size(win);
   float col[4], corner_scale, edge_thickness;
   int verts_per_corner = 0;
@@ -193,7 +229,7 @@ void ED_screen_draw_edges(wmWindow *win)
     GPU_scissor_test(true);
   }
 
-  UI_GetThemeColor4fv(TH_EDITOR_OUTLINE, col);
+  UI_GetThemeColor4fv(TH_EDITOR_BORDER, col);
   col[3] = 1.0f;
   corner_scale = U.pixelsize * 8.0f;
   edge_thickness = corner_scale * 0.21f;
@@ -210,11 +246,66 @@ void ED_screen_draw_edges(wmWindow *win)
     drawscredge_area(area, win_size[0], win_size[1], edge_thickness);
   }
 
+  float outline1[4];
+  float outline2[4];
+  UI_GetThemeColor4fv(TH_EDITOR_OUTLINE, outline1);
+  UI_GetThemeColor4fv(TH_EDITOR_OUTLINE_ACTIVE, outline2);
+  UI_draw_roundbox_corner_set(UI_CNR_ALL);
+  const float offset = UI_SCALE_FAC * 1.34f;
+
+  LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
+    rctf rectf2 = {float(area->totrct.xmin) + offset - 1.0f,
+                   float(area->totrct.xmax) - offset + 1.5f,
+                   float(area->totrct.ymin) + offset - 1.0f,
+                   float(area->totrct.ymax) - offset + 1.0f};
+
+    UI_draw_roundbox_4fv_ex(&rectf2,
+                            nullptr,
+                            nullptr,
+                            1.0f,
+                            (area == active_area) ? outline2 : outline1,
+                            U.pixelsize,
+                            6.0f * U.pixelsize);
+  }
+
   GPU_blend(GPU_BLEND_NONE);
 
   if (U.pixelsize <= 1.0f) {
     GPU_scissor_test(false);
   }
+}
+
+void screen_draw_move_highlight(bScreen *screen, eScreenAxis dir_axis)
+{
+  rctf rect = {SHRT_MAX, SHRT_MIN, SHRT_MAX, SHRT_MIN};
+
+  LISTBASE_FOREACH (const ScrEdge *, edge, &screen->edgebase) {
+    if (edge->v1->editflag && edge->v2->editflag) {
+      if (dir_axis == SCREEN_AXIS_H) {
+        rect.xmin = std::min({rect.xmin, float(edge->v1->vec.x), float(edge->v2->vec.x)});
+        rect.xmax = std::max({rect.xmax, float(edge->v1->vec.x), float(edge->v2->vec.x)});
+        rect.ymin = rect.ymax = float(edge->v1->vec.y);
+      }
+      else {
+        rect.ymin = std::min({rect.ymin, float(edge->v1->vec.y), float(edge->v2->vec.y)});
+        rect.ymax = std::max({rect.ymax, float(edge->v1->vec.y), float(edge->v2->vec.y)});
+        rect.xmin = rect.xmax = float(edge->v1->vec.x);
+      }
+    };
+  }
+
+  if (dir_axis == SCREEN_AXIS_H) {
+    BLI_rctf_pad(&rect, 0.0f, 2.5f * U.pixelsize);
+  }
+  else {
+    BLI_rctf_pad(&rect, 2.5f * U.pixelsize, 0.0f);
+  }
+
+  float inner[4] = {1.0f, 1.0f, 1.0f, 0.7f};
+  float outline[4] = {0.0f, 0.0f, 0.0f, 0.8f};
+  UI_draw_roundbox_corner_set(UI_CNR_ALL);
+  UI_draw_roundbox_4fv_ex(
+      &rect, inner, nullptr, 1.0f, outline, 2.0f * U.pixelsize, 2.5f * U.pixelsize);
 }
 
 static void screen_draw_area_drag_tip(int x, int y, const ScrArea *source, const std::string &hint)
@@ -359,6 +450,73 @@ void screen_draw_join_highlight(const wmWindow *win, ScrArea *sa1, ScrArea *sa2,
       win->eventstate->xy[0], win->eventstate->xy[1], sa1, IFACE_("Join Areas"));
 }
 
+static void rounded_corners(rctf rect, float color[4], int corners)
+{
+  GPUVertFormat *format = immVertexFormat();
+  const uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+
+  const float rad = 7 * U.pixelsize;
+
+  float vec[4][2] = {
+      {0.195, 0.02},
+      {0.55, 0.169},
+      {0.831, 0.45},
+      {0.98, 0.805},
+  };
+  for (int a = 0; a < 4; a++) {
+    mul_v2_fl(vec[a], rad);
+  }
+
+  immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
+  immUniformColor4fv(color);
+
+  if (corners & UI_CNR_TOP_LEFT) {
+    immBegin(GPU_PRIM_TRI_FAN, 7);
+    immVertex2f(pos, rect.xmin - 1, rect.ymax);
+    immVertex2f(pos, rect.xmin, rect.ymax - rad);
+    for (int a = 0; a < 4; a++) {
+      immVertex2f(pos, rect.xmin + vec[a][1], rect.ymax - rad + vec[a][0]);
+    }
+    immVertex2f(pos, rect.xmin + rad, rect.ymax);
+    immEnd();
+  }
+
+  if (corners & UI_CNR_TOP_RIGHT) {
+    immBegin(GPU_PRIM_TRI_FAN, 7);
+    immVertex2f(pos, rect.xmax + 1, rect.ymax);
+    immVertex2f(pos, rect.xmax - rad, rect.ymax);
+    for (int a = 0; a < 4; a++) {
+      immVertex2f(pos, rect.xmax - rad + vec[a][0], rect.ymax - vec[a][1]);
+    }
+    immVertex2f(pos, rect.xmax, rect.ymax - rad);
+    immEnd();
+  }
+
+  if (corners & UI_CNR_BOTTOM_RIGHT) {
+    immBegin(GPU_PRIM_TRI_FAN, 7);
+    immVertex2f(pos, rect.xmax + 1, rect.ymin);
+    immVertex2f(pos, rect.xmax, rect.ymin + rad);
+    for (int a = 0; a < 4; a++) {
+      immVertex2f(pos, rect.xmax - vec[a][1], rect.ymin + rad - vec[a][0]);
+    }
+    immVertex2f(pos, rect.xmax - rad, rect.ymin);
+    immEnd();
+  }
+
+  if (corners & UI_CNR_BOTTOM_LEFT) {
+    immBegin(GPU_PRIM_TRI_FAN, 7);
+    immVertex2f(pos, rect.xmin - 1, rect.ymin);
+    immVertex2f(pos, rect.xmin + rad, rect.ymin);
+    for (int a = 0; a < 4; a++) {
+      immVertex2f(pos, rect.xmin + rad - vec[a][0], rect.ymin + vec[a][1]);
+    }
+    immVertex2f(pos, rect.xmin, rect.ymin + rad);
+    immEnd();
+  }
+
+  immUnbindProgram();
+}
+
 void screen_draw_dock_preview(
     ScrArea *source, ScrArea *target, AreaDockTarget dock_target, float factor, int x, int y)
 {
@@ -369,7 +527,7 @@ void screen_draw_dock_preview(
   float outline[4] = {1.0f, 1.0f, 1.0f, 0.4f};
   float inner[4] = {1.0f, 1.0f, 1.0f, 0.1f};
   float border[4];
-  UI_GetThemeColor4fv(TH_EDITOR_OUTLINE, border);
+  UI_GetThemeColor4fv(TH_EDITOR_BORDER, border);
   UI_draw_roundbox_corner_set(UI_CNR_ALL);
   float half_line_width = 2.0f * U.pixelsize;
 
@@ -379,32 +537,38 @@ void screen_draw_dock_preview(
   BLI_rctf_rcti_copy(&remainder, &target->totrct);
 
   float split;
+  int corners = UI_CNR_NONE;
 
   if (dock_target == AreaDockTarget::Right) {
     split = std::min(dest.xmin + target->winx * (1.0f - factor),
                      dest.xmax - AREAMINX * UI_SCALE_FAC);
     dest.xmin = split + half_line_width;
     remainder.xmax = split - half_line_width;
+    corners = UI_CNR_TOP_LEFT | UI_CNR_BOTTOM_LEFT;
   }
   else if (dock_target == AreaDockTarget::Left) {
     split = std::max(dest.xmax - target->winx * (1.0f - factor),
                      dest.xmin + AREAMINX * UI_SCALE_FAC);
     dest.xmax = split - half_line_width;
     remainder.xmin = split + half_line_width;
+    corners = UI_CNR_TOP_RIGHT | UI_CNR_BOTTOM_RIGHT;
   }
   else if (dock_target == AreaDockTarget::Top) {
     split = std::min(dest.ymin + target->winy * (1.0f - factor),
                      dest.ymax - HEADERY * UI_SCALE_FAC);
     dest.ymin = split + half_line_width;
     remainder.ymax = split - half_line_width;
+    corners = UI_CNR_BOTTOM_RIGHT | UI_CNR_BOTTOM_LEFT;
   }
   else if (dock_target == AreaDockTarget::Bottom) {
     split = std::max(dest.ymax - target->winy * (1.0f - factor),
                      dest.ymin + HEADERY * UI_SCALE_FAC);
     dest.ymax = split - half_line_width;
     remainder.ymin = split + half_line_width;
+    corners = UI_CNR_TOP_RIGHT | UI_CNR_TOP_LEFT;
   }
 
+  rounded_corners(dest, border, corners);
   UI_draw_roundbox_4fv_ex(&dest, inner, nullptr, 1.0f, outline, U.pixelsize, 6 * U.pixelsize);
 
   if (dock_target != AreaDockTarget::Center) {
@@ -432,7 +596,7 @@ void screen_draw_split_preview(ScrArea *area, const eScreenAxis dir_axis, const 
   float outline[4] = {1.0f, 1.0f, 1.0f, 0.4f};
   float inner[4] = {1.0f, 1.0f, 1.0f, 0.10f};
   float border[4];
-  UI_GetThemeColor4fv(TH_EDITOR_OUTLINE, border);
+  UI_GetThemeColor4fv(TH_EDITOR_BORDER, border);
   UI_draw_roundbox_corner_set(UI_CNR_ALL);
 
   rctf rect;
@@ -454,6 +618,10 @@ void screen_draw_split_preview(ScrArea *area, const eScreenAxis dir_axis, const 
   rect.xmax = (dir_axis == SCREEN_AXIS_V) ? x - half_line_width : rect.xmax;
   rect.ymax = (dir_axis == SCREEN_AXIS_H) ? y - half_line_width : rect.ymax;
 
+  rounded_corners(rect,
+                  border,
+                  (dir_axis == SCREEN_AXIS_H) ? UI_CNR_TOP_RIGHT | UI_CNR_TOP_LEFT :
+                                                UI_CNR_BOTTOM_RIGHT | UI_CNR_TOP_RIGHT);
   UI_draw_roundbox_4fv_ex(&rect, inner, nullptr, 1.0f, outline, U.pixelsize, 7 * U.pixelsize);
 
   /* Outlined rectangle to right/below split position. */
@@ -465,6 +633,11 @@ void screen_draw_split_preview(ScrArea *area, const eScreenAxis dir_axis, const 
     rect.xmin = x + half_line_width;
     rect.xmax = area->totrct.xmax;
   }
+
+  rounded_corners(rect,
+                  border,
+                  (dir_axis == SCREEN_AXIS_H) ? UI_CNR_BOTTOM_RIGHT | UI_CNR_BOTTOM_LEFT :
+                                                UI_CNR_BOTTOM_LEFT | UI_CNR_TOP_LEFT);
   UI_draw_roundbox_4fv_ex(&rect, inner, nullptr, 1.0f, outline, U.pixelsize, 7 * U.pixelsize);
 
   /* Darken the split position itself. */

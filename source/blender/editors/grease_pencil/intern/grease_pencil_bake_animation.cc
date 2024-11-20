@@ -293,12 +293,11 @@ static int bake_grease_pencil_animation_exec(bContext *C, wmOperator *op)
 static bool bake_grease_pencil_animation_poll(bContext *C)
 {
   const Object *obact = CTX_data_active_object(C);
-  if (CTX_data_mode_enum(C) != CTX_MODE_OBJECT) {
-    return false;
-  }
 
   /* Check if grease pencil or empty for dupli groups. */
-  if ((obact == nullptr) || !ELEM(obact->type, OB_GREASE_PENCIL, OB_EMPTY)) {
+  if ((obact == nullptr) || (obact->mode != OB_MODE_OBJECT) ||
+      !ELEM(obact->type, OB_GREASE_PENCIL, OB_EMPTY))
+  {
     return false;
   }
 
@@ -311,7 +310,7 @@ static void GREASE_PENCIL_OT_bake_grease_pencil_animation(wmOperatorType *ot)
 {
   ot->name = "Bake Object Transform to Grease Pencil";
   ot->idname = "GREASE_PENCIL_OT_bake_grease_pencil_animation";
-  ot->description = "Bake grease pencil object transform to grease pencil keyframes";
+  ot->description = "Bake Grease Pencil object transform to Grease Pencil keyframes";
 
   ot->invoke = bake_grease_pencil_animation_invoke;
   ot->exec = bake_grease_pencil_animation_exec;

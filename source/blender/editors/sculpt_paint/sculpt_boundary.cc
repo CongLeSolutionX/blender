@@ -21,7 +21,7 @@
 #include "BKE_ccg.hh"
 #include "BKE_colortools.hh"
 #include "BKE_paint.hh"
-#include "BKE_pbvh_api.hh"
+#include "BKE_paint_bvh.hh"
 
 #include "brushes/types.hh"
 #include "mesh_brush_common.hh"
@@ -33,6 +33,8 @@
 
 #include "GPU_immediate.hh"
 #include "GPU_state.hh"
+
+#include "bmesh.hh"
 
 #include <cstdlib>
 
@@ -332,7 +334,7 @@ static void indices_init_mesh(Object &object,
   flood_fill::FillDataMesh flood_fill(vert_positions.size());
 
   Set<int, BOUNDARY_INDICES_BLOCK_SIZE> included_verts;
-  add_index(boundary, initial_boundary_vert, 1.0f, included_verts);
+  add_index(boundary, initial_boundary_vert, 0.0f, included_verts);
   flood_fill.add_initial(initial_boundary_vert);
 
   flood_fill.execute(object, vert_to_face, [&](const int from_v, const int to_v) {
@@ -1290,24 +1292,22 @@ static void do_bend_brush(const Depsgraph &depsgraph,
 
       threading::EnumerableThreadSpecific<LocalDataMesh> all_tls;
       MutableSpan<bke::pbvh::MeshNode> nodes = pbvh.nodes<bke::pbvh::MeshNode>();
-      threading::parallel_for(node_mask.index_range(), 1, [&](const IndexRange range) {
+      node_mask.foreach_index(GrainSize(1), [&](const int i) {
         LocalDataMesh &tls = all_tls.local();
-        node_mask.slice(range).foreach_index([&](const int i) {
-          calc_bend_mesh(depsgraph,
-                         sd,
-                         object,
-                         boundary.edit_info.propagation_steps_num,
-                         boundary.edit_info.strength_factor,
-                         boundary.bend.pivot_positions,
-                         boundary.bend.pivot_rotation_axis,
-                         nodes[i],
-                         tls,
-                         boundary.initial_vert_position,
-                         strength,
-                         deform_target,
-                         position_data);
-          bke::pbvh::update_node_bounds_mesh(position_data.eval, nodes[i]);
-        });
+        calc_bend_mesh(depsgraph,
+                       sd,
+                       object,
+                       boundary.edit_info.propagation_steps_num,
+                       boundary.edit_info.strength_factor,
+                       boundary.bend.pivot_positions,
+                       boundary.bend.pivot_rotation_axis,
+                       nodes[i],
+                       tls,
+                       boundary.initial_vert_position,
+                       strength,
+                       deform_target,
+                       position_data);
+        bke::pbvh::update_node_bounds_mesh(position_data.eval, nodes[i]);
       });
       break;
     }
@@ -1316,47 +1316,43 @@ static void do_bend_brush(const Depsgraph &depsgraph,
       MutableSpan<float3> positions = subdiv_ccg.positions;
       threading::EnumerableThreadSpecific<LocalDataGrids> all_tls;
       MutableSpan<bke::pbvh::GridsNode> nodes = pbvh.nodes<bke::pbvh::GridsNode>();
-      threading::parallel_for(node_mask.index_range(), 1, [&](const IndexRange range) {
+      node_mask.foreach_index(GrainSize(1), [&](const int i) {
         LocalDataGrids &tls = all_tls.local();
-        node_mask.slice(range).foreach_index([&](const int i) {
-          calc_bend_grids(depsgraph,
-                          sd,
-                          object,
-                          subdiv_ccg,
-                          boundary.edit_info.propagation_steps_num,
-                          boundary.edit_info.strength_factor,
-                          boundary.bend.pivot_positions,
-                          boundary.bend.pivot_rotation_axis,
-                          nodes[i],
-                          tls,
-                          boundary.initial_vert_position,
-                          strength,
-                          deform_target);
-          bke::pbvh::update_node_bounds_grids(subdiv_ccg.grid_area, positions, nodes[i]);
-        });
+        calc_bend_grids(depsgraph,
+                        sd,
+                        object,
+                        subdiv_ccg,
+                        boundary.edit_info.propagation_steps_num,
+                        boundary.edit_info.strength_factor,
+                        boundary.bend.pivot_positions,
+                        boundary.bend.pivot_rotation_axis,
+                        nodes[i],
+                        tls,
+                        boundary.initial_vert_position,
+                        strength,
+                        deform_target);
+        bke::pbvh::update_node_bounds_grids(subdiv_ccg.grid_area, positions, nodes[i]);
       });
       break;
     }
     case bke::pbvh::Type::BMesh: {
       threading::EnumerableThreadSpecific<LocalDataBMesh> all_tls;
       MutableSpan<bke::pbvh::BMeshNode> nodes = pbvh.nodes<bke::pbvh::BMeshNode>();
-      threading::parallel_for(node_mask.index_range(), 1, [&](const IndexRange range) {
+      node_mask.foreach_index(GrainSize(1), [&](const int i) {
         LocalDataBMesh &tls = all_tls.local();
-        node_mask.slice(range).foreach_index([&](const int i) {
-          calc_bend_bmesh(depsgraph,
-                          sd,
-                          object,
-                          boundary.edit_info.propagation_steps_num,
-                          boundary.edit_info.strength_factor,
-                          boundary.bend.pivot_positions,
-                          boundary.bend.pivot_rotation_axis,
-                          nodes[i],
-                          tls,
-                          boundary.initial_vert_position,
-                          strength,
-                          deform_target);
-          bke::pbvh::update_node_bounds_bmesh(nodes[i]);
-        });
+        calc_bend_bmesh(depsgraph,
+                        sd,
+                        object,
+                        boundary.edit_info.propagation_steps_num,
+                        boundary.edit_info.strength_factor,
+                        boundary.bend.pivot_positions,
+                        boundary.bend.pivot_rotation_axis,
+                        nodes[i],
+                        tls,
+                        boundary.initial_vert_position,
+                        strength,
+                        deform_target);
+        bke::pbvh::update_node_bounds_bmesh(nodes[i]);
       });
       break;
     }
@@ -1581,23 +1577,21 @@ static void do_slide_brush(const Depsgraph &depsgraph,
 
       threading::EnumerableThreadSpecific<LocalDataMesh> all_tls;
       MutableSpan<bke::pbvh::MeshNode> nodes = pbvh.nodes<bke::pbvh::MeshNode>();
-      threading::parallel_for(node_mask.index_range(), 1, [&](const IndexRange range) {
+      node_mask.foreach_index(GrainSize(1), [&](const int i) {
         LocalDataMesh &tls = all_tls.local();
-        node_mask.slice(range).foreach_index([&](const int i) {
-          calc_slide_mesh(depsgraph,
-                          sd,
-                          object,
-                          boundary.edit_info.propagation_steps_num,
-                          boundary.edit_info.strength_factor,
-                          boundary.slide.directions,
-                          nodes[i],
-                          tls,
-                          boundary.initial_vert_position,
-                          strength,
-                          deform_target,
-                          position_data);
-          bke::pbvh::update_node_bounds_mesh(position_data.eval, nodes[i]);
-        });
+        calc_slide_mesh(depsgraph,
+                        sd,
+                        object,
+                        boundary.edit_info.propagation_steps_num,
+                        boundary.edit_info.strength_factor,
+                        boundary.slide.directions,
+                        nodes[i],
+                        tls,
+                        boundary.initial_vert_position,
+                        strength,
+                        deform_target,
+                        position_data);
+        bke::pbvh::update_node_bounds_mesh(position_data.eval, nodes[i]);
       });
       break;
     }
@@ -1606,45 +1600,41 @@ static void do_slide_brush(const Depsgraph &depsgraph,
       MutableSpan<float3> positions = subdiv_ccg.positions;
       threading::EnumerableThreadSpecific<LocalDataGrids> all_tls;
       MutableSpan<bke::pbvh::GridsNode> nodes = pbvh.nodes<bke::pbvh::GridsNode>();
-      threading::parallel_for(node_mask.index_range(), 1, [&](const IndexRange range) {
+      node_mask.foreach_index(GrainSize(1), [&](const int i) {
         LocalDataGrids &tls = all_tls.local();
-        node_mask.slice(range).foreach_index([&](const int i) {
-          calc_slide_grids(depsgraph,
-                           sd,
-                           object,
-                           subdiv_ccg,
-                           boundary.edit_info.propagation_steps_num,
-                           boundary.edit_info.strength_factor,
-                           boundary.slide.directions,
-                           nodes[i],
-                           tls,
-                           boundary.initial_vert_position,
-                           strength,
-                           deform_target);
-          bke::pbvh::update_node_bounds_grids(subdiv_ccg.grid_area, positions, nodes[i]);
-        });
+        calc_slide_grids(depsgraph,
+                         sd,
+                         object,
+                         subdiv_ccg,
+                         boundary.edit_info.propagation_steps_num,
+                         boundary.edit_info.strength_factor,
+                         boundary.slide.directions,
+                         nodes[i],
+                         tls,
+                         boundary.initial_vert_position,
+                         strength,
+                         deform_target);
+        bke::pbvh::update_node_bounds_grids(subdiv_ccg.grid_area, positions, nodes[i]);
       });
       break;
     }
     case bke::pbvh::Type::BMesh: {
       threading::EnumerableThreadSpecific<LocalDataBMesh> all_tls;
       MutableSpan<bke::pbvh::BMeshNode> nodes = pbvh.nodes<bke::pbvh::BMeshNode>();
-      threading::parallel_for(node_mask.index_range(), 1, [&](const IndexRange range) {
+      node_mask.foreach_index(GrainSize(1), [&](const int i) {
         LocalDataBMesh &tls = all_tls.local();
-        node_mask.slice(range).foreach_index([&](const int i) {
-          calc_slide_bmesh(depsgraph,
-                           sd,
-                           object,
-                           boundary.edit_info.propagation_steps_num,
-                           boundary.edit_info.strength_factor,
-                           boundary.slide.directions,
-                           nodes[i],
-                           tls,
-                           boundary.initial_vert_position,
-                           strength,
-                           deform_target);
-          bke::pbvh::update_node_bounds_bmesh(nodes[i]);
-        });
+        calc_slide_bmesh(depsgraph,
+                         sd,
+                         object,
+                         boundary.edit_info.propagation_steps_num,
+                         boundary.edit_info.strength_factor,
+                         boundary.slide.directions,
+                         nodes[i],
+                         tls,
+                         boundary.initial_vert_position,
+                         strength,
+                         deform_target);
+        bke::pbvh::update_node_bounds_bmesh(nodes[i]);
       });
       break;
     }
@@ -1855,22 +1845,20 @@ static void do_inflate_brush(const Depsgraph &depsgraph,
 
       threading::EnumerableThreadSpecific<LocalDataMesh> all_tls;
       MutableSpan<bke::pbvh::MeshNode> nodes = pbvh.nodes<bke::pbvh::MeshNode>();
-      threading::parallel_for(node_mask.index_range(), 1, [&](const IndexRange range) {
+      node_mask.foreach_index(GrainSize(1), [&](const int i) {
         LocalDataMesh &tls = all_tls.local();
-        node_mask.slice(range).foreach_index([&](const int i) {
-          calc_inflate_mesh(depsgraph,
-                            sd,
-                            object,
-                            boundary.edit_info.propagation_steps_num,
-                            boundary.edit_info.strength_factor,
-                            nodes[i],
-                            tls,
-                            boundary.initial_vert_position,
-                            strength,
-                            deform_target,
-                            position_data);
-          bke::pbvh::update_node_bounds_mesh(position_data.eval, nodes[i]);
-        });
+        calc_inflate_mesh(depsgraph,
+                          sd,
+                          object,
+                          boundary.edit_info.propagation_steps_num,
+                          boundary.edit_info.strength_factor,
+                          nodes[i],
+                          tls,
+                          boundary.initial_vert_position,
+                          strength,
+                          deform_target,
+                          position_data);
+        bke::pbvh::update_node_bounds_mesh(position_data.eval, nodes[i]);
       });
       break;
     }
@@ -1879,43 +1867,39 @@ static void do_inflate_brush(const Depsgraph &depsgraph,
       MutableSpan<float3> positions = subdiv_ccg.positions;
       threading::EnumerableThreadSpecific<LocalDataGrids> all_tls;
       MutableSpan<bke::pbvh::GridsNode> nodes = pbvh.nodes<bke::pbvh::GridsNode>();
-      threading::parallel_for(node_mask.index_range(), 1, [&](const IndexRange range) {
+      node_mask.foreach_index(GrainSize(1), [&](const int i) {
         LocalDataGrids &tls = all_tls.local();
-        node_mask.slice(range).foreach_index([&](const int i) {
-          calc_inflate_grids(depsgraph,
-                             sd,
-                             object,
-                             subdiv_ccg,
-                             boundary.edit_info.propagation_steps_num,
-                             boundary.edit_info.strength_factor,
-                             nodes[i],
-                             tls,
-                             boundary.initial_vert_position,
-                             strength,
-                             deform_target);
-          bke::pbvh::update_node_bounds_grids(subdiv_ccg.grid_area, positions, nodes[i]);
-        });
+        calc_inflate_grids(depsgraph,
+                           sd,
+                           object,
+                           subdiv_ccg,
+                           boundary.edit_info.propagation_steps_num,
+                           boundary.edit_info.strength_factor,
+                           nodes[i],
+                           tls,
+                           boundary.initial_vert_position,
+                           strength,
+                           deform_target);
+        bke::pbvh::update_node_bounds_grids(subdiv_ccg.grid_area, positions, nodes[i]);
       });
       break;
     }
     case bke::pbvh::Type::BMesh: {
       threading::EnumerableThreadSpecific<LocalDataBMesh> all_tls;
       MutableSpan<bke::pbvh::BMeshNode> nodes = pbvh.nodes<bke::pbvh::BMeshNode>();
-      threading::parallel_for(node_mask.index_range(), 1, [&](const IndexRange range) {
+      node_mask.foreach_index(GrainSize(1), [&](const int i) {
         LocalDataBMesh &tls = all_tls.local();
-        node_mask.slice(range).foreach_index([&](const int i) {
-          calc_inflate_bmesh(depsgraph,
-                             sd,
-                             object,
-                             boundary.edit_info.propagation_steps_num,
-                             boundary.edit_info.strength_factor,
-                             nodes[i],
-                             tls,
-                             boundary.initial_vert_position,
-                             strength,
-                             deform_target);
-          bke::pbvh::update_node_bounds_bmesh(nodes[i]);
-        });
+        calc_inflate_bmesh(depsgraph,
+                           sd,
+                           object,
+                           boundary.edit_info.propagation_steps_num,
+                           boundary.edit_info.strength_factor,
+                           nodes[i],
+                           tls,
+                           boundary.initial_vert_position,
+                           strength,
+                           deform_target);
+        bke::pbvh::update_node_bounds_bmesh(nodes[i]);
       });
       break;
     }
@@ -2129,23 +2113,21 @@ static void do_grab_brush(const Depsgraph &depsgraph,
 
       threading::EnumerableThreadSpecific<LocalDataMesh> all_tls;
       MutableSpan<bke::pbvh::MeshNode> nodes = pbvh.nodes<bke::pbvh::MeshNode>();
-      threading::parallel_for(node_mask.index_range(), 1, [&](const IndexRange range) {
+      node_mask.foreach_index(GrainSize(1), [&](const int i) {
         LocalDataMesh &tls = all_tls.local();
-        node_mask.slice(range).foreach_index([&](const int i) {
-          calc_grab_mesh(depsgraph,
-                         sd,
-                         object,
-                         boundary.edit_info.propagation_steps_num,
-                         boundary.edit_info.strength_factor,
-                         nodes[i],
-                         tls,
-                         ss.cache->grab_delta_symm,
-                         boundary.initial_vert_position,
-                         strength,
-                         deform_target,
-                         position_data);
-          bke::pbvh::update_node_bounds_mesh(position_data.eval, nodes[i]);
-        });
+        calc_grab_mesh(depsgraph,
+                       sd,
+                       object,
+                       boundary.edit_info.propagation_steps_num,
+                       boundary.edit_info.strength_factor,
+                       nodes[i],
+                       tls,
+                       ss.cache->grab_delta_symm,
+                       boundary.initial_vert_position,
+                       strength,
+                       deform_target,
+                       position_data);
+        bke::pbvh::update_node_bounds_mesh(position_data.eval, nodes[i]);
       });
       break;
     }
@@ -2154,45 +2136,41 @@ static void do_grab_brush(const Depsgraph &depsgraph,
       MutableSpan<float3> positions = subdiv_ccg.positions;
       threading::EnumerableThreadSpecific<LocalDataGrids> all_tls;
       MutableSpan<bke::pbvh::GridsNode> nodes = pbvh.nodes<bke::pbvh::GridsNode>();
-      threading::parallel_for(node_mask.index_range(), 1, [&](const IndexRange range) {
+      node_mask.foreach_index(GrainSize(1), [&](const int i) {
         LocalDataGrids &tls = all_tls.local();
-        node_mask.slice(range).foreach_index([&](const int i) {
-          calc_grab_grids(depsgraph,
-                          sd,
-                          object,
-                          subdiv_ccg,
-                          boundary.edit_info.propagation_steps_num,
-                          boundary.edit_info.strength_factor,
-                          nodes[i],
-                          tls,
-                          ss.cache->grab_delta_symm,
-                          boundary.initial_vert_position,
-                          strength,
-                          deform_target);
-          bke::pbvh::update_node_bounds_grids(subdiv_ccg.grid_area, positions, nodes[i]);
-        });
+        calc_grab_grids(depsgraph,
+                        sd,
+                        object,
+                        subdiv_ccg,
+                        boundary.edit_info.propagation_steps_num,
+                        boundary.edit_info.strength_factor,
+                        nodes[i],
+                        tls,
+                        ss.cache->grab_delta_symm,
+                        boundary.initial_vert_position,
+                        strength,
+                        deform_target);
+        bke::pbvh::update_node_bounds_grids(subdiv_ccg.grid_area, positions, nodes[i]);
       });
       break;
     }
     case bke::pbvh::Type::BMesh: {
       threading::EnumerableThreadSpecific<LocalDataBMesh> all_tls;
       MutableSpan<bke::pbvh::BMeshNode> nodes = pbvh.nodes<bke::pbvh::BMeshNode>();
-      threading::parallel_for(node_mask.index_range(), 1, [&](const IndexRange range) {
+      node_mask.foreach_index(GrainSize(1), [&](const int i) {
         LocalDataBMesh &tls = all_tls.local();
-        node_mask.slice(range).foreach_index([&](const int i) {
-          calc_grab_bmesh(depsgraph,
-                          sd,
-                          object,
-                          boundary.edit_info.propagation_steps_num,
-                          boundary.edit_info.strength_factor,
-                          nodes[i],
-                          tls,
-                          ss.cache->grab_delta_symm,
-                          boundary.initial_vert_position,
-                          strength,
-                          deform_target);
-          bke::pbvh::update_node_bounds_bmesh(nodes[i]);
-        });
+        calc_grab_bmesh(depsgraph,
+                        sd,
+                        object,
+                        boundary.edit_info.propagation_steps_num,
+                        boundary.edit_info.strength_factor,
+                        nodes[i],
+                        tls,
+                        ss.cache->grab_delta_symm,
+                        boundary.initial_vert_position,
+                        strength,
+                        deform_target);
+        bke::pbvh::update_node_bounds_bmesh(nodes[i]);
       });
       break;
     }
@@ -2411,24 +2389,22 @@ static void do_twist_brush(const Depsgraph &depsgraph,
 
       threading::EnumerableThreadSpecific<LocalDataMesh> all_tls;
       MutableSpan<bke::pbvh::MeshNode> nodes = pbvh.nodes<bke::pbvh::MeshNode>();
-      threading::parallel_for(node_mask.index_range(), 1, [&](const IndexRange range) {
+      node_mask.foreach_index(GrainSize(1), [&](const int i) {
         LocalDataMesh &tls = all_tls.local();
-        node_mask.slice(range).foreach_index([&](const int i) {
-          calc_twist_mesh(depsgraph,
-                          sd,
-                          object,
-                          boundary.edit_info.propagation_steps_num,
-                          boundary.edit_info.strength_factor,
-                          nodes[i],
-                          tls,
-                          boundary.twist.pivot_position,
-                          boundary.twist.rotation_axis,
-                          boundary.initial_vert_position,
-                          strength,
-                          deform_target,
-                          position_data);
-          bke::pbvh::update_node_bounds_mesh(position_data.eval, nodes[i]);
-        });
+        calc_twist_mesh(depsgraph,
+                        sd,
+                        object,
+                        boundary.edit_info.propagation_steps_num,
+                        boundary.edit_info.strength_factor,
+                        nodes[i],
+                        tls,
+                        boundary.twist.pivot_position,
+                        boundary.twist.rotation_axis,
+                        boundary.initial_vert_position,
+                        strength,
+                        deform_target,
+                        position_data);
+        bke::pbvh::update_node_bounds_mesh(position_data.eval, nodes[i]);
       });
       break;
     }
@@ -2437,47 +2413,43 @@ static void do_twist_brush(const Depsgraph &depsgraph,
       MutableSpan<float3> positions = subdiv_ccg.positions;
       threading::EnumerableThreadSpecific<LocalDataGrids> all_tls;
       MutableSpan<bke::pbvh::GridsNode> nodes = pbvh.nodes<bke::pbvh::GridsNode>();
-      threading::parallel_for(node_mask.index_range(), 1, [&](const IndexRange range) {
+      node_mask.foreach_index(GrainSize(1), [&](const int i) {
         LocalDataGrids &tls = all_tls.local();
-        node_mask.slice(range).foreach_index([&](const int i) {
-          calc_twist_grids(depsgraph,
-                           sd,
-                           object,
-                           subdiv_ccg,
-                           boundary.edit_info.propagation_steps_num,
-                           boundary.edit_info.strength_factor,
-                           boundary.twist.pivot_position,
-                           boundary.twist.rotation_axis,
-                           nodes[i],
-                           tls,
-                           boundary.initial_vert_position,
-                           strength,
-                           deform_target);
-          bke::pbvh::update_node_bounds_grids(subdiv_ccg.grid_area, positions, nodes[i]);
-        });
+        calc_twist_grids(depsgraph,
+                         sd,
+                         object,
+                         subdiv_ccg,
+                         boundary.edit_info.propagation_steps_num,
+                         boundary.edit_info.strength_factor,
+                         boundary.twist.pivot_position,
+                         boundary.twist.rotation_axis,
+                         nodes[i],
+                         tls,
+                         boundary.initial_vert_position,
+                         strength,
+                         deform_target);
+        bke::pbvh::update_node_bounds_grids(subdiv_ccg.grid_area, positions, nodes[i]);
       });
       break;
     }
     case bke::pbvh::Type::BMesh: {
       threading::EnumerableThreadSpecific<LocalDataBMesh> all_tls;
       MutableSpan<bke::pbvh::BMeshNode> nodes = pbvh.nodes<bke::pbvh::BMeshNode>();
-      threading::parallel_for(node_mask.index_range(), 1, [&](const IndexRange range) {
+      node_mask.foreach_index(GrainSize(1), [&](const int i) {
         LocalDataBMesh &tls = all_tls.local();
-        node_mask.slice(range).foreach_index([&](const int i) {
-          calc_twist_bmesh(depsgraph,
-                           sd,
-                           object,
-                           boundary.edit_info.propagation_steps_num,
-                           boundary.edit_info.strength_factor,
-                           boundary.twist.pivot_position,
-                           boundary.twist.rotation_axis,
-                           nodes[i],
-                           tls,
-                           boundary.initial_vert_position,
-                           strength,
-                           deform_target);
-          bke::pbvh::update_node_bounds_bmesh(nodes[i]);
-        });
+        calc_twist_bmesh(depsgraph,
+                         sd,
+                         object,
+                         boundary.edit_info.propagation_steps_num,
+                         boundary.edit_info.strength_factor,
+                         boundary.twist.pivot_position,
+                         boundary.twist.rotation_axis,
+                         nodes[i],
+                         tls,
+                         boundary.initial_vert_position,
+                         strength,
+                         deform_target);
+        bke::pbvh::update_node_bounds_bmesh(nodes[i]);
       });
       break;
     }
@@ -2813,25 +2785,23 @@ static void do_smooth_brush(const Depsgraph &depsgraph,
 
       threading::EnumerableThreadSpecific<LocalDataMesh> all_tls;
       MutableSpan<bke::pbvh::MeshNode> nodes = pbvh.nodes<bke::pbvh::MeshNode>();
-      threading::parallel_for(node_mask.index_range(), 1, [&](const IndexRange range) {
+      node_mask.foreach_index(GrainSize(1), [&](const int i) {
         LocalDataMesh &tls = all_tls.local();
-        node_mask.slice(range).foreach_index([&](const int i) {
-          calc_smooth_mesh(sd,
-                           object,
-                           faces,
-                           corner_verts,
-                           vert_to_face_map,
-                           hide_poly,
-                           boundary.edit_info.propagation_steps_num,
-                           boundary.edit_info.strength_factor,
-                           nodes[i],
-                           tls,
-                           boundary.initial_vert_position,
-                           strength,
-                           deform_target,
-                           position_data);
-          bke::pbvh::update_node_bounds_mesh(position_data.eval, nodes[i]);
-        });
+        calc_smooth_mesh(sd,
+                         object,
+                         faces,
+                         corner_verts,
+                         vert_to_face_map,
+                         hide_poly,
+                         boundary.edit_info.propagation_steps_num,
+                         boundary.edit_info.strength_factor,
+                         nodes[i],
+                         tls,
+                         boundary.initial_vert_position,
+                         strength,
+                         deform_target,
+                         position_data);
+        bke::pbvh::update_node_bounds_mesh(position_data.eval, nodes[i]);
       });
       break;
     }
@@ -2840,41 +2810,37 @@ static void do_smooth_brush(const Depsgraph &depsgraph,
       MutableSpan<float3> positions = subdiv_ccg.positions;
       threading::EnumerableThreadSpecific<LocalDataGrids> all_tls;
       MutableSpan<bke::pbvh::GridsNode> nodes = pbvh.nodes<bke::pbvh::GridsNode>();
-      threading::parallel_for(node_mask.index_range(), 1, [&](const IndexRange range) {
+      node_mask.foreach_index(GrainSize(1), [&](const int i) {
         LocalDataGrids &tls = all_tls.local();
-        node_mask.slice(range).foreach_index([&](const int i) {
-          calc_smooth_grids(sd,
-                            object,
-                            subdiv_ccg,
-                            boundary.edit_info.propagation_steps_num,
-                            boundary.edit_info.strength_factor,
-                            nodes[i],
-                            tls,
-                            boundary.initial_vert_position,
-                            strength,
-                            deform_target);
-          bke::pbvh::update_node_bounds_grids(subdiv_ccg.grid_area, positions, nodes[i]);
-        });
+        calc_smooth_grids(sd,
+                          object,
+                          subdiv_ccg,
+                          boundary.edit_info.propagation_steps_num,
+                          boundary.edit_info.strength_factor,
+                          nodes[i],
+                          tls,
+                          boundary.initial_vert_position,
+                          strength,
+                          deform_target);
+        bke::pbvh::update_node_bounds_grids(subdiv_ccg.grid_area, positions, nodes[i]);
       });
       break;
     }
     case bke::pbvh::Type::BMesh: {
       threading::EnumerableThreadSpecific<LocalDataBMesh> all_tls;
       MutableSpan<bke::pbvh::BMeshNode> nodes = pbvh.nodes<bke::pbvh::BMeshNode>();
-      threading::parallel_for(node_mask.index_range(), 1, [&](const IndexRange range) {
+      node_mask.foreach_index(GrainSize(1), [&](const int i) {
         LocalDataBMesh &tls = all_tls.local();
-        node_mask.slice(range).foreach_index([&](const int i) {
-          calc_smooth_bmesh(sd,
-                            object,
-                            boundary.edit_info.propagation_steps_num,
-                            boundary.edit_info.strength_factor,
-                            nodes[i],
-                            tls,
-                            boundary.initial_vert_position,
-                            strength,
-                            deform_target);
-          bke::pbvh::update_node_bounds_bmesh(nodes[i]);
-        });
+        calc_smooth_bmesh(sd,
+                          object,
+                          boundary.edit_info.propagation_steps_num,
+                          boundary.edit_info.strength_factor,
+                          nodes[i],
+                          tls,
+                          boundary.initial_vert_position,
+                          strength,
+                          deform_target);
+        bke::pbvh::update_node_bounds_bmesh(nodes[i]);
       });
       break;
     }
@@ -3002,8 +2968,8 @@ static void init_falloff_grids(const SubdivCCG &subdiv_ccg,
   for (const int grid : IndexRange(subdiv_ccg.grids_num)) {
     for (const int index : bke::ccg::grid_range(key, grid)) {
       if (boundary.edit_info.propagation_steps_num[index] != BOUNDARY_STEPS_NONE) {
-        const float mask_factor = subdiv_ccg.masks.is_empty() ? 1.0f - subdiv_ccg.masks[index] :
-                                                                1.0f;
+        const float mask_factor = subdiv_ccg.masks.is_empty() ? 1.0f :
+                                                                1.0f - subdiv_ccg.masks[index];
         boundary.edit_info.strength_factor[index] =
             mask_factor * BKE_brush_curve_strength(&brush,
                                                    boundary.edit_info.propagation_steps_num[index],
@@ -3163,11 +3129,11 @@ static void init_boundary_grids(Object &object,
 
   std::optional<SubdivCCGCoord> initial_vert;
   if (ss.cache->mirror_symmetry_pass == 0) {
-    initial_vert = std::get<SubdivCCGCoord>(initial_vert_ref);
+    initial_vert = SubdivCCGCoord::from_index(key, std::get<int>(initial_vert_ref));
   }
   else {
-    const SubdivCCGCoord active_vert = std::get<SubdivCCGCoord>(initial_vert_ref);
-    float3 location = symmetry_flip(positions[active_vert.to_index(key)], symm_area);
+    const int active_vert = std::get<int>(initial_vert_ref);
+    float3 location = symmetry_flip(positions[active_vert], symm_area);
     initial_vert = nearest_vert_calc_grids(
         pbvh, subdiv_ccg, location, ss.cache->radius_squared, false);
   }
@@ -3617,9 +3583,13 @@ std::unique_ptr<SculptBoundaryPreview> preview_data_init(const Depsgraph &depsgr
     case bke::pbvh::Type::Mesh:
       boundary = data_init_mesh(depsgraph, object, brush, std::get<int>(initial_vert), radius);
       break;
-    case bke::pbvh::Type::Grids:
-      boundary = data_init_grids(object, brush, std::get<SubdivCCGCoord>(initial_vert), radius);
+    case bke::pbvh::Type::Grids: {
+      const SubdivCCG &subdiv_ccg = *ss.subdiv_ccg;
+      const CCGKey key = BKE_subdiv_ccg_key_top_level(subdiv_ccg);
+      boundary = data_init_grids(
+          object, brush, SubdivCCGCoord::from_index(key, std::get<int>(initial_vert)), radius);
       break;
+    }
     case bke::pbvh::Type::BMesh:
       boundary = data_init_bmesh(object, brush, std::get<BMVert *>(initial_vert), radius);
       break;

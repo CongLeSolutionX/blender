@@ -47,6 +47,7 @@
 #include "BLI_set.hh"
 #include "BLI_string.h"
 #include "BLI_string_ref.hh"
+#include "BLI_string_utf8.h"
 
 #include "BKE_anim_data.hh"
 #include "BKE_animsys.h"
@@ -61,7 +62,8 @@
 #include "BKE_file_handler.hh"
 #include "BKE_grease_pencil.hh"
 #include "BKE_idprop.hh"
-#include "BKE_image_format.h"
+#include "BKE_image_format.hh"
+#include "BKE_lib_query.hh"
 #include "BKE_main.hh"
 #include "BKE_material.h"
 #include "BKE_mesh_legacy_convert.hh"
@@ -79,6 +81,8 @@
 #include "SEQ_sequencer.hh"
 #include "SEQ_time.hh"
 
+#include "ANIM_action.hh"
+#include "ANIM_action_iterators.hh"
 #include "ANIM_armature_iter.hh"
 #include "ANIM_bone_collections.hh"
 
@@ -101,6 +105,192 @@ static void version_composite_nodetree_null_id(bNodeTree *ntree, Scene *scene)
                                  node->custom1 == CMP_NODE_CRYPTOMATTE_SOURCE_RENDER)))
     {
       node->id = &scene->id;
+    }
+  }
+}
+
+struct ActionUserInfo {
+  ID *id;
+  blender::animrig::slot_handle_t *slot_handle;
+  bAction **action_ptr_ptr;
+  char *slot_name;
+};
+
+static void convert_action_in_place(blender::animrig::Action &action)
+{
+  using namespace blender::animrig;
+  if (action.is_action_layered()) {
+    return;
+  }
+
+  /* Store this ahead of time, because adding the slot sets the action's idroot
+   * to 0. We also set the action's idroot to 0 manually, just to be defensive
+   * so we don't depend on esoteric behavior in `slot_add()`. */
+  const int16_t idtype = action.idroot;
+  action.idroot = 0;
+
+  Slot &slot = action.slot_add();
+  slot.idtype = idtype;
+  slot.name_ensure_prefix();
+
+  Layer &layer = action.layer_add("Layer");
+  blender::animrig::Strip &strip = layer.strip_add(action,
+                                                   blender::animrig::Strip::Type::Keyframe);
+  ChannelBag &bag = strip.data<StripKeyframeData>(action).channelbag_for_slot_ensure(slot);
+  const int fcu_count = BLI_listbase_count(&action.curves);
+  const int group_count = BLI_listbase_count(&action.groups);
+  bag.fcurve_array = MEM_cnew_array<FCurve *>(fcu_count, "Action versioning - fcurves");
+  bag.fcurve_array_num = fcu_count;
+  bag.group_array = MEM_cnew_array<bActionGroup *>(group_count, "Action versioning - groups");
+  bag.group_array_num = group_count;
+
+  int group_index = 0;
+  int fcurve_index = 0;
+  LISTBASE_FOREACH_INDEX (bActionGroup *, group, &action.groups, group_index) {
+    bag.group_array[group_index] = group;
+
+    group->channel_bag = &bag;
+    group->fcurve_range_start = fcurve_index;
+
+    LISTBASE_FOREACH (FCurve *, fcu, &group->channels) {
+      if (fcu->grp != group) {
+        break;
+      }
+      bag.fcurve_array[fcurve_index++] = fcu;
+    }
+
+    group->fcurve_range_length = fcurve_index - group->fcurve_range_start;
+  }
+
+  LISTBASE_FOREACH (FCurve *, fcu, &action.curves) {
+    /* Any fcurves with groups have already been added to the fcurve array. */
+    if (fcu->grp) {
+      continue;
+    }
+    bag.fcurve_array[fcurve_index++] = fcu;
+  }
+
+  BLI_assert(fcurve_index == fcu_count);
+
+  action.curves = {nullptr, nullptr};
+  action.groups = {nullptr, nullptr};
+}
+
+static void version_legacy_actions_to_layered(Main *bmain)
+{
+  using namespace blender::animrig;
+  blender::Map<bAction *, blender::Vector<ActionUserInfo>> action_users;
+  LISTBASE_FOREACH (bAction *, dna_action, &bmain->actions) {
+    Action &action = dna_action->wrap();
+    if (action.is_action_layered()) {
+      continue;
+    }
+    action_users.add(dna_action, {});
+  }
+
+  ID *id;
+  FOREACH_MAIN_ID_BEGIN (bmain, id) {
+    auto callback = [&](ID &animated_id,
+                        bAction *&action_ptr_ref,
+                        slot_handle_t &slot_handle_ref,
+                        char *slot_name) -> bool {
+      blender::Vector<ActionUserInfo> *action_user_vector = action_users.lookup_ptr(
+          action_ptr_ref);
+      /* Only actions that need to be converted are in this map. */
+      if (!action_user_vector) {
+        return true;
+      }
+      ActionUserInfo user_info;
+      user_info.id = &animated_id;
+      user_info.action_ptr_ptr = &action_ptr_ref;
+      user_info.slot_handle = &slot_handle_ref;
+      user_info.slot_name = slot_name;
+      action_user_vector->append(user_info);
+      return true;
+    };
+
+    auto embedded_id_callback = [&](LibraryIDLinkCallbackData *cb_data) -> int {
+      ID *linked_id = *cb_data->id_pointer;
+
+      /* We only process embedded IDs with this callback. */
+      if (!linked_id || (linked_id->flag & ID_FLAG_EMBEDDED_DATA) == 0) {
+        return IDWALK_RET_STOP_RECURSION;
+      }
+
+      foreach_action_slot_use_with_references(*linked_id, callback);
+
+      return IDWALK_RET_NOP;
+    };
+
+    /* Process the main ID itself. */
+    foreach_action_slot_use_with_references(*id, callback);
+
+    /* Process embedded IDs, as these are not listed in bmain, but still can
+     * have their own Action+Slot. */
+    BKE_library_foreach_ID_link(
+        bmain,
+        id,
+        embedded_id_callback,
+        nullptr,
+        IDWALK_RECURSE | IDWALK_READONLY |
+            /* This is more about "we don't care" than "must be ignored". We don't pass an owner
+             * ID, and it's not used in the callback either, so don't bother looking it up.  */
+            IDWALK_IGNORE_MISSING_OWNER_ID);
+  }
+  FOREACH_MAIN_ID_END;
+
+  for (const auto &item : action_users.items()) {
+    Action &action = item.key->wrap();
+    convert_action_in_place(action);
+    blender::Vector<ActionUserInfo> &user_infos = item.value;
+    Slot &slot_to_assign = *action.slot(0);
+
+    if (user_infos.size() == 1) {
+      /* Rename the slot after its single user. If there are multiple users, the name is unchanged
+       * because there is no good way to determine a name. */
+      action.slot_name_set(*bmain, slot_to_assign, user_infos[0].id->name);
+    }
+    for (ActionUserInfo &action_user : user_infos) {
+      const ActionSlotAssignmentResult result = generic_assign_action_slot(
+          &slot_to_assign,
+          *action_user.id,
+          *action_user.action_ptr_ptr,
+          *action_user.slot_handle,
+          action_user.slot_name);
+      switch (result) {
+        case ActionSlotAssignmentResult::OK:
+          break;
+        case ActionSlotAssignmentResult::SlotNotSuitable:
+          /* If the slot wasn't suitable for the ID, we force assignment anyway,
+           * but with a warning.
+           *
+           * This happens when the legacy action assigned to the ID had a
+           * mismatched idroot, and therefore the created slot does as well.
+           * This mismatch can happen in a variety of ways, and we opt to
+           * preserve this unusual (but technically valid) state of affairs.
+           */
+          *action_user.slot_handle = slot_to_assign.handle;
+          BLI_strncpy_utf8(action_user.slot_name, slot_to_assign.name, Slot::name_length_max);
+
+          printf(
+              "Warning: legacy action \"%s\" is assigned to \"%s\", which does not match the "
+              "action's id_root \"%s\". The action has been upgraded to a slotted action with "
+              "slot \"%s\" with an id_type \"%s\", which has also been assigned to \"%s\" despite "
+              "this type mismatch. This likely indicates something odd about the blend file.\n",
+              action.id.name + 2,
+              action_user.id->name,
+              slot_to_assign.name_prefix_for_idtype().c_str(),
+              slot_to_assign.name_without_prefix().c_str(),
+              slot_to_assign.name_prefix_for_idtype().c_str(),
+              action_user.id->name);
+          break;
+        case ActionSlotAssignmentResult::SlotNotFromAction:
+          BLI_assert(!"SlotNotFromAction should not be returned here");
+          break;
+        case ActionSlotAssignmentResult::MissingAction:
+          BLI_assert(!"MissingAction should not be returned here");
+          break;
+      }
     }
   }
 }
@@ -846,6 +1036,27 @@ static bool versioning_convert_strip_speed_factor(Sequence *seq, void *user_data
   return true;
 }
 
+static bool all_scenes_use(Main *bmain, const blender::Span<const char *> engines)
+{
+  if (!bmain->scenes.first) {
+    return false;
+  }
+
+  LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
+    bool match = false;
+    for (const char *engine : engines) {
+      if (STREQ(scene->r.engine, engine)) {
+        match = true;
+      }
+    }
+    if (!match) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 void do_versions_after_linking_400(FileData *fd, Main *bmain)
 {
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 400, 9)) {
@@ -971,10 +1182,7 @@ void do_versions_after_linking_400(FileData *fd, Main *bmain)
   }
 
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 402, 50)) {
-    Scene *scene = static_cast<Scene *>(bmain->scenes.first);
-    bool scene_uses_eevee_legacy = scene && STREQ(scene->r.engine, RE_engine_id_BLENDER_EEVEE);
-
-    if (scene_uses_eevee_legacy) {
+    if (all_scenes_use(bmain, {RE_engine_id_BLENDER_EEVEE})) {
       LISTBASE_FOREACH (Object *, object, &bmain->objects) {
         versioning_eevee_shadow_settings(object);
       }
@@ -983,11 +1191,8 @@ void do_versions_after_linking_400(FileData *fd, Main *bmain)
 
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 402, 51)) {
     /* Convert blend method to math nodes. */
-    Scene *scene = static_cast<Scene *>(bmain->scenes.first);
-    bool scene_uses_eevee_legacy = scene && STREQ(scene->r.engine, RE_engine_id_BLENDER_EEVEE);
-
-    LISTBASE_FOREACH (Material *, material, &bmain->materials) {
-      if (scene_uses_eevee_legacy) {
+    if (all_scenes_use(bmain, {RE_engine_id_BLENDER_EEVEE})) {
+      LISTBASE_FOREACH (Material *, material, &bmain->materials) {
         if (!material->use_nodes || material->nodetree == nullptr) {
           /* Nothing to version. */
         }
@@ -1048,6 +1253,10 @@ void do_versions_after_linking_400(FileData *fd, Main *bmain)
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 403, 6)) {
     /* Shift animation data to accommodate the new Diffuse Roughness input. */
     version_node_socket_index_animdata(bmain, NTREE_SHADER, SH_NODE_BSDF_PRINCIPLED, 7, 1, 30);
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 404, 2)) {
+    version_legacy_actions_to_layered(bmain);
   }
 
   /**
@@ -2992,6 +3201,35 @@ static void hide_simulation_node_skip_socket_value(Main &bmain)
   }
 }
 
+static bool versioning_convert_seq_text_anchor(Sequence *seq, void * /*user_data*/)
+{
+  if (seq->type != SEQ_TYPE_TEXT || seq->effectdata == nullptr) {
+    return true;
+  }
+
+  TextVars *data = static_cast<TextVars *>(seq->effectdata);
+  data->anchor_x = data->align;
+  data->anchor_y = data->align_y;
+  data->align = SEQ_TEXT_ALIGN_X_LEFT;
+
+  return true;
+}
+
+static void add_subsurf_node_limit_surface_option(Main &bmain)
+{
+  LISTBASE_FOREACH (bNodeTree *, ntree, &bmain.nodetrees) {
+    if (ntree->type == NTREE_GEOMETRY) {
+      LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+        if (node->type == GEO_NODE_SUBDIVISION_SURFACE) {
+          bNodeSocket *socket = version_node_add_socket_if_not_exist(
+              ntree, node, SOCK_IN, SOCK_BOOLEAN, PROP_NONE, "Limit Surface", "Limit Surface");
+          static_cast<bNodeSocketValueBoolean *>(socket->default_value)->value = false;
+        }
+      }
+    }
+  }
+}
+
 void blo_do_versions_400(FileData *fd, Library * /*lib*/, Main *bmain)
 {
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 400, 1)) {
@@ -3606,10 +3844,8 @@ void blo_do_versions_400(FileData *fd, Library * /*lib*/, Main *bmain)
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 401, 5)) {
     /* Unify Material::blend_shadow and Cycles.use_transparent_shadows into the
      * Material::blend_flag. */
-    Scene *scene = static_cast<Scene *>(bmain->scenes.first);
-    bool is_eevee = scene && STR_ELEM(scene->r.engine,
-                                      RE_engine_id_BLENDER_EEVEE,
-                                      RE_engine_id_BLENDER_EEVEE_NEXT);
+    bool is_eevee = all_scenes_use(bmain,
+                                   {RE_engine_id_BLENDER_EEVEE, RE_engine_id_BLENDER_EEVEE_NEXT});
     LISTBASE_FOREACH (Material *, material, &bmain->materials) {
       bool transparent_shadows = true;
       if (is_eevee) {
@@ -3841,7 +4077,7 @@ void blo_do_versions_400(FileData *fd, Library * /*lib*/, Main *bmain)
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 401, 17)) {
     LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
       ToolSettings *ts = scene->toolsettings;
-      int input_sample_values[10];
+      int input_sample_values[9];
 
       input_sample_values[0] = ts->imapaint.paint.num_input_samples_deprecated;
       input_sample_values[1] = ts->sculpt != nullptr ?
@@ -3851,28 +4087,28 @@ void blo_do_versions_400(FileData *fd, Library * /*lib*/, Main *bmain)
                                    ts->curves_sculpt->paint.num_input_samples_deprecated :
                                    1;
 
-      input_sample_values[4] = ts->gp_paint != nullptr ?
+      input_sample_values[3] = ts->gp_paint != nullptr ?
                                    ts->gp_paint->paint.num_input_samples_deprecated :
                                    1;
-      input_sample_values[5] = ts->gp_vertexpaint != nullptr ?
+      input_sample_values[4] = ts->gp_vertexpaint != nullptr ?
                                    ts->gp_vertexpaint->paint.num_input_samples_deprecated :
                                    1;
-      input_sample_values[6] = ts->gp_sculptpaint != nullptr ?
+      input_sample_values[5] = ts->gp_sculptpaint != nullptr ?
                                    ts->gp_sculptpaint->paint.num_input_samples_deprecated :
                                    1;
-      input_sample_values[7] = ts->gp_weightpaint != nullptr ?
+      input_sample_values[6] = ts->gp_weightpaint != nullptr ?
                                    ts->gp_weightpaint->paint.num_input_samples_deprecated :
                                    1;
 
-      input_sample_values[8] = ts->vpaint != nullptr ?
+      input_sample_values[7] = ts->vpaint != nullptr ?
                                    ts->vpaint->paint.num_input_samples_deprecated :
                                    1;
-      input_sample_values[9] = ts->wpaint != nullptr ?
+      input_sample_values[8] = ts->wpaint != nullptr ?
                                    ts->wpaint->paint.num_input_samples_deprecated :
                                    1;
 
       int unified_value = 1;
-      for (int i = 0; i < 10; i++) {
+      for (int i = 0; i < 9; i++) {
         if (input_sample_values[i] != 1) {
           if (unified_value == 1) {
             unified_value = input_sample_values[i];
@@ -4306,7 +4542,7 @@ void blo_do_versions_400(FileData *fd, Library * /*lib*/, Main *bmain)
     bool shadow_resolution_absolute = false;
     /* Try to get default resolution from scene setting. */
     LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
-      shadow_max_res_local = (2.0f * M_SQRT2) / scene->eevee.shadow_cube_size;
+      shadow_max_res_local = (2.0f * M_SQRT2) / scene->eevee.shadow_cube_size_deprecated;
       /* Round to avoid weird numbers in the UI. */
       shadow_max_res_local = ceil(shadow_max_res_local * 1000.0f) / 1000.0f;
       shadow_resolution_absolute = true;
@@ -4360,11 +4596,7 @@ void blo_do_versions_400(FileData *fd, Library * /*lib*/, Main *bmain)
 
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 402, 39)) {
     /* Unify cast shadow property with Cycles. */
-    Scene *scene = static_cast<Scene *>(bmain->scenes.first);
-    /* Be conservative, if there is no scene, still try to do the conversion as that can happen for
-     * append and linking. We prefer breaking EEVEE rather than breaking Cycles here. */
-    bool is_eevee = scene && STREQ(scene->r.engine, RE_engine_id_BLENDER_EEVEE);
-    if (!is_eevee) {
+    if (!all_scenes_use(bmain, {RE_engine_id_BLENDER_EEVEE})) {
       const Light *default_light = DNA_struct_default_get(Light);
       LISTBASE_FOREACH (Light *, light, &bmain->lights) {
         IDProperty *clight = version_cycles_properties_from_ID(&light->id);
@@ -4564,9 +4796,7 @@ void blo_do_versions_400(FileData *fd, Library * /*lib*/, Main *bmain)
   }
 
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 402, 64)) {
-    Scene *scene = static_cast<Scene *>(bmain->scenes.first);
-    bool is_eevee_legacy = scene && STR_ELEM(scene->r.engine, RE_engine_id_BLENDER_EEVEE);
-    if (is_eevee_legacy) {
+    if (all_scenes_use(bmain, {RE_engine_id_BLENDER_EEVEE})) {
       /* Re-apply versioning made for EEVEE-Next in 4.1 before it got delayed. */
       LISTBASE_FOREACH (Material *, material, &bmain->materials) {
         bool transparent_shadows = material->blend_shadow != MA_BS_SOLID;
@@ -4824,12 +5054,91 @@ void blo_do_versions_400(FileData *fd, Library * /*lib*/, Main *bmain)
     hide_simulation_node_skip_socket_value(*bmain);
   }
 
-  /**
-   * Always bump subversion in BKE_blender_version.h when adding versioning
-   * code here, and wrap it inside a MAIN_VERSION_FILE_ATLEAST check.
-   *
-   * \note Keep this message at the bottom of the function.
-   */
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 403, 28)) {
+    LISTBASE_FOREACH (bScreen *, screen, &bmain->screens) {
+      LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
+        LISTBASE_FOREACH (SpaceLink *, sl, &area->spacedata) {
+          if (sl->spacetype == SPACE_VIEW3D) {
+            View3D *v3d = reinterpret_cast<View3D *>(sl);
+            copy_v3_fl(v3d->overlay.gpencil_grid_color, 0.5f);
+            copy_v2_fl(v3d->overlay.gpencil_grid_scale, 1.0f);
+            copy_v2_fl(v3d->overlay.gpencil_grid_offset, 0.0f);
+            v3d->overlay.gpencil_grid_subdivisions = 4;
+          }
+        }
+      }
+    }
+
+    FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
+      if (ntree->type != NTREE_COMPOSIT) {
+        continue;
+      }
+      LISTBASE_FOREACH_MUTABLE (bNode *, node, &ntree->nodes) {
+        if (node->type == CMP_NODE_VIEWER || node->type == CMP_NODE_COMPOSITE) {
+          node->flag &= ~NODE_PREVIEW;
+        }
+      }
+    }
+    FOREACH_NODETREE_END;
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 403, 29)) {
+    /* Open warnings panel by default. */
+    LISTBASE_FOREACH (Object *, object, &bmain->objects) {
+      LISTBASE_FOREACH (ModifierData *, md, &object->modifiers) {
+        if (md->type == eModifierType_Nodes) {
+          md->layout_panel_open_flag |= 1 << NODES_MODIFIER_PANEL_WARNINGS;
+        }
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 403, 31)) {
+    LISTBASE_FOREACH (WorkSpace *, workspace, &bmain->workspaces) {
+      LISTBASE_FOREACH (bToolRef *, tref, &workspace->tools) {
+        if (tref->space_type != SPACE_SEQ) {
+          continue;
+        }
+        STRNCPY(tref->idname, "builtin.select_box");
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 404, 1)) {
+    LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
+      Editing *ed = SEQ_editing_get(scene);
+      if (ed != nullptr) {
+        SEQ_for_each_callback(&ed->seqbase, versioning_convert_seq_text_anchor, nullptr);
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 404, 4)) {
+    LISTBASE_FOREACH (bScreen *, screen, &bmain->screens) {
+      LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
+        LISTBASE_FOREACH (SpaceLink *, sl, &area->spacedata) {
+          if (sl->spacetype != SPACE_FILE) {
+            continue;
+          }
+          SpaceFile *sfile = reinterpret_cast<SpaceFile *>(sl);
+          if (sfile->asset_params) {
+            sfile->asset_params->base_params.sort = FILE_SORT_ASSET_CATALOG;
+          }
+        }
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 404, 5)) {
+    LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
+      SequencerToolSettings *sequencer_tool_settings = SEQ_tool_settings_ensure(scene);
+      sequencer_tool_settings->snap_mode |= SEQ_SNAP_TO_RETIMING;
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 404, 6)) {
+    add_subsurf_node_limit_surface_option(*bmain);
+  }
 
   /* Always run this versioning; meshes are written with the legacy format which always needs to
    * be converted to the new format on file load. Can be moved to a subversion check in a larger
@@ -4837,4 +5146,11 @@ void blo_do_versions_400(FileData *fd, Library * /*lib*/, Main *bmain)
   LISTBASE_FOREACH (Mesh *, mesh, &bmain->meshes) {
     blender::bke::mesh_sculpt_mask_to_generic(*mesh);
   }
+
+  /**
+   * Always bump subversion in BKE_blender_version.h when adding versioning
+   * code here, and wrap it inside a MAIN_VERSION_FILE_ATLEAST check.
+   *
+   * \note Keep this message at the bottom of the function.
+   */
 }

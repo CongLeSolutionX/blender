@@ -39,23 +39,27 @@ static void node_declare(NodeDeclarationBuilder &b)
   auto &distance_min = b.add_input<decl::Float>("Distance Min")
                            .min(0.0f)
                            .subtype(PROP_DISTANCE)
-                           .make_available(enable_poisson);
+                           .make_available(enable_poisson)
+                           .available(false);
   auto &density_max = b.add_input<decl::Float>("Density Max")
                           .default_value(10.0f)
                           .min(0.0f)
-                          .make_available(enable_poisson);
+                          .make_available(enable_poisson)
+                          .available(false);
   auto &density = b.add_input<decl::Float>("Density")
                       .default_value(10.0f)
                       .min(0.0f)
                       .field_on_all()
-                      .make_available(enable_random);
+                      .make_available(enable_random)
+                      .available(false);
   auto &density_factor = b.add_input<decl::Float>("Density Factor")
                              .default_value(1.0f)
                              .min(0.0f)
                              .max(1.0f)
                              .subtype(PROP_FACTOR)
                              .field_on_all()
-                             .make_available(enable_poisson);
+                             .make_available(enable_poisson)
+                             .available(false);
   b.add_input<decl::Int>("Seed");
 
   b.add_output<decl::Geometry>("Points").propagate_all();
@@ -282,7 +286,7 @@ BLI_NOINLINE static void interpolate_attribute(const Mesh &mesh,
 
 BLI_NOINLINE static void propagate_existing_attributes(
     const Mesh &mesh,
-    const Map<StringRef, AttributeKind> &attributes,
+    const Map<StringRef, AttributeDomainAndType> &attributes,
     PointCloud &points,
     const Span<float3> bary_coords,
     const Span<int> tri_indices)
@@ -290,7 +294,7 @@ BLI_NOINLINE static void propagate_existing_attributes(
   const AttributeAccessor mesh_attributes = mesh.attributes();
   MutableAttributeAccessor point_attributes = points.attributes_for_write();
 
-  for (MapItem<StringRef, AttributeKind> entry : attributes.items()) {
+  for (MapItem<StringRef, AttributeDomainAndType> entry : attributes.items()) {
     const StringRef attribute_id = entry.key;
     const eCustomDataType output_data_type = entry.value.data_type;
 
@@ -551,7 +555,7 @@ static void point_distribution_calculate(GeometrySet &geometry_set,
 
   geometry_set.replace_pointcloud(pointcloud);
 
-  Map<StringRef, AttributeKind> attributes;
+  Map<StringRef, AttributeDomainAndType> attributes;
   geometry_set.gather_attributes_for_propagation({GeometryComponent::Type::Mesh},
                                                  GeometryComponent::Type::PointCloud,
                                                  false,

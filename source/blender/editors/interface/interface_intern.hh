@@ -605,9 +605,7 @@ struct uiBlock {
   int (*block_event_func)(const bContext *C, uiBlock *, const wmEvent *);
 
   /** Custom extra draw function for custom blocks. */
-  void (*drawextra)(const bContext *C, void *idv, void *arg1, void *arg2, rcti *rect);
-  void *drawextra_arg1;
-  void *drawextra_arg2;
+  std::function<void(const bContext *, rcti *)> drawextra;
 
   int flag;
   short alignnr;
@@ -1263,14 +1261,14 @@ enum {
 blender::gpu::Batch *ui_batch_roundbox_widget_get();
 blender::gpu::Batch *ui_batch_roundbox_shadow_get();
 
-void ui_draw_menu_back(uiStyle *style, uiBlock *block, rcti *rect);
-void ui_draw_popover_back(ARegion *region, uiStyle *style, uiBlock *block, rcti *rect);
+void ui_draw_menu_back(uiStyle *style, uiBlock *block, const rcti *rect);
+void ui_draw_popover_back(ARegion *region, uiStyle *style, uiBlock *block, const rcti *rect);
 void ui_draw_pie_center(uiBlock *block);
 const uiWidgetColors *ui_tooltip_get_theme();
 
 void ui_draw_widget_menu_back_color(const rcti *rect, bool use_shadow, const float color[4]);
 void ui_draw_widget_menu_back(const rcti *rect, bool use_shadow);
-void ui_draw_tooltip_background(const uiStyle *style, uiBlock *block, rcti *rect);
+void ui_draw_tooltip_background(const uiStyle *style, uiBlock *block, const rcti *rect);
 
 /**
  * Conversion from old to new buttons, so still messy.
@@ -1553,6 +1551,9 @@ void UI_OT_eyedropper_color(wmOperatorType *ot);
 namespace blender::ui {
 void UI_OT_eyedropper_colorramp(wmOperatorType *ot);
 void UI_OT_eyedropper_colorramp_point(wmOperatorType *ot);
+
+void UI_OT_eyedropper_bone(wmOperatorType *ot);
+
 }  // namespace blender::ui
 
 /* interface_eyedropper_datablock.c */
@@ -1566,10 +1567,6 @@ void UI_OT_eyedropper_depth(wmOperatorType *ot);
 /* interface_eyedropper_driver.c */
 
 void UI_OT_eyedropper_driver(wmOperatorType *ot);
-
-/* interface_eyedropper_gpencil_color.c */
-
-void UI_OT_eyedropper_gpencil_color(wmOperatorType *ot);
 
 /* eyedropper_grease_pencil_color.cc */
 
@@ -1612,7 +1609,10 @@ void ui_interface_tag_script_reload_queries();
 /* interface_view.cc */
 
 void ui_block_free_views(uiBlock *block);
-void ui_block_views_bounds_calc(const uiBlock *block);
+void ui_block_views_end(ARegion *region, const uiBlock *block);
+void ui_block_view_persistent_state_restore(const ARegion &region,
+                                            const uiBlock &block,
+                                            blender::ui::AbstractView &view);
 void ui_block_views_listen(const uiBlock *block, const wmRegionListenerParams *listener_params);
 void ui_block_views_draw_overlays(const ARegion *region, const uiBlock *block);
 blender::ui::AbstractView *ui_block_view_find_matching_in_old_block(
