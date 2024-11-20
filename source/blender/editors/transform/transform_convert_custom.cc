@@ -19,14 +19,14 @@ static void custom_create_trans_data(bContext * /*C*/, TransInfo *t)
 }
 
 /* -------------------------------------------------------------------- */
-/** \name Draw Update
+/** \name Recalc Data
  * \{ */
 
 static void custom_recalc_data(TransInfo *t)
 {
   FOREACH_TRANS_DATA_CONTAINER (t, tc) {
     TcReservedData *tc_custom_data = static_cast<TcReservedData *>(tc->custom.type.data);
-    tc_custom_data->recalc_data_fn(tc_custom_data->userdata, (t->flag & T_ALT_TRANSFORM));
+    tc_custom_data->recalc_data_fn(tc_custom_data->userdata);
   }
 }
 

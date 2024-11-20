@@ -475,19 +475,11 @@ static ExtrudeMeshData *extrude_boolean_data_create(Object *obedit, float doubli
 /** \name Draw Update
  * \{ */
 
-static void extrude_boolean_recalc_data_fn(void *usedata, bool is_alt_pressed)
+static void extrude_boolean_recalc_data_fn(void *usedata)
 {
   ExtrudeMeshData *extrudata = static_cast<ExtrudeMeshData *>(usedata);
   if (!extrudata->draw_data.draw_handle) {
     return;
-  }
-
-  extrudata->do_subtract = is_alt_pressed;
-  if (extrudata->do_subtract) {
-    UI_GetThemeColor3fv(TH_GIZMO_SECONDARY, extrudata->draw_data.color);
-  }
-  else {
-    UI_GetThemeColor3fv(TH_GIZMO_PRIMARY, extrudata->draw_data.color);
   }
 
   int i = 0;

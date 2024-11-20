@@ -251,5 +251,5 @@ bool ED_transform_reserve_custom(
     int data_len,
     void *userdata,
     blender::FunctionRef<void(int index, TransDataBasic &r_td, float r_no[3])> foreach_data_fn,
-    blender::FunctionRef<void(void *usedata, bool is_alt_pressed)> recalc_data_fn,
+    blender::FunctionRef<void(void *usedata)> recalc_data_fn,
     blender::FunctionRef<void(void *userdata, bool is_cancel)> finish_fn);

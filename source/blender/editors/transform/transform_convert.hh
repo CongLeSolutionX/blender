@@ -107,10 +107,10 @@ struct CurvesTransformData {
 
 struct TcReservedData {
   void *userdata;
-  blender::FunctionRef<void(void *usedata, bool is_alt_pressed)> recalc_data_fn;
+  blender::FunctionRef<void(void *usedata)> recalc_data_fn;
   blender::FunctionRef<void(void *userdata, bool is_cancel)> finish_fn;
   TcReservedData(void *userdata,
-                 blender::FunctionRef<void(void *usedata, bool is_alt_pressed)> recalc_data_fn,
+                 blender::FunctionRef<void(void *usedata)> recalc_data_fn,
                  blender::FunctionRef<void(void *userdata, bool is_cancel)> finish_fn)
       : userdata(userdata), recalc_data_fn(recalc_data_fn), finish_fn(finish_fn)
   {
