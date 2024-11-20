@@ -2509,6 +2509,58 @@ void mesh_sculpt_mask_to_generic(Mesh &mesh)
   }
 }
 
+void mesh_custom_normals_to_legacy(MutableSpan<CustomDataLayer> corner_layers)
+{
+  bool changed = false;
+  for (CustomDataLayer &layer : corner_layers) {
+    if (StringRef(layer.name) == "custom_normal") {
+      layer.type = CD_CUSTOMLOOPNORMAL;
+      layer.name[0] = '\0';
+      changed = true;
+      break;
+    }
+  }
+  if (!changed) {
+    return;
+  }
+  /* #CustomData expects the layers to be sorted in increasing order based on type. */
+  std::stable_sort(
+      corner_layers.begin(),
+      corner_layers.end(),
+      [](const CustomDataLayer &a, const CustomDataLayer &b) { return a.type < b.type; });
+}
+
+void mesh_custom_normals_to_generic(Mesh &mesh)
+{
+  if (mesh.attributes().contains("custom_normal")) {
+    return;
+  }
+  void *data = nullptr;
+  const ImplicitSharingInfo *sharing_info = nullptr;
+  for (const int i : IndexRange(mesh.corner_data.totlayer)) {
+    CustomDataLayer &layer = mesh.corner_data.layers[i];
+    if (layer.type == CD_CUSTOMLOOPNORMAL) {
+      data = layer.data;
+      sharing_info = layer.sharing_info;
+      layer.data = nullptr;
+      layer.sharing_info = nullptr;
+      CustomData_free_layer(&mesh.corner_data, CD_CUSTOMLOOPNORMAL, mesh.corners_num, i);
+      break;
+    }
+  }
+  if (data != nullptr) {
+    CustomData_add_layer_named_with_data(&mesh.corner_data,
+                                         CD_PROP_INT16_2D,
+                                         data,
+                                         mesh.corners_num,
+                                         "custom_normal",
+                                         sharing_info);
+  }
+  if (sharing_info != nullptr) {
+    sharing_info->remove_user_and_delete_if_last();
+  }
+}
+
 //
 }  // namespace blender::bke
 

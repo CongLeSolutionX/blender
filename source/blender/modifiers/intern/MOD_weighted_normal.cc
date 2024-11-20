@@ -504,17 +504,6 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
     weight = (weight - 1) * 25;
   }
 
-  blender::short2 *clnors = static_cast<blender::short2 *>(CustomData_get_layer_for_write(
-      &result->corner_data, CD_CUSTOMLOOPNORMAL, mesh->corners_num));
-
-  /* Keep info whether we had clnors,
-   * it helps when generating clnor spaces and default normals. */
-  const bool has_clnors = clnors != nullptr;
-  if (!clnors) {
-    clnors = static_cast<blender::short2 *>(CustomData_add_layer(
-        &result->corner_data, CD_CUSTOMLOOPNORMAL, CD_SET_DEFAULT, corner_verts.size()));
-  }
-
   const MDeformVert *dvert;
   int defgrp_index;
   MOD_get_vgroup(ctx->object, mesh, wnmd->defgrp_name, &dvert, &defgrp_index);
@@ -522,8 +511,12 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
   const Span<int> loop_to_face_map = result->corner_to_face_map();
 
   bke::MutableAttributeAccessor attributes = result->attributes_for_write();
+  const bool has_clnors = attributes.contains("custom_normal");
+
   bke::SpanAttributeWriter<bool> sharp_edges = attributes.lookup_or_add_for_write_span<bool>(
       "sharp_edge", bke::AttrDomain::Edge);
+  bke::SpanAttributeWriter clnors = attributes.lookup_or_add_for_write_span<short2>(
+      "custom_normal", bke::AttrDomain::Corner);
 
   WeightedNormalData wn_data{};
   wn_data.verts_num = verts_num;
@@ -536,7 +529,7 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
   wn_data.corner_verts = corner_verts;
   wn_data.corner_edges = corner_edges;
   wn_data.loop_to_face = loop_to_face_map;
-  wn_data.clnors = {clnors, mesh->corners_num};
+  wn_data.clnors = clnors.span;
   wn_data.has_clnors = has_clnors;
 
   wn_data.faces = faces;
@@ -569,6 +562,7 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
   result->runtime->is_original_bmesh = false;
 
   sharp_edges.finish();
+  clnors.finish();
 
   return result;
 }
@@ -585,8 +579,6 @@ static void init_data(ModifierData *md)
 static void required_data_mask(ModifierData *md, CustomData_MeshMasks *r_cddata_masks)
 {
   WeightedNormalModifierData *wnmd = (WeightedNormalModifierData *)md;
-
-  r_cddata_masks->lmask = CD_MASK_CUSTOMLOOPNORMAL;
 
   if (wnmd->defgrp_name[0] != '\0') {
     r_cddata_masks->vmask |= CD_MASK_MDEFORMVERT;

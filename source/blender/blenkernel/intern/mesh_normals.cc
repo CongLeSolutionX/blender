@@ -202,11 +202,22 @@ blender::bke::MeshNormalDomain Mesh::normals_domain(const bool support_sharp_fac
     return MeshNormalDomain::Point;
   }
 
-  if (CustomData_has_layer(&this->corner_data, CD_CUSTOMLOOPNORMAL)) {
-    return MeshNormalDomain::Corner;
+  const bke::AttributeAccessor attributes = this->attributes();
+  if (const std::optional<AttributeMetaData> custom = attributes.lookup_meta_data("custom_normal"))
+  {
+    switch (custom->domain) {
+      case AttrDomain::Point:
+      case AttrDomain::Edge:
+      case AttrDomain::Face:
+        /* Not supported yet. */
+        break;
+      case AttrDomain::Corner:
+        return MeshNormalDomain::Corner;
+      default:
+        BLI_assert_unreachable();
+    }
   }
 
-  const AttributeAccessor attributes = this->attributes();
   const VArray<bool> sharp_faces = *attributes.lookup_or_default<bool>(
       "sharp_face", AttrDomain::Face, false);
 
@@ -288,8 +299,8 @@ blender::Span<blender::float3> Mesh::corner_normals() const
         const AttributeAccessor attributes = this->attributes();
         const VArraySpan sharp_edges = *attributes.lookup<bool>("sharp_edge", AttrDomain::Edge);
         const VArraySpan sharp_faces = *attributes.lookup<bool>("sharp_face", AttrDomain::Face);
-        const short2 *custom_normals = static_cast<const short2 *>(
-            CustomData_get_layer(&this->corner_data, CD_CUSTOMLOOPNORMAL));
+        const VArraySpan custom_normals = *attributes.lookup<short2>("custom_normal",
+                                                                     AttrDomain::Corner);
         mesh::normals_calc_corners(this->vert_positions(),
                                    this->edges(),
                                    this->faces(),
@@ -300,7 +311,7 @@ blender::Span<blender::float3> Mesh::corner_normals() const
                                    this->face_normals(),
                                    sharp_edges,
                                    sharp_faces,
-                                   custom_normals,
+                                   custom_normals.data(),
                                    nullptr,
                                    r_data);
         break;
@@ -1529,18 +1540,11 @@ void normals_corner_custom_set_from_verts(const Span<float3> vert_positions,
 
 static void mesh_set_custom_normals(Mesh *mesh, float (*r_custom_nors)[3], const bool use_vertices)
 {
-  short2 *clnors = static_cast<short2 *>(
-      CustomData_get_layer_for_write(&mesh->corner_data, CD_CUSTOMLOOPNORMAL, mesh->corners_num));
-  if (clnors != nullptr) {
-    memset(clnors, 0, sizeof(*clnors) * mesh->corners_num);
-  }
-  else {
-    clnors = static_cast<short2 *>(CustomData_add_layer(
-        &mesh->corner_data, CD_CUSTOMLOOPNORMAL, CD_SET_DEFAULT, mesh->corners_num));
-  }
   MutableAttributeAccessor attributes = mesh->attributes_for_write();
   SpanAttributeWriter<bool> sharp_edges = attributes.lookup_or_add_for_write_span<bool>(
       "sharp_edge", AttrDomain::Edge);
+  SpanAttributeWriter custom_normals = attributes.lookup_or_add_for_write_span<short2>(
+      "custom_normal", AttrDomain::Corner);
   const VArraySpan sharp_faces = *attributes.lookup<bool>("sharp_face", AttrDomain::Face);
 
   mesh_normals_corner_custom_set(mesh->vert_positions(),
@@ -1555,9 +1559,10 @@ static void mesh_set_custom_normals(Mesh *mesh, float (*r_custom_nors)[3], const
                                  {reinterpret_cast<float3 *>(r_custom_nors),
                                   use_vertices ? mesh->verts_num : mesh->corners_num},
                                  sharp_edges.span,
-                                 {clnors, mesh->corners_num});
+                                 custom_normals.span);
 
   sharp_edges.finish();
+  custom_normals.finish();
 }
 
 }  // namespace blender::bke::mesh
