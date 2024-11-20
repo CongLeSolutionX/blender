@@ -92,10 +92,7 @@ def _ensure_channelbag_exists(action: Action, slot: ActionSlot):
         for strip in layer.strips:
             return strip.channelbags.new(slot)
 
-def get_initial_frame_range(context):
-
-    objs = {obj for obj in context.selected_objects if obj.animation_data is not None}
-    actions = set()
+def scene_frame_range(context):
     scene = context.scene
     if scene.use_preview_range:
         scene_start = scene.frame_preview_start
@@ -104,6 +101,12 @@ def get_initial_frame_range(context):
         scene_start = scene.frame_start
         scene_end = scene.frame_end
 
+    return int(scene_start), int(scene_end)
+
+def keyframes_frame_range(context):
+    actions = set()
+    objs = {obj for obj in context.selected_objects if obj.animation_data is not None}
+
     #get all the actions
     for obj in objs:
         if obj.animation_data.action:
@@ -111,12 +114,28 @@ def get_initial_frame_range(context):
         if not obj.animation_data.use_nla:
             continue
         actions.update({strip.action for track in obj.animation_data.nla_tracks for strip in track.strips if strip.action})
-
+    if not actions:
+        return None, None
+    
     frame_ranges = [action.frame_range for action in actions]
     frames_start, frames_end = zip(*frame_ranges)
 
-    frame_start = int(max([min(frames_start), scene_start]))
-    frame_end = int(min([max(frames_end), scene_end]))
+    frame_start = min(frames_start)
+    frame_end = max(frames_end)
+
+    return int(frame_start), int(frame_end)
+
+def get_initial_frame_range(self, context):
+
+    self.keyframes_start, self.keyframes_end = keyframes_frame_range(context)
+    self.scene_start, self.scene_end = scene_frame_range(context)
+
+    #in case there was not actions then just return the scene
+    if self.keyframes_start is None:
+        return self.scene_start, self.scene_end
+
+    frame_start = max([self.keyframes_start, self.scene_start])
+    frame_end = min([self.keyframes_end, self.scene_end])
 
     return frame_start, frame_end
 
