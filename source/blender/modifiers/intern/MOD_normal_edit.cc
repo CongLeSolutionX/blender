@@ -497,8 +497,6 @@ static Mesh *normalEditModifier_do(NormalEditModifierData *enmd,
 
   blender::Array<blender::float3> corner_normals;
 
-  CustomData *ldata = &result->corner_data;
-
   bke::MutableAttributeAccessor attributes = result->attributes_for_write();
   bke::SpanAttributeWriter<bool> sharp_edges = attributes.lookup_or_add_for_write_span<bool>(
       "sharp_edge", bke::AttrDomain::Edge);
@@ -719,7 +717,7 @@ ModifierTypeInfo modifierType_NormalEdit = {
     /*modify_geometry_set*/ nullptr,
 
     /*init_data*/ init_data,
-    /*required_data_mask*/ nullptr,
+    /*required_data_mask*/ required_data_mask,
     /*free_data*/ nullptr,
     /*is_disabled*/ is_disabled,
     /*update_depsgraph*/ update_depsgraph,
