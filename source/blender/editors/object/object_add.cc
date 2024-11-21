@@ -3448,6 +3448,7 @@ static int object_convert_exec(bContext *C, wmOperator *op)
   info.basen = info.basact = nullptr;
   info.mballConverted = false;
   info.gpencilConverted = false;
+  info.gpencilCurveConverted = false;
   info.keep_original = keep_original;
   info.do_merge_customdata = do_merge_customdata;
   info.reports = op->reports;
@@ -3511,7 +3512,7 @@ static int object_convert_exec(bContext *C, wmOperator *op)
         }
       }
     }
-#if 1  // To test new conversion code
+#if 0  // To test new conversion code
     else {
       switch (ob->type) {
         case OB_MESH:
@@ -3547,8 +3548,8 @@ static int object_convert_exec(bContext *C, wmOperator *op)
       ob->flag |= OB_DONE;
 
       if (keep_original) {
-        basen = duplibase_for_convert(bmain, depsgraph, scene, view_layer, base, nullptr);
-        newob = basen->object;
+        info.basen = duplibase_for_convert(bmain, depsgraph, scene, view_layer, base, nullptr);
+        newob = info.basen->object;
 
         /* Decrement original mesh's usage count. */
         Mesh *mesh = static_cast<Mesh *>(newob->data);
@@ -3581,15 +3582,15 @@ static int object_convert_exec(bContext *C, wmOperator *op)
 
       if (geometry.has_curves()) {
         if (keep_original) {
-          basen = duplibase_for_convert(bmain, depsgraph, scene, view_layer, base, nullptr);
-          newob = basen->object;
+          info.basen = duplibase_for_convert(bmain, depsgraph, scene, view_layer, base, nullptr);
+          newob = info.basen->object;
 
           /* Decrement original curve's usage count. */
-          Curve *curves_legacy = static_cast<Curve *>(newob->data);
-          id_us_min(&curves_legacy->id);
+          Curve *legacy_curve = static_cast<Curve *>(newob->data);
+          id_us_min(&legacy_curve->id);
 
           /* Make a copy of the curve. */
-          newob->data = BKE_id_copy(bmain, &curves_legacy->id);
+          newob->data = BKE_id_copy(bmain, &legacy_curve->id);
         }
         else {
           newob = ob;
@@ -3609,15 +3610,15 @@ static int object_convert_exec(bContext *C, wmOperator *op)
       }
       else if (geometry.has_grease_pencil()) {
         if (keep_original) {
-          basen = duplibase_for_convert(bmain, depsgraph, scene, view_layer, base, nullptr);
-          newob = basen->object;
+          info.basen = duplibase_for_convert(bmain, depsgraph, scene, view_layer, base, nullptr);
+          newob = info.basen->object;
 
           /* Decrement original curve's usage count. */
-          Curve *curves_legacy = static_cast<Curve *>(newob->data);
-          id_us_min(&curves_legacy->id);
+          Curve *legacy_curve = static_cast<Curve *>(newob->data);
+          id_us_min(&legacy_curve->id);
 
           /* Make a copy of the curve. */
-          newob->data = BKE_id_copy(bmain, &curves_legacy->id);
+          newob->data = BKE_id_copy(bmain, &legacy_curve->id);
         }
         else {
           newob = ob;
@@ -3673,15 +3674,15 @@ static int object_convert_exec(bContext *C, wmOperator *op)
 
       if (geometry.has_curves()) {
         if (keep_original) {
-          basen = duplibase_for_convert(bmain, depsgraph, scene, view_layer, base, nullptr);
-          newob = basen->object;
+          info.basen = duplibase_for_convert(bmain, depsgraph, scene, view_layer, base, nullptr);
+          newob = info.basen->object;
 
           /* Decrement original curve's usage count. */
-          Curve *curves_legacy = static_cast<Curve *>(newob->data);
-          id_us_min(&curves_legacy->id);
+          Curve *legacy_curve = static_cast<Curve *>(newob->data);
+          id_us_min(&legacy_curve->id);
 
           /* Make a copy of the curve. */
-          newob->data = BKE_id_copy(bmain, &curves_legacy->id);
+          newob->data = BKE_id_copy(bmain, &legacy_curve->id);
         }
         else {
           newob = ob;
@@ -3701,15 +3702,15 @@ static int object_convert_exec(bContext *C, wmOperator *op)
       }
       else if (geometry.has_grease_pencil()) {
         if (keep_original) {
-          basen = duplibase_for_convert(bmain, depsgraph, scene, view_layer, base, nullptr);
-          newob = basen->object;
+          info.basen = duplibase_for_convert(bmain, depsgraph, scene, view_layer, base, nullptr);
+          newob = info.basen->object;
 
           /* Decrement original curve's usage count. */
-          Curve *curves_legacy = static_cast<Curve *>(newob->data);
-          id_us_min(&curves_legacy->id);
+          Curve *legacy_curve = static_cast<Curve *>(newob->data);
+          id_us_min(&legacy_curve->id);
 
           /* Make a copy of the curve. */
-          newob->data = BKE_id_copy(bmain, &curves_legacy->id);
+          newob->data = BKE_id_copy(bmain, &legacy_curve->id);
         }
         else {
           newob = ob;
@@ -3777,8 +3778,8 @@ static int object_convert_exec(bContext *C, wmOperator *op)
       ob->flag |= OB_DONE;
 
       if (keep_original) {
-        basen = duplibase_for_convert(bmain, depsgraph, scene, view_layer, base, nullptr);
-        newob = basen->object;
+        info.basen = duplibase_for_convert(bmain, depsgraph, scene, view_layer, base, nullptr);
+        newob = info.basen->object;
 
         /* Decrement original mesh's usage count. */
         Mesh *mesh = static_cast<Mesh *>(newob->data);
@@ -3802,8 +3803,8 @@ static int object_convert_exec(bContext *C, wmOperator *op)
       ob->flag |= OB_DONE;
 
       if (keep_original) {
-        basen = duplibase_for_convert(bmain, depsgraph, scene, view_layer, base, nullptr);
-        newob = basen->object;
+        info.basen = duplibase_for_convert(bmain, depsgraph, scene, view_layer, base, nullptr);
+        newob = info.basen->object;
 
         /* Decrement original mesh's usage count. */
         Mesh *mesh = static_cast<Mesh *>(newob->data);
@@ -3860,8 +3861,8 @@ static int object_convert_exec(bContext *C, wmOperator *op)
       ob->flag |= OB_DONE;
 
       if (keep_original) {
-        basen = duplibase_for_convert(bmain, depsgraph, scene, view_layer, base, nullptr);
-        newob = basen->object;
+        info.basen = duplibase_for_convert(bmain, depsgraph, scene, view_layer, base, nullptr);
+        newob = info.basen->object;
 
         /* Decrement original curve's usage count. */
         id_us_min(&((Curve *)newob->data)->id);
@@ -3907,6 +3908,7 @@ static int object_convert_exec(bContext *C, wmOperator *op)
 
       if (!keep_original) {
         /* other users */
+        Object* ob1;
         if (ID_REAL_USERS(&cu->id) > 1) {
           for (ob1 = static_cast<Object *>(bmain->objects.first); ob1;
                ob1 = static_cast<Object *>(ob1->id.next))
@@ -3940,8 +3942,8 @@ static int object_convert_exec(bContext *C, wmOperator *op)
 
       if (target == OB_MESH) {
         if (keep_original) {
-          basen = duplibase_for_convert(bmain, depsgraph, scene, view_layer, base, nullptr);
-          newob = basen->object;
+          info.basen = duplibase_for_convert(bmain, depsgraph, scene, view_layer, base, nullptr);
+          newob = info.basen->object;
 
           /* Decrement original curve's usage count. */
           id_us_min(&((Curve *)newob->data)->id);
@@ -3974,8 +3976,8 @@ static int object_convert_exec(bContext *C, wmOperator *op)
       }
 
       if (!(baseob->flag & OB_DONE)) {
-        basen = duplibase_for_convert(bmain, depsgraph, scene, view_layer, base, baseob);
-        newob = basen->object;
+        info.basen = duplibase_for_convert(bmain, depsgraph, scene, view_layer, base, baseob);
+        newob = info.basen->object;
 
         MetaBall *mb = static_cast<MetaBall *>(newob->data);
         id_us_min(&mb->id);
@@ -3989,19 +3991,19 @@ static int object_convert_exec(bContext *C, wmOperator *op)
         newob->type = OB_MESH;
 
         if (obact->type == OB_MBALL) {
-          basact = basen;
+          info.basact = info.basen;
         }
 
         baseob->flag |= OB_DONE;
-        mballConverted = 1;
+        info.mballConverted = 1;
       }
     }
     else if (ob->type == OB_POINTCLOUD && target == OB_MESH) {
       ob->flag |= OB_DONE;
 
       if (keep_original) {
-        basen = duplibase_for_convert(bmain, depsgraph, scene, view_layer, base, nullptr);
-        newob = basen->object;
+        info.basen = duplibase_for_convert(bmain, depsgraph, scene, view_layer, base, nullptr);
+        newob = info.basen->object;
 
         /* Decrement original point cloud's usage count. */
         PointCloud *pointcloud = static_cast<PointCloud *>(newob->data);
@@ -4031,8 +4033,8 @@ static int object_convert_exec(bContext *C, wmOperator *op)
       }
 
       if (keep_original) {
-        basen = duplibase_for_convert(bmain, depsgraph, scene, view_layer, base, nullptr);
-        newob = basen->object;
+        info.basen = duplibase_for_convert(bmain, depsgraph, scene, view_layer, base, nullptr);
+        newob = info.basen->object;
 
         Curves *curves = static_cast<Curves *>(newob->data);
         id_us_min(&curves->id);
@@ -4081,8 +4083,8 @@ static int object_convert_exec(bContext *C, wmOperator *op)
       }
 
       if (keep_original) {
-        basen = duplibase_for_convert(bmain, depsgraph, scene, view_layer, base, nullptr);
-        newob = basen->object;
+        info.basen = duplibase_for_convert(bmain, depsgraph, scene, view_layer, base, nullptr);
+        newob = info.basen->object;
 
         Curves *curves = static_cast<Curves *>(newob->data);
         id_us_min(&curves->id);
