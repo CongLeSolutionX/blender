@@ -27,7 +27,6 @@
 #include "BLI_string.h"
 #include "BLI_string_utf8.h"
 #include "BLI_task.hh"
-#include "BLI_threads.h"
 #include "BLI_utildefines.h"
 
 #include "DNA_packedFile_types.h"
@@ -83,47 +82,49 @@ static SeqEffectHandle get_sequence_effect_impl(int seq_type);
  */
 
 struct SeqFontMap {
-  Map<std::string, int> name_to_font_id_file;
-  Map<std::string, int> name_to_font_id_mem;
+  /* File path -> font ID mapping for file-based fonts. */
+  Map<std::string, int> path_to_file_font_id;
+  /* Datablock name -> font ID mapping for memory (datablock) fonts. */
+  Map<std::string, int> name_to_mem_font_id;
+
+  /* Font access mutex. Recursive since it is locked from
+   * text strip rendering, which can call into loading from within. */
   std::recursive_mutex mutex;
 };
 
-static SeqFontMap font_map;
+static SeqFontMap g_font_map;
 
 void SEQ_fontmap_clear()
 {
-  for (const auto &item : font_map.name_to_font_id_file.items()) {
+  for (const auto &item : g_font_map.path_to_file_font_id.items()) {
     BLF_unload_id(item.value);
   }
-  font_map.name_to_font_id_file.clear_and_shrink();
-  for (const auto &item : font_map.name_to_font_id_mem.items()) {
+  g_font_map.path_to_file_font_id.clear_and_shrink();
+  for (const auto &item : g_font_map.name_to_mem_font_id.items()) {
     BLF_unload_id(item.value);
   }
-  font_map.name_to_font_id_mem.clear_and_shrink();
+  g_font_map.name_to_mem_font_id.clear_and_shrink();
 }
 
 static int seq_load_font_file(const std::string &path)
 {
-  const bool is_main_thread = BLI_thread_is_main();
-  std::lock_guard lock(font_map.mutex);
-  int fontid = font_map.name_to_font_id_file.add_or_modify(
+  std::lock_guard lock(g_font_map.mutex);
+  int fontid = g_font_map.path_to_file_font_id.add_or_modify(
       path,
       [&](int *fontid) {
-        /* New path: load font if we're on the main thread.
-         * It should not really happen that we haven't seen this
-         * path on the main thread yet. */
-        *fontid = is_main_thread ? BLF_load_unique(path.c_str()) : -1;
+        /* New path: load font. */
+        *fontid = BLF_load_unique(path.c_str());
         return *fontid;
       },
       [&](int *fontid) {
         /* Path already in cache: add reference to already loaded font,
-         * or (if we're on the main thread) load a new one in case that
+         * or load a new one in case that
          * font id was unloaded behind our backs. */
         if (*fontid >= 0) {
           if (BLF_is_loaded_id(*fontid)) {
             BLF_addref_id(*fontid);
           }
-          else if (is_main_thread) {
+          else {
             *fontid = BLF_load_unique(path.c_str());
           }
         }
@@ -134,15 +135,12 @@ static int seq_load_font_file(const std::string &path)
 
 static int seq_load_font_mem(const std::string &name, const unsigned char *data, int data_size)
 {
-  const bool is_main_thread = BLI_thread_is_main();
-  std::lock_guard lock(font_map.mutex);
-  int fontid = font_map.name_to_font_id_mem.add_or_modify(
+  std::lock_guard lock(g_font_map.mutex);
+  int fontid = g_font_map.name_to_mem_font_id.add_or_modify(
       name,
       [&](int *fontid) {
-        /* New name: load font if we're on the main thread.
-         * It should not really happen that we haven't seen this
-         * path on the main thread yet. */
-        *fontid = is_main_thread ? BLF_load_mem_unique(name.c_str(), data, data_size) : -1;
+        /* New name: load font. */
+        *fontid = BLF_load_mem_unique(name.c_str(), data, data_size);
         return *fontid;
       },
       [&](int *fontid) {
@@ -153,7 +151,7 @@ static int seq_load_font_mem(const std::string &name, const unsigned char *data,
           if (BLF_is_loaded_id(*fontid)) {
             BLF_addref_id(*fontid);
           }
-          else if (is_main_thread) {
+          else {
             *fontid = BLF_load_mem_unique(name.c_str(), data, data_size);
           }
         }
@@ -164,14 +162,13 @@ static int seq_load_font_mem(const std::string &name, const unsigned char *data,
 
 static void seq_unload_font(int fontid)
 {
-  std::lock_guard lock(font_map.mutex);
-  BLF_unload_id(fontid);
-
+  std::lock_guard lock(g_font_map.mutex);
+  bool unloaded = BLF_unload_id(fontid);
   /* If that was the last usage of the font and it got unloaded: remove
    * it from our maps. */
-  if (!BLF_is_loaded_id(fontid)) {
-    font_map.name_to_font_id_file.remove_if([&](auto item) { return item.value == fontid; });
-    font_map.name_to_font_id_mem.remove_if([&](auto item) { return item.value == fontid; });
+  if (unloaded) {
+    g_font_map.path_to_file_font_id.remove_if([&](auto item) { return item.value == fontid; });
+    g_font_map.name_to_mem_font_id.remove_if([&](auto item) { return item.value == fontid; });
   }
 }
 
@@ -3452,7 +3449,7 @@ static ImBuf *do_text_effect(const SeqRenderData *context,
                          ((data->flag & SEQ_TEXT_ITALIC) ? BLF_ITALIC : 0);
 
   /* Guard against parallel accesses to the fonts map. */
-  std::lock_guard lock(font_map.mutex);
+  std::lock_guard lock(g_font_map.mutex);
 
   const int font = text_effect_font_init(context, seq, font_flags);
 
