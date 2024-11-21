@@ -322,6 +322,31 @@ typedef struct uiList { /* some list UI data need to be saved in file */
   uiListDyn *dyn_data;
 } uiList;
 
+/** See #uiViewStateLink. */
+typedef struct uiViewState {
+  /**
+   * User set height of the view in unscaled pixels. A value of 0 means no custom height was set
+   * and the default should be used.
+   */
+  int custom_height;
+  char _pad[4];
+} uiViewState;
+
+/**
+ * Persistent storage for some state of views (#ui::AbstractView), for storage in a region. The
+ * view state is matched to the view using the view's idname.
+ *
+ * The actual state is stored in #uiViewState, so views can manage this conveniently without having
+ * to care about the idname and listbase pointers themselves.
+ */
+typedef struct uiViewStateLink {
+  struct uiViewStateLink *next, *prev;
+
+  char idname[64]; /* #BKE_ST_MAXNAME */
+
+  uiViewState state;
+} uiViewStateLink;
+
 typedef struct TransformOrientation {
   struct TransformOrientation *next, *prev;
   /** MAX_NAME. */
@@ -498,6 +523,11 @@ typedef struct ARegion {
   ListBase ui_lists;
   /** #uiPreview. */
   ListBase ui_previews;
+  /**
+   * Permanent state storage of #ui::AbstractView instances, so hiding regions with views or
+   * loading files remembers the view state.
+   */
+  ListBase view_states; /* #uiViewStateLink */
 
   /** XXX 2.50, need spacedata equivalent? */
   void *regiondata;
