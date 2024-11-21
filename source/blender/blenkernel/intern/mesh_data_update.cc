@@ -219,19 +219,6 @@ static void add_orco_mesh(Object &ob,
 }
 
 /**
- * Does final touches to the final evaluated mesh, making sure it is perfectly usable.
- *
- * This is needed because certain information is not passed along intermediate meshes allocated
- * during stack evaluation.
- */
-static void mesh_calc_finalize(const Mesh &mesh_input, Mesh &mesh_eval)
-{
-  /* Make sure the name is the same. This is because mesh allocation from template does not
-   * take care of naming. */
-  STRNCPY(mesh_eval.id.name, mesh_input.id.name);
-}
-
-/**
  * Modifies the given mesh and geometry set. The mesh is not passed as part of the mesh component
  * in the \a geometry_set input, it is only passed in \a input_mesh and returned in the return
  * value.
@@ -893,33 +880,6 @@ static void editbmesh_build_data(Depsgraph &depsgraph,
   const Mesh &mesh_input = *static_cast<const Mesh *>(obedit.data);
 
   GeometrySet geometry_set = editbmesh_calc_modifiers(depsgraph, scene, obedit, dataMask);
-
-  /* Object has edit_mesh but is not in edit mode (object shares mesh datablock with another object
-   * with is in edit mode).
-   * Convert edit mesh to mesh until the draw manager can draw mesh wrapper which is not in the
-   * edit mode. */
-  // if (!(obedit.mode & OB_MODE_EDIT)) {
-  //   MeshEditHints &edit_hints =
-  //       *geometry_set.get_component_for_write<GeometryComponentEditData>().mesh_edit_hints_;
-  //   const bool cage_mesh_shared = edit_hints.mesh_cage->get() == geometry_set.get_mesh();
-  //   Mesh *mesh = geometry_set.get_mesh_for_write();
-  //   BKE_mesh_wrapper_ensure_mdata(mesh);
-  //   if (cage_mesh_shared) {
-  //     save_cage_mesh(geometry_set);
-  //   }
-  //   else {
-  //     if (edit_hints.mesh_cage->is_mutable()) {
-  //       edit_hints.mesh_cage->tag_ensured_mutable();
-  //     }
-  //     else {
-  //       Mesh *mesh_copy = BKE_mesh_copy_for_eval(*edit_hints.mesh_cage->get());
-  //       MeshComponent *copy = new MeshComponent(mesh_copy);
-  //       edit_hints.mesh_cage = ImplicitSharingPtr<MeshComponent>(copy);
-  //     }
-  //     Mesh *mesh_cage = const_cast<MeshComponent &>(*edit_hints.mesh_cage).get_for_write();
-  //     BKE_mesh_wrapper_ensure_mdata(mesh_cage);
-  //   }
-  // }
 
   /* Make sure that drivers can target shapekey properties.
    * Note that this causes a potential inconsistency, as the shapekey may have a
