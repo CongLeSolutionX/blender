@@ -73,13 +73,11 @@
  * \{ */
 
 static bool get_normalized_fcurve_bounds(FCurve *fcu,
-                                         AnimData *anim_data,
                                          SpaceLink *space_link,
                                          Scene *scene,
                                          ID *id,
                                          const bool include_handles,
                                          const float range[2],
-                                         const bool use_nla_remapping,
                                          rctf *r_bounds)
 {
   const bool fcu_selection_only = false;
@@ -103,10 +101,6 @@ static bool get_normalized_fcurve_bounds(FCurve *fcu,
   if (height < min_height) {
     r_bounds->ymin -= (min_height - height) / 2;
     r_bounds->ymax += (min_height - height) / 2;
-  }
-  if (use_nla_remapping) {
-    r_bounds->xmin = BKE_nla_tweakedit_remap(anim_data, r_bounds->xmin, NLATIME_CONVERT_MAP);
-    r_bounds->xmax = BKE_nla_tweakedit_remap(anim_data, r_bounds->xmax, NLATIME_CONVERT_MAP);
   }
 
   return true;
@@ -191,15 +185,12 @@ static bool get_channel_bounds(bAnimContext *ac,
 
     case ALE_FCURVE: {
       FCurve *fcu = (FCurve *)ale->key_data;
-      found_bounds = get_normalized_fcurve_bounds(fcu,
-                                                  ale->adt,
-                                                  ac->sl,
-                                                  ac->scene,
-                                                  ale->id,
-                                                  include_handles,
-                                                  range,
-                                                  ANIM_nla_mapping_allowed(ale),
-                                                  r_bounds);
+      found_bounds = get_normalized_fcurve_bounds(
+          fcu, ac->sl, ac->scene, ale->id, include_handles, range, r_bounds);
+      if (found_bounds) {
+        r_bounds->xmin = ANIM_nla_tweakedit_remap(ale, r_bounds->xmin, NLATIME_CONVERT_MAP);
+        r_bounds->xmax = ANIM_nla_tweakedit_remap(ale, r_bounds->xmax, NLATIME_CONVERT_MAP);
+      }
       break;
     }
     case ALE_NONE:
@@ -5501,24 +5492,13 @@ static rctf calculate_fcurve_bounds_and_unhide(SpaceLink *space_link,
   mapped_frame_range[1] = BKE_nla_tweakedit_remap(
       anim_data, frame_range[1], NLATIME_CONVERT_UNMAP);
 
-  /* We already did the nla remapping manually, so downstream code shouldn't do
-   * it again. */
-  const bool use_nla_remapping = false;
-
   const bool include_handles = false;
 
   for (FCurve *fcurve : fcurves) {
     fcurve->flag |= (FCURVE_SELECTED | FCURVE_VISIBLE);
     rctf fcu_bounds;
-    get_normalized_fcurve_bounds(fcurve,
-                                 anim_data,
-                                 space_link,
-                                 scene,
-                                 id,
-                                 include_handles,
-                                 mapped_frame_range,
-                                 use_nla_remapping,
-                                 &fcu_bounds);
+    get_normalized_fcurve_bounds(
+        fcurve, space_link, scene, id, include_handles, mapped_frame_range, &fcu_bounds);
 
     if (BLI_rctf_is_valid(&fcu_bounds)) {
       BLI_rctf_union(&bounds, &fcu_bounds);
