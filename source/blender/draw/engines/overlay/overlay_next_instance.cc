@@ -450,43 +450,56 @@ void Instance::draw(Manager &manager)
     draw_scope.begin_capture();
   }
 
-  auto draw_end = [&]() {
-    resources.line_tx.release();
-    resources.overlay_tx.release();
-    resources.xray_depth_tx.release();
-    resources.depth_in_front_alloc_tx.release();
-    resources.color_overlay_alloc_tx.release();
-    resources.color_render_alloc_tx.release();
-
-    resources.read_result();
-
-    if (resources.selection_type != SelectionType::DISABLED) {
-      select_scope.end_capture();
-    }
-    else {
-      draw_scope.end_capture();
-    }
-  };
-
   /* TODO(fclem): Would be better to have a v2d overlay class instead of these conditions. */
-  if (state.space_type == SPACE_IMAGE) {
-    GPU_framebuffer_bind(resources.overlay_output_fb);
-    GPU_framebuffer_clear_color(resources.overlay_output_fb, float4(0.0));
-
-    background.draw(resources.overlay_output_fb, manager, view);
-    grid.draw(resources.overlay_output_fb, manager, view);
-    regular.mesh_uvs.draw(resources.overlay_output_fb, manager, view);
-    draw_end();
-    return;
-  }
-  if (state.space_type == SPACE_NODE) {
-    /* Don't clear background for the node editor. The node editor draws the background and we
-     * need to mask out the image from the already drawn overlay color buffer. */
-    background.draw(resources.overlay_output_fb, manager, view);
-    draw_end();
-    return;
+  switch (state.space_type) {
+    case SPACE_NODE:
+      draw_node(manager, view);
+      break;
+    case SPACE_IMAGE:
+      draw_v2d(manager, view);
+      break;
+    case SPACE_VIEW3D:
+      draw_v3d(manager, view);
+      break;
+    default:
+      BLI_assert_unreachable();
   }
 
+  resources.line_tx.release();
+  resources.overlay_tx.release();
+  resources.xray_depth_tx.release();
+  resources.depth_in_front_alloc_tx.release();
+  resources.color_overlay_alloc_tx.release();
+  resources.color_render_alloc_tx.release();
+
+  resources.read_result();
+
+  if (resources.selection_type != SelectionType::DISABLED) {
+    select_scope.end_capture();
+  }
+  else {
+    draw_scope.end_capture();
+  }
+}
+
+void Instance::draw_node(Manager &manager, View &view)
+{
+  /* Don't clear background for the node editor. The node editor draws the background and we
+   * need to mask out the image from the already drawn overlay color buffer. */
+  background.draw(resources.overlay_output_fb, manager, view);
+}
+void Instance::draw_v2d(Manager &manager, View &view)
+{
+  GPU_framebuffer_bind(resources.overlay_output_fb);
+  GPU_framebuffer_clear_color(resources.overlay_output_fb, float4(0.0));
+
+  background.draw(resources.overlay_output_fb, manager, view);
+  grid.draw(resources.overlay_output_fb, manager, view);
+  regular.mesh_uvs.draw(resources.overlay_output_fb, manager, view);
+}
+
+void Instance::draw_v3d(Manager &manager, View &view)
+{
   regular.cameras.draw_scene_background_images(resources.render_fb, manager, view);
   infront.cameras.draw_scene_background_images(resources.render_fb, manager, view);
 
@@ -582,8 +595,6 @@ void Instance::draw(Manager &manager)
 
   background.draw(resources.overlay_output_fb, manager, view);
   anti_aliasing.draw(resources.overlay_output_fb, manager, view);
-
-  draw_end();
 }
 
 bool Instance::object_is_selected(const ObjectRef &ob_ref)
