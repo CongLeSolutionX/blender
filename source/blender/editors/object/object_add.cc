@@ -2872,7 +2872,7 @@ static Base *duplibase_for_convert(
   return basen;
 }
 
-typedef struct ObjectConversionInfo {
+struct ObjectConversionInfo {
   Main *bmain;
   Depsgraph *depsgraph;
   Scene *scene;
@@ -2886,7 +2886,7 @@ typedef struct ObjectConversionInfo {
   bool gpencilConverted;
   bool gpencilCurveConverted;
   ReportList *reports;
-} ObjectConversionInfo;
+};
 
 static Object *get_object_for_conversion(Object &ob, ObjectConversionInfo &info)
 {
