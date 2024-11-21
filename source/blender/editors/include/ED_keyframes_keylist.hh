@@ -155,11 +155,26 @@ int64_t ED_keylist_array_len(const AnimKeylist *keylist);
 
 /**
  * Add the keyframes of the F-Curve to the keylist.
- * \param adt: can be a nullptr.
- * \param range: adds keys in the given range to the keylist plus 1 extra on each side if
- * available.
- * \param use_nla_remapping: whether to allow NLA remapping or not. `true` by default, basically
- * only `false` when this F-Curve is an NLA control curve (like animated influence) or a driver.
+ *
+ * Note: the relationship between the `adt` and `use_nla_remapping` parameters
+ * is subtle. If either `adt` is null or `use_nla_remapping` is false, then NLA
+ * time remapping will not be performed. However, semantically they have
+ * different meanings: `adt` should only be null when no AnimData is available,
+ * and should *not* be set to null as a way of indicating an intention to not do
+ * NLA remapping. Indicating an intention to not do NLA remapping is the job of
+ * the `use_nla_remapping` parameter.
+ *
+ * AnimData should always be passed to `adt` when available. The reason `adt`
+ * needs to be nullable at all is simply because AnimData doesn't always exist
+ * at some of the places this function is called from.
+ *
+ * \param adt: the AnimData associated with the FCurve, if any. Can be nullptr
+ * if no such AnimData is available.
+ * \param range: adds keys in the given range to the keylist plus 1 extra on
+ * each side if available.
+ * \param use_nla_remapping: whether to allow NLA remapping or not. `true` by
+ * default, basically only `false` when this F-Curve is an NLA control curve
+ * (like animated influence) or a driver.
  */
 void fcurve_to_keylist(AnimData *adt,
                        FCurve *fcu,
