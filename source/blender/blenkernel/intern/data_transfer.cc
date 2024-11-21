@@ -382,6 +382,7 @@ static void data_transfer_dtdata_type_postprocess(Mesh *me_dst,
                                                   sharp_edges.span,
                                                   {loop_nors_dst, me_dst->corners_num},
                                                   custom_nors_dst.span);
+    custom_nors_dst.finish();
     sharp_edges.finish();
     CustomData_free_layers(ldata_dst, CD_NORMAL, me_dst->corners_num);
   }
