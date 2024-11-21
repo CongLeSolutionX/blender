@@ -141,6 +141,7 @@ def draw_kmi(display_keymaps, kc, km, kmi, layout, level):
 
     if km.is_modal:
         row.separator()
+        row.alert = not kmi.propvalue
         row.prop(kmi, "propvalue", text="")
     else:
         if is_op_available:
@@ -187,6 +188,7 @@ def draw_kmi(display_keymaps, kc, km, kmi, layout, level):
         sub = split.row()
 
         if km.is_modal:
+            sub.alert = not kmi.propvalue
             sub.prop(kmi, "propvalue", text="")
         else:
             subrow = sub.row()
