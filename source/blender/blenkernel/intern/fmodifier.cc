@@ -838,10 +838,13 @@ static void fcm_noise_evaluate(const FCurve * /*fcu*/,
     else {
       scale = 1.0 / data->size;
     }
+    /* Adding an offset so the 0 positions are unlikely to be on full frames. The user can counter
+     * that, which is why the value is chosen to be quite obscure. */
+    const float offset = 0.61803398874;
     /* Using float2 to generate a phase offset. Offsetting the evaltime by 0.5 to ensure that the
      * noise at full frames isn't always at 0. */
     noise = blender::noise::perlin_fbm<blender::float2>(
-        blender::float2(evaltime * scale - data->offset + 0.5, data->phase),
+        blender::float2(evaltime * scale - data->offset + offset, data->phase),
         data->depth / 10.0,
         data->roughness,
         data->lacunarity,
