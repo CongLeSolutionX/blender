@@ -261,6 +261,7 @@ int BLF_load_mem_unique(const char *name, const uchar *mem, int mem_size)
 
 void BLF_unload(const char *filepath)
 {
+  std::lock_guard lock(g_blf_load_mutex);
   for (int i = 0; i < BLF_MAX_FONT; i++) {
     FontBLF *font = global_font[i];
     if (font == nullptr || font->filepath == nullptr) {
@@ -281,6 +282,7 @@ void BLF_unload(const char *filepath)
 
 bool BLF_unload_id(int fontid)
 {
+  std::lock_guard lock(g_blf_load_mutex);
   FontBLF *font = blf_get(fontid);
   if (font) {
     BLI_assert(font->reference_count > 0);
@@ -311,6 +313,7 @@ void BLF_unload_all()
 
 void BLF_addref_id(int fontid)
 {
+  std::lock_guard lock(g_blf_load_mutex);
   FontBLF *font = blf_get(fontid);
   if (font) {
     font->reference_count++;
