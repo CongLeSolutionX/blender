@@ -403,8 +403,6 @@ class LazyFunctionForEvaluateClosureNode : public LazyFunction {
     eval_storage.graph_executor_storage = eval_storage.graph_executor->init_storage(
         eval_storage.scope.linear_allocator());
 
-    std::cout << "\n\n" << lf_graph.to_dot() << "\n\n";
-
     /* Log graph for debugging purposes. */
     bNodeTree &btree_orig = *reinterpret_cast<bNodeTree *>(
         DEG_get_original_id(const_cast<ID *>(&btree_.id)));
