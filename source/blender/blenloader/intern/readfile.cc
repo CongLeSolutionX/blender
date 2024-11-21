@@ -966,9 +966,9 @@ struct UnknownBlenderHeader {};
 /** The file is not a Blender file. */
 struct InvalidHeader {};
 
-using FileHeaderBariant = std::variant<InvalidHeader, UnknownBlenderHeader, BlenderHeader>;
+using BlenderHeaderVariant = std::variant<InvalidHeader, UnknownBlenderHeader, BlenderHeader>;
 
-static FileHeaderBariant decode_blender_header(FileData *fd)
+static BlenderHeaderVariant decode_blender_header(FileData *fd)
 {
   char header_bytes[SIZEOFBLENDERHEADER];
   const int64_t readsize = fd->file->read(fd->file, header_bytes, sizeof(header_bytes));
@@ -1015,7 +1015,7 @@ static FileHeaderBariant decode_blender_header(FileData *fd)
 
 static void read_blender_header(FileData *fd)
 {
-  const FileHeaderBariant header_variant = decode_blender_header(fd);
+  const BlenderHeaderVariant header_variant = decode_blender_header(fd);
   if (std::holds_alternative<InvalidHeader>(header_variant)) {
     return;
   }
