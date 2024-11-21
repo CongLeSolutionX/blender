@@ -2888,7 +2888,7 @@ typedef struct ObjectConversionInfo {
   ReportList *reports;
 } ObjectConversionInfo;
 
-static Object *ensure_object_duplication(Object &ob, ObjectConversionInfo &info)
+static Object *get_object_for_conversion(Object &ob, ObjectConversionInfo &info)
 {
   if (info.keep_original) {
     info.basen = duplibase_for_convert(
@@ -2904,15 +2904,13 @@ static Object *ensure_object_duplication(Object &ob, ObjectConversionInfo &info)
 
     return newob;
   }
-  else {
-    return &ob;
-  }
+  return &ob;
 }
 
 static Object *convert_mesh_to_curves_legacy(Object &ob, ObjectConversionInfo &info)
 {
   ob.flag |= OB_DONE;
-  Object *newob = ensure_object_duplication(ob, info);
+  Object *newob = get_object_for_conversion(ob, info);
 
   BKE_mesh_to_curve(info.bmain, info.depsgraph, info.scene, newob);
 
@@ -2938,7 +2936,7 @@ static Object *convert_any_to_curves(Object &ob, ObjectConversionInfo &info)
   }
 
   if (geometry.has_curves()) {
-    newob = ensure_object_duplication(ob, info);
+    newob = get_object_for_conversion(ob, info);
 
     const Curves *curves_eval = geometry.get_curves();
     Curves *new_curves = static_cast<Curves *>(BKE_id_new(info.bmain, ID_CV, newob->id.name + 2));
@@ -2953,7 +2951,7 @@ static Object *convert_any_to_curves(Object &ob, ObjectConversionInfo &info)
     BKE_object_free_modifiers(newob, 0);
   }
   else if (geometry.has_grease_pencil()) {
-    newob = ensure_object_duplication(ob, info);
+    newob = get_object_for_conversion(ob, info);
 
     Curves *new_curves = static_cast<Curves *>(BKE_id_new(info.bmain, ID_CV, newob->id.name + 2));
     newob->data = new_curves;
@@ -2997,7 +2995,7 @@ static Object *convert_any_to_curves(Object &ob, ObjectConversionInfo &info)
 static Object *convert_mesh_to_point_cloud(Object &ob, ObjectConversionInfo &info)
 {
   ob.flag |= OB_DONE;
-  Object *newob = ensure_object_duplication(ob, info);
+  Object *newob = get_object_for_conversion(ob, info);
 
   BKE_mesh_to_pointcloud(info.bmain, info.depsgraph, info.scene, newob);
 
@@ -3012,7 +3010,7 @@ static Object *convert_mesh_to_point_cloud(Object &ob, ObjectConversionInfo &inf
 static Object *convert_mesh_to_mesh(Object &ob, ObjectConversionInfo &info)
 {
   ob.flag |= OB_DONE;
-  Object *newob = ensure_object_duplication(ob, info);
+  Object *newob = get_object_for_conversion(ob, info);
 
   /* make new mesh data from the original copy */
   /* NOTE: get the mesh from the original, not from the copy in some
@@ -3088,7 +3086,7 @@ static Object *convert_curves_to_mesh(Object &ob, ObjectConversionInfo &info)
   Mesh *new_mesh = nullptr;
 
   if (mesh_eval || curves_eval) {
-    newob = ensure_object_duplication(ob, info);
+    newob = get_object_for_conversion(ob, info);
     new_mesh = static_cast<Mesh *>(BKE_id_new(info.bmain, ID_ME, newob->id.name + 2));
     newob->data = new_mesh;
     newob->type = OB_MESH;
@@ -3138,7 +3136,7 @@ static Object *convert_curves_to_grease_pencil(Object &ob, ObjectConversionInfo 
   GreasePencil *new_grease_pencil = nullptr;
 
   if (grease_pencil_eval || curves_eval) {
-    newob = ensure_object_duplication(ob, info);
+    newob = get_object_for_conversion(ob, info);
     new_grease_pencil = static_cast<GreasePencil *>(
         BKE_id_new(info.bmain, ID_GP, newob->id.name + 2));
     newob->data = new_grease_pencil;
@@ -3195,7 +3193,89 @@ static Object *convert_grease_pencil_to_mesh(Object &ob, ObjectConversionInfo &i
   ob.flag |= OB_DONE;
   Object *newob = nullptr;
 
-  // I think we should implement something better.
+  /* Mostly same as converting to OB_CURVES, the mesh will be converted from Curves afterwards. */
+
+  Object *ob_eval = DEG_get_evaluated_object(info.depsgraph, &ob);
+  bke::GeometrySet geometry;
+  if (ob_eval->runtime->geometry_set_eval != nullptr) {
+    geometry = *ob_eval->runtime->geometry_set_eval;
+  }
+
+  if (geometry.has_curves()) {
+    newob = get_object_for_conversion(ob, info);
+
+    const Curves *curves_eval = geometry.get_curves();
+    Curves *new_curves = static_cast<Curves *>(BKE_id_new(info.bmain, ID_CV, newob->id.name + 2));
+
+    newob->data = new_curves;
+    newob->type = OB_CURVES;
+
+    new_curves->geometry.wrap() = curves_eval->geometry.wrap();
+    BKE_object_material_from_eval_data(info.bmain, newob, &curves_eval->id);
+
+    BKE_object_free_derived_caches(newob);
+    BKE_object_free_modifiers(newob, 0);
+  }
+  else if (geometry.has_grease_pencil()) {
+    newob = get_object_for_conversion(ob, info);
+
+    /* Do not link `new_curves` to `bmain` since it's temporary. */
+    Curves *new_curves = static_cast<Curves *>(BKE_id_new_nomain(ID_CV, newob->id.name + 2));
+
+    newob->data = new_curves;
+    newob->type = OB_CURVES;
+
+    if (const Curves *curves_eval = geometry.get_curves()) {
+      new_curves->geometry.wrap() = curves_eval->geometry.wrap();
+      BKE_object_material_from_eval_data(info.bmain, newob, &curves_eval->id);
+    }
+    else if (const GreasePencil *grease_pencil = geometry.get_grease_pencil()) {
+      const Vector<ed::greasepencil::DrawingInfo> drawings =
+          ed::greasepencil::retrieve_visible_drawings(*info.scene, *grease_pencil, false);
+      Array<bke::GeometrySet> geometries(drawings.size());
+      for (const int i : drawings.index_range()) {
+        Curves *curves_id = static_cast<Curves *>(BKE_id_new_nomain(ID_CV, nullptr));
+        curves_id->geometry.wrap() = drawings[i].drawing.strokes();
+        const int layer_index = drawings[i].layer_index;
+        const bke::greasepencil::Layer *layer = grease_pencil->layers()[layer_index];
+        blender::float4x4 to_object = layer->to_object_space(ob);
+        bke::CurvesGeometry &new_curves = curves_id->geometry.wrap();
+        MutableSpan<blender::float3> positions = new_curves.positions_for_write();
+        for (const int point_i : new_curves.points_range()) {
+          positions[point_i] = blender::math::transform_point(to_object, positions[point_i]);
+        }
+        geometries[i] = bke::GeometrySet::from_curves(curves_id);
+      }
+      if (geometries.size() > 0) {
+        bke::GeometrySet joined_curves = geometry::join_geometries(geometries, {});
+
+        new_curves->geometry.wrap() = joined_curves.get_curves()->geometry.wrap();
+        new_curves->geometry.wrap().tag_topology_changed();
+        BKE_object_material_from_eval_data(info.bmain, newob, &joined_curves.get_curves()->id);
+      }
+    }
+
+    Mesh *new_mesh = static_cast<Mesh *>(BKE_id_new(info.bmain, ID_ME, newob->id.name + 2));
+    newob->data = new_mesh;
+    newob->type = OB_MESH;
+
+    Mesh *mesh = bke::curve_to_wire_mesh(new_curves->geometry.wrap(), {});
+    if (!mesh) {
+      mesh = BKE_mesh_new_nomain(0, 0, 0, 0);
+    }
+    BKE_mesh_nomain_to_mesh(mesh, new_mesh, newob);
+    BKE_object_material_from_eval_data(info.bmain, newob, &new_curves->id);
+
+    /* Free `new_curves` because it is just an intermediate. */
+    BKE_id_free(nullptr, new_curves);
+
+    BKE_object_free_derived_caches(newob);
+    BKE_object_free_modifiers(newob, 0);
+  }
+  else {
+    BKE_reportf(
+        info.reports, RPT_WARNING, "Object '%s' has no evaluated curves data", ob.id.name + 2);
+  }
 
   return newob;
 }
@@ -3206,7 +3286,7 @@ static Object *convert_grease_pencil(Object &ob, const short target, ObjectConve
     case OB_CURVES:
       return convert_any_to_curves(ob, info);
     case OB_MESH:
-      // return convert_curves_to_mesh(ob, info);
+      return convert_grease_pencil_to_mesh(ob, info);
     default:
       return nullptr;
   }
@@ -3218,7 +3298,7 @@ static Object *convert_font_to_curves_legacy_or_mesh(Object &ob,
                                                      const bool do_mesh)
 {
   ob.flag |= OB_DONE;
-  Object *newob = ensure_object_duplication(ob, info);
+  Object *newob = get_object_for_conversion(ob, info);
 
   Curve *cu = static_cast<Curve *>(newob->data);
 
@@ -3302,7 +3382,7 @@ static Object *convert_font(Object &ob, const short target, ObjectConversionInfo
 static Object *convert_curves_legacy_to_mesh(Object &ob, ObjectConversionInfo &info)
 {
   ob.flag |= OB_DONE;
-  Object *newob = ensure_object_duplication(ob, info);
+  Object *newob = get_object_for_conversion(ob, info);
 
   /* No assumption should be made that the resulting objects is a mesh, as conversion can
    * fail. */
@@ -3378,7 +3458,7 @@ static Object *convert_mball(Object &ob, const short target, ObjectConversionInf
 static Object *convert_point_cloud_to_mesh(Object &ob, ObjectConversionInfo &info)
 {
   ob.flag |= OB_DONE;
-  Object *newob = ensure_object_duplication(ob, info);
+  Object *newob = get_object_for_conversion(ob, info);
 
   BKE_pointcloud_to_mesh(info.bmain, info.depsgraph, info.scene, newob);
 
@@ -3908,7 +3988,7 @@ static int object_convert_exec(bContext *C, wmOperator *op)
 
       if (!keep_original) {
         /* other users */
-        Object* ob1;
+        Object *ob1;
         if (ID_REAL_USERS(&cu->id) > 1) {
           for (ob1 = static_cast<Object *>(bmain->objects.first); ob1;
                ob1 = static_cast<Object *>(ob1->id.next))
