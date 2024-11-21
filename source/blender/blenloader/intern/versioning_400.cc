@@ -2848,6 +2848,12 @@ static void update_paint_modes_for_brush_assets(Main &bmain)
   /* Replace persistent tool references with the new single builtin brush tool. */
   LISTBASE_FOREACH (WorkSpace *, workspace, &bmain.workspaces) {
     LISTBASE_FOREACH (bToolRef *, tref, &workspace->tools) {
+      if (STREQ(tref->idname, "builtin_brush.Draw")) {
+        /* Explicitly check against the old brush name, as the old texture paint image mode brush
+         * tool has a non-paint related mode. */
+        STRNCPY(tref->idname, "builtin.brush");
+        continue;
+      }
       if (tref->space_type != SPACE_VIEW3D) {
         continue;
       }
@@ -3116,6 +3122,21 @@ static bool versioning_convert_seq_text_anchor(Sequence *seq, void * /*user_data
   data->align = SEQ_TEXT_ALIGN_X_LEFT;
 
   return true;
+}
+
+static void add_subsurf_node_limit_surface_option(Main &bmain)
+{
+  LISTBASE_FOREACH (bNodeTree *, ntree, &bmain.nodetrees) {
+    if (ntree->type == NTREE_GEOMETRY) {
+      LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+        if (node->type == GEO_NODE_SUBDIVISION_SURFACE) {
+          bNodeSocket *socket = version_node_add_socket_if_not_exist(
+              ntree, node, SOCK_IN, SOCK_BOOLEAN, PROP_NONE, "Limit Surface", "Limit Surface");
+          static_cast<bNodeSocketValueBoolean *>(socket->default_value)->value = false;
+        }
+      }
+    }
+  }
 }
 
 void blo_do_versions_400(FileData *fd, Library * /*lib*/, Main *bmain)
@@ -5016,6 +5037,10 @@ void blo_do_versions_400(FileData *fd, Library * /*lib*/, Main *bmain)
       SequencerToolSettings *sequencer_tool_settings = SEQ_tool_settings_ensure(scene);
       sequencer_tool_settings->snap_mode |= SEQ_SNAP_TO_RETIMING;
     }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 404, 6)) {
+    add_subsurf_node_limit_surface_option(*bmain);
   }
 
   /* Always run this versioning; meshes are written with the legacy format which always needs to

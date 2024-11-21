@@ -29,6 +29,7 @@
 
 #include "DEG_depsgraph_query.hh"
 
+#include "DNA_brush_types.h"
 #include "DNA_material_types.h"
 
 #include "ED_grease_pencil.hh"
@@ -617,12 +618,12 @@ static void grease_pencil_primitive_status_indicators(bContext *C,
     return WM_modalkeymap_operator_items_to_string(op->type, int(id), true).value_or("");
   };
 
-  header += fmt::format(IFACE_("{}: confirm, {}: cancel, {}: panning, Shift: align"),
+  header += fmt::format(fmt::runtime(IFACE_("{}: confirm, {}: cancel, {}: panning, Shift: align")),
                         get_modal_key_str(ModalKeyMode::Confirm),
                         get_modal_key_str(ModalKeyMode::Cancel),
                         get_modal_key_str(ModalKeyMode::Panning));
 
-  header += fmt::format(IFACE_(", {}/{}: adjust subdivisions: {}"),
+  header += fmt::format(fmt::runtime(IFACE_(", {}/{}: adjust subdivisions: {}")),
                         get_modal_key_str(ModalKeyMode::IncreaseSubdivision),
                         get_modal_key_str(ModalKeyMode::DecreaseSubdivision),
                         int(ptd.subdivision));
@@ -637,10 +638,11 @@ static void grease_pencil_primitive_status_indicators(bContext *C,
            PrimitiveType::Arc,
            PrimitiveType::Curve))
   {
-    header += fmt::format(IFACE_(", {}: extrude"), get_modal_key_str(ModalKeyMode::Extrude));
+    header += fmt::format(fmt::runtime(IFACE_(", {}: extrude")),
+                          get_modal_key_str(ModalKeyMode::Extrude));
   }
 
-  header += fmt::format(IFACE_(", {}: grab, {}: rotate, {}: scale"),
+  header += fmt::format(fmt::runtime(IFACE_(", {}: grab, {}: rotate, {}: scale")),
                         get_modal_key_str(ModalKeyMode::Grab),
                         get_modal_key_str(ModalKeyMode::Rotate),
                         get_modal_key_str(ModalKeyMode::Scale));

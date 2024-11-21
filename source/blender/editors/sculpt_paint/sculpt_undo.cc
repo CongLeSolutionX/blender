@@ -358,7 +358,8 @@ static void restore_position_mesh(Object &object,
         /* When original positions aren't written separately in the the undo step, there are no
          * deform modifiers. Therefore the original and evaluated deform positions will be the
          * same, and modifying the positions from the original mesh is enough. */
-        swap_indexed_data(unode.position.as_mutable_span(), verts, positions);
+        swap_indexed_data(
+            unode.position.as_mutable_span().take_front(unode.unique_verts_num), verts, positions);
       }
       else {
         /* When original positions are stored in the undo step, undo/redo will cause a reevaluation
@@ -381,11 +382,11 @@ static void restore_position_mesh(Object &object,
             /* The basis key positions and the mesh positions are always kept in sync. */
             scatter_data_mesh(undo_positions.as_span(), verts, positions);
           }
-          swap_indexed_data(undo_positions, verts, active_data);
+          swap_indexed_data(undo_positions.take_front(unode.unique_verts_num), verts, active_data);
         }
         else {
           /* There is a deform modifier, but no shape keys. */
-          swap_indexed_data(undo_positions, verts, positions);
+          swap_indexed_data(undo_positions.take_front(unode.unique_verts_num), verts, positions);
         }
       }
       modified_verts.fill_indices(verts, true);
@@ -882,6 +883,13 @@ static void restore_list(bContext *C, Depsgraph *depsgraph, StepData &step_data)
         Mesh &mesh = *static_cast<Mesh *>(object.data);
         mesh.tag_positions_changed();
         BKE_sculptsession_free_deformMats(&ss);
+      }
+      else {
+        Mesh &mesh = *static_cast<Mesh *>(object.data);
+        /* The BVH normals recalculation that will happen later (caused by
+         * `pbvh.tag_positions_changed`) won't recalculate the face corner normals.
+         * We need to manually clear that cache. */
+        mesh.runtime->corner_normals_cache.tag_dirty();
       }
       bke::pbvh::update_bounds(*depsgraph, object, pbvh);
       bke::pbvh::store_bounds_orig(pbvh);
