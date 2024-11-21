@@ -1137,6 +1137,13 @@ void fcurve_to_keylist(AnimData *adt,
                        blender::float2 range,
                        const bool use_nla_remapping)
 {
+  /* This is not strictly necessary because `ANIM_nla_mapping_apply_fcurve()`
+   * will just not do remapping if `adt` is null. Nevertheless, saying that you
+   * want NLA remapping to be performed while not passing an `adt` (needed for
+   * NLA remapping) almost certainly indicates a mistake somewhere. */
+  BLI_assert_msg(!(use_nla_remapping && adt == nullptr),
+                 "Cannot perform NLA time remapping without an adt.");
+
   if (!fcu || fcu->totvert == 0 || !fcu->bezt) {
     return;
   }
