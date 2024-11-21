@@ -87,9 +87,9 @@ static void copy_loose_edge_hint(const Mesh &src, Mesh &dst)
   }
 }
 
-static OffsetIndices<int> calc_faces(const OffsetIndices<int> src_faces,
-                                     const IndexMask &unselected,
-                                     MutableSpan<int> offsets)
+static OffsetIndices<int> calc_face_offsets(const OffsetIndices<int> src_faces,
+                                            const IndexMask &unselected,
+                                            MutableSpan<int> offsets)
 {
   MutableSpan<int> new_tri_offsets = offsets.drop_back(unselected.size());
   offset_indices::fill_constant_group_size(3, new_tri_offsets.first(), new_tri_offsets);
@@ -789,7 +789,8 @@ std::optional<Mesh *> mesh_triangulate(const Mesh &src_mesh,
 
   /* Find the face corner ranges using the offsets array from the new mesh. That gives us the
    * final number of face corners. */
-  const OffsetIndices faces = calc_faces(src_faces, unselected, mesh->face_offsets_for_write());
+  const OffsetIndices faces = calc_face_offsets(
+      src_faces, unselected, mesh->face_offsets_for_write());
   mesh->corners_num = faces.total_size();
   const OffsetIndices faces_unselected = faces.slice(unselected_range);
 
