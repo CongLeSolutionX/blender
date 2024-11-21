@@ -1656,8 +1656,10 @@ void BKE_object_free_derived_caches(Object *ob)
 
   BKE_crazyspace_api_eval_clear(ob);
 
-  delete ob->runtime->geometry_set_eval;
-  ob->runtime->geometry_set_eval = nullptr;
+  if (ob->runtime->geometry_set_eval != nullptr) {
+    delete ob->runtime->geometry_set_eval;
+    ob->runtime->geometry_set_eval = nullptr;
+  }
 }
 
 void BKE_object_free_caches(Object *object)
