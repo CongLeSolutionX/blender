@@ -3512,7 +3512,7 @@ static int object_convert_exec(bContext *C, wmOperator *op)
         }
       }
     }
-#if 0  // To test new conversion code
+#if 1  // To test new conversion code
     else {
       switch (ob->type) {
         case OB_MESH:
