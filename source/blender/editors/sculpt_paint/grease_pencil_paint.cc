@@ -272,6 +272,7 @@ class PaintOperation : public GreasePencilStrokeOperation {
   bool use_fill_;
   float event_pressure_accumulated_;
   int event_count_;
+  bool from_bucket_;
 
   friend struct PaintOperationExecutor;
 
@@ -279,6 +280,11 @@ class PaintOperation : public GreasePencilStrokeOperation {
   void on_stroke_begin(const bContext &C, const InputSample &start_sample) override;
   void on_stroke_extended(const bContext &C, const InputSample &extension_sample) override;
   void on_stroke_done(const bContext &C) override;
+
+  PaintOperation(const bool from_bucket)
+  {
+    from_bucket_ = from_bucket;
+  }
 };
 
 /**
@@ -501,8 +507,9 @@ struct PaintOperationExecutor {
         settings_);
     start_radius = randomize_radius(self, 0.0f, start_radius, start_sample.pressure);
 
-    float start_opacity = ed::greasepencil::opacity_from_input_sample(
-        start_sample.pressure, brush_, settings_);
+    float start_opacity = self.from_bucket_ ? 1.0f :
+                                              ed::greasepencil::opacity_from_input_sample(
+                                                  start_sample.pressure, brush_, settings_);
     start_opacity = randomize_opacity(self, 0.0f, start_opacity, start_sample.pressure);
 
     const float start_rotation = randomize_rotation(self, start_sample.pressure);
@@ -988,7 +995,7 @@ struct PaintOperationExecutor {
         bke::attribute_filter_from_skip_ref(point_attributes_to_skip),
         curves.points_range().take_back(1));
 
-    if (self.use_fill_ && attributes.contains("fill_opacity")) {
+    if (self.use_fill_ && (!self.from_bucket_) && attributes.contains("fill_opacity")) {
       bke::SpanAttributeWriter<float> fill_opacities = attributes.lookup_for_write_span<float>(
           "fill_opacity");
       const float average_pressure = self.event_pressure_accumulated_ / float(self.event_count_);
@@ -1561,9 +1568,9 @@ void PaintOperation::on_stroke_done(const bContext &C)
   WM_event_add_notifier(&C, NC_GEOM | ND_DATA, &grease_pencil.id);
 }
 
-std::unique_ptr<GreasePencilStrokeOperation> new_paint_operation()
+std::unique_ptr<GreasePencilStrokeOperation> new_paint_operation(const bool from_bucket)
 {
-  return std::make_unique<PaintOperation>();
+  return std::make_unique<PaintOperation>(from_bucket);
 }
 
 }  // namespace blender::ed::sculpt_paint::greasepencil
