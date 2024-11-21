@@ -257,8 +257,6 @@ class LazyFunctionForEvaluateClosureNode : public LazyFunction {
   {
     const ScopedNodeTimer node_timer{context, bnode_};
 
-    auto &user_data = *static_cast<GeoNodesLFUserData *>(context.user_data);
-    auto &local_user_data = *static_cast<GeoNodesLFLocalUserData *>(context.local_user_data);
     auto &eval_storage = *static_cast<EvaluateClosureEvalStorage *>(context.storage);
 
     if (!eval_storage.graph_executor) {

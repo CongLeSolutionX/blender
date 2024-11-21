@@ -115,7 +115,7 @@ static void node_register()
 {
   static blender::bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, GEO_NODE_EVALUATE_CLOSURE, "Evaluate Closure", NODE_CLASS_INTERFACE);
+  geo_node_type_base(&ntype, GEO_NODE_EVALUATE_CLOSURE, "Evaluate Closure", NODE_CLASS_CONVERTER);
   ntype.declare = node_declare;
   ntype.initfunc = node_init;
   ntype.geometry_node_execute = node_geo_exec;
