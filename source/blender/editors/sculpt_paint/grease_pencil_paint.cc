@@ -268,6 +268,11 @@ class PaintOperation : public GreasePencilStrokeOperation {
   /* Current delta time from #start_time_, updated after each extension sample. */
   double delta_time_;
 
+  /* To average pressure along the stroke, making pressure controlled fill-opacity easier. */
+  bool use_fill_;
+  float event_pressure_accumulated_;
+  int event_count_;
+
   friend struct PaintOperationExecutor;
 
  public:
@@ -479,6 +484,11 @@ struct PaintOperationExecutor {
     const float2 start_coords = start_sample.mouse_position;
     const RegionView3D *rv3d = CTX_wm_region_view3d(&C);
     const ARegion *region = CTX_wm_region(&C);
+
+    /* For averaging pressure in order to fill shapes. */
+    self.use_fill_ = use_fill;
+    self.event_pressure_accumulated_ = start_sample.pressure;
+    self.event_count_ = 1;
 
     const float3 start_location = self.placement_.project(start_coords);
     float start_radius = ed::greasepencil::radius_from_input_sample(
@@ -738,6 +748,9 @@ struct PaintOperationExecutor {
     const ARegion *region = CTX_wm_region(&C);
     const bool on_back = (scene->toolsettings->gpencil_flags & GP_TOOL_FLAG_PAINT_ONBACK) != 0;
 
+    self.event_pressure_accumulated_ += extension_sample.pressure;
+    self.event_count_++;
+
     const float2 coords = extension_sample.mouse_position;
     float3 position = self.placement_.project(coords);
     float radius = ed::greasepencil::radius_from_input_sample(rv3d,
@@ -974,6 +987,14 @@ struct PaintOperationExecutor {
         bke::AttrDomain::Point,
         bke::attribute_filter_from_skip_ref(point_attributes_to_skip),
         curves.points_range().take_back(1));
+
+    if (self.use_fill_ && attributes.contains("fill_opacity")) {
+      bke::SpanAttributeWriter<float> fill_opacities = attributes.lookup_for_write_span<float>(
+          "fill_opacity");
+      const float average_pressure = self.event_pressure_accumulated_ / float(self.event_count_);
+      fill_opacities.span[active_curve] = average_pressure;
+      fill_opacities.finish();
+    }
 
     drawing_->set_texture_matrices({self.texture_space_}, IndexRange::from_single(active_curve));
   }
