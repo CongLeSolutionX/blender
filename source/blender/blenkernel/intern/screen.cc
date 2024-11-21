@@ -599,12 +599,12 @@ void BKE_area_region_free(SpaceType *st, ARegion *region)
     region->runtime->block_name_map = nullptr;
   }
 
-  MEM_delete(region->runtime);
   BLI_freelistN(&region->ui_lists);
   BLI_freelistN(&region->ui_previews);
   BLI_freelistN(&region->runtime->panels_category);
   BLI_freelistN(&region->panels_category_active);
   BLI_freelistN(&region->view_states);
+  MEM_delete(region->runtime);
 }
 
 void BKE_screen_area_free(ScrArea *area)

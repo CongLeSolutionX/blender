@@ -447,27 +447,27 @@ struct ARegionRuntime {
   ListBase uiblocks = {};
 
   /** #wmEventHandler. */
-  ListBase handlers;
+  ListBase handlers = {};
 
   /** Use this string to draw info. */
-  char *headerstr;
+  char *headerstr = nullptr;
 
   /** Gizmo-map of this region. */
-  wmGizmoMap *gizmo_map;
+  wmGizmoMap *gizmo_map = nullptr;
 
   /** Blend in/out. */
-  wmTimer *regiontimer;
+  wmTimer *regiontimer = nullptr;
 
-  wmDrawBuffer *draw_buffer;
+  wmDrawBuffer *draw_buffer = nullptr;
 
   /** Panel categories runtime. */
-  ListBase panels_category;
+  ListBase panels_category = {};
 
   /** Region is currently visible on screen. */
-  short visible;
+  short visible = 0;
 
   /** Private, cached notifier events. */
-  short do_draw;
+  short do_draw = 0;
 
   /* Dummy panel used in popups so they can support layout panels. */
   Panel *popup_block_panel = nullptr;
