@@ -79,8 +79,8 @@ static bool get_normalized_fcurve_bounds(FCurve *fcu,
                                          ID *id,
                                          const bool include_handles,
                                          const float range[2],
-                                         rctf *r_bounds,
-                                         const bool use_nla_remapping)
+                                         const bool use_nla_remapping,
+                                         rctf *r_bounds)
 {
   const bool fcu_selection_only = false;
   const bool found_bounds = BKE_fcurve_calc_bounds(
@@ -198,8 +198,8 @@ static bool get_channel_bounds(bAnimContext *ac,
                                                   ale->id,
                                                   include_handles,
                                                   range,
-                                                  r_bounds,
-                                                  ANIM_nla_mapping_allowed(ale));
+                                                  ANIM_nla_mapping_allowed(ale),
+                                                  r_bounds);
       break;
     }
     case ALE_NONE:
@@ -5517,8 +5517,8 @@ static rctf calculate_fcurve_bounds_and_unhide(SpaceLink *space_link,
                                  id,
                                  include_handles,
                                  mapped_frame_range,
-                                 &fcu_bounds,
-                                 use_nla_remapping);
+                                 use_nla_remapping,
+                                 &fcu_bounds);
 
     if (BLI_rctf_is_valid(&fcu_bounds)) {
       BLI_rctf_union(&bounds, &fcu_bounds);
