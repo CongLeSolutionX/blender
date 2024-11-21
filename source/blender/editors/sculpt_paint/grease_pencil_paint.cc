@@ -1568,9 +1568,9 @@ void PaintOperation::on_stroke_done(const bContext &C)
   WM_event_add_notifier(&C, NC_GEOM | ND_DATA, &grease_pencil.id);
 }
 
-std::unique_ptr<GreasePencilStrokeOperation> new_paint_operation(const bool from_bucket)
+std::unique_ptr<GreasePencilStrokeOperation> new_paint_operation(const bool temp_draw)
 {
-  return std::make_unique<PaintOperation>(from_bucket);
+  return std::make_unique<PaintOperation>(temp_draw);
 }
 
 }  // namespace blender::ed::sculpt_paint::greasepencil
