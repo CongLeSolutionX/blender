@@ -188,7 +188,7 @@ void BLO_write_destroy_id_buffer(BLO_Write_IDBuffer **id_buffer);
  * internally, but if their matching read function is used to load the data (like
  * #BLO_read_int8_array), the read function will take care of endianness conversion.
  */
-void BLO_write_raw(BlendWriter *writer, int64_t size_in_bytes, const void *data_ptr);
+void BLO_write_raw(BlendWriter *writer, size_t size_in_bytes, const void *data_ptr);
 /**
  * Slightly 'safer' code to write arrays of basic types data.
  */
@@ -219,7 +219,7 @@ void BLO_write_string(BlendWriter *writer, const char *data_ptr);
  */
 void BLO_write_shared(BlendWriter *writer,
                       const void *data,
-                      int64_t approximate_size_in_bytes,
+                      size_t approximate_size_in_bytes,
                       const blender::ImplicitSharingInfo *sharing_info,
                       blender::FunctionRef<void()> write_fn);
 
@@ -276,7 +276,7 @@ void *BLO_read_get_new_data_address(BlendDataReader *reader, const void *old_add
  */
 void *BLO_read_get_new_data_address_no_us(BlendDataReader *reader,
                                           const void *old_address,
-                                          int64_t expected_size);
+                                          size_t expected_size);
 
 /**
  * The 'main' read function and helper macros for non-basic data types.
@@ -286,7 +286,7 @@ void *BLO_read_get_new_data_address_no_us(BlendDataReader *reader,
  */
 void *BLO_read_struct_array_with_size(BlendDataReader *reader,
                                       const void *old_address,
-                                      int64_t expected_size);
+                                      size_t expected_size);
 #define BLO_read_struct(reader, struct_name, ptr_p) \
   *((void **)ptr_p) = BLO_read_struct_array_with_size( \
       reader, *((void **)ptr_p), sizeof(struct_name))
@@ -311,7 +311,7 @@ void *BLO_read_struct_by_name_array(BlendDataReader *reader,
  * Updates the `list->first` and `list->last` pointers.
  */
 void BLO_read_struct_list_with_size(BlendDataReader *reader,
-                                    int64_t expected_elem_size,
+                                    size_t expected_elem_size,
                                     ListBase *list);
 
 #define BLO_read_struct_list(reader, struct_name, list) \

@@ -771,7 +771,7 @@ static void writestruct_nr(
 /**
  * \warning Do not use for structs.
  */
-static void writedata(WriteData *wd, const int filecode, const int64_t len, const void *adr)
+static void writedata(WriteData *wd, const int filecode, const size_t len, const void *adr)
 {
   if (adr == nullptr || len == 0) {
     return;
@@ -1829,7 +1829,7 @@ void BLO_write_destroy_id_buffer(BLO_Write_IDBuffer **id_buffer)
  * API to write chunks of data.
  */
 
-void BLO_write_raw(BlendWriter *writer, const int64_t size_in_bytes, const void *data_ptr)
+void BLO_write_raw(BlendWriter *writer, const size_t size_in_bytes, const void *data_ptr)
 {
   writedata(writer->wd, BLO_CODE_DATA, size_in_bytes, data_ptr);
 }
@@ -1975,7 +1975,7 @@ void BLO_write_string(BlendWriter *writer, const char *data_ptr)
 
 void BLO_write_shared(BlendWriter *writer,
                       const void *data,
-                      const int64_t approximate_size_in_bytes,
+                      const size_t approximate_size_in_bytes,
                       const blender::ImplicitSharingInfo *sharing_info,
                       const blender::FunctionRef<void()> write_fn)
 {

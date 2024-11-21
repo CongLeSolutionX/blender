@@ -4865,7 +4865,7 @@ static void read_libraries(FileData *basefd, ListBase *mainlist)
 
 static void *blo_verify_data_address(void *new_address,
                                      const void * /*old_address*/,
-                                     const int64_t expected_size)
+                                     const size_t expected_size)
 {
   if (new_address != nullptr) {
     /* Not testing equality, since size might have been aligned up,
@@ -4885,7 +4885,7 @@ void *BLO_read_get_new_data_address(BlendDataReader *reader, const void *old_add
 
 void *BLO_read_get_new_data_address_no_us(BlendDataReader *reader,
                                           const void *old_address,
-                                          const int64_t expected_size)
+                                          const size_t expected_size)
 {
   void *new_address = newdataadr_no_us(reader->fd, old_address);
   return blo_verify_data_address(new_address, old_address, expected_size);
@@ -4893,7 +4893,7 @@ void *BLO_read_get_new_data_address_no_us(BlendDataReader *reader,
 
 void *BLO_read_struct_array_with_size(BlendDataReader *reader,
                                       const void *old_address,
-                                      const int64_t expected_size)
+                                      const size_t expected_size)
 {
   void *new_address = newdataadr(reader->fd, old_address);
   return blo_verify_data_address(new_address, old_address, expected_size);
@@ -4935,7 +4935,7 @@ bool BLO_read_requires_endian_switch(BlendDataReader *reader)
 }
 
 void BLO_read_struct_list_with_size(BlendDataReader *reader,
-                                    const int64_t expected_elem_size,
+                                    const size_t expected_elem_size,
                                     ListBase *list)
 {
   if (BLI_listbase_is_empty(list)) {
