@@ -64,7 +64,7 @@ class Closure : public ImplicitSharingInfo {
   {
   }
 
-  ClosureSignature &signature() const
+  const ClosureSignature &signature() const
   {
     return *signature_;
   }

@@ -414,18 +414,24 @@ class LazyFunctionForUndefinedNode : public LazyFunction {
   }
 };
 
+void construct_socket_default_value(const bke::bNodeSocketType &stype, void *r_value)
+{
+  const CPPType *cpp_type = stype.geometry_nodes_cpp_type;
+  BLI_assert(cpp_type);
+  if (stype.geometry_nodes_default_cpp_value) {
+    cpp_type->copy_construct(stype.geometry_nodes_default_cpp_value, r_value);
+  }
+  else {
+    cpp_type->value_initialize(r_value);
+  }
+}
+
 void set_default_value_for_output_socket(lf::Params &params,
                                          const int lf_index,
                                          const bNodeSocket &bsocket)
 {
-  const CPPType &cpp_type = *bsocket.typeinfo->geometry_nodes_cpp_type;
   void *output_value = params.get_output_data_ptr(lf_index);
-  if (bsocket.typeinfo->geometry_nodes_default_cpp_value) {
-    cpp_type.copy_construct(bsocket.typeinfo->geometry_nodes_default_cpp_value, output_value);
-  }
-  else {
-    cpp_type.value_initialize(output_value);
-  }
+  construct_socket_default_value(*bsocket.typeinfo, output_value);
   params.output_set(lf_index);
 }
 
@@ -2812,6 +2818,10 @@ struct GeometryNodesLazyFunctionBuilder {
         this->build_menu_switch_node(bnode, graph_params);
         break;
       }
+      case GEO_NODE_EVALUATE_CLOSURE: {
+        this->build_evaluate_closure_node(bnode, graph_params);
+        break;
+      }
       default: {
         if (node_type->geometry_node_execute) {
           this->build_geometry_node(bnode, graph_params);
@@ -3562,6 +3572,46 @@ struct GeometryNodesLazyFunctionBuilder {
           break;
         }
       }
+    }
+  }
+
+  void build_evaluate_closure_node(const bNode &bnode, BuildGraphParams &graph_params)
+  {
+    const EvaluateClosureFunction function = build_evaluate_closure_node_lazy_function(scope_,
+                                                                                       bnode);
+    lf::FunctionNode &lf_node = graph_params.lf_graph.add_function(*function.lazy_function);
+    const int inputs_num = bnode.input_sockets().size() - 1;
+    const int outputs_num = bnode.output_sockets().size() - 1;
+    BLI_assert(inputs_num == function.indices.inputs.main.size());
+    BLI_assert(inputs_num == function.indices.outputs.input_usages.size());
+    BLI_assert(outputs_num == function.indices.outputs.main.size());
+    BLI_assert(outputs_num == function.indices.inputs.output_usages.size());
+
+    for (const int i : IndexRange(inputs_num)) {
+      const bNodeSocket &bsocket = bnode.input_socket(i);
+      lf::InputSocket &lf_socket = lf_node.input(function.indices.inputs.main[i]);
+      graph_params.lf_inputs_by_bsocket.add(&bsocket, &lf_socket);
+      mapping_->bsockets_by_lf_socket_map.add(&lf_socket, &bsocket);
+      graph_params.usage_by_bsocket.add(&bsocket,
+                                        &lf_node.output(function.indices.outputs.input_usages[i]));
+    }
+    for (const int i : IndexRange(outputs_num)) {
+      const bNodeSocket &bsocket = bnode.output_socket(i);
+      lf::OutputSocket &lf_socket = lf_node.output(function.indices.outputs.main[i]);
+      graph_params.lf_output_by_bsocket.add(&bsocket, &lf_socket);
+      mapping_->bsockets_by_lf_socket_map.add(&lf_socket, &bsocket);
+      lf::InputSocket &lf_usage_socket = lf_node.input(function.indices.inputs.output_usages[i]);
+      graph_params.socket_usage_inputs.add(&lf_usage_socket);
+      if (lf::OutputSocket *output_is_used = graph_params.usage_by_bsocket.lookup(&bsocket)) {
+        graph_params.lf_graph.add_link(*output_is_used, lf_usage_socket);
+      }
+      else {
+        static const bool static_false = false;
+        lf_usage_socket.set_default_value(&static_false);
+      }
+    }
+    for (const auto item : function.indices.inputs.reference_sets.items()) {
+      graph_params.lf_reference_set_inputs.add(item.key, &lf_node.input(item.value));
     }
   }
 

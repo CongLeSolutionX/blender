@@ -453,6 +453,7 @@ void set_default_remaining_node_outputs(lf::Params &params, const bNode &node);
 void set_default_value_for_output_socket(lf::Params &params,
                                          const int lf_index,
                                          const bNodeSocket &bsocket);
+void construct_socket_default_value(const bke::bNodeSocketType &stype, void *r_value);
 
 std::string make_anonymous_attribute_socket_inspection_string(const bNodeSocket &socket);
 std::string make_anonymous_attribute_socket_inspection_string(StringRef node_name,
@@ -593,6 +594,26 @@ LazyFunction &build_closure_zone_lazy_function(ResourceScope &scope,
                                                const bke::bNodeTreeZone &zone,
                                                ZoneBuildInfo &zone_info,
                                                const ZoneBodyFunction &body_fn);
+
+struct EvaluateClosureFunctionIndices {
+  struct {
+    Vector<int> main;
+    Vector<int> output_usages;
+    Map<ReferenceSetIndex, int> reference_sets;
+  } inputs;
+  struct {
+    Vector<int> main;
+    Vector<int> input_usages;
+  } outputs;
+};
+
+struct EvaluateClosureFunction {
+  const LazyFunction *lazy_function = nullptr;
+  EvaluateClosureFunctionIndices indices;
+};
+
+EvaluateClosureFunction build_evaluate_closure_node_lazy_function(ResourceScope &scope,
+                                                                  const bNode &bnode);
 
 void initialize_zone_wrapper(const bke::bNodeTreeZone &zone,
                              ZoneBuildInfo &zone_info,
