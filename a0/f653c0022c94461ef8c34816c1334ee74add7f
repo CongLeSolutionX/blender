@@ -2,3 +2,4 @@ Referenced by commit 99324277fa2a56f8051c591d699fca05193e78e4, CMake: restore WI
 Referenced by issue #130549, bpy_module build: libextern_draco.so doesn't get installed in the right directory
 Referenced by issue #130545, Error with import of glTF file in Blender 4.3 (missing extern_draco.dll)
 Referenced by pull request #130572, Fix #130545: glTF: Draco: - Windows Draco dll was not in right directory
+Referenced by commit dbc8b295195aec360a127465e90fba8e97c9ba60, glTF: Draco: Fix #130545 - Windows Draco dll was not in right directory
