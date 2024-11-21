@@ -78,6 +78,11 @@ ShaderModule::ShaderModule()
 
 ShaderModule::~ShaderModule()
 {
+  if (compilation_handle_) {
+    /* Finish compilation to avoid asserts on exit at GLShaderCompiler destructor. */
+    is_ready(true);
+  }
+
   for (GPUShader *&shader : shaders_) {
     DRW_SHADER_FREE_SAFE(shader);
   }
@@ -998,8 +1003,6 @@ GPUMaterial *ShaderModule::world_shader_get(::World *blender_world,
                                this);
 }
 
-/* Variation to compile a material only with a nodetree. Caller needs to maintain the list of
- * materials and call GPU_material_free on it to update the material. */
 GPUMaterial *ShaderModule::material_shader_get(const char *name,
                                                ListBase &materials,
                                                bNodeTree *nodetree,

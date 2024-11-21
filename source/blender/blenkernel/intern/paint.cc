@@ -52,7 +52,7 @@
 #include "BKE_deform.hh"
 #include "BKE_gpencil_legacy.h"
 #include "BKE_idtype.hh"
-#include "BKE_image.h"
+#include "BKE_image.hh"
 #include "BKE_key.hh"
 #include "BKE_layer.hh"
 #include "BKE_lib_id.hh"
@@ -66,7 +66,7 @@
 #include "BKE_object.hh"
 #include "BKE_object_types.hh"
 #include "BKE_paint.hh"
-#include "BKE_pbvh_api.hh"
+#include "BKE_paint_bvh.hh"
 #include "BKE_scene.hh"
 #include "BKE_subdiv_ccg.hh"
 #include "BKE_subsurf.hh"
@@ -317,7 +317,7 @@ void BKE_paint_reset_overlay_invalid(ePaintOverlayControlFlags flag)
   overlay_flags &= ~(flag);
 }
 
-bool BKE_paint_ensure_from_paintmode(Main *bmain, Scene *sce, PaintMode mode)
+bool BKE_paint_ensure_from_paintmode(Scene *sce, PaintMode mode)
 {
   ToolSettings *ts = sce->toolsettings;
   Paint **paint_ptr = nullptr;
@@ -362,7 +362,7 @@ bool BKE_paint_ensure_from_paintmode(Main *bmain, Scene *sce, PaintMode mode)
       break;
   }
   if (paint_ptr) {
-    BKE_paint_ensure(bmain, ts, paint_ptr);
+    BKE_paint_ensure(ts, paint_ptr);
     return true;
   }
   return false;
@@ -602,6 +602,16 @@ PaintMode BKE_paintmode_get_from_tool(const bToolRef *tref)
   return PaintMode::Invalid;
 }
 
+bool BKE_paint_use_unified_color(const ToolSettings *tool_settings, const Paint *paint)
+{
+  /* Grease pencil draw mode never uses unified paint. */
+  if (paint->runtime.ob_mode == OB_MODE_PAINT_GREASE_PENCIL) {
+    return false;
+  }
+
+  return tool_settings->unified_paint_settings.flag & UNIFIED_PAINT_COLOR;
+}
+
 /**
  * After changing #Paint.brush_asset_reference, call this to activate the matching brush, importing
  * it if necessary. Has no effect if #Paint.brush is set already.
@@ -676,7 +686,8 @@ bool BKE_paint_brush_set(Main *bmain,
 
   Brush *brush = reinterpret_cast<Brush *>(
       blender::bke::asset_edit_id_from_weak_reference(*bmain, ID_BR, *brush_asset_reference));
-  BLI_assert(brush == nullptr || blender::bke::asset_edit_id_is_editable(brush->id));
+  BLI_assert(brush == nullptr || !ID_IS_LINKED(brush) ||
+             blender::bke::asset_edit_id_is_editable(brush->id));
 
   /* Ensure we have a brush with appropriate mode to assign.
    * Could happen if contents of asset blend were manually changed. */
@@ -847,7 +858,7 @@ static void paint_brush_default_essentials_name_get(
       }
       break;
     case OB_MODE_VERTEX_PAINT:
-      name = "Paint";
+      name = "Paint Hard";
       if (brush_type) {
         switch (eBrushVertexPaintType(*brush_type)) {
           case VPAINT_BRUSH_TYPE_BLUR:
@@ -1671,7 +1682,7 @@ eObjectMode BKE_paint_object_mode_from_paintmode(const PaintMode mode)
   }
 }
 
-bool BKE_paint_ensure(Main *bmain, ToolSettings *ts, Paint **r_paint)
+bool BKE_paint_ensure(ToolSettings *ts, Paint **r_paint)
 {
   Paint *paint = nullptr;
   if (*r_paint) {
@@ -1680,8 +1691,6 @@ bool BKE_paint_ensure(Main *bmain, ToolSettings *ts, Paint **r_paint)
       BLI_assert(ELEM(*r_paint, (Paint *)&ts->imapaint));
 
       paint_runtime_init(ts, *r_paint);
-      BKE_paint_brush_set_default(bmain, *r_paint);
-      BKE_paint_eraser_brush_set_default(bmain, *r_paint);
     }
     else {
       BLI_assert(ELEM(*r_paint,
@@ -1703,8 +1712,6 @@ bool BKE_paint_ensure(Main *bmain, ToolSettings *ts, Paint **r_paint)
       BLI_assert(paint_test.runtime.ob_mode == (*r_paint)->runtime.ob_mode);
 #endif
     }
-    paint_brush_update_from_asset_reference(bmain, *r_paint);
-    paint_eraser_brush_set_from_asset_reference(bmain, *r_paint);
     return true;
   }
 
@@ -1748,18 +1755,38 @@ bool BKE_paint_ensure(Main *bmain, ToolSettings *ts, Paint **r_paint)
   *r_paint = paint;
 
   paint_runtime_init(ts, paint);
-  BKE_paint_brush_set_default(bmain, paint);
-  BKE_paint_eraser_brush_set_default(bmain, paint);
 
   return false;
 }
 
-void BKE_paint_init(Main *bmain, Scene *sce, PaintMode mode, const uchar col[3])
+void BKE_paint_brushes_ensure(Main *bmain, Paint *paint)
+{
+  if (paint->brush_asset_reference) {
+    paint_brush_update_from_asset_reference(bmain, paint);
+  }
+  if (paint->eraser_brush_asset_reference) {
+    paint_eraser_brush_set_from_asset_reference(bmain, paint);
+  }
+
+  if (!paint->brush) {
+    BKE_paint_brush_set_default(bmain, paint);
+  }
+  if (!paint->eraser_brush) {
+    BKE_paint_eraser_brush_set_default(bmain, paint);
+  }
+}
+
+void BKE_paint_init(
+    Main *bmain, Scene *sce, PaintMode mode, const uchar col[3], const bool ensure_brushes)
 {
   UnifiedPaintSettings *ups = &sce->toolsettings->unified_paint_settings;
 
-  BKE_paint_ensure_from_paintmode(bmain, sce, mode);
+  BKE_paint_ensure_from_paintmode(sce, mode);
   Paint *paint = BKE_paint_get_active_from_paintmode(sce, mode);
+
+  if (ensure_brushes) {
+    BKE_paint_brushes_ensure(bmain, paint);
+  }
 
   copy_v3_v3_uchar(paint->paint_cursor_col, col);
   paint->paint_cursor_col[3] = 128;
@@ -2088,6 +2115,7 @@ void BKE_sculptsession_free_pbvh(Object &object)
 
   ss->vertex_info.boundary.clear_and_shrink();
   ss->fake_neighbors.fake_neighbor_index = {};
+  ss->topology_island_cache.reset();
 
   ss->clear_active_vert(false);
 }
@@ -2164,10 +2192,6 @@ int SculptSession::active_vert_index() const
   if (std::holds_alternative<int>(active_vert_)) {
     return std::get<int>(active_vert_);
   }
-  if (std::holds_alternative<SubdivCCGCoord>(active_vert_)) {
-    const SubdivCCGCoord coord = std::get<SubdivCCGCoord>(active_vert_);
-    return coord.to_index(BKE_subdiv_ccg_key_top_level(*this->subdiv_ccg));
-  }
   if (std::holds_alternative<BMVert *>(active_vert_)) {
     BMVert *bm_vert = std::get<BMVert *>(active_vert_);
     return BM_elem_index_get(bm_vert);
@@ -2181,10 +2205,6 @@ int SculptSession::last_active_vert_index() const
   if (std::holds_alternative<int>(last_active_vert_)) {
     return std::get<int>(last_active_vert_);
   }
-  if (std::holds_alternative<SubdivCCGCoord>(last_active_vert_)) {
-    const SubdivCCGCoord coord = std::get<SubdivCCGCoord>(last_active_vert_);
-    return coord.to_index(BKE_subdiv_ccg_key_top_level(*this->subdiv_ccg));
-  }
   if (std::holds_alternative<BMVert *>(last_active_vert_)) {
     BMVert *bm_vert = std::get<BMVert *>(last_active_vert_);
     return BM_elem_index_get(bm_vert);
@@ -2197,13 +2217,11 @@ blender::float3 SculptSession::active_vert_position(const Depsgraph &depsgraph,
                                                     const Object &object) const
 {
   if (std::holds_alternative<int>(active_vert_)) {
+    if (this->subdiv_ccg) {
+      return this->subdiv_ccg->positions[std::get<int>(active_vert_)];
+    }
     const Span<float3> positions = blender::bke::pbvh::vert_positions_eval(depsgraph, object);
     return positions[std::get<int>(active_vert_)];
-  }
-  if (std::holds_alternative<SubdivCCGCoord>(active_vert_)) {
-    const CCGKey key = BKE_subdiv_ccg_key_top_level(*this->subdiv_ccg);
-    const SubdivCCGCoord coord = std::get<SubdivCCGCoord>(active_vert_);
-    return this->subdiv_ccg->positions[coord.to_index(key)];
   }
   if (std::holds_alternative<BMVert *>(active_vert_)) {
     BMVert *bm_vert = std::get<BMVert *>(active_vert_);
@@ -2649,7 +2667,8 @@ void BKE_sculpt_mask_layers_ensure(Depsgraph *depsgraph,
 
 void BKE_sculpt_toolsettings_data_ensure(Main *bmain, Scene *scene)
 {
-  BKE_paint_ensure(bmain, scene->toolsettings, (Paint **)&scene->toolsettings->sculpt);
+  BKE_paint_ensure(scene->toolsettings, (Paint **)&scene->toolsettings->sculpt);
+  BKE_paint_brushes_ensure(bmain, &scene->toolsettings->sculpt->paint);
 
   Sculpt *sd = scene->toolsettings->sculpt;
 

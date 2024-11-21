@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.3.0 Beta (b'6039cb17e63e')\n"
+"Project-Id-Version: Blender 4.3.0 Release Candidate (b'7dfe47164a63')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-10-07 09:15+0000\n"
+"POT-Creation-Date: 2024-11-18 11:20+0000\n"
 "PO-Revision-Date: 2024-03-05 22:56+0000\n"
 "Last-Translator: 居樂行 <oscilloscope9705@gmail.com>\n"
 "Language-Team: Chinese (Traditional) <https://translate.blender.org/projects/blender-ui/ui/zh_Hant/>\n"
@@ -2469,10 +2469,6 @@ msgstr "字型的集盒"
 
 msgid "Main Grease Pencils"
 msgstr "主要蠟筆"
-
-
-msgid "Collection of grease pencils"
-msgstr "蠟筆的集盒"
 
 
 msgid "Main Hair Curves"
@@ -14813,20 +14809,12 @@ msgid "Power"
 msgstr "次方"
 
 
-msgid "Shadow Buffer Bias"
-msgstr "陰影緩衝偏差"
-
-
 msgid "Shadow Buffer Clip Start"
 msgstr "陰影緩衝剪輯開始"
 
 
 msgid "Shadow map clip start, below which objects will not generate shadows"
 msgstr "陰影映射剪輯結束，沒到這裡物體不會生成陰影"
-
-
-msgid "Shadow Color"
-msgstr "陰影色彩"
 
 
 msgid "Shadow Soft Size"
@@ -15032,22 +15020,6 @@ msgstr "折射深度"
 
 msgid "Roughness"
 msgstr "粗糙度"
-
-
-msgid "Shadow Mode"
-msgstr "陰影模式"
-
-
-msgid "Opaque"
-msgstr "不透明"
-
-
-msgid "Alpha Clip"
-msgstr "Alpha 剪輯"
-
-
-msgid "Alpha Hashed"
-msgstr "Alpha 雜湊化"
 
 
 msgid "Show Backface"
@@ -15324,10 +15296,6 @@ msgstr "偵測到的影片剪輯時間，以幀數計"
 
 msgid "Global scene frame number at which this movie starts playing (affects all data associated with a clip)"
 msgstr "此影片開始播放的全域場景幀號 (影響所有與此剪輯相關的資料)"
-
-
-msgid "Grease pencil data for this movie clip"
-msgstr "此影片剪輯的蠟筆資料"
 
 
 msgid "Where the clip comes from"
@@ -18732,28 +18700,8 @@ msgid "Codec"
 msgstr "編解碼器"
 
 
-msgid "Codec settings for OpenEXR"
-msgstr "OpenEXR 的編解碼設定"
-
-
 msgid "Pxr24 (lossy)"
 msgstr "Pxr24 (有損)"
-
-
-msgid "ZIP (lossless)"
-msgstr "ZIP (無損)"
-
-
-msgid "PIZ (lossless)"
-msgstr "PIZ (無損)"
-
-
-msgid "RLE (lossless)"
-msgstr "RLE (無損)"
-
-
-msgid "ZIPS (lossless)"
-msgstr "ZIPS (無損)"
 
 
 msgid "B44 (lossy)"
@@ -20941,24 +20889,12 @@ msgid "Material slot name"
 msgstr "材質槽名稱"
 
 
-msgid "Snap"
-msgstr "吸附"
-
-
-msgid "Proportional Editing Falloff"
-msgstr "比例化編輯衰落"
-
-
-msgid "Automasking"
-msgstr "自動遮罩"
-
-
-msgid "Face Sets Edit"
-msgstr "面集編輯"
-
-
 msgid "Mirror"
 msgstr "鏡像"
+
+
+msgid "Snap"
+msgstr "吸附"
 
 
 msgid "UV Mapping"
@@ -21091,6 +21027,18 @@ msgstr "骨骼滾動"
 
 msgid "Pivot Point"
 msgstr "樞紐點"
+
+
+msgid "Proportional Editing Falloff"
+msgstr "比例化編輯衰落"
+
+
+msgid "Automasking"
+msgstr "自動遮罩"
+
+
+msgid "Face Sets Edit"
+msgstr "面集編輯"
 
 
 msgid "Basic"
@@ -25335,10 +25283,6 @@ msgid "Minimal value of correlation between matched pattern and reference that i
 msgstr "在符合的樣式與仍被視為成功追蹤的參照之間校正的最小值"
 
 
-msgid "Grease pencil data for this track"
-msgstr "此軌道的蠟筆資料"
-
-
 msgid "Has Bundle"
 msgstr "有控制桿"
 
@@ -29033,6 +28977,16 @@ msgid "Add Hair Dynamics Preset"
 msgstr "添加毛髮動力學預設置"
 
 
+msgctxt "Operator"
+msgid "Disable Add-on"
+msgstr "停用附加元件"
+
+
+msgctxt "Operator"
+msgid "Enable Add-on"
+msgstr "啟用附加元件"
+
+
 msgid "Display information and preferences for this add-on"
 msgstr "顯示此附加元件的資訊和偏好設定"
 
@@ -29511,16 +29465,6 @@ msgstr "添加或移除操作器預設置"
 msgctxt "Operator"
 msgid "Operator Preset"
 msgstr "操作器預設置"
-
-
-msgctxt "Operator"
-msgid "Disable Add-on"
-msgstr "停用附加元件"
-
-
-msgctxt "Operator"
-msgid "Enable Add-on"
-msgstr "啟用附加元件"
 
 
 msgid "Open a path in a file browser"
@@ -33673,11 +33617,6 @@ msgstr "刪除作用中框幀"
 
 
 msgctxt "Operator"
-msgid "Insert Blank Frame"
-msgstr "插入空白框幀"
-
-
-msgctxt "Operator"
 msgid "Annotation Unlink"
 msgstr "註記取消連結"
 
@@ -33934,12 +33873,13 @@ msgstr "消融"
 
 
 msgctxt "Operator"
+msgid "Insert Blank Frame"
+msgstr "插入空白框幀"
+
+
+msgctxt "Operator"
 msgid "Grease Pencil Interpolation"
 msgstr "蠟筆插補"
-
-
-msgid "Only Selected"
-msgstr "僅所選項目"
 
 
 msgctxt "Operator"
@@ -35499,6 +35439,10 @@ msgid "Cut new topology"
 msgstr "切割出新拓樸"
 
 
+msgid "Only Selected"
+msgstr "僅所選項目"
+
+
 msgid "Only cut selected geometry"
 msgstr "僅切割所選的幾何形狀"
 
@@ -36531,10 +36475,6 @@ msgstr "烘焙物體變換"
 
 msgid "Clear Constraints"
 msgstr "清除約束"
-
-
-msgid "Remove all constraints from keyed object/bones, and do 'visual' keying"
-msgstr "從鍵處理的物體/骨骼移除所有約束，並執行「視覺」鍵處理"
 
 
 msgid "Clear Parents"
@@ -41553,10 +41493,6 @@ msgid "Reassign the inputs for the effect strip"
 msgstr "為效果片段重新指派輸入"
 
 
-msgid "Rebuild all selected proxies and timecode indices using the job system"
-msgstr "重建所有選取的代理與使用工作系統的時間碼索引"
-
-
 msgctxt "Operator"
 msgid "Refresh Sequencer"
 msgstr "重新整理序段編輯器"
@@ -44652,6 +44588,26 @@ msgid "Palette Color"
 msgstr "色版色彩"
 
 
+msgid "Transform Orientations"
+msgstr "變換方向"
+
+
+msgid "Stroke Placement"
+msgstr "筆觸放置"
+
+
+msgid "Stereoscopy"
+msgstr "立體視覺"
+
+
+msgid "Auto-Masking"
+msgstr "自動遮罩"
+
+
+msgid "VR"
+msgstr "VR"
+
+
 msgid "Active Tool"
 msgstr "作用中工具"
 
@@ -44674,26 +44630,6 @@ msgstr "疊層"
 
 msgid "Motion Tracking"
 msgstr "運動跟蹤"
-
-
-msgid "Transform Orientations"
-msgstr "變換方向"
-
-
-msgid "Stroke Placement"
-msgstr "筆觸放置"
-
-
-msgid "Stereoscopy"
-msgstr "立體視覺"
-
-
-msgid "Auto-Masking"
-msgstr "自動遮罩"
-
-
-msgid "VR"
-msgstr "VR"
 
 
 msgid "Chain Scaling"
@@ -45086,10 +45022,6 @@ msgstr "診斷"
 
 msgid "Helpers"
 msgstr "輔助器"
-
-
-msgid "Indirect Lighting"
-msgstr "間接光照"
 
 
 msgid "Shadows"
@@ -49225,20 +49157,8 @@ msgid "Over-blur"
 msgstr "過度模糊"
 
 
-msgid "Factor for ambient occlusion blending"
-msgstr "周遭遮擋其混合的係數"
-
-
 msgid "Screen-Trace"
 msgstr "畫面追蹤"
-
-
-msgid "Screen Space Refractions"
-msgstr "螢幕空間折射"
-
-
-msgid "Enable screen space Refractions"
-msgstr "啟用螢幕空間折射"
 
 
 msgid "USD"
@@ -49654,8 +49574,8 @@ msgid "Align X"
 msgstr "對齊 X"
 
 
-msgid "Align Y"
-msgstr "對齊 Y"
+msgid "Shadow Color"
+msgstr "陰影色彩"
 
 
 msgctxt "Sequence"
@@ -50983,10 +50903,6 @@ msgstr "影像與 UV 編輯器的空間資料"
 
 msgid "Z-Buffer"
 msgstr "Z 緩衝"
-
-
-msgid "Grease pencil data for this space"
-msgstr "此空間的蠟筆資料"
 
 
 msgid "UV Editor"
@@ -54234,6 +54150,10 @@ msgid "Multiplication factor when using the fast or slow modifiers"
 msgstr "當使用快速或慢速修改器時的相乘係數"
 
 
+msgid "Factor for ambient occlusion blending"
+msgstr "周遭遮擋其混合的係數"
+
+
 msgid "Length of rays, defines how far away other faces give occlusion effect"
 msgstr "光線長度，定義其他表面生成遮擋效果的距離有多遠"
 
@@ -54657,11 +54577,6 @@ msgstr "NLA 通用"
 
 
 msgctxt "WindowManager"
-msgid "Timeline"
-msgstr "時間軸"
-
-
-msgctxt "WindowManager"
 msgid "Image"
 msgstr "影像"
 
@@ -55061,62 +54976,6 @@ msgstr "套用"
 
 msgid "Options:"
 msgstr "選項："
-
-
-msgid "Save to PO File"
-msgstr "儲存至 PO 檔"
-
-
-msgid "Rebuild MO File"
-msgstr "重建 MO 檔"
-
-
-msgid "Erase Local MO files"
-msgstr "抹除本地端 MO 檔"
-
-
-msgid "    RNA Path: bpy.types."
-msgstr "    RNA 路徑：bpy.types。"
-
-
-msgid "    RNA Context: "
-msgstr "    RNA 情境："
-
-
-msgid "Labels:"
-msgstr "標籤："
-
-
-msgid "Tool Tips:"
-msgstr "提示框："
-
-
-msgid "Button Label:"
-msgstr "按鈕標籤："
-
-
-msgid "RNA Label:"
-msgstr "RNA 標籤："
-
-
-msgid "Enum Item Label:"
-msgstr "枚舉項目標籤："
-
-
-msgid "Button Tip:"
-msgstr "按鈕提示："
-
-
-msgid "RNA Tip:"
-msgstr "RNA 提示："
-
-
-msgid "Enum Item Tip:"
-msgstr "枚舉項目提示："
-
-
-msgid "Could not write to po file ({})"
-msgstr "無法寫入 po 檔 ({})"
 
 
 msgctxt "Operator"
@@ -55694,10 +55553,6 @@ msgstr "大寫"
 
 msgid "Auto-Step"
 msgstr "自動步進"
-
-
-msgid "Refraction"
-msgstr "折射"
 
 
 msgid "Paths:"
@@ -57433,10 +57288,6 @@ msgid "Total files %d | Changed %d | Failed %d"
 msgstr "總計檔案 %d | 更動 %d | 失敗 %d"
 
 
-msgid "Path '%s' not found"
-msgstr "找不到路徑「%s」"
-
-
 msgid "Could not find '%s' in '%s'"
 msgstr "找不到「%s」於「%s」中"
 
@@ -57717,10 +57568,6 @@ msgstr "找不到庫「%s」"
 
 msgid "Unable to open blend <memory>"
 msgstr "無法開啟 blend <記憶體>"
-
-
-msgid "Failed to read blend file '%s', not a blend file"
-msgstr "無法讀取 blend 檔「%s」，並非 blend 檔"
 
 
 msgid "Unable to open '%s': %s"
@@ -58117,16 +57964,8 @@ msgid "Active region not set"
 msgstr "未設定作用中區塊"
 
 
-msgid "Nowhere for grease pencil data to go"
-msgstr "蠟筆資料無處可去"
-
-
 msgid "Cannot delete locked layers"
 msgstr "無法刪除鎖定的層"
-
-
-msgid "No grease pencil data"
-msgstr "無蠟筆資料"
 
 
 msgid "No active frame to delete"
@@ -60732,11 +60571,6 @@ msgstr "Freestyle：製作視圖映射"
 
 msgid "Freestyle: Stroke rendering"
 msgstr "Freestyle：算繪筆觸"
-
-
-msgctxt "Action"
-msgid "Group"
-msgstr "群組"
 
 
 msgid "Index out of range"

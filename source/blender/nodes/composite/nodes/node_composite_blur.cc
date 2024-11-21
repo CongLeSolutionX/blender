@@ -102,6 +102,17 @@ class BlurOperation : public NodeOperation {
 
   void execute() override
   {
+    /* Not yet supported on CPU. */
+    if (!context().use_gpu()) {
+      for (const bNodeSocket *output : this->node()->output_sockets()) {
+        Result &output_result = get_result(output->identifier);
+        if (output_result.should_compute()) {
+          output_result.allocate_invalid();
+        }
+      }
+      return;
+    }
+
     if (is_identity()) {
       get_input("Image").pass_through(get_result("Image"));
       return;
@@ -141,7 +152,7 @@ class BlurOperation : public NodeOperation {
 
     const float2 blur_radius = compute_blur_radius();
 
-    const SymmetricBlurWeights &weights = context().cache_manager().symmetric_blur_weights.get(
+    const Result &weights = context().cache_manager().symmetric_blur_weights.get(
         context(), node_storage(bnode()).filtertype, blur_radius);
     weights.bind_as_texture(shader, "weights_tx");
 
@@ -176,7 +187,7 @@ class BlurOperation : public NodeOperation {
 
     const float2 blur_radius = compute_blur_radius();
 
-    const SymmetricBlurWeights &weights = context().cache_manager().symmetric_blur_weights.get(
+    const Result &weights = context().cache_manager().symmetric_blur_weights.get(
         context(), node_storage(bnode()).filtertype, blur_radius);
     weights.bind_as_texture(shader, "weights_tx");
 

@@ -857,7 +857,6 @@ static void editbmesh_calc_modifiers(Depsgraph &depsgraph,
        * cage mesh isn't modified anymore. */
       mesh = BKE_mesh_copy_for_eval(*mesh);
       if (mesh_cage->runtime->edit_mesh) {
-        mesh->runtime->edit_mesh = mesh_cage->runtime->edit_mesh;
         mesh->runtime->is_original_bmesh = true;
         mesh->runtime->deformed_only = mesh_cage->runtime->deformed_only;
         if (mesh_cage->runtime->edit_data) {
@@ -1053,12 +1052,6 @@ static void editbmesh_build_data(Depsgraph &depsgraph,
 
   editbmesh_calc_modifiers(
       depsgraph, scene, obedit, dataMask, &me_cage, &me_final, &non_mesh_components);
-
-  /* The modifier stack result is expected to share edit mesh pointer with the input.
-   * This is similar `mesh_calc_finalize()`. */
-  BKE_mesh_free_editmesh(me_final);
-  BKE_mesh_free_editmesh(me_cage);
-  me_final->runtime->edit_mesh = me_cage->runtime->edit_mesh = mesh->runtime->edit_mesh;
 
   /* Object has edit_mesh but is not in edit mode (object shares mesh datablock with another object
    * with is in edit mode).
@@ -1323,7 +1316,7 @@ void mesh_get_mapped_verts_coords(Mesh *mesh_eval, MutableSpan<float3> r_cos)
     MEM_freeN(user_data.vertex_visit);
   }
   else {
-    r_cos.copy_from(mesh_eval->vert_positions());
+    r_cos.copy_from(BKE_mesh_wrapper_vert_coords(mesh_eval));
   }
 }
 

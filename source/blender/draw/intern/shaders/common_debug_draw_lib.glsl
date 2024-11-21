@@ -4,6 +4,10 @@
 
 #pragma once
 
+#include "draw_debug_info.hh"
+
+SHADER_LIBRARY_CREATE_INFO(draw_debug_draw)
+
 /**
  * Debugging drawing library
  *
@@ -15,7 +19,7 @@
 
 /** Global switch option. */
 bool drw_debug_draw_enable = true;
-const vec4 drw_debug_default_color = vec4(1.0, 0.0, 0.0, 1.0);
+#  define drw_debug_default_color vec4(1.0, 0.0, 0.0, 1.0)
 
 /* -------------------------------------------------------------------- */
 /** \name Internals

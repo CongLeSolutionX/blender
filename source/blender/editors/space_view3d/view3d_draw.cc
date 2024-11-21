@@ -23,7 +23,7 @@
 #include "BKE_context.hh"
 #include "BKE_customdata.hh"
 #include "BKE_global.hh"
-#include "BKE_image.h"
+#include "BKE_image.hh"
 #include "BKE_key.hh"
 #include "BKE_layer.hh"
 #include "BKE_main.hh"
@@ -48,7 +48,6 @@
 
 #include "ED_gpencil_legacy.hh"
 #include "ED_info.hh"
-#include "ED_keyframing.hh"
 #include "ED_scene.hh"
 #include "ED_screen.hh"
 #include "ED_view3d_offscreen.hh"
@@ -79,6 +78,8 @@
 
 #include "IMB_imbuf.hh"
 #include "IMB_imbuf_types.hh"
+
+#include "ANIM_keyframing.hh"
 
 #include "view3d_intern.hh" /* own include */
 
@@ -1393,7 +1394,9 @@ static void draw_selected_name(
     }
 
     /* color depends on whether there is a keyframe */
-    if (id_frame_has_keyframe((ID *)ob, /* BKE_scene_ctime_get(scene) */ float(cfra))) {
+    if (blender::animrig::id_frame_has_keyframe((ID *)ob,
+                                                /* BKE_scene_ctime_get(scene) */ float(cfra)))
+    {
       UI_FontThemeColor(font_id, TH_TIME_KEYFRAME);
     }
   }
@@ -1852,6 +1855,11 @@ void ED_view3d_draw_offscreen_simple(Depsgraph *depsgraph,
   /* Actually not used since we pass in the projection matrix. */
   v3d.lens = 0;
 
+  /* WORKAROUND: Disable overscan because it is not supported for arbitrary input matrices.
+   * The proper fix to this would be to support arbitrary matrices in `eevee::Camera::sync()`. */
+  float overscan = scene->eevee.overscan;
+  scene->eevee.overscan = 0.0f;
+
   ED_view3d_draw_offscreen(depsgraph,
                            scene,
                            drawtype,
@@ -1868,6 +1876,9 @@ void ED_view3d_draw_offscreen_simple(Depsgraph *depsgraph,
                            true,
                            ofs,
                            viewport);
+
+  /* Restore overscan. */
+  scene->eevee.overscan = overscan;
 }
 
 ImBuf *ED_view3d_draw_offscreen_imbuf(Depsgraph *depsgraph,
