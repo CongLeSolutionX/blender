@@ -50,6 +50,10 @@ static void node_geo_exec(GeoNodeExecParams params)
     if (!src_mesh) {
       return;
     }
+    if (src_mesh->corners_num == src_mesh->faces_num * 3) {
+      /* The mesh is already completely triangulated. */
+      return;
+    }
 
     const bke::MeshFieldContext context(*src_mesh, AttrDomain::Face);
     FieldEvaluator evaluator{context, src_mesh->faces_num};
