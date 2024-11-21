@@ -7664,6 +7664,8 @@ static PyObject *pyrna_prop_collection_iter_CreatePyObject(PointerRNA *ptr, Prop
 
 #  ifdef USE_WEAKREFS
   self_property->in_weakreflist = nullptr;
+#  else
+  UNUSED_VARS_NDEBUG(self_property);
 #  endif
 
   return self;
@@ -9459,7 +9461,7 @@ static int bpy_class_call(bContext *C, PointerRNA *ptr, FunctionRNA *func, Param
     /* The error may be already set if the class instance couldn't be created. */
     if (err != -1) {
       PyErr_Format(PyExc_RuntimeError,
-                   "could not create instance of %.200s to call callback function %.200s",
+                   "could not create instance of %.200s to call callback function '%.200s'",
                    RNA_struct_identifier(ptr->type),
                    RNA_function_identifier(func));
       err = -1;

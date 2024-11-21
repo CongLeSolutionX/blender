@@ -80,9 +80,6 @@ void BKE_gpencil_free_layer_masks(struct bGPDlayer *gpl);
  */
 void BKE_gpencil_tag(struct bGPdata *gpd);
 
-void BKE_gpencil_batch_cache_dirty_tag(struct bGPdata *gpd);
-void BKE_gpencil_batch_cache_free(struct bGPdata *gpd);
-
 /**
  * Add a new gp-frame to the given layer.
  * \param gpl: Grease pencil layer
@@ -293,39 +290,6 @@ void BKE_gpencil_stroke_weights_duplicate(struct bGPDstroke *gps_src, struct bGP
  * \param scene: Scene
  */
 void BKE_gpencil_palette_ensure(struct Main *bmain, struct Scene *scene);
-
-extern void (*BKE_gpencil_batch_cache_dirty_tag_cb)(struct bGPdata *gpd);
-extern void (*BKE_gpencil_batch_cache_free_cb)(struct bGPdata *gpd);
-
-/**
- * Update original pointers in evaluated frame.
- * \param gpf_orig: Original grease-pencil frame.
- * \param gpf_eval: Evaluated grease pencil frame.
- */
-void BKE_gpencil_frame_original_pointers_update(const struct bGPDframe *gpf_orig,
-                                                const struct bGPDframe *gpf_eval);
-
-/**
- * Update original pointers in evaluated layer.
- * \param gpl_orig: Original grease-pencil layer.
- * \param gpl_eval: Evaluated grease pencil layer.
- */
-void BKE_gpencil_layer_original_pointers_update(const struct bGPDlayer *gpl_orig,
-                                                const struct bGPDlayer *gpl_eval);
-/**
- * Update pointers of eval data to original data to keep references.
- * \param ob_orig: Original grease pencil object
- * \param ob_eval: Evaluated grease pencil object
- */
-void BKE_gpencil_update_orig_pointers(const struct Object *ob_orig, const struct Object *ob_eval);
-
-/**
- * Update pointers of eval data to original data to keep references.
- * \param gpd_orig: Original grease pencil data
- * \param gpd_eval: Evaluated grease pencil data
- */
-void BKE_gpencil_data_update_orig_pointers(const struct bGPdata *gpd_orig,
-                                           const struct bGPdata *gpd_eval);
 
 void BKE_gpencil_blend_read_data(struct BlendDataReader *reader, struct bGPdata *gpd);
 
