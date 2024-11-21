@@ -1034,11 +1034,30 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
         description="Render high resolution images in tiles to reduce memory usage, using the specified tile size. Tiles are cached to disk while rendering to save memory",
         default=True,
     )
+    
+    tiling_mode: bpy.props.EnumProperty(
+        name="Tiling Mode",
+        description="Choose between Auto or Manual tiling mode",
+        items=[
+            ('AUTO', "Auto", "Calculate tile size automatically based on render dimensions"),
+            ('MANUAL', "Manual", "Set tile size manually")
+        ],
+        default='AUTO'
+    )
+
+    manual_tile_size: bpy.props.IntProperty(
+        name="Manual Tile Size",
+        description="Set tile size manually",
+        default=64,
+        min=16,
+        max=8192
+    )
+ 
     tile_size: IntProperty(
         name="Tile Size",
         default=2048,
         description="",
-        min=8, max=8192,
+        min=16, max=8192,
     )
 
     # Various fine-tuning debug flags
