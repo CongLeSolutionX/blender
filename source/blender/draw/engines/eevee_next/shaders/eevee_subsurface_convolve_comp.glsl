@@ -78,7 +78,7 @@ SubSurfaceSample sample_neighborhood(vec2 sample_uv)
   return samp;
 }
 
-void main(void)
+void main()
 {
   const uint tile_size = SUBSURFACE_GROUP_SIZE;
   uvec2 tile_coord = unpackUvec2x16(tiles_coord_buf[gl_WorkGroupID.x]);
@@ -149,7 +149,7 @@ void main(void)
   accum_radiance *= safe_rcp(accum_weight);
 
   /* Put result in direct diffuse. */
-  imageStore(out_direct_light_img, texel, uvec4(rgb9e5_encode(accum_radiance)));
+  imageStoreFast(out_direct_light_img, texel, uvec4(rgb9e5_encode(accum_radiance)));
   /* Clear the indirect pass since its content has been merged and convolved with direct light. */
-  imageStore(out_indirect_light_img, texel, vec4(0.0, 0.0, 0.0, 0.0));
+  imageStoreFast(out_indirect_light_img, texel, vec4(0.0, 0.0, 0.0, 0.0));
 }

@@ -35,8 +35,6 @@
 #include "RNA_path.hh"
 #include "RNA_prototypes.hh"
 
-#include "ED_keyframing.hh"
-
 #include "MEM_guardedalloc.h"
 
 #include "BLT_translation.hh"
@@ -400,12 +398,13 @@ static void slot_name_ensure_unique(Action &action, Slot &slot)
   BLI_uniquename_cb(check_name_is_used, &check_data, "", '.', slot.name, sizeof(slot.name));
 }
 
-/* TODO: maybe this function should only set the 'name without prefix' aka the 'display name'. That
- * way only `this->id_type` is responsible for the prefix. I (Sybren) think that's easier to
- * determine when the code is a bit more mature, and we can see what the majority of the calls to
- * this function actually do/need. */
 void Action::slot_name_set(Main &bmain, Slot &slot, const StringRefNull new_name)
 {
+  /* TODO: maybe this function should only set the 'name without prefix' aka the 'display name'.
+   * That way only `this->id_type` is responsible for the prefix. I (Sybren) think that's easier to
+   * determine when the code is a bit more mature, and we can see what the majority of the calls to
+   * this function actually do/need. */
+
   this->slot_name_define(slot, new_name);
   this->slot_name_propagate(bmain, slot);
 }
@@ -871,10 +870,6 @@ static float2 get_frame_range_of_fcurves(Span<const FCurve *> fcurves,
 
       foundmod = true;
     }
-
-    /* This block is here just so that editors/IDEs do not get confused about the two opening
-     * curly braces in the `#ifdef WITH_ANIM_BAKLAVA` block above, but one closing curly brace
-     * here. */
   }
 
   if (foundvert || foundmod) {
@@ -1485,7 +1480,6 @@ ActionSlotAssignmentResult assign_tmpaction_and_slot_handle(bAction *action,
                                            owned_adt.adt.tmp_slot_name);
 }
 
-/* TODO: rename to get_action(). */
 Action *get_action(ID &animated_id)
 {
   AnimData *adt = BKE_animdata_from_id(&animated_id);
@@ -2971,8 +2965,10 @@ void move_slot(Main &bmain, Slot &source_slot, Action &from_action, Action &to_a
 
   /* Reassign all users of `source_slot` to the action `to_action` and the slot `target_slot`. */
   for (ID *user : source_slot.users(bmain)) {
-    const auto assign_other_action =
-        [&](bAction *&action_ptr_ref, slot_handle_t &slot_handle_ref, char *slot_name) -> bool {
+    const auto assign_other_action = [&](ID & /* animated_id */,
+                                         bAction *&action_ptr_ref,
+                                         slot_handle_t &slot_handle_ref,
+                                         char *slot_name) -> bool {
       /* Only reassign if the reference is actually from the same action. Could be from a different
        * action when using the NLA or action constraints. */
       if (action_ptr_ref != &from_action) {

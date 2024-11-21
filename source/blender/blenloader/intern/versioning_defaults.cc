@@ -365,19 +365,11 @@ static void blo_update_defaults_scene(Main *bmain, Scene *scene)
   }
 
   /* New EEVEE defaults. */
-  scene->eevee.bloom_intensity = 0.05f;
-  scene->eevee.bloom_clamp = 0.0f;
   scene->eevee.motion_blur_shutter_deprecated = 0.5f;
 
   copy_v3_v3(scene->display.light_direction, blender::float3(M_SQRT1_3));
   copy_v2_fl2(scene->safe_areas.title, 0.1f, 0.05f);
   copy_v2_fl2(scene->safe_areas.action, 0.035f, 0.035f);
-
-  /* Change default cube-map quality. */
-  scene->eevee.gi_filter_quality = 3.0f;
-
-  /* Enable Soft Shadows by default. */
-  scene->eevee.flag |= SCE_EEVEE_SHADOW_SOFT;
 
   /* Default Rotate Increment. */
   const float default_snap_angle_increment = DEG2RADF(5.0f);
@@ -447,6 +439,11 @@ static void blo_update_defaults_scene(Main *bmain, Scene *scene)
   if (ts->unified_paint_settings.input_samples == 0) {
     ts->unified_paint_settings.input_samples = 1;
   }
+
+  const UnifiedPaintSettings &default_ups = *DNA_struct_default_get(UnifiedPaintSettings);
+  ts->unified_paint_settings.flag = default_ups.flag;
+  copy_v3_v3(ts->unified_paint_settings.rgb, default_ups.rgb);
+  copy_v3_v3(ts->unified_paint_settings.secondary_rgb, default_ups.secondary_rgb);
 }
 
 void BLO_update_defaults_startup_blend(Main *bmain, const char *app_template)

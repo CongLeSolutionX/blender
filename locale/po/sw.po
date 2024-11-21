@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.3.0 Beta (b'89e3ab2a4533')\n"
+"Project-Id-Version: Blender 4.3.0 Release Candidate (b'7dfe47164a63')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-10-14 08:43+0000\n"
+"POT-Creation-Date: 2024-11-18 11:20+0000\n"
 "PO-Revision-Date: 2024-07-05 18:56+0000\n"
 "Last-Translator: Isaac Gicheha <shwaky3@gmail.com>\n"
 "Language-Team: Swahili <https://translate.blender.org/projects/blender-ui/ui/sw/>\n"
@@ -2635,10 +2635,6 @@ msgid "Main Grease Pencils"
 msgstr "Penseli Kuu za Grisi"
 
 
-msgid "Collection of grease pencils"
-msgstr "Mkusanyiko wa penseli za grisi"
-
-
 msgid "Main Hair Curves"
 msgstr "Mikunjo ya Nywele Kuu"
 
@@ -4301,10 +4297,6 @@ msgstr "Kuza au kufinya mikunjo kwa kubadilisha ukubwa wake sawasawa badala ya k
 
 msgid "Grease Pencil Brush Settings"
 msgstr "Mipangilio ya Brashi ya Penseli ya Grisi"
-
-
-msgid "Settings for grease pencil brush"
-msgstr "Mipangilio ya brashi ya penseli ya grisi"
 
 
 msgid "Active Smooth"
@@ -12091,10 +12083,6 @@ msgid "Show Font data-blocks"
 msgstr "Onyesha vizuizi vya data vya Fonti"
 
 
-msgid "Show Grease pencil data-blocks"
-msgstr "Onyesha vizuizi vya data vya penseli ya Grease"
-
-
 msgid "Show Image data-blocks"
 msgstr "Onyesha vizuizi vya data vya Picha"
 
@@ -15324,10 +15312,6 @@ msgid "Grease Pencil Mask Layers"
 msgstr "Paka Mafuta Tabaka za Kinyago cha Penseli"
 
 
-msgid "Collection of grease pencil masking layers"
-msgstr "Mkusanyiko wa tabaka za kufunika penseli za grisi"
-
-
 msgid "Active Layer Mask Index"
 msgstr "Fahirisi ya Kinyago Inayotumika cha Tabaka"
 
@@ -17489,10 +17473,6 @@ msgid "Use Paint"
 msgstr "Tumia Rangi"
 
 
-msgid "Use this brush in grease pencil drawing mode"
-msgstr "Tumia brashi hii katika modi ya kuchora penseli ya grisi"
-
-
 msgid "Use this brush in texture paint mode"
 msgstr "Tumia brashi hii katika hali ya rangi ya unamu"
 
@@ -17663,10 +17643,6 @@ msgstr "Rekebisha Nguvu kwa Nafasi"
 
 msgid "Automatically adjust strength to give consistent results for different spacings"
 msgstr "Rekebisha nguvu kiotomatiki ili kutoa matokeo thabiti kwa nafasi tofauti"
-
-
-msgid "Use this brush in grease pencil vertex color mode"
-msgstr "Tumia brashi hii katika modi ya rangi ya kipeo cha penseli ya grisi"
 
 
 msgid "Use Pressure for Wet Mix"
@@ -19664,10 +19640,6 @@ msgid "2D Layers"
 msgstr "2D Tabaka"
 
 
-msgid "Display strokes using grease pencil layers to define order"
-msgstr "Onyesha viboko kwa kutumia safu za penseli za grisi kufafanua mpangilio"
-
-
 msgid "3D Location"
 msgstr "3D Mahali"
 
@@ -20309,30 +20281,6 @@ msgid "Directional area Light"
 msgstr "Eneo la Mwelekeo Mwanga"
 
 
-msgid "Contact Shadow Bias"
-msgstr "Wasiliana na Upendeleo wa Kivuli"
-
-
-msgid "Bias to avoid self shadowing"
-msgstr "Upendeleo ili kuepuka kujificha"
-
-
-msgid "Contact Shadow Distance"
-msgstr "Wasiliana Kivuli Umbali"
-
-
-msgid "World space distance in which to search for screen space occluder"
-msgstr "Umbali wa nafasi ya dunia ambapo utafute occluder wa nafasi ya skrini"
-
-
-msgid "Contact Shadow Thickness"
-msgstr "Wasiliana na Unene wa Kivuli"
-
-
-msgid "Pixel thickness used to detect occlusion"
-msgstr "Unene wa pikseli unaotumika kutambua kuziba"
-
-
 msgctxt "Light"
 msgid "Power"
 msgstr "Nguvu"
@@ -20342,28 +20290,12 @@ msgid "Light energy emitted over the entire area of the light in all directions"
 msgstr "Nishati nyepesi ilitolewa kwenye eneo lote la mwanga katika pande zote"
 
 
-msgid "Shadow Buffer Bias"
-msgstr "Upendeleo wa Bufa ya Kivuli"
-
-
-msgid "Bias for reducing self shadowing"
-msgstr "Upendeleo wa kupunguza ubinafsi"
-
-
 msgid "Shadow Buffer Clip Start"
 msgstr "Anza Kipande cha Kivuli Buffer"
 
 
 msgid "Shadow map clip start, below which objects will not generate shadows"
 msgstr "Klipu ya ramani ya kivuli inaanza, ambayo chini yake vitu havitatoa vivuli"
-
-
-msgid "Shadow Color"
-msgstr "Rangi ya Kivuli"
-
-
-msgid "Color of shadows cast by the light"
-msgstr "Rangi ya vivuli vinavyotolewa na mwanga"
 
 
 msgid "Shadow Soft Size"
@@ -20404,14 +20336,6 @@ msgstr "Ukubwa wa eneo la eneo mwanga katika mwelekeo wa Y kwa maumbo ya mstatil
 
 msgid "How widely the emitted light fans out, as in the case of a gridded softbox"
 msgstr "Ni kwa upana kiasi gani feni za mwanga zinazotolewa nje, kama ilivyo kwa kisanduku laini cha gridi"
-
-
-msgid "Contact Shadow"
-msgstr "Wasiliana na Kivuli"
-
-
-msgid "Use screen space ray-tracing to have correct shadowing near occluder, or for small features that does not appear in shadow maps"
-msgstr "Tumia ufuatiliaji wa miale ya nafasi ya skrini ili kuwa na kivuli sahihi karibu na occluder, au kwa vipengele vidogo ambavyo havionekani kwenye ramani za kivuli."
 
 
 msgid "Point Light"
@@ -20894,16 +20818,8 @@ msgid "Grease Pencil Settings"
 msgstr "Mipangilio ya Penseli ya Mafuta"
 
 
-msgid "Grease pencil color settings for material"
-msgstr "Mipangilio ya rangi ya penseli ya grisi kwa nyenzo"
-
-
 msgid "Is Grease Pencil"
 msgstr "Je, Penseli ya Grease"
-
-
-msgid "True if this material has grease pencil data"
-msgstr "Ni kweli ikiwa nyenzo hii ina data ya penseli ya grisi"
 
 
 msgid "Line Color"
@@ -21036,34 +20952,6 @@ msgstr "Ukali"
 
 msgid "Roughness of the material"
 msgstr "Ukali wa nyenzo"
-
-
-msgid "Shadow Mode"
-msgstr "Hali ya Kivuli"
-
-
-msgid "Shadow mapping method"
-msgstr "Njia ya kuchora ramani ya kivuli"
-
-
-msgid "Material will cast no shadow"
-msgstr "Nyenzo hazitatoa kivuli"
-
-
-msgid "Opaque"
-msgstr "Kificho"
-
-
-msgid "Material will cast shadows without transparency"
-msgstr "Nyenzo itatoa vivuli bila uwazi"
-
-
-msgid "Alpha Clip"
-msgstr "Klipu ya Alpha"
-
-
-msgid "Use noise to dither the binary visibility and use filtering to reduce the noise"
-msgstr "Tumia kelele kufifisha mwonekano wa binary na utumie uchujaji kupunguza kelele"
 
 
 msgid "Show Backface"
@@ -21520,10 +21408,6 @@ msgstr "Upungufu wa picha za fremu ya kwanza inayohusiana na jina la faili yake 
 
 msgid "Global scene frame number at which this movie starts playing (affects all data associated with a clip)"
 msgstr "Nambari ya fremu ya onyesho la kimataifa ambapo filamu hii inaanza kucheza (huathiri data yote inayohusishwa na klipu)"
-
-
-msgid "Grease pencil data for this movie clip"
-msgstr "Paka mafuta data ya penseli ya klipu hii ya filamu"
 
 
 msgid "Width and height in pixels, zero when image data can't be loaded"
@@ -22560,10 +22444,6 @@ msgstr "Tumia Alfa"
 
 msgid "Use alpha blending instead of alpha test (can produce sorting artifacts)"
 msgstr "Tumia uchanganyaji wa alpha badala ya jaribio la alpha (inaweza kutoa vibaki vya kupanga)"
-
-
-msgid "Lights affect grease pencil object"
-msgstr "Taa huathiri kitu cha penseli ya grisi"
 
 
 msgid "Scale to Face Sizes"
@@ -26063,28 +25943,8 @@ msgid "Codec"
 msgstr "Kodeki"
 
 
-msgid "Codec settings for OpenEXR"
-msgstr "Mipangilio ya Codec ya OpenEXR"
-
-
 msgid "Pxr24 (lossy)"
 msgstr "Pxr24 (iliyopotea)"
-
-
-msgid "ZIP (lossless)"
-msgstr "ZIP (bila hasara)"
-
-
-msgid "PIZ (lossless)"
-msgstr "PIZ (bila hasara)"
-
-
-msgid "RLE (lossless)"
-msgstr "RLE (bila hasara)"
-
-
-msgid "ZIPS (lossless)"
-msgstr "ZIPS (bila hasara)"
 
 
 msgid "B44 (lossy)"
@@ -29141,6 +29001,10 @@ msgid "Editor menu containing buttons"
 msgstr "Menyu ya mhariri iliyo na vitufe"
 
 
+msgid "Mirror"
+msgstr "Kioo"
+
+
 msgid "Snap"
 msgstr "Picha"
 
@@ -29179,10 +29043,6 @@ msgstr "Unganisha"
 
 msgid "Pivot Point"
 msgstr "Egemeo"
-
-
-msgid "Mirror"
-msgstr "Kioo"
 
 
 msgid "Keyframe Insert Pie"
@@ -30616,16 +30476,8 @@ msgid "Deform stroke points using objects"
 msgstr "Badilisha sehemu za kiharusi kwa kutumia vitu"
 
 
-msgid "Generate noise wobble in grease pencil strokes"
-msgstr "Tengeneza kelele katika mipigo ya penseli ya grisi"
-
-
 msgid "Change stroke location, rotation, or scale"
 msgstr "Badilisha eneo la kiharusi, mzunguko, au kiwango"
-
-
-msgid "Smooth grease pencil strokes"
-msgstr "Mipigo ya penseli ya grisi laini"
 
 
 msgid "Change stroke thickness"
@@ -33115,20 +32967,12 @@ msgid "Use Edge Mark"
 msgstr "Tumia Alama ya Edge"
 
 
-msgid "Generate strokes from freestyle marked edges"
-msgstr "Tengeneza mipigo kutoka kwa kingo zilizo na alama za mitindo huru"
-
-
 msgid "Handle Overlapping Edges"
 msgstr "Hushughulikia Kingo Zinazopishana"
 
 
 msgid "Filter Face Marks"
 msgstr "Alama za Uso za Chuja"
-
-
-msgid "Filter feature lines using freestyle face marks"
-msgstr "Chuja mistari ya vipengele kwa kutumia alama za uso za freestyle"
 
 
 msgid "Boundaries"
@@ -37237,10 +37081,6 @@ msgid "Use Mask"
 msgstr "Tumia Mask"
 
 
-msgid "Use a grease pencil data-block as a mask to use only specified areas of pattern when tracking"
-msgstr "Tumia kizuizi cha data cha penseli ya grisi kama kinyago ili kutumia maeneo maalum ya muundo wakati wa kufuatilia."
-
-
 msgid "Normalize"
 msgstr "Weka kawaida"
 
@@ -37459,10 +37299,6 @@ msgstr "Rangi ya wimbo katika Kihariri cha Klipu ya Filamu na eneo la kutazama l
 
 msgid "Minimal value of correlation between matched pattern and reference that is still treated as successful tracking"
 msgstr "Thamani ndogo ya uunganisho kati ya muundo unaolingana na marejeleo ambayo bado yanachukuliwa kuwa ufuatiliaji wenye mafanikio"
-
-
-msgid "Grease pencil data for this track"
-msgstr "Paka mafuta data ya penseli ya wimbo huu"
 
 
 msgid "Has Bundle"
@@ -41066,10 +40902,6 @@ msgstr "Aina ya data inayotumika kusoma maadili ya sifa"
 
 msgid "Named Layer Selection"
 msgstr "Uteuzi wa Tabaka Uliopewa Jina"
-
-
-msgid "Output a selection of a grease pencil layer"
-msgstr "Toa uteuzi wa safu ya penseli ya grisi"
 
 
 msgid "Retrieve a unit length vector indicating the direction pointing away from the geometry at each element"
@@ -45676,6 +45508,16 @@ msgid "Restore Previous Action"
 msgstr "Rejesha Kitendo Kilichotangulia"
 
 
+msgctxt "Operator"
+msgid "Disable Add-on"
+msgstr "Lemaza Nyongeza"
+
+
+msgctxt "Operator"
+msgid "Enable Add-on"
+msgstr "Wezesha Nyongeza"
+
+
 msgid "Display information and preferences for this add-on"
 msgstr "Onyesha habari na mapendeleo ya programu jalizi hii"
 
@@ -45980,10 +45822,6 @@ msgstr "Ongeza au ondoa uwekaji mapema wa brashi ya penseli ya grisi"
 msgctxt "Operator"
 msgid "Add Grease Pencil Brush Preset"
 msgstr "Ongeza Uwekaji Awali wa Brashi ya Penseli ya Grease"
-
-
-msgid "Add or remove grease pencil material preset"
-msgstr "Ongeza au ondoa uwekaji mapema wa nyenzo za penseli ya grisi"
 
 
 msgctxt "Operator"
@@ -46504,18 +46342,8 @@ msgid "Disable add-on for workspace"
 msgstr "Zima programu jalizi kwa nafasi ya kazi"
 
 
-msgctxt "Operator"
-msgid "Disable Add-on"
-msgstr "Lemaza Nyongeza"
-
-
 msgid "Enable add-on for workspace"
 msgstr "Washa programu jalizi kwa nafasi ya kazi"
-
-
-msgctxt "Operator"
-msgid "Enable Add-on"
-msgstr "Wezesha Nyongeza"
 
 
 msgid "Open a path in a file browser"
@@ -52556,6 +52384,10 @@ msgid "Export directional, point, and spot lights. Uses \"KHR_lights_punctual\" 
 msgstr "Hamisha taa za mwelekeo, za uhakika na za doa."
 
 
+msgid "Log Level"
+msgstr "Kiwango cha logi"
+
+
 msgid "Export materials"
 msgstr "Hamisha nyenzo"
 
@@ -54255,10 +54087,6 @@ msgid "Remove"
 msgstr "Ondoa"
 
 
-msgid "The ratio of remaining keyframes after the operation"
-msgstr "Uwiano wa fremu muhimu zilizosalia baada ya operesheni"
-
-
 msgid "Which mode to use for decimation"
 msgstr "Njia gani ya kutumia kwa uharibifu"
 
@@ -54873,10 +54701,6 @@ msgid "Bake Object Transform to Grease Pencil"
 msgstr "Bake Kitu Kibadilishwe Ili Kupaka Penseli"
 
 
-msgid "Bake grease pencil object transform to grease pencil keyframes"
-msgstr "Oka kitu cha penseli ya grisi badilisha hadi greisi ya fremu kuu za penseli"
-
-
 msgid "The end frame of animation"
 msgstr "Sura ya mwisho ya uhuishaji"
 
@@ -55138,10 +54962,6 @@ msgid "Grease Pencil Interpolation"
 msgstr "Ufafanuzi wa Penseli ya Grisi"
 
 
-msgid "Interpolate grease pencil strokes between frames"
-msgstr "Ingiza mipigo ya penseli ya grisi kati ya fremu"
-
-
 msgid "Exclude Breakdowns"
 msgstr "Ondoa Michanganyiko"
 
@@ -55188,10 +55008,6 @@ msgid "Easing"
 msgstr "Kurahisisha"
 
 
-msgid "Which ends of the segment between the preceding and following grease pencil frames easing interpolation is applied to"
-msgstr "Ni ncha zipi za sehemu kati ya fremu za penseli zilizotangulia na zinazofuata, ukalimani wa kurahisisha unatumika kwa"
-
-
 msgctxt "GPencil"
 msgid "Automatic Easing"
 msgstr "Urahisishaji Kiotomatiki"
@@ -55210,14 +55026,6 @@ msgstr "Rahisi Nje"
 msgctxt "GPencil"
 msgid "Ease In and Out"
 msgstr "Urahisi wa Kuingia na Kutoka"
-
-
-msgid "Only Selected"
-msgstr "Imechaguliwa Pekee"
-
-
-msgid "Interpolate only selected strokes"
-msgstr "Tafanua viboko vilivyochaguliwa pekee"
 
 
 msgid "Number of frames between generated interpolated frames"
@@ -55630,26 +55438,14 @@ msgid "Grease Pencil Curve Shape"
 msgstr "Umbo la Mviringo wa Penseli ya Mafuta"
 
 
-msgid "Create predefined grease pencil stroke curve shapes"
-msgstr "Unda maumbo ya curve ya penseli ya grisi yaliyofafanuliwa awali"
-
-
 msgctxt "Operator"
 msgid "Grease Pencil Line Shape"
 msgstr "Umbo la Mstari wa Penseli ya Grisi"
 
 
-msgid "Create predefined grease pencil stroke lines"
-msgstr "Unda mistari iliyofafanuliwa awali ya penseli ya grisi"
-
-
 msgctxt "Operator"
 msgid "Grease Pencil Polyline Shape"
 msgstr "Umbo la Penseli ya Mafuta ya Grisi"
-
-
-msgid "Create predefined grease pencil stroke polylines"
-msgstr "Unda polylines za penseli zilizofafanuliwa awali"
 
 
 msgctxt "Operator"
@@ -55755,10 +55551,6 @@ msgstr "Huchagua pointi nasibu kutoka kwa uteuzi wa sasa wa mipigo"
 
 msgid "Select all strokes with similar characteristics"
 msgstr "Chagua viboko vyote vilivyo na sifa zinazofanana"
-
-
-msgid "Separate the selected geometry into a new grease pencil object"
-msgstr "Tenganisha jiometri iliyochaguliwa kuwa kitu kipya cha penseli ya grisi"
 
 
 msgid "Separate selected geometry"
@@ -56006,10 +55798,6 @@ msgstr "Fuatilia fremu ya sasa ya picha"
 
 msgid "Trace full sequence"
 msgstr "Fuatilia mlolongo kamili"
-
-
-msgid "Target grease pencil"
-msgstr "Kalamu ya grisi inayolengwa"
 
 
 msgid "New Object"
@@ -56939,10 +56727,6 @@ msgstr "Ingiza maandishi ya WebP"
 
 msgid "If a texture exists in WebP format, loads the WebP texture instead of the fallback PNG/JPEG one"
 msgstr "Ikiwa unamu upo katika umbizo la WebP, hupakia unamu wa WebP badala ya ule wa nyuma wa PNG/JPEG."
-
-
-msgid "Log Level"
-msgstr "Kiwango cha logi"
 
 
 msgid "The glTF format requires discontinuous normals, UVs, and other vertex attributes to be stored as separate vertices, as required for rendering on typical graphics hardware. This option attempts to combine co-located vertices where possible. Currently cannot combine verts with different normals"
@@ -58635,6 +58419,10 @@ msgstr "Angle Snap Ongezeko"
 
 msgid "The angle snap increment used when in constrained angle mode"
 msgstr "Ongezeko la mlio wa pembe linalotumika ukiwa katika hali ya pembe iliyozuiliwa"
+
+
+msgid "Only Selected"
+msgstr "Imechaguliwa Pekee"
 
 
 msgid "Only cut selected geometry"
@@ -60354,10 +60142,6 @@ msgid "Clear Constraints"
 msgstr "Vikwazo Wazi"
 
 
-msgid "Remove all constraints from keyed object/bones, and do 'visual' keying"
-msgstr "Ondoa vizuizi vyote kutoka kwa kitu/mifupa iliyowekwa funguo, na ufanye kitufe cha 'kuona'."
-
-
 msgid "Clear Parents"
 msgstr "Wazazi Wazi"
 
@@ -60824,21 +60608,6 @@ msgstr "Ukuzaji wa Picha ya Mandharinyuma"
 
 msgid "Zoom in/out the background image"
 msgstr "Kuza ndani/nje picha ya usuli"
-
-
-msgctxt "Operator"
-msgid "Add Bake Item"
-msgstr "Ongeza Bidhaa ya Kuoka"
-
-
-msgctxt "Operator"
-msgid "Move Bake Item"
-msgstr "Sogeza Bidhaa ya Kuoka"
-
-
-msgctxt "Operator"
-msgid "Remove Bake Item"
-msgstr "Ondoa Bidhaa ya Kuoka"
 
 
 msgctxt "Operator"
@@ -62130,10 +61899,6 @@ msgid "Add a Grease Pencil object to the scene"
 msgstr "Ongeza kitu cha Penseli ya Grease kwenye tukio"
 
 
-msgid "Create an empty grease pencil object"
-msgstr "Tengeneza kitu tupu cha penseli ya grisi"
-
-
 msgctxt "Operator"
 msgid "Stroke"
 msgstr "Kiharusi"
@@ -62148,16 +61913,8 @@ msgid "Monkey"
 msgstr "Tumbili"
 
 
-msgid "Construct a Suzanne grease pencil object"
-msgstr "Tengeneza kitu cha penseli ya grisi ya Suzanne"
-
-
 msgid "Show In Front"
 msgstr "Onyesha Mbele"
-
-
-msgid "Use lights for this grease pencil object"
-msgstr "Tumia taa kwa kitu hiki cha penseli ya grisi"
 
 
 msgctxt "Operator"
@@ -63719,10 +63476,6 @@ msgstr "Sogeza athari juu kwenye rafu"
 msgctxt "Operator"
 msgid "Remove Grease Pencil Effect"
 msgstr "Ondoa Athari ya Penseli ya Grease"
-
-
-msgid "Remove a effect from the active grease pencil object"
-msgstr "Ondoa madoido kutoka kwa kitu amilifu cha penseli ya grisi"
 
 
 msgctxt "Operator"
@@ -66975,10 +66728,6 @@ msgid "Add Remote Repository"
 msgstr "Ongeza Hifadhi ya Mbali"
 
 
-msgid "Add a repository referencing an remote repository with support for listing and updating extensions"
-msgstr "Ongeza hazina inayorejelea hazina ya mbali na usaidizi wa kuorodhesha na kusasisha viendelezi."
-
-
 msgid "Add Local Repository"
 msgstr "Ongeza Hifadhi ya Ndani"
 
@@ -69789,10 +69538,6 @@ msgstr "Wape Pembejeo"
 
 msgid "Reassign the inputs for the effect strip"
 msgstr "Weka upya pembejeo za ukanda wa athari"
-
-
-msgid "Rebuild all selected proxies and timecode indices using the job system"
-msgstr "Jenga upya proksi zote zilizochaguliwa na fahirisi za msimbo wa saa kwa kutumia mfumo wa kazi"
 
 
 msgctxt "Operator"
@@ -74364,10 +74109,6 @@ msgid "Export to PDF"
 msgstr "Hamisha kwa PDF"
 
 
-msgid "Export grease pencil to PDF"
-msgstr "Hamisha penseli ya grisi kwa PDF"
-
-
 msgid "Which frames to include in the export"
 msgstr "Fremu zipi za kujumuisha katika usafirishaji"
 
@@ -74413,16 +74154,8 @@ msgid "Export to SVG"
 msgstr "Hamisha kwa SVG"
 
 
-msgid "Export grease pencil to SVG"
-msgstr "Hamisha penseli ya grisi kwa SVG"
-
-
 msgid "Clip Camera"
 msgstr "Kamera ya Klipu"
-
-
-msgid "Import SVG into grease pencil"
-msgstr "Ingiza SVG kwenye penseli ya grisi"
 
 
 msgid "Resolution of the generated strokes"
@@ -76591,6 +76324,14 @@ msgid "Panel containing UI elements"
 msgstr "Paneli iliyo na vipengele vya UI"
 
 
+msgid "Measurement"
+msgstr "Kipimo"
+
+
+msgid "Curve Edit Mode"
+msgstr "Njia ya Kuhariri Curve"
+
+
 msgid "Snapping"
 msgstr "Kupiga"
 
@@ -76631,10 +76372,6 @@ msgid "Viewport Debug"
 msgstr "Utatuzi wa kituo cha kutazama"
 
 
-msgid "Curve Edit Mode"
-msgstr "Njia ya Kuhariri Curve"
-
-
 msgid "View Lock"
 msgstr "Kufuli ya Tazama"
 
@@ -76669,10 +76406,6 @@ msgstr "Kufuatilia Mwendo"
 
 msgid "Mesh Edit Mode"
 msgstr "Njia ya Kuhariri Mesh"
-
-
-msgid "Measurement"
-msgstr "Kipimo"
 
 
 msgid "Fast GI Approximation"
@@ -76757,14 +76490,6 @@ msgstr "Pasi ya ukungu"
 
 msgid "Custom Distance"
 msgstr "Umbali Maalum"
-
-
-msgid "Cascaded Shadow Map"
-msgstr "Ramani ya Kivuli Iliyopigwa"
-
-
-msgid "Contact Shadows"
-msgstr "Wasiliana Shadows"
 
 
 msgid "Composition Guides"
@@ -84624,18 +84349,6 @@ msgid "Method of anti-aliasing when rendering 3d viewport"
 msgstr "Njia ya kupinga kutengwa wakati wa kutoa lango la kutazama la 3d"
 
 
-msgid "Knee"
-msgstr "Goti"
-
-
-msgid "Denoise Amount"
-msgstr "Denoise Kiasi"
-
-
-msgid "Amount of flicker removal applied to bokeh highlights"
-msgstr "Kiasi cha kuondolewa kwa flicker kinatumika kwa vivutio vya bokeh"
-
-
 msgid "Max Size"
 msgstr "Ukubwa wa Juu"
 
@@ -84672,14 +84385,6 @@ msgid "Trace Precision"
 msgstr "Fuatilia Usahihi"
 
 
-msgid "Cubemap Display Size"
-msgstr "Ukubwa wa Onyesho la Cubemap"
-
-
-msgid "Size of the cubemap spheres to debug captured light"
-msgstr "Ukubwa wa nyanja za mchemraba ili kutatua taa iliyonaswa"
-
-
 msgid "Cubemap Size"
 msgstr "Ukubwa wa Cubemap"
 
@@ -84692,24 +84397,8 @@ msgid "Number of times the light is reinjected inside light grids, 0 disable ind
 msgstr "Idadi ya mara taa hutupwa tena ndani ya gridi za mwanga, 0 zima mwangaza usio wa moja kwa moja"
 
 
-msgid "Filter Quality"
-msgstr "Ubora wa Kichujio"
-
-
-msgid "Take more samples during cubemap filtering to remove artifacts"
-msgstr "Chukua sampuli zaidi wakati wa kuchuja mchemraba ili kuondoa mabaki"
-
-
 msgid "Clamp pixel intensity to reduce noise inside glossy reflections from reflection cubemaps (0 to disable)"
 msgstr "Uzito wa pikseli ya mbano ili kupunguza kelele ndani ya uakisi wa glossy kutoka kwa cubemaps za kuakisi (0 ili kuzima)"
-
-
-msgid "Irradiance Display Size"
-msgstr "Ukubwa wa Onyesho la Mwani"
-
-
-msgid "Size of the irradiance sample spheres to debug captured light"
-msgstr "Ukubwa wa sampuli ya duara za miale ili kutatua taa iliyonaswa"
 
 
 msgid "Irradiance Pool Size"
@@ -84724,26 +84413,6 @@ msgid "1 GB"
 msgstr "GB 1"
 
 
-msgid "Irradiance Smoothing"
-msgstr "Kulainisha Mwani"
-
-
-msgid "Show Cubemap Cache"
-msgstr "Onyesha Akiba ya Cubemap"
-
-
-msgid "Display captured cubemaps in the viewport"
-msgstr "Onyesha ramani za mchemraba zilizonaswa kwenye lango la kutazama"
-
-
-msgid "Show Irradiance Cache"
-msgstr "Onyesha Akiba ya Irradiance"
-
-
-msgid "Display irradiance samples in the viewport"
-msgstr "Onyesha sampuli za miale katika eneo la kutazama"
-
-
 msgid "Irradiance Visibility Size"
 msgstr "Ukubwa wa Kuonekana kwa Mwale"
 
@@ -84754,10 +84423,6 @@ msgstr "Ukubwa wa ramani ya kivuli inayotumika kwa kila sampuli ya miale"
 
 msgid "Distance of object that contribute to the ambient occlusion effect"
 msgstr "Umbali wa kitu kinachochangia athari ya kuziba mazingira"
-
-
-msgid "Factor for ambient occlusion blending"
-msgstr "Kipengele cha mchanganyiko wa kuziba mazingira"
 
 
 msgid "Precision of the horizon search"
@@ -84816,14 +84481,6 @@ msgid "EEVEE settings for tracing reflections"
 msgstr "Mipangilio ya EEVEE ya kufuatilia tafakari"
 
 
-msgid "Directional Shadows Resolution"
-msgstr "Azimio la Vivuli vya Mwelekeo"
-
-
-msgid "Cube Shadows Resolution"
-msgstr "Azimio la Vivuli vya Mchemraba"
-
-
 msgid "Shadow Pool Size"
 msgstr "Ukubwa wa Dimbwi la Kivuli"
 
@@ -84848,42 +84505,6 @@ msgid "Amount of shadow map sample per shadow ray"
 msgstr "Kiasi cha sampuli ya ramani ya kivuli kwa kila miale ya kivuli"
 
 
-msgid "Edge Fading"
-msgstr "Kufifia kwa makali"
-
-
-msgid "Screen percentage used to fade the SSR"
-msgstr "Asilimia ya skrini inayotumika kufifisha SSR"
-
-
-msgid "Clamp pixel intensity to remove noise (0 to disable)"
-msgstr "Uzito wa pikseli ya bana ili kuondoa kelele (0 ili kuzima)"
-
-
-msgid "Max Roughness"
-msgstr "Ukali wa Juu"
-
-
-msgid "Do not raytrace reflections for roughness above this value"
-msgstr "Usiakisi uakisi kwa ukali zaidi ya thamani hii"
-
-
-msgid "Pixel thickness used to detect intersection"
-msgstr "Unene wa pikseli unaotumika kutambua makutano"
-
-
-msgid "Jitter Threshold"
-msgstr "Kizingiti cha Jitter"
-
-
-msgid "Rotate samples that are below this threshold"
-msgstr "Zungusha sampuli zilizo chini ya kizingiti hiki"
-
-
-msgid "Number of samples to compute the scattering effect"
-msgstr "Idadi ya sampuli za kukokotoa athari ya kutawanya"
-
-
 msgid "Render Samples"
 msgstr "Toa Sampuli"
 
@@ -84896,36 +84517,12 @@ msgid "Number of samples, unlimited if 0"
 msgstr "Idadi ya sampuli, isiyo na kikomo ikiwa 0"
 
 
-msgid "High Quality Slight Defocus"
-msgstr "Defocus Kidogo ya Ubora wa Juu"
-
-
-msgid "Sample all pixels in almost in-focus regions to eliminate noise"
-msgstr "Sakinisha saizi zote katika maeneo karibu-maalum ili kuondoa kelele"
-
-
 msgid "Jitter Camera"
 msgstr "Kamera ya Jitter"
 
 
 msgid "Enable ambient occlusion to simulate medium scale indirect shadowing"
 msgstr "Washa uzuiaji wa mazingira ili kuiga utiaji wa kivuli usio wa moja kwa moja wa kiwango cha wastani"
-
-
-msgid "Bent Normals"
-msgstr "Kawaida Zilizopinda"
-
-
-msgid "Compute main non occluded direction to sample the environment"
-msgstr "Kokotoa mwelekeo mkuu usiozuiliwa ili sampuli ya mazingira"
-
-
-msgid "Bounces Approximation"
-msgstr "Ukadiriaji wa Mabomu"
-
-
-msgid "An approximation to simulate light bounces giving less occlusion on brighter objects"
-msgstr "Ukadiriaji wa kuiga miale ya mwanga inayotoa uzuiaji mdogo kwenye vitu angavu"
 
 
 msgid "Internally render past the image border to avoid screen-space effects disappearing"
@@ -84940,44 +84537,8 @@ msgid "Enable the ray-tracing module"
 msgstr "Washa moduli ya ufuatiliaji wa miale"
 
 
-msgid "High Bit Depth"
-msgstr "Kina cha Juu"
-
-
-msgid "Use 32-bit shadows"
-msgstr "Tumia vivuli 32-bit"
-
-
 msgid "Enable shadow casting from lights"
 msgstr "Washa utumaji kivuli kutoka kwa taa"
-
-
-msgid "Soft Shadows"
-msgstr "Vivuli Laini"
-
-
-msgid "Randomize shadowmaps origin to create soft shadows"
-msgstr "Badilisha asili ya ramani za vivuli ili kuunda vivuli laini"
-
-
-msgid "Enable screen space reflection"
-msgstr "Washa uakisi wa nafasi ya skrini"
-
-
-msgid "Half Res Trace"
-msgstr "Nusu Res Trace"
-
-
-msgid "Raytrace at a lower resolution"
-msgstr "Raytrace katika azimio la chini"
-
-
-msgid "Screen Space Refractions"
-msgstr "Marekebisho ya Nafasi ya Skrini"
-
-
-msgid "Enable screen space Refractions"
-msgstr "Washa Vigezo vya nafasi ya skrini"
 
 
 msgid "Viewport Denoising"
@@ -84986,14 +84547,6 @@ msgstr "Kutoa sauti kwa Viewport"
 
 msgid "Denoise image using temporal reprojection (can leave some ghosting)"
 msgstr "Punguza picha kwa kutumia kukataliwa kwa muda (inaweza kuacha roho mbaya)"
-
-
-msgid "Enable scene light interactions with volumetrics"
-msgstr "Washa mwingiliano wa mwanga wa eneo na sauti za sauti"
-
-
-msgid "Generate shadows from volumetric material (Very expensive)"
-msgstr "Tengeneza vivuli kutoka kwa nyenzo za ujazo (ghali sana)"
 
 
 msgid "End distance of the volumetric effect"
@@ -85623,18 +85176,6 @@ msgid "Align X"
 msgstr "Pangilia X"
 
 
-msgid "Align the text along the X axis, relative to the text bounds"
-msgstr "Sawazisha maandishi kwenye mhimili wa X, ikilinganishwa na mipaka ya maandishi"
-
-
-msgid "Align Y"
-msgstr "Pangilia Y"
-
-
-msgid "Align the text along the Y axis, relative to the text bounds"
-msgstr "Pangilia maandishi kwenye mhimili wa Y, ikilinganishwa na mipaka ya maandishi"
-
-
 msgid "Box Color"
 msgstr "Rangi ya Sanduku"
 
@@ -85665,6 +85206,10 @@ msgstr "Rangi ya Muhtasari"
 
 msgid "Outline Width"
 msgstr "Upana wa Muhtasari"
+
+
+msgid "Shadow Color"
+msgstr "Rangi ya Kivuli"
 
 
 msgid "Text that will be displayed"
@@ -86716,10 +86261,6 @@ msgstr "Piga fremu ya sasa ili kuvua mwanzo au mwisho"
 
 msgid "Collection of Sequences"
 msgstr "Mkusanyiko wa Mifuatano"
-
-
-msgid "Effect affecting the grease pencil object"
-msgstr "Athari inayoathiri kitu cha penseli ya grisi"
 
 
 msgid "Effect name"
@@ -88491,10 +88032,6 @@ msgid "Show Grease Pencil"
 msgstr "Onyesha Penseli ya Grease"
 
 
-msgid "Show grease pencil objects"
-msgstr "Onyesha vitu vya penseli ya grisi"
-
-
 msgid "Show Lights"
 msgstr "Onyesha Taa"
 
@@ -89296,10 +88833,6 @@ msgstr "Ruhusu uteuzi wa utupu"
 
 msgid "Allow selection of text objects"
 msgstr "Ruhusu uteuzi wa vipengee vya maandishi"
-
-
-msgid "Allow selection of grease pencil objects"
-msgstr "Ruhusu uteuzi wa vitu vya penseli ya grisi"
 
 
 msgid "Allow selection of lattices"
@@ -93669,10 +93202,6 @@ msgid "Use Grid"
 msgstr "Tumia Gridi"
 
 
-msgid "Display a grid over grease pencil paper"
-msgstr "Onyesha gridi ya taifa juu ya karatasi ya penseli ya grisi"
-
-
 msgid "Lines Only"
 msgstr "Mistari Pekee"
 
@@ -94661,6 +94190,10 @@ msgstr "Je, chombo hiki kinatumia turubai ya uchoraji"
 
 msgid "Lighting for a World data-block"
 msgstr "Kuangaza kwa Kizuizi cha data cha Ulimwengu"
+
+
+msgid "Factor for ambient occlusion blending"
+msgstr "Kipengele cha mchanganyiko wa kuziba mazingira"
 
 
 msgid "Length of rays, defines how far away other faces give occlusion effect"
@@ -96885,11 +96418,6 @@ msgstr "NLA Jenerali"
 
 
 msgctxt "WindowManager"
-msgid "Timeline"
-msgstr "Ratiba ya matukio"
-
-
-msgctxt "WindowManager"
 msgid "Image"
 msgstr "Picha"
 
@@ -97576,10 +97104,6 @@ msgid "and NVIDIA driver version %s or newer"
 msgstr "na toleo la kiendeshi la NVIDIA %s au jipya zaidi"
 
 
-msgid "Requires AMD GPU with Vega or RDNA architecture"
-msgstr "Inahitaji AMD GPU yenye usanifu wa Vega au RDNA"
-
-
 msgid "and AMD Radeon Pro %s driver or newer"
 msgstr "na dereva wa AMD Radeon Pro %s au mpya zaidi"
 
@@ -98114,66 +97638,6 @@ msgstr "Chaguo:"
 msgctxt "Operator"
 msgid "Action"
 msgstr "Kitendo"
-
-
-msgid "Save to PO File"
-msgstr "Hifadhi kwenye Faili ya PO"
-
-
-msgid "Rebuild MO File"
-msgstr "Jenga Upya Faili la MO"
-
-
-msgid "Erase Local MO files"
-msgstr "Futa faili za MO za Ndani"
-
-
-msgid "invoke() needs to be called before execute()"
-msgstr "invoke() inahitaji kuitwa kabla ya kutekeleza()"
-
-
-msgid "    RNA Path: bpy.types."
-msgstr "    Njia ya RNA: bpy.aina."
-
-
-msgid "    RNA Context: "
-msgstr "    Muktadha wa RNA: "
-
-
-msgid "Labels:"
-msgstr "Lebo:"
-
-
-msgid "Tool Tips:"
-msgstr "Vidokezo vya Zana:"
-
-
-msgid "Button Label:"
-msgstr "Lebo ya Kitufe:"
-
-
-msgid "RNA Label:"
-msgstr "Lebo ya RNA:"
-
-
-msgid "Enum Item Label:"
-msgstr "Lebo ya Kipengee cha Enum:"
-
-
-msgid "Button Tip:"
-msgstr "Kidokezo cha Kitufe:"
-
-
-msgid "RNA Tip:"
-msgstr "Kidokezo cha RNA:"
-
-
-msgid "Enum Item Tip:"
-msgstr "Kidokezo cha Kipengee cha Enum:"
-
-
-msgid "Could not write to po file ({})"
-msgstr "Haikuweza kuandika kwa faili ya po ({})"
 
 
 msgid "WARNING: preferences are lost when add-on is disabled, be sure to use \"Save Persistent\" if you want to keep your settings!"
@@ -99356,26 +98820,6 @@ msgid "Only Axis Aligned"
 msgstr "Mhimili Pekee Uliopangwa"
 
 
-msgid "View in Render"
-msgstr "Tazama katika Toleo"
-
-
-msgid "Thickness Scale"
-msgstr "Kiwango cha Unene"
-
-
-msgid "Edit Line Color"
-msgstr "Badilisha Rangi ya Mstari"
-
-
-msgid "Keyframes Before"
-msgstr "Fremu Muhimu Kabla"
-
-
-msgid "Keyframes After"
-msgstr "Fremu Muhimu Baada ya"
-
-
 msgid "Stroke Thickness"
 msgstr "Unene wa Kiharusi"
 
@@ -99426,6 +98870,14 @@ msgstr "Nakili Safu hadi Iliyochaguliwa"
 msgctxt "Operator"
 msgid "Copy All Layers to Selected"
 msgstr "Nakili Tabaka Zote kwa Zilizochaguliwa"
+
+
+msgid "Keyframes Before"
+msgstr "Fremu Muhimu Kabla"
+
+
+msgid "Keyframes After"
+msgstr "Fremu Muhimu Baada ya"
 
 
 msgid "Interpolation U"
@@ -99666,6 +99118,16 @@ msgstr "Uteuzi kwa Mshale"
 msgctxt "Operator"
 msgid "Selection to Cursor (Keep Offset)"
 msgstr "Uteuzi wa Mshale (Weka Kilichowekwa)"
+
+
+msgctxt "Operator"
+msgid "Delete Active Keyframe (Active Layer)"
+msgstr "Futa Kiunzimsingi Inayotumika (Safu Inayotumika)"
+
+
+msgctxt "Operator"
+msgid "Delete Active Keyframes (All Layers)"
+msgstr "Futa Fremu Muhimu Zinazotumika (Tabaka Zote)"
 
 
 msgid "Show Fill Color While Drawing"
@@ -100643,24 +100105,12 @@ msgid "Auto-Step"
 msgstr "Hatua-Otomatiki"
 
 
-msgid "Light Clamping"
-msgstr "Kubana Mwanga"
-
-
 msgid "Max Depth"
 msgstr "Upeo wa Kina"
 
 
-msgid "Refraction"
-msgstr "Kinyumeo"
-
-
 msgid "Rays"
 msgstr "Miale"
-
-
-msgid "Cascade Size"
-msgstr "Ukubwa wa Kuteleza"
 
 
 msgid "Tracing"
@@ -100669,14 +100119,6 @@ msgstr "Kufuatilia"
 
 msgid "Temporal Reprojection"
 msgstr "Kukataliwa kwa Muda"
-
-
-msgid "Diffuse Occlusion"
-msgstr "Kuziba kwa Kueneza"
-
-
-msgid "Irradiance Size"
-msgstr "Ukubwa wa Irradiance"
 
 
 msgid "Max Child Particles"
@@ -100795,10 +100237,6 @@ msgstr "Umbali wa Kuziba"
 
 msgid "Conflicts with another render pass with the same name"
 msgstr "Migogoro na mwingine atatoa kupita kwa jina moja"
-
-
-msgid "Accurate Mode"
-msgstr "Njia Sahihi"
 
 
 msgid "Unknown add-ons"
@@ -104307,16 +103745,6 @@ msgstr "Vipeo Vikali"
 
 
 msgctxt "Operator"
-msgid "Delete Active Keyframe (Active Layer)"
-msgstr "Futa Kiunzimsingi Inayotumika (Safu Inayotumika)"
-
-
-msgctxt "Operator"
-msgid "Delete Active Keyframes (All Layers)"
-msgstr "Futa Fremu Muhimu Zinazotumika (Tabaka Zote)"
-
-
-msgctxt "Operator"
 msgid "Delete Segment"
 msgstr "Futa Sehemu"
 
@@ -105137,10 +104565,6 @@ msgstr "Data Iliyoongezwa"
 
 msgid "Lib Reload: Replacing all references to old data-block '%s' by reloaded one failed, old one (%d remaining users) had to be kept and was renamed to '%s'"
 msgstr "Upakiaji Upya wa Lib: Kubadilisha marejeleo yote kwa kizuizi cha data cha zamani '%s' kwa kupakiwa tena imeshindwa, cha zamani (watumiaji %d waliosalia) ilibidi kuwekwa na ilibadilishwa jina kuwa '%s'"
-
-
-msgid "Path '%s' not found"
-msgstr "Njia '%s' haijapatikana"
 
 
 msgid "No missing files"
@@ -106167,10 +105591,6 @@ msgstr "Faili ilihifadhiwa na toleo jipya zaidi, ifungue kwa Blender %s au toleo
 
 msgid "Failed to read blend file '%s': %s"
 msgstr "Imeshindwa kusoma faili mseto '%s': %s"
-
-
-msgid "Failed to read blend file '%s', not a blend file"
-msgstr "Imeshindwa kusoma faili ya mseto '%s', si faili ya mseto"
 
 
 msgid "Unable to read '%s': %s"
@@ -107284,16 +106704,8 @@ msgid "Active region not set"
 msgstr "Eneo inayotumika haijawekwa"
 
 
-msgid "Nowhere for grease pencil data to go"
-msgstr "Hakuna mahali pa data ya penseli ya grisi kwenda"
-
-
 msgid "Cannot delete locked layers"
 msgstr "Haiwezi kufuta tabaka zilizofungwa"
-
-
-msgid "No grease pencil data"
-msgstr "Hakuna data ya penseli ya grisi"
 
 
 msgid "No active frame to delete"
@@ -107346,10 +106758,6 @@ msgstr "Safu inayotumika imefungwa au kufichwa"
 
 msgid "No Grease Pencil frame to draw on"
 msgstr "Hakuna fremu ya Penseli ya Grisi ya kuchora"
-
-
-msgid "Active object is not a selected grease pencil"
-msgstr "Kifaa kinachotumika sio penseli ya grisi iliyochaguliwa"
 
 
 msgid "There is no layer '%s'"
@@ -110511,10 +109919,6 @@ msgid "Trace"
 msgstr "Fuatilia"
 
 
-msgid "Target object not a grease pencil, ignoring!"
-msgstr "Kitu lengwa si penseli ya grisi, kupuuza!"
-
-
 msgid "Target object library-data, ignoring!"
 msgstr "Data ya maktaba ya kitu kinacholengwa, kupuuza!"
 
@@ -110753,10 +110157,6 @@ msgstr "Ubandikaji wa fremu muhimu haupatikani kwa modi ya barakoa"
 
 msgid "No data in the internal clipboard to paste"
 msgstr "Hakuna data kwenye ubao wa kunakili wa ndani ya kubandika"
-
-
-msgid "Keyframe pasting is not available for grease pencil or mask mode"
-msgstr "Ubandikaji wa fremu muhimu haupatikani kwa penseli ya grisi au modi ya barakoa"
 
 
 msgid "No selected F-Curves to paste into"
@@ -112312,10 +111712,6 @@ msgid "Cannot unlink material '%s'. It's not clear which object or object-data i
 msgstr "Haiwezi kutenganisha nyenzo '%s'."
 
 
-msgid "Cannot unlink texture '%s'. It's not clear which freestyle line style it should be unlinked from, there's no freestyle line style as parent in the Outliner tree"
-msgstr "Haiwezi kutenganisha maandishi ya '%s'."
-
-
 msgid "Cannot unlink collection '%s'. It's not clear which scene, collection or instance empties it should be unlinked from, there's no scene, collection or instance empties as parent in the Outliner tree"
 msgstr "Haiwezi kutenganisha mkusanyiko wa '%s'."
 
@@ -113734,11 +113130,6 @@ msgid "Could not open Alembic archive for reading, see console for detail"
 msgstr "Haikuweza kufungua kumbukumbu ya Alembic ili isomwe, angalia kiweko kwa undani"
 
 
-msgctxt "Action"
-msgid "Group"
-msgstr "Kundi"
-
-
 msgid "PLY Export: Cannot open file '%s'"
 msgstr "PLY Hamisha: Haiwezi kufungua faili '%s'"
 
@@ -114748,10 +114139,6 @@ msgstr "Faharasa ya kipeo hasi katika vertex_indices_set"
 
 msgid "Duplicate index %d in vertex_indices_set"
 msgstr "Faharasa rudufu %d katika seti_ya_indisi_ya kipeo"
-
-
-msgid "Cannot assign material '%s', it has to be used by the grease pencil object already"
-msgstr "Haiwezi kugawa nyenzo '%s', lazima itumike na kitu cha penseli ya grisi tayari."
 
 
 msgid "Unable to create new strip"

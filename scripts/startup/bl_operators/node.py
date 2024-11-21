@@ -26,8 +26,6 @@ from bpy.app.translations import (
     pgettext_rpt as rpt_,
 )
 
-from nodeitems_builtins import node_tree_group_type
-
 
 class NodeSetting(PropertyGroup):
     value: StringProperty(
@@ -151,6 +149,8 @@ class NODE_OT_add_node(NodeAddOperator, Operator):
 
     @classmethod
     def description(cls, _context, properties):
+        from nodeitems_builtins import node_tree_group_type
+
         nodetype = properties["type"]
         if nodetype in node_tree_group_type.values():
             for setting in properties.settings:
@@ -306,7 +306,7 @@ class NodeInterfaceOperator():
 
 
 class NODE_OT_interface_item_new(NodeInterfaceOperator, Operator):
-    '''Add a new item to the interface'''
+    """Add a new item to the interface"""
     bl_idname = "node.interface_item_new"
     bl_label = "New Item"
     bl_options = {'REGISTER', 'UNDO'}
@@ -372,7 +372,7 @@ class NODE_OT_interface_item_new(NodeInterfaceOperator, Operator):
 
 
 class NODE_OT_interface_item_duplicate(NodeInterfaceOperator, Operator):
-    '''Add a copy of the active item to the interface'''
+    """Add a copy of the active item to the interface"""
     bl_idname = "node.interface_item_duplicate"
     bl_label = "Duplicate Item"
     bl_options = {'REGISTER', 'UNDO'}
@@ -401,7 +401,7 @@ class NODE_OT_interface_item_duplicate(NodeInterfaceOperator, Operator):
 
 
 class NODE_OT_interface_item_remove(NodeInterfaceOperator, Operator):
-    '''Remove active item from the interface'''
+    """Remove active item from the interface"""
     bl_idname = "node.interface_item_remove"
     bl_label = "Remove Item"
     bl_options = {'REGISTER', 'UNDO'}

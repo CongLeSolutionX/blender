@@ -25,6 +25,8 @@
 namespace blender::gpu {
 class VKBackend;
 
+/* TODO: Split into VKWorkarounds and VKExtensions to remove the negating when an extension isn't
+ * supported. */
 struct VKWorkarounds {
   /**
    * Some devices don't support pixel formats that are aligned to 24 and 48 bits.
@@ -60,6 +62,17 @@ struct VKWorkarounds {
    * If set to true, the backend would inject a geometry shader to produce barycentric coordinates.
    */
   bool fragment_shader_barycentric = false;
+
+  /**
+   * Is the workarounds for devices that don't support VK_KHR_dynamic_rendering enabled.
+   */
+  bool dynamic_rendering = false;
+
+  /**
+   * Is the workarounds for devices that don't support VK_EXT_dynamic_rendering_unused_attachments
+   * enabled.
+   */
+  bool dynamic_rendering_unused_attachments = false;
 };
 
 /**
@@ -184,6 +197,11 @@ class VKDevice : public NonCopyable {
     PFN_vkCreateDebugUtilsMessengerEXT vkCreateDebugUtilsMessenger = nullptr;
     PFN_vkDestroyDebugUtilsMessengerEXT vkDestroyDebugUtilsMessenger = nullptr;
   } functions;
+
+  const char *extension_name_get(int index) const
+  {
+    return device_extensions_[index].extensionName;
+  }
 
   VkPhysicalDevice physical_device_get() const
   {

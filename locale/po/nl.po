@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.3.0 Beta (b'89e3ab2a4533')\n"
+"Project-Id-Version: Blender 4.3.0 Release Candidate (b'7dfe47164a63')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-10-14 08:43+0000\n"
+"POT-Creation-Date: 2024-11-18 11:20+0000\n"
 "PO-Revision-Date: 2023-12-21 01:55+0000\n"
 "Last-Translator: Lisa <blendergirl@tutanota.com>\n"
 "Language-Team: Dutch <https://translate.blender.org/projects/blender-ui/ui/nl/>\n"
@@ -2169,10 +2169,6 @@ msgid "Power"
 msgstr "Kracht"
 
 
-msgid "Shadow Color"
-msgstr "Schaduwkleur"
-
-
 msgid "Size Y"
 msgstr "Grote Y"
 
@@ -2199,10 +2195,6 @@ msgstr "Ruwheid"
 
 msgid "Roughness of the material"
 msgstr "Ruwheid van het materiaal"
-
-
-msgid "Shadow Mode"
-msgstr "Schaduwmodus"
 
 
 msgid "Converter"
@@ -2682,6 +2674,10 @@ msgid "Active Point"
 msgstr "Actieve Punt"
 
 
+msgid "Mirror"
+msgstr "Spiegel"
+
+
 msgid "Local View"
 msgstr "Lokale Scherm"
 
@@ -2732,10 +2728,6 @@ msgstr "Maak Transformatie Leeg"
 
 msgid "Names"
 msgstr "Namen"
-
-
-msgid "Mirror"
-msgstr "Spiegel"
 
 
 msgctxt "MovieClip"
@@ -6156,10 +6148,6 @@ msgid "Debug Menu"
 msgstr "Debug Menu"
 
 
-msgid "Export grease pencil to PDF"
-msgstr "Exporteer vetkrijt naar PDF"
-
-
 msgctxt "Operator"
 msgid "Reload Library"
 msgstr "Herlaad Bibliotheek"
@@ -6720,10 +6708,6 @@ msgid "Bounciness"
 msgstr "Veerkrachtigheid"
 
 
-msgid "Max Roughness"
-msgstr "Maximale Ruwheid"
-
-
 msgid "Alpha Under"
 msgstr "Alpha Onder"
 
@@ -6770,6 +6754,10 @@ msgstr "Kruisovergang"
 
 msgid "Add Sequence"
 msgstr "Voeg Sequentie Toe"
+
+
+msgid "Shadow Color"
+msgstr "Schaduwkleur"
 
 
 msgid "Use Annotations"
@@ -7094,11 +7082,6 @@ msgstr "Beeldhouwen"
 msgctxt "WindowManager"
 msgid "Particle"
 msgstr "Deeltje"
-
-
-msgctxt "WindowManager"
-msgid "Timeline"
-msgstr "Tijdslijn"
 
 
 msgctxt "WindowManager"
@@ -9119,11 +9102,6 @@ msgstr "Ruimte"
 
 msgid "Unpack File"
 msgstr "Pak Bestand Uit"
-
-
-msgctxt "Action"
-msgid "Group"
-msgstr "Groep"
 
 
 msgid "Flame"

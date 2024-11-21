@@ -37,24 +37,21 @@
 static CLG_LogRef LOG = {"gpu.vulkan"};
 
 namespace blender::gpu {
+static const char *KNOWN_CRASHING_DRIVER = "unstable driver";
+
+static const char *vk_extension_get(int index)
+{
+  return VKBackend::get().device.extension_name_get(index);
+}
 
 static Vector<StringRefNull> missing_capabilities_get(VkPhysicalDevice vk_physical_device)
 {
   Vector<StringRefNull> missing_capabilities;
   /* Check device features. */
   VkPhysicalDeviceFeatures2 features = {};
-  VkPhysicalDeviceDynamicRenderingFeatures dynamic_rendering = {};
-
   features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-  dynamic_rendering.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES;
-  VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT
-      dynamic_rendering_unused_attachments = {};
-  dynamic_rendering_unused_attachments.sType =
-      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_UNUSED_ATTACHMENTS_FEATURES_EXT;
-  features.pNext = &dynamic_rendering;
-  dynamic_rendering.pNext = &dynamic_rendering_unused_attachments;
-
   vkGetPhysicalDeviceFeatures2(vk_physical_device, &features);
+
 #ifndef __APPLE__
   if (features.features.geometryShader == VK_FALSE) {
     missing_capabilities.append("geometry shaders");
@@ -84,9 +81,6 @@ static Vector<StringRefNull> missing_capabilities_get(VkPhysicalDevice vk_physic
   if (features.features.fragmentStoresAndAtomics == VK_FALSE) {
     missing_capabilities.append("fragment stores and atomics");
   }
-  if (dynamic_rendering.dynamicRendering == VK_FALSE) {
-    missing_capabilities.append("dynamic rendering");
-  }
 
   /* Check device extensions. */
   uint32_t vk_extension_count;
@@ -106,16 +100,36 @@ static Vector<StringRefNull> missing_capabilities_get(VkPhysicalDevice vk_physic
   if (!extensions.contains(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME)) {
     missing_capabilities.append(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
   }
-  /* VK_EXT_dynamic_rendering_unused_attachments are required for correct working. Renderdoc hides
-   * this extension, but most platforms do work. However when the Windows Intel driver crashes when
-   * using iGPUs; they don't support this extension at all.
+
+  /* Check for known faulty drivers. */
+  VkPhysicalDeviceProperties2 vk_physical_device_properties = {};
+  VkPhysicalDeviceDriverProperties vk_physical_device_driver_properties = {};
+  vk_physical_device_properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+  vk_physical_device_driver_properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES;
+  vk_physical_device_properties.pNext = &vk_physical_device_driver_properties;
+  vkGetPhysicalDeviceProperties2(vk_physical_device, &vk_physical_device_properties);
+  uint32_t conformance_version = VK_MAKE_API_VERSION(
+      vk_physical_device_driver_properties.conformanceVersion.major,
+      vk_physical_device_driver_properties.conformanceVersion.minor,
+      vk_physical_device_driver_properties.conformanceVersion.subminor,
+      vk_physical_device_driver_properties.conformanceVersion.patch);
+
+  /* Intel IRIS on 10th gen CPU (and older) crashes due to multiple driver issues.
    *
-   * TODO(jbakker): Make dynamic rendering optional to allow running on Windows/Intel iGPU.
+   * 1) Workbench is working, but EEVEE pipelines are failing. Calling vkCreateGraphicsPipelines
+   * for certain EEVEE shaders (Shadow, Deferred rendering) would return with VK_SUCCESS, but
+   * without a created VkPipeline handle.
+   *
+   * 2) When vkCmdBeginRendering is called some requirements need to be met, that can only be met
+   * when actually calling a vkCmdDraw* command. According to the Vulkan specs the requirements
+   * should only be met when calling a vkCmdDraw* command.
    */
-  if (!bool(G.debug & G_DEBUG_GPU_RENDERDOC)) {
-    if (!extensions.contains(VK_EXT_DYNAMIC_RENDERING_UNUSED_ATTACHMENTS_EXTENSION_NAME)) {
-      missing_capabilities.append(VK_EXT_DYNAMIC_RENDERING_UNUSED_ATTACHMENTS_EXTENSION_NAME);
-    }
+  if (vk_physical_device_driver_properties.driverID == VK_DRIVER_ID_INTEL_PROPRIETARY_WINDOWS &&
+      vk_physical_device_properties.properties.deviceType ==
+          VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU &&
+      conformance_version < VK_MAKE_API_VERSION(1, 3, 2, 0))
+  {
+    missing_capabilities.append(KNOWN_CRASHING_DRIVER);
   }
 
   return missing_capabilities;
@@ -260,13 +274,17 @@ void VKBackend::platform_init(const VKDevice &device)
   const VkPhysicalDeviceProperties &properties = device.physical_device_properties_get();
 
   eGPUDeviceType device_type = device.device_type();
+  eGPUDriverType driver = device.driver_type();
   eGPUOSType os = determine_os_type();
-  eGPUDriverType driver = GPU_DRIVER_ANY;
   eGPUSupportLevel support_level = GPU_SUPPORT_LEVEL_SUPPORTED;
 
   std::string vendor_name = device.vendor_name();
   std::string driver_version = device.driver_version();
 
+  /* GPG has already been initialized, but without a specific device. Calling init twice will
+   * clear the list of devices. Making a copy of the device list and set it after initialization to
+   * make sure the list isn't destroyed at this moment, but only when the backend is destroyed. */
+  Vector<GPUDevice> devices = GPG.devices;
   GPG.init(device_type,
            os,
            driver,
@@ -276,6 +294,7 @@ void VKBackend::platform_init(const VKDevice &device)
            properties.deviceName,
            driver_version.c_str(),
            GPU_ARCHITECTURE_IMR);
+  GPG.devices = devices;
 
   CLOG_INFO(&LOG,
             0,
@@ -301,6 +320,10 @@ void VKBackend::detect_workarounds(VKDevice &device)
     workarounds.shader_output_viewport_index = true;
     workarounds.vertex_formats.r8g8b8 = true;
     workarounds.fragment_shader_barycentric = true;
+    workarounds.dynamic_rendering = true;
+    workarounds.dynamic_rendering_unused_attachments = true;
+
+    GCaps.render_pass_workaround = true;
 
     device.workarounds_ = workarounds;
     return;
@@ -310,6 +333,12 @@ void VKBackend::detect_workarounds(VKDevice &device)
       !device.physical_device_vulkan_12_features_get().shaderOutputLayer;
   workarounds.shader_output_viewport_index =
       !device.physical_device_vulkan_12_features_get().shaderOutputViewportIndex;
+  workarounds.fragment_shader_barycentric = !device.supports_extension(
+      VK_KHR_FRAGMENT_SHADER_BARYCENTRIC_EXTENSION_NAME);
+  workarounds.dynamic_rendering = !device.supports_extension(
+      VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
+  workarounds.dynamic_rendering_unused_attachments = !device.supports_extension(
+      VK_EXT_DYNAMIC_RENDERING_UNUSED_ATTACHMENTS_EXTENSION_NAME);
 
   /* AMD GPUs don't support texture formats that use are aligned to 24 or 48 bits. */
   if (GPU_type_matches(GPU_DEVICE_ATI, GPU_OS_ANY, GPU_DRIVER_ANY) ||
@@ -326,6 +355,11 @@ void VKBackend::detect_workarounds(VKDevice &device)
 
   workarounds.fragment_shader_barycentric = !device.supports_extension(
       VK_KHR_FRAGMENT_SHADER_BARYCENTRIC_EXTENSION_NAME);
+
+  GCaps.render_pass_workaround = workarounds.dynamic_rendering = !device.supports_extension(
+      VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
+  workarounds.dynamic_rendering_unused_attachments = !device.supports_extension(
+      VK_EXT_DYNAMIC_RENDERING_UNUSED_ATTACHMENTS_EXTENSION_NAME);
 
   device.workarounds_ = workarounds;
 }
@@ -529,6 +563,12 @@ void VKBackend::capabilities_init(VKDevice &device)
 
   GCaps.max_parallel_compilations = BLI_system_thread_count();
   GCaps.mem_stats_support = true;
+
+  uint32_t vk_extension_count;
+  vkEnumerateDeviceExtensionProperties(
+      device.physical_device_get(), nullptr, &vk_extension_count, nullptr);
+  GCaps.extensions_len = vk_extension_count;
+  GCaps.extension_get = vk_extension_get;
 
   detect_workarounds(device);
 }

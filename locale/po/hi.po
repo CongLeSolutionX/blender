@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.3.0 Beta (b'89e3ab2a4533')\n"
+"Project-Id-Version: Blender 4.3.0 Release Candidate (b'7dfe47164a63')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-10-14 08:43+0000\n"
+"POT-Creation-Date: 2024-11-18 11:20+0000\n"
 "PO-Revision-Date: 2015-03-03 16:21+0530\n"
 "Last-Translator: Roshan Lal Gumasta <roshan@anisecrets.com>\n"
 "Language-Team: Hindi <www.anisecrets.com>\n"
@@ -2672,6 +2672,10 @@ msgid "Flip"
 msgstr "पलटें"
 
 
+msgid "Mirror"
+msgstr "दर्पण"
+
+
 msgid "Snap"
 msgstr "स्नैप"
 
@@ -2722,10 +2726,6 @@ msgstr "विलय करें"
 
 msgid "Bone Roll"
 msgstr "हड्डी पंजी"
-
-
-msgid "Mirror"
-msgstr "दर्पण"
 
 
 msgid "Basic"
@@ -3806,10 +3806,6 @@ msgid "Limit"
 msgstr "सीमा"
 
 
-msgid "Only Selected"
-msgstr "केवल चयनित"
-
-
 msgctxt "Operator"
 msgid "Merge"
 msgstr "विलय करें"
@@ -3926,6 +3922,10 @@ msgstr "अदला-बदली"
 msgctxt "Operator"
 msgid "Knife Project"
 msgstr "चाकू प्रक्षेपण"
+
+
+msgid "Only Selected"
+msgstr "केवल चयनित"
 
 
 msgid "X-Ray"
@@ -5261,54 +5261,6 @@ msgid "Options:"
 msgstr "विकल्प:"
 
 
-msgid "Save to PO File"
-msgstr "PO फाइल को बचाने के लिए"
-
-
-msgid "Rebuild MO File"
-msgstr "एमओ संचिका के पुनर्निर्माण"
-
-
-msgid "Erase Local MO files"
-msgstr "स्थानीय MO संचिकाें मिटाएँ"
-
-
-msgid "    RNA Path: bpy.types."
-msgstr "    आर एन ए पथ: bpy.types."
-
-
-msgid "    RNA Context: "
-msgstr "    आर एन ए संदर्भ: "
-
-
-msgid "Button Label:"
-msgstr "बटन सूचक पत्र:"
-
-
-msgid "RNA Label:"
-msgstr "आर एन ए सूचक पत्र:"
-
-
-msgid "Enum Item Label:"
-msgstr "Enum आइटम सूचक पत्र:"
-
-
-msgid "Button Tip:"
-msgstr "बटन युक्ति:"
-
-
-msgid "RNA Tip:"
-msgstr "आर एन ए टिप:"
-
-
-msgid "Enum Item Tip:"
-msgstr "Enum आइटम टिप:"
-
-
-msgid "Could not write to po file ({})"
-msgstr "पो संचिका (()) करने के लिए नहीं लिख सकता है"
-
-
 msgctxt "Operator"
 msgid "Save Persistent To..."
 msgstr "सहेजें करने के लिए लगातार..."
@@ -5492,10 +5444,6 @@ msgstr "ऊपरी"
 
 msgid "Auto-Step"
 msgstr "स्वत:-चरण"
-
-
-msgid "Refraction"
-msgstr "अपवर्तन"
 
 
 msgid "Paths:"
@@ -6707,11 +6655,6 @@ msgstr "रिक्त स्थान"
 
 msgid "Overwrite %s"
 msgstr "अधिलेखित करें %s"
-
-
-msgctxt "Action"
-msgid "Group"
-msgstr "समूह"
 
 
 msgid "Flame"

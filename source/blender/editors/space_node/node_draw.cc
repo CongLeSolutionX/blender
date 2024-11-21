@@ -111,6 +111,12 @@ using blender::nodes::NodeExtraInfoRow;
  * This is passed to many functions which draw the node editor.
  */
 struct TreeDrawContext {
+  Main *bmain;
+  wmWindow *window;
+  Scene *scene;
+  ARegion *region;
+  Depsgraph *depsgraph;
+
   /**
    * Whether a viewer node is active in geometry nodes can not be determined by a flag on the node
    * alone. That's because if the node group with the viewer is used multiple times, it's only
@@ -225,14 +231,15 @@ static const char *node_socket_get_translation_context(const bNodeSocket &socket
     return nullptr;
   }
 
-  blender::StringRefNull translation_context = socket.runtime->declaration->translation_context;
+  const std::optional<std::string> &translation_context =
+      socket.runtime->declaration->translation_context;
 
   /* Default context. */
-  if (translation_context.is_empty()) {
+  if (!translation_context.has_value()) {
     return nullptr;
   }
 
-  return translation_context.data();
+  return translation_context->c_str();
 }
 
 static void node_socket_add_tooltip_in_node_editor(const bNodeSocket &sock, uiLayout &layout);
@@ -339,11 +346,15 @@ Array<bNode *> tree_draw_order_calc_nodes_reversed(bNodeTree &ntree)
 static Array<uiBlock *> node_uiblocks_init(const bContext &C, const Span<bNode *> nodes)
 {
   Array<uiBlock *> blocks(nodes.size());
+
   /* Add node uiBlocks in drawing order - prevents events going to overlapping nodes. */
+  Scene *scene = CTX_data_scene(&C);
+  wmWindow *window = CTX_wm_window(&C);
+  ARegion *region = CTX_wm_region(&C);
   for (const int i : nodes.index_range()) {
     const bNode &node = *nodes[i];
     std::string block_name = "node_" + std::string(node.name);
-    uiBlock *block = UI_block_begin(&C, CTX_wm_region(&C), std::move(block_name), UI_EMBOSS);
+    uiBlock *block = UI_block_begin(&C, scene, window, region, std::move(block_name), UI_EMBOSS);
     blocks[node.index()] = block;
     /* This cancels events for background nodes. */
     UI_block_flag_enable(block, UI_BLOCK_CLIP_EVENTS);
@@ -647,7 +658,7 @@ static void determine_visible_panels_impl_recursive(const bNode &node,
   r_result[panel_decl.index] = true;
   const bNodePanelState &panel_state = node.panel_states_array[panel_decl.index];
   if (panel_state.is_collapsed()) {
-    /* The subpanels can't be visible if this panel is collapsed. */
+    /* The sub-panels can't be visible if this panel is collapsed. */
     return;
   }
   for (const nodes::ItemDeclaration *item_decl : panel_decl.items) {
@@ -1541,9 +1552,9 @@ static void create_inspection_string_for_generic_value(const bNodeSocket &socket
                                                        fmt::memory_buffer &buf)
 {
   auto id_to_inspection_string = [&](const ID *id, const short idcode) {
-    fmt::format_to(fmt::appender(buf), (id ? id->name + 2 : TIP_("None")));
+    fmt::format_to(fmt::appender(buf), "{}", id ? id->name + 2 : TIP_("None"));
     fmt::format_to(fmt::appender(buf), " (");
-    fmt::format_to(fmt::appender(buf), TIP_(BKE_idtype_idcode_to_name(idcode)));
+    fmt::format_to(fmt::appender(buf), "{}", TIP_(BKE_idtype_idcode_to_name(idcode)));
     fmt::format_to(fmt::appender(buf), ")");
   };
 
@@ -1570,8 +1581,9 @@ static void create_inspection_string_for_generic_value(const bNodeSocket &socket
     return;
   }
   if (value_type.is<std::string>()) {
-    fmt::format_to(
-        fmt::appender(buf), TIP_("{} (String)"), *static_cast<const std::string *>(buffer));
+    fmt::format_to(fmt::appender(buf),
+                   fmt::runtime(TIP_("{} (String)")),
+                   *static_cast<const std::string *>(buffer));
     return;
   }
 
@@ -1594,7 +1606,7 @@ static void create_inspection_string_for_generic_value(const bNodeSocket &socket
     if (!enum_item) {
       return;
     }
-    fmt::format_to(fmt::appender(buf), TIP_("{} (Menu)"), enum_item->name);
+    fmt::format_to(fmt::appender(buf), fmt::runtime(TIP_("{} (Menu)")), enum_item->name);
     return;
   }
 
@@ -1610,7 +1622,8 @@ static void create_inspection_string_for_generic_value(const bNodeSocket &socket
   BLI_SCOPED_DEFER([&]() { socket_type.destruct(socket_value); });
 
   if (socket_type.is<int>()) {
-    fmt::format_to(fmt::appender(buf), TIP_("{} (Integer)"), *static_cast<int *>(socket_value));
+    fmt::format_to(
+        fmt::appender(buf), fmt::runtime(TIP_("{} (Integer)")), *static_cast<int *>(socket_value));
   }
   else if (socket_type.is<float>()) {
     const float float_value = *static_cast<float *>(socket_value);
@@ -1618,21 +1631,28 @@ static void create_inspection_string_for_generic_value(const bNodeSocket &socket
     if (std::abs(float_value) > (1 << 24)) {
       /* Use higher precision to display correct integer value instead of one that is rounded to
        * fewer significant digits. */
-      fmt::format_to(fmt::appender(buf), TIP_("{:.10} (Float)"), float_value);
+      fmt::format_to(fmt::appender(buf), fmt::runtime(TIP_("{:.10} (Float)")), float_value);
     }
     else {
-      fmt::format_to(fmt::appender(buf), TIP_("{} (Float)"), float_value);
+      fmt::format_to(fmt::appender(buf), fmt::runtime(TIP_("{} (Float)")), float_value);
     }
   }
   else if (socket_type.is<blender::float3>()) {
     const blender::float3 &vector = *static_cast<blender::float3 *>(socket_value);
-    fmt::format_to(
-        fmt::appender(buf), TIP_("({}, {}, {}) (Vector)"), vector.x, vector.y, vector.z);
+    fmt::format_to(fmt::appender(buf),
+                   fmt::runtime(TIP_("({}, {}, {}) (Vector)")),
+                   vector.x,
+                   vector.y,
+                   vector.z);
   }
   else if (socket_type.is<blender::ColorGeometry4f>()) {
     const blender::ColorGeometry4f &color = *static_cast<blender::ColorGeometry4f *>(socket_value);
-    fmt::format_to(
-        fmt::appender(buf), TIP_("({}, {}, {}, {}) (Color)"), color.r, color.g, color.b, color.a);
+    fmt::format_to(fmt::appender(buf),
+                   fmt::runtime(TIP_("({}, {}, {}, {}) (Color)")),
+                   color.r,
+                   color.g,
+                   color.b,
+                   color.a);
   }
   else if (socket_type.is<math::Quaternion>()) {
     const math::Quaternion &rotation = *static_cast<math::Quaternion *>(socket_value);
@@ -1643,11 +1663,11 @@ static void create_inspection_string_for_generic_value(const bNodeSocket &socket
                    euler.x().degree(),
                    euler.y().degree(),
                    euler.z().degree());
-    fmt::format_to(fmt::appender(buf), TIP_("(Rotation)"));
+    fmt::format_to(fmt::appender(buf), "{}", TIP_("(Rotation)"));
   }
   else if (socket_type.is<bool>()) {
     fmt::format_to(fmt::appender(buf),
-                   TIP_("{} (Boolean)"),
+                   fmt::runtime(TIP_("{} (Boolean)")),
                    ((*static_cast<bool *>(socket_value)) ? TIP_("True") : TIP_("False")));
   }
   else if (socket_type.is<float4x4>()) {
@@ -1659,7 +1679,7 @@ static void create_inspection_string_for_generic_value(const bNodeSocket &socket
     ss << value[2] << ",\n";
     ss << value[3] << ",\n";
     buf.append(ss.str());
-    fmt::format_to(fmt::appender(buf), TIP_("(Matrix)"));
+    fmt::format_to(fmt::appender(buf), "{}", TIP_("(Matrix)"));
   }
 }
 
@@ -1673,35 +1693,35 @@ static void create_inspection_string_for_field_info(const bNodeSocket &socket,
   if (input_tooltips.is_empty()) {
     /* Should have been logged as constant value. */
     BLI_assert_unreachable();
-    fmt::format_to(fmt::appender(buf), TIP_("Value has not been logged"));
+    fmt::format_to(fmt::appender(buf), "{}", TIP_("Value has not been logged"));
   }
   else {
     if (socket_type.is<int>()) {
-      fmt::format_to(fmt::appender(buf), TIP_("Integer field based on:"));
+      fmt::format_to(fmt::appender(buf), "{}", TIP_("Integer field based on:"));
     }
     else if (socket_type.is<float>()) {
-      fmt::format_to(fmt::appender(buf), TIP_("Float field based on:"));
+      fmt::format_to(fmt::appender(buf), "{}", TIP_("Float field based on:"));
     }
     else if (socket_type.is<blender::float3>()) {
-      fmt::format_to(fmt::appender(buf), TIP_("Vector field based on:"));
+      fmt::format_to(fmt::appender(buf), "{}", TIP_("Vector field based on:"));
     }
     else if (socket_type.is<bool>()) {
-      fmt::format_to(fmt::appender(buf), TIP_("Boolean field based on:"));
+      fmt::format_to(fmt::appender(buf), "{}", TIP_("Boolean field based on:"));
     }
     else if (socket_type.is<std::string>()) {
-      fmt::format_to(fmt::appender(buf), TIP_("String field based on:"));
+      fmt::format_to(fmt::appender(buf), "{}", TIP_("String field based on:"));
     }
     else if (socket_type.is<blender::ColorGeometry4f>()) {
-      fmt::format_to(fmt::appender(buf), TIP_("Color field based on:"));
+      fmt::format_to(fmt::appender(buf), "{}", TIP_("Color field based on:"));
     }
     else if (socket_type.is<math::Quaternion>()) {
-      fmt::format_to(fmt::appender(buf), TIP_("Rotation field based on:"));
+      fmt::format_to(fmt::appender(buf), "{}", TIP_("Rotation field based on:"));
     }
     fmt::format_to(fmt::appender(buf), "\n");
 
     for (const int i : input_tooltips.index_range()) {
       const blender::StringRefNull tooltip = input_tooltips[i];
-      fmt::format_to(fmt::appender(buf), TIP_("\u2022 {}"), TIP_(tooltip.c_str()));
+      fmt::format_to(fmt::appender(buf), fmt::runtime(TIP_("\u2022 {}")), TIP_(tooltip.c_str()));
       if (i < input_tooltips.size() - 1) {
         fmt::format_to(fmt::appender(buf), ".\n");
       }
@@ -1720,18 +1740,18 @@ static void create_inspection_string_for_geometry_info(const geo_log::GeometryIn
 
   if (value_log.grid_info) {
     const geo_log::GeometryInfoLog::GridInfo &grid_info = *value_log.grid_info;
-    fmt::format_to(fmt::appender(buf),
-                   grid_info.is_empty ? TIP_("Empty Grid") : TIP_("\u2022 Grid"));
+    fmt::format_to(
+        fmt::appender(buf), "{}", grid_info.is_empty ? TIP_("Empty Grid") : TIP_("\u2022 Grid"));
     return;
   }
 
   Span<bke::GeometryComponent::Type> component_types = value_log.component_types;
   if (component_types.is_empty()) {
-    fmt::format_to(fmt::appender(buf), TIP_("Empty Geometry"));
+    fmt::format_to(fmt::appender(buf), "{}", TIP_("Empty Geometry"));
     return;
   }
 
-  fmt::format_to(fmt::appender(buf), TIP_("Geometry:"));
+  fmt::format_to(fmt::appender(buf), "{}", TIP_("Geometry:"));
   if (!value_log.name.empty()) {
     fmt::format_to(fmt::appender(buf), " \"{}\"", value_log.name);
   }
@@ -1741,7 +1761,7 @@ static void create_inspection_string_for_geometry_info(const geo_log::GeometryIn
       case bke::GeometryComponent::Type::Mesh: {
         const geo_log::GeometryInfoLog::MeshInfo &mesh_info = *value_log.mesh_info;
         fmt::format_to(fmt::appender(buf),
-                       TIP_("\u2022 Mesh: {} vertices, {} edges, {} faces"),
+                       fmt::runtime(TIP_("\u2022 Mesh: {} vertices, {} edges, {} faces")),
                        to_string(mesh_info.verts_num),
                        to_string(mesh_info.edges_num),
                        to_string(mesh_info.faces_num));
@@ -1751,14 +1771,14 @@ static void create_inspection_string_for_geometry_info(const geo_log::GeometryIn
         const geo_log::GeometryInfoLog::PointCloudInfo &pointcloud_info =
             *value_log.pointcloud_info;
         fmt::format_to(fmt::appender(buf),
-                       TIP_("\u2022 Point Cloud: {} points"),
+                       fmt::runtime(TIP_("\u2022 Point Cloud: {} points")),
                        to_string(pointcloud_info.points_num));
         break;
       }
       case bke::GeometryComponent::Type::Curve: {
         const geo_log::GeometryInfoLog::CurveInfo &curve_info = *value_log.curve_info;
         fmt::format_to(fmt::appender(buf),
-                       TIP_("\u2022 Curve: {} points, {} splines"),
+                       fmt::runtime(TIP_("\u2022 Curve: {} points, {} splines")),
                        to_string(curve_info.points_num),
                        to_string(curve_info.splines_num));
         break;
@@ -1766,20 +1786,22 @@ static void create_inspection_string_for_geometry_info(const geo_log::GeometryIn
       case bke::GeometryComponent::Type::Instance: {
         const geo_log::GeometryInfoLog::InstancesInfo &instances_info = *value_log.instances_info;
         fmt::format_to(fmt::appender(buf),
-                       TIP_("\u2022 Instances: {}"),
+                       fmt::runtime(TIP_("\u2022 Instances: {}")),
                        to_string(instances_info.instances_num));
         break;
       }
       case bke::GeometryComponent::Type::Volume: {
         const geo_log::GeometryInfoLog::VolumeInfo &volume_info = *value_log.volume_info;
-        fmt::format_to(fmt::appender(buf), TIP_("\u2022 Volume: {} grids"), volume_info.grids_num);
+        fmt::format_to(fmt::appender(buf),
+                       fmt::runtime(TIP_("\u2022 Volume: {} grids")),
+                       volume_info.grids_num);
         break;
       }
       case bke::GeometryComponent::Type::Edit: {
         if (value_log.edit_data_info.has_value()) {
           const geo_log::GeometryInfoLog::EditDataInfo &edit_info = *value_log.edit_data_info;
           fmt::format_to(fmt::appender(buf),
-                         TIP_("\u2022 Edit: {}, {}, {}"),
+                         fmt::runtime(TIP_("\u2022 Edit: {}, {}, {}")),
                          edit_info.has_deformed_positions ? TIP_("positions") :
                                                             TIP_("no positions"),
                          edit_info.has_deform_matrices ? TIP_("matrices") : TIP_("no matrices"),
@@ -1791,7 +1813,7 @@ static void create_inspection_string_for_geometry_info(const geo_log::GeometryIn
         const geo_log::GeometryInfoLog::GreasePencilInfo &grease_pencil_info =
             *value_log.grease_pencil_info;
         fmt::format_to(fmt::appender(buf),
-                       TIP_("\u2022 Grease Pencil: {} layers"),
+                       fmt::runtime(TIP_("\u2022 Grease Pencil: {} layers")),
                        to_string(grease_pencil_info.layers_num));
         break;
       }
@@ -1813,38 +1835,38 @@ static void create_inspection_string_for_geometry_socket(fmt::memory_buffer &buf
 
   Span<bke::GeometryComponent::Type> supported_types = socket_decl->supported_types();
   if (supported_types.is_empty()) {
-    fmt::format_to(fmt::appender(buf), TIP_("Supported: All Types"));
+    fmt::format_to(fmt::appender(buf), "{}", TIP_("Supported: All Types"));
     return;
   }
 
-  fmt::format_to(fmt::appender(buf), TIP_("Supported: "));
+  fmt::format_to(fmt::appender(buf), "{}", TIP_("Supported: "));
   for (bke::GeometryComponent::Type type : supported_types) {
     switch (type) {
       case bke::GeometryComponent::Type::Mesh: {
-        fmt::format_to(fmt::appender(buf), TIP_("Mesh"));
+        fmt::format_to(fmt::appender(buf), "{}", TIP_("Mesh"));
         break;
       }
       case bke::GeometryComponent::Type::PointCloud: {
-        fmt::format_to(fmt::appender(buf), TIP_("Point Cloud"));
+        fmt::format_to(fmt::appender(buf), "{}", TIP_("Point Cloud"));
         break;
       }
       case bke::GeometryComponent::Type::Curve: {
-        fmt::format_to(fmt::appender(buf), TIP_("Curve"));
+        fmt::format_to(fmt::appender(buf), "{}", TIP_("Curve"));
         break;
       }
       case bke::GeometryComponent::Type::Instance: {
-        fmt::format_to(fmt::appender(buf), TIP_("Instances"));
+        fmt::format_to(fmt::appender(buf), "{}", TIP_("Instances"));
         break;
       }
       case bke::GeometryComponent::Type::Volume: {
-        fmt::format_to(fmt::appender(buf), CTX_TIP_(BLT_I18NCONTEXT_ID_ID, "Volume"));
+        fmt::format_to(fmt::appender(buf), "{}", CTX_TIP_(BLT_I18NCONTEXT_ID_ID, "Volume"));
         break;
       }
       case bke::GeometryComponent::Type::Edit: {
         break;
       }
       case bke::GeometryComponent::Type::GreasePencil: {
-        fmt::format_to(fmt::appender(buf), TIP_("Grease Pencil"));
+        fmt::format_to(fmt::appender(buf), "{}", TIP_("Grease Pencil"));
         break;
       }
     }
@@ -2018,7 +2040,7 @@ static std::optional<std::string> create_multi_input_log_inspection_string(
     const Vector<std::string> lines = lines_of_text(info.second);
     fmt::format_to(fmt::appender(buf), "{}", info.first);
     fmt::format_to(fmt::appender(buf), ". ");
-    fmt::format_to(fmt::appender(buf), lines.first());
+    fmt::format_to(fmt::appender(buf), "{}", lines.first());
     for (const std::string &line : lines.as_span().drop_front(1)) {
       fmt::format_to(fmt::appender(buf), "\n  {}", line);
     }
@@ -2102,6 +2124,7 @@ static std::optional<std::string> create_dangling_reroute_inspection_string(
   }
   fmt::format_to(fmt::appender(buf), ".\n\n");
   fmt::format_to(fmt::appender(buf),
+                 "{}",
                  TIP_("Dangling reroute is ignored, default value of target socket is used"));
   return str;
 }
@@ -3051,7 +3074,7 @@ static std::string named_attribute_tooltip(bContext * /*C*/, void *argN, const c
   NamedAttributeTooltipArg &arg = *static_cast<NamedAttributeTooltipArg *>(argN);
 
   fmt::memory_buffer buf;
-  fmt::format_to(fmt::appender(buf), TIP_("Accessed named attributes:"));
+  fmt::format_to(fmt::appender(buf), "{}", TIP_("Accessed named attributes:"));
   fmt::format_to(fmt::appender(buf), "\n");
 
   struct NameWithUsage {
@@ -3072,7 +3095,7 @@ static std::string named_attribute_tooltip(bContext * /*C*/, void *argN, const c
   for (const NameWithUsage &attribute : sorted_used_attribute) {
     const StringRefNull name = attribute.name;
     const geo_log::NamedAttributeUsage usage = attribute.usage;
-    fmt::format_to(fmt::appender(buf), TIP_("  \u2022 \"{}\": "), name);
+    fmt::format_to(fmt::appender(buf), fmt::runtime(TIP_("  \u2022 \"{}\": ")), name);
     Vector<std::string> usages;
     if ((usage & geo_log::NamedAttributeUsage::Read) != geo_log::NamedAttributeUsage::None) {
       usages.append(TIP_("read"));
@@ -3084,7 +3107,7 @@ static std::string named_attribute_tooltip(bContext * /*C*/, void *argN, const c
       usages.append(TIP_("remove"));
     }
     for (const int i : usages.index_range()) {
-      fmt::format_to(fmt::appender(buf), usages[i]);
+      fmt::format_to(fmt::appender(buf), "{}", usages[i]);
       if (i < usages.size() - 1) {
         fmt::format_to(fmt::appender(buf), ", ");
       }
@@ -3092,9 +3115,10 @@ static std::string named_attribute_tooltip(bContext * /*C*/, void *argN, const c
     fmt::format_to(fmt::appender(buf), "\n");
   }
   fmt::format_to(fmt::appender(buf), "\n");
-  fmt::format_to(fmt::appender(buf),
-                 TIP_("Attributes with these names used within the group may conflict with "
-                      "existing attributes"));
+  fmt::format_to(
+      fmt::appender(buf),
+      fmt::runtime(TIP_("Attributes with these names used within the group may conflict with "
+                        "existing attributes")));
   return fmt::to_string(buf);
 }
 
@@ -3487,7 +3511,13 @@ static void node_draw_basis(const bContext &C,
     rect_with_preview.ymax += NODE_WIDTH(node);
   }
   if (BLI_rctf_isect(&rect_with_preview, &v2d.cur, nullptr) == false) {
-    UI_block_end(&C, &block);
+    UI_block_end_ex(&C,
+                    tree_draw_ctx.bmain,
+                    tree_draw_ctx.window,
+                    tree_draw_ctx.scene,
+                    tree_draw_ctx.region,
+                    tree_draw_ctx.depsgraph,
+                    &block);
     return;
   }
 
@@ -3563,7 +3593,7 @@ static void node_draw_basis(const bContext &C,
   float iconofs = rct.xmax - 0.35f * U.widget_unit;
 
   /* Group edit. This icon should be the first for the node groups. */
-  if (node.is_group()) {
+  if (node.type == NODE_GROUP) {
     iconofs -= iconbutw;
     UI_block_emboss_set(&block, UI_EMBOSS_NONE);
     uiBut *but = uiDefIconBut(&block,
@@ -3827,7 +3857,13 @@ static void node_draw_basis(const bContext &C,
     node_draw_panels(ntree, node, block);
   }
 
-  UI_block_end(&C, &block);
+  UI_block_end_ex(&C,
+                  tree_draw_ctx.bmain,
+                  tree_draw_ctx.window,
+                  tree_draw_ctx.scene,
+                  tree_draw_ctx.region,
+                  tree_draw_ctx.depsgraph,
+                  &block);
   UI_block_draw(&C, &block);
 }
 
@@ -4012,7 +4048,13 @@ static void node_draw_hidden(const bContext &C,
 
   node_draw_sockets(v2d, C, ntree, node, block, true, false);
 
-  UI_block_end(&C, &block);
+  UI_block_end_ex(&C,
+                  tree_draw_ctx.bmain,
+                  tree_draw_ctx.window,
+                  tree_draw_ctx.scene,
+                  tree_draw_ctx.region,
+                  tree_draw_ctx.depsgraph,
+                  &block);
   UI_block_draw(&C, &block);
 }
 
@@ -4338,7 +4380,13 @@ static void frame_node_draw_overlay(const bContext &C,
 {
   /* Skip if out of view. */
   if (BLI_rctf_isect(&node.runtime->totr, &region.v2d.cur, nullptr) == false) {
-    UI_block_end(&C, &block);
+    UI_block_end_ex(&C,
+                    tree_draw_ctx.bmain,
+                    tree_draw_ctx.window,
+                    tree_draw_ctx.scene,
+                    tree_draw_ctx.region,
+                    tree_draw_ctx.depsgraph,
+                    &block);
     return;
   }
 
@@ -4347,7 +4395,13 @@ static void frame_node_draw_overlay(const bContext &C,
 
   node_draw_extra_info_panel(C, tree_draw_ctx, snode, node, nullptr, block);
 
-  UI_block_end(&C, &block);
+  UI_block_end_ex(&C,
+                  tree_draw_ctx.bmain,
+                  tree_draw_ctx.window,
+                  tree_draw_ctx.scene,
+                  tree_draw_ctx.region,
+                  tree_draw_ctx.depsgraph,
+                  &block);
   UI_block_draw(&C, &block);
 }
 
@@ -4517,7 +4571,13 @@ static void reroute_node_draw(const bContext &C,
   if (rct.xmax < region.v2d.cur.xmin || rct.xmin > region.v2d.cur.xmax ||
       rct.ymax < region.v2d.cur.ymin || node.runtime->totr.ymin > region.v2d.cur.ymax)
   {
-    UI_block_end(&C, &block);
+    UI_block_end_ex(&C,
+                    tree_draw_ctx.bmain,
+                    tree_draw_ctx.window,
+                    tree_draw_ctx.scene,
+                    tree_draw_ctx.region,
+                    tree_draw_ctx.depsgraph,
+                    &block);
     return;
   }
 
@@ -4527,7 +4587,13 @@ static void reroute_node_draw(const bContext &C,
    * if node itself is selected, since we don't display the node body separately. */
   node_draw_sockets(region.v2d, C, ntree, node, block, false, node.flag & SELECT);
 
-  UI_block_end(&C, &block);
+  UI_block_end_ex(&C,
+                  tree_draw_ctx.bmain,
+                  tree_draw_ctx.window,
+                  tree_draw_ctx.scene,
+                  tree_draw_ctx.region,
+                  tree_draw_ctx.depsgraph,
+                  &block);
   UI_block_draw(&C, &block);
 }
 
@@ -4937,6 +5003,11 @@ static void draw_nodetree(const bContext &C,
   Array<uiBlock *> blocks = node_uiblocks_init(C, nodes);
 
   TreeDrawContext tree_draw_ctx;
+  tree_draw_ctx.bmain = CTX_data_main(&C);
+  tree_draw_ctx.window = CTX_wm_window(&C);
+  tree_draw_ctx.scene = CTX_data_scene(&C);
+  tree_draw_ctx.region = CTX_wm_region(&C);
+  tree_draw_ctx.depsgraph = CTX_data_depsgraph_pointer(&C);
 
   BLI_SCOPED_DEFER([&]() { ntree.runtime->sockets_on_active_gizmo_paths.clear(); });
   if (ntree.type == NTREE_GEOMETRY) {

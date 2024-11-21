@@ -28,10 +28,9 @@ struct PointCloud;
 struct Volume;
 struct GreasePencil;
 namespace blender::bke {
-struct AttributeKind;
+struct AttributeDomainAndType;
 class AttributeAccessor;
 struct AttributeMetaData;
-class ComponentAttributeProviders;
 class CurvesEditHints;
 class Instances;
 class GeometryComponent;
@@ -255,16 +254,12 @@ struct GeometrySet {
                          bool include_instances,
                          AttributeForeachCallback callback) const;
 
-  static void propagate_attributes_from_layer_to_instances(
-      const AttributeAccessor src_attributes,
-      MutableAttributeAccessor dst_attributes,
-      const AttributeFilter &attribute_filter);
-
-  void gather_attributes_for_propagation(Span<GeometryComponent::Type> component_types,
-                                         GeometryComponent::Type dst_component_type,
-                                         bool include_instances,
-                                         const AttributeFilter &attribute_filter,
-                                         Map<StringRef, AttributeKind> &r_attributes) const;
+  void gather_attributes_for_propagation(
+      Span<GeometryComponent::Type> component_types,
+      GeometryComponent::Type dst_component_type,
+      bool include_instances,
+      const AttributeFilter &attribute_filter,
+      Map<StringRef, AttributeDomainAndType> &r_attributes) const;
 
   Vector<GeometryComponent::Type> gather_component_types(bool include_instances,
                                                          bool ignore_empty) const;
@@ -657,6 +652,8 @@ class InstancesComponent : public GeometryComponent {
                GeometryOwnershipType ownership = GeometryOwnershipType::Owned);
 
   bool is_empty() const final;
+
+  Instances *release();
 
   bool owns_direct_data() const override;
   void ensure_owns_direct_data() override;

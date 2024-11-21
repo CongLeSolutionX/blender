@@ -204,7 +204,11 @@ static void do_versions_theme(const UserDef *userdef, bTheme *btheme)
     FROM_DEFAULT_V4_UCHAR(tui.editor_outline_active);
   }
 
-  if (!USER_VERSION_ATLEAST(404, 2)) {
+  if (!USER_VERSION_ATLEAST(404, 7)) {
+    FROM_DEFAULT_V4_UCHAR(space_view3d.face_front);
+  }
+
+  if (!USER_VERSION_ATLEAST(404, 8)) {
     FROM_DEFAULT_V4_UCHAR(space_node.node_zone_closure);
   }
 
@@ -1068,8 +1072,22 @@ void blo_do_versions_userdef(UserDef *userdef)
     userdef->sequencer_editor_flag |= USER_SEQ_ED_CONNECT_STRIPS_BY_DEFAULT;
   }
 
-  if (!USER_VERSION_ATLEAST(404, 1)) {
-    userdef->uiflag |= USER_FILTER_BRUSHES_BY_TOOL;
+  if (!USER_VERSION_ATLEAST(404, 3)) {
+    userdef->uiflag &= ~USER_FILTER_BRUSHES_BY_TOOL;
+
+    BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
+        userdef, "VIEW3D_AST_brush_gpencil_paint", "Brushes/Grease Pencil Draw/Draw");
+    BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
+        userdef, "VIEW3D_AST_brush_gpencil_paint", "Brushes/Grease Pencil Draw/Erase");
+    BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
+        userdef, "VIEW3D_AST_brush_gpencil_paint", "Brushes/Grease Pencil Draw/Utilities");
+
+    BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
+        userdef, "VIEW3D_AST_brush_gpencil_sculpt", "Brushes/Grease Pencil Sculpt/Contrast");
+    BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
+        userdef, "VIEW3D_AST_brush_gpencil_sculpt", "Brushes/Grease Pencil Sculpt/Transform");
+    BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
+        userdef, "VIEW3D_AST_brush_gpencil_sculpt", "Brushes/Grease Pencil Sculpt/Utilities");
   }
 
   /**

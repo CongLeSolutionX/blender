@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.3.0 Beta (b'89e3ab2a4533')\n"
+"Project-Id-Version: Blender 4.3.0 Release Candidate (b'7dfe47164a63')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-10-14 08:43+0000\n"
+"POT-Creation-Date: 2024-11-18 11:20+0000\n"
 "PO-Revision-Date: 2023-11-14 19:14+0000\n"
 "Last-Translator: Lee YeonJoo <yzoo2@naver.com>\n"
 "Language-Team: Korean <https://translate.blender.org/projects/blender-ui/ui/ko/>\n"
@@ -1905,10 +1905,6 @@ msgid "Main Grease Pencils"
 msgstr "매인 그리스 팬슬"
 
 
-msgid "Collection of grease pencils"
-msgstr "그리스 팬슬의 컬렉션"
-
-
 msgid "Main Images"
 msgstr "메인 이미지"
 
@@ -3233,10 +3229,6 @@ msgstr "최소의 거리"
 
 msgid "Grease Pencil Brush Settings"
 msgstr "그리스 펜슬 브러시 설정"
-
-
-msgid "Settings for grease pencil brush"
-msgstr "그리스 팬슬 브러시를 위한 설정"
 
 
 msgid "Active Smooth"
@@ -13935,10 +13927,6 @@ msgid "Smooths the edges of the strokes"
 msgstr "스트로크의 에지를를 부드럽게합니다"
 
 
-msgid "Use this brush in grease pencil drawing mode"
-msgstr "그리스 펜슬 그리기 모드에서 이 브러시 사용합니다"
-
-
 msgid "Use this brush in texture paint mode"
 msgstr "텍스처 페인트 모드에서 이 브러시를 사용"
 
@@ -15603,10 +15591,6 @@ msgid "2D Layers"
 msgstr "2D 레이어"
 
 
-msgid "Display strokes using grease pencil layers to define order"
-msgstr "윤곽을 정의하기 위해 그리스 펜슬 레이어를 사용하여 스트로크를 표시합니다"
-
-
 msgid "3D Location"
 msgstr "3D 위치"
 
@@ -16189,52 +16173,12 @@ msgid "Directional area Light"
 msgstr "지향성 영역 라이트"
 
 
-msgid "Contact Shadow Bias"
-msgstr "접촉 섀도우 성향"
-
-
-msgid "Bias to avoid self shadowing"
-msgstr "자기 섀도우를 피하는 성향"
-
-
-msgid "Contact Shadow Distance"
-msgstr "접촉 섀도우 거리"
-
-
-msgid "World space distance in which to search for screen space occluder"
-msgstr "화면 공간 폐색를 검색 할 월드 공간 거리"
-
-
-msgid "Contact Shadow Thickness"
-msgstr "접촉 섀도우 두께"
-
-
-msgid "Pixel thickness used to detect occlusion"
-msgstr "폐색을 감지하는 데 사용되는 픽셀 두께"
-
-
-msgid "Shadow Buffer Bias"
-msgstr "섀도우 버퍼 성향"
-
-
-msgid "Bias for reducing self shadowing"
-msgstr "자기 섀도우를 줄이기 위한 성향"
-
-
 msgid "Shadow Buffer Clip Start"
 msgstr "섀도우 버퍼 클립 시작"
 
 
 msgid "Shadow map clip start, below which objects will not generate shadows"
 msgstr "섀도우맵 클립 시작, 그 아래에 오브젝트는 섀도우를 생성하지 않음"
-
-
-msgid "Shadow Color"
-msgstr "섀도우 컬러"
-
-
-msgid "Color of shadows cast by the light"
-msgstr "라이트에 의해 드리우는 섀도우의 컬러"
 
 
 msgid "Shadow Soft Size"
@@ -16271,10 +16215,6 @@ msgstr "크기 Y"
 
 msgid "Size of the area of the area light in the Y direction for rectangle shapes"
 msgstr "직사각형 셰이프의 Y 방향 에서 영역 라이트의 영역의 크기"
-
-
-msgid "Contact Shadow"
-msgstr "접촉 섀도우"
 
 
 msgid "Point Light"
@@ -16589,16 +16529,8 @@ msgid "Grease Pencil Settings"
 msgstr "그리스 펜슬 설정"
 
 
-msgid "Grease pencil color settings for material"
-msgstr "매테리얼의 그리스 펜슬 컬러 설정"
-
-
 msgid "Is Grease Pencil"
 msgstr "Is 그리스 펜슬"
-
-
-msgid "True if this material has grease pencil data"
-msgstr "만약 이 매테리얼에 그리스 펜슬 데이터가 있으면 True입니다"
 
 
 msgid "Line Color"
@@ -16679,38 +16611,6 @@ msgstr "거칠기"
 
 msgid "Roughness of the material"
 msgstr "매테리얼의 거칠기"
-
-
-msgid "Shadow Mode"
-msgstr "섀도우 모드"
-
-
-msgid "Shadow mapping method"
-msgstr "섀도우 매핑 메서드"
-
-
-msgid "Material will cast no shadow"
-msgstr "매테리얼은 섀도우를 캐스트하지 않습니다"
-
-
-msgid "Opaque"
-msgstr "불투명"
-
-
-msgid "Material will cast shadows without transparency"
-msgstr "투명도가없는 매테리얼로 섀도우가 생깁니다"
-
-
-msgid "Alpha Clip"
-msgstr "알파 클립"
-
-
-msgid "Alpha Hashed"
-msgstr "알파 해시드"
-
-
-msgid "Use noise to dither the binary visibility and use filtering to reduce the noise"
-msgstr "노이즈를 사용하여 바이너리 가시성을 떨어트리고 필터링을 사용하여 노이즈를 줄입니다"
 
 
 msgid "Show Backface"
@@ -17063,10 +16963,6 @@ msgstr "프레임에서 무비 클립의 감지된 지속"
 
 msgid "Global scene frame number at which this movie starts playing (affects all data associated with a clip)"
 msgstr "이 무비이 재생되기 시작하는 글로벌 씬 프레임 번호 (클립과 관련된 모든 데이터에 영향을 줌)"
-
-
-msgid "Grease pencil data for this movie clip"
-msgstr "이 무비 클립의 그리스 펜슬 데이터"
 
 
 msgid "Where the clip comes from"
@@ -20878,28 +20774,8 @@ msgid "Codec"
 msgstr "코덱"
 
 
-msgid "Codec settings for OpenEXR"
-msgstr "OpenEXR에 대한 코덱 설정"
-
-
 msgid "Pxr24 (lossy)"
 msgstr "Pxr24 (손실)"
-
-
-msgid "ZIP (lossless)"
-msgstr "ZIP (무손실)"
-
-
-msgid "PIZ (lossless)"
-msgstr "PIZ (무손실)"
-
-
-msgid "RLE (lossless)"
-msgstr "RLE(무손실)"
-
-
-msgid "ZIPS (lossless)"
-msgstr "ZIPS (무손실)"
 
 
 msgid "B44 (lossy)"
@@ -24157,6 +24033,10 @@ msgid "Material slot name"
 msgstr "매테리얼 슬롯 이름"
 
 
+msgid "Mirror"
+msgstr "미러"
+
+
 msgid "Snap"
 msgstr "스냅"
 
@@ -24331,10 +24211,6 @@ msgstr "비례 편집 감소"
 
 msgid "Mask Edit"
 msgstr "마스크 편집"
-
-
-msgid "Mirror"
-msgstr "미러"
 
 
 msgid "Basic"
@@ -30070,10 +29946,6 @@ msgid "Use Mask"
 msgstr "마스크를 사용"
 
 
-msgid "Use a grease pencil data-block as a mask to use only specified areas of pattern when tracking"
-msgstr "트래킹 할 때 패턴의 지정된 영역 만을 사용하는 마스크로 그리스 팬슬 데이터 블럭을 사용"
-
-
 msgid "Normalize"
 msgstr "노멀라이즈"
 
@@ -30300,10 +30172,6 @@ msgstr "솔브된 후 무비 클립 에디터 및 3D 뷰포트에서 트랙의 �
 
 msgid "Minimal value of correlation between matched pattern and reference that is still treated as successful tracking"
 msgstr "성공적인 트래킹 으로 간주되는 일치 패턴과 참조간의 상관 관계 최소값"
-
-
-msgid "Grease pencil data for this track"
-msgstr "이 트랙에 대한 그리스 펜슬 데이터"
 
 
 msgid "Has Bundle"
@@ -34423,6 +34291,16 @@ msgid "Add Hair Dynamics Preset"
 msgstr "헤어 역학 프리셋을 추가"
 
 
+msgctxt "Operator"
+msgid "Disable Add-on"
+msgstr "애드온을 사용 중지"
+
+
+msgctxt "Operator"
+msgid "Enable Add-on"
+msgstr "애드온을 사용"
+
+
 msgid "Display information and preferences for this add-on"
 msgstr "이 애드온에 대한 환경 설정및 정보를 표시"
 
@@ -34666,10 +34544,6 @@ msgstr "그리이스 펜슬 브러시 프리셋을 추가 또는 제거"
 msgctxt "Operator"
 msgid "Add Grease Pencil Brush Preset"
 msgstr "그리스 펜슬 브러시 프리셋을 추가"
-
-
-msgid "Add or remove grease pencil material preset"
-msgstr "그리이스 펜슬 매테리얼 프리셋을 추가 또는 제거"
 
 
 msgctxt "Operator"
@@ -35026,16 +34900,6 @@ msgstr "작업자 프리셋을 추가 또는 제거"
 msgctxt "Operator"
 msgid "Operator Preset"
 msgstr "작업자 프리셋"
-
-
-msgctxt "Operator"
-msgid "Disable Add-on"
-msgstr "애드온을 사용 중지"
-
-
-msgctxt "Operator"
-msgid "Enable Add-on"
-msgstr "애드온을 사용"
 
 
 msgid "Open a path in a file browser"
@@ -39447,6 +39311,10 @@ msgid "Export directional, point, and spot lights. Uses \"KHR_lights_punctual\" 
 msgstr "방향, 포인트 및 스폿 라이트를 내 보냅니다. \"KHR_lights_punctual\" glTF 확장자 사용"
 
 
+msgid "Log Level"
+msgstr "로그 레벨"
+
+
 msgid "Export shape keys (morph targets)"
 msgstr "셰이프 키를 내보내기 (모프 타겟)"
 
@@ -40786,10 +40654,6 @@ msgid "Grease Pencil Interpolation"
 msgstr "그리스 펜슬 보간"
 
 
-msgid "Interpolate grease pencil strokes between frames"
-msgstr "프레임 사이 그리스 펜슬 스트로크를 보간"
-
-
 msgid "Bias factor for which frame has more influence on the interpolated strokes"
 msgstr "프레임이 보간된 스트로크에 더 많은 영향을 미치는 경향 계수"
 
@@ -40801,14 +40665,6 @@ msgstr "보간 시퀀스"
 
 msgid "Generate 'in-betweens' to smoothly interpolate between Grease Pencil frames"
 msgstr "그리스 펜슬 프레임 사이를 부드럽게 보간하기 위해 '사이에서' 생성"
-
-
-msgid "Which ends of the segment between the preceding and following grease pencil frames easing interpolation is applied to"
-msgstr "앞뒤 그리이스 펜슬 프레임 완화 보간 사이 부분의 끝이 다음에 적용됩니다"
-
-
-msgid "Only Selected"
-msgstr "선택된 항목 만"
 
 
 msgid "Interpolation method to use the next time 'Interpolate Sequence' is run"
@@ -41753,10 +41609,6 @@ msgstr "노멀 데이터를 사용"
 
 msgid "Flat Shading"
 msgstr "플랫 셰이딩"
-
-
-msgid "Log Level"
-msgstr "로그 레벨"
 
 
 msgctxt "Operator"
@@ -43211,6 +43063,10 @@ msgid "Cut new topology"
 msgstr "새로운 토폴로지를 잘라내기"
 
 
+msgid "Only Selected"
+msgstr "선택된 항목 만"
+
+
 msgid "Only cut selected geometry"
 msgstr "선택된 지모메트리 만 절단"
 
@@ -44657,10 +44513,6 @@ msgid "Clear Constraints"
 msgstr "제약을 지우기"
 
 
-msgid "Remove all constraints from keyed object/bones, and do 'visual' keying"
-msgstr "키가 있는 오브젝트/본에서 모든 제약을 제거하고 '시각' 키잉을 합니다"
-
-
 msgid "Clear Parents"
 msgstr "부모을 지우기"
 
@@ -45914,10 +45766,6 @@ msgid "Add a Grease Pencil object to the scene"
 msgstr "씬에 그리스 팬슬 오브젝트를 추가합니다"
 
 
-msgid "Create an empty grease pencil object"
-msgstr "엠프티 그리스 펜슬 오브젝트를 생성"
-
-
 msgid "Create a simple stroke with basic colors"
 msgstr "기본 컬러로 간단한 스트로크를 생성"
 
@@ -45925,10 +45773,6 @@ msgstr "기본 컬러로 간단한 스트로크를 생성"
 msgctxt "Operator"
 msgid "Monkey"
 msgstr "원숭이"
-
-
-msgid "Construct a Suzanne grease pencil object"
-msgstr "수잔 그리스 펜슬 오브젝트를 만들기"
 
 
 msgctxt "Operator"
@@ -51187,10 +51031,6 @@ msgid "Reassign the inputs for the effect strip"
 msgstr "이펙트 스트립에 대한 입력을 다시 할당"
 
 
-msgid "Rebuild all selected proxies and timecode indices using the job system"
-msgstr "작업 시스템을 사용하여 선택한 모든 프록시와 타임 코드 인덱스를 재작성"
-
-
 msgctxt "Operator"
 msgid "Refresh Sequencer"
 msgstr "시퀀서를 새로 고침"
@@ -55859,6 +55699,14 @@ msgid "Panel containing UI elements"
 msgstr "UI 요소가 포함된 패널"
 
 
+msgid "Measurement"
+msgstr "측정"
+
+
+msgid "Curve Edit Mode"
+msgstr "커브 에디트 모드"
+
+
 msgid "Snapping"
 msgstr "스냅하기"
 
@@ -55895,10 +55743,6 @@ msgid "Multi Frame"
 msgstr "다중 프레임"
 
 
-msgid "Curve Edit Mode"
-msgstr "커브 에디트 모드"
-
-
 msgid "Active Tool"
 msgstr "활성 도구"
 
@@ -55933,10 +55777,6 @@ msgstr "모션 트래킹"
 
 msgid "Mesh Edit Mode"
 msgstr "메쉬 에디트 모드"
-
-
-msgid "Measurement"
-msgstr "측정"
 
 
 msgid "Bone Constraints"
@@ -56121,14 +55961,6 @@ msgstr "안개 패스"
 
 msgid "Custom Distance"
 msgstr "커스텀 거리"
-
-
-msgid "Cascaded Shadow Map"
-msgstr "계단식 섀도우 맵"
-
-
-msgid "Contact Shadows"
-msgstr "접촉 섀도우"
 
 
 msgid "Composition Guides"
@@ -56541,32 +56373,12 @@ msgid "White Balance"
 msgstr "화이트 밸런스"
 
 
-msgid "Indirect Lighting"
-msgstr "간접 라이트닝"
-
-
 msgid "Denoising"
 msgstr "노이즈 제거"
 
 
 msgid "Shadows"
 msgstr "섀도우"
-
-
-msgid "Screen Space Reflections"
-msgstr "화면 공간 반사"
-
-
-msgid "Volumetrics"
-msgstr "볼륨메트릭"
-
-
-msgid "Volumetric Lighting"
-msgstr "볼륨메트릭 라이트닝"
-
-
-msgid "Volumetric Shadows"
-msgstr "볼륨메트릭 섀도우"
 
 
 msgid "Encoding"
@@ -62590,10 +62402,6 @@ msgid "Method of anti-aliasing when rendering 3d viewport"
 msgstr "3D 뷰포트를 렌더링 할 때 앨리어싱 제거 방법"
 
 
-msgid "Knee"
-msgstr "굽은 구조"
-
-
 msgid "Max Size"
 msgstr "최대 크기"
 
@@ -62614,14 +62422,6 @@ msgid "Trace Precision"
 msgstr "추적 정밀도"
 
 
-msgid "Cubemap Display Size"
-msgstr "큐브맵 표시 크기"
-
-
-msgid "Size of the cubemap spheres to debug captured light"
-msgstr "캡처된 라이트를 디버그하기 위한 큐브 맵 구체의 크기"
-
-
 msgid "Cubemap Size"
 msgstr "큐브맵 크기"
 
@@ -62630,44 +62430,8 @@ msgid "Size of every cubemaps"
 msgstr "모든 큐브 맵의 크기"
 
 
-msgid "Filter Quality"
-msgstr "필터 품질"
-
-
-msgid "Take more samples during cubemap filtering to remove artifacts"
-msgstr "큐브 맵 필터링 중에 더 많은 샘플을 가져와 부자연스러움을 제거합니다"
-
-
 msgid "Clamp Glossy"
 msgstr "광택을 클램프"
-
-
-msgid "Irradiance Display Size"
-msgstr "방사 조도 표시 크기"
-
-
-msgid "Size of the irradiance sample spheres to debug captured light"
-msgstr "포착된 빛을 디버그하기 위한 방사 샘플 구체의 크기"
-
-
-msgid "Irradiance Smoothing"
-msgstr "방사 조도 스무딩"
-
-
-msgid "Show Cubemap Cache"
-msgstr "큐브맵 캐시를 표시합니다"
-
-
-msgid "Display captured cubemaps in the viewport"
-msgstr "뷰포트에 캡쳐된 큐브 맵을 표시"
-
-
-msgid "Show Irradiance Cache"
-msgstr "방사 조도 캐시를 표시합니다"
-
-
-msgid "Display irradiance samples in the viewport"
-msgstr "뷰포트에 방사 조도 샘플을 표시"
 
 
 msgid "Irradiance Visibility Size"
@@ -62680,10 +62444,6 @@ msgstr "각 방사 조도 샘플에 적용된 그림자지도의 크기"
 
 msgid "Distance of object that contribute to the ambient occlusion effect"
 msgstr "주변 폐색 효과에 기여하는 대상의 거리"
-
-
-msgid "Factor for ambient occlusion blending"
-msgstr "주변 폐색 블렌딩에 대한 팩터"
 
 
 msgid "Precision of the horizon search"
@@ -62706,46 +62466,6 @@ msgid "Percentage of render size to add as overscan to the internal render buffe
 msgstr "내부 렌더 버퍼에 오버스캔으로 추가 할 렌더 크기의 백분율"
 
 
-msgid "Directional Shadows Resolution"
-msgstr "방향성 섀도우 해상도"
-
-
-msgid "Cube Shadows Resolution"
-msgstr "큐브 섀도우 해상도"
-
-
-msgid "Edge Fading"
-msgstr "에지 페이딩"
-
-
-msgid "Screen percentage used to fade the SSR"
-msgstr "SSR을 페이드하는 데 사용되는 화면 비율"
-
-
-msgid "Max Roughness"
-msgstr "최대 거칠기"
-
-
-msgid "Do not raytrace reflections for roughness above this value"
-msgstr "이 값보다 큰 거칠기에 대한 반사를 광선 추적하지 마십시오"
-
-
-msgid "Pixel thickness used to detect intersection"
-msgstr "교차점을 감지하는 데 사용되는 픽셀 두께"
-
-
-msgid "Jitter Threshold"
-msgstr "지터 임계 값"
-
-
-msgid "Rotate samples that are below this threshold"
-msgstr "이 임계 값보다 낮은 샘플을 회전"
-
-
-msgid "Number of samples to compute the scattering effect"
-msgstr "산란 효과를 계산하기위한 샘플의 수"
-
-
 msgid "Render Samples"
 msgstr "렌더 샘플"
 
@@ -62758,52 +62478,8 @@ msgid "Enable ambient occlusion to simulate medium scale indirect shadowing"
 msgstr "중간 정도의 간접적인 섀도우를 시뮬레이트하기 위해 주변 폐색을 활성화"
 
 
-msgid "Bent Normals"
-msgstr "구부러진 노멀"
-
-
-msgid "Compute main non occluded direction to sample the environment"
-msgstr "환경을 샘플링하기 위해 주요 비 폐색 방향을 계산합니다"
-
-
-msgid "Bounces Approximation"
-msgstr "바운스 근사치"
-
-
-msgid "An approximation to simulate light bounces giving less occlusion on brighter objects"
-msgstr "밝은 바운스를 시뮬레이트하는 근사는 더 밝은 오브젝트에서 더 적은 폐색을 제공합니다"
-
-
 msgid "Internally render past the image border to avoid screen-space effects disappearing"
 msgstr "공간 공간 이펙트가 사라지지 않도록 내부적으로 이미지 테두리를 렌더링합니다"
-
-
-msgid "Soft Shadows"
-msgstr "소프트 섀도우"
-
-
-msgid "Randomize shadowmaps origin to create soft shadows"
-msgstr "섀도우 맵 원본을 무작위로 만들어 부드러운 그림자를 만듭니다"
-
-
-msgid "Enable screen space reflection"
-msgstr "화면 공간 반사를 사용"
-
-
-msgid "Half Res Trace"
-msgstr "절반 해상도 추적"
-
-
-msgid "Raytrace at a lower resolution"
-msgstr "해상도가 낮은 레이 트레이스"
-
-
-msgid "Screen Space Refractions"
-msgstr "화면 공간 반사"
-
-
-msgid "Enable screen space Refractions"
-msgstr "화면 공간 굴절을 사용합니다"
 
 
 msgid "Viewport Denoising"
@@ -62814,12 +62490,8 @@ msgid "Denoise image using temporal reprojection (can leave some ghosting)"
 msgstr "일시적인 재투영을 사용한 디노이즈 이미지 (일부 고스트를 남길 수 있음)"
 
 
-msgid "Enable scene light interactions with volumetrics"
-msgstr "볼륨메트릭과 라이트 라이트 상호 작용을 사용"
-
-
-msgid "Generate shadows from volumetric material (Very expensive)"
-msgstr "볼륨메트릭 매테리얼로 섀도우를 생성 (매우 고사양)"
+msgid "Volumetric Shadows"
+msgstr "볼륨메트릭 섀도우"
 
 
 msgid "End distance of the volumetric effect"
@@ -63347,18 +63019,6 @@ msgid "Align X"
 msgstr "정렬 X"
 
 
-msgid "Align the text along the X axis, relative to the text bounds"
-msgstr "텍스트 경계를 기준으로 X 축을 따라 텍스트를 정렬"
-
-
-msgid "Align Y"
-msgstr "정렬 Y"
-
-
-msgid "Align the text along the Y axis, relative to the text bounds"
-msgstr "텍스트 경계를 기준으로 Y 축을 따라 텍스트를 정렬"
-
-
 msgid "Text color"
 msgstr "텍스트 컬러"
 
@@ -63377,6 +63037,10 @@ msgstr "윤곽선 컬러"
 
 msgid "Outline Width"
 msgstr "윤곽선 폭"
+
+
+msgid "Shadow Color"
+msgstr "섀도우 컬러"
 
 
 msgid "Text that will be displayed"
@@ -64050,10 +63714,6 @@ msgstr "개별 오리진"
 
 msgid "Collection of Sequences"
 msgstr "시퀀스의 컬렉션"
-
-
-msgid "Effect affecting the grease pencil object"
-msgstr "그리스 팬슬 오브젝트에 영향을 미치는 효과"
 
 
 msgid "Effect name"
@@ -65336,10 +64996,6 @@ msgstr "Z-버퍼"
 
 msgid "Display Z-buffer associated with image (mapped from camera clip start to end)"
 msgstr "이미지와 관련된 Z 버퍼를 표시 (카메라 클립 시작부터 끝까지 매핑됨)"
-
-
-msgid "Grease pencil data for this space"
-msgstr "이 공간의 그리스 펜슬 데이터"
 
 
 msgid "View the image"
@@ -69483,10 +69139,6 @@ msgid "Use Grid"
 msgstr "격자를 사용"
 
 
-msgid "Display a grid over grease pencil paper"
-msgstr "그리스 팬슬 종이 위에 격자를 표시"
-
-
 msgid "Lines Only"
 msgstr "라인 만"
 
@@ -69919,6 +69571,10 @@ msgid "Lighting for a World data-block"
 msgstr "월드 데이터 블록에 대한 라이트닝"
 
 
+msgid "Factor for ambient occlusion blending"
+msgstr "주변 폐색 블렌딩에 대한 팩터"
+
+
 msgid "Length of rays, defines how far away other faces give occlusion effect"
 msgstr "광선의 길이, 떨어진 다른 면에 폐색 효과를 주는 정도를 정의"
 
@@ -70268,11 +69924,6 @@ msgstr "NLA 에디터"
 msgctxt "WindowManager"
 msgid "NLA Generic"
 msgstr "NLA 일반"
-
-
-msgctxt "WindowManager"
-msgid "Timeline"
-msgstr "타임라인"
 
 
 msgctxt "WindowManager"
@@ -70702,66 +70353,6 @@ msgid "Options:"
 msgstr "옵션:"
 
 
-msgid "Save to PO File"
-msgstr "PO 파일로 저장"
-
-
-msgid "Rebuild MO File"
-msgstr "MO 파일 다시 작성"
-
-
-msgid "Erase Local MO files"
-msgstr "로컬 MO 파일을 지우기"
-
-
-msgid "invoke() needs to be called before execute()"
-msgstr "invoke ()를 execute () 전에 호출해야합니다"
-
-
-msgid "    RNA Path: bpy.types."
-msgstr "    RNA 경로: bpy.types."
-
-
-msgid "    RNA Context: "
-msgstr "    RNA 컨텍스트: "
-
-
-msgid "Labels:"
-msgstr "레이블:"
-
-
-msgid "Tool Tips:"
-msgstr "도구 팁:"
-
-
-msgid "Button Label:"
-msgstr "버튼 레이블:"
-
-
-msgid "RNA Label:"
-msgstr "RNA 레이블:"
-
-
-msgid "Enum Item Label:"
-msgstr "열거 항목 레이블:"
-
-
-msgid "Button Tip:"
-msgstr "버튼 팁:"
-
-
-msgid "RNA Tip:"
-msgstr "RNA 팁:"
-
-
-msgid "Enum Item Tip:"
-msgstr "열거 항목 팁:"
-
-
-msgid "Could not write to po file ({})"
-msgstr "po 파일에 작성할 수 없음 ({})"
-
-
 msgid "WARNING: preferences are lost when add-on is disabled, be sure to use \"Save Persistent\" if you want to keep your settings!"
 msgstr "경고: 추가 기능이 비활성화 되면 환경 설정이 손실 됩니다. 설정을 유지하려면 \"영구 저장\"을 사용해야 합니다!"
 
@@ -71115,22 +70706,6 @@ msgid "Interpolation Tilt"
 msgstr "보간 틸트"
 
 
-msgid "Thickness Scale"
-msgstr "두께 축적"
-
-
-msgid "Edit Line Color"
-msgstr "라인 컬러를 편집"
-
-
-msgid "Keyframes Before"
-msgstr "키 프레임 이전"
-
-
-msgid "Keyframes After"
-msgstr "키 프레임 이후"
-
-
 msgid "Stroke Thickness"
 msgstr "스트로크 두께"
 
@@ -71152,6 +70727,14 @@ msgstr "모두 잠금"
 msgctxt "Operator"
 msgid "Merge Down"
 msgstr "아래로 병합"
+
+
+msgid "Keyframes Before"
+msgstr "키 프레임 이전"
+
+
+msgid "Keyframes After"
+msgstr "키 프레임 이후"
 
 
 msgid "Interpolation U"
@@ -71329,6 +70912,16 @@ msgstr "선택을 커서에 스냅"
 msgctxt "Operator"
 msgid "Selection to Cursor (Keep Offset)"
 msgstr "선택을 커서에 스냅 (오프셋 유지)"
+
+
+msgctxt "Operator"
+msgid "Delete Active Keyframe (Active Layer)"
+msgstr "활성 키 프레임을 삭제 (활성 레이어)"
+
+
+msgctxt "Operator"
+msgid "Delete Active Keyframes (All Layers)"
+msgstr "활성 키 프레임을 삭제 (모든 레이어)"
 
 
 msgid "Show Fill Color While Drawing"
@@ -72122,26 +71715,6 @@ msgstr "단계 크기 최소"
 
 msgid "Auto-Step"
 msgstr "자동-단계"
-
-
-msgid "Light Clamping"
-msgstr "라이트 클램핑"
-
-
-msgid "Refraction"
-msgstr "굴절"
-
-
-msgid "Cascade Size"
-msgstr "캐스케이드 크기"
-
-
-msgid "Diffuse Occlusion"
-msgstr "확산 폐색"
-
-
-msgid "Irradiance Size"
-msgstr "방사 조도 크기"
 
 
 msgid "Max Child Particles"
@@ -74822,16 +74395,6 @@ msgstr "샤프 버텍스"
 
 
 msgctxt "Operator"
-msgid "Delete Active Keyframe (Active Layer)"
-msgstr "활성 키 프레임을 삭제 (활성 레이어)"
-
-
-msgctxt "Operator"
-msgid "Delete Active Keyframes (All Layers)"
-msgstr "활성 키 프레임을 삭제 (모든 레이어)"
-
-
-msgctxt "Operator"
 msgid "Delete Segment"
 msgstr "세그먼트를 삭제"
 
@@ -75243,10 +74806,6 @@ msgstr "Lib 다시 불러오기: 이전 데이터 블록 '%s'에 대한 모든 �
 
 msgid "Total files %d | Changed %d | Failed %d"
 msgstr "전체 파일 %d | 바뀜 %d | 실패됨 %d"
-
-
-msgid "Path '%s' not found"
-msgstr "경로 '%s' 찾을 수 없습니다"
 
 
 msgid "Could not find '%s' in '%s'"
@@ -75662,10 +75221,6 @@ msgstr "블렌드 열 수 없음 <memory>"
 
 msgid "Failed to read blend file '%s': %s"
 msgstr "blend 파일 '%s'을 읽지 못했습니다: %s"
-
-
-msgid "Failed to read blend file '%s', not a blend file"
-msgstr "Blend 파일 '%s' 을 읽기 실패, Blend 파일이 아님"
 
 
 msgid "Unable to read '%s': %s"
@@ -76326,16 +75881,8 @@ msgid "Active region not set"
 msgstr "활성 지역이 설정되지 않음"
 
 
-msgid "Nowhere for grease pencil data to go"
-msgstr "이동할 그리스 펜슬 데이터가 없음"
-
-
 msgid "Cannot delete locked layers"
 msgstr "잠긴 레이어를 삭제 할 수 없습니다"
-
-
-msgid "No grease pencil data"
-msgstr "그리스 펜슬 데이터가 없음"
 
 
 msgid "No active frame to delete"
@@ -76348,10 +75895,6 @@ msgstr "아무 것도 선택되지 않음"
 
 msgid "Active layer is locked or hidden"
 msgstr "활성 레이어가 잠겨 있거나 숨겨져 있습니다"
-
-
-msgid "Active object is not a selected grease pencil"
-msgstr "활성 오브젝트가 선택된 그리스 연필이 아닙니다"
 
 
 msgid "Could not resolve path '%s'"
@@ -78511,10 +78054,6 @@ msgid "Keyframe pasting is not available for mask mode"
 msgstr "키 프레임 붙여 넣기는 마스크 모드를 이용 할 수 없음"
 
 
-msgid "Keyframe pasting is not available for grease pencil or mask mode"
-msgstr "그리스 펜슬 또는 마스크 모드에서는 키 프레임 붙여 넣기를 사용할 수 없습니다"
-
-
 msgid "No selected F-Curves to paste into"
 msgstr "다음으로 붙여 넣기 하는 선택된 F-커브가 없음"
 
@@ -80151,11 +79690,6 @@ msgstr "프리스타일: 뷰 맵 제작"
 
 msgid "Freestyle: Stroke rendering"
 msgstr "프리스타일: 스트로크 렌더링"
-
-
-msgctxt "Action"
-msgid "Group"
-msgstr "그룹"
 
 
 msgid "Index out of range"

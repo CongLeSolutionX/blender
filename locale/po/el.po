@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.3.0 Beta (b'89e3ab2a4533')\n"
+"Project-Id-Version: Blender 4.3.0 Release Candidate (b'7dfe47164a63')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-10-14 08:43+0000\n"
+"POT-Creation-Date: 2024-11-18 11:20+0000\n"
 "PO-Revision-Date: 2024-04-29 13:44+0000\n"
 "Last-Translator: Anonymous <noreply@weblate.org>\n"
 "Language-Team: Greek <https://translate.blender.org/projects/blender-ui/ui/el/>\n"
@@ -451,10 +451,6 @@ msgid "Cube"
 msgstr "Κύβος"
 
 
-msgid "Opaque"
-msgstr "Αδιαφανής"
-
-
 msgid "Edges"
 msgstr "Ακμές"
 
@@ -551,6 +547,10 @@ msgid "Keyboard"
 msgstr "Πληκτρολόγιο"
 
 
+msgid "Mirror"
+msgstr "Καθρέφτισμα"
+
+
 msgid "Snap"
 msgstr "Προσκόλληση"
 
@@ -577,10 +577,6 @@ msgstr "Ορισμός Ενός Χρήστη"
 
 msgid "Merge"
 msgstr "Συγχώνευση"
-
-
-msgid "Mirror"
-msgstr "Καθρέφτισμα"
 
 
 msgid "Import"

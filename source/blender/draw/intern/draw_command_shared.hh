@@ -47,7 +47,7 @@ struct DrawGroup {
 
   /** Atomic counters used during command sorting. GPU only. Reset on CPU. */
 
-  /* Counts visible and invisble instances. Create drawcalls when it reaches `DrawGroup::len`. */
+  /* Counts visible and invisible instances. Create drawcalls when it reaches `DrawGroup::len`. */
   uint total_counter;
   /* Counts only visible instance (counting multi-view). Used to issue the drawcalls. */
   uint front_facing_counter;
@@ -91,7 +91,7 @@ struct DrawPrototype {
   /* Reference to parent DrawGroup to get the gpu::Batch vertex / instance count. */
   uint group_id;
   /* Resource handle associated with this call. Also reference visibility. */
-  uint resource_handle;
+  uint res_handle;
   /* Custom extra value to be used by the engines. */
   uint custom_id;
   /* Number of instances. */

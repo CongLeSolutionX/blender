@@ -1,10 +1,10 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.3.0 Beta (b'89e3ab2a4533')\n"
+"Project-Id-Version: Blender 4.3.0 Release Candidate (b'7dfe47164a63')\n"
 "(b'0000000000000000000000000000000000000000')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-10-14 08:43+0000\n"
+"POT-Creation-Date: 2024-11-18 11:20+0000\n"
 "PO-Revision-Date: 2013-11-05 13:47+0600\n"
 "Last-Translator: Chyngyz Dzhumaliev <kyrgyzl10n@gmail.com>\n"
 "Language-Team: Kirghiz <kyrgyzl10n@gmail.com>\n"
@@ -1053,10 +1053,6 @@ msgid "Cloth"
 msgstr "Кездеме"
 
 
-msgid "Opaque"
-msgstr "Күңүрттүк"
-
-
 msgid "Fast"
 msgstr "Тез"
 
@@ -1323,12 +1319,12 @@ msgid "Mask Layers"
 msgstr "Маска каттары"
 
 
-msgid "Apply"
-msgstr "Колдонуу"
-
-
 msgid "Mirror"
 msgstr "Чагылтуу"
+
+
+msgid "Apply"
+msgstr "Колдонуу"
 
 
 msgctxt "MovieClip"
@@ -3723,11 +3719,6 @@ msgstr "FPS: %i"
 
 msgid "(Smooth)"
 msgstr "(тегиз)"
-
-
-msgctxt "Action"
-msgid "Group"
-msgstr "Топ"
 
 
 msgctxt "Key"

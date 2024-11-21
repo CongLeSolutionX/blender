@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.3.0 Beta (b'89e3ab2a4533')\n"
+"Project-Id-Version: Blender 4.3.0 Release Candidate (b'7dfe47164a63')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-10-14 08:43+0000\n"
+"POT-Creation-Date: 2024-11-18 11:20+0000\n"
 "PO-Revision-Date: 2019-12-08 17:40+0700\n"
 "Last-Translator: gongpha <gongpha@gmail.com>\n"
 "Language-Team: Thai Translation Team <gongpha@gmail.com>\n"
@@ -1743,14 +1743,6 @@ msgid "Animation"
 msgstr "แอนิเมชัน"
 
 
-msgid "ZIP (lossless)"
-msgstr "ZIP (ไม่สูญเสียข้อมูล)"
-
-
-msgid "ZIPS (lossless)"
-msgstr "ZIPS (ไม่สูญเสียข้อมูล)"
-
-
 msgid "YCC"
 msgstr "YCC"
 
@@ -1907,6 +1899,10 @@ msgid "Mix Color"
 msgstr "ผสมสี"
 
 
+msgid "Mirror"
+msgstr "กระจกสะท้อน"
+
+
 msgid "Snap"
 msgstr "ยึดติด"
 
@@ -1973,10 +1969,6 @@ msgstr "แก้ไข"
 
 msgid "Mask Edit"
 msgstr "การแก้ไขหน้ากาก"
-
-
-msgid "Mirror"
-msgstr "กระจกสะท้อน"
 
 
 msgid "Zoom"
@@ -3919,14 +3911,6 @@ msgid "Apply"
 msgstr "นำไปใช้"
 
 
-msgid "    RNA Path: bpy.types."
-msgstr "    ตำแหน่ง RNA: bpy.types."
-
-
-msgid "    RNA Context: "
-msgstr "    บริบท RNA: "
-
-
 msgid "3D View"
 msgstr "มุมมองสามมิติ"
 
@@ -5262,11 +5246,6 @@ msgstr "สร้าง %s"
 
 msgid "Overwrite %s"
 msgstr "เขียนทับ %s"
-
-
-msgctxt "Action"
-msgid "Group"
-msgstr "กลุ่ม"
 
 
 msgid "%s '%s'"

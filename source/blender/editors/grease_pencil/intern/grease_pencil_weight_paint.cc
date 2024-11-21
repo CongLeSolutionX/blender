@@ -21,6 +21,7 @@
 #include "BLI_math_matrix.h"
 #include "BLI_string.h"
 
+#include "DNA_brush_types.h"
 #include "DNA_meshdata_types.h"
 
 #include "RNA_access.hh"
@@ -520,7 +521,7 @@ static int weight_sample_invoke(bContext *C, wmOperator * /*op*/, const wmEvent 
         return new_closest;
       },
       [](const ClosestGreasePencilDrawing &a, const ClosestGreasePencilDrawing &b) {
-        return (a.elem.distance < b.elem.distance) ? a : b;
+        return (a.elem.distance_sq < b.elem.distance_sq) ? a : b;
       });
 
   if (!closest.drawing) {
@@ -534,7 +535,7 @@ static int weight_sample_invoke(bContext *C, wmOperator * /*op*/, const wmEvent 
 
   /* Set the new brush weight. */
   const ToolSettings *ts = vc.scene->toolsettings;
-  Brush *brush = BKE_paint_brush(&ts->wpaint->paint);
+  Brush *brush = BKE_paint_brush(&ts->gp_weightpaint->paint);
   BKE_brush_weight_set(vc.scene, brush, new_weight);
 
   /* Update brush settings in UI. */
