@@ -194,6 +194,20 @@ static void do_versions_theme(const UserDef *userdef, bTheme *btheme)
     FROM_DEFAULT_V4_UCHAR(tui.icon_autokey);
   }
 
+  if (!USER_VERSION_ATLEAST(403, 25)) {
+    FROM_DEFAULT_V4_UCHAR(space_node.node_zone_foreach_geometry_element);
+  }
+
+  if (!USER_VERSION_ATLEAST(403, 27)) {
+    FROM_DEFAULT_V4_UCHAR(tui.editor_border);
+    FROM_DEFAULT_V4_UCHAR(tui.editor_outline);
+    FROM_DEFAULT_V4_UCHAR(tui.editor_outline_active);
+  }
+
+  if (!USER_VERSION_ATLEAST(404, 7)) {
+    FROM_DEFAULT_V4_UCHAR(space_view3d.face_front);
+  }
+
   /**
    * Always bump subversion in BKE_blender_version.h when adding versioning
    * code here, and wrap it inside a USER_VERSION_ATLEAST check.
@@ -936,7 +950,7 @@ void blo_do_versions_userdef(UserDef *userdef)
 
   if (!USER_VERSION_ATLEAST(400, 24)) {
     /* Clear deprecated USER_MENUFIXEDORDER user flag for reuse. */
-    userdef->uiflag &= ~USER_UIFLAG_UNUSED_4;
+    userdef->uiflag &= ~(1 << 23);
   }
 
   if (!USER_VERSION_ATLEAST(400, 26)) {
@@ -1052,6 +1066,24 @@ void blo_do_versions_userdef(UserDef *userdef)
   }
   if (!USER_VERSION_ATLEAST(403, 19)) {
     userdef->sequencer_editor_flag |= USER_SEQ_ED_CONNECT_STRIPS_BY_DEFAULT;
+  }
+
+  if (!USER_VERSION_ATLEAST(404, 3)) {
+    userdef->uiflag &= ~USER_FILTER_BRUSHES_BY_TOOL;
+
+    BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
+        userdef, "VIEW3D_AST_brush_gpencil_paint", "Brushes/Grease Pencil Draw/Draw");
+    BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
+        userdef, "VIEW3D_AST_brush_gpencil_paint", "Brushes/Grease Pencil Draw/Erase");
+    BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
+        userdef, "VIEW3D_AST_brush_gpencil_paint", "Brushes/Grease Pencil Draw/Utilities");
+
+    BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
+        userdef, "VIEW3D_AST_brush_gpencil_sculpt", "Brushes/Grease Pencil Sculpt/Contrast");
+    BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
+        userdef, "VIEW3D_AST_brush_gpencil_sculpt", "Brushes/Grease Pencil Sculpt/Transform");
+    BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
+        userdef, "VIEW3D_AST_brush_gpencil_sculpt", "Brushes/Grease Pencil Sculpt/Utilities");
   }
 
   /**

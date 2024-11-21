@@ -68,16 +68,11 @@ class DATA_PT_lattice(DataButtonsPanel, Panel):
 
 
 class DATA_PT_lattice_animation(DataButtonsPanel, PropertiesAnimationMixin, PropertyPanel, Panel):
-    COMPAT_ENGINES = {
-        'BLENDER_RENDER',
-        'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
-        'BLENDER_WORKBENCH',
-    }
 
     def draw(self, context):
         layout = self.layout
         layout.use_property_split = True
+        layout.use_property_decorate = False
 
         # DataButtonsPanel.poll ensures this is not None.
         lattice = context.lattice
@@ -93,12 +88,6 @@ class DATA_PT_lattice_animation(DataButtonsPanel, PropertiesAnimationMixin, Prop
 
 
 class DATA_PT_custom_props_lattice(DataButtonsPanel, PropertyPanel, Panel):
-    COMPAT_ENGINES = {
-        'BLENDER_RENDER',
-        'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
-        'BLENDER_WORKBENCH',
-    }
     _context_path = "object.data"
     _property_type = bpy.types.Lattice
 

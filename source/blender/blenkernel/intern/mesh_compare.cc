@@ -235,7 +235,7 @@ static bool values_different(const T value1,
                              const float threshold,
                              const int component_i)
 {
-  if constexpr (is_same_any_v<T, int, int2, bool, int8_t, OrderedEdge, ColorGeometry4b>) {
+  if constexpr (is_same_any_v<T, int, short2, int2, bool, int8_t, OrderedEdge, ColorGeometry4b>) {
     /* These types already have a good implementation. */
     return value1 != value2;
   }
@@ -522,6 +522,10 @@ static std::optional<MeshMismatch> verify_attributes_compatible(
   for (const StringRef id : mesh1_attribute_ids) {
     GAttributeReader reader1 = mesh1_attributes.lookup(id);
     GAttributeReader reader2 = mesh2_attributes.lookup(id);
+    if (!reader1 || !reader2) {
+      /* Necessary because of previous disabled return. */
+      continue;
+    }
     if (reader1.domain != reader2.domain || reader1.varray.type() != reader2.varray.type()) {
       return MeshMismatch::AttributeTypes;
     }

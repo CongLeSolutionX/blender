@@ -112,8 +112,11 @@ class DynamicAttributesProvider {
     return false;
   };
 
+  /**
+   * Return false when the iteration was stopped.
+   */
   virtual bool foreach_attribute(const void *owner,
-                                 const AttributeForeachCallback callback) const = 0;
+                                 FunctionRef<void(const AttributeIter &)> fn) const = 0;
   virtual void foreach_domain(const FunctionRef<void(AttrDomain)> callback) const = 0;
 };
 
@@ -145,7 +148,8 @@ class CustomDataAttributeProvider final : public DynamicAttributesProvider {
                   const eCustomDataType data_type,
                   const AttributeInit &initializer) const final;
 
-  bool foreach_attribute(const void *owner, const AttributeForeachCallback callback) const final;
+  bool foreach_attribute(const void *owner,
+                         FunctionRef<void(const AttributeIter &)> fn) const final;
 
   void foreach_domain(const FunctionRef<void(AttrDomain)> callback) const final
   {
@@ -198,10 +202,10 @@ class BuiltinCustomDataLayerProvider final : public BuiltinAttributeProvider {
 };
 
 /**
- * This is a container for multiple attribute providers that are used by one geometry component
- * type (e.g. there is a set of attribute providers for mesh components).
+ * This is a container for multiple attribute providers that are used by one geometry type
+ * (e.g. there is a set of attribute providers for mesh components).
  */
-class ComponentAttributeProviders {
+class GeometryAttributeProviders {
  private:
   /**
    * Builtin attribute providers are identified by their name. Attribute names that are in this
@@ -221,8 +225,8 @@ class ComponentAttributeProviders {
   VectorSet<AttrDomain> supported_domains_;
 
  public:
-  ComponentAttributeProviders(Span<const BuiltinAttributeProvider *> builtin_attribute_providers,
-                              Span<const DynamicAttributesProvider *> dynamic_attribute_providers)
+  GeometryAttributeProviders(Span<const BuiltinAttributeProvider *> builtin_attribute_providers,
+                             Span<const DynamicAttributesProvider *> dynamic_attribute_providers)
       : dynamic_attribute_providers_(dynamic_attribute_providers)
   {
     for (const BuiltinAttributeProvider *provider : builtin_attribute_providers) {
@@ -253,7 +257,7 @@ class ComponentAttributeProviders {
 
 namespace attribute_accessor_functions {
 
-template<const ComponentAttributeProviders &providers>
+template<const GeometryAttributeProviders &providers>
 inline bool is_builtin(const void * /*owner*/, const StringRef attribute_id)
 {
   if (bke::attribute_name_is_anonymous(attribute_id)) {
@@ -263,7 +267,7 @@ inline bool is_builtin(const void * /*owner*/, const StringRef attribute_id)
   return providers.builtin_attribute_providers().contains_as(name);
 }
 
-template<const ComponentAttributeProviders &providers>
+template<const GeometryAttributeProviders &providers>
 inline GAttributeReader lookup(const void *owner, const StringRef attribute_id)
 {
   if (!bke::attribute_name_is_anonymous(attribute_id)) {
@@ -283,37 +287,40 @@ inline GAttributeReader lookup(const void *owner, const StringRef attribute_id)
   return {};
 }
 
-template<const ComponentAttributeProviders &providers>
-inline bool for_all(const void *owner,
-                    FunctionRef<bool(const StringRefNull, const AttributeMetaData &)> fn)
+template<const GeometryAttributeProviders &providers>
+inline void foreach_attribute(const void *owner,
+                              const FunctionRef<void(const AttributeIter &)> fn,
+                              const AttributeAccessor &accessor)
 {
   Set<StringRef, 16> handled_attribute_ids;
   for (const BuiltinAttributeProvider *provider : providers.builtin_attribute_providers().values())
   {
     if (provider->exists(owner)) {
-      AttributeMetaData meta_data{provider->domain(), provider->data_type()};
-      if (!fn(provider->name(), meta_data)) {
-        return false;
+      const auto get_fn = [&]() { return provider->try_get_for_read(owner); };
+      AttributeIter iter{provider->name(), provider->domain(), provider->data_type(), get_fn};
+      iter.is_builtin = true;
+      iter.accessor = &accessor;
+      fn(iter);
+      if (iter.is_stopped()) {
+        return;
       }
-      handled_attribute_ids.add_new(provider->name());
+      handled_attribute_ids.add(iter.name);
     }
   }
   for (const DynamicAttributesProvider *provider : providers.dynamic_attribute_providers()) {
-    const bool continue_loop = provider->foreach_attribute(
-        owner, [&](const StringRefNull attribute_id, const AttributeMetaData &meta_data) {
-          if (handled_attribute_ids.add(attribute_id)) {
-            return fn(attribute_id, meta_data);
-          }
-          return true;
-        });
+    const bool continue_loop = provider->foreach_attribute(owner, [&](const AttributeIter &iter) {
+      if (handled_attribute_ids.add(iter.name)) {
+        iter.accessor = &accessor;
+        fn(iter);
+      }
+    });
     if (!continue_loop) {
-      return false;
+      return;
     }
   }
-  return true;
 }
 
-template<const ComponentAttributeProviders &providers>
+template<const GeometryAttributeProviders &providers>
 inline AttributeValidator lookup_validator(const void * /*owner*/,
                                            const blender::StringRef attribute_id)
 {
@@ -328,38 +335,7 @@ inline AttributeValidator lookup_validator(const void * /*owner*/,
   return provider->validator();
 }
 
-template<const ComponentAttributeProviders &providers>
-inline bool contains(const void *owner, const blender::StringRef attribute_id)
-{
-  bool found = false;
-  for_all<providers>(
-      owner, [&](const StringRef other_attribute_id, const AttributeMetaData & /*meta_data*/) {
-        if (attribute_id == other_attribute_id) {
-          found = true;
-          return false;
-        }
-        return true;
-      });
-  return found;
-}
-
-template<const ComponentAttributeProviders &providers>
-inline std::optional<AttributeMetaData> lookup_meta_data(const void *owner,
-                                                         const StringRef attribute_id)
-{
-  std::optional<AttributeMetaData> meta_data;
-  for_all<providers>(
-      owner, [&](const StringRef other_attribute_id, const AttributeMetaData &other_meta_data) {
-        if (attribute_id == other_attribute_id) {
-          meta_data = other_meta_data;
-          return false;
-        }
-        return true;
-      });
-  return meta_data;
-}
-
-template<const ComponentAttributeProviders &providers>
+template<const GeometryAttributeProviders &providers>
 inline GAttributeWriter lookup_for_write(void *owner, const StringRef attribute_id)
 {
   if (!bke::attribute_name_is_anonymous(attribute_id)) {
@@ -379,7 +355,7 @@ inline GAttributeWriter lookup_for_write(void *owner, const StringRef attribute_
   return {};
 }
 
-template<const ComponentAttributeProviders &providers>
+template<const GeometryAttributeProviders &providers>
 inline bool remove(void *owner, const StringRef attribute_id)
 {
   if (!bke::attribute_name_is_anonymous(attribute_id)) {
@@ -398,16 +374,13 @@ inline bool remove(void *owner, const StringRef attribute_id)
   return false;
 }
 
-template<const ComponentAttributeProviders &providers>
+template<const GeometryAttributeProviders &providers>
 inline bool add(void *owner,
                 const StringRef attribute_id,
                 AttrDomain domain,
                 eCustomDataType data_type,
                 const AttributeInit &initializer)
 {
-  if (contains<providers>(owner, attribute_id)) {
-    return false;
-  }
   if (!bke::attribute_name_is_anonymous(attribute_id)) {
     const StringRef name = attribute_id;
     if (const BuiltinAttributeProvider *provider =
@@ -430,17 +403,15 @@ inline bool add(void *owner,
   return false;
 }
 
-template<const ComponentAttributeProviders &providers>
+template<const GeometryAttributeProviders &providers>
 inline AttributeAccessorFunctions accessor_functions_for_providers()
 {
-  return AttributeAccessorFunctions{contains<providers>,
-                                    lookup_meta_data<providers>,
-                                    nullptr,
+  return AttributeAccessorFunctions{nullptr,
                                     nullptr,
                                     is_builtin<providers>,
                                     lookup<providers>,
                                     nullptr,
-                                    for_all<providers>,
+                                    foreach_attribute<providers>,
                                     lookup_validator<providers>,
                                     lookup_for_write<providers>,
                                     remove<providers>,

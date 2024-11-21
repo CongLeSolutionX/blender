@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#ifndef GPU_SHADER
+#if !defined(GPU_SHADER) && !defined(GLSL_CPP_STUBS)
 #  pragma once
 
 #  include "GPU_shader_shared_utils.hh"
@@ -69,8 +69,9 @@ BLI_STATIC_ASSERT_ALIGN(OVERLAY_GridData, 16)
 /* Keep the same values as in `draw_cache_impl_curves.cc` */
 #  define EDIT_CURVES_NURBS_CONTROL_POINT (1u)
 #  define EDIT_CURVES_BEZIER_HANDLE (1u << 1)
-#  define EDIT_CURVES_LEFT_HANDLE_TYPES_SHIFT (6u)
-#  define EDIT_CURVES_RIGHT_HANDLE_TYPES_SHIFT (4u)
+#  define EDIT_CURVES_ACTIVE_HANDLE (1u << 2)
+#  define EDIT_CURVES_BEZIER_KNOT (1u << 3)
+#  define EDIT_CURVES_HANDLE_TYPES_SHIFT (4u)
 /* Keep the same values as in `draw_cache_imp_curve.c` */
 #  define ACTIVE_NURB (1u << 2)
 #  define BEZIER_HANDLE (1u << 3)
@@ -80,6 +81,7 @@ BLI_STATIC_ASSERT_ALIGN(OVERLAY_GridData, 16)
 /* Keep the same value in `handle_display` in `DNA_view3d_types.h` */
 #  define CURVE_HANDLE_SELECTED 0u
 #  define CURVE_HANDLE_ALL 1u
+#  define CURVE_HANDLE_NONE 2u
 
 #  define GP_EDIT_POINT_SELECTED 1u  /* 1 << 0 */
 #  define GP_EDIT_STROKE_SELECTED 2u /* 1 << 1 */

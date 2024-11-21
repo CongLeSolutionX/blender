@@ -21,7 +21,7 @@
 #include "BKE_context.hh"
 #include "BKE_global.hh"
 #include "BKE_icons.h"
-#include "BKE_image.h"
+#include "BKE_image.hh"
 #include "BKE_layer.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_main.hh"
@@ -974,12 +974,7 @@ static void screen_cursor_set(wmWindow *win, const int xy[2])
 
   if (area) {
     if (az->type == AZONE_AREA) {
-#if defined(__APPLE__)
-      const int cursor = U.experimental.use_docking ? WM_CURSOR_HAND : WM_CURSOR_EDIT;
-#else
-      const int cursor = WM_CURSOR_EDIT;
-#endif
-      WM_cursor_set(win, cursor);
+      WM_cursor_set(win, WM_CURSOR_EDIT);
     }
     else if (az->type == AZONE_REGION) {
       if (ELEM(az->edge, AE_LEFT_TO_TOPRIGHT, AE_RIGHT_TO_TOPLEFT)) {

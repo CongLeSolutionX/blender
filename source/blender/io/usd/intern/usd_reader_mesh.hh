@@ -43,9 +43,19 @@ class USDMeshReader : public USDGeomReader {
  public:
   USDMeshReader(const pxr::UsdPrim &prim,
                 const USDImportParams &import_params,
-                const ImportSettings &settings);
+                const ImportSettings &settings)
+      : USDGeomReader(prim, import_params, settings),
+        mesh_prim_(prim),
+        is_left_handed_(false),
+        is_time_varying_(false),
+        is_initial_load_(false)
+  {
+  }
 
-  bool valid() const override;
+  bool valid() const override
+  {
+    return bool(mesh_prim_);
+  }
 
   void create_object(Main *bmain, double motionSampleTime) override;
   void read_object_data(Main *bmain, double motionSampleTime) override;
@@ -97,9 +107,6 @@ class USDMeshReader : public USDGeomReader {
   void read_uv_data_primvar(Mesh *mesh,
                             const pxr::UsdGeomPrimvar &primvar,
                             const double motionSampleTime);
-  void read_generic_data_primvar(Mesh *mesh,
-                                 const pxr::UsdGeomPrimvar &primvar,
-                                 const double motionSampleTime);
 
   /**
    * Override transform computation to account for the binding

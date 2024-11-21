@@ -165,6 +165,7 @@ static eCustomDataType data_type_in_attribute_input_node(const eCustomDataType t
       /* Unsupported currently. */
       return CD_PROP_FLOAT;
     case CD_PROP_FLOAT2:
+    case CD_PROP_INT16_2D:
     case CD_PROP_INT32_2D:
       /* No 2D vector sockets currently. */
       return CD_PROP_FLOAT3;
@@ -231,7 +232,8 @@ static void attribute_search_exec_fn(bContext *C, void *data_v, void *item_v)
 void node_geometry_add_attribute_search_button(const bContext & /*C*/,
                                                const bNode &node,
                                                PointerRNA &socket_ptr,
-                                               uiLayout &layout)
+                                               uiLayout &layout,
+                                               const StringRefNull placeholder)
 {
   uiBlock *block = uiLayoutGetBlock(&layout);
   uiBut *but = uiDefIconTextButR(block,
@@ -249,6 +251,7 @@ void node_geometry_add_attribute_search_button(const bContext & /*C*/,
                                  0.0f,
                                  0.0f,
                                  "");
+  UI_but_placeholder_set(but, placeholder.c_str());
 
   const bNodeSocket &socket = *static_cast<const bNodeSocket *>(socket_ptr.data);
   AttributeSearchData *data = MEM_cnew<AttributeSearchData>(__func__);

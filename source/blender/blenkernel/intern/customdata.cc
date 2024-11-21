@@ -29,7 +29,7 @@
 #include "BLI_math_vector.hh"
 #include "BLI_memory_counter.hh"
 #include "BLI_mempool.h"
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 #include "BLI_set.hh"
 #include "BLI_span.hh"
 #include "BLI_string.h"
@@ -1831,16 +1831,16 @@ static const LayerTypeInfo LAYERTYPEINFO[CD_NUMTYPES] = {
      nullptr,
      nullptr},
     /* 22: CD_TEXTURE_MCOL */
-    {sizeof(MCol[4]),
-     alignof(MCol[4]),
-     "MCol",
+    {sizeof(blender::short2),
+     alignof(blender::short2),
+     "vec2s",
      4,
-     N_("TexturedCol"),
+     N_("2D 16-Bit Integer"),
      nullptr,
      nullptr,
-     layerInterp_mcol,
-     layerSwap_mcol,
-     layerDefault_mcol},
+     nullptr,
+     nullptr,
+     nullptr},
     /* 23: CD_CLOTH_ORCO */
     {sizeof(float[3]),
      alignof(float[3]),

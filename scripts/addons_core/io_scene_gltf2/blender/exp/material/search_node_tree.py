@@ -63,7 +63,7 @@ class NodeTreeSearchResult:
 
 # TODO: cache these searches
 def from_socket(start_socket: NodeTreeSearchResult,
-                shader_node_filter: typing.Union[Filter, typing.Callable]) -> typing.List[NodeTreeSearchResult]:
+                shader_node_filter):
     """
     Find shader nodes where the filter expression is true.
 
@@ -734,8 +734,8 @@ def get_socket(blender_material_nodetree, use_nodes: bool, name: str, volume=Fal
     :return: a blender NodeSocket
     """
     if blender_material_nodetree and use_nodes:
-        #i = [input for input in blender_material.node_tree.inputs]
-        #o = [output for output in blender_material.node_tree.outputs]
+        # i = [input for input in blender_material.node_tree.inputs]
+        # o = [output for output in blender_material.node_tree.outputs]
         if name == "Emissive":
             # Check for a dedicated Emission node first, it must supersede the newer built-in one
             # because the newer one is always present in all Principled BSDF materials.
@@ -854,11 +854,11 @@ def get_texture_transform_from_mapping_node(mapping_node, export_settings):
     texture_transform = texture_transform_blender_to_gltf(mapping_transform)
 
     if all([component == 0 for component in texture_transform["offset"]]):
-        del(texture_transform["offset"])
+        del (texture_transform["offset"])
     if all([component == 1 for component in texture_transform["scale"]]):
-        del(texture_transform["scale"])
+        del (texture_transform["scale"])
     if texture_transform["rotation"] == 0:
-        del(texture_transform["rotation"])
+        del (texture_transform["rotation"])
 
     # glTF Offset needs: offset, rotation, scale (note that Offset is not used for Vector mapping)
     # glTF Rotation needs: rotation
@@ -869,27 +869,30 @@ def get_texture_transform_from_mapping_node(mapping_node, export_settings):
         path_['length'] = 2
         path_['path'] = "/materials/XXX/YYY/KHR_texture_transform/offset"
         path_['vector_type'] = mapping_node.node.vector_type
-        export_settings['current_texture_transform']["node_tree." + \
-            mapping_node.node.inputs['Location'].path_from_id() + ".default_value"] = path_
+        export_settings['current_texture_transform']["node_tree." +
+                                                     mapping_node.node.inputs['Location'].path_from_id() + ".default_value"] = path_
 
     path_ = {}
     path_['length'] = 2
     path_['path'] = "/materials/XXX/YYY/KHR_texture_transform/scale"
     path_['vector_type'] = mapping_node.node.vector_type
-    export_settings['current_texture_transform']["node_tree." + \
-        mapping_node.node.inputs['Scale'].path_from_id() + ".default_value"] = path_
+    export_settings['current_texture_transform']["node_tree." +
+                                                 mapping_node.node.inputs['Scale'].path_from_id() + ".default_value"] = path_
 
     path_ = {}
     path_['length'] = 1
     path_['path'] = "/materials/XXX/YYY/KHR_texture_transform/rotation"
     path_['vector_type'] = mapping_node.node.vector_type
-    export_settings['current_texture_transform']["node_tree." + \
-        mapping_node.node.inputs['Rotation'].path_from_id() + ".default_value[2]"] = path_
+    export_settings['current_texture_transform']["node_tree." +
+                                                 mapping_node.node.inputs['Rotation'].path_from_id() + ".default_value[2]"] = path_
 
     return texture_transform
 
 
 def check_if_is_linked_to_active_output(shader_socket, group_path):
+
+    # Here, group_path must be copyed, because if there are muliply link that enter/exit a group node
+    # This will modify it, and we don't want to modify the original group_path (from the parameter) inside the loop
     for link in shader_socket.links:
 
         # If we are entering a node group
@@ -897,10 +900,11 @@ def check_if_is_linked_to_active_output(shader_socket, group_path):
             socket_name = link.to_socket.name
             sockets = [n for n in link.to_node.node_tree.nodes if n.type == "GROUP_INPUT"][0].outputs
             socket = [s for s in sockets if s.name == socket_name][0]
-            group_path.append(link.to_node)
+            new_group_path = group_path.copy()
+            new_group_path.append(link.to_node)
             # TODOSNode : Why checking outputs[0] ? What about alpha for texture node, that is outputs[1] ????
             # recursive until find an output material node
-            ret = check_if_is_linked_to_active_output(socket, group_path)
+            ret = check_if_is_linked_to_active_output(socket, new_group_path)
             if ret is True:
                 return True
             continue
@@ -910,10 +914,10 @@ def check_if_is_linked_to_active_output(shader_socket, group_path):
             socket_name = link.to_socket.name
             sockets = group_path[-1].outputs
             socket = [s for s in sockets if s.name == socket_name][0]
-            group_path = group_path[:-1]
+            new_group_path = group_path[:-1]
             # TODOSNode : Why checking outputs[0] ? What about alpha for texture node, that is outputs[1] ????
             # recursive until find an output material node
-            ret = check_if_is_linked_to_active_output(socket, group_path)
+            ret = check_if_is_linked_to_active_output(socket, new_group_path)
             if ret is True:
                 return True
             continue

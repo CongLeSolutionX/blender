@@ -18,7 +18,7 @@
 #include "BLI_listbase.h"
 #include "BLI_math_vector_types.hh"
 #include "BLI_multi_value_map.hh"
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 #include "BLI_set.hh"
 #include "BLI_string.h"
 #include "BLI_utildefines.h"
@@ -112,6 +112,7 @@ static void init_data(ModifierData *md)
   NodesModifierData *nmd = (NodesModifierData *)md;
 
   BLI_assert(MEMCMP_STRUCT_AFTER_IS_ZERO(nmd, modifier));
+  nmd->modifier.layout_panel_open_flag |= 1 << NODES_MODIFIER_PANEL_WARNINGS;
 
   MEMCPY_STRUCT_AFTER(nmd, DNA_struct_default_get(NodesModifierData), modifier);
   nmd->runtime = MEM_new<NodesModifierRuntime>(__func__);
@@ -571,10 +572,33 @@ static void try_add_side_effect_node(const ComputeContext &final_compute_context
         return;
       }
       local_side_effect_nodes.nodes_by_context.add(parent_compute_context_hash, lf_zone_node);
-      local_side_effect_nodes.iterations_by_repeat_zone.add(
+      local_side_effect_nodes.iterations_by_iteration_zone.add(
           {parent_compute_context_hash, compute_context->output_node_id()},
           compute_context->iteration());
       current_zone = repeat_zone;
+    }
+    else if (const auto *compute_context =
+                 dynamic_cast<const bke::ForeachGeometryElementZoneComputeContext *>(
+                     compute_context_generic))
+    {
+      const bke::bNodeTreeZone *foreach_zone = current_zones->get_zone_by_node(
+          compute_context->output_node_id());
+      if (foreach_zone == nullptr) {
+        return;
+      }
+      if (foreach_zone->parent_zone != current_zone) {
+        return;
+      }
+      const lf::FunctionNode *lf_zone_node = lf_graph_info->mapping.zone_node_map.lookup_default(
+          foreach_zone, nullptr);
+      if (lf_zone_node == nullptr) {
+        return;
+      }
+      local_side_effect_nodes.nodes_by_context.add(parent_compute_context_hash, lf_zone_node);
+      local_side_effect_nodes.iterations_by_iteration_zone.add(
+          {parent_compute_context_hash, compute_context->output_node_id()},
+          compute_context->index());
+      current_zone = foreach_zone;
     }
     else if (const auto *compute_context = dynamic_cast<const bke::GroupNodeComputeContext *>(
                  compute_context_generic))
@@ -631,8 +655,8 @@ static void try_add_side_effect_node(const ComputeContext &final_compute_context
   for (const auto item : local_side_effect_nodes.nodes_by_context.items()) {
     r_side_effect_nodes.nodes_by_context.add_multiple(item.key, item.value);
   }
-  for (const auto item : local_side_effect_nodes.iterations_by_repeat_zone.items()) {
-    r_side_effect_nodes.iterations_by_repeat_zone.add_multiple(item.key, item.value);
+  for (const auto item : local_side_effect_nodes.iterations_by_iteration_zone.items()) {
+    r_side_effect_nodes.iterations_by_iteration_zone.add_multiple(item.key, item.value);
   }
 }
 
@@ -941,7 +965,7 @@ static BakeFrameIndices get_bake_frame_indices(
 {
   BakeFrameIndices frame_indices;
   if (!frame_caches.is_empty()) {
-    const int first_future_frame_index = binary_search::find_predicate_begin(
+    const int first_future_frame_index = binary_search::first_if(
         frame_caches,
         [&](const std::unique_ptr<bake::FrameCache> &value) { return value->frame > frame; });
     frame_indices.next = (first_future_frame_index == frame_caches.size()) ?
@@ -1212,7 +1236,7 @@ class NodesModifierSimulationParams : public nodes::GeoNodesSimulationParams {
     }
 
     /* If there are no baked frames, we don't need keep track of the data-blocks. */
-    if (!node_cache.bake.frames.is_empty()) {
+    if (!node_cache.bake.frames.is_empty() || node_cache.prev_cache.has_value()) {
       for (const NodesModifierDataBlock &data_block : Span{bake.data_blocks, bake.data_blocks_num})
       {
         data_block_map.old_mappings.add(data_block, data_block.id);
@@ -1481,7 +1505,7 @@ class NodesModifierBakeParams : public nodes::GeoNodesBakeParams {
           frame_cache->frame = current_frame;
           frame_cache->state = std::move(state);
           auto &frames = node_cache->bake.frames;
-          const int insert_index = binary_search::find_predicate_begin(
+          const int insert_index = binary_search::first_if(
               frames, [&](const std::unique_ptr<bake::FrameCache> &frame_cache) {
                 return frame_cache->frame > current_frame;
               });
@@ -1637,7 +1661,7 @@ static void add_data_block_items_writeback(const ModifierEvalContext &ctx,
             item.key))
     {
       /* Only writeback if the bake node has actually baked anything. */
-      if (!node_cache->bake.frames.is_empty()) {
+      if (!node_cache->bake.frames.is_empty() || node_cache->prev_cache.has_value()) {
         data.new_mappings = std::move(item.value->data_block_map.new_mappings);
       }
     }
@@ -2220,6 +2244,21 @@ static NodesModifierPanel *find_panel_by_id(NodesModifierData &nmd, const int id
   return nullptr;
 }
 
+static bool interace_panel_has_socket(const bNodeTreeInterfacePanel &interface_panel)
+{
+  for (const bNodeTreeInterfaceItem *item : interface_panel.items()) {
+    if (item->item_type == NODE_INTERFACE_SOCKET) {
+      return true;
+    }
+    if (item->item_type == NODE_INTERFACE_PANEL) {
+      if (interace_panel_has_socket(*reinterpret_cast<const bNodeTreeInterfacePanel *>(item))) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 static void draw_interface_panel_content(const bContext *C,
                                          uiLayout *layout,
                                          PointerRNA *modifier_ptr,
@@ -2232,6 +2271,9 @@ static void draw_interface_panel_content(const bContext *C,
   for (const bNodeTreeInterfaceItem *item : interface_panel.items()) {
     if (item->item_type == NODE_INTERFACE_PANEL) {
       const auto &sub_interface_panel = *reinterpret_cast<const bNodeTreeInterfacePanel *>(item);
+      if (!interace_panel_has_socket(sub_interface_panel)) {
+        continue;
+      }
       NodesModifierPanel *panel = find_panel_by_id(nmd, sub_interface_panel.identifier);
       PointerRNA panel_ptr = RNA_pointer_create(
           modifier_ptr->owner_id, &RNA_NodesModifierPanel, panel);
@@ -2385,6 +2427,51 @@ static void draw_manage_panel(const bContext *C,
   }
 }
 
+static void draw_warnings(const bContext *C,
+                          const NodesModifierData &nmd,
+                          uiLayout *layout,
+                          PointerRNA *md_ptr)
+{
+  using namespace geo_log;
+  GeoTreeLog *tree_log = get_root_tree_log(nmd);
+  if (!tree_log) {
+    return;
+  }
+  tree_log->ensure_node_warnings(nmd.node_group);
+  const int warnings_num = tree_log->all_warnings.size();
+  if (warnings_num == 0) {
+    return;
+  }
+  PanelLayout panel = uiLayoutPanelProp(C, layout, md_ptr, "open_warnings_panel");
+  uiItemL(panel.header,
+          fmt::format(fmt::runtime(IFACE_("Warnings ({})")), warnings_num).c_str(),
+          ICON_NONE);
+  if (!panel.body) {
+    return;
+  }
+  Vector<const NodeWarning *> warnings(tree_log->all_warnings.size());
+  for (const int i : warnings.index_range()) {
+    warnings[i] = &tree_log->all_warnings[i];
+  }
+  std::sort(warnings.begin(), warnings.end(), [](const NodeWarning *a, const NodeWarning *b) {
+    const int severity_a = node_warning_type_severity(a->type);
+    const int severity_b = node_warning_type_severity(b->type);
+    if (severity_a > severity_b) {
+      return true;
+    }
+    if (severity_a < severity_b) {
+      return false;
+    }
+    return BLI_strcasecmp_natural(a->message.c_str(), b->message.c_str()) < 0;
+  });
+
+  uiLayout *col = uiLayoutColumn(panel.body, false);
+  for (const NodeWarning *warning : warnings) {
+    const int icon = node_warning_type_icon(warning->type);
+    uiItemL(col, warning->message.c_str(), icon);
+  }
+}
+
 static void panel_draw(const bContext *C, Panel *panel)
 {
   uiLayout *layout = panel->layout;
@@ -2408,20 +2495,9 @@ static void panel_draw(const bContext *C, Panel *panel)
     draw_interface_panel_content(C, layout, ptr, *nmd, nmd->node_group->tree_interface.root_panel);
   }
 
-  /* Draw node warnings. */
-  geo_log::GeoTreeLog *tree_log = get_root_tree_log(*nmd);
-  if (tree_log != nullptr) {
-    tree_log->ensure_node_warnings(nmd->node_group);
-    for (const geo_log::NodeWarning &warning : tree_log->all_warnings) {
-      if (warning.type != geo_log::NodeWarningType::Info) {
-        uiItemL(layout,
-                warning.message.c_str(),
-                warning.type == geo_log::NodeWarningType::Warning ? ICON_ERROR : ICON_CANCEL);
-      }
-    }
-  }
-
   modifier_panel_end(layout, ptr);
+
+  draw_warnings(C, *nmd, layout, ptr);
 
   if (has_output_attribute(*nmd)) {
     if (uiLayout *panel_layout = uiLayoutPanelProp(

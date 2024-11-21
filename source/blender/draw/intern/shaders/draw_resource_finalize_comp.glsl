@@ -6,8 +6,12 @@
  * Finish computation of a few draw resource after sync.
  */
 
-#pragma BLENDER_REQUIRE(gpu_shader_math_vector_lib.glsl)
-#pragma BLENDER_REQUIRE(gpu_shader_math_matrix_lib.glsl)
+#include "draw_view_info.hh"
+
+#include "gpu_shader_math_matrix_lib.glsl"
+#include "gpu_shader_math_vector_lib.glsl"
+
+COMPUTE_SHADER_CREATE_INFO(draw_resource_finalize)
 
 void main()
 {
@@ -20,7 +24,7 @@ void main()
   ObjectInfos infos = infos_buf[resource_id];
   ObjectBounds bounds = bounds_buf[resource_id];
 
-  if (drw_bounds_are_valid(bounds)) {
+  if (drw_bounds_corners_are_valid(bounds)) {
     /* Convert corners to origin + sides in world space. */
     vec3 p0 = bounds.bounding_corners[0].xyz;
     vec3 p01 = bounds.bounding_corners[1].xyz - p0;

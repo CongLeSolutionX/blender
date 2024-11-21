@@ -7,6 +7,8 @@
 #include "gpu_shader_create_info.hh"
 #include "gpu_shader_private.hh"
 
+#include "mtl_shader_interface.hh"
+
 /** -- Metal Shader Generator for GLSL -> MSL conversion --
  *
  * The Metal shader generator class is used as a conversion utility for generating
@@ -174,6 +176,7 @@
 #  define UNIFORM_SSBO_INDEX_MODE_U16_STR "uniform_ssbo_index_mode_u16"
 #  define UNIFORM_SSBO_INPUT_PRIM_TYPE_STR "uniform_ssbo_input_prim_type"
 #  define UNIFORM_SSBO_INPUT_VERT_COUNT_STR "uniform_ssbo_input_vert_count"
+#  define UNIFORM_SSBO_INDEX_BASE_STR "uniform_ssbo_index_base_"
 /* Per-attribute. */
 #  define UNIFORM_SSBO_OFFSET_STR "uniform_ssbo_offset_"
 #  define UNIFORM_SSBO_STRIDE_STR "uniform_ssbo_stride_"
@@ -186,6 +189,7 @@
 #  define UNIFORM_SSBO_INDEX_MODE_U16_STR "_mu"
 #  define UNIFORM_SSBO_INPUT_PRIM_TYPE_STR "_pt"
 #  define UNIFORM_SSBO_INPUT_VERT_COUNT_STR "_vc"
+#  define UNIFORM_SSBO_INDEX_BASE_STR "_ib"
 /* Per-attribute. */
 #  define UNIFORM_SSBO_OFFSET_STR "_so"
 #  define UNIFORM_SSBO_STRIDE_STR "_ss"
@@ -355,13 +359,13 @@ struct MSLVertexOutputAttribute {
   }
   std::string get_mtl_interpolation_qualifier() const
   {
-    if (interpolation_qualifier == "" || interpolation_qualifier == "smooth") {
+    if (interpolation_qualifier.empty() || interpolation_qualifier == "smooth") {
       return "";
     }
-    else if (interpolation_qualifier == "flat") {
+    if (interpolation_qualifier == "flat") {
       return " [[flat]]";
     }
-    else if (interpolation_qualifier == "noperspective") {
+    if (interpolation_qualifier == "noperspective") {
       return " [[center_no_perspective]]";
     }
     return "";
@@ -424,8 +428,6 @@ class MSLGeneratorInterface {
   blender::Vector<MSLVertexOutputAttribute> vertex_output_varyings_tf;
   /* Clip Distances. */
   blender::Vector<char> clip_distances;
-  /* Shared Memory Blocks. */
-  blender::Vector<MSLSharedMemoryBlock> shared_memory_blocks;
   /* Max bind IDs. */
   int max_tex_bind_index = 0;
   /** GL Global usage. */
@@ -661,7 +663,7 @@ inline int get_matrix_location_count(const shader::Type &type)
   if (type == shader::Type::MAT4) {
     return 4;
   }
-  else if (type == shader::Type::MAT3) {
+  if (type == shader::Type::MAT3) {
     return 3;
   }
   return 1;
@@ -694,15 +696,15 @@ inline std::string get_attribute_conversion_function(bool *uses_conversion,
     *uses_conversion = true;
     return "internal_vertex_attribute_convert_read_float";
   }
-  else if (type == shader::Type::VEC2) {
+  if (type == shader::Type::VEC2) {
     *uses_conversion = true;
     return "internal_vertex_attribute_convert_read_float2";
   }
-  else if (type == shader::Type::VEC3) {
+  if (type == shader::Type::VEC3) {
     *uses_conversion = true;
     return "internal_vertex_attribute_convert_read_float3";
   }
-  else if (type == shader::Type::VEC4) {
+  if (type == shader::Type::VEC4) {
     *uses_conversion = true;
     return "internal_vertex_attribute_convert_read_float4";
   }
@@ -755,7 +757,7 @@ inline const char *to_string(const shader::Interpolation &interp)
       return "noperspective";
     default:
       BLI_assert(false);
-      return "unkown";
+      return "unknown";
   }
 }
 
@@ -842,11 +844,11 @@ inline const char *to_string(const shader::Type &type)
       return "short4";
     default:
       BLI_assert(false);
-      return "unkown";
+      return "unknown";
   }
 }
 
-inline char *next_symbol_in_range(char *begin, char *end, char symbol)
+inline char *next_symbol_in_range(char *begin, const char *end, char symbol)
 {
   for (char *a = begin; a < end; a++) {
     if (*a == symbol) {
@@ -856,7 +858,7 @@ inline char *next_symbol_in_range(char *begin, char *end, char symbol)
   return nullptr;
 }
 
-inline char *next_word_in_range(char *begin, char *end)
+inline char *next_word_in_range(char *begin, const char *end)
 {
   for (char *a = begin; a < end; a++) {
     char chr = *a;

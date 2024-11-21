@@ -19,14 +19,12 @@
 #include "DNA_anim_types.h"
 
 #include "ANIM_action.hh"
+#include "ANIM_action_iterators.hh"
 
 #include "action_runtime.hh"
 
 namespace blender::animrig::internal {
 
-/**
- * Rebuild the slot user cache for a specific bmain.
- */
 void rebuild_slot_user_cache(Main &bmain)
 {
   /* Loop over all Actions and clear their slots' user cache. */
@@ -56,30 +54,14 @@ void rebuild_slot_user_cache(Main &bmain)
       return false;
     }
 
-    /* Find directly assigned Action slots. */
-    std::optional<std::pair<Action *, Slot *>> action_slot = get_action_slot_pair(*id);
-    if (action_slot) {
-      Slot &slot = *action_slot->second;
-      slot.users_add(*id);
-    }
-
-    /* Find Action slots used by NLA strips. */
-    bke::nla::foreach_strip(id, [id](NlaStrip *strip) {
-      if (!strip->act) {
-        return true;
-      }
-
-      Action &action = strip->act->wrap();
-      if (!action.is_action_layered()) {
-        return true;
-      }
-
-      Slot *slot = action.slot_for_handle(strip->action_slot_handle);
+    foreach_action_slot_use(*id, [&](const Action &action, slot_handle_t slot_handle) {
+      const Slot *slot = action.slot_for_handle(slot_handle);
       if (!slot) {
         return true;
       }
-
-      slot->users_add(*id);
+      /* Constant cast because the `foreach` produces const Actions, and I (Sybren)
+       * didn't want to make a non-const duplicate. */
+      const_cast<Slot *>(slot)->users_add(*id);
       return true;
     });
 

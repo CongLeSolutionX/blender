@@ -27,10 +27,15 @@
 #include "BKE_subdiv_mesh.hh"
 
 #include "opensubdiv_converter_capi.hh"
+#ifdef WITH_OPENSUBDIV
+#  include "opensubdiv_evaluator.hh"
+#endif
 #include "opensubdiv_evaluator_capi.hh"
 
 #include "atomic_ops.h"
 #include "subdiv_converter.hh"
+
+#ifdef WITH_OPENSUBDIV
 
 /* -------------------------------------------------------------------- */
 /** \name Local Structs
@@ -157,7 +162,7 @@ struct MultiresReshapeSmoothContext {
    *
    * NOTE: Uses same enumerator type as Subdivide operator, since the values are the same and
    * decoupling type just adds extra headache to convert one enumerator to another. */
-  eMultiresSubdivideModeType smoothing_type;
+  MultiresSubdivideModeType smoothing_type;
 };
 
 /** \} */
@@ -317,13 +322,13 @@ static int get_face_grid_index(const MultiresReshapeSmoothContext *reshape_smoot
   const Corner *first_corner = &reshape_smooth_context->geometry.corners[face->start_corner_index];
   const int grid_index = first_corner->grid_index;
 
-#ifndef NDEBUG
+#  ifndef NDEBUG
   for (int face_corner = 0; face_corner < face->num_corners; ++face_corner) {
     const int corner_index = face->start_corner_index + face_corner;
     const Corner *corner = &reshape_smooth_context->geometry.corners[corner_index];
     BLI_assert(corner->grid_index == grid_index);
   }
-#endif
+#  endif
 
   return grid_index;
 }
@@ -357,7 +362,11 @@ static void grid_coords_from_face_verts(const MultiresReshapeSmoothContext *resh
   }
 }
 
-static float lerp(float t, float a, float b)
+/**
+ * C++20 has a built-in #lerp function, so use a different name here to avoid ambiguous calls for
+ * now.
+ */
+static float lerp_f(float t, float a, float b)
 {
   return (a + t * (b - a));
 }
@@ -379,15 +388,15 @@ static void interpolate_grid_coord(GridCoord *result,
    * *--------------------------> u
    */
 
-  const float u01 = lerp(u, face_grid_coords[0]->u, face_grid_coords[1]->u);
-  const float u32 = lerp(u, face_grid_coords[3]->u, face_grid_coords[2]->u);
+  const float u01 = lerp_f(u, face_grid_coords[0]->u, face_grid_coords[1]->u);
+  const float u32 = lerp_f(u, face_grid_coords[3]->u, face_grid_coords[2]->u);
 
-  const float v03 = lerp(v, face_grid_coords[0]->v, face_grid_coords[3]->v);
-  const float v12 = lerp(v, face_grid_coords[1]->v, face_grid_coords[2]->v);
+  const float v03 = lerp_f(v, face_grid_coords[0]->v, face_grid_coords[3]->v);
+  const float v12 = lerp_f(v, face_grid_coords[1]->v, face_grid_coords[2]->v);
 
   result->grid_index = face_grid_coords[0]->grid_index;
-  result->u = lerp(v, u01, u32);
-  result->v = lerp(u, v03, v12);
+  result->u = lerp_f(v, u01, u32);
+  result->v = lerp_f(u, v03, v12);
 }
 
 static void foreach_toplevel_grid_coord(
@@ -445,8 +454,8 @@ static int get_reshape_level_resolution(const MultiresReshapeContext *reshape_co
 static bool is_crease_supported(const MultiresReshapeSmoothContext *reshape_smooth_context)
 {
   return !ELEM(reshape_smooth_context->smoothing_type,
-               MULTIRES_SUBDIVIDE_LINEAR,
-               MULTIRES_SUBDIVIDE_SIMPLE);
+               MultiresSubdivideModeType::Linear,
+               MultiresSubdivideModeType::Simple);
 }
 
 /* Get crease which will be used for communication to OpenSubdiv topology.
@@ -474,7 +483,7 @@ static float get_effective_crease_float(const MultiresReshapeSmoothContext *resh
 
 static void context_init(MultiresReshapeSmoothContext *reshape_smooth_context,
                          const MultiresReshapeContext *reshape_context,
-                         const eMultiresSubdivideModeType mode)
+                         const MultiresSubdivideModeType mode)
 {
   reshape_smooth_context->reshape_context = reshape_context;
 
@@ -539,7 +548,8 @@ static bool foreach_topology_info(const blender::bke::subdiv::ForeachContext *fo
 {
   MultiresReshapeSmoothContext *reshape_smooth_context =
       static_cast<MultiresReshapeSmoothContext *>(foreach_context->user_data);
-  const int max_edges = reshape_smooth_context->smoothing_type == MULTIRES_SUBDIVIDE_LINEAR ?
+  const int max_edges = reshape_smooth_context->smoothing_type ==
+                                MultiresSubdivideModeType::Linear ?
                             num_edges :
                             reshape_smooth_context->geometry.max_edges;
 
@@ -785,7 +795,7 @@ static void foreach_edge(const blender::bke::subdiv::ForeachContext *foreach_con
   MultiresReshapeSmoothContext *reshape_smooth_context =
       static_cast<MultiresReshapeSmoothContext *>(foreach_context->user_data);
 
-  if (reshape_smooth_context->smoothing_type == MULTIRES_SUBDIVIDE_LINEAR) {
+  if (reshape_smooth_context->smoothing_type == MultiresSubdivideModeType::Linear) {
     if (!is_loose) {
       store_edge(reshape_smooth_context, subdiv_v1, subdiv_v2, 1.0f);
     }
@@ -1077,9 +1087,9 @@ static void reshape_subdiv_refine(const MultiresReshapeSmoothContext *reshape_sm
     const Vertex *vertex = &reshape_smooth_context->geometry.vertices[i];
     float P[3];
     coarse_position_cb(reshape_smooth_context, vertex, P);
-    reshape_subdiv->evaluator->setCoarsePositions(reshape_subdiv->evaluator, P, i, 1);
+    reshape_subdiv->evaluator->eval_output->setCoarsePositions(P, i, 1);
   }
-  reshape_subdiv->evaluator->refine(reshape_subdiv->evaluator);
+  reshape_subdiv->evaluator->eval_output->refine();
 }
 
 BLI_INLINE const GridCoord *reshape_subdiv_refine_vertex_grid_coord(const Vertex *vertex)
@@ -1422,6 +1432,8 @@ static void evaluate_higher_grid_positions(
       });
 }
 
+#endif
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -1431,6 +1443,7 @@ static void evaluate_higher_grid_positions(
 void multires_reshape_smooth_object_grids_with_details(
     const MultiresReshapeContext *reshape_context)
 {
+#ifdef WITH_OPENSUBDIV
   const int level_difference = (reshape_context->top.level - reshape_context->reshape.level);
   if (level_difference == 0) {
     /* Early output. */
@@ -1439,10 +1452,11 @@ void multires_reshape_smooth_object_grids_with_details(
 
   MultiresReshapeSmoothContext reshape_smooth_context;
   if (reshape_context->subdiv->settings.is_simple) {
-    context_init(&reshape_smooth_context, reshape_context, MULTIRES_SUBDIVIDE_SIMPLE);
+    context_init(&reshape_smooth_context, reshape_context, MultiresSubdivideModeType::Simple);
   }
   else {
-    context_init(&reshape_smooth_context, reshape_context, MULTIRES_SUBDIVIDE_CATMULL_CLARK);
+    context_init(
+        &reshape_smooth_context, reshape_context, MultiresSubdivideModeType::CatmullClark);
   }
 
   geometry_create(&reshape_smooth_context);
@@ -1458,11 +1472,15 @@ void multires_reshape_smooth_object_grids_with_details(
   evaluate_higher_grid_positions_with_details(&reshape_smooth_context);
 
   context_free(&reshape_smooth_context);
+#else
+  UNUSED_VARS(reshape_context);
+#endif
 }
 
 void multires_reshape_smooth_object_grids(const MultiresReshapeContext *reshape_context,
-                                          const eMultiresSubdivideModeType mode)
+                                          const MultiresSubdivideModeType mode)
 {
+#ifdef WITH_OPENSUBDIV
   const int level_difference = (reshape_context->top.level - reshape_context->reshape.level);
   if (level_difference == 0) {
     /* Early output. */
@@ -1481,6 +1499,9 @@ void multires_reshape_smooth_object_grids(const MultiresReshapeContext *reshape_
   evaluate_higher_grid_positions(&reshape_smooth_context);
 
   context_free(&reshape_smooth_context);
+#else
+  UNUSED_VARS(reshape_context, mode);
+#endif
 }
 
 /** \} */

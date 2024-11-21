@@ -46,7 +46,7 @@
 #include "DEG_depsgraph_query.hh"
 
 #ifdef WITH_PYTHON
-#  include "BPY_extern.h"
+#  include "BPY_extern.hh"
 #endif
 
 #include <cstring>
@@ -120,10 +120,7 @@ static bool driver_get_target_context_property(const DriverTargetContext *driver
   /* Reset to a nullptr RNA pointer.
    * This allows to more gracefully handle issues with unsupported configuration (forward
    * compatibility. for example). */
-  /* TODO(sergey): Replace with utility null-RNA-pointer creation once that is available. */
-  r_property_ptr->data = nullptr;
-  r_property_ptr->type = nullptr;
-  r_property_ptr->owner_id = nullptr;
+  *r_property_ptr = PointerRNA_NULL;
 
   return false;
 }
