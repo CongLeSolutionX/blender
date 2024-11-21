@@ -817,10 +817,20 @@ class CYCLES_RENDER_PT_performance_threads(CyclesButtonsPanel, Panel):
         sub.enabled = rd.threads_mode == 'FIXED'
         sub.prop(rd, "threads")
 
+def calculate_auto_tile_size(scene):
+    """Calculate an optimal tile size based on scaled render resolution."""
+    resolution_x = scene.render.resolution_x * scene.render.resolution_percentage / 100
+    resolution_y = scene.render.resolution_y * scene.render.resolution_percentage / 100
+    # Example calculation: Divide scaled resolution by 4 (adjust logic as needed)
+    return max(16, min(8192, int((resolution_x + resolution_y) // 4)))
 
-class CYCLES_RENDER_PT_performance_memory(CyclesButtonsPanel, Panel):
+
+class CYCLES_RENDER_PT_performance_memory(bpy.types.Panel):
     bl_label = "Memory"
     bl_parent_id = "CYCLES_RENDER_PT_performance"
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_context = "render"
 
     def draw(self, context):
         layout = self.layout
@@ -829,13 +839,20 @@ class CYCLES_RENDER_PT_performance_memory(CyclesButtonsPanel, Panel):
 
         scene = context.scene
         cscene = scene.cycles
+        #render_settings = scene.cycles_render_settings
 
         col = layout.column()
         col.prop(cscene, "use_auto_tile")
-        sub = col.column()
-        sub.active = cscene.use_auto_tile
-        sub.prop(cscene, "tile_size")
+        
+        if cscene.use_auto_tile:
+            col.prop(cscene, "tiling_mode")
 
+            if cscene.tiling_mode == 'AUTO':
+                col.label(text="Tile size is calculated automatically.")
+                auto_tile_size = calculate_auto_tile_size(scene)
+                col.label(text=f"Auto Tile Size: {auto_tile_size}px")
+            elif cscene.tiling_mode == 'MANUAL':
+                col.prop(cscene, "manual_tile_size")
 
 class CYCLES_RENDER_PT_performance_acceleration_structure(CyclesButtonsPanel, Panel):
     bl_label = "Acceleration Structure"
