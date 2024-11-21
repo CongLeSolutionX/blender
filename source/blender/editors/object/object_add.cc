@@ -2924,7 +2924,7 @@ static Object *convert_mesh_to_curves_legacy(Object &ob, ObjectConversionInfo &i
   return newob;
 }
 
-static Object *convert_any_to_curves(Object &ob, ObjectConversionInfo &info)
+static Object *convert_curves_component_to_curves(Object &ob, ObjectConversionInfo &info)
 {
   ob.flag |= OB_DONE;
   Object *newob = nullptr;
@@ -2950,7 +2950,28 @@ static Object *convert_any_to_curves(Object &ob, ObjectConversionInfo &info)
     BKE_object_free_derived_caches(newob);
     BKE_object_free_modifiers(newob, 0);
   }
-  else if (geometry.has_grease_pencil()) {
+  else {
+    BKE_reportf(info.reports,
+                RPT_WARNING,
+                "Object '%s' has no evaluated Curve or Grease Pencil data",
+                ob.id.name + 2);
+  }
+
+  return newob;
+}
+
+static Object *convert_grease_pencil_component_to_curves(Object &ob, ObjectConversionInfo &info)
+{
+  ob.flag |= OB_DONE;
+  Object *newob = nullptr;
+
+  Object *ob_eval = DEG_get_evaluated_object(info.depsgraph, &ob);
+  bke::GeometrySet geometry;
+  if (ob_eval->runtime->geometry_set_eval != nullptr) {
+    geometry = *ob_eval->runtime->geometry_set_eval;
+  }
+
+  if (geometry.has_grease_pencil()) {
     newob = get_object_for_conversion(ob, info);
 
     Curves *new_curves = static_cast<Curves *>(BKE_id_new(info.bmain, ID_CV, newob->id.name + 2));
@@ -2990,6 +3011,16 @@ static Object *convert_any_to_curves(Object &ob, ObjectConversionInfo &info)
   }
 
   return newob;
+}
+
+static Object *convert_mesh_to_curves(Object &ob, ObjectConversionInfo &info)
+{
+  /* This is to make it so the logic is the same as the old conversion code path. */
+  Object *newob = convert_curves_component_to_curves(ob, info);
+  if (newob) {
+    return newob;
+  }
+  return convert_grease_pencil_components_to_curves(ob, info);
 }
 
 static Object *convert_mesh_to_point_cloud(Object &ob, ObjectConversionInfo &info)
@@ -3061,7 +3092,7 @@ static Object *convert_mesh(Object &ob, const short target, ObjectConversionInfo
     case OB_CURVES_LEGACY:
       return convert_mesh_to_curves_legacy(ob, info);
     case OB_CURVES:
-      return convert_any_to_curves(ob, info);
+      return convert_mesh_to_curves(ob, info);
     case OB_POINTCLOUD:
       return convert_mesh_to_point_cloud(ob, info);
     case OB_MESH: /* And default...? (it seems to be the original logic)... */
@@ -3184,7 +3215,7 @@ static Object *convert_curves(Object &ob, const short target, ObjectConversionIn
     case OB_GREASE_PENCIL:
       return convert_curves_to_grease_pencil(ob, info);
     default:
-      return convert_any_to_curves(ob, info);
+      return convert_curves_component_to_curves(ob, info);
   }
 }
 
@@ -3284,7 +3315,7 @@ static Object *convert_grease_pencil(Object &ob, const short target, ObjectConve
 {
   switch (target) {
     case OB_CURVES:
-      return convert_any_to_curves(ob, info);
+      return convert_grease_pencil_component_to_curves(ob, info);
     case OB_MESH:
       return convert_grease_pencil_to_mesh(ob, info);
     default:
@@ -3293,9 +3324,7 @@ static Object *convert_grease_pencil(Object &ob, const short target, ObjectConve
   return nullptr;
 }
 
-static Object *convert_font_to_curves_legacy_or_mesh(Object &ob,
-                                                     ObjectConversionInfo &info,
-                                                     const bool do_mesh)
+static Object *convert_font_to_curves_legacy(Object &ob, ObjectConversionInfo &info)
 {
   ob.flag |= OB_DONE;
   Object *newob = get_object_for_conversion(ob, info);
@@ -3355,13 +3384,18 @@ static Object *convert_font_to_curves_legacy_or_mesh(Object &ob,
   cu->flag &= ~CU_3D;
   BKE_curve_dimension_update(cu);
 
-  if (do_mesh) {
-    /* No assumption should be made that the resulting objects is a mesh, as conversion can
-     * fail. */
-    object_data_convert_curve_to_mesh(info.bmain, info.depsgraph, newob);
-    /* Meshes doesn't use the "curve cache". */
-    BKE_object_free_curve_cache(newob);
-  }
+  return newob;
+}
+
+static Object *convert_font_to_mesh(Object &ob, ObjectConversionInfo &info)
+{
+  Object *newob = convert_font_to_curves_legacy(ob, info);
+
+  /* No assumption should be made that the resulting objects is a mesh, as conversion can
+   * fail. */
+  object_data_convert_curve_to_mesh(info.bmain, info.depsgraph, newob);
+  /* Meshes doesn't use the "curve cache". */
+  BKE_object_free_curve_cache(newob);
 
   return newob;
 }
@@ -3370,9 +3404,9 @@ static Object *convert_font(Object &ob, const short target, ObjectConversionInfo
 {
   switch (target) {
     case OB_MESH:
-      return convert_font_to_curves_legacy_or_mesh(ob, info, true);
+      return convert_font_to_mesh(ob, info);
     case OB_CURVES_LEGACY:
-      return convert_font_to_curves_legacy_or_mesh(ob, info, false);
+      return convert_font_to_curves_legacy(ob, info);
     default:
       return nullptr;
   }
