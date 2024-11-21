@@ -76,7 +76,6 @@ class Octree {
 
   /* Represent octree nodes as empty boxes with Blender Python API. */
   void visualize(KernelOctreeNode *knodes, const char *filename) const;
-  void visualize_fast(KernelOctreeNode *knodes, const char *filename) const;
 #ifdef WITH_OPENVDB
   openvdb::BoolGrid::ConstPtr get_vdb(const std::pair<const Geometry *, const Shader *> &) const;
 #endif
