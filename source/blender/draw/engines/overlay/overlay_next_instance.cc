@@ -490,6 +490,8 @@ void Instance::draw_node(Manager &manager, View &view)
 }
 void Instance::draw_v2d(Manager &manager, View &view)
 {
+  regular.mesh_uvs.draw_on_render(resources.render_fb, manager, view);
+
   GPU_framebuffer_bind(resources.overlay_output_fb);
   GPU_framebuffer_clear_color(resources.overlay_output_fb, float4(0.0));
 
@@ -504,9 +506,7 @@ void Instance::draw_v3d(Manager &manager, View &view)
   infront.cameras.draw_scene_background_images(resources.render_fb, manager, view);
 
   regular.sculpts.draw_on_render(resources.render_fb, manager, view);
-  regular.mesh_uvs.draw_on_render(resources.render_fb, manager, view);
   infront.sculpts.draw_on_render(resources.render_in_front_fb, manager, view);
-  infront.mesh_uvs.draw_on_render(resources.render_in_front_fb, manager, view);
 
   GPU_framebuffer_bind(resources.overlay_line_fb);
   float4 clear_color(0.0f);
@@ -554,7 +554,6 @@ void Instance::draw_v3d(Manager &manager, View &view)
     layer.sculpts.draw(framebuffer, manager, view);
     layer.grease_pencil.draw(framebuffer, manager, view);
     layer.meshes.draw(framebuffer, manager, view);
-    layer.mesh_uvs.draw(framebuffer, manager, view);
     layer.curves.draw(framebuffer, manager, view);
   };
 
