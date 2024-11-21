@@ -341,7 +341,7 @@ static void calc_corner_tris(const Span<float3> positions,
                              const TriangulateNGonMode ngon_mode,
                              MutableSpan<int3> corner_tris)
 {
-  struct TLS {
+  struct LocalData {
     Vector<float3x3> projections;
     Array<int> offset_data;
     Vector<float2> projected_positions;
@@ -350,7 +350,7 @@ static void calc_corner_tris(const Span<float3> positions,
     MemArena *arena = nullptr;
     Heap *heap = nullptr;
 
-    ~TLS()
+    ~LocalData()
     {
       if (arena) {
         BLI_memarena_free(arena);
@@ -360,10 +360,10 @@ static void calc_corner_tris(const Span<float3> positions,
       }
     }
   };
-  threading::EnumerableThreadSpecific<TLS> tls;
+  threading::EnumerableThreadSpecific<LocalData> tls;
 
   ngons.foreach_segment(GrainSize(128), [&](const IndexMaskSegment ngons, const int pos) {
-    TLS &data = tls.local();
+    LocalData &data = tls.local();
 
     /* In order to simplify and "parallelize" the next loops, gather offsets used to group an array
      * large enough for all the local face corners. */
