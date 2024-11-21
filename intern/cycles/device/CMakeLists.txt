@@ -160,11 +160,6 @@ if(WITH_CYCLES_DEVICE_HIP AND WITH_HIP_DYNLOAD)
   list(APPEND LIB
     extern_hipew
   )
-  if(HIP_VERSION_MAJOR)
-    if(HIP_VERSION_MAJOR EQUAL 6)
-      add_definitions(-DWITH_HIP_SDK_6)
-    endif()
-  endif()
 endif()
 
 if(WITH_CYCLES_DEVICE_METAL)

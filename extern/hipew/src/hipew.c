@@ -38,10 +38,10 @@ thipDriverGetVersion *hipDriverGetVersion;
 thipRuntimeGetVersion *hipRuntimeGetVersion;
 thipGetDevice *hipGetDevice;
 thipGetDeviceCount *hipGetDeviceCount;
-#ifdef WITH_HIP_SDK_6
-  thipGetDevicePropertiesR0600 *hipGetDevicePropertiesR0600;
-#else
+#ifdef WITH_HIP_SDK_5
   thipGetDeviceProperties *hipGetDeviceProperties;
+#else
+  thipGetDevicePropertiesR0600 *hipGetDevicePropertiesR0600;
 #endif
 thipDeviceGet* hipDeviceGet;
 thipDeviceGetName *hipDeviceGetName;
@@ -244,16 +244,17 @@ static int hipewHipInit(void) {
 #else
   /* ROCm 6 changes paths from /opt/rocm/hip/lib to /opt/rocm/lib, so
    * search for libraries there. It still includes .so.5. */
-  #ifdef WITH_HIP_SDK_6
-    const char *hip_paths[] = {"libamdhip64.so.6",,
-                              "/opt/rocm/lib/libamdhip64.so.6",
-                              "/opt/rocm/hip/lib/libamdhip64.so.6",
-                               NULL};
-  #else
-    const char *hip_paths[] = {"libamdhip64.so.5",,
+  #ifdef WITH_HIP_SDK_5
+      const char *hip_paths[] = {"libamdhip64.so.5",,
                                "/opt/rocm/lib/libamdhip64.so.5",
                                "/opt/rocm/hip/lib/libamdhip64.so.5",
                                 NULL};
+  #else
+  const char *hip_paths[] = {"libamdhip64.so.6",,
+                              "/opt/rocm/lib/libamdhip64.so.6",
+                              "/opt/rocm/hip/lib/libamdhip64.so.6",
+                               NULL};
+
   #endif
 #endif
   static int initialized = 0;
@@ -289,10 +290,10 @@ static int hipewHipInit(void) {
   }
 
   /* Fetch all function pointers. */
-#ifdef WITH_HIP_SDK_6
-  HIP_LIBRARY_FIND_CHECKED(hipGetDevicePropertiesR0600);
-#else
+#ifdef WITH_HIP_SDK_5
   HIP_LIBRARY_FIND_CHECKED(hipGetDeviceProperties);
+#else
+  HIP_LIBRARY_FIND_CHECKED(hipGetDevicePropertiesR0600);
 #endif
   HIP_LIBRARY_FIND_CHECKED(hipGetErrorName);
   HIP_LIBRARY_FIND_CHECKED(hipGetErrorString);

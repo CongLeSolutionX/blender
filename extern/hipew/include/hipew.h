@@ -825,10 +825,10 @@ typedef enum hiprtcJITInputType {
 	HIPRTC_JIT_NUM_INPUT_TYPES = ( HIPRTC_JIT_NUM_LEGACY_INPUT_TYPES + 3 )
 } hiprtcJITInputType;
 
- #ifdef WITH_HIP_SDK_6
+#ifdef WITH_HIP_SDK_5
+#include "hipew5.h"
+#else
 #include "hipew6.h"
-  #else
-  #include "hipew5.h"
 #endif
 
 

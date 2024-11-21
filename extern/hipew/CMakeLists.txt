@@ -34,8 +34,10 @@ if(HIPRT_INCLUDE_DIR)
   )
 endif()
 
-if(HIP_VERSION_MAJOR EQUAL 6)
-  add_definitions(-DWITH_HIP_SDK_6)
-endif()
 
 blender_add_lib(extern_hipew "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
+
+find_package(HIP 5.5.0)
+if(HIP_VERSION_MAJOR EQUAL 5)
+  target_compile_definitions(extern_hipew PUBLIC WITH_HIP_SDK_5)
+endif()
