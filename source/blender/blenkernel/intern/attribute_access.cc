@@ -155,11 +155,11 @@ static int attribute_data_type_complexity(const eCustomDataType data_type)
       return 0;
     case CD_PROP_INT8:
       return 1;
-    case CD_PROP_INT16_2D:
-      return 2;
     case CD_PROP_INT32:
-      return 3;
+      return 2;
     case CD_PROP_FLOAT:
+      return 3;
+    case CD_PROP_INT16_2D:
       return 4;
     case CD_PROP_INT32_2D:
       return 5;
