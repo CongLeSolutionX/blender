@@ -2872,21 +2872,544 @@ static Base *duplibase_for_convert(
   return basen;
 }
 
+typedef struct ObjectConversionInfo {
+  Main *bmain;
+  Depsgraph *depsgraph;
+  Scene *scene;
+  ViewLayer *view_layer;
+  Base *base;
+  Base *basen, *basact;
+  Object *obact;
+  bool keep_original;
+  bool do_merge_customdata;
+  bool mballConverted;
+  bool gpencilConverted;
+  bool gpencilCurveConverted;
+  ReportList *reports;
+} ObjectConversionInfo;
+
+static Object *ensure_object_duplication(Object &ob, ObjectConversionInfo &info)
+{
+  if (info.keep_original) {
+    info.basen = duplibase_for_convert(
+        info.bmain, info.depsgraph, info.scene, info.view_layer, info.base, nullptr);
+    Object *newob = info.basen->object;
+
+    /* Decrement original object data usage count. */
+    ID *original_object_data = static_cast<ID *>(newob->data);
+    id_us_min(original_object_data);
+
+    /* Make a copy of the object data. */
+    newob->data = BKE_id_copy(info.bmain, original_object_data);
+
+    return newob;
+  }
+  else {
+    return &ob;
+  }
+}
+
+static Object *convert_mesh_to_curves_legacy(Object &ob, ObjectConversionInfo &info)
+{
+  ob.flag |= OB_DONE;
+  Object *newob = ensure_object_duplication(ob, info);
+
+  BKE_mesh_to_curve(info.bmain, info.depsgraph, info.scene, newob);
+
+  if (newob->type == OB_CURVES_LEGACY) {
+    BKE_object_free_modifiers(newob, 0); /* after derivedmesh calls! */
+    if (newob->rigidbody_object != nullptr) {
+      ED_rigidbody_object_remove(info.bmain, info.scene, newob);
+    }
+  }
+
+  return newob;
+}
+
+static Object *convert_any_to_curves(Object &ob, ObjectConversionInfo &info)
+{
+  ob.flag |= OB_DONE;
+  Object *newob = nullptr;
+
+  Object *ob_eval = DEG_get_evaluated_object(info.depsgraph, &ob);
+  bke::GeometrySet geometry;
+  if (ob_eval->runtime->geometry_set_eval != nullptr) {
+    geometry = *ob_eval->runtime->geometry_set_eval;
+  }
+
+  if (geometry.has_curves()) {
+    newob = ensure_object_duplication(ob, info);
+
+    const Curves *curves_eval = geometry.get_curves();
+    Curves *new_curves = static_cast<Curves *>(BKE_id_new(info.bmain, ID_CV, newob->id.name + 2));
+
+    newob->data = new_curves;
+    newob->type = OB_CURVES;
+
+    new_curves->geometry.wrap() = curves_eval->geometry.wrap();
+    BKE_object_material_from_eval_data(info.bmain, newob, &curves_eval->id);
+
+    BKE_object_free_derived_caches(newob);
+    BKE_object_free_modifiers(newob, 0);
+  }
+  else if (geometry.has_grease_pencil()) {
+    newob = ensure_object_duplication(ob, info);
+
+    Curves *new_curves = static_cast<Curves *>(BKE_id_new(info.bmain, ID_CV, newob->id.name + 2));
+    newob->data = new_curves;
+    newob->type = OB_CURVES;
+
+    if (const Curves *curves_eval = geometry.get_curves()) {
+      new_curves->geometry.wrap() = curves_eval->geometry.wrap();
+      BKE_object_material_from_eval_data(info.bmain, newob, &curves_eval->id);
+    }
+    else if (const GreasePencil *grease_pencil = geometry.get_grease_pencil()) {
+      const Vector<ed::greasepencil::DrawingInfo> drawings =
+          ed::greasepencil::retrieve_visible_drawings(*info.scene, *grease_pencil, false);
+      if (drawings.size() > 0) {
+        Array<bke::GeometrySet> geometries(drawings.size());
+        for (const int i : drawings.index_range()) {
+          Curves *curves_id = static_cast<Curves *>(BKE_id_new_nomain(ID_CV, nullptr));
+          curves_id->geometry.wrap() = drawings[i].drawing.strokes();
+          geometries[i] = bke::GeometrySet::from_curves(curves_id);
+        }
+        bke::GeometrySet joined_curves = geometry::join_geometries(geometries, {});
+
+        new_curves->geometry.wrap() = joined_curves.get_curves()->geometry.wrap();
+        new_curves->geometry.wrap().tag_topology_changed();
+        BKE_object_material_from_eval_data(info.bmain, newob, &joined_curves.get_curves()->id);
+      }
+    }
+
+    BKE_object_free_derived_caches(newob);
+    BKE_object_free_modifiers(newob, 0);
+  }
+  else {
+    BKE_reportf(info.reports,
+                RPT_WARNING,
+                "Object '%s' has no evaluated Curve or Grease Pencil data",
+                ob.id.name + 2);
+  }
+
+  return newob;
+}
+
+static Object *convert_mesh_to_point_cloud(Object &ob, ObjectConversionInfo &info)
+{
+  ob.flag |= OB_DONE;
+  Object *newob = ensure_object_duplication(ob, info);
+
+  BKE_mesh_to_pointcloud(info.bmain, info.depsgraph, info.scene, newob);
+
+  if (newob->type == OB_POINTCLOUD) {
+    BKE_object_free_modifiers(newob, 0); /* after derivedmesh calls! */
+    ED_rigidbody_object_remove(info.bmain, info.scene, newob);
+  }
+
+  return newob;
+}
+
+static Object *convert_mesh_to_mesh(Object &ob, ObjectConversionInfo &info)
+{
+  ob.flag |= OB_DONE;
+  Object *newob = ensure_object_duplication(ob, info);
+
+  /* make new mesh data from the original copy */
+  /* NOTE: get the mesh from the original, not from the copy in some
+   * cases this doesn't give correct results (when MDEF is used for eg)
+   */
+  const Object *ob_eval = DEG_get_evaluated_object(info.depsgraph, &ob);
+  const Mesh *mesh_eval = BKE_object_get_evaluated_mesh(ob_eval);
+  Mesh *new_mesh = mesh_eval ? BKE_mesh_copy_for_eval(*mesh_eval) :
+                               BKE_mesh_new_nomain(0, 0, 0, 0);
+  BKE_object_material_from_eval_data(info.bmain, newob, &new_mesh->id);
+  /* Anonymous attributes shouldn't be available on the applied geometry. */
+  new_mesh->attributes_for_write().remove_anonymous();
+  if (info.do_merge_customdata) {
+    BKE_mesh_merge_customdata_for_apply_modifier(new_mesh);
+  }
+
+  Mesh *ob_data_mesh = (Mesh *)newob->data;
+
+  if (ob_data_mesh->key) {
+    /* NOTE(@ideasman42): Clearing the shape-key is needed when the
+     * number of vertices remains unchanged. Otherwise using this operator
+     * to "Apply Visual Geometry" will evaluate using the existing shape-key
+     * which doesn't have the "evaluated" coordinates from `new_mesh`.
+     * See #128839 for details.
+     *
+     * While shape-keys could be supported, this is more of a feature to consider.
+     * As there is already a `MESH_OT_blend_from_shape` operator,
+     * it's not clear this is especially useful or needed. */
+    if (!CustomData_has_layer(&new_mesh->vert_data, CD_SHAPEKEY)) {
+      id_us_min(&ob_data_mesh->key->id);
+      ob_data_mesh->key = nullptr;
+    }
+  }
+  BKE_mesh_nomain_to_mesh(new_mesh, ob_data_mesh, newob);
+
+  BKE_object_free_modifiers(newob, 0); /* after derivedmesh calls! */
+
+  if (!info.keep_original) {
+    DEG_id_tag_update(&ob.id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY | ID_RECALC_ANIMATION);
+  }
+
+  return newob;
+}
+
+static Object *convert_mesh(Object &ob, const short target, ObjectConversionInfo &info)
+{
+  switch (target) {
+    case OB_CURVES_LEGACY:
+      return convert_mesh_to_curves_legacy(ob, info);
+    case OB_CURVES:
+      return convert_any_to_curves(ob, info);
+    case OB_POINTCLOUD:
+      return convert_mesh_to_point_cloud(ob, info);
+    case OB_MESH: /* And default...? (it seems to be the original logic)... */
+    default:
+      return convert_mesh_to_mesh(ob, info);
+  }
+}
+
+static Object *convert_curves_to_mesh(Object &ob, ObjectConversionInfo &info)
+{
+  ob.flag |= OB_DONE;
+  Object *newob = nullptr;
+
+  Object *ob_eval = DEG_get_evaluated_object(info.depsgraph, &ob);
+  bke::GeometrySet geometry;
+  if (ob_eval->runtime->geometry_set_eval != nullptr) {
+    geometry = *ob_eval->runtime->geometry_set_eval;
+  }
+
+  const Mesh *mesh_eval = geometry.get_mesh();
+  const Curves *curves_eval = geometry.get_curves();
+  Mesh *new_mesh = nullptr;
+
+  if (mesh_eval || curves_eval) {
+    newob = ensure_object_duplication(ob, info);
+    new_mesh = static_cast<Mesh *>(BKE_id_new(info.bmain, ID_ME, newob->id.name + 2));
+    newob->data = new_mesh;
+    newob->type = OB_MESH;
+  }
+  else {
+    BKE_reportf(info.reports,
+                RPT_WARNING,
+                "Object '%s' has no evaluated mesh or curves data",
+                ob.id.name + 2);
+    return nullptr;
+  }
+
+  if (mesh_eval) {
+    BKE_mesh_nomain_to_mesh(BKE_mesh_copy_for_eval(*mesh_eval), new_mesh, newob);
+    BKE_object_material_from_eval_data(info.bmain, newob, &mesh_eval->id);
+    new_mesh->attributes_for_write().remove_anonymous();
+  }
+  else if (curves_eval) {
+    Mesh *mesh = bke::curve_to_wire_mesh(curves_eval->geometry.wrap(),
+                                         bke::ProcessAllAttributeExceptAnonymous{});
+    if (!mesh) {
+      mesh = BKE_mesh_new_nomain(0, 0, 0, 0);
+    }
+    BKE_mesh_nomain_to_mesh(mesh, new_mesh, newob);
+    BKE_object_material_from_eval_data(info.bmain, newob, &curves_eval->id);
+  }
+
+  BKE_object_free_derived_caches(newob);
+  BKE_object_free_modifiers(newob, 0);
+
+  return newob;
+}
+
+static Object *convert_curves_to_grease_pencil(Object &ob, ObjectConversionInfo &info)
+{
+  ob.flag |= OB_DONE;
+  Object *newob = nullptr;
+
+  Object *ob_eval = DEG_get_evaluated_object(info.depsgraph, &ob);
+  bke::GeometrySet geometry;
+  if (ob_eval->runtime->geometry_set_eval != nullptr) {
+    geometry = *ob_eval->runtime->geometry_set_eval;
+  }
+
+  const GreasePencil *grease_pencil_eval = geometry.get_grease_pencil();
+  const Curves *curves_eval = geometry.get_curves();
+  GreasePencil *new_grease_pencil = nullptr;
+
+  if (grease_pencil_eval || curves_eval) {
+    newob = ensure_object_duplication(ob, info);
+    new_grease_pencil = static_cast<GreasePencil *>(
+        BKE_id_new(info.bmain, ID_GP, newob->id.name + 2));
+    newob->data = new_grease_pencil;
+    newob->type = OB_GREASE_PENCIL;
+  }
+  else {
+    BKE_reportf(info.reports,
+                RPT_WARNING,
+                "Object '%s' has no evaluated Grease Pencil or Curves data",
+                ob.id.name + 2);
+    return nullptr;
+  }
+
+  if (grease_pencil_eval) {
+    BKE_grease_pencil_nomain_to_grease_pencil(BKE_grease_pencil_copy_for_eval(grease_pencil_eval),
+                                              new_grease_pencil);
+    BKE_object_material_from_eval_data(info.bmain, newob, &grease_pencil_eval->id);
+    new_grease_pencil->attributes_for_write().remove_anonymous();
+  }
+  else if (curves_eval) {
+    GreasePencil *grease_pencil = BKE_grease_pencil_new_nomain();
+    /* Insert a default layer and place the drawing on frame 1. */
+    const std::string layer_name = "Layer";
+    const int frame_number = 1;
+    bke::greasepencil::Layer &layer = grease_pencil->add_layer(layer_name);
+    bke::greasepencil::Drawing *drawing = grease_pencil->insert_frame(layer, frame_number);
+    BLI_assert(drawing != nullptr);
+    drawing->strokes_for_write() = curves_eval->geometry.wrap();
+
+    BKE_grease_pencil_nomain_to_grease_pencil(grease_pencil, new_grease_pencil);
+    BKE_object_material_from_eval_data(info.bmain, newob, &curves_eval->id);
+  }
+
+  BKE_object_free_derived_caches(newob);
+  BKE_object_free_modifiers(newob, 0);
+
+  return newob;
+}
+
+static Object *convert_curves(Object &ob, const short target, ObjectConversionInfo &info)
+{
+  switch (target) {
+    case OB_MESH:
+      return convert_curves_to_mesh(ob, info);
+    case OB_GREASE_PENCIL:
+      return convert_curves_to_grease_pencil(ob, info);
+    default:
+      return convert_any_to_curves(ob, info);
+  }
+}
+
+static Object *convert_grease_pencil_to_mesh(Object &ob, ObjectConversionInfo &info)
+{
+  ob.flag |= OB_DONE;
+  Object *newob = nullptr;
+
+  // I think we should implement something better.
+
+  return newob;
+}
+
+static Object *convert_grease_pencil(Object &ob, const short target, ObjectConversionInfo &info)
+{
+  switch (target) {
+    case OB_CURVES:
+      return convert_any_to_curves(ob, info);
+    case OB_MESH:
+      // return convert_curves_to_mesh(ob, info);
+    default:
+      return nullptr;
+  }
+  return nullptr;
+}
+
+static Object *convert_font_to_curves_legacy_or_mesh(Object &ob,
+                                                     ObjectConversionInfo &info,
+                                                     const bool do_mesh)
+{
+  ob.flag |= OB_DONE;
+  Object *newob = ensure_object_duplication(ob, info);
+
+  Curve *cu = static_cast<Curve *>(newob->data);
+
+  Object *ob_eval = DEG_get_evaluated_object(info.depsgraph, &ob);
+  BKE_vfont_to_curve_ex(ob_eval,
+                        static_cast<Curve *>(ob_eval->data),
+                        FO_EDIT,
+                        &cu->nurb,
+                        nullptr,
+                        nullptr,
+                        nullptr,
+                        nullptr);
+
+  newob->type = OB_CURVES_LEGACY;
+  cu->type = OB_CURVES_LEGACY;
+
+  if (cu->vfont) {
+    id_us_min(&cu->vfont->id);
+    cu->vfont = nullptr;
+  }
+  if (cu->vfontb) {
+    id_us_min(&cu->vfontb->id);
+    cu->vfontb = nullptr;
+  }
+  if (cu->vfonti) {
+    id_us_min(&cu->vfonti->id);
+    cu->vfonti = nullptr;
+  }
+  if (cu->vfontbi) {
+    id_us_min(&cu->vfontbi->id);
+    cu->vfontbi = nullptr;
+  }
+
+  if (!info.keep_original) {
+    /* other users */
+    Object *ob1 = nullptr;
+    if (ID_REAL_USERS(&cu->id) > 1) {
+      for (ob1 = static_cast<Object *>(info.bmain->objects.first); ob1;
+           ob1 = static_cast<Object *>(ob1->id.next))
+      {
+        if (ob1->data == ob.data && ob1 != &ob) {
+          ob1->type = OB_CURVES_LEGACY;
+          DEG_id_tag_update(&ob1->id,
+                            ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY | ID_RECALC_ANIMATION);
+        }
+      }
+    }
+  }
+
+  LISTBASE_FOREACH (Nurb *, nu, &cu->nurb) {
+    nu->charidx = 0;
+  }
+
+  cu->flag &= ~CU_3D;
+  BKE_curve_dimension_update(cu);
+
+  if (do_mesh) {
+    /* No assumption should be made that the resulting objects is a mesh, as conversion can
+     * fail. */
+    object_data_convert_curve_to_mesh(info.bmain, info.depsgraph, newob);
+    /* Meshes doesn't use the "curve cache". */
+    BKE_object_free_curve_cache(newob);
+  }
+
+  return newob;
+}
+
+static Object *convert_font(Object &ob, const short target, ObjectConversionInfo &info)
+{
+  switch (target) {
+    case OB_MESH:
+      return convert_font_to_curves_legacy_or_mesh(ob, info, true);
+    case OB_CURVES_LEGACY:
+      return convert_font_to_curves_legacy_or_mesh(ob, info, false);
+    default:
+      return nullptr;
+  }
+  return nullptr;
+}
+
+static Object *convert_curves_legacy_to_mesh(Object &ob, ObjectConversionInfo &info)
+{
+  ob.flag |= OB_DONE;
+  Object *newob = ensure_object_duplication(ob, info);
+
+  /* No assumption should be made that the resulting objects is a mesh, as conversion can
+   * fail. */
+  object_data_convert_curve_to_mesh(info.bmain, info.depsgraph, newob);
+  /* Meshes don't use the "curve cache". */
+  BKE_object_free_curve_cache(newob);
+
+  return newob;
+}
+
+static Object *convert_curves_legacy(Object &ob, const short target, ObjectConversionInfo &info)
+{
+  switch (target) {
+    case OB_MESH:
+      return convert_curves_legacy_to_mesh(ob, info);
+    default:
+      return nullptr;
+  }
+}
+
+static Object *convert_mball_to_mesh(Object &ob, ObjectConversionInfo &info)
+{
+  Object *newob = nullptr;
+  Object *baseob = nullptr;
+
+  info.base->flag &= ~BASE_SELECTED;
+  ob.base_flag &= ~BASE_SELECTED;
+
+  baseob = BKE_mball_basis_find(info.scene, &ob);
+
+  if (&ob != baseob) {
+    /* If mother-ball is converting it would be marked as done later. */
+    ob.flag |= OB_DONE;
+  }
+
+  if (!(baseob->flag & OB_DONE)) {
+    info.basen = duplibase_for_convert(
+        info.bmain, info.depsgraph, info.scene, info.view_layer, info.base, baseob);
+    newob = info.basen->object;
+
+    MetaBall *mb = static_cast<MetaBall *>(newob->data);
+    id_us_min(&mb->id);
+
+    /* Find the evaluated mesh of the basis metaball object. */
+    Object *object_eval = DEG_get_evaluated_object(info.depsgraph, baseob);
+    Mesh *mesh = BKE_mesh_new_from_object_to_bmain(info.bmain, info.depsgraph, object_eval, true);
+
+    id_us_plus(&mesh->id);
+    newob->data = mesh;
+    newob->type = OB_MESH;
+
+    if (info.obact->type == OB_MBALL) {
+      info.basact = info.basen;
+    }
+
+    baseob->flag |= OB_DONE;
+    info.mballConverted = 1;
+  }
+
+  return newob;
+}
+
+static Object *convert_mball(Object &ob, const short target, ObjectConversionInfo &info)
+{
+  switch (target) {
+    case OB_MESH:
+      return convert_mball_to_mesh(ob, info);
+    default:
+      return nullptr;
+  }
+}
+
+static Object *convert_point_cloud_to_mesh(Object &ob, ObjectConversionInfo &info)
+{
+  ob.flag |= OB_DONE;
+  Object *newob = ensure_object_duplication(ob, info);
+
+  BKE_pointcloud_to_mesh(info.bmain, info.depsgraph, info.scene, newob);
+
+  if (newob->type == OB_MESH) {
+    BKE_object_free_modifiers(newob, 0); /* after derivedmesh calls! */
+    ED_rigidbody_object_remove(info.bmain, info.scene, newob);
+  }
+
+  return newob;
+}
+
+static Object *convert_point_cloud(Object &ob, const short target, ObjectConversionInfo &info)
+{
+  switch (target) {
+    case OB_MESH:
+      return convert_point_cloud_to_mesh(ob, info);
+    default:
+      return nullptr;
+  }
+}
+
 static int object_convert_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  Base *basen = nullptr, *basact = nullptr;
-  Object *ob1, *obact = CTX_data_active_object(C);
+  Object *obact = CTX_data_active_object(C);
   const short target = RNA_enum_get(op->ptr, "target");
   bool keep_original = RNA_boolean_get(op->ptr, "keep_original");
   const bool do_merge_customdata = RNA_boolean_get(op->ptr, "merge_customdata");
-
-  int mballConverted = 0;
-  bool gpencilConverted = false;
-  bool gpencilCurveConverted = false;
 
   /* don't forget multiple users! */
 
@@ -2915,6 +3438,19 @@ static int object_convert_exec(bContext *C, wmOperator *op)
 
   Vector<PointerRNA> selected_editable_bases;
   CTX_data_selected_editable_bases(C, &selected_editable_bases);
+
+  ObjectConversionInfo info;
+  info.bmain = bmain;
+  info.depsgraph = depsgraph;
+  info.scene = scene;
+  info.view_layer = view_layer;
+  info.obact = obact;
+  info.basen = info.basact = nullptr;
+  info.mballConverted = false;
+  info.gpencilConverted = false;
+  info.keep_original = keep_original;
+  info.do_merge_customdata = do_merge_customdata;
+  info.reports = op->reports;
 
   /* Ensure we get all meshes calculated with a sufficient data-mask,
    * needed since re-evaluating single modifiers causes bugs if they depend
@@ -2954,6 +3490,8 @@ static int object_convert_exec(bContext *C, wmOperator *op)
     Base *base = static_cast<Base *>(ptr.data);
     Object *ob = base->object;
 
+    info.base = base;
+
     if (ob->flag & OB_DONE || !IS_TAGGED(ob->data)) {
       if (ob->type != target) {
         base->flag &= ~SELECT;
@@ -2973,6 +3511,38 @@ static int object_convert_exec(bContext *C, wmOperator *op)
         }
       }
     }
+#if 1  // To test new conversion code
+    else {
+      switch (ob->type) {
+        case OB_MESH:
+          newob = convert_mesh(*ob, target, info);
+          break;
+        case OB_CURVES:
+          newob = convert_curves(*ob, target, info);
+          break;
+        case OB_CURVES_LEGACY:
+          [[fallthrough]];
+        case OB_SURF:
+          newob = convert_curves_legacy(*ob, target, info);
+          break;
+        case OB_FONT:
+          newob = convert_font(*ob, target, info);
+          break;
+        case OB_GREASE_PENCIL:
+          newob = convert_grease_pencil(*ob, target, info);
+          break;
+        case OB_MBALL:
+          newob = convert_mball(*ob, target, info);
+          break;
+        case OB_POINTCLOUD:
+          newob = convert_point_cloud(*ob, target, info);
+          break;
+        default:
+          continue;
+      }
+    }
+
+#else
     else if (ob->type == OB_MESH && target == OB_CURVES_LEGACY) {
       ob->flag |= OB_DONE;
 
@@ -3015,11 +3585,11 @@ static int object_convert_exec(bContext *C, wmOperator *op)
           newob = basen->object;
 
           /* Decrement original curve's usage count. */
-          Curve *legacy_curve = static_cast<Curve *>(newob->data);
-          id_us_min(&legacy_curve->id);
+          Curve *curves_legacy = static_cast<Curve *>(newob->data);
+          id_us_min(&curves_legacy->id);
 
           /* Make a copy of the curve. */
-          newob->data = BKE_id_copy(bmain, &legacy_curve->id);
+          newob->data = BKE_id_copy(bmain, &curves_legacy->id);
         }
         else {
           newob = ob;
@@ -3043,11 +3613,11 @@ static int object_convert_exec(bContext *C, wmOperator *op)
           newob = basen->object;
 
           /* Decrement original curve's usage count. */
-          Curve *legacy_curve = static_cast<Curve *>(newob->data);
-          id_us_min(&legacy_curve->id);
+          Curve *curves_legacy = static_cast<Curve *>(newob->data);
+          id_us_min(&curves_legacy->id);
 
           /* Make a copy of the curve. */
-          newob->data = BKE_id_copy(bmain, &legacy_curve->id);
+          newob->data = BKE_id_copy(bmain, &curves_legacy->id);
         }
         else {
           newob = ob;
@@ -3107,11 +3677,11 @@ static int object_convert_exec(bContext *C, wmOperator *op)
           newob = basen->object;
 
           /* Decrement original curve's usage count. */
-          Curve *legacy_curve = static_cast<Curve *>(newob->data);
-          id_us_min(&legacy_curve->id);
+          Curve *curves_legacy = static_cast<Curve *>(newob->data);
+          id_us_min(&curves_legacy->id);
 
           /* Make a copy of the curve. */
-          newob->data = BKE_id_copy(bmain, &legacy_curve->id);
+          newob->data = BKE_id_copy(bmain, &curves_legacy->id);
         }
         else {
           newob = ob;
@@ -3135,11 +3705,11 @@ static int object_convert_exec(bContext *C, wmOperator *op)
           newob = basen->object;
 
           /* Decrement original curve's usage count. */
-          Curve *legacy_curve = static_cast<Curve *>(newob->data);
-          id_us_min(&legacy_curve->id);
+          Curve *curves_legacy = static_cast<Curve *>(newob->data);
+          id_us_min(&curves_legacy->id);
 
           /* Make a copy of the curve. */
-          newob->data = BKE_id_copy(bmain, &legacy_curve->id);
+          newob->data = BKE_id_copy(bmain, &curves_legacy->id);
         }
         else {
           newob = ob;
@@ -3560,6 +4130,7 @@ static int object_convert_exec(bContext *C, wmOperator *op)
     else {
       continue;
     }
+#endif
 
     /* Ensure new object has consistent material data with its new obdata. */
     if (newob) {
@@ -3569,13 +4140,13 @@ static int object_convert_exec(bContext *C, wmOperator *op)
     /* tag obdata if it was been changed */
 
     /* If the original object is active then make this object active */
-    if (basen) {
+    if (info.basen) {
       if (ob == obact) {
         /* Store new active base to update view layer. */
-        basact = basen;
+        info.basact = info.basen;
       }
 
-      basen = nullptr;
+      info.basen = nullptr;
     }
 
     if (!keep_original && (ob->flag & OB_DONE)) {
@@ -3590,7 +4161,7 @@ static int object_convert_exec(bContext *C, wmOperator *op)
   }
 
   if (!keep_original) {
-    if (mballConverted) {
+    if (info.mballConverted) {
       /* We need to remove non-basis MBalls first, otherwise we won't be able to detect them if
        * their basis happens to be removed first. */
       FOREACH_SCENE_OBJECT_BEGIN (scene, ob_mball) {
@@ -3616,7 +4187,7 @@ static int object_convert_exec(bContext *C, wmOperator *op)
       FOREACH_SCENE_OBJECT_END;
     }
     /* Remove curves and meshes converted to Grease Pencil object. */
-    if (gpencilConverted) {
+    if (info.gpencilConverted) {
       FOREACH_SCENE_OBJECT_BEGIN (scene, ob_delete) {
         if (ELEM(ob_delete->type, OB_CURVES_LEGACY, OB_MESH)) {
           if (ob_delete->flag & OB_DONE) {
@@ -3629,7 +4200,7 @@ static int object_convert_exec(bContext *C, wmOperator *op)
   }
   else {
     /* Remove Text curves converted to Grease Pencil object to avoid duplicated curves. */
-    if (gpencilCurveConverted) {
+    if (info.gpencilCurveConverted) {
       FOREACH_SCENE_OBJECT_BEGIN (scene, ob_delete) {
         if (ELEM(ob_delete->type, OB_CURVES_LEGACY) && (ob_delete->flag & OB_DONE)) {
           base_free_and_unlink(bmain, scene, ob_delete);
@@ -3642,10 +4213,10 @@ static int object_convert_exec(bContext *C, wmOperator *op)
   // XXX: editmode_enter(C, 0);
   // XXX: exit_editmode(C, EM_FREEDATA|); /* free data, but no undo. */
 
-  if (basact) {
+  if (info.basact) {
     /* active base was changed */
-    base_activate(C, basact);
-    view_layer->basact = basact;
+    base_activate(C, info.basact);
+    view_layer->basact = info.basact;
   }
   else {
     BKE_view_layer_synced_ensure(scene, view_layer);
