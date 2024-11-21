@@ -19,6 +19,18 @@ from bpy.app.translations import (
 )
 
 
+def is_operator_available(idname):
+    module, _, operator = idname.partition(".")
+    if not module or not operator:
+        return False
+
+    # Check if the module and operator exist.
+    if module in dir(bpy.ops):
+        operator_list = dir(getattr(bpy.ops, module))
+        return operator in operator_list
+    return False
+
+
 def _indented_layout(layout, level):
     indentpx = 16
     if level == 0:
@@ -110,6 +122,7 @@ def draw_km(display_keymaps, kc, km, children, layout, level):
 
 def draw_kmi(display_keymaps, kc, km, kmi, layout, level):
     map_type = kmi.map_type
+    is_op_available = is_operator_available(kmi.idname)
 
     col = _indented_layout(layout, level)
 
@@ -130,7 +143,11 @@ def draw_kmi(display_keymaps, kc, km, kmi, layout, level):
         row.separator()
         row.prop(kmi, "propvalue", text="")
     else:
-        row.label(text=kmi.name)
+        if is_op_available:
+            row.label(text=kmi.name)
+        else:
+            row.alert = True
+            row.label(icon="WARNING_LARGE", text="{:s} (unavailable)".format(kmi.idname))
 
     row = split.row()
     row.prop(kmi, "map_type", text="")
@@ -172,7 +189,9 @@ def draw_kmi(display_keymaps, kc, km, kmi, layout, level):
         if km.is_modal:
             sub.prop(kmi, "propvalue", text="")
         else:
-            sub.prop(kmi, "idname", text="")
+            subrow = sub.row()
+            subrow.alert = not is_op_available
+            subrow.prop(kmi, "idname", text="")
 
         if map_type not in {'TEXTINPUT', 'TIMER'}:
             sub = split.column()
