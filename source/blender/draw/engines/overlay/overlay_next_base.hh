@@ -25,6 +25,7 @@ class Overlay {
                                 const State &state,
                                 Resources &res) = 0;
 
+  virtual void pre_draw(Framebuffer &framebuffer, Manager &manager, View &view) = 0;
   virtual void draw(Framebuffer &framebuffer, Manager &manager, View &view) = 0;
 
   virtual void draw_color_only(Framebuffer &framebuffer, Manager &manager, View &view) = 0;
