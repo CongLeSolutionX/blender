@@ -5163,7 +5163,7 @@ void blo_do_versions_400(FileData *fd, Library * /*lib*/, Main *bmain)
     add_subsurf_node_limit_surface_option(*bmain);
   }
 
-  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 404, 7)) {
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 404, 8)) {
     LISTBASE_FOREACH (bNodeTree *, ntree, &bmain->nodetrees) {
       if (ntree->type == NTREE_GEOMETRY) {
         remove_triangulate_node_min_size_input(ntree);
