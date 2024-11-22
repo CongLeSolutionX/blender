@@ -12,22 +12,82 @@
 
 namespace blender::draw::overlay {
 
-class Overlay {
+/**
+ * Base overlay class used for documentation.
+ *
+ * This is not actually used as all functions should always be called from the derived class.
+ * There is still some external conditional logic and draw ordering that needs to be adjusted on a
+ * per overlay basis inside the `overlay::Instance`.
+ */
+struct Overlay {
+  bool enabled_ = false;
+
+  /**
+   * Overlays are used for every area using GPUViewport (i.e. View3D, UV Editor, Compositor ...).
+   * They are also used for depth picking and selection.
+   * This means each overlays must decide when they are active. The poll function must initialize
+   * the `enabled_` depending on the context state.
+   */
+  virtual void poll(Resources &res, const State &state) = 0;
+
+  /**
+   * Synchronization creates and fill render passes based on context state and scene state.
+   *
+   * It runs for every scene update, so keep computation overhead low.
+   * If it is triggered, everything in the scene is considered updated.
+   * Note that this only concerns the render passes, the mesh batch caches are updated
+   * on a per object-data basis.
+   *
+   * IMPORTANT: Synchronization must be view agnostic. That is, not rely on view position and
+   * projection matrix to do conditional pass creation. This is because, by design, syncing can
+   * happen once and rendered multiple time (multi view rendering, stereo rendering, orbiting
+   * view ...). Conditional pass creation, must be done in the drawing callbacks, but they should
+   * remain the exception. Also there will be no access to object data at this point.
+   */
+
+  /**
+   * Creates passes used for object sync and enabling / disabling internal overlay types
+   * (e.g. vertices, edges, faces in edit mode).
+   * Runs once at the start of the sync cycle.
+   * Should also contain passes setup for overlays that are not per object overlays (e.g. Grid).
+   */
   virtual void begin_sync(Resources &res, const State &state, const View &view) = 0;
 
+  /**
+   * Fills passes or buffers for each object.
+   * Runs for each individual object state.
+   * IMPORTANT: Can run only once for instances using the same state (#ObjectRef might contains
+   * instancing data).
+   */
   virtual void object_sync(Manager &manager,
                            const ObjectRef &ob_ref,
                            const State &state,
                            Resources &res) = 0;
 
+  /**
+   * Finalize passes or buffers used for object sync.
+   * Runs once at the start of the sync cycle.
+   */
   virtual void edit_object_sync(Manager &manager,
                                 const ObjectRef &ob_ref,
                                 const State &state,
                                 Resources &res) = 0;
 
-  virtual void pre_draw(Framebuffer &framebuffer, Manager &manager, View &view) = 0;
-  virtual void draw(Framebuffer &framebuffer, Manager &manager, View &view) = 0;
+  /**
+   * Warms #PassMain and #PassSortable to avoid overhead of pipeline switching.
+   * Should only contains calls to `generate_commands`.
+   * NOTE: `view` is guaranteed to be the same view that will be passed to the draw functions.
+   */
+  virtual void pre_draw(Manager &manager, View &view) = 0;
 
+  /**
+   * Drawing can be split into multiple passes. Each callback draws onto a specific framebuffer.
+   * The order between each draw function is guaranteed. But it is not guaranteed that no other
+   * overlay will render in between. The overlay can render to a temporary framebuffer before
+   * resolving to the given framebuffer.
+   */
+
+  virtual void draw(Framebuffer &framebuffer, Manager &manager, View &view) = 0;
   virtual void draw_color_only(Framebuffer &framebuffer, Manager &manager, View &view) = 0;
   virtual void draw_on_render(GPUFrameBuffer *framebuffer, Manager &manager, View &view) = 0;
 };

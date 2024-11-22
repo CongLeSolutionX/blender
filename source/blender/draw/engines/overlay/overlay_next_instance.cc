@@ -495,6 +495,7 @@ void Instance::draw_node(Manager &manager, View &view)
    * need to mask out the image from the already drawn overlay color buffer. */
   background.draw(resources.overlay_output_fb, manager, view);
 }
+
 void Instance::draw_v2d(Manager &manager, View &view)
 {
   regular.mesh_uvs.draw_on_render(resources.render_fb, manager, view);
