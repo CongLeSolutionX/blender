@@ -111,12 +111,11 @@ struct OctreeTracing {
   /* Current active interval. */
   Interval<float> t;
 
-  /* Offset ray to prevent numerical issue. */
-  /* TODO(weizhen): do we really need to store this offset? */
-  packed_float3 ray_offset;
-
   /* Precompute the inverse of the ray direction for finding the next voxel crossing. */
-  float3 inv_ray_D;
+  packed_float3 inv_ray_D;
+
+  /* Records the direction of the intersection, for offsetting ray to prevent numerical issue. */
+  int step_mask;
 
   /* See `ray_aabb_intersect()`. */
   ccl_device_inline_method float ray_voxel_intersect(const float3 ray_P, const float ray_tmax)
@@ -132,11 +131,7 @@ struct OctreeTracing {
     const float3 tmaxes = max(t_lower, t_upper);
     const float tmax = reduce_min(tmaxes);
 
-    /* TODO(weizhen): use proper depth. */
-    ray_offset = bbox.size() / (2 << VOLUME_OCTREE_MAX_DEPTH) *
-                 make_float3(copysignf(tmax == tmaxes.x, inv_ray_D.x),
-                             copysignf(tmax == tmaxes.y, inv_ray_D.y),
-                             copysignf(tmax == tmaxes.z, inv_ray_D.z));
+    step_mask = (tmax == tmaxes.x) + ((tmax == tmaxes.y) << 1) + ((tmax == tmaxes.z) << 2);
 
     return fminf(tmax, ray_tmax);
   }
@@ -170,7 +165,7 @@ ccl_device_inline bool volume_octree_tracing_init(KernelGlobals kg,
 {
   tracing.inv_ray_D = rcp(ray->D);
   tracing.t.min = ray->tmin;
-  tracing.ray_offset = zero_float3();
+  tracing.step_mask = 0;
 
   const ccl_global KernelOctreeNode *kroot = &kernel_data_fetch(volume_tree_nodes, 1);
   const KernelBoundingBox root_bbox = kroot->bbox;
@@ -204,14 +199,16 @@ ccl_device_inline bool volume_octree_tracing_advance(KernelGlobals kg,
     return false;
   }
 
-  /* Advance to the end of the current segment. */
-  const float3 shade_P = ray->P + ray->D * tracing.t.max + tracing.ray_offset;
+  /* Offset to the next node. */
+  KernelBoundingBox bbox = tracing.node->bbox;
+  const float3 ray_offset = bbox.size() / (2 << VOLUME_OCTREE_MAX_DEPTH) *
+                            make_float3(copysignf(tracing.step_mask & 1, ray->D.x),
+                                        copysignf((tracing.step_mask >> 1) & 1, ray->D.y),
+                                        copysignf((tracing.step_mask >> 2) & 1, ray->D.z));
+  const float3 offset_P = ray->P + ray->D * tracing.t.max + ray_offset;
 
   /* Find the deepest internal node that contains the current shading point. */
-  /* TODO(weizhen): Metal does not accept the following expression?? */
-  //   while (!tracing.node->bbox.contains(shade_P)) {
-  KernelBoundingBox bbox = tracing.node->bbox;
-  while (!bbox.contains(shade_P)) {
+  while (!bbox.contains(offset_P)) {
     /* TODO(weizhen): Metal complains that the function is not marked as const, I don't understand.
      */
     // if (tracing.node->is_root()) {
@@ -242,7 +239,7 @@ ccl_device_inline bool volume_octree_tracing_advance(KernelGlobals kg,
   }
 
   /* Find the current active leaf node. */
-  volume_voxel_get(kg, tracing, shade_P);
+  volume_voxel_get(kg, tracing, offset_P);
 
   /* Advance to the next segment. */
   tracing.t.min = tracing.t.max;
