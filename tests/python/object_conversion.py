@@ -1,9 +1,9 @@
-# SPDX-FileCopyrightText: 2020-2022 Blender Authors
+# SPDX-FileCopyrightText: 2020-2024 Blender Authors
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 # To run all tests, use
-# BLENDER_VERBOSE=1 ./bin/blender ../tests/data/modeling/curve_to_mesh.blend --python ../blender/tests/python/bl_curve_to_mesh.py -- --run-all-tests
+# BLENDER_VERBOSE=1 ./bin/blender ../tests/data/modeling/object_conversion.blend --python ../blender/tests/python/bl_object_conversion.py -- --run-all-tests
 # (that assumes the test is run from a build directory in the same directory as the source code)
 import bpy
 import os
@@ -62,31 +62,27 @@ class ConversionTypeTestHelper:
 
         test = case
         print("Running test '{}'".format(test.test_name))
-        
-        try:
-            test_object = bpy.data.objects[test.from_object]
-            with bpy.context.temp_override(object=test_object,selected_objects=[test_object]):
-                bpy.context.view_layer.objects.active = test_object
 
-                selection = test_object.select_get()
-                test_object.select_set(True)
-                retval = bpy.ops.object.convert(target = test.to_type, keep_original = True)
-                test_object.select_set(False)
+        test_object = bpy.data.objects[test.from_object]
+        with bpy.context.temp_override(object=test_object,selected_objects=[test_object]):
+            bpy.context.view_layer.objects.active = test_object
 
-                if retval != {'FINISHED'}:
-                    raise RuntimeError("Unexpected operator return value: {}".format(retval))
-                
-            resulting_type = bpy.context.view_layer.objects.active.type
-            bpy.ops.object.delete()
-            if resulting_type != test.resulting_type:
-                raise RuntimeError("Converted object does not match expected type.\nTest '{}': Converting '{}' to '{}' expecting '{}' got '{}'\n"
-                    .format(test.test_name, test.from_object, test.to_type, test.resulting_type, resulting_type))
-        except RuntimeError as err:
-            print(err)
-            return 0
+            selection = test_object.select_get()
+            test_object.select_set(True)
+            retval = bpy.ops.object.convert(target = test.to_type, keep_original = True)
+            test_object.select_set(False)
+
+            if retval != {'FINISHED'}:
+                raise RuntimeError("Unexpected operator return value: {}".format(retval))
+            
+        resulting_type = bpy.context.view_layer.objects.active.type
+        bpy.ops.object.delete()
+        if resulting_type != test.resulting_type:
+            raise RuntimeError("Converted object does not match expected type.\nTest '{}': Converting '{}' to '{}' expecting '{}' got '{}'\n"
+                .format(test.test_name, test.from_object, test.to_type, test.resulting_type, resulting_type))
 
         print("Success\n")
-        return 1
+        return True
 
 class ConversionPair:
     def __init__(self, test_name, from_object, to_type, resulting_type):
@@ -154,16 +150,8 @@ def main():
         if cmd == "--run-all-tests":
             has_problems = False
             operator_test.do_compare = True
-            try:
-                operator_test.run_all_tests()
-            except:
-                has_problems = True
-            try:
-                all_type_tests.run_all_tests()
-            except:
-                has_problems = True
-            if has_problems:
-                raise RuntimeError("Some tests failed.\n");
+            operator_test.run_all_tests()
+            all_type_tests.run_all_tests()
             break
         elif cmd == "--run-test":
             name = command[i + 1]
