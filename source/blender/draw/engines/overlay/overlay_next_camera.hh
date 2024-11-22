@@ -359,6 +359,7 @@ class Cameras {
   }
 
   bool enabled_ = false;
+  bool images_enabled_ = false;
 
  public:
   Cameras(const SelectionType selection_type) : call_buffers_{selection_type} {};
@@ -382,6 +383,12 @@ class Cameras {
     call_buffers_.tracking_path.clear();
     Empties::begin_sync(call_buffers_.empties);
 
+    images_enabled_ = res.selection_type == SelectionType::DISABLED;
+
+    if (!images_enabled_) {
+      return;
+    }
+
     float4x4 depth_bias_winmat = winmat_polygon_offset(
         view.winmat(), state.view_dist_get(view.winmat()), -1.0f);
 
@@ -396,7 +403,7 @@ class Cameras {
     };
 
     DRWState draw_state;
-    draw_state = DRW_STATE_WRITE_COLOR | DRW_STATE_DEPTH_GREATER | DRW_STATE_BLEND_ALPHA_PREMUL;
+    draw_state = DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ALPHA_PREMUL;
     init_pass(background_ps_, draw_state);
 
     draw_state = DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ALPHA_UNDER_PREMUL;
@@ -616,7 +623,7 @@ class Cameras {
 
   void pre_draw(Manager &manager, View &view)
   {
-    if (!enabled_) {
+    if (!images_enabled_) {
       return;
     }
 
@@ -636,9 +643,9 @@ class Cameras {
     manager.submit(ps_, view);
   }
 
-  void draw_scene_background_images(Framebuffer &framebuffer, Manager &manager, View &view)
+  void draw_scene_background_images(GPUFrameBuffer *framebuffer, Manager &manager, View &view)
   {
-    if (!enabled_) {
+    if (!images_enabled_) {
       return;
     }
 
@@ -649,7 +656,7 @@ class Cameras {
 
   void draw_background_images(Framebuffer &framebuffer, Manager &manager, View &view)
   {
-    if (!enabled_) {
+    if (!images_enabled_) {
       return;
     }
 
@@ -659,7 +666,7 @@ class Cameras {
 
   void draw_in_front(Framebuffer &framebuffer, Manager &manager, View &view)
   {
-    if (!enabled_) {
+    if (!images_enabled_) {
       return;
     }
 
@@ -676,6 +683,10 @@ class Cameras {
                           Resources &res,
                           const SelectionType selection_type)
   {
+    if (!images_enabled_) {
+      return;
+    }
+
     Object *ob = ob_ref.object;
     const Camera *cam = static_cast<Camera *>(ob->data);
 
