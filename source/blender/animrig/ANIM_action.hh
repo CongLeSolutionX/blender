@@ -157,7 +157,7 @@ class Action : public ::bAction {
    * \see #Action::slot_identifier_define
    * \see #Action::slot_identifier_propagate
    */
-  void slot_identifier_set(Main &bmain, Slot &slot, StringRefNull new_name);
+  void slot_identifier_set(Main &bmain, Slot &slot, StringRefNull new_identifier);
 
   /**
    * Set the slot identifier, and ensure it is unique.
@@ -168,7 +168,7 @@ class Action : public ::bAction {
    * \see #Action::slot_identifier_set
    * \see #Action::slot_identifier_propagate
    */
-  void slot_identifier_define(Slot &slot, StringRefNull new_name);
+  void slot_identifier_define(Slot &slot, StringRefNull new_identifier);
 
   /**
    * Update the `AnimData::action_slot_name` field of any ID that is animated by
@@ -180,7 +180,7 @@ class Action : public ::bAction {
    */
   void slot_identifier_propagate(Main &bmain, const Slot &slot);
 
-  Slot *slot_find_by_identifier(StringRefNull slot_name);
+  Slot *slot_find_by_identifier(StringRefNull slot_identifier);
 
   /**
    * Create a new, unused Slot.

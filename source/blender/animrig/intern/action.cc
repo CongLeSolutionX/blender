@@ -398,22 +398,22 @@ static void slot_name_ensure_unique(Action &action, Slot &slot)
   BLI_uniquename_cb(check_name_is_used, &check_data, "", '.', slot.name, sizeof(slot.name));
 }
 
-void Action::slot_identifier_set(Main &bmain, Slot &slot, const StringRefNull new_name)
+void Action::slot_identifier_set(Main &bmain, Slot &slot, const StringRefNull new_identifier)
 {
   /* TODO: maybe this function should only set the 'name without prefix' aka the 'display name'.
    * That way only `this->id_type` is responsible for the prefix. I (Sybren) think that's easier to
    * determine when the code is a bit more mature, and we can see what the majority of the calls to
    * this function actually do/need. */
 
-  this->slot_identifier_define(slot, new_name);
+  this->slot_identifier_define(slot, new_identifier);
   this->slot_identifier_propagate(bmain, slot);
 }
 
-void Action::slot_identifier_define(Slot &slot, const StringRefNull new_name)
+void Action::slot_identifier_define(Slot &slot, const StringRefNull new_identifier)
 {
-  BLI_assert_msg(StringRef(new_name).size() >= Slot::name_length_min,
+  BLI_assert_msg(StringRef(new_identifier).size() >= Slot::name_length_min,
                  "Action Slots must be large enough for a 2-letter ID code + the display name");
-  STRNCPY_UTF8(slot.name, new_name.c_str());
+  STRNCPY_UTF8(slot.name, new_identifier.c_str());
   slot_name_ensure_unique(*this, slot);
 }
 
@@ -448,10 +448,10 @@ void Action::slot_identifier_propagate(Main &bmain, const Slot &slot)
   FOREACH_MAIN_LISTBASE_END;
 }
 
-Slot *Action::slot_find_by_identifier(const StringRefNull slot_name)
+Slot *Action::slot_find_by_identifier(const StringRefNull slot_identifier)
 {
   for (Slot *slot : slots()) {
-    if (STREQ(slot->name, slot_name.c_str())) {
+    if (STREQ(slot->name, slot_identifier.c_str())) {
       return slot;
     }
   }
