@@ -378,14 +378,14 @@ class Action : public ::bAction {
   Slot &slot_allocate();
 
   /**
-   * Ensure the slot name prefix matches its ID type.
+   * Ensure the slot identifier prefix matches its ID type.
    *
    * This ensures that the first two characters match the ID type of
    * this slot.
    *
    * \see #Action::slot_identifier_propagate
    */
-  void slot_name_ensure_prefix(Slot &slot);
+  void slot_identifier_ensure_prefix(Slot &slot);
 };
 static_assert(sizeof(Action) == sizeof(::bAction),
               "DNA struct and its C++ wrapper must have the same size");

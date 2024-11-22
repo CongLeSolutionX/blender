@@ -684,7 +684,7 @@ Layer *Action::get_layer_for_keyframing()
   return this->layer(0);
 }
 
-void Action::slot_name_ensure_prefix(Slot &slot)
+void Action::slot_identifier_ensure_prefix(Slot &slot)
 {
   slot.name_ensure_prefix();
   slot_name_ensure_unique(*this, slot);
@@ -698,7 +698,7 @@ void Action::slot_setup_for_id(Slot &slot, const ID &animated_id)
   }
 
   slot.idtype = GS(animated_id.name);
-  this->slot_name_ensure_prefix(slot);
+  this->slot_identifier_ensure_prefix(slot);
 }
 
 bool Action::has_keyframes(const slot_handle_t action_slot_handle) const
