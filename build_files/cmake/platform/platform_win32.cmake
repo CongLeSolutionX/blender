@@ -53,7 +53,7 @@ else()
     endif()
     if(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 19.36.32532 AND # MSVC 2022 17.6.0 has a bad codegen
        CMAKE_CXX_COMPILER_VERSION VERSION_LESS 19.37.32705)             # But it is fixed in 2022 17.7 preview 1
-      message(FATAL_ERROR "Compiler is unsupported, MSVC 2022 17.6.x has codegen issues and cannot be used to build blender. Please use MSVC 17.5 for the time being.")
+      message(FATAL_ERROR "Compiler is unsupported, MSVC 2022 17.6.x has codegen issues and cannot be used to build blender. Please upgrade to 17.7 or newer.")
     endif()
   endif()
 endif()
@@ -212,7 +212,7 @@ endif()
 # /Zc:preprocessor: Available from MSVC 16.5 (1925) and up. Enables standards-conforming
 #                   preprocessor.
 if(NOT MSVC_CLANG)
-  string(APPEND CMAKE_CXX_FLAGS " /permissive- /Zc:__cplusplus /Zc:inline /Zc:lambda")
+  string(APPEND CMAKE_CXX_FLAGS " /permissive- /Zc:__cplusplus /Zc:inline")
   string(APPEND CMAKE_C_FLAGS   " /Zc:inline")
 
   # For ARM64 devices, we need to tell MSVC to use the new preprocessor

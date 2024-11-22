@@ -25,7 +25,7 @@ class Background {
     float4 color_override(0.0f, 0.0f, 0.0f, 0.0f);
     int background_type;
 
-    if (DRW_state_is_viewport_image_render() && !DRW_state_draw_background()) {
+    if (state.is_viewport_image_render && !state.draw_background) {
       background_type = BG_SOLID;
       color_override[3] = 1.0f;
     }
@@ -36,7 +36,7 @@ class Background {
       background_type = BG_MASK;
       pass_state = DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_MUL;
     }
-    else if (!DRW_state_draw_background()) {
+    else if (!state.draw_background) {
       background_type = BG_CHECKER;
     }
     else if (state.v3d->shading.background_type == V3D_SHADING_BACKGROUND_WORLD &&
@@ -70,11 +70,6 @@ class Background {
 
     bg_ps_.init();
     bg_ps_.framebuffer_set(&framebuffer_ref_);
-    /* Don't clear background for the node editor. The node editor draws the background and we
-     * need to mask out the image from the already drawn overlay color buffer. */
-    if (state.space_type != SPACE_NODE) {
-      bg_ps_.clear_color(float4(0.0f));
-    }
 
     if ((state.clipping_plane_count != 0) && (state.rv3d) && (state.rv3d->clipbb)) {
       bg_ps_.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ALPHA | DRW_STATE_CULL_BACK);

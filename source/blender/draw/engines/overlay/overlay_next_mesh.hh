@@ -346,7 +346,7 @@ class Meshes {
       gpu::Batch *geom = DRW_mesh_batch_cache_get_edit_skin_roots(mesh);
       edit_mesh_skin_roots_ps_.draw_expand(geom, GPU_PRIM_LINES, 32, 1, res_handle);
     }
-    if (DRW_state_show_text() && (state.overlay.edit_flag & overlay_edit_text)) {
+    if (state.show_text && (state.overlay.edit_flag & overlay_edit_text)) {
       DRW_text_edit_mesh_measure_stats(state.region, state.v3d, ob, &state.scene->unit, state.dt);
     }
   }
@@ -677,7 +677,7 @@ class MeshUVs {
                      DRW_STATE_BLEND_ALPHA);
       pass.shader_set(res.shaders.uv_edit_facedot.get());
       pass.bind_ubo("globalsBlock", &res.globals_buf);
-      pass.push_constant("pointSize", (point_size + 1.5f) * float(M_SQRT2));
+      pass.push_constant("pointSize", point_size);
     }
 
     if (show_face_) {
@@ -899,7 +899,7 @@ class MeshUVs {
     }
   }
 
-  void draw(Framebuffer &framebuffer, Manager &manager, View &view)
+  void draw(GPUFrameBuffer *framebuffer, Manager &manager, View &view)
   {
     if (!enabled_) {
       return;
