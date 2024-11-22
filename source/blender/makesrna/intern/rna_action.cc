@@ -296,9 +296,9 @@ static std::optional<std::string> rna_ActionSlot_path(const PointerRNA *ptr)
 {
   animrig::Slot &slot = rna_data_slot(ptr);
 
-  char name_esc[sizeof(slot.name) * 2];
-  BLI_str_escape(name_esc, slot.name, sizeof(name_esc));
-  return fmt::format("slots[\"{}\"]", name_esc);
+  char identifier_esc[sizeof(slot.identifier) * 2];
+  BLI_str_escape(identifier_esc, slot.identifier, sizeof(identifier_esc));
+  return fmt::format("slots[\"{}\"]", identifier_esc);
 }
 
 int rna_ActionSlot_id_root_icon_get(PointerRNA *ptr)
@@ -378,7 +378,7 @@ static void rna_ActionSlot_debug_log_users(const ID *action_id, ActionSlot *dna_
   Slot &slot = dna_slot->wrap();
 
   printf("\033[38;5;214mAction Slot users of '%s' on Action '%s':\033[0m\n",
-         slot.name,
+         slot.identifier,
          action.id.name + 2);
   if (bmain->is_action_slot_to_id_map_dirty) {
     printf("  User map is \033[93mdirty\033[0m, this will trigger a recompute.\n");
@@ -1976,10 +1976,10 @@ static void rna_def_action_slot(BlenderRNA *brna)
 
   RNA_define_lib_overridable(false);
 
-  prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
+  prop = RNA_def_property(srna, "identifier", PROP_STRING, PROP_NONE);
   RNA_def_struct_name_property(srna, prop);
   RNA_def_property_string_funcs(prop, nullptr, nullptr, "rna_ActionSlot_name_set");
-  RNA_def_property_string_maxlength(prop, sizeof(ActionSlot::name) - 2);
+  RNA_def_property_string_maxlength(prop, sizeof(ActionSlot::identifier) - 2);
   RNA_def_property_update(prop, NC_ANIMATION | ND_ANIMCHAN, "rna_ActionSlot_name_update");
   RNA_def_property_ui_text(
       prop,
@@ -2006,7 +2006,7 @@ static void rna_def_action_slot(BlenderRNA *brna)
                                 "rna_ActionSlot_name_display_get",
                                 "rna_ActionSlot_name_display_length",
                                 "rna_ActionSlot_name_display_set");
-  RNA_def_property_string_maxlength(prop, sizeof(ActionSlot::name) - 2);
+  RNA_def_property_string_maxlength(prop, sizeof(ActionSlot::identifier) - 2);
   RNA_def_property_update(prop, NC_ANIMATION | ND_ANIMCHAN, "rna_ActionSlot_name_update");
   RNA_def_property_ui_text(
       prop,

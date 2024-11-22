@@ -271,7 +271,7 @@ static void version_legacy_actions_to_layered(Main *bmain)
            */
           *action_user.slot_handle = slot_to_assign.handle;
           BLI_strncpy_utf8(
-              action_user.slot_name, slot_to_assign.name, Slot::identifier_length_max);
+              action_user.slot_name, slot_to_assign.identifier, Slot::identifier_length_max);
 
           printf(
               "Warning: legacy action \"%s\" is assigned to \"%s\", which does not match the "

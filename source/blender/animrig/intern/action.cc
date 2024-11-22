@@ -388,14 +388,15 @@ static void slot_identifier_ensure_unique(Action &action, Slot &slot)
         /* Don't compare against the slot that's being renamed. */
         continue;
       }
-      if (STREQ(slot->name, name)) {
+      if (STREQ(slot->identifier, name)) {
         return true;
       }
     }
     return false;
   };
 
-  BLI_uniquename_cb(check_name_is_used, &check_data, "", '.', slot.name, sizeof(slot.name));
+  BLI_uniquename_cb(
+      check_name_is_used, &check_data, "", '.', slot.identifier, sizeof(slot.identifier));
 }
 
 void Action::slot_identifier_set(Main &bmain, Slot &slot, const StringRefNull new_identifier)
@@ -414,7 +415,7 @@ void Action::slot_identifier_define(Slot &slot, const StringRefNull new_identifi
   BLI_assert_msg(
       StringRef(new_identifier).size() >= Slot::identifier_length_min,
       "Action Slot identifiers must be large enough for a 2-letter ID code + the display name");
-  STRNCPY_UTF8(slot.name, new_identifier.c_str());
+  STRNCPY_UTF8(slot.identifier, new_identifier.c_str());
   slot_identifier_ensure_unique(*this, slot);
 }
 
@@ -442,7 +443,7 @@ void Action::slot_identifier_propagate(Main &bmain, const Slot &slot)
       }
 
       /* Ensure the Slot identifier on the AnimData is correct. */
-      STRNCPY_UTF8(adt->slot_name, slot.name);
+      STRNCPY_UTF8(adt->slot_name, slot.identifier);
     }
     FOREACH_MAIN_LISTBASE_ID_END;
   }
@@ -452,7 +453,7 @@ void Action::slot_identifier_propagate(Main &bmain, const Slot &slot)
 Slot *Action::slot_find_by_identifier(const StringRefNull slot_identifier)
 {
   for (Slot *slot : slots()) {
-    if (STREQ(slot->name, slot_identifier.c_str())) {
+    if (STREQ(slot->identifier, slot_identifier.c_str())) {
       return slot;
     }
   }
@@ -478,8 +479,8 @@ Slot &Action::slot_add()
   Slot &slot = this->slot_allocate();
 
   /* Assign the default name and the 'unbound' identifier prefix. */
-  STRNCPY_UTF8(slot.name, slot_unbound_prefix);
-  BLI_strncpy_utf8(slot.name + 2, DATA_(slot_default_name), ARRAY_SIZE(slot.name) - 2);
+  STRNCPY_UTF8(slot.identifier, slot_unbound_prefix);
+  BLI_strncpy_utf8(slot.identifier + 2, DATA_(slot_default_name), ARRAY_SIZE(slot.identifier) - 2);
 
   /* Append the Slot to the Action. */
   grow_array_and_append<::ActionSlot *>(&this->slot_array, &this->slot_array_num, &slot);
@@ -1126,33 +1127,33 @@ std::string Slot::identifier_prefix_for_idtype() const
 
 StringRefNull Slot::identifier_without_prefix() const
 {
-  BLI_assert(StringRef(this->name).size() >= identifier_length_min);
+  BLI_assert(StringRef(this->identifier).size() >= identifier_length_min);
 
   /* Avoid accessing an uninitialized part of the string accidentally. */
-  if (this->name[0] == '\0' || this->name[1] == '\0') {
+  if (this->identifier[0] == '\0' || this->identifier[1] == '\0') {
     return "";
   }
-  return this->name + 2;
+  return this->identifier + 2;
 }
 
 void Slot::identifier_ensure_prefix()
 {
-  BLI_assert(StringRef(this->name).size() >= identifier_length_min);
+  BLI_assert(StringRef(this->identifier).size() >= identifier_length_min);
 
-  if (StringRef(this->name).size() < 2) {
+  if (StringRef(this->identifier).size() < 2) {
     /* The code below would overwrite the trailing 0-byte. */
-    this->name[2] = '\0';
+    this->identifier[2] = '\0';
   }
 
   if (!this->has_idtype()) {
     /* A zero idtype is not going to convert to a two-character string, so we
      * need to explicitly assign the default prefix. */
-    this->name[0] = slot_unbound_prefix[0];
-    this->name[1] = slot_unbound_prefix[1];
+    this->identifier[0] = slot_unbound_prefix[0];
+    this->identifier[1] = slot_unbound_prefix[1];
     return;
   }
 
-  *reinterpret_cast<short *>(this->name) = this->idtype;
+  *reinterpret_cast<short *>(this->identifier) = this->idtype;
 }
 
 /* ----- Functions  ----------- */
@@ -1378,7 +1379,7 @@ ActionSlotAssignmentResult generic_assign_action_slot(Slot *slot_to_assign,
      *
      * TODO: Replace this with a BLI_assert() that the identifier is as expected, and "simply"
      * ensure this identifier is always correct. */
-    BLI_strncpy_utf8(slot_identifier, slot_to_unassign->name, Slot::identifier_length_max);
+    BLI_strncpy_utf8(slot_identifier, slot_to_unassign->identifier, Slot::identifier_length_max);
 
     /* If this was the last use of this slot, remove this ID from its users. */
     if (!is_id_using_action_slot(animated_id, action, slot_to_unassign->handle)) {
@@ -1392,7 +1393,7 @@ ActionSlotAssignmentResult generic_assign_action_slot(Slot *slot_to_assign,
 
   action.slot_setup_for_id(*slot_to_assign, animated_id);
   slot_handle_ref = slot_to_assign->handle;
-  BLI_strncpy_utf8(slot_identifier, slot_to_assign->name, Slot::identifier_length_max);
+  BLI_strncpy_utf8(slot_identifier, slot_to_assign->identifier, Slot::identifier_length_max);
   slot_to_assign->users_add(animated_id);
 
   return ActionSlotAssignmentResult::OK;
@@ -1959,7 +1960,7 @@ SingleKeyingResult StripKeyframeData::keyframe_insert(Main *bmain,
                  "Available setting or Replace keyframing mode.\n",
                  fcurve_descriptor.rna_path.c_str(),
                  fcurve_descriptor.array_index,
-                 slot.name);
+                 slot.identifier);
     return SingleKeyingResult::CANNOT_CREATE_FCURVE;
   }
 
@@ -1969,7 +1970,7 @@ SingleKeyingResult StripKeyframeData::keyframe_insert(Main *bmain,
                  "FCurve %s[%d] for slot %s doesn't allow inserting keys.\n",
                  fcurve_descriptor.rna_path.c_str(),
                  fcurve_descriptor.array_index,
-                 slot.name);
+                 slot.identifier);
     return SingleKeyingResult::FCURVE_NOT_KEYFRAMEABLE;
   }
 
@@ -1996,7 +1997,7 @@ SingleKeyingResult StripKeyframeData::keyframe_insert(Main *bmain,
                  "Could not insert key into FCurve %s[%d] for slot %s.\n",
                  fcurve_descriptor.rna_path.c_str(),
                  fcurve_descriptor.array_index,
-                 slot.name);
+                 slot.identifier);
     return insert_vert_result;
   }
 
