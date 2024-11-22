@@ -729,11 +729,18 @@ typedef struct UserDef_FileSpaceData {
   int flag;           /* FileSelectParams.flag */
   int _pad0;
   uint64_t filter_id; /* FileSelectParams.filter_id */
-
-  /** Info used when creating the file browser in a temporary window. */
-  int temp_win_sizex;
-  int temp_win_sizey;
 } UserDef_FileSpaceData;
+
+/**
+ * Storage for temp window position and size. Needs to
+ * use floats (divided by UI_DPI_FAC) to avoid drifting.
+ */
+typedef struct UserDef_WinState {
+  float posx;
+  float posy;
+  float sizex;
+  float sizey;
+} UserDef_WinState;
 
 typedef struct UserDef_Experimental {
   /* Debug options, always available. */
@@ -1129,6 +1136,9 @@ typedef struct UserDef {
   /** The UI for the user preferences. */
   UserDef_SpaceData space_data;
   UserDef_FileSpaceData file_space_data;
+
+  UserDef_WinState file_winstate;
+  UserDef_WinState preferences_winstate;
 
   UserDef_Experimental experimental;
 
@@ -1571,7 +1581,8 @@ typedef enum eUserpref_RenderDisplayType {
   USER_RENDER_DISPLAY_NONE = 0,
   USER_RENDER_DISPLAY_SCREEN = 1,
   USER_RENDER_DISPLAY_AREA = 2,
-  USER_RENDER_DISPLAY_WINDOW = 3
+  USER_RENDER_DISPLAY_WINDOW = 3,
+  USER_RENDER_DISPLAY_WINDOW_SAVED = 4
 } eUserpref_RenderDisplayType;
 
 typedef enum eUserpref_TempSpaceDisplayType {

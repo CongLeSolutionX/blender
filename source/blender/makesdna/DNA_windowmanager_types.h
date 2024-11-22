@@ -414,6 +414,11 @@ typedef struct wmWindow {
   /** Private runtime info to show text in the status bar. */
   void *cursor_keymap_status;
 
+  /* Optional pointer to a UserDef_WinState used to save/restore size and position. */
+  struct UserDef_WinState *savestate;
+
+  void *_pad2;
+
   /**
    * The time when the key is pressed in milliseconds (see #GHOST_GetEventTime).
    * Used to detect double-click events.

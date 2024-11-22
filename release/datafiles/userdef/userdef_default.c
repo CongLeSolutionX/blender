@@ -226,9 +226,6 @@ const UserDef U_default = {
             .details_flags = FILE_DETAILS_SIZE | FILE_DETAILS_DATETIME,
             .flag = FILE_HIDE_DOT,
             .filter_id = FILTER_ID_ALL,
-
-            .temp_win_sizex = 1060,
-            .temp_win_sizey = 600,
         },
 
     .sequencer_disk_cache_dir = "",

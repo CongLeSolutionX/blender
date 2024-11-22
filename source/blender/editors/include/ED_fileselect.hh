@@ -114,9 +114,7 @@ void ED_fileselect_set_params_from_userdef(SpaceFile *sfile);
  * \param temp_win_size: If the browser was opened in a temporary window,
  * pass its size here so we can store that in the preferences. Otherwise NULL.
  */
-void ED_fileselect_params_to_userdef(SpaceFile *sfile,
-                                     const int temp_win_size[2],
-                                     bool is_maximized);
+void ED_fileselect_params_to_userdef(SpaceFile *sfile);
 
 void ED_fileselect_init_layout(SpaceFile *sfile, ARegion *region);
 
@@ -176,8 +174,6 @@ void ED_fileselect_activate_by_id(SpaceFile *sfile, ID *asset_id, bool deferred)
 
 void ED_fileselect_deselect_all(SpaceFile *sfile);
 void ED_fileselect_activate_by_relpath(SpaceFile *sfile, const char *relative_path);
-
-void ED_fileselect_window_params_get(const wmWindow *win, int r_win_size[2], bool *r_is_maximized);
 
 /**
  * Return the File Browser area in which \a file_operator is active.

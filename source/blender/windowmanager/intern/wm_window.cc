@@ -428,6 +428,27 @@ void wm_quit_with_optional_confirmation_prompt(bContext *C, wmWindow *win)
 
 void wm_window_close(bContext *C, wmWindowManager *wm, wmWindow *win)
 {
+  if (win->savestate && !WM_window_is_maximized(win)) {
+    /* Get DPI and scale from parent window, if there is one. */
+    WM_window_set_dpi(win->parent ? win->parent : win);
+    float f = GHOST_GetNativePixelSize(static_cast<GHOST_WindowHandle>(win->ghostwin));
+    float sizex = (float)win->sizex * f / UI_SCALE_FAC;
+    float sizey = (float)win->sizey * f / UI_SCALE_FAC;
+    float posx = (float)win->posx * f / UI_SCALE_FAC;
+    float posy = (float)win->posy * f / UI_SCALE_FAC;
+
+    if (sizex != win->savestate->sizex || sizey != win->savestate->sizey ||
+        posx != win->savestate->posx || posy != win->savestate->posy)
+    {
+      win->savestate->sizex = sizex;
+      win->savestate->sizey = sizey;
+      win->savestate->posx = posx;
+      win->savestate->posy = posy;
+      /* Tag user preferences as dirty. */
+      U.runtime.is_dirty = true;
+    }
+  }
+
   wmWindow *win_other;
 
   /* First check if there is another main window remaining. */
@@ -972,23 +993,23 @@ wmWindow *WM_window_open(bContext *C,
   const float native_pixel_size = GHOST_GetNativePixelSize(
       static_cast<GHOST_WindowHandle>(win_prev->ghostwin));
   /* Convert to native OS window coordinates. */
-  rect.xmin = win_prev->posx + (x / native_pixel_size);
-  rect.ymin = win_prev->posy + (y / native_pixel_size);
+  rect.xmin = x / native_pixel_size;
+  rect.ymin = y / native_pixel_size;
   sizex /= native_pixel_size;
   sizey /= native_pixel_size;
 
   if (alignment == WIN_ALIGN_LOCATION_CENTER) {
     /* Window centered around x,y location. */
-    rect.xmin -= sizex / 2;
-    rect.ymin -= sizey / 2;
+    rect.xmin += win_prev->posx - (sizex / 2);
+    rect.ymin += win_prev->posy - (sizey / 2);
   }
   else if (alignment == WIN_ALIGN_PARENT_CENTER) {
     /* Centered within parent. X,Y as offsets from there. */
-    rect.xmin += (win_prev->sizex - sizex) / 2;
-    rect.ymin += (win_prev->sizey - sizey) / 2;
+    rect.xmin += win_prev->posx + ((win_prev->sizex - sizex) / 2);
+    rect.ymin += win_prev->posy + ((win_prev->sizey - sizey) / 2);
   }
-  else {
-    /* Positioned absolutely within parent bounds. */
+  else if (alignment == WIN_ALIGN_ABSOLUTE) {
+    /* Positioned absolutely in desktop coordinates. */
   }
 
   rect.xmax = rect.xmin + sizex;
@@ -1104,6 +1125,47 @@ wmWindow *WM_window_open(bContext *C,
   CTX_wm_window_set(C, win_prev);
 
   return nullptr;
+}
+
+wmWindow *WM_window_open_temp(struct bContext *C,
+                              const char *title,
+                              UserDef_WinState *state,
+                              int def_sizex,
+                              int def_sizey,
+                              int space_type,
+                              bool dialog)
+{
+  rcti rect;
+
+  int posx, posy, sizex, sizey;
+  eWindowAlignment align;
+
+  WM_window_set_dpi(CTX_wm_window(C));
+
+  if (state && state->sizex != 0.0f) {
+    rect.xmin = (int)(state->posx * UI_SCALE_FAC);
+    rect.ymin = (int)(state->posy * UI_SCALE_FAC);
+    rect.xmax = rect.xmin + (int)(state->sizex * UI_SCALE_FAC);
+    rect.ymax = rect.ymin + (int)(state->sizey * UI_SCALE_FAC);
+    align = WIN_ALIGN_ABSOLUTE;
+  }
+  else {
+    wmWindow *win_cur = CTX_wm_window(C);
+    /* Use eventstate, not event from _invoke, so this can be called through exec(). */
+    const wmEvent *event = win_cur->eventstate;
+    rect.xmin = event->xy[0];
+    rect.ymin = event->xy[1];
+    rect.xmax = event->xy[0] + (def_sizex * UI_SCALE_FAC);
+    rect.ymax = event->xy[1] + (def_sizey * UI_SCALE_FAC);
+    align = WIN_ALIGN_LOCATION_CENTER;
+  }
+
+  wmWindow *win = WM_window_open(
+      C, title, &rect, space_type, false, dialog, true, align, nullptr, nullptr);
+
+  win->savestate = state;
+
+  return win;
 }
 
 /** \} */
