@@ -24,6 +24,9 @@ enum class ConversionType {
   /** No conversion needed, result can be directly read back to host memory. */
   PASS_THROUGH,
 
+  /** Pass through (ignores the stencil component). */
+  PASS_THROUGH_D32F_S8,
+
   FLOAT_TO_UNORM8,
   UNORM8_TO_FLOAT,
 
@@ -91,6 +94,9 @@ static ConversionType type_of_conversion_float(const eGPUTextureFormat host_form
     if (host_format == GPU_DEPTH_COMPONENT24 && device_format == GPU_DEPTH_COMPONENT32F) {
       return ConversionType::PASS_THROUGH;
     }
+    if (host_format == GPU_DEPTH24_STENCIL8 && device_format == GPU_DEPTH32F_STENCIL8) {
+      return ConversionType::PASS_THROUGH_D32F_S8;
+    }
 
     return ConversionType::UNSUPPORTED;
   }
@@ -101,6 +107,9 @@ static ConversionType type_of_conversion_float(const eGPUTextureFormat host_form
     case GPU_R32F:
     case GPU_DEPTH_COMPONENT32F:
       return ConversionType::PASS_THROUGH;
+
+    case GPU_DEPTH32F_STENCIL8:
+      return ConversionType::PASS_THROUGH_D32F_S8;
 
     case GPU_RGBA16F:
     case GPU_RG16F:
@@ -171,7 +180,6 @@ static ConversionType type_of_conversion_float(const eGPUTextureFormat host_form
     case GPU_R32I:
     case GPU_RGB10_A2:
     case GPU_RGB10_A2UI:
-    case GPU_DEPTH32F_STENCIL8:
     case GPU_RGB8UI:
     case GPU_RGB8I:
     case GPU_RGB8:
@@ -518,6 +526,8 @@ static ConversionType host_to_device(const eGPUDataFormat host_format,
                                      const eGPUTextureFormat host_texture_format,
                                      const eGPUTextureFormat device_format)
 {
+  BLI_assert(validate_data_format(device_format, host_format));
+
   switch (host_format) {
     case GPU_DATA_FLOAT:
       return type_of_conversion_float(host_texture_format, device_format);
@@ -554,6 +564,8 @@ static ConversionType reversed(ConversionType type)
   switch (type) {
     case ConversionType::PASS_THROUGH:
       return ConversionType::PASS_THROUGH;
+    case ConversionType::PASS_THROUGH_D32F_S8:
+      return ConversionType::PASS_THROUGH_D32F_S8;
 
       CASE_PAIR(FLOAT, UNORM8)
       CASE_PAIR(FLOAT, SNORM8)
@@ -910,6 +922,10 @@ static void convert_buffer(void *dst_memory,
     case ConversionType::PASS_THROUGH:
     case ConversionType::UINT_TO_DEPTH_COMPONENT24:
       memcpy(dst_memory, src_memory, buffer_size * to_bytesize(device_format));
+      return;
+
+    case ConversionType::PASS_THROUGH_D32F_S8:
+      memcpy(dst_memory, src_memory, buffer_size * to_bytesize(GPU_DEPTH_COMPONENT32F));
       return;
 
     case ConversionType::UI32_TO_UI16:
