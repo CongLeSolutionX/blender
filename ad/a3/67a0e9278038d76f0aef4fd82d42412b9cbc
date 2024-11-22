@@ -13,3 +13,4 @@ Referenced by commit a7d689f8316653f3d36a6c96f003032df80616b9, Fix #129871: conv
 Referenced by commit fee02cc224dcef907043bcc1f0614851a83f3c2a, Fix #129871: converting linked text to mesh results in empty mesh
 Referenced by issue #126391, Blender Viewport Speed Regression
 Referenced by pull request #130649, Fix #130606: Crash when switching workspace
+Referenced by commit 3941a4947b759e66955faaf9574c0a34651d7ced, Fix #130606: Crash when switching workspace
