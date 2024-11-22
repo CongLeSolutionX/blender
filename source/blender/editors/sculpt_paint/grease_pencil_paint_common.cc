@@ -297,7 +297,8 @@ IndexMask point_selection_mask(const GreasePencilStrokeParams &params,
 
   return (use_masking ? ed::greasepencil::retrieve_editable_and_selected_points(
                             params.ob_orig, params.drawing, params.layer_index, memory) :
-  ed::greasepencil::retrieve_editable_points(params.ob_orig, params.drawing, params.layer_index, memory));
+                        ed::greasepencil::retrieve_editable_points(
+                            params.ob_orig, params.drawing, params.layer_index, memory));
 }
 
 IndexMask stroke_selection_mask(const GreasePencilStrokeParams &params,
