@@ -284,6 +284,7 @@ void MESH_OT_dissolve_limited(wmOperatorType *ot);
 void MESH_OT_dissolve_degenerate(wmOperatorType *ot);
 void MESH_OT_delete_edgeloop(wmOperatorType *ot);
 void MESH_OT_edge_face_add(wmOperatorType *ot);
+void MESH_OT_insert_edge(wmOperatorType *ot);
 void MESH_OT_duplicate(wmOperatorType *ot);
 void MESH_OT_merge(wmOperatorType *ot);
 void MESH_OT_remove_doubles(wmOperatorType *ot);

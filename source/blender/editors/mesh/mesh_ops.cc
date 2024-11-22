@@ -114,6 +114,7 @@ void ED_operatortypes_mesh()
   WM_operatortype_append(MESH_OT_dupli_extrude_cursor);
   WM_operatortype_append(MESH_OT_loop_select);
   WM_operatortype_append(MESH_OT_edge_face_add);
+  WM_operatortype_append(MESH_OT_insert_edge);
   WM_operatortype_append(MESH_OT_shortest_path_pick);
   WM_operatortype_append(MESH_OT_select_similar);
   WM_operatortype_append(MESH_OT_select_similar_region);

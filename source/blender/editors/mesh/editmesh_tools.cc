@@ -1004,6 +1004,14 @@ static int edbm_add_edge_face_exec(bContext *C, wmOperator *op)
   return OPERATOR_FINISHED;
 }
 
+static int edbm_insert_edge_exec(bContext *C, wmOperator *op)
+{
+  printf("insert_edge");
+  
+
+  return OPERATOR_FINISHED;
+}
+
 void MESH_OT_edge_face_add(wmOperatorType *ot)
 {
   /* identifiers */
@@ -1013,6 +1021,21 @@ void MESH_OT_edge_face_add(wmOperatorType *ot)
 
   /* api callbacks */
   ot->exec = edbm_add_edge_face_exec;
+  ot->poll = ED_operator_editmesh;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
+
+void MESH_OT_insert_edge(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Insert Edge";
+  ot->description = "Insert an edge between two corners";
+  ot->idname = "MESH_OT_insert_edge";
+
+  /* api callbacks */
+  ot->exec = edbm_insert_edge_exec;
   ot->poll = ED_operator_editmesh;
 
   /* flags */
