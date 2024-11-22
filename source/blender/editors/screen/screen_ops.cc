@@ -1838,7 +1838,7 @@ static int area_snap_calc_location(const bScreen *screen,
         CLAMP(m_cursor_final, origval - smaller, origval + bigger);
       }
 
-      /* Slight snap to min and maximum. */
+      /* Slight snap to vertical minimum and maximum. */
       const int snap_threshold = int(float(ED_area_headersize()) * 0.6f);
       if (m_cursor_final < (m_min + snap_threshold)) {
         m_cursor_final = m_min;
@@ -1846,8 +1846,7 @@ static int area_snap_calc_location(const bScreen *screen,
       else if (m_cursor_final > (origval + bigger - snap_threshold)) {
         m_cursor_final = origval + bigger;
       }
-    }
-    break;
+    } break;
 
     case SNAP_BIGGER_SMALLER_ONLY:
       m_cursor_final = (m_cursor >= bigger) ? bigger : smaller;
