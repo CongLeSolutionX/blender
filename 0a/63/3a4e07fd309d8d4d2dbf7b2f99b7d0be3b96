@@ -3,3 +3,4 @@ Referenced by pull request #111954, Fix #111896: Regression: Crash for entering 
 Referenced by commit 20b3e62e932367bbb07d185af3fe2e1315cde622, Fix #111896: Regression: Crash for entering into Armature Edit Mode
 Referenced by pull request #118597, Fix #118475: Regression: NLA/driver data missing in outliner
 Referenced by commit 80e7c04726ec3e496031bfc42ee4f5219d618be6, Fix #118475: Regression: NLA/driver data missing in outliner
+Referenced by pull request #130750, Fix #130686: Outliner vertex groups sorting is broken
