@@ -90,7 +90,6 @@ class TestGreasePencilFrame(unittest.TestCase):
         self.assertEqual(frame1.frame_number, 0)
         self.assertEqual(frame2.frame_number, -100)
         self.assertEqual(frame3.frame_number, 10)
-        
 
     def test_grease_pencil_frame_remove(self):
         self.layer.frames.new(0)
@@ -107,7 +106,6 @@ class TestGreasePencilFrame(unittest.TestCase):
 
         self.assertEqual(len(self.layer.frames), 1)
         self.assertEqual(frame3.frame_number, 20)
-
 
     def test_grease_pencil_frame_copy(self):
         self.layer.frames.new(0)
@@ -126,7 +124,6 @@ class TestGreasePencilFrame(unittest.TestCase):
 
         with self.assertRaises(RuntimeError):
             self.layer.frames.copy(10, 20)
-
 
     def test_grease_pencil_frame_move(self):
         self.layer.frames.new(0)

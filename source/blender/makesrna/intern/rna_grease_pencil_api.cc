@@ -173,7 +173,8 @@ static void rna_Frames_frame_remove(ID *id,
     WM_main_add_notifier(NC_GPENCIL | NA_EDITED, &grease_pencil);
   }
 
-  /* TODO: Use `RNA_POINTER_INVALIDATE` to invalidate python objects poiting to the frame_number? */
+  /* TODO: Use `RNA_POINTER_INVALIDATE` to invalidate python objects pointing to the frame_number?
+   */
 }
 
 static GreasePencilFrame *rna_Frames_frame_copy(ID *id,
@@ -226,7 +227,8 @@ static GreasePencilFrame *rna_Frames_frame_move(ID *id,
   grease_pencil.remove_frames(layer, {from_frame_number});
   WM_main_add_notifier(NC_GPENCIL | NA_EDITED, &grease_pencil);
 
-  /* TODO: Use `RNA_POINTER_INVALIDATE` to invalidate python objects poiting to the from_frame_number? */
+  /* TODO: Use `RNA_POINTER_INVALIDATE` to invalidate python objects pointing to the
+   * from_frame_number? */
 
   return layer.frame_at(to_frame_number);
 }
