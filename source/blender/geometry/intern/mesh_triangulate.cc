@@ -557,10 +557,6 @@ static IndexMask calc_unselected_faces(const Mesh &mesh,
         if (unique_sorted_indices::non_empty_is_range(universe_segment.base_span())) {
           const IndexRange segment_range(universe_segment.offset(), universe_segment.size());
           const OffsetIndices segment_faces = src_faces.slice(segment_range);
-          if (segment_faces.total_size() >= segment_faces.size() * 4) {
-            /* All faces in segement are quads or at least not triangles. */
-            return universe_segment.offset();
-          }
           if (segment_faces.total_size() == segment_faces.size() * 3) {
             /* All faces in segment are triangles. */
             builder.add_range(universe_segment.base_span().first(),
