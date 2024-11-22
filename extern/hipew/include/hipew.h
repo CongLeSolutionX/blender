@@ -179,19 +179,6 @@ typedef struct textureReference {
 
 typedef textureReference* hipTexRef;
 
-/**
- * Pointer attributes
- */
-typedef struct hipPointerAttribute_t {
-    enum hipMemoryType memoryType;
-    int device;
-    void* devicePointer;
-    void* hostPointer;
-    int isManaged;
-    unsigned allocationFlags; /* flags specified when memory was allocated*/
-    /* peers? */
-} hipPointerAttribute_t;
-
 typedef struct ihipIpcEventHandle_t {
   char reserved[HIP_IPC_HANDLE_SIZE];
 } ihipIpcEventHandle_t;
@@ -831,6 +818,18 @@ typedef enum hiprtcJITInputType {
 #include "hipew6.h"
 #endif
 
+/**
+ * Pointer attributes
+ */
+typedef struct hipPointerAttribute_t {
+    enum hipMemoryType memoryType;
+    int device;
+    void* devicePointer;
+    void* hostPointer;
+    int isManaged;
+    unsigned allocationFlags; /* flags specified when memory was allocated*/
+    /* peers? */
+} hipPointerAttribute_t;
 
 typedef struct hip_Memcpy2D {
   size_t srcXInBytes;
