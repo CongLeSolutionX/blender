@@ -134,6 +134,7 @@ static ConversionType type_of_conversion_float(const eGPUTextureFormat host_form
       return ConversionType::FLOAT_TO_SRGBA8;
 
     case GPU_DEPTH_COMPONENT24:
+    case GPU_DEPTH24_STENCIL8:
       return ConversionType::FLOAT_TO_DEPTH_COMPONENT24;
 
     case GPU_R11F_G11F_B10F:
@@ -171,7 +172,6 @@ static ConversionType type_of_conversion_float(const eGPUTextureFormat host_form
     case GPU_RGB10_A2:
     case GPU_RGB10_A2UI:
     case GPU_DEPTH32F_STENCIL8:
-    case GPU_DEPTH24_STENCIL8:
     case GPU_RGB8UI:
     case GPU_RGB8I:
     case GPU_RGB8:
@@ -518,8 +518,6 @@ static ConversionType host_to_device(const eGPUDataFormat host_format,
                                      const eGPUTextureFormat host_texture_format,
                                      const eGPUTextureFormat device_format)
 {
-  BLI_assert(validate_data_format(device_format, host_format));
-
   switch (host_format) {
     case GPU_DATA_FLOAT:
       return type_of_conversion_float(host_texture_format, device_format);
