@@ -490,7 +490,6 @@ void curve_populate_trans_data_structs(
     VArray<bool> selection = selection_attrs[selection_i];
 
     threading::parallel_for(points_to_transform.index_range(), 1024, [&](const IndexRange range) {
-
       float center[3];
       if (is_individual_origin) {
         /* Calculate center of individual stroke. */
