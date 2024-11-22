@@ -63,7 +63,9 @@ void push_nodes(const Depsgraph &depsgraph,
 void push_begin(const Scene &scene, Object &ob, const wmOperator *op);
 
 /**
- * Special case for handling the empty undo step when entering sculpt mode.
+ * Pushes an undo step when entering Sculpt mode.
+ *
+ * Similar to geometry_push, this undo type does not need the PBVH to be constructed.
  */
 void push_enter_sculpt_mode(const Scene &scene, Object &ob, const wmOperator *op);
 
