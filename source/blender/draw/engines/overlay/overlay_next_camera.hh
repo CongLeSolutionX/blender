@@ -86,9 +86,6 @@ class Cameras {
   /* Same as `foreground_ps_` with "View as Render" checked. */
   PassMain foreground_scene_ps_ = {"foreground_scene_ps_"};
 
-  View view_reference_images = {"view_reference_images"};
-  float view_dist = 0.0f;
-
   struct CallBuffers {
     const SelectionType selection_type_;
     CameraInstanceBuf distances_buf = {selection_type_, "camera_distances_buf"};
@@ -362,6 +359,7 @@ class Cameras {
   }
 
   bool enabled_ = false;
+  bool images_enabled_ = false;
 
  public:
   Cameras(const SelectionType selection_type) : call_buffers_{selection_type} {};
@@ -374,8 +372,6 @@ class Cameras {
       return;
     }
 
-    view_dist = state.view_dist_get(view.winmat());
-
     call_buffers_.distances_buf.clear();
     call_buffers_.frame_buf.clear();
     call_buffers_.tria_buf.clear();
@@ -387,17 +383,27 @@ class Cameras {
     call_buffers_.tracking_path.clear();
     Empties::begin_sync(call_buffers_.empties);
 
+    images_enabled_ = res.selection_type == SelectionType::DISABLED;
+
+    if (!images_enabled_) {
+      return;
+    }
+
+    float4x4 depth_bias_winmat = winmat_polygon_offset(
+        view.winmat(), state.view_dist_get(view.winmat()), -1.0f);
+
     /* Init image passes. */
     auto init_pass = [&](PassMain &pass, DRWState draw_state) {
       pass.init();
       pass.state_set(draw_state, state.clipping_plane_count);
-      pass.shader_set(res.shaders.image_plane.get());
+      pass.shader_set(res.shaders.image_plane_depth_bias.get());
       pass.bind_ubo("globalsBlock", &res.globals_buf);
+      pass.push_constant("depth_bias_winmat", depth_bias_winmat);
       res.select_bind(pass);
     };
 
     DRWState draw_state;
-    draw_state = DRW_STATE_WRITE_COLOR | DRW_STATE_DEPTH_GREATER | DRW_STATE_BLEND_ALPHA_PREMUL;
+    draw_state = DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ALPHA_PREMUL;
     init_pass(background_ps_, draw_state);
 
     draw_state = DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ALPHA_UNDER_PREMUL;
@@ -615,6 +621,18 @@ class Cameras {
     }
   }
 
+  void pre_draw(Manager &manager, View &view)
+  {
+    if (!images_enabled_) {
+      return;
+    }
+
+    manager.generate_commands(background_scene_ps_, view);
+    manager.generate_commands(foreground_scene_ps_, view);
+    manager.generate_commands(background_ps_, view);
+    manager.generate_commands(foreground_ps_, view);
+  }
+
   void draw(Framebuffer &framebuffer, Manager &manager, View &view)
   {
     if (!enabled_) {
@@ -625,37 +643,35 @@ class Cameras {
     manager.submit(ps_, view);
   }
 
-  void draw_scene_background_images(Framebuffer &framebuffer, Manager &manager, View &view)
+  void draw_scene_background_images(GPUFrameBuffer *framebuffer, Manager &manager, View &view)
   {
-    if (!enabled_) {
+    if (!images_enabled_) {
       return;
     }
 
     GPU_framebuffer_bind(framebuffer);
-    manager.submit(background_scene_ps_, view);
-    manager.submit(foreground_scene_ps_, view);
+    manager.submit_only(background_scene_ps_, view);
+    manager.submit_only(foreground_scene_ps_, view);
   }
 
   void draw_background_images(Framebuffer &framebuffer, Manager &manager, View &view)
   {
-    if (!enabled_) {
+    if (!images_enabled_) {
       return;
     }
 
     GPU_framebuffer_bind(framebuffer);
-    manager.submit(background_ps_, view);
+    manager.submit_only(background_ps_, view);
   }
 
   void draw_in_front(Framebuffer &framebuffer, Manager &manager, View &view)
   {
-    if (!enabled_) {
+    if (!images_enabled_) {
       return;
     }
 
-    view_reference_images.sync(view.viewmat(),
-                               winmat_polygon_offset(view.winmat(), view_dist, -1.0f));
     GPU_framebuffer_bind(framebuffer);
-    manager.submit(foreground_ps_, view_reference_images);
+    manager.submit_only(foreground_ps_, view);
   }
 
  private:
@@ -667,6 +683,10 @@ class Cameras {
                           Resources &res,
                           const SelectionType selection_type)
   {
+    if (!images_enabled_) {
+      return;
+    }
+
     Object *ob = ob_ref.object;
     const Camera *cam = static_cast<Camera *>(ob->data);
 

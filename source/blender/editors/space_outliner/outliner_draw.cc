@@ -124,11 +124,6 @@ static bool is_object_data_in_editmode(const ID *id, const Object *obact)
 
   const short id_type = GS(id->name);
 
-  if (id_type == ID_GD_LEGACY && obact && obact->data == id) {
-    bGPdata *gpd = (bGPdata *)id;
-    return GPENCIL_EDIT_MODE(gpd);
-  }
-
   return ((obact && (obact->mode & OB_MODE_EDIT)) && (id && OB_DATA_SUPPORT_EDITMODE(id_type)) &&
           (GS(((ID *)obact->data)->name) == id_type) && BKE_object_data_is_in_editmode(obact, id));
 }
@@ -378,7 +373,7 @@ static void outliner_collection_set_flag_recursive(Scene *scene,
   }
   PointerRNA ptr;
   outliner_layer_or_collection_pointer_create(scene, layer_collection, collection, &ptr);
-  if (base_or_object_prop && !RNA_property_editable(&ptr, base_or_object_prop)) {
+  if (layer_or_collection_prop && !RNA_property_editable(&ptr, layer_or_collection_prop)) {
     return;
   }
 
@@ -782,6 +777,12 @@ static void namebutton_fn(bContext *C, void *tsep, char *oldname)
         case TSE_NLA_TRACK: {
           WM_event_add_notifier(C, NC_ANIMATION | ND_ANIMCHAN | NA_RENAME, nullptr);
           undo_str = "Rename NLA Track";
+          break;
+        }
+        case TSE_MODIFIER: {
+          WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER | NA_RENAME, nullptr);
+          DEG_relations_tag_update(bmain);
+          undo_str = "Rename Modifier";
           break;
         }
         case TSE_EBONE: {
