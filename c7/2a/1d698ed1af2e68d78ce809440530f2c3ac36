@@ -1,2 +1,3 @@
 Referenced by issue #124961, Eevee Next: Viewport Pixel sizes other than 1x doesn't take overscan into account
 Referenced by issue #125456, VR not showing when using 'Rendered' or 'Material preview' shading, on Blender 4.3
+Referenced by issue #130669, EEVEE Filter Size setting set to 0.00px no longer results in a pixelated viewport, but still outputs a pixelated render
