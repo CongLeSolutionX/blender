@@ -398,18 +398,18 @@ static void slot_name_ensure_unique(Action &action, Slot &slot)
   BLI_uniquename_cb(check_name_is_used, &check_data, "", '.', slot.name, sizeof(slot.name));
 }
 
-void Action::slot_name_set(Main &bmain, Slot &slot, const StringRefNull new_name)
+void Action::slot_identifier_set(Main &bmain, Slot &slot, const StringRefNull new_name)
 {
   /* TODO: maybe this function should only set the 'name without prefix' aka the 'display name'.
    * That way only `this->id_type` is responsible for the prefix. I (Sybren) think that's easier to
    * determine when the code is a bit more mature, and we can see what the majority of the calls to
    * this function actually do/need. */
 
-  this->slot_name_define(slot, new_name);
-  this->slot_name_propagate(bmain, slot);
+  this->slot_identifier_define(slot, new_name);
+  this->slot_identifier_propagate(bmain, slot);
 }
 
-void Action::slot_name_define(Slot &slot, const StringRefNull new_name)
+void Action::slot_identifier_define(Slot &slot, const StringRefNull new_name)
 {
   BLI_assert_msg(StringRef(new_name).size() >= Slot::name_length_min,
                  "Action Slots must be large enough for a 2-letter ID code + the display name");
@@ -417,7 +417,7 @@ void Action::slot_name_define(Slot &slot, const StringRefNull new_name)
   slot_name_ensure_unique(*this, slot);
 }
 
-void Action::slot_name_propagate(Main &bmain, const Slot &slot)
+void Action::slot_identifier_propagate(Main &bmain, const Slot &slot)
 {
   /* Just loop over all animatable IDs in the main database. */
   ListBase *lb;
@@ -448,7 +448,7 @@ void Action::slot_name_propagate(Main &bmain, const Slot &slot)
   FOREACH_MAIN_LISTBASE_END;
 }
 
-Slot *Action::slot_find_by_name(const StringRefNull slot_name)
+Slot *Action::slot_find_by_identifier(const StringRefNull slot_name)
 {
   for (Slot *slot : slots()) {
     if (STREQ(slot->name, slot_name.c_str())) {
@@ -501,9 +501,9 @@ Slot &Action::slot_add_for_id(const ID &animated_id)
   Slot &slot = this->slot_add();
 
   slot.idtype = GS(animated_id.name);
-  this->slot_name_define(slot, animated_id.name);
+  this->slot_identifier_define(slot, animated_id.name);
 
-  /* No need to call anim.slot_name_propagate() as nothing will be using
+  /* No need to call anim.slot_identifier_propagate() as nothing will be using
    * this brand new Slot yet. */
 
   return slot;
@@ -573,7 +573,7 @@ Slot *Action::find_suitable_slot_for(const ID &animated_id)
 
   /* Try the slot name from the AnimData, if it is set. */
   if (adt && adt->slot_name[0]) {
-    Slot *slot = this->slot_find_by_name(adt->slot_name);
+    Slot *slot = this->slot_find_by_identifier(adt->slot_name);
     if (slot && slot->is_suitable_for(animated_id)) {
       return slot;
     }
@@ -581,7 +581,7 @@ Slot *Action::find_suitable_slot_for(const ID &animated_id)
 
   /* Search for the ID name (which includes the ID type). */
   {
-    Slot *slot = this->slot_find_by_name(animated_id.name);
+    Slot *slot = this->slot_find_by_identifier(animated_id.name);
     if (slot && slot->is_suitable_for(animated_id)) {
       return slot;
     }
@@ -1225,11 +1225,11 @@ Slot *assign_action_ensure_slot_for_keying(Action &action, ID &animated_id)
     else {
       /* Try the slot name from the AnimData, if it is set. */
       if (adt && adt->slot_name[0]) {
-        slot = action.slot_find_by_name(adt->slot_name);
+        slot = action.slot_find_by_identifier(adt->slot_name);
       }
       else {
         /* Search for the ID name (which includes the ID type). */
-        slot = action.slot_find_by_name(animated_id.name);
+        slot = action.slot_find_by_identifier(animated_id.name);
       }
     }
   }

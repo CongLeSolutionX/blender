@@ -145,42 +145,42 @@ class Action : public ::bAction {
   const Slot *slot_for_handle(slot_handle_t handle) const;
 
   /**
-   * Set the slot name, ensure it is unique, and propagate the new name to
+   * Set the slot identifier, ensure it is unique, and propagate the new identifier to
    * all data-blocks that use it.
    *
    * This has to be done on the Action level to ensure each slot has a
-   * unique name within the Action.
+   * unique identifier within the Action.
    *
    * \note This does NOT ensure the first two characters match the ID type of
    * this slot. This is the caller's responsibility.
    *
-   * \see #Action::slot_name_define
-   * \see #Action::slot_name_propagate
+   * \see #Action::slot_identifier_define
+   * \see #Action::slot_identifier_propagate
    */
-  void slot_name_set(Main &bmain, Slot &slot, StringRefNull new_name);
+  void slot_identifier_set(Main &bmain, Slot &slot, StringRefNull new_name);
 
   /**
-   * Set the slot name, and ensure it is unique.
+   * Set the slot identifier, and ensure it is unique.
    *
    * \note This does NOT ensure the first two characters match the ID type of
    * this slot. This is the caller's responsibility.
    *
-   * \see #Action::slot_name_set
-   * \see #Action::slot_name_propagate
+   * \see #Action::slot_identifier_set
+   * \see #Action::slot_identifier_propagate
    */
-  void slot_name_define(Slot &slot, StringRefNull new_name);
+  void slot_identifier_define(Slot &slot, StringRefNull new_name);
 
   /**
    * Update the `AnimData::action_slot_name` field of any ID that is animated by
    * this Slot.
    *
-   * Should be called after `slot_name_define(slot)`. This is implemented as a separate
+   * Should be called after `slot_identifier_define(slot)`. This is implemented as a separate
    * function due to the need to access `bmain`, which is available in the RNA on-property-update
    * handler, but not in the RNA property setter.
    */
-  void slot_name_propagate(Main &bmain, const Slot &slot);
+  void slot_identifier_propagate(Main &bmain, const Slot &slot);
 
-  Slot *slot_find_by_name(StringRefNull slot_name);
+  Slot *slot_find_by_identifier(StringRefNull slot_name);
 
   /**
    * Create a new, unused Slot.
@@ -383,7 +383,7 @@ class Action : public ::bAction {
    * This ensures that the first two characters match the ID type of
    * this slot.
    *
-   * \see #Action::slot_name_propagate
+   * \see #Action::slot_identifier_propagate
    */
   void slot_name_ensure_prefix(Slot &slot);
 };
@@ -714,14 +714,14 @@ class Slot : public ::ActionSlot {
    *
    * This typically should not be called directly. Prefer assigning to an ID to
    * get the idtype and name prefix properly set. Prefer calling
-   * `Action::slot_name_set()` if you want to set the slot name. Both of those
+   * `Action::slot_identifier_set()` if you want to set the slot name. Both of those
    * approaches take care of ensuring uniqueness and other invariants.
    *
    * \note This does NOT ensure name uniqueness within the Action. That is the
    * responsibility of the caller.
    *
    * \see #assign_action_slot
-   * \see #Action::slot_name_set
+   * \see #Action::slot_identifier_set
    */
   void name_ensure_prefix();
 

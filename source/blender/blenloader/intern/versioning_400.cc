@@ -248,7 +248,7 @@ static void version_legacy_actions_to_layered(Main *bmain)
     if (user_infos.size() == 1) {
       /* Rename the slot after its single user. If there are multiple users, the name is unchanged
        * because there is no good way to determine a name. */
-      action.slot_name_set(*bmain, slot_to_assign, user_infos[0].id->name);
+      action.slot_identifier_set(*bmain, slot_to_assign, user_infos[0].id->name);
     }
     for (ActionUserInfo &action_user : user_infos) {
       const ActionSlotAssignmentResult result = generic_assign_action_slot(

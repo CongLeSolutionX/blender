@@ -516,20 +516,20 @@ TEST_F(ActionLayersTest, rename_slot)
   EXPECT_STREQ(slot_cube.name, cube->adt->slot_name)
       << "The slot name should be copied to the adt";
 
-  action->slot_name_define(slot_cube, "New Slot Name");
+  action->slot_identifier_define(slot_cube, "New Slot Name");
   EXPECT_STREQ("New Slot Name", slot_cube.name);
   /* At this point the slot name will not have been copied to the cube
    * AnimData. However, I don't want to test for that here, as it's not exactly
    * desirable behavior, but more of a side-effect of the current
    * implementation. */
 
-  action->slot_name_propagate(*bmain, slot_cube);
+  action->slot_identifier_propagate(*bmain, slot_cube);
   EXPECT_STREQ("New Slot Name", cube->adt->slot_name);
 
   /* Finally, do another rename, do NOT call the propagate function, then
    * unassign. This should still result in the correct slot name being stored
    * on the ADT. */
-  action->slot_name_define(slot_cube, "Even Newer Name");
+  action->slot_identifier_define(slot_cube, "Even Newer Name");
   EXPECT_TRUE(unassign_action(cube->id));
   EXPECT_STREQ("Even Newer Name", cube->adt->slot_name);
 }
@@ -559,7 +559,7 @@ TEST_F(ActionLayersTest, slot_name_ensure_prefix)
   EXPECT_STREQ("CASlot", slot.name);
 
   /* idtype ME, explicit name of other idtype. */
-  action->slot_name_define(slot, "CANewName");
+  action->slot_identifier_define(slot, "CANewName");
   slot.idtype = ID_ME;
   slot.name_ensure_prefix();
   EXPECT_STREQ("MENewName", slot.name);
@@ -579,13 +579,13 @@ TEST_F(ActionLayersTest, slot_name_prefix)
   EXPECT_EQ("CA", slot.name_prefix_for_idtype());
 }
 
-TEST_F(ActionLayersTest, rename_slot_name_collision)
+TEST_F(ActionLayersTest, rename_slot_identifier_collision)
 {
   Slot &slot1 = action->slot_add();
   Slot &slot2 = action->slot_add();
 
-  action->slot_name_define(slot1, "New Slot Name");
-  action->slot_name_define(slot2, "New Slot Name");
+  action->slot_identifier_define(slot1, "New Slot Name");
+  action->slot_identifier_define(slot2, "New Slot Name");
   EXPECT_STREQ("New Slot Name", slot1.name);
   EXPECT_STREQ("New Slot Name.001", slot2.name);
 }

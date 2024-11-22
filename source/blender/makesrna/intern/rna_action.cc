@@ -333,7 +333,7 @@ static void rna_ActionSlot_name_display_set(PointerRNA *ptr, const char *name)
 
   /* Construct the new internal name, from the slot's type and the given name. */
   const std::string internal_name = slot.name_prefix_for_idtype() + name_ref;
-  action.slot_name_define(slot, internal_name);
+  action.slot_identifier_define(slot, internal_name);
 }
 
 static void rna_ActionSlot_name_set(PointerRNA *ptr, const char *name)
@@ -360,14 +360,14 @@ static void rna_ActionSlot_name_set(PointerRNA *ptr, const char *name)
     }
   }
 
-  action.slot_name_define(slot, name);
+  action.slot_identifier_define(slot, name);
 }
 
 static void rna_ActionSlot_name_update(Main *bmain, Scene *, PointerRNA *ptr)
 {
   animrig::Action &action = rna_action(ptr);
   animrig::Slot &slot = rna_data_slot(ptr);
-  action.slot_name_propagate(*bmain, slot);
+  action.slot_identifier_propagate(*bmain, slot);
 }
 
 #  ifndef NDEBUG
