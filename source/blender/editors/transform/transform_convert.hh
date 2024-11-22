@@ -184,7 +184,8 @@ void curve_populate_trans_data_structs(
     const blender::Span<blender::IndexMask> points_to_transform_indices,
     const blender::IndexMask &affected_curves,
     bool use_connected_only,
-    const blender::IndexMask &bezier_curves);
+    const blender::IndexMask &bezier_curves,
+    bool is_individual_origin = false);
 
 CurvesTransformData *create_curves_transform_custom_data(TransCustomData &custom_data);
 

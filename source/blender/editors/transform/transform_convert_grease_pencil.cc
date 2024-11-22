@@ -212,7 +212,8 @@ static void createTransGreasePencilVerts(bContext *C, TransInfo *t)
                                         points_to_transform_per_attribute[layer_offset],
                                         affected_strokes,
                                         use_connected_only,
-                                        bezier_curves[layer_offset]);
+                                        bezier_curves[layer_offset],
+                                        (t->around == V3D_AROUND_LOCAL_ORIGINS));
       layer_offset++;
     }
   }

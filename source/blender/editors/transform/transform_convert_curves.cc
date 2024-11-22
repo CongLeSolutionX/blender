@@ -447,7 +447,8 @@ void curve_populate_trans_data_structs(
     const blender::Span<blender::IndexMask> points_to_transform_per_attr,
     const blender::IndexMask &affected_curves,
     bool use_connected_only,
-    const blender::IndexMask &bezier_curves)
+    const blender::IndexMask &bezier_curves,
+    bool is_individual_origin)
 {
   using namespace blender;
   const std::array<Span<float3>, 3> src_positions_per_selection_attr = {
@@ -489,13 +490,24 @@ void curve_populate_trans_data_structs(
     VArray<bool> selection = selection_attrs[selection_i];
 
     threading::parallel_for(points_to_transform.index_range(), 1024, [&](const IndexRange range) {
+
+      float center[3];
+      if (is_individual_origin) {
+        /* Calculate center of individual stroke. */
+        float3 sum(0);
+        for (const int tranform_point_i : range) {
+          add_v3_v3(sum, positions[tranform_point_i]);
+        }
+        mul_v3_v3fl(center, sum, 1.0f / range.size());
+      }
+
       for (const int tranform_point_i : range) {
         const int point_in_domain_i = points_to_transform[tranform_point_i];
         TransData &td = tc_data[tranform_point_i];
         float3 *elem = &positions[tranform_point_i];
 
         copy_v3_v3(td.iloc, *elem);
-        copy_v3_v3(td.center, td.iloc);
+        copy_v3_v3(td.center, (is_individual_origin ? center : td.iloc));
         td.loc = *elem;
 
         td.flag = 0;
