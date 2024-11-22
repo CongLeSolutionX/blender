@@ -97,3 +97,15 @@ void ANIM_OT_copy_driver_button(wmOperatorType *ot);
 void ANIM_OT_paste_driver_button(wmOperatorType *ot);
 
 /** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Driver management operators for UI buttons (RMB menu)
+ * \{ */
+
+namespace blender::ed::animrig {
+
+void POSELIB_OT_asset_create(wmOperatorType *ot);
+
+}
+
+/** \} */

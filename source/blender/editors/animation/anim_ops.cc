@@ -978,6 +978,8 @@ void ED_operatortypes_anim()
 
   WM_operatortype_append(ANIM_OT_convert_legacy_action);
   WM_operatortype_append(ANIM_OT_merge_animation);
+
+  WM_operatortype_append(blender::ed::animrig::POSELIB_OT_asset_create);
 }
 
 void ED_keymap_anim(wmKeyConfig *keyconf)
