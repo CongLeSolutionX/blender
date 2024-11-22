@@ -809,8 +809,8 @@ static void fcm_noise_new_data(void *mdata)
   data->offset = 0.0f;
   data->depth = 0;
   data->modification = FCM_NOISE_MODIF_REPLACE;
-  data->lacunarity = 2.3f;
-  data->roughness = 5.0f;
+  data->lacunarity = 2.0f;
+  data->roughness = 0.5f;
   data->legacy_noise = 0;
 }
 
@@ -845,7 +845,7 @@ static void fcm_noise_evaluate(const FCurve * /*fcu*/,
      * noise at full frames isn't always at 0. */
     noise = blender::noise::perlin_fbm<blender::float2>(
         blender::float2(evaltime * scale - data->offset + offset, data->phase),
-        data->depth / 10.0,
+        data->depth,
         data->roughness,
         data->lacunarity,
         true);
