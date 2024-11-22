@@ -411,8 +411,9 @@ void Action::slot_identifier_set(Main &bmain, Slot &slot, const StringRefNull ne
 
 void Action::slot_identifier_define(Slot &slot, const StringRefNull new_identifier)
 {
-  BLI_assert_msg(StringRef(new_identifier).size() >= Slot::name_length_min,
-                 "Action Slots must be large enough for a 2-letter ID code + the display name");
+  BLI_assert_msg(
+      StringRef(new_identifier).size() >= Slot::identifier_length_min,
+      "Action Slot identifiers must be large enough for a 2-letter ID code + the display name");
   STRNCPY_UTF8(slot.name, new_identifier.c_str());
   slot_name_ensure_unique(*this, slot);
 }
@@ -686,7 +687,7 @@ Layer *Action::get_layer_for_keyframing()
 
 void Action::slot_identifier_ensure_prefix(Slot &slot)
 {
-  slot.name_ensure_prefix();
+  slot.identifier_ensure_prefix();
   slot_name_ensure_unique(*this, slot);
 }
 
@@ -1112,7 +1113,7 @@ void Slot::users_invalidate(Main &bmain)
   bmain.is_action_slot_to_id_map_dirty = true;
 }
 
-std::string Slot::name_prefix_for_idtype() const
+std::string Slot::identifier_prefix_for_idtype() const
 {
   if (!this->has_idtype()) {
     return slot_unbound_prefix;
@@ -1123,9 +1124,9 @@ std::string Slot::name_prefix_for_idtype() const
   return name;
 }
 
-StringRefNull Slot::name_without_prefix() const
+StringRefNull Slot::identifier_without_prefix() const
 {
-  BLI_assert(StringRef(this->name).size() >= name_length_min);
+  BLI_assert(StringRef(this->name).size() >= identifier_length_min);
 
   /* Avoid accessing an uninitialized part of the string accidentally. */
   if (this->name[0] == '\0' || this->name[1] == '\0') {
@@ -1134,9 +1135,9 @@ StringRefNull Slot::name_without_prefix() const
   return this->name + 2;
 }
 
-void Slot::name_ensure_prefix()
+void Slot::identifier_ensure_prefix()
 {
-  BLI_assert(StringRef(this->name).size() >= name_length_min);
+  BLI_assert(StringRef(this->name).size() >= identifier_length_min);
 
   if (StringRef(this->name).size() < 2) {
     /* The code below would overwrite the trailing 0-byte. */
@@ -1377,7 +1378,7 @@ ActionSlotAssignmentResult generic_assign_action_slot(Slot *slot_to_assign,
      *
      * TODO: Replace this with a BLI_assert() that the name is as expected, and "simply" ensure
      * this name is always correct. */
-    BLI_strncpy_utf8(slot_name, slot_to_unassign->name, Slot::name_length_max);
+    BLI_strncpy_utf8(slot_name, slot_to_unassign->name, Slot::identifier_length_max);
 
     /* If this was the last use of this slot, remove this ID from its users. */
     if (!is_id_using_action_slot(animated_id, action, slot_to_unassign->handle)) {
@@ -1391,7 +1392,7 @@ ActionSlotAssignmentResult generic_assign_action_slot(Slot *slot_to_assign,
 
   action.slot_setup_for_id(*slot_to_assign, animated_id);
   slot_handle_ref = slot_to_assign->handle;
-  BLI_strncpy_utf8(slot_name, slot_to_assign->name, Slot::name_length_max);
+  BLI_strncpy_utf8(slot_name, slot_to_assign->name, Slot::identifier_length_max);
   slot_to_assign->users_add(animated_id);
 
   return ActionSlotAssignmentResult::OK;

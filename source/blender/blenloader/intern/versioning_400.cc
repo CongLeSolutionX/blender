@@ -131,7 +131,7 @@ static void convert_action_in_place(blender::animrig::Action &action)
 
   Slot &slot = action.slot_add();
   slot.idtype = idtype;
-  slot.name_ensure_prefix();
+  slot.identifier_ensure_prefix();
 
   Layer &layer = action.layer_add("Layer");
   blender::animrig::Strip &strip = layer.strip_add(action,
@@ -270,7 +270,8 @@ static void version_legacy_actions_to_layered(Main *bmain)
            * preserve this unusual (but technically valid) state of affairs.
            */
           *action_user.slot_handle = slot_to_assign.handle;
-          BLI_strncpy_utf8(action_user.slot_name, slot_to_assign.name, Slot::name_length_max);
+          BLI_strncpy_utf8(
+              action_user.slot_name, slot_to_assign.name, Slot::identifier_length_max);
 
           printf(
               "Warning: legacy action \"%s\" is assigned to \"%s\", which does not match the "
@@ -279,9 +280,9 @@ static void version_legacy_actions_to_layered(Main *bmain)
               "this type mismatch. This likely indicates something odd about the blend file.\n",
               action.id.name + 2,
               action_user.id->name,
-              slot_to_assign.name_prefix_for_idtype().c_str(),
-              slot_to_assign.name_without_prefix().c_str(),
-              slot_to_assign.name_prefix_for_idtype().c_str(),
+              slot_to_assign.identifier_prefix_for_idtype().c_str(),
+              slot_to_assign.identifier_without_prefix().c_str(),
+              slot_to_assign.identifier_prefix_for_idtype().c_str(),
               action_user.id->name);
           break;
         case ActionSlotAssignmentResult::SlotNotFromAction:

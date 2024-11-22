@@ -311,13 +311,13 @@ int rna_ActionSlot_id_root_icon_get(PointerRNA *ptr)
 void rna_ActionSlot_name_display_get(PointerRNA *ptr, char *value)
 {
   animrig::Slot &slot = rna_data_slot(ptr);
-  slot.name_without_prefix().unsafe_copy(value);
+  slot.identifier_without_prefix().unsafe_copy(value);
 }
 
 int rna_ActionSlot_name_display_length(PointerRNA *ptr)
 {
   animrig::Slot &slot = rna_data_slot(ptr);
-  return slot.name_without_prefix().size();
+  return slot.identifier_without_prefix().size();
 }
 
 static void rna_ActionSlot_name_display_set(PointerRNA *ptr, const char *name)
@@ -332,7 +332,7 @@ static void rna_ActionSlot_name_display_set(PointerRNA *ptr, const char *name)
   }
 
   /* Construct the new internal name, from the slot's type and the given name. */
-  const std::string internal_name = slot.name_prefix_for_idtype() + name_ref;
+  const std::string internal_name = slot.identifier_prefix_for_idtype() + name_ref;
   action.slot_identifier_define(slot, internal_name);
 }
 
@@ -342,14 +342,14 @@ static void rna_ActionSlot_name_set(PointerRNA *ptr, const char *name)
   animrig::Slot &slot = rna_data_slot(ptr);
   const StringRef name_ref(name);
 
-  if (name_ref.size() < animrig::Slot::name_length_min) {
+  if (name_ref.size() < animrig::Slot::identifier_length_min) {
     WM_report(RPT_ERROR, "Action slot names should be at least three characters");
     return;
   }
 
   if (slot.has_idtype()) {
     /* Check if the new name is going to be compatible with the already-established ID type. */
-    const std::string expect_prefix = slot.name_prefix_for_idtype();
+    const std::string expect_prefix = slot.identifier_prefix_for_idtype();
 
     if (!name_ref.startswith(expect_prefix)) {
       const std::string new_prefix = name_ref.substr(0, 2);

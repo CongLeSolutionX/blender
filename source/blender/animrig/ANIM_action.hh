@@ -620,28 +620,28 @@ class Slot : public ::ActionSlot {
   constexpr static slot_handle_t unassigned = 0;
 
   /**
-   * Slot names consist of a two-character ID code, then the display name.
-   * This means that the minimum length of a valid name is 3 characters.
+   * Slot identifiers consist of a two-character ID code, then the display name.
+   * This means that the minimum length of a valid identifier is 3 characters.
    */
-  constexpr static int name_length_min = 3;
+  constexpr static int identifier_length_min = 3;
 
-  constexpr static int name_length_max = MAX_ID_NAME;
-  static_assert(sizeof(AnimData::slot_name) == name_length_max);
-  static_assert(sizeof(NlaStrip::action_slot_name) == name_length_max);
+  constexpr static int identifier_length_max = MAX_ID_NAME;
+  static_assert(sizeof(AnimData::slot_name) == identifier_length_max);
+  static_assert(sizeof(NlaStrip::action_slot_name) == identifier_length_max);
 
   /**
-   * Return the name prefix for the Slot's type.
+   * Return the identifier prefix for the Slot's type.
    *
    * This is the ID name prefix, so "OB" for objects, "CA" for cameras, etc.
    */
-  std::string name_prefix_for_idtype() const;
+  std::string identifier_prefix_for_idtype() const;
 
   /**
-   * Return the name without the prefix, also known as the "display name".
+   * Return the identifier without the prefix, also known as the "display name".
    *
-   * \see name_prefix_for_idtype
+   * \see identifier_prefix_for_idtype
    */
-  StringRefNull name_without_prefix() const;
+  StringRefNull identifier_without_prefix() const;
 
   /** Return whether this Slot is usable by this ID type. */
   bool is_suitable_for(const ID &animated_id) const;
@@ -710,20 +710,20 @@ class Slot : public ::ActionSlot {
   static void users_invalidate(Main &bmain);
 
   /**
-   * Ensure the first two characters of the name match the ID type.
+   * Ensure the first two characters of the identifier match the ID type.
    *
    * This typically should not be called directly. Prefer assigning to an ID to
-   * get the idtype and name prefix properly set. Prefer calling
-   * `Action::slot_identifier_set()` if you want to set the slot name. Both of those
+   * get the idtype and identifier prefix properly set. Prefer calling
+   * `Action::slot_identifier_set()` if you want to set the slot identifier. Both of those
    * approaches take care of ensuring uniqueness and other invariants.
    *
-   * \note This does NOT ensure name uniqueness within the Action. That is the
+   * \note This does NOT ensure identifier uniqueness within the Action. That is the
    * responsibility of the caller.
    *
    * \see #assign_action_slot
    * \see #Action::slot_identifier_set
    */
-  void name_ensure_prefix();
+  void identifier_ensure_prefix();
 
  protected:
   friend Action;

@@ -534,13 +534,13 @@ TEST_F(ActionLayersTest, rename_slot)
   EXPECT_STREQ("Even Newer Name", cube->adt->slot_name);
 }
 
-TEST_F(ActionLayersTest, slot_name_ensure_prefix)
+TEST_F(ActionLayersTest, slot_identifier_ensure_prefix)
 {
   class AccessibleSlot : public Slot {
    public:
-    void name_ensure_prefix()
+    void identifier_ensure_prefix()
     {
-      Slot::name_ensure_prefix();
+      Slot::identifier_ensure_prefix();
     }
   };
 
@@ -550,33 +550,33 @@ TEST_F(ActionLayersTest, slot_name_ensure_prefix)
   ASSERT_EQ(0, slot.idtype);
 
   /* Check defaults, idtype zeroed. */
-  slot.name_ensure_prefix();
+  slot.identifier_ensure_prefix();
   EXPECT_STREQ("XXSlot", slot.name);
 
   /* idtype CA, default name.  */
   slot.idtype = ID_CA;
-  slot.name_ensure_prefix();
+  slot.identifier_ensure_prefix();
   EXPECT_STREQ("CASlot", slot.name);
 
   /* idtype ME, explicit name of other idtype. */
   action->slot_identifier_define(slot, "CANewName");
   slot.idtype = ID_ME;
-  slot.name_ensure_prefix();
+  slot.identifier_ensure_prefix();
   EXPECT_STREQ("MENewName", slot.name);
 
   /* Zeroing out idtype. */
   slot.idtype = 0;
-  slot.name_ensure_prefix();
+  slot.identifier_ensure_prefix();
   EXPECT_STREQ("XXNewName", slot.name);
 }
 
-TEST_F(ActionLayersTest, slot_name_prefix)
+TEST_F(ActionLayersTest, slot_identifier_prefix)
 {
   Slot &slot = action->slot_add();
-  EXPECT_EQ("XX", slot.name_prefix_for_idtype());
+  EXPECT_EQ("XX", slot.identifier_prefix_for_idtype());
 
   slot.idtype = ID_CA;
-  EXPECT_EQ("CA", slot.name_prefix_for_idtype());
+  EXPECT_EQ("CA", slot.identifier_prefix_for_idtype());
 }
 
 TEST_F(ActionLayersTest, rename_slot_identifier_collision)
