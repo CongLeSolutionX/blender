@@ -4096,6 +4096,7 @@ static float area_split_factor(bContext *C, sAreaJoinData *jd, const wmEvent *ev
     fac = (fabs(near_fac - fac) < fabs(frac_fac - fac)) ? near_fac : frac_fac;
   }
   else {
+    /* Slight snap to center when no modifiers are held. */
     if (fac >= 0.4375f && fac < 0.5f) {
       fac = 0.499999f;
     }
@@ -4104,12 +4105,12 @@ static float area_split_factor(bContext *C, sAreaJoinData *jd, const wmEvent *ev
     }
   }
 
-  const float min = (jd->split_dir == SCREEN_AXIS_V) ?
-                        float(ED_area_headersize()) / float(jd->sa1->winx + 1) * 2.0f :
-                        float(ED_area_headersize()) / float(jd->sa1->winy + 1) * 2.0f;
-
-  if (min < 0.5f) {
-    return std::clamp(fac, min, 1.0f - min);
+  /* Don't allow a new area to be created that is very small. */
+  const float min_size = float(2.0f * ED_area_headersize());
+  const float min_fac = min_size / ((jd->split_dir == SCREEN_AXIS_V) ? float(jd->sa1->winx + 1) :
+                                                                       float(jd->sa1->winy + 1));
+  if (min_fac < 0.5f) {
+    return std::clamp(fac, min_fac, 1.0f - min_fac);
   }
   else {
     return 0.5f;
