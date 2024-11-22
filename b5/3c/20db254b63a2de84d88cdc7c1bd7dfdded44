@@ -1,1 +1,2 @@
 Referenced by issue #130103, shadow_method is no longer valid in the python API but isnt in the release notes
+Referenced by issue #130705, Importing/exporting FBX with lights fails on Blender 4.3
