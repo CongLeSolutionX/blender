@@ -996,7 +996,9 @@ static void mirror_pose_bone(Object &ob, EditBone &ebone)
   pose_bone->limitmax[2] = -limit_min;
 }
 
-static void mirror_bone_collection_assignments(bArmature &armature, EditBone &ebone)
+static void mirror_bone_collection_assignments(bArmature &armature,
+                                               EditBone &source_bone,
+                                               EditBone &target_bone)
 {
   BLI_assert_msg(armature.edbo != nullptr, "Expecting the armature to be in edit mode");
   char name_flip[64];
@@ -1004,7 +1006,9 @@ static void mirror_bone_collection_assignments(bArmature &armature, EditBone &eb
   blender::Vector<BoneCollection *> unassign_collections;
   blender::Vector<BoneCollection *> assign_collections;
 
-  LISTBASE_FOREACH (BoneCollectionReference *, collection_reference, &ebone.bone_collections) {
+  /* Find all collections from source_bone that can be flipped. */
+  LISTBASE_FOREACH (BoneCollectionReference *, collection_reference, &source_bone.bone_collections)
+  {
     BoneCollection *collection = collection_reference->bcoll;
     BLI_string_flip_side_name(name_flip, collection->name, false, sizeof(name_flip));
     if (STREQ(name_flip, collection->name)) {
@@ -1024,12 +1028,14 @@ static void mirror_bone_collection_assignments(bArmature &armature, EditBone &eb
     assign_collections.append(flipped_collection);
   }
 
+  /* The target_bone might not be in unassign_collections anymore, or might already be in
+   * assign_collections. The assign functions will just do nothing in those cases. */
   for (BoneCollection *collection : unassign_collections) {
-    ANIM_armature_bonecoll_unassign_editbone(collection, &ebone);
+    ANIM_armature_bonecoll_unassign_editbone(collection, &target_bone);
   }
 
   for (BoneCollection *collection : assign_collections) {
-    ANIM_armature_bonecoll_assign_editbone(collection, &ebone);
+    ANIM_armature_bonecoll_assign_editbone(collection, &target_bone);
   }
 }
 
@@ -1459,7 +1465,7 @@ static int armature_symmetrize_exec(bContext *C, wmOperator *op)
         update_duplicate_custom_bone_shapes(C, ebone, obedit);
         /* Mirror any settings on the pose bone. */
         mirror_pose_bone(*obedit, *ebone);
-        mirror_bone_collection_assignments(*arm, *ebone);
+        mirror_bone_collection_assignments(*arm, *ebone_iter, *ebone);
       }
     }
 

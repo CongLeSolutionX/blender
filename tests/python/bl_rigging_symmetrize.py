@@ -348,9 +348,9 @@ class ArmatureSymmetrizeCollectionAssignments(unittest.TestCase):
         set_edit_bone_selected(self.arm.edit_bones["test.l"], True)
         bpy.ops.armature.symmetrize()
 
-        symmetrized_bone = self.arm.edit_bones["test.r"]
-        self.assertEqual(len(symmetrized_bone.collections), 1)
-        self.assertEqual(symmetrized_bone.collections[0], right_coll)
+        right_bone = self.arm.edit_bones["test.r"]
+        self.assertEqual(len(right_bone.collections), 1)
+        self.assertEqual(right_bone.collections[0], right_coll)
 
         # Parents should not be modified.
         left_coll = self.arm.collections_all["collection.l"]
@@ -382,9 +382,33 @@ class ArmatureSymmetrizeCollectionAssignments(unittest.TestCase):
         left_coll = self.arm.collections_all["collection.l"]
         self.assertEqual(right_coll.parent, left_coll.parent)
 
-        symmetrized_bone = self.arm.edit_bones["test.r"]
-        self.assertEqual(len(symmetrized_bone.collections), 1)
-        self.assertEqual(symmetrized_bone.collections[0], right_coll)
+        right_bone = self.arm.edit_bones["test.r"]
+        self.assertEqual(len(right_bone.collections), 1)
+        self.assertEqual(right_bone.collections[0], right_coll)
+
+    def test_symmetrize_to_existing_bone(self):
+        right_bone = self.arm.edit_bones.new(name="test.r")
+        right_bone.tail = (1, 0, 0)
+        unique_right_coll = self.arm.collections.new("unique")
+        unique_right_coll.assign(right_bone)
+
+        set_edit_bone_selected(self.arm.edit_bones["test.l"], True)
+        bpy.ops.armature.symmetrize()
+
+        # Missing collection is created.
+        self.assertTrue("collection.r" in self.arm.collections_all)
+        self.assertEqual(len(right_bone.collections), 2)
+        self.assertTrue("collection.r" in right_bone.collections)
+        self.assertTrue("unique" in right_bone.collections,
+                        "Mirrored bone shouldn't have lost the unique collection assignment")
+
+        # Symmetrizing twice shouldn't double invert the collection assignments.
+        set_edit_bone_selected(self.arm.edit_bones["test.l"], True)
+        set_edit_bone_selected(right_bone, False)
+        bpy.ops.armature.symmetrize()
+        self.assertTrue("collection.r" in right_bone.collections)
+        self.assertTrue("collection.l" not in right_bone.collections)
+
 
 
 def main():
