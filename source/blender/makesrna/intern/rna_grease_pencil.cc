@@ -219,9 +219,8 @@ static void rna_Frame_drawing_set(PointerRNA *frame_ptr,
   /* RNA doesn't give access to the parented layer object, so we have to iterate over all layers
    * and search for the matching GreasePencilFrame pointer in the frames collection. */
   auto [frame_number, this_layer] = find_layer_of_frame(grease_pencil, frame_to_find);
-  if (this_layer == nullptr) {
-    return;
-  }
+  /* Layer should exist. */
+  BLI_assert(this_layer != nullptr);
 
   Drawing *dst_drawing = grease_pencil.get_drawing_at(*this_layer, frame_number);
   if (dst_drawing == nullptr) {
