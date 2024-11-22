@@ -4456,6 +4456,7 @@ class VIEW3D_MT_edit_mesh_context_menu(Menu):
             if selected_verts_len > 1:
                 col.separator()
                 col.operator("mesh.edge_face_add", text="New Edge/Face from Vertices")
+                col.operator("mesh.insert_edge", text="Insert Edge between Corners")
                 col.operator("mesh.vert_connect_path", text="Connect Vertex Path")
                 col.operator("mesh.vert_connect", text="Connect Vertex Pairs")
 
@@ -4666,6 +4667,7 @@ class VIEW3D_MT_edit_mesh_vertices(Menu):
         layout.separator()
 
         layout.operator("mesh.edge_face_add", text="New Edge/Face from Vertices")
+        layout.operator("mesh.insert_edge", text="Insert Edge between Corners")
         layout.operator("mesh.vert_connect_path", text="Connect Vertex Path")
         layout.operator("mesh.vert_connect", text="Connect Vertex Pairs")
 
