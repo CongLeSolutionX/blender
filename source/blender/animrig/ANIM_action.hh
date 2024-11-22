@@ -249,7 +249,7 @@ class Action : public ::bAction {
    * - `animated_id.name`.
    *
    * Note that this is different from #slot_for_id, which does not use the
-   * slot name, and only works when this Action is already assigned. */
+   * slot identifier, and only works when this Action is already assigned. */
   Slot *find_suitable_slot_for(const ID &animated_id);
 
   /**
@@ -323,8 +323,8 @@ class Action : public ::bAction {
   float2 get_frame_range_of_keys(bool include_modifiers) const ATTR_WARN_UNUSED_RESULT;
 
   /**
-   * Set the slot's ID type to that of the animated ID, ensure the name
-   * prefix is set accordingly, and that the name is unique within the
+   * Set the slot's ID type to that of the animated ID, ensure the identifier
+   * prefix is set accordingly, and that the identifier is unique within the
    * Action.
    *
    * This is a low-level function, and shouldn't be called directly outside of
@@ -1221,10 +1221,10 @@ ActionSlotAssignmentResult assign_action_and_slot(Action *action,
  * mode (in which case no Action assignments can happen), or when the legacy Action ID type doesn't
  * match the animated ID.
  *
- * \note Contrary to `assign_action()` this skips the search by slot name when the Action is
+ * \note Contrary to `assign_action()` this skips the search by slot identifier when the Action is
  * already assigned. It should be possible for an animator to un-assign a slot, then create a new
- * slot by inserting a new key. This shouldn't auto-assign the old slot (by name) and _then_ insert
- * the key.
+ * slot by inserting a new key. This shouldn't auto-assign the old slot (by identifier) and _then_
+ * insert the key.
  *
  * \see assign_action()
  */
@@ -1267,7 +1267,7 @@ ActionSlotAssignmentResult assign_action_and_slot(Action *action,
                                          bAction *action_to_assign,
                                          bAction *&action_ptr_ref,
                                          slot_handle_t &slot_handle_ref,
-                                         char *slot_name);
+                                         char *slot_identifier);
 
 /**
  * Generic function to build Slot-assignment logic.
@@ -1279,7 +1279,7 @@ ActionSlotAssignmentResult assign_action_and_slot(Action *action,
                                                                     ID &animated_id,
                                                                     bAction *&action_ptr_ref,
                                                                     slot_handle_t &slot_handle_ref,
-                                                                    char *slot_name);
+                                                                    char *slot_identifier);
 
 /**
  * Generic function to build Slot Handle-assignment logic.
@@ -1292,7 +1292,7 @@ ActionSlotAssignmentResult assign_action_and_slot(Action *action,
     ID &animated_id,
     bAction *&action_ptr_ref,
     slot_handle_t &slot_handle_ref,
-    char *slot_name);
+    char *slot_identifier);
 
 /* --------------- Accessors --------------------- */
 
@@ -1622,9 +1622,9 @@ Action *convert_to_layered_action(Main &bmain, const Action &legacy_action);
 
 /**
  * Move the given slot from `from_action` to `to_action`.
- * The slot name might not be exactly the same if the name already exists in the slots of
- * `to_action`. Also the slot handle is likely going to be different on `to_action`.
- * All users of the slot will be reassigned to the moved slot on `to_action`.
+ * The slot identifier might not be exactly the same if the identifier already exists in the slots
+ * of `to_action`. Also the slot handle is likely going to be different on `to_action`. All users
+ * of the slot will be reassigned to the moved slot on `to_action`.
  *
  * \note The `from_action` will not be deleted by this function. But it might leave it without
  * users which means it will not be saved (unless it has a fake user).
