@@ -336,34 +336,35 @@ static void rna_ActionSlot_name_display_set(PointerRNA *ptr, const char *name)
   action.slot_identifier_define(slot, internal_name);
 }
 
-static void rna_ActionSlot_name_set(PointerRNA *ptr, const char *name)
+static void rna_ActionSlot_identifier_set(PointerRNA *ptr, const char *identifier)
 {
   animrig::Action &action = rna_action(ptr);
   animrig::Slot &slot = rna_data_slot(ptr);
-  const StringRef name_ref(name);
+  const StringRef identifier_ref(identifier);
 
-  if (name_ref.size() < animrig::Slot::identifier_length_min) {
-    WM_report(RPT_ERROR, "Action slot names should be at least three characters");
+  if (identifier_ref.size() < animrig::Slot::identifier_length_min) {
+    WM_report(RPT_ERROR, "Action slot identifiers should be at least three characters");
     return;
   }
 
   if (slot.has_idtype()) {
-    /* Check if the new name is going to be compatible with the already-established ID type. */
+    /* Check if the new identifier is going to be compatible with the already-established ID type.
+     */
     const std::string expect_prefix = slot.identifier_prefix_for_idtype();
 
-    if (!name_ref.startswith(expect_prefix)) {
-      const std::string new_prefix = name_ref.substr(0, 2);
+    if (!identifier_ref.startswith(expect_prefix)) {
+      const std::string new_prefix = identifier_ref.substr(0, 2);
       WM_reportf(RPT_WARNING,
-                 "Action slot renamed to unexpected prefix \"%s\" (expected \"%s\").\n",
+                 "Action slot identifier set with unexpected prefix \"%s\" (expected \"%s\").\n",
                  new_prefix.c_str(),
                  expect_prefix.c_str());
     }
   }
 
-  action.slot_identifier_define(slot, name);
+  action.slot_identifier_define(slot, identifier);
 }
 
-static void rna_ActionSlot_name_update(Main *bmain, Scene *, PointerRNA *ptr)
+static void rna_ActionSlot_identifier_update(Main *bmain, Scene *, PointerRNA *ptr)
 {
   animrig::Action &action = rna_action(ptr);
   animrig::Slot &slot = rna_data_slot(ptr);
@@ -1978,12 +1979,12 @@ static void rna_def_action_slot(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "identifier", PROP_STRING, PROP_NONE);
   RNA_def_struct_name_property(srna, prop);
-  RNA_def_property_string_funcs(prop, nullptr, nullptr, "rna_ActionSlot_name_set");
+  RNA_def_property_string_funcs(prop, nullptr, nullptr, "rna_ActionSlot_identifier_set");
   RNA_def_property_string_maxlength(prop, sizeof(ActionSlot::identifier) - 2);
-  RNA_def_property_update(prop, NC_ANIMATION | ND_ANIMCHAN, "rna_ActionSlot_name_update");
+  RNA_def_property_update(prop, NC_ANIMATION | ND_ANIMCHAN, "rna_ActionSlot_identifier_update");
   RNA_def_property_ui_text(
       prop,
-      "Slot Name",
+      "Slot Identifier",
       "Used when connecting an Action to a data-block, to find the correct slot handle. This is "
       "the display name, prefixed by two characters determined by the slot's ID type");
 
@@ -2007,7 +2008,7 @@ static void rna_def_action_slot(BlenderRNA *brna)
                                 "rna_ActionSlot_name_display_length",
                                 "rna_ActionSlot_name_display_set");
   RNA_def_property_string_maxlength(prop, sizeof(ActionSlot::identifier) - 2);
-  RNA_def_property_update(prop, NC_ANIMATION | ND_ANIMCHAN, "rna_ActionSlot_name_update");
+  RNA_def_property_update(prop, NC_ANIMATION | ND_ANIMCHAN, "rna_ActionSlot_identifier_update");
   RNA_def_property_ui_text(
       prop,
       "Slot Display Name",
