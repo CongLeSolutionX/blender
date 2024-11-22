@@ -410,7 +410,6 @@ class ArmatureSymmetrizeCollectionAssignments(unittest.TestCase):
         self.assertTrue("collection.l" not in right_bone.collections)
 
 
-
 def main():
     global args
     import argparse
