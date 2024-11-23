@@ -66,31 +66,31 @@ class GPUBackend {
 };
 
 namespace debug {
-  static ColorTheme4f get_debug_group_color(const char *name)
-  {
-    if(strcmp(name, "EEVEE") == 0) {
-      return ColorTheme4f(1.0, 0.5, 0.0, 1.0);
-    }
-    else if (strcmp(name, "External") == 0) {
-      return ColorTheme4f(0.0, 0.0, 1.0, 1.0);
-    }
-    else if(strcmp(name, "GpencilMode") == 0) {
-      return ColorTheme4f(1.0, 1.0, 0.0, 1.0);
-    }
-    else if(strcmp(name, "UV/Image") == 0) {
-      return ColorTheme4f(0.0, 1.0, 1.0, 1.0);
-    }
-    else if(strcmp(name, "Overlay") == 0) {
-      return ColorTheme4f(0.0, 1.0, 0.5, 1.0);
-    }
-    else if(strcmp(name, "Workbench") == 0) {
-      return ColorTheme4f(0.0, 0.7, 1.0, 1.0);
-    }
-    else if(strcmp(name, "Cycles") == 0) {
-      return ColorTheme4f(0.0, 0.5, 1.0, 1.0);
-    }
-    return GPU_DEBUG_GROUP_COLOR_DEFAULT;
+static ColorTheme4f get_debug_group_color(const char *name)
+{
+  if (strcmp(name, "EEVEE") == 0) {
+    return ColorTheme4f(1.0, 0.5, 0.0, 1.0);
   }
-}  // namespace blender::gpu::debug
+  else if (strcmp(name, "External") == 0) {
+    return ColorTheme4f(0.0, 0.0, 1.0, 1.0);
+  }
+  else if (strcmp(name, "GpencilMode") == 0) {
+    return ColorTheme4f(1.0, 1.0, 0.0, 1.0);
+  }
+  else if (strcmp(name, "UV/Image") == 0) {
+    return ColorTheme4f(0.0, 1.0, 1.0, 1.0);
+  }
+  else if (strcmp(name, "Overlay") == 0) {
+    return ColorTheme4f(0.0, 1.0, 0.5, 1.0);
+  }
+  else if (strcmp(name, "Workbench") == 0) {
+    return ColorTheme4f(0.0, 0.7, 1.0, 1.0);
+  }
+  else if (strcmp(name, "Cycles") == 0) {
+    return ColorTheme4f(0.0, 0.5, 1.0, 1.0);
+  }
+  return GPU_DEBUG_GROUP_COLOR_DEFAULT;
+}
+}  // namespace debug
 
 }  // namespace blender::gpu
