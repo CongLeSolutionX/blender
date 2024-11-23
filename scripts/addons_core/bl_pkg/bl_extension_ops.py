@@ -976,6 +976,11 @@ def _extensions_wheel_filter_for_this_system(wheels):
             continue
         # TODO: Match ABI tags.
         python_tag, _abi_tag, platform_tag = wheel_filename_split[-3:]
+        if _abi_tag.startswith("abi"):
+            abi_tag_match = int(_abi_tag.removeprefix("abi")) == python_version_current[0]
+        else:
+            # 'none', 'cp311' etc.
+            abi_tag_match = False
 
         # Perform Platform Checks.
         if platform_tag in {"any", platform_tag_current}:
@@ -1017,7 +1022,11 @@ def _extensions_wheel_filter_for_this_system(wheels):
                         python_version_is_compat = True
                         break
                 else:
-                    if python_version_current >= python_version:
+                    if (
+                        python_version_current >= python_version
+                        if abi_tag_match
+                        else python_version_current == python_version
+                    ):
                         python_version_is_compat = True
                         break
             if not python_version_is_compat:
