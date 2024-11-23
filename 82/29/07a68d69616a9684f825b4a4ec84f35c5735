@@ -1,2 +1,3 @@
 Referenced by pull request #130148, Fix #130090: Grease Pencil object in NLA cause Blender to crash
 Referenced by commit ae5717905bd9b84cf3451c7ac57c2e89c6575744, Fix #130090: Grease Pencil object in NLA cause Blender to crash
+Referenced by pull request #130787, Fix #130760: Grease Pencil: Group channel crash
