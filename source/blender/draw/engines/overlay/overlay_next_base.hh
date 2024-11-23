@@ -15,20 +15,18 @@ namespace blender::draw::overlay {
 /**
  * Base overlay class used for documentation.
  *
- * This is not actually used as all functions should always be called from the derived class.
+ * This is not actually used as all methods should always be called from the derived class.
  * There is still some external conditional logic and draw ordering that needs to be adjusted on a
  * per overlay basis inside the `overlay::Instance`.
  */
 struct Overlay {
-  bool enabled_ = false;
-
   /**
-   * Overlays are used for every area using GPUViewport (i.e. View3D, UV Editor, Compositor ...).
-   * They are also used for depth picking and selection.
-   * This means each overlays must decide when they are active. The poll function must initialize
-   * the `enabled_` depending on the context state.
+   * IMPORTANT: Overlays are used for every area using GPUViewport (i.e. View3D, UV Editor,
+   * Compositor ...). They are also used for depth picking and selection. This means each overlays
+   * must decide when they are active. The begin_sync method must initialize the `enabled_`
+   * member depending on the context state, and every method should implement an early out cases.
    */
-  virtual void poll(Resources &res, const State &state) = 0;
+  bool enabled_ = false;
 
   /**
    * Synchronization creates and fill render passes based on context state and scene state.
