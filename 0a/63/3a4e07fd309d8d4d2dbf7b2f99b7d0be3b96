@@ -4,3 +4,4 @@ Referenced by commit 20b3e62e932367bbb07d185af3fe2e1315cde622, Fix #111896: Regr
 Referenced by pull request #118597, Fix #118475: Regression: NLA/driver data missing in outliner
 Referenced by commit 80e7c04726ec3e496031bfc42ee4f5219d618be6, Fix #118475: Regression: NLA/driver data missing in outliner
 Referenced by pull request #130750, Fix #130686: Outliner vertex groups sorting is broken
+Referenced by commit 531ed680613a9c44d62413ada0c9ee1e15554e25, Fix #130686: Outliner vertex groups sorting is broken
