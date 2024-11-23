@@ -172,8 +172,7 @@ void USDMeshReader::read_object_data(Main *bmain, const double motionSampleTime)
   Mesh *mesh = (Mesh *)object_->data;
 
   is_initial_load_ = true;
-  const USDMeshReadParams params = create_mesh_read_params(motionSampleTime,
-                                                           import_params_.mesh_read_flag);
+  const USDMeshReadParams params = create_mesh_read_params(motionSampleTime);
 
   Mesh *read_mesh = this->read_mesh(mesh, params, nullptr);
 
@@ -501,9 +500,7 @@ void USDMeshReader::read_mesh_sample(ImportSettings *settings,
   }
 
   /* Custom Data layers. */
-  if ((settings->read_flag & MOD_MESHSEQ_READ_COLOR) ||
-      (settings->read_flag & MOD_MESHSEQ_READ_ATTRIBUTES))
-  {
+  if (import_params_.import_colors || import_params_.import_attributes) {
     read_velocities(mesh, motionSampleTime);
     read_custom_data(settings, mesh, motionSampleTime, new_mesh);
   }
@@ -567,7 +564,7 @@ void USDMeshReader::read_custom_data(const ImportSettings *settings,
 
     /* Read Color primvars. */
     if (convert_usd_type_to_blender(type) == CD_PROP_COLOR) {
-      if ((settings->read_flag & MOD_MESHSEQ_READ_COLOR) != 0) {
+      if (import_params_.import_colors) {
         /* Set the active color name to 'displayColor', if a color primvar
          * with this name exists.  Otherwise, use the name of the first
          * color primvar we find for the active color. */
@@ -586,7 +583,7 @@ void USDMeshReader::read_custom_data(const ImportSettings *settings,
                   pxr::UsdGeomTokens->varying) &&
              convert_usd_type_to_blender(type) == CD_PROP_FLOAT2)
     {
-      if ((settings->read_flag & MOD_MESHSEQ_READ_UV) != 0) {
+      if (import_params_.import_uvs) {
         /* Set the active uv set name to 'st', if a uv set primvar
          * with this name exists.  Otherwise, use the name of the first
          * uv set primvar we find for the active uv set. */
@@ -599,7 +596,7 @@ void USDMeshReader::read_custom_data(const ImportSettings *settings,
 
     /* Read all other primvars. */
     else {
-      if ((settings->read_flag & MOD_MESHSEQ_READ_ATTRIBUTES) != 0) {
+      if (import_params_.import_attributes) {
         read_generic_mesh_primvar(mesh, pv, motionSampleTime, is_left_handed_);
       }
     }

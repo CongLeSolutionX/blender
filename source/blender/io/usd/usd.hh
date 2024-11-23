@@ -180,7 +180,6 @@ struct USDImportParams {
   float scale;
   float light_intensity_scale;
 
-  char mesh_read_flag;
   bool set_frame_range;
   bool is_sequence;
   int sequence_len;
@@ -198,6 +197,10 @@ struct USDImportParams {
   bool import_points;
   bool import_subdiv;
   bool import_volumes;
+
+  bool import_uvs;
+  bool import_colors;
+  bool import_attributes;
 
   bool import_shapes;
   bool import_skeletons;
@@ -237,10 +240,9 @@ struct USDImportParams {
  */
 struct USDMeshReadParams {
   double motion_sample_time; /* USD TimeCode in frames. */
-  int read_flags; /* MOD_MESHSEQ_xxx value that is set from MeshSeqCacheModifierData.read_flag. */
 };
 
-USDMeshReadParams create_mesh_read_params(double motion_sample_time, int read_flags);
+USDMeshReadParams create_mesh_read_params(double motion_sample_time);
 
 /**
  * The USD_export takes a `as_background_job` parameter, and returns a boolean.

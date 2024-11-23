@@ -46,8 +46,7 @@ void USDShapeReader::create_object(Main *bmain, double /*motionSampleTime*/)
 
 void USDShapeReader::read_object_data(Main *bmain, double motionSampleTime)
 {
-  const USDMeshReadParams params = create_mesh_read_params(motionSampleTime,
-                                                           import_params_.mesh_read_flag);
+  const USDMeshReadParams params = create_mesh_read_params(motionSampleTime);
   Mesh *mesh = (Mesh *)object_->data;
   Mesh *read_mesh = this->read_mesh(mesh, params, nullptr);
 
@@ -262,7 +261,7 @@ Mesh *USDShapeReader::mesh_from_prim(Mesh *existing_mesh,
   MutableSpan<float3> vert_positions = active_mesh->vert_positions_for_write();
   vert_positions.copy_from(Span(positions.data(), positions.size()).cast<float3>());
 
-  if (params.read_flags & MOD_MESHSEQ_READ_COLOR) {
+  if (import_params_.import_colors || import_params_.import_attributes) {
     if (active_mesh != existing_mesh) {
       /* Clear the primvar map to force attributes to be reloaded. */
       this->primvar_time_varying_map_.clear();

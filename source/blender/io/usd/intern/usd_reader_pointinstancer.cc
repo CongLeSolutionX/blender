@@ -138,8 +138,7 @@ void USDPointInstancerReader::read_object_data(Main *bmain, const double motionS
   bke::GeometrySet geometry_set = bke::GeometrySet::from_pointcloud(
       point_cloud, bke::GeometryOwnershipType::Editable);
 
-  const USDMeshReadParams params = create_mesh_read_params(motionSampleTime,
-                                                           import_params_.mesh_read_flag);
+  const USDMeshReadParams params = create_mesh_read_params(motionSampleTime);
 
   read_geometry(geometry_set, params, nullptr);
 

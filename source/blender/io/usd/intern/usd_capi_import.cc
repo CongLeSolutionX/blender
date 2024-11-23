@@ -577,11 +577,10 @@ static USDPrimReader *get_usd_reader(CacheReader *reader,
   return usd_reader;
 }
 
-USDMeshReadParams create_mesh_read_params(const double motion_sample_time, const int read_flags)
+USDMeshReadParams create_mesh_read_params(const double motion_sample_time)
 {
-  USDMeshReadParams params = {};
+  USDMeshReadParams params{};
   params.motion_sample_time = motion_sample_time;
-  params.read_flags = read_flags;
   return params;
 }
 
@@ -680,17 +679,6 @@ USDImportParams USD_load_import_params(IDProperty *properties)
   const bool read_mesh_colors = RNA_boolean_get(&ptr, "read_mesh_colors");
   const bool read_mesh_attributes = RNA_boolean_get(&ptr, "read_mesh_attributes");
 
-  char mesh_read_flag = MOD_MESHSEQ_READ_VERT | MOD_MESHSEQ_READ_POLY;
-  if (read_mesh_uvs) {
-    mesh_read_flag |= MOD_MESHSEQ_READ_UV;
-  }
-  if (read_mesh_colors) {
-    mesh_read_flag |= MOD_MESHSEQ_READ_COLOR;
-  }
-  if (read_mesh_attributes) {
-    mesh_read_flag |= MOD_MESHSEQ_READ_ATTRIBUTES;
-  }
-
   const bool import_cameras = RNA_boolean_get(&ptr, "import_cameras");
   const bool import_curves = RNA_boolean_get(&ptr, "import_curves");
   const bool import_lights = RNA_boolean_get(&ptr, "import_lights");
@@ -757,7 +745,6 @@ USDImportParams USD_load_import_params(IDProperty *properties)
   params.scale = scale;
   params.light_intensity_scale = light_intensity_scale;
 
-  params.mesh_read_flag = mesh_read_flag;
   params.set_frame_range = set_frame_range;
   params.is_sequence = is_sequence;
   params.sequence_len = sequence_len;
@@ -775,6 +762,10 @@ USDImportParams USD_load_import_params(IDProperty *properties)
   params.import_points = import_points;
   params.import_subdiv = import_subdiv;
   params.import_volumes = import_volumes;
+
+  params.import_uvs = read_mesh_uvs;
+  params.import_colors = read_mesh_colors;
+  params.import_attributes = read_mesh_attributes;
 
   params.create_collection = create_collection;
   params.create_world_material = create_world_material;

@@ -28,8 +28,7 @@ void USDPointsReader::create_object(Main *bmain, double /*motionSampleTime*/)
 
 void USDPointsReader::read_object_data(Main *bmain, double motionSampleTime)
 {
-  const USDMeshReadParams params = create_mesh_read_params(motionSampleTime,
-                                                           import_params_.mesh_read_flag);
+  const USDMeshReadParams params = create_mesh_read_params(motionSampleTime);
 
   PointCloud *point_cloud = static_cast<PointCloud *>(object_->data);
 
