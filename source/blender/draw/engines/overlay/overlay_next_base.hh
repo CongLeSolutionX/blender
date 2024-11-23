@@ -85,9 +85,12 @@ struct Overlay {
    * resolving to the given framebuffer.
    */
 
-  virtual void draw(Framebuffer &framebuffer, Manager &manager, View &view) = 0;
-  virtual void draw_color_only(Framebuffer &framebuffer, Manager &manager, View &view) = 0;
   virtual void draw_on_render(GPUFrameBuffer *framebuffer, Manager &manager, View &view) = 0;
+  virtual void draw(Framebuffer &framebuffer, Manager &manager, View &view) = 0;
+  virtual void draw_line(Framebuffer &framebuffer, Manager &manager, View &view) = 0;
+  virtual void draw_line_only(Framebuffer &framebuffer, Manager &manager, View &view) = 0;
+  virtual void draw_color_only(Framebuffer &framebuffer, Manager &manager, View &view) = 0;
+  virtual void draw_output(Framebuffer &framebuffer, Manager &manager, View &view) = 0;
 };
 
 }  // namespace blender::draw::overlay
