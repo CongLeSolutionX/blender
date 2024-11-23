@@ -1821,8 +1821,8 @@ struct NodeSocketShaderParameters {
   float4 color_outline;
   float outline_thickness;
   float outline_offset;
-  float dot_radius;
   float shape;
+  float aspect;
 };
 
 /* Keep in sync with shader. */
@@ -1925,8 +1925,8 @@ void node_draw_nodesocket(const rctf *rect,
                           const float color_inner[4],
                           const float color_outline[4],
                           const float outline_thickness,
-                          const float dot_radius,
-                          int shape)
+                          const int shape,
+                          const float aspect)
 {
   /* WATCH: This is assuming the ModelViewProjectionMatrix is area pixel space.
    * If it has been scaled, then it's no longer valid. */
@@ -1943,9 +1943,9 @@ void node_draw_nodesocket(const rctf *rect,
   socket_params.color_outline[2] = color_outline[2];
   socket_params.color_outline[3] = color_outline[3];
   socket_params.outline_thickness = outline_thickness;
-  socket_params.dot_radius = dot_radius;
-  socket_params.outline_offset = 0.4 * outline_thickness;
+  socket_params.outline_offset = 0.0;
   socket_params.shape = float(shape) + 0.1f;
+  socket_params.aspect = aspect;
 
   GPU_blend(GPU_BLEND_ALPHA);
   draw_node_socket_batch(socket_params);

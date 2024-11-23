@@ -2148,7 +2148,6 @@ void node_socket_add_tooltip(const bNodeTree &ntree, const bNodeSocket &sock, ui
 }
 
 #define NODE_SOCKET_OUTLINE U.pixelsize
-#define NODE_SOCKET_DOT U.scale_factor
 
 void node_socket_draw(bNodeSocket *sock, const rcti *rect, const float color[4], float scale)
 {
@@ -2166,8 +2165,8 @@ void node_socket_draw(bNodeSocket *sock, const rcti *rect, const float color[4],
                        color,
                        outline_color,
                        NODE_SOCKET_OUTLINE * scale,
-                       NODE_SOCKET_DOT * scale,
-                       sock->display_shape);
+                       sock->display_shape,
+                       1.0 / scale);
 }
 
 /** Some elements of the node UI are hidden, when they get too small. */
@@ -2300,8 +2299,8 @@ static void node_draw_socket(const bContext &C,
                              uiBlock &block,
                              const bNodeSocket &sock,
                              const float outline_thickness,
-                             const float dot_radius,
-                             const bool selected)
+                             const bool selected,
+                             const float aspect)
 {
   const float half_width = NODE_SOCKSIZE;
 
@@ -2322,8 +2321,12 @@ static void node_draw_socket(const bContext &C,
       socket_location.y + half_height,
   };
 
-  node_draw_nodesocket(
-      &rect, socket_color, outline_color, outline_thickness, dot_radius, sock.display_shape);
+  node_draw_nodesocket(&rect,
+                       socket_color,
+                       outline_color,
+                       outline_thickness,
+                       sock.display_shape,
+                       aspect);
 
   node_socket_tooltip_set(
       block, sock.index_in_tree(), socket_location, float2(2.0f * half_width, 2.0f * half_height));
@@ -2344,7 +2347,6 @@ static void node_draw_sockets(
       const_cast<ID *>(&ntree.id), &RNA_Node, const_cast<bNode *>(&node));
 
   const float outline_thickness = NODE_SOCKET_OUTLINE;
-  const float dot_radius = NODE_SOCKET_DOT;
 
   nodesocket_batch_start();
   /* Input sockets. */
@@ -2353,8 +2355,15 @@ static void node_draw_sockets(
       continue;
     }
     const bool selected = (sock->flag & SELECT);
-    node_draw_socket(
-        C, ntree, node, nodeptr, block, *sock, outline_thickness, dot_radius, selected);
+    node_draw_socket(C,
+                     ntree,
+                     node,
+                     nodeptr,
+                     block,
+                     *sock,
+                     outline_thickness,
+                     selected,
+                     snode.runtime->aspect);
   }
 
   /* Output sockets. */
@@ -2363,8 +2372,15 @@ static void node_draw_sockets(
       continue;
     }
     const bool selected = (sock->flag & SELECT);
-    node_draw_socket(
-        C, ntree, node, nodeptr, block, *sock, outline_thickness, dot_radius, selected);
+    node_draw_socket(C,
+                     ntree,
+                     node,
+                     nodeptr,
+                     block,
+                     *sock,
+                     outline_thickness,
+                     selected,
+                     snode.runtime->aspect);
   }
   nodesocket_batch_end();
 }
@@ -4244,6 +4260,7 @@ static StringRefNull reroute_node_get_auto_label(TreeDrawContext &tree_draw_ctx,
 }
 
 static void reroute_node_draw_body(const bContext &C,
+                                   const SpaceNode &snode,
                                    const bNodeTree &ntree,
                                    const bNode &node,
                                    uiBlock &block,
@@ -4266,8 +4283,8 @@ static void reroute_node_draw_body(const bContext &C,
                        socket_color,
                        outline_color,
                        NODE_SOCKET_OUTLINE,
-                       NODE_SOCKET_DOT,
-                       sock.display_shape);
+                       sock.display_shape,
+                       snode.runtime->aspect);
 
   const float2 location = float2(BLI_rctf_cent_x(&node.runtime->totr),
                                  BLI_rctf_cent_y(&node.runtime->totr));
@@ -4343,7 +4360,7 @@ static void reroute_node_draw(const bContext &C,
 
   /* Only draw the input socket, since all sockets are at the same location. */
   const bool selected = node.flag & NODE_SELECT;
-  reroute_node_draw_body(C, ntree, node, block, selected);
+  reroute_node_draw_body(C, snode, ntree, node, block, selected);
 
   UI_block_end_ex(&C,
                   tree_draw_ctx.bmain,

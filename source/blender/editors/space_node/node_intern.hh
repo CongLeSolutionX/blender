@@ -245,8 +245,8 @@ void node_draw_nodesocket(const rctf *rect,
                           const float color_inner[4],
                           const float color_outline[4],
                           const float outline_thickness,
-                          const float dot_radius,
-                          int shape);
+                          int shape,
+                          float aspect);
 
 void nodelink_batch_start(SpaceNode &snode);
 void nodelink_batch_end(SpaceNode &snode);

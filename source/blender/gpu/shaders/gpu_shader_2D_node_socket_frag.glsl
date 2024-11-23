@@ -19,20 +19,28 @@ FRAGMENT_SHADER_CREATE_INFO(gpu_shader_2D_node_socket_inst)
 /* Calculates a squared distance field of a square. */
 float square_sdf(vec2 absCo, float half_width_x, float half_width_y)
 {
-  vec2 extruded = vec2(max(0.0, absCo.x - half_width_x), max(0.0, absCo.y - half_width_y));
-  return dot(extruded, extruded);
+  vec2 extruded_co = absCo - vec2(half_width_x, half_width_y);
+  vec2 clamped_extruded_co = vec2(max(0.0, extruded_co.x), max(0.0, extruded_co.y));
+
+  float exterior_distance_squared = dot(clamped_extruded_co, clamped_extruded_co);
+  
+  float interior_distance = min(max(extruded_co.x, extruded_co.y), 0);
+  float interior_distance_squared = interior_distance * interior_distance;
+  
+  return exterior_distance_squared - interior_distance_squared;
 }
 
 vec2 rotate_45(vec2 co)
-{
+{ 
   return from_rotation(Angle(M_PI * 0.25)) * co;
 }
 
 /* Calculates an upper and lower limit for an antialiased cutoff of the squared distance. */
 vec2 calculate_thresholds(float threshold)
 {
-  float inner_threshold = (threshold - AAsize) * (threshold - AAsize);
-  float outer_threshold = threshold * threshold;
+  /* Use the absolute on one of the factors to preserve the sign. */
+  float inner_threshold = (threshold - 0.5 * AAsize) * abs(threshold - 0.5 * AAsize);
+  float outer_threshold = (threshold + 0.5 * AAsize) * abs(threshold + 0.5 * AAsize);
   return vec2(inner_threshold, outer_threshold);
 }
 
@@ -46,10 +54,9 @@ void main()
   float dot_threshold = -1.0;
 
   const float circle_radius = 0.5;
-  const float square_radius = 0.5;
-  const float diamond_radius = 0.42;
-  /* Round the sharp corners of the square and diamond a little bit. */
-  const float corner_rounding = 0.15;
+  const float square_radius = 0.5 / sqrt(2.0 / M_PI) * M_SQRT1_2;
+  const float diamond_radius = 0.5 / sqrt(2.0 / M_PI) * M_SQRT1_2;
+  const float corner_rounding = 0.0;
 
   switch (finalShape) {
     default:
