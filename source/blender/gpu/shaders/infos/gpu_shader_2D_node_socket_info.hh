@@ -26,8 +26,7 @@ FLAT(INT, finalShape)
 SMOOTH(VEC2, uv)
 GPU_SHADER_INTERFACE_END()
 
-/* TODO(Leon): Share with C code. */
-/* TODO(Leon): Tweak the instance count to test if there's a noticable sweet spot. */
+/* TODO(lone_noel): Share with C code. */
 #define MAX_SOCKET_PARAMETERS 4
 #define MAX_SOCKET_INSTANCE 32
 
