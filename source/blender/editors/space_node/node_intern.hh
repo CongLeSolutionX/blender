@@ -244,7 +244,7 @@ void nodesocket_batch_end();
 void node_draw_nodesocket(const rctf *rect,
                           const float color_inner[4],
                           const float color_outline[4],
-                          const float outline_thickness,
+                          float outline_thickness,
                           int shape,
                           float aspect);
 
