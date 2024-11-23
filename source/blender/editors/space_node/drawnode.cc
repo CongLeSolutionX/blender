@@ -1814,18 +1814,7 @@ void node_link_bezier_points_evaluated(const bNodeLink &link,
 /** \name Node Socket Drawing
  * \{ */
 
-/* Node Socket shader parameters, must match the shader layout. */
-struct NodeSocketShaderParameters {
-  rctf rect;
-  float4 color_inner;
-  float4 color_outline;
-  float outline_thickness;
-  float outline_offset;
-  float shape;
-  float aspect;
-};
-
-/* Keep in sync with shader. */
+/* Keep in sync with node socket shader. */
 #define MAX_SOCKET_PARAMETERS 4
 #define MAX_SOCKET_INSTANCE 32
 
@@ -1933,7 +1922,10 @@ void node_draw_nodesocket(const rctf *rect,
   BLI_assert((color_inner != nullptr) && (color_outline != nullptr));
 
   NodeSocketShaderParameters socket_params = {};
-  socket_params.rect = *rect;
+  socket_params.rect[0] = rect->xmin;
+  socket_params.rect[1] = rect->xmax;
+  socket_params.rect[2] = rect->ymin;
+  socket_params.rect[3] = rect->ymax;
   socket_params.color_inner[0] = color_inner[0];
   socket_params.color_inner[1] = color_inner[1];
   socket_params.color_inner[2] = color_inner[2];
