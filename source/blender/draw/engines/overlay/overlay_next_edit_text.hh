@@ -11,11 +11,11 @@
 #include "BKE_vfont.hh"
 #include "BLI_math_matrix.hh"
 
-#include "overlay_next_private.hh"
+#include "overlay_next_base.hh"
 
 namespace blender::draw::overlay {
 
-class EditText {
+class EditText : Overlay {
 
  private:
   PassSimple ps_ = {"Selection&Cursor"};
@@ -27,20 +27,21 @@ class EditText {
   StorageVectorBuffer<ObjectMatrices> text_cursor_buf;
   LinePrimitiveBuf box_line_buf_;
 
-  bool enabled_ = false;
-
  public:
   EditText(SelectionType selection_type) : box_line_buf_(selection_type, "box_line_buf_") {}
 
-  void begin_sync(const State &state)
+  void begin_sync(Resources & /*res*/, const State &state) final
   {
-    enabled_ = state.v3d;
+    enabled_ = state.is_space_v3d();
     text_selection_buf.clear();
     text_cursor_buf.clear();
     box_line_buf_.clear();
   }
 
-  void edit_object_sync(const ObjectRef &ob_ref, const Resources &res)
+  void edit_object_sync(Manager & /*manager*/,
+                        const ObjectRef &ob_ref,
+                        Resources &res,
+                        const State & /*state*/) final
   {
     if (!enabled_) {
       return;
@@ -52,7 +53,7 @@ class EditText {
     add_boxes(res, cu, ob_ref.object->object_to_world());
   }
 
-  void end_sync(Resources &res, const ShapeCache &shapes, const State &state)
+  void end_sync(Resources &res, const ShapeCache &shapes, const State &state) final
   {
     ps_.init();
     res.select_bind(ps_);
@@ -121,7 +122,7 @@ class EditText {
     }
   }
 
-  void draw(Framebuffer &framebuffer, Manager &manager, View &view)
+  void draw(Framebuffer &framebuffer, Manager &manager, View &view) final
   {
     if (!enabled_) {
       return;

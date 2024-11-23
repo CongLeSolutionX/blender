@@ -9,24 +9,23 @@
 #pragma once
 
 #include "BKE_constraint.h"
-
+#include "DEG_depsgraph_query.hh"
 #include "DNA_constraint_types.h"
 #include "DNA_gpencil_modifier_types.h"
 #include "DNA_modifier_types.h"
+#include "DNA_rigidbody_types.h"
 
-#include "overlay_next_private.hh"
+#include "overlay_next_base.hh"
 
 namespace blender::draw::overlay {
 
-class Relations {
+class Relations : Overlay {
 
  private:
   PassSimple ps_ = {"Relations"};
 
   LinePrimitiveBuf relations_buf_;
   PointPrimitiveBuf points_buf_;
-
-  bool enabled_ = false;
 
  public:
   Relations(SelectionType selection_type)
@@ -35,24 +34,27 @@ class Relations {
   {
   }
 
-  void begin_sync(Resources &res, const State &state)
+  void begin_sync(Resources &res, const State &state) final
   {
-    enabled_ = state.space_type == SPACE_VIEW3D;
+    enabled_ = state.is_space_v3d();
     enabled_ &= (state.v3d_flag & V3D_HIDE_HELPLINES) == 0;
-    enabled_ &= res.selection_type == SelectionType::DISABLED;
+    enabled_ &= !res.is_selection();
 
     points_buf_.clear();
     relations_buf_.clear();
   }
 
-  void object_sync(const ObjectRef &ob_ref, Resources &res, const State &state)
+  void object_sync(Manager & /*manager*/,
+                   const ObjectRef &ob_ref,
+                   Resources &res,
+                   const State &state) final
   {
     if (!enabled_) {
       return;
     }
 
     /* Don't show object extras in set's. */
-    if (ob_ref.object->base_flag & (BASE_FROM_SET | BASE_FROM_DUPLI)) {
+    if (is_from_dupli_or_set(ob_ref)) {
       return;
     }
 
@@ -62,7 +64,8 @@ class Relations {
 
     if (ob->parent && (DRW_object_visibility_in_active_context(ob->parent) & OB_VISIBLE_SELF)) {
       const float3 &parent_pos = ob->runtime->parent_display_origin;
-      relations_buf_.append(parent_pos, ob->object_to_world().location(), relation_color);
+      /* Reverse order to have less stipple overlap. */
+      relations_buf_.append(ob->object_to_world().location(), parent_pos, relation_color);
     }
 
     /* Drawing the hook lines. */
@@ -168,7 +171,7 @@ class Relations {
     }
   }
 
-  void end_sync(Resources &res, const State &state)
+  void end_sync(Resources &res, const ShapeCache & /*shapes*/, const State &state) final
   {
     if (!enabled_) {
       return;
@@ -196,7 +199,7 @@ class Relations {
     }
   }
 
-  void draw(Framebuffer &framebuffer, Manager &manager, View &view)
+  void draw_line(Framebuffer &framebuffer, Manager &manager, View &view) final
   {
     if (!enabled_) {
       return;

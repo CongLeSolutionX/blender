@@ -173,7 +173,7 @@ class SocketDeclaration : public ItemDeclaration {
   std::string short_label;
   std::string identifier;
   std::string description;
-  std::string translation_context;
+  std::optional<std::string> translation_context;
   /** Defined by whether the socket is part of the node's input or
    * output socket declaration list. Included here for convenience. */
   eNodeSocketInOut in_out;
@@ -286,7 +286,8 @@ class BaseSocketDeclarationBuilder {
 
   BaseSocketDeclarationBuilder &description(std::string value = "");
 
-  BaseSocketDeclarationBuilder &translation_context(std::string value = BLT_I18NCONTEXT_DEFAULT);
+  BaseSocketDeclarationBuilder &translation_context(
+      std::optional<std::string> value = std::nullopt);
 
   BaseSocketDeclarationBuilder &no_muted_links(bool value = true);
 
@@ -441,7 +442,7 @@ class PanelDeclaration : public ItemDeclaration {
   int identifier;
   std::string name;
   std::string description;
-  std::string translation_context;
+  std::optional<std::string> translation_context;
   bool default_collapsed = false;
   Vector<ItemDeclaration *> items;
   /** Index in the list of panels on the node. */

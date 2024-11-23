@@ -8,14 +8,14 @@
 
 #pragma once
 
+#include "overlay_next_base.hh"
 #include "overlay_next_grease_pencil.hh"
-#include "overlay_next_private.hh"
 
 #include "draw_common.hh"
 
 namespace blender::draw::overlay {
 
-class Outline {
+class Outline : Overlay {
  private:
   /* Simple render pass that renders an object ID pass. */
   PassMain outline_prepass_ps_ = {"Prepass"};
@@ -33,15 +33,14 @@ class Outline {
 
   Framebuffer prepass_fb_ = {"outline.prepass_fb"};
 
-  bool enabled = false;
-
   overlay::GreasePencil::ViewParameters grease_pencil_view;
 
  public:
-  void begin_sync(Resources &res, const State &state)
+  void begin_sync(Resources &res, const State &state) final
   {
-    enabled = (state.v3d_flag & V3D_SELECT_OUTLINE);
-    if (!enabled) {
+    enabled_ = !res.is_selection();
+    enabled_ &= state.v3d && (state.v3d_flag & V3D_SELECT_OUTLINE);
+    if (!enabled_) {
       return;
     }
 
@@ -111,7 +110,6 @@ class Outline {
     {
       auto &pass = outline_resolve_ps_;
       pass.init();
-      pass.framebuffer_set(&res.overlay_line_only_fb);
       pass.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ALPHA_PREMUL);
       pass.shader_set(res.shaders.outline_detect.get());
       /* Don't occlude the outline if in xray mode as it causes too much flickering. */
@@ -127,9 +125,12 @@ class Outline {
     }
   }
 
-  void object_sync(Manager &manager, const ObjectRef &ob_ref, const State &state)
+  void object_sync(Manager &manager,
+                   const ObjectRef &ob_ref,
+                   Resources & /*res*/,
+                   const State &state) final
   {
-    if (!enabled) {
+    if (!enabled_) {
       return;
     }
 
@@ -194,9 +195,19 @@ class Outline {
     }
   }
 
-  void draw(Resources &res, Manager &manager, View &view)
+  void pre_draw(Manager &manager, View &view) final
   {
-    if (!enabled) {
+    if (!enabled_) {
+      return;
+    }
+
+    manager.generate_commands(outline_prepass_ps_, view);
+  }
+
+  /* TODO(fclem): Remove dependency on Resources. */
+  void draw_line_only(Framebuffer &framebuffer, Resources &res, Manager &manager, View &view)
+  {
+    if (!enabled_) {
       return;
     }
 
@@ -211,7 +222,9 @@ class Outline {
     prepass_fb_.ensure(GPU_ATTACHMENT_TEXTURE(tmp_depth_tx_),
                        GPU_ATTACHMENT_TEXTURE(object_id_tx_));
 
-    manager.submit(outline_prepass_ps_, view);
+    manager.submit_only(outline_prepass_ps_, view);
+
+    GPU_framebuffer_bind(framebuffer);
     manager.submit(outline_resolve_ps_, view);
 
     tmp_depth_tx_.release();

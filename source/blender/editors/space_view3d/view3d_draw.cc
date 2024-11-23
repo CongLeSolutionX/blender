@@ -30,6 +30,7 @@
 #include "BKE_object.hh"
 #include "BKE_paint.hh"
 #include "BKE_scene.hh"
+#include "BKE_screen.hh"
 #include "BKE_unit.hh"
 
 #include "BLF_api.hh"
@@ -48,7 +49,6 @@
 
 #include "ED_gpencil_legacy.hh"
 #include "ED_info.hh"
-#include "ED_keyframing.hh"
 #include "ED_scene.hh"
 #include "ED_screen.hh"
 #include "ED_view3d_offscreen.hh"
@@ -79,6 +79,8 @@
 
 #include "IMB_imbuf.hh"
 #include "IMB_imbuf_types.hh"
+
+#include "ANIM_keyframing.hh"
 
 #include "view3d_intern.hh" /* own include */
 
@@ -1393,7 +1395,9 @@ static void draw_selected_name(
     }
 
     /* color depends on whether there is a keyframe */
-    if (id_frame_has_keyframe((ID *)ob, /* BKE_scene_ctime_get(scene) */ float(cfra))) {
+    if (blender::animrig::id_frame_has_keyframe((ID *)ob,
+                                                /* BKE_scene_ctime_get(scene) */ float(cfra)))
+    {
       UI_FontThemeColor(font_id, TH_TIME_KEYFRAME);
     }
   }
@@ -1782,6 +1786,8 @@ void ED_view3d_draw_offscreen_simple(Depsgraph *depsgraph,
 {
   View3D v3d = blender::dna::shallow_zero_initialize();
   ARegion ar = {nullptr};
+  blender::bke::ARegionRuntime region_runtime{};
+  ar.runtime = &region_runtime;
   RegionView3D rv3d = {{{0}}};
 
   v3d.regionbase.first = v3d.regionbase.last = &ar;
@@ -2055,6 +2061,8 @@ ImBuf *ED_view3d_draw_offscreen_imbuf_simple(Depsgraph *depsgraph,
 {
   View3D v3d = blender::dna::shallow_zero_initialize();
   ARegion region = {nullptr};
+  blender::bke::ARegionRuntime region_runtime{};
+  region.runtime = &region_runtime;
   RegionView3D rv3d = {{{0}}};
 
   /* connect data */
