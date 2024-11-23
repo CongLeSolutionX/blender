@@ -17,8 +17,6 @@
 namespace blender::draw::overlay {
 class Fade {
  private:
-  const SelectionType selection_type_;
-
   PassMain ps_ = {"FadeGeometry"};
 
   PassMain::Sub *mesh_fade_geometry_ps_;
@@ -29,14 +27,11 @@ class Fade {
   bool enabled_ = false;
 
  public:
-  Fade(const SelectionType selection_type_) : selection_type_(selection_type_) {}
-
   void begin_sync(Resources &res, const State &state)
   {
-    const bool do_edit_mesh_fade_geom = !state.xray_enabled &&
-                                        (state.overlay.flag & V3D_OVERLAY_FADE_INACTIVE);
-    enabled_ = state.v3d && (do_edit_mesh_fade_geom || state.do_pose_fade_geom) &&
-               (selection_type_ == SelectionType::DISABLED);
+    const bool do_edit_mesh_fade_geom = !state.xray_enabled && state.show_fade_inactive();
+    enabled_ = state.is_space_v3d() && (do_edit_mesh_fade_geom || state.do_pose_fade_geom) &&
+               !res.is_selection();
 
     if (!enabled_) {
       /* Not used. But release the data. */
@@ -93,7 +88,7 @@ class Fade {
         [](Manager &manager, const ObjectRef &ob_ref, const State &state, PassMain::Sub &sub) {
           const bool use_sculpt_pbvh = BKE_sculptsession_use_pbvh_draw(ob_ref.object,
                                                                        state.rv3d) &&
-                                       !DRW_state_is_image_render();
+                                       !state.is_image_render;
 
           if (use_sculpt_pbvh) {
             ResourceHandle handle = manager.resource_handle_for_sculpt(ob_ref);
@@ -123,10 +118,23 @@ class Fade {
     }
   }
 
+  void pre_draw(Manager &manager, View &view)
+  {
+    if (!enabled_) {
+      return;
+    }
+
+    manager.generate_commands(ps_, view);
+  }
+
   void draw(Framebuffer &framebuffer, Manager &manager, View &view)
   {
+    if (!enabled_) {
+      return;
+    }
+
     GPU_framebuffer_bind(framebuffer);
-    manager.submit(ps_, view);
+    manager.submit_only(ps_, view);
   }
 
  private:

@@ -34,9 +34,6 @@ class Empties {
 
   PassSimple ps_ = {"Empties"};
 
-  View view_reference_images = {"view_reference_images"};
-  float view_dist = 0.0f;
-
   struct CallBuffers {
     const SelectionType selection_type_;
     EmptyInstanceBuf plain_axes_buf = {selection_type_, "plain_axes_buf"};
@@ -51,23 +48,27 @@ class Empties {
 
   bool enabled_ = false;
 
+  float4x4 depth_bias_winmat_;
+
  public:
   Empties(const SelectionType selection_type) : call_buffers_{selection_type} {};
 
-  void begin_sync(Resources &res, const State &state, const View &view)
+  void begin_sync(Resources &res, const State &state, View &view)
   {
-    enabled_ = state.space_type == SPACE_VIEW3D;
+    enabled_ = state.is_space_v3d() && state.show_extras();
 
     if (!enabled_) {
       return;
     }
 
-    view_dist = state.view_dist_get(view.winmat());
+    depth_bias_winmat_ = winmat_polygon_offset(
+        view.winmat(), state.view_dist_get(view.winmat()), -1.0f);
 
     auto init_pass = [&](PassMain &pass, DRWState draw_state) {
       pass.init();
       pass.state_set(draw_state, state.clipping_plane_count);
-      pass.shader_set(res.shaders.image_plane.get());
+      pass.shader_set(res.shaders.image_plane_depth_bias.get());
+      pass.push_constant("depth_bias_winmat", depth_bias_winmat_);
       pass.bind_ubo("globalsBlock", &res.globals_buf);
       res.select_bind(pass);
     };
@@ -196,7 +197,19 @@ class Empties {
     call_buffers.image_buf.end_sync(ps, shapes.quad_wire.get());
   }
 
-  void draw(Framebuffer &framebuffer, Manager &manager, View &view)
+  void pre_draw(Manager &manager, View &view)
+  {
+    if (!enabled_) {
+      return;
+    }
+
+    manager.generate_commands(images_back_ps_, view);
+    manager.generate_commands(images_ps_, view);
+    manager.generate_commands(images_blend_ps_, view);
+    manager.generate_commands(images_front_ps_, view);
+  }
+
+  void draw_line(Framebuffer &framebuffer, Manager &manager, View &view)
   {
     if (!enabled_) {
       return;
@@ -213,7 +226,7 @@ class Empties {
     }
 
     GPU_framebuffer_bind(framebuffer);
-    manager.submit(images_back_ps_, view);
+    manager.submit_only(images_back_ps_, view);
   }
 
   void draw_images(Framebuffer &framebuffer, Manager &manager, View &view)
@@ -224,11 +237,8 @@ class Empties {
 
     GPU_framebuffer_bind(framebuffer);
 
-    view_reference_images.sync(view.viewmat(),
-                               winmat_polygon_offset(view.winmat(), view_dist, -1.0f));
-
-    manager.submit(images_ps_, view_reference_images);
-    manager.submit(images_blend_ps_, view_reference_images);
+    manager.submit_only(images_ps_, view);
+    manager.submit_only(images_blend_ps_, view);
   }
 
   void draw_in_front_images(Framebuffer &framebuffer, Manager &manager, View &view)
@@ -239,10 +249,7 @@ class Empties {
 
     GPU_framebuffer_bind(framebuffer);
 
-    view_reference_images.sync(view.viewmat(),
-                               winmat_polygon_offset(view.winmat(), view_dist, -1.0f));
-
-    manager.submit(images_front_ps_, view_reference_images);
+    manager.submit_only(images_front_ps_, view);
   }
 
  private:
@@ -303,8 +310,8 @@ class Empties {
     if (show_image && tex && ((ob->color[3] > 0.0f) || !use_alpha_blend)) {
       /* Use the actual depth if we are doing depth tests to determine the distance to the
        * object. */
-      char depth_mode = DRW_state_is_depth() ? char(OB_EMPTY_IMAGE_DEPTH_DEFAULT) :
-                                               ob->empty_image_depth;
+      char depth_mode = state.is_depth_only_drawing ? char(OB_EMPTY_IMAGE_DEPTH_DEFAULT) :
+                                                      ob->empty_image_depth;
       PassMain::Sub &pass = create_subpass(state, *ob, use_alpha_blend, mat, res);
       pass.bind_texture("imgTexture", tex);
       pass.push_constant("imgPremultiplied", use_alpha_premult);
@@ -325,30 +332,38 @@ class Empties {
   {
     const bool in_front = state.use_in_front && (ob.dtx & OB_DRAW_IN_FRONT);
     if (in_front) {
-      return create_subpass(state, mat, res, images_front_ps_);
+      return create_subpass(state, mat, res, images_front_ps_, true);
     }
-    const char depth_mode = DRW_state_is_depth() ? char(OB_EMPTY_IMAGE_DEPTH_DEFAULT) :
-                                                   ob.empty_image_depth;
+    const char depth_mode = state.is_depth_only_drawing ? char(OB_EMPTY_IMAGE_DEPTH_DEFAULT) :
+                                                          ob.empty_image_depth;
     switch (depth_mode) {
       case OB_EMPTY_IMAGE_DEPTH_BACK:
-        return create_subpass(state, mat, res, images_back_ps_);
+        return create_subpass(state, mat, res, images_back_ps_, false);
       case OB_EMPTY_IMAGE_DEPTH_FRONT:
-        return create_subpass(state, mat, res, images_front_ps_);
+        return create_subpass(state, mat, res, images_front_ps_, true);
       case OB_EMPTY_IMAGE_DEPTH_DEFAULT:
       default:
-        return use_alpha_blend ? create_subpass(state, mat, res, images_blend_ps_) : images_ps_;
+        return use_alpha_blend ? create_subpass(state, mat, res, images_blend_ps_, true) :
+                                 images_ps_;
     }
   }
 
-  static PassMain::Sub &create_subpass(const State &state,
-                                       const float4x4 &mat,
-                                       Resources &res,
-                                       PassSortable &parent)
+  PassMain::Sub &create_subpass(const State &state,
+                                const float4x4 &mat,
+                                Resources &res,
+                                PassSortable &parent,
+                                bool depth_bias)
   {
     const float3 tmp = state.camera_position - mat.location();
     const float z = -math::dot(state.camera_forward, tmp);
     PassMain::Sub &sub = parent.sub("Sub", z);
-    sub.shader_set(res.shaders.image_plane.get());
+    if (depth_bias) {
+      sub.shader_set(res.shaders.image_plane_depth_bias.get());
+      sub.push_constant("depth_bias_winmat", depth_bias_winmat_);
+    }
+    else {
+      sub.shader_set(res.shaders.image_plane.get());
+    }
     sub.bind_ubo("globalsBlock", &res.globals_buf);
     return sub;
   };

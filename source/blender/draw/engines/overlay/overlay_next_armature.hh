@@ -127,22 +127,22 @@ class Armatures {
   BoneBuffers transparent_ = {selection_type_};
 
   bool enabled_ = false;
+  const ShapeCache &shapes_;
 
  public:
-  Armatures(const SelectionType selection_type) : selection_type_(selection_type){};
+  Armatures(const SelectionType selection_type, const ShapeCache &shapes)
+      : selection_type_(selection_type), shapes_(shapes){};
 
   void begin_sync(Resources &res, const State &state)
   {
-    enabled_ = state.v3d && !(state.overlay.flag & V3D_OVERLAY_HIDE_BONES);
+    enabled_ = state.is_space_v3d() && state.show_bones();
 
     if (!enabled_) {
       return;
     }
 
-    const bool is_select_mode = (selection_type_ != SelectionType::DISABLED);
-
     draw_transparent = (state.v3d->shading.type == OB_WIRE) || XRAY_FLAG_ENABLED(state.v3d);
-    show_relations = !((state.v3d->flag & V3D_HIDE_HELPLINES) || is_select_mode);
+    show_relations = !((state.v3d->flag & V3D_HIDE_HELPLINES) || res.is_selection());
     show_outline = (state.v3d->flag & V3D_SELECT_OUTLINE);
 
     const bool do_smooth_wire = U.gpu_flag & USER_GPU_FLAG_OVERLAY_SMOOTH_WIRE;
@@ -282,10 +282,11 @@ class Armatures {
 
       {
         auto &sub = armature_ps_.sub("opaque.shape_wire");
-        sub.state_set(default_state, state.clipping_plane_count);
+        sub.state_set(default_state | DRW_STATE_BLEND_ALPHA, state.clipping_plane_count);
         sub.shader_set(res.shaders.armature_shape_wire.get());
         sub.bind_ubo("globalsBlock", &res.globals_buf);
         sub.push_constant("alpha", 1.0f);
+        sub.push_constant("do_smooth_wire", do_smooth_wire);
         opaque_.shape_wire = &sub;
       }
       if (use_wire_alpha) {
@@ -507,7 +508,6 @@ class Armatures {
 
   DrawContext create_draw_context(const ObjectRef &ob_ref,
                                   Resources &res,
-                                  const ShapeCache &shapes,
                                   const State &state,
                                   eArmatureDrawMode draw_mode)
   {
@@ -517,7 +517,7 @@ class Armatures {
     ctx.ob = ob_ref.object;
     ctx.ob_ref = &ob_ref;
     ctx.res = &res;
-    ctx.shapes = &shapes;
+    ctx.shapes = &shapes_;
     ctx.draw_mode = draw_mode;
     ctx.drawtype = eArmature_Drawtype(arm->drawtype);
 
@@ -540,23 +540,23 @@ class Armatures {
     return ctx;
   }
 
-  void edit_object_sync(const ObjectRef &ob_ref,
-                        Resources &res,
-                        ShapeCache &shapes,
-                        const State &state)
+  void edit_object_sync(Manager & /*manager*/,
+                        const ObjectRef &ob_ref,
+                        const State &state,
+                        Resources &res)
   {
     if (!enabled_) {
       return;
     }
 
-    DrawContext ctx = create_draw_context(ob_ref, res, shapes, state, ARM_DRAW_MODE_EDIT);
+    DrawContext ctx = create_draw_context(ob_ref, res, state, ARM_DRAW_MODE_EDIT);
     draw_armature_edit(&ctx);
   }
 
-  void object_sync(const ObjectRef &ob_ref,
-                   Resources &res,
-                   const ShapeCache &shapes,
-                   const State &state)
+  void object_sync(Manager & /*manager*/,
+                   const ObjectRef &ob_ref,
+                   const State &state,
+                   Resources &res)
   {
     if (!enabled_ || ob_ref.object->dt == OB_BOUNDBOX) {
       return;
@@ -565,7 +565,7 @@ class Armatures {
     eArmatureDrawMode draw_mode = is_pose_mode(ob_ref.object, state) ? ARM_DRAW_MODE_POSE :
                                                                        ARM_DRAW_MODE_OBJECT;
 
-    DrawContext ctx = create_draw_context(ob_ref, res, shapes, state, draw_mode);
+    DrawContext ctx = create_draw_context(ob_ref, res, state, draw_mode);
     draw_armature_pose(&ctx);
   }
 
@@ -621,7 +621,7 @@ class Armatures {
     end_sync(opaque_);
   }
 
-  void draw(Framebuffer &framebuffer, Manager &manager, View &view)
+  void draw_line(Framebuffer &framebuffer, Manager &manager, View &view)
   {
     if (!enabled_) {
       return;

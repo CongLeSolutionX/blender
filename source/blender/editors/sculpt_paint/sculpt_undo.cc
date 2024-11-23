@@ -358,7 +358,8 @@ static void restore_position_mesh(Object &object,
         /* When original positions aren't written separately in the the undo step, there are no
          * deform modifiers. Therefore the original and evaluated deform positions will be the
          * same, and modifying the positions from the original mesh is enough. */
-        swap_indexed_data(unode.position.as_mutable_span(), verts, positions);
+        swap_indexed_data(
+            unode.position.as_mutable_span().take_front(unode.unique_verts_num), verts, positions);
       }
       else {
         /* When original positions are stored in the undo step, undo/redo will cause a reevaluation
@@ -381,11 +382,11 @@ static void restore_position_mesh(Object &object,
             /* The basis key positions and the mesh positions are always kept in sync. */
             scatter_data_mesh(undo_positions.as_span(), verts, positions);
           }
-          swap_indexed_data(undo_positions, verts, active_data);
+          swap_indexed_data(undo_positions.take_front(unode.unique_verts_num), verts, active_data);
         }
         else {
           /* There is a deform modifier, but no shape keys. */
-          swap_indexed_data(undo_positions, verts, positions);
+          swap_indexed_data(undo_positions.take_front(unode.unique_verts_num), verts, positions);
         }
       }
       modified_verts.fill_indices(verts, true);
@@ -1726,6 +1727,23 @@ void push_begin_ex(const Scene & /*scene*/, Object &ob, const char *name)
 void push_begin(const Scene &scene, Object &ob, const wmOperator *op)
 {
   push_begin_ex(scene, ob, op->type->name);
+}
+
+void push_enter_sculpt_mode(const Scene & /*scene*/, Object &ob, const wmOperator *op)
+{
+  UndoStack *ustack = ED_undo_stack_get();
+
+  /* If possible, we need to tag the object and its geometry data as 'changed in the future' in
+   * the previous undo step if it's a memfile one. */
+  ED_undosys_stack_memfile_id_changed_tag(ustack, &ob.id);
+  ED_undosys_stack_memfile_id_changed_tag(ustack, static_cast<ID *>(ob.data));
+
+  /* Special case, we never read from this. */
+  bContext *C = nullptr;
+
+  SculptUndoStep *us = reinterpret_cast<SculptUndoStep *>(
+      BKE_undosys_step_push_init_with_type(ustack, C, op->type->name, BKE_UNDOSYS_TYPE_SCULPT));
+  save_common_data(ob, us);
 }
 
 static size_t node_size_in_bytes(const Node &node)

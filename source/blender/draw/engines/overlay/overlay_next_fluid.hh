@@ -78,7 +78,7 @@ class Fluids {
     Object *ob = ob_ref.object;
 
     /* Do not show for dupli objects as the fluid is baked for the original object. */
-    if (ob->base_flag & (BASE_FROM_SET | BASE_FROM_DUPLI)) {
+    if (is_from_dupli_or_set(ob)) {
       return;
     }
 
@@ -235,7 +235,7 @@ class Fluids {
     cube_buf_.end_sync(fluid_ps_, shapes.cube.get());
   }
 
-  void draw(Framebuffer &framebuffer, Manager &manager, View &view)
+  void draw_line(Framebuffer &framebuffer, Manager &manager, View &view)
   {
     GPU_framebuffer_bind(framebuffer);
     manager.submit(fluid_ps_, view);

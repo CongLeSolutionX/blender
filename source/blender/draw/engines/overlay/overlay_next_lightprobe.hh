@@ -46,7 +46,7 @@ class LightProbes {
 
   void begin_sync(Resources &res, const State &state)
   {
-    enabled_ = state.space_type == SPACE_VIEW3D;
+    enabled_ = state.is_space_v3d() && state.show_extras();
     if (!enabled_) {
       return;
     }
@@ -80,8 +80,7 @@ class LightProbes {
     const bool show_clipping = (prb->flag & LIGHTPROBE_FLAG_SHOW_CLIP_DIST) != 0;
     const bool show_parallax = (prb->flag & LIGHTPROBE_FLAG_SHOW_PARALLAX) != 0;
     const bool show_influence = (prb->flag & LIGHTPROBE_FLAG_SHOW_INFLUENCE) != 0;
-    const bool is_select = selection_type_ == SelectionType::ENABLED;
-    const bool show_data = (ob_ref.object->base_flag & BASE_SELECTED) || is_select;
+    const bool show_data = (ob_ref.object->base_flag & BASE_SELECTED) || res.is_selection();
 
     const select::ID select_id = res.select_id(ob_ref);
     const float4 color = res.object_wire_color(ob_ref, state);
@@ -161,7 +160,7 @@ class LightProbes {
       case LIGHTPROBE_TYPE_PLANE:
         call_buffers_.probe_planar_buf.append(data, select_id);
 
-        if (is_select && (prb->flag & LIGHTPROBE_FLAG_SHOW_DATA)) {
+        if (res.is_selection() && (prb->flag & LIGHTPROBE_FLAG_SHOW_DATA)) {
           call_buffers_.quad_solid_buf.append(data, select_id);
         }
 
@@ -215,7 +214,16 @@ class LightProbes {
     }
   }
 
-  void draw(Framebuffer &framebuffer, Manager &manager, View &view)
+  void pre_draw(Manager &manager, View &view)
+  {
+    if (!enabled_) {
+      return;
+    }
+
+    manager.generate_commands(ps_dots_, view);
+  }
+
+  void draw_line(Framebuffer &framebuffer, Manager &manager, View &view)
   {
     if (!enabled_) {
       return;
@@ -232,7 +240,7 @@ class LightProbes {
     }
 
     GPU_framebuffer_bind(framebuffer);
-    manager.submit(ps_dots_, view);
+    manager.submit_only(ps_dots_, view);
   }
 };
 

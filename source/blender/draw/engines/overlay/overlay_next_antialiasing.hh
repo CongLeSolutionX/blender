@@ -55,7 +55,7 @@ class AntiAliasing {
  public:
   void begin_sync(Resources &res)
   {
-    if (res.selection_type != SelectionType::DISABLED) {
+    if (res.is_selection()) {
       anti_aliasing_ps_.init();
       return;
     }
@@ -77,7 +77,7 @@ class AntiAliasing {
     }
   }
 
-  void draw(Framebuffer &framebuffer, Manager &manager, View & /*view*/)
+  void draw_output(Framebuffer &framebuffer, Manager &manager, View & /*view*/)
   {
     framebuffer_ref_ = framebuffer;
     manager.submit(anti_aliasing_ps_);

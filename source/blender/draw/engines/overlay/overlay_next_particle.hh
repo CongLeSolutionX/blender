@@ -39,7 +39,7 @@ class Particles {
  public:
   void begin_sync(Resources &res, const State &state)
   {
-    enabled_ = state.space_type == SPACE_VIEW3D;
+    enabled_ = state.is_space_v3d();
 
     if (!enabled_) {
       return;
@@ -280,17 +280,26 @@ class Particles {
     }
   }
 
-  void draw(Framebuffer &framebuffer, Manager &manager, View &view)
+  void pre_draw(Manager &manager, View &view)
+  {
+    if (!enabled_) {
+      return;
+    }
+
+    manager.generate_commands(particle_ps_, view);
+  }
+
+  void draw_line(Framebuffer &framebuffer, Manager &manager, View &view)
   {
     if (!enabled_) {
       return;
     }
 
     GPU_framebuffer_bind(framebuffer);
-    manager.submit(particle_ps_, view);
+    manager.submit_only(particle_ps_, view);
   }
 
-  void draw_no_line(Framebuffer &framebuffer, Manager &manager, View &view)
+  void draw(Framebuffer &framebuffer, Manager &manager, View &view)
   {
     if (!enabled_) {
       return;

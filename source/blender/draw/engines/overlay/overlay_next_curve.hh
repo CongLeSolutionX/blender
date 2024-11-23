@@ -49,7 +49,7 @@ class Curves {
  public:
   void begin_sync(Resources &res, const State &state, const View &view)
   {
-    enabled_ = state.space_type == SPACE_VIEW3D;
+    enabled_ = state.is_space_v3d();
 
     if (!enabled_) {
       return;
@@ -234,7 +234,7 @@ class Curves {
     }
   }
 
-  void draw(Framebuffer &framebuffer, Manager &manager, View &view)
+  void draw_line(Framebuffer &framebuffer, Manager &manager, View &view)
   {
     if (!enabled_) {
       return;

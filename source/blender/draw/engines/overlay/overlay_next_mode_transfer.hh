@@ -28,7 +28,7 @@ class ModeTransfer {
  public:
   void begin_sync(Resources &res, const State &state)
   {
-    enabled_ = state.v3d && (res.selection_type == SelectionType::DISABLED);
+    enabled_ = state.is_space_v3d() && !res.is_selection();
 
     if (!enabled_) {
       /* Not used. But release the data. */
@@ -72,7 +72,7 @@ class ModeTransfer {
     ps_.push_constant("ucolor", float4(flash_color_.xyz() * alpha, alpha));
 
     const bool use_sculpt_pbvh = BKE_sculptsession_use_pbvh_draw(ob_ref.object, state.rv3d) &&
-                                 !DRW_state_is_image_render();
+                                 !state.is_image_render;
     if (use_sculpt_pbvh) {
       ResourceHandle handle = manager.resource_handle_for_sculpt(ob_ref);
 
