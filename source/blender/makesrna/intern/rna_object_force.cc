@@ -401,7 +401,12 @@ static void rna_Cache_active_point_cache_index_set(PointerRNA *ptr, int value)
   PTCacheID pid = BKE_ptcache_id_find(ob, scene, cache);
 
   if (pid.cache) {
-    *(pid.cache_ptr) = static_cast<PointCache *>(BLI_findlink(pid.ptcaches, value));
+    PointCache *cache_item = static_cast<PointCache *>(BLI_findlink(pid.ptcaches, value));
+    if (!cache_item) {
+      BKE_reportf(nullptr, RPT_ERROR, "Invalid point cache index: %d", value);
+      return;
+    }
+    *(pid.cache_ptr) = cache_item;
   }
 }
 
