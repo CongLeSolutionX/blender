@@ -12,6 +12,8 @@
 
 #include "ED_asset.hh"
 
+#include "BLT_translation.hh"
+
 namespace blender::ed::asset {
 
 std::string asset_tooltip(const asset_system::AssetRepresentation &asset, const bool include_name)
@@ -25,7 +27,7 @@ std::string asset_tooltip(const asset_system::AssetRepresentation &asset, const 
   const AssetMetaData &meta_data = asset.get_metadata();
   if (meta_data.description) {
     complete_string += '\n';
-    complete_string += meta_data.description;
+    complete_string += TIP_(meta_data.description);
   }
   return complete_string;
 }
