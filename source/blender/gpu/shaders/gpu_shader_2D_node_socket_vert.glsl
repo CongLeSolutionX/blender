@@ -20,7 +20,8 @@ void main()
 {
   /* Scale the original rectangle to accomodate the diagonal of the diamond shape. */
   vec2 originalRectSize = rect.yw - rect.xz;
-  float offset = 0.125 * min(originalRectSize.x, originalRectSize.y) + outlineOffset * outlineThickness;
+  float offset = 0.125 * min(originalRectSize.x, originalRectSize.y) +
+                 outlineOffset * outlineThickness;
   vec2 ofs = vec2(offset, -offset);
   vec2 pos;
   switch (gl_VertexID) {
@@ -55,7 +56,7 @@ void main()
    * multi sockets. */
   float ratio = rectSize.x / rectSize.y;
   extrusion = (ratio > 1.0) ? vec2((ratio - 1.0) / 2.0, 0.0) :
-                               vec2(0.0, ((1.0 / ratio) - 1.0) / 2.0);
+                              vec2(0.0, ((1.0 / ratio) - 1.0) / 2.0);
 
   /* Shape parameters. */
   finalShape = int(shape);

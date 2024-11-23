@@ -2335,12 +2335,8 @@ static void node_draw_socket(const bContext &C,
       socket_location.y + half_height,
   };
 
-  node_draw_nodesocket(&rect,
-                       socket_color,
-                       outline_color,
-                       outline_thickness,
-                       sock.display_shape,
-                       aspect);
+  node_draw_nodesocket(
+      &rect, socket_color, outline_color, outline_thickness, sock.display_shape, aspect);
 
   node_socket_tooltip_set(
       block, sock.index_in_tree(), socket_location, float2(2.0f * half_width, 2.0f * half_height));
@@ -2369,15 +2365,8 @@ static void node_draw_sockets(
       continue;
     }
     const bool selected = (sock->flag & SELECT);
-    node_draw_socket(C,
-                     ntree,
-                     node,
-                     nodeptr,
-                     block,
-                     *sock,
-                     outline_thickness,
-                     selected,
-                     snode.runtime->aspect);
+    node_draw_socket(
+        C, ntree, node, nodeptr, block, *sock, outline_thickness, selected, snode.runtime->aspect);
   }
 
   /* Output sockets. */
@@ -2386,15 +2375,8 @@ static void node_draw_sockets(
       continue;
     }
     const bool selected = (sock->flag & SELECT);
-    node_draw_socket(C,
-                     ntree,
-                     node,
-                     nodeptr,
-                     block,
-                     *sock,
-                     outline_thickness,
-                     selected,
-                     snode.runtime->aspect);
+    node_draw_socket(
+        C, ntree, node, nodeptr, block, *sock, outline_thickness, selected, snode.runtime->aspect);
   }
   nodesocket_batch_end();
 }

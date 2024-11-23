@@ -23,15 +23,15 @@ float square_sdf(vec2 absCo, float half_width_x, float half_width_y)
   vec2 clamped_extruded_co = vec2(max(0.0, extruded_co.x), max(0.0, extruded_co.y));
 
   float exterior_distance_squared = dot(clamped_extruded_co, clamped_extruded_co);
-  
+
   float interior_distance = min(max(extruded_co.x, extruded_co.y), 0);
   float interior_distance_squared = interior_distance * interior_distance;
-  
+
   return exterior_distance_squared - interior_distance_squared;
 }
 
 vec2 rotate_45(vec2 co)
-{ 
+{
   return from_rotation(Angle(M_PI * 0.25)) * co;
 }
 
