@@ -10,7 +10,6 @@
 
 #pragma once
 
-#include "BLI_color.hh"
 #include "GPU_debug.hh"
 #include "GPU_vertex_buffer.hh"
 
