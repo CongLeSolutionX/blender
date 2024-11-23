@@ -123,7 +123,11 @@ static int grease_pencil_vertex_paint_brightness_contrast_exec(bContext *C, wmOp
       return;
     }
     const bool changed = apply_color_operation_for_mode(
-        mode, object, info,is_selection_mask, [&](const ColorGeometry4f &color) -> ColorGeometry4f {
+        mode,
+        object,
+        info,
+        is_selection_mask,
+        [&](const ColorGeometry4f &color) -> ColorGeometry4f {
           const float3 result = float3(color) * gain + offset;
           return ColorGeometry4f(result[0], result[1], result[2], color.a);
         });
@@ -179,7 +183,11 @@ static int grease_pencil_vertex_paint_hsv_exec(bContext *C, wmOperator *op)
       return;
     }
     const bool changed = apply_color_operation_for_mode(
-        mode, object, info, is_selection_mask, [&](const ColorGeometry4f &color) -> ColorGeometry4f {
+        mode,
+        object,
+        info,
+        is_selection_mask,
+        [&](const ColorGeometry4f &color) -> ColorGeometry4f {
           float3 hsv;
           rgb_to_hsv_v(float3(color), hsv);
 
@@ -246,7 +254,11 @@ static int grease_pencil_vertex_paint_invert_exec(bContext *C, wmOperator *op)
       return;
     }
     const bool changed = apply_color_operation_for_mode(
-        mode, object, info, is_selection_mask, [&](const ColorGeometry4f &color) -> ColorGeometry4f {
+        mode,
+        object,
+        info,
+        is_selection_mask,
+        [&](const ColorGeometry4f &color) -> ColorGeometry4f {
           /* Invert the color. */
           return ColorGeometry4f(1.0f - color.r, 1.0f - color.g, 1.0f - color.b, color.a);
         });
@@ -298,7 +310,11 @@ static int grease_pencil_vertex_paint_levels_exec(bContext *C, wmOperator *op)
       return;
     }
     const bool changed = apply_color_operation_for_mode(
-        mode, object, info, is_selection_mask, [&](const ColorGeometry4f &color) -> ColorGeometry4f {
+        mode,
+        object,
+        info,
+        is_selection_mask,
+        [&](const ColorGeometry4f &color) -> ColorGeometry4f {
           const float3 result = float3(color) * gain + offset;
           return ColorGeometry4f(result[0], result[1], result[2], color.a);
         });
@@ -369,7 +385,11 @@ static int grease_pencil_vertex_paint_set_exec(bContext *C, wmOperator *op)
           "fill_color", bke::AttrDomain::Curve, bke::AttributeInitDefaultValue());
     }
     const bool changed = apply_color_operation_for_mode(
-        mode, object, info, is_selection_mask, [&](const ColorGeometry4f &color) -> ColorGeometry4f {
+        mode,
+        object,
+        info,
+        is_selection_mask,
+        [&](const ColorGeometry4f &color) -> ColorGeometry4f {
           /* Mix in the target color based on the factor. */
           return math::interpolate(color, target_color, factor);
         });
