@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include "GPU_debug.hh"
-
 struct rcti;
 
 void DRW_stats_free();

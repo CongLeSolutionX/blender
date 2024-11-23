@@ -45,7 +45,7 @@ namespace blender::gpu {
  * "passes".
  * \{ */
 
-void MTLContext::debug_group_begin(const char *name, const ColorTheme4f & /*color*/, int index)
+void MTLContext::debug_group_begin(const char *name, int index)
 {
   if (G.debug & G_DEBUG_GPU) {
     this->main_command_buffer.push_debug_group(name, index);

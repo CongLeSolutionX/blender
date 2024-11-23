@@ -801,7 +801,7 @@ class MTLContext : public Context {
     return static_cast<MTLContext *>(Context::get());
   }
 
-  void debug_group_begin(const char *name, const ColorTheme4f &color, int index) override;
+  void debug_group_begin(const char *name, int index) override;
   void debug_group_end() override;
   bool debug_capture_begin(const char *title) override;
   void debug_capture_end() override;

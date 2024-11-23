@@ -12,8 +12,6 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_color.hh"
-
 #include "GPU_context.hh"
 
 #include "gpu_debug_private.hh"
