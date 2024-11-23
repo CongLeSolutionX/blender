@@ -36,11 +36,12 @@ struct Overlay {
    * Note that this only concerns the render passes, the mesh batch caches are updated
    * on a per object-data basis.
    *
-   * IMPORTANT: Synchronization must be view agnostic. That is, not rely on view position and
-   * projection matrix to do conditional pass creation. This is because, by design, syncing can
-   * happen once and rendered multiple time (multi view rendering, stereo rendering, orbiting
-   * view ...). Conditional pass creation, must be done in the drawing callbacks, but they should
-   * remain the exception. Also there will be no access to object data at this point.
+   * IMPORTANT: Synchronization must be view agnostic. That is, not rely on view position,
+   * projection matrix or framebuffer size to do conditional pass creation. This is because, by
+   * design, syncing can happen once and rendered multiple time (multi view rendering, stereo
+   * rendering, orbiting view ...). Conditional pass creation, must be done in the drawing
+   * callbacks, but they should remain the exception. Also there will be no access to object data
+   * at this point.
    */
 
   /**
@@ -48,6 +49,8 @@ struct Overlay {
    * (e.g. vertices, edges, faces in edit mode).
    * Runs once at the start of the sync cycle.
    * Should also contain passes setup for overlays that are not per object overlays (e.g. Grid).
+   *
+   * This method must be implemented.
    */
   virtual void begin_sync(Resources &res, const State &state) = 0;
 
@@ -57,10 +60,10 @@ struct Overlay {
    * IMPORTANT: Can run only once for instances using the same state (#ObjectRef might contains
    * instancing data).
    */
-  virtual void object_sync(Manager &manager,
-                           const ObjectRef &ob_ref,
-                           const State &state,
-                           Resources &res) = 0;
+  virtual void object_sync(Manager & /*manager*/,
+                           const ObjectRef & /*ob_ref*/,
+                           const State & /*state*/,
+                           Resources & /*res*/){};
 
   /**
    * Fills passes or buffers for each object in edit mode.
@@ -68,23 +71,25 @@ struct Overlay {
    * IMPORTANT: Can run only once for instances using the same state (#ObjectRef might contains
    * instancing data).
    */
-  virtual void edit_object_sync(Manager &manager,
-                                const ObjectRef &ob_ref,
-                                const State &state,
-                                Resources &res) = 0;
+  virtual void edit_object_sync(Manager & /*manager*/,
+                                const ObjectRef & /*ob_ref*/,
+                                const State & /*state*/,
+                                Resources & /*res*/){};
 
   /**
    * Finalize passes or buffers used for object sync.
    * Runs once at the start of the sync cycle.
    */
-  virtual void end_sync(Resources &res, const ShapeCache &shapes, const State &state) = 0;
+  virtual void end_sync(Resources & /*res*/,
+                        const ShapeCache & /*shapes*/,
+                        const State & /*state*/){};
 
   /**
    * Warms #PassMain and #PassSortable to avoid overhead of pipeline switching.
    * Should only contains calls to `generate_commands`.
    * NOTE: `view` is guaranteed to be the same view that will be passed to the draw functions.
    */
-  virtual void pre_draw(Manager &manager, View &view) = 0;
+  virtual void pre_draw(Manager & /*manager*/, View & /*view*/){};
 
   /**
    * Drawing can be split into multiple passes. Each callback draws onto a specific framebuffer.
@@ -93,12 +98,12 @@ struct Overlay {
    * resolving to the given framebuffer.
    */
 
-  virtual void draw_on_render(GPUFrameBuffer *framebuffer, Manager &manager, View &view) = 0;
-  virtual void draw(Framebuffer &framebuffer, Manager &manager, View &view) = 0;
-  virtual void draw_line(Framebuffer &framebuffer, Manager &manager, View &view) = 0;
-  virtual void draw_line_only(Framebuffer &framebuffer, Manager &manager, View &view) = 0;
-  virtual void draw_color_only(Framebuffer &framebuffer, Manager &manager, View &view) = 0;
-  virtual void draw_output(Framebuffer &framebuffer, Manager &manager, View &view) = 0;
+  virtual void draw_on_render(GPUFrameBuffer * /*fb*/, Manager & /*manager*/, View & /*view*/){};
+  virtual void draw(Framebuffer & /*fb*/, Manager & /*manager*/, View & /*view*/){};
+  virtual void draw_line(Framebuffer & /*fb*/, Manager & /*manager*/, View & /*view*/){};
+  virtual void draw_line_only(Framebuffer & /*fb*/, Manager & /*manager*/, View & /*view*/){};
+  virtual void draw_color_only(Framebuffer & /*fb*/, Manager & /*manager*/, View & /*view*/){};
+  virtual void draw_output(Framebuffer & /*fb*/, Manager & /*manager*/, View & /*view*/){};
 };
 
 }  // namespace blender::draw::overlay
