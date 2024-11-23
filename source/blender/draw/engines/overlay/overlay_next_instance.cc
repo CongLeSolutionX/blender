@@ -129,7 +129,7 @@ void Instance::begin_sync()
     layer.armatures.begin_sync(resources, state);
     layer.attribute_viewer.begin_sync(resources, state);
     layer.axes.begin_sync(resources, state);
-    layer.bounds.begin_sync();
+    layer.bounds.begin_sync(resources, state);
     layer.cameras.begin_sync(resources, state, view);
     layer.curves.begin_sync(resources, state, view);
     layer.edit_text.begin_sync(state);
@@ -160,7 +160,7 @@ void Instance::begin_sync()
 
   grid.begin_sync(resources, shapes, state, view);
 
-  anti_aliasing.begin_sync(resources);
+  anti_aliasing.begin_sync(resources, state);
   xray_fade.begin_sync(resources, state);
 }
 
@@ -288,15 +288,15 @@ void Instance::object_sync(ObjectRef &ob_ref, Manager &manager)
         layer.speakers.object_sync(ob_ref, resources, state);
         break;
     }
-    layer.attribute_viewer.object_sync(ob_ref, state, manager);
-    layer.bounds.object_sync(ob_ref, resources, state);
+    layer.attribute_viewer.object_sync(manager, ob_ref, state, resources);
+    layer.bounds.object_sync(manager, ob_ref, state, resources);
     layer.facing.object_sync(manager, ob_ref, state);
     layer.fade.object_sync(manager, ob_ref, state);
     layer.force_fields.object_sync(ob_ref, resources, state);
     layer.fluids.object_sync(manager, ob_ref, resources, state);
     layer.particles.object_sync(manager, ob_ref, resources, state);
     layer.relations.object_sync(ob_ref, resources, state);
-    layer.axes.object_sync(ob_ref, resources, state);
+    layer.axes.object_sync(manager, ob_ref, state, resources);
     layer.names.object_sync(ob_ref, resources, state);
 
     motion_paths.object_sync(ob_ref, resources, state);
