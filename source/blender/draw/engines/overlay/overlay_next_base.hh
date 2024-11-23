@@ -52,7 +52,8 @@ struct Overlay {
    *
    * This method must be implemented.
    */
-  virtual void begin_sync(Resources &res, const State &state) = 0;
+  /* TODO(fclem): Make it pure virtual. */
+  virtual void begin_sync(Resources & /*res*/, const State & /*state*/){};
 
   /**
    * Fills passes or buffers for each object.
@@ -62,8 +63,8 @@ struct Overlay {
    */
   virtual void object_sync(Manager & /*manager*/,
                            const ObjectRef & /*ob_ref*/,
-                           const State & /*state*/,
-                           Resources & /*res*/){};
+                           Resources & /*res*/,
+                           const State & /*state*/){};
 
   /**
    * Fills passes or buffers for each object in edit mode.
@@ -73,8 +74,8 @@ struct Overlay {
    */
   virtual void edit_object_sync(Manager & /*manager*/,
                                 const ObjectRef & /*ob_ref*/,
-                                const State & /*state*/,
-                                Resources & /*res*/){};
+                                Resources & /*res*/,
+                                const State & /*state*/){};
 
   /**
    * Finalize passes or buffers used for object sync.

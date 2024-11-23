@@ -54,8 +54,8 @@ class AttributeViewer : Overlay {
 
   void object_sync(Manager &manager,
                    const ObjectRef &ob_ref,
-                   const State &state,
-                   Resources & /*res*/) final
+                   Resources & /*res*/,
+                   const State &state) final
   {
     const DupliObject *dupli_object = DRW_object_get_dupli(ob_ref.object);
     const bool is_preview = dupli_object != nullptr &&

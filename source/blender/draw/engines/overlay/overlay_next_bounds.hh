@@ -50,8 +50,8 @@ class Bounds : Overlay {
 
   void object_sync(Manager & /*manager*/,
                    const ObjectRef &ob_ref,
-                   const State &state,
-                   Resources &res) final
+                   Resources &res,
+                   const State &state) final
   {
     const Object *ob = ob_ref.object;
     const bool from_dupli = is_from_dupli_or_set(ob);

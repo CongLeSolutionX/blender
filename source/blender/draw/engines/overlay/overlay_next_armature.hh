@@ -541,8 +541,8 @@ class Armatures : Overlay {
 
   void edit_object_sync(Manager & /*manager*/,
                         const ObjectRef &ob_ref,
-                        const State &state,
-                        Resources &res) final
+                        Resources &res,
+                        const State &state) final
   {
     if (!enabled_) {
       return;
@@ -554,8 +554,8 @@ class Armatures : Overlay {
 
   void object_sync(Manager & /*manager*/,
                    const ObjectRef &ob_ref,
-                   const State &state,
-                   Resources &res) final
+                   Resources &res,
+                   const State &state) final
   {
     if (!enabled_ || ob_ref.object->dt == OB_BOUNDBOX) {
       return;

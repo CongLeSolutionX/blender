@@ -24,8 +24,6 @@ class Axes : Overlay {
 
   EmptyInstanceBuf axes_buf = {selection_type_, "object_axes"};
 
-  bool enabled_ = false;
-
  public:
   Axes(const SelectionType selection_type) : selection_type_{selection_type} {};
 
@@ -39,8 +37,8 @@ class Axes : Overlay {
 
   void object_sync(Manager & /*manager*/,
                    const ObjectRef &ob_ref,
-                   const State &state,
-                   Resources &res) final
+                   Resources &res,
+                   const State &state) final
   {
     if (!enabled_) {
       return;
