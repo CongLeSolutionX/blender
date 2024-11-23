@@ -49,7 +49,7 @@ struct Overlay {
    * Runs once at the start of the sync cycle.
    * Should also contain passes setup for overlays that are not per object overlays (e.g. Grid).
    */
-  virtual void begin_sync(Resources &res, const State &state, const View &view) = 0;
+  virtual void begin_sync(Resources &res, const State &state) = 0;
 
   /**
    * Fills passes or buffers for each object.
@@ -63,13 +63,21 @@ struct Overlay {
                            Resources &res) = 0;
 
   /**
-   * Finalize passes or buffers used for object sync.
-   * Runs once at the start of the sync cycle.
+   * Fills passes or buffers for each object in edit mode.
+   * Runs for each individual object state for a specific mode.
+   * IMPORTANT: Can run only once for instances using the same state (#ObjectRef might contains
+   * instancing data).
    */
   virtual void edit_object_sync(Manager &manager,
                                 const ObjectRef &ob_ref,
                                 const State &state,
                                 Resources &res) = 0;
+
+  /**
+   * Finalize passes or buffers used for object sync.
+   * Runs once at the start of the sync cycle.
+   */
+  virtual void end_sync(Resources &res, const ShapeCache &shapes, const State &state) = 0;
 
   /**
    * Warms #PassMain and #PassSortable to avoid overhead of pipeline switching.
