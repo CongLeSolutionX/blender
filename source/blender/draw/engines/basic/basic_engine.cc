@@ -271,7 +271,6 @@ DrawEngineType draw_engine_basic_type = {
     /*next*/ nullptr,
     /*prev*/ nullptr,
     /*idname*/ N_("Basic"),
-    /*debug_color*/ GPU_DEBUG_GROUP_COLOR_DEFAULT,
     /*vedata_size*/ &basic_data_size,
     /*engine_init*/ nullptr,
     /*engine_free*/ &basic_engine_free,

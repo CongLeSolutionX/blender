@@ -91,7 +91,6 @@ DrawEngineType draw_engine_select_next_type = {
     /*next*/ nullptr,
     /*prev*/ nullptr,
     /*idname*/ N_("Select-Next"),
-    /*debug_color*/ GPU_DEBUG_GROUP_COLOR_DEFAULT,
     /*vedata_size*/ &SELECT_next_data_size,
     /*engine_init*/ &SELECT_next_engine_init,
     /*engine_free*/ nullptr,

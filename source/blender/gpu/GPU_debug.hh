@@ -68,8 +68,7 @@
 
 static blender::ColorTheme4f GPU_DEBUG_GROUP_COLOR_DEFAULT = {};
 
-void GPU_debug_group_begin(const char *name,
-                           const blender::ColorTheme4f &color = GPU_DEBUG_GROUP_COLOR_DEFAULT);
+void GPU_debug_group_begin(const char *name);
 void GPU_debug_group_end();
 /**
  * Return a formatted string showing the current group hierarchy in this format:

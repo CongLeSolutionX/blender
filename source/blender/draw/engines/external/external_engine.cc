@@ -444,7 +444,6 @@ DrawEngineType draw_engine_external_type = {
     /*next*/ nullptr,
     /*prev*/ nullptr,
     /*idname*/ N_("External"),
-    /*debug_color*/ blender::ColorTheme4f(0.0, 0.0, 1.0, 1.0),
     /*vedata_size*/ &external_data_size,
     /*engine_init*/ &external_engine_init,
     /*engine_free*/ &external_engine_free,

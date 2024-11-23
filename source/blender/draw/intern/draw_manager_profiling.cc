@@ -119,11 +119,11 @@ static void drw_stats_timer_start_ex(const char *name, const bool is_query)
   }
 }
 
-void DRW_stats_group_start(const char *name, const blender::ColorTheme4f &debug_color)
+void DRW_stats_group_start(const char *name)
 {
   drw_stats_timer_start_ex(name, false);
 
-  GPU_debug_group_begin(name, debug_color);
+  GPU_debug_group_begin(name);
 }
 
 void DRW_stats_group_end()

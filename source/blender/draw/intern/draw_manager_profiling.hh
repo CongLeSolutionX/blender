@@ -20,8 +20,7 @@ void DRW_stats_reset();
  * Use this to group the queries. It does NOT keep track
  * of the time, it only sum what the queries inside it.
  */
-void DRW_stats_group_start(
-    const char *name, const blender::ColorTheme4f &debug_color = GPU_DEBUG_GROUP_COLOR_DEFAULT);
+void DRW_stats_group_start(const char *name);
 void DRW_stats_group_end();
 
 /**

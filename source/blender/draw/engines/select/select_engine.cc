@@ -304,7 +304,6 @@ DrawEngineType draw_engine_select_type = {
     /*next*/ nullptr,
     /*prev*/ nullptr,
     /*idname*/ N_("Select ID"),
-    /*debug_color*/ GPU_DEBUG_GROUP_COLOR_DEFAULT,
     /*vedata_size*/ &select_data_size,
     /*engine_init*/ &select_engine_init,
     /*engine_free*/ &select_engine_free,

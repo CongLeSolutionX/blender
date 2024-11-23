@@ -351,7 +351,6 @@ DrawEngineType draw_engine_compositor_type = {
     /*next*/ nullptr,
     /*prev*/ nullptr,
     /*idname*/ N_("Compositor"),
-    /*debug_color*/ GPU_DEBUG_GROUP_COLOR_DEFAULT,
     /*vedata_size*/ &compositor_data_size,
     /*engine_init*/ &compositor_engine_init,
     /*engine_free*/ nullptr,

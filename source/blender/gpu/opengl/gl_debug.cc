@@ -389,7 +389,7 @@ namespace blender::gpu {
  * Useful for debugging through render-doc. This makes all the API calls grouped into "passes".
  * \{ */
 
-void GLContext::debug_group_begin(const char *name, const ColorTheme4f & /*color*/, int index)
+void GLContext::debug_group_begin(const char *name, int index)
 {
   if ((G.debug & G_DEBUG_GPU) &&
       (epoxy_gl_version() >= 43 || epoxy_has_gl_extension("GL_KHR_debug")))

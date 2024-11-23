@@ -90,7 +90,7 @@ class Context {
 
   virtual void memory_statistics_get(int *r_total_mem, int *r_free_mem) = 0;
 
-  virtual void debug_group_begin(const char *, const ColorTheme4f & /*color*/, int){};
+  virtual void debug_group_begin(const char *, int){};
   virtual void debug_group_end(){};
 
   /* Returns true if capture successfully started. */

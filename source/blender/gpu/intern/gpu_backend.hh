@@ -10,6 +10,8 @@
 
 #pragma once
 
+#include "BLI_color.hh"
+#include "GPU_debug.hh"
 #include "GPU_vertex_buffer.hh"
 
 namespace blender::gpu {
@@ -62,5 +64,33 @@ class GPUBackend {
   virtual void render_end() = 0;
   virtual void render_step() = 0;
 };
+
+namespace debug {
+  static ColorTheme4f get_debug_group_color(const char *name)
+  {
+    if(strcmp(name, "EEVEE") == 0) {
+      return ColorTheme4f(1.0, 0.5, 0.0, 1.0);
+    }
+    else if (strcmp(name, "External") == 0) {
+      return ColorTheme4f(0.0, 0.0, 1.0, 1.0);
+    }
+    else if(strcmp(name, "GpencilMode") == 0) {
+      return ColorTheme4f(1.0, 1.0, 0.0, 1.0);
+    }
+    else if(strcmp(name, "UV/Image") == 0) {
+      return ColorTheme4f(0.0, 1.0, 1.0, 1.0);
+    }
+    else if(strcmp(name, "Overlay") == 0) {
+      return ColorTheme4f(0.0, 1.0, 0.5, 1.0);
+    }
+    else if(strcmp(name, "Workbench") == 0) {
+      return ColorTheme4f(0.0, 0.7, 1.0, 1.0);
+    }
+    else if(strcmp(name, "Cycles") == 0) {
+      return ColorTheme4f(0.0, 0.5, 1.0, 1.0);
+    }
+    return GPU_DEBUG_GROUP_COLOR_DEFAULT;
+  }
+}  // namespace blender::gpu::debug
 
 }  // namespace blender::gpu

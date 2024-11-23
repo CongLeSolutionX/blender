@@ -19,7 +19,7 @@
 using namespace blender;
 using namespace blender::gpu;
 
-void GPU_debug_group_begin(const char *name, const ColorTheme4f &color)
+void GPU_debug_group_begin(const char *name)
 {
   if (!(G.debug & G_DEBUG_GPU)) {
     return;
@@ -27,7 +27,7 @@ void GPU_debug_group_begin(const char *name, const ColorTheme4f &color)
   Context *ctx = Context::get();
   DebugStack &stack = ctx->debug_stack;
   stack.append(StringRef(name));
-  ctx->debug_group_begin(name, color, stack.size());
+  ctx->debug_group_begin(name, stack.size());
 }
 
 void GPU_debug_group_end()

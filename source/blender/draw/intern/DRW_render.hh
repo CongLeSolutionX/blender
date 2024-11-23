@@ -122,8 +122,6 @@ struct DrawEngineType {
 
   char idname[32];
 
-  blender::ColorTheme4f debug_color;
-
   const DrawEngineDataSize *vedata_size;
 
   void (*engine_init)(void *vedata);

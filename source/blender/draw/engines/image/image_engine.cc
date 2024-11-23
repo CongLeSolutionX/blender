@@ -191,7 +191,6 @@ DrawEngineType draw_engine_image_type = {
     /*next*/ nullptr,
     /*prev*/ nullptr,
     /*idname*/ N_("UV/Image"),
-    /*debug_color*/ blender::ColorTheme4f(0.0, 1.0, 1.0, 1.0),
     /*vedata_size*/ &IMAGE_data_size,
     /*engine_init*/ &IMAGE_engine_init,
     /*engine_free*/ &IMAGE_engine_free,

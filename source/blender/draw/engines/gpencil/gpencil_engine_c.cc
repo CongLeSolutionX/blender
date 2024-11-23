@@ -952,7 +952,6 @@ DrawEngineType draw_engine_gpencil_type = {
     /*next*/ nullptr,
     /*prev*/ nullptr,
     /*idname*/ N_("GpencilMode"),
-    /*debug_color*/ blender::ColorTheme4f(1.0, 1.0, 0.0, 1.0),
     /*vedata_size*/ &GPENCIL_data_size,
     /*engine_init*/ &GPENCIL_engine_init,
     /*engine_free*/ &GPENCIL_engine_free,

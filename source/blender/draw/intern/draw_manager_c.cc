@@ -1123,7 +1123,7 @@ static void drw_engines_draw_scene()
   DRW_ENABLED_ENGINE_ITER (DST.view_data_active, engine, data) {
     PROFILE_START(stime);
     if (engine->draw_scene) {
-      DRW_stats_group_start(engine->idname, engine->debug_color);
+      DRW_stats_group_start(engine->idname);
       engine->draw_scene(data);
       /* Restore for next engine */
       if (DRW_state_is_fbo()) {

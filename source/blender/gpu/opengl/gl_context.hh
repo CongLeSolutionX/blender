@@ -127,7 +127,7 @@ class GLContext : public Context {
   void vao_cache_register(GLVaoCache *cache);
   void vao_cache_unregister(GLVaoCache *cache);
 
-  void debug_group_begin(const char *name, const ColorTheme4f &color, int index) override;
+  void debug_group_begin(const char *name, int index) override;
   void debug_group_end() override;
   bool debug_capture_begin(const char *title) override;
   void debug_capture_end() override;

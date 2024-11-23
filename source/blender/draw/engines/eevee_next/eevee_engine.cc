@@ -197,7 +197,6 @@ DrawEngineType draw_engine_eevee_next_type = {
     /*next*/ nullptr,
     /*prev*/ nullptr,
     /*idname*/ N_("EEVEE"),
-    /*debug_color*/ ColorTheme4f(1.0, 0.5, 0.0, 1.0),
     /*vedata_size*/ &eevee_data_size,
     /*engine_init*/ &eevee_engine_init,
     /*engine_free*/ &eevee_engine_free,
