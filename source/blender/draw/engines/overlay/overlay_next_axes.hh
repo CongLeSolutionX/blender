@@ -31,7 +31,7 @@ class Axes {
 
   void begin_sync(Resources & /*res*/, const State &state)
   {
-    enabled_ = state.space_type == SPACE_VIEW3D;
+    enabled_ = state.is_space_v3d();
 
     ps_.init();
     axes_buf.clear();
@@ -69,7 +69,7 @@ class Axes {
     axes_buf.end_sync(ps_, shapes.arrows.get());
   }
 
-  void draw(Framebuffer &framebuffer, Manager &manager, View &view)
+  void draw_line(Framebuffer &framebuffer, Manager &manager, View &view)
   {
     if (!enabled_) {
       return;

@@ -27,8 +27,7 @@ class XrayFade {
  public:
   void begin_sync(Resources &res, State &state)
   {
-    enabled_ = state.xray_enabled && (state.xray_opacity > 0.0f) &&
-               (res.selection_type == SelectionType::DISABLED);
+    enabled_ = state.xray_enabled && (state.xray_opacity > 0.0f) && !res.is_selection();
 
     if (!enabled_) {
       return;
@@ -51,7 +50,7 @@ class XrayFade {
     }
   }
 
-  void draw(Framebuffer &framebuffer, Manager &manager, View & /*view*/)
+  void draw_color_only(Framebuffer &framebuffer, Manager &manager, View & /*view*/)
   {
     if (!enabled_) {
       return;

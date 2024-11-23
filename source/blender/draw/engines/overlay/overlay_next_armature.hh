@@ -133,16 +133,14 @@ class Armatures {
 
   void begin_sync(Resources &res, const State &state)
   {
-    enabled_ = state.space_type == SPACE_VIEW3D && !(state.overlay.flag & V3D_OVERLAY_HIDE_BONES);
+    enabled_ = state.is_space_v3d() && state.show_bones();
 
     if (!enabled_) {
       return;
     }
 
-    const bool is_select_mode = (selection_type_ != SelectionType::DISABLED);
-
     draw_transparent = (state.v3d->shading.type == OB_WIRE) || XRAY_FLAG_ENABLED(state.v3d);
-    show_relations = !((state.v3d->flag & V3D_HIDE_HELPLINES) || is_select_mode);
+    show_relations = !((state.v3d->flag & V3D_HIDE_HELPLINES) || res.is_selection());
     show_outline = (state.v3d->flag & V3D_SELECT_OUTLINE);
 
     const bool do_smooth_wire = U.gpu_flag & USER_GPU_FLAG_OVERLAY_SMOOTH_WIRE;
@@ -622,7 +620,7 @@ class Armatures {
     end_sync(opaque_);
   }
 
-  void draw(Framebuffer &framebuffer, Manager &manager, View &view)
+  void draw_line(Framebuffer &framebuffer, Manager &manager, View &view)
   {
     if (!enabled_) {
       return;

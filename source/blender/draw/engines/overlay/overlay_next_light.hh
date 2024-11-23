@@ -43,7 +43,7 @@ class Lights {
 
   void begin_sync(const State &state)
   {
-    enabled_ = state.space_type == SPACE_VIEW3D;
+    enabled_ = state.is_space_v3d() && state.show_extras();
     if (!enabled_) {
       return;
     }
@@ -94,7 +94,7 @@ class Lights {
     call_buffers_.ground_line_buf.append(float4(matrix.location()), select_id);
 
     const float4 light_color = {la.r, la.g, la.b, 1.0f};
-    const bool show_light_colors = state.overlay.flag & V3D_OVERLAY_SHOW_LIGHT_COLORS;
+    const bool show_light_colors = state.show_light_colors();
 
     /* Draw the outer ring of the light icon and the sun rays in `light_color`, if required. */
     call_buffers_.icon_outer_buf.append(data, select_id);
@@ -132,7 +132,7 @@ class Lights {
         /* HACK: We pack the area size in alpha color. This is decoded by the shader. */
         theme_color[3] = -max_ff(la.radius, FLT_MIN);
         call_buffers_.spot_buf.append(data, select_id);
-        if ((la.mode & LA_SHOW_CONE) && selection_type_ == SelectionType::DISABLED) {
+        if ((la.mode & LA_SHOW_CONE) && !res.is_selection()) {
           const float4 color_inside{0.0f, 0.0f, 0.0f, 0.5f};
           const float4 color_outside{1.0f, 1.0f, 1.0f, 0.3f};
           call_buffers_.spot_cone_front_buf.append(data.with_color(color_inside), select_id);
@@ -204,7 +204,7 @@ class Lights {
     }
   }
 
-  void draw(Framebuffer &framebuffer, Manager &manager, View &view)
+  void draw_line(Framebuffer &framebuffer, Manager &manager, View &view)
   {
     if (!enabled_) {
       return;

@@ -17,19 +17,15 @@ namespace blender::draw::overlay {
 class Facing {
 
  private:
-  const SelectionType selection_type_;
-
   PassMain ps_ = {"Facing"};
 
   bool enabled_ = false;
 
  public:
-  Facing(const SelectionType selection_type_) : selection_type_(selection_type_) {}
-
   void begin_sync(Resources &res, const State &state)
   {
-    enabled_ = state.v3d && (state.overlay.flag & V3D_OVERLAY_FACE_ORIENTATION) &&
-               !state.xray_enabled && (selection_type_ == SelectionType::DISABLED);
+    enabled_ = state.v3d && state.show_face_orientation() && !state.xray_enabled &&
+               !res.is_selection();
     if (!enabled_) {
       /* Not used. But release the data. */
       ps_.init();
@@ -68,7 +64,7 @@ class Facing {
       return;
     }
     const bool use_sculpt_pbvh = BKE_sculptsession_use_pbvh_draw(ob_ref.object, state.rv3d) &&
-                                 !DRW_state_is_image_render();
+                                 !state.is_image_render;
 
     if (use_sculpt_pbvh) {
       ResourceHandle handle = manager.resource_handle_for_sculpt(ob_ref);

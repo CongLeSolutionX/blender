@@ -80,7 +80,7 @@ class Meshes {
  public:
   void begin_sync(Resources &res, const State &state, const View &view)
   {
-    enabled_ = state.space_type == SPACE_VIEW3D;
+    enabled_ = state.is_space_v3d();
 
     if (!enabled_) {
       return;
@@ -346,12 +346,12 @@ class Meshes {
       gpu::Batch *geom = DRW_mesh_batch_cache_get_edit_skin_roots(mesh);
       edit_mesh_skin_roots_ps_.draw_expand(geom, GPU_PRIM_LINES, 32, 1, res_handle);
     }
-    if (DRW_state_show_text() && (state.overlay.edit_flag & overlay_edit_text)) {
+    if (state.show_text && (state.overlay.edit_flag & overlay_edit_text)) {
       DRW_text_edit_mesh_measure_stats(state.region, state.v3d, ob, &state.scene->unit, state.dt);
     }
   }
 
-  void draw(Framebuffer &framebuffer, Manager &manager, View &view)
+  void draw_line(Framebuffer &framebuffer, Manager &manager, View &view)
   {
     if (!enabled_) {
       return;
@@ -515,7 +515,7 @@ class MeshUVs {
  public:
   void begin_sync(Resources &res, const State &state)
   {
-    enabled_ = state.space_type == SPACE_IMAGE;
+    enabled_ = state.is_space_image();
 
     if (!enabled_) {
       return;

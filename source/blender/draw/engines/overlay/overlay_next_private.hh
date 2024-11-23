@@ -58,6 +58,18 @@ struct State {
   bool clear_in_front;
   bool use_in_front;
   bool is_wireframe_mode;
+  /** Whether we are rendering for an image (viewport render). */
+  bool is_viewport_image_render;
+  /** Whether we are rendering for an image. */
+  bool is_image_render;
+  /** True if rendering only to query the depth. Can be for auto-depth rotation. */
+  bool is_depth_only_drawing;
+  /** When drag-dropping material onto objects to assignment. */
+  bool is_material_select;
+  /** Whether we should render the background or leave it transparent. */
+  bool draw_background;
+  /** Should text draw in this mode? */
+  bool show_text;
   bool hide_overlays;
   bool xray_enabled;
   bool xray_enabled_and_not_wire;
@@ -87,6 +99,78 @@ struct State {
       view_dist = 1.0f / max_ff(fabsf(winmat[0][0]), fabsf(winmat[1][1]));
     }
     return view_dist;
+  }
+
+  /** Convenience functions. */
+
+  bool is_space_v3d() const
+  {
+    return this->space_type == SPACE_VIEW3D;
+  }
+  bool is_space_image() const
+  {
+    return this->space_type == SPACE_IMAGE;
+  }
+  bool is_space_node() const
+  {
+    return this->space_type == SPACE_NODE;
+  }
+
+  bool show_extras() const
+  {
+    return (this->overlay.flag & V3D_OVERLAY_HIDE_OBJECT_XTRAS) == 0;
+  }
+  bool show_face_orientation() const
+  {
+    return (this->overlay.flag & V3D_OVERLAY_FACE_ORIENTATION);
+  }
+  bool show_bone_selection() const
+  {
+    return (this->overlay.flag & V3D_OVERLAY_BONE_SELECT);
+  }
+  bool show_wireframes() const
+  {
+    return (this->overlay.flag & V3D_OVERLAY_WIREFRAMES);
+  }
+  bool show_motion_paths() const
+  {
+    return (this->overlay.flag & V3D_OVERLAY_HIDE_MOTION_PATHS) == 0;
+  }
+  bool show_bones() const
+  {
+    return (this->overlay.flag & V3D_OVERLAY_HIDE_BONES) == 0;
+  }
+  bool show_object_origins() const
+  {
+    return (this->overlay.flag & V3D_OVERLAY_HIDE_OBJECT_ORIGINS) == 0;
+  }
+  bool show_fade_inactive() const
+  {
+    return (this->overlay.flag & V3D_OVERLAY_FADE_INACTIVE);
+  }
+  bool show_attribute_viewer() const
+  {
+    return (this->overlay.flag & V3D_OVERLAY_VIEWER_ATTRIBUTE);
+  }
+  bool show_attribute_viewer_text() const
+  {
+    return (this->overlay.flag & V3D_OVERLAY_VIEWER_ATTRIBUTE_TEXT);
+  }
+  bool show_sculpt_mask() const
+  {
+    return (this->overlay.flag & V3D_OVERLAY_SCULPT_SHOW_MASK);
+  }
+  bool show_sculpt_face_sets() const
+  {
+    return (this->overlay.flag & V3D_OVERLAY_SCULPT_SHOW_FACE_SETS);
+  }
+  bool show_sculpt_curves_cage() const
+  {
+    return (this->overlay.flag & V3D_OVERLAY_SCULPT_CURVES_CAGE);
+  }
+  bool show_light_colors() const
+  {
+    return (this->overlay.flag & V3D_OVERLAY_SHOW_LIGHT_COLORS);
   }
 };
 
@@ -514,6 +598,14 @@ struct Resources : public select::SelectMap {
     for (MovieClip *clip : bg_movie_clips) {
       BKE_movieclip_free_gputexture(clip);
     }
+  }
+
+  /** Convenience functions. */
+
+  /* Returns true if drawing for any selection mode. */
+  bool is_selection() const
+  {
+    return this->selection_type != SelectionType::DISABLED;
   }
 };
 

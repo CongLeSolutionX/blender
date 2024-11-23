@@ -55,7 +55,7 @@ class Empties {
 
   void begin_sync(Resources &res, const State &state, View &view)
   {
-    enabled_ = state.space_type == SPACE_VIEW3D;
+    enabled_ = state.is_space_v3d() && state.show_extras();
 
     if (!enabled_) {
       return;
@@ -209,7 +209,7 @@ class Empties {
     manager.generate_commands(images_front_ps_, view);
   }
 
-  void draw(Framebuffer &framebuffer, Manager &manager, View &view)
+  void draw_line(Framebuffer &framebuffer, Manager &manager, View &view)
   {
     if (!enabled_) {
       return;
@@ -310,8 +310,8 @@ class Empties {
     if (show_image && tex && ((ob->color[3] > 0.0f) || !use_alpha_blend)) {
       /* Use the actual depth if we are doing depth tests to determine the distance to the
        * object. */
-      char depth_mode = DRW_state_is_depth() ? char(OB_EMPTY_IMAGE_DEPTH_DEFAULT) :
-                                               ob->empty_image_depth;
+      char depth_mode = state.is_depth_only_drawing ? char(OB_EMPTY_IMAGE_DEPTH_DEFAULT) :
+                                                      ob->empty_image_depth;
       PassMain::Sub &pass = create_subpass(state, *ob, use_alpha_blend, mat, res);
       pass.bind_texture("imgTexture", tex);
       pass.push_constant("imgPremultiplied", use_alpha_premult);
@@ -334,8 +334,8 @@ class Empties {
     if (in_front) {
       return create_subpass(state, mat, res, images_front_ps_, true);
     }
-    const char depth_mode = DRW_state_is_depth() ? char(OB_EMPTY_IMAGE_DEPTH_DEFAULT) :
-                                                   ob.empty_image_depth;
+    const char depth_mode = state.is_depth_only_drawing ? char(OB_EMPTY_IMAGE_DEPTH_DEFAULT) :
+                                                          ob.empty_image_depth;
     switch (depth_mode) {
       case OB_EMPTY_IMAGE_DEPTH_BACK:
         return create_subpass(state, mat, res, images_back_ps_, false);

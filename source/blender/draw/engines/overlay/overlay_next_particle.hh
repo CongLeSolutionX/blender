@@ -39,7 +39,7 @@ class Particles {
  public:
   void begin_sync(Resources &res, const State &state)
   {
-    enabled_ = state.space_type == SPACE_VIEW3D;
+    enabled_ = state.is_space_v3d();
 
     if (!enabled_) {
       return;
@@ -289,7 +289,7 @@ class Particles {
     manager.generate_commands(particle_ps_, view);
   }
 
-  void draw(Framebuffer &framebuffer, Manager &manager, View &view)
+  void draw_line(Framebuffer &framebuffer, Manager &manager, View &view)
   {
     if (!enabled_) {
       return;
@@ -299,7 +299,7 @@ class Particles {
     manager.submit_only(particle_ps_, view);
   }
 
-  void draw_no_line(Framebuffer &framebuffer, Manager &manager, View &view)
+  void draw(Framebuffer &framebuffer, Manager &manager, View &view)
   {
     if (!enabled_) {
       return;

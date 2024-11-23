@@ -47,7 +47,7 @@ class GreasePencil {
  public:
   void begin_sync(Resources &res, const State &state, const View &view)
   {
-    enabled_ = state.space_type == SPACE_VIEW3D;
+    enabled_ = state.is_space_v3d();
 
     if (!enabled_) {
       return;
@@ -58,7 +58,7 @@ class GreasePencil {
     const View3D *v3d = state.v3d;
     const ToolSettings *ts = state.scene->toolsettings;
 
-    show_material_name_ = (v3d->gp_flag & V3D_GP_SHOW_MATERIAL_NAME) && DRW_state_show_text();
+    show_material_name_ = (v3d->gp_flag & V3D_GP_SHOW_MATERIAL_NAME) && state.show_text;
     const bool show_lines = (v3d->gp_flag & V3D_GP_SHOW_EDIT_LINES);
     const bool show_direction = (v3d->gp_flag & V3D_GP_SHOW_STROKE_DIRECTION);
 
@@ -221,7 +221,7 @@ class GreasePencil {
     }
   }
 
-  void draw(Framebuffer &framebuffer, Manager &manager, View &view)
+  void draw_line(Framebuffer &framebuffer, Manager &manager, View &view)
   {
     if (!enabled_) {
       return;
