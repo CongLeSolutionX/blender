@@ -3569,6 +3569,7 @@ static blender::Vector<blender::IndexRange> silent_ranges_get(Scene *scene,
   SoundWaveform *wf = static_cast<SoundWaveform *>(seq->sound->waveform);
   const float samples_per_frame = SOUND_WAVE_SAMPLES_PER_SECOND / FPS;
   const int padding = RNA_int_get(op->ptr, "padding");
+  const int minimum_length = RNA_int_get(op->ptr, "minimum_length");
 
   blender::Vector<blender::IndexRange> silent_frames;
 
@@ -3581,9 +3582,8 @@ static blender::Vector<blender::IndexRange> silent_ranges_get(Scene *scene,
     const int silence_start = seq->start + silent_sample / samples_per_frame + padding;
     const int silence_end = seq->start + (loud_sample - 1) / samples_per_frame - padding;
 
-    blender::IndexRange range{silence_start, silence_end - silence_start};
-
-    if (range.size() > 3) {
+    if (silence_end - silence_start >= minimum_length) {
+      blender::IndexRange range{silence_start, silence_end - silence_start};
       silent_frames.append(range);
     }
   }
@@ -3608,6 +3608,9 @@ static int sequencer_remove_silence_exec(bContext *C, wmOperator *op)
     Sequence *next = seq;
     for (blender::IndexRange range : silent_ranges) {
       const char *error_msg = nullptr;
+
+      // Could be, that sound is completely silent. Would be good to skip splitting and just remove
+      // the strip completely?
 
       if (range.first() != SEQ_time_start_frame_get(next)) {
         silent = SEQ_edit_strip_split(
@@ -3665,7 +3668,7 @@ void SEQUENCER_OT_remove_silence(wmOperatorType *ot)
 
   RNA_def_float(ot->srna,
                 "volume_threshold",
-                0.1,
+                0.05,
                 0.0f,
                 1.0f,
                 "Volume Threshold",
@@ -3675,7 +3678,7 @@ void SEQUENCER_OT_remove_silence(wmOperatorType *ot)
 
   RNA_def_int(ot->srna,
               "length_threshold",
-              0,
+              15,
               0,
               INT_MAX,
               "Length Threshold",
@@ -3685,12 +3688,22 @@ void SEQUENCER_OT_remove_silence(wmOperatorType *ot)
 
   RNA_def_int(ot->srna,
               "padding",
+              3,
               0,
-              INT_MIN,
               INT_MAX,
-              "Frame",
+              "Padding",
               "Shrink silent range from each side by number of frames",
-              INT_MIN,
+              0,
+              INT_MAX);
+
+  RNA_def_int(ot->srna,
+              "minimum_length",
+              10,
+              1,
+              INT_MAX,
+              "Minimal Strip Length",
+              "How short can strip be after silence is removed",
+              1,
               INT_MAX);
 }
 
