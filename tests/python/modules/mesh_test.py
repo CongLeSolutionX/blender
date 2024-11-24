@@ -110,8 +110,8 @@ class OperatorSpecEditMode:
         """
         self.operator_name = operator_name
         self.operator_parameters = operator_parameters
-        if select_mode not in {'VERT', 'EDGE', 'FACE'}:
-            raise ValueError("select_mode must be either {}, {} or {}".format('VERT', 'EDGE', 'FACE'))
+        if select_mode not in {'VERT', 'EDGE', 'FACE', 'FACE_CORNER'}:
+            raise ValueError("select_mode must be either {}, {} or {}".format('VERT', 'EDGE', 'FACE', 'FACE_CORNER'))
         self.select_mode = select_mode
         self.selection = selection
         self.select_history = select_history
@@ -324,7 +324,7 @@ class MeshTest(ABC):
         Do selection on a mesh.
 
         :arg mesh: bpy.types.Mesh - input mesh
-        :arg: select_mode: str - selection mode. Must be 'VERT', 'EDGE' or 'FACE'
+        :arg: select_mode: str - selection mode. Must be 'VERT', 'EDGE', 'FACE' or 'FACE_CORNER'
         :arg: selection: sequence - indices of selection.
         :arg: select_history: bool - load selection into bmesh selection history
 
@@ -343,12 +343,14 @@ class MeshTest(ABC):
 
         bpy.context.tool_settings.mesh_select_mode = (select_mode == 'VERT',
                                                       select_mode == 'EDGE',
-                                                      select_mode == 'FACE')
+                                                      select_mode == 'FACE',
+                                                      select_mode == 'FACE_CORNER')
 
         items = (
             bm.verts if select_mode == 'VERT' else
             bm.edges if select_mode == 'EDGE' else
-            bm.faces if select_mode == 'FACE' else None
+            bm.faces if select_mode == 'FACE' else
+            bm.faces if select_mode == 'FACE_CORNER' else None
         )
 
         items.ensure_lookup_table()
