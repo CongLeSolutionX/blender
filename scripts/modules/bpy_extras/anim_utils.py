@@ -13,6 +13,7 @@ __all__ = (
 import bpy
 from bpy.types import Action, ActionSlot
 from dataclasses import dataclass
+from typing import Iterable
 
 from collections.abc import (
     Mapping,
@@ -92,8 +93,9 @@ def _ensure_channelbag_exists(action: Action, slot: ActionSlot):
         for strip in layer.strips:
             return strip.channelbags.new(slot)
 
-def scene_frame_range(context):
-    scene = context.scene
+
+def _scene_frame_range(scene: bpy.types.Scene) -> tuple[int, int]:
+    """Return the scene range or the frame range, as entire frames."""
     if scene.use_preview_range:
         scene_start = scene.frame_preview_start
         scene_end = scene.frame_preview_end
@@ -103,41 +105,50 @@ def scene_frame_range(context):
 
     return int(scene_start), int(scene_end)
 
-def keyframes_frame_range(context):
-    actions = set()
-    objs = {obj for obj in context.selected_objects if obj.animation_data is not None}
 
-    #get all the actions
-    for obj in objs:
-        if obj.animation_data.action:
-            actions.add(obj.animation_data.action)
+def _keyframes_frame_range(objects: Iterable[bpy.types.Object]) -> tuple[int, int]:
+    '''Returns the overall frame range from all the actions that are relevant to the selected objects.'''
+    frame_ranges = set()
+    animated_objs = (obj for obj in objects if obj.animation_data is not None)
+
+    # Get all the frame ranges.
+    for obj in animated_objs:
+        if obj.animation_data.action and not obj.animation_data.use_tweak_mode:
+            # Get the action only if it's outside of tweakmode, otherwise get it with the strip offset.
+            frame_ranges.add(tuple(obj.animation_data.action.frame_range))
         if not obj.animation_data.use_nla:
             continue
-        actions.update({strip.action for track in obj.animation_data.nla_tracks for strip in track.strips if strip.action})
-    if not actions:
-        return None, None
-    
-    frame_ranges = [action.frame_range for action in actions]
+        for track in obj.animation_data.nla_tracks:
+            for strip in track.strips:
+                if track.mute or strip.mute:
+                    continue
+                if not strip.action:
+                    continue
+                # Get the frame range with the strip offset.
+                offset = strip.frame_start - (strip.action_frame_start * strip.scale)
+                frame_start = (strip.action.frame_range[0] * strip.scale) + offset
+                frame_end = (strip.action.frame_range[1] * strip.scale) + offset
+
+                # If the strip is shorter then the range then crop the range to the strip start or end
+                frame_end = min(strip.frame_end, frame_end)
+                frame_start = max(strip.frame_start, frame_start)
+                frame_ranges.add((frame_start, frame_end))
+
+    if not frame_ranges:
+        # If there are no actions assign then return None, the bake however will continue to work
+        # in case it is baking something that is without action but we want to bake its constraints.
+        return None
     frames_start, frames_end = zip(*frame_ranges)
 
-    frame_start = min(frames_start)
-    frame_end = max(frames_end)
+    frame_start = int(round(min(frames_start)))
+    frame_end = int(round(max(frames_end)))
 
-    return int(frame_start), int(frame_end)
-
-def get_initial_frame_range(self, context):
-
-    self.keyframes_start, self.keyframes_end = keyframes_frame_range(context)
-    self.scene_start, self.scene_end = scene_frame_range(context)
-
-    #in case there was not actions then just return the scene
-    if self.keyframes_start is None:
-        return self.scene_start, self.scene_end
-
-    frame_start = max([self.keyframes_start, self.scene_start])
-    frame_end = min([self.keyframes_end, self.scene_end])
+    if frame_start == frame_end:
+        # If there is no range between frame end and frame start then better use scene range
+        return None
 
     return frame_start, frame_end
+
 
 def bake_action(
         obj,
