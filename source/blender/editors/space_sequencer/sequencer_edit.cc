@@ -11,6 +11,7 @@
 #include "BLI_map.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_vector.hh"
+#include "BLI_vector_set.hh"
 #include "DNA_node_types.h"
 #include "DNA_sequence_types.h"
 #include "DNA_windowmanager_types.h"
@@ -78,6 +79,7 @@
 
 /* Own include. */
 #include "sequencer_intern.hh"
+#include <algorithm>
 #include <cstddef>
 #include <cstdio>
 
@@ -3578,9 +3580,21 @@ static blender::Vector<blender::IndexRange> silent_ranges_get(Scene *scene,
 
   while (silent_sample < wf->length && loud_sample < wf->length) {
     silent_sample = find_next_sample(wf, loud_sample, SILENT, op);
+    // produces incorrect num at the end
     loud_sample = find_next_sample(wf, silent_sample, LOUD, op);
-    const int silence_start = seq->start + silent_sample / samples_per_frame + padding;
-    const int silence_end = seq->start + (loud_sample - 1) / samples_per_frame - padding;
+    int silence_start = std::round(seq->start + silent_sample / samples_per_frame);
+    int silence_end = std::round(seq->start + (loud_sample - 1) / samples_per_frame);
+
+    if (silent_sample > 0) {
+      silence_start += padding;
+    }
+    if (loud_sample < wf->length) {
+      silence_end -= padding;
+    }
+    else {
+      /* Snap end to real strip end rather than calculated one. */
+      silence_end = SEQ_time_right_handle_frame_get(scene, seq);
+    }
 
     if (silence_end - silence_start >= minimum_length) {
       blender::IndexRange range{silence_start, silence_end - silence_start};
@@ -3591,62 +3605,102 @@ static blender::Vector<blender::IndexRange> silent_ranges_get(Scene *scene,
   return silent_frames;
 }
 
-static int sequencer_remove_silence_exec(bContext *C, wmOperator *op)
+static Sequence *remove_silence_do_split(bContext *C,
+                                         Sequence *seq,
+                                         blender::IndexRange range,
+                                         int *r_silent_len)
 {
   Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   Editing *ed = SEQ_editing_get(scene);
+  ListBase *seqbase = SEQ_active_seqbase_get(ed);
+  Sequence *silent = seq;
+  const char *error_msg = nullptr;
 
+  if (range.first() != SEQ_time_start_frame_get(seq)) {
+    silent = SEQ_edit_strip_split(
+        bmain, scene, seqbase, seq, range.first(), SEQ_SPLIT_SOFT, &error_msg);
+  }
+
+  if (silent == nullptr) {
+    return nullptr;
+  }
+
+  Sequence *next = SEQ_edit_strip_split(
+      bmain, scene, seqbase, silent, range.last(), SEQ_SPLIT_SOFT, &error_msg);
+
+  *r_silent_len = SEQ_time_left_handle_frame_get(scene, silent) -
+                  SEQ_time_right_handle_frame_get(scene, silent);
+  SEQ_edit_flag_for_removal(scene, seqbase, silent);
+
+  return next;
+}
+
+static int sequencer_remove_silence_exec(bContext *C, wmOperator *op)
+{
+  Scene *scene = CTX_data_scene(C);
+  Editing *ed = SEQ_editing_get(scene);
+  ListBase *seqbase = SEQ_active_seqbase_get(ed);
+
+  blender::VectorSet strips = ED_sequencer_selected_strips_from_context(C);
+  blender::Vector<Sequence *> sound_strips = strips.as_span();
+  sound_strips.remove_if([](Sequence *seq) { return seq->type != SEQ_TYPE_SOUND_RAM; });
+  blender::Vector<Sequence *> other_strips = strips.as_span();
+  other_strips.remove_if([](Sequence *seq) { return seq->type == SEQ_TYPE_SOUND_RAM; });
+
+  blender::Vector<Sequence *> strips_to_translate;
+  blender::Vector<int> offsets;
   blender::Map<Sequence *, int> strip_to_offset;
   int offset = 0;
 
   // Assume only sound strips for now
-  for (Sequence *seq : ED_sequencer_selected_strips_from_context(C)) {
+  for (Sequence *seq : sound_strips) {
     blender::Vector<blender::IndexRange> silent_ranges = silent_ranges_get(scene, seq, op);
 
-    Sequence *silent = seq;
+    blender::Vector<Sequence *> other_strips_next;
     Sequence *next = seq;
     for (blender::IndexRange range : silent_ranges) {
-      const char *error_msg = nullptr;
+      // Could be, that sound is completely silent. Would be good to skip splitting and just
+      // remove the strip completely?
 
-      // Could be, that sound is completely silent. Would be good to skip splitting and just remove
-      // the strip completely?
+      int silent_length;
+      next = remove_silence_do_split(C, next, range, &silent_length);
 
-      if (range.first() != SEQ_time_start_frame_get(next)) {
-        silent = SEQ_edit_strip_split(
-            bmain, scene, ed->seqbasep, next, range.first(), SEQ_SPLIT_SOFT, &error_msg);
-      }
-
-      if (silent == nullptr) {
-        BLI_assert_unreachable();
-        break;
-      }
-
-      next = SEQ_edit_strip_split(
-          bmain, scene, ed->seqbasep, silent, range.last(), SEQ_SPLIT_SOFT, &error_msg);
-
-      SEQ_edit_flag_for_removal(scene, ed->seqbasep, silent);
-
-      if (error_msg != nullptr) {
-        BKE_report(op->reports, RPT_ERROR, error_msg);
-      }
-
-      if (next == nullptr) {
-        BLI_assert_unreachable();
-        break;
-      }
-
-      const int silent_start = SEQ_time_left_handle_frame_get(scene, silent);
-      offset += silent_start - SEQ_time_left_handle_frame_get(scene, next);
+      offset += silent_length;
       strip_to_offset.add(next, offset);
+      strips_to_translate.append(next);
+      offsets.append(offset);
+
+      /* Split non-sound strips. */
+      for (Sequence *other : other_strips) {
+        Sequence *other_next = remove_silence_do_split(C, other, range, &silent_length);
+        if (other_next == nullptr) {
+          /* Strip likely does not intersect this frame, so use it in next iterations. */
+          other_strips_next.append(other);
+          continue;
+        }
+        other_strips_next.append(other_next);
+        strip_to_offset.add(other_next, offset);
+        strips_to_translate.append(other_next);
+        offsets.append(offset);
+      }
+      other_strips = other_strips_next;
+      other_strips_next = {};
     }
   }
 
+  SEQ_edit_remove_flagged_sequences(scene, seqbase);
+
   /* Offset strips. */
+  for (int i : strips_to_translate.index_range()) {
+    SEQ_transform_translate_sequence(scene, strips_to_translate[i], offsets[i]);
+  }
+
+  /*
   for (auto item : strip_to_offset.items()) {
     SEQ_transform_translate_sequence(scene, item.key, item.value);
-    SEQ_edit_remove_flagged_sequences(scene, ed->seqbasep);
   }
+    */
 
   WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
   return OPERATOR_FINISHED;
