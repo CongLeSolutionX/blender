@@ -198,7 +198,10 @@ bool OptiXDevice::load_kernels(const uint kernel_features)
   }
 
 #  ifdef WITH_OSL
-  const bool use_osl = (kernel_features & KERNEL_FEATURE_OSL);
+  /* In theory, this could be split further, into a OSL-camera-only kernel and a
+   * full-OSL kernel. However, for now this is good enough. */
+  const uint osl_mask = KERNEL_FEATURE_OSL_SHADING | KERNEL_FEATURE_OSL_CAMERA;
+  const bool use_osl = (kernel_features & osl_mask);
 #  else
   const bool use_osl = false;
 #  endif
@@ -791,8 +794,9 @@ bool OptiXDevice::load_osl_kernels()
     }
   }
 
-  if (osl_kernels.empty()) {
-    /* No OSL shader groups, so no need to create a pipeline. */
+  /* We always need to reserve a spot for the camera shader group, but if it's unused
+   * and there are no other shader groups, we can skip creating the pipeline. */
+  if (osl_kernels.size() == 1 && osl_kernels[0].ptx.empty()) {
     return true;
   }
 

@@ -224,6 +224,8 @@ class Camera : public Node {
   int motion_step(float time) const;
   bool use_motion() const;
 
+  uint get_kernel_features() const;
+
   void set_screen_size(int width_, int height_);
 
   void set_osl_camera(Scene *scene,

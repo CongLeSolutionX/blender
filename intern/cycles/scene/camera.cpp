@@ -968,4 +968,15 @@ void Camera::clear_osl_camera(Scene *scene)
   scene->osl_manager->tag_update();
 }
 
+uint Camera::get_kernel_features() const
+{
+  uint kernel_features = 0;
+
+  if (!script_name.empty()) {
+    kernel_features |= KERNEL_FEATURE_OSL_CAMERA;
+  }
+
+  return kernel_features;
+}
+
 CCL_NAMESPACE_END
