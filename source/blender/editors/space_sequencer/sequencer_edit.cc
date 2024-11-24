@@ -6,6 +6,14 @@
  * \ingroup spseq
  */
 
+#include "BLI_assert.h"
+#include "BLI_index_range.hh"
+#include "BLI_map.hh"
+#include "BLI_math_vector_types.hh"
+#include "BLI_vector.hh"
+#include "DNA_node_types.h"
+#include "DNA_sequence_types.h"
+#include "DNA_windowmanager_types.h"
 #include "MEM_guardedalloc.h"
 
 #include "BLI_fileops.h"
@@ -27,6 +35,7 @@
 #include "BKE_report.hh"
 #include "BKE_sound.h"
 
+#include "RNA_access.hh"
 #include "SEQ_add.hh"
 #include "SEQ_animation.hh"
 #include "SEQ_channels.hh"
@@ -69,6 +78,8 @@
 
 /* Own include. */
 #include "sequencer_intern.hh"
+#include <cstddef>
+#include <cstdio>
 
 /* -------------------------------------------------------------------- */
 /** \name Public Context Checks
@@ -3509,6 +3520,178 @@ void SEQUENCER_OT_scene_frame_range_update(wmOperatorType *ot)
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Remove Silence Operator
+ * \{ */
+
+enum eSampleType {
+  SILENT,
+  LOUD,
+};
+
+static int find_next_sample(SoundWaveform *wf, int sample_start, eSampleType type, wmOperator *op)
+{
+  const float volume_threshold = RNA_float_get(op->ptr, "volume_threshold");
+  const int length_threshold = RNA_int_get(op->ptr, "length_threshold");
+
+  int i = sample_start;
+  int hit_count = 0;
+
+  while (i < wf->length) {
+    float sample = wf->data[i * 3 + 1]; /* +1 for max values. */
+    if ((type == SILENT && std::abs(sample) < volume_threshold) ||
+        (type == LOUD && std::abs(sample) > volume_threshold))
+    {
+      hit_count++;
+    }
+    else {
+      hit_count = 0;
+    }
+
+    if (hit_count > length_threshold) {
+      break;
+    }
+
+    i++;
+  }
+
+  return i - hit_count + 1;
+}
+
+static blender::Vector<blender::IndexRange> silent_ranges_get(Scene *scene,
+                                                              Sequence *seq,
+                                                              wmOperator *op)
+{
+  SoundWaveform *wf = static_cast<SoundWaveform *>(seq->sound->waveform);
+  const float samples_per_frame = SOUND_WAVE_SAMPLES_PER_SECOND / FPS;
+  const int padding = RNA_int_get(op->ptr, "padding");
+
+  blender::Vector<blender::IndexRange> silent_frames;
+
+  int silent_sample = 0;
+  int loud_sample = 0;
+
+  while (silent_sample < wf->length && loud_sample < wf->length) {
+    silent_sample = find_next_sample(wf, loud_sample, SILENT, op);
+    loud_sample = find_next_sample(wf, silent_sample, LOUD, op);
+    const int silence_start = seq->start + silent_sample / samples_per_frame + padding;
+    const int silence_end = seq->start + (loud_sample - 1) / samples_per_frame - padding;
+
+    blender::IndexRange range{silence_start, silence_end - silence_start};
+
+    if (range.size() > 3) {
+      silent_frames.append(range);
+    }
+  }
+
+  return silent_frames;
+}
+
+static int sequencer_remove_silence_exec(bContext *C, wmOperator *op)
+{
+  Main *bmain = CTX_data_main(C);
+  Scene *scene = CTX_data_scene(C);
+  Editing *ed = SEQ_editing_get(scene);
+
+  blender::Map<Sequence *, int> strip_to_offset;
+  int offset = 0;
+
+  // Assume only sound strips for now
+  for (Sequence *seq : ED_sequencer_selected_strips_from_context(C)) {
+    blender::Vector<blender::IndexRange> silent_ranges = silent_ranges_get(scene, seq, op);
+
+    Sequence *silent = seq;
+    Sequence *next = seq;
+    for (blender::IndexRange range : silent_ranges) {
+      const char *error_msg = nullptr;
+
+      if (range.first() != SEQ_time_start_frame_get(next)) {
+        silent = SEQ_edit_strip_split(
+            bmain, scene, ed->seqbasep, next, range.first(), SEQ_SPLIT_SOFT, &error_msg);
+      }
+
+      if (silent == nullptr) {
+        BLI_assert_unreachable();
+        break;
+      }
+
+      next = SEQ_edit_strip_split(
+          bmain, scene, ed->seqbasep, silent, range.last(), SEQ_SPLIT_SOFT, &error_msg);
+
+      SEQ_edit_flag_for_removal(scene, ed->seqbasep, silent);
+
+      if (error_msg != nullptr) {
+        BKE_report(op->reports, RPT_ERROR, error_msg);
+      }
+
+      if (next == nullptr) {
+        BLI_assert_unreachable();
+        break;
+      }
+
+      const int silent_start = SEQ_time_left_handle_frame_get(scene, silent);
+      offset += silent_start - SEQ_time_left_handle_frame_get(scene, next);
+      strip_to_offset.add(next, offset);
+    }
+  }
+
+  /* Offset strips. */
+  for (auto item : strip_to_offset.items()) {
+    SEQ_transform_translate_sequence(scene, item.key, item.value);
+    SEQ_edit_remove_flagged_sequences(scene, ed->seqbasep);
+  }
+
+  WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
+  return OPERATOR_FINISHED;
+}
+
+void SEQUENCER_OT_remove_silence(wmOperatorType *ot)
+{
+  /* Identifiers. */
+  ot->name = "Remove Silence";
+  ot->idname = "SEQUENCER_OT_remove_silence";
+  ot->description = "Remove silence from selected strips";
+
+  /* Api callbacks. */
+  ot->exec = sequencer_remove_silence_exec;
+  ot->poll = sequencer_edit_poll;
+
+  /* Flags. */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+  RNA_def_float(ot->srna,
+                "volume_threshold",
+                0.1,
+                0.0f,
+                1.0f,
+                "Volume Threshold",
+                "Maximum volume, that is considered as silence",
+                0.0f,
+                1.0f);
+
+  RNA_def_int(ot->srna,
+              "length_threshold",
+              0,
+              0,
+              INT_MAX,
+              "Length Threshold",
+              "How many samples must be silent or loud",
+              0,
+              INT_MAX);
+
+  RNA_def_int(ot->srna,
+              "padding",
+              0,
+              INT_MIN,
+              INT_MAX,
+              "Frame",
+              "Shrink silent range from each side by number of frames",
+              INT_MIN,
+              INT_MAX);
 }
 
 /** \} */

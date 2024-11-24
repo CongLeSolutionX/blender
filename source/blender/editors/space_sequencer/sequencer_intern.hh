@@ -231,6 +231,7 @@ void SEQUENCER_OT_images_separate(wmOperatorType *ot);
 void SEQUENCER_OT_meta_toggle(wmOperatorType *ot);
 void SEQUENCER_OT_meta_make(wmOperatorType *ot);
 void SEQUENCER_OT_meta_separate(wmOperatorType *ot);
+void SEQUENCER_OT_remove_silence(wmOperatorType *ot);
 
 void SEQUENCER_OT_gap_remove(wmOperatorType *ot);
 void SEQUENCER_OT_gap_insert(wmOperatorType *ot);

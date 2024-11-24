@@ -42,6 +42,7 @@ void sequencer_operatortypes()
   WM_operatortype_append(SEQUENCER_OT_meta_toggle);
   WM_operatortype_append(SEQUENCER_OT_meta_make);
   WM_operatortype_append(SEQUENCER_OT_meta_separate);
+  WM_operatortype_append(SEQUENCER_OT_remove_silence);
 
   WM_operatortype_append(SEQUENCER_OT_gap_remove);
   WM_operatortype_append(SEQUENCER_OT_gap_insert);
