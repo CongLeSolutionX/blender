@@ -6,3 +6,4 @@ Referenced by commit 4e907829d3d2cf7876d5e03d59831d9238951895, Fix #128099: Outl
 Referenced by issue #128099, Outliner toggles of linked collections can be set by ctrl-clicking local collections
 Referenced by issue #130579, Regression: Cannot 'un-isolate' collection when a linked collection is also present
 Referenced by pull request #130604, Fix #130579: Un-isolating collection fails in presence of linked-collection
+Referenced by commit f1812626341d58ce03a5fbcd9edcb0fd356dad90, Fix #130579: Un-isolating collection fails in presence of linked-collection
