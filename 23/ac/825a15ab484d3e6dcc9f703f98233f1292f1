@@ -1,1 +1,2 @@
 Referenced by issue #130848, When the default startup file with more passes is opened, the passes will be displayed incompletely.
+Referenced by issue #130867, macOS: Crash on startup using Overlay-Next
