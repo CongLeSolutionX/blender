@@ -3596,6 +3596,11 @@ static blender::Vector<blender::IndexRange> silent_ranges_get(Scene *scene,
       silence_end = SEQ_time_right_handle_frame_get(scene, seq);
     }
 
+    /* Prevent creating small strip fragments at start of the strip. */
+    if (silence_start - SEQ_time_start_frame_get(seq) < minimum_length) {
+      silence_start = SEQ_time_start_frame_get(seq);
+    }
+
     if (silence_end - silence_start >= minimum_length) {
       blender::IndexRange range{silence_start, silence_end - silence_start};
       silent_frames.append(range);
@@ -3608,6 +3613,7 @@ static blender::Vector<blender::IndexRange> silent_ranges_get(Scene *scene,
 static Sequence *remove_silence_do_split(bContext *C,
                                          Sequence *seq,
                                          blender::IndexRange range,
+                                         blender::Vector<Sequence *> &strips_to_remove,
                                          int *r_silent_len)
 {
   Main *bmain = CTX_data_main(C);
@@ -3616,6 +3622,7 @@ static Sequence *remove_silence_do_split(bContext *C,
   ListBase *seqbase = SEQ_active_seqbase_get(ed);
   Sequence *silent = seq;
   const char *error_msg = nullptr;
+  const int split_end = range.one_after_last();
 
   if (range.first() != SEQ_time_start_frame_get(seq)) {
     silent = SEQ_edit_strip_split(
@@ -3626,13 +3633,19 @@ static Sequence *remove_silence_do_split(bContext *C,
     return nullptr;
   }
 
-  Sequence *next = SEQ_edit_strip_split(
-      bmain, scene, seqbase, silent, range.last(), SEQ_SPLIT_SOFT, &error_msg);
+  strips_to_remove.append(silent);
 
+  /* No need to split. */
+  if (split_end >= SEQ_time_right_handle_frame_get(scene, silent)) {
+    *r_silent_len = SEQ_time_left_handle_frame_get(scene, silent) -
+                    SEQ_time_right_handle_frame_get(scene, silent);
+    return nullptr;
+  }
+
+  Sequence *next = SEQ_edit_strip_split(
+      bmain, scene, seqbase, silent, split_end, SEQ_SPLIT_SOFT, &error_msg);
   *r_silent_len = SEQ_time_left_handle_frame_get(scene, silent) -
                   SEQ_time_right_handle_frame_get(scene, silent);
-  SEQ_edit_flag_for_removal(scene, seqbase, silent);
-
   return next;
 }
 
@@ -3648,8 +3661,7 @@ static int sequencer_remove_silence_exec(bContext *C, wmOperator *op)
   blender::Vector<Sequence *> other_strips = strips.as_span();
   other_strips.remove_if([](Sequence *seq) { return seq->type == SEQ_TYPE_SOUND_RAM; });
 
-  blender::Vector<Sequence *> strips_to_translate;
-  blender::Vector<int> offsets;
+  blender::Vector<Sequence *> strips_to_remove;
   blender::Map<Sequence *, int> strip_to_offset;
   int offset = 0;
 
@@ -3664,16 +3676,17 @@ static int sequencer_remove_silence_exec(bContext *C, wmOperator *op)
       // remove the strip completely?
 
       int silent_length;
-      next = remove_silence_do_split(C, next, range, &silent_length);
-
+      next = remove_silence_do_split(C, next, range, strips_to_remove, &silent_length);
       offset += silent_length;
-      strip_to_offset.add(next, offset);
-      strips_to_translate.append(next);
-      offsets.append(offset);
+
+      if (next != nullptr) {
+        strip_to_offset.add(next, offset);
+      }
 
       /* Split non-sound strips. */
       for (Sequence *other : other_strips) {
-        Sequence *other_next = remove_silence_do_split(C, other, range, &silent_length);
+        Sequence *other_next = remove_silence_do_split(
+            C, other, range, strips_to_remove, &silent_length);
         if (other_next == nullptr) {
           /* Strip likely does not intersect this frame, so use it in next iterations. */
           other_strips_next.append(other);
@@ -3681,26 +3694,22 @@ static int sequencer_remove_silence_exec(bContext *C, wmOperator *op)
         }
         other_strips_next.append(other_next);
         strip_to_offset.add(other_next, offset);
-        strips_to_translate.append(other_next);
-        offsets.append(offset);
       }
       other_strips = other_strips_next;
       other_strips_next = {};
     }
   }
 
+  /* Delete strips. */
+  for (Sequence *seq : strips_to_remove) {
+    SEQ_edit_flag_for_removal(scene, seqbase, seq);
+  }
   SEQ_edit_remove_flagged_sequences(scene, seqbase);
 
   /* Offset strips. */
-  for (int i : strips_to_translate.index_range()) {
-    SEQ_transform_translate_sequence(scene, strips_to_translate[i], offsets[i]);
-  }
-
-  /*
   for (auto item : strip_to_offset.items()) {
     SEQ_transform_translate_sequence(scene, item.key, item.value);
   }
-    */
 
   WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
   return OPERATOR_FINISHED;
