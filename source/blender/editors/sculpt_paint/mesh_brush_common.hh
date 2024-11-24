@@ -152,9 +152,31 @@ void gather_grids_normals(const SubdivCCG &subdiv_ccg,
                           MutableSpan<float3> normals);
 void gather_bmesh_normals(const Set<BMVert *, 0> &verts, MutableSpan<float3> normals);
 
+/**
+ * Common set of mesh attributes used by a majority of brushes when calculating influence.
+ */
+struct MeshAttributeData {
+  /* Point Domain */
+  VArraySpan<float> mask;
+  VArraySpan<bool> hide_vert;
+
+  /* Face Domain */
+  VArraySpan<bool> hide_poly;
+  VArraySpan<int> face_sets;
+
+  explicit MeshAttributeData(const bke::AttributeAccessor &attributes)
+  {
+    this->mask = *attributes.lookup<float>(".sculpt_mask", bke::AttrDomain::Point);
+    this->hide_vert = *attributes.lookup<bool>(".hide_vert", bke::AttrDomain::Point);
+    this->hide_poly = *attributes.lookup<bool>(".hide_poly", bke::AttrDomain::Face);
+    this->face_sets = *attributes.lookup<int>(".sculpt_face_set", bke::AttrDomain::Face);
+  }
+};
+
 void calc_factors_common_mesh(const Depsgraph &depsgraph,
                               const Brush &brush,
                               const Object &object,
+                              const MeshAttributeData &attribute_data,
                               Span<float3> positions,
                               Span<float3> vert_normals,
                               const bke::pbvh::MeshNode &node,
@@ -163,6 +185,7 @@ void calc_factors_common_mesh(const Depsgraph &depsgraph,
 void calc_factors_common_mesh_indexed(const Depsgraph &depsgraph,
                                       const Brush &brush,
                                       const Object &object,
+                                      const MeshAttributeData &attribute_data,
                                       Span<float3> vert_positions,
                                       Span<float3> vert_normals,
                                       const bke::pbvh::MeshNode &node,
@@ -185,6 +208,7 @@ void calc_factors_common_bmesh(const Depsgraph &depsgraph,
 void calc_factors_common_from_orig_data_mesh(const Depsgraph &depsgraph,
                                              const Brush &brush,
                                              const Object &object,
+                                             const MeshAttributeData &attribute_data,
                                              Span<float3> positions,
                                              Span<float3> normals,
                                              const bke::pbvh::MeshNode &node,
@@ -210,7 +234,7 @@ void calc_factors_common_from_orig_data_bmesh(const Depsgraph &depsgraph,
 /**
  * Calculate initial influence factors based on vertex visibility.
  */
-void fill_factor_from_hide(const Mesh &mesh, Span<int> vert_indices, MutableSpan<float> r_factors);
+void fill_factor_from_hide(Span<bool> hide_vert, Span<int> verts, MutableSpan<float> r_factors);
 void fill_factor_from_hide(const SubdivCCG &subdiv_ccg,
                            Span<int> grids,
                            MutableSpan<float> r_factors);
@@ -219,8 +243,9 @@ void fill_factor_from_hide(const Set<BMVert *, 0> &verts, MutableSpan<float> r_f
 /**
  * Calculate initial influence factors based on vertex visibility and masking.
  */
-void fill_factor_from_hide_and_mask(const Mesh &mesh,
-                                    Span<int> vert_indices,
+void fill_factor_from_hide_and_mask(Span<bool> hide_vert,
+                                    Span<float> mask,
+                                    Span<int> verts,
                                     MutableSpan<float> r_factors);
 void fill_factor_from_hide_and_mask(const SubdivCCG &subdiv_ccg,
                                     Span<int> grids,
@@ -384,18 +409,6 @@ void clip_and_lock_translations(const Sculpt &sd,
                                 MutableSpan<float3> translations);
 
 /**
- * Applying final positions to shape keys is non-trivial because the mesh positions and the active
- * shape key positions must be kept in sync, and shape keys dependent on the active key must also
- * be modified.
- */
-void update_shape_keys(Object &object,
-                       const Mesh &mesh,
-                       const KeyBlock &active_key,
-                       Span<int> verts,
-                       Span<float3> translations,
-                       Span<float3> positions_orig);
-
-/**
  * Creates OffsetIndices based on each node's unique vertex count, allowing for easy slicing of a
  * new array.
  */
@@ -411,10 +424,10 @@ OffsetIndices<int> create_node_vert_offsets_bmesh(const Span<bke::pbvh::BMeshNod
                                                   Array<int> &node_data);
 
 /**
- * Find vertices connected to the indexed vertices across faces.
+ * Find vertices connected to the indexed vertices across faces. Neighbors connected across hidden
+ * faces are skipped.
  *
- * Does not handle boundary vertices differently, so this method is generally inappropriate for
- * functions that are related to coordinates. See #calc_vert_neighbors_interior
+ * See #calc_vert_neighbors_interior for a version that does extra filtering for boundary vertices.
  *
  * \note A vector allocated per element is typically not a good strategy for performance because
  * of each vector's 24 byte overhead, non-contiguous memory, and the possibility of further heap
@@ -436,9 +449,10 @@ void calc_vert_neighbors(const SubdivCCG &subdiv_ccg,
 void calc_vert_neighbors(Set<BMVert *, 0> verts, MutableSpan<Vector<BMVert *>> result);
 
 /**
- * Find vertices connected to the indexed vertices across faces. For boundary vertices (stored in
- * the \a boundary_verts argument), only include other boundary vertices. Also skip connectivity
- * across hidden faces and skip neighbors of corner vertices.
+ * Find vertices connected to the indexed vertices across faces. Neighbors connected across hidden
+ * faces are skipped. For boundary vertices (stored in the \a boundary_verts argument), only
+ * include other boundary vertices. Corner vertices are skipped entirely and will not have neighbor
+ * information populated.
  *
  * \note See #calc_vert_neighbors for information on why we use a Vector per element.
  */

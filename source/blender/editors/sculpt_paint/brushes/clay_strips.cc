@@ -10,10 +10,9 @@
 #include "DNA_scene_types.h"
 
 #include "BKE_brush.hh"
-#include "BKE_key.hh"
 #include "BKE_mesh.hh"
 #include "BKE_paint.hh"
-#include "BKE_pbvh.hh"
+#include "BKE_paint_bvh.hh"
 #include "BKE_subdiv_ccg.hh"
 
 #include "BLI_array.hh"
@@ -22,12 +21,13 @@
 #include "BLI_math_matrix.h"
 #include "BLI_math_matrix.hh"
 #include "BLI_math_vector.hh"
-#include "BLI_task.h"
 #include "BLI_task.hh"
 
 #include "editors/sculpt_paint/mesh_brush_common.hh"
 #include "editors/sculpt_paint/sculpt_automask.hh"
 #include "editors/sculpt_paint/sculpt_intern.hh"
+
+#include "bmesh.hh"
 
 namespace blender::ed::sculpt_paint {
 
@@ -40,6 +40,41 @@ struct LocalData {
   Vector<float3> translations;
 };
 
+/**
+ * Applies a linear falloff based on the z distance in brush local space to the factor.
+ *
+ * Note: We may want to provide users the ability to change this falloff in the future, the
+ * important detail is that we reduce the influence of the brush on vertices that are potentially
+ * "deep" inside the cube test area (i.e. on a nearby plane).
+ *
+ * TODO: Depending on if other brushes begin to use the calc_brush_cube_distances, we may want
+ * to consider either inlining this falloff in that method, or making this a commonly accessible
+ * function.
+ */
+BLI_NOINLINE static void apply_z_axis_falloff(const Span<float3> vert_positions,
+                                              const Span<int> verts,
+                                              const float4x4 &mat,
+                                              const MutableSpan<float> factors)
+{
+  BLI_assert(factors.size() == verts.size());
+  for (const int i : factors.index_range()) {
+    const float local_z_distance = math::abs(
+        math::transform_point(mat, vert_positions[verts[i]]).z);
+    factors[i] *= 1 - local_z_distance;
+  }
+}
+
+BLI_NOINLINE static void apply_z_axis_falloff(const Span<float3> positions,
+                                              const float4x4 &mat,
+                                              const MutableSpan<float> factors)
+{
+  BLI_assert(factors.size() == positions.size());
+  for (const int i : factors.index_range()) {
+    const float local_z_distance = math::abs(math::transform_point(mat, positions[i]).z);
+    factors[i] *= 1 - local_z_distance;
+  }
+}
+
 static void calc_faces(const Depsgraph &depsgraph,
                        const Sculpt &sd,
                        const Brush &brush,
@@ -48,6 +83,7 @@ static void calc_faces(const Depsgraph &depsgraph,
                        const float strength,
                        const bool flip,
                        const Span<float3> vert_normals,
+                       const MeshAttributeData &attribute_data,
                        const bke::pbvh::MeshNode &node,
                        Object &object,
                        LocalData &tls,
@@ -55,13 +91,12 @@ static void calc_faces(const Depsgraph &depsgraph,
 {
   SculptSession &ss = *object.sculpt;
   const StrokeCache &cache = *ss.cache;
-  Mesh &mesh = *static_cast<Mesh *>(object.data);
 
   const Span<int> verts = node.verts();
 
   tls.factors.resize(verts.size());
   const MutableSpan<float> factors = tls.factors;
-  fill_factor_from_hide_and_mask(mesh, verts, factors);
+  fill_factor_from_hide_and_mask(attribute_data.hide_vert, attribute_data.mask, verts, factors);
   filter_region_clip_factors(ss, position_data.eval, verts, factors);
   if (brush.flag & BRUSH_FRONTFACE) {
     calc_front_face(cache.view_normal_symm, vert_normals, verts, factors);
@@ -70,6 +105,7 @@ static void calc_faces(const Depsgraph &depsgraph,
   tls.distances.resize(verts.size());
   const MutableSpan<float> distances = tls.distances;
   calc_brush_cube_distances(brush, mat, position_data.eval, verts, distances, factors);
+  apply_z_axis_falloff(position_data.eval, verts, mat, factors);
   filter_distances_with_radius(1.0f, distances, factors);
   apply_hardness_to_distances(1.0f, cache.hardness, distances);
   BKE_brush_calc_curve_factors(
@@ -127,7 +163,9 @@ static void calc_grids(const Depsgraph &depsgraph,
   tls.distances.resize(positions.size());
   const MutableSpan<float> distances = tls.distances;
   calc_brush_cube_distances(brush, mat, positions, distances, factors);
+  apply_z_axis_falloff(positions, mat, factors);
   filter_distances_with_radius(1.0f, distances, factors);
+  apply_hardness_to_distances(1.0f, cache.hardness, distances);
   BKE_brush_calc_curve_factors(
       eBrushCurvePreset(brush.curve_preset), brush.curve, distances, 1.0f, factors);
 
@@ -182,7 +220,9 @@ static void calc_bmesh(const Depsgraph &depsgraph,
   tls.distances.resize(verts.size());
   const MutableSpan<float> distances = tls.distances;
   calc_brush_cube_distances(brush, mat, positions, distances, factors);
+  apply_z_axis_falloff(positions, mat, factors);
   filter_distances_with_radius(1.0f, distances, factors);
+  apply_hardness_to_distances(1.0f, cache.hardness, distances);
   BKE_brush_calc_curve_factors(
       eBrushCurvePreset(brush.curve_preset), brush.curve, distances, 1.0f, factors);
 
@@ -242,21 +282,11 @@ void do_clay_strips_brush(const Depsgraph &depsgraph,
     area_normal = plane_normal;
   }
 
-  /* Clay Strips uses a cube test with falloff in the XY axis (not in Z) and a plane to deform the
-   * vertices. When in Add mode, vertices that are below the plane and inside the cube are moved
-   * towards the plane. In this situation, there may be cases where a vertex is outside the cube
-   * but below the plane, so won't be deformed, causing artifacts. In order to prevent these
-   * artifacts, this displaces the test cube space in relation to the plane in order to
-   * deform more vertices that may be below it. */
-  /* The 0.7 and 1.25 factors are arbitrary and don't have any relation between them, they were set
-   * by doing multiple tests using the default "Clay Strips" brush preset. */
-  const float3 area_position_displaced = area_position + area_normal * -radius * 0.7f;
-
   float4x4 mat = float4x4::identity();
   mat.x_axis() = math::cross(area_normal, ss.cache->grab_delta_symm);
   mat.y_axis() = math::cross(area_normal, float3(mat[0]));
   mat.z_axis() = area_normal;
-  mat.location() = area_position_displaced;
+  mat.location() = area_position;
   mat = math::normalize(mat);
 
   /* Scale brush local space matrix. */
@@ -264,11 +294,6 @@ void do_clay_strips_brush(const Depsgraph &depsgraph,
   float4x4 tmat = mat * scale;
 
   tmat.y_axis() *= brush.tip_scale_x;
-
-  /* Deform the local space in Z to scale the test cube. As the test cube does not have falloff in
-   * Z this does not produce artifacts in the falloff cube and allows to deform extra vertices
-   * during big deformation while keeping the surface as uniform as possible. */
-  tmat.z_axis() *= 1.25f;
 
   mat = math::invert(tmat);
 
@@ -280,8 +305,10 @@ void do_clay_strips_brush(const Depsgraph &depsgraph,
   threading::EnumerableThreadSpecific<LocalData> all_tls;
   switch (pbvh.type()) {
     case bke::pbvh::Type::Mesh: {
+      Mesh &mesh = *static_cast<Mesh *>(object.data);
       MutableSpan<bke::pbvh::MeshNode> nodes = pbvh.nodes<bke::pbvh::MeshNode>();
       const PositionDeformData position_data(depsgraph, object);
+      const MeshAttributeData attribute_data(mesh.attributes());
       const Span<float3> vert_normals = bke::pbvh::vert_normals_eval(depsgraph, object);
       node_mask.foreach_index(GrainSize(1), [&](const int i) {
         LocalData &tls = all_tls.local();
@@ -293,6 +320,7 @@ void do_clay_strips_brush(const Depsgraph &depsgraph,
                    strength,
                    flip,
                    vert_normals,
+                   attribute_data,
                    nodes[i],
                    object,
                    tls,

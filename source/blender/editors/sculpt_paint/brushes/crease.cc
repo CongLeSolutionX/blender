@@ -10,10 +10,9 @@
 #include "DNA_scene_types.h"
 
 #include "BKE_brush.hh"
-#include "BKE_key.hh"
 #include "BKE_mesh.hh"
 #include "BKE_paint.hh"
-#include "BKE_pbvh.hh"
+#include "BKE_paint_bvh.hh"
 #include "BKE_subdiv_ccg.hh"
 
 #include "BLI_array.hh"
@@ -21,12 +20,13 @@
 #include "BLI_math_geom.h"
 #include "BLI_math_matrix.hh"
 #include "BLI_math_vector.hh"
-#include "BLI_task.h"
 #include "BLI_task.hh"
 
 #include "editors/sculpt_paint/mesh_brush_common.hh"
 #include "editors/sculpt_paint/sculpt_automask.hh"
 #include "editors/sculpt_paint/sculpt_intern.hh"
+
+#include "bmesh.hh"
 
 namespace blender::ed::sculpt_paint {
 
@@ -72,6 +72,7 @@ static void calc_faces(const Depsgraph &depsgraph,
                        const Brush &brush,
                        const float3 &offset,
                        const float strength,
+                       const MeshAttributeData &attribute_data,
                        const Span<float3> vert_normals,
                        const bke::pbvh::MeshNode &node,
                        Object &object,
@@ -86,6 +87,7 @@ static void calc_faces(const Depsgraph &depsgraph,
   calc_factors_common_mesh_indexed(depsgraph,
                                    brush,
                                    object,
+                                   attribute_data,
                                    position_data.eval,
                                    vert_normals,
                                    node,
@@ -216,6 +218,8 @@ static void do_crease_or_blob_brush(const Depsgraph &depsgraph,
   threading::EnumerableThreadSpecific<LocalData> all_tls;
   switch (pbvh.type()) {
     case bke::pbvh::Type::Mesh: {
+      const Mesh &mesh = *static_cast<Mesh *>(object.data);
+      const MeshAttributeData attribute_data(mesh.attributes());
       const PositionDeformData position_data(depsgraph, object);
       const Span<float3> vert_normals = bke::pbvh::vert_normals_eval(depsgraph, object);
       MutableSpan<bke::pbvh::MeshNode> nodes = pbvh.nodes<bke::pbvh::MeshNode>();
@@ -226,6 +230,7 @@ static void do_crease_or_blob_brush(const Depsgraph &depsgraph,
                    brush,
                    offset,
                    strength,
+                   attribute_data,
                    vert_normals,
                    nodes[i],
                    object,

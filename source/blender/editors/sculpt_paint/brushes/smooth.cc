@@ -9,10 +9,9 @@
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
-#include "BKE_key.hh"
 #include "BKE_mesh.hh"
 #include "BKE_paint.hh"
-#include "BKE_pbvh.hh"
+#include "BKE_paint_bvh.hh"
 #include "BKE_subdiv_ccg.hh"
 
 #include "BLI_array.hh"
@@ -25,6 +24,8 @@
 #include "editors/sculpt_paint/sculpt_boundary.hh"
 #include "editors/sculpt_paint/sculpt_intern.hh"
 #include "editors/sculpt_paint/sculpt_smooth.hh"
+
+#include "bmesh.hh"
 
 namespace blender::ed::sculpt_paint {
 
@@ -58,6 +59,7 @@ struct LocalData {
 BLI_NOINLINE static void apply_positions_faces(const Depsgraph &depsgraph,
                                                const Sculpt &sd,
                                                const Brush &brush,
+                                               const MeshAttributeData &attribute_data,
                                                const Span<float3> vert_normals,
                                                const bke::pbvh::MeshNode &node,
                                                const float strength,
@@ -73,6 +75,7 @@ BLI_NOINLINE static void apply_positions_faces(const Depsgraph &depsgraph,
   calc_factors_common_mesh_indexed(depsgraph,
                                    brush,
                                    object,
+                                   attribute_data,
                                    position_data.eval,
                                    vert_normals,
                                    node,
@@ -104,8 +107,7 @@ BLI_NOINLINE static void do_smooth_brush_mesh(const Depsgraph &depsgraph,
   const OffsetIndices faces = mesh.faces();
   const Span<int> corner_verts = mesh.corner_verts();
   const GroupedSpan<int> vert_to_face_map = mesh.vert_to_face_map();
-  const bke::AttributeAccessor attributes = mesh.attributes();
-  const VArraySpan hide_poly = *attributes.lookup<bool>(".hide_poly", bke::AttrDomain::Face);
+  const MeshAttributeData attribute_data(mesh.attributes());
 
   const PositionDeformData position_data(depsgraph, object);
   const Span<float3> vert_normals = bke::pbvh::vert_normals_eval(depsgraph, object);
@@ -129,7 +131,7 @@ BLI_NOINLINE static void do_smooth_brush_mesh(const Depsgraph &depsgraph,
                                    corner_verts,
                                    vert_to_face_map,
                                    ss.vertex_info.boundary,
-                                   hide_poly,
+                                   attribute_data.hide_poly,
                                    verts,
                                    tls.vert_neighbors);
       smooth::neighbor_data_average_mesh_check_loose(
@@ -144,6 +146,7 @@ BLI_NOINLINE static void do_smooth_brush_mesh(const Depsgraph &depsgraph,
       apply_positions_faces(depsgraph,
                             sd,
                             brush,
+                            attribute_data,
                             vert_normals,
                             nodes[i],
                             strength,

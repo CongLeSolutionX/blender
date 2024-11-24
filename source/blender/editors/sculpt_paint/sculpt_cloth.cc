@@ -15,6 +15,7 @@
 #include "BLI_math_matrix.hh"
 #include "BLI_math_rotation.h"
 #include "BLI_math_vector.hh"
+#include "BLI_ordered_edge.hh"
 #include "BLI_utildefines.h"
 #include "BLI_vector.hh"
 
@@ -34,7 +35,7 @@
 #include "BKE_mesh.hh"
 #include "BKE_modifier.hh"
 #include "BKE_paint.hh"
-#include "BKE_pbvh_api.hh"
+#include "BKE_paint_bvh.hh"
 #include "BKE_subdiv_ccg.hh"
 
 #include "DEG_depsgraph_query.hh"
@@ -731,6 +732,7 @@ static void calc_forces_mesh(const Depsgraph &depsgraph,
                              const float3 &sim_location,
                              const float3 &gravity,
                              const std::optional<FalloffPlane> &falloff_plane,
+                             const MeshAttributeData &attribute_data,
                              const Span<float3> positions_eval,
                              const Span<float3> vert_normals,
                              const bke::pbvh::MeshNode &node,
@@ -739,7 +741,6 @@ static void calc_forces_mesh(const Depsgraph &depsgraph,
   SculptSession &ss = *ob.sculpt;
   SimulationData &cloth_sim = *ss.cache->cloth_sim;
   const StrokeCache &cache = *ss.cache;
-  const Mesh &mesh = *static_cast<const Mesh *>(ob.data);
 
   const Span<int> verts = node.verts();
   const MutableSpan positions = gather_data_mesh(positions_eval, verts, tls.positions);
@@ -751,7 +752,7 @@ static void calc_forces_mesh(const Depsgraph &depsgraph,
 
   tls.factors.resize(verts.size());
   const MutableSpan<float> factors = tls.factors;
-  fill_factor_from_hide_and_mask(mesh, verts, factors);
+  fill_factor_from_hide_and_mask(attribute_data.hide_vert, attribute_data.mask, verts, factors);
   filter_region_clip_factors(ss, current_positions, factors);
 
   calc_brush_simulation_falloff(brush, cache.radius, sim_location, positions, factors);
@@ -892,7 +893,7 @@ static void calc_forces_grids(const Depsgraph &depsgraph,
   calc_brush_strength_factors(cache, brush, distances, factors);
 
   const auto_mask::Cache *automask = auto_mask::active_cache_get(ss);
-  auto_mask::calc_grids_factors(depsgraph, ob, automask, node, verts, factors);
+  auto_mask::calc_grids_factors(depsgraph, ob, automask, node, grids, factors);
 
   calc_brush_texture_factors(ss, brush, current_positions, factors);
 
@@ -1241,13 +1242,15 @@ static void calc_constraint_factors(const Depsgraph &depsgraph,
   switch (pbvh.type()) {
     case bke::pbvh::Type::Mesh: {
       const Mesh &mesh = *static_cast<const Mesh *>(object.data);
+      const MeshAttributeData attribute_data(mesh.attributes());
       const Span<bke::pbvh::MeshNode> nodes = pbvh.nodes<bke::pbvh::MeshNode>();
       node_mask.foreach_index(GrainSize(1), [&](const int i) {
         LocalData &tls = all_tls.local();
         const Span<int> verts = nodes[i].verts();
         tls.factors.resize(verts.size());
         const MutableSpan<float> factors = tls.factors;
-        fill_factor_from_hide_and_mask(mesh, verts, factors);
+        fill_factor_from_hide_and_mask(
+            attribute_data.hide_vert, attribute_data.mask, verts, factors);
         auto_mask::calc_vert_factors(depsgraph, object, automasking, nodes[i], verts, factors);
         if (ss.cache) {
           const MutableSpan positions = gather_data_mesh(init_positions, verts, tls.positions);
@@ -1400,6 +1403,7 @@ void do_simulation_step(const Depsgraph &depsgraph,
             return cloth_sim.node_state[node_index] == SCULPT_CLOTH_NODE_ACTIVE;
           });
       Mesh &mesh = *static_cast<Mesh *>(object.data);
+      const MeshAttributeData attribute_data(mesh.attributes());
       const PositionDeformData position_data(depsgraph, object);
       active_nodes.foreach_index(GrainSize(1), [&](const int i) {
         LocalData &tls = all_tls.local();
@@ -1407,7 +1411,8 @@ void do_simulation_step(const Depsgraph &depsgraph,
 
         tls.factors.resize(verts.size());
         const MutableSpan<float> factors = tls.factors;
-        fill_factor_from_hide_and_mask(mesh, verts, factors);
+        fill_factor_from_hide_and_mask(
+            attribute_data.hide_vert, attribute_data.mask, verts, factors);
         const auto_mask::Cache *automasking = auto_mask::active_cache_get(ss);
         auto_mask::calc_vert_factors(depsgraph, object, automasking, nodes[i], verts, factors);
 
@@ -1569,6 +1574,8 @@ static void cloth_brush_apply_brush_foces(const Depsgraph &depsgraph,
   threading::EnumerableThreadSpecific<LocalData> all_tls;
   switch (pbvh.type()) {
     case bke::pbvh::Type::Mesh: {
+      const Mesh &mesh = *static_cast<Mesh *>(ob.data);
+      const MeshAttributeData attribute_data(mesh.attributes());
       const Span<float3> positions_eval = bke::pbvh::vert_positions_eval(depsgraph, ob);
       const Span<float3> vert_normals = bke::pbvh::vert_normals_eval(depsgraph, ob);
       MutableSpan<bke::pbvh::MeshNode> nodes = pbvh.nodes<bke::pbvh::MeshNode>();
@@ -1582,6 +1589,7 @@ static void cloth_brush_apply_brush_foces(const Depsgraph &depsgraph,
                          sim_location,
                          gravity,
                          falloff_plane,
+                         attribute_data,
                          positions_eval,
                          vert_normals,
                          nodes[i],
@@ -2033,20 +2041,19 @@ static void apply_filter_forces_mesh(const Depsgraph &depsgraph,
                                      const Span<float3> positions_eval,
                                      const Span<float3> vert_normals,
                                      const GroupedSpan<int> vert_to_face_map,
-                                     const Span<int> face_sets,
+                                     const MeshAttributeData &attribute_data,
                                      const bke::pbvh::MeshNode &node,
                                      Object &object,
                                      FilterLocalData &tls)
 {
   const SculptSession &ss = *object.sculpt;
   SimulationData &cloth_sim = *ss.filter_cache->cloth_sim;
-  const Mesh &mesh = *static_cast<Mesh *>(object.data);
 
   const Span<int> verts = node.verts();
 
   tls.factors.resize(verts.size());
   const MutableSpan<float> factors = tls.factors;
-  fill_factor_from_hide_and_mask(mesh, verts, factors);
+  fill_factor_from_hide_and_mask(attribute_data.hide_vert, attribute_data.mask, verts, factors);
   const auto_mask::Cache *automasking = auto_mask::active_cache_get(ss);
   auto_mask::calc_vert_factors(depsgraph, object, automasking, node, verts, factors);
 
@@ -2054,7 +2061,7 @@ static void apply_filter_forces_mesh(const Depsgraph &depsgraph,
     for (const int i : verts.index_range()) {
       const int vert = verts[i];
       if (!face_set::vert_has_face_set(
-              vert_to_face_map, face_sets, vert, ss.filter_cache->active_face_set))
+              vert_to_face_map, attribute_data.face_sets, vert, ss.filter_cache->active_face_set))
       {
         factors[i] = 0.0f;
       }
@@ -2291,9 +2298,7 @@ static int sculpt_cloth_filter_modal(bContext *C, wmOperator *op, const wmEvent 
       const Span<float3> vert_normals = bke::pbvh::vert_normals_eval(*depsgraph, object);
       const Mesh &mesh = *static_cast<const Mesh *>(object.data);
       const GroupedSpan<int> vert_to_face_map = mesh.vert_to_face_map();
-      const bke::AttributeAccessor attributes = mesh.attributes();
-      const VArraySpan face_sets = *attributes.lookup<int>(".sculpt_face_set",
-                                                           bke::AttrDomain::Face);
+      MeshAttributeData attribute_data(mesh.attributes());
       MutableSpan<bke::pbvh::MeshNode> nodes = pbvh.nodes<bke::pbvh::MeshNode>();
       node_mask.foreach_index(GrainSize(1), [&](const int i) {
         FilterLocalData &tls = all_tls.local();
@@ -2304,7 +2309,7 @@ static int sculpt_cloth_filter_modal(bContext *C, wmOperator *op, const wmEvent 
                                  positions_eval,
                                  vert_normals,
                                  vert_to_face_map,
-                                 face_sets,
+                                 attribute_data,
                                  nodes[i],
                                  object,
                                  tls);
