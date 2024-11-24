@@ -531,6 +531,16 @@ if(UNIX AND NOT APPLE)
   endif()
 endif()
 
+if (APPLE)
+  if (WITH_METAL_BACKEND)
+    list (APPEND SRC
+      intern/GHOST_ContextCGL.mm
+
+      intern/GHOST_ContextCGL.hh
+    )
+  endif()
+endif()
+
 if(APPLE)
   list(APPEND SRC
     intern/GHOST_SystemPathsCocoa.hh
