@@ -60,7 +60,7 @@ class Instance {
   void init(Object *camera_ob = nullptr)
   {
     this->scene_state.init(camera_ob);
-    this->shadow_ps.init(this->scene_state, resources);
+    this->shadow_ps.init(this->scene_state, this->resources);
     this->resources.init(this->scene_state);
 
     this->outline_ps.init(this->scene_state);
