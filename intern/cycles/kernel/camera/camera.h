@@ -238,11 +238,11 @@ ccl_device_inline float3 camera_panorama_direction(ccl_constant KernelCamera *ca
   return panorama_to_direction(cam, Pcamera.x, Pcamera.y);
 }
 
-ccl_device_inline void camera_sample_panorama(KernelGlobals kg,
-                                              ccl_global const DecomposedTransform *cam_motion,
-                                              const float2 raster,
-                                              const float2 rand_lens,
-                                              ccl_private Ray *ray)
+ccl_device_inline float camera_sample_panorama(KernelGlobals kg,
+                                               ccl_global const DecomposedTransform *cam_motion,
+                                               const float2 raster,
+                                               const float2 rand_lens,
+                                               ccl_private Ray *ray)
 {
   ccl_constant KernelCamera *cam = &kernel_data.cam;
 
@@ -250,14 +250,16 @@ ccl_device_inline void camera_sample_panorama(KernelGlobals kg,
 #ifdef __RAY_DIFFERENTIALS__
   float3 Dcenter;
 #endif
+  float T = 1.0f;
 
   if (cam->panorama_type == PANORAMA_SCRIPT) {
     const ProjectionTransform rastertocamera = cam->rastertocamera;
     float3 Pcamera = transform_perspective(&rastertocamera, make_float3(raster.x, raster.y, 0.0f));
     packed_float3 pP, pD;
-    if (osl_eval_camera(kg, Pcamera, rand_lens, pP, pD) == 0.0f) {
+    T = osl_eval_camera(kg, Pcamera, rand_lens, pP, pD);
+    if (T == 0.0f) {
       ray->tmax = 0.0f;
-      return;
+      return 0.0f;
     }
     P = pP;
     D = pD;
@@ -273,7 +275,7 @@ ccl_device_inline void camera_sample_panorama(KernelGlobals kg,
     /* indicates ray should not receive any light, outside of the lens */
     if (is_zero(D)) {
       ray->tmax = 0.0f;
-      return;
+      return 0.0f;
     }
 
     /* modify ray for depth of field */
@@ -362,17 +364,19 @@ ccl_device_inline void camera_sample_panorama(KernelGlobals kg,
   ray->dP += nearclip * ray->dD;
   ray->tmin = 0.0f;
   ray->tmax = cam->cliplength;
+
+  return T;
 }
 
 /* Common */
 
-ccl_device_inline void camera_sample(KernelGlobals kg,
-                                     int x,
-                                     int y,
-                                     const float2 filter_uv,
-                                     const float time,
-                                     const float2 lens_uv,
-                                     ccl_private Ray *ray)
+ccl_device_inline float camera_sample(KernelGlobals kg,
+                                      int x,
+                                      int y,
+                                      const float2 filter_uv,
+                                      const float time,
+                                      const float2 lens_uv,
+                                      ccl_private Ray *ray)
 {
   /* pixel filter */
   int filter_table_offset = kernel_data.tables.filter_table_offset;
@@ -421,13 +425,15 @@ ccl_device_inline void camera_sample(KernelGlobals kg,
   /* sample */
   if (kernel_data.cam.type == CAMERA_PERSPECTIVE) {
     camera_sample_perspective(kg, raster, lens_uv, ray);
+    return 1.0f;
   }
   else if (kernel_data.cam.type == CAMERA_ORTHOGRAPHIC) {
     camera_sample_orthographic(kg, raster, lens_uv, ray);
+    return 1.0f;
   }
   else {
     ccl_global const DecomposedTransform *cam_motion = kernel_data_array(camera_motion);
-    camera_sample_panorama(kg, cam_motion, raster, lens_uv, ray);
+    return camera_sample_panorama(kg, cam_motion, raster, lens_uv, ray);
   }
 }
 
