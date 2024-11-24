@@ -3649,6 +3649,30 @@ static Sequence *remove_silence_do_split(bContext *C,
   return next;
 }
 
+static blender::Vector<Sequence *> remove_silence_do_split_non_sound(
+    bContext *C,
+    blender::Vector<Sequence *> other_strips,
+    blender::IndexRange range,
+    int offset,
+    blender::Map<Sequence *, int> &strip_to_offset,
+    blender::Vector<Sequence *> &strips_to_remove)
+{
+  blender::Vector<Sequence *> other_strips_next;
+  /* Split non-sound strips. */
+  for (Sequence *other : other_strips) {
+    int dummy;
+    Sequence *next = remove_silence_do_split(C, other, range, strips_to_remove, &dummy);
+    if (next == nullptr) {
+      /* Strip likely does not intersect this frame, so use it in next iterations. */
+      other_strips_next.append(other);
+      continue;
+    }
+    other_strips_next.append(next);
+    strip_to_offset.add(next, offset);
+  }
+  return other_strips_next;
+}
+
 static int sequencer_remove_silence_exec(bContext *C, wmOperator *op)
 {
   Scene *scene = CTX_data_scene(C);
@@ -3667,36 +3691,21 @@ static int sequencer_remove_silence_exec(bContext *C, wmOperator *op)
 
   // Assume only sound strips for now
   for (Sequence *seq : sound_strips) {
-    blender::Vector<blender::IndexRange> silent_ranges = silent_ranges_get(scene, seq, op);
-
-    blender::Vector<Sequence *> other_strips_next;
     Sequence *next = seq;
-    for (blender::IndexRange range : silent_ranges) {
-      // Could be, that sound is completely silent. Would be good to skip splitting and just
-      // remove the strip completely?
-
+    for (blender::IndexRange range : silent_ranges_get(scene, seq, op)) {
       int silent_length;
+
+      /* `next` and `other_strips` are set to right side strips after splitting. */
       next = remove_silence_do_split(C, next, range, strips_to_remove, &silent_length);
       offset += silent_length;
+      other_strips = remove_silence_do_split_non_sound(
+          C, other_strips, range, offset, strip_to_offset, strips_to_remove);
 
-      if (next != nullptr) {
-        strip_to_offset.add(next, offset);
+      if (next == nullptr) {
+        continue;
       }
 
-      /* Split non-sound strips. */
-      for (Sequence *other : other_strips) {
-        Sequence *other_next = remove_silence_do_split(
-            C, other, range, strips_to_remove, &silent_length);
-        if (other_next == nullptr) {
-          /* Strip likely does not intersect this frame, so use it in next iterations. */
-          other_strips_next.append(other);
-          continue;
-        }
-        other_strips_next.append(other_next);
-        strip_to_offset.add(other_next, offset);
-      }
-      other_strips = other_strips_next;
-      other_strips_next = {};
+      strip_to_offset.add(next, offset);
     }
   }
 
