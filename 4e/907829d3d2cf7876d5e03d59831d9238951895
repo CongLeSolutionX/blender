@@ -1,2 +1,3 @@
 Referenced by issue #130579, Regression: Cannot 'un-isolate' collection when a linked collection is also present
 Referenced by pull request #130604, Fix #130579: Un-isolating collection fails in presence of linked-collection
+Referenced by commit f1812626341d58ce03a5fbcd9edcb0fd356dad90, Fix #130579: Un-isolating collection fails in presence of linked-collection
