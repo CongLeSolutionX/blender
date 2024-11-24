@@ -1604,8 +1604,8 @@ static void harmonic_coordinates_bind(MeshDeformModifierData *mmd, MeshDeformBin
   mdb->boundisect = static_cast<MDefBoundIsect *(*)[6]>(
       MEM_callocN(sizeof(*mdb->boundisect) * mdb->size3, "MDefBoundIsect"));
   mdb->semibound = static_cast<int *>(MEM_callocN(sizeof(int) * mdb->size3, "MDefSemiBound"));
-  mdb->bvhtree = BKE_bvhtree_from_mesh_get(
-      &mdb->bvhdata, mdb->cagemesh, BVHTREE_FROM_CORNER_TRIS, 4);
+  mdb->bvhdata = mdb->cagemesh->bvh_corner_tris();
+  mdb->bvhtree = mdb->bvhdata.tree;
   mdb->inside = static_cast<int *>(MEM_callocN(sizeof(int) * mdb->verts_num, "MDefInside"));
 
   if (mmd->flag & MOD_MDEF_DYNAMIC_BIND) {

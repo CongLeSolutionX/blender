@@ -539,8 +539,8 @@ static bool PE_create_shape_tree(PEData *data, Object *shapeob)
     return false;
   }
 
-  return (BKE_bvhtree_from_mesh_get(&data->shape_bvh, mesh, BVHTREE_FROM_CORNER_TRIS, 4) !=
-          nullptr);
+  data->shape_bvh = mesh->bvh_corner_tris();
+  return data->shape_bvh.tree != nullptr;
 }
 
 static void PE_free_shape_tree(PEData *data)

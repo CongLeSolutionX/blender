@@ -159,12 +159,10 @@ static void deform_verts(ModifierData *md,
           MEM_callocN(sizeof(BVHTreeFromMesh), __func__));
 
       if (has_face) {
-        BKE_bvhtree_from_mesh_get(
-            surmd->runtime.bvhtree, surmd->runtime.mesh, BVHTREE_FROM_CORNER_TRIS, 2);
+        *surmd->runtime.bvhtree = surmd->runtime.mesh->bvh_corner_tris();
       }
       else if (has_edge) {
-        BKE_bvhtree_from_mesh_get(
-            surmd->runtime.bvhtree, surmd->runtime.mesh, BVHTREE_FROM_EDGES, 2);
+        *surmd->runtime.bvhtree = surmd->runtime.mesh->bvh_edges();
       }
     }
   }

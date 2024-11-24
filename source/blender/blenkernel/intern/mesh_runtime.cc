@@ -41,14 +41,6 @@ static void free_mesh_eval(MeshRuntime &mesh_runtime)
   }
 }
 
-static void free_bvh_cache(MeshRuntime &mesh_runtime)
-{
-  if (mesh_runtime.bvh_cache) {
-    bvhcache_free(mesh_runtime.bvh_cache);
-    mesh_runtime.bvh_cache = nullptr;
-  }
-}
-
 static void free_batch_cache(MeshRuntime &mesh_runtime)
 {
   if (mesh_runtime.batch_cache) {
@@ -62,7 +54,6 @@ MeshRuntime::MeshRuntime() = default;
 MeshRuntime::~MeshRuntime()
 {
   free_mesh_eval(*this);
-  free_bvh_cache(*this);
   free_batch_cache(*this);
 }
 

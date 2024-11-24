@@ -120,8 +120,8 @@ bool BKE_shrinkwrap_init_tree(
   data->sharp_faces = *attributes.lookup<bool>("sharp_face", AttrDomain::Face);
 
   if (shrinkType == MOD_SHRINKWRAP_NEAREST_VERTEX) {
-    data->bvh = BKE_bvhtree_from_mesh_get(&data->treeData, mesh, BVHTREE_FROM_VERTS, 2);
-
+    data->treeData = mesh->bvh_verts();
+    data->bvh = data->treeData.tree;
     return data->bvh != nullptr;
   }
 
@@ -129,7 +129,8 @@ bool BKE_shrinkwrap_init_tree(
     return false;
   }
 
-  data->bvh = BKE_bvhtree_from_mesh_get(&data->treeData, mesh, BVHTREE_FROM_CORNER_TRIS, 4);
+  data->treeData = mesh->bvh_corner_tris();
+  data->bvh = data->treeData.tree;
 
   if (data->bvh == nullptr) {
     return false;

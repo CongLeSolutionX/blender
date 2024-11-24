@@ -133,7 +133,8 @@ class SampleNearestSurfaceFunction : public mf::MultiFunction {
   ~SampleNearestSurfaceFunction()
   {
     for (BVHTreeFromMesh &tree : bvh_trees_) {
-      free_bvhtree_from_mesh(&tree);
+      // TODO: ONLY FREE IF IT'S NOT OWNED BY THE MESH!
+      BLI_bvhtree_free(tree.tree);
     }
   }
 
