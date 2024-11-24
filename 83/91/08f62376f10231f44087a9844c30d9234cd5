@@ -1,2 +1,3 @@
 Referenced by commit fd974775297f902df60599b479e917fdefffa76a, Fix: Incorrect assignment of original edit mesh to evaluated mesh
 Referenced by issue #130811, Crash entering Edit Mode in Grease Pencil Geometry Nodes setup
+Referenced by issue #130842, Adding Curve To Mesh Node Then Switching To Edit Mode Crash Blender
