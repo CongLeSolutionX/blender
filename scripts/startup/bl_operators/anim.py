@@ -370,46 +370,6 @@ class NLA_OT_bake(Operator):
         wm = context.window_manager
         return wm.invoke_props_dialog(self)
 
-    def draw(self, context):
-        layout = self.layout
-        box = layout.box()
-        
-        if self.range_type == 'CUSTOM':
-            split = box.split(factor=0.5, align = True)
-            split.label(text = 'Frame Range :')
-            split.prop(self, 'frame_start', text = '')
-            split.prop(self, 'frame_end', text = '')
-
-        split = box.split(factor=0.5, align = True)
-        split.label(text = 'Range Type :')
-        split.prop(self, 'range_type', text = '')
-
-        split = box.split(factor=0.5, align = True)
-        split.label(text = 'Frame Step :')
-        split.prop(self, 'step', text = '')
-
-        col = layout.column()
-        col.prop(self, 'only_selected')
-        col.prop(self, 'visual_keying')
-        col.prop(self, 'use_current_action')
-        col.prop(self, 'clean_curves')
-        
-        box = layout.box()
-        split = box.split(factor=0.5, align = True)
-        split.prop(self, 'clear_constraints')
-        split.prop(self, 'clear_parents')
-        layout.separator(factor = 0.2)
-
-        box = layout.box()
-        row = box.row()
-        row.label(text = 'Bake Data :')
-        row = box.row()
-        row.prop(self, 'bake_types', text = 'Bake Data')
-
-        layout.separator(factor = 0.2)
-
-        col = layout.column()
-        col.prop_menu_enum(self, 'channel_types')
 
 class ClearUselessActions(Operator):
     """Mark actions with no F-Curves for deletion after save and reload of """ \
