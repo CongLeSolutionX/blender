@@ -2496,6 +2496,7 @@ enum {
   SCE_SELECT_VERTEX = 1 << 0, /* for mesh */
   SCE_SELECT_EDGE = 1 << 1,
   SCE_SELECT_FACE = 1 << 2,
+  SCE_SELECT_CORNER = 1 << 3,
 };
 
 /** #MeshStatVis::type */

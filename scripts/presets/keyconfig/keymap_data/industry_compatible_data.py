@@ -2555,6 +2555,8 @@ def km_object_mode(params):
          {"properties": [("mode", 'EDIT'), ("mesh_select_mode", {'EDGE'})]}),
         ("object.mode_set_with_submode", {"type": 'THREE', "value": 'PRESS'},
          {"properties": [("mode", 'EDIT'), ("mesh_select_mode", {'FACE'})]}),
+        ("object.mode_set_with_submode", {"type": 'FOUR', "value": 'PRESS'},
+         {"properties": [("mode", 'EDIT'), ("mesh_select_mode", {'FACE_CORNER'})]}),
     ])
 
     return keymap

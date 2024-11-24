@@ -157,6 +157,7 @@ const EnumPropertyItem rna_enum_mesh_select_mode_items[] = {
     {SCE_SELECT_VERTEX, "VERT", ICON_VERTEXSEL, "Vertex", "Vertex selection mode"},
     {SCE_SELECT_EDGE, "EDGE", ICON_EDGESEL, "Edge", "Edge selection mode"},
     {SCE_SELECT_FACE, "FACE", ICON_FACESEL, "Face", "Face selection mode"},
+    {SCE_SELECT_CORNER, "FACE_CORNER", ICON_FACE_CORNER, "Face Corner", "Face Corner selection mode"},
     {0, nullptr, 0, nullptr, nullptr},
 };
 

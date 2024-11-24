@@ -51,7 +51,7 @@ struct BMEditMesh {
    */
   blender::Array<std::array<BMLoop *, 3>> looptris;
 
-  /** Selection mode (#SCE_SELECT_VERTEX, #SCE_SELECT_EDGE & #SCE_SELECT_FACE). */
+  /** Selection mode (#SCE_SELECT_VERTEX, #SCE_SELECT_EDGE , #SCE_SELECT_FACE & #SCE_SELECT_CORNER). */
   short selectmode;
   /** The active material (assigned to newly created faces). */
   short mat_nr;

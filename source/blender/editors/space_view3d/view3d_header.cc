@@ -113,6 +113,15 @@ void uiTemplateEditModeSelection(uiLayout *layout, bContext *C)
                   (em->selectmode & SCE_SELECT_FACE) ? UI_ITEM_O_DEPRESS : UI_ITEM_NONE,
                   &op_ptr);
   RNA_enum_set(&op_ptr, "type", SCE_SELECT_FACE);
+  uiItemFullO_ptr(row,
+                  ot,
+                  "",
+                  ICON_FACE_CORNER,
+                  nullptr,
+                  WM_OP_INVOKE_DEFAULT,
+                  (em->selectmode & SCE_SELECT_CORNER) ? UI_ITEM_O_DEPRESS : UI_ITEM_NONE,
+                  &op_ptr);
+  RNA_enum_set(&op_ptr, "type", SCE_SELECT_CORNER);
 }
 
 static void uiTemplatePaintModeSelection(uiLayout *layout, bContext *C)

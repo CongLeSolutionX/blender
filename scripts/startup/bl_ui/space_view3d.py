@@ -1828,7 +1828,7 @@ class VIEW3D_MT_edit_mesh_select_by_trait(Menu):
 
     def draw(self, context):
         layout = self.layout
-        _is_vert_mode, _is_edge_mode, is_face_mode = context.tool_settings.mesh_select_mode
+        _is_vert_mode, _is_edge_mode, is_face_mode, is_face_corner_mode = context.tool_settings.mesh_select_mode
 
         if is_face_mode is False:
             layout.operator("mesh.select_non_manifold", text="Non Manifold")
@@ -4414,7 +4414,7 @@ class VIEW3D_MT_edit_mesh_context_menu(Menu):
                 selected_faces_len += f
             return (selected_verts_len, selected_edges_len, selected_faces_len)
 
-        is_vert_mode, is_edge_mode, is_face_mode = context.tool_settings.mesh_select_mode
+        is_vert_mode, is_edge_mode, is_face_mode, is_face_corner_mode = context.tool_settings.mesh_select_mode
         selected_verts_len, selected_edges_len, selected_faces_len = count_selected_items_for_objects_in_mode()
 
         del count_selected_items_for_objects_in_mode
@@ -4605,6 +4605,52 @@ class VIEW3D_MT_edit_mesh_context_menu(Menu):
             col.operator_menu_enum("mesh.separate", "type")
             col.operator("mesh.dissolve_faces")
             col.operator("mesh.delete", text="Delete Faces").type = 'FACE'
+        
+        if is_face_corner_mode:
+            col = row.column(align=True)
+
+            col.label(text="Face", icon='FACE_CORNER')
+            col.separator()
+
+            # Additive Operators
+            col.operator("mesh.subdivide", text="Subdivide")
+
+            col.separator()
+
+            col.operator("view3d.edit_mesh_extrude_move_normal", text="Extrude Faces")
+            col.operator("view3d.edit_mesh_extrude_move_shrink_fatten", text="Extrude Faces Along Normals")
+            col.operator("mesh.extrude_faces_move", text="Extrude Individual Faces")
+
+            col.operator("mesh.inset")
+            col.operator("mesh.poke")
+
+            if selected_faces_len >= 2:
+                col.operator("mesh.bridge_edge_loops", text="Bridge Faces")
+
+            col.separator()
+
+            # Modify Operators
+            col.menu("VIEW3D_MT_uv_map", text="UV Unwrap Faces")
+
+            col.separator()
+
+            props = col.operator("mesh.quads_convert_to_tris")
+            props.quad_method = props.ngon_method = 'BEAUTY'
+            col.operator("mesh.tris_convert_to_quads")
+
+            col.separator()
+
+            col.operator("mesh.faces_shade_smooth")
+            col.operator("mesh.faces_shade_flat")
+
+            col.separator()
+
+            # Removal Operators
+            col.operator("mesh.unsubdivide")
+            col.operator("mesh.split")
+            col.operator_menu_enum("mesh.separate", "type")
+            col.operator("mesh.dissolve_faces")
+            col.operator("mesh.delete", text="Delete Faces").type = 'FACE'
 
 
 class VIEW3D_MT_edit_mesh_select_mode(Menu):
@@ -4617,6 +4663,7 @@ class VIEW3D_MT_edit_mesh_select_mode(Menu):
         layout.operator("mesh.select_mode", text="Vertex", icon='VERTEXSEL').type = 'VERT'
         layout.operator("mesh.select_mode", text="Edge", icon='EDGESEL').type = 'EDGE'
         layout.operator("mesh.select_mode", text="Face", icon='FACESEL').type = 'FACE'
+        layout.operator("mesh.select_mode", text="Corner", icon='FACE_CORNER').type = 'FACE_CORNER'
 
 
 class VIEW3D_MT_edit_mesh_extrude(Menu):

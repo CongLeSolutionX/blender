@@ -496,7 +496,7 @@ def _template_items_editmode_mesh_select_mode(params):
             )
             for key_expand, prop_expand in (({}, ()), ({"ctrl": True}, (("use_expand", True),)))
             for key_extend, prop_extend in (({}, ()), ({"shift": True}, (("use_extend", True),)))
-            for i, e in enumerate(('VERT', 'EDGE', 'FACE'))
+            for i, e in enumerate(('VERT', 'EDGE', 'FACE', 'FACE_CORNER'))
         ]
 
 
@@ -514,7 +514,7 @@ def _template_items_uv_select_mode(params):
 
             *_template_items_editmode_mesh_select_mode(params),
             # Hack to prevent fall-through, when sync select isn't enabled (and the island button isn't visible).
-            ("mesh.select_mode", {"type": 'FOUR', "value": 'PRESS'}, None),
+            ("mesh.select_mode", {"type": 'FIVE', "value": 'PRESS'}, None),
             *(("uv.select_mode", {"type": NUMBERS_1[i], "value": 'PRESS'},
                {"properties": [("type", e)]})
               for i, e in enumerate(('VERTEX', 'EDGE', 'FACE', 'ISLAND')))

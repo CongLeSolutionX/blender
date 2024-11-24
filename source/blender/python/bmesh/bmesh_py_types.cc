@@ -51,6 +51,7 @@ PyC_FlagSet bpy_bm_scene_vert_edge_face_flags[] = {
     {1, "VERT"},
     {2, "EDGE"},
     {4, "FACE"},
+    {5, "FACE_CORNER"},
     {0, nullptr},
 };
 
@@ -334,7 +335,7 @@ static PyObject *bpy_bmesh_is_wrapped_get(BPy_BMesh *self, void * /*closure*/)
 PyDoc_STRVAR(
     /* Wrap. */
     bpy_bmesh_select_mode_doc,
-    "The selection mode, values can be {'VERT', 'EDGE', 'FACE'}, can't be assigned an empty set.\n"
+    "The selection mode, values can be {'VERT', 'EDGE', 'FACE', 'FACE_CORNER'}, can't be assigned an empty set.\n"
     "\n"
     ":type: set");
 static PyObject *bpy_bmesh_select_mode_get(BPy_BMesh *self, void * /*closure*/)
