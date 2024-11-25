@@ -225,7 +225,7 @@ void VKFrameBuffer::clear(const eGPUFrameBufferBits buffers,
       needed_mask |= GPU_WRITE_STENCIL;
     }
 
-    /* Clearing depth via vkCmdClearAttachments requires a render pass with write depth or stencil
+    /* Clearing depth via #vkCmdClearAttachments requires a render pass with write depth or stencil
      * enabled. When not enabled, clearing should be done via texture directly. */
     /* WORKAROUND: Clearing depth attachment when using dynamic rendering are not working on AMD
      * official drivers.
@@ -594,9 +594,6 @@ void VKFrameBuffer::rendering_ensure_render_pass(VKContext &context)
     }
     VKTexture &color_texture = *unwrap(unwrap(attachment.tex));
     GPUAttachmentState attachment_state = attachment_states_[color_attachment_index];
-    VkImageView vk_image_view = VK_NULL_HANDLE;
-    VkImageLayout vk_image_layout = VK_IMAGE_LAYOUT_UNDEFINED;
-    uint32_t attachment_reference = VK_ATTACHMENT_UNUSED;
     uint32_t layer_base = max_ii(attachment.layer, 0);
     int layer_count = color_texture.layer_count();
     if (attachment.layer == -1 && layer_count != 1) {
@@ -612,23 +609,23 @@ void VKFrameBuffer::rendering_ensure_render_pass(VKContext &context)
         false,
         srgb_ && enabled_srgb_,
         VKImageViewArrayed::DONT_CARE};
-    vk_image_view = color_texture.image_view_get(image_view_info).vk_handle();
+    const VKImageView &image_view = color_texture.image_view_get(image_view_info);
     // TODO: Use VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL for readonly attachments.
-    vk_image_layout = (attachment_state == GPU_ATTACHMENT_READ) ?
-                          VK_IMAGE_LAYOUT_GENERAL :
-                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    attachment_reference = color_attachment_index - GPU_FB_COLOR_ATTACHMENT0;
+    VkImageLayout vk_image_layout = (attachment_state == GPU_ATTACHMENT_READ) ?
+                                        VK_IMAGE_LAYOUT_GENERAL :
+                                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    uint32_t attachment_reference = color_attachment_index - GPU_FB_COLOR_ATTACHMENT0;
     /* Depth attachment should always be right after the last color attachment. If not shaders
-     * cannot be reused between framebuffers with and without depth/stencil attachment*/
+     * cannot be reused between frame-buffers with and without depth/stencil attachment. */
     depth_attachment_reference.attachment = attachment_reference + 1;
 
     VkAttachmentDescription vk_attachment_description = {};
-    vk_attachment_description.format = to_vk_format(color_texture.device_format_get());
+    vk_attachment_description.format = image_view.vk_format();
     vk_attachment_description.samples = VK_SAMPLE_COUNT_1_BIT;
     vk_attachment_description.initialLayout = vk_image_layout;
     vk_attachment_description.finalLayout = vk_image_layout;
     vk_attachment_descriptions.append(std::move(vk_attachment_description));
-    vk_image_views.append(vk_image_view);
+    vk_image_views.append(image_view.vk_handle());
 
     switch (attachment_state) {
       case GPU_ATTACHMENT_WRITE: {
@@ -716,7 +713,7 @@ void VKFrameBuffer::rendering_ensure_render_pass(VKContext &context)
     }
   }
 
-  /* Subpass description */
+  /* Sub-pass description. */
   VkSubpassDescription vk_subpass_description = {};
   vk_subpass_description.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
   vk_subpass_description.colorAttachmentCount = color_attachments.size();
@@ -728,7 +725,7 @@ void VKFrameBuffer::rendering_ensure_render_pass(VKContext &context)
   }
 
   VKDevice &device = VKBackend::get().device;
-  /* Renderpass create info */
+  /* Render-pass create info. */
   VkRenderPassCreateInfo vk_render_pass_create_info = {};
   vk_render_pass_create_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
   vk_render_pass_create_info.subpassCount = 1;
@@ -760,13 +757,14 @@ void VKFrameBuffer::rendering_ensure_render_pass(VKContext &context)
 
   context.render_graph.add_node(begin_rendering);
 
-  /* Load store operations are not supported inside a render pass. It requires duplicating render
-   * passes and framebuffers to support suspend/resume rendering. After suspension all the graphics
-   * pipelines needs to be created using the resume handles. Due to command reordering it is
-   * unclear when this switch needs to be made and would require to double the graphics pipelines.
+  /* Load store operations are not supported inside a render pass.
+   * It requires duplicating render passes and frame-buffers to support suspend/resume rendering.
+   * After suspension all the graphics pipelines needs to be created using the resume handles.
+   * Due to command reordering it is unclear when this switch needs to be made and would require
+   * to double the graphics pipelines.
    *
    * This all adds a lot of complexity just to support clearing ops on legacy platforms. An easier
-   * solution is to use vkCmdClearAttachments right after the begin rendering.
+   * solution is to use #vkCmdClearAttachments right after the begin rendering.
    */
   if (use_explicit_load_store_) {
     render_graph::VKClearAttachmentsNode::CreateInfo clear_attachments = {};
@@ -834,6 +832,7 @@ void VKFrameBuffer::rendering_ensure_dynamic_rendering(VKContext &context,
     VkImageView vk_image_view = VK_NULL_HANDLE;
     uint32_t layer_base = max_ii(attachment.layer, 0);
     GPUAttachmentState attachment_state = attachment_states_[color_attachment_index];
+    VkFormat vk_format = to_vk_format(color_texture.device_format_get());
     if (attachment_state == GPU_ATTACHMENT_WRITE) {
       VKImageViewInfo image_view_info = {
           eImageViewUsage::Attachment,
@@ -844,7 +843,9 @@ void VKFrameBuffer::rendering_ensure_dynamic_rendering(VKContext &context,
           false,
           srgb_ && enabled_srgb_,
           VKImageViewArrayed::DONT_CARE};
-      vk_image_view = color_texture.image_view_get(image_view_info).vk_handle();
+      const VKImageView &image_view = color_texture.image_view_get(image_view_info);
+      vk_image_view = image_view.vk_handle();
+      vk_format = image_view.vk_format();
     }
     attachment_info.imageView = vk_image_view;
     attachment_info.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
@@ -858,7 +859,7 @@ void VKFrameBuffer::rendering_ensure_dynamic_rendering(VKContext &context,
     color_attachment_formats_.append(
         (workarounds.dynamic_rendering_unused_attachments && vk_image_view == VK_NULL_HANDLE) ?
             VK_FORMAT_UNDEFINED :
-            to_vk_format(color_texture.device_format_get()));
+            vk_format);
 
     begin_rendering.node_data.vk_rendering_info.pColorAttachments =
         begin_rendering.node_data.color_attachments;

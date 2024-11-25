@@ -360,7 +360,8 @@ static int grease_pencil_sculpt_paint_invoke(bContext *C, wmOperator *op, const 
    * the previous key. */
   const bool use_duplicate_previous_key = true;
   for (bke::greasepencil::Layer *layer : grease_pencil.layers_for_write()) {
-    if (ed::greasepencil::ensure_active_keyframe(
+    if (layer->is_editable() &&
+        ed::greasepencil::ensure_active_keyframe(
             *scene, grease_pencil, *layer, use_duplicate_previous_key, inserted_keyframe))
     {
       inserted_keyframe = true;
@@ -1151,12 +1152,12 @@ static void grease_pencil_fill_update_overlay(const ARegion &region,
   if (needs_overlay) {
     if (op_data.overlay_cb_handle == nullptr) {
       op_data.overlay_cb_handle = ED_region_draw_cb_activate(
-          region.type, grease_pencil_fill_overlay_cb, &op_data, REGION_DRAW_POST_VIEW);
+          region.runtime->type, grease_pencil_fill_overlay_cb, &op_data, REGION_DRAW_POST_VIEW);
     }
   }
   else {
     if (op_data.overlay_cb_handle) {
-      ED_region_draw_cb_exit(region.type, op_data.overlay_cb_handle);
+      ED_region_draw_cb_exit(region.runtime->type, op_data.overlay_cb_handle);
       op_data.overlay_cb_handle = nullptr;
     }
   }
@@ -1507,7 +1508,7 @@ static void grease_pencil_fill_exit(bContext &C, wmOperator &op)
     auto &op_data = *static_cast<GreasePencilFillOpData *>(op.customdata);
 
     if (op_data.overlay_cb_handle) {
-      ED_region_draw_cb_exit(region.type, op_data.overlay_cb_handle);
+      ED_region_draw_cb_exit(region.runtime->type, op_data.overlay_cb_handle);
       op_data.overlay_cb_handle = nullptr;
     }
 

@@ -550,7 +550,7 @@ static std::unique_ptr<uiTooltipData> ui_tooltip_data_from_tool(bContext *C,
                                 {},
                                 UI_TIP_STYLE_NORMAL,
                                 (is_error) ? UI_TIP_LC_ALERT : UI_TIP_LC_MAIN,
-                                true);
+                                false);
       MEM_freeN(expr_result);
     }
   }
@@ -1246,7 +1246,7 @@ static ARegion *ui_tooltip_create_with_data(bContext *C,
   type.draw = ui_tooltip_region_draw_cb;
   type.free = ui_tooltip_region_free_cb;
   type.regionid = RGN_TYPE_TEMPORARY;
-  region->type = &type;
+  region->runtime->type = &type;
   /* Move ownership to region data. The region type free callback puts it back into a unique
    * pointer for save freeing. */
   region->regiondata = data_uptr.release();
