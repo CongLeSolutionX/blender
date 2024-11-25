@@ -3575,17 +3575,14 @@ static blender::VectorSet<blender::int2> silent_ranges_get(Scene *scene,
   const float samples_per_frame = SOUND_WAVE_SAMPLES_PER_SECOND / FPS;
   const int padding = RNA_int_get(op->ptr, "padding");
   const int minimum_length = RNA_int_get(op->ptr, "minimum_length");
+  const int strip_start_frame = SEQ_time_left_handle_frame_get(scene, seq);
+  const int strip_end_frame = SEQ_time_right_handle_frame_get(scene, seq);
+  const int end_sample = (strip_end_frame - SEQ_time_start_frame_get(seq)) * samples_per_frame;
 
-  const int seq_start_index = SEQ_time_left_handle_frame_get(scene, seq) -
-                              SEQ_time_start_frame_get(seq);
-  const int seq_end_index = SEQ_time_right_handle_frame_get(scene, seq) -
-                            SEQ_time_start_frame_get(seq);
-  const int end_sample = seq_end_index * samples_per_frame;
+  int silent_sample = 0;
+  int loud_sample = (strip_start_frame - SEQ_time_start_frame_get(seq)) * samples_per_frame;
+
   blender::VectorSet<blender::int2> silent_frames;
-
-  int silent_sample = seq_start_index * samples_per_frame;
-  int loud_sample = 0;
-
   while (silent_sample < wf->length && loud_sample < wf->length && loud_sample <= end_sample) {
     silent_sample = find_next_sample(wf, loud_sample, SILENT, op);
     // produces incorrect num at the end
@@ -3601,18 +3598,21 @@ static blender::VectorSet<blender::int2> silent_ranges_get(Scene *scene,
     }
     else {
       /* Snap end to real strip end rather than calculated one. */
-      silence_end = SEQ_time_right_handle_frame_get(scene, seq);
+      silence_end = strip_end_frame;
     }
 
     /* Prevent creating small strip fragments at start of the strip. */
-    if (silence_start - SEQ_time_left_handle_frame_get(scene, seq) < minimum_length) {
-      silence_start = SEQ_time_left_handle_frame_get(scene, seq);
+    if (silence_start - strip_start_frame < minimum_length) {
+      silence_start = strip_start_frame;
     }
 
-    if (silence_end - silence_start >= minimum_length) {
-      blender::int2 range = {silence_start, silence_end};
-      silent_frames.add(range);
+    silence_start = std::clamp(silence_start, strip_start_frame, strip_end_frame);
+    silence_end = std::clamp(silence_end, strip_start_frame, strip_end_frame);
+
+    if (silence_end - silence_start < minimum_length) {
+      continue;
     }
+    silent_frames.add({silence_start, silence_end});
   }
 
   return silent_frames;
@@ -3695,9 +3695,7 @@ static int sequencer_remove_silence_exec(bContext *C, wmOperator *op)
   for (blender::int2 range : silent_ranges) {
     for (int i = 0; i < strips.size(); i++) {
       Sequence *seq = strips[i];
-
-      int offset = strip_to_offset.lookup_default(seq, 0);
-
+      const int offset = strip_to_offset.lookup_default(seq, 0);
       RemoveSilenceResult result = remove_silence_do_split(C, seq, range);
 
       // xxx
@@ -3712,16 +3710,14 @@ static int sequencer_remove_silence_exec(bContext *C, wmOperator *op)
                      SEQ_time_right_handle_frame_get(scene, result.silent);
       }
 
-      strip_to_offset.remove(result.silent);
-      strips_to_remove.append(result.silent);
+      strips_to_remove.append(
+          result.silent); /* Since strip has been split, add new one to vector. */
 
-      if (result.right == nullptr) {
-        continue;
+      if (result.right != nullptr) {
+        strip_to_offset.add_overwrite(result.right, offset);  // only add!
+        /* Since strip has been split, add new one to vector. */
+        strips.add(result.right);
       }
-      strip_to_offset.add_overwrite(result.right, offset);
-
-      /* Since strip has been split, add new one to vector. */
-      strips.add(result.right);
     }
 
     /* Process offset for strips to the right of silent range. */
@@ -3743,6 +3739,8 @@ static int sequencer_remove_silence_exec(bContext *C, wmOperator *op)
 
   /* Delete strips. */
   for (Sequence *seq : strips_to_remove) {
+    /* To effectively prevent use after free, filter out removed strips from `strip_to_offset`. */
+    strip_to_offset.remove(seq);
     SEQ_edit_flag_for_removal(scene, seqbase, seq);
     // seq->color_tag = SEQUENCE_COLOR_01;
   }
