@@ -183,6 +183,13 @@ void OSLManager::device_update_post(Device *device,
       og->use_camera = true;
     });
   }
+  else {
+    device->foreach_device([this, scene](Device *sub_device) {
+      OSLGlobals *og = (OSLGlobals *)sub_device->get_cpu_osl_memory();
+      og->camera_state.reset();
+      og->use_camera = false;
+    });
+  }
 
   /* setup shader engine */
   device->foreach_device([](Device *sub_device) {
