@@ -128,22 +128,23 @@ void Instance::begin_sync()
   auto begin_sync_layer = [&](OverlayLayer &layer) {
     layer.armatures.begin_sync(resources, state);
     layer.attribute_viewer.begin_sync(resources, state);
+    layer.attribute_texts.begin_sync(resources, state);
     layer.axes.begin_sync(resources, state);
     layer.bounds.begin_sync(resources, state);
-    layer.cameras.begin_sync(resources, state, view);
-    layer.curves.begin_sync(resources, state, view);
+    layer.cameras.begin_sync(resources, state);
+    layer.curves.begin_sync(resources, state);
     layer.edit_text.begin_sync(resources, state);
-    layer.empties.begin_sync(resources, state, view);
+    layer.empties.begin_sync(resources, state);
     layer.facing.begin_sync(resources, state);
     layer.fade.begin_sync(resources, state);
     layer.force_fields.begin_sync(resources, state);
     layer.fluids.begin_sync(resources, state);
-    layer.grease_pencil.begin_sync(resources, state, view);
+    layer.grease_pencil.begin_sync(resources, state);
     layer.lattices.begin_sync(resources, state);
     layer.lights.begin_sync(resources, state);
     layer.light_probes.begin_sync(resources, state);
     layer.metaballs.begin_sync(resources, state);
-    layer.meshes.begin_sync(resources, state, view);
+    layer.meshes.begin_sync(resources, state);
     layer.mesh_uvs.begin_sync(resources, state);
     layer.mode_transfer.begin_sync(resources, state);
     layer.names.begin_sync(resources, state);
@@ -158,7 +159,7 @@ void Instance::begin_sync()
   begin_sync_layer(regular);
   begin_sync_layer(infront);
 
-  grid.begin_sync(resources, shapes, state, view);
+  grid.begin_sync(resources, state);
 
   anti_aliasing.begin_sync(resources, state);
   xray_fade.begin_sync(resources, state);
@@ -191,7 +192,7 @@ void Instance::object_sync(ObjectRef &ob_ref, Manager &manager)
       case OB_MESH:
         /* TODO(fclem): Make it part of a #Meshes. */
         layer.paints.object_sync(manager, ob_ref, resources, state);
-        /* For wireframes. */
+        /* For wire-frames. */
         layer.mesh_uvs.edit_object_sync(manager, ob_ref, resources, state);
         break;
       case OB_GREASE_PENCIL:
@@ -249,16 +250,16 @@ void Instance::object_sync(ObjectRef &ob_ref, Manager &manager)
   }
 
   if (state.is_wireframe_mode || !state.hide_overlays) {
-    layer.wireframe.object_sync(manager, ob_ref, resources, state, in_edit_paint_mode);
+    layer.wireframe.object_sync_ex(manager, ob_ref, resources, state, in_edit_paint_mode);
   }
 
   if (!state.hide_overlays) {
     switch (ob_ref.object->type) {
       case OB_EMPTY:
-        layer.empties.object_sync(ob_ref, shapes, manager, resources, state);
+        layer.empties.object_sync_ex(ob_ref, shapes, manager, resources, state);
         break;
       case OB_CAMERA:
-        layer.cameras.object_sync(ob_ref, shapes, manager, resources, state);
+        layer.cameras.object_sync_ex(ob_ref, shapes, manager, resources, state);
         break;
       case OB_ARMATURE:
         if (!in_edit_mode) {
@@ -289,6 +290,7 @@ void Instance::object_sync(ObjectRef &ob_ref, Manager &manager)
         break;
     }
     layer.attribute_viewer.object_sync(manager, ob_ref, resources, state);
+    layer.attribute_texts.object_sync(manager, ob_ref, resources, state);
     layer.bounds.object_sync(manager, ob_ref, resources, state);
     layer.facing.object_sync(manager, ob_ref, resources, state);
     layer.fade.object_sync(manager, ob_ref, resources, state);
@@ -353,6 +355,16 @@ void Instance::draw(Manager &manager)
   /* TODO(fclem): Remove global access. */
   view.sync(DRW_view_default_get());
 
+  static gpu::DebugScope select_scope = {"Selection"};
+  static gpu::DebugScope draw_scope = {"Overlay"};
+
+  if (resources.is_selection()) {
+    select_scope.begin_capture();
+  }
+  else {
+    draw_scope.begin_capture();
+  }
+
   /* Pre-Draw: Run the compute steps of all passes up-front
    * to avoid constant GPU compute/raster context switching. */
   {
@@ -373,7 +385,9 @@ void Instance::draw(Manager &manager)
 
     pre_draw(regular);
     pre_draw(infront);
-    outline.pre_draw(manager, view);
+    outline.pre_draw_ex(manager, view, resources, state);
+
+    GreasePencil::compute_depth_planes(manager, view, resources, state);
   }
 
   resources.depth_tx.wrap(DRW_viewport_texture_list_get()->depth);
@@ -452,16 +466,6 @@ void Instance::draw(Manager &manager)
                                          GPUAttachment GPU_ATTACHMENT_NONE,
                                      GPU_ATTACHMENT_TEXTURE(resources.color_overlay_tx));
 
-  static gpu::DebugScope select_scope = {"Selection"};
-  static gpu::DebugScope draw_scope = {"Overlay"};
-
-  if (resources.is_selection()) {
-    select_scope.begin_capture();
-  }
-  else {
-    draw_scope.begin_capture();
-  }
-
   /* TODO(fclem): Would be better to have a v2d overlay class instead of these conditions. */
   switch (state.space_type) {
     case SPACE_NODE:
@@ -529,7 +533,7 @@ void Instance::draw_v3d(Manager &manager, View &view)
 
   auto draw_line = [&](OverlayLayer &layer, Framebuffer &framebuffer) {
     layer.bounds.draw_line(framebuffer, manager, view);
-    layer.wireframe.draw_line(framebuffer, resources, manager, view);
+    layer.wireframe.draw_line_ex(framebuffer, resources, manager, view);
     layer.cameras.draw_line(framebuffer, manager, view);
     layer.empties.draw_line(framebuffer, manager, view);
     layer.axes.draw_line(framebuffer, manager, view);
@@ -593,7 +597,7 @@ void Instance::draw_v3d(Manager &manager, View &view)
   }
   {
     /* Line only pass. */
-    outline.draw_line_only(resources.overlay_line_only_fb, resources, manager, view);
+    outline.draw_line_only_ex(resources.overlay_line_only_fb, resources, manager, view);
   }
   {
     /* Overlay (+Line) pass. */

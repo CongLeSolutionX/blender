@@ -11,6 +11,11 @@
 #include "overlay_next_base.hh"
 
 namespace blender::draw::overlay {
+
+/**
+ * Display object origins as dots.
+ * The option can be found under (Viewport Overlays > Objects > Origins).
+ */
 class Origins : Overlay {
  private:
   StorageVectorBuffer<VertexData> point_buf_;
@@ -75,7 +80,7 @@ class Origins : Overlay {
     ps_.init();
     ps_.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ALPHA, state.clipping_plane_count);
     ps_.shader_set(res.shaders.extra_point.get());
-    ps_.bind_ubo("globalsBlock", &res.globals_buf);
+    ps_.bind_ubo(OVERLAY_GLOBALS_SLOT, &res.globals_buf);
     select_buf_.select_bind(ps_);
     point_buf_.push_update();
     ps_.bind_ssbo("data_buf", &point_buf_);

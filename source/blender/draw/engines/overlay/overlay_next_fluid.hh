@@ -17,6 +17,9 @@
 
 namespace blender::draw::overlay {
 
+/**
+ * Draw fluid simulation overlays (water, smoke).
+ */
 class Fluids : Overlay {
  private:
   const SelectionType selection_type_;
@@ -233,7 +236,7 @@ class Fluids : Overlay {
   void end_sync(Resources &res, const ShapeCache &shapes, const State & /*state*/) final
   {
     fluid_ps_.shader_set(res.shaders.extra_shape.get());
-    fluid_ps_.bind_ubo("globalsBlock", &res.globals_buf);
+    fluid_ps_.bind_ubo(OVERLAY_GLOBALS_SLOT, &res.globals_buf);
 
     cube_buf_.end_sync(fluid_ps_, shapes.cube.get());
   }

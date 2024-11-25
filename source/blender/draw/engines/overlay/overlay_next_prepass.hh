@@ -4,9 +4,6 @@
 
 /** \file
  * \ingroup overlay
- *
- * A depth pass that write surface depth when it is needed.
- * It is also used for selecting non overlay-only objects.
  */
 
 #pragma once
@@ -23,18 +20,21 @@
 
 namespace blender::draw::overlay {
 
+/**
+ * A depth pass that write surface depth when it is needed.
+ * It is also used for selecting non overlay-only objects.
+ */
 class Prepass : Overlay {
  private:
   PassMain ps_ = {"prepass"};
   PassMain::Sub *mesh_ps_ = nullptr;
+  PassMain::Sub *mesh_flat_ps_ = nullptr;
   PassMain::Sub *hair_ps_ = nullptr;
   PassMain::Sub *curves_ps_ = nullptr;
   PassMain::Sub *point_cloud_ps_ = nullptr;
   PassMain::Sub *grease_pencil_ps_ = nullptr;
 
   bool use_material_slot_selection_ = false;
-
-  overlay::GreasePencil::ViewParameters grease_pencil_view;
 
  public:
   void begin_sync(Resources &res, const State &state) final
@@ -50,14 +50,6 @@ class Prepass : Overlay {
       return;
     }
 
-    {
-      /* TODO(fclem): This is against design. We should not sync depending on view position.
-       * Eventually, we should do this in a compute shader prepass. */
-      float4x4 viewinv;
-      DRW_view_viewmat_get(nullptr, viewinv.ptr(), true);
-      grease_pencil_view = {DRW_view_is_persp_get(nullptr), viewinv};
-    }
-
     use_material_slot_selection_ = state.is_material_select;
 
     const View3DShading &shading = state.v3d->shading;
@@ -65,6 +57,7 @@ class Prepass : Overlay {
     DRWState backface_cull_state = use_cull ? DRW_STATE_CULL_BACK : DRWState(0);
 
     ps_.init();
+    ps_.bind_ubo(OVERLAY_GLOBALS_SLOT, &res.globals_buf);
     ps_.state_set(DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS_EQUAL | backface_cull_state,
                   state.clipping_plane_count);
     res.select_bind(ps_);
@@ -72,31 +65,31 @@ class Prepass : Overlay {
       auto &sub = ps_.sub("Mesh");
       sub.shader_set(res.is_selection() ? res.shaders.depth_mesh_conservative.get() :
                                           res.shaders.depth_mesh.get());
-      sub.bind_ubo("globalsBlock", &res.globals_buf);
       mesh_ps_ = &sub;
+    }
+    {
+      auto &sub = ps_.sub("MeshFlat");
+      sub.shader_set(res.shaders.depth_mesh.get());
+      mesh_flat_ps_ = &sub;
     }
     {
       auto &sub = ps_.sub("Hair");
       sub.shader_set(res.shaders.depth_mesh.get());
-      sub.bind_ubo("globalsBlock", &res.globals_buf);
       hair_ps_ = &sub;
     }
     {
       auto &sub = ps_.sub("Curves");
       sub.shader_set(res.shaders.depth_curves.get());
-      sub.bind_ubo("globalsBlock", &res.globals_buf);
       curves_ps_ = &sub;
     }
     {
       auto &sub = ps_.sub("PointCloud");
       sub.shader_set(res.shaders.depth_point_cloud.get());
-      sub.bind_ubo("globalsBlock", &res.globals_buf);
       point_cloud_ps_ = &sub;
     }
     {
       auto &sub = ps_.sub("GreasePencil");
       sub.shader_set(res.shaders.depth_grease_pencil.get());
-      sub.bind_ubo("globalsBlock", &res.globals_buf);
       grease_pencil_ps_ = &sub;
     }
   }
@@ -188,6 +181,15 @@ class Prepass : Overlay {
         }
         else {
           geom_single = DRW_cache_mesh_surface_get(ob_ref.object);
+
+          if (res.is_selection() && !use_material_slot_selection_ &&
+              FlatObjectRef::flat_axis_index_get(ob_ref.object) != -1)
+          {
+            /* Avoid losing flat objects when in ortho views (see #56549) */
+            mesh_flat_ps_->draw(DRW_cache_mesh_all_edges_get(ob_ref.object),
+                                manager.unique_handle(ob_ref),
+                                res.select_id(ob_ref).get());
+          }
         }
         pass = mesh_ps_;
         break;
@@ -214,8 +216,8 @@ class Prepass : Overlay {
            * The grease pencil engine already renders it properly. */
           return;
         }
-        GreasePencil::draw_grease_pencil(*grease_pencil_ps_,
-                                         grease_pencil_view,
+        GreasePencil::draw_grease_pencil(res,
+                                         *grease_pencil_ps_,
                                          state.scene,
                                          ob_ref.object,
                                          manager.unique_handle(ob_ref),
