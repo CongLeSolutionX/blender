@@ -171,7 +171,7 @@ class Action : public ::bAction {
   void slot_name_define(Slot &slot, StringRefNull new_name);
 
   /**
-   * Update the `AnimData::action_slot_name` field of any ID that is animated by
+   * Update the `AnimData::last_slot_identifier` field of any ID that is animated by
    * this Slot.
    *
    * Should be called after `slot_name_define(slot)`. This is implemented as a separate
