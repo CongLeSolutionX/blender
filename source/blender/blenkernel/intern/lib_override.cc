@@ -5287,12 +5287,6 @@ ID *BKE_lib_override_library_operations_store(Main *bmain,
   return storage_id;
 }
 
-void BKE_lib_override_library_operations_store_end(
-    OverrideLibraryStorage * /*liboverride_storage*/, ID *local)
-{
-  BLI_assert(ID_IS_OVERRIDE_LIBRARY_REAL(local));
-}
-
 void BKE_lib_override_library_operations_store_finalize(
     OverrideLibraryStorage *liboverride_storage)
 {
