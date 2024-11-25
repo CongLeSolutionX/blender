@@ -91,25 +91,22 @@ void VKImmediate::end()
     state_manager.storage_buffer_bind(
         BindSpaceStorageBuffers::Type::Buffer, buffer, GPU_SSBO_INDEX_BUF_SLOT, buffer_offset_);
     this->polyline_draw_workaround(0);
-
-    buffer_offset_ += current_subbuffer_len_;
-    current_subbuffer_len_ = 0;
-    vertex_format_converter.reset();
-    return;
   }
-  render_graph::VKResourceAccessInfo &resource_access_info = context.reset_and_get_access_info();
-  vertex_attributes_.update_bindings(*this);
-  context.active_framebuffer_get()->rendering_ensure(context);
+  else {
+    render_graph::VKResourceAccessInfo &resource_access_info = context.reset_and_get_access_info();
+    vertex_attributes_.update_bindings(*this);
+    context.active_framebuffer_get()->rendering_ensure(context);
 
-  render_graph::VKDrawNode::CreateInfo draw(resource_access_info);
-  draw.node_data.vertex_count = vertex_idx;
-  draw.node_data.instance_count = 1;
-  draw.node_data.first_vertex = 0;
-  draw.node_data.first_instance = 0;
-  vertex_attributes_.bind(draw.node_data.vertex_buffers);
-  context.update_pipeline_data(prim_type, vertex_attributes_, draw.node_data.pipeline_data);
+    render_graph::VKDrawNode::CreateInfo draw(resource_access_info);
+    draw.node_data.vertex_count = vertex_idx;
+    draw.node_data.instance_count = 1;
+    draw.node_data.first_vertex = 0;
+    draw.node_data.first_instance = 0;
+    vertex_attributes_.bind(draw.node_data.vertex_buffers);
+    context.update_pipeline_data(prim_type, vertex_attributes_, draw.node_data.pipeline_data);
 
-  context.render_graph.add_node(draw);
+    context.render_graph.add_node(draw);
+  }
 
   buffer_offset_ += current_subbuffer_len_;
   current_subbuffer_len_ = 0;
