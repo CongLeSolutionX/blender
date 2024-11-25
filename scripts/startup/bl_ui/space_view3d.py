@@ -5679,7 +5679,7 @@ class VIEW3D_MT_edit_greasepencil(Menu):
         layout.separator()
 
         layout.menu("VIEW3D_MT_edit_greasepencil_animation", text="Animation")
-        layout.operator("grease_pencil.interpolate_sequence", text="Interpolate Sequence")
+        layout.operator("grease_pencil.interpolate_sequence", text="Interpolate Sequence").use_selection = True
 
         layout.separator()
 

@@ -1357,6 +1357,7 @@ static void grease_pencil_interpolate_sequence_ui(bContext *C, wmOperator *op)
 
   row = uiLayoutRow(layout, true);
   uiItemR(row, op->ptr, "exclude_breakdowns", UI_ITEM_NONE, nullptr, ICON_NONE);
+  uiItemR(row, op->ptr, "use_selection", UI_ITEM_NONE, nullptr, ICON_NONE);
 
   row = uiLayoutRow(layout, true);
   uiItemR(row, op->ptr, "flip", UI_ITEM_NONE, nullptr, ICON_NONE);
@@ -1428,6 +1429,12 @@ static void GREASE_PENCIL_OT_interpolate_sequence(wmOperatorType *ot)
                   false,
                   "Exclude Breakdowns",
                   "Exclude existing Breakdowns keyframes as interpolation extremes");
+
+  RNA_def_boolean(ot->srna,
+                  "use_selection",
+                  false,
+                  "Use Selection",
+                  "Use only selected strokes for interpolating");
 
   RNA_def_enum(ot->srna,
                "flip",

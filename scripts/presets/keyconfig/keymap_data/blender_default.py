@@ -3785,7 +3785,7 @@ def km_grease_pencil_paint_mode(params):
              "ctrl": True}, {"properties": [("use_selection", False)]}),
             (op_tool_cycle, "builtin.interpolate"), params),
         ("grease_pencil.interpolate_sequence", {"type": 'E', "value": 'PRESS',
-         "shift": True, "ctrl": True}, None),
+         "shift": True, "ctrl": True}, {"properties": [("use_selection", False)]}),
 
         op_asset_shelf_popup(
             "VIEW3D_AST_brush_gpencil_paint",
@@ -3947,7 +3947,7 @@ def km_grease_pencil_edit_mode(params):
              "ctrl": True}, {"properties": [("use_selection", True)]}),
             (op_tool_cycle, "builtin.interpolate"), params),
         ("grease_pencil.interpolate_sequence", {"type": 'E', "value": 'PRESS',
-         "shift": True, "ctrl": True}, None),
+         "shift": True, "ctrl": True}, {"properties": [("use_selection", True)]}),
     ])
 
     return keymap
