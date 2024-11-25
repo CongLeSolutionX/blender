@@ -446,10 +446,11 @@ static int loopcut_init(bContext *C, wmOperator *op, const wmEvent *event)
   /* for use in macro so we can restore, HACK */
   {
     ToolSettings *settings = scene->toolsettings;
-    const bool mesh_select_mode[3] = {
+    const bool mesh_select_mode[4] = {
         (settings->selectmode & SCE_SELECT_VERTEX) != 0,
         (settings->selectmode & SCE_SELECT_EDGE) != 0,
         (settings->selectmode & SCE_SELECT_FACE) != 0,
+        (settings->selectmode & SCE_SELECT_CORNER) != 0,
     };
 
     RNA_boolean_set_array(op->ptr, "mesh_select_mode_init", mesh_select_mode);
@@ -782,7 +783,7 @@ void MESH_OT_loopcut(wmOperatorType *ot)
   RNA_def_property_flag(prop, PROP_HIDDEN);
 
 #ifdef USE_LOOPSLIDE_HACK
-  prop = RNA_def_boolean_array(ot->srna, "mesh_select_mode_init", 3, nullptr, "", "");
+  prop = RNA_def_boolean_array(ot->srna, "mesh_select_mode_init", 4, nullptr, "", "");
   RNA_def_property_flag(prop, PROP_HIDDEN);
 #endif
 }

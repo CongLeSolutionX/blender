@@ -67,7 +67,7 @@ def render_gl_all_modes(context, obj, filepath=""):
     scene.objects.active = None
 
     # editmode
-    scene.tool_settings.mesh_select_mode = False, True, False
+    scene.tool_settings.mesh_select_mode = False, True, False, False
 
     # render
     render_gl(context, filepath + "_ob_solid", shade='SOLID')

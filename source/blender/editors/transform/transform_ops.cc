@@ -327,7 +327,7 @@ static void transformops_loopsel_hack(bContext *C, wmOperator *op)
     if (op->opm && op->opm->opm && op->opm->opm->prev) {
       wmOperator *op_prev = op->opm->opm->prev;
       Scene *scene = CTX_data_scene(C);
-      bool mesh_select_mode[3];
+      bool mesh_select_mode[4];
       PropertyRNA *prop = RNA_struct_find_property(op_prev->ptr, "mesh_select_mode_init");
 
       if (prop && RNA_property_is_set(op_prev->ptr, prop)) {
@@ -337,7 +337,8 @@ static void transformops_loopsel_hack(bContext *C, wmOperator *op)
         RNA_property_boolean_get_array(op_prev->ptr, prop, mesh_select_mode);
         selectmode_orig = ((mesh_select_mode[0] ? SCE_SELECT_VERTEX : 0) |
                            (mesh_select_mode[1] ? SCE_SELECT_EDGE : 0) |
-                           (mesh_select_mode[2] ? SCE_SELECT_FACE : 0));
+                           (mesh_select_mode[2] ? SCE_SELECT_FACE : 0) |
+                           (mesh_select_mode[3] ? SCE_SELECT_CORNER : 0));
 
         /* Still switch if we were originally in face select mode. */
         if ((ts->selectmode != selectmode_orig) && (selectmode_orig != SCE_SELECT_FACE)) {

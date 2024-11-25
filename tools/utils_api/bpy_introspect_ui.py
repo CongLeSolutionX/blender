@@ -179,7 +179,7 @@ _attribute_builder_overrides = {
     "context.preferences.filepaths.script_directory": "",
     "context.tool_settings.snap_elements": (True, ) * 3,
     "context.selected_objects": (),
-    "context.tool_settings.mesh_select_mode": (True, ) * 3,
+    "context.tool_settings.mesh_select_mode": (True, ) * 4,
     "context.mode": 'PAINT_TEXTURE',
 }
 

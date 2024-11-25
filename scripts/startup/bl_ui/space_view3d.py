@@ -1186,6 +1186,7 @@ class VIEW3D_MT_editor_menus(Menu):
                 layout.menu("VIEW3D_MT_edit_mesh_vertices")
                 layout.menu("VIEW3D_MT_edit_mesh_edges")
                 layout.menu("VIEW3D_MT_edit_mesh_faces")
+                layout.menu("VIEW3D_MT_edit_mesh_corners")
                 layout.menu("VIEW3D_MT_uv_map", text="UV")
                 layout.template_node_operator_asset_root_items()
             elif mode_string in {'EDIT_CURVE', 'EDIT_SURFACE'}:
@@ -4605,7 +4606,7 @@ class VIEW3D_MT_edit_mesh_context_menu(Menu):
             col.operator_menu_enum("mesh.separate", "type")
             col.operator("mesh.dissolve_faces")
             col.operator("mesh.delete", text="Delete Faces").type = 'FACE'
-        
+
         if is_face_corner_mode:
             col = row.column(align=True)
 
@@ -4849,6 +4850,56 @@ class VIEW3D_MT_edit_mesh_faces_data(Menu):
 class VIEW3D_MT_edit_mesh_faces(Menu):
     bl_label = "Face"
     bl_idname = "VIEW3D_MT_edit_mesh_faces"
+
+    def draw(self, context):
+        layout = self.layout
+
+        layout.operator_context = 'INVOKE_REGION_WIN'
+
+        layout.operator("view3d.edit_mesh_extrude_move_normal", text="Extrude Faces")
+        layout.operator("view3d.edit_mesh_extrude_move_shrink_fatten", text="Extrude Faces Along Normals")
+        layout.operator("mesh.extrude_faces_move", text="Extrude Individual Faces")
+
+        layout.separator()
+
+        layout.operator("mesh.inset")
+        layout.operator("mesh.poke")
+        props = layout.operator("mesh.quads_convert_to_tris")
+        props.quad_method = props.ngon_method = 'BEAUTY'
+        layout.operator("mesh.tris_convert_to_quads")
+        layout.operator("mesh.solidify", text="Solidify Faces")
+        layout.operator("mesh.wireframe")
+
+        layout.separator()
+
+        layout.operator("mesh.fill")
+        layout.operator("mesh.fill_grid")
+        layout.operator("mesh.beautify_fill")
+
+        layout.separator()
+
+        layout.operator("mesh.intersect")
+        layout.operator("mesh.intersect_boolean")
+
+        layout.separator()
+
+        layout.operator("mesh.face_split_by_edges")
+
+        layout.separator()
+
+        layout.operator("mesh.faces_shade_smooth")
+        layout.operator("mesh.faces_shade_flat")
+
+        layout.separator()
+
+        layout.menu("VIEW3D_MT_edit_mesh_faces_data")
+
+        layout.template_node_operator_asset_menu_items(catalog_path=self.bl_label)
+
+
+class VIEW3D_MT_edit_mesh_corners(Menu):
+    bl_label = "Face"
+    bl_idname = "VIEW3D_MT_edit_mesh_corners"
 
     def draw(self, context):
         layout = self.layout
@@ -8981,6 +9032,7 @@ classes = (
     VIEW3D_MT_edit_mesh_vertices,
     VIEW3D_MT_edit_mesh_edges,
     VIEW3D_MT_edit_mesh_faces,
+    VIEW3D_MT_edit_mesh_corners,
     VIEW3D_MT_edit_mesh_faces_data,
     VIEW3D_MT_edit_mesh_normals,
     VIEW3D_MT_edit_mesh_normals_select_strength,

@@ -157,7 +157,11 @@ const EnumPropertyItem rna_enum_mesh_select_mode_items[] = {
     {SCE_SELECT_VERTEX, "VERT", ICON_VERTEXSEL, "Vertex", "Vertex selection mode"},
     {SCE_SELECT_EDGE, "EDGE", ICON_EDGESEL, "Edge", "Edge selection mode"},
     {SCE_SELECT_FACE, "FACE", ICON_FACESEL, "Face", "Face selection mode"},
-    {SCE_SELECT_CORNER, "FACE_CORNER", ICON_FACE_CORNER, "Face Corner", "Face Corner selection mode"},
+    {SCE_SELECT_CORNER,
+     "FACE_CORNER",
+     ICON_FACE_CORNER,
+     "Face Corner",
+     "Face Corner selection mode"},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
@@ -4109,7 +4113,7 @@ static void rna_def_tool_settings(BlenderRNA *brna)
   prop = RNA_def_property(srna, "mesh_select_mode", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "selectmode", 1);
   RNA_def_property_flag(prop, PROP_DEG_SYNC_ONLY);
-  RNA_def_property_array(prop, 3);
+  RNA_def_property_array(prop, 4);
   RNA_def_property_boolean_funcs(prop, nullptr, "rna_Scene_editmesh_select_mode_set");
   RNA_def_property_ui_text(prop, "Mesh Selection Mode", "Which mesh elements selection works on");
   RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);

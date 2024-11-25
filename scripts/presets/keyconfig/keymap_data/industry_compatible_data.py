@@ -170,7 +170,7 @@ def _template_items_editmode_mesh_select_mode(params):
         )
         for key_expand, prop_expand in (({}, ()), ({"ctrl": True}, (("use_expand", True),)))
         for key_extend, prop_extend in (({}, ()), ({"shift": True}, (("use_extend", True),)))
-        for k, e in (('ONE', 'VERT'), ('TWO', 'EDGE'), ('THREE', 'FACE'))
+        for k, e in (('ONE', 'VERT'), ('TWO', 'EDGE'), ('THREE', 'FACE'), ('FOUR', 'FACE_CORNER'))
     ]
 
 
