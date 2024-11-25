@@ -159,7 +159,8 @@ static void world_blend_write(BlendWriter *writer, ID *id, const void *id_addres
   if (wrld->nodetree) {
     BLO_Write_IDBuffer temp_embedded_id_buffer{wrld->nodetree->id, writer};
     BLO_write_struct_at_address(writer, bNodeTree, wrld->nodetree, temp_embedded_id_buffer.get());
-    blender::bke::node_tree_blend_write(writer, (bNodeTree *)temp_embedded_id_buffer.get());
+    blender::bke::node_tree_blend_write(
+        writer, reinterpret_cast<bNodeTree *>(temp_embedded_id_buffer.get()));
   }
 
   BKE_previewimg_blend_write(writer, wrld->preview);
