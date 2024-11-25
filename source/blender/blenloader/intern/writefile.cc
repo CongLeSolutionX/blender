@@ -1277,7 +1277,7 @@ static void write_id(WriteData *wd, ID *id, const IDTypeInfo *id_type)
   mywrite_id_begin(wd, id);
   if (id_type->blend_write != nullptr) {
     BlendWriter writer = {wd};
-    BLO_Write_IDBuffer id_buffer{*id, wd};
+    BLO_Write_IDBuffer id_buffer{*id, &writer};
     id_type->blend_write(&writer, id_buffer.get(), id);
   }
   mywrite_id_end(wd, id);
