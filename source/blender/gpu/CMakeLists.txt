@@ -59,6 +59,10 @@ if(WITH_RENDERDOC)
   add_definitions(-DWITH_RENDERDOC)
 endif()
 
+if(WITH_GPU_SHADER_ASSERT)
+  add_definitions(-DWITH_GPU_SHADER_ASSERT)
+endif()
+
 set(INC_SYS
 )
 
@@ -478,6 +482,8 @@ set(GLSL_SRC
   shaders/gpu_shader_2D_widget_base_frag.glsl
   shaders/gpu_shader_2D_widget_shadow_vert.glsl
   shaders/gpu_shader_2D_widget_shadow_frag.glsl
+  shaders/gpu_shader_2D_node_socket_frag.glsl
+  shaders/gpu_shader_2D_node_socket_vert.glsl
   shaders/gpu_shader_2D_nodelink_frag.glsl
   shaders/gpu_shader_2D_nodelink_vert.glsl
   shaders/gpu_shader_2D_line_dashed_frag.glsl
@@ -740,6 +746,9 @@ if(WITH_OPENCOLORIO)
   add_definitions(-DWITH_OCIO)
 endif()
 
+if(WITH_GPU_DRAW_TESTS)
+  add_definitions(-DWITH_GPU_DRAW_TESTS)
+endif()
 
 blender_add_lib(bf_gpu "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 target_link_libraries(bf_gpu PUBLIC

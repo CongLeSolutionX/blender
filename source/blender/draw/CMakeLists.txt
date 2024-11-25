@@ -25,14 +25,6 @@ set(INC
   ../compositor/realtime_compositor/cached_resources
   ../windowmanager
 
-  # For shader includes
-  engines/eevee_next/shaders
-  engines/workbench/shaders
-  engines/overlay/shaders
-  intern/shaders
-  ../gpu/shaders/common
-  ../gpu/shaders
-
   ../../../intern/opensubdiv
 )
 
@@ -296,7 +288,9 @@ set(SRC
   engines/overlay/overlay_engine.h
   engines/overlay/overlay_next_antialiasing.hh
   engines/overlay/overlay_next_armature.hh
+  engines/overlay/overlay_next_attribute_text.hh
   engines/overlay/overlay_next_attribute_viewer.hh
+  engines/overlay/overlay_next_axes.hh
   engines/overlay/overlay_next_background.hh
   engines/overlay/overlay_next_bounds.hh
   engines/overlay/overlay_next_camera.hh
@@ -318,6 +312,7 @@ set(SRC
   engines/overlay/overlay_next_metaball.hh
   engines/overlay/overlay_next_mode_transfer.hh
   engines/overlay/overlay_next_motion_path.hh
+  engines/overlay/overlay_next_name.hh
   engines/overlay/overlay_next_origin.hh
   engines/overlay/overlay_next_outline.hh
   engines/overlay/overlay_next_paint.hh
@@ -605,7 +600,9 @@ set(GLSL_SRC
   intern/shaders/draw_intersect_lib.glsl
   intern/shaders/draw_math_geom_lib.glsl
   intern/shaders/draw_model_lib.glsl
+  intern/shaders/draw_pointcloud_lib.glsl
   intern/shaders/draw_resource_finalize_comp.glsl
+  intern/shaders/draw_view_clipping_lib.glsl
   intern/shaders/draw_view_finalize_comp.glsl
   intern/shaders/draw_view_lib.glsl
   intern/shaders/draw_view_reconstruction_lib.glsl

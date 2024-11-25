@@ -9,6 +9,7 @@
 #include "DNA_defaults.h"
 #include "DNA_modifier_types.h"
 
+#include "BLI_array_utils.hh"
 #include "BLI_math_geom.h"
 
 #include "BKE_curves.hh"
@@ -629,6 +630,8 @@ static void modify_drawing(const GreasePencilEnvelopeModifierData &emd,
                            bke::greasepencil::Drawing &drawing)
 {
   const EnvelopeInfo info = get_envelope_info(emd, ctx);
+
+  modifier::greasepencil::ensure_no_bezier_curves(drawing);
 
   IndexMaskMemory mask_memory;
   const IndexMask curves_mask = modifier::greasepencil::get_filtered_stroke_mask(
