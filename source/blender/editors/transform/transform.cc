@@ -1739,7 +1739,7 @@ void saveTransform(bContext *C, TransInfo *t, wmOperator *op)
         if ((snap_flag_ptr = transform_snap_flag_from_spacetype_ptr(t, &msg_key_params.prop)) &&
             (bool(t->modifiers & MOD_SNAP) != bool(*snap_flag_ptr & SCE_SNAP)))
         {
-          SET_FLAG_FROM_TEST(*snap_flag_ptr, t->modifiers & MOD_SNAP, SCE_SNAP);
+          SET_FLAG_FROM_TEST(*snap_flag_ptr, !(t->modifiers & MOD_SNAP), SCE_SNAP);
           WM_msg_publish_rna_params(t->mbus, &msg_key_params);
         }
       }
