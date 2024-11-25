@@ -420,6 +420,82 @@ static void blender_camera_viewplane(BlenderCamera *bcam,
   }
 }
 
+class BlenderCameraParamQuery : public OSLCameraParamQuery {
+ public:
+  BlenderCameraParamQuery(PointerRNA ccam) : ccam(ccam) {}
+  virtual ~BlenderCameraParamQuery() = default;
+
+  bool get_float(ustring name, vector<float> &data) override
+  {
+    PropertyRNA *prop = get_prop(name);
+    if (!prop)
+      return false;
+    if (RNA_property_array_check(prop)) {
+      data.resize(RNA_property_array_length(&ccam, prop));
+      RNA_property_float_get_array(&ccam, prop, data.data());
+    }
+    else {
+      data.resize(1);
+      data[0] = RNA_property_float_get(&ccam, prop);
+    }
+    return true;
+  }
+
+  bool get_int(ustring name, vector<int> &data) override
+  {
+    PropertyRNA *prop = get_prop(name);
+    if (!prop)
+      return false;
+
+    int array_len = 0;
+    if (RNA_property_array_check(prop)) {
+      array_len = RNA_property_array_length(&ccam, prop);
+    }
+
+    /* OSL represents booleans as integers, but we represent them as boolean-type
+     * properties in RNA, so convert here. */
+    if (RNA_property_type(prop) == PROP_BOOLEAN) {
+      if (array_len > 0) {
+        /* Can't use std::vector<bool> here since it's a weird special case. */
+        array<bool> bool_data(array_len);
+        RNA_property_boolean_get_array(&ccam, prop, bool_data.data());
+        std::copy(bool_data.begin(), bool_data.end(), std::back_inserter(data));
+      }
+      else {
+        data.push_back(RNA_property_boolean_get(&ccam, prop));
+      }
+    }
+    else {
+      if (array_len > 0) {
+        data.resize(array_len);
+        RNA_property_int_get_array(&ccam, prop, data.data());
+      }
+      else {
+        data.push_back(RNA_property_int_get(&ccam, prop));
+      }
+    }
+    return true;
+  }
+
+  bool get_string(ustring name, string &data) override
+  {
+    PropertyRNA *prop = get_prop(name);
+    if (!prop)
+      return false;
+    data = RNA_property_string_get(&ccam, prop);
+    return true;
+  }
+
+ private:
+  PointerRNA ccam;
+
+  PropertyRNA *get_prop(ustring param)
+  {
+    string name = string_printf("[\"script_param_%s\"]", param.c_str());
+    return RNA_struct_find_property(&ccam, name.c_str());
+  }
+};
+
 static void blender_camera_sync(Camera *cam,
                                 Scene *scene,
                                 BlenderCamera *bcam,
@@ -481,12 +557,14 @@ static void blender_camera_sync(Camera *cam,
     {
       string bytecode_hash = get_string(bcam->ccam, "script_bytecode_hash");
 
+      auto params = BlenderCameraParamQuery(bcam->ccam);
       if (!bytecode_hash.empty()) {
-        cam->set_osl_camera(scene, "", bytecode_hash, get_string(bcam->ccam, "script_bytecode"));
+        cam->set_osl_camera(
+            scene, params, "", bytecode_hash, get_string(bcam->ccam, "script_bytecode"));
       }
       else {
         string absolute_filepath = get_string(bcam->ccam, "script_path");  // blender_absolute_path
-        cam->set_osl_camera(scene, absolute_filepath);
+        cam->set_osl_camera(scene, params, absolute_filepath);
       }
     }
     else {

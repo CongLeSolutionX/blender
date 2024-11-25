@@ -21,6 +21,16 @@ class Device;
 class DeviceScene;
 class Scene;
 
+class OSLCameraParamQuery {
+ public:
+  OSLCameraParamQuery() = default;
+  virtual ~OSLCameraParamQuery() = default;
+
+  virtual bool get_float(ustring name, vector<float> &data) = 0;
+  virtual bool get_int(ustring name, vector<int> &data) = 0;
+  virtual bool get_string(ustring name, string &data) = 0;
+};
+
 /* Camera
  *
  * The camera parameters are quite standard, tested to be both compatible with
@@ -184,6 +194,7 @@ class Camera : public Node {
 
   /* osl script */
   string script_name;
+  map<ustring, pair<vector<uint8_t>, TypeDesc>> script_params;
 
  private:
   int width;
@@ -216,6 +227,7 @@ class Camera : public Node {
   void set_screen_size(int width_, int height_);
 
   void set_osl_camera(Scene *scene,
+                      OSLCameraParamQuery &params,
                       const std::string &filepath,
                       const std::string &bytecode_hash = "",
                       const std::string &bytecode = "");

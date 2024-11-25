@@ -142,6 +142,18 @@ void OSLManager::device_update_post(Device *device,
       OSL::ShadingSystem *ss = ss_shared[sub_device->info.type];
 
       OSL::ShaderGroupRef group = ss->ShaderGroupBegin("camera_group");
+      for (const auto &param : scene->camera->script_params) {
+        const ustring &name = param.first;
+        const vector<uint8_t> &data = param.second.first;
+        const TypeDesc &type = param.second.second;
+        if (type.basetype == TypeDesc::STRING) {
+          const void *string = data.data();
+          ss->Parameter(*group, name, type, (const void *)&string);
+        }
+        else {
+          ss->Parameter(*group, name, type, (const void *)data.data());
+        }
+      }
       ss->Shader(*group, "shader", scene->camera->script_name, "camera");
       ss->ShaderGroupEnd(*group);
 
