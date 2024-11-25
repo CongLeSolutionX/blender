@@ -996,7 +996,7 @@ bool rna_AnimaData_override_apply(Main *bmain, RNAPropertyOverrideApplyContext &
     adt_dst->slot_handle = adt_src->slot_handle;
     adt_dst->tmp_slot_handle = adt_src->tmp_slot_handle;
     STRNCPY(adt_dst->last_slot_identifier, adt_src->last_slot_identifier);
-    STRNCPY(adt_dst->tmp_slot_name, adt_src->tmp_slot_name);
+    STRNCPY(adt_dst->tmp_last_slot_identifier, adt_src->tmp_last_slot_identifier);
     adt_dst->tmpact = adt_src->tmpact;
     id_us_plus(reinterpret_cast<ID *>(adt_dst->tmpact));
     adt_dst->act_blendmode = adt_src->act_blendmode;

@@ -1173,7 +1173,7 @@ typedef struct AnimData {
    */
   bAction *tmpact;
   int32_t tmp_slot_handle;
-  char tmp_slot_name[66]; /* MAX_ID_NAME */
+  char tmp_last_slot_identifier[66]; /* MAX_ID_NAME */
   uint8_t _pad1[2];
 
   /* nla-tracks */

@@ -1193,7 +1193,7 @@ bool assign_tmpaction(bAction *action, const OwnedAnimData owned_adt)
                                action,
                                owned_adt.adt.tmpact,
                                owned_adt.adt.tmp_slot_handle,
-                               owned_adt.adt.tmp_slot_name);
+                               owned_adt.adt.tmp_last_slot_identifier);
 }
 
 bool unassign_action(ID &animated_id)
@@ -1477,7 +1477,7 @@ ActionSlotAssignmentResult assign_tmpaction_and_slot_handle(bAction *action,
                                            owned_adt.owner_id,
                                            owned_adt.adt.tmpact,
                                            owned_adt.adt.tmp_slot_handle,
-                                           owned_adt.adt.tmp_slot_name);
+                                           owned_adt.adt.tmp_last_slot_identifier);
 }
 
 Action *get_action(ID &animated_id)
