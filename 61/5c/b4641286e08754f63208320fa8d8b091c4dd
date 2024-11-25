@@ -1,1 +1,1 @@
-Referenced by issue #127225, Vulkan - Constantly increasing shared memory/RAM usage as frames are rendered - Recent NVIDIA drivers
+Referenced by issue #127225, Vulkan: Memory leak during rendering
