@@ -39,6 +39,7 @@ set(SRC
   intern/mesh_extractors/extract_mesh.cc
   intern/mesh_extractors/extract_mesh_ibo_edituv.cc
   intern/mesh_extractors/extract_mesh_ibo_fdots.cc
+  intern/mesh_extractors/extract_mesh_ibo_cdots.cc
   intern/mesh_extractors/extract_mesh_ibo_lines.cc
   intern/mesh_extractors/extract_mesh_ibo_lines_adjacency.cc
   intern/mesh_extractors/extract_mesh_ibo_lines_paint_mask.cc
@@ -53,6 +54,8 @@ set(SRC
   intern/mesh_extractors/extract_mesh_vbo_fdots_edituv_data.cc
   intern/mesh_extractors/extract_mesh_vbo_fdots_nor.cc
   intern/mesh_extractors/extract_mesh_vbo_fdots_pos.cc
+  intern/mesh_extractors/extract_mesh_vbo_cdots_nor.cc
+  intern/mesh_extractors/extract_mesh_vbo_cdots_pos.cc
   intern/mesh_extractors/extract_mesh_vbo_fdots_uv.cc
   intern/mesh_extractors/extract_mesh_vbo_lnor.cc
   intern/mesh_extractors/extract_mesh_vbo_mesh_analysis.cc

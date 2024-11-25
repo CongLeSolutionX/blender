@@ -1875,6 +1875,83 @@ void draw_subdiv_build_fdots_buffers(const DRWSubdivCache &cache,
 #endif
 }
 
+void draw_subdiv_build_cdots_buffers(const DRWSubdivCache &cache,
+                                     gpu::VertBuf *fdots_pos,
+                                     gpu::VertBuf *fdots_nor,
+                                     gpu::IndexBuf *fdots_indices)
+{
+#ifdef WITH_OPENSUBDIV
+  if (!draw_subdiv_cache_need_face_data(cache)) {
+    /* Happens on meshes with only loose geometry. */
+    return;
+  }
+
+  bke::subdiv::Subdiv *subdiv = cache.subdiv;
+  OpenSubdiv_Evaluator *evaluator = subdiv->evaluator;
+
+  OpenSubdiv_Buffer src_buffer_interface;
+  gpu::VertBuf *src_buffer = create_buffer_and_interface(&src_buffer_interface,
+                                                         get_subdiv_vertex_format());
+  evaluator->eval_output->wrapSrcBuffer(&src_buffer_interface);
+
+  OpenSubdiv_Buffer patch_arrays_buffer_interface;
+  gpu::VertBuf *patch_arrays_buffer = create_buffer_and_interface(&patch_arrays_buffer_interface,
+                                                                  get_patch_array_format());
+  opensubdiv_gpu_buffer_init(&patch_arrays_buffer_interface, patch_arrays_buffer);
+  evaluator->eval_output->fillPatchArraysBuffer(&patch_arrays_buffer_interface);
+
+  OpenSubdiv_Buffer patch_index_buffer_interface;
+  gpu::VertBuf *patch_index_buffer = create_buffer_and_interface(&patch_index_buffer_interface,
+                                                                 get_patch_index_format());
+  evaluator->eval_output->wrapPatchIndexBuffer(&patch_index_buffer_interface);
+
+  OpenSubdiv_Buffer patch_param_buffer_interface;
+  gpu::VertBuf *patch_param_buffer = create_buffer_and_interface(&patch_param_buffer_interface,
+                                                                 get_patch_param_format());
+  evaluator->eval_output->wrapPatchParamBuffer(&patch_param_buffer_interface);
+
+  GPUShader *shader = get_patch_evaluation_shader(
+      fdots_nor ? SHADER_PATCH_EVALUATION_FACE_DOTS_WITH_NORMALS :
+                  SHADER_PATCH_EVALUATION_FACE_DOTS);
+  GPU_shader_bind(shader);
+
+  int binding_point = 0;
+  GPU_vertbuf_bind_as_ssbo(src_buffer, binding_point++);
+  GPU_vertbuf_bind_as_ssbo(cache.gpu_patch_map.patch_map_handles, binding_point++);
+  GPU_vertbuf_bind_as_ssbo(cache.gpu_patch_map.patch_map_quadtree, binding_point++);
+  GPU_vertbuf_bind_as_ssbo(cache.fdots_patch_coords, binding_point++);
+  GPU_vertbuf_bind_as_ssbo(cache.verts_orig_index, binding_point++);
+  GPU_vertbuf_bind_as_ssbo(patch_arrays_buffer, binding_point++);
+  GPU_vertbuf_bind_as_ssbo(patch_index_buffer, binding_point++);
+  GPU_vertbuf_bind_as_ssbo(patch_param_buffer, binding_point++);
+  GPU_vertbuf_bind_as_ssbo(fdots_pos, binding_point++);
+  /* F-dots normals may not be requested, still reserve the binding point. */
+  if (fdots_nor) {
+    GPU_vertbuf_bind_as_ssbo(fdots_nor, binding_point);
+  }
+  binding_point++;
+  GPU_indexbuf_bind_as_ssbo(fdots_indices, binding_point++);
+  GPU_vertbuf_bind_as_ssbo(cache.extra_coarse_face_data, binding_point++);
+  BLI_assert(binding_point <= MAX_GPU_SUBDIV_SSBOS);
+
+  drw_subdiv_compute_dispatch(cache, shader, 0, 0, cache.num_coarse_faces);
+
+  /* This generates two vertex buffers and an index buffer, so we need to put a barrier on the
+   * vertex attributes and element arrays. */
+  GPU_memory_barrier(GPU_BARRIER_VERTEX_ATTRIB_ARRAY | GPU_BARRIER_ELEMENT_ARRAY);
+
+  /* Cleanup. */
+  GPU_shader_unbind();
+
+  GPU_vertbuf_discard(patch_index_buffer);
+  GPU_vertbuf_discard(patch_param_buffer);
+  GPU_vertbuf_discard(patch_arrays_buffer);
+  GPU_vertbuf_discard(src_buffer);
+#else
+  UNUSED_VARS(cache, fdots_pos, fdots_nor, fdots_indices);
+#endif
+}
+
 void draw_subdiv_build_lines_buffer(const DRWSubdivCache &cache, gpu::IndexBuf *lines_indices)
 {
   GPUShader *shader = get_subdiv_shader(SHADER_BUFFER_LINES);

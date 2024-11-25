@@ -74,6 +74,8 @@ struct MeshBufferList {
     gpu::VertBuf *fdots_pos;
     gpu::VertBuf *fdots_nor;
     gpu::VertBuf *fdots_uv;
+    gpu::VertBuf *cdots_pos;
+    gpu::VertBuf *cdots_nor;
     // gpu::VertBuf *fdots_edit_data; /* inside fdots_nor for now. */
     gpu::VertBuf *fdots_edituv_data;
     gpu::VertBuf *skin_roots;
@@ -82,6 +84,7 @@ struct MeshBufferList {
     gpu::VertBuf *edge_idx; /* extend */
     gpu::VertBuf *face_idx;
     gpu::VertBuf *fdot_idx;
+    gpu::VertBuf *cdot_idx;
     gpu::VertBuf *attr[GPU_MAX_ATTR];
     gpu::VertBuf *attr_viewer;
     gpu::VertBuf *vnor;
@@ -97,6 +100,7 @@ struct MeshBufferList {
     gpu::IndexBuf *lines_loose;
     gpu::IndexBuf *points;
     gpu::IndexBuf *fdots;
+    gpu::IndexBuf *cdots;
     /* 3D overlays. */
     /* no loose edges. */
     gpu::IndexBuf *lines_paint_mask;
@@ -120,6 +124,7 @@ struct MeshBatchList {
   gpu::Batch *edit_vnor;
   gpu::Batch *edit_lnor;
   gpu::Batch *edit_fdots;
+  gpu::Batch *edit_cdots;
   gpu::Batch *edit_mesh_analysis;
   gpu::Batch *edit_skin_roots;
   /* Edit UVs */
@@ -134,6 +139,7 @@ struct MeshBatchList {
   gpu::Batch *edit_selection_edges;
   gpu::Batch *edit_selection_faces;
   gpu::Batch *edit_selection_fdots;
+  gpu::Batch *edit_selection_cdots;
   /* Common display / Other */
   gpu::Batch *all_verts;
   gpu::Batch *all_edges;
@@ -164,6 +170,7 @@ enum DRWBatchFlag {
   MBC_EDIT_VNOR = (1u << MBC_BATCH_INDEX(edit_vnor)),
   MBC_EDIT_LNOR = (1u << MBC_BATCH_INDEX(edit_lnor)),
   MBC_EDIT_FACEDOTS = (1u << MBC_BATCH_INDEX(edit_fdots)),
+  MBC_EDIT_CORNERDOTS = (1u << MBC_BATCH_INDEX(edit_cdots)),
   MBC_EDIT_MESH_ANALYSIS = (1u << MBC_BATCH_INDEX(edit_mesh_analysis)),
   MBC_SKIN_ROOTS = (1u << MBC_BATCH_INDEX(edit_skin_roots)),
   MBC_EDITUV_FACES_STRETCH_AREA = (1u << MBC_BATCH_INDEX(edituv_faces_stretch_area)),
@@ -176,6 +183,7 @@ enum DRWBatchFlag {
   MBC_EDIT_SELECTION_EDGES = (1u << MBC_BATCH_INDEX(edit_selection_edges)),
   MBC_EDIT_SELECTION_FACES = (1u << MBC_BATCH_INDEX(edit_selection_faces)),
   MBC_EDIT_SELECTION_FACEDOTS = (1u << MBC_BATCH_INDEX(edit_selection_fdots)),
+  MBC_EDIT_SELECTION_CORNERDOTS = (1u << MBC_BATCH_INDEX(edit_selection_cdots)),
   MBC_ALL_VERTS = (1u << MBC_BATCH_INDEX(all_verts)),
   MBC_ALL_EDGES = (1u << MBC_BATCH_INDEX(all_edges)),
   MBC_LOOSE_EDGES = (1u << MBC_BATCH_INDEX(loose_edges)),

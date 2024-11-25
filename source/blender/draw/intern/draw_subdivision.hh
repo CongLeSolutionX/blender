@@ -238,6 +238,11 @@ void draw_subdiv_build_fdots_buffers(const DRWSubdivCache &cache,
                                      gpu::VertBuf *fdots_nor,
                                      gpu::IndexBuf *fdots_indices);
 
+void draw_subdiv_build_cdots_buffers(const DRWSubdivCache &cache,
+                                     gpu::VertBuf *fdots_pos,
+                                     gpu::VertBuf *fdots_nor,
+                                     gpu::IndexBuf *fdots_indices);
+
 void draw_subdiv_build_lnor_buffer(const DRWSubdivCache &cache,
                                    gpu::VertBuf *pos_nor,
                                    gpu::VertBuf *lnor);

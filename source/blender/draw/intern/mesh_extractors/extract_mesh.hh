@@ -268,6 +268,12 @@ void extract_face_dots_subdiv(const DRWSubdivCache &subdiv_cache,
                               gpu::VertBuf *fdots_nor,
                               gpu::IndexBuf &fdots);
 
+void extract_face_corner_dots_position(const MeshRenderData &mr, gpu::VertBuf &vbo);
+void extract_face_corner_dots_subdiv(const DRWSubdivCache &subdiv_cache,
+                                     gpu::VertBuf &fdots_pos,
+                                     gpu::VertBuf *fdots_nor,
+                                     gpu::IndexBuf &fdots);
+
 void extract_normals(const MeshRenderData &mr, bool use_hq, gpu::VertBuf &vbo);
 void extract_normals_subdiv(const MeshRenderData &mr,
                             const DRWSubdivCache &subdiv_cache,
@@ -275,6 +281,9 @@ void extract_normals_subdiv(const MeshRenderData &mr,
                             gpu::VertBuf &lnor);
 void extract_vert_normals(const MeshRenderData &mr, gpu::VertBuf &vbo);
 void extract_face_dot_normals(const MeshRenderData &mr, const bool use_hq, gpu::VertBuf &vbo);
+void extract_face_corner_dot_normals(const MeshRenderData &mr,
+                                     const bool use_hq,
+                                     gpu::VertBuf &vbo);
 void extract_edge_factor(const MeshRenderData &mr, gpu::VertBuf &vbo);
 void extract_edge_factor_subdiv(const DRWSubdivCache &subdiv_cache,
                                 const MeshRenderData &mr,
@@ -340,6 +349,7 @@ void extract_weights_subdiv(const MeshRenderData &mr,
                             gpu::VertBuf &vbo);
 
 void extract_face_dots(const MeshRenderData &mr, gpu::IndexBuf &face_dots);
+void extract_face_corner_dots(const MeshRenderData &mr, gpu::IndexBuf &face_dots);
 
 void extract_face_dots_uv(const MeshRenderData &mr, gpu::VertBuf &vbo);
 void extract_face_dots_edituv_data(const MeshRenderData &mr, gpu::VertBuf &vbo);
