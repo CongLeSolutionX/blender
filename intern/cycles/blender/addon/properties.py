@@ -1116,6 +1116,9 @@ class CyclesCameraSettings(bpy.types.PropertyGroup):
         update=update_camera_script,
     )
 
+    script_bytecode: StringProperty(name="OSL Script Bytecode")
+    script_bytecode_hash: StringProperty(name="OSL Script Bytecode Hash")
+
     @classmethod
     def register(cls):
         bpy.types.Camera.cycles = PointerProperty(

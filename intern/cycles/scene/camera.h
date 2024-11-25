@@ -182,6 +182,9 @@ class Camera : public Node {
   KernelCamera kernel_camera;
   array<DecomposedTransform> kernel_camera_motion;
 
+  /* osl script */
+  string script_name;
+
  private:
   int width;
   int height;
@@ -211,6 +214,12 @@ class Camera : public Node {
   bool use_motion() const;
 
   void set_screen_size(int width_, int height_);
+
+  void set_osl_camera(Scene *scene,
+                      const std::string &filepath,
+                      const std::string &bytecode_hash = "",
+                      const std::string &bytecode = "");
+  void clear_osl_camera(Scene *scene);
 
  private:
   /* Private utility functions. */

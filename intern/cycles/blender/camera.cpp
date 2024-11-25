@@ -4,6 +4,7 @@
 
 #include "scene/camera.h"
 #include "scene/bake.h"
+#include "scene/osl.h"
 #include "scene/scene.h"
 
 #include "blender/sync.h"
@@ -23,6 +24,8 @@ class BlenderCamera {
     full_width = render_width = render_resolution_x(b_render);
     full_height = render_height = render_resolution_y(b_render);
   };
+
+  PointerRNA ccam;
 
   float nearclip = 1e-5f;
   float farclip = 1e5f;
@@ -267,6 +270,8 @@ static void blender_camera_from_object(BlenderCamera *bcam,
     else {
       bcam->sensor_fit = BlenderCamera::VERTICAL;
     }
+
+    bcam->ccam = RNA_pointer_get(&b_camera.ptr, "cycles");
   }
   else if (b_ob_data.is_a(&RNA_Light)) {
     /* Can also look through spot light. */
@@ -416,6 +421,7 @@ static void blender_camera_viewplane(BlenderCamera *bcam,
 }
 
 static void blender_camera_sync(Camera *cam,
+                                Scene *scene,
                                 BlenderCamera *bcam,
                                 int width,
                                 int height,
@@ -465,6 +471,26 @@ static void blender_camera_sync(Camera *cam,
     else {
       cam->set_sensorwidth(sensor_size * fit_xratio / fit_yratio);
       cam->set_sensorheight(sensor_size);
+    }
+  }
+
+  /* script */
+  if (scene != nullptr) {
+    if (bcam->ccam.data && (bcam->type == CAMERA_PANORAMA) &&
+        (bcam->panorama_type == PANORAMA_SCRIPT))
+    {
+      string bytecode_hash = get_string(bcam->ccam, "script_bytecode_hash");
+
+      if (!bytecode_hash.empty()) {
+        cam->set_osl_camera(scene, "", bytecode_hash, get_string(bcam->ccam, "script_bytecode"));
+      }
+      else {
+        string absolute_filepath = get_string(bcam->ccam, "script_path");  // blender_absolute_path
+        cam->set_osl_camera(scene, absolute_filepath);
+      }
+    }
+    else {
+      cam->clear_osl_camera(scene);
     }
   }
 
@@ -634,7 +660,7 @@ void BlenderSync::sync_camera(BL::RenderSettings &b_render,
 
   /* sync */
   Camera *cam = scene->camera;
-  blender_camera_sync(cam, &bcam, width, height, viewname, &cscene);
+  blender_camera_sync(cam, scene, &bcam, width, height, viewname, &cscene);
 
   /* dicing camera */
   b_ob = BL::Object(RNA_pointer_get(&cscene, "dicing_camera"));
@@ -644,7 +670,7 @@ void BlenderSync::sync_camera(BL::RenderSettings &b_render,
     b_engine.camera_model_matrix(b_ob, bcam.use_spherical_stereo, b_ob_matrix);
     bcam.matrix = get_transform(b_ob_matrix);
 
-    blender_camera_sync(scene->dicing_camera, &bcam, width, height, viewname, &cscene);
+    blender_camera_sync(scene->dicing_camera, nullptr, &bcam, width, height, viewname, &cscene);
   }
   else {
     *scene->dicing_camera = *cam;
@@ -957,7 +983,7 @@ void BlenderSync::sync_view(BL::SpaceView3D &b_v3d,
   blender_camera_from_view(&bcam, b_engine, b_scene, b_v3d, b_rv3d, width, height);
   blender_camera_border(&bcam, b_engine, b_render_settings, b_scene, b_v3d, b_rv3d, width, height);
   PointerRNA cscene = RNA_pointer_get(&b_scene.ptr, "cycles");
-  blender_camera_sync(scene->camera, &bcam, width, height, "", &cscene);
+  blender_camera_sync(scene->camera, scene, &bcam, width, height, "", &cscene);
 
   /* dicing camera */
   BL::Object b_ob = BL::Object(RNA_pointer_get(&cscene, "dicing_camera"));
@@ -967,7 +993,7 @@ void BlenderSync::sync_view(BL::SpaceView3D &b_v3d,
     b_engine.camera_model_matrix(b_ob, bcam.use_spherical_stereo, b_ob_matrix);
     bcam.matrix = get_transform(b_ob_matrix);
 
-    blender_camera_sync(scene->dicing_camera, &bcam, width, height, "", &cscene);
+    blender_camera_sync(scene->dicing_camera, nullptr, &bcam, width, height, "", &cscene);
   }
   else {
     *scene->dicing_camera = *scene->camera;

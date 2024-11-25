@@ -5,6 +5,7 @@
 #include "scene/camera.h"
 #include "scene/mesh.h"
 #include "scene/object.h"
+#include "scene/osl.h"
 #include "scene/scene.h"
 #include "scene/stats.h"
 #include "scene/tables.h"
@@ -855,6 +856,50 @@ int Camera::motion_step(float time) const
   }
 
   return -1;
+}
+
+void Camera::set_osl_camera(Scene *scene,
+                            const std::string &filepath,
+                            const std::string &bytecode_hash,
+                            const std::string &bytecode)
+{
+  /* create query */
+  const char *hash;
+
+  if (!filepath.empty()) {
+    hash = scene->osl_manager->shader_load_filepath(filepath);
+  }
+  else {
+    hash = scene->osl_manager->shader_test_loaded(bytecode_hash);
+    if (!hash)
+      hash = scene->osl_manager->shader_load_bytecode(bytecode_hash, bytecode);
+  }
+
+  bool changed = false;
+
+  if (!hash) {
+    changed = !script_name.empty();
+    script_name = "";
+  }
+  else {
+    changed = (script_name != hash);
+    script_name = hash;
+  }
+
+  if (changed) {
+    tag_modified();
+    scene->osl_manager->tag_update();
+  }
+}
+
+void Camera::clear_osl_camera(Scene *scene)
+{
+  if (script_name == "")
+    return;
+
+  script_name = "";
+
+  scene->osl_manager->tag_update();
 }
 
 CCL_NAMESPACE_END

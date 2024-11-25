@@ -5,6 +5,7 @@
 #include "device/device.h"
 
 #include "scene/background.h"
+#include "scene/camera.h"
 #include "scene/colorspace.h"
 #include "scene/light.h"
 #include "scene/osl.h"
@@ -131,7 +132,7 @@ void OSLManager::device_update_post(Device *device,
     return;
 
   /* create camera shader */
-  if (getenv("CYCLES_OSL_CAMERA")) {
+  if (!scene->camera->script_name.empty()) {
     if (progress.get_cancel())
       return;
 
@@ -140,20 +141,9 @@ void OSLManager::device_update_post(Device *device,
       OSLGlobals *og = (OSLGlobals *)sub_device->get_cpu_osl_memory();
       OSL::ShadingSystem *ss = ss_shared[sub_device->info.type];
 
-      const char *shader = shader_load_filepath(getenv("CYCLES_OSL_CAMERA"));
-      if (!shader) {
-        printf("OSL Camera: Failed to load shader\n");
-        return;
-      }
       OSL::ShaderGroupRef group = ss->ShaderGroupBegin("camera_group");
-      if (!ss->Shader(*group, "shader", shader, "camera")) {
-        printf("OSL Camera: Failed to add shader\n");
-        return;
-      }
-      if (!ss->ShaderGroupEnd(*group)) {
-        printf("OSL Camera: Failed to finalize shader group\n");
-        return;
-      }
+      ss->Shader(*group, "shader", scene->camera->script_name, "camera");
+      ss->ShaderGroupEnd(*group);
 
       ss->add_symlocs(group.get(),
                       OSL::SymLocationDesc("camera.pos",

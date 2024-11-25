@@ -144,6 +144,7 @@ def update_camera_script(cam, report):
     """compile and update camera script"""
     import os
     import idprop
+    import hashlib
 
     oso_file_remove = False
 
@@ -156,7 +157,11 @@ def update_camera_script(cam, report):
         # internal script, we will store bytecode in the node
         ok, oso_path, bytecode = update_internal_script(report, ccam.script)
         if bytecode:
-            print("TODO Should store bytecode")
+            md5 = hashlib.md5(usedforsecurity=False)
+            md5.update(bytecode.encode())
+            ccam.script_bytecode = bytecode
+            ccam.script_bytecode_hash = md5.hexdigest()
+            cam.update_tag()
 
     else:
         report({'WARNING'}, "No text or file specified in node, nothing to compile")
