@@ -1293,6 +1293,7 @@ static blender::Vector<ID *> gather_local_ids_to_write(Main *bmain, const bool i
       continue;
     }
     const IDTypeInfo *id_type = BKE_idtype_get_info_from_id(id);
+    UNUSED_VARS_NDEBUG(id_type);
     /* We should never attempt to write non-regular IDs
      * (i.e. all kind of temp/runtime ones). */
     BLI_assert((id->tag & (ID_TAG_NO_MAIN | ID_TAG_NO_USER_REFCOUNT | ID_TAG_NOT_ALLOCATED)) == 0);
