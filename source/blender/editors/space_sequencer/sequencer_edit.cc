@@ -3573,17 +3573,17 @@ static blender::Vector<blender::IndexRange> silent_ranges_get(Scene *scene,
   const int padding = RNA_int_get(op->ptr, "padding");
   const int minimum_length = RNA_int_get(op->ptr, "minimum_length");
 
-  const int seq_start = SEQ_time_left_handle_frame_get(scene, seq);
-  const int seq_end = SEQ_time_right_handle_frame_get(scene, seq);
-
+  const int seq_start_index = SEQ_time_left_handle_frame_get(scene, seq) -
+                              SEQ_time_start_frame_get(seq);
+  const int seq_end_index = SEQ_time_right_handle_frame_get(scene, seq) -
+                            SEQ_time_start_frame_get(seq);
+  const int end_sample = seq_end_index * samples_per_frame;
   blender::Vector<blender::IndexRange> silent_frames;
 
-  //  int silent_sample = find_next_sample(wf, seq_start * samples_per_frame, SILENT, op);
-  //  int loud_sample = find_next_sample(wf, silent_sample, LOUD, op);
-  int silent_sample = 0;
+  int silent_sample = seq_start_index * samples_per_frame;
   int loud_sample = 0;
 
-  while (silent_sample < wf->length && loud_sample < wf->length) {
+  while (silent_sample < wf->length && loud_sample < wf->length && loud_sample <= end_sample) {
     silent_sample = find_next_sample(wf, loud_sample, SILENT, op);
     // produces incorrect num at the end
     loud_sample = find_next_sample(wf, silent_sample, LOUD, op);
@@ -3598,12 +3598,12 @@ static blender::Vector<blender::IndexRange> silent_ranges_get(Scene *scene,
     }
     else {
       /* Snap end to real strip end rather than calculated one. */
-      silence_end = seq_end;
+      silence_end = SEQ_time_right_handle_frame_get(scene, seq);
     }
 
     /* Prevent creating small strip fragments at start of the strip. */
-    if (silence_start - seq_start < minimum_length) {
-      silence_start = seq_start;
+    if (silence_start - SEQ_time_left_handle_frame_get(scene, seq) < minimum_length) {
+      silence_start = SEQ_time_left_handle_frame_get(scene, seq);
     }
 
     if (silence_end - silence_start >= minimum_length) {
@@ -3656,9 +3656,8 @@ static Sequence *remove_silence_do_split(bContext *C,
 
 static blender::Vector<Sequence *> remove_silence_do_split_non_sound(
     bContext *C,
-    blender::Vector<Sequence *> other_strips,
+    blender::Vector<Sequence *> &other_strips,
     blender::IndexRange range,
-    int old_offset,
     int offset,
     blender::Map<Sequence *, int> &strip_to_offset,
     blender::Vector<Sequence *> &strips_to_remove)
@@ -3671,10 +3670,6 @@ static blender::Vector<Sequence *> remove_silence_do_split_non_sound(
       /* Strip likely does not intersect this frame, so use it in next iterations. */
       other_strips_next.append(other);
       continue;
-    }
-
-    if (old_offset != 0) {
-      strip_to_offset.add(other, old_offset);
     }
 
     other_strips_next.append(next);
@@ -3697,49 +3692,51 @@ static int sequencer_remove_silence_exec(bContext *C, wmOperator *op)
 
   blender::Vector<Sequence *> strips_to_remove;
   blender::Map<Sequence *, int> strip_to_offset;
-  int offset = 0;
 
   for (Sequence *seq : strips) {
     SEQ_relations_invalidate_cache_raw(scene, seq);
   }
 
-  for (Sequence *seq : sound_strips) {
+  for (int i : sound_strips.index_range()) {
+    Sequence *seq = sound_strips[i];
     Sequence *next = seq;
-    bool is_first_pass = true;
+    int offset = 0;
+
     for (blender::IndexRange range : silent_ranges_get(scene, seq, op)) {
-      int silent_length;
+      int silent_length = 0;
 
-      int old_offset = offset;
-      if (is_first_pass && range.first() != SEQ_time_left_handle_frame_get(scene, next)) {
-        strip_to_offset.add(next, offset);
-      }
-      else {
-        old_offset = 0;
-      }
-
-      /* `next` and `other_strips` are set to right side strips after splitting. */
       next = remove_silence_do_split(C, next, range, strips_to_remove, &silent_length);
-      offset += silent_length;
-      other_strips = remove_silence_do_split_non_sound(C,
-                                                       other_strips,
-                                                       range,
-                                                       old_offset,
-                                                       offset,
-                                                       strip_to_offset,
-                                                       strips_to_remove);
+
+      if (silent_length != 0) {
+        int test = offset;
+        offset += silent_length;
+
+        if (next)
+          test += silent_length;
+        other_strips = remove_silence_do_split_non_sound(
+            C, other_strips, range, test, strip_to_offset, strips_to_remove);
+      }
 
       if (next == nullptr) {
         break;
       }
 
       strip_to_offset.add(next, offset);
-      is_first_pass = false;
+    }
+
+    /* Finished splitting sound strip. Offset remaining strips and reset offset variable. */
+    for (int j = i + 1; j < sound_strips.size(); j++) {
+      SEQ_transform_translate_sequence(scene, sound_strips[j], offset);
+    }
+    for (Sequence *other : other_strips) {
+      SEQ_transform_translate_sequence(scene, other, offset);
     }
   }
 
   /* Delete strips. */
   for (Sequence *seq : strips_to_remove) {
     SEQ_edit_flag_for_removal(scene, seqbase, seq);
+    // seq->color_tag = SEQUENCE_COLOR_01;
   }
   SEQ_edit_remove_flagged_sequences(scene, seqbase);
 
