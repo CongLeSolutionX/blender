@@ -144,7 +144,7 @@ bool rna_CurvesGeometry_reorder_curves(blender::bke::CurvesGeometry &curves,
     return false;
   }
   if (Set(new_to_old_indices_map).size() != reorder_indices_num) {
-    BKE_report(reports, RPT_ERROR, "Reorder indices can't have duplicates");
+    BKE_report(reports, RPT_ERROR, "Reorder indices must not have duplicates");
     return false;
   }
   curves = geometry::reorder_curves_geometry(curves, new_to_old_indices_map, {});
