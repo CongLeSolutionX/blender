@@ -655,7 +655,7 @@ inline float4 Result::sample_bilinear_wrap(const float2 &coordinates,
   }
 
   const int2 size = domain_.size;
-  const float2 texel_coordinates = coordinates * float2(size);
+  const float2 texel_coordinates = coordinates * float2(size) - 0.5f;
 
   math::interpolate_bilinear_wrapmode_fl(
       this->float_texture(),
@@ -679,7 +679,7 @@ inline float4 Result::sample_cubic_wrap(const float2 &coordinates, bool wrap_x, 
   }
 
   const int2 size = domain_.size;
-  const float2 texel_coordinates = coordinates * float2(size);
+  const float2 texel_coordinates = coordinates * float2(size) - 0.5f;
 
   math::interpolate_cubic_bspline_wrapmode_fl(
       this->float_texture(),
