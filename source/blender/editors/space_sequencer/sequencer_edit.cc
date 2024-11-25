@@ -3695,6 +3695,11 @@ static int sequencer_remove_silence_exec(bContext *C, wmOperator *op)
   for (blender::int2 range : silent_ranges) {
     for (int i = 0; i < strips.size(); i++) {
       Sequence *seq = strips[i];
+
+      if (SEQ_time_right_handle_frame_get(scene, seq) < range.y) {
+        continue;
+      }
+
       const int offset = strip_to_offset.lookup_default(seq, 0);
       RemoveSilenceResult result = remove_silence_do_split(C, seq, range);
 
@@ -3722,7 +3727,7 @@ static int sequencer_remove_silence_exec(bContext *C, wmOperator *op)
 
     /* Process offset for strips to the right of silent range. */
     for (Sequence *seq : strips) {
-      if (SEQ_time_left_handle_frame_get(scene, seq) < range.y) {
+      if (SEQ_time_right_handle_frame_get(scene, seq) < range.y) {
         continue;
       }
 
