@@ -1046,7 +1046,7 @@ static bool ui_but_update_from_old_block(const bContext *C,
 
   if ((*oldbut)->active || (*oldbut)->semi_modal_state) {
     /* Add the old button to the button groups in the new block. */
-    ui_button_group_replace_but_ptr(block, oldbut->get(), but.get());
+    ui_button_group_replace_but_ptr(block, but.get(), oldbut->get());
     (*oldbut)->block = block;
 
     ui_but_update_old_active_from_new(oldbut->get(), but.get());
@@ -4225,7 +4225,7 @@ uiBut *ui_but_change_type(uiBut *but, eButType new_type)
 
   /* Copy construct button with the new type. */
   but->block->buttons[but_index] = ui_but_new(new_type);
-  but = but->block->buttons.last().get();
+  but = but->block->buttons[but_index].get();
   *but = *old_but_ptr;
   /* We didn't mean to override this :) */
   but->type = new_type;
