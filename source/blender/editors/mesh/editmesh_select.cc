@@ -1612,7 +1612,7 @@ static int edbm_loop_multiselect_exec(bContext *C, wmOperator *op)
           walker_select(em, BMW_EDGELOOP_NONMANIFOLD, eed, true);
         }
         else {
-          changed |= walker_select(em, BMW_EDGELOOP, eed, true);
+          walker_select(em, BMW_EDGELOOP, eed, true);
         }
       }
       EDBM_selectmode_flush(em);
