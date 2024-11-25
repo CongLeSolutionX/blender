@@ -239,6 +239,8 @@ void ShadowPipeline::sync()
     surface_double_sided_ps_ = &pass.sub("Shadow.Surface.Double-Sided");
     surface_single_sided_ps_ = &pass.sub("Shadow.Surface.Single-Sided");
     surface_single_sided_ps_->state_set(state | DRW_STATE_CULL_BACK);
+    surface_single_sided_cull_front_ps_ = &pass.sub("Shadow.Surface.Single-Sided-Cull-Front");
+    surface_single_sided_cull_front_ps_->state_set(state | DRW_STATE_CULL_FRONT);
   }
 
   if (shadow_update_tbdr) {
@@ -263,9 +265,13 @@ void ShadowPipeline::sync()
 
 PassMain::Sub *ShadowPipeline::surface_material_add(::Material *material, GPUMaterial *gpumat)
 {
-  PassMain::Sub *pass = (material->blend_flag & MA_BL_CULL_BACKFACE_SHADOW) ?
-                            surface_single_sided_ps_ :
-                            surface_double_sided_ps_;
+  PassMain::Sub *pass = surface_double_sided_ps_;
+  if (material->blend_flag & MA_BL_CULL_BACKFACE_SHADOW) {
+    pass = surface_single_sided_ps_;
+  }
+  else if (material->blend_flag & MA_BL_CULL_FRONTFACE_SHADOW) {
+    pass = surface_single_sided_cull_front_ps_;
+  }
   return &pass->sub(GPU_material_get_name(gpumat));
 }
 

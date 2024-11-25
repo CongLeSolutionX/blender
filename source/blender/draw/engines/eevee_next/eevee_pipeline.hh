@@ -114,6 +114,7 @@ class ShadowPipeline {
   /* Shadow surface render sub-passes. */
   PassMain::Sub *surface_double_sided_ps_ = nullptr;
   PassMain::Sub *surface_single_sided_ps_ = nullptr;
+  PassMain::Sub *surface_single_sided_cull_front_ps_ = nullptr;
 
  public:
   ShadowPipeline(Instance &inst) : inst_(inst){};

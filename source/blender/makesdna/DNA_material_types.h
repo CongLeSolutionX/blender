@@ -221,15 +221,15 @@ typedef struct Material {
   float refract_depth;
   char blend_method; /* TODO(fclem): Deprecate once we remove legacy EEVEE. */
   char blend_shadow; /* TODO(fclem): Deprecate once we remove legacy EEVEE. */
-  char blend_flag;
-
-  /* Volume. */
-  char volume_intersection_method;
+  short blend_flag;
 
   /* Displacement. */
   float inflate_bounds;
 
-  char _pad3[4];
+  /* Volume. */
+  char volume_intersection_method;
+
+  char _pad3[3];
 
   /**
    * Cached slots for texture painting, must be refreshed via
@@ -369,9 +369,10 @@ enum {
   MA_BL_CULL_BACKFACE = (1 << 2),
   MA_BL_TRANSLUCENCY = (1 << 3),
   MA_BL_LIGHTPROBE_VOLUME_DOUBLE_SIDED = (1 << 4),
-  MA_BL_CULL_BACKFACE_SHADOW = (1 << 5),
+  MA_BL_CULL_BACKFACE_SHADOW = (1 << 8),
   MA_BL_TRANSPARENT_SHADOW = (1 << 6),
   MA_BL_THICKNESS_FROM_SHADOW = (1 << 7),
+  MA_BL_CULL_FRONTFACE_SHADOW = (1 << 5),
 };
 
 /** #Material::blend_shadow */

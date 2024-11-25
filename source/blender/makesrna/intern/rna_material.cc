@@ -218,6 +218,19 @@ static void rna_Material_blend_method_set(PointerRNA *ptr, int new_blend_method)
   }
 }
 
+static int rna_Material_shadow_culling_get(PointerRNA *ptr)
+{
+  Material *material = (Material *)ptr->owner_id;
+  return material->blend_flag & (MA_BL_CULL_BACKFACE_SHADOW | MA_BL_CULL_FRONTFACE_SHADOW);
+}
+
+static void rna_Material_shadow_culling_set(PointerRNA *ptr, int new_shadow_culling)
+{
+  Material *material = (Material *)ptr->owner_id;
+  material->blend_flag &= ~(MA_BL_CULL_BACKFACE_SHADOW | MA_BL_CULL_FRONTFACE_SHADOW);
+  material->blend_flag |= new_shadow_culling;
+}
+
 static void rna_Material_render_method_set(PointerRNA *ptr, int new_render_method)
 {
   Material *material = (Material *)ptr->owner_id;
@@ -921,6 +934,21 @@ void RNA_def_material(BlenderRNA *brna)
       {0, nullptr, 0, nullptr, nullptr},
   };
 
+  static EnumPropertyItem prop_shadow_culling_items[] = {
+      {0, "NONE", 0, "No Culling", "Don't use face culling when casting shadows"},
+      {MA_BL_CULL_BACKFACE_SHADOW,
+       "BACKFACE",
+       0,
+       "Backface Culling",
+       "Use back face culling when casting shadows"},
+      {MA_BL_CULL_FRONTFACE_SHADOW,
+       "BACKFACE",
+       0,
+       "Frontface Culling",
+       "Use front face culling when casting shadows"},
+      {0, nullptr, 0, nullptr, nullptr},
+  };
+
   srna = RNA_def_struct(brna, "Material", "ID");
   RNA_def_struct_ui_text(
       srna,
@@ -988,10 +1016,11 @@ void RNA_def_material(BlenderRNA *brna)
       prop, "Backface Culling", "Use back face culling to hide the back side of faces");
   RNA_def_property_update(prop, 0, "rna_Material_draw_update");
 
-  prop = RNA_def_property(srna, "use_backface_culling_shadow", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "blend_flag", MA_BL_CULL_BACKFACE_SHADOW);
-  RNA_def_property_ui_text(
-      prop, "Shadow Backface Culling", "Use back face culling when casting shadows");
+  prop = RNA_def_property(srna, "shadow_culling_method", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, prop_shadow_culling_items);
+  RNA_def_property_ui_text(prop, "Shadow Face Culling", "Use face culling when casting shadows");
+  RNA_def_property_enum_funcs(
+      prop, "rna_Material_shadow_culling_get", "rna_Material_shadow_culling_set", nullptr);
   RNA_def_property_update(prop, 0, "rna_Material_draw_update");
 
   prop = RNA_def_property(srna, "use_backface_culling_lightprobe_volume", PROP_BOOLEAN, PROP_NONE);
