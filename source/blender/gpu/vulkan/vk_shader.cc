@@ -583,6 +583,11 @@ bool VKShader::finalize(const shader::ShaderCreateInfo *info)
   if (compilation_failed) {
     return false;
   }
+  /* Add-ons that still use old API will crash as the shader create info isn't available.
+   * See #130555 */
+  if (info == nullptr) {
+    return false;
+  }
 
   if (do_geometry_shader_injection(info)) {
     std::string source = workaround_geometry_shader_source_create(*info);
@@ -1053,9 +1058,9 @@ std::string VKShader::fragment_interface_declare(const shader::ShaderCreateInfo 
   int fragment_out_location = 0;
   for (const ShaderCreateInfo::FragOut &output : info.fragment_outputs_) {
     /* When using dynamic rendering the attachment location doesn't change. When using render
-     * passes and subpasses the location refers to the color attachment of the subpass.
+     * passes and sub-passes the location refers to the color attachment of the sub-pass.
      *
-     * LIMITATION: dual source blending cannot be used together with subpasses.
+     * LIMITATION: dual source blending cannot be used together with sub-passes.
      */
     const bool use_dual_blending = output.blend != DualBlend::NONE;
     BLI_assert_msg(!(use_dual_blending && !info.subpass_inputs_.is_empty()),
