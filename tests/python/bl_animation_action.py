@@ -66,7 +66,7 @@ class ActionSlotAssignmentTest(unittest.TestCase):
 
         # Unassigning should keep the slot name.
         cube_adt.action = None
-        self.assertEqual(cube_adt.action_slot_name, slot_cube.name)
+        self.assertEqual(cube_adt.last_slot_identifier, slot_cube.name)
 
         # It should not be possible to set the slot handle while the Action is unassigned.
         slot_extra = action.slots.new()
