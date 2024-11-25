@@ -50,14 +50,10 @@ _attribute_value_shape = {
 }
 
 def get_attribute(attributes, name):
-  if name not in attributes:
-    return None
-  
   attr = attributes[name]
-  domain_size = attributes.domain_size(attr.domain)
-  shape = (domain_size, *_attribute_value_shape[attr.data_type])
+  shape = (len(attr.data), *_attribute_value_shape[attr.data_type])
 
-  data = np.zeros(shape, dtype=_attribute_value_dtype[attr.data_type])
+  data = np.empty(shape, dtype=_attribute_value_dtype[attr.data_type])
   attr.data.foreach_get(_attribute_value_string[attr.data_type], np.ravel(data))
   return data
 
@@ -69,19 +65,10 @@ class AttributeContextWriter(AbstractContextManager):
     self.name = name
 
   def __enter__(self):
-    # TODO: Handle errors correctly
-    if self.name not in self.attributes:
-      return None
-    
-    self.attr = self.attributes[self.name]
-    domain_size = self.attributes.domain_size(self.attr.domain)
-    shape = (domain_size, *_attribute_value_shape[self.attr.data_type])
-
-    self.data = np.zeros(shape, dtype=_attribute_value_dtype[self.attr.data_type])
-    self.attr.data.foreach_get(_attribute_value_string[self.attr.data_type], np.ravel(self.data))
+    # Store the reference to the data to write it back on __exit__.
+    self.data = get_attribute(self.attributes, self.name)
     return self.data
     
   def __exit__(self, *exc_details):
-    # TODO: Handle errors correctly
-    if self.name in self.attributes:
-      self.attr.data.foreach_set(_attribute_value_string[self.attr.data_type], np.ravel(self.data))
+    attr = self.attributes[self.name]
+    attr.data.foreach_set(_attribute_value_string[attr.data_type], np.ravel(self.data))
