@@ -337,6 +337,11 @@
 #    define ARCH_CPU_32_BITS 1
 #    define ARCH_CPU_BIG_ENDIAN 1
 #  endif
+#elif defined(__loongarch_lp64)
+#  define ARCH_CPU_LOONG_FAMILY 1
+#  define ARCH_CPU_LOONG64 1
+#  define ARCH_CPU_64_BITS 1
+#  define ARCH_CPU_LITTLE_ENDIAN 1
 #else
 #  error Please add support for your architecture in BLI_build_config.h
 #endif
@@ -373,6 +378,9 @@
 #if !defined(ARCH_CPU_S390_FAMILY)
 #  define ARCH_CPU_S390_FAMILY 0
 #endif
+#if !defined(ARCH_CPU_LOONG_FAMILY)
+#  define ARCH_CPU_LOONG_FAMILY 0
+#endif
 
 #if !defined(ARCH_CPU_ARM64)
 #  define ARCH_CPU_ARM64 0
@@ -406,6 +414,9 @@
 #endif
 #if !defined(ARCH_CPU_X86_64)
 #  define ARCH_CPU_X86_64 0
+#endif
+#if !defined(ARCH_CPU_LOONG64)
+#  define ARCH_CPU_LOONG64 0
 #endif
 
 /** \} */
