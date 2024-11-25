@@ -18,7 +18,6 @@
 #include "DNA_armature_types.h"
 #include "DNA_object_types.h"
 
-#include "BKE_action.h"
 #include "BKE_action.hh"
 #include "BKE_armature.hh"
 #include "BKE_idprop.hh"
@@ -58,7 +57,7 @@ static PoseBackup *pose_backup_create(const Object *ob,
 
   BoneNameSet backed_up_bone_names;
   /* Make a backup of the given pose channel. */
-  auto store_animated_pchans = [&](FCurve * /*unused*/, const char *bone_name) {
+  auto store_animated_pchans = [&](const FCurve * /*unused*/, const char *bone_name) {
     if (backed_up_bone_names.contains(bone_name)) {
       /* Only backup each bone once. */
       return;

@@ -428,7 +428,7 @@ class MemoryBuffer {
                    MemoryBufferExtend extend_x = MemoryBufferExtend::Clip,
                    MemoryBufferExtend extend_y = MemoryBufferExtend::Clip) const
   {
-    // Extend is completely ignored for constants. This may need to be fixed in the future.
+    /* Extend is completely ignored for constants. This may need to be fixed in the future. */
     if (is_a_single_elem_) {
       memcpy(result, buffer_, get_elem_bytes_len());
       return;
@@ -446,7 +446,7 @@ class MemoryBuffer {
     const float w = get_width();
     const float h = get_height();
 
-    // compute (linear interpolation) intersection with Clip
+    /* Compute (linear interpolation) intersection with Clip. */
     float mult = 1.0f;
     if (extend_x == MemoryBufferExtend::Clip) {
       mult = std::min(x + 1.0f, w - x);
@@ -460,23 +460,26 @@ class MemoryBuffer {
     }
 
     if (sampler == PixelSampler::Bilinear) {
-      // Sample using Extend or Repeat
-      math::interpolate_bilinear_wrap_fl(buffer_,
-                                         result,
-                                         w,
-                                         h,
-                                         num_channels_,
-                                         x,
-                                         y,
-                                         extend_x == MemoryBufferExtend::Repeat,
-                                         extend_y == MemoryBufferExtend::Repeat);
+      /* Sample using Extend or Repeat. */
+      math::interpolate_bilinear_wrapmode_fl(
+          buffer_,
+          result,
+          w,
+          h,
+          num_channels_,
+          x,
+          y,
+          extend_x == MemoryBufferExtend::Repeat ? math::InterpWrapMode::Repeat :
+                                                   math::InterpWrapMode::Extend,
+          extend_y == MemoryBufferExtend::Repeat ? math::InterpWrapMode::Repeat :
+                                                   math::InterpWrapMode::Extend);
     }
-    else {  // PixelSampler::Bicubic
-      // Sample using Extend (Repeat is not implemented by interpolate_cubic_bspline)
+    else { /* #PixelSampler::Bicubic */
+      /* Sample using Extend (Repeat is not implemented by `interpolate_cubic_bspline`). */
       math::interpolate_cubic_bspline_fl(buffer_, result, w, h, num_channels_, x, y);
     }
 
-    // Multiply by Clip intersection
+    /* Multiply by Clip intersection. */
     if (mult < 1.0f) {
       for (int i = 0; i < num_channels_; ++i) {
         result[i] *= mult;
@@ -504,15 +507,18 @@ class MemoryBuffer {
       memcpy(result, buffer_, sizeof(float) * num_channels_);
     }
     else {
-      math::interpolate_bilinear_wrap_fl(buffer_,
-                                         result,
-                                         get_width(),
-                                         get_height(),
-                                         num_channels_,
-                                         u,
-                                         v,
-                                         extend_x == MemoryBufferExtend::Repeat,
-                                         extend_y == MemoryBufferExtend::Repeat);
+      math::interpolate_bilinear_wrapmode_fl(
+          buffer_,
+          result,
+          get_width(),
+          get_height(),
+          num_channels_,
+          u,
+          v,
+          extend_x == MemoryBufferExtend::Repeat ? math::InterpWrapMode::Repeat :
+                                                   math::InterpWrapMode::Extend,
+          extend_y == MemoryBufferExtend::Repeat ? math::InterpWrapMode::Repeat :
+                                                   math::InterpWrapMode::Extend);
     }
   }
 
@@ -679,9 +685,7 @@ class MemoryBuffer {
                        int to_y,
                        int to_channel_offset);
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("COM:MemoryBuffer")
-#endif
 };
 
 }  // namespace blender::compositor

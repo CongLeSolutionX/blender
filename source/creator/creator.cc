@@ -82,6 +82,10 @@
 #  include <floatingpoint.h>
 #endif
 
+#ifdef _OPENMP
+#  include <omp.h>
+#endif
+
 #ifdef WITH_BINRELOC
 #  include "binreloc.h"
 #endif
@@ -92,10 +96,6 @@
 
 #ifdef WITH_CYCLES_LOGGING
 #  include "CCL_api.h"
-#endif
-
-#ifdef WITH_SDL_DYNLOAD
-#  include "sdlew.h"
 #endif
 
 #include "creator_intern.h" /* Own include. */
@@ -146,7 +146,7 @@ static void main_callback_setup()
   MEM_set_error_callback(callback_mem_error);
 }
 
-/* free data on early exit (if Python calls 'sys.exit()' while parsing args for eg). */
+/** Free data on early exit (if Python calls `sys.exit()` while parsing args for eg). */
 struct CreatorAtExitData {
 #ifndef WITH_PYTHON_MODULE
   bArgs *ba;
@@ -208,7 +208,7 @@ static void callback_clg_fatal(void *fp)
 int main_python_enter(int argc, const char **argv);
 void main_python_exit();
 
-/* Rename the 'main' function, allowing Python initialization to call it. */
+/* Rename the `main(..)` function, allowing Python initialization to call it. */
 #  define main main_python_enter
 static void *evil_C = nullptr;
 
@@ -304,12 +304,19 @@ int main(int argc,
   setvbuf(stdout, nullptr, _IONBF, 0);
 #endif
 
-#ifdef WIN32
-/* We delay loading of OPENMP so we can set the policy here. */
-#  if defined(_MSC_VER)
+#ifdef _OPENMP
+#  if defined(WIN32) && defined(_MSC_VER)
+  /* We delay loading of OPENMP so we can set the policy here. */
   _putenv_s("OMP_WAIT_POLICY", "PASSIVE");
 #  endif
+  /* Ensure the OpenMP runtime is initialized as soon as possible to make sure duplicate
+   * `libomp/libiomp5` runtime conflicts are detected as soon as a second runtime is initialized.
+   * Initialization must be done after setting any relevant environment variables, but before
+   * installing signal handlers. */
+  omp_get_max_threads();
+#endif
 
+#ifdef WIN32
 #  ifdef USE_WIN32_UNICODE_ARGS
   /* Win32 Unicode Arguments. */
   {
@@ -349,7 +356,7 @@ int main(int argc,
         MEM_use_guarded_allocator();
         break;
       }
-      if (STR_ELEM(argv[i], "--", "--command")) {
+      if (STR_ELEM(argv[i], "--", "-c", "--command")) {
         break;
       }
     }
@@ -370,10 +377,6 @@ int main(int argc,
       STRNCPY(build_commit_time, unknown);
     }
   }
-#endif
-
-#ifdef WITH_SDL_DYNLOAD
-  sdlewInit();
 #endif
 
   /* Initialize logging. */
@@ -457,7 +460,7 @@ int main(int argc,
   main_args_setup(C, ba, false);
 
   /* Begin argument parsing, ignore leaks so arguments that call #exit
-   * (such as '--version' & '--help') don't report leaks. */
+   * (such as `--version` & `--help`) don't report leaks. */
   MEM_use_memleak_detection(false);
 
   /* Parse environment handling arguments. */
@@ -553,8 +556,8 @@ int main(int argc,
 #endif
 
   /* Explicitly free data allocated for argument parsing:
-   * - 'ba'
-   * - 'argv' on WIN32.
+   * - `ba`
+   * - `argv` on WIN32.
    */
   callback_main_atexit(&app_init_data);
   BKE_blender_atexit_unregister(callback_main_atexit, &app_init_data);

@@ -79,7 +79,7 @@ static void pointcloud_copy_data(Main * /*bmain*/,
   const PointCloud *pointcloud_src = (const PointCloud *)id_src;
   pointcloud_dst->mat = static_cast<Material **>(MEM_dupallocN(pointcloud_src->mat));
 
-  CustomData_copy(
+  CustomData_init_from(
       &pointcloud_src->pdata, &pointcloud_dst->pdata, CD_MASK_ALL, pointcloud_dst->totpoint);
 
   pointcloud_dst->runtime = new blender::bke::PointCloudRuntime();
@@ -216,14 +216,14 @@ MutableSpan<float3> PointCloud::positions_for_write()
           this->totpoint};
 }
 
-void *BKE_pointcloud_add(Main *bmain, const char *name)
+PointCloud *BKE_pointcloud_add(Main *bmain, const char *name)
 {
   PointCloud *pointcloud = static_cast<PointCloud *>(BKE_id_new(bmain, ID_PT, name));
 
   return pointcloud;
 }
 
-void *BKE_pointcloud_add_default(Main *bmain, const char *name)
+PointCloud *BKE_pointcloud_add_default(Main *bmain, const char *name)
 {
   PointCloud *pointcloud = static_cast<PointCloud *>(BKE_libblock_alloc(bmain, ID_PT, name, 0));
 
@@ -253,7 +253,7 @@ void BKE_pointcloud_nomain_to_pointcloud(PointCloud *pointcloud_src, PointCloud 
   CustomData_free(&pointcloud_dst->pdata, pointcloud_dst->totpoint);
 
   const int totpoint = pointcloud_dst->totpoint = pointcloud_src->totpoint;
-  CustomData_copy(&pointcloud_src->pdata, &pointcloud_dst->pdata, CD_MASK_ALL, totpoint);
+  CustomData_init_from(&pointcloud_src->pdata, &pointcloud_dst->pdata, CD_MASK_ALL, totpoint);
 
   BKE_id_free(nullptr, pointcloud_src);
 }
@@ -282,6 +282,18 @@ std::optional<blender::Bounds<blender::float3>> PointCloud::bounds_min_max() con
 void PointCloud::count_memory(blender::MemoryCounter &memory) const
 {
   CustomData_count_memory(this->pdata, this->totpoint, memory);
+}
+
+blender::bke::AttributeAccessor PointCloud::attributes() const
+{
+  return blender::bke::AttributeAccessor(this,
+                                         blender::bke::pointcloud_attribute_accessor_functions());
+}
+
+blender::bke::MutableAttributeAccessor PointCloud::attributes_for_write()
+{
+  return blender::bke::MutableAttributeAccessor(
+      this, blender::bke::pointcloud_attribute_accessor_functions());
 }
 
 bool BKE_pointcloud_attribute_required(const PointCloud * /*pointcloud*/, const char *name)
@@ -403,3 +415,15 @@ void BKE_pointcloud_batch_cache_free(PointCloud *pointcloud)
     BKE_pointcloud_batch_cache_free_cb(pointcloud);
   }
 }
+
+namespace blender::bke {
+
+PointCloud *pointcloud_new_no_attributes(int totpoint)
+{
+  PointCloud *pointcloud = BKE_pointcloud_new_nomain(0);
+  pointcloud->totpoint = totpoint;
+  CustomData_free_layer_named(&pointcloud->pdata, "position", 0);
+  return pointcloud;
+}
+
+}  // namespace blender::bke

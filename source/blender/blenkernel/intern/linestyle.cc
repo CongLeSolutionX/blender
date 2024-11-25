@@ -61,10 +61,10 @@ static void linestyle_copy_data(Main *bmain,
   FreestyleLineStyle *linestyle_dst = (FreestyleLineStyle *)id_dst;
   const FreestyleLineStyle *linestyle_src = (const FreestyleLineStyle *)id_src;
 
-  /* We never handle user-count here for own data. */
+  /* Never handle user-count here for own sub-data. */
   const int flag_subdata = flag | LIB_ID_CREATE_NO_USER_REFCOUNT;
-  /* We always need allocation of our private ID data. */
-  const int flag_private_id_data = flag & ~LIB_ID_CREATE_NO_ALLOCATE;
+  /* Always need allocation of the embedded ID data. */
+  const int flag_embedded_id_data = flag_subdata & ~LIB_ID_CREATE_NO_ALLOCATE;
 
   for (int a = 0; a < MAX_MTEX; a++) {
     if (linestyle_src->mtex[a]) {
@@ -79,7 +79,7 @@ static void linestyle_copy_data(Main *bmain,
                        &linestyle_src->nodetree->id,
                        &linestyle_dst->id,
                        reinterpret_cast<ID **>(&linestyle_dst->nodetree),
-                       flag_private_id_data);
+                       flag_embedded_id_data);
   }
 
   BLI_listbase_clear(&linestyle_dst->color_modifiers);
@@ -443,17 +443,11 @@ static void linestyle_blend_write(BlendWriter *writer, ID *id, const void *id_ad
     }
   }
   if (linestyle->nodetree) {
-    BLO_Write_IDBuffer *temp_embedded_id_buffer = BLO_write_allocate_id_buffer();
-    BLO_write_init_id_buffer_from_id(
-        temp_embedded_id_buffer, &linestyle->nodetree->id, BLO_write_is_undo(writer));
-    BLO_write_struct_at_address(writer,
-                                bNodeTree,
-                                linestyle->nodetree,
-                                BLO_write_get_id_buffer_temp_id(temp_embedded_id_buffer));
+    BLO_Write_IDBuffer temp_embedded_id_buffer{linestyle->nodetree->id, writer};
+    BLO_write_struct_at_address(
+        writer, bNodeTree, linestyle->nodetree, temp_embedded_id_buffer.get());
     blender::bke::node_tree_blend_write(
-        writer,
-        reinterpret_cast<bNodeTree *>(BLO_write_get_id_buffer_temp_id(temp_embedded_id_buffer)));
-    BLO_write_destroy_id_buffer(&temp_embedded_id_buffer);
+        writer, reinterpret_cast<bNodeTree *>(temp_embedded_id_buffer.get()));
   }
 }
 

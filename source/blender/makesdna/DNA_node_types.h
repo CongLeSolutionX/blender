@@ -34,7 +34,6 @@ namespace blender::bke {
 class bNodeTreeRuntime;
 class bNodeRuntime;
 class bNodeSocketRuntime;
-struct bNodeTreeInterfaceCache;
 }  // namespace blender::bke
 namespace blender::bke {
 class bNodeTreeZones;
@@ -348,6 +347,13 @@ typedef struct bNodePanelState {
 #endif
 } bNodePanelState;
 
+typedef enum NodeWarningPropagation {
+  NODE_WARNING_PROPAGATION_ALL = 0,
+  NODE_WARNING_PROPAGATION_NONE = 1,
+  NODE_WARNING_PROPAGATION_ONLY_ERRORS = 2,
+  NODE_WARNING_PROPAGATION_ONLY_ERRORS_AND_WARNINGS = 3,
+} NodeWarningPropagation;
+
 typedef struct bNode {
   struct bNode *next, *prev;
 
@@ -393,6 +399,12 @@ typedef struct bNode {
   /** Used for some builtin nodes that store properties but don't have a storage struct. */
   int16_t custom1, custom2;
   float custom3, custom4;
+
+  /**
+   * #NodeWarningPropagation.
+   */
+  int8_t warning_propagation;
+  char _pad[7];
 
   /**
    * Optional link to libdata.
@@ -477,6 +489,9 @@ typedef struct bNode {
   const bNodeSocket &output_by_identifier(blender::StringRef identifier) const;
   bNodeSocket &input_by_identifier(blender::StringRef identifier);
   bNodeSocket &output_by_identifier(blender::StringRef identifier);
+  /** Lookup socket by its declaration. */
+  const bNodeSocket &socket_by_decl(const blender::nodes::SocketDeclaration &decl) const;
+  bNodeSocket &socket_by_decl(const blender::nodes::SocketDeclaration &decl);
   /** If node is frame, will return all children nodes. */
   blender::Span<bNode *> direct_children_in_frame() const;
   blender::Span<bNodePanelState> panel_states() const;
@@ -1005,6 +1020,12 @@ typedef struct NodeFrame {
   short flag;
   short label_size;
 } NodeFrame;
+
+typedef struct NodeReroute {
+  /** Name of the socket type (e.g. `NodeSocketFloat`). */
+  char type_idname[64];
+
+} NodeReroute;
 
 /** \note This one has been replaced with #ImageUser, keep it for do_versions(). */
 typedef struct NodeImageAnim {
@@ -1870,6 +1891,11 @@ typedef struct NodeGeometryDuplicateElements {
   int8_t domain;
 } NodeGeometryDuplicateElements;
 
+typedef struct NodeGeometryMergeLayers {
+  /** #MergeLayerMode. */
+  int8_t mode;
+} NodeGeometryMergeLayers;
+
 typedef struct NodeGeometrySeparateGeometry {
   /** #AttrDomain. */
   int8_t domain;
@@ -1954,6 +1980,80 @@ typedef struct NodeGeometryRepeatOutput {
   blender::MutableSpan<NodeRepeatItem> items_span();
 #endif
 } NodeGeometryRepeatOutput;
+
+typedef struct NodeGeometryForeachGeometryElementInput {
+  /** bNode.identifier of the corresponding output node. */
+  int32_t output_node_id;
+} NodeGeometryForeachGeometryElementInput;
+
+typedef struct NodeForeachGeometryElementInputItem {
+  char *name;
+  /** #eNodeSocketDatatype. */
+  short socket_type;
+  char _pad[2];
+  /** Generated identifier that stays the same even when the name or order changes. */
+  int identifier;
+} NodeForeachGeometryElementInputItem;
+
+typedef struct NodeForeachGeometryElementMainItem {
+  char *name;
+  /** #eNodeSocketDatatype. */
+  short socket_type;
+  char _pad[2];
+  /** Generated identifier that stays the same even when the name or order changes. */
+  int identifier;
+} NodeForeachGeometryElementMainItem;
+
+typedef struct NodeForeachGeometryElementGenerationItem {
+  char *name;
+  /** #eNodeSocketDatatype. */
+  short socket_type;
+  /** #AttrDomain. */
+  uint8_t domain;
+  char _pad[1];
+  /** Generated identifier that stays the same even when the name or order changes. */
+  int identifier;
+} NodeForeachGeometryElementGenerationItem;
+
+typedef struct NodeForeachGeometryElementInputItems {
+  NodeForeachGeometryElementInputItem *items;
+  int items_num;
+  int active_index;
+  int next_identifier;
+  char _pad[4];
+} NodeForeachGeometryElementInputItems;
+
+typedef struct NodeForeachGeometryElementMainItems {
+  NodeForeachGeometryElementMainItem *items;
+  int items_num;
+  int active_index;
+  int next_identifier;
+  char _pad[4];
+} NodeForeachGeometryElementMainItems;
+
+typedef struct NodeForeachGeometryElementGenerationItems {
+  NodeForeachGeometryElementGenerationItem *items;
+  int items_num;
+  int active_index;
+  int next_identifier;
+  char _pad[4];
+} NodeForeachGeometryElementGenerationItems;
+
+typedef struct NodeGeometryForeachGeometryElementOutput {
+  /**
+   * The `foreach` zone has three sets of dynamic sockets.
+   * One on the input node and two on the output node.
+   * All settings are stored centrally in the output node storage though.
+   */
+  NodeForeachGeometryElementInputItems input_items;
+  NodeForeachGeometryElementMainItems main_items;
+  NodeForeachGeometryElementGenerationItems generation_items;
+  /** This index is used when displaying socket values or using the viewer node. */
+  int inspection_index;
+  /** #AttrDomain. This is the domain that is iterated over. */
+  uint8_t domain;
+  char _pad[3];
+} NodeGeometryForeachGeometryElementOutput;
 
 typedef struct IndexSwitchItem {
   /** Generated unique identifier which stays the same even when the item order or names change. */
@@ -2102,13 +2202,10 @@ enum {
   NODE_PROXY_AUTOTYPE = 1,
 };
 
-/* Comp channel matte. */
-
+/* Conductive fresnel types */
 enum {
-  CMP_NODE_CHANNEL_MATTE_CS_RGB = 1,
-  CMP_NODE_CHANNEL_MATTE_CS_HSV = 2,
-  CMP_NODE_CHANNEL_MATTE_CS_YUV = 3,
-  CMP_NODE_CHANNEL_MATTE_CS_YCC = 4,
+  SHD_PHYSICAL_CONDUCTOR = 0,
+  SHD_CONDUCTOR_F82 = 1,
 };
 
 /* glossy distributions */
@@ -2464,6 +2561,27 @@ typedef enum NodeCompareOperation {
   NODE_COMPARE_COLOR_DARKER = 7,
 } NodeCompareOperation;
 
+typedef enum NodeIntegerMathOperation {
+  NODE_INTEGER_MATH_ADD = 0,
+  NODE_INTEGER_MATH_SUBTRACT = 1,
+  NODE_INTEGER_MATH_MULTIPLY = 2,
+  NODE_INTEGER_MATH_DIVIDE = 3,
+  NODE_INTEGER_MATH_MULTIPLY_ADD = 4,
+  NODE_INTEGER_MATH_POWER = 5,
+  NODE_INTEGER_MATH_FLOORED_MODULO = 6,
+  NODE_INTEGER_MATH_ABSOLUTE = 7,
+  NODE_INTEGER_MATH_MINIMUM = 8,
+  NODE_INTEGER_MATH_MAXIMUM = 9,
+  NODE_INTEGER_MATH_GCD = 10,
+  NODE_INTEGER_MATH_LCM = 11,
+  NODE_INTEGER_MATH_NEGATE = 12,
+  NODE_INTEGER_MATH_SIGN = 13,
+  NODE_INTEGER_MATH_DIVIDE_FLOOR = 14,
+  NODE_INTEGER_MATH_DIVIDE_CEIL = 15,
+  NODE_INTEGER_MATH_DIVIDE_ROUND = 16,
+  NODE_INTEGER_MATH_MODULO = 17,
+} NodeIntegerMathOperation;
+
 typedef enum FloatToIntRoundingMode {
   FN_NODE_FLOAT_TO_INT_ROUND = 0,
   FN_NODE_FLOAT_TO_INT_FLOOR = 1,
@@ -2552,8 +2670,8 @@ typedef enum CMPNodeAlphaConvertMode {
 
 /** Distance Matte Node. Stored in #NodeChroma.channel. */
 typedef enum CMPNodeDistanceMatteColorSpace {
-  CMP_NODE_DISTANCE_MATTE_COLOR_SPACE_YCCA = 0,
   CMP_NODE_DISTANCE_MATTE_COLOR_SPACE_RGBA = 1,
+  CMP_NODE_DISTANCE_MATTE_COLOR_SPACE_YCCA = 2,
 } CMPNodeDistanceMatteColorSpace;
 
 /** Color Spill Node. Stored in `custom2`. */
@@ -2701,6 +2819,14 @@ typedef enum CMPNodeCryptomatteSource {
   CMP_NODE_CRYPTOMATTE_SOURCE_IMAGE = 1,
 } CMPNodeCryptomatteSource;
 
+/* Channel Matte node, stored in custom1. */
+typedef enum CMPNodeChannelMatteColorSpace {
+  CMP_NODE_CHANNEL_MATTE_CS_RGB = 1,
+  CMP_NODE_CHANNEL_MATTE_CS_HSV = 2,
+  CMP_NODE_CHANNEL_MATTE_CS_YUV = 3,
+  CMP_NODE_CHANNEL_MATTE_CS_YCC = 4,
+} CMPNodeChannelMatteColorSpace;
+
 /* Point Density shader node */
 
 enum {
@@ -2723,6 +2849,15 @@ enum {
   SHD_POINTDENSITY_COLOR_VERTCOL = 0,
   SHD_POINTDENSITY_COLOR_VERTWEIGHT = 1,
   SHD_POINTDENSITY_COLOR_VERTNOR = 2,
+};
+
+/* Scattering phase functions */
+enum {
+  SHD_PHASE_HENYEY_GREENSTEIN = 0,
+  SHD_PHASE_FOURNIER_FORAND = 1,
+  SHD_PHASE_DRAINE = 2,
+  SHD_PHASE_RAYLEIGH = 3,
+  SHD_PHASE_MIE = 4,
 };
 
 /* Output shader node */
@@ -2757,19 +2892,6 @@ typedef enum GeometryNodeCurveHandleMode {
   GEO_NODE_CURVE_HANDLE_LEFT = (1 << 0),
   GEO_NODE_CURVE_HANDLE_RIGHT = (1 << 1)
 } GeometryNodeCurveHandleMode;
-
-typedef enum GeometryNodeTriangulateNGons {
-  GEO_NODE_TRIANGULATE_NGON_BEAUTY = 0,
-  GEO_NODE_TRIANGULATE_NGON_EARCLIP = 1,
-} GeometryNodeTriangulateNGons;
-
-typedef enum GeometryNodeTriangulateQuads {
-  GEO_NODE_TRIANGULATE_QUAD_BEAUTY = 0,
-  GEO_NODE_TRIANGULATE_QUAD_FIXED = 1,
-  GEO_NODE_TRIANGULATE_QUAD_ALTERNATE = 2,
-  GEO_NODE_TRIANGULATE_QUAD_SHORTEDGE = 3,
-  GEO_NODE_TRIANGULATE_QUAD_LONGEDGE = 4,
-} GeometryNodeTriangulateQuads;
 
 typedef enum GeometryNodeDistributePointsInVolumeMode {
   GEO_NODE_DISTRIBUTE_POINTS_IN_VOLUME_DENSITY_RANDOM = 0,

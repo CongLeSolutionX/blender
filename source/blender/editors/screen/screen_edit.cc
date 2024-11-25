@@ -21,7 +21,7 @@
 #include "BKE_context.hh"
 #include "BKE_global.hh"
 #include "BKE_icons.h"
-#include "BKE_image.h"
+#include "BKE_image.hh"
 #include "BKE_layer.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_main.hh"
@@ -554,6 +554,11 @@ static bool screen_area_join_ex(
     screen_area_close(C, screen, side1);
     screen_area_close(C, screen, side2);
   }
+  else {
+    /* Force full rebuild. #130732 */
+    ED_area_tag_redraw(side1);
+    ED_area_tag_redraw(side2);
+  }
 
   BKE_icon_changed(screen->id.icon_id);
   return true;
@@ -613,7 +618,9 @@ void screen_area_spacelink_add(const Scene *scene, ScrArea *area, eSpace_Type sp
 static void region_cursor_set_ex(wmWindow *win, ScrArea *area, ARegion *region, bool swin_changed)
 {
   BLI_assert(WM_window_get_active_screen(win)->active_region == region);
-  if (win->tag_cursor_refresh || swin_changed || (region->type && region->type->event_cursor)) {
+  if (win->tag_cursor_refresh || swin_changed ||
+      (region->runtime->type && region->runtime->type->event_cursor))
+  {
     win->tag_cursor_refresh = false;
     ED_region_cursor_set(win, area, region);
   }
@@ -666,7 +673,7 @@ static bool region_poll(const bContext *C,
                         const ScrArea *area,
                         const ARegion *region)
 {
-  if (!region->type || !region->type->poll) {
+  if (!region->runtime->type || !region->runtime->type->poll) {
     /* Show region by default. */
     return true;
   }
@@ -677,13 +684,13 @@ static bool region_poll(const bContext *C,
   params.region = region;
   params.context = C;
 
-  return region->type->poll(&params);
+  return region->runtime->type->poll(&params);
 }
 
 /**
  * \return true if any region polling state changed, and a screen refresh is needed.
  */
-static bool screen_regions_poll(bContext *C, wmWindow *win, bScreen *screen)
+static bool screen_regions_poll(bContext *C, wmWindow *win, const bScreen *screen)
 {
   wmWindow *prev_win = CTX_wm_window(C);
   ScrArea *prev_area = CTX_wm_area(C);
@@ -704,8 +711,8 @@ static bool screen_regions_poll(bContext *C, wmWindow *win, bScreen *screen)
       if (region_poll(C, screen, area, region) == false) {
         region->flag |= RGN_FLAG_POLL_FAILED;
       }
-      else if (region->type && region->type->on_poll_success) {
-        region->type->on_poll_success(C, region);
+      else if (region->runtime->type && region->runtime->type->on_poll_success) {
+        region->runtime->type->on_poll_success(C, region);
       }
 
       if (old_region_flag != region->flag) {
@@ -829,13 +836,13 @@ void ED_region_exit(bContext *C, ARegion *region)
   wmWindow *win = CTX_wm_window(C);
   ARegion *prevar = CTX_wm_region(C);
 
-  if (region->type && region->type->exit) {
-    region->type->exit(wm, region);
+  if (region->runtime->type && region->runtime->type->exit) {
+    region->runtime->type->exit(wm, region);
   }
 
   CTX_wm_region_set(C, region);
 
-  WM_event_remove_handlers(C, &region->handlers);
+  WM_event_remove_handlers(C, &region->runtime->handlers);
   WM_event_modal_handler_region_replace(win, region, nullptr);
 
   if (region->regiontype == RGN_TYPE_TEMPORARY) {
@@ -851,13 +858,13 @@ void ED_region_exit(bContext *C, ARegion *region)
 
   WM_draw_region_free(region);
   /* The region is not in a state that it can be visible in anymore. Reinitializing is needed. */
-  region->visible = false;
+  region->runtime->visible = false;
 
-  MEM_SAFE_FREE(region->headerstr);
+  MEM_SAFE_FREE(region->runtime->headerstr);
 
-  if (region->regiontimer) {
-    WM_event_timer_remove(wm, win, region->regiontimer);
-    region->regiontimer = nullptr;
+  if (region->runtime->regiontimer) {
+    WM_event_timer_remove(wm, win, region->runtime->regiontimer);
+    region->runtime->regiontimer = nullptr;
   }
 
   WM_msgbus_clear_by_owner(wm->message_bus, region);
@@ -1056,7 +1063,7 @@ void ED_screen_set_active_region(bContext *C, wmWindow *win, const int xy[2])
         }
 
         if (region == region_prev && region != screen->active_region) {
-          wmGizmoMap *gzmap = region_prev->gizmo_map;
+          wmGizmoMap *gzmap = region_prev->runtime->gizmo_map;
           if (gzmap) {
             if (WM_gizmo_highlight_set(gzmap, nullptr)) {
               ED_region_tag_redraw_no_rebuild(region_prev);
@@ -1209,10 +1216,11 @@ static int screen_global_header_size()
 
 static void screen_global_topbar_area_refresh(wmWindow *win, bScreen *screen)
 {
+  const blender::int2 win_size = WM_window_native_pixel_size(win);
   const short size = screen_global_header_size();
   rcti rect;
 
-  BLI_rcti_init(&rect, 0, WM_window_native_pixel_x(win) - 1, 0, WM_window_native_pixel_y(win) - 1);
+  BLI_rcti_init(&rect, 0, win_size[0] - 1, 0, win_size[1] - 1);
   rect.ymin = rect.ymax - size;
 
   screen_global_area_refresh(
@@ -1221,12 +1229,13 @@ static void screen_global_topbar_area_refresh(wmWindow *win, bScreen *screen)
 
 static void screen_global_statusbar_area_refresh(wmWindow *win, bScreen *screen)
 {
+  const blender::int2 win_size = WM_window_native_pixel_size(win);
   const short size_min = 1;
   const short size_max = 0.85f * screen_global_header_size();
   const short size = (screen->flag & SCREEN_COLLAPSE_STATUSBAR) ? size_min : size_max;
   rcti rect;
 
-  BLI_rcti_init(&rect, 0, WM_window_native_pixel_x(win) - 1, 0, WM_window_native_pixel_y(win) - 1);
+  BLI_rcti_init(&rect, 0, win_size[0] - 1, 0, win_size[1] - 1);
   rect.ymax = rect.ymin + size_max;
 
   screen_global_area_refresh(
@@ -1610,9 +1619,9 @@ ScrArea *ED_screen_state_toggle(bContext *C, wmWindow *win, ScrArea *area, const
      * are no longer in the same screen */
     LISTBASE_FOREACH (ARegion *, region, &area->regionbase) {
       UI_blocklist_free(C, region);
-      if (region->regiontimer) {
-        WM_event_timer_remove(wm, nullptr, region->regiontimer);
-        region->regiontimer = nullptr;
+      if (region->runtime->regiontimer) {
+        WM_event_timer_remove(wm, nullptr, region->runtime->regiontimer);
+        region->runtime->regiontimer = nullptr;
       }
     }
 

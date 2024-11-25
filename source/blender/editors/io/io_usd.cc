@@ -14,7 +14,7 @@
 #  include "BKE_file_handler.hh"
 #  include "BKE_report.hh"
 
-#  include "BLI_path_util.h"
+#  include "BLI_path_utils.hh"
 #  include "BLI_string.h"
 
 #  include "BLT_translation.hh"
@@ -162,7 +162,7 @@ const EnumPropertyItem rna_enum_usd_tex_export_mode_items[] = {
      "PRESERVE",
      0,
      "Preserve",
-     "Preserve file paths of textures from already imported USD files."
+     "Preserve file paths of textures from already imported USD files.\n"
      "Export remaining textures to a 'textures' folder next to the USD file"},
     {USD_TEX_EXPORT_NEW_PATH,
      "NEW",
@@ -170,6 +170,27 @@ const EnumPropertyItem rna_enum_usd_tex_export_mode_items[] = {
      "New Path",
      "Export textures to a 'textures' folder next to the USD file"},
     {0, nullptr, 0, nullptr, nullptr}};
+
+const EnumPropertyItem rna_enum_usd_mtl_purpose_items[] = {
+    {USD_MTL_PURPOSE_ALL,
+     "MTL_ALL_PURPOSE",
+     0,
+     "All Purpose",
+     "Attempt to import 'allPurpose' materials."},
+    {USD_MTL_PURPOSE_PREVIEW,
+     "MTL_PREVIEW",
+     0,
+     "Preview",
+     "Attempt to import 'preview' materials. "
+     "Load 'allPurpose' materials as a fallback"},
+    {USD_MTL_PURPOSE_FULL,
+     "MTL_FULL",
+     0,
+     "Full",
+     "Attempt to import 'full' materials. "
+     "Load 'allPurpose' or 'preview' materials, in that order, as a fallback"},
+    {0, nullptr, 0, nullptr, nullptr},
+};
 
 /* Stored in the wmOperator's customdata field to indicate it should run as a background job.
  * This is set when the operator is invoked, and not set when it is only executed. */
@@ -242,6 +263,7 @@ static int wm_usd_export_exec(bContext *C, wmOperator *op)
   const bool export_lights = RNA_boolean_get(op->ptr, "export_lights");
   const bool export_cameras = RNA_boolean_get(op->ptr, "export_cameras");
   const bool export_curves = RNA_boolean_get(op->ptr, "export_curves");
+  const bool export_points = RNA_boolean_get(op->ptr, "export_points");
   const bool export_volumes = RNA_boolean_get(op->ptr, "export_volumes");
 
   const bool use_instancing = RNA_boolean_get(op->ptr, "use_instancing");
@@ -276,6 +298,8 @@ static int wm_usd_export_exec(bContext *C, wmOperator *op)
       RNA_enum_get(op->ptr, "usdz_downscale_size"));
 
   const int usdz_downscale_custom_size = RNA_int_get(op->ptr, "usdz_downscale_custom_size");
+
+  const bool merge_parent_xform = RNA_boolean_get(op->ptr, "merge_parent_xform");
 
 #  if PXR_VERSION >= 2403
   const bool allow_unicode = RNA_boolean_get(op->ptr, "allow_unicode");
@@ -323,6 +347,7 @@ static int wm_usd_export_exec(bContext *C, wmOperator *op)
   params.export_lights = export_lights;
   params.export_cameras = export_cameras;
   params.export_curves = export_curves;
+  params.export_points = export_points;
   params.export_volumes = export_volumes;
   params.export_hair = export_hair;
   params.export_uvmaps = export_uvmaps;
@@ -363,6 +388,8 @@ static int wm_usd_export_exec(bContext *C, wmOperator *op)
 
   params.usdz_downscale_size = usdz_downscale_size;
   params.usdz_downscale_custom_size = usdz_downscale_custom_size;
+
+  params.merge_parent_xform = merge_parent_xform;
 
   STRNCPY(params.root_prim_path, root_prim_path);
   STRNCPY(params.custom_properties_namespace, custom_properties_namespace);
@@ -424,8 +451,9 @@ static void wm_usd_export_draw(bContext *C, wmOperator *op)
     uiItemR(col, ptr, "export_meshes", UI_ITEM_NONE, nullptr, ICON_NONE);
     uiItemR(col, ptr, "export_lights", UI_ITEM_NONE, nullptr, ICON_NONE);
     uiItemR(col, ptr, "export_cameras", UI_ITEM_NONE, nullptr, ICON_NONE);
-    uiItemR(col, ptr, "export_volumes", UI_ITEM_NONE, nullptr, ICON_NONE);
     uiItemR(col, ptr, "export_curves", UI_ITEM_NONE, nullptr, ICON_NONE);
+    uiItemR(col, ptr, "export_points", UI_ITEM_NONE, nullptr, ICON_NONE);
+    uiItemR(col, ptr, "export_volumes", UI_ITEM_NONE, nullptr, ICON_NONE);
     uiItemR(col, ptr, "export_hair", UI_ITEM_NONE, nullptr, ICON_NONE);
   }
 
@@ -436,6 +464,7 @@ static void wm_usd_export_draw(bContext *C, wmOperator *op)
     uiItemR(col, ptr, "rename_uvmaps", UI_ITEM_NONE, nullptr, ICON_NONE);
     uiItemR(col, ptr, "export_normals", UI_ITEM_NONE, nullptr, ICON_NONE);
 
+    uiItemR(col, ptr, "merge_parent_xform", UI_ITEM_NONE, nullptr, ICON_NONE);
     uiItemR(col, ptr, "triangulate_meshes", UI_ITEM_NONE, nullptr, ICON_NONE);
     if (RNA_boolean_get(ptr, "triangulate_meshes")) {
       uiItemR(col, ptr, "quad_method", UI_ITEM_NONE, IFACE_("Method Quads"), ICON_NONE);
@@ -780,6 +809,8 @@ void WM_OT_usd_export(wmOperatorType *ot)
 
   RNA_def_boolean(ot->srna, "export_curves", true, "Curves", "Export all curves");
 
+  RNA_def_boolean(ot->srna, "export_points", true, "Point Clouds", "Export all point clouds");
+
   RNA_def_boolean(ot->srna, "export_volumes", true, "Volumes", "Export all volumes");
 
   RNA_def_boolean(ot->srna,
@@ -818,6 +849,14 @@ void WM_OT_usd_export(wmOperatorType *ot)
               "Custom size for downscaling exported textures",
               128,
               8192);
+
+  RNA_def_boolean(ot->srna,
+                  "merge_parent_xform",
+                  false,
+                  "Merge parent Xform",
+                  "Merge USD primitives with their Xform parent if possible: "
+                  "USD does not allow nested UsdGeomGprim. Intermediary Xform will "
+                  "be defined to keep the USD file valid.");
 }
 
 /* ====== USD Import ====== */
@@ -898,6 +937,7 @@ static int wm_usd_import_exec(bContext *C, wmOperator *op)
 
   const float light_intensity_scale = RNA_float_get(op->ptr, "light_intensity_scale");
 
+  const eUSDMtlPurpose mtl_purpose = eUSDMtlPurpose(RNA_enum_get(op->ptr, "mtl_purpose"));
   const eUSDMtlNameCollisionMode mtl_name_collision_mode = eUSDMtlNameCollisionMode(
       RNA_enum_get(op->ptr, "mtl_name_collision_mode"));
 
@@ -907,6 +947,8 @@ static int wm_usd_import_exec(bContext *C, wmOperator *op)
   const bool validate_meshes = RNA_boolean_get(op->ptr, "validate_meshes");
 
   const bool create_world_material = RNA_boolean_get(op->ptr, "create_world_material");
+
+  const bool merge_parent_xform = RNA_boolean_get(op->ptr, "merge_parent_xform");
 
   /* TODO(makowalski): Add support for sequences. */
   const bool is_sequence = false;
@@ -955,6 +997,7 @@ static int wm_usd_import_exec(bContext *C, wmOperator *op)
   params.import_blendshapes = import_blendshapes;
 
   params.validate_meshes = validate_meshes;
+  params.merge_parent_xform = merge_parent_xform;
 
   params.import_guide = import_guide;
   params.import_proxy = import_proxy;
@@ -962,6 +1005,7 @@ static int wm_usd_import_exec(bContext *C, wmOperator *op)
 
   params.import_usd_preview = import_usd_preview;
   params.set_material_blend = set_material_blend;
+  params.mtl_purpose = mtl_purpose;
   params.mtl_name_collision_mode = mtl_name_collision_mode;
   params.import_textures_mode = import_textures_mode;
   params.tex_name_collision_mode = tex_name_collision_mode;
@@ -1026,10 +1070,13 @@ static void wm_usd_import_draw(bContext *C, wmOperator *op)
     uiItemR(col, ptr, "import_points", UI_ITEM_NONE, nullptr, ICON_NONE);
     uiItemR(col, ptr, "import_shapes", UI_ITEM_NONE, nullptr, ICON_NONE);
 
-    col = uiLayoutColumnWithHeading(panel, true, IFACE_("USD Purpose"));
+    col = uiLayoutColumnWithHeading(panel, true, IFACE_("Display Purpose"));
     uiItemR(col, ptr, "import_render", UI_ITEM_NONE, nullptr, ICON_NONE);
     uiItemR(col, ptr, "import_proxy", UI_ITEM_NONE, nullptr, ICON_NONE);
     uiItemR(col, ptr, "import_guide", UI_ITEM_NONE, nullptr, ICON_NONE);
+
+    col = uiLayoutColumnWithHeading(panel, true, IFACE_("Material Purpose"));
+    uiItemR(col, ptr, "mtl_purpose", UI_ITEM_NONE, nullptr, ICON_NONE);
   }
 
   if (uiLayout *panel = uiLayoutPanel(C, layout, "USD_import_geometry", true, IFACE_("Geometry")))
@@ -1042,6 +1089,7 @@ static void wm_usd_import_draw(bContext *C, wmOperator *op)
 
     col = uiLayoutColumn(panel, false);
     uiItemR(col, ptr, "validate_meshes", UI_ITEM_NONE, nullptr, ICON_NONE);
+    uiItemR(col, ptr, "merge_parent_xform", UI_ITEM_NONE, nullptr, ICON_NONE);
   }
 
   if (uiLayout *panel = uiLayoutPanel(C, layout, "USD_import_rigging", true, IFACE_("Rigging"))) {
@@ -1225,6 +1273,15 @@ void WM_OT_usd_import(wmOperatorType *ot)
                 0.0001f,
                 1000.0f);
 
+  RNA_def_enum(ot->srna,
+               "mtl_purpose",
+               rna_enum_usd_mtl_purpose_items,
+               USD_MTL_PURPOSE_FULL,
+               "Material Purpose",
+               "Attempt to import materials with the given purpose. "
+               "If no material with this purpose is bound to the primitive, "
+               "fall back on loading any other bound material");
+
   RNA_def_enum(
       ot->srna,
       "mtl_name_collision_mode",
@@ -1282,6 +1339,13 @@ void WM_OT_usd_import(wmOperatorType *ot)
                   "Defined Primitives Only",
                   "Import only defined USD primitives. When disabled this allows importing USD "
                   "primitives which are not defined, such as those with an override specifier");
+
+  RNA_def_boolean(ot->srna,
+                  "merge_parent_xform",
+                  true,
+                  "Merge parent Xform",
+                  "Allow USD primitives to merge with their Xform parent "
+                  "if they are the only child in the hierarchy");
 }
 
 namespace blender::ed::io {

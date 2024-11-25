@@ -436,8 +436,8 @@ class ErrorHandlingPrinter:
         try:
             with ensure_unwind_on_signal():
                 return self.printer.to_string()
-        except Exception as e:
-            return "Error"
+        except Exception as ex:
+            return f"Error: {ex!s}"
 
     def children(self):
         try:
@@ -531,8 +531,10 @@ class LazyFunctionEvalFilter:
     @staticmethod
     def frame_to_name(frame):
         function_name = frame.function()
-        if (function_name.startswith("blender::fn::lazy_function::LazyFunction::execute")
-                or function_name.startswith("blender::fn::lazy_function::Executor::push_to_task_pool")):
+        if function_name.startswith((
+                "blender::fn::lazy_function::LazyFunction::execute",
+                "blender::fn::lazy_function::Executor::push_to_task_pool",
+        )):
             return "Execute Lazy Function"
 
 
@@ -614,8 +616,12 @@ class FrameFilter:
             current_filter = None
 
         for frame in frame_iter:
+            file_name = frame.filename()
+            if file_name is None:
+                yield frame
+                continue
             if current_filter and re.match(
-                current_filter.filename_pattern, frame.filename()
+                current_filter.filename_pattern, file_name
             ):
                 current_frames.append(frame)
                 continue
@@ -623,7 +629,7 @@ class FrameFilter:
             yield from handle_gathered_frames()
 
             for f in frame_filters:
-                if re.match(f.filename_pattern, frame.filename()):
+                if re.match(f.filename_pattern, file_name):
                     current_filter = f
                     current_frames = [frame]
                     break

@@ -36,11 +36,12 @@
 #include "DNA_object_types.h"
 #include "DNA_particle_types.h"
 
+#include "BKE_brush.hh"
 #include "BKE_colorband.hh"
 #include "BKE_colortools.hh"
 #include "BKE_icons.h"
 #include "BKE_idtype.hh"
-#include "BKE_image.h"
+#include "BKE_image.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_lib_query.hh"
 #include "BKE_node_runtime.hh"
@@ -76,8 +77,10 @@ static void texture_copy_data(Main *bmain,
   const Tex *texture_src = (const Tex *)id_src;
 
   const bool is_localized = (flag & LIB_ID_CREATE_LOCAL) != 0;
-  /* We always need allocation of our private ID data. */
-  const int flag_private_id_data = flag & ~LIB_ID_CREATE_NO_ALLOCATE;
+  /* Never handle user-count here for own sub-data. */
+  const int flag_subdata = flag | LIB_ID_CREATE_NO_USER_REFCOUNT;
+  /* Always need allocation of the embedded ID data. */
+  const int flag_embedded_id_data = flag_subdata & ~LIB_ID_CREATE_NO_ALLOCATE;
 
   if (!BKE_texture_is_image_user(texture_src)) {
     texture_dst->ima = nullptr;
@@ -101,7 +104,7 @@ static void texture_copy_data(Main *bmain,
                          &texture_src->nodetree->id,
                          &texture_dst->id,
                          reinterpret_cast<ID **>(&texture_dst->nodetree),
-                         flag_private_id_data);
+                         flag_embedded_id_data);
     }
   }
 
@@ -166,17 +169,10 @@ static void texture_blend_write(BlendWriter *writer, ID *id, const void *id_addr
 
   /* nodetree is integral part of texture, no libdata */
   if (tex->nodetree) {
-    BLO_Write_IDBuffer *temp_embedded_id_buffer = BLO_write_allocate_id_buffer();
-    BLO_write_init_id_buffer_from_id(
-        temp_embedded_id_buffer, &tex->nodetree->id, BLO_write_is_undo(writer));
-    BLO_write_struct_at_address(writer,
-                                bNodeTree,
-                                tex->nodetree,
-                                BLO_write_get_id_buffer_temp_id(temp_embedded_id_buffer));
+    BLO_Write_IDBuffer temp_embedded_id_buffer{tex->nodetree->id, writer};
+    BLO_write_struct_at_address(writer, bNodeTree, tex->nodetree, temp_embedded_id_buffer.get());
     blender::bke::node_tree_blend_write(
-        writer,
-        reinterpret_cast<bNodeTree *>(BLO_write_get_id_buffer_temp_id(temp_embedded_id_buffer)));
-    BLO_write_destroy_id_buffer(&temp_embedded_id_buffer);
+        writer, reinterpret_cast<bNodeTree *>(temp_embedded_id_buffer.get()));
   }
 
   BKE_previewimg_blend_write(writer, tex->preview);
@@ -549,6 +545,7 @@ void set_current_brush_texture(Brush *br, Tex *newtex)
     br->mtex.tex = newtex;
     id_us_plus(&newtex->id);
   }
+  BKE_brush_tag_unsaved_changes(br);
 }
 
 Tex *give_current_particle_texture(ParticleSettings *part)

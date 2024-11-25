@@ -348,7 +348,7 @@ KeyframeEditFunc ANIM_editkeyframes_snap(short mode);
  * \note for markers and 'value', the values to use must be supplied as the first float value.
  */
 KeyframeEditFunc ANIM_editkeyframes_mirror(short mode);
-KeyframeEditFunc ANIM_editkeyframes_select(short selectmode);
+KeyframeEditFunc ANIM_editkeyframes_select(eEditKeyframes_Select selectmode);
 /**
  * Set all selected Bezier Handles to a single type.
  */
@@ -431,11 +431,7 @@ struct FCurveSegment {
  * The caller is responsible for freeing the memory.
  */
 ListBase find_fcurve_segments(FCurve *fcu);
-void clean_fcurve(bAnimContext *ac,
-                  bAnimListElem *ale,
-                  float thresh,
-                  bool cleardefault,
-                  bool only_selected_keys);
+void clean_fcurve(bAnimListElem *ale, float thresh, bool cleardefault, bool only_selected_keys);
 void blend_to_neighbor_fcurve_segment(FCurve *fcu, FCurveSegment *segment, float factor);
 void breakdown_fcurve_segment(FCurve *fcu, FCurveSegment *segment, float factor);
 void scale_average_fcurve_segment(FCurve *fcu, FCurveSegment *segment, float factor);

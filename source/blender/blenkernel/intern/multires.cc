@@ -29,7 +29,7 @@
 #include "BKE_modifier.hh"
 #include "BKE_multires.hh"
 #include "BKE_paint.hh"
-#include "BKE_pbvh_api.hh"
+#include "BKE_paint_bvh.hh"
 #include "BKE_scene.hh"
 #include "BKE_subdiv_ccg.hh"
 #include "BKE_subsurf.hh"
@@ -393,13 +393,17 @@ void multires_mark_as_modified(Depsgraph *depsgraph, Object *object, MultiresMod
 
 void multires_flush_sculpt_updates(Object *object)
 {
-  if (object == nullptr || object->sculpt == nullptr || object->sculpt->pbvh == nullptr) {
+  if (object == nullptr || object->sculpt == nullptr) {
+    return;
+  }
+  const blender::bke::pbvh::Tree *pbvh = blender::bke::object::pbvh_get(*object);
+  if (!pbvh) {
     return;
   }
 
   SculptSession *sculpt_session = object->sculpt;
-  if (sculpt_session->pbvh->type() != blender::bke::pbvh::Type::Grids ||
-      !sculpt_session->multires.active || sculpt_session->multires.modifier == nullptr)
+  if (pbvh->type() != blender::bke::pbvh::Type::Grids || !sculpt_session->multires.active ||
+      sculpt_session->multires.modifier == nullptr)
   {
     return;
   }
@@ -453,8 +457,7 @@ void multires_force_sculpt_rebuild(Object *object)
     return;
   }
 
-  SculptSession &ss = *object->sculpt;
-  BKE_sculptsession_free_pbvh(&ss);
+  BKE_sculptsession_free_pbvh(*object);
 }
 
 void multires_force_external_reload(Object *object)
@@ -736,9 +739,9 @@ static DerivedMesh *multires_dm_create_local(Scene *scene,
   mmd.renderlvl = lvl;
   mmd.totlvl = totlvl;
 
-  flags |= MULTIRES_USE_LOCAL_MMD;
+  flags |= MultiresFlags::UseLocalMMD;
   if (alloc_paint_mask) {
-    flags |= MULTIRES_ALLOC_PAINT_MASK;
+    flags |= MultiresFlags::AllocPaintMask;
   }
 
   return multires_make_derived_from_derived(dm, &mmd, scene, ob, flags);
@@ -1073,7 +1076,7 @@ void multires_modifier_update_mdisps(DerivedMesh *dm, Scene *scene)
 
       /* create multires DM from original mesh and displacements */
       lowdm = multires_dm_create_local(
-          scene, ob, cddm, lvl, totlvl, has_mask, MULTIRES_IGNORE_SIMPLIFY);
+          scene, ob, cddm, lvl, totlvl, has_mask, MultiresFlags::IgnoreSimplify);
       cddm->release(cddm);
 
       /* gather grid data */
@@ -1204,8 +1207,8 @@ void multires_stitch_grids(Object *ob)
   if (subdiv_ccg == nullptr) {
     return;
   }
-  BLI_assert(sculpt_session->pbvh &&
-             sculpt_session->pbvh->type() == blender::bke::pbvh::Type::Grids);
+  BLI_assert(bke::object::pbvh_get(*ob) &&
+             bke::object::pbvh_get(*ob)->type() == blender::bke::pbvh::Type::Grids);
   BKE_subdiv_ccg_average_stitch_faces(*subdiv_ccg, IndexMask(subdiv_ccg->faces.size()));
 }
 
@@ -1217,8 +1220,8 @@ DerivedMesh *multires_make_derived_from_derived(
   CCGDerivedMesh *ccgdm = nullptr;
   CCGElem **gridData, **subGridData;
   CCGKey key;
-  const bool render = (flags & MULTIRES_USE_RENDER_PARAMS) != 0;
-  const bool ignore_simplify = (flags & MULTIRES_IGNORE_SIMPLIFY) != 0;
+  const bool render = uint8_t(flags & MultiresFlags::UseRenderParams) != 0;
+  const bool ignore_simplify = uint8_t(flags & MultiresFlags::IgnoreSimplify) != 0;
   int lvl = multires_get_level(scene, ob, mmd, render, ignore_simplify);
   int i, gridSize, numGrids;
 
@@ -1235,11 +1238,11 @@ DerivedMesh *multires_make_derived_from_derived(
                                    false,
                                    mmd->flags & eMultiresModifierFlag_ControlEdges,
                                    mmd->uv_smooth == SUBSURF_UV_SMOOTH_NONE,
-                                   flags & MULTIRES_ALLOC_PAINT_MASK,
+                                   uint8_t(flags & MultiresFlags::AllocPaintMask),
                                    render,
                                    subsurf_flags);
 
-  if (!(flags & MULTIRES_USE_LOCAL_MMD)) {
+  if (!uint8_t(flags & MultiresFlags::UseLocalMMD)) {
     ccgdm = (CCGDerivedMesh *)result;
 
     ccgdm->multires.ob = ob;
@@ -1347,7 +1350,7 @@ void multiresModifier_sync_levels_ex(Object *ob_dst,
 
   if (mmd_src->totlvl > mmd_dst->totlvl) {
     multiresModifier_subdivide_to_level(
-        ob_dst, mmd_dst, mmd_src->totlvl, MULTIRES_SUBDIVIDE_CATMULL_CLARK);
+        ob_dst, mmd_dst, mmd_src->totlvl, MultiresSubdivideModeType::CatmullClark);
   }
   else {
     multires_del_higher(mmd_dst, ob_dst, mmd_src->totlvl);

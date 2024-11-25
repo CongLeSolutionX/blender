@@ -24,7 +24,7 @@
 
 #include "BLT_translation.hh"
 
-#include "BKE_action.h"
+#include "BKE_action.hh"
 #include "BKE_animsys.h"
 #include "BKE_context.hh"
 #include "BKE_lib_id.hh"
@@ -32,6 +32,8 @@
 #include "BKE_node_runtime.hh"
 #include "BKE_node_tree_update.hh"
 #include "BKE_report.hh"
+
+#include "ANIM_action.hh"
 
 #include "DEG_depsgraph_build.hh"
 
@@ -341,11 +343,12 @@ static void node_group_ungroup(Main *bmain, bNodeTree *ntree, bNode *gnode)
   /* and copy across the animation,
    * note that the animation data's action can be nullptr here */
   if (wgroup->adt) {
-    bAction *waction;
-
     /* firstly, wgroup needs to temporary dummy action
      * that can be destroyed, as it shares copies */
-    waction = wgroup->adt->action = (bAction *)BKE_id_copy(bmain, &wgroup->adt->action->id);
+    bAction *waction = reinterpret_cast<bAction *>(BKE_id_copy(bmain, &wgroup->adt->action->id));
+    const bool assign_ok = animrig::assign_action(waction, {wgroup->id, *wgroup->adt});
+    BLI_assert_msg(assign_ok, "assigning a copy of an already-assigned Action should work");
+    UNUSED_VARS_NDEBUG(assign_ok);
 
     /* now perform the moving */
     BKE_animdata_transfer_by_basepath(bmain, &wgroup->id, &ntree->id, &anim_basepaths);
@@ -357,8 +360,10 @@ static void node_group_ungroup(Main *bmain, bNodeTree *ntree, bNode *gnode)
 
     /* free temp action too */
     if (waction) {
+      const bool unassign_ok = animrig::unassign_action({wgroup->id, *wgroup->adt});
+      BLI_assert_msg(unassign_ok, "unassigning an Action that was just assigned should work");
+      UNUSED_VARS_NDEBUG(unassign_ok);
       BKE_id_free(bmain, waction);
-      wgroup->adt->action = nullptr;
     }
   }
 

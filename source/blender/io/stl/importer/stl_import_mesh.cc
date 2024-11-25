@@ -6,8 +6,6 @@
  * \ingroup stl
  */
 
-#include <iostream>
-
 #include "BKE_mesh.hh"
 
 #include "BLI_array_utils.hh"
@@ -17,6 +15,9 @@
 
 #include "stl_data.hh"
 #include "stl_import_mesh.hh"
+
+#include "CLG_log.h"
+static CLG_LogRef LOG = {"io.stl"};
 
 namespace blender::io::stl {
 
@@ -56,18 +57,18 @@ bool STLMeshHelper::add_triangle(const PackedTriangle &data)
 Mesh *STLMeshHelper::to_mesh()
 {
   if (degenerate_tris_num_ > 0) {
-    std::cout << "STL Importer: " << degenerate_tris_num_ << " degenerate triangles were removed"
-              << std::endl;
+    CLOG_WARN(&LOG, "Removed %d degenerate triangles during import", degenerate_tris_num_);
   }
   if (duplicate_tris_num_ > 0) {
-    std::cout << "STL Importer: " << duplicate_tris_num_ << " duplicate triangles were removed"
-              << std::endl;
+    CLOG_WARN(&LOG, "Removed %d duplicate triangles during import", duplicate_tris_num_);
   }
 
   Mesh *mesh = BKE_mesh_new_nomain(verts_.size(), 0, tris_.size(), tris_.size() * 3);
   mesh->vert_positions_for_write().copy_from(verts_);
   offset_indices::fill_constant_group_size(3, 0, mesh->face_offsets_for_write());
   array_utils::copy(tris_.as_span().cast<int>(), mesh->corner_verts_for_write());
+
+  bke::mesh_smooth_set(*mesh, false);
 
   /* NOTE: edges must be calculated first before setting custom normals. */
   bke::mesh_calc_edges(*mesh, false, false);

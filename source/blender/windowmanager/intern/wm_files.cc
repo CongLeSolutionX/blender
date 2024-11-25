@@ -115,6 +115,8 @@
 
 #include "GPU_context.hh"
 
+#include "SEQ_sequencer.hh"
+
 #include "UI_interface.hh"
 #include "UI_resources.hh"
 #include "UI_view2d.hh"
@@ -123,8 +125,8 @@
 #include "RE_engine.h"
 
 #ifdef WITH_PYTHON
-#  include "BPY_extern_python.h"
-#  include "BPY_extern_run.h"
+#  include "BPY_extern_python.hh"
+#  include "BPY_extern_run.hh"
 #endif
 
 #include "DEG_depsgraph.hh"
@@ -150,6 +152,17 @@ static void wm_history_file_write();
 static void wm_test_autorun_revert_action_exec(bContext *C);
 
 static CLG_LogRef LOG = {"wm.files"};
+
+/**
+ * Fast-path for down-scaling byte buffers.
+ *
+ * NOTE(@ideasman42) Support alternate logic for scaling byte buffers for
+ * thumbnails which doesn't use the higher quality box-filtered floating point math.
+ * This may be removed if similar performance can be achieved from other scale methods,
+ * especially in debug mode - which could cause file saving to be unreasonably slow
+ * (taking seconds just down-scaling the thumbnail).
+ */
+#define USE_THUMBNAIL_FAST_DOWNSCALE
 
 /* -------------------------------------------------------------------- */
 /** \name Misc Utility Functions
@@ -779,7 +792,7 @@ static void wm_file_read_post(bContext *C,
     /* Translate workspace names. */
     LISTBASE_FOREACH_MUTABLE (WorkSpace *, workspace, &bmain->workspaces) {
       BKE_libblock_rename(
-          bmain, &workspace->id, CTX_DATA_(BLT_I18NCONTEXT_ID_WORKSPACE, workspace->id.name + 2));
+          *bmain, workspace->id, CTX_DATA_(BLT_I18NCONTEXT_ID_WORKSPACE, workspace->id.name + 2));
     }
   }
 
@@ -977,20 +990,17 @@ static void file_read_reports_finalize(BlendFileReadReport *bf_reports)
   if (bf_reports->count.missing_libraries != 0 || bf_reports->count.missing_linked_id != 0) {
     BKE_reportf(bf_reports->reports,
                 RPT_WARNING,
-                "%d libraries and %d linked data-blocks are missing (including %d ObjectData and "
-                "%d Proxies), please check the Info and Outliner editors for details",
+                "%d libraries and %d linked data-blocks are missing (including %d ObjectData), "
+                "please check the Info and Outliner editors for details",
                 bf_reports->count.missing_libraries,
                 bf_reports->count.missing_linked_id,
-                bf_reports->count.missing_obdata,
-                bf_reports->count.missing_obproxies);
+                bf_reports->count.missing_obdata);
   }
   else {
-    if (bf_reports->count.missing_obdata != 0 || bf_reports->count.missing_obproxies != 0) {
-      CLOG_ERROR(&LOG,
-                 "%d local ObjectData and %d local Object proxies are reported to be missing, "
-                 "this should never happen",
-                 bf_reports->count.missing_obdata,
-                 bf_reports->count.missing_obproxies);
+    if (bf_reports->count.missing_obdata != 0) {
+      CLOG_WARN(&LOG,
+                "%d local ObjectData are reported to be missing, this should never happen",
+                bf_reports->count.missing_obdata);
     }
   }
 
@@ -1021,7 +1031,7 @@ static void file_read_reports_finalize(BlendFileReadReport *bf_reports)
                 RPT_ERROR,
                 "%d sequence strips were not read because they were in a channel larger than %d",
                 bf_reports->count.sequence_strips_skipped,
-                MAXSEQ);
+                SEQ_MAX_CHANNELS);
   }
 
   BLI_linklist_free(bf_reports->resynced_lib_overrides_libraries, nullptr);
@@ -1140,16 +1150,9 @@ bool WM_file_read(bContext *C, const char *filepath, ReportList *reports)
     BLI_assert_msg(0, "invalid 'retval'");
   }
 
-  if (success == false) {
-    /* Remove from recent files list. */
-    if (do_history_file_update) {
-      RecentFile *recent = wm_file_history_find(filepath);
-      if (recent) {
-        wm_history_file_free(recent);
-        wm_history_file_write();
-      }
-    }
-  }
+  /* NOTE: even if the file fails to load, keep the file in the "Recent Files" list.
+   * This is done because failure to load could be caused by the file-system being
+   * temporarily offline, see: #127825. */
 
   WM_cursor_wait(false);
 
@@ -1742,6 +1745,113 @@ static void wm_history_file_update()
  *
  * \{ */
 
+#ifdef USE_THUMBNAIL_FAST_DOWNSCALE
+static uint8_t *blend_file_thumb_fast_downscale(const uint8_t *src_rect,
+                                                const int src_size[2],
+                                                const int dst_size[2])
+{
+  /* NOTE: this is a faster alternative to #IMBScaleFilter::Box which is
+   * especially slow in debug builds, normally debug performance isn't a
+   * consideration however it's slow enough to get in the way of development.
+   * In release builds this gives ~1.4x speedup. */
+
+  /* Scaling using a box-filter where each box uses an integer-rounded region.
+   * Accept a slightly lower quality scale as this is only for thumbnails.
+   * In practice the result is visually indistinguishable.
+   *
+   * Technically the color accumulation *could* overflow (creating some invalid pixels),
+   * however this would require the source image to be larger than
+   * 65,535 pixels squared (when scaling down to 256x256).
+   * As the source input is a screenshot or a small camera render created for the thumbnail,
+   * this isn't a concern. */
+
+  BLI_assert(dst_size[0] <= src_size[0] && dst_size[1] <= src_size[1]);
+  uint8_t *dst_rect = static_cast<uint8_t *>(
+      MEM_mallocN(sizeof(uint8_t[4]) * dst_size[0] * dst_size[1], __func__));
+
+  /* A row, the width of the destination to accumulate pixel values into
+   * before writing into the image. */
+  uint32_t *accum_row = static_cast<uint32_t *>(
+      MEM_callocN(sizeof(uint32_t) * dst_size[0] * 4, __func__));
+
+#  ifndef NDEBUG
+  /* Assert that samples are calculated correctly. */
+  uint64_t sample_count_all = 0;
+#  endif
+
+  const uint32_t src_size_x = src_size[0];
+  const uint32_t src_size_y = src_size[1];
+
+  const uint32_t dst_size_x = dst_size[0];
+  const uint32_t dst_size_y = dst_size[1];
+  const uint8_t *src_px = src_rect;
+
+  uint32_t src_y = 0;
+  for (uint32_t dst_y = 0; dst_y < dst_size_y; dst_y++) {
+    const uint32_t src_y_beg = src_y;
+    const uint32_t src_y_end = ((dst_y + 1) * src_size_y) / dst_size_y;
+    for (; src_y < src_y_end; src_y++) {
+      uint32_t *accum = accum_row;
+      uint32_t src_x = 0;
+      for (uint32_t dst_x = 0; dst_x < dst_size_x; dst_x++, accum += 4) {
+        const uint32_t src_x_end = ((dst_x + 1) * src_size_x) / dst_size_x;
+        for (; src_x < src_x_end; src_x++) {
+          accum[0] += uint32_t(src_px[0]);
+          accum[1] += uint32_t(src_px[1]);
+          accum[2] += uint32_t(src_px[2]);
+          accum[3] += uint32_t(src_px[3]);
+          src_px += 4;
+        }
+        BLI_assert(src_x == src_x_end);
+      }
+      BLI_assert(accum == accum_row + (4 * dst_size[0]));
+    }
+
+    uint32_t *accum = accum_row;
+    uint8_t *dst_px = dst_rect + ((dst_y * dst_size_x) * 4);
+    uint32_t src_x_beg = 0;
+    const uint32_t span_y = src_y_end - src_y_beg;
+    for (uint32_t dst_x = 0; dst_x < dst_size_x; dst_x++) {
+      const uint32_t src_x_end = ((dst_x + 1) * src_size_x) / dst_size_x;
+      const uint32_t span_x = src_x_end - src_x_beg;
+
+      const uint32_t sample_count = span_x * span_y;
+      dst_px[0] = uint8_t(accum[0] / sample_count);
+      dst_px[1] = uint8_t(accum[1] / sample_count);
+      dst_px[2] = uint8_t(accum[2] / sample_count);
+      dst_px[3] = uint8_t(accum[3] / sample_count);
+      accum[0] = accum[1] = accum[2] = accum[3] = 0;
+      accum += 4;
+      dst_px += 4;
+
+      src_x_beg = src_x_end;
+#  ifndef NDEBUG
+      sample_count_all += sample_count;
+#  endif
+    }
+  }
+  BLI_assert(src_px == src_rect + (sizeof(uint8_t[4]) * src_size[0] * src_size[1]));
+  BLI_assert(sample_count_all == size_t(src_size[0]) * size_t(src_size[1]));
+
+  MEM_freeN(accum_row);
+  return dst_rect;
+}
+#endif /* USE_THUMBNAIL_FAST_DOWNSCALE */
+
+static blender::int2 blend_file_thumb_clamp_size(const int size[2], const int limit)
+{
+  blender::int2 result;
+  if (size[0] > size[1]) {
+    result.x = limit;
+    result.y = max_ii(1, int((float(size[1]) / float(size[0])) * limit));
+  }
+  else {
+    result.x = max_ii(1, int((float(size[0]) / float(size[1])) * limit));
+    result.y = limit;
+  }
+  return result;
+}
+
 /**
  * Screen-shot the active window.
  */
@@ -1755,7 +1865,7 @@ static ImBuf *blend_file_thumb_from_screenshot(bContext *C, BlendThumbnail **r_t
   }
 
   /* The window to capture should be a main window (without parent). */
-  while (win && win->parent) {
+  while (win->parent) {
     win = win->parent;
   }
 
@@ -1763,36 +1873,49 @@ static ImBuf *blend_file_thumb_from_screenshot(bContext *C, BlendThumbnail **r_t
   int win_size[2];
   /* NOTE: always read from front-buffer as drawing a window can cause problems while saving,
    * even if this means the thumbnail from the screen-shot fails to be created, see: #98462. */
-  uint8_t *buffer = WM_window_pixels_read_from_frontbuffer(wm, win, win_size);
-  ImBuf *ibuf = IMB_allocFromBufferOwn(buffer, nullptr, win_size[0], win_size[1], 24);
+  ImBuf *ibuf = nullptr;
+
+  if (uint8_t *buffer = WM_window_pixels_read_from_frontbuffer(wm, win, win_size)) {
+    const blender::int2 thumb_size_2x = blend_file_thumb_clamp_size(win_size, BLEN_THUMB_SIZE * 2);
+    const blender::int2 thumb_size = blend_file_thumb_clamp_size(win_size, BLEN_THUMB_SIZE);
+
+#ifdef USE_THUMBNAIL_FAST_DOWNSCALE
+    if ((thumb_size_2x[0] <= win_size[0]) && (thumb_size_2x[1] <= win_size[1])) {
+      uint8_t *rect_2x = blend_file_thumb_fast_downscale(buffer, win_size, thumb_size_2x);
+      uint8_t *rect = blend_file_thumb_fast_downscale(rect_2x, thumb_size_2x, thumb_size);
+
+      MEM_freeN(buffer);
+      ibuf = IMB_allocFromBufferOwn(rect_2x, nullptr, thumb_size_2x.x, thumb_size_2x.y, 24);
+
+      BlendThumbnail *thumb = BKE_main_thumbnail_from_buffer(nullptr, rect, thumb_size);
+      MEM_freeN(rect);
+      *r_thumb = thumb;
+    }
+    else
+#endif /* USE_THUMBNAIL_FAST_DOWNSCALE */
+    {
+      ibuf = IMB_allocFromBufferOwn(buffer, nullptr, win_size[0], win_size[1], 24);
+      BLI_assert(ibuf != nullptr); /* Never expected to fail. */
+
+      /* File-system thumbnail image can be 256x256. */
+      IMB_scale(ibuf, thumb_size_2x.x, thumb_size_2x.y, IMBScaleFilter::Box, false);
+
+      /* Thumbnail inside blend should be 128x128. */
+      ImBuf *thumb_ibuf = IMB_dupImBuf(ibuf);
+      IMB_scale(thumb_ibuf, thumb_size.x, thumb_size.y, IMBScaleFilter::Box, false);
+
+      BlendThumbnail *thumb = BKE_main_thumbnail_from_imbuf(nullptr, thumb_ibuf);
+      IMB_freeImBuf(thumb_ibuf);
+      *r_thumb = thumb;
+    }
+  }
 
   if (ibuf) {
-    int ex, ey;
-    if (ibuf->x > ibuf->y) {
-      ex = BLEN_THUMB_SIZE;
-      ey = max_ii(1, int((float(ibuf->y) / float(ibuf->x)) * BLEN_THUMB_SIZE));
-    }
-    else {
-      ex = max_ii(1, int((float(ibuf->x) / float(ibuf->y)) * BLEN_THUMB_SIZE));
-      ey = BLEN_THUMB_SIZE;
-    }
-
-    /* File-system thumbnail image can be 256x256. */
-    IMB_scale(ibuf, ex * 2, ey * 2, IMBScaleFilter::Box, false);
-
     /* Save metadata for quick access. */
-    char version_st[10] = {0};
-    SNPRINTF(version_st, "%d.%01d", BLENDER_VERSION / 100, BLENDER_VERSION % 100);
+    char version_str[10];
+    SNPRINTF(version_str, "%d.%01d", BLENDER_VERSION / 100, BLENDER_VERSION % 100);
     IMB_metadata_ensure(&ibuf->metadata);
-    IMB_metadata_set_field(ibuf->metadata, "Thumb::Blender::Version", version_st);
-
-    /* Thumbnail inside blend should be 128x128. */
-    ImBuf *thumb_ibuf = IMB_dupImBuf(ibuf);
-    IMB_scale(thumb_ibuf, ex, ey, IMBScaleFilter::Box, false);
-
-    BlendThumbnail *thumb = BKE_main_thumbnail_from_imbuf(nullptr, thumb_ibuf);
-    IMB_freeImBuf(thumb_ibuf);
-    *r_thumb = thumb;
+    IMB_metadata_set_field(ibuf->metadata, "Thumb::Blender::Version", version_str);
   }
 
   /* Must be freed by caller. */
@@ -1897,10 +2020,10 @@ static ImBuf *blend_file_thumb_from_camera(const bContext *C,
     thumb_ibuf = IMB_dupImBuf(ibuf);
 
     /* Save metadata for quick access. */
-    char version_st[10] = {0};
-    SNPRINTF(version_st, "%d.%01d", BLENDER_VERSION / 100, BLENDER_VERSION % 100);
+    char version_str[10];
+    SNPRINTF(version_str, "%d.%01d", BLENDER_VERSION / 100, BLENDER_VERSION % 100);
     IMB_metadata_ensure(&ibuf->metadata);
-    IMB_metadata_set_field(ibuf->metadata, "Thumb::Blender::Version", version_st);
+    IMB_metadata_set_field(ibuf->metadata, "Thumb::Blender::Version", version_str);
 
     /* BLEN_THUMB_SIZE is size of thumbnail inside blend file: 128x128. */
     IMB_scale(thumb_ibuf, BLEN_THUMB_SIZE, BLEN_THUMB_SIZE, IMBScaleFilter::Box, false);
@@ -2425,7 +2548,8 @@ static int wm_homefile_write_invoke(bContext *C, wmOperator *op, const wmEvent *
   char display_name[FILE_MAX];
   BLI_path_to_display_name(display_name, sizeof(display_name), IFACE_(U.app_template));
   std::string message = fmt::format(
-      IFACE_("Make the current file the default \"{}\" startup file."), IFACE_(display_name));
+      fmt::runtime(IFACE_("Make the current file the default \"{}\" startup file.")),
+      IFACE_(display_name));
   return WM_operator_confirm_ex(C,
                                 op,
                                 IFACE_("Overwrite Template Startup File"),
@@ -2611,7 +2735,8 @@ static int wm_userpref_read_invoke(bContext *C, wmOperator *op, const wmEvent * 
   if (template_only) {
     char display_name[FILE_MAX];
     BLI_path_to_display_name(display_name, sizeof(display_name), IFACE_(U.app_template));
-    title = fmt::format(IFACE_("Load Factory \"{}\" Preferences."), IFACE_(display_name));
+    title = fmt::format(fmt::runtime(IFACE_("Load Factory \"{}\" Preferences.")),
+                        IFACE_(display_name));
   }
   else {
     title = IFACE_("Load Factory Blender Preferences");
@@ -2870,7 +2995,7 @@ static int wm_read_factory_settings_invoke(bContext *C, wmOperator *op, const wm
   if (template_only) {
     char display_name[FILE_MAX];
     BLI_path_to_display_name(display_name, sizeof(display_name), IFACE_(U.app_template));
-    title = fmt::format(IFACE_("Load Factory \"{}\" Startup File and Preferences"),
+    title = fmt::format(fmt::runtime(IFACE_("Load Factory \"{}\" Startup File and Preferences")),
                         IFACE_(display_name));
   }
   else {
@@ -3103,13 +3228,13 @@ static std::string wm_open_mainfile_get_description(bContext * /*C*/,
   }
 
   /* Date. */
-  char date_st[FILELIST_DIRENTRY_DATE_LEN];
-  char time_st[FILELIST_DIRENTRY_TIME_LEN];
+  char date_str[FILELIST_DIRENTRY_DATE_LEN];
+  char time_str[FILELIST_DIRENTRY_TIME_LEN];
   bool is_today, is_yesterday;
   BLI_filelist_entry_datetime_to_string(
-      nullptr, int64_t(stats.st_mtime), false, time_st, date_st, &is_today, &is_yesterday);
+      nullptr, int64_t(stats.st_mtime), false, time_str, date_str, &is_today, &is_yesterday);
   if (is_today || is_yesterday) {
-    STRNCPY(date_st, is_today ? TIP_("Today") : TIP_("Yesterday"));
+    STRNCPY(date_str, is_today ? TIP_("Today") : TIP_("Yesterday"));
   }
 
   /* Size. */
@@ -3119,8 +3244,8 @@ static std::string wm_open_mainfile_get_description(bContext * /*C*/,
   return fmt::format("{}\n\n{}: {} {}\n{}: {}",
                      filepath,
                      TIP_("Modified"),
-                     date_st,
-                     time_st,
+                     date_str,
+                     time_str,
                      TIP_("Size"),
                      size_str);
 }
@@ -3309,7 +3434,7 @@ static int wm_recover_last_session_exec(bContext *C, wmOperator *op)
   if (WM_file_recover_last_session(C, op->reports)) {
     if (!G.background) {
       wmOperatorType *ot = op->type;
-      PointerRNA *props_ptr = MEM_cnew<PointerRNA>(__func__);
+      PointerRNA *props_ptr = MEM_new<PointerRNA>(__func__);
       WM_operator_properties_create_ptr(props_ptr, ot);
       RNA_boolean_set(props_ptr, "use_scripts", true);
       wm_test_autorun_revert_action_set(ot, props_ptr);
@@ -3377,7 +3502,7 @@ static int wm_recover_auto_save_exec(bContext *C, wmOperator *op)
   if (success) {
     if (!G.background) {
       wmOperatorType *ot = op->type;
-      PointerRNA *props_ptr = MEM_cnew<PointerRNA>(__func__);
+      PointerRNA *props_ptr = MEM_new<PointerRNA>(__func__);
       WM_operator_properties_create_ptr(props_ptr, ot);
       RNA_boolean_set(props_ptr, "use_scripts", true);
       wm_test_autorun_revert_action_set(ot, props_ptr);
@@ -3771,23 +3896,49 @@ void WM_OT_save_mainfile(wmOperatorType *ot)
 /** \name Clear Recent Files List Operator
  * \{ */
 
-static int wm_clear_recent_files_invoke(bContext *C, wmOperator *op, const wmEvent * /*event*/)
+enum ClearRecentInclude { CLEAR_RECENT_ALL, CLEAR_RECENT_MISSING };
+
+static const EnumPropertyItem prop_clear_recent_types[] = {
+    {CLEAR_RECENT_ALL, "ALL", 0, "All Items", ""},
+    {CLEAR_RECENT_MISSING, "MISSING", 0, "Items Not Found", ""},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
+static int wm_clear_recent_files_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
-  return WM_operator_confirm_ex(C,
-                                op,
-                                nullptr,
-                                IFACE_("Remove all items from the recent files list"),
-                                IFACE_("Remove All"),
-                                ALERT_ICON_WARNING,
-                                false);
+  return WM_operator_props_popup_confirm_ex(
+      C, op, event, IFACE_("Clear Recent Files List"), IFACE_("Remove"));
 }
 
-static int wm_clear_recent_files_exec(bContext * /*C*/, wmOperator * /*op*/)
+static int wm_clear_recent_files_exec(bContext * /*C*/, wmOperator *op)
 {
-  wm_history_files_free();
+  ClearRecentInclude include = static_cast<ClearRecentInclude>(RNA_enum_get(op->ptr, "remove"));
+
+  if (include == CLEAR_RECENT_ALL) {
+    wm_history_files_free();
+  }
+  else if (include == CLEAR_RECENT_MISSING) {
+    LISTBASE_FOREACH_MUTABLE (RecentFile *, recent, &G.recent_files) {
+      if (!BLI_exists(recent->filepath)) {
+        BLI_freelinkN(&G.recent_files, recent);
+      }
+    }
+  }
+
   wm_history_file_write();
 
   return OPERATOR_FINISHED;
+}
+
+static void wm_clear_recent_files_ui(bContext * /*C*/, wmOperator *op)
+{
+  uiLayout *layout = op->layout;
+  uiLayoutSetPropSep(layout, true);
+  uiLayoutSetPropDecorate(layout, false);
+
+  uiItemS(layout);
+  uiItemR(layout, op->ptr, "remove", UI_ITEM_R_TOGGLE, nullptr, ICON_NONE);
+  uiItemS(layout);
 }
 
 void WM_OT_clear_recent_files(wmOperatorType *ot)
@@ -3798,6 +3949,14 @@ void WM_OT_clear_recent_files(wmOperatorType *ot)
 
   ot->invoke = wm_clear_recent_files_invoke;
   ot->exec = wm_clear_recent_files_exec;
+  ot->ui = wm_clear_recent_files_ui;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER;
+
+  /* props */
+  ot->prop = RNA_def_enum(
+      ot->srna, "remove", prop_clear_recent_types, CLEAR_RECENT_ALL, "Remove", "");
 }
 
 /** \} */
@@ -3976,7 +4135,7 @@ void wm_test_autorun_revert_action_set(wmOperatorType *ot, PointerRNA *ptr)
   wm_test_autorun_revert_action_data.ot = nullptr;
   if (wm_test_autorun_revert_action_data.ptr != nullptr) {
     WM_operator_properties_free(wm_test_autorun_revert_action_data.ptr);
-    MEM_freeN(wm_test_autorun_revert_action_data.ptr);
+    MEM_delete(wm_test_autorun_revert_action_data.ptr);
     wm_test_autorun_revert_action_data.ptr = nullptr;
   }
   wm_test_autorun_revert_action_data.ot = ot;
@@ -3991,7 +4150,7 @@ void wm_test_autorun_revert_action_exec(bContext *C)
   /* Use regular revert. */
   if (ot == nullptr) {
     ot = WM_operatortype_find("WM_OT_revert_mainfile", false);
-    ptr = MEM_cnew<PointerRNA>(__func__);
+    ptr = MEM_new<PointerRNA>(__func__);
     WM_operator_properties_create_ptr(ptr, ot);
     RNA_boolean_set(ptr, "use_scripts", true);
 

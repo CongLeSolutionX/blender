@@ -66,6 +66,20 @@ BMEditMesh *BKE_editmesh_from_object(Object *ob)
   return ((Mesh *)ob->data)->runtime->edit_mesh.get();
 }
 
+bool BKE_editmesh_eval_orig_map_available(const Mesh &mesh_eval, const Mesh *mesh_orig)
+{
+  if (!mesh_orig) {
+    return false;
+  }
+  if (&mesh_eval == mesh_orig) {
+    return true;
+  }
+  if (mesh_eval.runtime->edit_mesh) {
+    return mesh_eval.runtime->edit_mesh == mesh_orig->runtime->edit_mesh;
+  }
+  return false;
+}
+
 void BKE_editmesh_looptris_calc_ex(BMEditMesh *em, const BMeshCalcTessellation_Params *params)
 {
   BMesh *bm = em->bm;
@@ -187,6 +201,10 @@ Span<float3> BKE_editmesh_vert_coords_when_deformed(
            (editmesh_eval_final->runtime->wrapper_type == ME_WRAPPER_TYPE_BMESH))
   {
     /* If this is an edit-mesh type, leave nullptr as we can use the vertex coords. */
+
+    /* If this is not empty, it's value should be assigned to `vert_positions`
+     * however the `mesh_cage` check above should handle this case. */
+    BLI_assert(BKE_mesh_wrapper_vert_coords(mesh_cage).is_empty());
   }
   else {
     /* Constructive modifiers have been used, we need to allocate coordinates. */

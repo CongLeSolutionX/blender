@@ -389,9 +389,9 @@ static int rna_property_override_diff(Main *bmain,
   }
 
   eRNAOverrideMatch diff_flags = flags;
-  if (!RNA_property_overridable_get(&prop_a->ptr, prop_a->rawprop) ||
+  if (!RNA_property_overridable_get(prop_a->ptr, prop_a->rawprop) ||
       (!ELEM(RNA_property_type(prop_a->rawprop), PROP_POINTER, PROP_COLLECTION) &&
-       !RNA_property_editable_flag(&prop_a->ptr, prop_a->rawprop)))
+       !RNA_property_editable_flag(prop_a->ptr, prop_a->rawprop)))
   {
     diff_flags &= ~RNA_OVERRIDE_COMPARE_CREATE;
   }
@@ -674,7 +674,7 @@ bool RNA_struct_override_matches(Main *bmain,
       continue;
     }
 
-    if (ignore_non_overridable && !RNA_property_overridable_get(&prop_local.ptr, rawprop)) {
+    if (ignore_non_overridable && !RNA_property_overridable_get(prop_local.ptr, rawprop)) {
       continue;
     }
 
@@ -1061,7 +1061,7 @@ static bool rna_property_override_collection_subitem_name_id_lookup(
     RNA_property_collection_end(&iter);
 
     if (!iter.valid) {
-      memset(r_ptr_item_name, 0, sizeof(*r_ptr_item_name));
+      *r_ptr_item_name = {};
     }
 
     return iter.valid;

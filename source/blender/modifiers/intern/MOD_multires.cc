@@ -231,10 +231,6 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
       sculpt_session->multires.active = true;
       sculpt_session->multires.modifier = mmd;
       sculpt_session->multires.level = mmd->sculptlvl;
-      sculpt_session->totvert = mesh->verts_num;
-      sculpt_session->faces_num = mesh->faces_num;
-      sculpt_session->faces = {};
-      sculpt_session->corner_verts = {};
     }
     // blender::bke::subdiv::stats_print(&subdiv->stats);
   }
@@ -250,7 +246,7 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
     if (use_clnors) {
       float(*corner_normals)[3] = static_cast<float(*)[3]>(
           CustomData_get_layer_for_write(&result->corner_data, CD_NORMAL, result->corners_num));
-      BKE_mesh_set_custom_normals(result, corner_normals);
+      BKE_mesh_set_custom_normals_normalized(result, corner_normals);
       CustomData_free_layers(&result->corner_data, CD_NORMAL, result->corners_num);
     }
     // blender::bke::subdiv::stats_print(&subdiv->stats);
@@ -294,8 +290,7 @@ static void deform_matrices(ModifierData *md,
     return;
   }
   blender::bke::subdiv::displacement_attach_from_multires(subdiv, mesh, mmd);
-  blender::bke::subdiv::deform_coarse_vertices(
-      subdiv, mesh, reinterpret_cast<float(*)[3]>(positions.data()), positions.size());
+  blender::bke::subdiv::deform_coarse_vertices(subdiv, mesh, positions);
   if (subdiv != runtime_data->subdiv) {
     blender::bke::subdiv::free(subdiv);
   }
@@ -358,7 +353,7 @@ static void subdivisions_panel_draw(const bContext * /*C*/, Panel *panel)
               WM_OP_EXEC_DEFAULT,
               UI_ITEM_NONE,
               &op_ptr);
-  RNA_enum_set(&op_ptr, "mode", MULTIRES_SUBDIVIDE_CATMULL_CLARK);
+  RNA_enum_set(&op_ptr, "mode", int8_t(MultiresSubdivideModeType::CatmullClark));
   RNA_string_set(&op_ptr, "modifier", ((ModifierData *)mmd)->name);
 
   row = uiLayoutRow(layout, false);
@@ -370,7 +365,7 @@ static void subdivisions_panel_draw(const bContext * /*C*/, Panel *panel)
               WM_OP_EXEC_DEFAULT,
               UI_ITEM_NONE,
               &op_ptr);
-  RNA_enum_set(&op_ptr, "mode", MULTIRES_SUBDIVIDE_SIMPLE);
+  RNA_enum_set(&op_ptr, "mode", int8_t(MultiresSubdivideModeType::Simple));
   RNA_string_set(&op_ptr, "modifier", ((ModifierData *)mmd)->name);
   uiItemFullO(row,
               "OBJECT_OT_multires_subdivide",
@@ -380,7 +375,7 @@ static void subdivisions_panel_draw(const bContext * /*C*/, Panel *panel)
               WM_OP_EXEC_DEFAULT,
               UI_ITEM_NONE,
               &op_ptr);
-  RNA_enum_set(&op_ptr, "mode", MULTIRES_SUBDIVIDE_LINEAR);
+  RNA_enum_set(&op_ptr, "mode", int8_t(MultiresSubdivideModeType::Linear));
   RNA_string_set(&op_ptr, "modifier", ((ModifierData *)mmd)->name);
 
   uiItemS(layout);

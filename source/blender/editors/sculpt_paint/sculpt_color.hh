@@ -61,14 +61,15 @@ float4 color_vert_get(OffsetIndices<int> faces,
 bke::GAttributeReader active_color_attribute(const Mesh &mesh);
 bke::GSpanAttributeWriter active_color_attribute_for_write(Mesh &mesh);
 
-void do_paint_brush(const Depsgraph &depsgraph,
+void do_paint_brush(const Scene &scene,
+                    const Depsgraph &depsgraph,
                     PaintModeSettings &paint_mode_settings,
                     const Sculpt &sd,
                     Object &ob,
-                    Span<bke::pbvh::Node *> nodes,
-                    Span<bke::pbvh::Node *> texnodes);
+                    const IndexMask &node_mask,
+                    const IndexMask &texnode_mask);
 void do_smear_brush(const Depsgraph &depsgraph,
                     const Sculpt &sd,
                     Object &ob,
-                    Span<bke::pbvh::Node *> nodes);
+                    const IndexMask &node_mask);
 }  // namespace blender::ed::sculpt_paint::color

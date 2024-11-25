@@ -50,7 +50,7 @@
 
 #include "BKE_anim_visualization.h"
 #include "BKE_customdata.hh"
-#include "BKE_image.h"
+#include "BKE_image.hh"
 #include "BKE_main.hh" /* for Main */
 #include "BKE_mesh_legacy_convert.hh"
 #include "BKE_modifier.hh"
@@ -179,7 +179,7 @@ static void do_versions_image_settings_2_60(Scene *sce)
   imf->depth = R_IMF_CHAN_DEPTH_8;
 
   /* openexr */
-  imf->exr_codec = rd->quality & 7; /* strange but true! 0-4 are valid values, OPENEXR_COMPRESS */
+  imf->exr_codec = rd->quality & 7; /* 0-4 were valid values back then */
 
   switch (imf->imtype) {
     case R_IMF_IMTYPE_OPENEXR:
@@ -1329,7 +1329,7 @@ void blo_do_versions_260(FileData *fd, Library * /*lib*/, Main *bmain)
 
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 260, 8)) {
     LISTBASE_FOREACH (Brush *, brush, &bmain->brushes) {
-      if (brush->sculpt_tool == SCULPT_TOOL_ROTATE) {
+      if (brush->sculpt_brush_type == SCULPT_BRUSH_TYPE_ROTATE) {
         brush->alpha = 1.0f;
       }
     }
@@ -2003,7 +2003,7 @@ void blo_do_versions_260(FileData *fd, Library * /*lib*/, Main *bmain)
     LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
       if (scene->toolsettings->uvcalc_margin == 0.0f) {
         scene->toolsettings->uvcalc_margin = 0.001f;
-        scene->toolsettings->unwrapper = 0;
+        scene->toolsettings->unwrapper = UVCALC_UNWRAP_METHOD_ANGLE;
       }
     }
   }
@@ -2637,7 +2637,7 @@ void blo_do_versions_260(FileData *fd, Library * /*lib*/, Main *bmain)
             continue;
           }
 
-          ARegion *arnew = MEM_cnew<ARegion>("node tools");
+          ARegion *arnew = BKE_area_region_new();
 
           BLI_insertlinkafter(&area->regionbase, region, arnew);
           arnew->regiontype = RGN_TYPE_TOOLS;

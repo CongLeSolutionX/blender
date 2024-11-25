@@ -17,7 +17,7 @@
 
 #include "BLT_translation.hh"
 
-#include "BKE_action.h"
+#include "BKE_action.hh"
 
 #include "RNA_access.hh"
 #include "RNA_define.hh"
@@ -645,8 +645,9 @@ static void rna_FCurve_group_set(PointerRNA *ptr, PointerRNA value, ReportList *
   }
 
   blender::animrig::Action &action = act->wrap();
+
+  /* Legacy action. */
   if (!action.is_action_layered()) {
-    /* Legacy action. */
 
     /* make sure F-Curve exists in this action first, otherwise we could still have been tricked */
     if (BLI_findindex(&act->curves, fcu) == -1) {
@@ -668,24 +669,23 @@ static void rna_FCurve_group_set(PointerRNA *ptr, PointerRNA value, ReportList *
        * (or else will corrupt groups). */
       BLI_addtail(&act->curves, fcu);
     }
+
+    return;
   }
-  else {
-    /* Layered action. */
 
-    bActionGroup *group = static_cast<bActionGroup *>(value.data);
-    blender::animrig::ChannelBag *channel_bag;
-    {
-      ActionChannelBag *tmp = group->channel_bag;
-      BLI_assert(tmp != nullptr);
-      channel_bag = &tmp->wrap();
-    }
+  /* Layered action. */
+  bActionGroup *group = static_cast<bActionGroup *>(value.data);
 
-    if (!channel_bag->fcurve_assign_to_channel_group(*fcu, *group)) {
-      printf("ERROR: F-Curve (%p) doesn't belong to the same channel bag as channel group '%s'\n",
-             fcu,
-             group->name);
-      return;
-    }
+  BLI_assert(group->channel_bag != nullptr);
+  blender::animrig::ChannelBag &channel_bag = group->channel_bag->wrap();
+
+  if (!channel_bag.fcurve_assign_to_channel_group(*fcu, *group)) {
+    printf(
+        "ERROR: F-Curve (datapath: '%s') doesn't belong to the same channel bag as "
+        "channel group '%s'\n",
+        fcu->rna_path,
+        group->name);
+    return;
   }
 }
 
@@ -773,6 +773,7 @@ static void rna_FCurve_modifiers_remove(FCurve *fcu, ReportList *reports, Pointe
   }
 
   remove_fmodifier(&fcu->modifiers, fcm);
+  DEG_id_tag_update(fcm_ptr->owner_id, ID_RECALC_ANIMATION);
   RNA_POINTER_INVALIDATE(fcm_ptr);
 }
 

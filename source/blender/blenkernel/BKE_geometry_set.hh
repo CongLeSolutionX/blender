@@ -28,12 +28,9 @@ struct PointCloud;
 struct Volume;
 struct GreasePencil;
 namespace blender::bke {
-class AnonymousAttributePropagationInfo;
-class AttributeIDRef;
-struct AttributeKind;
+struct AttributeDomainAndType;
 class AttributeAccessor;
 struct AttributeMetaData;
-class ComponentAttributeProviders;
 class CurvesEditHints;
 class Instances;
 class GeometryComponent;
@@ -249,7 +246,7 @@ struct GeometrySet {
    */
   void ensure_owns_all_data();
 
-  using AttributeForeachCallback = FunctionRef<void(const AttributeIDRef &attribute_id,
+  using AttributeForeachCallback = FunctionRef<void(StringRef attribute_id,
                                                     const AttributeMetaData &meta_data,
                                                     const GeometryComponent &component)>;
 
@@ -257,16 +254,12 @@ struct GeometrySet {
                          bool include_instances,
                          AttributeForeachCallback callback) const;
 
-  static void propagate_attributes_from_layer_to_instances(
-      const AttributeAccessor src_attributes,
-      MutableAttributeAccessor dst_attributes,
-      const AnonymousAttributePropagationInfo &propagation_info);
-
-  void gather_attributes_for_propagation(Span<GeometryComponent::Type> component_types,
-                                         GeometryComponent::Type dst_component_type,
-                                         bool include_instances,
-                                         const AnonymousAttributePropagationInfo &propagation_info,
-                                         Map<AttributeIDRef, AttributeKind> &r_attributes) const;
+  void gather_attributes_for_propagation(
+      Span<GeometryComponent::Type> component_types,
+      GeometryComponent::Type dst_component_type,
+      bool include_instances,
+      const AttributeFilter &attribute_filter,
+      Map<StringRef, AttributeDomainAndType> &r_attributes) const;
 
   Vector<GeometryComponent::Type> gather_component_types(bool include_instances,
                                                          bool ignore_empty) const;
@@ -446,6 +439,12 @@ struct GeometrySet {
   {
     /* This compares only the component pointers, not the actual geometry data. */
     return Span(a.components_) == Span(b.components_) && a.name == b.name;
+  }
+
+  uint64_t hash() const
+  {
+    /* This should have the same data that's also taken into account in #operator==. */
+    return get_default_hash(Span(components_), this->name);
   }
 
   void count_memory(MemoryCounter &memory) const;
@@ -654,6 +653,8 @@ class InstancesComponent : public GeometryComponent {
 
   bool is_empty() const final;
 
+  Instances *release();
+
   bool owns_direct_data() const override;
   void ensure_owns_direct_data() override;
 
@@ -797,5 +798,7 @@ class GreasePencilComponent : public GeometryComponent {
   std::optional<AttributeAccessor> attributes() const final;
   std::optional<MutableAttributeAccessor> attributes_for_write() final;
 };
+
+bool attribute_is_builtin_on_component_type(const GeometryComponent::Type type, StringRef name);
 
 }  // namespace blender::bke

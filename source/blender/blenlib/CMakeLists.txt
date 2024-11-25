@@ -21,7 +21,6 @@ set(INC_SYS
 )
 
 set(SRC
-  intern/BLI_array.c
   intern/BLI_assert.c
   intern/BLI_color.cc
   intern/BLI_dial_2d.c
@@ -41,13 +40,13 @@ set(SRC
   intern/BLI_mmap.c
   intern/BLI_subprocess.cc
   intern/BLI_timer.c
-  intern/DLRB_tree.c
   intern/array_store.cc
   intern/array_store_utils.cc
   intern/array_utils.c
   intern/array_utils.cc
   intern/astar.c
   intern/atomic_disjoint_set.cc
+  intern/bit_bool_conversion.cc
   intern/bit_ref.cc
   intern/bit_span.cc
   intern/bitmap.c
@@ -105,6 +104,7 @@ set(SRC
   intern/math_color_inline.c
   intern/math_geom.cc
   intern/math_geom_inline.c
+  intern/math_half.cc
   intern/math_interp.cc
   intern/math_matrix.cc
   intern/math_matrix_c.cc
@@ -125,7 +125,7 @@ set(SRC
   intern/noise.cc
   intern/offset_indices.cc
   intern/ordered_edge.cc
-  intern/path_util.cc
+  intern/path_utils.cc
   intern/polyfill_2d.c
   intern/polyfill_2d_beautify.c
   intern/quadric.c
@@ -153,7 +153,7 @@ set(SRC
   intern/task_pool.cc
   intern/task_range.cc
   intern/task_scheduler.cc
-  intern/tempfile.c
+  intern/tempfile.cc
   intern/threads.cc
   intern/time.c
   intern/timecode.c
@@ -177,7 +177,6 @@ set(SRC
   BLI_alloca.h
   BLI_allocator.hh
   BLI_any.hh
-  BLI_array.h
   BLI_array.hh
   BLI_array_store.h
   BLI_array_store_utils.h
@@ -188,10 +187,12 @@ set(SRC
   BLI_astar.h
   BLI_atomic_disjoint_set.hh
   BLI_binary_search.hh
+  BLI_bit_bool_conversion.hh
   BLI_bit_group_vector.hh
   BLI_bit_ref.hh
   BLI_bit_span.hh
   BLI_bit_span_ops.hh
+  BLI_bit_span_to_index_ranges.hh
   BLI_bit_vector.hh
   BLI_bitmap.h
   BLI_bitmap_draw_2d.h
@@ -219,7 +220,6 @@ set(SRC
   BLI_devirtualize_parameters.hh
   BLI_dial_2d.h
   BLI_disjoint_set.hh
-  BLI_dlrbTree.h
   BLI_dot_export.hh
   BLI_dot_export_attribute_enums.hh
   BLI_dynlib.h
@@ -264,6 +264,8 @@ set(SRC
   BLI_index_mask_expression.hh
   BLI_index_mask_fwd.hh
   BLI_index_range.hh
+  BLI_index_ranges_builder.hh
+  BLI_index_ranges_builder_fwd.hh
   BLI_inplace_priority_queue.hh
   BLI_iterator.h
   BLI_jitter_2d.h
@@ -298,6 +300,7 @@ set(SRC
   BLI_math_euler.hh
   BLI_math_euler_types.hh
   BLI_math_geom.h
+  BLI_math_half.hh
   BLI_math_inline.h
   BLI_math_interp.hh
   BLI_math_matrix.h
@@ -318,6 +321,7 @@ set(SRC
   BLI_math_vector.hh
   BLI_math_vector_mpq_types.hh
   BLI_math_vector_types.hh
+  BLI_math_vector_unroll.hh
   BLI_memarena.h
   BLI_memblock.h
   BLI_memiter.h
@@ -337,7 +341,7 @@ set(SRC
   BLI_offset_span.hh
   BLI_ordered_edge.hh
   BLI_parameter_pack_utils.hh
-  BLI_path_util.h
+  BLI_path_utils.hh
   BLI_polyfill_2d.h
   BLI_polyfill_2d_beautify.h
   BLI_pool.hh
@@ -474,13 +478,14 @@ if(WIN32)
     dxgi
   )
   list(APPEND SRC
-    intern/system_win32.c
+    intern/system_win32.cc
   )
 endif()
 
 
 if(APPLE)
   list(APPEND SRC
+    intern/fileops_apple.mm
     intern/storage_apple.mm
   )
 endif()
@@ -540,6 +545,7 @@ if(WITH_GTESTS)
     tests/BLI_index_mask_expression_test.cc
     tests/BLI_index_mask_test.cc
     tests/BLI_index_range_test.cc
+    tests/BLI_index_ranges_builder_test.cc
     tests/BLI_inplace_priority_queue_test.cc
     tests/BLI_kdopbvh_test.cc
     tests/BLI_kdtree_test.cc
@@ -554,6 +560,7 @@ if(WITH_GTESTS)
     tests/BLI_math_bits_test.cc
     tests/BLI_math_color_test.cc
     tests/BLI_math_geom_test.cc
+    tests/BLI_math_half_test.cc
     tests/BLI_math_interp_test.cc
     tests/BLI_math_matrix_test.cc
     tests/BLI_math_matrix_types_test.cc
@@ -570,7 +577,8 @@ if(WITH_GTESTS)
     tests/BLI_mesh_boolean_test.cc
     tests/BLI_mesh_intersect_test.cc
     tests/BLI_multi_value_map_test.cc
-    tests/BLI_path_util_test.cc
+    tests/BLI_offset_indices_test.cc
+    tests/BLI_path_utils_test.cc
     tests/BLI_polyfill_2d_test.cc
     tests/BLI_pool_test.cc
     tests/BLI_random_access_iterator_mixin_test.cc

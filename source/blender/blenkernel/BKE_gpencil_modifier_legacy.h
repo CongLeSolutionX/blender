@@ -13,31 +13,18 @@
 extern "C" {
 #endif
 
-struct ARegionType;
 struct BlendDataReader;
-struct BlendWriter;
-struct Depsgraph;
 struct GpencilModifierData;
 struct ID;
 struct ListBase;
-struct Main;
-struct ModifierUpdateDepsgraphContext;
 struct Object;
-struct Scene;
 /* NOTE: bake_modifier() called from UI:
  * needs to create new data-blocks, hence the need for this. */
-struct bGPDframe;
-struct bGPDlayer;
-struct bGPDstroke;
 
 typedef void (*GreasePencilIDWalkFunc)(void *user_data,
                                        struct Object *ob,
                                        struct ID **idpoin,
                                        int cb_flag);
-typedef void (*GreasePencilTexWalkFunc)(void *user_data,
-                                        struct Object *ob,
-                                        struct GpencilModifierData *md,
-                                        const char *propname);
 
 /**
  * Free grease pencil modifier data
@@ -61,7 +48,6 @@ void BKE_gpencil_modifiers_foreach_ID_link(struct Object *ob,
                                            GreasePencilIDWalkFunc walk,
                                            void *user_data);
 
-void BKE_gpencil_modifier_blend_write(struct BlendWriter *writer, struct ListBase *modbase);
 void BKE_gpencil_modifier_blend_read_data(struct BlendDataReader *reader,
                                           struct ListBase *lb,
                                           struct Object *ob);

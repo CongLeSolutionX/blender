@@ -7,6 +7,11 @@
  */
 
 #include <cstdlib>
+#ifndef WIN32
+#  include <unistd.h>
+#else
+#  include <io.h>
+#endif
 
 #include "MEM_guardedalloc.h"
 
@@ -16,7 +21,7 @@
 #include "BLI_fileops.h"
 #include "BLI_ghash.h"
 #include "BLI_math_base.h"
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 #include "BLI_string.h"
 #include "BLI_string_utils.hh"
 #include "BLI_threads.h"
@@ -27,10 +32,11 @@
 #  include "BLI_winstuff.h"
 #endif
 
+#include "BKE_writeffmpeg.hh"
+
 #include "IMB_anim.hh"
 #include "IMB_imbuf.hh"
 #include "IMB_indexer.hh"
-#include "imbuf.hh"
 
 #ifdef WITH_FFMPEG
 extern "C" {
@@ -88,13 +94,13 @@ anim_index_builder *IMB_index_builder_create(const char *filepath)
 
 void IMB_index_builder_add_entry(anim_index_builder *fp,
                                  int frameno,
-                                 uint64_t seek_pos,
                                  uint64_t seek_pos_pts,
                                  uint64_t seek_pos_dts,
                                  uint64_t pts)
 {
+  uint64_t pad = 0;
   fwrite(&frameno, sizeof(int), 1, fp->fp);
-  fwrite(&seek_pos, sizeof(uint64_t), 1, fp->fp);
+  fwrite(&pad, sizeof(uint64_t), 1, fp->fp);
   fwrite(&seek_pos_pts, sizeof(uint64_t), 1, fp->fp);
   fwrite(&seek_pos_dts, sizeof(uint64_t), 1, fp->fp);
   fwrite(&pts, sizeof(uint64_t), 1, fp->fp);
@@ -104,7 +110,6 @@ void IMB_index_builder_proc_frame(anim_index_builder *fp,
                                   uchar *buffer,
                                   int data_size,
                                   int frameno,
-                                  uint64_t seek_pos,
                                   uint64_t seek_pos_pts,
                                   uint64_t seek_pos_dts,
                                   uint64_t pts)
@@ -112,7 +117,6 @@ void IMB_index_builder_proc_frame(anim_index_builder *fp,
   if (fp->proc_frame) {
     anim_index_entry e;
     e.frameno = frameno;
-    e.seek_pos = seek_pos;
     e.seek_pos_pts = seek_pos_pts;
     e.seek_pos_dts = seek_pos_dts;
     e.pts = pts;
@@ -120,7 +124,7 @@ void IMB_index_builder_proc_frame(anim_index_builder *fp,
     fp->proc_frame(fp, buffer, data_size, &e);
   }
   else {
-    IMB_index_builder_add_entry(fp, frameno, seek_pos, seek_pos_pts, seek_pos_dts, pts);
+    IMB_index_builder_add_entry(fp, frameno, seek_pos_pts, seek_pos_dts, pts);
   }
 }
 
@@ -181,7 +185,7 @@ ImBufAnimIndex *IMB_indexer_open(const char *filepath)
   fseek(fp, 0, SEEK_END);
 
   idx->num_entries = (ftell(fp) - 12) / (sizeof(int) +      /* framepos */
-                                         sizeof(uint64_t) + /* seek_pos */
+                                         sizeof(uint64_t) + /* _pad */
                                          sizeof(uint64_t) + /* seek_pos_pts */
                                          sizeof(uint64_t) + /* seek_pos_dts */
                                          sizeof(uint64_t)   /* pts */
@@ -193,9 +197,10 @@ ImBufAnimIndex *IMB_indexer_open(const char *filepath)
       MEM_callocN(sizeof(anim_index_entry) * idx->num_entries, "anim_index_entries"));
 
   size_t items_read = 0;
+  uint64_t pad;
   for (i = 0; i < idx->num_entries; i++) {
     items_read += fread(&idx->entries[i].frameno, sizeof(int), 1, fp);
-    items_read += fread(&idx->entries[i].seek_pos, sizeof(uint64_t), 1, fp);
+    items_read += fread(&pad, sizeof(uint64_t), 1, fp);
     items_read += fread(&idx->entries[i].seek_pos_pts, sizeof(uint64_t), 1, fp);
     items_read += fread(&idx->entries[i].seek_pos_dts, sizeof(uint64_t), 1, fp);
     items_read += fread(&idx->entries[i].pts, sizeof(uint64_t), 1, fp);
@@ -212,7 +217,6 @@ ImBufAnimIndex *IMB_indexer_open(const char *filepath)
   if ((ENDIAN_ORDER == B_ENDIAN) != (header[8] == 'V')) {
     for (i = 0; i < idx->num_entries; i++) {
       BLI_endian_switch_int32(&idx->entries[i].frameno);
-      BLI_endian_switch_uint64(&idx->entries[i].seek_pos);
       BLI_endian_switch_uint64(&idx->entries[i].seek_pos_pts);
       BLI_endian_switch_uint64(&idx->entries[i].seek_pos_dts);
       BLI_endian_switch_uint64(&idx->entries[i].pts);
@@ -222,19 +226,6 @@ ImBufAnimIndex *IMB_indexer_open(const char *filepath)
   fclose(fp);
 
   return idx;
-}
-
-uint64_t IMB_indexer_get_seek_pos(ImBufAnimIndex *idx, int frame_index)
-{
-  /* This is hard coded, because our current timecode files return non zero seek position for index
-   * 0. Only when seeking to 0 it is guaranteed, that first packet will be read. */
-  if (frame_index <= 0) {
-    return 0;
-  }
-  if (frame_index >= idx->num_entries) {
-    frame_index = idx->num_entries - 1;
-  }
-  return idx->entries[frame_index].seek_pos;
 }
 
 uint64_t IMB_indexer_get_seek_pos_pts(ImBufAnimIndex *idx, int frame_index)
@@ -308,15 +299,6 @@ int IMB_indexer_get_duration(ImBufAnimIndex *idx)
     return 0;
   }
   return idx->entries[idx->num_entries - 1].frameno + 1;
-}
-
-int IMB_indexer_can_scan(ImBufAnimIndex *idx, int old_frame_index, int new_frame_index)
-{
-  /* makes only sense, if it is the same I-Frame and we are not
-   * trying to run backwards in time... */
-  return (IMB_indexer_get_seek_pos(idx, old_frame_index) ==
-              IMB_indexer_get_seek_pos(idx, new_frame_index) &&
-          old_frame_index < new_frame_index);
 }
 
 void IMB_indexer_close(ImBufAnimIndex *idx)
@@ -466,8 +448,13 @@ struct proxy_output_ctx {
   ImBufAnim *anim;
 };
 
-static proxy_output_ctx *alloc_proxy_output_ffmpeg(
-    ImBufAnim *anim, AVStream *st, IMB_Proxy_Size proxy_size, int width, int height, int quality)
+static proxy_output_ctx *alloc_proxy_output_ffmpeg(ImBufAnim *anim,
+                                                   AVCodecContext *codec_ctx,
+                                                   AVStream *st,
+                                                   IMB_Proxy_Size proxy_size,
+                                                   int width,
+                                                   int height,
+                                                   int quality)
 {
   proxy_output_ctx *rv = MEM_cnew<proxy_output_ctx>("alloc_proxy_output");
 
@@ -557,6 +544,11 @@ static proxy_output_ctx *alloc_proxy_output_ffmpeg(
     rv->c->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
   }
 
+  rv->c->color_range = codec_ctx->color_range;
+  rv->c->color_primaries = codec_ctx->color_primaries;
+  rv->c->color_trc = codec_ctx->color_trc;
+  rv->c->colorspace = codec_ctx->colorspace;
+
   avcodec_parameters_from_context(rv->st->codecpar, rv->c);
 
   int ret = avio_open(&rv->of->pb, filepath, AVIO_FLAG_WRITE);
@@ -595,32 +587,20 @@ static proxy_output_ctx *alloc_proxy_output_ffmpeg(
   if (st->codecpar->width != width || st->codecpar->height != height ||
       st->codecpar->format != rv->c->pix_fmt)
   {
+    const size_t align = ffmpeg_get_buffer_alignment();
     rv->frame = av_frame_alloc();
-
-    av_image_fill_arrays(rv->frame->data,
-                         rv->frame->linesize,
-                         static_cast<const uint8_t *>(MEM_mallocN(
-                             av_image_get_buffer_size(rv->c->pix_fmt, width, height, 1),
-                             "alloc proxy output frame")),
-                         rv->c->pix_fmt,
-                         width,
-                         height,
-                         1);
-
     rv->frame->format = rv->c->pix_fmt;
     rv->frame->width = width;
     rv->frame->height = height;
+    av_frame_get_buffer(rv->frame, align);
 
-    rv->sws_ctx = sws_getContext(st->codecpar->width,
-                                 rv->orig_height,
-                                 AVPixelFormat(st->codecpar->format),
-                                 width,
-                                 height,
-                                 rv->c->pix_fmt,
-                                 SWS_FAST_BILINEAR | SWS_PRINT_INFO,
-                                 nullptr,
-                                 nullptr,
-                                 nullptr);
+    rv->sws_ctx = BKE_ffmpeg_sws_get_context(st->codecpar->width,
+                                             rv->orig_height,
+                                             AVPixelFormat(st->codecpar->format),
+                                             width,
+                                             height,
+                                             rv->c->pix_fmt,
+                                             SWS_FAST_BILINEAR);
   }
 
   ret = avformat_write_header(rv->of, nullptr);
@@ -655,13 +635,7 @@ static void add_to_proxy_output_ffmpeg(proxy_output_ctx *ctx, AVFrame *frame)
   if (ctx->sws_ctx && frame &&
       (frame->data[0] || frame->data[1] || frame->data[2] || frame->data[3]))
   {
-    sws_scale(ctx->sws_ctx,
-              (const uint8_t *const *)frame->data,
-              frame->linesize,
-              0,
-              ctx->orig_height,
-              ctx->frame->data,
-              ctx->frame->linesize);
+    BKE_ffmpeg_sws_scale_frame(ctx->sws_ctx, ctx->frame, frame);
   }
 
   frame = ctx->sws_ctx ? (frame ? ctx->frame : nullptr) : frame;
@@ -752,10 +726,11 @@ static void free_proxy_output_ffmpeg(proxy_output_ctx *ctx, int rollback)
   avformat_free_context(ctx->of);
 
   if (ctx->sws_ctx) {
-    sws_freeContext(ctx->sws_ctx);
-
-    MEM_freeN(ctx->frame->data[0]);
-    av_free(ctx->frame);
+    BKE_ffmpeg_sws_release_context(ctx->sws_ctx);
+    ctx->sws_ctx = nullptr;
+  }
+  if (ctx->frame) {
+    av_frame_free(&ctx->frame);
   }
 
   get_proxy_filepath(ctx->anim, ctx->proxy_size, filepath_tmp, true);
@@ -790,10 +765,8 @@ struct FFmpegIndexBuilderContext : public IndexBuildContext {
   int tcs_in_use;
   int proxy_sizes_in_use;
 
-  uint64_t seek_pos;
   uint64_t seek_pos_pts;
   uint64_t seek_pos_dts;
-  uint64_t last_seek_pos;
   uint64_t last_seek_pos_pts;
   uint64_t last_seek_pos_dts;
   uint64_t start_pts;
@@ -899,7 +872,7 @@ static IndexBuildContext *index_ffmpeg_create_context(ImBufAnim *anim,
       width += width % 2;
       height += height % 2;
       context->proxy_ctx[i] = alloc_proxy_output_ffmpeg(
-          anim, context->iStream, proxy_sizes[i], width, height, quality);
+          anim, context->iCodecCtx, context->iStream, proxy_sizes[i], width, height, quality);
       if (!context->proxy_ctx[i]) {
         proxy_sizes_in_use &= ~int(proxy_sizes[i]);
       }
@@ -960,7 +933,6 @@ static void index_rebuild_ffmpeg_proc_decoded_frame(FFmpegIndexBuilderContext *c
                                                     AVFrame *in_frame)
 {
   int i;
-  uint64_t s_pos = context->seek_pos;
   uint64_t s_pts = context->seek_pos_pts;
   uint64_t s_dts = context->seek_pos_dts;
   uint64_t pts = av_get_pts_from_frame(in_frame);
@@ -984,7 +956,6 @@ static void index_rebuild_ffmpeg_proc_decoded_frame(FFmpegIndexBuilderContext *c
      * before our seek I-Frame. So we need to pick the previous available
      * I-Frame to be able to decode this one properly.
      */
-    s_pos = context->last_seek_pos;
     s_pts = context->last_seek_pos_pts;
     s_dts = context->last_seek_pos_dts;
   }
@@ -1001,7 +972,6 @@ static void index_rebuild_ffmpeg_proc_decoded_frame(FFmpegIndexBuilderContext *c
                                    curr_packet->data,
                                    curr_packet->size,
                                    tc_frameno,
-                                   s_pos,
                                    s_pts,
                                    s_dts,
                                    pts);
@@ -1056,11 +1026,9 @@ static int index_rebuild_ffmpeg(FFmpegIndexBuilderContext *context,
         }
 
         if (next_packet->flags & AV_PKT_FLAG_KEY) {
-          context->last_seek_pos = context->seek_pos;
           context->last_seek_pos_pts = context->seek_pos_pts;
           context->last_seek_pos_dts = context->seek_pos_dts;
 
-          context->seek_pos = in_frame->pkt_pos;
           context->seek_pos_pts = in_frame->pts;
           context->seek_pos_dts = in_frame->pkt_dts;
         }

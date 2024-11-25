@@ -28,6 +28,7 @@
 #include "BKE_context.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_report.hh"
+#include "BKE_screen.hh"
 
 #include "WM_api.hh"
 #include "WM_types.hh"
@@ -353,7 +354,7 @@ static void drawWalkPixel(const bContext * /*C*/, ARegion *region, void *arg)
 
   if (ED_view3d_cameracontrol_object_get(walk->v3d_camera_control)) {
     ED_view3d_calc_camera_border(
-        walk->scene, walk->depsgraph, region, walk->v3d, walk->rv3d, &viewborder, false);
+        walk->scene, walk->depsgraph, region, walk->v3d, walk->rv3d, false, &viewborder);
     xoff = int(viewborder.xmin + BLI_rctf_size_x(&viewborder) * 0.5f);
     yoff = int(viewborder.ymin + BLI_rctf_size_y(&viewborder) * 0.5f);
   }
@@ -621,7 +622,7 @@ static bool initWalkInfo(bContext *C, WalkInfo *walk, wmOperator *op, const int 
   walk->time_lastdraw = BLI_time_now_seconds();
 
   walk->draw_handle_pixel = ED_region_draw_cb_activate(
-      walk->region->type, drawWalkPixel, walk, REGION_DRAW_POST_PIXEL);
+      walk->region->runtime->type, drawWalkPixel, walk, REGION_DRAW_POST_PIXEL);
 
   walk->rv3d->rflag |= RV3D_NAVIGATING;
 
@@ -668,7 +669,7 @@ static int walkEnd(bContext *C, WalkInfo *walk)
 
   WM_event_timer_remove(CTX_wm_manager(C), win, walk->timer);
 
-  ED_region_draw_cb_exit(walk->region->type, walk->draw_handle_pixel);
+  ED_region_draw_cb_exit(walk->region->runtime->type, walk->draw_handle_pixel);
 
   ED_transform_snap_object_context_destroy(walk->snap_context);
 

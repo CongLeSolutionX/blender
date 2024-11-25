@@ -602,8 +602,9 @@ static void waveform_draw_one(const float *waveform, int waveform_num, const flo
   /* TODO: store the #blender::gpu::Batch inside the scope. */
   blender::gpu::Batch *batch = GPU_batch_create_ex(
       GPU_PRIM_POINTS, vbo, nullptr, GPU_BATCH_OWNS_VBO);
-  GPU_batch_program_set_builtin(batch, GPU_SHADER_3D_UNIFORM_COLOR);
+  GPU_batch_program_set_builtin(batch, GPU_SHADER_3D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_AA);
   GPU_batch_uniform_4f(batch, "color", col[0], col[1], col[2], 1.0f);
+  GPU_batch_uniform_1f(batch, "size", 1.0f);
   GPU_batch_draw(batch);
 
   GPU_batch_discard(batch);
@@ -1976,13 +1977,13 @@ void ui_draw_but_CURVEPROFILE(ARegion *region,
     BLI_polyfill_calc(table_coords, tot_points, -1, tri_indices);
 
     /* Draw the triangles for the profile fill. */
-    immUniformColor3ubvAlpha((const uchar *)wcol->item, 128);
+    immUniformColor3ubvAlpha(wcol->item, 128);
     GPU_blend(GPU_BLEND_ALPHA);
     GPU_polygon_smooth(false);
     immBegin(GPU_PRIM_TRIS, 3 * tot_triangles);
     for (uint i = 0; i < tot_triangles; i++) {
+      const uint *tri = tri_indices[i];
       for (uint j = 0; j < 3; j++) {
-        uint *tri = tri_indices[i];
         fx = rect->xmin + zoomx * (table_coords[tri[j]][0] - offsx);
         fy = rect->ymin + zoomy * (table_coords[tri[j]][1] - offsy);
         immVertex2f(pos, fx, fy);

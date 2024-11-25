@@ -520,7 +520,12 @@ const EnumPropertyItem rna_enum_operator_type_flag_items[] = {
      0,
      "Register",
      "Display in the info window and support the redo toolbar panel"},
-    {OPTYPE_UNDO, "UNDO", 0, "Undo", "Push an undo event (needed for operator redo)"},
+    {OPTYPE_UNDO,
+     "UNDO",
+     0,
+     "Undo",
+     "Push an undo event when the operator returns `FINISHED` (needed for operator redo, "
+     "mandatory if the operator modifies Blender data)"},
     {OPTYPE_UNDO_GROUPED,
      "UNDO_GROUPED",
      0,
@@ -618,7 +623,7 @@ const EnumPropertyItem rna_enum_wm_report_items[] = {
 #  include "MEM_guardedalloc.h"
 
 #  ifdef WITH_PYTHON
-#    include "BPY_extern.h"
+#    include "BPY_extern.hh"
 #  endif
 
 static wmOperator *rna_OperatorProperties_find_operator(PointerRNA *ptr)
@@ -1610,8 +1615,8 @@ static bool rna_Operator_unregister(Main *bmain, StructRNA *type);
 
 /* `bpy_operator_wrap.cc` */
 
-extern "C" void BPY_RNA_operator_wrapper(wmOperatorType *ot, void *userdata);
-extern "C" void BPY_RNA_operator_macro_wrapper(wmOperatorType *ot, void *userdata);
+extern void BPY_RNA_operator_wrapper(wmOperatorType *ot, void *userdata);
+extern void BPY_RNA_operator_macro_wrapper(wmOperatorType *ot, void *userdata);
 
 static StructRNA *rna_Operator_register(Main *bmain,
                                         ReportList *reports,
@@ -1930,7 +1935,10 @@ static void rna_Operator_bl_idname_set(PointerRNA *ptr, const char *value)
   wmOperator *data = (wmOperator *)(ptr->data);
   char *str = (char *)data->type->idname;
   if (!str[0]) {
-    BLI_strncpy(str, value, OP_MAX_TYPENAME); /* utf8 already ensured */
+    /* Calling UTF8 copy is disputable since registering ensures the value isn't truncated.
+     * Use a UTF8 copy to ensure truncating never causes an incomplete UTF8 sequence,
+     * even before registration. */
+    BLI_strncpy_utf8(str, value, OP_MAX_TYPENAME);
   }
   else {
     BLI_assert_msg(0, "setting the bl_idname on a non-builtin operator");
@@ -1942,7 +1950,7 @@ static void rna_Operator_bl_label_set(PointerRNA *ptr, const char *value)
   wmOperator *data = (wmOperator *)(ptr->data);
   char *str = (char *)data->type->name;
   if (!str[0]) {
-    BLI_strncpy(str, value, OP_MAX_TYPENAME); /* utf8 already ensured */
+    BLI_strncpy_utf8(str, value, OP_MAX_TYPENAME);
   }
   else {
     BLI_assert_msg(0, "setting the bl_label on a non-builtin operator");
@@ -1960,12 +1968,10 @@ static void rna_Operator_bl_label_set(PointerRNA *ptr, const char *value)
       wmOperator *data = (wmOperator *)(ptr->data); \
       char *str = (char *)data->type->attr; \
       if (str && !str[0]) { \
-        BLI_strncpy(str, value, attr_maxncpy); /* utf8 already ensured */ \
+        BLI_strncpy_utf8(str, value, attr_maxncpy); \
       } \
       else { \
-        BLI_assert_msg( \
-            false, \
-            "setting the bl_" STRINGIFY(translation_context) " on a non-builtin operator"); \
+        BLI_assert_msg(false, "setting the bl_" #attr " on a non-builtin operator"); \
       } \
     } \
     static void rna_Operator_bl_##attr##_get(PointerRNA *ptr, char *value) \

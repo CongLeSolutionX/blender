@@ -143,6 +143,7 @@ dict_custom = {
     "discretization",
     "discretized",
     "discretizes",
+    "distributable",
     "downcasting",
     "downsample",
     "downsampled",
@@ -312,6 +313,7 @@ dict_custom = {
     "rebalancing",
     "rebase",
     "recomputation",
+    "reconnection",
     "recurse",
     "recursed",
     "recurses",
@@ -324,6 +326,9 @@ dict_custom = {
     "reimplement",
     "reimplemented",
     "reimplementing",
+    "relink",
+    "relinked",
+    "relinking",
     "remappable",
     "remapper",
     "remappings",
@@ -422,6 +427,7 @@ dict_custom = {
     "unapply",
     "unassign",
     "unassigning",
+    "unassigns",
     "unassociated",
     "unbake",
     "unbuffered",
@@ -576,6 +582,7 @@ dict_custom = {
     "multithreaded",
     "multithreading",
     "namespace",
+    "namespaces",
     "reparent",
     "tooltip",
     "unparent",
@@ -843,6 +850,7 @@ dict_ignore = {
 
     # Company names.
     "Logitech",
+    "Qualcomm",
     "Wacom",
 
     # Project Names.

@@ -382,7 +382,7 @@ static void ui_view2d_curRect_validate_resize(View2D *v2d, bool resize)
   rctf *cur, *tot;
 
   /* use mask as size of region that View2D resides in, as it takes into account
-   * scroll-bars already - keep in sync with zoomx/zoomy in #view_zoomstep_apply_ex! */
+   * scroll-bars already - keep in sync with `zoomx/zoomy` in #view_zoomstep_apply_ex! */
   winx = float(BLI_rcti_size_x(&v2d->mask) + 1);
   winy = float(BLI_rcti_size_y(&v2d->mask) + 1);
 
@@ -404,7 +404,7 @@ static void ui_view2d_curRect_validate_resize(View2D *v2d, bool resize)
    */
   totwidth = BLI_rctf_size_x(tot);
   totheight = BLI_rctf_size_y(tot);
-  /* keep in sync with zoomx/zoomy in view_zoomstep_apply_ex! */
+  /* Keep in sync with `zoomx/zoomy` in #view_zoomstep_apply_ex! */
   curwidth = width = BLI_rctf_size_x(cur);
   curheight = height = BLI_rctf_size_y(cur);
 
@@ -832,8 +832,8 @@ void UI_view2d_curRect_changed(const bContext *C, View2D *v2d)
 
   ARegion *region = CTX_wm_region(C);
 
-  if (region->type->on_view2d_changed != nullptr) {
-    region->type->on_view2d_changed(C, region);
+  if (region->runtime->type->on_view2d_changed != nullptr) {
+    region->runtime->type->on_view2d_changed(C, region);
   }
 }
 

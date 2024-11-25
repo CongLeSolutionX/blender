@@ -73,8 +73,6 @@ char *blf_dir_metrics_search(const char *filepath);
 int blf_font_init();
 void blf_font_exit();
 
-bool blf_font_id_is_valid(int fontid);
-
 /**
  * Return glyph id from char-code.
  */
@@ -106,7 +104,7 @@ void blf_draw_svg_icon(FontBLF *font,
                        float x,
                        float y,
                        float size,
-                       float color[4] = nullptr,
+                       const float color[4] = nullptr,
                        float outline_alpha = 1.0f,
                        bool multicolor = false,
                        blender::FunctionRef<void(std::string &)> edit_source_cb = nullptr);
@@ -148,6 +146,7 @@ void blf_font_width_and_height(FontBLF *font,
 float blf_font_width(FontBLF *font, const char *str, size_t str_len, ResultBLF *r_info);
 float blf_font_height(FontBLF *font, const char *str, size_t str_len, ResultBLF *r_info);
 float blf_font_fixed_width(FontBLF *font);
+int blf_font_glyph_advance(FontBLF *font, const char *str);
 int blf_font_height_max(FontBLF *font);
 int blf_font_width_max(FontBLF *font);
 int blf_font_descender(FontBLF *font);
@@ -170,13 +169,13 @@ size_t blf_str_offset_from_cursor_position(FontBLF *font,
 void blf_str_offset_to_glyph_bounds(FontBLF *font,
                                     const char *str,
                                     size_t str_offset,
-                                    rcti *glyph_bounds);
+                                    rcti *r_glyph_bounds);
 
 blender::Vector<blender::Bounds<int>> blf_str_selection_boxes(
     FontBLF *font, const char *str, size_t str_len, size_t sel_start, size_t sel_length);
 
 int blf_str_offset_to_cursor(
-    FontBLF *font, const char *str, size_t str_len, size_t str_offset, float cursor_width);
+    FontBLF *font, const char *str, size_t str_len, size_t str_offset, int cursor_width);
 
 void blf_font_free(FontBLF *font);
 

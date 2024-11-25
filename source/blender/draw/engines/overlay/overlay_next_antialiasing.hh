@@ -42,18 +42,20 @@
 
 #pragma once
 
-#include "overlay_next_private.hh"
+#include "overlay_next_base.hh"
 
 namespace blender::draw::overlay {
 
-class AntiAliasing {
+class AntiAliasing : Overlay {
  private:
   PassSimple anti_aliasing_ps_ = {"AntiAliasing"};
 
+  GPUFrameBuffer *framebuffer_ref_ = nullptr;
+
  public:
-  void begin_sync(Resources &res)
+  void begin_sync(Resources &res, const State & /*state*/) final
   {
-    if (res.selection_type != SelectionType::DISABLED) {
+    if (res.is_selection()) {
       anti_aliasing_ps_.init();
       return;
     }
@@ -63,10 +65,10 @@ class AntiAliasing {
     {
       PassSimple &pass = anti_aliasing_ps_;
       pass.init();
+      pass.framebuffer_set(&framebuffer_ref_);
       pass.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ALPHA_PREMUL);
       pass.shader_set(res.shaders.anti_aliasing.get());
-      pass.framebuffer_set(&res.overlay_output_fb);
-      pass.bind_ubo("globalsBlock", &res.globals_buf);
+      pass.bind_ubo(OVERLAY_GLOBALS_SLOT, &res.globals_buf);
       pass.bind_texture("depthTex", &res.depth_tx);
       pass.bind_texture("colorTex", &res.overlay_tx);
       pass.bind_texture("lineTex", &res.line_tx);
@@ -75,8 +77,9 @@ class AntiAliasing {
     }
   }
 
-  void draw(Manager &manager)
+  void draw_output(Framebuffer &framebuffer, Manager &manager, View & /*view*/) final
   {
+    framebuffer_ref_ = framebuffer;
     manager.submit(anti_aliasing_ps_);
   }
 };

@@ -37,6 +37,15 @@ enum eUSDMtlNameCollisionMode {
   USD_MTL_NAME_COLLISION_REFERENCE_EXISTING = 1,
 };
 
+/* Enums specifying the USD material purpose,
+ * corresponding to #pxr::UsdShadeTokens 'allPurpose',
+ * 'preview', and 'render', respectively. */
+enum eUSDMtlPurpose {
+  USD_MTL_PURPOSE_ALL = 0,
+  USD_MTL_PURPOSE_PREVIEW = 1,
+  USD_MTL_PURPOSE_FULL = 2
+};
+
 /**
  *  Behavior for importing of custom
  *  attributes / properties outside
@@ -113,6 +122,7 @@ struct USDExportParams {
   bool export_lights = true;
   bool export_cameras = true;
   bool export_curves = true;
+  bool export_points = true;
   bool export_volumes = true;
   bool export_hair = true;
   bool export_uvmaps = true;
@@ -158,6 +168,8 @@ struct USDExportParams {
   char collection[MAX_IDPROP_NAME] = "";
   char custom_properties_namespace[MAX_IDPROP_NAME] = "";
 
+  bool merge_parent_xform = false;
+
   /** Communication structure between the wmJob management code and the worker code. Currently used
    * to generate safely reports from the worker thread. */
   wmJobWorkerStatus *worker_status = nullptr;
@@ -202,7 +214,9 @@ struct USDImportParams {
   bool set_material_blend;
 
   bool validate_meshes;
+  bool merge_parent_xform;
 
+  eUSDMtlPurpose mtl_purpose;
   eUSDMtlNameCollisionMode mtl_name_collision_mode;
   eUSDTexImportMode import_textures_mode;
 
@@ -283,7 +297,6 @@ CacheReader *CacheReader_open_usd_object(CacheArchiveHandle *handle,
                                          Object *object,
                                          const char *object_path);
 
-void USD_CacheReader_incref(CacheReader *reader);
 void USD_CacheReader_free(CacheReader *reader);
 
 /** Data for registering USD IO hooks. */

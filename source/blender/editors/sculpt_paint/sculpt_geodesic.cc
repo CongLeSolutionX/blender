@@ -26,7 +26,7 @@
 #include "BKE_mesh_mapping.hh"
 #include "BKE_object.hh"
 #include "BKE_paint.hh"
-#include "BKE_pbvh_api.hh"
+#include "BKE_paint_bvh.hh"
 
 #include "paint_intern.hh"
 #include "sculpt_geodesic.hh"
@@ -100,7 +100,7 @@ Array<float> distances_create(const Span<float3> vert_positions,
   BLI_LINKSTACK_INIT(queue);
   BLI_LINKSTACK_INIT(queue_next);
 
-  for (const int i : edges.index_range()) {
+  for (const int i : vert_positions.index_range()) {
     if (initial_verts.contains(i)) {
       dists[i] = 0.0f;
     }

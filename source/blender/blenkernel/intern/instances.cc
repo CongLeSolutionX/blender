@@ -62,6 +62,16 @@ void InstanceReference::count_memory(MemoryCounter &memory) const
   }
 }
 
+AttributeAccessor Instances::attributes() const
+{
+  return AttributeAccessor(this, instance_attribute_accessor_functions());
+}
+
+MutableAttributeAccessor Instances::attributes_for_write()
+{
+  return MutableAttributeAccessor(this, instance_attribute_accessor_functions());
+}
+
 static void convert_collection_to_instances(const Collection &collection,
                                             bke::Instances &instances)
 {
@@ -131,6 +141,12 @@ bool operator==(const InstanceReference &a, const InstanceReference &b)
   return a.type_ == b.type_ && a.data_ == b.data_;
 }
 
+uint64_t InstanceReference::hash() const
+{
+  const uint64_t geometry_hash = geometry_set_ ? geometry_set_->hash() : 0;
+  return get_default_hash(geometry_hash, type_, data_);
+}
+
 Instances::Instances()
 {
   CustomData_reset(&attributes_);
@@ -152,7 +168,7 @@ Instances::Instances(const Instances &other)
       reference_user_counts_(other.reference_user_counts_),
       almost_unique_ids_cache_(other.almost_unique_ids_cache_)
 {
-  CustomData_copy(&other.attributes_, &attributes_, CD_MASK_ALL, other.instances_num_);
+  CustomData_init_from(&other.attributes_, &attributes_, CD_MASK_ALL, other.instances_num_);
 }
 
 Instances::~Instances()
@@ -273,8 +289,7 @@ Span<InstanceReference> Instances::references() const
   return references_;
 }
 
-void Instances::remove(const IndexMask &mask,
-                       const AnonymousAttributePropagationInfo &propagation_info)
+void Instances::remove(const IndexMask &mask, const AttributeFilter &attribute_filter)
 {
   const std::optional<IndexRange> masked_range = mask.to_range();
   if (masked_range.has_value() && masked_range->start() == 0) {
@@ -290,8 +305,8 @@ void Instances::remove(const IndexMask &mask,
 
   gather_attributes(this->attributes(),
                     AttrDomain::Instance,
-                    propagation_info,
-                    {},
+                    AttrDomain::Instance,
+                    attribute_filter,
                     mask,
                     new_instances.attributes_for_write());
 

@@ -40,9 +40,10 @@ namespace blender::bke {
 struct bNodeType;
 class bNodeTreeZones;
 }  // namespace blender::bke
-namespace blender::bke::anonymous_attribute_inferencing {
-struct AnonymousAttributeInferencingResult;
-};
+
+namespace blender::bke::node_tree_reference_lifetimes {
+struct ReferenceLifetimesInfo;
+}
 
 namespace blender {
 
@@ -82,6 +83,16 @@ struct NodeLinkError {
   std::string tooltip;
 };
 
+struct LoggedZoneGraphs {
+  std::mutex mutex;
+  /**
+   * Technically there can be more than one graph per zone because the zone can be invoked in
+   * different contexts. However, for the purpose of logging here, we only need one at a time
+   * anyway.
+   */
+  Map<int, std::string> graph_by_zone_id;
+};
+
 /**
  * Runtime data for #bNodeTree from the perspective of execution instructions (rather than runtime
  * data from evaluation of the node tree). Evaluation data is not the responsibility of the node
@@ -114,6 +125,9 @@ class bNodeTreeRuntime : NonCopyable, NonMovable {
    */
   uint32_t previews_refresh_state = 0;
 
+  /** Allows logging zone graphs purely for debugging purposes. */
+  std::unique_ptr<LoggedZoneGraphs> logged_zone_graphs;
+
   /**
    * Storage of nodes based on their identifier. Also used as a contiguous array of nodes to
    * allow simpler and more cache friendly iteration. Supports lookup by integer or by node.
@@ -140,8 +154,7 @@ class bNodeTreeRuntime : NonCopyable, NonMovable {
   /** Information about how inputs and outputs of the node group interact with fields. */
   std::unique_ptr<nodes::FieldInferencingInterface> field_inferencing_interface;
   /** Information about usage of anonymous attributes within the group. */
-  std::unique_ptr<anonymous_attribute_inferencing::AnonymousAttributeInferencingResult>
-      anonymous_attribute_inferencing;
+  std::unique_ptr<node_tree_reference_lifetimes::ReferenceLifetimesInfo> reference_lifetimes_info;
   std::unique_ptr<nodes::gizmos::TreeGizmoPropagation> gizmo_propagation;
 
   /**
@@ -249,16 +262,19 @@ class bNodeSocketRuntime : NonCopyable, NonMovable {
   int index_in_inout_sockets = -1;
 };
 
+struct bNodePanelExtent {
+  float min_y;
+  float max_y;
+  bool fill_node_end = false;
+};
+
 class bNodePanelRuntime : NonCopyable, NonMovable {
  public:
   /* The vertical location of the panel in the tree, calculated while drawing the nodes and invalid
    * if the node tree hasn't been drawn yet. In the node tree's "world space" (the same as
    * #bNode::runtime::totr). */
-  float location_y;
-  /* Vertical start location of the panel content. */
-  float min_content_y;
-  /* Vertical end location of the panel content. */
-  float max_content_y;
+  std::optional<float> header_center_y;
+  std::optional<bNodePanelExtent> content_extent;
 };
 
 /**

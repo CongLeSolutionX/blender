@@ -94,8 +94,6 @@ void BKE_mesh_clear_geometry_and_metadata(Mesh *mesh);
 
 Mesh *BKE_mesh_add(Main *bmain, const char *name);
 
-void BKE_mesh_free_editmesh(Mesh *mesh);
-
 /**
  * A version of #BKE_mesh_copy_parameters that is intended for evaluated output
  * (the modifier stack for example).
@@ -357,6 +355,7 @@ bool BKE_mesh_has_custom_loop_normals(Mesh *mesh);
  * with automatically computed vectors.
  */
 void BKE_mesh_set_custom_normals(Mesh *mesh, float (*r_custom_loop_normals)[3]);
+void BKE_mesh_set_custom_normals_normalized(Mesh *mesh, float (*r_custom_loop_normals)[3]);
 /**
  * Higher level functions hiding most of the code needed around call to
  * #normals_corner_custom_set_from_verts().
@@ -365,6 +364,8 @@ void BKE_mesh_set_custom_normals(Mesh *mesh, float (*r_custom_loop_normals)[3]);
  * with automatically computed vectors.
  */
 void BKE_mesh_set_custom_normals_from_verts(Mesh *mesh, float (*r_custom_vert_normals)[3]);
+void BKE_mesh_set_custom_normals_from_verts_normalized(Mesh *mesh,
+                                                       float (*r_custom_vert_normals)[3]);
 
 /* *** mesh_evaluate.cc *** */
 

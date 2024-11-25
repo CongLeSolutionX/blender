@@ -10,17 +10,16 @@
 
 #include "draw_attributes.hh"
 #include "draw_manager_c.hh"
-#include "draw_pbvh.hh"
 
 #include "BKE_attribute.hh"
 #include "BKE_curve.hh"
+#include "BKE_customdata.hh"
 #include "BKE_duplilist.hh"
 #include "BKE_global.hh"
-#include "BKE_image.h"
+#include "BKE_image.hh"
 #include "BKE_mesh.hh"
 #include "BKE_object.hh"
 #include "BKE_paint.hh"
-#include "BKE_pbvh_api.hh"
 #include "BKE_volume.hh"
 
 /* For debug cursor position. */
@@ -1248,97 +1247,81 @@ static float sculpt_debug_colors[9][4] = {
     {0.7f, 0.2f, 1.0f, 1.0f},
 };
 
-static void sculpt_draw_cb(DRWSculptCallbackData *scd,
-                           blender::draw::pbvh::PBVHBatches *batches,
-                           const blender::draw::pbvh::PBVH_GPU_Args &pbvh_draw_args)
+static void draw_pbvh_nodes(const Object &object,
+                            const blender::Span<blender::gpu::Batch *> batches,
+                            const blender::Span<int> material_indices,
+                            const blender::Span<DRWShadingGroup *> shading_groups,
+                            const blender::IndexMask &nodes_to_draw)
 {
-  using namespace blender::draw;
-  blender::gpu::Batch *geom;
-
-  if (!scd->use_wire) {
-    geom = pbvh::tris_get(batches, scd->attrs, pbvh_draw_args, scd->fast_mode);
-  }
-  else {
-    geom = pbvh::lines_get(batches, scd->attrs, pbvh_draw_args, scd->fast_mode);
-  }
-
-  short index = 0;
-
-  if (scd->use_mats) {
-    index = pbvh::material_index_get(batches);
-    index = clamp_i(index, 0, scd->num_shading_groups - 1);
-  }
-
-  DRWShadingGroup *shgrp = scd->shading_groups[index];
-  if (geom != nullptr && shgrp != nullptr) {
+  nodes_to_draw.foreach_index([&](const int i) {
+    if (!batches[i]) {
+      return;
+    }
+    const int material_index = material_indices.is_empty() ? 0 : material_indices[i];
+    DRWShadingGroup *shgrp = shading_groups[material_index];
+    if (!shgrp) {
+      return;
+    }
     if (SCULPT_DEBUG_BUFFERS) {
       /* Color each buffers in different colors. Only work in solid/X-ray mode. */
       shgrp = DRW_shgroup_create_sub(shgrp);
-      DRW_shgroup_uniform_vec3(
-          shgrp, "materialDiffuseColor", SCULPT_DEBUG_COLOR(scd->debug_node_nr++), 1);
+      DRW_shgroup_uniform_vec3(shgrp, "materialDiffuseColor", SCULPT_DEBUG_COLOR(i), 1);
     }
 
     /* DRW_shgroup_call_no_cull reuses matrices calculations for all the drawcalls of this
      * object. */
-    DRW_shgroup_call_no_cull(shgrp, geom, scd->ob);
-  }
+    DRW_shgroup_call_no_cull(shgrp, batches[i], &object);
+  });
 }
 
-void DRW_sculpt_debug_cb(blender::bke::pbvh::Node *node,
-                         void *user_data,
-                         const float bmin[3],
-                         const float bmax[3],
-                         PBVHNodeFlags flag)
+void DRW_sculpt_debug_cb(blender::bke::pbvh::Node *node, void *user_data)
 {
   int *debug_node_nr = (int *)user_data;
   BoundBox bb;
-  BKE_boundbox_init_from_minmax(&bb, bmin, bmax);
+  BKE_boundbox_init_from_minmax(&bb, node->bounds_.min, node->bounds_.max);
 
 #if 0 /* Nodes hierarchy. */
-  if (flag & PBVH_Leaf) {
     DRW_debug_bbox(&bb, blender::float4{0.0f, 1.0f, 0.0f, 1.0f});
-  }
-  else {
-    DRW_debug_bbox(&bb, blender::float4{0.5f, 0.5f, 0.5f, 0.6f});
-  }
-#else /* Color coded leaf bounds. */
-  if (flag & (PBVH_Leaf | PBVH_TexLeaf)) {
-    DRW_debug_bbox(&bb, SCULPT_DEBUG_COLOR((*debug_node_nr)++));
-    int color = (*debug_node_nr)++;
-    color += BKE_pbvh_debug_draw_gen_get(*node);
 
-    DRW_debug_bbox(&bb, SCULPT_DEBUG_COLOR(color));
-  }
+#else /* Color coded leaf bounds. */
+  DRW_debug_bbox(&bb, SCULPT_DEBUG_COLOR((*debug_node_nr)++));
+  int color = (*debug_node_nr)++;
+  color += BKE_pbvh_debug_draw_gen_get(*node);
+
+  DRW_debug_bbox(&bb, SCULPT_DEBUG_COLOR(color));
 #endif
 }
 
-static void drw_sculpt_get_frustum_planes(const Object *ob, float planes[6][4])
+static std::array<float4, 6> drw_sculpt_get_frustum_planes(const Object *ob)
 {
   /* TODO: take into account partial redraw for clipping planes. */
-  DRW_view_frustum_planes_get(DRW_view_default_get(), planes);
+  std::array<float4, 6> planes = DRW_view_frustum_planes_get(DRW_view_default_get());
 
   /* Transform clipping planes to object space. Transforming a plane with a
    * 4x4 matrix is done by multiplying with the transpose inverse.
    * The inverse cancels out here since we transform by inverse(obmat). */
   float tmat[4][4];
   transpose_m4_m4(tmat, ob->object_to_world().ptr());
-  for (int i = 0; i < 6; i++) {
+  for (const int i : blender::IndexRange(planes.size())) {
     mul_m4_v4(tmat, planes[i]);
   }
+  return planes;
 }
 
 static void drw_sculpt_generate_calls(DRWSculptCallbackData *scd)
 {
   using namespace blender;
   /* pbvh::Tree should always exist for non-empty meshes, created by depsgraph eval. */
-  bke::pbvh::Tree *pbvh = (scd->ob->sculpt) ? scd->ob->sculpt->pbvh.get() : nullptr;
+  const Object &object = *scd->ob;
+  bke::pbvh::Tree *pbvh = (object.sculpt) ?
+                              const_cast<bke::pbvh::Tree *>(bke::object::pbvh_get(object)) :
+                              nullptr;
   if (!pbvh) {
     return;
   }
 
   const DRWContextState *drwctx = DRW_context_state_get();
   RegionView3D *rv3d = drwctx->rv3d;
-  const bool navigating = rv3d && (rv3d->rflag & RV3D_NAVIGATING);
 
   Paint *paint = nullptr;
   if (drwctx->evil_C != nullptr) {
@@ -1346,31 +1329,7 @@ static void drw_sculpt_generate_calls(DRWSculptCallbackData *scd)
   }
 
   /* Frustum planes to show only visible pbvh::Tree nodes. */
-  float update_planes[6][4];
-  float draw_planes[6][4];
-  PBVHFrustumPlanes update_frustum;
-  PBVHFrustumPlanes draw_frustum;
-
-  if (paint && (paint->flags & PAINT_SCULPT_DELAY_UPDATES)) {
-    update_frustum.planes = update_planes;
-    update_frustum.num_planes = 6;
-    bke::pbvh::get_frustum_planes(*pbvh, &update_frustum);
-    if (!navigating) {
-      drw_sculpt_get_frustum_planes(scd->ob, update_planes);
-      update_frustum.planes = update_planes;
-      update_frustum.num_planes = 6;
-      bke::pbvh::set_frustum_planes(*pbvh, &update_frustum);
-    }
-  }
-  else {
-    drw_sculpt_get_frustum_planes(scd->ob, update_planes);
-    update_frustum.planes = update_planes;
-    update_frustum.num_planes = 6;
-  }
-
-  drw_sculpt_get_frustum_planes(scd->ob, draw_planes);
-  draw_frustum.planes = draw_planes;
-  draw_frustum.num_planes = 6;
+  const std::array<float4, 6> draw_frustum_planes = drw_sculpt_get_frustum_planes(scd->ob);
 
   /* Fast mode to show low poly multires while navigating. */
   scd->fast_mode = false;
@@ -1387,24 +1346,42 @@ static void drw_sculpt_generate_calls(DRWSculptCallbackData *scd)
 
   bke::pbvh::update_normals_from_eval(*const_cast<Object *>(scd->ob), *pbvh);
 
-  bke::pbvh::draw_cb(
-      *scd->ob,
-      *pbvh,
-      update_only_visible,
-      update_frustum,
-      draw_frustum,
-      [&](blender::draw::pbvh::PBVHBatches *batches,
-          const blender::draw::pbvh::PBVH_GPU_Args &args) { sculpt_draw_cb(scd, batches, args); });
+  draw::pbvh::DrawCache &draw_data = draw::pbvh::ensure_draw_data(pbvh->draw_data);
+
+  IndexMaskMemory memory;
+  const IndexMask visible_nodes = bke::pbvh::search_nodes(
+      *pbvh, memory, [&](const bke::pbvh::Node &node) {
+        return !BKE_pbvh_node_fully_hidden_get(node) &&
+               bke::pbvh::node_frustum_contain_aabb(node, draw_frustum_planes);
+      });
+
+  const IndexMask nodes_to_update = update_only_visible ? visible_nodes :
+                                                          bke::pbvh::all_leaf_nodes(*pbvh, memory);
+
+  const draw::pbvh::ViewportRequest request{scd->attrs, scd->fast_mode};
+  Span<gpu::Batch *> batches;
+  if (scd->use_wire) {
+    batches = draw_data.ensure_lines_batches(object, request, nodes_to_update);
+  }
+  else {
+    batches = draw_data.ensure_tris_batches(object, request, nodes_to_update);
+  }
+
+  Span<int> material_indices;
+  if (scd->use_mats) {
+    material_indices = draw_data.ensure_material_indices(object);
+  }
+
+  draw_pbvh_nodes(object,
+                  batches,
+                  material_indices,
+                  {scd->shading_groups, scd->num_shading_groups},
+                  visible_nodes);
 
   if (SCULPT_DEBUG_BUFFERS) {
     int debug_node_nr = 0;
-    DRW_debug_modelmat(scd->ob->object_to_world().ptr());
-    BKE_pbvh_draw_debug_cb(
-        *pbvh,
-        (void (*)(
-            bke::pbvh::Node *n, void *d, const float min[3], const float max[3], PBVHNodeFlags f))
-            DRW_sculpt_debug_cb,
-        &debug_node_nr);
+    DRW_debug_modelmat(object.object_to_world().ptr());
+    BKE_pbvh_draw_debug_cb(*pbvh, DRW_sculpt_debug_cb, &debug_node_nr);
   }
 }
 
@@ -1509,7 +1486,7 @@ void DRW_shgroup_call_sculpt_with_materials(DRWShadingGroup **shgroups,
   scd.use_wire = false;
   scd.use_mats = true;
   scd.use_mask = false;
-  scd.attrs = attrs;
+  scd.attrs = std::move(attrs);
 
   drw_sculpt_generate_calls(&scd);
 }
@@ -2341,9 +2318,13 @@ void DRW_view_frustum_corners_get(const DRWView *view, BoundBox *corners)
   memcpy(corners, &view->frustum_corners, sizeof(view->frustum_corners));
 }
 
-void DRW_view_frustum_planes_get(const DRWView *view, float planes[6][4])
+std::array<float4, 6> DRW_view_frustum_planes_get(const DRWView *view)
 {
-  memcpy(planes, &view->frustum_planes, sizeof(view->frustum_planes));
+  std::array<float4, 6> planes;
+  const blender::Span<float4> view_planes(reinterpret_cast<const float4 *>(&view->frustum_planes),
+                                          6);
+  std::copy(view_planes.begin(), view_planes.end(), planes.begin());
+  return planes;
 }
 
 bool DRW_view_is_persp_get(const DRWView *view)

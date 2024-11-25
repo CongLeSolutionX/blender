@@ -16,7 +16,7 @@
 #include "DNA_armature_types.h"
 #include "DNA_object_types.h"
 
-#include "BKE_action.h"
+#include "BKE_action.hh"
 #include "BKE_anim_data.hh"
 #include "BKE_idprop.hh"
 #include "BKE_layer.hh"
@@ -71,9 +71,9 @@ typedef enum eAction_TransformFlags {
   ACT_TRANS_ALL = (ACT_TRANS_ONLY | ACT_TRANS_PROP),
 } eAction_TransformFlags;
 
-static eAction_TransformFlags get_item_transform_flags(Object &ob,
-                                                       bPoseChannel &pchan,
-                                                       ListBase &curves)
+static eAction_TransformFlags get_item_transform_flags_and_fcurves(Object &ob,
+                                                                   bPoseChannel &pchan,
+                                                                   ListBase &r_curves)
 {
   if (!ob.adt || !ob.adt->action) {
     return eAction_TransformFlags(0);
@@ -94,75 +94,70 @@ static eAction_TransformFlags get_item_transform_flags(Object &ob,
   /* Search F-Curves for the given properties
    * - we cannot use the groups, since they may not be grouped in that way...
    */
-  blender::animrig::action_foreach_fcurve(action, ob.adt->slot_handle, [&](FCurve &fcurve) {
-    const char *bPtr = nullptr, *pPtr = nullptr;
+  blender::animrig::foreach_fcurve_in_action_slot(
+      action, ob.adt->slot_handle, [&](FCurve &fcurve) {
+        const char *bPtr = nullptr, *pPtr = nullptr;
 
-    /* If enough flags have been found,
-     * we can stop checking unless we're also getting the curves. */
-    if (flags == ACT_TRANS_ALL) {
-      return;
-    }
+        if (fcurve.rna_path == nullptr) {
+          return;
+        }
 
-    if (fcurve.rna_path == nullptr) {
-      return;
-    }
+        /* Step 1: check for matching base path */
+        bPtr = strstr(fcurve.rna_path, basePath->c_str());
 
-    /* Step 1: check for matching base path */
-    bPtr = strstr(fcurve.rna_path, basePath->c_str());
+        if (!bPtr) {
+          return;
+        }
 
-    if (!bPtr) {
-      return;
-    }
+        /* We must add `len(basePath)` bytes to the match so that we are at the end of the
+         * base path so that we don't get false positives with these strings in the names
+         */
+        bPtr += strlen(basePath->c_str());
 
-    /* We must add `len(basePath)` bytes to the match so that we are at the end of the
-     * base path so that we don't get false positives with these strings in the names
-     */
-    bPtr += strlen(basePath->c_str());
+        /* Step 2: check for some property with transforms
+         * - once a match has been found, the curve cannot possibly be any other one
+         */
+        pPtr = strstr(bPtr, "location");
+        if (pPtr) {
+          flags |= ACT_TRANS_LOC;
 
-    /* Step 2: check for some property with transforms
-     * - once a match has been found, the curve cannot possibly be any other one
-     */
-    pPtr = strstr(bPtr, "location");
-    if (pPtr) {
-      flags |= ACT_TRANS_LOC;
+          BLI_addtail(&r_curves, BLI_genericNodeN(&fcurve));
+          return;
+        }
 
-      BLI_addtail(&curves, BLI_genericNodeN(&fcurve));
-      return;
-    }
+        pPtr = strstr(bPtr, "scale");
+        if (pPtr) {
+          flags |= ACT_TRANS_SCALE;
 
-    pPtr = strstr(bPtr, "scale");
-    if (pPtr) {
-      flags |= ACT_TRANS_SCALE;
+          BLI_addtail(&r_curves, BLI_genericNodeN(&fcurve));
+          return;
+        }
 
-      BLI_addtail(&curves, BLI_genericNodeN(&fcurve));
-      return;
-    }
+        pPtr = strstr(bPtr, "rotation");
+        if (pPtr) {
+          flags |= ACT_TRANS_ROT;
 
-    pPtr = strstr(bPtr, "rotation");
-    if (pPtr) {
-      flags |= ACT_TRANS_ROT;
+          BLI_addtail(&r_curves, BLI_genericNodeN(&fcurve));
+          return;
+        }
 
-      BLI_addtail(&curves, BLI_genericNodeN(&fcurve));
-      return;
-    }
+        pPtr = strstr(bPtr, "bbone_");
+        if (pPtr) {
+          flags |= ACT_TRANS_BBONE;
 
-    pPtr = strstr(bPtr, "bbone_");
-    if (pPtr) {
-      flags |= ACT_TRANS_BBONE;
+          BLI_addtail(&r_curves, BLI_genericNodeN(&fcurve));
+          return;
+        }
 
-      BLI_addtail(&curves, BLI_genericNodeN(&fcurve));
-      return;
-    }
+        /* Custom properties only. */
+        pPtr = strstr(bPtr, "[\"");
+        if (pPtr) {
+          flags |= ACT_TRANS_PROP;
 
-    /* Custom properties only. */
-    pPtr = strstr(bPtr, "[\"");
-    if (pPtr) {
-      flags |= ACT_TRANS_PROP;
-
-      BLI_addtail(&curves, BLI_genericNodeN(&fcurve));
-      return;
-    }
-  });
+          BLI_addtail(&r_curves, BLI_genericNodeN(&fcurve));
+          return;
+        }
+      });
 
   /* return flags found */
   return eAction_TransformFlags(flags);
@@ -172,7 +167,8 @@ static eAction_TransformFlags get_item_transform_flags(Object &ob,
 static void fcurves_to_pchan_links_get(ListBase &pfLinks, Object &ob, bPoseChannel &pchan)
 {
   ListBase curves = {nullptr, nullptr};
-  const eAction_TransformFlags transFlags = get_item_transform_flags(ob, pchan, curves);
+  const eAction_TransformFlags transFlags = get_item_transform_flags_and_fcurves(
+      ob, pchan, curves);
 
   pchan.flag &= ~(POSE_LOC | POSE_ROT | POSE_SIZE | POSE_BBONE_SHAPE);
 
@@ -396,7 +392,8 @@ void poseAnim_mapping_autoKeyframe(bContext *C, Scene *scene, ListBase *pfLinks,
   }
 
   /* Insert keyframes as necessary if auto-key-framing. */
-  KeyingSet *ks = ANIM_get_keyingset_for_autokeying(scene, ANIM_KS_WHOLE_CHARACTER_ID);
+  KeyingSet *ks = blender::animrig::get_keyingset_for_autokeying(scene,
+                                                                 ANIM_KS_WHOLE_CHARACTER_ID);
   blender::Vector<PointerRNA> sources;
 
   /* iterate over each pose-channel affected, tagging bones to be keyed */
@@ -411,11 +408,12 @@ void poseAnim_mapping_autoKeyframe(bContext *C, Scene *scene, ListBase *pfLinks,
     }
 
     /* Add data-source override for the PoseChannel, to be used later. */
-    ANIM_relative_keyingset_add_source(sources, &pfl->ob->id, &RNA_PoseBone, pchan);
+    blender::animrig::relative_keyingset_add_source(sources, &pfl->ob->id, &RNA_PoseBone, pchan);
   }
 
   /* insert keyframes for all relevant bones in one go */
-  ANIM_apply_keyingset(C, &sources, ks, blender::animrig::ModifyKeyMode::INSERT, cframe);
+  blender::animrig::apply_keyingset(
+      C, &sources, ks, blender::animrig::ModifyKeyMode::INSERT, cframe);
 
   /* do the bone paths
    * - only do this if keyframes should have been added

@@ -20,7 +20,7 @@
 #include "BLI_math_rotation.h"
 #include "BLI_math_vector.h"
 
-#include "BKE_action.h"
+#include "BKE_action.hh"
 #include "BKE_armature.hh"
 #include "BKE_camera.h"
 #include "BKE_lib_id.hh"
@@ -271,8 +271,8 @@ static int render_border_exec(bContext *C, wmOperator *op)
   /* calculate range */
 
   if (rv3d->persp == RV3D_CAMOB) {
-    Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
-    ED_view3d_calc_camera_border(scene, depsgraph, region, v3d, rv3d, &vb, false);
+    const Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
+    ED_view3d_calc_camera_border(scene, depsgraph, region, v3d, rv3d, false, &vb);
   }
   else {
     vb.xmin = 0;
@@ -915,7 +915,7 @@ void ED_view3d_cursor3d_position_rotation(bContext *C,
     SnapObjectParams params{};
     params.snap_target_select = SCE_SNAP_TARGET_ALL;
     params.edit_mode_type = SNAP_GEOM_FINAL;
-    params.use_occlusion_test = true;
+    params.occlusion_test = SNAP_OCCLUSION_AS_SEEM;
     if (ED_transform_snap_object_project_view3d_ex(snap_context,
                                                    CTX_data_ensure_evaluated_depsgraph(C),
                                                    region,
@@ -1054,7 +1054,7 @@ void ED_view3d_cursor3d_update(bContext *C,
 
   {
     wmMsgBus *mbus = CTX_wm_message_bus(C);
-    wmMsgParams_RNA msg_key_params = {{nullptr}};
+    wmMsgParams_RNA msg_key_params = {{}};
     msg_key_params.ptr = RNA_pointer_create(&scene->id, &RNA_View3DCursor, &scene->cursor);
     WM_msg_publish_rna_params(mbus, &msg_key_params);
   }

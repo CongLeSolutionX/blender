@@ -53,6 +53,7 @@
 #include "ED_asset.hh"
 #include "ED_fileselect.hh"
 #include "ED_info.hh"
+#include "ED_markers.hh"
 #include "ED_render.hh"
 #include "ED_screen.hh"
 #include "ED_undo.hh"
@@ -64,6 +65,7 @@
 #include "RNA_access.hh"
 
 #include "UI_interface.hh"
+#include "UI_view2d.hh"
 
 #include "WM_api.hh"
 #include "WM_message.hh"
@@ -410,9 +412,20 @@ void WM_main_remove_notifier_reference(const void *reference)
         const bool removed = BLI_gset_remove(wm->notifier_queue_set, note, nullptr);
         BLI_assert(removed);
         UNUSED_VARS_NDEBUG(removed);
-        /* Don't remove because this causes problems for #wm_event_do_notifiers
-         * which may be looping on the data (deleting screens). */
-        wm_notifier_clear(note);
+
+        /* Remove unless this is being iterated over by the caller.
+         * This is done to prevent `wm->notifier_queue` accumulating notifiers
+         * that aren't handled which can happen when notifiers are added from Python scripts.
+         * see #129323. */
+        if (wm->notifier_current == note) {
+          /* Don't remove because this causes problems for #wm_event_do_notifiers
+           * which may be looping on the data (deleting screens). */
+          wm_notifier_clear(note);
+        }
+        else {
+          BLI_remlink(&wm->notifier_queue, note);
+          MEM_freeN(note);
+        }
       }
     }
 
@@ -570,7 +583,20 @@ void wm_event_do_notifiers(bContext *C)
 
     CTX_wm_window_set(C, win);
 
-    LISTBASE_FOREACH_MUTABLE (const wmNotifier *, note, &wm->notifier_queue) {
+    BLI_assert(wm->notifier_current == nullptr);
+    for (const wmNotifier *note = static_cast<const wmNotifier *>(wm->notifier_queue.first),
+                          *note_next = nullptr;
+         note;
+         note = note_next)
+    {
+      if (wm_notifier_is_clear(note)) {
+        note_next = note->next;
+        MEM_freeN((void *)note);
+        continue;
+      }
+
+      wm->notifier_current = note;
+
       if (note->category == NC_WM) {
         if (ELEM(note->data, ND_FILEREAD, ND_FILESAVE)) {
           wm->file_saved = 1;
@@ -640,6 +666,14 @@ void wm_event_do_notifiers(bContext *C)
       if (ELEM(note->category, NC_SCENE, NC_OBJECT, NC_GEOM, NC_WM)) {
         clear_info_stats = true;
       }
+
+      wm->notifier_current = nullptr;
+
+      note_next = note->next;
+      if (wm_notifier_is_clear(note)) {
+        BLI_remlink(&wm->notifier_queue, (void *)note);
+        MEM_freeN((void *)note);
+      }
     }
 
     if (clear_info_stats) {
@@ -662,6 +696,8 @@ void wm_event_do_notifiers(bContext *C)
     }
   }
 
+  BLI_assert(wm->notifier_current == nullptr);
+
   /* The notifiers are sent without context, to keep it clean. */
   while (
       const wmNotifier *note = static_cast<const wmNotifier *>(BLI_pophead(&wm->notifier_queue)))
@@ -670,6 +706,8 @@ void wm_event_do_notifiers(bContext *C)
       MEM_freeN((void *)note);
       continue;
     }
+    /* NOTE: no need to set `wm->notifier_current` since it's been removed from the queue. */
+
     const bool removed = BLI_gset_remove(wm->notifier_queue_set, note, nullptr);
     BLI_assert(removed);
     UNUSED_VARS_NDEBUG(removed);
@@ -767,6 +805,7 @@ void wm_event_do_notifiers(bContext *C)
   wm_test_autorun_warning(C);
   /* Deprecation warning. */
   wm_test_opengl_deprecation_warning(C);
+  wm_test_gpu_backend_fallback(C);
 
   GPU_render_end();
 }
@@ -891,7 +930,7 @@ void wm_event_handler_ui_cancel_ex(bContext *C,
     return;
   }
 
-  LISTBASE_FOREACH_MUTABLE (wmEventHandler *, handler_base, &region->handlers) {
+  LISTBASE_FOREACH_MUTABLE (wmEventHandler *, handler_base, &region->runtime->handlers) {
     if (handler_base->type == WM_HANDLER_TYPE_UI) {
       wmEventHandler_UI *handler = (wmEventHandler_UI *)handler_base;
       BLI_assert(handler->handle_fn != nullptr);
@@ -1126,7 +1165,10 @@ static void wm_operator_reports(bContext *C,
     CLOG_STR_INFO(WM_LOG_OPERATORS, 1, pystring.c_str());
 
     if (caller_owns_reports == false) {
-      BKE_reports_print(op->reports, RPT_DEBUG); /* Print out reports to console. */
+      /* Print out reports to console.
+       * When quiet, only show warnings, suppressing info and other non-essential warnings. */
+      const eReportType level = G.quiet ? RPT_WARNING : RPT_DEBUG;
+      BKE_reports_print(op->reports, level);
     }
 
     if (op->type->flag & OPTYPE_REGISTER) {
@@ -1403,7 +1445,7 @@ static wmOperator *wm_operator_create(wmWindowManager *wm,
   STRNCPY(op->idname, ot->idname);
 
   /* Initialize properties, either copy or create. */
-  op->ptr = MEM_cnew<PointerRNA>("wmOperatorPtrRNA");
+  op->ptr = MEM_new<PointerRNA>("wmOperatorPtrRNA");
   if (properties && properties->data) {
     op->properties = IDP_CopyProperty(static_cast<const IDProperty *>(properties->data));
   }
@@ -1492,8 +1534,8 @@ static void wm_region_tag_draw_on_gizmo_delay_refresh_for_tweak(wmWindow *win)
   }
   ED_screen_areas_iter (win, screen, area) {
     LISTBASE_FOREACH (ARegion *, region, &area->regionbase) {
-      if (region->gizmo_map != nullptr) {
-        if (WM_gizmomap_tag_delay_refresh_for_tweak_check(region->gizmo_map)) {
+      if (region->runtime->gizmo_map != nullptr) {
+        if (WM_gizmomap_tag_delay_refresh_for_tweak_check(region->runtime->gizmo_map)) {
           ED_region_tag_redraw(region);
         }
       }
@@ -1916,7 +1958,7 @@ static void ui_handler_wait_for_input_remove(bContext *C, void *userdata)
     if (opwait->optype_params.opptr->data) {
       IDP_FreeProperty(static_cast<IDProperty *>(opwait->optype_params.opptr->data));
     }
-    MEM_freeN(opwait->optype_params.opptr);
+    MEM_delete(opwait->optype_params.opptr);
   }
 
   if (opwait->area != nullptr) {
@@ -2045,7 +2087,7 @@ void WM_operator_name_call_ptr_with_depends_on_cursor(bContext *C,
   opwait->area = area;
 
   if (properties) {
-    opwait->optype_params.opptr = MEM_cnew<PointerRNA>(__func__);
+    opwait->optype_params.opptr = MEM_new<PointerRNA>(__func__);
     *opwait->optype_params.opptr = *properties;
     if (properties->data != nullptr) {
       opwait->optype_params.opptr->data = IDP_CopyProperty(
@@ -2614,7 +2656,7 @@ static eHandlerActionFlag wm_handler_operator_call(bContext *C,
 
     if (ot && wm_operator_check_locked_interface(C, ot)) {
       bool use_last_properties = true;
-      PointerRNA tool_properties = {nullptr};
+      PointerRNA tool_properties = {};
 
       bToolRef *keymap_tool = nullptr;
       if (handler_base->type == WM_HANDLER_TYPE_KEYMAP) {
@@ -2720,10 +2762,8 @@ static eHandlerActionFlag wm_handler_fileselect_do(bContext *C,
   switch (val) {
     case EVT_FILESELECT_FULL_OPEN: {
       wmWindow *win = CTX_wm_window(C);
-      const int window_center[2] = {
-          WM_window_native_pixel_x(win) / 2,
-          WM_window_native_pixel_y(win) / 2,
-      };
+      const blender::int2 window_size = WM_window_native_pixel_size(win);
+      const blender::int2 window_center = window_size / 2;
 
       const rcti window_rect = {
           /*xmin*/ window_center[0],
@@ -3145,7 +3185,7 @@ static eHandlerActionFlag wm_handlers_do_gizmo_handler(bContext *C,
   /* Needed so UI blocks over gizmos don't let events fall through to the gizmos,
    * noticeable for the node editor - where dragging on a node should move it, see: #73212.
    * note we still allow for starting the gizmo drag outside, then travel 'inside' the node. */
-  if (region->type->clip_gizmo_events_by_ui) {
+  if (region->runtime->type->clip_gizmo_events_by_ui) {
     if (UI_region_block_find_mouse_over(region, event->xy, true)) {
       if (gz != nullptr && event->type != EVT_GIZMO_UPDATE) {
         if (restore_highlight_unless_activated == false) {
@@ -3167,7 +3207,7 @@ static eHandlerActionFlag wm_handlers_do_gizmo_handler(bContext *C,
   prev.gz = gz;
   prev.part = gz ? gz->highlight_part : 0;
 
-  if (region->gizmo_map != handler->gizmo_map) {
+  if (region->runtime->gizmo_map != handler->gizmo_map) {
     WM_gizmomap_tag_refresh(handler->gizmo_map);
   }
 
@@ -3343,7 +3383,9 @@ static eHandlerActionFlag wm_handlers_do_intern(bContext *C,
     if (handler_base->flag & WM_HANDLER_DO_FREE) {
       /* Pass. */
     }
-    else if (handler_base->poll == nullptr || handler_base->poll(CTX_wm_region(C), event)) {
+    else if (handler_base->poll == nullptr ||
+             handler_base->poll(win, CTX_wm_area(C), CTX_wm_region(C), event))
+    {
       /* In advance to avoid access to freed event on window close. */
       const bool always_pass = wm_event_always_pass(event);
 
@@ -3926,7 +3968,7 @@ static eHandlerActionFlag wm_event_do_region_handlers(bContext *C, wmEvent *even
     }
   }
 
-  return wm_handlers_do(C, event, &region->handlers);
+  return wm_handlers_do(C, event, &region->runtime->handlers);
 }
 
 /**
@@ -4675,8 +4717,8 @@ static void wm_event_get_keymap_from_toolsystem_ex(wmWindowManager *wm,
       wmGizmoMap *gzmap = nullptr;
       wmGizmoGroup *gzgroup = nullptr;
       LISTBASE_FOREACH (ARegion *, region, &area->regionbase) {
-        if (region->gizmo_map != nullptr) {
-          gzmap = region->gizmo_map;
+        if (region->runtime->gizmo_map != nullptr) {
+          gzmap = region->runtime->gizmo_map;
           gzgroup = WM_gizmomap_group_find(gzmap, tref_rt->gizmo_group);
           if (gzgroup != nullptr) {
             break;
@@ -4794,11 +4836,43 @@ static bool event_or_prev_in_rect(const wmEvent *event, const rcti *rect)
   return false;
 }
 
-static bool handler_region_v2d_mask_test(const ARegion *region, const wmEvent *event)
+bool WM_event_handler_region_v2d_mask_poll(const wmWindow * /*win*/,
+                                           const ScrArea * /*area*/,
+                                           const ARegion *region,
+                                           const wmEvent *event)
 {
   rcti rect = region->v2d.mask;
   BLI_rcti_translate(&rect, region->winrct.xmin, region->winrct.ymin);
   return event_or_prev_in_rect(event, &rect);
+}
+
+bool WM_event_handler_region_marker_poll(const wmWindow * /*win*/,
+                                         const ScrArea * /*area*/,
+                                         const ARegion *region,
+                                         const wmEvent *event)
+{
+  rcti rect = region->winrct;
+  rect.ymax = rect.ymin + UI_MARKER_MARGIN_Y;
+  /* TODO: investigate returning `event_or_prev_in_rect(event, &rect)` here.
+   * The difference is subtle but correct so dragging away from the region works. */
+  return BLI_rcti_isect_pt_v(&rect, event->xy);
+}
+
+bool WM_event_handler_region_v2d_mask_no_marker_poll(const wmWindow *win,
+                                                     const ScrArea *area,
+                                                     const ARegion *region,
+                                                     const wmEvent *event)
+{
+  if (!WM_event_handler_region_v2d_mask_poll(win, area, region, event)) {
+    return false;
+  }
+  /* Casting away `const` is only needed for a non-constant return value. */
+  const ListBase *markers = ED_scene_markers_get(WM_window_get_active_scene(win),
+                                                 const_cast<ScrArea *>(area));
+  if (markers && !BLI_listbase_is_empty(markers)) {
+    return !WM_event_handler_region_marker_poll(win, area, region, event);
+  }
+  return true;
 }
 
 wmEventHandler_Keymap *WM_event_add_keymap_handler_poll(ListBase *handlers,
@@ -4816,7 +4890,7 @@ wmEventHandler_Keymap *WM_event_add_keymap_handler_poll(ListBase *handlers,
 
 wmEventHandler_Keymap *WM_event_add_keymap_handler_v2d_mask(ListBase *handlers, wmKeyMap *keymap)
 {
-  return WM_event_add_keymap_handler_poll(handlers, keymap, handler_region_v2d_mask_test);
+  return WM_event_add_keymap_handler_poll(handlers, keymap, WM_event_handler_region_v2d_mask_poll);
 }
 
 void WM_event_remove_keymap_handler(ListBase *handlers, wmKeyMap *keymap)
@@ -5249,6 +5323,34 @@ static int wm_event_type_from_ghost_key(GHOST_TKey key)
   return EVENT_NONE;
 }
 
+/**
+ * \return The WM enum for button or `fallback`.
+ */
+static int wm_event_type_from_ghost_button(const GHOST_TButton button, const int fallback)
+{
+#define CASE_BUTTON(ghost_button, type) \
+  case ghost_button: \
+    return type
+
+  switch (button) {
+    CASE_BUTTON(GHOST_kButtonMaskLeft, LEFTMOUSE);
+    CASE_BUTTON(GHOST_kButtonMaskMiddle, MIDDLEMOUSE);
+    CASE_BUTTON(GHOST_kButtonMaskRight, RIGHTMOUSE);
+    CASE_BUTTON(GHOST_kButtonMaskButton4, BUTTON4MOUSE);
+    CASE_BUTTON(GHOST_kButtonMaskButton5, BUTTON5MOUSE);
+    CASE_BUTTON(GHOST_kButtonMaskButton6, BUTTON6MOUSE);
+    CASE_BUTTON(GHOST_kButtonMaskButton7, BUTTON7MOUSE);
+    case GHOST_kButtonMaskNone: {
+      BLI_assert_unreachable();
+    }
+  }
+
+#undef CASE_BUTTON
+
+  BLI_assert_unreachable();
+  return fallback;
+}
+
 static void wm_eventemulation(wmEvent *event, bool test_only)
 {
   /* Store last middle-mouse event value to make emulation work
@@ -5418,9 +5520,10 @@ static wmWindow *wm_event_cursor_other_windows(wmWindowManager *wm, wmWindow *wi
   /* In order to use window size and mouse position (pixels), we have to use a WM function. */
 
   /* Check if outside, include top window bar. */
+  const blender::int2 win_size = WM_window_native_pixel_size(win);
   int event_xy[2] = {UNPACK2(event->xy)};
-  if (event_xy[0] < 0 || event_xy[1] < 0 || event_xy[0] > WM_window_native_pixel_x(win) ||
-      event_xy[1] > WM_window_native_pixel_y(win) + 30)
+  if (event_xy[0] < 0 || event_xy[1] < 0 || event_xy[0] > win_size[0] ||
+      event_xy[1] > win_size[1] + 30)
   {
     /* Let's skip windows having modal handlers now. */
     /* Potential XXX ugly... I wouldn't have added a `modalhandlers` list
@@ -5836,30 +5939,12 @@ void wm_event_add_ghostevent(wmWindowManager *wm,
     case GHOST_kEventButtonUp: {
       const GHOST_TEventButtonData *bd = static_cast<const GHOST_TEventButtonData *>(customdata);
 
-      /* Get value and type from Ghost. */
+      /* Get value and type from GHOST.
+       *
+       * NOTE(@ideasman42): Unknown mouse buttons are treated as middle-mouse (historic stuff).
+       * GHOST should never generate unknown events and this logic can probably be removed. */
       event.val = (type == GHOST_kEventButtonDown) ? KM_PRESS : KM_RELEASE;
-
-      if (bd->button == GHOST_kButtonMaskLeft) {
-        event.type = LEFTMOUSE;
-      }
-      else if (bd->button == GHOST_kButtonMaskRight) {
-        event.type = RIGHTMOUSE;
-      }
-      else if (bd->button == GHOST_kButtonMaskButton4) {
-        event.type = BUTTON4MOUSE;
-      }
-      else if (bd->button == GHOST_kButtonMaskButton5) {
-        event.type = BUTTON5MOUSE;
-      }
-      else if (bd->button == GHOST_kButtonMaskButton6) {
-        event.type = BUTTON6MOUSE;
-      }
-      else if (bd->button == GHOST_kButtonMaskButton7) {
-        event.type = BUTTON7MOUSE;
-      }
-      else {
-        event.type = MIDDLEMOUSE;
-      }
+      event.type = wm_event_type_from_ghost_button(bd->button, MIDDLEMOUSE);
 
       /* Get tablet data. */
       wm_tablet_data_from_ghost(&bd->tablet, &event.tablet);
@@ -6285,7 +6370,9 @@ wmKeyMapItem *WM_event_match_keymap_item_from_handlers(
     if (handler_base->flag & WM_HANDLER_DO_FREE) {
       /* Pass. */
     }
-    else if (handler_base->poll == nullptr || handler_base->poll(CTX_wm_region(C), event)) {
+    else if (handler_base->poll == nullptr ||
+             handler_base->poll(win, CTX_wm_area(C), CTX_wm_region(C), event))
+    {
       if (handler_base->type == WM_HANDLER_TYPE_KEYMAP) {
         wmEventHandler_Keymap *handler = (wmEventHandler_Keymap *)handler_base;
         wmEventHandler_KeymapResult km_result;
@@ -6501,7 +6588,7 @@ void WM_window_cursor_keymap_status_refresh(bContext *C, wmWindow *win)
   CTX_wm_region_set(C, region);
 
   ListBase *handlers[] = {
-      &region->handlers,
+      &region->runtime->handlers,
       &area->handlers,
       &win->handlers,
   };

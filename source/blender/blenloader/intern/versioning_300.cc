@@ -20,7 +20,7 @@
 #include "BLI_math_rotation.h"
 #include "BLI_math_vector.h"
 #include "BLI_multi_value_map.hh"
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 #include "BLI_string.h"
 #include "BLI_string_utils.hh"
 #include "BLI_utildefines.h"
@@ -54,7 +54,7 @@
 
 #undef DNA_GENFILE_VERSIONING_MACROS
 
-#include "BKE_action.h"
+#include "BKE_action.hh"
 #include "BKE_anim_data.hh"
 #include "BKE_animsys.h"
 #include "BKE_armature.hh"
@@ -70,14 +70,14 @@
 #include "BKE_fcurve.hh"
 #include "BKE_fcurve_driver.h"
 #include "BKE_idprop.hh"
-#include "BKE_image.h"
+#include "BKE_image.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_lib_override.hh"
 #include "BKE_main.hh"
 #include "BKE_main_namemap.hh"
 #include "BKE_mesh.hh"
 #include "BKE_modifier.hh"
-#include "BKE_nla.h"
+#include "BKE_nla.hh"
 #include "BKE_node.hh"
 #include "BKE_screen.hh"
 #include "BKE_workspace.hh"
@@ -1459,15 +1459,6 @@ static void do_version_bbone_len_scale_fcurve_fix(FCurve *fcu)
   replace_bbone_len_scale_rnapath(&fcu->rna_path, &fcu->array_index);
 }
 
-static void do_version_bbone_len_scale_animdata_cb(ID * /*id*/,
-                                                   AnimData *adt,
-                                                   void * /*wrapper_data*/)
-{
-  LISTBASE_FOREACH_MUTABLE (FCurve *, fcu, &adt->drivers) {
-    do_version_bbone_len_scale_fcurve_fix(fcu);
-  }
-}
-
 static void do_version_bones_bbone_len_scale(ListBase *lb)
 {
   LISTBASE_FOREACH (Bone *, bone, lb) {
@@ -2369,7 +2360,7 @@ static void version_liboverride_nla_strip_frame_start_end(IDOverrideLibrary *lib
 }
 
 /** Fix the `frame_start` and `frame_end` overrides on NLA strips. See #102662. */
-static void version_liboverride_nla_frame_start_end(ID *id, AnimData *adt, void * /*user_data*/)
+static void version_liboverride_nla_frame_start_end(ID *id, AnimData *adt)
 {
   IDOverrideLibrary *liboverride = id->override_library;
   if (!liboverride) {
@@ -2511,7 +2502,11 @@ void blo_do_versions_300(FileData *fd, Library * /*lib*/, Main *bmain)
         }
       }
 
-      BKE_animdata_main_cb(bmain, do_version_bbone_len_scale_animdata_cb, nullptr);
+      BKE_animdata_main_cb(bmain, [](ID * /*id*/, AnimData *adt) {
+        LISTBASE_FOREACH_MUTABLE (FCurve *, fcu, &adt->drivers) {
+          do_version_bbone_len_scale_fcurve_fix(fcu);
+        }
+      });
     }
   }
 
@@ -3058,7 +3053,7 @@ void blo_do_versions_300(FileData *fd, Library * /*lib*/, Main *bmain)
                                                                      &sl->regionbase;
               LISTBASE_FOREACH (ARegion *, region, regionbase) {
                 if (region->regiontype == RGN_TYPE_WINDOW) {
-                  region->v2d.max[1] = MAXSEQ;
+                  region->v2d.max[1] = SEQ_MAX_CHANNELS;
                 }
               }
               break;
@@ -3560,7 +3555,7 @@ void blo_do_versions_300(FileData *fd, Library * /*lib*/, Main *bmain)
     LISTBASE_FOREACH (Brush *, br, &bmain->brushes) {
       /* Buggy code in wm_toolsystem broke smear in old files,
        * reset to defaults. */
-      if (br->sculpt_tool == SCULPT_TOOL_SMEAR) {
+      if (br->sculpt_brush_type == SCULPT_BRUSH_TYPE_SMEAR) {
         br->alpha = 1.0f;
         br->spacing = 5;
         br->flag &= ~BRUSH_ALPHA_PRESSURE;
@@ -3724,7 +3719,7 @@ void blo_do_versions_300(FileData *fd, Library * /*lib*/, Main *bmain)
      * to bugs in the wm_toolsystem API (auto-creation of sculpt brushes
      * was broken).  Go through and reset all smear brushes. */
     LISTBASE_FOREACH (Brush *, br, &bmain->brushes) {
-      if (br->sculpt_tool == SCULPT_TOOL_SMEAR) {
+      if (br->sculpt_brush_type == SCULPT_BRUSH_TYPE_SMEAR) {
         br->alpha = 1.0f;
         br->spacing = 5;
         br->flag &= ~BRUSH_ALPHA_PRESSURE;
@@ -4012,6 +4007,7 @@ void blo_do_versions_300(FileData *fd, Library * /*lib*/, Main *bmain)
           ARegion *channels_region = BKE_region_find_in_listbase_by_type(regionbase,
                                                                          RGN_TYPE_CHANNELS);
           if (channels_region) {
+            MEM_delete(channels_region->runtime);
             BLI_freelinkN(regionbase, channels_region);
           }
         }
@@ -4516,7 +4512,7 @@ void blo_do_versions_300(FileData *fd, Library * /*lib*/, Main *bmain)
   }
 
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 306, 11)) {
-    BKE_animdata_main_cb(bmain, version_liboverride_nla_frame_start_end, nullptr);
+    BKE_animdata_main_cb(bmain, version_liboverride_nla_frame_start_end);
 
     LISTBASE_FOREACH (bScreen *, screen, &bmain->screens) {
       LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
@@ -4545,6 +4541,15 @@ void blo_do_versions_300(FileData *fd, Library * /*lib*/, Main *bmain)
       }
     }
     FOREACH_NODETREE_END;
+  }
+
+  {
+    /* Keep this block, even when empty. */
+    LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
+      scene->toolsettings->uvcalc_iterations = 10;
+      scene->toolsettings->uvcalc_weight_factor = 1.0f;
+      STRNCPY(scene->toolsettings->uvcalc_weight_group, "uv_importance");
+    }
   }
 
   /**

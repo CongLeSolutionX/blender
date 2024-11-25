@@ -59,7 +59,6 @@ static void createTransSculpt(bContext *C, TransInfo *t)
   td->flag = TD_SELECTED;
   copy_v3_v3(td->center, ss.pivot_pos);
   mul_m4_v3(ob.object_to_world().ptr(), td->center);
-  td->ob = &ob;
 
   td->loc = ss.pivot_pos;
   copy_v3_v3(td->iloc, ss.pivot_pos);
@@ -94,6 +93,7 @@ static void createTransSculpt(bContext *C, TransInfo *t)
   copy_m3_m3(td->smtx, obmat_inv);
   copy_m3_m4(td->mtx, ob.object_to_world().ptr());
   copy_m3_m4(td->axismtx, ob.object_to_world().ptr());
+  normalize_m3(td->axismtx);
 
   BLI_assert(!(t->options & CTX_PAINT_CURVE));
   sculpt_paint::init_transform(C, ob, t->mval, t->undo_name);

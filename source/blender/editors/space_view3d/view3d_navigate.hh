@@ -29,7 +29,6 @@ struct PointerRNA;
 struct rcti;
 struct wmEvent;
 struct wmKeyConfig;
-struct wmKeyMap;
 struct wmOperator;
 struct wmOperatorType;
 struct wmTimer;
@@ -190,9 +189,7 @@ struct ViewOpsData {
                        const bool use_cursor_init = false);
   void end_navigation(bContext *C);
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("ViewOpsData")
-#endif
 };
 
 /* view3d_navigate.cc */
@@ -359,6 +356,19 @@ void ED_view3d_smooth_view_undo_end(bContext *C,
  * (so we don't end up half-applying a view operation when pressing keys quickly).
  */
 void ED_view3d_smooth_view_force_finish(bContext *C, View3D *v3d, ARegion *region);
+
+/**
+ * A version of #ED_view3d_smooth_view_force_finish
+ * that doesn't support camera locking or auto-keying.
+ * Use for viewport actions that don't control the camera,
+ * entering/exiting the local-view for example (see code-comments for details).
+ */
+void ED_view3d_smooth_view_force_finish_no_camera_lock(const Depsgraph *depsgraph,
+                                                       wmWindowManager *wm,
+                                                       wmWindow *win,
+                                                       const Scene *scene,
+                                                       View3D *v3d,
+                                                       ARegion *region);
 
 void VIEW3D_OT_smoothview(wmOperatorType *ot);
 

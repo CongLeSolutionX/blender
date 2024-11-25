@@ -32,6 +32,7 @@
 #include "BKE_global.hh"
 #include "BKE_object.hh"
 #include "BKE_paint.hh"
+#include "BKE_screen.hh"
 
 #include "view3d_intern.hh"
 
@@ -77,7 +78,7 @@ static bool is_cursor_visible(const DRWContextState *draw_ctx, Scene *scene, Vie
       const Paint *paint = BKE_paint_get_active(scene, view_layer);
       const Brush *brush = (paint) ? BKE_paint_brush_for_read(paint) : nullptr;
 
-      if (brush && brush->imagepaint_tool == PAINT_TOOL_CLONE) {
+      if (brush && brush->image_brush_type == IMAGE_PAINT_BRUSH_TYPE_CLONE) {
         if ((scene->toolsettings->imapaint.flag & IMAGEPAINT_PROJECT_LAYER_CLONE) == 0) {
           return true;
         }
@@ -87,7 +88,7 @@ static bool is_cursor_visible(const DRWContextState *draw_ctx, Scene *scene, Vie
     /* no exception met? then don't draw cursor! */
     return false;
   }
-  if (draw_ctx->object_mode & OB_MODE_WEIGHT_GPENCIL_LEGACY) {
+  if (draw_ctx->object_mode & OB_MODE_WEIGHT_GREASE_PENCIL) {
     /* grease pencil hide always in some modes */
     return false;
   }
@@ -288,7 +289,7 @@ void DRW_draw_gizmo_3d()
   /* draw depth culled gizmos - gizmos need to be updated *after* view matrix was set up */
   /* TODO: depth culling gizmos is not yet supported, just drawing _3D here, should
    * later become _IN_SCENE (and draw _3D separate) */
-  WM_gizmomap_draw(region->gizmo_map, draw_ctx->evil_C, WM_GIZMOMAP_DRAWSTEP_3D);
+  WM_gizmomap_draw(region->runtime->gizmo_map, draw_ctx->evil_C, WM_GIZMOMAP_DRAWSTEP_3D);
 }
 
 void DRW_draw_gizmo_2d()
@@ -296,7 +297,7 @@ void DRW_draw_gizmo_2d()
   const DRWContextState *draw_ctx = DRW_context_state_get();
   ARegion *region = draw_ctx->region;
 
-  WM_gizmomap_draw(region->gizmo_map, draw_ctx->evil_C, WM_GIZMOMAP_DRAWSTEP_2D);
+  WM_gizmomap_draw(region->runtime->gizmo_map, draw_ctx->evil_C, WM_GIZMOMAP_DRAWSTEP_2D);
 
   GPU_depth_mask(true);
 }

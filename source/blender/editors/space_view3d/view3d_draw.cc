@@ -9,6 +9,7 @@
 #include <cmath>
 
 #include "BLI_listbase.h"
+#include "BLI_math_half.hh"
 #include "BLI_math_matrix.h"
 #include "BLI_math_rotation.h"
 #include "BLI_rect.h"
@@ -22,13 +23,14 @@
 #include "BKE_context.hh"
 #include "BKE_customdata.hh"
 #include "BKE_global.hh"
-#include "BKE_image.h"
+#include "BKE_image.hh"
 #include "BKE_key.hh"
 #include "BKE_layer.hh"
 #include "BKE_main.hh"
 #include "BKE_object.hh"
 #include "BKE_paint.hh"
 #include "BKE_scene.hh"
+#include "BKE_screen.hh"
 #include "BKE_unit.hh"
 
 #include "BLF_api.hh"
@@ -47,7 +49,6 @@
 
 #include "ED_gpencil_legacy.hh"
 #include "ED_info.hh"
-#include "ED_keyframing.hh"
 #include "ED_scene.hh"
 #include "ED_screen.hh"
 #include "ED_view3d_offscreen.hh"
@@ -79,6 +80,8 @@
 #include "IMB_imbuf.hh"
 #include "IMB_imbuf_types.hh"
 
+#include "ANIM_keyframing.hh"
+
 #include "view3d_intern.hh" /* own include */
 
 using blender::float4;
@@ -91,7 +94,7 @@ using blender::float4;
 /** \name General Functions
  * \{ */
 
-void ED_view3d_update_viewmat(Depsgraph *depsgraph,
+void ED_view3d_update_viewmat(const Depsgraph *depsgraph,
                               const Scene *scene,
                               View3D *v3d,
                               ARegion *region,
@@ -133,7 +136,7 @@ void ED_view3d_update_viewmat(Depsgraph *depsgraph,
   /* store window coordinates scaling/offset */
   if (!offscreen && rv3d->persp == RV3D_CAMOB && v3d->camera) {
     rctf cameraborder;
-    ED_view3d_calc_camera_border(scene, depsgraph, region, v3d, rv3d, &cameraborder, false);
+    ED_view3d_calc_camera_border(scene, depsgraph, region, v3d, rv3d, false, &cameraborder);
     rv3d->viewcamtexcofac[0] = float(region->winx) / BLI_rctf_size_x(&cameraborder);
     rv3d->viewcamtexcofac[1] = float(region->winy) / BLI_rctf_size_y(&cameraborder);
 
@@ -375,7 +378,7 @@ void ED_view3d_draw_setup_view(const wmWindowManager *wm,
  * \{ */
 
 static void view3d_camera_border(const Scene *scene,
-                                 Depsgraph *depsgraph,
+                                 const Depsgraph *depsgraph,
                                  const ARegion *region,
                                  const View3D *v3d,
                                  const RegionView3D *rv3d,
@@ -436,12 +439,12 @@ void ED_view3d_calc_camera_border_size(const Scene *scene,
 }
 
 void ED_view3d_calc_camera_border(const Scene *scene,
-                                  Depsgraph *depsgraph,
+                                  const Depsgraph *depsgraph,
                                   const ARegion *region,
                                   const View3D *v3d,
                                   const RegionView3D *rv3d,
-                                  rctf *r_viewborder,
-                                  const bool no_shift)
+                                  const bool no_shift,
+                                  rctf *r_viewborder)
 {
   view3d_camera_border(scene, depsgraph, region, v3d, rv3d, r_viewborder, no_shift, false);
 }
@@ -542,7 +545,7 @@ static void drawviewborder(Scene *scene, Depsgraph *depsgraph, ARegion *region, 
     ca = static_cast<Camera *>(v3d->camera->data);
   }
 
-  ED_view3d_calc_camera_border(scene, depsgraph, region, v3d, rv3d, &viewborder, false);
+  ED_view3d_calc_camera_border(scene, depsgraph, region, v3d, rv3d, false, &viewborder);
   /* the offsets */
   x1 = viewborder.xmin;
   y1 = viewborder.ymin;
@@ -1392,17 +1395,10 @@ static void draw_selected_name(
     }
 
     /* color depends on whether there is a keyframe */
-    if (id_frame_has_keyframe((ID *)ob, /* BKE_scene_ctime_get(scene) */ float(cfra))) {
+    if (blender::animrig::id_frame_has_keyframe((ID *)ob,
+                                                /* BKE_scene_ctime_get(scene) */ float(cfra)))
+    {
       UI_FontThemeColor(font_id, TH_TIME_KEYFRAME);
-    }
-    else if (ED_gpencil_has_keyframe_v3d(scene, ob, cfra)) {
-      UI_FontThemeColor(font_id, TH_TIME_GP_KEYFRAME);
-    }
-  }
-  else {
-    /* no object */
-    if (ED_gpencil_has_keyframe_v3d(scene, nullptr, cfra)) {
-      UI_FontThemeColor(font_id, TH_TIME_GP_KEYFRAME);
     }
   }
 
@@ -1790,6 +1786,8 @@ void ED_view3d_draw_offscreen_simple(Depsgraph *depsgraph,
 {
   View3D v3d = blender::dna::shallow_zero_initialize();
   ARegion ar = {nullptr};
+  blender::bke::ARegionRuntime region_runtime{};
+  ar.runtime = &region_runtime;
   RegionView3D rv3d = {{{0}}};
 
   v3d.regionbase.first = v3d.regionbase.last = &ar;
@@ -1860,6 +1858,11 @@ void ED_view3d_draw_offscreen_simple(Depsgraph *depsgraph,
   /* Actually not used since we pass in the projection matrix. */
   v3d.lens = 0;
 
+  /* WORKAROUND: Disable overscan because it is not supported for arbitrary input matrices.
+   * The proper fix to this would be to support arbitrary matrices in `eevee::Camera::sync()`. */
+  float overscan = scene->eevee.overscan;
+  scene->eevee.overscan = 0.0f;
+
   ED_view3d_draw_offscreen(depsgraph,
                            scene,
                            drawtype,
@@ -1876,6 +1879,9 @@ void ED_view3d_draw_offscreen_simple(Depsgraph *depsgraph,
                            true,
                            ofs,
                            viewport);
+
+  /* Restore overscan. */
+  scene->eevee.overscan = overscan;
 }
 
 ImBuf *ED_view3d_draw_offscreen_imbuf(Depsgraph *depsgraph,
@@ -2055,6 +2061,8 @@ ImBuf *ED_view3d_draw_offscreen_imbuf_simple(Depsgraph *depsgraph,
 {
   View3D v3d = blender::dna::shallow_zero_initialize();
   ARegion region = {nullptr};
+  blender::bke::ARegionRuntime region_runtime{};
+  region.runtime = &region_runtime;
   RegionView3D rv3d = {{{0}}};
 
   /* connect data */
@@ -2417,14 +2425,7 @@ void ED_view3d_depth_override(Depsgraph *depsgraph,
         DRW_draw_depth_loop(depsgraph, region, v3d, viewport, true, true, false, false);
         break;
       case V3D_DEPTH_NO_GPENCIL:
-        DRW_draw_depth_loop(depsgraph,
-                            region,
-                            v3d,
-                            viewport,
-                            false,
-                            true,
-                            (v3d->flag2 & V3D_HIDE_OVERLAYS) == 0,
-                            false);
+        DRW_draw_depth_loop(depsgraph, region, v3d, viewport, false, true, false, false);
         break;
       case V3D_DEPTH_GPENCIL_ONLY:
         DRW_draw_depth_loop(depsgraph, region, v3d, viewport, true, false, false, false);
@@ -2661,7 +2662,7 @@ static bool view3d_main_region_do_render_draw(const Scene *scene)
 }
 
 bool ED_view3d_calc_render_border(
-    const Scene *scene, Depsgraph *depsgraph, View3D *v3d, ARegion *region, rcti *rect)
+    const Scene *scene, Depsgraph *depsgraph, View3D *v3d, ARegion *region, rcti *r_rect)
 {
   RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
   bool use_border;
@@ -2686,22 +2687,22 @@ bool ED_view3d_calc_render_border(
   /* Compute border. */
   if (rv3d->persp == RV3D_CAMOB) {
     rctf viewborder;
-    ED_view3d_calc_camera_border(scene, depsgraph, region, v3d, rv3d, &viewborder, false);
+    ED_view3d_calc_camera_border(scene, depsgraph, region, v3d, rv3d, false, &viewborder);
 
-    rect->xmin = viewborder.xmin + scene->r.border.xmin * BLI_rctf_size_x(&viewborder);
-    rect->ymin = viewborder.ymin + scene->r.border.ymin * BLI_rctf_size_y(&viewborder);
-    rect->xmax = viewborder.xmin + scene->r.border.xmax * BLI_rctf_size_x(&viewborder);
-    rect->ymax = viewborder.ymin + scene->r.border.ymax * BLI_rctf_size_y(&viewborder);
+    r_rect->xmin = viewborder.xmin + scene->r.border.xmin * BLI_rctf_size_x(&viewborder);
+    r_rect->ymin = viewborder.ymin + scene->r.border.ymin * BLI_rctf_size_y(&viewborder);
+    r_rect->xmax = viewborder.xmin + scene->r.border.xmax * BLI_rctf_size_x(&viewborder);
+    r_rect->ymax = viewborder.ymin + scene->r.border.ymax * BLI_rctf_size_y(&viewborder);
   }
   else {
-    rect->xmin = v3d->render_border.xmin * region->winx;
-    rect->xmax = v3d->render_border.xmax * region->winx;
-    rect->ymin = v3d->render_border.ymin * region->winy;
-    rect->ymax = v3d->render_border.ymax * region->winy;
+    r_rect->xmin = v3d->render_border.xmin * region->winx;
+    r_rect->xmax = v3d->render_border.xmax * region->winx;
+    r_rect->ymin = v3d->render_border.ymin * region->winy;
+    r_rect->ymax = v3d->render_border.ymax * region->winy;
   }
 
-  BLI_rcti_translate(rect, region->winrct.xmin, region->winrct.ymin);
-  BLI_rcti_isect(&region->winrct, rect, rect);
+  BLI_rcti_translate(r_rect, region->winrct.xmin, region->winrct.ymin);
+  BLI_rcti_isect(&region->winrct, r_rect, r_rect);
 
   return true;
 }
@@ -2759,15 +2760,15 @@ bool ViewportColorSampleSession::sample(const int mval[2], float r_col[3])
 
   blender::ushort4 pixel = data[mval[1] * tex_w + mval[0]];
 
-  if (half_to_float(pixel.w) < 0.5f) {
+  if (blender::math::half_to_float(pixel.w) < 0.5f) {
     /* Background etc. are not rendered to the viewport texture, so fall back to basic color
      * picking for those. */
     return false;
   }
 
-  r_col[0] = half_to_float(pixel.x);
-  r_col[1] = half_to_float(pixel.y);
-  r_col[2] = half_to_float(pixel.z);
+  r_col[0] = blender::math::half_to_float(pixel.x);
+  r_col[1] = blender::math::half_to_float(pixel.y);
+  r_col[2] = blender::math::half_to_float(pixel.z);
 
   return true;
 }

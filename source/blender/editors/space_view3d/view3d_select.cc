@@ -47,7 +47,7 @@
 #include "IMB_imbuf.hh"
 #include "IMB_imbuf_types.hh"
 
-#include "BKE_action.h"
+#include "BKE_action.hh"
 #include "BKE_armature.hh"
 #include "BKE_attribute.hh"
 #include "BKE_context.hh"
@@ -458,29 +458,18 @@ static void view3d_userdata_lassoselect_init(LassoSelectUserData *r_data,
 
 static bool view3d_selectable_data(bContext *C)
 {
-  Object *ob = CTX_data_active_object(C);
-
   if (!ED_operator_region_view3d_active(C)) {
     return false;
   }
-
-  if (ob) {
+  if (Object *ob = CTX_data_active_object(C)) {
     if (ob->mode & OB_MODE_EDIT) {
-      if (ob->type == OB_FONT) {
-        return false;
-      }
+      return ob->type != OB_FONT;
     }
-    else {
-      if ((ob->mode & (OB_MODE_VERTEX_PAINT | OB_MODE_TEXTURE_PAINT)) &&
-          !BKE_paint_select_elem_test(ob))
-      {
-        return false;
-      }
-      if ((ob->mode & OB_MODE_WEIGHT_PAINT) &&
-          !(BKE_paint_select_elem_test(ob) || BKE_object_pose_armature_get_with_wpaint_check(ob)))
-      {
-        return false;
-      }
+    if (ob->mode & (OB_MODE_VERTEX_PAINT | OB_MODE_TEXTURE_PAINT | OB_MODE_SCULPT_GREASE_PENCIL)) {
+      return BKE_paint_select_elem_test(ob);
+    }
+    if (ob->mode & OB_MODE_WEIGHT_PAINT) {
+      return BKE_paint_select_elem_test(ob) || BKE_object_pose_armature_get_with_wpaint_check(ob);
     }
   }
 
@@ -1186,11 +1175,11 @@ static bool do_lasso_select_grease_pencil(const ViewContext *vc,
                                           const eSelectOp sel_op)
 {
   using namespace blender;
-  const Object *ob_eval = DEG_get_evaluated_object(vc->depsgraph,
-                                                   const_cast<Object *>(vc->obedit));
-  const GreasePencil &grease_pencil = *static_cast<GreasePencil *>(vc->obedit->data);
+  Object *object = (vc->obedit ? vc->obedit : vc->obact);
+  const Object *ob_eval = DEG_get_evaluated_object(vc->depsgraph, const_cast<Object *>(object));
+  const GreasePencil &grease_pencil = *static_cast<GreasePencil *>(object->data);
   const bke::AttrDomain selection_domain = ED_grease_pencil_selection_domain_get(
-      vc->scene->toolsettings);
+      vc->scene->toolsettings, object);
 
   return ed::greasepencil::selection_update(
       vc,
@@ -1200,13 +1189,13 @@ static bool do_lasso_select_grease_pencil(const ViewContext *vc,
           const StringRef attribute_name,
           IndexMaskMemory &memory) {
         bke::CurvesGeometry &curves = info.drawing.strokes_for_write();
-        const bke::greasepencil::Layer &layer = *grease_pencil.layer(info.layer_index);
+        const bke::greasepencil::Layer &layer = grease_pencil.layer(info.layer_index);
         const bke::crazyspace::GeometryDeformation deformation =
             bke::crazyspace::get_evaluated_grease_pencil_drawing_deformation(
-                ob_eval, *vc->obedit, info.layer_index, info.frame_number);
+                ob_eval, *object, info.layer_index, info.frame_number);
         const IndexMask visible_handle_elements =
             ed::greasepencil::retrieve_visible_bezier_handle_elements(
-                *vc->obedit, info.drawing, info.layer_index, selection_domain, memory);
+                *object, info.drawing, info.layer_index, selection_domain, memory);
         const float4x4 layer_to_world = layer.to_world_space(*ob_eval);
         const float4x4 projection = ED_view3d_ob_project_mat_get_from_obmat(vc->rv3d,
                                                                             layer_to_world);
@@ -1370,6 +1359,9 @@ static bool view3d_lasso_select(bContext *C,
     }
     else if (BKE_paint_select_vert_test(ob)) {
       changed_multi |= do_lasso_select_paintvert(vc, wm_userdata, mcoords, sel_op);
+    }
+    else if (BKE_paint_select_grease_pencil_test(ob)) {
+      changed_multi |= do_lasso_select_grease_pencil(vc, mcoords, sel_op);
     }
     else if (ob && (ob->mode & OB_MODE_PARTICLE_EDIT)) {
       changed_multi |= PE_lasso_select(C,
@@ -1919,15 +1911,15 @@ static bool bone_mouse_select_menu(bContext *C,
   for (const GPUSelectResult &hit_result : hit_results) {
     void *bone_ptr = nullptr;
     Base *bone_base = nullptr;
-    uint hitresult = hit_result.id;
+    uint select_id = hit_result.id;
 
-    if (!(hitresult & BONESEL_ANY)) {
+    if (!(select_id & BONESEL_ANY)) {
       /* To avoid including objects in selection. */
       continue;
     }
 
-    hitresult &= ~BONESEL_ANY;
-    const uint hit_object = hitresult & 0xFFFF;
+    select_id &= ~BONESEL_ANY;
+    const uint hit_object = select_id & 0xFFFF;
 
     /* Find the hit bone base (armature object). */
     CTX_DATA_BEGIN (C, Base *, base, selectable_bases) {
@@ -1944,7 +1936,7 @@ static bool bone_mouse_select_menu(bContext *C,
 
     /* Determine what the current bone is */
     if (is_editmode) {
-      const uint hit_bone = (hitresult & ~BONESEL_ANY) >> 16;
+      const uint hit_bone = (select_id & ~BONESEL_ANY) >> 16;
       bArmature *arm = static_cast<bArmature *>(bone_base->object->data);
       EditBone *ebone = static_cast<EditBone *>(BLI_findlink(arm->edbo, hit_bone));
       if (ebone && !(ebone->flag & BONE_UNSELECTABLE)) {
@@ -1952,7 +1944,7 @@ static bool bone_mouse_select_menu(bContext *C,
       }
     }
     else {
-      const uint hit_bone = (hitresult & ~BONESEL_ANY) >> 16;
+      const uint hit_bone = (select_id & ~BONESEL_ANY) >> 16;
       bPoseChannel *pchan = static_cast<bPoseChannel *>(
           BLI_findlink(&bone_base->object->pose->chanbase, hit_bone));
       if (pchan && !(pchan->bone->flag & BONE_UNSELECTABLE)) {
@@ -2501,21 +2493,21 @@ static bool ed_object_select_pick_camera_track(bContext *C,
   MovieTrackingTrack *track = nullptr;
 
   for (int i = 0; i < hits; i++) {
-    const int hitresult = buffer.storage[i].id;
+    const int select_id = buffer.storage[i].id;
 
     /* If there's bundles in buffer select bundles first,
      * so non-camera elements should be ignored in buffer. */
-    if (basact->object->runtime->select_id != (hitresult & 0xFFFF)) {
+    if (basact->object->runtime->select_id != (select_id & 0xFFFF)) {
       continue;
     }
     /* Index of bundle is 1<<16-based. if there's no "bone" index
      * in height word, this buffer value belongs to camera. not to bundle. */
-    if ((hitresult & 0xFFFF0000) == 0) {
+    if ((select_id & 0xFFFF0000) == 0) {
       continue;
     }
 
     track = BKE_tracking_track_get_for_selection_index(
-        &clip->tracking, hitresult >> 16, &tracksbase);
+        &clip->tracking, select_id >> 16, &tracksbase);
     found = true;
     break;
   }
@@ -3111,7 +3103,7 @@ static bool ed_curves_select_pick(bContext &C, const int mval[2], const SelectPi
           Object &curves_ob = *base->object;
           Curves &curves_id = *static_cast<Curves *>(curves_ob.data);
           bke::crazyspace::GeometryDeformation deformation =
-              bke::crazyspace::get_evaluated_curves_deformation(*vc.depsgraph, *vc.obedit);
+              bke::crazyspace::get_evaluated_curves_deformation(*vc.depsgraph, curves_ob);
           const bke::CurvesGeometry &curves = curves_id.geometry.wrap();
           const float4x4 projection = ED_view3d_ob_project_mat_get(vc.rv3d, &curves_ob);
           const IndexMask elements(curves.attributes().domain_size(selection_domain));
@@ -3137,16 +3129,24 @@ static bool ed_curves_select_pick(bContext &C, const int mval[2], const SelectPi
               };
 
           if (selection_domain == bke::AttrDomain::Point) {
-            ed::curves::foreach_selectable_point_range(curves, deformation, range_consumer);
+            ed::curves::foreach_selectable_point_range(
+                curves,
+                deformation,
+                eHandleDisplay(vc.v3d->overlay.handle_display),
+                range_consumer);
           }
           else if (selection_domain == bke::AttrDomain::Curve) {
-            ed::curves::foreach_selectable_curve_range(curves, deformation, range_consumer);
+            ed::curves::foreach_selectable_curve_range(
+                curves,
+                deformation,
+                eHandleDisplay(vc.v3d->overlay.handle_display),
+                range_consumer);
           };
         }
         return new_closest;
       },
       [](const ClosestCurveDataBlock &a, const ClosestCurveDataBlock &b) {
-        return (a.elem.distance < b.elem.distance) ? a : b;
+        return (a.elem.distance_sq < b.elem.distance_sq) ? a : b;
       });
 
   std::atomic<bool> deselected = false;
@@ -3225,16 +3225,17 @@ static bool ed_grease_pencil_select_pick(bContext *C,
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   /* Setup view context for argument to callbacks. */
   const ViewContext vc = ED_view3d_viewcontext_init(C, depsgraph);
+  Object *object = (vc.obedit ? vc.obedit : vc.obact);
 
   /* Collect editable drawings. */
-  const Object *ob_eval = DEG_get_evaluated_object(vc.depsgraph, const_cast<Object *>(vc.obedit));
-  GreasePencil &grease_pencil = *static_cast<GreasePencil *>(vc.obedit->data);
+  const Object *ob_eval = DEG_get_evaluated_object(vc.depsgraph, const_cast<Object *>(object));
+  GreasePencil &grease_pencil = *static_cast<GreasePencil *>(object->data);
   const Vector<ed::greasepencil::MutableDrawingInfo> drawings =
       ed::greasepencil::retrieve_editable_drawings(*vc.scene, grease_pencil);
 
   /* Get selection domain from tool settings. */
   const bke::AttrDomain selection_domain = ED_grease_pencil_selection_domain_get(
-      vc.scene->toolsettings);
+      vc.scene->toolsettings, object);
 
   const ClosestGreasePencilDrawing closest = threading::parallel_reduce(
       drawings.index_range(),
@@ -3244,21 +3245,21 @@ static bool ed_grease_pencil_select_pick(bContext *C,
         ClosestGreasePencilDrawing new_closest = init;
         for (const int i : range) {
           ed::greasepencil::MutableDrawingInfo info = drawings[i];
-          const bke::greasepencil::Layer &layer = *grease_pencil.layer(info.layer_index);
+          const bke::greasepencil::Layer &layer = grease_pencil.layer(info.layer_index);
           /* Get deformation by modifiers. */
           bke::crazyspace::GeometryDeformation deformation =
               bke::crazyspace::get_evaluated_grease_pencil_drawing_deformation(
-                  ob_eval, *vc.obedit, info.layer_index, info.frame_number);
+                  ob_eval, *object, info.layer_index, info.frame_number);
 
           IndexMaskMemory memory;
           const IndexMask elements = ed::greasepencil::retrieve_editable_elements(
-              *vc.obedit, info, selection_domain, memory);
+              *object, info, selection_domain, memory);
           if (elements.is_empty()) {
             continue;
           }
           const IndexMask visible_handle_elements =
               ed::greasepencil::retrieve_visible_bezier_handle_elements(
-                  *vc.obedit, info.drawing, info.layer_index, selection_domain, memory);
+                  *object, info.drawing, info.layer_index, selection_domain, memory);
           const bke::CurvesGeometry &curves = info.drawing.strokes();
           const float4x4 layer_to_world = layer.to_world_space(*ob_eval);
           const float4x4 projection = ED_view3d_ob_project_mat_get_from_obmat(vc.rv3d,
@@ -3290,16 +3291,24 @@ static bool ed_grease_pencil_select_pick(bContext *C,
           };
 
           if (selection_domain == bke::AttrDomain::Point) {
-            ed::curves::foreach_selectable_point_range(curves, deformation, range_consumer);
+            ed::curves::foreach_selectable_point_range(
+                curves,
+                deformation,
+                eHandleDisplay(vc.v3d->overlay.handle_display),
+                range_consumer);
           }
           else if (selection_domain == bke::AttrDomain::Curve) {
-            ed::curves::foreach_selectable_curve_range(curves, deformation, range_consumer);
+            ed::curves::foreach_selectable_curve_range(
+                curves,
+                deformation,
+                eHandleDisplay(vc.v3d->overlay.handle_display),
+                range_consumer);
           };
         }
         return new_closest;
       },
       [](const ClosestGreasePencilDrawing &a, const ClosestGreasePencilDrawing &b) {
-        return (a.elem.distance < b.elem.distance) ? a : b;
+        return (a.elem.distance_sq < b.elem.distance_sq) ? a : b;
       });
 
   std::atomic<bool> deselected = false;
@@ -3309,7 +3318,7 @@ static bool ed_grease_pencil_select_pick(bContext *C,
         ed::greasepencil::MutableDrawingInfo info = drawings[i];
         IndexMaskMemory memory;
         const IndexMask elements = ed::greasepencil::retrieve_editable_elements(
-            *vc.obedit, info, selection_domain, memory);
+            *object, info, selection_domain, memory);
         if (elements.is_empty()) {
           continue;
         }
@@ -3368,17 +3377,6 @@ static int view3d_select_exec(bContext *C, wmOperator *op)
   Scene *scene = CTX_data_scene(C);
   Object *obedit = CTX_data_edit_object(C);
   Object *obact = CTX_data_active_object(C);
-
-  if (obact && obact->type == OB_GPENCIL_LEGACY && GPENCIL_ANY_MODE((bGPdata *)obact->data) &&
-      (BKE_object_pose_armature_get_with_wpaint_check(obact) == nullptr))
-  {
-    /* Prevent acting on Grease Pencil (when not in object mode -- or not in weight-paint + pose
-     * selection), it implements its own selection operator in other modes. We might still fall
-     * trough to here (because that operator uses OPERATOR_PASS_THROUGH to make tweak work) but if
-     * we don't stop here code below assumes we are in object mode it might falsely toggle object
-     * selection. Alternatively, this could be put in the poll function instead. */
-    return OPERATOR_PASS_THROUGH | OPERATOR_CANCELLED;
-  }
 
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   const ViewContext vc = ED_view3d_viewcontext_init(C, depsgraph);
@@ -3469,6 +3467,9 @@ static int view3d_select_exec(bContext *C, wmOperator *op)
   }
   else if (BKE_paint_select_vert_test(obact)) {
     changed = ed_wpaint_vertex_select_pick(C, mval, &params, obact);
+  }
+  else if (BKE_paint_select_grease_pencil_test(obact)) {
+    changed = ed_grease_pencil_select_pick(C, mval, params);
   }
   else {
     changed = ed_object_select_pick(C, mval, &params, center, enumerate, object_only);
@@ -4009,27 +4010,27 @@ static bool do_meta_box_select(const ViewContext *vc, const rcti *rect, const eS
     bool is_inside_stiff = false;
 
     for (a = 0; a < hits; a++) {
-      const int hitresult = buffer.storage[a].id;
+      const int select_id = buffer.storage[a].id;
 
-      if (hitresult == -1) {
+      if (select_id == -1) {
         continue;
       }
 
-      const uint hit_object = hitresult & 0xFFFF;
+      const uint hit_object = select_id & 0xFFFF;
       if (vc->obedit->runtime->select_id != hit_object) {
         continue;
       }
 
-      if (metaelem_id != (hitresult & 0xFFFF0000 & ~MBALLSEL_ANY)) {
+      if (metaelem_id != (select_id & 0xFFFF0000 & ~MBALLSEL_ANY)) {
         continue;
       }
 
-      if (hitresult & MBALLSEL_RADIUS) {
+      if (select_id & MBALLSEL_RADIUS) {
         is_inside_radius = true;
         break;
       }
 
-      if (hitresult & MBALLSEL_STIFF) {
+      if (select_id & MBALLSEL_STIFF) {
         is_inside_stiff = true;
         break;
       }
@@ -4282,11 +4283,11 @@ static bool do_grease_pencil_box_select(const ViewContext *vc,
                                         const eSelectOp sel_op)
 {
   using namespace blender;
-  const Object *ob_eval = DEG_get_evaluated_object(vc->depsgraph,
-                                                   const_cast<Object *>(vc->obedit));
-  const GreasePencil &grease_pencil = *static_cast<GreasePencil *>(vc->obedit->data);
+  Object *object = (vc->obedit ? vc->obedit : vc->obact);
+  const Object *ob_eval = DEG_get_evaluated_object(vc->depsgraph, const_cast<Object *>(object));
+  const GreasePencil &grease_pencil = *static_cast<GreasePencil *>(object->data);
   const bke::AttrDomain selection_domain = ED_grease_pencil_selection_domain_get(
-      vc->scene->toolsettings);
+      vc->scene->toolsettings, object);
 
   return ed::greasepencil::selection_update(
       vc,
@@ -4296,13 +4297,13 @@ static bool do_grease_pencil_box_select(const ViewContext *vc,
           const StringRef attribute_name,
           IndexMaskMemory &memory) {
         bke::CurvesGeometry &curves = info.drawing.strokes_for_write();
-        const bke::greasepencil::Layer &layer = *grease_pencil.layer(info.layer_index);
+        const bke::greasepencil::Layer &layer = grease_pencil.layer(info.layer_index);
         const bke::crazyspace::GeometryDeformation deformation =
             bke::crazyspace::get_evaluated_grease_pencil_drawing_deformation(
-                ob_eval, *vc->obedit, info.layer_index, info.frame_number);
+                ob_eval, *object, info.layer_index, info.frame_number);
         const IndexMask visible_handle_elements =
             ed::greasepencil::retrieve_visible_bezier_handle_elements(
-                *vc->obedit, info.drawing, info.layer_index, selection_domain, memory);
+                *object, info.drawing, info.layer_index, selection_domain, memory);
         const float4x4 layer_to_world = layer.to_world_space(*ob_eval);
         const float4x4 projection = ED_view3d_ob_project_mat_get_from_obmat(vc->rv3d,
                                                                             layer_to_world);
@@ -4428,6 +4429,9 @@ static int view3d_box_select_exec(bContext *C, wmOperator *op)
     }
     else if (vc.obact && BKE_paint_select_vert_test(vc.obact)) {
       changed_multi = do_paintvert_box_select(&vc, wm_userdata, &rect, sel_op);
+    }
+    else if (vc.obact && BKE_paint_select_grease_pencil_test(vc.obact)) {
+      changed_multi = do_grease_pencil_box_select(&vc, &rect, sel_op);
     }
     else if (vc.obact && vc.obact->mode & OB_MODE_PARTICLE_EDIT) {
       changed_multi = PE_box_select(C, &rect, sel_op);
@@ -5146,11 +5150,11 @@ static bool grease_pencil_circle_select(const ViewContext *vc,
                                         const float rad)
 {
   using namespace blender;
-  const Object *ob_eval = DEG_get_evaluated_object(vc->depsgraph,
-                                                   const_cast<Object *>(vc->obedit));
-  const GreasePencil &grease_pencil = *static_cast<GreasePencil *>(vc->obedit->data);
+  Object *object = (vc->obedit ? vc->obedit : vc->obact);
+  const Object *ob_eval = DEG_get_evaluated_object(vc->depsgraph, const_cast<Object *>(object));
+  const GreasePencil &grease_pencil = *static_cast<GreasePencil *>(object->data);
   const bke::AttrDomain selection_domain = ED_grease_pencil_selection_domain_get(
-      vc->scene->toolsettings);
+      vc->scene->toolsettings, object);
 
   return ed::greasepencil::selection_update(
       vc,
@@ -5160,13 +5164,13 @@ static bool grease_pencil_circle_select(const ViewContext *vc,
           const StringRef attribute_name,
           IndexMaskMemory &memory) {
         bke::CurvesGeometry &curves = info.drawing.strokes_for_write();
-        const bke::greasepencil::Layer &layer = *grease_pencil.layer(info.layer_index);
+        const bke::greasepencil::Layer &layer = grease_pencil.layer(info.layer_index);
         const bke::crazyspace::GeometryDeformation deformation =
             bke::crazyspace::get_evaluated_grease_pencil_drawing_deformation(
-                ob_eval, *vc->obedit, info.layer_index, info.frame_number);
+                ob_eval, *object, info.layer_index, info.frame_number);
         const IndexMask visible_handle_elements =
             ed::greasepencil::retrieve_visible_bezier_handle_elements(
-                *vc->obedit, info.drawing, info.layer_index, selection_domain, memory);
+                *object, info.drawing, info.layer_index, selection_domain, memory);
         const float4x4 layer_to_world = layer.to_world_space(*ob_eval);
         const float4x4 projection = ED_view3d_ob_project_mat_get_from_obmat(vc->rv3d,
                                                                             layer_to_world);
@@ -5391,6 +5395,9 @@ static int view3d_circle_select_exec(bContext *C, wmOperator *op)
       }
       else if (BKE_paint_select_vert_test(obact)) {
         paint_vertsel_circle_select(&vc, wm_userdata, sel_op, mval, float(radius));
+      }
+      else if (BKE_paint_select_grease_pencil_test(obact)) {
+        grease_pencil_circle_select(&vc, sel_op, mval, float(radius));
       }
       else if (obact->mode & OB_MODE_POSE) {
         pose_circle_select(&vc, sel_op, mval, float(radius));

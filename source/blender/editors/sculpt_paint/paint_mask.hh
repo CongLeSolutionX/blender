@@ -10,11 +10,11 @@
 
 #include "BLI_array.hh"
 #include "BLI_function_ref.hh"
+#include "BLI_index_mask_fwd.hh"
 #include "BLI_set.hh"
 
 struct BMesh;
 struct BMVert;
-struct CCGElem;
 struct CCGKey;
 struct Depsgraph;
 struct Object;
@@ -29,6 +29,7 @@ namespace blender::ed::sculpt_paint::mask {
 Array<float> duplicate_mask(const Object &object);
 void mix_new_masks(Span<float> new_masks, Span<float> factors, MutableSpan<float> masks);
 void clamp_mask(MutableSpan<float> masks);
+void invert_mask(MutableSpan<float> masks);
 
 void gather_mask_grids(const SubdivCCG &subdiv_ccg, Span<int> grids, MutableSpan<float> r_mask);
 void gather_mask_bmesh(const BMesh &bm, const Set<BMVert *, 0> &verts, MutableSpan<float> r_mask);
@@ -36,9 +37,6 @@ void gather_mask_bmesh(const BMesh &bm, const Set<BMVert *, 0> &verts, MutableSp
 void scatter_mask_grids(Span<float> mask, SubdivCCG &subdiv_ccg, Span<int> grids);
 void scatter_mask_bmesh(Span<float> mask, const BMesh &bm, const Set<BMVert *, 0> &verts);
 
-void average_neighbor_mask_grids(const SubdivCCG &subdiv_ccg,
-                                 Span<int> grids,
-                                 MutableSpan<float> new_masks);
 void average_neighbor_mask_bmesh(int mask_offset,
                                  const Set<BMVert *, 0> &verts,
                                  MutableSpan<float> new_masks);
@@ -46,7 +44,7 @@ void average_neighbor_mask_bmesh(int mask_offset,
 /** Write to the mask attribute for each node, storing undo data. */
 void write_mask_mesh(const Depsgraph &depsgraph,
                      Object &object,
-                     Span<bke::pbvh::Node *> nodes,
+                     const IndexMask &node_mask,
                      FunctionRef<void(MutableSpan<float>, Span<int>)> write_fn);
 
 /**
@@ -55,11 +53,11 @@ void write_mask_mesh(const Depsgraph &depsgraph,
  */
 void update_mask_mesh(const Depsgraph &depsgraph,
                       Object &object,
-                      Span<bke::pbvh::Node *> nodes,
+                      const IndexMask &node_mask,
                       FunctionRef<void(MutableSpan<float>, Span<int>)> update_fn);
 
 /** Check whether array data is the same as the stored mask for the referenced geometry. */
-bool mask_equals_array_grids(Span<CCGElem *> elems,
+bool mask_equals_array_grids(Span<float> masks,
                              const CCGKey &key,
                              Span<int> grids,
                              Span<float> values);

@@ -262,6 +262,14 @@ static void unlink_material_fn(bContext * /*C*/,
     return;
   }
 
+  if (!ID_IS_EDITABLE(tsep->id) || ID_IS_OVERRIDE_LIBRARY(tsep->id)) {
+    BKE_reportf(reports,
+                RPT_WARNING,
+                "Cannot unlink the material '%s' from linked object data",
+                tselem->id->name + 2);
+    return;
+  }
+
   Material **matar = nullptr;
   int a, totcol = 0;
 
@@ -334,8 +342,8 @@ static void unlink_texture_fn(bContext * /*C*/,
      * for example) so there's no data to unlink from. */
     BKE_reportf(reports,
                 RPT_WARNING,
-                "Cannot unlink texture '%s'. It's not clear which freestyle line style it should "
-                "be unlinked from, there's no freestyle line style as parent in the Outliner tree",
+                "Cannot unlink texture '%s'. It's not clear which Freestyle line style it should "
+                "be unlinked from, there's no Freestyle line style as parent in the Outliner tree",
                 tselem->id->name + 2);
     return;
   }
@@ -460,6 +468,7 @@ static void unlink_object_fn(bContext *C,
         case ID_GR: {
           Collection *parent = (Collection *)tsep->id;
           BKE_collection_object_remove(bmain, parent, ob, true);
+          DEG_id_tag_update(&parent->id, ID_RECALC_SYNC_TO_EVAL);
           break;
         }
         case ID_SCE: {
@@ -470,6 +479,7 @@ static void unlink_object_fn(bContext *C,
               if (BKE_collection_has_object(collection, ob)) {
                 BKE_collection_object_remove(bmain, collection, ob, true);
                 DEG_id_tag_update(&collection->id, ID_RECALC_HIERARCHY);
+                DEG_id_tag_update(&collection->id, ID_RECALC_SYNC_TO_EVAL);
               }
             }
             FOREACH_SCENE_COLLECTION_END;
@@ -478,6 +488,7 @@ static void unlink_object_fn(bContext *C,
           else {
             Collection *parent = scene->master_collection;
             BKE_collection_object_remove(bmain, parent, ob, true);
+            DEG_id_tag_update(&parent->id, ID_RECALC_SYNC_TO_EVAL);
           }
           break;
         }
@@ -2299,7 +2310,7 @@ static void modifier_fn(int event, TreeElement *te, TreeStoreElem * /*tselem*/, 
   }
   else if (event == OL_MODIFIER_OP_APPLY) {
     object::modifier_apply(
-        bmain, data->reports, depsgraph, scene, ob, md, object::MODIFIER_APPLY_DATA, false);
+        bmain, data->reports, depsgraph, scene, ob, md, object::MODIFIER_APPLY_DATA, false, false);
     DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
     DEG_relations_tag_update(bmain);
     WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER, ob);
@@ -2585,7 +2596,7 @@ void OUTLINER_OT_object_operation(wmOperatorType *ot)
 using OutlinerDeleteFn = void (*)(bContext *C, ReportList *reports, Scene *scene, Object *ob);
 
 struct ObjectEditData {
-  GSet *objects_set;
+  Set<Object *> objects_set;
   bool is_liboverride_allowed;
   bool is_liboverride_hierarchy_root_allowed;
 };
@@ -2593,13 +2604,10 @@ struct ObjectEditData {
 static void outliner_do_object_delete(bContext *C,
                                       ReportList *reports,
                                       Scene *scene,
-                                      GSet *objects_to_delete,
+                                      const Set<Object *> &objects_to_delete,
                                       OutlinerDeleteFn delete_fn)
 {
-  GSetIterator objects_to_delete_iter;
-  GSET_ITER (objects_to_delete_iter, objects_to_delete) {
-    Object *ob = (Object *)BLI_gsetIterator_getKey(&objects_to_delete_iter);
-
+  for (Object *ob : objects_to_delete) {
     delete_fn(C, reports, scene, ob);
   }
 }
@@ -2607,7 +2615,6 @@ static void outliner_do_object_delete(bContext *C,
 static TreeTraversalAction outliner_collect_objects_to_delete(TreeElement *te, void *customdata)
 {
   ObjectEditData *data = static_cast<ObjectEditData *>(customdata);
-  GSet *objects_to_delete = data->objects_set;
   TreeStoreElem *tselem = TREESTORE(te);
 
   if (outliner_is_collection_tree_element(te)) {
@@ -2648,7 +2655,7 @@ static TreeTraversalAction outliner_collect_objects_to_delete(TreeElement *te, v
     }
   }
 
-  BLI_gset_add(objects_to_delete, id);
+  data->objects_set.add(reinterpret_cast<Object *>(id));
 
   return TRAVERSE_CONTINUE;
 }
@@ -2668,7 +2675,6 @@ static int outliner_delete_exec(bContext *C, wmOperator *op)
   /* Get selected objects skipping duplicates to prevent deleting objects linked to multiple
    * collections twice */
   ObjectEditData object_delete_data = {};
-  object_delete_data.objects_set = BLI_gset_ptr_new(__func__);
   object_delete_data.is_liboverride_allowed = false;
   object_delete_data.is_liboverride_hierarchy_root_allowed = delete_hierarchy;
   outliner_tree_traverse(space_outliner,
@@ -2697,8 +2703,6 @@ static int outliner_delete_exec(bContext *C, wmOperator *op)
     outliner_do_object_delete(
         C, op->reports, scene, object_delete_data.objects_set, outliner_object_delete_fn);
   }
-
-  BLI_gset_free(object_delete_data.objects_set, nullptr);
 
   outliner_collection_delete(C, bmain, scene, op->reports, delete_hierarchy);
 

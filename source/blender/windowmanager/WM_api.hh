@@ -57,9 +57,6 @@ struct wmEventHandler_Op;
 struct wmEventHandler_UI;
 struct wmGenericUserData;
 struct wmGesture;
-struct wmGizmo;
-struct wmGizmoMap;
-struct wmGizmoMapType;
 struct wmJob;
 struct wmJobWorkerStatus;
 struct wmOperator;
@@ -275,6 +272,9 @@ bool WM_window_pixels_read_sample(bContext *C, wmWindow *win, const int pos[2], 
  */
 int WM_window_native_pixel_x(const wmWindow *win);
 int WM_window_native_pixel_y(const wmWindow *win);
+
+blender::int2 WM_window_native_pixel_size(const wmWindow *win);
+
 void WM_window_native_pixel_coords(const wmWindow *win, int *x, int *y);
 /**
  * Get boundaries usable by all window contents, including global areas.
@@ -471,11 +471,45 @@ enum eWM_EventHandlerFlag {
 };
 ENUM_OPERATORS(eWM_EventHandlerFlag, WM_HANDLER_DO_FREE)
 
-using EventHandlerPoll = bool (*)(const ARegion *region, const wmEvent *event);
+using EventHandlerPoll = bool (*)(const wmWindow *win,
+                                  const ScrArea *area,
+                                  const ARegion *region,
+                                  const wmEvent *event);
 wmEventHandler_Keymap *WM_event_add_keymap_handler(ListBase *handlers, wmKeyMap *keymap);
 wmEventHandler_Keymap *WM_event_add_keymap_handler_poll(ListBase *handlers,
                                                         wmKeyMap *keymap,
                                                         EventHandlerPoll poll);
+
+/**
+ * \return true when the `event` should be handled by the 2D views masked region.
+ *
+ * \note uses the #EventHandlerPoll signature.
+ */
+bool WM_event_handler_region_v2d_mask_poll(const wmWindow *win,
+                                           const ScrArea *area,
+                                           const ARegion *region,
+                                           const wmEvent *event);
+/**
+ * \return true when the `event` is inside the marker region.
+ *
+ * \note There are no checks that markers are displayed.
+ */
+bool WM_event_handler_region_marker_poll(const wmWindow *win,
+                                         const ScrArea *area,
+                                         const ARegion *region,
+                                         const wmEvent *event);
+
+/**
+ * A version of #WM_event_handler_region_v2d_mask_poll which excludes events
+ * (returning false) in the marker region.
+ *
+ * \note uses the #EventHandlerPoll signature.
+ */
+bool WM_event_handler_region_v2d_mask_no_marker_poll(const wmWindow *win,
+                                                     const ScrArea *area,
+                                                     const ARegion *region,
+                                                     const wmEvent *event);
+
 wmEventHandler_Keymap *WM_event_add_keymap_handler_v2d_mask(ListBase *handlers, wmKeyMap *keymap);
 /**
  * \note Priorities not implemented yet, for time being just insert in begin of list.
@@ -997,8 +1031,8 @@ void WM_operator_properties_id_lookup(wmOperatorType *ot, const bool add_name_pr
  */
 void WM_operator_properties_use_cursor_init(wmOperatorType *ot);
 void WM_operator_properties_border(wmOperatorType *ot);
-void WM_operator_properties_border_to_rcti(wmOperator *op, rcti *rect);
-void WM_operator_properties_border_to_rctf(wmOperator *op, rctf *rect);
+void WM_operator_properties_border_to_rcti(wmOperator *op, rcti *r_rect);
+void WM_operator_properties_border_to_rctf(wmOperator *op, rctf *r_rect);
 /**
  * Use with #WM_gesture_box_invoke
  */
@@ -1541,7 +1575,8 @@ std::string WM_drag_get_string_firstline(const wmDrag *drag);
 /* Set OpenGL viewport and scissor. */
 void wmViewport(const rcti *winrct);
 void wmPartialViewport(rcti *drawrct, const rcti *winrct, const rcti *partialrct);
-void wmWindowViewport(wmWindow *win);
+void wmWindowViewport(const wmWindow *win);
+void wmWindowViewport_ex(const wmWindow *win, float offset);
 
 /* OpenGL utilities with safety check. */
 void wmOrtho2(float x1, float x2, float y1, float y2);

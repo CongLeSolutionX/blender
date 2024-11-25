@@ -234,8 +234,7 @@ static void do_version_action_editor_properties_region(ListBase *regionbase)
     }
     if (region->regiontype == RGN_TYPE_WINDOW) {
       /* add new region here */
-      ARegion *region_new = static_cast<ARegion *>(
-          MEM_callocN(sizeof(ARegion), "buttons for action"));
+      ARegion *region_new = BKE_area_region_new();
 
       BLI_insertlinkbefore(regionbase, region, region_new);
 
@@ -386,7 +385,7 @@ static char *replace_bbone_easing_rnapath(char *old_path)
   return old_path;
 }
 
-static void do_version_bbone_easing_fcurve_fix(ID * /*id*/, FCurve *fcu, void * /*user_data*/)
+static void do_version_bbone_easing_fcurve_fix(ID * /*id*/, FCurve *fcu)
 {
   /* F-Curve's path (for bbone_in/out) */
   if (fcu->rna_path) {
@@ -652,7 +651,7 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 272, 1)) {
     LISTBASE_FOREACH (Brush *, br, &bmain->brushes) {
       if ((br->ob_mode & OB_MODE_SCULPT) &&
-          ELEM(br->sculpt_tool, SCULPT_TOOL_GRAB, SCULPT_TOOL_SNAKE_HOOK))
+          ELEM(br->sculpt_brush_type, SCULPT_BRUSH_TYPE_GRAB, SCULPT_BRUSH_TYPE_SNAKE_HOOK))
       {
         br->alpha = 1.0f;
       }
@@ -1221,7 +1220,7 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
     }
 
     LISTBASE_FOREACH (Brush *, br, &bmain->brushes) {
-      if (br->sculpt_tool == SCULPT_TOOL_FLATTEN) {
+      if (br->sculpt_brush_type == SCULPT_BRUSH_TYPE_FLATTEN) {
         br->flag |= BRUSH_ACCUMULATE;
       }
     }
@@ -1626,6 +1625,6 @@ void do_versions_after_linking_270(Main *bmain)
 
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 279, 2)) {
     /* B-Bones (bbone_in/out -> bbone_easein/out) + Stepped FMod Frame Start/End fix */
-    BKE_fcurves_main_cb(bmain, do_version_bbone_easing_fcurve_fix, nullptr);
+    BKE_fcurves_main_cb(bmain, do_version_bbone_easing_fcurve_fix);
   }
 }

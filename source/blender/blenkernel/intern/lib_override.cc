@@ -304,10 +304,10 @@ static ID *lib_override_library_create_from(Main *bmain,
   return local_id;
 }
 
-/* TODO: This could be simplified by storing a flag in #IDOverrideLibrary
- * during the diffing process? */
 bool BKE_lib_override_library_is_user_edited(const ID *id)
 {
+  /* TODO: This could be simplified by storing a flag in #IDOverrideLibrary
+   * during the diffing process? */
 
   if (!ID_IS_OVERRIDE_LIBRARY(id)) {
     return false;
@@ -511,8 +511,6 @@ static void lib_override_remapper_overrides_add(id::IDRemapper &id_remapper,
   }
 }
 
-/* TODO: Make this static local function instead? API is becoming complex, and it's not used
- * outside of this file anyway. */
 bool BKE_lib_override_library_create_from_tag(Main *bmain,
                                               Library *owner_library,
                                               const ID *id_root_reference,
@@ -521,6 +519,9 @@ bool BKE_lib_override_library_create_from_tag(Main *bmain,
                                               const bool do_no_main,
                                               const bool do_fully_editable)
 {
+  /* TODO: Make this static local function instead?
+   * API is becoming complex, and it's not used outside of this file anyway. */
+
   BLI_assert(id_root_reference != nullptr && ID_IS_LINKED(id_root_reference));
   /* If we do not have any hierarchy root given, then the root reference must be tagged for
    * override. */
@@ -4309,6 +4310,26 @@ static bool override_library_is_valid(const ID &id,
   return true;
 }
 
+/** Check all override properties and rules to ensure they are valid. Remove invalid ones. */
+static void override_library_properties_validate(const ID &id,
+                                                 IDOverrideLibrary &liboverride,
+                                                 ReportList *reports)
+{
+  LISTBASE_FOREACH_MUTABLE (IDOverrideLibraryProperty *, op, &liboverride.properties) {
+    if (!op->rna_path) {
+      BKE_reportf(
+          reports,
+          RPT_ERROR,
+          "Data corruption: data-block `%s` has a Library Override property with no RNA path",
+          id.name);
+      /* Simpler to allocate a dummy string here, than fix all 'normal' clearing/deletion code that
+       * does expect a non-null RNA path. */
+      op->rna_path = BLI_strdup("");
+      lib_override_library_property_delete(&liboverride, op, true);
+    }
+  }
+}
+
 void BKE_lib_override_library_validate(Main *bmain, ID *id, ReportList *reports)
 {
   /* Do NOT use `ID_IS_OVERRIDE_LIBRARY` here, since this code also needs to fix broken cases (like
@@ -4338,6 +4359,8 @@ void BKE_lib_override_library_validate(Main *bmain, ID *id, ReportList *reports)
   if (!override_library_is_valid(*liboverride_id, *liboverride, reports)) {
     BKE_lib_override_library_make_local(nullptr, liboverride_id);
   }
+
+  override_library_properties_validate(*liboverride_id, *liboverride, reports);
 }
 
 void BKE_lib_override_library_main_validate(Main *bmain, ReportList *reports)

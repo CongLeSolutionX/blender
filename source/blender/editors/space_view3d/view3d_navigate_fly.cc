@@ -30,6 +30,7 @@
 #include "BKE_context.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_report.hh"
+#include "BKE_screen.hh"
 
 #include "WM_api.hh"
 #include "WM_types.hh"
@@ -226,7 +227,7 @@ static void drawFlyPixel(const bContext * /*C*/, ARegion * /*region*/, void *arg
 
   if (ED_view3d_cameracontrol_object_get(fly->v3d_camera_control)) {
     ED_view3d_calc_camera_border(
-        fly->scene, fly->depsgraph, fly->region, fly->v3d, fly->rv3d, &viewborder, false);
+        fly->scene, fly->depsgraph, fly->region, fly->v3d, fly->rv3d, false, &viewborder);
     xoff = int(viewborder.xmin);
     yoff = int(viewborder.ymin);
   }
@@ -370,7 +371,7 @@ static bool initFlyInfo(bContext *C, FlyInfo *fly, wmOperator *op, const wmEvent
   fly->time_lastdraw = fly->time_lastwheel = BLI_time_now_seconds();
 
   fly->draw_handle_pixel = ED_region_draw_cb_activate(
-      fly->region->type, drawFlyPixel, fly, REGION_DRAW_POST_PIXEL);
+      fly->region->runtime->type, drawFlyPixel, fly, REGION_DRAW_POST_PIXEL);
 
   fly->rv3d->rflag |= RV3D_NAVIGATING;
 
@@ -388,7 +389,7 @@ static bool initFlyInfo(bContext *C, FlyInfo *fly, wmOperator *op, const wmEvent
   /* Calculate center. */
   if (ED_view3d_cameracontrol_object_get(fly->v3d_camera_control)) {
     ED_view3d_calc_camera_border(
-        fly->scene, fly->depsgraph, fly->region, fly->v3d, fly->rv3d, &viewborder, false);
+        fly->scene, fly->depsgraph, fly->region, fly->v3d, fly->rv3d, false, &viewborder);
 
     fly->viewport_size[0] = BLI_rctf_size_x(&viewborder);
     fly->viewport_size[1] = BLI_rctf_size_y(&viewborder);
@@ -442,7 +443,7 @@ static int flyEnd(bContext *C, FlyInfo *fly)
 
   WM_event_timer_remove(CTX_wm_manager(C), win, fly->timer);
 
-  ED_region_draw_cb_exit(fly->region->type, fly->draw_handle_pixel);
+  ED_region_draw_cb_exit(fly->region->runtime->type, fly->draw_handle_pixel);
 
   ED_view3d_cameracontrol_release(fly->v3d_camera_control, fly->state == FLY_CANCEL);
 

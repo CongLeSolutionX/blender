@@ -8,10 +8,11 @@
 #pragma once
 
 #include "BLI_array.hh"
+#include "BLI_index_mask.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_set.hh"
 
-#include "BKE_pbvh.hh"
+#include "BKE_paint_bvh.hh"
 
 struct Brush;
 struct Scene;
@@ -74,8 +75,7 @@ struct Cache {
    * during the execution of Expand by moving the origin. */
   float2 initial_mouse_move;
   float2 initial_mouse;
-  PBVHVertRef initial_active_vertex;
-  int initial_active_vertex_i;
+  int initial_active_vert;
   int initial_active_face_set;
 
   /* Maximum number of vertices allowed in the SculptSession for previewing the falloff using
@@ -117,7 +117,8 @@ struct Cache {
 
   /* Cached pbvh::Tree nodes. This allows to skip gathering all nodes from the pbvh::Tree each time
    * expand needs to update the state of the elements. */
-  Vector<bke::pbvh::Node *> nodes;
+  IndexMaskMemory node_mask_memory;
+  IndexMask node_mask;
 
   /* Expand state options. */
 

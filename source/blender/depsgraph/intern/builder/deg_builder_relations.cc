@@ -57,7 +57,7 @@
 #include "DNA_volume_types.h"
 #include "DNA_world_types.h"
 
-#include "BKE_action.h"
+#include "BKE_action.hh"
 #include "BKE_anim_data.hh"
 #include "BKE_armature.hh"
 #include "BKE_collection.hh"
@@ -69,7 +69,7 @@
 #include "BKE_gpencil_modifier_legacy.h"
 #include "BKE_grease_pencil.hh"
 #include "BKE_idprop.hh"
-#include "BKE_image.h"
+#include "BKE_image.hh"
 #include "BKE_key.hh"
 #include "BKE_layer.hh"
 #include "BKE_lib_query.hh"
@@ -690,9 +690,9 @@ void DepsgraphRelationBuilder::build_collection(LayerCollection *from_layer_coll
     const ComponentKey object_hierarchy_key{&object->id, NodeType::HIERARCHY};
     add_relation(collection_hierarchy_key, object_hierarchy_key, "Collection -> Object hierarchy");
 
-    const OperationKey object_instance_key{
-        &object->id, NodeType::INSTANCING, OperationCode::INSTANCE};
-    add_relation(object_instance_key, collection_geometry_key, "Collection Geometry");
+    const OperationKey object_instance_geometry_key{
+        &object->id, NodeType::INSTANCING, OperationCode::INSTANCE_GEOMETRY};
+    add_relation(object_instance_geometry_key, collection_geometry_key, "Collection Geometry");
 
     /* An instance is part of the geometry of the collection. */
     if (object->type == OB_EMPTY) {
@@ -750,9 +750,13 @@ void DepsgraphRelationBuilder::build_object(Object *object)
     add_relation(local_transform_key, parent_transform_key, "ObLocal -> ObParent");
   }
 
-  add_relation(ComponentKey(&object->id, NodeType::TRANSFORM),
+  add_relation(OperationKey{&object->id, NodeType::INSTANCING, OperationCode::INSTANCE_GEOMETRY},
                OperationKey{&object->id, NodeType::INSTANCING, OperationCode::INSTANCE},
-               "Transform -> Instance");
+               "Instance Geometry -> Geometry");
+
+  add_relation(ComponentKey(&object->id, NodeType::TRANSFORM),
+               OperationKey{&object->id, NodeType::INSTANCING, OperationCode::INSTANCE_GEOMETRY},
+               "Transform -> Instance Geometry");
 
   /* Modifiers. */
   build_object_modifiers(object);
@@ -1698,7 +1702,6 @@ void DepsgraphRelationBuilder::build_animdata_action_targets(ID *id,
     return;
   }
 
-#ifdef WITH_ANIM_BAKLAVA
   const animrig::Slot *slot = action.slot_for_handle(slot_handle);
   if (slot == nullptr) {
     /* If there's no matching slot, there's no Action dependency. */
@@ -1711,8 +1714,8 @@ void DepsgraphRelationBuilder::build_animdata_action_targets(ID *id,
     for (animrig::Strip *strip : layer->strips()) {
       switch (strip->type()) {
         case animrig::Strip::Type::Keyframe: {
-          animrig::KeyframeStrip &keyframe_strip = strip->as<animrig::KeyframeStrip>();
-          animrig::ChannelBag *channels = keyframe_strip.channelbag_for_slot(*slot);
+          animrig::StripKeyframeData &strip_data = strip->data<animrig::StripKeyframeData>(action);
+          animrig::ChannelBag *channels = strip_data.channelbag_for_slot(*slot);
           if (channels == nullptr) {
             /* Go to next strip. */
             break;
@@ -1725,9 +1728,6 @@ void DepsgraphRelationBuilder::build_animdata_action_targets(ID *id,
       }
     }
   }
-#else
-  UNUSED_VARS(slot_handle);
-#endif
 }
 
 void DepsgraphRelationBuilder::build_animdata_nlastrip_targets(ID *id,
@@ -1742,13 +1742,8 @@ void DepsgraphRelationBuilder::build_animdata_nlastrip_targets(ID *id,
       ComponentKey action_key(&strip->act->id, NodeType::ANIMATION);
       add_relation(action_key, adt_key, "Action -> Animation");
 
-      if (!strip->act->wrap().is_action_legacy()) {
-        /* TODO: add NLA support for layered actions. */
-        continue;
-      }
-      /* TODO: get slot handle from the owning ID. */
-      const animrig::slot_handle_t slot_handle = animrig::Slot::unassigned;
-      build_animdata_action_targets(id, slot_handle, adt_key, operation_from, strip->act);
+      build_animdata_action_targets(
+          id, strip->action_slot_handle, adt_key, operation_from, strip->act);
     }
     else if (strip->strips.first != nullptr) {
       build_animdata_nlastrip_targets(id, adt_key, operation_from, &strip->strips);
@@ -1844,13 +1839,6 @@ void DepsgraphRelationBuilder::build_action(bAction *dna_action)
   build_idproperties(dna_action->id.properties);
 
   blender::animrig::Action &action = dna_action->wrap();
-#ifndef WITH_ANIM_BAKLAVA
-  /* Prevent evaluation of data introduced by Project Baklava. */
-  if (action.is_action_layered()) {
-    return;
-  }
-#endif
-
   if (!action.is_empty()) {
     TimeSourceKey time_src_key;
     ComponentKey animation_key(&dna_action->id, NodeType::ANIMATION);
@@ -2600,8 +2588,8 @@ void DepsgraphRelationBuilder::build_object_data_geometry(Object *object)
   add_relation(scene_key, obdata_ubereval_key, "Copy-on-Eval Relation", RELATION_FLAG_NO_FLUSH);
   /* Relation to the instance, so that instancer can use geometry of this object. */
   add_relation(ComponentKey(&object->id, NodeType::GEOMETRY),
-               OperationKey(&object->id, NodeType::INSTANCING, OperationCode::INSTANCE),
-               "Transform -> Instance");
+               OperationKey(&object->id, NodeType::INSTANCING, OperationCode::INSTANCE_GEOMETRY),
+               "Transform -> Instance Geometry");
   /* Shader FX. */
   if (object->shader_fx.first != nullptr) {
     ModifierUpdateDepsgraphContext ctx = {};

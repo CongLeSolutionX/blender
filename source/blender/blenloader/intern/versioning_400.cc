@@ -47,6 +47,7 @@
 #include "BLI_set.hh"
 #include "BLI_string.h"
 #include "BLI_string_ref.hh"
+#include "BLI_string_utf8.h"
 
 #include "BKE_anim_data.hh"
 #include "BKE_animsys.h"
@@ -61,11 +62,12 @@
 #include "BKE_file_handler.hh"
 #include "BKE_grease_pencil.hh"
 #include "BKE_idprop.hh"
-#include "BKE_image_format.h"
+#include "BKE_image_format.hh"
+#include "BKE_lib_query.hh"
 #include "BKE_main.hh"
 #include "BKE_material.h"
 #include "BKE_mesh_legacy_convert.hh"
-#include "BKE_nla.h"
+#include "BKE_nla.hh"
 #include "BKE_node_runtime.hh"
 #include "BKE_paint.hh"
 #include "BKE_scene.hh"
@@ -79,6 +81,8 @@
 #include "SEQ_sequencer.hh"
 #include "SEQ_time.hh"
 
+#include "ANIM_action.hh"
+#include "ANIM_action_iterators.hh"
 #include "ANIM_armature_iter.hh"
 #include "ANIM_bone_collections.hh"
 
@@ -101,6 +105,192 @@ static void version_composite_nodetree_null_id(bNodeTree *ntree, Scene *scene)
                                  node->custom1 == CMP_NODE_CRYPTOMATTE_SOURCE_RENDER)))
     {
       node->id = &scene->id;
+    }
+  }
+}
+
+struct ActionUserInfo {
+  ID *id;
+  blender::animrig::slot_handle_t *slot_handle;
+  bAction **action_ptr_ptr;
+  char *slot_name;
+};
+
+static void convert_action_in_place(blender::animrig::Action &action)
+{
+  using namespace blender::animrig;
+  if (action.is_action_layered()) {
+    return;
+  }
+
+  /* Store this ahead of time, because adding the slot sets the action's idroot
+   * to 0. We also set the action's idroot to 0 manually, just to be defensive
+   * so we don't depend on esoteric behavior in `slot_add()`. */
+  const int16_t idtype = action.idroot;
+  action.idroot = 0;
+
+  Slot &slot = action.slot_add();
+  slot.idtype = idtype;
+  slot.name_ensure_prefix();
+
+  Layer &layer = action.layer_add("Layer");
+  blender::animrig::Strip &strip = layer.strip_add(action,
+                                                   blender::animrig::Strip::Type::Keyframe);
+  ChannelBag &bag = strip.data<StripKeyframeData>(action).channelbag_for_slot_ensure(slot);
+  const int fcu_count = BLI_listbase_count(&action.curves);
+  const int group_count = BLI_listbase_count(&action.groups);
+  bag.fcurve_array = MEM_cnew_array<FCurve *>(fcu_count, "Action versioning - fcurves");
+  bag.fcurve_array_num = fcu_count;
+  bag.group_array = MEM_cnew_array<bActionGroup *>(group_count, "Action versioning - groups");
+  bag.group_array_num = group_count;
+
+  int group_index = 0;
+  int fcurve_index = 0;
+  LISTBASE_FOREACH_INDEX (bActionGroup *, group, &action.groups, group_index) {
+    bag.group_array[group_index] = group;
+
+    group->channel_bag = &bag;
+    group->fcurve_range_start = fcurve_index;
+
+    LISTBASE_FOREACH (FCurve *, fcu, &group->channels) {
+      if (fcu->grp != group) {
+        break;
+      }
+      bag.fcurve_array[fcurve_index++] = fcu;
+    }
+
+    group->fcurve_range_length = fcurve_index - group->fcurve_range_start;
+  }
+
+  LISTBASE_FOREACH (FCurve *, fcu, &action.curves) {
+    /* Any fcurves with groups have already been added to the fcurve array. */
+    if (fcu->grp) {
+      continue;
+    }
+    bag.fcurve_array[fcurve_index++] = fcu;
+  }
+
+  BLI_assert(fcurve_index == fcu_count);
+
+  action.curves = {nullptr, nullptr};
+  action.groups = {nullptr, nullptr};
+}
+
+static void version_legacy_actions_to_layered(Main *bmain)
+{
+  using namespace blender::animrig;
+  blender::Map<bAction *, blender::Vector<ActionUserInfo>> action_users;
+  LISTBASE_FOREACH (bAction *, dna_action, &bmain->actions) {
+    Action &action = dna_action->wrap();
+    if (action.is_action_layered()) {
+      continue;
+    }
+    action_users.add(dna_action, {});
+  }
+
+  ID *id;
+  FOREACH_MAIN_ID_BEGIN (bmain, id) {
+    auto callback = [&](ID &animated_id,
+                        bAction *&action_ptr_ref,
+                        slot_handle_t &slot_handle_ref,
+                        char *slot_name) -> bool {
+      blender::Vector<ActionUserInfo> *action_user_vector = action_users.lookup_ptr(
+          action_ptr_ref);
+      /* Only actions that need to be converted are in this map. */
+      if (!action_user_vector) {
+        return true;
+      }
+      ActionUserInfo user_info;
+      user_info.id = &animated_id;
+      user_info.action_ptr_ptr = &action_ptr_ref;
+      user_info.slot_handle = &slot_handle_ref;
+      user_info.slot_name = slot_name;
+      action_user_vector->append(user_info);
+      return true;
+    };
+
+    auto embedded_id_callback = [&](LibraryIDLinkCallbackData *cb_data) -> int {
+      ID *linked_id = *cb_data->id_pointer;
+
+      /* We only process embedded IDs with this callback. */
+      if (!linked_id || (linked_id->flag & ID_FLAG_EMBEDDED_DATA) == 0) {
+        return IDWALK_RET_STOP_RECURSION;
+      }
+
+      foreach_action_slot_use_with_references(*linked_id, callback);
+
+      return IDWALK_RET_NOP;
+    };
+
+    /* Process the main ID itself. */
+    foreach_action_slot_use_with_references(*id, callback);
+
+    /* Process embedded IDs, as these are not listed in bmain, but still can
+     * have their own Action+Slot. */
+    BKE_library_foreach_ID_link(
+        bmain,
+        id,
+        embedded_id_callback,
+        nullptr,
+        IDWALK_RECURSE | IDWALK_READONLY |
+            /* This is more about "we don't care" than "must be ignored". We don't pass an owner
+             * ID, and it's not used in the callback either, so don't bother looking it up.  */
+            IDWALK_IGNORE_MISSING_OWNER_ID);
+  }
+  FOREACH_MAIN_ID_END;
+
+  for (const auto &item : action_users.items()) {
+    Action &action = item.key->wrap();
+    convert_action_in_place(action);
+    blender::Vector<ActionUserInfo> &user_infos = item.value;
+    Slot &slot_to_assign = *action.slot(0);
+
+    if (user_infos.size() == 1) {
+      /* Rename the slot after its single user. If there are multiple users, the name is unchanged
+       * because there is no good way to determine a name. */
+      action.slot_name_set(*bmain, slot_to_assign, user_infos[0].id->name);
+    }
+    for (ActionUserInfo &action_user : user_infos) {
+      const ActionSlotAssignmentResult result = generic_assign_action_slot(
+          &slot_to_assign,
+          *action_user.id,
+          *action_user.action_ptr_ptr,
+          *action_user.slot_handle,
+          action_user.slot_name);
+      switch (result) {
+        case ActionSlotAssignmentResult::OK:
+          break;
+        case ActionSlotAssignmentResult::SlotNotSuitable:
+          /* If the slot wasn't suitable for the ID, we force assignment anyway,
+           * but with a warning.
+           *
+           * This happens when the legacy action assigned to the ID had a
+           * mismatched idroot, and therefore the created slot does as well.
+           * This mismatch can happen in a variety of ways, and we opt to
+           * preserve this unusual (but technically valid) state of affairs.
+           */
+          *action_user.slot_handle = slot_to_assign.handle;
+          BLI_strncpy_utf8(action_user.slot_name, slot_to_assign.name, Slot::name_length_max);
+
+          printf(
+              "Warning: legacy action \"%s\" is assigned to \"%s\", which does not match the "
+              "action's id_root \"%s\". The action has been upgraded to a slotted action with "
+              "slot \"%s\" with an id_type \"%s\", which has also been assigned to \"%s\" despite "
+              "this type mismatch. This likely indicates something odd about the blend file.\n",
+              action.id.name + 2,
+              action_user.id->name,
+              slot_to_assign.name_prefix_for_idtype().c_str(),
+              slot_to_assign.name_without_prefix().c_str(),
+              slot_to_assign.name_prefix_for_idtype().c_str(),
+              action_user.id->name);
+          break;
+        case ActionSlotAssignmentResult::SlotNotFromAction:
+          BLI_assert(!"SlotNotFromAction should not be returned here");
+          break;
+        case ActionSlotAssignmentResult::MissingAction:
+          BLI_assert(!"MissingAction should not be returned here");
+          break;
+      }
     }
   }
 }
@@ -808,7 +998,7 @@ static void version_nla_tweakmode_incomplete(Main *bmain)
 
     /* Not enough info in the blend file to reliably stay in tweak mode. This is the most important
      * part of this versioning code, as it prevents future nullptr access. */
-    BKE_nla_tweakmode_exit(adt);
+    BKE_nla_tweakmode_exit({*id, *adt});
   }
   FOREACH_MAIN_ID_END;
 
@@ -841,6 +1031,27 @@ static bool versioning_convert_strip_speed_factor(Sequence *seq, void *user_data
     const int prev_length = seq->len - seq->startofs - seq->endofs;
     const float left_handle = SEQ_time_left_handle_frame_get(scene, seq);
     SEQ_time_right_handle_frame_set(scene, seq, left_handle + prev_length);
+  }
+
+  return true;
+}
+
+static bool all_scenes_use(Main *bmain, const blender::Span<const char *> engines)
+{
+  if (!bmain->scenes.first) {
+    return false;
+  }
+
+  LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
+    bool match = false;
+    for (const char *engine : engines) {
+      if (STREQ(scene->r.engine, engine)) {
+        match = true;
+      }
+    }
+    if (!match) {
+      return false;
+    }
   }
 
   return true;
@@ -971,10 +1182,7 @@ void do_versions_after_linking_400(FileData *fd, Main *bmain)
   }
 
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 402, 50)) {
-    Scene *scene = static_cast<Scene *>(bmain->scenes.first);
-    bool scene_uses_eevee_legacy = scene && STREQ(scene->r.engine, RE_engine_id_BLENDER_EEVEE);
-
-    if (scene_uses_eevee_legacy) {
+    if (all_scenes_use(bmain, {RE_engine_id_BLENDER_EEVEE})) {
       LISTBASE_FOREACH (Object *, object, &bmain->objects) {
         versioning_eevee_shadow_settings(object);
       }
@@ -983,11 +1191,8 @@ void do_versions_after_linking_400(FileData *fd, Main *bmain)
 
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 402, 51)) {
     /* Convert blend method to math nodes. */
-    Scene *scene = static_cast<Scene *>(bmain->scenes.first);
-    bool scene_uses_eevee_legacy = scene && STREQ(scene->r.engine, RE_engine_id_BLENDER_EEVEE);
-
-    LISTBASE_FOREACH (Material *, material, &bmain->materials) {
-      if (scene_uses_eevee_legacy) {
+    if (all_scenes_use(bmain, {RE_engine_id_BLENDER_EEVEE})) {
+      LISTBASE_FOREACH (Material *, material, &bmain->materials) {
         if (!material->use_nodes || material->nodetree == nullptr) {
           /* Nothing to version. */
         }
@@ -1048,6 +1253,22 @@ void do_versions_after_linking_400(FileData *fd, Main *bmain)
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 403, 6)) {
     /* Shift animation data to accommodate the new Diffuse Roughness input. */
     version_node_socket_index_animdata(bmain, NTREE_SHADER, SH_NODE_BSDF_PRINCIPLED, 7, 1, 30);
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 404, 2)) {
+    version_legacy_actions_to_layered(bmain);
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 404, 7)) {
+    constexpr char SCE_SNAP_TO_NODE_X = (1 << 0);
+    constexpr char SCE_SNAP_TO_NODE_Y = (1 << 1);
+    LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
+      if (scene->toolsettings->snap_node_mode & SCE_SNAP_TO_NODE_X ||
+          scene->toolsettings->snap_node_mode & SCE_SNAP_TO_NODE_Y)
+      {
+        scene->toolsettings->snap_node_mode = SCE_SNAP_TO_GRID;
+      }
+    }
   }
 
   /**
@@ -2195,6 +2416,126 @@ static void version_principled_bsdf_coat(bNodeTree *ntree)
       ntree, SH_NODE_BSDF_PRINCIPLED, "Clearcoat Normal", "Coat Normal");
 }
 
+static void remove_triangulate_node_min_size_input(bNodeTree *tree)
+{
+  using namespace blender;
+  Set<bNode *> triangulate_nodes;
+  LISTBASE_FOREACH (bNode *, node, &tree->nodes) {
+    if (node->type == GEO_NODE_TRIANGULATE) {
+      triangulate_nodes.add(node);
+    }
+  }
+
+  Map<bNodeSocket *, bNodeLink *> input_links;
+  LISTBASE_FOREACH (bNodeLink *, link, &tree->links) {
+    if (triangulate_nodes.contains(link->tonode)) {
+      input_links.add_new(link->tosock, link);
+    }
+  }
+
+  for (bNode *triangulate : triangulate_nodes) {
+    bNodeSocket *selection = bke::node_find_socket(triangulate, SOCK_IN, "Selection");
+    bNodeSocket *min_verts = bke::node_find_socket(triangulate, SOCK_IN, "Minimum Vertices");
+    if (!min_verts) {
+      /* Make versioning idempotent. */
+      continue;
+    }
+    const int old_min_verts = static_cast<bNodeSocketValueInt *>(min_verts->default_value)->value;
+    if (!input_links.contains(min_verts) && old_min_verts <= 4) {
+      continue;
+    }
+    bNode &corners_of_face = version_node_add_empty(*tree, "GeometryNodeCornersOfFace");
+    version_node_add_socket_if_not_exist(
+        tree, &corners_of_face, SOCK_IN, SOCK_INT, PROP_NONE, "Face Index", "Face Index");
+    version_node_add_socket_if_not_exist(
+        tree, &corners_of_face, SOCK_IN, SOCK_FLOAT, PROP_NONE, "Weights", "Weights");
+    version_node_add_socket_if_not_exist(
+        tree, &corners_of_face, SOCK_IN, SOCK_INT, PROP_NONE, "Sort Index", "Sort Index");
+    version_node_add_socket_if_not_exist(
+        tree, &corners_of_face, SOCK_OUT, SOCK_INT, PROP_NONE, "Corner Index", "Corner Index");
+    version_node_add_socket_if_not_exist(
+        tree, &corners_of_face, SOCK_OUT, SOCK_INT, PROP_NONE, "Total", "Total");
+    corners_of_face.locx = triangulate->locx - 200;
+    corners_of_face.locy = triangulate->locy - 50;
+    corners_of_face.parent = triangulate->parent;
+    LISTBASE_FOREACH (bNodeSocket *, socket, &corners_of_face.inputs) {
+      socket->flag |= SOCK_HIDDEN;
+    }
+    LISTBASE_FOREACH (bNodeSocket *, socket, &corners_of_face.outputs) {
+      if (!STREQ(socket->identifier, "Total")) {
+        socket->flag |= SOCK_HIDDEN;
+      }
+    }
+
+    bNode &greater_or_equal = version_node_add_empty(*tree, "FunctionNodeCompare");
+    auto *compare_storage = MEM_cnew<NodeFunctionCompare>(__func__);
+    compare_storage->operation = NODE_COMPARE_GREATER_EQUAL;
+    compare_storage->data_type = SOCK_INT;
+    greater_or_equal.storage = compare_storage;
+    version_node_add_socket_if_not_exist(
+        tree, &greater_or_equal, SOCK_IN, SOCK_INT, PROP_NONE, "A_INT", "A");
+    version_node_add_socket_if_not_exist(
+        tree, &greater_or_equal, SOCK_IN, SOCK_INT, PROP_NONE, "B_INT", "B");
+    version_node_add_socket_if_not_exist(
+        tree, &greater_or_equal, SOCK_OUT, SOCK_BOOLEAN, PROP_NONE, "Result", "Result");
+    greater_or_equal.locx = triangulate->locx - 100;
+    greater_or_equal.locy = triangulate->locy - 50;
+    greater_or_equal.parent = triangulate->parent;
+    greater_or_equal.flag &= ~NODE_OPTIONS;
+    version_node_add_link(*tree,
+                          corners_of_face,
+                          *bke::node_find_socket(&corners_of_face, SOCK_OUT, "Total"),
+                          greater_or_equal,
+                          *bke::node_find_socket(&greater_or_equal, SOCK_IN, "A_INT"));
+    if (bNodeLink **min_verts_link = input_links.lookup_ptr(min_verts)) {
+      (*min_verts_link)->tonode = &greater_or_equal;
+      (*min_verts_link)->tosock = bke::node_find_socket(&greater_or_equal, SOCK_IN, "B_INT");
+    }
+    else {
+      bNodeSocket *new_min_verts = bke::node_find_socket(&greater_or_equal, SOCK_IN, "B_INT");
+      static_cast<bNodeSocketValueInt *>(new_min_verts->default_value)->value = old_min_verts;
+    }
+
+    if (bNodeLink **selection_link = input_links.lookup_ptr(selection)) {
+      bNode &boolean_and = version_node_add_empty(*tree, "FunctionNodeBooleanMath");
+      version_node_add_socket_if_not_exist(
+          tree, &boolean_and, SOCK_IN, SOCK_BOOLEAN, PROP_NONE, "Boolean", "Boolean");
+      version_node_add_socket_if_not_exist(
+          tree, &boolean_and, SOCK_IN, SOCK_BOOLEAN, PROP_NONE, "Boolean_001", "Boolean");
+      version_node_add_socket_if_not_exist(
+          tree, &boolean_and, SOCK_OUT, SOCK_BOOLEAN, PROP_NONE, "Boolean", "Boolean");
+      boolean_and.locx = triangulate->locx - 75;
+      boolean_and.locy = triangulate->locy - 50;
+      boolean_and.parent = triangulate->parent;
+      boolean_and.flag &= ~NODE_OPTIONS;
+      boolean_and.custom1 = NODE_BOOLEAN_MATH_AND;
+
+      (*selection_link)->tonode = &boolean_and;
+      (*selection_link)->tosock = bke::node_find_socket(&boolean_and, SOCK_IN, "Boolean");
+      version_node_add_link(*tree,
+                            greater_or_equal,
+                            *bke::node_find_socket(&greater_or_equal, SOCK_OUT, "Result"),
+                            boolean_and,
+                            *bke::node_find_socket(&boolean_and, SOCK_IN, "Boolean_001"));
+
+      version_node_add_link(*tree,
+                            boolean_and,
+                            *bke::node_find_socket(&boolean_and, SOCK_OUT, "Boolean"),
+                            *triangulate,
+                            *selection);
+    }
+    else {
+      version_node_add_link(*tree,
+                            greater_or_equal,
+                            *bke::node_find_socket(&greater_or_equal, SOCK_OUT, "Result"),
+                            *triangulate,
+                            *selection);
+    }
+
+    /* Make versioning idempotent. */
+    bke::node_remove_socket(tree, triangulate, min_verts);
+  }
+}
 /* Convert specular tint in Principled BSDF. */
 static void version_principled_bsdf_specular_tint(bNodeTree *ntree)
 {
@@ -2639,6 +2980,12 @@ static void update_paint_modes_for_brush_assets(Main &bmain)
   /* Replace persistent tool references with the new single builtin brush tool. */
   LISTBASE_FOREACH (WorkSpace *, workspace, &bmain.workspaces) {
     LISTBASE_FOREACH (bToolRef *, tref, &workspace->tools) {
+      if (STREQ(tref->idname, "builtin_brush.Draw")) {
+        /* Explicitly check against the old brush name, as the old texture paint image mode brush
+         * tool has a non-paint related mode. */
+        STRNCPY(tref->idname, "builtin.brush");
+        continue;
+      }
       if (tref->space_type != SPACE_VIEW3D) {
         continue;
       }
@@ -2653,6 +3000,7 @@ static void update_paint_modes_for_brush_assets(Main &bmain)
                 CTX_MODE_SCULPT_GREASE_PENCIL,
                 CTX_MODE_WEIGHT_GPENCIL_LEGACY,
                 CTX_MODE_WEIGHT_GREASE_PENCIL,
+                CTX_MODE_VERTEX_GREASE_PENCIL,
                 CTX_MODE_VERTEX_GPENCIL_LEGACY,
                 CTX_MODE_SCULPT_CURVES))
       {
@@ -2779,6 +3127,31 @@ static void add_image_editor_asset_shelf(Main &bmain)
   }
 }
 
+static void node_reroute_add_storage(bNodeTree &tree)
+{
+  for (bNode *node : tree.all_nodes()) {
+    if (node->is_reroute()) {
+      if (node->storage != nullptr) {
+        continue;
+      }
+
+      bNodeSocket &input = *static_cast<bNodeSocket *>(node->inputs.first);
+      bNodeSocket &output = *static_cast<bNodeSocket *>(node->outputs.first);
+
+      /* Use uniform identifier for sockets. In old Blender versions (<=2021, up to af0b7925), the
+       * identifiers were sometimes all lower case. Fixing those wrong socket identifiers is
+       * important because otherwise they loose links now that the reroute node also uses node
+       * declarations. */
+      STRNCPY(input.identifier, "Input");
+      STRNCPY(output.identifier, "Output");
+
+      NodeReroute *data = MEM_cnew<NodeReroute>(__func__);
+      STRNCPY(data->type_idname, input.idname);
+      node->storage = data;
+    }
+  }
+}
+
 /**
  * It was possible that curve attributes were initialized to 0 even if that is not allowed for some
  * attributes.
@@ -2799,6 +3172,100 @@ static void fix_built_in_curve_attribute_defaults(Main *bmain)
     {
       for (int8_t &nurbs_order : blender::MutableSpan{nurb_orders, curves_num}) {
         nurbs_order = std::max<int8_t>(nurbs_order, 1);
+      }
+    }
+  }
+}
+
+static void add_bevel_modifier_attribute_name_defaults(Main &bmain)
+{
+  LISTBASE_FOREACH (Object *, ob, &bmain.objects) {
+    if (ob->type != OB_MESH) {
+      continue;
+    }
+    LISTBASE_FOREACH (ModifierData *, md, &ob->modifiers) {
+      if (md->type == eModifierType_Bevel) {
+        BevelModifierData *bmd = reinterpret_cast<BevelModifierData *>(md);
+        if (bmd->vertex_weight_name[0] == '\0') {
+          STRNCPY(bmd->vertex_weight_name, "bevel_weight_vert");
+        }
+        if (bmd->edge_weight_name[0] == '\0') {
+          STRNCPY(bmd->edge_weight_name, "bevel_weight_edge");
+        }
+      }
+    }
+  }
+}
+
+static void hide_simulation_node_skip_socket_value(Main &bmain)
+{
+  LISTBASE_FOREACH (bNodeTree *, tree, &bmain.nodetrees) {
+    LISTBASE_FOREACH (bNode *, node, &tree->nodes) {
+      if (node->type != GEO_NODE_SIMULATION_OUTPUT) {
+        continue;
+      }
+      bNodeSocket *skip_input = static_cast<bNodeSocket *>(node->inputs.first);
+      if (!skip_input || !STREQ(skip_input->identifier, "Skip")) {
+        continue;
+      }
+      auto *default_value = static_cast<bNodeSocketValueBoolean *>(skip_input->default_value);
+      if (!default_value->value) {
+        continue;
+      }
+      bool is_linked = false;
+      LISTBASE_FOREACH (bNodeLink *, link, &tree->links) {
+        if (link->tosock == skip_input) {
+          is_linked = true;
+        }
+      }
+      if (is_linked) {
+        continue;
+      }
+
+      bNode &input_node = version_node_add_empty(*tree, "FunctionNodeInputBool");
+      input_node.parent = node->parent;
+      input_node.locx = node->locx - 25;
+      input_node.locy = node->locy;
+
+      NodeInputBool *input_node_storage = MEM_cnew<NodeInputBool>(__func__);
+      input_node.storage = input_node_storage;
+      input_node_storage->boolean = true;
+
+      bNodeSocket &input_node_socket = version_node_add_socket(
+          *tree, input_node, SOCK_OUT, "NodeSocketBool", "Boolean");
+
+      version_node_add_link(*tree, input_node, input_node_socket, *node, *skip_input);
+
+      /* Change the old socket value so that the versioning code is not run again. */
+      default_value->value = false;
+    }
+  }
+}
+
+static bool versioning_convert_seq_text_anchor(Sequence *seq, void * /*user_data*/)
+{
+  if (seq->type != SEQ_TYPE_TEXT || seq->effectdata == nullptr) {
+    return true;
+  }
+
+  TextVars *data = static_cast<TextVars *>(seq->effectdata);
+  data->anchor_x = data->align;
+  data->anchor_y = data->align_y;
+  data->align = SEQ_TEXT_ALIGN_X_LEFT;
+
+  return true;
+}
+
+static void add_subsurf_node_limit_surface_option(Main &bmain)
+{
+  LISTBASE_FOREACH (bNodeTree *, ntree, &bmain.nodetrees) {
+    if (ntree->type == NTREE_GEOMETRY) {
+      LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+        if (node->type == GEO_NODE_SUBDIVISION_SURFACE) {
+          bNodeSocket *socket = version_node_add_socket_if_not_exist(
+              ntree, node, SOCK_IN, SOCK_BOOLEAN, PROP_NONE, "Limit Surface", "Limit Surface");
+          static_cast<bNodeSocketValueBoolean *>(socket->default_value)->value = false;
+        }
       }
     }
   }
@@ -3314,12 +3781,12 @@ void blo_do_versions_400(FileData *fd, Library * /*lib*/, Main *bmain)
       auto versioning_snap_to = [](short snap_to_old, int type) {
         eSnapMode snap_to_new = SCE_SNAP_TO_NONE;
         if (snap_to_old & (1 << 0)) {
-          snap_to_new |= type == IS_NODE ? SCE_SNAP_TO_NODE_X :
+          snap_to_new |= type == IS_NODE ? SCE_SNAP_TO_NONE :
                          type == IS_ANIM ? SCE_SNAP_TO_FRAME :
                                            SCE_SNAP_TO_VERTEX;
         }
         if (snap_to_old & (1 << 1)) {
-          snap_to_new |= type == IS_NODE ? SCE_SNAP_TO_NODE_Y :
+          snap_to_new |= type == IS_NODE ? SCE_SNAP_TO_NONE :
                          type == IS_ANIM ? SCE_SNAP_TO_SECOND :
                                            SCE_SNAP_TO_EDGE;
         }
@@ -3418,10 +3885,8 @@ void blo_do_versions_400(FileData *fd, Library * /*lib*/, Main *bmain)
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 401, 5)) {
     /* Unify Material::blend_shadow and Cycles.use_transparent_shadows into the
      * Material::blend_flag. */
-    Scene *scene = static_cast<Scene *>(bmain->scenes.first);
-    bool is_eevee = scene && STR_ELEM(scene->r.engine,
-                                      RE_engine_id_BLENDER_EEVEE,
-                                      RE_engine_id_BLENDER_EEVEE_NEXT);
+    bool is_eevee = all_scenes_use(bmain,
+                                   {RE_engine_id_BLENDER_EEVEE, RE_engine_id_BLENDER_EEVEE_NEXT});
     LISTBASE_FOREACH (Material *, material, &bmain->materials) {
       bool transparent_shadows = true;
       if (is_eevee) {
@@ -3647,7 +4112,7 @@ void blo_do_versions_400(FileData *fd, Library * /*lib*/, Main *bmain)
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 401, 17)) {
     LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
       ToolSettings *ts = scene->toolsettings;
-      int input_sample_values[10];
+      int input_sample_values[9];
 
       input_sample_values[0] = ts->imapaint.paint.num_input_samples_deprecated;
       input_sample_values[1] = ts->sculpt != nullptr ?
@@ -3657,28 +4122,28 @@ void blo_do_versions_400(FileData *fd, Library * /*lib*/, Main *bmain)
                                    ts->curves_sculpt->paint.num_input_samples_deprecated :
                                    1;
 
-      input_sample_values[4] = ts->gp_paint != nullptr ?
+      input_sample_values[3] = ts->gp_paint != nullptr ?
                                    ts->gp_paint->paint.num_input_samples_deprecated :
                                    1;
-      input_sample_values[5] = ts->gp_vertexpaint != nullptr ?
+      input_sample_values[4] = ts->gp_vertexpaint != nullptr ?
                                    ts->gp_vertexpaint->paint.num_input_samples_deprecated :
                                    1;
-      input_sample_values[6] = ts->gp_sculptpaint != nullptr ?
+      input_sample_values[5] = ts->gp_sculptpaint != nullptr ?
                                    ts->gp_sculptpaint->paint.num_input_samples_deprecated :
                                    1;
-      input_sample_values[7] = ts->gp_weightpaint != nullptr ?
+      input_sample_values[6] = ts->gp_weightpaint != nullptr ?
                                    ts->gp_weightpaint->paint.num_input_samples_deprecated :
                                    1;
 
-      input_sample_values[8] = ts->vpaint != nullptr ?
+      input_sample_values[7] = ts->vpaint != nullptr ?
                                    ts->vpaint->paint.num_input_samples_deprecated :
                                    1;
-      input_sample_values[9] = ts->wpaint != nullptr ?
+      input_sample_values[8] = ts->wpaint != nullptr ?
                                    ts->wpaint->paint.num_input_samples_deprecated :
                                    1;
 
       int unified_value = 1;
-      for (int i = 0; i < 10; i++) {
+      for (int i = 0; i < 9; i++) {
         if (input_sample_values[i] != 1) {
           if (unified_value == 1) {
             unified_value = input_sample_values[i];
@@ -4112,7 +4577,7 @@ void blo_do_versions_400(FileData *fd, Library * /*lib*/, Main *bmain)
     bool shadow_resolution_absolute = false;
     /* Try to get default resolution from scene setting. */
     LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
-      shadow_max_res_local = (2.0f * M_SQRT2) / scene->eevee.shadow_cube_size;
+      shadow_max_res_local = (2.0f * M_SQRT2) / scene->eevee.shadow_cube_size_deprecated;
       /* Round to avoid weird numbers in the UI. */
       shadow_max_res_local = ceil(shadow_max_res_local * 1000.0f) / 1000.0f;
       shadow_resolution_absolute = true;
@@ -4166,11 +4631,7 @@ void blo_do_versions_400(FileData *fd, Library * /*lib*/, Main *bmain)
 
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 402, 39)) {
     /* Unify cast shadow property with Cycles. */
-    Scene *scene = static_cast<Scene *>(bmain->scenes.first);
-    /* Be conservative, if there is no scene, still try to do the conversion as that can happen for
-     * append and linking. We prefer breaking EEVEE rather than breaking Cycles here. */
-    bool is_eevee = scene && STREQ(scene->r.engine, RE_engine_id_BLENDER_EEVEE);
-    if (!is_eevee) {
+    if (!all_scenes_use(bmain, {RE_engine_id_BLENDER_EEVEE})) {
       const Light *default_light = DNA_struct_default_get(Light);
       LISTBASE_FOREACH (Light *, light, &bmain->lights) {
         IDProperty *clight = version_cycles_properties_from_ID(&light->id);
@@ -4370,9 +4831,7 @@ void blo_do_versions_400(FileData *fd, Library * /*lib*/, Main *bmain)
   }
 
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 402, 64)) {
-    Scene *scene = static_cast<Scene *>(bmain->scenes.first);
-    bool is_eevee_legacy = scene && STR_ELEM(scene->r.engine, RE_engine_id_BLENDER_EEVEE);
-    if (is_eevee_legacy) {
+    if (all_scenes_use(bmain, {RE_engine_id_BLENDER_EEVEE})) {
       /* Re-apply versioning made for EEVEE-Next in 4.1 before it got delayed. */
       LISTBASE_FOREACH (Material *, material, &bmain->materials) {
         bool transparent_shadows = material->blend_shadow != MA_BS_SOLID;
@@ -4584,12 +5043,145 @@ void blo_do_versions_400(FileData *fd, Library * /*lib*/, Main *bmain)
     }
   }
 
-  /**
-   * Always bump subversion in BKE_blender_version.h when adding versioning
-   * code here, and wrap it inside a MAIN_VERSION_FILE_ATLEAST check.
-   *
-   * \note Keep this message at the bottom of the function.
-   */
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 403, 21)) {
+    LISTBASE_FOREACH (bScreen *, screen, &bmain->screens) {
+      LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
+        LISTBASE_FOREACH (SpaceLink *, sl, &area->spacedata) {
+          if (sl->spacetype == SPACE_CLIP) {
+            ARegion *region = BKE_area_find_region_type(area, RGN_TYPE_WINDOW);
+            if (region != nullptr) {
+              View2D *v2d = &region->v2d;
+              v2d->flag &= ~V2D_VIEWSYNC_SCREEN_TIME;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 403, 22)) {
+    add_bevel_modifier_attribute_name_defaults(*bmain);
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 403, 23)) {
+    LISTBASE_FOREACH (Object *, object, &bmain->objects) {
+      LISTBASE_FOREACH (ModifierData *, md, &object->modifiers) {
+        if (md->type != eModifierType_Nodes) {
+          continue;
+        }
+        NodesModifierData &nmd = *reinterpret_cast<NodesModifierData *>(md);
+        if (nmd.bake_target == NODES_MODIFIER_BAKE_TARGET_INHERIT) {
+          /* Use disk target for existing modifiers to avoid changing behavior. */
+          nmd.bake_target = NODES_MODIFIER_BAKE_TARGET_DISK;
+        }
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 403, 24)) {
+    FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
+      node_reroute_add_storage(*ntree);
+    }
+    FOREACH_NODETREE_END;
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 403, 26)) {
+    hide_simulation_node_skip_socket_value(*bmain);
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 403, 28)) {
+    LISTBASE_FOREACH (bScreen *, screen, &bmain->screens) {
+      LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
+        LISTBASE_FOREACH (SpaceLink *, sl, &area->spacedata) {
+          if (sl->spacetype == SPACE_VIEW3D) {
+            View3D *v3d = reinterpret_cast<View3D *>(sl);
+            copy_v3_fl(v3d->overlay.gpencil_grid_color, 0.5f);
+            copy_v2_fl(v3d->overlay.gpencil_grid_scale, 1.0f);
+            copy_v2_fl(v3d->overlay.gpencil_grid_offset, 0.0f);
+            v3d->overlay.gpencil_grid_subdivisions = 4;
+          }
+        }
+      }
+    }
+
+    FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
+      if (ntree->type != NTREE_COMPOSIT) {
+        continue;
+      }
+      LISTBASE_FOREACH_MUTABLE (bNode *, node, &ntree->nodes) {
+        if (node->type == CMP_NODE_VIEWER || node->type == CMP_NODE_COMPOSITE) {
+          node->flag &= ~NODE_PREVIEW;
+        }
+      }
+    }
+    FOREACH_NODETREE_END;
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 403, 29)) {
+    /* Open warnings panel by default. */
+    LISTBASE_FOREACH (Object *, object, &bmain->objects) {
+      LISTBASE_FOREACH (ModifierData *, md, &object->modifiers) {
+        if (md->type == eModifierType_Nodes) {
+          md->layout_panel_open_flag |= 1 << NODES_MODIFIER_PANEL_WARNINGS;
+        }
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 403, 31)) {
+    LISTBASE_FOREACH (WorkSpace *, workspace, &bmain->workspaces) {
+      LISTBASE_FOREACH (bToolRef *, tref, &workspace->tools) {
+        if (tref->space_type != SPACE_SEQ) {
+          continue;
+        }
+        STRNCPY(tref->idname, "builtin.select_box");
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 404, 1)) {
+    LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
+      Editing *ed = SEQ_editing_get(scene);
+      if (ed != nullptr) {
+        SEQ_for_each_callback(&ed->seqbase, versioning_convert_seq_text_anchor, nullptr);
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 404, 4)) {
+    LISTBASE_FOREACH (bScreen *, screen, &bmain->screens) {
+      LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
+        LISTBASE_FOREACH (SpaceLink *, sl, &area->spacedata) {
+          if (sl->spacetype != SPACE_FILE) {
+            continue;
+          }
+          SpaceFile *sfile = reinterpret_cast<SpaceFile *>(sl);
+          if (sfile->asset_params) {
+            sfile->asset_params->base_params.sort = FILE_SORT_ASSET_CATALOG;
+          }
+        }
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 404, 5)) {
+    LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
+      SequencerToolSettings *sequencer_tool_settings = SEQ_tool_settings_ensure(scene);
+      sequencer_tool_settings->snap_mode |= SEQ_SNAP_TO_RETIMING;
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 404, 6)) {
+    add_subsurf_node_limit_surface_option(*bmain);
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 404, 8)) {
+    LISTBASE_FOREACH (bNodeTree *, ntree, &bmain->nodetrees) {
+      if (ntree->type == NTREE_GEOMETRY) {
+        remove_triangulate_node_min_size_input(ntree);
+      }
+    }
+  }
 
   /* Always run this versioning; meshes are written with the legacy format which always needs to
    * be converted to the new format on file load. Can be moved to a subversion check in a larger
@@ -4597,4 +5189,11 @@ void blo_do_versions_400(FileData *fd, Library * /*lib*/, Main *bmain)
   LISTBASE_FOREACH (Mesh *, mesh, &bmain->meshes) {
     blender::bke::mesh_sculpt_mask_to_generic(*mesh);
   }
+
+  /**
+   * Always bump subversion in BKE_blender_version.h when adding versioning
+   * code here, and wrap it inside a MAIN_VERSION_FILE_ATLEAST check.
+   *
+   * \note Keep this message at the bottom of the function.
+   */
 }

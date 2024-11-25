@@ -23,12 +23,13 @@
 
 #include "BKE_brush.hh"
 #include "BKE_image_wrappers.hh"
-#include "BKE_pbvh_api.hh"
-#include "BKE_pbvh_pixels.hh"
+#include "BKE_paint_bvh.hh"
+#include "BKE_paint_bvh_pixels.hh"
 
 #include "bmesh.hh"
 
 #include "mesh_brush_common.hh"
+#include "sculpt_automask.hh"
 #include "sculpt_intern.hh"
 
 namespace blender::ed::sculpt_paint::paint::image {
@@ -231,7 +232,7 @@ static BitVector<> init_uv_primitives_brush_test(SculptSession &ss,
                                                  const Span<UVPrimitivePaintInput> uv_primitives,
                                                  const Span<float3> positions)
 {
-  const float3 location = ss.cache ? ss.cache->location : ss.cursor_location;
+  const float3 location = ss.cache ? ss.cache->location_symm : ss.cursor_location;
   const float radius = ss.cache ? ss.cache->radius : ss.cursor_radius;
   const Bounds<float3> brush_bounds(location - radius, location + radius);
 
@@ -250,15 +251,17 @@ static BitVector<> init_uv_primitives_brush_test(SculptSession &ss,
   return brush_test;
 }
 
-static void do_paint_pixels(const Depsgraph &depsgraph,
-                            const Object &object,
+static void do_paint_pixels(const Scene &scene,
+                            const Depsgraph &depsgraph,
+                            Object &object,
+                            const Paint &paint,
                             const Brush &brush,
                             ImageData image_data,
                             bke::pbvh::Node &node)
 {
   SculptSession &ss = *object.sculpt;
   const StrokeCache &cache = *ss.cache;
-  bke::pbvh::Tree &pbvh = *ss.pbvh;
+  bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
   PBVHData &pbvh_data = bke::pbvh::pixels::data_get(pbvh);
   NodeData &node_data = bke::pbvh::pixels::node_data_get(node);
   const Span<float3> positions = bke::pbvh::vert_positions_eval(depsgraph, object);
@@ -279,8 +282,8 @@ static void do_paint_pixels(const Depsgraph &depsgraph,
   brush_color[2] = float((hash >> 16) & 255) / 255.0f;
 #else
   copy_v3_v3(brush_color,
-             ss.cache->invert ? BKE_brush_secondary_color_get(ss.scene, &brush) :
-                                BKE_brush_color_get(ss.scene, &brush));
+             ss.cache->invert ? BKE_brush_secondary_color_get(&scene, &paint, &brush) :
+                                BKE_brush_color_get(&scene, &paint, &brush));
 #endif
 
   brush_color[3] = 1.0f;
@@ -431,12 +434,12 @@ static void do_push_undo_tile(Image &image, ImageUser &image_user, bke::pbvh::No
 /** \name Fix non-manifold edge bleeding.
  * \{ */
 
-static Vector<image::TileNumber> collect_dirty_tiles(Span<bke::pbvh::Node *> nodes)
+static Vector<image::TileNumber> collect_dirty_tiles(MutableSpan<bke::pbvh::MeshNode> nodes,
+                                                     const IndexMask &node_mask)
 {
   Vector<image::TileNumber> dirty_tiles;
-  for (bke::pbvh::Node *node : nodes) {
-    bke::pbvh::pixels::collect_dirty_tiles(*node, dirty_tiles);
-  }
+  node_mask.foreach_index(
+      [&](const int i) { bke::pbvh::pixels::collect_dirty_tiles(nodes[i], dirty_tiles); });
   return dirty_tiles;
 }
 static void fix_non_manifold_seam_bleeding(bke::pbvh::Tree &pbvh,
@@ -452,10 +455,11 @@ static void fix_non_manifold_seam_bleeding(bke::pbvh::Tree &pbvh,
 static void fix_non_manifold_seam_bleeding(Object &ob,
                                            Image &image,
                                            ImageUser &image_user,
-                                           const Span<bke::pbvh::Node *> nodes)
+                                           MutableSpan<bke::pbvh::MeshNode> nodes,
+                                           const IndexMask &node_mask)
 {
-  Vector<image::TileNumber> dirty_tiles = collect_dirty_tiles(nodes);
-  fix_non_manifold_seam_bleeding(*ob.sculpt->pbvh, image, image_user, dirty_tiles);
+  Vector<image::TileNumber> dirty_tiles = collect_dirty_tiles(nodes, node_mask);
+  fix_non_manifold_seam_bleeding(*bke::object::pbvh_get(ob), image, image_user, dirty_tiles);
 }
 
 /** \} */
@@ -495,11 +499,12 @@ bool SCULPT_use_image_paint_brush(PaintModeSettings &settings, Object &ob)
   return BKE_paint_canvas_image_get(&settings, &ob, &image, &image_user);
 }
 
-void SCULPT_do_paint_brush_image(const Depsgraph &depsgraph,
+void SCULPT_do_paint_brush_image(const Scene &scene,
+                                 const Depsgraph &depsgraph,
                                  PaintModeSettings &paint_mode_settings,
                                  const Sculpt &sd,
                                  Object &ob,
-                                 const blender::Span<blender::bke::pbvh::Node *> nodes)
+                                 const blender::IndexMask &node_mask)
 {
   using namespace blender;
   const Brush *brush = BKE_paint_brush_for_read(&sd.paint);
@@ -509,19 +514,19 @@ void SCULPT_do_paint_brush_image(const Depsgraph &depsgraph,
     return;
   }
 
-  threading::parallel_for(nodes.index_range(), 1, [&](const IndexRange range) {
-    for (const int i : range) {
-      do_push_undo_tile(*image_data.image, *image_data.image_user, *nodes[i]);
-    }
-  });
-  threading::parallel_for(nodes.index_range(), 1, [&](const IndexRange range) {
-    for (const int i : range) {
-      do_paint_pixels(depsgraph, ob, *brush, image_data, *nodes[i]);
-    }
-  });
-  fix_non_manifold_seam_bleeding(ob, *image_data.image, *image_data.image_user, nodes);
+  bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(ob);
+  MutableSpan<bke::pbvh::MeshNode> nodes = pbvh.nodes<bke::pbvh::MeshNode>();
 
-  for (bke::pbvh::Node *node : nodes) {
-    bke::pbvh::pixels::mark_image_dirty(*node, *image_data.image, *image_data.image_user);
-  }
+  node_mask.foreach_index(GrainSize(1), [&](const int i) {
+    do_push_undo_tile(*image_data.image, *image_data.image_user, nodes[i]);
+  });
+  node_mask.foreach_index(GrainSize(1), [&](const int i) {
+    do_paint_pixels(scene, depsgraph, ob, sd.paint, *brush, image_data, nodes[i]);
+  });
+
+  fix_non_manifold_seam_bleeding(ob, *image_data.image, *image_data.image_user, nodes, node_mask);
+
+  node_mask.foreach_index([&](const int i) {
+    bke::pbvh::pixels::mark_image_dirty(nodes[i], *image_data.image, *image_data.image_user);
+  });
 }

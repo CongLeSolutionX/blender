@@ -2,9 +2,9 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#pragma BLENDER_REQUIRE(gpu_shader_common_math_utils.glsl)
-#pragma BLENDER_REQUIRE(gpu_shader_compositor_blur_common.glsl)
-#pragma BLENDER_REQUIRE(gpu_shader_compositor_texture_utilities.glsl)
+#include "gpu_shader_compositor_blur_common.glsl"
+#include "gpu_shader_compositor_texture_utilities.glsl"
+#include "gpu_shader_math_vector_lib.glsl"
 
 /* Given the texel in the range [-radius, radius] in both axis, load the appropriate weight from
  * the weights texture, where the given texel (0, 0) corresponds the center of weights texture.
@@ -32,7 +32,6 @@ void main()
   ivec2 texel = ivec2(gl_GlobalInvocationID.xy);
 
   float center_radius = max(0.0, texture_load(radius_tx, texel).x);
-  vec4 center_color = texture_load(input_tx, texel);
 
   /* Go over the window of the given search radius and accumulate the colors multiplied by their
    * respective weights as well as the weights themselves, but only if both the radius of the

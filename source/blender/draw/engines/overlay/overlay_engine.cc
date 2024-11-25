@@ -56,7 +56,7 @@ static void OVERLAY_engine_init(void *vedata)
 
   /* Allocate instance. */
   if (data->instance == nullptr) {
-    data->instance = new Instance(select::SelectionType::DISABLED);
+    data->instance = new Instance(select::SelectionType::DISABLED, false);
   }
 
   OVERLAY_PrivateData *pd = stl->pd;
@@ -185,6 +185,7 @@ static void OVERLAY_cache_init(void *vedata)
     case CTX_MODE_SCULPT_GREASE_PENCIL:
     case CTX_MODE_EDIT_GREASE_PENCIL:
     case CTX_MODE_WEIGHT_GREASE_PENCIL:
+    case CTX_MODE_VERTEX_GREASE_PENCIL:
       OVERLAY_edit_grease_pencil_cache_init(data);
       break;
     case CTX_MODE_PARTICLE:
@@ -198,15 +199,6 @@ static void OVERLAY_cache_init(void *vedata)
       break;
     case CTX_MODE_SCULPT:
       OVERLAY_sculpt_cache_init(data);
-      break;
-    case CTX_MODE_EDIT_GPENCIL_LEGACY:
-      OVERLAY_edit_gpencil_legacy_cache_init(data);
-      break;
-    case CTX_MODE_PAINT_GPENCIL_LEGACY:
-    case CTX_MODE_SCULPT_GPENCIL_LEGACY:
-    case CTX_MODE_VERTEX_GPENCIL_LEGACY:
-    case CTX_MODE_WEIGHT_GPENCIL_LEGACY:
-      OVERLAY_edit_gpencil_legacy_cache_init(data);
       break;
     case CTX_MODE_EDIT_CURVES:
       OVERLAY_edit_curves_cache_init(data);
@@ -230,7 +222,6 @@ static void OVERLAY_cache_init(void *vedata)
   OVERLAY_extra_cache_init(data);
   OVERLAY_facing_cache_init(data);
   OVERLAY_grease_pencil_cache_init(data);
-  OVERLAY_gpencil_legacy_cache_init(data);
   OVERLAY_grid_cache_init(data);
   OVERLAY_image_cache_init(data);
   OVERLAY_metaball_cache_init(data);
@@ -298,7 +289,9 @@ static bool overlay_object_is_edit_mode(const OVERLAY_PrivateData *pd, const Obj
 
 static bool overlay_object_is_paint_mode(const DRWContextState *draw_ctx, const Object *ob)
 {
-  if (ob->type == OB_GREASE_PENCIL && draw_ctx->object_mode & OB_MODE_WEIGHT_GPENCIL_LEGACY) {
+  if (ob->type == OB_GREASE_PENCIL &&
+      draw_ctx->object_mode & (OB_MODE_WEIGHT_GREASE_PENCIL | OB_MODE_VERTEX_GREASE_PENCIL))
+  {
     return true;
   }
   return (ob == draw_ctx->obact) && (draw_ctx->object_mode & OB_MODE_ALL_PAINT);
@@ -338,7 +331,7 @@ static void OVERLAY_cache_populate(void *vedata, Object *ob)
   const bool is_preview = dupli_object != nullptr &&
                           dupli_object->preview_base_geometry != nullptr;
   const bool in_pose_mode = ob->type == OB_ARMATURE && OVERLAY_armature_is_pose_mode(ob, draw_ctx);
-  const bool in_edit_mode = overlay_object_is_edit_mode(pd, ob);
+  const bool in_edit_mode = ob->mode == OB_MODE_EDIT;
   const bool is_instance = (ob->base_flag & BASE_FROM_DUPLI);
   const bool instance_parent_in_edit_mode = is_instance ?
                                                 overlay_object_is_edit_mode(
@@ -354,8 +347,7 @@ static void OVERLAY_cache_populate(void *vedata, Object *ob)
   const bool in_sculpt_mode = (ob == draw_ctx->obact) && (ob->sculpt != nullptr) &&
                               (ob->sculpt->mode_type == OB_MODE_SCULPT);
   const bool in_grease_pencil_sculpt_mode = (ob->type == OB_GREASE_PENCIL) &&
-                                            (draw_ctx->object_mode &
-                                             OB_MODE_SCULPT_GPENCIL_LEGACY);
+                                            (draw_ctx->object_mode & OB_MODE_SCULPT_GREASE_PENCIL);
   const bool has_surface = ELEM(ob->type,
                                 OB_MESH,
                                 OB_CURVES_LEGACY,
@@ -476,8 +468,11 @@ static void OVERLAY_cache_populate(void *vedata, Object *ob)
       case OB_MODE_TEXTURE_PAINT:
         OVERLAY_paint_texture_cache_populate(data, ob);
         break;
-      case OB_MODE_WEIGHT_GPENCIL_LEGACY:
+      case OB_MODE_WEIGHT_GREASE_PENCIL:
         OVERLAY_weight_grease_pencil_cache_populate(data, ob);
+        break;
+      case OB_MODE_VERTEX_GREASE_PENCIL:
+        OVERLAY_vertex_grease_pencil_cache_populate(data, ob);
         break;
       default:
         break;
@@ -493,7 +488,7 @@ static void OVERLAY_cache_populate(void *vedata, Object *ob)
   else if (in_sculpt_curve_mode) {
     OVERLAY_sculpt_curves_cache_populate(data, ob);
   }
-  else if (in_grease_pencil_sculpt_mode) {
+  else if (in_grease_pencil_sculpt_mode && !pd->hide_overlays) {
     OVERLAY_sculpt_grease_pencil_cache_populate(data, ob);
   }
 
@@ -512,9 +507,6 @@ static void OVERLAY_cache_populate(void *vedata, Object *ob)
         if (!in_edit_mode) {
           OVERLAY_metaball_cache_populate(data, ob);
         }
-        break;
-      case OB_GPENCIL_LEGACY:
-        OVERLAY_gpencil_legacy_cache_populate(data, ob);
         break;
     }
   }
@@ -697,7 +689,6 @@ static void OVERLAY_draw_scene(void *vedata)
   OVERLAY_armature_draw(data);
   OVERLAY_particle_draw(data);
   OVERLAY_metaball_draw(data);
-  OVERLAY_gpencil_legacy_draw(data);
   OVERLAY_grease_pencil_draw(data);
   OVERLAY_extra_draw(data);
   if (pd->overlay.flag & V3D_OVERLAY_VIEWER_ATTRIBUTE) {
@@ -765,15 +756,6 @@ static void OVERLAY_draw_scene(void *vedata)
     case CTX_MODE_PARTICLE:
       OVERLAY_edit_particle_draw(data);
       break;
-    case CTX_MODE_EDIT_GPENCIL_LEGACY:
-      OVERLAY_edit_gpencil_legacy_draw(data);
-      break;
-    case CTX_MODE_PAINT_GPENCIL_LEGACY:
-    case CTX_MODE_SCULPT_GPENCIL_LEGACY:
-    case CTX_MODE_VERTEX_GPENCIL_LEGACY:
-    case CTX_MODE_WEIGHT_GPENCIL_LEGACY:
-      OVERLAY_edit_gpencil_legacy_draw(data);
-      break;
     case CTX_MODE_SCULPT_CURVES:
       break;
     case CTX_MODE_EDIT_CURVES:
@@ -782,6 +764,7 @@ static void OVERLAY_draw_scene(void *vedata)
     case CTX_MODE_EDIT_GREASE_PENCIL:
     case CTX_MODE_SCULPT_GREASE_PENCIL:
     case CTX_MODE_WEIGHT_GREASE_PENCIL:
+    case CTX_MODE_VERTEX_GREASE_PENCIL:
       OVERLAY_edit_grease_pencil_draw(data);
       break;
     default:

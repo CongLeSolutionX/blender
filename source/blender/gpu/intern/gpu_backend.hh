@@ -12,8 +12,7 @@
 
 #include "GPU_vertex_buffer.hh"
 
-namespace blender {
-namespace gpu {
+namespace blender::gpu {
 
 class Context;
 
@@ -55,6 +54,7 @@ class GPUBackend {
   virtual UniformBuf *uniformbuf_alloc(size_t size, const char *name) = 0;
   virtual StorageBuf *storagebuf_alloc(size_t size, GPUUsageType usage, const char *name) = 0;
   virtual VertBuf *vertbuf_alloc() = 0;
+  virtual void shader_cache_dir_clear_old() = 0;
 
   /* Render Frame Coordination --
    * Used for performing per-frame actions globally */
@@ -63,5 +63,4 @@ class GPUBackend {
   virtual void render_step() = 0;
 };
 
-}  // namespace gpu
-}  // namespace blender
+}  // namespace blender::gpu

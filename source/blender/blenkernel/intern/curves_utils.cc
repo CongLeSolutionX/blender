@@ -11,6 +11,17 @@
 
 namespace blender::bke::curves {
 
+IndexMask curve_to_point_selection(OffsetIndices<int> points_by_curve,
+                                   const IndexMask &curve_selection,
+                                   IndexMaskMemory &memory)
+{
+  Array<index_mask::IndexMask::Initializer> point_ranges(curve_selection.size());
+  curve_selection.foreach_index(GrainSize(2048), [&](const int curve, const int pos) {
+    point_ranges[pos] = points_by_curve[curve];
+  });
+  return IndexMask::from_initializers(point_ranges, memory);
+}
+
 void fill_points(const OffsetIndices<int> points_by_curve,
                  const IndexMask &curve_selection,
                  const GPointer value,
@@ -27,7 +38,7 @@ void fill_points(const OffsetIndices<int> points_by_curve,
 CurvesGeometry copy_only_curve_domain(const CurvesGeometry &src_curves)
 {
   CurvesGeometry dst_curves(0, src_curves.curves_num());
-  CustomData_copy(
+  CustomData_init_from(
       &src_curves.curve_data, &dst_curves.curve_data, CD_MASK_ALL, src_curves.curves_num());
   dst_curves.runtime->type_counts = src_curves.runtime->type_counts;
   return dst_curves;
@@ -77,7 +88,7 @@ namespace bezier {
 Array<float3> retrieve_all_positions(const bke::CurvesGeometry &curves,
                                      const IndexMask &curves_selection)
 {
-  if (curves.curves_num() == 0 || !curves.has_curve_with_type(CURVE_TYPE_BEZIER)) {
+  if (curves.is_empty() || !curves.has_curve_with_type(CURVE_TYPE_BEZIER)) {
     return {};
   }
   const OffsetIndices points_by_curve = curves.points_by_curve();
@@ -103,7 +114,7 @@ void write_all_positions(bke::CurvesGeometry &curves,
                          const IndexMask &curves_selection,
                          const Span<float3> all_positions)
 {
-  if (curves_selection.is_empty() || curves.curves_num() == 0 ||
+  if (curves_selection.is_empty() || curves.is_empty() ||
       !curves.has_curve_with_type(CURVE_TYPE_BEZIER))
   {
     return;

@@ -43,7 +43,7 @@
 #include "DNA_vec_types.h"
 
 #include "BKE_fcurve.hh"
-#include "BKE_nla.h"
+#include "BKE_nla.hh"
 
 #include "BKE_context.hh"
 #include "BKE_layer.hh"
@@ -149,7 +149,7 @@ struct tPoseSlideOp {
   /** Sliding Mode. */
   ePoseSlide_Modes mode;
   /** unused for now, but can later get used for storing runtime settings.... */
-  short flag;
+  // short flag;
 
   /* Store overlay settings when invoking the operator. Bones will be temporarily hidden. */
   int overlay_flag;
@@ -990,8 +990,9 @@ static int pose_slide_invoke_common(bContext *C, wmOperator *op, const wmEvent *
   LISTBASE_FOREACH (tPChanFCurveLink *, pfl, &pso->pfLinks) {
     /* Do this for each F-Curve. */
     LISTBASE_FOREACH (LinkData *, ld, &pfl->fcurves) {
+      AnimData *adt = pfl->ob->adt;
       FCurve *fcu = (FCurve *)ld->data;
-      fcurve_to_keylist(pfl->ob->adt, fcu, pso->keylist, 0, {-FLT_MAX, FLT_MAX});
+      fcurve_to_keylist(adt, fcu, pso->keylist, 0, {-FLT_MAX, FLT_MAX}, adt != nullptr);
     }
   }
 
@@ -1783,7 +1784,7 @@ static void get_keyed_frames_in_range(ListBase *pflinks,
   LISTBASE_FOREACH (tPChanFCurveLink *, pfl, pflinks) {
     LISTBASE_FOREACH (LinkData *, ld, &pfl->fcurves) {
       FCurve *fcu = (FCurve *)ld->data;
-      fcurve_to_keylist(nullptr, fcu, keylist, 0, {start_frame, end_frame});
+      fcurve_to_keylist(nullptr, fcu, keylist, 0, {start_frame, end_frame}, false);
     }
   }
   LISTBASE_FOREACH (ActKeyColumn *, column, ED_keylist_listbase(keylist)) {
@@ -1806,7 +1807,7 @@ static void get_selected_frames(ListBase *pflinks, ListBase /*FrameLink*/ *targe
   LISTBASE_FOREACH (tPChanFCurveLink *, pfl, pflinks) {
     LISTBASE_FOREACH (LinkData *, ld, &pfl->fcurves) {
       FCurve *fcu = (FCurve *)ld->data;
-      fcurve_to_keylist(nullptr, fcu, keylist, 0, {-FLT_MAX, FLT_MAX});
+      fcurve_to_keylist(nullptr, fcu, keylist, 0, {-FLT_MAX, FLT_MAX}, false);
     }
   }
   LISTBASE_FOREACH (ActKeyColumn *, column, ED_keylist_listbase(keylist)) {

@@ -53,7 +53,7 @@ else()
     endif()
     if(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 19.36.32532 AND # MSVC 2022 17.6.0 has a bad codegen
        CMAKE_CXX_COMPILER_VERSION VERSION_LESS 19.37.32705)             # But it is fixed in 2022 17.7 preview 1
-      message(FATAL_ERROR "Compiler is unsupported, MSVC 2022 17.6.x has codegen issues and cannot be used to build blender. Please use MSVC 17.5 for the time being.")
+      message(FATAL_ERROR "Compiler is unsupported, MSVC 2022 17.6.x has codegen issues and cannot be used to build blender. Please upgrade to 17.7 or newer.")
     endif()
   endif()
 endif()
@@ -88,8 +88,8 @@ add_definitions(-DWIN32)
 add_compile_options("$<$<C_COMPILER_ID:MSVC>:/utf-8>")
 add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/utf-8>")
 
-# needed for some MSVC installations
-# 4099 : PDB 'filename' was not found with 'object/library'
+# Needed for some MSVC installations, example warning:
+# `4099 : PDB {filename} was not found with {object/library}`.
 string(APPEND CMAKE_EXE_LINKER_FLAGS " /SAFESEH:NO /ignore:4099")
 string(APPEND CMAKE_SHARED_LINKER_FLAGS " /SAFESEH:NO /ignore:4099")
 string(APPEND CMAKE_MODULE_LINKER_FLAGS " /SAFESEH:NO /ignore:4099")
@@ -153,7 +153,7 @@ if(WITH_WINDOWS_BUNDLE_CRT)
     endif()
   endforeach()
   # Install the CRT to the blender.crt Sub folder.
-  install(FILES ${CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS} DESTINATION ./blender.crt COMPONENT Libraries)
+  install(FILES ${CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS} DESTINATION blender.crt COMPONENT Libraries)
 
   windows_generate_manifest(
     FILES "${CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS}"
@@ -161,7 +161,7 @@ if(WITH_WINDOWS_BUNDLE_CRT)
     NAME "blender.crt"
   )
 
-  install(FILES ${CMAKE_BINARY_DIR}/blender.crt.manifest DESTINATION ./blender.crt)
+  install(FILES ${CMAKE_BINARY_DIR}/blender.crt.manifest DESTINATION blender.crt)
   set(BUNDLECRT "<dependency><dependentAssembly><assemblyIdentity type=\"win32\" name=\"blender.crt\" version=\"1.0.0.0\" /></dependentAssembly></dependency>")
 endif()
 if(NOT WITH_PYTHON_MODULE)
@@ -304,7 +304,6 @@ endif()
 if(NOT DEFINED LIBDIR)
   # Setup 64bit and 64bit windows systems
   if(CMAKE_CL_64)
-    message(STATUS "64 bit compiler detected.")
     if(CMAKE_SYSTEM_PROCESSOR STREQUAL "ARM64")
       set(LIBDIR_BASE "windows_arm64")
     else()

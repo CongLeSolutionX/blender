@@ -11,6 +11,7 @@
  */
 
 #include "BLI_bounds.hh"
+#include "GPU_capabilities.hh"
 
 #include "eevee_instance.hh"
 #include "eevee_pipeline.hh"
@@ -555,9 +556,14 @@ void DeferredLayer::begin_sync()
   this->gbuffer_pass_sync(inst_);
 }
 
-void DeferredLayer::end_sync(bool is_first_pass, bool is_last_pass)
+void DeferredLayer::end_sync(bool is_first_pass,
+                             bool is_last_pass,
+                             bool next_layer_has_transmission)
 {
   const SceneEEVEE &sce_eevee = inst_.scene->eevee;
+  const bool has_any_closure = closure_bits_ != 0;
+  /* We need the feedback output in case of refraction in the next pass (see #126455). */
+  const bool is_layer_refracted = (next_layer_has_transmission && has_any_closure);
   const bool has_transmit_closure = (closure_bits_ & (CLOSURE_REFRACTION | CLOSURE_TRANSLUCENT));
   const bool has_reflect_closure = (closure_bits_ & (CLOSURE_REFLECTION | CLOSURE_DIFFUSE));
   use_raytracing_ = (has_transmit_closure || has_reflect_closure) &&
@@ -572,7 +578,8 @@ void DeferredLayer::end_sync(bool is_first_pass, bool is_last_pass)
   use_screen_reflection_ = use_raytracing_ && has_reflect_closure;
 
   use_split_radiance_ = use_raytracing_ || (use_clamp_direct_ || use_clamp_indirect_);
-  use_feedback_output_ = use_raytracing_ && (!is_last_pass || use_screen_reflection_);
+  use_feedback_output_ = (use_raytracing_ || is_layer_refracted) &&
+                         (!is_last_pass || use_screen_reflection_);
 
   {
     RenderBuffersInfoData &rbuf_data = inst_.render_buffers.data;
@@ -588,6 +595,10 @@ void DeferredLayer::end_sync(bool is_first_pass, bool is_last_pass)
                               GPU_ATTACHMENT_IGNORE,
                               GPU_ATTACHMENT_IGNORE});
       sub.shader_set(sh);
+      if (GPU_stencil_clasify_buffer_workaround()) {
+        /* Binding any buffer to satisfy the binding. The buffer is not actually used. */
+        sub.bind_ssbo("dummy_workaround_buf", &inst_.film.aovs_info);
+      }
       sub.state_set(DRW_STATE_WRITE_STENCIL | DRW_STATE_STENCIL_ALWAYS);
       if (GPU_stencil_export_support()) {
         /* The shader sets the stencil directly in one full-screen pass. */
@@ -890,8 +901,8 @@ void DeferredPipeline::begin_sync()
 
 void DeferredPipeline::end_sync()
 {
-  opaque_layer_.end_sync(true, refraction_layer_.is_empty());
-  refraction_layer_.end_sync(opaque_layer_.is_empty(), true);
+  opaque_layer_.end_sync(true, refraction_layer_.is_empty(), refraction_layer_.has_transmission());
+  refraction_layer_.end_sync(opaque_layer_.is_empty(), true, false);
 
   debug_pass_sync();
 }
@@ -927,10 +938,10 @@ void DeferredPipeline::debug_draw(draw::View &view, GPUFrameBuffer *combined_fb)
 
   switch (inst.debug_mode) {
     case eDebugMode::DEBUG_GBUFFER_EVALUATION:
-      inst.info = "Debug Mode: Deferred Lighting Cost";
+      inst.info_append("Debug Mode: Deferred Lighting Cost");
       break;
     case eDebugMode::DEBUG_GBUFFER_STORAGE:
-      inst.info = "Debug Mode: Gbuffer Storage Cost";
+      inst.info_append("Debug Mode: Gbuffer Storage Cost");
       break;
     default:
       /* Nothing to display. */
@@ -1176,6 +1187,7 @@ VolumeObjectBounds::VolumeObjectBounds(const Camera &camera, Object *ob)
 
 VolumeLayer *VolumePipeline::register_and_get_layer(Object *ob)
 {
+  /* TODO(fclem): This is against design. Sync shouldn't depend on view properties (camera). */
   VolumeObjectBounds object_bounds(inst_.camera, ob);
   object_integration_range_ = bounds::merge(object_integration_range_, object_bounds.z_range);
 

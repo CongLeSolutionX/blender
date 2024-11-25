@@ -17,7 +17,6 @@ struct Depsgraph;
 struct Main;
 struct Object;
 struct Scene;
-struct SculptSession;
 namespace blender::ed::sculpt_paint::undo {
 struct StepData;
 }
@@ -45,7 +44,7 @@ void disable_with_undo(Main &bmain, Depsgraph &depsgraph, Scene &scene, Object &
  * Others, like smooth, are better without.
  * Same goes for alt-key smoothing.
  */
-bool stroke_is_dyntopo(const SculptSession &ss, const Brush &brush);
+bool stroke_is_dyntopo(const Object &object, const Brush &brush);
 
 void triangulate(BMesh *bm);
 

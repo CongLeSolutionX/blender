@@ -9,41 +9,67 @@
 #pragma once
 
 #include "BKE_constraint.h"
-
+#include "DEG_depsgraph_query.hh"
 #include "DNA_constraint_types.h"
 #include "DNA_gpencil_modifier_types.h"
 #include "DNA_modifier_types.h"
+#include "DNA_rigidbody_types.h"
 
-#include "overlay_next_private.hh"
+#include "overlay_next_base.hh"
 
 namespace blender::draw::overlay {
 
-class Relations {
+/**
+ * Display object relations as dashed lines.
+ * Covers parenting relationships and constraints.
+ */
+class Relations : Overlay {
 
  private:
   PassSimple ps_ = {"Relations"};
 
-  LinePrimitiveBuf relations_buf_ = {SelectionType::DISABLED, "relations_buf_"};
-  PointPrimitiveBuf points_buf_ = {SelectionType::DISABLED, "points_buf_"};
+  LinePrimitiveBuf relations_buf_;
+  PointPrimitiveBuf points_buf_;
 
  public:
-  void begin_sync()
+  Relations(SelectionType selection_type)
+      : relations_buf_(selection_type, "relations_buf_"),
+        points_buf_(selection_type, "points_buf_")
   {
+  }
+
+  void begin_sync(Resources &res, const State &state) final
+  {
+    enabled_ = state.is_space_v3d();
+    enabled_ &= (state.v3d_flag & V3D_HIDE_HELPLINES) == 0;
+    enabled_ &= !res.is_selection();
+
     points_buf_.clear();
     relations_buf_.clear();
   }
 
-  void object_sync(const ObjectRef &ob_ref, Resources &res, const State &state)
+  void object_sync(Manager & /*manager*/,
+                   const ObjectRef &ob_ref,
+                   Resources &res,
+                   const State &state) final
   {
+    if (!enabled_) {
+      return;
+    }
+
+    /* Don't show object extras in set's. */
+    if (is_from_dupli_or_set(ob_ref)) {
+      return;
+    }
+
     Object *ob = ob_ref.object;
     const float4 &relation_color = res.theme_settings.color_wire;
     const float4 &constraint_color = res.theme_settings.color_grid_axis_z; /* ? */
-    const select::ID select_id = res.select_id(ob_ref);
 
     if (ob->parent && (DRW_object_visibility_in_active_context(ob->parent) & OB_VISIBLE_SELF)) {
       const float3 &parent_pos = ob->runtime->parent_display_origin;
-      relations_buf_.append(
-          parent_pos, ob->object_to_world().location(), relation_color, select_id);
+      /* Reverse order to have less stipple overlap. */
+      relations_buf_.append(ob->object_to_world().location(), parent_pos, relation_color);
     }
 
     /* Drawing the hook lines. */
@@ -149,29 +175,39 @@ class Relations {
     }
   }
 
-  void end_sync(Resources &res, const State &state)
+  void end_sync(Resources &res, const ShapeCache & /*shapes*/, const State &state) final
   {
+    if (!enabled_) {
+      return;
+    }
+
     ps_.init();
+    ps_.bind_ubo(OVERLAY_GLOBALS_SLOT, &res.globals_buf);
+    res.select_bind(ps_);
     {
       PassSimple::Sub &sub_pass = ps_.sub("lines");
       sub_pass.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH |
-                         DRW_STATE_DEPTH_LESS_EQUAL | state.clipping_state);
+                             DRW_STATE_DEPTH_LESS_EQUAL,
+                         state.clipping_plane_count);
       sub_pass.shader_set(res.shaders.extra_wire.get());
-      sub_pass.bind_ubo("globalsBlock", &res.globals_buf);
       relations_buf_.end_sync(sub_pass);
     }
     {
       PassSimple::Sub &sub_pass = ps_.sub("loose_points");
       sub_pass.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH |
-                         DRW_STATE_DEPTH_LESS_EQUAL | state.clipping_state);
+                             DRW_STATE_DEPTH_LESS_EQUAL,
+                         state.clipping_plane_count);
       sub_pass.shader_set(res.shaders.extra_loose_points.get());
-      sub_pass.bind_ubo("globalsBlock", &res.globals_buf);
       points_buf_.end_sync(sub_pass);
     }
   }
 
-  void draw(Framebuffer &framebuffer, Manager &manager, View &view)
+  void draw_line(Framebuffer &framebuffer, Manager &manager, View &view) final
   {
+    if (!enabled_) {
+      return;
+    }
+
     GPU_framebuffer_bind(framebuffer);
     manager.submit(ps_, view);
   }

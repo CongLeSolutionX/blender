@@ -22,8 +22,8 @@
 #include "BKE_modifier.hh"
 #include "BKE_object.hh"
 #include "BKE_paint.hh"
+#include "BKE_paint_bvh.hh"
 #include "BKE_particle.h"
-#include "BKE_pbvh_api.hh"
 #include "BKE_pointcache.h"
 #include "BKE_scene.hh"
 
@@ -65,7 +65,7 @@ void enable_ex(Main &bmain, Depsgraph &depsgraph, Object &ob)
   Mesh *mesh = static_cast<Mesh *>(ob.data);
   const BMAllocTemplate allocsize = BMALLOC_TEMPLATE_FROM_ME(mesh);
 
-  BKE_sculptsession_free_pbvh(&ss);
+  BKE_sculptsession_free_pbvh(ob);
 
   /* Dynamic topology doesn't ensure selection state is valid, so remove #36280. */
   BKE_mesh_mselect_clear(mesh);
@@ -119,7 +119,7 @@ static void disable(
     BM_data_layer_free_named(bm, &bm->pdata, ".sculpt_dyntopo_node_id_face");
   }
 
-  BKE_sculptsession_free_pbvh(&ss);
+  BKE_sculptsession_free_pbvh(ob);
 
   if (undo_step) {
     undo::restore_from_bmesh_enter_geometry(*undo_step, *mesh);
@@ -173,7 +173,7 @@ void disable_with_undo(Main &bmain, Depsgraph &depsgraph, Scene &scene, Object &
     /* May be false in background mode. */
     const bool use_undo = G.background ? (ED_undo_stack_get() != nullptr) : true;
     if (use_undo) {
-      undo::push_begin_ex(ob, "Dynamic topology disable");
+      undo::push_begin_ex(scene, ob, "Dynamic topology disable");
       undo::push_node(depsgraph, ob, nullptr, undo::Type::DyntopoEnd);
     }
     disable(bmain, depsgraph, scene, ob, nullptr);
@@ -183,14 +183,14 @@ void disable_with_undo(Main &bmain, Depsgraph &depsgraph, Scene &scene, Object &
   }
 }
 
-static void enable_with_undo(Main &bmain, Depsgraph &depsgraph, Object &ob)
+static void enable_with_undo(Main &bmain, Depsgraph &depsgraph, const Scene &scene, Object &ob)
 {
   SculptSession &ss = *ob.sculpt;
   if (ss.bm == nullptr) {
     /* May be false in background mode. */
     const bool use_undo = G.background ? (ED_undo_stack_get() != nullptr) : true;
     if (use_undo) {
-      undo::push_begin_ex(ob, "Dynamic topology enable");
+      undo::push_begin_ex(scene, ob, "Dynamic topology enable");
     }
     enable_ex(bmain, depsgraph, ob);
     if (use_undo) {
@@ -214,7 +214,7 @@ static int sculpt_dynamic_topology_toggle_exec(bContext *C, wmOperator * /*op*/)
     disable_with_undo(bmain, depsgraph, scene, ob);
   }
   else {
-    enable_with_undo(bmain, depsgraph, ob);
+    enable_with_undo(bmain, depsgraph, scene, ob);
   }
 
   WM_cursor_wait(false);

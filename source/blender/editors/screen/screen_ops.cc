@@ -12,6 +12,7 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "BLI_build_config.h"
 #include "BLI_math_rotation.h"
 #include "BLI_math_vector.h"
 #include "BLI_utildefines.h"
@@ -256,7 +257,7 @@ bool ED_operator_region_gizmo_active(bContext *C)
   if (region == nullptr) {
     return false;
   }
-  wmGizmoMap *gzmap = region->gizmo_map;
+  wmGizmoMap *gzmap = region->runtime->gizmo_map;
   if (gzmap == nullptr) {
     return false;
   }
@@ -785,7 +786,7 @@ static bool azone_clipped_rect_calc(const AZone *az, rcti *r_rect_clip)
   if (az->type == AZONE_REGION) {
     if (region->overlap && (region->v2d.keeptot != V2D_KEEPTOT_STRICT) &&
         /* Only when this isn't hidden (where it's displayed as an button that expands). */
-        region->visible)
+        region->runtime->visible)
     {
       /* A floating region to be resized, clip by the visible region. */
       switch (az->edge) {
@@ -824,7 +825,7 @@ static bool azone_clipped_rect_calc(const AZone *az, rcti *r_rect_clip)
 }
 
 /* Return the azone's calculated rect. */
-static void area_actionzone_get_rect(AZone *az, rcti *rect)
+static void area_actionzone_get_rect(AZone *az, rcti *r_rect)
 {
   if (az->type == AZONE_REGION_SCROLL) {
     const bool is_horizontal = az->direction == AZ_SCROLL_HOR;
@@ -836,13 +837,13 @@ static void area_actionzone_get_rect(AZone *az, rcti *rect)
     /* For scroll azones use the area around the region's scroll-bar location. */
     rcti scroller_vert = is_horizontal ? az->region->v2d.hor : az->region->v2d.vert;
     BLI_rcti_translate(&scroller_vert, az->region->winrct.xmin, az->region->winrct.ymin);
-    rect->xmin = scroller_vert.xmin - (is_right ? V2D_SCROLL_HIDE_HEIGHT : 0);
-    rect->ymin = scroller_vert.ymin - (is_top ? V2D_SCROLL_HIDE_WIDTH : 0);
-    rect->xmax = scroller_vert.xmax + (is_left ? V2D_SCROLL_HIDE_HEIGHT : 0);
-    rect->ymax = scroller_vert.ymax + (is_botton ? V2D_SCROLL_HIDE_WIDTH : 0);
+    r_rect->xmin = scroller_vert.xmin - (is_right ? V2D_SCROLL_HIDE_HEIGHT : 0);
+    r_rect->ymin = scroller_vert.ymin - (is_top ? V2D_SCROLL_HIDE_WIDTH : 0);
+    r_rect->xmax = scroller_vert.xmax + (is_left ? V2D_SCROLL_HIDE_HEIGHT : 0);
+    r_rect->ymax = scroller_vert.ymax + (is_botton ? V2D_SCROLL_HIDE_WIDTH : 0);
   }
   else {
-    azone_clipped_rect_calc(az, rect);
+    azone_clipped_rect_calc(az, r_rect);
   }
 }
 
@@ -865,7 +866,7 @@ static AZone *area_actionzone_refresh_xy(ScrArea *area, const int xy[2], const b
         /* Respect button sections: Clusters of buttons (separated using separator-spacers) are
          * drawn with a background, in-between them the region is fully transparent (if "Region
          * Overlap" is enabled). Only allow dragging visible edges, so at the button sections. */
-        if (region->visible && region->overlap &&
+        if (region->runtime->visible && region->overlap &&
             (region->flag & RGN_FLAG_RESIZE_RESPECT_BUTTON_SECTIONS) &&
             !UI_region_button_sections_is_inside_x(az->region, local_xy[0]))
         {
@@ -917,7 +918,7 @@ static AZone *area_actionzone_refresh_xy(ScrArea *area, const int xy[2], const b
           break;
         }
       }
-      else if (az->type == AZONE_REGION_SCROLL && az->region->visible) {
+      else if (az->type == AZONE_REGION_SCROLL && az->region->runtime->visible) {
         /* If the region is not visible we can ignore this scroll-bar zone. */
         ARegion *region = az->region;
         View2D *v2d = &region->v2d;
@@ -987,7 +988,7 @@ static AZone *area_actionzone_refresh_xy(ScrArea *area, const int xy[2], const b
         area->flag &= ~AREA_FLAG_ACTIONZONES_UPDATE;
         ED_area_tag_redraw_no_rebuild(area);
       }
-      else if (az->type == AZONE_REGION_SCROLL && az->region->visible) {
+      else if (az->type == AZONE_REGION_SCROLL && az->region->runtime->visible) {
         /* If the region is not visible we can ignore this scroll-bar zone. */
         if (az->direction == AZ_SCROLL_VERT) {
           az->alpha = az->region->v2d.alpha_vert = 0;
@@ -1105,7 +1106,7 @@ static int actionzone_invoke(bContext *C, wmOperator *op, const wmEvent *event)
     return OPERATOR_FINISHED;
   }
 
-  if (U.experimental.use_docking && sad->az->type == AZONE_AREA && sad->modifier == 0) {
+  if (sad->az->type == AZONE_AREA && sad->modifier == 0) {
     actionzone_apply(C, op, sad->az->type);
     actionzone_exit(op);
     return OPERATOR_FINISHED;
@@ -1207,7 +1208,12 @@ static int actionzone_modal(bContext *C, wmOperator *op, const wmEvent *event)
           }
         }
         else {
-          WM_cursor_set(win, WM_CURSOR_CROSS);
+#if defined(__APPLE__)
+          const int cursor = WM_CURSOR_HAND_CLOSED;
+#else
+          const int cursor = WM_CURSOR_MOVE;
+#endif
+          WM_cursor_set(win, cursor);
           is_gesture = false;
         }
       }
@@ -1650,6 +1656,8 @@ struct sAreaMoveData {
   int bigger, smaller, origval, step;
   eScreenAxis dir_axis;
   AreaMoveSnapType snap_type;
+  bScreen *screen;
+  void *draw_callback; /* Call #screen_draw_move_highlight */
 };
 
 /* helper call to move area-edge, sets limits
@@ -1752,6 +1760,13 @@ static void area_move_set_limits(wmWindow *win,
   }
 }
 
+static void area_move_draw_cb(const wmWindow * /*win*/, void *userdata)
+{
+  const wmOperator *op = static_cast<const wmOperator *>(userdata);
+  const sAreaMoveData *md = static_cast<sAreaMoveData *>(op->customdata);
+  screen_draw_move_highlight(md->screen, md->dir_axis);
+}
+
 /* validate selection inside screen, set variables OK */
 /* return false: init failed */
 static bool area_move_init(bContext *C, wmOperator *op)
@@ -1794,6 +1809,9 @@ static bool area_move_init(bContext *C, wmOperator *op)
 
   md->snap_type = use_bigger_smaller_snap ? SNAP_BIGGER_SMALLER_ONLY : SNAP_AREAGRID;
 
+  md->screen = screen;
+  md->draw_callback = WM_draw_cb_activate(CTX_wm_window(C), area_move_draw_cb, op);
+
   return true;
 }
 
@@ -1813,13 +1831,22 @@ static int area_snap_calc_location(const bScreen *screen,
   // const int axis_max = axis_min + m_span;
 
   switch (snap_type) {
-    case SNAP_AREAGRID:
+    case SNAP_AREAGRID: {
       m_cursor_final = m_cursor;
       if (!ELEM(delta, bigger, -smaller)) {
         m_cursor_final -= (m_cursor % AREAGRID);
         CLAMP(m_cursor_final, origval - smaller, origval + bigger);
       }
-      break;
+
+      /* Slight snap to vertical minimum and maximum. */
+      const int snap_threshold = int(float(ED_area_headersize()) * 0.6f);
+      if (m_cursor_final < (m_min + snap_threshold)) {
+        m_cursor_final = m_min;
+      }
+      else if (m_cursor_final > (origval + bigger - snap_threshold)) {
+        m_cursor_final = origval + bigger;
+      }
+    } break;
 
     case SNAP_BIGGER_SMALLER_ONLY:
       m_cursor_final = (m_cursor >= bigger) ? bigger : smaller;
@@ -1983,6 +2010,11 @@ static void area_move_apply(bContext *C, wmOperator *op)
 
 static void area_move_exit(bContext *C, wmOperator *op)
 {
+  sAreaMoveData *md = static_cast<sAreaMoveData *>(op->customdata);
+  if (md->draw_callback) {
+    WM_draw_cb_exit(CTX_wm_window(C), md->draw_callback);
+  }
+
   MEM_SAFE_FREE(op->customdata);
 
   /* this makes sure aligned edges will result in aligned grabbing */
@@ -2014,10 +2046,12 @@ static int area_move_invoke(bContext *C, wmOperator *op, const wmEvent *event)
     return OPERATOR_PASS_THROUGH;
   }
 
+  sAreaMoveData *md = static_cast<sAreaMoveData *>(op->customdata);
+
   WorkspaceStatus status(C);
   status.item(IFACE_("Confirm"), ICON_MOUSE_LMB);
   status.item(IFACE_("Cancel"), ICON_EVENT_ESC);
-  status.item(IFACE_("Snap"), ICON_EVENT_CTRL);
+  status.item_bool(IFACE_("Snap"), md->snap_type == SNAP_FRACTION_AND_ADJACENT, ICON_EVENT_CTRL);
 
   /* add temp handler */
   G.moving |= G_TRANSFORM_WM;
@@ -2050,6 +2084,10 @@ static int area_move_modal(bContext *C, wmOperator *op, const wmEvent *event)
 
       area_move_apply(C, op);
       break;
+    }
+    case RIGHTMOUSE: {
+      area_move_cancel(C, op);
+      return OPERATOR_CANCELLED;
     }
     case EVT_MODAL_MAP: {
       switch (event->val) {
@@ -2927,8 +2965,9 @@ static int region_scale_modal(bContext *C, wmOperator *op, const wmEvent *event)
          * check for and respect the max-width too. */
         CLAMP(rmd->region->sizex, 0, rmd->maxsize);
 
-        if (rmd->region->type->snap_size) {
-          short sizex_test = rmd->region->type->snap_size(rmd->region, rmd->region->sizex, 0);
+        if (rmd->region->runtime->type->snap_size) {
+          short sizex_test = rmd->region->runtime->type->snap_size(
+              rmd->region, rmd->region->sizex, 0);
           if ((abs(rmd->region->sizex - sizex_test) < snap_size_threshold) &&
               /* Don't snap to a new size if that would exceed the maximum width. */
               sizex_test <= rmd->maxsize)
@@ -2972,8 +3011,9 @@ static int region_scale_modal(bContext *C, wmOperator *op, const wmEvent *event)
          * check for and respect the max-height too. */
         CLAMP(rmd->region->sizey, 0, rmd->maxsize);
 
-        if (rmd->region->type->snap_size) {
-          short sizey_test = rmd->region->type->snap_size(rmd->region, rmd->region->sizey, 1);
+        if (rmd->region->runtime->type->snap_size) {
+          short sizey_test = rmd->region->runtime->type->snap_size(
+              rmd->region, rmd->region->sizey, 1);
           if ((abs(rmd->region->sizey - sizey_test) < snap_size_threshold) &&
               /* Don't snap to a new size if that would exceed the maximum height. */
               (sizey_test <= rmd->maxsize))
@@ -3005,8 +3045,8 @@ static int region_scale_modal(bContext *C, wmOperator *op, const wmEvent *event)
           size_changed = true;
         }
       }
-      if (size_changed && rmd->region->type->on_user_resize) {
-        rmd->region->type->on_user_resize(rmd->region);
+      if (size_changed && rmd->region->runtime->type->on_user_resize) {
+        rmd->region->runtime->type->on_user_resize(rmd->region);
       }
       ED_area_tag_redraw(rmd->area);
       WM_event_add_notifier(C, NC_SCREEN | NA_EDITED, nullptr);
@@ -3598,7 +3638,7 @@ static void area_join_dock_cb(const wmWindow * /*win*/, void *userdata)
 
 static void area_join_dock_cb_window(sAreaJoinData *jd, wmOperator *op)
 {
-  if (jd->sa2 && jd->win2 != jd->draw_dock_win) {
+  if (jd->sa2 && jd->win2 && jd->win2 != jd->draw_dock_win) {
     /* Change of highlight window. */
     if (jd->draw_dock_callback) {
       WM_draw_cb_exit(jd->draw_dock_win, jd->draw_dock_callback);
@@ -3622,11 +3662,20 @@ static bool area_join_init(bContext *C, wmOperator *op, ScrArea *sa1, ScrArea *s
 {
   if (sa1 == nullptr && sa2 == nullptr) {
     /* Get areas from cursor location if not specified. */
+    PropertyRNA *prop;
     int cursor[2];
-    RNA_int_get_array(op->ptr, "source_xy", cursor);
-    sa1 = BKE_screen_find_area_xy(CTX_wm_screen(C), SPACE_TYPE_ANY, cursor);
-    RNA_int_get_array(op->ptr, "target_xy", cursor);
-    sa2 = BKE_screen_find_area_xy(CTX_wm_screen(C), SPACE_TYPE_ANY, cursor);
+
+    prop = RNA_struct_find_property(op->ptr, "source_xy");
+    if (RNA_property_is_set(op->ptr, prop)) {
+      RNA_property_int_get_array(op->ptr, prop, cursor);
+      sa1 = BKE_screen_find_area_xy(CTX_wm_screen(C), SPACE_TYPE_ANY, cursor);
+    }
+
+    prop = RNA_struct_find_property(op->ptr, "target_xy");
+    if (RNA_property_is_set(op->ptr, prop)) {
+      RNA_property_int_get_array(op->ptr, prop, cursor);
+      sa2 = BKE_screen_find_area_xy(CTX_wm_screen(C), SPACE_TYPE_ANY, cursor);
+    }
   }
   if (sa1 == nullptr) {
     return false;
@@ -3744,38 +3793,24 @@ static int area_join_invoke(bContext *C, wmOperator *op, const wmEvent *event)
     return OPERATOR_RUNNING_MODAL;
   }
 
-  if (U.experimental.use_docking) {
-    /* Launched from menu item or keyboard shortcut. */
-    if (!area_join_init(C, op, nullptr, nullptr)) {
-      ScrArea *sa1 = CTX_wm_area(C);
-      if (!sa1 || ED_area_is_global(sa1) || !area_join_init(C, op, sa1, nullptr)) {
-        return OPERATOR_CANCELLED;
-      }
-    }
-    sAreaJoinData *jd = (sAreaJoinData *)op->customdata;
-    jd->sa2 = jd->sa1;
-    jd->start_x = jd->sa1->totrct.xmin;
-    jd->start_y = jd->sa1->totrct.ymax;
-    jd->current_x = event->xy[0];
-    jd->current_y = event->xy[1];
-    jd->draw_callback = WM_draw_cb_activate(CTX_wm_window(C), area_join_draw_cb, op);
-    WM_cursor_set(jd->win1, area_join_cursor(jd, event));
-    area_join_update_data(C, jd, event);
-    area_join_dock_cb_window(jd, op);
-    WM_event_add_notifier(C, NC_WINDOW, nullptr);
-    WM_event_add_modal_handler(C, op);
-    return OPERATOR_RUNNING_MODAL;
-  }
-
-  /* With docking turned off. */
+  /* Launched from menu item or keyboard shortcut. */
   if (!area_join_init(C, op, nullptr, nullptr)) {
-    return OPERATOR_CANCELLED;
+    ScrArea *sa1 = CTX_wm_area(C);
+    if (!sa1 || ED_area_is_global(sa1) || !area_join_init(C, op, sa1, nullptr)) {
+      return OPERATOR_CANCELLED;
+    }
   }
   sAreaJoinData *jd = (sAreaJoinData *)op->customdata;
-  jd->start_x = event->xy[0];
-  jd->start_y = event->xy[1];
+  jd->sa2 = jd->sa1;
+  jd->start_x = jd->sa1->totrct.xmin;
+  jd->start_y = jd->sa1->totrct.ymax;
+  jd->current_x = event->xy[0];
+  jd->current_y = event->xy[1];
   jd->draw_callback = WM_draw_cb_activate(CTX_wm_window(C), area_join_draw_cb, op);
-
+  WM_cursor_set(jd->win1, area_join_cursor(jd, event));
+  area_join_update_data(C, jd, event);
+  area_join_dock_cb_window(jd, op);
+  WM_event_add_notifier(C, NC_WINDOW, nullptr);
   WM_event_add_modal_handler(C, op);
   return OPERATOR_RUNNING_MODAL;
 }
@@ -3794,7 +3829,7 @@ void static area_docking_apply(bContext *C, wmOperator *op)
   bool same_area = (jd->sa1 == jd->sa2);
 
   if (!(jd->dock_target == AreaDockTarget::Center)) {
-    eScreenAxis dir = (ELEM(jd->dock_target, AreaDockTarget::Left, AreaDockTarget::Right)) ?
+    eScreenAxis dir = ELEM(jd->dock_target, AreaDockTarget::Left, AreaDockTarget::Right) ?
                           SCREEN_AXIS_V :
                           SCREEN_AXIS_H;
 
@@ -3808,6 +3843,10 @@ void static area_docking_apply(bContext *C, wmOperator *op)
 
     if (jd->factor <= 0.5f) {
       jd->sa2 = newa;
+    }
+    else {
+      /* Force full rebuild. #130732 */
+      ED_area_tag_redraw(newa);
     }
   }
 
@@ -3836,7 +3875,7 @@ void static area_docking_apply(bContext *C, wmOperator *op)
 
 static int area_join_cursor(sAreaJoinData *jd, const wmEvent *event)
 {
-  if (!jd->sa2 && jd->dock_target == AreaDockTarget::None && U.experimental.use_docking) {
+  if (!jd->sa2 && jd->dock_target == AreaDockTarget::None) {
     /* Mouse outside window, so can open new window. */
     if (event->xy[0] < 0 || event->xy[0] > jd->win1->sizex || event->xy[1] < 1 ||
         event->xy[1] > jd->win1->sizey)
@@ -3846,7 +3885,14 @@ static int area_join_cursor(sAreaJoinData *jd, const wmEvent *event)
     return WM_CURSOR_STOP;
   }
 
-  if (jd->sa1 && jd->sa1 == jd->sa2 && U.experimental.use_docking) {
+  if (jd->win2 && jd->win2->workspace_hook) {
+    bScreen *screen = BKE_workspace_active_screen_get(jd->win2->workspace_hook);
+    if (screen && screen->temp) {
+      return WM_CURSOR_STOP;
+    }
+  }
+
+  if (jd->sa1 && jd->sa1 == jd->sa2) {
     if (jd->split_fac >= 0.0001f) {
       /* Mouse inside source area, so allow splitting. */
       return (jd->split_dir == SCREEN_AXIS_V) ? WM_CURSOR_V_SPLIT : WM_CURSOR_H_SPLIT;
@@ -3854,33 +3900,15 @@ static int area_join_cursor(sAreaJoinData *jd, const wmEvent *event)
     return WM_CURSOR_EDIT;
   }
 
-  if (jd->dock_target == AreaDockTarget::None) {
-    if (U.experimental.use_docking) {
-      return WM_CURSOR_NONE;
-    }
-    else {
-      if (jd->dir == SCREEN_DIR_N) {
-        return WM_CURSOR_N_ARROW;
-      }
-      if (jd->dir == SCREEN_DIR_S) {
-        return WM_CURSOR_S_ARROW;
-      }
-      if (jd->dir == SCREEN_DIR_W) {
-        return WM_CURSOR_W_ARROW;
-      }
-      if (jd->dir == SCREEN_DIR_E) {
-        return WM_CURSOR_E_ARROW;
-      }
-    }
+  if (jd->dir != SCREEN_DIR_NONE || jd->dock_target != AreaDockTarget::None) {
+#if defined(__APPLE__)
+    return WM_CURSOR_HAND_CLOSED;
+#else
+    return WM_CURSOR_MOVE;
+#endif
   }
 
-  if (U.experimental.use_docking &&
-      (jd->dir != SCREEN_DIR_NONE || jd->dock_target != AreaDockTarget::None))
-  {
-    return WM_CURSOR_NONE;
-  }
-
-  return U.experimental.use_docking ? WM_CURSOR_PICK_AREA : WM_CURSOR_STOP;
+  return WM_CURSOR_PICK_AREA;
 }
 
 static float area_docking_snap(const float pos, const wmEvent *event)
@@ -3926,12 +3954,19 @@ static float area_docking_snap(const float pos, const wmEvent *event)
 
 static AreaDockTarget area_docking_target(sAreaJoinData *jd, const wmEvent *event)
 {
-  if (!U.experimental.use_docking || !jd->sa2 || !jd->win2) {
+  if (!jd->sa2 || !jd->win2) {
     return AreaDockTarget::None;
   }
 
   if (jd->sa1 == jd->sa2) {
     return AreaDockTarget::None;
+  }
+
+  if (jd->win2 && jd->win2->workspace_hook) {
+    bScreen *screen = BKE_workspace_active_screen_get(jd->win2->workspace_hook);
+    if (screen && screen->temp) {
+      return AreaDockTarget::None;
+    }
   }
 
   /* Convert to local coordinates in sa2. */
@@ -3981,14 +4016,35 @@ static AreaDockTarget area_docking_target(sAreaJoinData *jd, const wmEvent *even
   jd->dir = SCREEN_DIR_NONE;
   jd->factor = 0.5f;
 
+  const float min_fac_x = 1.5f * AREAMINX * UI_SCALE_FAC / float(jd->sa2->winx);
+  const float min_fac_y = 1.5f * HEADERY * UI_SCALE_FAC / float(jd->sa2->winy);
+
   /* if the area is narrow then there are only two docking targets. */
-  if (jd->sa2->winx < min_x) {
-    jd->factor = area_docking_snap(float(y) / float(jd->sa2->winy), event);
-    return (y < jd->sa2->winy / 2) ? AreaDockTarget::Bottom : AreaDockTarget::Top;
+  if (jd->sa2->winx < (min_x * 3)) {
+    if (fac_y > 0.4f && fac_y < 0.6f) {
+      return AreaDockTarget::Center;
+    }
+    if (float(y) > float(jd->sa2->winy) / 2.0f) {
+      jd->factor = area_docking_snap(std::max(1.0f - fac_y, min_fac_y), event);
+      return AreaDockTarget::Top;
+    }
+    else {
+      jd->factor = area_docking_snap(std::max(fac_y, min_fac_y), event);
+      return AreaDockTarget::Bottom;
+    }
   }
-  if (jd->sa2->winy < min_y) {
-    jd->factor = area_docking_snap(float(x) / float(jd->sa2->winx), event);
-    return (x < jd->sa2->winx / 2) ? AreaDockTarget::Left : AreaDockTarget::Right;
+  if (jd->sa2->winy < (min_y * 3)) {
+    if (fac_x > 0.4f && fac_x < 0.6f) {
+      return AreaDockTarget::Center;
+    }
+    if (float(x) > float(jd->sa2->winx) / 2.0f) {
+      jd->factor = area_docking_snap(std::max(1.0f - fac_x, min_fac_x), event);
+      return AreaDockTarget::Right;
+    }
+    else {
+      jd->factor = area_docking_snap(std::max(fac_x, min_fac_x), event);
+      return AreaDockTarget::Left;
+    }
   }
 
   /* Are we in the center? But not in same area! */
@@ -4004,19 +4060,19 @@ static AreaDockTarget area_docking_target(sAreaJoinData *jd, const wmEvent *even
   const bool lower_left = float(x) / float(jd->sa2->winy - y + 1) < area_ratio;
 
   if (upper_left && !lower_left) {
-    jd->factor = area_docking_snap(1.0f - float(y) / float(jd->sa2->winy), event);
+    jd->factor = area_docking_snap(std::max(1.0f - fac_y, min_fac_y), event);
     return AreaDockTarget::Top;
   }
   if (!upper_left && lower_left) {
-    jd->factor = area_docking_snap(float(y) / float(jd->sa2->winy), event);
+    jd->factor = area_docking_snap(std::max(fac_y, min_fac_y), event);
     return AreaDockTarget::Bottom;
   }
   if (upper_left && lower_left) {
-    jd->factor = area_docking_snap(float(x) / float(jd->sa2->winx), event);
+    jd->factor = area_docking_snap(std::max(fac_x, min_fac_x), event);
     return AreaDockTarget::Left;
   }
   if (!upper_left && !lower_left) {
-    jd->factor = area_docking_snap(1.0f - float(x) / float(jd->sa2->winx), event);
+    jd->factor = area_docking_snap(std::max(1.0f - fac_x, min_fac_x), event);
     return AreaDockTarget::Right;
   }
   return AreaDockTarget::None;
@@ -4052,13 +4108,59 @@ static float area_split_factor(bContext *C, sAreaJoinData *jd, const wmEvent *ev
     /* Use nearest neighbor or fractional, whichever is closest. */
     fac = (fabs(near_fac - fac) < fabs(frac_fac - fac)) ? near_fac : frac_fac;
   }
+  else {
+    /* Slight snap to center when no modifiers are held. */
+    if (fac >= 0.48f && fac < 0.5f) {
+      fac = 0.499999f;
+    }
+    else if (fac >= 0.5f && fac < 0.52f) {
+      fac = 0.500001f;
+    }
+  }
 
-  return std::clamp(fac, 0.001f, 0.999f);
+  /* Don't allow a new area to be created that is very small. */
+  const float min_size = float(2.0f * ED_area_headersize());
+  const float min_fac = min_size / ((jd->split_dir == SCREEN_AXIS_V) ? float(jd->sa1->winx + 1) :
+                                                                       float(jd->sa1->winy + 1));
+  if (min_fac < 0.5f) {
+    return std::clamp(fac, min_fac, 1.0f - min_fac);
+  }
+  else {
+    return 0.5f;
+  }
+
+  return fac;
 }
 
 static void area_join_update_data(bContext *C, sAreaJoinData *jd, const wmEvent *event)
 {
-  ScrArea *area = ED_area_find_under_cursor(C, SPACE_TYPE_ANY, event->xy);
+  ScrArea *area = nullptr;
+
+  /* TODO: The following is needed until we have linux-specific implementations of
+   * getWindowUnderCursor. See #130242. Use active window if there are overlapping. */
+
+#if (OS_WINDOWS || OS_MAC)
+  area = ED_area_find_under_cursor(C, SPACE_TYPE_ANY, event->xy);
+#else
+  int win_count = 0;
+  LISTBASE_FOREACH (wmWindow *, win, &CTX_wm_manager(C)->windows) {
+    int cursor[2];
+    if (wm_cursor_position_get(win, &cursor[0], &cursor[1])) {
+      rcti rect;
+      WM_window_rect_calc(win, &rect);
+      if (BLI_rcti_isect_pt_v(&rect, cursor)) {
+        win_count++;
+      }
+    }
+  }
+
+  if (win_count > 1) {
+    area = BKE_screen_find_area_xy(CTX_wm_screen(C), SPACE_TYPE_ANY, event->xy);
+  }
+  else {
+    area = ED_area_find_under_cursor(C, SPACE_TYPE_ANY, event->xy);
+  }
+#endif
 
   jd->win2 = WM_window_find_by_area(CTX_wm_manager(C), jd->sa2);
   jd->dir = SCREEN_DIR_NONE;
@@ -4066,18 +4168,10 @@ static void area_join_update_data(bContext *C, sAreaJoinData *jd, const wmEvent 
   jd->dir = area_getorientation(jd->sa1, jd->sa2);
   jd->dock_target = area_docking_target(jd, event);
 
-  if (!U.experimental.use_docking && area == jd->sa1) {
-    /* Hovering current source, so change direction. */
-    jd->sa1 = jd->sa2;
-    jd->sa2 = area;
-    jd->dir = area_getorientation(jd->sa1, jd->sa2);
-    return;
-  }
-
   if (jd->sa1 == area) {
     jd->sa2 = area;
-    if (!(abs(jd->start_x - event->xy[0]) > (10 * U.pixelsize) ||
-          abs(jd->start_y - event->xy[1]) > (10 * U.pixelsize)))
+    if (!(abs(jd->start_x - event->xy[0]) > (30 * U.pixelsize) ||
+          abs(jd->start_y - event->xy[1]) > (30 * U.pixelsize)))
     {
       /* We haven't moved enough to start a split. */
       jd->dir = SCREEN_DIR_NONE;
@@ -4092,12 +4186,10 @@ static void area_join_update_data(bContext *C, sAreaJoinData *jd, const wmEvent 
     return;
   }
 
-  if (U.experimental.use_docking) {
-    jd->sa2 = area;
-    jd->win2 = WM_window_find_by_area(CTX_wm_manager(C), jd->sa2);
-    jd->dir = area_getorientation(jd->sa1, jd->sa2);
-    jd->dock_target = area_docking_target(jd, event);
-  }
+  jd->sa2 = area;
+  jd->win2 = WM_window_find_by_area(CTX_wm_manager(C), jd->sa2);
+  jd->dir = area_getorientation(jd->sa1, jd->sa2);
+  jd->dock_target = area_docking_target(jd, event);
 }
 
 static void area_join_cancel(bContext *C, wmOperator *op)
@@ -4110,6 +4202,12 @@ static void area_join_cancel(bContext *C, wmOperator *op)
 /* modal callback while selecting area (space) that will be removed */
 static int area_join_modal(bContext *C, wmOperator *op, const wmEvent *event)
 {
+  if (event->type == WINDEACTIVATE) {
+    /* This operator can close windows, which can cause it to be re-run. */
+    area_join_exit(C, op);
+    return OPERATOR_FINISHED;
+  }
+
   if (op->customdata == nullptr) {
     if (!area_join_init(C, op, nullptr, nullptr)) {
       return OPERATOR_CANCELLED;
@@ -4138,11 +4236,14 @@ static int area_join_modal(bContext *C, wmOperator *op, const wmEvent *event)
       else {
         if (jd->dock_target == AreaDockTarget::None) {
           status.item(IFACE_("Select Area"), ICON_MOUSE_LMB);
+          status.item(IFACE_("Cancel"), ICON_EVENT_ESC);
         }
         else {
           status.item(IFACE_("Select Location"), ICON_MOUSE_LMB);
+          status.item(IFACE_("Cancel"), ICON_EVENT_ESC);
+          status.item_bool(IFACE_("Precision"), event->modifier & KM_ALT, ICON_EVENT_ALT);
+          status.item_bool(IFACE_("Snap"), event->modifier & KM_CTRL, ICON_EVENT_CTRL);
         }
-        status.item(IFACE_("Cancel"), ICON_EVENT_ESC);
       }
       break;
     }
@@ -4152,7 +4253,7 @@ static int area_join_modal(bContext *C, wmOperator *op, const wmEvent *event)
         area_join_dock_cb_window(jd, op);
         ED_area_tag_redraw(jd->sa1);
         ED_area_tag_redraw(jd->sa2);
-        if (U.experimental.use_docking && jd->sa1 && !jd->sa2) {
+        if (jd->sa1 && !jd->sa2) {
           /* Break out into new window if we are really outside the source window bounds. */
           if (event->xy[0] < 0 || event->xy[0] > jd->win1->sizex || event->xy[1] < 1 ||
               event->xy[1] > jd->win1->sizey)
@@ -4206,9 +4307,7 @@ static int area_join_modal(bContext *C, wmOperator *op, const wmEvent *event)
             ED_area_tag_redraw(jd->sa2);
           }
         }
-        else if (U.experimental.use_docking && jd->sa1 && jd->sa2 &&
-                 jd->dock_target != AreaDockTarget::None)
-        {
+        else if (jd->sa1 && jd->sa2 && jd->dock_target != AreaDockTarget::None) {
           /* Dock this to the new location. */
           area_docking_apply(C, op);
         }
@@ -4219,6 +4318,14 @@ static int area_join_modal(bContext *C, wmOperator *op, const wmEvent *event)
         else {
           area_join_cancel(C, op);
           return OPERATOR_CANCELLED;
+        }
+
+        /* Areas changed, update window titles. */
+        if (jd->win2 && jd->win2 != jd->win1) {
+          WM_window_title(CTX_wm_manager(C), jd->win2);
+        }
+        if (jd->win1 && !jd->close_win) {
+          WM_window_title(CTX_wm_manager(C), jd->win1);
         }
 
         const bool do_close_win = jd->close_win;
@@ -4258,7 +4365,7 @@ static void SCREEN_OT_area_join(wmOperatorType *ot)
   ot->cancel = area_join_cancel;
 
   /* flags */
-  ot->flag = OPTYPE_BLOCKING | OPTYPE_INTERNAL;
+  ot->flag = OPTYPE_BLOCKING;
 
   /* rna */
   RNA_def_int_vector(ot->srna,
@@ -4334,25 +4441,10 @@ static int screen_area_options_invoke(bContext *C, wmOperator *op, const wmEvent
   /* Join needs two very similar areas. */
   if (sa1 && sa2) {
     eScreenDir dir = area_getorientation(sa1, sa2);
-    if (!U.experimental.use_docking && dir != SCREEN_DIR_NONE) {
+    if (dir != SCREEN_DIR_NONE) {
       uiItemFullO(layout,
                   "SCREEN_OT_area_join",
-                  IFACE_("Join Areas"),
-                  ICON_AREA_JOIN,
-                  nullptr,
-                  WM_OP_INVOKE_DEFAULT,
-                  UI_ITEM_NONE,
-                  &ptr);
-      RNA_int_set_array(&ptr, "source_xy", blender::int2{sa2->totrct.xmin, sa2->totrct.ymin});
-      RNA_int_set_array(&ptr, "target_xy", blender::int2{sa1->totrct.xmin, sa1->totrct.ymin});
-
-      uiItemS(layout);
-    }
-    else if (U.experimental.use_docking && dir != SCREEN_DIR_NONE) {
-      uiItemFullO(layout,
-                  "SCREEN_OT_area_join",
-                  (ELEM(dir, SCREEN_DIR_N, SCREEN_DIR_S)) ? IFACE_("Join Up") :
-                                                            IFACE_("Join Right"),
+                  ELEM(dir, SCREEN_DIR_N, SCREEN_DIR_S) ? IFACE_("Join Up") : IFACE_("Join Right"),
                   ELEM(dir, SCREEN_DIR_N, SCREEN_DIR_S) ? ICON_AREA_JOIN_UP : ICON_AREA_JOIN,
                   nullptr,
                   WM_OP_EXEC_DEFAULT,
@@ -4364,7 +4456,7 @@ static int screen_area_options_invoke(bContext *C, wmOperator *op, const wmEvent
       uiItemFullO(
           layout,
           "SCREEN_OT_area_join",
-          (ELEM(dir, SCREEN_DIR_N, SCREEN_DIR_S)) ? IFACE_("Join Down") : IFACE_("Join Left"),
+          ELEM(dir, SCREEN_DIR_N, SCREEN_DIR_S) ? IFACE_("Join Down") : IFACE_("Join Left"),
           ELEM(dir, SCREEN_DIR_N, SCREEN_DIR_S) ? ICON_AREA_JOIN_DOWN : ICON_AREA_JOIN_LEFT,
           nullptr,
           WM_OP_EXEC_DEFAULT,
@@ -4609,6 +4701,7 @@ static void view3d_localview_update_rv3d(RegionView3D *rv3d)
 {
   if (rv3d->localvd) {
     rv3d->localvd->view = rv3d->view;
+    rv3d->localvd->view_axis_roll = rv3d->view_axis_roll;
     rv3d->localvd->persp = rv3d->persp;
     copy_qt_qt(rv3d->localvd->viewquat, rv3d->viewquat);
   }
@@ -4932,46 +5025,14 @@ static void screen_area_menu_items(ScrArea *area, uiLayout *layout)
 
   PointerRNA ptr;
 
-  /* Mouse position as if in middle of area. */
-  const int loc[2] = {BLI_rcti_cent_x(&area->totrct), BLI_rcti_cent_y(&area->totrct)};
-
-  if (U.experimental.use_docking) {
-    uiItemFullO(layout,
-                "SCREEN_OT_area_join",
-                IFACE_("Move/Split Area"),
-                ICON_AREA_DOCK,
-                nullptr,
-                WM_OP_INVOKE_DEFAULT,
-                UI_ITEM_NONE,
-                &ptr);
-    RNA_int_set_array(&ptr, "source_xy", loc);
-  }
-  else {
-    /* Vertical Split */
-    uiItemFullO(layout,
-                "SCREEN_OT_area_split",
-                IFACE_("Vertical Split"),
-                ICON_SPLIT_VERTICAL,
-                nullptr,
-                WM_OP_INVOKE_DEFAULT,
-                UI_ITEM_NONE,
-                &ptr);
-
-    RNA_int_set_array(&ptr, "cursor", loc);
-    RNA_enum_set(&ptr, "direction", SCREEN_AXIS_V);
-
-    /* Horizontal Split */
-    uiItemFullO(layout,
-                "SCREEN_OT_area_split",
-                IFACE_("Horizontal Split"),
-                ICON_SPLIT_HORIZONTAL,
-                nullptr,
-                WM_OP_INVOKE_DEFAULT,
-                UI_ITEM_NONE,
-                &ptr);
-    RNA_int_set_array(&ptr, "cursor", &loc[0]);
-    RNA_enum_set(&ptr, "direction", SCREEN_AXIS_H);
-  }
+  uiItemFullO(layout,
+              "SCREEN_OT_area_join",
+              IFACE_("Move/Split Area"),
+              ICON_AREA_DOCK,
+              nullptr,
+              WM_OP_INVOKE_DEFAULT,
+              UI_ITEM_NONE,
+              &ptr);
 
   uiItemS(layout);
 
@@ -5857,7 +5918,7 @@ static std::string userpref_show_get_description(bContext *C,
     int section = RNA_property_enum_get(ptr, prop);
     const char *section_name;
     if (RNA_property_enum_name_gettexted(C, ptr, prop, section, &section_name)) {
-      return fmt::format(TIP_("Show {} preferences"), section_name);
+      return fmt::format(fmt::runtime(TIP_("Show {} preferences")), section_name);
     }
   }
   /* Fallback to default. */
@@ -6114,17 +6175,18 @@ struct RegionAlphaInfo {
 float ED_region_blend_alpha(ARegion *region)
 {
   /* check parent too */
-  if (region->regiontimer == nullptr &&
+  if (region->runtime->regiontimer == nullptr &&
       (region->alignment & (RGN_SPLIT_PREV | RGN_ALIGN_HIDE_WITH_PREV)) && region->prev)
   {
     region = region->prev;
   }
 
-  if (region->regiontimer) {
-    RegionAlphaInfo *rgi = static_cast<RegionAlphaInfo *>(region->regiontimer->customdata);
+  if (region->runtime->regiontimer) {
+    RegionAlphaInfo *rgi = static_cast<RegionAlphaInfo *>(
+        region->runtime->regiontimer->customdata);
     float alpha;
 
-    alpha = float(region->regiontimer->time_duration) / TIMEOUT;
+    alpha = float(region->runtime->regiontimer->time_duration) / TIMEOUT;
     /* makes sure the blend out works 100% - without area redraws */
     if (rgi->hidden) {
       alpha = 0.9f - TIMESTEP - alpha;
@@ -6139,7 +6201,7 @@ float ED_region_blend_alpha(ARegion *region)
 /* assumes region has running region-blend timer */
 static void region_blend_end(bContext *C, ARegion *region, const bool is_running)
 {
-  RegionAlphaInfo *rgi = static_cast<RegionAlphaInfo *>(region->regiontimer->customdata);
+  RegionAlphaInfo *rgi = static_cast<RegionAlphaInfo *>(region->runtime->regiontimer->customdata);
 
   /* always send redraw */
   ED_region_tag_redraw(region);
@@ -6161,8 +6223,8 @@ static void region_blend_end(bContext *C, ARegion *region, const bool is_running
     /* area decoration needs redraw in end */
     ED_area_tag_redraw(rgi->area);
   }
-  WM_event_timer_remove(CTX_wm_manager(C), nullptr, region->regiontimer); /* frees rgi */
-  region->regiontimer = nullptr;
+  WM_event_timer_remove(CTX_wm_manager(C), nullptr, region->runtime->regiontimer); /* frees rgi */
+  region->runtime->regiontimer = nullptr;
 }
 void ED_region_visibility_change_update_animated(bContext *C, ScrArea *area, ARegion *region)
 {
@@ -6170,7 +6232,7 @@ void ED_region_visibility_change_update_animated(bContext *C, ScrArea *area, ARe
   wmWindow *win = CTX_wm_window(C);
 
   /* end running timer */
-  if (region->regiontimer) {
+  if (region->runtime->regiontimer) {
 
     region_blend_end(C, region, true);
   }
@@ -6197,8 +6259,8 @@ void ED_region_visibility_change_update_animated(bContext *C, ScrArea *area, ARe
   }
 
   /* new timer */
-  region->regiontimer = WM_event_timer_add(wm, win, TIMERREGION, TIMESTEP);
-  region->regiontimer->customdata = rgi;
+  region->runtime->regiontimer = WM_event_timer_add(wm, win, TIMERREGION, TIMESTEP);
+  region->runtime->regiontimer->customdata = rgi;
 }
 
 /* timer runs in win->handlers, so it cannot use context to find area/region */
@@ -6220,7 +6282,7 @@ static int region_blend_invoke(bContext *C, wmOperator * /*op*/, const wmEvent *
   }
 
   /* end timer? */
-  if (rgi->region->regiontimer->time_duration > double(TIMEOUT)) {
+  if (rgi->region->runtime->regiontimer->time_duration > double(TIMEOUT)) {
     region_blend_end(C, rgi->region, false);
     return (OPERATOR_FINISHED | OPERATOR_PASS_THROUGH);
   }

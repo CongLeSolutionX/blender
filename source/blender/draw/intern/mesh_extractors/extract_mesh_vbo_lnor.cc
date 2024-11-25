@@ -214,7 +214,7 @@ void extract_normals(const MeshRenderData &mr, const bool use_hq, gpu::VertBuf &
     MutableSpan corners_data = vbo_data.take_front(mr.corners_num);
     MutableSpan loose_data = vbo_data.take_back(mr.loose_indices_num);
 
-    if (mr.extract_type == MR_EXTRACT_MESH) {
+    if (mr.extract_type == MeshExtractType::Mesh) {
       extract_normals_mesh(mr, corners_data);
       extract_paint_overlay_flags(mr, corners_data);
     }
@@ -236,7 +236,7 @@ void extract_normals(const MeshRenderData &mr, const bool use_hq, gpu::VertBuf &
     MutableSpan corners_data = vbo_data.take_front(mr.corners_num);
     MutableSpan loose_data = vbo_data.take_back(mr.loose_indices_num);
 
-    if (mr.extract_type == MR_EXTRACT_MESH) {
+    if (mr.extract_type == MeshExtractType::Mesh) {
       extract_normals_mesh(mr, corners_data);
       extract_paint_overlay_flags(mr, corners_data);
     }
@@ -273,9 +273,13 @@ void extract_normals_subdiv(const MeshRenderData &mr,
   /* Push VBO content to the GPU and bind the VBO so that #GPU_vertbuf_update_sub can work. */
   GPU_vertbuf_use(&lnor);
 
-  const float4 up(0.0f, 0.0f, 1.0f, 0.0f);
+  /* Default to zeroed attribute. The overlay shader should expect this and render engines should
+   * never draw loose geometry. */
+  const float4 default_normal(0.0f, 0.0f, 0.0f, 0.0f);
   for (const int i : IndexRange::from_begin_end(loose_geom_start, vbo_size)) {
-    GPU_vertbuf_update_sub(&lnor, i * sizeof(float4), sizeof(float4), &up);
+    /* TODO(fclem): This has HORRENDOUS performance. Prefer clearing the buffer on device with
+     * something like glClearBufferSubData. */
+    GPU_vertbuf_update_sub(&lnor, i * sizeof(float4), sizeof(float4), &default_normal);
   }
 }
 }  // namespace blender::draw

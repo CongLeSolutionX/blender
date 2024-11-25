@@ -18,12 +18,12 @@
 #include "DNA_node_types.h"
 
 #include "BKE_anim_data.hh"
-#include "BKE_image.h"
+#include "BKE_image.hh"
 #include "BKE_main.hh"
 #include "BKE_node.hh"
 #include "BKE_node_enum.hh"
 #include "BKE_node_runtime.hh"
-#include "BKE_node_tree_anonymous_attributes.hh"
+#include "BKE_node_tree_reference_lifetimes.hh"
 #include "BKE_node_tree_update.hh"
 
 #include "MOD_nodes.hh"
@@ -508,7 +508,7 @@ class NodeTreeMainUpdater {
         result.interface_changed = true;
       }
       this->update_from_field_inference(ntree);
-      if (anonymous_attribute_inferencing::update_anonymous_attribute_relations(ntree)) {
+      if (node_tree_reference_lifetimes::analyse_reference_lifetimes(ntree)) {
         result.interface_changed = true;
       }
       if (nodes::gizmos::update_tree_gizmo_propagation(ntree)) {
@@ -954,6 +954,23 @@ class NodeTreeMainUpdater {
           }
         }
       }
+      else if (node->type == GEO_NODE_FOREACH_GEOMETRY_ELEMENT_INPUT) {
+        /* Propagate menu from element inputs to field inputs. */
+        BLI_assert(node->input_sockets().size() == node->output_sockets().size());
+        /* Inputs Geometry, Selection and outputs Index, Element are ignored. */
+        const IndexRange sockets = node->input_sockets().index_range().drop_front(2);
+        for (const int socket_i : sockets) {
+          bNodeSocket *input = node->input_sockets()[socket_i];
+          bNodeSocket *output = node->output_sockets()[socket_i];
+          if (input->is_available() && input->type == SOCK_MENU && output->is_available() &&
+              output->type == SOCK_MENU)
+          {
+            this->update_socket_enum_definition(
+                *input->default_value_typed<bNodeSocketValueMenu>(),
+                *output->default_value_typed<bNodeSocketValueMenu>());
+          }
+        }
+      }
       else {
         /* Propagate over internal relations. */
         /* XXX Placeholder implementation just propagates all outputs
@@ -1278,6 +1295,9 @@ class NodeTreeMainUpdater {
     if (node.type == NODE_GROUP_OUTPUT) {
       return true;
     }
+    if (node.type == GEO_NODE_WARNING) {
+      return true;
+    }
     if (nodes::gizmos::is_builtin_gizmo_node(node)) {
       return true;
     }
@@ -1484,6 +1504,32 @@ class NodeTreeMainUpdater {
               sockets_to_check.push(input_socket);
               pushed = true;
             }
+          }
+        }
+        /* Zones may propagate changes from the input node to the output node even though there is
+         * no explicit link. */
+        switch (node.type) {
+          case GEO_NODE_REPEAT_OUTPUT:
+          case GEO_NODE_SIMULATION_OUTPUT:
+          case GEO_NODE_FOREACH_GEOMETRY_ELEMENT_OUTPUT: {
+            const bNodeTreeZones *zones = tree.zones();
+            if (!zones) {
+              break;
+            }
+            const bNodeTreeZone *zone = zones->get_zone_by_node(node.identifier);
+            if (!zone->input_node) {
+              break;
+            }
+            for (const bNodeSocket *input_socket : zone->input_node->input_sockets()) {
+              if (input_socket->is_available()) {
+                bool &pushed = pushed_by_socket_id[input_socket->index_in_tree()];
+                if (!pushed) {
+                  sockets_to_check.push(input_socket);
+                  pushed = true;
+                }
+              }
+            }
+            break;
           }
         }
         /* The Normal node has a special case, because the value stored in the first output

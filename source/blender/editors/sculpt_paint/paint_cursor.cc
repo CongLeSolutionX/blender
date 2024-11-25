@@ -28,7 +28,7 @@
 #include "BKE_context.hh"
 #include "BKE_curve.hh"
 #include "BKE_grease_pencil.hh"
-#include "BKE_image.h"
+#include "BKE_image.hh"
 #include "BKE_node_runtime.hh"
 #include "BKE_object.hh"
 #include "BKE_paint.hh"
@@ -61,6 +61,8 @@
  * removed eventually (TODO) */
 #include "sculpt_intern.hh"
 #include "sculpt_pose.hh"
+
+#include "bmesh.hh"
 
 /* TODOs:
  *
@@ -559,7 +561,7 @@ static bool paint_draw_tex_overlay(UnifiedPaintSettings *ups,
   int overlay_alpha = (primary) ? brush->texture_overlay_alpha : brush->mask_overlay_alpha;
 
   if (mode == PaintMode::Texture3D) {
-    if (primary && brush->imagepaint_tool != PAINT_TOOL_DRAW) {
+    if (primary && brush->image_brush_type != IMAGE_PAINT_BRUSH_TYPE_DRAW) {
       /* All non-draw tools don't use the primary texture (clone, smear, soften.. etc). */
       return false;
     }
@@ -1155,7 +1157,7 @@ static void sculpt_geometry_preview_lines_draw(const Depsgraph &depsgraph,
   }
 
   const SculptSession &ss = *object.sculpt;
-  if (ss.pbvh->type() != bke::pbvh::Type::Mesh) {
+  if (bke::object::pbvh_get(object)->type() != bke::pbvh::Type::Mesh) {
     return;
   }
 
@@ -1252,13 +1254,9 @@ struct PaintCursorContext {
   SculptSession *ss;
 
   /**
-   * Previous active vertex, used to determine if the preview is updated for the pose brush.
-   *
-   * For now, this cannot be switched to using a straight index via #prev_active_vert_index() as
-   * the underlying SculptSession variable is not invalidated upon changing modes. Once we no
-   * longer persist PBVHVertRef inside SculptSession, this can be updated as well.
+   * Previous active vertex index , used to determine if the preview is updated for the pose brush.
    */
-  PBVHVertRef prev_active_vert_ref;
+  int prev_active_vert_index;
 
   bool is_stroke_active;
   bool is_cursor_over_mesh;
@@ -1413,9 +1411,13 @@ static void paint_cursor_sculpt_session_update_and_init(PaintCursorContext *pcon
       float(pcontext->y - pcontext->region->winrct.ymin),
   };
 
+  /* Ensure that the PBVH is generated before we call #SCULPT_cursor_geometry_info_update because
+   * the PBVH is needed to do a ray-cast to find the active vertex. */
+  bke::object::pbvh_ensure(*pcontext->depsgraph, *pcontext->vc.obact);
+
   /* This updates the active vertex, which is needed for most of the Sculpt/Vertex Colors tools to
    * work correctly */
-  pcontext->prev_active_vert_ref = ss.active_vert_ref();
+  pcontext->prev_active_vert_index = ss.active_vert_index();
   if (!ups.stroke_active) {
     pcontext->is_cursor_over_mesh = SCULPT_cursor_geometry_info_update(
         C, &gi, mval_fl, (pcontext->brush->falloff_shape == PAINT_FALLOFF_SHAPE_SPHERE));
@@ -1447,7 +1449,7 @@ static void paint_update_mouse_cursor(PaintCursorContext *pcontext)
      * with the UI (dragging a number button for e.g.), see: #102792. */
     return;
   }
-  if (pcontext->mode == PaintMode::GPencil) {
+  if (ELEM(pcontext->mode, PaintMode::GPencil, PaintMode::VertexGPencil)) {
     WM_cursor_set(pcontext->win, WM_CURSOR_DOT);
   }
   else {
@@ -1524,41 +1526,56 @@ static void grease_pencil_brush_cursor_draw(PaintCursorContext *pcontext)
     return;
   }
 
-  /* default radius and color */
-  pcontext->pixel_radius = brush->size;
-
   float3 color(1.0f);
   const int x = pcontext->x;
   const int y = pcontext->y;
 
-  /* for paint use paint brush size and color */
   if (pcontext->mode == PaintMode::GPencil) {
-    /* Eraser has a special shape and uses a different shader program. */
-    if (brush->gpencil_tool == GPAINT_TOOL_ERASE || grease_pencil->runtime->temp_use_eraser) {
-      /* If we use the eraser from the draw tool with a "scene" radius unit, we need to draw the
-       * cursor with the appropriate size. */
-      if (grease_pencil->runtime->temp_use_eraser && (brush->flag & BRUSH_LOCK_SIZE) != 0) {
-        pcontext->pixel_radius = grease_pencil->runtime->temp_eraser_size;
-      }
-      else {
-        pcontext->pixel_radius = float(pcontext->brush->size);
-      }
-      grease_pencil_eraser_draw(pcontext);
-      return;
-    }
-
     /* Hide the cursor while drawing. */
     if (grease_pencil->runtime->is_drawing_stroke) {
       return;
     }
 
-    if (brush->gpencil_tool == GPAINT_TOOL_DRAW && (brush->flag & BRUSH_LOCK_SIZE) != 0) {
-      const bke::greasepencil::Layer *layer = grease_pencil->get_active_layer();
-      const ed::greasepencil::DrawingPlacement placement(
-          *pcontext->scene, *pcontext->region, *pcontext->vc.v3d, *object, layer);
-      const float3 location = placement.project(float2(pcontext->x, pcontext->y));
-      pcontext->pixel_radius = project_brush_radius(
-          &pcontext->vc, brush->unprojected_radius, location);
+    /* Eraser has a special shape and uses a different shader program. */
+    if (brush->gpencil_brush_type == GPAINT_BRUSH_TYPE_ERASE ||
+        grease_pencil->runtime->temp_use_eraser)
+    {
+      /* If we use the eraser from the draw tool with a "scene" radius unit, we need to draw the
+       * cursor with the appropriate size. */
+      if (grease_pencil->runtime->temp_use_eraser && (brush->flag & BRUSH_LOCK_SIZE) != 0) {
+        pcontext->pixel_radius = int(grease_pencil->runtime->temp_eraser_size);
+      }
+      else {
+        pcontext->pixel_radius = brush->size;
+      }
+      grease_pencil_eraser_draw(pcontext);
+      return;
+    }
+
+    if (brush->gpencil_brush_type == GPAINT_BRUSH_TYPE_FILL) {
+      /* The fill tool doesn't use a brush size currently, but not showing any brush means that it
+       * can be hard to see where the cursor is. Use a fixed size that's not too big (10px). By
+       * disabling the "Display Cursor" option, this can still be turned off. */
+      pcontext->pixel_radius = 10;
+    }
+
+    if (brush->gpencil_brush_type == GPAINT_BRUSH_TYPE_TINT) {
+      pcontext->pixel_radius = brush->size;
+    }
+
+    if (brush->gpencil_brush_type == GPAINT_BRUSH_TYPE_DRAW) {
+      if ((brush->flag & BRUSH_LOCK_SIZE) != 0) {
+        const bke::greasepencil::Layer *layer = grease_pencil->get_active_layer();
+        const ed::greasepencil::DrawingPlacement placement(
+            *pcontext->scene, *pcontext->region, *pcontext->vc.v3d, *object, layer);
+        const float3 location = placement.project(float2(pcontext->x, pcontext->y));
+        pcontext->pixel_radius = project_brush_radius(
+            &pcontext->vc, brush->unprojected_radius, location);
+        brush->size = std::max(pcontext->pixel_radius, 1);
+      }
+      else {
+        pcontext->pixel_radius = brush->size;
+      }
     }
 
     /* Get current drawing material. */
@@ -1570,7 +1587,7 @@ static void grease_pencil_brush_cursor_draw(PaintCursorContext *pcontext)
        * - Brush size (i.e. stroke thickness)
        */
       if ((gp_style) && ((brush->flag & BRUSH_SMOOTH_STROKE) == 0) &&
-          (brush->gpencil_tool == GPAINT_TOOL_DRAW))
+          (brush->gpencil_brush_type == GPAINT_BRUSH_TYPE_DRAW))
       {
 
         const bool use_vertex_color = (pcontext->scene->toolsettings->gp_paint->mode ==
@@ -1588,6 +1605,10 @@ static void grease_pencil_brush_cursor_draw(PaintCursorContext *pcontext)
       color = scale * float3(paint->paint_cursor_col);
     }
   }
+  else if (pcontext->mode == PaintMode::VertexGPencil) {
+    pcontext->pixel_radius = BKE_brush_size_get(pcontext->vc.scene, brush);
+    color = BKE_brush_color_get(pcontext->vc.scene, paint, brush);
+  }
 
   GPU_line_width(1.0f);
   /* Inner Ring: Color from UI panel */
@@ -1603,13 +1624,12 @@ static void grease_pencil_brush_cursor_draw(PaintCursorContext *pcontext)
 static void paint_draw_2D_view_brush_cursor(PaintCursorContext *pcontext)
 {
   switch (pcontext->mode) {
-    case PaintMode::GPencil: {
+    case PaintMode::GPencil:
+    case PaintMode::VertexGPencil:
       grease_pencil_brush_cursor_draw(pcontext);
       break;
-    }
-    default: {
+    default:
       paint_draw_2D_view_brush_cursor_default(pcontext);
-    }
   }
 }
 
@@ -1761,7 +1781,7 @@ static void paint_cursor_draw_3d_view_brush_cursor_inactive(PaintCursorContext *
   Object &active_object = *pcontext->vc.obact;
   paint_cursor_update_object_space_radius(pcontext);
 
-  SCULPT_vertex_random_access_ensure(*pcontext->ss);
+  SCULPT_vertex_random_access_ensure(active_object);
 
   /* Setup drawing. */
   wmViewport(&pcontext->region->winrct);
@@ -1771,9 +1791,9 @@ static void paint_cursor_draw_3d_view_brush_cursor_inactive(PaintCursorContext *
   /* Cursor location symmetry points. */
 
   float3 active_vertex_co;
-  if (brush.sculpt_tool == SCULPT_TOOL_GRAB && brush.flag & BRUSH_GRAB_ACTIVE_VERTEX) {
+  if (brush.sculpt_brush_type == SCULPT_BRUSH_TYPE_GRAB && brush.flag & BRUSH_GRAB_ACTIVE_VERTEX) {
     SculptSession &ss = *pcontext->ss;
-    if (ss.pbvh->type() == bke::pbvh::Type::Mesh) {
+    if (bke::object::pbvh_get(active_object)->type() == bke::pbvh::Type::Mesh) {
       const Span<float3> positions = vert_positions_for_grab_active_get(*pcontext->depsgraph,
                                                                         active_object);
       active_vertex_co = positions[std::get<int>(ss.active_vert())];
@@ -1799,13 +1819,13 @@ static void paint_cursor_draw_3d_view_brush_cursor_inactive(PaintCursorContext *
 
   /* Pose brush updates and rotation origins. */
 
-  if (is_brush_tool && brush.sculpt_tool == SCULPT_TOOL_POSE) {
+  if (is_brush_tool && brush.sculpt_brush_type == SCULPT_BRUSH_TYPE_POSE) {
     /* Just after switching to the Pose Brush, the active vertex can be the same and the
      * cursor won't be tagged to update, so always initialize the preview chain if it is
      * nullptr before drawing it. */
     SculptSession &ss = *pcontext->ss;
-    const bool update_previews = pcontext->prev_active_vert_ref.i !=
-                                 pcontext->ss->active_vert_ref().i;
+    const bool update_previews = pcontext->prev_active_vert_index !=
+                                 pcontext->ss->active_vert_index();
     if (update_previews || !ss.pose_ik_chain_preview) {
       BKE_sculpt_update_object_for_edit(pcontext->depsgraph, &active_object, false);
 
@@ -1825,17 +1845,31 @@ static void paint_cursor_draw_3d_view_brush_cursor_inactive(PaintCursorContext *
 
   /* Expand operation origin. */
   if (pcontext->ss->expand_cache) {
+    const int vert = pcontext->ss->expand_cache->initial_active_vert;
+
+    float3 position;
+    switch (bke::object::pbvh_get(active_object)->type()) {
+      case bke::pbvh::Type::Mesh: {
+        const Span positions = bke::pbvh::vert_positions_eval(*pcontext->depsgraph, active_object);
+        position = positions[vert];
+        break;
+      }
+      case bke::pbvh::Type::Grids: {
+        const SubdivCCG &subdiv_ccg = *pcontext->ss->subdiv_ccg;
+        position = subdiv_ccg.positions[vert];
+        break;
+      }
+      case bke::pbvh::Type::BMesh: {
+        BMesh &bm = *pcontext->ss->bm;
+        position = BM_vert_at_index(&bm, vert)->co;
+        break;
+      }
+    }
     cursor_draw_point_screen_space(
-        pcontext->pos,
-        pcontext->region,
-        SCULPT_vertex_co_get(*pcontext->depsgraph,
-                             active_object,
-                             pcontext->ss->expand_cache->initial_active_vertex),
-        active_object.object_to_world().ptr(),
-        2);
+        pcontext->pos, pcontext->region, position, active_object.object_to_world().ptr(), 2);
   }
 
-  if (is_brush_tool && brush.sculpt_tool == SCULPT_TOOL_BOUNDARY) {
+  if (is_brush_tool && brush.sculpt_brush_type == SCULPT_BRUSH_TYPE_BOUNDARY) {
     paint_cursor_preview_boundary_data_update(pcontext);
     paint_cursor_preview_boundary_data_pivot_draw(pcontext);
   }
@@ -1856,19 +1890,20 @@ static void paint_cursor_draw_3d_view_brush_cursor_inactive(PaintCursorContext *
   GPU_matrix_mul(active_object.object_to_world().ptr());
 
   /* Drawing Cursor overlays in 3D object space. */
-  if (is_brush_tool && brush.sculpt_tool == SCULPT_TOOL_GRAB &&
+  if (is_brush_tool && brush.sculpt_brush_type == SCULPT_BRUSH_TYPE_GRAB &&
       (brush.flag & BRUSH_GRAB_ACTIVE_VERTEX))
   {
-    geometry_preview_lines_update(pcontext->C, *pcontext->ss, pcontext->radius);
+    geometry_preview_lines_update(
+        *pcontext->depsgraph, *pcontext->vc.obact, *pcontext->ss, pcontext->radius);
     sculpt_geometry_preview_lines_draw(
         *pcontext->depsgraph, pcontext->pos, *pcontext->brush, active_object);
   }
 
-  if (is_brush_tool && brush.sculpt_tool == SCULPT_TOOL_POSE) {
+  if (is_brush_tool && brush.sculpt_brush_type == SCULPT_BRUSH_TYPE_POSE) {
     paint_cursor_pose_brush_segments_draw(pcontext);
   }
 
-  if (is_brush_tool && brush.sculpt_tool == SCULPT_TOOL_BOUNDARY) {
+  if (is_brush_tool && brush.sculpt_brush_type == SCULPT_BRUSH_TYPE_BOUNDARY) {
     boundary::edges_preview_draw(
         pcontext->pos, *pcontext->ss, pcontext->outline_col, pcontext->outline_alpha);
     boundary::pivot_line_preview_draw(pcontext->pos, *pcontext->ss);
@@ -1884,7 +1919,7 @@ static void paint_cursor_draw_3d_view_brush_cursor_inactive(PaintCursorContext *
   paint_cursor_draw_main_inactive_cursor(pcontext);
 
   /* Cloth brush local simulation areas. */
-  if (is_brush_tool && brush.sculpt_tool == SCULPT_TOOL_CLOTH &&
+  if (is_brush_tool && brush.sculpt_brush_type == SCULPT_BRUSH_TYPE_CLOTH &&
       brush.cloth_simulation_area_type != BRUSH_CLOTH_SIMULATION_AREA_GLOBAL)
   {
     const float white[3] = {1.0f, 1.0f, 1.0f};
@@ -1897,7 +1932,7 @@ static void paint_cursor_draw_3d_view_brush_cursor_inactive(PaintCursorContext *
   }
 
   /* Layer brush height. */
-  if (is_brush_tool && brush.sculpt_tool == SCULPT_TOOL_LAYER) {
+  if (is_brush_tool && brush.sculpt_brush_type == SCULPT_BRUSH_TYPE_LAYER) {
     SCULPT_layer_brush_height_preview_draw(pcontext->pos,
                                            brush,
                                            pcontext->radius,
@@ -1948,19 +1983,19 @@ static void paint_cursor_cursor_draw_3d_view_brush_cursor_active(PaintCursorCont
   GPU_matrix_push();
   GPU_matrix_mul(pcontext->vc.obact->object_to_world().ptr());
 
-  /* Draw the special active cursors different tools may have. */
+  /* Draw the special active cursors different brush types may have. */
 
-  if (brush.sculpt_tool == SCULPT_TOOL_GRAB) {
+  if (brush.sculpt_brush_type == SCULPT_BRUSH_TYPE_GRAB) {
     sculpt_geometry_preview_lines_draw(
         *pcontext->depsgraph, pcontext->pos, brush, *pcontext->vc.obact);
   }
 
-  if (brush.sculpt_tool == SCULPT_TOOL_MULTIPLANE_SCRAPE) {
+  if (brush.sculpt_brush_type == SCULPT_BRUSH_TYPE_MULTIPLANE_SCRAPE) {
     multiplane_scrape_preview_draw(
         pcontext->pos, brush, ss, pcontext->outline_col, pcontext->outline_alpha);
   }
 
-  if (brush.sculpt_tool == SCULPT_TOOL_CLOTH) {
+  if (brush.sculpt_brush_type == SCULPT_BRUSH_TYPE_CLOTH) {
     if (brush.cloth_force_falloff_type == BRUSH_CLOTH_FORCE_FALLOFF_PLANE) {
       cloth::plane_falloff_preview_draw(
           pcontext->pos, ss, pcontext->outline_col, pcontext->outline_alpha);
@@ -1971,14 +2006,14 @@ static void paint_cursor_cursor_draw_3d_view_brush_cursor_active(PaintCursorCont
       /* Display the simulation limits if sculpting outside them. */
       /* This does not makes much sense of plane falloff as the falloff is infinite or global. */
 
-      if (len_v3v3(ss.cache->true_location, ss.cache->true_initial_location) >
+      if (len_v3v3(ss.cache->location, ss.cache->initial_location) >
           ss.cache->radius * (1.0f + brush.cloth_sim_limit))
       {
         const float red[3] = {1.0f, 0.2f, 0.2f};
         cloth::simulation_limits_draw(pcontext->pos,
                                       brush,
-                                      ss.cache->true_initial_location,
-                                      ss.cache->true_initial_normal,
+                                      ss.cache->initial_location,
+                                      ss.cache->initial_normal,
                                       ss.cache->radius,
                                       2.0f,
                                       red,
@@ -2023,7 +2058,7 @@ static bool paint_cursor_is_brush_cursor_enabled(PaintCursorContext *pcontext)
 {
   if (pcontext->paint->flags & PAINT_SHOW_BRUSH) {
     if (ELEM(pcontext->mode, PaintMode::Texture2D, PaintMode::Texture3D) &&
-        pcontext->brush->imagepaint_tool == PAINT_TOOL_FILL)
+        pcontext->brush->image_brush_type == IMAGE_PAINT_BRUSH_TYPE_FILL)
     {
       return false;
     }
@@ -2100,6 +2135,12 @@ static void paint_draw_cursor(bContext *C, int x, int y, void * /*unused*/)
   }
 
   if (!paint_cursor_is_brush_cursor_enabled(&pcontext)) {
+    /* For Grease Pencil draw mode, we want to we only render a small mouse cursor (dot) if the
+     * paint cursor is disabled so that the default mouse cursor doesn't get in the way of tablet
+     * users. See #130089. */
+    if (pcontext.mode == PaintMode::GPencil) {
+      WM_cursor_set(pcontext.win, WM_CURSOR_DOT);
+    }
     return;
   }
   if (paint_cursor_is_3d_view_navigating(&pcontext)) {

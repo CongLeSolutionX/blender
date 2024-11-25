@@ -19,6 +19,7 @@
 #include "DNA_workspace_types.h"
 
 #include "ED_info.hh"
+#include "ED_node.hh"
 
 const EnumPropertyItem rna_enum_region_type_items[] = {
     {RGN_TYPE_WINDOW, "WINDOW", 0, "Window", ""},
@@ -67,7 +68,7 @@ static const EnumPropertyItem rna_enum_region_panel_category_items[] = {
 #  include "BLT_translation.hh"
 
 #  ifdef WITH_PYTHON
-#    include "BPY_extern.h"
+#    include "BPY_extern.hh"
 #  endif
 
 static void rna_Screen_bar_update(Main * /*bmain*/, Scene * /*scene*/, PointerRNA *ptr)
@@ -171,6 +172,9 @@ static void rna_Area_type_update(bContext *C, PointerRNA *ptr)
       if (area->spacetype == SPACE_VIEW3D) {
         DEG_tag_on_visible_update(CTX_data_main(C), false);
       }
+      else if (area->spacetype == SPACE_NODE) {
+        blender::ed::space_node::snode_set_context(*C);
+      }
 
       CTX_wm_window_set(C, prevwin);
       CTX_wm_area_set(C, prevsa);
@@ -178,6 +182,10 @@ static void rna_Area_type_update(bContext *C, PointerRNA *ptr)
       break;
     }
   }
+
+  /* The set of visible geometry nodes gizmos depends on the visible node editors. So if a node
+   * editor becomes visible/invisible, the gizmos have to be updated. */
+  WM_main_add_notifier(NC_NODE | ND_NODE_GIZMO, nullptr);
 }
 
 static const EnumPropertyItem *rna_Area_ui_type_itemf(bContext *C,
@@ -284,7 +292,7 @@ static PointerRNA rna_Region_data_get(PointerRNA *ptr)
     if (region->regiontype == RGN_TYPE_WINDOW) {
       /* We could make this static, it won't change at run-time. */
       SpaceType *st = BKE_spacetype_from_id(SPACE_VIEW3D);
-      if (region->type == BKE_regiontype_from_id(st, region->regiontype)) {
+      if (region->runtime->type == BKE_regiontype_from_id(st, region->regiontype)) {
         PointerRNA newptr = RNA_pointer_create(&screen->id, &RNA_RegionView3D, region->regiondata);
         return newptr;
       }
@@ -297,7 +305,7 @@ static int rna_Region_active_panel_category_editable_get(const PointerRNA *ptr,
                                                          const char **r_info)
 {
   ARegion *region = static_cast<ARegion *>(ptr->data);
-  if (BLI_listbase_is_empty(&region->panels_category)) {
+  if (BLI_listbase_is_empty(&region->runtime->panels_category)) {
     if (r_info) {
       *r_info = N_("This region does not support panel categories");
     }
@@ -337,7 +345,9 @@ static const EnumPropertyItem *rna_Region_active_panel_category_itemf(bContext *
   EnumPropertyItem item = {0, "", 0, "", ""};
   int totitems = 0;
   int category_index;
-  LISTBASE_FOREACH_INDEX (PanelCategoryDyn *, pc_dyn, &region->panels_category, category_index) {
+  LISTBASE_FOREACH_INDEX (
+      PanelCategoryDyn *, pc_dyn, &region->runtime->panels_category, category_index)
+  {
     item.value = category_index;
     item.identifier = pc_dyn->idname;
     item.name = pc_dyn->idname;

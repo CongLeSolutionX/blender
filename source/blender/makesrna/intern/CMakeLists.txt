@@ -31,6 +31,7 @@ set(DEFSRC
   rna_armature.cc
   rna_asset.cc
   rna_attribute.cc
+  rna_blendfile_import.cc
   rna_boid.cc
   rna_brush.cc
   rna_cachefile.cc
@@ -109,7 +110,6 @@ endif()
 
 if(WITH_EXPERIMENTAL_FEATURES)
   add_definitions(-DWITH_SIMULATION_DATABLOCK)
-  add_definitions(-DWITH_ANIM_BAKLAVA)
 endif()
 
 set(APISRC
@@ -217,6 +217,8 @@ set(SRC_RNA_INC
   ../RNA_enum_types.hh
   ../RNA_path.hh
   ../RNA_types.hh
+
+  rna_action_tools.hh
 )
 
 set(SRC
@@ -243,6 +245,7 @@ set(INC
   ../../bmesh
   ../../depsgraph
   ../../draw
+  ../../functions
   ../../gpu
   ../../ikplugin
   ../../imbuf
@@ -337,12 +340,6 @@ if(WITH_MOD_OCEANSIM)
 endif()
 
 if(WITH_SDL)
-  if(WITH_SDL_DYNLOAD)
-    add_definitions(-DWITH_SDL_DYNLOAD)
-    list(APPEND INC
-      ../../../../extern/sdlew/include
-    )
-  endif()
   add_definitions(-DWITH_SDL)
 endif()
 
@@ -443,7 +440,7 @@ if(WITH_GMP)
   add_definitions(-DWITH_GMP)
 endif()
 
-# Build makesrna executable
+# Build `makesrna` executable.
 add_cc_flags_custom_test(makesrna)
 
 add_executable(makesrna ${SRC} ${SRC_RNA_INC} ${SRC_DNA_INC})

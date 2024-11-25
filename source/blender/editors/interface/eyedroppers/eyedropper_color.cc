@@ -25,7 +25,7 @@
 
 #include "BKE_context.hh"
 #include "BKE_cryptomatte.h"
-#include "BKE_image.h"
+#include "BKE_image.hh"
 #include "BKE_material.h"
 #include "BKE_report.hh"
 #include "BKE_screen.hh"
@@ -90,7 +90,7 @@ static void eyedropper_draw_cb(const wmWindow * /*window*/, void *arg)
 
 static bool eyedropper_init(bContext *C, wmOperator *op)
 {
-  Eyedropper *eye = MEM_cnew<Eyedropper>(__func__);
+  Eyedropper *eye = MEM_new<Eyedropper>(__func__);
 
   PropertyRNA *prop;
   if ((prop = RNA_struct_find_property(op->ptr, "prop_data_path")) &&
@@ -126,7 +126,7 @@ static bool eyedropper_init(bContext *C, wmOperator *op)
       (RNA_property_type(eye->prop) != PROP_FLOAT) ||
       (ELEM(prop_subtype, PROP_COLOR, PROP_COLOR_GAMMA) == 0))
   {
-    MEM_freeN(eye);
+    MEM_delete(eye);
     return false;
   }
   op->customdata = eye;
@@ -178,7 +178,8 @@ static void eyedropper_exit(bContext *C, wmOperator *op)
     eye->viewport_session = nullptr;
   }
 
-  MEM_SAFE_FREE(op->customdata);
+  op->customdata = nullptr;
+  MEM_delete(eye);
 }
 
 /* *** eyedropper_color_ helper functions *** */
@@ -246,6 +247,12 @@ static bool eyedropper_cryptomatte_sample_renderlayer_fl(RenderLayer *render_lay
         !STREQLEN(render_pass->name, render_pass_name_prefix, sizeof(render_pass->name)))
     {
       BLI_assert(render_pass->channels == 4);
+
+      /* Pass was allocated but not rendered yet. */
+      if (!render_pass->ibuf) {
+        return false;
+      }
+
       const int x = int(fpos[0] * render_pass->rectx);
       const int y = int(fpos[1] * render_pass->recty);
       const int offset = 4 * (y * render_pass->rectx + x);

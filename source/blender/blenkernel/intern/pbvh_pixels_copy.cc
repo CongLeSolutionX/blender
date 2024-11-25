@@ -14,8 +14,8 @@
 #include "IMB_imbuf_types.hh"
 
 #include "BKE_image_wrappers.hh"
-#include "BKE_pbvh_api.hh"
-#include "BKE_pbvh_pixels.hh"
+#include "BKE_paint_bvh.hh"
+#include "BKE_paint_bvh_pixels.hh"
 
 #include "pbvh_intern.hh"
 #include "pbvh_pixels_copy.hh"
@@ -173,20 +173,24 @@ class PixelNodesTileData : public Vector<std::reference_wrapper<UDIMTilePixels>>
   {
     reserve(count_nodes(pbvh, image_tile));
 
-    for (blender::bke::pbvh::Node &node : pbvh.nodes_) {
-      if (should_add_node(node, image_tile)) {
-        NodeData &node_data = *static_cast<NodeData *>(node.pixels_);
-        UDIMTilePixels &tile_pixels = *node_data.find_tile_data(image_tile);
-        append(tile_pixels);
-      }
-    }
+    std::visit(
+        [&](auto &nodes) {
+          for (blender::bke::pbvh::Node &node : nodes) {
+            if (should_add_node(node, image_tile)) {
+              NodeData &node_data = *static_cast<NodeData *>(node.pixels_);
+              UDIMTilePixels &tile_pixels = *node_data.find_tile_data(image_tile);
+              append(tile_pixels);
+            }
+          }
+        },
+        pbvh.nodes_);
   }
 
  private:
   static bool should_add_node(blender::bke::pbvh::Node &node,
                               const image::ImageTileWrapper &image_tile)
   {
-    if ((node.flag_ & PBVH_Leaf) == 0) {
+    if ((node.flag_ & Node::Leaf) == 0) {
       return false;
     }
     if (node.pixels_ == nullptr) {
@@ -203,11 +207,15 @@ class PixelNodesTileData : public Vector<std::reference_wrapper<UDIMTilePixels>>
                              const image::ImageTileWrapper &image_tile)
   {
     int64_t result = 0;
-    for (blender::bke::pbvh::Node &node : pbvh.nodes_) {
-      if (should_add_node(node, image_tile)) {
-        result++;
-      }
-    }
+    std::visit(
+        [&](auto &nodes) {
+          for (blender::bke::pbvh::Node &node : nodes) {
+            if (should_add_node(node, image_tile)) {
+              result++;
+            }
+          }
+        },
+        pbvh.nodes_);
     return result;
   }
 };

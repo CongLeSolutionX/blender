@@ -10,16 +10,16 @@
 #include "DNA_scene_types.h"
 
 #include "BKE_paint.hh"
-#include "BKE_pbvh.hh"
+#include "BKE_paint_bvh.hh"
 #include "BKE_subdiv_ccg.hh"
 
 #include "BLI_enumerable_thread_specific.hh"
 #include "BLI_math_matrix.hh"
 #include "BLI_math_vector.hh"
-#include "BLI_task.h"
 #include "BLI_task.hh"
 
 #include "editors/sculpt_paint/mesh_brush_common.hh"
+#include "editors/sculpt_paint/sculpt_automask.hh"
 #include "editors/sculpt_paint/sculpt_intern.hh"
 
 namespace blender::ed::sculpt_paint {
@@ -50,35 +50,18 @@ static void calc_node(const Depsgraph &depsgraph,
                       Object &object,
                       const Brush &brush,
                       const float strength,
-                      bke::pbvh::Node &node,
+                      bke::pbvh::GridsNode &node,
                       LocalData &tls)
 {
   SculptSession &ss = *object.sculpt;
-  const StrokeCache &cache = *ss.cache;
   SubdivCCG &subdiv_ccg = *ss.subdiv_ccg;
 
-  const Span<int> grids = bke::pbvh::node_grid_indices(node);
+  const Span<int> grids = node.grids();
   const MutableSpan positions = gather_grids_positions(subdiv_ccg, grids, tls.positions);
 
-  tls.factors.resize(positions.size());
-  const MutableSpan<float> factors = tls.factors;
-  fill_factor_from_hide_and_mask(subdiv_ccg, grids, factors);
-  filter_region_clip_factors(ss, positions, factors);
-  if (brush.flag & BRUSH_FRONTFACE) {
-    calc_front_face(cache.view_normal, subdiv_ccg, grids, factors);
-  }
+  calc_factors_common_grids(depsgraph, brush, object, positions, node, tls.factors, tls.distances);
 
-  tls.distances.resize(positions.size());
-  const MutableSpan<float> distances = tls.distances;
-  calc_brush_distances(ss, positions, eBrushFalloffShape(brush.falloff_shape), distances);
-  filter_distances_with_radius(cache.radius, distances, factors);
-  apply_hardness_to_distances(cache, distances);
-  calc_brush_strength_factors(cache, brush, distances, factors);
-
-  auto_mask::calc_grids_factors(depsgraph, object, cache.automasking.get(), node, grids, factors);
-
-  calc_brush_texture_factors(ss, brush, positions, factors);
-  scale_factors(factors, strength);
+  scale_factors(tls.factors, strength);
 
   tls.translations.resize(positions.size());
   const MutableSpan<float3> translations = tls.translations;
@@ -86,7 +69,7 @@ static void calc_node(const Depsgraph &depsgraph,
   for (const int i : positions.index_range()) {
     translations[i] -= positions[i];
   }
-  scale_translations(translations, factors);
+  scale_translations(translations, tls.factors);
 
   clip_and_lock_translations(sd, ss, positions, translations);
   apply_translations(translations, grids, subdiv_ccg);
@@ -97,19 +80,24 @@ static void calc_node(const Depsgraph &depsgraph,
 void do_displacement_eraser_brush(const Depsgraph &depsgraph,
                                   const Sculpt &sd,
                                   Object &object,
-                                  Span<bke::pbvh::Node *> nodes)
+                                  const IndexMask &node_mask)
 {
   SculptSession &ss = *object.sculpt;
+  SubdivCCG &subdiv_ccg = *object.sculpt->subdiv_ccg;
+  MutableSpan<float3> positions = subdiv_ccg.positions;
   const Brush &brush = *BKE_paint_brush_for_read(&sd.paint);
   const float strength = std::min(ss.cache->bstrength, 1.0f);
 
   threading::EnumerableThreadSpecific<LocalData> all_tls;
-  threading::parallel_for(nodes.index_range(), 1, [&](const IndexRange range) {
+  bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
+  MutableSpan<bke::pbvh::GridsNode> nodes = pbvh.nodes<bke::pbvh::GridsNode>();
+  node_mask.foreach_index(GrainSize(1), [&](const int i) {
     LocalData &tls = all_tls.local();
-    for (const int i : range) {
-      calc_node(depsgraph, sd, object, brush, strength, *nodes[i], tls);
-    }
+    calc_node(depsgraph, sd, object, brush, strength, nodes[i], tls);
+    bke::pbvh::update_node_bounds_grids(subdiv_ccg.grid_area, positions, nodes[i]);
   });
+  pbvh.tag_positions_changed(node_mask);
+  bke::pbvh::flush_bounds_to_parents(pbvh);
 }
 
 }  // namespace blender::ed::sculpt_paint

@@ -501,13 +501,13 @@ static void createTransSeqData(bContext * /*C*/, TransInfo *t)
                           SEQ_EDGE_PAN_MAX_SPEED,
                           SEQ_EDGE_PAN_DELAY,
                           SEQ_EDGE_PAN_ZOOM_INFLUENCE);
-  UI_view2d_edge_pan_set_limits(&ts->edge_pan, -FLT_MAX, FLT_MAX, 1, MAXSEQ + 1);
+  UI_view2d_edge_pan_set_limits(&ts->edge_pan, -FLT_MAX, FLT_MAX, 1, SEQ_MAX_CHANNELS + 1);
   ts->initial_v2d_cur = t->region->v2d.cur;
 
   /* Loop 2: build transdata array. */
   SeqToTransData_build(t, ed->seqbasep, td, td2d, tdsq);
 
-  ts->selection_channel_range_min = MAXSEQ + 1;
+  ts->selection_channel_range_min = SEQ_MAX_CHANNELS + 1;
   LISTBASE_FOREACH (Sequence *, seq, SEQ_active_seqbase_get(ed)) {
     if ((seq->flag & SELECT) != 0) {
       ts->selection_channel_range_min = min_ii(ts->selection_channel_range_min, seq->machine);
@@ -598,10 +598,19 @@ static void flushTransSeq(TransInfo *t)
           }
         }
         seq->machine = round_fl_to_int(td->loc[1] + edge_pan_offset[1]);
-        CLAMP(seq->machine, 1, MAXSEQ);
+        CLAMP(seq->machine, 1, SEQ_MAX_CHANNELS);
         break;
       }
       case SEQ_LEFTSEL: { /* No vertical transform. */
+        /* Update right handle first if both handles are selected and the new_frame is right of
+         * the old one to avoid unexpected left handle clamping when canceling. See #126191. */
+        bool both_handles_selected = (tdsq->flag & (SEQ_LEFTSEL | SEQ_RIGHTSEL)) ==
+                                     (SEQ_LEFTSEL | SEQ_RIGHTSEL);
+        if (both_handles_selected && new_frame > SEQ_time_left_handle_frame_get(scene, seq)) {
+          a++, td++, td2d++;
+          int new_right_frame = round_fl_to_int(td->loc[0] + edge_pan_offset[0]);
+          SEQ_time_right_handle_frame_set(scene, seq, new_right_frame);
+        }
         int old_startdisp = SEQ_time_left_handle_frame_get(scene, seq);
         SEQ_time_left_handle_frame_set(t->scene, seq, new_frame);
 
@@ -721,8 +730,8 @@ void transform_convert_sequencer_channel_clamp(TransInfo *t, float r_val[2])
   const int min_channel_after_transform = ts->selection_channel_range_min + channel_offset;
   const int max_channel_after_transform = ts->selection_channel_range_max + channel_offset;
 
-  if (max_channel_after_transform > MAXSEQ) {
-    r_val[1] -= max_channel_after_transform - MAXSEQ;
+  if (max_channel_after_transform > SEQ_MAX_CHANNELS) {
+    r_val[1] -= max_channel_after_transform - SEQ_MAX_CHANNELS;
   }
   if (min_channel_after_transform < 1) {
     r_val[1] -= min_channel_after_transform - 1;

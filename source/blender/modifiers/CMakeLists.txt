@@ -135,8 +135,8 @@ set(SRC
   intern/MOD_ui_common.hh
   intern/MOD_util.hh
   intern/MOD_weightvg_util.hh
-  intern/lineart/MOD_lineart.h
-  intern/lineart/lineart_intern.h
+  intern/lineart/MOD_lineart.hh
+  intern/lineart/lineart_intern.hh
 )
 
 set(LIB
@@ -218,7 +218,7 @@ endif()
 if(WITH_TBB)
   if(WIN32)
     # TBB includes Windows.h which will define min/max macros
-    # that will collide with the stl versions.
+    # that will collide with the STL versions.
     add_definitions(-DNOMINMAX)
   endif()
 endif()

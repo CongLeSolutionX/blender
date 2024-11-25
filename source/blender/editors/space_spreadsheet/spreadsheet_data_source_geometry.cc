@@ -197,30 +197,26 @@ void GeometryDataSource::foreach_default_column_ids(
 
   extra_columns_.foreach_default_column_ids(fn);
 
-  attributes->for_all(
-      [&](const bke::AttributeIDRef &attribute_id, const bke::AttributeMetaData &meta_data) {
-        if (meta_data.domain != domain_) {
-          return true;
-        }
-        if (attribute_id.is_anonymous()) {
-          return true;
-        }
-        if (!bke::allow_procedural_attribute_access(attribute_id.name())) {
-          return true;
-        }
-        if (meta_data.domain == bke::AttrDomain::Instance &&
-            attribute_id.name() == "instance_transform")
-        {
-          /* Don't display the instance transform attribute, since matrix visualization in the
-           * spreadsheet isn't helpful. */
-          return true;
-        }
-        SpreadsheetColumnID column_id;
-        column_id.name = (char *)attribute_id.name().data();
-        const bool is_front = attribute_id.name() == ".viewer";
-        fn(column_id, is_front);
-        return true;
-      });
+  attributes->foreach_attribute([&](const bke::AttributeIter &iter) {
+    if (iter.domain != domain_) {
+      return;
+    }
+    if (bke::attribute_name_is_anonymous(iter.name)) {
+      return;
+    }
+    if (!bke::allow_procedural_attribute_access(iter.name)) {
+      return;
+    }
+    if (iter.domain == bke::AttrDomain::Instance && iter.name == "instance_transform") {
+      /* Don't display the instance transform attribute, since matrix visualization in the
+       * spreadsheet isn't helpful. */
+      return;
+    }
+    SpreadsheetColumnID column_id;
+    column_id.name = (char *)iter.name.data();
+    const bool is_front = iter.name == ".viewer";
+    fn(column_id, is_front);
+  });
 
   if (component_->type() == bke::GeometryComponent::Type::Instance) {
     fn({(char *)"Position"}, false);
@@ -297,7 +293,11 @@ std::unique_ptr<ColumnValues> GeometryDataSource::get_column_values(
         const Span<const bke::greasepencil::Layer *> layers = grease_pencil->layers();
         return std::make_unique<ColumnValues>(
             column_id.name, VArray<std::string>::ForFunc(domain_num, [layers](int64_t index) {
-              return std::string(layers[index]->name());
+              StringRefNull name = layers[index]->name();
+              if (name.is_empty()) {
+                name = IFACE_("(Layer)");
+              }
+              return std::string(name);
             }));
       }
     }
@@ -377,6 +377,117 @@ bool GeometryDataSource::has_selection_filter() const
   }
 }
 
+static IndexMask calc_mesh_selection_mask_faces(const Mesh &mesh_eval,
+                                                const Mesh &mesh_orig,
+                                                IndexMaskMemory &memory)
+{
+  const bke::AttributeAccessor attributes_eval = mesh_eval.attributes();
+  const IndexRange range(attributes_eval.domain_size(bke::AttrDomain::Face));
+  BMesh *bm = mesh_orig.runtime->edit_mesh->bm;
+
+  BM_mesh_elem_table_ensure(bm, BM_FACE);
+  if (mesh_eval.faces_num == bm->totface) {
+    return IndexMask::from_predicate(range, GrainSize(4096), memory, [&](const int i) {
+      const BMFace *face = BM_face_at_index(bm, i);
+      return BM_elem_flag_test_bool(face, BM_ELEM_SELECT);
+    });
+  }
+  if (const int *orig_indices = static_cast<const int *>(
+          CustomData_get_layer(&mesh_eval.face_data, CD_ORIGINDEX)))
+  {
+    return IndexMask::from_predicate(range, GrainSize(2048), memory, [&](const int i) {
+      const int orig = orig_indices[i];
+      if (orig == -1) {
+        return false;
+      }
+      const BMFace *face = BM_face_at_index(bm, orig);
+      return BM_elem_flag_test_bool(face, BM_ELEM_SELECT);
+    });
+  }
+  return range;
+}
+
+static IndexMask calc_mesh_selection_mask(const Mesh &mesh_eval,
+                                          const Mesh &mesh_orig,
+                                          const bke::AttrDomain domain,
+                                          IndexMaskMemory &memory)
+{
+  const bke::AttributeAccessor attributes_eval = mesh_eval.attributes();
+  const IndexRange range(attributes_eval.domain_size(domain));
+  BMesh *bm = mesh_orig.runtime->edit_mesh->bm;
+
+  switch (domain) {
+    case bke::AttrDomain::Point: {
+      BM_mesh_elem_table_ensure(bm, BM_VERT);
+      if (mesh_eval.verts_num == bm->totvert) {
+        return IndexMask::from_predicate(range, GrainSize(4096), memory, [&](const int i) {
+          const BMVert *vert = BM_vert_at_index(bm, i);
+          return BM_elem_flag_test_bool(vert, BM_ELEM_SELECT);
+        });
+      }
+      if (const int *orig_indices = static_cast<const int *>(
+              CustomData_get_layer(&mesh_eval.vert_data, CD_ORIGINDEX)))
+      {
+        return IndexMask::from_predicate(range, GrainSize(2048), memory, [&](const int i) {
+          const int orig = orig_indices[i];
+          if (orig == -1) {
+            return false;
+          }
+          const BMVert *vert = BM_vert_at_index(bm, orig);
+          return BM_elem_flag_test_bool(vert, BM_ELEM_SELECT);
+        });
+      }
+      return range;
+    }
+    case bke::AttrDomain::Edge: {
+      BM_mesh_elem_table_ensure(bm, BM_EDGE);
+      if (mesh_eval.edges_num == bm->totedge) {
+        return IndexMask::from_predicate(range, GrainSize(4096), memory, [&](const int i) {
+          const BMEdge *edge = BM_edge_at_index(bm, i);
+          return BM_elem_flag_test_bool(edge, BM_ELEM_SELECT);
+        });
+      }
+      if (const int *orig_indices = static_cast<const int *>(
+              CustomData_get_layer(&mesh_eval.edge_data, CD_ORIGINDEX)))
+      {
+        return IndexMask::from_predicate(range, GrainSize(2048), memory, [&](const int i) {
+          const int orig = orig_indices[i];
+          if (orig == -1) {
+            return false;
+          }
+          const BMEdge *edge = BM_edge_at_index(bm, orig);
+          return BM_elem_flag_test_bool(edge, BM_ELEM_SELECT);
+        });
+      }
+      return range;
+    }
+    case bke::AttrDomain::Face: {
+      return calc_mesh_selection_mask_faces(mesh_eval, mesh_orig, memory);
+    }
+    case bke::AttrDomain::Corner: {
+      IndexMaskMemory face_memory;
+      const IndexMask face_mask = calc_mesh_selection_mask_faces(
+          mesh_eval, mesh_orig, face_memory);
+      if (face_mask.is_empty()) {
+        return {};
+      }
+      if (face_mask.size() == range.size()) {
+        return range;
+      }
+
+      Array<bool> face_selection(range.size(), false);
+      face_mask.to_bools(face_selection);
+
+      const VArray<bool> corner_selection = attributes_eval.adapt_domain<bool>(
+          VArray<bool>::ForSpan(face_selection), bke::AttrDomain::Face, bke::AttrDomain::Corner);
+      return IndexMask::from_bools(corner_selection, memory);
+    }
+    default:
+      BLI_assert_unreachable();
+      return range;
+  }
+}
+
 IndexMask GeometryDataSource::apply_selection_filter(IndexMaskMemory &memory) const
 {
   std::lock_guard lock{mutex_};
@@ -390,47 +501,8 @@ IndexMask GeometryDataSource::apply_selection_filter(IndexMaskMemory &memory) co
       BLI_assert(object_orig_->type == OB_MESH);
       BLI_assert(object_orig_->mode == OB_MODE_EDIT);
       const Mesh *mesh_eval = geometry_set_.get_mesh();
-      const bke::AttributeAccessor attributes_eval = mesh_eval->attributes();
-      Mesh *mesh_orig = (Mesh *)object_orig_->data;
-      BMesh *bm = mesh_orig->runtime->edit_mesh->bm;
-      BM_mesh_elem_table_ensure(bm, BM_VERT);
-
-      const int *orig_indices = (const int *)CustomData_get_layer(&mesh_eval->vert_data,
-                                                                  CD_ORIGINDEX);
-      if (orig_indices != nullptr) {
-        /* Use CD_ORIGINDEX layer if it exists. */
-        VArray<bool> selection = attributes_eval.adapt_domain<bool>(
-            VArray<bool>::ForFunc(mesh_eval->verts_num,
-                                  [bm, orig_indices](int vertex_index) -> bool {
-                                    const int i_orig = orig_indices[vertex_index];
-                                    if (i_orig < 0) {
-                                      return false;
-                                    }
-                                    if (i_orig >= bm->totvert) {
-                                      return false;
-                                    }
-                                    const BMVert *vert = BM_vert_at_index(bm, i_orig);
-                                    return BM_elem_flag_test(vert, BM_ELEM_SELECT);
-                                  }),
-            bke::AttrDomain::Point,
-            domain_);
-        return IndexMask::from_bools(selection, memory);
-      }
-
-      if (mesh_eval->verts_num == bm->totvert) {
-        /* Use a simple heuristic to match original vertices to evaluated ones. */
-        VArray<bool> selection = attributes_eval.adapt_domain<bool>(
-            VArray<bool>::ForFunc(mesh_eval->verts_num,
-                                  [bm](int vertex_index) -> bool {
-                                    const BMVert *vert = BM_vert_at_index(bm, vertex_index);
-                                    return BM_elem_flag_test(vert, BM_ELEM_SELECT);
-                                  }),
-            bke::AttrDomain::Point,
-            domain_);
-        return IndexMask::from_bools(selection, memory);
-      }
-
-      return full_range;
+      const Mesh *mesh_orig = static_cast<const Mesh *>(object_orig_->data);
+      return calc_mesh_selection_mask(*mesh_eval, *mesh_orig, domain_, memory);
     }
     case bke::GeometryComponent::Type::Curve: {
       BLI_assert(object_orig_->type == OB_CURVES);
@@ -449,7 +521,7 @@ IndexMask GeometryDataSource::apply_selection_filter(IndexMaskMemory &memory) co
     case bke::GeometryComponent::Type::PointCloud: {
       BLI_assert(object_orig_->type == OB_POINTCLOUD);
       const bke::AttributeAccessor attributes = *component_->attributes();
-      const VArray<bool> &selection = *attributes.lookup_or_default(
+      const VArray<bool> selection = *attributes.lookup_or_default(
           ".selection", bke::AttrDomain::Point, false);
       return IndexMask::from_bools(selection, memory);
     }
@@ -472,7 +544,7 @@ std::optional<const bke::AttributeAccessor> GeometryDataSource::get_component_at
   }
   if (layer_index_ >= 0 && layer_index_ < grease_pencil->layers().size()) {
     if (const bke::greasepencil::Drawing *drawing = grease_pencil->get_eval_drawing(
-            *grease_pencil->layer(layer_index_)))
+            grease_pencil->layer(layer_index_)))
     {
       return drawing->strokes().attributes();
     }

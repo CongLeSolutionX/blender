@@ -48,6 +48,7 @@ const EnumPropertyItem rna_enum_context_mode_items[] = {
     {CTX_MODE_PAINT_GREASE_PENCIL, "PAINT_GREASE_PENCIL", 0, "Grease Pencil Paint", ""},
     {CTX_MODE_SCULPT_GREASE_PENCIL, "SCULPT_GREASE_PENCIL", 0, "Grease Pencil Sculpt", ""},
     {CTX_MODE_WEIGHT_GREASE_PENCIL, "WEIGHT_GREASE_PENCIL", 0, "Grease Pencil Weight Paint", ""},
+    {CTX_MODE_VERTEX_GREASE_PENCIL, "VERTEX_GREASE_PENCIL", 0, "Grease Pencil Vertex Paint", ""},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
@@ -56,7 +57,7 @@ const EnumPropertyItem rna_enum_context_mode_items[] = {
 #  include "DNA_asset_types.h"
 
 #  ifdef WITH_PYTHON
-#    include "BPY_extern.h"
+#    include "BPY_extern.hh"
 #  endif
 
 #  include "RE_engine.h"
@@ -185,15 +186,20 @@ static PointerRNA rna_Context_collection_get(PointerRNA *ptr)
 static PointerRNA rna_Context_layer_collection_get(PointerRNA *ptr)
 {
   bContext *C = (bContext *)ptr->data;
-  ptr->owner_id = &CTX_data_scene(C)->id;
-  return rna_pointer_inherit_refine(ptr, &RNA_LayerCollection, CTX_data_layer_collection(C));
+  Scene *scene = CTX_data_scene(C);
+
+  PointerRNA scene_ptr = RNA_id_pointer_create(&scene->id);
+  return rna_pointer_inherit_refine(
+      &scene_ptr, &RNA_LayerCollection, CTX_data_layer_collection(C));
 }
 
 static PointerRNA rna_Context_tool_settings_get(PointerRNA *ptr)
 {
   bContext *C = (bContext *)ptr->data;
-  ptr->owner_id = &CTX_data_scene(C)->id;
-  return rna_pointer_inherit_refine(ptr, &RNA_ToolSettings, CTX_data_tool_settings(C));
+  Scene *scene = CTX_data_scene(C);
+
+  PointerRNA scene_ptr = RNA_id_pointer_create(&scene->id);
+  return rna_pointer_inherit_refine(&scene_ptr, &RNA_ToolSettings, CTX_data_tool_settings(C));
 }
 
 static PointerRNA rna_Context_preferences_get(PointerRNA * /*ptr*/)

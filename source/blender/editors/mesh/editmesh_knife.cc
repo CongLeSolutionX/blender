@@ -40,6 +40,7 @@
 #include "BKE_layer.hh"
 #include "BKE_report.hh"
 #include "BKE_scene.hh"
+#include "BKE_screen.hh"
 #include "BKE_unit.hh"
 
 #include "GPU_immediate.hh"
@@ -2185,14 +2186,7 @@ static void knife_make_face_cuts(KnifeTool_OpData *kcd, BMesh *bm, BMFace *f, Li
 #endif
 
     {
-      BMFace **face_arr = nullptr;
-      int face_arr_len;
-
-      BM_face_split_edgenet(bm, f, edge_array, edge_array_len, &face_arr, &face_arr_len);
-
-      if (face_arr) {
-        MEM_freeN(face_arr);
-      }
+      BM_face_split_edgenet(bm, f, edge_array, edge_array_len, nullptr);
     }
 
     /* Remove dangling edges, not essential - but nice for users. */
@@ -4026,7 +4020,7 @@ static void knifetool_init(ViewContext *vc,
 
   if (is_interactive) {
     kcd->draw_handle = ED_region_draw_cb_activate(
-        kcd->region->type, knifetool_draw, kcd, REGION_DRAW_POST_VIEW);
+        kcd->region->runtime->type, knifetool_draw, kcd, REGION_DRAW_POST_VIEW);
 
     knife_init_colors(&kcd->colors);
   }
@@ -4055,7 +4049,7 @@ static void knifetool_exit_ex(KnifeTool_OpData *kcd)
     WM_cursor_modal_restore(kcd->vc.win);
 
     /* Deactivate the extra drawing stuff in 3D-View. */
-    ED_region_draw_cb_exit(kcd->region->type, kcd->draw_handle);
+    ED_region_draw_cb_exit(kcd->region->runtime->type, kcd->draw_handle);
   }
 
   /* Free the custom data. */

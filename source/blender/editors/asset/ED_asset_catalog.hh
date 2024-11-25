@@ -23,7 +23,11 @@
 
 #include "BLI_string_ref.hh"
 
-struct bScreen;
+struct Main;
+
+namespace blender::asset_system {
+class AssetLibrary;
+}
 
 namespace blender::ed::asset {
 
