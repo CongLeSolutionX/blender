@@ -11,6 +11,7 @@
 #include "BLI_map.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_parameter_pack_utils.hh"
+#include "BLI_set.hh"
 #include "BLI_vector.hh"
 #include "BLI_vector_set.hh"
 #include "DNA_node_types.h"
@@ -3566,9 +3567,9 @@ static int find_next_sample(SoundWaveform *wf, int sample_start, eSampleType typ
   return i - hit_count + 1;
 }
 
-static blender::Vector<blender::IndexRange> silent_ranges_get(Scene *scene,
-                                                              Sequence *seq,
-                                                              wmOperator *op)
+static blender::VectorSet<blender::int2> silent_ranges_get(Scene *scene,
+                                                           Sequence *seq,
+                                                           wmOperator *op)
 {
   SoundWaveform *wf = static_cast<SoundWaveform *>(seq->sound->waveform);
   const float samples_per_frame = SOUND_WAVE_SAMPLES_PER_SECOND / FPS;
@@ -3580,7 +3581,7 @@ static blender::Vector<blender::IndexRange> silent_ranges_get(Scene *scene,
   const int seq_end_index = SEQ_time_right_handle_frame_get(scene, seq) -
                             SEQ_time_start_frame_get(seq);
   const int end_sample = seq_end_index * samples_per_frame;
-  blender::Vector<blender::IndexRange> silent_frames;
+  blender::VectorSet<blender::int2> silent_frames;
 
   int silent_sample = seq_start_index * samples_per_frame;
   int loud_sample = 0;
@@ -3609,76 +3610,61 @@ static blender::Vector<blender::IndexRange> silent_ranges_get(Scene *scene,
     }
 
     if (silence_end - silence_start >= minimum_length) {
-      blender::IndexRange range{silence_start, silence_end - silence_start};
-      silent_frames.append(range);
+      blender::int2 range = {silence_start, silence_end};
+      silent_frames.add(range);
     }
   }
 
   return silent_frames;
 }
 
-static Sequence *remove_silence_do_split(bContext *C,
-                                         Sequence *seq,
-                                         blender::IndexRange range,
-                                         blender::Vector<Sequence *> &strips_to_remove,
-                                         int *r_silent_len)
+struct RemoveSilenceResult {
+  Sequence *left;
+  Sequence *silent;
+  Sequence *right;
+};
+
+static RemoveSilenceResult remove_silence_do_split(bContext *C, Sequence *seq, blender::int2 range)
 {
   Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   Editing *ed = SEQ_editing_get(scene);
   ListBase *seqbase = SEQ_active_seqbase_get(ed);
-  Sequence *silent = seq;
   const char *error_msg = nullptr;
-  const int split_end = range.one_after_last();
 
-  if (range.first() != SEQ_time_left_handle_frame_get(scene, seq)) {
-    silent = SEQ_edit_strip_split(
-        bmain, scene, seqbase, seq, range.first(), SEQ_SPLIT_SOFT, &error_msg);
+  RemoveSilenceResult result{seq, nullptr, nullptr};
+
+  /* If strip starts with silence, first split can not be done. */
+  if (range.x != SEQ_time_left_handle_frame_get(scene, seq)) {
+    result.silent = SEQ_edit_strip_split(
+        bmain, scene, seqbase, seq, range.x, SEQ_SPLIT_SOFT, &error_msg);
+  }
+  else {
+    result.silent = seq;
   }
 
-  if (silent == nullptr) {
-    return nullptr;
+  // Should not happen!!!
+  if (result.silent == nullptr) {
+    // BLI_assert_unreachable();
+    return result;
   }
 
-  strips_to_remove.append(silent);
-
-  /* No need to split. */
-  if (split_end >= SEQ_time_right_handle_frame_get(scene, silent)) {
-    *r_silent_len = SEQ_time_left_handle_frame_get(scene, silent) -
-                    SEQ_time_right_handle_frame_get(scene, silent);
-    return nullptr;
+  const int split_end = range.y;
+  /* If strip ends with silence, last split can not be done. */
+  if (split_end <= SEQ_time_right_handle_frame_get(scene, result.silent)) {
+    result.right = SEQ_edit_strip_split(
+        bmain, scene, seqbase, result.silent, split_end, SEQ_SPLIT_SOFT, &error_msg);
   }
 
-  Sequence *next = SEQ_edit_strip_split(
-      bmain, scene, seqbase, silent, split_end, SEQ_SPLIT_SOFT, &error_msg);
-  *r_silent_len = SEQ_time_left_handle_frame_get(scene, silent) -
-                  SEQ_time_right_handle_frame_get(scene, silent);
-  return next;
+  return result;
 }
 
-static blender::Vector<Sequence *> remove_silence_do_split_non_sound(
-    bContext *C,
-    blender::Vector<Sequence *> &other_strips,
-    blender::IndexRange range,
-    int offset,
-    blender::Map<Sequence *, int> &strip_to_offset,
-    blender::Vector<Sequence *> &strips_to_remove)
-{
-  blender::Vector<Sequence *> other_strips_next;
-  for (Sequence *other : other_strips) {
-    int dummy;
-    Sequence *next = remove_silence_do_split(C, other, range, strips_to_remove, &dummy);
-    if (next == nullptr) {
-      /* Strip likely does not intersect this frame, so use it in next iterations. */
-      other_strips_next.append(other);
-      continue;
-    }
-
-    other_strips_next.append(next);
-    strip_to_offset.add(next, offset);
-  }
-  return other_strips_next;
-}
+/* So the new idea is: have a set of silent ranges, go over all strips and make a cut.
+ * - Each strip ater silent range will accumulate offset
+ * - When strip is split, copy offset to new strip
+ * This approach is bit more easier to implement, but god knows what happens if sounds strips would
+ * overlap in time
+ */
 
 static int sequencer_remove_silence_exec(bContext *C, wmOperator *op)
 {
@@ -3689,56 +3675,70 @@ static int sequencer_remove_silence_exec(bContext *C, wmOperator *op)
   blender::VectorSet strips = ED_sequencer_selected_strips_from_context(C);
   blender::Vector<Sequence *> sound_strips = strips.as_span();
   sound_strips.remove_if([](Sequence *seq) { return seq->type != SEQ_TYPE_SOUND_RAM; });
-  blender::Vector<Sequence *> other_strips = strips.as_span();
-  other_strips.remove_if([](Sequence *seq) { return seq->type == SEQ_TYPE_SOUND_RAM; });
 
   blender::Vector<Sequence *> strips_to_remove;
   blender::Map<Sequence *, int> strip_to_offset;
-  int offset = 0;
+  blender::VectorSet<blender::int2> silent_ranges;
 
+  /* It's easier to invalidate cache on original strips. */
   for (Sequence *seq : strips) {
     SEQ_relations_invalidate_cache_raw(scene, seq);
   }
 
-  for (int i : sound_strips.index_range()) {
-    Sequence *seq = sound_strips[i];
-    Sequence *next = seq;
+  /* Gather all the ranges for splitting. */
+  for (Sequence *seq : sound_strips) {
+    silent_ranges.add_multiple(silent_ranges_get(scene, seq, op));
+  }
 
-    /* If strip does not start with silence, it has to be offset manually here. */
-    blender::Vector<blender::IndexRange> ranges = silent_ranges_get(scene, seq, op);
-    if (ranges.is_empty() || ranges[0].first() > SEQ_time_left_handle_frame_get(scene, seq)) {
-      strip_to_offset.add(seq, offset);
-      for (Sequence *other : other_strips) {
-        /* This is super weak :( */
-        if (SEQ_time_left_handle_frame_get(scene, other) ==
-            SEQ_time_left_handle_frame_get(scene, seq))
-        {
-          strip_to_offset.add(other, offset);
-        }
-      }
-    }
+  /* Split strips, flag for removal and copy pending offset from original to right side strip. */
+  int silent_len = 0;
+  for (blender::int2 range : silent_ranges) {
+    for (int i = 0; i < strips.size(); i++) {
+      Sequence *seq = strips[i];
 
-    for (blender::IndexRange range : ranges) {
-      int silent_length = 0;
-      next = remove_silence_do_split(C, next, range, strips_to_remove, &silent_length);
-      offset += silent_length;
-      other_strips = remove_silence_do_split_non_sound(
-          C, other_strips, range, offset, strip_to_offset, strips_to_remove);
+      int offset = strip_to_offset.lookup_default(seq, 0);
 
-      if (next == nullptr) {
-        break;
+      RemoveSilenceResult result = remove_silence_do_split(C, seq, range);
+
+      // xxx
+      if (result.silent == nullptr) {
+        continue;
       }
 
-      strip_to_offset.add(next, offset);
+      // Technically, we can use range.size() here. it is calculated form strip, but it may have
+      // errors. TODO for testing.
+      if (seq->type == SEQ_TYPE_SOUND_RAM) {
+        silent_len = SEQ_time_left_handle_frame_get(scene, result.silent) -
+                     SEQ_time_right_handle_frame_get(scene, result.silent);
+      }
+
+      strip_to_offset.remove(result.silent);
+      strips_to_remove.append(result.silent);
+
+      if (result.right == nullptr) {
+        continue;
+      }
+      strip_to_offset.add_overwrite(result.right, offset);
+
+      /* Since strip has been split, add new one to vector. */
+      strips.add(result.right);
     }
 
-    /* Finished splitting sound strip. Offset remaining strips and reset offset variable. */
-    /*for (int j = i + 1; j < sound_strips.size(); j++) {
-      SEQ_transform_translate_sequence(scene, sound_strips[j], offset);
+    /* Process offset for strips to the right of silent range. */
+    for (Sequence *seq : strips) {
+      if (SEQ_time_left_handle_frame_get(scene, seq) < range.y) {
+        continue;
+      }
+
+      if (!strip_to_offset.contains(seq)) {
+        strip_to_offset.add(seq, silent_len);
+        continue;
+      }
+
+      const int new_offset = strip_to_offset.lookup(seq) + silent_len;
+      strip_to_offset.remove(seq);  // XXX
+      strip_to_offset.add(seq, new_offset);
     }
-    for (Sequence *other : other_strips) {
-      SEQ_transform_translate_sequence(scene, other, offset);
-    }*/
   }
 
   /* Delete strips. */
