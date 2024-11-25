@@ -100,7 +100,7 @@ bool foreach_action_slot_use_with_references(ID &animated_id,
   if (adt) {
     if (adt->action) {
       /* Direct assignment. */
-      if (!callback(animated_id, adt->action, adt->slot_handle, adt->slot_name)) {
+      if (!callback(animated_id, adt->action, adt->slot_handle, adt->last_slot_identifier)) {
         return false;
       }
     }

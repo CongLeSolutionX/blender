@@ -206,7 +206,7 @@ TEST_F(KeyframingTest, insert_keyframes__layered_action__non_array_property)
   ASSERT_EQ(1, action.slots().size());
   Slot *slot = action.slot(0);
   EXPECT_STREQ(object->id.name, slot->name);
-  EXPECT_STREQ(object->adt->slot_name, slot->name);
+  EXPECT_STREQ(object->adt->last_slot_identifier, slot->name);
   EXPECT_EQ(object->adt->slot_handle, slot->handle);
 
   /* We have the default layer and strip. */
@@ -616,7 +616,7 @@ TEST_F(KeyframingTest, insert_keyframes__layered_action__multiple_ids)
   Slot *slot_1 = action.slot_for_handle(object->adt->slot_handle);
   ASSERT_NE(nullptr, slot_1);
   EXPECT_STREQ(object->id.name, slot_1->name);
-  EXPECT_STREQ(object->adt->slot_name, slot_1->name);
+  EXPECT_STREQ(object->adt->last_slot_identifier, slot_1->name);
 
   /* Get the keyframe strip. */
   ASSERT_TRUE(action.is_action_layered());
@@ -649,7 +649,7 @@ TEST_F(KeyframingTest, insert_keyframes__layered_action__multiple_ids)
   Slot *slot_2 = action.slot_for_handle(armature_object->adt->slot_handle);
   ASSERT_NE(nullptr, slot_2);
   EXPECT_STREQ(armature_object->id.name, slot_2->name);
-  EXPECT_STREQ(armature_object->adt->slot_name, slot_2->name);
+  EXPECT_STREQ(armature_object->adt->last_slot_identifier, slot_2->name);
 
   ASSERT_EQ(2, strip_data->channelbags().size());
   ChannelBag *channel_bag_2 = strip_data->channelbag_for_slot(*slot_2);

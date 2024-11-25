@@ -245,7 +245,7 @@ class Action : public ::bAction {
    * Action's slots with (in order):
    *
    * - `animated_id.adt->slot_handle`,
-   * - `animated_id.adt->slot_name`,
+   * - `animated_id.adt->last_slot_identifier`,
    * - `animated_id.name`.
    *
    * Note that this is different from #slot_for_id, which does not use the
@@ -626,7 +626,7 @@ class Slot : public ::ActionSlot {
   constexpr static int name_length_min = 3;
 
   constexpr static int name_length_max = MAX_ID_NAME;
-  static_assert(sizeof(AnimData::slot_name) == name_length_max);
+  static_assert(sizeof(AnimData::last_slot_identifier) == name_length_max);
   static_assert(sizeof(NlaStrip::action_slot_name) == name_length_max);
 
   /**

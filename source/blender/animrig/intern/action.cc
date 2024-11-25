@@ -441,7 +441,7 @@ void Action::slot_name_propagate(Main &bmain, const Slot &slot)
       }
 
       /* Ensure the Slot name on the AnimData is correct. */
-      STRNCPY_UTF8(adt->slot_name, slot.name);
+      STRNCPY_UTF8(adt->last_slot_identifier, slot.name);
     }
     FOREACH_MAIN_LISTBASE_ID_END;
   }
@@ -571,9 +571,9 @@ Slot *Action::find_suitable_slot_for(const ID &animated_id)
     }
   }
 
-  /* Try the slot name from the AnimData, if it is set. */
-  if (adt && adt->slot_name[0]) {
-    Slot *slot = this->slot_find_by_name(adt->slot_name);
+  /* Try the slot identifier from the AnimData, if it is set. */
+  if (adt && adt->last_slot_identifier[0]) {
+    Slot *slot = this->slot_find_by_name(adt->last_slot_identifier);
     if (slot && slot->is_suitable_for(animated_id)) {
       return slot;
     }
@@ -1184,7 +1184,7 @@ bool assign_action(bAction *action, const OwnedAnimData owned_adt)
                                action,
                                owned_adt.adt.action,
                                owned_adt.adt.slot_handle,
-                               owned_adt.adt.slot_name);
+                               owned_adt.adt.last_slot_identifier);
 }
 
 bool assign_tmpaction(bAction *action, const OwnedAnimData owned_adt)
@@ -1223,9 +1223,9 @@ Slot *assign_action_ensure_slot_for_keying(Action &action, ID &animated_id)
        * re-assign an intentionally-unassigned slot. */
     }
     else {
-      /* Try the slot name from the AnimData, if it is set. */
-      if (adt && adt->slot_name[0]) {
-        slot = action.slot_find_by_name(adt->slot_name);
+      /* Try the slot identifier from the AnimData, if it is set. */
+      if (adt && adt->last_slot_identifier[0]) {
+        slot = action.slot_find_by_name(adt->last_slot_identifier);
       }
       else {
         /* Search for the ID name (which includes the ID type). */
@@ -1453,7 +1453,7 @@ ActionSlotAssignmentResult assign_action_slot(Slot *slot_to_assign, ID &animated
   }
 
   return generic_assign_action_slot(
-      slot_to_assign, animated_id, adt->action, adt->slot_handle, adt->slot_name);
+      slot_to_assign, animated_id, adt->action, adt->slot_handle, adt->last_slot_identifier);
 }
 
 ActionSlotAssignmentResult assign_action_and_slot(Action *action,
