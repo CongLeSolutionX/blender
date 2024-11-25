@@ -42,11 +42,15 @@ void VKDiscardPool::move_data(VKDiscardPool &src_pool)
   images_.extend(src_pool.images_);
   shader_modules_.extend(src_pool.shader_modules_);
   pipeline_layouts_.extend(src_pool.pipeline_layouts_);
+  framebuffers_.extend(src_pool.framebuffers_);
+  render_passes_.extend(src_pool.render_passes_);
   src_pool.buffers_.clear();
   src_pool.image_views_.clear();
   src_pool.images_.clear();
   src_pool.shader_modules_.clear();
   src_pool.pipeline_layouts_.clear();
+  src_pool.framebuffers_.clear();
+  src_pool.render_passes_.clear();
   for (VkCommandPool vk_command_pool : src_pool.command_buffers_.keys()) {
     Vector<VkCommandBuffer> &buffers = src_pool.command_buffers_.lookup(vk_command_pool);
     if (!command_buffers_.contains(vk_command_pool)) {
@@ -108,6 +112,18 @@ void VKDiscardPool::discard_pipeline_layout(VkPipelineLayout vk_pipeline_layout)
   pipeline_layouts_.append(vk_pipeline_layout);
 }
 
+void VKDiscardPool::discard_framebuffer(VkFramebuffer vk_framebuffer)
+{
+  std::scoped_lock mutex(mutex_);
+  framebuffers_.append(vk_framebuffer);
+}
+
+void VKDiscardPool::discard_render_pass(VkRenderPass vk_render_pass)
+{
+  std::scoped_lock mutex(mutex_);
+  render_passes_.append(vk_render_pass);
+}
+
 void VKDiscardPool::destroy_discarded_resources(VKDevice &device)
 {
   std::scoped_lock mutex(mutex_);
@@ -138,6 +154,16 @@ void VKDiscardPool::destroy_discarded_resources(VKDevice &device)
   while (!shader_modules_.is_empty()) {
     VkShaderModule vk_shader_module = shader_modules_.pop_last();
     vkDestroyShaderModule(device.vk_handle(), vk_shader_module, nullptr);
+  }
+
+  while (!framebuffers_.is_empty()) {
+    VkFramebuffer vk_framebuffer = framebuffers_.pop_last();
+    vkDestroyFramebuffer(device.vk_handle(), vk_framebuffer, nullptr);
+  }
+
+  while (!render_passes_.is_empty()) {
+    VkRenderPass vk_render_pass = render_passes_.pop_last();
+    vkDestroyRenderPass(device.vk_handle(), vk_render_pass, nullptr);
   }
 
   for (VkCommandPool vk_command_pool : command_buffers_.keys()) {

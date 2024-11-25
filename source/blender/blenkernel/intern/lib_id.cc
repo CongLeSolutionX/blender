@@ -861,8 +861,14 @@ ID *BKE_id_copy_for_use_in_bmain(Main *bmain, const ID *id)
 
 void BKE_id_move_to_same_lib(Main &bmain, ID &id, const ID &owner_id)
 {
-  BLI_assert(id.lib == nullptr);
-  if (owner_id.lib == nullptr) {
+  if (owner_id.lib == id.lib) {
+    /* `id` is already in the target library, nothing to do. */
+    return;
+  }
+  if (ID_IS_LINKED(&id)) {
+    BLI_assert_msg(false, "Only local IDs can be moved into a library");
+    /* Protect release builds against errors in calling code, as continuing here can lead to
+     * critical Main data-base corruption. */
     return;
   }
 
@@ -1907,6 +1913,7 @@ IDNewNameResult BKE_id_new_name_validate(Main &bmain,
         result.action = IDNewNameResult::Action::RENAMED_COLLISION_FORCED;
       }
       id_sort_by_name(&lb, &id, nullptr);
+
       return result;
     }
   }
@@ -2328,10 +2335,8 @@ IDNewNameResult BKE_id_rename(Main &bmain,
 {
   const IDNewNameResult result = BKE_libblock_rename(bmain, id, name, mode);
 
-  if (!ELEM(result.action,
-            IDNewNameResult::Action::UNCHANGED,
-            IDNewNameResult::Action::UNCHANGED_COLLISION))
-  {
+  auto deg_tag_id = [](ID &id) -> void {
+    DEG_id_tag_update(&id, ID_RECALC_SYNC_TO_EVAL);
     switch (GS(id.name)) {
       case ID_OB: {
         Object &ob = reinterpret_cast<Object &>(id);
@@ -2343,6 +2348,21 @@ IDNewNameResult BKE_id_rename(Main &bmain,
       default:
         break;
     }
+  };
+
+  switch (result.action) {
+    case IDNewNameResult::Action::UNCHANGED:
+    case IDNewNameResult::Action::UNCHANGED_COLLISION:
+      break;
+    case IDNewNameResult::Action::RENAMED_NO_COLLISION:
+    case IDNewNameResult::Action::RENAMED_COLLISION_ADJUSTED:
+      deg_tag_id(id);
+      break;
+    case IDNewNameResult::Action::RENAMED_COLLISION_FORCED:
+      BLI_assert(result.other_id);
+      deg_tag_id(*result.other_id);
+      deg_tag_id(id);
+      break;
   }
 
   return result;

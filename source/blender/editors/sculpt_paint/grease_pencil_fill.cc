@@ -23,6 +23,7 @@
 #include "BKE_material.h"
 #include "BKE_paint.hh"
 
+#include "DNA_brush_types.h"
 #include "DNA_curves_types.h"
 #include "DNA_grease_pencil_types.h"
 #include "DNA_material_types.h"
@@ -1030,7 +1031,9 @@ bke::CurvesGeometry fill_strokes(const ViewContext &view_context,
                                                   max_zoom_factor,
                                                   margin);
   /* Scale stroke radius by half to hide gaps between filled areas and boundaries. */
-  const float radius_scale = 0.5f;
+  const float radius_scale = (brush.gpencil_settings->fill_draw_mode == GP_FILL_DMODE_CONTROL) ?
+                                 0.0f :
+                                 0.5f;
 
   constexpr const int min_image_size = 128;
   /* Pixel scale (aka. "fill_factor, aka. "Precision") to reduce image size. */
