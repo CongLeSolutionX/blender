@@ -27,7 +27,7 @@ struct PointCloud;
  * Struct that stores basic information about a #BVHTree built from a mesh.
  */
 struct BVHTreeFromMesh {
-  BVHTree *tree = nullptr;
+  const BVHTree *tree = nullptr;
 
   /** Default callbacks to BVH nearest and ray-cast. */
   BVHTree_NearestPointCallback nearest_callback;
@@ -40,6 +40,15 @@ struct BVHTreeFromMesh {
   blender::Span<blender::int3> corner_tris;
 
   const MFace *face = nullptr;
+
+  BVHTree *owned_tree = nullptr;
+
+  ~BVHTreeFromMesh()
+  {
+    if (this->owned_tree) {
+      BLI_bvhtree_free(this->owned_tree);
+    }
+  }
 };
 
 enum BVHCacheType {
@@ -127,11 +136,6 @@ void BKE_bvhtree_from_mesh_edges_init(const Mesh &mesh,
 void BKE_bvhtree_from_mesh_verts_init(const Mesh &mesh,
                                       const blender::IndexMask &verts_mask,
                                       BVHTreeFromMesh &r_data);
-
-/**
- * Frees data allocated by a call to `bvhtree_from_mesh_*`.
- */
-void free_bvhtree_from_mesh(BVHTreeFromMesh *data);
 
 /**
  * Math functions used by callbacks

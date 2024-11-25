@@ -79,7 +79,7 @@ const ShrinkwrapBoundaryData &boundary_cache_ensure(const Mesh &mesh);
 struct ShrinkwrapTreeData {
   Mesh *mesh;
 
-  BVHTree *bvh;
+  const BVHTree *bvh;
   BVHTreeFromMesh treeData;
 
   blender::OffsetIndices<int> faces;

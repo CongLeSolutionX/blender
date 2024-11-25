@@ -1234,7 +1234,7 @@ void BKE_mesh_remap_calc_loops_from_mesh(const int mode,
     }
   }
   else {
-    BVHTreeFromMesh *treedata = nullptr;
+    Array<BVHTreeFromMesh> treedata;
     BVHTreeNearest nearest = {0};
     BVHTreeRayHit rayhit = {0};
     int num_trees = 0;
@@ -1369,8 +1369,7 @@ void BKE_mesh_remap_calc_loops_from_mesh(const int mode,
                                     &island_store);
 
       num_trees = use_islands ? island_store.islands_num : 1;
-      treedata = static_cast<BVHTreeFromMesh *>(
-          MEM_callocN(sizeof(*treedata) * size_t(num_trees), __func__));
+      treedata.reinitialize(num_trees);
       if (isld_steps_src) {
         as_graphdata = static_cast<BLI_AStarGraph *>(
             MEM_callocN(sizeof(*as_graphdata) * size_t(num_trees), __func__));
@@ -1387,7 +1386,7 @@ void BKE_mesh_remap_calc_loops_from_mesh(const int mode,
     }
     else {
       num_trees = 1;
-      treedata = static_cast<BVHTreeFromMesh *>(MEM_callocN(sizeof(*treedata), __func__));
+      treedata.reinitialize(1);
       if (isld_steps_src) {
         as_graphdata = static_cast<BLI_AStarGraph *>(MEM_callocN(sizeof(*as_graphdata), __func__));
       }
@@ -1994,14 +1993,12 @@ void BKE_mesh_remap_calc_loops_from_mesh(const int mode,
 
     for (tindex = 0; tindex < num_trees; tindex++) {
       MEM_freeN(islands_res[tindex]);
-      free_bvhtree_from_mesh(&treedata[tindex]);
       if (isld_steps_src) {
         BLI_astar_graph_free(&as_graphdata[tindex]);
       }
     }
     MEM_freeN(islands_res);
     BKE_mesh_loop_islands_free(&island_store);
-    MEM_freeN(treedata);
     if (isld_steps_src) {
       MEM_freeN(as_graphdata);
       BLI_astar_solution_free(&as_solution);
@@ -2302,8 +2299,6 @@ void BKE_mesh_remap_calc_faces_from_mesh(const int mode,
       CLOG_WARN(&LOG, "Unsupported mesh-to-mesh face mapping mode (%d)!", mode);
       memset(r_map->items, 0, sizeof(*r_map->items) * size_t(faces_dst.size()));
     }
-
-    free_bvhtree_from_mesh(&treedata);
   }
 }
 

@@ -196,7 +196,7 @@ static void statvis_calc_thickness(const MeshRenderData &mr, MutableSpan<float> 
   }
   else {
     BVHTreeFromMesh treeData = mr.mesh->bvh_corner_tris();
-    BVHTree *tree = treeData.tree;
+    const BVHTree *tree = treeData.tree;
     if (tree == nullptr) {
       return;
     }
@@ -327,7 +327,7 @@ static void statvis_calc_intersect(const MeshRenderData &mr, MutableSpan<float> 
   else {
     uint overlap_len;
     BVHTreeFromMesh treeData = mr.mesh->bvh_corner_tris();
-    BVHTree *tree = treeData.tree;
+    const BVHTree *tree = treeData.tree;
     if (tree == nullptr) {
       return;
     }

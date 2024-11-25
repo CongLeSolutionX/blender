@@ -199,16 +199,6 @@ static void get_vert2geom_distance(int verts_num,
   settings.userdata_chunk = &data_chunk;
   settings.userdata_chunk_size = sizeof(data_chunk);
   BLI_task_parallel_range(0, verts_num, &data, vert2geom_task_cb_ex, &settings);
-
-  if (dist_v) {
-    free_bvhtree_from_mesh(&treeData_v);
-  }
-  if (dist_e) {
-    free_bvhtree_from_mesh(&treeData_e);
-  }
-  if (dist_f) {
-    free_bvhtree_from_mesh(&treeData_f);
-  }
 }
 
 /**

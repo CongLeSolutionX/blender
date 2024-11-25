@@ -150,10 +150,7 @@ bool BKE_shrinkwrap_init_tree(
   return true;
 }
 
-void BKE_shrinkwrap_free_tree(ShrinkwrapTreeData *data)
-{
-  free_bvhtree_from_mesh(&data->treeData);
-}
+void BKE_shrinkwrap_free_tree(ShrinkwrapTreeData * /*data*/) {}
 
 namespace blender::bke::shrinkwrap {
 

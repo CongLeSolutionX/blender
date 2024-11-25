@@ -28,7 +28,6 @@ class ShrinkwrapBoundaryData;
 struct SubdivCCG;
 struct SubsurfRuntimeData;
 namespace blender::bke {
-struct BVHCacheItem;
 struct EditMeshData;
 }  // namespace blender::bke
 namespace blender::bke::bake {
@@ -106,6 +105,12 @@ struct TrianglesCache {
   void unfreeze();
   /** Call instead of `data.tag_dirty()`. */
   void tag_dirty();
+};
+
+struct BVHCacheItem {
+  BVHTree *tree = nullptr;
+  BVHCacheItem();
+  ~BVHCacheItem();
 };
 
 struct MeshRuntime {

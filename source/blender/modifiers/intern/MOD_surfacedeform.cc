@@ -1321,7 +1321,6 @@ static bool surfacedeformBind(Object *ob,
   }
 
   freeAdjacencyMap(vert_edges, adj_array, edge_polys);
-  free_bvhtree_from_mesh(&treeData);
 
   return data.success == 1;
 }

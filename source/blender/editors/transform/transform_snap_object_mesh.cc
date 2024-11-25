@@ -477,7 +477,7 @@ static eSnapMode snapMesh(SnapObjectContext *sctx,
   BVHTreeFromMesh treedata, treedata_dummy;
   snap_object_data_mesh_get(mesh_eval, skip_hidden, &treedata);
 
-  BVHTree *bvhtree[2] = {nullptr};
+  const BVHTree *bvhtree[2] = {nullptr};
   bvhtree[0] = skip_hidden ? mesh_eval->bvh_loose_no_hidden_edges().tree :
                              mesh_eval->bvh_loose_edges().tree;
   if (snap_to & SCE_SNAP_TO_POINT) {

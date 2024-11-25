@@ -705,8 +705,6 @@ static void rna_Object_closest_point_on_mesh(Object *ob,
       copy_v3_v3(r_location, nearest.co);
       copy_v3_v3(r_normal, nearest.no);
       *r_index = mesh_corner_tri_to_face_index(mesh_eval, nearest.index);
-
-      goto finally;
     }
   }
 
@@ -715,9 +713,6 @@ static void rna_Object_closest_point_on_mesh(Object *ob,
   zero_v3(r_location);
   zero_v3(r_normal);
   *r_index = -1;
-
-finally:
-  free_bvhtree_from_mesh(&treeData);
 }
 
 static bool rna_Object_is_modified(Object *ob, Scene *scene, int settings)

@@ -32,14 +32,11 @@ using blender::VArray;
 
 namespace blender::bke {
 
-struct BVHCacheItem {
-  BVHTree *tree = nullptr;
-  BVHCacheItem() = default;
-  ~BVHCacheItem()
-  {
-    BLI_bvhtree_free(this->tree);
-  }
-};
+BVHCacheItem::BVHCacheItem() = default;
+BVHCacheItem::~BVHCacheItem()
+{
+  BLI_bvhtree_free(this->tree);
+}
 
 }  // namespace blender::bke
 
@@ -788,7 +785,9 @@ BVHTreeFromMesh Mesh::bvh_loose_verts() const
     const LooseVertCache &loose_verts = this->loose_verts();
     data.tree = bvhtree_from_mesh_verts_create_tree(
         0.0f, 2, 6, positions, loose_verts.is_loose_bits, loose_verts.count);
-    bvhtree_balance(data.tree);
+    if (data.tree) {
+      BLI_bvhtree_balance(data.tree);
+    }
   });
   const BVHCacheItem &tree = this->runtime->bvh_cache_loose_verts.data();
   return bvhtree_from_mesh_setup_data(
@@ -802,7 +801,9 @@ BVHTreeFromMesh Mesh::bvh_loose_no_hidden_verts() const
     int mask_bits_act_len = -1;
     const BitVector<> mask = loose_verts_no_hidden_mask_get(*this, &mask_bits_act_len);
     data.tree = bvhtree_from_mesh_verts_create_tree(0.0f, 2, 6, positions, {}, -1);
-    bvhtree_balance(data.tree);
+    if (data.tree) {
+      BLI_bvhtree_balance(data.tree);
+    }
   });
   const BVHCacheItem &tree = this->runtime->bvh_cache_loose_no_hidden_verts.data();
   return bvhtree_from_mesh_setup_data(
@@ -814,7 +815,9 @@ BVHTreeFromMesh Mesh::bvh_verts() const
   const Span<float3> positions = this->vert_positions();
   this->runtime->bvh_cache_verts.ensure([&](BVHCacheItem &data) {
     data.tree = bvhtree_from_mesh_verts_create_tree(0.0f, 2, 6, positions, {}, -1);
-    bvhtree_balance(data.tree);
+    if (data.tree) {
+      BLI_bvhtree_balance(data.tree);
+    }
   });
   const BVHCacheItem &tree = this->runtime->bvh_cache_verts.data();
   return bvhtree_from_mesh_setup_data(
@@ -830,7 +833,9 @@ BVHTreeFromMesh Mesh::bvh_loose_edges() const
     const LooseEdgeCache &loose_edges = this->loose_edges();
     data.tree = bvhtree_from_mesh_edges_create_tree(
         positions, edges, loose_edges.is_loose_bits, loose_edges.count, 0.0f, 2, 6);
-    bvhtree_balance(data.tree);
+    if (data.tree) {
+      BLI_bvhtree_balance(data.tree);
+    }
   });
   const BVHCacheItem &tree = this->runtime->bvh_cache_loose_edges.data();
   BVHTreeFromMesh data;
@@ -847,7 +852,9 @@ BVHTreeFromMesh Mesh::bvh_loose_no_hidden_edges() const
     const BitVector<> mask = loose_edges_no_hidden_mask_get(*this, &mask_bits_act_len);
     data.tree = bvhtree_from_mesh_edges_create_tree(
         positions, edges, mask, mask_bits_act_len, 0.0f, 2, 6);
-    bvhtree_balance(data.tree);
+    if (data.tree) {
+      BLI_bvhtree_balance(data.tree);
+    }
   });
   const BVHCacheItem &tree = this->runtime->bvh_cache_loose_no_hidden_edges.data();
   return bvhtree_from_mesh_setup_data(
@@ -860,7 +867,9 @@ BVHTreeFromMesh Mesh::bvh_edges() const
   const Span<int2> edges = this->edges();
   this->runtime->bvh_cache_edges.ensure([&](BVHCacheItem &data) {
     data.tree = bvhtree_from_mesh_edges_create_tree(positions, edges, {}, -1, 0.0f, 2, 6);
-    bvhtree_balance(data.tree);
+    if (data.tree) {
+      BLI_bvhtree_balance(data.tree);
+    }
   });
   const BVHCacheItem &tree = this->runtime->bvh_cache_edges.data();
   return bvhtree_from_mesh_setup_data(
@@ -881,7 +890,9 @@ BVHTreeFromMesh Mesh::bvh_legacy_faces() const
         this->totface_legacy,
         {},
         -1);
-    bvhtree_balance(data.tree);
+    if (data.tree) {
+      BLI_bvhtree_balance(data.tree);
+    }
   });
   const BVHCacheItem &tree = this->runtime->bvh_cache_faces.data();
   return bvhtree_from_mesh_setup_data(
@@ -904,11 +915,18 @@ BVHTreeFromMesh Mesh::bvh_corner_tris_no_hidden() const
         &mask_bits_act_len);
     data.tree = bvhtree_from_mesh_verts_create_tree(
         0.0f, 2, 6, positions, mask, mask_bits_act_len);
-    bvhtree_balance(data.tree);
+    if (data.tree) {
+      BLI_bvhtree_balance(data.tree);
+    }
   });
   const BVHCacheItem &tree = this->runtime->bvh_cache_verts.data();
-  return bvhtree_from_mesh_setup_data(
-      tree.tree, BVHTREE_FROM_CORNER_TRIS_NO_HIDDEN, positions, {}, {}, {}, nullptr);
+  return bvhtree_from_mesh_setup_data(tree.tree,
+                                      BVHTREE_FROM_CORNER_TRIS_NO_HIDDEN,
+                                      positions,
+                                      {},
+                                      corner_verts,
+                                      corner_tris,
+                                      nullptr);
 }
 
 BVHTreeFromMesh Mesh::bvh_corner_tris() const
@@ -919,7 +937,9 @@ BVHTreeFromMesh Mesh::bvh_corner_tris() const
   this->runtime->bvh_cache_corner_tris.ensure([&](BVHCacheItem &data) {
     data.tree = bvhtree_from_mesh_corner_tris_create_tree(
         0.0f, 2, 6, positions, corner_verts, corner_tris, {}, -1);
-    bvhtree_balance(data.tree);
+    if (data.tree) {
+      BLI_bvhtree_balance(data.tree);
+    }
   });
   const BVHCacheItem &tree = this->runtime->bvh_cache_corner_tris.data();
   return bvhtree_from_mesh_setup_data(
@@ -953,6 +973,7 @@ void BKE_bvhtree_from_mesh_tris_init(const Mesh &mesh,
 
   int active_num = -1;
   BVHTree *tree = bvhtree_new_common(0.0f, 2, 6, tris_num, active_num);
+  r_data.owned_tree = tree;
   r_data.tree = tree;
   if (tree == nullptr) {
     return;
@@ -993,6 +1014,7 @@ void BKE_bvhtree_from_mesh_edges_init(const Mesh &mesh,
 
   int active_num = -1;
   BVHTree *tree = bvhtree_new_common(0.0f, 2, 6, edges_mask.size(), active_num);
+  r_data.owned_tree = tree;
   r_data.tree = tree;
   if (tree == nullptr) {
     return;
@@ -1028,6 +1050,7 @@ void BKE_bvhtree_from_mesh_verts_init(const Mesh &mesh,
 
   int active_num = -1;
   BVHTree *tree = bvhtree_new_common(0.0f, 2, 6, verts_mask.size(), active_num);
+  r_data.owned_tree = tree;
   r_data.tree = tree;
   if (tree == nullptr) {
     return;

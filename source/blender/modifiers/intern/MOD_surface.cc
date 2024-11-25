@@ -58,8 +58,8 @@ static void free_data(ModifierData *md)
 
   if (surmd) {
     if (surmd->runtime.bvhtree) {
-      free_bvhtree_from_mesh(surmd->runtime.bvhtree);
-      MEM_SAFE_FREE(surmd->runtime.bvhtree);
+      MEM_delete(surmd->runtime.bvhtree);
+      surmd->runtime.bvhtree = nullptr;
     }
 
     if (surmd->runtime.mesh) {
@@ -87,10 +87,8 @@ static void deform_verts(ModifierData *md,
   const int cfra = int(DEG_get_ctime(ctx->depsgraph));
 
   /* Free mesh and BVH cache. */
-  if (surmd->runtime.bvhtree) {
-    free_bvhtree_from_mesh(surmd->runtime.bvhtree);
-    MEM_SAFE_FREE(surmd->runtime.bvhtree);
-  }
+  MEM_delete(surmd->runtime.bvhtree);
+  surmd->runtime.bvhtree = nullptr;
 
   if (surmd->runtime.mesh) {
     BKE_id_free(nullptr, surmd->runtime.mesh);
