@@ -35,6 +35,7 @@ struct ShadowMapTracingState {
   /* State of the trace. */
   float ray_time;
   bool hit;
+  float occluder_dist;
 };
 
 ShadowMapTracingState shadow_map_trace_init(int sample_count, float step_offset)
@@ -57,6 +58,7 @@ struct ShadowTracingSample {
    */
   vec2 occluder;
   bool skip_sample;
+  vec3 ray_local_occluder;
 };
 
 /**
@@ -66,18 +68,20 @@ struct ShadowTracingSample {
  * Most of the code is wrapped into functions to avoid to debug issues inside macro code.
  */
 #define SHADOW_MAP_TRACE_FN(ShadowRayType) \
-  bool shadow_map_trace(ShadowRayType ray, int sample_count, float step_offset) \
+  ShadowMapTracingState shadow_map_trace(ShadowRayType ray, int sample_count, float step_offset) \
   { \
+    ShadowTracingSample samp; \
     ShadowMapTracingState state = shadow_map_trace_init(sample_count, step_offset); \
     for (int i = 0; (i <= sample_count) && (i <= SHADOW_MAX_STEP) && (state.hit == false); i++) { \
       /* Saturate to always cover the shading point position when i == sample_count. */ \
       state.ray_time = square(saturate(float(i) * state.ray_step_mul + state.ray_step_bias)); \
 \
-      ShadowTracingSample samp = shadow_map_trace_sample(state, ray); \
+      samp = shadow_map_trace_sample(state, ray); \
 \
       shadow_map_trace_hit_check(state, samp, i == sample_count); \
     } \
-    return state.hit; \
+    state.occluder_dist = dot(normalize(ray.direction), samp.ray_local_occluder); \
+    return state; \
   }
 
 /**
@@ -205,6 +209,7 @@ ShadowTracingSample shadow_map_trace_sample(ShadowMapTracingState state,
   samp.occluder.x = dot(ray_local_occluder, ray.direction) / length_squared(ray.direction);
   samp.occluder.y = dot(ray_local_occluder, ray.local_ray_up);
   samp.skip_sample = (depth == -1.0);
+  samp.ray_local_occluder = ray_local_occluder;
   return samp;
 }
 
@@ -306,6 +311,7 @@ ShadowTracingSample shadow_map_trace_sample(ShadowMapTracingState state,
   samp.occluder.x = dot(ray_local_occluder, ray.direction) / length_squared(ray.direction);
   samp.occluder.y = dot(ray_local_occluder, ray.local_ray_up);
   samp.skip_sample = (radial_occluder_depth == -1.0);
+  samp.ray_local_occluder = ray_local_occluder;
   return samp;
 }
 
@@ -417,7 +423,8 @@ float shadow_eval(LightData light,
                   vec3 P,
                   vec3 Ng,
                   int ray_count,
-                  int ray_step_count)
+                  int ray_step_count,
+                  out float out_shadow_dist)
 {
 #if defined(EEVEE_SAMPLING_DATA) && defined(EEVEE_UTILITY_TX)
 #  ifdef GPU_FRAGMENT_SHADER
@@ -474,24 +481,27 @@ float shadow_eval(LightData light,
   /* Don't do a any horizon clipping in this case as the closure is lit from both sides. */
   lNg = (is_transmission && is_translucent_with_thickness) ? vec3(0.0) : lNg;
 
+  out_shadow_dist = 0.0;
   float surface_hit = 0.0;
   for (int ray_index = 0; ray_index < ray_count && ray_index < SHADOW_MAX_RAY; ray_index++) {
     vec2 random_ray_2d = fract(hammersley_2d(ray_index, ray_count) + random_shadow_3d.xy);
 
-    bool has_hit;
+    ShadowMapTracingState trace;
     if (is_directional) {
       ShadowRayDirectional clip_ray = shadow_ray_generate_directional(
           light, random_ray_2d, lP, lNg, texel_radius);
-      has_hit = shadow_map_trace(clip_ray, ray_step_count, random_shadow_3d.z);
+      trace = shadow_map_trace(clip_ray, ray_step_count, random_shadow_3d.z);
     }
     else {
       ShadowRayPunctual clip_ray = shadow_ray_generate_punctual(light, random_ray_2d, lP, lNg);
-      has_hit = shadow_map_trace(clip_ray, ray_step_count, random_shadow_3d.z);
+      trace = shadow_map_trace(clip_ray, ray_step_count, random_shadow_3d.z);
     }
 
-    surface_hit += float(has_hit);
+    surface_hit += float(trace.hit);
+    out_shadow_dist += trace.occluder_dist;
   }
   /* Average samples. */
+  out_shadow_dist /= float(ray_count);
   return saturate(1.0 - surface_hit / float(ray_count));
 }
 

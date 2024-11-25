@@ -77,6 +77,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_output<decl::Float>("Distance");
   b.add_output<decl::Float>("Attenuation");
   b.add_output<decl::Float>("Shadow Mask");
+  b.add_output<decl::Float>("Occluder Distance");
 
   const bNode *node = b.node_or_null();
   const bNodeTree *tree = b.tree_or_null();
@@ -147,7 +148,7 @@ static int node_shader_fn(GPUMaterial *mat,
   }
 
   int zone_id = ((NodeShaderForeachLightInput *)node->storage)->output_node_id;
-  return GPU_stack_link_zone(mat, node, "FOREACH_LIGHT_BEGIN", in, out, zone_id, false, 1, 5);
+  return GPU_stack_link_zone(mat, node, "FOREACH_LIGHT_BEGIN", in, out, zone_id, false, 1, 6);
 }
 
 static void node_register()

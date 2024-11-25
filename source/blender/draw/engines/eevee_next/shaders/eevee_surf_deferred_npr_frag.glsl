@@ -174,7 +174,8 @@ bool foreach_light_setup(uint l_idx,
                          out vec3 out_vector,
                          out float out_distance,
                          out float out_attenuation,
-                         out float out_shadow_mask)
+                         out float out_shadow_mask,
+                         out float out_shadow_dist)
 {
   LightData light = light_buf[l_idx];
   if (light.color == vec3(0.0)) {
@@ -211,8 +212,16 @@ bool foreach_light_setup(uint l_idx,
 #ifdef SHADOW_FRONTFACE_CULL
     shadow_N = dot(g_data.Ng, lv.L) > 0 ? N : -N;
 #endif
-    shadow_mask = shadow_eval(
-        light, is_directional, false, false, 0.0, g_data.P, shadow_N, ray_count, ray_step_count);
+    shadow_mask = shadow_eval(light,
+                              is_directional,
+                              false,
+                              false,
+                              0.0,
+                              g_data.P,
+                              shadow_N,
+                              ray_count,
+                              ray_step_count,
+                              out_shadow_dist);
     // shadow_mask *= dot(N, lv.L) > 0.0 ? 1.0 : 0.0;
   }
 
@@ -226,7 +235,7 @@ bool foreach_light_setup(uint l_idx,
 }
 
 #define FOREACH_LIGHT_BEGIN( \
-    N, out_color, out_vector, out_distance, out_attenuation, out_shadow_mask) \
+    N, out_color, out_vector, out_distance, out_attenuation, out_shadow_mask, out_shadow_dist) \
   LIGHT_FOREACH_ALL_BEGIN(light_cull_buf, \
                           light_zbin_buf, \
                           light_tile_buf, \
@@ -241,7 +250,8 @@ bool foreach_light_setup(uint l_idx,
                            out_vector, \
                            out_distance, \
                            out_attenuation, \
-                           out_shadow_mask)) \
+                           out_shadow_mask, \
+                           out_shadow_dist)) \
   { \
     continue; \
   }

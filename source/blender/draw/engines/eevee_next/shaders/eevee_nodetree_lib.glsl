@@ -822,7 +822,7 @@ vec4 attr_load_uniform(vec4 attr, const uint attr_hash)
 
 #if !defined(NPR_SHADER) || !defined(GPU_FRAGMENT_SHADER)
 #  define FOREACH_LIGHT_BEGIN( \
-      N, out_color, out_vector, out_distance, out_attenuation, out_shadow_mask)
+      N, out_color, out_vector, out_distance, out_attenuation, out_shadow_mask, out_shadow_dist)
 
 #  define FOREACH_LIGHT_END()
 #endif
