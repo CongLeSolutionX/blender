@@ -299,6 +299,7 @@ static bool keymap_item_update_tweak_event(wmKeyMapItem *kmi, void * /*user_data
 
 void blo_do_versions_userdef(UserDef *userdef)
 {
+  printf("%d %d\n", userdef->versionfile, userdef->subversionfile);
 /* #UserDef & #Main happen to have the same struct member. */
 #define USER_VERSION_ATLEAST(ver, subver) MAIN_VERSION_FILE_ATLEAST(userdef, ver, subver)
 
@@ -1062,6 +1063,29 @@ void blo_do_versions_userdef(UserDef *userdef)
   }
   if (!USER_VERSION_ATLEAST(403, 19)) {
     userdef->sequencer_editor_flag |= USER_SEQ_ED_CONNECT_STRIPS_BY_DEFAULT;
+  }
+
+  if (!USER_VERSION_ATLEAST(403, 33)) {
+    LISTBASE_FOREACH (wmKeyMap *, keymap, &userdef->user_keymaps) {
+      printf("Keymap: %s\n", keymap->idname);
+
+      LISTBASE_FOREACH (wmKeyMapDiffItem *, kmid, &keymap->diff_items) {
+        wmKeyMapItem *kmi = kmid->add_item;
+        printf("\tAdd Item: Operator: %s\t=>", kmid->add_item->idname);
+        if (kmi) {
+          IDProperty *idprop = IDP_GetPropertyFromGroup(kmi->properties, "name");
+          printf("\tName: \"");
+          if (idprop && (idprop->type == IDP_STRING)){
+            char *prop_val = static_cast<char *>(idprop->data.pointer);
+            while (*prop_val != '\0') {
+              printf("%c", *prop_val);
+              prop_val++;
+            }
+            printf("\"\n");
+          }
+        }
+      }
+    }
   }
 
   if (!USER_VERSION_ATLEAST(404, 3)) {
