@@ -955,6 +955,11 @@ static bool unified_findnearest(ViewContext *vc,
 {
   BMEditMesh *em = vc->em;
 
+  bool sel_vert = em->selectmode & SCE_SELECT_VERTEX;
+  bool sel_edge = em->selectmode & SCE_SELECT_EDGE;
+  bool sel_face = em->selectmode & SCE_SELECT_FACE;
+  bool sel_corner = em->selectmode & SCE_SELECT_CORNER;
+
   const bool use_cycle = !WM_cursor_test_motion_and_update(vc->mval);
   const float dist_init = ED_view3d_select_dist_px();
   /* Since edges select lines, we give dots advantage of ~20 pix. */
@@ -978,7 +983,40 @@ static bool unified_findnearest(ViewContext *vc,
 
   /* No after-queue (yet), so we check it now, otherwise the em_xxxofs indices are bad. */
 
-  if ((dist > 0.0f) && (em->selectmode & SCE_SELECT_FACE)) {
+  if ((dist > 0.0f) && sel_corner) {
+    float dist_center = 0.0f;
+    float *dist_center_p = (em->selectmode & (SCE_SELECT_EDGE | SCE_SELECT_VERTEX)) ?
+                               &dist_center :
+                               nullptr;
+
+    uint base_index = 0;
+    BMFace *efa_zbuf = nullptr;
+    BMFace *efa_test = EDBM_face_find_nearest_ex(
+        vc, &dist, dist_center_p, true, true, use_cycle, &efa_zbuf, bases, &base_index);
+
+    if (efa_test && dist_center_p) {
+      dist = min_ff(dist_margin, dist_center);
+    }
+    if (efa_test) {
+      hit.f.base_index = base_index;
+      hit.f.ele = efa_test;
+    }
+    if (efa_zbuf) {
+      hit.f_zbuf.base_index = base_index;
+      hit.f_zbuf.ele = efa_zbuf;
+    }
+
+    base_index = 0;
+    dist = dist_init;
+    BMVert *eve_test = EDBM_vert_find_nearest_ex(vc, &dist, true, use_cycle, bases, &base_index);
+
+    if (eve_test) {
+      hit.v.base_index = base_index;
+      hit.v.ele = eve_test;
+    }
+  }
+
+  if ((dist > 0.0f) && sel_face) {
     float dist_center = 0.0f;
     float *dist_center_p = (em->selectmode & (SCE_SELECT_EDGE | SCE_SELECT_VERTEX)) ?
                                &dist_center :
@@ -1002,7 +1040,7 @@ static bool unified_findnearest(ViewContext *vc,
     }
   }
 
-  if ((dist > 0.0f) && (em->selectmode & SCE_SELECT_EDGE)) {
+  if ((dist > 0.0f) && sel_edge) {
     float dist_center = 0.0f;
     float *dist_center_p = (em->selectmode & SCE_SELECT_VERTEX) ? &dist_center : nullptr;
 
@@ -1024,7 +1062,7 @@ static bool unified_findnearest(ViewContext *vc,
     }
   }
 
-  if ((dist > 0.0f) && (em->selectmode & SCE_SELECT_VERTEX)) {
+  if ((dist > 0.0f) && sel_vert) {
     uint base_index = 0;
     BMVert *eve_test = EDBM_vert_find_nearest_ex(vc, &dist, true, use_cycle, bases, &base_index);
 
@@ -1035,12 +1073,14 @@ static bool unified_findnearest(ViewContext *vc,
   }
 
   /* Return only one of 3 pointers, for front-buffer redraws. */
-  if (hit.v.ele) {
-    hit.f.ele = nullptr;
-    hit.e.ele = nullptr;
-  }
-  else if (hit.e.ele) {
-    hit.f.ele = nullptr;
+  if (!sel_corner) {
+    if (hit.v.ele) {
+      hit.f.ele = nullptr;
+      hit.e.ele = nullptr;
+    }
+    else if (hit.e.ele) {
+      hit.f.ele = nullptr;
+    }
   }
 
   /* There may be a face under the cursor, who's center if too far away
@@ -1056,9 +1096,14 @@ static bool unified_findnearest(ViewContext *vc,
     }
   }
 
-  /* Only one element type will be non-null. */
-  BLI_assert(((hit.v.ele != nullptr) + (hit.e.ele != nullptr) + (hit.f.ele != nullptr)) <= 1);
+  /* Only one element type will be non-null if we are not selecting a corner. Only two(or zero)
+   * element type will be non-null if we are selecting a corner.*/
+  BLI_assert(sel_corner ? ((((hit.v.ele != nullptr) + (hit.f.ele != nullptr)) <= 2) ||
+                           (((hit.v.ele != nullptr) + (hit.f.ele != nullptr)) == 0)) :
+                          (((hit.v.ele != nullptr) + (hit.e.ele != nullptr) +
+                            (hit.f.ele != nullptr)) <= 1));
 
+  /* base_index will not be affected by the corner selection*/
   if (hit.v.ele) {
     *r_base_index = hit.v.base_index;
   }
@@ -1514,6 +1559,9 @@ static std::string edbm_select_mode_get_description(bContext * /*C*/,
             "Ctrl-Click expands/contracts selection depending on the current mode");
       case SCE_SELECT_FACE:
         return TIP_("Face select - Shift-Click for multiple modes, Ctrl-Click expands selection");
+      case SCE_SELECT_CORNER:
+        return TIP_(
+            "Face corner select - Shift-Click for multiple modes, Ctrl-Click expands selection");
     }
   }
 
@@ -1940,6 +1988,67 @@ static bool mouse_mesh_loop(
         BM_select_history_store(em->bm, efa);
       }
     }
+//     else if (em->selectmode & SCE_SELECT_CORNER) {
+//       printf("mouse_mesh_loop SCE_SELECT_CORNER\n");
+//       /* Select the face of eed which is the nearest of mouse. */
+//       BMFace *f;
+//       BMVert *v;
+//       BMIter iterf;
+//       float best_dist = FLT_MAX;
+
+//       /* We can't be sure this has already been set... */
+//       ED_view3d_init_mats_rv3d(vc.obedit, vc.rv3d);
+
+//       BM_ITER_ELEM (f, &iterf, eed, BM_FACES_OF_EDGE) {
+//         if (BM_elem_flag_test(f, BM_ELEM_SELECT)) {
+//           float cent[3];
+//           float co[2], tdist;
+
+//           BM_face_calc_center_median(f, cent);
+//           if (ED_view3d_project_float_object(vc.region, cent, co, V3D_PROJ_TEST_CLIP_NEAR) ==
+//               V3D_PROJ_RET_OK)
+//           {
+//             tdist = len_squared_v2v2(mvalf, co);
+//             if (tdist < best_dist) {
+//               // printf("Best face: %p (%f)\n", f, tdist);
+//               best_dist = tdist;
+//               efa = f;
+//             }
+//           }
+//         }
+//       }
+//       if (efa) {
+//         BM_mesh_active_face_set(em->bm, efa);
+//         BM_select_history_store(em->bm, efa);
+//       }
+
+//       /* Find nearest vert from mouse
+//        * (initialize to large values in case only one vertex can be projected). */
+//       float v1_co[2], v2_co[2];
+//       float length_1 = FLT_MAX;
+//       float length_2 = FLT_MAX;
+
+//       /* We can't be sure this has already been set... */
+//       ED_view3d_init_mats_rv3d(vc.obedit, vc.rv3d);
+
+//       if (ED_view3d_project_float_object(vc.region, eed->v1->co, v1_co, V3D_PROJ_TEST_CLIP_NEAR) ==
+//           V3D_PROJ_RET_OK)
+//       {
+//         length_1 = len_squared_v2v2(mvalf, v1_co);
+//       }
+
+//       if (ED_view3d_project_float_object(vc.region, eed->v2->co, v2_co, V3D_PROJ_TEST_CLIP_NEAR) ==
+//           V3D_PROJ_RET_OK)
+//       {
+//         length_2 = len_squared_v2v2(mvalf, v2_co);
+//       }
+// #if 0
+//       printf("mouse to v1: %f\nmouse to v2: %f\n",
+//              len_squared_v2v2(mvalf, v1_co),
+//              len_squared_v2v2(mvalf, v2_co));
+// #endif
+//       BM_select_history_store(em->bm, (length_1 < length_2) ? eed->v1 : eed->v2);
+//     }
   }
 
   DEG_id_tag_update(static_cast<ID *>(vc.obedit->data), ID_RECALC_SELECT);
@@ -2172,7 +2281,72 @@ bool EDBM_select_pick(bContext *C, const int mval[2], const SelectPick_Params *p
     Base *basact = bases[base_index_active];
     ED_view3d_viewcontext_init_object(&vc, basact->object);
 
-    if (efa) {
+    if (eve && efa) {
+      switch (params->sel_op) {
+        case SEL_OP_ADD: {
+          BM_mesh_active_face_set(vc.em->bm, efa);
+
+          /* Work-around: deselect first, so we can guarantee it will
+           * be active even if it was already selected. */
+          BM_select_history_remove(vc.em->bm, efa);
+          BM_face_select_set(vc.em->bm, efa, false);
+          BM_select_history_store(vc.em->bm, efa);
+          BM_face_select_set(vc.em->bm, efa, true);
+
+          BM_select_history_remove(vc.em->bm, eve);
+          BM_vert_select_set(vc.em->bm, eve, false);
+          BM_select_history_store(vc.em->bm, eve);
+          BM_vert_select_set(vc.em->bm, eve, true);
+          break;
+        }
+        case SEL_OP_SUB: {
+          BM_select_history_remove(vc.em->bm, efa);
+          BM_face_select_set(vc.em->bm, efa, false);
+
+          BM_select_history_remove(vc.em->bm, eve);
+          BM_vert_select_set(vc.em->bm, eve, false);
+          break;
+        }
+        case SEL_OP_XOR: {
+          BM_mesh_active_face_set(vc.em->bm, efa);
+          if (!BM_elem_flag_test(efa, BM_ELEM_SELECT)) {
+            BM_select_history_store(vc.em->bm, efa);
+            BM_face_select_set(vc.em->bm, efa, true);
+          }
+          else {
+            BM_select_history_remove(vc.em->bm, efa);
+            BM_face_select_set(vc.em->bm, efa, false);
+          }
+
+          if (!BM_elem_flag_test(eve, BM_ELEM_SELECT)) {
+            BM_select_history_store(vc.em->bm, eve);
+            BM_vert_select_set(vc.em->bm, eve, true);
+          }
+          else {
+            BM_select_history_remove(vc.em->bm, eve);
+            BM_vert_select_set(vc.em->bm, eve, false);
+          }
+          break;
+        }
+        case SEL_OP_SET: {
+          BM_mesh_active_face_set(vc.em->bm, efa);
+          if (!BM_elem_flag_test(efa, BM_ELEM_SELECT)) {
+            BM_select_history_store(vc.em->bm, efa);
+            BM_face_select_set(vc.em->bm, efa, true);
+          }
+          if (!BM_elem_flag_test(eve, BM_ELEM_SELECT)) {
+            BM_select_history_store(vc.em->bm, eve);
+            BM_vert_select_set(vc.em->bm, eve, true);
+          }
+          break;
+        }
+        case SEL_OP_AND: {
+          BLI_assert_unreachable(); /* Doesn't make sense for picking. */
+          break;
+        }
+      }
+    }
+    else if (efa) {
       switch (params->sel_op) {
         case SEL_OP_ADD: {
           BM_mesh_active_face_set(vc.em->bm, efa);
@@ -2365,6 +2539,16 @@ static void edbm_strip_selections(BMEditMesh *em)
       ese = nextese;
     }
   }
+  // if (!(em->selectmode & SCE_SELECT_CORNER)) {
+  //   ese = static_cast<BMEditSelection *>(em->bm->selected.first);
+  //   while (ese) {
+  //     nextese = ese->next;
+  //     if (ese->htype == BM_FACE) {
+  //       BLI_freelinkN(&(em->bm->selected), ese);
+  //     }
+  //     ese = nextese;
+  //   }
+  // }
 }
 
 void EDBM_selectmode_set(BMEditMesh *em)
@@ -2406,6 +2590,20 @@ void EDBM_selectmode_set(BMEditMesh *em)
     }
   }
   else if (em->selectmode & SCE_SELECT_FACE) {
+    /* Deselect edges, and select again based on face select. */
+    BM_ITER_MESH (eed, &iter, em->bm, BM_EDGES_OF_MESH) {
+      BM_edge_select_set(em->bm, eed, false);
+    }
+
+    if (em->bm->totfacesel) {
+      BM_ITER_MESH (efa, &iter, em->bm, BM_FACES_OF_MESH) {
+        if (BM_elem_flag_test(efa, BM_ELEM_SELECT)) {
+          BM_face_select_set(em->bm, efa, true);
+        }
+      }
+    }
+  }
+  else if (em->selectmode & SCE_SELECT_CORNER) {
     /* Deselect edges, and select again based on face select. */
     BM_ITER_MESH (eed, &iter, em->bm, BM_EDGES_OF_MESH) {
       BM_edge_select_set(em->bm, eed, false);
@@ -2623,6 +2821,12 @@ bool EDBM_selectmode_toggle_multi(bContext *C,
     case SCE_SELECT_FACE:
       if (use_extend == 0 || em->selectmode == 0) {
         em->selectmode = SCE_SELECT_FACE;
+      }
+      ret = true;
+      break;
+    case SCE_SELECT_CORNER:
+      if (use_extend == 0 || em->selectmode == 0) {
+        em->selectmode = SCE_SELECT_CORNER;
       }
       ret = true;
       break;

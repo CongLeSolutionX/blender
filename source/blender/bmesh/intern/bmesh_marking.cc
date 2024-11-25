@@ -297,6 +297,38 @@ void BM_mesh_select_mode_clean_ex(BMesh *bm, const short selectmode)
       }
     }
   }
+  // else if (selectmode & SCE_SELECT_CORNER) {
+  //   BMIter iter;
+
+  //   if (bm->totvertsel) {
+  //     BMVert *v;
+  //     BM_ITER_MESH (v, &iter, bm, BM_VERTS_OF_MESH) {
+  //       BM_elem_flag_disable(v, BM_ELEM_SELECT);
+  //     }
+  //     bm->totvertsel = 0;
+  //   }
+
+  //   if (bm->totedgesel) {
+  //     BMEdge *e;
+  //     BM_ITER_MESH (e, &iter, bm, BM_EDGES_OF_MESH) {
+  //       BM_elem_flag_disable(e, BM_ELEM_SELECT);
+  //     }
+  //     bm->totedgesel = 0;
+  //   }
+
+  //   if (bm->totfacesel) {
+  //     BMFace *f;
+  //     BM_ITER_MESH (f, &iter, bm, BM_FACES_OF_MESH) {
+  //       if (BM_elem_flag_test(f, BM_ELEM_SELECT)) {
+  //         BMLoop *l_iter, *l_first;
+  //         l_iter = l_first = BM_FACE_FIRST_LOOP(f);
+  //         do {
+  //           BM_edge_select_set(bm, l_iter->e, true);
+  //         } while ((l_iter = l_iter->next) != l_first);
+  //       }
+  //     }
+  //   }
+  // }
 }
 
 void BM_mesh_select_mode_clean(BMesh *bm)
@@ -587,16 +619,24 @@ void BM_face_select_set(BMesh *bm, BMFace *f, const bool select)
   }
 
   if (select) {
-    if (!BM_elem_flag_test(f, BM_ELEM_SELECT)) {
-      BM_elem_flag_enable(f, BM_ELEM_SELECT);
-      bm->totfacesel += 1;
+    if (bm->selectmode & SCE_SELECT_CORNER) {
+      if (!BM_elem_flag_test(f, BM_ELEM_SELECT)) {
+        BM_elem_flag_enable(f, BM_ELEM_SELECT);
+        bm->totfacesel += 1;
+      }
     }
+    else {
+      if (!BM_elem_flag_test(f, BM_ELEM_SELECT)) {
+        BM_elem_flag_enable(f, BM_ELEM_SELECT);
+        bm->totfacesel += 1;
+      }
 
-    l_iter = l_first = BM_FACE_FIRST_LOOP(f);
-    do {
-      BM_vert_select_set(bm, l_iter->v, true);
-      BM_edge_select_set(bm, l_iter->e, true);
-    } while ((l_iter = l_iter->next) != l_first);
+      l_iter = l_first = BM_FACE_FIRST_LOOP(f);
+      do {
+        BM_vert_select_set(bm, l_iter->v, true);
+        BM_edge_select_set(bm, l_iter->e, true);
+      } while ((l_iter = l_iter->next) != l_first);
+    }
   }
   else {
 
@@ -735,6 +775,20 @@ void BM_mesh_select_mode_set(BMesh *bm, int selectmode)
     BM_mesh_select_mode_flush(bm);
   }
   else if (bm->selectmode & SCE_SELECT_FACE) {
+/* disabled because selection flushing handles these */
+#if 0
+    BM_ITER_MESH (ele, &iter, bm, BM_EDGES_OF_MESH) {
+      BM_elem_flag_disable(ele, BM_ELEM_SELECT);
+    }
+#endif
+    BM_ITER_MESH (ele, &iter, bm, BM_FACES_OF_MESH) {
+      if (BM_elem_flag_test(ele, BM_ELEM_SELECT)) {
+        BM_face_select_set(bm, (BMFace *)ele, true);
+      }
+    }
+    BM_mesh_select_mode_flush(bm);
+  }
+  else if (bm->selectmode & SCE_SELECT_CORNER) {
 /* disabled because selection flushing handles these */
 #if 0
     BM_ITER_MESH (ele, &iter, bm, BM_EDGES_OF_MESH) {
