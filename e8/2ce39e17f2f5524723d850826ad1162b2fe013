@@ -7,3 +7,4 @@ Referenced by issue #128900, Applying a geonodes modifier that implements baking
 Referenced by issue #128864, macOS EEVEE - "Error: Shadow buffer full, may result in missing shadows and lower performance"
 Referenced by issue #128903, Key duplication in the dopesheet editor enables snapping in 3D viewport
 Referenced by issue #129161, Snap turning on after transform.
+Referenced by issue #130864, Snap stays enabled,
