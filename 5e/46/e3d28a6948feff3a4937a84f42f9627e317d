@@ -4,3 +4,4 @@ Referenced by commit 774bf4892553004959b48acc34499c4a0ea8114a, Fix: Build error 
 Referenced by commit 509090e7c3e738c1a6e535079dec28d00031cc4d, Subdiv: Remove evaluator C-API wrapper
 Referenced by pull request #129941, Cleanup: Subdiv: Remove unnecessary C-API header
 Referenced by commit ba03407e3389d83a4ae9eb8b266e9942225ac901, Cleanup: Subdiv: Remove unnecessary C-API header
+Referenced by issue #130917, OpenSubdiv Usage Simplification
