@@ -137,6 +137,10 @@ static constexpr DRWBatchFlag batches_that_use_buffer(const int buffer_index)
       return MBC_EDIT_FACEDOTS | MBC_EDIT_SELECTION_FACEDOTS;
     case BUFFER_INDEX(vbo.fdots_nor):
       return MBC_EDIT_FACEDOTS;
+    case BUFFER_INDEX(vbo.cdots_pos):
+      return MBC_EDIT_CORNERDOTS | MBC_EDIT_SELECTION_CORNERDOTS;
+    case BUFFER_INDEX(vbo.cdots_nor):
+      return MBC_EDIT_CORNERDOTS;
     case BUFFER_INDEX(vbo.fdots_uv):
       return MBC_EDITUV_FACEDOTS;
     case BUFFER_INDEX(vbo.fdots_edituv_data):
@@ -151,6 +155,8 @@ static constexpr DRWBatchFlag batches_that_use_buffer(const int buffer_index)
       return MBC_EDIT_SELECTION_FACES;
     case BUFFER_INDEX(vbo.fdot_idx):
       return MBC_EDIT_SELECTION_FACEDOTS;
+    case BUFFER_INDEX(vbo.cdot_idx):
+      return MBC_EDIT_SELECTION_CORNERDOTS;
     case BUFFER_INDEX(vbo.attr[0]):
     case BUFFER_INDEX(vbo.attr[1]):
     case BUFFER_INDEX(vbo.attr[2]):
@@ -183,6 +189,8 @@ static constexpr DRWBatchFlag batches_that_use_buffer(const int buffer_index)
       return MBC_EDIT_VNOR | MBC_EDIT_VERTICES | MBC_EDIT_SELECTION_VERTS;
     case BUFFER_INDEX(ibo.fdots):
       return MBC_EDIT_FACEDOTS | MBC_EDIT_SELECTION_FACEDOTS;
+    case BUFFER_INDEX(ibo.cdots):
+      return MBC_EDIT_CORNERDOTS | MBC_EDIT_SELECTION_CORNERDOTS;
     case BUFFER_INDEX(ibo.lines_paint_mask):
       return MBC_WIRE_LOOPS;
     case BUFFER_INDEX(ibo.lines_adjacency):
@@ -1121,6 +1129,13 @@ gpu::Batch *DRW_mesh_batch_cache_get_edit_facedots(Mesh &mesh)
   return DRW_batch_request(&cache.batch.edit_fdots);
 }
 
+gpu::Batch *DRW_mesh_batch_cache_get_edit_cornerdots(Mesh &mesh)
+{
+  MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
+  mesh_batch_cache_add_request(cache, MBC_EDIT_CORNERDOTS);
+  return DRW_batch_request(&cache.batch.edit_cdots);
+}
+
 gpu::Batch *DRW_mesh_batch_cache_get_edit_skin_roots(Mesh &mesh)
 {
   MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
@@ -1146,6 +1161,13 @@ gpu::Batch *DRW_mesh_batch_cache_get_facedots_with_select_id(Mesh &mesh)
   MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
   mesh_batch_cache_add_request(cache, MBC_EDIT_SELECTION_FACEDOTS);
   return DRW_batch_request(&cache.batch.edit_selection_fdots);
+}
+
+gpu::Batch *DRW_mesh_batch_cache_get_cornerdots_with_select_id(Mesh &mesh)
+{
+  MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
+  mesh_batch_cache_add_request(cache, MBC_EDIT_SELECTION_CORNERDOTS);
+  return DRW_batch_request(&cache.batch.edit_selection_cdots);
 }
 
 gpu::Batch *DRW_mesh_batch_cache_get_edges_with_select_id(Mesh &mesh)
@@ -1773,6 +1795,20 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
       init_empty_dummy_batch(*cache.batch.edit_fdots);
     }
   }
+  // TODO: change the references to cdots once the cdots are computed
+  assert_deps_valid(
+      MBC_EDIT_CORNERDOTS,
+      {BUFFER_INDEX(ibo.cdots), BUFFER_INDEX(vbo.cdots_pos), BUFFER_INDEX(vbo.cdots_nor)});
+  if (DRW_batch_requested(cache.batch.edit_cdots, GPU_PRIM_POINTS)) {
+    if (edit_mapping_valid) {
+      DRW_ibo_request(cache.batch.edit_cdots, &mbuflist->ibo.cdots);
+      DRW_vbo_request(cache.batch.edit_cdots, &mbuflist->vbo.cdots_pos);
+      DRW_vbo_request(cache.batch.edit_cdots, &mbuflist->vbo.cdots_nor);
+    }
+    else {
+      init_empty_dummy_batch(*cache.batch.edit_cdots);
+    }
+  }
   assert_deps_valid(MBC_SKIN_ROOTS, {BUFFER_INDEX(vbo.skin_roots)});
   if (DRW_batch_requested(cache.batch.edit_skin_roots, GPU_PRIM_POINTS)) {
     if (edit_mapping_valid) {
@@ -1831,6 +1867,19 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
     }
     else {
       init_empty_dummy_batch(*cache.batch.edit_selection_fdots);
+    }
+  }
+  assert_deps_valid(
+      MBC_EDIT_SELECTION_CORNERDOTS,
+      {BUFFER_INDEX(ibo.cdots), BUFFER_INDEX(vbo.cdots_pos), BUFFER_INDEX(vbo.cdot_idx)});
+  if (DRW_batch_requested(cache.batch.edit_selection_cdots, GPU_PRIM_POINTS)) {
+    if (edit_mapping_valid) {
+      DRW_ibo_request(cache.batch.edit_selection_cdots, &mbuflist->ibo.cdots);
+      DRW_vbo_request(cache.batch.edit_selection_cdots, &mbuflist->vbo.cdots_pos);
+      DRW_vbo_request(cache.batch.edit_selection_cdots, &mbuflist->vbo.cdot_idx);
+    }
+    else {
+      init_empty_dummy_batch(*cache.batch.edit_selection_cdots);
     }
   }
 

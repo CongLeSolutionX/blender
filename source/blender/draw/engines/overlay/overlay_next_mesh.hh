@@ -51,6 +51,7 @@ class Meshes {
   PassSimple edit_mesh_cages_ps_ = {"Cages"}; /* Same as faces but with a different offset. */
   PassSimple edit_mesh_verts_ps_ = {"Verts"};
   PassSimple edit_mesh_facedots_ps_ = {"FaceDots"};
+  PassSimple edit_mesh_cornerdots_ps_ = {"CornerDots"};
   PassSimple edit_mesh_skin_roots_ps_ = {"SkinRoots"};
 
   /* Depth pre-pass to cull edit cage in case the object is not opaque. */
@@ -62,10 +63,12 @@ class Meshes {
   bool show_mesh_analysis_ = false;
   bool show_face_ = false;
   bool show_face_dots_ = false;
+  bool show_corner_dots_ = false;
   bool show_weight_ = false;
 
   bool select_edge_ = false;
   bool select_face_ = false;
+  bool select_corner_ = false;
   bool select_vert_ = false;
 
   /* TODO(fclem): This is quite wasteful and expensive, prefer in shader Z modification like the
@@ -92,7 +95,8 @@ class Meshes {
     ToolSettings *tsettings = state.scene->toolsettings;
     select_edge_ = (tsettings->selectmode & SCE_SELECT_EDGE);
     select_face_ = (tsettings->selectmode & SCE_SELECT_FACE);
-    select_vert_ = (tsettings->selectmode & SCE_SELECT_VERTEX);
+    select_corner_ = (tsettings->selectmode & SCE_SELECT_CORNER);
+    select_vert_ = (tsettings->selectmode & (SCE_SELECT_VERTEX | SCE_SELECT_CORNER));
 
     int edit_flag = state.v3d->overlay.edit_flag;
     show_retopology_ = (edit_flag & V3D_OVERLAY_EDIT_RETOPOLOGY) && !state.xray_enabled;
@@ -100,6 +104,7 @@ class Meshes {
     show_face_ = (edit_flag & V3D_OVERLAY_EDIT_FACES);
     show_face_dots_ = ((edit_flag & V3D_OVERLAY_EDIT_FACE_DOT) || state.xray_enabled) &
                       select_face_;
+    show_corner_dots_ = select_corner_;
     show_weight_ = (edit_flag & V3D_OVERLAY_EDIT_WEIGHT);
 
     const bool show_face_nor = (edit_flag & V3D_OVERLAY_EDIT_FACE_NORMALS);
@@ -261,6 +266,17 @@ class Meshes {
       mesh_edit_common_resource_bind(pass, backwire_opacity);
     }
     {
+      // TODO: facedots to cornerdots
+      auto &pass = edit_mesh_cornerdots_ps_;
+      pass.init();
+      pass.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_DEPTH_LESS_EQUAL | DRW_STATE_BLEND_ALPHA
+      |
+                         DRW_STATE_WRITE_DEPTH,
+                     state.clipping_plane_count);
+      pass.shader_set(res.shaders.mesh_edit_facedot.get());
+      mesh_edit_common_resource_bind(pass, backwire_opacity);
+    }
+    {
       auto &pass = edit_mesh_skin_roots_ps_;
       pass.init();
       pass.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_DEPTH_LESS_EQUAL | DRW_STATE_BLEND_ALPHA |
@@ -341,6 +357,10 @@ class Meshes {
       gpu::Batch *geom = DRW_mesh_batch_cache_get_edit_facedots(mesh);
       edit_mesh_facedots_ps_.draw(geom, res_handle);
     }
+    if (show_corner_dots_) {
+      gpu::Batch *geom = DRW_mesh_batch_cache_get_edit_cornerdots(mesh);
+      edit_mesh_cornerdots_ps_.draw(geom, res_handle);
+    }
 
     if (mesh_has_skin_roots(ob)) {
       gpu::Batch *geom = DRW_mesh_batch_cache_get_edit_skin_roots(mesh);
@@ -380,6 +400,7 @@ class Meshes {
     manager.submit(edit_mesh_verts_ps_, view_edit_vert_);
     manager.submit(edit_mesh_skin_roots_ps_, view_edit_vert_);
     manager.submit(edit_mesh_facedots_ps_, view_edit_vert_);
+    manager.submit(edit_mesh_cornerdots_ps_, view_edit_vert_);
 
     GPU_debug_group_end();
   }
@@ -408,6 +429,7 @@ class Meshes {
     manager.submit(edit_mesh_verts_ps_, view_edit_vert_);
     manager.submit(edit_mesh_skin_roots_ps_, view_edit_vert_);
     manager.submit(edit_mesh_facedots_ps_, view_edit_vert_);
+    manager.submit(edit_mesh_cornerdots_ps_, view_edit_vert_);
 
     GPU_debug_group_end();
   }
