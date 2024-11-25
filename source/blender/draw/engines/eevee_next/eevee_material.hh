@@ -123,13 +123,14 @@ static inline uint64_t shader_uuid_from_material_type(
     eMaterialGeometry geometry_type,
     eMaterialDisplacement displacement_type = MAT_DISPLACEMENT_BUMP,
     eMaterialThickness thickness_type = MAT_THICKNESS_SPHERE,
-    char blend_flags = 0)
+    short blend_flags = 0)
 {
   BLI_assert(displacement_type < (1 << 1));
   BLI_assert(thickness_type < (1 << 1));
   BLI_assert(geometry_type < (1 << 4));
   BLI_assert(pipeline_type < (1 << 4));
   uint64_t transparent_shadows = blend_flags & MA_BL_TRANSPARENT_SHADOW ? 1 : 0;
+  uint64_t shadow_frontface_cull = blend_flags & MA_BL_CULL_FRONTFACE_SHADOW ? 1 : 0;
 
   uint64_t uuid;
   uuid = geometry_type;
@@ -137,6 +138,7 @@ static inline uint64_t shader_uuid_from_material_type(
   uuid |= displacement_type << 8;
   uuid |= thickness_type << 9;
   uuid |= transparent_shadows << 10;
+  uuid |= shadow_frontface_cull << 11;
   return uuid;
 }
 
@@ -267,7 +269,7 @@ struct ShaderKey {
   {
     shader = GPU_material_get_shader(gpumat);
     options = uint64_t(shader_closure_bits_from_flag(gpumat));
-    options = (options << 8) | blender_mat->blend_flag;
+    options = (options << 9) | blender_mat->blend_flag;
     options = (options << 2) | uint64_t(probe_capture);
     options = (options << 16) | refraction_layer;
   }

@@ -207,9 +207,13 @@ bool foreach_light_setup(uint l_idx,
   if (light.tilemap_index != LIGHT_NO_SHADOW) {
     int ray_count = uniform_buf.shadow.ray_count;
     int ray_step_count = uniform_buf.shadow.step_count;
+    vec3 shadow_N = N;
+#ifdef SHADOW_FRONTFACE_CULL
+    shadow_N = dot(g_data.Ng, lv.L) > 0 ? N : -N;
+#endif
     shadow_mask = shadow_eval(
-        light, is_directional, false, false, 0.0, g_data.P, N, ray_count, ray_step_count);
-    shadow_mask *= dot(N, lv.L) > 0.0 ? 1.0 : 0.0;
+        light, is_directional, false, false, 0.0, g_data.P, shadow_N, ray_count, ray_step_count);
+    // shadow_mask *= dot(N, lv.L) > 0.0 ? 1.0 : 0.0;
   }
 
   out_color = vec4(light.color, 1.0);
@@ -247,6 +251,7 @@ bool foreach_light_setup(uint l_idx,
 void main()
 {
   init_globals();
+  g_data.Ng = safe_normalize(cross(dFdx(g_data.P), dFdy(g_data.P)));
 
   out_radiance = swap_alpha(nodetree_npr());
 

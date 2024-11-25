@@ -633,6 +633,15 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
     }
   }
 
+  if (pipeline_type == MAT_PIPE_DEFERRED_NPR) {
+    const ::Material *blender_mat = GPU_material_get_material(gpumat);
+    if (blender_mat) {
+      if (blender_mat->blend_flag & MA_BL_CULL_FRONTFACE_SHADOW) {
+        info.define("SHADOW_FRONTFACE_CULL");
+      }
+    }
+  }
+
   std::stringstream global_vars;
   switch (geometry_type) {
     case MAT_GEOM_MESH:
