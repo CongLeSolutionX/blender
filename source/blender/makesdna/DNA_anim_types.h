@@ -762,7 +762,7 @@ typedef struct NlaStrip {
    * \note Most code should not write to this field directly, but use functions from
    * `blender::animrig::nla` instead, see ANIM_nla.hh.
    */
-  char action_slot_name[66]; /* MAX_ID_NAME */
+  char last_slot_identifier[66]; /* MAX_ID_NAME */
   char _pad0[2];
 
   /** F-Curves for controlling this strip's influence and timing */ /* TODO: move out? */

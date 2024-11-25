@@ -627,7 +627,7 @@ class Slot : public ::ActionSlot {
 
   constexpr static int name_length_max = MAX_ID_NAME;
   static_assert(sizeof(AnimData::last_slot_identifier) == name_length_max);
-  static_assert(sizeof(NlaStrip::action_slot_name) == name_length_max);
+  static_assert(sizeof(NlaStrip::last_slot_identifier) == name_length_max);
 
   /**
    * Return the name prefix for the Slot's type.

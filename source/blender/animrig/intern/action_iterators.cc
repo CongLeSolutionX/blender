@@ -108,7 +108,8 @@ bool foreach_action_slot_use_with_references(ID &animated_id,
     /* NLA strips. */
     const bool looped_until_last_strip = bke::nla::foreach_strip_adt(*adt, [&](NlaStrip *strip) {
       if (strip->act) {
-        if (!callback(animated_id, strip->act, strip->action_slot_handle, strip->action_slot_name))
+        if (!callback(
+                animated_id, strip->act, strip->action_slot_handle, strip->last_slot_identifier))
         {
           return false;
         }
