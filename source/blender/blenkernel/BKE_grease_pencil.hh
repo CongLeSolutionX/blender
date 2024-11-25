@@ -11,18 +11,17 @@
 
 #include <atomic>
 
-#include "BLI_array_utils.hh"
 #include "BLI_color.hh"
 #include "BLI_function_ref.hh"
 #include "BLI_implicit_sharing_ptr.hh"
 #include "BLI_map.hh"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_math_vector_types.hh"
+#include "BLI_offset_indices.hh"
 #include "BLI_shared_cache.hh"
 #include "BLI_utility_mixins.hh"
-#include "BLI_virtual_array.hh"
+#include "BLI_virtual_array_fwd.hh"
 
-#include "DNA_gpencil_legacy_types.h"
 #include "DNA_grease_pencil_types.h"
 
 struct Brush;
@@ -37,6 +36,7 @@ struct BakeMaterialsList;
 }
 
 namespace blender::bke {
+struct AttributeAccessorFunctions;
 
 namespace greasepencil {
 
@@ -882,6 +882,8 @@ inline LayerGroup &Layer::parent_group()
 }
 
 TREENODE_COMMON_METHODS_FORWARD_IMPL(LayerGroup);
+
+const AttributeAccessorFunctions &get_attribute_accessor_functions();
 
 }  // namespace greasepencil
 
