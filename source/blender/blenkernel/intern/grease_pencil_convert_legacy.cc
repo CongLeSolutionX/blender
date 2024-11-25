@@ -650,7 +650,7 @@ static void find_used_vertex_groups(const bGPDframe &gpf,
     Span<MDeformVert> dverts = {gps->dvert, gps->totpoints};
     for (const MDeformVert &dvert : dverts) {
       for (const MDeformWeight &weight : Span<MDeformWeight>{dvert.dw, dvert.totweight}) {
-        if (weight.def_nr >= dvert.totweight) {
+        if (weight.def_nr >= num_vertex_groups) {
           /* Ignore invalid deform weight group indices. */
           continue;
         }
@@ -846,6 +846,7 @@ static Drawing legacy_gpencil_frame_to_grease_pencil_drawing(const bGPDframe &gp
   BLI_assert(BLI_listbase_is_empty(&curves.vertex_group_names));
   curves.vertex_group_names = stroke_vertex_group_names;
   const bool use_dverts = !BLI_listbase_is_empty(&curves.vertex_group_names);
+  const int original_num_vertex_groups = BLI_listbase_count(&vertex_group_names);
 
   /* Copy vertex weights and map the vertex group indices. */
   auto copy_dvert = [&](const MDeformVert &src_dvert, MDeformVert &dst_dvert) {
@@ -853,7 +854,7 @@ static Drawing legacy_gpencil_frame_to_grease_pencil_drawing(const bGPDframe &gp
     dst_dvert.dw = static_cast<MDeformWeight *>(MEM_dupallocN(src_dvert.dw));
     const MutableSpan<MDeformWeight> vertex_weights = {dst_dvert.dw, dst_dvert.totweight};
     for (MDeformWeight &weight : vertex_weights) {
-      if (weight.def_nr >= dst_dvert.totweight) {
+      if (weight.def_nr >= original_num_vertex_groups) {
         /* Ignore invalid deform weight group indices. */
         continue;
       }
