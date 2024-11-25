@@ -5059,16 +5059,11 @@ void BKE_lib_override_library_update(Main *bmain, ID *local)
 
   PointerRNA rnaptr_src = RNA_id_pointer_create(local);
   PointerRNA rnaptr_dst = RNA_id_pointer_create(tmp_id);
-  PointerRNA rnaptr_storage_stack, *rnaptr_storage = nullptr;
-  if (local->override_library->storage) {
-    rnaptr_storage_stack = RNA_id_pointer_create(local->override_library->storage);
-    rnaptr_storage = &rnaptr_storage_stack;
-  }
 
   RNA_struct_override_apply(bmain,
                             &rnaptr_dst,
                             &rnaptr_src,
-                            rnaptr_storage,
+                            nullptr,
                             local->override_library,
                             RNA_OVERRIDE_APPLY_FLAG_NOP);
 
@@ -5117,14 +5112,6 @@ void BKE_lib_override_library_update(Main *bmain, ID *local)
    * vs. override-added NLA tracks/strips), they need to be checked _after_ all overrides have been
    * applied. */
   BKE_animdata_liboverride_post_process(local);
-
-  if (local->override_library->storage) {
-    /* We know this data-block is not used anywhere besides local->override->storage. */
-    /* XXX For until we get fully shadow copies, we still need to ensure storage releases
-     *     its usage of any ID pointers it may have. */
-    BKE_id_free_ex(bmain, local->override_library->storage, LIB_ID_FREE_NO_UI_USER, true);
-    local->override_library->storage = nullptr;
-  }
 
   local->tag |= ID_TAG_LIBOVERRIDE_REFOK;
 
@@ -5239,9 +5226,9 @@ OverrideLibraryStorage *BKE_lib_override_library_operations_store_init()
   return BKE_main_new();
 }
 
-ID *BKE_lib_override_library_operations_store_start(Main *bmain,
-                                                    OverrideLibraryStorage *liboverride_storage,
-                                                    ID *local)
+ID *BKE_lib_override_library_operations_store(Main *bmain,
+                                              OverrideLibraryStorage *liboverride_storage,
+                                              ID *local)
 {
   if (ID_IS_OVERRIDE_LIBRARY_VIRTUAL(local)) {
     /* This is actually one of these embedded IDs (root node trees, master collections or
@@ -5258,7 +5245,7 @@ ID *BKE_lib_override_library_operations_store_start(Main *bmain,
 
   ID *storage_id;
 #ifdef DEBUG_OVERRIDE_TIMEIT
-  TIMEIT_START_AVERAGED(BKE_lib_override_library_operations_store_start);
+  TIMEIT_START_AVERAGED(BKE_lib_override_library_operations_store);
 #endif
 
   /* This is fully disabled for now, as it generated very hard to solve issues with Collections and
@@ -5294,10 +5281,8 @@ ID *BKE_lib_override_library_operations_store_start(Main *bmain,
   storage_id = nullptr;
 #endif
 
-  local->override_library->storage = storage_id;
-
 #ifdef DEBUG_OVERRIDE_TIMEIT
-  TIMEIT_END_AVERAGED(BKE_lib_override_library_operations_store_start);
+  TIMEIT_END_AVERAGED(BKE_lib_override_library_operations_store);
 #endif
   return storage_id;
 }
@@ -5306,10 +5291,6 @@ void BKE_lib_override_library_operations_store_end(
     OverrideLibraryStorage * /*liboverride_storage*/, ID *local)
 {
   BLI_assert(ID_IS_OVERRIDE_LIBRARY_REAL(local));
-
-  /* Nothing else to do here really, we need to keep all temp override storage data-blocks in
-   * memory until whole file is written anyway (otherwise we'd get mem pointers overlap). */
-  local->override_library->storage = nullptr;
 }
 
 void BKE_lib_override_library_operations_store_finalize(

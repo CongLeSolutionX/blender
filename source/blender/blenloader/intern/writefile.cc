@@ -1423,9 +1423,6 @@ static bool write_file_handle(Main *mainvar,
           continue;
         }
 
-        const bool do_override = !ELEM(override_storage, nullptr, bmain) &&
-                                 ID_IS_OVERRIDE_LIBRARY_REAL(id);
-
         /* If not writing undo data, properly set directly linked IDs as `ID_TAG_EXTERN`. */
         if (!wd->use_memfile) {
           BKE_library_foreach_ID_link(bmain,
@@ -1435,8 +1432,10 @@ static bool write_file_handle(Main *mainvar,
                                       IDWALK_READONLY | IDWALK_INCLUDE_UI);
         }
 
+        const bool do_override = !ELEM(override_storage, nullptr, bmain) &&
+                                 ID_IS_OVERRIDE_LIBRARY_REAL(id);
         if (do_override) {
-          BKE_lib_override_library_operations_store_start(bmain, override_storage, id);
+          BKE_lib_override_library_operations_store(bmain, override_storage, id);
         }
 
         mywrite_id_begin(wd, id);
@@ -1444,10 +1443,6 @@ static bool write_file_handle(Main *mainvar,
         if (id_type->blend_write != nullptr) {
           BLO_Write_IDBuffer id_buffer{*id, &writer};
           id_type->blend_write(&writer, id_buffer.get(), id);
-        }
-
-        if (do_override) {
-          BKE_lib_override_library_operations_store_end(override_storage, id);
         }
 
         mywrite_id_end(wd, id);
