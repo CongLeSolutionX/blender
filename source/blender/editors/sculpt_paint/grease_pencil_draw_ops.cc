@@ -113,31 +113,6 @@ static std::unique_ptr<GreasePencilStrokeOperation> get_stroke_operation(bContex
         return greasepencil::new_tint_operation();
     }
   }
-  else if (mode == PaintMode::SculptGreasePencil) {
-    if (stroke_mode == BRUSH_STROKE_SMOOTH) {
-      return greasepencil::new_smooth_operation(stroke_mode);
-    }
-    switch (eBrushGPSculptType(brush.gpencil_sculpt_brush_type)) {
-      case GPSCULPT_BRUSH_TYPE_SMOOTH:
-        return greasepencil::new_smooth_operation(stroke_mode);
-      case GPSCULPT_BRUSH_TYPE_THICKNESS:
-        return greasepencil::new_thickness_operation(stroke_mode);
-      case GPSCULPT_BRUSH_TYPE_STRENGTH:
-        return greasepencil::new_strength_operation(stroke_mode);
-      case GPSCULPT_BRUSH_TYPE_GRAB:
-        return greasepencil::new_grab_operation(stroke_mode);
-      case GPSCULPT_BRUSH_TYPE_PUSH:
-        return greasepencil::new_push_operation(stroke_mode);
-      case GPSCULPT_BRUSH_TYPE_TWIST:
-        return greasepencil::new_twist_operation(stroke_mode);
-      case GPSCULPT_BRUSH_TYPE_PINCH:
-        return greasepencil::new_pinch_operation(stroke_mode);
-      case GPSCULPT_BRUSH_TYPE_RANDOMIZE:
-        return greasepencil::new_randomize_operation(stroke_mode);
-      case GPSCULPT_BRUSH_TYPE_CLONE:
-        return greasepencil::new_clone_operation(stroke_mode);
-    }
-  }
   else if (mode == PaintMode::WeightGPencil) {
     switch (eBrushGPWeightType(brush.gpencil_weight_brush_type)) {
       case GPWEIGHT_BRUSH_TYPE_DRAW:
