@@ -83,6 +83,7 @@ struct ShrinkwrapTreeData {
   BVHTreeFromMesh treeData;
 
   blender::OffsetIndices<int> faces;
+  blender::Span<blender::int2> edges;
   blender::Span<int> corner_edges;
 
   blender::Span<blender::float3> face_normals;

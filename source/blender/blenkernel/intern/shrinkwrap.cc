@@ -113,6 +113,7 @@ bool BKE_shrinkwrap_init_tree(
   }
 
   data->mesh = mesh;
+  data->edges = mesh->edges();
   data->faces = mesh->faces();
   data->corner_edges = mesh->corner_edges();
   data->vert_normals = mesh->vert_normals();
@@ -911,7 +912,7 @@ static void target_project_edge(const ShrinkwrapTreeData *tree,
                                 int eidx)
 {
   const BVHTreeFromMesh *data = &tree->treeData;
-  const blender::int2 &edge = data->edges[eidx];
+  const blender::int2 &edge = tree->edges[eidx];
   const float *vedge_co[2] = {data->vert_positions[edge[0]], data->vert_positions[edge[1]]};
 
 #ifdef TRACE_TARGET_PROJECT
@@ -1034,7 +1035,7 @@ static void mesh_corner_tris_target_project(void *userdata,
   {
     const BitSpan is_boundary = tree->boundary->edge_is_boundary;
     const int3 edges = bke::mesh::corner_tri_get_real_edges(
-        data->edges, data->corner_verts, tree->corner_edges, tri);
+        tree->edges, data->corner_verts, tree->corner_edges, tri);
 
     for (int i = 0; i < 3; i++) {
       if (edges[i] >= 0 && is_boundary[edges[i]]) {
