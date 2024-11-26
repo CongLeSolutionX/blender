@@ -42,7 +42,7 @@ template<typename Fn>
 static bool apply_color_operation_for_mode(const VertexColorMode mode,
                                            Object &object,
                                            MutableDrawingInfo &info,
-                                           bool is_selection_mask,
+                                           const bool use_selection_mask,
                                            Fn &&fn)
 {
   bool changed = false;
@@ -50,7 +50,7 @@ static bool apply_color_operation_for_mode(const VertexColorMode mode,
   using namespace ed::greasepencil;
   if (ELEM(mode, VertexColorMode::Stroke, VertexColorMode::Both)) {
     if (info.drawing.strokes().attributes().contains("vertex_color")) {
-      const IndexMask points = is_selection_mask ?
+      const IndexMask points = use_selection_mask ?
                                    retrieve_editable_and_selected_points(
                                        object, info.drawing, info.layer_index, memory) :
                                    retrieve_editable_points(
@@ -95,7 +95,7 @@ static int grease_pencil_vertex_paint_brightness_contrast_exec(bContext *C, wmOp
   const float brightness = RNA_float_get(op->ptr, "brightness");
   const float contrast = RNA_float_get(op->ptr, "contrast");
   float delta = contrast / 2.0f;
-  const bool is_selection_mask = GPENCIL_ANY_VERTEX_MASK(
+  const bool use_selection_mask = GPENCIL_ANY_VERTEX_MASK(
       eGP_vertex_SelectMaskFlag(scene.toolsettings->gpencil_selectmode_vertex));
 
   /*
@@ -126,7 +126,7 @@ static int grease_pencil_vertex_paint_brightness_contrast_exec(bContext *C, wmOp
         mode,
         object,
         info,
-        is_selection_mask,
+        use_selection_mask,
         [&](const ColorGeometry4f &color) -> ColorGeometry4f {
           const float3 result = float3(color) * gain + offset;
           return ColorGeometry4f(result[0], result[1], result[2], color.a);
@@ -172,7 +172,7 @@ static int grease_pencil_vertex_paint_hsv_exec(bContext *C, wmOperator *op)
   const float hue = RNA_float_get(op->ptr, "h");
   const float sat = RNA_float_get(op->ptr, "s");
   const float val = RNA_float_get(op->ptr, "v");
-  const bool is_selection_mask = GPENCIL_ANY_VERTEX_MASK(
+  const bool use_selection_mask = GPENCIL_ANY_VERTEX_MASK(
       eGP_vertex_SelectMaskFlag(scene.toolsettings->gpencil_selectmode_vertex));
 
   std::atomic<bool> any_changed;
@@ -186,7 +186,7 @@ static int grease_pencil_vertex_paint_hsv_exec(bContext *C, wmOperator *op)
         mode,
         object,
         info,
-        is_selection_mask,
+        use_selection_mask,
         [&](const ColorGeometry4f &color) -> ColorGeometry4f {
           float3 hsv;
           rgb_to_hsv_v(float3(color), hsv);
@@ -243,7 +243,7 @@ static int grease_pencil_vertex_paint_invert_exec(bContext *C, wmOperator *op)
   Object &object = *CTX_data_active_object(C);
   GreasePencil &grease_pencil = *static_cast<GreasePencil *>(object.data);
   const VertexColorMode mode = VertexColorMode(RNA_enum_get(op->ptr, "mode"));
-  const bool is_selection_mask = GPENCIL_ANY_VERTEX_MASK(
+  const bool use_selection_mask = GPENCIL_ANY_VERTEX_MASK(
       eGP_vertex_SelectMaskFlag(scene.toolsettings->gpencil_selectmode_vertex));
 
   std::atomic<bool> any_changed;
@@ -257,7 +257,7 @@ static int grease_pencil_vertex_paint_invert_exec(bContext *C, wmOperator *op)
         mode,
         object,
         info,
-        is_selection_mask,
+        use_selection_mask,
         [&](const ColorGeometry4f &color) -> ColorGeometry4f {
           /* Invert the color. */
           return ColorGeometry4f(1.0f - color.r, 1.0f - color.g, 1.0f - color.b, color.a);
@@ -299,7 +299,7 @@ static int grease_pencil_vertex_paint_levels_exec(bContext *C, wmOperator *op)
   const VertexColorMode mode = VertexColorMode(RNA_enum_get(op->ptr, "mode"));
   const float gain = RNA_float_get(op->ptr, "gain");
   const float offset = RNA_float_get(op->ptr, "offset");
-  const bool is_selection_mask = GPENCIL_ANY_VERTEX_MASK(
+  const bool use_selection_mask = GPENCIL_ANY_VERTEX_MASK(
       eGP_vertex_SelectMaskFlag(scene.toolsettings->gpencil_selectmode_vertex));
 
   std::atomic<bool> any_changed;
@@ -313,7 +313,7 @@ static int grease_pencil_vertex_paint_levels_exec(bContext *C, wmOperator *op)
         mode,
         object,
         info,
-        is_selection_mask,
+        use_selection_mask,
         [&](const ColorGeometry4f &color) -> ColorGeometry4f {
           const float3 result = float3(color) * gain + offset;
           return ColorGeometry4f(result[0], result[1], result[2], color.a);
@@ -361,7 +361,7 @@ static int grease_pencil_vertex_paint_set_exec(bContext *C, wmOperator *op)
   GreasePencil &grease_pencil = *static_cast<GreasePencil *>(object.data);
   const VertexColorMode mode = VertexColorMode(RNA_enum_get(op->ptr, "mode"));
   const float factor = RNA_float_get(op->ptr, "factor");
-  const bool is_selection_mask = GPENCIL_ANY_VERTEX_MASK(
+  const bool use_selection_mask = GPENCIL_ANY_VERTEX_MASK(
       eGP_vertex_SelectMaskFlag(scene.toolsettings->gpencil_selectmode_vertex));
 
   float3 color_linear;
@@ -388,7 +388,7 @@ static int grease_pencil_vertex_paint_set_exec(bContext *C, wmOperator *op)
         mode,
         object,
         info,
-        is_selection_mask,
+        use_selection_mask,
         [&](const ColorGeometry4f &color) -> ColorGeometry4f {
           /* Mix in the target color based on the factor. */
           return math::interpolate(color, target_color, factor);
