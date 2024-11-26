@@ -2127,6 +2127,19 @@ static void paint_cursor_restore_drawing_state()
   GPU_line_smooth(false);
 }
 
+static void paint_2d_cursor(PaintCursorContext &pcontext)
+{
+  paint_update_mouse_cursor(&pcontext);
+
+  paint_cursor_update_rake_rotation(&pcontext);
+  paint_cursor_check_and_draw_alpha_overlays(&pcontext);
+  paint_cursor_update_anchored_location(&pcontext);
+
+  paint_cursor_setup_2D_drawing(&pcontext);
+  paint_draw_2D_view_brush_cursor(&pcontext);
+  paint_cursor_restore_drawing_state();
+}
+
 static void paint_draw_cursor(bContext *C, int x, int y, void * /*unused*/)
 {
   PaintCursorContext pcontext;
@@ -2140,6 +2153,11 @@ static void paint_draw_cursor(bContext *C, int x, int y, void * /*unused*/)
      * users. See #130089. */
     if (pcontext.mode == PaintMode::GPencil) {
       WM_cursor_set(pcontext.win, WM_CURSOR_DOT);
+      Object &ob = *CTX_data_active_object(pcontext.C);
+      const GreasePencil &grease_pencil = *static_cast<GreasePencil *>(ob.data);
+      if (grease_pencil.runtime->temp_use_eraser) {
+        paint_2d_cursor(pcontext);
+      }
     }
     return;
   }
@@ -2152,15 +2170,7 @@ static void paint_draw_cursor(bContext *C, int x, int y, void * /*unused*/)
       paint_draw_curve_cursor(pcontext.brush, &pcontext.vc);
       break;
     case PAINT_CURSOR_2D:
-      paint_update_mouse_cursor(&pcontext);
-
-      paint_cursor_update_rake_rotation(&pcontext);
-      paint_cursor_check_and_draw_alpha_overlays(&pcontext);
-      paint_cursor_update_anchored_location(&pcontext);
-
-      paint_cursor_setup_2D_drawing(&pcontext);
-      paint_draw_2D_view_brush_cursor(&pcontext);
-      paint_cursor_restore_drawing_state();
+      paint_2d_cursor(pcontext);
       break;
     case PAINT_CURSOR_3D:
       paint_update_mouse_cursor(&pcontext);
