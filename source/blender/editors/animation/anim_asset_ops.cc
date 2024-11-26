@@ -170,25 +170,46 @@ static void show_catalog_in_asset_shelf(const bContext &C, const StringRefNull c
 
 static blender::animrig::Action &extract_pose(Main &bmain, Object &pose_object)
 {
-  using namespace blender::animrig;
-  Action &action = action_add(bmain, "pose_create");
   /* This currently only looks at the pose and not other things that could go onto different
    * slots on the same action. */
-  AnimationEvalContext eval_context = {nullptr, 1.0};
+
+  using namespace blender::animrig;
+  Action &action = action_add(bmain, "pose_create");
+  Slot &slot = action.slot_add_for_id(pose_object.id);
+  Layer &layer = action.layer_add("pose");
+  Strip &strip = layer.strip_add(action, Strip::Type::Keyframe);
+  StripKeyframeData &strip_data = strip.data<StripKeyframeData>(action);
+
+  KeyframeSettings key_settings = {BEZT_KEYTYPE_KEYFRAME, HD_AUTO, BEZT_IPO_BEZ};
 
   LISTBASE_FOREACH (bPoseChannel *, pose_bone, &pose_object.pose->chanbase) {
     if (!(pose_bone->bone->flag & BONE_SELECTED)) {
       continue;
     }
     PointerRNA bone_pointer = RNA_pointer_create(&pose_object.id, &RNA_PoseBone, pose_bone);
-    insert_keyframes(&bmain,
-                     &bone_pointer,
-                     std::nullopt,
-                     {{"location"}},
-                     1,
-                     eval_context,
-                     BEZT_KEYTYPE_KEYFRAME,
-                     INSERTKEY_NOFLAGS);
+    Vector<RNAPath> rna_paths = construct_rna_paths(&bone_pointer);
+    for (const RNAPath &rna_path : rna_paths) {
+      PointerRNA resolved_pointer;
+      PropertyRNA *resolved_property;
+      if (!RNA_path_resolve(
+              &bone_pointer, rna_path.path.c_str(), &resolved_pointer, &resolved_property))
+      {
+        continue;
+      }
+      Vector<float> values = blender::animrig::get_rna_values(&resolved_pointer,
+                                                              resolved_property);
+      int i = 0;
+      const std::optional<std::string> rna_path_id_to_prop = RNA_path_from_ID_to_property(
+          &resolved_pointer, resolved_property);
+      if (!rna_path_id_to_prop.has_value()) {
+        continue;
+      }
+      for (const float value : values) {
+        strip_data.keyframe_insert(
+            &bmain, slot, {rna_path_id_to_prop.value(), i}, {1, value}, key_settings);
+        i++;
+      }
+    }
   }
   return action;
 }
