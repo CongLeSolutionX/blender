@@ -189,7 +189,7 @@ set(SRC_GLSL_LIB
 # eevee_lightprobe_sphere_lib.glsl
 # eevee_lightprobe_sphere_mapping_lib.glsl
 # eevee_lightprobe_volume_eval_lib.glsl
-# eevee_ltc_lib.glsl
+eevee_ltc_lib.glsl
 # eevee_motion_blur_lib.glsl
 # eevee_nodetree_lib.glsl
 # eevee_occupancy_lib.glsl
@@ -240,5 +240,5 @@ if (WITH_GPU_SHADER_CPP_COMPILATION)
   # compile_sources_as_cpp(workbench_cpp_shaders_vert "${SRC_GLSL_VERT}" "GPU_VERTEX_SHADER")
   # compile_sources_as_cpp(workbench_cpp_shaders_frag "${SRC_GLSL_FRAG}" "GPU_FRAGMENT_SHADER")
   # compile_sources_as_cpp(workbench_cpp_shaders_comp "${SRC_GLSL_COMP}" "GPU_COMPUTE_SHADER")
-  # compile_sources_as_cpp(workbench_cpp_shaders_lib "${SRC_GLSL_LIB}" "GPU_LIBRARY_SHADER")
+  compile_sources_as_cpp(workbench_cpp_shaders_lib "${SRC_GLSL_LIB}" "GPU_LIBRARY_SHADER")
 endif()

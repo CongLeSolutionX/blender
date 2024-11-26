@@ -15,9 +15,13 @@
 #  define IS_CPP 1
 #endif
 
-#if IS_CPP
+#if IS_CPP || defined(GLSL_CPP_STUBS)
 #  pragma once
 
+#  include "eevee_defines.hh"
+#endif
+
+#if IS_CPP
 #  include "BLI_math_bits.h"
 #  include "BLI_memory_utils.hh"
 
@@ -25,8 +29,6 @@
 
 #  include "draw_manager.hh"
 #  include "draw_pass.hh"
-
-#  include "eevee_defines.hh"
 
 #  include "GPU_shader_shared.hh"
 
