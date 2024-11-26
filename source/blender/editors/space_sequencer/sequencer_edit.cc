@@ -3680,6 +3680,12 @@ static RemoveSilenceResult remove_silence_do_split(bContext *C, Sequence *seq, b
   return result;
 }
 
+static bool strip_intersects_range(const Scene *scene, Sequence *seq, blender::int2 range)
+{
+  return SEQ_time_strip_intersects_frame(scene, seq, range.x) ||
+         SEQ_time_strip_intersects_frame(scene, seq, range.y);
+}
+
 /* So the new idea is: have a set of silent ranges, go over all strips and make a cut.
  * - Each strip ater silent range will accumulate offset
  * - When strip is split, copy offset to new strip
@@ -3707,18 +3713,14 @@ static int sequencer_remove_silence_exec(bContext *C, wmOperator *op)
   blender::Vector<blender::int2> silent_ranges = silent_ranges_get_ordered(
       scene, sound_strips, op);
 
+  blender::Vector<Sequence *> unprocessed_strips = strips;
+
   /* Split strips, flag for removal and copy pending offset from original to right side strip. */
   for (blender::int2 range : silent_ranges) {
     int silent_len = 0;
     /* Iterate over copy of `strips`, since it will be modified. */
-    blender::Vector<Sequence *> strips_copy = strips;
-
-    for (int i = 0; i < strips_copy.size(); i++) {
-      Sequence *seq = strips_copy[i];
-
-      if (!SEQ_time_strip_intersects_frame(scene, seq, range.x) ||
-          !SEQ_time_strip_intersects_frame(scene, seq, range.y))
-      {
+    for (Sequence *seq : strips) {
+      if (!strip_intersects_range(scene, seq, range)) {
         continue;
       }
 
@@ -3744,12 +3746,15 @@ static int sequencer_remove_silence_exec(bContext *C, wmOperator *op)
       }
     }
 
+    unprocessed_strips = {};
+
     /* Process offset for strips to the right of silent range. */
     for (Sequence *seq : strips) {
       if (SEQ_time_right_handle_frame_get(scene, seq) < range.y) {
-        // strips.remove(result.left);
         continue;
       }
+
+      unprocessed_strips.append(seq);
 
       if (!strip_to_offset.contains(seq)) {
         strip_to_offset.add(seq, silent_len);
@@ -3760,6 +3765,9 @@ static int sequencer_remove_silence_exec(bContext *C, wmOperator *op)
       strip_to_offset.remove(seq);  // XXX
       strip_to_offset.add(seq, new_offset);
     }
+
+    /* Overwrite strips, so strips with no silence are not iterated over anymore. */
+    strips = unprocessed_strips;
   }
 
   /* Delete strips. */
