@@ -913,8 +913,8 @@ BVHTreeFromMesh Mesh::bvh_corner_tris_no_hidden() const
         *attributes.lookup_or_default(".hide_poly", AttrDomain::Face, false),
         corner_tris.size(),
         &mask_bits_act_len);
-    data.tree = bvhtree_from_mesh_verts_create_tree(
-        0.0f, 2, 6, positions, mask, mask_bits_act_len);
+    data.tree = bvhtree_from_mesh_corner_tris_create_tree(
+        0.0f, 2, 6, positions, corner_verts, corner_tris, mask, mask_bits_act_len);
     if (data.tree) {
       BLI_bvhtree_balance(data.tree);
     }
