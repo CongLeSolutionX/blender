@@ -3587,7 +3587,6 @@ static blender::VectorSet<blender::int2> silent_ranges_per_strip_get(const Scene
   blender::VectorSet<blender::int2> silent_frames;
   while (silent_sample < wf->length && loud_sample < wf->length && loud_sample <= end_sample) {
     silent_sample = find_next_sample(wf, loud_sample, SILENT, op);
-    // produces incorrect num at the end
     loud_sample = find_next_sample(wf, silent_sample, LOUD, op);
     int silence_start = std::round(seq->start + silent_sample / samples_per_frame);
     int silence_end = std::round(seq->start + (loud_sample - 1) / samples_per_frame);
@@ -3705,7 +3704,6 @@ static int sequencer_remove_silence_exec(bContext *C, wmOperator *op)
   for (Sequence *seq : strips) {
     /* It's easier to invalidate cache on original strips. */
     SEQ_relations_invalidate_cache_raw(scene, seq);
-    /* Connected strips are somehow interfering with the process. */  // check
     SEQ_disconnect(seq);
   }
 
