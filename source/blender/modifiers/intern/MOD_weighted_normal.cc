@@ -231,7 +231,7 @@ static void apply_weights_vertex_normal(WeightedNormalModifierData *wnmd,
                                     wn_data->face_normals,
                                     wn_data->sharp_edges,
                                     wn_data->sharp_faces,
-                                    has_clnors ? clnors.data() : nullptr,
+                                    clnors,
                                     &lnors_spacearr,
                                     corner_normals);
 
@@ -359,7 +359,7 @@ static void apply_weights_vertex_normal(WeightedNormalModifierData *wnmd,
                                                face_normals,
                                                wn_data->sharp_edges,
                                                wn_data->sharp_faces,
-                                               has_clnors ? clnors.data() : nullptr,
+                                               clnors,
                                                nullptr,
                                                corner_normals);
 

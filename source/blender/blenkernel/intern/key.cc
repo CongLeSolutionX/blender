@@ -2279,7 +2279,7 @@ void BKE_keyblock_mesh_calc_normals(const KeyBlock *kb,
         {reinterpret_cast<blender::float3 *>(face_normals), faces.size()},
         sharp_edges,
         sharp_faces,
-        custom_normals.is_empty() ? nullptr : custom_normals.data(),
+        custom_normals,
         nullptr,
         {reinterpret_cast<blender::float3 *>(r_loop_normals), corner_verts.size()});
   }

@@ -311,7 +311,7 @@ blender::Span<blender::float3> Mesh::corner_normals() const
                                    this->face_normals(),
                                    sharp_edges,
                                    sharp_faces,
-                                   custom_normals.data(),
+                                   custom_normals,
                                    nullptr,
                                    r_data);
         break;
@@ -1184,7 +1184,7 @@ void normals_calc_corners(const Span<float3> vert_positions,
                           const Span<float3> face_normals,
                           const Span<bool> sharp_edges,
                           const Span<bool> sharp_faces,
-                          const short2 *clnors_data,
+                          const Span<short2> custom_normals,
                           CornerNormalSpaceArray *r_lnors_spacearr,
                           MutableSpan<float3> r_corner_normals)
 {
@@ -1210,7 +1210,7 @@ void normals_calc_corners(const Span<float3> vert_positions,
   SCOPED_TIMER_AVERAGED(__func__);
 #endif
 
-  if (!r_lnors_spacearr && clnors_data) {
+  if (!r_lnors_spacearr && !custom_normals.is_empty()) {
     /* We need to compute lnor spacearr if some custom lnor data are given to us! */
     r_lnors_spacearr = &_lnors_spacearr;
   }
@@ -1219,7 +1219,7 @@ void normals_calc_corners(const Span<float3> vert_positions,
   CornerSplitTaskDataCommon common_data;
   common_data.lnors_spacearr = r_lnors_spacearr;
   common_data.corner_normals = r_corner_normals;
-  common_data.clnors_data = {clnors_data, clnors_data ? corner_verts.size() : 0};
+  common_data.clnors_data = custom_normals;
   common_data.positions = vert_positions;
   common_data.edges = edges;
   common_data.faces = faces;
@@ -1317,7 +1317,7 @@ static void mesh_normals_corner_custom_set(const Span<float3> positions,
                        face_normals,
                        sharp_edges,
                        sharp_faces,
-                       r_clnors_data.data(),
+                       r_clnors_data,
                        &lnors_spacearr,
                        corner_normals);
 
@@ -1438,7 +1438,7 @@ static void mesh_normals_corner_custom_set(const Span<float3> positions,
                          face_normals,
                          sharp_edges,
                          sharp_faces,
-                         r_clnors_data.data(),
+                         r_clnors_data,
                          &lnors_spacearr,
                          corner_normals);
   }
