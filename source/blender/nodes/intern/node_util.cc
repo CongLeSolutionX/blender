@@ -272,19 +272,6 @@ void node_combsep_color_label(const ListBase *sockets, NodeCombSepColorMode mode
   }
 }
 
-void node_warning_label(const bNodeTree * /*ntree*/,
-                     const bNode *node,
-                     char *label,
-                     int label_maxncpy)
-{
-  const char *name;
-  bool enum_label = RNA_enum_name(rna_enum_node_warning_type_items, node->custom1, &name);
-  if (!enum_label) {
-    name = IFACE_("Unknown");
-  }
-  BLI_strncpy_utf8(label, CTX_IFACE_(BLT_I18NCONTEXT_ID_NODETREE, name), label_maxncpy);
-}
-
 /** \} */
 
 /* -------------------------------------------------------------------- */
