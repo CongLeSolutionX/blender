@@ -290,8 +290,8 @@ void VKTexture::update_sub(
 
   VKBuffer staging_buffer;
   staging_buffer.create(device_memory_size, GPU_USAGE_DYNAMIC, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
-  /* When unpack row length is zero the rows are sequentially stored, Otherwise we need to encode
-   * per row.*/
+  /* Rows are sequentially stored, when unpack row length is 0, or equal to the extent width. In
+   * other cases we unpack the rows to reduce the size of the staging buffer and data transfer. */
   const uint texture_unpack_row_length =
       context.state_manager_get().texture_unpack_row_length_get();
   if (texture_unpack_row_length == 0 || texture_unpack_row_length == extent.x) {
@@ -301,7 +301,6 @@ void VKTexture::update_sub(
   else {
     BLI_assert_msg(!is_compressed,
                    "Compressed data with texture_unpack_row_length != 0 is not supported.");
-    /* Staging buffer is sequential to limit data transfers. */
     size_t dst_row_stride = extent.x * to_bytesize(device_format_);
     size_t src_row_stride = texture_unpack_row_length * to_bytesize(format_, format);
     uint8_t *dst_ptr = static_cast<uint8_t *>(staging_buffer.mapped_memory_get());
