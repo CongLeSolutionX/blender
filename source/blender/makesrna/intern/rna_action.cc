@@ -179,10 +179,8 @@ static void rna_ActionSlots_active_set(PointerRNA *ptr,
   }
 }
 
-static ActionSlot *rna_Action_slots_new(bAction *dna_action,
-                                        bContext *C,
-                                        ReportList *reports,
-                                        int type)
+static ActionSlot *rna_Action_slots_new(
+    bAction *dna_action, Main *bmain, bContext *C, ReportList *reports, int type, const char *name)
 {
   animrig::Action &action = dna_action->wrap();
 
@@ -194,7 +192,13 @@ static ActionSlot *rna_Action_slots_new(bAction *dna_action,
     return nullptr;
   }
 
+  if (name[0] == 0) {
+    BKE_reportf(reports, RPT_ERROR, "Invalid slot name '%s': name must not be empty.", name);
+    return nullptr;
+  }
+
   animrig::Slot *slot = &action.slot_add_for_id_type(ID_Type(type));
+  action.slot_display_name_set(*bmain, *slot, name);
 
   WM_event_add_notifier(C, NC_ANIMATION | ND_ANIMCHAN, nullptr);
   return slot;
@@ -1893,16 +1897,24 @@ static void rna_def_action_slots(BlenderRNA *brna, PropertyRNA *cprop)
   /* Animation.slots.new(...) */
   func = RNA_def_function(srna, "new", "rna_Action_slots_new");
   RNA_def_function_ui_description(func, "Add a slot to the Action");
-  RNA_def_function_flag(func, FUNC_USE_CONTEXT | FUNC_USE_REPORTS);
+  RNA_def_function_flag(func, FUNC_USE_MAIN | FUNC_USE_CONTEXT | FUNC_USE_REPORTS);
   parm = RNA_def_enum(
       func,
       "type",
       rna_enum_id_type_items,
       ID_OB,
       "Data-block Type",
-      "The data-block type that the slot is intended for.  This is combined with the slot name to "
+      "The data-block type that the slot is intended for. This is combined with the slot name to "
       "create the slot's unique identifier, and is also used to limit (on a best-effort basis) "
       "which data-blocks the slot can be assigned to.");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  parm = RNA_def_string(
+      func,
+      "name",
+      nullptr,
+      sizeof(ActionSlot::identifier) - 3,
+      "Name",
+      "Name of the slot. This will be made unique within the Action among slots of the same type");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
 
   parm = RNA_def_pointer(func, "slot", "ActionSlot", "", "Newly created action slot");

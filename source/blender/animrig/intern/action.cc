@@ -399,6 +399,16 @@ static void slot_identifier_ensure_unique(Action &action, Slot &slot)
       check_name_is_used, &check_data, "", '.', slot.identifier, sizeof(slot.identifier));
 }
 
+void Action::slot_display_name_set(Main &bmain, Slot &slot, StringRefNull new_display_name)
+{
+  BLI_assert_msg(StringRef(new_display_name).size() >= 1,
+                 "Action Slot display names must not be empty");
+
+  BLI_strncpy_utf8(slot.identifier + 2, new_display_name.c_str(), ARRAY_SIZE(slot.identifier) - 2);
+  slot_identifier_ensure_unique(*this, slot);
+  this->slot_identifier_propagate(bmain, slot);
+}
+
 void Action::slot_identifier_set(Main &bmain, Slot &slot, const StringRefNull new_identifier)
 {
   /* TODO: maybe this function should only set the 'identifier without prefix' aka the 'display

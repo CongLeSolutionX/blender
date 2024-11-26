@@ -145,6 +145,18 @@ class Action : public ::bAction {
   const Slot *slot_for_handle(slot_handle_t handle) const;
 
   /**
+   * Set the slot display name (the part of the identifier after the two-letter
+   * ID prefix), ensure the resulting identifier is unique, and propagate the
+   * new identifier to all data-blocks that use it
+   *
+   * This has to be done on the Action level to ensure each slot has a unique
+   * identifier within the Action.
+   *
+   * \see #Action::slot_identifier_set
+   */
+  void slot_display_name_set(Main &bmain, Slot &slot, StringRefNull new_display_name);
+
+  /**
    * Set the slot identifier, ensure it is unique, and propagate the new identifier to
    * all data-blocks that use it.
    *
