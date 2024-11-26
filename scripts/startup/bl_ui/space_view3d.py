@@ -6615,7 +6615,7 @@ class VIEW3D_PT_shading_options(Panel):
             row.prop(shading, "show_xray_wireframe", text="")
             sub = row.row()
             sub.active = shading.show_xray_wireframe
-            sub.prop(shading, "xray_alpha_wireframe", text="X-Ray")
+            sub.prop(shading, "xray_alpha_wireframe", text="Wireframe X-Ray")
         elif shading.type == 'SOLID':
             row.prop(shading, "show_xray", text="")
             sub = row.row()
@@ -7403,7 +7403,7 @@ class VIEW3D_PT_overlay_bones(Panel):
             row.prop(overlay, "show_xray_bone", text="")
             sub = row.row()
             sub.active = display_all and overlay.show_xray_bone
-            sub.prop(overlay, "xray_alpha_bone", text="Fade Geometry")
+            sub.prop(overlay, "xray_alpha_bone", text="Bone X-Ray")
         elif mode == 'PAINT_WEIGHT':
             row = col.row()
             row.prop(overlay, "show_xray_bone")

@@ -1199,30 +1199,56 @@ void VIEW3D_OT_toggle_shading(wmOperatorType *ot)
 /** \name Toggle XRay
  * \{ */
 
+enum class XRayMode {
+  Unavailable = 0,
+  General,
+  Wireframe,
+  Bone,
+};
+
+static XRayMode get_current_xray_mode(const bContext *C)
+{
+  View3D *v3d = CTX_wm_view3d(C);
+  Object *obact = CTX_data_active_object(C);
+
+  if (obact && (obact->mode & OB_MODE_POSE ||
+                (obact->mode & OB_MODE_WEIGHT_PAINT && BKE_object_pose_armature_get(obact))))
+  {
+    return XRayMode::Bone;
+  }
+
+  const bool xray_active = (obact && obact->mode & OB_MODE_EDIT) ||
+                           ELEM(v3d->shading.type, OB_WIRE, OB_SOLID);
+
+  if (!xray_active) {
+    return XRayMode::Unavailable;
+  }
+
+  if (v3d->shading.type == OB_WIRE) {
+    return XRayMode::Wireframe;
+  }
+
+  return XRayMode::General;
+}
+
 static int toggle_xray_exec(bContext *C, wmOperator *op)
 {
   View3D *v3d = CTX_wm_view3d(C);
   ScrArea *area = CTX_wm_area(C);
-  Object *obact = CTX_data_active_object(C);
 
-  if (obact && ((obact->mode & OB_MODE_POSE) ||
-                ((obact->mode & OB_MODE_WEIGHT_PAINT) && BKE_object_pose_armature_get(obact))))
-  {
-    v3d->overlay.flag ^= V3D_OVERLAY_BONE_SELECT;
-  }
-  else {
-    const bool xray_active = ((obact && (obact->mode & OB_MODE_EDIT)) ||
-                              ELEM(v3d->shading.type, OB_WIRE, OB_SOLID));
-
-    if (v3d->shading.type == OB_WIRE) {
-      v3d->shading.flag ^= V3D_SHADING_XRAY_WIREFRAME;
-    }
-    else {
+  switch (get_current_xray_mode(C)) {
+    case XRayMode::General:
       v3d->shading.flag ^= V3D_SHADING_XRAY;
-    }
-    if (!xray_active) {
+      break;
+    case XRayMode::Wireframe:
+      v3d->shading.flag ^= V3D_SHADING_XRAY_WIREFRAME;
+      break;
+    case XRayMode::Bone:
+      v3d->overlay.flag ^= V3D_OVERLAY_BONE_SELECT;
+      break;
+    case XRayMode::Unavailable:
       BKE_report(op->reports, RPT_INFO, "X-Ray not available in current mode");
-    }
+      break;
   }
 
   ED_area_tag_redraw(area);
@@ -1231,16 +1257,38 @@ static int toggle_xray_exec(bContext *C, wmOperator *op)
   return OPERATOR_FINISHED;
 }
 
+static std::string toggle_xray_get_description(bContext *C,
+                                               wmOperatorType * /*ot*/,
+                                               PointerRNA * /*ptr*/)
+{
+  PropertyRNA *prop;
+
+  /* Dynamically get the operator description from the current X-Ray mode UI text. */
+  switch (get_current_xray_mode(C)) {
+    case XRayMode::Wireframe:
+      prop = RNA_struct_type_find_property(&RNA_View3DShading, "show_xray_wireframe");
+      break;
+    case XRayMode::Bone:
+      prop = RNA_struct_type_find_property(&RNA_View3DOverlay, "show_xray_bone");
+      break;
+    default:
+      prop = RNA_struct_type_find_property(&RNA_View3DShading, "show_xray");
+      break;
+  }
+
+  return RNA_property_ui_description(prop);
+}
+
 void VIEW3D_OT_toggle_xray(wmOperatorType *ot)
 {
   /* identifiers */
   ot->name = "Toggle X-Ray";
   ot->idname = "VIEW3D_OT_toggle_xray";
-  ot->description = "Transparent scene display. Allow selecting through items";
 
   /* api callbacks */
   ot->exec = toggle_xray_exec;
   ot->poll = ED_operator_view3d_active;
+  ot->get_description = toggle_xray_get_description;
 }
 
 /** \} */
