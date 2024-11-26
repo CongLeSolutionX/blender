@@ -29,7 +29,7 @@
 
 #include "DEG_depsgraph_query.hh"
 
-#include "DNA_brush_enums.h"
+#include "DNA_brush_types.h"
 #include "DNA_material_types.h"
 #include "DNA_modifier_types.h"
 
@@ -268,12 +268,17 @@ class PaintOperation : public GreasePencilStrokeOperation {
   /* Current delta time from #start_time_, updated after each extension sample. */
   double delta_time_;
 
+  /* Whether the operation was temporarily called from tools other than draw tool. */
+  bool temp_draw_;
+
   friend struct PaintOperationExecutor;
 
  public:
   void on_stroke_begin(const bContext &C, const InputSample &start_sample) override;
   void on_stroke_extended(const bContext &C, const InputSample &extension_sample) override;
   void on_stroke_done(const bContext &C) override;
+
+  PaintOperation(const bool temp_draw = false) : temp_draw_(temp_draw) {}
 };
 
 /**
@@ -307,7 +312,7 @@ struct PaintOperationExecutor {
     settings_ = brush_->gpencil_settings;
 
     use_settings_random_ = (settings_->flag & GP_BRUSH_GROUP_RANDOM) != 0;
-    use_vertex_color_ = (scene_->toolsettings->gp_paint->mode == GPPAINT_FLAG_USE_VERTEXCOLOR);
+    use_vertex_color_ = brush_using_vertex_color(scene_->toolsettings->gp_paint, brush_);
     if (use_vertex_color_) {
       ColorGeometry4f color_base;
       srgb_to_linearrgb_v3_v3(color_base, brush_->rgb);
@@ -495,6 +500,9 @@ struct PaintOperationExecutor {
         start_sample.pressure, brush_, settings_);
     start_opacity = randomize_opacity(self, 0.0f, start_opacity, start_sample.pressure);
 
+    /* Do not allow pressure opacity when drawing tool was invoked temporarily. */
+    const float fill_opacity = (!self.temp_draw_) ? start_opacity : 1.0f;
+
     const float start_rotation = randomize_rotation(self, start_sample.pressure);
     if (use_vertex_color_) {
       vertex_color_ = randomize_color(self, 0.0f, vertex_color_, start_sample.pressure);
@@ -588,7 +596,7 @@ struct PaintOperationExecutor {
               "fill_opacity",
               bke::AttrDomain::Curve,
               bke::AttributeInitVArray(VArray<float>::ForSingle(1.0f, curves.curves_num())));
-      fill_opacities.span[active_curve] = start_opacity;
+      fill_opacities.span[active_curve] = fill_opacity;
       curve_attributes_to_skip.add("fill_opacity");
       fill_opacities.finish();
     }
@@ -1200,7 +1208,7 @@ static void trim_stroke_ends(bke::greasepencil::Drawing &drawing,
       true);
 
   /* No intersection found. */
-  if (stroke_trimmed.points_num() == 0) {
+  if (stroke_trimmed.is_empty()) {
     return;
   }
 
@@ -1540,9 +1548,9 @@ void PaintOperation::on_stroke_done(const bContext &C)
   WM_event_add_notifier(&C, NC_GEOM | ND_DATA, &grease_pencil.id);
 }
 
-std::unique_ptr<GreasePencilStrokeOperation> new_paint_operation()
+std::unique_ptr<GreasePencilStrokeOperation> new_paint_operation(const bool temp_draw)
 {
-  return std::make_unique<PaintOperation>();
+  return std::make_unique<PaintOperation>(temp_draw);
 }
 
 }  // namespace blender::ed::sculpt_paint::greasepencil

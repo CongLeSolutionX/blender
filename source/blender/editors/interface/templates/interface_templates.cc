@@ -347,15 +347,16 @@ static uiBlock *template_common_search_menu(const bContext *C,
  * \{ */
 
 struct TemplateID {
-  PointerRNA ptr;
-  PropertyRNA *prop;
+  PointerRNA ptr = {};
+  PropertyRNA *prop = nullptr;
 
-  ListBase *idlb;
-  short idcode;
-  short filter;
-  int prv_rows, prv_cols;
-  bool preview;
-  float scale;
+  ListBase *idlb = nullptr;
+  short idcode = 0;
+  short filter = 0;
+  int prv_rows = 0;
+  int prv_cols = 0;
+  bool preview = false;
+  float scale = 0.0f;
 };
 
 /* Search browse menu, assign. */
@@ -1403,10 +1404,8 @@ static void template_ID(const bContext *C,
      * ID. */
     UI_but_flag_disable(but, UI_BUT_UNDO);
     Main *bmain = CTX_data_main(C);
-    UI_but_func_rename_full_set(but, [bmain, id](std::string &new_name) {
-      ED_id_rename(*bmain, *id, new_name);
-      WM_main_add_notifier(NC_ID | NA_RENAME, nullptr);
-    });
+    UI_but_func_rename_full_set(
+        but, [bmain, id](std::string &new_name) { ED_id_rename(*bmain, *id, new_name); });
     UI_but_funcN_set(but,
                      template_id_cb,
                      MEM_new<TemplateID>(__func__, template_ui),
@@ -1818,7 +1817,7 @@ static void ui_template_id(uiLayout *layout,
     return;
   }
 
-  TemplateID template_ui;
+  TemplateID template_ui = {};
   template_ui.ptr = *ptr;
   template_ui.prop = prop;
   template_ui.prv_rows = prv_rows;
@@ -1922,7 +1921,7 @@ void uiTemplateAction(uiLayout *layout,
   AnimData *adt = BKE_animdata_from_id(id);
   PointerRNA adt_ptr = RNA_pointer_create(id, &RNA_AnimData, adt);
 
-  TemplateID template_ui;
+  TemplateID template_ui = {};
   template_ui.ptr = adt_ptr;
   template_ui.prop = adt_action_prop;
   template_ui.prv_rows = 0;
@@ -3406,7 +3405,13 @@ void uiTemplatePreview(uiLayout *layout,
     ui_preview = MEM_cnew<uiPreview>(__func__);
     STRNCPY(ui_preview->preview_id, preview_id);
     ui_preview->height = short(UI_UNIT_Y * 7.6f);
+    ui_preview->id_session_uid = pid->session_uid;
+    ui_preview->tag = UI_PREVIEW_TAG_DIRTY;
     BLI_addtail(&region->ui_previews, ui_preview);
+  }
+  else if (ui_preview->id_session_uid != pid->session_uid) {
+    ui_preview->id_session_uid = pid->session_uid;
+    ui_preview->tag |= UI_PREVIEW_TAG_DIRTY;
   }
 
   if (ui_preview->height < UI_UNIT_Y) {
@@ -3425,7 +3430,10 @@ void uiTemplatePreview(uiLayout *layout,
   /* add preview */
   uiDefBut(
       block, UI_BTYPE_EXTRA, 0, "", 0, 0, UI_UNIT_X * 10, ui_preview->height, pid, 0.0, 0.0, "");
-  UI_but_func_drawextra_set(block, ED_preview_draw, pparent, slot);
+  UI_but_func_drawextra_set(block,
+                            [pid, pparent, slot, ui_preview](const bContext *C, rcti *rect) {
+                              ED_preview_draw(C, pid, pparent, slot, ui_preview, rect);
+                            });
   UI_block_func_handle_set(block, do_preview_buttons, nullptr);
 
   uiDefIconButS(block,
@@ -6486,7 +6494,7 @@ static bool uiTemplateInputStatusAzone(uiLayout *layout, const AZone *az, const 
   if (az->type == AZONE_REGION) {
     uiItemL(layout, nullptr, ICON_MOUSE_LMB_DRAG);
     uiItemL(layout,
-            (region->visible) ? IFACE_("Resize Region") : IFACE_("Show Hidden Region"),
+            (region->runtime->visible) ? IFACE_("Resize Region") : IFACE_("Show Hidden Region"),
             ICON_NONE);
     return true;
   }
@@ -6587,8 +6595,9 @@ static std::string ui_template_status_tooltip(bContext *C, void * /*argN*/, cons
     char writer_ver_str[12];
     BKE_blender_version_blendfile_string_from_values(
         writer_ver_str, sizeof(writer_ver_str), bmain->versionfile, -1);
-    tooltip_message += fmt::format(RPT_("File saved by newer Blender\n({}), expect loss of data"),
-                                   writer_ver_str);
+    tooltip_message += fmt::format(
+        fmt::runtime(RPT_("File saved by newer Blender\n({}), expect loss of data")),
+        writer_ver_str);
   }
   if (bmain->is_asset_edit_file) {
     if (!tooltip_message.empty()) {
@@ -7449,10 +7458,13 @@ static void uiTemplateRecentFiles_tooltip_func(bContext & /*C*/, uiTooltipData &
 {
   char *path = (char *)argN;
 
-  /* File path. */
-  char root[FILE_MAX];
-  BLI_path_split_dir_part(path, root, FILE_MAX);
-  UI_tooltip_text_field_add(tip, root, {}, UI_TIP_STYLE_HEADER, UI_TIP_LC_NORMAL);
+  /* File name and path. */
+  char dirname[FILE_MAX];
+  char filename[FILE_MAX];
+  BLI_path_split_dir_file(path, dirname, sizeof(dirname), filename, sizeof(filename));
+  UI_tooltip_text_field_add(tip, filename, {}, UI_TIP_STYLE_HEADER, UI_TIP_LC_NORMAL);
+  UI_tooltip_text_field_add(tip, dirname, {}, UI_TIP_STYLE_NORMAL, UI_TIP_LC_NORMAL);
+
   UI_tooltip_text_field_add(tip, {}, {}, UI_TIP_STYLE_SPACER, UI_TIP_LC_NORMAL);
 
   if (!BLI_exists(path)) {

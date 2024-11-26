@@ -10,6 +10,7 @@
 #include "BKE_grease_pencil.hh"
 #include "BKE_paint.hh"
 
+#include "BLI_array_utils.hh"
 #include "BLI_index_mask.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_task.hh"
@@ -104,8 +105,6 @@ float brush_point_influence(const Scene &scene,
   return influence_base * brush_falloff;
 }
 
-/* Compute the closest distance to the "surface". When the point is outside the polygon, compute
- * the closest distance to the polygon points. When the point is inside the polygon return 0.*/
 float closest_distance_to_surface_2d(const float2 pt, const Span<float2> verts)
 {
   int j = verts.size() - 1;
@@ -185,6 +184,16 @@ IndexMask brush_point_influence_mask(const Scene &scene,
   array_utils::gather(all_influences.as_span(), influence_mask, influences.as_mutable_span());
 
   return influence_mask;
+}
+
+bool brush_using_vertex_color(const GpPaint *gp_paint, const Brush *brush)
+{
+  const int brush_draw_mode = brush->gpencil_settings->brush_draw_mode;
+  const bool brush_use_pinned_mode = (brush_draw_mode != GP_BRUSH_MODE_ACTIVE);
+  if (brush_use_pinned_mode) {
+    return (brush_draw_mode == GP_BRUSH_MODE_VERTEXCOLOR);
+  }
+  return (gp_paint->mode == GPPAINT_FLAG_USE_VERTEXCOLOR);
 }
 
 bool is_brush_inverted(const Brush &brush, const BrushStrokeMode stroke_mode)
@@ -296,9 +305,10 @@ IndexMask point_selection_mask(const GreasePencilStrokeParams &params,
                                IndexMaskMemory &memory)
 {
 
-  return (use_masking ? ed::greasepencil::retrieve_editable_and_selected_points(
-                            params.ob_orig, params.drawing, params.layer_index, memory) :
-                        params.drawing.strokes().points_range());
+  return use_masking ? ed::greasepencil::retrieve_editable_and_selected_points(
+                           params.ob_orig, params.drawing, params.layer_index, memory) :
+                       ed::greasepencil::retrieve_editable_points(
+                           params.ob_orig, params.drawing, params.layer_index, memory);
 }
 
 IndexMask stroke_selection_mask(const GreasePencilStrokeParams &params,
@@ -306,18 +316,19 @@ IndexMask stroke_selection_mask(const GreasePencilStrokeParams &params,
                                 IndexMaskMemory &memory)
 {
 
-  return (use_masking ? ed::greasepencil::retrieve_editable_and_selected_strokes(
-                            params.ob_orig, params.drawing, params.layer_index, memory) :
-                        params.drawing.strokes().curves_range());
+  return use_masking ? ed::greasepencil::retrieve_editable_and_selected_strokes(
+                           params.ob_orig, params.drawing, params.layer_index, memory) :
+                       ed::greasepencil::retrieve_editable_strokes(
+                           params.ob_orig, params.drawing, params.layer_index, memory);
 }
 
 IndexMask fill_selection_mask(const GreasePencilStrokeParams &params,
                               const bool use_masking,
                               IndexMaskMemory &memory)
 {
-  return (use_masking ? ed::greasepencil::retrieve_editable_and_selected_fill_strokes(
-                            params.ob_orig, params.drawing, params.layer_index, memory) :
-                        params.drawing.strokes().curves_range());
+  return use_masking ? ed::greasepencil::retrieve_editable_and_selected_fill_strokes(
+                           params.ob_orig, params.drawing, params.layer_index, memory) :
+                       params.drawing.strokes().curves_range();
 }
 
 bke::crazyspace::GeometryDeformation get_drawing_deformation(

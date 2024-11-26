@@ -49,7 +49,7 @@
 #include "BKE_context.hh"
 #include "BKE_customdata.hh"
 #include "BKE_global.hh"
-#include "BKE_image.h"
+#include "BKE_image.hh"
 #include "BKE_key.hh"
 #include "BKE_layer.hh"
 #include "BKE_mesh.hh"
@@ -59,7 +59,7 @@
 #include "BKE_object.hh"
 #include "BKE_object_types.hh"
 #include "BKE_paint.hh"
-#include "BKE_pbvh_api.hh"
+#include "BKE_paint_bvh.hh"
 #include "BKE_report.hh"
 #include "BKE_subdiv_ccg.hh"
 #include "BKE_subsurf.hh"
@@ -1033,18 +1033,18 @@ void restore_position_from_undo_step(const Depsgraph &depsgraph, Object &object)
         Vector<float3> translations;
       };
 
-      const KeyBlock *active_key = BKE_keyblock_from_object(&object);
-      const bool need_translations = !ss.deform_imats.is_empty() || active_key;
+      std::optional<ShapeKeyData> shape_key_data = ShapeKeyData::from_object(object);
+      const bool need_translations = !ss.deform_imats.is_empty() || shape_key_data.has_value();
 
       threading::EnumerableThreadSpecific<LocalData> all_tls;
       node_mask.foreach_index(GrainSize(1), [&](const int i) {
         threading::isolate_task([&] {
           LocalData &tls = all_tls.local();
           const OrigPositionData orig_data = *orig_position_data_lookup_mesh(object, nodes[i]);
-
           const Span<int> verts = nodes[i].verts();
           const Span<float3> undo_positions = orig_data.positions;
           if (need_translations) {
+            /* Calculate translations from evaluated positions before they are changed. */
             tls.translations.resize(verts.size());
             translations_from_new_positions(
                 undo_positions, verts, positions_eval, tls.translations);
@@ -1052,27 +1052,28 @@ void restore_position_from_undo_step(const Depsgraph &depsgraph, Object &object)
 
           scatter_data_mesh(undo_positions, verts, positions_eval);
 
-          if (positions_eval.data() != positions_orig.data()) {
-            /* When the evaluated positions and original mesh positions don't point to the same
-             * array, they must both be updated. */
-            if (ss.deform_imats.is_empty()) {
-              scatter_data_mesh(undo_positions, verts, positions_orig);
-            }
-            else {
-              /* Because brush deformation is calculated for the evaluated deformed positions,
-               * the translations have to be transformed to the original space. */
-              apply_crazyspace_to_translations(ss.deform_imats, verts, tls.translations);
-              if (ELEM(active_key, nullptr, mesh.key->refkey)) {
-                /* We only ever want to propagate changes back to the base mesh if we either have
-                 * no shape key active, or we are working on the basis shape key.
-                 * See #126199 for more information. */
-                apply_translations(tls.translations, verts, positions_orig);
-              }
-            }
+          if (positions_eval.data() == positions_orig.data()) {
+            return;
           }
 
-          if (active_key) {
-            update_shape_keys(object, mesh, *active_key, verts, tls.translations, positions_orig);
+          const MutableSpan<float3> translations = tls.translations;
+          if (!ss.deform_imats.is_empty()) {
+            apply_crazyspace_to_translations(ss.deform_imats, verts, translations);
+          }
+
+          if (shape_key_data) {
+            for (MutableSpan<float3> data : shape_key_data->dependent_keys) {
+              apply_translations(translations, verts, data);
+            }
+
+            if (shape_key_data->basis_key_active) {
+              /* The basis key positions and the mesh positions are always kept in sync. */
+              apply_translations(translations, verts, positions_orig);
+            }
+            apply_translations(translations, verts, shape_key_data->active_key_data);
+          }
+          else {
+            apply_translations(translations, verts, positions_orig);
           }
         });
       });
@@ -2060,6 +2061,23 @@ void calc_area_normal_and_center(const Depsgraph &depsgraph,
  * \{ */
 
 /**
+ * Calculates the sign of the direction of the brush stroke, typically indicates whether the stroke
+ * will deform a surface inwards or outwards along the brush normal.
+ */
+static float brush_flip(const Brush &brush, const blender::ed::sculpt_paint::StrokeCache &cache)
+{
+  if (brush.flag & BRUSH_INVERT_TO_SCRAPE_FILL) {
+    return 1.0f;
+  }
+
+  const float dir = (brush.flag & BRUSH_DIR_IN) ? -1.0f : 1.0f;
+  const float pen_flip = cache.pen_flip ? -1.0f : 1.0f;
+  const float invert = cache.invert ? -1.0f : 1.0f;
+
+  return dir * pen_flip * invert;
+}
+
+/**
  * Return modified brush strength. Includes the direction of the brush, positive
  * values pull vertices, negative values push. Uses tablet pressure and a
  * special multiplier found experimentally to scale the strength factor.
@@ -2076,18 +2094,12 @@ static float brush_strength(const Sculpt &sd,
   /* Primary strength input; square it to make lower values more sensitive. */
   const float root_alpha = BKE_brush_alpha_get(scene, &brush);
   const float alpha = root_alpha * root_alpha;
-  const float dir = (brush.flag & BRUSH_DIR_IN) ? -1.0f : 1.0f;
   const float pressure = BKE_brush_use_alpha_pressure(&brush) ? cache.pressure : 1.0f;
-  const float pen_flip = cache.pen_flip ? -1.0f : 1.0f;
-  const float invert = cache.invert ? -1.0f : 1.0f;
   float overlap = ups.overlap_factor;
   /* Spacing is integer percentage of radius, divide by 50 to get
    * normalized diameter. */
 
-  float flip = dir * invert * pen_flip;
-  if (brush.flag & BRUSH_INVERT_TO_SCRAPE_FILL) {
-    flip = 1.0f;
-  }
+  const float flip = brush_flip(brush, cache);
 
   /* Pressure final value after being tweaked depending on the brush. */
   float final_pressure;
@@ -3169,7 +3181,7 @@ static void do_brush_action(const Depsgraph &depsgraph,
          * stroke strength can become 0 during the stroke, but it can not change sign (the sign is
          * determined in the beginning of the stroke. So here it is important to not switch to
          * enhance brush in the middle of the stroke. */
-        if (ss.cache->bstrength < 0.0f) {
+        if (ss.cache->initial_direction_flipped) {
           /* Invert mode, intensify details. */
           do_enhance_details_brush(depsgraph, sd, ob, node_mask);
         }
@@ -3867,6 +3879,7 @@ static void sculpt_update_cache_invariants(
   copy_v3_v3(cache->initial_normal, ss.cursor_normal);
 
   mode = RNA_enum_get(op->ptr, "mode");
+  cache->pen_flip = RNA_boolean_get(op->ptr, "pen_flip");
   cache->invert = mode == BRUSH_STROKE_INVERT;
   cache->alt_smooth = mode == BRUSH_STROKE_SMOOTH;
   cache->normal_weight = brush->normal_weight;
@@ -3898,6 +3911,8 @@ static void sculpt_update_cache_invariants(
   copy_v2_v2(cache->mouse, cache->initial_mouse);
   copy_v2_v2(cache->mouse_event, cache->initial_mouse);
   copy_v2_v2(ups->tex_mouse, cache->initial_mouse);
+
+  cache->initial_direction_flipped = brush_flip(*brush, *cache) < 0.0f;
 
   /* Truly temporary data that isn't stored in properties. */
   cache->vc = vc;
@@ -4245,7 +4260,6 @@ static void sculpt_update_cache_variants(bContext *C, Sculpt &sd, Object &ob, Po
     RNA_float_get_array(ptr, "location", cache.location);
   }
 
-  cache.pen_flip = RNA_boolean_get(ptr, "pen_flip");
   RNA_float_get_array(ptr, "mouse", cache.mouse);
   RNA_float_get_array(ptr, "mouse_event", cache.mouse_event);
 
@@ -4408,7 +4422,7 @@ static void sculpt_raycast_cb(blender::bke::pbvh::Node &node, SculptRaycastData 
     }
   }
 
-  if (node.flag_ & PBVH_FullyHidden) {
+  if (node.flag_ & bke::pbvh::Node::FullyHidden) {
     return;
   }
 
@@ -4448,7 +4462,8 @@ static void sculpt_raycast_cb(blender::bke::pbvh::Node &node, SculptRaycastData 
                                           srd.active_face_grid_index,
                                           srd.face_normal);
       if (hit) {
-        srd.active_vertex = grids_active_vert;
+        srd.active_vertex = grids_active_vert.to_index(
+            BKE_subdiv_ccg_key_top_level(*srd.subdiv_ccg));
       }
       break;
     }
@@ -5024,6 +5039,20 @@ void flush_update_step(bContext *C, UpdateType update_type)
 
   if (update_type == UpdateType::Position && !ss.shapekey_active) {
     if (pbvh.type() == bke::pbvh::Type::Mesh) {
+      /* Various operations inside sculpt mode can cause either the #MeshRuntimeData or the entire
+       * Mesh to be changed (e.g. Undoing the very first operation after opening a file, performing
+       * remesh, etc).
+       *
+       * This isn't an ideal fix for the core issue here, but to mitigate the drastic performance
+       * falloff, we refreeze the cache before we do any operation that would tag this runtime
+       * cache as dirty.
+       *
+       * See #130636.
+       */
+      if (!mesh->runtime->corner_tris_cache.frozen) {
+        mesh->runtime->corner_tris_cache.freeze();
+      }
+
       /* Updating mesh positions without marking caches dirty is generally not good, but since
        * sculpt mode has special requirements and is expected to have sole ownership of the mesh it
        * modifies, it's generally okay. */
@@ -7100,6 +7129,34 @@ void clip_and_lock_translations(const Sculpt &sd,
   }
 }
 
+std::optional<ShapeKeyData> ShapeKeyData::from_object(Object &object)
+{
+  Mesh &mesh = *static_cast<Mesh *>(object.data);
+  Key *keys = mesh.key;
+  if (!keys) {
+    return std::nullopt;
+  }
+  const int active_index = object.shapenr - 1;
+  const KeyBlock *active_key = BKE_keyblock_find_by_index(keys, active_index);
+  if (!active_key) {
+    return std::nullopt;
+  }
+  ShapeKeyData data;
+  data.active_key_data = {static_cast<float3 *>(active_key->data), active_key->totelem};
+  data.basis_key_active = active_key == keys->refkey;
+  if (const std::optional<Array<bool>> dependent = BKE_keyblock_get_dependent_keys(keys,
+                                                                                   active_index))
+  {
+    int i;
+    LISTBASE_FOREACH_INDEX (KeyBlock *, other_key, &keys->block, i) {
+      if ((other_key != active_key) && (*dependent)[i]) {
+        data.dependent_keys.append({static_cast<float3 *>(other_key->data), other_key->totelem});
+      }
+    }
+  }
+  return data;
+}
+
 PositionDeformData::PositionDeformData(const Depsgraph &depsgraph, Object &object_orig)
 {
   Mesh &mesh = *static_cast<Mesh *>(object_orig.data);
@@ -7115,25 +7172,7 @@ PositionDeformData::PositionDeformData(const Depsgraph &depsgraph, Object &objec
     eval_mut_ = eval_mut;
   }
 
-  if (Key *keys = mesh.key) {
-    keys_ = keys;
-    const int active_index = object_orig.shapenr - 1;
-    active_key_ = BKE_keyblock_find_by_index(keys, active_index);
-    basis_active_ = active_key_ == keys->refkey;
-    dependent_keys_ = BKE_keyblock_get_dependent_keys(keys_, active_index);
-  }
-  else {
-    keys_ = nullptr;
-    active_key_ = nullptr;
-    basis_active_ = false;
-  }
-}
-
-static void copy_indices(const Span<float3> src, const Span<int> indices, MutableSpan<float3> dst)
-{
-  for (const int i : indices) {
-    dst[i] = src[i];
-  }
+  shape_key_data_ = ShapeKeyData::from_object(object_orig);
 }
 
 void PositionDeformData::deform(MutableSpan<float3> translations, const Span<int> verts) const
@@ -7151,59 +7190,21 @@ void PositionDeformData::deform(MutableSpan<float3> translations, const Span<int
     apply_crazyspace_to_translations(*deform_imats_, verts, translations);
   }
 
-  if (KeyBlock *key = active_key_) {
-    const MutableSpan active_key_data(static_cast<float3 *>(key->data), key->totelem);
-    if (basis_active_) {
-      /* The active shape key positions and the mesh positions are always kept in sync. */
-      apply_translations(translations, verts, orig_);
-      copy_indices(orig_, verts, active_key_data);
-    }
-    else {
-      apply_translations(translations, verts, active_key_data);
-    }
-
-    if (dependent_keys_) {
-      int i;
-      LISTBASE_FOREACH_INDEX (KeyBlock *, other_key, &keys_->block, i) {
-        if ((other_key != key) && (*dependent_keys_)[i]) {
-          MutableSpan data(static_cast<float3 *>(other_key->data), other_key->totelem);
-          apply_translations(translations, verts, data);
-        }
-      }
-    }
-  }
-  else {
-    apply_translations(translations, verts, orig_);
-  }
-}
-
-void update_shape_keys(Object &object,
-                       const Mesh &mesh,
-                       const KeyBlock &active_key,
-                       const Span<int> verts,
-                       const Span<float3> translations,
-                       const Span<float3> positions_orig)
-{
-  const MutableSpan active_key_data(static_cast<float3 *>(active_key.data), active_key.totelem);
-  if (&active_key == mesh.key->refkey) {
-    for (const int vert : verts) {
-      active_key_data[vert] = positions_orig[vert];
-    }
-  }
-  else {
-    apply_translations(translations, verts, active_key_data);
-  }
-
-  if (std::optional<Array<bool>> dependent = BKE_keyblock_get_dependent_keys(mesh.key,
-                                                                             object.shapenr - 1))
-  {
-    int i;
-    LISTBASE_FOREACH_INDEX (KeyBlock *, other_key, &mesh.key->block, i) {
-      if ((other_key != &active_key) && (*dependent)[i]) {
-        MutableSpan<float3> data(static_cast<float3 *>(other_key->data), other_key->totelem);
+  if (shape_key_data_) {
+    if (!shape_key_data_->dependent_keys.is_empty()) {
+      for (MutableSpan<float3> data : shape_key_data_->dependent_keys) {
         apply_translations(translations, verts, data);
       }
     }
+
+    if (shape_key_data_->basis_key_active) {
+      /* The basis key positions and the mesh positions are always kept in sync. */
+      apply_translations(translations, verts, orig_);
+    }
+    apply_translations(translations, verts, shape_key_data_->active_key_data);
+  }
+  else {
+    apply_translations(translations, verts, orig_);
   }
 }
 

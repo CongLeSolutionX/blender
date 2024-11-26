@@ -2670,8 +2670,8 @@ typedef enum CMPNodeAlphaConvertMode {
 
 /** Distance Matte Node. Stored in #NodeChroma.channel. */
 typedef enum CMPNodeDistanceMatteColorSpace {
-  CMP_NODE_DISTANCE_MATTE_COLOR_SPACE_YCCA = 0,
   CMP_NODE_DISTANCE_MATTE_COLOR_SPACE_RGBA = 1,
+  CMP_NODE_DISTANCE_MATTE_COLOR_SPACE_YCCA = 2,
 } CMPNodeDistanceMatteColorSpace;
 
 /** Color Spill Node. Stored in `custom2`. */
@@ -2892,19 +2892,6 @@ typedef enum GeometryNodeCurveHandleMode {
   GEO_NODE_CURVE_HANDLE_LEFT = (1 << 0),
   GEO_NODE_CURVE_HANDLE_RIGHT = (1 << 1)
 } GeometryNodeCurveHandleMode;
-
-typedef enum GeometryNodeTriangulateNGons {
-  GEO_NODE_TRIANGULATE_NGON_BEAUTY = 0,
-  GEO_NODE_TRIANGULATE_NGON_EARCLIP = 1,
-} GeometryNodeTriangulateNGons;
-
-typedef enum GeometryNodeTriangulateQuads {
-  GEO_NODE_TRIANGULATE_QUAD_BEAUTY = 0,
-  GEO_NODE_TRIANGULATE_QUAD_FIXED = 1,
-  GEO_NODE_TRIANGULATE_QUAD_ALTERNATE = 2,
-  GEO_NODE_TRIANGULATE_QUAD_SHORTEDGE = 3,
-  GEO_NODE_TRIANGULATE_QUAD_LONGEDGE = 4,
-} GeometryNodeTriangulateQuads;
 
 typedef enum GeometryNodeDistributePointsInVolumeMode {
   GEO_NODE_DISTRIBUTE_POINTS_IN_VOLUME_DENSITY_RANDOM = 0,

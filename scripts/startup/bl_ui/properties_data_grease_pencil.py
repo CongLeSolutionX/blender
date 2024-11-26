@@ -116,7 +116,7 @@ class GreasePencil_LayerAdjustmentsPanel:
         col.prop(layer, "radius_offset", text="Stroke Thickness")
 
 
-class GreasPencil_LayerRelationsPanel:
+class GreasePencil_LayerRelationsPanel:
     def draw(self, context):
         layout = self.layout
         layout.use_property_split = True
@@ -309,7 +309,7 @@ class DATA_PT_grease_pencil_layer_adjustments(LayerDataButtonsPanel, GreasePenci
     bl_options = {'DEFAULT_CLOSED'}
 
 
-class DATA_PT_grease_pencil_layer_relations(LayerDataButtonsPanel, GreasPencil_LayerRelationsPanel, Panel):
+class DATA_PT_grease_pencil_layer_relations(LayerDataButtonsPanel, GreasePencil_LayerRelationsPanel, Panel):
     bl_label = "Relations"
     bl_parent_id = "DATA_PT_grease_pencil_layers"
     bl_options = {'DEFAULT_CLOSED'}
@@ -441,12 +441,6 @@ class GREASE_PENCIL_UL_attributes(UIList):
 class DATA_PT_grease_pencil_attributes(DataButtonsPanel, Panel):
     bl_label = "Attributes"
     bl_options = {'DEFAULT_CLOSED'}
-    COMPAT_ENGINES = {
-        'BLENDER_RENDER',
-        'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
-        'BLENDER_WORKBENCH',
-    }
 
     def draw(self, context):
         grease_pencil = context.grease_pencil
