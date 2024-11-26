@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include "BLI_string_ref.hh"
 #include "GPU_debug.hh"
 #include "GPU_vertex_buffer.hh"
 
@@ -65,30 +66,32 @@ class GPUBackend {
 };
 
 namespace debug {
-static ColorTheme4f get_debug_group_color(const char *name)
+static ColorTheme4f get_debug_group_color(StringRefNull name)
 {
-  if (strcmp(name, "EEVEE") == 0) {
+  if (name == "EEVEE") {
     return ColorTheme4f(1.0, 0.5, 0.0, 1.0);
   }
-  else if (strcmp(name, "External") == 0) {
+  else if (name == "External") {
     return ColorTheme4f(0.0, 0.0, 1.0, 1.0);
   }
-  else if (strcmp(name, "GpencilMode") == 0) {
+  else if (name == "GpencilMode") {
     return ColorTheme4f(1.0, 1.0, 0.0, 1.0);
   }
-  else if (strcmp(name, "UV/Image") == 0) {
+  else if (name == "UV/Image") {
     return ColorTheme4f(0.0, 1.0, 1.0, 1.0);
   }
-  else if (strcmp(name, "Overlay") == 0) {
+  else if (name == "Overlay") {
     return ColorTheme4f(0.0, 1.0, 0.5, 1.0);
   }
-  else if (strcmp(name, "Workbench") == 0) {
+  else if (name == "Workbench") {
     return ColorTheme4f(0.0, 0.7, 1.0, 1.0);
   }
-  else if (strcmp(name, "Cycles") == 0) {
+  else if (name == "Cycles") {
     return ColorTheme4f(0.0, 0.5, 1.0, 1.0);
   }
-  return GPU_DEBUG_GROUP_COLOR_DEFAULT;
+  else {
+    return GPU_DEBUG_GROUP_COLOR_DEFAULT;
+  }
 }
 }  // namespace debug
 
