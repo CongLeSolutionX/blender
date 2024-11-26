@@ -146,6 +146,7 @@ static void refresh_asset_library(const bContext *C, const AssetLibraryReference
   AssetLibraryReference all_lib_ref = asset_system::all_library_reference();
   asset::list::clear(&all_lib_ref, C);
 }
+
 static void show_catalog_in_asset_shelf(const bContext &C, const StringRefNull catalog_path)
 {
   /* Enable catalog in all visible asset shelves. */
@@ -169,10 +170,7 @@ static blender::animrig::Action &extract_pose(Main &bmain, Object &pose_object)
   Action &action = action_add(bmain, "pose_create");
   /* This currently only looks at the pose and not other things that could go onto different
    * slots on the same action. */
-
-  AnimationEvalContext eval_context;
-  blender::Vector<RNAPath> paths;
-  paths.append({"location"});
+  AnimationEvalContext eval_context = {nullptr, 1.0};
 
   LISTBASE_FOREACH (bPoseChannel *, pose_bone, &pose_object.pose->chanbase) {
     if (!(pose_bone->bone->flag & BONE_SELECTED)) {
@@ -182,7 +180,7 @@ static blender::animrig::Action &extract_pose(Main &bmain, Object &pose_object)
     insert_keyframes(&bmain,
                      &bone_pointer,
                      std::nullopt,
-                     paths.as_span(),
+                     {{"location"}},
                      1,
                      eval_context,
                      BEZT_KEYTYPE_KEYFRAME,
