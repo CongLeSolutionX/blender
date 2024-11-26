@@ -7352,8 +7352,10 @@ GroupedSpan<int> calc_vert_neighbors(const OffsetIndices<int> faces,
       }
       const int2 neighbors = bke::mesh::face_find_adjacent_verts(faces[face], corner_verts, vert);
       for (const int neighbor : {neighbors[0], neighbors[1]}) {
-        if (std::find(r_data.begin() + vert_start, r_data.end(), neighbor) != r_data.end()) {
-          continue;
+        for (int other = r_data.size() - 1; other >= vert_start; other--) {
+          if (r_data[other] == neighbor) {
+            continue;
+          }
         }
         r_data.append(neighbor);
       }
@@ -7437,8 +7439,10 @@ GroupedSpan<int> calc_vert_neighbors_interior(const OffsetIndices<int> faces,
       }
       const int2 neighbors = bke::mesh::face_find_adjacent_verts(faces[face], corner_verts, vert);
       for (const int neighbor : {neighbors[0], neighbors[1]}) {
-        if (std::find(r_data.begin() + vert_start, r_data.end(), neighbor) != r_data.end()) {
-          continue;
+        for (int other = r_data.size() - 1; other >= vert_start; other--) {
+          if (r_data[other] == neighbor) {
+            continue;
+          }
         }
         if (boundary) {
           if (boundary_verts[neighbor]) {
