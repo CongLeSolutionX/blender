@@ -503,6 +503,9 @@ static Mesh *normalEditModifier_do(NormalEditModifierData *enmd,
 
   bke::SpanAttributeWriter custom_nors_dst = attributes.lookup_or_add_for_write_span<short2>(
       "custom_normal", bke::AttrDomain::Corner);
+  if (!custom_nors_dst) {
+    return result;
+  }
   if (use_current_clnors) {
     corner_normals.reinitialize(corner_verts.size());
     const VArraySpan sharp_faces = *attributes.lookup<bool>("sharp_face", bke::AttrDomain::Face);

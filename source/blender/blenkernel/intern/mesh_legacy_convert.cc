@@ -2513,7 +2513,7 @@ void mesh_custom_normals_to_legacy(MutableSpan<CustomDataLayer> corner_layers)
 {
   bool changed = false;
   for (CustomDataLayer &layer : corner_layers) {
-    if (StringRef(layer.name) == "custom_normal") {
+    if (StringRef(layer.name) == "custom_normal" && layer.type == CD_PROP_INT16_2D) {
       layer.type = CD_CUSTOMLOOPNORMAL;
       layer.name[0] = '\0';
       changed = true;

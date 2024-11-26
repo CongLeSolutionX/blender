@@ -722,8 +722,11 @@ static int mesh_customdata_custom_splitnormals_add_exec(bContext *C, wmOperator 
     BM_data_layer_ensure_named(&bm, &bm.ldata, CD_PROP_INT16_2D, "custom_normal");
   }
   else {
-    mesh->attributes_for_write().add<short2>(
-        "custom_normal", bke::AttrDomain::Corner, bke::AttributeInitDefaultValue());
+    if (!mesh->attributes_for_write().add<short2>(
+            "custom_normal", bke::AttrDomain::Corner, bke::AttributeInitDefaultValue()))
+    {
+      return OPERATOR_CANCELLED;
+    }
   }
 
   DEG_id_tag_update(&mesh->id, 0);

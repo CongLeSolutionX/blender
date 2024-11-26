@@ -390,13 +390,13 @@ Mesh *BKE_mesh_mirror_apply_mirror_on_axis_for_modifier(MirrorModifierData *mmd,
   }
 
   /* handle custom split normals */
-  if (ob->type == OB_MESH && result->attributes().contains("custom_normal") &&
-      result->faces_num > 0)
+  bke::MutableAttributeAccessor attributes = result->attributes_for_write();
+  bke::GAttributeWriter custom_normals = attributes.lookup_for_write("custom_normal");
+  if (ob->type == OB_MESH && custom_normals && custom_normals.domain == bke::AttrDomain::Corner &&
+      custom_normals.varray.type().is<short2>() && result->faces_num > 0)
   {
-    bke::MutableAttributeAccessor attributes = result->attributes_for_write();
     blender::Array<blender::float3> corner_normals(result_corner_verts.size());
-    blender::bke::SpanAttributeWriter clnors = attributes.lookup_or_add_for_write_span<short2>(
-        "custom_normal", bke::AttrDomain::Corner, bke::AttributeInitDefaultValue());
+    MutableVArraySpan clnors(custom_normals.varray.typed<short2>());
     blender::bke::mesh::CornerNormalSpaceArray lnors_spacearr;
 
     /* The transform matrix of a normal must be
@@ -418,7 +418,7 @@ Mesh *BKE_mesh_mirror_apply_mirror_on_axis_for_modifier(MirrorModifierData *mmd,
                                              result->face_normals(),
                                              sharp_edges,
                                              sharp_faces,
-                                             clnors.span,
+                                             clnors,
                                              &lnors_spacearr,
                                              corner_normals);
 
@@ -437,13 +437,14 @@ Mesh *BKE_mesh_mirror_apply_mirror_on_axis_for_modifier(MirrorModifierData *mmd,
         mul_m4_v3(mtx_nor, corner_normals[mirrorj]);
 
         const int space_index = lnors_spacearr.corner_space_indices[mirrorj];
-        clnors.span[mirrorj] = blender::bke::mesh::corner_space_custom_normal_to_data(
+        clnors[mirrorj] = blender::bke::mesh::corner_space_custom_normal_to_data(
             lnors_spacearr.spaces[space_index], corner_normals[mirrorj]);
       }
     }
 
-    clnors.finish();
+    clnors.save();
   }
+  custom_normals.finish();
 
   /* handle vgroup stuff */
   if (BKE_object_supports_vertex_groups(ob)) {
