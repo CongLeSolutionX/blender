@@ -107,11 +107,11 @@ class Wireframe : Overlay {
     }
   }
 
-  void object_sync(Manager &manager,
-                   const ObjectRef &ob_ref,
-                   Resources &res,
-                   const State &state,
-                   const bool in_edit_paint_mode)
+  void object_sync_ex(Manager &manager,
+                      const ObjectRef &ob_ref,
+                      Resources &res,
+                      const State &state,
+                      const bool in_edit_paint_mode)
   {
     if (!enabled_) {
       return;
@@ -198,6 +198,9 @@ class Wireframe : Overlay {
       }
       case OB_VOLUME: {
         gpu::Batch *geom = DRW_cache_volume_face_wireframe_get(ob_ref.object);
+        if (geom == nullptr) {
+          break;
+        }
         if (static_cast<Volume *>(ob_ref.object->data)->display.wireframe_type ==
             VOLUME_WIREFRAME_POINTS)
         {
@@ -227,7 +230,7 @@ class Wireframe : Overlay {
   }
 
   /* TODO(fclem): Remove dependency on Resources. */
-  void draw_line(Framebuffer &framebuffer, Resources &res, Manager &manager, View &view)
+  void draw_line_ex(Framebuffer &framebuffer, Resources &res, Manager &manager, View &view)
   {
     if (!enabled_) {
       return;
