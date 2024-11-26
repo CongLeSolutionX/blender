@@ -18,76 +18,27 @@ import multiprocessing
 import typing
 
 
-# Directories, relative the to given `--root-dir` argument.
-EXCLUDED_DIRS = {
-    # Theses folders should only contain scripts designed to work within Blender's python.
-    "extern",
-    "intern",
-    "lib",
-    "scripts",
-    "source",
-    "tests",
-    # Not relevant, never expected to be used on buildbots or similar systems.
-    "tools/utils_ide",
-    "tools/debug",
-    "tools/triage",
-    # Remanants from history, can still be present in some cases, just ignore.
-    "release/scripts/addons",
-    "release/scripts/addons_contrib",
+# Allow-list of directories, relative to the given `--root-dir` argument.
+INCLUDED_DIRS = {
+    "build_files",
+    # Used to generate the manual and API documentations.
+    "doc",
 }
 
-# Paths to python modules, relative the to given `--root-dir` argument.
+# Block-list of paths to python modules, relative to the given `--root-dir` argument.
 EXCLUDED_FILE_PATHS = {
-    # self module.
-    "tests/python/system_python/load_tool_scripts.py",
-
-    # Will try to open a GUI.
-    "tools/utils/make_cursor_gui.py",
-
     # Require `bpy` module.
-    "tools/check_source/check_descriptions.py",
-    "tools/utils/make_shape_2d_from_blend.py",
-    "tools/utils_maintenance/blender_menu_search_coverage.py",
-    "tools/utils_maintenance/blender_update_themes.py",
     "doc/python_api/sphinx_doc_gen.py",
-    "release/datafiles/blender_icons_geom.py",
-
-    # Require `gdb`  module.
-    "tools/utils/gdb_struct_repr_c99.py",
 
     # Require `clang` module.
     "build_files/cmake/cmake_static_check_clang.py",
 
-    # Require `yarl` module.
-    "tools/utils/gitea_inactive_developers.py",
-
-    # Require `enchant` module.
-    "tools/check_source/check_spelling.py",
-
-    # Require `requests` module.
-    "release/lts/lts_issue.py",
-
-    # XXX Also manipulates `sys.path`, fails to import.
-    "tools/utils_maintenance/cmake_sort_filelists.py",
-
     # XXX These scripts execute on import! bad, need to be fixed or removed.
     # FIXME: Should be reasonably trivial to fix/cleanup for most of them.
-    "tools/check_source/check_unused_defines.py",
-    "tools/utils/autopep8_clean.py",
-    "tools/utils/blender_merge_format_changes.py",
-    "tools/utils/git_log_review_commits.py",
-    "tools/utils_maintenance/c_sort_blocks.py",
-    "tools/utils_maintenance/c_struct_clean.py",
-    "tools/utils_doc/rna_manual_reference_updater.py",
-    "tools/git/git_sh1_to_svn_rev.py",
     "build_files/cmake/cmake_netbeans_project.py",
     "build_files/cmake/clang_array_check.py",
     "build_files/package_spec/build_archive.py",
     "build_files/utils/make_test.py",
-    "release/datafiles/blender_icons_geom_update.py",
-    "release/datafiles/ctodata.py",
-    "release/pypi/upload-release.py",
-    "release/lts/create_release_notes.py",
     "doc/python_api/conf.py",
 }
 
@@ -136,11 +87,11 @@ def import_module(file_path):
 def import_modules(root_dir):
     print("+++", sys.executable)
 
-    excluded_directories = {os.path.join(root_dir, p) for p in EXCLUDED_DIRS}
+    included_directories = [os.path.join(root_dir, p) for p in INCLUDED_DIRS]
     excluded_file_paths = {os.path.join(root_dir, p) for p in EXCLUDED_FILE_PATHS}
 
     has_failures = False
-    directories = [root_dir]
+    directories = included_directories[:]
     while directories:
         path = directories.pop(0)
         sub_directories = []
@@ -149,17 +100,15 @@ def import_modules(root_dir):
         with os.scandir(path) as it:
             for entry in it:
                 if entry.is_dir():
-                    if entry.path in excluded_directories:
-                        continue
                     if entry.name.startswith('.'):
                         continue
                     sub_directories.append(entry.path)
                     continue
                 if not entry.is_file():
                     continue
-                if entry.path in excluded_file_paths:
-                    continue
                 if not entry.name.endswith(".py"):
+                    continue
+                if entry.path in excluded_file_paths:
                     continue
                 try:
                     is_current_package = import_module(entry.path)
@@ -172,6 +121,9 @@ def import_modules(root_dir):
                     print(f"+++ Failed to import {entry.path} ({e.__class__}), {e}")
                     traceback.print_tb(e.__traceback__)
                     print("\n\n")
+        # Do not attempt to import individual modules of a package. For now assume that if the top-level package can
+        # be imported, it is good enough. This may have to be revisited at some point though. Currently there are
+        # no packages in target directories anyway.
         if not is_package:
             directories += sub_directories
 
